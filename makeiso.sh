@@ -28,9 +28,9 @@ apt-get install mkisofs isolinux -y
 
 # Let's get Ubuntu 14.04.1 as .iso
 fuECHO "### Downloading Ubuntu 14.04.1."
-if [ ! -f $myUBUNTUFILE ]
+if [ ! -f $myUBUNTUISO ]
   then wget $myUBUNTULINK;
-  else fuECHO "### Found it locally."
+  else fuECHO "### Found it locally.";
 fi
 
 # Let's loop mount it and copy all contents
