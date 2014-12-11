@@ -13,7 +13,10 @@ d-i netcfg/choose_interface select auto
 d-i netcfg/dhcp_timeout string 60
 d-i netcfg/get_hostname string t-pot 
 
-# Proxy
+# Source & Proxy
+d-i mirror/country string manual
+d-i mirror/http/hostname string archive.ubuntu.com
+d-i mirror/http/directory string /ubuntu
 d-i mirror/http/proxy string
 
 # Time

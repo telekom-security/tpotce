@@ -7,7 +7,7 @@
 ########################################################
 
 # Let's define some global vars
-myUBUNTULINK="http://de.releases.ubuntu.com/14.04.1/ubuntu-14.04.1-server-amd64.iso"
+myUBUNTULINK="http://releases.ubuntu.com/14.04.1/ubuntu-14.04.1-server-amd64.iso"
 myUBUNTUISO="ubuntu-14.04.1-server-amd64.iso"
 myTPOTCEISO="tpotce.iso"
 myTPOTCEDIR="tpotceiso"
