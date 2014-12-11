@@ -3,7 +3,7 @@
 # .iso maker for tpotce                                #
 #                                                      #
 #                                                      #
-# v0.02 by mo, 2014-12-11                              #
+# v0.03 by mo, 2014-12-11                              #
 ########################################################
 
 # Let's define some global vars
