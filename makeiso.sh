@@ -3,7 +3,7 @@
 # .iso maker for tpotce                                #
 #                                                      #
 #                                                      #
-# v0.01 by mo, 2014-11-28                              #
+# v0.02 by mo, 2014-12-11                              #
 ########################################################
 
 # Let's define some global vars
@@ -24,6 +24,7 @@ fuECHO () {
 
 # Let's install all the packages we need
 fuECHO "### Installing packages."
+apt-get update -y
 apt-get install mkisofs isolinux -y
 
 # Let's get Ubuntu 14.04.1 as .iso
