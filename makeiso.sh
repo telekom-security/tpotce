@@ -25,7 +25,7 @@ fuECHO () {
 # Let's install all the packages we need
 fuECHO "### Installing packages."
 apt-get update -y
-apt-get install mkisofs isolinux -y
+apt-get install genisoimage isolinux -y
 
 # Let's get Ubuntu 14.04.1 as .iso
 fuECHO "### Downloading Ubuntu 14.04.1."
