@@ -3,7 +3,7 @@
 # T-Pot Community Edition post install script          #
 # Ubuntu server 14.04, x64                             #
 #                                                      #
-# v0.16 by mo, DTAG, 2014-12-18                        #
+# v0.17 by mo, DTAG, 2014-12-18                        #
 ########################################################
 
 # Let's make sure there is a warning if running for a second time
@@ -227,6 +227,14 @@ APT::Periodic::Download-Upgradeable-Packages "0";
 APT::Periodic::AutocleanInterval "7";
 EOF
 
+# Let's add "docker ps" output to /dev/tty2 every 60s
+fuECHO "### Adding useful docker output to tty2"
+tee -a /etc/crontab <<EOF
+
+# Show running containers every 60s via /dev/tty2
+*/1 * * * * root date > /dev/tty2; docker ps > /dev/tty2; echo /dev/tty2
+EOF
+
 # Let's add a nice and useful issue text and update rc.local accordingly
 fuECHO "### Adding a nice and useful issue text and updating rc.local accordingly."
 tee /etc/issue <<EOF
@@ -247,7 +255,8 @@ IP:
 
 
 
-
+CTRL+ALT+F2 - Display current container status
+CTRL+ALT+F1 - Return to this screen
 EOF
 
 echo "#!/bin/sh -e" > /etc/rc.local.new
