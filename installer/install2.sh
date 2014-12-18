@@ -3,7 +3,7 @@
 # T-Pot Community Edition post install script          #
 # Ubuntu server 14.04, x64                             #
 #                                                      #
-# v0.15 by mo, DTAG, 2014-11-28                        #
+# v0.16 by mo, DTAG, 2014-12-18                        #
 ########################################################
 
 # Let's make sure there is a warning if running for a second time
@@ -170,7 +170,7 @@ stop on runlevel [!2345]
 respawn
 pre-start script
   sleep 1
-  /sbin/iptables -A INPUT -p tcp --syn -m state --state NEW -j NFQUEUE
+  /sbin/iptables -A INPUT -w -p tcp --syn -m state --state NEW -j NFQUEUE
 end script
 script
   sleep 1
@@ -178,7 +178,7 @@ script
 end script
 post-stop script
   sleep 1
-  /sbin/iptables -D INPUT -p tcp --syn -m state --state NEW -j NFQUEUE
+  /sbin/iptables -D INPUT -w -p tcp --syn -m state --state NEW -j NFQUEUE
   /usr/bin/docker rm honeytrap
 end script
 EOF
