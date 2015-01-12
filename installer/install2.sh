@@ -116,7 +116,7 @@ stop on runlevel [!2345]
 respawn
 script
   sleep 1
-  /usr/bin/docker run --name dionaea --cap-add=NET_ADMIN --rm -p 21:21 -p 42:42 -p 8080:80 -p 135:135 -p 443:443 -p 445:445 -p 1433:1433 -p 3306:3306 -p 5061:5061 -p 5060:5060 -p 69:69/udp -p 5060:5060/udp -v /data/dionaea dtagdevsec/dionaea
+  /usr/bin/docker run --name dionaea --cap-add=NET_BIND_SERVICE --rm=true -p 21:21 -p 42:42 -p 8080:80 -p 135:135 -p 443:443 -p 445:445 -p 1433:1433 -p 3306:3306 -p 5061:5061 -p 5060:5060 -p 69:69/udp -p 5060:5060/udp -v /data/dionaea dtagdevsec/dionaea
 end script
 post-stop script
   sleep 1
@@ -134,7 +134,7 @@ stop on runlevel [!2345]
 respawn
 script
   sleep 15 
-  /usr/bin/docker run --name ews --volumes-from dionaea --volumes-from glastopf --volumes-from honeytrap --volumes-from kippo --rm -v /data/ews/:/data/ews/ --link kippo:kippo dtagdevsec/ews
+  /usr/bin/docker run --name ews --volumes-from dionaea --volumes-from glastopf --volumes-from honeytrap --volumes-from kippo --rm=true -v /data/ews/:/data/ews/ --link kippo:kippo dtagdevsec/ews
 end script
 post-stop script
   sleep 1
@@ -152,7 +152,7 @@ stop on runlevel [!2345]
 respawn
 script
   sleep 1
-  /usr/bin/docker run --name glastopf --rm -p 80:80 -v /data/glastopf dtagdevsec/glastopf 
+  /usr/bin/docker run --name glastopf --rm=true -p 80:80 -v /data/glastopf dtagdevsec/glastopf 
 end script
 post-stop script
   sleep 1
@@ -174,7 +174,7 @@ pre-start script
 end script
 script
   sleep 1
-  /usr/bin/docker run --name honeytrap --cap-add=NET_ADMIN --net=host --rm -v /data/honeytrap dtagdevsec/honeytrap
+  /usr/bin/docker run --name honeytrap --cap-add=NET_ADMIN --net=host --rm=true -v /data/honeytrap dtagdevsec/honeytrap
 end script
 post-stop script
   sleep 1
@@ -193,7 +193,7 @@ stop on runlevel [!2345]
 respawn
 script
   sleep 1 
-  /usr/bin/docker run --name kippo --rm -p 22:2222 -v /data/kippo dtagdevsec/kippo 
+  /usr/bin/docker run --name kippo --rm=true -p 22:2222 -v /data/kippo dtagdevsec/kippo 
 end script
 post-stop script
   sleep 1
