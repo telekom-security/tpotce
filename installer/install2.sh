@@ -6,9 +6,6 @@
 # v0.20 by mo, DTAG, 2015-01-20                        #
 ########################################################
 
-# Let's fit more on the screen
-setupcon
-
 # Let's make sure there is a warning if running for a second time
 if [ -f install.log ];
   then fuECHO "### Running more than once may complicate things. Erase install.log if you are really sure."
@@ -129,8 +126,8 @@ if [ -f /etc/init/ssh.conf ];
   then echo "### Already enabled. Exiting."
   exit 1;
 fi
-mv /etc/init/ssh.conf.disable /etc/init/ssh.conf
-service ssh start
+sudo mv /etc/init/ssh.conf.disable /etc/init/ssh.conf
+sudo service ssh start
 EOF
 chmod 700 /home/tsec/ssh_enable.sh
 chown tsec:tsec /home/tsec/ssh_enable.sh
