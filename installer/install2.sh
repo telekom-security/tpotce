@@ -3,8 +3,11 @@
 # T-Pot Community Edition post install script          #
 # Ubuntu server 14.04, x64                             #
 #                                                      #
-# v0.19 by mo, DTAG, 2014-12-18                        #
+# v0.20 by mo, DTAG, 2015-01-20                        #
 ########################################################
+
+# Let's fit more on the screen
+setupcon
 
 # Let's make sure there is a warning if running for a second time
 if [ -f install.log ];
@@ -44,20 +47,7 @@ apt-get dist-upgrade -y
 
 # Let's install all the packages we need
 fuECHO "### Installing packages."
-apt-get install ntp lxc-docker git -y
-
-# Create the data partition and limit its size
-# If we want to extent the size of that filesystem later, without loss of data:
-# resize2fs -p data.img 8192M
-#fuECHO "### Creating data partition (Please be patient, this may take a while)."
-#mkdir -p /opt/virtual-disk/
-#dd if=/dev/zero of=/opt/virtual-disk/data.ext4 bs=1024 count=4096000
-#mkfs.ext4 /opt/virtual-disk/data.ext4 -F
-#tee -a /etc/fstab <<EOF
-#/opt/virtual-disk/data.ext4 /data       ext4    loop,rw,nosuid
-#EOF
-#mkdir -p /data
-#mount /opt/virtual-disk/data.ext4 -o loop,rw,nosuid
+apt-get install ethtool git ntp libpam-google-authenticator lxc-docker-1.4.1 vim -y
 
 # Let's add a new user
 fuECHO "### Adding new user."
@@ -66,8 +56,7 @@ adduser --system --no-create-home --uid 2000 --disabled-password --disabled-logi
 
 # Let's create some files and folders
 fuECHO "### Creating some files and folders."
-mkdir -p /data/ews/log /data/ews/conf
-#mkdir -p /data/puppet/
+mkdir -p /data/ews/log /data/ews/conf /data/elk/data /data/elk/log
 
 # Let's modify the ownership / access rights
 chmod 760 -R /data
@@ -78,27 +67,74 @@ fuECHO "### Setting a new hostname."
 myHOST=ce$(date +%s)$RANDOM
 hostnamectl set-hostname $myHOST
 sed -i 's/127.0.1.1.*/127.0.1.1\t'"$myHOST"'/g' /etc/hosts
-#echo $myHOST > /data/puppet/name.conf
 
 # Let's patch sshd_config
 fuECHO "### Patching sshd_config to listen on port 64295 and deny password authentication."
 sed -i 's#Port 22#Port 64295#' /etc/ssh/sshd_config
 sed -i 's#\#PasswordAuthentication yes#PasswordAuthentication no#' /etc/ssh/sshd_config
 
-# Disable ssh service
+# Let's disable ssh service
 mv /etc/init/ssh.conf /etc/init/ssh.conf.disable
 
-# Let's add the ssh keys
-#fuECHO "### Adding ssh keys for the admin user."
-#mkdir -p /home/admin/.ssh/
-#tee /home/admin/.ssh/authorized_keys <<EOF
-#ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEA8f8Dq8/XuVZl3M8ARxPQNz74T46Gez8nFTV6xjGKh6VZmyU8BL/+ERXSTJg47HsncNLEpqHgPnZTTh1hZK7HxJvPLQ1JrfPO7Fbl2B5Qy26yzAYJTnHQYUBMGTpI8gmLczE6eZcGuK0huMOoot+m7WeIMHQbzZcuNAknPsxBhJHY4s3rvElrJnY7ckz4mroqRSZXvu6w7igthUX3a1A+xsxVmxUatzFJ1Ky4jYswKFdcNPA77/nRckxtt86ORpqJq/r2PjDpuv2JpRha9zdUDpvpdCIQJFM1SdRyGMSrvbMyEWZBCTB3YF/GmQT04sfEytqHUY7zbK7kzNyDhXeg5Q== av@telekom
-#ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCt6Af5L8FYaNiDG0JKHPlJDLAbXklK5wVHj1IYqLINR8dIBcGcFwIF+YoJypZmsf1geta9WPjEW8bpd4G6XiYYg6YNRYxgBZScSb0WGVn0rHBMH+cuQxkhIdHucEMq4JFsRTVFWXjpQspu6p5gQxafGHnsLY/RYrgFy9XktS7Ha0Tfa6WXxpF72jyCoRRBUKF8CSip1XFaHIIY0xA0wTHZpmAI7dea4XA44oVDfr6g/4CTDTPQJiwn0HrRnZjgqJPzCT4gyXv+L6c5lcdrob4JpRj/YIis6aD6AMw4PeDsp3d/P9L2Vm9+p2a5Xx5U5cfGNUanvkvicrzZC1v+v3H9 mo@telekom
-#ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDHM2Pht1q6VDfRs+gPYu3/Eg5wgFfQrM45A+jRduskcIJSlwO5m/dMEipc10Y+Ut+tIST8ydQA8ZTYicinOjoCbSUju7sTDRb5jMs60nBRaj4BmzCQOqo4hidt3iX8+IpU9JUl8RR5rQzwDsWTdkhuCEEjiD+2YDdJO5kjMoaa1UW19iFEOLY582psoDTmkNY9MOfhoJla4S7m0A6eOMfq4DO/eKMKgOxJ0W8K6fQjSAyMSmqlamirxSjZ2OGohS7r1JVYhTdU6cmJxYRVNa2Rr8BHn8uf1cR4uaV49CfqJgx3W5YMjSjc3nCLt0csfdQd+sur25Gv0033liq7ZQFR ms@telekom
-#EOF
-#chmod 700 -R /home/admin/.ssh
-#chmod 600 /home/admin/.ssh/authorized_keys
-#chown admin:admin -R /home/admin/.ssh
+# Let's create the 2FA enable script
+fuECHO "### Creating 2FA enable script."
+tee /home/tsec/2fa_enable.sh <<EOF
+#!/bin/bash
+echo "### This script will enable Two-Factor-Authentication based on Google Authenticator for SSH."
+while true 
+do
+  echo -n "### Do you want to continue (y/n)? "; read myANSWER;
+  case \$myANSWER in
+    n)
+      echo "### Exiting."
+      exit 0;
+      ;;
+    y)
+      break
+      ;;
+  esac
+done
+if [ -f /etc/pam.d/sshd.bak ];
+  then echo "### Already enabled. Exiting."
+  exit 1;
+fi
+sudo sed -i.bak '\# PAM#aauth required pam_google_authenticator.so' /etc/pam.d/sshd
+sudo sed -i.bak 's#ChallengeResponseAuthentication no#ChallengeResponseAuthentication yes#' /etc/ssh/sshd_config
+google-authenticator -t -d -f -r 3 -R 30 -w 21
+echo "### Please do not forget to run the ssh_enable script."
+EOF
+chmod 700 /home/tsec/2fa_enable.sh
+chown tsec:tsec /home/tsec/2fa_enable.sh
+
+# Let's create the ssh enable script
+fuECHO "### Creating ssh enable script."
+tee /home/tsec/ssh_enable.sh <<EOF
+#!/bin/bash
+echo "### This script will enable the ssh service (default port tcp/64295)."
+echo "### Password authentication is disabled by default."
+while true 
+do
+  echo -n "### Do you want to continue (y/n)? "; read myANSWER;
+  case \$myANSWER in
+    n)
+      echo "### Exiting."
+      exit 0;
+      ;;
+    y)
+      break
+      ;;
+  esac
+done
+if [ -f /etc/init/ssh.conf ];
+  then echo "### Already enabled. Exiting."
+  exit 1;
+fi
+mv /etc/init/ssh.conf.disable /etc/init/ssh.conf
+service ssh start
+EOF
+chmod 700 /home/tsec/ssh_enable.sh
+chown tsec:tsec /home/tsec/ssh_enable.sh
+
 
 # Let's patch docker defaults, so we can run images as service
 fuECHO "### Patching docker defaults."
@@ -108,7 +144,7 @@ EOF
 
 # Let's create an upstart config for the dionaea docker image
 fuECHO "### Adding upstart config for the dionaea docker image."
-tee -a /etc/init/dionaea.conf <<EOF
+tee /etc/init/dionaea.conf <<EOF
 description "Dionaea"
 author "mo"
 start on started docker and filesystem
@@ -124,9 +160,27 @@ post-stop script
 end script
 EOF
 
+# Let's create an upstart config for the elk docker image
+fuECHO "### Adding upstart config for the elk docker image."
+tee /etc/init/elk.conf <<EOF
+description "ELK"
+author "mo"
+start on started docker and filesystem and started suricata and started ews
+stop on runlevel [!2345]
+respawn
+script
+  sleep 15 
+  /usr/bin/docker run --name=elk --volumes-from ews --volumes-from suricata -v /data/elk/:/data/elk/ -p 127.0.0.1:64296:80 --rm=true dtagdevsec/elk
+end script
+post-stop script
+  sleep 1
+  /usr/bin/docker rm elk 
+end script
+EOF
+
 # Let's create an upstart config for the ews docker image
 fuECHO "### Adding upstart config for the ews docker image."
-tee -a /etc/init/ews.conf <<EOF
+tee /etc/init/ews.conf <<EOF
 description "EWS"
 author "mo"
 start on started docker and filesystem and started dionaea and started honeytrap and started kippo and started glastopf
@@ -144,7 +198,7 @@ EOF
 
 # Let's create an upstart config for the glastopf docker image
 fuECHO "### Adding upstart config for the glastopf docker image."
-tee -a /etc/init/glastopf.conf <<EOF
+tee /etc/init/glastopf.conf <<EOF
 description "Glastopf"
 author "mo"
 start on started docker and filesystem
@@ -162,7 +216,7 @@ EOF
 
 # Let's create an upstart config for the honeytrap docker image
 fuECHO "### Adding upstart config for the honeytrap docker image."
-tee -a /etc/init/honeytrap.conf <<EOF
+tee /etc/init/honeytrap.conf <<EOF
 description "Honeytrap"
 author "mo"
 start on started docker and filesystem
@@ -170,22 +224,22 @@ stop on runlevel [!2345]
 respawn
 pre-start script
   sleep 1
-  /sbin/iptables -A INPUT -w -p tcp --syn -m state --state NEW -j NFQUEUE
+  /sbin/iptables -A INPUT -p tcp --syn -m state --state NEW -j NFQUEUE
 end script
 script
   sleep 1
-  /usr/bin/docker run --name honeytrap --cap-add=NET_ADMIN --net=host --rm=true -v /data/honeytrap dtagdevsec/honeytrap
+  /usr/bin/docker run --name honeytrap --cap-add=NET_ADMIN --net=host --rm -v /data/honeytrap dtagdevsec/honeytrap
 end script
 post-stop script
   sleep 1
-  /sbin/iptables -D INPUT -w -p tcp --syn -m state --state NEW -j NFQUEUE
+  /sbin/iptables -D INPUT -p tcp --syn -m state --state NEW -j NFQUEUE
   /usr/bin/docker rm honeytrap
 end script
 EOF
 
 # Let's create an upstart config for the kippo docker image
 fuECHO "### Adding upstart config for the kippo docker image."
-tee -a /etc/init/kippo.conf <<EOF
+tee /etc/init/kippo.conf <<EOF
 description "Kippo"
 author "mo"
 start on started docker and filesystem
@@ -201,20 +255,34 @@ post-stop script
 end script
 EOF
 
-# Let's load docker images from local
-#fuECHO "### Loading docker images from local."
-#cd /root/images
-#for name in dionaea ews glastopf honeytrap kippo
-#do
-#  docker load -i $(ls $name*)
-#  docker tag $(ls $name* | cut -d "_" -f 2 | cut -c-12) t3chn0m4g3/beehive:$name
-#done
-#cd /root
-#rm -rf /root/images
+# Let's create an upstart config for the suricata docker image
+fuECHO "### Adding upstart config for the suricata docker image."
+tee /etc/init/suricata.conf <<EOF
+description "Suricata"
+author "mo"
+start on started docker and filesystem
+stop on runlevel [!2345]
+respawn
+pre-start script
+  sleep 1
+  myIF=\$(route | grep default | awk '{ print \$8 }')
+  /sbin/ethtool --offload \$myIF rx off tx off
+  /sbin/ethtool -K \$myIF gso off gro off
+  /sbin/ip link set \$myIF promisc on
+end script
+script
+  sleep 1
+  /usr/bin/docker run --name suricata --cap-add=NET_ADMIN --net=host --rm=true -v /data/suricata/ dtagdevsec/suricata 
+end script
+post-stop script
+  sleep 1
+  /usr/bin/docker rm suricata
+end script
+EOF
 
 # Let's load docker images from remote
 fuECHO "### Downloading docker images from DockerHub. Please be patient, this may take a while."
-for name in dionaea ews glastopf honeytrap kippo
+for name in dionaea elk ews glastopf honeytrap kippo suricata
 do
   docker pull dtagdevsec/$name
 done
@@ -243,16 +311,12 @@ Hostname: \n
 IP:
 
 
-
-              xxx              .            
-            xxx xxx          ==            
-          xxx xxx xxx       ===            
-       /""""""""""""""""\___/ ===        
-  ~~~ {~~ ~~~~ ~~~ ~~~~ ~~ ~ /  ===- ~~~   
-       \______ o          __/            
-         \    \        __/             
-          \____\______/                
-
+___________     _____________________________
+\\\__    ___/     \\\______   \\\_____  \\\__    ___/
+  |    |  ______ |     ___//   |   \\\|    |
+  |    | /_____/ |    |   /    |    \\\    |
+  |____|         |____|   \\\_______  /____|
+                                  \\\/
 
 
 CTRL+ALT+F2 - Display current container status
@@ -260,10 +324,14 @@ CTRL+ALT+F1 - Return to this screen
 
 EOF
 
-echo "#!/bin/sh -e" > /etc/rc.local.new
-echo "# Let's add the first local ip to the /etc/issue file" >> /etc/rc.local.new
-echo 'sed -i "s#IP:.*#IP: ""$(hostname -I | awk '"'"'{ print $1 }'"'"')""#" /etc/issue' >> /etc/rc.local.new
-echo "exit 0" >> /etc/rc.local.new
+tee /etc/rc.local.new <<EOF
+#!/bin/sh -e
+# Let's add the first local ip to the /etc/issue file
+sed -i "s#IP:.*#IP: \$(hostname -I | awk '{ print \$1 }')#" /etc/issue
+setupcon
+exit 0
+EOF
+
 chmod +x /etc/rc.local.new
 
 # Final steps
