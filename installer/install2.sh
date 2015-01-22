@@ -221,7 +221,7 @@ stop on runlevel [!2345]
 respawn
 pre-start script
   sleep 1
-  /sbin/iptables -A INPUT -p tcp --syn -m state --state NEW -j NFQUEUE
+  /sbin/iptables -A INPUT -p tcp --syn -m state --state NEW --destination-port ! 21,22,42,80,135,443,445,1433,3306,5060,5061,64295,64296 -j NFQUEUE
 end script
 script
   sleep 1
@@ -229,7 +229,7 @@ script
 end script
 post-stop script
   sleep 1
-  /sbin/iptables -D INPUT -p tcp --syn -m state --state NEW -j NFQUEUE
+  /sbin/iptables -D INPUT -p tcp --syn -m state --state NEW --destination-port ! 21,22,42,80,135,443,445,1433,3306,5060,5061,64295,64296 -j NFQUEUE
   /usr/bin/docker rm honeytrap
 end script
 EOF
