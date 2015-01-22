@@ -3,7 +3,7 @@
 # T-Pot Community Edition post install script          #
 # Ubuntu server 14.04, x64                             #
 #                                                      #
-# v0.20 by mo, DTAG, 2015-01-20                        #
+# v0.21 by mo, DTAG, 2015-01-22                        #
 ########################################################
 
 # Let's make sure there is a warning if running for a second time
@@ -166,7 +166,7 @@ start on started docker and filesystem and started suricata and started ews
 stop on runlevel [!2345]
 respawn
 script
-  sleep 15 
+  sleep 1 
   /usr/bin/docker run --name=elk --volumes-from ews --volumes-from suricata -v /data/elk/:/data/elk/ -p 127.0.0.1:64296:80 --rm=true dtagdevsec/elk
 end script
 post-stop script
@@ -221,15 +221,15 @@ stop on runlevel [!2345]
 respawn
 pre-start script
   sleep 1
-  /sbin/iptables -A INPUT -p tcp --syn -m state --state NEW -m multiport ! --dports 21,22,42,80,135,443,445,1433,3306,5060,5061,64295,64296 -j NFQUEUE
+  /sbin/iptables -w -A INPUT -p tcp --syn -m state --state NEW -m multiport ! --dports 21,22,42,80,135,443,445,1433,3306,5060,5061,64295,64296 -j NFQUEUE
 end script
 script
   sleep 1
-  /usr/bin/docker run --name honeytrap --cap-add=NET_ADMIN --net=host --rm -v /data/honeytrap dtagdevsec/honeytrap
+  /usr/bin/docker run --name honeytrap --cap-add=NET_ADMIN --net=host --rm=true -v /data/honeytrap dtagdevsec/honeytrap
 end script
 post-stop script
   sleep 1
-  /sbin/iptables -D INPUT -p tcp --syn -m state --state NEW -m multiport ! --dports 21,22,42,80,135,443,445,1433,3306,5060,5061,64295,64296 -j NFQUEUE
+  /sbin/iptables -w -D INPUT -p tcp --syn -m state --state NEW -m multiport ! --dports 21,22,42,80,135,443,445,1433,3306,5060,5061,64295,64296 -j NFQUEUE
   /usr/bin/docker rm honeytrap
 end script
 EOF
