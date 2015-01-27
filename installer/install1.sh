@@ -4,7 +4,7 @@
 #                           and consoleblank permanently    #
 # Ubuntu server 14.04.1, x64                                #
 #                                                           #
-# v0.07 by mo, DTAG, 2015-01-20                             #
+# v0.10 by mo, DTAG, 2015-01-20                             #
 #############################################################
 
 # Let's replace "quiet splash" options and update grub

@@ -1,9 +1,10 @@
 #!/bin/bash
+
 ########################################################
-# .iso maker for tpotce                                #
+# T-Pot Community Edition                              #
+# .ISO maker                                           #
 #                                                      #
-#                                                      #
-# v0.04 by mo, 2014-12-11                              #
+# v0.10 by mo, DTAG, 2015-01-27                        #
 ########################################################
 
 # Let's define some global vars
@@ -47,7 +48,7 @@ losetup -d /dev/loop0
 # Let's add the files for the automated install
 fuECHO "### Adding the automated install files."
 mkdir -p $myTPOTCEDIR/tpotce
-cp installer/* $myTPOTCEDIR/tpotce/
+cp installer/* -r $myTPOTCEDIR/tpotce/
 cp isolinux/* $myTPOTCEDIR/isolinux/
 cp kickstart/* $myTPOTCEDIR/tpotce/
 cp preseed/* $myTPOTCEDIR/tpotce/
