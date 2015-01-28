@@ -7,6 +7,7 @@
 # v0.10 by mo, DTAG, 2015-01-27                        #
 ########################################################
 myCOUNT=1
+myIMAGES=$(cat /data/images.conf)
 while true
 do 
   if ! [ -f /var/run/check.lock ];
@@ -18,6 +19,12 @@ do
       echo -n "Waiting for services "
     else echo -n .
   fi
+  if [ $myCOUNT = 300 ];
+    then
+    echo
+    echo "Services are busy or not available. Please retry later."
+    exit 1
+  fi
   myCOUNT=$[$myCOUNT +1]
 done
 echo
@@ -25,7 +32,7 @@ echo
 echo "****************** $(date) ******************"
 echo
 echo
-for i in dionaea elk ews glastopf honeytrap kippo suricata
+for i in $myIMAGES
 do 
   echo "======| Container:" $i "|======"
   docker exec -i $i supervisorctl status | GREP_COLORS='mt=01;32' egrep --color=always "(RUNNING)|$" | GREP_COLORS='mt=01;31' egrep --color=always "(STOPPED|FATAL)|$"

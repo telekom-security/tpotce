@@ -36,11 +36,7 @@ d-i pkgsel/update-policy select unattended-upgrades
 # Post install
 d-i preseed/late_command string \
 cp /cdrom/tpotce/install1.sh /target/etc/rc.local; \
-cp /cdrom/tpotce/install2.sh /target/root/install.sh; \
-cp /cdrom/tpotce/bin/*.sh /target/usr/bin/; \
-cp /cdrom/tpotce/etc/issue /target/etc/; \
-cp /cdrom/tpotce/home/*.sh /target/home/tsec/; \
-cp -r /cdrom/tpotce/upstart/ /target/root/
+cp -r /cdrom/tpotce/ /target/root/
 
 # Reboot
 d-i finish-install/reboot_in_progress note

@@ -3,7 +3,7 @@
 # T-Pot Community Edition post install script          #
 # Ubuntu server 14.04, x64                             #
 #                                                      #
-# v0.30 by mo, DTAG, 2015-01-27                        #
+# v0.40 by mo, DTAG, 2015-01-28                        #
 ########################################################
 
 # Let's make sure there is a warning if running for a second time
@@ -59,9 +59,6 @@ mkdir -p /data/ews/log /data/ews/conf /data/elk/data /data/elk/log
 chmod 760 -R /data
 chown tpot:tpot -R /data
 
-chmod 700 /home/tsec/*.sh
-chown tsec:tsec /home/tsec/*.sh
-
 # Let's set the hostname
 fuECHO "### Setting a new hostname."
 myHOST=ce$(date +%s)$RANDOM
@@ -84,7 +81,7 @@ EOF
 
 # Let's load docker images from remote
 fuECHO "### Downloading docker images from DockerHub. Please be patient, this may take a while."
-for name in dionaea elk ews glastopf honeytrap kippo suricata
+for name in $(cat /root/tpotce/data/images.conf) 
 do
   docker pull dtagdevsec/$name
 done
@@ -102,29 +99,31 @@ fuECHO "### Adding cronjobs."
 tee -a /etc/crontab <<EOF
 
 # Show running containers every 60s via /dev/tty2
-*/2 * * * * root /usr/bin/status.sh 2 > /dev/tty2 
+*/1 * * * * root /usr/bin/status.sh > /dev/tty2 
 
 # Check if containers and services are up
 */5 * * * * root /usr/bin/check.sh
+
+# Restart docker service and containers
+7 3 * * * root /usr/bin/dcres.sh
 EOF
 
-# Let's update rc.local
-fuECHO "### Updating rc.local."
-tee /etc/rc.local.new <<EOF
-#!/bin/sh -e
-# Let's add the first local ip to the /etc/issue file
-sed -i "s#IP:.*#IP: \$(hostname -I | awk '{ print \$1 }')#" /etc/issue
-if [ -f /var/run/check.lock ];
-  then rm /var/run/check.lock
-fi
-setupcon
-exit 0
-EOF
+# Let's take care of some files and permissions
+chmod 500 /root/tpotce/bin/*
+chmod 600 /root/tpotce/data/*
+chmod 644 /root/tpotce/etc/issue
+chmod 755 /root/tpotce/etc/rc.local
+chmod 700 /root/tpotce/home/*
+chown tsec:tsec /root/tpotce/home/*
+chmod 644 /root/tpotce/upstart/*
 
-chmod +x /etc/rc.local.new
+# Let's move some files
+mv /root/tpotce/bin/* /usr/bin/
+mv /root/tpotce/data/* /data/
+mv /root/tpotce/etc/issue /etc/
+mv /root/tpotce/home/* /home/tsec/
+mv /root/tpotce/upstart/* /etc/init/
 
 # Final steps
 fuECHO "### Thanks for your patience. Now rebooting."
-mv /root/upstart/*.conf /etc/init/
-rm -rf /root/upstart/
-mv /etc/rc.local.new /etc/rc.local && chage -d 0 tsec && sleep 2 && reboot
+mv /root/tpotce/etc/rc.local /etc/rc.local && rm -rf /root/tpotce/ && chage -d 0 tsec && sleep 2 && reboot

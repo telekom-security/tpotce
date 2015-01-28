@@ -48,7 +48,7 @@ losetup -d /dev/loop0
 # Let's add the files for the automated install
 fuECHO "### Adding the automated install files."
 mkdir -p $myTPOTCEDIR/tpotce
-cp installer/* -r $myTPOTCEDIR/tpotce/
+cp installer/* -R $myTPOTCEDIR/tpotce/
 cp isolinux/* $myTPOTCEDIR/isolinux/
 cp kickstart/* $myTPOTCEDIR/tpotce/
 cp preseed/* $myTPOTCEDIR/tpotce/

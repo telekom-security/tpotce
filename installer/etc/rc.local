@@ -1,0 +1,13 @@
+#!/bin/sh -e
+# Let's add the first local ip to the /etc/issue and ews.ip file
+myIP=$(hostname -I | awk '{ print $1 }')
+sed -i "s#IP:.*#IP: $myIP#" /etc/issue
+tee /data/ews/conf/ews.ip << EOF
+[MAIN]
+ip = $myIP
+EOF
+if [ -f /var/run/check.lock ];
+  then rm /var/run/check.lock
+fi
+setupcon
+exit 0
