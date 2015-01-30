@@ -10,7 +10,7 @@ myCOUNT=1
 myIMAGES=$(cat /data/images.conf)
 while true
 do 
-  if ! [ -f /var/run/check.lock ];
+  if ! [ -a /var/run/check.lock ];
     then break
   fi
   sleep 0.1

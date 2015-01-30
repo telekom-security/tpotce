@@ -4,10 +4,10 @@
 # T-Pot Community Edition                              #
 # Container and services restart script                #
 #                                                      #
-# v0.10 by mo, DTAG, 2015-01-28                        #
+# v0.11 by mo, DTAG, 2015-01-29                        #
 ########################################################
 
-if [ -f /var/run/check.lock ];
+if [ -a /var/run/check.lock ];
   then exit
 fi
 
@@ -22,6 +22,7 @@ if [ $myUPTIME -gt 5 ];
       do
         service $i stop
     done
+    iptables -w -F
     service docker restart
     while true
       do

@@ -4,9 +4,9 @@
 # T-Pot Community Edition                              #
 # Check container and services script                  #
 #                                                      #
-# v0.11 by mo, DTAG, 2015-01-28                        #
+# v0.12 by mo, DTAG, 2015-01-29                        #
 ########################################################
-if [ -f /var/run/check.lock ];
+if [ -a /var/run/check.lock ];
   then exit
 fi
 
@@ -32,6 +32,7 @@ for i in $myIMAGES
                 do
                   service $j stop
               done
+              iptables -w -F
               service docker restart
               while true
                 do
