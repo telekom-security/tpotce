@@ -4,7 +4,7 @@
 # T-Pot Community Edition                              #
 # Container and services restart script                #
 #                                                      #
-# v0.11 by mo, DTAG, 2015-01-29                        #
+# v0.12 by mo, DTAG, 2015-02-05                        #
 ########################################################
 
 if [ -a /var/run/check.lock ];
@@ -46,3 +46,4 @@ fi
 
 rm /var/run/check.lock
 
+/etc/rc.local
