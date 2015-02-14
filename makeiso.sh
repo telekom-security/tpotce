@@ -25,8 +25,8 @@ fuECHO () {
 
 # Let's install all the packages we need
 fuECHO "### Installing packages."
-apt-get update -y
-apt-get install genisoimage syslinux -y
+#apt-get update -y
+#apt-get install genisoimage syslinux -y
 
 # Let's get Ubuntu 14.04.1 as .iso
 fuECHO "### Downloading Ubuntu 14.04.1."
@@ -68,6 +68,6 @@ rm -rf $myTMP $myTPOTCEDIR
 # Done.
 fuECHO "### Done."
 fuECHO "### Install to usb stick"
-fuECHO "###### Show devices:    df"
-fuECHO "###### Write to device: dd bs=1M if="$myTPOTCEISO" of=/dev/sdb" 
+fuECHO "###### Show devices:    df or fdisk -l"
+fuECHO "###### Write to device: dd bs=1M if="$myTPOTCEISO" of=<path to device>" 
 exit 0

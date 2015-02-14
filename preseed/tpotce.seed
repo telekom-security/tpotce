@@ -1,12 +1,15 @@
 # T-Pot CE preseed file by mo
 # Setting locale
-d-i debian-installer/language string en
-d-i debian-installer/country string DE
-d-i debian-installer/locale string en_US.UTF-8
+#d-i debian-installer/language string en
+#d-i debian-installer/country string DE
+#d-i debian-installer/locale string en_US.UTF-8
 
 # Keyboard selection
-d-i console-setup/ask_detect boolean false
-d-i keyboard-configuration/layoutcode string de
+#d-i console-setup/ask_detect boolean false
+#d-i keyboard-configuration/layoutcode string de
+
+#Unmount active partitions
+d-i preseed/early_command string umount /media
 
 # Network Configuration
 d-i netcfg/choose_interface select auto
@@ -20,8 +23,8 @@ d-i mirror/http/directory string /ubuntu
 d-i mirror/http/proxy string
 
 # Time
-d-i clock-setup/utc boolean true
-d-i time/zone string Europe/Berlin
+#d-i clock-setup/utc boolean true
+#d-i time/zone string Europe/Berlin
 d-i clock-setup/ntp boolean true
 
 # Package Groups
