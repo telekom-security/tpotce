@@ -3,7 +3,7 @@
 # T-Pot Community Edition post install script          #
 # Ubuntu server 14.04, x64                             #
 #                                                      #
-# v0.42 by mo, DTAG, 2015-02-11                        #
+# v0.43 by mo, DTAG, 2015-02-16                        #
 ########################################################
 
 # Let's make sure there is a warning if running for a second time
@@ -50,14 +50,6 @@ apt-get install curl ethtool git ntp libpam-google-authenticator lxc-docker-1.5.
 fuECHO "### Adding new user."
 addgroup --gid 2000 tpot
 adduser --system --no-create-home --uid 2000 --disabled-password --disabled-login --gid 2000 tpot
-
-# Let's create some files and folders
-fuECHO "### Creating some files and folders."
-mkdir -p /data/ews/log /data/ews/conf /data/elk/data /data/elk/log
-
-# Let's modify some ownership / access rights
-chmod 760 -R /data
-chown tpot:tpot -R /data
 
 # Let's set the hostname
 fuECHO "### Setting a new hostname."
@@ -117,12 +109,20 @@ chmod 700 /root/tpotce/home/*
 chown tsec:tsec /root/tpotce/home/*
 chmod 644 /root/tpotce/upstart/*
 
+# Let's create some files and folders
+fuECHO "### Creating some files and folders."
+mkdir -p /data/ews/log /data/ews/conf /data/elk/data /data/elk/log
+
 # Let's move some files
-mv /root/tpotce/bin/* /usr/bin/
-mv /root/tpotce/data/* /data/
-mv /root/tpotce/etc/issue /etc/
-mv /root/tpotce/home/* /home/tsec/
-mv /root/tpotce/upstart/* /etc/init/
+cp -R /root/tpotce/bin/* /usr/bin/
+cp -R /root/tpotce/data/* /data/
+cp -R /root/tpotce/etc/issue /etc/
+cp -R /root/tpotce/home/* /home/tsec/
+cp -R /root/tpotce/upstart/* /etc/init/
+
+# Let's modify some ownership / access rights
+chmod 660 -R /data
+chown tpot:tpot -R /data
 
 # Final steps
 fuECHO "### Thanks for your patience. Now rebooting."
