@@ -3,7 +3,7 @@
 # T-Pot Community Edition post install script          #
 # Ubuntu server 14.04, x64                             #
 #                                                      #
-# v0.43 by mo, DTAG, 2015-02-16                        #
+# v0.44 by mo, DTAG, 2015-02-17                        #
 ########################################################
 
 # Let's make sure there is a warning if running for a second time
@@ -123,6 +123,7 @@ cp -R /root/tpotce/upstart/* /etc/init/
 # Let's modify some ownership / access rights
 chmod 660 -R /data
 chown tpot:tpot -R /data
+chown tsec:tsec /home/tsec/*.sh
 
 # Final steps
 fuECHO "### Thanks for your patience. Now rebooting."
