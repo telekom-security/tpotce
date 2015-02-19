@@ -4,7 +4,7 @@
 # T-Pot Community Edition                              #
 # Container and services restart script                #
 #                                                      #
-# v0.12 by mo, DTAG, 2015-02-05                        #
+# v0.13 by mo, DTAG, 2015-02-19                        #
 ########################################################
 
 if [ -a /var/run/check.lock ];
@@ -37,6 +37,7 @@ if [ $myUPTIME -gt 5 ];
         sleep 0.1
     done
     docker rm $(docker ps -aq)
+    docker rmi $(docker images | grep "^<none>" | awk '{print $3}')
     for i in $myIMAGES
       do
         service $i start
