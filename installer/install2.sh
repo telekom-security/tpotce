@@ -3,7 +3,7 @@
 # T-Pot Community Edition post install script          #
 # Ubuntu server 14.04, x64                             #
 #                                                      #
-# v0.44 by mo, DTAG, 2015-02-17                        #
+# v0.45 by mo, DTAG, 2015-02-19                        #
 ########################################################
 
 # Let's make sure there is a warning if running for a second time
@@ -91,13 +91,16 @@ fuECHO "### Adding cronjobs."
 tee -a /etc/crontab <<EOF
 
 # Show running containers every 60s via /dev/tty2
-*/1 * * * * root /usr/bin/status.sh > /dev/tty2 
+*/1 * * * * 	root 	/usr/bin/status.sh > /dev/tty2 
 
 # Check if containers and services are up
-*/5 * * * * root /usr/bin/check.sh
+*/5 * * * * 	root 	/usr/bin/check.sh
+
+# Check if updated images are available and download them 
+27 1 * * *  	root	for i in $(cat /data/images.conf); do /usr/bin/docker pull dtagdevsec/$i:latest; done
 
 # Restart docker service and containers
-7 3 * * * root /usr/bin/dcres.sh
+27 3 * * * 	root 	/usr/bin/dcres.sh
 EOF
 
 # Let's take care of some files and permissions
@@ -120,7 +123,7 @@ cp -R /root/tpotce/etc/issue /etc/
 cp -R /root/tpotce/home/* /home/tsec/
 cp -R /root/tpotce/upstart/* /etc/init/
 
-# Let's modify some ownership / access rights
+# Let's take care of some files and permissions
 chmod 660 -R /data
 chown tpot:tpot -R /data
 chown tsec:tsec /home/tsec/*.sh
