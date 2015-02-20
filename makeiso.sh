@@ -4,12 +4,12 @@
 # T-Pot Community Edition                              #
 # .ISO maker                                           #
 #                                                      #
-# v0.10 by mo, DTAG, 2015-01-27                        #
+# v0.11 by mo, DTAG, 2015-02-20                        #
 ########################################################
 
 # Let's define some global vars
-myUBUNTULINK="http://releases.ubuntu.com/14.04.1/ubuntu-14.04.1-server-amd64.iso"
-myUBUNTUISO="ubuntu-14.04.1-server-amd64.iso"
+myUBUNTULINK="http://releases.ubuntu.com/14.04.2/ubuntu-14.04.2-server-amd64.iso"
+myUBUNTUISO="ubuntu-14.04.2-server-amd64.iso"
 myTPOTCEISO="tpotce.iso"
 myTPOTCEDIR="tpotceiso"
 myTMP="tmp"
