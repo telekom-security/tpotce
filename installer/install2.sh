@@ -3,7 +3,7 @@
 # T-Pot Community Edition post install script          #
 # Ubuntu server 14.04, x64                             #
 #                                                      #
-# v0.45 by mo, DTAG, 2015-02-19                        #
+# v0.46 by mo, DTAG, 2015-02-21                        #
 ########################################################
 
 # Let's make sure there is a warning if running for a second time
@@ -101,6 +101,9 @@ tee -a /etc/crontab <<EOF
 
 # Restart docker service and containers
 27 3 * * * 	root 	/usr/bin/dcres.sh
+
+# Delete elastic indices older than 30 days
+27 4 * * *  root  /usr/bin/docker exec elk bash -c '/usr/local/bin/curator --host 127.0.0.1 delete --older-than 30'
 EOF
 
 # Let's take care of some files and permissions
