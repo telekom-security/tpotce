@@ -8,6 +8,7 @@ tee /data/ews/conf/ews.ip << EOF
 [MAIN]
 ip = $myEXTIP
 EOF
+chown tpot:tpot /data/ews/conf/ews.ip
 if [ -f /var/run/check.lock ];
   then rm /var/run/check.lock
 fi
