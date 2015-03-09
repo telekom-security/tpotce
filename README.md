@@ -31,6 +31,7 @@ When installing the T-Pot ISO image, make sure the target system (physical/virtu
 - 2 GB RAM (4 GB recommended)
 - 40 GB disk (64 GB SSD recommended)
 - Network via DHCP
+- A working internet connection
 
 The installation requires very little interaction. Most things should be configured automatically. The system will reboot a couple of times. Make sure it can access the internet as it needs to download the dockerized honeypot components. Depending on your network connection, the installation may take some time. 
 Once the installation is finished, the system will automatically reboot and you will be presented with a login screen. The user credentials for the first login are:
