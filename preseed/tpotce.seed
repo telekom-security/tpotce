@@ -9,7 +9,7 @@
 #d-i keyboard-configuration/layoutcode string de
 
 #Unmount active partitions
-d-i preseed/early_command string umount /media
+d-i preseed/early_command string umount /media || :
 
 # Network Configuration
 d-i netcfg/choose_interface select auto
