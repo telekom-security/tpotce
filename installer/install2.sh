@@ -3,7 +3,7 @@
 # T-Pot Community Edition post install script          #
 # Ubuntu server 14.04, x64                             #
 #                                                      #
-# v0.46 by mo, DTAG, 2015-02-21                        #
+# v0.46 by mo, DTAG, 2015-03-09                        #
 ########################################################
 
 # Let's make sure there is a warning if running for a second time
@@ -97,7 +97,7 @@ tee -a /etc/crontab <<EOF
 */5 * * * * 	root 	/usr/bin/check.sh
 
 # Check if updated images are available and download them 
-27 1 * * *  	root	for i in $(cat /data/images.conf); do /usr/bin/docker pull dtagdevsec/$i:latest; done
+27 1 * * *  	root	for i in \$(cat /data/images.conf); do /usr/bin/docker pull dtagdevsec/\$i:latest; done
 
 # Restart docker service and containers
 27 3 * * * 	root 	/usr/bin/dcres.sh
