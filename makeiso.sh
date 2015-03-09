@@ -4,7 +4,7 @@
 # T-Pot Community Edition                              #
 # .ISO maker                                           #
 #                                                      #
-# v0.11 by mo, DTAG, 2015-02-20                        #
+# v0.12 by mo, DTAG, 2015-03-09                        #
 ########################################################
 
 # Let's define some global vars
@@ -28,8 +28,8 @@ fuECHO "### Installing packages."
 apt-get update -y
 apt-get install genisoimage syslinux -y
 
-# Let's get Ubuntu 14.04.1 as .iso
-fuECHO "### Downloading Ubuntu 14.04.1."
+# Let's get Ubuntu 14.04.2 as .iso
+fuECHO "### Downloading Ubuntu 14.04.2."
 if [ ! -f $myUBUNTUISO ]
   then wget $myUBUNTULINK;
   else fuECHO "### Found it locally.";
