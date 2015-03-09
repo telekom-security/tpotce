@@ -8,6 +8,7 @@ The image can then be used to install T-Pot on a physical or virtual machine.
 - Ubuntu 14.04.2 or 14.10 as host system (others *may* work, but remain untested)
 - 2GB of free memory  
 - 4GB of free storage 
+- A working internet connection
 
 **How to create the ISO image:**
 
