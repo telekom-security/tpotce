@@ -28,7 +28,7 @@ After successful build, you will find the ISO image `tpotce.iso` in your directo
 If you don't want to build the image yourself, you can download the prebuilt [tpotce.iso](http://dtag-dev-sec.github.io/tpotce.iso) ISO image from the project's web page. 
 
 ###Installation
-When installing the T-Pot ISO image, make sure the target system (physical/virtual) meets the following minimal requirements:
+When installing the T-Pot ISO image, make sure the target system (physical/virtual) meets the following minimum requirements:
 - 2 GB RAM (4 GB recommended)
 - 40 GB disk (64 GB SSD recommended)
 - Network via DHCP
