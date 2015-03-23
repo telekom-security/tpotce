@@ -13,6 +13,7 @@ myUBUNTUISO="ubuntu-14.04.2-server-amd64.iso"
 myTPOTCEISO="tpotce.iso"
 myTPOTCEDIR="tpotceiso"
 myTMP="tmp"
+myDEV=$1
 
 # Let's create a function for colorful output
 fuECHO () {
@@ -60,14 +61,23 @@ cd $myTPOTCEDIR
 mkisofs -D -r -V "T-Pot CE" -cache-inodes -J -l -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -o ../$myTPOTCEISO ../$myTPOTCEDIR
 cd ..
 isohybrid $myTPOTCEISO
-  
+
 # Let's clean up
 fuECHO "### Cleaning up."
 rm -rf $myTMP $myTPOTCEDIR
 
-# Done.
+# Let's write the image to $myDEV or show instructions
+if [ -b $myDEV ] && [ ! -z $1 ]
+then
+  fuECHO "### Found a block device on $myDEV"
+  fuECHO "### Writing image to device. Please wait..."
+  dd bs=1M if="$myTPOTCEISO" of="$myDEV"
+else
+  fuECHO "### Install to usb stick"
+  fuECHO "###### Show devices:    df or fdisk -l"
+  fuECHO "###### Write to device: dd bs=1M if="$myTPOTCEISO" of=<path to device>"
+fi
+
+# Done
 fuECHO "### Done."
-fuECHO "### Install to usb stick"
-fuECHO "###### Show devices:    df or fdisk -l"
-fuECHO "###### Write to device: dd bs=1M if="$myTPOTCEISO" of=<path to device>" 
 exit 0
