@@ -91,7 +91,7 @@ fuECHO "### Adding cronjobs."
 tee -a /etc/crontab <<EOF
 
 # Show running containers every 60s via /dev/tty2
-*/1 * * * * 	root 	/usr/bin/status.sh > /dev/tty2 
+*/2 * * * * 	root 	/usr/bin/status.sh > /dev/tty2
 
 # Check if containers and services are up
 */5 * * * * 	root 	/usr/bin/check.sh
@@ -104,6 +104,9 @@ tee -a /etc/crontab <<EOF
 
 # Delete elastic indices older than 30 days
 27 4 * * *  root  /usr/bin/docker exec elk bash -c '/usr/local/bin/curator --host 127.0.0.1 delete --older-than 30'
+
+# Update IP and erase check.lock if it exists
+27 15 * * * root /etc/rc.local
 EOF
 
 # Let's take care of some files and permissions
