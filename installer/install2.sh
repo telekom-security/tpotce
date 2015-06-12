@@ -3,7 +3,7 @@
 # T-Pot Community Edition post install script          #
 # Ubuntu server 14.04, x64                             #
 #                                                      #
-# v0.46 by mo, DTAG, 2015-03-09                        #
+# v0.47 by mo, DTAG, 2015-06-12                        #
 ########################################################
 
 # Let's make sure there is a warning if running for a second time
@@ -44,7 +44,7 @@ apt-get dist-upgrade -y
 
 # Let's install all the packages we need
 fuECHO "### Installing packages."
-apt-get install curl ethtool git ntp libpam-google-authenticator lxc-docker-1.5.0 vim -y
+apt-get install curl ethtool git ntp libpam-google-authenticator lxc-docker-1.6.2 vim -y
 
 # Let's add a new user
 fuECHO "### Adding new user."
