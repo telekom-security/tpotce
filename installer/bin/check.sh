@@ -4,7 +4,7 @@
 # T-Pot Community Edition                              #
 # Check container and services script                  #
 #                                                      #
-# v0.12 by mo, DTAG, 2015-01-29                        #
+# v0.13 by mo, DTAG, 2015-06-12                        #
 ########################################################
 if [ -a /var/run/check.lock ];
   then exit
@@ -17,7 +17,7 @@ touch /var/run/check.lock
 myUPTIME=$(awk '{print int($1/60)}' /proc/uptime)
 for i in $myIMAGES
   do 
-    myCIDSTATUS=$(docker exec -i $i supervisorctl status)
+    myCIDSTATUS=$(docker exec $i supervisorctl status)
       if [ $? -ne 0 ]; 
         then
           myCIDSTATUS=1 
@@ -59,4 +59,3 @@ for i in $myIMAGES
 done
 
 rm /var/run/check.lock
-
