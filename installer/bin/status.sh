@@ -4,7 +4,7 @@
 # T-Pot Community Edition                              #
 # Container and services status script                 #
 #                                                      #
-# v0.10 by mo, DTAG, 2015-01-27                        #
+# v0.11 by mo, DTAG, 2015-06-12                        #
 ########################################################
 myCOUNT=1
 myIMAGES=$(cat /data/images.conf)
@@ -34,7 +34,8 @@ echo
 echo
 for i in $myIMAGES
 do 
+  echo
   echo "======| Container:" $i "|======"
-  docker exec -i $i supervisorctl status | GREP_COLORS='mt=01;32' egrep --color=always "(RUNNING)|$" | GREP_COLORS='mt=01;31' egrep --color=always "(STOPPED|FATAL)|$"
+  docker exec $i supervisorctl status | GREP_COLORS='mt=01;32' egrep --color=always "(RUNNING)|$" | GREP_COLORS='mt=01;31' egrep --color=always "(STOPPED|FATAL)|$"
   echo
 done
