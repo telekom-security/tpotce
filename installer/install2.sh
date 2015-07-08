@@ -3,7 +3,7 @@
 # T-Pot Community Edition post install script          #
 # Ubuntu server 14.04, x64                             #
 #                                                      #
-# v0.47 by mo, DTAG, 2015-06-12                        #
+# v0.48 by mo, DTAG, 2015-07-08                        #
 ########################################################
 
 # Let's make sure there is a warning if running for a second time
@@ -44,7 +44,7 @@ apt-get dist-upgrade -y
 
 # Let's install all the packages we need
 fuECHO "### Installing packages."
-apt-get install curl ethtool git ntp libpam-google-authenticator lxc-docker-1.6.2 vim -y
+apt-get install curl ethtool git ntp libpam-google-authenticator lxc-docker-1.7.0 vim -y
 
 # Let's add a new user
 fuECHO "### Adding new user."
@@ -86,7 +86,19 @@ APT::Periodic::Download-Upgradeable-Packages "0";
 APT::Periodic::AutocleanInterval "7";
 EOF
 
-# Let's add some conrjobs
+# Let's wait no longer for network than 20 seconds 
+fuECHO "### Wait no longer for network than 20 seconds."
+sed -i.bak 's#sleep 60#sleep 10#' /etc/init/failsafe.conf
+
+# Let's make sure to reboot the system after a kernel panic
+fuECHO "### Reboot after kernel panic."
+tee -a /etc/sysctl.conf <<EOF
+# Reboot after kernel panic, check via /proc/sys/kernel/panic[_on_oops]
+kernel.panic = 1
+kernel.panic_on_oops = 1
+EOF
+
+# Let's add some cronjobs
 fuECHO "### Adding cronjobs."
 tee -a /etc/crontab <<EOF
 
