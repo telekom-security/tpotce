@@ -86,9 +86,9 @@ APT::Periodic::Download-Upgradeable-Packages "0";
 APT::Periodic::AutocleanInterval "7";
 EOF
 
-# Let's wait no longer for network than 20 seconds 
-#fuECHO "### Wait no longer for network than 60 seconds."
-#sed -i.bak 's#sleep 60#sleep 30#' /etc/init/failsafe.conf
+# Let's wait no longer for network than 60 seconds 
+fuECHO "### Wait no longer for network than 60 seconds."
+sed -i.bak 's#sleep 60#sleep 30#' /etc/init/failsafe.conf
 
 # Let's make sure to reboot the system after a kernel panic
 fuECHO "### Reboot after kernel panic."
