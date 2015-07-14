@@ -4,7 +4,7 @@
 # T-Pot Community Edition                              #
 # .ISO maker                                           #
 #                                                      #
-# v0.12 by mo, DTAG, 2015-03-09                        #
+# v0.13 by mo, DTAG, 2015-07-14                        #
 ########################################################
 
 # Let's define some global vars
@@ -27,7 +27,7 @@ fuECHO () {
 # Let's install all the packages we need
 fuECHO "### Installing packages."
 apt-get update -y
-apt-get install genisoimage syslinux -y
+apt-get install genisoimage syslinux syslinux-utils -y
 
 # Let's get Ubuntu 14.04.2 as .iso
 fuECHO "### Downloading Ubuntu 14.04.2."
