@@ -16,17 +16,17 @@ touch /var/run/check.lock
 
 myUPTIME=$(awk '{print int($1/60)}' /proc/uptime)
 for i in $myIMAGES
-  do 
+  do
     myCIDSTATUS=$(docker exec $i supervisorctl status)
-      if [ $? -ne 0 ]; 
+      if [ $? -ne 0 ];
         then
-          myCIDSTATUS=1 
-        else 
+          myCIDSTATUS=1
+        else
           myCIDSTATUS=$(echo $myCIDSTATUS | egrep -c "(STOPPED|FATAL)")
       fi
-      if [ $myCIDSTATUS -gt 0 ]; 
+      if [ $myCIDSTATUS -gt 0 ];
         then
-          if [ $myUPTIME -gt 5 ]; 
+          if [ $myUPTIME -gt 5 ];
             then
               for j in $myIMAGES
                 do
@@ -46,7 +46,7 @@ for i in $myIMAGES
                   fi
                   sleep 0.1
               done
-              docker rm $(docker ps -aq)
+              docker rm -v $(docker ps -aq)
               for j in $myIMAGES
                 do
                   service $j start

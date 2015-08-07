@@ -16,9 +16,9 @@ myIMAGES=$(cat /data/images.conf)
 touch /var/run/check.lock
 
 myUPTIME=$(awk '{print int($1/60)}' /proc/uptime)
-if [ $myUPTIME -gt 5 ]; 
+if [ $myUPTIME -gt 5 ];
   then
-    for i in $myIMAGES 
+    for i in $myIMAGES
       do
         service $i stop
     done
@@ -30,13 +30,13 @@ if [ $myUPTIME -gt 5 ];
         if [ $? -ne 0 ];
           then
             echo Docker daemon is still starting.
-          else 
+          else
             echo Docker daemon is now available.
             break
         fi
         sleep 0.1
     done
-    docker rm $(docker ps -aq)
+    docker rm -v $(docker ps -aq)
     docker rmi $(docker images | grep "^<none>" | awk '{print $3}')
     for i in $myIMAGES
       do
