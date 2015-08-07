@@ -1,4 +1,4 @@
-!/bin/bash
+#!/bin/bash
 ########################################################
 # T-Pot Community Edition                              #
 # Volume bug fix script                                #
