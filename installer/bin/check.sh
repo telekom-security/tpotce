@@ -4,7 +4,7 @@
 # T-Pot Community Edition                              #
 # Check container and services script                  #
 #                                                      #
-# v0.13 by mo, DTAG, 2015-06-12                        #
+# v0.14 by mo, DTAG, 2015-08-07                        #
 ########################################################
 if [ -a /var/run/check.lock ];
   then exit

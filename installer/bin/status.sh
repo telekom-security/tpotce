@@ -9,7 +9,7 @@
 myCOUNT=1
 myIMAGES=$(cat /data/images.conf)
 while true
-do 
+do
   if ! [ -a /var/run/check.lock ];
     then break
   fi
@@ -33,7 +33,7 @@ echo "****************** $(date) ******************"
 echo
 echo
 for i in $myIMAGES
-do 
+do
   echo
   echo "======| Container:" $i "|======"
   docker exec $i supervisorctl status | GREP_COLORS='mt=01;32' egrep --color=always "(RUNNING)|$" | GREP_COLORS='mt=01;31' egrep --color=always "(STOPPED|FATAL)|$"
