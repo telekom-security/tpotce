@@ -73,7 +73,7 @@ EOF
 
 # Let's load docker images from remote
 fuECHO "### Downloading docker images from DockerHub. Please be patient, this may take a while."
-for name in $(cat /root/tpotce/data/images.conf) 
+for name in $(cat /root/tpotce/data/images.conf)
 do
   docker pull dtagdevsec/$name
 done
@@ -86,7 +86,7 @@ APT::Periodic::Download-Upgradeable-Packages "0";
 APT::Periodic::AutocleanInterval "7";
 EOF
 
-# Let's wait no longer for network than 60 seconds 
+# Let's wait no longer for network than 60 seconds
 fuECHO "### Wait no longer for network than 60 seconds."
 sed -i.bak 's#sleep 60#sleep 30#' /etc/init/failsafe.conf
 
@@ -108,7 +108,7 @@ tee -a /etc/crontab <<EOF
 # Check if containers and services are up
 */5 * * * * 	root 	/usr/bin/check.sh
 
-# Check if updated images are available and download them 
+# Check if updated images are available and download them
 27 1 * * *  	root	for i in \$(cat /data/images.conf); do /usr/bin/docker pull dtagdevsec/\$i:latest; done
 
 # Restart docker service and containers

@@ -4,12 +4,12 @@
 # T-Pot Community Edition                              #
 # .ISO maker                                           #
 #                                                      #
-# v0.13 by mo, DTAG, 2015-07-14                        #
+# v0.14 by mo, DTAG, 2015-08-11                        #
 ########################################################
 
 # Let's define some global vars
-myUBUNTULINK="http://releases.ubuntu.com/14.04.2/ubuntu-14.04.2-server-amd64.iso"
-myUBUNTUISO="ubuntu-14.04.2-server-amd64.iso"
+myUBUNTULINK="http://releases.ubuntu.com/14.04.3/ubuntu-14.04.3-server-amd64.iso"
+myUBUNTUISO="ubuntu-14.04.3-server-amd64.iso"
 myTPOTCEISO="tpotce.iso"
 myTPOTCEDIR="tpotceiso"
 myTMP="tmp"
@@ -30,7 +30,7 @@ apt-get update -y
 apt-get install genisoimage syslinux syslinux-utils -y
 
 # Let's get Ubuntu 14.04.2 as .iso
-fuECHO "### Downloading Ubuntu 14.04.2."
+fuECHO "### Downloading Ubuntu 14.04.3."
 if [ ! -f $myUBUNTUISO ]
   then wget $myUBUNTULINK;
   else fuECHO "### Found it locally.";
