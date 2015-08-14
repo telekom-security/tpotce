@@ -3,7 +3,7 @@
 # T-Pot Community Edition                              #
 # Volume bug fix script                                #
 #                                                      #
-# v0.01 by mo, DTAG, 2015-08-07                        #
+# v0.02 by mo, DTAG, 2015-08-14                        #
 ########################################################
 myFIXPATH="/tpot-volume-fix"
 myLOCK="/var/run/check.lock"
@@ -32,8 +32,9 @@ apt-get autoremove -y
 rm -rf /var/lib/docker/
 rm -rf /var/run/docker/
 
-# Let's reinstall docker again
-apt-get install lxc-docker -y
+# Let's reinstall docker using the new docker repo (old one is deprecated)
+wget -qO- https://get.docker.com/gpg | apt-key add -
+wget -qO- https://get.docker.com/ | sh
 
 # Let's pull the images
 for i in $(cat $myIMAGECONFPATH); do /usr/bin/docker pull dtagdevsec/$i:latest; done
@@ -44,6 +45,11 @@ cp $myFIXPATH/tpotce/installer/bin/check.sh /usr/bin/
 cp $myFIXPATH/tpotce/installer/bin/dcres.sh /usr/bin/
 for i in $(cat $myIMAGECONFPATH); do cp $myFIXPATH/tpotce/installer/upstart/$i.conf /etc/init/; done
 cp $myFIXPATH/crontab /etc/
+tee -a /etc/crontab <<EOF
+
+# Check for updated packages every sunday, upgrade and reboot
+27 16 * * 0   root  sleep \$((RANDOM %600)); apt-get autoclean -y; apt-get autoremove -y; apt-get update -y; apt-get upgrade -y; apt-get upgrade docker-engine -y; sleep 5; reboot
+EOF
 
 # Let's remove the check.lock and allow scripts to execute again
 rm $myLOCK
