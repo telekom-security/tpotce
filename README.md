@@ -14,7 +14,7 @@ The image can then be used to install T-Pot on a physical or virtual machine.
 
 1. Clone the repository and enter it. 
     
-        git clone git@github.com:dtag-dev-sec/tpotce.git
+        git clone https://github.com/dtag-dev-sec/tpotce.git
         cd tpotce
 
 2. Invoke the script that builds the ISO image. 
