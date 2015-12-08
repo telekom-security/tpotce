@@ -1,0 +1,4 @@
+#!/bin/bash
+# Stop plymouth to allow for terminal interaction
+plymouth quit
+openvt -w -s /root/tpot/install.sh

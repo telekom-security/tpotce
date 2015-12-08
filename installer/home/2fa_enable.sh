@@ -1,14 +1,14 @@
 #!/bin/bash
 
 ########################################################
-# T-Pot Community Edition                              #
+# T-Pot                                                #
 # Two-Factor authentication enable script              #
 #                                                      #
-# v0.20 by mo, DTAG, 2015-01-27                        #
+# v0.01 by mo, DTAG, 2015-06-15                        #
 ########################################################
 
 echo "### This script will enable Two-Factor-Authentication based on Google Authenticator for SSH."
-while true 
+while true
 do
   echo -n "### Do you want to continue (y/n)? "; read myANSWER;
   case $myANSWER in

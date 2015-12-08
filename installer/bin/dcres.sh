@@ -1,15 +1,33 @@
 #!/bin/bash
 
 ########################################################
-# T-Pot Community Edition                              #
+# T-Pot                                                #
 # Container and services restart script                #
 #                                                      #
-# v0.14 by mo, DTAG, 2015-08-07                        #
+# v0.03 by mo, DTAG, 2015-11-02                        #
 ########################################################
+myCOUNT=1
 
-if [ -a /var/run/check.lock ];
-  then exit
-fi
+while true
+do
+  if ! [ -a /var/run/check.lock ];
+    then break
+  fi
+  sleep 0.1
+  if [ "$myCOUNT" = "1" ];
+    then
+      echo -n "Waiting for services "
+    else echo -n .
+  fi
+  if [ "$myCOUNT" = "6000" ];
+    then
+    echo
+    echo "Overriding check.lock"
+    rm /var/run/check.lock
+    break
+  fi
+  myCOUNT=$[$myCOUNT +1]
+done
 
 myIMAGES=$(cat /data/images.conf)
 

@@ -14,7 +14,7 @@ d-i preseed/early_command string umount /media || :
 # Network Configuration
 d-i netcfg/choose_interface select auto
 d-i netcfg/dhcp_timeout string 60
-d-i netcfg/get_hostname string t-pot 
+d-i netcfg/get_hostname string t-pot
 
 # Source & Proxy
 d-i mirror/country string manual
@@ -31,15 +31,15 @@ d-i clock-setup/ntp boolean true
 tasksel tasksel/first multiselect ubuntu-server
 
 # Packages
-d-i pkgsel/include string openssh-server
+d-i pkgsel/include string curl dialog dstat ethtool genisoimage git htop iw libpam-google-authenticator lm-sensors ntp openssh-server syslinux pv vim wireless-tools wpasupplicant
 
 # Update Policy
 d-i pkgsel/update-policy select unattended-upgrades
 
 # Post install
 d-i preseed/late_command string \
-cp /cdrom/tpotce/install1.sh /target/etc/rc.local; \
-cp -r /cdrom/tpotce/ /target/root/
+cp /cdrom/tpot/rc.local.install /target/etc/rc.local; \
+cp -r /cdrom/tpot/ /target/root/
 
 # Reboot
 d-i finish-install/reboot_in_progress note

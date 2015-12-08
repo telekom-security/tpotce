@@ -1,0 +1,311 @@
+[2015-11-16 09:29:38,922][INFO ][node                     ] [Veil] initialized
+[2015-11-16 09:29:38,923][INFO ][node                     ] [Veil] starting ...
+[2015-11-16 09:29:39,081][INFO ][transport                ] [Veil] publish_address {127.0.0.1:9300}, bound_addresses {127.0.0.1:9300}, {[::1]:9300}
+[2015-11-16 09:29:39,096][INFO ][discovery                ] [Veil] elasticsearch/uYwNByX2TxSVe55Pzdbb0g
+[2015-11-16 09:29:42,201][INFO ][cluster.service          ] [Veil] new_master {Veil}{uYwNByX2TxSVe55Pzdbb0g}{127.0.0.1}{127.0.0.1:9300}, reason: zen-disco-join(elected_as_master, [0] joins received)
+[2015-11-16 09:29:42,294][INFO ][gateway                  ] [Veil] recovered [2] indices into cluster_state
+[2015-11-16 09:29:42,311][INFO ][http                     ] [Veil] publish_address {127.0.0.1:9200}, bound_addresses {127.0.0.1:9200}, {[::1]:9200}
+[2015-11-16 09:29:42,311][INFO ][node                     ] [Veil] started
+[2015-11-16 09:30:24,102][INFO ][cluster.metadata         ] [Veil] [logstash-2015.11.16] creating index, cause [auto(bulk api)], templates [logstash], shards [5]/[1], mappings [SuricataIDPS-logs, _default_]
+[2015-11-16 09:30:24,229][INFO ][cluster.metadata         ] [Veil] [logstash-2015.11.16] update_mapping [SuricataIDPS-logs]
+[2015-11-16 09:30:24,813][INFO ][cluster.metadata         ] [Veil] [logstash-2015.11.16] update_mapping [SuricataIDPS-logs]
+[2015-11-16 09:30:31,124][INFO ][cluster.metadata         ] [Veil] [logstash-2015.11.16] update_mapping [SuricataIDPS-logs]
+[2015-11-16 09:53:30,514][INFO ][cluster.metadata         ] [Veil] [logstash-2015.11.16] update_mapping [SuricataIDPS-logs]
+[2015-11-16 10:03:55,575][INFO ][cluster.metadata         ] [Veil] [logstash-2015.11.16] update_mapping [SuricataIDPS-logs]
+[2015-11-16 10:03:59,745][INFO ][cluster.metadata         ] [Veil] [logstash-2015.11.16] update_mapping [SuricataIDPS-logs]
+[2015-11-16 10:03:59,762][INFO ][cluster.metadata         ] [Veil] [logstash-2015.11.16] update_mapping [SuricataIDPS-logs]
+[2015-11-16 10:04:03,891][INFO ][cluster.metadata         ] [Veil] [logstash-2015.11.16] update_mapping [SuricataIDPS-logs]
+[2015-11-16 10:10:48,444][INFO ][cluster.metadata         ] [Veil] [logstash-2015.11.16] update_mapping [SuricataIDPS-logs]
+[2015-11-16 10:29:23,286][INFO ][cluster.metadata         ] [Veil] [logstash-2015.11.16] update_mapping [SuricataIDPS-logs]
+[2015-11-16 10:29:23,307][INFO ][cluster.metadata         ] [Veil] [logstash-2015.11.16] update_mapping [SuricataIDPS-logs]
+[2015-11-16 11:21:34,996][INFO ][rest.suppressed          ] /.kibana/visualization/Destination-Ports Params: {id=Destination-Ports, index=.kibana, op_type=create, type=visualization}
+[.kibana][[.kibana][0]] DocumentAlreadyExistsException[[visualization][Destination-Ports]: document already exists]
+	at org.elasticsearch.index.engine.InternalEngine.innerCreateNoLock(InternalEngine.java:411)
+	at org.elasticsearch.index.engine.InternalEngine.innerCreate(InternalEngine.java:369)
+	at org.elasticsearch.index.engine.InternalEngine.create(InternalEngine.java:341)
+	at org.elasticsearch.index.shard.IndexShard.create(IndexShard.java:517)
+	at org.elasticsearch.index.engine.Engine$Create.execute(Engine.java:789)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction.executeIndexRequestOnPrimary(TransportReplicationAction.java:1073)
+	at org.elasticsearch.action.index.TransportIndexAction.shardOperationOnPrimary(TransportIndexAction.java:170)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase.performOnPrimary(TransportReplicationAction.java:579)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase$1.doRun(TransportReplicationAction.java:452)
+	at org.elasticsearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:37)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:615)
+	at java.lang.Thread.run(Thread.java:745)
+[2015-11-16 11:22:20,042][INFO ][rest.suppressed          ] /.kibana/visualization/Destination-Ports Params: {id=Destination-Ports, index=.kibana, op_type=create, type=visualization}
+[.kibana][[.kibana][0]] DocumentAlreadyExistsException[[visualization][Destination-Ports]: document already exists]
+	at org.elasticsearch.index.engine.InternalEngine.innerCreateNoLock(InternalEngine.java:411)
+	at org.elasticsearch.index.engine.InternalEngine.innerCreate(InternalEngine.java:369)
+	at org.elasticsearch.index.engine.InternalEngine.create(InternalEngine.java:341)
+	at org.elasticsearch.index.shard.IndexShard.create(IndexShard.java:517)
+	at org.elasticsearch.index.engine.Engine$Create.execute(Engine.java:789)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction.executeIndexRequestOnPrimary(TransportReplicationAction.java:1073)
+	at org.elasticsearch.action.index.TransportIndexAction.shardOperationOnPrimary(TransportIndexAction.java:170)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase.performOnPrimary(TransportReplicationAction.java:579)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase$1.doRun(TransportReplicationAction.java:452)
+	at org.elasticsearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:37)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:615)
+	at java.lang.Thread.run(Thread.java:745)
+[2015-11-16 11:26:11,386][INFO ][cluster.metadata         ] [Veil] [logstash-2015.11.16] create_mapping [ews-logs]
+[2015-11-16 11:30:22,723][INFO ][rest.suppressed          ] /.kibana/index-pattern/[logstash-]YYYY.MM.DD Params: {id=[logstash-]YYYY.MM.DD, index=.kibana, op_type=create, type=index-pattern}
+[.kibana][[.kibana][0]] DocumentAlreadyExistsException[[index-pattern][[logstash-]YYYY.MM.DD]: document already exists]
+	at org.elasticsearch.index.engine.InternalEngine.innerCreateNoLock(InternalEngine.java:411)
+	at org.elasticsearch.index.engine.InternalEngine.innerCreate(InternalEngine.java:369)
+	at org.elasticsearch.index.engine.InternalEngine.create(InternalEngine.java:341)
+	at org.elasticsearch.index.shard.IndexShard.create(IndexShard.java:517)
+	at org.elasticsearch.index.engine.Engine$Create.execute(Engine.java:789)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction.executeIndexRequestOnPrimary(TransportReplicationAction.java:1073)
+	at org.elasticsearch.action.index.TransportIndexAction.shardOperationOnPrimary(TransportIndexAction.java:170)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase.performOnPrimary(TransportReplicationAction.java:579)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase$1.doRun(TransportReplicationAction.java:452)
+	at org.elasticsearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:37)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:615)
+	at java.lang.Thread.run(Thread.java:745)
+[2015-11-16 12:07:18,928][INFO ][rest.suppressed          ] /.kibana/visualization/Destination-Ports Params: {id=Destination-Ports, index=.kibana, op_type=create, type=visualization}
+[.kibana][[.kibana][0]] DocumentAlreadyExistsException[[visualization][Destination-Ports]: document already exists]
+	at org.elasticsearch.index.engine.InternalEngine.innerCreateNoLock(InternalEngine.java:411)
+	at org.elasticsearch.index.engine.InternalEngine.innerCreate(InternalEngine.java:369)
+	at org.elasticsearch.index.engine.InternalEngine.create(InternalEngine.java:341)
+	at org.elasticsearch.index.shard.IndexShard.create(IndexShard.java:517)
+	at org.elasticsearch.index.engine.Engine$Create.execute(Engine.java:789)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction.executeIndexRequestOnPrimary(TransportReplicationAction.java:1073)
+	at org.elasticsearch.action.index.TransportIndexAction.shardOperationOnPrimary(TransportIndexAction.java:170)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase.performOnPrimary(TransportReplicationAction.java:579)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase$1.doRun(TransportReplicationAction.java:452)
+	at org.elasticsearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:37)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:615)
+	at java.lang.Thread.run(Thread.java:745)
+[2015-11-16 12:18:27,537][INFO ][rest.suppressed          ] /.kibana/visualization/SSH-Software-Version Params: {id=SSH-Software-Version, index=.kibana, op_type=create, type=visualization}
+[.kibana][[.kibana][0]] DocumentAlreadyExistsException[[visualization][SSH-Software-Version]: document already exists]
+	at org.elasticsearch.index.engine.InternalEngine.innerCreateNoLock(InternalEngine.java:411)
+	at org.elasticsearch.index.engine.InternalEngine.innerCreate(InternalEngine.java:369)
+	at org.elasticsearch.index.engine.InternalEngine.create(InternalEngine.java:341)
+	at org.elasticsearch.index.shard.IndexShard.create(IndexShard.java:517)
+	at org.elasticsearch.index.engine.Engine$Create.execute(Engine.java:789)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction.executeIndexRequestOnPrimary(TransportReplicationAction.java:1073)
+	at org.elasticsearch.action.index.TransportIndexAction.shardOperationOnPrimary(TransportIndexAction.java:170)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase.performOnPrimary(TransportReplicationAction.java:579)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase$1.doRun(TransportReplicationAction.java:452)
+	at org.elasticsearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:37)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:615)
+	at java.lang.Thread.run(Thread.java:745)
+[2015-11-16 12:22:37,298][INFO ][rest.suppressed          ] /.kibana/visualization/SSH-Software-Version Params: {id=SSH-Software-Version, index=.kibana, op_type=create, type=visualization}
+[.kibana][[.kibana][0]] DocumentAlreadyExistsException[[visualization][SSH-Software-Version]: document already exists]
+	at org.elasticsearch.index.engine.InternalEngine.innerCreateNoLock(InternalEngine.java:411)
+	at org.elasticsearch.index.engine.InternalEngine.innerCreate(InternalEngine.java:369)
+	at org.elasticsearch.index.engine.InternalEngine.create(InternalEngine.java:341)
+	at org.elasticsearch.index.shard.IndexShard.create(IndexShard.java:517)
+	at org.elasticsearch.index.engine.Engine$Create.execute(Engine.java:789)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction.executeIndexRequestOnPrimary(TransportReplicationAction.java:1073)
+	at org.elasticsearch.action.index.TransportIndexAction.shardOperationOnPrimary(TransportIndexAction.java:170)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase.performOnPrimary(TransportReplicationAction.java:579)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase$1.doRun(TransportReplicationAction.java:452)
+	at org.elasticsearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:37)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:615)
+	at java.lang.Thread.run(Thread.java:745)
+[2015-11-16 12:43:41,414][INFO ][rest.suppressed          ] /.kibana/dashboard/Default Params: {id=Default, index=.kibana, op_type=create, type=dashboard}
+[.kibana][[.kibana][0]] DocumentAlreadyExistsException[[dashboard][Default]: document already exists]
+	at org.elasticsearch.index.engine.InternalEngine.innerCreateNoLock(InternalEngine.java:411)
+	at org.elasticsearch.index.engine.InternalEngine.innerCreate(InternalEngine.java:369)
+	at org.elasticsearch.index.engine.InternalEngine.create(InternalEngine.java:341)
+	at org.elasticsearch.index.shard.IndexShard.create(IndexShard.java:517)
+	at org.elasticsearch.index.engine.Engine$Create.execute(Engine.java:789)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction.executeIndexRequestOnPrimary(TransportReplicationAction.java:1073)
+	at org.elasticsearch.action.index.TransportIndexAction.shardOperationOnPrimary(TransportIndexAction.java:170)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase.performOnPrimary(TransportReplicationAction.java:579)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase$1.doRun(TransportReplicationAction.java:452)
+	at org.elasticsearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:37)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:615)
+	at java.lang.Thread.run(Thread.java:745)
+[2015-11-16 14:33:42,067][INFO ][rest.suppressed          ] /.kibana/dashboard/Default Params: {id=Default, index=.kibana, op_type=create, type=dashboard}
+[.kibana][[.kibana][0]] DocumentAlreadyExistsException[[dashboard][Default]: document already exists]
+	at org.elasticsearch.index.engine.InternalEngine.innerCreateNoLock(InternalEngine.java:411)
+	at org.elasticsearch.index.engine.InternalEngine.innerCreate(InternalEngine.java:369)
+	at org.elasticsearch.index.engine.InternalEngine.create(InternalEngine.java:341)
+	at org.elasticsearch.index.shard.IndexShard.create(IndexShard.java:517)
+	at org.elasticsearch.index.engine.Engine$Create.execute(Engine.java:789)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction.executeIndexRequestOnPrimary(TransportReplicationAction.java:1073)
+	at org.elasticsearch.action.index.TransportIndexAction.shardOperationOnPrimary(TransportIndexAction.java:170)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase.performOnPrimary(TransportReplicationAction.java:579)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase$1.doRun(TransportReplicationAction.java:452)
+	at org.elasticsearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:37)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:615)
+	at java.lang.Thread.run(Thread.java:745)
+[2015-11-16 14:48:17,447][INFO ][rest.suppressed          ] /.kibana/dashboard/Default Params: {id=Default, index=.kibana, op_type=create, type=dashboard}
+[.kibana][[.kibana][0]] DocumentAlreadyExistsException[[dashboard][Default]: document already exists]
+	at org.elasticsearch.index.engine.InternalEngine.innerCreateNoLock(InternalEngine.java:411)
+	at org.elasticsearch.index.engine.InternalEngine.innerCreate(InternalEngine.java:369)
+	at org.elasticsearch.index.engine.InternalEngine.create(InternalEngine.java:341)
+	at org.elasticsearch.index.shard.IndexShard.create(IndexShard.java:517)
+	at org.elasticsearch.index.engine.Engine$Create.execute(Engine.java:789)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction.executeIndexRequestOnPrimary(TransportReplicationAction.java:1073)
+	at org.elasticsearch.action.index.TransportIndexAction.shardOperationOnPrimary(TransportIndexAction.java:170)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase.performOnPrimary(TransportReplicationAction.java:579)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase$1.doRun(TransportReplicationAction.java:452)
+	at org.elasticsearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:37)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:615)
+	at java.lang.Thread.run(Thread.java:745)
+[2015-11-16 14:55:11,489][INFO ][rest.suppressed          ] /.kibana/dashboard/Default Params: {id=Default, index=.kibana, op_type=create, type=dashboard}
+[.kibana][[.kibana][0]] DocumentAlreadyExistsException[[dashboard][Default]: document already exists]
+	at org.elasticsearch.index.engine.InternalEngine.innerCreateNoLock(InternalEngine.java:411)
+	at org.elasticsearch.index.engine.InternalEngine.innerCreate(InternalEngine.java:369)
+	at org.elasticsearch.index.engine.InternalEngine.create(InternalEngine.java:341)
+	at org.elasticsearch.index.shard.IndexShard.create(IndexShard.java:517)
+	at org.elasticsearch.index.engine.Engine$Create.execute(Engine.java:789)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction.executeIndexRequestOnPrimary(TransportReplicationAction.java:1073)
+	at org.elasticsearch.action.index.TransportIndexAction.shardOperationOnPrimary(TransportIndexAction.java:170)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase.performOnPrimary(TransportReplicationAction.java:579)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase$1.doRun(TransportReplicationAction.java:452)
+	at org.elasticsearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:37)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:615)
+	at java.lang.Thread.run(Thread.java:745)
+[2015-11-16 14:58:51,689][INFO ][rest.suppressed          ] /.kibana/dashboard/Default Params: {id=Default, index=.kibana, op_type=create, type=dashboard}
+[.kibana][[.kibana][0]] DocumentAlreadyExistsException[[dashboard][Default]: document already exists]
+	at org.elasticsearch.index.engine.InternalEngine.innerCreateNoLock(InternalEngine.java:411)
+	at org.elasticsearch.index.engine.InternalEngine.innerCreate(InternalEngine.java:369)
+	at org.elasticsearch.index.engine.InternalEngine.create(InternalEngine.java:341)
+	at org.elasticsearch.index.shard.IndexShard.create(IndexShard.java:517)
+	at org.elasticsearch.index.engine.Engine$Create.execute(Engine.java:789)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction.executeIndexRequestOnPrimary(TransportReplicationAction.java:1073)
+	at org.elasticsearch.action.index.TransportIndexAction.shardOperationOnPrimary(TransportIndexAction.java:170)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase.performOnPrimary(TransportReplicationAction.java:579)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase$1.doRun(TransportReplicationAction.java:452)
+	at org.elasticsearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:37)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:615)
+	at java.lang.Thread.run(Thread.java:745)
+[2015-11-16 15:01:17,546][INFO ][rest.suppressed          ] /.kibana/dashboard/Default Params: {id=Default, index=.kibana, op_type=create, type=dashboard}
+[.kibana][[.kibana][0]] DocumentAlreadyExistsException[[dashboard][Default]: document already exists]
+	at org.elasticsearch.index.engine.InternalEngine.innerCreateNoLock(InternalEngine.java:411)
+	at org.elasticsearch.index.engine.InternalEngine.innerCreate(InternalEngine.java:369)
+	at org.elasticsearch.index.engine.InternalEngine.create(InternalEngine.java:341)
+	at org.elasticsearch.index.shard.IndexShard.create(IndexShard.java:517)
+	at org.elasticsearch.index.engine.Engine$Create.execute(Engine.java:789)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction.executeIndexRequestOnPrimary(TransportReplicationAction.java:1073)
+	at org.elasticsearch.action.index.TransportIndexAction.shardOperationOnPrimary(TransportIndexAction.java:170)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase.performOnPrimary(TransportReplicationAction.java:579)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase$1.doRun(TransportReplicationAction.java:452)
+	at org.elasticsearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:37)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:615)
+	at java.lang.Thread.run(Thread.java:745)
+[2015-11-16 15:13:10,208][INFO ][rest.suppressed          ] /.kibana/dashboard/Default Params: {id=Default, index=.kibana, op_type=create, type=dashboard}
+[.kibana][[.kibana][0]] DocumentAlreadyExistsException[[dashboard][Default]: document already exists]
+	at org.elasticsearch.index.engine.InternalEngine.innerCreateNoLock(InternalEngine.java:411)
+	at org.elasticsearch.index.engine.InternalEngine.innerCreate(InternalEngine.java:369)
+	at org.elasticsearch.index.engine.InternalEngine.create(InternalEngine.java:341)
+	at org.elasticsearch.index.shard.IndexShard.create(IndexShard.java:517)
+	at org.elasticsearch.index.engine.Engine$Create.execute(Engine.java:789)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction.executeIndexRequestOnPrimary(TransportReplicationAction.java:1073)
+	at org.elasticsearch.action.index.TransportIndexAction.shardOperationOnPrimary(TransportIndexAction.java:170)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase.performOnPrimary(TransportReplicationAction.java:579)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase$1.doRun(TransportReplicationAction.java:452)
+	at org.elasticsearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:37)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:615)
+	at java.lang.Thread.run(Thread.java:745)
+[2015-11-16 15:21:57,533][INFO ][rest.suppressed          ] /.kibana/visualization/Fileinfo-Magic Params: {id=Fileinfo-Magic, index=.kibana, op_type=create, type=visualization}
+[.kibana][[.kibana][0]] DocumentAlreadyExistsException[[visualization][Fileinfo-Magic]: document already exists]
+	at org.elasticsearch.index.engine.InternalEngine.innerCreateNoLock(InternalEngine.java:411)
+	at org.elasticsearch.index.engine.InternalEngine.innerCreate(InternalEngine.java:369)
+	at org.elasticsearch.index.engine.InternalEngine.create(InternalEngine.java:341)
+	at org.elasticsearch.index.shard.IndexShard.create(IndexShard.java:517)
+	at org.elasticsearch.index.engine.Engine$Create.execute(Engine.java:789)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction.executeIndexRequestOnPrimary(TransportReplicationAction.java:1073)
+	at org.elasticsearch.action.index.TransportIndexAction.shardOperationOnPrimary(TransportIndexAction.java:170)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase.performOnPrimary(TransportReplicationAction.java:579)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase$1.doRun(TransportReplicationAction.java:452)
+	at org.elasticsearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:37)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:615)
+	at java.lang.Thread.run(Thread.java:745)
+[2015-11-16 15:23:22,710][INFO ][rest.suppressed          ] /.kibana/dashboard/Default Params: {id=Default, index=.kibana, op_type=create, type=dashboard}
+[.kibana][[.kibana][0]] DocumentAlreadyExistsException[[dashboard][Default]: document already exists]
+	at org.elasticsearch.index.engine.InternalEngine.innerCreateNoLock(InternalEngine.java:411)
+	at org.elasticsearch.index.engine.InternalEngine.innerCreate(InternalEngine.java:369)
+	at org.elasticsearch.index.engine.InternalEngine.create(InternalEngine.java:341)
+	at org.elasticsearch.index.shard.IndexShard.create(IndexShard.java:517)
+	at org.elasticsearch.index.engine.Engine$Create.execute(Engine.java:789)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction.executeIndexRequestOnPrimary(TransportReplicationAction.java:1073)
+	at org.elasticsearch.action.index.TransportIndexAction.shardOperationOnPrimary(TransportIndexAction.java:170)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase.performOnPrimary(TransportReplicationAction.java:579)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase$1.doRun(TransportReplicationAction.java:452)
+	at org.elasticsearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:37)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:615)
+	at java.lang.Thread.run(Thread.java:745)
+[2015-11-16 16:10:54,364][INFO ][rest.suppressed          ] /.kibana/dashboard/Default Params: {id=Default, index=.kibana, op_type=create, type=dashboard}
+[.kibana][[.kibana][0]] DocumentAlreadyExistsException[[dashboard][Default]: document already exists]
+	at org.elasticsearch.index.engine.InternalEngine.innerCreateNoLock(InternalEngine.java:411)
+	at org.elasticsearch.index.engine.InternalEngine.innerCreate(InternalEngine.java:369)
+	at org.elasticsearch.index.engine.InternalEngine.create(InternalEngine.java:341)
+	at org.elasticsearch.index.shard.IndexShard.create(IndexShard.java:517)
+	at org.elasticsearch.index.engine.Engine$Create.execute(Engine.java:789)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction.executeIndexRequestOnPrimary(TransportReplicationAction.java:1073)
+	at org.elasticsearch.action.index.TransportIndexAction.shardOperationOnPrimary(TransportIndexAction.java:170)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase.performOnPrimary(TransportReplicationAction.java:579)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase$1.doRun(TransportReplicationAction.java:452)
+	at org.elasticsearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:37)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:615)
+	at java.lang.Thread.run(Thread.java:745)
+[2015-11-16 16:14:13,496][INFO ][rest.suppressed          ] /.kibana/dashboard/Default Params: {id=Default, index=.kibana, op_type=create, type=dashboard}
+[.kibana][[.kibana][0]] DocumentAlreadyExistsException[[dashboard][Default]: document already exists]
+	at org.elasticsearch.index.engine.InternalEngine.innerCreateNoLock(InternalEngine.java:411)
+	at org.elasticsearch.index.engine.InternalEngine.innerCreate(InternalEngine.java:369)
+	at org.elasticsearch.index.engine.InternalEngine.create(InternalEngine.java:341)
+	at org.elasticsearch.index.shard.IndexShard.create(IndexShard.java:517)
+	at org.elasticsearch.index.engine.Engine$Create.execute(Engine.java:789)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction.executeIndexRequestOnPrimary(TransportReplicationAction.java:1073)
+	at org.elasticsearch.action.index.TransportIndexAction.shardOperationOnPrimary(TransportIndexAction.java:170)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase.performOnPrimary(TransportReplicationAction.java:579)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase$1.doRun(TransportReplicationAction.java:452)
+	at org.elasticsearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:37)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:615)
+	at java.lang.Thread.run(Thread.java:745)
+[2015-11-16 16:32:20,483][INFO ][rest.suppressed          ] /.kibana/dashboard/Default Params: {id=Default, index=.kibana, op_type=create, type=dashboard}
+[.kibana][[.kibana][0]] DocumentAlreadyExistsException[[dashboard][Default]: document already exists]
+	at org.elasticsearch.index.engine.InternalEngine.innerCreateNoLock(InternalEngine.java:411)
+	at org.elasticsearch.index.engine.InternalEngine.innerCreate(InternalEngine.java:369)
+	at org.elasticsearch.index.engine.InternalEngine.create(InternalEngine.java:341)
+	at org.elasticsearch.index.shard.IndexShard.create(IndexShard.java:517)
+	at org.elasticsearch.index.engine.Engine$Create.execute(Engine.java:789)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction.executeIndexRequestOnPrimary(TransportReplicationAction.java:1073)
+	at org.elasticsearch.action.index.TransportIndexAction.shardOperationOnPrimary(TransportIndexAction.java:170)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase.performOnPrimary(TransportReplicationAction.java:579)
+	at org.elasticsearch.action.support.replication.TransportReplicationAction$PrimaryPhase$1.doRun(TransportReplicationAction.java:452)
+	at org.elasticsearch.common.util.concurrent.AbstractRunnable.run(AbstractRunnable.java:37)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1145)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:615)
+	at java.lang.Thread.run(Thread.java:745)
+[2015-11-16 16:34:42,196][INFO ][node                     ] [Veil] stopping ...
+[2015-11-16 16:34:42,288][INFO ][node                     ] [Veil] stopped
+[2015-11-16 16:34:42,289][INFO ][node                     ] [Veil] closing ...
+[2015-11-16 16:34:42,297][INFO ][node                     ] [Veil] closed
+[2015-11-16 16:35:06,696][INFO ][node                     ] [Famine] version[2.0.0], pid[8], build[de54438/2015-10-22T08:09:48Z]
+[2015-11-16 16:35:06,697][INFO ][node                     ] [Famine] initializing ...
+[2015-11-16 16:35:06,798][INFO ][plugins                  ] [Famine] loaded [], sites []
+[2015-11-16 16:35:06,915][INFO ][env                      ] [Famine] using [1] data paths, mounts [[/data/elk (/dev/sda5)]], net usable_space [6.9gb], net total_space [7.3gb], spins? [possibly], types [ext4]
+[2015-11-16 16:35:08,561][INFO ][node                     ] [Famine] initialized
+[2015-11-16 16:35:08,561][INFO ][node                     ] [Famine] starting ...
+[2015-11-16 16:35:08,752][INFO ][transport                ] [Famine] publish_address {127.0.0.1:9300}, bound_addresses {127.0.0.1:9300}, {[::1]:9300}
+[2015-11-16 16:35:08,758][INFO ][discovery                ] [Famine] elasticsearch/viSYKHsKRYar5tp5Av8fLQ
+[2015-11-16 16:35:11,809][INFO ][cluster.service          ] [Famine] new_master {Famine}{viSYKHsKRYar5tp5Av8fLQ}{127.0.0.1}{127.0.0.1:9300}, reason: zen-disco-join(elected_as_master, [0] joins received)
+[2015-11-16 16:35:11,897][INFO ][gateway                  ] [Famine] recovered [3] indices into cluster_state
+[2015-11-16 16:35:11,945][INFO ][http                     ] [Famine] publish_address {127.0.0.1:9200}, bound_addresses {127.0.0.1:9200}, {[::1]:9200}
+[2015-11-16 16:35:11,945][INFO ][node                     ] [Famine] started
+[2015-11-16 16:39:06,106][INFO ][node                     ] [Famine] stopping ...
+[2015-11-16 16:39:06,223][INFO ][node                     ] [Famine] stopped
+[2015-11-16 16:39:06,223][INFO ][node                     ] [Famine] closing ...
+[2015-11-16 16:39:06,239][INFO ][node                     ] [Famine] closed

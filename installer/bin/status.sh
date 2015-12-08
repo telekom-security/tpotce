@@ -1,10 +1,10 @@
 #!/bin/bash
 
 ########################################################
-# T-Pot Community Edition                              #
+# T-Pot                                                #
 # Container and services status script                 #
 #                                                      #
-# v0.11 by mo, DTAG, 2015-06-12                        #
+# v0.04 by mo, DTAG, 2015-08-20                        #
 ########################################################
 myCOUNT=1
 myIMAGES=$(cat /data/images.conf)
@@ -29,12 +29,13 @@ do
 done
 echo
 echo
-echo "****************** $(date) ******************"
-echo
+echo "======| System |======"
+echo Date:"     "$(date)
+echo Uptime:"  "$(uptime)
+echo CPU temp: $(sensors | grep "Physical" | awk '{ print $4 }')
 echo
 for i in $myIMAGES
 do
-  echo
   echo "======| Container:" $i "|======"
   docker exec $i supervisorctl status | GREP_COLORS='mt=01;32' egrep --color=always "(RUNNING)|$" | GREP_COLORS='mt=01;31' egrep --color=always "(STOPPED|FATAL)|$"
   echo

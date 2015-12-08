@@ -1,0 +1,4 @@
+[2015-11-14 03:43:15,837][INFO ][node                     ] [Veil] version[2.0.0], pid[8], build[de54438/2015-10-22T08:09:48Z]
+[2015-11-14 03:43:15,838][INFO ][node                     ] [Veil] initializing ...
+[2015-11-14 03:43:15,973][INFO ][plugins                  ] [Veil] loaded [], sites []
+[2015-11-14 03:43:16,175][INFO ][env                      ] [Veil] using [1] data paths, mounts [[/data/elk (/dev/sda5)]], net usable_space [6.9gb], net total_space [7.3gb], spins? [possibly], types [ext4]
