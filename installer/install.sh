@@ -3,7 +3,7 @@
 # T-Pot post install script                            #
 # Ubuntu server 14.04.3, x64                           #
 #                                                      #
-# v0.10 by mo, DTAG, 2015-10-06                        #
+# v16.03.1 by mo, DTAG, 2015-12-11                     #
 ########################################################
 
 # Type of install, SENSOR or FULL?
@@ -273,7 +273,7 @@ chmod 644 /root/tpot/upstart/*
 
 # Let's create some files and folders
 fuECHO "### Creating some files and folders."
-mkdir -p /data/ews/log /data/ews/conf /data/ews/cowrie /data/ews/dionaea /data/ews/glastopf /data/ews/honeytrap /data/elk/data /data/elk/log /home/tsec/.ssh/
+mkdir -p /data/ews/log /data/ews/conf /data/ews/cowrie /data/ews/dionaea /data/ews/glastopf /data/ews/honeytrap /data/elk/data /data/elk/log /data/suricata /home/tsec/.ssh/
 
 # Let's copy some files
 cp -R /root/tpot/bin/* /usr/bin/
