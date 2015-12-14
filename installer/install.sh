@@ -274,8 +274,9 @@ chmod 644 /root/tpot/upstart/*
 # Let's create some files and folders
 fuECHO "### Creating some files and folders."
 mkdir -p /data/ews/log /data/ews/conf /data/ews/dionaea /data/ews/glastopf /data/ews/honeytrap \
-         /data/elk/data /data/elk/log /data/suricata/log /data/glastopf /data/dionaea /data/cowrie \
-         /data/honeytrap /home/tsec/.ssh/
+         /data/cowrie/log/tty/ /data/cowrie/downloads/ /data/cowrie/keys/ /data/cowrie/misc/ \
+         /data/dionaea /data/elk/data /data/elk/log /data/glastopf /data/honeytrap /data/suricata/log  \
+         /home/tsec/.ssh/
 
 # Let's copy some files
 cp -R /root/tpot/bin/* /usr/bin/
