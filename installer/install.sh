@@ -276,8 +276,8 @@ fuECHO "### Creating some files and folders."
 mkdir -p /data/ews/log /data/ews/conf /data/ews/dionaea /data/ews/glastopf /data/ews/honeytrap \
          /data/cowrie/log/tty/ /data/cowrie/downloads/ /data/cowrie/keys/ /data/cowrie/misc/ \
          /data/dionaea/log /data/dionaea/bistreams /data/dionaea/binaries /data/dionaea/rtp /data/dionaea/wwwroot \
-         /data/elk/data /data/elk/log /data/glastopf /data/honeytrap /data/suricata/log  \
-         /home/tsec/.ssh/
+         /data/elk/data /data/elk/log /data/glastopf /data/honeytrap/log/ /data/honeytrap/attacks/ /data/honeytrap/downloads/ \ 
+         /data/suricata/log /home/tsec/.ssh/
 
 # Let's copy some files
 cp -R /root/tpot/bin/* /usr/bin/
