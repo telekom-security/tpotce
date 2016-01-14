@@ -3,7 +3,7 @@
 # T-Pot post install script                            #
 # Ubuntu server 14.04.3, x64                           #
 #                                                      #
-# v16.03.2 by mo, DTAG, 2015-12-14                     #
+# v16.03.3 by mo, DTAG, 2016-01-14                     #
 ########################################################
 
 # Type of install, SENSOR or FULL?
@@ -48,6 +48,7 @@ export HTTPS_PROXY=$myPROXY
 export no_proxy=localhost,127.0.0.1,.sock
 EOF
 source /etc/environment
+
 # Let's setup the proxy for apt
 tee /etc/apt/apt.conf <<EOF
 Acquire::http::Proxy "$myPROXY";
@@ -276,7 +277,7 @@ fuECHO "### Creating some files and folders."
 mkdir -p /data/ews/log /data/ews/conf /data/ews/dionaea /data/ews/glastopf /data/ews/honeytrap \
          /data/cowrie/log/tty/ /data/cowrie/downloads/ /data/cowrie/keys/ /data/cowrie/misc/ \
          /data/dionaea/log /data/dionaea/bistreams /data/dionaea/binaries /data/dionaea/rtp /data/dionaea/wwwroot \
-         /data/elk/data /data/elk/log /data/glastopf /data/honeytrap/log/ /data/honeytrap/attacks/ /data/honeytrap/downloads/ \ 
+         /data/elk/data /data/elk/log /data/glastopf /data/honeytrap/log/ /data/honeytrap/attacks/ /data/honeytrap/downloads/ \
          /data/suricata/log /home/tsec/.ssh/
 
 # Let's copy some files

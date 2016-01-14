@@ -4,7 +4,7 @@
 # T-Pot                                                #
 # .ISO maker                                           #
 #                                                      #
-# v0.07 by mo, DTAG, 2015-08-12                        #
+# v16.03.1 by mo, DTAG, 2016-01-14                     #
 ########################################################
 
 # Let's define some global vars
@@ -19,7 +19,7 @@ myAUTHKEYSPATH="installer/keys/authorized_keys"
 myPFXPATH="installer/keys/8021x.pfx"
 myPFXPWPATH="installer/keys/8021x.pw"
 myPFXHOSTIDPATH="installer/keys/8021x.id"
-myINSTALLER2PATH="installer/install2.sh"
+myINSTALLERPATH="installer/install.sh"
 myPROXYCONFIG="installer/etc/proxy"
 myNTPCONFPATH="installer/etc/ntp"
 myTMP="tmp"
@@ -87,7 +87,7 @@ fi
 
 # Let's ask for the type of installation FULL or SENSOR?
 myFLAVOR=$(dialog --no-cancel --backtitle "$myBACKTITLE" --title "[ Installation type ... ]" --radiolist "" 8 50 2 "FULL" "Install Everything" on "SENSOR" "Install Honeypots & EWS Poster" off 3>&1 1>&2 2>&3 3>&-)
-sed -i 's#^myFLAVOR=.*#myFLAVOR="'$myFLAVOR'"#' $myINSTALLER2PATH
+sed -i 's#^myFLAVOR=.*#myFLAVOR="'$myFLAVOR'"#' $myINSTALLERPATH
 
 # Let's ask the user for a proxy ...
 while true;
