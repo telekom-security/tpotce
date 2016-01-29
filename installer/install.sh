@@ -144,6 +144,13 @@ EOF
 # Let's modify the sources list
 sed -i '/cdrom/d' /etc/apt/sources.list
 
+# Let's make sure SSH roaming is turned off (CVE-2016-0777, CVE-2016-0778)
+fuECHO "### Let's make sure SSH roaming is turned off."
+tee -a /etc/ssh/ssh_config <<EOF
+UseRoaming no
+EOF
+
+
 # Let's pull some updates
 fuECHO "### Pulling Updates."
 apt-get update -y
