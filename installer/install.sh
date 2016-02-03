@@ -3,7 +3,7 @@
 # T-Pot post install script                            #
 # Ubuntu server 14.04.3, x64                           #
 #                                                      #
-# v16.03.3 by mo, DTAG, 2016-01-14                     #
+# v16.03.4 by mo, DTAG, 2016-02-03                     #
 ########################################################
 
 # Type of install, SENSOR or FULL?
@@ -319,6 +319,10 @@ gunzip /etc/console-setup/Uni2-Terminus12x6.psf.gz
 sed -i 's#FONTFACE=".*#FONTFACE="Terminus"#' /etc/default/console-setup
 sed -i 's#FONTSIZE=".*#FONTSIZE="12x6"#' /etc/default/console-setup
 update-initramfs -u
+
+# Let's enable a color prompt
+sed -i 's#\#force_color_prompt=yes#force_color_prompt=yes#' /home/tsec/.bashrc
+sed -i 's#\#force_color_prompt=yes#force_color_prompt=yes#' /root/.bashrc
 
 # Final steps
 fuECHO "### Thanks for your patience. Now rebooting."
