@@ -3,7 +3,7 @@
 # T-Pot post install script                            #
 # Ubuntu server 14.04.3, x64                           #
 #                                                      #
-# v16.03.4 by mo, DTAG, 2016-02-03                     #
+# v16.03.5 by mo, DTAG, 2016-02-04                     #
 ########################################################
 
 # Type of install, SENSOR or FULL?
@@ -283,7 +283,7 @@ chmod 644 /root/tpot/upstart/*
 fuECHO "### Creating some files and folders."
 mkdir -p /data/ews/log /data/ews/conf /data/ews/dionaea /data/ews/glastopf /data/ews/honeytrap \
          /data/cowrie/log/tty/ /data/cowrie/downloads/ /data/cowrie/keys/ /data/cowrie/misc/ \
-         /data/elasticpot \
+         /data/elasticpot /data/elasticpot/log \
          /data/dionaea/log /data/dionaea/bistreams /data/dionaea/binaries /data/dionaea/rtp /data/dionaea/wwwroot \
          /data/elk/data /data/elk/log /data/glastopf /data/honeytrap/log/ /data/honeytrap/attacks/ /data/honeytrap/downloads/ \
          /data/suricata/log /home/tsec/.ssh/
