@@ -14,7 +14,7 @@ The image can then be used to install T-Pot on a physical or virtual machine.
 
 1. Clone the repository and enter it.
 
-        git clone git@github.com:dtag-dev-sec/tpotce.git
+        git clone https://github.com/dtag-dev-sec/tpotce.git
         cd tpotce
 
 2. Invoke the script that builds the ISO image.
@@ -24,10 +24,17 @@ The script will download and install dependecies necessary to build the image on
 
 After a successful build, you will find the ISO image `tpot.iso` in your directory.
 
-###Installation
+### T-Pot Full Installation
 When installing the T-Pot ISO image, make sure the target system (physical/virtual) meets the following minimum requirements:
-- 4 GB RAM
-- 40 GB disk (64 GB SSD recommended)
+- 4 GB RAM (6-8 GB recommended)
+- 64 GB disk (128 GB SSD recommended)
+- Network via DHCP
+- A working internet connection
+
+### T-Pot Sensor Installation (no ELK, no Suricata - only available thru ISO Creator)
+When installing the T-Pot ISO image, make sure the target system (physical/virtual) meets the following minimum requirements:
+- 3 GB RAM (4-6 GB recommended) 
+- 64 GB disk (64 GB SSD recommended)
 - Network via DHCP
 - A working internet connection
 
