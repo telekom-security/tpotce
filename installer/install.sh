@@ -281,8 +281,7 @@ mkdir -p /data/ews/log /data/ews/conf /data/ews/dionaea /data/ews/emobility \
          /data/dionaea/log /data/dionaea/bistreams /data/dionaea/binaries /data/dionaea/rtp /data/dionaea/wwwroot \
          /data/elk/data /data/elk/log /data/glastopf /data/honeytrap/log/ /data/honeytrap/attacks/ /data/honeytrap/downloads/ \
          /data/suricata/log /home/tsec/.ssh/ \
-         /data/emobility/log \
-         /etc/init/t-pot
+         /data/emobility/log
 
 # Let's take care of some files and permissions before copying
 chmod 500 /root/tpot/bin/*
@@ -292,7 +291,6 @@ chmod 755 /root/tpot/etc/rc.local
 chmod 700 /root/tpot/home/*
 chown tsec:tsec /root/tpot/home/*
 chmod 644 /root/tpot/data/upstart/*
-chmod 644 /etc/init/t-pot
 
 # Let's copy some files
 cp -R /root/tpot/bin/* /usr/bin/
@@ -302,7 +300,7 @@ cp -R /root/tpot/home/* /home/tsec/
 cp    /root/tpot/keys/authorized_keys /home/tsec/.ssh/authorized_keys
 for i in $(cat /data/images.conf);
   do 
-    cp /data/upstart/$i.conf /etc/init/t-pot/;
+    cp /data/upstart/$i.conf /etc/init/;
 done
 
 # Let's take care of some files and permissions
