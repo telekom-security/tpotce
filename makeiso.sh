@@ -86,7 +86,7 @@ if [ "$mySTART" = "1" ];
 fi
 
 # Let's ask for the type of installation SENSOR, INDUSTRIAL or FULL?
-myFLAVOR=$(dialog --no-cancel --backtitle "$myBACKTITLE" --title "[ Installation type ... ]" --radiolist "" 9 50 4 "FULL" "Everything (w/o INDUSTRIAL)" on "SENSOR" "Honeypots (w/o INDUSTRIAL)" off "INDUSTRIAL" "Experimental (+ELK +Suricata)" off 3>&1 1>&2 2>&3 3>&-)
+myFLAVOR=$(dialog --no-cancel --backtitle "$myBACKTITLE" --title "[ Installation type ... ]" --radiolist "" 9 70 4 "FULL" "Everything (w/o INDUSTRIAL)" on "SENSOR" "Honeypots only (w/o INDUSTRIAL)" off "INDUSTRIAL" "eMobility, ELK, Suricata (8GB RAM required)" off 3>&1 1>&2 2>&3 3>&-)
 sed -i 's#^myFLAVOR=.*#myFLAVOR="'$myFLAVOR'"#' $myINSTALLERPATH
 
 # Let's ask the user for a proxy ...
