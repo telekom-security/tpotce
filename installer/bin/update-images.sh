@@ -13,9 +13,10 @@ for i in $(ls /data/upstart/);
     rm -rf /etc/init/$i || true;
 done
 
-# Setup only T-Pot upstart scripts from images.conf
+# Setup only T-Pot upstart scripts from images.conf and pull the images
 for i in $(cat /data/images.conf);
   do 
+    docker pull dtagdevsec/$i:latest1603;
     cp /data/upstart/"$i".conf /etc/init/;
 done
 
