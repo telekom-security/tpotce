@@ -332,6 +332,16 @@ update-initramfs -u
 sed -i 's#\#force_color_prompt=yes#force_color_prompt=yes#' /home/tsec/.bashrc
 sed -i 's#\#force_color_prompt=yes#force_color_prompt=yes#' /root/.bashrc
 
+# Let's create ews.ip before reboot and prevent race condition for first start
+myLOCALIP=$(hostname -I | awk '{ print $1 }')
+myEXTIP=$(curl myexternalip.com/raw)
+sed -i "s#IP:.*#IP: $myLOCALIP, $myEXTIP#" /etc/issue
+tee /data/ews/conf/ews.ip << EOF
+[MAIN]
+ip = $myEXTIP
+EOF
+chown tpot:tpot /data/ews/conf/ews.ip
+
 # Final steps
 fuECHO "### Thanks for your patience. Now rebooting."
 mv /root/tpot/etc/rc.local /etc/rc.local && rm -rf /root/tpot/ && chage -d 0 tsec && sleep 2 && reboot
