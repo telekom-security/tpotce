@@ -4,7 +4,7 @@
 # T-Pot                                                #
 # .ISO maker                                           #
 #                                                      #
-# v16.03.1 by mo, DTAG, 2016-01-14                     #
+# v16.03.2 by mo, DTAG, 2016-02-08                     #
 ########################################################
 
 # Let's define some global vars
@@ -85,8 +85,8 @@ if [ "$mySTART" = "1" ];
     exit
 fi
 
-# Let's ask for the type of installation FULL or SENSOR?
-myFLAVOR=$(dialog --no-cancel --backtitle "$myBACKTITLE" --title "[ Installation type ... ]" --radiolist "" 8 50 2 "FULL" "Install Everything" on "SENSOR" "Install Honeypots & EWS Poster" off 3>&1 1>&2 2>&3 3>&-)
+# Let's ask for the type of installation SENSOR, INDUSTRIAL or FULL?
+myFLAVOR=$(dialog --no-cancel --backtitle "$myBACKTITLE" --title "[ Installation type ... ]" --radiolist "" 9 50 4 "FULL" "Everything (w/o INDUSTRIAL)" on "SENSOR" "Honeypots (w/o INDUSTRIAL)" off "INDUSTRIAL" "Experimental (+ELK +Suricata)" off 3>&1 1>&2 2>&3 3>&-)
 sed -i 's#^myFLAVOR=.*#myFLAVOR="'$myFLAVOR'"#' $myINSTALLERPATH
 
 # Let's ask the user for a proxy ...

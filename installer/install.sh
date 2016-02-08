@@ -3,10 +3,10 @@
 # T-Pot post install script                            #
 # Ubuntu server 14.04.3, x64                           #
 #                                                      #
-# v16.03.5 by mo, DTAG, 2016-02-04                     #
+# v16.03.6 by mo, DTAG, 2016-02-08                     #
 ########################################################
 
-# Type of install, SENSOR or FULL?
+# Type of install, SENSOR, INDUSTRIAL or FULL?
 myFLAVOR="FULL"
 
 # Some global vars
@@ -150,7 +150,6 @@ tee -a /etc/ssh/ssh_config <<EOF
 UseRoaming no
 EOF
 
-
 # Let's pull some updates
 fuECHO "### Pulling Updates."
 apt-get update -y
@@ -204,9 +203,13 @@ EOF
 if [ "$myFLAVOR" = "SENSOR" ]
   then
     cp /root/tpot/data/sensor_images.conf /root/tpot/data/images.conf
-    echo "manual" >> /etc/init/suricata.override
-    echo "manual" >> /etc/init/elk.override
-  else
+fi
+if [ "$myFLAVOR" = "INDUSTRIAL" ]
+  then
+    cp /root/tpot/data/industrial_images.conf /root/tpot/data/images.conf
+fi
+if [ "$myFLAVOR" = "FULL" ]
+  then
     cp /root/tpot/data/full_images.conf /root/tpot/data/images.conf
 fi
 
@@ -270,15 +273,6 @@ tee -a /etc/crontab <<EOF
 27 16 * * 0   root  sleep \$((RANDOM %600)); apt-get autoclean -y; apt-get autoremove -y; apt-get update -y; apt-get upgrade -y; apt-get upgrade docker-engine -y; sleep 5; reboot
 EOF
 
-# Let's take care of some files and permissions before copying
-chmod 500 /root/tpot/bin/*
-chmod 600 /root/tpot/data/*
-chmod 644 /root/tpot/etc/issue
-chmod 755 /root/tpot/etc/rc.local
-chmod 700 /root/tpot/home/*
-chown tsec:tsec /root/tpot/home/*
-chmod 644 /root/tpot/upstart/*
-
 # Let's create some files and folders
 fuECHO "### Creating some files and folders."
 mkdir -p /data/ews/log /data/ews/conf /data/ews/dionaea /data/ews/glastopf /data/ews/honeytrap \
@@ -286,15 +280,29 @@ mkdir -p /data/ews/log /data/ews/conf /data/ews/dionaea /data/ews/glastopf /data
          /data/elasticpot /data/elasticpot/log \
          /data/dionaea/log /data/dionaea/bistreams /data/dionaea/binaries /data/dionaea/rtp /data/dionaea/wwwroot \
          /data/elk/data /data/elk/log /data/glastopf /data/honeytrap/log/ /data/honeytrap/attacks/ /data/honeytrap/downloads/ \
-         /data/suricata/log /home/tsec/.ssh/
+         /data/suricata/log /home/tsec/.ssh/ \
+         /etc/init/t-pot
+
+# Let's take care of some files and permissions before copying
+chmod 500 /root/tpot/bin/*
+chmod 600 /root/tpot/data/*
+chmod 644 /root/tpot/etc/issue
+chmod 755 /root/tpot/etc/rc.local
+chmod 700 /root/tpot/home/*
+chown tsec:tsec /root/tpot/home/*
+chmod 644 /root/tpot/data/upstart/*
+chmod 644 /etc/init/t-pot
 
 # Let's copy some files
 cp -R /root/tpot/bin/* /usr/bin/
 cp -R /root/tpot/data/* /data/
 cp -R /root/tpot/etc/issue /etc/
 cp -R /root/tpot/home/* /home/tsec/
-cp -R /root/tpot/upstart/* /etc/init/
 cp    /root/tpot/keys/authorized_keys /home/tsec/.ssh/authorized_keys
+for i in $(cat /data/images.conf);
+  do 
+    cp /data/upstart/$i.conf /etc/init/t-pot/;
+done
 
 # Let's take care of some files and permissions
 chmod 760 -R /data
