@@ -275,12 +275,13 @@ EOF
 
 # Let's create some files and folders
 fuECHO "### Creating some files and folders."
-mkdir -p /data/ews/log /data/ews/conf /data/ews/dionaea /data/ews/glastopf /data/ews/honeytrap \
+mkdir -p /data/ews/log /data/ews/conf /data/ews/dionaea /data/ews/emobility \
          /data/cowrie/log/tty/ /data/cowrie/downloads/ /data/cowrie/keys/ /data/cowrie/misc/ \
-         /data/elasticpot /data/elasticpot/log \
+         /data/elasticpot/log \
          /data/dionaea/log /data/dionaea/bistreams /data/dionaea/binaries /data/dionaea/rtp /data/dionaea/wwwroot \
          /data/elk/data /data/elk/log /data/glastopf /data/honeytrap/log/ /data/honeytrap/attacks/ /data/honeytrap/downloads/ \
          /data/suricata/log /home/tsec/.ssh/ \
+         /data/emobility/log \
          /etc/init/t-pot
 
 # Let's take care of some files and permissions before copying
