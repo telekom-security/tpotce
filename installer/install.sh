@@ -270,7 +270,7 @@ tee -a /etc/crontab <<EOF
 27 15 * * *   root  /etc/rc.local
 
 # Check for updated packages every sunday, upgrade and reboot
-27 16 * * 0   root  sleep \$((RANDOM %600)); apt-get autoclean -y; apt-get autoremove -y; apt-get update -y; apt-get upgrade -y; apt-get upgrade docker-engine -y; sleep 5; reboot
+27 16 * * 0   root  sleep \$((RANDOM %600)); apt-get autoclean -y; apt-get autoremove -y; apt-get update -y; apt-get upgrade -y; sleep 5; reboot
 EOF
 
 # Let's create some files and folders
