@@ -3,11 +3,11 @@
 # T-Pot post install script                            #
 # Ubuntu server 14.04.3, x64                           #
 #                                                      #
-# v16.03.6 by mo, DTAG, 2016-02-08                     #
+# v16.03.7 by mo, DTAG, 2016-02-11                     #
 ########################################################
 
 # Type of install, SENSOR, INDUSTRIAL or FULL?
-myFLAVOR="FULL"
+myFLAVOR="INDUSTRIAL"
 
 # Some global vars
 myPROXYFILEPATH="/root/tpot/etc/proxy"
@@ -150,6 +150,13 @@ tee -a /etc/ssh/ssh_config <<EOF
 UseRoaming no
 EOF
 
+# Let's add the docker repository
+fuECHO "### Adding the docker repository."
+apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
+tee /etc/apt/sources.list.d/docker.list <<EOF
+deb https://apt.dockerproject.org/repo ubuntu-trusty main
+EOF
+
 # Let's pull some updates
 fuECHO "### Pulling Updates."
 apt-get update -y
@@ -157,9 +164,8 @@ fuECHO "### Installing Upgrades."
 apt-get dist-upgrade -y
 
 # Let's install docker
-fuECHO "### Installing docker."
-wget -qO- https://get.docker.com/gpg | apt-key add -
-wget -qO- https://get.docker.com/ | sh
+fuECHO "### Installing docker-engine."
+apt-get install docker-engine=1.10.0-0~trusty -y
 
 # Let's add proxy settings to docker defaults
 if [ -f $myPROXYFILEPATH ];
@@ -299,7 +305,7 @@ cp -R /root/tpot/etc/issue /etc/
 cp -R /root/tpot/home/* /home/tsec/
 cp    /root/tpot/keys/authorized_keys /home/tsec/.ssh/authorized_keys
 for i in $(cat /data/images.conf);
-  do 
+  do
     cp /data/upstart/$i.conf /etc/init/;
 done
 
