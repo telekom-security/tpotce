@@ -31,7 +31,7 @@ d-i clock-setup/ntp boolean true
 tasksel tasksel/first multiselect ubuntu-server
 
 # Packages
-d-i pkgsel/include string curl dialog dstat ethtool genisoimage git htop iw libpam-google-authenticator lm-sensors ntp openssh-server syslinux pv vim wireless-tools wpasupplicant
+d-i pkgsel/include string apt-transport-https ca-certificates curl dialog dstat ethtool genisoimage git htop iw libpam-google-authenticator lm-sensors ntp openssh-server syslinux pv vim wireless-tools wpasupplicant
 
 # Update Policy
 d-i pkgsel/update-policy select unattended-upgrades

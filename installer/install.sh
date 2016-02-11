@@ -7,7 +7,7 @@
 ########################################################
 
 # Type of install, SENSOR, INDUSTRIAL or FULL?
-myFLAVOR="INDUSTRIAL"
+myFLAVOR="FULL"
 
 # Some global vars
 myPROXYFILEPATH="/root/tpot/etc/proxy"
