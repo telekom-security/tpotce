@@ -208,19 +208,19 @@ EOF
 # Let's make sure only myFLAVOR images will be downloaded and started
 if [ "$myFLAVOR" = "HP" ]
   then
-    cp /root/tpot/data/hp_images.conf /root/tpot/data/images.conf
+    cp /root/tpot/data/imgcfg/hp_images.conf /root/tpot/data/images.conf
 fi
 if [ "$myFLAVOR" = "INDUSTRIAL" ]
   then
-    cp /root/tpot/data/industrial_images.conf /root/tpot/data/images.conf
+    cp /root/tpot/data/imgcfg/industrial_images.conf /root/tpot/data/images.conf
 fi
 if [ "$myFLAVOR" = "TPOT" ]
   then
-    cp /root/tpot/data/tpot_images.conf /root/tpot/data/images.conf
+    cp /root/tpot/data/imgcfg/tpot_images.conf /root/tpot/data/images.conf
 fi
 if [ "$myFLAVOR" = "ALL" ]
   then
-    cp /root/tpot/data/all_images.conf /root/tpot/data/images.conf
+    cp /root/tpot/data/imgcfg/all_images.conf /root/tpot/data/images.conf
 fi
 
 
@@ -304,6 +304,8 @@ chown tsec:tsec /root/tpot/home/*
 chmod 644 /root/tpot/data/upstart/*
 
 # Let's copy some files
+tar xvfz /root/tpot/data/elkbase.tgz -C / 
+rm /root/tpot/data/elkbase.tgz
 cp -R /root/tpot/bin/* /usr/bin/
 cp -R /root/tpot/data/* /data/
 cp -R /root/tpot/etc/issue /etc/
@@ -313,7 +315,6 @@ for i in $(cat /data/images.conf);
   do
     cp /data/upstart/$i.conf /etc/init/;
 done
-tar xvfz /data/elkbase.tgz -C / 
 
 # Let's take care of some files and permissions
 chmod 760 -R /data
