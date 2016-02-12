@@ -4,10 +4,16 @@
 # T-Pot                                                #
 # Container and services status script                 #
 #                                                      #
-# v0.04 by mo, DTAG, 2015-08-20                        #
+# v0.05 by mo, DTAG, 2016-02-12                        #
 ########################################################
 myCOUNT=1
-myIMAGES=$(cat /data/images.conf)
+
+if [[ $1 == "" ]]
+  then
+    myIMAGES=$(cat /data/images.conf)
+  else myIMAGES=$1
+fi
+
 while true
 do
   if ! [ -a /var/run/check.lock ];

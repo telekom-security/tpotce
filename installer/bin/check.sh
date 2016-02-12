@@ -4,10 +4,12 @@
 # T-Pot                                                #
 # Check container and services script                  #
 #                                                      #
-# v0.02 by mo, DTAG, 2015-08-08                        #
+# v0.03 by mo, DTAG, 2016-02-12                        #
 ########################################################
 if [ -a /var/run/check.lock ];
-  then exit
+  then 
+    echo "Lock exists. Exiting now."
+    exit
 fi
 
 myIMAGES=$(cat /data/images.conf)
@@ -24,38 +26,13 @@ for i in $myIMAGES
         else
           myCIDSTATUS=$(echo $myCIDSTATUS | egrep -c "(STOPPED|FATAL)")
       fi
-      if [ $myCIDSTATUS -gt 0 ];
+      if [ $myUPTIME -gt 4 ] && [ $myCIDSTATUS -gt 0 ];
         then
-          if [ $myUPTIME -gt 5 ];
-            then
-              for j in $myIMAGES
-                do
-                  service $j stop
-              done
-              iptables -w -F
-              service docker restart
-              while true
-                do
-                  docker info > /dev/null
-                  if [ $? -ne 0 ];
-                    then
-                      echo Docker daemon is still starting.
-                    else
-                      echo Docker daemon is now available.
-                      break
-                  fi
-                  sleep 0.1
-              done
-              docker rm -v $(docker ps -aq)
-              for j in $myIMAGES
-                do
-                  service $j start
-                  sleep $(((RANDOM %5)+5))
-              done
-              rm /var/run/check.lock
-              exit
-          fi
+          echo "Restarting "$i"."
+          service $i stop
+          sleep 5
+          service $i start
       fi
 done
-
+        
 rm /var/run/check.lock

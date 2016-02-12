@@ -3,11 +3,11 @@
 # T-Pot post install script                            #
 # Ubuntu server 14.04.3, x64                           #
 #                                                      #
-# v16.03.7 by mo, DTAG, 2016-02-11                     #
+# v16.03.8 by mo, DTAG, 2016-02-12                     #
 ########################################################
 
 # Type of install, SENSOR, INDUSTRIAL or FULL?
-myFLAVOR="FULL"
+myFLAVOR="TPOT"
 
 # Some global vars
 myPROXYFILEPATH="/root/tpot/etc/proxy"
@@ -206,18 +206,23 @@ DOCKER_OPTS="-r=false"
 EOF
 
 # Let's make sure only myFLAVOR images will be downloaded and started
-if [ "$myFLAVOR" = "SENSOR" ]
+if [ "$myFLAVOR" = "HP" ]
   then
-    cp /root/tpot/data/sensor_images.conf /root/tpot/data/images.conf
+    cp /root/tpot/data/hp_images.conf /root/tpot/data/images.conf
 fi
 if [ "$myFLAVOR" = "INDUSTRIAL" ]
   then
     cp /root/tpot/data/industrial_images.conf /root/tpot/data/images.conf
 fi
-if [ "$myFLAVOR" = "FULL" ]
+if [ "$myFLAVOR" = "TPOT" ]
   then
-    cp /root/tpot/data/full_images.conf /root/tpot/data/images.conf
+    cp /root/tpot/data/tpot_images.conf /root/tpot/data/images.conf
 fi
+if [ "$myFLAVOR" = "ALL" ]
+  then
+    cp /root/tpot/data/all_images.conf /root/tpot/data/images.conf
+fi
+
 
 # Let's load docker images
 fuECHO "### Loading docker images. Please be patient, this may take a while."
@@ -308,6 +313,7 @@ for i in $(cat /data/images.conf);
   do
     cp /data/upstart/$i.conf /etc/init/;
 done
+tar xvfz /data/elkbase.tgz -C / 
 
 # Let's take care of some files and permissions
 chmod 760 -R /data
