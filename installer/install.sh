@@ -3,7 +3,7 @@
 # T-Pot post install script                            #
 # Ubuntu server 14.04.3, x64                           #
 #                                                      #
-# v16.03.8 by mo, DTAG, 2016-02-12                     #
+# v16.03.9 by mo, DTAG, 2016-02-15                     #
 ########################################################
 
 # Type of install, SENSOR, INDUSTRIAL or FULL?
@@ -165,7 +165,7 @@ apt-get dist-upgrade -y
 
 # Let's install docker
 fuECHO "### Installing docker-engine."
-apt-get install docker-engine=1.10.0-0~trusty -y
+apt-get install docker-engine=1.10.1-0~trusty -y
 
 # Let's add proxy settings to docker defaults
 if [ -f $myPROXYFILEPATH ];
