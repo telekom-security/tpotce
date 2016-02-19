@@ -3,7 +3,7 @@
 # T-Pot post install script                            #
 # Ubuntu server 14.04.3, x64                           #
 #                                                      #
-# v16.03.9 by mo, DTAG, 2016-02-15                     #
+# v16.03.10 by mo, DTAG, 2016-02-19                    #
 ########################################################
 
 # Type of install, SENSOR, INDUSTRIAL or FULL?
@@ -223,7 +223,6 @@ if [ "$myFLAVOR" = "ALL" ]
     cp /root/tpot/data/imgcfg/all_images.conf /root/tpot/data/images.conf
 fi
 
-
 # Let's load docker images
 fuECHO "### Loading docker images. Please be patient, this may take a while."
 if [ -d /root/tpot/images ];
@@ -281,18 +280,19 @@ tee -a /etc/crontab <<EOF
 27 15 * * *   root  /etc/rc.local
 
 # Check for updated packages every sunday, upgrade and reboot
-27 16 * * 0   root  sleep \$((RANDOM %600)); apt-get autoclean -y; apt-get autoremove -y; apt-get update -y; apt-get upgrade -y; sleep 5; reboot
+27 16 * * 0   root  apt-get autoclean -y; apt-get autoremove -y; apt-get update -y; apt-get upgrade -y; sleep 5; reboot
 EOF
 
 # Let's create some files and folders
 fuECHO "### Creating some files and folders."
-mkdir -p /data/ews/log /data/ews/conf /data/ews/dionaea /data/ews/emobility \
+mkdir -p /data/conpot/log \
          /data/cowrie/log/tty/ /data/cowrie/downloads/ /data/cowrie/keys/ /data/cowrie/misc/ \
-         /data/elasticpot/log \
          /data/dionaea/log /data/dionaea/bistreams /data/dionaea/binaries /data/dionaea/rtp /data/dionaea/wwwroot \
+         /data/elasticpot/log \
          /data/elk/data /data/elk/log /data/glastopf /data/honeytrap/log/ /data/honeytrap/attacks/ /data/honeytrap/downloads/ \
-         /data/suricata/log /home/tsec/.ssh/ \
-         /data/emobility/log
+         /data/emobility/log \
+         /data/ews/log /data/ews/conf /data/ews/dionaea /data/ews/emobility \
+         /data/suricata/log /home/tsec/.ssh/
 
 # Let's take care of some files and permissions before copying
 chmod 500 /root/tpot/bin/*

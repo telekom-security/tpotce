@@ -24,17 +24,31 @@ The script will download and install dependecies necessary to build the image on
 
 After a successful build, you will find the ISO image `tpot.iso` in your directory.
 
-### T-Pot Full Installation
+### T-Pot Installation (Cowrie, Dionaea, ElasticPot, Glastopf, Honeytrap, ELK, Suricata+P0f)
 When installing the T-Pot ISO image, make sure the target system (physical/virtual) meets the following minimum requirements:
 - 4 GB RAM (6-8 GB recommended)
 - 64 GB disk (128 GB SSD recommended)
 - Network via DHCP
 - A working internet connection
 
-### T-Pot Sensor Installation (no ELK, no Suricata - only available thru ISO Creator)
+### Sensor Installation (Cowrie, Dionaea, ElasticPot, Glastopf, Honeytrap - only available thru ISO Creator)
 When installing the T-Pot ISO image, make sure the target system (physical/virtual) meets the following minimum requirements:
 - 3 GB RAM (4-6 GB recommended) 
 - 64 GB disk (64 GB SSD recommended)
+- Network via DHCP
+- A working internet connection
+
+### Industrial Installation (ConPot, eMobility, ELK, Suricata+P0f - only available thru ISO Creator)
+When installing the T-Pot ISO image, make sure the target system (physical/virtual) meets the following minimum requirements:
+- 4 GB RAM (8 GB recommended)
+- 64 GB disk (128 GB SSD recommended)
+- Network via DHCP
+- A working internet connection
+
+### Everything Installation (Everything)
+When installing the T-Pot ISO image, make sure the target system (physical/virtual) meets the following minimum requirements:
+- 8 GB RAM
+- 128 GB disk or larger (128 GB SSD or larger recommended)
 - Network via DHCP
 - A working internet connection
 
