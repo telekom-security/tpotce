@@ -4,7 +4,7 @@
 # T-Pot                                                #
 # Export docker images maker                           #
 #                                                      #
-# v0.01 by mo, DTAG, 2015-08-11                        #
+# v0.02 by mo, DTAG, 2016-02-22                        #
 ########################################################
 
 # This feature is experimental and requires at least docker 1.7!
@@ -29,7 +29,7 @@ if [ -z $1 ]
 fi
 if [ $1 == "now" ]
   then
-  for name in $(cat installer/data/full_images.conf)
+  for name in $(cat installer/data/imgcfg/all_images.conf)
     do
       docker pull dtagdevsec/$name:latest1603
     done
