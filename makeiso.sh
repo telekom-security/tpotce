@@ -4,7 +4,7 @@
 # T-Pot                                                #
 # .ISO maker                                           #
 #                                                      #
-# v16.03.3 by mo, DTAG, 2016-02-19                     #
+# v16.03.3 by mo, DTAG, 2016-02-26                     #
 ########################################################
 
 # Let's define some global vars
@@ -74,7 +74,10 @@ done
 if [ "$myINST" != "" ]
   then
     apt-get update -y
-    apt-get install $myINST -y
+    for myDEPS in $myINST;
+    do
+      apt-get install $myDEPS -y
+    done
 fi
 
 # Let's ask if the user wants to run the script ...
