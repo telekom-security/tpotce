@@ -3,7 +3,7 @@
 # T-Pot post install script                            #
 # Ubuntu server 14.04.3, x64                           #
 #                                                      #
-# v16.03.10 by mo, DTAG, 2016-02-19                    #
+# v16.03.11 by mo, DTAG, 2016-03-02                    #
 ########################################################
 
 # Type of install, SENSOR, INDUSTRIAL or FULL?
@@ -273,8 +273,8 @@ tee -a /etc/crontab <<EOF
 # Restart docker service and containers
 27 3 * * *    root 	dcres.sh
 
-# Delete elastic indices older than 30 days
-27 4 * * *    root  docker exec elk bash -c '/usr/local/bin/curator --host 127.0.0.1 delete --older-than 30'
+# Delete elastic indices older than 90 days (kibana index is omitted by default)
+27 4 * * *    root  docker exec elk bash -c '/usr/local/bin/curator --host 127.0.0.1 delete indices --older-than 90 --time-unit days --timestring '%Y.%m.%d''
 
 # Update IP and erase check.lock if it exists
 27 15 * * *   root  /etc/rc.local
