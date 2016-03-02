@@ -1,11 +1,11 @@
-# T-Pot Image Creator (Beta 1 - unstable)
+# T-Pot 16.03 Image Creator (Beta 1 - unstable)
 
 This repository contains the necessary files to create the **[T-Pot community honeypot](http://dtag-dev-sec.github.io/)**  ISO image.
 The image can then be used to install T-Pot on a physical or virtual machine.
 
 ### Image Creation
 **Requirements to create the ISO image:**
-- Ubuntu 14.04.3 or newer as host system (others *may* work, but remain untested)
+- Ubuntu 14.04.4 or newer as host system (others *may* work, but remain untested)
 - 4GB of free memory  
 - 32GB of free storage
 - A working internet connection
@@ -31,14 +31,16 @@ When installing the T-Pot ISO image, make sure the target system (physical/virtu
 - Network via DHCP
 - A working internet connection
 
-### Sensor Installation (Cowrie, Dionaea, ElasticPot, Glastopf, Honeytrap - only available thru ISO Creator)
+### Sensor Installation (Cowrie, Dionaea, ElasticPot, Glastopf, Honeytrap)
+This installation type is currently only available via ISO Creator.
 When installing the T-Pot ISO image, make sure the target system (physical/virtual) meets the following minimum requirements:
 - 3 GB RAM (4-6 GB recommended) 
 - 64 GB disk (64 GB SSD recommended)
 - Network via DHCP
 - A working internet connection
 
-### Industrial Installation (ConPot, eMobility, ELK, Suricata+P0f - only available thru ISO Creator)
+### Industrial Installation (ConPot, eMobility, ELK, Suricata+P0f)
+This installation type is currently only available via ISO Creator.
 When installing the T-Pot ISO image, make sure the target system (physical/virtual) meets the following minimum requirements:
 - 4 GB RAM (8 GB recommended)
 - 64 GB disk (128 GB SSD recommended)
@@ -46,6 +48,7 @@ When installing the T-Pot ISO image, make sure the target system (physical/virtu
 - A working internet connection
 
 ### Everything Installation (Everything)
+This installation type is currently only available via ISO Creator.
 When installing the T-Pot ISO image, make sure the target system (physical/virtual) meets the following minimum requirements:
 - 8 GB RAM
 - 128 GB disk or larger (128 GB SSD or larger recommended)
