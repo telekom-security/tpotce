@@ -64,6 +64,12 @@ You will need to set a new password after first login.
 
 All honeypot services are started automatically. 
 
-![T-Pot 16.03 architecture](T-Pot16.03.png)
+# T-Pot Architecture
+
+![T-Pot 16.03 architecture](doc/architecture.png)
+
+# T-Pot Dashboard
+
+![T-Pot Dashboard](doc/dashboard.png)
 
 For further information and a more in depth installation instruction, visit [T-Pot's website](http://dtag-dev-sec.github.io/).
