@@ -3,7 +3,7 @@
 # T-Pot post install script                            #
 # Ubuntu server 14.04.3, x64                           #
 #                                                      #
-# v16.03.11 by mo, DTAG, 2016-03-02                    #
+# v16.03.12 by mo, DTAG, 2016-03-03                    #
 ########################################################
 
 # Type of install, SENSOR, INDUSTRIAL or FULL?
@@ -315,6 +315,9 @@ for i in $(cat /data/images.conf);
   do
     cp /data/upstart/$i.conf /etc/init/;
 done
+
+# Let's turn persistence off by default
+touch /data/persistence.off
 
 # Let's take care of some files and permissions
 chmod 760 -R /data
