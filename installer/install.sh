@@ -165,7 +165,7 @@ apt-get dist-upgrade -y
 
 # Let's install docker
 fuECHO "### Installing docker-engine."
-apt-get install docker-engine=1.10.1-0~trusty -y
+apt-get install docker-engine=1.10.2-0~trusty -y
 
 # Let's add proxy settings to docker defaults
 if [ -f $myPROXYFILEPATH ];
