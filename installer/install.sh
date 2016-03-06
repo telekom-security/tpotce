@@ -1,9 +1,9 @@
 #!/bin/bash
 ########################################################
 # T-Pot post install script                            #
-# Ubuntu server 14.04.3, x64                           #
+# Ubuntu server 14.04.4, x64                           #
 #                                                      #
-# v16.03.12 by mo, DTAG, 2016-03-03                    #
+# v16.03.13 by mo, DTAG, 2016-03-06                    #
 ########################################################
 
 # Type of install, SENSOR, INDUSTRIAL or FULL?
