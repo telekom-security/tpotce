@@ -12,8 +12,8 @@
 d-i preseed/early_command string umount /media || :
 
 # Network Configuration
-d-i netcfg/choose_interface select auto
-d-i netcfg/dhcp_timeout string 60
+#d-i netcfg/choose_interface select auto
+#d-i netcfg/dhcp_timeout string 60
 d-i netcfg/get_hostname string t-pot
 
 # Source & Proxy
