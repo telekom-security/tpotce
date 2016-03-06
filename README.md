@@ -1,4 +1,4 @@
-# T-Pot 16.03 Image Creator (Beta 1 - unstable)
+# T-Pot 16.03 Image Creator (Beta 2 - unstable)
 
 This repository contains the necessary files to create the **[T-Pot community honeypot](http://dtag-dev-sec.github.io/)**  ISO image.
 The image can then be used to install T-Pot on a physical or virtual machine.
@@ -24,6 +24,10 @@ The script will download and install dependecies necessary to build the image on
 
 After a successful build, you will find the ISO image `tpot.iso` in your directory.
 
+# T-Pot Architecture
+
+![T-Pot 16.03 architecture](doc/architecture.png)
+
 ### T-Pot Installation (Cowrie, Dionaea, ElasticPot, Glastopf, Honeytrap, ELK, Suricata+P0f)
 When installing the T-Pot ISO image, make sure the target system (physical/virtual) meets the following minimum requirements:
 - 4 GB RAM (6-8 GB recommended)
@@ -40,7 +44,7 @@ When installing the T-Pot ISO image, make sure the target system (physical/virtu
 - A working internet connection
 
 ### Industrial Installation (ConPot, eMobility, ELK, Suricata+P0f)
-This installation type is currently only available via ISO Creator.
+This installation type is currently only available via ISO Creator and remains experimental.
 When installing the T-Pot ISO image, make sure the target system (physical/virtual) meets the following minimum requirements:
 - 4 GB RAM (8 GB recommended)
 - 64 GB disk (128 GB SSD recommended)
@@ -63,10 +67,6 @@ Once the installation is finished, the system will automatically reboot and you 
 You will need to set a new password after first login.
 
 All honeypot services are started automatically. 
-
-# T-Pot Architecture
-
-![T-Pot 16.03 architecture](doc/architecture.png)
 
 # T-Pot Dashboard
 
