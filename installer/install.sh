@@ -206,22 +206,24 @@ DOCKER_OPTS="-r=false"
 EOF
 
 # Let's make sure only myFLAVOR images will be downloaded and started
-if [ "$myFLAVOR" = "HP" ]
-  then
+case $myFLAVOR in
+  HP)
+    echo "### Preparing HONEYPOT flavor installation."
     cp /root/tpot/data/imgcfg/hp_images.conf /root/tpot/data/images.conf
-fi
-if [ "$myFLAVOR" = "INDUSTRIAL" ]
-  then
+  ;;
+  INDUSTRIAL)
+    echo "### Preparing INDUSTRIAL flavor installation."
     cp /root/tpot/data/imgcfg/industrial_images.conf /root/tpot/data/images.conf
-fi
-if [ "$myFLAVOR" = "TPOT" ]
-  then
+  ;;
+  TPOT)
+    echo "### Preparing TPOT flavor installation."
     cp /root/tpot/data/imgcfg/tpot_images.conf /root/tpot/data/images.conf
-fi
-if [ "$myFLAVOR" = "ALL" ]
-  then
+  ;;
+  ALL)
+    echo "### Preparing EVERYTHING flavor installation."
     cp /root/tpot/data/imgcfg/all_images.conf /root/tpot/data/images.conf
-fi
+  ;;
+esac
 
 # Let's load docker images
 fuECHO "### Loading docker images. Please be patient, this may take a while."
