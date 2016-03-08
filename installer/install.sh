@@ -3,7 +3,7 @@
 # T-Pot post install script                            #
 # Ubuntu server 14.04.4, x64                           #
 #                                                      #
-# v16.03.13 by mo, DTAG, 2016-03-06                    #
+# v16.03.14 by mo, DTAG, 2016-03-08                    #
 ########################################################
 
 # Type of install, SENSOR, INDUSTRIAL or FULL?
@@ -161,7 +161,7 @@ EOF
 fuECHO "### Pulling Updates."
 apt-get update -y
 fuECHO "### Installing Upgrades."
-apt-get dist-upgrade -y
+apt-get upgrade -y
 
 # Let's install docker
 fuECHO "### Installing docker-engine."
