@@ -4,7 +4,7 @@
 # T-Pot                                                #
 # .ISO maker                                           #
 #                                                      #
-# v16.03.3 by mo, DTAG, 2016-02-26                     #
+# v16.03.4 by mo, DTAG, 2016-03-08                     #
 ########################################################
 
 # Let's define some global vars
@@ -204,11 +204,11 @@ EOF
   fi
 done
 
-# Let's get Ubuntu 14.04.2 as .iso
+# Let's get Ubuntu 14.04.4 as .iso
 if [ ! -f $myUBUNTUISO ]
   then
-    wget $myUBUNTULINK --progress=dot 2>&1 | awk '{print $7+0} fflush()' | dialog --backtitle "$myBACKTITLE" --title "[ Downloading Ubuntu ... ]" --gauge "" 6 70;
-    echo 100 | dialog --backtitle "$myBACKTITLE" --title "[ Downloading Ubuntu ... Done! ]" --gauge "" 6 70;
+    wget $myUBUNTULINK --progress=dot 2>&1 | awk '{print $7+0} fflush()' | dialog --backtitle "$myBACKTITLE" --title "[ Downloading Ubuntu ... ]" --gauge "" 5 70;
+    echo 100 | dialog --backtitle "$myBACKTITLE" --title "[ Downloading Ubuntu ... Done! ]" --gauge "" 5 70;
   else
     dialog --infobox "Using previously downloaded .iso ..." 3 50;
 fi
@@ -236,7 +236,7 @@ chmod 777 -R $myTPOTDIR
 
 # Let's create the new .iso
 cd $myTPOTDIR
-mkisofs -gui -D -r -V "T-Pot" -cache-inodes -J -l -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -o ../$myTPOTISO ../$myTPOTDIR 2>&1 | awk '{print $1+0} fflush()' | dialog --backtitle "$myBACKTITLE" --title "[ Building T-Pot .iso ... ]" --gauge "" 5 70 0
+mkisofs -gui -D -r -V "T-Pot" -cache-inodes -J -l -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -o ../$myTPOTISO ../$myTPOTDIR 2>&1 | awk '{print $1+0} fflush()' | cut -f1 -d"." | dialog --backtitle "$myBACKTITLE" --title "[ Building T-Pot .iso ... ]" --gauge "" 5 70 0
 echo 100 | dialog --backtitle "$myBACKTITLE" --title "[ Building T-Pot .iso ... Done! ]" --gauge "" 5 70
 cd ..
 isohybrid $myTPOTISO
@@ -256,9 +256,9 @@ do
           if [ "$myWRITE" = "0" ]
             then
               umount $myTARGET 2>&1 || true
-              (dd if="$myTPOTISO" | pv -n -s $(ls --block-size=1M -vs "$myTPOTISO" | awk '{print $1}')m | dd bs=1M of="$myTARGET") 2>&1 | dialog --backtitle "$myBACKTITLE" --title "[ Writing .iso to target ... ]" --gauge "" 5 70 0
+              (pv -n "$myTPOTISO" | dd of="$myTARGET") 2>&1 | dialog --backtitle "$myBACKTITLE" --title "[ Writing .iso to target ... ]" --gauge "" 5 70 0
               echo 100 | dialog --backtitle "$myBACKTITLE" --title "[ Writing .iso to target ... Done! ]" --gauge "" 5 70
-              break;
+              break
           fi
       fi
     else
