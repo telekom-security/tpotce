@@ -4,7 +4,7 @@
 # T-Pot                                                #
 # ELK DB backup script                                 #
 #                                                      #
-# v0.01 by mo, DTAG, 2016-02-12                        #
+# v16.03.1 by mo, DTAG, 2016-03-09                     #
 ########################################################
 myCOUNT=1
 myDATE=$(date +%Y%m%d%H%M)
@@ -43,13 +43,12 @@ sleep 10
 
 # Backup DB in 2 flavors
 echo "Now backing up Elasticsearch data ..."
-tar cvfz $myBACKUPPATH"$myDATE"_elkall.tgz $myELKPATH  
+tar cvfz $myBACKUPPATH"$myDATE"_elkall.tgz $myELKPATH
 rm -rf "$myELKPATH"log/*
 rm -rf "$myELKPATH"data/elasticsearch/nodes/0/indices/logstash*
 tar cvfz $myBACKUPPATH"$myDATE"_elkbase.tgz $myELKPATH
 rm -rf $myELKPATH
-tar xvfz $myBACKUPPATH"$myDATE"_elkall.tgz -C / 
-#tar xvfz $myBACKUPPATH"$myDATE"_elkbase.tgz -C /
+tar xvfz $myBACKUPPATH"$myDATE"_elkall.tgz -C /
 chmod 760 -R $myELKPATH
 chown tpot:tpot -R $myELKPATH
 
@@ -59,4 +58,3 @@ echo "Now starting up ELK ..."
 
 # Allow checks to resume
 rm /var/run/check.lock
-

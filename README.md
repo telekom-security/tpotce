@@ -18,7 +18,7 @@ The image can then be used to install T-Pot on a physical or virtual machine.
         cd tpotce
 
 2. Invoke the script that builds the ISO image.
-The script will download and install dependecies necessary to build the image on the invoking machine. It will further download the ubuntu base image (~600MB) which T-Pot is based on.
+The script will download and install dependencies necessary to build the image on the invoking machine. It will further download the ubuntu base image (~600MB) which T-Pot is based on.
 
         sudo ./makeiso.sh
 
@@ -38,7 +38,7 @@ When installing the T-Pot ISO image, make sure the target system (physical/virtu
 ### Sensor Installation (Cowrie, Dionaea, ElasticPot, Glastopf, Honeytrap)
 This installation type is currently only available via ISO Creator.
 When installing the T-Pot ISO image, make sure the target system (physical/virtual) meets the following minimum requirements:
-- 3 GB RAM (4-6 GB recommended) 
+- 3 GB RAM (4-6 GB recommended)
 - 64 GB disk (64 GB SSD recommended)
 - Network via DHCP
 - A working internet connection
@@ -66,7 +66,7 @@ Once the installation is finished, the system will automatically reboot and you 
 
 You will need to set a new password after first login.
 
-All honeypot services are started automatically. 
+All honeypot services are started automatically.
 
 # T-Pot Dashboard
 

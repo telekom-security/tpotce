@@ -4,11 +4,11 @@
 # T-Pot                                                #
 # Export docker images maker                           #
 #                                                      #
-# v0.02 by mo, DTAG, 2016-02-22                        #
+# v16.03.1 by mo, DTAG, 2016-03-09                     #
 ########################################################
 
 # This feature is experimental and requires at least docker 1.7!
-# Using any docker version < 1.7 may result in a unusable installation
+# Using any docker version < 1.7 may result in a unusable T-Pot installation
 
 # This script will download the docker images and export them to the folder "images".
 # When building the .iso image the preloaded docker images will be exported to the .iso which

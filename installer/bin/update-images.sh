@@ -4,7 +4,7 @@
 # T-Pot                                                #
 # Only start the containers found in /etc/init/        #
 #                                                      #
-# v0.03 by mo, DTAG, 2016-02-12                        #
+# v16.03.1 by mo, DTAG, 2016-03-09                     #
 ########################################################
 
 # Make sure not to interrupt a check
@@ -40,7 +40,7 @@ done
 
 # Setup only T-Pot upstart scripts from images.conf and pull the images
 for i in $(cat /data/images.conf);
-  do 
+  do
     docker pull dtagdevsec/$i:latest1603;
     cp /data/upstart/"$i".conf /etc/init/;
 done
@@ -49,8 +49,8 @@ done
 rm /var/run/check.lock
 
 # Announce reboot
-echo "Rebooting in 5 seconds for the changes to take effect."
-sleep 5
+echo "### Rebooting in 60 seconds for the changes to take effect."
+sleep 60
 
 # Reboot
 reboot

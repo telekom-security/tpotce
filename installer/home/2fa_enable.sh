@@ -4,7 +4,7 @@
 # T-Pot                                                #
 # Two-Factor-Authentication and SSH enable script      #
 #                                                      #
-# v16.03.1 by mo, DTAG, 2016-03-07                     #
+# v16.03.2 by mo, DTAG, 2016-03-09                     #
 ########################################################
 myBACKTITLE="T-Pot - Two-Factor-Authentication and SSH enable script"
 
@@ -18,7 +18,7 @@ dialog --backtitle "$myBACKTITLE" --title "[ Enable SSH? ]" --yesno "\nDo you wa
 mySSH=$?
 
 # Enable 2FA
-if [ $my2FA == 0 ] && ! [ -f /etc/pam.d/sshd.bak ];
+if [ "$my2FA" = "0" ] && ! [ -f /etc/pam.d/sshd.bak ];
   then
     clear
     sudo sed -i.bak '\# PAM#aauth required pam_google_authenticator.so' /etc/pam.d/sshd
@@ -27,12 +27,12 @@ if [ $my2FA == 0 ] && ! [ -f /etc/pam.d/sshd.bak ];
     echo "2FA enabled. Please press return to continue ..."
     read
   elif [ -f /etc/pam.d/sshd.bak ]
-    then 
-      dialog --backtitle "$myBACKTITLE" --title "[ Already enabled ]" --msgbox "\nIt seems that Two-Factor-Authentication has already been enabled. Please run 'google-authenticator -t -d -f -r 3 -R 30 -w 21' if you want to rewrite your token." 8 70  
+    then
+      dialog --backtitle "$myBACKTITLE" --title "[ Already enabled ]" --msgbox "\nIt seems that Two-Factor-Authentication has already been enabled. Please run 'google-authenticator -t -d -f -r 3 -R 30 -w 21' if you want to rewrite your token." 8 70
 fi
 
 # Enable SSH
-if [ $mySSH == 0 ] && [ -f /etc/init/ssh.override ];
+if [ "$mySSH" = "0" ] && [ -f /etc/init/ssh.override ];
   then
     clear
     sudo rm /etc/init/ssh.override

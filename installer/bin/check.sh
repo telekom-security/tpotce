@@ -4,10 +4,10 @@
 # T-Pot                                                #
 # Check container and services script                  #
 #                                                      #
-# v0.03 by mo, DTAG, 2016-02-12                        #
+# v16.03.1 by mo, DTAG, 2016-03-09                     #
 ########################################################
 if [ -a /var/run/check.lock ];
-  then 
+  then
     echo "Lock exists. Exiting now."
     exit
 fi
@@ -34,5 +34,5 @@ for i in $myIMAGES
           service $i start
       fi
 done
-        
+
 rm /var/run/check.lock
