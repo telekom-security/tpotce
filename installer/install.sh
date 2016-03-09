@@ -306,8 +306,8 @@ chown tsec:tsec /root/tpot/home/*
 chmod 644 /root/tpot/data/upstart/*
 
 # Let's copy some files
-tar xvfz /root/tpot/data/elkbase.tgz -C / 
-rm /root/tpot/data/elkbase.tgz
+tar xvfz /root/tpot/data/elkbase.tgz -C /
+cp /root/tpot/data/elkbase.tgz /data/
 cp -R /root/tpot/bin/* /usr/bin/
 cp -R /root/tpot/data/* /data/
 cp -R /root/tpot/etc/issue /etc/
