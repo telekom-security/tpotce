@@ -34,11 +34,11 @@ touch /var/run/check.lock
 
 # Stop T-Pot services and delete all T-Pot upstart scripts
 echo "### Stopping T-Pot services and cleaning up."
-for i in $(ls /data/upstart/);
+for i in $(cat /data/imgcfg/all_images.conf);
   do
     service $i stop
     sleep 2
-    rm -rf /etc/init/$i || true;
+    rm -rf /etc/init/$i.conf || true;
 done
 
 # Setup only T-Pot upstart scripts from images.conf and pull the images
