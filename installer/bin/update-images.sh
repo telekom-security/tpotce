@@ -32,9 +32,12 @@ done
 # We do not want to get interrupted by a check
 touch /var/run/check.lock
 
-# Delete all T-Pot upstart scripts
+# Stop T-Pot services and delete all T-Pot upstart scripts
+echo "### Stopping T-Pot services and cleaning up."
 for i in $(ls /data/upstart/);
   do
+    service $i stop
+    sleep 2
     rm -rf /etc/init/$i || true;
 done
 
@@ -45,12 +48,12 @@ for i in $(cat /data/images.conf);
     cp /data/upstart/"$i".conf /etc/init/;
 done
 
-# Allow checks to resume
-rm /var/run/check.lock
-
 # Announce reboot
 echo "### Rebooting in 60 seconds for the changes to take effect."
 sleep 60
+
+# Allow checks to resume
+rm /var/run/check.lock
 
 # Reboot
 reboot
