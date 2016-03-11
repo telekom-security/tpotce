@@ -31,7 +31,7 @@ Furthermore we use the following tools
 
 # TL;DR
 1. Meet the [system requirements](#requirements). The T-Pot installation needs at least 4 GB RAM and 64 GB free disk space as well as a working internet connection.
-2. Download the [tpotce.iso](http://community-honeypot.de/tpotce.iso) or [create it yourself](#createiso).
+2. Download the [tpot.iso](http://community-honeypot.de/tpot.iso) or [create it yourself](#createiso).
 3. Install the system in a [VM](#vm) or on [physical hardware](#hw) with [internet access](#placement).
 4. Enjoy your favorite beverage - [watch](http://sicherheitstacho.eu/?peers=communityPeers) and [analyze](#kibana).
 
@@ -185,17 +185,17 @@ When installing the T-Pot ISO image, make sure the target system (physical/virtu
 # Installation
 The installation of T-Pot is straight forward. Please be advised that you should have an internet connection up and running as all all the docker images for the chosen installation type need to be pulled from docker hub.
 
-Firstly, decide if you want to download our prebuilt installation ISO image [tpotce.iso](http://community-honeypot.de/tpotce.iso) ***or*** [create it yourself](#createiso).
+Firstly, decide if you want to download our prebuilt installation ISO image [tpot.iso](http://community-honeypot.de/tpot.iso) ***or*** [create it yourself](#createiso).
 
 Secondly, decide where you want to let the system run: [real hardware](#hardware) or in a [virtual machine](#vm)?
 
 <a name="prebuilt"></a>
 ## Prebuilt ISO Image
 We provide an installation ISO image for download (~600MB), which is created using the same [tool](https://github.com/dtag-dev-sec/tpotce) you can use yourself in order to create your own image. It will basically just save you some time downloading components and creating the ISO image.
-You can download the prebuilt installation image [here](http://community-honeypot.de/tpotce.iso) and jump to the [installation](#vm) section. The ISO image is hosted by our friends from [Strato](http://www.strato.de) / [Cronon](http://www.cronon.de).
+You can download the prebuilt installation image [here](http://community-honeypot.de/tpot.iso) and jump to the [installation](#vm) section. The ISO image is hosted by our friends from [Strato](http://www.strato.de) / [Cronon](http://www.cronon.de).
 
-    shasum tpotce.iso
-    3b8f15eba2a478b106b202726661ce75c8fe7acc tpotce.iso
+    shasum tpot.iso
+    3b8f15eba2a478b106b202726661ce75c8fe7acc tpot.iso
 
 <a name="createiso"></a>
 ## Create your own ISO Image
@@ -233,7 +233,7 @@ You need to enable promiscuous mode for the network interface for suricata to wo
 
 If you want to use a wifi card as primary NIC for T-Pot, please remind that not all network interface drivers support all wireless cards. E.g. in VirtualBox, you then have to choose the *"MT SERVER"* model of the NIC.
 
-Lastly, mount the `tpotce.iso` ISO to the VM and continue with the installation.<br>
+Lastly, mount the `tpot.iso` ISO to the VM and continue with the installation.<br>
 
 You can now jump [here](#firstrun).
 
