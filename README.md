@@ -195,7 +195,7 @@ We provide an installation ISO image for download (~600MB), which is created usi
 You can download the prebuilt installation image [here](http://community-honeypot.de/tpot.iso) and jump to the [installation](#vm) section. The ISO image is hosted by our friends from [Strato](http://www.strato.de) / [Cronon](http://www.cronon.de).
 
     shasum tpot.iso
-    3b8f15eba2a478b106b202726661ce75c8fe7acc tpot.iso
+    ecb016fb391622518ac558041f3f609ba1eca419 tpot.iso
 
 <a name="createiso"></a>
 ## Create your own ISO Image
