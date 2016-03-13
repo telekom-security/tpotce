@@ -1,4 +1,4 @@
-# T-Pot CE preseed file by mo
+# T-Pot preseed file by mo
 # Setting locale
 #d-i debian-installer/language string en
 #d-i debian-installer/country string DE
@@ -25,6 +25,7 @@ d-i mirror/http/proxy string
 # Time
 #d-i clock-setup/utc boolean true
 #d-i time/zone string Europe/Berlin
+d-i time/zone string UTC
 d-i clock-setup/ntp boolean true
 
 # Package Groups
