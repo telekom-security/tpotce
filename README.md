@@ -95,6 +95,7 @@ In case you already have an Ubuntu 14.04.x running in your datacenter and are un
 - Size limits for the `/data` have been lifted and swap space is now 8 GB.
 - The number of **installation reboots** has been reduced to **2**. The first to finish the initial Ubuntu Server installation and the second after setting up T-Pot and its dependencies.
 - Some packages are now be installed directly from the installation image instead of downloading them.
+- **[Update 20160313]** - T-Pot host `/var/log/syslog` and `/var/log/auth.log` will now be forwarded to the ELK-stack.
 
 
 <a name="concept"></a>
@@ -195,7 +196,7 @@ We provide an installation ISO image for download (~600MB), which is created usi
 You can download the prebuilt installation image [here](http://community-honeypot.de/tpot.iso) and jump to the [installation](#vm) section. The ISO image is hosted by our friends from [Strato](http://www.strato.de) / [Cronon](http://www.cronon.de).
 
     shasum tpot.iso
-    ecb016fb391622518ac558041f3f609ba1eca419 tpot.iso
+    bee641b7af6c17f394d59659d573cbba99af9a6c tpot.iso
 
 <a name="createiso"></a>
 ## Create your own ISO Image
@@ -361,7 +362,7 @@ You are always invited to participate in development on our [GitHub](https://git
 - By default, your data is submitted to the community dashboard. You can disable this in the config. But hey, wouldn't it be better to contribute to the community?
 - By default, hpfeeds submission is disabled. You can enable it in the config section for hpfeeds. This is due to the nature of hpfeeds. We do not want to spam any channel, so you can choose where to post your data and who to share it with.  
 - Malware submission is enabled by default but malware is currently not processed on the submission backend. This may be added later, but can also be disabled in the `ews.cfg` config file.
-- The system restarts the docker containers every night to avoid clutter and reduce disk consumption. *All data in the container is then reset.* The data displayed in kibana is kept for <=90 days. 
+- The system restarts the docker containers every night to avoid clutter and reduce disk consumption. *All data in the container is then reset.* The data displayed in kibana is kept for <=90 days.
 
 
 <a name="faq"></a>
