@@ -4,7 +4,7 @@
 # T-Pot                                                #
 # Only start the containers found in /etc/init/        #
 #                                                      #
-# v16.03.1 by mo, DTAG, 2016-03-09                     #
+# v16.03.2 by mo, DTAG, 2016-04-20                     #
 ########################################################
 
 # Make sure not to interrupt a check
@@ -40,6 +40,13 @@ for i in $(cat /data/imgcfg/all_images.conf);
     sleep 2
     rm -rf /etc/init/$i.conf || true;
 done
+
+# Restarting docker services
+echo "### Restarting docker services ..."
+service docker stop
+sleep 2
+service docker start
+sleep 2
 
 # Setup only T-Pot upstart scripts from images.conf and pull the images
 for i in $(cat /data/images.conf);
