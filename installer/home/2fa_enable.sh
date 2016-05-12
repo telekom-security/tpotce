@@ -4,10 +4,9 @@
 # T-Pot                                                #
 # Two-Factor-Authentication and SSH enable script      #
 #                                                      #
-# v16.03.2 by mo, DTAG, 2016-03-09                     #
+# v16.10.0 by mo, DTAG, 2016-05-12                     #
 ########################################################
 myBACKTITLE="T-Pot - Two-Factor-Authentication and SSH enable script"
-
 
 # Let's ask if the user wants to enable two-factor ...
 dialog --backtitle "$myBACKTITLE" --title "[ Enable 2FA? ]" --yesno "\nDo you want to enable Two-Factor-Authentication based on Google Authenticator for SSH?" 8 70
@@ -32,13 +31,13 @@ if [ "$my2FA" = "0" ] && ! [ -f /etc/pam.d/sshd.bak ];
 fi
 
 # Enable SSH
-if [ "$mySSH" = "0" ] && [ -f /etc/init/ssh.override ];
+if [ "$mySSH" = "0" ] && [ "$(systemctl status ssh | grep -o dead)" = "dead" ];
   then
     clear
-    sudo rm /etc/init/ssh.override
-    sudo service ssh start
+    sudo systemctl enable ssh
+    sudo systemctl start ssh
     dialog --backtitle "$myBACKTITLE" --title "[ SSH enabled ]" --msgbox "\nThe SSH service has been enabled and is now reachable via port tcp/64295. Password authentication is disabled by default." 8 70
-  elif ! [ -f /etc/init/ssh.override ]
+  elif [ "$(systemctl status ssh | grep -o dead)" = "" ]
     then
       dialog --backtitle "$myBACKTITLE" --title "[ Already enabled ]" --msgbox "\nIt seems that SSH has already been enabled." 8 70
 fi

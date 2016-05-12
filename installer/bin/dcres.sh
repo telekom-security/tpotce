@@ -4,7 +4,7 @@
 # T-Pot                                                #
 # Container and services restart script                #
 #                                                      #
-# v16.03.1 by mo, DTAG, 2016-03-09                     #
+# v16.10.0 by mo, DTAG, 2016-05-12                     #
 ########################################################
 myCOUNT=1
 
@@ -38,12 +38,12 @@ if [ $myUPTIME -gt 4 ];
   then
     for i in $myIMAGES
       do
-        service $i stop
+        systemctl stop $i
     done
     echo "### Waiting 10 seconds before restarting docker ..."
     sleep 10
     iptables -w -F
-    service docker restart
+    systemctl restart docker
     while true
       do
         docker info > /dev/null
@@ -64,7 +64,7 @@ if [ $myUPTIME -gt 4 ];
     echo "### Starting T-Pot services ..."
     for i in $myIMAGES
       do
-        service $i start
+        systemctl start $i
     done
     sleep 5
   else

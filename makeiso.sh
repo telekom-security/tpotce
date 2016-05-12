@@ -4,13 +4,13 @@
 # T-Pot                                                #
 # .ISO maker                                           #
 #                                                      #
-# v16.03.4 by mo, DTAG, 2016-03-08                     #
+# v16.10.0 by mo, DTAG, 2016-05-20                     #
 ########################################################
 
 # Let's define some global vars
 myBACKTITLE="T-Pot - ISO Maker"
-myUBUNTULINK="http://releases.ubuntu.com/14.04.4/ubuntu-14.04.4-server-amd64.iso"
-myUBUNTUISO="ubuntu-14.04.4-server-amd64.iso"
+myUBUNTULINK="http://releases.ubuntu.com/16.04/ubuntu-16.04-server-amd64.iso"
+myUBUNTUISO="ubuntu-16.04-server-amd64.iso"
 myTPOTISO="tpot.iso"
 myTPOTDIR="tpotiso"
 myTPOTSEED="preseed/tpot.seed"

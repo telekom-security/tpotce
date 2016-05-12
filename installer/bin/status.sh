@@ -4,7 +4,7 @@
 # T-Pot                                                #
 # Container and services status script                 #
 #                                                      #
-# v16.03.1 by mo, DTAG, 2016-03-09                     #
+# v16.10.0 by mo, DTAG, 2016-05-12                     #
 ########################################################
 myCOUNT=1
 

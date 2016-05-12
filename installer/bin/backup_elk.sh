@@ -4,7 +4,7 @@
 # T-Pot                                                #
 # ELK DB backup script                                 #
 #                                                      #
-# v16.03.1 by mo, DTAG, 2016-03-09                     #
+# v16.10.0 by mo, DTAG, 2016-05-12                     #
 ########################################################
 myCOUNT=1
 myDATE=$(date +%Y%m%d%H%M)
@@ -38,7 +38,7 @@ touch /var/run/check.lock
 
 # Stop ELK to lift db lock
 echo "Now stopping ELK ..."
-service elk stop
+systemctl stop elk
 sleep 10
 
 # Backup DB in 2 flavors
@@ -53,7 +53,7 @@ chmod 760 -R $myELKPATH
 chown tpot:tpot -R $myELKPATH
 
 # Start ELK
-service elk start
+systemctl start elk
 echo "Now starting up ELK ..."
 
 # Allow checks to resume

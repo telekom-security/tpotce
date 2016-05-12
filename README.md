@@ -1,15 +1,14 @@
-# T-Pot 16.03 Image Creator
+# T-Pot 16.10 Image Creator (broken, dev in progress)
 
 This repository contains the necessary files to create the **[T-Pot community honeypot](http://dtag-dev-sec.github.io/)**  ISO image.
 The image can then be used to install T-Pot on a physical or virtual machine.
 
-Last year we released
-[T-Pot 15.03](http://dtag-dev-sec.github.io/mediator/feature/2015/03/17/concept.html)
-as open source and we received lots of positive feedback and naturally feature requests which encouraged us to continue development and share our work as open source and are proud to present to you ...
+In March 2016 we released
+[T-Pot 16.03](http://dtag-dev-sec.github.io/mediator/feature/2016/03/11/t-pot-16.03.html)
 
-# T-Pot 16.03
+# T-Pot 16.10
 
-T-Pot 16.03 is based on
+T-Pot 16.10 now uses Ubuntu Server 16.04 LTS and is based on
 
 [docker](https://www.docker.com/)
 

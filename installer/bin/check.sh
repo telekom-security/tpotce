@@ -4,7 +4,7 @@
 # T-Pot                                                #
 # Check container and services script                  #
 #                                                      #
-# v16.03.1 by mo, DTAG, 2016-03-09                     #
+# v16.10.0 by mo, DTAG, 2016-05-12                     #
 ########################################################
 if [ -a /var/run/check.lock ];
   then
@@ -29,9 +29,9 @@ for i in $myIMAGES
       if [ $myUPTIME -gt 4 ] && [ $myCIDSTATUS -gt 0 ];
         then
           echo "Restarting "$i"."
-          service $i stop
+          systemctl stop $i
           sleep 5
-          service $i start
+          systemctl start $i
       fi
 done
 

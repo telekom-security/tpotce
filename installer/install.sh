@@ -1,9 +1,9 @@
 #!/bin/bash
 ########################################################
 # T-Pot post install script                            #
-# Ubuntu server 14.04.4, x64                           #
+# Ubuntu server 16.04.0, x64                           #
 #                                                      #
-# v16.03.14 by mo, DTAG, 2016-03-08                    #
+# v16.10.0 by mo, DTAG, 2016-05-12                     #
 ########################################################
 
 # Type of install, SENSOR, INDUSTRIAL or FULL?
@@ -20,9 +20,9 @@ myPFXHOSTIDPATH="/root/tpot/keys/8021x.id"
 fuECHO () {
   local myRED=1
   local myWHT=7
-  tput setaf $myRED
+  tput setaf $myRED -T xterm
   echo $1 "$2"
-  tput setaf $myWHT
+  tput setaf $myWHT -T xterm
 }
 
 # Let's make sure there is a warning if running for a second time
@@ -154,7 +154,7 @@ EOF
 fuECHO "### Adding the docker repository."
 apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
 tee /etc/apt/sources.list.d/docker.list <<EOF
-deb https://apt.dockerproject.org/repo ubuntu-trusty main
+deb https://apt.dockerproject.org/repo ubuntu-xenial main
 EOF
 
 # Let's pull some updates
@@ -165,7 +165,11 @@ apt-get upgrade -y
 
 # Let's install docker
 fuECHO "### Installing docker-engine."
-apt-get install docker-engine=1.10.2-0~trusty -y
+apt-get install docker-engine=1.11.1-0~xenial -y
+
+# Let's enable docker at boot and start service
+systemctl enable docker
+systemctl start docker
 
 # Let's add proxy settings to docker defaults
 if [ -f $myPROXYFILEPATH ];
@@ -197,7 +201,7 @@ sed -i 's#Port 22#Port 64295#' /etc/ssh/sshd_config
 sed -i 's#\#PasswordAuthentication yes#PasswordAuthentication no#' /etc/ssh/sshd_config
 
 # Let's disable ssh service
-echo "manual" >> /etc/init/ssh.override
+systemctl disable ssh
 
 # Let's patch docker defaults, so we can run images as service
 fuECHO "### Patching docker defaults."
