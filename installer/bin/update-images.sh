@@ -41,7 +41,7 @@ for i in $(cat /data/imgcfg/all_images.conf);
   do
     systemctl stop $i
     sleep 2
-    rm -rf /etc/init/$i.conf || true;
+    systemctl disable $i;
 done
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -56,7 +56,7 @@ sleep 2
 for i in $(cat /data/images.conf);
   do
     docker pull dtagdevsec/$i:latest1603;
-    cp /data/upstart/"$i".conf /etc/init/;
+    systemctl enable $i;
 done
 
 # Announce reboot

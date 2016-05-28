@@ -314,16 +314,14 @@ tar xvfz /root/tpot/data/elkbase.tgz -C /
 cp /root/tpot/data/elkbase.tgz /data/
 cp -R /root/tpot/bin/* /usr/bin/
 cp -R /root/tpot/data/* /data/
+cp /root/tpot/data/systemd/* /etc/systemd/system/
 cp -R /root/tpot/etc/issue /etc/
 cp -R /root/tpot/home/* /home/tsec/
 cp    /root/tpot/keys/authorized_keys /home/tsec/.ssh/authorized_keys
 for i in $(cat /data/images.conf);
   do
-    cp /data/upstart/$i.conf /etc/init/;
+    systemctl enable $i;
 done
-
-# Let's turn persistence off by default
-touch /data/persistence.off
 
 # Let's take care of some files and permissions
 chmod 760 -R /data
