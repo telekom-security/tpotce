@@ -1,4 +1,4 @@
-# T-Pot 16.10 Image Creator (broken, dev in progress)
+# T-Pot 16.10 Image Creator (working - dev in progress)
 
 This repository contains the necessary files to create the **[T-Pot community honeypot](http://dtag-dev-sec.github.io/)**  ISO image.
 The image can then be used to install T-Pot on a physical or virtual machine.
