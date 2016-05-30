@@ -236,13 +236,13 @@ if [ -d /root/tpot/images ];
     fuECHO "### Found cached images and will load from local."
     for name in $(cat /root/tpot/data/images.conf)
     do
-      fuECHO "### Now loading dtagdevsec/$name:latest1603"
-      docker load -i /root/tpot/images/$name:latest1603.img
+      fuECHO "### Now loading dtagdevsec/$name:latest1610"
+      docker load -i /root/tpot/images/$name:latest1610.img
     done
   else
     for name in $(cat /root/tpot/data/images.conf)
     do
-      docker pull dtagdevsec/$name:latest1603
+      docker pull dtagdevsec/$name:latest1610
     done
 fi
 
@@ -274,7 +274,7 @@ tee -a /etc/crontab <<EOF
 */5 * * * *   root 	check.sh
 
 # Check if updated images are available and download them
-27 1 * * *    root	for i in \$(cat /data/images.conf); do docker pull dtagdevsec/\$i:latest1603; done
+27 1 * * *    root	for i in \$(cat /data/images.conf); do docker pull dtagdevsec/\$i:latest1610; done
 
 # Restart docker service and containers
 27 3 * * *    root 	dcres.sh

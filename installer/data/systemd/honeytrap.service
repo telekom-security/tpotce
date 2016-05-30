@@ -9,7 +9,7 @@ ExecStartPre=-/usr/bin/docker stop honeytrap
 ExecStartPre=-/usr/bin/docker rm -v honeytrap
 ExecStartPre=/bin/bash -c '/usr/bin/clean.sh honeytrap off'
 ExecStartPre=/sbin/iptables -w -A INPUT -p tcp --syn -m state --state NEW -j NFQUEUE
-ExecStart=/usr/bin/docker run --name honeytrap --cap-add=NET_ADMIN --net=host --rm=true -v /data/honeytrap:/data/honeytrap -v /data/ews:/data/ews dtagdevsec/honeytrap:latest1603
+ExecStart=/usr/bin/docker run --name honeytrap --cap-add=NET_ADMIN --net=host --rm=true -v /data/honeytrap:/data/honeytrap -v /data/ews:/data/ews dtagdevsec/honeytrap:latest1610
 ExecStop=/usr/bin/docker stop honeytrap
 ExecStopPost=/sbin/iptables -w -D INPUT -p tcp --syn -m state --state NEW -j NFQUEUE
 

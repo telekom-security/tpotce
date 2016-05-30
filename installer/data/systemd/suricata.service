@@ -8,7 +8,7 @@ Restart=always
 ExecStartPre=-/usr/bin/docker stop suricata
 ExecStartPre=-/usr/bin/docker rm -v suricata
 ExecStartPre=/bin/bash -c '/usr/bin/clean.sh suricata off'
-ExecStart=/usr/bin/docker run --name suricata --cap-add=NET_ADMIN --net=host --rm=true -v /data/suricata:/data/suricata dtagdevsec/suricata:latest1603
+ExecStart=/usr/bin/docker run --name suricata --cap-add=NET_ADMIN --net=host --rm=true -v /data/suricata:/data/suricata dtagdevsec/suricata:latest1610
 ExecStop=/usr/bin/docker stop suricata
 
 [Install]
