@@ -307,7 +307,7 @@ chmod 644 /root/tpot/etc/issue
 chmod 755 /root/tpot/etc/rc.local
 chmod 700 /root/tpot/home/*
 chown tsec:tsec /root/tpot/home/*
-chmod 644 /root/tpot/data/upstart/*
+chmod 644 /root/tpot/data/systemd/*
 
 # Let's copy some files
 tar xvfz /root/tpot/data/elkbase.tgz -C /
