@@ -160,8 +160,6 @@ EOF
 # Let's pull some updates
 fuECHO "### Pulling Updates."
 apt-get update -y
-fuECHO "### Installing Upgrades."
-apt-get upgrade -y
 
 # Let's install docker
 fuECHO "### Installing docker-engine."
@@ -360,6 +358,10 @@ tee /data/ews/conf/ews.ip << EOF
 ip = $myEXTIP
 EOF
 chown tpot:tpot /data/ews/conf/ews.ip
+
+# Installing upgrades
+fuECHO "### Installing Upgrades."
+apt-get upgrade -y
 
 # Final steps
 fuECHO "### Thanks for your patience. Now rebooting."
