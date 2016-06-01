@@ -37,7 +37,7 @@ fuCOWRIE () {
 fuDIONAEA () {
   rm -rf /data/dionaea/*
   rm /data/ews/dionaea/ews.json
-  mkdir -p /data/dionaea/log /data/dionaea/bistreams /data/dionaea/binaries /data/dionaea/rtp /data/dionaea/wwwroot
+  mkdir -p /data/dionaea/log /data/dionaea/bistreams /data/dionaea/binaries /data/dionaea/rtp /data/dionaea/roots/ftp /data/dionaea/roots/tftp /data/dionaea/roots/www /data/dionaea/roots/upnp
   chmod 760 /data/dionaea -R
   chown tpot:tpot /data/dionaea -R
 }
