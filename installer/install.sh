@@ -331,7 +331,6 @@ apt-get upgrade -y
 apt-get autoclean -y
 apt-get autoremove -y
 
-# Installing upgrades
 # Let's replace "quiet splash" options, set a console font for more screen canvas and update grub
 sed -i 's#GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"#GRUB_CMDLINE_LINUX_DEFAULT="consoleblank=0"#' /etc/default/grub
 sed -i 's#\#GRUB_GFXMODE=640x480#GRUB_GFXMODE=800x600x32#' /etc/default/grub
