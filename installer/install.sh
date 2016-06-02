@@ -150,24 +150,17 @@ tee -a /etc/ssh/ssh_config <<EOF
 UseRoaming no
 EOF
 
-# Let's add the docker repository
-fuECHO "### Adding the docker repository."
-apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
-tee /etc/apt/sources.list.d/docker.list <<EOF
-deb https://apt.dockerproject.org/repo ubuntu-xenial main
-EOF
-
 # Let's pull some updates
 fuECHO "### Pulling Updates."
 apt-get update -y
 
 # Let's install docker
 fuECHO "### Installing docker-engine."
-apt-get install docker-engine=1.11.1-0~xenial -y
+wget -qO- https://get.docker.com/ | sh
 
 # Let's enable docker at boot and start service
-systemctl enable docker
-systemctl start docker
+#systemctl enable docker
+#systemctl start docker
 
 # Let's add proxy settings to docker defaults
 if [ -f $myPROXYFILEPATH ];
@@ -206,6 +199,9 @@ fuECHO "### Patching docker defaults."
 tee -a /etc/default/docker <<EOF
 DOCKER_OPTS="-r=false"
 EOF
+
+# Let's restart docker for proxy changes to take effect
+systemctl restart docker
 
 # Let's make sure only myFLAVOR images will be downloaded and started
 case $myFLAVOR in
@@ -327,10 +323,15 @@ chown tpot:tpot -R /data
 chmod 600 /home/tsec/.ssh/authorized_keys
 chown tsec:tsec /home/tsec/*.sh /home/tsec/.ssh /home/tsec/.ssh/authorized_keys
 
+# Installing upgrades
+fuECHO "### Installing Upgrades."
+apt-get upgrade -y
+
 # Let's clean up apt
 apt-get autoclean -y
 apt-get autoremove -y
 
+# Installing upgrades
 # Let's replace "quiet splash" options, set a console font for more screen canvas and update grub
 sed -i 's#GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"#GRUB_CMDLINE_LINUX_DEFAULT="consoleblank=0"#' /etc/default/grub
 sed -i 's#\#GRUB_GFXMODE=640x480#GRUB_GFXMODE=800x600x32#' /etc/default/grub
@@ -358,10 +359,6 @@ tee /data/ews/conf/ews.ip << EOF
 ip = $myEXTIP
 EOF
 chown tpot:tpot /data/ews/conf/ews.ip
-
-# Installing upgrades
-fuECHO "### Installing Upgrades."
-apt-get upgrade -y
 
 # Final steps
 fuECHO "### Thanks for your patience. Now rebooting."
