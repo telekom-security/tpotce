@@ -6,7 +6,7 @@
 # v16.10.0 by mo, DTAG, 2016-05-12                     #
 ########################################################
 
-# Type of install, SENSOR, INDUSTRIAL or FULL?
+# Type of install, TPOT, SENSOR, INDUSTRIAL or FULL?
 myFLAVOR="TPOT"
 
 # Some global vars
@@ -150,17 +150,9 @@ tee -a /etc/ssh/ssh_config <<EOF
 UseRoaming no
 EOF
 
-# Let's pull some updates
-fuECHO "### Pulling Updates."
-apt-get update -y
-
 # Let's install docker
 fuECHO "### Installing docker-engine."
 wget -qO- https://get.docker.com/ | sh
-
-# Let's enable docker at boot and start service
-#systemctl enable docker
-#systemctl start docker
 
 # Let's add proxy settings to docker defaults
 if [ -f $myPROXYFILEPATH ];
@@ -267,6 +259,9 @@ tee -a /etc/crontab <<EOF
 # Check if containers and services are up
 */5 * * * *   root 	check.sh
 
+# Example for alerta-cli IP update
+#*/5 * * * *   root      alerta --endpoint-url http://<ip>:<port>/api delete --filters resource=<host> && alerta --endpoint-url http://<ip>:<port>/api send -e IP -r <host> -E Production -s ok -S T-Pot -t \$(cat /data/elk/logstash/mylocal.ip) --status open
+
 # Check if updated images are available and download them
 27 1 * * *    root	for i in \$(cat /data/images.conf); do docker pull dtagdevsec/\$i:latest1610; done
 
@@ -289,7 +284,8 @@ mkdir -p /data/conpot/log \
          /data/cowrie/log/tty/ /data/cowrie/downloads/ /data/cowrie/keys/ /data/cowrie/misc/ \
          /data/dionaea/log /data/dionaea/bistreams /data/dionaea/binaries /data/dionaea/rtp /data/dionaea/roots/ftp /data/dionaea/roots/tftp /data/dionaea/roots/www /data/dionaea/roots/upnp \
          /data/elasticpot/log \
-         /data/elk/data /data/elk/log /data/glastopf /data/honeytrap/log/ /data/honeytrap/attacks/ /data/honeytrap/downloads/ \
+         /data/elk/data /data/elk/log /data/elk/logstash/conf \
+         /data/glastopf /data/honeytrap/log/ /data/honeytrap/attacks/ /data/honeytrap/downloads/ \
          /data/emobility/log \
          /data/ews/log /data/ews/conf /data/ews/dionaea /data/ews/emobility \
          /data/suricata/log /home/tsec/.ssh/
@@ -323,9 +319,17 @@ chown tpot:tpot -R /data
 chmod 600 /home/tsec/.ssh/authorized_keys
 chown tsec:tsec /home/tsec/*.sh /home/tsec/.ssh /home/tsec/.ssh/authorized_keys
 
+# Let's pull some updates
+fuECHO "### Pulling Updates."
+apt-get update -y
+
 # Installing upgrades
 fuECHO "### Installing Upgrades."
 apt-get upgrade -y
+
+# Installing alerta-cli
+fuECHO "### Installing alerta-cli."
+pip install alerta
 
 # Let's clean up apt
 apt-get autoclean -y
