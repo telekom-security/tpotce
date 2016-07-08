@@ -151,8 +151,26 @@ UseRoaming no
 EOF
 
 # Let's install docker
+#fuECHO "### Installing docker-engine."
+#wget -qO- https://test.docker.com/ | sh
+
+# Let's add the docker repository
+fuECHO "### Adding the docker repository."
+apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
+tee /etc/apt/sources.list.d/docker.list <<EOF
+deb https://apt.dockerproject.org/repo ubuntu-xenial main
+EOF
+
+# Let's pull some updates
+fuECHO "### Pulling Updates."
+apt-get update -y
+
+# Let's install docker
 fuECHO "### Installing docker-engine."
-wget -qO- https://get.docker.com/ | sh
+fuECHO "### You can safely ignore the [FAILED] message,"
+fuECHO "### which is caused by a bug in the docker installer."
+#apt-get install docker-engine=1.10.2-0~trusty -y
+apt-get install docker-engine -y || true && sleep 5
 
 # Let's add proxy settings to docker defaults
 if [ -f $myPROXYFILEPATH ];

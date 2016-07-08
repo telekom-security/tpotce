@@ -2,15 +2,15 @@
 
 ########################################################
 # T-Pot                                                #
-# .ISO maker                                           #
+# .ISO creator                                         #
 #                                                      #
-# v16.10.0 by mo, DTAG, 2016-05-20                     #
+# v16.10.0 by mo, DTAG, 2016-07-04                     #
 ########################################################
 
 # Let's define some global vars
-myBACKTITLE="T-Pot - ISO Maker"
-myUBUNTULINK="http://releases.ubuntu.com/16.04/ubuntu-16.04-server-amd64.iso"
-myUBUNTUISO="ubuntu-16.04-server-amd64.iso"
+myBACKTITLE="T-Pot - ISO Creator"
+myUBUNTULINK="http://archive.ubuntu.com/ubuntu/dists/xenial-updates/main/installer-amd64/current/images/netboot/mini.iso"
+myUBUNTUISO="mini.iso"
 myTPOTISO="tpot.iso"
 myTPOTDIR="tpotiso"
 myTPOTSEED="preseed/tpot.seed"
@@ -28,7 +28,8 @@ myTMP="tmp"
 myWHOAMI=$(whoami)
 if [ "$myWHOAMI" != "root" ]
   then
-    echo "Please run as root ..."
+    echo "Need to run as root ..."
+    sudo ./$0
     exit
 fi
 
@@ -81,14 +82,14 @@ if [ "$myINST" != "" ]
 fi
 
 # Let's ask if the user wants to run the script ...
-dialog --backtitle "$myBACKTITLE" --title "[ Continue? ]" --yesno "\nThis script will download the latest supported Ubuntu Server and build the T-Pot .iso" 8 50
+dialog --backtitle "$myBACKTITLE" --title "[ Continue? ]" --yesno "\nDownload latest supported Ubuntu Mini ISO and build the T-Pot Install Image." 8 50
 mySTART=$?
 if [ "$mySTART" = "1" ];
   then
     exit
 fi
 
-# Let's ask for the type of installation SENSOR, INDUSTRIAL or FULL?
+# Let's ask for the type of installation?
 myFLAVOR=$(dialog --no-cancel --backtitle "$myBACKTITLE" --title "[ Installation type ... ]" --radiolist "" 11 76 4 "TPOT" "Standard (w/o INDUSTRIAL)" on "HP" "Honeypots only (w/o INDUSTRIAL)" off "INDUSTRIAL" "ConPot, eMobility, ELK, Suricata (8GB RAM recommended)" off "ALL" "Everything (8GB RAM required)" off 3>&1 1>&2 2>&3 3>&-)
 sed -i 's#^myFLAVOR=.*#myFLAVOR="'$myFLAVOR'"#' $myINSTALLERPATH
 
@@ -204,7 +205,7 @@ EOF
   fi
 done
 
-# Let's get Ubuntu 14.04.4 as .iso
+# Let's download Ubuntu Minimal ISO
 if [ ! -f $myUBUNTUISO ]
   then
     wget $myUBUNTULINK --progress=dot 2>&1 | awk '{print $7+0} fflush()' | dialog --backtitle "$myBACKTITLE" --title "[ Downloading Ubuntu ... ]" --gauge "" 5 70;
@@ -215,31 +216,40 @@ fi
 
 # Let's loop mount it and copy all contents
 mkdir -p $myTMP $myTPOTDIR
-losetup /dev/loop0 $myUBUNTUISO
-mount /dev/loop0 $myTMP
-cp -rT $myTMP $myTPOTDIR
-chmod 777 -R $myTPOTDIR
+mount -o loop $myUBUNTUISO $myTMP
+rsync -a $myTMP/ $myTPOTDIR
 umount $myTMP
-losetup -d /dev/loop0
+
+# Let's modify initrd
+gunzip $myTPOTDIR/initrd.gz
+mkdir $myTPOTDIR/tmp
+cd $myTPOTDIR/tmp
+cpio --extract --make-directories --no-absolute-filenames < ../initrd
+cd ..
+rm initrd
+cd ..
 
 # Let's add the files for the automated install
-mkdir -p $myTPOTDIR/tpot
-cp installer/* -R $myTPOTDIR/tpot/
-cp isolinux/* $myTPOTDIR/isolinux/
-cp kickstart/* $myTPOTDIR/tpot/
-cp preseed/* $myTPOTDIR/tpot/
-if [ -d images ];
-  then
-    cp -R images $myTPOTDIR/tpot/images/
-fi
-chmod 777 -R $myTPOTDIR
+mkdir -p $myTPOTDIR/tmp/opt/tpot
+cp installer/* -R $myTPOTDIR/tmp/opt/tpot/
+cp isolinux/* $myTPOTDIR/
+cp preseed/tpot.seed $myTPOTDIR/tmp/preseed.cfg
+
+# Let's create the new initrd
+cd $myTPOTDIR/tmp
+find . | cpio -H newc --create > ../initrd
+cd ..
+gzip initrd
+rm -rf tmp
+cd ..
 
 # Let's create the new .iso
 cd $myTPOTDIR
-mkisofs -gui -D -r -V "T-Pot" -cache-inodes -J -l -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -o ../$myTPOTISO ../$myTPOTDIR 2>&1 | awk '{print $1+0} fflush()' | cut -f1 -d"." | dialog --backtitle "$myBACKTITLE" --title "[ Building T-Pot .iso ... ]" --gauge "" 5 70 0
+mkisofs -gui -D -r -V "T-Pot" -cache-inodes -J -l -b isolinux.bin -c boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -o ../$myTPOTISO ../$myTPOTDIR 2>&1 | awk '{print $1+0} fflush()' | cut -f1 -d"." | dialog --backtitle "$myBACKTITLE" --title "[ Building T-Pot .iso ... ]" --gauge "" 5 70 0
 echo 100 | dialog --backtitle "$myBACKTITLE" --title "[ Building T-Pot .iso ... Done! ]" --gauge "" 5 70
 cd ..
 isohybrid $myTPOTISO
+sha256sum $myTPOTISO > tpot.sha256
 
 # Let's write the image
 while true;
