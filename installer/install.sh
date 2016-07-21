@@ -264,19 +264,19 @@ fuECHO "### Adding cronjobs."
 tee -a /etc/crontab <<EOF
 
 # Show running containers every 60s via /dev/tty2
-*/2 * * * *   root 	status.sh > /dev/tty2
+*/2 * * * *   root  status.sh > /dev/tty2
 
 # Check if containers and services are up
-*/5 * * * *   root 	check.sh
+*/5 * * * *   root  check.sh
 
 # Check if updated images are available and download them
 27 1 * * *    root	for i in \$(cat /data/images.conf); do docker pull dtagdevsec/\$i:latest1603; done
 
 # Restart docker service and containers
-27 3 * * *    root 	dcres.sh
+27 3 * * *    root  dcres.sh
 
 # Delete elastic indices older than 90 days (kibana index is omitted by default)
-27 4 * * *    root  docker exec elk bash -c '/usr/local/bin/curator --host 127.0.0.1 delete indices --older-than 90 --time-unit days --timestring '%Y.%m.%d''
+27 4 * * *    root  docker exec elk bash -c '/usr/local/bin/curator --host 127.0.0.1 delete indices --older-than 90 --time-unit days --timestring \%Y.\%m.\%d'
 
 # Update IP and erase check.lock if it exists
 27 15 * * *   root  /etc/rc.local
