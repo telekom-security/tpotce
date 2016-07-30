@@ -100,7 +100,7 @@ tasksel tasksel/first multiselect ubuntu-server
 ########################
 ### Package Installation
 ########################
-d-i pkgsel/include string aufs-tools apparmor apt-transport-https bash-completion ca-certificates cgroupfs-mount curl dialog dstat ethtool genisoimage git htop iptables iw libpam-google-authenticator libltdl7 lm-sensors ntp openssh-server syslinux pv python-pip vim wireless-tools wpasupplicant
+d-i pkgsel/include string aufs-tools apparmor apt-transport-https bash-completion ca-certificates cgroupfs-mount curl dialog dstat ethtool genisoimage git htop iptables iw libpam-google-authenticator libltdl7 lm-sensors ntp openssh-server syslinux pv python-pip vim wireless-tools wpasupplicant npm nodejs build-essential nginx-full docker.io apache2-utils
 
 #################
 ### Update Policy

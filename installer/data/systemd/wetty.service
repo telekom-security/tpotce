@@ -1,0 +1,13 @@
+[Unit]
+Description=wetty
+Requires=sshd.service
+After=sshd.service
+
+[Service]
+Restart=always
+User=tsec
+Group=tsec
+ExecStart=/usr/bin/node /usr/local/lib/node_modules/wetty/app.js -p 64300 --host 127.0.0.1 --sshhost 127.0.0.1 --sshport 64295
+
+[Install]
+WantedBy=multi-user.target
