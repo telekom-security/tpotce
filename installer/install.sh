@@ -36,6 +36,13 @@ set -e
 exec 2> >(tee "install.err")
 exec > >(tee "install.log")
 
+# Let's stop and disable ssh, nginx services
+fuECHO "### Disabling and stopping ssh, nginx services."
+systemctl disable ssh
+systemctl stop ssh
+systemctl disable nginx
+systemctl stop nginx
+
 # Let's setup the proxy for env
 if [ -f $myPROXYFILEPATH ];
 then fuECHO "### Setting up the proxy."
@@ -150,27 +157,42 @@ tee -a /etc/ssh/ssh_config <<EOF
 UseRoaming no
 EOF
 
+# Let's pull some updates
+fuECHO "### Pulling Updates."
+apt-get update -y
+apt-get upgrade -y
+
+# Let's clean up apt
+apt-get autoclean -y
+apt-get autoremove -y
+
+# Installing alerta-cli, wetty
+fuECHO "### Installing alerta-cli."
+pip install alerta
+fuECHO "### Installing wetty."
+npm install git://github.com/t3chn0m4g3/wetty -g
+
 # Let's install docker
 #fuECHO "### Installing docker-engine."
 #wget -qO- https://test.docker.com/ | sh
 
 # Let's add the docker repository
-fuECHO "### Adding the docker repository."
-apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
-tee /etc/apt/sources.list.d/docker.list <<EOF
-deb https://apt.dockerproject.org/repo ubuntu-xenial main
-EOF
+#fuECHO "### Adding the docker repository."
+#apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
+#tee /etc/apt/sources.list.d/docker.list <<EOF
+#deb https://apt.dockerproject.org/repo ubuntu-xenial main
+#EOF
 
 # Let's pull some updates
-fuECHO "### Pulling Updates."
-apt-get update -y
+#fuECHO "### Pulling Updates."
+#apt-get update -y
 
 # Let's install docker
-fuECHO "### Installing docker-engine."
-fuECHO "### You can safely ignore the [FAILED] message,"
-fuECHO "### which is caused by a bug in the docker installer."
+#fuECHO "### Installing docker-engine."
+#fuECHO "### You can safely ignore the [FAILED] message,"
+#fuECHO "### which is caused by a bug in the docker installer."
 #apt-get install docker-engine=1.10.2-0~trusty -y
-apt-get install docker-engine -y || true && sleep 5
+#apt-get install docker-engine -y || true && sleep 5
 
 # Let's add proxy settings to docker defaults
 if [ -f $myPROXYFILEPATH ];
@@ -192,7 +214,8 @@ adduser --system --no-create-home --uid 2000 --disabled-password --disabled-logi
 
 # Let's set the hostname
 fuECHO "### Setting a new hostname."
-myHOST=ce$(date +%s)$RANDOM
+#myHOST=ce$(date +%s)$RANDOM
+myHOST=$(curl -s www.nsanamegenerator.com | html2text | tr A-Z a-z)
 hostnamectl set-hostname $myHOST
 sed -i 's#127.0.1.1.*#127.0.1.1\t'"$myHOST"'#g' /etc/hosts
 
@@ -201,8 +224,12 @@ fuECHO "### Patching sshd_config to listen on port 64295 and deny password authe
 sed -i 's#Port 22#Port 64295#' /etc/ssh/sshd_config
 sed -i 's#\#PasswordAuthentication yes#PasswordAuthentication no#' /etc/ssh/sshd_config
 
-# Let's disable ssh service
-systemctl disable ssh
+# Let's allow ssh password authentication from RFC1918 networks
+fuECHO "### Allow SSH password authentication from RFC1918 networks" 
+tee -a /etc/ssh/sshd_config <<EOF
+Match address 127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+    PasswordAuthentication yes
+EOF
 
 # Let's patch docker defaults, so we can run images as service
 fuECHO "### Patching docker defaults."
@@ -235,20 +262,20 @@ esac
 
 # Let's load docker images
 fuECHO "### Loading docker images. Please be patient, this may take a while."
-if [ -d /root/tpot/images ];
-  then
-    fuECHO "### Found cached images and will load from local."
-    for name in $(cat /root/tpot/data/images.conf)
-    do
-      fuECHO "### Now loading dtagdevsec/$name:latest1610"
-      docker load -i /root/tpot/images/$name:latest1610.img
-    done
-  else
-    for name in $(cat /root/tpot/data/images.conf)
-    do
-      docker pull dtagdevsec/$name:latest1610
-    done
-fi
+#if [ -d /root/tpot/images ];
+#  then
+#    fuECHO "### Found cached images and will load from local."
+#    for name in $(cat /root/tpot/data/images.conf)
+#    do
+#      fuECHO "### Now loading dtagdevsec/$name:latest1610"
+#      docker load -i /root/tpot/images/$name:latest1610.img
+#    done
+#  else
+for name in $(cat /root/tpot/data/images.conf)
+  do
+    docker pull dtagdevsec/$name:latest1610
+  done
+#fi
 
 # Let's add the daily update check with a weekly clean interval
 fuECHO "### Modifying update checks."
@@ -306,7 +333,7 @@ mkdir -p /data/conpot/log \
          /data/glastopf /data/honeytrap/log/ /data/honeytrap/attacks/ /data/honeytrap/downloads/ \
          /data/emobility/log \
          /data/ews/log /data/ews/conf /data/ews/dionaea /data/ews/emobility \
-         /data/suricata/log /home/tsec/.ssh/
+         /data/suricata/log /home/tsec/.ssh/ 
 
 # Let's take care of some files and permissions before copying
 chmod 500 /root/tpot/bin/*
@@ -322,36 +349,29 @@ tar xvfz /root/tpot/data/elkbase.tgz -C /
 cp /root/tpot/data/elkbase.tgz /data/
 cp -R /root/tpot/bin/* /usr/bin/
 cp -R /root/tpot/data/* /data/
-cp /root/tpot/data/systemd/* /etc/systemd/system/
+cp    /root/tpot/data/systemd/* /etc/systemd/system/
 cp -R /root/tpot/etc/issue /etc/
+cp -R /root/tpot/etc/nginx/ssl /etc/nginx/
+cp    /root/tpot/etc/nginx/nginxpasswd /etc/nginx/
+cp    /root/tpot/etc/nginx/tpotweb /etc/nginx/sites-available/
 cp -R /root/tpot/home/* /home/tsec/
 cp    /root/tpot/keys/authorized_keys /home/tsec/.ssh/authorized_keys
+cp    /root/usr/share/nginx/html/* /usr/share/nginx/html/
 for i in $(cat /data/images.conf);
   do
     systemctl enable $i;
 done
+
+# Let's remove nginx default website and link t-pot website 
+fuECHO "### Removing nginx default website and linking t-pot website."
+rm /etc/nginx/sites-enabled/default
+ln -s /etc/nginx/sites-available/tpotweb /etc/nginx/sites-enabled/
 
 # Let's take care of some files and permissions
 chmod 760 -R /data
 chown tpot:tpot -R /data
 chmod 600 /home/tsec/.ssh/authorized_keys
 chown tsec:tsec /home/tsec/*.sh /home/tsec/.ssh /home/tsec/.ssh/authorized_keys
-
-# Let's pull some updates
-fuECHO "### Pulling Updates."
-apt-get update -y
-
-# Installing upgrades
-fuECHO "### Installing Upgrades."
-apt-get upgrade -y
-
-# Installing alerta-cli
-fuECHO "### Installing alerta-cli."
-pip install alerta
-
-# Let's clean up apt
-apt-get autoclean -y
-apt-get autoremove -y
 
 # Let's replace "quiet splash" options, set a console font for more screen canvas and update grub
 sed -i 's#GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"#GRUB_CMDLINE_LINUX_DEFAULT="consoleblank=0"#' /etc/default/grub
