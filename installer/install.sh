@@ -168,8 +168,10 @@ apt-get autoremove -y
 
 # Installing alerta-cli, wetty
 fuECHO "### Installing alerta-cli."
+pip install --upgrade pip
 pip install alerta
 fuECHO "### Installing wetty."
+ln -s /usr/bin/nodejs /usr/bin/node
 npm install git://github.com/t3chn0m4g3/wetty -g
 
 # Let's install docker
@@ -353,7 +355,7 @@ cp    /root/tpot/data/systemd/* /etc/systemd/system/
 cp -R /root/tpot/etc/issue /etc/
 cp -R /root/tpot/etc/nginx/ssl /etc/nginx/
 cp    /root/tpot/etc/nginx/nginxpasswd /etc/nginx/
-cp    /root/tpot/etc/nginx/tpotweb /etc/nginx/sites-available/
+cp    /root/tpot/etc/nginx/tpotweb.conf /etc/nginx/sites-available/
 cp -R /root/tpot/home/* /home/tsec/
 cp    /root/tpot/keys/authorized_keys /home/tsec/.ssh/authorized_keys
 cp    /root/usr/share/nginx/html/* /usr/share/nginx/html/
@@ -365,7 +367,7 @@ done
 # Let's remove nginx default website and link t-pot website 
 fuECHO "### Removing nginx default website and linking t-pot website."
 rm /etc/nginx/sites-enabled/default
-ln -s /etc/nginx/sites-available/tpotweb /etc/nginx/sites-enabled/
+ln -s /etc/nginx/sites-available/tpotweb.conf /etc/nginx/sites-enabled/tpotweb.conf
 
 # Let's take care of some files and permissions
 chmod 760 -R /data
