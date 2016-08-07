@@ -37,11 +37,38 @@ exec 2> >(tee "install.err")
 exec > >(tee "install.log")
 
 # Let's stop and disable ssh, nginx services
-fuECHO "### Disabling and stopping ssh, nginx services."
-systemctl disable ssh
-systemctl stop ssh
-systemctl disable nginx
-systemctl stop nginx
+#fuECHO "### Disabling and stopping ssh, nginx services."
+#systemctl disable ssh
+#systemctl stop ssh
+#systemctl disable nginx
+#systemctl stop nginx
+
+# Let's disable NGINX default website
+fuECHO "### Removing link to NGINX default website."
+rm /etc/nginx/sites-enabled/default
+
+# Let's ask user for web password
+fuECHO "### Please enter a web user name and password."
+myOK="n"
+myUSER="tsec"
+while [ "$myOK" != "y"  ]
+  do
+    while [ "$myUSER" = "tsec"  ]
+      do
+        echo -n "Username (tsec not allowed): "
+        read myUSER
+        echo "Your username is: "$myUSER
+      done
+    echo -n "OK (y/n)? "
+    read myOK
+done
+htpasswd -c /etc/nginx/nginxpasswd $myUSER
+
+# Let's generate a SSL certificate
+fuECHO "### Generating a self-signed-certificate for NGINX."
+fuECHO "### If you are unsure you can use the default values."
+mkdir -p /etc/nginx/ssl
+openssl req -nodes -x509 -sha512 -newkey rsa:8192 -keyout "/etc/nginx/ssl/nginx.key" -out "/etc/nginx/ssl/nginx.crt" -days 3650
 
 # Let's setup the proxy for env
 if [ -f $myPROXYFILEPATH ];
@@ -353,20 +380,19 @@ cp -R /root/tpot/bin/* /usr/bin/
 cp -R /root/tpot/data/* /data/
 cp    /root/tpot/data/systemd/* /etc/systemd/system/
 cp -R /root/tpot/etc/issue /etc/
-cp -R /root/tpot/etc/nginx/ssl /etc/nginx/
-cp    /root/tpot/etc/nginx/nginxpasswd /etc/nginx/
+cp    /root/tpot/etc/nginx/ssl/* /etc/nginx/ssl/
 cp    /root/tpot/etc/nginx/tpotweb.conf /etc/nginx/sites-available/
 cp -R /root/tpot/home/* /home/tsec/
 cp    /root/tpot/keys/authorized_keys /home/tsec/.ssh/authorized_keys
-cp    /root/usr/share/nginx/html/* /usr/share/nginx/html/
+cp    /root/tpot/usr/share/nginx/html/* /usr/share/nginx/html/
 for i in $(cat /data/images.conf);
   do
     systemctl enable $i;
 done
+systemctl enable wetty
 
-# Let's remove nginx default website and link t-pot website 
-fuECHO "### Removing nginx default website and linking t-pot website."
-rm /etc/nginx/sites-enabled/default
+# Let's enable T-Pot website 
+fuECHO "### Enabling T-Pot website."
 ln -s /etc/nginx/sites-available/tpotweb.conf /etc/nginx/sites-enabled/tpotweb.conf
 
 # Let's take care of some files and permissions
@@ -406,4 +432,5 @@ chown tpot:tpot /data/ews/conf/ews.ip
 
 # Final steps
 fuECHO "### Thanks for your patience. Now rebooting."
-mv /root/tpot/etc/rc.local /etc/rc.local && rm -rf /root/tpot/ && chage -d 0 tsec && sleep 2 && reboot
+#mv /root/tpot/etc/rc.local /etc/rc.local && rm -rf /root/tpot/ && chage -d 0 tsec && sleep 2 && reboot
+mv /root/tpot/etc/rc.local /etc/rc.local && rm -rf /root/tpot/ && sleep 2 && reboot
