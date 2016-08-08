@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # T-Pot documentation build configuration file, created by
-# sphinx-quickstart on Mon Aug  8 13:07:41 2016.
+# sphinx-quickstart on Mon Aug  8 13:24:39 2016.
 #
 # This file is execfile()d with the current directory set to its
 # containing dir.
@@ -109,7 +109,7 @@ todo_include_todos = False
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme = 'alabaster'
+html_theme = 'default'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
