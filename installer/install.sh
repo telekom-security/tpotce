@@ -47,29 +47,6 @@ exec > >(tee "install.log")
 fuECHO "### Removing link to NGINX default website."
 rm /etc/nginx/sites-enabled/default
 
-# Let's ask user for web password
-fuECHO "### Please enter a web user name and password."
-myOK="n"
-myUSER="tsec"
-while [ "$myOK" != "y"  ]
-  do
-    while [ "$myUSER" = "tsec"  ]
-      do
-        echo -n "Username (tsec not allowed): "
-        read myUSER
-        echo "Your username is: "$myUSER
-      done
-    echo -n "OK (y/n)? "
-    read myOK
-done
-htpasswd -c /etc/nginx/nginxpasswd $myUSER
-
-# Let's generate a SSL certificate
-fuECHO "### Generating a self-signed-certificate for NGINX."
-fuECHO "### If you are unsure you can use the default values."
-mkdir -p /etc/nginx/ssl
-openssl req -nodes -x509 -sha512 -newkey rsa:8192 -keyout "/etc/nginx/ssl/nginx.key" -out "/etc/nginx/ssl/nginx.crt" -days 3650
-
 # Let's setup the proxy for env
 if [ -f $myPROXYFILEPATH ];
 then fuECHO "### Setting up the proxy."
@@ -203,25 +180,25 @@ npm install git://github.com/t3chn0m4g3/wetty -g
 
 # Let's install docker
 #fuECHO "### Installing docker-engine."
-#wget -qO- https://test.docker.com/ | sh
+#wget -qO- https://get.docker.com/ | sh
 
 # Let's add the docker repository
-#fuECHO "### Adding the docker repository."
-#apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
-#tee /etc/apt/sources.list.d/docker.list <<EOF
-#deb https://apt.dockerproject.org/repo ubuntu-xenial main
-#EOF
+fuECHO "### Adding the docker repository."
+apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
+tee /etc/apt/sources.list.d/docker.list <<EOF
+deb https://apt.dockerproject.org/repo ubuntu-xenial main
+EOF
 
 # Let's pull some updates
-#fuECHO "### Pulling Updates."
-#apt-get update -y
+fuECHO "### Pulling Updates."
+apt-get update -y
 
 # Let's install docker
-#fuECHO "### Installing docker-engine."
-#fuECHO "### You can safely ignore the [FAILED] message,"
-#fuECHO "### which is caused by a bug in the docker installer."
+fuECHO "### Installing docker-engine."
+fuECHO "### You can safely ignore the [FAILED] message,"
+fuECHO "### which is caused by a bug in the docker installer."
 #apt-get install docker-engine=1.10.2-0~trusty -y
-#apt-get install docker-engine -y || true && sleep 5
+apt-get install docker-engine=1.12.0-0~xenial -y || true && sleep 5
 
 # Let's add proxy settings to docker defaults
 if [ -f $myPROXYFILEPATH ];
@@ -254,7 +231,7 @@ sed -i 's#Port 22#Port 64295#' /etc/ssh/sshd_config
 sed -i 's#\#PasswordAuthentication yes#PasswordAuthentication no#' /etc/ssh/sshd_config
 
 # Let's allow ssh password authentication from RFC1918 networks
-fuECHO "### Allow SSH password authentication from RFC1918 networks" 
+fuECHO "### Allow SSH password authentication from RFC1918 networks"
 tee -a /etc/ssh/sshd_config <<EOF
 Match address 127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
     PasswordAuthentication yes
@@ -328,7 +305,7 @@ fuECHO "### Adding cronjobs."
 tee -a /etc/crontab <<EOF
 
 # Show running containers every 60s via /dev/tty2
-*/2 * * * *   root 	status.sh > /dev/tty2
+#*/2 * * * *   root 	status.sh > /dev/tty2
 
 # Check if containers and services are up
 */5 * * * *   root    check.sh
@@ -362,15 +339,13 @@ mkdir -p /data/conpot/log \
          /data/glastopf /data/honeytrap/log/ /data/honeytrap/attacks/ /data/honeytrap/downloads/ \
          /data/emobility/log \
          /data/ews/log /data/ews/conf /data/ews/dionaea /data/ews/emobility \
-         /data/suricata/log /home/tsec/.ssh/ 
+         /data/suricata/log /home/tsec/.ssh/
 
 # Let's take care of some files and permissions before copying
 chmod 500 /root/tpot/bin/*
 chmod 600 /root/tpot/data/*
 chmod 644 /root/tpot/etc/issue
 chmod 755 /root/tpot/etc/rc.local
-chmod 700 /root/tpot/home/*
-chown tsec:tsec /root/tpot/home/*
 chmod 644 /root/tpot/data/systemd/*
 
 # Let's copy some files
@@ -379,10 +354,9 @@ cp /root/tpot/data/elkbase.tgz /data/
 cp -R /root/tpot/bin/* /usr/bin/
 cp -R /root/tpot/data/* /data/
 cp    /root/tpot/data/systemd/* /etc/systemd/system/
-cp -R /root/tpot/etc/issue /etc/
-cp    /root/tpot/etc/nginx/ssl/* /etc/nginx/ssl/
+cp    /root/tpot/etc/issue /etc/
+cp -R /root/tpot/etc/nginx/ssl /etc/nginx/
 cp    /root/tpot/etc/nginx/tpotweb.conf /etc/nginx/sites-available/
-cp -R /root/tpot/home/* /home/tsec/
 cp    /root/tpot/keys/authorized_keys /home/tsec/.ssh/authorized_keys
 cp    /root/tpot/usr/share/nginx/html/* /usr/share/nginx/html/
 for i in $(cat /data/images.conf);
@@ -391,7 +365,7 @@ for i in $(cat /data/images.conf);
 done
 systemctl enable wetty
 
-# Let's enable T-Pot website 
+# Let's enable T-Pot website
 fuECHO "### Enabling T-Pot website."
 ln -s /etc/nginx/sites-available/tpotweb.conf /etc/nginx/sites-enabled/tpotweb.conf
 
@@ -399,7 +373,7 @@ ln -s /etc/nginx/sites-available/tpotweb.conf /etc/nginx/sites-enabled/tpotweb.c
 chmod 760 -R /data
 chown tpot:tpot -R /data
 chmod 600 /home/tsec/.ssh/authorized_keys
-chown tsec:tsec /home/tsec/*.sh /home/tsec/.ssh /home/tsec/.ssh/authorized_keys
+chown tsec:tsec /home/tsec/.ssh /home/tsec/.ssh/authorized_keys
 
 # Let's replace "quiet splash" options, set a console font for more screen canvas and update grub
 sed -i 's#GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"#GRUB_CMDLINE_LINUX_DEFAULT="consoleblank=0"#' /etc/default/grub
@@ -421,14 +395,49 @@ sed -i 's#\#force_color_prompt=yes#force_color_prompt=yes#' /home/tsec/.bashrc
 sed -i 's#\#force_color_prompt=yes#force_color_prompt=yes#' /root/.bashrc
 
 # Let's create ews.ip before reboot and prevent race condition for first start
+source /etc/environment
 myLOCALIP=$(hostname -I | awk '{ print $1 }')
-myEXTIP=$(curl myexternalip.com/raw)
-sed -i "s#IP:.*#IP: $myLOCALIP, $myEXTIP#" /etc/issue
+myEXTIP=$(curl -s myexternalip.com/raw)
+sed -i "s#IP:.*#IP: $myLOCALIP ($myEXTIP)#" /etc/issue
+sed -i "s#SSH:.*#SSH: ssh -l tsec -p 64295 $myLOCALIP#" /etc/issue
+sed -i "s#WEB:.*#WEB: https://$myLOCALIP:64297#" /etc/issue
 tee /data/ews/conf/ews.ip << EOF
 [MAIN]
 ip = $myEXTIP
 EOF
+echo $myLOCALIP > /data/elk/logstash/mylocal.ip
 chown tpot:tpot /data/ews/conf/ews.ip
+
+# Let's ask user for web password
+fuECHO "### Please enter a web user name and password."
+myOK="n"
+myUSER="tsec"
+while [ 1 != 2 ]
+  do
+    read -p "Username (tsec not allowed): " myUSER
+    echo "Your username is: "$myUSER
+    read -p "OK (y/n)? " myOK
+    if [ "$myOK" = "y" ] && [ "$myUSER" != "tsec" ];
+      then
+        break
+    fi
+  done
+myPASS1="pass1"
+myPASS2="pass2"
+while [ "$myPASS1" != "$myPASS2"  ]
+  do
+    read -s -p "Password: " myPASS1
+    echo
+    read -s -p "Repeat password: " myPASS2
+    echo
+  done
+htpasswd -b -c /etc/nginx/nginxpasswd $myUSER $myPASS1
+
+# Let's generate a SSL certificate
+fuECHO "### Generating a self-signed-certificate for NGINX."
+fuECHO "### If you are unsure you can use the default values."
+mkdir -p /etc/nginx/ssl
+openssl req -nodes -x509 -sha512 -newkey rsa:8192 -keyout "/etc/nginx/ssl/nginx.key" -out "/etc/nginx/ssl/nginx.crt" -days 3650
 
 # Final steps
 fuECHO "### Thanks for your patience. Now rebooting."

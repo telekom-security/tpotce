@@ -1,7 +1,5 @@
 T-Pot 16.10 (development)
 Hostname: \n
-IP:
-
 
 ___________     _____________________________
 \\__    ___/     \\______   \\_____  \\__    ___/
@@ -10,6 +8,9 @@ ___________     _____________________________
   |____|         |____|   \\_______  /____|
                                   \\/
 
+ IP:
+SSH:
+WEB:
 
-CTRL+ALT+F2 - Display current container status
-CTRL+ALT+F1 - Return to this screen
+
+ 
