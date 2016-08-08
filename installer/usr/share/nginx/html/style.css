@@ -4,9 +4,9 @@
   border-radius: 0px;
   font-family: Arial;
   color: #ffffff;
-  font-size: 20px;
+  font-size: 12px;
   background: #E20074;
-  padding: 10px 20px 10px 20px;
+  padding: 2px 30px 2px 30px;
   text-decoration: none;
 }
 
@@ -15,31 +15,3 @@
   text-decoration: none;
 }
 
-.vertical-align {
-  position: relative;
-  top: 50%;
-  	-webkit-transform: translateY(-50%);
-  	-ms-transform: translateY(-50%);
-  	transform: translateY(-50%);
-}
-.center {
-  margin: 0 auto;
-  text-align: center;
-}
-.modal {
-  background-color: #fff;
-  border: 5px solid #333;
-  width: 450px;
-  height: 300px;
-}
-
-section {
-  display: block;
-  margin: 0 auto 1em;
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 100%;
-}
