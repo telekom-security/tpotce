@@ -1,0 +1,14 @@
+[Unit]
+Description=ui-for-docker
+Requires=docker.service
+After=docker.service
+
+[Service]
+Restart=always
+ExecStartPre=-/usr/bin/docker stop ui-for-docker
+ExecStartPre=-/usr/bin/docker rm -v ui-for-docker
+ExecStart=/usr/bin/docker run --name ui-for-docker --rm=true -v /var/run/docker.sock:/var/run/docker.sock -p 127.0.0.1:64299:9000 dtagdevsec/ui-for-docker:latest1610
+ExecStop=/usr/bin/docker stop ui-for-docker
+
+[Install]
+WantedBy=multi-user.target
