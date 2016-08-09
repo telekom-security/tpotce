@@ -88,11 +88,6 @@ fuSURICATA () {
   mkdir -p /data/suricata/log
   chmod 760 -R /data/suricata
   chown tpot:tpot -R /data/suricata
-  # Get IF, disable offloading, enable promiscious mode
-  myIF=$(ip route | grep $(hostname -I | awk '{print $1 }') | awk '{print $3 }')
-  /sbin/ethtool --offload $myIF rx off tx off
-  /sbin/ethtool -K $myIF gso off gro off
-  /sbin/ip link set $myIF promisc on
 }
 
 case $1 in
