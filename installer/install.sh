@@ -36,13 +36,6 @@ set -e
 exec 2> >(tee "install.err")
 exec > >(tee "install.log")
 
-# Let's stop and disable ssh, nginx services
-#fuECHO "### Disabling and stopping ssh, nginx services."
-#systemctl disable ssh
-#systemctl stop ssh
-#systemctl disable nginx
-#systemctl stop nginx
-
 # Let's disable NGINX default website
 fuECHO "### Removing link to NGINX default website."
 rm /etc/nginx/sites-enabled/default
@@ -178,10 +171,6 @@ fuECHO "### Installing wetty."
 ln -s /usr/bin/nodejs /usr/bin/node
 npm install git://github.com/t3chn0m4g3/wetty -g
 
-# Let's install docker
-#fuECHO "### Installing docker-engine."
-#wget -qO- https://get.docker.com/ | sh
-
 # Let's add the docker repository
 fuECHO "### Adding the docker repository."
 apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
@@ -197,7 +186,6 @@ apt-get update -y
 fuECHO "### Installing docker-engine."
 fuECHO "### You can safely ignore the [FAILED] message,"
 fuECHO "### which is caused by a bug in the docker installer."
-#apt-get install docker-engine=1.10.2-0~trusty -y
 apt-get install docker-engine=1.12.0-0~xenial -y || true && sleep 5
 
 # Let's add proxy settings to docker defaults
@@ -220,7 +208,6 @@ adduser --system --no-create-home --uid 2000 --disabled-password --disabled-logi
 
 # Let's set the hostname
 fuECHO "### Setting a new hostname."
-#myHOST=ce$(date +%s)$RANDOM
 myHOST=$(curl -s www.nsanamegenerator.com | html2text | tr A-Z a-z)
 hostnamectl set-hostname $myHOST
 sed -i 's#127.0.1.1.*#127.0.1.1\t'"$myHOST"'#g' /etc/hosts
@@ -268,15 +255,6 @@ esac
 
 # Let's load docker images
 fuECHO "### Loading docker images. Please be patient, this may take a while."
-#if [ -d /root/tpot/images ];
-#  then
-#    fuECHO "### Found cached images and will load from local."
-#    for name in $(cat /root/tpot/data/images.conf)
-#    do
-#      fuECHO "### Now loading dtagdevsec/$name:latest1610"
-#      docker load -i /root/tpot/images/$name:latest1610.img
-#    done
-#  else
 for name in $(cat /root/tpot/data/images.conf)
   do
     docker pull dtagdevsec/$name:latest1610
@@ -391,8 +369,14 @@ sed -i 's#FONTSIZE=".*#FONTSIZE="12x6"#' /etc/default/console-setup
 update-initramfs -u
 
 # Let's enable a color prompt
-sed -i 's#\#force_color_prompt=yes#force_color_prompt=yes#' /home/tsec/.bashrc
-sed -i 's#\#force_color_prompt=yes#force_color_prompt=yes#' /root/.bashrc
+myROOTPROMPT='PS1="\[\033[38;5;8m\][\[$(tput sgr0)\]\[\033[38;5;1m\]\u\[$(tput sgr0)\]\[\033[38;5;6m\]@\[$(tput sgr0)\]\[\033[38;5;4m\]\h\[$(tput sgr0)\]\[\033[38;5;6m\]:\[$(tput sgr0)\]\[\033[38;5;5m\]\w\[$(tput sgr0)\]\[\033[38;5;8m\]]\[$(tput sgr0)\]\[\033[38;5;1m\]\\$\[$(tput sgr0)\]\[\033[38;5;15m\] \[$(tput sgr0)\]"'
+myUSERPROMPT='PS1="\[\033[38;5;8m\][\[$(tput sgr0)\]\[\033[38;5;2m\]\u\[$(tput sgr0)\]\[\033[38;5;6m\]@\[$(tput sgr0)\]\[\033[38;5;4m\]\h\[$(tput sgr0)\]\[\033[38;5;6m\]:\[$(tput sgr0)\]\[\033[38;5;5m\]\w\[$(tput sgr0)\]\[\033[38;5;8m\]]\[$(tput sgr0)\]\[\033[38;5;2m\]\\$\[$(tput sgr0)\]\[\033[38;5;15m\] \[$(tput sgr0)\]"'
+tee -a /root/.bashrc << EOF
+$myROOTPROMPT
+EOF
+tee -a /home/tsec/.bashrc << EOF
+$myUSERPROMPT
+EOF
 
 # Let's create ews.ip before reboot and prevent race condition for first start
 source /etc/environment
