@@ -25,6 +25,14 @@ fuECHO () {
   tput setaf $myWHT -T xterm
 }
 
+fuRANDOMWORD () {
+  local myWORDFILE=/usr/share/dict/names
+  local myLINES=$(cat $myWORDFILE  | wc -l)
+  local myRANDOM=$((RANDOM % $myLINES))
+  local myNUM=$((myRANDOM * myRANDOM % $myLINES + 1))
+  echo -n $(sed -n "$myNUM p" $myWORDFILE | tr -d \' | tr A-Z a-z)
+}
+
 # Let's make sure there is a warning if running for a second time
 if [ -f install.log ];
   then fuECHO "### Running more than once may complicate things. Erase install.log if you are really sure."
@@ -39,6 +47,38 @@ exec > >(tee "install.log")
 # Let's disable NGINX default website
 fuECHO "### Removing link to NGINX default website."
 rm /etc/nginx/sites-enabled/default
+
+# Let's ask user for a web user and password
+fuECHO "### Please enter a web user name and password."
+myOK="n"
+myUSER="tsec"
+while [ 1 != 2 ]
+  do
+    read -p "Username (tsec not allowed): " myUSER
+    echo "Your username is: "$myUSER
+    read -p "OK (y/n)? " myOK
+    if [ "$myOK" = "y" ] && [ "$myUSER" != "tsec" ];
+      then
+        break
+    fi
+  done
+myPASS1="pass1"
+myPASS2="pass2"
+while [ "$myPASS1" != "$myPASS2"  ]
+  do
+    read -s -p "Password: " myPASS1
+    echo
+    read -s -p "Repeat password: " myPASS2
+    echo
+  done
+htpasswd -b -c /etc/nginx/nginxpasswd $myUSER $myPASS1
+
+# Let's generate a SSL certificate
+fuECHO "### Generating a self-signed-certificate for NGINX."
+fuECHO "### If you are unsure you can use the default values."
+mkdir -p /etc/nginx/ssl
+openssl req -nodes -x509 -sha512 -newkey rsa:8192 -keyout "/etc/nginx/ssl/nginx.key" -out "/etc/nginx/ssl/nginx.crt" -days 3650
+
 
 # Let's setup the proxy for env
 if [ -f $myPROXYFILEPATH ];
@@ -208,7 +248,11 @@ adduser --system --no-create-home --uid 2000 --disabled-password --disabled-logi
 
 # Let's set the hostname
 fuECHO "### Setting a new hostname."
-myHOST=$(curl -s www.nsanamegenerator.com | html2text | tr A-Z a-z)
+myHOST=$(curl -s www.nsanamegenerator.com | html2text | tr A-Z a-z | awk '{print $1}')
+if [ "$myHOST" = "" ]; then
+  fuECHO "### Failed to fetch name from remote, using local cache."
+  myHOST=$(fuRANDOMWORD)
+fi
 hostnamectl set-hostname $myHOST
 sed -i 's#127.0.1.1.*#127.0.1.1\t'"$myHOST"'#g' /etc/hosts
 
@@ -392,38 +436,6 @@ EOF
 echo $myLOCALIP > /data/elk/logstash/mylocal.ip
 chown tpot:tpot /data/ews/conf/ews.ip
 
-# Let's ask user for web password
-fuECHO "### Please enter a web user name and password."
-myOK="n"
-myUSER="tsec"
-while [ 1 != 2 ]
-  do
-    read -p "Username (tsec not allowed): " myUSER
-    echo "Your username is: "$myUSER
-    read -p "OK (y/n)? " myOK
-    if [ "$myOK" = "y" ] && [ "$myUSER" != "tsec" ];
-      then
-        break
-    fi
-  done
-myPASS1="pass1"
-myPASS2="pass2"
-while [ "$myPASS1" != "$myPASS2"  ]
-  do
-    read -s -p "Password: " myPASS1
-    echo
-    read -s -p "Repeat password: " myPASS2
-    echo
-  done
-htpasswd -b -c /etc/nginx/nginxpasswd $myUSER $myPASS1
-
-# Let's generate a SSL certificate
-fuECHO "### Generating a self-signed-certificate for NGINX."
-fuECHO "### If you are unsure you can use the default values."
-mkdir -p /etc/nginx/ssl
-openssl req -nodes -x509 -sha512 -newkey rsa:8192 -keyout "/etc/nginx/ssl/nginx.key" -out "/etc/nginx/ssl/nginx.crt" -days 3650
-
 # Final steps
 fuECHO "### Thanks for your patience. Now rebooting."
-#mv /root/tpot/etc/rc.local /etc/rc.local && rm -rf /root/tpot/ && chage -d 0 tsec && sleep 2 && reboot
 mv /root/tpot/etc/rc.local /etc/rc.local && rm -rf /root/tpot/ && sleep 2 && reboot
