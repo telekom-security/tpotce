@@ -45,7 +45,7 @@ sleep 10
 echo "Now backing up Elasticsearch data ..."
 tar cvfz $myBACKUPPATH"$myDATE"_elkall.tgz $myELKPATH
 rm -rf "$myELKPATH"log/*
-rm -rf "$myELKPATH"data/elasticsearch/nodes/0/indices/logstash*
+rm -rf "$myELKPATH"data/tpotcluster/nodes/0/indices/logstash*
 tar cvfz $myBACKUPPATH"$myDATE"_elkbase.tgz $myELKPATH
 rm -rf $myELKPATH
 tar xvfz $myBACKUPPATH"$myDATE"_elkall.tgz -C /
