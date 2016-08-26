@@ -55,6 +55,9 @@ fuELK () {
   # ELK data will be kept for <= 90 days, check /etc/crontab for curator modification
   # ELK daemon log files will be removed
   rm -rf /data/elk/log/*
+  mkdir -p /data/elk/logstash/conf 
+  chmod 760 /data/elk -R
+  chown tpot:tpot /data/elk -R
 }
 
 # Let's create a function to clean up and prepare emobility data
