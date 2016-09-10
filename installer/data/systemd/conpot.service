@@ -8,7 +8,7 @@ Restart=always
 ExecStartPre=-/usr/bin/docker stop conpot
 ExecStartPre=-/usr/bin/docker rm -v conpot
 ExecStartPre=/bin/bash -c '/usr/bin/clean.sh conpot off'
-ExecStart=/usr/bin/docker run --name conpot --rm=true -v /data/conpot:/data/conpot -v /data/ews:/data/ews -p 81:80 -p 102:102 -p 161:161/udp -p 502:502 dtagdevsec/conpot:latest1610
+ExecStart=/usr/bin/docker run --name conpot --rm=true -v /data/conpot:/data/conpot -v /data/ews:/data/ews -p 1025:1025 -p 50100:50100 dtagdevsec/conpot:latest1610
 ExecStop=/usr/bin/docker stop conpot
 
 [Install]
