@@ -8,15 +8,16 @@ Restart=always
 ExecStartPre=-/usr/bin/docker stop honeytrap
 ExecStartPre=-/usr/bin/docker rm -v honeytrap
 ExecStartPre=/bin/bash -c '/usr/bin/clean.sh honeytrap off'
-ExecStartPre=/sbin/iptables -w -A INPUT -p tcp --syn -m state --state NEW -m multiport ! --dports 21,22,23,42,80,135,443,445,1433,3306,5060,5061 -j NFQUEUE
+ExecStartPre=/sbin/iptables -w -A INPUT -p tcp --syn -m state --state NEW -m multiport ! --dports 21,22,23,42,69,80,135,443,445,1433,1723,1883,1900 -j NFQUEUE
+ExecStartPre=/sbin/iptables -w -A INPUT -p tcp --syn -m state --state NEW -m multiport ! --dports 3306,5060,5061,11211 -j NFQUEUE
 ExecStartPre=/sbin/iptables -w -A INPUT -p tcp --syn -m state --state NEW -m multiport ! --dports 64295,64296,64297,64298,64299,64300,64301 -j NFQUEUE
-ExecStartPre=/sbin/iptables -w -A INPUT -p tcp --syn -m state --state NEW -m multiport ! --dports 1025,50100,8080,9200 -j NFQUEUE
+ExecStartPre=/sbin/iptables -w -A INPUT -p tcp --syn -m state --state NEW -m multiport ! --dports 1025,50100,8080,8081,9200 -j NFQUEUE
 ExecStart=/usr/bin/docker run --name honeytrap --cap-add=NET_ADMIN --net=host --rm=true -v /data/honeytrap:/data/honeytrap -v /data/ews:/data/ews dtagdevsec/honeytrap:latest1610
 ExecStop=/usr/bin/docker stop honeytrap
-ExecStopPost=/sbin/iptables -w -D INPUT -p tcp --syn -m state --state NEW -m multiport ! --dports 1025,50100,8080,9200 -j NFQUEUE
+ExecStopPost=/sbin/iptables -w -D INPUT -p tcp --syn -m state --state NEW -m multiport ! --dports 1025,50100,8080,8081,9200 -j NFQUEUE
 ExecStopPost=/sbin/iptables -w -D INPUT -p tcp --syn -m state --state NEW -m multiport ! --dports 64295,64296,64297,64298,64299,64300,64301 -j NFQUEUE
-ExecStopPost=/sbin/iptables -w -D INPUT -p tcp --syn -m state --state NEW -m multiport ! --dports 21,22,23,42,80,135,443,445,1433,3306,5060,5061 -j NFQUEUE
+ExecStopPost=/sbin/iptables -w -D INPUT -p tcp --syn -m state --state NEW -m multiport ! --dports 3306,5060,5061,11211 -j NFQUEUE
+ExecStopPost=/sbin/iptables -w -D INPUT -p tcp --syn -m state --state NEW -m multiport ! --dports 21,22,23,42,69,80,135,443,445,1433,1723,1883,1900 -j NFQUEUE
 
 [Install]
 WantedBy=multi-user.target
-
