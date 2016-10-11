@@ -379,6 +379,7 @@ cp    /root/tpot/data/systemd/* /etc/systemd/system/
 cp    /root/tpot/etc/issue /etc/
 cp -R /root/tpot/etc/nginx/ssl /etc/nginx/
 cp    /root/tpot/etc/nginx/tpotweb.conf /etc/nginx/sites-available/
+cp    /root/tpot/etc/nginx/nginx.conf /etc/nginx/nginx.conf
 cp    /root/tpot/keys/authorized_keys /home/tsec/.ssh/authorized_keys
 cp    /root/tpot/usr/share/nginx/html/* /usr/share/nginx/html/
 for i in $(cat /data/images.conf);
