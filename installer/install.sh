@@ -53,7 +53,6 @@ fuECHO "### Waiting a few seconds to avoid interference with service messages."
 sleep 5
 
 # Let's ask user for a web user and password
-clear
 myOK="n"
 myUSER="tsec"
 while [ 1 != 2 ]
@@ -62,19 +61,28 @@ while [ 1 != 2 ]
     read -p "Username (tsec not allowed): " myUSER
     echo "Your username is: "$myUSER
     read -p "OK (y/n)? " myOK
-    if [ "$myOK" = "y" ] && [ "$myUSER" != "tsec" ];
+    if [ "$myOK" = "y" ] && [ "$myUSER" != "tsec" ] && [ "$myUSER" != "" ];
       then
         break
     fi
   done
 myPASS1="pass1"
 myPASS2="pass2"
-while [ "$myPASS1" != "$myPASS2"  ]
+while [ "$myPASS1" != "$myPASS2"  ] 
   do
-    read -s -p "Password: " myPASS1
-    echo
+    while [ "$myPASS1" == "pass1"  ] || [ "$myPASS1" == "" ]
+      do
+        read -s -p "Password: " myPASS1
+        echo
+      done
     read -s -p "Repeat password: " myPASS2
     echo
+    if [ "$myPASS1" != "$myPASS2" ];
+      then
+        fuECHO "### Passwords do not match."
+        myPASS1="pass1"
+        myPASS2="pass2"
+    fi
   done
 htpasswd -b -c /etc/nginx/nginxpasswd $myUSER $myPASS1
 

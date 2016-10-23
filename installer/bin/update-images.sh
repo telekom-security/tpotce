@@ -7,8 +7,6 @@
 # v16.10.0 by mo, DTAG, 2016-05-12                     #
 ########################################################
 
-echo "### I still need some dev-work!"
-
 # Make sure not to interrupt a check
 while true
 do
