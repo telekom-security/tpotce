@@ -3,7 +3,7 @@
 # T-Pot post install script                            #
 # Ubuntu server 16.04.0, x64                           #
 #                                                      #
-# v16.10.0 by mo, DTAG, 2016-05-12                     #
+# v16.10.0 by mo, DTAG, 2016-10-23                     #
 ########################################################
 
 # Type of install, TPOT, SENSOR, INDUSTRIAL or FULL?
@@ -336,19 +336,22 @@ tee -a /etc/crontab <<EOF
 #*/5 * * * *   root   alerta --endpoint-url http://<ip>:<port>/api delete --filters resource=<host> && alerta --endpoint-url http://<ip>:<port>/api send -e IP -r <host> -E Production -s ok -S T-Pot -t \$(cat /data/elk/logstash/mylocal.ip) --status open
 
 # Check if updated images are available and download them
-27 1 * * *    root    for i in \$(cat /data/images.conf); do docker pull dtagdevsec/\$i:latest1610; done
+27 1 * * *	root	for i in \$(cat /data/images.conf); do docker pull dtagdevsec/\$i:latest1610; done
 
 # Restart docker service and containers
-27 3 * * *    root    dcres.sh
+27 3 * * *	root	dcres.sh
 
 # Delete elastic indices older than 90 days (kibana index is omitted by default)
-27 4 * * *    root    docker exec elk bash -c '/usr/local/bin/curator --host 127.0.0.1 delete indices --older-than 90 --time-unit days --timestring \%Y.\%m.\%d'
+27 4 * * *	root	docker exec elk bash -c '/usr/local/bin/curator --host 127.0.0.1 delete indices --older-than 90 --time-unit days --timestring \%Y.\%m.\%d'
 
 # Update IP and erase check.lock if it exists
-27 15 * * *   root    /etc/rc.local
+27 15 * * *	root	/etc/rc.local
+
+# Daily reboot
+27 23 * * *	root	reboot
 
 # Check for updated packages every sunday, upgrade and reboot
-27 16 * * 0   root    apt-get autoclean -y; apt-get autoremove -y; apt-get update -y; apt-get upgrade -y; sleep 5; reboot
+27 16 * * 0	root	apt-get autoclean -y && apt-get autoremove -y && apt-get update -y && apt-get upgrade -y && sleep 10 && reboot
 EOF
 
 # Let's create some files and folders
