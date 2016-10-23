@@ -289,6 +289,7 @@ EOF
 
 # Let's restart docker for proxy changes to take effect
 systemctl restart docker
+sleep 5
 
 # Let's make sure only myFLAVOR images will be downloaded and started
 case $myFLAVOR in
