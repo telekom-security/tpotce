@@ -48,12 +48,17 @@ exec > >(tee "install.log")
 fuECHO "### Removing link to NGINX default website."
 rm /etc/nginx/sites-enabled/default
 
+# Let's wait a few seconds to avoid interference with service messages
+fuECHO "### Waiting a few seconds to avoid interference with service messages."
+sleep 5
+
 # Let's ask user for a web user and password
-fuECHO "### Please enter a web user name and password."
+clear
 myOK="n"
 myUSER="tsec"
 while [ 1 != 2 ]
   do
+    fuECHO "### Please enter a web user name and password."
     read -p "Username (tsec not allowed): " myUSER
     echo "Your username is: "$myUSER
     read -p "OK (y/n)? " myOK
@@ -226,7 +231,7 @@ apt-get update -y
 fuECHO "### Installing docker-engine."
 fuECHO "### You can safely ignore the [FAILED] message,"
 fuECHO "### which is caused by a bug in the docker installer."
-apt-get install docker-engine=1.12.0-0~xenial -y || true && sleep 5
+apt-get install docker-engine=1.12.2-0~xenial -y || true && sleep 5
 
 # Let's add proxy settings to docker defaults
 if [ -f $myPROXYFILEPATH ];
@@ -327,13 +332,13 @@ fuECHO "### Adding cronjobs."
 tee -a /etc/crontab <<EOF
 
 # Show running containers every 60s via /dev/tty2
-#*/2 * * * *   root 	status.sh > /dev/tty2
+#*/2 * * * *	root	status.sh > /dev/tty2
 
 # Check if containers and services are up
-*/5 * * * *   root    check.sh
+*/5 * * * *	root	check.sh
 
 # Example for alerta-cli IP update
-#*/5 * * * *   root   alerta --endpoint-url http://<ip>:<port>/api delete --filters resource=<host> && alerta --endpoint-url http://<ip>:<port>/api send -e IP -r <host> -E Production -s ok -S T-Pot -t \$(cat /data/elk/logstash/mylocal.ip) --status open
+#*/5 * * * *	root	alerta --endpoint-url http://<ip>:<port>/api delete --filters resource=<host> && alerta --endpoint-url http://<ip>:<port>/api send -e IP -r <host> -E Production -s ok -S T-Pot -t \$(cat /data/elk/logstash/mylocal.ip) --status open
 
 # Check if updated images are available and download them
 27 1 * * *	root	for i in \$(cat /data/images.conf); do docker pull dtagdevsec/\$i:latest1610; done
