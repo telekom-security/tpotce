@@ -6,9 +6,6 @@
 # v16.10.0 by mo, DTAG, 2016-10-25                     #
 ########################################################
 
-# Type of install, TPOT, SENSOR, INDUSTRIAL or FULL?
-#myFLAVOR="TPOT"
-
 # Some global vars
 myPROXYFILEPATH="/root/tpot/etc/proxy"
 myNTPCONFPATH="/root/tpot/etc/ntp"
@@ -56,12 +53,26 @@ sleep 5
 # Install types are TPOT, HP, INDUSTRIAL, ALL
 while [ 1 != 2 ]
   do
-    fuECHO "### Please choose your install type."
+    fuECHO "### Please choose your install type and notice HW recommendation."
     fuECHO "###"
-    fuECHO "### [T] - T-Pot (Standard w/o Industrial)"
-    fuECHO "### [H] - Honeypots only (w/o Industrial)"
-    fuECHO "### [I] - Industrial (ConPot, eMobility, ELK, Suricata) (8GB RAM recommended)"
+    fuECHO "### [T] - T-Pot Standard Installation"
+    fuECHO "###       > Cowrie, Dionaea, Elasticpot, Glastopf, Honeytrap, Suricata & ELK"
+    fuECHO "###       > 4 GB RAM (6-8 GB recommended)"
+    fuECHO "###       > 64GB disk (128 GB SSD recommended)"
+    fuECHO "###"
+    fuECHO "### [H] - Honeypots Only Installation"
+    fuECHO "###       > Cowrie, Dionaea, ElasticPot, Glastopf & Honeytrap"
+    fuECHO "###       > 3 GB RAM (4-6 GB recommended)"
+    fuECHO "###       > 64 GB disk (64 GB SSD recommended)"
+    fuECHO "###"
+    fuECHO "### [I] - Industrial"
+    fuECHO "###       > ConPot, eMobility, ELK & Suricata"
+    fuECHO "###       > 4 GB RAM (8 GB recommended)"
+    fuECHO "###       > 64 GB disk (128 GB SSD recommended)"
+    fuECHO "###"
     fuECHO "### [E] - Everything (8GB RAM recommended)"
+    fuECHO "###       > 8 GB RAM"
+    fuECHO "###       > 128 GB disk or larger (128 GB SSD or larger recommended)"
     fuECHO "###"
     read -p "Install Type: " myTYPE
     case "$myTYPE" in
