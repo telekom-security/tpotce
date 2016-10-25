@@ -18,7 +18,7 @@ fuECHO () {
   local myRED=1
   local myWHT=7
   tput setaf $myRED -T xterm
-  echo $1 "$2"
+  echo "$1" "$2"
   tput setaf $myWHT -T xterm
 }
 
@@ -54,26 +54,27 @@ sleep 5
 while [ 1 != 2 ]
   do
     fuECHO "### Please choose your install type and notice HW recommendation."
-    fuECHO "###"
-    fuECHO "### [T] - T-Pot Standard Installation"
-    fuECHO "###       > Cowrie, Dionaea, Elasticpot, Glastopf, Honeytrap, Suricata & ELK"
-    fuECHO "###       > 4 GB RAM (6-8 GB recommended)"
-    fuECHO "###       > 64GB disk (128 GB SSD recommended)"
-    fuECHO "###"
-    fuECHO "### [H] - Honeypots Only Installation"
-    fuECHO "###       > Cowrie, Dionaea, ElasticPot, Glastopf & Honeytrap"
-    fuECHO "###       > 3 GB RAM (4-6 GB recommended)"
-    fuECHO "###       > 64 GB disk (64 GB SSD recommended)"
-    fuECHO "###"
-    fuECHO "### [I] - Industrial"
-    fuECHO "###       > ConPot, eMobility, ELK & Suricata"
-    fuECHO "###       > 4 GB RAM (8 GB recommended)"
-    fuECHO "###       > 64 GB disk (128 GB SSD recommended)"
-    fuECHO "###"
-    fuECHO "### [E] - Everything (8GB RAM recommended)"
-    fuECHO "###       > 8 GB RAM"
-    fuECHO "###       > 128 GB disk or larger (128 GB SSD or larger recommended)"
-    fuECHO "###"
+    fuECHO
+    fuECHO "    [T] - T-Pot Standard Installation"
+    fuECHO "          - Cowrie, Dionaea, Elasticpot, Glastopf, Honeytrap, Suricata & ELK"
+    fuECHO "          - 4 GB RAM (6-8 GB recommended)"
+    fuECHO "          - 64GB disk (128 GB SSD recommended)"
+    fuECHO
+    fuECHO "    [H] - Honeypots Only Installation"
+    fuECHO "          - Cowrie, Dionaea, ElasticPot, Glastopf & Honeytrap"
+    fuECHO "          - 3 GB RAM (4-6 GB recommended)"
+    fuECHO "          - 64 GB disk (64 GB SSD recommended)"
+    fuECHO
+    fuECHO "    [I] - Industrial"
+    fuECHO "          - ConPot, eMobility, ELK & Suricata"
+    fuECHO "          - 4 GB RAM (8 GB recommended)"
+    fuECHO "          - 64 GB disk (128 GB SSD recommended)"
+    fuECHO
+    fuECHO "    [E] - Everything"
+    fuECHO "          - All of the above"
+    fuECHO "          - 8 GB RAM"
+    fuECHO "          - 128 GB disk or larger (128 GB SSD or larger recommended)"
+    fuECHO
     read -p "Install Type: " myTYPE
     case "$myTYPE" in
       [t,T])
@@ -95,7 +96,7 @@ while [ 1 != 2 ]
     esac
 done
 fuECHO "### You chose: "$myFLAVOR
-echo
+fuECHO
 
 # Let's ask user for a web user and password
 myOK="n"
