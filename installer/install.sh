@@ -3,11 +3,11 @@
 # T-Pot post install script                            #
 # Ubuntu server 16.04.0, x64                           #
 #                                                      #
-# v16.10.0 by mo, DTAG, 2016-10-23                     #
+# v16.10.0 by mo, DTAG, 2016-10-25                     #
 ########################################################
 
 # Type of install, TPOT, SENSOR, INDUSTRIAL or FULL?
-myFLAVOR="TPOT"
+#myFLAVOR="TPOT"
 
 # Some global vars
 myPROXYFILEPATH="/root/tpot/etc/proxy"
@@ -51,6 +51,40 @@ rm /etc/nginx/sites-enabled/default
 # Let's wait a few seconds to avoid interference with service messages
 fuECHO "### Waiting a few seconds to avoid interference with service messages."
 sleep 5
+
+# Let's ask user for install type
+# Install types are TPOT, HP, INDUSTRIAL, ALL
+while [ 1 != 2 ]
+  do
+    fuECHO "### Please choose your install type."
+    fuECHO "###"
+    fuECHO "### [T] - T-Pot (Standard w/o Industrial)"
+    fuECHO "### [H] - Honeypots only (w/o Industrial)"
+    fuECHO "### [I] - Industrial (ConPot, eMobility, ELK, Suricata) (8GB RAM recommended)"
+    fuECHO "### [E] - Everything (8GB RAM recommended)"
+    fuECHO "###"
+    read -p "Install Type: " myTYPE
+    case "$myTYPE" in
+      [t,T])
+        myFLAVOR="TPOT"
+        break
+        ;;
+      [h,H])
+        myFLAVOR="HP"
+        break
+        ;;
+      [i,I])
+        myFLAVOR="INDUSTRIAL"
+        break
+        ;;
+      [e,E])
+        myFLAVOR="ALL"
+        break
+        ;;
+    esac
+done
+fuECHO "### You chose: "$myFLAVOR
+echo
 
 # Let's ask user for a web user and password
 myOK="n"
