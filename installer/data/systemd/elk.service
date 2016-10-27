@@ -1,0 +1,15 @@
+[Unit]
+Description=elk
+Requires=docker.service
+After=docker.service
+
+[Service]
+Restart=always
+ExecStartPre=-/usr/bin/docker stop elk
+ExecStartPre=-/usr/bin/docker rm -v elk
+ExecStartPre=/bin/bash -c '/usr/bin/clean.sh elk'
+ExecStart=/usr/bin/docker run --name=elk -v /data:/data -v /var/log:/data/host/log -p 127.0.0.1:64296:5601 -p 127.0.0.1:64298:9200 --rm=true dtagdevsec/elk:latest1610
+ExecStop=/usr/bin/docker stop elk
+
+[Install]
+WantedBy=multi-user.target

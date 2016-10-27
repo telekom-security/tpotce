@@ -17,7 +17,7 @@ Thank you :smiley:
 ### FAQ
 
 ##### Where can I find the honeypot logs?
-###### The honeypot logs are located in `/data/`. You have to login via ssh and run `sudo cd /data/`. Do not change any permissions here or T-Pot will fail to work.
+###### The honeypot logs are located in `/data/`. You have to login via ssh and run `sudo su -` and then `cd /data/`. Do not change any permissions here or T-Pot will fail to work.
 
 -
 

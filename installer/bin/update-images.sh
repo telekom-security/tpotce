@@ -4,7 +4,7 @@
 # T-Pot                                                #
 # Only start the containers found in /etc/init/        #
 #                                                      #
-# v16.03.2 by mo, DTAG, 2016-04-20                     #
+# v16.10.0 by mo, DTAG, 2016-05-12                     #
 ########################################################
 
 # Make sure not to interrupt a check
@@ -32,27 +32,27 @@ done
 # We do not want to get interrupted by a check
 touch /var/run/check.lock
 
-# Stop T-Pot services and delete all T-Pot upstart scripts
+# Stop T-Pot services and disable all T-Pot services
 echo "### Stopping T-Pot services and cleaning up."
 for i in $(cat /data/imgcfg/all_images.conf);
   do
-    service $i stop
+    systemctl stop $i
     sleep 2
-    rm -rf /etc/init/$i.conf || true;
+    systemctl disable $i;
 done
 
 # Restarting docker services
 echo "### Restarting docker services ..."
-service docker stop
+systemctl stop docker
 sleep 2
-service docker start
+systemctl start docker
 sleep 2
 
-# Setup only T-Pot upstart scripts from images.conf and pull the images
+# Enable only T-Pot upstart scripts from images.conf and pull the images
 for i in $(cat /data/images.conf);
   do
-    docker pull dtagdevsec/$i:latest1603;
-    cp /data/upstart/"$i".conf /etc/init/;
+    docker pull dtagdevsec/$i:latest1610;
+    systemctl enable $i;
 done
 
 # Announce reboot

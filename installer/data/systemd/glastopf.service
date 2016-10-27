@@ -1,0 +1,15 @@
+[Unit]
+Description=glastopf
+Requires=docker.service
+After=docker.service
+
+[Service]
+Restart=always
+ExecStartPre=-/usr/bin/docker stop glastopf
+ExecStartPre=-/usr/bin/docker rm -v glastopf
+ExecStartPre=/bin/bash -c '/usr/bin/clean.sh glastopf off'
+ExecStart=/usr/bin/docker run --name glastopf --rm=true -v /data/glastopf:/data/glastopf -v /data/ews:/data/ews -p 80:80 dtagdevsec/glastopf:latest1610
+ExecStop=/usr/bin/docker stop glastopf
+
+[Install]
+WantedBy=multi-user.target

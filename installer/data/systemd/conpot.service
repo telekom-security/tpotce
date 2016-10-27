@@ -1,0 +1,15 @@
+[Unit]
+Description=conpot
+Requires=docker.service
+After=docker.service
+
+[Service]
+Restart=always
+ExecStartPre=-/usr/bin/docker stop conpot
+ExecStartPre=-/usr/bin/docker rm -v conpot
+ExecStartPre=/bin/bash -c '/usr/bin/clean.sh conpot off'
+ExecStart=/usr/bin/docker run --name conpot --rm=true -v /data/conpot:/data/conpot -v /data/ews:/data/ews -p 1025:1025 -p 50100:50100 dtagdevsec/conpot:latest1610
+ExecStop=/usr/bin/docker stop conpot
+
+[Install]
+WantedBy=multi-user.target

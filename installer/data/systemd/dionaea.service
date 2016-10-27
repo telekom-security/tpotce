@@ -1,0 +1,15 @@
+[Unit]
+Description=dionaea
+Requires=docker.service
+After=docker.service
+
+[Service]
+Restart=always
+ExecStartPre=-/usr/bin/docker stop dionaea
+ExecStartPre=-/usr/bin/docker rm -v dionaea
+ExecStartPre=/bin/bash -c '/usr/bin/clean.sh dionaea off'
+ExecStart=/usr/bin/docker run --name dionaea --cap-add=NET_BIND_SERVICE --rm=true -p 21:21 -p 42:42 -p 69:69/udp -p 8081:80 -p 135:135 -p 443:443 -p 445:445 -p 1433:1433 -p 1723:1723 -p 1883:1883 -p 1900:1900 -p 3306:3306 -p 5060:5060 -p 5061:5061 -p 5060:5060/udp -p 11211:11211 -v /data/dionaea:/data/dionaea -v /data/ews:/data/ews dtagdevsec/dionaea:latest1610
+ExecStop=/usr/bin/docker stop dionaea
+
+[Install]
+WantedBy=multi-user.target

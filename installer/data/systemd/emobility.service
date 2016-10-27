@@ -1,0 +1,15 @@
+[Unit]
+Description=emobility
+Requires=docker.service
+After=docker.service
+
+[Service]
+Restart=always
+ExecStartPre=-/usr/bin/docker stop emobility
+ExecStartPre=-/usr/bin/docker rm -v emobility
+ExecStartPre=/bin/bash -c '/usr/bin/clean.sh emobility off'
+ExecStart=/usr/bin/docker run --name emobility --cap-add=NET_ADMIN -p 8080:8080 -v /data/emobility:/data/eMobility -v /data/ews:/data/ews --rm=true dtagdevsec/emobility:latest1610
+ExecStop=/usr/bin/docker stop emobility
+
+[Install]
+WantedBy=multi-user.target

@@ -4,7 +4,7 @@
 # T-Pot                                                #
 # Container and services status script                 #
 #                                                      #
-# v16.03.1 by mo, DTAG, 2016-03-09                     #
+# v16.10.0 by mo, DTAG, 2016-05-12                     #
 ########################################################
 myCOUNT=1
 
@@ -42,7 +42,10 @@ echo CPU temp: $(sensors | grep "Physical" | awk '{ print $4 }')
 echo
 for i in $myIMAGES
 do
-  echo "======| Container:" $i "|======"
-  docker exec $i supervisorctl status | GREP_COLORS='mt=01;32' egrep --color=always "(RUNNING)|$" | GREP_COLORS='mt=01;31' egrep --color=always "(STOPPED|FATAL)|$"
-  echo
+  if [ "$i" != "ui-for-docker" ] && [ "$i" != "netdata" ];
+  then
+    echo "======| Container:" $i "|======"
+    docker exec $i supervisorctl status | GREP_COLORS='mt=01;32' egrep --color=always "(RUNNING)|$" | GREP_COLORS='mt=01;31' egrep --color=always "(STOPPED|FATAL)|$"
+    echo
+  fi
 done

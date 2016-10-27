@@ -31,14 +31,14 @@ if [ $1 == "now" ]
   then
   for name in $(cat installer/data/imgcfg/all_images.conf)
     do
-      docker pull dtagdevsec/$name:latest1603
+      docker pull dtagdevsec/$name:latest1610
     done
   mkdir images
   chmod 777 images
   for name in $(cat installer/data/full_images.conf)
     do
       echo "Now exporting dtagdevsec/$name:latest1603"
-      docker save -o images/$name:latest1603.img dtagdevsec/$name:latest1603
+      docker save -o images/$name:latest1610.img dtagdevsec/$name:latest1610
   done
   chmod 777 images/*.img
 fi
