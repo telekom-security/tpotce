@@ -46,7 +46,6 @@ fuECHO "### Removing NGINX default website."
 rm /etc/nginx/sites-enabled/default
 rm /etc/nginx/sites-available/default
 rm /usr/share/nginx/html/index.html
-nginx -s reload
 
 # Let's wait a few seconds to avoid interference with service messages
 fuECHO "### Waiting a few seconds to avoid interference with service messages."
@@ -136,13 +135,13 @@ while [ "$myPASS1" != "$myPASS2"  ]
     fi
   done
 htpasswd -b -c /etc/nginx/nginxpasswd $myUSER $myPASS1
+fuECHO
 
 # Let's generate a SSL certificate
 fuECHO "### Generating a self-signed-certificate for NGINX."
 fuECHO "### If you are unsure you can use the default values."
 mkdir -p /etc/nginx/ssl
 openssl req -nodes -x509 -sha512 -newkey rsa:8192 -keyout "/etc/nginx/ssl/nginx.key" -out "/etc/nginx/ssl/nginx.crt" -days 3650
-
 
 # Let's setup the proxy for env
 if [ -f $myPROXYFILEPATH ];
