@@ -3,7 +3,7 @@
 # T-Pot post install script                            #
 # Ubuntu server 16.04.0, x64                           #
 #                                                      #
-# v16.10.0 by mo, DTAG, 2016-10-25                     #
+# v16.10.0 by mo, DTAG, 2016-10-27                     #
 ########################################################
 
 # Some global vars
@@ -41,9 +41,12 @@ set -e
 exec 2> >(tee "install.err")
 exec > >(tee "install.log")
 
-# Let's disable NGINX default website
-fuECHO "### Removing link to NGINX default website."
+# Let's remove NGINX default website
+fuECHO "### Removing NGINX default website."
 rm /etc/nginx/sites-enabled/default
+rm /etc/nginx/sites-available/default
+rm /usr/share/nginx/html/index.html
+nginx -s reload
 
 # Let's wait a few seconds to avoid interference with service messages
 fuECHO "### Waiting a few seconds to avoid interference with service messages."
@@ -106,7 +109,9 @@ while [ 1 != 2 ]
     fuECHO "### Please enter a web user name and password."
     read -p "Username (tsec not allowed): " myUSER
     echo "Your username is: "$myUSER
+    fuECHO
     read -p "OK (y/n)? " myOK
+    fuECHO
     if [ "$myOK" = "y" ] && [ "$myUSER" != "tsec" ] && [ "$myUSER" != "" ];
       then
         break
@@ -119,10 +124,10 @@ while [ "$myPASS1" != "$myPASS2"  ]
     while [ "$myPASS1" == "pass1"  ] || [ "$myPASS1" == "" ]
       do
         read -s -p "Password: " myPASS1
-        echo
+        fuECHO
       done
     read -s -p "Repeat password: " myPASS2
-    echo
+    fuECHO
     if [ "$myPASS1" != "$myPASS2" ];
       then
         fuECHO "### Passwords do not match."
