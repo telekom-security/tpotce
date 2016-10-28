@@ -4,7 +4,7 @@
 # T-Pot                                                #
 # .ISO creator                                         #
 #                                                      #
-# v16.10.0 by mo, DTAG, 2016-07-04                     #
+# v16.10.0 by mo, DTAG, 2016-10-28                     #
 ########################################################
 
 # Let's define some global vars
@@ -14,7 +14,7 @@ myUBUNTUISO="mini.iso"
 myTPOTISO="tpot.iso"
 myTPOTDIR="tpotiso"
 myTPOTSEED="preseed/tpot.seed"
-myPACKAGES="dialog genisoimage syslinux syslinux-utils pv"
+myPACKAGES="dialog genisoimage syslinux syslinux-utils pv udisks2"
 myAUTHKEYSPATH="installer/keys/authorized_keys"
 myPFXPATH="installer/keys/8021x.pfx"
 myPFXPWPATH="installer/keys/8021x.pw"
@@ -261,9 +261,10 @@ do
           myWRITE=$?
           if [ "$myWRITE" = "0" ]
             then
-              umount $myTARGET 2>&1 || true
+              umount $myTARGET? 2>&1 || true
               (pv -n "$myTPOTISO" | dd of="$myTARGET") 2>&1 | dialog --backtitle "$myBACKTITLE" --title "[ Writing .iso to target ... ]" --gauge "" 5 70 0
               echo 100 | dialog --backtitle "$myBACKTITLE" --title "[ Writing .iso to target ... Done! ]" --gauge "" 5 70
+              udisksctl power-off -b $myTARGET 2>&1
               break
           fi
       fi

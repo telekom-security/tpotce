@@ -3,7 +3,7 @@
 # T-Pot post install script                            #
 # Ubuntu server 16.04.0, x64                           #
 #                                                      #
-# v16.10.0 by mo, DTAG, 2016-10-27                     #
+# v16.10.0 by mo, DTAG, 2016-10-28                     #
 ########################################################
 
 # Some global vars
@@ -468,11 +468,11 @@ chown tsec:tsec /home/tsec/.ssh /home/tsec/.ssh/authorized_keys
 # Let's replace "quiet splash" options, set a console font for more screen canvas and update grub
 sed -i 's#GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"#GRUB_CMDLINE_LINUX_DEFAULT="consoleblank=0"#' /etc/default/grub
 sed -i 's#GRUB_CMDLINE_LINUX=""#GRUB_CMDLINE_LINUX="cgroup_enable=memory swapaccount=1"#' /etc/default/grub
-sed -i 's#\#GRUB_GFXMODE=640x480#GRUB_GFXMODE=800x600x32#' /etc/default/grub
-tee -a /etc/default/grub <<EOF
-GRUB_GFXPAYLOAD=800x600x32
-GRUB_GFXPAYLOAD_LINUX=800x600x32
-EOF
+#sed -i 's#\#GRUB_GFXMODE=640x480#GRUB_GFXMODE=800x600x32#' /etc/default/grub
+#tee -a /etc/default/grub <<EOF
+#GRUB_GFXPAYLOAD=800x600x32
+#GRUB_GFXPAYLOAD_LINUX=800x600x32
+#EOF
 update-grub
 cp /usr/share/consolefonts/Uni2-Terminus12x6.psf.gz /etc/console-setup/
 gunzip /etc/console-setup/Uni2-Terminus12x6.psf.gz
