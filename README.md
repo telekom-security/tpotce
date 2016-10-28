@@ -41,7 +41,7 @@ Furthermore we use the following tools
 3. Install the system in a [VM](#vm) or on [physical hardware](#hw) with [internet access](#placement).
 4. Enjoy your favorite beverage - [watch](http://sicherheitstacho.eu/?peers=communityPeers) and [analyze](#kibana).
 
--
+
 
 <!--
 To Do
@@ -64,6 +64,7 @@ In case you already have an Ubuntu 14.04.x running in your datacenter and are un
 - [Options](#options)
   - [SSH and web access](#ssh)
   - [Kibana Dashboard](#kibana)
+  - [Tools](#tools)
   - [Maintenance](#maintenance)
   - [Community Data Submission](#submission)
 - [Roadmap](#roadmap)
@@ -219,8 +220,8 @@ Secondly, decide where you want to let the system run: [real hardware](#hardware
 We provide an installation ISO image for download (~50MB), which is created using the same [tool](https://github.com/dtag-dev-sec/tpotce) you can use yourself in order to create your own image. It will basically just save you some time downloading components and creating the ISO image.
 You can download the prebuilt installation image [here](http://community-honeypot.de/tpot.iso) and jump to the [installation](#vm) section. The ISO image is hosted by our friends from [Strato](http://www.strato.de) / [Cronon](http://www.cronon.de).
 
-    shasum tpot.iso
-    7f4c5d91ab620866b661fcaa7c1778f473e2a07d tpot.iso
+    sha256sum tpot.iso
+    df6b1db24d0dcc421125dc973fbb2d17aa91cd9ff94607dde9d1b09a92bcbaf0 tpot.iso
 
 <a name="createiso"></a>
 ## Create your own ISO Image
@@ -333,6 +334,8 @@ If you do not have a SSH client at hand and still want to access the machine via
 
 and choose **WebSSH** from the navigation bar. You will be prompted to allow access for this connection and enter the password for the user **tsec**.
 
+![WebSSH](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/doc/webssh.png)
+
 <a name="kibana"></a>
 ## Kibana Dashboard
 Just open a web browser and access and connect to `https://<your.ip>:64297`, enter
@@ -343,6 +346,14 @@ Just open a web browser and access and connect to `https://<your.ip>:64297`, ent
 and the **Kibana dashboard** will automagically load. The Kibana dashboard can be customized to fit your needs. By default, we haven't added any filtering, because the filters depend on your setup. E.g. you might want to filter out your incoming administrative ssh connections and connections to update servers.
 
 ![Dashbaord](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/doc/dashboard.png)
+
+<a name="tools"></a>
+## Tools
+We included some web based management tools to improve and ease up on your daily tasks.
+
+![ES Head Plugin](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/doc/headplugin.png)
+![UI-For-Docker](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/doc/dockerui.png)
+![Netdata](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/doc/netdata.png)
 
 <a name="maintenance"></a>
 ## Maintenance
