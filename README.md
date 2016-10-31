@@ -41,14 +41,10 @@ Furthermore we use the following tools
 3. Install the system in a [VM](#vm) or on [physical hardware](#hw) with [internet access](#placement).
 4. Enjoy your favorite beverage - [watch](http://sicherheitstacho.eu/?peers=communityPeers) and [analyze](#kibana).
 
+Seeing is believing :bowtie:
 
+[![T-Pot 16.10 - Webified](https://img.youtube.com/vi/SNo7CkQ7ZWQ/0.jpg)](https://www.youtube.com/watch?v=SNo7CkQ7ZWQ)
 
-<!--
-To Do
-We have created a nice [installation video](https://youtu.be/dWbJS_9sFNE) for you in case you run into problems.
-
-In case you already have an Ubuntu 14.04.x running in your datacenter and are unable to install from an ISO image, we have created a [script](http://dtag-dev-sec.github.io/mediator/feature/2015/05/11/t-pot-autoinstall.html) that converts your Ubuntu base install into a full-fledged T-Pot within just a couple of minutes.
--->
 
 # Table of Contents
 - [Changelog](#changelog)
@@ -78,7 +74,7 @@ In case you already have an Ubuntu 14.04.x running in your datacenter and are un
 
 <a name="background"></a>
 # Changelog
-- **Ubuntu 16.04** is now being used as T-Pot's OS base
+- **Ubuntu 16.04 LTS** is now being used as T-Pot's OS base
 - **Size does matter** 😅
 	- `tpot.iso` is now based on **Ubuntu's** network installer reducing the image download size by 600MB from 650MB to only **50MB**
 	- All docker images have been rebuilt to reduce the image size at least by 50MB in some cases even 400-600MB
@@ -127,7 +123,7 @@ In case you already have an Ubuntu 14.04.x running in your datacenter and are un
 <a name="concept"></a>
 # Technical Concept
 
-T-Pot is based on the network installer of Ubuntu Server 16.04.1 LTS.
+T-Pot is based on the network installer of Ubuntu Server 16.04 LTS.
 The honeypot daemons as well as other support components being used have been paravirtualized using [docker](http://docker.io).
 This allows us to run multiple honeypot daemons on the same network interface without problems and thus making the entire system very low maintenance. <br>The encapsulation of the honeypot daemons in docker provides a good isolation of the runtime environments and easy update mechanisms.
 
@@ -228,7 +224,7 @@ You can download the prebuilt installation image [here](http://community-honeypo
 For transparency reasons and to give you the ability to customize your install, we provide you the [ISO Creator](https://github.com/dtag-dev-sec/tpotce) that enables you to create your own ISO installation image.
 
 **Requirements to create the ISO image:**
-- Ubuntu 16.04.x or newer as host system (others *may* work, but remain untested)
+- Ubuntu 16.04 LTS or newer as host system (others *may* work, but remain untested)
 - 4GB of free memory  
 - 32GB of free storage
 - A working internet connection
