@@ -60,7 +60,7 @@ if [ $myUPTIME -gt 4 ];
     echo "### Removing obsolete container data ..."
     docker rm -v $(docker ps -aq)
     echo "### Removing obsolete image data ..."
-    docker rmi $(docker images | grep "^<none>" | awk '{print $3}')
+    docker rmi $(docker images | grep "<none>" | awk '{print $3}')
     echo "### Starting T-Pot services ..."
     for i in $myIMAGES
       do
