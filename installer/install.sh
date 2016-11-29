@@ -272,7 +272,7 @@ pip install --upgrade pip
 pip install alerta
 fuECHO "### Installing wetty."
 ln -s /usr/bin/nodejs /usr/bin/node
-npm install git://github.com/t3chn0m4g3/wetty -g
+npm install https://github.com/t3chn0m4g3/wetty -g
 
 # Let's add the docker repository
 fuECHO "### Adding the docker repository."
