@@ -3,7 +3,7 @@
 # T-Pot post install script                            #
 # Ubuntu server 16.04.0, x64                           #
 #                                                      #
-# v16.10.0 by mo, DTAG, 2016-10-28                     #
+# v16.10.0 by mo, DTAG, 2016-12-03                     #
 ########################################################
 
 # Some global vars
@@ -274,23 +274,6 @@ fuECHO "### Installing wetty."
 ln -s /usr/bin/nodejs /usr/bin/node
 npm install https://github.com/t3chn0m4g3/wetty -g
 
-# Let's add the docker repository
-fuECHO "### Adding the docker repository."
-apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
-tee /etc/apt/sources.list.d/docker.list <<EOF
-deb https://apt.dockerproject.org/repo ubuntu-xenial main
-EOF
-
-# Let's pull some updates
-fuECHO "### Pulling Updates."
-apt-get update -y
-
-# Let's install docker
-fuECHO "### Installing docker-engine."
-fuECHO "### You can safely ignore the [FAILED] message,"
-fuECHO "### which is caused by a bug in the docker installer."
-apt-get install docker-engine=1.12.2-0~xenial -y || true && sleep 5
-
 # Let's add proxy settings to docker defaults
 if [ -f $myPROXYFILEPATH ];
 then fuECHO "### Setting up the proxy for docker."
@@ -367,7 +350,6 @@ for name in $(cat /root/tpot/data/images.conf)
   do
     docker pull dtagdevsec/$name:latest1610
   done
-#fi
 
 # Let's add the daily update check with a weekly clean interval
 fuECHO "### Modifying update checks."
