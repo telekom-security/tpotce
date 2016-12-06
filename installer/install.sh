@@ -189,9 +189,10 @@ tee -a /etc/network/interfaces <<EOF
 ### This configuration was tested with the IntelNUC series
 ### If problems occur you can try and change wpa-driver to "iwlwifi"
 ### Do not forget to enter a ssid in /etc/wpa_supplicant/wireless8021x.conf
+### The Intel NUC uses wlpXsY notation instead of wlanX
 #
-#auto wlan0
-#iface wlan0 inet dhcp
+#auto wlp2s0
+#iface wlp2s0 inet dhcp
 #        wpa-driver wext
 #        wpa-conf /etc/wpa_supplicant/wireless8021x.conf
 EOF
