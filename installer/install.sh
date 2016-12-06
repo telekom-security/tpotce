@@ -279,11 +279,11 @@ if [ -f $myPROXYFILEPATH ];
 then fuECHO "### Setting up the proxy for docker."
 myPROXY=$(cat $myPROXYFILEPATH)
 tee -a /etc/default/docker <<EOF
-export http_proxy=$myPROXY
-export https_proxy=$myPROXY
-export HTTP_PROXY=$myPROXY
-export HTTPS_PROXY=$myPROXY
-export no_proxy=localhost,127.0.0.1,.sock
+http_proxy=$myPROXY
+https_proxy=$myPROXY
+HTTP_PROXY=$myPROXY
+HTTPS_PROXY=$myPROXY
+no_proxy=localhost,127.0.0.1,.sock
 EOF
 fi
 
