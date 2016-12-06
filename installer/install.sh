@@ -294,7 +294,7 @@ adduser --system --no-create-home --uid 2000 --disabled-password --disabled-logi
 
 # Let's set the hostname
 fuECHO "### Setting a new hostname."
-myHOST=$(curl -s www.nsanamegenerator.com | html2text | tr A-Z a-z | awk '{print $1}')
+myHOST=$(curl -s -f www.nsanamegenerator.com | html2text | tr A-Z a-z | awk '{print $1}')
 if [ "$myHOST" = "" ]; then
   fuECHO "### Failed to fetch name from remote, using local cache."
   myHOST=$(fuRANDOMWORD)
