@@ -1,5 +1,3 @@
-[![Gitter](https://img.shields.io/gitter/room/nwjs/nw.js.svg?maxAge=2592000)](https://gitter.im/dtag-dev-sec/tpotce)
-
 # T-Pot 16.10 Image Creator
 
 This repository contains the necessary files to create the **[T-Pot community honeypot](http://dtag-dev-sec.github.io/)**  ISO image.
