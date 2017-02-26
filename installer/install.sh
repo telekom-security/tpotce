@@ -365,8 +365,10 @@ fuECHO "### Reboot after kernel panic."
 tee -a /etc/sysctl.conf <<EOF
 
 # Reboot after kernel panic, check via /proc/sys/kernel/panic[_on_oops]
+# Set required map count for ELK
 kernel.panic = 1
 kernel.panic_on_oops = 1
+vm.max_map_count = 262144
 EOF
 
 # Let's add some cronjobs
