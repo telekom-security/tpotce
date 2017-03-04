@@ -316,10 +316,10 @@ Match address 127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
 EOF
 
 # Let's patch docker defaults, so we can run images as service
-fuECHO "### Patching docker defaults."
-tee -a /etc/default/docker <<EOF
-DOCKER_OPTS="-r=false"
-EOF
+#fuECHO "### Patching docker defaults."
+#tee -a /etc/default/docker <<EOF
+#DOCKER_OPTS="-r=false"
+#EOF
 
 # Let's restart docker for proxy changes to take effect
 systemctl restart docker
