@@ -267,13 +267,17 @@ apt-get upgrade -y
 apt-get autoclean -y
 apt-get autoremove -y
 
-# Installing alerta-cli, wetty
+# Installing alerta-cli, wetty, ctop
 fuECHO "### Installing alerta-cli."
 pip install --upgrade pip
 pip install alerta
 fuECHO "### Installing wetty."
 ln -s /usr/bin/nodejs /usr/bin/node
 npm install https://github.com/t3chn0m4g3/wetty -g
+fuECHO "### Installing ctop."
+wget https://github.com/bcicen/ctop/releases/download/v0.4.1/ctop-0.4.1-linux-amd64 -O ctop
+mv ctop /usr/bin/
+chmod +x /usr/bin/ctop
 
 # Let's add proxy settings to docker defaults
 if [ -f $myPROXYFILEPATH ];
