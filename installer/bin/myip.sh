@@ -10,7 +10,7 @@ dnslist=(
     "dig +short            myip.opendns.com        @resolver2.opendns.com"
     "dig +short            myip.opendns.com        @resolver3.opendns.com"
     "dig +short            myip.opendns.com        @resolver4.opendns.com"
-    "dig +short    -t txt  o-o.myaddr.l.google.com @ns1.google.com"
+#    "dig +short    -t txt  o-o.myaddr.l.google.com @ns1.google.com"
     "dig +short -4 -t a    whoami.akamai.net       @ns1-1.akamaitech.net"
     "dig +short            whoami.akamai.net       @ns1-1.akamaitech.net"
 )
