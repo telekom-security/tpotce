@@ -416,7 +416,7 @@ mkdir -p /data/conpot/log \
          /data/elk/data /data/elk/log /data/elk/logstash/conf \
          /data/glastopf /data/honeytrap/log/ /data/honeytrap/attacks/ /data/honeytrap/downloads/ \
          /data/emobility/log \
-         /data/ews/log /data/ews/conf /data/ews/dionaea /data/ews/emobility \
+         /data/ews/conf \
          /data/suricata/log /home/tsec/.ssh/
 
 # Let's take care of some files and permissions before copying
