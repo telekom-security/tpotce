@@ -16,7 +16,7 @@ dnslist=(
 )
 
 httplist=(
-    4.ifcfg.me
+#    4.ifcfg.me
     alma.ch/myip.cgi
     api.infoip.io/ip
     api.ipify.org
@@ -32,7 +32,7 @@ httplist=(
     ip.tyk.nu
     l2.io/ip
     smart-ip.net/myip
-    tnx.nl/ip
+#    tnx.nl/ip
     wgetip.com
     whatismyip.akamai.com
 )
