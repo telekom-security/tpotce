@@ -1,11 +1,11 @@
 #!/bin/bash
 
-########################################################
-# T-Pot                                                #
-# Only start the containers found in /etc/init/        #
-#                                                      #
-# v16.10.0 by mo, DTAG, 2016-05-12                     #
-########################################################
+##########################################################
+# T-Pot                                                  #
+# Only start the containers found in /etc/systemd/system #
+#                                                        #
+# v17.06 by mo, DTAG, 2017-03-13                         #
+##########################################################
 
 # Make sure not to interrupt a check
 while true
@@ -34,30 +34,42 @@ touch /var/run/check.lock
 
 # Stop T-Pot services and disable all T-Pot services
 echo "### Stopping T-Pot services and cleaning up."
-for i in $(cat /data/imgcfg/all_images.conf);
+for i in $(cat /data/images.conf);
   do
     systemctl stop $i
     sleep 2
     systemctl disable $i;
+    rm /etc/systemd/system/$i.service
 done
 
-# Restarting docker services
-echo "### Restarting docker services ..."
+# Restarting docker services and optionally clear local repository
+echo "### Stopping docker services ..."
 systemctl stop docker
-sleep 2
+sleep 1
+# If option "hard" clear the whole repository
+if [ "$1" = "hard" ];
+  then
+    echo "### Clearing local docker repository."
+    rm -rf /var/lib/docker
+    sleep 1
+fi
+echo "### Starting docker services ..."
 systemctl start docker
-sleep 2
+sleep 1
 
 # Enable only T-Pot upstart scripts from images.conf and pull the images
 for i in $(cat /data/images.conf);
   do
+    echo
+    echo "### Now pulling "$i
     docker pull dtagdevsec/$i:1706;
+    cp /data/systemd/$i.service /etc/systemd/system/
     systemctl enable $i;
 done
 
 # Announce reboot
-echo "### Rebooting in 60 seconds for the changes to take effect."
-sleep 60
+echo
+echo "### Rebooting."
 
 # Allow checks to resume
 rm /var/run/check.lock
