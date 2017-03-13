@@ -353,7 +353,7 @@ esac
 fuECHO "### Loading docker images. Please be patient, this may take a while."
 for name in $(cat /root/tpot/data/images.conf)
   do
-    docker pull dtagdevsec/$name:latest1610
+    docker pull dtagdevsec/$name:1706
   done
 
 # Let's add the daily update check with a weekly clean interval
@@ -389,7 +389,7 @@ tee -a /etc/crontab <<EOF
 #*/5 * * * *	root	alerta --endpoint-url http://<ip>:<port>/api delete --filters resource=<host> && alerta --endpoint-url http://<ip>:<port>/api send -e IP -r <host> -E Production -s ok -S T-Pot -t \$(cat /data/elk/logstash/mylocal.ip) --status open
 
 # Check if updated images are available and download them
-27 1 * * *	root	for i in \$(cat /data/images.conf); do docker pull dtagdevsec/\$i:latest1610; done
+27 1 * * *	root	for i in \$(cat /data/images.conf); do docker pull dtagdevsec/\$i:1706; done
 
 # Restart docker service and containers
 27 3 * * *	root	dcres.sh
