@@ -8,7 +8,7 @@ Restart=always
 ExecStartPre=-/usr/bin/docker stop netdata
 ExecStartPre=-/usr/bin/docker rm -v netdata
 ExecStartPre=-/bin/chmod 666 /var/run/docker.sock
-ExecStart=/usr/bin/docker run --name netdata --net=host --cap-add=SYS_PTRACE --rm=true -v /proc:/host/proc:ro -v /sys:/host/sys:ro -v /var/run/docker.sock:/var/run/docker.sock dtagdevsec/netdata:latest1610
+ExecStart=/usr/bin/docker run --name netdata --net=host --cap-add=SYS_PTRACE --rm=true -v /proc:/host/proc:ro -v /sys:/host/sys:ro -v /var/run/docker.sock:/var/run/docker.sock dtagdevsec/netdata:1706
 ExecStop=/usr/bin/docker stop netdata 
 
 [Install]

@@ -12,7 +12,7 @@ ExecStartPre=/sbin/iptables -w -A INPUT -p tcp --syn -m state --state NEW -m mul
 ExecStartPre=/sbin/iptables -w -A INPUT -p tcp --syn -m state --state NEW -m multiport ! --dports 3306,5060,5061,5601,11211 -j NFQUEUE
 ExecStartPre=/sbin/iptables -w -A INPUT -p tcp --syn -m state --state NEW -m multiport ! --dports 64295,64296,64297,64298,64299,64300,64301 -j NFQUEUE
 ExecStartPre=/sbin/iptables -w -A INPUT -p tcp --syn -m state --state NEW -m multiport ! --dports 1025,50100,8080,8081,9200 -j NFQUEUE
-ExecStart=/usr/bin/docker run --name honeytrap --cap-add=NET_ADMIN --net=host --rm=true -v /data/honeytrap:/data/honeytrap -v /data/ews:/data/ews dtagdevsec/honeytrap:latest1610
+ExecStart=/usr/bin/docker run --name honeytrap --cap-add=NET_ADMIN --net=host --rm=true -v /data/honeytrap:/data/honeytrap -v /data/ews:/data/ews dtagdevsec/honeytrap:1706
 ExecStop=/usr/bin/docker stop honeytrap
 ExecStopPost=/sbin/iptables -w -D INPUT -p tcp --syn -m state --state NEW -m multiport ! --dports 1025,50100,8080,8081,9200 -j NFQUEUE
 ExecStopPost=/sbin/iptables -w -D INPUT -p tcp --syn -m state --state NEW -m multiport ! --dports 64295,64296,64297,64298,64299,64300,64301 -j NFQUEUE

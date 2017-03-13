@@ -51,7 +51,7 @@ sleep 2
 # Enable only T-Pot upstart scripts from images.conf and pull the images
 for i in $(cat /data/images.conf);
   do
-    docker pull dtagdevsec/$i:latest1610;
+    docker pull dtagdevsec/$i:1706;
     systemctl enable $i;
 done
 

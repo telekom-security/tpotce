@@ -7,7 +7,7 @@ After=docker.service
 Restart=always
 ExecStartPre=-/usr/bin/docker stop ewsposter
 ExecStartPre=-/usr/bin/docker rm -v ewsposter
-ExecStart=/usr/bin/docker run --name ewsposter --rm=true -v /data:/data -v /data/ews/conf/ews.ip:/opt/ewsposter/ews.ip dtagdevsec/ewsposter:latest1610
+ExecStart=/usr/bin/docker run --name ewsposter --rm=true -v /data:/data -v /data/ews/conf/ews.ip:/opt/ewsposter/ews.ip dtagdevsec/ewsposter:1706
 ExecStop=/usr/bin/docker stop ewsposter
 
 [Install]

@@ -12,7 +12,7 @@ ExecStartPre=/bin/bash -c '/sbin/ethtool --offload $(/sbin/ip route | /bin/grep 
 ExecStartPre=/bin/bash -c '/sbin/ethtool -K $(/sbin/ip route | /bin/grep $(/bin/hostname -I | /usr/bin/awk \'{print $1 }\') | /usr/bin/awk \'{print $3 }\') gso off gro off'
 ExecStartPre=/bin/bash -c '/sbin/ip link set $(/sbin/ip route | /bin/grep $(/bin/hostname -I | /usr/bin/awk \'{print $1 }\') | /usr/bin/awk \'{print $3 }\') promisc on'
 ExecStartPre=/bin/bash -c '/usr/bin/clean.sh suricata off'
-ExecStart=/usr/bin/docker run --name suricata --cap-add=NET_ADMIN --net=host --rm=true -v /data/suricata:/data/suricata dtagdevsec/suricata:latest1610
+ExecStart=/usr/bin/docker run --name suricata --cap-add=NET_ADMIN --net=host --rm=true -v /data/suricata:/data/suricata dtagdevsec/suricata:1706
 ExecStop=/usr/bin/docker stop suricata
 
 [Install]
