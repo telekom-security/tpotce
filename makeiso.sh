@@ -4,7 +4,7 @@
 # T-Pot                                                #
 # .ISO creator                                         #
 #                                                      #
-# v16.10.0 by mo, DTAG, 2016-10-28                     #
+# v17.06 by mo, DTAG, 2017-03-13                       #
 ########################################################
 
 # Let's define some global vars
