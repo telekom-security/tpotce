@@ -34,7 +34,7 @@ touch /var/run/check.lock
 
 # Stop T-Pot services and disable all T-Pot services
 echo "### Stopping T-Pot services and cleaning up."
-for i in $(cat /data/all_images.conf);
+for i in $(cat /data/imgcfg/all_images.conf);
   do
     systemctl stop $i
     sleep 2
@@ -57,8 +57,8 @@ echo "### Starting docker services ..."
 systemctl start docker
 sleep 1
 
-# Enable only T-Pot upstart scripts from images.conf and pull the images
-for i in $(cat /data/imgcfg/images.conf);
+# Enable only T-Pot systemd scripts from images.conf and pull the images
+for i in $(cat /data/images.conf);
   do
     echo
     echo "### Now pulling "$i
