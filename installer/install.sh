@@ -3,7 +3,7 @@
 # T-Pot post install script                            #
 # Ubuntu server 16.04.0, x64                           #
 #                                                      #
-# v16.10.0 by mo, DTAG, 2016-12-03                     #
+# v17.06 by mo, DTAG, 2017-03-18                       #
 ########################################################
 
 # Some global vars
@@ -274,6 +274,7 @@ pip install alerta
 fuECHO "### Installing wetty."
 ln -s /usr/bin/nodejs /usr/bin/node
 npm install https://github.com/t3chn0m4g3/wetty -g
+npm install elasticdump -g
 fuECHO "### Installing ctop."
 wget https://github.com/bcicen/ctop/releases/download/v0.4.1/ctop-0.4.1-linux-amd64 -O ctop
 mv ctop /usr/bin/
@@ -482,10 +483,10 @@ EOF
 # Let's create ews.ip before reboot and prevent race condition for first start
 source /etc/environment
 myLOCALIP=$(hostname -I | awk '{ print $1 }')
-myEXTIP=$(curl -s myexternalip.com/raw)
-sed -i "s#IP:.*#IP: $myLOCALIP ($myEXTIP)#" /etc/issue
-sed -i "s#SSH:.*#SSH: ssh -l tsec -p 64295 $myLOCALIP#" /etc/issue
-sed -i "s#WEB:.*#WEB: https://$myLOCALIP:64297#" /etc/issue
+myEXTIP=$(/usr/bin/myip.sh)
+sed -i "s#IP:.*#IP: $myLOCALIP ($myEXTIP)^[[0m#" /etc/issue
+sed -i "s#SSH:.*#SSH: ssh -l tsec -p 64295 $myLOCALIP^[[0m#" /etc/issue
+sed -i "s#WEB:.*#WEB: https://$myLOCALIP:64297^[[0m#" /etc/issue
 tee /data/ews/conf/ews.ip << EOF
 [MAIN]
 ip = $myEXTIP
