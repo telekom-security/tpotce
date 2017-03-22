@@ -3,8 +3,15 @@
 # T-Pot post install script                            #
 # Ubuntu server 16.04.0, x64                           #
 #                                                      #
-# v17.06 by mo, DTAG, 2017-03-18                       #
+# v17.06 by mo, DTAG, 2017-03-22                       #
 ########################################################
+
+# Set TERM, DIALOGRC
+export TERM=xterm
+export DIALOGRC=/etc/dialogrc
+
+# Let's load dialog color theme
+cp /root/tpot/etc/dialogrc /etc/
 
 # Some global vars
 myPROXYFILEPATH="/root/tpot/etc/proxy"
@@ -12,6 +19,8 @@ myNTPCONFPATH="/root/tpot/etc/ntp"
 myPFXPATH="/root/tpot/keys/8021x.pfx"
 myPFXPWPATH="/root/tpot/keys/8021x.pw"
 myPFXHOSTIDPATH="/root/tpot/keys/8021x.id"
+myBACKTITLE="T-Pot Installer"
+mySITES="https://index.docker.io https://ubuntu.com https://github.com http://nsanamegenerator.com"
 
 # Let's create a function for colorful output
 fuECHO () {
@@ -41,108 +50,6 @@ set -e
 exec 2> >(tee "install.err")
 exec > >(tee "install.log")
 
-# Let's remove NGINX default website
-fuECHO "### Removing NGINX default website."
-rm /etc/nginx/sites-enabled/default
-rm /etc/nginx/sites-available/default
-rm /usr/share/nginx/html/index.html
-
-# Let's wait a few seconds to avoid interference with service messages
-fuECHO "### Waiting a few seconds to avoid interference with service messages."
-sleep 5
-
-# Let's ask user for install type
-# Install types are TPOT, HP, INDUSTRIAL, ALL
-while [ 1 != 2 ]
-  do
-    fuECHO "### Please choose your install type and notice HW recommendation."
-    fuECHO
-    fuECHO "    [T] - T-Pot Standard Installation"
-    fuECHO "          - Cowrie, Dionaea, Elasticpot, Glastopf, Honeytrap, Suricata & ELK"
-    fuECHO "          - 4 GB RAM (6-8 GB recommended)"
-    fuECHO "          - 64GB disk (128 GB SSD recommended)"
-    fuECHO
-    fuECHO "    [H] - Honeypots Only Installation"
-    fuECHO "          - Cowrie, Dionaea, ElasticPot, Glastopf & Honeytrap"
-    fuECHO "          - 3 GB RAM (4-6 GB recommended)"
-    fuECHO "          - 64 GB disk (64 GB SSD recommended)"
-    fuECHO
-    fuECHO "    [I] - Industrial"
-    fuECHO "          - ConPot, eMobility, ELK & Suricata"
-    fuECHO "          - 4 GB RAM (8 GB recommended)"
-    fuECHO "          - 64 GB disk (128 GB SSD recommended)"
-    fuECHO
-    fuECHO "    [E] - Everything"
-    fuECHO "          - All of the above"
-    fuECHO "          - 8 GB RAM"
-    fuECHO "          - 128 GB disk or larger (128 GB SSD or larger recommended)"
-    fuECHO
-    read -p "Install Type: " myTYPE
-    case "$myTYPE" in
-      [t,T])
-        myFLAVOR="TPOT"
-        break
-        ;;
-      [h,H])
-        myFLAVOR="HP"
-        break
-        ;;
-      [i,I])
-        myFLAVOR="INDUSTRIAL"
-        break
-        ;;
-      [e,E])
-        myFLAVOR="ALL"
-        break
-        ;;
-    esac
-done
-fuECHO "### You chose: "$myFLAVOR
-fuECHO
-
-# Let's ask user for a web user and password
-myOK="n"
-myUSER="tsec"
-while [ 1 != 2 ]
-  do
-    fuECHO "### Please enter a web user name and password."
-    read -p "Username (tsec not allowed): " myUSER
-    echo "Your username is: "$myUSER
-    fuECHO
-    read -p "OK (y/n)? " myOK
-    fuECHO
-    if [ "$myOK" = "y" ] && [ "$myUSER" != "tsec" ] && [ "$myUSER" != "" ];
-      then
-        break
-    fi
-  done
-myPASS1="pass1"
-myPASS2="pass2"
-while [ "$myPASS1" != "$myPASS2"  ] 
-  do
-    while [ "$myPASS1" == "pass1"  ] || [ "$myPASS1" == "" ]
-      do
-        read -s -p "Password: " myPASS1
-        fuECHO
-      done
-    read -s -p "Repeat password: " myPASS2
-    fuECHO
-    if [ "$myPASS1" != "$myPASS2" ];
-      then
-        fuECHO "### Passwords do not match."
-        myPASS1="pass1"
-        myPASS2="pass2"
-    fi
-  done
-htpasswd -b -c /etc/nginx/nginxpasswd $myUSER $myPASS1
-fuECHO
-
-# Let's generate a SSL certificate
-fuECHO "### Generating a self-signed-certificate for NGINX."
-fuECHO "### If you are unsure you can use the default values."
-mkdir -p /etc/nginx/ssl
-openssl req -nodes -x509 -sha512 -newkey rsa:8192 -keyout "/etc/nginx/ssl/nginx.key" -out "/etc/nginx/ssl/nginx.crt" -days 3650
-
 # Let's setup the proxy for env
 if [ -f $myPROXYFILEPATH ];
 then fuECHO "### Setting up the proxy."
@@ -162,6 +69,80 @@ Acquire::http::Proxy "$myPROXY";
 Acquire::https::Proxy "$myPROXY";
 EOF
 fi
+
+# Let's test internet connection
+fuECHO "### Testing internet connection."
+for i in $mySITES;
+  do
+    curl --connect-timeout 5 -IsS $i > /dev/null;
+      if [ $? -ne 0 ];
+        then
+          dialog --backtitle $myBACKTITLE --title "[ Continue? ]" --yesno "\nInternet connection test failed. This might indicate some problems with your connection. You can continue, but the installation might fail." 10 50
+          if [ $? = 1 ];
+            then
+              dialog --backtitle $myBACKTITLE --title "[ Abort ]" --msgbox "\nInstallation aborted. Exiting the installer." 7 50
+              exit
+            else
+              break;
+          fi;
+      fi;
+  done;
+
+# Let's remove NGINX default website
+fuECHO "### Removing NGINX default website."
+rm /etc/nginx/sites-enabled/default
+rm /etc/nginx/sites-available/default
+rm /usr/share/nginx/html/index.html
+
+# Let's wait a few seconds to avoid interference with service messages
+fuECHO "### Waiting a few seconds to avoid interference with service messages."
+sleep 5
+
+# Let's ask user for install flavor
+# Install types are TPOT, HP, INDUSTRIAL, ALL
+myFLAVOR=$(dialog --backtitle $myBACKTITLE --title "[ Choose your edition ]" --no-tags --menu \
+"\nRequired: 4GB RAM, 64GB disk\nRecommended: 8GB RAM, 128GB SSD" 14 60 4 \
+"TPOT" "Standard Honeypots, Suricata & ELK" \
+"HP" "Honeypots only, w/o Suricata & ELK" \
+"INDUSTRIAL" "Conpot, eMobility, Suricata & ELK" \
+"EVERYTHING" "Everything" 3>&1 1>&2 2>&3 3>&-)
+
+# Let's ask user for a web user and password
+myOK="1"
+myUSER="tsec"
+while [ 1 != 2 ]
+  do
+    myUSER=$(dialog --backtitle $myBACKTITLE --title "[ Enter your web user name ]" --inputbox "\nUsername (tsec not allowed)" 9 50 3>&1 1>&2 2>&3 3>&-)
+    dialog --backtitle $myBACKTITLE --title "[ Your username is ]" --yesno "\n"$myUSER 7 50
+    myOK=$?
+    if [ "$myOK" = "0" ] && [ "$myUSER" != "tsec" ] && [ "$myUSER" != "" ];
+      then
+        break
+    fi
+  done
+myPASS1="pass1"
+myPASS2="pass2"
+while [ "$myPASS1" != "$myPASS2"  ] 
+  do
+    while [ "$myPASS1" == "pass1"  ] || [ "$myPASS1" == "" ]
+      do
+        myPASS1=$(dialog --insecure --backtitle $myBACKTITLE --title "[ Enter your web user password ]" --passwordbox "\nPassword" 9 50 3>&1 1>&2 2>&3 3>&-)
+      done
+        myPASS2=$(dialog --insecure --backtitle $myBACKTITLE --title "[ Repeat web user password ]" --passwordbox "\nPassword" 9 50 3>&1 1>&2 2>&3 3>&-)
+    if [ "$myPASS1" != "$myPASS2" ];
+      then
+        dialog --backtitle $myBACKTITLE --title "[ Passwords do not match. ]" --msgbox "\nPlease re-enter your password." 7 50
+        myPASS1="pass1"
+        myPASS2="pass2"
+    fi
+  done
+htpasswd -b -c /etc/nginx/nginxpasswd $myUSER $myPASS1
+fuECHO
+
+# Let's generate a SSL self-signed certificate without interaction (browsers will see it invalid anyway)
+fuECHO "### Generating a self-signed-certificate for NGINX."
+mkdir -p /etc/nginx/ssl
+openssl req -nodes -x509 -sha512 -newkey rsa:8192 -keyout "/etc/nginx/ssl/nginx.key" -out "/etc/nginx/ssl/nginx.crt" -days 3650 -subj '/C=AU/ST=Some-State/O=Internet Widgits Pty Ltd'
 
 # Let's setup the ntp server
 if [ -f $myNTPCONFPATH ];
@@ -267,14 +248,15 @@ apt-get upgrade -y
 apt-get autoclean -y
 apt-get autoremove -y
 
-# Installing alerta-cli, wetty, ctop
+# Installing alerta-cli, wetty, ctop, elasticdump
 fuECHO "### Installing alerta-cli."
 pip install --upgrade pip
 pip install alerta
 fuECHO "### Installing wetty."
 ln -s /usr/bin/nodejs /usr/bin/node
 npm install https://github.com/t3chn0m4g3/wetty -g
-npm install elasticdump -g
+fuECHO "### Installing elasticdump."
+npm install https://github.com/t3chn0m4g3/elasticsearch-dump -g
 fuECHO "### Installing ctop."
 wget https://github.com/bcicen/ctop/releases/download/v0.4.1/ctop-0.4.1-linux-amd64 -O ctop
 mv ctop /usr/bin/

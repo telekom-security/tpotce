@@ -33,6 +33,10 @@ if [ "$myWHOAMI" != "root" ]
     exit
 fi
 
+# Let's load dialog color theme
+export DIALOGRC=/etc/dialogrc
+cp installer/etc/dialogrc /etc/
+
 # Let's clean up at the end or if something goes wrong ...
 function fuCLEANUP {
 rm -rf $myTMP $myTPOTDIR $myPROXYCONFIG $myPFXPATH $myPFXPWPATH $myPFXHOSTIDPATH $myNTPCONFPATH
