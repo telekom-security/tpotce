@@ -7,6 +7,10 @@
 # v17.06 by mo, DTAG, 2017-03-13                       #
 ########################################################
 
+# Set TERM, DIALOGRC
+export DIALOGRC=/etc/dialogrc
+export TERM=linux
+
 # Let's define some global vars
 myBACKTITLE="T-Pot - ISO Creator"
 myUBUNTULINK="http://archive.ubuntu.com/ubuntu/dists/xenial-updates/main/installer-amd64/current/images/netboot/mini.iso"
@@ -34,7 +38,6 @@ if [ "$myWHOAMI" != "root" ]
 fi
 
 # Let's load dialog color theme
-export DIALOGRC=/etc/dialogrc
 cp installer/etc/dialogrc /etc/
 
 # Let's clean up at the end or if something goes wrong ...

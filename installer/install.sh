@@ -7,7 +7,7 @@
 ########################################################
 
 # Set TERM, DIALOGRC
-export TERM=xterm
+export TERM=linux
 export DIALOGRC=/etc/dialogrc
 
 # Let's load dialog color theme
