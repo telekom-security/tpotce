@@ -381,7 +381,7 @@ tee -a /etc/crontab <<EOF
 27 4 * * *	root	docker exec elk bash -c '/usr/local/bin/curator --host 127.0.0.1 delete indices --older-than 90 --time-unit days --timestring \%Y.\%m.\%d'
 
 # Update IP and erase check.lock if it exists
-27 15 * * *	root	/etc/rc.local
+27 5 * * *	root	/etc/rc.local
 
 # Daily reboot
 27 23 * * *	root	reboot

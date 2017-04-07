@@ -10,6 +10,10 @@ tee /data/ews/conf/ews.ip << EOF
 [MAIN]
 ip = $myEXTIP
 EOF
+tee /data/elk/environment << EOF
+MY_EXTIP=$myEXTIP
+MY_HOSTNAME=$HOSTNAME
+EOF
 echo $myLOCALIP > /data/elk/logstash/mylocal.ip
 chown tpot:tpot /data/ews/conf/ews.ip
 if [ -f /var/run/check.lock ];
