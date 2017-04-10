@@ -8,7 +8,7 @@ Restart=always
 ExecStartPre=-/usr/bin/docker stop elasticpot
 ExecStartPre=-/usr/bin/docker rm -v elasticpot
 ExecStartPre=/bin/bash -c '/usr/bin/clean.sh elasticpot off'
-ExecStart=/usr/bin/docker run --name elasticpot --rm=true -v /data/elasticpot:/data/elasticpot -v /data/ews/conf/ews.ip:/data/ews/conf/ews.ip -p 9200:9200 dtagdevsec/elasticpot:1706
+ExecStart=/usr/bin/docker run --name elasticpot --rm=true -v /data/elasticpot:/data/elasticpot -p 9200:9200 dtagdevsec/elasticpot:1706
 ExecStop=/usr/bin/docker stop elasticpot
 
 [Install]
