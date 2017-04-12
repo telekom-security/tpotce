@@ -7,7 +7,7 @@ myCOL0="[0;0m"
 # Check if parameter is given and file exists
 if [ "$myDUMP" = "" ];
     then
-      echo $myCOL1"### Please proive a backup file name."$myCOL0 
+      echo $myCOL1"### Please provide a backup file name."$myCOL0 
       echo $myCOL1"### restore-elk.sh <es_dump.tgz>"$myCOL0
       echo 
       exit 
