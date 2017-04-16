@@ -45,11 +45,6 @@ if [ -f install.log ];
   exit 1;
 fi
 
-# Let's log for the beauty of it
-set -e
-exec 2> >(tee "install.err")
-exec > >(tee "install.log")
-
 # Let's setup the proxy for env
 if [ -f $myPROXYFILEPATH ];
 then fuECHO "### Setting up the proxy."
@@ -77,10 +72,10 @@ for i in $mySITES;
     curl --connect-timeout 5 -IsS $i > /dev/null;
       if [ $? -ne 0 ];
         then
-          dialog --backtitle $myBACKTITLE --title "[ Continue? ]" --yesno "\nInternet connection test failed. This might indicate some problems with your connection. You can continue, but the installation might fail." 10 50
+          dialog --backtitle "$myBACKTITLE" --title "[ Continue? ]" --yesno "\nInternet connection test failed. This might indicate some problems with your connection. You can continue, but the installation might fail." 10 50
           if [ $? = 1 ];
             then
-              dialog --backtitle $myBACKTITLE --title "[ Abort ]" --msgbox "\nInstallation aborted. Exiting the installer." 7 50
+              dialog --backtitle "$myBACKTITLE" --title "[ Abort ]" --msgbox "\nInstallation aborted. Exiting the installer." 7 50
               exit
             else
               break;
@@ -90,9 +85,9 @@ for i in $mySITES;
 
 # Let's remove NGINX default website
 fuECHO "### Removing NGINX default website."
-rm /etc/nginx/sites-enabled/default
-rm /etc/nginx/sites-available/default
-rm /usr/share/nginx/html/index.html
+rm -rf /etc/nginx/sites-enabled/default
+rm -rf /etc/nginx/sites-available/default
+rm -rf /usr/share/nginx/html/index.html
 
 # Let's wait a few seconds to avoid interference with service messages
 fuECHO "### Waiting a few seconds to avoid interference with service messages."
@@ -100,7 +95,7 @@ sleep 5
 
 # Let's ask user for install flavor
 # Install types are TPOT, HP, INDUSTRIAL, ALL
-myFLAVOR=$(dialog --backtitle $myBACKTITLE --title "[ Choose your edition ]" --no-tags --menu \
+myFLAVOR=$(dialog --no-cancel --backtitle "$myBACKTITLE" --title "[ Choose your edition ]" --no-tags --menu \
 "\nRequired: 4GB RAM, 64GB disk\nRecommended: 8GB RAM, 128GB SSD" 14 60 4 \
 "TPOT" "Standard Honeypots, Suricata & ELK" \
 "HP" "Honeypots only, w/o Suricata & ELK" \
@@ -112,8 +107,9 @@ myOK="1"
 myUSER="tsec"
 while [ 1 != 2 ]
   do
-    myUSER=$(dialog --backtitle $myBACKTITLE --title "[ Enter your web user name ]" --inputbox "\nUsername (tsec not allowed)" 9 50 3>&1 1>&2 2>&3 3>&-)
-    dialog --backtitle $myBACKTITLE --title "[ Your username is ]" --yesno "\n"$myUSER 7 50
+    myUSER=$(dialog --backtitle "$myBACKTITLE" --title "[ Enter your web user name ]" --inputbox "\nUsername (tsec not allowed)" 9 50 3>&1 1>&2 2>&3 3>&-)
+    myUSER=$(echo $myUSER | tr -cd "[:alnum:]_.-")
+    dialog --backtitle "$myBACKTITLE" --title "[ Your username is ]" --yesno "\n$myUSER" 7 50
     myOK=$?
     if [ "$myOK" = "0" ] && [ "$myUSER" != "tsec" ] && [ "$myUSER" != "" ];
       then
@@ -122,22 +118,27 @@ while [ 1 != 2 ]
   done
 myPASS1="pass1"
 myPASS2="pass2"
-while [ "$myPASS1" != "$myPASS2"  ] 
+while [ "$myPASS1" != "$myPASS2"  ]
   do
     while [ "$myPASS1" == "pass1"  ] || [ "$myPASS1" == "" ]
       do
-        myPASS1=$(dialog --insecure --backtitle $myBACKTITLE --title "[ Enter your web user password ]" --passwordbox "\nPassword" 9 50 3>&1 1>&2 2>&3 3>&-)
+        myPASS1=$(dialog --insecure --backtitle "$myBACKTITLE" --title "[ Enter your web user password ]" --passwordbox "\nPassword" 9 50 3>&1 1>&2 2>&3 3>&-)
       done
-        myPASS2=$(dialog --insecure --backtitle $myBACKTITLE --title "[ Repeat web user password ]" --passwordbox "\nPassword" 9 50 3>&1 1>&2 2>&3 3>&-)
+        myPASS2=$(dialog --insecure --backtitle "$myBACKTITLE" --title "[ Repeat web user password ]" --passwordbox "\nPassword" 9 50 3>&1 1>&2 2>&3 3>&-)
     if [ "$myPASS1" != "$myPASS2" ];
       then
-        dialog --backtitle $myBACKTITLE --title "[ Passwords do not match. ]" --msgbox "\nPlease re-enter your password." 7 50
+        dialog --backtitle "$myBACKTITLE" --title "[ Passwords do not match. ]" --msgbox "\nPlease re-enter your password." 7 50
         myPASS1="pass1"
         myPASS2="pass2"
     fi
   done
-htpasswd -b -c /etc/nginx/nginxpasswd $myUSER $myPASS1
+htpasswd -b -c /etc/nginx/nginxpasswd "$myUSER" "$myPASS1"
 fuECHO
+
+# Let's log for the beauty of it
+set -e
+exec 2> >(tee "install.err")
+exec > >(tee "install.log")
 
 # Let's generate a SSL self-signed certificate without interaction (browsers will see it invalid anyway)
 fuECHO "### Generating a self-signed-certificate for NGINX."
