@@ -26,9 +26,9 @@ mySITES="https://index.docker.io https://ubuntu.com https://github.com http://ns
 fuECHO () {
   local myRED=1
   local myWHT=7
-  tput setaf $myRED -T xterm
+  tput setaf $myRED -T linux
   echo "$1" "$2"
-  tput setaf $myWHT -T xterm
+  tput setaf $myWHT -T linux
 }
 
 fuRANDOMWORD () {
@@ -40,10 +40,10 @@ fuRANDOMWORD () {
 }
 
 # Let's make sure there is a warning if running for a second time
-if [ -f install.log ];
-  then fuECHO "### Running more than once may complicate things. Erase install.log if you are really sure."
-  exit 1;
-fi
+#if [ -f install.log ];
+#  then fuECHO "### Running more than once may complicate things. Erase install.log if you are really sure."
+#  exit 1;
+#fi
 
 # Let's setup the proxy for env
 if [ -f $myPROXYFILEPATH ];
@@ -136,9 +136,9 @@ htpasswd -b -c /etc/nginx/nginxpasswd "$myUSER" "$myPASS1"
 fuECHO
 
 # Let's log for the beauty of it
-set -e
-exec 2> >(tee "install.err")
-exec > >(tee "install.log")
+#set -e
+#exec 2> >(tee "install.err")
+#exec > >(tee "install.log")
 
 # Let's generate a SSL self-signed certificate without interaction (browsers will see it invalid anyway)
 fuECHO "### Generating a self-signed-certificate for NGINX."
