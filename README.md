@@ -421,7 +421,7 @@ The software that T-Pot is built on, uses the following licenses.
 # Credits
 Without open source and the fruitful development community we are proud to be a part of T-Pot would not have been possible. Our thanks are extended but not limited to the following people and organizations:
 
-###The developers and development communities of
+### The developers and development communities of
 
 * [conpot](https://github.com/mushorg/conpot/graphs/contributors)
 * [cowrie](https://github.com/micheloosterhof/cowrie/graphs/contributors)
@@ -445,7 +445,7 @@ Without open source and the fruitful development community we are proud to be a 
 * [ubuntu](http://www.ubuntu.com/)
 * [wetty](https://github.com/krishnasrinivas/wetty/graphs/contributors)
 
-###The following companies and organizations
+### The following companies and organizations
 * [cannonical](http://www.canonical.com/)
 * [docker](https://www.docker.com/)
 * [elastic.io](https://www.elastic.co/)
