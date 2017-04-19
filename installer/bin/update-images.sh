@@ -63,7 +63,7 @@ for i in $(cat /etc/tpot/images.conf);
     echo
     echo "### Now pulling "$i
     docker pull dtagdevsec/$i:1706;
-    cp /data/systemd/$i.service /etc/systemd/system/
+    cp /etc/tpot/systemd/$i.service /etc/systemd/system/
     systemctl enable $i;
 done
 
