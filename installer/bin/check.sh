@@ -12,14 +12,14 @@ if [ -a /var/run/check.lock ];
     exit
 fi
 
-myIMAGES=$(cat /data/images.conf)
+myIMAGES=$(cat /etc/tpot/images.conf)
 
 touch /var/run/check.lock
 
 myUPTIME=$(awk '{print int($1/60)}' /proc/uptime)
 for i in $myIMAGES
   do
-    if [ "$i" != "ui-for-docker" ] && [ "$i" != "netdata" ];
+    if [ "$i" != "ui-for-docker" ] && [ "$i" != "netdata" ] && [ "$i" != "spiderfoot" ];
       then
         myCIDSTATUS=$(docker exec $i supervisorctl status)
         if [ $? -ne 0 ];

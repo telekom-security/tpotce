@@ -10,7 +10,7 @@ myCOUNT=1
 
 if [[ $1 == "" ]]
   then
-    myIMAGES=$(cat /data/images.conf)
+    myIMAGES=$(cat /etc/tpot/images.conf)
   else myIMAGES=$1
 fi
 
@@ -42,7 +42,7 @@ echo CPU temp: $(sensors | grep "Physical" | awk '{ print $4 }')
 echo
 for i in $myIMAGES
 do
-  if [ "$i" != "ui-for-docker" ] && [ "$i" != "netdata" ];
+  if [ "$i" != "ui-for-docker" ] && [ "$i" != "netdata" ] && [ "$i" != "spiderfoot" ];
   then
     echo "======| Container:" $i "|======"
     docker exec $i supervisorctl status | GREP_COLORS='mt=01;32' egrep --color=always "(RUNNING)|$" | GREP_COLORS='mt=01;31' egrep --color=always "(STOPPED|FATAL)|$"

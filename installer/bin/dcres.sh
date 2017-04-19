@@ -29,7 +29,7 @@ do
   myCOUNT=$[$myCOUNT +1]
 done
 
-myIMAGES=$(cat /data/images.conf)
+myIMAGES=$(cat /etc/tpot/images.conf)
 
 touch /var/run/check.lock
 

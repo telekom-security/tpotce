@@ -39,12 +39,6 @@ fuRANDOMWORD () {
   echo -n $(sed -n "$myNUM p" $myWORDFILE | tr -d \' | tr A-Z a-z)
 }
 
-# Let's make sure there is a warning if running for a second time
-#if [ -f install.log ];
-#  then fuECHO "### Running more than once may complicate things. Erase install.log if you are really sure."
-#  exit 1;
-#fi
-
 # Let's setup the proxy for env
 if [ -f $myPROXYFILEPATH ];
 then fuECHO "### Setting up the proxy."
@@ -102,7 +96,7 @@ myFLAVOR=$(dialog --no-cancel --backtitle "$myBACKTITLE" --title "[ Choose your 
 "INDUSTRIAL" "Conpot, eMobility, Suricata & ELK" \
 "EVERYTHING" "Everything" 3>&1 1>&2 2>&3 3>&-)
 
-# Let's ask user for a web user and password
+# Let's ask user for a web username and password
 myOK="1"
 myUSER="tsec"
 while [ 1 != 2 ]
@@ -303,12 +297,6 @@ Match address 127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
     PasswordAuthentication yes
 EOF
 
-# Let's patch docker defaults, so we can run images as service
-#fuECHO "### Patching docker defaults."
-#tee -a /etc/default/docker <<EOF
-#DOCKER_OPTS="-r=false"
-#EOF
-
 # Let's restart docker for proxy changes to take effect
 systemctl restart docker
 sleep 5
@@ -363,9 +351,6 @@ EOF
 fuECHO "### Adding cronjobs."
 tee -a /etc/crontab <<EOF
 
-# Show running containers every 60s via /dev/tty2
-#*/2 * * * *	root	status.sh > /dev/tty2
-
 # Check if containers and services are up
 */5 * * * *	root	check.sh
 
@@ -373,7 +358,7 @@ tee -a /etc/crontab <<EOF
 #*/5 * * * *	root	alerta --endpoint-url http://<ip>:<port>/api delete --filters resource=<host> && alerta --endpoint-url http://<ip>:<port>/api send -e IP -r <host> -E Production -s ok -S T-Pot -t \$(cat /data/elk/logstash/mylocal.ip) --status open
 
 # Check if updated images are available and download them
-27 1 * * *	root	for i in \$(cat /data/images.conf); do docker pull dtagdevsec/\$i:1706; done
+27 1 * * *	root	for i in \$(cat /etc/tpot/images.conf); do docker pull dtagdevsec/\$i:1706; done
 
 # Restart docker service and containers
 27 3 * * *	root	dcres.sh
@@ -401,7 +386,9 @@ mkdir -p /data/conpot/log \
          /data/glastopf /data/honeytrap/log/ /data/honeytrap/attacks/ /data/honeytrap/downloads/ \
          /data/emobility/log \
          /data/ews/conf \
-         /data/suricata/log /home/tsec/.ssh/
+         /data/suricata/log /home/tsec/.ssh/ \
+         /etc/tpot/elk /etc/tpot/imgcfg /etc/tpot/systemd \
+         /usr/share/tpot/bin
 
 # Let's take care of some files and permissions before copying
 chmod 500 /root/tpot/bin/*
@@ -412,9 +399,8 @@ chmod 644 /root/tpot/data/systemd/*
 
 # Let's copy some files
 tar xvfz /root/tpot/data/elkbase.tgz -C /
-cp /root/tpot/data/elkbase.tgz /data/
-cp -R /root/tpot/bin/* /usr/bin/
-cp -R /root/tpot/data/* /data/
+cp -R /root/tpot/bin/* /usr/share/tpot/bin/
+cp -R /root/tpot/data/* /etc/tpot/
 cp    /root/tpot/data/systemd/* /etc/systemd/system/
 cp    /root/tpot/etc/issue /etc/
 cp -R /root/tpot/etc/nginx/ssl /etc/nginx/
@@ -453,26 +439,32 @@ sed -i 's#FONTFACE=".*#FONTFACE="Terminus"#' /etc/default/console-setup
 sed -i 's#FONTSIZE=".*#FONTSIZE="12x6"#' /etc/default/console-setup
 update-initramfs -u
 
-# Let's enable a color prompt
+# Let's enable a color prompt and add /usr/share/tpot/bin to path
 myROOTPROMPT='PS1="\[\033[38;5;8m\][\[$(tput sgr0)\]\[\033[38;5;1m\]\u\[$(tput sgr0)\]\[\033[38;5;6m\]@\[$(tput sgr0)\]\[\033[38;5;4m\]\h\[$(tput sgr0)\]\[\033[38;5;6m\]:\[$(tput sgr0)\]\[\033[38;5;5m\]\w\[$(tput sgr0)\]\[\033[38;5;8m\]]\[$(tput sgr0)\]\[\033[38;5;1m\]\\$\[$(tput sgr0)\]\[\033[38;5;15m\] \[$(tput sgr0)\]"'
 myUSERPROMPT='PS1="\[\033[38;5;8m\][\[$(tput sgr0)\]\[\033[38;5;2m\]\u\[$(tput sgr0)\]\[\033[38;5;6m\]@\[$(tput sgr0)\]\[\033[38;5;4m\]\h\[$(tput sgr0)\]\[\033[38;5;6m\]:\[$(tput sgr0)\]\[\033[38;5;5m\]\w\[$(tput sgr0)\]\[\033[38;5;8m\]]\[$(tput sgr0)\]\[\033[38;5;2m\]\\$\[$(tput sgr0)\]\[\033[38;5;15m\] \[$(tput sgr0)\]"'
 tee -a /root/.bashrc << EOF
 $myROOTPROMPT
+PATH="$PATH:/usr/share/tpot/bin"
 EOF
 tee -a /home/tsec/.bashrc << EOF
 $myUSERPROMPT
+PATH="$PATH:/usr/share/tpot/bin"
 EOF
 
 # Let's create ews.ip before reboot and prevent race condition for first start
 source /etc/environment
 myLOCALIP=$(hostname -I | awk '{ print $1 }')
-myEXTIP=$(/usr/bin/myip.sh)
+myEXTIP=$(/usr/share/tpot/bin/myip.sh)
 sed -i "s#IP:.*#IP: $myLOCALIP ($myEXTIP)[0m#" /etc/issue
 sed -i "s#SSH:.*#SSH: ssh -l tsec -p 64295 $myLOCALIP[0m#" /etc/issue
 sed -i "s#WEB:.*#WEB: https://$myLOCALIP:64297[0m#" /etc/issue
 tee /data/ews/conf/ews.ip << EOF
 [MAIN]
 ip = $myEXTIP
+EOF
+tee /etc/tpot/elk/environment << EOF
+MY_EXTIP=$myEXTIP
+MY_HOSTNAME=$HOSTNAME
 EOF
 echo $myLOCALIP > /data/elk/logstash/mylocal.ip
 chown tpot:tpot /data/ews/conf/ews.ip

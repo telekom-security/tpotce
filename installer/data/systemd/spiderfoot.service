@@ -1,0 +1,14 @@
+[Unit]
+Description=spiderfoot
+Requires=docker.service
+After=docker.service
+
+[Service]
+Restart=always
+ExecStartPre=-/usr/bin/docker stop spiderfoot
+ExecStartPre=-/usr/bin/docker rm -v spiderfoot
+ExecStart=/usr/bin/docker run --name spiderfoot --rm=true -p 127.0.0.1:64303:8080 dtagdevsec/spiderfoot:1706
+ExecStop=/usr/bin/docker stop spiderfoot 
+
+[Install]
+WantedBy=multi-user.target

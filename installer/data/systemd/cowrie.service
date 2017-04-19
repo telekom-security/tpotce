@@ -7,7 +7,7 @@ After=docker.service
 Restart=always
 ExecStartPre=-/usr/bin/docker stop cowrie
 ExecStartPre=-/usr/bin/docker rm -v cowrie
-ExecStartPre=/bin/bash -c '/usr/bin/clean.sh cowrie off'
+ExecStartPre=/bin/bash -c '/usr/share/tpot/bin/clean.sh cowrie off'
 ExecStart=/usr/bin/docker run --name cowrie --rm=true -p 22:2222 -p 23:2223 -v /data/cowrie:/data/cowrie -v /data/ews:/data/ews dtagdevsec/cowrie:1706
 ExecStop=/usr/bin/docker stop cowrie
 
