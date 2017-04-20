@@ -19,17 +19,9 @@ myNTPCONFPATH="/root/tpot/etc/ntp"
 myPFXPATH="/root/tpot/keys/8021x.pfx"
 myPFXPWPATH="/root/tpot/keys/8021x.pw"
 myPFXHOSTIDPATH="/root/tpot/keys/8021x.id"
-myBACKTITLE="T-Pot Installer"
+myBACKTITLE="T-Pot-Installer"
 mySITES="https://index.docker.io https://ubuntu.com https://github.com http://nsanamegenerator.com"
-
-# Let's create a function for colorful output
-fuECHO () {
-  local myRED=1
-  local myWHT=7
-  tput setaf $myRED -T linux
-  echo "$1" "$2"
-  tput setaf $myWHT -T linux
-}
+myPROGRESSBOXCONF=" --backtitle "$myBACKTITLE" --progressbox 24 80"
 
 fuRANDOMWORD () {
   local myWORDFILE=/usr/share/dict/names
@@ -39,11 +31,16 @@ fuRANDOMWORD () {
   echo -n $(sed -n "$myNUM p" $myWORDFILE | tr -d \' | tr A-Z a-z)
 }
 
+# Let's wait a few seconds to avoid interference with service messages
+dialog --no-ok --no-cancel --backtitle "$myBACKTITLE" --title "[ Wait to avoid interference with service messages ]" --pause "" 6 80 7
+
 # Let's setup the proxy for env
 if [ -f $myPROXYFILEPATH ];
-then fuECHO "### Setting up the proxy."
+then
+dialog --title "[ Setting up the proxy ]" $myPROGRESSBOXCONF <<EOF
+EOF
 myPROXY=$(cat $myPROXYFILEPATH)
-tee -a /etc/environment <<EOF
+tee -a /etc/environment 2>&1>/dev/null <<EOF
 export http_proxy=$myPROXY
 export https_proxy=$myPROXY
 export HTTP_PROXY=$myPROXY
@@ -53,17 +50,32 @@ EOF
 source /etc/environment
 
 # Let's setup the proxy for apt
-tee /etc/apt/apt.conf <<EOF
+tee /etc/apt/apt.conf 2>&1>/dev/null <<EOF
 Acquire::http::Proxy "$myPROXY";
 Acquire::https::Proxy "$myPROXY";
 EOF
+
+# Let's add proxy settings to docker defaults
+myPROXY=$(cat $myPROXYFILEPATH)
+tee -a /etc/default/docker 2>&1>/dev/null <<EOF
+http_proxy=$myPROXY
+https_proxy=$myPROXY
+HTTP_PROXY=$myPROXY
+HTTPS_PROXY=$myPROXY
+no_proxy=localhost,127.0.0.1,.sock
+EOF
+
+# Let's restart docker for proxy changes to take effect
+systemctl stop docker 2>&1 | dialog --title "[ Stop docker service ]" $myPROGRESSBOXCONF
+systemctl start docker 2>&1 | dialog --title "[ Start docker service ]" $myPROGRESSBOXCONF
 fi
 
 # Let's test internet connection
-fuECHO "### Testing internet connection."
 for i in $mySITES;
   do
-    curl --connect-timeout 5 -IsS $i > /dev/null;
+dialog --title "[ Availability check for $i ]" $myPROGRESSBOXCONF <<EOF
+EOF
+    curl --connect-timeout 5 -IsS $i 2>&1>/dev/null
       if [ $? -ne 0 ];
         then
           dialog --backtitle "$myBACKTITLE" --title "[ Continue? ]" --yesno "\nInternet connection test failed. This might indicate some problems with your connection. You can continue, but the installation might fail." 10 50
@@ -78,14 +90,10 @@ for i in $mySITES;
   done;
 
 # Let's remove NGINX default website
-fuECHO "### Removing NGINX default website."
-rm -rf /etc/nginx/sites-enabled/default
-rm -rf /etc/nginx/sites-available/default
-rm -rf /usr/share/nginx/html/index.html
-
-# Let's wait a few seconds to avoid interference with service messages
-fuECHO "### Waiting a few seconds to avoid interference with service messages."
-sleep 5
+#fuECHO "### Removing NGINX default website."
+rm -rf /etc/nginx/sites-enabled/default 2>&1 | dialog --title "[ Removing NGINX default website. ]" $myPROGRESSBOXCONF;
+rm -rf /etc/nginx/sites-available/default 2>&1 | dialog --title "[ Removing NGINX default website. ]" $myPROGRESSBOXCONF;
+rm -rf /usr/share/nginx/html/index.html 2>&1 | dialog --title "[ Removing NGINX default website. ]" $myPROGRESSBOXCONF;
 
 # Let's ask user for install flavor
 # Install types are TPOT, HP, INDUSTRIAL, ALL
@@ -126,8 +134,7 @@ while [ "$myPASS1" != "$myPASS2"  ]
         myPASS2="pass2"
     fi
   done
-htpasswd -b -c /etc/nginx/nginxpasswd "$myUSER" "$myPASS1"
-fuECHO
+htpasswd -b -c /etc/nginx/nginxpasswd "$myUSER" "$myPASS1" 2>&1 | dialog --title "[ Setting up user and password ]" $myPROGRESSBOXCONF;
 
 # Let's log for the beauty of it
 #set -e
@@ -135,29 +142,39 @@ fuECHO
 #exec > >(tee "install.log")
 
 # Let's generate a SSL self-signed certificate without interaction (browsers will see it invalid anyway)
-fuECHO "### Generating a self-signed-certificate for NGINX."
-mkdir -p /etc/nginx/ssl
-openssl req -nodes -x509 -sha512 -newkey rsa:8192 -keyout "/etc/nginx/ssl/nginx.key" -out "/etc/nginx/ssl/nginx.crt" -days 3650 -subj '/C=AU/ST=Some-State/O=Internet Widgits Pty Ltd'
+mkdir -p /etc/nginx/ssl 2>&1 | dialog --title "[ Generating a self-signed-certificate for NGINX ]" $myPROGRESSBOXCONF;
+openssl req \
+        -nodes \
+        -x509 \
+        -sha512 \
+        -newkey rsa:8192 \
+        -keyout "/etc/nginx/ssl/nginx.key" \
+        -out "/etc/nginx/ssl/nginx.crt" \
+        -days 3650 \
+        -subj '/C=AU/ST=Some-State/O=Internet Widgits Pty Ltd' 2>&1 | dialog --title "[ Generating a self-signed-certificate for NGINX ]" $myPROGRESSBOXCONF;
 
 # Let's setup the ntp server
 if [ -f $myNTPCONFPATH ];
   then
-    fuECHO "### Setting up the ntp server."
-    cp $myNTPCONFPATH /etc/ntp.conf
+dialog --title "[ Setting up the ntp server ]" $myPROGRESSBOXCONF <<EOF
+EOF
+    cp $myNTPCONFPATH /etc/ntp.conf 2>&1 | dialog --title "[ Setting up the ntp server ]" $myPROGRESSBOXCONF
 fi
 
 # Let's setup 802.1x networking
 if [ -f $myPFXPATH ];
   then
-    fuECHO "### Setting up 802.1x networking."
-    cp $myPFXPATH /etc/wpa_supplicant/
+dialog --title "[ Setting 802.1x networking ]" $myPROGRESSBOXCONF <<EOF
+EOF
+    cp $myPFXPATH /etc/wpa_supplicant/ 2>&1 | dialog --title "[ Setting 802.1x networking ]" $myPROGRESSBOXCONF
     if [ -f $myPFXPWPATH ];
       then
-        fuECHO "### Setting up 802.1x password."
+dialog --title "[ Setting up 802.1x password ]" $myPROGRESSBOXCONF <<EOF
+EOF
         myPFXPW=$(cat $myPFXPWPATH)
     fi
     myPFXHOSTID=$(cat $myPFXHOSTIDPATH)
-tee -a /etc/network/interfaces <<EOF
+tee -a /etc/network/interfaces 2>&1>/dev/null <<EOF
         wpa-driver wired
         wpa-conf /etc/wpa_supplicant/wired8021x.conf
 
@@ -173,7 +190,7 @@ tee -a /etc/network/interfaces <<EOF
 #        wpa-conf /etc/wpa_supplicant/wireless8021x.conf
 EOF
 
-tee /etc/wpa_supplicant/wired8021x.conf <<EOF
+tee /etc/wpa_supplicant/wired8021x.conf 2>&1>/dev/null <<EOF
 ctrl_interface=/var/run/wpa_supplicant
 ctrl_interface_group=root
 eapol_version=1
@@ -187,7 +204,7 @@ network={
 }
 EOF
 
-tee /etc/wpa_supplicant/wireless8021x.conf <<EOF
+tee /etc/wpa_supplicant/wireless8021x.conf 2>&1>/dev/null <<EOF
 ctrl_interface=/var/run/wpa_supplicant
 ctrl_interface_group=root
 eapol_version=1
@@ -207,7 +224,7 @@ fi
 
 # Let's provide a wireless example config ...
 fuECHO "### Providing a wireless example config."
-tee -a /etc/network/interfaces <<EOF
+tee -a /etc/network/interfaces 2>&1>/dev/null <<EOF
 
 ### Example wireless config without 802.1x
 ### This configuration was tested with the IntelNUC series
@@ -230,115 +247,89 @@ sed -i '/cdrom/d' /etc/apt/sources.list
 
 # Let's make sure SSH roaming is turned off (CVE-2016-0777, CVE-2016-0778)
 fuECHO "### Let's make sure SSH roaming is turned off."
-tee -a /etc/ssh/ssh_config <<EOF
+tee -a /etc/ssh/ssh_config 2>&1>/dev/null <<EOF
 UseRoaming no
 EOF
 
 # Let's pull some updates
-fuECHO "### Pulling Updates."
-apt-get update -y
-apt-get upgrade -y
+apt-get update -y 2>&1 | dialog --title "[ Pulling updates ]" $myPROGRESSBOXCONF
+apt-get upgrade -y 2>&1 | dialog --title "[ Pulling updates ]" $myPROGRESSBOXCONF
 
 # Let's clean up apt
-apt-get autoclean -y
-apt-get autoremove -y
+apt-get autoclean -y 2>&1 | dialog --title "[ Pulling updates ]" $myPROGRESSBOXCONF
+apt-get autoremove -y 2>&1 | dialog --title "[ Pulling updates ]" $myPROGRESSBOXCONF
 
 # Installing alerta-cli, wetty, ctop, elasticdump
-fuECHO "### Installing alerta-cli."
-pip install --upgrade pip
-pip install alerta
-fuECHO "### Installing wetty."
-ln -s /usr/bin/nodejs /usr/bin/node
-npm install https://github.com/t3chn0m4g3/wetty -g
-fuECHO "### Installing elasticdump."
-npm install https://github.com/t3chn0m4g3/elasticsearch-dump -g
-fuECHO "### Installing ctop."
-wget https://github.com/bcicen/ctop/releases/download/v0.4.1/ctop-0.4.1-linux-amd64 -O ctop
-mv ctop /usr/bin/
-chmod +x /usr/bin/ctop
-
-# Let's add proxy settings to docker defaults
-if [ -f $myPROXYFILEPATH ];
-then fuECHO "### Setting up the proxy for docker."
-myPROXY=$(cat $myPROXYFILEPATH)
-tee -a /etc/default/docker <<EOF
-http_proxy=$myPROXY
-https_proxy=$myPROXY
-HTTP_PROXY=$myPROXY
-HTTPS_PROXY=$myPROXY
-no_proxy=localhost,127.0.0.1,.sock
-EOF
-fi
+pip install --upgrade pip 2>&1 | dialog --title "[ Installing pip ]" $myPROGRESSBOXCONF
+pip install alerta  2>&1 | dialog --title "[ Installing alerta ]" $myPROGRESSBOXCONF
+ln -s /usr/bin/nodejs /usr/bin/node 2>&1 | dialog --title "[ Installing wetty ]" $myPROGRESSBOXCONF
+npm install https://github.com/t3chn0m4g3/wetty -g 2>&1 | dialog --title "[ Installing wetty ]" $myPROGRESSBOXCONF
+npm install https://github.com/t3chn0m4g3/elasticsearch-dump -g 2>&1 | dialog --title "[ Installing elasticsearch-dump ]" $myPROGRESSBOXCONF
+wget https://github.com/bcicen/ctop/releases/download/v0.4.1/ctop-0.4.1-linux-amd64 -O ctop 2>&1 | dialog --title "[ Installing ctop ]" $myPROGRESSBOXCONF
+mv ctop /usr/bin/ 2>&1 | dialog --title "[ Installing ctop ]" $myPROGRESSBOXCONF
+chmod +x /usr/bin/ctop 2>&1 | dialog --title "[ Installing ctop ]" $myPROGRESSBOXCONF
 
 # Let's add a new user
-fuECHO "### Adding new user."
-addgroup --gid 2000 tpot
-adduser --system --no-create-home --uid 2000 --disabled-password --disabled-login --gid 2000 tpot
+addgroup --gid 2000 tpot 2>&1 | dialog --title "[ Adding new user ]" $myPROGRESSBOXCONF
+adduser --system --no-create-home --uid 2000 --disabled-password --disabled-login --gid 2000 tpot 2>&1 | dialog --title "[ Adding new user ]" $myPROGRESSBOXCONF
 
 # Let's set the hostname
-fuECHO "### Setting a new hostname."
 myHOST=$(curl -s -f www.nsanamegenerator.com | html2text | tr A-Z a-z | awk '{print $1}')
-if [ "$myHOST" = "" ]; then
-  fuECHO "### Failed to fetch name from remote, using local cache."
-  myHOST=$(fuRANDOMWORD)
-fi
-hostnamectl set-hostname $myHOST
-sed -i 's#127.0.1.1.*#127.0.1.1\t'"$myHOST"'#g' /etc/hosts
+if [ "$myHOST" = "" ];
+  then
+    dialog --no-ok --no-cancel --backtitle "$myBACKTITLE" --title "[ Failed to fetch name from remote, using local cache ]" --pause "" 6 80 2
+    myHOST=$(fuRANDOMWORD)
+  fi
+hostnamectl set-hostname $myHOST 2>&1 | dialog --title "[ Setting new hostname ]" $myPROGRESSBOXCONF
+sed -i 's#127.0.1.1.*#127.0.1.1\t'"$myHOST"'#g' /etc/hosts 2>&1 | dialog --title "[ Setting new hostname ]" $myPROGRESSBOXCONF
 
 # Let's patch sshd_config
-fuECHO "### Patching sshd_config to listen on port 64295 and deny password authentication."
-sed -i 's#Port 22#Port 64295#' /etc/ssh/sshd_config
-sed -i 's#\#PasswordAuthentication yes#PasswordAuthentication no#' /etc/ssh/sshd_config
-
-# Let's allow ssh password authentication from RFC1918 networks
-fuECHO "### Allow SSH password authentication from RFC1918 networks"
-tee -a /etc/ssh/sshd_config <<EOF
+sed -i 's#Port 22#Port 64295#' /etc/ssh/sshd_config 2>&1 | dialog --title "[ SSH listen on tcp/64295 ]" $myPROGRESSBOXCONF
+sed -i 's#\#PasswordAuthentication yes#PasswordAuthentication no#' /etc/ssh/sshd_config 2>&1 | dialog --title "[ SSH password authentication only from RFC1918 networks ]" $myPROGRESSBOXCONF
+tee -a /etc/ssh/sshd_config 2>&1>/dev/null <<EOF
 Match address 127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
     PasswordAuthentication yes
 EOF
-
-# Let's restart docker for proxy changes to take effect
-systemctl restart docker
-sleep 5
 
 # Let's make sure only myFLAVOR images will be downloaded and started
 case $myFLAVOR in
   HP)
     echo "### Preparing HONEYPOT flavor installation."
-    cp /root/tpot/data/imgcfg/hp_images.conf /root/tpot/data/images.conf
+    cp /root/tpot/data/imgcfg/hp_images.conf /root/tpot/data/images.conf 2>&1>/dev/null
   ;;
   INDUSTRIAL)
     echo "### Preparing INDUSTRIAL flavor installation."
-    cp /root/tpot/data/imgcfg/industrial_images.conf /root/tpot/data/images.conf
+    cp /root/tpot/data/imgcfg/industrial_images.conf /root/tpot/data/images.conf 2>&1>/dev/null
   ;;
   TPOT)
     echo "### Preparing TPOT flavor installation."
-    cp /root/tpot/data/imgcfg/tpot_images.conf /root/tpot/data/images.conf
+    cp /root/tpot/data/imgcfg/tpot_images.conf /root/tpot/data/images.conf 2>&1>/dev/null
   ;;
   ALL)
     echo "### Preparing EVERYTHING flavor installation."
-    cp /root/tpot/data/imgcfg/all_images.conf /root/tpot/data/images.conf
+    cp /root/tpot/data/imgcfg/all_images.conf /root/tpot/data/images.conf 2>&1>/dev/null
   ;;
 esac
 
 # Let's load docker images
-fuECHO "### Loading docker images. Please be patient, this may take a while."
 for name in $(cat /root/tpot/data/images.conf)
   do
-    docker pull dtagdevsec/$name:1706
+    docker pull dtagdevsec/$name:1706 2>&1 | dialog --title "[ Downloading docker image dtagdevsec/$name:1706 ]" $myPROGRESSBOXCONF
   done
 
 # Let's add the daily update check with a weekly clean interval
-fuECHO "### Modifying update checks."
-tee /etc/apt/apt.conf.d/10periodic <<EOF
+dialog --title "[ Modifying update checks ]" $myPROGRESSBOXCONF <<EOF
+EOF
+tee /etc/apt/apt.conf.d/10periodic 2>&1>/dev/null <<EOF
 APT::Periodic::Update-Package-Lists "1";
 APT::Periodic::Download-Upgradeable-Packages "0";
 APT::Periodic::AutocleanInterval "7";
 EOF
 
 # Let's make sure to reboot the system after a kernel panic
-fuECHO "### Reboot after kernel panic."
-tee -a /etc/sysctl.conf <<EOF
+dialog --title "[ Reboot after kernel panic ]" $myPROGRESSBOXCONF <<EOF
+EOF
+tee -a /etc/sysctl.conf 2>&1>/dev/null <<EOF
 
 # Reboot after kernel panic, check via /proc/sys/kernel/panic[_on_oops]
 # Set required map count for ELK
@@ -348,8 +339,9 @@ vm.max_map_count = 262144
 EOF
 
 # Let's add some cronjobs
-fuECHO "### Adding cronjobs."
-tee -a /etc/crontab <<EOF
+dialog --title "[ Adding cronjobs ]" $myPROGRESSBOXCONF <<EOF
+EOF
+tee -a /etc/crontab 2>&1>/dev/null <<EOF
 
 # Check if containers and services are up
 */5 * * * *	root	check.sh
@@ -377,7 +369,6 @@ tee -a /etc/crontab <<EOF
 EOF
 
 # Let's create some files and folders
-fuECHO "### Creating some files and folders."
 mkdir -p /data/conpot/log \
          /data/cowrie/log/tty/ /data/cowrie/downloads/ /data/cowrie/keys/ /data/cowrie/misc/ \
          /data/dionaea/log /data/dionaea/bistreams /data/dionaea/binaries /data/dionaea/rtp /data/dionaea/roots/ftp /data/dionaea/roots/tftp /data/dionaea/roots/www /data/dionaea/roots/upnp \
@@ -388,87 +379,88 @@ mkdir -p /data/conpot/log \
          /data/ews/conf \
          /data/suricata/log /home/tsec/.ssh/ \
          /etc/tpot/elk /etc/tpot/imgcfg /etc/tpot/systemd \
-         /usr/share/tpot/bin
+         /usr/share/tpot/bin 2>&1 | dialog --title "[ Creating some files and folders ]" $myPROGRESSBOXCONF
 
 # Let's take care of some files and permissions before copying
-chmod 500 /root/tpot/bin/*
-chmod 600 /root/tpot/data/*
-chmod 644 /root/tpot/etc/issue
-chmod 755 /root/tpot/etc/rc.local
-chmod 644 /root/tpot/data/systemd/*
+chmod 500 /root/tpot/bin/* 2>&1 | dialog --title "[ Setting permissions ]" $myPROGRESSBOXCONF
+chmod 600 /root/tpot/data/* 2>&1 | dialog --title "[ Setting permissions ]" $myPROGRESSBOXCONF
+chmod 644 /root/tpot/etc/issue 2>&1 | dialog --title "[ Setting permissions ]" $myPROGRESSBOXCONF
+chmod 755 /root/tpot/etc/rc.local 2>&1 | dialog --title "[ Setting permissions ]" $myPROGRESSBOXCONF
+chmod 644 /root/tpot/data/systemd/* 2>&1 | dialog --title "[ Setting permissions ]" $myPROGRESSBOXCONF
 
 # Let's copy some files
-tar xvfz /root/tpot/data/elkbase.tgz -C /
-cp -R /root/tpot/bin/* /usr/share/tpot/bin/
-cp -R /root/tpot/data/* /etc/tpot/
-cp    /root/tpot/data/systemd/* /etc/systemd/system/
-cp    /root/tpot/etc/issue /etc/
-cp -R /root/tpot/etc/nginx/ssl /etc/nginx/
-cp    /root/tpot/etc/nginx/tpotweb.conf /etc/nginx/sites-available/
-cp    /root/tpot/etc/nginx/nginx.conf /etc/nginx/nginx.conf
-cp    /root/tpot/keys/authorized_keys /home/tsec/.ssh/authorized_keys
-cp    /root/tpot/usr/share/nginx/html/* /usr/share/nginx/html/
+tar xvfz /root/tpot/data/elkbase.tgz -C / 2>&1 | dialog --title "[ Extracting elkbase.tgz ]" $myPROGRESSBOXCONF
+cp -R /root/tpot/bin/* /usr/share/tpot/bin/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
+cp -R /root/tpot/data/* /etc/tpot/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
+cp    /root/tpot/data/systemd/* /etc/systemd/system/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
+cp    /root/tpot/etc/issue /etc/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
+cp -R /root/tpot/etc/nginx/ssl /etc/nginx/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
+cp    /root/tpot/etc/nginx/tpotweb.conf /etc/nginx/sites-available/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
+cp    /root/tpot/etc/nginx/nginx.conf /etc/nginx/nginx.conf 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
+cp    /root/tpot/keys/authorized_keys /home/tsec/.ssh/authorized_keys 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
+cp    /root/tpot/usr/share/nginx/html/* /usr/share/nginx/html/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
 for i in $(cat /etc/tpot/images.conf);
   do
-    systemctl enable $i;
+    systemctl enable $i 2>&1 | dialog --title "[ Enabling service for $i ]" $myPROGRESSBOXCONF
 done
-systemctl enable wetty
+systemctl enable wetty 2>&1 | dialog --title "[ Enabling service for wetty ]" $myPROGRESSBOXCONF
 
 # Let's enable T-Pot website
-fuECHO "### Enabling T-Pot website."
-ln -s /etc/nginx/sites-available/tpotweb.conf /etc/nginx/sites-enabled/tpotweb.conf
+ln -s /etc/nginx/sites-available/tpotweb.conf /etc/nginx/sites-enabled/tpotweb.conf 2>&1 | dialog --title "[ Enabling T-Pot website ]" $myPROGRESSBOXCONF
 
 # Let's take care of some files and permissions
-chmod 760 -R /data
-chown tpot:tpot -R /data
-chmod 600 /home/tsec/.ssh/authorized_keys
-chown tsec:tsec /home/tsec/.ssh /home/tsec/.ssh/authorized_keys
+chmod 760 -R /data 2>&1 | dialog --title "[ Set permissions and ownerships ]" $myPROGRESSBOXCONF
+chown tpot:tpot -R /data 2>&1 | dialog --title "[ Set permissions and ownerships ]" $myPROGRESSBOXCONF
+chmod 600 /home/tsec/.ssh/authorized_keys 2>&1 | dialog --title "[ Set permissions and ownerships ]" $myPROGRESSBOXCONF
+chown tsec:tsec /home/tsec/.ssh /home/tsec/.ssh/authorized_keys 2>&1 | dialog --title "[ Set permissions and ownerships ]" $myPROGRESSBOXCONF
 
 # Let's replace "quiet splash" options, set a console font for more screen canvas and update grub
-sed -i 's#GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"#GRUB_CMDLINE_LINUX_DEFAULT="consoleblank=0"#' /etc/default/grub
-sed -i 's#GRUB_CMDLINE_LINUX=""#GRUB_CMDLINE_LINUX="cgroup_enable=memory swapaccount=1"#' /etc/default/grub
+sed -i 's#GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"#GRUB_CMDLINE_LINUX_DEFAULT="consoleblank=0"#' /etc/default/grub 2>&1>/dev/null
+sed -i 's#GRUB_CMDLINE_LINUX=""#GRUB_CMDLINE_LINUX="cgroup_enable=memory swapaccount=1"#' /etc/default/grub 2>&1>/dev/null
 #sed -i 's#\#GRUB_GFXMODE=640x480#GRUB_GFXMODE=800x600x32#' /etc/default/grub
 #tee -a /etc/default/grub <<EOF
 #GRUB_GFXPAYLOAD=800x600x32
 #GRUB_GFXPAYLOAD_LINUX=800x600x32
 #EOF
-update-grub
+update-grub 2>&1 | dialog --title "[ Update grub ]" $myPROGRESSBOXCONF
 cp /usr/share/consolefonts/Uni2-Terminus12x6.psf.gz /etc/console-setup/
 gunzip /etc/console-setup/Uni2-Terminus12x6.psf.gz
 sed -i 's#FONTFACE=".*#FONTFACE="Terminus"#' /etc/default/console-setup
 sed -i 's#FONTSIZE=".*#FONTSIZE="12x6"#' /etc/default/console-setup
-update-initramfs -u
+update-initramfs -u 2>&1 | dialog --title "[ Update initramfs ]" $myPROGRESSBOXCONF
 
 # Let's enable a color prompt and add /usr/share/tpot/bin to path
 myROOTPROMPT='PS1="\[\033[38;5;8m\][\[$(tput sgr0)\]\[\033[38;5;1m\]\u\[$(tput sgr0)\]\[\033[38;5;6m\]@\[$(tput sgr0)\]\[\033[38;5;4m\]\h\[$(tput sgr0)\]\[\033[38;5;6m\]:\[$(tput sgr0)\]\[\033[38;5;5m\]\w\[$(tput sgr0)\]\[\033[38;5;8m\]]\[$(tput sgr0)\]\[\033[38;5;1m\]\\$\[$(tput sgr0)\]\[\033[38;5;15m\] \[$(tput sgr0)\]"'
 myUSERPROMPT='PS1="\[\033[38;5;8m\][\[$(tput sgr0)\]\[\033[38;5;2m\]\u\[$(tput sgr0)\]\[\033[38;5;6m\]@\[$(tput sgr0)\]\[\033[38;5;4m\]\h\[$(tput sgr0)\]\[\033[38;5;6m\]:\[$(tput sgr0)\]\[\033[38;5;5m\]\w\[$(tput sgr0)\]\[\033[38;5;8m\]]\[$(tput sgr0)\]\[\033[38;5;2m\]\\$\[$(tput sgr0)\]\[\033[38;5;15m\] \[$(tput sgr0)\]"'
-tee -a /root/.bashrc << EOF
+tee -a /root/.bashrc 2>&1>/dev/null <<EOF
 $myROOTPROMPT
 PATH="$PATH:/usr/share/tpot/bin"
 EOF
-tee -a /home/tsec/.bashrc << EOF
+tee -a /home/tsec/.bashrc 2>&1>/dev/null <<EOF
 $myUSERPROMPT
 PATH="$PATH:/usr/share/tpot/bin"
 EOF
 
 # Let's create ews.ip before reboot and prevent race condition for first start
-source /etc/environment
+source /etc/environment 2>&1>/dev/null
 myLOCALIP=$(hostname -I | awk '{ print $1 }')
 myEXTIP=$(/usr/share/tpot/bin/myip.sh)
-sed -i "s#IP:.*#IP: $myLOCALIP ($myEXTIP)[0m#" /etc/issue
-sed -i "s#SSH:.*#SSH: ssh -l tsec -p 64295 $myLOCALIP[0m#" /etc/issue
-sed -i "s#WEB:.*#WEB: https://$myLOCALIP:64297[0m#" /etc/issue
-tee /data/ews/conf/ews.ip << EOF
+sed -i "s#IP:.*#IP: $myLOCALIP ($myEXTIP)[0m#" /etc/issue 2>&1>/dev/null
+sed -i "s#SSH:.*#SSH: ssh -l tsec -p 64295 $myLOCALIP[0m#" /etc/issue 2>&1>/dev/null
+sed -i "s#WEB:.*#WEB: https://$myLOCALIP:64297[0m#" /etc/issue 2>&1>/dev/null
+tee /data/ews/conf/ews.ip 2>&1>/dev/null <<EOF
 [MAIN]
 ip = $myEXTIP
 EOF
-tee /etc/tpot/elk/environment << EOF
+tee /etc/tpot/elk/environment 2>&1>/dev/null <<EOF
 MY_EXTIP=$myEXTIP
 MY_HOSTNAME=$HOSTNAME
 EOF
-echo $myLOCALIP > /data/elk/logstash/mylocal.ip
-chown tpot:tpot /data/ews/conf/ews.ip
+echo $myLOCALIP > /data/elk/logstash/mylocal.ip 2>&1>/dev/null
+chown tpot:tpot /data/ews/conf/ews.ip 2>&1>/dev/null
 
 # Final steps
-fuECHO "### Thanks for your patience. Now rebooting."
-mv /root/tpot/etc/rc.local /etc/rc.local && rm -rf /root/tpot/ && sleep 2 && reboot
+mv /root/tpot/etc/rc.local /etc/rc.local 2>&1>/dev/null && \
+rm -rf /root/tpot/ 2>&1>/dev/null && \
+dialog --no-ok --no-cancel --backtitle "$myBACKTITLE" --title "[ Thanks for your patience. Now rebooting. ]" --pause "" 6 80 2 && \
+reboot
