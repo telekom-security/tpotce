@@ -70,10 +70,13 @@ systemctl stop docker 2>&1 | dialog --title "[ Stop docker service ]" $myPROGRES
 systemctl start docker 2>&1 | dialog --title "[ Start docker service ]" $myPROGRESSBOXCONF
 fi
 
-# Let's test internet connection
+# Let's test the internet connection
+mySITESCOUNT=$(echo $mySITES | wc -w)
+j=0
 for i in $mySITES;
   do
-dialog --title "[ Availability check for $i ]" $myPROGRESSBOXCONF <<EOF
+    let j+=1
+    dialog --title "[ Availability check for $i ]" --backtitle "$myBACKTITLE" --gauge "" 6 80 $(expr 100 \* $j / $mySITESCOUNT) <<EOF
 EOF
     curl --connect-timeout 5 -IsS $i 2>&1>/dev/null
       if [ $? -ne 0 ];
@@ -135,11 +138,6 @@ while [ "$myPASS1" != "$myPASS2"  ]
     fi
   done
 htpasswd -b -c /etc/nginx/nginxpasswd "$myUSER" "$myPASS1" 2>&1 | dialog --title "[ Setting up user and password ]" $myPROGRESSBOXCONF;
-
-# Let's log for the beauty of it
-#set -e
-#exec 2> >(tee "install.err")
-#exec > >(tee "install.log")
 
 # Let's generate a SSL self-signed certificate without interaction (browsers will see it invalid anyway)
 mkdir -p /etc/nginx/ssl 2>&1 | dialog --title "[ Generating a self-signed-certificate for NGINX ]" $myPROGRESSBOXCONF;
@@ -312,9 +310,14 @@ case $myFLAVOR in
 esac
 
 # Let's load docker images
+myIMAGESCOUNT=$(cat /root/tpot/data/images.conf | wc -w)
+j=0
 for name in $(cat /root/tpot/data/images.conf)
   do
-    docker pull dtagdevsec/$name:1706 2>&1 | dialog --title "[ Downloading docker image dtagdevsec/$name:1706 ]" $myPROGRESSBOXCONF
+dialog --title "[ Downloading docker image dtagdevsec/$name:1706 ]" --backtitle "$myBACKTITLE" --gauge "" 6 80 $(expr 100 \* $j / $myIMAGESCOUNT) <<EOF
+EOF
+    docker pull dtagdevsec/$name:1706 2>&1>/dev/null
+    let j+=1
   done
 
 # Let's add the daily update check with a weekly clean interval
