@@ -75,8 +75,8 @@ mySITESCOUNT=$(echo $mySITES | wc -w)
 j=0
 for i in $mySITES;
   do
-    let j+=1
-    dialog --title "[ Availability check for $i ]" --backtitle "$myBACKTITLE" --gauge "" 6 80 $(expr 100 \* $j / $mySITESCOUNT) <<EOF
+    dialog --title "[ Testing the internet connection ]" --backtitle "$myBACKTITLE" \
+           --gauge "\n  Now checking: $i\n" 8 80 $(expr 100 \* $j / $mySITESCOUNT) <<EOF
 EOF
     curl --connect-timeout 5 -IsS $i 2>&1>/dev/null
       if [ $? -ne 0 ];
@@ -90,6 +90,10 @@ EOF
               break;
           fi;
       fi;
+    let j+=1
+    dialog --title "[ Testing the internet connection ]" --backtitle "$myBACKTITLE" \
+           --gauge "\n  Now checking: $i\n" 8 80 $(expr 100 \* $j / $mySITESCOUNT) <<EOF
+EOF
   done;
 
 # Let's remove NGINX default website
@@ -107,9 +111,49 @@ myFLAVOR=$(dialog --no-cancel --backtitle "$myBACKTITLE" --title "[ Choose your 
 "INDUSTRIAL" "Conpot, eMobility, Suricata & ELK" \
 "EVERYTHING" "Everything" 3>&1 1>&2 2>&3 3>&-)
 
-# Let's ask user for a web username and password
+# Let's ask for a secure tsec password
+myUSER="tsec"
+myPASS1="pass1"
+myPASS2="pass2"
+mySECURE="0"
+while [ "$myPASS1" != "$myPASS2"  ] && [ "$mySECURE" == "0" ]
+  do
+    while [ "$myPASS1" == "pass1"  ] || [ "$myPASS1" == "" ]
+      do
+        myPASS1=$(dialog --insecure --backtitle "$myBACKTITLE" \
+                         --title "[ Enter password for console user (tsec) ]" \
+                         --passwordbox "\nPassword" 9 60 3>&1 1>&2 2>&3 3>&-)
+      done
+        myPASS2=$(dialog --insecure --backtitle "$myBACKTITLE" \
+                         --title "[ Repeat password for console user (tsec) ]" \
+                         --passwordbox "\nPassword" 9 60 3>&1 1>&2 2>&3 3>&-)
+    if [ "$myPASS1" != "$myPASS2" ];
+      then
+        dialog --backtitle "$myBACKTITLE" --title "[ Passwords do not match. ]" \
+               --msgbox "\nPlease re-enter your password." 7 60
+        myPASS1="pass1"
+        myPASS2="pass2"
+    fi
+    mySECURE=$(printf "%s" "$myPASS1" | cracklib-check | grep -c "OK")
+    if [ "$mySECURE" == "0" ] && [ "$myPASS1" == "$myPASS2" ];
+      then
+        dialog --backtitle "$myBACKTITLE" --title "[ Password is not secure ]" --defaultno --yesno "\nKeep insecure password?" 7 50
+        myOK=$?
+        if [ "$myOK" == "1" ];
+          then
+            myPASS1="pass1"
+            myPASS2="pass2"
+        fi
+    fi
+  done
+printf "%s" "$myUSER:$myPASS1" | chpasswd
+
+# Let's ask for a web username with secure password
 myOK="1"
 myUSER="tsec"
+myPASS1="pass1"
+myPASS2="pass2"
+mySECURE="0"
 while [ 1 != 2 ]
   do
     myUSER=$(dialog --backtitle "$myBACKTITLE" --title "[ Enter your web user name ]" --inputbox "\nUsername (tsec not allowed)" 9 50 3>&1 1>&2 2>&3 3>&-)
@@ -121,20 +165,34 @@ while [ 1 != 2 ]
         break
     fi
   done
-myPASS1="pass1"
-myPASS2="pass2"
-while [ "$myPASS1" != "$myPASS2"  ]
+while [ "$myPASS1" != "$myPASS2"  ] && [ "$mySECURE" == "0" ]
   do
     while [ "$myPASS1" == "pass1"  ] || [ "$myPASS1" == "" ]
       do
-        myPASS1=$(dialog --insecure --backtitle "$myBACKTITLE" --title "[ Enter your web user password ]" --passwordbox "\nPassword" 9 50 3>&1 1>&2 2>&3 3>&-)
+        myPASS1=$(dialog --insecure --backtitle "$myBACKTITLE" \
+                         --title "[ Enter password for your web user ]" \
+                         --passwordbox "\nPassword" 9 60 3>&1 1>&2 2>&3 3>&-)
       done
-        myPASS2=$(dialog --insecure --backtitle "$myBACKTITLE" --title "[ Repeat web user password ]" --passwordbox "\nPassword" 9 50 3>&1 1>&2 2>&3 3>&-)
+        myPASS2=$(dialog --insecure --backtitle "$myBACKTITLE" \
+                         --title "[ Repeat password for your web user ]" \
+                         --passwordbox "\nPassword" 9 60 3>&1 1>&2 2>&3 3>&-)
     if [ "$myPASS1" != "$myPASS2" ];
       then
-        dialog --backtitle "$myBACKTITLE" --title "[ Passwords do not match. ]" --msgbox "\nPlease re-enter your password." 7 50
+        dialog --backtitle "$myBACKTITLE" --title "[ Passwords do not match. ]" \
+               --msgbox "\nPlease re-enter your password." 7 60
         myPASS1="pass1"
         myPASS2="pass2"
+    fi
+    mySECURE=$(printf "%s" "$myPASS1" | cracklib-check | grep -c "OK")
+    if [ "$mySECURE" == "0" ] && [ "$myPASS1" == "$myPASS2" ];
+      then
+        dialog --backtitle "$myBACKTITLE" --title "[ Password is not secure ]" --defaultno --yesno "\nKeep insecure password?" 7 50
+        myOK=$?
+        if [ "$myOK" == "1" ];
+          then
+            myPASS1="pass1"
+            myPASS2="pass2"
+        fi
     fi
   done
 htpasswd -b -c /etc/nginx/nginxpasswd "$myUSER" "$myPASS1" 2>&1 | dialog --title "[ Setting up user and password ]" $myPROGRESSBOXCONF;
@@ -314,10 +372,14 @@ myIMAGESCOUNT=$(cat /root/tpot/data/images.conf | wc -w)
 j=0
 for name in $(cat /root/tpot/data/images.conf)
   do
-dialog --title "[ Downloading docker image dtagdevsec/$name:1706 ]" --backtitle "$myBACKTITLE" --gauge "" 6 80 $(expr 100 \* $j / $myIMAGESCOUNT) <<EOF
+    dialog --title "[ Downloading docker images, please be patient ]" --backtitle "$myBACKTITLE" \
+           --gauge "\n  Now downloading: dtagdevsec/$name:1706\n" 8 80 $(expr 100 \* $j / $myIMAGESCOUNT) <<EOF
 EOF
     docker pull dtagdevsec/$name:1706 2>&1>/dev/null
     let j+=1
+    dialog --title "[ Downloading docker images, please be patient ]" --backtitle "$myBACKTITLE" \
+           --gauge "\n  Now downloading: dtagdevsec/$name:1706\n" 8 80 $(expr 100 \* $j / $myIMAGESCOUNT) <<EOF
+EOF
   done
 
 # Let's add the daily update check with a weekly clean interval
