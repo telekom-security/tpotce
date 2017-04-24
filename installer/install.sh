@@ -20,7 +20,7 @@ myPFXPATH="/root/tpot/keys/8021x.pfx"
 myPFXPWPATH="/root/tpot/keys/8021x.pw"
 myPFXHOSTIDPATH="/root/tpot/keys/8021x.id"
 myBACKTITLE="T-Pot-Installer"
-mySITES="https://index.docker.io https://ubuntu.com https://github.com http://nsanamegenerator.com"
+mySITES="https://index.docker.io https://github.com http://nsanamegenerator.com https://pypi.python.org https://ubuntu.com"
 myPROGRESSBOXCONF=" --backtitle "$myBACKTITLE" --progressbox 24 80"
 
 fuRANDOMWORD () {
