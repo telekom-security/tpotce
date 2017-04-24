@@ -361,7 +361,7 @@ case $myFLAVOR in
     echo "### Preparing TPOT flavor installation."
     cp /root/tpot/data/imgcfg/tpot_images.conf /root/tpot/data/images.conf 2>&1>/dev/null
   ;;
-  ALL)
+  EVERYTHING)
     echo "### Preparing EVERYTHING flavor installation."
     cp /root/tpot/data/imgcfg/all_images.conf /root/tpot/data/images.conf 2>&1>/dev/null
   ;;
