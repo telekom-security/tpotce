@@ -353,26 +353,26 @@ EOF
 case $myFLAVOR in
   HP)
     echo "### Preparing HONEYPOT flavor installation."
-    cp /root/tpot/data/imgcfg/hp_images.conf /root/tpot/data/images.conf 2>&1>/dev/null
+    cp /root/tpot/etc/tpot/compose/hp.yml /root/tpot/etc/tpot/tpot.yml 2>&1>/dev/null
   ;;
   INDUSTRIAL)
     echo "### Preparing INDUSTRIAL flavor installation."
-    cp /root/tpot/data/imgcfg/industrial_images.conf /root/tpot/data/images.conf 2>&1>/dev/null
+    cp /root/tpot/etc/tpot/compose/industrial.yml /root/tpot/etc/tpot/tpot.yml 2>&1>/dev/null
   ;;
   TPOT)
     echo "### Preparing TPOT flavor installation."
-    cp /root/tpot/data/imgcfg/tpot_images.conf /root/tpot/data/images.conf 2>&1>/dev/null
+    cp /root/tpot/etc/tpot/compose/tpot.yml /root/tpot/etc/tpot/tpot.yml 2>&1>/dev/null
   ;;
   EVERYTHING)
     echo "### Preparing EVERYTHING flavor installation."
-    cp /root/tpot/data/imgcfg/all_images.conf /root/tpot/data/images.conf 2>&1>/dev/null
+    cp /root/tpot/etc/tpot/compose/all.yml /root/tpot/etc/tpot/tpot.yml 2>&1>/dev/null
   ;;
 esac
 
 # Let's load docker images
-myIMAGESCOUNT=$(cat /root/tpot/data/images.conf | wc -w)
+myIMAGESCOUNT=$(cat /root/tpot/etc/tpot/tpot.yml | grep container_name | cut -d: -f2 | wc -l)
 j=0
-for name in $(cat /root/tpot/data/images.conf)
+for name in $(cat /root/tpot/etc/tpot/tpot.yml | grep container_name | cut -d: -f2)
   do
     dialog --title "[ Downloading docker images, please be patient ]" --backtitle "$myBACKTITLE" \
            --gauge "\n  Now downloading: dtagdevsec/$name:1706\n" 8 80 $(expr 100 \* $j / $myIMAGESCOUNT) <<EOF
@@ -411,19 +411,19 @@ EOF
 tee -a /etc/crontab 2>&1>/dev/null <<EOF
 
 # Check if containers and services are up
-*/5 * * * *	root	check.sh
+#*/5 * * * *	root	check.sh
 
 # Example for alerta-cli IP update
 #*/5 * * * *	root	alerta --endpoint-url http://<ip>:<port>/api delete --filters resource=<host> && alerta --endpoint-url http://<ip>:<port>/api send -e IP -r <host> -E Production -s ok -S T-Pot -t \$(cat /data/elk/logstash/mylocal.ip) --status open
 
 # Check if updated images are available and download them
-27 1 * * *	root	for i in \$(cat /etc/tpot/images.conf); do docker pull dtagdevsec/\$i:1706; done
+27 1 * * *	root	/usr/bin/docker-compose -f /etc/tpot/tpot.yml pull
 
 # Restart docker service and containers
-27 3 * * *	root	dcres.sh
+#27 3 * * *	root	dcres.sh
 
 # Delete elastic indices older than 90 days (kibana index is omitted by default)
-27 4 * * *	root	docker exec elk bash -c '/usr/local/bin/curator --host 127.0.0.1 delete indices --older-than 90 --time-unit days --timestring \%Y.\%m.\%d'
+#27 4 * * *	root	docker exec elk bash -c '/usr/local/bin/curator --host 127.0.0.1 delete indices --older-than 90 --time-unit days --timestring \%Y.\%m.\%d'
 
 # Update IP and erase check.lock if it exists
 27 5 * * *	root	/etc/rc.local
@@ -445,31 +445,28 @@ mkdir -p /data/conpot/log \
          /data/emobility/log \
          /data/ews/conf \
          /data/suricata/log /home/tsec/.ssh/ \
-         /etc/tpot/elk /etc/tpot/imgcfg /etc/tpot/systemd \
+         /etc/tpot/elk /etc/tpot/compose /etc/tpot/systemd \
          /usr/share/tpot/bin 2>&1 | dialog --title "[ Creating some files and folders ]" $myPROGRESSBOXCONF
 
 # Let's take care of some files and permissions before copying
 chmod 500 /root/tpot/bin/* 2>&1 | dialog --title "[ Setting permissions ]" $myPROGRESSBOXCONF
-chmod 600 /root/tpot/data/* 2>&1 | dialog --title "[ Setting permissions ]" $myPROGRESSBOXCONF
+chmod 600 -R /root/tpot/etc/tpot 2>&1 | dialog --title "[ Setting permissions ]" $myPROGRESSBOXCONF
 chmod 644 /root/tpot/etc/issue 2>&1 | dialog --title "[ Setting permissions ]" $myPROGRESSBOXCONF
 chmod 755 /root/tpot/etc/rc.local 2>&1 | dialog --title "[ Setting permissions ]" $myPROGRESSBOXCONF
-chmod 644 /root/tpot/data/systemd/* 2>&1 | dialog --title "[ Setting permissions ]" $myPROGRESSBOXCONF
+chmod 644 /root/tpot/etc/tpot/systemd/* 2>&1 | dialog --title "[ Setting permissions ]" $myPROGRESSBOXCONF
 
 # Let's copy some files
-tar xvfz /root/tpot/data/elkbase.tgz -C / 2>&1 | dialog --title "[ Extracting elkbase.tgz ]" $myPROGRESSBOXCONF
+tar xvfz /root/tpot/etc/tpot/elkbase.tgz -C / 2>&1 | dialog --title "[ Extracting elkbase.tgz ]" $myPROGRESSBOXCONF
 cp -R /root/tpot/bin/* /usr/share/tpot/bin/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
-cp -R /root/tpot/data/* /etc/tpot/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
-cp    /root/tpot/data/systemd/* /etc/systemd/system/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
+cp -R /root/tpot/etc/tpot/* /etc/tpot/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
+cp    /root/tpot/etc/tpot/systemd/* /etc/systemd/system/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
 cp    /root/tpot/etc/issue /etc/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
 cp -R /root/tpot/etc/nginx/ssl /etc/nginx/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
 cp    /root/tpot/etc/nginx/tpotweb.conf /etc/nginx/sites-available/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
 cp    /root/tpot/etc/nginx/nginx.conf /etc/nginx/nginx.conf 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
 cp    /root/tpot/keys/authorized_keys /home/tsec/.ssh/authorized_keys 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
 cp    /root/tpot/usr/share/nginx/html/* /usr/share/nginx/html/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
-for i in $(cat /etc/tpot/images.conf);
-  do
-    systemctl enable $i 2>&1 | dialog --title "[ Enabling service for $i ]" $myPROGRESSBOXCONF
-done
+systemctl enable tpot 2>&1 | dialog --title "[ Enabling service for tpot ]" $myPROGRESSBOXCONF
 systemctl enable wetty 2>&1 | dialog --title "[ Enabling service for wetty ]" $myPROGRESSBOXCONF
 
 # Let's enable T-Pot website
