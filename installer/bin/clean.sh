@@ -1,11 +1,5 @@
 #!/bin/bash
-
-########################################################
-# T-Pot                                                #
-# Container Data Cleaner                               #
-#                                                      #
-# v16.10.0 by mo, DTAG, 2016-05-28                     #
-########################################################
+# T-Pot Container Data Cleaner
 
 # Set persistence
 myPERSISTENCE=$1

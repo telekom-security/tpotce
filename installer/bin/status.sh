@@ -1,16 +1,10 @@
 #!/bin/bash
-
-########################################################
-# T-Pot                                                #
-# Container and services status script                 #
-#                                                      #
-# v16.10.0 by mo, DTAG, 2016-05-12                     #
-########################################################
+# Show status of SupervisorD within running containers
 myCOUNT=1
 
 if [[ $1 == "" ]]
   then
-    myIMAGES=$(cat /etc/tpot/images.conf)
+    myIMAGES=$(cat /etc/tpot/tpot.yml | grep container_name | cut -d: -f2)
   else myIMAGES=$1
 fi
 

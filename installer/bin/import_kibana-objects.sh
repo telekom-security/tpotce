@@ -1,4 +1,5 @@
 #!/bin/bash
+# Import Kibana objects
 # Make sure ES is available
 myES="http://127.0.0.1:64298/"
 myESSTATUS=$(curl -s -XGET ''$myES'_cluster/health' | jq '.' | grep -c green)

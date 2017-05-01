@@ -1,5 +1,5 @@
 #/bin/bash
-
+# Show current status of all running containers
 # Let's ensure normal operation on exit or if interrupted ...
 function fuCLEANUP {
   stty sane
@@ -7,8 +7,6 @@ function fuCLEANUP {
 trap fuCLEANUP EXIT
 
 stty -echo -icanon time 0 min 0
-#myIMAGES=$(cat /etc/tpot/images.conf)
-#myIMAGES=$(/usr/bin/docker ps -a -f name=$i --format "table {{.Names}}" | grep -v NAMES)
 myIMAGES=$(cat /etc/tpot/tpot.yml | grep container_name | cut -d: -f2)
 while true
   do

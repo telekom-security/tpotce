@@ -1,10 +1,5 @@
 #!/bin/bash
-########################################################
-# T-Pot post install script                            #
-# Ubuntu server 16.04.0, x64                           #
-#                                                      #
-# v17.06 by mo, DTAG, 2017-03-22                       #
-########################################################
+# T-Pot post install script
 
 # Set TERM, DIALOGRC
 export TERM=linux
@@ -32,6 +27,8 @@ fuRANDOMWORD () {
 }
 
 # Let's wait a few seconds to avoid interference with service messages
+sleep 3
+tput civis
 dialog --no-ok --no-cancel --backtitle "$myBACKTITLE" --title "[ Wait to avoid interference with service messages ]" --pause "" 6 80 7
 
 # Let's setup the proxy for env
@@ -104,6 +101,7 @@ rm -rf /usr/share/nginx/html/index.html 2>&1 | dialog --title "[ Removing NGINX 
 
 # Let's ask user for install flavor
 # Install types are TPOT, HP, INDUSTRIAL, ALL
+tput cnorm
 myFLAVOR=$(dialog --no-cancel --backtitle "$myBACKTITLE" --title "[ Choose your edition ]" --no-tags --menu \
 "\nRequired: 4GB RAM, 64GB disk\nRecommended: 8GB RAM, 128GB SSD" 14 60 4 \
 "TPOT" "Standard Honeypots, Suricata & ELK" \
@@ -198,6 +196,7 @@ while [ "$myPASS1" != "$myPASS2"  ] && [ "$mySECURE" == "0" ]
 htpasswd -b -c /etc/nginx/nginxpasswd "$myUSER" "$myPASS1" 2>&1 | dialog --title "[ Setting up user and password ]" $myPROGRESSBOXCONF;
 
 # Let's generate a SSL self-signed certificate without interaction (browsers will see it invalid anyway)
+tput civis
 mkdir -p /etc/nginx/ssl 2>&1 | dialog --title "[ Generating a self-signed-certificate for NGINX ]" $myPROGRESSBOXCONF;
 openssl req \
         -nodes \
@@ -372,15 +371,15 @@ esac
 # Let's load docker images
 myIMAGESCOUNT=$(cat /root/tpot/etc/tpot/tpot.yml | grep container_name | cut -d: -f2 | wc -l)
 j=0
-for name in $(cat /root/tpot/etc/tpot/tpot.yml | grep container_name | cut -d: -f2)
+for name in $(cat /root/tpot/etc/tpot/tpot.yml | grep image | cut -d'"' -f2)
   do
     dialog --title "[ Downloading docker images, please be patient ]" --backtitle "$myBACKTITLE" \
-           --gauge "\n  Now downloading: dtagdevsec/$name:1706\n" 8 80 $(expr 100 \* $j / $myIMAGESCOUNT) <<EOF
+           --gauge "\n  Now downloading: $name\n" 8 80 $(expr 100 \* $j / $myIMAGESCOUNT) <<EOF
 EOF
-    docker pull dtagdevsec/$name:1706 2>&1>/dev/null
+    docker pull $name 2>&1>/dev/null
     let j+=1
     dialog --title "[ Downloading docker images, please be patient ]" --backtitle "$myBACKTITLE" \
-           --gauge "\n  Now downloading: dtagdevsec/$name:1706\n" 8 80 $(expr 100 \* $j / $myIMAGESCOUNT) <<EOF
+           --gauge "\n  Now downloading: $name\n" 8 80 $(expr 100 \* $j / $myIMAGESCOUNT) <<EOF
 EOF
   done
 
@@ -410,29 +409,20 @@ dialog --title "[ Adding cronjobs ]" $myPROGRESSBOXCONF <<EOF
 EOF
 tee -a /etc/crontab 2>&1>/dev/null <<EOF
 
-# Check if containers and services are up
-#*/5 * * * *	root	check.sh
-
 # Example for alerta-cli IP update
-#*/5 * * * *	root	alerta --endpoint-url http://<ip>:<port>/api delete --filters resource=<host> && alerta --endpoint-url http://<ip>:<port>/api send -e IP -r <host> -E Production -s ok -S T-Pot -t \$(cat /data/elk/logstash/mylocal.ip) --status open
+#*/5 * * * *    root    alerta --endpoint-url http://<ip>:<port>/api delete --filters resource=<host> && alerta --endpoint-url http://<ip>:<port>/api send -e IP -r <host> -E Production -s ok -S T-Pot -t \$(cat /data/elk/logstash/mylocal.ip) --status open
 
 # Check if updated images are available and download them
-27 1 * * *	root	/usr/bin/docker-compose -f /etc/tpot/tpot.yml pull
-
-# Restart docker service and containers
-#27 3 * * *	root	dcres.sh
+27 1 * * *      root    /usr/bin/docker-compose -f /etc/tpot/tpot.yml pull
 
 # Delete elastic indices older than 90 days (kibana index is omitted by default)
-#27 4 * * *	root	docker exec elk bash -c '/usr/local/bin/curator --host 127.0.0.1 delete indices --older-than 90 --time-unit days --timestring \%Y.\%m.\%d'
-
-# Update IP and erase check.lock if it exists
-27 5 * * *	root	/etc/rc.local
+#27 4 * * *     root    docker exec elk bash -c '/usr/local/bin/curator --host 127.0.0.1 delete indices --older-than 90 --time-unit days --timestring \%Y.\%m.\%d'
 
 # Daily reboot
-27 23 * * *	root	reboot
+27 3 * * *      root    reboot
 
 # Check for updated packages every sunday, upgrade and reboot
-27 16 * * 0	root	apt-get autoclean -y && apt-get autoremove -y && apt-get update -y && apt-get upgrade -y && sleep 10 && reboot
+27 16 * * 0     root    apt-get autoclean -y && apt-get autoremove -y && apt-get update -y && apt-get upgrade -y && sleep 10 && reboot
 EOF
 
 # Let's create some files and folders

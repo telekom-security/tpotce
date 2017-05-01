@@ -34,8 +34,6 @@ httplist=(
     whatismyip.akamai.com
 )
 
-
-
 # function to shuffle the global array "array"
 shuffle() {
    local i tmp size max rand
@@ -47,7 +45,6 @@ shuffle() {
       tmp=${array[i]} array[i]=${array[rand]} array[rand]=$tmp
    done
 }
-
 
 # if we have dig and a list of dns methods, try that first
 if hash dig 2>/dev/null && [ ${#dnslist[*]} -gt 0 ]; then
@@ -64,9 +61,7 @@ if hash dig 2>/dev/null && [ ${#dnslist[*]} -gt 0 ]; then
     done
 fi
 
-
 # if we haven't succeeded with DNS, try HTTP
-
 if [ ${#httplist[*]} == 0 ]; then
     echo "No hosts in httplist array!" >&2
     exit 1
