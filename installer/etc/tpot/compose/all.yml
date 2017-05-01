@@ -1,0 +1,174 @@
+# T-Pot (Everything)
+# For docker-compose version ...
+version: '2'
+services:
+
+# Conpot service
+  conpot:
+    container_name: conpot
+    restart: always
+    ports:
+     - "1025:1025"
+     - "50100:50100"
+    image: "dtagdevsec/conpot:1706"
+    volumes:
+     - /data/conpot:/data/conpot
+     - /data/ews:/data/ews
+
+# Cowrie service
+  cowrie:
+    container_name: cowrie
+    restart: always
+    ports:
+     - "22:2222"
+     - "23:2223"
+    image: "dtagdevsec/cowrie:1706"
+    volumes:
+     - /data/cowrie:/data/cowrie
+
+# Dionaea service
+  dionaea:
+    container_name: dionaea
+    restart: always
+    cap_add:
+     - NET_BIND_SERVICE
+    ports:
+     - "21:21" 
+     - "42:42"
+     - "69:69/udp"
+     - "8081:80"
+     - "135:135"
+     - "443:443"
+     - "445:445"
+     - "1433:1433"
+     - "1723:1723"
+     - "1883:1883"
+     - "1900:1900"
+     - "3306:3306" 
+     - "5060:5060"
+     - "5061:5061"
+     - "5060:5060/udp"
+     - "11211:11211" 
+    image: "dtagdevsec/dionaea:1706"
+    volumes:
+     - /data/dionaea:/data/dionaea
+
+# Elasticpot service
+  elasticpot:
+    container_name: elasticpot
+    restart: always
+    ports:
+     - "9200:9200"
+    image: "dtagdevsec/elasticpot:1706"
+    volumes:
+     - /data/elasticpot:/data/elasticpot
+
+# ELK service
+  elk:
+    container_name: elk
+    restart: always
+    env_file:
+     - /etc/tpot/elk/environment
+    cap_add:
+     - IPC_LOCK
+    ulimits:
+      memlock: -1
+      nofile: 65536
+    ports:
+     - "127.0.0.1:64296:5601"
+     - "127.0.0.1:64302:9100"
+     - "127.0.0.1:64298:9200"
+    image: "dtagdevsec/elk:1706"
+    volumes:
+     - /data:/data
+     - /var/log:/data/host/log
+
+# Emobility service
+  emobility:
+    container_name: emobility
+    restart: always
+    cap_add:
+     - NET_ADMIN
+    ports:
+     - "8080:8080"
+    image: "dtagdevsec/emobility:1706"
+    volumes:
+     - /data/emobility:/data/eMobility
+     - /data/ews:/data/ews
+
+# Ewsposter service
+  ewsposter:
+    container_name: ewsposter
+    restart: always
+    image: "dtagdevsec/ewsposter:1706"
+    volumes:
+     - /data:/data
+     - /data/ews/conf/ews.ip:/opt/ewsposter/ews.ip
+
+# Glastopf service
+  glastopf:
+    container_name: glastopf
+    restart: always
+    ports:
+     - "80:80"
+    image: "dtagdevsec/glastopf:1706"
+    volumes:
+     - /data/glastopf:/data/glastopf
+     - /data/ews:/data/ews
+
+# Honeytrap service
+  honeytrap:
+    container_name: honeytrap
+    restart: always
+    network_mode: "host"
+    cap_add:
+     - NET_ADMIN
+    image: "dtagdevsec/honeytrap:1706"
+    volumes:
+     - /data/honeytrap:/data/honeytrap
+     - /data/ews:/data/ews
+
+# Netdata service
+  netdata:
+    container_name: netdata
+    restart: always
+    network_mode: "host"
+    cap_add:
+     - SYS_PTRACE
+    security_opt:
+     - apparmor=unconfined
+    image: "dtagdevsec/netdata:1706"
+    volumes:
+     - /proc:/host/proc:ro
+     - /sys:/host/sys:ro
+     - /var/run/docker.sock:/var/run/docker.sock
+
+# Spiderfoot service
+  spiderfoot:
+    container_name: spiderfoot
+    restart: always
+    ports:
+     - "127.0.0.1:64303:8080"
+    image: "dtagdevsec/spiderfoot:1706"
+
+# Ui-for-docker service
+  ui-for-docker:
+    container_name: ui-for-docker
+    command:  -H unix:///var/run/docker.sock --no-auth
+    restart: always
+    ports:
+     - "127.0.0.1:64299:9000"
+    image: "dtagdevsec/ui-for-docker:1706"
+    volumes:
+     - /var/run/docker.sock:/var/run/docker.sock 
+
+# Suricata service
+  suricata:
+    container_name: suricata
+    restart: always
+    network_mode: "host"
+    cap_add:
+     - NET_ADMIN
+    image: "dtagdevsec/suricata:1706"
+    volumes:
+     - /data/suricata:/data/suricata

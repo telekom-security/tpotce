@@ -16,6 +16,3 @@ MY_HOSTNAME=$HOSTNAME
 EOF
 echo $myLOCALIP > /data/elk/logstash/mylocal.ip
 chown tpot:tpot /data/ews/conf/ews.ip
-if [ -f /var/run/check.lock ];
-  then rm /var/run/check.lock
-fi

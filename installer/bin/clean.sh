@@ -1,14 +1,8 @@
 #!/bin/bash
-
-########################################################
-# T-Pot                                                #
-# Container Data Cleaner                               #
-#                                                      #
-# v16.10.0 by mo, DTAG, 2016-05-28                     #
-########################################################
+# T-Pot Container Data Cleaner
 
 # Set persistence
-myPERSISTENCE=$2
+myPERSISTENCE=$1
 
 # Check persistence
 if [ "$myPERSISTENCE" = "on" ];
@@ -36,7 +30,6 @@ fuCOWRIE () {
 # Let's create a function to clean up and prepare dionaea data
 fuDIONAEA () {
   rm -rf /data/dionaea/*
-  rm /data/ews/dionaea/ews.json
   mkdir -p /data/dionaea/log /data/dionaea/bistreams /data/dionaea/binaries /data/dionaea/rtp /data/dionaea/roots/ftp /data/dionaea/roots/tftp /data/dionaea/roots/www /data/dionaea/roots/upnp
   chmod 760 /data/dionaea -R
   chown tpot:tpot /data/dionaea -R
@@ -93,32 +86,12 @@ fuSURICATA () {
   chown tpot:tpot -R /data/suricata
 }
 
-case $1 in
-  conpot)
-    fuCONPOT $1
-  ;;
-  cowrie)
-    fuCOWRIE $1
-  ;;
-  dionaea)
-    fuDIONAEA $1
-  ;;
-  elasticpot)
-    fuELASTICPOT $1
-  ;;
-  elk)
-    fuELK $1
-  ;;
-  emobility)
-    fuEMOBILITY $1
-  ;;
-  glastopf)
-    fuGLASTOPF $1
-  ;;
-  honeytrap)
-    fuHONEYTRAP $1
-  ;;
-  suricata)
-    fuSURICATA $1
-  ;;
-esac
+fuCONPOT
+fuCOWRIE
+fuDIONAEA
+fuELASTICPOT
+fuELK
+fuEMOBILITY
+fuGLASTOPF
+fuHONEYTRAP
+fuSURICATA
