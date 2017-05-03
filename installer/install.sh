@@ -409,9 +409,6 @@ dialog --title "[ Adding cronjobs ]" $myPROGRESSBOXCONF <<EOF
 EOF
 tee -a /etc/crontab 2>&1>/dev/null <<EOF
 
-# Example for alerta-cli IP update
-#*/5 * * * *    root    alerta --endpoint-url http://<ip>:<port>/api delete --filters resource=<host> && alerta --endpoint-url http://<ip>:<port>/api send -e IP -r <host> -E Production -s ok -S T-Pot -t \$(cat /data/elk/logstash/mylocal.ip) --status open
-
 # Check if updated images are available and download them
 27 1 * * *      root    /usr/bin/docker-compose -f /etc/tpot/tpot.yml pull
 
@@ -430,7 +427,7 @@ mkdir -p /data/conpot/log \
          /data/cowrie/log/tty/ /data/cowrie/downloads/ /data/cowrie/keys/ /data/cowrie/misc/ \
          /data/dionaea/log /data/dionaea/bistreams /data/dionaea/binaries /data/dionaea/rtp /data/dionaea/roots/ftp /data/dionaea/roots/tftp /data/dionaea/roots/www /data/dionaea/roots/upnp \
          /data/elasticpot/log \
-         /data/elk/data /data/elk/log /data/elk/logstash/conf \
+         /data/elk/data /data/elk/log \
          /data/glastopf /data/honeytrap/log/ /data/honeytrap/attacks/ /data/honeytrap/downloads/ \
          /data/emobility/log \
          /data/ews/conf \
@@ -510,7 +507,6 @@ tee /etc/tpot/elk/environment 2>&1>/dev/null <<EOF
 MY_EXTIP=$myEXTIP
 MY_HOSTNAME=$HOSTNAME
 EOF
-echo $myLOCALIP > /data/elk/logstash/mylocal.ip 2>&1>/dev/null
 chown tpot:tpot /data/ews/conf/ews.ip 2>&1>/dev/null
 
 # Final steps

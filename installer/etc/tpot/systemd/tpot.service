@@ -9,10 +9,12 @@ Restart=always
 # Clear state from /data
 ExecStartPre=/bin/bash -c '/usr/share/tpot/bin/clean.sh off'
 
-# Remove old containers and volumes
+# Remove old containers, images and volumes
 ExecStartPre=/usr/bin/docker-compose -f /etc/tpot/tpot.yml down -v
 ExecStartPre=/usr/bin/docker-compose -f /etc/tpot/tpot.yml rm -v
 ExecStartPre=-/bin/bash -c 'docker volume rm $(docker volume ls -q)'
+ExecStartPre=-/bin/bash -c 'docker rmi $(docker images | grep "<none>" | awk \'{print $3}\')'
+ExecStartPre=-/bin/bash -c 'docker rm -v $(docker ps -aq)'
 
 # Get IF, disable offloading, enable promiscious mode for p0f and suricata
 ExecStartPre=/bin/bash -c '/sbin/ethtool --offload $(/sbin/ip route | /bin/grep $(/bin/hostname -I | /usr/bin/awk \'{print $1 }\') | /usr/bin/awk \'{print $3 }\') rx off tx off'

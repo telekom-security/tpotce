@@ -1,12 +1,22 @@
-# T-Pot (Everything)
-# For docker-compose version ...
+# T-Pot (Industrial)
+# For docker-compose ...
 version: '2'
+
+networks:
+  conpot_local:
+  emobility_local:
+  ewsposter_local:
+  spiderfoot_local:
+  ui-for-docker_local:
+
 services:
 
 # Conpot service
   conpot:
     container_name: conpot
     restart: always
+    networks:
+      - conpot_local
     ports:
      - "1025:1025"
      - "50100:50100"
@@ -15,30 +25,69 @@ services:
      - /data/conpot:/data/conpot
      - /data/ews:/data/ews
 
-# ELK service
-  elk:
-    container_name: elk
+# ELK services
+## Elasticsearch service
+  elasticsearch:
+    container_name: elasticsearch
     restart: always
-    env_file:
-     - /etc/tpot/elk/environment
+    environment:
+      - bootstrap.memory_lock=true
+#      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
     cap_add:
      - IPC_LOCK
     ulimits:
-      memlock: -1
-      nofile: 65536
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+#    mem_limit: 2g
+    ports:
+     - "127.0.0.1:64298:9200"
+    image: "dtagdevsec/elasticsearch:1706"
+    volumes:
+     - /data:/data
+
+## Kibana service
+  kibana:
+    container_name: kibana
+    restart: always
+    depends_on:
+     - elasticsearch
     ports:
      - "127.0.0.1:64296:5601"
-     - "127.0.0.1:64302:9100"
-     - "127.0.0.1:64298:9200"
-    image: "dtagdevsec/elk:1706"
+    image: "dtagdevsec/kibana:1706"
+
+## Logstash service
+  logstash:
+    container_name: logstash
+    restart: always
+    depends_on:
+     - elasticsearch
+    env_file:
+     - /etc/tpot/elk/environment
+    image: "dtagdevsec/logstash:1706"
     volumes:
      - /data:/data
      - /var/log:/data/host/log
+
+## Elasticsearch-head service
+  head:
+    container_name: head
+    restart: always
+    depends_on:
+     - elasticsearch
+    ports:
+     - "127.0.0.1:64302:9100"
+    image: "dtagdevsec/head:1706"
 
 # Emobility service
   emobility:
     container_name: emobility
     restart: always
+    networks:
+      - emobility_local
     cap_add:
      - NET_ADMIN
     ports:
@@ -52,6 +101,8 @@ services:
   ewsposter:
     container_name: ewsposter
     restart: always
+    networks:
+      - ewsposter_local
     image: "dtagdevsec/ewsposter:1706"
     volumes:
      - /data:/data
@@ -76,6 +127,8 @@ services:
   spiderfoot:
     container_name: spiderfoot
     restart: always
+    networks:
+      - spiderfoot_local
     ports:
      - "127.0.0.1:64303:8080"
     image: "dtagdevsec/spiderfoot:1706"
@@ -85,6 +138,8 @@ services:
     container_name: ui-for-docker
     command:  -H unix:///var/run/docker.sock --no-auth
     restart: always
+    networks:
+      - ui-for-docker_local
     ports:
      - "127.0.0.1:64299:9000"
     image: "dtagdevsec/ui-for-docker:1706"
