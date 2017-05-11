@@ -17,9 +17,9 @@ ExecStartPre=-/bin/bash -c 'docker rmi $(docker images | grep "<none>" | awk \'{
 ExecStartPre=-/bin/bash -c 'docker rm -v $(docker ps -aq)'
 
 # Get IF, disable offloading, enable promiscious mode for p0f and suricata
-ExecStartPre=/bin/bash -c '/sbin/ethtool --offload $(/sbin/ip route | /bin/grep $(/bin/hostname -I | /usr/bin/awk \'{print $1 }\') | /usr/bin/awk \'{print $3 }\') rx off tx off'
-ExecStartPre=/bin/bash -c '/sbin/ethtool -K $(/sbin/ip route | /bin/grep $(/bin/hostname -I | /usr/bin/awk \'{print $1 }\') | /usr/bin/awk \'{print $3 }\') gso off gro off'
-ExecStartPre=/bin/bash -c '/sbin/ip link set $(/sbin/ip route | /bin/grep $(/bin/hostname -I | /usr/bin/awk \'{print $1 }\') | /usr/bin/awk \'{print $3 }\') promisc on'
+ExecStartPre=/bin/bash -c '/sbin/ethtool --offload $(/sbin/ip address | grep "^2: " | awk \'{ print $2 }\' | tr -d [:punct:]) rx off tx off'
+ExecStartPre=/bin/bash -c '/sbin/ethtool -K $(/sbin/ip address | grep "^2: " | awk \'{ print $2 }\' | tr -d [:punct:]) gso off gro off'
+ExecStartPre=/bin/bash -c '/sbin/ip link set $(/sbin/ip address | grep "^2: " | awk \'{ print $2 }\' | tr -d [:punct:]) promisc on'
 
 # Modify access rights on docker.sock for netdata
 ExecStartPre=-/bin/chmod 666 /var/run/docker.sock
@@ -27,10 +27,10 @@ ExecStartPre=-/bin/chmod 666 /var/run/docker.sock
 # Prepare iptables rules for honeytrap
 ExecStartPre=/sbin/iptables -w -A INPUT -p tcp --syn -m state --state NEW -m multiport ! --dports 21,22,23,42,69,80,135,443,445,1433,1723,1883,1900 -j NFQUEUE
 ExecStartPre=/sbin/iptables -w -A INPUT -p tcp --syn -m state --state NEW -m multiport ! --dports 3306,5060,5061,5601,11211 -j NFQUEUE
-ExecStartPre=/sbin/iptables -w -A INPUT -p tcp --syn -m state --state NEW -m multiport ! --dports 64295,64296,64297,64298,64299,64300,64301,64302,64303 -j NFQUEUE
+ExecStartPre=/sbin/iptables -w -A INPUT -p tcp --syn -m state --state NEW -m multiport ! --dports 64295:64303 -j NFQUEUE
 ExecStartPre=/sbin/iptables -w -A INPUT -p tcp --syn -m state --state NEW -m multiport ! --dports 1025,50100,8080,8081,9200 -j NFQUEUE
 
-# Compose T-Pot up and run as daemon
+# Compose T-Pot up
 ExecStart=/usr/bin/docker-compose -f /etc/tpot/tpot.yml up
 
 # Compose T-Pot down and remove containers
@@ -38,7 +38,7 @@ ExecStop=/usr/bin/docker-compose -f /etc/tpot/tpot.yml down -v
 
 # Remove iptables rules for honeytrap
 ExecStopPost=/sbin/iptables -w -D INPUT -p tcp --syn -m state --state NEW -m multiport ! --dports 1025,50100,8080,8081,9200 -j NFQUEUE
-ExecStopPost=/sbin/iptables -w -D INPUT -p tcp --syn -m state --state NEW -m multiport ! --dports 64295,64296,64297,64298,64299,64300,64301,64302,64303 -j NFQUEUE
+ExecStopPost=/sbin/iptables -w -D INPUT -p tcp --syn -m state --state NEW -m multiport ! --dports 64295:64303 -j NFQUEUE
 ExecStopPost=/sbin/iptables -w -D INPUT -p tcp --syn -m state --state NEW -m multiport ! --dports 3306,5060,5061,5601,11211 -j NFQUEUE
 ExecStopPost=/sbin/iptables -w -D INPUT -p tcp --syn -m state --state NEW -m multiport ! --dports 21,22,23,42,69,80,135,443,445,1433,1723,1883,1900 -j NFQUEUE
 

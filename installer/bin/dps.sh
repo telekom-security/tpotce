@@ -21,7 +21,7 @@ while true
     printf "%-15s STATUS"
     printf "%-13s PORTS\n"
     for i in $myIMAGES; do
-      mySTATUS=$(/usr/bin/docker ps -f name=$i --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" -f status=running -f status=exited | GREP_COLORS='mt=01;35' /bin/egrep --color=always "(^[_0-9a-z-]+ |$)|$" | GREP_COLORS='mt=01;32' /bin/egrep --color=always "(Up[ 0-9a-Z ]+ |$)|$" | GREP_COLORS='mt=01;31' /bin/egrep --color=always "(Exited[ \(0-9\) ]+ [0-9a-Z ]+ ago|$)|$" | tail -n 1)
+      mySTATUS=$(/usr/bin/docker ps -f name=$i --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}\t" -f status=running -f status=exited | GREP_COLORS='mt=01;35' /bin/egrep --color=always "(^[_0-9a-z-]+ |$)|$" | GREP_COLORS='mt=01;32' /bin/egrep --color=always "(Up[ 0-9a-Z ]+ |$)|$" | GREP_COLORS='mt=01;31' /bin/egrep --color=always "(Exited[ \(0-9\) ]+ [0-9a-Z ]+ ago|$)|$" | tail -n 1)
       myDOWN=$(echo "$mySTATUS" | grep -c "NAMES")
       if [ "$myDOWN" = "1" ];
         then
@@ -31,7 +31,7 @@ while true
       fi
       if [ "$1" = "vv" ]; 
         then
-          /usr/bin/docker exec -t $i /bin/ps -awfuwfxwf | egrep -v -E "awfuwfxwf|/bin/ps" 
+          /usr/bin/docker exec -t $i /bin/ps awfuwfxwf | egrep -v -E "awfuwfxwf|/bin/ps" 
       fi      
     done
     if [[ $1 =~ ^([1-9]|[1-9][0-9]|[1-9][0-9][0-9])$ ]];

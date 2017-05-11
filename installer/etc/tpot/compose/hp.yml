@@ -27,13 +27,14 @@ services:
 # Dionaea service
   dionaea:
     container_name: dionaea
+    stdin_open: true
     restart: always
     networks:
       - dionaea_local
     cap_add:
      - NET_BIND_SERVICE
     ports:
-     - "21:21" 
+     - "21:21"
      - "42:42"
      - "69:69/udp"
      - "8081:80"
@@ -44,11 +45,11 @@ services:
      - "1723:1723"
      - "1883:1883"
      - "1900:1900"
-     - "3306:3306" 
+     - "3306:3306"
      - "5060:5060"
      - "5061:5061"
      - "5060:5060/udp"
-     - "11211:11211" 
+     - "11211:11211"
     image: "dtagdevsec/dionaea:1706"
     volumes:
      - /data/dionaea:/data/dionaea

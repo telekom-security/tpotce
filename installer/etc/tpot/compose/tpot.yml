@@ -29,6 +29,7 @@ services:
 # Dionaea service
   dionaea:
     container_name: dionaea
+    stdin_open: true
     restart: always
     networks:
       - dionaea_local
@@ -74,7 +75,7 @@ services:
     restart: always
     environment:
       - bootstrap.memory_lock=true
-#      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+#      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
     cap_add:
      - IPC_LOCK
     ulimits:
