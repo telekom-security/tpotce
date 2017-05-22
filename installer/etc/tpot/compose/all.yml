@@ -1,6 +1,6 @@
 # T-Pot (Everything)
 # For docker-compose ...
-version: '2'
+version: '2.1'
 
 networks:
   conpot_local:
@@ -35,9 +35,11 @@ services:
     restart: always
     networks:
       - cowrie_local
+    cap_add:
+     - NET_BIND_SERVICE
     ports:
-     - "22:2222"
-     - "23:2223"
+     - "22:22"
+     - "23:23"
     image: "dtagdevsec/cowrie:1706"
     volumes:
      - /data/cowrie:/data/cowrie
@@ -101,7 +103,7 @@ services:
       nofile:
         soft: 65536
         hard: 65536
-#    mem_limit: 3g
+#    mem_limit: 2g
     ports:
      - "127.0.0.1:64298:9200"
     image: "dtagdevsec/elasticsearch:1706"
@@ -113,7 +115,8 @@ services:
     container_name: kibana
     restart: always
     depends_on:
-     - elasticsearch
+     elasticsearch:
+       condition: service_healthy
     ports:
      - "127.0.0.1:64296:5601"
     image: "dtagdevsec/kibana:1706"
@@ -123,7 +126,8 @@ services:
     container_name: logstash
     restart: always
     depends_on:
-     - elasticsearch
+     elasticsearch:
+       condition: service_healthy
     env_file:
      - /etc/tpot/elk/environment
     image: "dtagdevsec/logstash:1706"
@@ -136,7 +140,8 @@ services:
     container_name: head
     restart: always
     depends_on:
-     - elasticsearch
+     elasticsearch:
+       condition: service_healthy
     ports:
      - "127.0.0.1:64302:9100"
     image: "dtagdevsec/head:1706"
@@ -195,8 +200,13 @@ services:
 # Netdata service
   netdata:
     container_name: netdata
+    hostname: ${HOSTNAME}
     restart: always
-    network_mode: "host"
+    depends_on:
+     elasticsearch:
+       condition: service_healthy
+    ports:
+     - "127.0.0.1:64301:19999"
     cap_add:
      - SYS_PTRACE
     security_opt:

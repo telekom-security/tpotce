@@ -1,6 +1,6 @@
 # T-Pot (Honeypots)
 # For docker-compose ...
-version: '2'
+version: '2.1'
 
 networks:
   cowrie_local:
@@ -17,9 +17,11 @@ services:
     restart: always
     networks:
       - cowrie_local
+    cap_add:
+     - NET_BIND_SERVICE
     ports:
-     - "22:2222"
-     - "23:2223"
+     - "22:22"
+     - "23:23"
     image: "dtagdevsec/cowrie:1706"
     volumes:
      - /data/cowrie:/data/cowrie
@@ -34,7 +36,7 @@ services:
     cap_add:
      - NET_BIND_SERVICE
     ports:
-     - "21:21"
+     - "21:21" 
      - "42:42"
      - "69:69/udp"
      - "8081:80"
@@ -45,11 +47,11 @@ services:
      - "1723:1723"
      - "1883:1883"
      - "1900:1900"
-     - "3306:3306"
+     - "3306:3306" 
      - "5060:5060"
      - "5061:5061"
      - "5060:5060/udp"
-     - "11211:11211"
+     - "11211:11211" 
     image: "dtagdevsec/dionaea:1706"
     volumes:
      - /data/dionaea:/data/dionaea

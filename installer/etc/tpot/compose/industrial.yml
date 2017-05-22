@@ -1,6 +1,6 @@
 # T-Pot (Industrial)
 # For docker-compose ...
-version: '2'
+version: '2.1'
 
 networks:
   conpot_local:
@@ -32,7 +32,7 @@ services:
     restart: always
     environment:
       - bootstrap.memory_lock=true
-#      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+#      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
     cap_add:
      - IPC_LOCK
     ulimits:
@@ -54,7 +54,8 @@ services:
     container_name: kibana
     restart: always
     depends_on:
-     - elasticsearch
+     elasticsearch:
+       condition: service_healthy
     ports:
      - "127.0.0.1:64296:5601"
     image: "dtagdevsec/kibana:1706"
@@ -64,7 +65,8 @@ services:
     container_name: logstash
     restart: always
     depends_on:
-     - elasticsearch
+     elasticsearch:
+       condition: service_healthy
     env_file:
      - /etc/tpot/elk/environment
     image: "dtagdevsec/logstash:1706"
@@ -77,7 +79,8 @@ services:
     container_name: head
     restart: always
     depends_on:
-     - elasticsearch
+     elasticsearch:
+       condition: service_healthy
     ports:
      - "127.0.0.1:64302:9100"
     image: "dtagdevsec/head:1706"
@@ -111,8 +114,13 @@ services:
 # Netdata service
   netdata:
     container_name: netdata
+    hostname: ${HOSTNAME}
     restart: always
-    network_mode: "host"
+    depends_on:
+     elasticsearch:
+       condition: service_healthy
+    ports:
+     - "127.0.0.1:64301:19999"
     cap_add:
      - SYS_PTRACE
     security_opt:

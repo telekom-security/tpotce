@@ -1,18 +1,13 @@
 #!/bin/bash
 
-########################################################
-# T-Pot                                                #
-# .ISO creator                                         #
-#                                                      #
-# v17.06 by mo, DTAG, 2017-03-13                       #
-########################################################
-
 # Set TERM, DIALOGRC
 export DIALOGRC=/etc/dialogrc
 export TERM=linux
 
 # Let's define some global vars
 myBACKTITLE="T-Pot - ISO Creator"
+# If you need latest hardware support, try using the hardware enablement (hwe) ISO
+# myUBUNTULINK="http://archive.ubuntu.com/ubuntu/dists/xenial-updates/main/installer-amd64/current/images/hwe-netboot/mini.iso"
 myUBUNTULINK="http://archive.ubuntu.com/ubuntu/dists/xenial-updates/main/installer-amd64/current/images/netboot/mini.iso"
 myUBUNTUISO="mini.iso"
 myTPOTISO="tpot.iso"

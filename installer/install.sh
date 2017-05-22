@@ -278,8 +278,20 @@ EOF
 fi
 
 # Let's provide a wireless example config ...
-fuECHO "### Providing a wireless example config."
+fuECHO "### Providing static ip, wireless example config."
 tee -a /etc/network/interfaces 2>&1>/dev/null <<EOF
+
+### Example static ip config
+### Replace <eth0> with the name of your physical interface name
+#
+#auto eth0
+#iface eth0 inet static
+# address 192.168.1.1
+# netmask 255.255.255.0
+# network 192.168.1.0
+# broadcast 192.168.1.255
+# gateway 192.168.1.1
+# dns-nameservers 192.168.1.1
 
 ### Example wireless config without 802.1x
 ### This configuration was tested with the IntelNUC series
@@ -314,9 +326,9 @@ apt-get upgrade -y 2>&1 | dialog --title "[ Pulling updates ]" $myPROGRESSBOXCON
 apt-get autoclean -y 2>&1 | dialog --title "[ Pulling updates ]" $myPROGRESSBOXCONF
 apt-get autoremove -y 2>&1 | dialog --title "[ Pulling updates ]" $myPROGRESSBOXCONF
 
-# Installing alerta-cli, wetty, ctop, elasticdump
+# Installing docker-compose, wetty, ctop, elasticdump
 pip install --upgrade pip 2>&1 | dialog --title "[ Installing pip ]" $myPROGRESSBOXCONF
-pip install alerta  2>&1 | dialog --title "[ Installing alerta ]" $myPROGRESSBOXCONF
+pip install docker-compose==1.12.0 2>&1 | dialog --title "[ Installing docker-compose ]" $myPROGRESSBOXCONF
 ln -s /usr/bin/nodejs /usr/bin/node 2>&1 | dialog --title "[ Installing wetty ]" $myPROGRESSBOXCONF
 npm install https://github.com/t3chn0m4g3/wetty -g 2>&1 | dialog --title "[ Installing wetty ]" $myPROGRESSBOXCONF
 npm install https://github.com/t3chn0m4g3/elasticsearch-dump -g 2>&1 | dialog --title "[ Installing elasticsearch-dump ]" $myPROGRESSBOXCONF
@@ -493,21 +505,7 @@ PATH="$PATH:/usr/share/tpot/bin"
 EOF
 
 # Let's create ews.ip before reboot and prevent race condition for first start
-source /etc/environment 2>&1>/dev/null
-myLOCALIP=$(hostname -I | awk '{ print $1 }')
-myEXTIP=$(/usr/share/tpot/bin/myip.sh)
-sed -i "s#IP:.*#IP: $myLOCALIP ($myEXTIP)[0m#" /etc/issue 2>&1>/dev/null
-sed -i "s#SSH:.*#SSH: ssh -l tsec -p 64295 $myLOCALIP[0m#" /etc/issue 2>&1>/dev/null
-sed -i "s#WEB:.*#WEB: https://$myLOCALIP:64297[0m#" /etc/issue 2>&1>/dev/null
-tee /data/ews/conf/ews.ip 2>&1>/dev/null <<EOF
-[MAIN]
-ip = $myEXTIP
-EOF
-tee /etc/tpot/elk/environment 2>&1>/dev/null <<EOF
-MY_EXTIP=$myEXTIP
-MY_HOSTNAME=$HOSTNAME
-EOF
-chown tpot:tpot /data/ews/conf/ews.ip 2>&1>/dev/null
+/usr/share/tpot/bin/updateip.sh 2>&1>/dev/null
 
 # Final steps
 mv /root/tpot/etc/rc.local /etc/rc.local 2>&1>/dev/null && \
