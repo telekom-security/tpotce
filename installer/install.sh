@@ -443,9 +443,11 @@ mkdir -p /data/conpot/log \
          /data/glastopf /data/honeytrap/log/ /data/honeytrap/attacks/ /data/honeytrap/downloads/ \
          /data/emobility/log \
          /data/ews/conf \
+         /data/spiderfoot \
          /data/suricata/log /home/tsec/.ssh/ \
          /etc/tpot/elk /etc/tpot/compose /etc/tpot/systemd \
          /usr/share/tpot/bin 2>&1 | dialog --title "[ Creating some files and folders ]" $myPROGRESSBOXCONF
+touch /data/spiderfoot/spiderfoot.db 2>&1 | dialog --title "[ Creating some files and folders ]" $myPROGRESSBOXCONF
 
 # Let's take care of some files and permissions before copying
 chmod 500 /root/tpot/bin/* 2>&1 | dialog --title "[ Setting permissions ]" $myPROGRESSBOXCONF

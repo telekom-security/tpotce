@@ -48,7 +48,7 @@ fuELK () {
   # ELK data will be kept for <= 90 days, check /etc/crontab for curator modification
   # ELK daemon log files will be removed
   rm -rf /data/elk/log/*
-  mkdir -p /data/elk/logstash/conf 
+  mkdir -p /data/elk 
   chmod 760 /data/elk -R
   chown tpot:tpot /data/elk -R
 }
@@ -78,6 +78,14 @@ fuHONEYTRAP () {
   chown tpot:tpot /data/honeytrap/ -R
 }
 
+# Let's create a function prepare spiderfoot db
+fuSPIDERFOOT () {
+  mkdir -p /data/spiderfoot
+  touch /data/spiderfoot/spiderfoot.db
+  chmod 760 -R /data/spiderfoot
+  chown tpot:tpot -R /data/spiderfoot
+}
+
 # Let's create a function to clean up and prepare suricata data
 fuSURICATA () {
   rm -rf /data/suricata/*
@@ -94,4 +102,5 @@ fuELK
 fuEMOBILITY
 fuGLASTOPF
 fuHONEYTRAP
+fuSPIDERFOOT
 fuSURICATA

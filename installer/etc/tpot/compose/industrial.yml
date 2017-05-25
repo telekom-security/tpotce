@@ -140,6 +140,8 @@ services:
     ports:
      - "127.0.0.1:64303:8080"
     image: "dtagdevsec/spiderfoot:1706"
+    volumes:
+     - /data/spiderfoot/spiderfoot.db:/home/spiderfoot/spiderfoot.db
 
 # Ui-for-docker service
   ui-for-docker:
