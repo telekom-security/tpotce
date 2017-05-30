@@ -200,13 +200,11 @@ services:
 # Netdata service
   netdata:
     container_name: netdata
-    hostname: ${HOSTNAME}
     restart: always
+    network_mode: "host"
     depends_on:
      elasticsearch:
        condition: service_healthy
-    ports:
-     - "127.0.0.1:64301:19999"
     cap_add:
      - SYS_PTRACE
     security_opt:
