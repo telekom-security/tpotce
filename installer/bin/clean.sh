@@ -94,6 +94,14 @@ fuSURICATA () {
   chown tpot:tpot -R /data/suricata
 }
 
+# Let's create a function to clean up and prepare p0f data
+fuP0F () {
+  rm -rf /data/p0f/*
+  mkdir -p /data/p0f/log
+  chmod 760 -R /data/p0f
+  chown tpot:tpot -R /data/p0f
+}
+
 fuCONPOT
 fuCOWRIE
 fuDIONAEA
@@ -104,3 +112,4 @@ fuGLASTOPF
 fuHONEYTRAP
 fuSPIDERFOOT
 fuSURICATA
+fuP0F

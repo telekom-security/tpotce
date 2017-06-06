@@ -39,7 +39,7 @@ ExecStartPre=/sbin/iptables -w -A INPUT -p tcp -m multiport --dports 1025,50100,
 ExecStartPre=/sbin/iptables -w -A INPUT -p tcp --syn -m state --state NEW -j NFQUEUE
 
 # Compose T-Pot up
-ExecStart=/usr/local/bin/docker-compose -f /etc/tpot/tpot.yml up
+ExecStart=/usr/local/bin/docker-compose -f /etc/tpot/tpot.yml up --no-color
 
 # Compose T-Pot down, remove containers and volumes
 ExecStop=/usr/local/bin/docker-compose -f /etc/tpot/tpot.yml down -v

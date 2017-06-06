@@ -445,6 +445,7 @@ mkdir -p /data/conpot/log \
          /data/ews/conf \
          /data/spiderfoot \
          /data/suricata/log /home/tsec/.ssh/ \
+         /data/p0f/log \
          /etc/tpot/elk /etc/tpot/compose /etc/tpot/systemd \
          /usr/share/tpot/bin 2>&1 | dialog --title "[ Creating some files and folders ]" $myPROGRESSBOXCONF
 touch /data/spiderfoot/spiderfoot.db 2>&1 | dialog --title "[ Creating some files and folders ]" $myPROGRESSBOXCONF

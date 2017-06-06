@@ -10,7 +10,6 @@ stty -echo -icanon time 0 min 0
 myIMAGES=$(cat /etc/tpot/tpot.yml | grep container_name | cut -d: -f2)
 while true
   do
-    clear
     echo "[0;0m"
     echo "======| System |======"
     echo Date:"     "$(date)
