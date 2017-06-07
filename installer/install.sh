@@ -381,9 +381,9 @@ case $myFLAVOR in
 esac
 
 # Let's load docker images
-myIMAGESCOUNT=$(cat /root/tpot/etc/tpot/tpot.yml | grep container_name | cut -d: -f2 | wc -l)
+myIMAGESCOUNT=$(cat /root/tpot/etc/tpot/tpot.yml | grep -v '#' | grep image | cut -d: -f2 | wc -l)
 j=0
-for name in $(cat /root/tpot/etc/tpot/tpot.yml | grep image | cut -d'"' -f2)
+for name in $(cat /root/tpot/etc/tpot/tpot.yml | grep -v '#' | grep image | cut -d'"' -f2)
   do
     dialog --title "[ Downloading docker images, please be patient ]" --backtitle "$myBACKTITLE" \
            --gauge "\n  Now downloading: $name\n" 8 80 $(expr 100 \* $j / $myIMAGESCOUNT) <<EOF
