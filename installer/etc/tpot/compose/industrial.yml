@@ -10,20 +10,19 @@ networks:
   ui-for-docker_local:
 
 services:
-
+ 
 # Conpot service
   conpot:
     container_name: conpot
     restart: always
     networks:
-      - conpot_local
+     - conpot_local
     ports:
      - "1025:1025"
      - "50100:50100"
     image: "dtagdevsec/conpot:1706"
     volumes:
-     - /data/conpot:/data/conpot
-     - /data/ews:/data/ews
+     - /data/conpot/log:/var/log/conpot
 
 # ELK services
 ## Elasticsearch service
@@ -31,8 +30,8 @@ services:
     container_name: elasticsearch
     restart: always
     environment:
-      - bootstrap.memory_lock=true
-#      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+     - bootstrap.memory_lock=true
+#     - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
     cap_add:
      - IPC_LOCK
     ulimits:
@@ -54,8 +53,8 @@ services:
     container_name: kibana
     restart: always
     depends_on:
-     elasticsearch:
-       condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
     ports:
      - "127.0.0.1:64296:5601"
     image: "dtagdevsec/kibana:1706"
@@ -65,8 +64,8 @@ services:
     container_name: logstash
     restart: always
     depends_on:
-     elasticsearch:
-       condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
     env_file:
      - /etc/tpot/elk/environment
     image: "dtagdevsec/logstash:1706"
@@ -79,8 +78,8 @@ services:
     container_name: head
     restart: always
     depends_on:
-     elasticsearch:
-       condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
     ports:
      - "127.0.0.1:64302:9100"
     image: "dtagdevsec/head:1706"
@@ -90,7 +89,7 @@ services:
     container_name: emobility
     restart: always
     networks:
-      - emobility_local
+     - emobility_local
     cap_add:
      - NET_ADMIN
     ports:
@@ -105,7 +104,7 @@ services:
     container_name: ewsposter
     restart: always
     networks:
-      - ewsposter_local
+     - ewsposter_local
     image: "dtagdevsec/ewsposter:1706"
     volumes:
      - /data:/data
@@ -117,8 +116,8 @@ services:
     restart: always
     network_mode: "host"
     depends_on:
-     elasticsearch:
-       condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
     cap_add:
      - SYS_PTRACE
     security_opt:
@@ -134,26 +133,26 @@ services:
     container_name: spiderfoot
     restart: always
     networks:
-      - spiderfoot_local
+     - spiderfoot_local
     ports:
      - "127.0.0.1:64303:8080"
     image: "dtagdevsec/spiderfoot:1706"
     volumes:
      - /data/spiderfoot/spiderfoot.db:/home/spiderfoot/spiderfoot.db
-
+ 
 # Ui-for-docker service
   ui-for-docker:
     container_name: ui-for-docker
     command:  -H unix:///var/run/docker.sock --no-auth
     restart: always
     networks:
-      - ui-for-docker_local
+     - ui-for-docker_local
     ports:
      - "127.0.0.1:64299:9000"
     image: "dtagdevsec/ui-for-docker:1706"
     volumes:
      - /var/run/docker.sock:/var/run/docker.sock 
-
+ 
 # Suricata service
   suricata:
     container_name: suricata
@@ -166,3 +165,12 @@ services:
     image: "dtagdevsec/suricata:1706"
     volumes:
      - /data/suricata/log:/var/log/suricata
+
+# P0f service
+  p0f:
+    container_name: p0f
+    restart: always
+    network_mode: "host"
+    image: "dtagdevsec/p0f:1706"
+    volumes:
+     - /data/p0f/log:/var/log/p0f
