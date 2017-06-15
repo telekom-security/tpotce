@@ -8,6 +8,7 @@ networks:
   elasticpot_local:
   ewsposter_local:
   glastopf_local:
+  mailoney_local:
 
 services:
 
@@ -103,3 +104,15 @@ services:
     volumes:
      - /data/honeytrap:/data/honeytrap
      - /data/ews:/data/ews
+
+# Mailoney service
+  mailoney:
+    container_name: mailoney
+    restart: always
+    networks:
+     - mailoney_local
+    ports:
+     - "25:2525"
+    image: "dtagdevsec/mailoney:1706"
+    volumes:
+     - /data/mailoney/log:/opt/mailoney/logs

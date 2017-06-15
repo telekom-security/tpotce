@@ -97,7 +97,6 @@ services:
     image: "dtagdevsec/emobility:1706"
     volumes:
      - /data/emobility:/data/eMobility
-     - /data/ews:/data/ews
 
 # Ewsposter service
   ewsposter:

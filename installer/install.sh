@@ -441,6 +441,7 @@ mkdir -p /data/conpot/log \
          /data/elasticpot/log \
          /data/elk/data /data/elk/log \
          /data/glastopf /data/honeytrap/log/ /data/honeytrap/attacks/ /data/honeytrap/downloads/ \
+         /data/mailoney/log \
          /data/emobility/log \
          /data/ews/conf \
          /data/spiderfoot \

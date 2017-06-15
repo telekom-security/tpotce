@@ -78,7 +78,15 @@ fuHONEYTRAP () {
   chown tpot:tpot /data/honeytrap/ -R
 }
 
-# Let's create a function prepare spiderfoot db
+# Let's create a function to clean up and prepare mailoney data
+fuHONEYTRAP () {
+  rm -rf /data/mailoney/*
+  mkdir -p /data/mailoney/log/
+  chmod 760 /data/mailoney/ -R
+  chown tpot:tpot /data/mailoney/ -R
+}
+
+# Let's create a function to prepare spiderfoot db
 fuSPIDERFOOT () {
   mkdir -p /data/spiderfoot
   touch /data/spiderfoot/spiderfoot.db
