@@ -81,7 +81,7 @@ services:
      - "9200:9200"
     image: "dtagdevsec/elasticpot:1706"
     volumes:
-     - /data/elasticpot/log/elasticpot.log:/opt/ElasticpotPY/elasticpot.log
+     - /data/elasticpot/log:/opt/ElasticpotPY/log
 
 # ELK services
 ## Elasticsearch service
