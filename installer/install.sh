@@ -15,11 +15,11 @@ myPFXPATH="/root/tpot/keys/8021x.pfx"
 myPFXPWPATH="/root/tpot/keys/8021x.pw"
 myPFXHOSTIDPATH="/root/tpot/keys/8021x.id"
 myBACKTITLE="T-Pot-Installer"
-mySITES="https://index.docker.io https://github.com http://nsanamegenerator.com https://pypi.python.org https://ubuntu.com"
+mySITES="https://index.docker.io https://github.com https://pypi.python.org https://ubuntu.com"
 myPROGRESSBOXCONF=" --backtitle "$myBACKTITLE" --progressbox 24 80"
 
 fuRANDOMWORD () {
-  local myWORDFILE=/usr/share/dict/names
+  local myWORDFILE="$1"
   local myLINES=$(cat $myWORDFILE  | wc -l)
   local myRANDOM=$((RANDOM % $myLINES))
   local myNUM=$((myRANDOM * myRANDOM % $myLINES + 1))
@@ -341,12 +341,9 @@ addgroup --gid 2000 tpot 2>&1 | dialog --title "[ Adding new user ]" $myPROGRESS
 adduser --system --no-create-home --uid 2000 --disabled-password --disabled-login --gid 2000 tpot 2>&1 | dialog --title "[ Adding new user ]" $myPROGRESSBOXCONF
 
 # Let's set the hostname
-myHOST=$(curl -s -f www.nsanamegenerator.com | html2text | tr A-Z a-z | awk '{print $1}')
-if [ "$myHOST" = "" ];
-  then
-    dialog --no-ok --no-cancel --backtitle "$myBACKTITLE" --title "[ Failed to fetch name from remote, using local cache ]" --pause "" 6 80 2
-    myHOST=$(fuRANDOMWORD)
-  fi
+a=$(fuRANDOMWORD /usr/share/dict/a.txt)
+n=$(fuRANDOMWORD /usr/share/dict/n.txt)
+myHOST=$a$n
 hostnamectl set-hostname $myHOST 2>&1 | dialog --title "[ Setting new hostname ]" $myPROGRESSBOXCONF
 sed -i 's#127.0.1.1.*#127.0.1.1\t'"$myHOST"'#g' /etc/hosts 2>&1 | dialog --title "[ Setting new hostname ]" $myPROGRESSBOXCONF
 
