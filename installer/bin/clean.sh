@@ -79,7 +79,7 @@ fuHONEYTRAP () {
 }
 
 # Let's create a function to clean up and prepare mailoney data
-fuHONEYTRAP () {
+fuMAILONEY () {
   rm -rf /data/mailoney/*
   mkdir -p /data/mailoney/log/
   chmod 760 /data/mailoney/ -R
@@ -118,6 +118,7 @@ fuELK
 fuEMOBILITY
 fuGLASTOPF
 fuHONEYTRAP
+fuMAILONEY
 fuSPIDERFOOT
 fuSURICATA
 fuP0F

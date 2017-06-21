@@ -414,6 +414,9 @@ tee -a /etc/sysctl.conf 2>&1>/dev/null <<EOF
 kernel.panic = 1
 kernel.panic_on_oops = 1
 vm.max_map_count = 262144
+net.ipv6.conf.all.disable_ipv6 = 1
+net.ipv6.conf.default.disable_ipv6 = 1
+net.ipv6.conf.lo.disable_ipv6 = 1
 EOF
 
 # Let's add some cronjobs
@@ -426,6 +429,9 @@ tee -a /etc/crontab 2>&1>/dev/null <<EOF
 
 # Delete elastic indices older than 90 days (kibana index is omitted by default)
 #27 4 * * *     root    docker exec elk bash -c '/usr/local/bin/curator --host 127.0.0.1 delete indices --older-than 90 --time-unit days --timestring \%Y.\%m.\%d'
+
+# Uploaded binaries are not supposed to be downloaded
+*/1 * * * *     root    mv --backup=numbered /data/dionaea/roots/ftp/* /data/dionaea/binaries/
 
 # Daily reboot
 27 3 * * *      root    reboot
