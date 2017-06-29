@@ -23,7 +23,7 @@ fuECHO () {
 }
 
 fuRANDOMWORD () {
-  local myWORDFILE=/usr/share/dict/names
+  local myWORDFILE="$1"
   local myLINES=$(cat $myWORDFILE  | wc -l)
   local myRANDOM=$((RANDOM % $myLINES))
   local myNUM=$((myRANDOM * myRANDOM % $myLINES + 1))
@@ -295,11 +295,9 @@ adduser --system --no-create-home --uid 2000 --disabled-password --disabled-logi
 
 # Let's set the hostname
 fuECHO "### Setting a new hostname."
-myHOST=$(curl -s -f www.nsanamegenerator.com | html2text | tr A-Z a-z | awk '{print $1}')
-if [ "$myHOST" = "" ]; then
-  fuECHO "### Failed to fetch name from remote, using local cache."
-  myHOST=$(fuRANDOMWORD)
-fi
+a=$(fuRANDOMWORD /usr/share/dict/a.txt)
+n=$(fuRANDOMWORD /usr/share/dict/n.txt)
+myHOST=$a$n
 hostnamectl set-hostname $myHOST
 sed -i 's#127.0.1.1.*#127.0.1.1\t'"$myHOST"'#g' /etc/hosts
 
