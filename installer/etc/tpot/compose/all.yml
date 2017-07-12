@@ -221,6 +221,16 @@ services:
     image: "dtagdevsec/mailoney:1706"
     volumes:
      - /data/mailoney/log:/opt/mailoney/logs
+
+# Maltrail service
+#  maltrail:
+#    container_name: maltrail
+#    stdin_open: true
+#    restart: always
+#    network_mode: "host"
+#    image: "dtagdevsec/maltrail:1706"
+#    volumes:
+#     - /data/maltrail/log:/var/log/maltrail
  
 # Netdata service
   netdata:

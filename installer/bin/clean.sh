@@ -86,6 +86,14 @@ fuMAILONEY () {
   chown tpot:tpot /data/mailoney/ -R
 }
 
+# Let's create a function to clean up and prepare maltrail data
+fuMALTRAIL () {
+  rm -rf /data/maltrail/*
+  mkdir -p /data/maltrail/log/
+  chmod 760 /data/maltrail/ -R
+  chown tpot:tpot /data/maltrail/ -R
+}
+
 # Let's create a function to prepare spiderfoot db
 fuSPIDERFOOT () {
   mkdir -p /data/spiderfoot
@@ -119,6 +127,7 @@ fuEMOBILITY
 fuGLASTOPF
 fuHONEYTRAP
 fuMAILONEY
+fuMALTRAIL
 fuSPIDERFOOT
 fuSURICATA
 fuP0F
