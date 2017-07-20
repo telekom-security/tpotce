@@ -10,7 +10,7 @@ RestartSec=5
 # Get and set internal, external IP infos, but ignore errors
 ExecStartPre=-/usr/share/tpot/bin/updateip.sh
 
-# Clear state from /data
+# Clear state or if persistence is enabled rotate and compress logs from /data
 ExecStartPre=-/bin/bash -c '/usr/share/tpot/bin/clean.sh off'
 
 # Remove old containers, images and volumes
