@@ -138,14 +138,6 @@ fuMAILONEY () {
   chown tpot:tpot /data/mailoney/ -R
 }
 
-# Let's create a function to clean up and prepare maltrail data
-fuMALTRAIL () {
-  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/maltrail/*; fi
-  mkdir -p /data/maltrail/log/
-  chmod 760 /data/maltrail/ -R
-  chown tpot:tpot /data/maltrail/ -R
-}
-
 # Let's create a function to prepare spiderfoot db
 fuSPIDERFOOT () {
   mkdir -p /data/spiderfoot
@@ -169,7 +161,6 @@ fuP0F () {
   chmod 760 -R /data/p0f
   chown tpot:tpot -R /data/p0f
 }
-
 
 # Avoid unwanted cleaning
 if [ "$myPERSISTENCE" = "" ];
@@ -204,7 +195,6 @@ fuEMOBILITY
 fuGLASTOPF
 fuHONEYTRAP
 fuMAILONEY
-fuMALTRAIL
 fuSPIDERFOOT
 fuSURICATA
 fuP0F
