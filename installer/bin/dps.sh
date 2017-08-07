@@ -1,41 +1,70 @@
 #/bin/bash
 # Show current status of all running containers
-# Let's ensure normal operation on exit or if interrupted ...
-function fuCLEANUP {
-  stty sane
-}
-trap fuCLEANUP EXIT
+myPARAM="$1"
+myIMAGES="$(cat /etc/tpot/tpot.yml | grep -v '#' | grep container_name | cut -d: -f2)"
+myRED="[1;31m"
+myGREEN="[1;32m"
+myBLUE="[1;34m"
+myWHITE="[0;0m"
+myMAGENTA="[1;35m"
 
-stty -echo -icanon time 0 min 0
-myIMAGES=$(cat /etc/tpot/tpot.yml | grep -v '#' | grep container_name | cut -d: -f2)
+function fuCONTAINERSTATUS {
+local myNAME="$1"
+local mySTATUS="$(/usr/bin/docker ps -f name=$i --format "table {{.Status}}" -f status=running -f status=exited | tail -n 1)"
+myDOWN="$(echo "$mySTATUS" | grep -o -E "(STATUS|NAMES|Exited)")"
+
+case "$myDOWN" in
+  STATUS)
+    mySTATUS="$myRED"DOWN"$myWHITE"
+  ;;
+  NAMES)
+    mySTATUS="$myRED"DOWN"$myWHITE"
+  ;;
+  Exited)
+    mySTATUS="$myRED$mySTATUS$myWHITE"
+  ;;
+  *)
+    mySTATUS="$myGREEN$mySTATUS$myWHITE"
+  ;;
+esac
+
+printf "$mySTATUS"
+}
+
+function fuCONTAINERPORTS {
+local myNAME="$1"
+local myPORTS="$(/usr/bin/docker ps -f name=$i --format "table {{.Ports}}" -f status=running -f status=exited | tail -n 1 | sed s/","/",\n\t\t\t\t\t\t\t"/g)"
+
+if [ "$myDOWN" != "(STATUS|NAMES|Exited)" ];
+  then
+    printf "$myBLUE$myPORTS$myWHITE"
+fi
+}
+
+function fuGETSYS {
+printf "========| System |========\n"
+printf "%+10s %-20s\n" "Date: " "$(date)"
+printf "%+10s %-20s\n" "Uptime: " "$(uptime | cut -b 2-)"
+printf "%+10s %-20s\n" "CPU temp: " "$(sensors | grep 'Physical' | awk '{ print $4" " }' | tr -d [:cntrl:])"
+echo
+}
+
 while true
   do
-    echo "[0;0m"
-    echo "======| System |======"
-    echo Date:"     "$(date)
-    echo Uptime:"  "$(uptime)
-    echo CPU temp: $(sensors | grep "Physical" | awk '{ print $4 }')
-    echo
-    printf "NAME"
-    printf "%-15s STATUS"
-    printf "%-13s PORTS\n"
+    fuGETSYS
+    printf "%-19s %-36s %s\n" "NAME" "STATUS" "PORTS"
     for i in $myIMAGES; do
-      mySTATUS=$(/usr/bin/docker ps -f name=$i --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}\t" -f status=running -f status=exited | GREP_COLORS='mt=01;35' /bin/egrep --color=always "(^[_0-9a-z-]+ |$)|$" | GREP_COLORS='mt=01;32' /bin/egrep --color=always "(Up[ 0-9a-Z ]+ |$)|$" | GREP_COLORS='mt=01;31' /bin/egrep --color=always "(Exited[ \(0-9\) ]+ [0-9a-Z ]+ ago|$)|$" | tail -n 1)
-      myDOWN=$(echo "$mySTATUS" | grep -c "NAMES")
-      if [ "$myDOWN" = "1" ];
+          myNAME="$myMAGENTA$i$myWHITE"
+          printf "%-32s %-49s %s" "$myNAME" "$(fuCONTAINERSTATUS $i)" "$(fuCONTAINERPORTS $i)"
+          echo
+      if [ "$myPARAM" = "vv" ]; 
         then
-          printf "[1;35m%-19s [1;31mDown\n" $i
-        else
-          printf "$mySTATUS\n"
-      fi
-      if [ "$1" = "vv" ]; 
-        then
-          /usr/bin/docker exec -t $i /bin/ps awfuwfxwf | egrep -v -E "awfuwfxwf|/bin/ps" 
+          /usr/bin/docker exec -t "$i" /bin/ps awfuwfxwf | egrep -v -E "awfuwfxwf|/bin/ps" 
       fi      
     done
-    if [[ $1 =~ ^([1-9]|[1-9][0-9]|[1-9][0-9][0-9])$ ]];
+    if [[ $myPARAM =~ ^([1-9]|[1-9][0-9]|[1-9][0-9][0-9])$ ]];
       then 
-        sleep $1
+        sleep "$myPARAM"
       else 
         break
     fi
