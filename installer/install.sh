@@ -329,6 +329,7 @@ apt-get autoremove -y 2>&1 | dialog --title "[ Pulling updates ]" $myPROGRESSBOX
 # Installing docker-compose, wetty, ctop, elasticdump
 pip install --upgrade pip 2>&1 | dialog --title "[ Installing pip ]" $myPROGRESSBOXCONF
 pip install docker-compose==1.12.0 2>&1 | dialog --title "[ Installing docker-compose ]" $myPROGRESSBOXCONF
+pip install elasticsearch-curator==5.1.1 2>&1 | dialog --title "[ Installing elasticsearch-curator ]" $myPROGRESSBOXCONF
 ln -s /usr/bin/nodejs /usr/bin/node 2>&1 | dialog --title "[ Installing wetty ]" $myPROGRESSBOXCONF
 npm install https://github.com/t3chn0m4g3/wetty -g 2>&1 | dialog --title "[ Installing wetty ]" $myPROGRESSBOXCONF
 npm install https://github.com/t3chn0m4g3/elasticsearch-dump -g 2>&1 | dialog --title "[ Installing elasticsearch-dump ]" $myPROGRESSBOXCONF
@@ -424,8 +425,8 @@ tee -a /etc/crontab 2>&1>/dev/null <<EOF
 # Check if updated images are available and download them
 27 1 * * *      root    /usr/bin/docker-compose -f /etc/tpot/tpot.yml pull
 
-# Delete elastic indices older than 90 days (kibana index is omitted by default)
-#27 4 * * *     root    docker exec elk bash -c '/usr/local/bin/curator --host 127.0.0.1 delete indices --older-than 90 --time-unit days --timestring \%Y.\%m.\%d'
+# Delete elasticsearch logstash indices older than 90 days
+27 4 * * *      root    /usr/local/bin/curator --config /etc/tpot/curator/curator.yml /etc/tpot/curator/actions.yml
 
 # Uploaded binaries are not supposed to be downloaded
 */1 * * * *     root    mv --backup=numbered /data/dionaea/roots/ftp/* /data/dionaea/binaries/
