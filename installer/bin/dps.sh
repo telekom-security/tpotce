@@ -10,7 +10,7 @@ myMAGENTA="[1;35m"
 
 function fuCONTAINERSTATUS {
 local myNAME="$1"
-local mySTATUS="$(/usr/bin/docker ps -f name=$i --format "table {{.Status}}" -f status=running -f status=exited | tail -n 1)"
+local mySTATUS="$(/usr/bin/docker ps -f name=$myNAME --format "table {{.Status}}" -f status=running -f status=exited | tail -n 1)"
 myDOWN="$(echo "$mySTATUS" | grep -o -E "(STATUS|NAMES|Exited)")"
 
 case "$myDOWN" in
@@ -33,9 +33,9 @@ printf "$mySTATUS"
 
 function fuCONTAINERPORTS {
 local myNAME="$1"
-local myPORTS="$(/usr/bin/docker ps -f name=$i --format "table {{.Ports}}" -f status=running -f status=exited | tail -n 1 | sed s/","/",\n\t\t\t\t\t\t\t"/g)"
+local myPORTS="$(/usr/bin/docker ps -f name=$myNAME --format "table {{.Ports}}" -f status=running -f status=exited | tail -n 1 | sed s/","/",\n\t\t\t\t\t\t\t"/g)"
 
-if [ "$myDOWN" != "(STATUS|NAMES|Exited)" ];
+if [ "$myPORTS" != "PORTS" ];
   then
     printf "$myBLUE$myPORTS$myWHITE"
 fi
