@@ -162,6 +162,7 @@ fuP0F () {
   chown tpot:tpot -R /data/p0f
 }
 
+
 # Avoid unwanted cleaning
 if [ "$myPERSISTENCE" = "" ];
   then

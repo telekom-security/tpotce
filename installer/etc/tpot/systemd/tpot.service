@@ -29,7 +29,6 @@ ExecStartPre=/bin/bash -c '/sbin/ip link set $(/sbin/ip address | grep "^2: " | 
 ExecStartPre=-/bin/chmod 666 /var/run/docker.sock
 
 # Set iptables accept rules to avoid forwarding to honeytrap / NFQUEUE
-# Disregards UDP1900 traffic from/to localhost, too many false positives
 # Forward all other connections to honeytrap / NFQUEUE
 ExecStartPre=/sbin/iptables -w -A INPUT -s 127.0.0.1 -j ACCEPT
 ExecStartPre=/sbin/iptables -w -A INPUT -d 127.0.0.1 -j ACCEPT
