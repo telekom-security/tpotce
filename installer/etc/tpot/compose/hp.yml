@@ -35,13 +35,12 @@ services:
     container_name: dionaea
     stdin_open: true
     restart: always
-    sysctls:
-     - net.ipv6.conf.all.disable_ipv6=1
     networks:
      - dionaea_local
     cap_add:
      - NET_BIND_SERVICE
     ports:
+     - "20:20"
      - "21:21"
      - "42:42"
      - "69:69/udp"

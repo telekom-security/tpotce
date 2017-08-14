@@ -11,7 +11,7 @@ RestartSec=5
 ExecStartPre=-/usr/share/tpot/bin/updateip.sh
 
 # Clear state or if persistence is enabled rotate and compress logs from /data
-ExecStartPre=-/bin/bash -c '/usr/share/tpot/bin/clean.sh off'
+ExecStartPre=-/bin/bash -c '/usr/share/tpot/bin/clean.sh on'
 
 # Remove old containers, images and volumes
 ExecStartPre=-/usr/local/bin/docker-compose -f /etc/tpot/tpot.yml down -v
@@ -29,11 +29,12 @@ ExecStartPre=/bin/bash -c '/sbin/ip link set $(/sbin/ip address | grep "^2: " | 
 ExecStartPre=-/bin/chmod 666 /var/run/docker.sock
 
 # Set iptables accept rules to avoid forwarding to honeytrap / NFQUEUE
+# Disregards UDP1900 traffic from/to localhost, too many false positives
 # Forward all other connections to honeytrap / NFQUEUE
 ExecStartPre=/sbin/iptables -w -A INPUT -s 127.0.0.1 -j ACCEPT
 ExecStartPre=/sbin/iptables -w -A INPUT -d 127.0.0.1 -j ACCEPT
 ExecStartPre=/sbin/iptables -w -A INPUT -p tcp -m multiport --dports 64295:64303,7634 -j ACCEPT
-ExecStartPre=/sbin/iptables -w -A INPUT -p tcp -m multiport --dports 21:23,25,42,69,80,135,443,445,1433,1723,1883,1900 -j ACCEPT
+ExecStartPre=/sbin/iptables -w -A INPUT -p tcp -m multiport --dports 20:23,25,42,69,80,135,443,445,1433,1723,1883,1900 -j ACCEPT
 ExecStartPre=/sbin/iptables -w -A INPUT -p tcp -m multiport --dports 3306,5060,5061,5601,27017 -j ACCEPT
 ExecStartPre=/sbin/iptables -w -A INPUT -p tcp -m multiport --dports 1025,50100,8080,8081,9200 -j ACCEPT
 ExecStartPre=/sbin/iptables -w -A INPUT -p tcp --syn -m state --state NEW -j NFQUEUE
@@ -48,7 +49,7 @@ ExecStop=/usr/local/bin/docker-compose -f /etc/tpot/tpot.yml down -v
 ExecStopPost=/sbin/iptables -w -D INPUT -s 127.0.0.1 -j ACCEPT
 ExecStopPost=/sbin/iptables -w -D INPUT -d 127.0.0.1 -j ACCEPT
 ExecStopPost=/sbin/iptables -w -D INPUT -p tcp -m multiport --dports 64295:64303,7634 -j ACCEPT
-ExecStopPost=/sbin/iptables -w -D INPUT -p tcp -m multiport --dports 21:23,25,42,69,80,135,443,445,1433,1723,1883,1900 -j ACCEPT
+ExecStopPost=/sbin/iptables -w -D INPUT -p tcp -m multiport --dports 20:23,25,42,69,80,135,443,445,1433,1723,1883,1900 -j ACCEPT
 ExecStopPost=/sbin/iptables -w -D INPUT -p tcp -m multiport --dports 3306,5060,5061,5601,27017 -j ACCEPT
 ExecStopPost=/sbin/iptables -w -D INPUT -p tcp -m multiport --dports 1025,50100,8080,8081,9200 -j ACCEPT
 ExecStopPost=/sbin/iptables -w -D INPUT -p tcp --syn -m state --state NEW -j NFQUEUE
