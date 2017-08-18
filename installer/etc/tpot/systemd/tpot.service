@@ -34,7 +34,7 @@ ExecStartPre=/sbin/iptables -w -A INPUT -s 127.0.0.1 -j ACCEPT
 ExecStartPre=/sbin/iptables -w -A INPUT -d 127.0.0.1 -j ACCEPT
 ExecStartPre=/sbin/iptables -w -A INPUT -p tcp -m multiport --dports 64295:64303,7634 -j ACCEPT
 ExecStartPre=/sbin/iptables -w -A INPUT -p tcp -m multiport --dports 20:23,25,42,69,80,135,443,445,1433,1723,1883,1900 -j ACCEPT
-ExecStartPre=/sbin/iptables -w -A INPUT -p tcp -m multiport --dports 3306,5060,5061,5601,27017 -j ACCEPT
+ExecStartPre=/sbin/iptables -w -A INPUT -p tcp -m multiport --dports 3306,5060,5061,5601,5900,27017 -j ACCEPT
 ExecStartPre=/sbin/iptables -w -A INPUT -p tcp -m multiport --dports 1025,50100,8080,8081,9200 -j ACCEPT
 ExecStartPre=/sbin/iptables -w -A INPUT -p tcp --syn -m state --state NEW -j NFQUEUE
 
@@ -49,7 +49,7 @@ ExecStopPost=/sbin/iptables -w -D INPUT -s 127.0.0.1 -j ACCEPT
 ExecStopPost=/sbin/iptables -w -D INPUT -d 127.0.0.1 -j ACCEPT
 ExecStopPost=/sbin/iptables -w -D INPUT -p tcp -m multiport --dports 64295:64303,7634 -j ACCEPT
 ExecStopPost=/sbin/iptables -w -D INPUT -p tcp -m multiport --dports 20:23,25,42,69,80,135,443,445,1433,1723,1883,1900 -j ACCEPT
-ExecStopPost=/sbin/iptables -w -D INPUT -p tcp -m multiport --dports 3306,5060,5061,5601,27017 -j ACCEPT
+ExecStopPost=/sbin/iptables -w -D INPUT -p tcp -m multiport --dports 3306,5060,5061,5601,5900,27017 -j ACCEPT
 ExecStopPost=/sbin/iptables -w -D INPUT -p tcp -m multiport --dports 1025,50100,8080,8081,9200 -j ACCEPT
 ExecStopPost=/sbin/iptables -w -D INPUT -p tcp --syn -m state --state NEW -j NFQUEUE
 
