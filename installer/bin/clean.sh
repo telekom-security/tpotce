@@ -162,6 +162,14 @@ fuP0F () {
   chown tpot:tpot -R /data/p0f
 }
 
+# Let's create a function to clean up and prepare vnclowpot data
+fuVNCLOWPOT () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/vnclowpot/*; fi
+  mkdir -p /data/vnclowpot/log/
+  chmod 760 /data/vnclowpot/ -R
+  chown tpot:tpot /data/vnclowpot/ -R
+}
+
 
 # Avoid unwanted cleaning
 if [ "$myPERSISTENCE" = "" ];
@@ -185,17 +193,18 @@ if [ "$myPERSISTENCE" = "on" ];
     fuLOGROTATE
   else
     echo "Cleaning up and preparing data folders."
-fi
+    fuCONPOT
+    fuCOWRIE
+    fuDIONAEA
+    fuELASTICPOT
+    fuELK
+    fuEMOBILITY
+    fuGLASTOPF
+    fuHONEYTRAP
+    fuMAILONEY
+    fuSPIDERFOOT
+    fuSURICATA
+    fuP0F
+    fuVNCLOWPOT
+  fi
 
-fuCONPOT
-fuCOWRIE
-fuDIONAEA
-fuELASTICPOT
-fuELK
-fuEMOBILITY
-fuGLASTOPF
-fuHONEYTRAP
-fuMAILONEY
-fuSPIDERFOOT
-fuSURICATA
-fuP0F
