@@ -9,6 +9,7 @@ networks:
   ewsposter_local:
   glastopf_local:
   mailoney_local:
+  vnclowpot_local:
 
 services:
  
@@ -128,3 +129,15 @@ services:
     image: "dtagdevsec/mailoney:1706"
     volumes:
      - /data/mailoney/log:/opt/mailoney/logs
+
+# Vnclowpot service
+  vnclowpot:
+    container_name: vnclowpot
+    restart: always
+    networks:
+     - vnclowpot_local
+    ports:
+     - "5900:5900"
+    image: "dtagdevsec/vnclowpot:1706"
+    volumes:
+     - /data/vnclowpot/log:/var/log/vnclowpot

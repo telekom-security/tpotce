@@ -13,6 +13,7 @@ networks:
   mailoney_local:
   spiderfoot_local:
   ui-for-docker_local:
+  vnclowpot_local:
 
 services:
  
@@ -285,3 +286,15 @@ services:
     image: "dtagdevsec/p0f:1706"
     volumes:
      - /data/p0f/log:/var/log/p0f
+
+# Vnclowpot service
+  vnclowpot:
+    container_name: vnclowpot
+    restart: always
+    networks:
+     - vnclowpot_local
+    ports:
+     - "5900:5900"
+    image: "dtagdevsec/vnclowpot:1706"
+    volumes:
+     - /data/vnclowpot/log:/var/log/vnclowpot
