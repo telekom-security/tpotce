@@ -138,6 +138,14 @@ fuMAILONEY () {
   chown tpot:tpot /data/mailoney/ -R
 }
 
+# Let's create a function to clean up and prepare rdpy data
+fuRDPY () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/rdpy/*; fi
+  mkdir -p /data/rdpy/log/
+  chmod 760 /data/rdpy/ -R
+  chown tpot:tpot /data/rdpy/ -R
+}
+
 # Let's create a function to prepare spiderfoot db
 fuSPIDERFOOT () {
   mkdir -p /data/spiderfoot
@@ -202,6 +210,7 @@ if [ "$myPERSISTENCE" = "on" ];
     fuGLASTOPF
     fuHONEYTRAP
     fuMAILONEY
+    fuRDPY
     fuSPIDERFOOT
     fuSURICATA
     fuP0F

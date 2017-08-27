@@ -448,6 +448,7 @@ mkdir -p /data/conpot/log \
          /data/mailoney/log \
          /data/emobility/log \
          /data/ews/conf \
+         /data/rdpy/log \
          /data/spiderfoot \
          /data/suricata/log /home/tsec/.ssh/ \
          /data/p0f/log \

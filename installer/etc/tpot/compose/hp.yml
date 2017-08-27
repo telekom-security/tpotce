@@ -9,6 +9,7 @@ networks:
   ewsposter_local:
   glastopf_local:
   mailoney_local:
+  rdpy_local:
   vnclowpot_local:
 
 services:
@@ -129,6 +130,18 @@ services:
     image: "dtagdevsec/mailoney:1706"
     volumes:
      - /data/mailoney/log:/opt/mailoney/logs
+
+# Rdpy service
+  rdpy:
+    container_name: rdpy
+    restart: always
+    networks:
+     - rdpy_local
+    ports:
+     - "3389:3389"
+    image: "dtagdevsec/rdpy:1706"
+    volumes:
+     - /data/rdpy/log:/var/log/rdpy
 
 # Vnclowpot service
   vnclowpot:
