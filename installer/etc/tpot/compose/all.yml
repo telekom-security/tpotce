@@ -27,7 +27,7 @@ services:
     ports:
      - "1025:1025"
      - "50100:50100"
-    image: "dtagdevsec/conpot:1706"
+    image: "dtagdevsec/conpot:1710"
     volumes:
      - /data/conpot/log:/var/log/conpot
 
@@ -42,7 +42,7 @@ services:
     ports:
      - "22:2222"
      - "23:2223"
-    image: "dtagdevsec/cowrie:1706"
+    image: "dtagdevsec/cowrie:1710"
     volumes:
      - /data/cowrie/downloads:/home/cowrie/cowrie/dl
      - /data/cowrie/keys:/home/cowrie/cowrie/etc
@@ -76,7 +76,7 @@ services:
      - "5060:5060/udp"
      - "5061:5061"
      - "27017:27017"
-    image: "dtagdevsec/dionaea:1706"
+    image: "dtagdevsec/dionaea:1710"
     volumes:
      - /data/dionaea/roots/ftp:/opt/dionaea/var/dionaea/roots/ftp
      - /data/dionaea/roots/tftp:/opt/dionaea/var/dionaea/roots/tftp
@@ -95,7 +95,7 @@ services:
      - elasticpot_local
     ports:
      - "9200:9200"
-    image: "dtagdevsec/elasticpot:1706"
+    image: "dtagdevsec/elasticpot:1710"
     volumes:
      - /data/elasticpot/log:/opt/ElasticpotPY/log
 
@@ -119,7 +119,7 @@ services:
 #    mem_limit: 2g
     ports:
      - "127.0.0.1:64298:9200"
-    image: "dtagdevsec/elasticsearch:1706"
+    image: "dtagdevsec/elasticsearch:1710"
     volumes:
      - /data:/data
 
@@ -132,7 +132,7 @@ services:
         condition: service_healthy
     ports:
      - "127.0.0.1:64296:5601"
-    image: "dtagdevsec/kibana:1706"
+    image: "dtagdevsec/kibana:1710"
 
 ## Logstash service
   logstash:
@@ -143,7 +143,7 @@ services:
         condition: service_healthy
     env_file:
      - /etc/tpot/elk/environment
-    image: "dtagdevsec/logstash:1706"
+    image: "dtagdevsec/logstash:1710"
     volumes:
      - /data:/data
      - /var/log:/data/host/log
@@ -157,7 +157,7 @@ services:
         condition: service_healthy
     ports:
      - "127.0.0.1:64302:9100"
-    image: "dtagdevsec/head:1706"
+    image: "dtagdevsec/head:1710"
 
 # Emobility service
   emobility:
@@ -169,7 +169,7 @@ services:
      - NET_ADMIN
     ports:
      - "8080:8080"
-    image: "dtagdevsec/emobility:1706"
+    image: "dtagdevsec/emobility:1710"
     volumes:
      - /data/emobility:/data/eMobility
      - /data/ews:/data/ews
@@ -180,7 +180,7 @@ services:
     restart: always
     networks:
      - ewsposter_local
-    image: "dtagdevsec/ewsposter:1706"
+    image: "dtagdevsec/ewsposter:1710"
     volumes:
      - /data:/data
      - /data/ews/conf/ews.ip:/opt/ewsposter/ews.ip
@@ -193,7 +193,7 @@ services:
      - glastopf_local
     ports:
      - "80:80"
-    image: "dtagdevsec/glastopf:1706"
+    image: "dtagdevsec/glastopf:1710"
     volumes:
      - /data/glastopf/db:/opt/glastopf/db
      - /data/glastopf/log:/opt/glastopf/log
@@ -205,7 +205,7 @@ services:
     network_mode: "host"
     cap_add:
      - NET_ADMIN
-    image: "dtagdevsec/honeytrap:1706"
+    image: "dtagdevsec/honeytrap:1710"
     volumes:
      - /data/honeytrap/attacks:/opt/honeytrap/var/attacks
      - /data/honeytrap/downloads:/opt/honeytrap/var/downloads
@@ -219,7 +219,7 @@ services:
      - mailoney_local
     ports:
      - "25:2525"
-    image: "dtagdevsec/mailoney:1706"
+    image: "dtagdevsec/mailoney:1710"
     volumes:
      - /data/mailoney/log:/opt/mailoney/logs
 
@@ -235,7 +235,7 @@ services:
      - SYS_PTRACE
     security_opt:
      - apparmor=unconfined
-    image: "dtagdevsec/netdata:1706"
+    image: "dtagdevsec/netdata:1710"
     volumes:
      - /proc:/host/proc:ro
      - /sys:/host/sys:ro
@@ -249,7 +249,7 @@ services:
      - rdpy_local
     ports:
      - "3389:3389"
-    image: "dtagdevsec/rdpy:1706"
+    image: "dtagdevsec/rdpy:1710"
     volumes:
      - /data/rdpy/log:/var/log/rdpy
 
@@ -261,7 +261,7 @@ services:
      - spiderfoot_local
     ports:
      - "127.0.0.1:64303:8080"
-    image: "dtagdevsec/spiderfoot:1706"
+    image: "dtagdevsec/spiderfoot:1710"
     volumes:
      - /data/spiderfoot/spiderfoot.db:/home/spiderfoot/spiderfoot.db
  
@@ -274,7 +274,7 @@ services:
      - ui-for-docker_local
     ports:
      - "127.0.0.1:64299:9000"
-    image: "dtagdevsec/ui-for-docker:1706"
+    image: "dtagdevsec/ui-for-docker:1710"
     volumes:
      - /var/run/docker.sock:/var/run/docker.sock 
  
@@ -287,7 +287,7 @@ services:
      - NET_ADMIN
      - SYS_NICE
      - NET_RAW
-    image: "dtagdevsec/suricata:1706"
+    image: "dtagdevsec/suricata:1710"
     volumes:
      - /data/suricata/log:/var/log/suricata
 
@@ -296,7 +296,7 @@ services:
     container_name: p0f
     restart: always
     network_mode: "host"
-    image: "dtagdevsec/p0f:1706"
+    image: "dtagdevsec/p0f:1710"
     volumes:
      - /data/p0f/log:/var/log/p0f
 
@@ -308,6 +308,6 @@ services:
      - vnclowpot_local
     ports:
      - "5900:5900"
-    image: "dtagdevsec/vnclowpot:1706"
+    image: "dtagdevsec/vnclowpot:1710"
     volumes:
      - /data/vnclowpot/log:/var/log/vnclowpot

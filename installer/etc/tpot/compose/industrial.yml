@@ -20,7 +20,7 @@ services:
     ports:
      - "1025:1025"
      - "50100:50100"
-    image: "dtagdevsec/conpot:1706"
+    image: "dtagdevsec/conpot:1710"
     volumes:
      - /data/conpot/log:/var/log/conpot
 
@@ -44,7 +44,7 @@ services:
 #    mem_limit: 2g
     ports:
      - "127.0.0.1:64298:9200"
-    image: "dtagdevsec/elasticsearch:1706"
+    image: "dtagdevsec/elasticsearch:1710"
     volumes:
      - /data:/data
 
@@ -57,7 +57,7 @@ services:
         condition: service_healthy
     ports:
      - "127.0.0.1:64296:5601"
-    image: "dtagdevsec/kibana:1706"
+    image: "dtagdevsec/kibana:1710"
 
 ## Logstash service
   logstash:
@@ -68,7 +68,7 @@ services:
         condition: service_healthy
     env_file:
      - /etc/tpot/elk/environment
-    image: "dtagdevsec/logstash:1706"
+    image: "dtagdevsec/logstash:1710"
     volumes:
      - /data:/data
      - /var/log:/data/host/log
@@ -82,7 +82,7 @@ services:
         condition: service_healthy
     ports:
      - "127.0.0.1:64302:9100"
-    image: "dtagdevsec/head:1706"
+    image: "dtagdevsec/head:1710"
 
 # Emobility service
   emobility:
@@ -94,7 +94,7 @@ services:
      - NET_ADMIN
     ports:
      - "8080:8080"
-    image: "dtagdevsec/emobility:1706"
+    image: "dtagdevsec/emobility:1710"
     volumes:
      - /data/emobility:/data/eMobility
      - /data/ews:/data/ews
@@ -105,7 +105,7 @@ services:
     restart: always
     networks:
      - ewsposter_local
-    image: "dtagdevsec/ewsposter:1706"
+    image: "dtagdevsec/ewsposter:1710"
     volumes:
      - /data:/data
      - /data/ews/conf/ews.ip:/opt/ewsposter/ews.ip
@@ -122,7 +122,7 @@ services:
      - SYS_PTRACE
     security_opt:
      - apparmor=unconfined
-    image: "dtagdevsec/netdata:1706"
+    image: "dtagdevsec/netdata:1710"
     volumes:
      - /proc:/host/proc:ro
      - /sys:/host/sys:ro
@@ -136,7 +136,7 @@ services:
      - spiderfoot_local
     ports:
      - "127.0.0.1:64303:8080"
-    image: "dtagdevsec/spiderfoot:1706"
+    image: "dtagdevsec/spiderfoot:1710"
     volumes:
      - /data/spiderfoot/spiderfoot.db:/home/spiderfoot/spiderfoot.db
  
@@ -149,7 +149,7 @@ services:
      - ui-for-docker_local
     ports:
      - "127.0.0.1:64299:9000"
-    image: "dtagdevsec/ui-for-docker:1706"
+    image: "dtagdevsec/ui-for-docker:1710"
     volumes:
      - /var/run/docker.sock:/var/run/docker.sock 
  
@@ -162,7 +162,7 @@ services:
      - NET_ADMIN
      - SYS_NICE
      - NET_RAW
-    image: "dtagdevsec/suricata:1706"
+    image: "dtagdevsec/suricata:1710"
     volumes:
      - /data/suricata/log:/var/log/suricata
 
@@ -171,6 +171,6 @@ services:
     container_name: p0f
     restart: always
     network_mode: "host"
-    image: "dtagdevsec/p0f:1706"
+    image: "dtagdevsec/p0f:1710"
     volumes:
      - /data/p0f/log:/var/log/p0f
