@@ -911,7 +911,7 @@ constellation
 construction
 consul
 consulate
-contact lens
+contactlens
 contagion
 contest
 context
@@ -998,7 +998,7 @@ credenza
 credit
 creditor
 creek
-creme brulee
+cremebrulee
 crest
 crew
 crib
@@ -1284,13 +1284,13 @@ duffel
 dugout
 dulcimer
 dumbwaiter
-dump truck
-dune buggy
+dumptruck
+dunebuggy
 dungarees
 dungeon
 duplexer
 dust
-dust storm
+duststorm
 duster
 duty
 dwarf
@@ -2623,8 +2623,8 @@ noodle
 normal
 norse
 north
-north america
-north korea
+northamerica
+northkorea
 nose
 note
 notebook
@@ -3367,7 +3367,7 @@ satire
 satisfaction
 saturday
 sauce
-saudi arabia
+saudiarabia
 sausage
 save
 saving
@@ -3634,9 +3634,9 @@ source
 sourwood
 sousaphone
 south
-south africa
-south america
-south korea
+southafrica
+southamerica
+southkorea
 sow
 soy
 soybean
@@ -4157,7 +4157,7 @@ unibody
 uniform
 union
 unit
-united kingdom
+unitedkingdom
 university
 urn
 use

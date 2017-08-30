@@ -1,7 +1,7 @@
 average
 big
 colossal
-fat 
+fat
 giant
 gigantic
 great
@@ -19,7 +19,7 @@ short
 small
 tall
 tiny
- boiling
+boiling
 breezy
 broken
 bumpy
@@ -237,7 +237,7 @@ friendly
 funny
 gentle
 glorious
- good
+good
 happy
 healthy
 helpful
@@ -1317,7 +1317,7 @@ fragile
 helpful
 helpless
 important
- impossible
+impossible
 innocent
 inquisitive
 modern
@@ -1337,7 +1337,7 @@ uninterested
 wandering
 wild
 wrong
- adorable
+adorable
 alert
 average
 beautiful
