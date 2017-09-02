@@ -1,6 +1,6 @@
 # T-Pot 16.10 Image Creator
 
-This repository contains the necessary files to create the **[T-Pot community honeypot](http://dtag-dev-sec.github.io/)**  ISO image.
+This repository contains the necessary files to create the **[T-Pot community honeypot](https://github.com/dtag-dev-sec/tpotce/releases)**  ISO image.
 The image can then be used to install T-Pot on a physical or virtual machine.
 
 In March 2016 we released
@@ -35,7 +35,7 @@ Furthermore we use the following tools
 
 # TL;DR
 1. Meet the [system requirements](#requirements). The T-Pot installation needs at least 4 GB RAM and 64 GB free disk space as well as a working internet connection.
-2. Download the [tpot.iso](http://community-honeypot.de/tpot.iso) or [create it yourself](#createiso).
+2. Download the T-Pot ISO from [GitHub](https://github.com/dtag-dev-sec/tpotce/releases) or [create it yourself](#createiso).
 3. Install the system in a [VM](#vm) or on [physical hardware](#hw) with [internet access](#placement).
 4. Enjoy your favorite beverage - [watch](http://sicherheitstacho.eu/?peers=communityPeers) and [analyze](#kibana).
 
@@ -205,17 +205,14 @@ When installing the T-Pot ISO image, make sure the target system (physical/virtu
 # Installation
 The installation of T-Pot is straight forward. Please be advised that you should have an internet connection up and running as all all the docker images for the chosen installation type need to be pulled from docker hub.
 
-Firstly, decide if you want to download our prebuilt installation ISO image [tpot.iso](http://community-honeypot.de/tpot.iso) ***or*** [create it yourself](#createiso).
+Firstly, decide if you want to download our prebuilt installation ISO image from [GitHub](https://github.com/dtag-dev-sec/tpotce/releases) ***or*** [create it yourself](#createiso).
 
 Secondly, decide where you want to let the system run: [real hardware](#hardware) or in a [virtual machine](#vm)?
 
 <a name="prebuilt"></a>
 ## Prebuilt ISO Image
 We provide an installation ISO image for download (~50MB), which is created using the same [tool](https://github.com/dtag-dev-sec/tpotce) you can use yourself in order to create your own image. It will basically just save you some time downloading components and creating the ISO image.
-You can download the prebuilt installation image [here](http://community-honeypot.de/tpot.iso) and jump to the [installation](#vm) section. The ISO image is hosted by our friends from [Strato](http://www.strato.de) / [Cronon](http://www.cronon.de).
-
-    sha256sum tpot.iso
-    df6b1db24d0dcc421125dc973fbb2d17aa91cd9ff94607dde9d1b09a92bcbaf0 tpot.iso
+You can download the prebuilt installation image from [GitHub](https://github.com/dtag-dev-sec/tpotce/releases) and jump to the [installation](#vm) section.
 
 <a name="createiso"></a>
 ## Create your own ISO Image
@@ -421,7 +418,7 @@ The software that T-Pot is built on, uses the following licenses.
 # Credits
 Without open source and the fruitful development community we are proud to be a part of T-Pot would not have been possible. Our thanks are extended but not limited to the following people and organizations:
 
-###The developers and development communities of
+### The developers and development communities of
 
 * [conpot](https://github.com/mushorg/conpot/graphs/contributors)
 * [cowrie](https://github.com/micheloosterhof/cowrie/graphs/contributors)
@@ -445,7 +442,7 @@ Without open source and the fruitful development community we are proud to be a 
 * [ubuntu](http://www.ubuntu.com/)
 * [wetty](https://github.com/krishnasrinivas/wetty/graphs/contributors)
 
-###The following companies and organizations
+### The following companies and organizations
 * [cannonical](http://www.canonical.com/)
 * [docker](https://www.docker.com/)
 * [elastic.io](https://www.elastic.co/)
