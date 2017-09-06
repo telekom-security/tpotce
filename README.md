@@ -1,16 +1,16 @@
-# T-Pot 16.10 Image Creator
+# T-Pot 17.10 (Alpha)
 
-This repository contains the necessary files to create the **[T-Pot community honeypot](http://dtag-dev-sec.github.io/)**  ISO image.
+This repository contains the necessary files to create the **[T-Pot](http://dtag-dev-sec.github.io/)** ISO image.
 The image can then be used to install T-Pot on a physical or virtual machine.
 
-In March 2016 we released
-[T-Pot 16.03](http://dtag-dev-sec.github.io/mediator/feature/2016/03/11/t-pot-16.03.html)
+In October 2016 we released
+[T-Pot 16.10](http://dtag-dev-sec.github.io/mediator/feature/2016/10/31/t-pot-16.10.html)
 
-# T-Pot 16.10
+# T-Pot 17.10 (Alpha - be careful there may be dragons!)
 
-T-Pot 16.10 now uses Ubuntu Server 16.04 LTS and is based on
+T-Pot 17.10 uses latest 16.04 LTS Ubuntu Server Network Installer image, is based on
 
-[docker](https://www.docker.com/)
+[docker](https://www.docker.com/), [docker-compose](https://docs.docker.com/compose/)
 
 and includes dockerized versions of the following honeypots
 
@@ -19,8 +19,12 @@ and includes dockerized versions of the following honeypots
 * [dionaea](https://github.com/DinoTools/dionaea),
 * [elasticpot](https://github.com/schmalle/ElasticPot),
 * [emobility](https://github.com/dtag-dev-sec/emobility),
-* [glastopf](http://glastopf.org/) and
-* [honeytrap](https://github.com/armedpot/honeytrap/)
+* [glastopf](http://glastopf.org/),
+* [honeytrap](https://github.com/armedpot/honeytrap/),
+* [mailoney](https://github.com/awhitehatter/mailoney),
+* [rdpy](https://github.com/citronneur/rdpy) and
+* [vnclowpot](https://github.com/magisterquis/vnclowpot)
+
 
 Furthermore we use the following tools
 
@@ -28,6 +32,7 @@ Furthermore we use the following tools
 * [Elasticsearch Head](https://mobz.github.io/elasticsearch-head/) a web front end for browsing and interacting with an Elastic Search cluster.
 * [Netdata](http://my-netdata.io/) for real-time performance monitoring.
 * [Portainer](http://portainer.io/) a web based UI for docker.
+* [Spiderfoot](https://github.com/smicallef/spiderfoot) a open source intelligence automation tool.
 * [Suricata](http://suricata-ids.org/) a Network Security Monitoring engine.
 * [Wetty](https://github.com/krishnasrinivas/wetty) a web based SSH client.
 
@@ -35,7 +40,7 @@ Furthermore we use the following tools
 
 # TL;DR
 1. Meet the [system requirements](#requirements). The T-Pot installation needs at least 4 GB RAM and 64 GB free disk space as well as a working internet connection.
-2. Download the [tpot.iso](http://community-honeypot.de/tpot.iso) or [create it yourself](#createiso).
+2. Download the T-Pot ISO from [GitHub](https://github.com/dtag-dev-sec/tpotce/releases) or [create it yourself](#createiso).
 3. Install the system in a [VM](#vm) or on [physical hardware](#hw) with [internet access](#placement).
 4. Enjoy your favorite beverage - [watch](http://sicherheitstacho.eu/?peers=communityPeers) and [analyze](#kibana).
 
@@ -72,51 +77,47 @@ Seeing is believing :bowtie:
 
 <a name="background"></a>
 # Changelog
-- **Ubuntu 16.04 LTS** is now being used as T-Pot's OS base
-- **Size does matter** 😅
-	- `tpot.iso` is now based on **Ubuntu's** network installer reducing the image download size by 600MB from 650MB to only **50MB**
-	- All docker images have been rebuilt to reduce the image size at least by 50MB in some cases even 400-600MB
-	- A "Everything" installation takes roughly 2GB less download size (counting from initial image download)
-- **Introducing** new tools making things a lot easier for new users
-	- [Elasticsearch Head](https://mobz.github.io/elasticsearch-head/) a web front end for browsing and interacting with an Elastic Search cluster.
-	- [Netdata](http://my-netdata.io/) for real-time performance monitoring.
-	- [Portainer](http://portainer.io/) a web based UI for docker.
-	- [Wetty](https://github.com/krishnasrinivas/wetty) a web based SSH client.
-- **NGINX** implemented as HTTPS reverse proxy
-	- Access Kibana, ES Head plugin, UI-for-Docker, WebSSH and Netdata via browser!
-	- Two factor based SSH tunnel is no longer needed!
-- **Installation** procedure improved
-	- Set your own password for the *tsec* user
-	- Choose your installation type without the need of building your own image
-	- Setup a remote user / password for secure web access including a self-signed-certificate
-	- Easy to remember hostnames
-- **First login** easy and secure
-	- Access from console, ssh or web
-	- No two-factor-authentication needed for ssh when logging in from RFC1918 networks
-	- Enforcing public-key authentication for ssh connections other than RFC1918 networks
-- **Systemd** now supersedes *upstart* as init system. All upstart scripts were ported to systemd along with the following improvements:
-	- Improved start / stop handling of containers
-	- Set persistence individually per container startup scripts (`/etc/systemd/system`)
-	- Set persistence globally (`/usr/bin/clean.sh`)
+- **Size still matters** 😅
+	- All docker images have been rebuilt as micro containers based on Alpine Linux to even further reduce the image size and leading to image sizes (compressed) below the 50 MB mark. The uncompressed size of eMobility and the ELK stack could each be reduced by a whopping 600 MB!
+	- A "Everything" installation now takes roughly 1.6 GB download size
+- **docker-compose**
+	- T-Pot containers are now being controlled and monitored through docker-compose and a single configuration file `/etc/tpot/tpot.yml` allowing for greater flexibility and resulting in easier image management (i.e. updated images).
+	- As a benefit only a single `systemd` script `/etc/systemd/system/tpot.service` is needed to start `systemctl start tpot` and stop `systemctl stop tpot` the T-Pot services.
+	- There are four pre-configured compose configurations which do reflect the T-Pot editions `/etc/tpot/compose`. Simply stop the T-Pot services and copy i.e. `cp /etc/tpot/compose/all.yml /etc/tpot/tpot.yml`, restart the T-Pot services and the selcted edition will be running after downloading the required docker images.
+
+- **Introducing** [Spiderfoot](https://github.com/smicallef/spiderfoot) a open source intelligence automation tool.
+- **Installation** procedure simplified
+	- Within the Ubuntu Installer you only have to choose language settings
+	- After the first reboot the T-Pot installer checks if internet and required services are reachable before the installation procedure begins
+	- T-Pot Installer now uses a “dialog” which looks way better than the old text based installer
+	- `tsec` user & password dialog is now part of the T-Pot Installer
+	- The self-signed certificate is now created automatically to reduce unnecessary overhead for novice users
+	- New ASCII logo and login screen pointing to web and ssh logins
+	- Hostnames are now generated using an offline name generator, which still produces funny and collision free hostnames
+- **CVE IDs for Suricata**
+	- Our very own [Listbot](https://github.com/dtag-dev-sec/listbot) builds translation maps for Logstash. If Logstash registers a match the events' CVE ID will be stored alongside the event within Elasticsearch.
+- **IP Reputations**
+	- [Listbot](https://github.com/dtag-dev-sec/listbot) also builds translation maps for blacklisted IPs
+	- Based upon 30+ publicly available IP blacklisting sources listbot creates a logstash translation map matching the events' source IP addresses against the IPs reputation
+	- If the source IP is known to a blacklist service a corresponding tag will be stored with the event
+	- Updates occur on every logstash container start; by default every 24h
 - **Honeypot updates and improvements**
-	- **Conpot** now supports **JSON logging** with many thanks as to making this feature request possible going to: 
-		- [Andrea Pasquale](https://github.com/adepasquale),
-		- [Danilo Massa](https://github.com/danilo-massa) &
-		- [Johnny Vestergaard](https://github.com/johnnykv) 
-	- **Cowrie** is now supporting **telnet** which is highly appreciated and thank you
-		- [Michel Oosterhof](https://github.com/micheloosterhof)
-	- **Dionaea** now supports **JSON logging** with many thanks as to making this feature request possible going to:
-		- [PhiBo](https://github.com/phibos)
-	- **Elasticpot** now supports **logging all queries and requests** with many thanks as to making this feature request possible going to:
-		- [Markus Schmall](https://github.com/schmalle)
-	- **Honeytrap** now supports **JSON logging** with many thanks as to making this feature request possible going to: 
-		- [Andrea Pasquale](https://github.com/adepasquale)
+	- All honeypots were updated to their latest & stable versions.
+- **New Honeypots** were added ...
+	* [mailoney](https://github.com/awhitehatter/mailoney)
+		- A low interaction SMTP honeypot
+	* [rdpy](https://github.com/citronneur/rdpy)
+		- A low interaction RDP honeypot
+	* [vnclowpot](https://github.com/magisterquis/vnclowpot)
+		- A low interaction VNC honeypot
 - **Updates**
-	- **Docker** was updated to the latest **1.12.2** release
-	- **ELK** was updated to the latest **Kibana 4.6.2**, **Elasticsearch 2.4.1** and **Logstash 2.4.0** releases.
-	- **Suricata** was updated to the latest **3.1.2** version including the latest **Emerging Threats** community ruleset.
-- We now have **150 Visualizations** pre-configured and compiled to 14 individual **Kibana Dashboards** for every honeypot. Monitor all *honeypot events* locally on your T-Pot installation. Aside from *honeypot events* you can also view *Suricata NSM, Syslog and NGINX* events for a quick overview of local host events.
-- More **Smart links** are now included.
+	- **Docker** was updated to the latest **1.12.6** release within Ubuntu 16.04.x LTS
+	- **ELK** was updated to the latest **Kibana 5.5.2**, **Elasticsearch 5.5.2** and **Logstash 5.5.2** releases.
+	- **Suricata** was updated to the latest **4.0.0** version including the latest **Emerging Threats** community ruleset.
+
+- **Dashboards Makeover**
+	- We now have **150 Visualizations** pre-configured and compiled to 14 individual **Kibana Dashboards** for every honeypot. Monitor all *honeypot events* locally on your T-Pot installation. Aside from *honeypot events* you can also view *Suricata NSM, Syslog and NGINX* events for a quick overview of local host events.
+	- More **Smart links** are now included.
 
 <a name="concept"></a>
 # Technical Concept
@@ -136,7 +137,7 @@ In T-Pot we combine the dockerized honeypots
 [suricata](http://suricata-ids.org/) a Network Security Monitoring engine and the
 [ELK stack](https://www.elastic.co/videos) to beautifully visualize all the events captured by T-Pot. Events will be correlated by our own data submission tool [ewsposter](https://github.com/dtag-dev-sec/ews) which also supports Honeynet project hpfeeds honeypot data sharing.
 
-![Architecture](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/doc/architecture.png)
+![Architecture](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/17.06/doc/architecture.png)
 
 All data in docker is volatile. Once a docker container crashes, all data produced within its environment is gone and a fresh instance is restarted. Hence, for some data that needs to be persistent, i.e. config files, we have a persistent storage **`/data/`** on the host in order to make it available and persistent across container or system restarts.<br>
 Important log data is now also stored outside the container in `/data/<container-name>` allowing easy access to logs from within the host and. The **systemd** scripts have been adjusted to support storing data on the host either volatile (*default*) or persistent (adjust individual systemd scripts in `/etc/systemd/system` or use a global setting in `/usr/bin/clear.sh`).
