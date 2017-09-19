@@ -418,13 +418,15 @@ For general feedback you can write to cert @ telekom.de.
 <a name="licenses"></a>
 # Licenses
 The software that T-Pot is built on uses the following licenses.
-<br>GPLv2: [conpot (by Lukas Rist)](https://github.com/mushorg/conpot/blob/master/LICENSE.txt), [dionaea](https://github.com/DinoTools/dionaea/blob/master/LICENSE), [honeytrap (by Tillmann Werner)](https://github.com/armedpot/honeytrap/blob/master/LICENSE), [suricata](http://suricata-ids.org/about/open-source/)
-<br>GPLv3: [elasticpot (by Markus Schmall)](https://github.com/schmalle/ElasticPot), [emobility (by Mohamad Sbeiti)](https://github.com/dtag-dev-sec/emobility/blob/master/LICENSE), [ewsposter (by Markus Schroer)](https://github.com/dtag-dev-sec/ews/), [glastopf (by Lukas Rist)](https://github.com/glastopf/glastopf/blob/master/GPL), [netdata](https://github.com/firehol/netdata/blob/master/LICENSE.md)
-<br>Apache 2 License: [elasticsearch](https://github.com/elasticsearch/elasticsearch/blob/master/LICENSE.txt), [logstash](https://github.com/elasticsearch/logstash/blob/master/LICENSE), [kibana](https://github.com/elasticsearch/kibana/blob/master/LICENSE.md), [docker] (https://github.com/docker/docker/blob/master/LICENSE), [elasticsearch-head](https://github.com/mobz/elasticsearch-head/blob/master/LICENCE)
-<br>MIT License: [tagcloud (by Shelby Sturgis)](https://github.com/stormpython/tagcloud/blob/master/LICENSE), [heatmap (by Shelby Sturgis)](https://github.com/stormpython/heatmap/blob/master/LICENSE), [wetty](https://github.com/krishnasrinivas/wetty/blob/master/LICENSE)
-<br>[cowrie (copyright disclaimer by Upi Tamminen)](https://github.com/micheloosterhof/cowrie/blob/master/doc/COPYRIGHT)
-<br>[Ubuntu licensing](http://www.ubuntu.com/about/about-ubuntu/licensing)
-<br>[Portainer](https://github.com/portainer/portainer/blob/develop/LICENSE)
+GPLv2: [conpot (by Lukas Rist)](https://github.com/mushorg/conpot/blob/master/LICENSE.txt), [dionaea](https://github.com/DinoTools/dionaea/blob/master/LICENSE), [honeytrap (by Tillmann Werner)](https://github.com/armedpot/honeytrap/blob/master/LICENSE), [suricata](http://suricata-ids.org/about/open-source/)
+GPLv3: [elasticpot (by Markus Schmall)](https://github.com/schmalle/ElasticPot), [emobility (by Mohamad Sbeiti)](https://github.com/dtag-dev-sec/emobility/blob/master/LICENSE), [ewsposter (by Markus Schroer)](https://github.com/dtag-dev-sec/ews/), [glastopf (by Lukas Rist)](https://github.com/glastopf/glastopf/blob/master/GPL), [rdpy](https://github.com/citronneur/rdpy/blob/master/LICENSE), [netdata](https://github.com/firehol/netdata/blob/master/LICENSE.md)
+Apache 2 License: [elasticsearch](https://github.com/elasticsearch/elasticsearch/blob/master/LICENSE.txt), [logstash](https://github.com/elasticsearch/logstash/blob/master/LICENSE), [kibana](https://github.com/elasticsearch/kibana/blob/master/LICENSE.md), [docker] (https://github.com/docker/docker/blob/master/LICENSE), [elasticsearch-head](https://github.com/mobz/elasticsearch-head/blob/master/LICENCE)
+MIT License: [wetty](https://github.com/krishnasrinivas/wetty/blob/master/LICENSE)
+zlib License: [vnclowpot](https://github.com/magisterquis/vnclowpot/blob/master/LICENSE)
+[cowrie (copyright disclaimer by Upi Tamminen)](https://github.com/micheloosterhof/cowrie/blob/master/doc/COPYRIGHT)
+[mailoney](https://github.com/awhitehatter/mailoney)
+[Ubuntu licensing](http://www.ubuntu.com/about/about-ubuntu/licensing)
+[Portainer](https://github.com/portainer/portainer/blob/develop/LICENSE)
 
 <a name="credits"></a>
 # Credits
