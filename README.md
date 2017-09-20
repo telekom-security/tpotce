@@ -326,9 +326,9 @@ If you do not have a SSH client at hand and still want to access the machine via
 - user: **user you chose during the installation**
 - pass: **password you chose during the installation**
 
-and choose **WebSSH** from the navigation bar. You will be prompted to allow access for this connection and enter the password for the user **tsec**.
+and choose **WebTTY** from the navigation bar. You will be prompted to allow access for this connection and enter the password for the user **tsec**.
 
-![WebSSH](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/17.06/doc/webssh.png)
+![WebTTY](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/17.06/doc/webssh.png)
 
 <a name="kibana"></a>
 ## Kibana Dashboard
