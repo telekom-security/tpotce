@@ -110,16 +110,16 @@ Seeing is believing :bowtie:
 		- A low interaction RDP honeypot
 	* [vnclowpot](https://github.com/magisterquis/vnclowpot)
 		- A low interaction VNC honeypot
-- **Persistence** is now enabled by default and will keep honeypot logs and tools data in `/data/` and its sub-folders by default for 30 days. You may change that behavior in `/etc/tpot/logrotate/logrotate.conf`. ELK data however will be kept for 90 days by default. You may change that behavior in `/etc/tpot/curator/actions.yml`. Scripts will be triggered through `/etc/crontab`. 
+- **Persistence** is now enabled by default and will keep honeypot logs and tools data in `/data/` and its sub-folders by default for 30 days. You may change that behavior in `/etc/tpot/logrotate/logrotate.conf`. ELK data however will be kept for 90 days by default. You may change that behavior in `/etc/tpot/curator/actions.yml`. Scripts will be triggered through `/etc/crontab`.
 - **Updates**
 	- **Docker** was updated to the latest **1.12.6** release within Ubuntu 16.04.x LTS
-	- **ELK** was updated to the latest **Kibana 5.5.2**, **Elasticsearch 5.5.2** and **Logstash 5.5.2** releases.
+	- **ELK** was updated to the latest **Kibana 5.6.1**, **Elasticsearch 5.6.1** and **Logstash 5.6.1** releases.
 	- **Suricata** was updated to the latest **4.0.0** version including the latest **Emerging Threats** community ruleset.
 
 - **Dashboards Makeover**
 	- We now have **160+ Visualizations** pre-configured and compiled to 14 individual **Kibana Dashboards** for every honeypot. Monitor all *honeypot events* locally on your T-Pot installation. Aside from *honeypot events* you can also view *Suricata NSM, Syslog and NGINX* events for a quick overview of local host events.
 	- View available IP reputation of any source IP address
-	- View available CVE ID for events 
+	- View available CVE ID for events
 	- More **Smart links** are now included.
 
 <a name="concept"></a>
@@ -193,7 +193,7 @@ When installing the T-Pot ISO image, make sure the target system (physical/virtu
 - Network via DHCP
 - A working, non-proxied, internet connection
 
-##### Sensor Installation (Cowrie, Dionaea, ElasticPot, Glastopf, Honeytrap)
+##### Honeypot Installation (Cowrie, Dionaea, ElasticPot, Glastopf, Honeytrap, Mailoney, Rdpy, Vnclowpot)
 When installing the T-Pot ISO image, make sure the target system (physical/virtual) meets the following minimum requirements:
 
 - 3 GB RAM (4-6 GB recommended)
