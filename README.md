@@ -1,6 +1,6 @@
 # T-Pot 17.10 (Alpha)
 
-This repository contains the necessary files to create the **[T-Pot](http://dtag-dev-sec.github.io/)** ISO image.
+This repository contains the necessary files to create the **[T-Pot](https://github.com/dtag-dev-sec/tpotce/releases)** ISO image.
 The image can then be used to install T-Pot on a physical or virtual machine.
 
 In October 2016 we released
