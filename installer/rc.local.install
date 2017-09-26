@@ -1,2 +1,0 @@
-#!/bin/bash
-openvt -w -s /root/tpot/install.sh
