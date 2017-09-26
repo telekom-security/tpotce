@@ -457,7 +457,7 @@ mkdir -p /data/conpot/log \
 touch /data/spiderfoot/spiderfoot.db 2>&1 | dialog --title "[ Creating some files and folders ]" $myPROGRESSBOXCONF
 
 # Let's copy some files
-tar xvfz /opt/tpot/etc/objetcs/elkbase.tgz -C / 2>&1 | dialog --title "[ Extracting elkbase.tgz ]" $myPROGRESSBOXCONF
+tar xvfz /opt/tpot/etc/objects/elkbase.tgz -C / 2>&1 | dialog --title "[ Extracting elkbase.tgz ]" $myPROGRESSBOXCONF
 cp    /opt/tpot/host/etc/systemd/* /etc/systemd/system/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
 cp    /opt/tpot/host/etc/issue /etc/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
 cp -R /opt/tpot/host/etc/nginx/ssl /etc/nginx/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
