@@ -1,0 +1,21 @@
+# Remember, leave a key empty if there is no value.  None will be a string,
+# not a Python "NoneType"
+client:
+  hosts:
+    - 127.0.0.1
+  port: 64298
+  url_prefix:
+  use_ssl: False
+  certificate:
+  client_cert:
+  client_key:
+  ssl_no_validate: False
+  http_auth:
+  timeout: 30
+  master_only: False
+
+logging:
+  loglevel: INFO
+  logfile: /var/log/curator.log
+  logformat: default
+  blacklist: ['elasticsearch', 'urllib3']
