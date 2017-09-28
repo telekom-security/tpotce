@@ -329,15 +329,16 @@ apt-get autoremove -y 2>&1 | dialog --title "[ Pulling updates ]" $myPROGRESSBOX
 
 # Installing docker-compose, wetty, ctop, elasticdump, tpot
 pip install --upgrade pip 2>&1 | dialog --title "[ Installing pip ]" $myPROGRESSBOXCONF
-pip install docker-compose==1.12.0 2>&1 | dialog --title "[ Installing docker-compose ]" $myPROGRESSBOXCONF
-pip install elasticsearch-curator==5.1.1 2>&1 | dialog --title "[ Installing elasticsearch-curator ]" $myPROGRESSBOXCONF
+pip install docker-compose==1.16.1 2>&1 | dialog --title "[ Installing docker-compose ]" $myPROGRESSBOXCONF
+pip install elasticsearch-curator==5.2.0 2>&1 | dialog --title "[ Installing elasticsearch-curator ]" $myPROGRESSBOXCONF
 ln -s /usr/bin/nodejs /usr/bin/node 2>&1 | dialog --title "[ Installing wetty ]" $myPROGRESSBOXCONF
 npm install https://github.com/t3chn0m4g3/wetty -g 2>&1 | dialog --title "[ Installing wetty ]" $myPROGRESSBOXCONF
 npm install https://github.com/t3chn0m4g3/elasticsearch-dump -g 2>&1 | dialog --title "[ Installing elasticsearch-dump ]" $myPROGRESSBOXCONF
 wget https://github.com/bcicen/ctop/releases/download/v0.6.1/ctop-0.6.1-linux-amd64 -O ctop 2>&1 | dialog --title "[ Installing ctop ]" $myPROGRESSBOXCONF
-git clone https://github.com/dtag-dev-sec/tpotce -b autoupdate /opt/tpot 2>&1 | dialog --title "[ Cloning T-Pot ]" $myPROGRESSBOXCONF
 mv ctop /usr/bin/ 2>&1 | dialog --title "[ Installing ctop ]" $myPROGRESSBOXCONF
 chmod +x /usr/bin/ctop 2>&1 | dialog --title "[ Installing ctop ]" $myPROGRESSBOXCONF
+git clone https://github.com/dtag-dev-sec/tpotce -b autoupdate /opt/tpot 2>&1 | dialog --title "[ Cloning T-Pot ]" $myPROGRESSBOXCONF
+
 # Let's add a new user
 addgroup --gid 2000 tpot 2>&1 | dialog --title "[ Adding new user ]" $myPROGRESSBOXCONF
 adduser --system --no-create-home --uid 2000 --disabled-password --disabled-login --gid 2000 tpot 2>&1 | dialog --title "[ Adding new user ]" $myPROGRESSBOXCONF
