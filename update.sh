@@ -1,5 +1,9 @@
 #!/bin/bash
 
+###################################################
+# Do not change any contents of this script!
+###################################################
+
 # Some vars
 myCONFIGFILE="/opt/tpot/etc/tpot.yml"
 myRED="[0;31m"
@@ -53,6 +57,30 @@ mySITES=$1
   done;
 }
 
+function fuSELFUPDATE () {
+  echo "### Now checking for newer update script ..."
+  git fetch
+  myRESULT=$(git diff --name-only origin/autoupdate | grep update.sh)
+  myLOCALSTAT=$(git status -uno | grep -c update.sh)
+  if [ "$myRESULT" == "update.sh" ];
+    then
+      if [ "$myLOCALSTATUS" == "0" ];
+        then
+          echo "###### $myBLUE"Found newer version, will update myself and restart."$myWHITE"
+          git pull --force
+          exec "$1" "$2"
+          exit 1
+        else
+          echo $myRED"Error - Update script was changed locally, cannot update."
+          echo "Exiting."$myWHITE
+          echo
+          exit 1
+      fi
+    else
+      echo "###### Update script is already up-to-date."
+  fi    
+} 
+
 # Only run with command switch
 if [ "$1" != "-y" ]; then
   echo "This script will update / upgrade all T-Pot related scripts, tools and packages" 
@@ -64,8 +92,10 @@ fi
 
 echo "### Now running T-Pot update script."
 echo
-
 fuCHECKINET "https://index.docker.io https://github.com https://pypi.python.org https://ubuntu.com"
+echo
+
+fuSELFUPDATE "$0" "$@"
 echo
 
 fuCONFIGCHECK
@@ -87,10 +117,6 @@ ln -s /usr/bin/nodejs /usr/bin/node 2>&1
 npm install https://github.com/t3chn0m4g3/wetty -g
 npm install https://github.com/t3chn0m4g3/elasticsearch-dump -g
 wget https://github.com/bcicen/ctop/releases/download/v0.6.1/ctop-0.6.1-linux-amd64 -O /usr/bin/ctop && chmod +x /usr/bin/ctop
-
-echo
-echo "### Now pulling T-Pot Repo"
-git pull
 
 echo
 echo "### Now replacing T-Pot related config files on host"
