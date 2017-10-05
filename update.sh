@@ -1,5 +1,5 @@
 #!/bin/bash
-### test 2
+
 ###################################################
 # Do not change any contents of this script!
 ###################################################
@@ -19,8 +19,6 @@ if [ "$myWHOAMI" != "root" ]
     sudo ./$0
     exit
 fi
-
-echo "#############>>>>>> I just got updated WOOT"
 
 # Check for existing tpot.yml
 function fuCONFIGCHECK () {
@@ -68,7 +66,7 @@ function fuSELFUPDATE () {
       echo "###### $myBLUE"No updates found in repository."$myWHITE"
       return
   fi
-  myRESULT=$(git diff --name-only origin/autoupdate | grep update.sh)
+  myRESULT=$(git diff --name-only origin/17.06 | grep update.sh)
   myLOCALSTAT=$(git status -uno | grep -c update.sh)
   if [ "$myRESULT" == "update.sh" ];
     then
