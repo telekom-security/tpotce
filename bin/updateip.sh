@@ -3,7 +3,7 @@
 # If the external IP cannot be detected, the internal IP will be inherited.
 source /etc/environment
 myLOCALIP=$(hostname -I | awk '{ print $1 }')
-myEXTIP=$(/usr/share/tpot/bin/myip.sh)
+myEXTIP=$(/opt/tpot/bin/myip.sh)
 if [ "$myEXTIP" = "" ];
   then
     myEXTIP=$myLOCALIP
@@ -15,7 +15,7 @@ tee /data/ews/conf/ews.ip << EOF
 [MAIN]
 ip = $myEXTIP
 EOF
-tee /etc/tpot/elk/environment << EOF
+tee /opt/tpot/etc/compose/elk_environment << EOF
 MY_EXTIP=$myEXTIP
 MY_INTIP=$myLOCALIP
 MY_HOSTNAME=$HOSTNAME

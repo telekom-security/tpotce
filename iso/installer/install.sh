@@ -6,14 +6,15 @@ export TERM=linux
 export DIALOGRC=/etc/dialogrc
 
 # Let's load dialog color theme
-cp /root/tpot/etc/dialogrc /etc/
+cp /root/installer/dialogrc /etc/
 
 # Some global vars
-myPROXYFILEPATH="/root/tpot/etc/proxy"
-myNTPCONFPATH="/root/tpot/etc/ntp"
-myPFXPATH="/root/tpot/keys/8021x.pfx"
-myPFXPWPATH="/root/tpot/keys/8021x.pw"
-myPFXHOSTIDPATH="/root/tpot/keys/8021x.id"
+myPROXYFILEPATH="/root/installer/proxy"
+myNTPCONFPATH="/root/installer/ntp"
+myPFXPATH="/root/installer/keys/8021x.pfx"
+myPFXPWPATH="/root/installer/keys/8021x.pw"
+myPFXHOSTIDPATH="/root/installer/keys/8021x.id"
+myTPOTCOMPOSE="/opt/tpot/etc/tpot.yml"
 myBACKTITLE="T-Pot-Installer"
 mySITES="https://index.docker.io https://github.com https://pypi.python.org https://ubuntu.com"
 myPROGRESSBOXCONF=" --backtitle "$myBACKTITLE" --progressbox 24 80"
@@ -326,24 +327,25 @@ apt-get upgrade -y 2>&1 | dialog --title "[ Pulling updates ]" $myPROGRESSBOXCON
 apt-get autoclean -y 2>&1 | dialog --title "[ Pulling updates ]" $myPROGRESSBOXCONF
 apt-get autoremove -y 2>&1 | dialog --title "[ Pulling updates ]" $myPROGRESSBOXCONF
 
-# Installing docker-compose, wetty, ctop, elasticdump
+# Installing docker-compose, wetty, ctop, elasticdump, tpot
 pip install --upgrade pip 2>&1 | dialog --title "[ Installing pip ]" $myPROGRESSBOXCONF
-pip install docker-compose==1.12.0 2>&1 | dialog --title "[ Installing docker-compose ]" $myPROGRESSBOXCONF
-pip install elasticsearch-curator==5.1.1 2>&1 | dialog --title "[ Installing elasticsearch-curator ]" $myPROGRESSBOXCONF
+pip install docker-compose==1.16.1 2>&1 | dialog --title "[ Installing docker-compose ]" $myPROGRESSBOXCONF
+pip install elasticsearch-curator==5.2.0 2>&1 | dialog --title "[ Installing elasticsearch-curator ]" $myPROGRESSBOXCONF
 ln -s /usr/bin/nodejs /usr/bin/node 2>&1 | dialog --title "[ Installing wetty ]" $myPROGRESSBOXCONF
 npm install https://github.com/t3chn0m4g3/wetty -g 2>&1 | dialog --title "[ Installing wetty ]" $myPROGRESSBOXCONF
 npm install https://github.com/t3chn0m4g3/elasticsearch-dump -g 2>&1 | dialog --title "[ Installing elasticsearch-dump ]" $myPROGRESSBOXCONF
 wget https://github.com/bcicen/ctop/releases/download/v0.6.1/ctop-0.6.1-linux-amd64 -O ctop 2>&1 | dialog --title "[ Installing ctop ]" $myPROGRESSBOXCONF
 mv ctop /usr/bin/ 2>&1 | dialog --title "[ Installing ctop ]" $myPROGRESSBOXCONF
 chmod +x /usr/bin/ctop 2>&1 | dialog --title "[ Installing ctop ]" $myPROGRESSBOXCONF
+git clone https://github.com/dtag-dev-sec/tpotce -b autoupdate /opt/tpot 2>&1 | dialog --title "[ Cloning T-Pot ]" $myPROGRESSBOXCONF
 
 # Let's add a new user
 addgroup --gid 2000 tpot 2>&1 | dialog --title "[ Adding new user ]" $myPROGRESSBOXCONF
 adduser --system --no-create-home --uid 2000 --disabled-password --disabled-login --gid 2000 tpot 2>&1 | dialog --title "[ Adding new user ]" $myPROGRESSBOXCONF
 
 # Let's set the hostname
-a=$(fuRANDOMWORD /usr/share/dict/a.txt)
-n=$(fuRANDOMWORD /usr/share/dict/n.txt)
+a=$(fuRANDOMWORD /opt/tpot/host/usr/share/dict/a.txt)
+n=$(fuRANDOMWORD /opt/tpot/host/usr/share/dict/n.txt)
 myHOST=$a$n
 hostnamectl set-hostname $myHOST 2>&1 | dialog --title "[ Setting new hostname ]" $myPROGRESSBOXCONF
 sed -i 's#127.0.1.1.*#127.0.1.1\t'"$myHOST"'#g' /etc/hosts 2>&1 | dialog --title "[ Setting new hostname ]" $myPROGRESSBOXCONF
@@ -362,26 +364,26 @@ EOF
 case $myFLAVOR in
   HP)
     echo "### Preparing HONEYPOT flavor installation."
-    cp /root/tpot/etc/tpot/compose/hp.yml /root/tpot/etc/tpot/tpot.yml 2>&1>/dev/null
+    cp /opt/tpot/etc/compose/hp.yml $myTPOTCOMPOSE 2>&1>/dev/null
   ;;
   INDUSTRIAL)
     echo "### Preparing INDUSTRIAL flavor installation."
-    cp /root/tpot/etc/tpot/compose/industrial.yml /root/tpot/etc/tpot/tpot.yml 2>&1>/dev/null
+    cp /opt/tpot/etc/compose/industrial.yml $myTPOTCOMPOSE 2>&1>/dev/null
   ;;
   TPOT)
     echo "### Preparing TPOT flavor installation."
-    cp /root/tpot/etc/tpot/compose/tpot.yml /root/tpot/etc/tpot/tpot.yml 2>&1>/dev/null
+    cp /opt/tpot/etc/compose/tpot.yml $myTPOTCOMPOSE 2>&1>/dev/null
   ;;
   EVERYTHING)
     echo "### Preparing EVERYTHING flavor installation."
-    cp /root/tpot/etc/tpot/compose/all.yml /root/tpot/etc/tpot/tpot.yml 2>&1>/dev/null
+    cp /opt/tpot/etc/compose/all.yml $myTPOTCOMPOSE 2>&1>/dev/null
   ;;
 esac
 
 # Let's load docker images
-myIMAGESCOUNT=$(cat /root/tpot/etc/tpot/tpot.yml | grep -v '#' | grep image | cut -d: -f2 | wc -l)
+myIMAGESCOUNT=$(cat $myTPOTCOMPOSE | grep -v '#' | grep image | cut -d: -f2 | wc -l)
 j=0
-for name in $(cat /root/tpot/etc/tpot/tpot.yml | grep -v '#' | grep image | cut -d'"' -f2)
+for name in $(cat $myTPOTCOMPOSE | grep -v '#' | grep image | cut -d'"' -f2)
   do
     dialog --title "[ Downloading docker images, please be patient ]" --backtitle "$myBACKTITLE" \
            --gauge "\n  Now downloading: $name\n" 8 80 $(expr 100 \* $j / $myIMAGESCOUNT) <<EOF
@@ -423,10 +425,10 @@ EOF
 tee -a /etc/crontab 2>&1>/dev/null <<EOF
 
 # Check if updated images are available and download them
-27 1 * * *      root    /usr/bin/docker-compose -f /etc/tpot/tpot.yml pull
+27 1 * * *      root    /usr/bin/docker-compose -f /opt/tpot/etc/tpot.yml pull
 
 # Delete elasticsearch logstash indices older than 90 days
-27 4 * * *      root    /usr/local/bin/curator --config /etc/tpot/curator/curator.yml /etc/tpot/curator/actions.yml
+27 4 * * *      root    /usr/local/bin/curator --config /opt/tpot/etc/curator/curator.yml /opt/tpot/etc/curator/actions.yml
 
 # Uploaded binaries are not supposed to be downloaded
 */1 * * * *     root    mv --backup=numbered /data/dionaea/roots/ftp/* /data/dionaea/binaries/
@@ -452,29 +454,18 @@ mkdir -p /data/conpot/log \
          /data/spiderfoot \
          /data/suricata/log /home/tsec/.ssh/ \
          /data/p0f/log \
-         /data/vnclowpot/log \
-         /etc/tpot/elk /etc/tpot/compose /etc/tpot/systemd \
-         /usr/share/tpot/bin 2>&1 | dialog --title "[ Creating some files and folders ]" $myPROGRESSBOXCONF
+         /data/vnclowpot/log 2>&1 | dialog --title "[ Creating some files and folders ]" $myPROGRESSBOXCONF
 touch /data/spiderfoot/spiderfoot.db 2>&1 | dialog --title "[ Creating some files and folders ]" $myPROGRESSBOXCONF
 
-# Let's take care of some files and permissions before copying
-chmod 500 /root/tpot/bin/* 2>&1 | dialog --title "[ Setting permissions ]" $myPROGRESSBOXCONF
-chmod 600 -R /root/tpot/etc/tpot 2>&1 | dialog --title "[ Setting permissions ]" $myPROGRESSBOXCONF
-chmod 644 /root/tpot/etc/issue 2>&1 | dialog --title "[ Setting permissions ]" $myPROGRESSBOXCONF
-chmod 755 /root/tpot/etc/rc.local 2>&1 | dialog --title "[ Setting permissions ]" $myPROGRESSBOXCONF
-chmod 644 /root/tpot/etc/tpot/systemd/* 2>&1 | dialog --title "[ Setting permissions ]" $myPROGRESSBOXCONF
-
 # Let's copy some files
-tar xvfz /root/tpot/etc/tpot/elkbase.tgz -C / 2>&1 | dialog --title "[ Extracting elkbase.tgz ]" $myPROGRESSBOXCONF
-cp -R /root/tpot/bin/* /usr/share/tpot/bin/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
-cp -R /root/tpot/etc/tpot/* /etc/tpot/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
-cp    /root/tpot/etc/tpot/systemd/* /etc/systemd/system/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
-cp    /root/tpot/etc/issue /etc/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
-cp -R /root/tpot/etc/nginx/ssl /etc/nginx/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
-cp    /root/tpot/etc/nginx/tpotweb.conf /etc/nginx/sites-available/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
-cp    /root/tpot/etc/nginx/nginx.conf /etc/nginx/nginx.conf 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
-cp    /root/tpot/keys/authorized_keys /home/tsec/.ssh/authorized_keys 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
-cp    /root/tpot/usr/share/nginx/html/* /usr/share/nginx/html/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
+tar xvfz /opt/tpot/etc/objects/elkbase.tgz -C / 2>&1 | dialog --title "[ Extracting elkbase.tgz ]" $myPROGRESSBOXCONF
+cp    /opt/tpot/host/etc/systemd/* /etc/systemd/system/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
+cp    /opt/tpot/host/etc/issue /etc/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
+cp -R /opt/tpot/host/etc/nginx/ssl /etc/nginx/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
+cp    /opt/tpot/host/etc/nginx/tpotweb.conf /etc/nginx/sites-available/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
+cp    /opt/tpot/host/etc/nginx/nginx.conf /etc/nginx/nginx.conf 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
+cp    /opt/tpot/host/usr/share/nginx/html/* /usr/share/nginx/html/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
+cp    /root/installer/keys/authorized_keys /home/tsec/.ssh/authorized_keys 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
 systemctl enable tpot 2>&1 | dialog --title "[ Enabling service for tpot ]" $myPROGRESSBOXCONF
 systemctl enable wetty 2>&1 | dialog --title "[ Enabling service for wetty ]" $myPROGRESSBOXCONF
 
@@ -490,11 +481,6 @@ chown tsec:tsec /home/tsec/.ssh /home/tsec/.ssh/authorized_keys 2>&1 | dialog --
 # Let's replace "quiet splash" options, set a console font for more screen canvas and update grub
 sed -i 's#GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"#GRUB_CMDLINE_LINUX_DEFAULT="consoleblank=0"#' /etc/default/grub 2>&1>/dev/null
 sed -i 's#GRUB_CMDLINE_LINUX=""#GRUB_CMDLINE_LINUX="cgroup_enable=memory swapaccount=1"#' /etc/default/grub 2>&1>/dev/null
-#sed -i 's#\#GRUB_GFXMODE=640x480#GRUB_GFXMODE=800x600x32#' /etc/default/grub
-#tee -a /etc/default/grub <<EOF
-#GRUB_GFXPAYLOAD=800x600x32
-#GRUB_GFXPAYLOAD_LINUX=800x600x32
-#EOF
 update-grub 2>&1 | dialog --title "[ Update grub ]" $myPROGRESSBOXCONF
 cp /usr/share/consolefonts/Uni2-Terminus12x6.psf.gz /etc/console-setup/
 gunzip /etc/console-setup/Uni2-Terminus12x6.psf.gz
@@ -502,23 +488,23 @@ sed -i 's#FONTFACE=".*#FONTFACE="Terminus"#' /etc/default/console-setup
 sed -i 's#FONTSIZE=".*#FONTSIZE="12x6"#' /etc/default/console-setup
 update-initramfs -u 2>&1 | dialog --title "[ Update initramfs ]" $myPROGRESSBOXCONF
 
-# Let's enable a color prompt and add /usr/share/tpot/bin to path
+# Let's enable a color prompt and add /opt/tpot/bin to path
 myROOTPROMPT='PS1="\[\033[38;5;8m\][\[$(tput sgr0)\]\[\033[38;5;1m\]\u\[$(tput sgr0)\]\[\033[38;5;6m\]@\[$(tput sgr0)\]\[\033[38;5;4m\]\h\[$(tput sgr0)\]\[\033[38;5;6m\]:\[$(tput sgr0)\]\[\033[38;5;5m\]\w\[$(tput sgr0)\]\[\033[38;5;8m\]]\[$(tput sgr0)\]\[\033[38;5;1m\]\\$\[$(tput sgr0)\]\[\033[38;5;15m\] \[$(tput sgr0)\]"'
 myUSERPROMPT='PS1="\[\033[38;5;8m\][\[$(tput sgr0)\]\[\033[38;5;2m\]\u\[$(tput sgr0)\]\[\033[38;5;6m\]@\[$(tput sgr0)\]\[\033[38;5;4m\]\h\[$(tput sgr0)\]\[\033[38;5;6m\]:\[$(tput sgr0)\]\[\033[38;5;5m\]\w\[$(tput sgr0)\]\[\033[38;5;8m\]]\[$(tput sgr0)\]\[\033[38;5;2m\]\\$\[$(tput sgr0)\]\[\033[38;5;15m\] \[$(tput sgr0)\]"'
 tee -a /root/.bashrc 2>&1>/dev/null <<EOF
 $myROOTPROMPT
-PATH="$PATH:/usr/share/tpot/bin"
+PATH="$PATH:/opt/tpot/bin"
 EOF
 tee -a /home/tsec/.bashrc 2>&1>/dev/null <<EOF
 $myUSERPROMPT
-PATH="$PATH:/usr/share/tpot/bin"
+PATH="$PATH:/opt/tpot/bin"
 EOF
 
 # Let's create ews.ip before reboot and prevent race condition for first start
-/usr/share/tpot/bin/updateip.sh 2>&1>/dev/null
+/opt/tpot/bin/updateip.sh 2>&1>/dev/null
 
 # Final steps
-mv /root/tpot/etc/rc.local /etc/rc.local 2>&1>/dev/null && \
-rm -rf /root/tpot/ 2>&1>/dev/null && \
+cp /opt/tpot/host/etc/rc.local /etc/rc.local 2>&1>/dev/null && \
+rm -rf /root/installer 2>&1>/dev/null && \
 dialog --no-ok --no-cancel --backtitle "$myBACKTITLE" --title "[ Thanks for your patience. Now rebooting. ]" --pause "" 6 80 2 && \
 reboot

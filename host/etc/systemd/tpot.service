@@ -8,14 +8,14 @@ Restart=always
 RestartSec=5
 
 # Get and set internal, external IP infos, but ignore errors
-ExecStartPre=-/usr/share/tpot/bin/updateip.sh
+ExecStartPre=-/opt/tpot/bin/updateip.sh
 
 # Clear state or if persistence is enabled rotate and compress logs from /data
-ExecStartPre=-/bin/bash -c '/usr/share/tpot/bin/clean.sh on'
+ExecStartPre=-/bin/bash -c '/opt/tpot/bin/clean.sh on'
 
 # Remove old containers, images and volumes
-ExecStartPre=-/usr/local/bin/docker-compose -f /etc/tpot/tpot.yml down -v
-ExecStartPre=-/usr/local/bin/docker-compose -f /etc/tpot/tpot.yml rm -v
+ExecStartPre=-/usr/local/bin/docker-compose -f /opt/tpot/etc/tpot.yml down -v
+ExecStartPre=-/usr/local/bin/docker-compose -f /opt/tpot/etc/tpot.yml rm -v
 ExecStartPre=-/bin/bash -c 'docker volume rm $(docker volume ls -q)'
 ExecStartPre=-/bin/bash -c 'docker rm -v $(docker ps -aq)'
 ExecStartPre=-/bin/bash -c 'docker rmi $(docker images | grep "<none>" | awk \'{print $3}\')'
@@ -39,10 +39,10 @@ ExecStartPre=/sbin/iptables -w -A INPUT -p tcp -m multiport --dports 1025,50100,
 ExecStartPre=/sbin/iptables -w -A INPUT -p tcp --syn -m state --state NEW -j NFQUEUE
 
 # Compose T-Pot up
-ExecStart=/usr/local/bin/docker-compose -f /etc/tpot/tpot.yml up --no-color
+ExecStart=/usr/local/bin/docker-compose -f /opt/tpot/etc/tpot.yml up --no-color
 
 # Compose T-Pot down, remove containers and volumes
-ExecStop=/usr/local/bin/docker-compose -f /etc/tpot/tpot.yml down -v
+ExecStop=/usr/local/bin/docker-compose -f /opt/tpot/etc/tpot.yml down -v
 
 # Remove only previously set iptables rules
 ExecStopPost=/sbin/iptables -w -D INPUT -s 127.0.0.1 -j ACCEPT

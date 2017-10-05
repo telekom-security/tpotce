@@ -1,7 +1,7 @@
 #/bin/bash
 # Show current status of all running containers
 myPARAM="$1"
-myIMAGES="$(cat /etc/tpot/tpot.yml | grep -v '#' | grep container_name | cut -d: -f2)"
+myIMAGES="$(cat /opt/tpot/etc/tpot.yml | grep -v '#' | grep container_name | cut -d: -f2)"
 myRED="[1;31m"
 myGREEN="[1;32m"
 myBLUE="[1;34m"

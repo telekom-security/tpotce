@@ -114,9 +114,8 @@ d-i preseed/late_command string \
 in-target apt-get -y install grub-pc; \
 in-target grub-install --force $(debconf-get partman-auto/disk); \
 in-target update-grub; \
-cp /opt/tpot/rc.local.install /target/etc/rc.local; \
-cp -r /opt/tpot/ /target/root/; \
-cp /opt/tpot/usr/share/dict/* /target/usr/share/dict/
+cp /opt/installer/rc.local.install /target/etc/rc.local; \
+cp /opt/installer -R /target/root/;
 
 ##########
 ### Reboot

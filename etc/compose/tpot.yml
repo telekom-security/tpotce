@@ -127,7 +127,7 @@ services:
       elasticsearch:
         condition: service_healthy
     env_file:
-     - /etc/tpot/elk/environment
+     - /opt/tpot/etc/compose/elk_environment
     image: "dtagdevsec/logstash:1710"
     volumes:
      - /data:/data
