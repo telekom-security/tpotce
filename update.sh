@@ -61,17 +61,16 @@ if [ "$1" != "-y" ]; then
   echo
   exit
 fi
-######################################### Prevent race condition on updated update.sh!!!! What happens if update.sh will be overwritten by git pull?
-######################################### git pull needs to run first, if Already up to date => no action, if update, then fork
+
 echo "### Now running T-Pot update script."
 echo
+
 fuCHECKINET "https://index.docker.io https://github.com https://pypi.python.org https://ubuntu.com"
 echo
+
 fuCONFIGCHECK
 echo
-exit
 
-echo
 echo "### Now stopping T-Pot"
 systemctl stop tpot
 
