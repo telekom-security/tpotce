@@ -58,8 +58,14 @@ mySITES=$1
 }
 
 function fuSELFUPDATE () {
-  echo "### Now checking for newer update script ..."
+  echo "### Now checking for newer files in repository ..."
   git fetch
+  myREMOTESTAT=$(git status | grep -c "up-to-date")
+  if [ "$myREMOTESTAT" != "0" ];
+    then
+      echo "###### $myBLUE"No updates found in repository."$myWHITE"
+      return
+  fi
   myRESULT=$(git diff --name-only origin/autoupdate | grep update.sh)
   myLOCALSTAT=$(git status -uno | grep -c update.sh)
   if [ "$myRESULT" == "update.sh" ];
@@ -92,6 +98,7 @@ fi
 
 echo "### Now running T-Pot update script."
 echo
+
 fuCHECKINET "https://index.docker.io https://github.com https://pypi.python.org https://ubuntu.com"
 echo
 
@@ -147,4 +154,4 @@ echo "### Now starting T-Pot service"
 systemctl start tpot
 
 echo
-echo "### Done. If all services run correctly (dps.sh) you should perform a reboot."
+echo "### Done."
