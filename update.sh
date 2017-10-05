@@ -1,5 +1,12 @@
 #!/bin/bash
 
+# Some vars
+myCONFIGFILE="/opt/tpot/etc/tpot.yml"
+myRED="[0;31m"
+myGREEN="[0;32m"
+myWHITE="[0;0m"
+myBLUE="[0;34m"
+
 # Got root?
 myWHOAMI=$(whoami)
 if [ "$myWHOAMI" != "root" ]
@@ -9,6 +16,43 @@ if [ "$myWHOAMI" != "root" ]
     exit
 fi
 
+# Check for existing tpot.yml
+function fuCONFIGCHECK () {
+  echo "### Checking for T-Pot configuration file ..."
+  echo -n "###### $myBLUE$myCONFIGFILE$myWHITE "
+  if ! [ -f $myCONFIGFILE ]; 
+    then
+      echo
+      echo $myRED"Error - No T-Pot configuration file present."
+      echo "Please copy one of the preconfigured configuration files from /opt/tpot/etc/compose/*.yml to /opt/tpot/etc/tpot.yml."$myWHITE
+      echo
+      exit 1
+    else
+      echo $myGREEN"OK"$myWHITE
+  fi
+}
+
+# Let's test the internet connection
+function fuCHECKINET () {
+mySITES=$1
+  echo "### Now checking availability of ..."
+  for i in $mySITES;
+    do
+      echo -n "###### $myBLUE$i$myWHITE "
+      curl --connect-timeout 5 -IsS $i 2>&1>/dev/null
+        if [ $? -ne 0 ];
+          then
+            echo
+            echo $myRED"Error - Internet connection test failed. This might indicate some problems with your connection."
+            echo "Exiting."$myWHITE
+            echo
+            exit 1
+          else
+            echo $myGREEN"OK"$myWHITE
+        fi
+  done;
+}
+
 # Only run with command switch
 if [ "$1" != "-y" ]; then
   echo "This script will update / upgrade all T-Pot related scripts, tools and packages" 
@@ -17,8 +61,15 @@ if [ "$1" != "-y" ]; then
   echo
   exit
 fi
-
-echo "Now running T-Pot update script..."
+######################################### Prevent race condition on updated update.sh!!!! What happens if update.sh will be overwritten by git pull?
+######################################### git pull needs to run first, if Already up to date => no action, if update, then fork
+echo "### Now running T-Pot update script."
+echo
+fuCHECKINET "https://index.docker.io https://github.com https://pypi.python.org https://ubuntu.com"
+echo
+fuCONFIGCHECK
+echo
+exit
 
 echo
 echo "### Now stopping T-Pot"
