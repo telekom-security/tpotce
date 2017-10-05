@@ -70,7 +70,7 @@ function fuSELFUPDATE () {
   myLOCALSTAT=$(git status -uno | grep -c update.sh)
   if [ "$myRESULT" == "update.sh" ];
     then
-      if [ "$myLOCALSTATUS" == "0" ];
+      if [ "$myLOCALSTAT" == "0" ];
         then
           echo "###### $myBLUE"Found newer version, will update myself and restart."$myWHITE"
           git pull --force
