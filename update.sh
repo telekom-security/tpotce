@@ -1,5 +1,5 @@
 #!/bin/bash
-### test 1
+### test 2
 ###################################################
 # Do not change any contents of this script!
 ###################################################
@@ -19,6 +19,8 @@ if [ "$myWHOAMI" != "root" ]
     sudo ./$0
     exit
 fi
+
+echo "#############>>>>>> I just got updated WOOT"
 
 # Check for existing tpot.yml
 function fuCONFIGCHECK () {
