@@ -81,10 +81,9 @@ Seeing is believing :bowtie:
 	- All docker images have been rebuilt as micro containers based on Alpine Linux to even further reduce the image size and leading to image sizes (compressed) below the 50 MB mark. The uncompressed size of eMobility and the ELK stack could each be reduced by a whopping 600 MB!
 	- A "Everything" installation now takes roughly 1.6 GB download size
 - **docker-compose**
-	- T-Pot containers are now being controlled and monitored through docker-compose and a single configuration file `/etc/tpot/tpot.yml` allowing for greater flexibility and resulting in easier image management (i.e. updated images).
+	- T-Pot containers are now being controlled and monitored through docker-compose and a single configuration file `/opt/tpot/etc/tpot.yml` allowing for greater flexibility and resulting in easier image management (i.e. updated images).
 	- As a benefit only a single `systemd` script `/etc/systemd/system/tpot.service` is needed to start `systemctl start tpot` and stop `systemctl stop tpot` the T-Pot services.
-	- There are four pre-configured compose configurations which do reflect the T-Pot editions `/etc/tpot/compose`. Simply stop the T-Pot services and copy i.e. `cp /etc/tpot/compose/all.yml /etc/tpot/tpot.yml`, restart the T-Pot services and the selcted edition will be running after downloading the required docker images.
-
+	- There are four pre-configured compose configurations which do reflect the T-Pot editions `/opt/tpot/etc/compose`. Simply stop the T-Pot services and copy i.e. `cp /opt/tpot/etc/compose/all.yml /opt/tpot/etc/tpot.yml`, restart the T-Pot services and the selcted edition will be running after downloading the required docker images.
 - **Introducing** [Spiderfoot](https://github.com/smicallef/spiderfoot) a open source intelligence automation tool.
 - **Installation** procedure simplified
 	- Within the Ubuntu Installer you only have to choose language settings
@@ -110,7 +109,7 @@ Seeing is believing :bowtie:
 		- A low interaction RDP honeypot
 	* [vnclowpot](https://github.com/magisterquis/vnclowpot)
 		- A low interaction VNC honeypot
-- **Persistence** is now enabled by default and will keep honeypot logs and tools data in `/data/` and its sub-folders by default for 30 days. You may change that behavior in `/etc/tpot/logrotate/logrotate.conf`. ELK data however will be kept for 90 days by default. You may change that behavior in `/etc/tpot/curator/actions.yml`. Scripts will be triggered through `/etc/crontab`.
+- **Persistence** is now enabled by default and will keep honeypot logs and tools data in `/data/` and its sub-folders by default for 30 days. You may change that behavior in `/opt/tpot/etc/logrotate/logrotate.conf`. ELK data however will be kept for 90 days by default. You may change that behavior in `/opt/tpot/etc/curator/actions.yml`. Scripts will be triggered through `/etc/crontab`.
 - **Updates**
 	- **Docker** was updated to the latest **1.12.6** release within Ubuntu 16.04.x LTS
 	- **ELK** was updated to the latest **Kibana 5.6.1**, **Elasticsearch 5.6.1** and **Logstash 5.6.1** releases.
@@ -121,6 +120,12 @@ Seeing is believing :bowtie:
 	- View available IP reputation of any source IP address
 	- View available CVE ID for events
 	- More **Smart links** are now included.
+
+- **Update Feature**
+	- For the ones who like to live on the bleeding edge of T-Pot development there is now a update script available in `/opt/tpot/update.sh`. Just run the script and it will get the latest changes from the `master branch`. For now this feature is experimental and the first step to a true rolling release cycle.
+
+- **Files & Folders**
+	- While the `/data` folder is still in its old place, all T-Pot relevant files and folders have been restructured and will now be installed into `/opt/tpot`. Only a few system relevant files with regard to the installed OS and its services will be copied to locations outside the T-Pot base path.
 
 <a name="concept"></a>
 # Technical Concept
@@ -150,7 +155,7 @@ In T-Pot we combine the dockerized honeypots
 
 ![Architecture](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/17.06/doc/architecture.png)
 
-While data within docker containers is volatile we do now ensure a default 30 day persistence of all relevant honeypot and tool data in the well known `/data` folder and sub-folders. The persistence configuration may be adjusted in `/etc/tpot/logrotate/logrotate.conf`. Once a docker container crashes, all other data produced within its environment is erased and a fresh instance is started from the corresponding docker image.<br>
+While data within docker containers is volatile we do now ensure a default 30 day persistence of all relevant honeypot and tool data in the well known `/data` folder and sub-folders. The persistence configuration may be adjusted in `/opt/tpot/etc/logrotate/logrotate.conf`. Once a docker container crashes, all other data produced within its environment is erased and a fresh instance is started from the corresponding docker image.<br>
 
 Basically, what happens when the system is booted up is the following:
 
@@ -160,7 +165,7 @@ Basically, what happens when the system is booted up is the following:
 
 Within the T-Pot project, we provide all the tools and documentation necessary to build your own honeypot system and contribute to our [community data view](http://sicherheitstacho.eu/?peers=communityPeers), a separate channel on our  [Sicherheitstacho](http://sicherheitstacho.eu) that is powered by T-Pot community data.
 
-The source code and configuration files are stored in individual GitHub repositories, which are linked below. The docker images are pre-configured for the T-Pot environment. If you want to run the docker images separately, make sure you study the docker-compose configuration (`/etc/tpot/tpot.yml`) and the T-Pot systemd script (`/etc/systemd/system/tpot.service`), as they provide a good starting point for implementing changes.
+The source code and configuration files are stored in individual GitHub repositories, which are linked below. The docker images are pre-configured for the T-Pot environment. If you want to run the docker images separately, make sure you study the docker-compose configuration (`/opt/tpot/etc/tpot.yml`) and the T-Pot systemd script (`/etc/systemd/system/tpot.service`), as they provide a good starting point for implementing changes.
 
 The individual docker configurations are located in the following GitHub repositories:
 
@@ -252,7 +257,7 @@ The script will download and install dependencies necessary to build the image o
 ```
 sudo ./makeiso.sh
 ```
-After a successful build, you will find the ISO image `tpot.iso` along with a SHA256 checksum `tpot.sha256`in your directory.
+After a successful build, you will find the ISO image `tpot.iso` along with a SHA256 checksum `tpot.sha256` in your directory.
 
 <a name="vm"></a>
 ## Running in VM
@@ -362,9 +367,9 @@ If new versions of the components involved appear, we will test them and build n
 <a name="submission"></a>
 ## Community Data Submission
 We provide T-Pot in order to make it accessible to all parties interested in honeypot deployment. By default, the data captured is submitted to a community backend. This community backend uses the data to feed a [community data view](http://sicherheitstacho.eu/?peers=communityPeers), a separate channel on our own [Sicherheitstacho](http://sicherheitstacho.eu), which is powered by our own set of honeypots.
-You may opt out the submission to our community server by removing the `# Ewsposter service` from `/etc/tpot/tpot.yml`:
+You may opt out the submission to our community server by removing the `# Ewsposter service` from `/opt/tpot/etc/tpot.yml`:
 1. Stop T-Pot services: `systemctl stop tpot`
-2. Remove Ewsposter service: `vi /etc/tpot/tpot.yml`
+2. Remove Ewsposter service: `vi /opt/tpot/etc/tpot.yml`
 3. Remove the following lines, save and exit vi (`:x!`):<br>
 ```
 # Ewsposter service
@@ -430,7 +435,7 @@ The software that T-Pot is built on uses the following licenses.
 
 <a name="credits"></a>
 # Credits
-Without open source and the fruitful development community we are proud to be a part of T-Pot would not have been possible. Our thanks are extended but not limited to the following people and organizations:
+Without open source and the fruitful development community we are proud to be a part of, T-Pot would not have been possible! Our thanks are extended but not limited to the following people and organizations:
 
 ### The developers and development communities of
 
@@ -459,14 +464,13 @@ Without open source and the fruitful development community we are proud to be a 
 * [wetty](https://github.com/krishnasrinivas/wetty/graphs/contributors)
 
 ### The following companies and organizations
-* [cannonical](http://www.canonical.com/)
+* [canonical](http://www.canonical.com/)
 * [docker](https://www.docker.com/)
 * [elastic.io](https://www.elastic.co/)
 * [honeynet project](https://www.honeynet.org/)
 * [intel](http://www.intel.com)
 
 ### ... and of course ***you*** for joining the community!
-
 
 <a name="staytuned"></a>
 # Stay tuned ...
@@ -475,4 +479,4 @@ We will be releasing a new version of T-Pot about every 6-12 months.
 <a name="funfact"></a>
 # Fun Fact
 
-Coffee just does not cut it anymore which is why we needed a different caffeine source and consumed *215* bottles of [Club Mate](https://de.wikipedia.org/wiki/Club-Mate) during the development of T-Pot 17.10 😇
+Coffee just does not cut it anymore which is why we needed a different caffeine source and consumed *227* bottles of [Club Mate](https://de.wikipedia.org/wiki/Club-Mate) during the development of T-Pot 17.10 😇
