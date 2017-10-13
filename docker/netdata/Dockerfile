@@ -16,6 +16,7 @@ RUN apk -U upgrade && \
     sed -i "s/# cluster_health: True/cluster_health: True/" /etc/netdata/python.d/elasticsearch.conf && \
     sed -i "s/# cluster_stats: True/cluster_stats: True/" /etc/netdata/python.d/elasticsearch.conf && \
     sed -i 's/SEND_EMAIL="YES"/SEND_EMAIL="NO"/' /etc/netdata/health_alarm_notify.conf && \
+    echo 0 > /usr/share/netdata/web/version.txt && \
     cd / && \
 
 # Clean up
