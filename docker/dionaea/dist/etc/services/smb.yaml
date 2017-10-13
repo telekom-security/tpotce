@@ -1,0 +1,57 @@
+- name: smb
+  config:
+
+    ## Generic setting ##
+
+    # 1:"Windows XP Service Pack 0/1",
+    # 2:"Windows XP Service Pack 2",
+    # 3:"Windows XP Service Pack 3",
+    # 4:"Windows 7 Service Pack 1",
+    # 5:"Linux Samba 4.3.11"
+    os_type: 4
+
+     # Additional config
+    primary_domain: WORKGROUP
+    oem_domain_name: WORKGROUP
+    server_name: WIN_SRV
+
+     ## Windows 7 ##
+    native_os: Windows 7 Professional 7600
+    native_lan_manager: Windows 7 Professional 6.1
+    shares:
+      ADMIN$:
+        comment: Remote Admin
+        path: C:\\Windows
+        type: disktree
+      C$:
+        coment: Default Share
+        path: C:\\
+        type:
+          - disktree
+          - special
+      IPC$:
+        comment: Remote IPC
+        type: ipc
+      Printer:
+        comment: Microsoft XPS Document Writer
+        type: printq
+
+     ## Samba ##
+#    native_os: Windows 6.1
+#    native_lan_manager: Samba 4.3.11
+#    shares:
+#      admin:
+#        comment: Remote Admin
+#        path: \\home\\admin
+#        type: disktree
+#      share:
+#        coment: Default Share
+#        path: \\share
+#        type: disktree
+#      IPC$:
+#        comment: Remote IPC
+#        path: IPC Service
+#        type: ipc
+#      Printer:
+#        comment: Printer Drivers
+#        type: printq

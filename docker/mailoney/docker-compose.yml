@@ -1,0 +1,18 @@
+version: '2.1'
+
+networks:
+  mailoney_local:
+
+services:
+ 
+# Mailoney service
+  mailoney:
+    container_name: mailoney
+    restart: always
+    networks:
+     - mailoney_local
+    ports:
+     - "25:2525"
+    image: "dtagdevsec/mailoney:1706"
+#   volumes:
+#    - /data/mailoney/log:/opt/mailoney/logs

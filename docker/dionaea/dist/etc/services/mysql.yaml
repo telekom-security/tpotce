@@ -1,0 +1,10 @@
+- name: mysql
+  config:
+    databases:
+      information_schema:
+        path: ":memory:"
+      # example how to extend this
+      # just provide a databasename and path to the database
+      # the database can be altered by attackers, so ... better use a copy
+#      psn:
+#        path: "/path/to/cc_info.sqlite"

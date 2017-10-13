@@ -1,0 +1,128 @@
+Version 3.09b:
+--------------
+
+  - Fixed a likely only cosmetic bug with a one-byte overread of the pcap
+    packet buffer, which would cause an error under ASAN. Spotted by
+    Xavid Pretzer.
+
+  - Added a new signature for Chrome.
+
+  - Updated another signature for Chrome.
+
+Version 3.08b:
+--------------
+
+  - An awful fix for a packet loss bug (probably kernel or libpcap-related)
+    with some VMs.
+
+  - Improvement to avoid warnings with -r. 
+
+Version 3.07b:
+--------------
+
+Bug fixes:
+
+  - Improvement to API handling to avoid FATAL() on short API reads & writes.
+
+  - Minor bug fix to IP parsing in one of the companion utilities.
+
+Improvements:
+
+  - New signatures.
+
+Version 3.06b:
+--------------
+
+Bug fixes:
+
+  - Made os_match_q actually functional in api.c (thanks to Anthony Howe).
+
+  - Fixed api.c struct packing issue (thanks to Tomoyuki Murakami).
+
+  - Improved logic around the vlan behavior (thanks to Anthony Howe).
+
+Version 3.05b:
+--------------
+
+Bug fixes:
+
+  - Cleaned up hash.h to avoid pointless OOB reads, alignment issues.
+
+  - Fixed divide-by-zero in MSS calculations
+
+Version 3.04b:
+--------------
+
+Bug fixes:
+
+  - Fixed a realloc bug (not normally triggered in p0f)
+
+Version 3.03b:
+--------------
+
+Bug fixes:
+
+  - Potential NULL ptr in p0f-client on some 64-bit systems.
+
+Version 3.02b:
+--------------
+
+Bug fixes:
+
+  - Cygwin compile issue fixed.
+
+Improvements:
+
+  - New signatures.
+
+Version 3.01b (2012-01-17):
+---------------------------
+
+Bug fixes:
+
+  - 'Date' comparisons for server sigs now work as expected.
+
+  - Bad TS reading now allowed on initial SYN (improves uptime detection).
+
+Improvements:
+
+  - New signatures.
+
+  - Solaris support (in theory).
+
+Version 3.00b (2012-01-17):
+---------------------------
+
+Bug fixes:
+
+  - Alignment-related SIGBUS non-x86 fixed.
+
+  - Cache expiration algorithm now works as expected.
+
+  - p0f -L no longer leads to NULL ptr when no interfaces visible.
+
+  - Greppable output format no longer mixes up cli and srv fields.
+
+  - Added '|' to banned characters in reported header values.
+
+Improvements:
+
+  - Multiple new HTTP and TCP signatures.
+
+  - Improved MSS/MTU matching to account for peer MTU.
+
+  - New HTTP fingerprinting logic with optional headers (? prefix).
+
+  - Memory leak detection added (but nothing found).
+
+  - API now indicates the value of 'generic' / 'fuzzy' fields and several
+    other parameters.
+
+  - General style improvements.
+
+  - Delay added to p0f-sendsyn to aid with packet ordering.
+
+Version 3.00-rc0 (2012-01-10):
+------------------------------
+
+  - Initial public release, complete rewrite.

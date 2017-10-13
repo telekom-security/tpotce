@@ -1,0 +1,18 @@
+version: '2.1'
+
+networks:
+  elasticpot_local:
+
+services:
+
+# Elasticpot service
+  elasticpot:
+    container_name: elasticpot
+    restart: always
+    networks:
+     - elasticpot_local
+    ports:
+     - "9200:9200"
+    image: "dtagdevsec/elasticpot:1706"
+    volumes:
+     - /data/elasticpot/log:/opt/ElasticpotPY/log

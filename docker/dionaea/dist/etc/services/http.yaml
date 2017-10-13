@@ -1,0 +1,17 @@
+- name: http
+  config:
+    root: "/opt/dionaea/var/dionaea/roots/www"
+    ports:
+      - 80
+    ssl_ports:
+      - 443
+    max_request_size: 32768 # maximum size in kbytes of the request (32MB)
+    global_headers:
+      - ["Server", "nginx"]
+    headers:
+      - filename_pattern: ".*\\.php"
+        headers:
+          - ["Content-Type", "text/html; charset=utf-8"]
+          - ["Content-Length", "{content_length}"]
+          - ["Connection", "{connection}"]
+          - ["X-Powered-By", "PHP/5.6"]
