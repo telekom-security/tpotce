@@ -18,7 +18,7 @@ RUN apk -U upgrade && \
     cd /home/rdpy && \
     git clone https://github.com/t3chn0m4g3/rdpy && \
     pip install --no-cache-dir --upgrade cffi && \
-    pip install twisted pyopenssl qt4reactor service_identity rsa pyasn1==0.3.3 && \
+    pip install twisted pyopenssl qt4reactor service_identity rsa pyasn1==0.3.4 && \
     cd rdpy && \
     python setup.py install && \
 
