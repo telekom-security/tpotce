@@ -105,6 +105,8 @@ services:
     restart: always
     networks:
      - ewsposter_local
+    env_file:
+     - /opt/tpot/etc/compose/elk_environment
     image: "dtagdevsec/ewsposter:1710"
     volumes:
      - /data:/data
