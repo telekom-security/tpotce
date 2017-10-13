@@ -84,6 +84,7 @@ function fuSELFUPDATE () {
       fi
     else
       echo "###### Update script is already up-to-date."
+      git pull --force
   fi    
 } 
 
