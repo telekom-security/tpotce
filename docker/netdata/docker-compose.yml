@@ -1,0 +1,19 @@
+version: '2.1'
+
+services:
+ 
+# Netdata service
+  netdata:
+    container_name: netdata
+    restart: always
+    network_mode: "host"
+    cap_add:
+     - SYS_PTRACE
+    security_opt:
+     - apparmor=unconfined
+    image: "dtagdevsec/netdata:1706"
+    volumes:
+     - /proc:/host/proc:ro
+     - /sys:/host/sys:ro
+     - /var/run/docker.sock:/var/run/docker.sock
+    command: ["/usr/sbin/netdata","-D","-s","/host","-p","19999"]

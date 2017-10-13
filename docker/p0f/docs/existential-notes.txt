@@ -1,0 +1,29 @@
+-----------------------------
+Some random food for thought:
+-----------------------------
+
+1) If you run p0f on any reasonably popular server, you will probably see quite
+   a few systems that seem to be leaking memory in TCP headers (e.g. ACK number
+   or second timestamp set on SYN packets, URG pointer without URG flag, etc).
+   You will also see HTTP traffic with non-stripped Proxy-Authorization headers
+   and other hilarious abnormalities.
+
+   Unfortunately, pinpointing the sources of many of these leaks is pretty hard;
+   they often trace to proprietary corporate proxies and firewalls, and unless
+   it's *your* proxy or firewall, you won't be finding out more. If you wish to
+   put some investigative effort into this, there are quite a few bugs waiting
+   to be tracked down, though :-)
+
+2) After some hesitation, I decided *against* the inclusion of encrypted traffic
+   classification features into p0f. Timing, packet size, and direction
+   information lets you, for example, reliably differentiate between interactive
+   SSH sessions and SFTP uploads or downloads; automated and human password
+   entry attemps; or failed and successful auth.
+
+   The same goes for SSL: you can tell normal HTTPS browsing from file uploads,
+   from attempts to smuggle, say, PPP over SSL. In the end, however, it seems
+   like stretch to cram it into p0f; one day, I might improve my ancient 'fl0p'
+   tool, instead:
+
+   http://lcamtuf.coredump.cx/soft/fl0p-devel.tgz
+

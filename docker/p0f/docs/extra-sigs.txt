@@ -1,0 +1,73 @@
+These need to be investigated:
+
+# AVM FritzBox 7112 w/ BusyBox Linux - sendsyn response
+4:64+0:0:1460:mss*4,0:mss:df:0
+4:64+0:0:1460:mss*4,1:mss,nop,ws:df:0
+4:64+0:0:1460:mss*4,1:mss,nop,nop,sok,nop,ws:df:0
+4:64+0:0:1460:mss*4,1:mss,sok,ts,nop,ws:df:0
+4:64+0:0:1460:mss*4,1:mss,nop,nop,ts,nop,ws:df:0
+4:64+0:0:1460:mss*4,0:mss,nop,nop,sok:df:0
+4:64+0:0:1460:mss*4,0:mss,sok,ts:df:0
+4:64+0:0:1460:mss*4,0:mss,nop,nop,ts:df:0
+
+# LaCIE Network storage - sendsyn response
+4:64+0:0:1460:mss*4,0:mss,nop,nop,sok:df:0
+4:64+0:0:1460:mss*4,0:mss,sok,ts:df:0
+4:64+0:0:1460:mss*4,0:mss,nop,nop,ts:df:0
+
+# HP LaserJet printer CP1515 - sendsyn response
+4:64+0:0:*:mss*7,0:mss,nop,nop,sok::0
+4:64+0:0:*:mss*7,0:mss,nop,nop,sok,nop,nop,ts::0
+4:64+0:0:*:mss*7,0:mss,nop,nop,ts::0
+
+# HP LaserJet printer CP1515 - http response
+1:Server,Transfer-Encoding=[chunked],Content-Type,?Expires,?Cache-Control:Connection,Keep-Alive,Accept-Ranges,Date:Virata-EmWeb/R6_2_1
+1:Server,?Content-Length,Content-Type,?ETag,?Last-Modified,?Cache-Control:Connection,Keep-Alive,Accept-Ranges,Date:Virata-EmWeb/R6_2_1
+1:Server,Transfer-Encoding=[chunked],Content-Type,?Expires,?Cache-Control:Connection,Keep-Alive,Accept-Ranges,Date:Virata-EmWeb/R6_2_1
+
+Cherokee 1.0.8-5:
+1:Connection=[Keep-Alive],Keep-Alive=[timeout=15],Date,Server,?Content-Length,Content-Type,?Cache-Control,?Pragma:Accept-Ranges:Cherokee/1.0.8 (Debian GNU/Linux)
+
+AOLserver 4.5.1-12:
+1:MIME-Version=[1.0],Date,Server,Content-Type,?Content-Length,Connection=[close]:Keep-Alive,Accept-Ranges:AOLserver/4.5.1
+
+BOA 0.94.14rc21-3.1:
+1:Date,Server,Accept-Ranges=[bytes],Connection=[close],Content-Type:Keep-Alive:Boa/0.94.14rc21
+
+Yaws 1.88-2:
+1:Connection=[close],Server,Date,?Content-Length,Content-Type:Keep-Alive,Accept-Ranges:Yaws/1.88 Yet Another Web Server
+
+Ocsigen 1.3.3-1squeeze1:
+1:accept-ranges=[none],cache-control=[no-cache],content-type=[text/html; charset=iso-8859-1],date=[Wed, 18 Jan 2012 09:32:55 GMT],expires=[0],server=[Ocsigen],transfer-encoding=[chunked]:Content-Type,Connection,Keep-Alive,Accept-Ranges,Date:
+
+dhttpd 1.02a-18:
+0:Date,Server,Content-type=[text/html]:Content-Type,Connection,Keep-Alive,Accept-Ranges:dhttpd/1.02a
+
+thttpd 2.25b-11:
+1:Server,Content-Type,Date,?Last-Modified,Accept-Ranges=[bytes],Connection=[close]:Keep-Alive:thttpd/2.25b 29dec2003
+
+------------
+
+uhttpd version 7 (running on OpenWrt):
+0::Content-Type,Connection,Keep-Alive,Accept-Ranges,Date:
+
+Cherokee 1.0.8-5:
+0:Connection=[close],Date,Server,Content-Type:Keep-Alive,Accept-Ranges:Cherokee/1.0.8 (Debian GNU/Linux)
+
+AOLserver 4.5.1-12:
+0:MIME-Version=[1.0],Date,Server,Content-Type,?Content-Length,Connection=[close]:Keep-Alive,Accept-Ranges:AOLserver/4.5.1
+
+BOA 0.94.14rc21-3.1:
+0:Date,Server,Accept-Ranges=[bytes],Connection=[close],?Last-Modified,Content-Type:Keep-Alive:Boa/0.94.14rc21
+
+Ocsigen 1.3.3-1squeeze1:
+1:accept-ranges=[none],cache-control=[no-cache],content-type=[text/html; charset=iso-8859-1],date=[Tue, 17 Jan 2012 22:46:08 GMT],expires=[0],server=[Ocsigen]:Content-Type,Connection,Keep-Alive,Accept-Ranges,Date:
+
+dhttpd 1.02a-18:
+0:Date,Server,Content-type=[text/html]:Content-Type,Connection,Keep-Alive,Accept-Ranges:dhttpd/1.02a
+
+Yaws 1.88-2:
+1:Connection=[Keep-Alive],Server,Date,?Last-Modified,Etag=["2nu+xcAAGwK"],?Content-Length,Content-Type:Keep-Alive,Accept-Ranges:Yaws/1.88 Yet Another Web Server
+
+thttpd 2.25b-11:
+0:Server,Content-Type,Date,?Last-Modified,Accept-Ranges=[bytes],Connection=[close]:Keep-Alive:thttpd/2.25b 29dec2003

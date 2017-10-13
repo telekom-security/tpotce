@@ -1,0 +1,10 @@
+# ftp client section
+- name: ftp
+  config:
+    # host for active ftp via NAT
+    # * 0.0.0.0 - the initiating connection ip is used for active ftp
+    # * not 0.0.0.0 - gets resolved as hostname and used
+    active_host: "0.0.0.0"
+
+    # ports for active ftp; string indicating a range
+    active_ports: 63001-64000

@@ -1,0 +1,28 @@
+- name: upnp
+  config:
+    root: /opt/dionaea/var/dionaea/roots/upnp
+    # maximum size in kbytes of the request (32MB)
+    max_request_size: 32768
+    personality:
+      # default
+      cache:    "CACHE-CONTROL: max-age=120\r\n"
+      st:       "ST: upnp:rootdevice\r\n"
+      usn:      "USN: uuid:Upnp-IPMI-1_0-1234567890001::upnp:rootdevice\r\n"
+      server:   "SERVER: Linux/2.6.17.WB_WPCM450.1.3 UPnP/1.0, Intel SDK for UPnP devices/1.3.1\r\n"
+      location: "LOCATION: http://192.168.0.1:49152/IPMIdevicedesc.xml\r\n"
+      opt:      "OPT: http://schemas.upnp.org/upnp/1/0/\r\n"
+#      # Samsung TV
+#      cache:     "CACHE-CONTROL: max-age=900\r\n"
+#      st:        "ST: uuid:c1fd12b2-d954-4dba-9e92-a697e1558fb4\r\n"
+#      usn:       "USN: uuid:c1fd12b2-d954-4dba-9e92-a697e1558fb4\r\n"
+#      server:    "SERVER: SHP, UPnP/1.0, Samsung UPnP SDK/1.0\r\n"
+#      location:  "LOCATION: http://192.168.0.10:7677/MainTVServer2\r\n"
+#      opt:       "OPT: http://schemas.upnp.org/upnp/1/0/\r\n"
+#
+#      # XBOX 360
+#      cache:     "CACHE-CONTROL: max-age=1800\r\n"
+#      st:        "ST: urn:microsoft.com:service:X_MS_MediaReceiverRegistrar:1\r\n"
+#      usn:       "USN: uuid:531c567a-8c46-4201-bcd4-09afa554d859::urn:microsoft.com:service:X_MS_MediaReceiverRegistrar:1\r\n"
+#      server:    "SERVER: Microsoft-Windows/6.3 UPnP/1.0 UPnP-Device-Host/1.0\r\n"
+#      location:  "LOCATION: http://192.168.0.10:1055/upnphost/udhisapi.dll?content=uuid:531c567a-8c46-4201-bcd4-09afa554d859\r\n"
+#      opt:       "OPT: http://schemas.upnp.org/upnp/1/0/\r\n"

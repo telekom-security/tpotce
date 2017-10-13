@@ -1,0 +1,916 @@
+                        =============================
+                        p0f v3: passive fingerprinter
+                        =============================
+
+                    http://lcamtuf.coredump.cx/p0f3.shtml
+
+         Copyright (C) 2012 by Michal Zalewski <lcamtuf@coredump.cx>
+
+
+---------------
+1. What's this?
+---------------
+
+P0f is a tool that utilizes an array of sophisticated, purely passive traffic
+fingerprinting mechanisms to identify the players behind any incidental TCP/IP
+communications (often as little as a single normal SYN) without interfering in
+any way.
+
+Some of its capabilities include:
+
+  - Highly scalable and extremely fast identification of the operating system
+    and software on both endpoints of a vanilla TCP connection - especially in
+    settings where NMap probes are blocked, too slow, unreliable, or would
+    simply set off alarms,
+
+  - Measurement of system uptime and network hookup, distance (including
+    topology behind NAT or packet filters), and so on.
+
+  - Automated detection of connection sharing / NAT, load balancing, and
+    application-level proxying setups.
+
+  - Detection of dishonest clients / servers that forge declarative statements
+    such as X-Mailer or User-Agent.
+
+The tool can be operated in the foreground or as a daemon, and offers a simple
+real-time API for third-party components that wish to obtain additional
+information about the actors they are talking to.
+
+Common uses for p0f include reconnaissance during penetration tests; routine
+network monitoring; detection of unauthorized network interconnects in corporate
+environments; providing signals for abuse-prevention tools; and miscellanous
+forensics.
+
+A snippet of typical p0f output may look like this:
+
+.-[ 1.2.3.4/1524 -> 4.3.2.1/80 (syn) ]-
+|
+| client   = 1.2.3.4
+| os       = Windows XP
+| dist     = 8
+| params   = none
+| raw_sig  = 4:120+8:0:1452:65535,0:mss,nop,nop,sok:df,id+:0
+|
+`----
+
+.-[ 1.2.3.4/1524 -> 4.3.2.1/80 (syn+ack) ]-
+|
+| server   = 4.3.2.1
+| os       = Linux 3.x
+| dist     = 0
+| params   = none
+| raw_sig  = 4:64+0:0:1460:mss*10,0:mss,nop,nop,sok:df:0
+|
+`----
+
+.-[ 1.2.3.4/1524 -> 4.3.2.1/80 (mtu) ]-
+|
+| client   = 1.2.3.4
+| link     = DSL
+| raw_mtu  = 1492
+|
+`----
+
+.-[ 1.2.3.4/1524 -> 4.3.2.1/80 (uptime) ]-
+|
+| client   = 1.2.3.4
+| uptime   = 0 days 11 hrs 16 min (modulo 198 days)
+| raw_freq = 250.00 Hz
+|
+`----
+
+A live demonstration can be seen here:
+
+http://lcamtuf.coredump.cx/p0f3/
+
+--------------------
+2. How does it work?
+--------------------
+
+A vast majority of metrics used by p0f were invented specifically for this tool,
+and include data extracted from IPv4 and IPv6 headers, TCP headers, the dynamics
+of the TCP handshake, and the contents of application-level payloads.
+
+For TCP/IP, the tool fingerprints the client-originating SYN packet and the
+first SYN+ACK response from the server, paying attention to factors such as the
+ordering of TCP options, the relation between maximum segment size and window
+size, the progression of TCP timestamps, and the state of about a dozen possible
+implementation quirks (e.g. non-zero values in "must be zero" fields).
+
+The metrics used for application-level traffic vary from one module to another;
+where possible, the tool relies on signals such as the ordering or syntax of
+HTTP headers or SMTP commands, rather than any declarative statements such as
+User-Agent. Application-level fingerprinting modules currently support HTTP.
+Before the tool leaves "beta", I want to add SMTP and FTP. Other protocols,
+such as FTP, POP3, IMAP, SSH, and SSL, may follow.
+
+The list of all the measured parameters is reviewed in section 5 later on.
+Some of the analysis also happens on a higher level: inconsistencies in the
+data collected from various sources, or in the data from the same source
+obtained over time, may be indicative of address translation, proxying, or
+just plain trickery. For example, a system where TCP timestamps jump back
+and forth, or where TTLs and MTUs change subtly, is probably a NAT device.
+
+-------------------------------
+3. How do I compile and use it?
+-------------------------------
+
+To compile p0f, try running './build.sh'; if that fails, you will be probably
+given some tips about the probable cause. If the tips are useless, send me a
+mean-spirited mail.
+
+It is also possible to build a debug binary ('./build.sh debug'), in which case,
+verbose packet parsing and signature matching information will be written to
+stderr. This is useful when troubleshooting problems, but that's about it.
+
+The tool should compile cleanly under any reasonably new version of Linux,
+FreeBSD, OpenBSD, MacOS X, and so forth. You can also builtdit on Windows using
+cygwin and winpcap. I have not tested it on all possible varieties of un*x, but
+if there are issues, they should be fairly superficial.
+
+Once you have the binary compiled, you should be aware of the following
+command-line options:
+
+  -f fname   - reads fingerprint database (p0f.fp) from the specified location.
+               See section 5 for more information about the contents of this
+               file.
+
+               The default location is ./p0f.fp. If you want to install p0f, you
+               may want to change FP_FILE in config.h to /etc/p0f.fp.
+
+  -i iface   - asks p0f to listen on a specific network interface. On un*x, you
+               should reference the interface by name (e.g., eth0). On Windows,
+               you can use adapter index instead (0, 1, 2...).
+               
+               Multiple -i parameters are not supported; you need to run
+               separate instances of p0f for that. On Linux, you can specify
+               'any' to access a pseudo-device that combines the traffic on
+               all other interfaces; the only limitation is that libpcap will
+               not recognize VLAN-tagged frames in this mode, which may be
+               an issue in some of the more exotic setups.
+
+               If you do not specify an interface, libpcap will probably pick
+               the first working interface in your system.
+               
+  -L         - lists all available network interfaces, then quits. Particularly
+               useful on Windows, where the system-generated interface names
+               are impossible to memorize.
+               
+  -r fname   - instead of listening for live traffic, reads pcap captures from
+               the specified file. The data can be collected with tcpdump or any
+               other compatible tool. Make sure that snapshot length (-s
+               option in tcpdump) is large enough not to truncate packets; the
+               default may be too small.
+
+               As with -i, only one -r option can be specified at any given
+               time.
+               
+  -o fname   - appends grep-friendly log data to the specified file. The log
+               contains all observations made by p0f about every matching
+               connection, and may grow large; plan accordingly.
+
+               Only one instance of p0f should be writing to a particular file
+               at any given time; where supported, advisory locking is used to
+               avoid problems.
+               
+  -s fname   - listens for API queries on the specified filesystem socket. This
+               allows other programs to ask p0f about its current thoughts about
+               a particular host. More information about the API protocol can be
+               found in section 4 below.
+
+               Only one instance of p0f can be listening on a particular socket
+               at any given time. The mode is also incompatible with -r.
+
+  -d         - runs p0f in daemon mode: the program will fork into background
+               and continue writing to the specified log file or API socket. It
+               will continue running until killed, until the listening interface
+               is shut down, or until some other fatal error is encountered.
+
+               This mode requires either -o or -s to be specified.
+
+               To continue capturing p0f debug output and error messages (but
+               not signatures), redirect stderr to another non-TTY destination,
+               e.g.:
+               
+               ./p0f -o /var/log/p0f.log -d 2>>/var/log/p0f.error
+               
+               Note that if -d is specified and stderr points to a TTY, error
+               messages will be lost.
+
+   -u user   - causes p0f to drop privileges, switching to the specified user
+               and chroot()ing itself to said user's home directory.
+
+               This mode is *highly* advisable (but not required) on un*x
+               systems, especially in daemon mode. See section 7 for more info.
+
+More arcane settings (you probably don't need to touch these):
+
+  -j         - Log in JSON format.
+
+  -l         - Line buffered mode for logging to output file.
+
+  -p         - puts the interface specified with -i in promiscuous mode. If
+               supported by the firmware, the card will also process frames not
+               addressed to it. 
+
+  -S num     - sets the maximum number of simultaneous API connections. The
+               default is 20; the upper cap is 100.
+
+  -m c,h     - sets the maximum number of connections (c) and hosts (h) to be
+               tracked at the same time (default: c = 1,000, h = 10,000). Once
+               the limit is reached, the oldest 10% entries gets pruned to make
+               room for new data.
+
+               This setting effectively controls the memory footprint of p0f.
+               The cost of tracking a single host is under 400 bytes; active
+               connections have a worst-case footprint of about 18 kB. High
+               limits have some CPU impact, too, by the virtue of complicating
+               data lookups in the cache.
+
+               NOTE: P0f tracks connections only until the handshake is done,
+               and if protocol-level fingerprinting is possible, until few
+               initial kilobytes of data have been exchanged. This means that
+               most connections are dropped from the cache in under 5 seconds;
+               consequently, the 'c' variable can be much lower than the real
+               number of parallel connections happening on the wire.
+
+  -t c,h     - sets the timeout for collecting signatures for any connection
+               (c); and for purging idle hosts from in-memory cache (h). The
+               first parameter is given in seconds, and defaults to 30 s; the
+               second one is in minutes, and defaults to 120 min.
+
+               The first value must be just high enough to reliably capture
+               SYN, SYN+ACK, and the initial few kB of traffic. Low-performance
+               sites may want to increase it slightly.
+
+               The second value governs for how long API queries about a
+               previously seen host can be made; and what's the maximum interval
+               between signatures to still trigger NAT detection and so on.
+               Raising it is usually not advisable; lowering it to 5-10 minutes
+               may make sense for high-traffic servers, where it is possible to
+               see several unrelated visitors subsequently obtaining the same
+               dynamic IP from their ISP.
+
+Well, that's about it. You probably need to run the tool as root. Some of the
+most common use cases:
+
+# ./p0f -i eth0
+
+# ./p0f -i eth0 -d -u p0f-user -o /var/log/p0f.log
+
+# ./p0f -r some_capture.cap
+
+The greppable log format (-o) uses pipe ('|') as a delimiter, with name=value
+pairs describing the signature in a manner very similar to the pretty-printed
+output generated on stdout:
+
+[2012/01/04 10:26:14] mod=mtu|cli=1.2.3.4/1234|srv=4.3.2.1/80|subj=cli|link=DSL|raw_mtu=1492
+
+The 'mod' parameter identifies the subsystem that generated the entry; the
+'cli' and 'srv' parameters always describe the direction in which the TCP
+session is established; and 'subj' describes which of these two parties is
+actually being fingerprinted.
+
+Command-line options may be followed by a single parameter containing a
+pcap-style traffic filtering rule. This allows you to reject some of the less
+interesting packets for performance or privacy reasons. Simple examples include:
+
+  'dst net 10.0.0.0/8 and port 80'
+  
+  'not src host 10.1.2.3'
+  
+  'port 22 or port 443'
+
+You can read more about the supported syntax by doing 'man pcap-fiter'; if
+that fails, try this URL:
+
+  http://www.manpagez.com/man/7/pcap-filter/
+  
+Filters work both for online capture (-i) and for previously collected data
+produced by any other tool (-r).
+
+-------------
+4. API access
+-------------
+
+The API allows other applications running on the same system to get p0f's
+current opinion about a particular host. This is useful for integrating it with
+spam filters, web apps, and so on.
+
+Clients are welcome to connect to the unix socket specified with -s using the
+SOCK_STREAM protocol, and may issue any number of fixed-length queries. The
+queries will be answered in the order they are received.
+
+Note that there is no response caching, nor any software limits in place on p0f
+end, so it is your responsibility to write reasonably well-behaved clients.
+
+Queries have exactly 21 bytes. The format is:
+
+  - Magic dword (0x50304601), in native endian of the platform.
+
+  - Address type byte: 4 for IPv4, 6 for IPv6.
+
+  - 16 bytes of address data, network endian. IPv4 addresses should be
+    aligned to the left.
+
+To such a query, p0f responds with:
+
+  - Another magic dword (0x50304602), native endian.
+
+  - Status dword: 0x00 for 'bad query', 0x10 for 'OK', and 0x20 for 'no match'.
+
+  - Host information, valid only if status is 'OK' (byte width in square
+    brackets):
+
+    [4]  first_seen  - unix time (seconds) of first observation of the host.
+
+    [4]  last_seen   - unix time (seconds) of most recent traffic.
+
+    [4]  total_conn  - total number of connections seen.
+
+    [4]  uptime_min  - calculated system uptime, in minutes. Zero if not known.
+
+    [4]  up_mod_days - uptime wrap-around interval, in days.
+
+    [4]  last_nat    - time of the most recent detection of IP sharing (NAT,
+                       load balancing, proxying). Zero if never detected.
+
+    [4]  last_chg    - time of the most recent individual OS mismatch (e.g.,
+                       due to multiboot or IP reuse).
+
+    [2]  distance    - system distance (derived from TTL; -1 if no data).
+
+    [1]  bad_sw      - p0f thinks the User-Agent or Server strings aren't
+                       accurate. The value of 1 means OS difference (possibly
+                       due to proxying), while 2 means an outright mismatch.
+
+                       NOTE: If User-Agent is not present at all, this value
+                       stays at 0.
+
+    [1]  os_match_q  - OS match quality: 0 for a normal match; 1 for fuzzy
+                       (e.g., TTL or DF difference); 2 for a generic signature;
+                       and 3 for both.
+
+    [32] os_name     - NUL-terminated name of the most recent positively matched
+                       OS. If OS not known, os_name[0] is NUL.
+
+                       NOTE: If the host is first seen using an known system and
+                       then switches to an unknown one, this field is not
+                       reset.
+
+    [32] os_flavor   - OS version. May be empty if no data.
+
+    [32] http_name   - most recent positively identified HTTP application
+                       (e.g. 'Firefox').
+
+    [32] http_flavor - version of the HTTP application, if any.
+
+    [32] link_type   - network link type, if recognized.
+
+    [32] language    - system language, if recognized.
+
+A simple reference implementation of an API client is provided in p0f-client.c.
+Implementations in C / C++ may reuse api.h from p0f source code, too.
+
+Developers using the API should be aware of several important constraints:
+
+  - The maximum number of simultaneous API connections is capped to 20. The
+    limit may be adjusted with the -S parameter, but rampant parallelism may
+    lead to poorly controlled latency; consider a single query pipeline,
+    possibly with prioritization and caching.
+    
+  - The maximum number of hosts and connections tracked at any given time is
+    subject to configurable limits. You should look at your traffic stats and
+    see if the defaults are suitable.
+
+    You should also keep in mind that whenever you are subject to an ongoing
+    DDoS or SYN spoofing DoS attack, p0f may end up dropping entries faster
+    than you could query for them. It's that or running out of memory, so
+    don't fret.
+
+  - Cache entries with no activity for more than 120 minutes will be dropped
+    even if the cache is nearly empty. The timeout is adjustable with -t, but
+    you should not use the API to obtain ancient data; if you routinely need to
+    go back hours or days, parse the logs instead of wasting RAM.
+
+-----------------------
+5. Fingerprint database
+-----------------------
+
+Whenever p0f obtains a fingerprint from the observed traffic, it defers to
+the data read from p0f.fp to identify the operating system and obtain some
+ancillary data needed for other analysis tasks. The fingerprint database is a
+simple text file where lines starting with ; are ignored.
+
+== Module specification ==
+
+The file is split into sections based on the type of traffic the fingerprints
+apply to. Section identifiers are enclosed in square brackets, like so:
+
+[module:direction]
+
+  module     - the name of the fingerprinting module (e.g. 'tcp' or 'http').
+
+  direction  - the direction of fingerprinted traffic: 'request' (from client to
+               server) or 'response' (from server to client).
+
+               For the TCP module, 'client' matches the initial SYN; and
+               'server' matches SYN+ACK.
+
+The 'direction' part is omitted for MTU signatures, as they work equally well
+both ways.
+
+== Signature groups ==
+
+The actual signatures must be preceeded by an 'label' line, describing the
+fingerprinted software:
+
+label = type:class:name:flavor
+
+  type       - some signatures in p0f.fp offer broad, last-resort matching for
+               less researched corner cases. The goal there is to give an
+               answer slightly better than "unknown", but less precise than
+               what the user may be expecting.
+
+               Normal, reasonably specific signatures that can't be radically
+               improved should have their type specified as 's'; while generic,
+               last-resort ones should be tagged with 'g'.
+
+               Note that generic signatures are considered only if no specific
+               matches are found in the database.
+
+  class      - the tool needs to distinguish between OS-identifying signatures
+               (only one of which should be matched for any given host) and
+               signatures that just identify user applications (many of which
+               may be seen concurrently).
+
+               To assist with this, OS-specific signatures should specify the
+               OS architecture family here (e.g., 'win', 'unix', 'cisco'); while
+               application-related sigs (NMap, MSIE, Apache) should use a
+               special value of '!'.
+
+               Most TCP signatures are OS-specific, and should have OS family
+               defined. Other signatures, such as HTTP, should use '!' unless
+               the fingerprinted component is deeply intertwined with the
+               platform (e.g., Windows Update).
+
+               NOTE: To avoid variations (e.g. 'win' and 'windows' or 'unix'
+               and 'linux'), all classes need to be pre-registered using a
+               'classes' directive, seen near the beginning of p0f.fp.
+
+  name       - a human-readable short name for what the fingerprint actually
+               helps identify - say, 'Linux', 'Sendmail', or 'NMap'. The tool
+               doesn't care about the exact value, but requires consistency - so
+               don't switch between 'Internet Explorer' and 'MSIE', or 'MacOS'
+               and 'Mac OS'.
+
+  flavor     - anything you want to say to further qualify the observation. Can
+               be the version of the identified software, or a description of
+               what the application seems to be doing (e.g. 'SYN scan' for NMap).
+
+               NOTE: Don't be too specific: if you have a signature for Apache
+               2.2.16, but have no reason to suspect that other recent versions
+               behave in a radically different way, just say '2.x'.
+
+P0f uses labels to group similar signatures that may be plausibly generated by
+the same system or application, and should not be considered a strong signal for
+NAT detection.
+
+To further assist the tool in deciding which OS and application combinations are
+reasonable, and which ones are indicative of foul play, any 'label' line for
+applications (class '!') should be followed by a comma-delimited list of OS
+names or @-prefixed OS architecture classes on which this software is known to
+be used on. For example:
+
+label = s:!:Uncle John's Networked ls Utility:2.3.0.1
+sys   = Linux,FreeBSD,OpenBSD
+
+...or:
+
+label = s:!:Mom's Homestyle Browser:1.x
+sys = @unix,@win
+
+The label can be followed by any number of module-specific signatures; all of
+them will be linked to the most recent label, and will be reported the same
+way.
+
+All sections except for 'name' are omitted for [mtu] signatures, which do not
+convey any OS-specific information, and just describe link types.
+
+== MTU signatures ==
+
+Many operating systems derive the maximum segment size specified in TCP options
+from the MTU of their network interface; that value, in turn, normally depends
+on the design of the link-layer protocol. A different MTU is associated with
+PPPoE, a different one with IPSec, and a different one with Juniper VPN.
+
+The format of the signatures in the [mtu] section is exceedingly simple,
+consisting just of a description and a list of values:
+
+label = Ethernet
+sig   = 1500
+
+These will be matched for any wildcard MSS TCP packets (see below) not generated
+by userspace TCP tools.
+
+== TCP signatures ==
+
+For TCP traffic, signature layout is as follows:
+
+sig = ver:ittl:olen:mss:wsize,scale:olayout:quirks:pclass
+
+  ver        - signature for IPv4 ('4'), IPv6 ('6'), or both ('*').
+
+               NEW SIGNATURES: P0f documents the protocol observed on the wire,
+               but you should replace it with '*' unless you have observed some
+               actual differences between IPv4 and IPv6 traffic, or unless the
+               software supports only one of these versions to begin with.
+
+  ittl       - initial TTL used by the OS. Almost all operating systems use
+               64, 128, or 255; ancient versions of Windows sometimes used
+               32, and several obscure systems sometimes resort to odd values
+               such as 60.
+
+               NEW SIGNATURES: P0f will usually suggest something, using the
+               format of 'observed_ttl+distance' (e.g. 54+10). Consider using
+               traceroute to check that the distance is accurate, then sum up
+               the values. If initial TTL can't be guessed, p0f will output
+               'nnn+?', and you need to use traceroute to estimate the '?'.
+
+               A handful of userspace tools will generate random TTLs. In these
+               cases, determine maximum initial TTL and then add a - suffix to
+               the value to avoid confusion.
+
+  olen       - length of IPv4 options or IPv6 extension headers. Usually zero
+               for normal IPv4 traffic; always zero for IPv6 due to the
+               limitations of libpcap.
+
+               NEW SIGNATURES: Copy p0f output literally.
+
+  mss        - maximum segment size, if specified in TCP options. Special value
+               of '*' can be used to denote that MSS varies depending on the
+               parameters of sender's network link, and should not be a part of
+               the signature. In this case, MSS will be used to guess the
+               type of network hookup according to the [mtu] rules.
+
+               NEW SIGNATURES: Use '*' for any commodity OSes where MSS is
+               around 1300 - 1500, unless you know for sure that it's fixed.
+               If the value is outside that range, you can probably copy it
+               literally.
+
+  wsize      - window size. Can be expressed as a fixed value, but many
+               operating systems set it to a multiple of MSS or MTU, or a
+               multiple of some random integer. P0f automatically detects these
+               cases, and allows notation such as 'mss*4', 'mtu*4', or '%8192'
+               to be used. Wilcard ('*') is possible too.
+
+               NEW SIGNATURES: Copy p0f output literally. If frequent variations
+               are seen, look for obvious patterns. If there are no patterns,
+               '*' is a possible alternative.
+
+  scale      - window scaling factor, if specified in TCP options. Fixed value
+               or '*'.
+
+               NEW SIGNATURES: Copy literally, unless the value varies randomly.
+               Many systems alter between 2 or 3 scaling factors, in which case,
+               it's better to have several 'sig' lines, rather than a wildcard.
+
+  olayout    - comma-delimited layout and ordering of TCP options, if any. This
+               is one of the most valuable TCP fingerprinting signals. Supported
+               values:
+
+               eol+n  - explicit end of options, followed by n bytes of padding
+               nop    - no-op option
+               mss    - maximum segment size
+               ws     - window scaling
+               sok    - selective ACK permitted
+               sack   - selective ACK (should not be seen)
+               ts     - timestamp
+               ?n     - unknown option ID n
+
+               NEW SIGNATURES: Copy this string literally.
+
+  quirks     - comma-delimited properties and quirks observed in IP or TCP
+               headers:
+
+               df     - "don't fragment" set (probably PMTUD); ignored for IPv6
+               id+    - DF set but IPID non-zero; ignored for IPv6
+               id-    - DF not set but IPID is zero; ignored for IPv6
+               ecn    - explicit congestion notification support
+               0+     - "must be zero" field not zero; ignored for IPv6
+               flow   - non-zero IPv6 flow ID; ignored for IPv4
+
+               seq-   - sequence number is zero
+               ack+   - ACK number is non-zero, but ACK flag not set
+               ack-   - ACK number is zero, but ACK flag set
+               uptr+  - URG pointer is non-zero, but URG flag not set
+               urgf+  - URG flag used
+               pushf+ - PUSH flag used
+
+               ts1-   - own timestamp specified as zero
+               ts2+   - non-zero peer timestamp on initial SYN
+               opt+   - trailing non-zero data in options segment
+               exws   - excessive window scaling factor (> 14)
+               bad    - malformed TCP options
+
+               If a signature scoped to both IPv4 and IPv6 contains quirks valid
+               for just one of these protocols, such quirks will be ignored for
+               on packets using the other protocol. For example, any combination
+               of 'df', 'id+', and 'id-' is always matched by any IPv6 packet.
+
+               NEW SIGNATURES: Copy literally.
+
+  pclass     - payload size classification: '0' for zero, '+' for non-zero,
+               '*' for any. The packets we fingerprint right now normally have
+               no payloads, but some corner cases exist.
+
+               NEW SIGNATURES: Copy literally.
+
+NOTE: The TCP module allows some fuzziness when an exact match can't be found:
+'df' and 'id+' quirks are allowed to disappear; 'id-' or 'ecn' may appear; and
+TTLs can change.
+
+To gather new SYN ('request') signatures, simply connect to the fingerprinted
+system, and p0f will provide you with the necessary data. To gather SYN+ACK
+('response') signatures, you should use the bundled p0f-sendsyn utility while p0f
+is running in the background; creating them manually is not advisable.
+
+== HTTP signatures ==
+
+A special directive should appear at the beginning of the [http:request]
+section, structured the following way:
+
+ua_os = Linux,Windows,iOS=[iPad],iOS=[iPhone],Mac OS X,...
+
+This list should specify OS names that should be looked for within the
+User-Agent string if the string is otherwise deemed to be honest. This input
+is not used for fingerprinting, but aids NAT detection in some useful ways.
+
+The names have to match the names used in 'sig' specifiers across p0f.fp. If a
+particular name used by p0f differs from what typically appears in User-Agent,
+the name=[string] syntax may be used to define any number of aliases.
+
+Other than that, HTTP signatures for GET and HEAD requests have the following
+layout:
+
+sig = ver:horder:habsent:expsw
+
+  ver        - 0 for HTTP/1.0, 1 for HTTP/1.1, or '*' for any. 
+
+               NEW SIGNATURES: Copy the value literally, unless you have a
+               specific reason to do otherwise.
+
+  horder     - comma-separated, ordered list of headers that should appear in
+               matching traffic. Substrings to match within each of these
+               headers may be specified using a name=[value] notation.
+
+               The signature will be matched even if other headers appear in
+               between, as long as the list itself is matched in the specified
+               sequence.
+
+               Headers that usually do appear in the traffic, but may go away
+               (e.g. Accept-Language if the user has no languages defined, or
+               Referer if no referring site exists) should be prefixed with '?',
+               e.g. "?Referer". P0f will accept their disappearance, but will
+               not allow them to appear at any other location.
+
+               NEW SIGNATURES: Review the list and remove any headers that
+               appear to be irrelevant to the fingerprinted software, and mark
+               transient ones with '?'. Remove header values that do not add
+               anything to the signature, or are request- or user-specific.
+               In particular, pay attention to Accept, Accept-Language, and
+               Accept-Charset, as they are highly specific to request type
+               and user settings.
+
+               P0f automatically removes some headers, prefixes others with '?',
+               and inhibits the value of fields such as 'Referer' or 'Cookie' -
+               but this is not a substitute for manual review.
+
+               NOTE: Server signatures may differ depending on the request
+               (HTTP/1.1 versus 1.0, keep-alive versus one-shot, etc) and on the
+               returned resource (e.g., CGI versus static content). Play around,
+               browse to several URLs, also try curl and wget.
+
+  habsent    - comma-separated list of headers that must *not* appear in
+               matching traffic. This is particularly useful for noting the
+               absence of standard headers (e.g. 'Host'), or for differentiating
+               between otherwise very similar signatures.
+
+               NEW SIGNATURES: P0f will automatically highlight the absence of
+               any normally present headers; other entries may be added where
+               necessary.
+
+  expsw      - expected substring in 'User-Agent' or 'Server'. This is not
+               used to match traffic, and merely serves to detect dishonest
+               software. If you want to explicitly match User-Agent, you need
+               to do this in the 'horder' section, e.g.:
+
+               User-Agent=[Firefox]
+
+Any of these sections sections except for 'ver' may be blank.
+
+There are many protocol-level quirks that p0f could be detecting - for example,
+the use of non-standard newlines, or missing or extra spacing between header
+field names and values. There is also some information to be gathered from
+responses to OPTIONS or POST. That said, it does not seem to be worth the
+effort: the protocol is so verbose, and implemented so arbitrarily, that we are
+getting more than enough information just with a simple GET / HEAD fingerprint.
+
+== SMTP signatures ==
+
+   *** NOT IMPLEMENTED YET ***
+
+== FTP signatures ==
+
+   *** NOT IMPLEMENTED YET ***
+
+----------------
+6. NAT detection
+----------------
+
+In addition to fairly straightforward measurements of intrinsic properties of
+a single TCP session, p0f also tries to compare signatures across sessions to
+detect client-side connection sharing (NAT, HTTP proxies) or server-side load
+balancing.
+
+This is done in two steps: the first significant deviation usually prompts a
+"host change" entry (which may be also indicative of multi-boot, address reuse,
+or other one-off events); and a persistent pattern of changes prompts an
+"ip sharing" notification later on.
+
+All of these messages are accompanied by a set of reason codes:
+
+  os_sig       - the OS detected right now doesn't match the OS detected earlier
+                 on.
+
+  sig_diff     - no definite OS detection data available, but protocol-level
+                 characteristics have changed drastically (e.g., different
+                 TCP option layout).
+
+  app_vs_os    - the application detected running on the host is not supposed
+                 to work on the host's operating system.
+
+  x_known      - the signature progressed from known to unknown, or vice versa.
+
+The following additional codes are specific to TCP:
+
+  tstamp       - TCP timestamps went back or jumped forward.
+
+  ttl          - TTL values have changed.
+
+  port         - source port number has decreased.
+
+  mtu          - system MTU has changed.
+
+  fuzzy        - the precision with which a TCP signature is matched has
+                 changed.
+
+The following code is also issued by the HTTP module:
+
+  via          - data explicitly includes Via / X-Forwarded-For.
+
+  us_vs_os     - OS fingerprint doesn't match User-Agent data, and the
+                 User-Agent value otherwise looks honest.
+
+  app_srv_lb   - server application signatures change, suggesting load
+                 balancing.
+
+  date         - server-advertised date changes inconsistently.
+
+Different reasons have different weights, balanced to keep p0f very sensitive
+even to very homogenous environments behind NAT. If you end up seeing false
+positives or other detection problems in your environment, please let me know!
+
+-----------
+7. Security
+-----------
+
+You should treat the output from this tool as advisory; the fingerprinting can
+be gambled with some minor effort, and it's also possible to evade it altogether
+(e.g. with excessive IP fragmentation or bad TCP checksums). Plan accordingly.
+
+P0f should to be reasonably secure to operate as a daemon. That said, un*x
+users should employ the -u option to drop privileges and chroot() when running
+the tool continuously. This greatly minimizes the consequences of any mishaps -
+and mishaps in C just tend to happen.
+
+To make this step meaningful, the user you are running p0f as should be
+completely unprivileged, and should have an empty, read-only home directory. For
+example, you can do:
+
+# useradd -d /var/empty/p0f -M -r -s /bin/nologin p0f-user
+# mkdir -p -m 755 /var/empty/p0f
+
+Please don't put the p0f binary itself, or any other valuable assets, inside
+that user's home directory; and certainly do not use any generic locations such
+as / or /bin/ in lieu of a proper home.
+
+P0f running in the background should be fairly difficult to DoS, especially
+compared to any real TCP services it will be watching. Nevertheless, there are
+so many deployment-specific factors at play that you should always preemptively
+stress-test your setup, and see how it behaves.
+
+Other than that, let's talk filesystem security. When using the tool in the
+API mode (-s), the listening socket is always re-created created with 666
+permissions, so that applications running as other uids can query it at will.
+If you want to preserve the privacy of captured traffic in a multi-user system,
+please ensure that the socket is created in a directory with finer-grained
+permissions; or change API_MODE in config.h.
+
+The default file mode for binary log data (-o) is 600, on the account that
+others probably don't need access to historical data; if you need to share logs,
+you can pre-create the file or change LOG_MODE in config.h.
+
+Don't build p0f, and do not store its source, binary, configuration files, logs,
+or query sockets in world-writable locations such as /tmp (or any
+subdirectories created therein).
+
+Last but not least, please do not attempt to make p0f setuid, or otherwise
+grant it privileges higher than these of the calling user. Neither the tool
+itself, nor the third-party components it depends on, are designed to keep rogue
+less-privileged callers at bay. If you use /etc/sudoers to list p0f as the only
+program that user X should be able to run as root, that user will probably be
+able to compromise your system. The same goes for many other uses of sudo, by
+the way.
+
+--------------
+8. Limitations
+--------------
+
+Here are some of the known issues you may run into:
+
+== General ==
+
+1) RST, ACK, and other experimental fingerprinting modes offered in p0f v2 are
+   no longer supported in v3. This is because they proved to have very low
+   specificity. The consequence is that you can no longer fingerprint
+   "connection refused" responses.
+
+2) API queries or daemon execution are not supported when reading offline pcaps.
+   While there may be some fringe use cases for that, offline pcaps use a
+   much simpler event loop, and so supporting these features would require some
+   extra effort.
+
+3) P0f needs to observe at least about 25 milliseconds worth of qualifying
+   traffic to estimate system uptime. This means that if you're testing it over
+   loopback or LAN, you may need to let it see more than one connection.
+
+   Systems with extremely slow timestamp clocks may need longer acquisition
+   periods (up to several seconds); very fast clocks (over 1.5 kHz) are rejected
+   completely on account of being prohibited by the RFC. Almost all OSes are
+   between 100 Hz and 1 kHz, which should work fine.
+
+4) Some systems vary SYN+ACK responses based on the contents of the initial SYN,
+   sometimes removing TCP options not supported by the other endpoint. 
+   Unfortunately, there is no easy way to account for this, so several SYN+ACK
+   signatures may be required per system. The bundled p0f-sendsyn utility helps
+   with collecting them.
+
+   Another consequence of this is that you will sometimes see server uptime only
+   if your own system has RFC1323 timestamps enabled. Linux does that since
+   version 2.2; on Windows, you need version 7 or newer. Client uptimes are not
+   affected.
+
+== Windows port ==
+
+1) API sockets do not work on Windows. This is due to a limitation of winpcap;
+   see live_event_loop(...) in p0f.c for more info.
+
+2) The chroot() jail (-u) on Windows doesn't offer any real security. This is
+   due to the limitations of cygwin.
+
+3) The p0f-sendsyn utility doesn't work because of the limited capabilities of
+   Windows raw sockets (this should be relatively easy to fix if there are any
+   users who care).
+
+---------------------------
+9. Acknowledgments and more
+---------------------------
+
+P0f is made possible thanks to the contributions of several good souls,
+including:
+
+  Phil Ames
+  Jannich Brendle
+  Matthew Dempsky
+  Jason DePriest
+  Dalibor Dukic
+  Mark Martinec
+  Damien Miller
+  Josh Newton
+  Nibbler
+  Bernhard Rabe
+  Chris John Riley
+  Sebastian Roschke
+  Peter Valchev
+  Jeff Weisberg
+  Anthony Howe
+  Tomoyuki Murakami
+  Michael Petch
+
+If you wish to help, the most immediate way to do so is to simply gather new
+signatures, especially from less popular or older platforms (servers, networking
+equipment, portable / embedded / specialty OSes, etc).
+
+Problems? Suggestions? Complaints? Compliments? You can reach the author at
+<lcamtuf@coredump.cx>. The author is very lonely and appreciates your mail.
