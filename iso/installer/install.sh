@@ -425,10 +425,10 @@ EOF
 tee -a /etc/crontab 2>&1>/dev/null <<EOF
 
 # Check if updated images are available and download them
-27 1 * * *      root    /usr/bin/docker-compose -f /opt/tpot/etc/tpot.yml pull
+27 1 * * *      root    docker-compose -f /opt/tpot/etc/tpot.yml pull
 
 # Delete elasticsearch logstash indices older than 90 days
-27 4 * * *      root    /usr/local/bin/curator --config /opt/tpot/etc/curator/curator.yml /opt/tpot/etc/curator/actions.yml
+27 4 * * *      root    curator --config /opt/tpot/etc/curator/curator.yml /opt/tpot/etc/curator/actions.yml
 
 # Uploaded binaries are not supposed to be downloaded
 */1 * * * *     root    mv --backup=numbered /data/dionaea/roots/ftp/* /data/dionaea/binaries/
