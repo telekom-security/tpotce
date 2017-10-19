@@ -1,0 +1,46 @@
+# T-Pot (Standard)
+# For docker-compose ...
+version: '2.1'
+
+networks:
+  dionaea_local:
+
+services:
+
+# Dionaea service
+  dionaea:
+    container_name: dionaea
+    stdin_open: true
+    restart: always
+    networks:
+     - dionaea_local
+    cap_add:
+     - NET_BIND_SERVICE
+    ports:
+     - "20:20"
+     - "21:21"
+     - "42:42"
+     - "69:69/udp"
+     - "8081:80"
+     - "135:135"
+     - "443:443"
+     - "445:445"
+     - "1433:1433"
+     - "1723:1723"
+     - "1883:1883"
+     - "1900:1900/udp"
+     - "3306:3306"
+     - "5060:5060"
+     - "5060:5060/udp"
+     - "5061:5061"
+     - "27017:27017"
+    image: "dtagdevsec/dionaea:1706"
+    volumes:
+     - /data/dionaea/roots/ftp:/opt/dionaea/var/dionaea/roots/ftp
+     - /data/dionaea/roots/tftp:/opt/dionaea/var/dionaea/roots/tftp
+     - /data/dionaea/roots/www:/opt/dionaea/var/dionaea/roots/www
+     - /data/dionaea/roots/upnp:/opt/dionaea/var/dionaea/roots/upnp
+     - /data/dionaea:/opt/dionaea/var/dionaea
+     - /data/dionaea/binaries:/opt/dionaea/var/dionaea/binaries
+     - /data/dionaea/log:/opt/dionaea/var/log
+     - /data/dionaea/rtp:/opt/dionaea/var/dionaea/rtp

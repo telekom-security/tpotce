@@ -1,27 +1,26 @@
 #!/bin/bash
 
-########################################################
-# T-Pot                                                #
-# .ISO creator                                         #
-#                                                      #
-# v16.10.0 by mo, DTAG, 2016-10-28                     #
-########################################################
+# Set TERM, DIALOGRC
+export DIALOGRC=/etc/dialogrc
+export TERM=linux
 
 # Let's define some global vars
 myBACKTITLE="T-Pot - ISO Creator"
+# If you need latest hardware support, try using the hardware enablement (hwe) ISO
+# myUBUNTULINK="http://archive.ubuntu.com/ubuntu/dists/xenial-updates/main/installer-amd64/current/images/hwe-netboot/mini.iso"
 myUBUNTULINK="http://archive.ubuntu.com/ubuntu/dists/xenial-updates/main/installer-amd64/current/images/netboot/mini.iso"
 myUBUNTUISO="mini.iso"
 myTPOTISO="tpot.iso"
 myTPOTDIR="tpotiso"
-myTPOTSEED="preseed/tpot.seed"
+myTPOTSEED="iso/preseed/tpot.seed"
 myPACKAGES="dialog genisoimage syslinux syslinux-utils pv udisks2"
-myAUTHKEYSPATH="installer/keys/authorized_keys"
-myPFXPATH="installer/keys/8021x.pfx"
-myPFXPWPATH="installer/keys/8021x.pw"
-myPFXHOSTIDPATH="installer/keys/8021x.id"
-myINSTALLERPATH="installer/install.sh"
-myPROXYCONFIG="installer/etc/proxy"
-myNTPCONFPATH="installer/etc/ntp"
+myAUTHKEYSPATH="iso/installer/keys/authorized_keys"
+myPFXPATH="iso/installer/keys/8021x.pfx"
+myPFXPWPATH="iso/installer/keys/8021x.pw"
+myPFXHOSTIDPATH="iso/installer/keys/8021x.id"
+myINSTALLERPATH="iso/installer/install.sh"
+myPROXYCONFIG="iso/installer/proxy"
+myNTPCONFPATH="iso/installer/ntp"
 myTMP="tmp"
 
 # Got root?
@@ -32,6 +31,9 @@ if [ "$myWHOAMI" != "root" ]
     sudo ./$0
     exit
 fi
+
+# Let's load dialog color theme
+cp host/etc/dialogrc /etc/
 
 # Let's clean up at the end or if something goes wrong ...
 function fuCLEANUP {
@@ -226,10 +228,10 @@ rm initrd
 cd ..
 
 # Let's add the files for the automated install
-mkdir -p $myTPOTDIR/tmp/opt/tpot
-cp installer/* -R $myTPOTDIR/tmp/opt/tpot/
-cp isolinux/* $myTPOTDIR/
-cp preseed/tpot.seed $myTPOTDIR/tmp/preseed.cfg
+mkdir -p $myTPOTDIR/tmp/opt/
+cp iso/installer -R $myTPOTDIR/tmp/opt/
+cp iso/isolinux/* $myTPOTDIR/
+cp iso/preseed/tpot.seed $myTPOTDIR/tmp/preseed.cfg
 
 # Let's create the new initrd
 cd $myTPOTDIR/tmp

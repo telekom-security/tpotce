@@ -1,0 +1,26 @@
+Signatures:
+
+  - More SYN sigs,
+
+  - A lot more SYN+ACK signatures,
+
+  - A lot more server signatures - maybe write a tool.
+
+Modules:
+
+  - SMTP
+
+  - FTP
+
+  - POP3
+
+  - IMAP
+
+  - SSH
+
+  - SSL
+
+Misc:
+
+  - Manpage.
+

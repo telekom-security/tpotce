@@ -1,0 +1,19 @@
+version: '2.1'
+
+networks:
+  honeytrap_local:
+
+services:
+
+# Honeytrap service
+  honeytrap:
+    container_name: honeytrap
+    restart: always
+    network_mode: "host"
+    cap_add:
+     - NET_ADMIN
+    image: "dtagdevsec/honeytrap:1706"
+    volumes:
+     - /data/honeytrap/attacks:/opt/honeytrap/var/attacks
+     - /data/honeytrap/downloads:/opt/honeytrap/var/downloads
+     - /data/honeytrap/log:/opt/honeytrap/var/log

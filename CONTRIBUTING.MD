@@ -23,7 +23,7 @@ Thank you :smiley:
 
 
 <a name="info"></a>
-### Baisc support information
+### Basic support information
 
 - What T-Pot version are you currtently using?
 - Are you running on a Intel NUC or a VM?

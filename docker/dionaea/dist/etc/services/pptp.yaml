@@ -1,0 +1,26 @@
+- name: pptp
+  config:
+# Cisco PIX
+#    firmware_revision: 4608
+#    hostname:
+#    vendor_name: Cisco Systems
+
+# DrayTek
+#    firmware: 1
+#    hostname: Vigor
+#    vendor_name: DrayTek
+
+# Linux
+    firmware: 1
+    hostname: local
+    vendor_name: linux
+
+# Windows
+#    firmware_revision: 0
+#    hostname:
+#    vendor_name: Microsoft
+
+# MikroTik router
+#    firmware_revision: 1
+#    hostname: MikroTik
+#    vendor_name: MikroTik

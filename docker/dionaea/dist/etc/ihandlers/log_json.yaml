@@ -1,0 +1,7 @@
+- name: log_json
+  config:
+    # Uncomment next line to flatten object lists to work with ELK
+    flat_data: true
+    handlers:
+      #- http://127.0.0.1:8080/
+      - file:///opt/dionaea/var/log/dionaea.json
