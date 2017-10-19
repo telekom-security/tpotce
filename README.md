@@ -1,4 +1,4 @@
-# T-Pot 17.10 (Alpha)
+# T-Pot 17.10 (Beta)
 
 This repository contains the necessary files to create the **[T-Pot](https://github.com/dtag-dev-sec/tpotce/releases)** ISO image.
 The image can then be used to install T-Pot on a physical or virtual machine.
@@ -6,7 +6,7 @@ The image can then be used to install T-Pot on a physical or virtual machine.
 In October 2016 we released
 [T-Pot 16.10](http://dtag-dev-sec.github.io/mediator/feature/2016/10/31/t-pot-16.10.html)
 
-# T-Pot 17.10 (Alpha - be careful there may be dragons!)
+# T-Pot 17.10 (Beta)
 
 T-Pot 17.10 uses latest 16.04 LTS Ubuntu Server Network Installer image, is based on
 

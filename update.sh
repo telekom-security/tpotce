@@ -24,7 +24,7 @@ fi
 function fuCONFIGCHECK () {
   echo "### Checking for T-Pot configuration file ..."
   echo -n "###### $myBLUE$myCONFIGFILE$myWHITE "
-  if ! [ -f $myCONFIGFILE ]; 
+  if ! [ -f $myCONFIGFILE ];
     then
       echo
       echo $myRED"Error - No T-Pot configuration file present."
@@ -66,7 +66,7 @@ function fuSELFUPDATE () {
       echo "###### $myBLUE"No updates found in repository."$myWHITE"
       return
   fi
-  myRESULT=$(git diff --name-only origin/17.06 | grep update.sh)
+  myRESULT=$(git diff --name-only origin/master | grep update.sh)
   myLOCALSTAT=$(git status -uno | grep -c update.sh)
   if [ "$myRESULT" == "update.sh" ];
     then
@@ -85,14 +85,14 @@ function fuSELFUPDATE () {
     else
       echo "###### Update script is already up-to-date."
       git pull --force
-  fi    
-} 
+  fi
+}
 
 # Only run with command switch
 if [ "$1" != "-y" ]; then
-  echo "This script will update / upgrade all T-Pot related scripts, tools and packages" 
+  echo "This script will update / upgrade all T-Pot related scripts, tools and packages"
   echo "Some of your changes might be overwritten, so make sure to save your work"
-  echo "This feature is still experimental, run with \"-y\" switch" 
+  echo "This feature is still experimental, run with \"-y\" switch"
   echo
   exit
 fi
