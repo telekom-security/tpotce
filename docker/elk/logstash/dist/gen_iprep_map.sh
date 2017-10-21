@@ -43,9 +43,9 @@ local myFILE=$1
       myZIP=$(file $myFILE | grep -c "Zip")
       if [ "$myZIP" == "1" ]
         then
-          unzip -p $myFILE | grep -o -P "\b(?:\d{1,3}\.){3}\d{1,3}/\d{1,2}\b" | xargs -I '{}' prips '{}'
+          unzip -p $myFILE | grep -o -P "^\b(?:\d{1,3}\.){3}\d{1,3}/\d{1,2}\b" | xargs -I '{}' prips '{}'
         else
-          grep -o -P "\b(?:\d{1,3}\.){3}\d{1,3}/\d{1,2}\b" $myFILE | xargs -I '{}' prips '{}'
+          grep -o -P "^\b(?:\d{1,3}\.){3}\d{1,3}/\d{1,2}\b" $myFILE | xargs -I '{}' prips '{}'
       fi
   fi
 }
@@ -60,9 +60,9 @@ local myFILE=$1
       myZIP=$(file $myFILE | grep -c "Zip")
       if [ "$myZIP" == "1" ]
         then
-          unzip -p $myFILE | grep -o -P "\b(?:\d{1,3}\.){3}\d{1,3}\b"
+          unzip -p $myFILE | grep -o -P "^\b(?:\d{1,3}\.){3}\d{1,3}\b"
         else
-          grep -o -P "\b(?:\d{1,3}\.){3}\d{1,3}\b" $myFILE
+          grep -o -P "^\b(?:\d{1,3}\.){3}\d{1,3}\b" $myFILE
       fi
   fi
 }
