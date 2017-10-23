@@ -1,6 +1,6 @@
 [![](https://images.microbadger.com/badges/version/dtagdevsec/rdpy:1710.svg)](https://microbadger.com/images/dtagdevsec/rdpy:1710 "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/dtagdevsec/rdpy:1710.svg)](https://microbadger.com/images/dtagdevsec/rdpy:1710 "Get your own image badge on microbadger.com")
 
-# dockerized rdpy
+# rdpy
 
 [rdpy](https://github.com/citronneur/rdpy) RDPY is a pure Python implementation of the Microsoft RDP (Remote Desktop Protocol) protocol (client and server side). RDPY is built over the event driven network engine Twisted. RDPY support standard RDP security layer, RDP over SSL and NLA authentication (through ntlmv2 authentication protocol).
 

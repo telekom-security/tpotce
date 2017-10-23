@@ -25,7 +25,7 @@ RUN apk -U upgrade && \
     chmod u+x /usr/bin/update.sh && \
     mkdir -p /etc/logstash/conf.d && \
     cp logstash.conf /etc/logstash/conf.d/ && \
-    cp elasticsearch-template-es5x.json /usr/share/logstash/vendor/bundle/jruby/1.9/gems/logstash-output-elasticsearch-7.4.0-java/lib/logstash/outputs/elasticsearch/ && \
+    cp elasticsearch-template-es5x.json /usr/share/logstash/vendor/bundle/jruby/1.9/gems/logstash-output-elasticsearch-7.4.2-java/lib/logstash/outputs/elasticsearch/ && \
 
 # Clean up
     apk del wget && \
