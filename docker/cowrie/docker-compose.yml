@@ -18,7 +18,7 @@ services:
     ports:
      - "22:2222"
      - "23:2223"
-    image: "dtagdevsec/cowrie:1706"
+    image: "dtagdevsec/cowrie:1710"
     volumes:
      - /data/cowrie/downloads:/home/cowrie/cowrie/dl
      - /data/cowrie/keys:/home/cowrie/cowrie/etc

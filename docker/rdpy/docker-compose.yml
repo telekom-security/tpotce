@@ -15,6 +15,6 @@ services:
      - rdpy_local
     ports:
      - "3389:3389"
-    image: "dtagdevsec/rdpy:1706"
+    image: "dtagdevsec/rdpy:1710"
     volumes:
      - /data/rdpy/log:/var/log/rdpy

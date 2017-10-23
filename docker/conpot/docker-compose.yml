@@ -4,7 +4,7 @@ networks:
   conpot_local:
 
 services:
- 
+
 # Conpot service
   conpot:
     container_name: conpot
@@ -14,6 +14,6 @@ services:
     ports:
      - "1025:1025"
      - "50100:50100"
-    image: "dtagdevsec/conpot:1706"
+    image: "dtagdevsec/conpot:1710"
     volumes:
      - /data/conpot/log:/var/log/conpot

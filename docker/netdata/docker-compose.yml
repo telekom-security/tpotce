@@ -1,7 +1,7 @@
 version: '2.1'
 
 services:
- 
+
 # Netdata service
   netdata:
     container_name: netdata
@@ -11,7 +11,7 @@ services:
      - SYS_PTRACE
     security_opt:
      - apparmor=unconfined
-    image: "dtagdevsec/netdata:1706"
+    image: "dtagdevsec/netdata:1710"
     volumes:
      - /proc:/host/proc:ro
      - /sys:/host/sys:ro

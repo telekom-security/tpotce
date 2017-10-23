@@ -4,7 +4,7 @@ networks:
   mailoney_local:
 
 services:
- 
+
 # Mailoney service
   mailoney:
     container_name: mailoney
@@ -13,6 +13,6 @@ services:
      - mailoney_local
     ports:
      - "25:2525"
-    image: "dtagdevsec/mailoney:1706"
-#   volumes:
-#    - /data/mailoney/log:/opt/mailoney/logs
+    image: "dtagdevsec/mailoney:1710"
+   volumes:
+    - /data/mailoney/log:/opt/mailoney/logs

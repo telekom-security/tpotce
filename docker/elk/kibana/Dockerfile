@@ -11,8 +11,8 @@ RUN apk -U upgrade && \
 # Get and install packages
     cd /root/dist/ && \
     mkdir -p /usr/share/kibana/ && \
-    wget https://artifacts.elastic.co/downloads/kibana/kibana-5.6.1-linux-x86_64.tar.gz && \
-    tar xvfz kibana-5.6.1-linux-x86_64.tar.gz --strip-components=1 -C /usr/share/kibana/ && \
+    wget https://artifacts.elastic.co/downloads/kibana/kibana-5.6.3-linux-x86_64.tar.gz && \
+    tar xvfz kibana-5.6.3-linux-x86_64.tar.gz --strip-components=1 -C /usr/share/kibana/ && \
 
 # Kibana's bundled node does not work in alpine
     rm /usr/share/kibana/node/bin/node && \
@@ -47,6 +47,6 @@ RUN apk -U upgrade && \
 # Healthcheck
 HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:5601'
 
-# Start kibana 
+# Start kibana
 USER kibana
 CMD ["/usr/share/kibana/bin/kibana"]

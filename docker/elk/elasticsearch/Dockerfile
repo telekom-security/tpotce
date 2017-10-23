@@ -11,8 +11,8 @@ RUN apk -U upgrade && \
 # Get and install packages
     cd /root/dist/ && \
     mkdir -p /usr/share/elasticsearch/ && \
-    wget https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-5.6.1.tar.gz && \
-    tar xvfz elasticsearch-5.6.1.tar.gz --strip-components=1 -C /usr/share/elasticsearch/ && \
+    wget https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-5.6.3.tar.gz && \
+    tar xvfz elasticsearch-5.6.3.tar.gz --strip-components=1 -C /usr/share/elasticsearch/ && \
 
 # Add and move files
     cd /root/dist/ && \

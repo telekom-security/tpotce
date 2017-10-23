@@ -34,7 +34,7 @@ services:
      - "5060:5060/udp"
      - "5061:5061"
      - "27017:27017"
-    image: "dtagdevsec/dionaea:1706"
+    image: "dtagdevsec/dionaea:1710"
     volumes:
      - /data/dionaea/roots/ftp:/opt/dionaea/var/dionaea/roots/ftp
      - /data/dionaea/roots/tftp:/opt/dionaea/var/dionaea/roots/tftp
