@@ -1,6 +1,6 @@
 [![](https://images.microbadger.com/badges/version/dtagdevsec/p0f:1710.svg)](https://microbadger.com/images/dtagdevsec/p0f:1710 "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/dtagdevsec/p0f:1710.svg)](https://microbadger.com/images/dtagdevsec/p0f:1710 "Get your own image badge on microbadger.com")
 
-# dockerized p0f
+# p0f
 
 [p0f](http://lcamtuf.coredump.cx/p0f3/) P0f is a tool that utilizes an array of sophisticated, purely passive traffic fingerprinting mechanisms to identify the players behind any incidental TCP/IP communications (often as little as a single normal SYN) without interfering in any way.
 
