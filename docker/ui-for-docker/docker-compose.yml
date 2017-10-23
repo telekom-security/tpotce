@@ -1,0 +1,21 @@
+# T-Pot (Standard)
+# For docker-compose ...
+version: '2.1'
+
+networks:
+  ui-for-docker_local:
+
+services:
+
+# Ui-for-docker service
+  ui-for-docker:
+    container_name: ui-for-docker
+    command:  -H unix:///var/run/docker.sock --no-auth
+    restart: always
+    networks:
+     - ui-for-docker_local
+    ports:
+     - "127.0.0.1:64299:9000"
+    image: "dtagdevsec/ui-for-docker:1710"
+    volumes:
+     - /var/run/docker.sock:/var/run/docker.sock

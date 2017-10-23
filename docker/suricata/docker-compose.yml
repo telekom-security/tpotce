@@ -1,0 +1,18 @@
+# T-Pot (Standard)
+# For docker-compose ...
+version: '2.1'
+
+services:
+
+# Suricata service
+  suricata:
+    container_name: suricata
+    restart: always
+    network_mode: "host"
+    cap_add:
+     - NET_ADMIN
+     - SYS_NICE
+     - NET_RAW
+    image: "dtagdevsec/suricata:1710"
+    volumes:
+     - /data/suricata/log:/var/log/suricata

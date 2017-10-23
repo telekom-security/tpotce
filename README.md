@@ -1,4 +1,4 @@
-# T-Pot 17.10 (Beta)
+# T-Pot 17.10
 
 This repository contains the necessary files to create the **[T-Pot](https://github.com/dtag-dev-sec/tpotce/releases)** ISO image.
 The image can then be used to install T-Pot on a physical or virtual machine.
@@ -6,9 +6,9 @@ The image can then be used to install T-Pot on a physical or virtual machine.
 In October 2016 we released
 [T-Pot 16.10](http://dtag-dev-sec.github.io/mediator/feature/2016/10/31/t-pot-16.10.html)
 
-# T-Pot 17.10 (Beta)
+# T-Pot 17.10
 
-T-Pot 17.10 uses latest 16.04 LTS Ubuntu Server Network Installer image, is based on
+T-Pot 17.10 runs on the latest 16.04 LTS Ubuntu Server Network Installer image, is based on
 
 [docker](https://www.docker.com/), [docker-compose](https://docs.docker.com/compose/)
 
@@ -112,18 +112,15 @@ Seeing is believing :bowtie:
 - **Persistence** is now enabled by default and will keep honeypot logs and tools data in `/data/` and its sub-folders by default for 30 days. You may change that behavior in `/opt/tpot/etc/logrotate/logrotate.conf`. ELK data however will be kept for 90 days by default. You may change that behavior in `/opt/tpot/etc/curator/actions.yml`. Scripts will be triggered through `/etc/crontab`.
 - **Updates**
 	- **Docker** was updated to the latest **1.12.6** release within Ubuntu 16.04.x LTS
-	- **ELK** was updated to the latest **Kibana 5.6.1**, **Elasticsearch 5.6.1** and **Logstash 5.6.1** releases.
+	- **ELK** was updated to the latest **Kibana 5.6.3**, **Elasticsearch 5.6.3** and **Logstash 5.6.3** releases.
 	- **Suricata** was updated to the latest **4.0.0** version including the latest **Emerging Threats** community ruleset.
-
 - **Dashboards Makeover**
 	- We now have **160+ Visualizations** pre-configured and compiled to 14 individual **Kibana Dashboards** for every honeypot. Monitor all *honeypot events* locally on your T-Pot installation. Aside from *honeypot events* you can also view *Suricata NSM, Syslog and NGINX* events for a quick overview of local host events.
 	- View available IP reputation of any source IP address
 	- View available CVE ID for events
 	- More **Smart links** are now included.
-
 - **Update Feature**
 	- For the ones who like to live on the bleeding edge of T-Pot development there is now a update script available in `/opt/tpot/update.sh`. Just run the script and it will get the latest changes from the `master branch`. For now this feature is experimental and the first step to a true rolling release cycle.
-
 - **Files & Folders**
 	- While the `/data` folder is still in its old place, all T-Pot relevant files and folders have been restructured and will now be installed into `/opt/tpot`. Only a few system relevant files with regard to the installed OS and its services will be copied to locations outside the T-Pot base path.
 
@@ -153,7 +150,7 @@ In T-Pot we combine the dockerized honeypots
 [Suricata](http://suricata-ids.org/) a Network Security Monitoring engine and
 [Wetty](https://github.com/krishnasrinivas/wetty) a web based SSH client.
 
-![Architecture](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/17.06/doc/architecture.png)
+![Architecture](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/doc/architecture.png)
 
 While data within docker containers is volatile we do now ensure a default 30 day persistence of all relevant honeypot and tool data in the well known `/data` folder and sub-folders. The persistence configuration may be adjusted in `/opt/tpot/etc/logrotate/logrotate.conf`. Once a docker container crashes, all other data produced within its environment is erased and a fresh instance is started from the corresponding docker image.<br>
 
@@ -333,7 +330,7 @@ If you do not have a SSH client at hand and still want to access the machine via
 
 and choose **WebTTY** from the navigation bar. You will be prompted to allow access for this connection and enter the password for the user **tsec**.
 
-![WebTTY](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/17.06/doc/webssh.png)
+![WebTTY](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/doc/webssh.png)
 
 <a name="kibana"></a>
 ## Kibana Dashboard
@@ -344,16 +341,16 @@ Just open a web browser and access and connect to `https://<your.ip>:64297`, ent
 
 and **Kibana** will automagically load. The Kibana dashboard can be customized to fit your needs. By default, we haven't added any filtering, because the filters depend on your setup. E.g. you might want to filter out your incoming administrative ssh connections and connections to update servers.
 
-![Dashbaord](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/17.06/doc/dashboard.png)
+![Dashbaord](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/doc/dashboard.png)
 
 <a name="tools"></a>
 ## Tools
 We included some web based management tools to improve and ease up on your daily tasks.
 
-![ES Head Plugin](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/17.06/doc/headplugin.png)
-![Netdata](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/17.06/doc/netdata.png)
-![Portainer](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/17.06/doc/dockerui.png)
-![Spiderfoot](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/17.06/doc/spiderfoot.png)
+![ES Head Plugin](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/doc/headplugin.png)
+![Netdata](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/doc/netdata.png)
+![Portainer](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/doc/dockerui.png)
+![Spiderfoot](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/doc/spiderfoot.png)
 
 
 <a name="maintenance"></a>
@@ -479,4 +476,4 @@ We will be releasing a new version of T-Pot about every 6-12 months.
 <a name="funfact"></a>
 # Fun Fact
 
-Coffee just does not cut it anymore which is why we needed a different caffeine source and consumed *227* bottles of [Club Mate](https://de.wikipedia.org/wiki/Club-Mate) during the development of T-Pot 17.10 😇
+Coffee just does not cut it anymore which is why we needed a different caffeine source and consumed *242* bottles of [Club Mate](https://de.wikipedia.org/wiki/Club-Mate) during the development of T-Pot 17.10 😇

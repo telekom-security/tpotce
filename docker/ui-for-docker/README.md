@@ -1,26 +1,15 @@
-# dockerized portainer (ui-for-docker)
+[![](https://images.microbadger.com/badges/version/dtagdevsec/ui-for-docker:1710.svg)](https://microbadger.com/images/dtagdevsec/ui-for-docker:1710 "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/dtagdevsec/ui-for-docker:1710.svg)](https://microbadger.com/images/dtagdevsec/ui-for-docker:1710 "Get your own image badge on microbadger.com")
+
+# portainer
 
 [portainer](http://portainer.io/) Portainer allows you to manage your Docker containers, images, volumes, networks and more ! It is compatible with the standalone Docker engine and with Docker Swarm.
-
-This repository contains the necessary files to create a *dockerized* version of portainer.
 
 This dockerized version is part of the **[T-Pot community honeypot](http://dtag-dev-sec.github.io/)** of Deutsche Telekom AG.
 
 The `Dockerfile` contains the blueprint for the dockerized portainer and will be used to setup the docker image.  
 
-Using systemd, copy the `systemd/ui-for-docker.service` to `/etc/systemd/system/ui-for-docker.service` and start using
+The `docker-compose.yml` contains the necessary settings to test portainer using `docker-compose`. This will ensure to start the docker container with the appropriate permissions and port mappings.
 
-```
-systemctl enable ui-for-docker
-systemctl start ui-for-docker
-```
+# Portainer UI
 
-This will make sure that the docker container is started with the appropriate permissions and port mappings. Further, it autostarts during boot.
-
-# Portainer Dashboard
-
-![Portainer Dashboard](https://raw.githubusercontent.com/dtag-dev-sec/ui-for-docker/master/doc/dashboard1.png)
-![Portainer Dashboard](https://raw.githubusercontent.com/dtag-dev-sec/ui-for-docker/master/doc/dashboard2.png)
-![Portainer Dashboard](https://raw.githubusercontent.com/dtag-dev-sec/ui-for-docker/master/doc/dashboard3.png)
-![Portainer Dashboard](https://raw.githubusercontent.com/dtag-dev-sec/ui-for-docker/master/doc/dashboard4.png)
-![Portainer Dashboard](https://raw.githubusercontent.com/dtag-dev-sec/ui-for-docker/master/doc/dashboard5.png)
+![Portainer UI](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/docker/ui-for-docker/doc/dashboard.png)

@@ -1,0 +1,12 @@
+version: '2.1'
+
+services:
+
+# P0f service
+  p0f:
+    container_name: p0f
+    restart: always
+    network_mode: "host"
+    image: "dtagdevsec/p0f:1710"
+    volumes:
+     - /data/p0f/log:/var/log/p0f
