@@ -35,4 +35,4 @@ Thank you :smiley:
 - How much stress are the CPUs under (login via ssh and run `htop`)?
 - How much swap space is being used (login via ssh and run `htop`)?
 - How much free disk space is available (login via ssh and run `sudo df -h`)?
-- What is the current container status (login via ssh and run `sudo start.sh`)?
+- What is the current container status (login via ssh and run `sudo dps.sh`)?
