@@ -390,9 +390,8 @@ We encourage you not to disable the data submission as it is the main purpose of
 # Roadmap
 As with every development there is always room for improvements ...
 
-- Bump ELK-stack to 6.x
 - Introduce new honeypots
-- Include automatic updates
+- Improve automatic updates
 
 Some features may be provided with updated docker images, others may require some hands on from your side.
 
