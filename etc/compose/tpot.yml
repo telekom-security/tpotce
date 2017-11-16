@@ -1,6 +1,6 @@
 # T-Pot (Standard)
 # For docker-compose ...
-version: '2.1'
+version: '2.2'
 
 networks:
   cowrie_local:
@@ -248,7 +248,7 @@ services:
      - "127.0.0.1:64299:9000"
     image: "dtagdevsec/ui-for-docker:1710"
     volumes:
-     - /var/run/docker.sock:/var/run/docker.sock 
+     - /var/run/docker.sock:/var/run/docker.sock
 
 # Suricata service
   suricata:

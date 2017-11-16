@@ -1,6 +1,6 @@
 # T-Pot (Industrial)
 # For docker-compose ...
-version: '2.1'
+version: '2.2'
 
 networks:
   conpot_local:
@@ -10,7 +10,7 @@ networks:
   ui-for-docker_local:
 
 services:
- 
+
 # Conpot service
   conpot:
     container_name: conpot
@@ -141,7 +141,7 @@ services:
     image: "dtagdevsec/spiderfoot:1710"
     volumes:
      - /data/spiderfoot/spiderfoot.db:/home/spiderfoot/spiderfoot.db
- 
+
 # Ui-for-docker service
   ui-for-docker:
     container_name: ui-for-docker
@@ -153,8 +153,8 @@ services:
      - "127.0.0.1:64299:9000"
     image: "dtagdevsec/ui-for-docker:1710"
     volumes:
-     - /var/run/docker.sock:/var/run/docker.sock 
- 
+     - /var/run/docker.sock:/var/run/docker.sock
+
 # Suricata service
   suricata:
     container_name: suricata

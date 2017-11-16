@@ -1,6 +1,6 @@
 # T-Pot (HP)
 # For docker-compose ...
-version: '2.1'
+version: '2.2'
 
 networks:
   cowrie_local:
@@ -13,7 +13,7 @@ networks:
   vnclowpot_local:
 
 services:
- 
+
 # Cowrie service
   cowrie:
     container_name: cowrie
@@ -31,7 +31,7 @@ services:
      - /data/cowrie/keys:/home/cowrie/cowrie/etc
      - /data/cowrie/log:/home/cowrie/cowrie/log
      - /data/cowrie/log/tty:/home/cowrie/cowrie/log/tty
- 
+
 # Dionaea service
   dionaea:
     container_name: dionaea
