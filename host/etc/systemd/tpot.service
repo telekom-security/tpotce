@@ -21,7 +21,7 @@ ExecStartPre=-/bin/bash -c 'docker rm -v $(docker ps -aq)'
 ExecStartPre=-/bin/bash -c 'docker rmi $(docker images | grep "<none>" | awk \'{print $3}\')'
 
 # Get IF, disable offloading, enable promiscious mode for p0f and suricata
-ExecStartPre=/bin/bash -c '/sbin/ethtool --offload $(/sbin/ip address | grep "^2: " | awk \'{ print $2 }\' | tr -d [:punct:]) rx off tx off'
+ExecStartPre=-/bin/bash -c '/sbin/ethtool --offload $(/sbin/ip address | grep "^2: " | awk \'{ print $2 }\' | tr -d [:punct:]) rx off tx off'
 ExecStartPre=/bin/bash -c '/sbin/ethtool -K $(/sbin/ip address | grep "^2: " | awk \'{ print $2 }\' | tr -d [:punct:]) gso off gro off'
 ExecStartPre=/bin/bash -c '/sbin/ip link set $(/sbin/ip address | grep "^2: " | awk \'{ print $2 }\' | tr -d [:punct:]) promisc on'
 
