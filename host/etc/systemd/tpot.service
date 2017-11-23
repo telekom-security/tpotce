@@ -6,6 +6,7 @@ After=docker.service
 [Service]
 Restart=always
 RestartSec=5
+TimeoutSec=infinity
 
 # Get and set internal, external IP infos, but ignore errors
 ExecStartPre=-/opt/tpot/bin/updateip.sh
