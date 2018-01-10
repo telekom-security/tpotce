@@ -85,36 +85,7 @@ function fuSELFUPDATE () {
       fi
     else
       echo "###### Update script is already up-to-date."
-
-      # Better safe than sorry
-      echo "###### Creating backup and storing it in /home/tsec"
-      tar cvfz /home/tsec/tpot_backup.tgz /opt/tpot
-
-      echo "###### Pulling updates"
       git pull --force
-
-      echo "###### Getting the current install flavor"
-      myFLAVOR=$(head $myCONFIGFILE -n 1 | awk '{ print $3 }' | tr -d :'()':)
-
-      echo "###### Updating compose file"
-      case $myFLAVOR in
-        HP)
-          echo "###### Restoring HONEYPOT flavor installation."
-          cp $myCOMPOSEPATH/hp.yml $myCONFIGFILE
-        ;;
-        Industrial)
-          echo "###### Restoring INDUSTRIAL flavor installation."
-          cp $myCOMPOSEPATH/industrial.yml $myCONFIGFILE
-        ;;
-        Standard)
-          echo "###### Restoring TPOT flavor installation."
-          cp $myCOMPOSEPATH/tpot.yml $myCONFIGFILE
-        ;;
-        Everything)
-          echo "###### Restoring EVERYTHING flavor installation."
-          cp $myCOMPOSEPATH/all.yml $myCONFIGFILE
-        ;;
-      esac
   fi
 }
 
@@ -141,6 +112,33 @@ echo
 
 echo "### Now stopping T-Pot"
 systemctl stop tpot
+
+# Better safe than sorry
+echo "###### Creating backup and storing it in /home/tsec"
+tar cvfz /home/tsec/tpot_backup.tgz /opt/tpot
+
+echo "###### Getting the current install flavor"
+myFLAVOR=$(head $myCONFIGFILE -n 1 | awk '{ print $3 }' | tr -d :'()':)
+
+echo "###### Updating compose file"
+case $myFLAVOR in
+  HP)
+    echo "###### Restoring HONEYPOT flavor installation."
+    cp $myCOMPOSEPATH/hp.yml $myCONFIGFILE
+  ;;
+  Industrial)
+    echo "###### Restoring INDUSTRIAL flavor installation."
+    cp $myCOMPOSEPATH/industrial.yml $myCONFIGFILE
+  ;;
+  Standard)
+    echo "###### Restoring TPOT flavor installation."
+    cp $myCOMPOSEPATH/tpot.yml $myCONFIGFILE
+  ;;
+  Everything)
+    echo "###### Restoring EVERYTHING flavor installation."
+    cp $myCOMPOSEPATH/all.yml $myCONFIGFILE
+  ;;
+esac
 
 echo
 echo "### Now upgrading packages"
@@ -185,4 +183,6 @@ echo "### Now starting T-Pot service"
 systemctl start tpot
 
 echo
+echo "### If you made changes to tpot.yml please ensure to add them again."
+echo "### We stored the previous version as backup in /home/tsec."
 echo "### Done."
