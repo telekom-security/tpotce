@@ -3,6 +3,8 @@
 ###################################################
 # Do not change any contents of this script!
 ###################################################
+
+# Some vars
 myCONFIGFILE="/opt/tpot/etc/tpot.yml"
 myCOMPOSEPATH="/opt/tpot/etc/compose"
 myRED="[0;31m"
