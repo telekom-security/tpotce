@@ -3,9 +3,8 @@
 ###################################################
 # Do not change any contents of this script!
 ###################################################
-
-# Some vars
 myCONFIGFILE="/opt/tpot/etc/tpot.yml"
+myCOMPOSEPATH="/opt/tpot/etc/compose"
 myRED="[0;31m"
 myGREEN="[0;32m"
 myWHITE="[0;0m"
@@ -84,7 +83,36 @@ function fuSELFUPDATE () {
       fi
     else
       echo "###### Update script is already up-to-date."
+
+      # Better safe than sorry
+      echo "###### Creating backup and storing it in /home/tsec"
+      tar cvfz /home/tsec/tpot_backup.tgz /opt/tpot
+
+      echo "###### Pulling updates"
       git pull --force
+
+      echo "###### Getting the current install flavor"
+      myFLAVOR=$(head $myCONFIGFILE -n 1 | awk '{ print $3 }' | tr -d :'()':)
+
+      echo "###### Updating compose file"
+      case $myFLAVOR in
+        HP)
+          echo "###### Restoring HONEYPOT flavor installation."
+          cp $myCOMPOSEPATH/hp.yml $myCONFIGFILE
+        ;;
+        Industrial)
+          echo "###### Restoring INDUSTRIAL flavor installation."
+          cp $myCOMPOSEPATH/industrial.yml $myCONFIGFILE
+        ;;
+        Standard)
+          echo "###### Restoring TPOT flavor installation."
+          cp $myCOMPOSEPATH/tpot.yml $myCONFIGFILE
+        ;;
+        Everything)
+          echo "###### Restoring EVERYTHING flavor installation."
+          cp $myCOMPOSEPATH/all.yml $myCONFIGFILE
+        ;;
+      esac
   fi
 }
 
