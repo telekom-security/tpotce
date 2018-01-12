@@ -44,7 +44,10 @@ Furthermore we use the following tools
 3. Install the system in a [VM](#vm) or on [physical hardware](#hw) with [internet access](#placement).
 4. Enjoy your favorite beverage - [watch](http://sicherheitstacho.eu/?peers=communityPeers) and [analyze](#kibana).
 
-Seeing is believing :bowtie:
+# T-Pot-Autoinstaller
+T-Pot may also be installed on an existing machine using the [T-Pot-Autoinstaller](https://github.com/dtag-dev-sec/t-pot-autoinstall).
+
+# Seeing is believing :bowtie:
 
 [![T-Pot 17.10](https://img.youtube.com/vi/G-_OabDowFU/0.jpg)](https://youtu.be/G-_OabDowFU)
 
