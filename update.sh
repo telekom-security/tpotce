@@ -115,7 +115,7 @@ systemctl stop tpot
 
 # Better safe than sorry
 echo "###### Creating backup and storing it in /home/tsec"
-tar cvfz /home/tsec/tpot_backup.tgz /opt/tpot
+tar cvfz /root/tpot_backup.tgz /opt/tpot
 
 echo "###### Getting the current install flavor"
 myFLAVOR=$(head $myCONFIGFILE -n 1 | awk '{ print $3 }' | tr -d :'()':)
