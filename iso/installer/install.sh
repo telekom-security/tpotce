@@ -329,8 +329,8 @@ apt-get autoremove -y 2>&1 | dialog --title "[ Pulling updates ]" $myPROGRESSBOX
 
 # Installing docker-compose, wetty, ctop, elasticdump, tpot
 pip install --upgrade pip 2>&1 | dialog --title "[ Installing pip ]" $myPROGRESSBOXCONF
-pip install docker-compose==1.16.1 2>&1 | dialog --title "[ Installing docker-compose ]" $myPROGRESSBOXCONF
-pip install elasticsearch-curator==5.2.0 2>&1 | dialog --title "[ Installing elasticsearch-curator ]" $myPROGRESSBOXCONF
+#pip install docker-compose==1.16.1 2>&1 | dialog --title "[ Installing docker-compose ]" $myPROGRESSBOXCONF
+pip install elasticsearch-curator==5.4.1 2>&1 | dialog --title "[ Installing elasticsearch-curator ]" $myPROGRESSBOXCONF
 ln -s /usr/bin/nodejs /usr/bin/node 2>&1 | dialog --title "[ Installing wetty ]" $myPROGRESSBOXCONF
 npm install https://github.com/t3chn0m4g3/wetty -g 2>&1 | dialog --title "[ Installing wetty ]" $myPROGRESSBOXCONF
 npm install https://github.com/t3chn0m4g3/elasticsearch-dump -g 2>&1 | dialog --title "[ Installing elasticsearch-dump ]" $myPROGRESSBOXCONF
@@ -351,7 +351,7 @@ hostnamectl set-hostname $myHOST 2>&1 | dialog --title "[ Setting new hostname ]
 sed -i 's#127.0.1.1.*#127.0.1.1\t'"$myHOST"'#g' /etc/hosts 2>&1 | dialog --title "[ Setting new hostname ]" $myPROGRESSBOXCONF
 
 # Let's patch sshd_config
-sed -i 's#Port 22#Port 64295#' /etc/ssh/sshd_config 2>&1 | dialog --title "[ SSH listen on tcp/64295 ]" $myPROGRESSBOXCONF
+sed -i 's#\#Port 22#Port 64295#' /etc/ssh/sshd_config 2>&1 | dialog --title "[ SSH listen on tcp/64295 ]" $myPROGRESSBOXCONF
 sed -i 's#\#PasswordAuthentication yes#PasswordAuthentication no#' /etc/ssh/sshd_config 2>&1 | dialog --title "[ SSH password authentication only from RFC1918 networks ]" $myPROGRESSBOXCONF
 tee -a /etc/ssh/sshd_config 2>&1>/dev/null <<EOF
 
