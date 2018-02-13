@@ -8,7 +8,8 @@ export TERM=linux
 myBACKTITLE="T-Pot - ISO Creator"
 # If you need latest hardware support, try using the hardware enablement (hwe) ISO
 # myUBUNTULINK="http://archive.ubuntu.com/ubuntu/dists/xenial-updates/main/installer-amd64/current/images/hwe-netboot/mini.iso"
-myUBUNTULINK="http://archive.ubuntu.com/ubuntu/dists/xenial-updates/main/installer-amd64/current/images/netboot/mini.iso"
+# myUBUNTULINK="http://archive.ubuntu.com/ubuntu/dists/xenial-updates/main/installer-amd64/current/images/netboot/mini.iso"
+myUBUNTULINK="http://archive.ubuntu.com/ubuntu/dists/bionic/main/installer-amd64/current/images/netboot/mini.iso"
 myUBUNTUISO="mini.iso"
 myTPOTISO="tpot.iso"
 myTPOTDIR="tpotiso"
