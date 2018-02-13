@@ -43,7 +43,7 @@ ExecStartPre=/sbin/iptables -w -A INPUT -p tcp --syn -m state --state NEW -j NFQ
 ExecStart=/usr/bin/docker-compose -f /opt/tpot/etc/tpot.yml up --no-color
 
 # Compose T-Pot down, remove containers and volumes
-ExecStop=/usr/local/bin/docker-compose -f /opt/tpot/etc/tpot.yml down -v
+ExecStop=/usr/bin/docker-compose -f /opt/tpot/etc/tpot.yml down -v
 
 # Remove only previously set iptables rules
 ExecStopPost=/sbin/iptables -w -D INPUT -s 127.0.0.1 -j ACCEPT
