@@ -36,6 +36,8 @@ fuLOGROTATE () {
 # Ensure correct permissions and ownerships for logrotate to run without issues
 chmod 760 /data/ -R
 chown tpot:tpot /data -R
+chmod 644 /data/nginx/conf -R
+chmod 644 /data/nginx/cert -R
 
 # Run logrotate with force (-f) first, so the status file can be written and race conditions (with tar) be avoided
 logrotate -f -s $mySTATUS $myCONF
@@ -138,6 +140,13 @@ fuMAILONEY () {
   chown tpot:tpot /data/mailoney/ -R
 }
 
+# Let's create a function to clean up nginx logs
+fuNGINX () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm /data/nginx/log/*; fi
+  chmod 644 /data/nginx/conf -R
+  chmod 644 /data/nginx/cert -R
+}
+
 # Let's create a function to clean up and prepare rdpy data
 fuRDPY () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/rdpy/*; fi
@@ -210,6 +219,7 @@ if [ "$myPERSISTENCE" = "on" ];
     fuGLASTOPF
     fuHONEYTRAP
     fuMAILONEY
+    fuNGINX
     fuRDPY
     fuSPIDERFOOT
     fuSURICATA

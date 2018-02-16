@@ -242,6 +242,19 @@ services:
      - /sys:/host/sys:ro
      - /var/run/docker.sock:/var/run/docker.sock
 
+# Nginx service
+  nginx:
+    container_name: nginx
+    restart: always
+    network_mode: "host"
+    ports:
+     - "64297:64297"
+    image: "dtagdevsec/nginx:1710"
+    volumes:
+     - /data/nginx/cert/:/etc/nginx/cert/
+     - /data/nginx/conf/nginxpasswd:/etc/nginx/nginxpasswd
+     - /data/nginx/log/:/var/log/nginx/
+
 # Rdpy service
   rdpy:
     container_name: rdpy

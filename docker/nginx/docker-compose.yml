@@ -1,0 +1,20 @@
+# T-Pot (Standard)
+# For docker-compose ...
+version: '2.2'
+
+services:
+
+# nginx service
+  nginx:
+    container_name: nginx
+    restart: always
+    network_mode: "host"
+    #    cap_add:
+    #     - NET_BIND_SERVICE
+    ports:
+     - "64297:64297"
+    image: "dtagdevsec/nginx:1710"
+    volumes:
+     - /data/nginx/cert/:/etc/nginx/cert/
+     - /data/nginx/conf/nginxpasswd:/etc/nginx/nginxpasswd
+     - /data/nginx/log/:/var/log/nginx/
