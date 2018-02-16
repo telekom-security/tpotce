@@ -94,12 +94,6 @@ EOF
 EOF
   done;
 
-# Let's remove NGINX default website
-#fuECHO "### Removing NGINX default website."
-rm -rf /etc/nginx/sites-enabled/default 2>&1 | dialog --title "[ Removing NGINX default website. ]" $myPROGRESSBOXCONF;
-rm -rf /etc/nginx/sites-available/default 2>&1 | dialog --title "[ Removing NGINX default website. ]" $myPROGRESSBOXCONF;
-rm -rf /usr/share/nginx/html/index.html 2>&1 | dialog --title "[ Removing NGINX default website. ]" $myPROGRESSBOXCONF;
-
 # Let's ask user for install flavor
 # Install types are TPOT, HP, INDUSTRIAL, ALL
 tput cnorm
@@ -194,18 +188,19 @@ while [ "$myPASS1" != "$myPASS2"  ] && [ "$mySECURE" == "0" ]
         fi
     fi
   done
-htpasswd -b -c /etc/nginx/nginxpasswd "$myUSER" "$myPASS1" 2>&1 | dialog --title "[ Setting up user and password ]" $myPROGRESSBOXCONF;
+mkdir -p /data/nginx/conf 2>&1
+htpasswd -b -c /data/nginx/conf/nginxpasswd "$myUSER" "$myPASS1" 2>&1 | dialog --title "[ Setting up user and password ]" $myPROGRESSBOXCONF;
 
 # Let's generate a SSL self-signed certificate without interaction (browsers will see it invalid anyway)
 tput civis
-mkdir -p /etc/nginx/ssl 2>&1 | dialog --title "[ Generating a self-signed-certificate for NGINX ]" $myPROGRESSBOXCONF;
+mkdir -p /data/nginx/cert 2>&1 | dialog --title "[ Generating a self-signed-certificate for NGINX ]" $myPROGRESSBOXCONF;
 openssl req \
         -nodes \
         -x509 \
         -sha512 \
         -newkey rsa:8192 \
-        -keyout "/etc/nginx/ssl/nginx.key" \
-        -out "/etc/nginx/ssl/nginx.crt" \
+        -keyout "/data/nginx/cert/nginx.key" \
+        -out "/data/nginx/cert/nginx.crt" \
         -days 3650 \
         -subj '/C=AU/ST=Some-State/O=Internet Widgits Pty Ltd' 2>&1 | dialog --title "[ Generating a self-signed-certificate for NGINX ]" $myPROGRESSBOXCONF;
 
@@ -447,6 +442,7 @@ mkdir -p /data/conpot/log \
          /data/elk/data /data/elk/log \
          /data/glastopf /data/honeytrap/log/ /data/honeytrap/attacks/ /data/honeytrap/downloads/ \
          /data/mailoney/log \
+	 /data/nginx/log \
          /data/emobility/log \
          /data/ews/conf \
          /data/rdpy/log \
@@ -460,20 +456,15 @@ touch /data/spiderfoot/spiderfoot.db 2>&1 | dialog --title "[ Creating some file
 tar xvfz /opt/tpot/etc/objects/elkbase.tgz -C / 2>&1 | dialog --title "[ Extracting elkbase.tgz ]" $myPROGRESSBOXCONF
 cp    /opt/tpot/host/etc/systemd/* /etc/systemd/system/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
 cp    /opt/tpot/host/etc/issue /etc/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
-cp -R /opt/tpot/host/etc/nginx/ssl /etc/nginx/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
-cp    /opt/tpot/host/etc/nginx/tpotweb.conf /etc/nginx/sites-available/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
-cp    /opt/tpot/host/etc/nginx/nginx.conf /etc/nginx/nginx.conf 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
-cp    /opt/tpot/host/usr/share/nginx/html/* /usr/share/nginx/html/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
 cp    /root/installer/keys/authorized_keys /home/tsec/.ssh/authorized_keys 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
 systemctl enable tpot 2>&1 | dialog --title "[ Enabling service for tpot ]" $myPROGRESSBOXCONF
 systemctl enable wetty 2>&1 | dialog --title "[ Enabling service for wetty ]" $myPROGRESSBOXCONF
 
-# Let's enable T-Pot website
-ln -s /etc/nginx/sites-available/tpotweb.conf /etc/nginx/sites-enabled/tpotweb.conf 2>&1 | dialog --title "[ Enabling T-Pot website ]" $myPROGRESSBOXCONF
-
 # Let's take care of some files and permissions
 chmod 760 -R /data 2>&1 | dialog --title "[ Set permissions and ownerships ]" $myPROGRESSBOXCONF
 chown tpot:tpot -R /data 2>&1 | dialog --title "[ Set permissions and ownerships ]" $myPROGRESSBOXCONF
+chmod 644 -R /data/nginx/conf 2>&1 | dialog --title "[ Set permissions and ownerships ]" $myPROGRESSBOXCONF
+chmod 644 -R /data/nginx/cert 2>&1 | dialog --title "[ Set permissions and ownerships ]" $myPROGRESSBOXCONF
 chmod 600 /home/tsec/.ssh/authorized_keys 2>&1 | dialog --title "[ Set permissions and ownerships ]" $myPROGRESSBOXCONF
 chown tsec:tsec /home/tsec/.ssh /home/tsec/.ssh/authorized_keys 2>&1 | dialog --title "[ Set permissions and ownerships ]" $myPROGRESSBOXCONF
 
