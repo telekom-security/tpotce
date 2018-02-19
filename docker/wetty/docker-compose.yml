@@ -1,0 +1,14 @@
+# T-Pot (Standard)
+# For docker-compose ...
+version: '2.2'
+
+services:
+
+# Wetty service
+  wetty:
+    container_name: wetty
+    restart: always
+    network_mode: "host"
+    env_file:
+     - /opt/tpot/etc/compose/wetty_environment
+    image: "dtagdevsec/wetty:1710"

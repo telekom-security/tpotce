@@ -325,3 +325,12 @@ services:
     image: "dtagdevsec/vnclowpot:1710"
     volumes:
      - /data/vnclowpot/log:/var/log/vnclowpot
+
+# Wetty service
+  wetty:
+    container_name: wetty
+    restart: always
+    network_mode: "host"
+    env_file:
+     - /opt/tpot/etc/compose/wetty_environment
+    image: "dtagdevsec/wetty:1710"

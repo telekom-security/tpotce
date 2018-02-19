@@ -189,3 +189,12 @@ services:
     image: "dtagdevsec/p0f:1710"
     volumes:
      - /data/p0f/log:/var/log/p0f
+
+# Wetty service
+  wetty:
+    container_name: wetty
+    restart: always
+    network_mode: "host"
+    env_file:
+     - /opt/tpot/etc/compose/wetty_environment
+    image: "dtagdevsec/wetty:1710"

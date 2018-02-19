@@ -322,11 +322,9 @@ apt-get upgrade -y 2>&1 | dialog --title "[ Pulling updates ]" $myPROGRESSBOXCON
 apt-get autoclean -y 2>&1 | dialog --title "[ Pulling updates ]" $myPROGRESSBOXCONF
 apt-get autoremove -y 2>&1 | dialog --title "[ Pulling updates ]" $myPROGRESSBOXCONF
 
-# Installing wetty, ctop, elasticdump, tpot
+# Installing ctop, elasticdump, tpot
 pip install --upgrade pip 2>&1 | dialog --title "[ Installing pip ]" $myPROGRESSBOXCONF
 pip install elasticsearch-curator==5.4.1 2>&1 | dialog --title "[ Installing elasticsearch-curator ]" $myPROGRESSBOXCONF
-ln -s /usr/bin/nodejs /usr/bin/node 2>&1 | dialog --title "[ Installing wetty ]" $myPROGRESSBOXCONF
-npm install https://github.com/t3chn0m4g3/wetty -g 2>&1 | dialog --title "[ Installing wetty ]" $myPROGRESSBOXCONF
 npm install https://github.com/taskrabbit/elasticsearch-dump#ac9f62a -g 2>&1 | dialog --title "[ Installing elasticsearch-dump ]" $myPROGRESSBOXCONF
 wget https://github.com/bcicen/ctop/releases/download/v0.7/ctop-0.7-linux-amd64 -O ctop 2>&1 | dialog --title "[ Installing ctop ]" $myPROGRESSBOXCONF
 mv ctop /usr/bin/ 2>&1 | dialog --title "[ Installing ctop ]" $myPROGRESSBOXCONF
@@ -458,7 +456,6 @@ cp    /opt/tpot/host/etc/systemd/* /etc/systemd/system/ 2>&1 | dialog --title "[
 cp    /opt/tpot/host/etc/issue /etc/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
 cp    /root/installer/keys/authorized_keys /home/tsec/.ssh/authorized_keys 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
 systemctl enable tpot 2>&1 | dialog --title "[ Enabling service for tpot ]" $myPROGRESSBOXCONF
-systemctl enable wetty 2>&1 | dialog --title "[ Enabling service for wetty ]" $myPROGRESSBOXCONF
 
 # Let's take care of some files and permissions
 chmod 760 -R /data 2>&1 | dialog --title "[ Set permissions and ownerships ]" $myPROGRESSBOXCONF
