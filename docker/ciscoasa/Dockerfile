@@ -15,10 +15,11 @@ RUN apk -U upgrade && \
     git clone https://github.com/cymmetria/ciscoasa_honeypot && \
     cd ciscoasa_honeypot && \
     pip3 install -r requirements.txt && \
-    chown -R ciscoasa:ciscoasa /opt/ciscoasa_honeypot 
+    chown -R ciscoasa:ciscoasa /opt/ciscoasa_honeypot && \
 
 # Clean up
-#    apk del build-base git nodejs-npm python
+    apk del build-base git libffi-dev openssl-dev python3-dev && \
+    apk add libffi openssl python3
 
 # Start elasticsearch-head
 WORKDIR /opt/ciscoasa_honeypot

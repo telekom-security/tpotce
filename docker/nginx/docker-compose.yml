@@ -9,8 +9,6 @@ services:
     container_name: nginx
     restart: always
     network_mode: "host"
-    #    cap_add:
-    #     - NET_BIND_SERVICE
     ports:
      - "64297:64297"
     image: "dtagdevsec/nginx:1710"

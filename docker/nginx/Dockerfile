@@ -1,4 +1,4 @@
-FROM nginx:alpine
+FROM alpine
 MAINTAINER MO
 
 # Include dist
@@ -9,7 +9,8 @@ RUN apk -U upgrade && \
     apk add bash nginx nginx-mod-http-headers-more procps && \
 
 # Setup configs
-    rm /etc/nginx/conf.d/* /usr/share/nginx/html/* && \
+    mkdir -p /run/nginx && \
+    rm -rf /etc/nginx/conf.d/* /usr/share/nginx/html/* && \
     cp /root/dist/conf/nginx.conf /etc/nginx/ && \
     cp -R /root/dist/conf/ssl /etc/nginx/ && \
     cp /root/dist/conf/tpotweb.conf /etc/nginx/conf.d/ && \
