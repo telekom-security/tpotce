@@ -1,6 +1,6 @@
 gevent>=1.0
-pysnmp==4.3.5
-pysmi==0.1.3
+pysnmp
+pysmi
 lxml
 bottle
 jinja2
@@ -11,13 +11,16 @@ libtaxii>=1.1.0
 MySQL-python
 xlrd
 crc16
-enum
+natsort
+scapy
+enum34
 hpfeeds
 modbus-tk
 stix-validator
 stix
 cybox
-bacpypes==0.13.8
+bacpypes==0.16.1
 pyghmi
 mixbox
 modbus-tk
+cpppo
