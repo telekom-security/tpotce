@@ -169,19 +169,6 @@ services:
      - /data/glastopf/db:/opt/glastopf/db
      - /data/glastopf/log:/opt/glastopf/log
 
-# Honeytrap service
-  honeytrap:
-    container_name: honeytrap
-    restart: always
-    network_mode: "host"
-    cap_add:
-     - NET_ADMIN
-    image: "dtagdevsec/honeytrap:1710"
-    volumes:
-     - /data/honeytrap/attacks:/opt/honeytrap/var/attacks
-     - /data/honeytrap/downloads:/opt/honeytrap/var/downloads
-     - /data/honeytrap/log:/opt/honeytrap/var/log
-
 # Mailoney service
   mailoney:
     container_name: mailoney
@@ -194,47 +181,6 @@ services:
     volumes:
      - /data/mailoney/log:/opt/mailoney/logs
 
-# Netdata service
-  netdata:
-    container_name: netdata
-    restart: always
-    network_mode: "host"
-    depends_on:
-      elasticsearch:
-        condition: service_healthy
-    cap_add:
-     - SYS_PTRACE
-    security_opt:
-     - apparmor=unconfined
-    image: "dtagdevsec/netdata:1710"
-    volumes:
-     - /proc:/host/proc:ro
-     - /sys:/host/sys:ro
-     - /var/run/docker.sock:/var/run/docker.sock
-
-# Rdpy service
-  rdpy:
-    container_name: rdpy
-    restart: always
-    networks:
-     - rdpy_local
-    ports:
-     - "3389:3389"
-    image: "dtagdevsec/rdpy:1710"
-    volumes:
-     - /data/rdpy/log:/var/log/rdpy
-
-# Spiderfoot service
-  spiderfoot:
-    container_name: spiderfoot
-    restart: always
-    networks:
-     - spiderfoot_local
-    ports:
-     - "127.0.0.1:64303:8080"
-    image: "dtagdevsec/spiderfoot:1710"
-    volumes:
-     - /data/spiderfoot/spiderfoot.db:/home/spiderfoot/spiderfoot.db
 
 # Ui-for-docker service
   ui-for-docker:
@@ -270,15 +216,3 @@ services:
     image: "dtagdevsec/p0f:1710"
     volumes:
      - /data/p0f/log:/var/log/p0f
-
-# Vnclowpot service
-  vnclowpot:
-    container_name: vnclowpot
-    restart: always
-    networks:
-     - vnclowpot_local
-    ports:
-     - "5900:5900"
-    image: "dtagdevsec/vnclowpot:1710"
-    volumes:
-     - /data/vnclowpot/log:/var/log/vnclowpot
