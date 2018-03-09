@@ -4,7 +4,7 @@
         <entity name="unit">S7-200</entity>
         <entity name="vendor">Siemens</entity>
         <entity name="description">Rough simulation of a basic Siemens S7-200 CPU with 2 slaves</entity>
-        <entity name="protocols">HTTP, MODBUS, s7comm, SNMP</entity>
+        <entity name="protocols">MODBUS, s7comm, SNMP, Bacnet</entity>
         <entity name="creator">the conpot team</entity>
     </template>
     <databus>

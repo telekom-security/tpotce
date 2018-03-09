@@ -1,0 +1,39 @@
+<bacnet enabled="True" host="0.0.0.0" port="47808">
+    <device_info>
+        <device_name>SystemName</device_name>
+        <device_identifier>36113</device_identifier>
+        <vendor_name>Alerton Technologies, Inc.</vendor_name>
+        <vendor_identifier>15</vendor_identifier>
+        <max_apdu_length_accepted>1024</max_apdu_length_accepted>
+        <segmentation_supported>segmentedBoth</segmentation_supported>
+        <model_name>VAV-DD Controller</model_name>
+        <protocol_version>1</protocol_version>
+    </device_info>
+    <object_list>
+        <object name="objectBinary">
+            <properties>
+                <object_identifier>12</object_identifier>
+                <object_name>BI 01</object_name>
+                <object_type>Binary Input</object_type>
+            </properties>
+        </object>
+        <object name="objectAnalog">
+            <properties>
+                <object_identifier>14</object_identifier>
+                <object_name>AI 01</object_name>
+                <object_type>Analog Input</object_type>
+                <present_value>68.0</present_value>
+            </properties>
+        </object>
+        <object name="objectDoor">
+            <properties>
+                <object_identifier>16</object_identifier>
+                <object_name>Door 01</object_name>
+                <object_type>Access Door</object_type>
+                <present_value>0</present_value>
+                <out_of_service>True</out_of_service>
+                <maintenance_required>2</maintenance_required>
+            </properties>
+        </object>
+    </object_list>
+</bacnet>

@@ -1,4 +1,4 @@
-version: '2.1a'
+version: '2.1'
 
 networks:
   conpot_kamstrup_local:
