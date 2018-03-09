@@ -1,0 +1,91 @@
+<modbus enabled="True" host="0.0.0.0" port="502">
+    <device_info>
+        <VendorName>Siemens</VendorName>
+        <ProductCode>SIMATIC</ProductCode>
+        <MajorMinorRevision>S7-200</MajorMinorRevision>
+    </device_info>
+    <mode>serial</mode>
+    <delay>100</delay>
+    <slaves>
+        <slave id="0">
+            <blocks>
+                <block name="memoryModbusSlave0BlockA">
+                    <!-- COILS/DISCRETE_OUTPUTS aka. binary output, power on/power off
+                         Here we map modbus addresses 1 to 127 to S7-200 PLC Addresses Q0.0 to Q15.7 -->
+                    <type>COILS</type>
+                    <starting_address>1</starting_address>
+                    <size>128</size>
+                    <content>memoryModbusSlave0BlockA</content>
+                </block>
+                <block name="memoryModbusSlave0BlockB">
+                    <!-- CONTACTS/DISCRETE_INPUTS aka. binary input.
+                         Map modbus addresses 10001-10032 to S7-200 PLC inputs starting from I0.0  -->
+                    <type>DISCRETE_INPUTS</type>
+                    <starting_address>10001</starting_address>
+                    <size>32</size>
+                    <content>memoryModbusSlave0BlockB</content>
+                </block>
+            </blocks>
+        </slave>
+        <slave id="255">
+            <blocks>
+                <block name="memoryModbusSlave255BlockA">
+                    <!-- COILS/DISCRETE_OUTPUTS aka. binary output, power on/power off
+                         Here we map modbus addresses 1 to 127 to S7-200 PLC Addresses Q0.0 to Q15.7 -->
+                    <type>COILS</type>
+                    <starting_address>1</starting_address>
+                    <size>128</size>
+                    <content>memoryModbusSlave255BlockA</content>
+                </block>
+                <block name="memoryModbusSlave255BlockB">
+                    <!-- CONTACTS/DISCRETE_INPUTS aka. binary input.
+                         Map modbus addresses 10001-10032 to S7-200 PLC inputs starting from I0.0  -->
+                    <type>DISCRETE_INPUTS</type>
+                    <starting_address>10001</starting_address>
+                    <size>32</size>
+                    <content>memoryModbusSlave255BlockB</content>
+                </block>
+            </blocks>
+        </slave>
+        <slave id="1">
+            <blocks>
+                <block name="memoryModbusSlave1BlockA">
+                    <!-- COILS/DISCRETE_OUTPUTS aka. binary output, power on/power off
+                         Here we map modbus addresses 1 to 127 to S7-200 PLC Addresses Q0.0 to Q15.7 -->
+                    <type>COILS</type>
+                    <starting_address>1</starting_address>
+                    <size>128</size>
+                    <content>memoryModbusSlave1BlockA</content>
+                </block>
+                <block name="memoryModbusSlave1BlockB">
+                    <!-- CONTACTS/DISCRETE_INPUTS aka. binary input.
+                         Map modbus addresses 10001-10032 to S7-200 PLC inputs starting from I0.0  -->
+                    <type>DISCRETE_INPUTS</type>
+                    <starting_address>10001</starting_address>
+                    <size>32</size>
+                    <content>memoryModbusSlave1BlockB</content>
+                </block>
+            </blocks>
+        </slave>
+        <slave id="2">
+            <!-- This slave does some measuring. (analog inputs).
+                 Map modbus addresses 30001-30009 to S7 PLC analog input bits AIW0-AIW8 -->
+            <blocks>
+                <block name="memoryModbusSlave2BlockC">
+                    <!-- Will be parsed with eval() -->
+                    <type>ANALOG_INPUTS</type>
+                    <starting_address>30001</starting_address>
+                    <size>8</size>
+                    <content>memoryModbusSlave2BlockC</content>
+                </block>
+                <block name="memoryModbusSlave2BlockD">
+                    <!-- Maps to S7-200 PLC addresses HoldStart+8 -->
+                    <type>HOLDING_REGISTERS</type>
+                    <starting_address>40001</starting_address>
+                    <size>8</size>
+                    <content>memoryModbusSlave2BlockD</content>
+                </block>
+            </blocks>
+        </slave>
+    </slaves>
+</modbus>

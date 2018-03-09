@@ -1,9 +1,12 @@
 # T-Pot (Industrial)
 # For docker-compose ...
-version: '2.2'
+version: '2.2a'
 
 networks:
-  conpot_local:
+  conpot_kamstrup_local:
+  conpot_default_local:
+  conpot_guardian_ast_local:
+  conpot_IEC104_local:
   emobility_local:
   ewsposter_local:
   spiderfoot_local:
@@ -11,18 +14,57 @@ networks:
 
 services:
 
-# Conpot service
-  conpot:
-    container_name: conpot
+# Conpot service - Kamstrup Template
+  conpot_kamstrup:
+    container_name: conpot_kamstrup
     restart: always
     networks:
-     - conpot_local
+     - conpot_kamstrup_local
     ports:
      - "1025:1025"
      - "50100:50100"
     image: "dtagdevsec/conpot:1710"
     volumes:
-     - /data/conpot/log:/var/log/conpot
+     - /data/conpot_kamstrup_local/log:/var/log/conpot_kamstrup_local
+
+# Conpot service - Default Template
+  conpot_default:
+    container_name: conpot_default
+    restart: always
+    networks:
+     - conpot_default_local
+    ports:
+     - "102:102"
+     - "502:502"
+     - "161:161/udp
+    image: "dtagdevsec/conpot:1710"
+    volumes:
+     - /data/conpot_default_local/log:/var/log/conpot_default_local
+
+# Conpot service - Guardian AST Template
+  conpot_guardian_ast:
+    container_name: conpot_guardian_ast
+    restart: always
+    networks:
+     - conpot_guardian_ast_local
+    ports:
+     - "10001:10001"
+    image: "dtagdevsec/conpot:1710"
+    volumes:
+     - /data/conpot_guardian_ast_local/log:/var/log/conpot_guardian_ast_local     
+     
+# Conpot service - IEC104 Template
+  conpot_IEC104:
+    container_name: conpot_IEC104
+    restart: always
+    networks:
+     - conpot_IEC104_local
+    ports:
+     - "2404:2404"
+    image: "dtagdevsec/conpot:1710"
+    volumes:
+     - /data/conpot_IEC104_local/log:/var/log/conpot_IEC104_local      
+
 
 # ELK services
 ## Elasticsearch service

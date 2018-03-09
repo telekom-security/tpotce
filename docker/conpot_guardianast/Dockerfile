@@ -21,20 +21,20 @@ RUN apk -U add bash \
                py-cffi && \
 
 # Setup ConPot
-    git clone https://github.com/mushorg/conpot /opt/conpot/ && \
-    cd /opt/conpot/ && \
+    git clone https://github.com/mushorg/conpot /opt/conpot_guardian_ast/ && \
+    cd /opt/conpot_guardian_ast/ && \
     git checkout d97a68a054e4fe42ff90293188a5702ce8ab09a3 && \
-    cp /root/dist/requirements.txt /opt/conpot/ && \
+    cp /root/dist/requirements.txt /opt/conpot_guardian_ast/ && \
     python setup.py install && \
     cd / && \
-    rm -rf /opt/conpot /tmp/* /var/tmp/* && \
+    rm -rf /opt/conpot_guardian_ast /tmp/* /var/tmp/* && \
 
 # Setup user, groups and configs
-    addgroup -g 2000 conpot && \
-    adduser -S -s /bin/bash -u 2000 -D -g 2000 conpot && \
-    mkdir -p /etc/conpot /var/log/conpot && \
-    mv /root/dist/conpot.cfg /etc/conpot/conpot.cfg && \
-    mv /root/dist/kamstrup_382/template.xml /usr/lib/python2.7/site-packages/Conpot-0.5.1-py2.7.egg/conpot/templates/kamstrup_382/ && \
+    addgroup -g 2000 conpot_guardian_ast && \
+    adduser -S -s /bin/bash -u 2000 -D -g 2000 conpot_guardian_ast && \
+    mkdir -p /etc/conpot_guardian_ast /var/log/conpot_guardian_ast && \
+    mv /root/dist/conpot.cfg /etc/conpot_guardian_ast/conpot_guardian_ast.cfg && \
+    mv /root/dist/guardian_ast/template.xml /usr/lib/python2.7/site-packages/Conpot-0.5.1-py2.7.egg/conpot_guardian_ast/templates/guardian_ast/ && \
 
 # Clean up
     apk del build-base \
@@ -51,4 +51,4 @@ RUN apk -U add bash \
     rm -rf /var/cache/apk/*
 
 # Run supervisor upon container start
-CMD ["/usr/bin/conpot", "--template", "kamstrup_382", "--logfile", "/var/log/conpot/conpot.log", "--config", "/etc/conpot/conpot.cfg"]
+CMD ["/usr/bin/conpot", "--template", "guardian_ast", "--logfile", "/var/log/conpot_guardian_ast/conpot_guardian_ast.log", "--config", "/etc/conpot_guardian_ast/conpot_guardian_ast.cfg"]

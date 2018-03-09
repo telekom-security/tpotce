@@ -1,0 +1,324 @@
+<!-- Copyright (C) 2017  Patrick Reichenberger (University of Passau) <patrick.reichenberger@t-online.de>
+
+ This program is free software; you can redistribute it and/or
+ modify it under the terms of the GNU General Public License
+ as published by the Free Software Foundation; either version 2
+ of the License, or (at your option) any later version.
+
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+
+ You should have received a copy of the GNU General Public License
+ along with this program; if not, write to the Free Software
+ Foundation, Inc.,
+ 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+-->
+
+<IEC104 enabled="True" host="0.0.0.0" port="2404">
+    <device_info>
+        <vendor_name>Siemens</vendor_name>
+        <product_code>SIMATIC</product_code>
+    </device_info>
+    <!-- names are in structured 16_8 Bit format of the Information Object Address -->
+    <categories>
+        <category name="SinglePoint" id="1">
+            <register name="13_20">
+                <value>13_20</value>
+            </register>
+            <register name="13_21">
+                <value>13_21</value>
+            </register>
+            <register name="13_22">
+                <value>13_22</value>
+            </register>
+            <register name="13_24">
+                <value>13_24</value>
+            </register>
+            <register name="13_25">
+                <value>13_25</value>
+            </register>
+            <register name="13_32">
+                <value>13_32</value>
+            </register>
+            <register name="13_33">
+                <value>13_33</value>
+            </register>
+            <register name="13_34">
+                <value>13_34</value>
+            </register>
+            <register name="13_35">
+                <value>13_35</value>
+            </register>
+            <register name="13_36">
+                <value>13_36</value>
+            </register>
+            <register name="13_37">
+                <value>13_37</value>
+            </register>
+            <register name="13_38">
+                <value>13_38</value>
+            </register>
+            <register name="13_39">
+                <value>13_39</value>
+            </register>
+            <register name="13_40">
+                <value>13_40</value>
+            </register>
+            <register name="13_41">
+                <value>13_41</value>
+            </register>
+            <register name="13_42">
+                <value>13_42</value>
+            </register>
+        </category>
+
+        <category name="SingleCommand" id="45">
+            <register name="22_19">
+                <value>22_19</value>
+            </register>
+            <register name="22_20" rel="13_20">
+                <value>22_20</value>
+            </register>
+            <register name="22_21" rel="13_21">
+                <value>22_21</value>
+            </register>
+            <register name="22_22" rel="13_22">
+                <value>22_22</value>
+            </register>
+            <register name="22_24" rel="13_24">
+                <value>22_24</value>
+            </register>
+            <register name="22_25" rel="13_25">
+                <value>22_25</value>
+            </register>
+            <register name="22_42">
+                <value>22_42</value>
+            </register>
+            <register name="22_43">
+                <value>22_43</value>
+            </register>
+            <register name="22_54">
+                <value>22_54</value>
+            </register>
+        </category>
+
+        <category name="DoublePoint" id="3">
+            <register name="33_2">
+                <value>33_2</value>
+            </register>
+            <register name="33_3">
+                <value>33_3</value>
+            </register>
+            <register name="33_4">
+                <value>33_4</value>
+            </register>
+            <register name="33_5">
+                <value>33_5</value>
+            </register>
+            <register name="33_6">
+                <value>33_6</value>
+            </register>
+            <register name="33_7">
+                <value>33_7</value>
+            </register>
+            <register name="33_8">
+                <value>33_8</value>
+            </register>
+            <register name="33_9">
+                <value>33_9</value>
+            </register>
+            <register name="33_10">
+                <value>33_10</value>
+            </register>
+            <register name="33_11">
+                <value>33_11</value>
+            </register>
+        </category>
+
+        <category name="DoubleCommand" id="46">
+            <register name="60_6" rel="33_6">
+                <value>60_6</value>
+            </register>
+            <register name="60_7" rel="33_7">
+                <value>60_7</value>
+            </register>
+            <register name="60_8" rel="33_8">
+                <value>60_8</value>
+            </register>
+            <register name="60_9" rel="33_9">
+                <value>60_9</value>
+            </register>
+            <register name="60_20" rel="33_10">
+                <value>60_20</value>
+            </register>
+            <register name="60_21" rel="33_11">
+                <value>60_21</value>
+            </register>
+            <register name="60_32">
+                <value>60_32</value>
+            </register>
+            <register name="60_34">
+                <value>60_34</value>
+            </register>
+            <register name="60_35">
+                <value>60_35</value>
+            </register>
+            <register name="60_36">
+                <value>60_36</value>
+            </register>
+        </category>
+
+        <category name="MeasuredValueScaled" id="11">
+            <register name="100_12">
+                <value>100_12</value>
+            </register>
+            <register name="100_13">
+                <value>100_13</value>
+            </register>
+            <register name="100_51">
+                <value>100_51</value>
+            </register>
+            <register name="100_108">
+                <value>100_108</value>
+            </register>
+            <register name="100_109">
+                <value>100_109</value>
+            </register>
+            <register name="100_178">
+                <value>100_178</value>
+            </register>
+            <register name="100_179">
+                <value>100_179</value>
+            </register>
+            <register name="100_190">
+                <value>100_190</value>
+            </register>
+            <register name="100_191">
+                <value>100_191</value>
+            </register>
+            <register name="100_192">
+                <value>100_192</value>
+            </register>
+            <register name="100_193">
+                <value>100_193</value>
+            </register>
+        </category>
+
+        <category name="SetpointCommandScaled" id="49">
+            <register name="101_63" rel="100_12">
+                <value>101_63</value>
+            </register>
+            <register name="101_205" rel="100_13">
+                <value>101_205</value>
+            </register>
+            <register name="101_100">
+                <value>101_100</value>
+            </register>
+            <register name="101_101" rel="100_51">
+                <value>101_101</value>
+            </register>
+            <register name="101_102" rel="100_178">
+                <value>101_102</value>
+            </register>
+            <register name="101_105">
+                <value>101_105</value>
+            </register>
+            <register name="101_106">
+                <value>101_106</value>
+            </register>
+        </category>
+
+        <category name="MeasuredValueFloatingPoint" id="13">
+            <register name="107_3">
+                <value>107_3</value>
+            </register>
+            <register name="107_77">
+                <value>107_77</value>
+            </register>
+            <register name="107_78">
+                <value>107_78</value>
+            </register>
+            <register name="107_79">
+                <value>107_79</value>
+            </register>
+            <register name="107_90">
+                <value>107_90</value>
+            </register>
+            <register name="107_130">
+                <value>107_130</value>
+            </register>
+            <register name="107_131">
+                <value>107_131</value>
+            </register>
+            <register name="107_132">
+                <value>107_132</value>
+            </register>
+            <register name="107_141">
+                <value>107_141</value>
+            </register>
+            <register name="107_200">
+                <value>107_200</value>
+            </register>
+            <register name="107_201">
+                <value>107_201</value>
+            </register>
+            <register name="107_202">
+                <value>107_202</value>
+            </register>
+            <register name="107_203">
+                <value>107_203</value>
+            </register>
+            <register name="107_204">
+                <value>107_204</value>
+            </register>
+            <register name="107_205">
+                <value>107_205</value>
+            </register>
+            <register name="107_206">
+                <value>107_206</value>
+            </register>
+            <register name="107_207">
+                <value>107_207</value>
+            </register>
+            <register name="107_208">
+                <value>107_208</value>
+            </register>
+            <register name="107_209">
+                <value>107_209</value>
+            </register>
+            <register name="107_210">
+                <value>107_210</value>
+            </register>
+            <register name="107_211">
+                <value>107_211</value>
+            </register>
+            <register name="107_212">
+                <value>107_212</value>
+            </register>
+        </category>
+
+        <category name="SetpointCommandFloatingPoint" id="50">
+            <register name="109_3" rel="107_3">
+                <value>109_3</value>
+            </register>
+            <register name="109_7" rel="107_77">
+                <value>109_7</value>
+            </register>
+            <register name="109_8">
+                <value>109_8</value>
+            </register>
+            <register name="109_10" rel="107_90">
+                <value>109_10</value>
+            </register>
+            <register name="109_40" rel="107_132">
+                <value>109_40</value>
+            </register>
+            <register name="109_41" rel="107_141">
+                <value>109_41</value>
+            </register>
+
+        </category>
+    </categories>
+</IEC104>
