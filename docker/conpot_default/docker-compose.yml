@@ -14,6 +14,7 @@ services:
     ports:
      - "102:102"
      - "502:502"
+     - "2404:2404"
      - "47808:47808"
      - "161:161/udp"
     image: "dtagdevsec/conpot:1710"

@@ -33,7 +33,7 @@ RUN apk -U add bash \
     addgroup -g 2000 conpot_guardian_ast && \
     adduser -S -s /bin/bash -u 2000 -D -g 2000 conpot_guardian_ast && \
     mkdir -p /etc/conpot_guardian_ast /var/log/conpot_guardian_ast && \
-    mv /root/dist/conpot.cfg /etc/conpot_guardian_ast/conpot_guardian_ast.cfg && \
+    mv /root/dist/conpot_guardian_ast.cfg /etc/conpot_guardian_ast/conpot_guardian_ast.cfg && \
     mv /root/dist/guardian_ast/template.xml /usr/lib/python2.7/site-packages/Conpot-0.5.1-py2.7.egg/conpot_guardian_ast/templates/guardian_ast/ && \
 
 # Clean up

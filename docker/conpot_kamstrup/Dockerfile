@@ -33,7 +33,7 @@ RUN apk -U add bash \
     addgroup -g 2000 conpot_kamstrup && \
     adduser -S -s /bin/bash -u 2000 -D -g 2000 conpot_kamstrup && \
     mkdir -p /etc/conpot_kamstrup /var/log/conpot_kamstrup && \
-    mv /root/dist/conpot.cfg /etc/conpot_kamstrup/conpot_kamstrup.cfg && \
+    mv /root/dist/conpot_kamstrup.cfg /etc/conpot_kamstrup/conpot_kamstrup.cfg && \
     mv /root/dist/kamstrup_382/template.xml /usr/lib/python2.7/site-packages/Conpot-0.5.1-py2.7.egg/conpot_kamstrup/templates/kamstrup_382/ && \
 
 # Clean up

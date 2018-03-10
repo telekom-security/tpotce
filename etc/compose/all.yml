@@ -6,7 +6,6 @@ networks:
   conpot_kamstrup_local:
   conpot_default_local:
   conpot_guardian_ast_local:
-  conpot_IEC104_local:
   cowrie_local:
   dionaea_local:
   elasticpot_local:
@@ -43,6 +42,7 @@ services:
     ports:
      - "102:102"
      - "502:502"
+     - "2404:2404"
      - "47808:47808"
      - "161:161/udp"
     image: "dtagdevsec/conpot:1710"
@@ -60,18 +60,6 @@ services:
     image: "dtagdevsec/conpot:1710"
     volumes:
      - /data/conpot_guardian_ast_local/log:/var/log/conpot_guardian_ast_local     
-     
-# Conpot service - IEC104 Template
-  conpot_IEC104:
-    container_name: conpot_IEC104
-    restart: always
-    networks:
-     - conpot_IEC104_local
-    ports:
-     - "2404:2404"
-    image: "dtagdevsec/conpot:1710"
-    volumes:
-     - /data/conpot_IEC104_local/log:/var/log/conpot_IEC104_local      
      
 # Cowrie service
   cowrie:
