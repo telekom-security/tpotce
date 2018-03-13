@@ -29,9 +29,10 @@ services:
     ports:
      - "1025:1025"
      - "50100:50100"
-    image: "dtagdevsec/conpot:1710"
+#   image: "dtagdevsec/conpot:1710"
+    image: "uncleraymondo/conpot_kamstrup:1710"
     volumes:
-     - /data/conpot_kamstrup_local/log:/var/log/conpot_kamstrup_local
+     - /data/conpot/log:/var/log/conpot
 
 # Conpot service - Default Template
   conpot_default:
@@ -42,12 +43,13 @@ services:
     ports:
      - "102:102"
      - "502:502"
-     - "2404:2404"
-     - "47808:47808"
+     - "623:623/udp"
+     - "47808:47808/udp"
      - "161:161/udp"
-    image: "dtagdevsec/conpot:1710"
+#   image: "dtagdevsec/conpot:1710"
+    image: "uncleraymondo/conpot_default:1710"
     volumes:
-     - /data/conpot_default_local/log:/var/log/conpot_default_local
+     - /data/conpot/log:/var/log/conpot
 
 # Conpot service - Guardian AST Template
   conpot_guardian_ast:
@@ -57,9 +59,10 @@ services:
      - conpot_guardian_ast_local
     ports:
      - "10001:10001"
-    image: "dtagdevsec/conpot:1710"
+#   image: "dtagdevsec/conpot:1710"
+    image: "uncleraymondo/conpot_guardianast:1710"
     volumes:
-     - /data/conpot_guardian_ast_local/log:/var/log/conpot_guardian_ast_local     
+     - /data/conpot/log:/var/log/conpot
      
 # Cowrie service
   cowrie:

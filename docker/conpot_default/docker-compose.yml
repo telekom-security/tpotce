@@ -1,4 +1,4 @@
-version: '2.1'
+version: '2.0'
 
 networks:
   conpot_default_local:
@@ -14,9 +14,10 @@ services:
     ports:
      - "102:102"
      - "502:502"
-     - "2404:2404"
-     - "47808:47808"
+     - "623:623/udp"
+     - "47808:47808/udp"
      - "161:161/udp"
-    image: "dtagdevsec/conpot:1710"
+#   image: "dtagdevsec/conpot:1710"
+    image: "uncleraymondo/conpot_default:1710"
     volumes:
-     - /data/conpot_default/log:/var/log/conpot_default
+     - /data/conpot/log:/var/log/conpot

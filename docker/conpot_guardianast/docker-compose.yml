@@ -1,4 +1,4 @@
-version: '2.1'
+version: '2.0'
 
 networks:
   conpot_guardianast_local:
@@ -13,6 +13,7 @@ services:
      - conpot_guardianast_local
     ports:
      - "10001:10001"
-    image: "dtagdevsec/conpot:1710"
+#   image: "dtagdevsec/conpot:1710"
+    image: "uncleraymodo/conpot_guardianast:1710"
     volumes:
-     - /data/conpot_guardianast/log:/var/log/conpot_guardianast
+     - /data/conpot/log:/var/log/conpot

@@ -1,4 +1,4 @@
-version: '2.1'
+version: '2.0'
 
 networks:
   conpot_kamstrup_local:
@@ -14,6 +14,7 @@ services:
     ports:
      - "1025:1025"
      - "50100:50100"
-    image: "dtagdevsec/conpot:1710"
+#   image: "dtagdevsec/conpot:1710"
+    image: "uncleraymondo/conpot_kamstrup:1710"
     volumes:
-     - /data/conpot_kamstrup/log:/var/log/conpot_kamstrup
+     - /data/conpot/log:/var/log/conpot

@@ -65,32 +65,11 @@ logrotate -s $mySTATUS $myCONF
 }
 
 # Let's create a function to clean up and prepare conpot data
-fuCONPOT_DEFAULT () {
-  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/conpot_default/*; fi
-  mkdir -p /data/conpot_default/log
-  chmod 760 /data/conpot_default -R
-  chown tpot:tpot /data/conpot_default -R
-}
-
-fuCONPOT_KAMSTRUP () {
-  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/conpot_kamstrup/*; fi
-  mkdir -p /data/conpot_kamstrup/log
-  chmod 760 /data/conpot_kamstrup -R
-  chown tpot:tpot /data/conpot_kamstrup -R
-}
-
-fuCONPOT_GUARDIANAST () {
-  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/conpot_guardianast/*; fi
-  mkdir -p /data/conpot_guardianast/log
-  chmod 760 /data/conpot_guardianast -R
-  chown tpot:tpot /data/conpot_guardianast -R
-}
-
-fuCONPOT_IEC104 () {
-  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/conpot_IEC104/*; fi
-  mkdir -p /data/conpot_IEC104/log
-  chmod 760 /data/conpot_IEC104 -R
-  chown tpot:tpot /data/conpot_IEC104 -R
+fuCONPOT () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/conpot/*; fi
+  mkdir -p /data/conpot/log
+  chmod 760 /data/conpot -R
+  chown tpot:tpot /data/conpot -R
 }
 
 # Let's create a function to clean up and prepare cowrie data
@@ -222,10 +201,7 @@ if [ "$myPERSISTENCE" = "on" ];
     fuLOGROTATE
   else
     echo "Cleaning up and preparing data folders."
-    fuCONPOT_DEFAULT
-	fuCONPOT_KAMSTRUP
-	fuCONPOT_GUARDIANAST
-	fuCONPOT_IEC104
+    fuCONPOT
     fuCOWRIE
     fuDIONAEA
     fuELASTICPOT

@@ -4,6 +4,9 @@ MAINTAINER MO
 # Include dist
 ADD dist/ /root/dist/
 
+# Define Environment Variables
+ENV CONPOT_TEMPLATE="kamstrup_382" CONPOT_LOG="/var/log/conpot/conpot_kamstrup.log" CONPOT_CONFIG="/etc/conpot/conpot_kamstrup.cfg"
+
 # Setup apt
 RUN apk -U add bash \
                build-base \
@@ -18,6 +21,8 @@ RUN apk -U add bash \
                pkgconfig \
                python \
                python-dev \
+			   py-gevent \
+			   py-snmp \			   
                py-cffi && \
 
 # Setup ConPot
@@ -32,9 +37,9 @@ RUN apk -U add bash \
 # Setup user, groups and configs
     addgroup -g 2000 conpot_kamstrup && \
     adduser -S -s /bin/bash -u 2000 -D -g 2000 conpot_kamstrup && \
-    mkdir -p /etc/conpot_kamstrup /var/log/conpot_kamstrup && \
-    mv /root/dist/conpot_kamstrup.cfg /etc/conpot_kamstrup/conpot_kamstrup.cfg && \
-    mv /root/dist/kamstrup_382/template.xml /usr/lib/python2.7/site-packages/Conpot-0.5.1-py2.7.egg/conpot_kamstrup/templates/kamstrup_382/ && \
+    mkdir -p /etc/conpot /var/log/conpot && \
+    mv /root/dist/conpot.cfg /etc/conpot/conpot_kamstrup.cfg && \
+    mv /root/dist/kamstrup_382/template.xml /usr/lib/python2.7/site-packages/Conpot-0.5.1-py2.7.egg/conpot/templates/kamstrup_382/ && \
 
 # Clean up
     apk del build-base \
@@ -45,10 +50,10 @@ RUN apk -U add bash \
             libxslt-dev \
             mariadb-dev \
             pkgconfig \
-            python-dev \
+            python-dev \	
             py-cffi && \
     rm -rf /root/* && \
     rm -rf /var/cache/apk/*
 
 # Run supervisor upon container start
-CMD ["/usr/bin/conpot", "--template", "kamstrup_382", "--logfile", "/var/log/conpot_kamstrup/conpot_kamstrup.log", "--config", "/etc/conpot_kamstrup/conpot_kamstrup.cfg"]
+CMD /usr/bin/conpot --template $CONPOT_TEMPLATE --logfile $CONPOT_LOG --config $CONPOT_CONFIG

@@ -4,6 +4,9 @@ MAINTAINER MO
 # Include dist
 ADD dist/ /root/dist/
 
+# Define Environment Variables
+ENV CONPOT_TEMPLATE="guardian_ast" CONPOT_LOG="/var/log/conpot/conpot_guardian_ast.log" CONPOT_CONFIG="/etc/conpot/conpot_guardian_ast.cfg"
+
 # Setup apt
 RUN apk -U add bash \
                build-base \
@@ -18,6 +21,8 @@ RUN apk -U add bash \
                pkgconfig \
                python \
                python-dev \
+			   py-gevent \
+			   py-snmp \			   
                py-cffi && \
 
 # Setup ConPot
@@ -32,9 +37,9 @@ RUN apk -U add bash \
 # Setup user, groups and configs
     addgroup -g 2000 conpot_guardian_ast && \
     adduser -S -s /bin/bash -u 2000 -D -g 2000 conpot_guardian_ast && \
-    mkdir -p /etc/conpot_guardian_ast /var/log/conpot_guardian_ast && \
-    mv /root/dist/conpot_guardian_ast.cfg /etc/conpot_guardian_ast/conpot_guardian_ast.cfg && \
-    mv /root/dist/guardian_ast/template.xml /usr/lib/python2.7/site-packages/Conpot-0.5.1-py2.7.egg/conpot_guardian_ast/templates/guardian_ast/ && \
+    mkdir -p /etc/conpot /var/log/conpot && \
+    mv /root/dist/conpot.cfg /etc/conpot/conpot_guardian_ast.cfg && \
+    mv /root/dist/guardian_ast/template.xml /usr/lib/python2.7/site-packages/Conpot-0.5.1-py2.7.egg/conpot/templates/guardian_ast/ && \
 
 # Clean up
     apk del build-base \
@@ -45,10 +50,10 @@ RUN apk -U add bash \
             libxslt-dev \
             mariadb-dev \
             pkgconfig \
-            python-dev \
+            python-dev \		
             py-cffi && \
     rm -rf /root/* && \
     rm -rf /var/cache/apk/*
 
 # Run supervisor upon container start
-CMD ["/usr/bin/conpot", "--template", "guardian_ast", "--logfile", "/var/log/conpot_guardian_ast/conpot_guardian_ast.log", "--config", "/etc/conpot_guardian_ast/conpot_guardian_ast.cfg"]
+CMD /usr/bin/conpot --template $CONPOT_TEMPLATE --logfile $CONPOT_LOG --config $CONPOT_CONFIG
