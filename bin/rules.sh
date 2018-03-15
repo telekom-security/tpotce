@@ -18,10 +18,9 @@ fi
 }
 
 function fuNFQCHECK {
-### Check if honeytrap is actively enabled in docker-compose.yml
+### Check if honeytrap or glutton is actively enabled in docker-compose.yml
 	
-myNFQCHECK=$(grep -e '^\s*honeytrap:' $myDOCKERCOMPOSEYML | tr -d ': ' | wc -l)
-
+myNFQCHECK=$(grep -e '^\s*honeytrap:\|^\s*glutton:' $myDOCKERCOMPOSEYML | tr -d ': ' | wc -l)
 if [ "$myNFQCHECK" == "0" ];
   then
     echo "No NFQ related honeypot detected, no firewall rules needed. Exiting."
