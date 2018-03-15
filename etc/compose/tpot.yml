@@ -206,6 +206,8 @@ services:
      - SYS_PTRACE
     security_opt:
      - apparmor=unconfined
+    ports:
+     - "64301:64301"
     image: "dtagdevsec/netdata:1710"
     volumes:
      - /proc:/host/proc:ro
@@ -303,4 +305,6 @@ services:
     network_mode: "host"
     env_file:
      - /opt/tpot/etc/compose/wetty_environment
+    ports:
+     - "64300:64300"
     image: "dtagdevsec/wetty:1710"
