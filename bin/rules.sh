@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ### Vars, Ports for Standard services
-myHOSTPORTS="64295"
+myHOSTPORTS="7634 64295"
 myDOCKERCOMPOSEYML="$1"
 myRULESFUNCTION="$2"
 
