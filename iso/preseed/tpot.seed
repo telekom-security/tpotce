@@ -108,6 +108,12 @@ d-i pkgsel/include string apache2-utils apparmor apt-transport-https aufs-tools 
 #################
 d-i pkgsel/update-policy select unattended-upgrades
 
+###############
+### Boot Splash
+###############
+d-i debian-installer/quiet boolean false
+d-i debian-installer/splash boolean false
+
 #########################################
 ### Post install (Grub & T-Pot Installer)
 #########################################

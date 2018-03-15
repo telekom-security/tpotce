@@ -1,2 +1,3 @@
 #!/bin/bash
-openvt -w -s /root/installer/install.sh
+plymouth --quit
+openvt -f -w -s /root/installer/install.sh
