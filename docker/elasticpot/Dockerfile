@@ -1,14 +1,18 @@
 FROM alpine
-MAINTAINER MS/MO
 
 # Include dist
 ADD dist/ /root/dist/
 
 # Install packages
 RUN apk -U upgrade && \ 
-    apk add bash python3 git && \
+    apk add bash \
+            git \
+            python3 && \
     pip3 install --upgrade pip && \
-    pip3 install bottle requests configparser datetime && \
+    pip3 install bottle \
+                 configparser \
+                 datetime \
+                 requests && \
     mkdir -p /opt && \
     cd /opt/ && \
     git clone https://github.com/schmalle/ElasticpotPY.git && \

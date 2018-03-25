@@ -1,12 +1,13 @@
-# Elasticsearch-head Dockerfile by MO
-#
-# VERSION 17.06 
 FROM alpine
-MAINTAINER MO
 
 # Setup env and apt
 RUN apk -U upgrade && \
-    apk add bash curl nodejs nodejs-npm git procps && \
+    apk add bash \
+            curl \
+            git \
+            nodejs \
+            nodejs-npm \
+            procps && \
 
 # Get and install packages
     mkdir -p /usr/src/app/ && \

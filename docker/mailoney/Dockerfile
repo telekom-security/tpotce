@@ -1,9 +1,17 @@
 FROM alpine 
-MAINTAINER MO 
 
 # Install packages
 RUN apk -U upgrade && \
-    apk add autoconf automake bash build-base git libtool procps py-pip python python-dev && \
+    apk add autoconf \
+            automake \
+            bash \
+            build-base \
+            git \
+            libtool \
+            procps \
+            py-pip \
+            python \
+            python-dev && \
 
 # Install libemu    
     git clone https://github.com/buffer/libemu /root/libemu/ && \
@@ -25,7 +33,12 @@ RUN apk -U upgrade && \
     chown -R mailoney:mailoney /opt/mailoney && \
 
 # Clean up
-    apk del autoconf automake build-base git py-pip python-dev && \
+    apk del autoconf \
+            automake \
+            build-base \
+            git \
+            py-pip \
+            python-dev && \
     rm -rf /root/* && \
     rm -rf /var/cache/apk/*
 

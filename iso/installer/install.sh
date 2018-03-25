@@ -434,12 +434,14 @@ tee -a /etc/crontab 2>&1>/dev/null <<EOF
 EOF
 
 # Let's create some files and folders
-mkdir -p /data/conpot/log \
+mkdir -p /data/ciscoasa/log \
+	 /data/conpot/log \
          /data/cowrie/log/tty/ /data/cowrie/downloads/ /data/cowrie/keys/ /data/cowrie/misc/ \
          /data/dionaea/log /data/dionaea/bistreams /data/dionaea/binaries /data/dionaea/rtp /data/dionaea/roots/ftp /data/dionaea/roots/tftp /data/dionaea/roots/www /data/dionaea/roots/upnp \
          /data/elasticpot/log \
          /data/elk/data /data/elk/log \
          /data/glastopf /data/honeytrap/log/ /data/honeytrap/attacks/ /data/honeytrap/downloads/ \
+	 /data/heralding/log \
          /data/mailoney/log \
 	 /data/nginx/log \
          /data/emobility/log \

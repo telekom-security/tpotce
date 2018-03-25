@@ -1,12 +1,25 @@
 FROM alpine
-MAINTAINER MO
 
 # Include dist
 ADD dist/ /root/dist/
 
 # Get and install dependencies & packages
 RUN apk -U upgrade && \
-    apk add git procps py-pip mpfr-dev openssl-dev mpc1-dev libffi-dev build-base python python-dev py-mysqldb py-requests py-setuptools gmp-dev && \
+    apk add build-base \
+            git \
+            gmp-dev \
+            libcap \
+            libffi-dev \
+            mpc1-dev \
+            mpfr-dev \
+            openssl-dev \
+            procps \
+            python \
+            python-dev \
+            py-mysqldb \
+            py-pip \
+            py-requests \
+            py-setuptools && \
 
 # Setup user
     addgroup -g 2000 cowrie && \

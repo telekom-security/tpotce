@@ -2,13 +2,21 @@
 # For docker-compose ...
 version: '2.2'
 
+networks:
+  ciscoasa_local:
+
 services:
 
-# Wetty service
-  wetty:
-    container_name: wetty
+# Ciscoasa service
+  ciscoasa:
+    build: .
+    container_name: ciscoasa
     restart: always
-    network_mode: "host"
-    env_file:
-     - /opt/tpot/etc/compose/wetty_environment
-    image: "dtagdevsec/wetty:1710"
+    networks:
+     - ciscoasa_local
+    ports:
+     - "5000:5000"
+     - "8443:8443"
+    image: "dtagdevsec/ciscoasa:1804"
+    volumes:
+     - /data/ciscoasa/log:/var/log/ciscoasa

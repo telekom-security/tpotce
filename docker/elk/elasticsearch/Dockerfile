@@ -1,18 +1,21 @@
 FROM alpine
-MAINTAINER MO
 
 # Include dist
 ADD dist/ /root/dist/
 
 # Setup env and apt
 RUN apk -U upgrade && \
-    apk add bash curl openjdk8-jre procps wget && \
+    apk add bash \
+            curl \
+            openjdk8-jre \
+            procps \
+            wget && \
 
 # Get and install packages
     cd /root/dist/ && \
     mkdir -p /usr/share/elasticsearch/ && \
-    wget https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-5.6.5.tar.gz && \
-    tar xvfz elasticsearch-5.6.5.tar.gz --strip-components=1 -C /usr/share/elasticsearch/ && \
+    wget https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-5.6.8.tar.gz && \
+    tar xvfz elasticsearch-5.6.8.tar.gz --strip-components=1 -C /usr/share/elasticsearch/ && \
 
 # Add and move files
     cd /root/dist/ && \

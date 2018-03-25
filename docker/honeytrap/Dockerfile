@@ -1,6 +1,4 @@
 FROM debian:stretch-slim 
-MAINTAINER MO
-
 ENV DEBIAN_FRONTEND noninteractive
 
 # Include dist
@@ -11,8 +9,19 @@ RUN apt-get update -y && \
     apt-get dist-upgrade -y && \
 
 # Install packages
-    apt-get install -y autoconf build-essential git iptables libnetfilter-queue1 libnetfilter-queue-dev \
-                       libjson-c-dev libtool libpq5 libpq-dev netbase procps wget && \
+    apt-get install -y autoconf \
+                       build-essential \
+                       git \
+                       iptables \
+                       libnetfilter-queue1 \
+                       libnetfilter-queue-dev \
+                       libjson-c-dev \
+                       libtool \
+                       libpq5 \
+                       libpq-dev \
+                       netbase \
+                       procps \
+                       wget && \
 
 # Install honeytrap from source
     cd /root/ && \
@@ -36,7 +45,11 @@ RUN apt-get update -y && \
 
 # Clean up
     rm -rf /root/* && \
-    apt-get purge -y autoconf build-essential git libnetfilter-queue-dev libpq-dev && \
+    apt-get purge -y autoconf \
+                     build-essential \
+                     git \
+                     libnetfilter-queue-dev \
+                     libpq-dev && \
     apt-get autoremove -y --purge && \
     apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 

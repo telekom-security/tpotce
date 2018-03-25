@@ -1,9 +1,29 @@
 FROM alpine
-MAINTAINER MO
 
 # Install packages
 RUN apk -U upgrade && \
-    apk add alpine-sdk autoconf automake bash curl gawk gcc iw jq libmnl-dev libuuid linux-headers lm_sensors make musl-dev netcat-openbsd util-linux-dev pkgconf python py-requests py-yaml zlib-dev && \
+    apk add alpine-sdk \
+            autoconf \
+            automake \
+            bash \
+            curl \
+            gawk \
+            gcc \
+            iw \
+            jq \
+            libmnl-dev \
+            libuuid \
+            linux-headers \
+            lm_sensors \
+            make \
+            musl-dev \
+            netcat-openbsd \
+            util-linux-dev \
+            pkgconf \
+            python \
+            py-requests \
+            py-yaml \
+            zlib-dev && \
 
 # Install netdata
     cd /root && \
@@ -20,7 +40,17 @@ RUN apk -U upgrade && \
     cd / && \
 
 # Clean up
-    apk del alpine-sdk autoconf automake gcc libmnl-dev linux-headers make musl-dev pkgconf util-linux-dev zlib-dev && \
+    apk del alpine-sdk \
+            autoconf \
+            automake \
+            gcc \
+            libmnl-dev \
+            linux-headers \
+            make \
+            musl-dev \
+            pkgconf \
+            util-linux-dev \
+            zlib-dev && \
     rm -rf /root/* && \
     rm -rf /var/cache/apk/*
 

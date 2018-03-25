@@ -1,4 +1,4 @@
-version: '2.1'
+version: '2.2'
 
 networks:
   mailoney_local:
@@ -7,12 +7,13 @@ services:
 
 # Mailoney service
   mailoney:
+    build: .
     container_name: mailoney
     restart: always
     networks:
      - mailoney_local
     ports:
      - "25:2525"
-    image: "dtagdevsec/mailoney:1710"
-   volumes:
-    - /data/mailoney/log:/opt/mailoney/logs
+    image: "dtagdevsec/mailoney:1804"
+    volumes:
+     - /data/mailoney/log:/opt/mailoney/logs

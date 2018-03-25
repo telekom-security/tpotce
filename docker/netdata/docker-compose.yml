@@ -1,9 +1,10 @@
-version: '2.1'
+version: '2.2'
 
 services:
 
 # Netdata service
   netdata:
+    build: .
     container_name: netdata
     restart: always
     network_mode: "host"
@@ -11,7 +12,7 @@ services:
      - SYS_PTRACE
     security_opt:
      - apparmor=unconfined
-    image: "dtagdevsec/netdata:1710"
+    image: "dtagdevsec/netdata:1804"
     volumes:
      - /proc:/host/proc:ro
      - /sys:/host/sys:ro

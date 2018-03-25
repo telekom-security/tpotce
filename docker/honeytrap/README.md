@@ -1,4 +1,4 @@
-[![](https://images.microbadger.com/badges/version/dtagdevsec/honeytrap:1710.svg)](https://microbadger.com/images/dtagdevsec/honeytrap:1710 "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/dtagdevsec/honeytrap:1710.svg)](https://microbadger.com/images/dtagdevsec/honeytrap:1710 "Get your own image badge on microbadger.com")
+[![](https://images.microbadger.com/badges/version/dtagdevsec/honeytrap:1804.svg)](https://microbadger.com/images/dtagdevsec/honeytrap:1804 "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/dtagdevsec/honeytrap:1804.svg)](https://microbadger.com/images/dtagdevsec/honeytrap:1804 "Get your own image badge on microbadger.com")
 
 # honeytrap
 

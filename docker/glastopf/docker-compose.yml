@@ -1,4 +1,4 @@
-version: '2.1'
+version: '2.2'
 
 networks:
   glastopf_local:
@@ -7,13 +7,14 @@ services:
 
 # Glastopf service
   glastopf:
+    build: .
     container_name: glastopf
     restart: always
     networks:
      - glastopf_local
     ports:
      - "80:80"
-    image: "dtagdevsec/glastopf:1710"
+    image: "dtagdevsec/glastopf:1804"
     volumes:
      - /data/glastopf/db:/opt/glastopf/db
      - /data/glastopf/log:/opt/glastopf/log

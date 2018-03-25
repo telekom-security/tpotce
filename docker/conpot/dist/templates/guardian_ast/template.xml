@@ -1,0 +1,93 @@
+<core>
+    <template>
+        <!-- General information about the template -->
+        <entity name="unit">Guardian AST tank-monitoring system</entity>
+        <entity name="vendor">Guardian</entity>
+        <entity name="description">Guardian AST tank-monitoring system</entity>
+        <entity name="protocols">guardian_ast</entity>
+        <entity name="creator">the conpot team</entity>
+    </template>
+    <databus>
+        <!-- Core value that can be retrieved from the databus by key -->
+        <key_value_mappings>
+            <key name="product1">
+                <value type="value">"SUPER"</value>
+            </key>
+            <key name="product2">
+                <value type="value">"UNLEAD"</value>
+            </key>
+            <key name="product3">
+                <value type="value">"DIESEL"</value>
+            </key>
+            <key name="product4">
+                <value type="value">"ADBLUE"</value>
+            </key>
+            <key name="station_name">
+                <value type="value">"AVIA"</value>
+            </key>
+            <key name="vol1">
+                <value type="value">random.randint(1000, 9050)</value>
+            </key>
+            <key name="vol2">
+                <value type="value">random.randint(1000, 9050)</value>
+            </key>
+            <key name="vol3">
+                <value type="value">random.randint(1000, 9050)</value>
+            </key>
+            <key name="vol4">
+                <value type="value">random.randint(1000, 9050)</value>
+            </key>
+            <key name="ullage1">
+                <value type="value">random.randint(3000, 9999)</value>
+            </key>
+            <key name="ullage2">
+                <value type="value">random.randint(3000, 9999)</value>
+            </key>
+            <key name="ullage3">
+                <value type="value">random.randint(3000, 9999)</value>
+            </key>
+            <key name="ullage4">
+                <value type="value">random.randint(3000, 9999)</value>
+            </key>
+            <key name="height1">
+                <value type="value">round(random.uniform(25.00, 75.99), 2)</value>
+            </key>
+            <key name="height2">
+                <value type="value">round(random.uniform(25.00, 75.99), 2)</value>
+            </key>
+            <key name="height3">
+                <value type="value">round(random.uniform(25.00, 75.99), 2)</value>
+            </key>
+            <key name="height4">
+                <value type="value">round(random.uniform(25.00, 75.99), 2)</value>
+            </key>
+            <key name="h2o1">
+                <value type="value">round(random.uniform(0.0, 9.99), 2)</value>
+            </key>
+            <key name="h2o2">
+                <value type="value">round(random.uniform(0.0, 9.99), 2)</value>
+            </key>
+            <key name="h2o3">
+                <value type="value">round(random.uniform(0.0, 9.99), 2)</value>
+            </key>
+            <key name="h2o4">
+                <value type="value">round(random.uniform(0.0, 9.99), 2)</value>
+            </key>
+            <key name="temp1">
+                <value type="value">round(random.uniform(50.0, 59.99), 2)</value>
+            </key>
+            <key name="temp2">
+                <value type="value">round(random.uniform(50.0, 59.99), 2)</value>
+            </key>
+            <key name="temp3">
+                <value type="value">round(random.uniform(50.0, 59.99), 2)</value>
+            </key>
+            <key name="temp4">
+                <value type="value">round(random.uniform(50.0, 59.99), 2)</value>
+            </key>
+            <key name="empty">
+                <value type="value">""</value>
+            </key>
+        </key_value_mappings>
+    </databus>
+</core>

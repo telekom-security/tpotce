@@ -413,43 +413,43 @@
                 <value type="value">''</value>
             </key>
             <key name="nameserver_1">
-                <value type="value">'192.168.254.111'</value>
+                <value type="value">'0.0.0.0'</value>
             </key>
             <key name="nameserver_2">
-                <value type="value">'192.168.254.112'</value>
+                <value type="value">'0.0.0.0'</value>
             </key>
             <key name="nameserver_3">
                 <value type="value">'0.0.0.0'</value>
             </key>
             <key name="mac_address">
-                <value type="value">'00:13:EA:00:72:FA'</value>
+                <value type="value">'00:13:EA:00:00:00'</value>
             </key>
             <key name="use_dhcp">
                 <value type="value">'YES'</value>
             </key>
             <key name="ip_addr">
-                <value type="value">'192.168.201.101'</value>
+                <value type="value">'192.168.1.210'</value>
             </key>
             <key name="ip_gateway">
-                <value type="value">'192.168.201.254'</value>
+                <value type="value">'192.168.1.1'</value>
             </key>
             <key name="ip_subnet">
                 <value type="value">'255.255.255.0'</value>
             </key>
             <key name="ip_addr_dhcp">
-                <value type="value">'192.168.200.1'</value>
+                <value type="value">'192.168.0.1'</value>
             </key>
             <key name="ip_gateway_dhcp">
-                <value type="value">'192.168.200.254'</value>
+                <value type="value">'192.168.0.254'</value>
             </key>
             <key name="ip_subnet_dhcp">
                 <value type="value">'255.255.255.0'</value>
             </key>
             <key name="kap_a_server_hostname">
-                <value type="value">'de_fra_lxg00.local.dom'</value>
+                <value type="value">'kapserver.evilpowerprovider.org'</value>
             </key>
             <key name="kap_a_server_ip">
-                <value type="value">'192.168.254.201'</value>
+                <value type="value">'202.202.202.1'</value>
             </key>
             <key name="kap_a_server_port">
                 <value type="value">'50'</value>

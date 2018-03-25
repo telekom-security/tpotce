@@ -1,5 +1,4 @@
 FROM debian:stretch-slim
-MAINTAINER MO
 ENV DEBIAN_FRONTEND noninteractive
 
 # Include dist
@@ -36,7 +35,6 @@ RUN apt-get update -y && \
 # Get and install dionaea
     git clone https://github.com/dinotools/dionaea /root/dionaea/ && \
     cd /root/dionaea && \
-#    git checkout 99e9cfc88cfa8f3715813b18ec7006bca2622d76 && \
     autoreconf -vi && \
     ./configure \
       --prefix=/opt/dionaea \

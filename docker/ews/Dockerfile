@@ -1,12 +1,23 @@
 FROM alpine
-MAINTAINER MO
 
 # Include dist
 ADD dist/ /root/dist/
 
 # Install packages
 RUN apk -U upgrade && \
-    apk add build-base git libssl1.0 openssl-dev python-dev py-cffi py-ipaddress py-lxml py-mysqldb py-pip py-pysqlite py-requests py-setuptools && \
+    apk add build-base \
+            git \
+            libssl1.0 \
+            openssl-dev \
+            python-dev \
+            py-cffi \
+            py-ipaddress \
+            py-lxml \
+            py-mysqldb \
+            py-pip \
+            py-pysqlite \
+            py-requests \
+            py-setuptools && \
     pip install pyOpenSSL==16.2.0 && \
 
 # Setup ewsposter
@@ -24,7 +35,12 @@ RUN apk -U upgrade && \
     mv /root/dist/ews.cfg /opt/ewsposter/ && \
 
 # Clean up
-    apk del build-base git openssl-dev python-dev py-pip py-setuptools && \
+    apk del build-base \
+            git \
+            openssl-dev \
+            python-dev \
+            py-pip \
+            py-setuptools && \
     rm -rf /root/* && \
     rm -rf /var/cache/apk/*
 
