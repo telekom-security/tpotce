@@ -8,7 +8,6 @@ RUN apk -U upgrade && \
     apk add bash \
             build-base \
             git \
-            libcap \
             libffi-dev \
             libressl-dev \
             postgresql-dev \
@@ -32,7 +31,15 @@ RUN apk -U upgrade && \
     mkdir -p /var/log/heralding/ && \
 
 # Clean up
-    apk del git && \
+    apk del --purge \
+            build-base \
+            git \
+            libffi-dev \
+            libressl-dev \
+            postgresql-dev \
+            python3-dev \
+            py-virtualenv && \
+    apk add libzmq && \
     rm -rf /root/* && \
     rm -rf /var/cache/apk/*
 

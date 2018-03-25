@@ -6,7 +6,10 @@ ADD dist/ /root/dist/
 
 # Get and install dependencies & packages
 RUN apk -U upgrade && \
-    apk add bash nginx nginx-mod-http-headers-more procps && \
+    apk add bash \
+            nginx \
+            nginx-mod-http-headers-more \
+            procps && \
 
 # Setup configs
     mkdir -p /run/nginx && \
