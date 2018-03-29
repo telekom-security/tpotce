@@ -162,13 +162,14 @@ services:
 
 # Spiderfoot service
   spiderfoot:
+    build: .
     container_name: spiderfoot
     restart: always
     networks:
      - spiderfoot_local
     ports:
      - "127.0.0.1:64303:8080"
-    image: "dtagdevsec/spiderfoot:1710"
+    image: "dtagdevsec/spiderfoot:1804"
     volumes:
      - /data/spiderfoot/spiderfoot.db:/home/spiderfoot/spiderfoot.db
 

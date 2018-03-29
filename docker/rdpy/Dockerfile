@@ -16,7 +16,7 @@ RUN apk -U upgrade && \
             python-dev \
             py-pip \
             py-setuptools && \
-    apk -U add --repository https://dl-cdn.alpinelinux.org/alpine/edge/testing/ \
+    apk -U add --repository http://dl-cdn.alpinelinux.org/alpine/edge/testing/ \
             py-qt && \
 
 # Setup user
@@ -31,7 +31,7 @@ RUN apk -U upgrade && \
                 pyopenssl \
                 qt4reactor \
                 service_identity \
-                rsa pyasn1==0.3.4 && \
+                rsa pyasn1 && \
     cd rdpy && \
     python setup.py install && \
 
@@ -43,6 +43,7 @@ RUN apk -U upgrade && \
 # Clean up
     rm -rf /root/* && \
     apk del --purge build-base \
+                    git \
                     libffi-dev \
                     openssl-dev \
                     python-dev \
@@ -51,4 +52,5 @@ RUN apk -U upgrade && \
     rm -rf /var/cache/apk/*
 
 # Start rdpy
+USER rdpy:rdpy
 CMD /usr/bin/python2 -i /usr/bin/rdpy-rdphoneypot.py /home/rdpy/1 /home/rdpy/2 /home/rdpy/3 >> /var/log/rdpy/rdpy.log

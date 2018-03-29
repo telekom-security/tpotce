@@ -257,7 +257,8 @@ services:
      - rdpy_local
     ports:
      - "3389:3389"
-    image: "dtagdevsec/rdpy:1710"
+    image: "dtagdevsec/rdpy:1804"
+    read_only: true
     volumes:
      - /data/rdpy/log:/var/log/rdpy
 
@@ -269,7 +270,7 @@ services:
      - spiderfoot_local
     ports:
      - "127.0.0.1:64303:8080"
-    image: "dtagdevsec/spiderfoot:1710"
+    image: "dtagdevsec/spiderfoot:1804"
     volumes:
      - /data/spiderfoot/spiderfoot.db:/home/spiderfoot/spiderfoot.db
 
