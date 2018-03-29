@@ -1,6 +1,6 @@
 # T-Pot (Standard)
 # For docker-compose ...
-version: '2.1'
+version: '2.2'
 
 networks:
   rdpy_local:
@@ -9,12 +9,14 @@ services:
 
 # Rdpy service
   rdpy:
+    build: .
     container_name: rdpy
     restart: always
     networks:
      - rdpy_local
     ports:
      - "3389:3389"
-    image: "dtagdevsec/rdpy:1710"
+    image: "dtagdevsec/rdpy:1804"
+    read_only: true
     volumes:
      - /data/rdpy/log:/var/log/rdpy

@@ -139,14 +139,22 @@ services:
      - /sys:/host/sys:ro
      - /var/run/docker.sock:/var/run/docker.sock
 
-# Nginx service
+# nginx service
   nginx:
     container_name: nginx
     restart: always
+    tmpfs:
+     - /var/tmp/nginx/client_body
+     - /var/tmp/nginx/proxy
+     - /var/tmp/nginx/fastcgi
+     - /var/tmp/nginx/uwsgi
+     - /var/tmp/nginx/scgi
+     - /run
     network_mode: "host"
     ports:
      - "64297:64297"
-    image: "dtagdevsec/nginx:1710"
+    image: "dtagdevsec/nginx:1804"
+    read_only: true
     volumes:
      - /data/nginx/cert/:/etc/nginx/cert/
      - /data/nginx/conf/nginxpasswd:/etc/nginx/nginxpasswd
@@ -195,7 +203,8 @@ services:
     container_name: p0f
     restart: always
     network_mode: "host"
-    image: "dtagdevsec/p0f:1710"
+    image: "dtagdevsec/p0f:1804"
+    read_only: true
     volumes:
      - /data/p0f/log:/var/log/p0f
 

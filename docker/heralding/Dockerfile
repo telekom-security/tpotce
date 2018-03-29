@@ -11,6 +11,7 @@ RUN apk -U upgrade && \
             libffi-dev \
             libressl-dev \
             postgresql-dev \
+            procps \
             python3 \
             python3-dev \
             py-virtualenv && \

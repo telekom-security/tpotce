@@ -1,5 +1,4 @@
 FROM alpine
-MAINTAINER MO
 
 # Include dist
 ADD dist/ /root/dist/

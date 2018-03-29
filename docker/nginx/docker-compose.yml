@@ -6,12 +6,21 @@ services:
 
 # nginx service
   nginx:
+    build: .
     container_name: nginx
     restart: always
+    tmpfs:
+     - /var/tmp/nginx/client_body
+     - /var/tmp/nginx/proxy
+     - /var/tmp/nginx/fastcgi
+     - /var/tmp/nginx/uwsgi
+     - /var/tmp/nginx/scgi
+     - /run
     network_mode: "host"
     ports:
      - "64297:64297"
-    image: "dtagdevsec/nginx:1710"
+    image: "dtagdevsec/nginx:1804"
+    read_only: true
     volumes:
      - /data/nginx/cert/:/etc/nginx/cert/
      - /data/nginx/conf/nginxpasswd:/etc/nginx/nginxpasswd
