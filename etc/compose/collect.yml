@@ -162,7 +162,6 @@ services:
 
 # Spiderfoot service
   spiderfoot:
-    build: .
     container_name: spiderfoot
     restart: always
     networks:
