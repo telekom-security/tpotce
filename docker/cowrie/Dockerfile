@@ -8,7 +8,7 @@ RUN apk -U upgrade && \
     apk add build-base \
             git \
             gmp-dev \
-            libcap \
+#            libcap \
             libffi-dev \
             mpc1-dev \
             mpfr-dev \
@@ -38,11 +38,19 @@ RUN apk -U upgrade && \
 
 # Clean up
     rm -rf /root/* && \
-    apk del git py-pip mpfr-dev mpc1-dev libffi-dev build-base py-mysqldb gmp-dev python-dev && \
+    apk del --purge git \
+                    py-pip \
+                    mpfr-dev \
+                    mpc1-dev \
+                    libffi-dev \
+                    build-base \
+                    py-mysqldb \
+                    gmp-dev \
+                    python-dev && \
     rm -rf /var/cache/apk/*
 
 # Start cowrie
 ENV PYTHONPATH /home/cowrie/cowrie
 WORKDIR /home/cowrie/cowrie
-USER cowrie
+USER cowrie:cowrie
 CMD ["/usr/bin/twistd", "--nodaemon", "-y", "cowrie.tac", "--pidfile", "var/run/cowrie.pid", "cowrie"]

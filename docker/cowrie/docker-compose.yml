@@ -14,8 +14,6 @@ services:
     restart: always
     networks:
      - cowrie_local
-    cap_add:
-     - NET_BIND_SERVICE
     ports:
      - "22:2222"
      - "23:2223"

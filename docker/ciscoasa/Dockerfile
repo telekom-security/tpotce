@@ -23,16 +23,16 @@ RUN apk -U upgrade && \
     chown -R ciscoasa:ciscoasa /opt/ciscoasa_honeypot && \
 
 # Clean up
-    apk del build-base \
-            git \
-            libffi-dev \
-            openssl-dev \
-            python3-dev && \
+    apk del --purge build-base \
+                    git \
+                    libffi-dev \
+                    openssl-dev \
+                    python3-dev && \
     apk add libffi \
             openssl \
             python3
 
 # Start elasticsearch-head
 WORKDIR /opt/ciscoasa_honeypot
-USER ciscoasa
-CMD python3 asa_server.py --enable_ssl --verbose > /var/log/ciscoasa/ciscoasa.log 2>&1
+USER ciscoasa:ciscoasa
+CMD python3 asa_server.py --enable_ssl --verbose >> /var/log/ciscoasa/ciscoasa.log 2>&1
