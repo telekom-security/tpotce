@@ -66,6 +66,14 @@ chown tpot:tpot $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEY
 logrotate -s $mySTATUS $myCONF
 }
 
+# Let's create a function to clean up and prepare ciscoasa data
+fuCISCOASA () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/ciscoasa/*; fi
+  mkdir -p /data/ciscoasa/log
+  chmod 760 /data/ciscoasa -R
+  chown tpot:tpot /data/ciscoasa -R
+}
+
 # Let's create a function to clean up and prepare conpot data
 fuCONPOT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/conpot/*; fi
@@ -122,6 +130,14 @@ fuGLASTOPF () {
   mkdir -p /data/glastopf
   chmod 760 /data/glastopf -R
   chown tpot:tpot /data/glastopf -R
+}
+
+# Let's create a function to clean up and prepare heralding data
+fuHERALDING () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/heralding/*; fi
+  mkdir -p /data/heralding/log
+  chmod 760 /data/heralding -R
+  chown tpot:tpot /data/heralding -R
 }
 
 # Let's create a function to clean up and prepare honeytrap data
@@ -210,6 +226,7 @@ if [ "$myPERSISTENCE" = "on" ];
     fuLOGROTATE
   else
     echo "Cleaning up and preparing data folders."
+    fuCISCOASA
     fuCONPOT
     fuCOWRIE
     fuDIONAEA
@@ -217,6 +234,7 @@ if [ "$myPERSISTENCE" = "on" ];
     fuELK
     fuEMOBILITY
     fuGLASTOPF
+    fuHERALDING
     fuHONEYTRAP
     fuMAILONEY
     fuNGINX

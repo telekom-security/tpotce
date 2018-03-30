@@ -1,18 +1,22 @@
 # T-Pot (Standard)
 # For docker-compose ...
-version: '2.1'
+version: '2.2'
 
 services:
 
 # Suricata service
   suricata:
+    build: .
     container_name: suricata
     restart: always
+    environment:
+    # For ET Pro ruleset replace <OPEN> with your OINKCODE
+     - OINKCODE=OPEN
     network_mode: "host"
     cap_add:
      - NET_ADMIN
      - SYS_NICE
      - NET_RAW
-    image: "dtagdevsec/suricata:1710"
+    image: "dtagdevsec/suricata:1804"
     volumes:
      - /data/suricata/log:/var/log/suricata
