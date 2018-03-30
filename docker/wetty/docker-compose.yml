@@ -6,9 +6,11 @@ services:
 
 # Wetty service
   wetty:
+    build: .
     container_name: wetty
     restart: always
     network_mode: "host"
     env_file:
      - /opt/tpot/etc/compose/wetty_environment
-    image: "dtagdevsec/wetty:1710"
+    image: "dtagdevsec/wetty:1804"
+    read_only: true

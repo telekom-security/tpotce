@@ -1,8 +1,4 @@
 FROM alpine
-MAINTAINER MO
-
-# Include dist
-#ADD dist/ /root/dist/
 
 # Setup apk
 RUN apk -U add bash \
@@ -11,7 +7,10 @@ RUN apk -U add bash \
                go \
                procps && \
 
-# Setup vnclowpot
+# Setup go, vnclowpot
+    export GOPATH=/opt/go/ && \
+    mkdir -p /opt/go/ && \
+    cd /opt && \
     go get github.com/magisterquis/vnclowpot && \
     go install github.com/magisterquis/vnclowpot && \
 
@@ -22,8 +21,10 @@ RUN apk -U add bash \
 
 # Clean up
     apk del build-base \
-            git && \
+            git \
+            go && \
     rm -rf /var/cache/apk/*
 
 # Run supervisor upon container start
-CMD /root/go/bin/vnclowpot -j >> /var/log/vnclowpot/vnclowpot.log
+USER vnclowpot:vnclowpot
+CMD /opt/go/bin/vnclowpot -j >> /var/log/vnclowpot/vnclowpot.log

@@ -1,4 +1,4 @@
-version: '2.1'
+version: '2.2'
 
 networks:
   vnclowpot_local:
@@ -7,12 +7,14 @@ services:
 
 # vnclowpot service
   vnclowpot:
+    build: .
     container_name: vnclowpot
     restart: always
     networks:
      - vnclowpot_local
     ports:
      - "5900:5900"
-    image: "dtagdevsec/vnclowpot:1710"
+    image: "dtagdevsec/vnclowpot:1804"
+    read_only: true
     volumes:
      - /data/vnclowpot/log:/var/log/vnclowpot
