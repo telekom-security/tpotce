@@ -22,14 +22,14 @@ RUN apk -U upgrade && \
     cd /opt/ && \
     git clone https://github.com/johnnykv/heralding && \
     cd heralding && \
-    mv /root/dist/heralding.yml /opt/heralding/ && \
     pip3 install -r requirements.txt && \
     pip3 install heralding && \
 
 # Setup user, groups and configs
     addgroup -g 2000 heralding && \
     adduser -S -H -s /bin/bash -u 2000 -D -g 2000 heralding && \
-    mkdir -p /var/log/heralding/ && \
+    mkdir -p /var/log/heralding/ /etc/heralding && \
+    mv /root/dist/heralding.yml /etc/heralding/ && \
 
 # Clean up
     apk del --purge \
@@ -45,5 +45,5 @@ RUN apk -U upgrade && \
     rm -rf /var/cache/apk/*
 
 # Start elasticpot
-WORKDIR /opt/heralding/
-CMD ["heralding","-l","/var/log/heralding/heralding.log"]
+WORKDIR /tmp/heralding/
+CMD ["heralding","-c","/etc/heralding/heralding.yml","-l","/var/log/heralding/heralding.log"]

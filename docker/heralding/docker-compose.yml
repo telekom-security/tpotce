@@ -10,6 +10,10 @@ services:
     build: .
     container_name: heralding
     restart: always
+    environment:
+      - PYTHON_EGG_CACHE=/tmp/heralding
+    tmpfs:
+      - /tmp/heralding:exec
     networks:
      - heralding_local
     ports:
@@ -26,5 +30,6 @@ services:
      - "5432:5432"
      - "5900:5900"
     image: "dtagdevsec/heralding:1804"
+    read_only: true
     volumes:
      - /data/heralding/log:/var/log/heralding

@@ -12,7 +12,6 @@ RUN apk -U --no-cache add autoconf \
                git \
                libffi \
                libffi-dev \
-               libcap \
                make \
                py-asn1 \
                py-cffi \
@@ -67,7 +66,6 @@ RUN apk -U --no-cache add autoconf \
     python setup.py install && \
     cd / && \
     rm -rf /opt/glastopf /tmp/* /var/tmp/* && \
-    setcap cap_net_bind_service=+ep /usr/bin/glastopf-runner && \
 
 # Setup user, groups and configs
     addgroup -g 2000 glastopf && \
@@ -86,5 +84,5 @@ RUN apk -U --no-cache add autoconf \
     rm -rf /var/cache/apk/*
 
 # Set workdir and start glastopf
-WORKDIR /opt/glastopf/
-CMD ["glastopf-runner"]
+WORKDIR /tmp/glastopf/
+CMD cp /opt/glastopf/glastopf.cfg /tmp/glastopf && glastopf-runner

@@ -59,4 +59,5 @@ HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:64301'
 
 # Start netdata 
 WORKDIR /
+USER netdata:netdata
 CMD ["/usr/sbin/netdata","-D","-s","/host","-i","127.0.0.1","-p","64301"]

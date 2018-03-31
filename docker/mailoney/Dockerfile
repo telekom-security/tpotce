@@ -43,6 +43,6 @@ RUN apk -U upgrade && \
     rm -rf /var/cache/apk/*
 
 # Set workdir and start glastopf
-USER mailoney
+USER mailoney:mailoney
 WORKDIR /opt/mailoney/
 CMD ["/usr/bin/python","mailoney.py","-i","0.0.0.0","-p","2525","-s","mailserver","-t","schizo_open_relay"]
