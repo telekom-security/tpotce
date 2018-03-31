@@ -1,4 +1,4 @@
-version: '2.1'
+version: '2.2'
 
 networks:
   elasticpot_local:
@@ -15,5 +15,6 @@ services:
     ports:
      - "9200:9200"
     image: "dtagdevsec/elasticpot:1804"
+    read_only: true
     volumes:
      - /data/elasticpot/log:/opt/ElasticpotPY/log

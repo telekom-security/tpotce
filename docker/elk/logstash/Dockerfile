@@ -33,12 +33,20 @@ RUN apk -U upgrade && \
     cp logstash.conf /etc/logstash/conf.d/ && \
     cp elasticsearch-template-es5x.json /usr/share/logstash/vendor/bundle/jruby/1.9/gems/logstash-output-elasticsearch-7.4.2-java/lib/logstash/outputs/elasticsearch/ && \
 
+# Setup user, groups and configs
+    addgroup -g 2000 logstash && \
+    adduser -S -H -s /bin/bash -u 2000 -D -g 2000 logstash && \
+    chown -R logstash:logstash /usr/share/logstash && \
+    chown -R logstash:logstash /etc/listbot && \
+    chmod 755 /usr/bin/update.sh && \
+
 # Clean up
-    apk del wget && \
+    apk del --purge wget && \
     rm -rf /root/*
 
 # Healthcheck
 HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:9600'
 
 # Start logstash
+USER logstash:logstash
 CMD update.sh && /usr/share/logstash/bin/logstash -f /etc/logstash/conf.d/logstash.conf

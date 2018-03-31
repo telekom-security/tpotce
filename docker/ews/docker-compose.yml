@@ -1,0 +1,23 @@
+# T-Pot (Standard)
+# For docker-compose ...
+version: '2.2'
+
+networks:
+  ewsposter_local:
+
+services:
+
+# Ewsposter service
+  ewsposter:
+    build: .
+    container_name: ewsposter
+    restart: always
+    networks:
+     - ewsposter_local
+    env_file:
+     - /opt/tpot/etc/compose/elk_environment
+    image: "dtagdevsec/ewsposter:1804"
+    volumes:
+     - /data:/data
+     - /data/ews/conf/ews.ip:/opt/ewsposter/ews.ip
+

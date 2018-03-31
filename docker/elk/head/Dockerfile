@@ -22,12 +22,12 @@ RUN apk -U upgrade && \
     chown -R head:head /usr/src/app/ && \
 
 # Clean up
-    apk del git
+    apk del --purge git
 
 # Healthcheck
 HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:9100'
 
 # Start elasticsearch-head
-USER head
+USER head:head
 WORKDIR /usr/src/app
 CMD ["node_modules/http-server/bin/http-server", "_site", "-p", "9100"]

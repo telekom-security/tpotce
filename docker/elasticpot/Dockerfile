@@ -24,11 +24,11 @@ RUN apk -U upgrade && \
     mkdir /opt/ElasticpotPY/log && \
 
 # Clean up
-    apk del git && \
+    apk del --purge git && \
     rm -rf /root/* && \
     rm -rf /var/cache/apk/*
 
 # Start elasticpot
-USER elasticpot
+USER elasticpot:elasticpot
 WORKDIR /opt/ElasticpotPY/
 CMD ["/usr/bin/python3","main.py"]

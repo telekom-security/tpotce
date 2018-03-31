@@ -2,8 +2,8 @@
 # For docker-compose ...
 version: '2.2'
 
-networks:
-  dionaea_local:
+#networks:
+#  dionaea_local:
 
 services:
 
@@ -13,16 +13,15 @@ services:
     container_name: dionaea
     stdin_open: true
     restart: always
-    networks:
-     - dionaea_local
-    cap_add:
-     - NET_BIND_SERVICE
+    network_mode: "host"
+    #    networks:
+    #     - dionaea_local
     ports:
      - "20:20"
      - "21:21"
      - "42:42"
      - "69:69/udp"
-     - "8081:80"
+     - "8081:8081"
      - "135:135"
      - "443:443"
      - "445:445"
@@ -35,6 +34,7 @@ services:
      - "5061:5061"
      - "27017:27017"
     image: "dtagdevsec/dionaea:1804"
+    read_only: true
     volumes:
      - /data/dionaea/roots/ftp:/opt/dionaea/var/dionaea/roots/ftp
      - /data/dionaea/roots/tftp:/opt/dionaea/var/dionaea/roots/tftp

@@ -1,0 +1,17 @@
+# T-Pot (Standard)
+# For docker-compose ...
+version: '2.2'
+
+services:
+
+## Kibana service
+  kibana:
+    build: .
+    container_name: kibana
+    restart: always
+#    depends_on:
+#      elasticsearch:
+#        condition: service_healthy
+    ports:
+     - "127.0.0.1:64296:5601"
+    image: "dtagdevsec/kibana:1804"

@@ -15,6 +15,7 @@ RUN apt-get update -y && \
       check \
       cython3 \
       git \
+      libcap2-bin \
       libcurl4-openssl-dev \
       libemu-dev \
       libev-dev \
@@ -54,6 +55,7 @@ RUN apt-get update -y && \
 # Setup user and groups
     addgroup --gid 2000 dionaea && \
     adduser --system --no-create-home --shell /bin/bash --uid 2000 --disabled-password --disabled-login --gid 2000 dionaea && \
+    setcap cap_net_bind_service=+ep /opt/dionaea/bin/dionaea && \
 
 # Supply configs and set permissions
     chown -R dionaea:dionaea /opt/dionaea/var && \
@@ -105,4 +107,5 @@ RUN apt-get update -y && \
     rm -rf /root/* /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Start dionaea
+USER dionaea:dionaea
 CMD ["/opt/dionaea/bin/dionaea", "-u", "dionaea", "-g", "dionaea", "-c", "/opt/dionaea/etc/dionaea/dionaea.cfg"]

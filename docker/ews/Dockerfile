@@ -30,6 +30,7 @@ RUN apk -U upgrade && \
 # Setup user and groups
     addgroup -g 2000 ews && \
     adduser -S -H -u 2000 -D -g 2000 ews && \
+    chown -R ews:ews /opt/ewsposter && \
 
 # Supply configs
     mv /root/dist/ews.cfg /opt/ewsposter/ && \
@@ -45,4 +46,5 @@ RUN apk -U upgrade && \
     rm -rf /var/cache/apk/*
 
 # Run ewsposter
+USER ews:ews
 CMD sleep 10 && /usr/bin/python /opt/ewsposter/ews.py -l 60

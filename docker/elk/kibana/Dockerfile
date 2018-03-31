@@ -44,12 +44,12 @@ RUN apk -U upgrade && \
     chown -R kibana:kibana /usr/share/kibana/ && \
 
 # Clean up
-    apk del wget && \
+    apk del --purge wget && \
     rm -rf /root/*
 
 # Healthcheck
 HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:5601'
 
 # Start kibana
-USER kibana
+USER kibana:kibana
 CMD ["/usr/share/kibana/bin/kibana"]

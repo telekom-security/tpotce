@@ -28,12 +28,12 @@ RUN apk -U upgrade && \
     chown -R elasticsearch:elasticsearch /usr/share/elasticsearch/ && \
 
 # Clean up
-    apk del wget && \
+    apk del --purge wget && \
     rm -rf /root/*
 
 # Healthcheck
 HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:9200/_cat/health'
 
 # Start ELK
-USER elasticsearch
+USER elasticsearch:elasticsearch
 CMD ["/usr/share/elasticsearch/bin/elasticsearch"]
