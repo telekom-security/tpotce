@@ -1,0 +1,38 @@
+rules:
+  - match: tcp dst port 64295
+    type: passthrough
+    name: ssh
+  - match: tcp dst port 22 or port 2222
+    type: conn_handler
+    name: proxy_ssh
+    target: tcp://172.17.0.2:22
+  - match: tcp dst port 23 or port 2323 or port 23231
+    type: conn_handler
+    target: telnet
+  - match: tcp dst port 25
+    type: conn_handler
+    target: smtp
+  - match: tcp dst port 3389
+    type: conn_handler
+    target: rdp
+  - match: tcp dst port 445
+    type: conn_handler
+    target: smb
+  - match: tcp dst port 21
+    type: conn_handler
+    target: ftp
+  - match: tcp dst port 5060
+    type: conn_handler
+    target: sip
+  - match: tcp dst port 1080
+    type: passthrough
+    name: http
+  - match: tcp dst port 6000 or port 7000
+    type: conn_handler
+    name: proxy_tcp
+    target: tcp://172.17.0.2:22
+  - match: tcp
+    type: conn_handler
+    target: default
+  - match: udp
+    type: drop

@@ -1,0 +1,21 @@
+# For docker-compose ...
+version: '2.2'
+
+networks:
+  glutton_local:
+
+services:
+
+# glutton service
+  glutton:
+    container_name: glutton
+    restart: always
+    network_mode: "host"
+    #networks:
+    # - glutton_local
+    cap_add:
+     - NET_ADMIN
+    image: "dtagdevsec/glutton:1804"
+    volumes:
+     - /data/glutton/log:/var/log/glutton
+

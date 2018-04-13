@@ -8,7 +8,6 @@ RUN apk -U upgrade && \
     apk add build-base \
             git \
             gmp-dev \
-#            libcap \
             libffi-dev \
             mpc1-dev \
             mpfr-dev \

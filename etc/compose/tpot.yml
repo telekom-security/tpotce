@@ -173,12 +173,17 @@ services:
 # Glastopf service
   glastopf:
     container_name: glastopf
+    environment:
+      - PYTHON_EGG_CACHE=/tmp/glastopf
+    tmpfs:
+      - /tmp/glastopf:exec
     restart: always
     networks:
      - glastopf_local
     ports:
      - "80:80"
     image: "dtagdevsec/glastopf:1804"
+    read_only: true
     volumes:
      - /data/glastopf/db:/opt/glastopf/db
      - /data/glastopf/log:/opt/glastopf/log
@@ -205,6 +210,7 @@ services:
     ports:
      - "25:2525"
     image: "dtagdevsec/mailoney:1804"
+    read_only: true
     volumes:
      - /data/mailoney/log:/opt/mailoney/logs
 
@@ -245,8 +251,8 @@ services:
     image: "dtagdevsec/nginx:1804"
     read_only: true
     volumes:
-     - /data/nginx/cert/:/etc/nginx/cert/
-     - /data/nginx/conf/nginxpasswd:/etc/nginx/nginxpasswd
+     - /data/nginx/cert/:/etc/nginx/cert/:ro
+     - /data/nginx/conf/nginxpasswd:/etc/nginx/nginxpasswd:ro
      - /data/nginx/log/:/var/log/nginx/
 
 # Rdpy service

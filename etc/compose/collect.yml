@@ -88,6 +88,10 @@ services:
   heralding:
     container_name: heralding
     restart: always
+    environment:
+      - PYTHON_EGG_CACHE=/tmp/heralding
+    tmpfs:
+      - /tmp/heralding:exec
     networks:
      - heralding_local
     ports:
@@ -104,6 +108,7 @@ services:
      - "5432:5432"
      - "5900:5900"
     image: "dtagdevsec/heralding:1804"
+    read_only: true
     volumes:
      - /data/heralding/log:/var/log/heralding
 
@@ -157,8 +162,8 @@ services:
     image: "dtagdevsec/nginx:1804"
     read_only: true
     volumes:
-     - /data/nginx/cert/:/etc/nginx/cert/
-     - /data/nginx/conf/nginxpasswd:/etc/nginx/nginxpasswd
+     - /data/nginx/cert/:/etc/nginx/cert/:ro
+     - /data/nginx/conf/nginxpasswd:/etc/nginx/nginxpasswd:ro
      - /data/nginx/log/:/var/log/nginx/
 
 # Spiderfoot service

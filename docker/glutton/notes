@@ -1,0 +1,50 @@
+1  apk add golang
+    2  apk add go
+    3  apk -U --no-cache add bash                           build-base                           git                           go                           g++                           iptables-dev                           libnetfilter_queue-dev                           libpcap-dev                           procps
+    4  ls
+    5  go get github.com/mushorg/glutton
+    6  go get -d github.com/mushorg/glutton
+    7  ls
+    8  cd $GOPATH
+    9  ls
+   10  cd go/
+   11  ls
+   12  cd src/github.com/mushorg/glutton/
+   13  ls
+   14  go get -u github.com/golang/dep/cmd/dep
+   15  dep
+   16  find / -name dep
+   17  pwd
+   18  cd ..
+   19  ls
+   20  cd ..
+   21  ls
+   22  cd ..
+   23  ls
+   24  cd golang.org/
+   25  ls
+   26  cd x/
+   27  ls
+   28  cd ..
+   29  ls
+   30  cd ..
+   31  ls
+   32  cd ..
+   33  ls
+   34  cd bin
+   35  ls
+   36  dep ensure
+   37  ./dep ensure
+   38  cd ..
+   39  ls
+   40  cd ..
+   41  ls
+   42  cd ..
+   43  ls
+   44  cd root/go/src/github.com/mushorg/glutton/
+   45  which dep
+   46  /root/go/bin/dep ensure
+   47  make build
+   48  bin/server
+   49  history
+
