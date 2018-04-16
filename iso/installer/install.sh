@@ -446,6 +446,7 @@ mkdir -p /data/ciscoasa/log \
          /data/elasticpot/log \
          /data/elk/data /data/elk/log \
          /data/glastopf /data/honeytrap/log/ /data/honeytrap/attacks/ /data/honeytrap/downloads/ \
+	 /data/glutton/log \
 	 /data/heralding/log \
          /data/mailoney/log \
 	 /data/nginx/log \

@@ -132,6 +132,14 @@ fuGLASTOPF () {
   chown tpot:tpot /data/glastopf -R
 }
 
+# Let's create a function to clean up and prepare glastopf data
+fuGLUTTON () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/glutton/*; fi
+  mkdir -p /data/glutton/log
+  chmod 760 /data/glutton -R
+  chown tpot:tpot /data/glutton -R
+}
+
 # Let's create a function to clean up and prepare heralding data
 fuHERALDING () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/heralding/*; fi
@@ -234,6 +242,7 @@ if [ "$myPERSISTENCE" = "on" ];
     fuELK
     fuEMOBILITY
     fuGLASTOPF
+    fuGLUTTON
     fuHERALDING
     fuHONEYTRAP
     fuMAILONEY

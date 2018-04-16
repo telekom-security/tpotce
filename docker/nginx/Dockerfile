@@ -23,4 +23,4 @@ RUN apk -U upgrade && \
     rm -rf /var/cache/apk/*
 
 # Start nginx
-CMD nginx -g 'daemon off;'
+CMD exec nginx -g 'daemon off;'
