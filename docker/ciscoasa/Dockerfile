@@ -35,4 +35,4 @@ RUN apk -U upgrade && \
 # Start elasticsearch-head
 WORKDIR /opt/ciscoasa_honeypot
 USER ciscoasa:ciscoasa
-CMD python3 asa_server.py --enable_ssl --verbose >> /var/log/ciscoasa/ciscoasa.log 2>&1
+CMD exec python3 asa_server.py --enable_ssl --verbose >> /var/log/ciscoasa/ciscoasa.log 2>&1

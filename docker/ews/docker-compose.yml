@@ -12,6 +12,7 @@ services:
     build: .
     container_name: ewsposter
     restart: always
+    stop_signal: SIGINT
     networks:
      - ewsposter_local
     env_file:

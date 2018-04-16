@@ -21,6 +21,7 @@ RUN apk -U --no-cache add bash \
                python-dev \
                py-cffi \
                py-cryptography \
+               py-pip \
                tcpdump \
                wget && \
 
@@ -31,6 +32,7 @@ RUN apk -U --no-cache add bash \
     cp /root/dist/requirements.txt /opt/conpot/ && \
     # Patch to accept ENV for MIB path
     cp /root/dist/snmp_server.py /opt/conpot/conpot/protocols/snmp/ && \
+    pip install -U pip setuptools && \
     python setup.py install && \
     cd / && \
     # Monkey patch, see https://github.com/mushorg/conpot/issues/361
@@ -64,4 +66,4 @@ RUN apk -U --no-cache add bash \
     rm -rf /var/cache/apk/*
 
 # Start conpot
-CMD /usr/bin/conpot --template $CONPOT_TEMPLATE --logfile $CONPOT_LOG --config $CONPOT_CONFIG
+CMD exec /usr/bin/conpot --template $CONPOT_TEMPLATE --logfile $CONPOT_LOG --config $CONPOT_CONFIG
