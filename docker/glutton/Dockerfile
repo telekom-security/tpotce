@@ -45,4 +45,4 @@ RUN apk -U --no-cache add bash \
 
 # Run supervisor upon container start
 WORKDIR /opt/glutton
-CMD bin/server -i $(/sbin/ip address | grep '^2: ' | awk '{ print $2 }' | tr -d [:punct:]) -l /var/log/glutton/glutton.log -d true
+CMD exec bin/server -i $(/sbin/ip address | grep '^2: ' | awk '{ print $2 }' | tr -d [:punct:]) -l /var/log/glutton/glutton.log -d true

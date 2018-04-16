@@ -1,9 +1,6 @@
 # For docker-compose ...
 version: '2.2'
 
-networks:
-  glutton_local:
-
 services:
 
 # glutton service
@@ -13,9 +10,12 @@ services:
     network_mode: "host"
     #networks:
     # - glutton_local
+    #ports:
+    # - "5000:5000"
+    # - "22:5000"
     cap_add:
      - NET_ADMIN
     image: "dtagdevsec/glutton:1804"
     volumes:
      - /data/glutton/log:/var/log/glutton
-
+     - /root/tpotce/docker/glutton/dist/rules.yaml:/opt/glutton/rules/rules.yaml

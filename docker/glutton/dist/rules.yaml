@@ -1,5 +1,5 @@
 rules:
-  - match: tcp dst port 64295
+  - match: tcp dst port 5001
     type: passthrough
     name: ssh
   - match: tcp dst port 22 or port 2222
