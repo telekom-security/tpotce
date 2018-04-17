@@ -23,8 +23,9 @@ RUN apk -U add bash \
     apk del build-base \
             git \
             go && \
-    rm -rf /var/cache/apk/*
+    rm -rf /opt/go/src \
+           /var/cache/apk/* \
 
 # Run supervisor upon container start
 USER vnclowpot:vnclowpot
-CMD /opt/go/bin/vnclowpot -j >> /var/log/vnclowpot/vnclowpot.log
+CMD exec /opt/go/bin/vnclowpot -j >> /var/log/vnclowpot/vnclowpot.log

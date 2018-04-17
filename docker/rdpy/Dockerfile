@@ -53,4 +53,4 @@ RUN apk -U upgrade && \
 
 # Start rdpy
 USER rdpy:rdpy
-CMD /usr/bin/python2 -i /usr/bin/rdpy-rdphoneypot.py /home/rdpy/$(shuf -i 1-3 -n 1) >> /var/log/rdpy/rdpy.log
+CMD exec /usr/bin/python2 -i /usr/bin/rdpy-rdphoneypot.py /home/rdpy/$(shuf -i 1-3 -n 1) >> /var/log/rdpy/rdpy.log

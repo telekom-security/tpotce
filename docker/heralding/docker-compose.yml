@@ -10,6 +10,7 @@ services:
     build: .
     container_name: heralding
     restart: always
+    stop_signal: SIGINT
     environment:
       - PYTHON_EGG_CACHE=/tmp/heralding
     tmpfs:

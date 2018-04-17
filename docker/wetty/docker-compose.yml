@@ -9,6 +9,7 @@ services:
     build: .
     container_name: wetty
     restart: always
+    stop_signal: SIGKILL
     network_mode: "host"
     env_file:
      - /opt/tpot/etc/compose/wetty_environment

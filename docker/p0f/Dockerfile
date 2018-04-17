@@ -35,4 +35,4 @@ RUN apk -U upgrade && \
 # Start suricata
 WORKDIR /opt/p0f
 USER p0f:p0f
-CMD /bin/bash -c "exec /opt/p0f/p0f -u p0f -j -o /var/log/p0f/p0f.json -i $(/sbin/ip address | grep '^2: ' | awk '{ print $2 }' | tr -d [:punct:])"
+CMD exec /opt/p0f/p0f -u p0f -j -o /var/log/p0f/p0f.json -i $(/sbin/ip address | grep '^2: ' | awk '{ print $2 }' | tr -d [:punct:])

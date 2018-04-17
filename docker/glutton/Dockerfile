@@ -12,7 +12,8 @@ RUN apk -U --no-cache add bash \
                           iptables-dev \
                           libnetfilter_queue-dev \
                           libpcap-dev \
-                          procps && \
+                          procps \
+                          upx && \
 
 # Setup go, glutton
     export GOPATH=/opt/go/ && \
@@ -27,6 +28,7 @@ RUN apk -U --no-cache add bash \
     mv /opt/go/src/github.com/mushorg/glutton/bin /opt/glutton/ && \
     mv /opt/go/src/github.com/mushorg/glutton/config /opt/glutton/ && \
     mv /opt/go/src/github.com/mushorg/glutton/rules /opt/glutton/ && \
+    upx /opt/glutton/bin/server && \
 
 # Setup user, groups and configs
     addgroup -g 2000 glutton && \
@@ -38,7 +40,8 @@ RUN apk -U --no-cache add bash \
     apk del --purge build-base \
                     git \
                     go \
-                    g++ && \
+                    g++ \
+                    upx && \
     rm -rf /var/cache/apk/* \
            /opt/go \
            /root/dist

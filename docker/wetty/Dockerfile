@@ -29,4 +29,4 @@ RUN apk -U upgrade && \
 # Start elasticsearch-head
 WORKDIR /opt
 USER wetty:wetty
-CMD /usr/bin/node /opt/node_modules/wetty/app.js -p 64300 --host 127.0.0.1 --sshhost 127.0.0.1 --sshport 64295 --sshuser $MY_SSHUSER
+CMD exec /usr/bin/node /opt/node_modules/wetty/app.js -p 64300 --host 127.0.0.1 --sshhost 127.0.0.1 --sshport 64295 --sshuser $MY_SSHUSER

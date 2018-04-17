@@ -46,4 +46,4 @@ RUN apk -U upgrade && \
 
 # Start elasticpot
 WORKDIR /tmp/heralding/
-CMD ["heralding","-c","/etc/heralding/heralding.yml","-l","/var/log/heralding/heralding.log"]
+CMD exec heralding -c /etc/heralding/heralding.yml -l /var/log/heralding/heralding.log

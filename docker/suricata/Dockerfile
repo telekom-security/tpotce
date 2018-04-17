@@ -30,4 +30,4 @@ RUN apk -U upgrade && \
     rm -rf /var/cache/apk/*
 
 # Start suricata
-CMD update.sh $OINKCODE && suricata -v -F /etc/suricata/capture-filter.bpf -i $(/sbin/ip address | grep '^2: ' | awk '{ print $2 }' | tr -d [:punct:])
+CMD update.sh $OINKCODE && exec suricata -v -F /etc/suricata/capture-filter.bpf -i $(/sbin/ip address | grep '^2: ' | awk '{ print $2 }' | tr -d [:punct:])
