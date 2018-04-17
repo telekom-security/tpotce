@@ -1,11 +1,11 @@
 # T-Pot (Standard)
 # For docker-compose ...
+# Do not erase ports sections, these are used by /opt/tpot/bin/rules.sh to setup iptables ACCEPT rules for NFQ (honeytrap / glutton)
 version: '2.2'
 
 networks:
   ciscoasa_local:
   cowrie_local:
-#  dionaea_local:
   elasticpot_local:
   ewsposter_local:
   glastopf_local:
@@ -21,6 +21,7 @@ services:
   ciscoasa:
     container_name: ciscoasa
     restart: always
+    stop_signal: SIGINT
     networks:
      - ciscoasa_local
     ports:
@@ -45,15 +46,13 @@ services:
      - /data/cowrie/keys:/home/cowrie/cowrie/etc
      - /data/cowrie/log:/home/cowrie/cowrie/log
      - /data/cowrie/log/tty:/home/cowrie/cowrie/log/tty
-
+       
 # Dionaea service
   dionaea:
     container_name: dionaea
     stdin_open: true
     restart: always
     network_mode: "host"
-#    networks:
-#     - dionaea_local
     ports:
      - "20:20"
      - "21:21"
@@ -87,6 +86,7 @@ services:
   elasticpot:
     container_name: elasticpot
     restart: always
+    stop_signal: SIGINT
     networks:
      - elasticpot_local
     ports:
@@ -124,6 +124,7 @@ services:
   kibana:
     container_name: kibana
     restart: always
+    stop_signal: SIGKILL
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -161,6 +162,7 @@ services:
   ewsposter:
     container_name: ewsposter
     restart: always
+    stop_signal: SIGINT
     networks:
      - ewsposter_local
     env_file:
@@ -205,6 +207,7 @@ services:
   mailoney:
     container_name: mailoney
     restart: always
+    stop_signal: SIGINT
     networks:
      - mailoney_local
     ports:
@@ -298,6 +301,7 @@ services:
   suricata:
     container_name: suricata
     restart: always
+    stop_signal: SIGINT
     environment:
     # For ET Pro ruleset replace <OPEN> with your OINKCODE
      - OINKCODE=OPEN
@@ -337,6 +341,7 @@ services:
   wetty:
     container_name: wetty
     restart: always
+    stop_signal: SIGKILL
     network_mode: "host"
     env_file:
      - /opt/tpot/etc/compose/wetty_environment
