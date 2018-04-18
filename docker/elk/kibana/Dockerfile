@@ -14,8 +14,8 @@ RUN apk -U upgrade && \
 # Get and install packages
     cd /root/dist/ && \
     mkdir -p /usr/share/kibana/ && \
-    wget https://artifacts.elastic.co/downloads/kibana/kibana-5.6.8-linux-x86_64.tar.gz && \
-    tar xvfz kibana-5.6.8-linux-x86_64.tar.gz --strip-components=1 -C /usr/share/kibana/ && \
+    wget https://artifacts.elastic.co/downloads/kibana/kibana-6.2.4-linux-x86_64.tar.gz && \
+    tar xvfz kibana-6.2.4-linux-x86_64.tar.gz --strip-components=1 -C /usr/share/kibana/ && \
 
 # Kibana's bundled node does not work in alpine
     rm /usr/share/kibana/node/bin/node && \
@@ -25,13 +25,22 @@ RUN apk -U upgrade && \
 
 # Add and move files
     cd /root/dist/ && \
-    cp kibana.svg /usr/share/kibana/src/ui/public/images/kibana.svg && \
-    cp kibana.svg /usr/share/kibana/src/ui/public/icons/kibana.svg && \
+    cp test.svg /usr/share/kibana/src/ui/public/images/kibana.svg && \
+    cp test.svg /usr/share/kibana/src/ui/public/icons/kibana.svg && \
     cp elk.ico /usr/share/kibana/src/ui/public/assets/favicons/favicon.ico && \
     cp elk.ico /usr/share/kibana/src/ui/public/assets/favicons/favicon-16x16.png && \
     cp elk.ico /usr/share/kibana/src/ui/public/assets/favicons/favicon-32x32.png && \
     cp create_kibana_index.js /usr/share/kibana/src/core_plugins/elasticsearch/lib/ && \
     cd / && \
+
+# Setup plugins
+    cd /usr/share/kibana/plugins && \
+    wget https://github.com/dlumbrer/kbn_radar/releases/download/Kibana-6.X/kbn_radar.tar.gz && \
+    wget https://github.com/dlumbrer/kbn_network/releases/download/6.0.X-1/network_vis.tar.gz && \
+    tar xvfz kbn_radar.tar.gz && \
+    tar xvfz network_vis.tar.gz && \
+    rm *.tar.gz && \
+#    /usr/share/kibana/bin/kibana-plugin install https://github.com/johtani/analyze-api-ui-plugin/releases/download/6.2.4/analyze-api-ui-plugin-6.2.4.zip && \
 
 # Setup user, groups and configs
     sed -i 's/#server.basePath: ""/server.basePath: "\/kibana"/' /usr/share/kibana/config/kibana.yml && \

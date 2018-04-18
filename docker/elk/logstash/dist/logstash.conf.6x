@@ -425,8 +425,8 @@ if "_grokparsefailure" in [tags] { drop {} }
 # Output section
 output {
   elasticsearch {
+    path => "/usr/share/logstash/vendor/bundle/jruby/2.3.0/gems/logstash-output-elasticsearch-9.1.1-java/lib/logstash/outputs/elasticsearch/elasticsearch-template-es6x.json"
     hosts => ["elasticsearch:9200"]
-    document_type => "doc"
   }
 
   if [type] == "Suricata" {

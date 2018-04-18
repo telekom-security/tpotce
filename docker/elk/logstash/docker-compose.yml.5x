@@ -18,4 +18,3 @@ services:
     volumes:
      - /data:/data
      - /var/log:/data/host/log
-     - /root/tpotce/docker/elk/logstash/dist/logstash.conf:/etc/logstash/conf.d/logstash.conf
