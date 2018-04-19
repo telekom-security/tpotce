@@ -1,7 +1,8 @@
 #!/bin/bash
-# Export all Kibana objects
+# Export all Kibana objects through Kibana Saved Objects API
 # Make sure ES is available
 myES="http://127.0.0.1:64298/"
+myKIBANA="http://127.0.0.1:64296/"
 myESSTATUS=$(curl -s -XGET ''$myES'_cluster/health' | jq '.' | grep -c green)
 if ! [ "$myESSTATUS" = "1" ]
   then
@@ -14,10 +15,10 @@ fi
 
 # Set vars
 myDATE=$(date +%Y%m%d%H%M)
-myINDEXCOUNT=$(curl -s -XGET ''$myES'.kibana/index-pattern/logstash-*' | tr '\\' '\n' | grep "scripted" | wc -w)
-myDASHBOARDS=$(curl -s -XGET ''$myES'.kibana/dashboard/_search?filter_path=hits.hits._id&pretty&size=10000'  | jq '.hits.hits[] | {_id}' | jq -r '._id')
-myVISUALIZATIONS=$(curl -s -XGET ''$myES'.kibana/visualization/_search?filter_path=hits.hits._id&pretty&size=10000' | jq '.hits.hits[] | {_id}' | jq -r '._id')
-mySEARCHES=$(curl -s -XGET ''$myES'.kibana/search/_search?filter_path=hits.hits._id&pretty&size=10000' | jq '.hits.hits[] | {_id}' | jq -r '._id')
+myINDEXCOUNT=$(curl -s -XGET ''$myKIBANA'api/saved_objects/index-pattern' | jq '.saved_objects[].attributes' | tr '\\' '\n' | grep "scripted" | wc -w)
+myDASHBOARDS=$(curl -s -XGET ''$myKIBANA'api/saved_objects/dashboard?per_page=200' | jq '.saved_objects[].id' | tr -d '"')
+myVISUALIZATIONS=$(curl -s -XGET ''$myKIBANA'api/saved_objects/visualization?per_page=200' | jq '.saved_objects[].id' | tr -d '"')
+mySEARCHES=$(curl -s -XGET ''$myKIBANA'api/saved_objects/search?per_page=200' | jq '.saved_objects[].id' | tr -d '"')
 myCOL1="[0;34m"
 myCOL0="[0;0m"
 
@@ -30,7 +31,7 @@ trap fuCLEANUP EXIT
 # Export index patterns
 mkdir -p patterns
 echo $myCOL1"### Now exporting"$myCOL0 $myINDEXCOUNT $myCOL1"index patterns." $myCOL0
-curl -s -XGET ''$myES'.kibana/index-pattern/logstash-*?' | jq '._source' > patterns/index-patterns.json
+curl -s -XGET ''$myKIBANA'api/saved_objects/index-pattern' | jq '.saved_objects[] | {attributes}' > patterns/index-patterns.json
 echo
 
 # Export dashboards
@@ -39,7 +40,7 @@ echo $myCOL1"### Now exporting"$myCOL0 $(echo $myDASHBOARDS | wc -w) $myCOL1"das
 for i in $myDASHBOARDS;
   do
     echo $myCOL1"###### "$i $myCOL0
-    curl -s -XGET ''$myES'.kibana/dashboard/'$i'' | jq '._source' > dashboards/$i.json
+    curl -s -XGET ''$myKIBANA'api/saved_objects/dashboard/'$i'' | jq '. | {attributes}' > dashboards/$i.json
   done;
 echo
 
@@ -49,7 +50,7 @@ echo $myCOL1"### Now exporting"$myCOL0 $(echo $myVISUALIZATIONS | wc -w) $myCOL1
 for i in $myVISUALIZATIONS;
   do
     echo $myCOL1"###### "$i $myCOL0
-    curl -s -XGET ''$myES'.kibana/visualization/'$i'' | jq '._source' > visualizations/$i.json
+    curl -s -XGET ''$myKIBANA'api/saved_objects/visualization/'$i'' | jq '. | {attributes}' > visualizations/$i.json
   done;
 echo
 
@@ -59,7 +60,7 @@ echo $myCOL1"### Now exporting"$myCOL0 $(echo $mySEARCHES | wc -w) $myCOL1"searc
 for i in $mySEARCHES;
   do
     echo $myCOL1"###### "$i $myCOL0
-    curl -s -XGET ''$myES'.kibana/search/'$i'' | jq '._source' > searches/$i.json
+    curl -s -XGET ''$myKIBANA'api/saved_objects/search/'$i'' | jq '. | {attributes}' > searches/$i.json
   done;
 echo
 

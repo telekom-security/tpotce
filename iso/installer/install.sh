@@ -327,7 +327,7 @@ apt-get autoremove -y 2>&1 | dialog --title "[ Pulling updates ]" $myPROGRESSBOX
 pip install --upgrade pip 2>&1 | dialog --title "[ Installing pip ]" $myPROGRESSBOXCONF
 pip install elasticsearch-curator==5.4.1 2>&1 | dialog --title "[ Installing elasticsearch-curator ]" $myPROGRESSBOXCONF
 pip install yq==2.4.1 2>&1 | dialog --title "[ Installing yq ]" $myPROGRESSBOXCONF
-npm install https://github.com/taskrabbit/elasticsearch-dump#ac9f62a -g 2>&1 | dialog --title "[ Installing elasticsearch-dump ]" $myPROGRESSBOXCONF
+npm install https://github.com/taskrabbit/elasticsearch-dump#9fcc8cc -g 2>&1 | dialog --title "[ Installing elasticsearch-dump ]" $myPROGRESSBOXCONF
 wget https://github.com/bcicen/ctop/releases/download/v0.7/ctop-0.7-linux-amd64 -O ctop 2>&1 | dialog --title "[ Installing ctop ]" $myPROGRESSBOXCONF
 mv ctop /usr/bin/ 2>&1 | dialog --title "[ Installing ctop ]" $myPROGRESSBOXCONF
 chmod +x /usr/bin/ctop 2>&1 | dialog --title "[ Installing ctop ]" $myPROGRESSBOXCONF
