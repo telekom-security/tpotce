@@ -7,7 +7,6 @@ services:
 # ELK services
 ## Elasticsearch service
   elasticsearch:
-    build: .
     container_name: elasticsearch
     restart: always
     environment:
@@ -31,7 +30,6 @@ services:
 
 ## Kibana service
   kibana:
-    build: .
     container_name: kibana
     restart: always
     stop_signal: SIGKILL
@@ -44,7 +42,6 @@ services:
 
 ## Logstash service
   logstash:
-    build: .
     container_name: logstash
     restart: always
     depends_on:
@@ -60,7 +57,6 @@ services:
 
 ## Elasticsearch-head service
   head:
-    build: .
     container_name: head
     restart: always
     depends_on:

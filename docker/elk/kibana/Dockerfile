@@ -25,8 +25,8 @@ RUN apk -U upgrade && \
 
 # Add and move files
     cd /root/dist/ && \
-    cp test.svg /usr/share/kibana/src/ui/public/images/kibana.svg && \
-    cp test.svg /usr/share/kibana/src/ui/public/icons/kibana.svg && \
+    cp kibana.svg /usr/share/kibana/src/ui/public/images/kibana.svg && \
+    cp kibana.svg /usr/share/kibana/src/ui/public/icons/kibana.svg && \
     cp elk.ico /usr/share/kibana/src/ui/public/assets/favicons/favicon.ico && \
     cp elk.ico /usr/share/kibana/src/ui/public/assets/favicons/favicon-16x16.png && \
     cp elk.ico /usr/share/kibana/src/ui/public/assets/favicons/favicon-32x32.png && \

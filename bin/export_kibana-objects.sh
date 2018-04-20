@@ -16,6 +16,7 @@ fi
 # Set vars
 myDATE=$(date +%Y%m%d%H%M)
 myINDEXCOUNT=$(curl -s -XGET ''$myKIBANA'api/saved_objects/index-pattern' | jq '.saved_objects[].attributes' | tr '\\' '\n' | grep "scripted" | wc -w)
+myINDEXID=$(curl -s -XGET ''$myKIBANA'api/saved_objects/index-pattern' | jq '.saved_objects[].id' | tr -d '"')
 myDASHBOARDS=$(curl -s -XGET ''$myKIBANA'api/saved_objects/dashboard?per_page=200' | jq '.saved_objects[].id' | tr -d '"')
 myVISUALIZATIONS=$(curl -s -XGET ''$myKIBANA'api/saved_objects/visualization?per_page=200' | jq '.saved_objects[].id' | tr -d '"')
 mySEARCHES=$(curl -s -XGET ''$myKIBANA'api/saved_objects/search?per_page=200' | jq '.saved_objects[].id' | tr -d '"')
@@ -31,7 +32,7 @@ trap fuCLEANUP EXIT
 # Export index patterns
 mkdir -p patterns
 echo $myCOL1"### Now exporting"$myCOL0 $myINDEXCOUNT $myCOL1"index patterns." $myCOL0
-curl -s -XGET ''$myKIBANA'api/saved_objects/index-pattern' | jq '.saved_objects[] | {attributes}' > patterns/index-patterns.json
+curl -s -XGET ''$myKIBANA'api/saved_objects/index-pattern/'$myINDEXID'' | jq '. | {attributes}' > patterns/$myINDEXID.json &
 echo
 
 # Export dashboards
@@ -40,7 +41,7 @@ echo $myCOL1"### Now exporting"$myCOL0 $(echo $myDASHBOARDS | wc -w) $myCOL1"das
 for i in $myDASHBOARDS;
   do
     echo $myCOL1"###### "$i $myCOL0
-    curl -s -XGET ''$myKIBANA'api/saved_objects/dashboard/'$i'' | jq '. | {attributes}' > dashboards/$i.json
+    curl -s -XGET ''$myKIBANA'api/saved_objects/dashboard/'$i'' | jq '. | {attributes}' > dashboards/$i.json &
   done;
 echo
 
@@ -50,7 +51,7 @@ echo $myCOL1"### Now exporting"$myCOL0 $(echo $myVISUALIZATIONS | wc -w) $myCOL1
 for i in $myVISUALIZATIONS;
   do
     echo $myCOL1"###### "$i $myCOL0
-    curl -s -XGET ''$myKIBANA'api/saved_objects/visualization/'$i'' | jq '. | {attributes}' > visualizations/$i.json
+    curl -s -XGET ''$myKIBANA'api/saved_objects/visualization/'$i'' | jq '. | {attributes}' > visualizations/$i.json &
   done;
 echo
 
@@ -60,9 +61,12 @@ echo $myCOL1"### Now exporting"$myCOL0 $(echo $mySEARCHES | wc -w) $myCOL1"searc
 for i in $mySEARCHES;
   do
     echo $myCOL1"###### "$i $myCOL0
-    curl -s -XGET ''$myKIBANA'api/saved_objects/search/'$i'' | jq '. | {attributes}' > searches/$i.json
+    curl -s -XGET ''$myKIBANA'api/saved_objects/search/'$i'' | jq '. | {attributes}' > searches/$i.json &
   done;
 echo
+
+# Wait for background exports to finish
+wait
 
 # Building tar archive
 echo $myCOL1"### Now building archive"$myCOL0 "kibana-objects_"$myDATE".tgz"
