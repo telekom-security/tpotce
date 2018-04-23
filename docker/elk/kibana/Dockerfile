@@ -37,20 +37,21 @@ RUN apk -U upgrade && \
     cd / && \
 
 # Setup plugins, rebuild bundle
-    #cd /usr/share/kibana/plugins && \
-    #wget https://github.com/dlumbrer/kbn_radar/releases/download/Kibana-6.X/kbn_radar.tar.gz && \
-    #wget https://github.com/dlumbrer/kbn_network/releases/download/6.0.X-1/network_vis.tar.gz && \
-    #tar xvfz kbn_radar.tar.gz && \
-    #tar xvfz network_vis.tar.gz && \
-    #rm *.tar.gz && \
+    cd /usr/share/kibana/plugins && \
+    wget https://github.com/dlumbrer/kbn_radar/releases/download/Kibana-6.X/kbn_radar.tar.gz && \
+    wget https://github.com/dlumbrer/kbn_network/releases/download/6.0.X-1/network_vis.tar.gz && \
+    tar xvfz kbn_radar.tar.gz && \
+    tar xvfz network_vis.tar.gz && \
+    rm *.tar.gz && \
     rm -rf /usr/share/kibana/optimize/bundles/* && \
-    #/usr/share/kibana/bin/kibana-plugin install https://github.com/johtani/analyze-api-ui-plugin/releases/download/6.2.4/analyze-api-ui-plugin-6.2.4.zip && \
 
 # Setup user, groups and configs
     sed -i 's/#server.basePath: ""/server.basePath: "\/kibana"/' /usr/share/kibana/config/kibana.yml && \
     sed -i 's/#kibana.defaultAppId: "home"/kibana.defaultAppId: "dashboards"/' /usr/share/kibana/config/kibana.yml && \
     sed -i 's/#server.host: "localhost"/server.host: "0.0.0.0"/' /usr/share/kibana/config/kibana.yml && \
     sed -i 's/#elasticsearch.url: "http:\/\/localhost:9200"/elasticsearch.url: "http:\/\/elasticsearch:9200"/' /usr/share/kibana/config/kibana.yml && \
+    sed -i "s/#005571/#e20074/g" /usr/share/kibana/src/ui/public/chrome/directives/global_nav/global_nav.less && \
+    sed -i "s/#005571/#e20074/g" /usr/share/kibana/src/core_plugins/kibana/public/dashboard/styles/index.less && \
     /usr/share/kibana/bin/kibana 2>&1 | grep -m 1 "Optimization of bundles" && \
     addgroup -g 2000 kibana && \
     adduser -S -H -s /bin/bash -u 2000 -D -g 2000 kibana && \
