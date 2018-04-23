@@ -42,6 +42,7 @@ tar xvf $myDUMP
 
 # Build indices list
 myINDICES=$(ls tmp/logstash*.gz | cut -c 5- | rev | cut -c 4- | rev)
+myINDICES+=" .kibana"
 echo $myCOL1"### The following indices will be restored: "$myCOL0
 echo $myINDICES
 echo

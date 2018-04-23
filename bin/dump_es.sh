@@ -20,7 +20,7 @@ trap fuCLEANUP EXIT
 
 # Set vars
 myDATE=$(date +%Y%m%d%H%M)
-myINDICES=$(curl -s -XGET ''$myES'_cat/indices/' | grep logstash | awk '{ print $3 }' | sort | grep -v 1970)
+myINDICES=$(curl -s -XGET ''$myES'_cat/indices/' | awk '{ print $3 }' | sort | grep -v 1970)
 myES="http://127.0.0.1:64298/"
 myCOL1="[0;34m"
 myCOL0="[0;0m"
@@ -41,5 +41,5 @@ for i in $myINDICES;
 
 # Build tar archive
 echo $myCOL1"### Now building tar archive: es_dump_"$myDATE".tgz" $myCOL0
-tar cvf es_dump_$myDATE.tar tmp/*
+tar cvf es_dump_$myDATE.tar tmp/.
 echo $myCOL1"### Done."$myCOL0
