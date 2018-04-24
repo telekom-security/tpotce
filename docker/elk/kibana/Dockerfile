@@ -52,6 +52,8 @@ RUN apk -U upgrade && \
     sed -i 's/#elasticsearch.url: "http:\/\/localhost:9200"/elasticsearch.url: "http:\/\/elasticsearch:9200"/' /usr/share/kibana/config/kibana.yml && \
     sed -i "s/#005571/#e20074/g" /usr/share/kibana/src/ui/public/chrome/directives/global_nav/global_nav.less && \
     sed -i "s/#005571/#e20074/g" /usr/share/kibana/src/core_plugins/kibana/public/dashboard/styles/index.less && \
+    sed -i "s/globalColorBlue/globalColorMagenta/g" /usr/share/kibana/src/ui/public/chrome/directives/global_nav/global_nav_link/global_nav_link.less && \
+    echo "@globalColorMagenta: #E20074;" >> /usr/share/kibana/src/ui/public/styles/variables/colors.less && \
     /usr/share/kibana/bin/kibana 2>&1 | grep -m 1 "Optimization of bundles" && \
     addgroup -g 2000 kibana && \
     adduser -S -H -s /bin/bash -u 2000 -D -g 2000 kibana && \
