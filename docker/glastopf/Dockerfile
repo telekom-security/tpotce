@@ -12,6 +12,7 @@ RUN apk -U --no-cache add autoconf \
                git \
                libffi \
                libffi-dev \
+               libcap \
                make \
                py-asn1 \
                py-cffi \
@@ -41,6 +42,7 @@ RUN apk -U --no-cache add autoconf \
                py-mongo \
                py-sqlalchemy \
                py-webob && \
+    pip install --no-cache-dir --upgrade pip && \
 
 # Install php sandbox from git
     git clone https://github.com/mushorg/BFR /opt/BFR && \
@@ -63,9 +65,10 @@ RUN apk -U --no-cache add autoconf \
     cp /root/dist/base_logger.py /opt/glastopf/glastopf/modules/reporting/auxiliary/ && \
     cp /root/dist/log_s3.py /opt/glastopf/glastopf/modules/reporting/auxiliary/ && \
     cp /root/dist/requirements.txt /opt/glastopf/ && \
-    python setup.py install && \
+    pip install --no-cache-dir . && \
     cd / && \
     rm -rf /opt/glastopf /tmp/* /var/tmp/* && \
+    setcap cap_net_bind_service=+ep /usr/bin/python2.7 && \
 
 # Setup user, groups and configs
     addgroup -g 2000 glastopf && \
@@ -79,10 +82,12 @@ RUN apk -U --no-cache add autoconf \
             git \
             libffi-dev \
             php7-dev \
-            python-dev && \
+            python-dev \
+            py-pip && \
     rm -rf /root/* && \
     rm -rf /var/cache/apk/*
 
 # Set workdir and start glastopf
+USER glastopf:glastopf
 WORKDIR /tmp/glastopf/
-CMD cp /opt/glastopf/glastopf.cfg /tmp/glastopf && glastopf-runner
+CMD cp /opt/glastopf/glastopf.cfg /tmp/glastopf && exec glastopf-runner

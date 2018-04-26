@@ -47,4 +47,4 @@ RUN apk -U upgrade && \
 
 # Run ewsposter
 USER ews:ews
-CMD sleep 10 && exec /usr/bin/python /opt/ewsposter/ews.py -l 60
+CMD sleep 10 && exec /usr/bin/python -u /opt/ewsposter/ews.py -l 60

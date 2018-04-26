@@ -9,11 +9,10 @@ services:
   glastopf:
     build: .
     container_name: glastopf
-    environment:
-      - PYTHON_EGG_CACHE=/tmp/glastopf
     tmpfs:
-      - /tmp/glastopf:exec
+      - /tmp/glastopf:uid=2000,gid=2000
     restart: always
+    stop_signal: SIGINT
     networks:
      - glastopf_local
     ports:

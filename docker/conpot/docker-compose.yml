@@ -22,7 +22,6 @@ services:
      - CONPOT_LOG=/var/log/conpot/conpot_default.log
      - CONPOT_TEMPLATE=default
      - CONPOT_TMP=/tmp/conpot
-     - PYTHON_EGG_CACHE=/tmp/conpot
     tmpfs:
      - /tmp/conpot:exec
     networks:
@@ -52,7 +51,6 @@ services:
      - CONPOT_LOG=/var/log/conpot/conpot_IEC104.log
      - CONPOT_TEMPLATE=IEC104
      - CONPOT_TMP=/tmp/conpot
-     - PYTHON_EGG_CACHE=/tmp/conpot
     tmpfs:
      - /tmp/conpot:exec
     networks:
@@ -77,7 +75,6 @@ services:
      - CONPOT_LOG=/var/log/conpot/conpot_guardian_ast.log
      - CONPOT_TEMPLATE=guardian_ast
      - CONPOT_TMP=/tmp/conpot
-     - PYTHON_EGG_CACHE=/tmp/conpot
     tmpfs:
      - /tmp/conpot:exec
     networks:
@@ -101,7 +98,6 @@ services:
      - CONPOT_LOG=/var/log/conpot/conpot_ipmi.log
      - CONPOT_TEMPLATE=ipmi
      - CONPOT_TMP=/tmp/conpot
-     - PYTHON_EGG_CACHE=/tmp/conpot
     tmpfs:
      - /tmp/conpot:exec
     networks:
@@ -125,7 +121,6 @@ services:
      - CONPOT_LOG=/var/log/conpot/conpot_kamstrup_382.log
      - CONPOT_TEMPLATE=kamstrup_382
      - CONPOT_TMP=/tmp/conpot
-     - PYTHON_EGG_CACHE=/tmp/conpot
     tmpfs:
      - /tmp/conpot:exec
     networks:
