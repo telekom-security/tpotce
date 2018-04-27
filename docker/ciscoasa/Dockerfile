@@ -1,5 +1,8 @@
 FROM alpine
 
+# Include dist
+ADD dist/ /root/dist/
+
 # Setup env and apt
 RUN apk -U upgrade && \
     apk add bash \
@@ -19,7 +22,8 @@ RUN apk -U upgrade && \
     cd /opt/ && \
     git clone https://github.com/cymmetria/ciscoasa_honeypot && \
     cd ciscoasa_honeypot && \
-    pip3 install -r requirements.txt && \
+    pip3 install --no-cache-dir -r requirements.txt && \
+    cp /root/dist/asa_server.py /opt/ciscoasa_honeypot && \
     chown -R ciscoasa:ciscoasa /opt/ciscoasa_honeypot && \
 
 # Clean up
@@ -33,6 +37,7 @@ RUN apk -U upgrade && \
             python3
 
 # Start elasticsearch-head
-WORKDIR /opt/ciscoasa_honeypot
+WORKDIR /tmp/ciscoasa/
 USER ciscoasa:ciscoasa
-CMD exec python3 asa_server.py --enable_ssl --verbose >> /var/log/ciscoasa/ciscoasa.log 2>&1
+CMD cp -R /opt/ciscoasa_honeypot/* /tmp/ciscoasa && exec python3 asa_server.py --enable_ssl --verbose >> /var/log/ciscoasa/ciscoasa.log 2>&1
+#CMD cp -R /opt/ciscoasa_honeypot/* /tmp/ciscoasa && exec python3 asa_server.py --enable_ssl >> /var/log/ciscoasa/ciscoasa.log 2>&1

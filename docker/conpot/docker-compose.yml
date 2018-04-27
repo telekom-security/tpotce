@@ -23,7 +23,7 @@ services:
      - CONPOT_TEMPLATE=default
      - CONPOT_TMP=/tmp/conpot
     tmpfs:
-     - /tmp/conpot:exec
+     - /tmp/conpot:uid=2000,gid=2000
     networks:
      - conpot_local_default
     ports:
@@ -52,7 +52,7 @@ services:
      - CONPOT_TEMPLATE=IEC104
      - CONPOT_TMP=/tmp/conpot
     tmpfs:
-     - /tmp/conpot:exec
+     - /tmp/conpot:uid=2000,gid=2000
     networks:
      - conpot_local_IEC104
     ports:
@@ -76,7 +76,7 @@ services:
      - CONPOT_TEMPLATE=guardian_ast
      - CONPOT_TMP=/tmp/conpot
     tmpfs:
-     - /tmp/conpot:exec
+     - /tmp/conpot:uid=2000,gid=2000
     networks:
      - conpot_local_guardian_ast
     ports:
@@ -99,7 +99,7 @@ services:
      - CONPOT_TEMPLATE=ipmi
      - CONPOT_TMP=/tmp/conpot
     tmpfs:
-     - /tmp/conpot:exec
+     - /tmp/conpot:uid=2000,gid=2000
     networks:
      - conpot_local_ipmi
     ports:
@@ -122,7 +122,7 @@ services:
      - CONPOT_TEMPLATE=kamstrup_382
      - CONPOT_TMP=/tmp/conpot
     tmpfs:
-     - /tmp/conpot:exec
+     - /tmp/conpot:uid=2000,gid=2000
     networks:
      - conpot_local_kamstrup_382
     ports:

@@ -13,11 +13,14 @@ services:
     container_name: ciscoasa
     restart: always
     stop_signal: SIGINT
+    tmpfs:
+     - /tmp/ciscoasa:uid=2000,gid=2000
     networks:
      - ciscoasa_local
     ports:
      - "5000:5000"
      - "8443:8443"
     image: "dtagdevsec/ciscoasa:1804"
+    read_only: true
     volumes:
      - /data/ciscoasa/log:/var/log/ciscoasa
