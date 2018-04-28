@@ -40,4 +40,3 @@ RUN apk -U upgrade && \
 WORKDIR /tmp/ciscoasa/
 USER ciscoasa:ciscoasa
 CMD cp -R /opt/ciscoasa_honeypot/* /tmp/ciscoasa && exec python3 asa_server.py --enable_ssl --verbose >> /var/log/ciscoasa/ciscoasa.log 2>&1
-#CMD cp -R /opt/ciscoasa_honeypot/* /tmp/ciscoasa && exec python3 asa_server.py --enable_ssl >> /var/log/ciscoasa/ciscoasa.log 2>&1
