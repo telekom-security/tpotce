@@ -8,5 +8,5 @@ trap fuCLEANUP EXIT
 
 # Download updated translation maps
 cd /etc/listbot 
-git pull
+git pull --all --depth=1
 cd /

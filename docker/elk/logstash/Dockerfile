@@ -9,12 +9,12 @@ RUN apk -U upgrade && \
     apk add bash curl git libc6-compat libzmq openjdk8-jre procps wget && \
 
 # Get and install packages
-    git clone https://github.com/dtag-dev-sec/listbot /etc/listbot && \
+    git clone --depth=1 https://github.com/dtag-dev-sec/listbot /etc/listbot && \
     cd /root/dist/ && \
     mkdir -p /usr/share/logstash/ && \
-    wget https://artifacts.elastic.co/downloads/logstash/logstash-5.6.5.tar.gz && \
+    wget https://artifacts.elastic.co/downloads/logstash/logstash-5.6.9.tar.gz && \
     wget http://geolite.maxmind.com/download/geoip/database/GeoLite2-ASN.tar.gz && \
-    tar xvfz logstash-5.6.5.tar.gz --strip-components=1 -C /usr/share/logstash/ && \
+    tar xvfz logstash-5.6.9.tar.gz --strip-components=1 -C /usr/share/logstash/ && \
     /usr/share/logstash/bin/logstash-plugin install logstash-filter-translate && \
     /usr/share/logstash/bin/logstash-plugin install logstash-output-syslog && \
     tar xvfz GeoLite2-ASN.tar.gz --strip-components=1 -C /usr/share/logstash/vendor/bundle/jruby/1.9/gems/logstash-filter-geoip-4.3.1-java/vendor/ && \
