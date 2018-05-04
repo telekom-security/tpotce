@@ -4,52 +4,60 @@ FROM alpine
 ADD dist/ /root/dist/
 
 # Get and install dependencies & packages
-RUN apk -U upgrade && \
-    apk add build-base \
-            git \
-            gmp-dev \
-            libffi-dev \
-            mpc1-dev \
-            mpfr-dev \
-            openssl-dev \
-            procps \
-            python \
-            python-dev \
-            py-mysqldb \
-            py-pip \
-            py-requests \
-            py-setuptools && \
+RUN apk -U --no-cache add \
+                       build-base \
+                       git \
+                       gmp-dev \
+                       libcap \
+                       libffi-dev \
+                       mpc1-dev \
+                       mpfr-dev \
+                       openssl-dev \
+                       python \
+                       python-dev \
+                       py-mysqldb \
+                       py-pip \
+                       py-requests \
+                       py-setuptools && \
 
 # Setup user
     addgroup -g 2000 cowrie && \
-    adduser -S -s /bin/bash -u 2000 -D -g 2000 cowrie && \
+    adduser -S -s /bin/ash -u 2000 -D -g 2000 cowrie && \
 
 # Install cowrie from git
-    git clone https://github.com/micheloosterhof/cowrie.git /home/cowrie/cowrie/ && \
+    git clone https://github.com/micheloosterhof/cowrie /home/cowrie/cowrie/ && \
     cd /home/cowrie/cowrie && \
-    pip install --no-cache-dir --upgrade cffi && \
-    pip install --no-cache-dir -U -r requirements.txt && \
+    pip install --no-cache-dir --upgrade cffi pip && \
+    pip install --no-cache-dir --upgrade -r requirements.txt && \
 
-# Setup user, groups and configs
+# Setup configs
+    setcap cap_net_bind_service=+ep /usr/bin/python2.7 && \
     cp /root/dist/cowrie.cfg /home/cowrie/cowrie/cowrie.cfg && \
-    cp /root/dist/userdb.txt /home/cowrie/cowrie/data/userdb.txt && \
-    chown cowrie:cowrie -R /home/cowrie/* && \
+    chown cowrie:cowrie -R /home/cowrie/* /usr/lib/python2.7/site-packages/twisted/plugins && \
+
+# Start Cowrie once to prevent dropin.cache errors upon container start caused by read-only filesystem
+    su - cowrie -c "export PYTHONPATH=/home/cowrie/cowrie && \
+                   cd /home/cowrie/cowrie && \
+                   /usr/bin/twistd --uid=2000 --gid=2000 -y cowrie.tac --pidfile cowrie.pid cowrie &" && \
+    sleep 10 && \
 
 # Clean up
-    rm -rf /root/* && \
-    apk del --purge git \
-                    py-pip \
-                    mpfr-dev \
-                    mpc1-dev \
-                    libffi-dev \
-                    build-base \
-                    py-mysqldb \
+    apk del --purge build-base \
+                    git \
                     gmp-dev \
-                    python-dev && \
-    rm -rf /var/cache/apk/*
+                    libcap \
+                    libffi-dev \
+                    mpc1-dev \
+                    mpfr-dev \
+                    python-dev \
+                    py-mysqldb \
+                    py-pip && \
+    rm -rf /root/* && \
+    rm -rf /var/cache/apk/* && \
+    rm -rf /home/cowrie/cowrie/cowrie.pid
 
 # Start cowrie
 ENV PYTHONPATH /home/cowrie/cowrie
 WORKDIR /home/cowrie/cowrie
 USER cowrie:cowrie
-CMD ["/usr/bin/twistd", "--nodaemon", "-y", "cowrie.tac", "--pidfile", "var/run/cowrie.pid", "cowrie"]
+CMD ["/usr/bin/twistd", "--nodaemon", "-y", "cowrie.tac", "--pidfile", "/tmp/cowrie/cowrie.pid", "cowrie"]

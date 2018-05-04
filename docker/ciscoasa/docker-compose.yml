@@ -1,5 +1,3 @@
-# T-Pot (Standard)
-# For docker-compose ...
 version: '2.2'
 
 networks:

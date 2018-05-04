@@ -5,17 +5,17 @@ ADD dist/ /root/dist/
 
 # Setup env and apt
 RUN apk -U upgrade && \
-    apk add bash \
-            curl \
-            git \
-            libc6-compat \
-            libzmq \
-            openjdk8-jre \
-            procps \
-            wget && \
+    apk --no-cache add \
+                    bash \
+                    curl \
+                    git \
+                    libc6-compat \
+                    libzmq \
+                    openjdk8-jre \
+                    wget && \
 
 # Get and install packages
-    git clone https://github.com/dtag-dev-sec/listbot /etc/listbot && \
+    git clone --depth=1 https://github.com/dtag-dev-sec/listbot /etc/listbot && \
     cd /root/dist/ && \
     mkdir -p /usr/share/logstash/ && \
     wget https://artifacts.elastic.co/downloads/logstash/logstash-6.2.4.tar.gz && \
@@ -42,11 +42,13 @@ RUN apk -U upgrade && \
 
 # Clean up
     apk del --purge wget && \
-    rm -rf /root/*
+    rm -rf /root/* && \
+    rm -rf /var/cache/apk/*
 
 # Healthcheck
 HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:9600'
 
 # Start logstash
 #USER logstash:logstash
-CMD update.sh && exec /usr/share/logstash/bin/logstash -f /etc/logstash/conf.d/logstash.conf
+#CMD update.sh && exec /usr/share/logstash/bin/logstash -f /etc/logstash/conf.d/logstash.conf
+CMD exec /usr/share/logstash/bin/logstash -f /etc/logstash/conf.d/logstash.conf

@@ -1,5 +1,0 @@
-#!/usr/bin/python
-# EASY-INSTALL-SCRIPT: 'Conpot==0.5.1','conpot'
-__import__('gevent.monkey').monkey.patch_all()
-__requires__ = 'Conpot==0.5.1'
-__import__('pkg_resources').run_script('Conpot==0.5.1', 'conpot')

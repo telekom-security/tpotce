@@ -5,13 +5,11 @@ ADD dist/ /root/dist/
 
 # Setup env and apt
 RUN apk -U upgrade && \
-    apk add bash \
-            build-base \
+    apk add build-base \
             git \
             libffi-dev \
             openssl-dev \
-            python3-dev \
-            procps && \
+            python3-dev && \
 
 # Setup user
     addgroup -g 2000 ciscoasa && \
@@ -34,9 +32,11 @@ RUN apk -U upgrade && \
                     python3-dev && \
     apk add libffi \
             openssl \
-            python3
+            python3 && \
+    rm -rf /root/* && \
+    rm -rf /var/cache/apk/*
 
-# Start elasticsearch-head
+# Start ciscoasa
 WORKDIR /tmp/ciscoasa/
 USER ciscoasa:ciscoasa
 CMD cp -R /opt/ciscoasa_honeypot/* /tmp/ciscoasa && exec python3 asa_server.py --enable_ssl --verbose >> /var/log/ciscoasa/ciscoasa.log 2>&1

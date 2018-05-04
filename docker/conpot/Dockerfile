@@ -4,7 +4,7 @@ FROM alpine
 ADD dist/ /root/dist/
 
 # Setup apt
-RUN apk -U --no-cache add bash \
+RUN apk -U --no-cache add \
                build-base \
                cython-dev \
                file \
@@ -51,7 +51,8 @@ RUN apk -U --no-cache add bash \
     adduser -S -s /bin/bash -u 2000 -D -g 2000 conpot && \
 
 # Clean up
-    apk del --purge build-base \
+    apk del --purge \
+            build-base \
             cython-dev \
             file \
             git \

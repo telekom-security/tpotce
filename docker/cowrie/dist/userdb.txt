@@ -1,1 +1,0 @@
-root:0:password
