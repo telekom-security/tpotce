@@ -6,7 +6,7 @@ ADD dist/ /root/dist/
 
 # Install dependencies and packages
 RUN apt-get update -y && \
-    apt-get upgrade -y && \
+    apt-get dist-upgrade -y && \
     apt-get install -y --no-install-recommends \
       autoconf \
       automake \
@@ -27,11 +27,11 @@ RUN apt-get update -y && \
       libssl-dev \
       libtool \
       libudns-dev \
-      procps \
       python3 \
       python3-dev \
       python3-bson \
-      python3-yaml && \
+      python3-yaml \
+      ttf-liberation && \
 
 # Get and install dionaea
     git clone https://github.com/dinotools/dionaea /root/dionaea/ && \

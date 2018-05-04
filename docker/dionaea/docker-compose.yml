@@ -1,9 +1,4 @@
-# T-Pot (Standard)
-# For docker-compose ...
 version: '2.2'
-
-#networks:
-#  dionaea_local:
 
 services:
 
@@ -14,8 +9,6 @@ services:
     stdin_open: true
     restart: always
     network_mode: "host"
-    #    networks:
-    #     - dionaea_local
     ports:
      - "20:20"
      - "21:21"
