@@ -1,5 +1,5 @@
 # CONPOT TEMPLATE=[default, IEC104, guardian_ast, ipmi, kamstrup_382, proxy]
-version: '2.2'
+version: '2.3'
 
 networks:
   conpot_local_default:

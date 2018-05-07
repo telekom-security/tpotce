@@ -4,22 +4,21 @@ FROM alpine
 ADD dist/ /root/dist/
 
 # Install packages
-RUN apk -U upgrade && \ 
-    apk add bash \
-            git \
-            python3 && \
-    pip3 install --upgrade pip && \
-    pip3 install bottle \
-                 configparser \
-                 datetime \
-                 requests && \
+RUN apk -U --no-cache add \
+             git \
+             python3 && \
+    pip3 install --no-cache-dir --upgrade pip && \
+    pip3 install --no-cache-dir bottle \
+                                configparser \
+                                datetime \
+                                requests && \
     mkdir -p /opt && \
     cd /opt/ && \
     git clone https://github.com/schmalle/ElasticpotPY.git && \
 
 # Setup user, groups and configs
     addgroup -g 2000 elasticpot && \
-    adduser -S -H -s /bin/bash -u 2000 -D -g 2000 elasticpot && \
+    adduser -S -H -s /bin/ash -u 2000 -D -g 2000 elasticpot && \
     mv /root/dist/elasticpot.cfg /opt/ElasticpotPY/ && \
     mkdir /opt/ElasticpotPY/log && \
 
