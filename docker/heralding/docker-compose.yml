@@ -1,4 +1,4 @@
-version: '2.2'
+version: '2.3'
   
 networks:
   heralding_local:
@@ -11,10 +11,8 @@ services:
     container_name: heralding
     restart: always
     stop_signal: SIGINT
-    environment:
-      - PYTHON_EGG_CACHE=/tmp/heralding
     tmpfs:
-      - /tmp/heralding:exec
+     - /tmp/heralding:uid=2000,gid=2000
     networks:
      - heralding_local
     ports:
@@ -25,7 +23,7 @@ services:
      - "80:80"
      - "110:110"
      - "143:143"
-     - "8443:8443"
+     - "443:443"
      - "993:993"
      - "995:995"
      - "5432:5432"

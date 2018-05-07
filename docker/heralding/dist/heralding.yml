@@ -120,7 +120,7 @@ capabilities:
 
   https:
     enabled: true
-    port: 8443
+    port: 443
     timeout: 30
     protocol_specific_data:
       banner: ""
