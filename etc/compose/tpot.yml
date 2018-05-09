@@ -4,7 +4,6 @@
 version: '2.2'
 
 networks:
-  ciscoasa_local:
   cowrie_local:
   elasticpot_local:
   ewsposter_local:
@@ -22,8 +21,7 @@ services:
     container_name: ciscoasa
     restart: always
     stop_signal: SIGINT
-    networks:
-     - ciscoasa_local
+    network_mode: "host"
     ports:
      - "5000:5000/udp"
      - "8443:8443"
@@ -38,8 +36,8 @@ services:
     networks:
      - cowrie_local
     ports:
-     - "22:2222"
-     - "23:2223"
+     - "22:22"
+     - "23:23"
     image: "dtagdevsec/cowrie:1804"
     volumes:
      - /data/cowrie/downloads:/home/cowrie/cowrie/dl

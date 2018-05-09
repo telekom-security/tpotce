@@ -1,8 +1,5 @@
 version: '2.3'
 
-networks:
-  ciscoasa_local:
-
 services:
 
 # Ciscoasa service
@@ -13,11 +10,10 @@ services:
     stop_signal: SIGINT
     tmpfs:
      - /tmp/ciscoasa:uid=2000,gid=2000
-    networks:
-     - ciscoasa_local
+    network_mode: "host"
     ports:
-     - "5000:500"
-     - "8443:443"
+     - "5000:5000/udp"
+     - "8443:8443"
     image: "dtagdevsec/ciscoasa:1804"
     read_only: true
     volumes:
