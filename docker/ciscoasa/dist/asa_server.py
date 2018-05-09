@@ -150,7 +150,7 @@ class WebLogicHandler(SimpleHTTPRequestHandler):
 
     def log_message(self, format, *args):
         self.logger.debug("{'timestamp': '%s', 'src_ip': '%s', 'payload_printable': '%s'}" %
-                          (datetime.datetime.utcnow().isoformat(),
+                          (datetime.datetime.now().isoformat(),
                            self.client_address[0],
                            format % args))
 

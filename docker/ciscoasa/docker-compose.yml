@@ -16,8 +16,8 @@ services:
     networks:
      - ciscoasa_local
     ports:
-     - "5000:5000"
-     - "8443:8443"
+     - "5000:500"
+     - "8443:443"
     image: "dtagdevsec/ciscoasa:1804"
     read_only: true
     volumes:
