@@ -1,0 +1,6 @@
+<guardian_ast enabled="True" host="0.0.0.0" port="10001">
+    <device_info>
+        <vendor_name>Guardian</vendor_name>
+        <product_code>Guardian AST</product_code>
+    </device_info>
+</guardian_ast>

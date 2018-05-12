@@ -3,7 +3,9 @@
 version: '2.2'
 
 networks:
-  conpot_local:
+  conpot_kamstrup_local:
+  conpot_default_local:
+  conpot_guardian_ast_local:
   cowrie_local:
   dionaea_local:
   elasticpot_local:
@@ -18,19 +20,50 @@ networks:
 
 services:
 
-# Conpot service
-  conpot:
-    container_name: conpot
+# Conpot service - Kamstrup Template
+  conpot_kamstrup:
+    container_name: conpot_kamstrup
     restart: always
     networks:
-     - conpot_local
+     - conpot_kamstrup_local
     ports:
      - "1025:1025"
      - "50100:50100"
-    image: "dtagdevsec/conpot:1710"
+#   image: "dtagdevsec/conpot:1710"
+    image: "uncleraymondo/conpot_kamstrup:1710"
     volumes:
      - /data/conpot/log:/var/log/conpot
 
+# Conpot service - Default Template
+  conpot_default:
+    container_name: conpot_default
+    restart: always
+    networks:
+     - conpot_default_local
+    ports:
+     - "102:102"
+     - "502:502"
+     - "623:623/udp"
+     - "47808:47808/udp"
+     - "161:161/udp"
+#   image: "dtagdevsec/conpot:1710"
+    image: "uncleraymondo/conpot_default:1710"
+    volumes:
+     - /data/conpot/log:/var/log/conpot
+
+# Conpot service - Guardian AST Template
+  conpot_guardian_ast:
+    container_name: conpot_guardian_ast
+    restart: always
+    networks:
+     - conpot_guardian_ast_local
+    ports:
+     - "10001:10001"
+#   image: "dtagdevsec/conpot:1710"
+    image: "uncleraymondo/conpot_guardianast:1710"
+    volumes:
+     - /data/conpot/log:/var/log/conpot
+     
 # Cowrie service
   cowrie:
     container_name: cowrie

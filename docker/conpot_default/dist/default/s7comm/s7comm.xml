@@ -1,0 +1,20 @@
+<s7comm enabled="True" host="0.0.0.0" port="102">
+    <system_status_lists>
+        <ssl id="W#16#xy1C" name="Component Identification">
+            <system_name id="W#16#0001">SystemName</system_name>
+            <module_name id="W#16#0002">SystemDescription</module_name>
+            <plant_ident id="W#16#0003">FacilityName</plant_ident>
+            <copyright id="W#16#0004">Copyright</copyright>
+            <serial id="W#16#0005">s7_id</serial>
+            <module_type_name id="W#16#0007">s7_module_type</module_type_name>
+            <oem_id id="W#16#000A">empty</oem_id>
+            <location id="W#16#000B">empty</location>
+        </ssl>
+        <ssl id="W#16#xy11" name="Module Identification">
+            <!-- Not really sure what these are supposed to contain -->
+            <module_identification id="W#16#0001">empty</module_identification>
+            <hardware_identification id="W#16#0006">empty</hardware_identification>
+            <firmware_identification id="W#16#0006">empty</firmware_identification>
+        </ssl>
+    </system_status_lists>
+</s7comm>

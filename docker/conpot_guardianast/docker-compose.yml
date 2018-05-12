@@ -1,0 +1,19 @@
+version: '2.0'
+
+networks:
+  conpot_guardianast_local:
+
+services:
+
+# Conpot service using the Guardian AST Tank Monitoring System Template
+  conpot_guardianast:
+    container_name: conpot_guardianast
+    restart: always
+    networks:
+     - conpot_guardianast_local
+    ports:
+     - "10001:10001"
+#   image: "dtagdevsec/conpot:1710"
+    image: "uncleraymodo/conpot_guardianast:1710"
+    volumes:
+     - /data/conpot/log:/var/log/conpot
