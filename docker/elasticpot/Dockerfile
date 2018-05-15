@@ -14,7 +14,7 @@ RUN apk -U --no-cache add \
                                 requests && \
     mkdir -p /opt && \
     cd /opt/ && \
-    git clone https://github.com/schmalle/ElasticpotPY.git && \
+    git clone --depth=1 https://github.com/schmalle/ElasticpotPY.git && \
 
 # Setup user, groups and configs
     addgroup -g 2000 elasticpot && \
