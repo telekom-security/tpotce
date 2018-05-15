@@ -21,7 +21,7 @@ RUN apk -U upgrade && \
 # Get and install packages
     mkdir -p /opt/ && \
     cd /opt/ && \
-    git clone https://github.com/cymmetria/ciscoasa_honeypot && \
+    git clone --depth=1 https://github.com/cymmetria/ciscoasa_honeypot && \
     cd ciscoasa_honeypot && \
     pip3 install --no-cache-dir --upgrade pip && \
     pip3 install --no-cache-dir -r requirements.txt && \
