@@ -48,7 +48,7 @@ RUN apk -U --no-cache add \
     cp /root/dist/conpot.cfg /etc/conpot/conpot.cfg && \
     cp -R /root/dist/templates /usr/lib/python2.7/site-packages/conpot/ && \
     addgroup -g 2000 conpot && \
-    adduser -S -s /bin/bash -u 2000 -D -g 2000 conpot && \
+    adduser -S -s /bin/ash -u 2000 -D -g 2000 conpot && \
 
 # Clean up
     apk del --purge \
