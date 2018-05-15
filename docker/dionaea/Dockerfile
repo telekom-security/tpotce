@@ -34,7 +34,7 @@ RUN apt-get update -y && \
       ttf-liberation && \
 
 # Get and install dionaea
-    git clone https://github.com/dinotools/dionaea /root/dionaea/ && \
+    git clone --depth=1 https://github.com/dinotools/dionaea /root/dionaea/ && \
     cd /root/dionaea && \
     autoreconf -vi && \
     ./configure \
