@@ -4,8 +4,8 @@ FROM alpine
 ADD dist/ /root/dist/
 
 # Install packages
-RUN apk -U upgrade && \
-    apk add build-base \
+RUN apk -U --no-cache add \
+            build-base \
             git \
             libssl1.0 \
             openssl-dev \
@@ -18,13 +18,14 @@ RUN apk -U upgrade && \
             py-pysqlite \
             py-requests \
             py-setuptools && \
-    pip install pyOpenSSL==16.2.0 && \
+    pip install --no-cache-dir -U pip && \
+    pip install --no-cache-dir pyOpenSSL && \
 
 # Setup ewsposter
-    git clone https://github.com/rep/hpfeeds /opt/hpfeeds && \
+    git clone --depth=1 https://github.com/rep/hpfeeds /opt/hpfeeds && \
     cd /opt/hpfeeds && \
     python setup.py install && \
-    git clone https://github.com/vorband/ewsposter /opt/ewsposter && \
+    git clone --depth=1 https://github.com/vorband/ewsposter /opt/ewsposter && \
     mkdir -p /opt/ewsposter/spool /opt/ewsposter/log && \
 
 # Setup user and groups
