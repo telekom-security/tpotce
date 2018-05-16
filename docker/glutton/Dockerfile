@@ -46,6 +46,6 @@ RUN apk -U --no-cache add bash \
            /opt/go \
            /root/dist
 
-# Run supervisor upon container start
+# Start glutton 
 WORKDIR /opt/glutton
 CMD exec bin/server -i $(/sbin/ip address | grep '^2: ' | awk '{ print $2 }' | tr -d [:punct:]) -l /var/log/glutton/glutton.log
