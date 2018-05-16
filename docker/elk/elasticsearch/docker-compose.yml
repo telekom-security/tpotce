@@ -1,6 +1,4 @@
-# T-Pot (Standard)
-# For docker-compose ...
-version: '2.2'
+version: '2.3'
 
 services:
 
@@ -12,7 +10,8 @@ services:
     restart: always
     environment:
      - bootstrap.memory_lock=true
-     - "ES_JAVA_OPTS=-Xms1024m -Xmx1024m"
+     - ES_JAVA_OPTS=-Xms1024m -Xmx1024m
+     - ES_TMPDIR=/tmp
     cap_add:
      - IPC_LOCK
     ulimits:

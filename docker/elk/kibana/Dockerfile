@@ -4,11 +4,9 @@ FROM alpine
 ADD dist/ /root/dist/
 
 # Setup env and apt
-RUN apk -U upgrade && \
-    apk add bash \
+RUN apk -U --no-cache add \
             curl \
             nodejs \
-            procps \
             wget && \
 
 # Get and install packages
@@ -56,7 +54,7 @@ RUN apk -U upgrade && \
     echo "@globalColorMagenta: #E20074;" >> /usr/share/kibana/src/ui/public/styles/variables/colors.less && \
     /usr/share/kibana/bin/kibana 2>&1 | grep -m 1 "Optimization of bundles" && \
     addgroup -g 2000 kibana && \
-    adduser -S -H -s /bin/bash -u 2000 -D -g 2000 kibana && \
+    adduser -S -H -s /bin/ash -u 2000 -D -g 2000 kibana && \
     chown -R kibana:kibana /usr/share/kibana/ && \
 
 # Clean up

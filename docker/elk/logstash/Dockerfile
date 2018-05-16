@@ -4,15 +4,14 @@ FROM alpine
 ADD dist/ /root/dist/
 
 # Setup env and apt
-RUN apk -U upgrade && \
-    apk --no-cache add \
-                    bash \
-                    curl \
-                    git \
-                    libc6-compat \
-                    libzmq \
-                    openjdk8-jre \
-                    wget && \
+RUN apk -U --no-cache add \
+               bash \
+               curl \
+               git \
+               libc6-compat \
+               libzmq \
+               openjdk8-jre \
+               wget && \
 
 # Get and install packages
     git clone --depth=1 https://github.com/dtag-dev-sec/listbot /etc/listbot && \

@@ -4,12 +4,11 @@ FROM alpine
 ADD dist/ /root/dist/
 
 # Setup env and apt
-RUN apk -U upgrade && \
-    apk add bash \
-            curl \
-            openjdk8-jre \
-            procps \
-            wget && \
+RUN apk -U --no-cache add \
+             bash \
+             curl \
+             openjdk8-jre \
+             wget && \
 
 # Get and install packages
     cd /root/dist/ && \
@@ -24,7 +23,7 @@ RUN apk -U upgrade && \
 
 # Setup user, groups and configs
     addgroup -g 2000 elasticsearch && \
-    adduser -S -H -s /bin/bash -u 2000 -D -g 2000 elasticsearch && \
+    adduser -S -H -s /bin/ash -u 2000 -D -g 2000 elasticsearch && \
     chown -R elasticsearch:elasticsearch /usr/share/elasticsearch/ && \
 
 # Clean up
@@ -36,4 +35,4 @@ HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:9200/_cat/health'
 
 # Start ELK
 USER elasticsearch:elasticsearch
-CMD export ES_TMPDIR=/tmp && exec /usr/share/elasticsearch/bin/elasticsearch
+CMD ["/usr/share/elasticsearch/bin/elasticsearch"]
