@@ -4,8 +4,8 @@ FROM alpine
 ADD dist/ /root/dist/
 
 # Install packages
-RUN apk -U --no-cache add autoconf \
-               bash \
+RUN apk -U --no-cache add \
+               autoconf \
                bind-tools \
                build-base \
                cython \
@@ -61,9 +61,7 @@ RUN apk -U --no-cache add autoconf \
 # Install glastopf from git
     git clone https://github.com/mushorg/glastopf.git /opt/glastopf && \
     cd /opt/glastopf && \
-    git checkout c4932d9cb513d284142e2c0d66284221201d7477 && \
-    cp /root/dist/base_logger.py /opt/glastopf/glastopf/modules/reporting/auxiliary/ && \
-    cp /root/dist/log_s3.py /opt/glastopf/glastopf/modules/reporting/auxiliary/ && \
+    git checkout 67c2a3fce7419f0c6b418b2b91da3c45b399f2b8 && \
     cp /root/dist/requirements.txt /opt/glastopf/ && \
     pip install --no-cache-dir . && \
     cd / && \
@@ -73,21 +71,23 @@ RUN apk -U --no-cache add autoconf \
 # Setup user, groups and configs
     addgroup -g 2000 glastopf && \
     adduser -S -H -u 2000 -D -g 2000 glastopf && \
-    mkdir -p /opt/glastopf && \
-    mv /root/dist/glastopf.cfg /opt/glastopf/ && \
+    mkdir -p /etc/glastopf && \
+    mv /root/dist/glastopf.cfg /etc/glastopf/ && \
 
 # Clean up
-    apk del autoconf \
-            build-base \
-            git \
-            libffi-dev \
-            php7-dev \
-            python-dev \
-            py-pip && \
+    apk del --purge autoconf \
+                    build-base \
+                    file \
+                    git \
+                    libffi-dev \
+                    php7-dev \
+                    python-dev \
+                    py-pip \
+                    re2c && \
     rm -rf /root/* && \
     rm -rf /var/cache/apk/*
 
 # Set workdir and start glastopf
 USER glastopf:glastopf
 WORKDIR /tmp/glastopf/
-CMD cp /opt/glastopf/glastopf.cfg /tmp/glastopf && exec glastopf-runner
+CMD cp /etc/glastopf/glastopf.cfg /tmp/glastopf && exec glastopf-runner

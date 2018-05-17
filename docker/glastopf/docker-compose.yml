@@ -1,4 +1,4 @@
-version: '2.2'
+version: '2.3'
 
 networks:
   glastopf_local:
@@ -20,5 +20,5 @@ services:
     image: "dtagdevsec/glastopf:1804"
     read_only: true
     volumes:
-     - /data/glastopf/db:/opt/glastopf/db
-     - /data/glastopf/log:/opt/glastopf/log
+     - /data/glastopf/db:/tmp/glastopf/db
+     - /data/glastopf/log:/tmp/glastopf/log
