@@ -19,6 +19,7 @@ RUN apk -U --no-cache add \
     mkdir -p /opt/go/ && \
     go get -d github.com/mushorg/glutton && \
     go get -u github.com/golang/dep/cmd/dep && \
+    mv /root/dist/system.go /opt/go/src/github.com/mushorg/glutton/ && \
     cd /opt/go/src/github.com/mushorg/glutton/ && \
     /opt/go/bin/dep ensure && \
     make build && \
