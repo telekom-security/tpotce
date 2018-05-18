@@ -10,6 +10,7 @@ RUN apk -U --no-cache add \
             		libcap \
             		libffi-dev \
             		libressl-dev \
+                        libzmq \
             		postgresql-dev \
             		python3 \
             		python3-dev \
@@ -42,7 +43,6 @@ RUN apk -U --no-cache add \
             postgresql-dev \
             python3-dev \
             py-virtualenv && \
-    apk add libzmq && \
     rm -rf /root/* \
            /var/cache/apk/* \
            /opt/heralding
