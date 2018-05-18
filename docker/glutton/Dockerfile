@@ -11,6 +11,7 @@ RUN apk -U --no-cache add \
                    g++ \
                    iptables-dev \
                    libnetfilter_queue-dev \
+                   libcap \
                    libpcap-dev && \
 
 # Setup go, glutton
@@ -26,6 +27,8 @@ RUN apk -U --no-cache add \
     mv /opt/go/src/github.com/mushorg/glutton/bin /opt/glutton/ && \
     mv /opt/go/src/github.com/mushorg/glutton/config /opt/glutton/ && \
     mv /opt/go/src/github.com/mushorg/glutton/rules /opt/glutton/ && \
+    setcap cap_net_admin,cap_net_raw=+ep /opt/glutton/bin/server && \
+    setcap cap_net_admin,cap_net_raw=+ep /sbin/xtables-multi && \
 
 # Setup user, groups and configs
     addgroup -g 2000 glutton && \
@@ -44,4 +47,5 @@ RUN apk -U --no-cache add \
 
 # Start glutton 
 WORKDIR /opt/glutton
+USER glutton:glutton
 CMD exec bin/server -i $(/sbin/ip address | grep '^2: ' | awk '{ print $2 }' | tr -d [:punct:]) -l /var/log/glutton/glutton.log

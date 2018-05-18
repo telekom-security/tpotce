@@ -1,5 +1,4 @@
-# For docker-compose ...
-version: '2.2'
+version: '2.3'
 
 services:
 
