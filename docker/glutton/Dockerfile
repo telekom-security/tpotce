@@ -4,16 +4,14 @@ FROM alpine
 ADD dist/ /root/dist/
   
 # Setup apk
-RUN apk -U --no-cache add bash \
-                          build-base \
-                          git \
-                          go \
-                          g++ \
-                          iptables-dev \
-                          libnetfilter_queue-dev \
-                          libpcap-dev \
-                          procps \
-                          upx && \
+RUN apk -U --no-cache add \
+                   build-base \
+                   git \
+                   go \
+                   g++ \
+                   iptables-dev \
+                   libnetfilter_queue-dev \
+                   libpcap-dev && \
 
 # Setup go, glutton
     export GOPATH=/opt/go/ && \
@@ -28,11 +26,10 @@ RUN apk -U --no-cache add bash \
     mv /opt/go/src/github.com/mushorg/glutton/bin /opt/glutton/ && \
     mv /opt/go/src/github.com/mushorg/glutton/config /opt/glutton/ && \
     mv /opt/go/src/github.com/mushorg/glutton/rules /opt/glutton/ && \
-    upx /opt/glutton/bin/server && \
 
 # Setup user, groups and configs
     addgroup -g 2000 glutton && \
-    adduser -S -s /bin/bash -u 2000 -D -g 2000 glutton && \
+    adduser -S -s /bin/ash -u 2000 -D -g 2000 glutton && \
     mkdir -p /var/log/glutton && \
     mv /root/dist/rules.yaml /opt/glutton/rules/ && \
 
@@ -40,8 +37,7 @@ RUN apk -U --no-cache add bash \
     apk del --purge build-base \
                     git \
                     go \
-                    g++ \
-                    upx && \
+                    g++ && \
     rm -rf /var/cache/apk/* \
            /opt/go \
            /root/dist
