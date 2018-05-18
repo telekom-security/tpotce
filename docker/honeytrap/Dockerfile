@@ -54,4 +54,4 @@ RUN apt-get update -y && \
     apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Start honeytrap
-CMD ["/opt/honeytrap/sbin/honeytrap", "-D", "-C", "/opt/honeytrap/etc/honeytrap/honeytrap.conf", "-t", "5", "-u", "honeytrap", "-g", "honeytrap"]
+CMD ["/opt/honeytrap/sbin/honeytrap", "-D", "-C", "/opt/honeytrap/etc/honeytrap/honeytrap.conf", "-P", "/tmp/honeytrap/honeytrap.pid", "-t", "5", "-u", "honeytrap", "-g", "honeytrap"]

@@ -1,4 +1,4 @@
-version: '2.2'
+version: '2.3'
 
 networks:
   honeytrap_local:
@@ -10,10 +10,13 @@ services:
     build: .
     container_name: honeytrap
     restart: always
+    tmpfs:
+     - /tmp/honeytrap:uid=2000,gid=2000
     network_mode: "host"
     cap_add:
      - NET_ADMIN
     image: "dtagdevsec/honeytrap:1804"
+    read_only: true
     volumes:
      - /data/honeytrap/attacks:/opt/honeytrap/var/attacks
      - /data/honeytrap/downloads:/opt/honeytrap/var/downloads
