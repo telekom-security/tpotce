@@ -1,11 +1,10 @@
 FROM alpine
 
 # Install packages
-RUN apk -U upgrade && \
-    apk add alpine-sdk \
+RUN apk -U --no-cache add \
+            alpine-sdk \
             autoconf \
             automake \
-            bash \
             curl \
             gawk \
             gcc \
@@ -27,7 +26,7 @@ RUN apk -U upgrade && \
 
 # Install netdata
     cd /root && \
-    git clone https://github.com/firehol/netdata && \
+    git clone --depth=1 https://github.com/firehol/netdata && \
     cd netdata && \
     ./netdata-installer.sh --dont-wait --dont-start-it && \
     sed -i "s/#local:/local:/" /etc/netdata/python.d/elasticsearch.conf && \
@@ -40,7 +39,7 @@ RUN apk -U upgrade && \
     cd / && \
 
 # Clean up
-    apk del alpine-sdk \
+    apk del --purge alpine-sdk \
             autoconf \
             automake \
             gcc \

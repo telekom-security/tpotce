@@ -1,4 +1,4 @@
-version: '2.2'
+version: '2.3'
 
 services:
 
@@ -16,5 +16,5 @@ services:
     volumes:
      - /proc:/host/proc:ro
      - /sys:/host/sys:ro
-     - /var/run/docker.sock:/var/run/docker.sock
+     - /var/run/docker.sock:/var/run/docker.sock:ro
     command: ["/usr/sbin/netdata","-D","-s","/host","-p","19999"]
