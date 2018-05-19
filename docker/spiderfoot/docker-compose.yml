@@ -1,6 +1,4 @@
-# T-Pot (Standard)
-# For docker-compose ...
-version: '2.2'
+version: '2.3'
 
 networks:
   spiderfoot_local:
