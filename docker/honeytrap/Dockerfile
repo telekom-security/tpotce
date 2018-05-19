@@ -13,6 +13,8 @@ RUN apt-get update -y && \
                        build-essential \
                        git \
                        iptables \
+                       libcap2 \
+                       libcap2-bin \
                        libnetfilter-queue1 \
                        libnetfilter-queue-dev \
                        libjson-c-dev \
@@ -42,6 +44,7 @@ RUN apt-get update -y && \
     adduser --system --no-create-home --shell /bin/bash --uid 2000 --disabled-password --disabled-login --gid 2000 honeytrap && \
     mkdir -p /opt/honeytrap/etc/honeytrap/ /opt/honeytrap/var/attacks /opt/honeytrap/var/downloads /opt/honeytrap/var/log && \
     mv /root/dist/honeytrap.conf /opt/honeytrap/etc/honeytrap/ && \
+    setcap cap_net_admin=+ep /opt/honeytrap/sbin/honeytrap && \
 
 # Clean up
     rm -rf /root/* && \
@@ -54,4 +57,5 @@ RUN apt-get update -y && \
     apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Start honeytrap
+USER honeytrap:honeytrap
 CMD ["/opt/honeytrap/sbin/honeytrap", "-D", "-C", "/opt/honeytrap/etc/honeytrap/honeytrap.conf", "-P", "/tmp/honeytrap/honeytrap.pid", "-t", "5", "-u", "honeytrap", "-g", "honeytrap"]
