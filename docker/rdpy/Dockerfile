@@ -4,30 +4,30 @@ FROM alpine
 ADD dist/ /root/dist/
 
 # Get and install dependencies & packages
-RUN apk -U upgrade && \
-    apk add bash \
+RUN apk -U --no-cache add \
             build-base \
             git \
             libffi-dev \
             openssl \
             openssl-dev \
-            procps \
             python \
             python-dev \
             py-pip \
             py-setuptools && \
-    apk -U add --repository http://dl-cdn.alpinelinux.org/alpine/edge/testing/ \
+    apk -U --no-cache add --repository http://dl-cdn.alpinelinux.org/alpine/edge/testing/ \
             py-qt && \
 
 # Setup user
     addgroup -g 2000 rdpy && \
-    adduser -S -s /bin/bash -u 2000 -D -g 2000 rdpy && \
+    adduser -S -s /bin/ash -u 2000 -D -g 2000 rdpy && \
 
 # Install rdpy from git
     cd /home/rdpy && \
-    git clone https://github.com/t3chn0m4g3/rdpy && \
+    git clone --depth=1 https://github.com/t3chn0m4g3/rdpy && \
+    pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir --upgrade cffi && \
-    pip install twisted \
+    pip install --no-cache-dir \
+                twisted \
                 pyopenssl \
                 qt4reactor \
                 service_identity \
