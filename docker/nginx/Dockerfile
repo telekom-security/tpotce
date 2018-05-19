@@ -4,11 +4,9 @@ FROM alpine
 ADD dist/ /root/dist/
 
 # Get and install dependencies & packages
-RUN apk -U upgrade && \
-    apk add bash \
-            nginx \
-            nginx-mod-http-headers-more \
-            procps && \
+RUN apk -U --no-cache add \
+                       nginx \
+                       nginx-mod-http-headers-more && \
 
 # Setup configs
     mkdir -p /run/nginx && \
