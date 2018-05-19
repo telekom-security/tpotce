@@ -7,7 +7,6 @@ ADD . /opt/p0f
 RUN apk -U --no-cache add \
                        bash \
                        build-base \
-                       git \
                        jansson \
                        jansson-dev \
                        libcap \
@@ -25,7 +24,6 @@ RUN apk -U --no-cache add \
 
 # Clean up
     apk del --purge build-base \
-                    git \
                     jansson-dev \
                     libpcap-dev && \
     rm -rf /root/* && \
