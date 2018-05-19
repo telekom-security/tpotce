@@ -4,14 +4,15 @@ FROM alpine
 ADD . /opt/p0f
 
 # Install packages
-RUN apk -U upgrade && \
-    apk add bash \
-            build-base \
-            git \
-            jansson-dev \
-            libcap \
-            libpcap-dev \
-            procps && \
+RUN apk -U --no-cache add \
+                       bash \
+                       build-base \
+                       git \
+                       jansson \
+                       jansson-dev \
+                       libcap \
+                       libpcap \
+                       libpcap-dev && \
 
 # Setup user, groups and configs
     addgroup -g 2000 p0f && \
@@ -27,8 +28,6 @@ RUN apk -U upgrade && \
                     git \
                     jansson-dev \
                     libpcap-dev && \
-    apk add jansson \
-            libpcap && \
     rm -rf /root/* && \
     rm -rf /var/cache/apk/*
 
