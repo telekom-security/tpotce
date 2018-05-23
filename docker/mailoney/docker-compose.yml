@@ -14,7 +14,7 @@ services:
     networks:
      - mailoney_local
     ports:
-     - "25:2525"
+     - "25:25"
     image: "dtagdevsec/mailoney:1804"
     read_only: true
     volumes:

@@ -6,6 +6,7 @@ RUN apk -U --no-cache add \
             automake \
             build-base \
             git \
+            libcap \
             libtool \
             py-pip \
             python \
@@ -30,6 +31,7 @@ RUN apk -U --no-cache add \
     addgroup -g 2000 mailoney && \
     adduser -S -H -s /bin/ash -u 2000 -D -g 2000 mailoney && \
     chown -R mailoney:mailoney /opt/mailoney && \
+    setcap cap_net_bind_service=+ep /usr/bin/python2.7 && \
 
 # Clean up
     apk del --purge autoconf \
@@ -44,4 +46,4 @@ RUN apk -U --no-cache add \
 # Set workdir and start glastopf
 USER mailoney:mailoney
 WORKDIR /opt/mailoney/
-CMD ["/usr/bin/python","mailoney.py","-i","0.0.0.0","-p","2525","-s","mailserver","-t","schizo_open_relay"]
+CMD ["/usr/bin/python","mailoney.py","-i","0.0.0.0","-p","25","-s","mailserver","-t","schizo_open_relay"]
