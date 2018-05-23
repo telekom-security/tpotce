@@ -1,19 +1,23 @@
 FROM alpine
 
 # Setup env and apt
-RUN apk -U upgrade && \
-    apk add bash \
-            build-base \
-            git \
-            nodejs \
-            nodejs-npm \
-            openssh-client \
-            python \
-            procps && \
+RUN apk -U --no-cache add \
+                build-base \
+                git \
+                nodejs \
+                nodejs-npm \
+                openssh-client \
+                python && \
 
 # Setup user
     addgroup -g 2000 wetty && \
-    adduser -S -s /bin/bash -u 2000 -D -g 2000 wetty && \
+    adduser -S -s /bin/ash -u 2000 -D -g 2000 wetty && \
+    #mkdir -p /home/wetty/.ssh && \
+    #chmod 755 /home/wetty/.ssh && \
+    #chown wetty:wetty /home/wetty/.ssh && \
+    #touch /home/wetty/.ssh/known_hosts && \
+    #chmod 777 /home/wetty/.ssh/known_hosts && \
+    #chown wetty:wetty /home/wetty/.ssh/known_hosts && \
 
 # Get and install packages
     mkdir -p /opt/ && \
