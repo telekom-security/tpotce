@@ -1,11 +1,10 @@
 FROM alpine
 
 # Setup apk
-RUN apk -U add bash \
+RUN apk -U --no-cache add \
                build-base \
                git \
-               go \
-               procps && \
+               go && \
 
 # Setup go, vnclowpot
     export GOPATH=/opt/go/ && \
