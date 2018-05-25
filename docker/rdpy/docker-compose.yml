@@ -10,13 +10,13 @@ services:
     build: .
     container_name: rdpy
     extra_hosts:
-     - hpfeeds.example.com:10.20.30.40
+     - hpfeeds.example.com:127.0.0.1
     restart: always
     environment:
      - HPFEEDS_SERVER=hpfeeds.example.com
      - HPFEEDS_IDENT=user
      - HPFEEDS_SECRET=pass
-     - HPFEEDS_PORT=80
+     - HPFEEDS_PORT=65000
      - SERVERID=id
     networks:
      - rdpy_local
