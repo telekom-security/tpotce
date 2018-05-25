@@ -21,23 +21,28 @@ RUN apk -U --no-cache add \
     addgroup -g 2000 rdpy && \
     adduser -S -s /bin/ash -u 2000 -D -g 2000 rdpy && \
 
-# Install rdpy from git
-    cd /home/rdpy && \
-    git clone --depth=1 https://github.com/t3chn0m4g3/rdpy && \
+# Install deps 
     pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir --upgrade cffi && \
     pip install --no-cache-dir \
+                hpfeeds \
                 twisted \
                 pyopenssl \
                 qt4reactor \
                 service_identity \
-                rsa pyasn1 && \
+                rsa \
+                pyasn1 && \
+
+# Install rdpy from git
+    mkdir /opt && \
+    cd /opt && \
+    git clone --depth=1 https://github.com/t3chn0m4g3/rdpy && \
     cd rdpy && \
     python setup.py install && \
 
 # Setup user, groups and configs
-    cp /root/dist/* /home/rdpy/ && \
-    chown rdpy:rdpy -R /home/rdpy/* && \
+    cp /root/dist/* /opt/rdpy/ && \
+    chown rdpy:rdpy -R /opt/rdpy/* && \
     mkdir -p /var/log/rdpy && \
 
 # Clean up
@@ -53,4 +58,4 @@ RUN apk -U --no-cache add \
 
 # Start rdpy
 USER rdpy:rdpy
-CMD exec /usr/bin/python2 -i /usr/bin/rdpy-rdphoneypot.py /home/rdpy/$(shuf -i 1-3 -n 1) >> /var/log/rdpy/rdpy.log
+CMD exec /usr/bin/python2 -i /usr/bin/rdpy-rdphoneypot.py /opt/rdpy/$(shuf -i 1-3 -n 1) >> /var/log/rdpy/rdpy.log
