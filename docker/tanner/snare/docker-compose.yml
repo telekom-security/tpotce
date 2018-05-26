@@ -1,0 +1,19 @@
+version: '2.3'
+
+networks:
+  snare_local:
+
+services:
+
+# Snare service
+  snare:
+    build: .
+    container_name: snare
+    restart: always
+    stop_signal: SIGKILL
+    tty: true
+    networks:
+     - snare_local
+    ports:
+     - "80:80"
+    image: "dtagdevsec/snare:1804"

@@ -1,0 +1,13 @@
+aiohttp==2.2
+aiomysql
+aiohttp_jinja2==0.14.0
+docker<2.6
+elizabeth==0.3.27
+yarl<0.11
+redis
+asyncio_redis
+uvloop
+pymongo
+pylibinjection
+jinja2
+pycodestyle
