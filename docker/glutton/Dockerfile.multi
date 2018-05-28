@@ -1,0 +1,59 @@
+### Builder
+FROM alpine
+
+# Include dist
+ADD dist/ /root/dist/
+  
+# Setup apk
+RUN apk -U --no-cache add \
+                   build-base \
+                   git \
+                   go \
+                   g++ \
+                   iptables-dev \
+                   libnetfilter_queue-dev \
+                   libcap \
+                   libpcap-dev && \
+
+# Setup go, build glutton
+    export GOPATH=/opt/go/ && \
+    mkdir -p /opt/go/ && \
+    go get -d github.com/mushorg/glutton && \
+    go get -u github.com/golang/dep/cmd/dep && \
+    mv /root/dist/system.go /opt/go/src/github.com/mushorg/glutton/ && \
+    cd /opt/go/src/github.com/mushorg/glutton/ && \
+    /opt/go/bin/dep ensure && \
+    make build && \
+    cd / && \
+    mkdir glutton && \
+    mv /opt/go/src/github.com/mushorg/glutton/bin /glutton && \
+    mv /opt/go/src/github.com/mushorg/glutton/config /glutton && \
+    mv /opt/go/src/github.com/mushorg/glutton/rules /glutton && \
+    mv /root/dist/rules.yaml /glutton/rules/
+
+### Final Image
+FROM alpine
+
+COPY --from=0 /glutton /opt/glutton/
+
+# Add deps
+RUN apk -U --no-cache add iptables-dev \
+                          libcap && \
+
+# Setup user, groups and configs
+    ls -R /opt/glutton && \
+    addgroup -g 2000 glutton && \
+    adduser -S -s /bin/ash -u 2000 -D -g 2000 glutton && \
+    mkdir -p /var/log/glutton && \
+
+# Setup glutton
+    setcap cap_net_admin,cap_net_raw=+ep /opt/glutton/bin/server && \
+    setcap cap_net_admin,cap_net_raw=+ep /sbin/xtables-multi && \
+
+    rm -rf /var/cache/apk/*
+
+
+# Start glutton 
+WORKDIR /opt/glutton
+USER glutton:glutton
+CMD exec bin/server -i $(/sbin/ip address | grep '^2: ' | awk '{ print $2 }' | tr -d [:punct:]) -l /var/log/glutton/glutton.log
