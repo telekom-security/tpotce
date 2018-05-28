@@ -82,6 +82,7 @@ services:
     read_only: true
     volumes:
      - /data/tanner/log:/var/log/tanner
+     - /data/tanner/files:/opt/tanner/files
     depends_on:
      - tanner_api
      - tanner_web
