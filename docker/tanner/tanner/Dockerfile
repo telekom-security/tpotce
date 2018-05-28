@@ -13,8 +13,8 @@ RUN apk -U --no-cache add \
                python3 \
                python3-dev && \ 
 
-# Setup ConPot
-    git clone https://github.com/mushorg/tanner /opt/tanner && \
+# Setup Tanner
+    git clone --depth=1 https://github.com/mushorg/tanner /opt/tanner && \
     cp /root/dist/config.py /opt/tanner/tanner/ && \
     cp /root/dist/requirements.txt /opt/tanner/ && \
     cd /opt/tanner/ && \
@@ -23,9 +23,11 @@ RUN apk -U --no-cache add \
     python3 setup.py install && \
     cd / && \
     
-# Get wireshark manuf db for scapy, setup configs, user, groups
+# Setup configs, user, groups
     addgroup -g 2000 tanner && \
     adduser -S -s /bin/ash -u 2000 -D -g 2000 tanner && \
+    mkdir /var/log/tanner && \
+    chown -R tanner:tanner /opt/tanner /var/log/tanner && \
 
 # Clean up
     apk del --purge \
@@ -37,5 +39,6 @@ RUN apk -U --no-cache add \
     rm -rf /var/cache/apk/*
 
 # Start conpot
+USER tanner:tanner
 WORKDIR /opt/tanner
 CMD tanner 

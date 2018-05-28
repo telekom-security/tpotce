@@ -4,8 +4,7 @@ FROM redis:alpine
 ADD dist/ /root/dist/
 
 # Setup apt
-RUN apk -U --no-cache add \
-               redis && \ 
+RUN apk -U --no-cache add redis && \ 
 
     cp /root/dist/redis.conf /etc && \
 
@@ -15,4 +14,5 @@ RUN apk -U --no-cache add \
     rm -rf /var/cache/apk/*
 
 # Start conpot
+USER nobody:nobody
 CMD redis-server /etc/redis.conf

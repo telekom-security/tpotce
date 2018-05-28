@@ -17,9 +17,8 @@ RUN apk -U --no-cache add \
     pip3 install --no-cache-dir --upgrade pip && \
 
 # Install bfr sandbox from git
-    git clone https://github.com/mushorg/BFR /opt/BFR && \
+    git clone --depth=1 https://github.com/mushorg/BFR /opt/BFR && \
     cd /opt/BFR && \
-    git checkout 508729202428a35bcc6bb27dd97b831f7e5009b5 && \
     phpize7 && \
     ./configure \
       --with-php-config=/usr/bin/php-config7 \
@@ -31,7 +30,7 @@ RUN apk -U --no-cache add \
     echo "zend_extension = "$(find /usr -name bfr.so) >> /etc/php7/php.ini && \
 
 # Install PHP Sandbox
-    git clone https://github.com/mushorg/phpox /opt/phpox && \
+    git clone --depth=1 https://github.com/mushorg/phpox /opt/phpox && \
     cd /opt/phpox && \
     cp /root/dist/sandbox.py . && \
     pip3 install -r requirements.txt && \
@@ -46,5 +45,6 @@ RUN apk -U --no-cache add \
     rm -rf /var/cache/apk/*
 
 # Set workdir and start phpsandbox
+USER nobody:nobody
 WORKDIR /opt/phpox
-CMD python3.6 sandbox.py
+CMD ["python3.6", "sandbox.py"]

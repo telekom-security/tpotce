@@ -14,6 +14,7 @@ services:
     networks:
      - tanner_local
     image: "dtagdevsec/redis:1804"
+    read_only: true
 
 # PHP Sandbox service
   tanner_phpox:
@@ -25,6 +26,7 @@ services:
     networks:
      - tanner_local
     image: "dtagdevsec/phpox:1804"
+    read_only: true
 
 # Tanner API Service
   tanner_api:
@@ -32,10 +34,15 @@ services:
     container_name: tanner_api
     restart: always
     stop_signal: SIGKILL
+    tmpfs:
+     - /tmp/tanner:uid=2000,gid=2000
     tty: true
     networks:
      - tanner_local
     image: "dtagdevsec/tanner:1804"
+    read_only: true
+    volumes:
+     - /data/tanner/log:/var/log/tanner
     command: tannerapi 
     depends_on:
      - tanner_redis
@@ -46,11 +53,16 @@ services:
     container_name: tanner_web
     restart: always
     stop_signal: SIGKILL
+    tmpfs:
+     - /tmp/tanner:uid=2000,gid=2000
     tty: true
     networks:
      - tanner_local
     image: "dtagdevsec/tanner:1804"
     command: tannerweb
+    read_only: true
+    volumes:
+     - /data/tanner/log:/var/log/tanner
     depends_on:
      - tanner_redis
 
@@ -60,11 +72,16 @@ services:
     container_name: tanner
     restart: always
     stop_signal: SIGKILL
+    tmpfs:
+     - /tmp/tanner:uid=2000,gid=2000
     tty: true
     networks:
      - tanner_local
     image: "dtagdevsec/tanner:1804"
     command: tanner
+    read_only: true
+    volumes:
+     - /data/tanner/log:/var/log/tanner
     depends_on:
      - tanner_api
      - tanner_web
