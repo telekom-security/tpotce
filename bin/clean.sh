@@ -32,6 +32,8 @@ fuLOGROTATE () {
   local myHONEYTRAPATTACKSTGZ="/data/honeytrap/attacks.tgz"
   local myHONEYTRAPDL="/data/honeytrap/downloads/"
   local myHONEYTRAPDLTGZ="/data/honeytrap/downloads.tgz"
+  local myTANNERF="/data/tanner/files/"
+  local myTANNERFTGZ="/data/tanner/files.tgz"
 
 # Ensure correct permissions and ownerships for logrotate to run without issues
 chmod 760 /data/ -R
@@ -49,18 +51,19 @@ if [ "$(fuEMPTY $myDIONAEABI)" != "0" ]; then tar cvfz $myDIONAEABITGZ $myDIONAE
 if [ "$(fuEMPTY $myDIONAEABIN)" != "0" ]; then tar cvfz $myDIONAEABINTGZ $myDIONAEABIN; fi
 if [ "$(fuEMPTY $myHONEYTRAPATTACKS)" != "0" ]; then tar cvfz $myHONEYTRAPATTACKSTGZ $myHONEYTRAPATTACKS; fi
 if [ "$(fuEMPTY $myHONEYTRAPDL)" != "0" ]; then tar cvfz $myHONEYTRAPDLTGZ $myHONEYTRAPDL; fi
+if [ "$(fuEMPTY $myTANNERF)" != "0" ]; then tar cvfz $myTANNERFTGZ $myTANNERF; fi
 
 # Ensure correct permissions and ownership for previously created archives
-chmod 760 $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ
-chown tpot:tpot $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ
+chmod 760 $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ $myTANNERFTGZ
+chown tpot:tpot $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ $myTANNERFTGZ
 
 # Need to remove subfolders since too many files cause rm to exit with errors
-rm -rf $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL
+rm -rf $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL $myTANNERF
 
 # Recreate subfolders with correct permissions and ownership
-mkdir -p $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL
-chmod 760 $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL 
-chown tpot:tpot $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL
+mkdir -p $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL $myTANNERF
+chmod 760 $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL $myTANNERF
+chown tpot:tpot $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL $myTANNERF
 
 # Run logrotate again to account for previously created archives - DO NOT FORCE HERE!
 logrotate -s $mySTATUS $myCONF
@@ -203,6 +206,14 @@ fuP0F () {
   chown tpot:tpot -R /data/p0f
 }
 
+# Let's create a function to clean up and prepare p0f data
+fuTANNER () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/tanner/*; fi
+  mkdir -p /data/tanner/log /data/tanner/files
+  chmod 760 -R /data/tanner
+  chown tpot:tpot -R /data/tanner
+}
+
 # Let's create a function to clean up and prepare vnclowpot data
 fuVNCLOWPOT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/vnclowpot/*; fi
@@ -210,7 +221,6 @@ fuVNCLOWPOT () {
   chmod 760 /data/vnclowpot/ -R
   chown tpot:tpot /data/vnclowpot/ -R
 }
-
 
 # Avoid unwanted cleaning
 if [ "$myPERSISTENCE" = "" ];
@@ -251,6 +261,6 @@ if [ "$myPERSISTENCE" = "on" ];
     fuSPIDERFOOT
     fuSURICATA
     fuP0F
+    fuTANNER
     fuVNCLOWPOT
   fi
-
