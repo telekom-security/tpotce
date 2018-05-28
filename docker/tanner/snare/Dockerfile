@@ -4,7 +4,6 @@ FROM alpine
 RUN apk -U --no-cache add \
                build-base \
                git \
-               libcap \
                linux-headers \
                python3 \
                python3-dev && \ 
