@@ -10,6 +10,12 @@ services:
     build: .
     container_name: mailoney
     restart: always
+    environment:
+     - HPFEEDS_SERVER=
+     - HPFEEDS_IDENT=user
+     - HPFEEDS_SECRET=pass
+     - HPFEEDS_PORT=20000
+     - HPFEEDS_CHANNELPREFIX=prefix
     stop_signal: SIGINT
     networks:
      - mailoney_local

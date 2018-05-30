@@ -22,7 +22,9 @@ RUN apk -U --no-cache add \
 
 # Install libemu python wrapper
     pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir pylibemu && \ 
+    pip install --no-cache-dir \ 
+                        hpfeeds \
+                        pylibemu && \ 
 
 # Install mailoney from git
     git clone --depth=1 https://github.com/awhitehatter/mailoney /opt/mailoney && \
@@ -43,7 +45,7 @@ RUN apk -U --no-cache add \
     rm -rf /root/* && \
     rm -rf /var/cache/apk/*
 
-# Set workdir and start glastopf
+# Set workdir and start mailoney
 USER mailoney:mailoney
 WORKDIR /opt/mailoney/
-CMD ["/usr/bin/python","mailoney.py","-i","0.0.0.0","-p","25","-s","mailserver","-t","schizo_open_relay"]
+CMD ["/usr/bin/python","mailoney.py","-i","0.0.0.0","-p","25","-s","mailrelay.local","-t","schizo_open_relay"]
