@@ -130,7 +130,7 @@ fuEMOBILITY () {
 # Let's create a function to clean up and prepare glastopf data
 fuGLASTOPF () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/glastopf/*; fi
-  mkdir -p /data/glastopf
+  mkdir -p /data/glastopf/db /data/glastopf/log
   chmod 760 /data/glastopf -R
   chown tpot:tpot /data/glastopf -R
 }
@@ -169,7 +169,7 @@ fuMAILONEY () {
 
 # Let's create a function to clean up nginx logs
 fuNGINX () {
-  if [ "$myPERSISTENCE" != "on" ]; then rm /data/nginx/log/*; fi
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/nginx/log/*; fi
   chmod 644 /data/nginx/conf -R
   chmod 644 /data/nginx/cert -R
 }
