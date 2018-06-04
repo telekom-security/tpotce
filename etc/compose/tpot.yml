@@ -1,7 +1,6 @@
 # T-Pot (Standard)
-# For docker-compose ...
 # Do not erase ports sections, these are used by /opt/tpot/bin/rules.sh to setup iptables ACCEPT rules for NFQ (honeytrap / glutton)
-version: '2.2'
+version: '2.3'
 
 networks:
   cowrie_local:
@@ -11,7 +10,7 @@ networks:
   mailoney_local:
   rdpy_local:
   spiderfoot_local:
-  ui-for-docker_local:
+  portainer_local:
   vnclowpot_local:
 
 services:
@@ -21,11 +20,14 @@ services:
     container_name: ciscoasa
     restart: always
     stop_signal: SIGINT
+    tmpfs:
+     - /tmp/ciscoasa:uid=2000,gid=2000
     network_mode: "host"
     ports:
      - "5000:5000/udp"
      - "8443:8443"
     image: "dtagdevsec/ciscoasa:1804"
+    read_only: true
     volumes:
      - /data/ciscoasa/log:/var/log/ciscoasa
 
@@ -33,12 +35,16 @@ services:
   cowrie:
     container_name: cowrie
     restart: always
+    tmpfs:
+     - /tmp/cowrie:uid=2000,gid=2000
+     - /tmp/cowrie/data:uid=2000,gid=2000
     networks:
      - cowrie_local
     ports:
      - "22:22"
      - "23:23"
     image: "dtagdevsec/cowrie:1804"
+    read_only: true
     volumes:
      - /data/cowrie/downloads:/home/cowrie/cowrie/dl
      - /data/cowrie/keys:/home/cowrie/cowrie/etc
@@ -49,6 +55,7 @@ services:
   dionaea:
     container_name: dionaea
     stdin_open: true
+    tty: true
     restart: always
     network_mode: "host"
     ports:
@@ -56,7 +63,7 @@ services:
      - "21:21"
      - "42:42"
      - "69:69/udp"
-     - "8081:8081"
+     - "81:81"
      - "135:135"
      - "443:443"
      - "445:445"
@@ -101,7 +108,8 @@ services:
     restart: always
     environment:
      - bootstrap.memory_lock=true
-     - "ES_JAVA_OPTS=-Xms1024m -Xmx1024m"
+     - ES_JAVA_OPTS=-Xms1024m -Xmx1024m
+     - ES_TMPDIR=/tmp
     cap_add:
      - IPC_LOCK
     ulimits:
@@ -173,11 +181,10 @@ services:
 # Glastopf service
   glastopf:
     container_name: glastopf
-    environment:
-      - PYTHON_EGG_CACHE=/tmp/glastopf
     tmpfs:
-      - /tmp/glastopf:exec
+     - /tmp/glastopf:uid=2000,gid=2000
     restart: always
+    stop_signal: SIGINT
     networks:
      - glastopf_local
     ports:
@@ -185,17 +192,20 @@ services:
     image: "dtagdevsec/glastopf:1804"
     read_only: true
     volumes:
-     - /data/glastopf/db:/opt/glastopf/db
-     - /data/glastopf/log:/opt/glastopf/log
+     - /data/glastopf/db:/tmp/glastopf/db
+     - /data/glastopf/log:/tmp/glastopf/log
 
 # Honeytrap service
   honeytrap:
     container_name: honeytrap
     restart: always
+    tmpfs:
+     - /tmp/honeytrap:uid=2000,gid=2000
     network_mode: "host"
     cap_add:
      - NET_ADMIN
     image: "dtagdevsec/honeytrap:1804"
+    read_only: true
     volumes:
      - /data/honeytrap/attacks:/opt/honeytrap/var/attacks
      - /data/honeytrap/downloads:/opt/honeytrap/var/downloads
@@ -205,11 +215,17 @@ services:
   mailoney:
     container_name: mailoney
     restart: always
+    environment:
+     - HPFEEDS_SERVER=
+     - HPFEEDS_IDENT=user
+     - HPFEEDS_SECRET=pass
+     - HPFEEDS_PORT=20000
+     - HPFEEDS_CHANNELPREFIX=prefix
     stop_signal: SIGINT
     networks:
      - mailoney_local
     ports:
-     - "25:2525"
+     - "25:25"
     image: "dtagdevsec/mailoney:1804"
     read_only: true
     volumes:
@@ -233,7 +249,7 @@ services:
     volumes:
      - /proc:/host/proc:ro
      - /sys:/host/sys:ro
-     - /var/run/docker.sock:/var/run/docker.sock
+     - /var/run/docker.sock:/var/run/docker.sock:ro
 
 # nginx service
   nginx:
@@ -256,10 +272,32 @@ services:
      - /data/nginx/conf/nginxpasswd:/etc/nginx/nginxpasswd:ro
      - /data/nginx/log/:/var/log/nginx/
 
+# Portainer service
+  portainer:
+    container_name: portainer
+    command:  -H unix:///var/run/docker.sock --no-auth
+    restart: always
+    networks:
+     - portainer_local
+    ports:
+     - "127.0.0.1:64299:9000"
+    image: "dtagdevsec/portainer:1804"
+    read_only: true
+    volumes:
+     - /var/run/docker.sock:/var/run/docker.sock
+
 # Rdpy service
   rdpy:
     container_name: rdpy
+    extra_hosts:
+     - hpfeeds.example.com:127.0.0.1
     restart: always
+    environment:
+     - HPFEEDS_SERVER=hpfeeds.example.com
+     - HPFEEDS_IDENT=user
+     - HPFEEDS_SECRET=pass
+     - HPFEEDS_PORT=65000
+     - SERVERID=id
     networks:
      - rdpy_local
     ports:
@@ -280,20 +318,6 @@ services:
     image: "dtagdevsec/spiderfoot:1804"
     volumes:
      - /data/spiderfoot/spiderfoot.db:/home/spiderfoot/spiderfoot.db
-
-# Ui-for-docker service
-  ui-for-docker:
-    container_name: ui-for-docker
-    command:  -H unix:///var/run/docker.sock --no-auth
-    restart: always
-    networks:
-     - ui-for-docker_local
-    ports:
-     - "127.0.0.1:64299:9000"
-    image: "dtagdevsec/ui-for-docker:1804"
-    read_only: true
-    volumes:
-     - /var/run/docker.sock:/var/run/docker.sock
 
 # Suricata service
   suricata:
@@ -343,5 +367,7 @@ services:
     network_mode: "host"
     env_file:
      - /opt/tpot/etc/compose/wetty_environment
+    tmpfs:
+     - /home/wetty/.ssh/:uid=2000,gid=2000
     image: "dtagdevsec/wetty:1804"
     read_only: true

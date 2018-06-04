@@ -8,6 +8,9 @@ services:
     container_name: netdata
     restart: always
     network_mode: "host"
+    #depends_on:
+    #  elasticsearch:
+    #    condition: service_healthy
     cap_add:
      - SYS_PTRACE
     security_opt:
