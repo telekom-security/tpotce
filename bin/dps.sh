@@ -59,7 +59,7 @@ while true
           echo
       if [ "$myPARAM" = "vv" ]; 
         then
-          /usr/bin/docker exec -t "$i" /bin/ps awfuwfxwf | egrep -v -E "awfuwfxwf|/bin/ps" 
+          /usr/bin/docker exec -t "$i" sh -c "stty rows 50 cols 1000 && /bin/ps aux | egrep -v -E 'awfuwfxwf|/bin/ps'"
       fi      
     done
     if [[ $myPARAM =~ ^([1-9]|[1-9][0-9]|[1-9][0-9][0-9])$ ]];
