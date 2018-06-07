@@ -9,7 +9,7 @@ services:
     restart: always
     stop_signal: SIGINT
     environment:
-    # For ET Pro ruleset replace <OPEN> with your OINKCODE
+    # For ET Pro ruleset replace "OPEN" with your OINKCODE
      - OINKCODE=OPEN
     network_mode: "host"
     cap_add:

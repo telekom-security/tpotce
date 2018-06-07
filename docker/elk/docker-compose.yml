@@ -21,7 +21,7 @@ services:
       nofile:
         soft: 65536
         hard: 65536
-    mem_limit: 2g
+    mem_limit: 4g
     ports:
      - "127.0.0.1:64298:9200"
     image: "dtagdevsec/elasticsearch:1804"

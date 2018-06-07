@@ -15,4 +15,3 @@ services:
      - /home/wetty/.ssh/:uid=2000,gid=2000
     image: "dtagdevsec/wetty:1804"
     read_only: true
-
