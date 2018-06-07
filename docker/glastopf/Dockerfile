@@ -45,9 +45,8 @@ RUN apk -U --no-cache add \
     pip install --no-cache-dir --upgrade pip && \
 
 # Install php sandbox from git
-    git clone https://github.com/mushorg/BFR /opt/BFR && \
+    git clone --depth=1 https://github.com/mushorg/BFR /opt/BFR && \
     cd /opt/BFR && \
-    git checkout 508729202428a35bcc6bb27dd97b831f7e5009b5 && \
     phpize7 && \
     ./configure \
       --with-php-config=/usr/bin/php-config7 \
@@ -59,9 +58,8 @@ RUN apk -U --no-cache add \
     echo "zend_extension = "$(find /usr -name bfr.so) >> /etc/php7/php.ini && \
 
 # Install glastopf from git
-    git clone https://github.com/mushorg/glastopf.git /opt/glastopf && \
+    git clone --depth=1 https://github.com/mushorg/glastopf.git /opt/glastopf && \
     cd /opt/glastopf && \
-    git checkout 67c2a3fce7419f0c6b418b2b91da3c45b399f2b8 && \
     cp /root/dist/requirements.txt /opt/glastopf/ && \
     pip install --no-cache-dir . && \
     cd / && \
