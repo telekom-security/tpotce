@@ -1,6 +1,6 @@
-# T-Pot (Industrial, based on Conpot=[default, IEC104, guardian_ast, ipmi, kamstrup_382])
-# For docker-compose ...
-version: '2.2'
+# T-Pot (Industrial)
+# Do not erase ports sections, these are used by /opt/tpot/bin/rules.sh to setup iptables ACCEPT rules for NFQ (honeytrap / glutton)
+version: '2.3'
 
 networks:
   conpot_local_default:
@@ -8,26 +8,33 @@ networks:
   conpot_local_guardian_ast:
   conpot_local_ipmi:
   conpot_local_kamstrup_382:
+  cowrie_local:
+  rdpy_local:
+  vnclowpot_local:
   ewsposter_local:
   spiderfoot_local:
-  ui-for-docker_local:
+  portainer_local:
 
 services:
 
+##################
+#### Honeypots
+##################
+
 # Conpot default service
   conpot_default:
+    build: .
     container_name: conpot_default
     restart: always
+    stop_signal: SIGINT
     environment:
      - CONPOT_CONFIG=/etc/conpot/conpot.cfg
      - CONPOT_JSON_LOG=/var/log/conpot/conpot_default.json
      - CONPOT_LOG=/var/log/conpot/conpot_default.log
      - CONPOT_TEMPLATE=default
      - CONPOT_TMP=/tmp/conpot
-     - PYTHON_EGG_CACHE=/tmp/conpot
     tmpfs:
-     - /tmp/conpot:exec
-       #     - /var/run/conpot/
+     - /tmp/conpot:uid=2000,gid=2000
     networks:
      - conpot_local_default
     ports:
@@ -47,20 +54,19 @@ services:
   conpot_IEC104:
     container_name: conpot_IEC104
     restart: always
+    stop_signal: SIGINT
     environment:
      - CONPOT_CONFIG=/etc/conpot/conpot.cfg
      - CONPOT_JSON_LOG=/var/log/conpot/conpot_IEC104.json
      - CONPOT_LOG=/var/log/conpot/conpot_IEC104.log
      - CONPOT_TEMPLATE=IEC104
      - CONPOT_TMP=/tmp/conpot
-     - PYTHON_EGG_CACHE=/tmp/conpot
     tmpfs:
-     - /tmp/conpot:exec
-     - /var/run/conpot/
+     - /tmp/conpot:uid=2000,gid=2000
     networks:
      - conpot_local_IEC104
     ports:
-#     - "161:161"
+     - "161:161"
      - "2404:2404"
     image: "dtagdevsec/conpot:1804"
     read_only: true
@@ -71,16 +77,15 @@ services:
   conpot_guardian_ast:
     container_name: conpot_guardian_ast
     restart: always
+    stop_signal: SIGINT
     environment:
      - CONPOT_CONFIG=/etc/conpot/conpot.cfg
      - CONPOT_JSON_LOG=/var/log/conpot/conpot_guardian_ast.json
      - CONPOT_LOG=/var/log/conpot/conpot_guardian_ast.log
      - CONPOT_TEMPLATE=guardian_ast
      - CONPOT_TMP=/tmp/conpot
-     - PYTHON_EGG_CACHE=/tmp/conpot
     tmpfs:
-     - /tmp/conpot:exec
-     - /var/run/conpot/
+     - /tmp/conpot:uid=2000,gid=2000
     networks:
      - conpot_local_guardian_ast
     ports:
@@ -94,16 +99,15 @@ services:
   conpot_ipmi:
     container_name: conpot_ipmi
     restart: always
+    stop_signal: SIGINT
     environment:
      - CONPOT_CONFIG=/etc/conpot/conpot.cfg
      - CONPOT_JSON_LOG=/var/log/conpot/conpot_ipmi.json
      - CONPOT_LOG=/var/log/conpot/conpot_ipmi.log
      - CONPOT_TEMPLATE=ipmi
      - CONPOT_TMP=/tmp/conpot
-     - PYTHON_EGG_CACHE=/tmp/conpot
     tmpfs:
-     - /tmp/conpot:exec
-     - /var/run/conpot/
+     - /tmp/conpot:uid=2000,gid=2000
     networks:
      - conpot_local_ipmi
     ports:
@@ -117,16 +121,15 @@ services:
   conpot_kamstrup_382:
     container_name: conpot_kamstrup_382
     restart: always
+    stop_signal: SIGINT
     environment:
      - CONPOT_CONFIG=/etc/conpot/conpot.cfg
      - CONPOT_JSON_LOG=/var/log/conpot/conpot_kamstrup_382.json
      - CONPOT_LOG=/var/log/conpot/conpot_kamstrup_382.log
      - CONPOT_TEMPLATE=kamstrup_382
      - CONPOT_TMP=/tmp/conpot
-     - PYTHON_EGG_CACHE=/tmp/conpot
     tmpfs:
-     - /tmp/conpot:exec
-     - /var/run/conpot/
+     - /tmp/conpot:uid=2000,gid=2000
     networks:
      - conpot_local_kamstrup_382
     ports:
@@ -137,14 +140,122 @@ services:
     volumes:
      - /data/conpot/log:/var/log/conpot
 
-# ELK services
+# Cowrie service
+  cowrie:
+    container_name: cowrie
+    restart: always
+    tmpfs:
+     - /tmp/cowrie:uid=2000,gid=2000
+     - /tmp/cowrie/data:uid=2000,gid=2000
+    networks:
+     - cowrie_local
+    ports:
+     - "22:22"
+     - "23:23"
+    image: "dtagdevsec/cowrie:1804"
+    read_only: true
+    volumes:
+     - /data/cowrie/downloads:/home/cowrie/cowrie/dl
+     - /data/cowrie/keys:/home/cowrie/cowrie/etc
+     - /data/cowrie/log:/home/cowrie/cowrie/log
+     - /data/cowrie/log/tty:/home/cowrie/cowrie/log/tty
+
+# Honeytrap service
+  honeytrap:
+    container_name: honeytrap
+    restart: always
+    tmpfs:
+     - /tmp/honeytrap:uid=2000,gid=2000
+    network_mode: "host"
+    cap_add:
+     - NET_ADMIN
+    image: "dtagdevsec/honeytrap:1804"
+    read_only: true
+    volumes:
+     - /data/honeytrap/attacks:/opt/honeytrap/var/attacks
+     - /data/honeytrap/downloads:/opt/honeytrap/var/downloads
+     - /data/honeytrap/log:/opt/honeytrap/var/log
+
+# Rdpy service
+  rdpy:
+    container_name: rdpy
+    extra_hosts:
+     - hpfeeds.example.com:127.0.0.1
+    restart: always
+    environment:
+     - HPFEEDS_SERVER=hpfeeds.example.com
+     - HPFEEDS_IDENT=user
+     - HPFEEDS_SECRET=pass
+     - HPFEEDS_PORT=65000
+     - SERVERID=id
+    networks:
+     - rdpy_local
+    ports:
+     - "3389:3389"
+    image: "dtagdevsec/rdpy:1804"
+    read_only: true
+    volumes:
+     - /data/rdpy/log:/var/log/rdpy
+
+# Vnclowpot service
+  vnclowpot:
+    container_name: vnclowpot
+    restart: always
+    networks:
+     - vnclowpot_local
+    ports:
+     - "5900:5900"
+    image: "dtagdevsec/vnclowpot:1804"
+    read_only: true
+    volumes:
+     - /data/vnclowpot/log:/var/log/vnclowpot
+
+
+##################
+#### NSM
+##################
+
+# P0f service
+  p0f:
+    container_name: p0f
+    restart: always
+    network_mode: "host"
+    image: "dtagdevsec/p0f:1804"
+    read_only: true
+    volumes:
+     - /data/p0f/log:/var/log/p0f
+
+# Suricata service
+  suricata:
+    container_name: suricata
+    restart: always
+    stop_signal: SIGINT
+    environment:
+    # For ET Pro ruleset replace "OPEN" with your OINKCODE
+     - OINKCODE=OPEN
+    network_mode: "host"
+    cap_add:
+     - NET_ADMIN
+     - SYS_NICE
+     - NET_RAW
+    image: "dtagdevsec/suricata:1804"
+    volumes:
+     - /data/suricata/log:/var/log/suricata
+
+
+##################
+#### Tools
+##################
+
+#### ELK
 ## Elasticsearch service
   elasticsearch:
     container_name: elasticsearch
     restart: always
     environment:
      - bootstrap.memory_lock=true
-#     - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+     - ES_JAVA_OPTS=-Xms1024m -Xmx1024m
+     - ES_TMPDIR=/tmp
     cap_add:
      - IPC_LOCK
     ulimits:
@@ -154,10 +265,10 @@ services:
       nofile:
         soft: 65536
         hard: 65536
-#    mem_limit: 2g
+    mem_limit: 4g
     ports:
      - "127.0.0.1:64298:9200"
-    image: "dtagdevsec/elasticsearch:1710"
+    image: "dtagdevsec/elasticsearch:1804"
     volumes:
      - /data:/data
 
@@ -165,12 +276,13 @@ services:
   kibana:
     container_name: kibana
     restart: always
+    stop_signal: SIGKILL
     depends_on:
       elasticsearch:
         condition: service_healthy
     ports:
      - "127.0.0.1:64296:5601"
-    image: "dtagdevsec/kibana:1710"
+    image: "dtagdevsec/kibana:1804"
 
 ## Logstash service
   logstash:
@@ -181,7 +293,7 @@ services:
         condition: service_healthy
     env_file:
      - /opt/tpot/etc/compose/elk_environment
-    image: "dtagdevsec/logstash:1710"
+    image: "dtagdevsec/logstash:1804"
     volumes:
      - /data:/data
      - /var/log:/data/host/log
@@ -195,17 +307,19 @@ services:
         condition: service_healthy
     ports:
      - "127.0.0.1:64302:9100"
-    image: "dtagdevsec/head:1710"
+    image: "dtagdevsec/head:1804"
+    read_only: true
 
 # Ewsposter service
   ewsposter:
     container_name: ewsposter
     restart: always
+    stop_signal: SIGINT
     networks:
      - ewsposter_local
     env_file:
      - /opt/tpot/etc/compose/elk_environment
-    image: "dtagdevsec/ewsposter:1710"
+    image: "dtagdevsec/ewsposter:1804"
     volumes:
      - /data:/data
      - /data/ews/conf/ews.ip:/opt/ewsposter/ews.ip
@@ -222,24 +336,48 @@ services:
      - SYS_PTRACE
     security_opt:
      - apparmor=unconfined
-    image: "dtagdevsec/netdata:1710"
+    ports:
+     - "64301:64301"
+    image: "dtagdevsec/netdata:1804"
     volumes:
      - /proc:/host/proc:ro
      - /sys:/host/sys:ro
-     - /var/run/docker.sock:/var/run/docker.sock
+     - /var/run/docker.sock:/var/run/docker.sock:ro
 
 # Nginx service
   nginx:
     container_name: nginx
     restart: always
+    tmpfs:
+     - /var/tmp/nginx/client_body
+     - /var/tmp/nginx/proxy
+     - /var/tmp/nginx/fastcgi
+     - /var/tmp/nginx/uwsgi
+     - /var/tmp/nginx/scgi
+     - /run
     network_mode: "host"
     ports:
      - "64297:64297"
-    image: "dtagdevsec/nginx:1710"
+    image: "dtagdevsec/nginx:1804"
+    read_only: true
     volumes:
-     - /data/nginx/cert/:/etc/nginx/cert/
-     - /data/nginx/conf/nginxpasswd:/etc/nginx/nginxpasswd
+     - /data/nginx/cert/:/etc/nginx/cert/:ro
+     - /data/nginx/conf/nginxpasswd:/etc/nginx/nginxpasswd:ro
      - /data/nginx/log/:/var/log/nginx/
+
+# Portainer service
+  portainer:
+    container_name: portainer
+    command:  -H unix:///var/run/docker.sock --no-auth
+    restart: always
+    networks:
+     - portainer_local
+    ports:
+     - "127.0.0.1:64299:9000"
+    image: "dtagdevsec/portainer:1804"
+    read_only: true
+    volumes:
+     - /var/run/docker.sock:/var/run/docker.sock
 
 # Spiderfoot service
   spiderfoot:
@@ -249,50 +387,19 @@ services:
      - spiderfoot_local
     ports:
      - "127.0.0.1:64303:8080"
-    image: "dtagdevsec/spiderfoot:1710"
+    image: "dtagdevsec/spiderfoot:1804"
     volumes:
      - /data/spiderfoot/spiderfoot.db:/home/spiderfoot/spiderfoot.db
-
-# Ui-for-docker service
-  ui-for-docker:
-    container_name: ui-for-docker
-    command:  -H unix:///var/run/docker.sock --no-auth
-    restart: always
-    networks:
-     - ui-for-docker_local
-    ports:
-     - "127.0.0.1:64299:9000"
-    image: "dtagdevsec/ui-for-docker:1710"
-    volumes:
-     - /var/run/docker.sock:/var/run/docker.sock
-
-# Suricata service
-  suricata:
-    container_name: suricata
-    restart: always
-    network_mode: "host"
-    cap_add:
-     - NET_ADMIN
-     - SYS_NICE
-     - NET_RAW
-    image: "dtagdevsec/suricata:1710"
-    volumes:
-     - /data/suricata/log:/var/log/suricata
-
-# P0f service
-  p0f:
-    container_name: p0f
-    restart: always
-    network_mode: "host"
-    image: "dtagdevsec/p0f:1710"
-    volumes:
-     - /data/p0f/log:/var/log/p0f
 
 # Wetty service
   wetty:
     container_name: wetty
     restart: always
+    stop_signal: SIGKILL
     network_mode: "host"
     env_file:
      - /opt/tpot/etc/compose/wetty_environment
-    image: "dtagdevsec/wetty:1710"
+    tmpfs:
+     - /home/wetty/.ssh/:uid=2000,gid=2000
+    image: "dtagdevsec/wetty:1804"
+    read_only: true

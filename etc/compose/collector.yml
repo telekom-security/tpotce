@@ -1,23 +1,108 @@
 # T-Pot (Collector)
-# For docker-compose ...
-version: '2.2'
+# Do not erase ports sections, these are used by /opt/tpot/bin/rules.sh to setup iptables ACCEPT rules for NFQ (honeytrap / glutton)
+version: '2.3'
 
 networks:
-  ewsposter_local:
   heralding_local:
+  ewsposter_local:
   spiderfoot_local:
-  ui-for-docker_local:
+  portainer_local:
 
 services:
 
-# ELK services
+##################
+#### Honeypots
+##################
+
+# Heralding service
+  heralding:
+    container_name: heralding
+    restart: always
+    stop_signal: SIGINT
+    tmpfs:
+     - /tmp/heralding:uid=2000,gid=2000
+    networks:
+     - heralding_local
+    ports:
+     - "21:21"
+     - "22:22"
+     - "23:23"
+     - "25:25"
+     - "80:80"
+     - "110:110"
+     - "143:143"
+     - "443:443"
+     - "993:993"
+     - "995:995"
+     - "5432:5432"
+     - "5900:5900"
+    image: "dtagdevsec/heralding:1804"
+    read_only: true
+    volumes:
+     - /data/heralding/log:/var/log/heralding
+
+# Honeytrap service
+  honeytrap:
+    container_name: honeytrap
+    restart: always
+    tmpfs:
+     - /tmp/honeytrap:uid=2000,gid=2000
+    network_mode: "host"
+    cap_add:
+     - NET_ADMIN
+    image: "dtagdevsec/honeytrap:1804"
+    read_only: true
+    volumes:
+     - /data/honeytrap/attacks:/opt/honeytrap/var/attacks
+     - /data/honeytrap/downloads:/opt/honeytrap/var/downloads
+     - /data/honeytrap/log:/opt/honeytrap/var/log
+
+
+##################
+#### NSM
+##################
+
+# P0f service
+  p0f:
+    container_name: p0f
+    restart: always
+    network_mode: "host"
+    image: "dtagdevsec/p0f:1804"
+    read_only: true
+    volumes:
+     - /data/p0f/log:/var/log/p0f
+
+# Suricata service
+  suricata:
+    container_name: suricata
+    restart: always
+    stop_signal: SIGINT
+    environment:
+    # For ET Pro ruleset replace "OPEN" with your OINKCODE
+     - OINKCODE=OPEN
+    network_mode: "host"
+    cap_add:
+     - NET_ADMIN
+     - SYS_NICE
+     - NET_RAW
+    image: "dtagdevsec/suricata:1804"
+    volumes:
+     - /data/suricata/log:/var/log/suricata
+
+
+##################
+#### Tools
+##################
+
+#### ELK
 ## Elasticsearch service
   elasticsearch:
     container_name: elasticsearch
     restart: always
     environment:
      - bootstrap.memory_lock=true
-     - "ES_JAVA_OPTS=-Xms1024m -Xmx1024m"
+     - ES_JAVA_OPTS=-Xms1024m -Xmx1024m
+     - ES_TMPDIR=/tmp
     cap_add:
      - IPC_LOCK
     ulimits:
@@ -27,7 +112,7 @@ services:
       nofile:
         soft: 65536
         hard: 65536
-    mem_limit: 2g
+    mem_limit: 4g
     ports:
      - "127.0.0.1:64298:9200"
     image: "dtagdevsec/elasticsearch:1804"
@@ -38,6 +123,7 @@ services:
   kibana:
     container_name: kibana
     restart: always
+    stop_signal: SIGKILL
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -75,6 +161,7 @@ services:
   ewsposter:
     container_name: ewsposter
     restart: always
+    stop_signal: SIGINT
     networks:
      - ewsposter_local
     env_file:
@@ -83,47 +170,6 @@ services:
     volumes:
      - /data:/data
      - /data/ews/conf/ews.ip:/opt/ewsposter/ews.ip
-
-# Heralding service
-  heralding:
-    container_name: heralding
-    restart: always
-    environment:
-      - PYTHON_EGG_CACHE=/tmp/heralding
-    tmpfs:
-      - /tmp/heralding:exec
-    networks:
-     - heralding_local
-    ports:
-     - "21:21"
-     - "22:22"
-     - "23:23"
-     - "25:25"
-     - "80:80"
-     - "110:110"
-     - "143:143"
-     - "443:443"
-     - "993:993"
-     - "995:995"
-     - "5432:5432"
-     - "5900:5900"
-    image: "dtagdevsec/heralding:1804"
-    read_only: true
-    volumes:
-     - /data/heralding/log:/var/log/heralding
-
-# Honeytrap service
-  honeytrap:
-    container_name: honeytrap
-    restart: always
-    network_mode: "host"
-    cap_add:
-     - NET_ADMIN
-    image: "dtagdevsec/honeytrap:1804"
-    volumes:
-     - /data/honeytrap/attacks:/opt/honeytrap/var/attacks
-     - /data/honeytrap/downloads:/opt/honeytrap/var/downloads
-     - /data/honeytrap/log:/opt/honeytrap/var/log
 
 # Netdata service
   netdata:
@@ -143,9 +189,9 @@ services:
     volumes:
      - /proc:/host/proc:ro
      - /sys:/host/sys:ro
-     - /var/run/docker.sock:/var/run/docker.sock
+     - /var/run/docker.sock:/var/run/docker.sock:ro
 
-# nginx service
+# Nginx service
   nginx:
     container_name: nginx
     restart: always
@@ -166,6 +212,20 @@ services:
      - /data/nginx/conf/nginxpasswd:/etc/nginx/nginxpasswd:ro
      - /data/nginx/log/:/var/log/nginx/
 
+# Portainer service
+  portainer:
+    container_name: portainer
+    command:  -H unix:///var/run/docker.sock --no-auth
+    restart: always
+    networks:
+     - portainer_local
+    ports:
+     - "127.0.0.1:64299:9000"
+    image: "dtagdevsec/portainer:1804"
+    read_only: true
+    volumes:
+     - /var/run/docker.sock:/var/run/docker.sock
+
 # Spiderfoot service
   spiderfoot:
     container_name: spiderfoot
@@ -178,52 +238,15 @@ services:
     volumes:
      - /data/spiderfoot/spiderfoot.db:/home/spiderfoot/spiderfoot.db
 
-# Ui-for-docker service
-  ui-for-docker:
-    container_name: ui-for-docker
-    command:  -H unix:///var/run/docker.sock --no-auth
-    restart: always
-    networks:
-     - ui-for-docker_local
-    ports:
-     - "127.0.0.1:64299:9000"
-    image: "dtagdevsec/ui-for-docker:1804"
-    read_only: true
-    volumes:
-     - /var/run/docker.sock:/var/run/docker.sock
-
-# Suricata service
-  suricata:
-    container_name: suricata
-    restart: always
-    environment:
-    # For ET Pro ruleset replace <OPEN> with your OINKCODE
-     - OINKCODE=OPEN
-    network_mode: "host"
-    cap_add:
-     - NET_ADMIN
-     - SYS_NICE
-     - NET_RAW
-    image: "dtagdevsec/suricata:1804"
-    volumes:
-     - /data/suricata/log:/var/log/suricata
-
-# P0f service
-  p0f:
-    container_name: p0f
-    restart: always
-    network_mode: "host"
-    image: "dtagdevsec/p0f:1804"
-    read_only: true
-    volumes:
-     - /data/p0f/log:/var/log/p0f
-
 # Wetty service
   wetty:
     container_name: wetty
     restart: always
+    stop_signal: SIGKILL
     network_mode: "host"
     env_file:
      - /opt/tpot/etc/compose/wetty_environment
+    tmpfs:
+     - /home/wetty/.ssh/:uid=2000,gid=2000
     image: "dtagdevsec/wetty:1804"
     read_only: true
