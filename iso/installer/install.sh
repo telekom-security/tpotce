@@ -97,13 +97,14 @@ EOF
 # Let's ask user for install flavor
 # Install types are TPOT, HP, INDUSTRIAL, ALL
 tput cnorm
-myFLAVOR=$(dialog --no-cancel --backtitle "$myBACKTITLE" --title "[ Choose your edition ]" --no-tags --menu \
-"\nRequired: 4GB RAM, 64GB disk\nRecommended: 8GB RAM, 128GB SSD" 14 60 5 \
-"TPOT" "Standard Honeypots, Suricata & ELK" \
-"HP" "Honeypots only, w/o Suricata & ELK" \
-"COLLECTOR" "Heralding, Honeytrap & ELK" \
-"INDUSTRIAL" "Conpot, Suricata & ELK" \
-"EVERYTHING" "Everything" 3>&1 1>&2 2>&3 3>&-)
+myFLAVOR=$(dialog --no-cancel --backtitle "$myBACKTITLE" --title "[ Choose Your T-Pot NG Edition ]" --menu \
+"\nRequired: 6GB RAM, 128GB SSD\nRecommended: 8GB RAM, 256GB SSD" 15 70 7 \
+"STANDARD" "Honeypots, ELK, NSM & Tools" \
+"SENSOR" "Just Honeypots, EWS Poster & NSM" \
+"INDUSTRIAL" "Conpot, RDPY, Vnclowpot, ELK, NSM & Tools" \
+"COLLECTOR" "Heralding, ELK, NSM & Tools" \
+"EXPERIMENTAL" "Experimental (Glutton instead of Honeytrap)" \
+"LEGACY" "Standard Edition from previous release" 3>&1 1>&2 2>&3 3>&-)
 
 # Let's ask for a secure tsec password
 myUSER="tsec"
@@ -356,25 +357,29 @@ EOF
 
 # Let's make sure only myFLAVOR images will be downloaded and started
 case $myFLAVOR in
-  COLLECTOR)
-    echo "### Preparing COLLECTOR flavor installation."
-    cp /opt/tpot/etc/compose/collect.yml $myTPOTCOMPOSE 2>&1>/dev/null
+  STANDARD)
+    echo "### Preparing STANDARD flavor installation."
+    cp /opt/tpot/etc/compose/standard.yml $myTPOTCOMPOSE 2>&1>/dev/null
   ;;
-  HP)
-    echo "### Preparing HONEYPOT flavor installation."
-    cp /opt/tpot/etc/compose/hp.yml $myTPOTCOMPOSE 2>&1>/dev/null
+  SENSOR)
+    echo "### Preparing SENSOR flavor installation."
+    cp /opt/tpot/etc/compose/sensor.yml $myTPOTCOMPOSE 2>&1>/dev/null
   ;;
   INDUSTRIAL)
     echo "### Preparing INDUSTRIAL flavor installation."
     cp /opt/tpot/etc/compose/industrial.yml $myTPOTCOMPOSE 2>&1>/dev/null
   ;;
-  TPOT)
-    echo "### Preparing TPOT flavor installation."
-    cp /opt/tpot/etc/compose/tpot.yml $myTPOTCOMPOSE 2>&1>/dev/null
+  COLLECTOR)
+    echo "### Preparing COLLECTOR flavor installation."
+    cp /opt/tpot/etc/compose/collector.yml $myTPOTCOMPOSE 2>&1>/dev/null
   ;;
-  EVERYTHING)
-    echo "### Preparing EVERYTHING flavor installation."
-    cp /opt/tpot/etc/compose/all.yml $myTPOTCOMPOSE 2>&1>/dev/null
+  EXPERIMENTAL)
+    echo "### Preparing EXPERIMENTAL flavor installation."
+    cp /opt/tpot/etc/compose/experimental.yml $myTPOTCOMPOSE 2>&1>/dev/null
+  ;;
+  LEGACY)
+    echo "### Preparing LEGACY flavor installation."
+    cp /opt/tpot/etc/compose/legacy.yml $myTPOTCOMPOSE 2>&1>/dev/null
   ;;
 esac
 
