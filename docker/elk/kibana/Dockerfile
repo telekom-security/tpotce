@@ -35,12 +35,12 @@ RUN apk -U --no-cache add \
     cd / && \
 
 # Setup plugins, rebuild bundle
-    cd /usr/share/kibana/plugins && \
-    wget https://github.com/dlumbrer/kbn_radar/releases/download/Kibana-6.X/kbn_radar.tar.gz && \
-    wget https://github.com/dlumbrer/kbn_network/releases/download/6.0.X-1/network_vis.tar.gz && \
-    tar xvfz kbn_radar.tar.gz && \
-    tar xvfz network_vis.tar.gz && \
-    rm *.tar.gz && \
+    #cd /usr/share/kibana/plugins && \
+    #wget https://github.com/dlumbrer/kbn_radar/releases/download/Kibana-6.X/kbn_radar.tar.gz && \
+    #wget https://github.com/dlumbrer/kbn_network/releases/download/6.0.X-1/network_vis.tar.gz && \
+    #tar xvfz kbn_radar.tar.gz && \
+    #tar xvfz network_vis.tar.gz && \
+    #rm *.tar.gz && \
     rm -rf /usr/share/kibana/optimize/bundles/* && \
 
 # Setup user, groups and configs
