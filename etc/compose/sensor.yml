@@ -42,7 +42,7 @@ services:
 
 # Conpot IEC104 service
   conpot_IEC104:
-    container_name: conpot_IEC104
+    container_name: conpot_iec104
     restart: always
     stop_signal: SIGINT
     environment:
