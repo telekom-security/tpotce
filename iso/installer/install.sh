@@ -9,15 +9,14 @@ export DIALOGRC=/etc/dialogrc
 cp /root/installer/dialogrc /etc/
 
 # Some global vars
-myPROXYFILEPATH="/root/installer/proxy"
-myNTPCONFPATH="/root/installer/ntp"
-myPFXPATH="/root/installer/keys/8021x.pfx"
-myPFXPWPATH="/root/installer/keys/8021x.pw"
-myPFXHOSTIDPATH="/root/installer/keys/8021x.id"
+myNTPCONFFILE="/root/installer/ntp.conf"
+myPFXFILE="/root/installer/keys/8021x.pfx"
 myTPOTCOMPOSE="/opt/tpot/etc/tpot.yml"
 myBACKTITLE="T-Pot-Installer"
 mySITES="https://index.docker.io https://github.com https://pypi.python.org https://ubuntu.com"
 myPROGRESSBOXCONF=" --backtitle "$myBACKTITLE" --progressbox 24 80"
+myCONF_FILE="/root/installer/iso.conf"
+myTPOT_CONF_FILE="/root/installer/tpot.conf"
 
 fuRANDOMWORD () {
   local myWORDFILE="$1"
@@ -32,12 +31,25 @@ sleep 3
 tput civis
 dialog --no-ok --no-cancel --backtitle "$myBACKTITLE" --title "[ Wait to avoid interference with service messages ]" --pause "" 6 80 7
 
+# Let's load the iso config file
+if [ -f $myCONF_FILE ];
+  then
+    dialog --backtitle "$myBACKTITLE" --title "[ Found personalized iso.config ]" --msgbox "\nYour personalized settings will be applied!" 7 47
+    source $myCONF_FILE
+  else
+    # dialog logic considers 1=false, 0=true
+    myCONF_PROXY_USE="1"
+    myCONF_SSH_PUBKEY_USE="1"
+    myCONF_PFX_USE="1"
+    myCONF_NTP_USE="1"
+fi
+
 # Let's setup the proxy for env
-if [ -f $myPROXYFILEPATH ];
+if [ "$myCONF_PROXY_USE" == "0" ];
 then
 dialog --title "[ Setting up the proxy ]" $myPROGRESSBOXCONF <<EOF
 EOF
-myPROXY=$(cat $myPROXYFILEPATH)
+myPROXY="http://$myCONF_PROXY_IP:$myCONF_PROXY_PORT"
 tee -a /etc/environment 2>&1>/dev/null <<EOF
 export http_proxy=$myPROXY
 export https_proxy=$myPROXY
@@ -54,7 +66,6 @@ Acquire::https::Proxy "$myPROXY";
 EOF
 
 # Let's add proxy settings to docker defaults
-myPROXY=$(cat $myPROXYFILEPATH)
 tee -a /etc/default/docker 2>&1>/dev/null <<EOF
 http_proxy=$myPROXY
 https_proxy=$myPROXY
@@ -95,7 +106,6 @@ EOF
   done;
 
 # Let's ask user for install flavor
-# Install types are TPOT, HP, INDUSTRIAL, ALL
 tput cnorm
 myFLAVOR=$(dialog --no-cancel --backtitle "$myBACKTITLE" --title "[ Choose Your T-Pot NG Edition ]" --menu \
 "\nRequired: 6GB RAM, 128GB SSD\nRecommended: 8GB RAM, 256GB SSD" 15 70 7 \
@@ -207,26 +217,19 @@ openssl req \
         -subj '/C=AU/ST=Some-State/O=Internet Widgits Pty Ltd' 2>&1 | dialog --title "[ Generating a self-signed-certificate for NGINX ]" $myPROGRESSBOXCONF;
 
 # Let's setup the ntp server
-if [ -f $myNTPCONFPATH ];
+if [ "$myCONF_NTP_USE" == "0" ];
   then
 dialog --title "[ Setting up the ntp server ]" $myPROGRESSBOXCONF <<EOF
 EOF
-    cp $myNTPCONFPATH /etc/ntp.conf 2>&1 | dialog --title "[ Setting up the ntp server ]" $myPROGRESSBOXCONF
+    cp $myNTPCONFFILE /etc/ntp.conf 2>&1 | dialog --title "[ Setting up the ntp server ]" $myPROGRESSBOXCONF
 fi
 
 # Let's setup 802.1x networking
-if [ -f $myPFXPATH ];
+if [ "myCONF_PFX_USE" == "0" ];
   then
 dialog --title "[ Setting 802.1x networking ]" $myPROGRESSBOXCONF <<EOF
 EOF
-    cp $myPFXPATH /etc/wpa_supplicant/ 2>&1 | dialog --title "[ Setting 802.1x networking ]" $myPROGRESSBOXCONF
-    if [ -f $myPFXPWPATH ];
-      then
-dialog --title "[ Setting up 802.1x password ]" $myPROGRESSBOXCONF <<EOF
-EOF
-        myPFXPW=$(cat $myPFXPWPATH)
-    fi
-    myPFXHOSTID=$(cat $myPFXHOSTIDPATH)
+    cp $myPFXFILE /etc/wpa_supplicant/ 2>&1 | dialog --title "[ Setting 802.1x networking ]" $myPROGRESSBOXCONF
 tee -a /etc/network/interfaces 2>&1>/dev/null <<EOF
         wpa-driver wired
         wpa-conf /etc/wpa_supplicant/wired8021x.conf
@@ -251,9 +254,9 @@ ap_scan=1
 network={
   key_mgmt=IEEE8021X
   eap=TLS
-  identity="host/$myPFXHOSTID"
+  identity="host/$myCONF_PFX_HOST_ID"
   private_key="/etc/wpa_supplicant/8021x.pfx"
-  private_key_passwd="$myPFXPW"
+  private_key_passwd="$myCONF_PFX_PW"
 }
 EOF
 
@@ -268,9 +271,9 @@ network={
   pairwise=CCMP
   group=CCMP
   eap=TLS
-  identity="host/$myPFXHOSTID"
+  identity="host/$myCONF_PFX_HOST_ID"
   private_key="/etc/wpa_supplicant/8021x.pfx"
-  private_key_passwd="$myPFXPW"
+  private_key_passwd="$myCONF_PFX_PW"
 }
 EOF
 fi
