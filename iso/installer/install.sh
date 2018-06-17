@@ -1,19 +1,19 @@
 #!/bin/bash
 # T-Pot post install script
 
+# Let's load dialog color theme
+cp /root/installer/dialogrc /etc/
+
 # Set TERM, DIALOGRC
 export TERM=linux
 export DIALOGRC=/etc/dialogrc
-
-# Let's load dialog color theme
-cp /root/installer/dialogrc /etc/
 
 # Some global vars
 myNTPCONFFILE="/root/installer/ntp.conf"
 myPFXFILE="/root/installer/keys/8021x.pfx"
 myTPOTCOMPOSE="/opt/tpot/etc/tpot.yml"
 myBACKTITLE="T-Pot-Installer"
-mySITES="https://index.docker.io https://github.com https://pypi.python.org https://ubuntu.com"
+mySITES="https://hub.docker.com https://github.com https://pypi.python.org https://ubuntu.com"
 myPROGRESSBOXCONF=" --backtitle "$myBACKTITLE" --progressbox 24 80"
 myCONF_FILE="/root/installer/iso.conf"
 myTPOT_CONF_FILE="/root/installer/tpot.conf"
@@ -87,7 +87,7 @@ for i in $mySITES;
     dialog --title "[ Testing the internet connection ]" --backtitle "$myBACKTITLE" \
            --gauge "\n  Now checking: $i\n" 8 80 $(expr 100 \* $j / $mySITESCOUNT) <<EOF
 EOF
-    curl --connect-timeout 5 -IsS $i 2>&1>/dev/null
+    curl --connect-timeout 30 -IsS $i 2>&1>/dev/null
       if [ $? -ne 0 ];
         then
           dialog --backtitle "$myBACKTITLE" --title "[ Continue? ]" --yesno "\nInternet connection test failed. This might indicate some problems with your connection. You can continue, but the installation might fail." 10 50
