@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Set TERM, DIALOGRC
-export DIALOGRC=/etc/dialogrc
 export TERM=linux
+export DIALOGRC=/etc/dialogrc
 
 # Let's define some global vars
 myBACKTITLE="T-Pot - ISO Creator"
