@@ -1,8 +1,165 @@
 #!/bin/bash
-# T-Pot post install script
+# T-Pot Universal Installer
+
+##################################
+# Extract command line arguments #
+##################################
+
+myLSB=$(lsb_release -r | awk '{ print $2 }')
+myLSB_SUPPORTED="18.04"
+myINFO="\
+############################################
+### T-Pot Installer for Ubuntu $myLSB_SUPPORTED LTS ###
+############################################
+
+Disclaimer:
+This script will install T-Pot on this system, by running the script you know what you are doing:
+1. SSH will be reconfigured to tcp/64295
+2. Some packages will be installed, some will be upgraded
+3. Please ensure other means of access to this system in case something goes wrong.
+4. At best this script well be executed on the console instead through a SSH session.
+
+###########################################
+
+Usage:
+        $0 --help - Help.
+
+Example: 
+        $0 --type=user - Best option for most users."
+  
+if [ "$myLSB" != "$myLSB_SUPPORTED" ];
+  then
+    echo "Aborting. Ubuntu $myLSB is not supported."
+    exit
+fi
+if [ "$1" == "" ];
+  then
+    echo "$myINFO"
+    exit
+fi
+for i in "$@"
+  do
+    case $i in
+      --conf=*)
+        myTPOT_CONF_FILE="${i#*=}"
+        shift
+      ;;
+      --type=user)
+        myTPOT_DEPLOYMENT_TYPE="${i#*=}"
+        shift
+      ;;
+      --type=auto)
+        myTPOT_DEPLOYMENT_TYPE="${i#*=}"
+        shift
+      ;;
+      --type=iso)
+        myTPOT_DEPLOYMENT_TYPE="${i#*=}"
+        shift
+      ;;
+      --help)
+        echo "Usage: $0 <options>"
+        echo
+        echo "--conf=<Path to \"tpot.conf\">"
+	echo "  Use this if you want to automatically deploy a T-Pot instance (--type=automatic implied)."
+        echo "  A configuration example is available in \"tpotce/iso/installer/tpot.conf.dist\"."
+        echo
+        echo "--type=<[user, auto, iso]>"
+        echo "  user, use this if you want to manually install a T-Pot on a Ubuntu 18.04 LTS machine."
+        echo "  iso, use this if you are a T-Pot developer and want to install a T-Pot from a pre-compiled iso."
+        echo
+	exit
+      ;;
+      *)
+        echo "$myINFO"
+	exit
+      ;;
+    esac
+  done
+
+
+###################################################
+# Validate command line arguments and load config #
+###################################################
+
+# If a valid config file exists, set deployment type to "auto" and load the configuration
+if [ "$myTPOT_DEPLOYMENT_TYPE" == "auto" ] && [ "$myTPOT_CONF_FILE" == "" ];
+  then
+    echo "Aborting. No configuration file given."
+    exit
+fi
+if [ -s "$myTPOT_CONF_FILE" ] && [ "$myTPOT_CONF_FILE" != "" ];
+  then
+    myTPOT_DEPLOYMENT_TYPE="auto"
+    if [ "$(head -n 1 $myTPOT_CONF_FILE | grep -c "# tpot")" == "1" ];
+      then
+        source "$myTPOT_CONF_FILE"
+        echo "$myCONF_PROXY_IP"
+      else
+	echo "Aborting. Config file \"$myTPOT_CONF_FILE\" not a T-Pot configuration file."
+        exit
+      fi
+  elif ! [ -s "$myTPOT_CONF_FILE" ] && [ "$myTPOT_CONF_FILE" != "" ];
+    then 
+      echo "Aborting. Config file \"$myTPOT_CONF_FILE\" not found."
+      exit
+fi  
+
+
+#######################
+# Prepare environment #
+#######################
+
+# Got root?
+function fuGOT_ROOT {
+echo
+echo -n "### Checking for root: "
+if [ "$(whoami)" != "root" ];
+  then
+    echo "[ NOT OK ]"
+    echo "### Please run as root. Exiting."
+    exit
+  else
+    echo "[ OK ]"
+fi
+}
+
+# Let's check if all dependencies are met
+function fuGET_DEPS {
+local myPACKAGES="apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount curl dialog dnsutils docker.io docker-compose dstat ethtool genisoimage git glances grc html2text htop ifupdown iptables iw jq libcrack2 libltdl7 lm-sensors man multitail net-tools npm ntp openssh-server openssl pass prips syslinux psmisc pv python-pip unattended-upgrades unzip vim wireless-tools wpasupplicant"
+echo
+echo "### Getting update information."
+echo
+apt-get -y update
+echo
+echo "### Upgrading packages."
+echo
+apt-get -y dist-upgrade
+echo
+echo "### Installing T-Pot dependencies."
+echo
+apt-get -y install $myPACKAGES
+}
 
 # Let's load dialog color theme
-cp /root/installer/dialogrc /etc/
+function fuDIALOG_SETUP {
+echo
+echo -n "### Checking for dialogrc: "
+if [ -f "dialogrc" ];
+  then
+    echo "[ OK ]"
+    cp dialogrc /etc/
+  else
+    echo "[ NOT OK ]"
+    echo "### 'dialogrc' is missing. Please run 'install.sh' from within the setup folder."
+  fi
+}
+
+# Prepare running the installer
+fuGOT_ROOT
+fuGET_DEPS
+fuDIALOG_SETUP
+
+exit
 
 # Set TERM, DIALOGRC
 export TERM=linux
@@ -16,7 +173,6 @@ myBACKTITLE="T-Pot-Installer"
 mySITES="https://hub.docker.com https://github.com https://pypi.python.org https://ubuntu.com"
 myPROGRESSBOXCONF=" --backtitle "$myBACKTITLE" --progressbox 24 80"
 myCONF_FILE="/root/installer/iso.conf"
-myTPOT_CONF_FILE="/root/installer/tpot.conf"
 
 fuRANDOMWORD () {
   local myWORDFILE="$1"
