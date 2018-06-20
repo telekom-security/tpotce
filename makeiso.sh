@@ -229,14 +229,15 @@ echo "myCONF_PROXY_USE=\"$myCONF_PROXY_USE\"" >> $myCONF_FILE
 echo "myCONF_PROXY_IP=\"$myCONF_PROXY_IP\"" >> $myCONF_FILE
 echo "myCONF_PROXY_PORT=\"$myCONF_PROXY_PORT\"" >> $myCONF_FILE
 echo "myCONF_SSH_PUBKEY_USE=\"$myCONF_SSH_PUBKEY_USE\"" >> $myCONF_FILE
-echo "myCONF_SSH_PUBKEY_FILE=\"$myCONF_SSH_PUBKEY_FILE\"" >> $myCONF_FILE
+echo "myCONF_SSH_PUBKEY_FILE=\"/root/installer/keys/authorized_keys\"" >> $myCONF_FILE
 echo "myCONF_PFX_USE=\"$myCONF_PFX_USE\"" >> $myCONF_FILE
-echo "myCONF_PFX_FILE=\"$myCONF_PFX_FILE\"" >> $myCONF_FILE
+echo "myCONF_PFX_FILE=\"/root/installer/keys/8021x.pfx\"" >> $myCONF_FILE
 echo "myCONF_PFX_PW_USE=\"$myCONF_PFX_PW_USE\"" >> $myCONF_FILE
 echo "myCONF_PFX_PW=\"$myCONF_PFX_PW\"" >> $myCONF_FILE
 echo "myCONF_PFX_HOST_ID=\"$myCONF_PFX_HOST_ID\"" >> $myCONF_FILE
 echo "myCONF_NTP_USE=\"$myCONF_NTP_USE\"" >> $myCONF_FILE
 echo "myCONF_NTP_IP=\"$myCONF_NTP_IP\"" >> $myCONF_FILE
+echo "myCONF_NTP_CONF_FILE=\"/root/installer/ntp.conf\"" >> $myCONF_FILE
 
 # Let's download Ubuntu Minimal ISO
 if [ ! -f $myUBUNTUISO ]

@@ -1,6 +1,9 @@
 #!/bin/bash
 # T-Pot Universal Installer
 
+#### to do
+#### 1. use authorized keys config
+
 ##################################
 # Extract command line arguments #
 ##################################
@@ -159,20 +162,27 @@ fuGOT_ROOT
 fuGET_DEPS
 fuDIALOG_SETUP
 
-exit
+#############
+# Installer #
+#############
 
 # Set TERM, DIALOGRC
 export TERM=linux
 export DIALOGRC=/etc/dialogrc
 
-# Some global vars
-myNTPCONFFILE="/root/installer/ntp.conf"
-myPFXFILE="/root/installer/keys/8021x.pfx"
-myTPOTCOMPOSE="/opt/tpot/etc/tpot.yml"
+#######################
+# Global vars section #
+#######################
+
 myBACKTITLE="T-Pot-Installer"
-mySITES="https://hub.docker.com https://github.com https://pypi.python.org https://ubuntu.com"
-myPROGRESSBOXCONF=" --backtitle "$myBACKTITLE" --progressbox 24 80"
 myCONF_FILE="/root/installer/iso.conf"
+myPROGRESSBOXCONF=" --backtitle "$myBACKTITLE" --progressbox 24 80"
+mySITES="https://hub.docker.com https://github.com https://pypi.python.org https://ubuntu.com"
+myTPOTCOMPOSE="/opt/tpot/etc/tpot.yml"
+
+#####################
+# Functions section #
+#####################
 
 fuRANDOMWORD () {
   local myWORDFILE="$1"
@@ -182,12 +192,15 @@ fuRANDOMWORD () {
   echo -n $(sed -n "$myNUM p" $myWORDFILE | tr -d \' | tr A-Z a-z)
 }
 
-# Let's wait a few seconds to avoid interference with service messages
-sleep 3
-tput civis
-dialog --no-ok --no-cancel --backtitle "$myBACKTITLE" --title "[ Wait to avoid interference with service messages ]" --pause "" 6 80 7
+# If this is a ISO installation we need to wait a few seconds to avoid interference with service messages
+if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ];
+  then
+    sleep 5
+    tput civis
+    dialog --no-ok --no-cancel --backtitle "$myBACKTITLE" --title "[ Wait to avoid interference with service messages ]" --pause "" 6 80 7
+fi
 
-# Let's load the iso config file
+# Let's load the iso config file if there is one
 if [ -f $myCONF_FILE ];
   then
     dialog --backtitle "$myBACKTITLE" --title "[ Found personalized iso.config ]" --msgbox "\nYour personalized settings will be applied!" 7 47
@@ -200,7 +213,10 @@ if [ -f $myCONF_FILE ];
     myCONF_NTP_USE="1"
 fi
 
-# Let's setup the proxy for env
+### <--- Begin proxy setup
+# If a proxy is set in iso.conf it needs to be setup.
+# However, none of the other installation types will automatically take care of a proxy.
+# Please open a feature request if you think this is something worth considering.
 if [ "$myCONF_PROXY_USE" == "0" ];
 then
 dialog --title "[ Setting up the proxy ]" $myPROGRESSBOXCONF <<EOF
@@ -234,6 +250,7 @@ EOF
 systemctl stop docker 2>&1 | dialog --title "[ Stop docker service ]" $myPROGRESSBOXCONF
 systemctl start docker 2>&1 | dialog --title "[ Start docker service ]" $myPROGRESSBOXCONF
 fi
+### ---> End proxy setup
 
 # Let's test the internet connection
 mySITESCOUNT=$(echo $mySITES | wc -w)
@@ -261,16 +278,40 @@ EOF
 EOF
   done;
 
-# Let's ask user for install flavor
+# Let's put cursor back in standard form
 tput cnorm
-myFLAVOR=$(dialog --no-cancel --backtitle "$myBACKTITLE" --title "[ Choose Your T-Pot NG Edition ]" --menu \
-"\nRequired: 6GB RAM, 128GB SSD\nRecommended: 8GB RAM, 256GB SSD" 15 70 7 \
-"STANDARD" "Honeypots, ELK, NSM & Tools" \
-"SENSOR" "Just Honeypots, EWS Poster & NSM" \
-"INDUSTRIAL" "Conpot, RDPY, Vnclowpot, ELK, NSM & Tools" \
-"COLLECTOR" "Heralding, ELK, NSM & Tools" \
-"EXPERIMENTAL" "Experimental (Glutton instead of Honeytrap)" \
-"LEGACY" "Standard Edition from previous release" 3>&1 1>&2 2>&3 3>&-)
+
+# Let's ask the user for install flavor
+if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ] || [ "$myTPOT_DEPLOYMENT_TYPE" == "user" ];
+  then
+    myCONF_TPOT_FLAVOR=$(dialog --no-cancel --backtitle "$myBACKTITLE" --title "[ Choose Your T-Pot NG Edition ]" --menu \
+    "\nRequired: 6GB RAM, 128GB SSD\nRecommended: 8GB RAM, 256GB SSD" 15 70 7 \
+    "STANDARD" "Honeypots, ELK, NSM & Tools" \
+    "SENSOR" "Just Honeypots, EWS Poster & NSM" \
+    "INDUSTRIAL" "Conpot, RDPY, Vnclowpot, ELK, NSM & Tools" \
+    "COLLECTOR" "Heralding, ELK, NSM & Tools" \
+    "EXPERIMENTAL" "Experimental (Glutton instead of Honeytrap)" \
+    "LEGACY" "Standard Edition from previous release" 3>&1 1>&2 2>&3 3>&-)
+fi
+
+# Let's ask for a username if installation type is user
+if [ "$myTPOT_DEPLOYMENT_TYPE" == "user" ];
+  then
+    while [ 1 != 2 ]
+      do
+        myCONF_TPOT_USER=$(dialog --backtitle "$myBACKTITLE" --title "[ Existing linux user name ]" --inputbox "\nUsername (root is not allowed)" 9 50 "$(who am i | awk '{ print $1 }')" 3>&1 1>&2 2>&3 3>&-)
+        myCONF_TPOT_USER=$(echo $myUSER | tr -cd "[:alnum:]_.-")
+        dialog --backtitle "$myBACKTITLE" --title "[ Your username is ]" --yesno "\n$myUSER" 7 50
+        myOK=$?
+        if [ "$myOK" = "0" ] && [ "$myUSER" != "root" ] && [ "$myUSER" != "" ];
+          then
+            break
+        fi
+      done
+fi
+
+##### exit #####
+exit
 
 # Let's ask for a secure tsec password
 myUSER="tsec"
@@ -377,7 +418,7 @@ if [ "$myCONF_NTP_USE" == "0" ];
   then
 dialog --title "[ Setting up the ntp server ]" $myPROGRESSBOXCONF <<EOF
 EOF
-    cp $myNTPCONFFILE /etc/ntp.conf 2>&1 | dialog --title "[ Setting up the ntp server ]" $myPROGRESSBOXCONF
+    cp $myCONF_NTP_CONF_FILE /etc/ntp.conf 2>&1 | dialog --title "[ Setting up the ntp server ]" $myPROGRESSBOXCONF
 fi
 
 # Let's setup 802.1x networking
@@ -385,7 +426,7 @@ if [ "myCONF_PFX_USE" == "0" ];
   then
 dialog --title "[ Setting 802.1x networking ]" $myPROGRESSBOXCONF <<EOF
 EOF
-    cp $myPFXFILE /etc/wpa_supplicant/ 2>&1 | dialog --title "[ Setting 802.1x networking ]" $myPROGRESSBOXCONF
+    cp $myCONF_PFX_FILE /etc/wpa_supplicant/ 2>&1 | dialog --title "[ Setting 802.1x networking ]" $myPROGRESSBOXCONF
 tee -a /etc/network/interfaces 2>&1>/dev/null <<EOF
         wpa-driver wired
         wpa-conf /etc/wpa_supplicant/wired8021x.conf
@@ -514,8 +555,8 @@ Match address 127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
     PasswordAuthentication yes
 EOF
 
-# Let's make sure only myFLAVOR images will be downloaded and started
-case $myFLAVOR in
+# Let's make sure only myCONF_TPOT_FLAVOR images will be downloaded and started
+case $myCONF_TPOT_FLAVOR in
   STANDARD)
     echo "### Preparing STANDARD flavor installation."
     cp /opt/tpot/etc/compose/standard.yml $myTPOTCOMPOSE 2>&1>/dev/null
@@ -626,9 +667,9 @@ touch /data/spiderfoot/spiderfoot.db 2>&1 | dialog --title "[ Creating some file
 
 # Let's copy some files
 tar xvfz /opt/tpot/etc/objects/elkbase.tgz -C / 2>&1 | dialog --title "[ Extracting elkbase.tgz ]" $myPROGRESSBOXCONF
-cp    /opt/tpot/host/etc/systemd/* /etc/systemd/system/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
-cp    /opt/tpot/host/etc/issue /etc/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
-cp    /root/installer/keys/authorized_keys /home/tsec/.ssh/authorized_keys 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
+cp /opt/tpot/host/etc/systemd/* /etc/systemd/system/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
+cp /opt/tpot/host/etc/issue /etc/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
+cp $myCONF_SSH_PUBKEY_FILE /home/tsec/.ssh/authorized_keys 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
 systemctl enable tpot 2>&1 | dialog --title "[ Enabling service for tpot ]" $myPROGRESSBOXCONF
 
 # Let's take care of some files and permissions
