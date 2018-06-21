@@ -2,7 +2,8 @@
 # T-Pot Universal Installer
 
 #### to do
-#### 1. use authorized keys config
+#### 1. ditch authorized keys config, use fail2ban
+#### 2. check for other services that might collide with the honeypots, if found abort install
 
 ##################################
 # Extract command line arguments #
@@ -63,11 +64,12 @@ for i in "$@"
         echo "Usage: $0 <options>"
         echo
         echo "--conf=<Path to \"tpot.conf\">"
-	echo "  Use this if you want to automatically deploy a T-Pot instance (--type=automatic implied)."
+	echo "  Use this if you want to automatically deploy a T-Pot instance (--type=auto implied)."
         echo "  A configuration example is available in \"tpotce/iso/installer/tpot.conf.dist\"."
         echo
         echo "--type=<[user, auto, iso]>"
         echo "  user, use this if you want to manually install a T-Pot on a Ubuntu 18.04 LTS machine."
+        echo "  auto, implied if a configuration file is passed as an argument for automatic deployment."
         echo "  iso, use this if you are a T-Pot developer and want to install a T-Pot from a pre-compiled iso."
         echo
 	exit
@@ -119,7 +121,8 @@ echo -n "### Checking for root: "
 if [ "$(whoami)" != "root" ];
   then
     echo "[ NOT OK ]"
-    echo "### Please run as root. Exiting."
+    echo "### Please run as root."
+    echo "### Example: sudo $0"
     exit
   else
     echo "[ OK ]"
@@ -253,30 +256,33 @@ fi
 ### ---> End proxy setup
 
 # Let's test the internet connection
-mySITESCOUNT=$(echo $mySITES | wc -w)
-j=0
-for i in $mySITES;
-  do
-    dialog --title "[ Testing the internet connection ]" --backtitle "$myBACKTITLE" \
-           --gauge "\n  Now checking: $i\n" 8 80 $(expr 100 \* $j / $mySITESCOUNT) <<EOF
+if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ] || [ "$myTPOT_DEPLOYMENT_TYPE" == "user" ];
+  then
+    mySITESCOUNT=$(echo $mySITES | wc -w)
+    j=0
+    for i in $mySITES;
+      do
+        dialog --title "[ Testing the internet connection ]" --backtitle "$myBACKTITLE" \
+               --gauge "\n  Now checking: $i\n" 8 80 $(expr 100 \* $j / $mySITESCOUNT) <<EOF
 EOF
-    curl --connect-timeout 30 -IsS $i 2>&1>/dev/null
-      if [ $? -ne 0 ];
-        then
-          dialog --backtitle "$myBACKTITLE" --title "[ Continue? ]" --yesno "\nInternet connection test failed. This might indicate some problems with your connection. You can continue, but the installation might fail." 10 50
-          if [ $? = 1 ];
-            then
-              dialog --backtitle "$myBACKTITLE" --title "[ Abort ]" --msgbox "\nInstallation aborted. Exiting the installer." 7 50
-              exit
-            else
-              break;
-          fi;
-      fi;
-    let j+=1
-    dialog --title "[ Testing the internet connection ]" --backtitle "$myBACKTITLE" \
-           --gauge "\n  Now checking: $i\n" 8 80 $(expr 100 \* $j / $mySITESCOUNT) <<EOF
+        curl --connect-timeout 30 -IsS $i 2>&1>/dev/null
+        if [ $? -ne 0 ];
+          then
+            dialog --backtitle "$myBACKTITLE" --title "[ Continue? ]" --yesno "\nInternet connection test failed. This might indicate some problems with your connection. You can continue, but the installation might fail." 10 50
+            if [ $? = 1 ];
+              then
+                dialog --backtitle "$myBACKTITLE" --title "[ Abort ]" --msgbox "\nInstallation aborted. Exiting the installer." 7 50
+                exit
+              else
+                break;
+            fi;
+        fi;
+      let j+=1
+      dialog --title "[ Testing the internet connection ]" --backtitle "$myBACKTITLE" \
+             --gauge "\n  Now checking: $i\n" 8 80 $(expr 100 \* $j / $mySITESCOUNT) <<EOF
 EOF
-  done;
+    done;
+fi
 
 # Let's put cursor back in standard form
 tput cnorm
@@ -299,124 +305,149 @@ if [ "$myTPOT_DEPLOYMENT_TYPE" == "user" ];
   then
     while [ 1 != 2 ]
       do
-        myCONF_TPOT_USER=$(dialog --backtitle "$myBACKTITLE" --title "[ Existing linux user name ]" --inputbox "\nUsername (root is not allowed)" 9 50 "$(who am i | awk '{ print $1 }')" 3>&1 1>&2 2>&3 3>&-)
-        myCONF_TPOT_USER=$(echo $myUSER | tr -cd "[:alnum:]_.-")
-        dialog --backtitle "$myBACKTITLE" --title "[ Your username is ]" --yesno "\n$myUSER" 7 50
+        myCONF_TPOT_USER=$(dialog --backtitle "$myBACKTITLE" --title "[ Existing console user name ]" --inputbox "\nUsername (root is not allowed)" 9 50 "$(who am i | awk '{ print $1 }')" 3>&1 1>&2 2>&3 3>&-)
+        myCONF_TPOT_USER=$(echo $myCONF_TPOT_USER | tr -cd "[:alnum:]_.-")
+        dialog --backtitle "$myBACKTITLE" --title "[ Your username is ]" --yesno "\n$myCONF_TPOT_USER" 7 50
         myOK=$?
-        if [ "$myOK" = "0" ] && [ "$myUSER" != "root" ] && [ "$myUSER" != "" ];
+	if [ "$myOK" = "0" ] && [ "$myCONF_TPOT_USER" != "root" ] && [ "$myCONF_TPOT_USER" != "" ] && [ "$(cat /etc/passwd | grep -wc $myCONF_TPOT_USER)" == "1" ];
           then
             break
         fi
       done
 fi
 
+# Let's ask for a secure tsec password if installation type is iso
+if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ];
+  then
+    myCONF_TPOT_USER="tsec"
+    myPASS1="pass1"
+    myPASS2="pass2"
+    mySECURE="0"
+    while [ "$myPASS1" != "$myPASS2"  ] && [ "$mySECURE" == "0" ]
+      do
+        while [ "$myPASS1" == "pass1"  ] || [ "$myPASS1" == "" ]
+          do
+            myPASS1=$(dialog --insecure --backtitle "$myBACKTITLE" \
+                             --title "[ Enter password for console user (tsec) ]" \
+                             --passwordbox "\nPassword" 9 60 3>&1 1>&2 2>&3 3>&-)
+          done
+            myPASS2=$(dialog --insecure --backtitle "$myBACKTITLE" \
+                             --title "[ Repeat password for console user (tsec) ]" \
+                             --passwordbox "\nPassword" 9 60 3>&1 1>&2 2>&3 3>&-)
+        if [ "$myPASS1" != "$myPASS2" ];
+          then
+            dialog --backtitle "$myBACKTITLE" --title "[ Passwords do not match. ]" \
+                   --msgbox "\nPlease re-enter your password." 7 60
+            myPASS1="pass1"
+            myPASS2="pass2"
+        fi
+        mySECURE=$(printf "%s" "$myPASS1" | cracklib-check | grep -c "OK")
+        if [ "$mySECURE" == "0" ] && [ "$myPASS1" == "$myPASS2" ];
+          then
+            dialog --backtitle "$myBACKTITLE" --title "[ Password is not secure ]" --defaultno --yesno "\nKeep insecure password?" 7 50
+            myOK=$?
+            if [ "$myOK" == "1" ];
+              then
+                myPASS1="pass1"
+                myPASS2="pass2"
+            fi
+        fi
+      done
+    printf "%s" "$myCONF_TPOT_USER:$myPASS1" | chpasswd
+fi
+
+# Let's ask for a web user credentials if deployment type is iso or user
+# In case of auto, credentials are created from config values
+# Skip this step entirely if SENSOR flavor
+if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ] || [ "$myTPOT_DEPLOYMENT_TYPE" == "user" ];
+  then
+    myOK="1"
+    myCONF_WEB_USER="webuser"
+    myCONF_WEB_PW="pass1"
+    myCONF_WEB_PW2="pass2"
+    mySECURE="0"
+    while [ 1 != 2 ]
+      do
+        myCONF_WEB_USER=$(dialog --backtitle "$myBACKTITLE" --title "[ Enter your web user name ]" --inputbox "\nUsername (tsec not allowed)" 9 50 3>&1 1>&2 2>&3 3>&-)
+        myCONF_WEB_USER=$(echo $myCONF_WEB_USER | tr -cd "[:alnum:]_.-")
+        dialog --backtitle "$myBACKTITLE" --title "[ Your username is ]" --yesno "\n$myCONF_WEB_USER" 7 50
+        myOK=$?
+        if [ "$myOK" = "0" ] && [ "$myCONF_WEB_USER" != "tsec" ] && [ "$myCONF_WEB_USER" != "" ];
+          then
+            break
+        fi
+      done
+    while [ "$myCONF_WEB_PW" != "$myCONF_WEB_PW2"  ] && [ "$mySECURE" == "0" ]
+      do
+        while [ "$myCONF_WEB_PW" == "pass1"  ] || [ "$myCONF_WEB_PW" == "" ]
+          do
+            myCONF_WEB_PW=$(dialog --insecure --backtitle "$myBACKTITLE" \
+                             --title "[ Enter password for your web user ]" \
+                             --passwordbox "\nPassword" 9 60 3>&1 1>&2 2>&3 3>&-)
+          done
+        myCONF_WEB_PW2=$(dialog --insecure --backtitle "$myBACKTITLE" \
+                         --title "[ Repeat password for your web user ]" \
+                         --passwordbox "\nPassword" 9 60 3>&1 1>&2 2>&3 3>&-)
+        if [ "$myCONF_WEB_PW" != "$myCONF_WEB_PW2" ];
+          then
+            dialog --backtitle "$myBACKTITLE" --title "[ Passwords do not match. ]" \
+                   --msgbox "\nPlease re-enter your password." 7 60
+            myCONF_WEB_PW="pass1"
+            myCONF_WEB_PW2="pass2"
+        fi
+        mySECURE=$(printf "%s" "$myCONF_WEB_PW" | cracklib-check | grep -c "OK")
+        if [ "$mySECURE" == "0" ] && [ "$myCONF_WEB_PW" == "$myCONF_WEB_PW2" ];
+          then
+            dialog --backtitle "$myBACKTITLE" --title "[ Password is not secure ]" --defaultno --yesno "\nKeep insecure password?" 7 50
+            myOK=$?
+            if [ "$myOK" == "1" ];
+              then
+                myCONF_WEB_PW="pass1"
+                myCONF_WEB_PW2="pass2"
+            fi
+        fi
+      done
+fi
+# If flavor is SENSOR do not write credentials
+if ! [ "$myCONF_TPOT_FLAVOR" == "SENSOR" ];
+  then
+    mkdir -p /data/nginx/conf 2>&1
+    htpasswd -b -c /data/nginx/conf/nginxpasswd "$myCONF_WEB_USER" "$myCONF_WEB_PW" 2>&1 | dialog --title "[ Setting up user and password ]" $myPROGRESSBOXCONF;
+fi
+
+################
+echo $myCONF_TPOT_FLAVOR
+echo $myCONF_TPOT_USER
+echo $myCONF_TPOT_PW
+echo $myCONF_WEB_USER
+echo $myCONF_WEB_PW
+
+
 ##### exit #####
 exit
 
-# Let's ask for a secure tsec password
-myUSER="tsec"
-myPASS1="pass1"
-myPASS2="pass2"
-mySECURE="0"
-while [ "$myPASS1" != "$myPASS2"  ] && [ "$mySECURE" == "0" ]
-  do
-    while [ "$myPASS1" == "pass1"  ] || [ "$myPASS1" == "" ]
-      do
-        myPASS1=$(dialog --insecure --backtitle "$myBACKTITLE" \
-                         --title "[ Enter password for console user (tsec) ]" \
-                         --passwordbox "\nPassword" 9 60 3>&1 1>&2 2>&3 3>&-)
-      done
-        myPASS2=$(dialog --insecure --backtitle "$myBACKTITLE" \
-                         --title "[ Repeat password for console user (tsec) ]" \
-                         --passwordbox "\nPassword" 9 60 3>&1 1>&2 2>&3 3>&-)
-    if [ "$myPASS1" != "$myPASS2" ];
-      then
-        dialog --backtitle "$myBACKTITLE" --title "[ Passwords do not match. ]" \
-               --msgbox "\nPlease re-enter your password." 7 60
-        myPASS1="pass1"
-        myPASS2="pass2"
-    fi
-    mySECURE=$(printf "%s" "$myPASS1" | cracklib-check | grep -c "OK")
-    if [ "$mySECURE" == "0" ] && [ "$myPASS1" == "$myPASS2" ];
-      then
-        dialog --backtitle "$myBACKTITLE" --title "[ Password is not secure ]" --defaultno --yesno "\nKeep insecure password?" 7 50
-        myOK=$?
-        if [ "$myOK" == "1" ];
-          then
-            myPASS1="pass1"
-            myPASS2="pass2"
-        fi
-    fi
-  done
-printf "%s" "$myUSER:$myPASS1" | chpasswd
-
-# Let's ask for a web username with secure password
-myOK="1"
-myUSER="tsec"
-myPASS1="pass1"
-myPASS2="pass2"
-mySECURE="0"
-while [ 1 != 2 ]
-  do
-    myUSER=$(dialog --backtitle "$myBACKTITLE" --title "[ Enter your web user name ]" --inputbox "\nUsername (tsec not allowed)" 9 50 3>&1 1>&2 2>&3 3>&-)
-    myUSER=$(echo $myUSER | tr -cd "[:alnum:]_.-")
-    dialog --backtitle "$myBACKTITLE" --title "[ Your username is ]" --yesno "\n$myUSER" 7 50
-    myOK=$?
-    if [ "$myOK" = "0" ] && [ "$myUSER" != "tsec" ] && [ "$myUSER" != "" ];
-      then
-        break
-    fi
-  done
-while [ "$myPASS1" != "$myPASS2"  ] && [ "$mySECURE" == "0" ]
-  do
-    while [ "$myPASS1" == "pass1"  ] || [ "$myPASS1" == "" ]
-      do
-        myPASS1=$(dialog --insecure --backtitle "$myBACKTITLE" \
-                         --title "[ Enter password for your web user ]" \
-                         --passwordbox "\nPassword" 9 60 3>&1 1>&2 2>&3 3>&-)
-      done
-        myPASS2=$(dialog --insecure --backtitle "$myBACKTITLE" \
-                         --title "[ Repeat password for your web user ]" \
-                         --passwordbox "\nPassword" 9 60 3>&1 1>&2 2>&3 3>&-)
-    if [ "$myPASS1" != "$myPASS2" ];
-      then
-        dialog --backtitle "$myBACKTITLE" --title "[ Passwords do not match. ]" \
-               --msgbox "\nPlease re-enter your password." 7 60
-        myPASS1="pass1"
-        myPASS2="pass2"
-    fi
-    mySECURE=$(printf "%s" "$myPASS1" | cracklib-check | grep -c "OK")
-    if [ "$mySECURE" == "0" ] && [ "$myPASS1" == "$myPASS2" ];
-      then
-        dialog --backtitle "$myBACKTITLE" --title "[ Password is not secure ]" --defaultno --yesno "\nKeep insecure password?" 7 50
-        myOK=$?
-        if [ "$myOK" == "1" ];
-          then
-            myPASS1="pass1"
-            myPASS2="pass2"
-        fi
-    fi
-  done
-mkdir -p /data/nginx/conf 2>&1
-htpasswd -b -c /data/nginx/conf/nginxpasswd "$myUSER" "$myPASS1" 2>&1 | dialog --title "[ Setting up user and password ]" $myPROGRESSBOXCONF;
+# Put cursor in invisible mode
+tput civis
 
 # Let's generate a SSL self-signed certificate without interaction (browsers will see it invalid anyway)
-tput civis
-mkdir -p /data/nginx/cert 2>&1 | dialog --title "[ Generating a self-signed-certificate for NGINX ]" $myPROGRESSBOXCONF;
-openssl req \
-        -nodes \
-        -x509 \
-        -sha512 \
-        -newkey rsa:8192 \
-        -keyout "/data/nginx/cert/nginx.key" \
-        -out "/data/nginx/cert/nginx.crt" \
-        -days 3650 \
-        -subj '/C=AU/ST=Some-State/O=Internet Widgits Pty Ltd' 2>&1 | dialog --title "[ Generating a self-signed-certificate for NGINX ]" $myPROGRESSBOXCONF;
+if ! [ "$myCONF_TPOT_FLAVOR" == "SENSOR" ];
+  then
+    mkdir -p /data/nginx/cert 2>&1 | dialog --title "[ Generating a self-signed-certificate for NGINX ]" $myPROGRESSBOXCONF;
+    openssl req \
+            -nodes \
+            -x509 \
+            -sha512 \
+            -newkey rsa:8192 \
+            -keyout "/data/nginx/cert/nginx.key" \
+            -out "/data/nginx/cert/nginx.crt" \
+            -days 3650 \
+            -subj '/C=AU/ST=Some-State/O=Internet Widgits Pty Ltd' 2>&1 | dialog --title "[ Generating a self-signed-certificate for NGINX ]" $myPROGRESSBOXCONF;
+fi
 
 # Let's setup the ntp server
 if [ "$myCONF_NTP_USE" == "0" ];
   then
-dialog --title "[ Setting up the ntp server ]" $myPROGRESSBOXCONF <<EOF
+    dialog --title "[ Setting up the ntp server ]" $myPROGRESSBOXCONF <<EOF
 EOF
     cp $myCONF_NTP_CONF_FILE /etc/ntp.conf 2>&1 | dialog --title "[ Setting up the ntp server ]" $myPROGRESSBOXCONF
 fi
@@ -424,10 +455,10 @@ fi
 # Let's setup 802.1x networking
 if [ "myCONF_PFX_USE" == "0" ];
   then
-dialog --title "[ Setting 802.1x networking ]" $myPROGRESSBOXCONF <<EOF
+    dialog --title "[ Setting 802.1x networking ]" $myPROGRESSBOXCONF <<EOF
 EOF
     cp $myCONF_PFX_FILE /etc/wpa_supplicant/ 2>&1 | dialog --title "[ Setting 802.1x networking ]" $myPROGRESSBOXCONF
-tee -a /etc/network/interfaces 2>&1>/dev/null <<EOF
+    tee -a /etc/network/interfaces 2>&1>/dev/null <<EOF
         wpa-driver wired
         wpa-conf /etc/wpa_supplicant/wired8021x.conf
 
@@ -443,7 +474,7 @@ tee -a /etc/network/interfaces 2>&1>/dev/null <<EOF
 #        wpa-conf /etc/wpa_supplicant/wireless8021x.conf
 EOF
 
-tee /etc/wpa_supplicant/wired8021x.conf 2>&1>/dev/null <<EOF
+    tee /etc/wpa_supplicant/wired8021x.conf 2>&1>/dev/null <<EOF
 ctrl_interface=/var/run/wpa_supplicant
 ctrl_interface_group=root
 eapol_version=1
@@ -457,7 +488,7 @@ network={
 }
 EOF
 
-tee /etc/wpa_supplicant/wireless8021x.conf 2>&1>/dev/null <<EOF
+    tee /etc/wpa_supplicant/wireless8021x.conf 2>&1>/dev/null <<EOF
 ctrl_interface=/var/run/wpa_supplicant
 ctrl_interface_group=root
 eapol_version=1
@@ -516,27 +547,23 @@ tee -a /etc/ssh/ssh_config 2>&1>/dev/null <<EOF
 UseRoaming no
 EOF
 
-# Let's pull some updates
-apt-get update -y 2>&1 | dialog --title "[ Pulling updates ]" $myPROGRESSBOXCONF
-apt-get upgrade -y 2>&1 | dialog --title "[ Pulling updates ]" $myPROGRESSBOXCONF
-
-# Let's clean up apt
-apt-get autoclean -y 2>&1 | dialog --title "[ Pulling updates ]" $myPROGRESSBOXCONF
-apt-get autoremove -y 2>&1 | dialog --title "[ Pulling updates ]" $myPROGRESSBOXCONF
-
 # Installing ctop, elasticdump, tpot
+if ! [ "$myCONF_TPOT_FLAVOR" == "SENSOR" ];
+  then
+    npm install https://github.com/taskrabbit/elasticsearch-dump#9fcc8cc -g 2>&1 | dialog --title "[ Installing elasticsearch-dump ]" $myPROGRESSBOXCONF
+fi
 pip install --upgrade pip 2>&1 | dialog --title "[ Installing pip ]" $myPROGRESSBOXCONF
+hash -r 2>&1 | dialog --title "[ Installing pip ]" $myPROGRESSBOXCONF
 pip install elasticsearch-curator==5.4.1 2>&1 | dialog --title "[ Installing elasticsearch-curator ]" $myPROGRESSBOXCONF
 pip install yq==2.4.1 2>&1 | dialog --title "[ Installing yq ]" $myPROGRESSBOXCONF
-npm install https://github.com/taskrabbit/elasticsearch-dump#9fcc8cc -g 2>&1 | dialog --title "[ Installing elasticsearch-dump ]" $myPROGRESSBOXCONF
 wget https://github.com/bcicen/ctop/releases/download/v0.7/ctop-0.7-linux-amd64 -O ctop 2>&1 | dialog --title "[ Installing ctop ]" $myPROGRESSBOXCONF
 mv ctop /usr/bin/ 2>&1 | dialog --title "[ Installing ctop ]" $myPROGRESSBOXCONF
 chmod +x /usr/bin/ctop 2>&1 | dialog --title "[ Installing ctop ]" $myPROGRESSBOXCONF
 git clone https://github.com/dtag-dev-sec/tpotce -b 18.04 /opt/tpot 2>&1 | dialog --title "[ Cloning T-Pot ]" $myPROGRESSBOXCONF
 
-# Let's add a new user
-addgroup --gid 2000 tpot 2>&1 | dialog --title "[ Adding new user ]" $myPROGRESSBOXCONF
-adduser --system --no-create-home --uid 2000 --disabled-password --disabled-login --gid 2000 tpot 2>&1 | dialog --title "[ Adding new user ]" $myPROGRESSBOXCONF
+# Let's create the T-Pot user
+addgroup --gid 2000 tpot 2>&1 | dialog --title "[ Adding T-Pot user ]" $myPROGRESSBOXCONF
+adduser --system --no-create-home --uid 2000 --disabled-password --disabled-login --gid 2000 tpot 2>&1 | dialog --title "[ Adding T-Pot user ]" $myPROGRESSBOXCONF
 
 # Let's set the hostname
 a=$(fuRANDOMWORD /opt/tpot/host/usr/share/dict/a.txt)
@@ -704,6 +731,10 @@ EOF
 
 # Let's create ews.ip before reboot and prevent race condition for first start
 /opt/tpot/bin/updateip.sh 2>&1>/dev/null
+
+# Let's clean up apt
+apt-get autoclean -y 2>&1 | dialog --title "[ Cleaning up ]" $myPROGRESSBOXCONF
+apt-get autoremove -y 2>&1 | dialog --title "[ Cleaning up ]" $myPROGRESSBOXCONF
 
 # Final steps
 cp /opt/tpot/host/etc/rc.local /etc/rc.local 2>&1>/dev/null && \
