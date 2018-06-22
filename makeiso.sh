@@ -115,36 +115,11 @@ do
           myCONF_PROXY_PORT=$(dialog --backtitle "$myBACKTITLE" --no-cancel --title "Proxy Port (i.e. 3128)?" --inputbox "" 7 50 "$myCONF_PROXY_PORT" 3>&1 1>&2 2>&3 3>&-)
           if [[ $myCONF_PROXY_PORT =~ ^-?[0-9]+$ ]] && [ $myCONF_PROXY_PORT -gt 0 ] && [ $myCONF_PROXY_PORT -lt 65536 ]; then myPORTRESULT="true"; fi
       done
-      #################################################################
-      #echo http://$myCONF_PROXY_IP:$myCONF_PROXY_PORT > $myPROXYCONFIG
-      #################################################################
       sed -i.bak 's#d-i mirror/http/proxy.*#d-i mirror/http/proxy string http://'$myCONF_PROXY_IP':'$myCONF_PROXY_PORT'/#' $myTPOTSEED
       break
     else
       myCONF_PROXY_IP=""
       myCONF_PROXY_PORT=""
-      break
-  fi
-done
-
-# Let's ask the user for ssh keys ...
-while true;
-do
-  dialog --backtitle "$myBACKTITLE" --title "[ Add ssh keys? ]" --yesno "\nDo you want to add public key(s) to authorized_keys file?" 8 50
-  myCONF_SSH_PUBKEY_USE=$?
-  if [ "$myCONF_SSH_PUBKEY_USE" = "0" ]
-    then
-      myCONF_SSH_PUBKEY_FILE=$(dialog --backtitle "$myBACKTITLE" --fselect "$myCONF_SSH_PUBKEY_FILE" 15 50 3>&1 1>&2 2>&3 3>&-)
-      if [ -f "$myCONF_SSH_PUBKEY_FILE" ]
-        then
-          cp $myCONF_SSH_PUBKEY_FILE $myAUTHKEYSFILE
-          break
-        else
-          dialog --backtitle "$myBACKTITLE" --title "[ Try again! ]" --msgbox "\nThis is no regular file." 7 50;
-      fi
-    else
-      echo > $myAUTHKEYSFILE
-      myCONF_SSH_PUBKEY_FILE=""
       break
   fi
 done
@@ -165,16 +140,10 @@ do
           if [ "$myCONF_PFX_PW_USE" = "0" ]
             then
               myCONF_PFX_PW=$(dialog --backtitle "$myBACKTITLE" --no-cancel --inputbox "Password?" 7 50 3>&1 1>&2 2>&3 3>&-)
-              ###################################
-	      #echo $myCONF_PFX_PW > $myPFXPWPATH
-	      ###################################
 	    else
 	      myCONF_PFX_PW=""
           fi
           myCONF_PFX_HOST_ID=$(dialog --backtitle "$myBACKTITLE" --no-cancel --inputbox "Host ID?" 7 50 "$myCONF_PFX_HOST_ID" 3>&1 1>&2 2>&3 3>&-)
-          ############################################
-	  #echo $myCONF_PFX_HOST_ID > $myPFXHOSTIDPATH
-	  ############################################
           break
         else
           dialog --backtitle "$myBACKTITLE" --title "[ Try again! ]" --msgbox "\nThis is no regular file." 7 50;
@@ -225,19 +194,17 @@ done
 
 # Let's write the config file
 echo "# makeiso configuration file" > $myCONF_FILE
-echo "myCONF_PROXY_USE=\'$myCONF_PROXY_USE\'" >> $myCONF_FILE
-echo "myCONF_PROXY_IP=\'$myCONF_PROXY_IP\'" >> $myCONF_FILE
-echo "myCONF_PROXY_PORT=\'$myCONF_PROXY_PORT\'" >> $myCONF_FILE
-echo "myCONF_SSH_PUBKEY_USE=\'$myCONF_SSH_PUBKEY_USE\'" >> $myCONF_FILE
-echo "myCONF_SSH_PUBKEY_FILE=\'/root/installer/keys/authorized_keys\'" >> $myCONF_FILE
-echo "myCONF_PFX_USE=\'$myCONF_PFX_USE\'" >> $myCONF_FILE
-echo "myCONF_PFX_FILE=\'/root/installer/keys/8021x.pfx\'" >> $myCONF_FILE
-echo "myCONF_PFX_PW_USE=\'$myCONF_PFX_PW_USE\'" >> $myCONF_FILE
-echo "myCONF_PFX_PW=\'$myCONF_PFX_PW\'" >> $myCONF_FILE
-echo "myCONF_PFX_HOST_ID=\'$myCONF_PFX_HOST_ID\'" >> $myCONF_FILE
-echo "myCONF_NTP_USE=\'$myCONF_NTP_USE\'" >> $myCONF_FILE
-echo "myCONF_NTP_IP=\'$myCONF_NTP_IP\'" >> $myCONF_FILE
-echo "myCONF_NTP_CONF_FILE=\'/root/installer/ntp.conf\'" >> $myCONF_FILE
+echo "myCONF_PROXY_USE=\"$myCONF_PROXY_USE\"" >> $myCONF_FILE
+echo "myCONF_PROXY_IP=\"$myCONF_PROXY_IP\"" >> $myCONF_FILE
+echo "myCONF_PROXY_PORT=\"$myCONF_PROXY_PORT\"" >> $myCONF_FILE
+echo "myCONF_PFX_USE=\"$myCONF_PFX_USE\"" >> $myCONF_FILE
+echo "myCONF_PFX_FILE=\"/root/installer/keys/8021x.pfx\"" >> $myCONF_FILE
+echo "myCONF_PFX_PW_USE=\"$myCONF_PFX_PW_USE\"" >> $myCONF_FILE
+echo "myCONF_PFX_PW=\"$myCONF_PFX_PW\"" >> $myCONF_FILE
+echo "myCONF_PFX_HOST_ID=\"$myCONF_PFX_HOST_ID\"" >> $myCONF_FILE
+echo "myCONF_NTP_USE=\"$myCONF_NTP_USE\"" >> $myCONF_FILE
+echo "myCONF_NTP_IP=\"$myCONF_NTP_IP\"" >> $myCONF_FILE
+echo "myCONF_NTP_CONF_FILE=\"/root/installer/ntp.conf\"" >> $myCONF_FILE
 
 # Let's download Ubuntu Minimal ISO
 if [ ! -f $myUBUNTUISO ]

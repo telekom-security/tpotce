@@ -2,8 +2,8 @@
 # T-Pot Universal Installer
 
 #### to do
-#### 1. ditch authorized keys config, use fail2ban
-#### 2. check for other services that might collide with the honeypots, if found abort install
+#### 1. use fail2ban
+#### 2. use cockpit
 
 ##################################
 # Extract command line arguments #
@@ -160,9 +160,41 @@ if [ -f "dialogrc" ];
   fi
 }
 
+# Let's check for other services
+function fuCHECK_PORTS {
+if [ "$myTPOT_DEPLOYMENT_TYPE" == "user" ];
+  then
+    echo
+    echo "### Checking for active services."
+    echo
+    grc netstat -tulpen
+    echo
+    echo "### Please review your running services."
+    echo "### We will take care of SSH (22), but other services i.e. FTP (21), TELNET (23), SMTP (25), HTTP (80), HTTPS (443), etc."
+    echo "### might collide with T-Pot's honeypots and prevent T-Pot from starting successfully."
+    echo
+    while [ 1 != 2 ]
+      do
+        read -s -n 1 -p "Continue [y/n]? " mySELECT
+	echo
+        case "$mySELECT" in
+          [y,Y])
+            break
+            ;;
+          [n,N])
+            exit
+            ;;
+        esac
+      done
+fi
+}
+
+
 # Prepare running the installer
+echo "$myINFO" | head -n 3
 fuGOT_ROOT
 fuGET_DEPS
+fuCHECK_PORTS
 fuDIALOG_SETUP
 
 #############
@@ -211,7 +243,6 @@ if [ -f $myCONF_FILE ];
   else
     # dialog logic considers 1=false, 0=true
     myCONF_PROXY_USE="1"
-    myCONF_SSH_PUBKEY_USE="1"
     myCONF_PFX_USE="1"
     myCONF_NTP_USE="1"
 fi
@@ -286,6 +317,10 @@ fi
 
 # Let's put cursor back in standard form
 tput cnorm
+
+####################
+# User interaction #
+####################
 
 # Let's ask the user for install flavor
 if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ] || [ "$myTPOT_DEPLOYMENT_TYPE" == "user" ];
@@ -426,6 +461,10 @@ echo $myCONF_WEB_PW
 ##### exit #####
 exit
 
+########################
+# Installation section #
+########################
+
 # Put cursor in invisible mode
 tput civis
 
@@ -547,7 +586,7 @@ tee -a /etc/ssh/ssh_config 2>&1>/dev/null <<EOF
 UseRoaming no
 EOF
 
-# Installing ctop, elasticdump, tpot
+# Installing ctop, elasticdump, tpot, yq
 if ! [ "$myCONF_TPOT_FLAVOR" == "SENSOR" ];
   then
     npm install https://github.com/taskrabbit/elasticsearch-dump#9fcc8cc -g 2>&1 | dialog --title "[ Installing elasticsearch-dump ]" $myPROGRESSBOXCONF
@@ -556,8 +595,7 @@ pip install --upgrade pip 2>&1 | dialog --title "[ Installing pip ]" $myPROGRESS
 hash -r 2>&1 | dialog --title "[ Installing pip ]" $myPROGRESSBOXCONF
 pip install elasticsearch-curator==5.4.1 2>&1 | dialog --title "[ Installing elasticsearch-curator ]" $myPROGRESSBOXCONF
 pip install yq==2.4.1 2>&1 | dialog --title "[ Installing yq ]" $myPROGRESSBOXCONF
-wget https://github.com/bcicen/ctop/releases/download/v0.7/ctop-0.7-linux-amd64 -O ctop 2>&1 | dialog --title "[ Installing ctop ]" $myPROGRESSBOXCONF
-mv ctop /usr/bin/ 2>&1 | dialog --title "[ Installing ctop ]" $myPROGRESSBOXCONF
+wget https://github.com/bcicen/ctop/releases/download/v0.7/ctop-0.7-linux-amd64 -O /usr/bin/ctop 2>&1 | dialog --title "[ Installing ctop ]" $myPROGRESSBOXCONF
 chmod +x /usr/bin/ctop 2>&1 | dialog --title "[ Installing ctop ]" $myPROGRESSBOXCONF
 git clone https://github.com/dtag-dev-sec/tpotce -b 18.04 /opt/tpot 2>&1 | dialog --title "[ Cloning T-Pot ]" $myPROGRESSBOXCONF
 
@@ -574,13 +612,6 @@ sed -i 's#127.0.1.1.*#127.0.1.1\t'"$myHOST"'#g' /etc/hosts 2>&1 | dialog --title
 
 # Let's patch sshd_config
 sed -i 's#\#Port 22#Port 64295#' /etc/ssh/sshd_config 2>&1 | dialog --title "[ SSH listen on tcp/64295 ]" $myPROGRESSBOXCONF
-sed -i 's#\#PasswordAuthentication yes#PasswordAuthentication no#' /etc/ssh/sshd_config 2>&1 | dialog --title "[ SSH password authentication only from RFC1918 networks ]" $myPROGRESSBOXCONF
-tee -a /etc/ssh/sshd_config 2>&1>/dev/null <<EOF
-
-
-Match address 127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
-    PasswordAuthentication yes
-EOF
 
 # Let's make sure only myCONF_TPOT_FLAVOR images will be downloaded and started
 case $myCONF_TPOT_FLAVOR in
@@ -696,7 +727,6 @@ touch /data/spiderfoot/spiderfoot.db 2>&1 | dialog --title "[ Creating some file
 tar xvfz /opt/tpot/etc/objects/elkbase.tgz -C / 2>&1 | dialog --title "[ Extracting elkbase.tgz ]" $myPROGRESSBOXCONF
 cp /opt/tpot/host/etc/systemd/* /etc/systemd/system/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
 cp /opt/tpot/host/etc/issue /etc/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
-cp $myCONF_SSH_PUBKEY_FILE /home/tsec/.ssh/authorized_keys 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
 systemctl enable tpot 2>&1 | dialog --title "[ Enabling service for tpot ]" $myPROGRESSBOXCONF
 
 # Let's take care of some files and permissions
@@ -704,8 +734,6 @@ chmod 760 -R /data 2>&1 | dialog --title "[ Set permissions and ownerships ]" $m
 chown tpot:tpot -R /data 2>&1 | dialog --title "[ Set permissions and ownerships ]" $myPROGRESSBOXCONF
 chmod 644 -R /data/nginx/conf 2>&1 | dialog --title "[ Set permissions and ownerships ]" $myPROGRESSBOXCONF
 chmod 644 -R /data/nginx/cert 2>&1 | dialog --title "[ Set permissions and ownerships ]" $myPROGRESSBOXCONF
-chmod 600 /home/tsec/.ssh/authorized_keys 2>&1 | dialog --title "[ Set permissions and ownerships ]" $myPROGRESSBOXCONF
-chown tsec:tsec /home/tsec/.ssh /home/tsec/.ssh/authorized_keys 2>&1 | dialog --title "[ Set permissions and ownerships ]" $myPROGRESSBOXCONF
 
 # Let's replace "quiet splash" options, set a console font for more screen canvas and update grub
 sed -i 's#GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"#GRUB_CMDLINE_LINUX_DEFAULT="consoleblank=0"#' /etc/default/grub 2>&1>/dev/null
