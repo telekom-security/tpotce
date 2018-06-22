@@ -131,7 +131,7 @@ fi
 
 # Let's check if all dependencies are met
 function fuGET_DEPS {
-local myPACKAGES="apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount curl dialog dnsutils docker.io docker-compose dstat ethtool genisoimage git glances grc html2text htop ifupdown iptables iw jq libcrack2 libltdl7 lm-sensors man multitail net-tools npm ntp openssh-server openssl pass prips syslinux psmisc pv python-pip unattended-upgrades unzip vim wireless-tools wpasupplicant"
+local myPACKAGES="apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount curl dialog dnsutils docker.io docker-compose dstat ethtool fail2ban genisoimage git glances grc html2text htop ifupdown iptables iw jq libcrack2 libltdl7 lm-sensors man multitail net-tools npm ntp openssh-server openssl pass prips syslinux psmisc pv python-pip unattended-upgrades unzip vim wireless-tools wpasupplicant"
 echo
 echo "### Getting update information."
 echo
@@ -678,6 +678,23 @@ vm.max_map_count = 262144
 net.ipv6.conf.all.disable_ipv6 = 1
 net.ipv6.conf.default.disable_ipv6 = 1
 net.ipv6.conf.lo.disable_ipv6 = 1
+EOF
+
+# Let's setup fail2ban config
+dialog --title "[ Setup fail2ban config ]" $myPROGRESSBOXCONF <<EOF
+EOF
+tee /etc/fail2ban/jail.d/tpot.conf 2>&1>/dev/null <<EOF
+[DEFAULT]
+ignoreip = 127.0.0.1/8
+bantime = 3600
+findtime = 600
+maxretry = 5
+
+[sshd]
+enabled = true
+port    = 64295
+filter  = sshd
+logpath = /var/log/auth.log
 EOF
 
 # Let's add some cronjobs
