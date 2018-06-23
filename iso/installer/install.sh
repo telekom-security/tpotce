@@ -131,7 +131,7 @@ fi
 
 # Let's check if all dependencies are met
 function fuGET_DEPS {
-local myPACKAGES="apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount curl dialog dnsutils docker.io docker-compose dstat ethtool fail2ban genisoimage git glances grc html2text htop ifupdown iptables iw jq libcrack2 libltdl7 lm-sensors man multitail net-tools npm ntp openssh-server openssl pass prips syslinux psmisc pv python-pip unattended-upgrades unzip vim wireless-tools wpasupplicant"
+local myPACKAGES="apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker curl dialog dnsutils docker.io docker-compose dstat ethtool fail2ban genisoimage git glances grc html2text htop ifupdown iptables iw jq libcrack2 libltdl7 lm-sensors man multitail net-tools npm ntp openssh-server openssl pass prips syslinux psmisc pv python-pip unattended-upgrades unzip vim wireless-tools wpasupplicant"
 echo
 echo "### Getting update information."
 echo
@@ -610,7 +610,8 @@ myHOST=$a$n
 hostnamectl set-hostname $myHOST 2>&1 | dialog --title "[ Setting new hostname ]" $myPROGRESSBOXCONF
 sed -i 's#127.0.1.1.*#127.0.1.1\t'"$myHOST"'#g' /etc/hosts 2>&1 | dialog --title "[ Setting new hostname ]" $myPROGRESSBOXCONF
 
-# Let's patch sshd_config
+# Let's patch cockpit.socket, sshd_config
+sed -i 's#ListenStream=9090#ListeStream=64294#' /etc/systemd/system/sockets.target.wants/cockpit.socket 2>&1 | dialog --title "[ Cockpit listen on tcp/64294 ]" $myPROGRESSBOXCONF
 sed -i 's#\#Port 22#Port 64295#' /etc/ssh/sshd_config 2>&1 | dialog --title "[ SSH listen on tcp/64295 ]" $myPROGRESSBOXCONF
 
 # Let's make sure only myCONF_TPOT_FLAVOR images will be downloaded and started
@@ -685,10 +686,22 @@ dialog --title "[ Setup fail2ban config ]" $myPROGRESSBOXCONF <<EOF
 EOF
 tee /etc/fail2ban/jail.d/tpot.conf 2>&1>/dev/null <<EOF
 [DEFAULT]
-ignoreip = 127.0.0.1/8
+ignore-ip = 127.0.0.1/8
 bantime = 3600
 findtime = 600
 maxretry = 5
+
+[nginx-http-auth]
+enabled  = true
+filter   = nginx-http-auth
+port     = 64297
+logpath  = /data/nginx/log/error.log
+
+[pam-generic]
+enabled = true
+port    = 64294
+filter  = pam-generic
+logpath = /var/log/auth.log
 
 [sshd]
 enabled = true

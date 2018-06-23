@@ -324,26 +324,6 @@ services:
      - /data:/data
      - /data/ews/conf/ews.ip:/opt/ewsposter/ews.ip
 
-# Netdata service
-  netdata:
-    container_name: netdata
-    restart: always
-    network_mode: "host"
-    depends_on:
-      elasticsearch:
-        condition: service_healthy
-    cap_add:
-     - SYS_PTRACE
-    security_opt:
-     - apparmor=unconfined
-    ports:
-     - "64301:64301"
-    image: "dtagdevsec/netdata:1804"
-    volumes:
-     - /proc:/host/proc:ro
-     - /sys:/host/sys:ro
-     - /var/run/docker.sock:/var/run/docker.sock:ro
-
 # Nginx service
   nginx:
     container_name: nginx
@@ -365,20 +345,6 @@ services:
      - /data/nginx/conf/nginxpasswd:/etc/nginx/nginxpasswd:ro
      - /data/nginx/log/:/var/log/nginx/
 
-# Portainer service
-  portainer:
-    container_name: portainer
-    command:  -H unix:///var/run/docker.sock --no-auth
-    restart: always
-    networks:
-     - portainer_local
-    ports:
-     - "127.0.0.1:64299:9000"
-    image: "dtagdevsec/portainer:1804"
-    read_only: true
-    volumes:
-     - /var/run/docker.sock:/var/run/docker.sock
-
 # Spiderfoot service
   spiderfoot:
     container_name: spiderfoot
@@ -390,16 +356,3 @@ services:
     image: "dtagdevsec/spiderfoot:1804"
     volumes:
      - /data/spiderfoot/spiderfoot.db:/home/spiderfoot/spiderfoot.db
-
-# Wetty service
-  wetty:
-    container_name: wetty
-    restart: always
-    stop_signal: SIGKILL
-    network_mode: "host"
-    env_file:
-     - /opt/tpot/etc/compose/wetty_environment
-    tmpfs:
-     - /home/wetty/.ssh/:uid=2000,gid=2000
-    image: "dtagdevsec/wetty:1804"
-    read_only: true
