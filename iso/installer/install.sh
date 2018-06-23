@@ -1,10 +1,6 @@
 #!/bin/bash
 # T-Pot Universal Installer
 
-#### to do
-#### 1. use fail2ban
-#### 2. use cockpit
-
 ##################################
 # Extract command line arguments #
 ##################################
@@ -450,16 +446,6 @@ if ! [ "$myCONF_TPOT_FLAVOR" == "SENSOR" ];
     htpasswd -b -c /data/nginx/conf/nginxpasswd "$myCONF_WEB_USER" "$myCONF_WEB_PW" 2>&1 | dialog --title "[ Setting up user and password ]" $myPROGRESSBOXCONF;
 fi
 
-################
-echo $myCONF_TPOT_FLAVOR
-echo $myCONF_TPOT_USER
-echo $myCONF_TPOT_PW
-echo $myCONF_WEB_USER
-echo $myCONF_WEB_PW
-
-
-##### exit #####
-exit
 
 ########################
 # Installation section #
