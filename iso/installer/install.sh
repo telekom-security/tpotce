@@ -24,9 +24,9 @@ This script will install T-Pot on this system, by running the script you know wh
 Usage:
         $0 --help - Help.
 
-Example: 
+Example:
         $0 --type=user - Best option for most users."
-  
+
 if [ "$myLSB" != "$myLSB_SUPPORTED" ];
   then
     echo "Aborting. Ubuntu $myLSB is not supported."
@@ -100,10 +100,10 @@ if [ -s "$myTPOT_CONF_FILE" ] && [ "$myTPOT_CONF_FILE" != "" ];
         exit
       fi
   elif ! [ -s "$myTPOT_CONF_FILE" ] && [ "$myTPOT_CONF_FILE" != "" ];
-    then 
+    then
       echo "Aborting. Config file \"$myTPOT_CONF_FILE\" not found."
       exit
-fi  
+fi
 
 
 #######################
@@ -599,7 +599,7 @@ hostnamectl set-hostname $myHOST 2>&1 | dialog --title "[ Setting new hostname ]
 sed -i 's#127.0.1.1.*#127.0.1.1\t'"$myHOST"'#g' /etc/hosts 2>&1 | dialog --title "[ Setting new hostname ]" $myPROGRESSBOXCONF
 
 # Let's patch cockpit.socket, sshd_config
-sed -i 's#ListenStream=9090#ListeStream=64294#' /etc/systemd/system/sockets.target.wants/cockpit.socket 2>&1 | dialog --title "[ Cockpit listen on tcp/64294 ]" $myPROGRESSBOXCONF
+sed -i 's#ListenStream=9090#ListenStream=64294#' /lib/systemd/system/cockpit.socket 2>&1 | dialog --title "[ Cockpit listen on tcp/64294 ]" $myPROGRESSBOXCONF
 sed -i 's#\#Port 22#Port 64295#' /etc/ssh/sshd_config 2>&1 | dialog --title "[ SSH listen on tcp/64295 ]" $myPROGRESSBOXCONF
 
 # Let's make sure only myCONF_TPOT_FLAVOR images will be downloaded and started
@@ -740,6 +740,7 @@ mkdir -p /data/ciscoasa/log \
          /data/p0f/log \
          /data/vnclowpot/log 2>&1 | dialog --title "[ Creating some files and folders ]" $myPROGRESSBOXCONF
 touch /data/spiderfoot/spiderfoot.db 2>&1 | dialog --title "[ Creating some files and folders ]" $myPROGRESSBOXCONF
+touch /data/nginx/log/error.log  2>&1 | dialog --title "[ Creating some files and folders ]" $myPROGRESSBOXCONF
 
 # Let's copy some files
 tar xvfz /opt/tpot/etc/objects/elkbase.tgz -C / 2>&1 | dialog --title "[ Extracting elkbase.tgz ]" $myPROGRESSBOXCONF

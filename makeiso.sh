@@ -191,18 +191,21 @@ EOF
 done
 
 # Let's write the config file
-echo "# makeiso configuration file" > $myCONF_FILE
-echo "myCONF_PROXY_USE=\"$myCONF_PROXY_USE\"" >> $myCONF_FILE
-echo "myCONF_PROXY_IP=\"$myCONF_PROXY_IP\"" >> $myCONF_FILE
-echo "myCONF_PROXY_PORT=\"$myCONF_PROXY_PORT\"" >> $myCONF_FILE
-echo "myCONF_PFX_USE=\"$myCONF_PFX_USE\"" >> $myCONF_FILE
-echo "myCONF_PFX_FILE=\"/root/installer/keys/8021x.pfx\"" >> $myCONF_FILE
-echo "myCONF_PFX_PW_USE=\"$myCONF_PFX_PW_USE\"" >> $myCONF_FILE
-echo "myCONF_PFX_PW=\"$myCONF_PFX_PW\"" >> $myCONF_FILE
-echo "myCONF_PFX_HOST_ID=\"$myCONF_PFX_HOST_ID\"" >> $myCONF_FILE
-echo "myCONF_NTP_USE=\"$myCONF_NTP_USE\"" >> $myCONF_FILE
-echo "myCONF_NTP_IP=\"$myCONF_NTP_IP\"" >> $myCONF_FILE
-echo "myCONF_NTP_CONF_FILE=\"/root/installer/ntp.conf\"" >> $myCONF_FILE
+if [ "$myCONF_PROXY_USE" == "0" ] || [ "$myCONF_PFX_USE" == "0" ] || [ "$myCONF_NTP_USE" == "0" ];
+  then
+    echo "# makeiso configuration file" > $myCONF_FILE
+    echo "myCONF_PROXY_USE=\"$myCONF_PROXY_USE\"" >> $myCONF_FILE
+    echo "myCONF_PROXY_IP=\"$myCONF_PROXY_IP\"" >> $myCONF_FILE
+    echo "myCONF_PROXY_PORT=\"$myCONF_PROXY_PORT\"" >> $myCONF_FILE
+    echo "myCONF_PFX_USE=\"$myCONF_PFX_USE\"" >> $myCONF_FILE
+    echo "myCONF_PFX_FILE=\"/root/installer/keys/8021x.pfx\"" >> $myCONF_FILE
+    echo "myCONF_PFX_PW_USE=\"$myCONF_PFX_PW_USE\"" >> $myCONF_FILE
+    echo "myCONF_PFX_PW=\"$myCONF_PFX_PW\"" >> $myCONF_FILE
+    echo "myCONF_PFX_HOST_ID=\"$myCONF_PFX_HOST_ID\"" >> $myCONF_FILE
+    echo "myCONF_NTP_USE=\"$myCONF_NTP_USE\"" >> $myCONF_FILE
+    echo "myCONF_NTP_IP=\"$myCONF_NTP_IP\"" >> $myCONF_FILE
+    echo "myCONF_NTP_CONF_FILE=\"/root/installer/ntp.conf\"" >> $myCONF_FILE
+fi
 
 # Let's download Ubuntu Minimal ISO
 if [ ! -f $myUBUNTUISO ]

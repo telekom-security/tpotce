@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ### Vars, Ports for Standard services
-myHOSTPORTS="7634 64295"
+myHOSTPORTS="7634 64294 64295"
 myDOCKERCOMPOSEYML="$1"
 myRULESFUNCTION="$2"
 
@@ -19,7 +19,7 @@ fi
 
 function fuNFQCHECK {
 ### Check if honeytrap or glutton is actively enabled in docker-compose.yml
-	
+
 myNFQCHECK=$(grep -e '^\s*honeytrap:\|^\s*glutton:' $myDOCKERCOMPOSEYML | tr -d ': ' | uniq)
 if [ "$myNFQCHECK" == "" ];
   then
@@ -32,7 +32,7 @@ fi
 
 function fuGETPORTS {
 ### Get ports from docker-compose.yml
-	
+
 myDOCKERCOMPOSEPORTS=$(cat $myDOCKERCOMPOSEYML | yq -r '.services[].ports' | grep ':' | sed -e s/127.0.0.1// | tr -d '", ' | sed -e s/^:// | cut -f1 -d ':' )
 myDOCKERCOMPOSEPORTS+=" $myHOSTPORTS"
 myRULESPORTS=$(for i in $myDOCKERCOMPOSEPORTS; do echo $i; done | sort -gu)
@@ -50,7 +50,7 @@ if [ "$myNFQCHECK" == "honeytrap" ];
     for myPORT in $myRULESPORTS; do
       /sbin/iptables -w -A INPUT -p tcp --dport $myPORT -j ACCEPT
     done
-  
+
     /sbin/iptables -w -A INPUT -p tcp --syn -m state --state NEW -j NFQUEUE
 fi
 

@@ -1,4 +1,4 @@
+rc.local.inst:
 #!/bin/bash
 plymouth --quit
-cd /root/installer
-openvt -f -w -s install.sh --type=iso
+openvt -f -w -s /root/installer/wrapper.sh
