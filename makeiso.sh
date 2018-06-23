@@ -14,7 +14,6 @@ myTPOTISO="tpot.iso"
 myTPOTDIR="tpotiso"
 myTPOTSEED="iso/preseed/tpot.seed"
 myPACKAGES="dialog genisoimage syslinux syslinux-utils pv udisks2"
-myAUTHKEYSFILE="iso/installer/keys/authorized_keys"
 myPFXFILE="iso/installer/keys/8021x.pfx"
 myINSTALLERPATH="iso/installer/install.sh"
 myNTPCONFFILE="iso/installer/ntp.conf"
@@ -56,7 +55,6 @@ cp host/etc/dialogrc /etc/
 # Let's clean up at the end or if something goes wrong ...
 function fuCLEANUP {
 rm -rf $myTMP $myTPOTDIR $myPFXFILE $myNTPCONFFILE $myCONF_FILE
-echo > $myAUTHKEYSFILE
 if [ -f $myTPOTSEED.bak ];
   then
     mv $myTPOTSEED.bak $myTPOTSEED

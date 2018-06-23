@@ -153,6 +153,7 @@ if [ -f "dialogrc" ];
   else
     echo "[ NOT OK ]"
     echo "### 'dialogrc' is missing. Please run 'install.sh' from within the setup folder."
+    exit
   fi
 }
 
@@ -192,6 +193,7 @@ fuGOT_ROOT
 fuGET_DEPS
 fuCHECK_PORTS
 fuDIALOG_SETUP
+
 
 #############
 # Installer #
