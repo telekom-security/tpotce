@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Set TERM, DIALOGRC
-export DIALOGRC=/etc/dialogrc
 export TERM=linux
+export DIALOGRC=/etc/dialogrc
 
 # Let's define some global vars
 myBACKTITLE="T-Pot - ISO Creator"
@@ -14,14 +14,13 @@ myTPOTISO="tpot.iso"
 myTPOTDIR="tpotiso"
 myTPOTSEED="iso/preseed/tpot.seed"
 myPACKAGES="dialog genisoimage syslinux syslinux-utils pv udisks2"
-myAUTHKEYSPATH="iso/installer/keys/authorized_keys"
-myPFXPATH="iso/installer/keys/8021x.pfx"
-myPFXPWPATH="iso/installer/keys/8021x.pw"
-myPFXHOSTIDPATH="iso/installer/keys/8021x.id"
+myAUTHKEYSFILE="iso/installer/keys/authorized_keys"
+myPFXFILE="iso/installer/keys/8021x.pfx"
 myINSTALLERPATH="iso/installer/install.sh"
-myPROXYCONFIG="iso/installer/proxy"
-myNTPCONFPATH="iso/installer/ntp"
+myNTPCONFFILE="iso/installer/ntp.conf"
 myTMP="tmp"
+myCONF_FILE="iso/installer/iso.conf"
+myCONF_DEFAULT_FILE="iso/installer/iso.conf.dist"
 
 # Got root?
 myWHOAMI=$(whoami)
@@ -32,13 +31,32 @@ if [ "$myWHOAMI" != "root" ]
     exit
 fi
 
+# Let's check if all dependencies are met
+myINST=""
+for myDEPS in $myPACKAGES;
+do
+  myOK=$(dpkg -s $myDEPS | grep ok | awk '{ print $3 }');
+  if [ "$myOK" != "ok" ]
+    then
+      myINST=$(echo $myINST $myDEPS)
+  fi
+done
+if [ "$myINST" != "" ]
+  then
+    apt-get update -y
+    for myDEPS in $myINST;
+    do
+      apt-get install $myDEPS -y
+    done
+fi
+
 # Let's load dialog color theme
 cp host/etc/dialogrc /etc/
 
 # Let's clean up at the end or if something goes wrong ...
 function fuCLEANUP {
-rm -rf $myTMP $myTPOTDIR $myPROXYCONFIG $myPFXPATH $myPFXPWPATH $myPFXHOSTIDPATH $myNTPCONFPATH
-echo > $myAUTHKEYSPATH
+rm -rf $myTMP $myTPOTDIR $myPFXFILE $myNTPCONFFILE $myCONF_FILE
+echo > $myAUTHKEYSFILE
 if [ -f $myTPOTSEED.bak ];
   then
     mv $myTPOTSEED.bak $myTPOTSEED
@@ -64,25 +82,6 @@ function valid_ip()
     return $stat
 }
 
-# Let's check if all dependencies are met
-myINST=""
-for myDEPS in $myPACKAGES;
-do
-  myOK=$(dpkg -s $myDEPS | grep ok | awk '{ print $3 }');
-  if [ "$myOK" != "ok" ]
-    then
-      myINST=$(echo $myINST $myDEPS)
-  fi
-done
-if [ "$myINST" != "" ]
-  then
-    apt-get update -y
-    for myDEPS in $myINST;
-    do
-      apt-get install $myDEPS -y
-    done
-fi
-
 # Let's ask if the user wants to run the script ...
 dialog --backtitle "$myBACKTITLE" --title "[ Continue? ]" --yesno "\nDownload latest supported Ubuntu Mini ISO and build the T-Pot Install Image." 8 50
 mySTART=$?
@@ -91,50 +90,36 @@ if [ "$mySTART" = "1" ];
     exit
 fi
 
+# Let's load the default config file
+if [ -f $myCONF_DEFAULT_FILE ];
+  then
+    source $myCONF_DEFAULT_FILE
+fi
+
 # Let's ask the user for a proxy ...
 while true;
 do
   dialog --backtitle "$myBACKTITLE" --title "[ Proxy Settings ]" --yesno "\nDo you want to configure a proxy?" 7 50
-  myADDPROXY=$?
-  if [ "$myADDPROXY" = "0" ]
+  myCONF_PROXY_USE=$?
+  if [ "$myCONF_PROXY_USE" = "0" ]
     then
       myIPRESULT="false"
       while [ "$myIPRESULT" = "false" ];
         do
-          myPROXYIP=$(dialog --backtitle "$myBACKTITLE" --no-cancel --title "Proxy IP?" --inputbox "" 7 50 "1.2.3.4" 3>&1 1>&2 2>&3 3>&-)
-          if valid_ip $myPROXYIP; then myIPRESULT="true"; fi
+          myCONF_PROXY_IP=$(dialog --backtitle "$myBACKTITLE" --no-cancel --title "Proxy IP?" --inputbox "" 7 50 "$myCONF_PROXY_IP" 3>&1 1>&2 2>&3 3>&-)
+          if valid_ip $myCONF_PROXY_IP; then myIPRESULT="true"; fi
       done
       myPORTRESULT="false"
       while [ "$myPORTRESULT" = "false" ];
         do
-          myPROXYPORT=$(dialog --backtitle "$myBACKTITLE" --no-cancel --title "Proxy Port (i.e. 3128)?" --inputbox "" 7 50 "3128" 3>&1 1>&2 2>&3 3>&-)
-          if [[ $myPROXYPORT =~ ^-?[0-9]+$ ]] && [ $myPROXYPORT -gt 0 ] && [ $myPROXYPORT -lt 65536 ]; then myPORTRESULT="true"; fi
+          myCONF_PROXY_PORT=$(dialog --backtitle "$myBACKTITLE" --no-cancel --title "Proxy Port (i.e. 3128)?" --inputbox "" 7 50 "$myCONF_PROXY_PORT" 3>&1 1>&2 2>&3 3>&-)
+          if [[ $myCONF_PROXY_PORT =~ ^-?[0-9]+$ ]] && [ $myCONF_PROXY_PORT -gt 0 ] && [ $myCONF_PROXY_PORT -lt 65536 ]; then myPORTRESULT="true"; fi
       done
-      echo http://$myPROXYIP:$myPROXYPORT > $myPROXYCONFIG
-      sed -i.bak 's#d-i mirror/http/proxy.*#d-i mirror/http/proxy string http://'$myPROXYIP':'$myPROXYPORT'/#' $myTPOTSEED
+      sed -i.bak 's#d-i mirror/http/proxy.*#d-i mirror/http/proxy string http://'$myCONF_PROXY_IP':'$myCONF_PROXY_PORT'/#' $myTPOTSEED
       break
     else
-      break
-  fi
-done
-
-# Let's ask the user for ssh keys ...
-while true;
-do
-  dialog --backtitle "$myBACKTITLE" --title "[ Add ssh keys? ]" --yesno "\nDo you want to add public key(s) to authorized_keys file?" 8 50
-  myADDKEYS=$?
-  if [ "$myADDKEYS" = "0" ]
-    then
-      myKEYS=$(dialog --backtitle "$myBACKTITLE" --fselect "/" 15 50 3>&1 1>&2 2>&3 3>&-)
-      if [ -f "$myKEYS" ]
-        then
-          cat $myKEYS > $myAUTHKEYSPATH
-          break
-        else
-          dialog --backtitle "$myBACKTITLE" --title "[ Try again! ]" --msgbox "\nThis is no regular file." 7 50;
-      fi
-    else
-      echo > $myAUTHKEYSPATH
+      myCONF_PROXY_IP=""
+      myCONF_PROXY_PORT=""
       break
   fi
 done
@@ -143,27 +128,30 @@ done
 while true;
 do
   dialog --backtitle "$myBACKTITLE" --title "[ Need 802.1x auth? ]" --yesno "\nDo you want to add a 802.1x host certificate?" 7 50
-  myADDPFX=$?
-  if [ "$myADDPFX" = "0" ]
+  myCONF_PFX_USE=$?
+  if [ "$myCONF_PFX_USE" = "0" ]
     then
-      myPFX=$(dialog --backtitle "$myBACKTITLE" --fselect "/" 15 50 3>&1 1>&2 2>&3 3>&-)
-      if [ -f "$myPFX" ]
+      myCONF_PFX_FILE=$(dialog --backtitle "$myBACKTITLE" --fselect "$myCONF_PFX_FILE" 15 50 3>&1 1>&2 2>&3 3>&-)
+      if [ -f "$myCONF_PFX_FILE" ]
         then
-          cp $myPFX $myPFXPATH
+          cp $myCONF_PFX_FILE $myPFXFILE
           dialog --backtitle "$myBACKTITLE" --title "[ Password protected? ]" --yesno "\nDoes the certificate need your password?" 7 50
-          myADDPFXPW=$?
-          if [ "$myADDPFXPW" = "0" ]
+          myCONF_PFX_PW_USE=$?
+          if [ "$myCONF_PFX_PW_USE" = "0" ]
             then
-              myPFXPW=$(dialog --backtitle "$myBACKTITLE" --no-cancel --inputbox "Password?" 7 50 3>&1 1>&2 2>&3 3>&-)
-              echo $myPFXPW > $myPFXPWPATH
+              myCONF_PFX_PW=$(dialog --backtitle "$myBACKTITLE" --no-cancel --inputbox "Password?" 7 50 3>&1 1>&2 2>&3 3>&-)
+	    else
+	      myCONF_PFX_PW=""
           fi
-          myPFXHOSTID=$(dialog --backtitle "$myBACKTITLE" --no-cancel --inputbox "Host ID?" 7 50 "<HOSTNAME>.<DOMAIN>" 3>&1 1>&2 2>&3 3>&-)
-          echo $myPFXHOSTID > $myPFXHOSTIDPATH
+          myCONF_PFX_HOST_ID=$(dialog --backtitle "$myBACKTITLE" --no-cancel --inputbox "Host ID?" 7 50 "$myCONF_PFX_HOST_ID" 3>&1 1>&2 2>&3 3>&-)
           break
         else
           dialog --backtitle "$myBACKTITLE" --title "[ Try again! ]" --msgbox "\nThis is no regular file." 7 50;
       fi
     else
+      myCONF_PFX_FILE=""
+      myCONF_PFX_HOST_ID=""
+      myCONF_PFX_PW=""
       break
   fi
 done
@@ -172,16 +160,16 @@ done
 while true;
 do
   dialog --backtitle "$myBACKTITLE" --title "[ NTP server? ]" --yesno "\nDo you want to configure a ntp server?" 7 50
-  myADDNTP=$?
-  if [ "$myADDNTP" = "0" ]
+  myCONF_NTP_USE=$?
+  if [ "$myCONF_NTP_USE" = "0" ]
     then
       myIPRESULT="false"
       while [ "$myIPRESULT" = "false" ];
         do
-          myNTPIP=$(dialog --backtitle "$myBACKTITLE" --no-cancel --title "NTP IP?" --inputbox "" 7 50 "1.2.3.4" 3>&1 1>&2 2>&3 3>&-)
-          if valid_ip $myNTPIP; then myIPRESULT="true"; fi
+          myCONF_NTP_IP=$(dialog --backtitle "$myBACKTITLE" --no-cancel --title "NTP IP?" --inputbox "" 7 50 "$myCONF_NTP_IP" 3>&1 1>&2 2>&3 3>&-)
+          if valid_ip $myCONF_NTP_IP; then myIPRESULT="true"; fi
       done
-tee $myNTPCONFPATH <<EOF
+tee $myNTPCONFFILE <<EOF
 driftfile /var/lib/ntp/ntp.drift
 
 statistics loopstats peerstats clockstats
@@ -189,7 +177,7 @@ filegen loopstats file loopstats type day enable
 filegen peerstats file peerstats type day enable
 filegen clockstats file clockstats type day enable
 
-server $myNTPIP
+server $myCONF_NTP_IP
 
 restrict -4 default kod notrap nomodify nopeer noquery
 restrict -6 default kod notrap nomodify nopeer noquery
@@ -199,9 +187,24 @@ EOF
 
       break
     else
+      myCONF_NTP_IP=""
       break
   fi
 done
+
+# Let's write the config file
+echo "# makeiso configuration file" > $myCONF_FILE
+echo "myCONF_PROXY_USE=\"$myCONF_PROXY_USE\"" >> $myCONF_FILE
+echo "myCONF_PROXY_IP=\"$myCONF_PROXY_IP\"" >> $myCONF_FILE
+echo "myCONF_PROXY_PORT=\"$myCONF_PROXY_PORT\"" >> $myCONF_FILE
+echo "myCONF_PFX_USE=\"$myCONF_PFX_USE\"" >> $myCONF_FILE
+echo "myCONF_PFX_FILE=\"/root/installer/keys/8021x.pfx\"" >> $myCONF_FILE
+echo "myCONF_PFX_PW_USE=\"$myCONF_PFX_PW_USE\"" >> $myCONF_FILE
+echo "myCONF_PFX_PW=\"$myCONF_PFX_PW\"" >> $myCONF_FILE
+echo "myCONF_PFX_HOST_ID=\"$myCONF_PFX_HOST_ID\"" >> $myCONF_FILE
+echo "myCONF_NTP_USE=\"$myCONF_NTP_USE\"" >> $myCONF_FILE
+echo "myCONF_NTP_IP=\"$myCONF_NTP_IP\"" >> $myCONF_FILE
+echo "myCONF_NTP_CONF_FILE=\"/root/installer/ntp.conf\"" >> $myCONF_FILE
 
 # Let's download Ubuntu Minimal ISO
 if [ ! -f $myUBUNTUISO ]

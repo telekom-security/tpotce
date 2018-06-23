@@ -12,6 +12,7 @@ mySSHUSER=$(cat /etc/passwd | grep 1000 | cut -d ':' -f1)
 sed -i "s#IP:.*#IP: $myLOCALIP ($myEXTIP)[0m#" /etc/issue
 sed -i "s#SSH:.*#SSH: ssh -l tsec -p 64295 $myLOCALIP[0m#" /etc/issue
 sed -i "s#WEB:.*#WEB: https://$myLOCALIP:64297[0m#" /etc/issue
+sed -i "s#ADMIN:.*#ADMIN: https://$myLOCALIP:64294[0m#" /etc/issue
 tee /data/ews/conf/ews.ip << EOF
 [MAIN]
 ip = $myEXTIP
@@ -20,9 +21,6 @@ tee /opt/tpot/etc/compose/elk_environment << EOF
 MY_EXTIP=$myEXTIP
 MY_INTIP=$myLOCALIP
 MY_HOSTNAME=$HOSTNAME
-EOF
-tee /opt/tpot/etc/compose/wetty_environment << EOF
-MY_SSHUSER=$mySSHUSER
 EOF
 chown tpot:tpot /data/ews/conf/ews.ip
 chmod 760 /data/ews/conf/ews.ip
