@@ -94,7 +94,6 @@ if [ -s "$myTPOT_CONF_FILE" ] && [ "$myTPOT_CONF_FILE" != "" ];
     if [ "$(head -n 1 $myTPOT_CONF_FILE | grep -c "# tpot")" == "1" ];
       then
         source "$myTPOT_CONF_FILE"
-        echo "$myCONF_PROXY_IP"
       else
 	echo "Aborting. Config file \"$myTPOT_CONF_FILE\" not a T-Pot configuration file."
         exit
@@ -331,22 +330,6 @@ if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ] || [ "$myTPOT_DEPLOYMENT_TYPE" == "use
     "COLLECTOR" "Heralding, ELK, NSM & Tools" \
     "EXPERIMENTAL" "Experimental (Glutton instead of Honeytrap)" \
     "LEGACY" "Standard Edition from previous release" 3>&1 1>&2 2>&3 3>&-)
-fi
-
-# Let's ask for a username if installation type is user
-if [ "$myTPOT_DEPLOYMENT_TYPE" == "user" ];
-  then
-    while [ 1 != 2 ]
-      do
-        myCONF_TPOT_USER=$(dialog --backtitle "$myBACKTITLE" --title "[ Existing console user name ]" --inputbox "\nUsername (root is not allowed)" 9 50 "$(who am i | awk '{ print $1 }')" 3>&1 1>&2 2>&3 3>&-)
-        myCONF_TPOT_USER=$(echo $myCONF_TPOT_USER | tr -cd "[:alnum:]_.-")
-        dialog --backtitle "$myBACKTITLE" --title "[ Your username is ]" --yesno "\n$myCONF_TPOT_USER" 7 50
-        myOK=$?
-	if [ "$myOK" = "0" ] && [ "$myCONF_TPOT_USER" != "root" ] && [ "$myCONF_TPOT_USER" != "" ] && [ "$(cat /etc/passwd | grep -wc $myCONF_TPOT_USER)" == "1" ];
-          then
-            break
-        fi
-      done
 fi
 
 # Let's ask for a secure tsec password if installation type is iso
@@ -597,6 +580,10 @@ n=$(fuRANDOMWORD /opt/tpot/host/usr/share/dict/n.txt)
 myHOST=$a$n
 hostnamectl set-hostname $myHOST 2>&1 | dialog --title "[ Setting new hostname ]" $myPROGRESSBOXCONF
 sed -i 's#127.0.1.1.*#127.0.1.1\t'"$myHOST"'#g' /etc/hosts 2>&1 | dialog --title "[ Setting new hostname ]" $myPROGRESSBOXCONF
+if [ -f "/etc/cloud/cloud.cfg" ];
+  then
+    sed -i 's/preserve_hostname: false/preserve_hostname: true/' /etc/cloud/cloud.cfg
+fi
 
 # Let's patch cockpit.socket, sshd_config
 sed -i 's#ListenStream=9090#ListenStream=64294#' /lib/systemd/system/cockpit.socket 2>&1 | dialog --title "[ Cockpit listen on tcp/64294 ]" $myPROGRESSBOXCONF
