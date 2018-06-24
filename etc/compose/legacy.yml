@@ -10,7 +10,6 @@ networks:
   rdpy_local:
   vnclowpot_local:
   ewsposter_local:
-  portainer_local:
   spiderfoot_local:
 
 services:

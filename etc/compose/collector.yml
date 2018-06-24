@@ -6,7 +6,6 @@ networks:
   heralding_local:
   ewsposter_local:
   spiderfoot_local:
-  portainer_local:
 
 services:
 
