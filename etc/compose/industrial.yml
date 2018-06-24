@@ -296,7 +296,6 @@ services:
     image: "dtagdevsec/logstash:1804"
     volumes:
      - /data:/data
-     - /var/log:/data/host/log
 
 ## Elasticsearch-head service
   head:

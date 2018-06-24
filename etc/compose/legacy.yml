@@ -262,7 +262,6 @@ services:
     image: "dtagdevsec/logstash:1804"
     volumes:
      - /data:/data
-     - /var/log:/data/host/log
 
 ## Elasticsearch-head service
   head:
@@ -322,4 +321,3 @@ services:
     image: "dtagdevsec/spiderfoot:1804"
     volumes:
      - /data/spiderfoot/spiderfoot.db:/home/spiderfoot/spiderfoot.db
-
