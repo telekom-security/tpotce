@@ -631,9 +631,9 @@ case $myCONF_TPOT_FLAVOR in
 esac
 
 # Let's load docker images
-myIMAGESCOUNT=$(cat $myTPOTCOMPOSE | grep -v '#' | grep image | cut -d: -f2 | wc -l)
+myIMAGESCOUNT=$(cat $myTPOTCOMPOSE | grep -v '#' | grep image | cut -d: -f2 | uniq | wc -l)
 j=0
-for name in $(cat $myTPOTCOMPOSE | grep -v '#' | grep image | cut -d'"' -f2)
+for name in $(cat $myTPOTCOMPOSE | grep -v '#' | grep image | cut -d'"' -f2 | uniq)
   do
     dialog --title "[ Downloading docker images, please be patient ]" --backtitle "$myBACKTITLE" \
            --gauge "\n  Now downloading: $name\n" 8 80 $(expr 100 \* $j / $myIMAGESCOUNT) <<EOF

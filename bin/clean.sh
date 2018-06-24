@@ -114,7 +114,7 @@ fuELK () {
   # ELK data will be kept for <= 90 days, check /etc/crontab for curator modification
   # ELK daemon log files will be removed
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/elk/log/*; fi
-  mkdir -p /data/elk 
+  mkdir -p /data/elk
   chmod 760 /data/elk -R
   chown tpot:tpot /data/elk -R
 }
@@ -170,6 +170,7 @@ fuMAILONEY () {
 # Let's create a function to clean up nginx logs
 fuNGINX () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/nginx/log/*; fi
+  touch /data/nginx/log/error.log
   chmod 644 /data/nginx/conf -R
   chmod 644 /data/nginx/cert -R
 }
