@@ -458,17 +458,17 @@ tput civis
 
 # Let's generate a SSL self-signed certificate without interaction (browsers will see it invalid anyway)
 if ! [ "$myCONF_TPOT_FLAVOR" == "SENSOR" ];
-  then
-    mkdir -p /data/nginx/cert 2>&1 | dialog --title "[ Generating a self-signed-certificate for NGINX ]" $myPROGRESSBOXCONF;
-    openssl req \
-            -nodes \
-            -x509 \
-            -sha512 \
-            -newkey rsa:8192 \
-            -keyout "/data/nginx/cert/nginx.key" \
-            -out "/data/nginx/cert/nginx.crt" \
-            -days 3650 \
-            -subj '/C=AU/ST=Some-State/O=Internet Widgits Pty Ltd' 2>&1 | dialog --title "[ Generating a self-signed-certificate for NGINX ]" $myPROGRESSBOXCONF;
+then
+mkdir -p /data/nginx/cert 2>&1 | dialog --title "[ Generating a self-signed-certificate for NGINX ]" $myPROGRESSBOXCONF;
+openssl req \
+        -nodes \
+        -x509 \
+        -sha512 \
+        -newkey rsa:8192 \
+        -keyout "/data/nginx/cert/nginx.key" \
+        -out "/data/nginx/cert/nginx.crt" \
+        -days 3650 \
+        -subj '/C=AU/ST=Some-State/O=Internet Widgits Pty Ltd' 2>&1 | dialog --title "[ Generating a self-signed-certificate for NGINX ]" $myPROGRESSBOXCONF;
 fi
 
 # Let's setup the ntp server
