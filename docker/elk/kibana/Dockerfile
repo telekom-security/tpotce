@@ -12,9 +12,8 @@ RUN apk -U --no-cache add \
 # Get and install packages
     cd /root/dist/ && \
     mkdir -p /usr/share/kibana/ && \
-    wget https://artifacts.elastic.co/downloads/kibana/kibana-6.2.4-linux-x86_64.tar.gz && \
-    tar xvfz kibana-6.2.4-linux-x86_64.tar.gz --strip-components=1 -C /usr/share/kibana/ && \
-    unzip kibana_6.2.x_vis_scaling_fixes.zip && \
+    wget https://artifacts.elastic.co/downloads/kibana/kibana-6.3.0-linux-x86_64.tar.gz && \
+    tar xvfz kibana-6.3.0-linux-x86_64.tar.gz --strip-components=1 -C /usr/share/kibana/ && \
 
 # Kibana's bundled node does not work in alpine
     rm /usr/share/kibana/node/bin/node && \
@@ -30,9 +29,6 @@ RUN apk -U --no-cache add \
     cp elk.ico /usr/share/kibana/src/ui/public/assets/favicons/favicon-16x16.png && \
     cp elk.ico /usr/share/kibana/src/ui/public/assets/favicons/favicon-32x32.png && \
     cp create_kibana_index.js /usr/share/kibana/src/core_plugins/elasticsearch/lib/ && \
-    cd kibana_6.2.x_vis_scaling_fixes && \
-    cp -R * /usr/share/kibana/ && \
-    cd / && \
 
 # Setup plugins, rebuild bundle
     #cd /usr/share/kibana/plugins && \

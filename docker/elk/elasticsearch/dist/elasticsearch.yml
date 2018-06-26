@@ -1,5 +1,6 @@
 cluster.name: tpotcluster
 node.name: "tpotcluster-node-01"
+xpack.ml.enabled: false
 path:
     logs: /data/elk/log
     data: /data/elk/data
