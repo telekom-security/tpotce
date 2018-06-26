@@ -685,6 +685,15 @@ filter  = sshd
 logpath = /var/log/auth.log
 EOF
 
+# Fix systemd error https://github.com/systemd/systemd/issues/3374
+dialog --title "[ systemd fix ]" $myPROGRESSBOXCONF <<EOF
+EOF
+tee /etc/systemd/network/99-default.link 2>&1>/dev/null <<EOF
+[Link]
+NamePolicy=kernel database onboard slot path
+MACAddressPolicy=none
+EOF
+
 # Let's add some cronjobs
 dialog --title "[ Adding cronjobs ]" $myPROGRESSBOXCONF <<EOF
 EOF
