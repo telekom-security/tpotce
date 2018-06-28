@@ -593,27 +593,27 @@ sed -i 's#\#Port 22#Port 64295#' /etc/ssh/sshd_config 2>&1 | dialog --title "[ S
 case $myCONF_TPOT_FLAVOR in
   STANDARD)
     echo "### Preparing STANDARD flavor installation."
-    cp /opt/tpot/etc/compose/standard.yml $myTPOTCOMPOSE 2>&1>/dev/null
+    ln -s /opt/tpot/etc/compose/standard.yml $myTPOTCOMPOSE 2>&1>/dev/null
   ;;
   SENSOR)
     echo "### Preparing SENSOR flavor installation."
-    cp /opt/tpot/etc/compose/sensor.yml $myTPOTCOMPOSE 2>&1>/dev/null
+    ln -s /opt/tpot/etc/compose/sensor.yml $myTPOTCOMPOSE 2>&1>/dev/null
   ;;
   INDUSTRIAL)
     echo "### Preparing INDUSTRIAL flavor installation."
-    cp /opt/tpot/etc/compose/industrial.yml $myTPOTCOMPOSE 2>&1>/dev/null
+    ln -s /opt/tpot/etc/compose/industrial.yml $myTPOTCOMPOSE 2>&1>/dev/null
   ;;
   COLLECTOR)
     echo "### Preparing COLLECTOR flavor installation."
-    cp /opt/tpot/etc/compose/collector.yml $myTPOTCOMPOSE 2>&1>/dev/null
+    ln -s /opt/tpot/etc/compose/collector.yml $myTPOTCOMPOSE 2>&1>/dev/null
   ;;
   EXPERIMENTAL)
     echo "### Preparing EXPERIMENTAL flavor installation."
-    cp /opt/tpot/etc/compose/experimental.yml $myTPOTCOMPOSE 2>&1>/dev/null
+    ln -s /opt/tpot/etc/compose/experimental.yml $myTPOTCOMPOSE 2>&1>/dev/null
   ;;
   LEGACY)
     echo "### Preparing LEGACY flavor installation."
-    cp /opt/tpot/etc/compose/legacy.yml $myTPOTCOMPOSE 2>&1>/dev/null
+    ln -s /opt/tpot/etc/compose/legacy.yml $myTPOTCOMPOSE 2>&1>/dev/null
   ;;
 esac
 
