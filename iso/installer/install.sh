@@ -244,42 +244,43 @@ if [ -f $myCONF_FILE ];
     myCONF_NTP_USE="1"
 fi
 
+
 ### <--- Begin proxy setup
 # If a proxy is set in iso.conf it needs to be setup.
 # However, none of the other installation types will automatically take care of a proxy.
 # Please open a feature request if you think this is something worth considering.
-if [ "$myCONF_PROXY_USE" == "0" ];
-then
-dialog --title "[ Setting up the proxy ]" $myPROGRESSBOXCONF <<EOF
-EOF
 myPROXY="http://$myCONF_PROXY_IP:$myCONF_PROXY_PORT"
-tee -a /etc/environment 2>&1>/dev/null <<EOF
-export http_proxy=$myPROXY
+myPROXY_ENV="export http_proxy=$myPROXY
 export https_proxy=$myPROXY
 export HTTP_PROXY=$myPROXY
 export HTTPS_PROXY=$myPROXY
 export no_proxy=localhost,127.0.0.1,.sock
-EOF
-source /etc/environment
-
-# Let's setup the proxy for apt
-tee /etc/apt/apt.conf 2>&1>/dev/null <<EOF
-Acquire::http::Proxy "$myPROXY";
-Acquire::https::Proxy "$myPROXY";
-EOF
-
-# Let's add proxy settings to docker defaults
-tee -a /etc/default/docker 2>&1>/dev/null <<EOF
-http_proxy=$myPROXY
+"
+myPROXY_APT="Acquire::http::Proxy \"$myPROXY\";
+Acquire::https::Proxy \"$myPROXY\";
+"
+myPROXY_DOCKER="http_proxy=$myPROXY
 https_proxy=$myPROXY
 HTTP_PROXY=$myPROXY
 HTTPS_PROXY=$myPROXY
 no_proxy=localhost,127.0.0.1,.sock
-EOF
+"
 
-# Let's restart docker for proxy changes to take effect
-systemctl stop docker 2>&1 | dialog --title "[ Stop docker service ]" $myPROGRESSBOXCONF
-systemctl start docker 2>&1 | dialog --title "[ Start docker service ]" $myPROGRESSBOXCONF
+if [ "$myCONF_PROXY_USE" == "0" ];
+  then
+    # Let's setup proxy for the environment
+    echo "$myPROXY_ENV" 2>&1 | tee -a /etc/environment | dialog --title "[ Setting up the proxy ]" $myPROGRESSBOXCONF
+    source /etc/environment
+
+    # Let's setup the proxy for apt
+    echo "$myPROXY_APT" 2>&1 | tee /etc/apt/apt.conf | dialog --title "[ Setting up the proxy ]" $myPROGRESSBOXCONF
+
+    # Let's add proxy settings to docker defaults
+    echo "$myPROXY_DOCKER" 2>&1 | tee -a /etc/default/docker | dialog --title "[ Setting up the proxy ]" $myPROGRESSBOXCONF
+
+    # Let's restart docker for proxy changes to take effect
+    systemctl stop docker 2>&1 | dialog --title "[ Stop docker service ]" $myPROGRESSBOXCONF
+    systemctl start docker 2>&1 | dialog --title "[ Start docker service ]" $myPROGRESSBOXCONF
 fi
 ### ---> End proxy setup
 
@@ -290,10 +291,8 @@ if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ] || [ "$myTPOT_DEPLOYMENT_TYPE" == "use
     j=0
     for i in $mySITES;
       do
-        dialog --title "[ Testing the internet connection ]" --backtitle "$myBACKTITLE" \
-               --gauge "\n  Now checking: $i\n" 8 80 $(expr 100 \* $j / $mySITESCOUNT) <<EOF
-EOF
-        curl --connect-timeout 30 -IsS $i 2>&1>/dev/null
+        curl --connect-timeout 30 -IsS $i 2>&1>/dev/null | dialog --title "[ Testing the internet connection ]" --backtitle "$myBACKTITLE" \
+                                                                  --gauge "\n  Now checking: $i\n" 8 80 $(expr 100 \* $j / $mySITESCOUNT)
         if [ $? -ne 0 ];
           then
             dialog --backtitle "$myBACKTITLE" --title "[ Continue? ]" --yesno "\nInternet connection test failed. This might indicate some problems with your connection. You can continue, but the installation might fail." 10 50
@@ -306,12 +305,10 @@ EOF
             fi;
         fi;
       let j+=1
-      dialog --title "[ Testing the internet connection ]" --backtitle "$myBACKTITLE" \
-             --gauge "\n  Now checking: $i\n" 8 80 $(expr 100 \* $j / $mySITESCOUNT) <<EOF
-EOF
+      echo 2>&1>/dev/null | dialog --title "[ Testing the internet connection ]" --backtitle "$myBACKTITLE" \
+                                                                                 --gauge "\n  Now checking: $i\n" 8 80 $(expr 100 \* $j / $mySITESCOUNT)
     done;
 fi
-
 # Let's put cursor back in standard form
 tput cnorm
 
@@ -457,24 +454,17 @@ fi
 # Let's setup the ntp server
 if [ "$myCONF_NTP_USE" == "0" ];
   then
-    dialog --title "[ Setting up the ntp server ]" $myPROGRESSBOXCONF <<EOF
-EOF
     cp $myCONF_NTP_CONF_FILE /etc/ntp.conf 2>&1 | dialog --title "[ Setting up the ntp server ]" $myPROGRESSBOXCONF
 fi
 
 # Let's setup 802.1x networking
-if [ "myCONF_PFX_USE" == "0" ];
-  then
-    dialog --title "[ Setting 802.1x networking ]" $myPROGRESSBOXCONF <<EOF
-EOF
-    cp $myCONF_PFX_FILE /etc/wpa_supplicant/ 2>&1 | dialog --title "[ Setting 802.1x networking ]" $myPROGRESSBOXCONF
-    tee -a /etc/network/interfaces 2>&1>/dev/null <<EOF
-        wpa-driver wired
-        wpa-conf /etc/wpa_supplicant/wired8021x.conf
+myNETWORK_INTERFACES="
+wpa-driver wired
+wpa-conf /etc/wpa_supplicant/wired8021x.conf
 
 ### Example wireless config for 802.1x
 ### This configuration was tested with the IntelNUC series
-### If problems occur you can try and change wpa-driver to "iwlwifi"
+### If problems occur you can try and change wpa-driver to \"iwlwifi\"
 ### Do not forget to enter a ssid in /etc/wpa_supplicant/wireless8021x.conf
 ### The Intel NUC uses wlpXsY notation instead of wlanX
 #
@@ -482,24 +472,20 @@ EOF
 #iface wlp2s0 inet dhcp
 #        wpa-driver wext
 #        wpa-conf /etc/wpa_supplicant/wireless8021x.conf
-EOF
-
-    tee /etc/wpa_supplicant/wired8021x.conf 2>&1>/dev/null <<EOF
-ctrl_interface=/var/run/wpa_supplicant
+"
+myNETWORK_WIRED8021x="ctrl_interface=/var/run/wpa_supplicant
 ctrl_interface_group=root
 eapol_version=1
 ap_scan=1
 network={
   key_mgmt=IEEE8021X
   eap=TLS
-  identity="host/$myCONF_PFX_HOST_ID"
-  private_key="/etc/wpa_supplicant/8021x.pfx"
-  private_key_passwd="$myCONF_PFX_PW"
+  identity=\"host/$myCONF_PFX_HOST_ID\"
+  private_key=\"/etc/wpa_supplicant/8021x.pfx\"
+  private_key_passwd=\"$myCONF_PFX_PW\"
 }
-EOF
-
-    tee /etc/wpa_supplicant/wireless8021x.conf 2>&1>/dev/null <<EOF
-ctrl_interface=/var/run/wpa_supplicant
+"
+myNETWORK_WLAN8021x="ctrl_interface=/var/run/wpa_supplicant
 ctrl_interface_group=root
 eapol_version=1
 ap_scan=1
@@ -513,13 +499,19 @@ network={
   private_key="/etc/wpa_supplicant/8021x.pfx"
   private_key_passwd="$myCONF_PFX_PW"
 }
-EOF
+"
+if [ "myCONF_PFX_USE" == "0" ];
+  then
+    cp $myCONF_PFX_FILE /etc/wpa_supplicant/ 2>&1 | dialog --title "[ Setting 802.1x networking ]" $myPROGRESSBOXCONF
+    echo "$myNETWORK_INTERFACES" 2>&1 | tee -a /etc/network/interfaces | dialog --title "[ Setting 802.1x networking ]" $myPROGRESSBOXCONF
+
+    echo "$myNETWORK_WIRED8021x" 2>&1 | tee /etc/wpa_supplicant/wired8021x.conf | dialog --title "[ Setting 802.1x networking ]" $myPROGRESSBOXCONF
+
+    echo "$myNETWORK_WLAN8021x" 2>&1 | tee /etc/wpa_supplicant/wireless8021x.conf | dialog --title "[ Setting 802.1x networking ]" $myPROGRESSBOXCONF
 fi
 
 # Let's provide a wireless example config ...
-fuECHO "### Providing static ip, wireless example config."
-tee -a /etc/network/interfaces 2>&1>/dev/null <<EOF
-
+myNETWORK_WLANEXAMPLE="
 ### Example static ip config
 ### Replace <eth0> with the name of your physical interface name
 #
@@ -545,17 +537,15 @@ tee -a /etc/network/interfaces 2>&1>/dev/null <<EOF
 #   wpa-pairwise CCMP
 #   wpa-group CCMP
 #   wpa-key-mgmt WPA-PSK
-#   wpa-psk "<your_password_here_without_brackets>"
-EOF
+#   wpa-psk \"<your_password_here_without_brackets>\"
+"
+echo "$myNETWORK_WLANEXAMPLE" 2>&1 | tee -a /etc/network/interfaces | dialog --title "[ Provide WLAN example config ]" $myPROGRESSBOXCONF
 
 # Let's modify the sources list
 sed -i '/cdrom/d' /etc/apt/sources.list
 
 # Let's make sure SSH roaming is turned off (CVE-2016-0777, CVE-2016-0778)
-fuECHO "### Let's make sure SSH roaming is turned off."
-tee -a /etc/ssh/ssh_config 2>&1>/dev/null <<EOF
-UseRoaming no
-EOF
+echo "UseRoaming no" 2>&1 | tee -a /etc/ssh/ssh_config | dialog --title "[ Turn SSH roaming off ]" $myPROGRESSBOXCONF
 
 # Installing ctop, elasticdump, tpot, yq
 if ! [ "$myCONF_TPOT_FLAVOR" == "SENSOR" ];
@@ -617,35 +607,25 @@ case $myCONF_TPOT_FLAVOR in
   ;;
 esac
 
-# Let's load docker images
-myIMAGESCOUNT=$(cat $myTPOTCOMPOSE | grep -v '#' | grep image | cut -d: -f2 | uniq | wc -l)
-j=0
+# Let's load docker images in parallel
+function fuPULLIMAGES {
 for name in $(cat $myTPOTCOMPOSE | grep -v '#' | grep image | cut -d'"' -f2 | uniq)
   do
-    dialog --title "[ Downloading docker images, please be patient ]" --backtitle "$myBACKTITLE" \
-           --gauge "\n  Now downloading: $name\n" 8 80 $(expr 100 \* $j / $myIMAGESCOUNT) <<EOF
-EOF
-    docker pull $name 2>&1>/dev/null
-    let j+=1
-    dialog --title "[ Downloading docker images, please be patient ]" --backtitle "$myBACKTITLE" \
-           --gauge "\n  Now downloading: $name\n" 8 80 $(expr 100 \* $j / $myIMAGESCOUNT) <<EOF
-EOF
-  done
+    docker pull $name &
+done
+wait
+}
+fuPULLIMAGES 2>&1 | dialog --title "[ Pulling docker images, please be patient ]" $myPROGRESSBOXCONF
 
 # Let's add the daily update check with a weekly clean interval
-dialog --title "[ Modifying update checks ]" $myPROGRESSBOXCONF <<EOF
-EOF
-tee /etc/apt/apt.conf.d/10periodic 2>&1>/dev/null <<EOF
-APT::Periodic::Update-Package-Lists "1";
-APT::Periodic::Download-Upgradeable-Packages "0";
-APT::Periodic::AutocleanInterval "7";
-EOF
+myUPDATECHECK="APT::Periodic::Update-Package-Lists \"1\";
+APT::Periodic::Download-Upgradeable-Packages \"0\";
+APT::Periodic::AutocleanInterval \"7\";
+"
+echo "$myUPDATECHECK" 2>&1 | tee /etc/apt/apt.conf.d/10periodic | dialog --title "[ Modifying update checks ]" $myPROGRESSBOXCONF
 
 # Let's make sure to reboot the system after a kernel panic
-dialog --title "[ Reboot after kernel panic ]" $myPROGRESSBOXCONF <<EOF
-EOF
-tee -a /etc/sysctl.conf 2>&1>/dev/null <<EOF
-
+mySYSCTLCONF="
 # Reboot after kernel panic, check via /proc/sys/kernel/panic[_on_oops]
 # Set required map count for ELK
 kernel.panic = 1
@@ -654,13 +634,11 @@ vm.max_map_count = 262144
 net.ipv6.conf.all.disable_ipv6 = 1
 net.ipv6.conf.default.disable_ipv6 = 1
 net.ipv6.conf.lo.disable_ipv6 = 1
-EOF
+"
+echo "$mySYSCTLCONF" 2>&1 | tee -a /etc/sysctl.conf | dialog --title "[ Tweak Sysctl ]" $myPROGRESSBOXCONF
 
 # Let's setup fail2ban config
-dialog --title "[ Setup fail2ban config ]" $myPROGRESSBOXCONF <<EOF
-EOF
-tee /etc/fail2ban/jail.d/tpot.conf 2>&1>/dev/null <<EOF
-[DEFAULT]
+myFAIL2BANCONF="[DEFAULT]
 ignore-ip = 127.0.0.1/8
 bantime = 3600
 findtime = 600
@@ -683,22 +661,18 @@ enabled = true
 port    = 64295
 filter  = sshd
 logpath = /var/log/auth.log
-EOF
+"
+echo "$myFAIL2BANCONF" 2>&1 | tee /etc/fail2ban/jail.d/tpot.conf | dialog --title "[ Setup fail2ban config ]" $myPROGRESSBOXCONF
 
 # Fix systemd error https://github.com/systemd/systemd/issues/3374
-dialog --title "[ systemd fix ]" $myPROGRESSBOXCONF <<EOF
-EOF
-tee /etc/systemd/network/99-default.link 2>&1>/dev/null <<EOF
-[Link]
+mySYSTEMDFIX="[Link]
 NamePolicy=kernel database onboard slot path
 MACAddressPolicy=none
-EOF
+"
+echo "$mySYSTEMDFIX" 2>&1 | tee /etc/systemd/network/99-default.link | dialog --title "[ systemd fix ]" $myPROGRESSBOXCONF
 
 # Let's add some cronjobs
-dialog --title "[ Adding cronjobs ]" $myPROGRESSBOXCONF <<EOF
-EOF
-tee -a /etc/crontab 2>&1>/dev/null <<EOF
-
+myCRONJOBS="
 # Check if updated images are available and download them
 27 1 * * *      root    docker-compose -f /opt/tpot/etc/tpot.yml pull
 
@@ -713,7 +687,8 @@ tee -a /etc/crontab 2>&1>/dev/null <<EOF
 
 # Check for updated packages every sunday, upgrade and reboot
 27 16 * * 0     root    apt-get autoclean -y && apt-get autoremove -y && apt-get update -y && apt-get upgrade -y && sleep 10 && reboot
-EOF
+"
+echo "$myCRONJOBS" 2>&1 | tee -a /etc/crontab | dialog --title "[ Adding cronjobs ]" $myPROGRESSBOXCONF
 
 # Let's create some files and folders
 mkdir -p /data/ciscoasa/log \
