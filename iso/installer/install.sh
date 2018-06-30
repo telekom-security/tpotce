@@ -618,19 +618,14 @@ wait
 fuPULLIMAGES 2>&1 | dialog --title "[ Pulling docker images, please be patient ]" $myPROGRESSBOXCONF
 
 # Let's add the daily update check with a weekly clean interval
-dialog --title "[ Modifying update checks ]" $myPROGRESSBOXCONF <<EOF
-EOF
-tee /etc/apt/apt.conf.d/10periodic 2>&1>/dev/null <<EOF
-APT::Periodic::Update-Package-Lists "1";
-APT::Periodic::Download-Upgradeable-Packages "0";
-APT::Periodic::AutocleanInterval "7";
-EOF
+myUPDATECHECK="APT::Periodic::Update-Package-Lists \"1\";
+APT::Periodic::Download-Upgradeable-Packages \"0\";
+APT::Periodic::AutocleanInterval \"7\";
+"
+echo "$myUPDATECHECK" 2>&1 | tee /etc/apt/apt.conf.d/10periodic | dialog --title "[ Modifying update checks ]" $myPROGRESSBOXCONF
 
 # Let's make sure to reboot the system after a kernel panic
-dialog --title "[ Reboot after kernel panic ]" $myPROGRESSBOXCONF <<EOF
-EOF
-tee -a /etc/sysctl.conf 2>&1>/dev/null <<EOF
-
+mySYSCTLCONF="
 # Reboot after kernel panic, check via /proc/sys/kernel/panic[_on_oops]
 # Set required map count for ELK
 kernel.panic = 1
@@ -639,13 +634,11 @@ vm.max_map_count = 262144
 net.ipv6.conf.all.disable_ipv6 = 1
 net.ipv6.conf.default.disable_ipv6 = 1
 net.ipv6.conf.lo.disable_ipv6 = 1
-EOF
+"
+echo "$mySYSCTLCONF" 2>&1 | tee -a /etc/sysctl.conf | dialog --title "[ Tweak Sysctl ]" $myPROGRESSBOXCONF
 
 # Let's setup fail2ban config
-dialog --title "[ Setup fail2ban config ]" $myPROGRESSBOXCONF <<EOF
-EOF
-tee /etc/fail2ban/jail.d/tpot.conf 2>&1>/dev/null <<EOF
-[DEFAULT]
+myFAIL2BANCONF="[DEFAULT]
 ignore-ip = 127.0.0.1/8
 bantime = 3600
 findtime = 600
@@ -668,22 +661,18 @@ enabled = true
 port    = 64295
 filter  = sshd
 logpath = /var/log/auth.log
-EOF
+"
+echo "$myFAIL2BANCONF" 2>&1 | tee /etc/fail2ban/jail.d/tpot.conf | dialog --title "[ Setup fail2ban config ]" $myPROGRESSBOXCONF
 
 # Fix systemd error https://github.com/systemd/systemd/issues/3374
-dialog --title "[ systemd fix ]" $myPROGRESSBOXCONF <<EOF
-EOF
-tee /etc/systemd/network/99-default.link 2>&1>/dev/null <<EOF
-[Link]
+mySYSTEMDFIX="[Link]
 NamePolicy=kernel database onboard slot path
 MACAddressPolicy=none
-EOF
+"
+echo "$mySYSTEMDFIX" 2>&1 | tee /etc/systemd/network/99-default.link | dialog --title "[ systemd fix ]" $myPROGRESSBOXCONF
 
 # Let's add some cronjobs
-dialog --title "[ Adding cronjobs ]" $myPROGRESSBOXCONF <<EOF
-EOF
-tee -a /etc/crontab 2>&1>/dev/null <<EOF
-
+myCRONJOBS="
 # Check if updated images are available and download them
 27 1 * * *      root    docker-compose -f /opt/tpot/etc/tpot.yml pull
 
@@ -698,7 +687,8 @@ tee -a /etc/crontab 2>&1>/dev/null <<EOF
 
 # Check for updated packages every sunday, upgrade and reboot
 27 16 * * 0     root    apt-get autoclean -y && apt-get autoremove -y && apt-get update -y && apt-get upgrade -y && sleep 10 && reboot
-EOF
+"
+echo "$myCRONJOBS" 2>&1 | tee -a /etc/crontab | dialog --title "[ Adding cronjobs ]" $myPROGRESSBOXCONF
 
 # Let's create some files and folders
 mkdir -p /data/ciscoasa/log \
