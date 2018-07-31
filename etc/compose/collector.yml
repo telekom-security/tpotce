@@ -3,6 +3,7 @@
 version: '2.3'
 
 networks:
+  cyberchef_local:
   heralding_local:
   ewsposter_local:
   spiderfoot_local:
@@ -92,6 +93,17 @@ services:
 ##################
 #### Tools
 ##################
+
+# Cyberchef service
+  cyberchef:
+    container_name: cyberchef
+    restart: always
+    networks:
+     - cyberchef_local
+    ports:
+     - "127.0.0.1:64299:8000"
+    image: "dtagdevsec/cyberchef:1804"
+    read_only: true
 
 #### ELK
 ## Elasticsearch service
