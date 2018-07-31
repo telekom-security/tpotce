@@ -8,47 +8,37 @@ ADD dist/ /root/dist/
 RUN apt-get update -y && \
     apt-get dist-upgrade -y && \
     apt-get install -y --no-install-recommends \
-      autoconf \
-      automake \
-      build-essential \
-      ca-certificates \
-      check \
-      cython3 \
-      git \
-      libcap2-bin \
-      libcurl4-openssl-dev \
-      libemu-dev \
-      libev-dev \
-      libglib2.0-dev \
-      libloudmouth1-dev \
-      libnetfilter-queue-dev \
-      libnl-3-dev \
-      libpcap-dev \
-      libssl-dev \
-      libtool \
-      libudns-dev \
-      python3 \
-      python3-dev \
-      python3-bson \
-      python3-yaml \
-      ttf-liberation && \
+	build-essential \
+	ca-certificates \
+	check \
+	cmake \
+	cython3 \
+	git \
+        libcap2-bin \
+	libcurl4-openssl-dev \
+	libemu-dev \
+	libev-dev \
+	libglib2.0-dev \
+	libloudmouth1-dev \
+	libnetfilter-queue-dev \
+	libnl-3-dev \
+	libpcap-dev \
+	libssl-dev \
+	libtool \
+	libudns-dev \
+	procps \
+	python3 \
+	python3-dev \
+	python3-bson \
+	python3-yaml \
+	ttf-liberation && \
 
 # Get and install dionaea
-    git clone --depth=1 https://github.com/dinotools/dionaea -b 0.7.0 /root/dionaea/ && \
+    git clone --depth=1 https://github.com/dinotools/dionaea -b 0.8.0 /root/dionaea/ && \
     cd /root/dionaea && \
-    autoreconf -vi && \
-    ./configure \
-      --prefix=/opt/dionaea \
-      --with-python=/usr/bin/python3 \
-      --with-cython-dir=/usr/bin \
-      --enable-ev \
-      --with-ev-include=/usr/include \
-      --with-ev-lib=/usr/lib \
-      --with-emu-lib=/usr/lib/libemu \
-      --with-emu-include=/usr/include \
-      --with-nl-include=/usr/include/libnl3 \
-      --with-nl-lib=/usr/lib \
-      --enable-static && \
+    mkdir build && \
+    cd build && \
+    cmake -DCMAKE_INSTALL_PREFIX:PATH=/opt/dionaea .. && \
     make && \
     make install && \
 
@@ -64,11 +54,10 @@ RUN apt-get update -y && \
 
 # Setup runtime and clean up
     apt-get purge -y \
-      autoconf \
-      automake \
       build-essential \
       ca-certificates \
       check \
+      cmake \
       cython3 \
       git \
       libcurl4-openssl-dev \
@@ -85,7 +74,7 @@ RUN apt-get update -y && \
       python3 \
       python3-dev \   
       python3-bson \
-      python3-yaml && \
+      python3-yaml && \ 
 
     apt-get install -y \
       ca-certificates \
