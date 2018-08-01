@@ -12,7 +12,7 @@ RUN apk -U --no-cache add \
     cd /usr/src/app/ && \
     git clone --depth=1 https://github.com/mobz/elasticsearch-head . && \
     npm install http-server && \
-    sed -i 's/\"http\:\/\/localhost\:9200\"/\"https\:\/\/\<FQDN\>\:64297\/es\/\"/' /usr/src/app/_site/app.js && \
+    sed -i "s#\"http\:\/\/localhost\:9200\"#window.location.protocol \+ \'\/\/\' \+ window.location.hostname \+ \'\:\' \+ window.location.port \+ \'\/es\/\'#" /usr/src/app/_site/app.js && \
 
 # Setup user, groups and configs
     addgroup -g 2000 head && \
