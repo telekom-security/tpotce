@@ -14,12 +14,18 @@ rules:
   - match: tcp dst port 445
     type: conn_handler
     target: smb
+  - match: tcp dst port 1883
+    type: conn_handler
+    target: mqtt
   - match: tcp dst port 3389
     type: conn_handler
     target: rdp
   - match: tcp dst port 5060
     type: conn_handler
     target: sip
+  - match: tcp dst port 5222 or port 5223
+    type: conn_handler
+    target: jabber
   - match: tcp
     type: conn_handler
     target: default
