@@ -8,6 +8,8 @@ RUN apk -U --no-cache add \
                build-base \
                git \
                libcap \
+               libffi-dev \
+               libressl-dev \
                linux-headers \
                py3-yarl \
                python3 \
