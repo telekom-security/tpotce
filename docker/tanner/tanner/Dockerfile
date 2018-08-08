@@ -18,11 +18,22 @@ RUN apk -U --no-cache add \
 # Setup Tanner
     git clone --depth=1 https://github.com/mushorg/tanner /opt/tanner && \
     cp /root/dist/config.py /opt/tanner/tanner/ && \
-    cp /root/dist/requirements.txt /opt/tanner/ && \
     cd /opt/tanner/ && \
     pip3 install --no-cache-dir --upgrade pip setuptools && \
     pip3 install --no-cache-dir -r requirements.txt && \
     python3 setup.py install && \
+    rm -rf .coveragerc \
+           .git \
+           .gitignore \
+           .travis.yml \
+           Tanner.egg-info \
+           build \
+           dist \
+           docker \
+           docs \
+           requirements.txt \
+           setup.py \
+           tanner/data && \
     cd / && \
     
 # Setup configs, user, groups
@@ -34,6 +45,10 @@ RUN apk -U --no-cache add \
 # Clean up
     apk del --purge \
             build-base \
+            git \
+            libcap \
+            libffi-dev \
+            libressl-dev \
             linux-headers \
             python3-dev && \
     rm -rf /root/* && \
