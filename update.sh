@@ -12,6 +12,32 @@ myGREEN="[0;32m"
 myWHITE="[0;0m"
 myBLUE="[0;34m"
 
+
+# Let's check for version
+function fuCHECK_VERSION {
+myMINVERSION="18.04.0"
+myMASTERVERSION="18.04.0"
+echo
+echo -n "##### Checking for version tag: "
+if [ -f "version" ];
+  then
+    myVERSION=$(cat version)
+    echo "[ OK ] - You are running $myVERSION"
+    if [[ "$myVERSION" > "$myMINVERSION" || "$myVERSION" == "$myMINVERSION" ]] && [[ "$myVERSION" < "$myMASTERVERSION" || "$myVERSION" == "$myMASTERVERSION" ]]
+      then
+        echo "##### Valid version found. Update procedure will be initiated."
+        exit
+      else
+        echo "##### Your T-Pot installation cannot be upgraded automatically. Please run a fresh install."
+	exit
+    fi
+  else
+    echo "[ NOT OK ]"
+    echo "##### 'version' is missing. Please run 'update.sh' from within '/opt/tpot'."
+    exit
+  fi
+}
+
 # Got root?
 myWHOAMI=$(whoami)
 if [ "$myWHOAMI" != "root" ]
@@ -89,11 +115,36 @@ function fuSELFUPDATE () {
   fi
 }
 
+# Let's check for version
+function fuCHECK_VERSION () {
+local myMINVERSION="18.04.0"
+local myMASTERVERSION="18.04.0"
+echo
+echo -n "##### Checking for version tag: "
+if [ -f "version" ];
+  then
+    myVERSION=$(cat version)
+    echo "[ OK ] - You are running $myVERSION"
+    if [[ "$myVERSION" > "$myMINVERSION" || "$myVERSION" == "$myMINVERSION" ]] && [[ "$myVERSION" < "$myMASTERVERSION" || "$myVERSION" == "$myMASTERVERSION" ]]
+      then
+        echo "##### Valid version found. Update procedure will be initiated."
+        exit
+      else
+        echo "##### Your T-Pot installation cannot be upgraded automatically. Please run a fresh install."
+        exit
+    fi
+  else
+    echo "[ NOT OK ]"
+    echo "##### 'version' is missing. Please run 'update.sh' from within '/opt/tpot'."
+    exit
+  fi
+}
+
 # Only run with command switch
 if [ "$1" != "-y" ]; then
   echo "This script will update / upgrade all T-Pot related scripts, tools and packages"
   echo "Some of your changes might be overwritten, so make sure to save your work"
-  echo "This feature is still experimental, run with \"-y\" switch"
+  echo "This is beta feature and only recommended for experienced users, run with \"-y\" switch"
   echo
   exit
 fi
