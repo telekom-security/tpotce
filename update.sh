@@ -12,32 +12,6 @@ myGREEN="[0;32m"
 myWHITE="[0;0m"
 myBLUE="[0;34m"
 
-
-# Let's check for version
-function fuCHECK_VERSION {
-myMINVERSION="18.04.0"
-myMASTERVERSION="18.04.0"
-echo
-echo -n "##### Checking for version tag: "
-if [ -f "version" ];
-  then
-    myVERSION=$(cat version)
-    echo "[ OK ] - You are running $myVERSION"
-    if [[ "$myVERSION" > "$myMINVERSION" || "$myVERSION" == "$myMINVERSION" ]] && [[ "$myVERSION" < "$myMASTERVERSION" || "$myVERSION" == "$myMASTERVERSION" ]]
-      then
-        echo "##### Valid version found. Update procedure will be initiated."
-        exit
-      else
-        echo "##### Your T-Pot installation cannot be upgraded automatically. Please run a fresh install."
-	exit
-    fi
-  else
-    echo "[ NOT OK ]"
-    echo "##### 'version' is missing. Please run 'update.sh' from within '/opt/tpot'."
-    exit
-  fi
-}
-
 # Got root?
 myWHOAMI=$(whoami)
 if [ "$myWHOAMI" != "root" ]
@@ -84,6 +58,7 @@ mySITES=$1
   done;
 }
 
+# Self Update
 function fuSELFUPDATE () {
   echo "### Now checking for newer files in repository ..."
   git fetch
