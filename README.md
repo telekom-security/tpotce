@@ -1,43 +1,45 @@
-# T-Pot 18.04
+# T-Pot 18.10
 
-T-Pot 18.04 runs on the latest 18.04 LTS Ubuntu Server Network Installer image, is based on
+T-Pot 18.10 runs on the latest 18.04 LTS Ubuntu Server Network Installer image, is based on
 
 [docker](https://www.docker.com/), [docker-compose](https://docs.docker.com/compose/)
 
 and includes dockerized versions of the following honeypots
 
+* [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot),
 * [conpot](http://conpot.org/),
 * [cowrie](http://www.micheloosterhof.com/cowrie/),
 * [dionaea](https://github.com/DinoTools/dionaea),
 * [elasticpot](https://github.com/schmalle/ElasticPot),
-* [emobility](https://github.com/dtag-dev-sec/emobility),
-* [glastopf](http://glastopf.org/),
+* [glastopf](http://mushmush.org/),
+* [glutton](https://github.com/mushorg/glutton),
+* [heralding](https://github.com/johnnykv/heralding),
 * [honeytrap](https://github.com/armedpot/honeytrap/),
 * [mailoney](https://github.com/awhitehatter/mailoney),
 * [rdpy](https://github.com/citronneur/rdpy) and
+* [snare](http://mushmush.org/),
+* [tanner](http://mushmush.org/),
 * [vnclowpot](https://github.com/magisterquis/vnclowpot)
 
 
 Furthermore we use the following tools
 
+* [Cockpit](https://cockpit-project.org/running) for a lightweight, webui for docker, os, real-time performance monitoring and web terminal.
+* [Cyberchef](https://gchq.github.io/CyberChef/) a web app for encryption, encoding, compression and data analysis.
 * [ELK stack](https://www.elastic.co/videos) to beautifully visualize all the events captured by T-Pot.
 * [Elasticsearch Head](https://mobz.github.io/elasticsearch-head/) a web front end for browsing and interacting with an Elastic Search cluster.
-* [Netdata](http://my-netdata.io/) for real-time performance monitoring.
-* [Portainer](http://portainer.io/) a web based UI for docker.
 * [Spiderfoot](https://github.com/smicallef/spiderfoot) a open source intelligence automation tool.
 * [Suricata](http://suricata-ids.org/) a Network Security Monitoring engine.
-* [Wetty](https://github.com/krishnasrinivas/wetty) a web based SSH client.
-
 
 
 # TL;DR
-1. Meet the [system requirements](#requirements). The T-Pot installation needs at least 4 GB RAM and 64 GB free disk space as well as a working internet connection.
+1. Meet the [system requirements](#requirements). The T-Pot installation needs at least 6-8 GB RAM and 128 GB free disk space as well as a working internet connection.
 2. Download the T-Pot ISO from [GitHub](https://github.com/dtag-dev-sec/tpotce/releases) or [create it yourself](#createiso).
 3. Install the system in a [VM](#vm) or on [physical hardware](#hw) with [internet access](#placement).
 4. Enjoy your favorite beverage - [watch](http://sicherheitstacho.eu/?peers=communityPeers) and [analyze](#kibana).
 
-# T-Pot-Autoinstaller
-T-Pot may also be installed on an existing machine using the [T-Pot-Autoinstaller](https://github.com/dtag-dev-sec/t-pot-autoinstall).
+# T-Pot Universal Installer
+The T-Pot installer now also includes the option to install on a existing machine, the T-Pot-Autoinstaller is no longer necessary.
 
 # Seeing is believing :bowtie:
 
@@ -70,11 +72,19 @@ T-Pot may also be installed on an existing machine using the [T-Pot-Autoinstalle
 - [Stay tuned](#staytuned)
 - [Fun Fact](#funfact)
 
-<a name="background"></a>
+<a name="changelog"></a>
 # Changelog
-- **Size still matters** 😅
-	- All docker images have been rebuilt as micro containers based on Alpine Linux to even further reduce the image size and leading to image sizes (compressed) below the 50 MB mark. The uncompressed size of eMobility and the ELK stack could each be reduced by a whopping 600 MB!
-	- A "Everything" installation now takes roughly 1.6 GB download size
+- **Welcoming new honeypots**
+	- Ciscoasa,
+	- Glutton (experimental),
+	- Heralding,
+	- Snare & Tanner
+- **New Standard Installation**
+        - The new standard installation is now running a whopping *14* honeypot instances.
+- **Tighten Security**
+	- The docker containers are now running mostly with a read-only file system
+	- If possible using `setcap` to start daemons without root or dropping privileges
+	- Introducing `fail2ban` to ease up on `authorized_keys` requirement which is no longer necessary for `SSH`. And also to further prevent brute-force attacks on `Cockpit` and `NGINX` allowing for faster load times of the WebUI.
 - **docker-compose**
 	- T-Pot containers are now being controlled and monitored through docker-compose and a single configuration file `/opt/tpot/etc/tpot.yml` allowing for greater flexibility and resulting in easier image management (i.e. updated images).
 	- As a benefit only a single `systemd` script `/etc/systemd/system/tpot.service` is needed to start `systemctl start tpot` and stop `systemctl stop tpot` the T-Pot services.
