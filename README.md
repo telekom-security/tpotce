@@ -146,7 +146,7 @@ In T-Pot we combine the dockerized honeypots ...
 
 ... to give you the best out-of-the-box experience possible and a easy-to-use multi-honeypot appliance. 
 
-![Architecture](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/doc/architecture.png)
+![Architecture](doc/architecture.png)
 
 While data within docker containers is volatile we do now ensure a default 30 day persistence of all relevant honeypot and tool data in the well known `/data` folder and sub-folders. The persistence configuration may be adjusted in `/opt/tpot/etc/logrotate/logrotate.conf`. Once a docker container crashes, all other data produced within its environment is erased and a fresh instance is started from the corresponding docker image.<br>
 
@@ -355,7 +355,7 @@ If you do not have a SSH client at hand and still want to access the machine via
 - user: **[tsec, user you chose during post install method]**
 - pass: **password you chose during the installation**
 
-![WebTTY](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/doc/webssh.png)
+![Cockpit Terminal](doc/cockpit3.png)
 
 <a name="kibana"></a>
 ## Kibana Dashboard
@@ -366,14 +366,15 @@ Just open a web browser and connect to `https://<your.ip>:64297`, enter
 
 and **Kibana** will automagically load. The Kibana dashboard can be customized to fit your needs. By default, we haven't added any filtering, because the filters depend on your setup. E.g. you might want to filter out your incoming administrative ssh connections and connections to update servers.
 
-![Dashbaord](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/doc/dashboard.png)
+![Dashbaord](doc/kibana.png)
 
 <a name="tools"></a>
 ## Tools
 We included some web based management tools to improve and ease up on your daily tasks.
 
-![Cockpit](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/doc/netdata.png)
-![Cyberchef](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/doc/netdata.png)
+![Cockpit Overview](doc/cockpit1.png)
+![Cockpit Containers](doc/cockpit2.png)
+![Cyberchef](doc/cyberchef.png)
 ![ES Head Plugin](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/doc/headplugin.png)
 ![Spiderfoot](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/doc/spiderfoot.png)
 
@@ -439,15 +440,14 @@ We hope you understand that we cannot provide support on an individual basis. We
 <a name="licenses"></a>
 # Licenses
 The software that T-Pot is built on uses the following licenses.
-<br>GPLv2: [conpot (by Lukas Rist)](https://github.com/mushorg/conpot/blob/master/LICENSE.txt), [dionaea](https://github.com/DinoTools/dionaea/blob/master/LICENSE), [honeytrap (by Tillmann Werner)](https://github.com/armedpot/honeytrap/blob/master/LICENSE), [suricata](http://suricata-ids.org/about/open-source/)
-<br>GPLv3: [elasticpot (by Markus Schmall)](https://github.com/schmalle/ElasticPot), [emobility (by Mohamad Sbeiti)](https://github.com/dtag-dev-sec/emobility/blob/master/LICENSE), [ewsposter (by Markus Schroer)](https://github.com/dtag-dev-sec/ews/), [glastopf (by Lukas Rist)](https://github.com/glastopf/glastopf/blob/master/GPL), [rdpy](https://github.com/citronneur/rdpy/blob/master/LICENSE), [netdata](https://github.com/firehol/netdata/blob/master/LICENSE.md)
-<br>Apache 2 License: [elasticsearch](https://github.com/elasticsearch/elasticsearch/blob/master/LICENSE.txt), [logstash](https://github.com/elasticsearch/logstash/blob/master/LICENSE), [kibana](https://github.com/elasticsearch/kibana/blob/master/LICENSE.md), [docker](https://github.com/docker/docker/blob/master/LICENSE), [elasticsearch-head](https://github.com/mobz/elasticsearch-head/blob/master/LICENCE)
-<br>MIT License: [ctop](https://github.com/bcicen/ctop/blob/master/LICENSE), [wetty](https://github.com/krishnasrinivas/wetty/blob/master/LICENSE)
+<br>GPLv2: [conpot)](https://github.com/mushorg/conpot/blob/master/LICENSE.txt), [dionaea](https://github.com/DinoTools/dionaea/blob/master/LICENSE), [honeytrap](https://github.com/armedpot/honeytrap/blob/master/LICENSE), [suricata](http://suricata-ids.org/about/open-source/)
+<br>GPLv3: [elasticpot](https://github.com/schmalle/ElasticPot), [ewsposter](https://github.com/dtag-dev-sec/ews/), [glastopf](https://github.com/glastopf/glastopf/blob/master/GPL), [rdpy](https://github.com/citronneur/rdpy/blob/master/LICENSE), [heralding](https://github.com/johnnykv/heralding/blob/master/LICENSE.txt), [snare](https://github.com/mushorg/snare/blob/master/LICENSE), [tanner](https://github.com/mushorg/snare/blob/master/LICENSE)
+<br>Apache 2 License: [cyberchef](https://github.com/gchq/CyberChef/blob/master/LICENSE), [elasticsearch](https://github.com/elasticsearch/elasticsearch/blob/master/LICENSE.txt), [logstash](https://github.com/elasticsearch/logstash/blob/master/LICENSE), [kibana](https://github.com/elasticsearch/kibana/blob/master/LICENSE.md), [docker](https://github.com/docker/docker/blob/master/LICENSE), [elasticsearch-head](https://github.com/mobz/elasticsearch-head/blob/master/LICENCE)
+<br>MIT license: [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/blob/master/LICENSE), [ctop](https://github.com/bcicen/ctop/blob/master/LICENSE), [glutton](https://github.com/mushorg/glutton/blob/master/LICENSE)
 <br>zlib License: [vnclowpot](https://github.com/magisterquis/vnclowpot/blob/master/LICENSE)
-<br>[cowrie (copyright disclaimer by Upi Tamminen)](https://github.com/micheloosterhof/cowrie/blob/master/doc/COPYRIGHT)
+<br>[cowrie](https://github.com/micheloosterhof/cowrie/blob/master/LICENSE.md)
 <br>[mailoney](https://github.com/awhitehatter/mailoney)
 <br>[Ubuntu licensing](http://www.ubuntu.com/about/about-ubuntu/licensing)
-<br>[Portainer](https://github.com/portainer/portainer/blob/develop/LICENSE)
 
 <a name="credits"></a>
 # Credits
@@ -455,6 +455,8 @@ Without open source and the fruitful development community we are proud to be a 
 
 ### The developers and development communities of
 
+* [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/graphs/contributors)
+* [cockpit](https://github.com/cockpit-project/cockpit/graphs/contributors)
 * [conpot](https://github.com/mushorg/conpot/graphs/contributors)
 * [cowrie](https://github.com/micheloosterhof/cowrie/graphs/contributors)
 * [dionaea](https://github.com/DinoTools/dionaea/graphs/contributors)
@@ -462,22 +464,22 @@ Without open source and the fruitful development community we are proud to be a 
 * [elasticpot](https://github.com/schmalle/ElasticPot/graphs/contributors)
 * [elasticsearch](https://github.com/elastic/elasticsearch/graphs/contributors)
 * [elasticsearch-head](https://github.com/mobz/elasticsearch-head/graphs/contributors)
-* [emobility](https://github.com/dtag-dev-sec/emobility/graphs/contributors)
 * [ewsposter](https://github.com/armedpot/ewsposter/graphs/contributors)
 * [glastopf](https://github.com/mushorg/glastopf/graphs/contributors)
+* [glutton](https://github.com/mushorg/glutton/graphs/contributors)
+* [heralding](https://github.com/johnnykv/heralding/graphs/contributors)
 * [honeytrap](https://github.com/armedpot/honeytrap/graphs/contributors)
 * [kibana](https://github.com/elastic/kibana/graphs/contributors)
 * [logstash](https://github.com/elastic/logstash/graphs/contributors)
 * [mailoney](https://github.com/awhitehatter/mailoney)
-* [netdata](https://github.com/firehol/netdata/graphs/contributors)
 * [p0f](http://lcamtuf.coredump.cx/p0f3/)
-* [portainer](https://github.com/portainer/portainer/graphs/contributors)
 * [rdpy](https://github.com/citronneur/rdpy)
 * [spiderfoot](https://github.com/smicallef/spiderfoot)
+* [snare](https://github.com/mushorg/snare/graphs/contributors)
+* [tanner](https://github.com/mushorg/tanner/graphs/contributors)
 * [suricata](https://github.com/inliniac/suricata/graphs/contributors)
 * [ubuntu](http://www.ubuntu.com/)
 * [vnclowpot](https://github.com/magisterquis/vnclowpot)
-* [wetty](https://github.com/krishnasrinivas/wetty/graphs/contributors)
 
 ### The following companies and organizations
 * [canonical](http://www.canonical.com/)
@@ -495,4 +497,4 @@ We will be releasing a new version of T-Pot about every 6-12 months.
 <a name="funfact"></a>
 # Fun Fact
 
-Coffee just does not cut it anymore which is why we needed a different caffeine source and consumed *242* bottles of [Club Mate](https://de.wikipedia.org/wiki/Club-Mate) during the development of T-Pot 17.10 😇
+In an effort of saving the environment we are now brewing our own Mate Ice Tea and consumed 136 liters so far for the T-Pot 18.10 development 😇
