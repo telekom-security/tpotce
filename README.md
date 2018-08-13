@@ -375,8 +375,8 @@ We included some web based management tools to improve and ease up on your daily
 ![Cockpit Overview](doc/cockpit1.png)
 ![Cockpit Containers](doc/cockpit2.png)
 ![Cyberchef](doc/cyberchef.png)
-![ES Head Plugin](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/doc/headplugin.png)
-![Spiderfoot](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/doc/spiderfoot.png)
+![ES Head Plugin](doc/headplugin.png)
+![Spiderfoot](doc/spiderfoot.png)
 
 
 <a name="maintenance"></a>
