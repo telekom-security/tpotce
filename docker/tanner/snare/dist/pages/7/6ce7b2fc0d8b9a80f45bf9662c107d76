@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+
+<html dir="ltr" lang="en-gb">
+<head>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta charset="utf-8"/>
+<base href="/index.php/component/users/"/>
+<meta content="joomla, Joomla" name="keywords"/>
+<meta content="Joomla! - the dynamic portal engine and content management system" name="description"/>
+<meta content="Joomla! - Open Source Content Management" name="generator"/>
+<title>user's Site!</title>
+<link href="/templates/protostar/xfavicon.ico.pagespeed.ic.tZz9337ewR.png" rel="shortcut icon" type="image/vnd.microsoft.icon"/>
+<link href="/index.php/component/search/?format=opensearch" rel="search" title="Search user's Site!" type="application/opensearchdescription+xml"/>
+<link href="/templates/protostar/css/A.template.css,q13f9ad72278f2eabc33cd15dc84fd6e5.pagespeed.cf.Zr2w8TMba3.css" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css?family=Open+Sans" rel="stylesheet"/>
+<style>h1,h2,h3,h4,h5,h6,.site-title{font-family:'Open Sans',sans-serif}div.mod_search93 input[type="search"]{width:auto}</style>
+<script class="joomla-script-options new" type="application/json">{"csrf.token":"1e675dfa39711c41cbc5786db6a18486","system.paths":{"root":"","base":""},"system.keepalive":{"interval":840000,"uri":"\/index.php\/component\/ajax\/?format=json"},"joomla.jtext":{"JLIB_FORM_FIELD_INVALID":"Invalid field:&#160"}}</script>
+<script src="/media/system/js/core.js,q13f9ad72278f2eabc33cd15dc84fd6e5.pagespeed.ce.lkuR1pLk4d.js"></script>
+<!--[if lt IE 9]><script src="/media/system/js/polyfill.event.js?13f9ad72278f2eabc33cd15dc84fd6e5"></script><![endif]-->
+<script>//<![CDATA[
+!function(){"use strict";document.addEventListener("DOMContentLoaded",function(){var o=Joomla.getOptions("system.keepalive"),n=o&&o.uri?o.uri.replace(/&amp;/g,"&"):"",t=o&&o.interval?o.interval:45e3;if(""===n){var e=Joomla.getOptions("system.paths");n=(e?e.root+"/index.php":window.location.pathname)+"?option=com_ajax&format=json"}window.setInterval(function(){Joomla.request({url:n,onSuccess:function(){},onError:function(){}})},t)})}(window,document,Joomla);
+//]]></script>
+<script src="/media/jui/js/jquery.min.js,q13f9ad72278f2eabc33cd15dc84fd6e5.pagespeed.jm.29OAZzvhfX.js"></script>
+<script src="/media/jui,_js,_jquery-noconflict.js,q13f9ad72278f2eabc33cd15dc84fd6e5+jui,_js,_jquery-migrate.min.js,q13f9ad72278f2eabc33cd15dc84fd6e5+system,_js,_punycode.js,q13f9ad72278f2eabc33cd15dc84fd6e5+system,_js,_validate.js,q13f9ad72278f2eabc33cd15dc84fd6e5.pagespeed.jc.b23kIIuBR-.js"></script><script>eval(mod_pagespeed_bkgOu3tCuw);</script>
+<script>eval(mod_pagespeed_CSgeOoI3S1);</script>
+<script>eval(mod_pagespeed_QyvTCAi8tu);</script>
+<script>eval(mod_pagespeed_q4uEPuWLPm);</script>
+<!--[if lt IE 9]><script src="/media/system/js/html5fallback.js?13f9ad72278f2eabc33cd15dc84fd6e5"></script><![endif]-->
+<script src="/media,_jui,_js,_bootstrap.min.js,q13f9ad72278f2eabc33cd15dc84fd6e5+templates,_protostar,_js,_template.js,q13f9ad72278f2eabc33cd15dc84fd6e5.pagespeed.jc.BSXXs04gCZ.js"></script><script>eval(mod_pagespeed_hjpzwBJTqH);</script>
+<script>eval(mod_pagespeed_VbUGB9euU2);</script>
+<!--[if lt IE 9]><script src="/media/jui/js/html5.js?13f9ad72278f2eabc33cd15dc84fd6e5"></script><![endif]-->
+<script>jQuery(function($){initTooltips();$("body").on("subform-row-add",initTooltips);function initTooltips(event,container){container=container||document;$(container).find(".hasTooltip").tooltip({"html":true,"container":"body"});}});</script>
+</head>
+<body class="site com_users view- no-layout no-task">
+<!-- Body -->
+<div class="body" id="top">
+<div class="container">
+<!-- Header -->
+<header class="header" role="banner">
+<div class="header-inner clearfix">
+<a class="brand pull-left" href="/">
+<span class="site-title" title="user's Site!">user's Site!</span> </a>
+<div class="header-search pull-right">
+<div class="search mod_search93">
+<form action="/index.php/component/users/?Itemid=101" class="form-inline" method="post">
+<label class="element-invisible" for="mod-search-searchword93">Search ...</label> <input class="inputbox search-query input-medium" id="mod-search-searchword93" maxlength="200" name="searchword" placeholder="Search ..." size="20" type="search"/> <input name="task" type="hidden" value="search"/>
+<input name="option" type="hidden" value="com_search"/>
+<input name="Itemid" type="hidden" value=""/>
+</form>
+</div>
+</div>
+</div>
+</header>
+<nav class="navigation" role="navigation">
+<div class="navbar pull-left">
+<a class="btn btn-navbar collapsed" data-target=".nav-collapse" data-toggle="collapse">
+<span class="element-invisible">Toggle Navigation</span>
+<span class="icon-bar"></span>
+<span class="icon-bar"></span>
+<span class="icon-bar"></span>
+</a>
+</div>
+<div class="nav-collapse">
+<ul class="nav menu nav-pills">
+<li class="item-101 default current active"><a href="/index.php">Home</a></li></ul>
+</div>
+</nav>
+<div class="row-fluid">
+<main class="span9" id="content" role="main">
+<!-- Begin Content -->
+<div class="moduletable">
+<div class="custom">
+<p><img alt="Blue Flower" src="/images/headers/xblue-flower.jpg.pagespeed.ic.TmhK3SWR9L.jpg"/></p></div>
+</div>
+<div id="system-message-container">
+</div>
+<div class="login">
+<form action="/index.php/component/users/?task=user.login&amp;Itemid=101" class="form-validate form-horizontal well" method="post">
+<fieldset>
+<div class="control-group">
+<div class="control-label">
+<label class="required" for="username" id="username-lbl">
+	Username<span class="star"> *</span></label>
+</div>
+<div class="controls">
+<input aria-required="true" autofocus="" class="validate-username required" id="username" name="username" required="" size="25" type="text" value=""/>
+</div>
+</div>
+<div class="control-group">
+<div class="control-label">
+<label class="required" for="password" id="password-lbl">
+	Password<span class="star"> *</span></label>
+</div>
+<div class="controls">
+<input aria-required="true" class="validate-password required" id="password" maxlength="99" name="password" required="" size="25" type="password" value=""/> </div>
+</div>
+<div class="control-group">
+<div class="control-label">
+<label for="remember">
+							Remember me						</label>
+</div>
+<div class="controls">
+<input class="inputbox" id="remember" name="remember" type="checkbox" value="yes"/>
+</div>
+</div>
+<div class="control-group">
+<div class="controls">
+<button class="btn btn-primary" type="submit">
+						Log in					</button>
+</div>
+</div>
+<input name="return" type="hidden" value=""/>
+<input name="1e675dfa39711c41cbc5786db6a18486" type="hidden" value="1"/> </fieldset>
+</form>
+</div>
+<div>
+<ul class="nav nav-tabs nav-stacked">
+<li>
+<a href="/index.php/component/users/?view=reset&amp;Itemid=101">
+				Forgot your password?			</a>
+</li>
+<li>
+<a href="/index.php/component/users/?view=remind&amp;Itemid=101">
+				Forgot your username?			</a>
+</li>
+</ul>
+</div>
+<div class="clearfix"></div>
+<ul class="breadcrumb" itemscope="" itemtype="https://schema.org/BreadcrumbList">
+<li>
+			You are here:  
+		</li>
+<li class="active" itemprop="itemListElement" itemscope="" itemtype="https://schema.org/ListItem">
+<span itemprop="name">
+					Home				</span>
+<meta content="1" itemprop="position"/>
+</li>
+</ul>
+<!-- End Content -->
+</main>
+<div class="span3" id="aside">
+<!-- Begin Right Sidebar -->
+<div class="well "><h3 class="page-header">Popular Tags</h3><div class="tagspopular">
+<ul>
+<li>
+<a href="/index.php/component/tags/tag/joomla">
+			Joomla</a>
+</li>
+</ul>
+</div>
+</div><div class="well "><h3 class="page-header">Latest Articles</h3><ul class="latestnews">
+<li itemscope="" itemtype="https://schema.org/Article">
+<a href="/index.php" itemprop="url">
+<span itemprop="name">
+				Getting Started			</span>
+</a>
+</li>
+</ul>
+</div><div class="well "><h3 class="page-header">Login Form</h3><form action="/index.php/component/users/?Itemid=101" class="form-inline" id="login-form" method="post">
+<div class="userdata">
+<div class="control-group" id="form-login-username">
+<div class="controls">
+<div class="input-prepend">
+<span class="add-on">
+<span class="icon-user hasTooltip" title="Username"></span>
+<label class="element-invisible" for="modlgn-username">Username</label>
+</span>
+<input class="input-small" id="modlgn-username" name="username" placeholder="Username" size="18" tabindex="0" type="text"/>
+</div>
+</div>
+</div>
+<div class="control-group" id="form-login-password">
+<div class="controls">
+<div class="input-prepend">
+<span class="add-on">
+<span class="icon-lock hasTooltip" title="Password">
+</span>
+<label class="element-invisible" for="modlgn-passwd">Password							</label>
+</span>
+<input class="input-small" id="modlgn-passwd" name="password" placeholder="Password" size="18" tabindex="0" type="password"/>
+</div>
+</div>
+</div>
+<div class="control-group checkbox" id="form-login-remember">
+<label class="control-label" for="modlgn-remember">Remember Me</label> <input class="inputbox" id="modlgn-remember" name="remember" type="checkbox" value="yes"/>
+</div>
+<div class="control-group" id="form-login-submit">
+<div class="controls">
+<button class="btn btn-primary login-button" name="Submit" tabindex="0" type="submit">Log in</button>
+</div>
+</div>
+<ul class="unstyled">
+<li>
+<a href="/index.php/component/users/?view=remind&amp;Itemid=101">
+					Forgot your username?</a>
+</li>
+<li>
+<a href="/index.php/component/users/?view=reset&amp;Itemid=101">
+					Forgot your password?</a>
+</li>
+</ul>
+<input name="option" type="hidden" value="com_users"/>
+<input name="task" type="hidden" value="user.login"/>
+<input name="return" type="hidden" value="aHR0cDovLzE3Mi4yMC4yNTQuMTM3L2luZGV4LnBocC9jb21wb25lbnQvdXNlcnMv"/>
+<input name="1e675dfa39711c41cbc5786db6a18486" type="hidden" value="1"/> </div>
+</form>
+</div>
+<!-- End Right Sidebar -->
+</div>
+</div>
+</div>
+</div>
+<!-- Footer -->
+<footer class="footer" role="contentinfo">
+<div class="container">
+<hr/>
+<p class="pull-right">
+<a href="#top" id="back-top">
+					Back to Top				</a>
+</p>
+<p>
+				© 2018 user's Site!			</p>
+</div>
+</footer>
+</body>
+</html>

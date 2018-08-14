@@ -1,5 +1,8 @@
 FROM alpine
 
+# Include dist
+ADD dist/ /root/dist/
+
 # Setup apt
 RUN apk -U --no-cache add \
                build-base \
@@ -17,6 +20,7 @@ RUN apk -U --no-cache add \
     cd / && \
     rm -rf /opt/snare && \
     clone --target http://example.com && \
+    mv /root/dist/pages/* /opt/snare/pages/ && \
     
 # Clean up
     apk del --purge \
@@ -28,4 +32,4 @@ RUN apk -U --no-cache add \
     rm -rf /var/cache/apk/*
 
 # Start snare
-CMD snare --tanner tanner --debug true --no-dorks true --auto-update false --host-ip 0.0.0.0 --port 8080 --page-dir example.com
+CMD snare --tanner tanner --debug true --no-dorks true --auto-update false --host-ip 0.0.0.0 --port 8080 --page-dir $(shuf -i 1-10 -n 1)

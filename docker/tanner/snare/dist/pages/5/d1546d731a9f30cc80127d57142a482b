@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+
+<html class="ng-csp" data-placeholder-focus="false" lang="en">
+<head data-requesttoken="ZFo8HwAyPg8OHkMLKAkZDEk9CzU4SlQ5GjwALzxtGzg=:VbsjeTXabzl3jcwvzQctOs3xCO7axTLnOvbePZr95oI=">
+<meta charset="utf-8"/>
+<title>
+		ownCloud		</title>
+<meta content="IE=edge" http-equiv="X-UA-Compatible"/>
+<meta content="never" name="referrer"/>
+<meta content="width=device-width, minimum-scale=1.0, maximum-scale=1.0" name="viewport"/>
+<meta content="app-id=543672169" name="apple-itunes-app"/>
+<meta content="#1d2d44" name="theme-color"/>
+<link href="/core/img/favicon.ico" rel="icon"/>
+<link href="/core/img/favicon-touch.png" rel="apple-touch-icon-precomposed"/>
+<link color="#1d2d44" href="/core/img/favicon-mask.svg" rel="mask-icon" sizes="any"/>
+<link href="/core/vendor/select2/select2.css?v=a9e1a600d8a15933c86dcad2284676cf" rel="stylesheet"/>
+<link href="/core/css/styles.css?v=a9e1a600d8a15933c86dcad2284676cf" rel="stylesheet"/>
+<link href="/core/css/inputs.css?v=a9e1a600d8a15933c86dcad2284676cf" rel="stylesheet"/>
+<link href="/core/css/header.css?v=a9e1a600d8a15933c86dcad2284676cf" rel="stylesheet"/>
+<link href="/core/css/icons.css?v=a9e1a600d8a15933c86dcad2284676cf" rel="stylesheet"/>
+<link href="/core/css/fonts.css?v=a9e1a600d8a15933c86dcad2284676cf" rel="stylesheet"/>
+<link href="/core/css/apps.css?v=a9e1a600d8a15933c86dcad2284676cf" rel="stylesheet"/>
+<link href="/core/css/global.css?v=a9e1a600d8a15933c86dcad2284676cf" rel="stylesheet"/>
+<link href="/core/css/fixes.css?v=a9e1a600d8a15933c86dcad2284676cf" rel="stylesheet"/>
+<link href="/core/css/multiselect.css?v=a9e1a600d8a15933c86dcad2284676cf" rel="stylesheet"/>
+<link href="/core/css/mobile.css?v=a9e1a600d8a15933c86dcad2284676cf" rel="stylesheet"/>
+<link href="/core/vendor/jquery-ui/themes/base/jquery-ui.css?v=a9e1a600d8a15933c86dcad2284676cf" rel="stylesheet"/>
+<link href="/core/css/jquery-ui-fixes.css?v=a9e1a600d8a15933c86dcad2284676cf" rel="stylesheet"/>
+<link href="/core/css/tooltip.css?v=a9e1a600d8a15933c86dcad2284676cf" rel="stylesheet"/>
+<link href="/core/css/share.css?v=a9e1a600d8a15933c86dcad2284676cf" rel="stylesheet"/>
+<link href="/apps/files_versions/css/versions.css?v=a9e1a600d8a15933c86dcad2284676cf" rel="stylesheet"/>
+<link href="/apps/files_videoplayer/css/style.css?v=a9e1a600d8a15933c86dcad2284676cf" rel="stylesheet"/>
+<link href="/apps/firstrunwizard/css/colorbox.css?v=a9e1a600d8a15933c86dcad2284676cf" rel="stylesheet"/>
+<link href="/apps/firstrunwizard/css/firstrunwizard.css?v=a9e1a600d8a15933c86dcad2284676cf" rel="stylesheet"/>
+<link href="/core/css/jquery.ocdialog.css?v=a9e1a600d8a15933c86dcad2284676cf" rel="stylesheet"/>
+<script src="/index.php/core/js/oc.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/vendor/jquery/dist/jquery.min.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/vendor/jquery-migrate/jquery-migrate.min.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/vendor/jquery-ui/ui/jquery-ui.custom.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/vendor/underscore/underscore.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/vendor/moment/min/moment-with-locales.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/vendor/handlebars/handlebars.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/vendor/blueimp-md5/js/md5.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/vendor/bootstrap/js/tooltip.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/vendor/backbone/backbone.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/vendor/es6-promise/dist/es6-promise.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/vendor/davclient.js/lib/client.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/vendor/clipboard/dist/clipboard.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/vendor/bowser/src/bowser.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/jquery.ocdialog.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/oc-dialogs.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/js.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/l10n.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/octemplate.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/eventsource.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/config.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/search/js/search.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/oc-requesttoken.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/apps.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/mimetype.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/mimetypelist.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/vendor/snapjs/dist/latest/snap.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/vendor/select2/select2.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/oc-backbone.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/placeholder.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/jquery.avatar.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/backgroundjobs.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/shareconfigmodel.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/sharemodel.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/sharescollection.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/shareitemmodel.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/sharedialogresharerinfoview.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/sharedialoglinklistview.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/sharedialoglinkshareview.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/sharedialogmailview.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/sharedialoglinksocialview.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/sharedialogexpirationview.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/sharedialogshareelistview.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/sharedialogview.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/share.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/apps/files_videoplayer/js/viewer.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/apps/firstrunwizard/js/jquery.colorbox.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/apps/firstrunwizard/js/firstrunwizard.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/files/fileinfo.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/files/client.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/vendor/jsTimezoneDetect/jstz.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/visitortimezone.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/lostpassword.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/login.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+<script src="/core/js/browser-update.js?v=a9e1a600d8a15933c86dcad2284676cf"></script>
+</head>
+<body id="body-login">
+<noscript>
+<div id="nojavascript">
+<div>
+			This application requires JavaScript for correct operation. Please <a href="http://enable-javascript.com/" rel="noreferrer" target="_blank">enable JavaScript</a> and reload the page.		</div>
+</div>
+</noscript>
+<div class="wrapper">
+<div class="v-align">
+<header role="banner">
+<div id="header">
+<div class="logo">
+<h1 class="hidden-visually">
+									ownCloud								</h1>
+</div>
+<div id="logo-claim" style="display:none;"></div>
+</div>
+</header>
+<!--[if IE 8]><style>input[type="checkbox"]{padding:0;}</style><![endif]-->
+<form method="post" name="login">
+<fieldset>
+<div class="hidden" id="message">
+<img alt="" class="float-spinner" src="/core/img/loading-dark.gif"/>
+<span id="messageText"></span>
+<!-- the following div ensures that the spinner is always inside the #message div -->
+<div style="clear: both;"></div>
+</div>
+<p class="grouptop">
+<input autocapitalize="off" autocomplete="on" autocorrect="off" autofocus="" id="user" name="user" placeholder="Username or email" required="" type="text" value=""/>
+<label class="infield" for="user">Username or email</label>
+</p>
+<p class="groupbottom">
+<input autocapitalize="off" autocomplete="on" autocorrect="off" id="password" name="password" placeholder="Password" required="" type="password" value=""/>
+<label class="infield" for="password">Password</label>
+<input class="login primary icon-confirm" disabled="disabled" id="submit" title="Log in" type="submit" value="">
+</input></p>
+<input id="timezone-offset" name="timezone-offset" type="hidden">
+<input id="timezone" name="timezone" type="hidden"/>
+<input name="requesttoken" type="hidden" value="ZFo8HwAyPg8OHkMLKAkZDEk9CzU4SlQ5GjwALzxtGzg=:VbsjeTXabzl3jcwvzQctOs3xCO7axTLnOvbePZr95oI="/>
+</input></fieldset>
+</form>
+<div class="push"></div><!-- for sticky footer -->
+</div>
+</div>
+<footer role="contentinfo">
+<p class="info">
+<a href="https://owncloud.org" rel="noreferrer" target="_blank">ownCloud</a> – A safe home for all your data			</p>
+</footer>
+</body>
+</html>

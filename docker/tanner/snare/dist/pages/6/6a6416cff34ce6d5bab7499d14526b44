@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="IE=edge" http-equiv="X-UA-Compatible"/>
+<title>Calendar - Redmine</title>
+<meta content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" name="viewport"/>
+<meta content="Redmine" name="description">
+<meta content="issue,bug,tracker" name="keywords"/>
+<meta content="authenticity_token" name="csrf-param"/>
+<meta content="91bn7g5drbFhKvI2/jztXUsDa6PUVNu9VPPzkY14Xhr0uJcFsyu61MMwEtTbNR23Cv+dyC/vF1NdE3YpHL9ZYg==" name="csrf-token"/>
+<link href="/favicon.ico?1528612569" rel="shortcut icon"/>
+<link href="/stylesheets/jquery/jquery-ui-1.11.0.css?1528612569" media="all" rel="stylesheet"/>
+<link href="/stylesheets/application.css?1528612569" media="all" rel="stylesheet"/>
+<link href="/stylesheets/responsive.css?1528612569" media="all" rel="stylesheet"/>
+<script src="/javascripts/jquery-1.11.1-ui-1.11.0-ujs-3.1.4.js?1528612568"></script>
+<script src="/javascripts/application.js?1528612569"></script>
+<script src="/javascripts/responsive.js?1528612569"></script>
+<script>
+//<![CDATA[
+$(window).load(function(){ warnLeavingUnsaved('The current page contains unsaved text that will be lost if you leave this page.'); });
+//]]>
+</script>
+<!-- page specific tags -->
+<script>
+//<![CDATA[
+var datepickerOptions={dateFormat: 'yy-mm-dd', firstDay: 0, showOn: 'button', buttonImageOnly: true, buttonImage: '/images/calendar.png?1528612567', showButtonPanel: true, showWeek: true, showOtherMonths: true, selectOtherMonths: true, changeMonth: true, changeYear: true, beforeShow: beforeShowDatePicker};
+//]]>
+</script></meta></head>
+<body class="controller-calendars action-show">
+<div id="wrapper">
+<div class="flyout-menu js-flyout-menu">
+<div class="flyout-menu__search">
+<form accept-charset="UTF-8" action="/search" method="get"><input name="utf8" type="hidden" value="✓"/>
+<label class="search-magnifier search-magnifier--flyout" for="flyout-search">⚲</label>
+<input class="small js-search-input" id="flyout-search" name="q" placeholder="Search" type="text"/>
+</form> </div>
+<h3>Project</h3>
+<span class="js-project-menu"></span>
+<h3>General</h3>
+<span class="js-general-menu"></span>
+<span class="js-sidebar flyout-menu__sidebar"></span>
+<h3>Profile</h3>
+<span class="js-profile-menu"></span>
+</div>
+<div id="wrapper2">
+<div id="wrapper3">
+<div id="top-menu">
+<div id="account">
+<ul><li><a class="login" href="/login">Sign in</a></li><li><a class="register" href="/account/register">Register</a></li></ul> </div>
+<ul><li><a class="home" href="/">Home</a></li><li><a class="projects" href="/projects">Projects</a></li><li><a class="help" href="https://www.redmine.org/guide">Help</a></li></ul></div>
+<div id="header">
+<a class="mobile-toggle-button js-flyout-menu-toggle-button" href=""></a>
+<div id="quick-search">
+<form accept-charset="UTF-8" action="/search" method="get"><input name="utf8" type="hidden" value="✓"/>
+<input name="scope" type="hidden"/>
+<label for="q">
+<a accesskey="4" href="/search">Search</a>:
+        </label>
+<input accesskey="f" class="small" id="q" name="q" size="20" type="text"/>
+</form> <div class="drdn" id="project-jump"><span class="drdn-trigger">Jump to a project...</span><div class="drdn-content"><div class="quick-search"><input autocomplete="off" class="autocomplete" data-automcomplete-url="/projects/autocomplete.js?jump=calendar" id="projects-quick-search" name="q" type="text" value=""/></div><div class="drdn-items projects selection"></div><div class="drdn-items all-projects selection"><a class="selected" href="/projects?jump=calendar">All Projects</a></div></div></div>
+</div>
+<h1>Redmine</h1>
+<div class="tabs" id="main-menu">
+<ul><li><a class="projects" href="/projects">Projects</a></li><li><a class="activity" href="/activity">Activity</a></li><li><a class="issues" href="/issues">Issues</a></li><li><a class="time-entries" href="/time_entries">Spent time</a></li><li><a class="gantt" href="/issues/gantt">Gantt</a></li><li><a class="calendar selected" href="/issues/calendar">Calendar</a></li><li><a class="news" href="/news">News</a></li></ul>
+<div class="tabs-buttons" style="display:none;">
+<button class="tab-left" onclick="moveTabLeft(this); return false;"></button>
+<button class="tab-right" onclick="moveTabRight(this); return false;"></button>
+</div>
+</div>
+</div>
+<div class="" id="main">
+<div id="sidebar">
+<h3>Issues</h3>
+<ul>
+<li><a href="/issues?set_filter=1">View all issues</a></li>
+</ul>
+</div>
+<div id="content">
+<h2>Calendar</h2>
+<form accept-charset="UTF-8" action="/issues/calendar" id="query_form" method="get"><input name="utf8" type="hidden" value="✓"/>
+<input id="set_filter" name="set_filter" type="hidden" value="1"/>
+<fieldset class="collapsible " id="filters">
+<legend onclick="toggleFieldset(this);">Filters</legend>
+<div style="">
+<script>
+//<![CDATA[
+
+var operatorLabels = {"=":"is","!":"is not","o":"open","c":"closed","!*":"none","*":"any","\u003e=":"\u003e=","\u003c=":"\u003c=","\u003e\u003c":"between","\u003ct+":"in less than","\u003et+":"in more than","\u003e\u003ct+":"in the next","t+":"in","t":"today","ld":"yesterday","w":"this week","lw":"last week","l2w":"last 2 weeks","m":"this month","lm":"last month","y":"this year","\u003et-":"less than days ago","\u003ct-":"more than days ago","\u003e\u003ct-":"in the past","t-":"days ago","~":"contains","!~":"doesn't contain","=p":"any issues in project","=!p":"any issues not in project","!p":"no issues in project","*o":"any open issues","!o":"no open issues"};
+var operatorByType = {"list":["=","!"],"list_status":["o","=","!","c","*"],"list_optional":["=","!","!*","*"],"list_subprojects":["*","!*","=","!"],"date":["=","\u003e=","\u003c=","\u003e\u003c","\u003ct+","\u003et+","\u003e\u003ct+","t+","t","ld","w","lw","l2w","m","lm","y","\u003et-","\u003ct-","\u003e\u003ct-","t-","!*","*"],"date_past":["=","\u003e=","\u003c=","\u003e\u003c","\u003et-","\u003ct-","\u003e\u003ct-","t-","t","ld","w","lw","l2w","m","lm","y","!*","*"],"string":["=","~","!","!~","!*","*"],"text":["~","!~","!*","*"],"integer":["=","\u003e=","\u003c=","\u003e\u003c","!*","*"],"float":["=","\u003e=","\u003c=","\u003e\u003c","!*","*"],"relation":["=","=p","=!p","!p","*o","!o","!*","*"],"tree":["=","~","!*","*"]};
+var availableFilters = {"status_id":{"type":"list_status","name":"Status","remote":true,"values":[["New","1"],["In Progress","2"],["Resolved","3"],["Feedback","4"],["Closed","5"],["Rejected","6"]]},"project_id":{"type":"list","name":"Project","remote":true},"tracker_id":{"type":"list","name":"Tracker","values":[]},"priority_id":{"type":"list","name":"Priority","values":[["Low","1"],["Normal","2"],["High","3"],["Urgent","4"],["Immediate","5"]]},"author_id":{"type":"list","name":"Author","remote":true},"assigned_to_id":{"type":"list_optional","name":"Assignee","remote":true},"member_of_group":{"type":"list_optional","name":"Assignee's group","remote":true},"assigned_to_role":{"type":"list_optional","name":"Assignee's role","remote":true},"fixed_version_id":{"type":"list_optional","name":"Target version","remote":true},"fixed_version.due_date":{"type":"date","name":"Target version's Due date","values":null},"fixed_version.status":{"type":"list","name":"Target version's Status","values":[["open","open"],["locked","locked"],["closed","closed"]]},"subject":{"type":"text","name":"Subject","values":null},"description":{"type":"text","name":"Description","values":null},"created_on":{"type":"date_past","name":"Created","values":null},"updated_on":{"type":"date_past","name":"Updated","values":null},"closed_on":{"type":"date_past","name":"Closed","values":null},"start_date":{"type":"date","name":"Start date","values":null},"due_date":{"type":"date","name":"Due date","values":null},"estimated_hours":{"type":"float","name":"Estimated time","values":null},"done_ratio":{"type":"integer","name":"% Done","values":null},"attachment":{"type":"text","name":"File","values":null},"updated_by":{"type":"list","name":"Updated by","remote":true},"last_updated_by":{"type":"list","name":"Last updated by","remote":true},"relates":{"type":"relation","name":"Related to","remote":true},"duplicates":{"type":"relation","name":"Is duplicate of","remote":true},"duplicated":{"type":"relation","name":"Has duplicate","remote":true},"blocks":{"type":"relation","name":"Blocks","remote":true},"blocked":{"type":"relation","name":"Blocked by","remote":true},"precedes":{"type":"relation","name":"Precedes","remote":true},"follows":{"type":"relation","name":"Follows","remote":true},"copied_to":{"type":"relation","name":"Copied to","remote":true},"copied_from":{"type":"relation","name":"Copied from","remote":true},"parent_id":{"type":"tree","name":"Parent task","values":null},"child_id":{"type":"tree","name":"Subtasks","values":null},"issue_id":{"type":"integer","name":"Issue","values":null}};
+var labelDayPlural = "days";
+
+var filtersUrl = "\/queries\/filter?type=IssueQuery";
+
+$(document).ready(function(){
+  initFilters();
+  addFilter("status_id", "o", [""]);
+});
+
+//]]>
+</script>
+<table id="filters-table">
+</table>
+<div class="add-filter">
+<label for="add_filter_select">Add filter</label>
+<select id="add_filter_select"><option value=""> </option>
+<option value="status_id">Status</option>
+<option value="project_id">Project</option>
+<option value="tracker_id">Tracker</option>
+<option value="priority_id">Priority</option>
+<option value="author_id">Author</option>
+<option value="assigned_to_id">Assignee</option>
+<option value="fixed_version_id">Target version</option>
+<option value="subject">Subject</option>
+<option value="description">Description</option>
+<option value="estimated_hours">Estimated time</option>
+<option value="done_ratio">% Done</option>
+<option value="attachment">File</option>
+<option value="updated_by">Updated by</option>
+<option value="last_updated_by">Last updated by</option>
+<option value="issue_id">Issue</option><optgroup label="Assignee"><option value="member_of_group">Assignee's group</option>
+<option value="assigned_to_role">Assignee's role</option></optgroup><optgroup label="Target version"><option value="fixed_version.due_date">Target version's Due date</option>
+<option value="fixed_version.status">Target version's Status</option></optgroup><optgroup label="Date"><option value="created_on">Created</option>
+<option value="updated_on">Updated</option>
+<option value="closed_on">Closed</option>
+<option value="start_date">Start date</option>
+<option value="due_date">Due date</option></optgroup><optgroup label="Relations"><option value="relates">Related to</option>
+<option value="duplicates">Is duplicate of</option>
+<option value="duplicated">Has duplicate</option>
+<option value="blocks">Blocks</option>
+<option value="blocked">Blocked by</option>
+<option value="precedes">Precedes</option>
+<option value="follows">Follows</option>
+<option value="copied_to">Copied to</option>
+<option value="copied_from">Copied from</option>
+<option value="parent_id">Parent task</option>
+<option value="child_id">Subtasks</option></optgroup></select>
+</div>
+<input id="f_" name="f[]" type="hidden" value=""/>
+</div>
+</fieldset>
+<p style="float:right;">
+<a accesskey="p" href="/issues/calendar?month=7&amp;year=2018">« July</a> | <a accesskey="n" href="/issues/calendar?month=9&amp;year=2018">September »</a>
+</p>
+<p class="buttons">
+<label for="month">Month</label>
+<select id="month" name="month">
+<option value="1">January</option>
+<option value="2">February</option>
+<option value="3">March</option>
+<option value="4">April</option>
+<option value="5">May</option>
+<option value="6">June</option>
+<option value="7">July</option>
+<option selected="selected" value="8">August</option>
+<option value="9">September</option>
+<option value="10">October</option>
+<option value="11">November</option>
+<option value="12">December</option>
+</select>
+<label for="year">Year</label>
+<select id="year" name="year">
+<option value="2013">2013</option>
+<option value="2014">2014</option>
+<option value="2015">2015</option>
+<option value="2016">2016</option>
+<option value="2017">2017</option>
+<option selected="selected" value="2018">2018</option>
+<option value="2019">2019</option>
+<option value="2020">2020</option>
+<option value="2021">2021</option>
+<option value="2022">2022</option>
+<option value="2023">2023</option>
+</select>
+<a class="icon icon-checked" href="" onclick='$("#query_form").submit(); return false;'>Apply</a>
+<a class="icon icon-reload" href="/issues/calendar?set_filter=1">Clear</a>
+</p>
+</form>
+<table class="cal">
+<thead>
+<tr><th class="week-number" scope="col" title="Week"></th><th scope="col">Sunday</th><th scope="col">Monday</th><th scope="col">Tuesday</th><th scope="col">Wednesday</th><th scope="col">Thursday</th><th scope="col">Friday</th><th scope="col">Saturday</th></tr>
+</thead>
+<tbody>
+<tr>
+<td class="week-number" title="Week">31</td>
+<td class="odd">
+<p class="day-num">29</p>
+</td>
+<td class="odd">
+<p class="day-num">30</p>
+</td>
+<td class="odd">
+<p class="day-num">31</p>
+</td>
+<td class="even">
+<p class="day-num">1</p>
+</td>
+<td class="even">
+<p class="day-num">2</p>
+</td>
+<td class="even">
+<p class="day-num">3</p>
+</td>
+<td class="even">
+<p class="day-num">4</p>
+</td>
+</tr><tr>
+<td class="week-number" title="Week">32</td>
+<td class="even">
+<p class="day-num">5</p>
+</td>
+<td class="even">
+<p class="day-num">6</p>
+</td>
+<td class="even">
+<p class="day-num">7</p>
+</td>
+<td class="even">
+<p class="day-num">8</p>
+</td>
+<td class="even">
+<p class="day-num">9</p>
+</td>
+<td class="even">
+<p class="day-num">10</p>
+</td>
+<td class="even">
+<p class="day-num">11</p>
+</td>
+</tr><tr>
+<td class="week-number" title="Week">33</td>
+<td class="even">
+<p class="day-num">12</p>
+</td>
+<td class="even">
+<p class="day-num">13</p>
+</td>
+<td class="even today">
+<p class="day-num">14</p>
+</td>
+<td class="even">
+<p class="day-num">15</p>
+</td>
+<td class="even">
+<p class="day-num">16</p>
+</td>
+<td class="even">
+<p class="day-num">17</p>
+</td>
+<td class="even">
+<p class="day-num">18</p>
+</td>
+</tr><tr>
+<td class="week-number" title="Week">34</td>
+<td class="even">
+<p class="day-num">19</p>
+</td>
+<td class="even">
+<p class="day-num">20</p>
+</td>
+<td class="even">
+<p class="day-num">21</p>
+</td>
+<td class="even">
+<p class="day-num">22</p>
+</td>
+<td class="even">
+<p class="day-num">23</p>
+</td>
+<td class="even">
+<p class="day-num">24</p>
+</td>
+<td class="even">
+<p class="day-num">25</p>
+</td>
+</tr><tr>
+<td class="week-number" title="Week">35</td>
+<td class="even">
+<p class="day-num">26</p>
+</td>
+<td class="even">
+<p class="day-num">27</p>
+</td>
+<td class="even">
+<p class="day-num">28</p>
+</td>
+<td class="even">
+<p class="day-num">29</p>
+</td>
+<td class="even">
+<p class="day-num">30</p>
+</td>
+<td class="even">
+<p class="day-num">31</p>
+</td>
+<td class="odd">
+<p class="day-num">1</p>
+</td>
+</tr>
+</tbody>
+</table>
+<p class="legend cal">
+<span class="starting">issue beginning this day</span>
+<span class="ending">issue ending this day</span>
+<span class="starting ending">issue beginning and ending this day</span>
+</p>
+<div style="clear:both;"></div>
+</div>
+</div>
+</div>
+<div id="ajax-indicator" style="display:none;"><span>Loading...</span></div>
+<div id="ajax-modal" style="display:none;"></div>
+<div id="footer">
+<div class="bgl"><div class="bgr">
+    Powered by <a href="https://bitnami.com/stack/redmine">Bitnami Redmine Stack</a> © 2006-2018 Jean-Philippe Lang
+  </div></div>
+</div>
+</div>
+</div>
+</body>
+</html>

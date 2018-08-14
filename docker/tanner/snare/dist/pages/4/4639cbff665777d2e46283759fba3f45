@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+
+<html class="client-nojs" dir="ltr" lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>All public logs - user's Wiki!</title>
+<script>document.documentElement.className=document.documentElement.className.replace(/(^|\s)client-nojs(\s|$)/,"$1client-js$2");</script>
+<script>(window.RLQ=window.RLQ||[]).push(function(){mw.config.set({"wgCanonicalNamespace":"Special","wgCanonicalSpecialPageName":"Log","wgNamespaceNumber":-1,"wgPageName":"Special:Log","wgTitle":"Log","wgCurRevisionId":0,"wgRevisionId":0,"wgArticleId":0,"wgIsArticle":false,"wgIsRedirect":false,"wgAction":"view","wgUserName":null,"wgUserGroups":["*"],"wgCategories":[],"wgBreakFrames":true,"wgPageContentLanguage":"en","wgPageContentModel":"wikitext","wgSeparatorTransformTable":["",""],"wgDigitTransformTable":["",""],"wgDefaultDateFormat":"dmy","wgMonthNames":["","January","February","March","April","May","June","July","August","September","October","November","December"],"wgMonthNamesShort":["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],"wgRelevantPageName":"Special:Log","wgRelevantArticleId":0,"wgRequestId":"d0f00d766bc7b7c926024cb5","wgIsProbablyEditable":false,"wgRelevantPageIsProbablyEditable":false});mw.loader.state({"site.styles":"ready","noscript":"ready","user.styles":"ready","user":"ready","site":"ready","user.options":"ready","user.tokens":"loading","mediawiki.helplink":"ready","mediawiki.legacy.shared":"ready","mediawiki.legacy.commonPrint":"ready","mediawiki.sectionAnchor":"ready","mediawiki.skinning.interface":"ready","skins.vector.styles":"ready"});mw.loader.implement("user.tokens@1cmymd6",function($,jQuery,require,module){mw.user.tokens.set({"editToken":"+\\","patrolToken":"+\\","watchToken":"+\\","csrfToken":"+\\"});});mw.loader.load(["mediawiki.userSuggest","mediawiki.page.startup","mediawiki.user","mediawiki.hidpi","mediawiki.page.ready","mediawiki.searchSuggest","skins.vector.js"]);});</script>
+<link href="/load.php?debug=false&amp;lang=en&amp;modules=mediawiki.helplink,sectionAnchor|mediawiki.legacy.commonPrint,shared|mediawiki.skinning.interface|skins.vector.styles&amp;only=styles&amp;skin=vector" rel="stylesheet"/>
+<script async="" src="/load.php,qdebug=false,alang=en,amodules=startup,aonly=scripts,askin=vector.pagespeed.jm.VdeaCFxk6_.js"></script>
+<meta content="" name="ResourceLoaderDynamicStyles"/>
+<meta content="MediaWiki 1.31.0" name="generator"/>
+<meta content="noindex,nofollow" name="robots"/>
+<link href="/favicon.ico" rel="shortcut icon"/>
+<link href="/opensearch_desc.php" rel="search" title="user's Wiki! (en)" type="application/opensearchdescription+xml"/>
+<link href="/api.php?action=rsd" rel="EditURI" type="application/rsd+xml"/>
+<link href="/index.php?title=Special:RecentChanges&amp;feed=atom" rel="alternate" title="user's Wiki! Atom feed" type="application/atom+xml"/>
+<!--[if lt IE 9]><script src="/load.php?debug=false&amp;lang=en&amp;modules=html5shiv&amp;only=scripts&amp;skin=vector&amp;sync=1"></script><![endif]-->
+</head>
+<body class="mediawiki ltr sitedir-ltr mw-hide-empty-elt ns--1 ns-special mw-special-Log page-Special_Log rootpage-Special_Log skin-vector action-view"> <div class="noprint" id="mw-page-base"></div>
+<div class="noprint" id="mw-head-base"></div>
+<div class="mw-body" id="content" role="main">
+<a id="top"></a>
+<div class="mw-indicators mw-body-content">
+<div class="mw-indicator" id="mw-indicator-mw-helplink"><a class="mw-helplink" href="//www.mediawiki.org/wiki/Special:MyLanguage/Help:Log" target="_blank">Help</a></div>
+</div>
+<h1 class="firstHeading" id="firstHeading" lang="en">All public logs</h1> <div class="mw-body-content" id="bodyContent">
+<div id="contentSub"></div>
+<div class="mw-jump" id="jump-to-nav">
+					Jump to:					<a href="#mw-head">navigation</a>, 					<a href="#p-search">search</a>
+</div>
+<div id="mw-content-text"><p>Combined display of all available logs of user's Wiki!.
+You can narrow down the view by selecting a log type, the username (case-sensitive), or the affected page (also case-sensitive).
+</p><form action="/index.php" method="get"><fieldset>
+<legend>Logs</legend>
+<input name="title" type="hidden" value="Special:Log"/><select name="type"><option selected="" value="">All public logs</option>
+<option value="block">Block log</option>
+<option value="contentmodel">Content model change log</option>
+<option value="delete">Deletion log</option>
+<option value="import">Import log</option>
+<option value="merge">Merge log</option>
+<option value="move">Move log</option>
+<option value="patrol">Patrol log</option>
+<option value="protect">Protection log</option>
+<option value="tag">Tag log</option>
+<option value="managetags">Tag management log</option>
+<option value="upload">Upload log</option>
+<option value="newusers">User creation log</option>
+<option value="rights">User rights log</option></select>
+<span class="mw-input-with-label"><label class="mw-autocomplete-user" for="mw-log-user">Performer:</label> <input class="mw-autocomplete-user" id="mw-log-user" name="user" size="15" value=""/></span>
+<span class="mw-input-with-label"><label for="mw-log-page">Target (title or User:username for user):</label> <input id="mw-log-page" name="page" size="20" value="Favicon.ico"/></span>
+<span class="mw-input-with-label"><input id="pattern" name="pattern" type="checkbox" value="1"/> <label for="pattern">Search titles starting with this text</label></span>
+<p><label for="year">From year (and earlier):</label> <input id="year" maxlength="4" name="year" size="7" type="number"/> <label for="month">From month (and earlier):</label> <select class="mw-month-selector" id="month" name="month"><option value="-1">all</option>
+<option value="1">January</option>
+<option value="2">February</option>
+<option value="3">March</option>
+<option value="4">April</option>
+<option value="5">May</option>
+<option value="6">June</option>
+<option value="7">July</option>
+<option value="8">August</option>
+<option value="9">September</option>
+<option value="10">October</option>
+<option value="11">November</option>
+<option value="12">December</option></select></p><p><label for="tagfilter"><a href="/Special:Tags" title="Special:Tags">Tag</a> filter:</label> <input class="mw-tagfilter-input mw-ui-input mw-ui-input-inline" id="tagfilter" name="tagfilter" size="20" value=""/></p><p><small><a href="/index.php?title=Special:Log&amp;page=Favicon.ico&amp;hide_patrol_log=0" title="Special:Log">Show</a> patrol log | <a href="/index.php?title=Special:Log&amp;page=Favicon.ico&amp;hide_tag_log=0" title="Special:Log">Show</a> tag log</small><input name="hide_patrol_log" type="hidden" value="1"/>
+<input name="hide_tag_log" type="hidden" value="1"/>
+</p><p></p><input type="submit" value="Show"/>
+</fieldset>
+</form><p>No matching items in log.
+</p></div> <div class="printfooter">
+						Retrieved from "<a dir="ltr" href="/Special:Log">http://172.20.254.132/Special:Log</a>"					</div>
+<div class="catlinks catlinks-allhidden" data-mw="interface" id="catlinks"></div> <div class="visualClear"></div>
+</div>
+</div>
+<div id="mw-navigation">
+<h2>Navigation menu</h2>
+<div id="mw-head">
+<div aria-labelledby="p-personal-label" class="" id="p-personal" role="navigation">
+<h3 id="p-personal-label">Personal tools</h3>
+<ul>
+<li id="pt-anonuserpage">Not logged in</li><li id="pt-anontalk"><a accesskey="n" href="/Special:MyTalk" title="Discussion about edits from this IP address [n]">Talk</a></li><li id="pt-anoncontribs"><a accesskey="y" href="/Special:MyContributions" title="A list of edits made from this IP address [y]">Contributions</a></li><li id="pt-createaccount"><a href="/index.php?title=Special:CreateAccount&amp;returnto=Special:Log&amp;returntoquery=page%3DFavicon.ico" title="You are encouraged to create an account and log in; however, it is not mandatory">Create account</a></li><li id="pt-login"><a accesskey="o" href="/index.php?title=Special:UserLogin&amp;returnto=Special:Log&amp;returntoquery=page%3DFavicon.ico" title="You are encouraged to log in; however, it is not mandatory [o]">Log in</a></li> </ul>
+</div>
+<div id="left-navigation">
+<div aria-labelledby="p-namespaces-label" class="vectorTabs" id="p-namespaces" role="navigation">
+<h3 id="p-namespaces-label">Namespaces</h3>
+<ul>
+<li class="selected" id="ca-nstab-special"><span><a href="/index.php?title=Special:Log&amp;page=Favicon.ico" title="This is a special page, and it cannot be edited">Special page</a></span></li> </ul>
+</div>
+<div aria-labelledby="p-variants-label" class="vectorMenu emptyPortlet" id="p-variants" role="navigation">
+<input aria-labelledby="p-variants-label" class="vectorMenuCheckbox" type="checkbox"/>
+<h3 id="p-variants-label">
+<span>Variants</span>
+</h3>
+<div class="menu">
+<ul>
+</ul>
+</div>
+</div>
+</div>
+<div id="right-navigation">
+<div aria-labelledby="p-views-label" class="vectorTabs emptyPortlet" id="p-views" role="navigation">
+<h3 id="p-views-label">Views</h3>
+<ul>
+</ul>
+</div>
+<div aria-labelledby="p-cactions-label" class="vectorMenu emptyPortlet" id="p-cactions" role="navigation">
+<input aria-labelledby="p-cactions-label" class="vectorMenuCheckbox" type="checkbox"/>
+<h3 id="p-cactions-label"><span>More</span></h3>
+<div class="menu">
+<ul>
+</ul>
+</div>
+</div>
+<div id="p-search" role="search">
+<h3>
+<label for="searchInput">Search</label>
+</h3>
+<form action="/index.php" id="searchform">
+<div id="simpleSearch">
+<input accesskey="f" id="searchInput" name="search" placeholder="Search user's Wiki!" title="Search user's Wiki! [f]" type="search"/><input name="title" type="hidden" value="Special:Search"/><input class="searchButton mw-fallbackSearchButton" id="mw-searchButton" name="fulltext" title="Search the pages for this text" type="submit" value="Search"/><input class="searchButton" id="searchButton" name="go" title="Go to a page with this exact name if it exists" type="submit" value="Go"/> </div>
+</form>
+</div>
+</div>
+</div>
+<div id="mw-panel">
+<div id="p-logo" role="banner"><a class="mw-wiki-logo" href="/Main_Page" title="Visit the main page"></a></div>
+<div aria-labelledby="p-navigation-label" class="portal" id="p-navigation" role="navigation">
+<h3 id="p-navigation-label">Navigation</h3>
+<div class="body">
+<ul>
+<li id="n-mainpage-description"><a accesskey="z" href="/Main_Page" title="Visit the main page [z]">Main page</a></li><li id="n-recentchanges"><a accesskey="r" href="/Special:RecentChanges" title="A list of recent changes in the wiki [r]">Recent changes</a></li><li id="n-randompage"><a accesskey="x" href="/Special:Random" title="Load a random page [x]">Random page</a></li><li id="n-help"><a href="https://www.mediawiki.org/wiki/Special:MyLanguage/Help:Contents" title="The place to find out">Help</a></li> </ul>
+</div>
+</div>
+<div aria-labelledby="p-tb-label" class="portal" id="p-tb" role="navigation">
+<h3 id="p-tb-label">Tools</h3>
+<div class="body">
+<ul>
+<li id="t-specialpages"><a accesskey="q" href="/Special:SpecialPages" title="A list of all special pages [q]">Special pages</a></li><li id="t-print"><a accesskey="p" href="/index.php?title=Special:Log&amp;page=Favicon.ico&amp;printable=yes" rel="alternate" title="Printable version of this page [p]">Printable version</a></li> </ul>
+</div>
+</div>
+</div>
+</div>
+<div id="footer" role="contentinfo">
+<ul id="footer-places">
+<li id="footer-places-privacy"><a href="/user's_Wiki!:Privacy_policy" title="user's Wiki!:Privacy policy">Privacy policy</a></li>
+<li id="footer-places-about"><a href="/user's_Wiki!:About" title="user's Wiki!:About">About user's Wiki!</a></li>
+<li id="footer-places-disclaimer"><a href="/user's_Wiki!:General_disclaimer" title="user's Wiki!:General disclaimer">Disclaimers</a></li>
+</ul>
+<ul class="noprint" id="footer-icons">
+<li id="footer-poweredbyico">
+<a href="//www.mediawiki.org/"><img alt="Powered by MediaWiki" height="31" src="/resources/assets/poweredby_mediawiki_88x31.png.pagespeed.ce.gmntWCYHG0.png" srcset="/resources/assets/poweredby_mediawiki_132x47.png.pagespeed.ce.L1zE4_p3Ii.png 1.5x, /resources/assets/poweredby_mediawiki_176x62.png.pagespeed.ce.LE9xjEBgUS.png 2x" width="88"/></a> </li>
+</ul>
+<div style="clear: both;"></div>
+</div>
+<script>(window.RLQ=window.RLQ||[]).push(function(){mw.config.set({"wgBackendResponseTime":57});});</script>
+</body>
+</html>

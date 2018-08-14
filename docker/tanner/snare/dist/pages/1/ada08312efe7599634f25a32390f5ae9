@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+
+<html class="" lang="en">
+<head prefix="og: http://ogp.me/ns#">
+<meta charset="utf-8"/>
+<meta content="IE=edge" http-equiv="X-UA-Compatible"/>
+<meta content="object" property="og:type"/>
+<meta content="GitLab" property="og:site_name"/>
+<meta content="Issue board · Project · User · Help" property="og:title"/>
+<meta content="GitLab Community Edition" property="og:description"/>
+<meta content="http://172.20.254.127/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png" property="og:image"/>
+<meta content="64" property="og:image:width"/>
+<meta content="64" property="og:image:height"/>
+<meta content="http://172.20.254.127/help/user/project/issue_board.md" property="og:url"/>
+<meta content="summary" property="twitter:card"/>
+<meta content="Issue board · Project · User · Help" property="twitter:title"/>
+<meta content="GitLab Community Edition" property="twitter:description"/>
+<meta content="http://172.20.254.127/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png" property="twitter:image"/>
+<title>Issue board · Project · User · Help · GitLab</title>
+<meta content="GitLab Community Edition" name="description"/>
+<link data-original-href="/assets/favicon-7901bd695fb93edb07975966062049829afb56cf11511236e61bcf425070e36e.png" href="/assets/favicon-7901bd695fb93edb07975966062049829afb56cf11511236e61bcf425070e36e.png" id="favicon" rel="shortcut icon" type="image/png"/>
+<link href="/assets/application-266f2bfa52ff531258d13c702895a14fd5994ca591fa2df7338da00ab18c99ac.css" media="all" rel="stylesheet"/>
+<link href="/assets/print-c8ff536271f8974b8a9a5f75c0ca25d2b8c1dceb4cff3c01d1603862a0bdcbfc.css" media="print" rel="stylesheet"/>
+<script>
+//<![CDATA[
+window.gon={};gon.api_version="v4";gon.default_avatar_url="http://172.20.254.127/assets/no_avatar-849f9c04a3a0d0cea2424ae97b27447dc64a7dbfae83c036c45b403392f0e8ba.png";gon.max_file_size=10;gon.asset_host=null;gon.webpack_public_path="/assets/webpack/";gon.relative_url_root="";gon.shortcuts_path="/help/shortcuts";gon.user_color_scheme="white";gon.gitlab_url="http://172.20.254.127";gon.revision="63daf37";gon.gitlab_logo="/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png";gon.sprite_icons="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg";gon.sprite_file_icons="/assets/file_icons-7262fc6897e02f1ceaf8de43dc33afa5e4f9a2067f4f68ef77dcc87946575e9e.svg";gon.emoji_sprites_css_path="/assets/emoji_sprites-289eccffb1183c188b630297431be837765d9ff4aed6130cf738586fb307c170.css";gon.test_env=false;gon.suggested_label_colors=["#0033CC","#428BCA","#44AD8E","#A8D695","#5CB85C","#69D100","#004E00","#34495E","#7F8C8D","#A295D6","#5843AD","#8E44AD","#FFECDB","#AD4363","#D10069","#CC0033","#FF0000","#D9534F","#D1D100","#F0AD4E","#AD8D43"];
+//]]>
+</script>
+<script defer="defer" src="/assets/webpack/runtime.9fcb75d4.bundle.js"></script>
+<script defer="defer" src="/assets/webpack/main.a66b6c66.chunk.js"></script>
+<script defer="defer" src="/assets/webpack/pages.help.show.c42c0700.chunk.js"></script>
+<meta content="authenticity_token" name="csrf-param">
+<meta content="gEkxbKHXnzDUqgp8+et5I9E71RTTOQsgROabSL2c2io3C24sPB7W4xwbYLLJ/Z9ifNTd4k1S3/vCGvEHtjFYcQ==" name="csrf-token">
+<meta content="origin-when-cross-origin" name="referrer"/>
+<meta content="width=device-width, initial-scale=1, maximum-scale=1" name="viewport"/>
+<meta content="#474D57" name="theme-color"/>
+<link href="/assets/touch-icon-iphone-5a9cee0e8a51212e70b90c87c12f382c428870c0ff67d1eb034d884b78d2dae7.png" rel="apple-touch-icon" type="image/x-icon"/>
+<link href="/assets/touch-icon-ipad-a6eec6aeb9da138e507593b464fdac213047e49d3093fc30e90d9a995df83ba3.png" rel="apple-touch-icon" sizes="76x76" type="image/x-icon"/>
+<link href="/assets/touch-icon-iphone-retina-72e2aadf86513a56e050e7f0f2355deaa19cc17ed97bbe5147847f2748e5a3e3.png" rel="apple-touch-icon" sizes="120x120" type="image/x-icon"/>
+<link href="/assets/touch-icon-ipad-retina-8ebe416f5313483d9c1bc772b5bbe03ecad52a54eba443e5215a22caed2a16a2.png" rel="apple-touch-icon" sizes="152x152" type="image/x-icon"/>
+<link color="rgb(226, 67, 41)" href="/assets/logo-d36b5212042cebc89b96df4bf6ac24e43db316143e89926c0db839ff694d2de4.svg" rel="mask-icon"/>
+<meta content="/assets/msapplication-tile-1196ec67452f618d39cdd85e2e3a542f76574c071051ae7effbfde01710eb17d.png" name="msapplication-TileImage"/>
+<meta content="#30353E" name="msapplication-TileColor"/>
+</meta></meta></head>
+<body class="ui-indigo " data-group="" data-page="help:show" data-project="">
+<header class="navbar navbar-gitlab qa-navbar navbar-expand-sm">
+<a class="sr-only gl-accessibility" href="#content-body" tabindex="1">Skip to content</a>
+<div class="container-fluid">
+<div class="header-content">
+<div class="title-container">
+<h1 class="title">
+<a href="/" id="logo" title="Dashboard"><svg class="tanuki-logo" height="24" viewbox="0 0 36 36" width="24">
+<path class="tanuki-shape tanuki-left-ear" d="M2 14l9.38 9v-9l-4-12.28c-.205-.632-1.176-.632-1.38 0z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-right-ear" d="M34 14l-9.38 9v-9l4-12.28c.205-.632 1.176-.632 1.38 0z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-nose" d="M18,34.38 3,14 33,14 Z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-left-eye" d="M18,34.38 11.38,14 2,14 6,25Z" fill="#fc6d26"></path>
+<path class="tanuki-shape tanuki-right-eye" d="M18,34.38 24.62,14 34,14 30,25Z" fill="#fc6d26"></path>
+<path class="tanuki-shape tanuki-left-cheek" d="M2 14L.1 20.16c-.18.565 0 1.2.5 1.56l17.42 12.66z" fill="#fca326"></path>
+<path class="tanuki-shape tanuki-right-cheek" d="M34 14l1.9 6.16c.18.565 0 1.2-.5 1.56L18 34.38z" fill="#fca326"></path>
+</svg>
+<span class="logo-text d-none d-sm-block">
+<svg viewbox="0 0 617 169" xmlns="http://www.w3.org/2000/svg"><path d="M315.26 2.97h-21.8l.1 162.5h88.3v-20.1h-66.5l-.1-142.4M465.89 136.95c-5.5 5.7-14.6 11.4-27 11.4-16.6 0-23.3-8.2-23.3-18.9 0-16.1 11.2-23.8 35-23.8 4.5 0 11.7.5 15.4 1.2v30.1h-.1m-22.6-98.5c-17.6 0-33.8 6.2-46.4 16.7l7.7 13.4c8.9-5.2 19.8-10.4 35.5-10.4 17.9 0 25.8 9.2 25.8 24.6v7.9c-3.5-.7-10.7-1.2-15.1-1.2-38.2 0-57.6 13.4-57.6 41.4 0 25.1 15.4 37.7 38.7 37.7 15.7 0 30.8-7.2 36-18.9l4 15.9h15.4v-83.2c-.1-26.3-11.5-43.9-44-43.9M557.63 149.1c-8.2 0-15.4-1-20.8-3.5V70.5c7.4-6.2 16.6-10.7 28.3-10.7 21.1 0 29.2 14.9 29.2 39 0 34.2-13.1 50.3-36.7 50.3m9.2-110.6c-19.5 0-30 13.3-30 13.3v-21l-.1-27.8h-21.3l.1 158.5c10.7 4.5 25.3 6.9 41.2 6.9 40.7 0 60.3-26 60.3-70.9-.1-35.5-18.2-59-50.2-59M77.9 20.6c19.3 0 31.8 6.4 39.9 12.9l9.4-16.3C114.5 6 97.3 0 78.9 0 32.5 0 0 28.3 0 85.4c0 59.8 35.1 83.1 75.2 83.1 20.1 0 37.2-4.7 48.4-9.4l-.5-63.9V75.1H63.6v20.1h38l.5 48.5c-5 2.5-13.6 4.5-25.3 4.5-32.2 0-53.8-20.3-53.8-63-.1-43.5 22.2-64.6 54.9-64.6M231.43 2.95h-21.3l.1 27.3v94.3c0 26.3 11.4 43.9 43.9 43.9 4.5 0 8.9-.4 13.1-1.2v-19.1c-3.1.5-6.4.7-9.9.7-17.9 0-25.8-9.2-25.8-24.6v-65h35.7v-17.8h-35.7l-.1-38.5M155.96 165.47h21.3v-124h-21.3v124M155.96 24.37h21.3V3.07h-21.3v21.3"></path></svg>
+</span>
+</a></h1>
+<ul class="list-unstyled navbar-sub-nav">
+<li class="home"><a class="dashboard-shortcuts-projects" href="/explore" title="Projects">Projects
+</a></li><li class=""><a class="dashboard-shortcuts-groups" href="/explore/groups" title="Groups">Groups
+</a></li><li class=""><a class="dashboard-shortcuts-snippets" href="/explore/snippets" title="Snippets">Snippets
+</a></li><li>
+<a href="/help" title="About GitLab CE">Help</a>
+</li>
+</ul>
+</div>
+<div class="navbar-collapse collapse">
+<ul class="nav navbar-nav">
+<li class="nav-item d-none d-sm-none d-md-block m-auto">
+<div class="search search-form">
+<form accept-charset="UTF-8" action="/search" class="form-inline" method="get"><input name="utf8" type="hidden" value="✓"/><div class="search-input-container">
+<div class="search-input-wrap">
+<div class="dropdown" data-url="/search/autocomplete">
+<input aria-label="Search" autocomplete="off" class="search-input dropdown-menu-toggle no-outline js-search-dashboard-options" data-issues-path="/dashboard/issues" data-mr-path="/dashboard/merge_requests" id="search" name="search" placeholder="Search" spellcheck="false" tabindex="1" type="search"/>
+<button class="hidden js-dropdown-search-toggle" data-toggle="dropdown" type="button"></button>
+<div class="dropdown-menu dropdown-select">
+<div class="dropdown-content"><ul>
+<li class="dropdown-menu-empty-item">
+<a>
+Loading...
+</a>
+</li>
+</ul>
+</div><div class="dropdown-loading"><i aria-hidden="true" class="fa fa-spinner fa-spin" data-hidden="true"></i></div>
+</div>
+<svg class="s16 search-icon"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#search"></use></svg>
+<svg class="s16 clear-icon js-clear-input"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#close"></use></svg>
+</div>
+</div>
+</div>
+<input class="js-search-group-options" id="group_id" name="group_id" type="hidden"/>
+<input class="js-search-project-options" id="search_project_id" name="project_id" type="hidden" value=""/>
+<input id="repository_ref" name="repository_ref" type="hidden"/>
+<div class="search-autocomplete-opts hide" data-autocomplete-path="/search/autocomplete"></div>
+</form></div>
+</li>
+<li class="nav-item d-inline-block d-sm-none d-md-none">
+<a aria-label="Search" data-container="body" data-placement="bottom" data-toggle="tooltip" href="/search" title="Search"><svg class="s16"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#search"></use></svg>
+</a></li>
+<li class="nav-item">
+<div>
+<a class="btn btn-sign-in" href="/users/sign_in?redirect_to_referer=yes">Sign in / Register</a>
+</div>
+</li>
+</ul>
+</div>
+<button class="navbar-toggler d-block d-sm-none" type="button">
+<span class="sr-only">Toggle navigation</span>
+<svg class="s12 more-icon js-navbar-toggle-right"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#more"></use></svg>
+<svg class="s12 close-icon js-navbar-toggle-left"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#close"></use></svg>
+</button>
+</div>
+</div>
+</header>
+<div class="layout-page">
+<div class="content-wrapper">
+<div class="mobile-overlay"></div>
+<div class="alert-wrapper">
+<nav class="breadcrumbs container-fluid container-limited" role="navigation">
+<div class="breadcrumbs-container">
+<div class="breadcrumbs-links js-title-container">
+<ul class="list-unstyled breadcrumbs-list js-breadcrumbs-list">
+<li><a href="/help">Help</a><svg class="s8 breadcrumbs-list-angle"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#angle-right"></use></svg></li>
+<li>
+<h2 class="breadcrumbs-sub-title"><a href="/help/user/project/issue_board.md">Help</a></h2>
+</li>
+</ul>
+</div>
+</div>
+</nav>
+<div class="flash-container flash-container-page">
+</div>
+</div>
+<div class="container-fluid container-limited ">
+<div class="content" id="content-body">
+<div class="documentation wiki prepend-top-default">
+<h1 dir="auto">
+<a aria-hidden="true" class="anchor" href="#issue-boards" id="user-content-issue-boards"></a>Issue Boards</h1>
+<blockquote dir="auto">
+<p><a href="https://gitlab.com/gitlab-org/gitlab-ce/merge_requests/5554" rel="nofollow noreferrer noopener" target="_blank">Introduced</a> in <a href="https://about.gitlab.com/2016/08/22/gitlab-8-11-released/#issue-board" rel="nofollow noreferrer noopener" target="_blank">GitLab 8.11</a>.</p>
+</blockquote>
+<p dir="auto">The GitLab Issue Board is a software project management tool used to plan,
+organize, and visualize a workflow for a feature or product release.
+It can be used as a <a href="https://en.wikipedia.org/wiki/Kanban_(development)" rel="nofollow noreferrer noopener" target="_blank">Kanban</a> or a <a href="https://en.wikipedia.org/wiki/Scrum_(software_development)" rel="nofollow noreferrer noopener" target="_blank">Scrum</a> board.</p>
+<p dir="auto"><a class="no-attachment-icon" href="/img/issue_board.png" rel="noopener noreferrer" target="_blank"><img alt="GitLab Issue Board" class="lazy" data-src="img/issue_board.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#overview" id="user-content-overview"></a>Overview</h2>
+<p dir="auto">The Issue Board builds on GitLab's existing
+<a href="issues/index.md#issue-tracker">issue tracking functionality</a> and
+leverages the power of <a href="/labels.md">labels</a> by utilizing them as lists of the scrum board.</p>
+<p dir="auto">With the Issue Board you can have a different view of your issues while
+maintaining the same filtering and sorting abilities you see across the
+issue tracker. An Issue Board is based on its project's label structure, therefore, it
+applies the same descriptive labels to indicate placement on the board, keeping
+consistency throughout the entire development lifecycle.</p>
+<p dir="auto">An Issue Board shows you what issues your team is working on, who is assigned to each,
+and where in the workflow those issues are.</p>
+<p dir="auto">You create issues, host code, perform reviews, build, test,
+and deploy from one single platform. Issue Boards help you to visualize
+and manage the entire process <em>in</em> GitLab.</p>
+<p dir="auto">With <a href="#multiple-issue-boards">Multiple Issue Boards</a>, available
+only in <a href="#features-per-tier">GitLab Enterprise Edition</a>,
+you go even further, as you can not only keep yourself and your project
+organized from a broader perspective with one Issue Board per project,
+but also allow your team members to organize their own workflow by creating
+multiple Issue Boards within the same project.</p>
+<p dir="auto">For a visual overview, see our <a href="https://about.gitlab.com/features/issueboard/" rel="nofollow noreferrer noopener" target="_blank">Issue Board feature page</a>
+on about.gitlab.com or our <a href="https://www.youtube.com/watch?v=UWsJ8tkHAa8" rel="nofollow noreferrer noopener" target="_blank">video introduction to Issue Boards</a>.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#use-cases" id="user-content-use-cases"></a>Use cases</h2>
+<p dir="auto">There are many ways to use GitLab Issue Boards tailored to your own preferred workflow.
+Here are some common use cases for Issue Boards.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#use-cases-for-a-single-issue-board" id="user-content-use-cases-for-a-single-issue-board"></a>Use cases for a single Issue Board</h3>
+<p dir="auto">GitLab Workflow allows you to discuss proposals in issues, categorize them
+with labels, and from there organize and prioritize them with Issue Boards.</p>
+<p dir="auto">For example, let's consider this simplified development workflow:</p>
+<ol dir="auto">
+<li>You have a repository hosting your app's codebase
+and your team actively contributing to code</li>
+<li>Your <strong>backend</strong> team starts working a new
+implementation, gathers feedback and approval, and pass it over to <strong>frontend</strong>
+</li>
+<li>When frontend is complete, the new feature is deployed to <strong>staging</strong> to be tested</li>
+<li>When successful, it is deployed to <strong>production</strong>
+</li>
+</ol>
+<p dir="auto">If we have the labels "<strong>backend</strong>", "<strong>frontend</strong>", "<strong>staging</strong>", and
+"<strong>production</strong>", and an Issue Board with a list for each, we can:</p>
+<ul dir="auto">
+<li>Visualize the entire flow of implementations since the
+beginning of the development lifecycle until deployed to production</li>
+<li>Prioritize the issues in a list by moving them vertically</li>
+<li>Move issues between lists to organize them according to the labels you've set</li>
+<li>Add multiple issues to lists in the board by selecting one or more existing issues</li>
+</ul>
+<p dir="auto"><a class="no-attachment-icon" href="/img/issue_board_move_issue_card_list.png" rel="noopener noreferrer" target="_blank"><img alt="issue card moving" class="lazy" data-src="img/issue_board_move_issue_card_list.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#use-cases-for-multiple-issue-boards" id="user-content-use-cases-for-multiple-issue-boards"></a>Use cases for Multiple Issue Boards</h3>
+<p dir="auto">With <a href="#multiple-issue-boards">Multiple Issue Boards</a>, available only in
+<a href="https://about.gitlab.com/pricing/" rel="nofollow noreferrer noopener" target="_blank">GitLab Enterprise Edition</a>,
+each team can have their own board to organize their workflow individually.</p>
+<h4 dir="auto">
+<a aria-hidden="true" class="anchor" href="#scrum-team" id="user-content-scrum-team"></a>Scrum team</h4>
+<p dir="auto">With multiple Issue Boards, each team has one board. Now you can move issues through each
+part of the process. For instance: <strong>To Do</strong>, <strong>Doing</strong>, and <strong>Done</strong>.</p>
+<h4 dir="auto">
+<a aria-hidden="true" class="anchor" href="#organization-of-topics" id="user-content-organization-of-topics"></a>Organization of topics</h4>
+<p dir="auto">Create lists to order things by topic and quickly change them between topics or groups,
+such as between <strong>UX</strong>, <strong>Frontend</strong>, and <strong>Backend</strong>. The changes will be reflected across boards,
+as changing lists will update the label accordingly.</p>
+<h4 dir="auto">
+<a aria-hidden="true" class="anchor" href="#advanced-team-handover" id="user-content-advanced-team-handover"></a>Advanced team handover</h4>
+<p dir="auto">For example, suppose we have a UX team with an Issue Board that contains:</p>
+<ul dir="auto">
+<li><strong>To Do</strong></li>
+<li><strong>Doing</strong></li>
+<li><strong>Frontend</strong></li>
+</ul>
+<p dir="auto">When done with something, they move the card to <strong>Frontend</strong>. The Frontend team's board looks like:</p>
+<ul dir="auto">
+<li><strong>Frontend</strong></li>
+<li><strong>Doing</strong></li>
+<li><strong>Done</strong></li>
+</ul>
+<p dir="auto">Cards finished by the UX team will automatically appear in the <strong>Frontend</strong> column when they're ready for them.</p>
+<p dir="auto">NOTE: <strong>Note:</strong>
+For a broader use case, please see the blog post
+<a href="https://about.gitlab.com/2016/10/25/gitlab-workflow-an-overview/#gitlab-workflow-use-case-scenario" rel="nofollow noreferrer noopener" target="_blank">GitLab Workflow, an Overview</a>.
+For a real use case example, you can read why
+<a href="https://about.gitlab.com/2017/01/27/codepen-welcome-to-gitlab/#project-management-everything-in-one-place" rel="nofollow noreferrer noopener" target="_blank">Codepen decided to adopt Issue Boards</a>
+to improve their workflow with multiple boards.</p>
+<h4 dir="auto">
+<a aria-hidden="true" class="anchor" href="#quick-assignments" id="user-content-quick-assignments"></a>Quick assignments</h4>
+<p dir="auto">Create lists for each of your team members and quickly drag-and-drop issues onto each team member.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#permissions" id="user-content-permissions"></a>Permissions</h2>
+<p dir="auto"><a href="/permissions.md">Developers and up</a> can use all the functionality of the
+Issue Board, that is, create or delete lists and drag issues from one list to another.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#issue-board-terminology" id="user-content-issue-board-terminology"></a>Issue Board terminology</h2>
+<ul dir="auto">
+<li>
+<strong>Issue Board</strong> - Each board represents a unique view for your issues. It can have multiple lists with each list consisting of issues represented by cards.</li>
+<li>
+<strong>List</strong> - A column on the issue board that displays issues matching certain attributes. In addition to the default lists of 'Backlog' and 'Closed' issue, each additional list will show issues matching your chosen label or assignee.
+<ul>
+<li>
+<strong>Label list</strong>: a list based on a label. It shows all opened issues with that label.</li>
+<li>
+<strong>Assignee list</strong>: a list which includes all issues assigned to a user.</li>
+<li>
+<strong>Backlog</strong> (default): shows all open issues that do not belong to one of the other lists. Always appears as the leftmost list.</li>
+<li>
+<strong>Closed</strong> (default): shows all closed issues. Always appears as the rightmost list.</li>
+</ul>
+</li>
+<li>
+<strong>Card</strong> - A box in the list that represents an individual issue. The information you can see on a card consists of the issue number, the issue title, the assignee, and the labels associated with the issue. You can drag cards from one list to another to change their label or assignee from that of the source list to that of the destination list.</li>
+</ul>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#actions-you-can-take-on-an-issue-board" id="user-content-actions-you-can-take-on-an-issue-board"></a>Actions you can take on an Issue Board</h2>
+<ul dir="auto">
+<li>
+<a href="#creating-a-new-list">Create a new list</a>.</li>
+<li>
+<a href="#deleting-a-list">Delete an existing list</a>.</li>
+<li>Drag issues between lists.</li>
+<li>Re-order issues in lists.</li>
+<li>Drag and reorder the lists themselves.</li>
+<li>Change issue labels on-the-fly while dragging issues between lists.</li>
+<li>Close an issue if you drag it to the <strong>Done</strong> list.</li>
+<li>Create a new list from a non-existing label by <a href="#creating-a-new-list">creating the label on-the-fly</a>
+within the Issue Board.</li>
+<li>
+<a href="#filtering-issues">Filter issues</a> that appear across your Issue Board.</li>
+</ul>
+<p dir="auto">If you are not able to perform one or more of the things above, make sure you
+have the right <a href="#permissions">permissions</a>.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#first-time-using-the-issue-board" id="user-content-first-time-using-the-issue-board"></a>First time using the Issue Board</h2>
+<p dir="auto">The first time you navigate to your Issue Board, you will be presented with
+a default list (<strong>Done</strong>) and a welcoming message that gives
+you two options. You can either create a predefined set of labels and create
+their corresponding lists to the Issue Board or opt-out and use your own lists.</p>
+<p dir="auto"><a class="no-attachment-icon" href="/img/issue_board_welcome_message.png" rel="noopener noreferrer" target="_blank"><img alt="Issue Board welcome message" class="lazy" data-src="img/issue_board_welcome_message.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<p dir="auto">If you choose to use and create the predefined lists, they will appear as empty
+because the labels associated to them will not exist up until that moment,
+which means the system has no way of populating them automatically. That's of
+course if the predefined labels don't already exist. If any of them does exist,
+the list will be created and filled with the issues that have that label.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#creating-a-new-list" id="user-content-creating-a-new-list"></a>Creating a new list</h2>
+<p dir="auto">Create a new list by clicking on the <strong>Add list</strong> button at the upper
+right corner of the Issue Board.</p>
+<p dir="auto"><a class="no-attachment-icon" href="/img/issue_board_add_list.png" rel="noopener noreferrer" target="_blank"><img alt="Issue Board welcome message" class="lazy" data-src="img/issue_board_add_list.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<p dir="auto">Simply choose the label or user to create the list from. The new list will be inserted
+at the end of the lists, before <strong>Done</strong>. Moving and reordering lists is as
+easy as dragging them around.</p>
+<p dir="auto">To create a list for a label that doesn't yet exist, simply create the label by
+choosing <strong>Create new label</strong>. The label will be created on-the-fly and it will
+be immediately added to the dropdown. You can now choose it to create a list.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#deleting-a-list" id="user-content-deleting-a-list"></a>Deleting a list</h2>
+<p dir="auto">To delete a list from the Issue Board use the small trash icon that is present
+in the list's heading. A confirmation dialog will appear for you to confirm.</p>
+<p dir="auto">Deleting a list doesn't have any effect in issues and labels, it's just the
+list view that is removed. You can always add it back later if you need.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#adding-issues-to-a-list" id="user-content-adding-issues-to-a-list"></a>Adding issues to a list</h2>
+<p dir="auto">You can add issues to a list by clicking the <strong>Add issues</strong> button that is
+present in the upper right corner of the Issue Board. This will open up a modal
+window where you can see all the issues that do not belong to any list.</p>
+<p dir="auto">Select one or more issues by clicking on the cards and then click <strong>Add issues</strong>
+to add them to the selected list. You can limit the issues you want to add to
+the list by filtering by author, assignee, milestone and label.</p>
+<p dir="auto"><a class="no-attachment-icon" href="/img/issue_boards_add_issues_modal.png" rel="noopener noreferrer" target="_blank"><img alt="Bulk adding issues to lists" class="lazy" data-src="img/issue_boards_add_issues_modal.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#removing-an-issue-from-a-list" id="user-content-removing-an-issue-from-a-list"></a>Removing an issue from a list</h2>
+<p dir="auto">Removing an issue from a list can be done by clicking on the issue card and then
+clicking the <strong>Remove from board</strong> button in the sidebar. Under the hood, the
+respective label is removed, and as such it's also removed from the list and the
+board itself.</p>
+<p dir="auto"><a class="no-attachment-icon" href="/img/issue_boards_remove_issue.png" rel="noopener noreferrer" target="_blank"><img alt="Remove issue from list" class="lazy" data-src="img/issue_boards_remove_issue.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#issue-ordering-in-a-list" id="user-content-issue-ordering-in-a-list"></a>Issue ordering in a list</h2>
+<p dir="auto">When visiting a board, issues appear ordered in any list. You are able to change
+that order simply by dragging and dropping the issues. The changed order will be saved
+to the system so that anybody who visits the same board later will see the reordering,
+with some exceptions.</p>
+<p dir="auto">The first time a given issue appears in any board (i.e. the first time a user
+loads a board containing that issue), it will be ordered with
+respect to other issues in that list according to <a href="labels.md#label-priority">Priority order</a>.</p>
+<p dir="auto">At that point, that issue will be assigned a relative order value by the system
+representing its relative order with respect to the other issues in the list. Any time
+you drag-and-drop reorder that issue, its relative order value will change accordingly.</p>
+<p dir="auto">Also, any time that issue appears in any board when it is loaded by a user,
+the updated relative order value will be used for the ordering. (It's only the first
+time an issue appears that it takes from the Priority order mentioned above.) This means that
+if issue <code>A</code> is drag-and-drop reordered to be above issue <code>B</code> by any user in
+a given board inside your GitLab instance, any time those two issues are subsequently
+loaded in any board in the same instance (could be a different project board or a different group board, for example),
+that ordering will be maintained.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#filtering-issues" id="user-content-filtering-issues"></a>Filtering issues</h2>
+<p dir="auto">You should be able to use the filters on top of your Issue Board to show only
+the results you want. This is similar to the filtering used in the issue tracker
+since the metadata from the issues and labels are re-used in the Issue Board.</p>
+<p dir="auto">You can filter by author, assignee, milestone and label.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#creating-workflows" id="user-content-creating-workflows"></a>Creating workflows</h2>
+<p dir="auto">By reordering your lists, you can create workflows. As lists in Issue Boards are
+based on labels, it works out of the box with your existing issues. So if you've
+already labeled things with 'Backend' and 'Frontend', the issue will appear in
+the lists as you create them. In addition, this means you can easily move
+something between lists by changing a label.</p>
+<p dir="auto">A typical workflow of using the Issue Board would be:</p>
+<ol dir="auto">
+<li>You have <a href="labels.md#creating-labels">created</a> and <a href="labels.md#label-priority">prioritized</a>
+labels so that you can easily categorize your issues.</li>
+<li>You have a bunch of issues (ideally labeled).</li>
+<li>You visit the Issue Board and start <a href="#creating-a-new-list">creating lists</a> to
+create a workflow.</li>
+<li>You move issues around in lists so that your team knows who should be working
+on what issue.</li>
+<li>When the work by one team is done, the issue can be dragged to the next list
+so someone else can pick up.</li>
+<li>When the issue is finally resolved, the issue is moved to the <strong>Done</strong> list
+and gets automatically closed.</li>
+</ol>
+<p dir="auto">For instance you can create a list based on the label of 'Frontend' and one for
+'Backend'. A designer can start working on an issue by adding it to the
+'Frontend' list. That way, everyone knows that this issue is now being
+worked on by the designers. Then, once they're done, all they have to do is
+drag it over to the next list, 'Backend', where a backend developer can
+eventually pick it up. Once they’re done, they move it to <strong>Done</strong>, to close the
+issue.</p>
+<p dir="auto">This process can be seen clearly when visiting an issue since with every move
+to another list the label changes and a system not is recorded.</p>
+<p dir="auto"><a class="no-attachment-icon" href="/img/issue_board_system_notes.png" rel="noopener noreferrer" target="_blank"><img alt="Issue Board system notes" class="lazy" data-src="img/issue_board_system_notes.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#multiple-issue-boards-starter" id="user-content-multiple-issue-boards-starter"></a>Multiple Issue Boards <strong>[STARTER]</strong>
+</h2>
+<blockquote dir="auto">
+<p>Introduced in <a href="https://about.gitlab.com/2016/10/22/gitlab-8-13-released/#multiple-issue-boards-ee" rel="nofollow noreferrer noopener" target="_blank">GitLab Enterprise Edition 8.13</a>.</p>
+</blockquote>
+<p dir="auto">Multiple Issue Boards, as the name suggests, allow for more than one Issue Board
+for a given project or group. This is great for large projects with more than one team
+or in situations where a repository is used to host the code of multiple
+products.</p>
+<p dir="auto">Clicking on the current board name in the upper left corner will reveal a
+menu from where you can create another Issue Board and rename or delete the
+existing one.</p>
+<p dir="auto">NOTE: <strong>Note:</strong>
+The Multiple Issue Boards feature is available for
+<strong>projects in GitLab Starter Edition</strong> and for <strong>groups in GitLab Premium Edition</strong>.</p>
+<p dir="auto"><a class="no-attachment-icon" href="/img/issue_boards_multiple.png" rel="noopener noreferrer" target="_blank"><img alt="Multiple Issue Boards" class="lazy" data-src="img/issue_boards_multiple.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#configurable-issue-boards-starter" id="user-content-configurable-issue-boards-starter"></a>Configurable Issue Boards <strong>[STARTER]</strong>
+</h2>
+<blockquote dir="auto">
+<p>Introduced in <a href="https://about.gitlab.com/2017/11/22/gitlab-10-2-released/#issue-boards-configuration" rel="nofollow noreferrer noopener" target="_blank">GitLab Starter Edition 10.2</a>.</p>
+</blockquote>
+<p dir="auto">An Issue Board can be associated with GitLab <a href="milestones/index.md#milestones">Milestone</a>,
+<a href="/labels.md">Labels</a>, Assignee and Weight
+which will automatically filter the Board issues according to these fields.
+This allows you to create unique boards according to your team's need.</p>
+<p dir="auto"><a class="no-attachment-icon" href="/img/issue_board_creation.png" rel="noopener noreferrer" target="_blank"><img alt="Create scoped board" class="lazy" data-src="img/issue_board_creation.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<p dir="auto">You can define the scope of your board when creating it or by clicking on the "Edit board" button. Once a milestone, assignee or weight is assigned to an Issue Board, you will no longer be able to filter
+through these in the search bar. In order to do that, you need to remove the desired scope (e.g. milestone, assignee or weight) from the Issue Board.</p>
+<p dir="auto"><a class="no-attachment-icon" href="/img/issue_board_edit_button.png" rel="noopener noreferrer" target="_blank"><img alt="Edit board configuration" class="lazy" data-src="img/issue_board_edit_button.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<p dir="auto">If you don't have editing permission in a board, you're still able to see the configuration by clicking on "View scope".</p>
+<p dir="auto"><a class="no-attachment-icon" href="/img/issue_board_view_scope.png" rel="noopener noreferrer" target="_blank"><img alt="Viewing board configuration" class="lazy" data-src="img/issue_board_view_scope.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#focus-mode-starter" id="user-content-focus-mode-starter"></a>Focus mode <strong>[STARTER]</strong>
+</h2>
+<blockquote dir="auto">
+<p>Introduced in <a href="https://about.gitlab.com/2017/04/22/gitlab-9-1-released/#issue-boards-focus-mode-ees-eep" rel="nofollow noreferrer noopener" target="_blank">GitLab Starter 9.1</a>.</p>
+</blockquote>
+<p dir="auto">Click the button at the top right to toggle focus mode on and off. In focus mode, the navigation UI is hidden, allowing you to focus on issues in the board.</p>
+<p dir="auto"><a class="no-attachment-icon" href="/img/issue_board_focus_mode.gif" rel="noopener noreferrer" target="_blank"><img alt="Board focus mode" class="lazy" data-src="img/issue_board_focus_mode.gif" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#group-issue-boards-premium" id="user-content-group-issue-boards-premium"></a>Group Issue Boards <strong>[PREMIUM]</strong>
+</h2>
+<blockquote dir="auto">
+<p>Introduced in <a href="https://about.gitlab.com/2017/09/22/gitlab-10-0-released/#group-issue-boards" rel="nofollow noreferrer noopener" target="_blank">GitLab Premium 10.0</a>.</p>
+</blockquote>
+<p dir="auto">Accessible at the group navigation level, a group issue board offers the same features as a project-level board,
+but it can display issues from all projects in that
+group and its descendant subgroups. Similarly, you can only filter by group labels for these
+boards. When updating milestones and labels for an issue through the sidebar update mechanism, again only
+group-level objects are available.</p>
+<p dir="auto">NOTE: <strong>Note:</strong>
+Multiple group issue boards were originally introduced in <a href="https://about.gitlab.com/2017/09/22/gitlab-10-0-released/#group-issue-boards" rel="nofollow noreferrer noopener" target="_blank">GitLab 10.0 Premium</a> and
+one group issue board per group was made available in GitLab 10.6 Core.</p>
+<p dir="auto"><a class="no-attachment-icon" href="/img/group_issue_board.png" rel="noopener noreferrer" target="_blank"><img alt="Group issue board" class="lazy" data-src="img/group_issue_board.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#assignee-lists-premium" id="user-content-assignee-lists-premium"></a>Assignee lists <strong>[PREMIUM]</strong>
+</h2>
+<blockquote dir="auto">
+<p><a href="https://gitlab.com/gitlab-org/gitlab-ee/issues/5784" rel="nofollow noreferrer noopener" target="_blank">Introduced</a> in GitLab 11.0 Premium.</p>
+</blockquote>
+<p dir="auto">Like a regular list that shows all issues that have the list label, you can add
+an assignee list that shows all issues assigned to the given user.
+You can have a board with both label lists and assignee lists. To add an
+assignee list:</p>
+<ol dir="auto">
+<li>Click <strong>Add list</strong>.</li>
+<li>Select the <strong>Assignee list</strong> tab.</li>
+<li>Search and click on the user you want to add as an assignee.</li>
+</ol>
+<p dir="auto">Now that the assignee list is added, you can assign or unassign issues to that user
+by <a href="#dragging-issues-between-lists">dragging issues</a> to and/or from an assignee list.
+To remove an assignee list, just as with a label list, click the trash icon.</p>
+<p dir="auto"><a class="no-attachment-icon" href="/img/issue_board_assignee_lists.png" rel="noopener noreferrer" target="_blank"><img alt="Assignee lists" class="lazy" data-src="img/issue_board_assignee_lists.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#dragging-issues-between-lists" id="user-content-dragging-issues-between-lists"></a>Dragging issues between lists</h2>
+<p dir="auto">When dragging issues between lists, different behavior occurs depending on the source list and the target list.</p>
+<table dir="auto">
+<thead>
+<tr>
+<th></th>
+<th>To Backlog</th>
+<th>To Closed</th>
+<th>To label <code>B</code> list</th>
+<th>To assignee <code>Bob</code> list</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>From Backlog</td>
+<td>-</td>
+<td>Issue closed</td>
+<td>
+<code>B</code> added</td>
+<td>
+<code>Bob</code> assigned</td>
+</tr>
+<tr>
+<td>From Closed</td>
+<td>Issue reopened</td>
+<td>-</td>
+<td>Issue reopened<br/><code>B</code> added</td>
+<td>Issue reopened<br/><code>Bob</code> assigned</td>
+</tr>
+<tr>
+<td>From label <code>A</code> list</td>
+<td>
+<code>A</code> removed</td>
+<td>Issue closed</td>
+<td>
+<code>A</code> removed<br/><code>B</code> added</td>
+<td>
+<code>Bob</code> assigned</td>
+</tr>
+<tr>
+<td>From assignee <code>Alice</code> list</td>
+<td>
+<code>Alice</code> unassigned</td>
+<td>Issue closed</td>
+<td>
+<code>B</code> added</td>
+<td>
+<code>Alice</code> unassigned<br/><code>Bob</code> assigned</td>
+</tr>
+</tbody>
+</table>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#features-per-tier" id="user-content-features-per-tier"></a>Features per tier</h2>
+<p dir="auto">Different issue board features are available in different <a href="https://about.gitlab.com/pricing/" rel="nofollow noreferrer noopener" target="_blank">GitLab tiers</a>, as shown in the following table:</p>
+<table dir="auto">
+<thead>
+<tr>
+<th>Tier</th>
+<th>Number of Project Issue Boards</th>
+<th>Number of Group Issue Boards</th>
+<th>Configurable Project Issue Boards</th>
+<th>Configurable Group Issue Boards</th>
+<th>Assignee Lists</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Core</td>
+<td>1</td>
+<td>1</td>
+<td>No</td>
+<td>No</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Starter</td>
+<td>Multiple</td>
+<td>1</td>
+<td>Yes</td>
+<td>No</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Premium</td>
+<td>Multiple</td>
+<td>Multiple</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Ultimate</td>
+<td>Multiple</td>
+<td>Multiple</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+</tbody>
+</table>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#tips" id="user-content-tips"></a>Tips</h2>
+<p dir="auto">A few things to remember:</p>
+<ul dir="auto">
+<li>Moving an issue between lists removes the label from the list it came from
+and adds the label from the list it goes to.</li>
+<li>An issue can exist in multiple lists if it has more than one label.</li>
+<li>Lists are populated with issues automatically if the issues are labeled.</li>
+<li>Clicking on the issue title inside a card will take you to that issue.</li>
+<li>Clicking on a label inside a card will quickly filter the entire Issue Board
+and show only the issues from all lists that have that label.</li>
+<li>For performance and visibility reasons, each list shows the first 20 issues
+by default. If you have more than 20 issues start scrolling down and the next
+20 will appear.</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

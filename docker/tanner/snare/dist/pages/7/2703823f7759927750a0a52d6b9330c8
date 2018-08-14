@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- generator="Joomla! - Open Source Content Management" -->
+<feed xmlns="http://www.w3.org/2005/Atom"  xml:lang="en-gb">
+	<title type="text">user's Site!</title>
+	<subtitle type="text">Joomla! - the dynamic portal engine and content management system</subtitle>
+	<link rel="alternate" type="text/html" href="http://172.20.254.137"/>
+	<id>http://172.20.254.137/index.php/component/tags/</id>
+	<updated>2018-08-14T13:38:06+00:00</updated>
+	<generator uri="https://www.joomla.org">Joomla! - Open Source Content Management</generator>
+	<link rel="self" type="application/atom+xml" href="http://172.20.254.137/index.php/component/tags/?format=feed&amp;type=atom"/>
+	<entry>
+		<title>Joomla</title>
+		<link rel="alternate" type="text/html" href="http://172.20.254.137/index.php/component/tags/tag/2"/>
+		<published>2013-11-16T08:00:00+00:00</published>
+		<updated>2013-11-16T08:00:00+00:00</updated>
+		<id>http://172.20.254.137/index.php?option=com_tags&view=tag&id=2</id>
+		<category term="All Tags" />
+	</entry>
+</feed>

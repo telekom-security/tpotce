@@ -1,0 +1,109 @@
+
+table.revision-info td {
+    margin:  0px;
+    padding: 0px;
+}
+
+div.revision-graph { position: absolute; min-width: 1px; }
+
+div.changeset-changes ul { margin: 0; padding: 0; }
+div.changeset-changes ul > ul { margin-left: 18px; padding: 0; }
+
+li.change {
+    list-style-type:none;
+    background-image: url(../images/bullet_black.png);
+    background-position: 1px 1px;
+    background-repeat: no-repeat;
+    padding-top: 1px;
+    padding-bottom: 1px;
+    padding-left: 20px;
+    margin: 0;
+}
+li.change.folder { background-image: url(../images/folder_open.png); }
+li.change.folder.change-A { background-image: url(../images/folder_open_add.png); }
+li.change.folder.change-M { background-image: url(../images/folder_open_orange.png); }
+li.change.change-A { background-image: url(../images/bullet_add.png); }
+li.change.change-M { background-image: url(../images/bullet_orange.png); }
+li.change.change-C { background-image: url(../images/bullet_blue.png); }
+li.change.change-R { background-image: url(../images/bullet_purple.png); }
+li.change.change-D { background-image: url(../images/bullet_delete.png); }
+
+li.change .copied-from { font-style: italic; color: #999; font-size: 0.9em; }
+li.change .copied-from:before { content: " - "}
+
+#changes-legend { float: right; font-size: 0.8em; margin: 0; }
+#changes-legend li { float: left; background-position: 5px 0; }
+
+table.filecontent { border: 1px solid #e2e2e2;  border-collapse: collapse; width:98%; background-color: #fafafa; }
+table.filecontent tbody {font-family:Consolas, Menlo, "Liberation Mono", Courier, monospace; font-size:12px;}
+table.filecontent th { border: 1px solid #e2e2e2; background-color: #eee; }
+table.filecontent th.filename { background-color: #e4e4d4; text-align: left; padding:5px;}
+table.filecontent tr.spacing th { text-align:center; }
+table.filecontent tr.spacing td { height: 0.4em; background: #EAF2F5;}
+table.filecontent th.line-num {
+    border: 1px solid #e2e2e2;
+    text-align: right;
+    width: 2%;
+    padding: 0 3px 0 0;
+    color: #999;
+    user-select: none;
+    -moz-user-select: none;
+    -o-user-select: none;
+    -ms-user-select: none;
+    -webkit-user-select: none;
+    font-weight:normal;
+}
+table.filecontent th.line-num a {
+    text-decoration: none;
+    color: inherit;
+}
+table.filecontent td.line-code {padding: 0 0 0 4px;}
+table.filecontent td.line-code pre {
+    margin: 0px;
+    white-space: pre-wrap;
+    font-family:Consolas, Menlo, "Liberation Mono", Courier, monospace; font-size:12px;
+}
+
+table.filecontent tr:target th.line-num { background-color:#E0E0E0; color: #777; }
+table.filecontent tr:target td.line-code { background-color:#DDEEFF; }
+
+img.filecontent { max-width: 100%; }
+
+/* 12 different colors for the annonate view */
+table.annotate tr.bloc-0 {background: #FFFFBF;}
+table.annotate tr.bloc-1 {background: #EABFFF;}
+table.annotate tr.bloc-2 {background: #BFFFFF;}
+table.annotate tr.bloc-3 {background: #FFD9BF;}
+table.annotate tr.bloc-4 {background: #E6FFBF;}
+table.annotate tr.bloc-5 {background: #BFCFFF;}
+table.annotate tr.bloc-6 {background: #FFBFEF;}
+table.annotate tr.bloc-7 {background: #FFE6BF;}
+table.annotate tr.bloc-8 {background: #FFE680;}
+table.annotate tr.bloc-9 {background: #AA80FF;}
+table.annotate tr.bloc-10 {background: #FFBFDC;}
+table.annotate tr.bloc-11 {background: #BFE4FF;}
+
+table.annotate td.revision {
+    padding:0;
+    text-align: center;
+    width: 2%;
+    padding-left: 1em;
+    background: inherit;
+}
+
+table.annotate td.author {
+    padding:0;
+    text-align: center;
+    border-right: 1px solid #d7d7d7;
+    white-space: nowrap;
+    padding-left: 1em;
+    padding-right: 1em;
+    width: 3%;
+    background: inherit;
+}
+
+table.annotate td.line-code { background-color: #fafafa; }
+
+div.action_M { background: #fd8 }
+div.action_D { background: #f88 }
+div.action_A { background: #bfb }

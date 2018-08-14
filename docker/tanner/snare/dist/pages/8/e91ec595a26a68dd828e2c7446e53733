@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="IE=edge" http-equiv="X-UA-Compatible"/>
+<title>Using the Ghost editor</title>
+<meta content="True" name="HandheldFriendly"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="/assets/built/screen.css?v=8cfc086fe8" rel="stylesheet" type="text/css"/>
+<link href="/favicon.ico" rel="shortcut icon" type="image/x-icon"/>
+<link href="/the-editor/" rel="canonical"/>
+<meta content="no-referrer-when-downgrade" name="referrer"/>
+<link href="/the-editor/amp/" rel="amphtml"/>
+<meta content="user Blog" property="og:site_name"/>
+<meta content="article" property="og:type"/>
+<meta content="Using the Ghost editor" property="og:title"/>
+<meta content="Ghost uses a language called Markdown to format text. When you go to edit a post and see special characters and colours intertwined between the words, those are Markdown shortcuts which tell Ghost what to do with the words in your document. The biggest benefit of Markdown is that you" property="og:description"/>
+<meta content="http://172.20.254.138:80/the-editor/" property="og:url"/>
+<meta content="https://casper.ghost.org/v1.0.0/images/writing.jpg" property="og:image"/>
+<meta content="2018-08-09T11:04:51.000Z" property="article:published_time"/>
+<meta content="2018-08-09T11:04:45.000Z" property="article:modified_time"/>
+<meta content="Getting Started" property="article:tag"/>
+<meta content="summary_large_image" name="twitter:card"/>
+<meta content="Using the Ghost editor" name="twitter:title"/>
+<meta content="Ghost uses a language called Markdown to format text. When you go to edit a post and see special characters and colours intertwined between the words, those are Markdown shortcuts which tell Ghost what to do with the words in your document. The biggest benefit of Markdown is that you" name="twitter:description"/>
+<meta content="http://172.20.254.138:80/the-editor/" name="twitter:url"/>
+<meta content="https://casper.ghost.org/v1.0.0/images/writing.jpg" name="twitter:image"/>
+<meta content="Written by" name="twitter:label1"/>
+<meta content="Ghost" name="twitter:data1"/>
+<meta content="Filed under" name="twitter:label2"/>
+<meta content="Getting Started" name="twitter:data2"/>
+<meta content="1400" property="og:image:width"/>
+<meta content="935" property="og:image:height"/>
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "user Blog",
+        "logo": "https://casper.ghost.org/v1.0.0/images/ghost-logo.svg"
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Ghost",
+        "url": "http://172.20.254.138:80/author/ghost/",
+        "sameAs": []
+    },
+    "headline": "Using the Ghost editor",
+    "url": "http://172.20.254.138:80/the-editor/",
+    "datePublished": "2018-08-09T11:04:51.000Z",
+    "dateModified": "2018-08-09T11:04:45.000Z",
+    "image": {
+        "@type": "ImageObject",
+        "url": "https://casper.ghost.org/v1.0.0/images/writing.jpg",
+        "width": 1400,
+        "height": 935
+    },
+    "keywords": "Getting Started",
+    "description": "Ghost uses a language called Markdown to format text. When you go to edit a post and see special characters and colours intertwined between the words, those are Markdown shortcuts which tell Ghost what to do with the words in your document. The biggest benefit of Markdown is that you",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "http://172.20.254.138:80/"
+    }
+}
+    </script>
+<script>//<![CDATA[
+!function(){var o,i,n,e,r="//172.20.254.138:80/ghost/api/v0.1/";n={api:function(){var n,e=Array.prototype.slice.call(arguments),t=r;return(n=e.pop())&&"object"!=typeof n&&(e.push(n),n={}),(n=n||{}).client_id=o,n.client_secret=i,e.length&&e.forEach(function(n){t+=n.replace(/^\/|\/$/g,"")+"/"}),t+function(n){var e,t=[];if(!n)return"";for(e in n)n.hasOwnProperty(e)&&(n[e]||!1===n[e])&&t.push(e+"="+encodeURIComponent(n[e]));return t.length?"?"+t.join("&"):""}(n)}},e=function(n){o=n.clientId?n.clientId:"",i=n.clientSecret?n.clientSecret:"",r=n.url?n.url:r.match(/{\{api-url}}/)?"":r},"undefined"!=typeof window&&(window.ghost=window.ghost||{},window.ghost.url=n,window.ghost.init=e),"undefined"!=typeof module&&(module.exports={url:n,init:e})}();
+//]]></script>
+<script>ghost.init({clientId:"ghost-frontend",clientSecret:"99616761d626"});</script>
+<meta content="Ghost 1.25" name="generator"/>
+<link href="/rss/" rel="alternate" title="user Blog" type="application/rss+xml"/>
+</head>
+<body class="post-template tag-getting-started">
+<div class="site-wrapper">
+<header class="site-header outer">
+<div class="inner">
+<nav class="site-nav">
+<div class="site-nav-left">
+<a class="site-nav-logo" href=""><img alt="user Blog" src="/v1.0.0/images/ghost-logo.svg"/></a>
+<ul class="nav" role="menu">
+<li class="nav-home" role="menuitem"><a href="/">Home</a></li>
+</ul>
+</div>
+<div class="site-nav-right">
+<div class="social-links">
+</div>
+<a class="rss-button" href="https://feedly.com/i/subscription/feed/http://172.20.254.138:80/rss/" rel="noopener" target="_blank"><svg viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle cx="6.18" cy="17.82" r="2.18"></circle><path d="M4 4.44v2.83c7.03 0 12.73 5.7 12.73 12.73h2.83c0-8.59-6.97-15.56-15.56-15.56zm0 5.66v2.83c3.9 0 7.07 3.17 7.07 7.07h2.83c0-5.47-4.43-9.9-9.9-9.9z"></path></svg>
+</a>
+</div>
+</nav>
+</div>
+</header>
+<main class="site-main outer" id="site-main">
+<div class="inner">
+<article class="post-full post tag-getting-started ">
+<header class="post-full-header">
+<section class="post-full-meta">
+<time class="post-full-meta-date" datetime="2018-08-09">9 August 2018</time>
+<span class="date-divider">/</span> <a href="/tag/getting-started/">Getting Started</a>
+</section>
+<h1 class="post-full-title">Using the Ghost editor</h1>
+</header>
+<figure class="post-full-image" style="background-image:url(https://casper.ghost.org/v1.0.0/images/writing.jpg)">
+</figure>
+<section class="post-full-content">
+<div class="post-content">
+<div class="kg-card-markdown"><p>Ghost uses a language called <strong>Markdown</strong> to format text.</p>
+<p>When you go to edit a post and see special characters and colours intertwined between the words, those are Markdown shortcuts which tell Ghost what to do with the words in your document. The biggest benefit of Markdown is that you can quickly apply formatting as you type, without needing to pause.</p>
+<p>At the bottom of the editor, you'll find a toolbar with basic formatting options to help you get started as easily as possible. You'll also notice that there's a <strong>?</strong> icon, which contains more advanced shortcuts.</p>
+<p>For now, though, let's run you through some of the basics. You'll want to make sure you're editing this post in order to see all the Markdown we've used.</p>
+<h2 id="formattingtext">Formatting text</h2>
+<p>The most common shortcuts are of course, <strong>bold</strong> text, <em>italic</em> text, and <a href="https://example.com">hyperlinks</a>. These generally make up the bulk of any document. You can type the characters out, but you can also use keyboard shortcuts.</p>
+<ul>
+<li><code>CMD/Ctrl + B</code> for Bold</li>
+<li><code>CMD/Ctrl + I</code> for Italic</li>
+<li><code>CMD/Ctrl + K</code> for a Link</li>
+<li><code>CMD/Ctrl + H</code> for a Heading (Press multiple times for h2/h3/h4/etc)</li>
+</ul>
+<p>With just a couple of extra characters here and there, you're well on your way to creating a beautifully formatted story.</p>
+<h2 id="insertingimages">Inserting images</h2>
+<p>Images in Markdown look just the same as links, except they're prefixed with an exclamation mark, like this:</p>
+<p><code>![Image description](/path/to/image.jpg)</code></p>
+<p><img alt="Computer" src="/v1.0.0/images/computer.jpg"/></p>
+<p>Most Markdown editors don't make you type this out, though. In Ghost you can click on the image icon in the toolbar at the bottom of the editor, or you can just click and drag an image from your desktop directly into the editor. Both will upload the image for you and generate the appropriate Markdown.</p>
+<p><em><strong>Important Note:</strong> Ghost does not currently have automatic image resizing, so it's always a good idea to make sure your images aren't gigantic files <strong>before</strong> uploading them to Ghost.</em></p>
+<h2 id="makinglists">Making lists</h2>
+<p>Lists in HTML are a formatting nightmare, but in Markdown they become an absolute breeze with just a couple of characters and a bit of smart automation. For numbered lists, just write out the numbers. For bullet lists, just use <code>*</code> or <code>-</code> or <code>+</code>. Like this:</p>
+<ol>
+<li>Crack the eggs over a bowl</li>
+<li>Whisk them together</li>
+<li>Make an omelette</li>
+</ol>
+<p>or</p>
+<ul>
+<li>Remember to buy milk</li>
+<li>Feed the cat</li>
+<li>Come up with idea for next story</li>
+</ul>
+<h2 id="addingquotes">Adding quotes</h2>
+<p>When you want to pull out a particularly good excerpt in the middle of a piece, you can use <code>&gt;</code> at the beginning of a paragraph to turn it into a Blockquote. You might've seen this formatting before in email clients.</p>
+<blockquote>
+<p>A well placed quote guides a reader through a story, helping them to understand the most important points being made</p>
+</blockquote>
+<p>All themes handles blockquotes slightly differently. Sometimes they'll look better kept shorter, while other times you can quote fairly hefty amounts of text and get away with it. Generally, the safest option is to use blockquotes sparingly.</p>
+<h2 id="dividingthingsup">Dividing things up</h2>
+<p>If you're writing a piece in parts and you just feel like you need to divide a couple of sections distinctly from each other, a horizontal rule might be just what you need. Dropping <code>---</code> on a new line will create a sleek divider, anywhere you want it.</p>
+<hr/>
+<p>This should get you going with the vast majority of what you need to do in the editor, but if you're still curious about more advanced tips then check out the <a href="/advanced-markdown/">Advanced Markdown Guide</a> - or if you'd rather learn about how Ghost taxononomies work, we've got a overview of <a href="/using-tags/">how to use Ghost tags</a>.</p>
+</div>
+</div>
+</section>
+<footer class="post-full-footer">
+<section class="author-card">
+<span class="avatar-wrapper"><svg viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd"><path d="M3.513 18.998C4.749 15.504 8.082 13 12 13s7.251 2.504 8.487 5.998C18.47 21.442 15.417 23 12 23s-6.47-1.558-8.487-4.002zM12 12c2.21 0 4-2.79 4-5s-1.79-4-4-4-4 1.79-4 4 1.79 5 4 5z" fill="#FFF"></path></g></svg>
+</span>
+<section class="author-card-content">
+<h4 class="author-card-name"><a href="/author/ghost/">Ghost</a></h4>
+<p>You can delete this user to remove all the welcome posts</p>
+</section>
+</section>
+<div class="post-full-footer-right">
+<a class="author-card-button" href="/author/ghost/">Read More</a>
+</div>
+</footer>
+</article>
+</div>
+</main>
+<aside class="read-next outer">
+<div class="inner">
+<div class="read-next-feed">
+<article class="read-next-card" style="background-image:url(https://casper.ghost.org/v1.0.0/images/blog-cover.jpg)">
+<header class="read-next-card-header">
+<small class="read-next-card-header-sitetitle">— user Blog —</small>
+<h3 class="read-next-card-header-title"><a href="/tag/getting-started/">Getting Started</a></h3>
+</header>
+<div class="read-next-divider"><svg viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M13 14.5s2 3 5 3 5.5-2.463 5.5-5.5S21 6.5 18 6.5c-5 0-7 11-12 11C2.962 17.5.5 15.037.5 12S3 6.5 6 6.5s4.5 3.5 4.5 3.5"></path></svg>
+</div>
+<div class="read-next-card-content">
+<ul>
+<li><a href="/welcome/">Welcome to Ghost</a></li>
+<li><a href="/using-tags/">Organising your content with tags</a></li>
+<li><a href="/managing-users/">Managing Ghost users</a></li>
+</ul>
+</div>
+<footer class="read-next-card-footer">
+<a href="/tag/getting-started/">See all 6 posts →</a>
+</footer>
+</article>
+<article class="post-card post tag-getting-started">
+<a class="post-card-image-link" href="/welcome/">
+<div class="post-card-image" style="background-image:url(https://casper.ghost.org/v1.0.0/images/welcome.jpg)"></div>
+</a>
+<div class="post-card-content">
+<a class="post-card-content-link" href="/welcome/">
+<header class="post-card-header">
+<span class="post-card-tags">Getting Started</span>
+<h2 class="post-card-title">Welcome to Ghost</h2>
+</header>
+<section class="post-card-excerpt">
+<p>Hey! Welcome to Ghost, it's great to have you :) We know that first impressions are important, so we've populated your new site with some initial Getting Started posts that will help you get</p>
+</section>
+</a>
+<footer class="post-card-meta">
+<ul class="author-list">
+<li class="author-list-item">
+<div class="author-name-tooltip">
+                        Ghost
+                    </div>
+<a class="static-avatar author-profile-image" href="/author/ghost/"><svg viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd"><path d="M3.513 18.998C4.749 15.504 8.082 13 12 13s7.251 2.504 8.487 5.998C18.47 21.442 15.417 23 12 23s-6.47-1.558-8.487-4.002zM12 12c2.21 0 4-2.79 4-5s-1.79-4-4-4-4 1.79-4 4 1.79 5 4 5z" fill="#FFF"></path></g></svg>
+</a>
+</li>
+</ul>
+<span class="reading-time">1 min read</span>
+</footer>
+</div>
+</article>
+<article class="post-card post tag-getting-started">
+<a class="post-card-image-link" href="/using-tags/">
+<div class="post-card-image" style="background-image:url(https://casper.ghost.org/v1.0.0/images/tags.jpg)"></div>
+</a>
+<div class="post-card-content">
+<a class="post-card-content-link" href="/using-tags/">
+<header class="post-card-header">
+<span class="post-card-tags">Getting Started</span>
+<h2 class="post-card-title">Organising your content with tags</h2>
+</header>
+<section class="post-card-excerpt">
+<p>Ghost has a single, powerful organisational taxonomy, called tags. It doesn't matter whether you want to call them categories, tags, boxes, or anything else. You can think of Ghost tags a lot like</p>
+</section>
+</a>
+<footer class="post-card-meta">
+<ul class="author-list">
+<li class="author-list-item">
+<div class="author-name-tooltip">
+                        Ghost
+                    </div>
+<a class="static-avatar author-profile-image" href="/author/ghost/"><svg viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd"><path d="M3.513 18.998C4.749 15.504 8.082 13 12 13s7.251 2.504 8.487 5.998C18.47 21.442 15.417 23 12 23s-6.47-1.558-8.487-4.002zM12 12c2.21 0 4-2.79 4-5s-1.79-4-4-4-4 1.79-4 4 1.79 5 4 5z" fill="#FFF"></path></g></svg>
+</a>
+</li>
+</ul>
+<span class="reading-time">2 min read</span>
+</footer>
+</div>
+</article>
+</div>
+</div>
+</aside>
+<div class="floating-header">
+<div class="floating-header-logo">
+<a href="">
+<span>user Blog</span>
+</a>
+</div>
+<span class="floating-header-divider">—</span>
+<div class="floating-header-title">Using the Ghost editor</div>
+<div class="floating-header-share">
+<div class="floating-header-share-label">Share this <svg viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M7.5 15.5V4a1.5 1.5 0 1 1 3 0v4.5h2a1 1 0 0 1 1 1h2a1 1 0 0 1 1 1H18a1.5 1.5 0 0 1 1.5 1.5v3.099c0 .929-.13 1.854-.385 2.748L17.5 23.5h-9c-1.5-2-5.417-8.673-5.417-8.673a1.2 1.2 0 0 1 1.76-1.605L7.5 15.5zm6-6v2m-3-3.5v3.5m6-1v2"></path>
+</svg>
+</div>
+<a class="floating-header-share-tw" href="https://twitter.com/share?text=Using%20the%20Ghost%20editor&amp;url=http://172.20.254.138:80/the-editor/" onclick="window.open(this.href, 'share-twitter', 'width=550,height=235');return false;">
+<svg viewbox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><path d="M30.063 7.313c-.813 1.125-1.75 2.125-2.875 2.938v.75c0 1.563-.188 3.125-.688 4.625a15.088 15.088 0 0 1-2.063 4.438c-.875 1.438-2 2.688-3.25 3.813a15.015 15.015 0 0 1-4.625 2.563c-1.813.688-3.75 1-5.75 1-3.25 0-6.188-.875-8.875-2.625.438.063.875.125 1.375.125 2.688 0 5.063-.875 7.188-2.5-1.25 0-2.375-.375-3.375-1.125s-1.688-1.688-2.063-2.875c.438.063.813.125 1.125.125.5 0 1-.063 1.5-.25-1.313-.25-2.438-.938-3.313-1.938a5.673 5.673 0 0 1-1.313-3.688v-.063c.813.438 1.688.688 2.625.688a5.228 5.228 0 0 1-1.875-2c-.5-.875-.688-1.813-.688-2.75 0-1.063.25-2.063.75-2.938 1.438 1.75 3.188 3.188 5.25 4.25s4.313 1.688 6.688 1.813a5.579 5.579 0 0 1 1.5-5.438c1.125-1.125 2.5-1.688 4.125-1.688s3.063.625 4.188 1.813a11.48 11.48 0 0 0 3.688-1.375c-.438 1.375-1.313 2.438-2.563 3.188 1.125-.125 2.188-.438 3.313-.875z"></path></svg>
+</a>
+<a class="floating-header-share-fb" href="https://www.facebook.com/sharer/sharer.php?u=http://172.20.254.138:80/the-editor/" onclick="window.open(this.href, 'share-facebook','width=580,height=296');return false;">
+<svg viewbox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><path d="M19 6h5V0h-5c-3.86 0-7 3.14-7 7v3H8v6h4v16h6V16h5l1-6h-6V7c0-.542.458-1 1-1z"></path></svg>
+</a>
+</div>
+<progress class="progress" id="reading-progress" value="0">
+<div class="progress-container">
+<span class="progress-bar"></span>
+</div>
+</progress>
+</div>
+<footer class="site-footer outer">
+<div class="site-footer-content inner">
+<section class="copyright"><a href="">user Blog</a> © 2018</section>
+<nav class="site-footer-nav">
+<a href="">Latest Posts</a>
+<a href="https://ghost.org" rel="noopener" target="_blank">Ghost</a>
+</nav>
+</div>
+</footer>
+</div>
+<script crossorigin="anonymous" integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4=" src="/jquery-3.2.1.min.js"></script>
+<script src="/assets/js/jquery.fitvids.js,qv=8cfc086fe8.pagespeed.jm.nHU73nSfsl.js" type="text/javascript"></script>
+<script>$(document).ready(function(){var $postContent=$(".post-full-content");$postContent.fitVids();var progressBar=document.querySelector('#reading-progress');var header=document.querySelector('.floating-header');var title=document.querySelector('.post-full-title');var lastScrollY=window.scrollY;var lastWindowHeight=window.innerHeight;var lastDocumentHeight=$(document).height();var ticking=false;function onScroll(){lastScrollY=window.scrollY;requestTick();}function onResize(){lastWindowHeight=window.innerHeight;lastDocumentHeight=$(document).height();requestTick();}function requestTick(){if(!ticking){requestAnimationFrame(update);}ticking=true;}function update(){var trigger=title.getBoundingClientRect().top+window.scrollY;var triggerOffset=title.offsetHeight+35;var progressMax=lastDocumentHeight-lastWindowHeight;if(lastScrollY>=trigger+triggerOffset){header.classList.add('floating-active');}else{header.classList.remove('floating-active');}progressBar.setAttribute('max',progressMax);progressBar.setAttribute('value',lastScrollY);ticking=false;}window.addEventListener('scroll',onScroll,{passive:true});window.addEventListener('resize',onResize,false);update();});</script>
+</body>
+</html>

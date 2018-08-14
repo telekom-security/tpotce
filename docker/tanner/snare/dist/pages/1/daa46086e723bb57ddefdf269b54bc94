@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+
+<html class="" lang="en">
+<head prefix="og: http://ogp.me/ns#">
+<meta charset="utf-8"/>
+<meta content="IE=edge" http-equiv="X-UA-Compatible"/>
+<meta content="object" property="og:type"/>
+<meta content="GitLab" property="og:site_name"/>
+<meta content="Index · Gpg signed commits · Repository · Project · User · Help" property="og:title"/>
+<meta content="GitLab Community Edition" property="og:description"/>
+<meta content="http://172.20.254.127/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png" property="og:image"/>
+<meta content="64" property="og:image:width"/>
+<meta content="64" property="og:image:height"/>
+<meta content="http://172.20.254.127/help/user/project/repository/gpg_signed_commits/index.md" property="og:url"/>
+<meta content="summary" property="twitter:card"/>
+<meta content="Index · Gpg signed commits · Repository · Project · User · Help" property="twitter:title"/>
+<meta content="GitLab Community Edition" property="twitter:description"/>
+<meta content="http://172.20.254.127/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png" property="twitter:image"/>
+<title>Index · Gpg signed commits · Repository · Project · User · Help · GitLab</title>
+<meta content="GitLab Community Edition" name="description"/>
+<link data-original-href="/assets/favicon-7901bd695fb93edb07975966062049829afb56cf11511236e61bcf425070e36e.png" href="/assets/favicon-7901bd695fb93edb07975966062049829afb56cf11511236e61bcf425070e36e.png" id="favicon" rel="shortcut icon" type="image/png"/>
+<link href="/assets/application-266f2bfa52ff531258d13c702895a14fd5994ca591fa2df7338da00ab18c99ac.css" media="all" rel="stylesheet"/>
+<link href="/assets/print-c8ff536271f8974b8a9a5f75c0ca25d2b8c1dceb4cff3c01d1603862a0bdcbfc.css" media="print" rel="stylesheet"/>
+<script>
+//<![CDATA[
+window.gon={};gon.api_version="v4";gon.default_avatar_url="http://172.20.254.127/assets/no_avatar-849f9c04a3a0d0cea2424ae97b27447dc64a7dbfae83c036c45b403392f0e8ba.png";gon.max_file_size=10;gon.asset_host=null;gon.webpack_public_path="/assets/webpack/";gon.relative_url_root="";gon.shortcuts_path="/help/shortcuts";gon.user_color_scheme="white";gon.gitlab_url="http://172.20.254.127";gon.revision="63daf37";gon.gitlab_logo="/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png";gon.sprite_icons="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg";gon.sprite_file_icons="/assets/file_icons-7262fc6897e02f1ceaf8de43dc33afa5e4f9a2067f4f68ef77dcc87946575e9e.svg";gon.emoji_sprites_css_path="/assets/emoji_sprites-289eccffb1183c188b630297431be837765d9ff4aed6130cf738586fb307c170.css";gon.test_env=false;gon.suggested_label_colors=["#0033CC","#428BCA","#44AD8E","#A8D695","#5CB85C","#69D100","#004E00","#34495E","#7F8C8D","#A295D6","#5843AD","#8E44AD","#FFECDB","#AD4363","#D10069","#CC0033","#FF0000","#D9534F","#D1D100","#F0AD4E","#AD8D43"];
+//]]>
+</script>
+<script defer="defer" src="/assets/webpack/runtime.9fcb75d4.bundle.js"></script>
+<script defer="defer" src="/assets/webpack/main.a66b6c66.chunk.js"></script>
+<script defer="defer" src="/assets/webpack/pages.help.show.c42c0700.chunk.js"></script>
+<meta content="authenticity_token" name="csrf-param">
+<meta content="IhSJ/+sqpTjj7Y9JWwAJ47oQvEqIisjHb1UOOdgi44oXjskh8jyo+Jwj44Jss90aSNEL9Z7Lh3JZpzCeJdHGtg==" name="csrf-token">
+<meta content="origin-when-cross-origin" name="referrer"/>
+<meta content="width=device-width, initial-scale=1, maximum-scale=1" name="viewport"/>
+<meta content="#474D57" name="theme-color"/>
+<link href="/assets/touch-icon-iphone-5a9cee0e8a51212e70b90c87c12f382c428870c0ff67d1eb034d884b78d2dae7.png" rel="apple-touch-icon" type="image/x-icon"/>
+<link href="/assets/touch-icon-ipad-a6eec6aeb9da138e507593b464fdac213047e49d3093fc30e90d9a995df83ba3.png" rel="apple-touch-icon" sizes="76x76" type="image/x-icon"/>
+<link href="/assets/touch-icon-iphone-retina-72e2aadf86513a56e050e7f0f2355deaa19cc17ed97bbe5147847f2748e5a3e3.png" rel="apple-touch-icon" sizes="120x120" type="image/x-icon"/>
+<link href="/assets/touch-icon-ipad-retina-8ebe416f5313483d9c1bc772b5bbe03ecad52a54eba443e5215a22caed2a16a2.png" rel="apple-touch-icon" sizes="152x152" type="image/x-icon"/>
+<link color="rgb(226, 67, 41)" href="/assets/logo-d36b5212042cebc89b96df4bf6ac24e43db316143e89926c0db839ff694d2de4.svg" rel="mask-icon"/>
+<meta content="/assets/msapplication-tile-1196ec67452f618d39cdd85e2e3a542f76574c071051ae7effbfde01710eb17d.png" name="msapplication-TileImage"/>
+<meta content="#30353E" name="msapplication-TileColor"/>
+</meta></meta></head>
+<body class="ui-indigo " data-group="" data-page="help:show" data-project="">
+<header class="navbar navbar-gitlab qa-navbar navbar-expand-sm">
+<a class="sr-only gl-accessibility" href="#content-body" tabindex="1">Skip to content</a>
+<div class="container-fluid">
+<div class="header-content">
+<div class="title-container">
+<h1 class="title">
+<a href="/" id="logo" title="Dashboard"><svg class="tanuki-logo" height="24" viewbox="0 0 36 36" width="24">
+<path class="tanuki-shape tanuki-left-ear" d="M2 14l9.38 9v-9l-4-12.28c-.205-.632-1.176-.632-1.38 0z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-right-ear" d="M34 14l-9.38 9v-9l4-12.28c.205-.632 1.176-.632 1.38 0z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-nose" d="M18,34.38 3,14 33,14 Z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-left-eye" d="M18,34.38 11.38,14 2,14 6,25Z" fill="#fc6d26"></path>
+<path class="tanuki-shape tanuki-right-eye" d="M18,34.38 24.62,14 34,14 30,25Z" fill="#fc6d26"></path>
+<path class="tanuki-shape tanuki-left-cheek" d="M2 14L.1 20.16c-.18.565 0 1.2.5 1.56l17.42 12.66z" fill="#fca326"></path>
+<path class="tanuki-shape tanuki-right-cheek" d="M34 14l1.9 6.16c.18.565 0 1.2-.5 1.56L18 34.38z" fill="#fca326"></path>
+</svg>
+<span class="logo-text d-none d-sm-block">
+<svg viewbox="0 0 617 169" xmlns="http://www.w3.org/2000/svg"><path d="M315.26 2.97h-21.8l.1 162.5h88.3v-20.1h-66.5l-.1-142.4M465.89 136.95c-5.5 5.7-14.6 11.4-27 11.4-16.6 0-23.3-8.2-23.3-18.9 0-16.1 11.2-23.8 35-23.8 4.5 0 11.7.5 15.4 1.2v30.1h-.1m-22.6-98.5c-17.6 0-33.8 6.2-46.4 16.7l7.7 13.4c8.9-5.2 19.8-10.4 35.5-10.4 17.9 0 25.8 9.2 25.8 24.6v7.9c-3.5-.7-10.7-1.2-15.1-1.2-38.2 0-57.6 13.4-57.6 41.4 0 25.1 15.4 37.7 38.7 37.7 15.7 0 30.8-7.2 36-18.9l4 15.9h15.4v-83.2c-.1-26.3-11.5-43.9-44-43.9M557.63 149.1c-8.2 0-15.4-1-20.8-3.5V70.5c7.4-6.2 16.6-10.7 28.3-10.7 21.1 0 29.2 14.9 29.2 39 0 34.2-13.1 50.3-36.7 50.3m9.2-110.6c-19.5 0-30 13.3-30 13.3v-21l-.1-27.8h-21.3l.1 158.5c10.7 4.5 25.3 6.9 41.2 6.9 40.7 0 60.3-26 60.3-70.9-.1-35.5-18.2-59-50.2-59M77.9 20.6c19.3 0 31.8 6.4 39.9 12.9l9.4-16.3C114.5 6 97.3 0 78.9 0 32.5 0 0 28.3 0 85.4c0 59.8 35.1 83.1 75.2 83.1 20.1 0 37.2-4.7 48.4-9.4l-.5-63.9V75.1H63.6v20.1h38l.5 48.5c-5 2.5-13.6 4.5-25.3 4.5-32.2 0-53.8-20.3-53.8-63-.1-43.5 22.2-64.6 54.9-64.6M231.43 2.95h-21.3l.1 27.3v94.3c0 26.3 11.4 43.9 43.9 43.9 4.5 0 8.9-.4 13.1-1.2v-19.1c-3.1.5-6.4.7-9.9.7-17.9 0-25.8-9.2-25.8-24.6v-65h35.7v-17.8h-35.7l-.1-38.5M155.96 165.47h21.3v-124h-21.3v124M155.96 24.37h21.3V3.07h-21.3v21.3"></path></svg>
+</span>
+</a></h1>
+<ul class="list-unstyled navbar-sub-nav">
+<li class="home"><a class="dashboard-shortcuts-projects" href="/explore" title="Projects">Projects
+</a></li><li class=""><a class="dashboard-shortcuts-groups" href="/explore/groups" title="Groups">Groups
+</a></li><li class=""><a class="dashboard-shortcuts-snippets" href="/explore/snippets" title="Snippets">Snippets
+</a></li><li>
+<a href="/help" title="About GitLab CE">Help</a>
+</li>
+</ul>
+</div>
+<div class="navbar-collapse collapse">
+<ul class="nav navbar-nav">
+<li class="nav-item d-none d-sm-none d-md-block m-auto">
+<div class="search search-form">
+<form accept-charset="UTF-8" action="/search" class="form-inline" method="get"><input name="utf8" type="hidden" value="✓"/><div class="search-input-container">
+<div class="search-input-wrap">
+<div class="dropdown" data-url="/search/autocomplete">
+<input aria-label="Search" autocomplete="off" class="search-input dropdown-menu-toggle no-outline js-search-dashboard-options" data-issues-path="/dashboard/issues" data-mr-path="/dashboard/merge_requests" id="search" name="search" placeholder="Search" spellcheck="false" tabindex="1" type="search"/>
+<button class="hidden js-dropdown-search-toggle" data-toggle="dropdown" type="button"></button>
+<div class="dropdown-menu dropdown-select">
+<div class="dropdown-content"><ul>
+<li class="dropdown-menu-empty-item">
+<a>
+Loading...
+</a>
+</li>
+</ul>
+</div><div class="dropdown-loading"><i aria-hidden="true" class="fa fa-spinner fa-spin" data-hidden="true"></i></div>
+</div>
+<svg class="s16 search-icon"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#search"></use></svg>
+<svg class="s16 clear-icon js-clear-input"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#close"></use></svg>
+</div>
+</div>
+</div>
+<input class="js-search-group-options" id="group_id" name="group_id" type="hidden"/>
+<input class="js-search-project-options" id="search_project_id" name="project_id" type="hidden" value=""/>
+<input id="repository_ref" name="repository_ref" type="hidden"/>
+<div class="search-autocomplete-opts hide" data-autocomplete-path="/search/autocomplete"></div>
+</form></div>
+</li>
+<li class="nav-item d-inline-block d-sm-none d-md-none">
+<a aria-label="Search" data-container="body" data-placement="bottom" data-toggle="tooltip" href="/search" title="Search"><svg class="s16"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#search"></use></svg>
+</a></li>
+<li class="nav-item">
+<div>
+<a class="btn btn-sign-in" href="/users/sign_in?redirect_to_referer=yes">Sign in / Register</a>
+</div>
+</li>
+</ul>
+</div>
+<button class="navbar-toggler d-block d-sm-none" type="button">
+<span class="sr-only">Toggle navigation</span>
+<svg class="s12 more-icon js-navbar-toggle-right"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#more"></use></svg>
+<svg class="s12 close-icon js-navbar-toggle-left"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#close"></use></svg>
+</button>
+</div>
+</div>
+</header>
+<div class="layout-page">
+<div class="content-wrapper">
+<div class="mobile-overlay"></div>
+<div class="alert-wrapper">
+<nav class="breadcrumbs container-fluid container-limited" role="navigation">
+<div class="breadcrumbs-container">
+<div class="breadcrumbs-links js-title-container">
+<ul class="list-unstyled breadcrumbs-list js-breadcrumbs-list">
+<li><a href="/help">Help</a><svg class="s8 breadcrumbs-list-angle"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#angle-right"></use></svg></li>
+<li>
+<h2 class="breadcrumbs-sub-title"><a href="/help/user/project/repository/gpg_signed_commits/index.md">Help</a></h2>
+</li>
+</ul>
+</div>
+</div>
+</nav>
+<div class="flash-container flash-container-page">
+</div>
+</div>
+<div class="container-fluid container-limited ">
+<div class="content" id="content-body">
+<div class="documentation wiki prepend-top-default">
+<h1 dir="auto">
+<a aria-hidden="true" class="anchor" href="#signing-commits-with-gpg" id="user-content-signing-commits-with-gpg"></a>Signing commits with GPG</h1>
+<p dir="auto">NOTE: <strong>Note:</strong>
+The term GPG is used for all OpenPGP/PGP/GPG related material and
+implementations.</p>
+<blockquote dir="auto">
+<ul>
+<li>
+<a href="https://gitlab.com/gitlab-org/gitlab-ce/merge_requests/9546" rel="nofollow noreferrer noopener" target="_blank">Introduced</a> in GitLab 9.5.</li>
+<li>Subkeys support was added in GitLab 10.1.</li>
+</ul>
+</blockquote>
+<p dir="auto">GitLab can show whether a commit is verified or not when signed with a GPG key.
+All you need to do is upload the public GPG key in your profile settings.</p>
+<p dir="auto">GPG verified tags are not supported yet.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#getting-started-with-gpg" id="user-content-getting-started-with-gpg"></a>Getting started with GPG</h2>
+<p dir="auto">Here are a few guides to get you started with GPG:</p>
+<ul dir="auto">
+<li><a href="https://git-scm.com/book/en/v2/Git-Tools-Signing-Your-Work" rel="nofollow noreferrer noopener" target="_blank">Git Tools - Signing Your Work</a></li>
+<li><a href="https://riseup.net/en/security/message-security/openpgp/gpg-keys" rel="nofollow noreferrer noopener" target="_blank">Managing OpenPGP Keys</a></li>
+<li><a href="https://riseup.net/en/security/message-security/openpgp/best-practices" rel="nofollow noreferrer noopener" target="_blank">OpenPGP Best Practices</a></li>
+<li>
+<a href="https://www.void.gr/kargig/blog/2013/12/02/creating-a-new-gpg-key-with-subkeys/" rel="nofollow noreferrer noopener" target="_blank">Creating a new GPG key with subkeys</a> (advanced)</li>
+</ul>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#how-gitlab-handles-gpg" id="user-content-how-gitlab-handles-gpg"></a>How GitLab handles GPG</h2>
+<p dir="auto">GitLab uses its own keyring to verify the GPG signature. It does not access any
+public key server.</p>
+<p dir="auto">In order to have a commit verified on GitLab the corresponding public key needs
+to be uploaded to GitLab. For a signature to be verified three conditions need
+to be met:</p>
+<ol dir="auto">
+<li>The public key needs to be added your GitLab account</li>
+<li>One of the emails in the GPG key matches a <strong>verified</strong> email address you use in GitLab</li>
+<li>The committer's email matches the verified email from the gpg key</li>
+</ol>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#generating-a-gpg-key" id="user-content-generating-a-gpg-key"></a>Generating a GPG key</h2>
+<blockquote dir="auto">
+<p><strong>Notes:</strong></p>
+</blockquote>
+<ul dir="auto">
+<li>If your Operating System has <code>gpg2</code> installed, replace <code>gpg</code> with <code>gpg2</code> in
+the following commands.</li>
+<li>If Git is using <code>gpg</code> and you get errors like <code>secret key not available</code> or
+<code>gpg: signing failed: secret key not available</code>, run the following command to
+change to <code>gpg2</code>:
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">git config --global gpg.program gpg2</span></code></pre>
+</li>
+</ul>
+<p dir="auto">If you don't already have a GPG key, the following steps will help you get
+started:</p>
+<ol dir="auto">
+<li>
+<p><a href="https://www.gnupg.org/download/index.html" rel="nofollow noreferrer noopener" target="_blank">Install GPG</a> for your operating system</p>
+</li>
+<li>
+<p>Generate the private/public key pair with the following command:</p>
+<pre class="code highlight js-syntax-highlight shell" lang="shell" v-pre="true"><code><span class="line" id="LC1" lang="shell">gpg <span class="nt">--full-gen-key</span></span></code></pre>
+<p>This will spawn a series of questions.</p>
+</li>
+<li>
+<p>The first question is which algorithm can be used.  Select the kind you want
+or press <kbd>Enter</kbd> to choose the default (RSA and RSA):</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">Please select what kind of key you want:</span>
+<span class="line" id="LC2" lang="plaintext">   (1) RSA and RSA (default)</span>
+<span class="line" id="LC3" lang="plaintext">   (2) DSA and Elgamal</span>
+<span class="line" id="LC4" lang="plaintext">   (3) DSA (sign only)</span>
+<span class="line" id="LC5" lang="plaintext">   (4) RSA (sign only)</span>
+<span class="line" id="LC6" lang="plaintext">Your selection? 1</span></code></pre>
+</li>
+<li>
+<p>The next question is key length. We recommend to choose the highest value
+which is <code>4096</code>:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">RSA keys may be between 1024 and 4096 bits long.</span>
+<span class="line" id="LC2" lang="plaintext">What keysize do you want? (2048) 4096</span>
+<span class="line" id="LC3" lang="plaintext">Requested keysize is 4096 bits</span></code></pre>
+</li>
+<li>
+<p>Next, you need to specify the validity period of your key. This is something
+subjective, and you can use the default value which is to never expire:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">Please specify how long the key should be valid.</span>
+<span class="line" id="LC2" lang="plaintext">         0 = key does not expire</span>
+<span class="line" id="LC3" lang="plaintext">      &lt;n&gt;  = key expires in n days</span>
+<span class="line" id="LC4" lang="plaintext">      &lt;n&gt;w = key expires in n weeks</span>
+<span class="line" id="LC5" lang="plaintext">      &lt;n&gt;m = key expires in n months</span>
+<span class="line" id="LC6" lang="plaintext">      &lt;n&gt;y = key expires in n years</span>
+<span class="line" id="LC7" lang="plaintext">Key is valid for? (0) 0</span>
+<span class="line" id="LC8" lang="plaintext">Key does not expire at all</span></code></pre>
+</li>
+<li>
+<p>Confirm that the answers you gave were correct by typing <code>y</code>:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">Is this correct? (y/N) y</span></code></pre>
+</li>
+<li>
+<p>Enter you real name, the email address to be associated with this key (should
+match a verified email address you use in GitLab) and an optional comment
+(press <kbd>Enter</kbd> to skip):</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">GnuPG needs to construct a user ID to identify your key.</span>
+<span class="line" id="LC2" lang="plaintext"></span>
+<span class="line" id="LC3" lang="plaintext">Real name: Mr. Robot</span>
+<span class="line" id="LC4" lang="plaintext">Email address: mr@robot.sh</span>
+<span class="line" id="LC5" lang="plaintext">Comment:</span>
+<span class="line" id="LC6" lang="plaintext">You selected this USER-ID:</span>
+<span class="line" id="LC7" lang="plaintext">    "Mr. Robot &lt;mr@robot.sh&gt;"</span>
+<span class="line" id="LC8" lang="plaintext"></span>
+<span class="line" id="LC9" lang="plaintext">Change (N)ame, (C)omment, (E)mail or (O)kay/(Q)uit? O</span></code></pre>
+</li>
+<li>
+<p>Pick a strong password when asked and type it twice to confirm.</p>
+</li>
+<li>
+<p>Use the following command to list the private GPG key you just created:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">gpg --list-secret-keys --keyid-format LONG mr@robot.sh</span></code></pre>
+<p>Replace <code>mr@robot.sh</code> with the email address you entered above.</p>
+</li>
+<li>
+<p>Copy the GPG key ID that starts with <code>sec</code>. In the following example, that's
+<code>30F2B65B9246B6CA</code>:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">sec   rsa4096/30F2B65B9246B6CA 2017-08-18 [SC]</span>
+<span class="line" id="LC2" lang="plaintext">      D5E4F29F3275DC0CDA8FFC8730F2B65B9246B6CA</span>
+<span class="line" id="LC3" lang="plaintext">uid                   [ultimate] Mr. Robot &lt;mr@robot.sh&gt;</span>
+<span class="line" id="LC4" lang="plaintext">ssb   rsa4096/B7ABC0813E4028C0 2017-08-18 [E]</span></code></pre>
+</li>
+<li>
+<p>Export the public key of that ID (replace your key ID from the previous step):</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">gpg --armor --export 30F2B65B9246B6CA</span></code></pre>
+</li>
+<li>
+<p>Finally, copy the public key and <a href="#adding-a-gpg-key-to-your-account">add it in your profile settings</a></p>
+</li>
+</ol>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#adding-a-gpg-key-to-your-account" id="user-content-adding-a-gpg-key-to-your-account"></a>Adding a GPG key to your account</h2>
+<blockquote dir="auto">
+<p><strong>Note:</strong>
+Once you add a key, you cannot edit it, only remove it. In case the paste
+didn't work, you'll have to remove the offending key and re-add it.</p>
+</blockquote>
+<p dir="auto">You can add a GPG key in your profile's settings:</p>
+<ol dir="auto">
+<li>
+<p>On the upper right corner, click on your avatar and go to your <strong>Settings</strong>.</p>
+<p><a class="no-attachment-icon" href="/profile/img/profile_settings_dropdown.png" rel="noopener noreferrer" target="_blank"><img alt="Settings dropdown" class="lazy" data-src="../../../profile/img/profile_settings_dropdown.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+</li>
+<li>
+<p>Navigate to the <strong>GPG keys</strong> tab and paste your <em>public</em> key in the 'Key'
+box.</p>
+<p><a class="no-attachment-icon" href="/img/profile_settings_gpg_keys_paste_pub.png" rel="noopener noreferrer" target="_blank"><img alt="Paste GPG public key" class="lazy" data-src="img/profile_settings_gpg_keys_paste_pub.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+</li>
+<li>
+<p>Finally, click on <strong>Add key</strong> to add it to GitLab. You will be able to see
+its fingerprint, the corresponding email address and creation date.</p>
+<p><a class="no-attachment-icon" href="/img/profile_settings_gpg_keys_single_key.png" rel="noopener noreferrer" target="_blank"><img alt="GPG key single page" class="lazy" data-src="img/profile_settings_gpg_keys_single_key.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+</li>
+</ol>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#associating-your-gpg-key-with-git" id="user-content-associating-your-gpg-key-with-git"></a>Associating your GPG key with Git</h2>
+<p dir="auto">After you have <a href="#generating-a-gpg-key">created your GPG key</a> and <a href="#adding-a-gpg-key-to-your-account">added it to
+your account</a>, it's time to tell Git which
+key to use.</p>
+<ol dir="auto">
+<li>
+<p>Use the following command to list the private GPG key you just created:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">gpg --list-secret-keys --keyid-format LONG mr@robot.sh</span></code></pre>
+<p>Replace <code>mr@robot.sh</code> with the email address you entered above.</p>
+</li>
+<li>
+<p>Copy the GPG key ID that starts with <code>sec</code>. In the following example, that's
+<code>30F2B65B9246B6CA</code>:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">sec   rsa4096/30F2B65B9246B6CA 2017-08-18 [SC]</span>
+<span class="line" id="LC2" lang="plaintext">      D5E4F29F3275DC0CDA8FFC8730F2B65B9246B6CA</span>
+<span class="line" id="LC3" lang="plaintext">uid                   [ultimate] Mr. Robot &lt;mr@robot.sh&gt;</span>
+<span class="line" id="LC4" lang="plaintext">ssb   rsa4096/B7ABC0813E4028C0 2017-08-18 [E]</span></code></pre>
+</li>
+<li>
+<p>Tell Git to use that key to sign the commits:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">git config --global user.signingkey 30F2B65B9246B6CA</span></code></pre>
+<p>Replace <code>30F2B65B9246B6CA</code> with your GPG key ID.</p>
+</li>
+</ol>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#signing-commits" id="user-content-signing-commits"></a>Signing commits</h2>
+<p dir="auto">After you have <a href="#generating-a-gpg-key">created your GPG key</a> and <a href="#adding-a-gpg-key-to-your-account">added it to
+your account</a>, you can start signing your
+commits:</p>
+<ol dir="auto">
+<li>
+<p>Commit like you used to, the only difference is the addition of the <code>-S</code> flag:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">git commit -S -m "My commit msg"</span></code></pre>
+</li>
+<li>
+<p>Enter the passphrase of your GPG key when asked.</p>
+</li>
+<li>
+<p>Push to GitLab and check that your commits <a href="#verifying-commits">are verified</a>.</p>
+</li>
+</ol>
+<p dir="auto">If you don't want to type the <code>-S</code> flag every time you commit, you can tell Git
+to sign your commits automatically:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">git config --global commit.gpgsign true</span></code></pre>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#verifying-commits" id="user-content-verifying-commits"></a>Verifying commits</h2>
+<ol dir="auto">
+<li>
+<p>Within a project or <a href="/merge_requests/index.md">merge request</a>, navigate to
+the <strong>Commits</strong> tab. Signed commits will show a badge containing either
+"Verified" or "Unverified", depending on the verification status of the GPG
+signature.</p>
+<p><a class="no-attachment-icon" href="/img/project_signed_and_unsigned_commits.png" rel="noopener noreferrer" target="_blank"><img alt="Signed and unsigned commits" class="lazy" data-src="img/project_signed_and_unsigned_commits.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+</li>
+<li>
+<p>By clicking on the GPG badge, details of the signature are displayed.</p>
+<p><a class="no-attachment-icon" href="/img/project_signed_commit_verified_signature.png" rel="noopener noreferrer" target="_blank"><img alt="Signed commit with verified signature" class="lazy" data-src="img/project_signed_commit_verified_signature.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<p><a class="no-attachment-icon" href="/img/project_signed_commit_unverified_signature.png" rel="noopener noreferrer" target="_blank"><img alt="Signed commit with verified signature" class="lazy" data-src="img/project_signed_commit_unverified_signature.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+</li>
+</ol>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#revoking-a-gpg-key" id="user-content-revoking-a-gpg-key"></a>Revoking a GPG key</h2>
+<p dir="auto">Revoking a key <strong>unverifies</strong> already signed commits. Commits that were
+verified by using this key will change to an unverified state. Future commits
+will also stay unverified once you revoke this key. This action should be used
+in case your key has been compromised.</p>
+<p dir="auto">To revoke a GPG key:</p>
+<ol dir="auto">
+<li>On the upper right corner, click on your avatar and go to your <strong>Settings</strong>.</li>
+<li>Navigate to the <strong>GPG keys</strong> tab.</li>
+<li>Click on <strong>Revoke</strong> besides the GPG key you want to delete.</li>
+</ol>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#removing-a-gpg-key" id="user-content-removing-a-gpg-key"></a>Removing a GPG key</h2>
+<p dir="auto">Removing a key <strong>does not unverify</strong> already signed commits. Commits that were
+verified by using this key will stay verified. Only unpushed commits will stay
+unverified once you remove this key. To unverify already signed commits, you need
+to <a href="#revoking-a-gpg-key">revoke the associated GPG key</a> from your account.</p>
+<p dir="auto">To remove a GPG key from your account:</p>
+<ol dir="auto">
+<li>On the upper right corner, click on your avatar and go to your <strong>Settings</strong>.</li>
+<li>Navigate to the <strong>GPG keys</strong> tab.</li>
+<li>Click on the trash icon besides the GPG key you want to delete.</li>
+</ol>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

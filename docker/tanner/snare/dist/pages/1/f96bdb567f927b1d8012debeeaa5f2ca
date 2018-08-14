@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+
+<html class="" lang="en">
+<head prefix="og: http://ogp.me/ns#">
+<meta charset="utf-8"/>
+<meta content="IE=edge" http-equiv="X-UA-Compatible"/>
+<meta content="object" property="og:type"/>
+<meta content="GitLab" property="og:site_name"/>
+<meta content="Index · Documentation · Development · Help" property="og:title"/>
+<meta content="GitLab Community Edition" property="og:description"/>
+<meta content="http://172.20.254.127/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png" property="og:image"/>
+<meta content="64" property="og:image:width"/>
+<meta content="64" property="og:image:height"/>
+<meta content="http://172.20.254.127/help/development/documentation/index.md" property="og:url"/>
+<meta content="summary" property="twitter:card"/>
+<meta content="Index · Documentation · Development · Help" property="twitter:title"/>
+<meta content="GitLab Community Edition" property="twitter:description"/>
+<meta content="http://172.20.254.127/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png" property="twitter:image"/>
+<title>Index · Documentation · Development · Help · GitLab</title>
+<meta content="GitLab Community Edition" name="description"/>
+<link data-original-href="/assets/favicon-7901bd695fb93edb07975966062049829afb56cf11511236e61bcf425070e36e.png" href="/assets/favicon-7901bd695fb93edb07975966062049829afb56cf11511236e61bcf425070e36e.png" id="favicon" rel="shortcut icon" type="image/png"/>
+<link href="/assets/application-266f2bfa52ff531258d13c702895a14fd5994ca591fa2df7338da00ab18c99ac.css" media="all" rel="stylesheet"/>
+<link href="/assets/print-c8ff536271f8974b8a9a5f75c0ca25d2b8c1dceb4cff3c01d1603862a0bdcbfc.css" media="print" rel="stylesheet"/>
+<script>
+//<![CDATA[
+window.gon={};gon.api_version="v4";gon.default_avatar_url="http://172.20.254.127/assets/no_avatar-849f9c04a3a0d0cea2424ae97b27447dc64a7dbfae83c036c45b403392f0e8ba.png";gon.max_file_size=10;gon.asset_host=null;gon.webpack_public_path="/assets/webpack/";gon.relative_url_root="";gon.shortcuts_path="/help/shortcuts";gon.user_color_scheme="white";gon.gitlab_url="http://172.20.254.127";gon.revision="63daf37";gon.gitlab_logo="/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png";gon.sprite_icons="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg";gon.sprite_file_icons="/assets/file_icons-7262fc6897e02f1ceaf8de43dc33afa5e4f9a2067f4f68ef77dcc87946575e9e.svg";gon.emoji_sprites_css_path="/assets/emoji_sprites-289eccffb1183c188b630297431be837765d9ff4aed6130cf738586fb307c170.css";gon.test_env=false;gon.suggested_label_colors=["#0033CC","#428BCA","#44AD8E","#A8D695","#5CB85C","#69D100","#004E00","#34495E","#7F8C8D","#A295D6","#5843AD","#8E44AD","#FFECDB","#AD4363","#D10069","#CC0033","#FF0000","#D9534F","#D1D100","#F0AD4E","#AD8D43"];
+//]]>
+</script>
+<script defer="defer" src="/assets/webpack/runtime.9fcb75d4.bundle.js"></script>
+<script defer="defer" src="/assets/webpack/main.a66b6c66.chunk.js"></script>
+<script defer="defer" src="/assets/webpack/pages.help.show.c42c0700.chunk.js"></script>
+<meta content="authenticity_token" name="csrf-param">
+<meta content="1Ksyuyqe3ZUFN6gGRTXs48Z13oRuQSIIF3vc1daFMHJUrhJepMwvDP/VefeNa3BL5oBGUx3OJdUoPsspCKd/Hg==" name="csrf-token">
+<meta content="origin-when-cross-origin" name="referrer"/>
+<meta content="width=device-width, initial-scale=1, maximum-scale=1" name="viewport"/>
+<meta content="#474D57" name="theme-color"/>
+<link href="/assets/touch-icon-iphone-5a9cee0e8a51212e70b90c87c12f382c428870c0ff67d1eb034d884b78d2dae7.png" rel="apple-touch-icon" type="image/x-icon"/>
+<link href="/assets/touch-icon-ipad-a6eec6aeb9da138e507593b464fdac213047e49d3093fc30e90d9a995df83ba3.png" rel="apple-touch-icon" sizes="76x76" type="image/x-icon"/>
+<link href="/assets/touch-icon-iphone-retina-72e2aadf86513a56e050e7f0f2355deaa19cc17ed97bbe5147847f2748e5a3e3.png" rel="apple-touch-icon" sizes="120x120" type="image/x-icon"/>
+<link href="/assets/touch-icon-ipad-retina-8ebe416f5313483d9c1bc772b5bbe03ecad52a54eba443e5215a22caed2a16a2.png" rel="apple-touch-icon" sizes="152x152" type="image/x-icon"/>
+<link color="rgb(226, 67, 41)" href="/assets/logo-d36b5212042cebc89b96df4bf6ac24e43db316143e89926c0db839ff694d2de4.svg" rel="mask-icon"/>
+<meta content="/assets/msapplication-tile-1196ec67452f618d39cdd85e2e3a542f76574c071051ae7effbfde01710eb17d.png" name="msapplication-TileImage"/>
+<meta content="#30353E" name="msapplication-TileColor"/>
+</meta></meta></head>
+<body class="ui-indigo " data-group="" data-page="help:show" data-project="">
+<header class="navbar navbar-gitlab qa-navbar navbar-expand-sm">
+<a class="sr-only gl-accessibility" href="#content-body" tabindex="1">Skip to content</a>
+<div class="container-fluid">
+<div class="header-content">
+<div class="title-container">
+<h1 class="title">
+<a href="/" id="logo" title="Dashboard"><svg class="tanuki-logo" height="24" viewbox="0 0 36 36" width="24">
+<path class="tanuki-shape tanuki-left-ear" d="M2 14l9.38 9v-9l-4-12.28c-.205-.632-1.176-.632-1.38 0z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-right-ear" d="M34 14l-9.38 9v-9l4-12.28c.205-.632 1.176-.632 1.38 0z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-nose" d="M18,34.38 3,14 33,14 Z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-left-eye" d="M18,34.38 11.38,14 2,14 6,25Z" fill="#fc6d26"></path>
+<path class="tanuki-shape tanuki-right-eye" d="M18,34.38 24.62,14 34,14 30,25Z" fill="#fc6d26"></path>
+<path class="tanuki-shape tanuki-left-cheek" d="M2 14L.1 20.16c-.18.565 0 1.2.5 1.56l17.42 12.66z" fill="#fca326"></path>
+<path class="tanuki-shape tanuki-right-cheek" d="M34 14l1.9 6.16c.18.565 0 1.2-.5 1.56L18 34.38z" fill="#fca326"></path>
+</svg>
+<span class="logo-text d-none d-sm-block">
+<svg viewbox="0 0 617 169" xmlns="http://www.w3.org/2000/svg"><path d="M315.26 2.97h-21.8l.1 162.5h88.3v-20.1h-66.5l-.1-142.4M465.89 136.95c-5.5 5.7-14.6 11.4-27 11.4-16.6 0-23.3-8.2-23.3-18.9 0-16.1 11.2-23.8 35-23.8 4.5 0 11.7.5 15.4 1.2v30.1h-.1m-22.6-98.5c-17.6 0-33.8 6.2-46.4 16.7l7.7 13.4c8.9-5.2 19.8-10.4 35.5-10.4 17.9 0 25.8 9.2 25.8 24.6v7.9c-3.5-.7-10.7-1.2-15.1-1.2-38.2 0-57.6 13.4-57.6 41.4 0 25.1 15.4 37.7 38.7 37.7 15.7 0 30.8-7.2 36-18.9l4 15.9h15.4v-83.2c-.1-26.3-11.5-43.9-44-43.9M557.63 149.1c-8.2 0-15.4-1-20.8-3.5V70.5c7.4-6.2 16.6-10.7 28.3-10.7 21.1 0 29.2 14.9 29.2 39 0 34.2-13.1 50.3-36.7 50.3m9.2-110.6c-19.5 0-30 13.3-30 13.3v-21l-.1-27.8h-21.3l.1 158.5c10.7 4.5 25.3 6.9 41.2 6.9 40.7 0 60.3-26 60.3-70.9-.1-35.5-18.2-59-50.2-59M77.9 20.6c19.3 0 31.8 6.4 39.9 12.9l9.4-16.3C114.5 6 97.3 0 78.9 0 32.5 0 0 28.3 0 85.4c0 59.8 35.1 83.1 75.2 83.1 20.1 0 37.2-4.7 48.4-9.4l-.5-63.9V75.1H63.6v20.1h38l.5 48.5c-5 2.5-13.6 4.5-25.3 4.5-32.2 0-53.8-20.3-53.8-63-.1-43.5 22.2-64.6 54.9-64.6M231.43 2.95h-21.3l.1 27.3v94.3c0 26.3 11.4 43.9 43.9 43.9 4.5 0 8.9-.4 13.1-1.2v-19.1c-3.1.5-6.4.7-9.9.7-17.9 0-25.8-9.2-25.8-24.6v-65h35.7v-17.8h-35.7l-.1-38.5M155.96 165.47h21.3v-124h-21.3v124M155.96 24.37h21.3V3.07h-21.3v21.3"></path></svg>
+</span>
+</a></h1>
+<ul class="list-unstyled navbar-sub-nav">
+<li class="home"><a class="dashboard-shortcuts-projects" href="/explore" title="Projects">Projects
+</a></li><li class=""><a class="dashboard-shortcuts-groups" href="/explore/groups" title="Groups">Groups
+</a></li><li class=""><a class="dashboard-shortcuts-snippets" href="/explore/snippets" title="Snippets">Snippets
+</a></li><li>
+<a href="/help" title="About GitLab CE">Help</a>
+</li>
+</ul>
+</div>
+<div class="navbar-collapse collapse">
+<ul class="nav navbar-nav">
+<li class="nav-item d-none d-sm-none d-md-block m-auto">
+<div class="search search-form">
+<form accept-charset="UTF-8" action="/search" class="form-inline" method="get"><input name="utf8" type="hidden" value="✓"/><div class="search-input-container">
+<div class="search-input-wrap">
+<div class="dropdown" data-url="/search/autocomplete">
+<input aria-label="Search" autocomplete="off" class="search-input dropdown-menu-toggle no-outline js-search-dashboard-options" data-issues-path="/dashboard/issues" data-mr-path="/dashboard/merge_requests" id="search" name="search" placeholder="Search" spellcheck="false" tabindex="1" type="search"/>
+<button class="hidden js-dropdown-search-toggle" data-toggle="dropdown" type="button"></button>
+<div class="dropdown-menu dropdown-select">
+<div class="dropdown-content"><ul>
+<li class="dropdown-menu-empty-item">
+<a>
+Loading...
+</a>
+</li>
+</ul>
+</div><div class="dropdown-loading"><i aria-hidden="true" class="fa fa-spinner fa-spin" data-hidden="true"></i></div>
+</div>
+<svg class="s16 search-icon"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#search"></use></svg>
+<svg class="s16 clear-icon js-clear-input"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#close"></use></svg>
+</div>
+</div>
+</div>
+<input class="js-search-group-options" id="group_id" name="group_id" type="hidden"/>
+<input class="js-search-project-options" id="search_project_id" name="project_id" type="hidden" value=""/>
+<input id="repository_ref" name="repository_ref" type="hidden"/>
+<div class="search-autocomplete-opts hide" data-autocomplete-path="/search/autocomplete"></div>
+</form></div>
+</li>
+<li class="nav-item d-inline-block d-sm-none d-md-none">
+<a aria-label="Search" data-container="body" data-placement="bottom" data-toggle="tooltip" href="/search" title="Search"><svg class="s16"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#search"></use></svg>
+</a></li>
+<li class="nav-item">
+<div>
+<a class="btn btn-sign-in" href="/users/sign_in?redirect_to_referer=yes">Sign in / Register</a>
+</div>
+</li>
+</ul>
+</div>
+<button class="navbar-toggler d-block d-sm-none" type="button">
+<span class="sr-only">Toggle navigation</span>
+<svg class="s12 more-icon js-navbar-toggle-right"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#more"></use></svg>
+<svg class="s12 close-icon js-navbar-toggle-left"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#close"></use></svg>
+</button>
+</div>
+</div>
+</header>
+<div class="layout-page">
+<div class="content-wrapper">
+<div class="mobile-overlay"></div>
+<div class="alert-wrapper">
+<nav class="breadcrumbs container-fluid container-limited" role="navigation">
+<div class="breadcrumbs-container">
+<div class="breadcrumbs-links js-title-container">
+<ul class="list-unstyled breadcrumbs-list js-breadcrumbs-list">
+<li><a href="/help">Help</a><svg class="s8 breadcrumbs-list-angle"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#angle-right"></use></svg></li>
+<li>
+<h2 class="breadcrumbs-sub-title"><a href="/help/development/documentation/index.md">Help</a></h2>
+</li>
+</ul>
+</div>
+</div>
+</nav>
+<div class="flash-container flash-container-page">
+</div>
+</div>
+<div class="container-fluid container-limited ">
+<div class="content" id="content-body">
+<div class="documentation wiki prepend-top-default">
+<h1 dir="auto">
+<a aria-hidden="true" class="anchor" href="#gitlab-documentation-guidelines" id="user-content-gitlab-documentation-guidelines"></a>GitLab Documentation guidelines</h1>
+<ul dir="auto">
+<li>
+<strong>General Documentation</strong>: written by the <a href="#contributing-to-docs">developers responsible by creating features</a>. Should be submitted in the same merge request containing code. Feature proposals (by GitLab contributors) should also be accompanied by its respective documentation. They can be later improved by PMs and Technical Writers.</li>
+<li>
+<strong><a href="#technical-articles">Technical Articles</a></strong>: written by any <a href="https://about.gitlab.com/team/" rel="nofollow noreferrer noopener" target="_blank">GitLab Team</a> member, GitLab contributors, or <a href="https://about.gitlab.com/handbook/product/technical-writing/community-writers/" rel="nofollow noreferrer noopener" target="_blank">Community Writers</a>.</li>
+<li>
+<strong>Indexes per topic</strong>: initially prepared by the Technical Writing Team, and kept up-to-date by developers and PMs in the same merge request containing code. They gather all resources for that topic in a single page (user and admin documentation, articles, and third-party docs).</li>
+</ul>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#contributing-to-docs" id="user-content-contributing-to-docs"></a>Contributing to docs</h2>
+<p dir="auto">Whenever a feature is changed, updated, introduced, or deprecated, the merge
+request introducing these changes must be accompanied by the documentation
+(either updating existing ones or creating new ones). This is also valid when
+changes are introduced to the UI.</p>
+<p dir="auto">The one responsible for writing the first piece of documentation is the developer who
+wrote the code. It's the job of the Product Manager to ensure all features are
+shipped with its docs, whether is a small or big change. At the pace GitLab evolves,
+this is the only way to keep the docs up-to-date. If you have any questions about it,
+ask a Technical Writer. Otherwise, when your content is ready, assign one of
+them to review it for you.</p>
+<p dir="auto">We use the <a href="https://about.gitlab.com/handbook/marketing/blog/release-posts/#monthly-releases" rel="nofollow noreferrer noopener" target="_blank">monthly release blog post</a> as a changelog checklist to ensure everything
+is documented.</p>
+<p dir="auto">Whenever you submit a merge request for the documentation, use the documentation MR description template.</p>
+<p dir="auto">Please check the <a href="https://about.gitlab.com/handbook/product/technical-writing/workflow/" rel="nofollow noreferrer noopener" target="_blank">documentation workflow</a> before getting started.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#documentation-structure" id="user-content-documentation-structure"></a>Documentation structure</h2>
+<ul dir="auto">
+<li>Overview and use cases: what it is, why it is necessary, why one would use it</li>
+<li>Requirements: what do we need to get started</li>
+<li>Tutorial: how to set it up, how to use it</li>
+</ul>
+<p dir="auto">Always link a new document from its topic-related index, otherwise, it will
+not be included it in the documentation site search.</p>
+<p dir="auto"><em>Note: to be extended.</em></p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#feature-overview-and-use-cases" id="user-content-feature-overview-and-use-cases"></a>Feature overview and use cases</h3>
+<p dir="auto">Every major feature (regardless if present in GitLab Community or Enterprise editions)
+should present, at the beginning of the document, two main sections: <strong>overview</strong> and
+<strong>use cases</strong>. Every GitLab EE-only feature should also contain these sections.</p>
+<p dir="auto"><strong>Overview</strong>: as the name suggests, the goal here is to provide an overview of the feature.
+Describe what is it, what it does, why it is important/cool/nice-to-have,
+what problem it solves, and what you can do with this feature that you couldn't
+do before.</p>
+<p dir="auto"><strong>Use cases</strong>: provide at least two, ideally three, use cases for every major feature.
+You should answer this question: what can you do with this feature/change? Use cases
+are examples of how this feature or change can be used in real life.</p>
+<p dir="auto">Examples:</p>
+<ul dir="auto">
+<li>CE and EE: <a href="../user/project/issues/index.md#use-cases">Issues</a>
+</li>
+<li>CE and EE: <a href="../user/project/merge_requests/index.md#overview">Merge Requests</a>
+</li>
+<li>EE-only: <a href="https://docs.gitlab.com/ee/gitlab-geo/README.html#overview" rel="nofollow noreferrer noopener" target="_blank">Geo</a>
+</li>
+<li>EE-only: <a href="https://docs.gitlab.com/ee/integration/jenkins.md#overview" rel="nofollow noreferrer noopener" target="_blank">Jenkins integration</a>
+</li>
+</ul>
+<p dir="auto">Note that if you don't have anything to add between the doc title (<code>&lt;h1&gt;</code>) and
+the header <code>## Overview</code>, you can omit the header, but keep the content of the
+overview there.</p>
+<blockquote dir="auto">
+<p><strong>Overview</strong> and <strong>use cases</strong> are required to <strong>every</strong> Enterprise Edition feature,
+and for every <strong>major</strong> feature present in Community Edition.</p>
+</blockquote>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#markdown-and-styles" id="user-content-markdown-and-styles"></a>Markdown and styles</h2>
+<p dir="auto">Currently GitLab docs use Redcarpet as <a href="/user/markdown.md">markdown</a> engine, but there's an <a href="https://gitlab.com/gitlab-com/gitlab-docs/issues/50" rel="nofollow noreferrer noopener" target="_blank">open discussion</a> for implementing Kramdown in the near future.</p>
+<p dir="auto">All the docs follow the <a href="/styleguide.md">documentation style guidelines</a>.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#documentation-directory-structure" id="user-content-documentation-directory-structure"></a>Documentation directory structure</h2>
+<p dir="auto">The documentation is structured based on the GitLab UI structure itself,
+separated by <a href="https://gitlab.com/gitlab-org/gitlab-ce/tree/master/doc/user" rel="nofollow noreferrer noopener" target="_blank"><code>user</code></a>,
+<a href="https://gitlab.com/gitlab-org/gitlab-ce/tree/master/doc/administration" rel="nofollow noreferrer noopener" target="_blank"><code>administrator</code></a>, and <a href="https://gitlab.com/gitlab-org/gitlab-ce/tree/master/doc/development" rel="nofollow noreferrer noopener" target="_blank"><code>contributor</code></a>.</p>
+<p dir="auto">In order to have a <a href="https://searchengineland.com/seo-benefits-developing-solid-site-structure-277456" rel="nofollow noreferrer noopener" target="_blank">solid site structure</a> for our documentation,
+all docs should be linked. Every new document should be cross-linked to its related documentation, and linked from its topic-related index, when existent.</p>
+<p dir="auto">The directories <code>/workflow/</code>, <code>/gitlab-basics/</code>, <code>/university/</code>, and <code>/articles/</code> have
+been deprecated and the majority their docs have been moved to their correct location
+in small iterations. Please don't create new docs in these folders.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#location-and-naming-documents" id="user-content-location-and-naming-documents"></a>Location and naming documents</h3>
+<p dir="auto">The documentation hierarchy can be vastly improved by providing a better layout
+and organization of directories.</p>
+<p dir="auto">Having a structured document layout, we will be able to have meaningful URLs
+like <code>docs.gitlab.com/user/project/merge_requests/index.html</code>. With this pattern,
+you can immediately tell that you are navigating a user related documentation
+and is about the project and its merge requests.</p>
+<p dir="auto">Do not create summaries of similar types of content (e.g. an index of all articles, videos, etc.),
+rather organize content by its subject (e.g. everything related to CI goes together)
+and cross-link between any related content.</p>
+<p dir="auto">The table below shows what kind of documentation goes where.</p>
+<table dir="auto">
+<thead>
+<tr>
+<th>Directory</th>
+<th>What belongs here</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>doc/user/</code></td>
+<td>User related documentation. Anything that can be done within the GitLab UI goes here including <code>/admin</code>.</td>
+</tr>
+<tr>
+<td><code>doc/administration/</code></td>
+<td>Documentation that requires the user to have access to the server where GitLab is installed. The admin settings that can be accessed via GitLab's interface go under <code>doc/user/admin_area/</code>.</td>
+</tr>
+<tr>
+<td><code>doc/api/</code></td>
+<td>API related documentation.</td>
+</tr>
+<tr>
+<td><code>doc/development/</code></td>
+<td>Documentation related to the development of GitLab. Any styleguides should go here.</td>
+</tr>
+<tr>
+<td><code>doc/legal/</code></td>
+<td>Legal documents about contributing to GitLab.</td>
+</tr>
+<tr>
+<td><code>doc/install/</code></td>
+<td>Probably the most visited directory, since <code>installation.md</code> is there. Ideally this should go under <code>doc/administration/</code>, but it's best to leave it as-is in order to avoid confusion (still debated though).</td>
+</tr>
+<tr>
+<td><code>doc/update/</code></td>
+<td>Same with <code>doc/install/</code>. Should be under <code>administration/</code>, but this is a well known location, better leave as-is, at least for now.</td>
+</tr>
+<tr>
+<td><code>doc/topics/</code></td>
+<td>Indexes per Topic (<code>doc/topics/topic-name/index.md</code>): all resources for that topic (user and admin documentation, articles, and third-party docs)</td>
+</tr>
+</tbody>
+</table>
+<hr/>
+<p dir="auto"><strong>General rules:</strong></p>
+<ol dir="auto">
+<li>The correct naming and location of a new document, is a combination
+of the relative URL of the document in question and the GitLab Map design
+that is used for UX purposes (<a href="https://gitlab.com/gitlab-org/gitlab-design/blob/d8d39f4a87b90fb9ae89ca12dc565347b4900d5e/production/resources/gitlab-map.graffle" rel="nofollow noreferrer noopener" target="_blank">source</a>, <a href="https://gitlab.com/gitlab-org/gitlab-design/raw/master/production/resources/gitlab-map.png" rel="nofollow noreferrer noopener" target="_blank">image</a>).</li>
+<li>When creating a new document and it has more than one word in its name,
+make sure to use underscores instead of spaces or dashes (<code>-</code>). For example,
+a proper naming would be <code>import_projects_from_github.md</code>. The same rule
+applies to images.</li>
+<li>Start a new directory with an <code>index.md</code> file.</li>
+<li>There are four main directories, <code>user</code>, <code>administration</code>, <code>api</code> and <code>development</code>.</li>
+<li>The <code>doc/user/</code> directory has five main subdirectories: <code>project/</code>, <code>group/</code>,
+<code>profile/</code>, <code>dashboard/</code> and <code>admin_area/</code>.
+<ol>
+<li>
+<code>doc/user/project/</code> should contain all project related documentation.</li>
+<li>
+<code>doc/user/group/</code> should contain all group related documentation.</li>
+<li>
+<code>doc/user/profile/</code> should contain all profile related documentation.
+Every page you would navigate under <code>/profile</code> should have its own document,
+i.e. <code>account.md</code>, <code>applications.md</code>, <code>emails.md</code>, etc.</li>
+<li>
+<code>doc/user/dashboard/</code> should contain all dashboard related documentation.</li>
+<li>
+<code>doc/user/admin_area/</code> should contain all admin related documentation
+describing what can be achieved by accessing GitLab's admin interface
+(<em>not to be confused with <code>doc/administration</code> where server access is
+required</em>).
+<ol>
+<li>Every category under <code>/admin/application_settings</code> should have its
+own document located at <code>doc/user/admin_area/settings/</code>. For example,
+the <strong>Visibility and Access Controls</strong> category should have a document
+located at <code>doc/user/admin_area/settings/visibility_and_access_controls.md</code>.</li>
+</ol>
+</li>
+</ol>
+</li>
+<li>The <code>doc/topics/</code> directory holds topic-related technical content. Create
+<code>doc/topics/topic-name/subtopic-name/index.md</code> when subtopics become necessary.
+General user- and admin- related documentation, should be placed accordingly.</li>
+</ol>
+<p dir="auto">If you are unsure where a document should live, you can ping <code>@axil</code> or <code>@marcia</code> in your
+merge request.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#changing-document-location" id="user-content-changing-document-location"></a>Changing document location</h3>
+<p dir="auto">Changing a document's location is not to be taken lightly. Remember that the
+documentation is available to all installations under <code>help/</code> and not only to
+GitLab.com or <a href="http://docs.gitlab.com" rel="nofollow noreferrer noopener" target="_blank">http://docs.gitlab.com</a>. Make sure this is discussed with the
+Documentation team beforehand.</p>
+<p dir="auto">If you indeed need to change a document's location, do NOT remove the old
+document, but rather replace all of its contents with a new line:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">This document was moved to [another location](path/to/new_doc.md).</span></code></pre>
+<p dir="auto">where <code>path/to/new_doc.md</code> is the relative path to the root directory <code>doc/</code>.</p>
+<hr/>
+<p dir="auto">For example, if you were to move <code>doc/workflow/lfs/lfs_administration.md</code> to
+<code>doc/administration/lfs.md</code>, then the steps would be:</p>
+<ol dir="auto">
+<li>
+<p>Copy <code>doc/workflow/lfs/lfs_administration.md</code> to <code>doc/administration/lfs.md</code></p>
+</li>
+<li>
+<p>Replace the contents of <code>doc/workflow/lfs/lfs_administration.md</code> with:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">This document was moved to [another location](../../administration/lfs.md).</span></code></pre>
+</li>
+<li>
+<p>Find and replace any occurrences of the old location with the new one.
+A quick way to find them is to use <code>git grep</code>. First go to the root directory
+where you cloned the <code>gitlab-ce</code> repository and then do:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">git grep -n "workflow/lfs/lfs_administration"</span>
+<span class="line" id="LC2" lang="plaintext">git grep -n "lfs/lfs_administration"</span></code></pre>
+</li>
+</ol>
+<p dir="auto">NOTE: <strong>Note:</strong>
+If the document being moved has any Disqus comments on it, there are extra steps
+to follow documented just <a href="#redirections-for-pages-with-disqus-comments">below</a>.</p>
+<p dir="auto">Things to note:</p>
+<ul dir="auto">
+<li>Since we also use inline documentation, except for the documentation itself,
+the document might also be referenced in the views of GitLab (<code>app/</code>) which will
+render when visiting <code>/help</code>, and sometimes in the testing suite (<code>spec/</code>).</li>
+<li>The above <code>git grep</code> command will search recursively in the directory you run
+it in for <code>workflow/lfs/lfs_administration</code> and <code>lfs/lfs_administration</code>
+and will print the file and the line where this file is mentioned.
+You may ask why the two greps. Since we use relative paths to link to
+documentation, sometimes it might be useful to search a path deeper.</li>
+<li>The <code>*.md</code> extension is not used when a document is linked to GitLab's
+built-in help page, that's why we omit it in <code>git grep</code>.</li>
+<li>Use the checklist on the documentation MR description template.</li>
+</ul>
+<h4 dir="auto">
+<a aria-hidden="true" class="anchor" href="#alternative-redirection-method" id="user-content-alternative-redirection-method"></a>Alternative redirection method</h4>
+<p dir="auto">Alternatively to the method described above, you can simply replace the content
+of the old file with a frontmatter containing a redirect link:</p>
+<pre class="code highlight js-syntax-highlight yaml" lang="yaml" v-pre="true"><code><span class="line" id="LC1" lang="yaml"><span class="nn">---</span></span>
+<span class="line" id="LC2" lang="yaml"><span class="na">redirect_to</span><span class="pi">:</span> <span class="s1">'</span><span class="s">../path/to/file/README.md'</span></span>
+<span class="line" id="LC3" lang="yaml"><span class="nn">---</span></span></code></pre>
+<p dir="auto">It supports both full and relative URLs, e.g. <code>https://docs.gitlab.com/ee/path/to/file.html</code>, <code>../path/to/file.html</code>, <code>path/to/file.md</code>. Note that any <code>*.md</code> paths will be compiled to <code>*.html</code>.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#redirections-for-pages-with-disqus-comments" id="user-content-redirections-for-pages-with-disqus-comments"></a>Redirections for pages with Disqus comments</h3>
+<p dir="auto">If the documentation page being relocated already has any Disqus comments,
+we need to preserve the Disqus thread.</p>
+<p dir="auto">Disqus uses an identifier per page, and for docs.gitlab.com, the page identifier
+is configured to be the page URL. Therefore, when we change the document location,
+we need to preserve the old URL as the same Disqus identifier.</p>
+<p dir="auto">To do that, add to the frontmatter the variable <code>redirect_from</code>,
+using the old URL as value. For example, let's say I moved the document
+available under <code>https://docs.gitlab.com/my-old-location/README.html</code> to a new location,
+<code>https://docs.gitlab.com/my-new-location/index.html</code>.</p>
+<p dir="auto">Into the <strong>new document</strong> frontmatter add the following:</p>
+<pre class="code highlight js-syntax-highlight yaml" lang="yaml" v-pre="true"><code><span class="line" id="LC1" lang="yaml"><span class="nn">---</span></span>
+<span class="line" id="LC2" lang="yaml"><span class="na">redirect_from</span><span class="pi">:</span> <span class="s1">'</span><span class="s">https://docs.gitlab.com/my-old-location/README.html'</span></span>
+<span class="line" id="LC3" lang="yaml"><span class="nn">---</span></span></code></pre>
+<p dir="auto">Note: it is necessary to include the file name in the <code>redirect_from</code> URL,
+even if it's <code>index.html</code> or <code>README.html</code>.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#testing" id="user-content-testing"></a>Testing</h2>
+<p dir="auto">We treat documentation as code, thus have implemented some testing.
+Currently, the following tests are in place:</p>
+<ol dir="auto">
+<li>
+<code>docs lint</code>: Check that all internal (relative) links work correctly and
+that all cURL examples in API docs use the full switches. It's recommended
+to <a href="#previewing-locally">check locally</a> before pushing to GitLab by executing the command
+<code>bundle exec nanoc check internal_links</code> on your local
+<a href="https://gitlab.com/gitlab-com/gitlab-docs" rel="nofollow noreferrer noopener" target="_blank"><code>gitlab-docs</code></a> directory.</li>
+<li>
+<a href="../automatic_ce_ee_merge.md#avoiding-ce-gt-ee-merge-conflicts-beforehand"><code>ee_compat_check</code></a> (runs on CE only):
+When you submit a merge request to GitLab Community Edition (CE),
+there is this additional job that runs against Enterprise Edition (EE)
+and checks if your changes can apply cleanly to the EE codebase.
+If that job fails, read the instructions in the job log for what to do next.
+As CE is merged into EE once a day, it's important to avoid merge conflicts.
+Submitting an EE-equivalent merge request cherry-picking all commits from CE to EE is
+essential to avoid them.</li>
+</ol>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#branch-naming" id="user-content-branch-naming"></a>Branch naming</h2>
+<p dir="auto">If your contribution contains <strong>only</strong> documentation changes, you can speed up
+the CI process by following some branch naming conventions. You have three
+choices:</p>
+<table dir="auto">
+<thead>
+<tr>
+<th>Branch name</th>
+<th>Valid example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Starting with <code>docs/</code>
+</td>
+<td><code>docs/update-api-issues</code></td>
+</tr>
+<tr>
+<td>Starting with <code>docs-</code>
+</td>
+<td><code>docs-update-api-issues</code></td>
+</tr>
+<tr>
+<td>Ending in <code>-docs</code>
+</td>
+<td><code>123-update-api-issues-docs</code></td>
+</tr>
+</tbody>
+</table>
+<p dir="auto">If your branch name matches any of the above, it will run only the docs
+tests. If it doesn't, the whole test suite will run (including docs).</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#merge-requests-for-gitlab-documentation" id="user-content-merge-requests-for-gitlab-documentation"></a>Merge requests for GitLab documentation</h2>
+<p dir="auto">Before getting started, make sure you read the introductory section
+"<a href="#contributing-to-docs">contributing to docs</a>" above and the
+<a href="https://about.gitlab.com/handbook/product/technical-writing/workflow/" rel="nofollow noreferrer noopener" target="_blank">tech writing workflow</a>
+for GitLab Team members.</p>
+<ul dir="auto">
+<li>Use the current <a href="https://gitlab.com/gitlab-org/gitlab-ce/blob/master/.gitlab/merge_request_templates/Documentation.md" rel="nofollow noreferrer noopener" target="_blank">merge request description template</a>
+</li>
+<li>Use the correct <a href="#branch-naming">branch name</a>
+</li>
+<li>Label the MR <code>Documentation</code>
+</li>
+<li>Assign the correct milestone (see note below)</li>
+</ul>
+<p dir="auto">NOTE: <strong>Note:</strong>
+If the release version you want to add the documentation to has already been
+frozen or released, use the label <code>Pick into X.Y</code> to get it merged into
+the correct release. Avoid picking into a past release as much as you can, as
+it increases the work of the release managers.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#cherry-picking-from-ce-to-ee" id="user-content-cherry-picking-from-ce-to-ee"></a>Cherry-picking from CE to EE</h3>
+<p dir="auto">As we have the <code>master</code> branch of CE merged into EE once a day, it's common to
+run into merge conflicts. To avoid them, we <a href="#testing">test for merge conflicts against EE</a>
+with the <code>ee-compat-check</code> job, and use the following method of creating equivalent
+branches for CE and EE.</p>
+<p dir="auto">Follow this <a href="../automatic_ce_ee_merge.md#cherry-picking-from-ce-to-ee">method for cherry-picking from CE to EE</a>, with a few adjustments:</p>
+<ul dir="auto">
+<li>Create the <a href="#branch-naming">CE branch</a> starting with <code>docs-</code>,
+e.g.: <code>git checkout -b docs-example</code>
+</li>
+<li>Create the EE-equivalent branch ending with <code>-ee</code>, e.g.,
+<code>git checkout -b docs-example-ee</code>
+</li>
+<li>Once all the jobs are passing in CE and EE, and you've addressed the
+feedback from your own team, assign the CE MR to a technical writer for review</li>
+<li>When both MRs are ready, the EE merge request will be merged first, and the
+CE-equivalent will be merged next.</li>
+<li>Note that the review will occur only in the CE MR, as the EE MR
+contains the same commits as the CE MR.</li>
+<li>If you have a few more changes that apply to the EE-version only, you can submit
+a couple more commits to the EE branch, but ask the reviewer to review the EE merge request
+additionally to the CE MR. If there are many EE-only changes though, start a new MR
+to EE only.</li>
+</ul>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#previewing-the-changes-live" id="user-content-previewing-the-changes-live"></a>Previewing the changes live</h2>
+<p dir="auto">NOTE: <strong>Note:</strong>
+To preview your changes to documentation locally, follow this
+<a href="https://gitlab.com/gitlab-com/gitlab-docs/blob/master/README.md#development" rel="nofollow noreferrer noopener" target="_blank">development guide</a>.</p>
+<p dir="auto">The live preview is currently enabled for the following projects:</p>
+<ul dir="auto">
+<li><a href="https://gitlab.com/gitlab-org/gitlab-ce" rel="nofollow noreferrer noopener" target="_blank">https://gitlab.com/gitlab-org/gitlab-ce</a></li>
+<li><a href="https://gitlab.com/gitlab-org/gitlab-ee" rel="nofollow noreferrer noopener" target="_blank">https://gitlab.com/gitlab-org/gitlab-ee</a></li>
+<li><a href="https://gitlab.com/gitlab-org/gitlab-runner" rel="nofollow noreferrer noopener" target="_blank">https://gitlab.com/gitlab-org/gitlab-runner</a></li>
+</ul>
+<p dir="auto">If your branch contains only documentation changes, you can use
+<a href="#branch-naming">special branch names</a> to avoid long running pipelines.</p>
+<p dir="auto">For <a href="#branch-naming">docs-only changes</a>, the review app is run automatically.
+For all other branches, you can use the manual <code>review-docs-deploy-manual</code> job
+in your merge request. You will need at least Maintainer permissions to be able
+to run it. In the mini pipeline graph, you should see an <code>&gt;&gt;</code> icon. Clicking on it will
+reveal the <code>review-docs-deploy-manual</code> job. Hit the play button for the job to start.</p>
+<p dir="auto"><a class="no-attachment-icon" href="/img/manual_build_docs.png" rel="noopener noreferrer" target="_blank"><img alt="Manual trigger a docs build" class="lazy" data-src="img/manual_build_docs.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<p dir="auto">NOTE: <strong>Note:</strong>
+You will need to push a branch to those repositories, it doesn't work for forks.</p>
+<p dir="auto">The <code>review-docs-deploy*</code> job will:</p>
+<ol dir="auto">
+<li>Create a new branch in the <a href="https://gitlab.com/gitlab-com/gitlab-docs" rel="nofollow noreferrer noopener" target="_blank">gitlab-docs</a>
+project named after the scheme: <code>$DOCS_GITLAB_REPO_SUFFIX-$CI_ENVIRONMENT_SLUG</code>,
+where <code>DOCS_GITLAB_REPO_SUFFIX</code> is the suffix for each product, e.g, <code>ce</code> for
+CE, etc.</li>
+<li>Trigger a cross project pipeline and build the docs site with your changes</li>
+</ol>
+<p dir="auto">After a few minutes, the Review App will be deployed and you will be able to
+preview the changes. The docs URL can be found in two places:</p>
+<ul dir="auto">
+<li>In the merge request widget</li>
+<li>In the output of the <code>review-docs-deploy*</code> job, which also includes the
+triggered pipeline so that you can investigate whether something went wrong</li>
+</ul>
+<p dir="auto">In case the Review App URL returns 404, follow these steps to debug:</p>
+<ol dir="auto">
+<li>
+<strong>Did you follow the URL from the merge request widget?</strong> If yes, then check if
+the link is the same as the one in the job output.</li>
+<li>
+<strong>Did you follow the URL from the job output?</strong> If yes, then it means that
+either the site is not yet deployed or something went wrong with the remote
+pipeline. Give it a few minutes and it should appear online, otherwise you
+can check the status of the remote pipeline from the link in the job output.
+If the pipeline failed or got stuck, drop a line in the <code>#docs</code> chat channel.</li>
+</ol>
+<p dir="auto">TIP: <strong>Tip:</strong>
+Someone that has no merge rights to the CE/EE projects (think of forks from
+contributors) will not be able to run the manual job. In that case, you can
+ask someone from the GitLab team who has the permissions to do that for you.</p>
+<p dir="auto">NOTE: <strong>Note:</strong>
+Make sure that you always delete the branch of the merge request you were
+working on. If you don't, the remote docs branch won't be removed either,
+and the server where the Review Apps are hosted will eventually be out of
+disk space.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#technical-aspects" id="user-content-technical-aspects"></a>Technical aspects</h3>
+<p dir="auto">If you want to know the hot details, here's what's really happening:</p>
+<ol dir="auto">
+<li>You manually run the <code>review-docs-deploy</code> job in a CE/EE merge request.</li>
+<li>The job runs the <a href="https://gitlab.com/gitlab-org/gitlab-ce/blob/master/scripts/trigger-build-docs" rel="nofollow noreferrer noopener" target="_blank"><code>scripts/trigger-build-docs</code></a>
+script with the <code>deploy</code> flag, which in turn:
+<ol>
+<li>Takes your branch name and applies the following:
+<ul>
+<li>The slug of the branch name is used to avoid special characters since
+ultimately this will be used by NGINX.</li>
+<li>The <code>preview-</code> prefix is added to avoid conflicts if there's a remote branch
+with the same name that you created in the merge request.</li>
+<li>The final branch name is truncated to 42 characters to avoid filesystem
+limitations with long branch names (&gt; 63 chars).</li>
+</ul>
+</li>
+<li>The remote branch is then created if it doesn't exist (meaning you can
+re-run the manual job as many times as you want and this step will be skipped).</li>
+<li>A new cross-project pipeline is triggered in the docs project.</li>
+<li>The preview URL is shown both at the job output and in the merge request
+widget. You also get the link to the remote pipeline.</li>
+</ol>
+</li>
+<li>In the docs project, the pipeline is created and it
+<a href="https://gitlab.com/gitlab-com/gitlab-docs/blob/8d5d5c750c602a835614b02f9db42ead1c4b2f5e/.gitlab-ci.yml#L50-55" rel="nofollow noreferrer noopener" target="_blank">skips the test jobs</a>
+to lower the build time.</li>
+<li>Once the docs site is built, the HTML files are uploaded as artifacts.</li>
+<li>A specific Runner tied only to the docs project, runs the Review App job
+that downloads the artifacts and uses <code>rsync</code> to transfer the files over
+to a location where NGINX serves them.</li>
+</ol>
+<p dir="auto">The following GitLab features are used among others:</p>
+<ul dir="auto">
+<li><a href="../../ci/yaml/README.md#manual-actions">Manual actions</a></li>
+<li><a href="https://docs.gitlab.com/ee/ci/multi_project_pipeline_graphs.html" rel="nofollow noreferrer noopener" target="_blank">Multi project pipelines</a></li>
+<li><a href="/ci/review_apps/index.md">Review Apps</a></li>
+<li><a href="../../ci/yaml/README.md#artifacts">Artifacts</a></li>
+<li><a href="../../ci/runners/README.md#locking-a-specific-runner-from-being-enabled-for-other-projects">Specific Runner</a></li>
+</ul>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#gitlab-help" id="user-content-gitlab-help"></a>GitLab <code>/help</code>
+</h2>
+<p dir="auto">Every GitLab instance includes the documentation, which is available from <code>/help</code>
+(<code>http://my-instance.com/help</code>), e.g., <a href="https://gitlab.com/help" rel="nofollow noreferrer noopener" target="_blank">https://gitlab.com/help</a>.</p>
+<p dir="auto">When you're building a new feature, you may need to link the documentation
+from GitLab, the application. This is normally done in files inside the
+<code>app/views/</code> directory with the help of the <code>help_page_path</code> helper method.</p>
+<p dir="auto">In its simplest form, the HAML code to generate a link to the <code>/help</code> page is:</p>
+<pre class="code highlight js-syntax-highlight haml" lang="haml" v-pre="true"><code><span class="line" id="LC1" lang="haml"><span class="p">=</span> <span class="n">link_to</span> <span class="s1">'Help page'</span><span class="p">,</span> <span class="n">help_page_path</span><span class="p">(</span><span class="s1">'user/permissions'</span><span class="p">)</span></span></code></pre>
+<p dir="auto">The <code>help_page_path</code> contains the path to the document you want to link to with
+the following conventions:</p>
+<ul dir="auto">
+<li>it is relative to the <code>doc/</code> directory in the GitLab repository</li>
+<li>the <code>.md</code> extension must be omitted</li>
+<li>it must not end with a slash (<code>/</code>)</li>
+</ul>
+<p dir="auto">Below are some special cases where should be used depending on the context.
+You can combine one or more of the following:</p>
+<ol dir="auto">
+<li>
+<p><strong>Linking to an anchor link.</strong> Use <code>anchor</code> as part of the <code>help_page_path</code>
+method:</p>
+<pre class="code highlight js-syntax-highlight haml" lang="haml" v-pre="true"><code><span class="line" id="LC1" lang="haml"><span class="p">=</span> <span class="n">link_to</span> <span class="s1">'Help page'</span><span class="p">,</span> <span class="n">help_page_path</span><span class="p">(</span><span class="s1">'user/permissions'</span><span class="p">,</span> <span class="ss">anchor: </span><span class="s1">'anchor-link'</span><span class="p">)</span></span></code></pre>
+</li>
+<li>
+<p><strong>Opening links in a new tab.</strong> This should be the default behavior:</p>
+<pre class="code highlight js-syntax-highlight haml" lang="haml" v-pre="true"><code><span class="line" id="LC1" lang="haml"><span class="p">=</span> <span class="n">link_to</span> <span class="s1">'Help page'</span><span class="p">,</span> <span class="n">help_page_path</span><span class="p">(</span><span class="s1">'user/permissions'</span><span class="p">),</span> <span class="ss">target: </span><span class="s1">'_blank'</span></span></code></pre>
+</li>
+<li>
+<p><strong>Linking to a circle icon.</strong> Usually used in settings where a long
+description cannot be used, like near checkboxes. You can basically use
+any font awesome icon, but prefer the <code>question-circle</code>:</p>
+<pre class="code highlight js-syntax-highlight haml" lang="haml" v-pre="true"><code><span class="line" id="LC1" lang="haml"><span class="p">=</span> <span class="n">link_to</span> <span class="n">icon</span><span class="p">(</span><span class="s1">'question-circle'</span><span class="p">),</span> <span class="n">help_page_path</span><span class="p">(</span><span class="s1">'user/permissions'</span><span class="p">)</span></span></code></pre>
+</li>
+<li>
+<p><strong>Using a button link.</strong> Useful in places where text would be out of context
+with the rest of the page layout:</p>
+<pre class="code highlight js-syntax-highlight haml" lang="haml" v-pre="true"><code><span class="line" id="LC1" lang="haml"><span class="p">=</span> <span class="n">link_to</span> <span class="s1">'Help page'</span><span class="p">,</span> <span class="n">help_page_path</span><span class="p">(</span><span class="s1">'user/permissions'</span><span class="p">),</span>  <span class="ss">class: </span><span class="s1">'btn btn-info'</span></span></code></pre>
+</li>
+<li>
+<p><strong>Using links inline of some text.</strong></p>
+<pre class="code highlight js-syntax-highlight haml" lang="haml" v-pre="true"><code><span class="line" id="LC1" lang="haml">Description to <span class="si">#{</span><span class="n">link_to</span> <span class="s1">'Help page'</span><span class="p">,</span> <span class="n">help_page_path</span><span class="p">(</span><span class="s1">'user/permissions'</span><span class="p">)</span><span class="si">}</span>.</span></code></pre>
+</li>
+<li>
+<p><strong>Adding a period at the end of the sentence.</strong> Useful when you don't want
+the period to be part of the link:</p>
+<pre class="code highlight js-syntax-highlight haml" lang="haml" v-pre="true"><code><span class="line" id="LC1" lang="haml"><span class="p">=</span> <span class="n">succeed</span> <span class="s1">'.'</span> <span class="k">do</span></span>
+<span class="line" id="LC2" lang="haml">  Learn more in the</span>
+<span class="line" id="LC3" lang="haml">  <span class="p">=</span> <span class="n">link_to</span> <span class="s1">'Help page'</span><span class="p">,</span> <span class="n">help_page_path</span><span class="p">(</span><span class="s1">'user/permissions'</span><span class="p">)</span></span></code></pre>
+</li>
+</ol>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#general-documentation-vs-technical-articles" id="user-content-general-documentation-vs-technical-articles"></a>General Documentation vs Technical Articles</h2>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#general-documentation" id="user-content-general-documentation"></a>General documentation</h3>
+<p dir="auto">General documentation is categorized by <em>User</em>, <em>Admin</em>, and <em>Contributor</em>, and describe what that feature is, what it does, and its available settings.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#technical-articles" id="user-content-technical-articles"></a>Technical Articles</h3>
+<p dir="auto">Technical articles replace technical content that once lived in the <a href="https://about.gitlab.com/blog/" rel="nofollow noreferrer noopener" target="_blank">GitLab Blog</a>, where they got out-of-date and weren't easily found.</p>
+<p dir="auto">They are topic-related documentation, written with an user-friendly approach and language, aiming to provide the community with guidance on specific processes to achieve certain objectives.</p>
+<p dir="auto">A technical article guides users and/or admins to achieve certain objectives (within guides and tutorials), or provide an overview of that particular topic or feature (within technical overviews). It can also describe the use, implementation, or integration of third-party tools with GitLab.</p>
+<p dir="auto">They should be placed in a new directory named <code>/article-title/index.md</code> under a topic-related folder, and their images should be placed in <code>/article-title/img/</code>. For example, a new article on GitLab Pages should be placed in <code>doc/user/project/pages/article-title/</code> and a new article on GitLab CI/CD should be placed in <code>doc/ci/examples/article-title/</code>.</p>
+<h4 dir="auto">
+<a aria-hidden="true" class="anchor" href="#types-of-technical-articles" id="user-content-types-of-technical-articles"></a>Types of Technical Articles</h4>
+<ul dir="auto">
+<li>
+<strong>User guides</strong>: technical content to guide regular users from point A to point B</li>
+<li>
+<strong>Admin guides</strong>: technical content to guide administrators of GitLab instances from point A to point B</li>
+<li>
+<strong>Technical Overviews</strong>: technical content describing features, solutions, and third-party integrations</li>
+<li>
+<strong>Tutorials</strong>: technical content provided step-by-step on how to do things, or how to reach very specific objectives</li>
+</ul>
+<h4 dir="auto">
+<a aria-hidden="true" class="anchor" href="#understanding-guides-tutorials-and-technical-overviews" id="user-content-understanding-guides-tutorials-and-technical-overviews"></a>Understanding guides, tutorials, and technical overviews</h4>
+<p dir="auto">Suppose there's a process to go from point A to point B in 5 steps: <code>(A) 1 &gt; 2 &gt; 3 &gt; 4 &gt; 5 (B)</code>.</p>
+<p dir="auto">A <strong>guide</strong> can be understood as a description of certain processes to achieve a particular objective. A guide brings you from A to B describing the characteristics of that process, but not necessarily going over each step. It can mention, for example, steps 2 and 3, but does not necessarily explain how to accomplish them.</p>
+<ul dir="auto">
+<li>Live example: "<a href="/user/project/pages/getting_started_part_one.md">Static sites and GitLab Pages domains (Part 1)</a> to <a href="/user/project/pages/getting_started_part_four.md">Creating and Tweaking GitLab CI/CD for GitLab Pages (Part 4)</a>"</li>
+</ul>
+<p dir="auto">A <strong>tutorial</strong> requires a clear <strong>step-by-step</strong> guidance to achieve a singular objective. It brings you from A to B, describing precisely all the necessary steps involved in that process, showing each of the 5 steps to go from A to B.
+It does not only describes steps 2 and 3, but also shows you how to accomplish them.</p>
+<ul dir="auto">
+<li>Live example (on the blog): <a href="https://about.gitlab.com/2016/04/07/gitlab-pages-setup/" rel="nofollow noreferrer noopener" target="_blank">Hosting on GitLab.com with GitLab Pages</a>
+</li>
+</ul>
+<p dir="auto">A <strong>technical overview</strong> is a description of what a certain feature is, and what it does, but does not walk
+through the process of how to use it systematically.</p>
+<ul dir="auto">
+<li>Live example (on the blog): <a href="https://about.gitlab.com/2016/10/25/gitlab-workflow-an-overview/" rel="nofollow noreferrer noopener" target="_blank">GitLab Workflow, an overview</a>
+</li>
+</ul>
+<h4 dir="auto">
+<a aria-hidden="true" class="anchor" href="#special-format" id="user-content-special-format"></a>Special format</h4>
+<p dir="auto">Every <strong>Technical Article</strong> contains a frontmatter at the beginning of the doc
+with the following information:</p>
+<ul dir="auto">
+<li>
+<strong>Type of article</strong> (user guide, admin guide, technical overview, tutorial)</li>
+<li>
+<strong>Knowledge level</strong> expected from the reader to be able to follow through (beginner, intermediate, advanced)</li>
+<li>
+<strong>Author's name</strong> and <strong>GitLab.com handle</strong>
+</li>
+<li>
+<strong>Publication date</strong> (ISO format YYYY-MM-DD)</li>
+</ul>
+<p dir="auto">For example:</p>
+<pre class="code highlight js-syntax-highlight yaml" lang="yaml" v-pre="true"><code><span class="line" id="LC1" lang="yaml"><span class="nn">---</span></span>
+<span class="line" id="LC2" lang="yaml"><span class="na">author</span><span class="pi">:</span> <span class="s">John Doe</span></span>
+<span class="line" id="LC3" lang="yaml"><span class="na">author_gitlab</span><span class="pi">:</span> <span class="s">johnDoe</span></span>
+<span class="line" id="LC4" lang="yaml"><span class="na">level</span><span class="pi">:</span> <span class="s">beginner</span></span>
+<span class="line" id="LC5" lang="yaml"><span class="na">article_type</span><span class="pi">:</span> <span class="s">user guide</span></span>
+<span class="line" id="LC6" lang="yaml"><span class="na">date</span><span class="pi">:</span> <span class="s">2017-02-01</span></span>
+<span class="line" id="LC7" lang="yaml"><span class="nn">---</span></span></code></pre>
+<h4 dir="auto">
+<a aria-hidden="true" class="anchor" href="#technical-articles-writing-method" id="user-content-technical-articles-writing-method"></a>Technical Articles - Writing Method</h4>
+<p dir="auto">Use the <a href="https://about.gitlab.com/handbook/product/technical-writing/#writing-method" rel="nofollow noreferrer noopener" target="_blank">writing method</a> defined by the Technical Writing team.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

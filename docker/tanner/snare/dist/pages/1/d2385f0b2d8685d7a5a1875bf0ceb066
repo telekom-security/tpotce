@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+
+<html class="" lang="en">
+<head prefix="og: http://ogp.me/ns#">
+<meta charset="utf-8"/>
+<meta content="IE=edge" http-equiv="X-UA-Compatible"/>
+<meta content="object" property="og:type"/>
+<meta content="GitLab" property="og:site_name"/>
+<meta content="Environments · Ci · Help" property="og:title"/>
+<meta content="GitLab Community Edition" property="og:description"/>
+<meta content="http://172.20.254.127/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png" property="og:image"/>
+<meta content="64" property="og:image:width"/>
+<meta content="64" property="og:image:height"/>
+<meta content="http://172.20.254.127/help/ci/environments.md" property="og:url"/>
+<meta content="summary" property="twitter:card"/>
+<meta content="Environments · Ci · Help" property="twitter:title"/>
+<meta content="GitLab Community Edition" property="twitter:description"/>
+<meta content="http://172.20.254.127/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png" property="twitter:image"/>
+<title>Environments · Ci · Help · GitLab</title>
+<meta content="GitLab Community Edition" name="description"/>
+<link data-original-href="/assets/favicon-7901bd695fb93edb07975966062049829afb56cf11511236e61bcf425070e36e.png" href="/assets/favicon-7901bd695fb93edb07975966062049829afb56cf11511236e61bcf425070e36e.png" id="favicon" rel="shortcut icon" type="image/png"/>
+<link href="/assets/application-266f2bfa52ff531258d13c702895a14fd5994ca591fa2df7338da00ab18c99ac.css" media="all" rel="stylesheet"/>
+<link href="/assets/print-c8ff536271f8974b8a9a5f75c0ca25d2b8c1dceb4cff3c01d1603862a0bdcbfc.css" media="print" rel="stylesheet"/>
+<script>
+//<![CDATA[
+window.gon={};gon.api_version="v4";gon.default_avatar_url="http://172.20.254.127/assets/no_avatar-849f9c04a3a0d0cea2424ae97b27447dc64a7dbfae83c036c45b403392f0e8ba.png";gon.max_file_size=10;gon.asset_host=null;gon.webpack_public_path="/assets/webpack/";gon.relative_url_root="";gon.shortcuts_path="/help/shortcuts";gon.user_color_scheme="white";gon.gitlab_url="http://172.20.254.127";gon.revision="63daf37";gon.gitlab_logo="/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png";gon.sprite_icons="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg";gon.sprite_file_icons="/assets/file_icons-7262fc6897e02f1ceaf8de43dc33afa5e4f9a2067f4f68ef77dcc87946575e9e.svg";gon.emoji_sprites_css_path="/assets/emoji_sprites-289eccffb1183c188b630297431be837765d9ff4aed6130cf738586fb307c170.css";gon.test_env=false;gon.suggested_label_colors=["#0033CC","#428BCA","#44AD8E","#A8D695","#5CB85C","#69D100","#004E00","#34495E","#7F8C8D","#A295D6","#5843AD","#8E44AD","#FFECDB","#AD4363","#D10069","#CC0033","#FF0000","#D9534F","#D1D100","#F0AD4E","#AD8D43"];
+//]]>
+</script>
+<script defer="defer" src="/assets/webpack/runtime.9fcb75d4.bundle.js"></script>
+<script defer="defer" src="/assets/webpack/main.a66b6c66.chunk.js"></script>
+<script defer="defer" src="/assets/webpack/pages.help.show.c42c0700.chunk.js"></script>
+<meta content="authenticity_token" name="csrf-param">
+<meta content="Oe1eWsa7jVh5Mmy3jI3urb60QD/oxaQAwwN3hqVJMHE4gKiNf05vflTqNYns7S0IFWxPv1yZwItA60nNxivYpQ==" name="csrf-token">
+<meta content="origin-when-cross-origin" name="referrer"/>
+<meta content="width=device-width, initial-scale=1, maximum-scale=1" name="viewport"/>
+<meta content="#474D57" name="theme-color"/>
+<link href="/assets/touch-icon-iphone-5a9cee0e8a51212e70b90c87c12f382c428870c0ff67d1eb034d884b78d2dae7.png" rel="apple-touch-icon" type="image/x-icon"/>
+<link href="/assets/touch-icon-ipad-a6eec6aeb9da138e507593b464fdac213047e49d3093fc30e90d9a995df83ba3.png" rel="apple-touch-icon" sizes="76x76" type="image/x-icon"/>
+<link href="/assets/touch-icon-iphone-retina-72e2aadf86513a56e050e7f0f2355deaa19cc17ed97bbe5147847f2748e5a3e3.png" rel="apple-touch-icon" sizes="120x120" type="image/x-icon"/>
+<link href="/assets/touch-icon-ipad-retina-8ebe416f5313483d9c1bc772b5bbe03ecad52a54eba443e5215a22caed2a16a2.png" rel="apple-touch-icon" sizes="152x152" type="image/x-icon"/>
+<link color="rgb(226, 67, 41)" href="/assets/logo-d36b5212042cebc89b96df4bf6ac24e43db316143e89926c0db839ff694d2de4.svg" rel="mask-icon"/>
+<meta content="/assets/msapplication-tile-1196ec67452f618d39cdd85e2e3a542f76574c071051ae7effbfde01710eb17d.png" name="msapplication-TileImage"/>
+<meta content="#30353E" name="msapplication-TileColor"/>
+</meta></meta></head>
+<body class="ui-indigo " data-group="" data-page="help:show" data-project="">
+<header class="navbar navbar-gitlab qa-navbar navbar-expand-sm">
+<a class="sr-only gl-accessibility" href="#content-body" tabindex="1">Skip to content</a>
+<div class="container-fluid">
+<div class="header-content">
+<div class="title-container">
+<h1 class="title">
+<a href="/" id="logo" title="Dashboard"><svg class="tanuki-logo" height="24" viewbox="0 0 36 36" width="24">
+<path class="tanuki-shape tanuki-left-ear" d="M2 14l9.38 9v-9l-4-12.28c-.205-.632-1.176-.632-1.38 0z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-right-ear" d="M34 14l-9.38 9v-9l4-12.28c.205-.632 1.176-.632 1.38 0z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-nose" d="M18,34.38 3,14 33,14 Z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-left-eye" d="M18,34.38 11.38,14 2,14 6,25Z" fill="#fc6d26"></path>
+<path class="tanuki-shape tanuki-right-eye" d="M18,34.38 24.62,14 34,14 30,25Z" fill="#fc6d26"></path>
+<path class="tanuki-shape tanuki-left-cheek" d="M2 14L.1 20.16c-.18.565 0 1.2.5 1.56l17.42 12.66z" fill="#fca326"></path>
+<path class="tanuki-shape tanuki-right-cheek" d="M34 14l1.9 6.16c.18.565 0 1.2-.5 1.56L18 34.38z" fill="#fca326"></path>
+</svg>
+<span class="logo-text d-none d-sm-block">
+<svg viewbox="0 0 617 169" xmlns="http://www.w3.org/2000/svg"><path d="M315.26 2.97h-21.8l.1 162.5h88.3v-20.1h-66.5l-.1-142.4M465.89 136.95c-5.5 5.7-14.6 11.4-27 11.4-16.6 0-23.3-8.2-23.3-18.9 0-16.1 11.2-23.8 35-23.8 4.5 0 11.7.5 15.4 1.2v30.1h-.1m-22.6-98.5c-17.6 0-33.8 6.2-46.4 16.7l7.7 13.4c8.9-5.2 19.8-10.4 35.5-10.4 17.9 0 25.8 9.2 25.8 24.6v7.9c-3.5-.7-10.7-1.2-15.1-1.2-38.2 0-57.6 13.4-57.6 41.4 0 25.1 15.4 37.7 38.7 37.7 15.7 0 30.8-7.2 36-18.9l4 15.9h15.4v-83.2c-.1-26.3-11.5-43.9-44-43.9M557.63 149.1c-8.2 0-15.4-1-20.8-3.5V70.5c7.4-6.2 16.6-10.7 28.3-10.7 21.1 0 29.2 14.9 29.2 39 0 34.2-13.1 50.3-36.7 50.3m9.2-110.6c-19.5 0-30 13.3-30 13.3v-21l-.1-27.8h-21.3l.1 158.5c10.7 4.5 25.3 6.9 41.2 6.9 40.7 0 60.3-26 60.3-70.9-.1-35.5-18.2-59-50.2-59M77.9 20.6c19.3 0 31.8 6.4 39.9 12.9l9.4-16.3C114.5 6 97.3 0 78.9 0 32.5 0 0 28.3 0 85.4c0 59.8 35.1 83.1 75.2 83.1 20.1 0 37.2-4.7 48.4-9.4l-.5-63.9V75.1H63.6v20.1h38l.5 48.5c-5 2.5-13.6 4.5-25.3 4.5-32.2 0-53.8-20.3-53.8-63-.1-43.5 22.2-64.6 54.9-64.6M231.43 2.95h-21.3l.1 27.3v94.3c0 26.3 11.4 43.9 43.9 43.9 4.5 0 8.9-.4 13.1-1.2v-19.1c-3.1.5-6.4.7-9.9.7-17.9 0-25.8-9.2-25.8-24.6v-65h35.7v-17.8h-35.7l-.1-38.5M155.96 165.47h21.3v-124h-21.3v124M155.96 24.37h21.3V3.07h-21.3v21.3"></path></svg>
+</span>
+</a></h1>
+<ul class="list-unstyled navbar-sub-nav">
+<li class="home"><a class="dashboard-shortcuts-projects" href="/explore" title="Projects">Projects
+</a></li><li class=""><a class="dashboard-shortcuts-groups" href="/explore/groups" title="Groups">Groups
+</a></li><li class=""><a class="dashboard-shortcuts-snippets" href="/explore/snippets" title="Snippets">Snippets
+</a></li><li>
+<a href="/help" title="About GitLab CE">Help</a>
+</li>
+</ul>
+</div>
+<div class="navbar-collapse collapse">
+<ul class="nav navbar-nav">
+<li class="nav-item d-none d-sm-none d-md-block m-auto">
+<div class="search search-form">
+<form accept-charset="UTF-8" action="/search" class="form-inline" method="get"><input name="utf8" type="hidden" value="✓"/><div class="search-input-container">
+<div class="search-input-wrap">
+<div class="dropdown" data-url="/search/autocomplete">
+<input aria-label="Search" autocomplete="off" class="search-input dropdown-menu-toggle no-outline js-search-dashboard-options" data-issues-path="/dashboard/issues" data-mr-path="/dashboard/merge_requests" id="search" name="search" placeholder="Search" spellcheck="false" tabindex="1" type="search"/>
+<button class="hidden js-dropdown-search-toggle" data-toggle="dropdown" type="button"></button>
+<div class="dropdown-menu dropdown-select">
+<div class="dropdown-content"><ul>
+<li class="dropdown-menu-empty-item">
+<a>
+Loading...
+</a>
+</li>
+</ul>
+</div><div class="dropdown-loading"><i aria-hidden="true" class="fa fa-spinner fa-spin" data-hidden="true"></i></div>
+</div>
+<svg class="s16 search-icon"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#search"></use></svg>
+<svg class="s16 clear-icon js-clear-input"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#close"></use></svg>
+</div>
+</div>
+</div>
+<input class="js-search-group-options" id="group_id" name="group_id" type="hidden"/>
+<input class="js-search-project-options" id="search_project_id" name="project_id" type="hidden" value=""/>
+<input id="repository_ref" name="repository_ref" type="hidden"/>
+<div class="search-autocomplete-opts hide" data-autocomplete-path="/search/autocomplete"></div>
+</form></div>
+</li>
+<li class="nav-item d-inline-block d-sm-none d-md-none">
+<a aria-label="Search" data-container="body" data-placement="bottom" data-toggle="tooltip" href="/search" title="Search"><svg class="s16"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#search"></use></svg>
+</a></li>
+<li class="nav-item">
+<div>
+<a class="btn btn-sign-in" href="/users/sign_in?redirect_to_referer=yes">Sign in / Register</a>
+</div>
+</li>
+</ul>
+</div>
+<button class="navbar-toggler d-block d-sm-none" type="button">
+<span class="sr-only">Toggle navigation</span>
+<svg class="s12 more-icon js-navbar-toggle-right"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#more"></use></svg>
+<svg class="s12 close-icon js-navbar-toggle-left"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#close"></use></svg>
+</button>
+</div>
+</div>
+</header>
+<div class="layout-page">
+<div class="content-wrapper">
+<div class="mobile-overlay"></div>
+<div class="alert-wrapper">
+<nav class="breadcrumbs container-fluid container-limited" role="navigation">
+<div class="breadcrumbs-container">
+<div class="breadcrumbs-links js-title-container">
+<ul class="list-unstyled breadcrumbs-list js-breadcrumbs-list">
+<li><a href="/help">Help</a><svg class="s8 breadcrumbs-list-angle"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#angle-right"></use></svg></li>
+<li>
+<h2 class="breadcrumbs-sub-title"><a href="/help/ci/environments.md">Help</a></h2>
+</li>
+</ul>
+</div>
+</div>
+</nav>
+<div class="flash-container flash-container-page">
+</div>
+</div>
+<div class="container-fluid container-limited ">
+<div class="content" id="content-body">
+<div class="documentation wiki prepend-top-default">
+<h1 dir="auto">
+<a aria-hidden="true" class="anchor" href="#introduction-to-environments-and-deployments" id="user-content-introduction-to-environments-and-deployments"></a>Introduction to environments and deployments</h1>
+<blockquote dir="auto">
+<p>Introduced in GitLab 8.9.</p>
+</blockquote>
+<p dir="auto">During the development of software, there can be many stages until it's ready
+for public consumption. You sure want to first test your code and then deploy it
+in a testing or staging environment before you release it to the public. That
+way you can prevent bugs not only in your software, but in the deployment
+process as well.</p>
+<p dir="auto">GitLab CI is capable of not only testing or building your projects, but also
+deploying them in your infrastructure, with the added benefit of giving you a
+way to track your deployments. In other words, you can always know what is
+currently being deployed or has been deployed on your servers.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#overview" id="user-content-overview"></a>Overview</h2>
+<p dir="auto">With environments, you can control the Continuous Deployment of your software
+all within GitLab. All you need to do is define them in your project's
+<a href="/yaml/README.md"><code>.gitlab-ci.yml</code></a> as we will explore below. GitLab provides a full
+history of your deployments per every environment.</p>
+<p dir="auto">Environments are like tags for your CI jobs, describing where code gets deployed.
+Deployments are created when <a href="yaml/README.md#jobs">jobs</a> deploy versions of code to environments,
+so every environment can have one or more deployments. GitLab keeps track of
+your deployments, so you always know what is currently being deployed on your
+servers. If you have a deployment service such as <a href="/user/project/clusters/index.md">Kubernetes</a>
+enabled for your project, you can use it to assist with your deployments, and
+can even access a <a href="#web-terminals">web terminal</a> for your environment from within GitLab!</p>
+<p dir="auto">To better understand how environments and deployments work, let's consider an
+example. We assume that you have already created a project in GitLab and set up
+a Runner. The example will cover the following:</p>
+<ul dir="auto">
+<li>We are developing an application</li>
+<li>We want to run tests and build our app on all branches</li>
+<li>Our default branch is <code>master</code>
+</li>
+<li>We deploy the app only when a pipeline on <code>master</code> branch is run</li>
+</ul>
+<p dir="auto">Let's see how it all ties together.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#defining-environments" id="user-content-defining-environments"></a>Defining environments</h2>
+<p dir="auto">Let's consider the following <code>.gitlab-ci.yml</code> example:</p>
+<pre class="code highlight js-syntax-highlight yaml" lang="yaml" v-pre="true"><code><span class="line" id="LC1" lang="yaml"><span class="na">stages</span><span class="pi">:</span></span>
+<span class="line" id="LC2" lang="yaml">  <span class="pi">-</span> <span class="s">test</span></span>
+<span class="line" id="LC3" lang="yaml">  <span class="pi">-</span> <span class="s">build</span></span>
+<span class="line" id="LC4" lang="yaml">  <span class="pi">-</span> <span class="s">deploy</span></span>
+<span class="line" id="LC5" lang="yaml"></span>
+<span class="line" id="LC6" lang="yaml"><span class="na">test</span><span class="pi">:</span></span>
+<span class="line" id="LC7" lang="yaml">  <span class="na">stage</span><span class="pi">:</span> <span class="s">test</span></span>
+<span class="line" id="LC8" lang="yaml">  <span class="na">script</span><span class="pi">:</span> <span class="s">echo "Running tests"</span></span>
+<span class="line" id="LC9" lang="yaml"></span>
+<span class="line" id="LC10" lang="yaml"><span class="na">build</span><span class="pi">:</span></span>
+<span class="line" id="LC11" lang="yaml">  <span class="na">stage</span><span class="pi">:</span> <span class="s">build</span></span>
+<span class="line" id="LC12" lang="yaml">  <span class="na">script</span><span class="pi">:</span> <span class="s">echo "Building the app"</span></span>
+<span class="line" id="LC13" lang="yaml"></span>
+<span class="line" id="LC14" lang="yaml"><span class="na">deploy_staging</span><span class="pi">:</span></span>
+<span class="line" id="LC15" lang="yaml">  <span class="na">stage</span><span class="pi">:</span> <span class="s">deploy</span></span>
+<span class="line" id="LC16" lang="yaml">  <span class="na">script</span><span class="pi">:</span></span>
+<span class="line" id="LC17" lang="yaml">    <span class="pi">-</span> <span class="s">echo "Deploy to staging server"</span></span>
+<span class="line" id="LC18" lang="yaml">  <span class="na">environment</span><span class="pi">:</span></span>
+<span class="line" id="LC19" lang="yaml">    <span class="na">name</span><span class="pi">:</span> <span class="s">staging</span></span>
+<span class="line" id="LC20" lang="yaml">    <span class="na">url</span><span class="pi">:</span> <span class="s">https://staging.example.com</span></span>
+<span class="line" id="LC21" lang="yaml">  <span class="na">only</span><span class="pi">:</span></span>
+<span class="line" id="LC22" lang="yaml">  <span class="pi">-</span> <span class="s">master</span></span></code></pre>
+<p dir="auto">We have defined 3 <a href="yaml/README.md#stages">stages</a>:</p>
+<ul dir="auto">
+<li>test</li>
+<li>build</li>
+<li>deploy</li>
+</ul>
+<p dir="auto">The jobs assigned to these stages will run in this order. If a job fails, then
+the jobs that are assigned to the next stage won't run, rendering the pipeline
+as failed. In our case, the <code>test</code> job will run first, then the <code>build</code> and
+lastly the <code>deploy_staging</code>. With this, we ensure that first the tests pass,
+then our app is able to be built successfully, and lastly we deploy to the
+staging server.</p>
+<p dir="auto">The <code>environment</code> keyword is just a hint for GitLab that this job actually
+deploys to this environment's <code>name</code>. It can also have a <code>url</code> which, as we
+will later see, is exposed in various places within GitLab. Each time a job that
+has an environment specified and succeeds, a deployment is recorded, remembering
+the Git SHA and environment name.</p>
+<blockquote dir="auto">
+<p><strong>Note:</strong>
+Starting with GitLab 8.15, the environment name is exposed to the Runner in
+two forms: <code>$CI_ENVIRONMENT_NAME</code>, and <code>$CI_ENVIRONMENT_SLUG</code>. The first is
+the name given in <code>.gitlab-ci.yml</code> (with any variables expanded), while the
+second is a "cleaned-up" version of the name, suitable for use in URLs, DNS,
+etc.</p>
+</blockquote>
+<blockquote dir="auto">
+<p><strong>Note:</strong>
+Starting with GitLab 9.3, the environment URL is exposed to the Runner via
+<code>$CI_ENVIRONMENT_URL</code>. The URL would be expanded from <code>.gitlab-ci.yml</code>, or if
+the URL was not defined there, the external URL from the environment would be
+used.</p>
+</blockquote>
+<p dir="auto">To sum up, with the above <code>.gitlab-ci.yml</code> we have achieved that:</p>
+<ul dir="auto">
+<li>All branches will run the <code>test</code> and <code>build</code> jobs.</li>
+<li>The <code>deploy_staging</code> job will run <a href="yaml/README.md#only">only</a> on the <code>master</code>
+branch which means all merge requests that are created from branches don't
+get to deploy to the staging server</li>
+<li>When a merge request is merged, all jobs will run and the <code>deploy_staging</code>
+in particular will deploy our code to a staging server while the deployment
+will be recorded in an environment named <code>staging</code>.</li>
+</ul>
+<p dir="auto">Let's now see how that information is exposed within GitLab.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#viewing-the-current-status-of-an-environment" id="user-content-viewing-the-current-status-of-an-environment"></a>Viewing the current status of an environment</h2>
+<p dir="auto">The environment list under your project's <strong>Operations &gt; Environments</strong>, is
+where you can find information of the last deployment status of an environment.</p>
+<p dir="auto">Here's how the Environments page looks so far.</p>
+<p dir="auto"><a class="no-attachment-icon" href="/img/environments_available.png" rel="noopener noreferrer" target="_blank"><img alt="Environment view" class="lazy" data-src="img/environments_available.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<p dir="auto">There's a bunch of information there, specifically you can see:</p>
+<ul dir="auto">
+<li>The environment's name with a link to its deployments</li>
+<li>The last deployment ID number and who performed it</li>
+<li>The job ID of the last deployment with its respective job name</li>
+<li>The commit information of the last deployment such as who committed, to what
+branch and the Git SHA of the commit</li>
+<li>The exact time the last deployment was performed</li>
+<li>A button that takes you to the URL that you have defined under the
+<code>environment</code> keyword in <code>.gitlab-ci.yml</code>
+</li>
+<li>A button that re-deploys the latest deployment, meaning it runs the job
+defined by the environment name for that specific commit</li>
+</ul>
+<blockquote dir="auto">
+<p><strong>Notes:</strong></p>
+</blockquote>
+<ul dir="auto">
+<li>While you can create environments manually in the web interface, we recommend
+that you define your environments in <code>.gitlab-ci.yml</code> first. They will
+be automatically created for you after the first deploy.</li>
+<li>The environments page can only be viewed by Reporters and above. For more
+information on the permissions, see the <a href="/user/permissions.md">permissions documentation</a>.</li>
+<li>Only deploys that happen after your <code>.gitlab-ci.yml</code> is properly configured
+will show up in the "Environment" and "Last deployment" lists.</li>
+</ul>
+<p dir="auto">The information shown in the Environments page is limited to the latest
+deployments, but as you may have guessed an environment can have multiple
+deployments.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#viewing-the-deployment-history-of-an-environment" id="user-content-viewing-the-deployment-history-of-an-environment"></a>Viewing the deployment history of an environment</h2>
+<p dir="auto">GitLab keeps track of your deployments, so you always know what is currently
+being deployed on your servers. That way you can have the full history of your
+deployments per every environment right in your browser. Clicking on an
+environment will show the history of its deployments. Assuming you have deployed
+multiple times already, here's how a specific environment's page looks like.</p>
+<p dir="auto"><a class="no-attachment-icon" href="/img/deployments_view.png" rel="noopener noreferrer" target="_blank"><img alt="Deployments" class="lazy" data-src="img/deployments_view.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<p dir="auto">We can see the same information as when in the Environments page, but this time
+all deployments are shown. As you may have noticed, apart from the <strong>Re-deploy</strong>
+button there are now <strong>Rollback</strong> buttons for each deployment. Let's see how
+that works.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#rolling-back-changes" id="user-content-rolling-back-changes"></a>Rolling back changes</h2>
+<p dir="auto">You can't control everything, so sometimes things go wrong. When that unfortunate
+time comes GitLab has you covered. Simply by clicking the <strong>Rollback</strong> button
+that can be found in the deployments page
+(<strong>Operations &gt; Environments &gt; <code>environment name</code></strong>) you can relaunch the
+job with the commit associated with it.</p>
+<blockquote dir="auto">
+<p><strong>Note:</strong>
+Bear in mind that your mileage will vary and it's entirely up to how you define
+the deployment process in the job's <code>script</code> whether the rollback succeeds or not.
+GitLab CI is just following orders.</p>
+</blockquote>
+<p dir="auto">Thankfully that was the staging server that we had to rollback, and since we
+learn from our mistakes, we decided to not make the same again when we deploy
+to the production server. Enter manual actions for deployments.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#manually-deploying-to-environments" id="user-content-manually-deploying-to-environments"></a>Manually deploying to environments</h2>
+<p dir="auto">Turning a job from running automatically to a manual action is as simple as
+adding <code>when: manual</code> to it. To expand on our previous example, let's add
+another job that this time deploys our app to a production server and is
+tracked by a <code>production</code> environment. The <code>.gitlab-ci.yml</code> looks like this
+so far:</p>
+<pre class="code highlight js-syntax-highlight yaml" lang="yaml" v-pre="true"><code><span class="line" id="LC1" lang="yaml"><span class="na">stages</span><span class="pi">:</span></span>
+<span class="line" id="LC2" lang="yaml">  <span class="pi">-</span> <span class="s">test</span></span>
+<span class="line" id="LC3" lang="yaml">  <span class="pi">-</span> <span class="s">build</span></span>
+<span class="line" id="LC4" lang="yaml">  <span class="pi">-</span> <span class="s">deploy</span></span>
+<span class="line" id="LC5" lang="yaml"></span>
+<span class="line" id="LC6" lang="yaml"><span class="na">test</span><span class="pi">:</span></span>
+<span class="line" id="LC7" lang="yaml">  <span class="na">stage</span><span class="pi">:</span> <span class="s">test</span></span>
+<span class="line" id="LC8" lang="yaml">  <span class="na">script</span><span class="pi">:</span> <span class="s">echo "Running tests"</span></span>
+<span class="line" id="LC9" lang="yaml"></span>
+<span class="line" id="LC10" lang="yaml"><span class="na">build</span><span class="pi">:</span></span>
+<span class="line" id="LC11" lang="yaml">  <span class="na">stage</span><span class="pi">:</span> <span class="s">build</span></span>
+<span class="line" id="LC12" lang="yaml">  <span class="na">script</span><span class="pi">:</span> <span class="s">echo "Building the app"</span></span>
+<span class="line" id="LC13" lang="yaml"></span>
+<span class="line" id="LC14" lang="yaml"><span class="na">deploy_staging</span><span class="pi">:</span></span>
+<span class="line" id="LC15" lang="yaml">  <span class="na">stage</span><span class="pi">:</span> <span class="s">deploy</span></span>
+<span class="line" id="LC16" lang="yaml">  <span class="na">script</span><span class="pi">:</span></span>
+<span class="line" id="LC17" lang="yaml">    <span class="pi">-</span> <span class="s">echo "Deploy to staging server"</span></span>
+<span class="line" id="LC18" lang="yaml">  <span class="na">environment</span><span class="pi">:</span></span>
+<span class="line" id="LC19" lang="yaml">    <span class="na">name</span><span class="pi">:</span> <span class="s">staging</span></span>
+<span class="line" id="LC20" lang="yaml">    <span class="na">url</span><span class="pi">:</span> <span class="s">https://staging.example.com</span></span>
+<span class="line" id="LC21" lang="yaml">  <span class="na">only</span><span class="pi">:</span></span>
+<span class="line" id="LC22" lang="yaml">  <span class="pi">-</span> <span class="s">master</span></span>
+<span class="line" id="LC23" lang="yaml"></span>
+<span class="line" id="LC24" lang="yaml"><span class="na">deploy_prod</span><span class="pi">:</span></span>
+<span class="line" id="LC25" lang="yaml">  <span class="na">stage</span><span class="pi">:</span> <span class="s">deploy</span></span>
+<span class="line" id="LC26" lang="yaml">  <span class="na">script</span><span class="pi">:</span></span>
+<span class="line" id="LC27" lang="yaml">    <span class="pi">-</span> <span class="s">echo "Deploy to production server"</span></span>
+<span class="line" id="LC28" lang="yaml">  <span class="na">environment</span><span class="pi">:</span></span>
+<span class="line" id="LC29" lang="yaml">    <span class="na">name</span><span class="pi">:</span> <span class="s">production</span></span>
+<span class="line" id="LC30" lang="yaml">    <span class="na">url</span><span class="pi">:</span> <span class="s">https://example.com</span></span>
+<span class="line" id="LC31" lang="yaml">  <span class="na">when</span><span class="pi">:</span> <span class="s">manual</span></span>
+<span class="line" id="LC32" lang="yaml">  <span class="na">only</span><span class="pi">:</span></span>
+<span class="line" id="LC33" lang="yaml">  <span class="pi">-</span> <span class="s">master</span></span></code></pre>
+<p dir="auto">The <code>when: manual</code> action exposes a play button in GitLab's UI and the
+<code>deploy_prod</code> job will only be triggered if and when we click that play button.
+You can find it in the pipeline, job, environment, and deployment views.</p>
+<table dir="auto">
+<thead>
+<tr>
+<th>Pipelines</th>
+<th>Single pipeline</th>
+<th>Environments</th>
+<th>Deployments</th>
+<th>jobs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a class="no-attachment-icon" href="/img/environments_manual_action_pipelines.png" rel="noopener noreferrer" target="_blank"><img alt="Pipelines manual action" class="lazy" data-src="img/environments_manual_action_pipelines.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></td>
+<td><a class="no-attachment-icon" href="/img/environments_manual_action_single_pipeline.png" rel="noopener noreferrer" target="_blank"><img alt="Pipelines manual action" class="lazy" data-src="img/environments_manual_action_single_pipeline.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></td>
+<td><a class="no-attachment-icon" href="/img/environments_manual_action_environments.png" rel="noopener noreferrer" target="_blank"><img alt="Environments manual action" class="lazy" data-src="img/environments_manual_action_environments.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></td>
+<td><a class="no-attachment-icon" href="/img/environments_manual_action_deployments.png" rel="noopener noreferrer" target="_blank"><img alt="Deployments manual action" class="lazy" data-src="img/environments_manual_action_deployments.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></td>
+<td><a class="no-attachment-icon" href="/img/environments_manual_action_jobs.png" rel="noopener noreferrer" target="_blank"><img alt="Builds manual action" class="lazy" data-src="img/environments_manual_action_jobs.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></td>
+</tr>
+</tbody>
+</table>
+<p dir="auto">Clicking on the play button in either of these places will trigger the
+<code>deploy_prod</code> job, and the deployment will be recorded under a new
+environment named <code>production</code>.</p>
+<blockquote dir="auto">
+<p><strong>Note:</strong>
+Remember that if your environment's name is <code>production</code> (all lowercase), then
+it will get recorded in <a href="/user/project/cycle_analytics.md">Cycle Analytics</a>.
+Double the benefit!</p>
+</blockquote>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#dynamic-environments" id="user-content-dynamic-environments"></a>Dynamic environments</h2>
+<p dir="auto">As the name suggests, it is possible to create environments on the fly by just
+declaring their names dynamically in <code>.gitlab-ci.yml</code>. Dynamic environments is
+the basis of <a href="/review_apps/index.md">Review apps</a>.</p>
+<p dir="auto">NOTE: <strong>Note:</strong>
+The <code>name</code> and <code>url</code> parameters can use most of the CI/CD variables,
+including <a href="variables/README.md#predefined-variables-environment-variables">predefined</a>,
+<a href="variables/README.md#variables">project/group ones</a> and
+<a href="yaml/README.md#variables"><code>.gitlab-ci.yml</code> variables</a>. You however cannot use variables
+defined under <code>script</code> or on the Runner's side. There are also other variables that
+are unsupported in the context of <code>environment:name</code>. You can read more about
+<a href="/variables/where_variables_can_be_used.md">where variables can be used</a>.</p>
+<p dir="auto">GitLab Runner exposes various <a href="/variables/README.md">environment variables</a> when a job runs,
+and as such, you can use them as environment names. Let's add another job in
+our example which will deploy to all branches except <code>master</code>:</p>
+<pre class="code highlight js-syntax-highlight yaml" lang="yaml" v-pre="true"><code><span class="line" id="LC1" lang="yaml"><span class="na">deploy_review</span><span class="pi">:</span></span>
+<span class="line" id="LC2" lang="yaml">  <span class="na">stage</span><span class="pi">:</span> <span class="s">deploy</span></span>
+<span class="line" id="LC3" lang="yaml">  <span class="na">script</span><span class="pi">:</span></span>
+<span class="line" id="LC4" lang="yaml">    <span class="pi">-</span> <span class="s">echo "Deploy a review app"</span></span>
+<span class="line" id="LC5" lang="yaml">  <span class="na">environment</span><span class="pi">:</span></span>
+<span class="line" id="LC6" lang="yaml">    <span class="na">name</span><span class="pi">:</span> <span class="s">review/$CI_COMMIT_REF_NAME</span></span>
+<span class="line" id="LC7" lang="yaml">    <span class="na">url</span><span class="pi">:</span> <span class="s">https://$CI_ENVIRONMENT_SLUG.example.com</span></span>
+<span class="line" id="LC8" lang="yaml">  <span class="na">only</span><span class="pi">:</span></span>
+<span class="line" id="LC9" lang="yaml">    <span class="pi">-</span> <span class="s">branches</span></span>
+<span class="line" id="LC10" lang="yaml">  <span class="na">except</span><span class="pi">:</span></span>
+<span class="line" id="LC11" lang="yaml">    <span class="pi">-</span> <span class="s">master</span></span></code></pre>
+<p dir="auto">Let's break it down in pieces. The job's name is <code>deploy_review</code> and it runs
+on the <code>deploy</code> stage. The <code>script</code> at this point is fictional, you'd have to
+use your own based on your deployment. Then, we set the <code>environment</code> with the
+<code>environment:name</code> being <code>review/$CI_COMMIT_REF_NAME</code>. Now that's an interesting
+one. Since the <a href="yaml/README.md#environment-name">environment name</a> can contain slashes (<code>/</code>), we can
+use this pattern to distinguish between dynamic environments and the regular
+ones.</p>
+<p dir="auto">So, the first part is <code>review</code>, followed by a <code>/</code> and then <code>$CI_COMMIT_REF_NAME</code>
+which takes the value of the branch name. Since <code>$CI_COMMIT_REF_NAME</code> itself may
+also contain <code>/</code>, or other characters that would be invalid in a domain name or
+URL, we use <code>$CI_ENVIRONMENT_SLUG</code> in the <code>environment:url</code> so that the
+environment can get a specific and distinct URL for each branch. In this case,
+given a <code>$CI_COMMIT_REF_NAME</code> of <code>100-Do-The-Thing</code>, the URL will be something
+like <code>https://100-do-the-4f99a2.example.com</code>. Again, the way you set up
+the web server to serve these requests is based on your setup.</p>
+<p dir="auto">You could also use <code>$CI_COMMIT_REF_SLUG</code> in <code>environment:url</code>, e.g.:
+<code>https://$CI_COMMIT_REF_SLUG.example.com</code>. We use <code>$CI_ENVIRONMENT_SLUG</code>
+here because it is guaranteed to be unique, but if you're using a workflow like
+<a href="/workflow/gitlab_flow.md">GitLab Flow</a>, collisions are very unlikely, and you may prefer
+environment names to be more closely based on the branch name - the example
+above would give you an URL like <code>https://100-do-the-thing.example.com</code></p>
+<p dir="auto">Last but not least, we tell the job to run <a href="yaml/README.md#only-and-except"><code>only</code></a> on branches
+<a href="yaml/README.md#only-and-except"><code>except</code></a> master.</p>
+<blockquote dir="auto">
+<p><strong>Note:</strong>
+You are not bound to use the same prefix or only slashes in the dynamic
+environments' names (<code>/</code>), but as we will see later, this will enable the
+<a href="#grouping-similar-environments">grouping similar environments</a> feature.</p>
+</blockquote>
+<p dir="auto">The whole <code>.gitlab-ci.yml</code> looks like this so far:</p>
+<pre class="code highlight js-syntax-highlight yaml" lang="yaml" v-pre="true"><code><span class="line" id="LC1" lang="yaml"><span class="na">stages</span><span class="pi">:</span></span>
+<span class="line" id="LC2" lang="yaml">  <span class="pi">-</span> <span class="s">test</span></span>
+<span class="line" id="LC3" lang="yaml">  <span class="pi">-</span> <span class="s">build</span></span>
+<span class="line" id="LC4" lang="yaml">  <span class="pi">-</span> <span class="s">deploy</span></span>
+<span class="line" id="LC5" lang="yaml"></span>
+<span class="line" id="LC6" lang="yaml"><span class="na">test</span><span class="pi">:</span></span>
+<span class="line" id="LC7" lang="yaml">  <span class="na">stage</span><span class="pi">:</span> <span class="s">test</span></span>
+<span class="line" id="LC8" lang="yaml">  <span class="na">script</span><span class="pi">:</span> <span class="s">echo "Running tests"</span></span>
+<span class="line" id="LC9" lang="yaml"></span>
+<span class="line" id="LC10" lang="yaml"><span class="na">build</span><span class="pi">:</span></span>
+<span class="line" id="LC11" lang="yaml">  <span class="na">stage</span><span class="pi">:</span> <span class="s">build</span></span>
+<span class="line" id="LC12" lang="yaml">  <span class="na">script</span><span class="pi">:</span> <span class="s">echo "Building the app"</span></span>
+<span class="line" id="LC13" lang="yaml"></span>
+<span class="line" id="LC14" lang="yaml"><span class="na">deploy_review</span><span class="pi">:</span></span>
+<span class="line" id="LC15" lang="yaml">  <span class="na">stage</span><span class="pi">:</span> <span class="s">deploy</span></span>
+<span class="line" id="LC16" lang="yaml">  <span class="na">script</span><span class="pi">:</span></span>
+<span class="line" id="LC17" lang="yaml">    <span class="pi">-</span> <span class="s">echo "Deploy a review app"</span></span>
+<span class="line" id="LC18" lang="yaml">  <span class="na">environment</span><span class="pi">:</span></span>
+<span class="line" id="LC19" lang="yaml">    <span class="na">name</span><span class="pi">:</span> <span class="s">review/$CI_COMMIT_REF_NAME</span></span>
+<span class="line" id="LC20" lang="yaml">    <span class="na">url</span><span class="pi">:</span> <span class="s">https://$CI_ENVIRONMENT_SLUG.example.com</span></span>
+<span class="line" id="LC21" lang="yaml">  <span class="na">only</span><span class="pi">:</span></span>
+<span class="line" id="LC22" lang="yaml">    <span class="pi">-</span> <span class="s">branches</span></span>
+<span class="line" id="LC23" lang="yaml">  <span class="na">except</span><span class="pi">:</span></span>
+<span class="line" id="LC24" lang="yaml">    <span class="pi">-</span> <span class="s">master</span></span>
+<span class="line" id="LC25" lang="yaml"></span>
+<span class="line" id="LC26" lang="yaml"><span class="na">deploy_staging</span><span class="pi">:</span></span>
+<span class="line" id="LC27" lang="yaml">  <span class="na">stage</span><span class="pi">:</span> <span class="s">deploy</span></span>
+<span class="line" id="LC28" lang="yaml">  <span class="na">script</span><span class="pi">:</span></span>
+<span class="line" id="LC29" lang="yaml">    <span class="pi">-</span> <span class="s">echo "Deploy to staging server"</span></span>
+<span class="line" id="LC30" lang="yaml">  <span class="na">environment</span><span class="pi">:</span></span>
+<span class="line" id="LC31" lang="yaml">    <span class="na">name</span><span class="pi">:</span> <span class="s">staging</span></span>
+<span class="line" id="LC32" lang="yaml">    <span class="na">url</span><span class="pi">:</span> <span class="s">https://staging.example.com</span></span>
+<span class="line" id="LC33" lang="yaml">  <span class="na">only</span><span class="pi">:</span></span>
+<span class="line" id="LC34" lang="yaml">  <span class="pi">-</span> <span class="s">master</span></span>
+<span class="line" id="LC35" lang="yaml"></span>
+<span class="line" id="LC36" lang="yaml"><span class="na">deploy_prod</span><span class="pi">:</span></span>
+<span class="line" id="LC37" lang="yaml">  <span class="na">stage</span><span class="pi">:</span> <span class="s">deploy</span></span>
+<span class="line" id="LC38" lang="yaml">  <span class="na">script</span><span class="pi">:</span></span>
+<span class="line" id="LC39" lang="yaml">    <span class="pi">-</span> <span class="s">echo "Deploy to production server"</span></span>
+<span class="line" id="LC40" lang="yaml">  <span class="na">environment</span><span class="pi">:</span></span>
+<span class="line" id="LC41" lang="yaml">    <span class="na">name</span><span class="pi">:</span> <span class="s">production</span></span>
+<span class="line" id="LC42" lang="yaml">    <span class="na">url</span><span class="pi">:</span> <span class="s">https://example.com</span></span>
+<span class="line" id="LC43" lang="yaml">  <span class="na">when</span><span class="pi">:</span> <span class="s">manual</span></span>
+<span class="line" id="LC44" lang="yaml">  <span class="na">only</span><span class="pi">:</span></span>
+<span class="line" id="LC45" lang="yaml">  <span class="pi">-</span> <span class="s">master</span></span></code></pre>
+<p dir="auto">A more realistic example would include copying files to a location where a
+webserver (NGINX) could then read and serve. The example below will copy the
+<code>public</code> directory to <code>/srv/nginx/$CI_COMMIT_REF_SLUG/public</code>:</p>
+<pre class="code highlight js-syntax-highlight yaml" lang="yaml" v-pre="true"><code><span class="line" id="LC1" lang="yaml"><span class="na">review_app</span><span class="pi">:</span></span>
+<span class="line" id="LC2" lang="yaml">  <span class="na">stage</span><span class="pi">:</span> <span class="s">deploy</span></span>
+<span class="line" id="LC3" lang="yaml">  <span class="na">script</span><span class="pi">:</span></span>
+<span class="line" id="LC4" lang="yaml">    <span class="pi">-</span> <span class="s">rsync -av --delete public /srv/nginx/$CI_COMMIT_REF_SLUG</span></span>
+<span class="line" id="LC5" lang="yaml">  <span class="na">environment</span><span class="pi">:</span></span>
+<span class="line" id="LC6" lang="yaml">    <span class="na">name</span><span class="pi">:</span> <span class="s">review/$CI_COMMIT_REF_NAME</span></span>
+<span class="line" id="LC7" lang="yaml">    <span class="na">url</span><span class="pi">:</span> <span class="s">https://$CI_COMMIT_REF_SLUG.example.com</span></span></code></pre>
+<p dir="auto">It is assumed that the user has already setup NGINX and GitLab Runner in the
+server this job will run on.</p>
+<blockquote dir="auto">
+<p><strong>Note:</strong>
+Be sure to check out the <a href="#limitations">limitations</a> section for some edge
+cases regarding naming of your branches and Review Apps.</p>
+</blockquote>
+<hr/>
+<p dir="auto">The development workflow would now be:</p>
+<ul dir="auto">
+<li>Developer creates a branch locally</li>
+<li>Developer makes changes, commits and pushes the branch to GitLab</li>
+<li>Developer creates a merge request</li>
+</ul>
+<p dir="auto">Behind the scenes:</p>
+<ul dir="auto">
+<li>GitLab Runner picks up the changes and starts running the jobs</li>
+<li>The jobs run sequentially as defined in <code>stages</code>
+<ul>
+<li>First, the tests pass</li>
+<li>Then, the job begins and successfully also passes</li>
+<li>Lastly, the app is deployed to an environment with a name specific to the
+branch</li>
+</ul>
+</li>
+</ul>
+<p dir="auto">So now, every branch gets its own environment and is deployed to its own place
+with the added benefit of having a <a href="#viewing-the-deployment-history-of-an-environment">history of deployments</a>
+and also being able to <a href="#rolling-back-changes">rollback changes</a> if needed.
+Let's briefly see where URL that's defined in the environments is exposed.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#making-use-of-the-environment-url" id="user-content-making-use-of-the-environment-url"></a>Making use of the environment URL</h2>
+<p dir="auto">The <a href="yaml/README.md#environments-url">environment URL</a> is exposed in a few
+places within GitLab.</p>
+<table dir="auto">
+<thead>
+<tr>
+<th>In a merge request widget as a link</th>
+<th>In the Environments view as a button</th>
+<th>In the Deployments view as a button</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a class="no-attachment-icon" href="/img/environments_mr_review_app.png" rel="noopener noreferrer" target="_blank"><img alt="Environment URL in merge request" class="lazy" data-src="img/environments_mr_review_app.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></td>
+<td><a class="no-attachment-icon" href="/img/environments_available.png" rel="noopener noreferrer" target="_blank"><img alt="Environment URL in environments" class="lazy" data-src="img/environments_available.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></td>
+<td><a class="no-attachment-icon" href="/img/deployments_view.png" rel="noopener noreferrer" target="_blank"><img alt="Environment URL in deployments" class="lazy" data-src="img/deployments_view.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></td>
+</tr>
+</tbody>
+</table>
+<p dir="auto">If a merge request is eventually merged to the default branch (in our case
+<code>master</code>) and that branch also deploys to an environment (in our case <code>staging</code>
+and/or <code>production</code>) you can see this information in the merge request itself.</p>
+<p dir="auto"><a class="no-attachment-icon" href="/img/environments_link_url_mr.png" rel="noopener noreferrer" target="_blank"><img alt="Environment URLs in merge request" class="lazy" data-src="img/environments_link_url_mr.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#go-directly-from-source-files-to-public-pages-on-the-environment" id="user-content-go-directly-from-source-files-to-public-pages-on-the-environment"></a>Go directly from source files to public pages on the environment</h3>
+<blockquote dir="auto">
+<p>Introduced in GitLab 8.17.</p>
+</blockquote>
+<p dir="auto">To go one step further, we can specify a Route Map to get GitLab to show us "View on [environment URL]" buttons to go directly from a file to that file's representation on the deployed website. It will be exposed in a few places:</p>
+<table dir="auto">
+<thead>
+<tr>
+<th>In the diff for a merge request, comparison or commit</th>
+<th>In the file view</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a class="no-attachment-icon" href="/img/view_on_env_mr.png" rel="noopener noreferrer" target="_blank"><img alt='"View on env" button in merge request diff' class="lazy" data-src="img/view_on_env_mr.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></td>
+<td><a class="no-attachment-icon" href="/img/view_on_env_blob.png" rel="noopener noreferrer" target="_blank"><img alt='"View on env" button in file view' class="lazy" data-src="img/view_on_env_blob.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></td>
+</tr>
+</tbody>
+</table>
+<p dir="auto">To get this to work, you need to tell GitLab how the paths of files in your repository map to paths of pages on your website, using a Route Map.</p>
+<p dir="auto">A Route Map is a file inside the repository at <code>.gitlab/route-map.yml</code>, which contains a YAML array that maps <code>source</code> paths (in the repository) to <code>public</code> paths (on the website).</p>
+<p dir="auto">This is an example of a route map for <a href="https://middlemanapp.com" rel="nofollow noreferrer noopener" target="_blank">Middleman</a> static websites like <a href="https://gitlab.com/gitlab-com/www-gitlab-com" rel="nofollow noreferrer noopener" target="_blank">http://about.gitlab.com</a>:</p>
+<pre class="code highlight js-syntax-highlight yaml" lang="yaml" v-pre="true"><code><span class="line" id="LC1" lang="yaml"><span class="c1"># Team data</span></span>
+<span class="line" id="LC2" lang="yaml"><span class="pi">-</span> <span class="na">source</span><span class="pi">:</span> <span class="s1">'</span><span class="s">data/team.yml'</span> <span class="c1"># data/team.yml</span></span>
+<span class="line" id="LC3" lang="yaml">  <span class="na">public</span><span class="pi">:</span> <span class="s1">'</span><span class="s">team/'</span> <span class="c1"># team/</span></span>
+<span class="line" id="LC4" lang="yaml"></span>
+<span class="line" id="LC5" lang="yaml"><span class="c1"># Blogposts</span></span>
+<span class="line" id="LC6" lang="yaml"><span class="pi">-</span> <span class="na">source</span><span class="pi">:</span> <span class="s">/source\/posts\/([0-9]{4})-([0-9]{2})-([0-9]{2})-(.+?)\..*/</span> <span class="c1"># source/posts/2017-01-30-around-the-world-in-6-releases.html.md.erb</span></span>
+<span class="line" id="LC7" lang="yaml">  <span class="na">public</span><span class="pi">:</span> <span class="s1">'</span><span class="s">\1/\2/\3/\4/'</span> <span class="c1"># 2017/01/30/around-the-world-in-6-releases/</span></span>
+<span class="line" id="LC8" lang="yaml"></span>
+<span class="line" id="LC9" lang="yaml"><span class="c1"># HTML files</span></span>
+<span class="line" id="LC10" lang="yaml"><span class="pi">-</span> <span class="na">source</span><span class="pi">:</span> <span class="s">/source\/(.+?\.html).*/</span> <span class="c1"># source/index.html.haml</span></span>
+<span class="line" id="LC11" lang="yaml">  <span class="na">public</span><span class="pi">:</span> <span class="s1">'</span><span class="s">\1'</span> <span class="c1"># index.html</span></span>
+<span class="line" id="LC12" lang="yaml"></span>
+<span class="line" id="LC13" lang="yaml"><span class="c1"># Other files</span></span>
+<span class="line" id="LC14" lang="yaml"><span class="pi">-</span> <span class="na">source</span><span class="pi">:</span> <span class="s">/source\/(.*)/</span> <span class="c1"># source/images/blogimages/around-the-world-in-6-releases-cover.png</span></span>
+<span class="line" id="LC15" lang="yaml">  <span class="na">public</span><span class="pi">:</span> <span class="s1">'</span><span class="s">\1'</span> <span class="c1"># images/blogimages/around-the-world-in-6-releases-cover.png</span></span></code></pre>
+<p dir="auto">Mappings are defined as entries in the root YAML array, and are identified by a <code>-</code> prefix. Within an entry, we have a hash map with two keys:</p>
+<ul dir="auto">
+<li>
+<code>source</code>
+<ul>
+<li>a string, starting and ending with <code>'</code>, for an exact match</li>
+<li>a regular expression, starting and ending with <code>/</code>, for a pattern match
+<ul>
+<li>The regular expression needs to match the entire source path - <code>^</code> and <code>$</code> anchors are implied.</li>
+<li>Can include capture groups denoted by <code>()</code> that can be referred to in the <code>public</code> path.</li>
+<li>Slashes (<code>/</code>) can, but don't have to, be escaped as <code>\/</code>.</li>
+<li>Literal periods (<code>.</code>) should be escaped as <code>\.</code>.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>
+<code>public</code>
+<ul>
+<li>a string, starting and ending with <code>'</code>.
+<ul>
+<li>Can include <code>\N</code> expressions to refer to capture groups in the <code>source</code> regular expression in order of their occurrence, starting with <code>\1</code>.</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p dir="auto">The public path for a source path is determined by finding the first <code>source</code> expression that matches it, and returning the corresponding <code>public</code> path, replacing the <code>\N</code> expressions with the values of the <code>()</code> capture groups if appropriate.</p>
+<p dir="auto">In the example above, the fact that mappings are evaluated in order of their definition is used to ensure that <code>source/index.html.haml</code> will match <code>/source\/(.+?\.html).*/</code> instead of <code>/source\/(.*)/</code>, and will result in a public path of <code>index.html</code>, instead of <code>index.html.haml</code>.</p>
+<hr/>
+<p dir="auto">We now have a full development cycle, where our app is tested, built, deployed
+as a Review app, deployed to a staging server once the merge request is merged,
+and finally manually deployed to the production server. What we just described
+is a single workflow, but imagine tens of developers working on a project
+at the same time. They each push to their branches, and dynamic environments are
+created all the time. In that case, we probably need to do some clean up. Read
+next how environments can be stopped.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#stopping-an-environment" id="user-content-stopping-an-environment"></a>Stopping an environment</h2>
+<p dir="auto">By stopping an environment, you are effectively terminating its recording of the
+deployments that happen in it.</p>
+<p dir="auto">A branch is associated with an environment when the CI pipeline that is created
+for this branch, was recently deployed to this environment. You can think of
+the CI pipeline as the glue between the branch and the environment:
+<code>branch ➔ CI pipeline ➔ environment</code>.</p>
+<p dir="auto">There is a special case where environments can be manually stopped. That can
+happen if you provide another job for that matter. The syntax is a little
+tricky since a job calls another job to do the job.</p>
+<p dir="auto">Consider the following example where the <code>deploy_review</code> calls the <code>stop_review</code>
+to clean up and stop the environment:</p>
+<pre class="code highlight js-syntax-highlight yaml" lang="yaml" v-pre="true"><code><span class="line" id="LC1" lang="yaml"><span class="na">deploy_review</span><span class="pi">:</span></span>
+<span class="line" id="LC2" lang="yaml">  <span class="na">stage</span><span class="pi">:</span> <span class="s">deploy</span></span>
+<span class="line" id="LC3" lang="yaml">  <span class="na">script</span><span class="pi">:</span></span>
+<span class="line" id="LC4" lang="yaml">    <span class="pi">-</span> <span class="s">echo "Deploy a review app"</span></span>
+<span class="line" id="LC5" lang="yaml">  <span class="na">environment</span><span class="pi">:</span></span>
+<span class="line" id="LC6" lang="yaml">    <span class="na">name</span><span class="pi">:</span> <span class="s">review/$CI_COMMIT_REF_NAME</span></span>
+<span class="line" id="LC7" lang="yaml">    <span class="na">url</span><span class="pi">:</span> <span class="s">https://$CI_ENVIRONMENT_SLUG.example.com</span></span>
+<span class="line" id="LC8" lang="yaml">    <span class="na">on_stop</span><span class="pi">:</span> <span class="s">stop_review</span></span>
+<span class="line" id="LC9" lang="yaml">  <span class="na">only</span><span class="pi">:</span></span>
+<span class="line" id="LC10" lang="yaml">    <span class="pi">-</span> <span class="s">branches</span></span>
+<span class="line" id="LC11" lang="yaml">  <span class="na">except</span><span class="pi">:</span></span>
+<span class="line" id="LC12" lang="yaml">    <span class="pi">-</span> <span class="s">master</span></span>
+<span class="line" id="LC13" lang="yaml"></span>
+<span class="line" id="LC14" lang="yaml"><span class="na">stop_review</span><span class="pi">:</span></span>
+<span class="line" id="LC15" lang="yaml">  <span class="na">stage</span><span class="pi">:</span> <span class="s">deploy</span></span>
+<span class="line" id="LC16" lang="yaml">  <span class="na">variables</span><span class="pi">:</span></span>
+<span class="line" id="LC17" lang="yaml">    <span class="na">GIT_STRATEGY</span><span class="pi">:</span> <span class="s">none</span></span>
+<span class="line" id="LC18" lang="yaml">  <span class="na">script</span><span class="pi">:</span></span>
+<span class="line" id="LC19" lang="yaml">    <span class="pi">-</span> <span class="s">echo "Remove review app"</span></span>
+<span class="line" id="LC20" lang="yaml">  <span class="na">when</span><span class="pi">:</span> <span class="s">manual</span></span>
+<span class="line" id="LC21" lang="yaml">  <span class="na">environment</span><span class="pi">:</span></span>
+<span class="line" id="LC22" lang="yaml">    <span class="na">name</span><span class="pi">:</span> <span class="s">review/$CI_COMMIT_REF_NAME</span></span>
+<span class="line" id="LC23" lang="yaml">    <span class="na">action</span><span class="pi">:</span> <span class="s">stop</span></span></code></pre>
+<p dir="auto">Setting the <a href="yaml/README.md#git-strategy"><code>GIT_STRATEGY</code></a> to <code>none</code> is necessary on the
+<code>stop_review</code> job so that the <a href="https://docs.gitlab.com/runner/" rel="nofollow noreferrer noopener" target="_blank">GitLab Runner</a> won't try to checkout the code
+after the branch is deleted.</p>
+<blockquote dir="auto">
+<p><strong>Note:</strong>
+Starting with GitLab 8.14, dynamic environments will be stopped automatically
+when their associated branch is deleted.</p>
+</blockquote>
+<p dir="auto">When you have an environment that has a stop action defined (typically when
+the environment describes a review app), GitLab will automatically trigger a
+stop action when the associated branch is deleted. The <code>stop_review</code> job must
+be in the same <code>stage</code> as the <code>deploy_review</code> one in order for the environment
+to automatically stop.</p>
+<p dir="auto">You can read more in the <a href="yaml/README.md#environment-on_stop"><code>.gitlab-ci.yml</code> reference</a>.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#grouping-similar-environments" id="user-content-grouping-similar-environments"></a>Grouping similar environments</h2>
+<blockquote dir="auto">
+<p><a href="https://gitlab.com/gitlab-org/gitlab-ce/merge_requests/7015" rel="nofollow noreferrer noopener" target="_blank">Introduced</a> in GitLab 8.14.</p>
+</blockquote>
+<p dir="auto">As we've seen in the <a href="#dynamic-environments">dynamic environments</a>, you can
+prepend their name with a word, then followed by a <code>/</code> and finally the branch
+name which is automatically defined by the <code>CI_COMMIT_REF_NAME</code> variable.</p>
+<p dir="auto">In short, environments that are named like <code>type/foo</code> are presented under a
+group named <code>type</code>.</p>
+<p dir="auto">In our minimal example, we name the environments <code>review/$CI_COMMIT_REF_NAME</code>
+where <code>$CI_COMMIT_REF_NAME</code> is the branch name:</p>
+<pre class="code highlight js-syntax-highlight yaml" lang="yaml" v-pre="true"><code><span class="line" id="LC1" lang="yaml"><span class="na">deploy_review</span><span class="pi">:</span></span>
+<span class="line" id="LC2" lang="yaml">  <span class="na">stage</span><span class="pi">:</span> <span class="s">deploy</span></span>
+<span class="line" id="LC3" lang="yaml">  <span class="na">script</span><span class="pi">:</span></span>
+<span class="line" id="LC4" lang="yaml">    <span class="pi">-</span> <span class="s">echo "Deploy a review app"</span></span>
+<span class="line" id="LC5" lang="yaml">  <span class="na">environment</span><span class="pi">:</span></span>
+<span class="line" id="LC6" lang="yaml">    <span class="na">name</span><span class="pi">:</span> <span class="s">review/$CI_COMMIT_REF_NAME</span></span></code></pre>
+<p dir="auto">In that case, if you visit the Environments page, and provided the branches
+exist, you should see something like:</p>
+<p dir="auto"><a class="no-attachment-icon" href="/img/environments_dynamic_groups.png" rel="noopener noreferrer" target="_blank"><img alt="Environment groups" class="lazy" data-src="img/environments_dynamic_groups.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#monitoring-environments" id="user-content-monitoring-environments"></a>Monitoring environments</h2>
+<blockquote dir="auto">
+<p><strong>Notes:</strong></p>
+</blockquote>
+<ul dir="auto">
+<li>For the monitoring dashboard to appear, you need to:
+<ul>
+<li>Have enabled the <a href="/user/project/integrations/prometheus.md">Prometheus integration</a>
+</li>
+<li>Configured Prometheus to collect at least one <a href="/user/project/integrations/prometheus_library/metrics.md">supported metric</a>
+</li>
+</ul>
+</li>
+<li>With GitLab 9.2, all deployments to an environment are shown directly on the
+monitoring dashboard</li>
+</ul>
+<p dir="auto">If you have enabled <a href="https://docs.gitlab.com/ee/user/project/integrations/prometheus.html" rel="nofollow noreferrer noopener" target="_blank">Prometheus for monitoring system and response metrics</a>, you can monitor the performance behavior of your app running in each environment.</p>
+<p dir="auto">Once configured, GitLab will attempt to retrieve <a href="https://docs.gitlab.com/ee/user/project/integrations/prometheus_library/metrics.html" rel="nofollow noreferrer noopener" target="_blank">supported performance metrics</a> for any
+environment which has had a successful deployment. If monitoring data was
+successfully retrieved, a Monitoring button will appear for each environment.</p>
+<p dir="auto"><a class="no-attachment-icon" href="/img/deployments_view.png" rel="noopener noreferrer" target="_blank"><img alt="Environment Detail with Metrics" class="lazy" data-src="img/deployments_view.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<p dir="auto">Clicking on the Monitoring button will display a new page, showing up to the last
+8 hours of performance data. It may take a minute or two for data to appear
+after initial deployment.</p>
+<p dir="auto">All deployments to an environment are shown directly on the monitoring dashboard
+which allows easy correlation between any changes in performance and a new
+version of the app, all without leaving GitLab.</p>
+<p dir="auto"><a class="no-attachment-icon" href="/img/environments_monitoring.png" rel="noopener noreferrer" target="_blank"><img alt="Monitoring dashboard" class="lazy" data-src="img/environments_monitoring.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#web-terminals" id="user-content-web-terminals"></a>Web terminals</h2>
+<blockquote dir="auto">
+<p><strong>Note:</strong>
+Web terminals were added in GitLab 8.15 and are only available to project
+maintainers and owners.</p>
+</blockquote>
+<p dir="auto">If you deploy to your environments with the help of a deployment service (e.g.,
+the <a href="/user/project/clusters/index.md">Kubernetes integration</a>), GitLab can open
+a terminal session to your environment! This is a very powerful feature that
+allows you to debug issues without leaving the comfort of your web browser. To
+enable it, just follow the instructions given in the service integration
+documentation.</p>
+<p dir="auto">Once enabled, your environments will gain a "terminal" button:</p>
+<p dir="auto"><a class="no-attachment-icon" href="/img/environments_terminal_button_on_index.png" rel="noopener noreferrer" target="_blank"><img alt="Terminal button on environment index" class="lazy" data-src="img/environments_terminal_button_on_index.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<p dir="auto">You can also access the terminal button from the page for a specific environment:</p>
+<p dir="auto"><a class="no-attachment-icon" href="/img/environments_terminal_button_on_show.png" rel="noopener noreferrer" target="_blank"><img alt="Terminal button for an environment" class="lazy" data-src="img/environments_terminal_button_on_show.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<p dir="auto">Wherever you find it, clicking the button will take you to a separate page to
+establish the terminal session:</p>
+<p dir="auto"><a class="no-attachment-icon" href="/img/environments_terminal_page.png" rel="noopener noreferrer" target="_blank"><img alt="Terminal page" class="lazy" data-src="img/environments_terminal_page.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<p dir="auto">This works just like any other terminal - you'll be in the container created
+by your deployment, so you can run shell commands and get responses in real
+time, check the logs, try out configuration or code tweaks, etc. You can open
+multiple terminals to the same environment - they each get their own shell
+session -  and even a multiplexer like <code>screen</code> or <code>tmux</code>!</p>
+<blockquote dir="auto">
+<p><strong>Note:</strong>
+Container-based deployments often lack basic tools (like an editor), and may
+be stopped or restarted at any time. If this happens, you will lose all your
+changes! Treat this as a debugging tool, not a comprehensive online IDE.</p>
+</blockquote>
+<hr/>
+<p dir="auto">While this is fine for deploying to some stable environments like staging or
+production, what happens for branches? So far we haven't defined anything
+regarding deployments for branches other than <code>master</code>. Dynamic environments
+will help us achieve that.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#checkout-deployments-locally" id="user-content-checkout-deployments-locally"></a>Checkout deployments locally</h2>
+<p dir="auto">Since 8.13, a reference in the git repository is saved for each deployment, so
+knowing the state of your current environments is only a <code>git fetch</code> away.</p>
+<p dir="auto">In your git config, append the <code>[remote "&lt;your-remote&gt;"]</code> block with an extra
+fetch line:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">fetch = +refs/environments/*:refs/remotes/origin/environments/*</span></code></pre>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#limitations" id="user-content-limitations"></a>Limitations</h2>
+<ol dir="auto">
+<li>You are limited to use only the <a href="/variables/README.md">CI predefined variables</a> in the
+<code>environment: name</code>. If you try to re-use variables defined inside <code>script</code>
+as part of the environment name, it will not work.</li>
+</ol>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#further-reading" id="user-content-further-reading"></a>Further reading</h2>
+<p dir="auto">Below are some links you may find interesting:</p>
+<ul dir="auto">
+<li><a href="yaml/README.md#environment">The <code>.gitlab-ci.yml</code> definition of environments</a></li>
+<li><a href="https://about.gitlab.com/2016/08/26/ci-deployment-and-environments/" rel="nofollow noreferrer noopener" target="_blank">A blog post on Deployments &amp; Environments</a></li>
+<li><a href="/review_apps/index.md">Review Apps - Use dynamic environments to deploy your code for every branch</a></li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

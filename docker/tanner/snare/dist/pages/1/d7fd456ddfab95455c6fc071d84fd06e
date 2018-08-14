@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+
+<html class="" lang="en">
+<head prefix="og: http://ogp.me/ns#">
+<meta charset="utf-8"/>
+<meta content="IE=edge" http-equiv="X-UA-Compatible"/>
+<meta content="object" property="og:type"/>
+<meta content="GitLab" property="og:site_name"/>
+<meta content="Index · Merge requests · Project · User · Help" property="og:title"/>
+<meta content="GitLab Community Edition" property="og:description"/>
+<meta content="http://172.20.254.127/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png" property="og:image"/>
+<meta content="64" property="og:image:width"/>
+<meta content="64" property="og:image:height"/>
+<meta content="http://172.20.254.127/help/user/project/merge_requests/index.md" property="og:url"/>
+<meta content="summary" property="twitter:card"/>
+<meta content="Index · Merge requests · Project · User · Help" property="twitter:title"/>
+<meta content="GitLab Community Edition" property="twitter:description"/>
+<meta content="http://172.20.254.127/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png" property="twitter:image"/>
+<title>Index · Merge requests · Project · User · Help · GitLab</title>
+<meta content="GitLab Community Edition" name="description"/>
+<link data-original-href="/assets/favicon-7901bd695fb93edb07975966062049829afb56cf11511236e61bcf425070e36e.png" href="/assets/favicon-7901bd695fb93edb07975966062049829afb56cf11511236e61bcf425070e36e.png" id="favicon" rel="shortcut icon" type="image/png"/>
+<link href="/assets/application-266f2bfa52ff531258d13c702895a14fd5994ca591fa2df7338da00ab18c99ac.css" media="all" rel="stylesheet"/>
+<link href="/assets/print-c8ff536271f8974b8a9a5f75c0ca25d2b8c1dceb4cff3c01d1603862a0bdcbfc.css" media="print" rel="stylesheet"/>
+<script>
+//<![CDATA[
+window.gon={};gon.api_version="v4";gon.default_avatar_url="http://172.20.254.127/assets/no_avatar-849f9c04a3a0d0cea2424ae97b27447dc64a7dbfae83c036c45b403392f0e8ba.png";gon.max_file_size=10;gon.asset_host=null;gon.webpack_public_path="/assets/webpack/";gon.relative_url_root="";gon.shortcuts_path="/help/shortcuts";gon.user_color_scheme="white";gon.gitlab_url="http://172.20.254.127";gon.revision="63daf37";gon.gitlab_logo="/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png";gon.sprite_icons="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg";gon.sprite_file_icons="/assets/file_icons-7262fc6897e02f1ceaf8de43dc33afa5e4f9a2067f4f68ef77dcc87946575e9e.svg";gon.emoji_sprites_css_path="/assets/emoji_sprites-289eccffb1183c188b630297431be837765d9ff4aed6130cf738586fb307c170.css";gon.test_env=false;gon.suggested_label_colors=["#0033CC","#428BCA","#44AD8E","#A8D695","#5CB85C","#69D100","#004E00","#34495E","#7F8C8D","#A295D6","#5843AD","#8E44AD","#FFECDB","#AD4363","#D10069","#CC0033","#FF0000","#D9534F","#D1D100","#F0AD4E","#AD8D43"];
+//]]>
+</script>
+<script defer="defer" src="/assets/webpack/runtime.9fcb75d4.bundle.js"></script>
+<script defer="defer" src="/assets/webpack/main.a66b6c66.chunk.js"></script>
+<script defer="defer" src="/assets/webpack/pages.help.show.c42c0700.chunk.js"></script>
+<meta content="authenticity_token" name="csrf-param">
+<meta content="Vh8KdHvnGZR/PepapAy+FK+AJ1CsNYNtc6ggpK/5NFr8Zab76MtKHnYGLKtjvca5qHk+0CYMHVGVDVE2UmrpWw==" name="csrf-token">
+<meta content="origin-when-cross-origin" name="referrer"/>
+<meta content="width=device-width, initial-scale=1, maximum-scale=1" name="viewport"/>
+<meta content="#474D57" name="theme-color"/>
+<link href="/assets/touch-icon-iphone-5a9cee0e8a51212e70b90c87c12f382c428870c0ff67d1eb034d884b78d2dae7.png" rel="apple-touch-icon" type="image/x-icon"/>
+<link href="/assets/touch-icon-ipad-a6eec6aeb9da138e507593b464fdac213047e49d3093fc30e90d9a995df83ba3.png" rel="apple-touch-icon" sizes="76x76" type="image/x-icon"/>
+<link href="/assets/touch-icon-iphone-retina-72e2aadf86513a56e050e7f0f2355deaa19cc17ed97bbe5147847f2748e5a3e3.png" rel="apple-touch-icon" sizes="120x120" type="image/x-icon"/>
+<link href="/assets/touch-icon-ipad-retina-8ebe416f5313483d9c1bc772b5bbe03ecad52a54eba443e5215a22caed2a16a2.png" rel="apple-touch-icon" sizes="152x152" type="image/x-icon"/>
+<link color="rgb(226, 67, 41)" href="/assets/logo-d36b5212042cebc89b96df4bf6ac24e43db316143e89926c0db839ff694d2de4.svg" rel="mask-icon"/>
+<meta content="/assets/msapplication-tile-1196ec67452f618d39cdd85e2e3a542f76574c071051ae7effbfde01710eb17d.png" name="msapplication-TileImage"/>
+<meta content="#30353E" name="msapplication-TileColor"/>
+</meta></meta></head>
+<body class="ui-indigo " data-group="" data-page="help:show" data-project="">
+<header class="navbar navbar-gitlab qa-navbar navbar-expand-sm">
+<a class="sr-only gl-accessibility" href="#content-body" tabindex="1">Skip to content</a>
+<div class="container-fluid">
+<div class="header-content">
+<div class="title-container">
+<h1 class="title">
+<a href="/" id="logo" title="Dashboard"><svg class="tanuki-logo" height="24" viewbox="0 0 36 36" width="24">
+<path class="tanuki-shape tanuki-left-ear" d="M2 14l9.38 9v-9l-4-12.28c-.205-.632-1.176-.632-1.38 0z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-right-ear" d="M34 14l-9.38 9v-9l4-12.28c.205-.632 1.176-.632 1.38 0z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-nose" d="M18,34.38 3,14 33,14 Z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-left-eye" d="M18,34.38 11.38,14 2,14 6,25Z" fill="#fc6d26"></path>
+<path class="tanuki-shape tanuki-right-eye" d="M18,34.38 24.62,14 34,14 30,25Z" fill="#fc6d26"></path>
+<path class="tanuki-shape tanuki-left-cheek" d="M2 14L.1 20.16c-.18.565 0 1.2.5 1.56l17.42 12.66z" fill="#fca326"></path>
+<path class="tanuki-shape tanuki-right-cheek" d="M34 14l1.9 6.16c.18.565 0 1.2-.5 1.56L18 34.38z" fill="#fca326"></path>
+</svg>
+<span class="logo-text d-none d-sm-block">
+<svg viewbox="0 0 617 169" xmlns="http://www.w3.org/2000/svg"><path d="M315.26 2.97h-21.8l.1 162.5h88.3v-20.1h-66.5l-.1-142.4M465.89 136.95c-5.5 5.7-14.6 11.4-27 11.4-16.6 0-23.3-8.2-23.3-18.9 0-16.1 11.2-23.8 35-23.8 4.5 0 11.7.5 15.4 1.2v30.1h-.1m-22.6-98.5c-17.6 0-33.8 6.2-46.4 16.7l7.7 13.4c8.9-5.2 19.8-10.4 35.5-10.4 17.9 0 25.8 9.2 25.8 24.6v7.9c-3.5-.7-10.7-1.2-15.1-1.2-38.2 0-57.6 13.4-57.6 41.4 0 25.1 15.4 37.7 38.7 37.7 15.7 0 30.8-7.2 36-18.9l4 15.9h15.4v-83.2c-.1-26.3-11.5-43.9-44-43.9M557.63 149.1c-8.2 0-15.4-1-20.8-3.5V70.5c7.4-6.2 16.6-10.7 28.3-10.7 21.1 0 29.2 14.9 29.2 39 0 34.2-13.1 50.3-36.7 50.3m9.2-110.6c-19.5 0-30 13.3-30 13.3v-21l-.1-27.8h-21.3l.1 158.5c10.7 4.5 25.3 6.9 41.2 6.9 40.7 0 60.3-26 60.3-70.9-.1-35.5-18.2-59-50.2-59M77.9 20.6c19.3 0 31.8 6.4 39.9 12.9l9.4-16.3C114.5 6 97.3 0 78.9 0 32.5 0 0 28.3 0 85.4c0 59.8 35.1 83.1 75.2 83.1 20.1 0 37.2-4.7 48.4-9.4l-.5-63.9V75.1H63.6v20.1h38l.5 48.5c-5 2.5-13.6 4.5-25.3 4.5-32.2 0-53.8-20.3-53.8-63-.1-43.5 22.2-64.6 54.9-64.6M231.43 2.95h-21.3l.1 27.3v94.3c0 26.3 11.4 43.9 43.9 43.9 4.5 0 8.9-.4 13.1-1.2v-19.1c-3.1.5-6.4.7-9.9.7-17.9 0-25.8-9.2-25.8-24.6v-65h35.7v-17.8h-35.7l-.1-38.5M155.96 165.47h21.3v-124h-21.3v124M155.96 24.37h21.3V3.07h-21.3v21.3"></path></svg>
+</span>
+</a></h1>
+<ul class="list-unstyled navbar-sub-nav">
+<li class="home"><a class="dashboard-shortcuts-projects" href="/explore" title="Projects">Projects
+</a></li><li class=""><a class="dashboard-shortcuts-groups" href="/explore/groups" title="Groups">Groups
+</a></li><li class=""><a class="dashboard-shortcuts-snippets" href="/explore/snippets" title="Snippets">Snippets
+</a></li><li>
+<a href="/help" title="About GitLab CE">Help</a>
+</li>
+</ul>
+</div>
+<div class="navbar-collapse collapse">
+<ul class="nav navbar-nav">
+<li class="nav-item d-none d-sm-none d-md-block m-auto">
+<div class="search search-form">
+<form accept-charset="UTF-8" action="/search" class="form-inline" method="get"><input name="utf8" type="hidden" value="✓"/><div class="search-input-container">
+<div class="search-input-wrap">
+<div class="dropdown" data-url="/search/autocomplete">
+<input aria-label="Search" autocomplete="off" class="search-input dropdown-menu-toggle no-outline js-search-dashboard-options" data-issues-path="/dashboard/issues" data-mr-path="/dashboard/merge_requests" id="search" name="search" placeholder="Search" spellcheck="false" tabindex="1" type="search"/>
+<button class="hidden js-dropdown-search-toggle" data-toggle="dropdown" type="button"></button>
+<div class="dropdown-menu dropdown-select">
+<div class="dropdown-content"><ul>
+<li class="dropdown-menu-empty-item">
+<a>
+Loading...
+</a>
+</li>
+</ul>
+</div><div class="dropdown-loading"><i aria-hidden="true" class="fa fa-spinner fa-spin" data-hidden="true"></i></div>
+</div>
+<svg class="s16 search-icon"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#search"></use></svg>
+<svg class="s16 clear-icon js-clear-input"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#close"></use></svg>
+</div>
+</div>
+</div>
+<input class="js-search-group-options" id="group_id" name="group_id" type="hidden"/>
+<input class="js-search-project-options" id="search_project_id" name="project_id" type="hidden" value=""/>
+<input id="repository_ref" name="repository_ref" type="hidden"/>
+<div class="search-autocomplete-opts hide" data-autocomplete-path="/search/autocomplete"></div>
+</form></div>
+</li>
+<li class="nav-item d-inline-block d-sm-none d-md-none">
+<a aria-label="Search" data-container="body" data-placement="bottom" data-toggle="tooltip" href="/search" title="Search"><svg class="s16"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#search"></use></svg>
+</a></li>
+<li class="nav-item">
+<div>
+<a class="btn btn-sign-in" href="/users/sign_in?redirect_to_referer=yes">Sign in / Register</a>
+</div>
+</li>
+</ul>
+</div>
+<button class="navbar-toggler d-block d-sm-none" type="button">
+<span class="sr-only">Toggle navigation</span>
+<svg class="s12 more-icon js-navbar-toggle-right"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#more"></use></svg>
+<svg class="s12 close-icon js-navbar-toggle-left"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#close"></use></svg>
+</button>
+</div>
+</div>
+</header>
+<div class="layout-page">
+<div class="content-wrapper">
+<div class="mobile-overlay"></div>
+<div class="alert-wrapper">
+<nav class="breadcrumbs container-fluid container-limited" role="navigation">
+<div class="breadcrumbs-container">
+<div class="breadcrumbs-links js-title-container">
+<ul class="list-unstyled breadcrumbs-list js-breadcrumbs-list">
+<li><a href="/help">Help</a><svg class="s8 breadcrumbs-list-angle"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#angle-right"></use></svg></li>
+<li>
+<h2 class="breadcrumbs-sub-title"><a href="/help/user/project/merge_requests/index.md">Help</a></h2>
+</li>
+</ul>
+</div>
+</div>
+</nav>
+<div class="flash-container flash-container-page">
+</div>
+</div>
+<div class="container-fluid container-limited ">
+<div class="content" id="content-body">
+<div class="documentation wiki prepend-top-default">
+<h1 dir="auto">
+<a aria-hidden="true" class="anchor" href="#merge-requests" id="user-content-merge-requests"></a>Merge requests</h1>
+<p dir="auto">Merge requests allow you to exchange changes you made to source code and
+collaborate with other people on the same project.</p>
+<p dir="auto"><a class="no-attachment-icon" href="/img/merge_request.png" rel="noopener noreferrer" target="_blank"><img alt="Merge request view" class="lazy" data-src="img/merge_request.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#overview" id="user-content-overview"></a>Overview</h2>
+<p dir="auto">A Merge Request (<strong>MR</strong>) is the basis of GitLab as a code collaboration
+and version control platform.
+Is it simple as the name implies: a <em>request</em> to <em>merge</em> one branch into another.</p>
+<p dir="auto">With GitLab merge requests, you can:</p>
+<ul dir="auto">
+<li>Compare the changes between two <a href="https://git-scm.com/book/en/v2/Git-Branching-Branches-in-a-Nutshell#_git_branching" rel="nofollow noreferrer noopener" target="_blank">branches</a>
+</li>
+<li>
+<a href="../../discussions/index.md#discussions">Review and discuss</a> the proposed modifications inline</li>
+<li>Live preview the changes when <a href="/ci/review_apps/index.md">Review Apps</a> is configured for your project</li>
+<li>Build, test, and deploy your code in a per-branch basis with built-in <a href="/ci/README.md">GitLab CI/CD</a>
+</li>
+<li>Prevent the merge request from being merged before it's ready with <a href="#work-in-progress-merge-requests">WIP MRs</a>
+</li>
+<li>View the deployment process through <a href="../../../ci/pipelines.md#pipeline-graphs">Pipeline Graphs</a>
+</li>
+<li>
+<a href="../../project/issues/closing_issues.md#via-merge-request">Automatically close the issue(s)</a> that originated the implementation proposed in the merge request</li>
+<li>Assign it to any registered user, and change the assignee how many times you need</li>
+<li>Assign a <a href="/project/milestones/index.md">milestone</a> and track the development of a broader implementation</li>
+<li>Organize your issues and merge requests consistently throughout the project with <a href="/project/labels.md">labels</a>
+</li>
+<li>Add a time estimation and the time spent with that merge request with <a href="../../../workflow/time_tracking.html#time-tracking">Time Tracking</a>
+</li>
+<li><a href="#resolve-conflicts">Resolve merge conflicts from the UI</a></li>
+<li>Enable <a href="#fast-forward-merge-requests">fast-forward merge requests</a>
+</li>
+<li>Enable <a href="#semi-linear-history-merge-requests">semi-linear history merge requests</a> as another security layer to guarantee the pipeline is passing in the target branch</li>
+<li><a href="#create-new-merge-requests-by-email">Create new merge requests by email</a></li>
+<li>
+<a href="/allow_collaboration.md">Allow collaboration</a> so members of the target project can push directly to the fork</li>
+<li>
+<a href="/squash_and_merge.md">Squash and merge</a> for a cleaner commit history</li>
+</ul>
+<p dir="auto">With <strong><a href="https://about.gitlab.com/pricing/" rel="nofollow noreferrer noopener" target="_blank" title="GitLab Enterprise Edition">GitLab Enterprise Edition</a></strong>, you can also:</p>
+<ul dir="auto">
+<li>View the deployment process across projects with <a href="https://docs.gitlab.com/ee/ci/multi_project_pipeline_graphs.html#multi-project-pipeline-graphs" rel="nofollow noreferrer noopener" target="_blank">Multi-Project Pipeline Graphs</a> <strong>[PREMIUM]</strong>
+</li>
+<li>Request <a href="https://docs.gitlab.com/ee/user/project/merge_requests/merge_request_approvals.html" rel="nofollow noreferrer noopener" target="_blank">approvals</a> from your managers <strong>[STARTER]</strong>
+</li>
+<li>Analyze the impact of your changes with <a href="https://docs.gitlab.com/ee/user/project/merge_requests/code_quality.html" rel="nofollow noreferrer noopener" target="_blank">Code Quality reports</a> <strong>[STARTER]</strong>
+</li>
+</ul>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#use-cases" id="user-content-use-cases"></a>Use cases</h2>
+<p dir="auto">A. Consider you are a software developer working in a team:</p>
+<ol dir="auto">
+<li>You checkout a new branch, and submit your changes through a merge request</li>
+<li>You gather feedback from your team</li>
+<li>You work on the implementation optimizing code with <a href="https://docs.gitlab.com/ee/user/project/merge_requests/code_quality.html" rel="nofollow noreferrer noopener" target="_blank">Code Quality reports</a> <strong>[STARTER]</strong>
+</li>
+<li>You build and test your changes with GitLab CI/CD</li>
+<li>You request the approval from your manager</li>
+<li>Your manager pushes a commit with his final review, <a href="https://docs.gitlab.com/ee/user/project/merge_requests/merge_request_approvals.html" rel="nofollow noreferrer noopener" target="_blank">approves the merge request</a>, and set it to <a href="#merge-when-pipeline-succeeds">merge when pipeline succeeds</a> (Merge Request Approvals are available in GitLab Starter)</li>
+<li>Your changes get deployed to production with <a href="../../../ci/yaml/README.md#manual-actions">manual actions</a> for GitLab CI/CD</li>
+<li>Your implementations were successfully shipped to your customer</li>
+</ol>
+<p dir="auto">B. Consider you're a web developer writing a webpage for your company's:</p>
+<ol dir="auto">
+<li>You checkout a new branch, and submit a new page through a merge request</li>
+<li>You gather feedback from your reviewers</li>
+<li>Your changes are previewed with <a href="/ci/review_apps/index.md">Review Apps</a>
+</li>
+<li>You request your web designers for their implementation</li>
+<li>You request the <a href="https://docs.gitlab.com/ee/user/project/merge_requests/merge_request_approvals.html" rel="nofollow noreferrer noopener" target="_blank">approval</a> from your manager <strong>[STARTER]</strong>
+</li>
+<li>Once approved, your merge request is <a href="/squash_and_merge.md">squashed and merged</a>, and <a href="https://about.gitlab.com/2016/08/26/ci-deployment-and-environments/" rel="nofollow noreferrer noopener" target="_blank">deployed to staging with GitLab Pages</a>
+</li>
+<li>Your production team <a href="#cherry-pick-changes">cherry picks</a> the merge commit into production</li>
+</ol>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#merge-requests-per-project" id="user-content-merge-requests-per-project"></a>Merge requests per project</h2>
+<p dir="auto">View all the merge requests within a project by navigating to <strong>Project &gt; Merge Requests</strong>.</p>
+<p dir="auto">When you access your project's merge requests, GitLab will present them in a list,
+and you can use the tabs available to quickly filter by open and closed. You can also <a href="../../search/index.md#issues-and-merge-requests-per-project">search and filter the results</a>.</p>
+<p dir="auto"><a class="no-attachment-icon" href="/img/project_merge_requests_list_view.png" rel="noopener noreferrer" target="_blank"><img alt="Project merge requests list view" class="lazy" data-src="img/project_merge_requests_list_view.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#merge-requests-per-group" id="user-content-merge-requests-per-group"></a>Merge requests per group</h2>
+<p dir="auto">View merge requests in all projects in the group, including all projects of all descendant subgroups of the group. Navigate to <strong>Group &gt; Merge Requests</strong> to view these merge requests. This view also has the open and closed merge requests tabs.</p>
+<p dir="auto">You can <a href="../../search/index.md#issues-and-merge-requests-per-group">search and filter the results</a> from here.</p>
+<p dir="auto"><a class="no-attachment-icon" href="/img/group_merge_requests_list_view.png" rel="noopener noreferrer" target="_blank"><img alt="Group Issues list view" class="lazy" data-src="img/group_merge_requests_list_view.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#removing-the-source-branch" id="user-content-removing-the-source-branch"></a>Removing the source branch</h2>
+<p dir="auto">When creating a merge request, select the "Remove source branch when merge
+request accepted" option and the source branch will be removed when the merge
+request is merged.</p>
+<p dir="auto">This option is also visible in an existing merge request next to the merge
+request button and can be selected/deselected before merging. It's only visible
+to users with <a href="/permissions.md">Maintainer permissions</a> in the source project.</p>
+<p dir="auto">If the user viewing the merge request does not have the correct permissions to
+remove the source branch and the source branch is set for removal, the merge
+request widget will show the "Removes source branch" text.</p>
+<p dir="auto"><a class="no-attachment-icon" href="/img/remove_source_branch_status.png" rel="noopener noreferrer" target="_blank"><img alt="Remove source branch status" class="lazy" data-src="img/remove_source_branch_status.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#authorization-for-merge-requests" id="user-content-authorization-for-merge-requests"></a>Authorization for merge requests</h2>
+<p dir="auto">There are two main ways to have a merge request flow with GitLab:</p>
+<ol dir="auto">
+<li>Working with <a href="/protected_branches.md">protected branches</a> in a single repository</li>
+<li>Working with forks of an authoritative project</li>
+</ol>
+<p dir="auto"><a href="/authorization_for_merge_requests.md">Learn more about the authorization for merge requests.</a></p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#cherry-pick-changes" id="user-content-cherry-pick-changes"></a>Cherry-pick changes</h2>
+<p dir="auto">Cherry-pick any commit in the UI by simply clicking the <strong>Cherry-pick</strong> button
+in a merged merge requests or a commit.</p>
+<p dir="auto"><a href="/cherry_pick_changes.md">Learn more about cherry-picking changes.</a></p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#semi-linear-history-merge-requests" id="user-content-semi-linear-history-merge-requests"></a>Semi-linear history merge requests</h2>
+<p dir="auto">A merge commit is created for every merge, but the branch is only merged if
+a fast-forward merge is possible. This ensures that if the merge request build
+succeeded, the target branch build will also succeed after merging.</p>
+<p dir="auto">Navigate to a project's settings, select the <strong>Merge commit with semi-linear
+history</strong> option under <strong>Merge Requests: Merge method</strong> and save your changes.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#fast-forward-merge-requests" id="user-content-fast-forward-merge-requests"></a>Fast-forward merge requests</h2>
+<p dir="auto">If you prefer a linear Git history and a way to accept merge requests without
+creating merge commits, you can configure this on a per-project basis.</p>
+<p dir="auto"><a href="/fast_forward_merge.md">Read more about fast-forward merge requests.</a></p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#merge-when-pipeline-succeeds" id="user-content-merge-when-pipeline-succeeds"></a>Merge when pipeline succeeds</h2>
+<p dir="auto">When reviewing a merge request that looks ready to merge but still has one or
+more CI jobs running, you can set it to be merged automatically when CI
+pipeline succeeds. This way, you don't have to wait for the pipeline to finish
+and remember to merge the request manually.</p>
+<p dir="auto"><a href="/merge_when_pipeline_succeeds.md">Learn more about merging when pipeline succeeds.</a></p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#resolve-discussion-comments-in-merge-requests-reviews" id="user-content-resolve-discussion-comments-in-merge-requests-reviews"></a>Resolve discussion comments in merge requests reviews</h2>
+<p dir="auto">Keep track of the progress during a code review with resolving comments.
+Resolving comments prevents you from forgetting to address feedback and lets
+you hide discussions that are no longer relevant.</p>
+<p dir="auto"><a href="/discussions/index.md">Read more about resolving discussion comments in merge requests reviews.</a></p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#resolve-conflicts" id="user-content-resolve-conflicts"></a>Resolve conflicts</h2>
+<p dir="auto">When a merge request has conflicts, GitLab may provide the option to resolve
+those conflicts in the GitLab UI.</p>
+<p dir="auto"><a href="/resolve_conflicts.md">Learn more about resolving merge conflicts in the UI.</a></p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#create-new-merge-requests-by-email" id="user-content-create-new-merge-requests-by-email"></a>Create new merge requests by email</h2>
+<p dir="auto"><em>This feature needs <a href="/administration/incoming_email.md">incoming email</a>
+to be configured by a GitLab administrator to be available for CE/EE users, and
+it's available on GitLab.com.</em></p>
+<p dir="auto">You can create a new merge request by sending an email to a user-specific email
+address. The address can be obtained on the merge requests page by clicking on
+a <strong>Email a new merge request to this project</strong> button.  The subject will be
+used as the source branch name for the new merge request and the target branch
+will be the default branch for the project. The message body (if not empty)
+will be used as the merge request description. You need
+<a href="/administration/reply_by_email.md">"Reply by email"</a> enabled to use
+this feature. If it's not enabled to your instance, you may ask your GitLab
+administrator to do so.</p>
+<p dir="auto"><a class="no-attachment-icon" href="/img/create_from_email.png" rel="noopener noreferrer" target="_blank"><img alt="Create new merge requests by email" class="lazy" data-src="img/create_from_email.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#find-the-merge-request-that-introduced-a-change" id="user-content-find-the-merge-request-that-introduced-a-change"></a>Find the merge request that introduced a change</h2>
+<blockquote dir="auto">
+<p><strong>Note</strong>: this feature was <a href="https://gitlab.com/gitlab-org/gitlab-ce/issues/2383" rel="nofollow noreferrer noopener" target="_blank">implemented in GitLab 10.5</a>.</p>
+</blockquote>
+<p dir="auto">When viewing the commit details page, GitLab will link to the merge request (or
+merge requests, if it's in more than one) containing that commit.</p>
+<p dir="auto">This only applies to commits that are in the most recent version of a merge
+request - if a commit was in a merge request, then rebased out of that merge
+request, they will not be linked.</p>
+<p dir="auto"><a href="/versions.md">Read more about merge request versions</a></p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#revert-changes" id="user-content-revert-changes"></a>Revert changes</h2>
+<p dir="auto">GitLab implements Git's powerful feature to revert any commit with introducing
+a <strong>Revert</strong> button in merge requests and commit details.</p>
+<p dir="auto"><a href="/revert_changes.md">Learn more about reverting changes in the UI</a></p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#merge-requests-versions" id="user-content-merge-requests-versions"></a>Merge requests versions</h2>
+<p dir="auto">Every time you push to a branch that is tied to a merge request, a new version
+of merge request diff is created. When you visit a merge request that contains
+more than one pushes, you can select and compare the versions of those merge
+request diffs.</p>
+<p dir="auto"><a href="/versions.md">Read more about merge request versions</a></p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#work-in-progress-merge-requests" id="user-content-work-in-progress-merge-requests"></a>Work In Progress merge requests</h2>
+<p dir="auto">To prevent merge requests from accidentally being accepted before they're
+completely ready, GitLab blocks the "Accept" button for merge requests that
+have been marked as a <strong>Work In Progress</strong>.</p>
+<p dir="auto"><a href="/work_in_progress_merge_requests.md">Learn more about settings a merge request as "Work In Progress".</a></p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#merge-request-diff-file-navigation" id="user-content-merge-request-diff-file-navigation"></a>Merge request diff file navigation</h2>
+<p dir="auto">The diff view has a persistent dropdown for file navigation. As you scroll through
+diffs with a large number of files and/or many changes in those files, you can
+easily jump to any changed file through the dropdown navigation.</p>
+<p dir="auto"><a class="no-attachment-icon" href="/img/merge_request_diff_file_navigation.png" rel="noopener noreferrer" target="_blank"><img alt="Merge request diff file navigation" class="lazy" data-src="img/merge_request_diff_file_navigation.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#ignore-whitespace-changes-in-merge-request-diff-view" id="user-content-ignore-whitespace-changes-in-merge-request-diff-view"></a>Ignore whitespace changes in Merge Request diff view</h2>
+<p dir="auto">If you click the <strong>Hide whitespace changes</strong> button, you can see the diff
+without whitespace changes (if there are any). This is also working when on a
+specific commit page.</p>
+<p dir="auto"><a class="no-attachment-icon" href="/img/merge_request_diff.png" rel="noopener noreferrer" target="_blank"><img alt="MR diff" class="lazy" data-src="img/merge_request_diff.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<blockquote dir="auto">
+<p><strong>Tip:</strong>
+You can append <code>?w=1</code> while on the diffs page of a merge request to ignore any
+whitespace changes.</p>
+</blockquote>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#live-preview-with-review-apps" id="user-content-live-preview-with-review-apps"></a>Live preview with Review Apps</h2>
+<p dir="auto">If you configured <a href="https://about.gitlab.com/features/review-apps/" rel="nofollow noreferrer noopener" target="_blank">Review Apps</a> for your project,
+you can preview the changes submitted to a feature-branch through a merge request
+in a per-branch basis. No need to checkout the branch, install and preview locally;
+all your changes will be available to preview by anyone with the Review Apps link.</p>
+<p dir="auto"><a href="/ci/review_apps/index.md">Read more about Review Apps.</a></p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#bulk-editing-merge-requests" id="user-content-bulk-editing-merge-requests"></a>Bulk editing merge requests</h2>
+<p dir="auto">Find out about <a href="/project/bulk_editing.md">bulk editing merge requests</a>.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#tips" id="user-content-tips"></a>Tips</h2>
+<p dir="auto">Here are some tips that will help you be more efficient with merge requests in
+the command line.</p>
+<blockquote dir="auto">
+<p><strong>Note:</strong>
+This section might move in its own document in the future.</p>
+</blockquote>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#checkout-merge-requests-locally" id="user-content-checkout-merge-requests-locally"></a>Checkout merge requests locally</h3>
+<p dir="auto">A merge request contains all the history from a repository, plus the additional
+commits added to the branch associated with the merge request. Here's a few
+tricks to checkout a merge request locally.</p>
+<p dir="auto">Please note that you can checkout a merge request locally even if the source
+project is a fork (even a private fork) of the target project.</p>
+<h4 dir="auto">
+<a aria-hidden="true" class="anchor" href="#checkout-locally-by-adding-a-git-alias" id="user-content-checkout-locally-by-adding-a-git-alias"></a>Checkout locally by adding a git alias</h4>
+<p dir="auto">Add the following alias to your <code>~/.gitconfig</code>:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">[alias]</span>
+<span class="line" id="LC2" lang="plaintext">    mr = !sh -c 'git fetch $1 merge-requests/$2/head:mr-$1-$2 &amp;&amp; git checkout mr-$1-$2' -</span></code></pre>
+<p dir="auto">Now you can check out a particular merge request from any repository and any
+remote. For example, to check out the merge request with ID 5 as shown in GitLab
+from the <code>upstream</code> remote, do:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">git mr upstream 5</span></code></pre>
+<p dir="auto">This will fetch the merge request into a local <code>mr-upstream-5</code> branch and check
+it out.</p>
+<h4 dir="auto">
+<a aria-hidden="true" class="anchor" href="#checkout-locally-by-modifying-gitconfig-for-a-given-repository" id="user-content-checkout-locally-by-modifying-gitconfig-for-a-given-repository"></a>Checkout locally by modifying <code>.git/config</code> for a given repository</h4>
+<p dir="auto">Locate the section for your GitLab remote in the <code>.git/config</code> file. It looks
+like this:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">[remote "origin"]</span>
+<span class="line" id="LC2" lang="plaintext">  url = https://gitlab.com/gitlab-org/gitlab-ce.git</span>
+<span class="line" id="LC3" lang="plaintext">  fetch = +refs/heads/*:refs/remotes/origin/*</span></code></pre>
+<p dir="auto">You can open the file with:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">git config -e</span></code></pre>
+<p dir="auto">Now add the following line to the above section:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">fetch = +refs/merge-requests/*/head:refs/remotes/origin/merge-requests/*</span></code></pre>
+<p dir="auto">In the end, it should look like this:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">[remote "origin"]</span>
+<span class="line" id="LC2" lang="plaintext">  url = https://gitlab.com/gitlab-org/gitlab-ce.git</span>
+<span class="line" id="LC3" lang="plaintext">  fetch = +refs/heads/*:refs/remotes/origin/*</span>
+<span class="line" id="LC4" lang="plaintext">  fetch = +refs/merge-requests/*/head:refs/remotes/origin/merge-requests/*</span></code></pre>
+<p dir="auto">Now you can fetch all the merge requests:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">git fetch origin</span>
+<span class="line" id="LC2" lang="plaintext"></span>
+<span class="line" id="LC3" lang="plaintext">...</span>
+<span class="line" id="LC4" lang="plaintext">From https://gitlab.com/gitlab-org/gitlab-ce.git</span>
+<span class="line" id="LC5" lang="plaintext"> * [new ref]         refs/merge-requests/1/head -&gt; origin/merge-requests/1</span>
+<span class="line" id="LC6" lang="plaintext"> * [new ref]         refs/merge-requests/2/head -&gt; origin/merge-requests/2</span>
+<span class="line" id="LC7" lang="plaintext">...</span></code></pre>
+<p dir="auto">And to check out a particular merge request:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">git checkout origin/merge-requests/1</span></code></pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

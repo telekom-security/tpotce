@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en">
+	<id>http://172.20.254.132/api.php?action=feedcontributions&amp;user=172.20.254.136&amp;feedformat=atom</id>
+	<title>user's Wiki! - User contributions [en]</title>
+	<link rel="self" type="application/atom+xml" href="http://172.20.254.132/api.php?action=feedcontributions&amp;user=172.20.254.136&amp;feedformat=atom"/>
+	<link rel="alternate" type="text/html" href="http://172.20.254.132/Special:Contributions/172.20.254.136"/>
+	<updated>2018-08-14T13:36:05Z</updated>
+	<subtitle>User contributions</subtitle>
+	<generator>MediaWiki 1.31.0</generator>
+</feed>

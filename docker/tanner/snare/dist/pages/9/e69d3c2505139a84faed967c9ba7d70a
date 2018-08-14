@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/css" href="/stylesheets/rss.css"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>user's Blog!</title>
+    <link>http://172.20.254.140:80/2018/08/07/hello-world</link>
+    <atom:link href="http://172.20.254.140/2018/08/07/hello-world.rss" rel="self" type="application/rss+xml"/>
+    <language>en-us</language>
+    <ttl>40</ttl>
+    <description></description>
+  </channel>
+</rss>

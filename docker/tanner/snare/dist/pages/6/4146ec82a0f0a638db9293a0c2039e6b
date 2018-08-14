@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="IE=edge" http-equiv="X-UA-Compatible"/>
+<title>Redmine</title>
+<meta content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" name="viewport"/>
+<meta content="Redmine" name="description">
+<meta content="issue,bug,tracker" name="keywords"/>
+<meta content="authenticity_token" name="csrf-param"/>
+<meta content="scamw4bmTQ6/5NNDPYRfSQrZMxMyZS5plUc9jbR0JjOvViUhgzQiVmn6bq6EU5ixCW5rnEX+ce7dd+t/Sp1FQQ==" name="csrf-token"/>
+<link href="/favicon.ico?1528612569" rel="shortcut icon"/>
+<link href="/stylesheets/jquery/jquery-ui-1.11.0.css?1528612569" media="all" rel="stylesheet"/>
+<link href="/stylesheets/application.css?1528612569" media="all" rel="stylesheet"/>
+<link href="/stylesheets/responsive.css?1528612569" media="all" rel="stylesheet"/>
+<script src="/javascripts/jquery-1.11.1-ui-1.11.0-ujs-3.1.4.js?1528612568"></script>
+<script src="/javascripts/application.js?1528612569"></script>
+<script src="/javascripts/responsive.js?1528612569"></script>
+<script>
+//<![CDATA[
+$(window).load(function(){ warnLeavingUnsaved('The current page contains unsaved text that will be lost if you leave this page.'); });
+//]]>
+</script>
+<!-- page specific tags -->
+</meta></head>
+<body class="controller-account action-login">
+<div id="wrapper">
+<div class="flyout-menu js-flyout-menu">
+<div class="flyout-menu__search">
+<form accept-charset="UTF-8" action="/search" method="get"><input name="utf8" type="hidden" value="✓"/>
+<label class="search-magnifier search-magnifier--flyout" for="flyout-search">⚲</label>
+<input class="small js-search-input" id="flyout-search" name="q" placeholder="Search" type="text"/>
+</form> </div>
+<h3>General</h3>
+<span class="js-general-menu"></span>
+<span class="js-sidebar flyout-menu__sidebar"></span>
+<h3>Profile</h3>
+<span class="js-profile-menu"></span>
+</div>
+<div id="wrapper2">
+<div id="wrapper3">
+<div id="top-menu">
+<div id="account">
+<ul><li><a class="login" href="/login">Sign in</a></li><li><a class="register" href="/account/register">Register</a></li></ul> </div>
+<ul><li><a class="home" href="/">Home</a></li><li><a class="projects" href="/projects">Projects</a></li><li><a class="help" href="https://www.redmine.org/guide">Help</a></li></ul></div>
+<div id="header">
+<a class="mobile-toggle-button js-flyout-menu-toggle-button" href=""></a>
+<div id="quick-search">
+<form accept-charset="UTF-8" action="/search" method="get"><input name="utf8" type="hidden" value="✓"/>
+<input name="scope" type="hidden"/>
+<label for="q">
+<a accesskey="4" href="/search">Search</a>:
+        </label>
+<input accesskey="f" class="small" id="q" name="q" size="20" type="text"/>
+</form> <div class="drdn" id="project-jump"><span class="drdn-trigger">Jump to a project...</span><div class="drdn-content"><div class="quick-search"><input autocomplete="off" class="autocomplete" data-automcomplete-url="/projects/autocomplete.js?jump=account" id="projects-quick-search" name="q" type="text" value=""/></div><div class="drdn-items projects selection"></div><div class="drdn-items all-projects selection"><a href="/projects?jump=account">All Projects</a></div></div></div>
+</div>
+<h1>Redmine</h1>
+</div>
+<div class="nosidebar" id="main">
+<div id="sidebar">
+</div>
+<div id="content">
+<div id="login-form">
+<form accept-charset="UTF-8" action="/login" method="post" onsubmit="return keepAnchorOnSignIn(this);"><input name="utf8" type="hidden" value="✓"/><input name="authenticity_token" type="hidden" value="RfYih7mXIjZlvcLhpF6g8ROT9v2J7cZO6IgDT/Vjl/1bZqFlvEVNbrOjfwwdiWcJECSucv52mcmguNW9C4r0jw=="/>
+<label for="username">Login</label>
+<input id="username" name="username" tabindex="1" type="text"/>
+<label for="password">
+    Password
+    <a class="lost_password" href="/account/lost_password">Lost password</a>
+</label>
+<input id="password" name="password" tabindex="2" type="password"/>
+<input id="login-submit" name="login" tabindex="5" type="submit" value="Login"/>
+</form></div>
+<script>
+//<![CDATA[
+$('#username').focus();
+//]]>
+</script>
+<div style="clear:both;"></div>
+</div>
+</div>
+</div>
+<div id="ajax-indicator" style="display:none;"><span>Loading...</span></div>
+<div id="ajax-modal" style="display:none;"></div>
+<div id="footer">
+<div class="bgl"><div class="bgr">
+    Powered by <a href="https://bitnami.com/stack/redmine">Bitnami Redmine Stack</a> © 2006-2018 Jean-Philippe Lang
+  </div></div>
+</div>
+</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+
+<html class="" lang="en">
+<head prefix="og: http://ogp.me/ns#">
+<meta charset="utf-8"/>
+<meta content="IE=edge" http-equiv="X-UA-Compatible"/>
+<meta content="object" property="og:type"/>
+<meta content="GitLab" property="og:site_name"/>
+<meta content="Index · Administration · Help" property="og:title"/>
+<meta content="GitLab Community Edition" property="og:description"/>
+<meta content="http://172.20.254.127/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png" property="og:image"/>
+<meta content="64" property="og:image:width"/>
+<meta content="64" property="og:image:height"/>
+<meta content="http://172.20.254.127/help/administration/index.md" property="og:url"/>
+<meta content="summary" property="twitter:card"/>
+<meta content="Index · Administration · Help" property="twitter:title"/>
+<meta content="GitLab Community Edition" property="twitter:description"/>
+<meta content="http://172.20.254.127/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png" property="twitter:image"/>
+<title>Index · Administration · Help · GitLab</title>
+<meta content="GitLab Community Edition" name="description"/>
+<link data-original-href="/assets/favicon-7901bd695fb93edb07975966062049829afb56cf11511236e61bcf425070e36e.png" href="/assets/favicon-7901bd695fb93edb07975966062049829afb56cf11511236e61bcf425070e36e.png" id="favicon" rel="shortcut icon" type="image/png"/>
+<link href="/assets/application-266f2bfa52ff531258d13c702895a14fd5994ca591fa2df7338da00ab18c99ac.css" media="all" rel="stylesheet"/>
+<link href="/assets/print-c8ff536271f8974b8a9a5f75c0ca25d2b8c1dceb4cff3c01d1603862a0bdcbfc.css" media="print" rel="stylesheet"/>
+<script>
+//<![CDATA[
+window.gon={};gon.api_version="v4";gon.default_avatar_url="http://172.20.254.127/assets/no_avatar-849f9c04a3a0d0cea2424ae97b27447dc64a7dbfae83c036c45b403392f0e8ba.png";gon.max_file_size=10;gon.asset_host=null;gon.webpack_public_path="/assets/webpack/";gon.relative_url_root="";gon.shortcuts_path="/help/shortcuts";gon.user_color_scheme="white";gon.gitlab_url="http://172.20.254.127";gon.revision="63daf37";gon.gitlab_logo="/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png";gon.sprite_icons="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg";gon.sprite_file_icons="/assets/file_icons-7262fc6897e02f1ceaf8de43dc33afa5e4f9a2067f4f68ef77dcc87946575e9e.svg";gon.emoji_sprites_css_path="/assets/emoji_sprites-289eccffb1183c188b630297431be837765d9ff4aed6130cf738586fb307c170.css";gon.test_env=false;gon.suggested_label_colors=["#0033CC","#428BCA","#44AD8E","#A8D695","#5CB85C","#69D100","#004E00","#34495E","#7F8C8D","#A295D6","#5843AD","#8E44AD","#FFECDB","#AD4363","#D10069","#CC0033","#FF0000","#D9534F","#D1D100","#F0AD4E","#AD8D43"];
+//]]>
+</script>
+<script defer="defer" src="/assets/webpack/runtime.9fcb75d4.bundle.js"></script>
+<script defer="defer" src="/assets/webpack/main.a66b6c66.chunk.js"></script>
+<script defer="defer" src="/assets/webpack/pages.help.show.c42c0700.chunk.js"></script>
+<meta content="authenticity_token" name="csrf-param">
+<meta content="8oHh5WZqWivdk6/I2RHF3WHCSxAq9jZ6yTtUB8KNiGwF3oiBFbP1wtM0vIlmjMJ6+R92tfoeakICK9+IH1tDfg==" name="csrf-token">
+<meta content="origin-when-cross-origin" name="referrer"/>
+<meta content="width=device-width, initial-scale=1, maximum-scale=1" name="viewport"/>
+<meta content="#474D57" name="theme-color"/>
+<link href="/assets/touch-icon-iphone-5a9cee0e8a51212e70b90c87c12f382c428870c0ff67d1eb034d884b78d2dae7.png" rel="apple-touch-icon" type="image/x-icon"/>
+<link href="/assets/touch-icon-ipad-a6eec6aeb9da138e507593b464fdac213047e49d3093fc30e90d9a995df83ba3.png" rel="apple-touch-icon" sizes="76x76" type="image/x-icon"/>
+<link href="/assets/touch-icon-iphone-retina-72e2aadf86513a56e050e7f0f2355deaa19cc17ed97bbe5147847f2748e5a3e3.png" rel="apple-touch-icon" sizes="120x120" type="image/x-icon"/>
+<link href="/assets/touch-icon-ipad-retina-8ebe416f5313483d9c1bc772b5bbe03ecad52a54eba443e5215a22caed2a16a2.png" rel="apple-touch-icon" sizes="152x152" type="image/x-icon"/>
+<link color="rgb(226, 67, 41)" href="/assets/logo-d36b5212042cebc89b96df4bf6ac24e43db316143e89926c0db839ff694d2de4.svg" rel="mask-icon"/>
+<meta content="/assets/msapplication-tile-1196ec67452f618d39cdd85e2e3a542f76574c071051ae7effbfde01710eb17d.png" name="msapplication-TileImage"/>
+<meta content="#30353E" name="msapplication-TileColor"/>
+</meta></meta></head>
+<body class="ui-indigo " data-group="" data-page="help:show" data-project="">
+<header class="navbar navbar-gitlab qa-navbar navbar-expand-sm">
+<a class="sr-only gl-accessibility" href="#content-body" tabindex="1">Skip to content</a>
+<div class="container-fluid">
+<div class="header-content">
+<div class="title-container">
+<h1 class="title">
+<a href="/" id="logo" title="Dashboard"><svg class="tanuki-logo" height="24" viewbox="0 0 36 36" width="24">
+<path class="tanuki-shape tanuki-left-ear" d="M2 14l9.38 9v-9l-4-12.28c-.205-.632-1.176-.632-1.38 0z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-right-ear" d="M34 14l-9.38 9v-9l4-12.28c.205-.632 1.176-.632 1.38 0z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-nose" d="M18,34.38 3,14 33,14 Z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-left-eye" d="M18,34.38 11.38,14 2,14 6,25Z" fill="#fc6d26"></path>
+<path class="tanuki-shape tanuki-right-eye" d="M18,34.38 24.62,14 34,14 30,25Z" fill="#fc6d26"></path>
+<path class="tanuki-shape tanuki-left-cheek" d="M2 14L.1 20.16c-.18.565 0 1.2.5 1.56l17.42 12.66z" fill="#fca326"></path>
+<path class="tanuki-shape tanuki-right-cheek" d="M34 14l1.9 6.16c.18.565 0 1.2-.5 1.56L18 34.38z" fill="#fca326"></path>
+</svg>
+<span class="logo-text d-none d-sm-block">
+<svg viewbox="0 0 617 169" xmlns="http://www.w3.org/2000/svg"><path d="M315.26 2.97h-21.8l.1 162.5h88.3v-20.1h-66.5l-.1-142.4M465.89 136.95c-5.5 5.7-14.6 11.4-27 11.4-16.6 0-23.3-8.2-23.3-18.9 0-16.1 11.2-23.8 35-23.8 4.5 0 11.7.5 15.4 1.2v30.1h-.1m-22.6-98.5c-17.6 0-33.8 6.2-46.4 16.7l7.7 13.4c8.9-5.2 19.8-10.4 35.5-10.4 17.9 0 25.8 9.2 25.8 24.6v7.9c-3.5-.7-10.7-1.2-15.1-1.2-38.2 0-57.6 13.4-57.6 41.4 0 25.1 15.4 37.7 38.7 37.7 15.7 0 30.8-7.2 36-18.9l4 15.9h15.4v-83.2c-.1-26.3-11.5-43.9-44-43.9M557.63 149.1c-8.2 0-15.4-1-20.8-3.5V70.5c7.4-6.2 16.6-10.7 28.3-10.7 21.1 0 29.2 14.9 29.2 39 0 34.2-13.1 50.3-36.7 50.3m9.2-110.6c-19.5 0-30 13.3-30 13.3v-21l-.1-27.8h-21.3l.1 158.5c10.7 4.5 25.3 6.9 41.2 6.9 40.7 0 60.3-26 60.3-70.9-.1-35.5-18.2-59-50.2-59M77.9 20.6c19.3 0 31.8 6.4 39.9 12.9l9.4-16.3C114.5 6 97.3 0 78.9 0 32.5 0 0 28.3 0 85.4c0 59.8 35.1 83.1 75.2 83.1 20.1 0 37.2-4.7 48.4-9.4l-.5-63.9V75.1H63.6v20.1h38l.5 48.5c-5 2.5-13.6 4.5-25.3 4.5-32.2 0-53.8-20.3-53.8-63-.1-43.5 22.2-64.6 54.9-64.6M231.43 2.95h-21.3l.1 27.3v94.3c0 26.3 11.4 43.9 43.9 43.9 4.5 0 8.9-.4 13.1-1.2v-19.1c-3.1.5-6.4.7-9.9.7-17.9 0-25.8-9.2-25.8-24.6v-65h35.7v-17.8h-35.7l-.1-38.5M155.96 165.47h21.3v-124h-21.3v124M155.96 24.37h21.3V3.07h-21.3v21.3"></path></svg>
+</span>
+</a></h1>
+<ul class="list-unstyled navbar-sub-nav">
+<li class="home"><a class="dashboard-shortcuts-projects" href="/explore" title="Projects">Projects
+</a></li><li class=""><a class="dashboard-shortcuts-groups" href="/explore/groups" title="Groups">Groups
+</a></li><li class=""><a class="dashboard-shortcuts-snippets" href="/explore/snippets" title="Snippets">Snippets
+</a></li><li>
+<a href="/help" title="About GitLab CE">Help</a>
+</li>
+</ul>
+</div>
+<div class="navbar-collapse collapse">
+<ul class="nav navbar-nav">
+<li class="nav-item d-none d-sm-none d-md-block m-auto">
+<div class="search search-form">
+<form accept-charset="UTF-8" action="/search" class="form-inline" method="get"><input name="utf8" type="hidden" value="✓"/><div class="search-input-container">
+<div class="search-input-wrap">
+<div class="dropdown" data-url="/search/autocomplete">
+<input aria-label="Search" autocomplete="off" class="search-input dropdown-menu-toggle no-outline js-search-dashboard-options" data-issues-path="/dashboard/issues" data-mr-path="/dashboard/merge_requests" id="search" name="search" placeholder="Search" spellcheck="false" tabindex="1" type="search"/>
+<button class="hidden js-dropdown-search-toggle" data-toggle="dropdown" type="button"></button>
+<div class="dropdown-menu dropdown-select">
+<div class="dropdown-content"><ul>
+<li class="dropdown-menu-empty-item">
+<a>
+Loading...
+</a>
+</li>
+</ul>
+</div><div class="dropdown-loading"><i aria-hidden="true" class="fa fa-spinner fa-spin" data-hidden="true"></i></div>
+</div>
+<svg class="s16 search-icon"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#search"></use></svg>
+<svg class="s16 clear-icon js-clear-input"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#close"></use></svg>
+</div>
+</div>
+</div>
+<input class="js-search-group-options" id="group_id" name="group_id" type="hidden"/>
+<input class="js-search-project-options" id="search_project_id" name="project_id" type="hidden" value=""/>
+<input id="repository_ref" name="repository_ref" type="hidden"/>
+<div class="search-autocomplete-opts hide" data-autocomplete-path="/search/autocomplete"></div>
+</form></div>
+</li>
+<li class="nav-item d-inline-block d-sm-none d-md-none">
+<a aria-label="Search" data-container="body" data-placement="bottom" data-toggle="tooltip" href="/search" title="Search"><svg class="s16"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#search"></use></svg>
+</a></li>
+<li class="nav-item">
+<div>
+<a class="btn btn-sign-in" href="/users/sign_in?redirect_to_referer=yes">Sign in / Register</a>
+</div>
+</li>
+</ul>
+</div>
+<button class="navbar-toggler d-block d-sm-none" type="button">
+<span class="sr-only">Toggle navigation</span>
+<svg class="s12 more-icon js-navbar-toggle-right"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#more"></use></svg>
+<svg class="s12 close-icon js-navbar-toggle-left"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#close"></use></svg>
+</button>
+</div>
+</div>
+</header>
+<div class="layout-page">
+<div class="content-wrapper">
+<div class="mobile-overlay"></div>
+<div class="alert-wrapper">
+<nav class="breadcrumbs container-fluid container-limited" role="navigation">
+<div class="breadcrumbs-container">
+<div class="breadcrumbs-links js-title-container">
+<ul class="list-unstyled breadcrumbs-list js-breadcrumbs-list">
+<li><a href="/help">Help</a><svg class="s8 breadcrumbs-list-angle"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#angle-right"></use></svg></li>
+<li>
+<h2 class="breadcrumbs-sub-title"><a href="/help/administration/index.md">Help</a></h2>
+</li>
+</ul>
+</div>
+</div>
+</nav>
+<div class="flash-container flash-container-page">
+</div>
+</div>
+<div class="container-fluid container-limited ">
+<div class="content" id="content-body">
+<div class="documentation wiki prepend-top-default">
+<h1 dir="auto">
+<a aria-hidden="true" class="anchor" href="#administrator-documentation-core-only" id="user-content-administrator-documentation-core-only"></a>Administrator documentation <strong>[CORE ONLY]</strong>
+</h1>
+<p dir="auto">Learn how to administer your GitLab instance (Community Edition and
+Enterprise Edition).
+Regular users don't have access to GitLab administration tools and settings.</p>
+<p dir="auto">GitLab has two product distributions: the open source
+<a href="https://gitlab.com/gitlab-org/gitlab-ce" rel="nofollow noreferrer noopener" target="_blank">GitLab Community Edition (CE)</a>,
+and the open core <a href="https://gitlab.com/gitlab-org/gitlab-ee" rel="nofollow noreferrer noopener" target="_blank">GitLab Enterprise Edition (EE)</a>,
+available through <a href="https://about.gitlab.com/pricing/" rel="nofollow noreferrer noopener" target="_blank">different subscriptions</a>.</p>
+<p dir="auto">You can <a href="https://about.gitlab.com/installation/ce-or-ee/" rel="nofollow noreferrer noopener" target="_blank">install GitLab CE or GitLab EE</a>,
+but the features you'll have access to depend on the subscription you choose
+(Core, Starter, Premium, or Ultimate). GitLab Community Edition installations
+only have access to Core features.</p>
+<p dir="auto">GitLab.com is administered by GitLab, Inc., therefore, only GitLab team members have
+access to its admin configurations. If you're a GitLab.com user, please check the
+<a href="/user/index.html">user documentation</a>.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#installing-and-maintaining-gitlab" id="user-content-installing-and-maintaining-gitlab"></a>Installing and maintaining GitLab</h2>
+<p dir="auto">Learn how to install, configure, update, and maintain your GitLab instance.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#installing-gitlab" id="user-content-installing-gitlab"></a>Installing GitLab</h3>
+<ul dir="auto">
+<li>
+<a href="/install/README.md">Install</a>: Requirements, directory structures, and installation methods.</li>
+<li>
+<a href="/high_availability/README.md">High Availability</a>: Configure multiple servers for scaling or high availability.
+<ul>
+<li>
+<a href="/university/high-availability/aws/README.md">High Availability on AWS</a>: Set up GitLab HA on Amazon AWS.</li>
+</ul>
+</li>
+</ul>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#configuring-gitlab" id="user-content-configuring-gitlab"></a>Configuring GitLab</h3>
+<ul dir="auto">
+<li>
+<a href="/workflow/timezone.md">Adjust your instance's timezone</a>: Customize the default time zone of GitLab.</li>
+<li>
+<a href="/system_hooks/system_hooks.md">System hooks</a>: Notifications when users, projects and keys are changed.</li>
+<li>
+<a href="/security/README.md">Security</a>: Learn what you can do to further secure your GitLab instance.</li>
+<li>
+<a href="/user/admin_area/settings/usage_statistics.md">Usage statistics, version check, and usage ping</a>: Enable or disable information about your instance to be sent to GitLab, Inc.</li>
+<li>
+<a href="/polling.md">Polling</a>: Configure how often the GitLab UI polls for updates.</li>
+<li>
+<a href="/pages/index.md">GitLab Pages configuration</a>: Enable and configure GitLab Pages.</li>
+<li>
+<a href="/pages/source.md">GitLab Pages configuration for GitLab source installations</a>: Enable and configure GitLab Pages on
+<a href="../install/installation.md#installation-from-source">source installations</a>.</li>
+<li>
+<a href="/environment_variables.md">Environment variables</a>: Supported environment variables that can be used to override their defaults values in order to configure GitLab.</li>
+<li>
+<a href="/plugins.md">Plugins</a>: With custom plugins, GitLab administrators can introduce custom integrations without modifying GitLab's source code.</li>
+<li><a href="/user/admin_area/settings/terms.md">Enforcing Terms of Service</a></li>
+<li><a href="/user/admin_area/settings/third_party_offers.md">Third party offers</a></li>
+</ul>
+<h4 dir="auto">
+<a aria-hidden="true" class="anchor" href="#customizing-gitlabs-appearance" id="user-content-customizing-gitlabs-appearance"></a>Customizing GitLab's appearance</h4>
+<ul dir="auto">
+<li>
+<a href="/customization/branded_page_and_email_header.md">Header logo</a>: Change the logo on all pages and email headers.</li>
+<li>
+<a href="/customization/favicon.md">Favicon</a>: Change the default favicon to your own logo.</li>
+<li>
+<a href="/customization/branded_login_page.md">Branded login page</a>: Customize the login page with your own logo, title, and description.</li>
+<li>
+<a href="/customization/welcome_message.md">Welcome message</a>: Add a custom welcome message to the sign-in page.</li>
+<li>
+<a href="/customization/new_project_page.md">"New Project" page</a>: Customize the text to be displayed on the page that opens whenever your users create a new project.</li>
+</ul>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#maintaining-gitlab" id="user-content-maintaining-gitlab"></a>Maintaining GitLab</h3>
+<ul dir="auto">
+<li>
+<a href="/raketasks/README.md">Raketasks</a>: Perform various tasks for maintenance, backups, automatic webhooks setup, etc.
+<ul>
+<li>
+<a href="/raketasks/backup_restore.md">Backup and restore</a>: Backup and restore your GitLab instance.</li>
+</ul>
+</li>
+<li>
+<a href="/operations/index.md">Operations</a>: Keeping GitLab up and running (clean up Redis sessions, moving repositories, Sidekiq Job throttling, Sidekiq MemoryKiller, Unicorn).</li>
+<li>
+<a href="/restart_gitlab.md">Restart GitLab</a>: Learn how to restart GitLab and its components.</li>
+</ul>
+<h4 dir="auto">
+<a aria-hidden="true" class="anchor" href="#updating-gitlab" id="user-content-updating-gitlab"></a>Updating GitLab</h4>
+<ul dir="auto">
+<li>
+<a href="/policy/maintenance.md">GitLab versions and maintenance policy</a>: Understand GitLab versions and releases (Major, Minor, Patch, Security), as well as update recommendations.</li>
+<li>
+<a href="/update/README.md">Update GitLab</a>: Update guides to upgrade your installation to a new version.</li>
+<li>
+<a href="../update/README.md#upgrading-without-downtime">Downtimeless updates</a>: Upgrade to a newer major, minor, or patch version of GitLab without taking your GitLab instance offline.</li>
+<li>
+<a href="/migrate_ci_to_ce/README.md">Migrate your GitLab CI/CD data to another version of GitLab</a>: If you have an old GitLab installation (older than 8.0), follow this guide to migrate your existing GitLab CI/CD data to another version of GitLab.</li>
+</ul>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#upgrading-or-downgrading-gitlab" id="user-content-upgrading-or-downgrading-gitlab"></a>Upgrading or downgrading GitLab</h3>
+<ul dir="auto">
+<li>
+<a href="../update/README.md#upgrading-between-editions">Upgrade from GitLab CE to GitLab EE</a>: learn how to upgrade GitLab Community Edition to GitLab Enterprise Editions.</li>
+<li>
+<a href="/downgrade_ee_to_ce/README.md">Downgrade from GitLab EE to GitLab CE</a>: Learn how to downgrade GitLab Enterprise Editions to Community Edition.</li>
+</ul>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#gitlab-platform-integrations" id="user-content-gitlab-platform-integrations"></a>GitLab platform integrations</h3>
+<ul dir="auto">
+<li>
+<a href="https://docs.gitlab.com/omnibus/gitlab-mattermost/" rel="nofollow noreferrer noopener" target="_blank">Mattermost</a>: Integrate with <a href="https://about.mattermost.com/" rel="nofollow noreferrer noopener" target="_blank">Mattermost</a>, an open source, private cloud workplace for web messaging.</li>
+<li>
+<a href="/integration/plantuml.md">PlantUML</a>: Create simple diagrams in AsciiDoc and Markdown documents
+created in snippets, wikis, and repos.</li>
+<li>
+<a href="/integration/terminal.md">Web terminals</a>: Provide terminal access to your applications deployed to Kubernetes from within GitLab's CI/CD <a href="../ci/environments.md#web-terminals">environments</a>.</li>
+</ul>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#user-settings-and-permissions" id="user-content-user-settings-and-permissions"></a>User settings and permissions</h2>
+<ul dir="auto">
+<li>
+<a href="/customization/libravatar.md">Libravatar</a>: Use Libravatar instead of Gravatar for user avatars.</li>
+<li>
+<a href="/user/admin_area/settings/sign_up_restrictions.md">Sign-up restrictions</a>: block email addresses of specific domains, or whitelist only specific domains.</li>
+<li>
+<a href="../user/admin_area/settings/visibility_and_access_controls.md#enabled-git-access-protocols">Access restrictions</a>: Define which Git access protocols can be used to talk to GitLab (SSH, HTTP, HTTPS).</li>
+<li>
+<a href="../topics/authentication/index.md#gitlab-administrators">Authentication/Authorization</a>: Enforce 2FA, configure external authentication with LDAP, SAML, CAS and additional Omniauth providers.</li>
+<li>
+<a href="/incoming_email.md">Incoming email</a>: Configure incoming emails to allow
+users to <a href="/reply_by_email.md">reply by email</a>, create <a href="../user/project/issues/create_new_issue.md#new-issue-via-email">issues by email</a> and
+<a href="../user/project/merge_requests/index.md#create-new-merge-requests-by-email">merge requests by email</a>, and to enable [Service Desk].
+<ul>
+<li>
+<a href="/reply_by_email_postfix_setup.md">Postfix for incoming email</a>: Set up a
+basic Postfix mail server with IMAP authentication on Ubuntu for incoming
+emails.</li>
+</ul>
+</li>
+<li>
+<a href="/user/admin_area/user_cohorts.md">User Cohorts</a>: Display the monthly cohorts of new users and their activities over time.</li>
+</ul>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#project-settings" id="user-content-project-settings"></a>Project settings</h2>
+<ul dir="auto">
+<li>
+<a href="/container_registry.md">Container Registry</a>: Configure Container Registry with GitLab.</li>
+<li>
+<a href="/issue_closing_pattern.md">Issue closing pattern</a>: Customize how to close an issue from commit messages.</li>
+<li>
+<a href="/gitaly/index.md">Gitaly</a>: Configuring Gitaly, GitLab's Git repository storage service.</li>
+<li>
+<a href="/user/admin_area/labels.html">Default labels</a>: Create labels that will be automatically added to every new project.</li>
+<li>
+<a href="../public_access/public_access.md#restricting-the-use-of-public-or-internal-projects">Restrict the use of public or internal projects</a>: Restrict the use of visibility levels for users when they create a project or a snippet.</li>
+</ul>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#repository-settings" id="user-content-repository-settings"></a>Repository settings</h3>
+<ul dir="auto">
+<li>
+<a href="/repository_checks.md">Repository checks</a>: Periodic Git repository checks.</li>
+<li>
+<a href="/repository_storage_paths.md">Repository storage paths</a>: Manage the paths used to store repositories.</li>
+<li>
+<a href="/raketasks/storage.md">Repository storage rake tasks</a>: A collection of rake tasks to list and migrate existing projects and attachments associated with it from Legacy storage to Hashed storage.</li>
+</ul>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#continuous-integration-settings" id="user-content-continuous-integration-settings"></a>Continuous Integration settings</h2>
+<ul dir="auto">
+<li>
+<a href="../ci/enable_or_disable_ci.md#site-wide-admin-setting">Enable/disable GitLab CI/CD</a>: Enable or disable GitLab CI/CD for your instance.</li>
+<li>
+<a href="/user/admin_area/settings/continuous_integration.md">GitLab CI/CD admin settings</a>: Define max artifacts size and expiration time.</li>
+<li>
+<a href="/job_artifacts.md">Job artifacts</a>: Enable, disable, and configure job artifacts (a set of files and directories which are outputted by a job when it completes successfully).</li>
+<li>
+<a href="/job_traces.md">Job traces</a>: Information about the job traces (logs).</li>
+<li>
+<a href="../user/admin_area/settings/continuous_integration.md#maximum-artifacts-size">Artifacts size and expiration</a>: Define maximum artifacts limits and expiration date.</li>
+<li>
+<a href="../ci/runners/README.md#registering-a-shared-runner">Register Shared and specific Runners</a>: Learn how to register and configure Shared and specific Runners to your own instance.</li>
+<li>
+<a href="../user/admin_area/settings/continuous_integration.md#shared-runners-pipeline-minutes-quota">Shared Runners pipelines quota</a>: Limit the usage of pipeline minutes for Shared Runners.</li>
+<li>
+<a href="../topics/autodevops/index.md#enabling-auto-devops">Enable/disable Auto DevOps</a>: Enable or disable Auto DevOps for your instance.</li>
+</ul>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#git-configuration-options" id="user-content-git-configuration-options"></a>Git configuration options</h2>
+<ul dir="auto">
+<li>
+<a href="/custom_hooks.md">Custom Git hooks</a>: Custom Git hooks (on the filesystem) for when webhooks aren't enough.</li>
+<li>
+<a href="/workflow/lfs/lfs_administration.md">Git LFS configuration</a>: Learn how to configure LFS for GitLab.</li>
+<li>
+<a href="/housekeeping.md">Housekeeping</a>: Keep your Git repositories tidy and fast.</li>
+</ul>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#monitoring-gitlab" id="user-content-monitoring-gitlab"></a>Monitoring GitLab</h2>
+<ul dir="auto">
+<li>
+<a href="/monitoring/index.md">Monitoring GitLab</a>:
+<ul>
+<li>
+<a href="/user/admin_area/monitoring/health_check.md">Monitoring uptime</a>: Check the server status using the health check endpoint.
+<ul>
+<li>
+<a href="/monitoring/ip_whitelist.md">IP whitelist</a>: Monitor endpoints that provide health check information when probed.</li>
+<li>
+<a href="/monitoring/github_imports.md">Monitoring GitHub imports</a>: GitLab's GitHub Importer displays Prometheus metrics to monitor the health and progress of the importer.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>
+<a href="/user/admin_area/monitoring/convdev.md">Conversational Development (ConvDev) Index</a>: Provides an overview of your entire instance's feature usage.</li>
+</ul>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#performance-monitoring" id="user-content-performance-monitoring"></a>Performance Monitoring</h3>
+<ul dir="auto">
+<li>
+<a href="/monitoring/performance/index.md">GitLab Performance Monitoring</a>:
+<ul>
+<li>
+<a href="/monitoring/performance/gitlab_configuration.md">Enable Performance Monitoring</a>: Enable GitLab Performance Monitoring.</li>
+<li>
+<a href="/monitoring/performance/influxdb_configuration.md">GitLab performance monitoring with InfluxDB</a>: Configure GitLab and InfluxDB for measuring performance metrics.
+<ul>
+<li>
+<a href="/monitoring/performance/influxdb_schema.md">InfluxDB Schema</a>: Measurements stored in InfluxDB.</li>
+</ul>
+</li>
+<li>
+<a href="/monitoring/prometheus/index.md">GitLab performance monitoring with Prometheus</a>: Configure GitLab and Prometheus for measuring performance metrics.</li>
+<li>
+<a href="/monitoring/performance/grafana_configuration.md">GitLab performance monitoring with Grafana</a>: Configure GitLab to visualize time series metrics through graphs and dashboards.</li>
+<li>
+<a href="/monitoring/performance/request_profiling.md">Request Profiling</a>: Get a detailed profile on slow requests.</li>
+<li>
+<a href="/monitoring/performance/performance_bar.md">Performance Bar</a>: Get performance information for the current page.</li>
+</ul>
+</li>
+</ul>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#troubleshooting" id="user-content-troubleshooting"></a>Troubleshooting</h2>
+<ul dir="auto">
+<li>
+<a href="/troubleshooting/debug.md">Debugging tips</a>: Tips to debug problems when things go wrong</li>
+<li>
+<a href="/logs.md">Log system</a>: Where to look for logs.</li>
+<li>
+<a href="/troubleshooting/sidekiq.md">Sidekiq Troubleshooting</a>: Debug when Sidekiq appears hung and is not processing jobs.</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

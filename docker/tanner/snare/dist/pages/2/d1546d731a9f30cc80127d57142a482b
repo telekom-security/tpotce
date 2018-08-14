@@ -1,0 +1,37 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:fb="http://www.facebook.com/2008/fbml" xmlns:og="http://opengraphprotocol.org/schema/">
+<head>
+<meta content="text/html; charset=utf-8" http-equiv="Content-Type"/>
+<title>Bitnami: Open Source. Simplified</title>
+<link href="/bitnami.css" media="screen" rel="stylesheet" type="text/css"/>
+</head>
+<body>
+<div class="container-virtual-applicances" id="container">
+<div class="launch-page" id="dashboard-content">
+<div class="launch-slogan" id="dashboard-slogan">
+<h1>Congratulations!</h1>
+<br/>
+<table class="virtual-appliances-logo-block">
+<tr>
+<td>
+<img src="/img/tomcat.png"/>
+</td>
+<td>
+                You are now running Bitnami <a href="https://bitnami.com/stack/tomcat?utm_source=bitnami&amp;utm_medium=virtualmachine&amp;utm_campaign=Virtual%2BMachine">Tomcat</a> 8.5.32-0.
+              </td>
+</tr>
+</table>
+</div>
+<div id="dashboard-right-area">
+<div class="dashboard-button-big launch-button launch-button-green"><a href="/index.jsp" id="bitnami-link">Access my application</a></div>
+<div class="dashboard-button-big launch-button"><a href="https://docs.bitnami.com/virtual-machine/components/phpmyadmin/?utm_source=bitnami&amp;utm_medium=virtualmachine&amp;utm_campaign=Virtual%2BMachine">Access phpMyAdmin</a></div>
+<div class="dashboard-button-big launch-button"><a href="https://docs.bitnami.com/virtual-machine/infrastructure/tomcat/?utm_source=bitnami&amp;utm_medium=virtualmachine&amp;utm_campaign=Virtual%2BMachine">Bitnami Documentation</a></div>
+<div class="dashboard-button-big launch-button"><a href="https://community.bitnami.com?utm_source=bitnami&amp;utm_medium=virtualmachine&amp;utm_campaign=Virtual%2BMachine">Bitnami Forums</a></div>
+</div>
+<br/>
+<div class="clear"></div>
+</div>
+</div>
+</body>
+</html>

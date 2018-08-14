@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+
+<html class="client-nojs" dir="ltr" lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Special pages - user's Wiki!</title>
+<script>document.documentElement.className=document.documentElement.className.replace(/(^|\s)client-nojs(\s|$)/,"$1client-js$2");</script>
+<script>(window.RLQ=window.RLQ||[]).push(function(){mw.config.set({"wgCanonicalNamespace":"Special","wgCanonicalSpecialPageName":"Specialpages","wgNamespaceNumber":-1,"wgPageName":"Special:SpecialPages","wgTitle":"SpecialPages","wgCurRevisionId":0,"wgRevisionId":0,"wgArticleId":0,"wgIsArticle":false,"wgIsRedirect":false,"wgAction":"view","wgUserName":null,"wgUserGroups":["*"],"wgCategories":[],"wgBreakFrames":false,"wgPageContentLanguage":"en","wgPageContentModel":"wikitext","wgSeparatorTransformTable":["",""],"wgDigitTransformTable":["",""],"wgDefaultDateFormat":"dmy","wgMonthNames":["","January","February","March","April","May","June","July","August","September","October","November","December"],"wgMonthNamesShort":["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],"wgRelevantPageName":"Special:SpecialPages","wgRelevantArticleId":0,"wgRequestId":"2efd4ff47a384b14241207a3","wgIsProbablyEditable":false,"wgRelevantPageIsProbablyEditable":false});mw.loader.state({"site.styles":"ready","noscript":"ready","user.styles":"ready","user":"ready","site":"ready","user.options":"ready","user.tokens":"loading","mediawiki.special":"ready","mediawiki.helplink":"ready","mediawiki.legacy.shared":"ready","mediawiki.legacy.commonPrint":"ready","mediawiki.sectionAnchor":"ready","mediawiki.skinning.interface":"ready","skins.vector.styles":"ready"});mw.loader.implement("user.tokens@1cmymd6",function($,jQuery,require,module){mw.user.tokens.set({"editToken":"+\\","patrolToken":"+\\","watchToken":"+\\","csrfToken":"+\\"});});mw.loader.load(["mediawiki.page.startup","mediawiki.user","mediawiki.hidpi","mediawiki.page.ready","mediawiki.searchSuggest","skins.vector.js"]);});</script>
+<link href="/load.php?debug=false&amp;lang=en&amp;modules=mediawiki.helplink,sectionAnchor,special|mediawiki.legacy.commonPrint,shared|mediawiki.skinning.interface|skins.vector.styles&amp;only=styles&amp;skin=vector" rel="stylesheet"/>
+<script async="" src="/load.php,qdebug=false,alang=en,amodules=startup,aonly=scripts,askin=vector.pagespeed.jm.VdeaCFxk6_.js"></script>
+<meta content="" name="ResourceLoaderDynamicStyles"/>
+<meta content="MediaWiki 1.31.0" name="generator"/>
+<meta content="noindex,nofollow" name="robots"/>
+<link href="/favicon.ico" rel="shortcut icon"/>
+<link href="/opensearch_desc.php" rel="search" title="user's Wiki! (en)" type="application/opensearchdescription+xml"/>
+<link href="/api.php?action=rsd" rel="EditURI" type="application/rsd+xml"/>
+<link href="/index.php?title=Special:RecentChanges&amp;feed=atom" rel="alternate" title="user's Wiki! Atom feed" type="application/atom+xml"/>
+<!--[if lt IE 9]><script src="/load.php?debug=false&amp;lang=en&amp;modules=html5shiv&amp;only=scripts&amp;skin=vector&amp;sync=1"></script><![endif]-->
+</head>
+<body class="mediawiki ltr sitedir-ltr mw-hide-empty-elt ns--1 ns-special mw-special-Specialpages page-Special_SpecialPages rootpage-Special_SpecialPages skin-vector action-view"> <div class="noprint" id="mw-page-base"></div>
+<div class="noprint" id="mw-head-base"></div>
+<div class="mw-body" id="content" role="main">
+<a id="top"></a>
+<div class="mw-indicators mw-body-content">
+<div class="mw-indicator" id="mw-indicator-mw-helplink"><a class="mw-helplink" href="//www.mediawiki.org/wiki/Special:MyLanguage/Help:Special_pages" target="_blank">Help</a></div>
+</div>
+<h1 class="firstHeading" id="firstHeading" lang="en">Special pages</h1> <div class="mw-body-content" id="bodyContent">
+<div id="contentSub"></div>
+<div class="mw-jump" id="jump-to-nav">
+					Jump to:					<a href="#mw-head">navigation</a>, 					<a href="#p-search">search</a>
+</div>
+<div id="mw-content-text"><h2 class="mw-specialpagesgroup" id="mw-specialpagesgroup-maintenance"><span class="mw-headline" id="Maintenance_reports">Maintenance reports</span></h2>
+<div class="mw-specialpages-list"><ul><li><a href="/Special:BrokenRedirects" title="Special:BrokenRedirects">Broken redirects</a></li>
+<li><a href="/Special:DeadendPages" title="Special:DeadendPages">Dead-end pages</a></li>
+<li><a href="/Special:DoubleRedirects" title="Special:DoubleRedirects">Double redirects</a></li>
+<li><a href="/Special:LongPages" title="Special:LongPages">Long pages</a></li>
+<li><a href="/Special:AncientPages" title="Special:AncientPages">Oldest pages</a></li>
+<li><a href="/Special:LonelyPages" title="Special:LonelyPages">Orphaned pages</a></li>
+<li><a href="/Special:FewestRevisions" title="Special:FewestRevisions">Pages with the fewest revisions</a></li>
+<li><a href="/Special:WithoutInterwiki" title="Special:WithoutInterwiki">Pages without language links</a></li>
+<li><a href="/Special:ProtectedPages" title="Special:ProtectedPages">Protected pages</a></li>
+<li><a href="/Special:ProtectedTitles" title="Special:ProtectedTitles">Protected titles</a></li>
+<li><a href="/Special:ShortPages" title="Special:ShortPages">Short pages</a></li>
+<li><a href="/Special:UncategorizedCategories" title="Special:UncategorizedCategories">Uncategorized categories</a></li>
+<li><a href="/Special:UncategorizedFiles" title="Special:UncategorizedFiles">Uncategorized files</a></li>
+<li><a href="/Special:UncategorizedPages" title="Special:UncategorizedPages">Uncategorized pages</a></li>
+<li><a href="/Special:UncategorizedTemplates" title="Special:UncategorizedTemplates">Uncategorized templates</a></li>
+<li><a href="/Special:UnusedCategories" title="Special:UnusedCategories">Unused categories</a></li>
+<li><a href="/Special:UnusedFiles" title="Special:UnusedFiles">Unused files</a></li>
+<li><a href="/Special:UnusedTemplates" title="Special:UnusedTemplates">Unused templates</a></li>
+<li><a href="/Special:WantedCategories" title="Special:WantedCategories">Wanted categories</a></li>
+<li><a href="/Special:WantedFiles" title="Special:WantedFiles">Wanted files</a></li>
+<li><a href="/Special:WantedPages" title="Special:WantedPages">Wanted pages</a></li>
+<li><a href="/Special:WantedTemplates" title="Special:WantedTemplates">Wanted templates</a></li>
+</ul></div><h2 class="mw-specialpagesgroup" id="mw-specialpagesgroup-pages"><span class="mw-headline" id="Lists_of_pages">Lists of pages</span></h2>
+<div class="mw-specialpages-list"><ul><li><a href="/Special:AllPages" title="Special:AllPages">All pages</a></li>
+<li><a href="/Special:PrefixIndex" title="Special:PrefixIndex">All pages with prefix</a></li>
+<li><a href="/Special:Categories" title="Special:Categories">Categories</a></li>
+<li><a href="/Special:ListRedirects" title="Special:ListRedirects">List of redirects</a></li>
+<li><a href="/Special:PagesWithProp" title="Special:PagesWithProp">Pages with a page property</a></li>
+<li><a href="/Special:Search" title="Special:Search">Search</a></li>
+<li><a href="/Special:TrackingCategories" title="Special:TrackingCategories">Tracking categories</a></li>
+</ul></div><h2 class="mw-specialpagesgroup" id="mw-specialpagesgroup-login"><span id="Login_/_create_account"></span><span class="mw-headline" id="Login_.2F_create_account">Login / create account</span></h2>
+<div class="mw-specialpages-list"><ul><li><a href="/Special:CreateAccount" title="Special:CreateAccount">Create account</a></li>
+<li><a href="/Special:UserLogin" title="Special:UserLogin">Log in</a></li>
+</ul></div><h2 class="mw-specialpagesgroup" id="mw-specialpagesgroup-users"><span class="mw-headline" id="Users_and_rights">Users and rights</span></h2>
+<div class="mw-specialpages-list"><ul><li><a href="/Special:ActiveUsers" title="Special:ActiveUsers">Active users list</a></li>
+<li><a href="/Special:AutoblockList" title="Special:AutoblockList">Autoblocks</a></li>
+<li><a href="/Special:BlockList" title="Special:BlockList">Blocked users</a></li>
+<li><a href="/Special:BotPasswords" title="Special:BotPasswords">Bot passwords</a></li>
+<li><a href="/Special:ChangeCredentials" title="Special:ChangeCredentials">Change credentials</a></li>
+<li><a href="/Special:ChangeEmail" title="Special:ChangeEmail">Change or remove email address</a></li>
+<li><a href="/Special:ListGrants" title="Special:ListGrants">Grants</a></li>
+<li><a href="/Special:Preferences" title="Special:Preferences">Preferences</a></li>
+<li><a href="/Special:RemoveCredentials" title="Special:RemoveCredentials">Remove credentials</a></li>
+<li><a href="/Special:PasswordReset" title="Special:PasswordReset">Reset password</a></li>
+<li><a href="/Special:ResetTokens" title="Special:ResetTokens">Reset tokens</a></li>
+<li><a href="/Special:Contributions" title="Special:Contributions">User contributions</a></li>
+<li><a href="/Special:ListGroupRights" title="Special:ListGroupRights">User group rights</a></li>
+<li><a href="/Special:ListUsers" title="Special:ListUsers">User list</a></li>
+<li><a href="/Special:UserRights" title="Special:UserRights">User rights</a></li>
+</ul></div><h2 class="mw-specialpagesgroup" id="mw-specialpagesgroup-changes"><span class="mw-headline" id="Recent_changes_and_logs">Recent changes and logs</span></h2>
+<div class="mw-specialpages-list"><ul><li><a href="/Special:NewFiles" title="Special:NewFiles">Gallery of new files</a></li>
+<li><a href="/Special:Log" title="Special:Log">Logs</a></li>
+<li><a href="/Special:NewPages" title="Special:NewPages">New pages</a></li>
+<li><a href="/Special:RecentChanges" title="Special:RecentChanges">Recent changes</a></li>
+<li><a href="/Special:RecentChangesLinked" title="Special:RecentChangesLinked">Related changes</a></li>
+<li><a href="/Special:Tags" title="Special:Tags">Valid change tags</a></li>
+<li><a href="/Special:Watchlist" title="Special:Watchlist">Watchlist</a></li>
+</ul></div><h2 class="mw-specialpagesgroup" id="mw-specialpagesgroup-media"><span class="mw-headline" id="Media_reports_and_uploads">Media reports and uploads</span></h2>
+<div class="mw-specialpages-list"><ul><li><a href="/Special:ListFiles" title="Special:ListFiles">File list</a></li>
+<li><a href="/Special:ListDuplicatedFiles" title="Special:ListDuplicatedFiles">List of files with duplicates</a></li>
+<li><a href="/Special:MIMESearch" title="Special:MIMESearch">MIME search</a></li>
+<li><a href="/Special:MediaStatistics" title="Special:MediaStatistics">Media statistics</a></li>
+<li><a href="/Special:FileDuplicateSearch" title="Special:FileDuplicateSearch">Search for duplicate files</a></li>
+</ul></div><h2 class="mw-specialpagesgroup" id="mw-specialpagesgroup-wiki"><span class="mw-headline" id="Data_and_tools">Data and tools</span></h2>
+<div class="mw-specialpages-list"><ul><li><a href="/Special:ApiSandbox" title="Special:ApiSandbox">API sandbox</a></li>
+<li><a href="/Special:BookSources" title="Special:BookSources">Book sources</a></li>
+<li><a href="/Special:ExpandTemplates" title="Special:ExpandTemplates">Expand templates</a></li>
+<li><a href="/Special:Statistics" title="Special:Statistics">Statistics</a></li>
+<li><a href="/Special:AllMessages" title="Special:AllMessages">System messages</a></li>
+<li><a href="/Special:Version" title="Special:Version">Version</a></li>
+</ul></div><h2 class="mw-specialpagesgroup" id="mw-specialpagesgroup-redirects"><span class="mw-headline" id="Redirecting_special_pages">Redirecting special pages</span></h2>
+<div class="mw-specialpages-list"><ul><li><a href="/Special:Diff" title="Special:Diff">Differences</a></li>
+<li><a href="/Special:LinkSearch" title="Special:LinkSearch">External links search</a></li>
+<li><a href="/Special:PermanentLink" title="Special:PermanentLink">Permanent link</a></li>
+<li><a href="/Special:Random" title="Special:Random">Random page</a></li>
+<li><a href="/Special:RandomInCategory" title="Special:RandomInCategory">Random page in category</a></li>
+<li><a href="/Special:RandomRedirect" title="Special:RandomRedirect">Random redirect</a></li>
+<li><a href="/Special:RandomRootpage" title="Special:RandomRootpage">Random root page</a></li>
+<li><a href="/Special:Redirect" title="Special:Redirect">Redirect by file, user, page, revision, or log ID</a></li>
+</ul></div><h2 class="mw-specialpagesgroup" id="mw-specialpagesgroup-highuse"><span class="mw-headline" id="High_use_pages">High use pages</span></h2>
+<div class="mw-specialpages-list"><ul><li><a href="/Special:MostLinkedCategories" title="Special:MostLinkedCategories">Most linked-to categories</a></li>
+<li><a href="/Special:MostLinkedFiles" title="Special:MostLinkedFiles">Most linked-to files</a></li>
+<li><a href="/Special:MostLinkedPages" title="Special:MostLinkedPages">Most linked-to pages</a></li>
+<li><a href="/Special:MostTranscludedPages" title="Special:MostTranscludedPages">Most transcluded pages</a></li>
+<li><a href="/Special:MostCategories" title="Special:MostCategories">Pages with the most categories</a></li>
+<li><a href="/Special:MostInterwikis" title="Special:MostInterwikis">Pages with the most interwikis</a></li>
+<li><a href="/Special:MostRevisions" title="Special:MostRevisions">Pages with the most revisions</a></li>
+</ul></div><h2 class="mw-specialpagesgroup" id="mw-specialpagesgroup-pagetools"><span class="mw-headline" id="Page_tools">Page tools</span></h2>
+<div class="mw-specialpages-list"><ul><li><a href="/Special:ComparePages" title="Special:ComparePages">Compare pages</a></li>
+<li><a href="/Special:Export" title="Special:Export">Export pages</a></li>
+<li><a href="/Special:WhatLinksHere" title="Special:WhatLinksHere">What links here</a></li>
+</ul></div></div> <div class="printfooter">
+						Retrieved from "<a dir="ltr" href="/Special:SpecialPages">http://172.20.254.132/Special:SpecialPages</a>"					</div>
+<div class="catlinks catlinks-allhidden" data-mw="interface" id="catlinks"></div> <div class="visualClear"></div>
+</div>
+</div>
+<div id="mw-navigation">
+<h2>Navigation menu</h2>
+<div id="mw-head">
+<div aria-labelledby="p-personal-label" class="" id="p-personal" role="navigation">
+<h3 id="p-personal-label">Personal tools</h3>
+<ul>
+<li id="pt-anonuserpage">Not logged in</li><li id="pt-anontalk"><a accesskey="n" href="/Special:MyTalk" title="Discussion about edits from this IP address [n]">Talk</a></li><li id="pt-anoncontribs"><a accesskey="y" href="/Special:MyContributions" title="A list of edits made from this IP address [y]">Contributions</a></li><li id="pt-createaccount"><a href="/index.php?title=Special:CreateAccount&amp;returnto=Special:SpecialPages" title="You are encouraged to create an account and log in; however, it is not mandatory">Create account</a></li><li id="pt-login"><a accesskey="o" href="/index.php?title=Special:UserLogin&amp;returnto=Special:SpecialPages" title="You are encouraged to log in; however, it is not mandatory [o]">Log in</a></li> </ul>
+</div>
+<div id="left-navigation">
+<div aria-labelledby="p-namespaces-label" class="vectorTabs" id="p-namespaces" role="navigation">
+<h3 id="p-namespaces-label">Namespaces</h3>
+<ul>
+<li class="selected" id="ca-nstab-special"><span><a href="/Special:SpecialPages" title="This is a special page, and it cannot be edited">Special page</a></span></li> </ul>
+</div>
+<div aria-labelledby="p-variants-label" class="vectorMenu emptyPortlet" id="p-variants" role="navigation">
+<input aria-labelledby="p-variants-label" class="vectorMenuCheckbox" type="checkbox"/>
+<h3 id="p-variants-label">
+<span>Variants</span>
+</h3>
+<div class="menu">
+<ul>
+</ul>
+</div>
+</div>
+</div>
+<div id="right-navigation">
+<div aria-labelledby="p-views-label" class="vectorTabs emptyPortlet" id="p-views" role="navigation">
+<h3 id="p-views-label">Views</h3>
+<ul>
+</ul>
+</div>
+<div aria-labelledby="p-cactions-label" class="vectorMenu emptyPortlet" id="p-cactions" role="navigation">
+<input aria-labelledby="p-cactions-label" class="vectorMenuCheckbox" type="checkbox"/>
+<h3 id="p-cactions-label"><span>More</span></h3>
+<div class="menu">
+<ul>
+</ul>
+</div>
+</div>
+<div id="p-search" role="search">
+<h3>
+<label for="searchInput">Search</label>
+</h3>
+<form action="/index.php" id="searchform">
+<div id="simpleSearch">
+<input accesskey="f" id="searchInput" name="search" placeholder="Search user's Wiki!" title="Search user's Wiki! [f]" type="search"/><input name="title" type="hidden" value="Special:Search"/><input class="searchButton mw-fallbackSearchButton" id="mw-searchButton" name="fulltext" title="Search the pages for this text" type="submit" value="Search"/><input class="searchButton" id="searchButton" name="go" title="Go to a page with this exact name if it exists" type="submit" value="Go"/> </div>
+</form>
+</div>
+</div>
+</div>
+<div id="mw-panel">
+<div id="p-logo" role="banner"><a class="mw-wiki-logo" href="/Main_Page" title="Visit the main page"></a></div>
+<div aria-labelledby="p-navigation-label" class="portal" id="p-navigation" role="navigation">
+<h3 id="p-navigation-label">Navigation</h3>
+<div class="body">
+<ul>
+<li id="n-mainpage-description"><a accesskey="z" href="/Main_Page" title="Visit the main page [z]">Main page</a></li><li id="n-recentchanges"><a accesskey="r" href="/Special:RecentChanges" title="A list of recent changes in the wiki [r]">Recent changes</a></li><li id="n-randompage"><a accesskey="x" href="/Special:Random" title="Load a random page [x]">Random page</a></li><li id="n-help"><a href="https://www.mediawiki.org/wiki/Special:MyLanguage/Help:Contents" title="The place to find out">Help</a></li> </ul>
+</div>
+</div>
+<div aria-labelledby="p-tb-label" class="portal" id="p-tb" role="navigation">
+<h3 id="p-tb-label">Tools</h3>
+<div class="body">
+<ul>
+<li id="t-specialpages"><a accesskey="q" href="/Special:SpecialPages" title="A list of all special pages [q]">Special pages</a></li><li id="t-print"><a accesskey="p" href="/index.php?title=Special:SpecialPages&amp;printable=yes" rel="alternate" title="Printable version of this page [p]">Printable version</a></li> </ul>
+</div>
+</div>
+</div>
+</div>
+<div id="footer" role="contentinfo">
+<ul id="footer-places">
+<li id="footer-places-privacy"><a href="/user's_Wiki!:Privacy_policy" title="user's Wiki!:Privacy policy">Privacy policy</a></li>
+<li id="footer-places-about"><a href="/user's_Wiki!:About" title="user's Wiki!:About">About user's Wiki!</a></li>
+<li id="footer-places-disclaimer"><a href="/user's_Wiki!:General_disclaimer" title="user's Wiki!:General disclaimer">Disclaimers</a></li>
+</ul>
+<ul class="noprint" id="footer-icons">
+<li id="footer-poweredbyico">
+<a href="//www.mediawiki.org/"><img alt="Powered by MediaWiki" height="31" src="/resources/assets/poweredby_mediawiki_88x31.png.pagespeed.ce.gmntWCYHG0.png" srcset="/resources/assets/poweredby_mediawiki_132x47.png.pagespeed.ce.L1zE4_p3Ii.png 1.5x, /resources/assets/poweredby_mediawiki_176x62.png.pagespeed.ce.LE9xjEBgUS.png 2x" width="88"/></a> </li>
+</ul>
+<div style="clear: both;"></div>
+</div>
+<script>(window.RLQ=window.RLQ||[]).push(function(){mw.config.set({"wgBackendResponseTime":148});});</script>
+</body>
+</html>

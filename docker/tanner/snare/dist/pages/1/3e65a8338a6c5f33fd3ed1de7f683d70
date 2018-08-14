@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+
+<html class="" lang="en">
+<head prefix="og: http://ogp.me/ns#">
+<meta charset="utf-8"/>
+<meta content="IE=edge" http-equiv="X-UA-Compatible"/>
+<meta content="object" property="og:type"/>
+<meta content="GitLab" property="og:site_name"/>
+<meta content="Index · Clusters · Project · User · Help" property="og:title"/>
+<meta content="GitLab Community Edition" property="og:description"/>
+<meta content="http://172.20.254.127/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png" property="og:image"/>
+<meta content="64" property="og:image:width"/>
+<meta content="64" property="og:image:height"/>
+<meta content="http://172.20.254.127/help/user/project/clusters/index.md" property="og:url"/>
+<meta content="summary" property="twitter:card"/>
+<meta content="Index · Clusters · Project · User · Help" property="twitter:title"/>
+<meta content="GitLab Community Edition" property="twitter:description"/>
+<meta content="http://172.20.254.127/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png" property="twitter:image"/>
+<title>Index · Clusters · Project · User · Help · GitLab</title>
+<meta content="GitLab Community Edition" name="description"/>
+<link data-original-href="/assets/favicon-7901bd695fb93edb07975966062049829afb56cf11511236e61bcf425070e36e.png" href="/assets/favicon-7901bd695fb93edb07975966062049829afb56cf11511236e61bcf425070e36e.png" id="favicon" rel="shortcut icon" type="image/png"/>
+<link href="/assets/application-266f2bfa52ff531258d13c702895a14fd5994ca591fa2df7338da00ab18c99ac.css" media="all" rel="stylesheet"/>
+<link href="/assets/print-c8ff536271f8974b8a9a5f75c0ca25d2b8c1dceb4cff3c01d1603862a0bdcbfc.css" media="print" rel="stylesheet"/>
+<script>
+//<![CDATA[
+window.gon={};gon.api_version="v4";gon.default_avatar_url="http://172.20.254.127/assets/no_avatar-849f9c04a3a0d0cea2424ae97b27447dc64a7dbfae83c036c45b403392f0e8ba.png";gon.max_file_size=10;gon.asset_host=null;gon.webpack_public_path="/assets/webpack/";gon.relative_url_root="";gon.shortcuts_path="/help/shortcuts";gon.user_color_scheme="white";gon.gitlab_url="http://172.20.254.127";gon.revision="63daf37";gon.gitlab_logo="/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png";gon.sprite_icons="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg";gon.sprite_file_icons="/assets/file_icons-7262fc6897e02f1ceaf8de43dc33afa5e4f9a2067f4f68ef77dcc87946575e9e.svg";gon.emoji_sprites_css_path="/assets/emoji_sprites-289eccffb1183c188b630297431be837765d9ff4aed6130cf738586fb307c170.css";gon.test_env=false;gon.suggested_label_colors=["#0033CC","#428BCA","#44AD8E","#A8D695","#5CB85C","#69D100","#004E00","#34495E","#7F8C8D","#A295D6","#5843AD","#8E44AD","#FFECDB","#AD4363","#D10069","#CC0033","#FF0000","#D9534F","#D1D100","#F0AD4E","#AD8D43"];
+//]]>
+</script>
+<script defer="defer" src="/assets/webpack/runtime.9fcb75d4.bundle.js"></script>
+<script defer="defer" src="/assets/webpack/main.a66b6c66.chunk.js"></script>
+<script defer="defer" src="/assets/webpack/pages.help.show.c42c0700.chunk.js"></script>
+<meta content="authenticity_token" name="csrf-param">
+<meta content="u4STeGO1WcEI8n+sjAubJIS+YUHzHcUWnAxz0MINfwKVNynQn4lk9k7mx3B0C0iqsOCa3QAW4Z7fd7h57+/lZA==" name="csrf-token">
+<meta content="origin-when-cross-origin" name="referrer"/>
+<meta content="width=device-width, initial-scale=1, maximum-scale=1" name="viewport"/>
+<meta content="#474D57" name="theme-color"/>
+<link href="/assets/touch-icon-iphone-5a9cee0e8a51212e70b90c87c12f382c428870c0ff67d1eb034d884b78d2dae7.png" rel="apple-touch-icon" type="image/x-icon"/>
+<link href="/assets/touch-icon-ipad-a6eec6aeb9da138e507593b464fdac213047e49d3093fc30e90d9a995df83ba3.png" rel="apple-touch-icon" sizes="76x76" type="image/x-icon"/>
+<link href="/assets/touch-icon-iphone-retina-72e2aadf86513a56e050e7f0f2355deaa19cc17ed97bbe5147847f2748e5a3e3.png" rel="apple-touch-icon" sizes="120x120" type="image/x-icon"/>
+<link href="/assets/touch-icon-ipad-retina-8ebe416f5313483d9c1bc772b5bbe03ecad52a54eba443e5215a22caed2a16a2.png" rel="apple-touch-icon" sizes="152x152" type="image/x-icon"/>
+<link color="rgb(226, 67, 41)" href="/assets/logo-d36b5212042cebc89b96df4bf6ac24e43db316143e89926c0db839ff694d2de4.svg" rel="mask-icon"/>
+<meta content="/assets/msapplication-tile-1196ec67452f618d39cdd85e2e3a542f76574c071051ae7effbfde01710eb17d.png" name="msapplication-TileImage"/>
+<meta content="#30353E" name="msapplication-TileColor"/>
+</meta></meta></head>
+<body class="ui-indigo " data-group="" data-page="help:show" data-project="">
+<header class="navbar navbar-gitlab qa-navbar navbar-expand-sm">
+<a class="sr-only gl-accessibility" href="#content-body" tabindex="1">Skip to content</a>
+<div class="container-fluid">
+<div class="header-content">
+<div class="title-container">
+<h1 class="title">
+<a href="/" id="logo" title="Dashboard"><svg class="tanuki-logo" height="24" viewbox="0 0 36 36" width="24">
+<path class="tanuki-shape tanuki-left-ear" d="M2 14l9.38 9v-9l-4-12.28c-.205-.632-1.176-.632-1.38 0z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-right-ear" d="M34 14l-9.38 9v-9l4-12.28c.205-.632 1.176-.632 1.38 0z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-nose" d="M18,34.38 3,14 33,14 Z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-left-eye" d="M18,34.38 11.38,14 2,14 6,25Z" fill="#fc6d26"></path>
+<path class="tanuki-shape tanuki-right-eye" d="M18,34.38 24.62,14 34,14 30,25Z" fill="#fc6d26"></path>
+<path class="tanuki-shape tanuki-left-cheek" d="M2 14L.1 20.16c-.18.565 0 1.2.5 1.56l17.42 12.66z" fill="#fca326"></path>
+<path class="tanuki-shape tanuki-right-cheek" d="M34 14l1.9 6.16c.18.565 0 1.2-.5 1.56L18 34.38z" fill="#fca326"></path>
+</svg>
+<span class="logo-text d-none d-sm-block">
+<svg viewbox="0 0 617 169" xmlns="http://www.w3.org/2000/svg"><path d="M315.26 2.97h-21.8l.1 162.5h88.3v-20.1h-66.5l-.1-142.4M465.89 136.95c-5.5 5.7-14.6 11.4-27 11.4-16.6 0-23.3-8.2-23.3-18.9 0-16.1 11.2-23.8 35-23.8 4.5 0 11.7.5 15.4 1.2v30.1h-.1m-22.6-98.5c-17.6 0-33.8 6.2-46.4 16.7l7.7 13.4c8.9-5.2 19.8-10.4 35.5-10.4 17.9 0 25.8 9.2 25.8 24.6v7.9c-3.5-.7-10.7-1.2-15.1-1.2-38.2 0-57.6 13.4-57.6 41.4 0 25.1 15.4 37.7 38.7 37.7 15.7 0 30.8-7.2 36-18.9l4 15.9h15.4v-83.2c-.1-26.3-11.5-43.9-44-43.9M557.63 149.1c-8.2 0-15.4-1-20.8-3.5V70.5c7.4-6.2 16.6-10.7 28.3-10.7 21.1 0 29.2 14.9 29.2 39 0 34.2-13.1 50.3-36.7 50.3m9.2-110.6c-19.5 0-30 13.3-30 13.3v-21l-.1-27.8h-21.3l.1 158.5c10.7 4.5 25.3 6.9 41.2 6.9 40.7 0 60.3-26 60.3-70.9-.1-35.5-18.2-59-50.2-59M77.9 20.6c19.3 0 31.8 6.4 39.9 12.9l9.4-16.3C114.5 6 97.3 0 78.9 0 32.5 0 0 28.3 0 85.4c0 59.8 35.1 83.1 75.2 83.1 20.1 0 37.2-4.7 48.4-9.4l-.5-63.9V75.1H63.6v20.1h38l.5 48.5c-5 2.5-13.6 4.5-25.3 4.5-32.2 0-53.8-20.3-53.8-63-.1-43.5 22.2-64.6 54.9-64.6M231.43 2.95h-21.3l.1 27.3v94.3c0 26.3 11.4 43.9 43.9 43.9 4.5 0 8.9-.4 13.1-1.2v-19.1c-3.1.5-6.4.7-9.9.7-17.9 0-25.8-9.2-25.8-24.6v-65h35.7v-17.8h-35.7l-.1-38.5M155.96 165.47h21.3v-124h-21.3v124M155.96 24.37h21.3V3.07h-21.3v21.3"></path></svg>
+</span>
+</a></h1>
+<ul class="list-unstyled navbar-sub-nav">
+<li class="home"><a class="dashboard-shortcuts-projects" href="/explore" title="Projects">Projects
+</a></li><li class=""><a class="dashboard-shortcuts-groups" href="/explore/groups" title="Groups">Groups
+</a></li><li class=""><a class="dashboard-shortcuts-snippets" href="/explore/snippets" title="Snippets">Snippets
+</a></li><li>
+<a href="/help" title="About GitLab CE">Help</a>
+</li>
+</ul>
+</div>
+<div class="navbar-collapse collapse">
+<ul class="nav navbar-nav">
+<li class="nav-item d-none d-sm-none d-md-block m-auto">
+<div class="search search-form">
+<form accept-charset="UTF-8" action="/search" class="form-inline" method="get"><input name="utf8" type="hidden" value="✓"/><div class="search-input-container">
+<div class="search-input-wrap">
+<div class="dropdown" data-url="/search/autocomplete">
+<input aria-label="Search" autocomplete="off" class="search-input dropdown-menu-toggle no-outline js-search-dashboard-options" data-issues-path="/dashboard/issues" data-mr-path="/dashboard/merge_requests" id="search" name="search" placeholder="Search" spellcheck="false" tabindex="1" type="search"/>
+<button class="hidden js-dropdown-search-toggle" data-toggle="dropdown" type="button"></button>
+<div class="dropdown-menu dropdown-select">
+<div class="dropdown-content"><ul>
+<li class="dropdown-menu-empty-item">
+<a>
+Loading...
+</a>
+</li>
+</ul>
+</div><div class="dropdown-loading"><i aria-hidden="true" class="fa fa-spinner fa-spin" data-hidden="true"></i></div>
+</div>
+<svg class="s16 search-icon"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#search"></use></svg>
+<svg class="s16 clear-icon js-clear-input"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#close"></use></svg>
+</div>
+</div>
+</div>
+<input class="js-search-group-options" id="group_id" name="group_id" type="hidden"/>
+<input class="js-search-project-options" id="search_project_id" name="project_id" type="hidden" value=""/>
+<input id="repository_ref" name="repository_ref" type="hidden"/>
+<div class="search-autocomplete-opts hide" data-autocomplete-path="/search/autocomplete"></div>
+</form></div>
+</li>
+<li class="nav-item d-inline-block d-sm-none d-md-none">
+<a aria-label="Search" data-container="body" data-placement="bottom" data-toggle="tooltip" href="/search" title="Search"><svg class="s16"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#search"></use></svg>
+</a></li>
+<li class="nav-item">
+<div>
+<a class="btn btn-sign-in" href="/users/sign_in?redirect_to_referer=yes">Sign in / Register</a>
+</div>
+</li>
+</ul>
+</div>
+<button class="navbar-toggler d-block d-sm-none" type="button">
+<span class="sr-only">Toggle navigation</span>
+<svg class="s12 more-icon js-navbar-toggle-right"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#more"></use></svg>
+<svg class="s12 close-icon js-navbar-toggle-left"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#close"></use></svg>
+</button>
+</div>
+</div>
+</header>
+<div class="layout-page">
+<div class="content-wrapper">
+<div class="mobile-overlay"></div>
+<div class="alert-wrapper">
+<nav class="breadcrumbs container-fluid container-limited" role="navigation">
+<div class="breadcrumbs-container">
+<div class="breadcrumbs-links js-title-container">
+<ul class="list-unstyled breadcrumbs-list js-breadcrumbs-list">
+<li><a href="/help">Help</a><svg class="s8 breadcrumbs-list-angle"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#angle-right"></use></svg></li>
+<li>
+<h2 class="breadcrumbs-sub-title"><a href="/help/user/project/clusters/index.md">Help</a></h2>
+</li>
+</ul>
+</div>
+</div>
+</nav>
+<div class="flash-container flash-container-page">
+</div>
+</div>
+<div class="container-fluid container-limited ">
+<div class="content" id="content-body">
+<div class="documentation wiki prepend-top-default">
+<h1 dir="auto">
+<a aria-hidden="true" class="anchor" href="#connecting-gitlab-with-a-kubernetes-cluster" id="user-content-connecting-gitlab-with-a-kubernetes-cluster"></a>Connecting GitLab with a Kubernetes cluster</h1>
+<blockquote dir="auto">
+<p><a href="https://gitlab.com/gitlab-org/gitlab-ce/issues/35954" rel="nofollow noreferrer noopener" target="_blank">Introduced</a> in GitLab 10.1.</p>
+</blockquote>
+<p dir="auto">Connect your project to Google Kubernetes Engine (GKE) or an existing Kubernetes
+cluster in a few steps.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#overview" id="user-content-overview"></a>Overview</h2>
+<p dir="auto">With one or more Kubernetes clusters associated to your project, you can use
+<a href="/ci/review_apps/index.md">Review Apps</a>, deploy your applications, run
+your pipelines, use it with <a href="/topics/autodevops/index.md">Auto DevOps</a>,
+and much more, all from within GitLab.</p>
+<p dir="auto">There are two options when adding a new cluster to your project; either associate
+your account with Google Kubernetes Engine (GKE) so that you can <a href="#adding-and-creating-a-new-gke-cluster-via-gitlab">create new
+clusters</a> from within GitLab,
+or provide the credentials to an <a href="#adding-an-existing-kubernetes-cluster">existing Kubernetes cluster</a>.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#adding-and-creating-a-new-gke-cluster-via-gitlab" id="user-content-adding-and-creating-a-new-gke-cluster-via-gitlab"></a>Adding and creating a new GKE cluster via GitLab</h2>
+<p dir="auto">TIP: <strong>Tip:</strong>
+Every new Google Cloud Platform (GCP) account receives <a href="https://console.cloud.google.com/freetrial" rel="nofollow noreferrer noopener" target="_blank">$300 in credit upon sign up</a>,
+and in partnership with Google, GitLab is able to offer an additional $200 for new GCP accounts to get started with GitLab's
+Google Kubernetes Engine Integration. All you have to do is <a href="https://goo.gl/AaJzRW" rel="nofollow noreferrer noopener" target="_blank">follow this link</a> and apply for credit.</p>
+<p dir="auto">NOTE: <strong>Note:</strong>
+The <a href="/integration/google.md">Google authentication integration</a> must
+be enabled in GitLab at the instance level. If that's not the case, ask your
+GitLab administrator to enable it. On GitLab.com, this is enabled.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#requirements" id="user-content-requirements"></a>Requirements</h3>
+<p dir="auto">Before creating your first cluster on Google Kubernetes Engine with GitLab's
+integration, make sure the following requirements are met:</p>
+<ul dir="auto">
+<li>A <a href="https://cloud.google.com/billing/docs/how-to/manage-billing-account" rel="nofollow noreferrer noopener" target="_blank">billing account</a>
+is set up and you have permissions to access it.</li>
+<li>The Kubernetes Engine API is enabled. Follow the steps as outlined in the
+<a href="https://cloud.google.com/kubernetes-engine/docs/quickstart#before-you-begin" rel="nofollow noreferrer noopener" target="_blank">"Before you begin" section of the Kubernetes Engine docs</a>.</li>
+</ul>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#creating-the-cluster" id="user-content-creating-the-cluster"></a>Creating the cluster</h3>
+<p dir="auto">If all of the above requirements are met, you can proceed to create and add a
+new Kubernetes cluster to your project:</p>
+<ol dir="auto">
+<li>
+<p>Navigate to your project's <strong>Operations &gt; Kubernetes</strong> page.</p>
+<p>NOTE: <strong>Note:</strong>
+You need Maintainer <a href="/permissions.md">permissions</a> and above to access the Kubernetes page.</p>
+</li>
+<li>
+<p>Click on <strong>Add Kubernetes cluster</strong>.</p>
+</li>
+<li>
+<p>Click on <strong>Create with Google Kubernetes Engine</strong>.</p>
+</li>
+<li>
+<p>Connect your Google account if you haven't done already by clicking the
+<strong>Sign in with Google</strong> button.</p>
+</li>
+<li>
+<p>From there on, choose your cluster's settings:</p>
+</li>
+</ol>
+<ul dir="auto">
+<li>
+<strong>Kubernetes cluster name</strong> - The name you wish to give the cluster.</li>
+<li>
+<strong>Environment scope</strong> - The <a href="#setting-the-environment-scope">associated environment</a> to this cluster.</li>
+<li>
+<strong>Google Cloud Platform project</strong> - Choose the project you created in your GCP
+console that will host the Kubernetes cluster. Learn more about
+<a href="https://cloud.google.com/resource-manager/docs/creating-managing-projects" rel="nofollow noreferrer noopener" target="_blank">Google Cloud Platform projects</a>.</li>
+<li>
+<strong>Zone</strong> - Choose the <a href="https://cloud.google.com/compute/docs/regions-zones/" rel="nofollow noreferrer noopener" target="_blank">region zone</a>
+under which the cluster will be created.</li>
+<li>
+<strong>Number of nodes</strong> - Enter the number of nodes you wish the cluster to have.</li>
+<li>
+<strong>Machine type</strong> - The <a href="https://cloud.google.com/compute/docs/machine-types" rel="nofollow noreferrer noopener" target="_blank">machine type</a>
+of the Virtual Machine instance that the cluster will be based on.</li>
+</ul>
+<ol dir="auto">
+<li>Finally, click the <strong>Create Kubernetes cluster</strong> button.</li>
+</ol>
+<p dir="auto">After a couple of minutes, your cluster will be ready to go. You can now proceed
+to install some <a href="#installing-applications">pre-defined applications</a>.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#adding-an-existing-kubernetes-cluster" id="user-content-adding-an-existing-kubernetes-cluster"></a>Adding an existing Kubernetes cluster</h2>
+<p dir="auto">To add an existing Kubernetes cluster to your project:</p>
+<ol dir="auto">
+<li>
+<p>Navigate to your project's <strong>Operations &gt; Kubernetes</strong> page.</p>
+<p>NOTE: <strong>Note:</strong>
+You need Maintainer <a href="/permissions.md">permissions</a> and above to access the Kubernetes page.</p>
+</li>
+<li>
+<p>Click on <strong>Add Kubernetes cluster</strong>.</p>
+</li>
+<li>
+<p>Click on <strong>Add an existing Kubernetes cluster</strong> and fill in the details:</p>
+<ul>
+<li>
+<strong>Kubernetes cluster name</strong> (required) - The name you wish to give the cluster.</li>
+<li>
+<strong>Environment scope</strong> (required)- The
+<a href="#setting-the-environment-scope">associated environment</a> to this cluster.</li>
+<li>
+<strong>API URL</strong> (required) -
+It's the URL that GitLab uses to access the Kubernetes API. Kubernetes
+exposes several APIs, we want the "base" URL that is common to all of them,
+e.g., <code>https://kubernetes.example.com</code> rather than <code>https://kubernetes.example.com/api/v1</code>.</li>
+<li>
+<strong>CA certificate</strong> (optional) -
+If the API is using a self-signed TLS certificate, you'll also need to include
+the <code>ca.crt</code> contents here.</li>
+<li>
+<strong>Token</strong> -
+GitLab authenticates against Kubernetes using service tokens, which are
+scoped to a particular <code>namespace</code>. If you don't have a service token yet,
+you can follow the
+<a href="https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/" rel="nofollow noreferrer noopener" target="_blank">Kubernetes documentation</a>
+to create one. You can also view or create service tokens in the
+<a href="https://kubernetes.io/docs/tasks/access-application-cluster/web-ui-dashboard/" rel="nofollow noreferrer noopener" target="_blank">Kubernetes dashboard</a>
+(under <strong>Config &gt; Secrets</strong>). <strong>The account that will issue the service token
+must have admin privileges on the cluster.</strong>
+</li>
+<li>
+<strong>Project namespace</strong> (optional) - You don't have to fill it in; by leaving
+it blank, GitLab will create one for you. Also:
+<ul>
+<li>Each project should have a unique namespace.</li>
+<li>The project namespace is not necessarily the namespace of the secret, if
+you're using a secret with broader permissions, like the secret from <code>default</code>.</li>
+<li>You should <strong>not</strong> use <code>default</code> as the project namespace.</li>
+<li>If you or someone created a secret specifically for the project, usually
+with limited permissions, the secret's namespace and project namespace may
+be the same.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>
+<p>Finally, click the <strong>Create Kubernetes cluster</strong> button.</p>
+</li>
+</ol>
+<p dir="auto">After a couple of minutes, your cluster will be ready to go. You can now proceed
+to install some <a href="#installing-applications">pre-defined applications</a>.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#security-implications" id="user-content-security-implications"></a>Security implications</h2>
+<p dir="auto">CAUTION: <strong>Important:</strong>
+The whole cluster security is based on a model where <a href="/permissions.md">developers</a>
+are trusted, so <strong>only trusted users should be allowed to control your clusters</strong>.</p>
+<p dir="auto">The default cluster configuration grants access to a wide set of
+functionalities needed to successfully build and deploy a containerized
+application. Bare in mind that the same credentials are used for all the
+applications running on the cluster.</p>
+<p dir="auto">When GitLab creates the cluster, it enables and uses the legacy
+<a href="https://kubernetes.io/docs/admin/authorization/abac/" rel="nofollow noreferrer noopener" target="_blank">Attribute-based access control (ABAC)</a>.
+The newer <a href="https://kubernetes.io/docs/admin/authorization/rbac/" rel="nofollow noreferrer noopener" target="_blank">RBAC</a>
+authorization will be supported in a
+<a href="https://gitlab.com/gitlab-org/gitlab-ce/issues/29398" rel="nofollow noreferrer noopener" target="_blank">future release</a>.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#security-of-gitlab-runners" id="user-content-security-of-gitlab-runners"></a>Security of GitLab Runners</h3>
+<p dir="auto">GitLab Runners have the <a href="https://docs.gitlab.com/runner/executors/docker.html#the-privileged-mode" rel="nofollow noreferrer noopener" target="_blank">privileged mode</a>
+enabled by default, which allows them to execute special commands and running
+Docker in Docker. This functionality is needed to run some of the <a href="/topics/autodevops/index.md">Auto DevOps</a>
+jobs. This implies the containers are running in privileged mode and you should,
+therefore, be aware of some important details.</p>
+<p dir="auto">The privileged flag gives all capabilities to the running container, which in
+turn can do almost everything that the host can do. Be aware of the
+inherent security risk associated with performing <code>docker run</code> operations on
+arbitrary images as they effectively have root access.</p>
+<p dir="auto">If you don't want to use GitLab Runner in privileged mode, first make sure that
+you don't have it installed via the applications, and then use the
+<a href="/install/kubernetes/gitlab_runner_chart.md">Runner's Helm chart</a> to
+install it manually.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#installing-applications" id="user-content-installing-applications"></a>Installing applications</h2>
+<p dir="auto">GitLab provides a one-click install for various applications which will be
+added directly to your configured cluster. Those applications are needed for
+<a href="/ci/review_apps/index.md">Review Apps</a> and <a href="/ci/environments.md">deployments</a>.</p>
+<p dir="auto">NOTE: <strong>Note:</strong>
+The applications will be installed in a dedicated namespace called
+<code>gitlab-managed-apps</code>. In case you have added an existing Kubernetes cluster
+with Tiller already installed, you should be careful as GitLab cannot
+detect it. By installing it via the applications will result into having it
+twice, which can lead to confusion during deployments.</p>
+<table dir="auto">
+<thead>
+<tr>
+<th>Application</th>
+<th align="center">GitLab version</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://docs.helm.sh/" rel="nofollow noreferrer noopener" target="_blank">Helm Tiller</a></td>
+<td align="center">10.2+</td>
+<td>Helm is a package manager for Kubernetes and is required to install all the other applications. It is installed in its own pod inside the cluster which can run the <code>helm</code> CLI in a safe environment.</td>
+</tr>
+<tr>
+<td><a href="https://kubernetes.io/docs/concepts/services-networking/ingress/" rel="nofollow noreferrer noopener" target="_blank">Ingress</a></td>
+<td align="center">10.2+</td>
+<td>Ingress can provide load balancing, SSL termination, and name-based virtual hosting. It acts as a web proxy for your applications and is useful if you want to use <a href="/topics/autodevops/index.md">Auto DevOps</a> or deploy your own web apps.</td>
+</tr>
+<tr>
+<td><a href="https://prometheus.io/docs/introduction/overview/" rel="nofollow noreferrer noopener" target="_blank">Prometheus</a></td>
+<td align="center">10.4+</td>
+<td>Prometheus is an open-source monitoring and alerting system useful to supervise your deployed applications.</td>
+</tr>
+<tr>
+<td><a href="https://docs.gitlab.com/runner/" rel="nofollow noreferrer noopener" target="_blank">GitLab Runner</a></td>
+<td align="center">10.6+</td>
+<td>GitLab Runner is the open source project that is used to run your jobs and send the results back to GitLab. It is used in conjunction with <a href="https://about.gitlab.com/features/gitlab-ci-cd/" rel="nofollow noreferrer noopener" target="_blank">GitLab CI/CD</a>, the open-source continuous integration service included with GitLab that coordinates the jobs. When installing the GitLab Runner via the applications, it will run in <strong>privileged mode</strong> by default. Make sure you read the <a href="#security-implications">security implications</a> before doing so.</td>
+</tr>
+<tr>
+<td><a href="http://jupyter.org/" rel="nofollow noreferrer noopener" target="_blank">JupyterHub</a></td>
+<td align="center">11.0+</td>
+<td>
+<a href="https://jupyterhub.readthedocs.io/en/stable/" rel="nofollow noreferrer noopener" target="_blank">JupyterHub</a> is a multi-user service for managing notebooks across a team. <a href="https://jupyter-notebook.readthedocs.io/en/latest/" rel="nofollow noreferrer noopener" target="_blank">Jupyter Notebooks</a> provide a web-based interactive programming environment used for data analysis, visualization, and machine learning. <strong>Note</strong>: Authentication will be enabled for any user of the GitLab server via OAuth2. HTTPS will be supported in a future release.</td>
+</tr>
+</tbody>
+</table>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#getting-the-external-ip-address" id="user-content-getting-the-external-ip-address"></a>Getting the external IP address</h2>
+<p dir="auto">NOTE: <strong>Note:</strong>
+You need a load balancer installed in your cluster in order to obtain the
+external IP address with the following procedure. It can be deployed using the
+<a href="#installing-applications"><strong>Ingress</strong> application</a>.</p>
+<p dir="auto">In order to publish your web application, you first need to find the external IP
+address associated to your load balancer.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#let-gitlab-fetch-the-ip-address" id="user-content-let-gitlab-fetch-the-ip-address"></a>Let GitLab fetch the IP address</h3>
+<blockquote dir="auto">
+<p><a href="https://gitlab.com/gitlab-org/gitlab-ce/merge_requests/17052" rel="nofollow noreferrer noopener" target="_blank">Introduced</a> in GitLab 10.6.</p>
+</blockquote>
+<p dir="auto">If you installed the Ingress <a href="#installing-applications">via the <strong>Applications</strong></a>,
+you should see the Ingress IP address on this same page within a few minutes.
+If you don't see this, GitLab might not be able to determine the IP address of
+your ingress application in which case you should manually determine it.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#manually-determining-the-ip-address" id="user-content-manually-determining-the-ip-address"></a>Manually determining the IP address</h3>
+<p dir="auto">If the cluster is on GKE, click on the <strong>Google Kubernetes Engine</strong> link in the
+<strong>Advanced settings</strong>, or go directly to the
+<a href="https://console.cloud.google.com/kubernetes/" rel="nofollow noreferrer noopener" target="_blank">Google Kubernetes Engine dashboard</a>
+and select the proper project and cluster. Then click on <strong>Connect</strong> and execute
+the <code>gcloud</code> command in a local terminal or using the <strong>Cloud Shell</strong>.</p>
+<p dir="auto">If the cluster is not on GKE, follow the specific instructions for your
+Kubernetes provider to configure <code>kubectl</code> with the right credentials.</p>
+<p dir="auto">If you installed the Ingress <a href="#installing-applications">via the <strong>Applications</strong></a>,
+run the following command:</p>
+<pre class="code highlight js-syntax-highlight shell" lang="shell" v-pre="true"><code><span class="line" id="LC1" lang="shell">kubectl get svc <span class="nt">--namespace</span><span class="o">=</span>gitlab-managed-apps ingress-nginx-ingress-controller <span class="nt">-o</span> <span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.status.loadBalancer.ingress[0].ip} '</span></span></code></pre>
+<p dir="auto">Otherwise, you can list the IP addresses of all load balancers:</p>
+<pre class="code highlight js-syntax-highlight shell" lang="shell" v-pre="true"><code><span class="line" id="LC1" lang="shell">kubectl get svc <span class="nt">--all-namespaces</span> <span class="nt">-o</span> <span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{range.items[?(@.status.loadBalancer.ingress)]}{.status.loadBalancer.ingress[*].ip} '</span></span></code></pre>
+<blockquote dir="auto">
+<p><strong>Note</strong>: Some Kubernetes clusters return a hostname instead, like <a href="https://aws.amazon.com/eks/" rel="nofollow noreferrer noopener" target="_blank">Amazon EKS</a>. For these platforms, run:</p>
+<pre class="code highlight js-syntax-highlight shell" lang="shell" v-pre="true"><code><span class="line" id="LC1" lang="shell">kubectl get service ingress-nginx-ingress-controller <span class="nt">-n</span> gitlab-managed-apps <span class="nt">-o</span> <span class="nv">jsonpath</span><span class="o">=</span><span class="s2">"{.status.loadBalancer.ingress[0].hostname}"</span><span class="nb">.</span></span></code></pre>
+</blockquote>
+<p dir="auto">The output is the external IP address of your cluster. This information can then
+be used to set up DNS entries and forwarding rules that allow external access to
+your deployed applications.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#using-a-static-ip" id="user-content-using-a-static-ip"></a>Using a static IP</h3>
+<p dir="auto">By default, an ephemeral external IP address is associated to the cluster's load
+balancer. If you associate the ephemeral IP with your DNS and the IP changes,
+your apps will not be able to be reached, and you'd have to change the DNS
+record again. In order to avoid that, you should change it into a static
+reserved IP.</p>
+<p dir="auto"><a href="https://cloud.google.com/compute/docs/ip-addresses/reserve-static-external-ip-address#promote_ephemeral_ip" rel="nofollow noreferrer noopener" target="_blank">Read how to promote an ephemeral external IP address in GKE.</a></p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#pointing-your-dns-at-the-cluster-ip" id="user-content-pointing-your-dns-at-the-cluster-ip"></a>Pointing your DNS at the cluster IP</h3>
+<p dir="auto">Once you've set up the static IP, you should associate it to a <a href="https://en.wikipedia.org/wiki/Wildcard_DNS_record" rel="nofollow noreferrer noopener" target="_blank">wildcard DNS
+record</a>, in order to be able
+to reach your apps. This heavily depends on your domain provider, but in case
+you aren't sure, just create an A record with a wildcard host like
+<code>*.example.com.</code>.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#setting-the-environment-scope" id="user-content-setting-the-environment-scope"></a>Setting the environment scope</h2>
+<p dir="auto">NOTE: <strong>Note:</strong>
+This is only available for <a href="https://about.gitlab.com/pricing/" rel="nofollow noreferrer noopener" target="_blank">GitLab Premium</a> where you can add more than
+one Kubernetes cluster.</p>
+<p dir="auto">When adding more than one Kubernetes clusters to your project, you need to
+differentiate them with an environment scope. The environment scope associates
+clusters and <a href="/ci/environments.md">environments</a> in an 1:1 relationship
+similar to how the
+<a href="../../../ci/variables/README.md#limiting-environment-scopes-of-variables">environment-specific variables</a>
+work.</p>
+<p dir="auto">The default environment scope is <code>*</code>, which means all jobs, regardless of their
+environment, will use that cluster. Each scope can only be used by a single
+cluster in a project, and a validation error will occur if otherwise.
+Also, jobs that don't have an environment keyword set will not be able to access any cluster.</p>
+<hr/>
+<p dir="auto">For example, let's say the following Kubernetes clusters exist in a project:</p>
+<table dir="auto">
+<thead>
+<tr>
+<th>Cluster</th>
+<th>Environment scope</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Development</td>
+<td><code>*</code></td>
+</tr>
+<tr>
+<td>Staging</td>
+<td><code>staging/*</code></td>
+</tr>
+<tr>
+<td>Production</td>
+<td><code>production/*</code></td>
+</tr>
+</tbody>
+</table>
+<p dir="auto">And the following environments are set in <a href="/ci/yaml/README.md"><code>.gitlab-ci.yml</code></a>:</p>
+<pre class="code highlight js-syntax-highlight yaml" lang="yaml" v-pre="true"><code><span class="line" id="LC1" lang="yaml"><span class="na">stages</span><span class="pi">:</span></span>
+<span class="line" id="LC2" lang="yaml"><span class="pi">-</span> <span class="s">test</span></span>
+<span class="line" id="LC3" lang="yaml"><span class="pi">-</span> <span class="s">deploy</span></span>
+<span class="line" id="LC4" lang="yaml"></span>
+<span class="line" id="LC5" lang="yaml"><span class="na">test</span><span class="pi">:</span></span>
+<span class="line" id="LC6" lang="yaml">  <span class="na">stage</span><span class="pi">:</span> <span class="s">test</span></span>
+<span class="line" id="LC7" lang="yaml">  <span class="na">script</span><span class="pi">:</span> <span class="s">sh test</span></span>
+<span class="line" id="LC8" lang="yaml"></span>
+<span class="line" id="LC9" lang="yaml"><span class="na">deploy to staging</span><span class="pi">:</span></span>
+<span class="line" id="LC10" lang="yaml">  <span class="na">stage</span><span class="pi">:</span> <span class="s">deploy</span></span>
+<span class="line" id="LC11" lang="yaml">  <span class="na">script</span><span class="pi">:</span> <span class="s">make deploy</span></span>
+<span class="line" id="LC12" lang="yaml">  <span class="na">environment</span><span class="pi">:</span></span>
+<span class="line" id="LC13" lang="yaml">    <span class="na">name</span><span class="pi">:</span> <span class="s">staging/$CI_COMMIT_REF_NAME</span></span>
+<span class="line" id="LC14" lang="yaml">    <span class="na">url</span><span class="pi">:</span> <span class="s">https://staging.example.com/</span></span>
+<span class="line" id="LC15" lang="yaml"></span>
+<span class="line" id="LC16" lang="yaml"><span class="na">deploy to production</span><span class="pi">:</span></span>
+<span class="line" id="LC17" lang="yaml">  <span class="na">stage</span><span class="pi">:</span> <span class="s">deploy</span></span>
+<span class="line" id="LC18" lang="yaml">  <span class="na">script</span><span class="pi">:</span> <span class="s">make deploy</span></span>
+<span class="line" id="LC19" lang="yaml">  <span class="na">environment</span><span class="pi">:</span></span>
+<span class="line" id="LC20" lang="yaml">    <span class="na">name</span><span class="pi">:</span> <span class="s">production/$CI_COMMIT_REF_NAME</span></span>
+<span class="line" id="LC21" lang="yaml">    <span class="na">url</span><span class="pi">:</span> <span class="s">https://example.com/</span></span></code></pre>
+<p dir="auto">The result will then be:</p>
+<ul dir="auto">
+<li>The development cluster will be used for the "test" job.</li>
+<li>The staging cluster will be used for the "deploy to staging" job.</li>
+<li>The production cluster will be used for the "deploy to production" job.</li>
+</ul>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#multiple-kubernetes-clusters" id="user-content-multiple-kubernetes-clusters"></a>Multiple Kubernetes clusters</h2>
+<blockquote dir="auto">
+<p>Introduced in <a href="https://about.gitlab.com/pricing/" rel="nofollow noreferrer noopener" target="_blank">GitLab Premium</a> 10.3.</p>
+</blockquote>
+<p dir="auto">With GitLab Premium, you can associate more than one Kubernetes clusters to your
+project. That way you can have different clusters for different environments,
+like dev, staging, production, etc.</p>
+<p dir="auto">Simply add another cluster, like you did the first time, and make sure to
+<a href="#setting-the-environment-scope">set an environment scope</a> that will
+differentiate the new cluster with the rest.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#deployment-variables" id="user-content-deployment-variables"></a>Deployment variables</h2>
+<p dir="auto">The Kubernetes cluster integration exposes the following
+<a href="../../../ci/variables/README.md#deployment-variables">deployment variables</a> in the
+GitLab CI/CD build environment.</p>
+<table dir="auto">
+<thead>
+<tr>
+<th>Variable</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>KUBE_URL</code></td>
+<td>Equal to the API URL.</td>
+</tr>
+<tr>
+<td><code>KUBE_TOKEN</code></td>
+<td>The Kubernetes token.</td>
+</tr>
+<tr>
+<td><code>KUBE_NAMESPACE</code></td>
+<td>The Kubernetes namespace is auto-generated if not specified. The default value is <code>&lt;project_name&gt;-&lt;project_id&gt;</code>. You can overwrite it to use different one if needed, otherwise the <code>KUBE_NAMESPACE</code> variable will receive the default value.</td>
+</tr>
+<tr>
+<td><code>KUBE_CA_PEM_FILE</code></td>
+<td>Only present if a custom CA bundle was specified. Path to a file containing PEM data.</td>
+</tr>
+<tr>
+<td><code>KUBE_CA_PEM</code></td>
+<td>(<strong>deprecated</strong>) Only if a custom CA bundle was specified. Raw PEM data.</td>
+</tr>
+<tr>
+<td><code>KUBECONFIG</code></td>
+<td>Path to a file containing <code>kubeconfig</code> for this deployment. CA bundle would be embedded if specified.</td>
+</tr>
+</tbody>
+</table>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#enabling-or-disabling-the-kubernetes-cluster-integration" id="user-content-enabling-or-disabling-the-kubernetes-cluster-integration"></a>Enabling or disabling the Kubernetes cluster integration</h2>
+<p dir="auto">After you have successfully added your cluster information, you can enable the
+Kubernetes cluster integration:</p>
+<ol dir="auto">
+<li>Click the "Enabled/Disabled" switch</li>
+<li>Hit <strong>Save</strong> for the changes to take effect</li>
+</ol>
+<p dir="auto">You can now start using your Kubernetes cluster for your deployments.</p>
+<p dir="auto">To disable the Kubernetes cluster integration, follow the same procedure.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#removing-the-kubernetes-cluster-integration" id="user-content-removing-the-kubernetes-cluster-integration"></a>Removing the Kubernetes cluster integration</h2>
+<p dir="auto">NOTE: <strong>Note:</strong>
+You need Maintainer <a href="/permissions.md">permissions</a> and above to remove a Kubernetes cluster integration.</p>
+<p dir="auto">NOTE: <strong>Note:</strong>
+When you remove a cluster, you only remove its relation to GitLab, not the
+cluster itself. To remove the cluster, you can do so by visiting the GKE
+dashboard or using <code>kubectl</code>.</p>
+<p dir="auto">To remove the Kubernetes cluster integration from your project, simply click on the
+<strong>Remove integration</strong> button. You will then be able to follow the procedure
+and add a Kubernetes cluster again.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#what-you-can-get-with-the-kubernetes-integration" id="user-content-what-you-can-get-with-the-kubernetes-integration"></a>What you can get with the Kubernetes integration</h2>
+<p dir="auto">Here's what you can do with GitLab if you enable the Kubernetes integration.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#deploy-boards" id="user-content-deploy-boards"></a>Deploy Boards</h3>
+<blockquote dir="auto">
+<p>Available in <a href="https://about.gitlab.com/pricing/" rel="nofollow noreferrer noopener" target="_blank">GitLab Premium</a>.</p>
+</blockquote>
+<p dir="auto">GitLab's Deploy Boards offer a consolidated view of the current health and
+status of each CI <a href="/ci/environments.md">environment</a> running on Kubernetes,
+displaying the status of the pods in the deployment. Developers and other
+teammates can view the progress and status of a rollout, pod by pod, in the
+workflow they already use without any need to access Kubernetes.</p>
+<p dir="auto"><a href="https://docs.gitlab.com/ee/user/project/deploy_boards.html" rel="nofollow noreferrer noopener" target="_blank">&gt; Read more about Deploy Boards</a></p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#canary-deployments" id="user-content-canary-deployments"></a>Canary Deployments</h3>
+<blockquote dir="auto">
+<p>Available in <a href="https://about.gitlab.com/pricing/" rel="nofollow noreferrer noopener" target="_blank">GitLab Premium</a>.</p>
+</blockquote>
+<p dir="auto">Leverage <a href="https://kubernetes.io/docs/concepts/cluster-administration/manage-deployment/#canary-deployments" rel="nofollow noreferrer noopener" target="_blank">Kubernetes' Canary deployments</a>
+and visualize your canary deployments right inside the Deploy Board, without
+the need to leave GitLab.</p>
+<p dir="auto"><a href="https://docs.gitlab.com/ee/user/project/canary_deployments.html" rel="nofollow noreferrer noopener" target="_blank">&gt; Read more about Canary Deployments</a></p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#kubernetes-monitoring" id="user-content-kubernetes-monitoring"></a>Kubernetes monitoring</h3>
+<p dir="auto">Automatically detect and monitor Kubernetes metrics. Automatic monitoring of
+<a href="/integrations/prometheus_library/nginx.md">NGINX ingress</a> is also supported.</p>
+<p dir="auto"><a href="/integrations/prometheus_library/kubernetes.md">&gt; Read more about Kubernetes monitoring</a></p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#auto-devops" id="user-content-auto-devops"></a>Auto DevOps</h3>
+<p dir="auto">Auto DevOps automatically detects, builds, tests, deploys, and monitors your
+applications.</p>
+<p dir="auto">To make full use of Auto DevOps(Auto Deploy, Auto Review Apps, and Auto Monitoring)
+you will need the Kubernetes project integration enabled.</p>
+<p dir="auto"><a href="/topics/autodevops/index.md">&gt; Read more about Auto DevOps</a></p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#web-terminals" id="user-content-web-terminals"></a>Web terminals</h3>
+<p dir="auto">NOTE: <strong>Note:</strong>
+Introduced in GitLab 8.15. You must be the project owner or have <code>maintainer</code> permissions
+to use terminals. Support is limited to the first container in the
+first pod of your environment.</p>
+<p dir="auto">When enabled, the Kubernetes service adds <a href="../../../ci/environments.md#web-terminals">web terminal</a>
+support to your <a href="/ci/environments.md">environments</a>. This is based on the <code>exec</code> functionality found in
+Docker and Kubernetes, so you get a new shell session within your existing
+containers. To use this integration, you should deploy to Kubernetes using
+the deployment variables above, ensuring any pods you create are labelled with
+<code>app=$CI_ENVIRONMENT_SLUG</code>. GitLab will do the rest!</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#read-more" id="user-content-read-more"></a>Read more</h2>
+<ul dir="auto">
+<li><a href="/eks_and_gitlab/index.md">Connecting and deploying to an Amazon EKS cluster</a></li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>
