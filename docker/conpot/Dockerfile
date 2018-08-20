@@ -1,4 +1,4 @@
-FROM alpine
+FROM alpine:3.7
 
 # Include dist
 ADD dist/ /root/dist/
@@ -12,10 +12,10 @@ RUN apk -U --no-cache add \
                libev \
                libtool \
                libcap \
+               libxml2-dev \
                libxslt \
-               libxslt-dev \
-               mariadb-dev \
                mariadb-client-libs \
+               mariadb-dev \
                pkgconfig \
                python \
                python-dev \
@@ -58,6 +58,7 @@ RUN apk -U --no-cache add \
             git \
             libev \
             libtool \
+            libxml2-dev \
             libxslt-dev \
             mariadb-dev \
             pkgconfig \

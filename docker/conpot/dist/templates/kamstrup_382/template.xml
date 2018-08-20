@@ -446,10 +446,10 @@
                 <value type="value">'255.255.255.0'</value>
             </key>
             <key name="kap_a_server_hostname">
-                <value type="value">'kapserver.evilpowerprovider.org'</value>
+                <value type="value">'pwr_ctrl_mgmt01.int.local'</value>
             </key>
             <key name="kap_a_server_ip">
-                <value type="value">'202.202.202.1'</value>
+                <value type="value">'10.232.15.242'</value>
             </key>
             <key name="kap_a_server_port">
                 <value type="value">'50'</value>
