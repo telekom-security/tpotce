@@ -167,6 +167,7 @@ echo
 echo "### Now replacing T-Pot related config files on host"
 cp host/etc/systemd/* /etc/systemd/system/
 cp host/etc/issue /etc/
+systemctl daemon-reload
 echo
 
 echo "### Now pulling latest docker images"
