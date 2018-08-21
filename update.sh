@@ -1,9 +1,5 @@
 #!/bin/bash
 
-###################################################
-# Do not change any contents of this script!!
-###################################################
-
 # Some vars
 myCONFIGFILE="/opt/tpot/etc/tpot.yml"
 myCOMPOSEPATH="/opt/tpot/etc/compose"
@@ -27,6 +23,7 @@ function fuCONFIGCHECK () {
     else
       echo "[ $myGREEN""OK""$myWHITE ]"
   fi
+echo
 }
 
 # Let's test the internet connection
@@ -48,6 +45,7 @@ mySITES=$1
             echo "[ $myGREEN"OK"$myWHITE ]"
         fi
   done;
+echo
 }
 
 # Update
@@ -61,22 +59,15 @@ function fuSELFUPDATE () {
       return
   fi
   myRESULT=$(git diff --name-only origin/18.04 | grep update.sh)
-  myLOCALSTAT=$(git status -uno | grep -c update.sh)
   if [ "$myRESULT" == "update.sh" ];
     then
-      if [ "$myLOCALSTAT" == "0" ];
-        then
-          echo "###### $myBLUE""Found newer version, will update myself and restart.""$myWHITE"
-          git reset --hard
-          git pull --force
-          exec "$1" "$2"
-          exit 1
-      fi
-    else
-      echo "###### $myBLUE""Update script is already up-to-date.""$myWHITE"
+      echo "###### $myBLUE""Found newer version, will update myself and restart.""$myWHITE"
       git reset --hard
       git pull --force
+      exec "$1" "$2"
+      exit 1
   fi
+echo
 }
 
 # Let's check for version
@@ -99,6 +90,7 @@ if [ -f "version" ];
     echo "###### $myBLUE""Unable to determine version. Please run 'update.sh' from within '/opt/tpot'.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
     exit
   fi
+echo
 }
 
 
@@ -117,6 +109,7 @@ if [ $? -ne 0 ];
   else
     echo "[ $myGREEN"OK"$myWHITE ]"
 fi
+echo
 }
 
 # Backup
@@ -139,6 +132,7 @@ if [ $? -ne 0 ];
     echo "[ $myGREEN"OK"$myWHITE ]"
     cd $myPATH
 fi
+echo
 }
 
 # Let's load docker images in parallel
@@ -149,6 +143,7 @@ for name in $(cat $myTPOTCOMPOSE | grep -v '#' | grep image | cut -d'"' -f2 | un
     docker pull $name &
   done
 wait
+echo
 }
 
 function fuUPDATER () {
@@ -176,11 +171,11 @@ echo
 
 echo "### Now pulling latest docker images"
 fuPULLIMAGES
-echo
 
 echo "### If you made changes to tpot.yml please ensure to add them again."
 echo "### We stored the previous version as backup in /root/."
 echo "### Done, please reboot."
+echo
 }
 
 
@@ -207,22 +202,9 @@ if [ "$1" != "-y" ]; then
 fi
 
 fuCHECK_VERSION
-echo
-
 fuCONFIGCHECK
-echo
-
 fuCHECKINET "https://index.docker.io https://github.com https://pypi.python.org https://ubuntu.com"
-echo
-
 fuSTOP_TPOT
-echo
-
 fuBACKUP
-echo
-
 fuSELFUPDATE "$0" "$@"
-echo
-
 fuUPDATER
-echo
