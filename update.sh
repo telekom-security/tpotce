@@ -60,7 +60,7 @@ function fuSELFUPDATE () {
       echo "###### $myBLUE""No updates found in repository.""$myWHITE"
       return
   fi
-  myRESULT=$(git diff --name-only origin/master | grep update.sh)
+  myRESULT=$(git diff --name-only origin/18.04 | grep update.sh)
   myLOCALSTAT=$(git status -uno | grep -c update.sh)
   if [ "$myRESULT" == "update.sh" ];
     then
