@@ -61,11 +61,15 @@ function fuSELFUPDATE () {
   myRESULT=$(git diff --name-only origin/18.04 | grep update.sh)
   if [ "$myRESULT" == "update.sh" ];
     then
-      echo "###### $myBLUE""Found newer version, will update myself and restart.""$myWHITE"
+      echo "###### $myBLUE""Found newer version, will be pulling updates and restart myself.""$myWHITE"
       git reset --hard
       git pull --force
       exec "$1" "$2"
       exit 1
+    else
+      echo "###### $myBLUE""Pulling updates from repository.""$myWHITE"
+      git reset --hard
+      git pull --force
   fi
 echo
 }
