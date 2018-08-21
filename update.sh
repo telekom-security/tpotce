@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Some vars
+# Some global vars
 myCONFIGFILE="/opt/tpot/etc/tpot.yml"
 myCOMPOSEPATH="/opt/tpot/etc/compose"
 myRED="[0;31m"
