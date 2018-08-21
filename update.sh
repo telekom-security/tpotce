@@ -194,9 +194,10 @@ fi
 
 # Only run with command switch
 if [ "$1" != "-y" ]; then
-  echo "This script will update / upgrade all T-Pot related scripts, tools and packages"
-  echo "Some of your changes might be overwritten, so make sure to save your work"
-  echo "This is beta feature and only recommended for experienced users, run with '-y' switch"
+  echo "This script will update / upgrade all T-Pot related scripts, tools and packages to the latest versions."
+  echo "A backup of /opt/tpot will be written to /root. If you are unsure, you should save your work."
+  echo "This is a beta feature and only recommended for experienced users."
+  echo "If you understand the involved risks feel free to run this script with the '-y' switch."
   echo
   exit
 fi
