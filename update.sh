@@ -67,7 +67,7 @@ function fuSELFUPDATE () {
       if [ "$myLOCALSTAT" == "0" ];
         then
           echo "###### $myBLUE""Found newer version, will update myself and restart.""$myWHITE"
-	  git reset --hard
+          git reset --hard
           git pull --force
           exec "$1" "$2"
           exit 1
