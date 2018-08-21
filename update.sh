@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ###################################################
-# Do not change any contents of this script!
+# Do not change any contents of this script!!
 ###################################################
 
 # Some vars
