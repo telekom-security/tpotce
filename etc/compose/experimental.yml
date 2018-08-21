@@ -374,7 +374,7 @@ services:
     networks:
      - tanner_local
     ports:
-     - "80:8080"
+     - "80:80"
     image: "dtagdevsec/snare:1804"
     depends_on:
      - tanner

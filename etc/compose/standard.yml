@@ -1,4 +1,4 @@
-# T-Pot (NG)
+# T-Pot (Standard)
 # Do not erase ports sections, these are used by /opt/tpot/bin/rules.sh to setup iptables ACCEPT rules for NFQ (honeytrap / glutton)
 version: '2.3'
 
@@ -373,7 +373,7 @@ services:
     networks:
      - tanner_local
     ports:
-     - "80:8080"
+     - "80:80"
     image: "dtagdevsec/snare:1804"
     depends_on:
      - tanner
