@@ -1,6 +1,6 @@
 # T-Pot 18.10
 
-T-Pot 18.10 runs on the latest 18.04 LTS Ubuntu Server Network Installer image, is based on
+T-Pot 18.10 runs on the latest 18.04.x LTS Ubuntu Server Network Installer image, is based on
 
 [docker](https://www.docker.com/), [docker-compose](https://docs.docker.com/compose/)
 
