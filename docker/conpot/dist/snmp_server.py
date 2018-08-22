@@ -21,7 +21,7 @@ import shutil
 import os
 
 from lxml import etree
-
+from conpot.core.protocol_wrapper import conpot_protocol
 from conpot.protocols.snmp.command_responder import CommandResponder
 from conpot.protocols.snmp.build_pysnmp_mib_wrapper import find_mibs, compile_mib
 import conpot.core as conpot_core
@@ -30,6 +30,7 @@ import conpot.core as conpot_core
 logger = logging.getLogger()
 
 
+@conpot_protocol
 class SNMPServer(object):
     def __init__(self, template, template_directory, args):
         """

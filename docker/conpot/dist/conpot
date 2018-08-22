@@ -1,0 +1,459 @@
+#!/usr/bin/env python3
+# Copyright (C) 2013  Lukas Rist <glaslos@gmail.com>
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+import gevent.monkey; gevent.monkey.patch_all()
+import logging
+import os
+import argparse
+import sys
+import pwd
+import grp
+import ast
+import inspect
+from configparser import ConfigParser, NoSectionError, NoOptionError
+import gevent
+from lxml import etree
+import conpot
+import conpot.core as conpot_core
+from conpot.core.loggers.log_worker import LogWorker
+from conpot.protocols.snmp.snmp_server import SNMPServer
+from conpot.protocols.modbus.modbus_server import ModbusServer
+from conpot.protocols.s7comm.s7_server import S7Server
+from conpot.protocols.http.web_server import HTTPServer
+from conpot.protocols.enip.enip_server import EnipServer
+from conpot.helpers import fix_sslwrap
+from conpot.protocols.kamstrup.meter_protocol.kamstrup_server import KamstrupServer
+from conpot.protocols.kamstrup.management_protocol.kamstrup_management_server import KamstrupManagementServer
+from conpot.protocols.bacnet.bacnet_server import BacnetServer
+from conpot.protocols.ipmi.ipmi_server import IpmiServer
+from conpot.protocols.guardian_ast.guardian_ast_server import GuardianASTServer
+from conpot.protocols.IEC104.IEC104_server import IEC104Server
+from conpot.protocols.ftp.ftp_server import FTPServer
+from conpot.protocols.tftp.tftp_server import TftpServer
+
+from conpot.emulators.proxy import Proxy
+from conpot.utils import ext_ip
+from conpot.utils import mac_addr
+
+logger = logging.getLogger()
+package_directory = os.path.dirname(os.path.abspath(conpot.__file__))
+core_interface = conpot_core.get_interface()
+
+
+def logo():
+    print("""
+                       _
+   ___ ___ ___ ___ ___| |_
+  |  _| . |   | . | . |  _|
+  |___|___|_|_|  _|___|_|
+              |_|
+
+  Version {0}
+  MushMush Foundation
+""".format(conpot.__version__))
+
+
+def on_unhandled_greenlet_exception(dead_greenlet):
+    logger.error('Stopping because %s died: %s', dead_greenlet, dead_greenlet.exception)
+    sys.exit(1)
+
+
+def setup_logging(log_file, verbose):
+    if verbose:
+        log_level = logging.DEBUG
+    else:
+        log_level = logging.INFO
+
+    log_format = logging.Formatter('%(asctime)-15s %(message)s')
+    console_log = logging.StreamHandler()
+    console_log.setLevel(log_level)
+    console_log.setFormatter(log_format)
+
+    logger.setLevel(log_level)
+    file_log = logging.FileHandler(log_file)
+    file_log.setFormatter(log_format)
+    file_log.setLevel(log_level)
+
+    root_logger = logging.getLogger()
+    root_logger.addHandler(console_log)
+    root_logger.addHandler(file_log)
+
+
+# fixme: drop privs need sudo user. Figure alternatives.
+def drop_privileges(uid_name=None, gid_name=None):
+    if uid_name is None:
+        uid_name = 'nobody'
+
+    try:
+        wanted_user = pwd.getpwnam(uid_name)
+    except KeyError:
+        logger.exception(
+            'Cannot drop privileges: user "%s" does not exist.',
+            uid_name)
+        sys.exit(1)
+
+    if gid_name is None:
+        gid_name = grp.getgrgid(wanted_user.pw_gid).gr_name
+
+    try:
+        wanted_group = grp.getgrnam(gid_name)
+    except KeyError:
+        logger.exception(
+            'Cannot drop privileges: group "%s" does not exist.',
+            gid_name)
+        sys.exit(1)
+
+    logger.debug('Attempting to drop privileges to "%s:%s"',
+                 wanted_user.pw_name, wanted_group.gr_name)
+    os.setgid(wanted_group.gr_gid)
+    os.setuid(wanted_user.pw_uid)
+    new_user = pwd.getpwuid(os.getuid())
+    new_group = grp.getgrgid(os.getgid())
+    logger.info('Privileges dropped, running as "%s:%s"',
+                new_user.pw_name, new_group.gr_name)
+
+
+def validate_template(xml_file, xsd_file):
+    xml_schema = etree.parse(xsd_file)
+    xsd = etree.XMLSchema(xml_schema)
+    xml = etree.parse(xml_file)
+    xsd.validate(xml)
+    if xsd.error_log:
+        logger.error('Error parsing XML template: %s', xsd.error_log)
+        sys.exit(1)
+
+
+def main():
+    logo()
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("-t", "--template",
+                        help="Name of one of the supplied templates, or the full path to a custom template.",
+                        default=''
+                        )
+    parser.add_argument("-f", "--force",
+                        help="Force use testing config.",
+                        metavar="testing.cfg",
+                        action='store_const',
+                        const=True,
+                        default=False
+                        )
+    parser.add_argument("-c", "--config",
+                        help="The configuration file to use",
+                        metavar="conpot.cfg",
+                        )
+
+    parser.add_argument("-l", "--logfile",
+                        help="The logfile to use",
+                        default="conpot.log"
+                        )
+    parser.add_argument("-a", "--raw_mib",
+                        help="Path to raw MIB files."
+                             "(will automatically get compiled by build-pysnmp-mib)",
+                        action='append',
+                        default=[]
+                        )
+    parser.add_argument("-m", "--mibpaths",
+                        action='append',
+                        help="Path to compiled PySNMP MIB files."
+                             "(must be compiled with build-pysnmp-mib)",
+                        default=[]
+                        )
+    parser.add_argument("--temp_dir",
+                        help="Directory where all conpot vfs related files would be kept.",
+                        default="ConpotTempFS"
+                        )
+    parser.add_argument('-v', '--verbose', action='store_true', default=False, help='Logs debug messages.')
+    args = parser.parse_args()
+
+    setup_logging(args.logfile, args.verbose)
+
+    core_interface.config = ConfigParser(os.environ)
+    config = core_interface.config
+
+    if os.getuid() == 0:
+        if not args.force:
+            logger.critical("Can't start conpot with root. Please ref user docs for more info.")
+            sys.exit(3)
+        else:
+            logger.warning('Running conpot with root. Running conpot with root isn\'t recommended. ')
+
+    if os.getuid() == 0:
+        try:
+            # retrieve user to run as
+            conpot_user = config.get('daemon', 'user')
+        except (NoSectionError, NoOptionError):
+            conpot_user = None
+
+        try:
+            # retrieve group to run as
+            conpot_group = config.get('daemon', 'group')
+        except (NoSectionError, NoOptionError):
+            conpot_group = None
+        # FIXME: drop privs require sudo
+        drop_privileges(conpot_user, conpot_group)
+
+    # Loading default config if config not set.
+    if args.force:
+        args.config = os.path.join(package_directory, 'testing.cfg')
+        logger.warning('--force option specified. Using testing configuration')
+        config.read(args.config)
+    else:
+        # sanity check: see that both config and template arguments are provided - else exit
+        if not (args.config and args.template):
+            print('Invalid arguments supplied. Please check that you pass both template and config arguments before'
+                  ' running Conpot')
+            sys.exit(3)
+        try:
+            if not os.path.isfile(os.path.join(package_directory, args.config)):
+                raise FileNotFoundError('Config file not found!')
+            args.config = os.path.join(package_directory, args.config)
+            logger.info('Config file found!')
+            config.read(args.config)
+        except FileNotFoundError:
+            logger.exception('\nCould not find config file!\nUse -f option to try the test configuration')
+            sys.exit(1)
+
+    # No template specified
+    if not args.template:
+
+        available_templates = os.listdir(os.path.join(package_directory, 'templates'))
+
+        print("--------------------------------------------------")
+        print(" Available templates:")
+        print("--------------------------------------------------\n")
+
+        for folder in available_templates:
+            template_xml = os.path.join(package_directory, 'templates', folder, 'template.xml')
+            if os.path.isfile(template_xml):
+                template_unit = template_vendor = template_description = template_protocols = template_creator = 'N/A'
+                dom_template = etree.parse(template_xml)
+                template_details = dom_template.xpath('//core/template/*')
+                if template_details:
+
+                    # retrieve all template details
+                    for entity in template_details:
+
+                        if entity.attrib['name'] == 'unit':
+                            template_unit = entity.text
+
+                        elif entity.attrib['name'] == 'vendor':
+                            template_vendor = entity.text
+
+                        elif entity.attrib['name'] == 'description':
+                            template_description = entity.text
+
+                        elif entity.attrib['name'] == 'protocols':
+                            template_protocols = entity.text
+
+                        elif entity.attrib['name'] == 'creator':
+                            template_creator = entity.text
+
+                    print("   --template {0}".format(folder))
+                    print("       Unit:        {0} - {1}".format(template_vendor, template_unit))
+                    print("       Desc:        {0}".format(template_description))
+                    print("       Protocols:   {0}".format(template_protocols))
+                    print("       Created by:  {0}\n".format(template_creator))
+
+        sys.exit(0)
+
+    # Custom template supplied
+    if os.path.exists(os.path.join(args.template, 'template.xml')):
+        root_template_directory = args.template
+    # Check if the template name can be in the default templates directory
+    elif os.path.isfile(os.path.join(package_directory, 'templates', args.template, 'template.xml')):
+        root_template_directory = os.path.join(package_directory, 'templates', args.template)
+    else:
+        logger.error('Template not found: %s', args.template)
+        sys.exit(1)
+
+    # Check if the configuration file exists..
+    if not os.path.isfile(args.config):
+        logger.error('Config not found: %s', args.config)
+        sys.exit(1)
+
+    logger.info('Starting Conpot using template: %s', root_template_directory)
+    logger.info('Starting Conpot using configuration found in: %s', args.config)
+
+    servers = list()
+
+    template_base = os.path.join(root_template_directory, 'template.xml')
+    if os.path.isfile(template_base):
+        validate_template(template_base, os.path.join(package_directory, 'tests/template_schemas/core.xsd'))
+        dom_base = etree.parse(template_base)
+    else:
+        logger.error('Could not access template configuration')
+        sys.exit(1)
+
+    session_manager = conpot_core.get_sessionManager()
+    session_manager.initialize_databus(template_base)
+
+    # initialize the virtual file system
+    fs_url = config.get('virtual_file_system', 'fs_url')
+    data_fs_url = config.get('virtual_file_system', 'data_fs_url')
+    if os.path.isdir(args.temp_dir):
+        temp_dir = args.temp_dir
+    else:
+        temp_dir = os.path.join(conpot.__path__[0], 'ConpotTempFS')
+        logger.info("Can't find the temp directory. Conpot VFS would be kept at : {}".format(temp_dir))
+        if not os.path.exists(temp_dir):
+            os.mkdir(temp_dir)
+    if fs_url == 'default' or data_fs_url == 'default':
+        if not args.force:
+            logger.error('Can\'t start conpot with default file system')
+            sys.exit(3)
+        else:
+            fs_url, data_fs_url = None, None
+    else:
+        logger.info('Serving {} as file system. File uploads will be kept at : {}'.format(fs_url, data_fs_url))
+    conpot_core.initialize_vfs(fs_url, data_fs_url, temp_dir)
+
+    public_ip = None
+    if config.getboolean('fetch_public_ip', 'enabled'):
+        public_ip = ext_ip.get_ext_ip(config)
+    if config.getboolean('change_mac_addr', 'enabled'):
+        if os.getuid() == 0:
+            logger.info('Attempting to change mac address.')
+            mac_addr.change_mac(config=config)
+        else:
+            logger.info('Changing mac address require sudo permissions. Skipping')
+    protocol_instance_mapping = (
+        ('modbus', ModbusServer),
+        ('s7comm', S7Server),
+        ('kamstrup_meter', KamstrupServer),
+        ('kamstrup_management', KamstrupManagementServer),
+        ('http', HTTPServer),
+        ('snmp', SNMPServer),
+        ('bacnet', BacnetServer),
+        ('ipmi', IpmiServer),
+        ('guardian_ast', GuardianASTServer),
+        ('enip', EnipServer),
+        ('IEC104', IEC104Server),
+        ('ftp', FTPServer),
+        ('tftp', TftpServer)
+    )
+
+    # no need to fork process when we don't want to change MAC address
+    pid = 0
+    if config.getboolean('change_mac_addr', 'enabled'):
+        pid = gevent.fork()
+
+    if pid == 0:
+        for protocol in protocol_instance_mapping:
+            protocol_name, server_class = protocol
+            protocol_template = os.path.join(root_template_directory, protocol_name, '{0}.xml'.format(protocol_name))
+            if os.path.isfile(protocol_template):
+                if 'kamstrup' in protocol_name:
+                    kamstrup_dir, protocol_name = os.path.split((protocol_name.replace('_', '/')) + '_protocol')
+                    xsd_file = os.path.join(package_directory, 'protocols', kamstrup_dir, protocol_name, '{0}.xsd'.format(protocol_name))
+                else:
+                    xsd_file = os.path.join(package_directory, 'protocols', protocol_name, '{0}.xsd'.format(protocol_name))
+                validate_template(protocol_template, xsd_file)
+                dom_protocol = etree.parse(protocol_template)
+                if dom_protocol.xpath('//{0}'.format(protocol_name)):
+                    if ast.literal_eval(dom_protocol.xpath('//{0}/@enabled'.format(protocol_name))[0]):
+                        host = dom_protocol.xpath('//{0}/@host'.format(protocol_name))[0]
+                        # -- > Are we running on testing config?
+                        if 'testing.cfg' in args.config:
+                            if '127.' not in host:
+                                if not args.force:
+                                    logger.error('To run conpot on a non local interface, please specify -f option')
+                                    sys.exit(1)
+                        port = ast.literal_eval(dom_protocol.xpath('//{0}/@port'.format(protocol_name))[0])
+                        server = server_class(protocol_template, root_template_directory, args)
+                        greenlet = gevent.spawn(server.start, host, port)
+                        greenlet.link_exception(on_unhandled_greenlet_exception)
+                        servers.append(server)
+                        logger.info('Found and enabled %s protocol.', (protocol[0], server))
+                else:
+                    logger.info('%s available but disabled by configuration.', protocol_name)
+            else:
+                logger.debug('No %s template found. Service will remain unconfigured/stopped.', protocol_name)
+
+        log_worker = LogWorker(config, dom_base, session_manager, public_ip)
+        greenlet = gevent.spawn(log_worker.start)
+        greenlet.link_exception(on_unhandled_greenlet_exception)
+
+        # TODO: Make proxy fit into protocol_instance_mapping
+        template_proxy = os.path.join(root_template_directory, 'proxy', 'proxy.xml')
+        if os.path.isfile(template_proxy):
+            xsd_file = os.path.join(os.path.dirname(inspect.getfile(Proxy)), 'proxy.xsd')
+            validate_template(template_proxy, xsd_file)
+            dom_proxy = etree.parse(template_proxy)
+            if dom_proxy.xpath('//proxies'):
+                if ast.literal_eval(dom_proxy.xpath('//proxies/@enabled')[0]):
+                    proxies = dom_proxy.xpath('//proxies/*')
+                    for p in proxies:
+                        name = p.attrib['name']
+                        host = p.attrib['host']
+                        keyfile = None
+                        certfile = None
+                        if 'keyfile' in p.attrib and 'certfile' in p.attrib:
+                            keyfile = p.attrib['keyfile']
+                            certfile = p.attrib['certfile']
+
+                            # if path is absolute we assert that the cert and key is located in
+                            # the templates ssl standard location
+
+                            if not os.path.isabs(keyfile):
+                                keyfile = os.path.join(os.path.dirname(root_template_directory), 'ssl', keyfile)
+                                certfile = os.path.join(os.path.dirname(root_template_directory), 'ssl', certfile)
+                        port = ast.literal_eval(p.attrib['port'])
+                        proxy_host = p.xpath('./proxy_host/text()')[0]
+                        proxy_port = ast.literal_eval(p.xpath('./proxy_port/text()')[0])
+                        decoder = p.xpath('./decoder/text()')
+                        if len(decoder) > 0:
+                            decoder = decoder[0]
+                        else:
+                            decoder = None
+                        proxy_instance = Proxy(name, proxy_host, proxy_port, decoder, keyfile, certfile)
+                        proxy_server = proxy_instance.get_server(host, port)
+                        servers.append(proxy_instance)
+                        proxy_greenlet = gevent.spawn(proxy_server.start)
+                        proxy_greenlet.link_exception(on_unhandled_greenlet_exception)
+                else:
+                    logger.info('Proxy available but disabled by template.')
+        else:
+            logger.info('No proxy template found. Service will remain unconfigured/stopped.')
+        # Wait for the services to bind ports before forking
+        gevent.sleep(5)
+        try:
+            if len(servers) > 0:
+                gevent.wait()
+        except KeyboardInterrupt:
+            logging.info('Stopping Conpot')
+            for server in servers:
+                server.stop()
+        finally:
+            conpot_core.close_fs()
+
+    else:
+        # wait for the child to end
+        try:
+            os.waitpid(pid, 0)
+        except KeyboardInterrupt:
+            pass
+        # Revert MAC address
+        iface = config.get('change_mac_addr', 'iface')
+        mac_addr.revert_mac(iface)
+
+
+if __name__ == "__main__":
+    fix_sslwrap()
+    main()

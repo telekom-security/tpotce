@@ -1,4 +1,4 @@
-FROM alpine:3.7
+FROM alpine
 
 # Include dist
 ADD dist/ /root/dist/
@@ -6,47 +6,55 @@ ADD dist/ /root/dist/
 # Setup apt
 RUN apk -U --no-cache add \
                build-base \
-               cython-dev \
                file \
                git \
                libev \
                libtool \
                libcap \
-               libxml2-dev \
                libxslt \
-               mariadb-client-libs \
+               libxslt-dev \
                mariadb-dev \
                pkgconfig \
-               python \
-               python-dev \
+               python3 \
+               python3-dev \
                py-cffi \
                py-cryptography \
-               py-pip \
                tcpdump \
                wget && \
 
 # Setup ConPot
-    git clone https://github.com/mushorg/conpot /opt/conpot && \
+    git clone --depth=1 https://github.com/mushorg/conpot /opt/conpot && \
     cd /opt/conpot/ && \
-    git reset --hard d157229e4587188ad3d3af5dddcd71200713852d && \
-    git fetch origin pull/367/head:run-without-root && \
-    git checkout run-without-root && \
-    git checkout master && \
-    git merge run-without-root && \
-    cp /root/dist/requirements.txt /opt/conpot/ && \
     # Patch to accept ENV for MIB path
     cp /root/dist/snmp_server.py /opt/conpot/conpot/protocols/snmp/ && \
-    pip install --no-cache-dir -U pip setuptools && \
-    pip install --no-cache-dir . && \
+    # Increase logging for debug mushorg/conpot/issues/#399
+    cp /root/dist/command_responder.py /opt/conpot/conpot/protocols/http/ && \
+    # mushorg/conpot/issues/#398
+    #cp /root/dist/conpot /opt/conpot/bin && \
+    # Change template default ports if <1024
+    sed -i 's/port="2121"/port="21"/' /opt/conpot/conpot/templates/default/ftp/ftp.xml && \ 
+    sed -i 's/port="8800"/port="80"/' /opt/conpot/conpot/templates/default/http/http.xml && \ 
+    sed -i 's/port="6230"/port="623"/' /opt/conpot/conpot/templates/default/ipmi/ipmi.xml && \ 
+    sed -i 's/port="5020"/port="502"/' /opt/conpot/conpot/templates/default/modbus/modbus.xml && \ 
+    sed -i 's/port="10201"/port="102"/' /opt/conpot/conpot/templates/default/s7comm/s7comm.xml && \ 
+    sed -i 's/port="16100"/port="161"/' /opt/conpot/conpot/templates/default/snmp/snmp.xml && \ 
+    sed -i 's/port="6969"/port="69"/' /opt/conpot/conpot/templates/default/tftp/tftp.xml && \ 
+    sed -i 's/port="16100"/port="161"/' /opt/conpot/conpot/templates/IEC104/snmp/snmp.xml && \ 
+    sed -i 's/port="6230"/port="623"/' /opt/conpot/conpot/templates/ipmi/ipmi/ipmi.xml && \ 
+    pip3 install --no-cache-dir -U pip setuptools && \
+    pip3 install --no-cache-dir . && \
     cd / && \
     rm -rf /opt/conpot /tmp/* /var/tmp/* && \
-    setcap cap_net_bind_service=+ep /usr/bin/python2.7 && \
+    setcap cap_net_bind_service=+ep /usr/bin/python3.6 && \
+    # Fix kamstrup not starting error
+    ln -s /usr/lib/python3.6/site-packages/conpot/protocols/kamstrup/meter_protocol /usr/lib/python3.6/site-packages/conpot/protocols/kamstrup_meter && \
+    ln -s /usr/lib/python3.6/site-packages/conpot/protocols/kamstrup/management_protocol /usr/lib/python3.6/site-packages/conpot/protocols/kamstrup_management && \
     
 # Get wireshark manuf db for scapy, setup configs, user, groups
     mkdir -p /etc/conpot /var/log/conpot /usr/share/wireshark && \
     wget https://github.com/wireshark/wireshark/raw/master/manuf -o /usr/share/wireshark/manuf && \
     cp /root/dist/conpot.cfg /etc/conpot/conpot.cfg && \
-    cp -R /root/dist/templates /usr/lib/python2.7/site-packages/conpot/ && \
+    cp -R /root/dist/templates /usr/lib/python3.6/site-packages/conpot/ && \
     addgroup -g 2000 conpot && \
     adduser -S -s /bin/ash -u 2000 -D -g 2000 conpot && \
 
@@ -58,17 +66,16 @@ RUN apk -U --no-cache add \
             git \
             libev \
             libtool \
-            libxml2-dev \
             libxslt-dev \
             mariadb-dev \
             pkgconfig \
-            python-dev \
+            python3-dev \
             py-cffi \
-            py-pip \
             wget && \
     rm -rf /root/* && \
     rm -rf /var/cache/apk/*
 
 # Start conpot
 USER conpot:conpot
-CMD exec /usr/bin/conpot --template $CONPOT_TEMPLATE --logfile $CONPOT_LOG --config $CONPOT_CONFIG
+CMD exec /usr/bin/conpot --temp_dir $CONPOT_TMP --template $CONPOT_TEMPLATE --logfile $CONPOT_LOG --config $CONPOT_CONFIG
+#CMD exec /usr/bin/conpot -v --temp_dir $CONPOT_TMP --template $CONPOT_TEMPLATE --logfile $CONPOT_LOG --config $CONPOT_CONFIG

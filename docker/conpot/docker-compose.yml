@@ -27,11 +27,13 @@ services:
     networks:
      - conpot_local_default
     ports:
+#    - "69:69"        
      - "80:80"
      - "102:102"
      - "161:161"
      - "502:502"
 #     - "623:623"
+     - "2121:21"
      - "44818:44818"
      - "47808:47808"
     image: "dtagdevsec/conpot:1804"
