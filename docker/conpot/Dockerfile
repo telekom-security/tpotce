@@ -25,6 +25,8 @@ RUN apk -U --no-cache add \
 # Setup ConPot
     git clone --depth=1 https://github.com/mushorg/conpot /opt/conpot && \
     cd /opt/conpot/ && \
+    # Patch Conpot to PR#400
+    git pull origin pull/400/head && \
     # Patch to accept ENV for MIB path
     cp /root/dist/snmp_server.py /opt/conpot/conpot/protocols/snmp/ && \
     # Increase logging for debug mushorg/conpot/issues/#399
@@ -46,7 +48,7 @@ RUN apk -U --no-cache add \
     cd / && \
     rm -rf /opt/conpot /tmp/* /var/tmp/* && \
     setcap cap_net_bind_service=+ep /usr/bin/python3.6 && \
-    # Fix kamstrup not starting error
+    # Fix kamstrup not starting error / #398 Workaround
     ln -s /usr/lib/python3.6/site-packages/conpot/protocols/kamstrup/meter_protocol /usr/lib/python3.6/site-packages/conpot/protocols/kamstrup_meter && \
     ln -s /usr/lib/python3.6/site-packages/conpot/protocols/kamstrup/management_protocol /usr/lib/python3.6/site-packages/conpot/protocols/kamstrup_management && \
     
@@ -77,5 +79,5 @@ RUN apk -U --no-cache add \
 
 # Start conpot
 USER conpot:conpot
-CMD exec /usr/bin/conpot --temp_dir $CONPOT_TMP --template $CONPOT_TEMPLATE --logfile $CONPOT_LOG --config $CONPOT_CONFIG
-#CMD exec /usr/bin/conpot -v --temp_dir $CONPOT_TMP --template $CONPOT_TEMPLATE --logfile $CONPOT_LOG --config $CONPOT_CONFIG
+#CMD exec /usr/bin/conpot --temp_dir $CONPOT_TMP --template $CONPOT_TEMPLATE --logfile $CONPOT_LOG --config $CONPOT_CONFIG
+CMD exec /usr/bin/conpot -v --temp_dir $CONPOT_TMP --template $CONPOT_TEMPLATE --logfile $CONPOT_LOG --config $CONPOT_CONFIG

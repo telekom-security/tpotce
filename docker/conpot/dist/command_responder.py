@@ -40,7 +40,7 @@ class HTTPServer(http.server.BaseHTTPRequestHandler):
 
     def log(self, version, request_type, addr, request, response=None):
 
-        session = conpot_core.get_session('http', addr[0], addr[1])
+        session = conpot_core.get_session('http', addr[0], addr[1], self.connection._sock.getsockname()[0], self.connection._sock.getsockname()[1])
 
         log_dict = {'remote': addr,
                     'timestamp': datetime.utcnow(),
