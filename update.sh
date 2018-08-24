@@ -175,7 +175,8 @@ systemctl daemon-reload
 echo
 
 echo "### Now pulling latest docker images"
-fuPULLIMAGES
+echo "######$myBLUE This might take a while, please be patient!$myWHITE"
+fuPULLIMAGES 2>&1>/dev/null
 
 echo "### If you made changes to tpot.yml please ensure to add them again."
 echo "### We stored the previous version as backup in /root/."
