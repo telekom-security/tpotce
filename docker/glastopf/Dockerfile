@@ -60,7 +60,6 @@ RUN apk -U --no-cache add \
 # Install glastopf from git
     git clone --depth=1 https://github.com/mushorg/glastopf.git /opt/glastopf && \
     cd /opt/glastopf && \
-    cp /root/dist/requirements.txt /opt/glastopf/ && \
     pip install --no-cache-dir . && \
     cd / && \
     rm -rf /opt/glastopf /tmp/* /var/tmp/* && \
