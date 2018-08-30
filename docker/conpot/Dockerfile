@@ -27,8 +27,6 @@ RUN apk -U --no-cache add \
     cd /opt/conpot/ && \
     # Patch to accept ENV for MIB path
     sed -i "s/tmp_mib_dir = tempfile.mkdtemp()/tmp_mib_dir = tempfile.mkdtemp(dir=os.environ['CONPOT_TMP'])/" /opt/conpot/conpot/protocols/snmp/snmp_server.py && \
-    # Increase logging for debug mushorg/conpot/issues/#399
-    cp /root/dist/command_responder.py /opt/conpot/conpot/protocols/http/ && \
     # Change template default ports if <1024
     sed -i 's/port="2121"/port="21"/' /opt/conpot/conpot/templates/default/ftp/ftp.xml && \ 
     sed -i 's/port="8800"/port="80"/' /opt/conpot/conpot/templates/default/http/http.xml && \ 
@@ -44,9 +42,6 @@ RUN apk -U --no-cache add \
     cd / && \
     rm -rf /opt/conpot /tmp/* /var/tmp/* && \
     setcap cap_net_bind_service=+ep /usr/bin/python3.6 && \
-    # Fix kamstrup not starting error / #398 Workaround
-    ln -s /usr/lib/python3.6/site-packages/conpot/protocols/kamstrup/meter_protocol /usr/lib/python3.6/site-packages/conpot/protocols/kamstrup_meter && \
-    ln -s /usr/lib/python3.6/site-packages/conpot/protocols/kamstrup/management_protocol /usr/lib/python3.6/site-packages/conpot/protocols/kamstrup_management && \
     
 # Get wireshark manuf db for scapy, setup configs, user, groups
     mkdir -p /etc/conpot /var/log/conpot /usr/share/wireshark && \
@@ -75,5 +70,4 @@ RUN apk -U --no-cache add \
 
 # Start conpot
 USER conpot:conpot
-#CMD exec /usr/bin/conpot --temp_dir $CONPOT_TMP --template $CONPOT_TEMPLATE --logfile $CONPOT_LOG --config $CONPOT_CONFIG
-CMD exec /usr/bin/conpot -v --temp_dir $CONPOT_TMP --template $CONPOT_TEMPLATE --logfile $CONPOT_LOG --config $CONPOT_CONFIG
+CMD exec /usr/bin/conpot --temp_dir $CONPOT_TMP --template $CONPOT_TEMPLATE --logfile $CONPOT_LOG --config $CONPOT_CONFIG
