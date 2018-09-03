@@ -68,7 +68,7 @@ services:
     networks:
      - conpot_local_IEC104
     ports:
-     - "161:161"
+#     - "161:161"
      - "2404:2404"
     image: "dtagdevsec/conpot:1804"
     read_only: true
