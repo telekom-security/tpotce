@@ -81,8 +81,9 @@ Furthermore we use the following tools
 - **New tools**
 	- *Cockpit* is an interactive server admin interface. It is easy to use and very lightweight. Cockpit interacts directly with the operating system from a real Linux session in a browser.
 	- *Cyberchef* is the Cyber Swiss Army Knife - a web app for encryption, encoding, compression and data analysis.
-	- *grc* (commandline) is yet another colouriser (written in python) for beautifying your logfiles or output of commands
+	- *grc* (commandline) is yet another colouriser (written in python) for beautifying your logfiles or output of commands.
 	- *multitail* (commandline) allows you to monitor logfiles and command output in multiple windows in a terminal, colorize, filter and merge.
+	- *tped.sh* (commandline) allows you to switch between T-Pot Editions after installation.
 - **Deprecated tools**
 	- *Netdata*, *Portainer* and *WeTTY* were superseded by *Cockpit* which is much more lightweight, perfectly well integrated into Ubuntu 18.04 LTS and of course comes with the same but a more basic feature set. 
 - **New Standard Installation**
