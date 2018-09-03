@@ -23,7 +23,6 @@ RUN apk -U --no-cache add \
     cd go.uuid && \
     git checkout v1.2.0 && \
     mv /root/dist/system.go /opt/go/src/github.com/mushorg/glutton/ && \
-    mv /root/dist/tcp.go /opt/go/src/github.com/mushorg/glutton/ && \
     cd /opt/go/src/github.com/mushorg/glutton/ && \
     make build && \
     cd / && \
