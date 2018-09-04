@@ -13,35 +13,16 @@ RUN apk -U --no-cache add \
                libffi \
                libffi-dev \
                libcap \
+               libxslt-dev \
                make \
-               py-asn1 \
-               py-cffi \
-               py-chardet \
-               py-cparser \
-               py-cryptography \
-               py-dateutil \
-               py-enum34 \
-               py-idna \
-               py-ipaddress \
-               py-jinja2 \
-               py-lxml \
+               php7 \
+               php7-dev \
                py-mysqldb \
                py-openssl \
                py-pip \
-               py-requests \
                py-setuptools \
                python \
                python-dev && \
-    apk -U add --repository http://dl-3.alpinelinux.org/alpine/edge/testing/ \
-               py-beautifulsoup4 \
-               php7 \
-               php7-dev \
-               py-cssselect \
-               py-gevent \
-               py-greenlet \
-               py-mongo \
-               py-sqlalchemy \
-               py-webob && \
     pip install --no-cache-dir --upgrade pip && \
 
 # Install php sandbox from git
@@ -60,6 +41,7 @@ RUN apk -U --no-cache add \
 # Install glastopf from git
     git clone --depth=1 https://github.com/mushorg/glastopf.git /opt/glastopf && \
     cd /opt/glastopf && \
+    cp /root/dist/requirements.txt . && \
     pip install --no-cache-dir . && \
     cd / && \
     rm -rf /opt/glastopf /tmp/* /var/tmp/* && \
@@ -79,8 +61,7 @@ RUN apk -U --no-cache add \
                     libffi-dev \
                     php7-dev \
                     python-dev \
-                    py-pip \
-                    re2c && \
+                    py-pip && \
     rm -rf /root/* && \
     rm -rf /var/cache/apk/*
 
