@@ -1,0 +1,20 @@
+version: '2.3'
+
+networks:
+  medpot_local:
+
+services:
+
+# medpot service
+  medpot:
+    build: .
+    container_name: medpot
+    restart: always
+    networks:
+     - medpot_local
+    ports:
+     - "2575:2575"
+    image: "dtagdevsec/medpot:1804"
+    read_only: true
+    volumes:
+     - /data/medpot/log/:/var/log/
