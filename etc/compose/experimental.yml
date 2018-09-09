@@ -12,6 +12,7 @@ networks:
   elasticpot_local:
   heralding_local:
   mailoney_local:
+  medpot_local:
   rdpy_local:
   tanner_local:
   vnclowpot_local:
@@ -263,6 +264,19 @@ services:
     read_only: true
     volumes:
      - /data/mailoney/log:/opt/mailoney/logs
+
+# Medpot service
+  medpot:
+    container_name: medpot
+    restart: always
+    networks:
+     - medpot_local
+    ports:
+     - "2575:2575"
+    image: "dtagdevsec/medpot:1804"
+    read_only: true
+    volumes:
+     - /data/medpot/log/:/var/log/
 
 # Rdpy service
   rdpy:

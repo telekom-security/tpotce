@@ -10,6 +10,7 @@ networks:
   conpot_local_kamstrup_382:
   cowrie_local:
   cyberchef_local:
+  medpot_local:
   rdpy_local:
   vnclowpot_local:
   ewsposter_local:
@@ -177,6 +178,19 @@ services:
      - /data/honeytrap/attacks:/opt/honeytrap/var/attacks
      - /data/honeytrap/downloads:/opt/honeytrap/var/downloads
      - /data/honeytrap/log:/opt/honeytrap/var/log
+
+# Medpot service
+  medpot:
+    container_name: medpot
+    restart: always
+    networks:
+     - medpot_local
+    ports:
+     - "2575:2575"
+    image: "dtagdevsec/medpot:1804"
+    read_only: true
+    volumes:
+     - /data/medpot/log/:/var/log/
 
 # Rdpy service
   rdpy:

@@ -698,6 +698,7 @@ mkdir -p /data/ciscoasa/log \
 	 /data/glutton/log \
 	 /data/heralding/log \
          /data/mailoney/log \
+         /data/medpot/log \
 	 /data/nginx/log \
          /data/emobility/log \
          /data/ews/conf \

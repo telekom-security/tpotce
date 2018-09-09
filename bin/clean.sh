@@ -167,6 +167,14 @@ fuMAILONEY () {
   chown tpot:tpot /data/mailoney/ -R
 }
 
+# Let's create a function to clean up and prepare mailoney data
+fuMEDPOT () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/medpot/*; fi
+  mkdir -p /data/medpot/log/
+  chmod 760 /data/medpot/ -R
+  chown tpot:tpot /data/medpot/ -R
+}
+
 # Let's create a function to clean up nginx logs
 fuNGINX () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/nginx/log/*; fi
@@ -257,6 +265,7 @@ if [ "$myPERSISTENCE" = "on" ];
     fuHERALDING
     fuHONEYTRAP
     fuMAILONEY
+    fuMEDPOT
     fuNGINX
     fuRDPY
     fuSPIDERFOOT
