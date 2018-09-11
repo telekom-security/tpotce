@@ -706,8 +706,7 @@ mkdir -p /data/ciscoasa/log \
          /data/spiderfoot \
          /data/suricata/log /home/tsec/.ssh/ \
 	 /data/tanner/log /data/tanner/files \
-         /data/p0f/log \
-         /data/vnclowpot/log 2>&1 | dialog --title "[ Creating some files and folders ]" $myPROGRESSBOXCONF
+         /data/p0f/log 2>&1 | dialog --title "[ Creating some files and folders ]" $myPROGRESSBOXCONF
 touch /data/spiderfoot/spiderfoot.db 2>&1 | dialog --title "[ Creating some files and folders ]" $myPROGRESSBOXCONF
 touch /data/nginx/log/error.log  2>&1 | dialog --title "[ Creating some files and folders ]" $myPROGRESSBOXCONF
 

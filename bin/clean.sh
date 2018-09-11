@@ -119,14 +119,6 @@ fuELK () {
   chown tpot:tpot /data/elk -R
 }
 
-# Let's create a function to clean up and prepare emobility data
-fuEMOBILITY () {
-  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/emobility/*; fi
-  mkdir -p /data/emobility/log
-  chmod 760 /data/emobility -R
-  chown tpot:tpot /data/emobility -R
-}
-
 # Let's create a function to clean up and prepare glastopf data
 fuGLASTOPF () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/glastopf/*; fi
@@ -223,14 +215,6 @@ fuTANNER () {
   chown tpot:tpot -R /data/tanner
 }
 
-# Let's create a function to clean up and prepare vnclowpot data
-fuVNCLOWPOT () {
-  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/vnclowpot/*; fi
-  mkdir -p /data/vnclowpot/log/
-  chmod 760 /data/vnclowpot/ -R
-  chown tpot:tpot /data/vnclowpot/ -R
-}
-
 # Avoid unwanted cleaning
 if [ "$myPERSISTENCE" = "" ];
   then
@@ -259,7 +243,6 @@ if [ "$myPERSISTENCE" = "on" ];
     fuDIONAEA
     fuELASTICPOT
     fuELK
-    fuEMOBILITY
     fuGLASTOPF
     fuGLUTTON
     fuHERALDING
@@ -272,5 +255,4 @@ if [ "$myPERSISTENCE" = "on" ];
     fuSURICATA
     fuP0F
     fuTANNER
-    fuVNCLOWPOT
   fi

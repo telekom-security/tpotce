@@ -10,6 +10,7 @@ networks:
   conpot_local_kamstrup_382:
   cowrie_local:
   cyberchef_local:
+  heralding_local:
   medpot_local:
   rdpy_local:
   ewsposter_local:
