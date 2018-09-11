@@ -28,6 +28,7 @@ RUN apk -U --no-cache add \
     rm -rf /var/cache/apk/*
 
 # Start elasticpot
+STOPSIGNAL SIGINT
 USER elasticpot:elasticpot
 WORKDIR /opt/ElasticpotPY/
 CMD ["/usr/bin/python3","main.py"]

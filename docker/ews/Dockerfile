@@ -47,5 +47,6 @@ RUN apk -U --no-cache add \
     rm -rf /var/cache/apk/*
 
 # Run ewsposter
+STOPSIGNAL SIGINT
 USER ews:ews
 CMD sleep 10 && exec /usr/bin/python -u /opt/ewsposter/ews.py -l 60

@@ -45,6 +45,7 @@ RUN apk -U --no-cache add \
     rm -rf /var/cache/apk/*
 
 # Set workdir and start phpsandbox
+STOPSIGNAL SIGKILL
 USER nobody:nobody
 WORKDIR /opt/phpox
 CMD ["python3.6", "sandbox.py"]

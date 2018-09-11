@@ -66,6 +66,7 @@ RUN apk -U --no-cache add \
     rm -rf /var/cache/apk/*
 
 # Set workdir and start glastopf
+STOPSIGNAL SIGINT
 USER glastopf:glastopf
 WORKDIR /tmp/glastopf/
 CMD cp /etc/glastopf/glastopf.cfg /tmp/glastopf && exec glastopf-runner

@@ -46,6 +46,7 @@ RUN apk -U --no-cache add \
     rm -rf /var/cache/apk/*
 
 # Set workdir and start mailoney
+STOPSIGNAL SIGINT
 USER mailoney:mailoney
 WORKDIR /opt/mailoney/
 CMD ["/usr/bin/python","mailoney.py","-i","0.0.0.0","-p","25","-s","mailrelay.local","-t","schizo_open_relay"]

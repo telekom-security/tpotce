@@ -14,5 +14,6 @@ RUN apk -U --no-cache add redis && \
     rm -rf /var/cache/apk/*
 
 # Start conpot
+STOPSIGNAL SIGKILL
 USER nobody:nobody
 CMD redis-server /etc/redis.conf

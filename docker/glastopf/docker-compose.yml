@@ -12,7 +12,6 @@ services:
     tmpfs:
       - /tmp/glastopf:uid=2000,gid=2000
     restart: always
-    stop_signal: SIGINT
     networks:
      - glastopf_local
     ports:

@@ -56,6 +56,7 @@ RUN apk -U --no-cache add \
     rm -rf /var/cache/apk/*
 
 # Start conpot
+STOPSIGNAL SIGKILL
 USER tanner:tanner
 WORKDIR /opt/tanner
 CMD tanner 

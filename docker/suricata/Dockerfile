@@ -29,4 +29,5 @@ RUN apk -U --no-cache add \
     rm -rf /var/cache/apk/*
 
 # Start suricata
+STOPSIGNAL SIGINT
 CMD SURICATA_CAPTURE_FILTER=$(update.sh $OINKCODE) && exec suricata -v -F $SURICATA_CAPTURE_FILTER -i $(/sbin/ip address | grep '^2: ' | awk '{ print $2 }' | tr -d [:punct:])

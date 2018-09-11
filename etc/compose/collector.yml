@@ -18,7 +18,6 @@ services:
   heralding:
     container_name: heralding
     restart: always
-    stop_signal: SIGINT
     tmpfs:
      - /tmp/heralding:uid=2000,gid=2000
     networks:
@@ -76,7 +75,6 @@ services:
   suricata:
     container_name: suricata
     restart: always
-    stop_signal: SIGINT
     environment:
     # For ET Pro ruleset replace "OPEN" with your OINKCODE
      - OINKCODE=OPEN
@@ -134,7 +132,6 @@ services:
   kibana:
     container_name: kibana
     restart: always
-    stop_signal: SIGKILL
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -171,7 +168,6 @@ services:
   ewsposter:
     container_name: ewsposter
     restart: always
-    stop_signal: SIGINT
     networks:
      - ewsposter_local
     env_file:

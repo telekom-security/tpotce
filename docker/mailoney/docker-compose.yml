@@ -16,7 +16,6 @@ services:
      - HPFEEDS_SECRET=pass
      - HPFEEDS_PORT=20000
      - HPFEEDS_CHANNELPREFIX=prefix
-    stop_signal: SIGINT
     networks:
      - mailoney_local
     ports:

@@ -61,5 +61,6 @@ RUN apk -U --no-cache add \
 HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:5601'
 
 # Start kibana
+STOPSIGNAL SIGKILL
 USER kibana:kibana
 CMD ["/usr/share/kibana/bin/kibana"]

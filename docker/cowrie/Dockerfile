@@ -25,7 +25,7 @@ RUN apk -U --no-cache add \
     adduser -S -s /bin/ash -u 2000 -D -g 2000 cowrie && \
 
 # Install cowrie from git
-    git clone --depth=1 https://github.com/micheloosterhof/cowrie /home/cowrie/cowrie/ && \
+    git clone --depth=1 https://github.com/micheloosterhof/cowrie /home/cowrie/cowrie/ -b v1.3.0 && \
     cd /home/cowrie/cowrie && \
     pip install --no-cache-dir --upgrade cffi pip && \
     pip install --no-cache-dir --upgrade -r requirements.txt && \

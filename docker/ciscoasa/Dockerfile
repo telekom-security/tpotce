@@ -38,6 +38,7 @@ RUN apk -U upgrade && \
     rm -rf /var/cache/apk/*
 
 # Start ciscoasa
+STOPSIGNAL SIGINT
 WORKDIR /tmp/ciscoasa/
 USER ciscoasa:ciscoasa
 CMD cp -R /opt/ciscoasa_honeypot/* /tmp/ciscoasa && exec python3 asa_server.py --ike-port 5000 --enable_ssl --port 8443 --verbose >> /var/log/ciscoasa/ciscoasa.log 2>&1

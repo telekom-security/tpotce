@@ -28,7 +28,6 @@ services:
   ciscoasa:
     container_name: ciscoasa
     restart: always
-    stop_signal: SIGINT
     tmpfs:
      - /tmp/ciscoasa:uid=2000,gid=2000
     network_mode: "host"
@@ -44,7 +43,6 @@ services:
   conpot_IEC104:
     container_name: conpot_iec104
     restart: always
-    stop_signal: SIGINT
     environment:
      - CONPOT_CONFIG=/etc/conpot/conpot.cfg
      - CONPOT_JSON_LOG=/var/log/conpot/conpot_IEC104.json
@@ -67,7 +65,6 @@ services:
   conpot_guardian_ast:
     container_name: conpot_guardian_ast
     restart: always
-    stop_signal: SIGINT
     environment:
      - CONPOT_CONFIG=/etc/conpot/conpot.cfg
      - CONPOT_JSON_LOG=/var/log/conpot/conpot_guardian_ast.json
@@ -89,7 +86,6 @@ services:
   conpot_ipmi:
     container_name: conpot_ipmi
     restart: always
-    stop_signal: SIGINT
     environment:
      - CONPOT_CONFIG=/etc/conpot/conpot.cfg
      - CONPOT_JSON_LOG=/var/log/conpot/conpot_ipmi.json
@@ -111,7 +107,6 @@ services:
   conpot_kamstrup_382:
     container_name: conpot_kamstrup_382
     restart: always
-    stop_signal: SIGINT
     environment:
      - CONPOT_CONFIG=/etc/conpot/conpot.cfg
      - CONPOT_JSON_LOG=/var/log/conpot/conpot_kamstrup_382.json
@@ -190,7 +185,6 @@ services:
   elasticpot:
     container_name: elasticpot
     restart: always
-    stop_signal: SIGINT
     networks:
      - elasticpot_local
     ports:
@@ -204,7 +198,6 @@ services:
   heralding:
     container_name: heralding
     restart: always
-    stop_signal: SIGINT
     tmpfs:
      - /tmp/heralding:uid=2000,gid=2000
     networks:
@@ -253,7 +246,6 @@ services:
      - HPFEEDS_SECRET=pass
      - HPFEEDS_PORT=20000
      - HPFEEDS_CHANNELPREFIX=prefix
-    stop_signal: SIGINT
     networks:
      - mailoney_local
     ports:
@@ -302,7 +294,6 @@ services:
   tanner_redis:
     container_name: tanner_redis
     restart: always
-    stop_signal: SIGKILL
     tty: true
     networks:
      - tanner_local
@@ -313,7 +304,6 @@ services:
   tanner_phpox:
     container_name: tanner_phpox
     restart: always
-    stop_signal: SIGKILL
     tty: true
     networks:
      - tanner_local
@@ -324,7 +314,6 @@ services:
   tanner_api:
     container_name: tanner_api
     restart: always
-    stop_signal: SIGKILL
     tmpfs:
      - /tmp/tanner:uid=2000,gid=2000
     tty: true
@@ -342,7 +331,6 @@ services:
   tanner_web:
     container_name: tanner_web
     restart: always
-    stop_signal: SIGKILL
     tmpfs:
      - /tmp/tanner:uid=2000,gid=2000
     tty: true
@@ -360,7 +348,6 @@ services:
   tanner:
     container_name: tanner
     restart: always
-    stop_signal: SIGKILL
     tmpfs:
      - /tmp/tanner:uid=2000,gid=2000
     tty: true
@@ -381,7 +368,6 @@ services:
   snare:
     container_name: snare
     restart: always
-    stop_signal: SIGKILL
     tty: true
     networks:
      - tanner_local
@@ -423,7 +409,6 @@ services:
   suricata:
     container_name: suricata
     restart: always
-    stop_signal: SIGINT
     environment:
     # For ET Pro ruleset replace "OPEN" with your OINKCODE
      - OINKCODE=OPEN
@@ -445,7 +430,6 @@ services:
   ewsposter:
     container_name: ewsposter
     restart: always
-    stop_signal: SIGINT
     networks:
      - ewsposter_local
     env_file:

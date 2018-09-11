@@ -23,7 +23,7 @@ RUN apk -U --no-cache add \
     git clone --depth=1 https://github.com/johnnykv/heralding && \
     cd heralding && \
     pip3 install --no-cache-dir -r requirements.txt && \
-    pip3 install --no-cache-dir heralding && \
+    pip3 install --no-cache-dir . && \
 
 # Setup user, groups and configs
     addgroup -g 2000 heralding && \
@@ -48,6 +48,7 @@ RUN apk -U --no-cache add \
            /opt/heralding
 
 # Start elasticpot
+STOPSIGNAL SIGINT
 WORKDIR /tmp/heralding/
 USER heralding:heralding
 CMD exec heralding -c /etc/heralding/heralding.yml -l /var/log/heralding/heralding.log

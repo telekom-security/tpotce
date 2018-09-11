@@ -78,7 +78,6 @@ services:
   elasticpot:
     container_name: elasticpot
     restart: always
-    stop_signal: SIGINT
     networks:
      - elasticpot_local
     ports:
@@ -94,7 +93,6 @@ services:
     tmpfs:
      - /tmp/glastopf:uid=2000,gid=2000
     restart: always
-    stop_signal: SIGINT
     networks:
      - glastopf_local
     ports:
@@ -131,7 +129,6 @@ services:
      - HPFEEDS_SECRET=pass
      - HPFEEDS_PORT=20000
      - HPFEEDS_CHANNELPREFIX=prefix
-    stop_signal: SIGINT
     networks:
      - mailoney_local
     ports:
@@ -194,7 +191,6 @@ services:
   suricata:
     container_name: suricata
     restart: always
-    stop_signal: SIGINT
     environment:
     # For ET Pro ruleset replace "OPEN" with your OINKCODE
      - OINKCODE=OPEN
@@ -241,7 +237,6 @@ services:
   kibana:
     container_name: kibana
     restart: always
-    stop_signal: SIGKILL
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -278,7 +273,6 @@ services:
   ewsposter:
     container_name: ewsposter
     restart: always
-    stop_signal: SIGINT
     networks:
      - ewsposter_local
     env_file:

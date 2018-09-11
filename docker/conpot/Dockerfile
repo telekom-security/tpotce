@@ -69,5 +69,6 @@ RUN apk -U --no-cache add \
     rm -rf /var/cache/apk/*
 
 # Start conpot
+STOPSIGNAL SIGINT
 USER conpot:conpot
 CMD exec /usr/bin/conpot --temp_dir $CONPOT_TMP --template $CONPOT_TEMPLATE --logfile $CONPOT_LOG --config $CONPOT_CONFIG

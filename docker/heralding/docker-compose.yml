@@ -10,7 +10,6 @@ services:
     build: .
     container_name: heralding
     restart: always
-    stop_signal: SIGINT
     tmpfs:
      - /tmp/heralding:uid=2000,gid=2000
     networks:

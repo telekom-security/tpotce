@@ -7,7 +7,6 @@ services:
     build: .
     container_name: kibana
     restart: always
-    stop_signal: SIGKILL
 #    depends_on:
 #      elasticsearch:
 #        condition: service_healthy

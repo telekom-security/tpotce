@@ -15,7 +15,6 @@ services:
     build: .
     container_name: conpot_default
     restart: always
-    stop_signal: SIGINT
     environment:
      - CONPOT_CONFIG=/etc/conpot/conpot.cfg
      - CONPOT_JSON_LOG=/var/log/conpot/conpot_default.json
@@ -46,7 +45,6 @@ services:
     build: .
     container_name: conpot_IEC104
     restart: always
-    stop_signal: SIGINT
     environment:
      - CONPOT_CONFIG=/etc/conpot/conpot.cfg
      - CONPOT_JSON_LOG=/var/log/conpot/conpot_IEC104.json
@@ -70,7 +68,6 @@ services:
     build: .
     container_name: conpot_guardian_ast
     restart: always
-    stop_signal: SIGINT
     environment:
      - CONPOT_CONFIG=/etc/conpot/conpot.cfg
      - CONPOT_JSON_LOG=/var/log/conpot/conpot_guardian_ast.json
@@ -93,7 +90,6 @@ services:
     build: .
     container_name: conpot_ipmi
     restart: always
-    stop_signal: SIGINT
     environment:
      - CONPOT_CONFIG=/etc/conpot/conpot.cfg
      - CONPOT_JSON_LOG=/var/log/conpot/conpot_ipmi.json
@@ -116,7 +112,6 @@ services:
     build: .
     container_name: conpot_kamstrup_382
     restart: always
-    stop_signal: SIGINT
     environment:
      - CONPOT_CONFIG=/etc/conpot/conpot.cfg
      - CONPOT_JSON_LOG=/var/log/conpot/conpot_kamstrup_382.json
