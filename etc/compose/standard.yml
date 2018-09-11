@@ -275,7 +275,7 @@ services:
     image: "dtagdevsec/medpot:1804"
     read_only: true
     volumes:
-     - /data/medpot/log/:/var/log/
+     - /data/medpot/log/:/var/log/medpot
 
 # Rdpy service
   rdpy:

@@ -11,7 +11,7 @@ RUN apk -U --no-cache add \
     export GOPATH=/opt/go/ && \
     mkdir -p /opt/go/src && \
     cd /opt/go/src && \
-    git clone https://github.com/schmalle/medpot.git && \
+    git clone https://github.com/schmalle/medpot && \
     go get -d -v github.com/davecgh/go-spew/spew && \
     go get -d -v github.com/go-ini/ini && \
     go get -d -v github.com/mozillazg/request && \
@@ -21,15 +21,14 @@ RUN apk -U --no-cache add \
 
 # Setup medpot
     mkdir -p /opt/medpot \
-             /var/log/ && \
-    touch /var/log/medpot.log && \
+             /var/log/medpot && \
     cp medpot /opt/medpot && \
     cp /opt/go/src/medpot/template/*.xml /opt/medpot/ && \
 
 # Setup user, groups and configs
     addgroup -g 2000 medpot && \
     adduser -S -s /bin/ash -u 2000 -D -g 2000 medpot && \
-    chown -R medpot:medpot /var/log/medpot.log && \ 
+    chown -R medpot:medpot /var/log/medpot && \
 
 # Clean up
     apk del --purge build-base \
