@@ -15,7 +15,6 @@ networks:
   medpot_local:
   rdpy_local:
   tanner_local:
-  vnclowpot_local:
   ewsposter_local:
   spiderfoot_local:
 
@@ -215,7 +214,7 @@ services:
      - "993:993"
      - "995:995"
      - "5432:5432"
-    # - "5900:5900"
+     - "5900:5900"
     image: "dtagdevsec/heralding:1804"
     read_only: true
     volumes:
@@ -378,19 +377,6 @@ services:
     image: "dtagdevsec/snare:1804"
     depends_on:
      - tanner
-
-# Vnclowpot service
-  vnclowpot:
-    container_name: vnclowpot
-    restart: always
-    networks:
-     - vnclowpot_local
-    ports:
-     - "5900:5900"
-    image: "dtagdevsec/vnclowpot:1804"
-    read_only: true
-    volumes:
-     - /data/vnclowpot/log:/var/log/vnclowpot
 
 
 ##################

@@ -12,7 +12,6 @@ networks:
   cyberchef_local:
   medpot_local:
   rdpy_local:
-  vnclowpot_local:
   ewsposter_local:
   spiderfoot_local:
 
@@ -158,6 +157,32 @@ services:
      - /data/cowrie/log:/home/cowrie/cowrie/log
      - /data/cowrie/log/tty:/home/cowrie/cowrie/log/tty
 
+# Heralding service
+  heralding:
+    container_name: heralding
+    restart: always
+    tmpfs:
+     - /tmp/heralding:uid=2000,gid=2000
+    networks:
+     - heralding_local
+    ports:
+    # - "21:21"
+    # - "22:22"
+    # - "23:23"
+    # - "25:25"
+    # - "80:80"
+    # - "110:110"
+    # - "143:143"
+    # - "443:443"
+    # - "993:993"
+    # - "995:995"
+    # - "5432:5432"
+     - "5900:5900"
+    image: "dtagdevsec/heralding:1804"
+    read_only: true
+    volumes:
+     - /data/heralding/log:/var/log/heralding
+
 # Honeytrap service
   honeytrap:
     container_name: honeytrap
@@ -207,19 +232,6 @@ services:
     read_only: true
     volumes:
      - /data/rdpy/log:/var/log/rdpy
-
-# Vnclowpot service
-  vnclowpot:
-    container_name: vnclowpot
-    restart: always
-    networks:
-     - vnclowpot_local
-    ports:
-     - "5900:5900"
-    image: "dtagdevsec/vnclowpot:1804"
-    read_only: true
-    volumes:
-     - /data/vnclowpot/log:/var/log/vnclowpot
 
 
 ##################
