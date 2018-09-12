@@ -5,6 +5,17 @@ myBACKTITLE="T-Pot Edition Selection Tool"
 myYMLS=$(cd /opt/tpot/etc/compose/ && ls -1 *.yml)
 myLINK="/opt/tpot/etc/tpot.yml"
 
+# Let's load docker images in parallel
+function fuPULLIMAGES {
+local myTPOTCOMPOSE="/opt/tpot/etc/tpot.yml"
+for name in $(cat $myTPOTCOMPOSE | grep -v '#' | grep image | cut -d'"' -f2 | uniq)
+  do
+    docker pull $name &
+  done
+wait
+echo
+}
+
 # setup menu
 for i in $myYMLS;
   do
@@ -20,10 +31,13 @@ dialog --backtitle "$myBACKTITLE" --title "[ Activate now? ]" --yesno "\n$myEDIT
 myOK=$?
 if [ "$myOK" == "0" ];
   then
-    echo "OK - Activating"
+    echo "OK - Activating and downloading latest images."
     systemctl stop tpot
+    docker stop $(docker ps -aq)
+    docker rm $(docker ps -aq)
     rm -f $myLINK
     ln -s /opt/tpot/etc/compose/$myEDITION $myLINK
+    fuPULLIMAGES
     systemctl start tpot
     echo "Done. Use \"dps.sh\" for monitoring"
   else 
