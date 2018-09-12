@@ -113,8 +113,11 @@ if [ $? -ne 0 ];
   else
     echo "[ $myGREEN"OK"$myWHITE ]"
     echo "###### $myBLUE Now cleaning up containers.$myWHITE "
-    docker stop $(docker ps -aq)
-    docker rm $(docker ps -aq)
+    if [ "$(docker ps -aq)" != "" ];
+      then
+        docker stop $(docker ps -aq)
+        docker rm $(docker ps -aq)
+    fi
 fi
 echo
 }
