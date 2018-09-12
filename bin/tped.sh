@@ -33,8 +33,11 @@ if [ "$myOK" == "0" ];
   then
     echo "OK - Activating and downloading latest images."
     systemctl stop tpot
-    docker stop $(docker ps -aq)
-    docker rm $(docker ps -aq)
+    if [ "$(docker ps -aq)" != "" ];
+      then
+        docker stop $(docker ps -aq)
+        docker rm $(docker ps -aq)
+    fi
     rm -f $myLINK
     ln -s /opt/tpot/etc/compose/$myEDITION $myLINK
     fuPULLIMAGES
