@@ -13,8 +13,8 @@ RUN apk -U --no-cache add \
 # Get and install packages
     cd /root/dist/ && \
     mkdir -p /usr/share/elasticsearch/ && \
-    wget https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-6.4.0.tar.gz && \
-    tar xvfz elasticsearch-6.4.0.tar.gz --strip-components=1 -C /usr/share/elasticsearch/ && \
+    wget https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-6.4.2.tar.gz && \
+    tar xvfz elasticsearch-6.4.2.tar.gz --strip-components=1 -C /usr/share/elasticsearch/ && \
 
 # Add and move files
     cd /root/dist/ && \
