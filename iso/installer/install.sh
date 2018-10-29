@@ -573,7 +573,7 @@ fi
 
 # Let's patch cockpit.socket, sshd_config
 sed -i 's#ListenStream=9090#ListenStream=64294#' /lib/systemd/system/cockpit.socket 2>&1 | dialog --title "[ Cockpit listen on tcp/64294 ]" $myPROGRESSBOXCONF
-sed -i 's#\#Port 22#Port 64295#' /etc/ssh/sshd_config 2>&1 | dialog --title "[ SSH listen on tcp/64295 ]" $myPROGRESSBOXCONF
+sed -i '/^port/Id' /etc/ssh/sshd_config && echo "Port 64295" >> /etc/ssh/sshd_config 2>&1 | dialog --title "[ SSH listen on tcp/64295 ]" $myPROGRESSBOXCONF
 
 # Let's make sure only myCONF_TPOT_FLAVOR images will be downloaded and started
 case $myCONF_TPOT_FLAVOR in
@@ -679,7 +679,7 @@ myCRONJOBS="
 */1 * * * *     root    mv --backup=numbered /data/dionaea/roots/ftp/* /data/dionaea/binaries/
 
 # Daily reboot
-27 3 * * *      root    systemctl stop tpot && docker stop $(docker ps -aq) && docker rm $(docker ps -aq) && reboot
+27 3 * * *      root    systemctl stop tpot && docker stop \$(docker ps -aq) && docker rm \$(docker ps -aq) && reboot
 
 # Check for updated packages every sunday, upgrade and reboot
 27 16 * * 0     root    apt-get autoclean -y && apt-get autoremove -y && apt-get update -y && apt-get upgrade -y && sleep 10 && reboot
