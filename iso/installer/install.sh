@@ -134,7 +134,8 @@ apt-get -y update
 echo
 echo "### Upgrading packages."
 echo
-apt-get -y dist-upgrade
+# Downlaod and upgrade packages, but silently kee existing configs
+apt-get dist-upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes
 echo
 echo "### Installing T-Pot dependencies."
 echo
