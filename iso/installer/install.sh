@@ -134,7 +134,7 @@ apt-get -y update
 echo
 echo "### Upgrading packages."
 echo
-# Downlaod and upgrade packages, but silently kee existing configs
+# Downlaod and upgrade packages, but silently keep existing configs
 apt-get dist-upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes
 echo
 echo "### Installing T-Pot dependencies."
@@ -755,5 +755,10 @@ apt-get autoremove -y 2>&1 | dialog --title "[ Cleaning up ]" $myPROGRESSBOXCONF
 # Final steps
 cp /opt/tpot/host/etc/rc.local /etc/rc.local 2>&1>/dev/null && \
 rm -rf /root/installer 2>&1>/dev/null && \
-dialog --no-ok --no-cancel --backtitle "$myBACKTITLE" --title "[ Thanks for your patience. Now rebooting. ]" --pause "" 6 80 2 && \
-reboot
+if [ "$myTPOT_DEPLOYMENT_TYPE" == "auto" ];
+  then
+    echo "Done. Please reboot."
+  else
+    dialog --no-ok --no-cancel --backtitle "$myBACKTITLE" --title "[ Thanks for your patience. Now rebooting. ]" --pause "" 6 80 2 && \
+    reboot
+fi
