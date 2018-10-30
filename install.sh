@@ -1,1 +1,3 @@
-iso/installer/install.sh
+#!/bin/bash
+cd iso/installer
+./install.sh "$@"
