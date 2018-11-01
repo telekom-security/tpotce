@@ -742,10 +742,13 @@ tee -a /root/.bashrc 2>&1>/dev/null <<EOF
 $myROOTPROMPT
 PATH="$PATH:/opt/tpot/bin"
 EOF
-tee -a /home/tsec/.bashrc 2>&1>/dev/null <<EOF
+for i in $(ls -d /home/*/)
+  do
+tee -a $i.bashrc 2>&1>/dev/null <<EOF
 $myUSERPROMPT
 PATH="$PATH:/opt/tpot/bin"
 EOF
+done
 
 # Let's create ews.ip before reboot and prevent race condition for first start
 /opt/tpot/bin/updateip.sh 2>&1>/dev/null
