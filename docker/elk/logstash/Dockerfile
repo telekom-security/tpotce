@@ -17,9 +17,9 @@ RUN apk -U --no-cache add \
     git clone --depth=1 https://github.com/dtag-dev-sec/listbot /etc/listbot && \
     cd /root/dist/ && \
     mkdir -p /usr/share/logstash/ && \
-    wget https://artifacts.elastic.co/downloads/logstash/logstash-6.4.2.tar.gz && \
+    wget https://artifacts.elastic.co/downloads/logstash/logstash-6.4.3.tar.gz && \
     wget http://geolite.maxmind.com/download/geoip/database/GeoLite2-ASN.tar.gz && \
-    tar xvfz logstash-6.4.2.tar.gz --strip-components=1 -C /usr/share/logstash/ && \
+    tar xvfz logstash-6.4.3.tar.gz --strip-components=1 -C /usr/share/logstash/ && \
     /usr/share/logstash/bin/logstash-plugin install logstash-filter-translate && \
     /usr/share/logstash/bin/logstash-plugin install logstash-output-syslog && \
     tar xvfz GeoLite2-ASN.tar.gz --strip-components=1 -C /usr/share/logstash/vendor/bundle/jruby/2.3.0/gems/logstash-filter-geoip-5.0.3-java/vendor/ && \
