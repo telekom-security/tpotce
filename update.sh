@@ -157,7 +157,7 @@ echo
 }
 
 function fuUPDATER () {
-local myPACKAGES="apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker curl dialog dnsutils docker.io docker-compose dstat ethtool fail2ban genisoimage git glances grc html2text htop ifupdown iptables iw jq libcrack2 libltdl7 lm-sensors man multitail net-tools npm ntp openssh-server openssl pass prips syslinux psmisc pv python-pip unattended-upgrades unzip vim wireless-tools wpasupplicant"
+local myPACKAGES="apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker curl dialog dnsutils docker.io docker-compose dstat ethtool fail2ban genisoimage git glances grc html2text htop ifupdown iptables iw jq libcrack2 libltdl7 lm-sensors man mosh multitail net-tools npm ntp openssh-server openssl pass prips syslinux psmisc pv python-pip unattended-upgrades unzip vim wireless-tools wpasupplicant"
 echo "### Now upgrading packages ..."
 apt-get -y autoclean
 apt-get -y autoremove
@@ -165,9 +165,9 @@ apt-get update
 apt-get -y install $myPACKAGES
 # Some updates require interactive attention, you can override that for unattended upgrades.
 # Be warned, this can easily break your system.
-# apt-get dist-upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes
-apt-get -y dist-upgrade
-npm install "https://github.com/taskrabbit/elasticsearch-dump#9fcc8cc" -g
+apt-get dist-upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes
+#apt-get -y dist-upgrade
+npm install "https://github.com/taskrabbit/elasticsearch-dump" -g
 pip install --upgrade pip
 hash -r
 pip install --upgrade elasticsearch-curator yq
