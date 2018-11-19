@@ -16,7 +16,7 @@ fi
 myCOUNT=1
 myDATE=$(date +%Y%m%d%H%M)
 myELKPATH="/data/elk/data"
-myKIBANAINDEXNAME=$(curl -s -XGET ''$myES'_cat/indices/' | grep .kibana | awk '{ print $4 }')
+myKIBANAINDEXNAME=$(curl -s -XGET ''$myES'_cat/indices/' | grep -w ".kibana" | awk '{ print $4 }')
 myKIBANAINDEXPATH=$myELKPATH/nodes/0/indices/$myKIBANAINDEXNAME
 
 # Let's ensure normal operation on exit or if interrupted ...

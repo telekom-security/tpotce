@@ -28,7 +28,7 @@ trap fuCLEANUP EXIT
 if [ "$myDUMP" = "" ];
   then
     echo $myCOL1"### Please provide a backup file name."$myCOL0 
-    echo $myCOL1"### restore-kibana-objects.sh <kibana-objects.tgz>"$myCOL0
+    echo $myCOL1"### import_kibana-objects.sh <kibana-objects.tgz>"$myCOL0
     echo 
     exit
 fi
@@ -44,7 +44,7 @@ tar xvfz $myDUMP > /dev/null
 # Restore index patterns
 myINDEXID=$(ls patterns/*.json | cut -c 10- | rev | cut -c 6- | rev)
 myINDEXCOUNT=$(cat patterns/$myINDEXID.json | tr '\\' '\n' | grep "scripted" | wc -w)
-echo $myCOL1"### Now importing"$myCOL0 $myINDEXCOUNT $myCOL1"index patterns." $myCOL0
+echo $myCOL1"### Now importing"$myCOL0 $myINDEXCOUNT $myCOL1"index pattern fields." $myCOL0
 curl -s -XDELETE ''$myKIBANA'api/saved_objects/index-pattern/logstash-*' -H "Content-Type: application/json" -H "kbn-xsrf: true" > /dev/null
 curl -s -XDELETE ''$myKIBANA'api/saved_objects/index-pattern/'$myINDEXID'' -H "Content-Type: application/json" -H "kbn-xsrf: true" > /dev/null
 curl -s -XPOST ''$myKIBANA'api/saved_objects/index-pattern/'$myINDEXID'' -H "Content-Type: application/json" -H "kbn-xsrf: true" -d @patterns/$myINDEXID.json > /dev/null &

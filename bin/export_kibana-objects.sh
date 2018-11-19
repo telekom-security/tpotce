@@ -15,11 +15,11 @@ fi
 
 # Set vars
 myDATE=$(date +%Y%m%d%H%M)
-myINDEXCOUNT=$(curl -s -XGET ''$myKIBANA'api/saved_objects/index-pattern' | jq '.saved_objects[].attributes' | tr '\\' '\n' | grep "scripted" | wc -w)
-myINDEXID=$(curl -s -XGET ''$myKIBANA'api/saved_objects/index-pattern' | jq '.saved_objects[].id' | tr -d '"')
-myDASHBOARDS=$(curl -s -XGET ''$myKIBANA'api/saved_objects/dashboard?per_page=200' | jq '.saved_objects[].id' | tr -d '"')
-myVISUALIZATIONS=$(curl -s -XGET ''$myKIBANA'api/saved_objects/visualization?per_page=200' | jq '.saved_objects[].id' | tr -d '"')
-mySEARCHES=$(curl -s -XGET ''$myKIBANA'api/saved_objects/search?per_page=200' | jq '.saved_objects[].id' | tr -d '"')
+myINDEXCOUNT=$(curl -s -XGET ''$myKIBANA'api/saved_objects/_find?type=index-pattern' | jq '.saved_objects[].attributes' | tr '\\' '\n' | grep "scripted" | wc -w)
+myINDEXID=$(curl -s -XGET ''$myKIBANA'api/saved_objects/_find?type=index-pattern' | jq '.saved_objects[].id' | tr -d '"')
+myDASHBOARDS=$(curl -s -XGET ''$myKIBANA'api/saved_objects/_find?type=dashboard&per_page=300' | jq '.saved_objects[].id' | tr -d '"')
+myVISUALIZATIONS=$(curl -s -XGET ''$myKIBANA'api/saved_objects/_find?type=visualization&per_page=300' | jq '.saved_objects[].id' | tr -d '"')
+mySEARCHES=$(curl -s -XGET ''$myKIBANA'api/saved_objects/_find?type=search&per_page=300' | jq '.saved_objects[].id' | tr -d '"')
 myCOL1="[0;34m"
 myCOL0="[0;0m"
 
@@ -31,7 +31,7 @@ trap fuCLEANUP EXIT
 
 # Export index patterns
 mkdir -p patterns
-echo $myCOL1"### Now exporting"$myCOL0 $myINDEXCOUNT $myCOL1"index patterns." $myCOL0
+echo $myCOL1"### Now exporting"$myCOL0 $myINDEXCOUNT $myCOL1"index pattern fields." $myCOL0
 curl -s -XGET ''$myKIBANA'api/saved_objects/index-pattern/'$myINDEXID'' | jq '. | {attributes}' > patterns/$myINDEXID.json &
 echo
 
