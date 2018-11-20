@@ -34,7 +34,7 @@ services:
     ports:
      - "5000:5000/udp"
      - "8443:8443"
-    image: "dtagdevsec/ciscoasa:1804"
+    image: "dtagdevsec/ciscoasa:1811"
     read_only: true
     volumes:
      - /data/ciscoasa/log:/var/log/ciscoasa
@@ -56,7 +56,7 @@ services:
     ports:
      - "161:161"
      - "2404:2404"
-    image: "dtagdevsec/conpot:1804"
+    image: "dtagdevsec/conpot:1811"
     read_only: true
     volumes:
      - /data/conpot/log:/var/log/conpot
@@ -77,7 +77,7 @@ services:
      - conpot_local_guardian_ast
     ports:
      - "10001:10001"
-    image: "dtagdevsec/conpot:1804"
+    image: "dtagdevsec/conpot:1811"
     read_only: true
     volumes:
      - /data/conpot/log:/var/log/conpot
@@ -98,7 +98,7 @@ services:
      - conpot_local_ipmi
     ports:
      - "623:623"
-    image: "dtagdevsec/conpot:1804"
+    image: "dtagdevsec/conpot:1811"
     read_only: true
     volumes:
      - /data/conpot/log:/var/log/conpot
@@ -120,7 +120,7 @@ services:
     ports:
      - "1025:1025"
      - "50100:50100"
-    image: "dtagdevsec/conpot:1804"
+    image: "dtagdevsec/conpot:1811"
     read_only: true
     volumes:
      - /data/conpot/log:/var/log/conpot
@@ -137,7 +137,7 @@ services:
     ports:
      - "22:22"
      - "23:23"
-    image: "dtagdevsec/cowrie:1804"
+    image: "dtagdevsec/cowrie:1811"
     read_only: true
     volumes:
      - /data/cowrie/downloads:/home/cowrie/cowrie/dl
@@ -169,7 +169,7 @@ services:
      - "5060:5060/udp"
      - "5061:5061"
      - "27017:27017"
-    image: "dtagdevsec/dionaea:1804"
+    image: "dtagdevsec/dionaea:1811"
     read_only: true
     volumes:
      - /data/dionaea/roots/ftp:/opt/dionaea/var/dionaea/roots/ftp
@@ -189,7 +189,7 @@ services:
      - elasticpot_local
     ports:
      - "9200:9200"
-    image: "dtagdevsec/elasticpot:1804"
+    image: "dtagdevsec/elasticpot:1811"
     read_only: true
     volumes:
      - /data/elasticpot/log:/opt/ElasticpotPY/log
@@ -215,7 +215,7 @@ services:
      - "995:995"
      - "5432:5432"
      - "5900:5900"
-    image: "dtagdevsec/heralding:1804"
+    image: "dtagdevsec/heralding:1811"
     read_only: true
     volumes:
      - /data/heralding/log:/var/log/heralding
@@ -229,7 +229,7 @@ services:
     network_mode: "host"
     cap_add:
      - NET_ADMIN
-    image: "dtagdevsec/honeytrap:1804"
+    image: "dtagdevsec/honeytrap:1811"
     read_only: true
     volumes:
      - /data/honeytrap/attacks:/opt/honeytrap/var/attacks
@@ -250,7 +250,7 @@ services:
      - mailoney_local
     ports:
      - "25:25"
-    image: "dtagdevsec/mailoney:1804"
+    image: "dtagdevsec/mailoney:1811"
     read_only: true
     volumes:
      - /data/mailoney/log:/opt/mailoney/logs
@@ -263,7 +263,7 @@ services:
      - medpot_local
     ports:
      - "2575:2575"
-    image: "dtagdevsec/medpot:1804"
+    image: "dtagdevsec/medpot:1811"
     read_only: true
     volumes:
      - /data/medpot/log/:/var/log/medpot
@@ -284,7 +284,7 @@ services:
      - rdpy_local
     ports:
      - "3389:3389"
-    image: "dtagdevsec/rdpy:1804"
+    image: "dtagdevsec/rdpy:1811"
     read_only: true
     volumes:
      - /data/rdpy/log:/var/log/rdpy
@@ -297,7 +297,7 @@ services:
     tty: true
     networks:
      - tanner_local
-    image: "dtagdevsec/redis:1804"
+    image: "dtagdevsec/redis:1811"
     read_only: true
 
 ## PHP Sandbox service
@@ -307,7 +307,7 @@ services:
     tty: true
     networks:
      - tanner_local
-    image: "dtagdevsec/phpox:1804"
+    image: "dtagdevsec/phpox:1811"
     read_only: true
 
 ## Tanner API Service
@@ -319,7 +319,7 @@ services:
     tty: true
     networks:
      - tanner_local
-    image: "dtagdevsec/tanner:1804"
+    image: "dtagdevsec/tanner:1811"
     read_only: true
     volumes:
      - /data/tanner/log:/var/log/tanner
@@ -336,7 +336,7 @@ services:
     tty: true
     networks:
      - tanner_local
-    image: "dtagdevsec/tanner:1804"
+    image: "dtagdevsec/tanner:1811"
     command: tannerweb
     read_only: true
     volumes:
@@ -353,7 +353,7 @@ services:
     tty: true
     networks:
      - tanner_local
-    image: "dtagdevsec/tanner:1804"
+    image: "dtagdevsec/tanner:1811"
     command: tanner
     read_only: true
     volumes:
@@ -373,7 +373,7 @@ services:
      - tanner_local
     ports:
      - "80:80"
-    image: "dtagdevsec/snare:1804"
+    image: "dtagdevsec/snare:1811"
     depends_on:
      - tanner
 
@@ -387,7 +387,7 @@ services:
     container_name: p0f
     restart: always
     network_mode: "host"
-    image: "dtagdevsec/p0f:1804"
+    image: "dtagdevsec/p0f:1811"
     read_only: true
     volumes:
      - /data/p0f/log:/var/log/p0f
@@ -404,7 +404,7 @@ services:
      - NET_ADMIN
      - SYS_NICE
      - NET_RAW
-    image: "dtagdevsec/suricata:1804"
+    image: "dtagdevsec/suricata:1811"
     volumes:
      - /data/suricata/log:/var/log/suricata
 
@@ -421,7 +421,7 @@ services:
      - cyberchef_local
     ports:
      - "127.0.0.1:64299:8000"
-    image: "dtagdevsec/cyberchef:1804"
+    image: "dtagdevsec/cyberchef:1811"
     read_only: true
 
 #### ELK
@@ -445,7 +445,7 @@ services:
     mem_limit: 4g
     ports:
      - "127.0.0.1:64298:9200"
-    image: "dtagdevsec/elasticsearch:1804"
+    image: "dtagdevsec/elasticsearch:1811"
     volumes:
      - /data:/data
 
@@ -458,7 +458,7 @@ services:
         condition: service_healthy
     ports:
      - "127.0.0.1:64296:5601"
-    image: "dtagdevsec/kibana:1804"
+    image: "dtagdevsec/kibana:1811"
 
 ## Logstash service
   logstash:
@@ -469,7 +469,7 @@ services:
         condition: service_healthy
     env_file:
      - /opt/tpot/etc/compose/elk_environment
-    image: "dtagdevsec/logstash:1804"
+    image: "dtagdevsec/logstash:1811"
     volumes:
      - /data:/data
 
@@ -482,7 +482,7 @@ services:
         condition: service_healthy
     ports:
      - "127.0.0.1:64302:9100"
-    image: "dtagdevsec/head:1804"
+    image: "dtagdevsec/head:1811"
     read_only: true
 
 # Ewsposter service
@@ -493,7 +493,7 @@ services:
      - ewsposter_local
     env_file:
      - /opt/tpot/etc/compose/elk_environment
-    image: "dtagdevsec/ewsposter:1804"
+    image: "dtagdevsec/ewsposter:1811"
     volumes:
      - /data:/data
      - /data/ews/conf/ews.ip:/opt/ewsposter/ews.ip
@@ -512,7 +512,7 @@ services:
     network_mode: "host"
     ports:
      - "64297:64297"
-    image: "dtagdevsec/nginx:1804"
+    image: "dtagdevsec/nginx:1811"
     read_only: true
     volumes:
      - /data/nginx/cert/:/etc/nginx/cert/:ro
@@ -527,6 +527,6 @@ services:
      - spiderfoot_local
     ports:
      - "127.0.0.1:64303:8080"
-    image: "dtagdevsec/spiderfoot:1804"
+    image: "dtagdevsec/spiderfoot:1811"
     volumes:
      - /data/spiderfoot/spiderfoot.db:/home/spiderfoot/spiderfoot.db
