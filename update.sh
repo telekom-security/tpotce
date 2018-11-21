@@ -145,6 +145,17 @@ fi
 echo
 }
 
+# Remove old images for specific tag
+function fuREMOVEOLDIMAGES () {
+local myOLDTAG=$1
+local myOLDIMAGES=$(docker images | grep -c "$myOLDTAG")
+if [ "$myOLDIMAGES" -gt "0" ];
+  then
+    echo "### Removing old docker images."
+    docker rmi $(docker images | grep "$myOLDTAG" | awk '{print $3}')
+fi
+}
+
 # Let's load docker images in parallel
 function fuPULLIMAGES {
 local myTPOTCOMPOSE="/opt/tpot/etc/tpot.yml"
@@ -187,6 +198,7 @@ echo "### Now pulling latest docker images"
 echo "######$myBLUE This might take a while, please be patient!$myWHITE"
 fuPULLIMAGES 2>&1>/dev/null
 
+fuREMOVEOLDIMAGES "1804"
 echo "### If you made changes to tpot.yml please ensure to add them again."
 echo "### We stored the previous version as backup in /root/."
 echo "### Done, please reboot."
