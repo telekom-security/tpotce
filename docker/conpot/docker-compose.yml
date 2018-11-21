@@ -35,7 +35,7 @@ services:
      - "2121:21"
      - "44818:44818"
      - "47808:47808"
-    image: "dtagdevsec/conpot:1804"
+    image: "dtagdevsec/conpot:1811"
     read_only: true
     volumes:
      - /data/conpot/log:/var/log/conpot

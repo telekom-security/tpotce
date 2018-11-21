@@ -27,7 +27,7 @@ services:
      - "995:995"
      - "5432:5432"
      - "5900:5900"
-    image: "dtagdevsec/heralding:1804"
+    image: "dtagdevsec/heralding:1811"
     read_only: true
     volumes:
      - /data/heralding/log:/var/log/heralding

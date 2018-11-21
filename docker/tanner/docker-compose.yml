@@ -13,7 +13,7 @@ services:
     tty: true
     networks:
      - tanner_local
-    image: "dtagdevsec/redis:1804"
+    image: "dtagdevsec/redis:1811"
     read_only: true
 
 # PHP Sandbox service
@@ -25,7 +25,7 @@ services:
     tty: true
     networks:
      - tanner_local
-    image: "dtagdevsec/phpox:1804"
+    image: "dtagdevsec/phpox:1811"
     read_only: true
 
 # Tanner API Service
@@ -39,7 +39,7 @@ services:
     tty: true
     networks:
      - tanner_local
-    image: "dtagdevsec/tanner:1804"
+    image: "dtagdevsec/tanner:1811"
     read_only: true
     volumes:
      - /data/tanner/log:/var/log/tanner
@@ -58,7 +58,7 @@ services:
     tty: true
     networks:
      - tanner_local
-    image: "dtagdevsec/tanner:1804"
+    image: "dtagdevsec/tanner:1811"
     command: tannerweb
     read_only: true
     volumes:
@@ -77,7 +77,7 @@ services:
     tty: true
     networks:
      - tanner_local
-    image: "dtagdevsec/tanner:1804"
+    image: "dtagdevsec/tanner:1811"
     command: tanner
     read_only: true
     volumes:
@@ -99,6 +99,6 @@ services:
      - tanner_local
     ports:
      - "80:80"
-    image: "dtagdevsec/snare:1804"
+    image: "dtagdevsec/snare:1811"
     depends_on:
      - tanner
