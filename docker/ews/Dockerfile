@@ -7,6 +7,7 @@ ADD dist/ /root/dist/
 RUN apk -U --no-cache add \
             build-base \
             git \
+            libffi-dev \
             libssl1.0 \
             openssl-dev \
             python-dev \
