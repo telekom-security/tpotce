@@ -4,23 +4,23 @@ FROM alpine
 ADD dist/ /root/dist/
 
 # Setup apt
-RUN apk -U --no-cache add \
-               build-base \
-               file \
-               git \
-               libev \
-               libtool \
-               libcap \
-               libxslt \
-               libxslt-dev \
-               mariadb-dev \
-               pkgconfig \
-               python3 \
-               python3-dev \
-               py-cffi \
-               py-cryptography \
-               tcpdump \
-               wget && \
+RUN apk -U add \
+             build-base \
+             file \
+             git \
+             libev \
+             libtool \
+             libcap \
+             libxslt \
+             libxslt-dev \
+             mariadb-dev \
+             pkgconfig \
+             python3 \
+             python3-dev \
+             py-cffi \
+             py-cryptography \
+             tcpdump \
+             wget && \
 
 # Setup ConPot
     git clone --depth=1 https://github.com/mushorg/conpot /opt/conpot && \
@@ -66,6 +66,7 @@ RUN apk -U --no-cache add \
             py-cffi \
             wget && \
     rm -rf /root/* && \
+    rm -rf /tmp/* && \
     rm -rf /var/cache/apk/*
 
 # Start conpot
