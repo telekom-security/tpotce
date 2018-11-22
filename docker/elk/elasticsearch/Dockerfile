@@ -4,7 +4,7 @@ FROM alpine
 ADD dist/ /root/dist/
 
 # Setup env and apt
-RUN apk -U --no-cache add \
+RUN apk -U add \
              bash \
              curl \
              openjdk8-jre \
@@ -13,8 +13,8 @@ RUN apk -U --no-cache add \
 # Get and install packages
     cd /root/dist/ && \
     mkdir -p /usr/share/elasticsearch/ && \
-    wget https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-6.4.3.tar.gz && \
-    tar xvfz elasticsearch-6.4.3.tar.gz --strip-components=1 -C /usr/share/elasticsearch/ && \
+    wget https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-6.5.1.tar.gz && \
+    tar xvfz elasticsearch-6.5.1.tar.gz --strip-components=1 -C /usr/share/elasticsearch/ && \
 
 # Add and move files
     cd /root/dist/ && \
@@ -29,7 +29,9 @@ RUN apk -U --no-cache add \
 
 # Clean up
     apk del --purge wget && \
-    rm -rf /root/*
+    rm -rf /root/* && \
+    rm -rf /tmp/* && \
+    rm -rf /var/cache/apk/*
 
 # Healthcheck
 HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:9200/_cat/health'

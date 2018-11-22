@@ -1,11 +1,11 @@
 FROM alpine
 
 # Setup env and apt
-RUN apk -U --no-cache add \
-              curl \
-              git \
-              nodejs \
-              nodejs-npm && \
+RUN apk -U add \
+            curl \
+            git \
+            nodejs \
+            nodejs-npm && \
 
 # Get and install packages
     mkdir -p /usr/src/app/ && \
@@ -20,7 +20,10 @@ RUN apk -U --no-cache add \
     chown -R head:head /usr/src/app/ && \
 
 # Clean up
-    apk del --purge git
+    apk del --purge git && \
+    rm -rf /root/* && \
+    rm -rf /tmp/* && \
+    rm -rf /var/cache/apk/*
 
 # Healthcheck
 HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:9100'
