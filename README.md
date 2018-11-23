@@ -1,6 +1,6 @@
-# T-Pot 18.10
+# T-Pot 18.11
 
-T-Pot 18.10 runs on the latest 18.04.x LTS Ubuntu Server Network Installer image, is based on
+T-Pot 18.11 runs on the latest 18.04.x LTS Ubuntu Server Network Installer image, is based on
 
 [docker](https://www.docker.com/), [docker-compose](https://docs.docker.com/compose/)
 
@@ -16,10 +16,10 @@ and includes dockerized versions of the following honeypots
 * [heralding](https://github.com/johnnykv/heralding),
 * [honeytrap](https://github.com/armedpot/honeytrap/),
 * [mailoney](https://github.com/awhitehatter/mailoney),
+* [medpot](https://github.com/schmalle/medpot),
 * [rdpy](https://github.com/citronneur/rdpy),
 * [snare](http://mushmush.org/),
-* [tanner](http://mushmush.org/),
-* [vnclowpot](https://github.com/magisterquis/vnclowpot)
+* [tanner](http://mushmush.org/)
 
 
 Furthermore we use the following tools
@@ -73,9 +73,10 @@ Furthermore we use the following tools
 <a name="changelog"></a>
 # Changelog
 - **New honeypots**
-	- *Ciscoasa* a low interaction honeypot for the Cisco ASA component capable of detecting CVE-2018-0101, a DoS and remote code execution vulnerability. 
-	- *Glutton* (experimental) is the all eating honeypot
+	- *Ciscoasa* a low interaction honeypot for the Cisco ASA component capable of detecting CVE-2018-0101, a DoS and remote code execution vulnerability.
+	- *Glutton* (NextGen) is the all eating honeypot
 	- *Heralding* a credentials catching honeypot.
+  - *Medpot* is a HL7 / FHIR honeypot.
 	- *Snare* is a web application honeypot sensor, is the successor of Glastopf. SNARE has feature parity with Glastopf and allows to convert existing web pages into attack surfaces.
 	- *Tanner* is SNARES' "brain". Every event is send from SNARE to TANNER, gets evaluated and TANNER decides how SNARE should respond to the client. This allows us to change the behaviour of many sensors on the fly. We are providing a TANNER instance for your use, but there is nothing stopping you from setting up your own instance.
 - **New tools**
@@ -85,7 +86,7 @@ Furthermore we use the following tools
 	- *multitail* (commandline) allows you to monitor logfiles and command output in multiple windows in a terminal, colorize, filter and merge.
 	- *tped.sh* (commandline) allows you to switch between T-Pot Editions after installation.
 - **Deprecated tools**
-	- *Netdata*, *Portainer* and *WeTTY* were superseded by *Cockpit* which is much more lightweight, perfectly well integrated into Ubuntu 18.04 LTS and of course comes with the same but a more basic feature set. 
+	- *Netdata*, *Portainer* and *WeTTY* were superseded by *Cockpit* which is much more lightweight, perfectly well integrated into Ubuntu 18.04 LTS and of course comes with the same but a more basic feature set.
 - **New Standard Installation**
         - The new standard installation is now running a whopping *14* honeypot instances.
 - **T-Pot Universal Installer**
@@ -111,7 +112,7 @@ Furthermore we use the following tools
 	- Docker images were mostly overhauled to tighten security even further
 	- Some of the honeypot configurations were modified to keep things fresh
 - **Update Feature**
-	- For the ones who like to live on the bleeding edge of T-Pot development there is now a update script available in `/opt/tpot/update.sh`. 
+	- For the ones who like to live on the bleeding edge of T-Pot development there is now a update script available in `/opt/tpot/update.sh`.
 	- This feature is now in beta and is mostly intended to provide you with the latest development advances without the need of reinstalling T-Pot.
 
 <a name="concept"></a>
@@ -132,10 +133,10 @@ In T-Pot we combine the dockerized honeypots ...
 * [heralding](https://github.com/johnnykv/heralding),
 * [honeytrap](https://github.com/armedpot/honeytrap/),
 * [mailoney](https://github.com/awhitehatter/mailoney),
+* [medpot](https://github.com/schmalle/medpot),
 * [rdpy](https://github.com/citronneur/rdpy),
 * [snare](http://mushmush.org/),
-* [tanner](http://mushmush.org/),
-* [vnclowpot](https://github.com/magisterquis/vnclowpot)
+* [tanner](http://mushmush.org/)
 
 ... with the following tools ...
 * [Cockpit](https://cockpit-project.org/running) for a lightweight, webui for docker, os, real-time performance monitoring and web terminal.
@@ -145,7 +146,7 @@ In T-Pot we combine the dockerized honeypots ...
 * [Spiderfoot](https://github.com/smicallef/spiderfoot) a open source intelligence automation tool.
 * [Suricata](http://suricata-ids.org/) a Network Security Monitoring engine.
 
-... to give you the best out-of-the-box experience possible and a easy-to-use multi-honeypot appliance. 
+... to give you the best out-of-the-box experience possible and a easy-to-use multi-honeypot appliance.
 
 ![Architecture](doc/architecture.png)
 
@@ -203,7 +204,7 @@ Depending on your installation type, whether you install on [real hardware](#har
 - Network via DHCP
 - A working, non-proxied, internet connection
 
-##### Experimental Installation
+##### NextGen Installation (Glutton instead of Honeytrap)
 - Honeypots: ciscoasa, conpot, cowrie, dionaea, elasticpot, glutton, heralding, mailoney, rdpy, snare, tanner and vnclowpot
 - Tools: cockpit, cyberchef, ELK, elasticsearch head, ewsposter, NGINX, spiderfoot, p0f and suricata
 
@@ -294,7 +295,7 @@ In some cases it is necessary to install Ubuntu Server 18.04 LTS on your own:
 
 While the T-Pot-Autoinstaller served us perfectly well in the past we decided to include the feature directly into T-Pot and its Universal Installer.
 
-Just follow these steps: 
+Just follow these steps:
 
 ```
 git clone https://github.com/dtag-dev-sec/tpotce
@@ -374,15 +375,19 @@ and **Kibana** will automagically load. The Kibana dashboard can be customized t
 We included some web based management tools to improve and ease up on your daily tasks.
 
 ![Cockpit Overview](doc/cockpit1.png)
+
 ![Cockpit Containers](doc/cockpit2.png)
+
 ![Cyberchef](doc/cyberchef.png)
+
 ![ES Head Plugin](doc/headplugin.png)
+
 ![Spiderfoot](doc/spiderfoot.png)
 
 
 <a name="maintenance"></a>
 ## Maintenance
-As mentioned before, the system was designed to be low maintenance. Basically, there is nothing you have to do but let it run.
+As mentioned before, the system is designed to be low maintenance. Basically, there is nothing you have to do but let it run.
 
 If you run into any problems, a reboot may fix it :bowtie:
 
@@ -445,10 +450,7 @@ The software that T-Pot is built on uses the following licenses.
 <br>GPLv3: [elasticpot](https://github.com/schmalle/ElasticPot), [ewsposter](https://github.com/dtag-dev-sec/ews/), [glastopf](https://github.com/glastopf/glastopf/blob/master/GPL), [rdpy](https://github.com/citronneur/rdpy/blob/master/LICENSE), [heralding](https://github.com/johnnykv/heralding/blob/master/LICENSE.txt), [snare](https://github.com/mushorg/snare/blob/master/LICENSE), [tanner](https://github.com/mushorg/snare/blob/master/LICENSE)
 <br>Apache 2 License: [cyberchef](https://github.com/gchq/CyberChef/blob/master/LICENSE), [elasticsearch](https://github.com/elasticsearch/elasticsearch/blob/master/LICENSE.txt), [logstash](https://github.com/elasticsearch/logstash/blob/master/LICENSE), [kibana](https://github.com/elasticsearch/kibana/blob/master/LICENSE.md), [docker](https://github.com/docker/docker/blob/master/LICENSE), [elasticsearch-head](https://github.com/mobz/elasticsearch-head/blob/master/LICENCE)
 <br>MIT license: [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/blob/master/LICENSE), [ctop](https://github.com/bcicen/ctop/blob/master/LICENSE), [glutton](https://github.com/mushorg/glutton/blob/master/LICENSE)
-<br>zlib License: [vnclowpot](https://github.com/magisterquis/vnclowpot/blob/master/LICENSE)
-<br>[cowrie](https://github.com/micheloosterhof/cowrie/blob/master/LICENSE.md)
-<br>[mailoney](https://github.com/awhitehatter/mailoney)
-<br>[Ubuntu licensing](http://www.ubuntu.com/about/about-ubuntu/licensing)
+<br> Other: [cowrie](https://github.com/micheloosterhof/cowrie/blob/master/LICENSE.md), [mailoney](https://github.com/awhitehatter/mailoney), [Ubuntu licensing](http://www.ubuntu.com/about/about-ubuntu/licensing)
 
 <a name="credits"></a>
 # Credits
@@ -473,6 +475,7 @@ Without open source and the fruitful development community we are proud to be a 
 * [kibana](https://github.com/elastic/kibana/graphs/contributors)
 * [logstash](https://github.com/elastic/logstash/graphs/contributors)
 * [mailoney](https://github.com/awhitehatter/mailoney)
+* [medpot](https://github.com/schmalle/medpot/graphs/contributors)
 * [p0f](http://lcamtuf.coredump.cx/p0f3/)
 * [rdpy](https://github.com/citronneur/rdpy)
 * [spiderfoot](https://github.com/smicallef/spiderfoot)
@@ -480,7 +483,6 @@ Without open source and the fruitful development community we are proud to be a 
 * [tanner](https://github.com/mushorg/tanner/graphs/contributors)
 * [suricata](https://github.com/inliniac/suricata/graphs/contributors)
 * [ubuntu](http://www.ubuntu.com/)
-* [vnclowpot](https://github.com/magisterquis/vnclowpot)
 
 ### The following companies and organizations
 * [canonical](http://www.canonical.com/)
@@ -498,4 +500,4 @@ We will be releasing a new version of T-Pot about every 6-12 months.
 <a name="funfact"></a>
 # Fun Fact
 
-In an effort of saving the environment we are now brewing our own Mate Ice Tea and consumed 136 liters so far for the T-Pot 18.10 development 😇
+In an effort of saving the environment we are now brewing our own Mate Ice Tea and consumed 235 liters so far for the T-Pot 18.11 development 😇

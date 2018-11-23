@@ -331,7 +331,7 @@ if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ] || [ "$myTPOT_DEPLOYMENT_TYPE" == "use
     "SENSOR" "Just Honeypots, EWS Poster & NSM" \
     "INDUSTRIAL" "Conpot, RDPY, Vnclowpot, ELK, NSM & Tools" \
     "COLLECTOR" "Heralding, ELK, NSM & Tools" \
-    "EXPERIMENTAL" "Experimental (Glutton instead of Honeytrap)" \
+    "NEXTGEN" "NextGen (Glutton instead of Honeytrap)" \
     "LEGACY" "Standard Edition from previous release" 3>&1 1>&2 2>&3 3>&-)
 fi
 
@@ -600,9 +600,9 @@ case $myCONF_TPOT_FLAVOR in
     echo "### Preparing COLLECTOR flavor installation."
     ln -s /opt/tpot/etc/compose/collector.yml $myTPOTCOMPOSE 2>&1>/dev/null
   ;;
-  EXPERIMENTAL)
-    echo "### Preparing EXPERIMENTAL flavor installation."
-    ln -s /opt/tpot/etc/compose/experimental.yml $myTPOTCOMPOSE 2>&1>/dev/null
+  NEXTGEN)
+    echo "### Preparing NEXTGEN flavor installation."
+    ln -s /opt/tpot/etc/compose/nextgen.yml $myTPOTCOMPOSE 2>&1>/dev/null
   ;;
   LEGACY)
     echo "### Preparing LEGACY flavor installation."
