@@ -54,41 +54,6 @@
     }
   },
   {
-    "_id": "56cdedf0-ec08-11e8-96db-ebfb2a58ccf6",
-    "_type": "visualization",
-    "_source": {
-      "title": "Username Tagcloud",
-      "visState": "{\"aggs\":[{\"enabled\":true,\"id\":\"1\",\"params\":{\"customLabel\":\"\"},\"schema\":\"metric\",\"type\":\"count\"},{\"enabled\":true,\"id\":\"2\",\"params\":{\"customLabel\":\"\",\"field\":\"username.keyword\",\"missingBucket\":false,\"missingBucketLabel\":\"Missing\",\"order\":\"desc\",\"orderBy\":\"1\",\"otherBucket\":false,\"otherBucketLabel\":\"Other\",\"size\":50},\"schema\":\"segment\",\"type\":\"terms\"}],\"params\":{\"font\":\"serif\",\"fontStyle\":\"normal\",\"fontWeight\":\"normal\",\"fromDegree\":\"0\",\"maxFontSize\":64,\"minFontSize\":16,\"orientation\":\"single\",\"orientations\":1,\"scale\":\"linear\",\"showLabel\":false,\"spiral\":\"rectangular\",\"textScale\":\"sqrt\",\"timeInterval\":\"500\",\"toDegree\":\"0\"},\"title\":\"Username Tagcloud\",\"type\":\"tagcloud\"}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"query\":{\"language\":\"kuery\",\"query\":\"(type.keyword:\\\"Cowrie\\\" AND system:\\\"ssh\\\") OR type.keyword:\\\"Dionaea\\\" OR type.keyword:\\\"Heralding\\\" OR type.keyword:\\\"RDPY\\\"\"},\"filter\":[],\"index\":\"logstash-*\"}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
-    "_id": "63d0bf60-e851-11e8-97df-bbc3de28ece0",
-    "_type": "visualization",
-    "_source": {
-      "title": "Glutton Attack Map",
-      "visState": "{\"title\":\"Glutton Attack Map\",\"type\":\"tile_map\",\"params\":{\"mapType\":\"Shaded Circle Markers\",\"isDesaturated\":false,\"addTooltip\":true,\"heatMaxZoom\":16,\"heatMinOpacity\":0.1,\"heatRadius\":25,\"heatBlur\":15,\"heatNormalizeData\":true,\"wms\":{\"enabled\":false,\"url\":\"http://ows.terrestris.de/osm/service\",\"options\":{\"version\":\"1.3.0\",\"layers\":\"OSM-WMS\",\"format\":\"image/png\",\"transparent\":true,\"attribution\":\"© <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors\",\"styles\":\"\"},\"baseLayersAreLoaded\":{},\"tmsLayers\":[{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}],\"selectedTmsLayer\":{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}},\"legendPosition\":\"bottomright\",\"mapZoom\":2,\"mapCenter\":[0,0],\"colorSchema\":\"Yellow to Red\",\"heatClusterSize\":1.5},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"geohash_grid\",\"schema\":\"segment\",\"params\":{\"field\":\"geoip.location\",\"autoPrecision\":true,\"isFilteredByCollar\":true,\"useGeocentroid\":true,\"mapZoom\":2,\"mapCenter\":{\"lon\":0,\"lat\":-0.17578097424708533},\"precision\":2}}]}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "savedSearchId": "385ea460-ad22-11e8-942c-a39712fa9ddf",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
     "_id": "7c5959b0-4889-11e8-9b3d-f36e8d4f5cb2",
     "_type": "visualization",
     "_source": {
@@ -161,24 +126,6 @@
     }
   },
   {
-    "_id": "a81cba70-e7fc-11e8-9ac4-13ecd4ad8d70",
-    "_type": "visualization",
-    "_source": {
-      "title": "Medpot Attack Map",
-      "visState": "{\"title\":\"Medpot Attack Map\",\"type\":\"tile_map\",\"params\":{\"mapType\":\"Shaded Circle Markers\",\"isDesaturated\":false,\"addTooltip\":true,\"heatMaxZoom\":16,\"heatMinOpacity\":0.1,\"heatRadius\":25,\"heatBlur\":15,\"heatNormalizeData\":true,\"wms\":{\"enabled\":false,\"url\":\"http://ows.terrestris.de/osm/service\",\"options\":{\"version\":\"1.3.0\",\"layers\":\"OSM-WMS\",\"format\":\"image/png\",\"transparent\":true,\"attribution\":\"© <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors\",\"styles\":\"\"},\"baseLayersAreLoaded\":{},\"tmsLayers\":[{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}],\"selectedTmsLayer\":{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}},\"legendPosition\":\"bottomright\",\"mapZoom\":2,\"mapCenter\":[0,0],\"colorSchema\":\"Yellow to Red\",\"heatClusterSize\":1.5},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"geohash_grid\",\"schema\":\"segment\",\"params\":{\"field\":\"geoip.location\",\"autoPrecision\":true,\"isFilteredByCollar\":true,\"useGeocentroid\":true,\"mapZoom\":2,\"mapCenter\":{\"lon\":0,\"lat\":-0.17578097424708533},\"precision\":2}}]}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "savedSearchId": "baa53b00-b597-11e8-9a34-d951cebce834",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
     "_id": "87cf3b50-6357-11e8-be86-73985bedf977",
     "_type": "visualization",
     "_source": {
@@ -197,23 +144,6 @@
     }
   },
   {
-    "_id": "9b89ddb0-ec07-11e8-96db-ebfb2a58ccf6",
-    "_type": "visualization",
-    "_source": {
-      "title": "Password Tagcloud",
-      "visState": "{\"title\":\"Password Tagcloud\",\"type\":\"tagcloud\",\"params\":{\"font\":\"serif\",\"fontStyle\":\"normal\",\"fontWeight\":\"normal\",\"fromDegree\":0,\"maxFontSize\":64,\"minFontSize\":16,\"orientation\":\"single\",\"orientations\":1,\"scale\":\"linear\",\"showLabel\":false,\"spiral\":\"rectangular\",\"textScale\":\"sqrt\",\"timeInterval\":500,\"toDegree\":0},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"terms\",\"schema\":\"segment\",\"params\":{\"field\":\"password.keyword\",\"size\":50,\"order\":\"desc\",\"orderBy\":\"1\",\"otherBucket\":false,\"otherBucketLabel\":\"Other\",\"missingBucket\":false,\"missingBucketLabel\":\"Missing\"}}]}",
-      "uiStateJSON": "{\"spy\":{\"mode\":{\"fill\":false,\"name\":null}}}",
-      "description": "",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"query\":{\"query\":\"(type:\\\"Cowrie\\\" AND system:\\\"ssh\\\") OR type:\\\"Dionaea\\\" OR type:\\\"Heralding\\\" OR type:\\\"RDPY\\\"\",\"language\":\"lucene\"},\"filter\":[],\"index\":\"logstash-*\"}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
     "_id": "946dc4d0-6352-11e8-be86-73985bedf977",
     "_type": "visualization",
     "_source": {
@@ -222,24 +152,6 @@
       "uiStateJSON": "{}",
       "description": "",
       "savedSearchId": "d800f130-633f-11e8-be86-73985bedf977",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"filter\":[],\"query\":{\"query\":\"\",\"language\":\"lucene\"}}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
-    "_id": "94ae10e0-4871-11e8-9b3d-f36e8d4f5cb2",
-    "_type": "visualization",
-    "_source": {
-      "title": "Heralding Attack Map",
-      "visState": "{\"title\":\"Heralding Attack Map\",\"type\":\"tile_map\",\"params\":{\"mapType\":\"Shaded Circle Markers\",\"isDesaturated\":false,\"addTooltip\":true,\"heatClusterSize\":1.5,\"legendPosition\":\"bottomright\",\"mapZoom\":2,\"mapCenter\":[0,0],\"wms\":{\"enabled\":false,\"options\":{\"format\":\"image/png\",\"transparent\":true,\"layers\":\"OSM-WMS\",\"version\":\"1.3.0\",\"attribution\":\"© <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors\"},\"baseLayersAreLoaded\":{},\"tmsLayers\":[{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.2.4\",\"minZoom\":0,\"maxZoom\":10,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}],\"selectedTmsLayer\":{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.2.4\",\"minZoom\":0,\"maxZoom\":10,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]},\"url\":\"http://ows.terrestris.de/osm/service\"},\"colorSchema\":\"Yellow to Red\"},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"geohash_grid\",\"schema\":\"segment\",\"params\":{\"field\":\"geoip.location\",\"autoPrecision\":true,\"isFilteredByCollar\":true,\"useGeocentroid\":true,\"mapZoom\":2,\"mapCenter\":{\"lon\":0,\"lat\":-0.17578097424708533},\"precision\":2}}]}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "savedSearchId": "c2bea500-47ca-11e8-a905-f74bbc7cbd2d",
       "version": 1,
       "kibanaSavedObjectMeta": {
         "searchSourceJSON": "{\"filter\":[],\"query\":{\"query\":\"\",\"language\":\"lucene\"}}"
@@ -448,24 +360,6 @@
     }
   },
   {
-    "_id": "b8745000-4ad5-11e8-ab1b-fdef76c312f4",
-    "_type": "visualization",
-    "_source": {
-      "title": "Ciscoasa Attack Map",
-      "visState": "{\"title\":\"Ciscoasa Attack Map\",\"type\":\"tile_map\",\"params\":{\"mapType\":\"Shaded Circle Markers\",\"isDesaturated\":false,\"addTooltip\":true,\"heatClusterSize\":1.5,\"legendPosition\":\"bottomright\",\"mapZoom\":2,\"mapCenter\":[0,0],\"wms\":{\"enabled\":false,\"options\":{\"format\":\"image/png\",\"transparent\":true,\"layers\":\"OSM-WMS\",\"version\":\"1.3.0\",\"styles\":\"\",\"attribution\":\"© <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors\"},\"baseLayersAreLoaded\":{},\"tmsLayers\":[{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.2.4\",\"minZoom\":0,\"maxZoom\":10,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}],\"selectedTmsLayer\":{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.2.4\",\"minZoom\":0,\"maxZoom\":10,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]},\"url\":\"http://ows.terrestris.de/osm/service\"},\"colorSchema\":\"Yellow to Red\"},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"geohash_grid\",\"schema\":\"segment\",\"params\":{\"field\":\"geoip.location\",\"autoPrecision\":true,\"isFilteredByCollar\":true,\"useGeocentroid\":true,\"mapZoom\":2,\"mapCenter\":{\"lon\":2.4609375000000004,\"lat\":37.85750715625203},\"precision\":2}}]}",
-      "uiStateJSON": "{\"mapZoom\":2,\"mapCenter\":[37.782941450067156,2.458449960686267]}",
-      "description": "",
-      "savedSearchId": "2934abc0-4ad4-11e8-ab1b-fdef76c312f4",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"filter\":[],\"query\":{\"query\":\"\",\"language\":\"lucene\"}}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
     "_id": "c80e9ff0-e866-11e8-95af-236f09a02fdb",
     "_type": "visualization",
     "_source": {
@@ -526,60 +420,6 @@
       "title": "Conpot Input - Top 10",
       "visState": "{\"title\":\"Conpot Input - Top 10\",\"type\":\"table\",\"params\":{\"perPage\":10,\"showPartialRows\":false,\"sort\":{\"columnIndex\":null,\"direction\":null},\"showTotal\":false,\"totalFunc\":\"sum\",\"showMetricsAtAllLevels\":false},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"CNT\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"terms\",\"schema\":\"bucket\",\"params\":{\"field\":\"request.keyword\",\"size\":10,\"order\":\"desc\",\"orderBy\":\"1\",\"otherBucket\":false,\"otherBucketLabel\":\"Other\",\"missingBucket\":false,\"missingBucketLabel\":\"Missing\",\"customLabel\":\"Input\"}}]}",
       "uiStateJSON": "{\"vis\":{\"params\":{\"sort\":{\"columnIndex\":null,\"direction\":null}}}}",
-      "description": "",
-      "savedSearchId": "ConPot-Logs",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
-    "_id": "c0916430-8b5e-11e7-ba35-0d8832ac304f",
-    "_type": "visualization",
-    "_source": {
-      "title": "Mailoney Attack Map",
-      "visState": "{\"title\":\"Mailoney Attack Map\",\"type\":\"tile_map\",\"params\":{\"mapType\":\"Shaded Circle Markers\",\"isDesaturated\":false,\"addTooltip\":true,\"heatMaxZoom\":16,\"heatMinOpacity\":0.1,\"heatRadius\":25,\"heatBlur\":15,\"heatNormalizeData\":true,\"wms\":{\"enabled\":false,\"url\":\"http://ows.terrestris.de/osm/service\",\"options\":{\"version\":\"1.3.0\",\"layers\":\"OSM-WMS\",\"format\":\"image/png\",\"transparent\":true,\"attribution\":\"© <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors\",\"styles\":\"\"},\"baseLayersAreLoaded\":{},\"tmsLayers\":[{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}],\"selectedTmsLayer\":{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}},\"legendPosition\":\"bottomright\",\"mapZoom\":2,\"mapCenter\":[0,0],\"colorSchema\":\"Yellow to Red\",\"heatClusterSize\":1.5},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"geohash_grid\",\"schema\":\"segment\",\"params\":{\"field\":\"geoip.location\",\"autoPrecision\":true,\"isFilteredByCollar\":true,\"useGeocentroid\":true,\"mapZoom\":2,\"mapCenter\":{\"lon\":0,\"lat\":-0.17578097424708533},\"precision\":2}}]}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "savedSearchId": "9c35dd90-6977-11e7-9c11-8d9c11943fa0",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
-    "_id": "Cowrie-Map",
-    "_type": "visualization",
-    "_source": {
-      "title": "Cowrie Attack Map",
-      "visState": "{\"title\":\"Cowrie Attack Map\",\"type\":\"tile_map\",\"params\":{\"mapType\":\"Shaded Circle Markers\",\"isDesaturated\":false,\"addTooltip\":true,\"heatMaxZoom\":16,\"heatMinOpacity\":0.1,\"heatRadius\":25,\"heatBlur\":15,\"heatNormalizeData\":true,\"wms\":{\"enabled\":false,\"url\":\"http://ows.terrestris.de/osm/service\",\"options\":{\"version\":\"1.3.0\",\"layers\":\"OSM-WMS\",\"format\":\"image/png\",\"transparent\":true,\"attribution\":\"© <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors\",\"styles\":\"\"},\"baseLayersAreLoaded\":{},\"tmsLayers\":[{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}],\"selectedTmsLayer\":{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}},\"legendPosition\":\"bottomright\",\"mapZoom\":2,\"mapCenter\":[0,0],\"colorSchema\":\"Yellow to Red\",\"heatClusterSize\":1.5},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"geohash_grid\",\"schema\":\"segment\",\"params\":{\"field\":\"geoip.location\",\"autoPrecision\":true,\"isFilteredByCollar\":true,\"useGeocentroid\":true,\"mapZoom\":2,\"mapCenter\":{\"lon\":0,\"lat\":-0.17578097424708533},\"precision\":2}}]}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "savedSearchId": "Cowrie-Logs",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
-    "_id": "ConPot-Map",
-    "_type": "visualization",
-    "_source": {
-      "title": "Conpot Attack Map",
-      "visState": "{\"title\":\"Conpot Attack Map\",\"type\":\"tile_map\",\"params\":{\"mapType\":\"Shaded Circle Markers\",\"isDesaturated\":false,\"addTooltip\":true,\"heatMaxZoom\":16,\"heatMinOpacity\":0.1,\"heatRadius\":25,\"heatBlur\":15,\"heatNormalizeData\":true,\"wms\":{\"enabled\":false,\"url\":\"http://ows.terrestris.de/osm/service\",\"options\":{\"version\":\"1.3.0\",\"layers\":\"OSM-WMS\",\"format\":\"image/png\",\"transparent\":true,\"attribution\":\"© <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors\",\"styles\":\"\"},\"baseLayersAreLoaded\":{},\"tmsLayers\":[{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}],\"selectedTmsLayer\":{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}},\"legendPosition\":\"bottomright\",\"mapZoom\":2,\"mapCenter\":[0,0],\"colorSchema\":\"Yellow to Red\",\"heatClusterSize\":1.5},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"geohash_grid\",\"schema\":\"segment\",\"params\":{\"field\":\"geoip.location\",\"autoPrecision\":true,\"isFilteredByCollar\":true,\"useGeocentroid\":true,\"mapZoom\":2,\"mapCenter\":{\"lon\":0,\"lat\":-0.17578097424708533},\"precision\":2}}]}",
-      "uiStateJSON": "{}",
       "description": "",
       "savedSearchId": "ConPot-Logs",
       "version": 1,
@@ -700,24 +540,6 @@
     }
   },
   {
-    "_id": "e4b7cf40-8b52-11e7-b92d-d39e43e3de0f",
-    "_type": "visualization",
-    "_source": {
-      "title": "Rdpy Attack Map",
-      "visState": "{\"title\":\"Rdpy Attack Map\",\"type\":\"tile_map\",\"params\":{\"mapType\":\"Shaded Circle Markers\",\"isDesaturated\":false,\"addTooltip\":true,\"heatMaxZoom\":16,\"heatMinOpacity\":0.1,\"heatRadius\":25,\"heatBlur\":15,\"heatNormalizeData\":true,\"wms\":{\"enabled\":false,\"url\":\"http://ows.terrestris.de/osm/service\",\"options\":{\"version\":\"1.3.0\",\"layers\":\"OSM-WMS\",\"format\":\"image/png\",\"transparent\":true,\"attribution\":\"© <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors\",\"styles\":\"\"},\"baseLayersAreLoaded\":{},\"tmsLayers\":[{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}],\"selectedTmsLayer\":{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}},\"legendPosition\":\"bottomright\",\"mapZoom\":2,\"mapCenter\":[0,0],\"colorSchema\":\"Yellow to Red\",\"heatClusterSize\":1.5},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"geohash_grid\",\"schema\":\"segment\",\"params\":{\"field\":\"geoip.location\",\"autoPrecision\":true,\"isFilteredByCollar\":true,\"useGeocentroid\":true,\"mapZoom\":2,\"mapCenter\":{\"lon\":0,\"lat\":-0.17578097424708533},\"precision\":2}}]}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "savedSearchId": "aa750980-8ab5-11e7-8fef-33e989079c7d",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
     "_id": "e624bc50-7dd6-11e7-bee2-c98307c16efa",
     "_type": "visualization",
     "_source": {
@@ -729,42 +551,6 @@
       "version": 1,
       "kibanaSavedObjectMeta": {
         "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
-    "_id": "Glastopf-Map",
-    "_type": "visualization",
-    "_source": {
-      "title": "Glastopf Attack Map",
-      "visState": "{\"title\":\"Glastopf Attack Map\",\"type\":\"tile_map\",\"params\":{\"mapType\":\"Scaled Circle Markers\",\"isDesaturated\":false,\"addTooltip\":true,\"heatMaxZoom\":16,\"heatMinOpacity\":0.1,\"heatRadius\":25,\"heatBlur\":15,\"heatNormalizeData\":true,\"wms\":{\"enabled\":false,\"url\":\"http://ows.terrestris.de/osm/service\",\"options\":{\"version\":\"1.3.0\",\"layers\":\"OSM-WMS\",\"format\":\"image/png\",\"transparent\":true,\"attribution\":\"© <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors\",\"styles\":\"\"},\"baseLayersAreLoaded\":{},\"tmsLayers\":[{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}],\"selectedTmsLayer\":{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}},\"legendPosition\":\"bottomright\",\"mapZoom\":2,\"mapCenter\":[0,0],\"colorSchema\":\"Yellow to Red\",\"heatClusterSize\":1.5},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"geohash_grid\",\"schema\":\"segment\",\"params\":{\"field\":\"geoip.location\",\"autoPrecision\":true,\"isFilteredByCollar\":true,\"useGeocentroid\":true,\"mapZoom\":2,\"mapCenter\":{\"lon\":0,\"lat\":-0.17578097424708533},\"precision\":2}}]}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "savedSearchId": "Glastopf-Logs",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
-    "_id": "f8e24f20-634e-11e8-be86-73985bedf977",
-    "_type": "visualization",
-    "_source": {
-      "title": "Tanner Attack Map",
-      "visState": "{\"title\":\"Tanner Attack Map\",\"type\":\"tile_map\",\"params\":{\"mapType\":\"Shaded Circle Markers\",\"isDesaturated\":false,\"addTooltip\":true,\"heatMaxZoom\":16,\"heatMinOpacity\":0.1,\"heatRadius\":25,\"heatBlur\":15,\"heatNormalizeData\":true,\"wms\":{\"enabled\":false,\"url\":\"http://ows.terrestris.de/osm/service\",\"options\":{\"version\":\"1.3.0\",\"layers\":\"OSM-WMS\",\"format\":\"image/png\",\"transparent\":true,\"attribution\":\"© <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors\",\"styles\":\"\"},\"baseLayersAreLoaded\":{},\"tmsLayers\":[{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.2.4\",\"minZoom\":0,\"maxZoom\":10,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}],\"selectedTmsLayer\":{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.2.4\",\"minZoom\":0,\"maxZoom\":10,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}},\"legendPosition\":\"bottomright\",\"mapZoom\":2,\"mapCenter\":[0,0],\"heatClusterSize\":1.5,\"colorSchema\":\"Yellow to Red\"},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"geohash_grid\",\"schema\":\"segment\",\"params\":{\"field\":\"geoip.location\",\"autoPrecision\":true,\"isFilteredByCollar\":true,\"useGeocentroid\":true,\"mapZoom\":2,\"mapCenter\":{\"lon\":0,\"lat\":-0.17578097424708533},\"precision\":2}}]}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "savedSearchId": "d800f130-633f-11e8-be86-73985bedf977",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"filter\":[],\"query\":{\"query\":\"\",\"language\":\"lucene\"}}"
       }
     },
     "_meta": {
@@ -1060,24 +846,6 @@
     }
   },
   {
-    "_id": "ElasticPot-Map",
-    "_type": "visualization",
-    "_source": {
-      "title": "ElasticPot Attack Map",
-      "visState": "{\"title\":\"ElasticPot Attack Map\",\"type\":\"tile_map\",\"params\":{\"mapType\":\"Shaded Circle Markers\",\"isDesaturated\":false,\"addTooltip\":true,\"heatMaxZoom\":16,\"heatMinOpacity\":0.1,\"heatRadius\":25,\"heatBlur\":15,\"heatNormalizeData\":true,\"wms\":{\"enabled\":false,\"url\":\"http://ows.terrestris.de/osm/service\",\"options\":{\"version\":\"1.3.0\",\"layers\":\"OSM-WMS\",\"format\":\"image/png\",\"transparent\":true,\"attribution\":\"© <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors\",\"styles\":\"\"},\"baseLayersAreLoaded\":{},\"tmsLayers\":[{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}],\"selectedTmsLayer\":{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}},\"legendPosition\":\"bottomright\",\"mapZoom\":2,\"mapCenter\":[0,0],\"colorSchema\":\"Yellow to Red\",\"heatClusterSize\":1.5},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"geohash_grid\",\"schema\":\"segment\",\"params\":{\"field\":\"geoip.location\",\"autoPrecision\":true,\"isFilteredByCollar\":true,\"useGeocentroid\":true,\"mapZoom\":2,\"mapCenter\":{\"lon\":0,\"lat\":-0.17578097424708533},\"precision\":2}}]}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "savedSearchId": "ElasticPot-Logs",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
     "_id": "NGINX-Events-Histogram",
     "_type": "visualization",
     "_source": {
@@ -1089,24 +857,6 @@
       "version": 1,
       "kibanaSavedObjectMeta": {
         "searchSourceJSON": "{\"query\":{\"language\":\"lucene\",\"query\":\"\"},\"filter\":[]}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
-    "_id": "Honeytrap-Map",
-    "_type": "visualization",
-    "_source": {
-      "title": "Honeytrap Attack Map",
-      "visState": "{\"title\":\"Honeytrap Attack Map\",\"type\":\"tile_map\",\"params\":{\"mapType\":\"Shaded Circle Markers\",\"isDesaturated\":false,\"addTooltip\":true,\"heatMaxZoom\":16,\"heatMinOpacity\":0.1,\"heatRadius\":25,\"heatBlur\":15,\"heatNormalizeData\":true,\"wms\":{\"enabled\":false,\"url\":\"http://ows.terrestris.de/osm/service\",\"options\":{\"version\":\"1.3.0\",\"layers\":\"OSM-WMS\",\"format\":\"image/png\",\"transparent\":true,\"attribution\":\"© <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors\",\"styles\":\"\"},\"baseLayersAreLoaded\":{},\"tmsLayers\":[{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}],\"selectedTmsLayer\":{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}},\"legendPosition\":\"bottomright\",\"mapZoom\":2,\"mapCenter\":[0,0],\"colorSchema\":\"Yellow to Red\",\"heatClusterSize\":1.5},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"geohash_grid\",\"schema\":\"segment\",\"params\":{\"field\":\"geoip.location\",\"autoPrecision\":true,\"isFilteredByCollar\":true,\"useGeocentroid\":true,\"mapZoom\":2,\"mapCenter\":{\"lon\":0,\"lat\":-0.17578097424708533},\"precision\":2}}]}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "savedSearchId": "Honeytrap-Logs",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
       }
     },
     "_meta": {
@@ -1186,24 +936,6 @@
     }
   },
   {
-    "_id": "NGINX-Map",
-    "_type": "visualization",
-    "_source": {
-      "title": "NGINX Attack Map",
-      "visState": "{\"title\":\"NGINX Attack Map\",\"type\":\"tile_map\",\"params\":{\"mapType\":\"Shaded Circle Markers\",\"isDesaturated\":false,\"addTooltip\":true,\"heatMaxZoom\":16,\"heatMinOpacity\":0.1,\"heatRadius\":25,\"heatBlur\":15,\"heatNormalizeData\":true,\"wms\":{\"enabled\":false,\"url\":\"http://ows.terrestris.de/osm/service\",\"options\":{\"version\":\"1.3.0\",\"layers\":\"OSM-WMS\",\"format\":\"image/png\",\"transparent\":true,\"attribution\":\"© <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors\",\"styles\":\"\"},\"baseLayersAreLoaded\":{},\"tmsLayers\":[{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}],\"selectedTmsLayer\":{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}},\"legendPosition\":\"bottomright\",\"mapZoom\":2,\"mapCenter\":[0,0],\"colorSchema\":\"Yellow to Red\",\"heatClusterSize\":1.5},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"geohash_grid\",\"schema\":\"segment\",\"params\":{\"field\":\"geoip.location\",\"autoPrecision\":true,\"isFilteredByCollar\":true,\"useGeocentroid\":true,\"mapZoom\":2,\"mapCenter\":{\"lon\":0,\"lat\":-0.17578097424708533},\"precision\":2}}]}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "savedSearchId": "NGINX-Logs",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
     "_id": "NGINX-Username-Tagcloud",
     "_type": "visualization",
     "_source": {
@@ -1212,24 +944,6 @@
       "uiStateJSON": "{}",
       "description": "",
       "savedSearchId": "NGINX-Logs",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
-    "_id": "Suricata-Map",
-    "_type": "visualization",
-    "_source": {
-      "title": "Suricata Attack Map",
-      "visState": "{\"title\":\"Suricata Attack Map\",\"type\":\"tile_map\",\"params\":{\"mapType\":\"Shaded Circle Markers\",\"isDesaturated\":false,\"addTooltip\":true,\"heatMaxZoom\":16,\"heatMinOpacity\":0.1,\"heatRadius\":25,\"heatBlur\":15,\"heatNormalizeData\":true,\"wms\":{\"enabled\":false,\"url\":\"http://ows.terrestris.de/osm/service\",\"options\":{\"version\":\"1.3.0\",\"layers\":\"OSM-WMS\",\"format\":\"image/png\",\"transparent\":true,\"attribution\":\"© <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors\",\"styles\":\"\"},\"baseLayersAreLoaded\":{},\"tmsLayers\":[{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}],\"selectedTmsLayer\":{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}},\"legendPosition\":\"bottomright\",\"mapZoom\":2,\"mapCenter\":[0,0],\"colorSchema\":\"Yellow to Red\",\"heatClusterSize\":1.5},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"geohash_grid\",\"schema\":\"segment\",\"params\":{\"field\":\"geoip.location\",\"autoPrecision\":true,\"isFilteredByCollar\":true,\"useGeocentroid\":true,\"mapZoom\":2,\"mapCenter\":{\"lon\":0,\"lat\":-0.17578097424708533},\"precision\":2}}]}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "savedSearchId": "Suricata-Logs",
       "version": 1,
       "kibanaSavedObjectMeta": {
         "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
@@ -1250,6 +964,9 @@
     },
     "_meta": {
       "savedObjectVersion": 2
+    },
+    "_migrationVersion": {
+      "index-pattern": "6.5.0"
     }
   },
   {
@@ -1634,24 +1351,6 @@
       "uiStateJSON": "{}",
       "description": "",
       "savedSearchId": "385ea460-ad22-11e8-942c-a39712fa9ddf",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
-    "_id": "Dionaea-Map",
-    "_type": "visualization",
-    "_source": {
-      "title": "Dionaea Attack Map",
-      "visState": "{\"title\":\"Dionaea Attack Map\",\"type\":\"tile_map\",\"params\":{\"mapType\":\"Shaded Circle Markers\",\"isDesaturated\":false,\"addTooltip\":true,\"heatMaxZoom\":16,\"heatMinOpacity\":0.1,\"heatRadius\":25,\"heatBlur\":15,\"heatNormalizeData\":true,\"wms\":{\"enabled\":false,\"url\":\"http://ows.terrestris.de/osm/service\",\"options\":{\"version\":\"1.3.0\",\"layers\":\"OSM-WMS\",\"format\":\"image/png\",\"transparent\":true,\"attribution\":\"© <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors\",\"styles\":\"\"},\"baseLayersAreLoaded\":{},\"tmsLayers\":[{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}],\"selectedTmsLayer\":{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}},\"legendPosition\":\"bottomright\",\"mapZoom\":2,\"mapCenter\":[0,0],\"colorSchema\":\"Yellow to Red\",\"heatClusterSize\":1.5},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"geohash_grid\",\"schema\":\"segment\",\"params\":{\"field\":\"geoip.location\",\"autoPrecision\":true,\"isFilteredByCollar\":true,\"useGeocentroid\":true,\"mapZoom\":2,\"mapCenter\":{\"lon\":0,\"lat\":-0.17578097424708533},\"precision\":2}}]}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "savedSearchId": "Dionaea-Logs",
       "version": 1,
       "kibanaSavedObjectMeta": {
         "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
@@ -2118,24 +1817,6 @@
     }
   },
   {
-    "_id": "d1aa9740-7e9e-11e7-a286-9f03beba6417",
-    "_type": "visualization",
-    "_source": {
-      "title": "Honeypot Attack Map",
-      "visState": "{\"title\":\"Honeypot Attack Map\",\"type\":\"tile_map\",\"params\":{\"mapType\":\"Shaded Circle Markers\",\"isDesaturated\":false,\"addTooltip\":true,\"heatMaxZoom\":0,\"heatMinOpacity\":0.1,\"heatRadius\":25,\"heatBlur\":15,\"legendPosition\":\"bottomright\",\"mapZoom\":2,\"mapCenter\":[0,0],\"wms\":{\"enabled\":false,\"url\":\"http://ows.terrestris.de/osm/service\",\"options\":{\"version\":\"1.3.0\",\"layers\":\"OSM-WMS\",\"format\":\"image/png\",\"transparent\":true,\"attribution\":\"© <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors\",\"styles\":\"\"},\"baseLayersAreLoaded\":{},\"tmsLayers\":[{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.2&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}],\"selectedTmsLayer\":{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.2&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}},\"colorSchema\":\"Yellow to Red\",\"heatClusterSize\":1.5},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"geohash_grid\",\"schema\":\"segment\",\"params\":{\"field\":\"geoip.location\",\"autoPrecision\":true,\"isFilteredByCollar\":true,\"useGeocentroid\":true,\"mapZoom\":2,\"mapCenter\":{\"lon\":0,\"lat\":-0.17578097424708533},\"precision\":3}}]}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "savedSearchId": "Honeypot-Logs",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
     "_id": "885928c0-7ebe-11e7-a286-9f03beba6417",
     "_type": "visualization",
     "_source": {
@@ -2165,24 +1846,6 @@
       "version": 1,
       "kibanaSavedObjectMeta": {
         "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"kuery\"},\"filter\":[]}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
-    "_id": "e77bc660-e9d3-11e8-be2c-8fd05c77f582",
-    "_type": "visualization",
-    "_source": {
-      "title": "Honeypot Attacks - Top 10",
-      "visState": "{\"title\":\"Honeypot Attacks - Top 10\",\"type\":\"metric\",\"params\":{\"addTooltip\":true,\"addLegend\":false,\"type\":\"metric\",\"metric\":{\"percentageMode\":false,\"useRanges\":false,\"colorSchema\":\"Green to Red\",\"metricColorMode\":\"None\",\"colorsRange\":[{\"from\":0,\"to\":10000}],\"labels\":{\"show\":true},\"invertColors\":false,\"style\":{\"bgFill\":\"#000\",\"bgColor\":false,\"labelColor\":false,\"subText\":\"\",\"fontSize\":21}}},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"Attacks\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"terms\",\"schema\":\"group\",\"params\":{\"field\":\"type.keyword\",\"size\":10,\"order\":\"desc\",\"orderBy\":\"1\",\"otherBucket\":false,\"otherBucketLabel\":\"Other\",\"missingBucket\":false,\"missingBucketLabel\":\"Missing\"}}]}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "savedSearchId": "Honeypot-Logs",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
       }
     },
     "_meta": {
@@ -2316,60 +1979,6 @@
     }
   },
   {
-    "_id": "15f2c000-4ad5-11e8-ab1b-fdef76c312f4",
-    "_type": "visualization",
-    "_source": {
-      "title": "Ciscoasa Attacks Bar",
-      "visState": "{\"title\":\"Ciscoasa Attacks Bar\",\"type\":\"horizontal_bar\",\"params\":{\"type\":\"histogram\",\"grid\":{\"categoryLines\":false,\"style\":{\"color\":\"#eee\"}},\"categoryAxes\":[{\"id\":\"CategoryAxis-1\",\"type\":\"category\",\"position\":\"left\",\"show\":true,\"style\":{},\"scale\":{\"type\":\"linear\"},\"labels\":{\"show\":false,\"rotate\":90,\"filter\":false,\"truncate\":200},\"title\":{}}],\"valueAxes\":[{\"id\":\"ValueAxis-1\",\"name\":\"LeftAxis-1\",\"type\":\"value\",\"position\":\"bottom\",\"show\":true,\"style\":{},\"scale\":{\"type\":\"square root\",\"mode\":\"normal\"},\"labels\":{\"show\":true,\"rotate\":0,\"filter\":true,\"truncate\":100},\"title\":{\"text\":\"\"}}],\"seriesParams\":[{\"show\":true,\"type\":\"histogram\",\"mode\":\"normal\",\"data\":{\"label\":\"Attacks\",\"id\":\"1\"},\"valueAxis\":\"ValueAxis-1\",\"drawLinesBetweenPoints\":true,\"showCircles\":true},{\"show\":true,\"mode\":\"normal\",\"type\":\"histogram\",\"drawLinesBetweenPoints\":true,\"showCircles\":true,\"data\":{\"id\":\"2\",\"label\":\"Unique Src IPs\"},\"valueAxis\":\"ValueAxis-1\"}],\"addTooltip\":true,\"addLegend\":true,\"legendPosition\":\"right\",\"times\":[],\"addTimeMarker\":false},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"Attacks\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"cardinality\",\"schema\":\"metric\",\"params\":{\"field\":\"src_ip.keyword\",\"customLabel\":\"Unique Src IPs\"}}]}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "savedSearchId": "2934abc0-4ad4-11e8-ab1b-fdef76c312f4",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"filter\":[],\"query\":{\"query\":\"\",\"language\":\"lucene\"}}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
-    "_id": "3f646820-e851-11e8-97df-bbc3de28ece0",
-    "_type": "visualization",
-    "_source": {
-      "title": "Glutton Attacks",
-      "visState": "{\"title\":\"Glutton Attacks\",\"type\":\"metric\",\"params\":{\"addTooltip\":true,\"addLegend\":false,\"type\":\"metric\",\"metric\":{\"percentageMode\":false,\"useRanges\":false,\"colorSchema\":\"Green to Red\",\"metricColorMode\":\"None\",\"colorsRange\":[{\"from\":0,\"to\":10000}],\"labels\":{\"show\":true},\"invertColors\":false,\"style\":{\"bgFill\":\"#000\",\"bgColor\":false,\"labelColor\":false,\"subText\":\"\",\"fontSize\":24}}},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"Attacks\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"cardinality\",\"schema\":\"metric\",\"params\":{\"field\":\"src_ip.keyword\",\"customLabel\":\"Unique Src IPs\"}}]}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "savedSearchId": "385ea460-ad22-11e8-942c-a39712fa9ddf",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[],\"index\":\"logstash-*\"}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
-    "_id": "79a71e90-dec1-11e8-87cf-239397d2b8d3",
-    "_type": "visualization",
-    "_source": {
-      "title": "Ciscoasa Attacks",
-      "visState": "{\"title\":\"Ciscoasa Attacks\",\"type\":\"metric\",\"params\":{\"addTooltip\":true,\"addLegend\":false,\"type\":\"metric\",\"metric\":{\"percentageMode\":false,\"useRanges\":false,\"colorSchema\":\"Green to Red\",\"metricColorMode\":\"None\",\"colorsRange\":[{\"from\":0,\"to\":10000}],\"labels\":{\"show\":true},\"invertColors\":false,\"style\":{\"bgFill\":\"#000\",\"bgColor\":false,\"labelColor\":false,\"subText\":\"\",\"fontSize\":24}}},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"Attacks\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"cardinality\",\"schema\":\"metric\",\"params\":{\"field\":\"src_ip.keyword\",\"customLabel\":\"Unique Src IPs\"}}]}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "savedSearchId": "2934abc0-4ad4-11e8-ab1b-fdef76c312f4",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
     "_id": "0d947000-7ebd-11e7-a286-9f03beba6417",
     "_type": "visualization",
     "_source": {
@@ -2400,150 +2009,6 @@
       "timeRestore": false,
       "kibanaSavedObjectMeta": {
         "searchSourceJSON": "{\"query\":{\"language\":\"lucene\",\"query\":\"\"},\"filter\":[],\"highlightAll\":true,\"version\":true}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
-    "_id": "d500a3c0-e6b8-11e8-b727-735f5b0e1502",
-    "_type": "visualization",
-    "_source": {
-      "title": "Heralding Attacks",
-      "visState": "{\"title\":\"Heralding Attacks\",\"type\":\"metric\",\"params\":{\"addTooltip\":true,\"addLegend\":false,\"type\":\"metric\",\"metric\":{\"percentageMode\":false,\"useRanges\":false,\"colorSchema\":\"Green to Red\",\"metricColorMode\":\"None\",\"colorsRange\":[{\"from\":0,\"to\":10000}],\"labels\":{\"show\":true},\"invertColors\":false,\"style\":{\"bgFill\":\"#000\",\"bgColor\":false,\"labelColor\":false,\"subText\":\"\",\"fontSize\":24}}},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"Attacks\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"cardinality\",\"schema\":\"metric\",\"params\":{\"field\":\"src_ip.keyword\",\"customLabel\":\"Unique Src IPs\"}}]}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "savedSearchId": "c2bea500-47ca-11e8-a905-f74bbc7cbd2d",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[],\"index\":\"logstash-*\"}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
-    "_id": "f2742de0-e745-11e8-b4a6-215b0b97c069",
-    "_type": "visualization",
-    "_source": {
-      "title": "Mailoney Attacks",
-      "visState": "{\"title\":\"Mailoney Attacks\",\"type\":\"metric\",\"params\":{\"addTooltip\":true,\"addLegend\":false,\"type\":\"metric\",\"metric\":{\"percentageMode\":false,\"useRanges\":false,\"colorSchema\":\"Green to Red\",\"metricColorMode\":\"None\",\"colorsRange\":[{\"from\":0,\"to\":10000}],\"labels\":{\"show\":true},\"invertColors\":false,\"style\":{\"bgFill\":\"#000\",\"bgColor\":false,\"labelColor\":false,\"subText\":\"\",\"fontSize\":24}}},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"Attacks\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"cardinality\",\"schema\":\"metric\",\"params\":{\"field\":\"src_ip.keyword\",\"customLabel\":\"Unique Src IPs\"}}]}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "savedSearchId": "9c35dd90-6977-11e7-9c11-8d9c11943fa0",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[],\"index\":\"logstash-*\"}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
-    "_id": "535b0c80-e761-11e8-803c-59c072645505",
-    "_type": "visualization",
-    "_source": {
-      "title": "Tanner Attacks",
-      "visState": "{\"title\":\"Tanner Attacks\",\"type\":\"metric\",\"params\":{\"addTooltip\":true,\"addLegend\":false,\"type\":\"metric\",\"metric\":{\"percentageMode\":false,\"useRanges\":false,\"colorSchema\":\"Green to Red\",\"metricColorMode\":\"None\",\"colorsRange\":[{\"from\":0,\"to\":10000}],\"labels\":{\"show\":true},\"invertColors\":false,\"style\":{\"bgFill\":\"#000\",\"bgColor\":false,\"labelColor\":false,\"subText\":\"\",\"fontSize\":24}}},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"Attacks\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"cardinality\",\"schema\":\"metric\",\"params\":{\"field\":\"src_ip.keyword\",\"customLabel\":\"Unique Src IPs\"}}]}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "savedSearchId": "d800f130-633f-11e8-be86-73985bedf977",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[],\"index\":\"logstash-*\"}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
-    "_id": "94e13130-e756-11e8-b4a6-215b0b97c069",
-    "_type": "visualization",
-    "_source": {
-      "title": "Rdpy Attacks",
-      "visState": "{\"title\":\"Rdpy Attacks\",\"type\":\"metric\",\"params\":{\"addTooltip\":true,\"addLegend\":false,\"type\":\"metric\",\"metric\":{\"percentageMode\":false,\"useRanges\":false,\"colorSchema\":\"Green to Red\",\"metricColorMode\":\"None\",\"colorsRange\":[{\"from\":0,\"to\":10000}],\"labels\":{\"show\":true},\"invertColors\":false,\"style\":{\"bgFill\":\"#000\",\"bgColor\":false,\"labelColor\":false,\"subText\":\"\",\"fontSize\":24}}},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"Attacks\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"cardinality\",\"schema\":\"metric\",\"params\":{\"field\":\"src_ip.keyword\",\"customLabel\":\"Unique Src IPs\"}}]}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "savedSearchId": "aa750980-8ab5-11e7-8fef-33e989079c7d",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[],\"index\":\"logstash-*\"}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
-    "_id": "f5e74220-e725-11e8-b4a6-215b0b97c069",
-    "_type": "visualization",
-    "_source": {
-      "title": "Honeytrap Attacks",
-      "visState": "{\"title\":\"Honeytrap Attacks\",\"type\":\"metric\",\"params\":{\"addTooltip\":true,\"addLegend\":false,\"type\":\"metric\",\"metric\":{\"percentageMode\":false,\"useRanges\":false,\"colorSchema\":\"Green to Red\",\"metricColorMode\":\"None\",\"colorsRange\":[{\"from\":0,\"to\":10000}],\"labels\":{\"show\":true},\"invertColors\":false,\"style\":{\"bgFill\":\"#000\",\"bgColor\":false,\"labelColor\":false,\"subText\":\"\",\"fontSize\":24}}},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"Attacks\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"cardinality\",\"schema\":\"metric\",\"params\":{\"field\":\"src_ip.keyword\",\"customLabel\":\"Unique Src IPs\"}}]}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "savedSearchId": "Honeytrap-Logs",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[],\"index\":\"logstash-*\"}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
-    "_id": "409907c0-e6b5-11e8-b727-735f5b0e1502",
-    "_type": "visualization",
-    "_source": {
-      "title": "Glastopf Attacks",
-      "visState": "{\"title\":\"Glastopf Attacks\",\"type\":\"metric\",\"params\":{\"addTooltip\":true,\"addLegend\":false,\"type\":\"metric\",\"metric\":{\"percentageMode\":false,\"useRanges\":false,\"colorSchema\":\"Green to Red\",\"metricColorMode\":\"None\",\"colorsRange\":[{\"from\":0,\"to\":10000}],\"labels\":{\"show\":true},\"invertColors\":false,\"style\":{\"bgFill\":\"#000\",\"bgColor\":false,\"labelColor\":false,\"subText\":\"\",\"fontSize\":24}}},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"Attacks\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"cardinality\",\"schema\":\"metric\",\"params\":{\"field\":\"src_ip.keyword\",\"customLabel\":\"Unique Src IPs\"}}]}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "savedSearchId": "Glastopf-Logs",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[],\"index\":\"logstash-*\"}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
-    "_id": "465d9810-e5cf-11e8-b72a-b734d2b55cd4",
-    "_type": "visualization",
-    "_source": {
-      "title": "Dionaea Attacks",
-      "visState": "{\"title\":\"Dionaea Attacks\",\"type\":\"metric\",\"params\":{\"addLegend\":false,\"addTooltip\":true,\"metric\":{\"colorSchema\":\"Green to Red\",\"colorsRange\":[{\"from\":0,\"to\":10000}],\"invertColors\":false,\"labels\":{\"show\":true},\"metricColorMode\":\"None\",\"percentageMode\":false,\"style\":{\"bgColor\":false,\"bgFill\":\"#000\",\"fontSize\":24,\"labelColor\":false,\"subText\":\"\"},\"useRanges\":false},\"type\":\"metric\"},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"Attacks\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"cardinality\",\"schema\":\"metric\",\"params\":{\"field\":\"src_ip.keyword\",\"customLabel\":\"Unique Src IPs\"}}]}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "savedSearchId": "Dionaea-Logs",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"query\":{\"language\":\"lucene\",\"query\":\"\"},\"filter\":[],\"index\":\"logstash-*\"}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
-    "_id": "45e32dc0-dec5-11e8-87cf-239397d2b8d3",
-    "_type": "visualization",
-    "_source": {
-      "title": "Cowrie Attacks",
-      "visState": "{\"title\":\"Cowrie Attacks\",\"type\":\"metric\",\"params\":{\"addTooltip\":true,\"addLegend\":false,\"type\":\"metric\",\"metric\":{\"percentageMode\":false,\"useRanges\":false,\"colorSchema\":\"Green to Red\",\"metricColorMode\":\"None\",\"colorsRange\":[{\"from\":0,\"to\":10000}],\"labels\":{\"show\":true},\"invertColors\":false,\"style\":{\"bgFill\":\"#000\",\"bgColor\":false,\"labelColor\":false,\"subText\":\"\",\"fontSize\":24}}},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"Attacks\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"cardinality\",\"schema\":\"metric\",\"params\":{\"field\":\"src_ip.keyword\",\"customLabel\":\"Unique Src IPs\"}}]}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "savedSearchId": "Cowrie-Logs",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[],\"index\":\"logstash-*\"}"
       }
     },
     "_meta": {
@@ -2616,96 +2081,6 @@
       "version": 1,
       "kibanaSavedObjectMeta": {
         "searchSourceJSON": "{\"filter\":[],\"query\":{\"language\":\"lucene\",\"query\":\"\"}}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
-    "_id": "17130490-e7fb-11e8-9ac4-13ecd4ad8d70",
-    "_type": "visualization",
-    "_source": {
-      "title": "Medpot Attacks",
-      "visState": "{\"title\":\"Medpot Attacks\",\"type\":\"metric\",\"params\":{\"addLegend\":false,\"addTooltip\":true,\"metric\":{\"colorSchema\":\"Green to Red\",\"colorsRange\":[{\"from\":0,\"to\":10000}],\"invertColors\":false,\"labels\":{\"show\":true},\"metricColorMode\":\"None\",\"percentageMode\":false,\"style\":{\"bgColor\":false,\"bgFill\":\"#000\",\"fontSize\":24,\"labelColor\":false,\"subText\":\"\"},\"useRanges\":false},\"type\":\"metric\"},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"Attacks\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"cardinality\",\"schema\":\"metric\",\"params\":{\"field\":\"src_ip.keyword\",\"customLabel\":\"Unique Src IPs\"}}]}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "savedSearchId": "baa53b00-b597-11e8-9a34-d951cebce834",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"query\":{\"language\":\"lucene\",\"query\":\"\"},\"filter\":[],\"index\":\"logstash-*\"}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
-    "_id": "3814c570-e68e-11e8-b727-735f5b0e1502",
-    "_type": "visualization",
-    "_source": {
-      "title": "ElasticPot Attacks",
-      "visState": "{\"title\":\"ElasticPot Attacks\",\"type\":\"metric\",\"params\":{\"addLegend\":false,\"addTooltip\":true,\"metric\":{\"colorSchema\":\"Green to Red\",\"colorsRange\":[{\"from\":0,\"to\":10000}],\"invertColors\":false,\"labels\":{\"show\":true},\"metricColorMode\":\"None\",\"percentageMode\":false,\"style\":{\"bgColor\":false,\"bgFill\":\"#000\",\"fontSize\":24,\"labelColor\":false,\"subText\":\"\"},\"useRanges\":false},\"type\":\"metric\"},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"Attacks\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"cardinality\",\"schema\":\"metric\",\"params\":{\"field\":\"src_ip.keyword\",\"customLabel\":\"Unique Src IPs\"}}]}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "savedSearchId": "ElasticPot-Logs",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"query\":{\"language\":\"lucene\",\"query\":\"\"},\"filter\":[],\"index\":\"logstash-*\"}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
-    "_id": "4a60fe20-e75f-11e8-803c-59c072645505",
-    "_type": "visualization",
-    "_source": {
-      "title": "Suricata Events",
-      "visState": "{\"title\":\"Suricata Events\",\"type\":\"metric\",\"params\":{\"addTooltip\":true,\"addLegend\":false,\"type\":\"metric\",\"metric\":{\"percentageMode\":false,\"useRanges\":false,\"colorSchema\":\"Green to Red\",\"metricColorMode\":\"None\",\"colorsRange\":[{\"from\":0,\"to\":10000}],\"labels\":{\"show\":true},\"invertColors\":false,\"style\":{\"bgFill\":\"#000\",\"bgColor\":false,\"labelColor\":false,\"subText\":\"\",\"fontSize\":24}}},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"Events\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"cardinality\",\"schema\":\"metric\",\"params\":{\"field\":\"src_ip.keyword\",\"customLabel\":\"Unique Src IPs\"}}]}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "savedSearchId": "Suricata-Logs",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[],\"index\":\"logstash-*\"}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
-    "_id": "07581df0-e752-11e8-b4a6-215b0b97c069",
-    "_type": "visualization",
-    "_source": {
-      "title": "NGINX Events",
-      "visState": "{\"title\":\"NGINX Events\",\"type\":\"metric\",\"params\":{\"addTooltip\":true,\"addLegend\":false,\"type\":\"metric\",\"metric\":{\"percentageMode\":false,\"useRanges\":false,\"colorSchema\":\"Green to Red\",\"metricColorMode\":\"None\",\"colorsRange\":[{\"from\":0,\"to\":10000}],\"labels\":{\"show\":true},\"invertColors\":false,\"style\":{\"bgFill\":\"#000\",\"bgColor\":false,\"labelColor\":false,\"subText\":\"\",\"fontSize\":24}}},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"Events\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"cardinality\",\"schema\":\"metric\",\"params\":{\"field\":\"src_ip.keyword\",\"customLabel\":\"Unique Src IPs\"}}]}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "savedSearchId": "NGINX-Logs",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[],\"index\":\"logstash-*\"}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
-    "_id": "10e765a0-e51e-11e8-8a75-d5f374dbaebe",
-    "_type": "visualization",
-    "_source": {
-      "title": "Conpot Attacks",
-      "visState": "{\"title\":\"Conpot Attacks\",\"type\":\"metric\",\"params\":{\"addTooltip\":true,\"addLegend\":false,\"type\":\"metric\",\"metric\":{\"percentageMode\":false,\"useRanges\":false,\"colorSchema\":\"Green to Red\",\"metricColorMode\":\"None\",\"colorsRange\":[{\"from\":0,\"to\":10000}],\"labels\":{\"show\":true},\"invertColors\":false,\"style\":{\"bgFill\":\"#000\",\"bgColor\":false,\"labelColor\":false,\"subText\":\"\",\"fontSize\":24}}},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"Attacks\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"cardinality\",\"schema\":\"metric\",\"params\":{\"field\":\"src_ip.keyword\",\"customLabel\":\"Unique Src IPs\"}}]}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "savedSearchId": "ConPot-Logs",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
       }
     },
     "_meta": {
@@ -2850,24 +2225,6 @@
       "version": 1,
       "kibanaSavedObjectMeta": {
         "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
-    "_id": "2cf90930-47d3-11e8-a905-f74bbc7cbd2d",
-    "_type": "visualization",
-    "_source": {
-      "title": "Heralding Attacks Bar",
-      "visState": "{\"title\":\"Heralding Attacks Bar\",\"type\":\"horizontal_bar\",\"params\":{\"type\":\"histogram\",\"grid\":{\"categoryLines\":false,\"style\":{\"color\":\"#eee\"}},\"categoryAxes\":[{\"id\":\"CategoryAxis-1\",\"type\":\"category\",\"position\":\"left\",\"show\":true,\"style\":{},\"scale\":{\"type\":\"linear\"},\"labels\":{\"show\":false,\"rotate\":90,\"filter\":false,\"truncate\":200},\"title\":{}}],\"valueAxes\":[{\"id\":\"ValueAxis-1\",\"name\":\"LeftAxis-1\",\"type\":\"value\",\"position\":\"bottom\",\"show\":true,\"style\":{},\"scale\":{\"type\":\"square root\",\"mode\":\"normal\"},\"labels\":{\"show\":true,\"rotate\":0,\"filter\":true,\"truncate\":100},\"title\":{\"text\":\"\"}}],\"seriesParams\":[{\"show\":true,\"type\":\"histogram\",\"mode\":\"normal\",\"data\":{\"label\":\"Attacks\",\"id\":\"1\"},\"valueAxis\":\"ValueAxis-1\",\"drawLinesBetweenPoints\":true,\"showCircles\":true},{\"show\":true,\"mode\":\"normal\",\"type\":\"histogram\",\"drawLinesBetweenPoints\":true,\"showCircles\":true,\"data\":{\"id\":\"2\",\"label\":\"Unique Src IPs\"},\"valueAxis\":\"ValueAxis-1\"}],\"addTooltip\":true,\"addLegend\":true,\"legendPosition\":\"right\",\"times\":[],\"addTimeMarker\":false},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"Attacks\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"cardinality\",\"schema\":\"metric\",\"params\":{\"field\":\"src_ip.keyword\",\"customLabel\":\"Unique Src IPs\"}}]}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "savedSearchId": "c2bea500-47ca-11e8-a905-f74bbc7cbd2d",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"filter\":[],\"query\":{\"query\":\"\",\"language\":\"lucene\"}}"
       }
     },
     "_meta": {
@@ -4423,14 +3780,14 @@
     }
   },
   {
-    "_id": "7e33e3d0-810c-11e7-8413-9fe5e30ade77",
+    "_id": "9d251bd0-e851-11e8-97df-bbc3de28ece0",
     "_type": "visualization",
     "_source": {
-      "title": "Dionaea - Attacks by Destination Ports Histogram",
-      "visState": "{\"title\":\"Dionaea - Attacks by Destination Ports Histogram\",\"type\":\"area\",\"params\":{\"grid\":{\"categoryLines\":false,\"style\":{\"color\":\"#eee\"}},\"categoryAxes\":[{\"id\":\"CategoryAxis-1\",\"type\":\"category\",\"position\":\"bottom\",\"show\":true,\"style\":{},\"scale\":{\"type\":\"linear\"},\"labels\":{\"show\":true,\"truncate\":100},\"title\":{\"text\":\"Timestamp\"}}],\"valueAxes\":[{\"id\":\"ValueAxis-1\",\"name\":\"LeftAxis-1\",\"type\":\"value\",\"position\":\"left\",\"show\":true,\"style\":{},\"scale\":{\"type\":\"square root\",\"mode\":\"normal\"},\"labels\":{\"show\":true,\"rotate\":0,\"filter\":false,\"truncate\":100},\"title\":{\"text\":\"\"}}],\"seriesParams\":[{\"show\":\"true\",\"type\":\"area\",\"mode\":\"normal\",\"data\":{\"label\":\"Attacks\",\"id\":\"1\"},\"drawLinesBetweenPoints\":true,\"showCircles\":true,\"interpolate\":\"step-after\",\"valueAxis\":\"ValueAxis-1\"}],\"addTooltip\":true,\"addLegend\":true,\"legendPosition\":\"right\",\"times\":[],\"addTimeMarker\":false,\"type\":\"area\"},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"Attacks\"}},{\"id\":\"3\",\"enabled\":true,\"type\":\"terms\",\"schema\":\"group\",\"params\":{\"field\":\"dest_port\",\"size\":5,\"order\":\"desc\",\"orderBy\":\"1\",\"otherBucket\":false,\"otherBucketLabel\":\"Other\",\"missingBucket\":false,\"missingBucketLabel\":\"Missing\",\"customLabel\":\"\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"@timestamp\",\"interval\":\"auto\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{},\"customLabel\":\"Timestamp\"}}]}",
+      "title": "Glutton - Attacks by Destination Ports Histogram",
+      "visState": "{\"title\":\"Glutton - Attacks by Destination Ports Histogram\",\"type\":\"area\",\"params\":{\"grid\":{\"categoryLines\":false,\"style\":{\"color\":\"#eee\"}},\"categoryAxes\":[{\"id\":\"CategoryAxis-1\",\"type\":\"category\",\"position\":\"bottom\",\"show\":true,\"style\":{},\"scale\":{\"type\":\"linear\"},\"labels\":{\"show\":true,\"truncate\":100},\"title\":{\"text\":\"Timestamp\"}}],\"valueAxes\":[{\"id\":\"ValueAxis-1\",\"name\":\"LeftAxis-1\",\"type\":\"value\",\"position\":\"left\",\"show\":true,\"style\":{},\"scale\":{\"type\":\"square root\",\"mode\":\"normal\"},\"labels\":{\"show\":true,\"rotate\":0,\"filter\":false,\"truncate\":100},\"title\":{\"text\":\"\"}}],\"seriesParams\":[{\"show\":\"true\",\"type\":\"area\",\"mode\":\"normal\",\"data\":{\"label\":\"Attacks\",\"id\":\"1\"},\"drawLinesBetweenPoints\":true,\"showCircles\":true,\"interpolate\":\"step-after\",\"valueAxis\":\"ValueAxis-1\"}],\"addTooltip\":true,\"addLegend\":true,\"legendPosition\":\"right\",\"times\":[],\"addTimeMarker\":false,\"type\":\"area\"},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"Attacks\"}},{\"id\":\"3\",\"enabled\":true,\"type\":\"terms\",\"schema\":\"group\",\"params\":{\"field\":\"dest_port\",\"size\":5,\"order\":\"desc\",\"orderBy\":\"1\",\"otherBucket\":false,\"otherBucketLabel\":\"Other\",\"missingBucket\":false,\"missingBucketLabel\":\"Missing\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"@timestamp\",\"interval\":\"auto\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{},\"customLabel\":\"Timestamp\"}}]}",
       "uiStateJSON": "{}",
       "description": "",
-      "savedSearchId": "Dionaea-Logs",
+      "savedSearchId": "385ea460-ad22-11e8-942c-a39712fa9ddf",
       "version": 1,
       "kibanaSavedObjectMeta": {
         "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
@@ -4441,11 +3798,29 @@
     }
   },
   {
-    "_id": "Dionaea-Destination-Ports-Top-10",
+    "_id": "ec53e470-8376-11e7-9adb-2955c2136c8c",
     "_type": "visualization",
     "_source": {
-      "title": "Dionaea - Attacks by Port",
-      "visState": "{\"title\":\"Dionaea - Attacks by Port\",\"type\":\"pie\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"isDonut\":true,\"legendPosition\":\"right\",\"type\":\"pie\",\"labels\":{\"show\":false,\"values\":true,\"last_level\":true,\"truncate\":100}},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"Attacks\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"terms\",\"schema\":\"segment\",\"params\":{\"field\":\"dest_port\",\"size\":10,\"order\":\"desc\",\"orderBy\":\"1\",\"otherBucket\":false,\"otherBucketLabel\":\"Other\",\"missingBucket\":false,\"missingBucketLabel\":\"Missing\"}}]}",
+      "title": "Honeytrap - Attacks by Destination Ports Histogram",
+      "visState": "{\"title\":\"Honeytrap - Attacks by Destination Ports Histogram\",\"type\":\"area\",\"params\":{\"grid\":{\"categoryLines\":false,\"style\":{\"color\":\"#eee\"}},\"categoryAxes\":[{\"id\":\"CategoryAxis-1\",\"type\":\"category\",\"position\":\"bottom\",\"show\":true,\"style\":{},\"scale\":{\"type\":\"linear\"},\"labels\":{\"show\":true,\"truncate\":100},\"title\":{\"text\":\"Timestamp\"}}],\"valueAxes\":[{\"id\":\"ValueAxis-1\",\"name\":\"LeftAxis-1\",\"type\":\"value\",\"position\":\"left\",\"show\":true,\"style\":{},\"scale\":{\"type\":\"square root\",\"mode\":\"normal\"},\"labels\":{\"show\":true,\"rotate\":0,\"filter\":false,\"truncate\":100},\"title\":{\"text\":\"\"}}],\"seriesParams\":[{\"show\":\"true\",\"type\":\"area\",\"mode\":\"normal\",\"data\":{\"label\":\"Attacks\",\"id\":\"1\"},\"drawLinesBetweenPoints\":true,\"showCircles\":true,\"interpolate\":\"step-after\",\"valueAxis\":\"ValueAxis-1\"}],\"addTooltip\":true,\"addLegend\":true,\"legendPosition\":\"right\",\"times\":[],\"addTimeMarker\":false,\"type\":\"area\"},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"Attacks\"}},{\"id\":\"3\",\"enabled\":true,\"type\":\"terms\",\"schema\":\"group\",\"params\":{\"field\":\"dest_port\",\"size\":5,\"order\":\"desc\",\"orderBy\":\"1\",\"otherBucket\":false,\"otherBucketLabel\":\"Other\",\"missingBucket\":false,\"missingBucketLabel\":\"Missing\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"@timestamp\",\"interval\":\"auto\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{},\"customLabel\":\"Timestamp\"}}]}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "Honeytrap-Logs",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "7e33e3d0-810c-11e7-8413-9fe5e30ade77",
+    "_type": "visualization",
+    "_source": {
+      "title": "Dionaea - Attacks by Destination Ports Histogram",
+      "visState": "{\"title\":\"Dionaea - Attacks by Destination Ports Histogram\",\"type\":\"area\",\"params\":{\"grid\":{\"categoryLines\":false,\"style\":{\"color\":\"#eee\"}},\"categoryAxes\":[{\"id\":\"CategoryAxis-1\",\"type\":\"category\",\"position\":\"bottom\",\"show\":true,\"style\":{},\"scale\":{\"type\":\"linear\"},\"labels\":{\"show\":true,\"truncate\":100},\"title\":{\"text\":\"Timestamp\"}}],\"valueAxes\":[{\"id\":\"ValueAxis-1\",\"name\":\"LeftAxis-1\",\"type\":\"value\",\"position\":\"left\",\"show\":true,\"style\":{},\"scale\":{\"type\":\"square root\",\"mode\":\"normal\"},\"labels\":{\"show\":true,\"rotate\":0,\"filter\":false,\"truncate\":100},\"title\":{\"text\":\"\"}}],\"seriesParams\":[{\"show\":\"true\",\"type\":\"area\",\"mode\":\"normal\",\"data\":{\"label\":\"Attacks\",\"id\":\"1\"},\"drawLinesBetweenPoints\":true,\"showCircles\":true,\"interpolate\":\"step-after\",\"valueAxis\":\"ValueAxis-1\"}],\"addTooltip\":true,\"addLegend\":true,\"legendPosition\":\"right\",\"times\":[],\"addTimeMarker\":false,\"type\":\"area\"},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"Attacks\"}},{\"id\":\"3\",\"enabled\":true,\"type\":\"terms\",\"schema\":\"group\",\"params\":{\"field\":\"dest_port\",\"size\":5,\"order\":\"desc\",\"orderBy\":\"1\",\"otherBucket\":false,\"otherBucketLabel\":\"Other\",\"missingBucket\":false,\"missingBucketLabel\":\"Missing\",\"customLabel\":\"\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"@timestamp\",\"interval\":\"auto\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{},\"customLabel\":\"Timestamp\"}}]}",
       "uiStateJSON": "{}",
       "description": "",
       "savedSearchId": "Dionaea-Logs",
@@ -4477,24 +3852,6 @@
     }
   },
   {
-    "_id": "9d251bd0-e851-11e8-97df-bbc3de28ece0",
-    "_type": "visualization",
-    "_source": {
-      "title": "Glutton - Attacks by Destination Ports Histogram",
-      "visState": "{\"title\":\"Glutton - Attacks by Destination Ports Histogram\",\"type\":\"area\",\"params\":{\"grid\":{\"categoryLines\":false,\"style\":{\"color\":\"#eee\"}},\"categoryAxes\":[{\"id\":\"CategoryAxis-1\",\"type\":\"category\",\"position\":\"bottom\",\"show\":true,\"style\":{},\"scale\":{\"type\":\"linear\"},\"labels\":{\"show\":true,\"truncate\":100},\"title\":{\"text\":\"Timestamp\"}}],\"valueAxes\":[{\"id\":\"ValueAxis-1\",\"name\":\"LeftAxis-1\",\"type\":\"value\",\"position\":\"left\",\"show\":true,\"style\":{},\"scale\":{\"type\":\"square root\",\"mode\":\"normal\"},\"labels\":{\"show\":true,\"rotate\":0,\"filter\":false,\"truncate\":100},\"title\":{\"text\":\"\"}}],\"seriesParams\":[{\"show\":\"true\",\"type\":\"area\",\"mode\":\"normal\",\"data\":{\"label\":\"Attacks\",\"id\":\"1\"},\"drawLinesBetweenPoints\":true,\"showCircles\":true,\"interpolate\":\"step-after\",\"valueAxis\":\"ValueAxis-1\"}],\"addTooltip\":true,\"addLegend\":true,\"legendPosition\":\"right\",\"times\":[],\"addTimeMarker\":false,\"type\":\"area\"},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"Attacks\"}},{\"id\":\"3\",\"enabled\":true,\"type\":\"terms\",\"schema\":\"group\",\"params\":{\"field\":\"dest_port\",\"size\":5,\"order\":\"desc\",\"orderBy\":\"1\",\"otherBucket\":false,\"otherBucketLabel\":\"Other\",\"missingBucket\":false,\"missingBucketLabel\":\"Missing\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"@timestamp\",\"interval\":\"auto\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{},\"customLabel\":\"Timestamp\"}}]}",
-      "uiStateJSON": "{}",
-      "description": "",
-      "savedSearchId": "385ea460-ad22-11e8-942c-a39712fa9ddf",
-      "version": 1,
-      "kibanaSavedObjectMeta": {
-        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
-      }
-    },
-    "_meta": {
-      "savedObjectVersion": 2
-    }
-  },
-  {
     "_id": "864b2f30-4883-11e8-9b3d-f36e8d4f5cb2",
     "_type": "visualization",
     "_source": {
@@ -4513,14 +3870,31 @@
     }
   },
   {
-    "_id": "ec53e470-8376-11e7-9adb-2955c2136c8c",
+    "_id": "56cdedf0-ec08-11e8-96db-ebfb2a58ccf6",
     "_type": "visualization",
     "_source": {
-      "title": "Honeytrap - Attacks by Destination Ports Histogram",
-      "visState": "{\"title\":\"Honeytrap - Attacks by Destination Ports Histogram\",\"type\":\"area\",\"params\":{\"grid\":{\"categoryLines\":false,\"style\":{\"color\":\"#eee\"}},\"categoryAxes\":[{\"id\":\"CategoryAxis-1\",\"type\":\"category\",\"position\":\"bottom\",\"show\":true,\"style\":{},\"scale\":{\"type\":\"linear\"},\"labels\":{\"show\":true,\"truncate\":100},\"title\":{\"text\":\"Timestamp\"}}],\"valueAxes\":[{\"id\":\"ValueAxis-1\",\"name\":\"LeftAxis-1\",\"type\":\"value\",\"position\":\"left\",\"show\":true,\"style\":{},\"scale\":{\"type\":\"square root\",\"mode\":\"normal\"},\"labels\":{\"show\":true,\"rotate\":0,\"filter\":false,\"truncate\":100},\"title\":{\"text\":\"\"}}],\"seriesParams\":[{\"show\":\"true\",\"type\":\"area\",\"mode\":\"normal\",\"data\":{\"label\":\"Attacks\",\"id\":\"1\"},\"drawLinesBetweenPoints\":true,\"showCircles\":true,\"interpolate\":\"step-after\",\"valueAxis\":\"ValueAxis-1\"}],\"addTooltip\":true,\"addLegend\":true,\"legendPosition\":\"right\",\"times\":[],\"addTimeMarker\":false,\"type\":\"area\"},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"Attacks\"}},{\"id\":\"3\",\"enabled\":true,\"type\":\"terms\",\"schema\":\"group\",\"params\":{\"field\":\"dest_port\",\"size\":5,\"order\":\"desc\",\"orderBy\":\"1\",\"otherBucket\":false,\"otherBucketLabel\":\"Other\",\"missingBucket\":false,\"missingBucketLabel\":\"Missing\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"date_histogram\",\"schema\":\"segment\",\"params\":{\"field\":\"@timestamp\",\"interval\":\"auto\",\"customInterval\":\"2h\",\"min_doc_count\":1,\"extended_bounds\":{},\"customLabel\":\"Timestamp\"}}]}",
+      "title": "Username Tagcloud",
+      "visState": "{\"title\":\"Username Tagcloud\",\"type\":\"tagcloud\",\"params\":{\"font\":\"serif\",\"fontStyle\":\"normal\",\"fontWeight\":\"normal\",\"fromDegree\":\"0\",\"maxFontSize\":64,\"minFontSize\":16,\"orientation\":\"single\",\"orientations\":1,\"scale\":\"linear\",\"showLabel\":false,\"spiral\":\"rectangular\",\"textScale\":\"sqrt\",\"timeInterval\":\"500\",\"toDegree\":\"0\"},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"terms\",\"schema\":\"segment\",\"params\":{\"field\":\"username.keyword\",\"size\":50,\"order\":\"desc\",\"orderBy\":\"1\",\"otherBucket\":false,\"otherBucketLabel\":\"Other\",\"missingBucket\":false,\"missingBucketLabel\":\"Missing\",\"customLabel\":\"\"}}]}",
       "uiStateJSON": "{}",
       "description": "",
-      "savedSearchId": "Honeytrap-Logs",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"query\":{\"language\":\"kuery\",\"query\":\"(type.keyword:\\\"Cowrie\\\" AND system:\\\"ssh\\\") OR type.keyword:\\\"Dionaea\\\" OR type.keyword:\\\"Heralding\\\" OR type.keyword:\\\"RDPY\\\"\"},\"filter\":[],\"index\":\"logstash-*\"}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "Dionaea-Destination-Ports-Top-10",
+    "_type": "visualization",
+    "_source": {
+      "title": "Dionaea - Attacks by Port",
+      "visState": "{\"title\":\"Dionaea - Attacks by Port\",\"type\":\"pie\",\"params\":{\"shareYAxis\":true,\"addTooltip\":true,\"addLegend\":true,\"isDonut\":true,\"legendPosition\":\"right\",\"type\":\"pie\",\"labels\":{\"show\":false,\"values\":true,\"last_level\":true,\"truncate\":100}},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"Attacks\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"terms\",\"schema\":\"segment\",\"params\":{\"field\":\"dest_port\",\"size\":10,\"order\":\"desc\",\"orderBy\":\"1\",\"otherBucket\":false,\"otherBucketLabel\":\"Other\",\"missingBucket\":false,\"missingBucketLabel\":\"Missing\"}}]}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "Dionaea-Logs",
       "version": 1,
       "kibanaSavedObjectMeta": {
         "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
@@ -4549,18 +3923,647 @@
     }
   },
   {
+    "_id": "9b89ddb0-ec07-11e8-96db-ebfb2a58ccf6",
+    "_type": "visualization",
+    "_source": {
+      "title": "Password Tagcloud",
+      "visState": "{\"title\":\"Password Tagcloud\",\"type\":\"tagcloud\",\"params\":{\"font\":\"serif\",\"fontStyle\":\"normal\",\"fontWeight\":\"normal\",\"fromDegree\":0,\"maxFontSize\":64,\"minFontSize\":16,\"orientation\":\"single\",\"orientations\":1,\"scale\":\"linear\",\"showLabel\":false,\"spiral\":\"rectangular\",\"textScale\":\"sqrt\",\"timeInterval\":500,\"toDegree\":0},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"terms\",\"schema\":\"segment\",\"params\":{\"field\":\"password.keyword\",\"size\":50,\"order\":\"desc\",\"orderBy\":\"1\",\"otherBucket\":false,\"otherBucketLabel\":\"Other\",\"missingBucket\":false,\"missingBucketLabel\":\"Missing\"}}]}",
+      "uiStateJSON": "{\"spy\":{\"mode\":{\"fill\":false,\"name\":null}}}",
+      "description": "",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"query\":{\"query\":\"(type:\\\"Cowrie\\\" AND system:\\\"ssh\\\") OR type:\\\"Dionaea\\\" OR type:\\\"Heralding\\\" OR type:\\\"RDPY\\\"\",\"language\":\"lucene\"},\"filter\":[],\"index\":\"logstash-*\"}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
     "_id": "8d4e8300-ebde-11e8-9675-1b303bfb38ef",
     "_type": "dashboard",
     "_source": {
       "title": ">T-Pot",
       "hits": 0,
       "description": "T-Pot Dashboard",
-      "panelsJSON": "[{\"embeddableConfig\":{\"vis\":{\"legendOpen\":true}},\"gridData\":{\"h\":15,\"i\":\"9\",\"w\":12,\"x\":24,\"y\":37},\"id\":\"P0f-OS-Top-10\",\"panelIndex\":\"9\",\"type\":\"visualization\",\"version\":\"6.3.0\"},{\"embeddableConfig\":{\"vis\":{\"params\":{\"sort\":{\"columnIndex\":null,\"direction\":null}}}},\"gridData\":{\"h\":29,\"i\":\"21\",\"w\":20,\"x\":28,\"y\":86},\"id\":\"Suricata-Alert-Signature-Top-10\",\"panelIndex\":\"21\",\"type\":\"visualization\",\"version\":\"6.3.0\"},{\"embeddableConfig\":{\"vis\":{\"params\":{\"sort\":{\"columnIndex\":null,\"direction\":null}}}},\"gridData\":{\"h\":29,\"i\":\"38\",\"w\":8,\"x\":20,\"y\":86},\"id\":\"1a097850-7c22-11e7-aa1e-6bf93670d67b\",\"panelIndex\":\"38\",\"type\":\"visualization\",\"version\":\"6.3.0\"},{\"embeddableConfig\":{\"vis\":{\"legendOpen\":true}},\"gridData\":{\"h\":15,\"i\":\"43\",\"w\":24,\"x\":24,\"y\":52},\"id\":\"e624bc50-7dd6-11e7-bee2-c98307c16efa\",\"panelIndex\":\"43\",\"type\":\"visualization\",\"version\":\"6.3.0\"},{\"embeddableConfig\":{\"vis\":{\"params\":{\"sort\":{\"columnIndex\":null,\"direction\":null}}}},\"gridData\":{\"h\":29,\"i\":\"44\",\"w\":12,\"x\":0,\"y\":86},\"id\":\"d94ff2a0-7ec2-11e7-a286-9f03beba6417\",\"panelIndex\":\"44\",\"type\":\"visualization\",\"version\":\"6.3.0\"},{\"gridData\":{\"h\":15,\"i\":\"45\",\"w\":12,\"x\":36,\"y\":37},\"id\":\"50d82860-7ea0-11e7-a286-9f03beba6417\",\"panelIndex\":\"45\",\"type\":\"visualization\",\"version\":\"6.3.0\"},{\"embeddableConfig\":{\"spy\":{\"mode\":{\"fill\":false,\"name\":null}},\"vis\":{\"legendOpen\":true}},\"gridData\":{\"h\":15,\"i\":\"46\",\"w\":16,\"x\":0,\"y\":22},\"id\":\"7b61a6a0-7ebf-11e7-a286-9f03beba6417\",\"panelIndex\":\"46\",\"type\":\"visualization\",\"version\":\"6.3.0\"},{\"embeddableConfig\":{\"vis\":{\"legendOpen\":false}},\"gridData\":{\"h\":15,\"i\":\"47\",\"w\":16,\"x\":0,\"y\":7},\"id\":\"87428ba0-7e9d-11e7-a286-9f03beba6417\",\"panelIndex\":\"47\",\"type\":\"visualization\",\"version\":\"6.3.0\"},{\"embeddableConfig\":{\"vis\":{\"legendOpen\":false}},\"gridData\":{\"h\":15,\"i\":\"48\",\"w\":16,\"x\":16,\"y\":7},\"id\":\"762f66c0-7e9e-11e7-a286-9f03beba6417\",\"panelIndex\":\"48\",\"type\":\"visualization\",\"version\":\"6.3.0\"},{\"gridData\":{\"h\":15,\"i\":\"49\",\"w\":12,\"x\":12,\"y\":37},\"id\":\"0d947000-7ebd-11e7-a286-9f03beba6417\",\"panelIndex\":\"49\",\"type\":\"visualization\",\"version\":\"6.3.0\"},{\"embeddableConfig\":{\"vis\":{\"legendOpen\":true}},\"gridData\":{\"h\":15,\"i\":\"50\",\"w\":16,\"x\":32,\"y\":22},\"id\":\"885928c0-7ebe-11e7-a286-9f03beba6417\",\"panelIndex\":\"50\",\"type\":\"visualization\",\"version\":\"6.3.0\"},{\"embeddableConfig\":{\"vis\":{\"legendOpen\":true}},\"gridData\":{\"h\":15,\"i\":\"51\",\"w\":16,\"x\":16,\"y\":22},\"id\":\"ef227eb0-7e9d-11e7-a286-9f03beba6417\",\"panelIndex\":\"51\",\"type\":\"visualization\",\"version\":\"6.3.0\"},{\"embeddableConfig\":{\"mapCenter\":[24.5271348225978,-5.273437500000001],\"mapZoom\":1},\"gridData\":{\"h\":15,\"i\":\"52\",\"w\":16,\"x\":32,\"y\":7},\"id\":\"d1aa9740-7e9e-11e7-a286-9f03beba6417\",\"panelIndex\":\"52\",\"type\":\"visualization\",\"version\":\"6.3.0\"},{\"embeddableConfig\":{\"vis\":{\"params\":{\"sort\":{\"columnIndex\":null,\"direction\":null}}}},\"gridData\":{\"h\":29,\"i\":\"53\",\"w\":8,\"x\":12,\"y\":86},\"id\":\"772cb2b0-7ec3-11e7-a7c8-5f38ad5bf75f\",\"panelIndex\":\"53\",\"type\":\"visualization\",\"version\":\"6.3.0\"},{\"embeddableConfig\":{\"vis\":{\"legendOpen\":true}},\"gridData\":{\"h\":15,\"i\":\"54\",\"w\":12,\"x\":0,\"y\":37},\"id\":\"349c11c0-7ea0-11e7-a286-9f03beba6417\",\"panelIndex\":\"54\",\"type\":\"visualization\",\"version\":\"6.3.0\"},{\"embeddableConfig\":{\"vis\":{\"legendOpen\":true}},\"gridData\":{\"h\":15,\"i\":\"55\",\"w\":24,\"x\":0,\"y\":52},\"id\":\"f1a19000-7ebf-11e7-a286-9f03beba6417\",\"panelIndex\":\"55\",\"type\":\"visualization\",\"version\":\"6.3.0\"},{\"embeddableConfig\":{},\"gridData\":{\"h\":7,\"i\":\"56\",\"w\":48,\"x\":0,\"y\":0},\"id\":\"e77bc660-e9d3-11e8-be2c-8fd05c77f582\",\"panelIndex\":\"56\",\"type\":\"visualization\",\"version\":\"6.4.3\"},{\"embeddableConfig\":{},\"gridData\":{\"h\":19,\"i\":\"57\",\"w\":24,\"x\":0,\"y\":67},\"id\":\"56cdedf0-ec08-11e8-96db-ebfb2a58ccf6\",\"panelIndex\":\"57\",\"type\":\"visualization\",\"version\":\"6.4.3\"},{\"embeddableConfig\":{},\"gridData\":{\"h\":19,\"i\":\"58\",\"w\":24,\"x\":24,\"y\":67},\"id\":\"9b89ddb0-ec07-11e8-96db-ebfb2a58ccf6\",\"panelIndex\":\"58\",\"type\":\"visualization\",\"version\":\"6.4.3\"}]",
+      "panelsJSON": "[{\"embeddableConfig\":{\"vis\":{\"legendOpen\":true}},\"gridData\":{\"x\":24,\"y\":36,\"w\":12,\"h\":15,\"i\":\"9\"},\"id\":\"P0f-OS-Top-10\",\"panelIndex\":\"9\",\"type\":\"visualization\",\"version\":\"6.3.0\"},{\"embeddableConfig\":{\"vis\":{\"params\":{\"sort\":{\"columnIndex\":null,\"direction\":null}}}},\"gridData\":{\"x\":28,\"y\":85,\"w\":20,\"h\":29,\"i\":\"21\"},\"id\":\"Suricata-Alert-Signature-Top-10\",\"panelIndex\":\"21\",\"type\":\"visualization\",\"version\":\"6.3.0\"},{\"embeddableConfig\":{\"vis\":{\"params\":{\"sort\":{\"columnIndex\":null,\"direction\":null}}}},\"gridData\":{\"x\":20,\"y\":85,\"w\":8,\"h\":29,\"i\":\"38\"},\"id\":\"1a097850-7c22-11e7-aa1e-6bf93670d67b\",\"panelIndex\":\"38\",\"type\":\"visualization\",\"version\":\"6.3.0\"},{\"embeddableConfig\":{\"vis\":{\"legendOpen\":true}},\"gridData\":{\"x\":24,\"y\":51,\"w\":24,\"h\":15,\"i\":\"43\"},\"id\":\"e624bc50-7dd6-11e7-bee2-c98307c16efa\",\"panelIndex\":\"43\",\"type\":\"visualization\",\"version\":\"6.3.0\"},{\"embeddableConfig\":{\"vis\":{\"params\":{\"sort\":{\"columnIndex\":null,\"direction\":null}}}},\"gridData\":{\"x\":0,\"y\":85,\"w\":12,\"h\":29,\"i\":\"44\"},\"id\":\"d94ff2a0-7ec2-11e7-a286-9f03beba6417\",\"panelIndex\":\"44\",\"type\":\"visualization\",\"version\":\"6.3.0\"},{\"gridData\":{\"x\":36,\"y\":36,\"w\":12,\"h\":15,\"i\":\"45\"},\"id\":\"50d82860-7ea0-11e7-a286-9f03beba6417\",\"panelIndex\":\"45\",\"type\":\"visualization\",\"version\":\"6.3.0\"},{\"embeddableConfig\":{\"spy\":{\"mode\":{\"fill\":false,\"name\":null}},\"vis\":{\"legendOpen\":true}},\"gridData\":{\"x\":0,\"y\":21,\"w\":16,\"h\":15,\"i\":\"46\"},\"id\":\"7b61a6a0-7ebf-11e7-a286-9f03beba6417\",\"panelIndex\":\"46\",\"type\":\"visualization\",\"version\":\"6.3.0\"},{\"embeddableConfig\":{\"vis\":{\"legendOpen\":false}},\"gridData\":{\"x\":0,\"y\":6,\"w\":16,\"h\":15,\"i\":\"47\"},\"id\":\"87428ba0-7e9d-11e7-a286-9f03beba6417\",\"panelIndex\":\"47\",\"type\":\"visualization\",\"version\":\"6.3.0\"},{\"embeddableConfig\":{\"vis\":{\"legendOpen\":false}},\"gridData\":{\"x\":16,\"y\":6,\"w\":16,\"h\":15,\"i\":\"48\"},\"id\":\"762f66c0-7e9e-11e7-a286-9f03beba6417\",\"panelIndex\":\"48\",\"type\":\"visualization\",\"version\":\"6.3.0\"},{\"gridData\":{\"x\":12,\"y\":36,\"w\":12,\"h\":15,\"i\":\"49\"},\"id\":\"0d947000-7ebd-11e7-a286-9f03beba6417\",\"panelIndex\":\"49\",\"type\":\"visualization\",\"version\":\"6.3.0\"},{\"embeddableConfig\":{\"vis\":{\"legendOpen\":true}},\"gridData\":{\"x\":32,\"y\":21,\"w\":16,\"h\":15,\"i\":\"50\"},\"id\":\"885928c0-7ebe-11e7-a286-9f03beba6417\",\"panelIndex\":\"50\",\"type\":\"visualization\",\"version\":\"6.3.0\"},{\"embeddableConfig\":{\"vis\":{\"legendOpen\":true}},\"gridData\":{\"x\":16,\"y\":21,\"w\":16,\"h\":15,\"i\":\"51\"},\"id\":\"ef227eb0-7e9d-11e7-a286-9f03beba6417\",\"panelIndex\":\"51\",\"type\":\"visualization\",\"version\":\"6.3.0\"},{\"embeddableConfig\":{\"mapCenter\":[24.5271348225978,-5.273437500000001],\"mapZoom\":1},\"gridData\":{\"x\":32,\"y\":6,\"w\":16,\"h\":15,\"i\":\"52\"},\"id\":\"d1aa9740-7e9e-11e7-a286-9f03beba6417\",\"panelIndex\":\"52\",\"type\":\"visualization\",\"version\":\"6.3.0\"},{\"embeddableConfig\":{\"vis\":{\"params\":{\"sort\":{\"columnIndex\":null,\"direction\":null}}}},\"gridData\":{\"x\":12,\"y\":85,\"w\":8,\"h\":29,\"i\":\"53\"},\"id\":\"772cb2b0-7ec3-11e7-a7c8-5f38ad5bf75f\",\"panelIndex\":\"53\",\"type\":\"visualization\",\"version\":\"6.3.0\"},{\"embeddableConfig\":{\"vis\":{\"legendOpen\":true}},\"gridData\":{\"x\":0,\"y\":36,\"w\":12,\"h\":15,\"i\":\"54\"},\"id\":\"349c11c0-7ea0-11e7-a286-9f03beba6417\",\"panelIndex\":\"54\",\"type\":\"visualization\",\"version\":\"6.3.0\"},{\"embeddableConfig\":{\"vis\":{\"legendOpen\":true}},\"gridData\":{\"x\":0,\"y\":51,\"w\":24,\"h\":15,\"i\":\"55\"},\"id\":\"f1a19000-7ebf-11e7-a286-9f03beba6417\",\"panelIndex\":\"55\",\"type\":\"visualization\",\"version\":\"6.3.0\"},{\"embeddableConfig\":{},\"gridData\":{\"x\":0,\"y\":0,\"w\":48,\"h\":6,\"i\":\"56\"},\"id\":\"e77bc660-e9d3-11e8-be2c-8fd05c77f582\",\"panelIndex\":\"56\",\"type\":\"visualization\",\"version\":\"6.4.3\"},{\"embeddableConfig\":{},\"gridData\":{\"x\":0,\"y\":66,\"w\":24,\"h\":19,\"i\":\"57\"},\"id\":\"56cdedf0-ec08-11e8-96db-ebfb2a58ccf6\",\"panelIndex\":\"57\",\"type\":\"visualization\",\"version\":\"6.4.3\"},{\"embeddableConfig\":{},\"gridData\":{\"x\":24,\"y\":66,\"w\":24,\"h\":19,\"i\":\"58\"},\"id\":\"9b89ddb0-ec07-11e8-96db-ebfb2a58ccf6\",\"panelIndex\":\"58\",\"type\":\"visualization\",\"version\":\"6.4.3\"}]",
       "optionsJSON": "{\"darkTheme\":true,\"useMargins\":false}",
       "version": 1,
       "timeRestore": false,
       "kibanaSavedObjectMeta": {
         "searchSourceJSON": "{\"filter\":[],\"highlightAll\":true,\"version\":true,\"query\":{\"language\":\"lucene\",\"query\":{\"query_string\":{\"analyze_wildcard\":true,\"default_field\":\"*\",\"query\":\"*\"}}}}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "63d0bf60-e851-11e8-97df-bbc3de28ece0",
+    "_type": "visualization",
+    "_source": {
+      "title": "Glutton Attack Map",
+      "visState": "{\"title\":\"Glutton Attack Map\",\"type\":\"tile_map\",\"params\":{\"mapType\":\"Shaded Circle Markers\",\"isDesaturated\":true,\"addTooltip\":true,\"heatMaxZoom\":16,\"heatMinOpacity\":0.1,\"heatRadius\":25,\"heatBlur\":15,\"heatNormalizeData\":true,\"wms\":{\"enabled\":false,\"url\":\"http://ows.terrestris.de/osm/service\",\"options\":{\"version\":\"1.3.0\",\"layers\":\"OSM-WMS\",\"format\":\"image/png\",\"transparent\":true,\"attribution\":\"© <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors\",\"styles\":\"\"},\"baseLayersAreLoaded\":{},\"tmsLayers\":[{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}],\"selectedTmsLayer\":{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}},\"legendPosition\":\"bottomright\",\"mapZoom\":2,\"mapCenter\":[0,0],\"colorSchema\":\"Yellow to Red\",\"heatClusterSize\":1.5},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"geohash_grid\",\"schema\":\"segment\",\"params\":{\"field\":\"geoip.location\",\"autoPrecision\":true,\"isFilteredByCollar\":true,\"useGeocentroid\":true,\"mapZoom\":2,\"mapCenter\":{\"lon\":0.17578125,\"lat\":-0.17578097424708533},\"precision\":2}}]}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "385ea460-ad22-11e8-942c-a39712fa9ddf",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "a81cba70-e7fc-11e8-9ac4-13ecd4ad8d70",
+    "_type": "visualization",
+    "_source": {
+      "title": "Medpot Attack Map",
+      "visState": "{\"title\":\"Medpot Attack Map\",\"type\":\"tile_map\",\"params\":{\"mapType\":\"Shaded Circle Markers\",\"isDesaturated\":true,\"addTooltip\":true,\"heatMaxZoom\":16,\"heatMinOpacity\":0.1,\"heatRadius\":25,\"heatBlur\":15,\"heatNormalizeData\":true,\"wms\":{\"enabled\":false,\"url\":\"http://ows.terrestris.de/osm/service\",\"options\":{\"version\":\"1.3.0\",\"layers\":\"OSM-WMS\",\"format\":\"image/png\",\"transparent\":true,\"attribution\":\"© <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors\",\"styles\":\"\"},\"baseLayersAreLoaded\":{},\"tmsLayers\":[{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}],\"selectedTmsLayer\":{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}},\"legendPosition\":\"bottomright\",\"mapZoom\":2,\"mapCenter\":[0,0],\"colorSchema\":\"Yellow to Red\",\"heatClusterSize\":1.5},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"geohash_grid\",\"schema\":\"segment\",\"params\":{\"field\":\"geoip.location\",\"autoPrecision\":true,\"isFilteredByCollar\":true,\"useGeocentroid\":true,\"mapZoom\":2,\"mapCenter\":{\"lon\":0.17578125,\"lat\":-0.17578097424708533},\"precision\":2}}]}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "baa53b00-b597-11e8-9a34-d951cebce834",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "b8745000-4ad5-11e8-ab1b-fdef76c312f4",
+    "_type": "visualization",
+    "_source": {
+      "title": "Ciscoasa Attack Map",
+      "visState": "{\"title\":\"Ciscoasa Attack Map\",\"type\":\"tile_map\",\"params\":{\"mapType\":\"Shaded Circle Markers\",\"isDesaturated\":true,\"addTooltip\":true,\"heatClusterSize\":1.5,\"legendPosition\":\"bottomright\",\"mapZoom\":2,\"mapCenter\":[0,0],\"wms\":{\"enabled\":false,\"options\":{\"format\":\"image/png\",\"transparent\":true,\"layers\":\"OSM-WMS\",\"version\":\"1.3.0\",\"styles\":\"\",\"attribution\":\"© <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors\"},\"baseLayersAreLoaded\":{},\"tmsLayers\":[{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.2.4\",\"minZoom\":0,\"maxZoom\":10,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}],\"selectedTmsLayer\":{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.2.4\",\"minZoom\":0,\"maxZoom\":10,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]},\"url\":\"http://ows.terrestris.de/osm/service\"},\"colorSchema\":\"Yellow to Red\"},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"geohash_grid\",\"schema\":\"segment\",\"params\":{\"field\":\"geoip.location\",\"autoPrecision\":true,\"isFilteredByCollar\":true,\"useGeocentroid\":true,\"mapZoom\":2,\"mapCenter\":{\"lon\":2.2851562500000004,\"lat\":37.85750715625203},\"precision\":2}}]}",
+      "uiStateJSON": "{\"mapZoom\":2,\"mapCenter\":[37.782941450067156,2.458449960686267]}",
+      "description": "",
+      "savedSearchId": "2934abc0-4ad4-11e8-ab1b-fdef76c312f4",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"filter\":[],\"query\":{\"query\":\"\",\"language\":\"lucene\"}}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "94ae10e0-4871-11e8-9b3d-f36e8d4f5cb2",
+    "_type": "visualization",
+    "_source": {
+      "title": "Heralding Attack Map",
+      "visState": "{\"title\":\"Heralding Attack Map\",\"type\":\"tile_map\",\"params\":{\"mapType\":\"Shaded Circle Markers\",\"isDesaturated\":true,\"addTooltip\":true,\"heatClusterSize\":1.5,\"legendPosition\":\"bottomright\",\"mapZoom\":2,\"mapCenter\":[0,0],\"wms\":{\"enabled\":false,\"options\":{\"format\":\"image/png\",\"transparent\":true,\"layers\":\"OSM-WMS\",\"version\":\"1.3.0\",\"attribution\":\"© <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors\"},\"baseLayersAreLoaded\":{},\"tmsLayers\":[{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.2.4\",\"minZoom\":0,\"maxZoom\":10,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}],\"selectedTmsLayer\":{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.2.4\",\"minZoom\":0,\"maxZoom\":10,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]},\"url\":\"http://ows.terrestris.de/osm/service\"},\"colorSchema\":\"Yellow to Red\"},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"geohash_grid\",\"schema\":\"segment\",\"params\":{\"field\":\"geoip.location\",\"autoPrecision\":true,\"isFilteredByCollar\":true,\"useGeocentroid\":true,\"mapZoom\":2,\"mapCenter\":{\"lon\":0.17578125,\"lat\":-0.17578097424708533},\"precision\":2}}]}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "c2bea500-47ca-11e8-a905-f74bbc7cbd2d",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"filter\":[],\"query\":{\"query\":\"\",\"language\":\"lucene\"}}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "e77bc660-e9d3-11e8-be2c-8fd05c77f582",
+    "_type": "visualization",
+    "_source": {
+      "title": "Honeypot Attacks - Top 10",
+      "visState": "{\"title\":\"Honeypot Attacks - Top 10\",\"type\":\"metric\",\"params\":{\"addTooltip\":true,\"addLegend\":false,\"type\":\"metric\",\"metric\":{\"percentageMode\":false,\"useRanges\":false,\"colorSchema\":\"Green to Red\",\"metricColorMode\":\"None\",\"colorsRange\":[{\"from\":0,\"to\":10000}],\"labels\":{\"show\":true},\"invertColors\":false,\"style\":{\"bgFill\":\"#000\",\"bgColor\":false,\"labelColor\":false,\"subText\":\"\",\"fontSize\":24}}},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"Attacks\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"terms\",\"schema\":\"group\",\"params\":{\"field\":\"type.keyword\",\"size\":10,\"order\":\"desc\",\"orderBy\":\"1\",\"otherBucket\":false,\"otherBucketLabel\":\"Other\",\"missingBucket\":false,\"missingBucketLabel\":\"Missing\"}}]}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "Honeypot-Logs",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "c0916430-8b5e-11e7-ba35-0d8832ac304f",
+    "_type": "visualization",
+    "_source": {
+      "title": "Mailoney Attack Map",
+      "visState": "{\"title\":\"Mailoney Attack Map\",\"type\":\"tile_map\",\"params\":{\"mapType\":\"Shaded Circle Markers\",\"isDesaturated\":true,\"addTooltip\":true,\"heatMaxZoom\":16,\"heatMinOpacity\":0.1,\"heatRadius\":25,\"heatBlur\":15,\"heatNormalizeData\":true,\"wms\":{\"enabled\":false,\"url\":\"http://ows.terrestris.de/osm/service\",\"options\":{\"version\":\"1.3.0\",\"layers\":\"OSM-WMS\",\"format\":\"image/png\",\"transparent\":true,\"attribution\":\"© <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors\",\"styles\":\"\"},\"baseLayersAreLoaded\":{},\"tmsLayers\":[{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}],\"selectedTmsLayer\":{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}},\"legendPosition\":\"bottomright\",\"mapZoom\":2,\"mapCenter\":[0,0],\"colorSchema\":\"Yellow to Red\",\"heatClusterSize\":1.5},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"geohash_grid\",\"schema\":\"segment\",\"params\":{\"field\":\"geoip.location\",\"autoPrecision\":true,\"isFilteredByCollar\":true,\"useGeocentroid\":true,\"mapZoom\":2,\"mapCenter\":{\"lon\":0.17578125,\"lat\":-0.17578097424708533},\"precision\":2}}]}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "9c35dd90-6977-11e7-9c11-8d9c11943fa0",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "e4b7cf40-8b52-11e7-b92d-d39e43e3de0f",
+    "_type": "visualization",
+    "_source": {
+      "title": "Rdpy Attack Map",
+      "visState": "{\"title\":\"Rdpy Attack Map\",\"type\":\"tile_map\",\"params\":{\"mapType\":\"Shaded Circle Markers\",\"isDesaturated\":true,\"addTooltip\":true,\"heatMaxZoom\":16,\"heatMinOpacity\":0.1,\"heatRadius\":25,\"heatBlur\":15,\"heatNormalizeData\":true,\"wms\":{\"enabled\":false,\"url\":\"http://ows.terrestris.de/osm/service\",\"options\":{\"version\":\"1.3.0\",\"layers\":\"OSM-WMS\",\"format\":\"image/png\",\"transparent\":true,\"attribution\":\"© <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors\",\"styles\":\"\"},\"baseLayersAreLoaded\":{},\"tmsLayers\":[{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}],\"selectedTmsLayer\":{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}},\"legendPosition\":\"bottomright\",\"mapZoom\":2,\"mapCenter\":[0,0],\"colorSchema\":\"Yellow to Red\",\"heatClusterSize\":1.5},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"geohash_grid\",\"schema\":\"segment\",\"params\":{\"field\":\"geoip.location\",\"autoPrecision\":true,\"isFilteredByCollar\":true,\"useGeocentroid\":true,\"mapZoom\":2,\"mapCenter\":{\"lon\":0.17578125,\"lat\":-0.17578097424708533},\"precision\":2}}]}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "aa750980-8ab5-11e7-8fef-33e989079c7d",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "f8e24f20-634e-11e8-be86-73985bedf977",
+    "_type": "visualization",
+    "_source": {
+      "title": "Tanner Attack Map",
+      "visState": "{\"title\":\"Tanner Attack Map\",\"type\":\"tile_map\",\"params\":{\"mapType\":\"Shaded Circle Markers\",\"isDesaturated\":true,\"addTooltip\":true,\"heatMaxZoom\":16,\"heatMinOpacity\":0.1,\"heatRadius\":25,\"heatBlur\":15,\"heatNormalizeData\":true,\"wms\":{\"enabled\":false,\"url\":\"http://ows.terrestris.de/osm/service\",\"options\":{\"version\":\"1.3.0\",\"layers\":\"OSM-WMS\",\"format\":\"image/png\",\"transparent\":true,\"attribution\":\"© <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors\",\"styles\":\"\"},\"baseLayersAreLoaded\":{},\"tmsLayers\":[{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.2.4\",\"minZoom\":0,\"maxZoom\":10,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}],\"selectedTmsLayer\":{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.2.4\",\"minZoom\":0,\"maxZoom\":10,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}},\"legendPosition\":\"bottomright\",\"mapZoom\":2,\"mapCenter\":[0,0],\"heatClusterSize\":1.5,\"colorSchema\":\"Yellow to Red\"},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"geohash_grid\",\"schema\":\"segment\",\"params\":{\"field\":\"geoip.location\",\"autoPrecision\":true,\"isFilteredByCollar\":true,\"useGeocentroid\":true,\"mapZoom\":2,\"mapCenter\":{\"lon\":0.17578125,\"lat\":-0.17578097424708533},\"precision\":2}}]}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "d800f130-633f-11e8-be86-73985bedf977",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"filter\":[],\"query\":{\"query\":\"\",\"language\":\"lucene\"}}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "ElasticPot-Map",
+    "_type": "visualization",
+    "_source": {
+      "title": "ElasticPot Attack Map",
+      "visState": "{\"title\":\"ElasticPot Attack Map\",\"type\":\"tile_map\",\"params\":{\"mapType\":\"Shaded Circle Markers\",\"isDesaturated\":true,\"addTooltip\":true,\"heatMaxZoom\":16,\"heatMinOpacity\":0.1,\"heatRadius\":25,\"heatBlur\":15,\"heatNormalizeData\":true,\"wms\":{\"enabled\":false,\"url\":\"http://ows.terrestris.de/osm/service\",\"options\":{\"version\":\"1.3.0\",\"layers\":\"OSM-WMS\",\"format\":\"image/png\",\"transparent\":true,\"attribution\":\"© <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors\",\"styles\":\"\"},\"baseLayersAreLoaded\":{},\"tmsLayers\":[{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}],\"selectedTmsLayer\":{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}},\"legendPosition\":\"bottomright\",\"mapZoom\":2,\"mapCenter\":[0,0],\"colorSchema\":\"Yellow to Red\",\"heatClusterSize\":1.5},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"geohash_grid\",\"schema\":\"segment\",\"params\":{\"field\":\"geoip.location\",\"autoPrecision\":true,\"isFilteredByCollar\":true,\"useGeocentroid\":true,\"mapZoom\":2,\"mapCenter\":{\"lon\":0.17578125,\"lat\":-0.17578097424708533},\"precision\":2}}]}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "ElasticPot-Logs",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "Honeytrap-Map",
+    "_type": "visualization",
+    "_source": {
+      "title": "Honeytrap Attack Map",
+      "visState": "{\"title\":\"Honeytrap Attack Map\",\"type\":\"tile_map\",\"params\":{\"mapType\":\"Shaded Circle Markers\",\"isDesaturated\":true,\"addTooltip\":true,\"heatMaxZoom\":16,\"heatMinOpacity\":0.1,\"heatRadius\":25,\"heatBlur\":15,\"heatNormalizeData\":true,\"wms\":{\"enabled\":false,\"url\":\"http://ows.terrestris.de/osm/service\",\"options\":{\"version\":\"1.3.0\",\"layers\":\"OSM-WMS\",\"format\":\"image/png\",\"transparent\":true,\"attribution\":\"© <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors\",\"styles\":\"\"},\"baseLayersAreLoaded\":{},\"tmsLayers\":[{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}],\"selectedTmsLayer\":{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}},\"legendPosition\":\"bottomright\",\"mapZoom\":2,\"mapCenter\":[0,0],\"colorSchema\":\"Yellow to Red\",\"heatClusterSize\":1.5},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"geohash_grid\",\"schema\":\"segment\",\"params\":{\"field\":\"geoip.location\",\"autoPrecision\":true,\"isFilteredByCollar\":true,\"useGeocentroid\":true,\"mapZoom\":2,\"mapCenter\":{\"lon\":0.17578125,\"lat\":-0.17578097424708533},\"precision\":2}}]}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "Honeytrap-Logs",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "NGINX-Map",
+    "_type": "visualization",
+    "_source": {
+      "title": "NGINX Attack Map",
+      "visState": "{\"title\":\"NGINX Attack Map\",\"type\":\"tile_map\",\"params\":{\"mapType\":\"Shaded Circle Markers\",\"isDesaturated\":true,\"addTooltip\":true,\"heatMaxZoom\":16,\"heatMinOpacity\":0.1,\"heatRadius\":25,\"heatBlur\":15,\"heatNormalizeData\":true,\"wms\":{\"enabled\":false,\"url\":\"http://ows.terrestris.de/osm/service\",\"options\":{\"version\":\"1.3.0\",\"layers\":\"OSM-WMS\",\"format\":\"image/png\",\"transparent\":true,\"attribution\":\"© <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors\",\"styles\":\"\"},\"baseLayersAreLoaded\":{},\"tmsLayers\":[{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}],\"selectedTmsLayer\":{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}},\"legendPosition\":\"bottomright\",\"mapZoom\":2,\"mapCenter\":[0,0],\"colorSchema\":\"Yellow to Red\",\"heatClusterSize\":1.5},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"geohash_grid\",\"schema\":\"segment\",\"params\":{\"field\":\"geoip.location\",\"autoPrecision\":true,\"isFilteredByCollar\":true,\"useGeocentroid\":true,\"mapZoom\":2,\"mapCenter\":{\"lon\":0.17578125,\"lat\":-0.17578097424708533},\"precision\":2}}]}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "NGINX-Logs",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "Glastopf-Map",
+    "_type": "visualization",
+    "_source": {
+      "title": "Glastopf Attack Map",
+      "visState": "{\"title\":\"Glastopf Attack Map\",\"type\":\"tile_map\",\"params\":{\"mapType\":\"Scaled Circle Markers\",\"isDesaturated\":true,\"addTooltip\":true,\"heatMaxZoom\":16,\"heatMinOpacity\":0.1,\"heatRadius\":25,\"heatBlur\":15,\"heatNormalizeData\":true,\"wms\":{\"enabled\":false,\"url\":\"http://ows.terrestris.de/osm/service\",\"options\":{\"version\":\"1.3.0\",\"layers\":\"OSM-WMS\",\"format\":\"image/png\",\"transparent\":true,\"attribution\":\"© <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors\",\"styles\":\"\"},\"baseLayersAreLoaded\":{},\"tmsLayers\":[{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}],\"selectedTmsLayer\":{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}},\"legendPosition\":\"bottomright\",\"mapZoom\":2,\"mapCenter\":[0,0],\"colorSchema\":\"Yellow to Red\",\"heatClusterSize\":1.5},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"geohash_grid\",\"schema\":\"segment\",\"params\":{\"field\":\"geoip.location\",\"autoPrecision\":true,\"isFilteredByCollar\":true,\"useGeocentroid\":true,\"mapZoom\":2,\"mapCenter\":{\"lon\":0.17578125,\"lat\":-0.17578097424708533},\"precision\":2}}]}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "Glastopf-Logs",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "ConPot-Map",
+    "_type": "visualization",
+    "_source": {
+      "title": "Conpot Attack Map",
+      "visState": "{\"title\":\"Conpot Attack Map\",\"type\":\"tile_map\",\"params\":{\"mapType\":\"Shaded Circle Markers\",\"isDesaturated\":true,\"addTooltip\":true,\"heatMaxZoom\":16,\"heatMinOpacity\":0.1,\"heatRadius\":25,\"heatBlur\":15,\"heatNormalizeData\":true,\"wms\":{\"enabled\":false,\"url\":\"http://ows.terrestris.de/osm/service\",\"options\":{\"version\":\"1.3.0\",\"layers\":\"OSM-WMS\",\"format\":\"image/png\",\"transparent\":true,\"attribution\":\"© <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors\",\"styles\":\"\"},\"baseLayersAreLoaded\":{},\"tmsLayers\":[{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}],\"selectedTmsLayer\":{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}},\"legendPosition\":\"bottomright\",\"mapZoom\":2,\"mapCenter\":[0,0],\"colorSchema\":\"Yellow to Red\",\"heatClusterSize\":1.5},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"geohash_grid\",\"schema\":\"segment\",\"params\":{\"field\":\"geoip.location\",\"autoPrecision\":true,\"isFilteredByCollar\":true,\"useGeocentroid\":true,\"mapZoom\":2,\"mapCenter\":{\"lon\":0.17578125,\"lat\":-0.17578097424708533},\"precision\":2}}]}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "ConPot-Logs",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "d1aa9740-7e9e-11e7-a286-9f03beba6417",
+    "_type": "visualization",
+    "_source": {
+      "title": "Honeypot Attack Map",
+      "visState": "{\"title\":\"Honeypot Attack Map\",\"type\":\"tile_map\",\"params\":{\"mapType\":\"Shaded Circle Markers\",\"isDesaturated\":true,\"addTooltip\":true,\"heatMaxZoom\":0,\"heatMinOpacity\":0.1,\"heatRadius\":25,\"heatBlur\":15,\"legendPosition\":\"bottomright\",\"mapZoom\":2,\"mapCenter\":[0,0],\"wms\":{\"enabled\":false,\"url\":\"http://ows.terrestris.de/osm/service\",\"options\":{\"version\":\"1.3.0\",\"layers\":\"OSM-WMS\",\"format\":\"image/png\",\"transparent\":true,\"attribution\":\"© <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors\",\"styles\":\"\"},\"baseLayersAreLoaded\":{},\"tmsLayers\":[{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.2&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}],\"selectedTmsLayer\":{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.2&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}},\"colorSchema\":\"Yellow to Red\",\"heatClusterSize\":1.5},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"geohash_grid\",\"schema\":\"segment\",\"params\":{\"field\":\"geoip.location\",\"autoPrecision\":true,\"isFilteredByCollar\":true,\"useGeocentroid\":true,\"mapZoom\":2,\"mapCenter\":{\"lon\":0.17578125,\"lat\":-0.17578097424708533},\"precision\":3}}]}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "Honeypot-Logs",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "Suricata-Map",
+    "_type": "visualization",
+    "_source": {
+      "title": "Suricata Attack Map",
+      "visState": "{\"title\":\"Suricata Attack Map\",\"type\":\"tile_map\",\"params\":{\"mapType\":\"Shaded Circle Markers\",\"isDesaturated\":true,\"addTooltip\":true,\"heatMaxZoom\":16,\"heatMinOpacity\":0.1,\"heatRadius\":25,\"heatBlur\":15,\"heatNormalizeData\":true,\"wms\":{\"enabled\":false,\"url\":\"http://ows.terrestris.de/osm/service\",\"options\":{\"version\":\"1.3.0\",\"layers\":\"OSM-WMS\",\"format\":\"image/png\",\"transparent\":true,\"attribution\":\"© <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors\",\"styles\":\"\"},\"baseLayersAreLoaded\":{},\"tmsLayers\":[{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}],\"selectedTmsLayer\":{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}},\"legendPosition\":\"bottomright\",\"mapZoom\":2,\"mapCenter\":[0,0],\"colorSchema\":\"Yellow to Red\",\"heatClusterSize\":1.5},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"geohash_grid\",\"schema\":\"segment\",\"params\":{\"field\":\"geoip.location\",\"autoPrecision\":true,\"isFilteredByCollar\":true,\"useGeocentroid\":true,\"mapZoom\":2,\"mapCenter\":{\"lon\":0.17578125,\"lat\":-0.17578097424708533},\"precision\":2}}]}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "Suricata-Logs",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "Dionaea-Map",
+    "_type": "visualization",
+    "_source": {
+      "title": "Dionaea Attack Map",
+      "visState": "{\"title\":\"Dionaea Attack Map\",\"type\":\"tile_map\",\"params\":{\"mapType\":\"Shaded Circle Markers\",\"isDesaturated\":true,\"addTooltip\":true,\"heatMaxZoom\":16,\"heatMinOpacity\":0.1,\"heatRadius\":25,\"heatBlur\":15,\"heatNormalizeData\":true,\"wms\":{\"enabled\":false,\"url\":\"http://ows.terrestris.de/osm/service\",\"options\":{\"version\":\"1.3.0\",\"layers\":\"OSM-WMS\",\"format\":\"image/png\",\"transparent\":true,\"attribution\":\"© <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors\",\"styles\":\"\"},\"baseLayersAreLoaded\":{},\"tmsLayers\":[{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}],\"selectedTmsLayer\":{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}},\"legendPosition\":\"bottomright\",\"mapZoom\":2,\"mapCenter\":[0,0],\"colorSchema\":\"Yellow to Red\",\"heatClusterSize\":1.5},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"geohash_grid\",\"schema\":\"segment\",\"params\":{\"field\":\"geoip.location\",\"autoPrecision\":true,\"isFilteredByCollar\":true,\"useGeocentroid\":true,\"mapZoom\":2,\"mapCenter\":{\"lon\":0.17578125,\"lat\":-0.17578097424708533},\"precision\":2}}]}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "Dionaea-Logs",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "Cowrie-Map",
+    "_type": "visualization",
+    "_source": {
+      "title": "Cowrie Attack Map",
+      "visState": "{\"title\":\"Cowrie Attack Map\",\"type\":\"tile_map\",\"params\":{\"mapType\":\"Shaded Circle Markers\",\"isDesaturated\":true,\"addTooltip\":true,\"heatMaxZoom\":16,\"heatMinOpacity\":0.1,\"heatRadius\":25,\"heatBlur\":15,\"heatNormalizeData\":true,\"wms\":{\"enabled\":false,\"url\":\"http://ows.terrestris.de/osm/service\",\"options\":{\"version\":\"1.3.0\",\"layers\":\"OSM-WMS\",\"format\":\"image/png\",\"transparent\":true,\"attribution\":\"© <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors\",\"styles\":\"\"},\"baseLayersAreLoaded\":{},\"tmsLayers\":[{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}],\"selectedTmsLayer\":{\"id\":\"road_map\",\"url\":\"https://tiles.maps.elastic.co/v2/default/{z}/{x}/{y}.png?elastic_tile_service_tos=agree&my_app_name=kibana&my_app_version=6.4.3&license=9fb155de-424a-423c-a59a-07b920363565\",\"minZoom\":0,\"maxZoom\":18,\"attribution\":\"<p>&#169; <a href=\\\"http://www.openstreetmap.org/copyright\\\">OpenStreetMap</a> contributors | <a href=\\\"https://www.elastic.co/elastic-maps-service\\\">Elastic Maps Service</a></p>&#10;\",\"subdomains\":[]}},\"legendPosition\":\"bottomright\",\"mapZoom\":2,\"mapCenter\":[0,0],\"colorSchema\":\"Yellow to Red\",\"heatClusterSize\":1.5},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{}},{\"id\":\"2\",\"enabled\":true,\"type\":\"geohash_grid\",\"schema\":\"segment\",\"params\":{\"field\":\"geoip.location\",\"autoPrecision\":true,\"isFilteredByCollar\":true,\"useGeocentroid\":true,\"mapZoom\":2,\"mapCenter\":{\"lon\":0.17578125,\"lat\":-0.17578097424708533},\"precision\":2}}]}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "Cowrie-Logs",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[]}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "17130490-e7fb-11e8-9ac4-13ecd4ad8d70",
+    "_type": "visualization",
+    "_source": {
+      "title": "Medpot Attacks",
+      "visState": "{\n  \"title\": \"Medpot Attacks\",\n  \"type\": \"metric\",\n  \"params\": {\n    \"addLegend\": false,\n    \"addTooltip\": true,\n    \"metric\": {\n      \"colorSchema\": \"Green to Red\",\n      \"colorsRange\": [\n        {\n          \"from\": 0,\n          \"to\": 10000\n        }\n      ],\n      \"invertColors\": false,\n      \"labels\": {\n        \"show\": true\n      },\n      \"metricColorMode\": \"None\",\n      \"percentageMode\": false,\n      \"style\": {\n        \"bgColor\": false,\n        \"bgFill\": \"#000\",\n        \"fontSize\": 30,\n        \"labelColor\": false,\n        \"subText\": \"\"\n      },\n      \"useRanges\": false\n    },\n    \"type\": \"metric\"\n  },\n  \"aggs\": [\n    {\n      \"id\": \"1\",\n      \"enabled\": true,\n      \"type\": \"count\",\n      \"schema\": \"metric\",\n      \"params\": {\n        \"customLabel\": \"Attacks\"\n      }\n    },\n    {\n      \"id\": \"2\",\n      \"enabled\": true,\n      \"type\": \"cardinality\",\n      \"schema\": \"metric\",\n      \"params\": {\n        \"field\": \"src_ip.keyword\",\n        \"customLabel\": \"Unique Src IPs\"\n      }\n    }\n  ]\n}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "baa53b00-b597-11e8-9a34-d951cebce834",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\n  \"query\": {\n    \"language\": \"lucene\",\n    \"query\": \"\"\n  },\n  \"filter\": [],\n  \"index\": \"logstash-*\"\n}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "3814c570-e68e-11e8-b727-735f5b0e1502",
+    "_type": "visualization",
+    "_source": {
+      "title": "ElasticPot Attacks",
+      "visState": "{\n  \"title\": \"ElasticPot Attacks\",\n  \"type\": \"metric\",\n  \"params\": {\n    \"addLegend\": false,\n    \"addTooltip\": true,\n    \"metric\": {\n      \"colorSchema\": \"Green to Red\",\n      \"colorsRange\": [\n        {\n          \"from\": 0,\n          \"to\": 10000\n        }\n      ],\n      \"invertColors\": false,\n      \"labels\": {\n        \"show\": true\n      },\n      \"metricColorMode\": \"None\",\n      \"percentageMode\": false,\n      \"style\": {\n        \"bgColor\": false,\n        \"bgFill\": \"#000\",\n        \"fontSize\": 30,\n        \"labelColor\": false,\n        \"subText\": \"\"\n      },\n      \"useRanges\": false\n    },\n    \"type\": \"metric\"\n  },\n  \"aggs\": [\n    {\n      \"id\": \"1\",\n      \"enabled\": true,\n      \"type\": \"count\",\n      \"schema\": \"metric\",\n      \"params\": {\n        \"customLabel\": \"Attacks\"\n      }\n    },\n    {\n      \"id\": \"2\",\n      \"enabled\": true,\n      \"type\": \"cardinality\",\n      \"schema\": \"metric\",\n      \"params\": {\n        \"field\": \"src_ip.keyword\",\n        \"customLabel\": \"Unique Src IPs\"\n      }\n    }\n  ]\n}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "ElasticPot-Logs",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\n  \"query\": {\n    \"language\": \"lucene\",\n    \"query\": \"\"\n  },\n  \"filter\": [],\n  \"index\": \"logstash-*\"\n}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "45e32dc0-dec5-11e8-87cf-239397d2b8d3",
+    "_type": "visualization",
+    "_source": {
+      "title": "Cowrie Attacks",
+      "visState": "{\n  \"title\": \"Cowrie Attacks\",\n  \"type\": \"metric\",\n  \"params\": {\n    \"addTooltip\": true,\n    \"addLegend\": false,\n    \"type\": \"metric\",\n    \"metric\": {\n      \"percentageMode\": false,\n      \"useRanges\": false,\n      \"colorSchema\": \"Green to Red\",\n      \"metricColorMode\": \"None\",\n      \"colorsRange\": [\n        {\n          \"from\": 0,\n          \"to\": 10000\n        }\n      ],\n      \"labels\": {\n        \"show\": true\n      },\n      \"invertColors\": false,\n      \"style\": {\n        \"bgFill\": \"#000\",\n        \"bgColor\": false,\n        \"labelColor\": false,\n        \"subText\": \"\",\n        \"fontSize\": 30\n      }\n    }\n  },\n  \"aggs\": [\n    {\n      \"id\": \"1\",\n      \"enabled\": true,\n      \"type\": \"count\",\n      \"schema\": \"metric\",\n      \"params\": {\n        \"customLabel\": \"Attacks\"\n      }\n    },\n    {\n      \"id\": \"2\",\n      \"enabled\": true,\n      \"type\": \"cardinality\",\n      \"schema\": \"metric\",\n      \"params\": {\n        \"field\": \"src_ip.keyword\",\n        \"customLabel\": \"Unique Src IPs\"\n      }\n    }\n  ]\n}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "Cowrie-Logs",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\n  \"query\": {\n    \"query\": \"\",\n    \"language\": \"lucene\"\n  },\n  \"filter\": [],\n  \"index\": \"logstash-*\"\n}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "465d9810-e5cf-11e8-b72a-b734d2b55cd4",
+    "_type": "visualization",
+    "_source": {
+      "title": "Dionaea Attacks",
+      "visState": "{\n  \"title\": \"Dionaea Attacks\",\n  \"type\": \"metric\",\n  \"params\": {\n    \"addLegend\": false,\n    \"addTooltip\": true,\n    \"metric\": {\n      \"colorSchema\": \"Green to Red\",\n      \"colorsRange\": [\n        {\n          \"from\": 0,\n          \"to\": 10000\n        }\n      ],\n      \"invertColors\": false,\n      \"labels\": {\n        \"show\": true\n      },\n      \"metricColorMode\": \"None\",\n      \"percentageMode\": false,\n      \"style\": {\n        \"bgColor\": false,\n        \"bgFill\": \"#000\",\n        \"fontSize\": 30,\n        \"labelColor\": false,\n        \"subText\": \"\"\n      },\n      \"useRanges\": false\n    },\n    \"type\": \"metric\"\n  },\n  \"aggs\": [\n    {\n      \"id\": \"1\",\n      \"enabled\": true,\n      \"type\": \"count\",\n      \"schema\": \"metric\",\n      \"params\": {\n        \"customLabel\": \"Attacks\"\n      }\n    },\n    {\n      \"id\": \"2\",\n      \"enabled\": true,\n      \"type\": \"cardinality\",\n      \"schema\": \"metric\",\n      \"params\": {\n        \"field\": \"src_ip.keyword\",\n        \"customLabel\": \"Unique Src IPs\"\n      }\n    }\n  ]\n}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "Dionaea-Logs",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\n  \"query\": {\n    \"language\": \"lucene\",\n    \"query\": \"\"\n  },\n  \"filter\": [],\n  \"index\": \"logstash-*\"\n}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "10e765a0-e51e-11e8-8a75-d5f374dbaebe",
+    "_type": "visualization",
+    "_source": {
+      "title": "Conpot Attacks",
+      "visState": "{\n  \"title\": \"Conpot Attacks\",\n  \"type\": \"metric\",\n  \"params\": {\n    \"addTooltip\": true,\n    \"addLegend\": false,\n    \"type\": \"metric\",\n    \"metric\": {\n      \"percentageMode\": false,\n      \"useRanges\": false,\n      \"colorSchema\": \"Green to Red\",\n      \"metricColorMode\": \"None\",\n      \"colorsRange\": [\n        {\n          \"from\": 0,\n          \"to\": 10000\n        }\n      ],\n      \"labels\": {\n        \"show\": true\n      },\n      \"invertColors\": false,\n      \"style\": {\n        \"bgFill\": \"#000\",\n        \"bgColor\": false,\n        \"labelColor\": false,\n        \"subText\": \"\",\n        \"fontSize\": 30\n      }\n    }\n  },\n  \"aggs\": [\n    {\n      \"id\": \"1\",\n      \"enabled\": true,\n      \"type\": \"count\",\n      \"schema\": \"metric\",\n      \"params\": {\n        \"customLabel\": \"Attacks\"\n      }\n    },\n    {\n      \"id\": \"2\",\n      \"enabled\": true,\n      \"type\": \"cardinality\",\n      \"schema\": \"metric\",\n      \"params\": {\n        \"field\": \"src_ip.keyword\",\n        \"customLabel\": \"Unique Src IPs\"\n      }\n    }\n  ]\n}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "ConPot-Logs",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\n  \"query\": {\n    \"query\": \"\",\n    \"language\": \"lucene\"\n  },\n  \"filter\": []\n}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "d500a3c0-e6b8-11e8-b727-735f5b0e1502",
+    "_type": "visualization",
+    "_source": {
+      "title": "Heralding Attacks",
+      "visState": "{\n  \"title\": \"Heralding Attacks\",\n  \"type\": \"metric\",\n  \"params\": {\n    \"addTooltip\": true,\n    \"addLegend\": false,\n    \"type\": \"metric\",\n    \"metric\": {\n      \"percentageMode\": false,\n      \"useRanges\": false,\n      \"colorSchema\": \"Green to Red\",\n      \"metricColorMode\": \"None\",\n      \"colorsRange\": [\n        {\n          \"from\": 0,\n          \"to\": 10000\n        }\n      ],\n      \"labels\": {\n        \"show\": true\n      },\n      \"invertColors\": false,\n      \"style\": {\n        \"bgFill\": \"#000\",\n        \"bgColor\": false,\n        \"labelColor\": false,\n        \"subText\": \"\",\n        \"fontSize\": 30\n      }\n    }\n  },\n  \"aggs\": [\n    {\n      \"id\": \"1\",\n      \"enabled\": true,\n      \"type\": \"count\",\n      \"schema\": \"metric\",\n      \"params\": {\n        \"customLabel\": \"Attacks\"\n      }\n    },\n    {\n      \"id\": \"2\",\n      \"enabled\": true,\n      \"type\": \"cardinality\",\n      \"schema\": \"metric\",\n      \"params\": {\n        \"field\": \"src_ip.keyword\",\n        \"customLabel\": \"Unique Src IPs\"\n      }\n    }\n  ]\n}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "c2bea500-47ca-11e8-a905-f74bbc7cbd2d",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\n  \"query\": {\n    \"query\": \"\",\n    \"language\": \"lucene\"\n  },\n  \"filter\": [],\n  \"index\": \"logstash-*\"\n}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "f2742de0-e745-11e8-b4a6-215b0b97c069",
+    "_type": "visualization",
+    "_source": {
+      "title": "Mailoney Attacks",
+      "visState": "{\n  \"title\": \"Mailoney Attacks\",\n  \"type\": \"metric\",\n  \"params\": {\n    \"addTooltip\": true,\n    \"addLegend\": false,\n    \"type\": \"metric\",\n    \"metric\": {\n      \"percentageMode\": false,\n      \"useRanges\": false,\n      \"colorSchema\": \"Green to Red\",\n      \"metricColorMode\": \"None\",\n      \"colorsRange\": [\n        {\n          \"from\": 0,\n          \"to\": 10000\n        }\n      ],\n      \"labels\": {\n        \"show\": true\n      },\n      \"invertColors\": false,\n      \"style\": {\n        \"bgFill\": \"#000\",\n        \"bgColor\": false,\n        \"labelColor\": false,\n        \"subText\": \"\",\n        \"fontSize\": 30\n      }\n    }\n  },\n  \"aggs\": [\n    {\n      \"id\": \"1\",\n      \"enabled\": true,\n      \"type\": \"count\",\n      \"schema\": \"metric\",\n      \"params\": {\n        \"customLabel\": \"Attacks\"\n      }\n    },\n    {\n      \"id\": \"2\",\n      \"enabled\": true,\n      \"type\": \"cardinality\",\n      \"schema\": \"metric\",\n      \"params\": {\n        \"field\": \"src_ip.keyword\",\n        \"customLabel\": \"Unique Src IPs\"\n      }\n    }\n  ]\n}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "9c35dd90-6977-11e7-9c11-8d9c11943fa0",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\n  \"query\": {\n    \"query\": \"\",\n    \"language\": \"lucene\"\n  },\n  \"filter\": [],\n  \"index\": \"logstash-*\"\n}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "3f646820-e851-11e8-97df-bbc3de28ece0",
+    "_type": "visualization",
+    "_source": {
+      "title": "Glutton Attacks",
+      "visState": "{\n  \"title\": \"Glutton Attacks\",\n  \"type\": \"metric\",\n  \"params\": {\n    \"addTooltip\": true,\n    \"addLegend\": false,\n    \"type\": \"metric\",\n    \"metric\": {\n      \"percentageMode\": false,\n      \"useRanges\": false,\n      \"colorSchema\": \"Green to Red\",\n      \"metricColorMode\": \"None\",\n      \"colorsRange\": [\n        {\n          \"from\": 0,\n          \"to\": 10000\n        }\n      ],\n      \"labels\": {\n        \"show\": true\n      },\n      \"invertColors\": false,\n      \"style\": {\n        \"bgFill\": \"#000\",\n        \"bgColor\": false,\n        \"labelColor\": false,\n        \"subText\": \"\",\n        \"fontSize\": 30\n      }\n    }\n  },\n  \"aggs\": [\n    {\n      \"id\": \"1\",\n      \"enabled\": true,\n      \"type\": \"count\",\n      \"schema\": \"metric\",\n      \"params\": {\n        \"customLabel\": \"Attacks\"\n      }\n    },\n    {\n      \"id\": \"2\",\n      \"enabled\": true,\n      \"type\": \"cardinality\",\n      \"schema\": \"metric\",\n      \"params\": {\n        \"field\": \"src_ip.keyword\",\n        \"customLabel\": \"Unique Src IPs\"\n      }\n    }\n  ]\n}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "385ea460-ad22-11e8-942c-a39712fa9ddf",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\n  \"query\": {\n    \"query\": \"\",\n    \"language\": \"lucene\"\n  },\n  \"filter\": [],\n  \"index\": \"logstash-*\"\n}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "535b0c80-e761-11e8-803c-59c072645505",
+    "_type": "visualization",
+    "_source": {
+      "title": "Tanner Attacks",
+      "visState": "{\n  \"title\": \"Tanner Attacks\",\n  \"type\": \"metric\",\n  \"params\": {\n    \"addTooltip\": true,\n    \"addLegend\": false,\n    \"type\": \"metric\",\n    \"metric\": {\n      \"percentageMode\": false,\n      \"useRanges\": false,\n      \"colorSchema\": \"Green to Red\",\n      \"metricColorMode\": \"None\",\n      \"colorsRange\": [\n        {\n          \"from\": 0,\n          \"to\": 10000\n        }\n      ],\n      \"labels\": {\n        \"show\": true\n      },\n      \"invertColors\": false,\n      \"style\": {\n        \"bgFill\": \"#000\",\n        \"bgColor\": false,\n        \"labelColor\": false,\n        \"subText\": \"\",\n        \"fontSize\": 30\n      }\n    }\n  },\n  \"aggs\": [\n    {\n      \"id\": \"1\",\n      \"enabled\": true,\n      \"type\": \"count\",\n      \"schema\": \"metric\",\n      \"params\": {\n        \"customLabel\": \"Attacks\"\n      }\n    },\n    {\n      \"id\": \"2\",\n      \"enabled\": true,\n      \"type\": \"cardinality\",\n      \"schema\": \"metric\",\n      \"params\": {\n        \"field\": \"src_ip.keyword\",\n        \"customLabel\": \"Unique Src IPs\"\n      }\n    }\n  ]\n}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "d800f130-633f-11e8-be86-73985bedf977",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\n  \"query\": {\n    \"query\": \"\",\n    \"language\": \"lucene\"\n  },\n  \"filter\": [],\n  \"index\": \"logstash-*\"\n}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "94e13130-e756-11e8-b4a6-215b0b97c069",
+    "_type": "visualization",
+    "_source": {
+      "title": "Rdpy Attacks",
+      "visState": "{\n  \"title\": \"Rdpy Attacks\",\n  \"type\": \"metric\",\n  \"params\": {\n    \"addTooltip\": true,\n    \"addLegend\": false,\n    \"type\": \"metric\",\n    \"metric\": {\n      \"percentageMode\": false,\n      \"useRanges\": false,\n      \"colorSchema\": \"Green to Red\",\n      \"metricColorMode\": \"None\",\n      \"colorsRange\": [\n        {\n          \"from\": 0,\n          \"to\": 10000\n        }\n      ],\n      \"labels\": {\n        \"show\": true\n      },\n      \"invertColors\": false,\n      \"style\": {\n        \"bgFill\": \"#000\",\n        \"bgColor\": false,\n        \"labelColor\": false,\n        \"subText\": \"\",\n        \"fontSize\": 30\n      }\n    }\n  },\n  \"aggs\": [\n    {\n      \"id\": \"1\",\n      \"enabled\": true,\n      \"type\": \"count\",\n      \"schema\": \"metric\",\n      \"params\": {\n        \"customLabel\": \"Attacks\"\n      }\n    },\n    {\n      \"id\": \"2\",\n      \"enabled\": true,\n      \"type\": \"cardinality\",\n      \"schema\": \"metric\",\n      \"params\": {\n        \"field\": \"src_ip.keyword\",\n        \"customLabel\": \"Unique Src IPs\"\n      }\n    }\n  ]\n}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "aa750980-8ab5-11e7-8fef-33e989079c7d",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\n  \"query\": {\n    \"query\": \"\",\n    \"language\": \"lucene\"\n  },\n  \"filter\": [],\n  \"index\": \"logstash-*\"\n}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "79a71e90-dec1-11e8-87cf-239397d2b8d3",
+    "_type": "visualization",
+    "_source": {
+      "title": "Ciscoasa Attacks",
+      "visState": "{\n  \"title\": \"Ciscoasa Attacks\",\n  \"type\": \"metric\",\n  \"params\": {\n    \"addTooltip\": true,\n    \"addLegend\": false,\n    \"type\": \"metric\",\n    \"metric\": {\n      \"percentageMode\": false,\n      \"useRanges\": false,\n      \"colorSchema\": \"Green to Red\",\n      \"metricColorMode\": \"None\",\n      \"colorsRange\": [\n        {\n          \"from\": 0,\n          \"to\": 10000\n        }\n      ],\n      \"labels\": {\n        \"show\": true\n      },\n      \"invertColors\": false,\n      \"style\": {\n        \"bgFill\": \"#000\",\n        \"bgColor\": false,\n        \"labelColor\": false,\n        \"subText\": \"\",\n        \"fontSize\": 30\n      }\n    }\n  },\n  \"aggs\": [\n    {\n      \"id\": \"1\",\n      \"enabled\": true,\n      \"type\": \"count\",\n      \"schema\": \"metric\",\n      \"params\": {\n        \"customLabel\": \"Attacks\"\n      }\n    },\n    {\n      \"id\": \"2\",\n      \"enabled\": true,\n      \"type\": \"cardinality\",\n      \"schema\": \"metric\",\n      \"params\": {\n        \"field\": \"src_ip.keyword\",\n        \"customLabel\": \"Unique Src IPs\"\n      }\n    }\n  ]\n}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "2934abc0-4ad4-11e8-ab1b-fdef76c312f4",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\n  \"query\": {\n    \"query\": \"\",\n    \"language\": \"lucene\"\n  },\n  \"filter\": []\n}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "f5e74220-e725-11e8-b4a6-215b0b97c069",
+    "_type": "visualization",
+    "_source": {
+      "title": "Honeytrap Attacks",
+      "visState": "{\n  \"title\": \"Honeytrap Attacks\",\n  \"type\": \"metric\",\n  \"params\": {\n    \"addTooltip\": true,\n    \"addLegend\": false,\n    \"type\": \"metric\",\n    \"metric\": {\n      \"percentageMode\": false,\n      \"useRanges\": false,\n      \"colorSchema\": \"Green to Red\",\n      \"metricColorMode\": \"None\",\n      \"colorsRange\": [\n        {\n          \"from\": 0,\n          \"to\": 10000\n        }\n      ],\n      \"labels\": {\n        \"show\": true\n      },\n      \"invertColors\": false,\n      \"style\": {\n        \"bgFill\": \"#000\",\n        \"bgColor\": false,\n        \"labelColor\": false,\n        \"subText\": \"\",\n        \"fontSize\": 30\n      }\n    }\n  },\n  \"aggs\": [\n    {\n      \"id\": \"1\",\n      \"enabled\": true,\n      \"type\": \"count\",\n      \"schema\": \"metric\",\n      \"params\": {\n        \"customLabel\": \"Attacks\"\n      }\n    },\n    {\n      \"id\": \"2\",\n      \"enabled\": true,\n      \"type\": \"cardinality\",\n      \"schema\": \"metric\",\n      \"params\": {\n        \"field\": \"src_ip.keyword\",\n        \"customLabel\": \"Unique Src IPs\"\n      }\n    }\n  ]\n}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "Honeytrap-Logs",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\n  \"query\": {\n    \"query\": \"\",\n    \"language\": \"lucene\"\n  },\n  \"filter\": [],\n  \"index\": \"logstash-*\"\n}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "409907c0-e6b5-11e8-b727-735f5b0e1502",
+    "_type": "visualization",
+    "_source": {
+      "title": "Glastopf Attacks",
+      "visState": "{\n  \"title\": \"Glastopf Attacks\",\n  \"type\": \"metric\",\n  \"params\": {\n    \"addTooltip\": true,\n    \"addLegend\": false,\n    \"type\": \"metric\",\n    \"metric\": {\n      \"percentageMode\": false,\n      \"useRanges\": false,\n      \"colorSchema\": \"Green to Red\",\n      \"metricColorMode\": \"None\",\n      \"colorsRange\": [\n        {\n          \"from\": 0,\n          \"to\": 10000\n        }\n      ],\n      \"labels\": {\n        \"show\": true\n      },\n      \"invertColors\": false,\n      \"style\": {\n        \"bgFill\": \"#000\",\n        \"bgColor\": false,\n        \"labelColor\": false,\n        \"subText\": \"\",\n        \"fontSize\": 30\n      }\n    }\n  },\n  \"aggs\": [\n    {\n      \"id\": \"1\",\n      \"enabled\": true,\n      \"type\": \"count\",\n      \"schema\": \"metric\",\n      \"params\": {\n        \"customLabel\": \"Attacks\"\n      }\n    },\n    {\n      \"id\": \"2\",\n      \"enabled\": true,\n      \"type\": \"cardinality\",\n      \"schema\": \"metric\",\n      \"params\": {\n        \"field\": \"src_ip.keyword\",\n        \"customLabel\": \"Unique Src IPs\"\n      }\n    }\n  ]\n}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "Glastopf-Logs",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\n  \"query\": {\n    \"query\": \"\",\n    \"language\": \"lucene\"\n  },\n  \"filter\": [],\n  \"index\": \"logstash-*\"\n}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "07581df0-e752-11e8-b4a6-215b0b97c069",
+    "_type": "visualization",
+    "_source": {
+      "title": "NGINX Events",
+      "visState": "{\"title\":\"NGINX Events\",\"type\":\"metric\",\"params\":{\"addTooltip\":true,\"addLegend\":false,\"type\":\"metric\",\"metric\":{\"percentageMode\":false,\"useRanges\":false,\"colorSchema\":\"Green to Red\",\"metricColorMode\":\"None\",\"colorsRange\":[{\"from\":0,\"to\":10000}],\"labels\":{\"show\":true},\"invertColors\":false,\"style\":{\"bgFill\":\"#000\",\"bgColor\":false,\"labelColor\":false,\"subText\":\"\",\"fontSize\":30}}},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"Events\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"cardinality\",\"schema\":\"metric\",\"params\":{\"field\":\"src_ip.keyword\",\"customLabel\":\"Unique Src IPs\"}}]}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "NGINX-Logs",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[],\"index\":\"logstash-*\"}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "4a60fe20-e75f-11e8-803c-59c072645505",
+    "_type": "visualization",
+    "_source": {
+      "title": "Suricata Events",
+      "visState": "{\"title\":\"Suricata Events\",\"type\":\"metric\",\"params\":{\"addTooltip\":true,\"addLegend\":false,\"type\":\"metric\",\"metric\":{\"percentageMode\":false,\"useRanges\":false,\"colorSchema\":\"Green to Red\",\"metricColorMode\":\"None\",\"colorsRange\":[{\"from\":0,\"to\":10000}],\"labels\":{\"show\":true},\"invertColors\":false,\"style\":{\"bgFill\":\"#000\",\"bgColor\":false,\"labelColor\":false,\"subText\":\"\",\"fontSize\":30}}},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"Events\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"cardinality\",\"schema\":\"metric\",\"params\":{\"field\":\"src_ip.keyword\",\"customLabel\":\"Unique Src IPs\"}}]}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "Suricata-Logs",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"query\":{\"query\":\"\",\"language\":\"lucene\"},\"filter\":[],\"index\":\"logstash-*\"}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "15f2c000-4ad5-11e8-ab1b-fdef76c312f4",
+    "_type": "visualization",
+    "_source": {
+      "title": "Ciscoasa Attacks Bar",
+      "visState": "{\"title\":\"Ciscoasa Attacks Bar\",\"type\":\"horizontal_bar\",\"params\":{\"type\":\"histogram\",\"grid\":{\"categoryLines\":false,\"style\":{\"color\":\"#eee\"}},\"categoryAxes\":[{\"id\":\"CategoryAxis-1\",\"type\":\"category\",\"position\":\"left\",\"show\":false,\"style\":{},\"scale\":{\"type\":\"linear\"},\"labels\":{\"show\":false,\"rotate\":90,\"filter\":false,\"truncate\":200},\"title\":{}}],\"valueAxes\":[{\"id\":\"ValueAxis-1\",\"name\":\"LeftAxis-1\",\"type\":\"value\",\"position\":\"bottom\",\"show\":true,\"style\":{},\"scale\":{\"type\":\"square root\",\"mode\":\"normal\"},\"labels\":{\"show\":true,\"rotate\":0,\"filter\":true,\"truncate\":100},\"title\":{\"text\":\"\"}}],\"seriesParams\":[{\"show\":true,\"type\":\"histogram\",\"mode\":\"normal\",\"data\":{\"label\":\"Attacks\",\"id\":\"1\"},\"valueAxis\":\"ValueAxis-1\",\"drawLinesBetweenPoints\":true,\"showCircles\":true},{\"show\":true,\"mode\":\"normal\",\"type\":\"histogram\",\"drawLinesBetweenPoints\":true,\"showCircles\":true,\"data\":{\"id\":\"2\",\"label\":\"Unique Src IPs\"},\"valueAxis\":\"ValueAxis-1\"}],\"addTooltip\":true,\"addLegend\":true,\"legendPosition\":\"right\",\"times\":[],\"addTimeMarker\":false},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"Attacks\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"cardinality\",\"schema\":\"metric\",\"params\":{\"field\":\"src_ip.keyword\",\"customLabel\":\"Unique Src IPs\"}}]}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "2934abc0-4ad4-11e8-ab1b-fdef76c312f4",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"filter\":[],\"query\":{\"query\":\"\",\"language\":\"lucene\"}}"
+      }
+    },
+    "_meta": {
+      "savedObjectVersion": 2
+    }
+  },
+  {
+    "_id": "2cf90930-47d3-11e8-a905-f74bbc7cbd2d",
+    "_type": "visualization",
+    "_source": {
+      "title": "Heralding Attacks Bar",
+      "visState": "{\"title\":\"Heralding Attacks Bar\",\"type\":\"horizontal_bar\",\"params\":{\"type\":\"histogram\",\"grid\":{\"categoryLines\":false,\"style\":{\"color\":\"#eee\"}},\"categoryAxes\":[{\"id\":\"CategoryAxis-1\",\"type\":\"category\",\"position\":\"left\",\"show\":false,\"style\":{},\"scale\":{\"type\":\"linear\"},\"labels\":{\"show\":false,\"rotate\":90,\"filter\":false,\"truncate\":200},\"title\":{}}],\"valueAxes\":[{\"id\":\"ValueAxis-1\",\"name\":\"LeftAxis-1\",\"type\":\"value\",\"position\":\"bottom\",\"show\":true,\"style\":{},\"scale\":{\"type\":\"square root\",\"mode\":\"normal\"},\"labels\":{\"show\":true,\"rotate\":0,\"filter\":true,\"truncate\":100},\"title\":{\"text\":\"\"}}],\"seriesParams\":[{\"show\":true,\"type\":\"histogram\",\"mode\":\"normal\",\"data\":{\"label\":\"Attacks\",\"id\":\"1\"},\"valueAxis\":\"ValueAxis-1\",\"drawLinesBetweenPoints\":true,\"showCircles\":true},{\"show\":true,\"mode\":\"normal\",\"type\":\"histogram\",\"drawLinesBetweenPoints\":true,\"showCircles\":true,\"data\":{\"id\":\"2\",\"label\":\"Unique Src IPs\"},\"valueAxis\":\"ValueAxis-1\"}],\"addTooltip\":true,\"addLegend\":true,\"legendPosition\":\"right\",\"times\":[],\"addTimeMarker\":false},\"aggs\":[{\"id\":\"1\",\"enabled\":true,\"type\":\"count\",\"schema\":\"metric\",\"params\":{\"customLabel\":\"Attacks\"}},{\"id\":\"2\",\"enabled\":true,\"type\":\"cardinality\",\"schema\":\"metric\",\"params\":{\"field\":\"src_ip.keyword\",\"customLabel\":\"Unique Src IPs\"}}]}",
+      "uiStateJSON": "{}",
+      "description": "",
+      "savedSearchId": "c2bea500-47ca-11e8-a905-f74bbc7cbd2d",
+      "version": 1,
+      "kibanaSavedObjectMeta": {
+        "searchSourceJSON": "{\"filter\":[],\"query\":{\"query\":\"\",\"language\":\"lucene\"}}"
       }
     },
     "_meta": {
