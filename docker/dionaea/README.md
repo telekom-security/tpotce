@@ -1,4 +1,4 @@
-[![](https://images.microbadger.com/badges/version/dtagdevsec/dionaea:1804.svg)](https://microbadger.com/images/dtagdevsec/dionaea:1804 "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/dtagdevsec/dionaea:1804.svg)](https://microbadger.com/images/dtagdevsec/dionaea:1804 "Get your own image badge on microbadger.com")
+[![](https://images.microbadger.com/badges/version/dtagdevsec/dionaea:1811.svg)](https://microbadger.com/images/dtagdevsec/dionaea:1811 "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/dtagdevsec/dionaea:1811.svg)](https://microbadger.com/images/dtagdevsec/dionaea:1811 "Get your own image badge on microbadger.com")
 
 # dionaea
 
@@ -12,4 +12,4 @@ The `docker-compose.yml` contains the necessary settings to test dionaea using `
 
 # Dionaea Dashboard
 
-![Dionaea Dashboard](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/docker/dionaea/doc/dashboard.png)
+![Dionaea Dashboard](doc/dashboard.png)

@@ -12,4 +12,4 @@ The `docker-compose.yml` contains the necessary settings to test mailoney using 
 
 # Mailoney Dashboard
 
-![Mailoney Dashboard](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/docker/mailoney/doc/dashboard.png)
+![Mailoney Dashboard](doc/dashboard.png)

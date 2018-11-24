@@ -1,4 +1,4 @@
-[![](https://images.microbadger.com/badges/version/dtagdevsec/heralding:1804.svg)](https://microbadger.com/images/dtagdevsec/heralding:1804 "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/dtagdevsec/heralding:1804.svg)](https://microbadger.com/images/dtagdevsec/heralding:1804 "Get your own image badge on microbadger.com")
+[![](https://images.microbadger.com/badges/version/dtagdevsec/heralding:1811.svg)](https://microbadger.com/images/dtagdevsec/heralding:1811 "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/dtagdevsec/heralding:1811.svg)](https://microbadger.com/images/dtagdevsec/heralding:1811 "Get your own image badge on microbadger.com")
 
 # heralding
 
@@ -10,3 +10,6 @@ The `Dockerfile` contains the blueprint for the dockerized heralding and will be
 
 The `docker-compose.yml` contains the necessary settings to test conpot using `docker-compose`. This will ensure to start the docker container with the appropriate permissions and port mappings.
 
+# heralding Dashboard
+
+![heralding Dashboard](doc/dashboard.png)

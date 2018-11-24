@@ -1,4 +1,4 @@
-[![](https://images.microbadger.com/badges/version/dtagdevsec/cowrie:1804.svg)](https://microbadger.com/images/dtagdevsec/cowrie:1804 "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/dtagdevsec/cowrie:1804.svg)](https://microbadger.com/images/dtagdevsec/cowrie:1804 "Get your own image badge on microbadger.com")
+[![](https://images.microbadger.com/badges/version/dtagdevsec/cowrie:1811.svg)](https://microbadger.com/images/dtagdevsec/cowrie:1811 "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/dtagdevsec/cowrie:1811.svg)](https://microbadger.com/images/dtagdevsec/cowrie:1811 "Get your own image badge on microbadger.com")
 
 # cowrie
 
@@ -12,4 +12,4 @@ The `docker-compose.yml` contains the necessary settings to test cowrie using `d
 
 # Cowrie Dashboard
 
-![Cowrie Dashboard](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/docker/cowrie/doc/dashboard.png)
+![Cowrie Dashboard](doc/dashboard.png)

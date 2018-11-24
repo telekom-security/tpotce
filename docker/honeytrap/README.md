@@ -12,4 +12,4 @@ The `docker-compose.yml` contains the necessary settings to test honeytrap using
 
 # Honeytrap Dashboard
 
-![Honeytrap Dashboard](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/docker/honeytrap/doc/dashboard.png)
+![Honeytrap Dashboard](doc/dashboard.png)

@@ -1,11 +1,11 @@
 # Elasticsearch
-[![](https://images.microbadger.com/badges/version/dtagdevsec/elasticsearch:1804.svg)](https://microbadger.com/images/dtagdevsec/elasticsearch:1804 "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/dtagdevsec/elasticsearch:1804.svg)](https://microbadger.com/images/dtagdevsec/elasticsearch:1804 "Get your own image badge on microbadger.com")
+[![](https://images.microbadger.com/badges/version/dtagdevsec/elasticsearch:1811.svg)](https://microbadger.com/images/dtagdevsec/elasticsearch:1811 "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/dtagdevsec/elasticsearch:1811.svg)](https://microbadger.com/images/dtagdevsec/elasticsearch:1811 "Get your own image badge on microbadger.com")
 
 # Logstash
-[![](https://images.microbadger.com/badges/version/dtagdevsec/logstash:1804.svg)](https://microbadger.com/images/dtagdevsec/logstash:1804 "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/dtagdevsec/logstash:1804.svg)](https://microbadger.com/images/dtagdevsec/logstash:1804 "Get your own image badge on microbadger.com")
+[![](https://images.microbadger.com/badges/version/dtagdevsec/logstash:1811.svg)](https://microbadger.com/images/dtagdevsec/logstash:1811 "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/dtagdevsec/logstash:1811.svg)](https://microbadger.com/images/dtagdevsec/logstash:1811 "Get your own image badge on microbadger.com")
 
 # Kibana
-[![](https://images.microbadger.com/badges/version/dtagdevsec/kibana:1804.svg)](https://microbadger.com/images/dtagdevsec/kibana:1804 "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/dtagdevsec/kibana:1804.svg)](https://microbadger.com/images/dtagdevsec/kibana:1804 "Get your own image badge on microbadger.com")
+[![](https://images.microbadger.com/badges/version/dtagdevsec/kibana:1811.svg)](https://microbadger.com/images/dtagdevsec/kibana:1811 "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/dtagdevsec/kibana:1811.svg)](https://microbadger.com/images/dtagdevsec/kibana:1811 "Get your own image badge on microbadger.com")
 
 # elk stack
 
@@ -17,4 +17,4 @@ The `Dockerfiles` contain the blueprint for the dockerized elk stack and will be
 
 # T-Pot Dashboard
 
-![T-Pot Dashboard](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/docker/elk/doc/dashboard.png)
+![T-Pot Dashboard](doc/dashboard.png)
