@@ -194,6 +194,41 @@ cp host/etc/issue /etc/
 systemctl daemon-reload
 echo
 
+# Ensure some defaults
+echo "### Ensure some T-Pot defaults with regard to some folders, permissions and configs."
+sed -i 's#ListenStream=9090#ListenStream=64294#' /lib/systemd/system/cockpit.socket
+sed -i '/^port/Id' /etc/ssh/sshd_config
+echo "Port 64295" >> /etc/ssh/sshd_config
+echo
+
+### Ensure creation of T-Pot related folders, just in case
+mkdir -p /data/ciscoasa/log \
+         /data/conpot/log \
+         /data/cowrie/log/tty/ /data/cowrie/downloads/ /data/cowrie/keys/ /data/cowrie/misc/ \
+         /data/dionaea/log /data/dionaea/bistreams /data/dionaea/binaries /data/dionaea/rtp /data/dionaea/roots/ftp /data/dionaea/roots/tftp /data/dionaea/roots/www /data/dionaea/roots/upnp \
+         /data/elasticpot/log \
+         /data/elk/data /data/elk/log \
+         /data/glastopf/log /data/glastopf/db \
+         /data/honeytrap/log/ /data/honeytrap/attacks/ /data/honeytrap/downloads/ \
+         /data/glutton/log \
+         /data/heralding/log \
+         /data/mailoney/log \
+         /data/medpot/log \
+         /data/nginx/log \
+         /data/emobility/log \
+         /data/ews/conf \
+         /data/rdpy/log \
+         /data/spiderfoot \
+         /data/suricata/log /home/tsec/.ssh/ \
+         /data/tanner/log /data/tanner/files \
+         /data/p0f/log
+
+### Let's take care of some files and permissions
+chmod 760 -R /data
+chown tpot:tpot -R /data
+chmod 644 -R /data/nginx/conf
+chmod 644 -R /data/nginx/cert
+
 echo "### Now pulling latest docker images"
 echo "######$myBLUE This might take a while, please be patient!$myWHITE"
 fuPULLIMAGES 2>&1>/dev/null
