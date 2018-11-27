@@ -359,7 +359,7 @@ T-Pot requires outgoing git, http, https connections for updates (Ubuntu, Docker
 For the ones of you who want to live on the bleeding edge of T-Pot development we introduced an update feature which will allow you to update all T-Pot relevant files to be up to date with the T-Pot master branch.
 **If you made any relevant changes to the T-Pot relevant config files make sure to create a backup first.**
 - The Update script will
- - **mercyless** overwrite local changes to be in sync with the T-Pot master branch
+ - **merciless** overwrite local changes to be in sync with the T-Pot master branch
  - upgrade the system to the latest kernel within Ubuntu 18.04.x LTS
  - upgrade the system to the latest packages available within Ubuntu 18.04.x LTS
  - update all resources to be en par with the T-Pot master branch
