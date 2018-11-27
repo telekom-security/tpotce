@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-8"?><rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom" version="2.0" xmlns:media="http://search.yahoo.com/mrss/"><channel><title><![CDATA[user Blog]]></title><description><![CDATA[Thoughts, stories and ideas.]]></description><link>http://172.20.254.138:80/</link><image><url>http://172.20.254.138:80/favicon.png</url><title>user Blog</title><link>http://172.20.254.138:80/</link></image><generator>Ghost 1.25</generator><lastBuildDate>Tue, 14 Aug 2018 12:46:03 GMT</lastBuildDate><atom:link href="http://172.20.254.138:80/rss/" rel="self" type="application/rss+xml"/><ttl>60</ttl><item><title><![CDATA[Welcome to Ghost]]></title><description><![CDATA[<div class="kg-card-markdown"><p>Hey! Welcome to Ghost, it's great to have you :)</p>
+<p>We know that first impressions are important, so we've populated your new site with some initial <strong>Getting Started</strong> posts that will help you get familiar with everything in no time. This is the first one!</p>
+<h3 id="thereareafewthingsthatyoushouldknowupfront">There are a few things that</h3></div>]]></description><link>http://172.20.254.138:80/welcome/</link><guid isPermaLink="false">5b6c1fcd2d07ae3e32c42ae3</guid><category><![CDATA[Getting Started]]></category><dc:creator><![CDATA[Ghost]]></dc:creator><pubDate>Thu, 09 Aug 2018 11:04:52 GMT</pubDate><media:content url="https://casper.ghost.org/v1.0.0/images/welcome.jpg" medium="image"/><content:encoded><![CDATA[<div class="kg-card-markdown"><img src="https://casper.ghost.org/v1.0.0/images/welcome.jpg" alt="Welcome to Ghost"><p>Hey! Welcome to Ghost, it's great to have you :)</p>
+<p>We know that first impressions are important, so we've populated your new site with some initial <strong>Getting Started</strong> posts that will help you get familiar with everything in no time. This is the first one!</p>
+<h3 id="thereareafewthingsthatyoushouldknowupfront">There are a few things that you should know up-front:</h3>
+<ol>
+<li>
+<p>Ghost is designed for ambitious, professional publishers who want to actively build a business around their content. That's who it works best for. If you're using Ghost for some other purpose, that's fine too - but it might not be the best choice for you.</p>
+</li>
+<li>
+<p>The entire platform can be modified and customized to suit your needs, which is very powerful, but doing so <strong>does</strong> require some knowledge of code. Ghost is not necessarily a good platform for beginners or people who just want a simple personal blog.</p>
+</li>
+<li>
+<p>For the best experience we recommend downloading the <a href="https://ghost.org/downloads/">Ghost Desktop App</a> for your computer, which is the best way to access your Ghost site on a desktop device.</p>
+</li>
+</ol>
+<p>Ghost is made by an independent non-profit organisation called the Ghost Foundation. We are 100% self funded by revenue from our <a href="https://ghost.org/pricing">Ghost(Pro)</a> service, and every penny we make is re-invested into funding further development of free, open source technology for modern journalism.</p>
+<p>The main thing you'll want to read about next is probably: <a href="http://172.20.254.138:80/the-editor/">the Ghost editor</a>.</p>
+<p>Once you're done reading, you can simply delete the default <strong>Ghost</strong> user from your team to remove all of these introductory posts!</p>
+</div>]]></content:encoded></item><item><title><![CDATA[Using the Ghost editor]]></title><description><![CDATA[<div class="kg-card-markdown"><p>Ghost uses a language called <strong>Markdown</strong> to format text.</p>
+<p>When you go to edit a post and see special characters and colours intertwined between the words, those are Markdown shortcuts which tell Ghost what to do with the words in your document. The biggest benefit of Markdown is that you</p></div>]]></description><link>http://172.20.254.138:80/the-editor/</link><guid isPermaLink="false">5b6c1fcd2d07ae3e32c42ae1</guid><category><![CDATA[Getting Started]]></category><dc:creator><![CDATA[Ghost]]></dc:creator><pubDate>Thu, 09 Aug 2018 11:04:51 GMT</pubDate><media:content url="https://casper.ghost.org/v1.0.0/images/writing.jpg" medium="image"/><content:encoded><![CDATA[<div class="kg-card-markdown"><img src="https://casper.ghost.org/v1.0.0/images/writing.jpg" alt="Using the Ghost editor"><p>Ghost uses a language called <strong>Markdown</strong> to format text.</p>
+<p>When you go to edit a post and see special characters and colours intertwined between the words, those are Markdown shortcuts which tell Ghost what to do with the words in your document. The biggest benefit of Markdown is that you can quickly apply formatting as you type, without needing to pause.</p>
+<p>At the bottom of the editor, you'll find a toolbar with basic formatting options to help you get started as easily as possible. You'll also notice that there's a <strong>?</strong> icon, which contains more advanced shortcuts.</p>
+<p>For now, though, let's run you through some of the basics. You'll want to make sure you're editing this post in order to see all the Markdown we've used.</p>
+<h2 id="formattingtext">Formatting text</h2>
+<p>The most common shortcuts are of course, <strong>bold</strong> text, <em>italic</em> text, and <a href="https://example.com">hyperlinks</a>. These generally make up the bulk of any document. You can type the characters out, but you can also use keyboard shortcuts.</p>
+<ul>
+<li><code>CMD/Ctrl + B</code> for Bold</li>
+<li><code>CMD/Ctrl + I</code> for Italic</li>
+<li><code>CMD/Ctrl + K</code> for a Link</li>
+<li><code>CMD/Ctrl + H</code> for a Heading (Press multiple times for h2/h3/h4/etc)</li>
+</ul>
+<p>With just a couple of extra characters here and there, you're well on your way to creating a beautifully formatted story.</p>
+<h2 id="insertingimages">Inserting images</h2>
+<p>Images in Markdown look just the same as links, except they're prefixed with an exclamation mark, like this:</p>
+<p><code>![Image description](/path/to/image.jpg)</code></p>
+<p><img src="https://casper.ghost.org/v1.0.0/images/computer.jpg" alt="Using the Ghost editor"></p>
+<p>Most Markdown editors don't make you type this out, though. In Ghost you can click on the image icon in the toolbar at the bottom of the editor, or you can just click and drag an image from your desktop directly into the editor. Both will upload the image for you and generate the appropriate Markdown.</p>
+<p><em><strong>Important Note:</strong> Ghost does not currently have automatic image resizing, so it's always a good idea to make sure your images aren't gigantic files <strong>before</strong> uploading them to Ghost.</em></p>
+<h2 id="makinglists">Making lists</h2>
+<p>Lists in HTML are a formatting nightmare, but in Markdown they become an absolute breeze with just a couple of characters and a bit of smart automation. For numbered lists, just write out the numbers. For bullet lists, just use <code>*</code> or <code>-</code> or <code>+</code>. Like this:</p>
+<ol>
+<li>Crack the eggs over a bowl</li>
+<li>Whisk them together</li>
+<li>Make an omelette</li>
+</ol>
+<p>or</p>
+<ul>
+<li>Remember to buy milk</li>
+<li>Feed the cat</li>
+<li>Come up with idea for next story</li>
+</ul>
+<h2 id="addingquotes">Adding quotes</h2>
+<p>When you want to pull out a particularly good excerpt in the middle of a piece, you can use <code>&gt;</code> at the beginning of a paragraph to turn it into a Blockquote. You might've seen this formatting before in email clients.</p>
+<blockquote>
+<p>A well placed quote guides a reader through a story, helping them to understand the most important points being made</p>
+</blockquote>
+<p>All themes handles blockquotes slightly differently. Sometimes they'll look better kept shorter, while other times you can quote fairly hefty amounts of text and get away with it. Generally, the safest option is to use blockquotes sparingly.</p>
+<h2 id="dividingthingsup">Dividing things up</h2>
+<p>If you're writing a piece in parts and you just feel like you need to divide a couple of sections distinctly from each other, a horizontal rule might be just what you need. Dropping <code>---</code> on a new line will create a sleek divider, anywhere you want it.</p>
+<hr>
+<p>This should get you going with the vast majority of what you need to do in the editor, but if you're still curious about more advanced tips then check out the <a href="http://172.20.254.138:80/advanced-markdown/">Advanced Markdown Guide</a> - or if you'd rather learn about how Ghost taxononomies work, we've got a overview of <a href="http://172.20.254.138:80/using-tags/">how to use Ghost tags</a>.</p>
+</div>]]></content:encoded></item><item><title><![CDATA[Organising your content with tags]]></title><description><![CDATA[<div class="kg-card-markdown"><p>Ghost has a single, powerful organisational taxonomy, called tags.</p>
+<p>It doesn't matter whether you want to call them categories, tags, boxes, or anything else. You can think of Ghost tags a lot like Gmail labels. By tagging posts with one or more keyword, you can organise articles into buckets of</p></div>]]></description><link>http://172.20.254.138:80/using-tags/</link><guid isPermaLink="false">5b6c1fcd2d07ae3e32c42adf</guid><category><![CDATA[Getting Started]]></category><dc:creator><![CDATA[Ghost]]></dc:creator><pubDate>Thu, 09 Aug 2018 11:04:50 GMT</pubDate><media:content url="https://casper.ghost.org/v1.0.0/images/tags.jpg" medium="image"/><content:encoded><![CDATA[<div class="kg-card-markdown"><img src="https://casper.ghost.org/v1.0.0/images/tags.jpg" alt="Organising your content with tags"><p>Ghost has a single, powerful organisational taxonomy, called tags.</p>
+<p>It doesn't matter whether you want to call them categories, tags, boxes, or anything else. You can think of Ghost tags a lot like Gmail labels. By tagging posts with one or more keyword, you can organise articles into buckets of related content.</p>
+<h2 id="basictagging">Basic tagging</h2>
+<p>When you write a post, you can assign tags to help differentiate between categories of content. For example, you might tag some posts with <code>News</code> and other posts with <code>Cycling</code>, which would create two distinct categories of content listed on <code>/tag/news/</code> and <code>/tag/cycling/</code>, respectively.</p>
+<p>If you tag a post with both <code>News</code> <em>and</em> <code>Cycling</code> - then it appears in both sections.</p>
+<p>Tag archives are like dedicated home-pages for each category of content that you have. They have their own pages, their own RSS feeds, and can support their own cover images and meta data.</p>
+<h2 id="theprimarytag">The primary tag</h2>
+<p>Inside the Ghost editor, you can drag and drop tags into a specific order. The first tag in the list is always given the most importance, and some themes will only display the primary tag (the first tag in the list) by default. So you can add the most important tag which you want to show up in your theme, but also add a bunch of related tags which are less important.</p>
+<p><mark><strong>News</strong>, Cycling, Bart Stevens, Extreme Sports</mark></p>
+<p>In this example, <strong>News</strong> is the primary tag which will be displayed by the theme, but the post will also still receive all the other tags, and show up in their respective archives.</p>
+<h2 id="privatetags">Private tags</h2>
+<p>Sometimes you may want to assign a post a specific tag, but you don't necessarily want that tag appearing in the theme or creating an archive page. In Ghost, hashtags are private and can be used for special styling.</p>
+<p>For example, if you sometimes publish posts with video content - you might want your theme to adapt and get rid of the sidebar for these posts, to give more space for an embedded video to fill the screen. In this case, you could use private tags to tell your theme what to do.</p>
+<p><mark><strong>News</strong>, Cycling, #video</mark></p>
+<p>Here, the theme would assign the post publicly displayed tags of <code>News</code>, and <code>Cycling</code> - but it would also keep a private record of the post being tagged with <code>#video</code>.</p>
+<p>In your theme, you could then look for private tags conditionally and give them special formatting:</p>
+<pre><code>{{#post}}
+    {{#has tag=&quot;#video&quot;}}
+        ...markup for a nice big video post layout...
+    {{else}}
+        ...regular markup for a post...
+    {{/has}}
+{{/post}}
+</code></pre>
+<p>You can find documentation for theme development techniques like this and many more over on Ghost's extensive <a href="https://themes.ghost.org/v1.23.0/">theme documentation</a>.</p>
+</div>]]></content:encoded></item><item><title><![CDATA[Managing Ghost users]]></title><description><![CDATA[<div class="kg-card-markdown"><p>Ghost has a number of different user roles for your team</p>
+<h3 id="authors">Authors</h3>
+<p>The base user level in Ghost is an author. Authors can write posts, edit their own posts, and publish their own posts. Authors are <strong>trusted</strong> users. If you don't trust users to be allowed to publish their own</p></div>]]></description><link>http://172.20.254.138:80/managing-users/</link><guid isPermaLink="false">5b6c1fcd2d07ae3e32c42add</guid><category><![CDATA[Getting Started]]></category><dc:creator><![CDATA[Ghost]]></dc:creator><pubDate>Thu, 09 Aug 2018 11:04:49 GMT</pubDate><media:content url="https://casper.ghost.org/v1.0.0/images/team.jpg" medium="image"/><content:encoded><![CDATA[<div class="kg-card-markdown"><img src="https://casper.ghost.org/v1.0.0/images/team.jpg" alt="Managing Ghost users"><p>Ghost has a number of different user roles for your team</p>
+<h3 id="authors">Authors</h3>
+<p>The base user level in Ghost is an author. Authors can write posts, edit their own posts, and publish their own posts. Authors are <strong>trusted</strong> users. If you don't trust users to be allowed to publish their own posts, you shouldn't invite them to Ghost admin.</p>
+<h3 id="editors">Editors</h3>
+<p>Editors are the 2nd user level in Ghost. Editors can do everything that an Author can do, but they can also edit and publish the posts of others - as well as their own. Editors can also invite new authors to the site.</p>
+<h3 id="administrators">Administrators</h3>
+<p>The top user level in Ghost is Administrator. Again, administrators can do everything that Authors and Editors can do, but they can also edit all site settings and data, not just content. Additionally, administrators have full access to invite, manage or remove any other user of the site.</p>
+<h3 id="theowner">The Owner</h3>
+<p>There is only ever one owner of a Ghost site. The owner is a special user which has all the same permissions as an Administrator, but with two exceptions: The Owner can never be deleted. And in some circumstances the owner will have access to additional special settings if applicable — for example, billing details, if using Ghost(Pro).</p>
+<hr>
+<p>It's a good idea to ask all of your users to fill out their user profiles, including bio and social links. These will populate rich structured data for posts and generally create more opportunities for themes to fully populate their design.</p>
+</div>]]></content:encoded></item><item><title><![CDATA[Making your site private]]></title><description><![CDATA[<div class="kg-card-markdown"><p>Sometimes you might want to put your site behind closed doors</p>
+<p>If you've got a publication that you don't want the world to see yet because it's not ready to launch, you can hide your Ghost site behind a simple shared pass-phrase.</p>
+<p>You can toggle this preference on at the</p></div>]]></description><link>http://172.20.254.138:80/private-sites/</link><guid isPermaLink="false">5b6c1fcd2d07ae3e32c42adb</guid><category><![CDATA[Getting Started]]></category><dc:creator><![CDATA[Ghost]]></dc:creator><pubDate>Thu, 09 Aug 2018 11:04:48 GMT</pubDate><media:content url="https://casper.ghost.org/v1.0.0/images/locked.jpg" medium="image"/><content:encoded><![CDATA[<div class="kg-card-markdown"><img src="https://casper.ghost.org/v1.0.0/images/locked.jpg" alt="Making your site private"><p>Sometimes you might want to put your site behind closed doors</p>
+<p>If you've got a publication that you don't want the world to see yet because it's not ready to launch, you can hide your Ghost site behind a simple shared pass-phrase.</p>
+<p>You can toggle this preference on at the bottom of Ghost's General Settings</p>
+<p><img src="https://casper.ghost.org/v1.0.0/images/private.png" alt="Making your site private"></p>
+<p>Ghost will give you a short, randomly generated pass-phrase which you can share with anyone who needs access to the site while you're working on it. While this setting is enabled, all search engine optimisation features will be switched off to help keep the site off the radar.</p>
+<p>Do remember though, this is <em>not</em> secure authentication. You shouldn't rely on this feature for protecting important private data. It's just a simple, shared pass-phrase for very basic privacy.</p>
+</div>]]></content:encoded></item><item><title><![CDATA[Advanced Markdown tips]]></title><description><![CDATA[<div class="kg-card-markdown"><p>There are lots of powerful things you can do with the Ghost editor</p>
+<p>If you've gotten pretty comfortable with <a href="http://172.20.254.138:80/the-editor/">all the basics</a> of writing in Ghost, then you may enjoy some more advanced tips about the types of things you can do with Markdown!</p>
+<p>As with the last post about</p></div>]]></description><link>http://172.20.254.138:80/advanced-markdown/</link><guid isPermaLink="false">5b6c1fcd2d07ae3e32c42ad9</guid><category><![CDATA[Getting Started]]></category><dc:creator><![CDATA[Ghost]]></dc:creator><pubDate>Thu, 09 Aug 2018 11:04:47 GMT</pubDate><media:content url="https://casper.ghost.org/v1.0.0/images/advanced.jpg" medium="image"/><content:encoded><![CDATA[<div class="kg-card-markdown"><img src="https://casper.ghost.org/v1.0.0/images/advanced.jpg" alt="Advanced Markdown tips"><p>There are lots of powerful things you can do with the Ghost editor</p>
+<p>If you've gotten pretty comfortable with <a href="http://172.20.254.138:80/the-editor/">all the basics</a> of writing in Ghost, then you may enjoy some more advanced tips about the types of things you can do with Markdown!</p>
+<p>As with the last post about the editor, you'll want to be actually editing this post as you read it so that you can see all the Markdown code we're using.</p>
+<h2 id="specialformatting">Special formatting</h2>
+<p>As well as bold and italics, you can also use some other special formatting in Markdown when the need arises, for example:</p>
+<ul>
+<li><s>strike through</s></li>
+<li><mark>highlight</mark></li>
+<li>*escaped characters*</li>
+</ul>
+<h2 id="writingcodeblocks">Writing code blocks</h2>
+<p>There are two types of code elements which can be inserted in Markdown, the first is inline, and the other is block. Inline code is formatted by wrapping any word or words in back-ticks, <code>like this</code>. Larger snippets of code can be displayed across multiple lines using triple back ticks:</p>
+<pre><code>.my-link {
+    text-decoration: underline;
+}
+</code></pre>
+<p>If you want to get really fancy, you can even add syntax highlighting using <a href="http://prismjs.com/">Prism.js</a>.</p>
+<h2 id="fullbleedimages">Full bleed images</h2>
+<p>One neat trick which you can use in Markdown to distinguish between different types of images is to add a <code>#hash</code> value to the end of the source URL, and then target images containing the hash with special styling. For example:</p>
+<p><img src="https://casper.ghost.org/v1.0.0/images/walking.jpg#full" alt="Advanced Markdown tips"></p>
+<p>which is styled with...</p>
+<pre><code>img[src$=&quot;#full&quot;] {
+    max-width: 100vw;
+}
+</code></pre>
+<p>This creates full-bleed images in the Casper theme, which stretch beyond their usual boundaries right up to the edge of the window. Every theme handles these types of things slightly differently, but it's a great trick to play with if you want to have a variety of image sizes and styles.</p>
+<h2 id="referencelists">Reference lists</h2>
+<p><strong>The quick brown <a href="https://en.wikipedia.org/wiki/Fox" title="Wikipedia: Fox">fox</a>, jumped over the lazy <a href="https://en.wikipedia.org/wiki/Dog" title="Wikipedia: Dog">dog</a>.</strong></p>
+<p>Another way to insert links in markdown is using reference lists. You might want to use this style of linking to cite reference material in a Wikipedia-style. All of the links are listed at the end of the document, so you can maintain full separation between content and its source or reference.</p>
+<h2 id="creatingfootnotes">Creating footnotes</h2>
+<p>The quick brown fox<sup class="footnote-ref"><a href="#fn1" id="fnref1">[1]</a></sup> jumped over the lazy dog<sup class="footnote-ref"><a href="#fn2" id="fnref2">[2]</a></sup>.</p>
+<p>Footnotes are a great way to add additional contextual details when appropriate. Ghost will automatically add footnote content to the very end of your post.</p>
+<h2 id="fullhtml">Full HTML</h2>
+<p>Perhaps the best part of Markdown is that you're never limited to just Markdown. You can write HTML directly in the Ghost editor and it will just work as HTML usually does. No limits! Here's a standard YouTube embed code as an example:</p>
+<iframe width="560" height="315" src="https://www.youtube.com/embed/Cniqsc9QfDo?rel=0&amp;showinfo=0" frameborder="0" allowfullscreen></iframe>
+<hr class="footnotes-sep">
+<section class="footnotes">
+<ol class="footnotes-list">
+<li id="fn1" class="footnote-item"><p>Foxes are red <a href="#fnref1" class="footnote-backref">↩︎</a></p>
+</li>
+<li id="fn2" class="footnote-item"><p>Dogs are usually not red <a href="#fnref2" class="footnote-backref">↩︎</a></p>
+</li>
+</ol>
+</section>
+</div>]]></content:encoded></item><item><title><![CDATA[Setting up your own Ghost theme]]></title><description><![CDATA[<div class="kg-card-markdown"><p>Creating a totally custom design for your publication</p>
+<p>Ghost comes with a beautiful default theme called Casper, which is designed to be a clean, readable publication layout and can be easily adapted for most purposes. However, Ghost can also be completely themed to suit your needs. Rather than just giving</p></div>]]></description><link>http://172.20.254.138:80/themes/</link><guid isPermaLink="false">5b6c1fcd2d07ae3e32c42ad7</guid><category><![CDATA[Getting Started]]></category><dc:creator><![CDATA[Ghost]]></dc:creator><pubDate>Thu, 09 Aug 2018 11:04:46 GMT</pubDate><media:content url="https://casper.ghost.org/v1.0.0/images/design.jpg" medium="image"/><content:encoded><![CDATA[<div class="kg-card-markdown"><img src="https://casper.ghost.org/v1.0.0/images/design.jpg" alt="Setting up your own Ghost theme"><p>Creating a totally custom design for your publication</p>
+<p>Ghost comes with a beautiful default theme called Casper, which is designed to be a clean, readable publication layout and can be easily adapted for most purposes. However, Ghost can also be completely themed to suit your needs. Rather than just giving you a few basic settings which act as a poor proxy for code, we just let you write code.</p>
+<p>There are a huge range of both free and premium pre-built themes which you can get from the <a href="http://marketplace.ghost.org">Ghost Theme Marketplace</a>, or you can simply create your own from scratch.</p>
+<p><a href="http://marketplace.ghost.org"><img src="https://casper.ghost.org/v1.0.0/images/marketplace.jpg" alt="Setting up your own Ghost theme"></a></p>
+<blockquote>
+<p>Anyone can write a completely custom Ghost theme, with just some solid knowledge of HTML and CSS</p>
+</blockquote>
+<p>Ghost themes are written with a templating language called handlebars, which has a bunch of dynamic helpers to insert your data into template files. Like <code>{{author.name}}</code>, for example, outputs the name of the current author.</p>
+<p>The best way to learn how to write your own Ghost theme is to have a look at <a href="https://github.com/TryGhost/Casper">the source code for Casper</a>, which is heavily commented and should give you a sense of how everything fits together.</p>
+<ul>
+<li><code>default.hbs</code> is the main template file, all contexts will load inside this file unless specifically told to use a different template.</li>
+<li><code>post.hbs</code> is the file used in the context of viewing a post.</li>
+<li><code>index.hbs</code> is the file used in the context of viewing the home page.</li>
+<li>and so on</li>
+</ul>
+<p>We've got <a href="http://themes.ghost.org/v1.23.0/docs/about">full and extensive theme documentation</a> which outlines every template file, context and helper that you can use.</p>
+<p>If you want to chat with other people making Ghost themes to get any advice or help, there's also a <strong>themes</strong> section on our <a href="https://forum.ghost.org/c/themes">public Ghost forum</a>.</p>
+</div>]]></content:encoded></item></channel></rss>

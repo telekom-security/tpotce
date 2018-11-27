@@ -1,0 +1,1 @@
+.alignleft,img.left{float:left;margin:0 5px 5px 0}.alignright,img.right{float:right;margin:0 0 5px 5px}.centered{margin-left:auto;margin-right:auto;display:block;padding:8px}.gravatar{float:left;margin-right:3px;margin-bottom:3px}.status{background:#fff;margin:-8px;padding:8px}

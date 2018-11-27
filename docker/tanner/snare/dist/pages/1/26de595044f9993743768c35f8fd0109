@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+
+<html class="" lang="en">
+<head prefix="og: http://ogp.me/ns#">
+<meta charset="utf-8"/>
+<meta content="IE=edge" http-equiv="X-UA-Compatible"/>
+<meta content="object" property="og:type"/>
+<meta content="GitLab" property="og:site_name"/>
+<meta content="Gitlab flow · Workflow · Help" property="og:title"/>
+<meta content="GitLab Community Edition" property="og:description"/>
+<meta content="http://172.20.254.127/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png" property="og:image"/>
+<meta content="64" property="og:image:width"/>
+<meta content="64" property="og:image:height"/>
+<meta content="http://172.20.254.127/help/workflow/gitlab_flow.md" property="og:url"/>
+<meta content="summary" property="twitter:card"/>
+<meta content="Gitlab flow · Workflow · Help" property="twitter:title"/>
+<meta content="GitLab Community Edition" property="twitter:description"/>
+<meta content="http://172.20.254.127/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png" property="twitter:image"/>
+<title>Gitlab flow · Workflow · Help · GitLab</title>
+<meta content="GitLab Community Edition" name="description"/>
+<link data-original-href="/assets/favicon-7901bd695fb93edb07975966062049829afb56cf11511236e61bcf425070e36e.png" href="/assets/favicon-7901bd695fb93edb07975966062049829afb56cf11511236e61bcf425070e36e.png" id="favicon" rel="shortcut icon" type="image/png"/>
+<link href="/assets/application-266f2bfa52ff531258d13c702895a14fd5994ca591fa2df7338da00ab18c99ac.css" media="all" rel="stylesheet"/>
+<link href="/assets/print-c8ff536271f8974b8a9a5f75c0ca25d2b8c1dceb4cff3c01d1603862a0bdcbfc.css" media="print" rel="stylesheet"/>
+<script>
+//<![CDATA[
+window.gon={};gon.api_version="v4";gon.default_avatar_url="http://172.20.254.127/assets/no_avatar-849f9c04a3a0d0cea2424ae97b27447dc64a7dbfae83c036c45b403392f0e8ba.png";gon.max_file_size=10;gon.asset_host=null;gon.webpack_public_path="/assets/webpack/";gon.relative_url_root="";gon.shortcuts_path="/help/shortcuts";gon.user_color_scheme="white";gon.gitlab_url="http://172.20.254.127";gon.revision="63daf37";gon.gitlab_logo="/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png";gon.sprite_icons="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg";gon.sprite_file_icons="/assets/file_icons-7262fc6897e02f1ceaf8de43dc33afa5e4f9a2067f4f68ef77dcc87946575e9e.svg";gon.emoji_sprites_css_path="/assets/emoji_sprites-289eccffb1183c188b630297431be837765d9ff4aed6130cf738586fb307c170.css";gon.test_env=false;gon.suggested_label_colors=["#0033CC","#428BCA","#44AD8E","#A8D695","#5CB85C","#69D100","#004E00","#34495E","#7F8C8D","#A295D6","#5843AD","#8E44AD","#FFECDB","#AD4363","#D10069","#CC0033","#FF0000","#D9534F","#D1D100","#F0AD4E","#AD8D43"];
+//]]>
+</script>
+<script defer="defer" src="/assets/webpack/runtime.9fcb75d4.bundle.js"></script>
+<script defer="defer" src="/assets/webpack/main.a66b6c66.chunk.js"></script>
+<script defer="defer" src="/assets/webpack/pages.help.show.c42c0700.chunk.js"></script>
+<meta content="authenticity_token" name="csrf-param">
+<meta content="2KMxJOS7EaMM76zaHBcqBRCcI2D2EXNFSvIyuhmsbxqIaSgc4UAl0jCj7kr7jyUTe+76X0Qg0I3eob3CEVyu9Q==" name="csrf-token">
+<meta content="origin-when-cross-origin" name="referrer"/>
+<meta content="width=device-width, initial-scale=1, maximum-scale=1" name="viewport"/>
+<meta content="#474D57" name="theme-color"/>
+<link href="/assets/touch-icon-iphone-5a9cee0e8a51212e70b90c87c12f382c428870c0ff67d1eb034d884b78d2dae7.png" rel="apple-touch-icon" type="image/x-icon"/>
+<link href="/assets/touch-icon-ipad-a6eec6aeb9da138e507593b464fdac213047e49d3093fc30e90d9a995df83ba3.png" rel="apple-touch-icon" sizes="76x76" type="image/x-icon"/>
+<link href="/assets/touch-icon-iphone-retina-72e2aadf86513a56e050e7f0f2355deaa19cc17ed97bbe5147847f2748e5a3e3.png" rel="apple-touch-icon" sizes="120x120" type="image/x-icon"/>
+<link href="/assets/touch-icon-ipad-retina-8ebe416f5313483d9c1bc772b5bbe03ecad52a54eba443e5215a22caed2a16a2.png" rel="apple-touch-icon" sizes="152x152" type="image/x-icon"/>
+<link color="rgb(226, 67, 41)" href="/assets/logo-d36b5212042cebc89b96df4bf6ac24e43db316143e89926c0db839ff694d2de4.svg" rel="mask-icon"/>
+<meta content="/assets/msapplication-tile-1196ec67452f618d39cdd85e2e3a542f76574c071051ae7effbfde01710eb17d.png" name="msapplication-TileImage"/>
+<meta content="#30353E" name="msapplication-TileColor"/>
+</meta></meta></head>
+<body class="ui-indigo " data-group="" data-page="help:show" data-project="">
+<header class="navbar navbar-gitlab qa-navbar navbar-expand-sm">
+<a class="sr-only gl-accessibility" href="#content-body" tabindex="1">Skip to content</a>
+<div class="container-fluid">
+<div class="header-content">
+<div class="title-container">
+<h1 class="title">
+<a href="/" id="logo" title="Dashboard"><svg class="tanuki-logo" height="24" viewbox="0 0 36 36" width="24">
+<path class="tanuki-shape tanuki-left-ear" d="M2 14l9.38 9v-9l-4-12.28c-.205-.632-1.176-.632-1.38 0z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-right-ear" d="M34 14l-9.38 9v-9l4-12.28c.205-.632 1.176-.632 1.38 0z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-nose" d="M18,34.38 3,14 33,14 Z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-left-eye" d="M18,34.38 11.38,14 2,14 6,25Z" fill="#fc6d26"></path>
+<path class="tanuki-shape tanuki-right-eye" d="M18,34.38 24.62,14 34,14 30,25Z" fill="#fc6d26"></path>
+<path class="tanuki-shape tanuki-left-cheek" d="M2 14L.1 20.16c-.18.565 0 1.2.5 1.56l17.42 12.66z" fill="#fca326"></path>
+<path class="tanuki-shape tanuki-right-cheek" d="M34 14l1.9 6.16c.18.565 0 1.2-.5 1.56L18 34.38z" fill="#fca326"></path>
+</svg>
+<span class="logo-text d-none d-sm-block">
+<svg viewbox="0 0 617 169" xmlns="http://www.w3.org/2000/svg"><path d="M315.26 2.97h-21.8l.1 162.5h88.3v-20.1h-66.5l-.1-142.4M465.89 136.95c-5.5 5.7-14.6 11.4-27 11.4-16.6 0-23.3-8.2-23.3-18.9 0-16.1 11.2-23.8 35-23.8 4.5 0 11.7.5 15.4 1.2v30.1h-.1m-22.6-98.5c-17.6 0-33.8 6.2-46.4 16.7l7.7 13.4c8.9-5.2 19.8-10.4 35.5-10.4 17.9 0 25.8 9.2 25.8 24.6v7.9c-3.5-.7-10.7-1.2-15.1-1.2-38.2 0-57.6 13.4-57.6 41.4 0 25.1 15.4 37.7 38.7 37.7 15.7 0 30.8-7.2 36-18.9l4 15.9h15.4v-83.2c-.1-26.3-11.5-43.9-44-43.9M557.63 149.1c-8.2 0-15.4-1-20.8-3.5V70.5c7.4-6.2 16.6-10.7 28.3-10.7 21.1 0 29.2 14.9 29.2 39 0 34.2-13.1 50.3-36.7 50.3m9.2-110.6c-19.5 0-30 13.3-30 13.3v-21l-.1-27.8h-21.3l.1 158.5c10.7 4.5 25.3 6.9 41.2 6.9 40.7 0 60.3-26 60.3-70.9-.1-35.5-18.2-59-50.2-59M77.9 20.6c19.3 0 31.8 6.4 39.9 12.9l9.4-16.3C114.5 6 97.3 0 78.9 0 32.5 0 0 28.3 0 85.4c0 59.8 35.1 83.1 75.2 83.1 20.1 0 37.2-4.7 48.4-9.4l-.5-63.9V75.1H63.6v20.1h38l.5 48.5c-5 2.5-13.6 4.5-25.3 4.5-32.2 0-53.8-20.3-53.8-63-.1-43.5 22.2-64.6 54.9-64.6M231.43 2.95h-21.3l.1 27.3v94.3c0 26.3 11.4 43.9 43.9 43.9 4.5 0 8.9-.4 13.1-1.2v-19.1c-3.1.5-6.4.7-9.9.7-17.9 0-25.8-9.2-25.8-24.6v-65h35.7v-17.8h-35.7l-.1-38.5M155.96 165.47h21.3v-124h-21.3v124M155.96 24.37h21.3V3.07h-21.3v21.3"></path></svg>
+</span>
+</a></h1>
+<ul class="list-unstyled navbar-sub-nav">
+<li class="home"><a class="dashboard-shortcuts-projects" href="/explore" title="Projects">Projects
+</a></li><li class=""><a class="dashboard-shortcuts-groups" href="/explore/groups" title="Groups">Groups
+</a></li><li class=""><a class="dashboard-shortcuts-snippets" href="/explore/snippets" title="Snippets">Snippets
+</a></li><li>
+<a href="/help" title="About GitLab CE">Help</a>
+</li>
+</ul>
+</div>
+<div class="navbar-collapse collapse">
+<ul class="nav navbar-nav">
+<li class="nav-item d-none d-sm-none d-md-block m-auto">
+<div class="search search-form">
+<form accept-charset="UTF-8" action="/search" class="form-inline" method="get"><input name="utf8" type="hidden" value="✓"/><div class="search-input-container">
+<div class="search-input-wrap">
+<div class="dropdown" data-url="/search/autocomplete">
+<input aria-label="Search" autocomplete="off" class="search-input dropdown-menu-toggle no-outline js-search-dashboard-options" data-issues-path="/dashboard/issues" data-mr-path="/dashboard/merge_requests" id="search" name="search" placeholder="Search" spellcheck="false" tabindex="1" type="search"/>
+<button class="hidden js-dropdown-search-toggle" data-toggle="dropdown" type="button"></button>
+<div class="dropdown-menu dropdown-select">
+<div class="dropdown-content"><ul>
+<li class="dropdown-menu-empty-item">
+<a>
+Loading...
+</a>
+</li>
+</ul>
+</div><div class="dropdown-loading"><i aria-hidden="true" class="fa fa-spinner fa-spin" data-hidden="true"></i></div>
+</div>
+<svg class="s16 search-icon"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#search"></use></svg>
+<svg class="s16 clear-icon js-clear-input"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#close"></use></svg>
+</div>
+</div>
+</div>
+<input class="js-search-group-options" id="group_id" name="group_id" type="hidden"/>
+<input class="js-search-project-options" id="search_project_id" name="project_id" type="hidden" value=""/>
+<input id="repository_ref" name="repository_ref" type="hidden"/>
+<div class="search-autocomplete-opts hide" data-autocomplete-path="/search/autocomplete"></div>
+</form></div>
+</li>
+<li class="nav-item d-inline-block d-sm-none d-md-none">
+<a aria-label="Search" data-container="body" data-placement="bottom" data-toggle="tooltip" href="/search" title="Search"><svg class="s16"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#search"></use></svg>
+</a></li>
+<li class="nav-item">
+<div>
+<a class="btn btn-sign-in" href="/users/sign_in?redirect_to_referer=yes">Sign in / Register</a>
+</div>
+</li>
+</ul>
+</div>
+<button class="navbar-toggler d-block d-sm-none" type="button">
+<span class="sr-only">Toggle navigation</span>
+<svg class="s12 more-icon js-navbar-toggle-right"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#more"></use></svg>
+<svg class="s12 close-icon js-navbar-toggle-left"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#close"></use></svg>
+</button>
+</div>
+</div>
+</header>
+<div class="layout-page">
+<div class="content-wrapper">
+<div class="mobile-overlay"></div>
+<div class="alert-wrapper">
+<nav class="breadcrumbs container-fluid container-limited" role="navigation">
+<div class="breadcrumbs-container">
+<div class="breadcrumbs-links js-title-container">
+<ul class="list-unstyled breadcrumbs-list js-breadcrumbs-list">
+<li><a href="/help">Help</a><svg class="s8 breadcrumbs-list-angle"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#angle-right"></use></svg></li>
+<li>
+<h2 class="breadcrumbs-sub-title"><a href="/help/workflow/gitlab_flow.md">Help</a></h2>
+</li>
+</ul>
+</div>
+</div>
+</nav>
+<div class="flash-container flash-container-page">
+</div>
+</div>
+<div class="container-fluid container-limited ">
+<div class="content" id="content-body">
+<div class="documentation wiki prepend-top-default">
+<p dir="auto"><a class="no-attachment-icon" href="/gitlab_flow.png" rel="noopener noreferrer" target="_blank"><img alt="GitLab Flow" class="lazy" data-src="gitlab_flow.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<h1 dir="auto">
+<a aria-hidden="true" class="anchor" href="#introduction-to-gitlab-flow" id="user-content-introduction-to-gitlab-flow"></a>Introduction to GitLab Flow</h1>
+<p dir="auto">Version management with git makes branching and merging much easier than older versioning systems such as SVN.
+This allows a wide variety of branching strategies and workflows.
+Almost all of these are an improvement over the methods used before git.
+But many organizations end up with a workflow that is not clearly defined, overly complex or not integrated with issue tracking systems.
+Therefore we propose the GitLab flow as clearly defined set of best practices.
+It combines <a href="https://en.wikipedia.org/wiki/Feature-driven_development" rel="nofollow noreferrer noopener" target="_blank">feature driven development</a> and <a href="http://martinfowler.com/bliki/FeatureBranch.html" rel="nofollow noreferrer noopener" target="_blank">feature branches</a> with issue tracking.</p>
+<p dir="auto">Organizations coming to git from other version control systems frequently find it hard to develop an effective workflow.
+This article describes the GitLab flow that integrates the git workflow with an issue tracking system.
+It offers a simple, transparent and effective way to work with git.</p>
+<p dir="auto"><a class="no-attachment-icon" href="/four_stages.png" rel="noopener noreferrer" target="_blank"><img alt="Four stages (working copy, index, local repo, remote repo) and three steps between them" class="lazy" data-src="four_stages.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<p dir="auto">When converting to git you have to get used to the fact that there are three steps before a commit is shared with colleagues.
+Most version control systems have only one step, committing from the working copy to a shared server.
+In git you add files from the working copy to the staging area. After that you commit them to the local repo.
+The third step is pushing to a shared remote repository.
+After getting used to these three steps the branching model becomes the challenge.</p>
+<p dir="auto"><a class="no-attachment-icon" href="/messy_flow.png" rel="noopener noreferrer" target="_blank"><img alt="Multiple long running branches and merging in all directions" class="lazy" data-src="messy_flow.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<p dir="auto">Since many organizations new to git have no conventions how to work with it, it can quickly become a mess.
+The biggest problem they run into is that many long running branches that each contain part of the changes are around.
+People have a hard time figuring out which branch they should develop on or deploy to production.
+Frequently the reaction to this problem is to adopt a standardized pattern such as <a href="http://nvie.com/posts/a-successful-git-branching-model/" rel="nofollow noreferrer noopener" target="_blank">git flow</a> and <a href="http://scottchacon.com/2011/08/31/github-flow.html" rel="nofollow noreferrer noopener" target="_blank">GitHub flow</a>.
+We think there is still room for improvement and will detail a set of practices we call GitLab flow.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#git-flow-and-its-problems" id="user-content-git-flow-and-its-problems"></a>Git flow and its problems</h2>
+<p dir="auto"><a class="no-attachment-icon" href="/gitdashflow.png" rel="noopener noreferrer" target="_blank"><img alt="Git Flow timeline by Vincent Driessen, used with permission" class="lazy" data-src="gitdashflow.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<p dir="auto">Git flow was one of the first proposals to use git branches and it has gotten a lot of attention.
+It advocates a master branch and a separate develop branch as well as supporting branches for features, releases and hotfixes.
+The development happens on the develop branch, moves to a release branch and is finally merged into the master branch.
+Git flow is a well defined standard but its complexity introduces two problems.
+The first problem is that developers must use the develop branch and not master, master is reserved for code that is released to production.
+It is a convention to call your default branch master and to mostly branch from and merge to this.
+Since most tools automatically make the master branch the default one and display that one by default it is annoying to have to switch to another one.
+The second problem of git flow is the complexity introduced by the hotfix and release branches.
+These branches can be a good idea for some organizations but are overkill for the vast majority of them.
+Nowadays most organizations practice continuous delivery which means that your default branch can be deployed.
+This means that hotfix and release branches can be prevented including all the ceremony they introduce.
+An example of this ceremony is the merging back of release branches.
+Though specialized tools do exist to solve this, they require documentation and add complexity.
+Frequently developers make a mistake and for example changes are only merged into master and not into the develop branch.
+The root cause of these errors is that git flow is too complex for most of the use cases.
+And doing releases doesn't automatically mean also doing hotfixes.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#github-flow-as-a-simpler-alternative" id="user-content-github-flow-as-a-simpler-alternative"></a>GitHub flow as a simpler alternative</h2>
+<p dir="auto"><a class="no-attachment-icon" href="/github_flow.png" rel="noopener noreferrer" target="_blank"><img alt="Master branch with feature branches merged in" class="lazy" data-src="github_flow.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<p dir="auto">In reaction to git flow a simpler alternative was detailed, <a href="https://guides.github.com/introduction/flow/index.html" rel="nofollow noreferrer noopener" target="_blank">GitHub flow</a>.
+This flow has only feature branches and a master branch.
+This is very simple and clean, many organizations have adopted it with great success.
+Atlassian recommends <a href="http://blogs.atlassian.com/2014/01/simple-git-workflow-simple/" rel="nofollow noreferrer noopener" target="_blank">a similar strategy</a> although they rebase feature branches.
+Merging everything into the master branch and deploying often means you minimize the amount of code in 'inventory' which is in line with the lean and continuous delivery best practices.
+But this flow still leaves a lot of questions unanswered regarding deployments, environments, releases and integrations with issues.
+With GitLab flow we offer additional guidance for these questions.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#production-branch-with-gitlab-flow" id="user-content-production-branch-with-gitlab-flow"></a>Production branch with GitLab flow</h2>
+<p dir="auto"><a class="no-attachment-icon" href="/production_branch.png" rel="noopener noreferrer" target="_blank"><img alt="Master branch and production branch with arrow that indicate deployments" class="lazy" data-src="production_branch.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<p dir="auto">GitHub flow does assume you are able to deploy to production every time you merge a feature branch.
+This is possible for e.g. SaaS applications, but there are many cases where this is not possible.
+One would be a situation where you are not in control of the exact release moment, for example an iOS application that needs to pass App Store validation.
+Another example is when you have deployment windows (workdays from 10am to 4pm when the operations team is at full capacity) but you also merge code at other times.
+In these cases you can make a production branch that reflects the deployed code.
+You can deploy a new version by merging in master to the production branch.
+If you need to know what code is in production you can just checkout the production branch to see.
+The approximate time of deployment is easily visible as the merge commit in the version control system.
+This time is pretty accurate if you automatically deploy your production branch.
+If you need a more exact time you can have your deployment script create a tag on each deployment.
+This flow prevents the overhead of releasing, tagging and merging that is common to git flow.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#environment-branches-with-gitlab-flow" id="user-content-environment-branches-with-gitlab-flow"></a>Environment branches with GitLab flow</h2>
+<p dir="auto"><a class="no-attachment-icon" href="/environment_branches.png" rel="noopener noreferrer" target="_blank"><img alt="Multiple branches with the code cascading from one to another" class="lazy" data-src="environment_branches.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<p dir="auto">It might be a good idea to have an environment that is automatically updated to the master branch.
+Only in this case, the name of this environment might differ from the branch name.
+Suppose you have a staging environment, a pre-production environment and a production environment.
+In this case the master branch is deployed on staging. When someone wants to deploy to pre-production they create a merge request from the master branch to the pre-production branch.
+And going live with code happens by merging the pre-production branch into the production branch.
+This workflow where commits only flow downstream ensures that everything has been tested on all environments.
+If you need to cherry-pick a commit with a hotfix it is common to develop it on a feature branch and merge it into master with a merge request, do not delete the feature branch.
+If master is good to go (it should be if you are practicing <a href="http://martinfowler.com/bliki/ContinuousDelivery.html" rel="nofollow noreferrer noopener" target="_blank">continuous delivery</a>) you then merge it to the other branches.
+If this is not possible because more manual testing is required you can send merge requests from the feature branch to the downstream branches.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#release-branches-with-gitlab-flow" id="user-content-release-branches-with-gitlab-flow"></a>Release branches with GitLab flow</h2>
+<p dir="auto"><a class="no-attachment-icon" href="/release_branches.png" rel="noopener noreferrer" target="_blank"><img alt="Master and multiple release branches that vary in length with cherry-picks from master" class="lazy" data-src="release_branches.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<p dir="auto">Only in case you need to release software to the outside world you need to work with release branches.
+In this case, each branch contains a minor version (2-3-stable, 2-4-stable, etc.).
+The stable branch uses master as a starting point and is created as late as possible.
+By branching as late as possible you minimize the time you have to apply bug fixes to multiple branches.
+After a release branch is announced, only serious bug fixes are included in the release branch.
+If possible these bug fixes are first merged into master and then cherry-picked into the release branch.
+This way you can't forget to cherry-pick them into master and encounter the same bug on subsequent releases.
+This is called an 'upstream first' policy that is also practiced by <a href="https://www.chromium.org/chromium-os/chromiumos-design-docs/upstream-first" rel="nofollow noreferrer noopener" target="_blank">Google</a> and <a href="https://www.redhat.com/about/news/archive/2013/5/a-community-for-using-openstack-with-red-hat-rdo" rel="nofollow noreferrer noopener" target="_blank">Red Hat</a>.
+Every time a bug-fix is included in a release branch the patch version is raised (to comply with <a href="http://semver.org/" rel="nofollow noreferrer noopener" target="_blank">Semantic Versioning</a>) by setting a new tag.
+Some projects also have a stable branch that points to the same commit as the latest released branch.
+In this flow it is not common to have a production branch (or git flow master branch).</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#mergepull-requests-with-gitlab-flow" id="user-content-mergepull-requests-with-gitlab-flow"></a>Merge/pull requests with GitLab flow</h2>
+<p dir="auto"><a class="no-attachment-icon" href="/mr_inline_comments.png" rel="noopener noreferrer" target="_blank"><img alt="Merge request with line comments" class="lazy" data-src="mr_inline_comments.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<p dir="auto">Merge or pull requests are created in a git management application and ask an assigned person to merge two branches.
+Tools such as GitHub and Bitbucket choose the name pull request since the first manual action would be to pull the feature branch.
+Tools such as GitLab and others choose the name merge request since that is the final action that is requested of the assignee.
+In this article we'll refer to them as merge requests.</p>
+<p dir="auto">If you work on a feature branch for more than a few hours it is good to share the intermediate result with the rest of the team.
+This can be done by creating a merge request without assigning it to anyone, instead you mention people in the description or a comment (/cc @mark @susan).
+This means it is not ready to be merged but feedback is welcome.
+Your team members can comment on the merge request in general or on specific lines with line comments.
+The merge requests serves as a code review tool and no separate tools such as Gerrit and reviewboard should be needed.
+If the review reveals shortcomings anyone can commit and push a fix.
+Commonly the person to do this is the creator of the merge/pull request.
+The diff in the merge/pull requests automatically updates when new commits are pushed on the branch.</p>
+<p dir="auto">When you feel comfortable with it to be merged you assign it to the person that knows most about the codebase you are changing and mention any other people you would like feedback from.
+There is room for more feedback and after the assigned person feels comfortable with the result the branch is merged.
+If the assigned person does not feel comfortable they can close the merge request without merging.</p>
+<p dir="auto">In GitLab it is common to protect the long-lived branches (e.g. the master branch) so that normal developers <a href="http://docs.gitlab.com/ce/permissions/permissions.html" rel="nofollow noreferrer noopener" target="_blank">can't modify these protected branches</a>.
+So if you want to merge it into a protected branch you assign it to someone with maintainer authorizations.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#issue-tracking-with-gitlab-flow" id="user-content-issue-tracking-with-gitlab-flow"></a>Issue tracking with GitLab flow</h2>
+<p dir="auto"><a class="no-attachment-icon" href="/merge_request.png" rel="noopener noreferrer" target="_blank"><img alt="Merge request with the branch name 15-require-a-password-to-change-it and assignee field shown" class="lazy" data-src="merge_request.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<p dir="auto">GitLab flow is a way to make the relation between the code and the issue tracker more transparent.</p>
+<p dir="auto">Any significant change to the code should start with an issue where the goal is described.
+Having a reason for every code change is important to inform everyone on the team and to help people keep the scope of a feature branch small.
+In GitLab each change to the codebase starts with an issue in the issue tracking system.
+If there is no issue yet it should be created first provided there is significant work involved (more than 1 hour).
+For many organizations this will be natural since the issue will have to be estimated for the sprint.
+Issue titles should describe the desired state of the system, e.g. "As an administrator I want to remove users without receiving an error" instead of "Admin can't remove users.".</p>
+<p dir="auto">When you are ready to code you start a branch for the issue from the master branch.
+The name of this branch should start with the issue number, for example '15-require-a-password-to-change-it'.</p>
+<p dir="auto">When you are done or want to discuss the code you open a merge request.
+This is an online place to discuss the change and review the code.
+Opening a merge request is a manual action since you do not always want to merge a new branch you push, it could be a long-running environment or release branch.
+If you open the merge request but do not assign it to anyone it is a 'Work In Progress' merge request.
+These are used to discuss the proposed implementation but are not ready for inclusion in the master branch yet.
+<em>Pro tip:</em> Start the title of the merge request with <code>[WIP]</code> or <code>WIP:</code> to prevent it from being merged before it's ready.</p>
+<p dir="auto">When the author thinks the code is ready the merge request is assigned to reviewer.
+The reviewer presses the merge button when they think the code is ready for inclusion in the master branch.
+In this case the code is merged and a merge commit is generated that makes this event easily visible later on.
+Merge requests always create a merge commit even when the commit could be added without one.
+This merge strategy is called 'no fast-forward' in git.
+After the merge the feature branch is deleted since it is no longer needed, in GitLab this deletion is an option when merging.</p>
+<p dir="auto">Suppose that a branch is merged but a problem occurs and the issue is reopened.
+In this case it is no problem to reuse the same branch name since it was deleted when the branch was merged.
+At any time there is at most one branch for every issue.
+It is possible that one feature branch solves more than one issue.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#linking-and-closing-issues-from-merge-requests" id="user-content-linking-and-closing-issues-from-merge-requests"></a>Linking and closing issues from merge requests</h2>
+<p dir="auto"><a class="no-attachment-icon" href="/close_issue_mr.png" rel="noopener noreferrer" target="_blank"><img alt="Merge request showing the linked issues that will be closed" class="lazy" data-src="close_issue_mr.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<p dir="auto">Linking to issues can happen by mentioning them in commit messages (fixes #14, closes #67, etc.) or in the merge request description.
+GitLab then creates links to the mentioned issues and creates comments in the corresponding issues linking back to the merge request.</p>
+<p dir="auto">These issues are closed once code is merged into the default branch.</p>
+<p dir="auto">If you only want to make the reference without closing the issue you can also just mention it: "Duck typing is preferred. #12".</p>
+<p dir="auto">If you have an issue that spans across multiple repositories, the best thing is to create an issue for each repository and link all issues to a parent issue.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#squashing-commits-with-rebase" id="user-content-squashing-commits-with-rebase"></a>Squashing commits with rebase</h2>
+<p dir="auto"><a class="no-attachment-icon" href="/rebase.png" rel="noopener noreferrer" target="_blank"><img alt="Vim screen showing the rebase view" class="lazy" data-src="rebase.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<p dir="auto">With git you can use an interactive rebase (<code>rebase -i</code>) to squash multiple commits into one and reorder them.
+In GitLab EE and .com you can also <a href="http://docs.gitlab.com/ee/workflow/rebase_before_merge.html" rel="nofollow noreferrer noopener" target="_blank">rebase before merge</a> from the web interface.
+This functionality is useful if you made a couple of commits for small changes during development and want to replace them with a single commit or if you want to make the order more logical.
+However you should never rebase commits you have pushed to a remote server.
+Somebody can have referred to the commits or cherry-picked them.
+When you rebase you change the identifier (SHA-1) of the commit and this is confusing.
+If you do that the same change will be known under multiple identifiers and this can cause much confusion.
+If people already reviewed your code it will be hard for them to review only the improvements you made since then if you have rebased everything into one commit.
+Another reasons not to rebase is that you lose authorship information, maybe someone created a merge request, another person pushed a commit on there to improve it and a third one merged it.
+In this case rebasing all the commits into one prevent the other authors from being properly attributed and sharing part of the <a href="https://git-scm.com/docs/git-blame" rel="nofollow noreferrer noopener" target="_blank">git blame</a>.</p>
+<p dir="auto">People are encouraged to commit often and to frequently push to the remote repository so other people are aware what everyone is working on.
+This will lead to many commits per change which makes the history harder to understand.
+But the advantages of having stable identifiers outweigh this drawback.
+And to understand a change in context one can always look at the merge commit that groups all the commits together when the code is merged into the master branch.</p>
+<p dir="auto">After you merge multiple commits from a feature branch into the master branch this is harder to undo.
+If you had squashed all the commits into one you could have just reverted this commit but as we indicated you should not rebase commits after they are pushed.
+Fortunately <a href="https://git-scm.com/blog/2010/03/02/undoing-merges.html" rel="nofollow noreferrer noopener" target="_blank">reverting a merge made some time ago</a> can be done with git.
+This however, requires having specific merge commits for the commits your want to revert.
+If you revert a merge and you change your mind, revert the revert instead of merging again since git will not allow you to merge the code again otherwise.</p>
+<p dir="auto">Being able to revert a merge is a good reason always to create a merge commit when you merge manually with the <code>--no-ff</code> option.
+Git management software will always create a merge commit when you accept a merge request.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#do-not-order-commits-with-rebase" id="user-content-do-not-order-commits-with-rebase"></a>Do not order commits with rebase</h2>
+<p dir="auto"><a class="no-attachment-icon" href="/merge_commits.png" rel="noopener noreferrer" target="_blank"><img alt="List of sequential merge commits" class="lazy" data-src="merge_commits.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<p dir="auto">With git you can also rebase your feature branch commits to order them after the commits on the master branch.
+This prevents creating a merge commit when merging master into your feature branch and creates a nice linear history.
+However, just like with squashing you should never rebase commits you have pushed to a remote server.
+This makes it impossible to rebase work in progress that you already shared with your team which is something we recommend.
+When using rebase to keep your feature branch updated you <a href="https://blogs.atlassian.com/2013/10/git-team-workflows-merge-or-rebase/" rel="nofollow noreferrer noopener" target="_blank">need to resolve similar conflicts again and again</a>.
+You can reuse recorded resolutions (rerere) sometimes, but without rebasing you only have to solve the conflicts one time and you’re set.
+There has to be a better way to avoid many merge commits.</p>
+<p dir="auto">The way to prevent creating many merge commits is to not frequently merge master into the feature branch.
+We'll discuss the three reasons to merge in master: leveraging code, merge conflicts, and long running branches.
+If you need to leverage some code that was introduced in master after you created the feature branch you can sometimes solve this by just cherry-picking a commit.
+If your feature branch has a merge conflict, creating a merge commit is a normal way of solving this.
+You can prevent some merge conflicts by using <a href="http://git-scm.com/docs/gitattributes" rel="nofollow noreferrer noopener" target="_blank">gitattributes</a> for files that can be in a random order.
+For example in GitLab our changelog file is specified in .gitattributes as <code>CHANGELOG.md merge=union</code> so that there are fewer merge conflicts in it.
+The last reason for creating merge commits is having long lived branches that you want to keep up to date with the latest state of the project.
+Martin Fowler, in <a href="http://martinfowler.com/bliki/FeatureBranch.html" rel="nofollow noreferrer noopener" target="_blank">his article about feature branches</a> talks about this Continuous Integration (CI).
+At GitLab we are guilty of confusing CI with branch testing. Quoting Martin Fowler: "I've heard people say they are doing CI because they are running builds, perhaps using a CI server, on every branch with every commit.
+That's continuous building, and a Good Thing, but there's no integration, so it's not CI.".
+The solution to prevent many merge commits is to keep your feature branches short-lived, the vast majority should take less than one day of work.
+If your feature branches commonly take more than a day of work, look into ways to create smaller units of work and/or use <a href="http://martinfowler.com/bliki/FeatureToggle.html" rel="nofollow noreferrer noopener" target="_blank">feature toggles</a>.
+As for the long running branches that take more than one day there are two strategies.
+In a CI strategy you can merge in master at the start of the day to prevent painful merges at a later time.
+In a synchronization point strategy you only merge in from well defined points in time, for example a tagged release.
+This strategy is <a href="https://www.mail-archive.com/dri-devel@lists.sourceforge.net/msg39091.html" rel="nofollow noreferrer noopener" target="_blank">advocated by Linus Torvalds</a> because the state of the code at these points is better known.</p>
+<p dir="auto">In conclusion, we can say that you should try to prevent merge commits, but not eliminate them.
+Your codebase should be clean but your history should represent what actually happened.
+Developing software happen in small messy steps and it is OK to have your history reflect this.
+You can use tools to view the network graphs of commits and understand the messy history that created your code.
+If you rebase code the history is incorrect, and there is no way for tools to remedy this because they can't deal with changing commit identifiers.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#award-emojis-on-issues-and-merge-requests" id="user-content-award-emojis-on-issues-and-merge-requests"></a>Award emojis on issues and merge requests</h2>
+<p dir="auto"><a class="no-attachment-icon" href="/award_emoji.png" rel="noopener noreferrer" target="_blank"><img alt="Emoji bar in GitLab" class="lazy" data-src="award_emoji.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<p dir="auto">It is common to voice approval or disapproval by using +1 or -1. In GitLab you
+can use emojis to give a virtual high five on issues and merge requests.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#pushing-and-removing-branches" id="user-content-pushing-and-removing-branches"></a>Pushing and removing branches</h2>
+<p dir="auto"><a class="no-attachment-icon" href="/remove_checkbox.png" rel="noopener noreferrer" target="_blank"><img alt="Remove checkbox for branch in merge requests" class="lazy" data-src="remove_checkbox.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<p dir="auto">We recommend that people push their feature branches frequently, even when they are not ready for review yet.
+By doing this you prevent team members from accidentally starting to work on the same issue.
+Of course this situation should already be prevented by assigning someone to the issue in the issue tracking software.
+However sometimes one of the two parties forgets to assign someone in the issue tracking software.
+After a branch is merged it should be removed from the source control software.
+In GitLab and similar systems this is an option when merging.
+This ensures that the branch overview in the repository management software shows only work in progress.
+This also ensures that when someone reopens the issue a new branch with the same name can be used without problem.
+When you reopen an issue you need to create a new merge request.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#committing-often-and-with-the-right-message" id="user-content-committing-often-and-with-the-right-message"></a>Committing often and with the right message</h2>
+<p dir="auto"><a class="no-attachment-icon" href="/good_commit.png" rel="noopener noreferrer" target="_blank"><img alt="Good and bad commit message" class="lazy" data-src="good_commit.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<p dir="auto">We recommend to commit early and often.
+Each time you have a functioning set of tests and code a commit can be made.
+The advantage is that when an extension or refactor goes wrong it is easy to revert to a working version.
+This is quite a change for programmers that used SVN before, they used to commit when their work was ready to share.
+The trick is to use the merge/pull request with multiple commits when your work is ready to share.
+The commit message should reflect your intention, not the contents of the commit.
+The contents of the commit can be easily seen anyway, the question is why you did it.
+An example of a good commit message is: "Combine templates to dry up the user views.".
+Some words that are bad commit messages because they don't contain much information are: change, improve and refactor.
+The word fix or fixes is also a red flag, unless it comes after the commit sentence and references an issue number.
+To see more information about the formatting of commit messages please see this great <a href="http://tbaggery.com/2008/04/19/a-note-about-git-commit-messages.html" rel="nofollow noreferrer noopener" target="_blank">blog post by Tim Pope</a>.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#testing-before-merging" id="user-content-testing-before-merging"></a>Testing before merging</h2>
+<p dir="auto"><a class="no-attachment-icon" href="/ci_mr.png" rel="noopener noreferrer" target="_blank"><img alt="Merge requests showing the test states, red, yellow and green" class="lazy" data-src="ci_mr.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<p dir="auto">In old workflows the Continuous Integration (CI) server commonly ran tests on the master branch only.
+Developers had to ensure their code did not break the master branch.
+When using GitLab flow developers create their branches from this master branch so it is essential it is green.
+Therefore each merge request must be tested before it is accepted.
+CI software like Travis and GitLab CI show the build results right in the merge request itself to make this easy.
+One drawback is that they are testing the feature branch itself and not the merged result.
+What one can do to improve this is to test the merged result itself.
+The problem is that the merge result changes every time something is merged into master.
+Retesting on every commit to master is computationally expensive and means you are more frequently waiting for test results.
+If there are no merge conflicts and the feature branches are short lived the risk is acceptable.
+If there are merge conflicts you merge the master branch into the feature branch and the CI server will rerun the tests.
+If you have long lived feature branches that last for more than a few days you should make your issues smaller.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#working-with-feature-branches" id="user-content-working-with-feature-branches"></a>Working with feature branches</h2>
+<p dir="auto"><a class="no-attachment-icon" href="/git_pull.png" rel="noopener noreferrer" target="_blank"><img alt="Shell output showing git pull output" class="lazy" data-src="git_pull.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<p dir="auto">When initiating a feature branch, always start with an up to date master to branch off from.
+If you know beforehand that your work absolutely depends on another branch you can also branch from there.
+If you need to merge in another branch after starting explain the reason in the merge commit.
+If you have not pushed your commits to a shared location yet you can also rebase on master or another feature branch.
+Do not merge in upstream if your code will work and merge cleanly without doing so, Linus even says that <a href="https://lwn.net/Articles/328438/" rel="nofollow noreferrer noopener" target="_blank">you should never merge in upstream at random points, only at major releases</a>.
+Merging only when needed prevents creating merge commits in your feature branch that later end up littering the master history.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#references" id="user-content-references"></a>References</h3>
+<ul dir="auto">
+<li><a href="http://nvie.com/posts/a-successful-git-branching-model/" rel="nofollow noreferrer noopener" target="_blank">Git Flow by Vincent Driessen</a></li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

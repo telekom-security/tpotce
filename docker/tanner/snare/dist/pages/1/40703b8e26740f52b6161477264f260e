@@ -1,0 +1,1077 @@
+<!DOCTYPE html>
+
+<html class="" lang="en">
+<head prefix="og: http://ogp.me/ns#">
+<meta charset="utf-8"/>
+<meta content="IE=edge" http-equiv="X-UA-Compatible"/>
+<meta content="object" property="og:type"/>
+<meta content="GitLab" property="og:site_name"/>
+<meta content="Markdown · User · Help" property="og:title"/>
+<meta content="GitLab Community Edition" property="og:description"/>
+<meta content="http://172.20.254.127/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png" property="og:image"/>
+<meta content="64" property="og:image:width"/>
+<meta content="64" property="og:image:height"/>
+<meta content="http://172.20.254.127/help/user/markdown.md" property="og:url"/>
+<meta content="summary" property="twitter:card"/>
+<meta content="Markdown · User · Help" property="twitter:title"/>
+<meta content="GitLab Community Edition" property="twitter:description"/>
+<meta content="http://172.20.254.127/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png" property="twitter:image"/>
+<title>Markdown · User · Help · GitLab</title>
+<meta content="GitLab Community Edition" name="description"/>
+<link data-original-href="/assets/favicon-7901bd695fb93edb07975966062049829afb56cf11511236e61bcf425070e36e.png" href="/assets/favicon-7901bd695fb93edb07975966062049829afb56cf11511236e61bcf425070e36e.png" id="favicon" rel="shortcut icon" type="image/png"/>
+<link href="/assets/application-266f2bfa52ff531258d13c702895a14fd5994ca591fa2df7338da00ab18c99ac.css" media="all" rel="stylesheet"/>
+<link href="/assets/print-c8ff536271f8974b8a9a5f75c0ca25d2b8c1dceb4cff3c01d1603862a0bdcbfc.css" media="print" rel="stylesheet"/>
+<script>
+//<![CDATA[
+window.gon={};gon.api_version="v4";gon.default_avatar_url="http://172.20.254.127/assets/no_avatar-849f9c04a3a0d0cea2424ae97b27447dc64a7dbfae83c036c45b403392f0e8ba.png";gon.max_file_size=10;gon.asset_host=null;gon.webpack_public_path="/assets/webpack/";gon.relative_url_root="";gon.shortcuts_path="/help/shortcuts";gon.user_color_scheme="white";gon.gitlab_url="http://172.20.254.127";gon.revision="63daf37";gon.gitlab_logo="/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png";gon.sprite_icons="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg";gon.sprite_file_icons="/assets/file_icons-7262fc6897e02f1ceaf8de43dc33afa5e4f9a2067f4f68ef77dcc87946575e9e.svg";gon.emoji_sprites_css_path="/assets/emoji_sprites-289eccffb1183c188b630297431be837765d9ff4aed6130cf738586fb307c170.css";gon.test_env=false;gon.suggested_label_colors=["#0033CC","#428BCA","#44AD8E","#A8D695","#5CB85C","#69D100","#004E00","#34495E","#7F8C8D","#A295D6","#5843AD","#8E44AD","#FFECDB","#AD4363","#D10069","#CC0033","#FF0000","#D9534F","#D1D100","#F0AD4E","#AD8D43"];
+//]]>
+</script>
+<script defer="defer" src="/assets/webpack/runtime.9fcb75d4.bundle.js"></script>
+<script defer="defer" src="/assets/webpack/main.a66b6c66.chunk.js"></script>
+<script defer="defer" src="/assets/webpack/pages.help.show.c42c0700.chunk.js"></script>
+<meta content="authenticity_token" name="csrf-param">
+<meta content="BsmXWfJKNJKhs+SRZqbBnzSjXLA/Fxy/MuhZLQvvaOPJAvXbzEypytVRhV1uLhSS+NKaWZAa5wiSdSJ0/Vpd2w==" name="csrf-token">
+<meta content="origin-when-cross-origin" name="referrer"/>
+<meta content="width=device-width, initial-scale=1, maximum-scale=1" name="viewport"/>
+<meta content="#474D57" name="theme-color"/>
+<link href="/assets/touch-icon-iphone-5a9cee0e8a51212e70b90c87c12f382c428870c0ff67d1eb034d884b78d2dae7.png" rel="apple-touch-icon" type="image/x-icon"/>
+<link href="/assets/touch-icon-ipad-a6eec6aeb9da138e507593b464fdac213047e49d3093fc30e90d9a995df83ba3.png" rel="apple-touch-icon" sizes="76x76" type="image/x-icon"/>
+<link href="/assets/touch-icon-iphone-retina-72e2aadf86513a56e050e7f0f2355deaa19cc17ed97bbe5147847f2748e5a3e3.png" rel="apple-touch-icon" sizes="120x120" type="image/x-icon"/>
+<link href="/assets/touch-icon-ipad-retina-8ebe416f5313483d9c1bc772b5bbe03ecad52a54eba443e5215a22caed2a16a2.png" rel="apple-touch-icon" sizes="152x152" type="image/x-icon"/>
+<link color="rgb(226, 67, 41)" href="/assets/logo-d36b5212042cebc89b96df4bf6ac24e43db316143e89926c0db839ff694d2de4.svg" rel="mask-icon"/>
+<meta content="/assets/msapplication-tile-1196ec67452f618d39cdd85e2e3a542f76574c071051ae7effbfde01710eb17d.png" name="msapplication-TileImage"/>
+<meta content="#30353E" name="msapplication-TileColor"/>
+</meta></meta></head>
+<body class="ui-indigo " data-group="" data-page="help:show" data-project="">
+<header class="navbar navbar-gitlab qa-navbar navbar-expand-sm">
+<a class="sr-only gl-accessibility" href="#content-body" tabindex="1">Skip to content</a>
+<div class="container-fluid">
+<div class="header-content">
+<div class="title-container">
+<h1 class="title">
+<a href="/" id="logo" title="Dashboard"><svg class="tanuki-logo" height="24" viewbox="0 0 36 36" width="24">
+<path class="tanuki-shape tanuki-left-ear" d="M2 14l9.38 9v-9l-4-12.28c-.205-.632-1.176-.632-1.38 0z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-right-ear" d="M34 14l-9.38 9v-9l4-12.28c.205-.632 1.176-.632 1.38 0z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-nose" d="M18,34.38 3,14 33,14 Z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-left-eye" d="M18,34.38 11.38,14 2,14 6,25Z" fill="#fc6d26"></path>
+<path class="tanuki-shape tanuki-right-eye" d="M18,34.38 24.62,14 34,14 30,25Z" fill="#fc6d26"></path>
+<path class="tanuki-shape tanuki-left-cheek" d="M2 14L.1 20.16c-.18.565 0 1.2.5 1.56l17.42 12.66z" fill="#fca326"></path>
+<path class="tanuki-shape tanuki-right-cheek" d="M34 14l1.9 6.16c.18.565 0 1.2-.5 1.56L18 34.38z" fill="#fca326"></path>
+</svg>
+<span class="logo-text d-none d-sm-block">
+<svg viewbox="0 0 617 169" xmlns="http://www.w3.org/2000/svg"><path d="M315.26 2.97h-21.8l.1 162.5h88.3v-20.1h-66.5l-.1-142.4M465.89 136.95c-5.5 5.7-14.6 11.4-27 11.4-16.6 0-23.3-8.2-23.3-18.9 0-16.1 11.2-23.8 35-23.8 4.5 0 11.7.5 15.4 1.2v30.1h-.1m-22.6-98.5c-17.6 0-33.8 6.2-46.4 16.7l7.7 13.4c8.9-5.2 19.8-10.4 35.5-10.4 17.9 0 25.8 9.2 25.8 24.6v7.9c-3.5-.7-10.7-1.2-15.1-1.2-38.2 0-57.6 13.4-57.6 41.4 0 25.1 15.4 37.7 38.7 37.7 15.7 0 30.8-7.2 36-18.9l4 15.9h15.4v-83.2c-.1-26.3-11.5-43.9-44-43.9M557.63 149.1c-8.2 0-15.4-1-20.8-3.5V70.5c7.4-6.2 16.6-10.7 28.3-10.7 21.1 0 29.2 14.9 29.2 39 0 34.2-13.1 50.3-36.7 50.3m9.2-110.6c-19.5 0-30 13.3-30 13.3v-21l-.1-27.8h-21.3l.1 158.5c10.7 4.5 25.3 6.9 41.2 6.9 40.7 0 60.3-26 60.3-70.9-.1-35.5-18.2-59-50.2-59M77.9 20.6c19.3 0 31.8 6.4 39.9 12.9l9.4-16.3C114.5 6 97.3 0 78.9 0 32.5 0 0 28.3 0 85.4c0 59.8 35.1 83.1 75.2 83.1 20.1 0 37.2-4.7 48.4-9.4l-.5-63.9V75.1H63.6v20.1h38l.5 48.5c-5 2.5-13.6 4.5-25.3 4.5-32.2 0-53.8-20.3-53.8-63-.1-43.5 22.2-64.6 54.9-64.6M231.43 2.95h-21.3l.1 27.3v94.3c0 26.3 11.4 43.9 43.9 43.9 4.5 0 8.9-.4 13.1-1.2v-19.1c-3.1.5-6.4.7-9.9.7-17.9 0-25.8-9.2-25.8-24.6v-65h35.7v-17.8h-35.7l-.1-38.5M155.96 165.47h21.3v-124h-21.3v124M155.96 24.37h21.3V3.07h-21.3v21.3"></path></svg>
+</span>
+</a></h1>
+<ul class="list-unstyled navbar-sub-nav">
+<li class="home"><a class="dashboard-shortcuts-projects" href="/explore" title="Projects">Projects
+</a></li><li class=""><a class="dashboard-shortcuts-groups" href="/explore/groups" title="Groups">Groups
+</a></li><li class=""><a class="dashboard-shortcuts-snippets" href="/explore/snippets" title="Snippets">Snippets
+</a></li><li>
+<a href="/help" title="About GitLab CE">Help</a>
+</li>
+</ul>
+</div>
+<div class="navbar-collapse collapse">
+<ul class="nav navbar-nav">
+<li class="nav-item d-none d-sm-none d-md-block m-auto">
+<div class="search search-form">
+<form accept-charset="UTF-8" action="/search" class="form-inline" method="get"><input name="utf8" type="hidden" value="✓"/><div class="search-input-container">
+<div class="search-input-wrap">
+<div class="dropdown" data-url="/search/autocomplete">
+<input aria-label="Search" autocomplete="off" class="search-input dropdown-menu-toggle no-outline js-search-dashboard-options" data-issues-path="/dashboard/issues" data-mr-path="/dashboard/merge_requests" id="search" name="search" placeholder="Search" spellcheck="false" tabindex="1" type="search"/>
+<button class="hidden js-dropdown-search-toggle" data-toggle="dropdown" type="button"></button>
+<div class="dropdown-menu dropdown-select">
+<div class="dropdown-content"><ul>
+<li class="dropdown-menu-empty-item">
+<a>
+Loading...
+</a>
+</li>
+</ul>
+</div><div class="dropdown-loading"><i aria-hidden="true" class="fa fa-spinner fa-spin" data-hidden="true"></i></div>
+</div>
+<svg class="s16 search-icon"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#search"></use></svg>
+<svg class="s16 clear-icon js-clear-input"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#close"></use></svg>
+</div>
+</div>
+</div>
+<input class="js-search-group-options" id="group_id" name="group_id" type="hidden"/>
+<input class="js-search-project-options" id="search_project_id" name="project_id" type="hidden" value=""/>
+<input id="repository_ref" name="repository_ref" type="hidden"/>
+<div class="search-autocomplete-opts hide" data-autocomplete-path="/search/autocomplete"></div>
+</form></div>
+</li>
+<li class="nav-item d-inline-block d-sm-none d-md-none">
+<a aria-label="Search" data-container="body" data-placement="bottom" data-toggle="tooltip" href="/search" title="Search"><svg class="s16"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#search"></use></svg>
+</a></li>
+<li class="nav-item">
+<div>
+<a class="btn btn-sign-in" href="/users/sign_in?redirect_to_referer=yes">Sign in / Register</a>
+</div>
+</li>
+</ul>
+</div>
+<button class="navbar-toggler d-block d-sm-none" type="button">
+<span class="sr-only">Toggle navigation</span>
+<svg class="s12 more-icon js-navbar-toggle-right"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#more"></use></svg>
+<svg class="s12 close-icon js-navbar-toggle-left"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#close"></use></svg>
+</button>
+</div>
+</div>
+</header>
+<div class="layout-page">
+<div class="content-wrapper">
+<div class="mobile-overlay"></div>
+<div class="alert-wrapper">
+<nav class="breadcrumbs container-fluid container-limited" role="navigation">
+<div class="breadcrumbs-container">
+<div class="breadcrumbs-links js-title-container">
+<ul class="list-unstyled breadcrumbs-list js-breadcrumbs-list">
+<li><a href="/help">Help</a><svg class="s8 breadcrumbs-list-angle"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#angle-right"></use></svg></li>
+<li>
+<h2 class="breadcrumbs-sub-title"><a href="/help/user/markdown.md">Help</a></h2>
+</li>
+</ul>
+</div>
+</div>
+</nav>
+<div class="flash-container flash-container-page">
+</div>
+</div>
+<div class="container-fluid container-limited ">
+<div class="content" id="content-body">
+<div class="documentation wiki prepend-top-default">
+<h1 dir="auto">
+<a aria-hidden="true" class="anchor" href="#markdown" id="user-content-markdown"></a>Markdown</h1>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#gitlab-flavored-markdown-gfm" id="user-content-gitlab-flavored-markdown-gfm"></a>GitLab Flavored Markdown (GFM)</h2>
+<blockquote dir="auto">
+<p><strong>Note:</strong>
+Not all of the GitLab-specific extensions to Markdown that are described in
+this document currently work on our documentation website.</p>
+<p>For the best result, we encourage you to check this document out as rendered
+by GitLab: <a href="https://gitlab.com/gitlab-org/gitlab-ce/blob/master/doc/user/markdown.md" rel="nofollow noreferrer noopener" target="_blank">markdown.md</a></p>
+</blockquote>
+<p dir="auto"><em>GitLab uses (as of 11.1) the <a href="https://github.com/gjtorikian/commonmarker" rel="nofollow noreferrer noopener" target="_blank">CommonMark Ruby Library</a> for Markdown processing of all new issues, merge requests, comments, and other Markdown content in the GitLab system.  Previous content, wiki pages and Markdown files (<code>.md</code>) in the repositories are still processed using the <a href="https://github.com/vmg/redcarpet" rel="nofollow noreferrer noopener" target="_blank" title="Redcarpet website">Redcarpet Ruby library</a>.</em></p>
+<p dir="auto"><em>Where there are significant differences, we will try to call them out in this document.</em></p>
+<p dir="auto">GitLab uses "GitLab Flavored Markdown" (GFM). It extends the standard Markdown in a few significant ways to add some useful functionality. It was inspired by <a href="https://help.github.com/articles/basic-writing-and-formatting-syntax/" rel="nofollow noreferrer noopener" target="_blank">GitHub Flavored Markdown</a>.</p>
+<p dir="auto">You can use GFM in the following areas:</p>
+<ul dir="auto">
+<li>comments</li>
+<li>issues</li>
+<li>merge requests</li>
+<li>milestones</li>
+<li>snippets (the snippet must be named with a <code>.md</code> extension)</li>
+<li>wiki pages (currently only rendered by Redcarpet)</li>
+<li>markdown documents inside the repository (currently only rendered by Redcarpet)</li>
+</ul>
+<p dir="auto">You can also use other rich text files in GitLab. You might have to install a
+dependency to do so. Please see the <a href="https://github.com/gitlabhq/markup#markups" rel="nofollow noreferrer noopener" target="_blank">github-markup gem readme</a> for more information.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#newlines" id="user-content-newlines"></a>Newlines</h3>
+<blockquote dir="auto">
+<p>If this is not rendered correctly, see
+<a href="https://gitlab.com/gitlab-org/gitlab-ce/blob/master/doc/user/markdown.md#newlines" rel="nofollow noreferrer noopener" target="_blank">https://gitlab.com/gitlab-org/gitlab-ce/blob/master/doc/user/markdown.md#newlines</a></p>
+</blockquote>
+<p dir="auto">GFM honors the markdown specification in how <a href="https://daringfireball.net/projects/markdown/syntax#p" rel="nofollow noreferrer noopener" target="_blank">paragraphs and line breaks are handled</a>.</p>
+<p dir="auto">A paragraph is simply one or more consecutive lines of text, separated by one or more blank lines.
+Line-breaks, or soft returns, are rendered if you end a line with two or more spaces:</p>
+<p dir="auto">Roses are red [followed by two or more spaces]<br/>
+Violets are blue</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">Sugar is sweet</span></code></pre>
+<p dir="auto">Roses are red<br/>
+Violets are blue</p>
+<p dir="auto">Sugar is sweet</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#multiple-underscores-in-words" id="user-content-multiple-underscores-in-words"></a>Multiple underscores in words</h3>
+<blockquote dir="auto">
+<p>If this is not rendered correctly, see
+<a href="https://gitlab.com/gitlab-org/gitlab-ce/blob/master/doc/user/markdown.md#multiple-underscores-in-words" rel="nofollow noreferrer noopener" target="_blank">https://gitlab.com/gitlab-org/gitlab-ce/blob/master/doc/user/markdown.md#multiple-underscores-in-words</a></p>
+</blockquote>
+<p dir="auto">It is not reasonable to italicize just <em>part</em> of a word, especially when you're dealing with code and names that often appear with multiple underscores. Therefore, GFM ignores multiple underscores in words:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">perform_complicated_task</span>
+<span class="line" id="LC2" lang="plaintext"></span>
+<span class="line" id="LC3" lang="plaintext">do_this_and_do_that_and_another_thing</span></code></pre>
+<p dir="auto">perform_complicated_task</p>
+<p dir="auto">do_this_and_do_that_and_another_thing</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#url-auto-linking" id="user-content-url-auto-linking"></a>URL auto-linking</h3>
+<blockquote dir="auto">
+<p>If this is not rendered correctly, see
+<a href="https://gitlab.com/gitlab-org/gitlab-ce/blob/master/doc/user/markdown.md#url-auto-linking" rel="nofollow noreferrer noopener" target="_blank">https://gitlab.com/gitlab-org/gitlab-ce/blob/master/doc/user/markdown.md#url-auto-linking</a></p>
+</blockquote>
+<p dir="auto">GFM will autolink almost any URL you copy and paste into your text:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">* https://www.google.com</span>
+<span class="line" id="LC2" lang="plaintext">* https://google.com/</span>
+<span class="line" id="LC3" lang="plaintext">* ftp://ftp.us.debian.org/debian/</span>
+<span class="line" id="LC4" lang="plaintext">* smb://foo/bar/baz</span>
+<span class="line" id="LC5" lang="plaintext">* irc://irc.freenode.net/gitlab</span>
+<span class="line" id="LC6" lang="plaintext">* http://localhost:3000</span></code></pre>
+<ul dir="auto">
+<li><a href="https://www.google.com" rel="nofollow noreferrer noopener" target="_blank">https://www.google.com</a></li>
+<li><a href="https://google.com/" rel="nofollow noreferrer noopener" target="_blank">https://google.com/</a></li>
+<li><a href="ftp://ftp.us.debian.org/debian/">ftp://ftp.us.debian.org/debian/</a></li>
+<li><a href="smb://foo/bar/baz">smb://foo/bar/baz</a></li>
+<li><a href="irc://irc.freenode.net/gitlab">irc://irc.freenode.net/gitlab</a></li>
+<li><a href="http://localhost:3000" rel="nofollow noreferrer noopener" target="_blank">http://localhost:3000</a></li>
+</ul>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#multiline-blockquote" id="user-content-multiline-blockquote"></a>Multiline Blockquote</h3>
+<blockquote dir="auto">
+<p>If this is not rendered correctly, see
+<a href="https://gitlab.com/gitlab-org/gitlab-ce/blob/master/doc/user/markdown.md#multiline-blockquote" rel="nofollow noreferrer noopener" target="_blank">https://gitlab.com/gitlab-org/gitlab-ce/blob/master/doc/user/markdown.md#multiline-blockquote</a></p>
+</blockquote>
+<p dir="auto">On top of standard Markdown <a href="#blockquotes">blockquotes</a>, which require prepending <code>&gt;</code> to quoted lines,
+GFM supports multiline blockquotes fenced by <code>&gt;&gt;&gt;</code>:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">&gt;&gt;&gt;</span>
+<span class="line" id="LC2" lang="plaintext">If you paste a message from somewhere else</span>
+<span class="line" id="LC3" lang="plaintext"></span>
+<span class="line" id="LC4" lang="plaintext">that</span>
+<span class="line" id="LC5" lang="plaintext"></span>
+<span class="line" id="LC6" lang="plaintext">spans</span>
+<span class="line" id="LC7" lang="plaintext"></span>
+<span class="line" id="LC8" lang="plaintext">multiple lines,</span>
+<span class="line" id="LC9" lang="plaintext"></span>
+<span class="line" id="LC10" lang="plaintext">you can quote that without having to manually prepend `&gt;` to every line!</span>
+<span class="line" id="LC11" lang="plaintext">&gt;&gt;&gt;</span></code></pre>
+<blockquote dir="auto">
+<p>If you paste a message from somewhere else</p>
+<p>that</p>
+<p>spans</p>
+<p>multiple lines,</p>
+<p>you can quote that without having to manually prepend <code>&gt;</code> to every line!</p>
+</blockquote>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#code-and-syntax-highlighting" id="user-content-code-and-syntax-highlighting"></a>Code and Syntax Highlighting</h3>
+<blockquote dir="auto">
+<p>If this is not rendered correctly, see
+<a href="https://gitlab.com/gitlab-org/gitlab-ce/blob/master/doc/user/markdown.md#code-and-syntax-highlighting" rel="nofollow noreferrer noopener" target="_blank">https://gitlab.com/gitlab-org/gitlab-ce/blob/master/doc/user/markdown.md#code-and-syntax-highlighting</a></p>
+</blockquote>
+<p dir="auto"><em>GitLab uses the <a href="http://rouge.jneen.net/" rel="nofollow noreferrer noopener" target="_blank" title="Rouge website">Rouge Ruby library</a> for syntax highlighting. For a
+list of supported languages visit the Rouge website.</em></p>
+<p dir="auto">Blocks of code are either fenced by lines with three back-ticks <code>```</code>,
+or are indented with four spaces. Only the fenced code blocks support syntax
+highlighting:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">Inline `code` has `back-ticks around` it.</span></code></pre>
+<p dir="auto">Inline <code>code</code> has <code>back-ticks around</code> it.</p>
+<p dir="auto">Example:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">```javascript</span>
+<span class="line" id="LC2" lang="plaintext">var s = "JavaScript syntax highlighting";</span>
+<span class="line" id="LC3" lang="plaintext">alert(s);</span>
+<span class="line" id="LC4" lang="plaintext">```</span>
+<span class="line" id="LC5" lang="plaintext"></span>
+<span class="line" id="LC6" lang="plaintext">```python</span>
+<span class="line" id="LC7" lang="plaintext">def function():</span>
+<span class="line" id="LC8" lang="plaintext">    #indenting works just fine in the fenced code block</span>
+<span class="line" id="LC9" lang="plaintext">    s = "Python syntax highlighting"</span>
+<span class="line" id="LC10" lang="plaintext">    print s</span>
+<span class="line" id="LC11" lang="plaintext">```</span>
+<span class="line" id="LC12" lang="plaintext"></span>
+<span class="line" id="LC13" lang="plaintext">```ruby</span>
+<span class="line" id="LC14" lang="plaintext">require 'redcarpet'</span>
+<span class="line" id="LC15" lang="plaintext">markdown = Redcarpet.new("Hello World!")</span>
+<span class="line" id="LC16" lang="plaintext">puts markdown.to_html</span>
+<span class="line" id="LC17" lang="plaintext">```</span>
+<span class="line" id="LC18" lang="plaintext"></span>
+<span class="line" id="LC19" lang="plaintext">```</span>
+<span class="line" id="LC20" lang="plaintext">No language indicated, so no syntax highlighting.</span>
+<span class="line" id="LC21" lang="plaintext">s = "There is no highlighting for this."</span>
+<span class="line" id="LC22" lang="plaintext">But let's throw in a &lt;b&gt;tag&lt;/b&gt;.</span>
+<span class="line" id="LC23" lang="plaintext">```</span></code></pre>
+<p dir="auto">becomes:</p>
+<pre class="code highlight js-syntax-highlight javascript" lang="javascript" v-pre="true"><code><span class="line" id="LC1" lang="javascript"><span class="kd">var</span> <span class="nx">s</span> <span class="o">=</span> <span class="s2">"JavaScript syntax highlighting"</span><span class="p">;</span></span>
+<span class="line" id="LC2" lang="javascript"><span class="nx">alert</span><span class="p">(</span><span class="nx">s</span><span class="p">);</span></span></code></pre>
+<pre class="code highlight js-syntax-highlight python" lang="python" v-pre="true"><code><span class="line" id="LC1" lang="python"><span class="k">def</span> <span class="nf">function</span><span class="p">():</span></span>
+<span class="line" id="LC2" lang="python">    <span class="c">#indenting works just fine in the fenced code block</span></span>
+<span class="line" id="LC3" lang="python">    <span class="n">s</span> <span class="o">=</span> <span class="s">"Python syntax highlighting"</span></span>
+<span class="line" id="LC4" lang="python">    <span class="k">print</span> <span class="n">s</span></span></code></pre>
+<pre class="code highlight js-syntax-highlight ruby" lang="ruby" v-pre="true"><code><span class="line" id="LC1" lang="ruby"><span class="nb">require</span> <span class="s1">'redcarpet'</span></span>
+<span class="line" id="LC2" lang="ruby"><span class="n">markdown</span> <span class="o">=</span> <span class="no">Redcarpet</span><span class="p">.</span><span class="nf">new</span><span class="p">(</span><span class="s2">"Hello World!"</span><span class="p">)</span></span>
+<span class="line" id="LC3" lang="ruby"><span class="nb">puts</span> <span class="n">markdown</span><span class="p">.</span><span class="nf">to_html</span></span></code></pre>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">No language indicated, so no syntax highlighting.</span>
+<span class="line" id="LC2" lang="plaintext">s = "There is no highlighting for this."</span>
+<span class="line" id="LC3" lang="plaintext">But let's throw in a &lt;b&gt;tag&lt;/b&gt;.</span></code></pre>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#inline-diff" id="user-content-inline-diff"></a>Inline Diff</h3>
+<blockquote dir="auto">
+<p>If this is not rendered correctly, see
+<a href="https://gitlab.com/gitlab-org/gitlab-ce/blob/master/doc/user/markdown.md#inline-diff" rel="nofollow noreferrer noopener" target="_blank">https://gitlab.com/gitlab-org/gitlab-ce/blob/master/doc/user/markdown.md#inline-diff</a></p>
+</blockquote>
+<p dir="auto">With inline diffs tags you can display <span class="idiff left right addition"> additions </span> or <span class="idiff left right deletion"> deletions </span>.</p>
+<p dir="auto">The wrapping tags can be either curly braces or square brackets: <span class="idiff left right addition"> additions </span> or <span class="idiff left right deletion"> deletions </span>.</p>
+<p dir="auto">Examples:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">- {+ additions +}</span>
+<span class="line" id="LC2" lang="plaintext">- [+ additions +]</span>
+<span class="line" id="LC3" lang="plaintext">- {- deletions -}</span>
+<span class="line" id="LC4" lang="plaintext">- [- deletions -]</span></code></pre>
+<p dir="auto">However the wrapping tags cannot be mixed as such:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">- {+ additions +]</span>
+<span class="line" id="LC2" lang="plaintext">- [+ additions +}</span>
+<span class="line" id="LC3" lang="plaintext">- {- deletions -]</span>
+<span class="line" id="LC4" lang="plaintext">- [- deletions -}</span></code></pre>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#emoji" id="user-content-emoji"></a>Emoji</h3>
+<blockquote dir="auto">
+<p>If this is not rendered correctly, see
+<a href="https://gitlab.com/gitlab-org/gitlab-ce/blob/master/doc/user/markdown.md#emoji" rel="nofollow noreferrer noopener" target="_blank">https://gitlab.com/gitlab-org/gitlab-ce/blob/master/doc/user/markdown.md#emoji</a></p>
+</blockquote>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">Sometimes you want to :monkey: around a bit and add some :star2: to your :speech_balloon:. Well we have a gift for you:</span>
+<span class="line" id="LC2" lang="plaintext"></span>
+<span class="line" id="LC3" lang="plaintext">:zap: You can use emoji anywhere GFM is supported. :v:</span>
+<span class="line" id="LC4" lang="plaintext"></span>
+<span class="line" id="LC5" lang="plaintext">You can use it to point out a :bug: or warn about :speak_no_evil: patches. And if someone improves your really :snail: code, send them some :birthday:. People will :heart: you for that.</span>
+<span class="line" id="LC6" lang="plaintext"></span>
+<span class="line" id="LC7" lang="plaintext">If you are new to this, don't be :fearful:. You can easily join the emoji :family:. All you need to do is to look up one of the supported codes.</span>
+<span class="line" id="LC8" lang="plaintext"></span>
+<span class="line" id="LC9" lang="plaintext">Consult the [Emoji Cheat Sheet](https://www.emojicopy.com) for a list of all supported emoji codes. :thumbsup:</span></code></pre>
+<p dir="auto">Sometimes you want to <gl-emoji data-name="monkey" data-unicode-version="6.0" title="monkey">🐒</gl-emoji> around a bit and add some <gl-emoji data-name="star2" data-unicode-version="6.0" title="glowing star">🌟</gl-emoji> to your <gl-emoji data-name="speech_balloon" data-unicode-version="6.0" title="speech balloon">💬</gl-emoji>. Well we have a gift for you:</p>
+<p dir="auto"><gl-emoji data-name="zap" data-unicode-version="4.0" title="high voltage sign">⚡</gl-emoji> You can use emoji anywhere GFM is supported. <gl-emoji data-name="v" data-unicode-version="1.1" title="victory hand">✌</gl-emoji></p>
+<p dir="auto">You can use it to point out a <gl-emoji data-name="bug" data-unicode-version="6.0" title="bug">🐛</gl-emoji> or warn about <gl-emoji data-name="speak_no_evil" data-unicode-version="6.0" title="speak-no-evil monkey">🙊</gl-emoji> patches. And if someone improves your really <gl-emoji data-name="snail" data-unicode-version="6.0" title="snail">🐌</gl-emoji> code, send them some <gl-emoji data-name="birthday" data-unicode-version="6.0" title="birthday cake">🎂</gl-emoji>. People will <gl-emoji data-name="heart" data-unicode-version="1.1" title="heavy black heart">❤</gl-emoji> you for that.</p>
+<p dir="auto">If you are new to this, don't be <gl-emoji data-name="fearful" data-unicode-version="6.0" title="fearful face">😨</gl-emoji>. You can easily join the emoji <gl-emoji data-name="family" data-unicode-version="6.0" title="family">👪</gl-emoji>. All you need to do is to look up one of the supported codes.</p>
+<p dir="auto">Consult the <a href="https://www.emojicopy.com" rel="nofollow noreferrer noopener" target="_blank">Emoji Cheat Sheet</a> for a list of all supported emoji codes. <gl-emoji data-name="thumbsup" data-unicode-version="6.0" title="thumbs up sign">👍</gl-emoji></p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#special-gitlab-references" id="user-content-special-gitlab-references"></a>Special GitLab References</h3>
+<p dir="auto">GFM recognizes special references.</p>
+<p dir="auto">You can easily reference e.g. an issue, a commit, a team member or even the whole team within a project.</p>
+<p dir="auto">GFM will turn that reference into a link so you can navigate between them easily.</p>
+<p dir="auto">GFM will recognize the following:</p>
+<table dir="auto">
+<thead>
+<tr>
+<th align="left">input</th>
+<th align="left">references</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left"><code>@user_name</code></td>
+<td align="left">specific user</td>
+</tr>
+<tr>
+<td align="left"><code>@group_name</code></td>
+<td align="left">specific group</td>
+</tr>
+<tr>
+<td align="left"><code>@all</code></td>
+<td align="left">entire team</td>
+</tr>
+<tr>
+<td align="left"><code>#12345</code></td>
+<td align="left">issue</td>
+</tr>
+<tr>
+<td align="left"><code>!123</code></td>
+<td align="left">merge request</td>
+</tr>
+<tr>
+<td align="left"><code>$123</code></td>
+<td align="left">snippet</td>
+</tr>
+<tr>
+<td align="left"><code>~123</code></td>
+<td align="left">label by ID</td>
+</tr>
+<tr>
+<td align="left"><code>~bug</code></td>
+<td align="left">one-word label by name</td>
+</tr>
+<tr>
+<td align="left"><code>~"feature request"</code></td>
+<td align="left">multi-word label by name</td>
+</tr>
+<tr>
+<td align="left"><code>%123</code></td>
+<td align="left">project milestone by ID</td>
+</tr>
+<tr>
+<td align="left"><code>%v1.23</code></td>
+<td align="left">one-word milestone by name</td>
+</tr>
+<tr>
+<td align="left"><code>%"release candidate"</code></td>
+<td align="left">multi-word milestone by name</td>
+</tr>
+<tr>
+<td align="left"><code>9ba12248</code></td>
+<td align="left">specific commit</td>
+</tr>
+<tr>
+<td align="left"><code>9ba12248...b19a04f5</code></td>
+<td align="left">commit range comparison</td>
+</tr>
+<tr>
+<td align="left"><code>[README](doc/README)</code></td>
+<td align="left">repository file references</td>
+</tr>
+<tr>
+<td align="left"><code>[README](doc/README#L13)</code></td>
+<td align="left">repository file line references</td>
+</tr>
+</tbody>
+</table>
+<p dir="auto">GFM also recognizes certain cross-project references:</p>
+<table dir="auto">
+<thead>
+<tr>
+<th align="left">input</th>
+<th align="left">references</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left"><code>namespace/project#123</code></td>
+<td align="left">issue</td>
+</tr>
+<tr>
+<td align="left"><code>namespace/project!123</code></td>
+<td align="left">merge request</td>
+</tr>
+<tr>
+<td align="left"><code>namespace/project%123</code></td>
+<td align="left">project milestone</td>
+</tr>
+<tr>
+<td align="left"><code>namespace/project$123</code></td>
+<td align="left">snippet</td>
+</tr>
+<tr>
+<td align="left"><code>namespace/project@9ba12248</code></td>
+<td align="left">specific commit</td>
+</tr>
+<tr>
+<td align="left"><code>namespace/project@9ba12248...b19a04f5</code></td>
+<td align="left">commit range comparison</td>
+</tr>
+<tr>
+<td align="left"><code>namespace/project~"Some label"</code></td>
+<td align="left">issues with given label</td>
+</tr>
+</tbody>
+</table>
+<p dir="auto">It also has a shorthand version to reference other projects from the same namespace:</p>
+<table dir="auto">
+<thead>
+<tr>
+<th align="left">input</th>
+<th align="left">references</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left"><code>project#123</code></td>
+<td align="left">issue</td>
+</tr>
+<tr>
+<td align="left"><code>project!123</code></td>
+<td align="left">merge request</td>
+</tr>
+<tr>
+<td align="left"><code>project%123</code></td>
+<td align="left">project milestone</td>
+</tr>
+<tr>
+<td align="left"><code>project$123</code></td>
+<td align="left">snippet</td>
+</tr>
+<tr>
+<td align="left"><code>project@9ba12248</code></td>
+<td align="left">specific commit</td>
+</tr>
+<tr>
+<td align="left"><code>project@9ba12248...b19a04f5</code></td>
+<td align="left">commit range comparison</td>
+</tr>
+<tr>
+<td align="left"><code>project~"Some label"</code></td>
+<td align="left">issues with given label</td>
+</tr>
+</tbody>
+</table>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#task-lists" id="user-content-task-lists"></a>Task Lists</h3>
+<blockquote dir="auto">
+<p>If this is not rendered correctly, see
+<a href="https://gitlab.com/gitlab-org/gitlab-ce/blob/master/doc/user/markdown.md#task-lists" rel="nofollow noreferrer noopener" target="_blank">https://gitlab.com/gitlab-org/gitlab-ce/blob/master/doc/user/markdown.md#task-lists</a></p>
+</blockquote>
+<p dir="auto">You can add task lists to issues, merge requests and comments. To create a task list, add a specially-formatted Markdown list, like so:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">- [x] Completed task</span>
+<span class="line" id="LC2" lang="plaintext">- [ ] Incomplete task</span>
+<span class="line" id="LC3" lang="plaintext">    - [ ] Sub-task 1</span>
+<span class="line" id="LC4" lang="plaintext">    - [x] Sub-task 2</span>
+<span class="line" id="LC5" lang="plaintext">    - [ ] Sub-task 3</span></code></pre>
+<ul class="task-list" dir="auto">
+<li class="task-list-item">
+<input checked="" class="task-list-item-checkbox" disabled="" type="checkbox"/> Completed task</li>
+<li class="task-list-item">
+<input class="task-list-item-checkbox" disabled="" type="checkbox"/> Incomplete task
+<ul class="task-list">
+<li class="task-list-item">
+<input class="task-list-item-checkbox" disabled="" type="checkbox"/> Sub-task 1</li>
+<li class="task-list-item">
+<input checked="" class="task-list-item-checkbox" disabled="" type="checkbox"/> Sub-task 2</li>
+<li class="task-list-item">
+<input class="task-list-item-checkbox" disabled="" type="checkbox"/> Sub-task 3</li>
+</ul>
+</li>
+</ul>
+<p dir="auto">Tasks formatted as ordered lists are supported as well:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">1. [x] Completed task</span>
+<span class="line" id="LC2" lang="plaintext">1. [ ] Incomplete task</span>
+<span class="line" id="LC3" lang="plaintext">    1. [ ] Sub-task 1</span>
+<span class="line" id="LC4" lang="plaintext">    1. [x] Sub-task 2</span></code></pre>
+<ol class="task-list" dir="auto">
+<li class="task-list-item">
+<input checked="" class="task-list-item-checkbox" disabled="" type="checkbox"/> Completed task</li>
+<li class="task-list-item">
+<input class="task-list-item-checkbox" disabled="" type="checkbox"/> Incomplete task
+<ol class="task-list">
+<li class="task-list-item">
+<input class="task-list-item-checkbox" disabled="" type="checkbox"/> Sub-task 1</li>
+<li class="task-list-item">
+<input checked="" class="task-list-item-checkbox" disabled="" type="checkbox"/> Sub-task 2</li>
+</ol>
+</li>
+</ol>
+<p dir="auto">Task lists can only be created in descriptions, not in titles. Task item state can be managed by editing the description's Markdown or by toggling the rendered check boxes.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#videos" id="user-content-videos"></a>Videos</h3>
+<blockquote dir="auto">
+<p>If this is not rendered correctly, see
+<a href="https://gitlab.com/gitlab-org/gitlab-ce/blob/master/doc/user/markdown.md#videos" rel="nofollow noreferrer noopener" target="_blank">https://gitlab.com/gitlab-org/gitlab-ce/blob/master/doc/user/markdown.md#videos</a></p>
+</blockquote>
+<p dir="auto">Image tags with a video extension are automatically converted to a video player.</p>
+<p dir="auto">The valid video extensions are <code>.mp4</code>, <code>.m4v</code>, <code>.mov</code>, <code>.webm</code>, and <code>.ogv</code>.</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">Here's a sample video:</span>
+<span class="line" id="LC2" lang="plaintext"></span>
+<span class="line" id="LC3" lang="plaintext">![Sample Video](img/markdown_video.mp4)</span></code></pre>
+<p dir="auto">Here's a sample video:</p>
+<p dir="auto"></p><div class="video-container">
+<video controls="true" data-setup="{}" data-title="Sample Video" src="/img/markdown_video.mp4" width="400"></video><p><a href="/img/markdown_video.mp4" rel="noopener noreferrer" target="_blank" title="Download 'Sample Video'">Sample Video</a></p>
+</div>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#math" id="user-content-math"></a>Math</h3>
+<blockquote dir="auto">
+<p>If this is not rendered correctly, see
+<a href="https://gitlab.com/gitlab-org/gitlab-ce/blob/master/doc/user/markdown.md#math" rel="nofollow noreferrer noopener" target="_blank">https://gitlab.com/gitlab-org/gitlab-ce/blob/master/doc/user/markdown.md#math</a></p>
+</blockquote>
+<p dir="auto">It is possible to have math written with the LaTeX syntax rendered using <a href="https://github.com/Khan/KaTeX" rel="nofollow noreferrer noopener" target="_blank" title="KaTeX website">KaTeX</a>.</p>
+<p dir="auto">Math written inside <code>$``$</code> will be rendered inline with the text.</p>
+<p dir="auto">Math written inside triple back quotes, with the language declared as <code>math</code>, will be rendered on a separate line.</p>
+<p dir="auto">Example:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">This math is inline $`a^2+b^2=c^2`$.</span>
+<span class="line" id="LC2" lang="plaintext"></span>
+<span class="line" id="LC3" lang="plaintext">This is on a separate line</span>
+<span class="line" id="LC4" lang="plaintext">```math</span>
+<span class="line" id="LC5" lang="plaintext">a^2+b^2=c^2</span>
+<span class="line" id="LC6" lang="plaintext">```</span></code></pre>
+<p dir="auto">Becomes:</p>
+<p dir="auto">This math is inline <code class="code math js-render-math" data-math-style="inline">a^2+b^2=c^2</code>.</p>
+<p dir="auto">This is on a separate line</p>
+<pre class="code highlight js-syntax-highlight math js-render-math" data-math-style="display" lang="math" v-pre="true"><code><span class="line" id="LC1" lang="math">a^2+b^2=c^2</span></code></pre>
+<p dir="auto"><em>Be advised that KaTeX only supports a <a href="https://github.com/Khan/KaTeX/wiki/Function-Support-in-KaTeX" rel="nofollow noreferrer noopener" target="_blank" title="Macros supported by KaTeX">subset</a> of LaTeX.</em></p>
+<blockquote dir="auto">
+<p><strong>Note:</strong>
+This also works for the asciidoctor <code>:stem: latexmath</code>. For details see the <a href="http://asciidoctor.org/docs/user-manual/#activating-stem-support" rel="nofollow noreferrer noopener" target="_blank" title="Asciidoctor user manual">asciidoctor user manual</a>.</p>
+</blockquote>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#colors" id="user-content-colors"></a>Colors</h3>
+<blockquote dir="auto">
+<p>If this is not rendered correctly, see
+<a href="https://gitlab.com/gitlab-org/gitlab-ce/blob/master/doc/user/markdown.md#colors" rel="nofollow noreferrer noopener" target="_blank">https://gitlab.com/gitlab-org/gitlab-ce/blob/master/doc/user/markdown.md#colors</a></p>
+</blockquote>
+<p dir="auto">It is possible to have color written in HEX, RGB or HSL format rendered with a color indicator.</p>
+<p dir="auto">Color written inside backticks will be followed by a color "chip".</p>
+<p dir="auto">Examples:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">`#F00`  </span>
+<span class="line" id="LC2" lang="plaintext">`#F00A`  </span>
+<span class="line" id="LC3" lang="plaintext">`#FF0000`  </span>
+<span class="line" id="LC4" lang="plaintext">`#FF0000AA`  </span>
+<span class="line" id="LC5" lang="plaintext">`RGB(0,255,0)`  </span>
+<span class="line" id="LC6" lang="plaintext">`RGB(0%,100%,0%)`  </span>
+<span class="line" id="LC7" lang="plaintext">`RGBA(0,255,0,0.7)`  </span>
+<span class="line" id="LC8" lang="plaintext">`HSL(540,70%,50%)`  </span>
+<span class="line" id="LC9" lang="plaintext">`HSLA(540,70%,50%,0.7)`</span></code></pre>
+<p dir="auto">Become:</p>
+<p dir="auto"><code>#F00<span class="gfm-color_chip"><span style="background-color: #F00;"></span></span></code><br/>
+<code>#F00A<span class="gfm-color_chip"><span style="background-color: #F00A;"></span></span></code><br/>
+<code>#FF0000<span class="gfm-color_chip"><span style="background-color: #FF0000;"></span></span></code><br/>
+<code>#FF0000AA<span class="gfm-color_chip"><span style="background-color: #FF0000AA;"></span></span></code><br/>
+<code>RGB(0,255,0)<span class="gfm-color_chip"><span style="background-color: RGB(0,255,0);"></span></span></code><br/>
+<code>RGB(0%,100%,0%)<span class="gfm-color_chip"><span style="background-color: RGB(0%,100%,0%);"></span></span></code><br/>
+<code>RGBA(0,255,0,0.7)<span class="gfm-color_chip"><span style="background-color: RGBA(0,255,0,0.7);"></span></span></code><br/>
+<code>HSL(540,70%,50%)<span class="gfm-color_chip"><span style="background-color: HSL(540,70%,50%);"></span></span></code><br/>
+<code>HSLA(540,70%,50%,0.7)<span class="gfm-color_chip"><span style="background-color: HSLA(540,70%,50%,0.7);"></span></span></code></p>
+<h4 dir="auto">
+<a aria-hidden="true" class="anchor" href="#supported-formats" id="user-content-supported-formats"></a>Supported formats:</h4>
+<ul dir="auto">
+<li>HEX: <code>`#RGB[A]`</code> or <code>`#RRGGBB[AA]`</code>
+</li>
+<li>RGB: <code>`RGB[A](R, G, B[, A])`</code>
+</li>
+<li>HSL: <code>`HSL[A](H, S, L[, A])`</code>
+</li>
+</ul>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#mermaid" id="user-content-mermaid"></a>Mermaid</h3>
+<blockquote dir="auto">
+<p><a href="https://gitlab.com/gitlab-org/gitlab-ce/merge_requests/15107" rel="nofollow noreferrer noopener" target="_blank">Introduced</a> in
+GitLab 10.3.</p>
+</blockquote>
+<blockquote dir="auto">
+<p>If this is not rendered correctly, see
+<a href="https://gitlab.com/gitlab-org/gitlab-ce/blob/master/doc/user/markdown.md#mermaid" rel="nofollow noreferrer noopener" target="_blank">https://gitlab.com/gitlab-org/gitlab-ce/blob/master/doc/user/markdown.md#mermaid</a></p>
+</blockquote>
+<p dir="auto">It is possible to generate diagrams and flowcharts from text using <a href="https://mermaidjs.github.io/" rel="nofollow noreferrer noopener" target="_blank" title="Mermaid website">Mermaid</a>.</p>
+<p dir="auto">In order to generate a diagram or flowchart, you should write your text inside the <code>mermaid</code> block.</p>
+<p dir="auto">Example:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">```mermaid</span>
+<span class="line" id="LC2" lang="plaintext">graph TD;</span>
+<span class="line" id="LC3" lang="plaintext">  A--&gt;B;</span>
+<span class="line" id="LC4" lang="plaintext">  A--&gt;C;</span>
+<span class="line" id="LC5" lang="plaintext">  B--&gt;D;</span>
+<span class="line" id="LC6" lang="plaintext">  C--&gt;D;</span>
+<span class="line" id="LC7" lang="plaintext">```</span></code></pre>
+<p dir="auto">Becomes:</p>
+<pre class="code highlight js-syntax-highlight mermaid" lang="mermaid" v-pre="true"><code class="js-render-mermaid"><span class="line" id="LC1" lang="mermaid">graph TD;</span>
+<span class="line" id="LC2" lang="mermaid">  A--&gt;B;</span>
+<span class="line" id="LC3" lang="mermaid">  A--&gt;C;</span>
+<span class="line" id="LC4" lang="mermaid">  B--&gt;D;</span>
+<span class="line" id="LC5" lang="mermaid">  C--&gt;D;</span></code></pre>
+<p dir="auto">For details see the <a href="https://mermaidjs.github.io/" rel="nofollow noreferrer noopener" target="_blank" title="Mermaid website">Mermaid official page</a>.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#standard-markdown" id="user-content-standard-markdown"></a>Standard Markdown</h2>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#headers" id="user-content-headers"></a>Headers</h3>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext"># H1</span>
+<span class="line" id="LC2" lang="plaintext">## H2</span>
+<span class="line" id="LC3" lang="plaintext">### H3</span>
+<span class="line" id="LC4" lang="plaintext">#### H4</span>
+<span class="line" id="LC5" lang="plaintext">##### H5</span>
+<span class="line" id="LC6" lang="plaintext">###### H6</span>
+<span class="line" id="LC7" lang="plaintext"></span>
+<span class="line" id="LC8" lang="plaintext">Alternatively, for H1 and H2, an underline-ish style:</span>
+<span class="line" id="LC9" lang="plaintext"></span>
+<span class="line" id="LC10" lang="plaintext">Alt-H1</span>
+<span class="line" id="LC11" lang="plaintext">======</span>
+<span class="line" id="LC12" lang="plaintext"></span>
+<span class="line" id="LC13" lang="plaintext">Alt-H2</span>
+<span class="line" id="LC14" lang="plaintext">------</span></code></pre>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#header-ids-and-links" id="user-content-header-ids-and-links"></a>Header IDs and links</h3>
+<p dir="auto">All Markdown-rendered headers automatically get IDs, except in comments.</p>
+<p dir="auto">On hover, a link to those IDs becomes visible to make it easier to copy the link to the header to give it to someone else.</p>
+<p dir="auto">The IDs are generated from the content of the header according to the following rules:</p>
+<ol dir="auto">
+<li>All text is converted to lowercase.</li>
+<li>All non-word text (e.g., punctuation, HTML) is removed.</li>
+<li>All spaces are converted to hyphens.</li>
+<li>Two or more hyphens in a row are converted to one.</li>
+<li>If a header with the same ID has already been generated, a unique
+incrementing number is appended, starting at 1.</li>
+</ol>
+<p dir="auto">For example:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext"># This header has spaces in it</span>
+<span class="line" id="LC2" lang="plaintext">## This header has a :thumbsup: in it</span>
+<span class="line" id="LC3" lang="plaintext"># This header has Unicode in it: 한글</span>
+<span class="line" id="LC4" lang="plaintext">## This header has spaces in it</span>
+<span class="line" id="LC5" lang="plaintext">### This header has spaces in it</span>
+<span class="line" id="LC6" lang="plaintext">## This header has 3.5 in it (and parentheses)</span></code></pre>
+<p dir="auto">Would generate the following link IDs:</p>
+<ol dir="auto">
+<li><code>this-header-has-spaces-in-it</code></li>
+<li><code>this-header-has-a-in-it</code></li>
+<li><code>this-header-has-unicode-in-it-한글</code></li>
+<li><code>this-header-has-spaces-in-it</code></li>
+<li><code>this-header-has-spaces-in-it-1</code></li>
+<li><code>this-header-has-3-5-in-it-and-parentheses</code></li>
+</ol>
+<p dir="auto">Note that the Emoji processing happens before the header IDs are generated, so the Emoji is converted to an image which then gets removed from the ID.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#emphasis" id="user-content-emphasis"></a>Emphasis</h3>
+<p dir="auto">Examples:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">Emphasis, aka italics, with *asterisks* or _underscores_.</span>
+<span class="line" id="LC2" lang="plaintext"></span>
+<span class="line" id="LC3" lang="plaintext">Strong emphasis, aka bold, with **asterisks** or __underscores__.</span>
+<span class="line" id="LC4" lang="plaintext"></span>
+<span class="line" id="LC5" lang="plaintext">Combined emphasis with **asterisks and _underscores_**.</span>
+<span class="line" id="LC6" lang="plaintext"></span>
+<span class="line" id="LC7" lang="plaintext">Strikethrough uses two tildes. ~~Scratch this.~~</span></code></pre>
+<p dir="auto">Become:</p>
+<p dir="auto">Emphasis, aka italics, with <em>asterisks</em> or <em>underscores</em>.</p>
+<p dir="auto">Strong emphasis, aka bold, with <strong>asterisks</strong> or <strong>underscores</strong>.</p>
+<p dir="auto">Combined emphasis with <strong>asterisks and <em>underscores</em></strong>.</p>
+<p dir="auto">Strikethrough uses two tildes. <del>Scratch this.</del></p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#lists" id="user-content-lists"></a>Lists</h3>
+<p dir="auto">Examples:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">1. First ordered list item</span>
+<span class="line" id="LC2" lang="plaintext">2. Another item</span>
+<span class="line" id="LC3" lang="plaintext">   * Unordered sub-list.</span>
+<span class="line" id="LC4" lang="plaintext">1. Actual numbers don't matter, just that it's a number</span>
+<span class="line" id="LC5" lang="plaintext">   1. Ordered sub-list</span>
+<span class="line" id="LC6" lang="plaintext">4. And another item.</span>
+<span class="line" id="LC7" lang="plaintext"></span>
+<span class="line" id="LC8" lang="plaintext">* Unordered list can use asterisks</span>
+<span class="line" id="LC9" lang="plaintext">- Or minuses</span>
+<span class="line" id="LC10" lang="plaintext">+ Or pluses</span></code></pre>
+<p dir="auto">Become:</p>
+<ol dir="auto">
+<li>First ordered list item</li>
+<li>Another item
+<ul>
+<li>Unordered sub-list.</li>
+</ul>
+</li>
+<li>Actual numbers don't matter, just that it's a number
+<ol>
+<li>Ordered sub-list</li>
+</ol>
+</li>
+<li>And another item.</li>
+</ol>
+<ul dir="auto">
+<li>Unordered list can use asterisks</li>
+</ul>
+<ul dir="auto">
+<li>Or minuses</li>
+</ul>
+<ul dir="auto">
+<li>Or pluses</li>
+</ul>
+<p dir="auto">If a list item contains multiple paragraphs,
+each subsequent paragraph should be indented to the same level as the start of the list item text (<em>Redcarpet: paragraph should be indented with four spaces.</em>)</p>
+<p dir="auto">Example:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">1. First ordered list item</span>
+<span class="line" id="LC2" lang="plaintext"></span>
+<span class="line" id="LC3" lang="plaintext">   Second paragraph of first item.</span>
+<span class="line" id="LC4" lang="plaintext"></span>
+<span class="line" id="LC5" lang="plaintext">2. Another item</span></code></pre>
+<p dir="auto">Becomes:</p>
+<ol dir="auto">
+<li>
+<p>First ordered list item</p>
+<p>Paragraph of first item.</p>
+</li>
+<li>
+<p>Another item</p>
+</li>
+</ol>
+<p dir="auto">If the paragraph of the first item is not indented with the proper number of spaces,
+the paragraph will appear outside the list, instead of properly indented under the list item.</p>
+<p dir="auto">Example:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">1. First ordered list item</span>
+<span class="line" id="LC2" lang="plaintext"></span>
+<span class="line" id="LC3" lang="plaintext">  Paragraph of first item.</span>
+<span class="line" id="LC4" lang="plaintext"></span>
+<span class="line" id="LC5" lang="plaintext">2. Another item</span></code></pre>
+<p dir="auto">Becomes:</p>
+<ol dir="auto">
+<li>First ordered list item</li>
+</ol>
+<p dir="auto">Paragraph of first item.</p>
+<ol dir="auto" start="2">
+<li>Another item</li>
+</ol>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#links" id="user-content-links"></a>Links</h3>
+<p dir="auto">There are two ways to create links, inline-style and reference-style.</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">[I'm an inline-style link](https://www.google.com)</span>
+<span class="line" id="LC2" lang="plaintext"></span>
+<span class="line" id="LC3" lang="plaintext">[I'm a reference-style link][Arbitrary case-insensitive reference text]</span>
+<span class="line" id="LC4" lang="plaintext"></span>
+<span class="line" id="LC5" lang="plaintext">[I'm a relative reference to a repository file](LICENSE)</span>
+<span class="line" id="LC6" lang="plaintext"></span>
+<span class="line" id="LC7" lang="plaintext">[I am an absolute reference within the repository](/doc/user/markdown.md)</span>
+<span class="line" id="LC8" lang="plaintext"></span>
+<span class="line" id="LC9" lang="plaintext">[I link to the Milestones page](/../milestones)</span>
+<span class="line" id="LC10" lang="plaintext"></span>
+<span class="line" id="LC11" lang="plaintext">[You can use numbers for reference-style link definitions][1]</span>
+<span class="line" id="LC12" lang="plaintext"></span>
+<span class="line" id="LC13" lang="plaintext">Or leave it empty and use the [link text itself][]</span>
+<span class="line" id="LC14" lang="plaintext"></span>
+<span class="line" id="LC15" lang="plaintext">Some text to show that the reference links can follow later.</span>
+<span class="line" id="LC16" lang="plaintext"></span>
+<span class="line" id="LC17" lang="plaintext">[arbitrary case-insensitive reference text]: https://www.mozilla.org</span>
+<span class="line" id="LC18" lang="plaintext">[1]: http://slashdot.org</span>
+<span class="line" id="LC19" lang="plaintext">[link text itself]: https://www.reddit.com</span></code></pre>
+<blockquote dir="auto">
+<p><strong>Note:</strong>
+Relative links do not allow referencing project files in a wiki page or wiki
+page in a project file. The reason for this is that, in GitLab, wiki is always
+a separate Git repository. For example, <code>[I'm a reference-style link](style)</code>
+will point the link to <code>wikis/style</code> when the link is inside of a wiki markdown file.</p>
+</blockquote>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#images" id="user-content-images"></a>Images</h3>
+<p dir="auto">Examples:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">Here's our logo (hover to see the title text):</span>
+<span class="line" id="LC2" lang="plaintext"></span>
+<span class="line" id="LC3" lang="plaintext">Inline-style:</span>
+<span class="line" id="LC4" lang="plaintext">![alt text](img/markdown_logo.png)</span>
+<span class="line" id="LC5" lang="plaintext"></span>
+<span class="line" id="LC6" lang="plaintext">Reference-style:</span>
+<span class="line" id="LC7" lang="plaintext">![alt text1][logo]</span>
+<span class="line" id="LC8" lang="plaintext"></span>
+<span class="line" id="LC9" lang="plaintext">[logo]: img/markdown_logo.png</span></code></pre>
+<p dir="auto">Become:</p>
+<p dir="auto">Here's our logo:</p>
+<p dir="auto">Inline-style:</p>
+<p dir="auto"><a class="no-attachment-icon" href="/img/markdown_logo.png" rel="noopener noreferrer" target="_blank"><img alt="alt text" class="lazy" data-src="img/markdown_logo.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<p dir="auto">Reference-style:</p>
+<p dir="auto"><a class="no-attachment-icon" href="/img/markdown_logo.png" rel="noopener noreferrer" target="_blank"><img alt="alt text" class="lazy" data-src="img/markdown_logo.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#blockquotes" id="user-content-blockquotes"></a>Blockquotes</h3>
+<p dir="auto">Examples:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">&gt; Blockquotes are very handy in email to emulate reply text.</span>
+<span class="line" id="LC2" lang="plaintext">&gt; This line is part of the same quote.</span>
+<span class="line" id="LC3" lang="plaintext"></span>
+<span class="line" id="LC4" lang="plaintext">Quote break.</span>
+<span class="line" id="LC5" lang="plaintext"></span>
+<span class="line" id="LC6" lang="plaintext">&gt; This is a very long line that will still be quoted properly when it wraps. Oh boy let's keep writing to make sure this is long enough to actually wrap for everyone. Oh, you can *put* **Markdown** into a blockquote.</span></code></pre>
+<p dir="auto">Become:</p>
+<blockquote dir="auto">
+<p>Blockquotes are very handy in email to emulate reply text.
+This line is part of the same quote.</p>
+</blockquote>
+<p dir="auto">Quote break.</p>
+<blockquote dir="auto">
+<p>This is a very long line that will still be quoted properly when it wraps. Oh boy let's keep writing to make sure this is long enough to actually wrap for everyone. Oh, you can <em>put</em> <strong>Markdown</strong> into a blockquote.</p>
+</blockquote>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#inline-html" id="user-content-inline-html"></a>Inline HTML</h3>
+<p dir="auto">You can also use raw HTML in your Markdown, and it'll mostly work pretty well.</p>
+<p dir="auto">See the documentation for HTML::Pipeline's <a href="http://www.rubydoc.info/gems/html-pipeline/1.11.0/HTML/Pipeline/SanitizationFilter#WHITELIST-constant" rel="nofollow noreferrer noopener" target="_blank">SanitizationFilter</a> class for the list of allowed HTML tags and attributes.  In addition to the default <code>SanitizationFilter</code> whitelist, GitLab allows <code>span</code>, <code>abbr</code>, <code>details</code> and <code>summary</code> elements.</p>
+<p dir="auto">Examples:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">&lt;dl&gt;</span>
+<span class="line" id="LC2" lang="plaintext">  &lt;dt&gt;Definition list&lt;/dt&gt;</span>
+<span class="line" id="LC3" lang="plaintext">  &lt;dd&gt;Is something people use sometimes.&lt;/dd&gt;</span>
+<span class="line" id="LC4" lang="plaintext"></span>
+<span class="line" id="LC5" lang="plaintext">  &lt;dt&gt;Markdown in HTML&lt;/dt&gt;</span>
+<span class="line" id="LC6" lang="plaintext">  &lt;dd&gt;Does *not* work **very** well. Use HTML &lt;em&gt;tags&lt;/em&gt;.&lt;/dd&gt;</span>
+<span class="line" id="LC7" lang="plaintext">&lt;/dl&gt;</span></code></pre>
+<p dir="auto">Become:</p>
+<dl>
+<dt>Definition list</dt>
+<dd>Is something people use sometimes.</dd>
+<dt>Markdown in HTML</dt>
+<dd>Does *not* work **very** well. Use HTML <em>tags</em>.</dd>
+</dl>
+<h4 dir="auto">
+<a aria-hidden="true" class="anchor" href="#details-and-summary" id="user-content-details-and-summary"></a>Details and Summary</h4>
+<p dir="auto">Content can be collapsed using HTML's <a href="https://developer.mozilla.org/en-US/docs/Web/HTML/Element/details" rel="nofollow noreferrer noopener" target="_blank"><code>&lt;details&gt;</code></a> and <a href="https://developer.mozilla.org/en-US/docs/Web/HTML/Element/summary" rel="nofollow noreferrer noopener" target="_blank"><code>&lt;summary&gt;</code></a> tags. This is especially useful for collapsing long logs so they take up less screen space.</p>
+<p dir="auto">
+<details>
+<summary>Click me to collapse/fold.</summary>
+<p>These details <em>will</em> remain <strong>hidden</strong> until expanded.</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">PASTE LOGS HERE</span></code></pre>
+</details>
+</p>
+<p dir="auto"><strong>Note:</strong> Markdown inside these tags is supported, as long as you have a blank link after the <code>&lt;/summary&gt;</code> tag and before the <code>&lt;/details&gt;</code> tag, as shown in the example.  <em>Redcarpet does not support Markdown inside these tags.  You can work around this by using HTML, for example you can use <code>&lt;pre&gt;&lt;code&gt;</code> tags instead of <a href="https://gitlab.com/gitlab-org/gitlab-ce/blob/master/doc/user/markdown.md#code-and-syntax-highlighting" rel="nofollow noreferrer noopener" target="_blank">code fences</a>.</em></p>
+<pre class="code highlight js-syntax-highlight html" lang="html" v-pre="true"><code><span class="line" id="LC1" lang="html"><span class="nt">&lt;details&gt;</span></span>
+<span class="line" id="LC2" lang="html"><span class="nt">&lt;summary&gt;</span>Click me to collapse/fold.<span class="nt">&lt;/summary&gt;</span></span>
+<span class="line" id="LC3" lang="html"></span>
+<span class="line" id="LC4" lang="html">These details _will_ remain **hidden** until expanded.</span>
+<span class="line" id="LC5" lang="html"></span>
+<span class="line" id="LC6" lang="html">    PASTE LOGS HERE</span>
+<span class="line" id="LC7" lang="html"></span>
+<span class="line" id="LC8" lang="html"><span class="nt">&lt;/details&gt;</span></span></code></pre>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#horizontal-rule" id="user-content-horizontal-rule"></a>Horizontal Rule</h3>
+<p dir="auto">Examples:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">Three or more...</span>
+<span class="line" id="LC2" lang="plaintext"></span>
+<span class="line" id="LC3" lang="plaintext">---</span>
+<span class="line" id="LC4" lang="plaintext"></span>
+<span class="line" id="LC5" lang="plaintext">Hyphens</span>
+<span class="line" id="LC6" lang="plaintext"></span>
+<span class="line" id="LC7" lang="plaintext">***</span>
+<span class="line" id="LC8" lang="plaintext"></span>
+<span class="line" id="LC9" lang="plaintext">Asterisks</span>
+<span class="line" id="LC10" lang="plaintext"></span>
+<span class="line" id="LC11" lang="plaintext">___</span>
+<span class="line" id="LC12" lang="plaintext"></span>
+<span class="line" id="LC13" lang="plaintext">Underscores</span></code></pre>
+<p dir="auto">Become:</p>
+<p dir="auto">Three or more...</p>
+<hr/>
+<p dir="auto">Hyphens</p>
+<hr/>
+<p dir="auto">Asterisks</p>
+<hr/>
+<p dir="auto">Underscores</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#line-breaks" id="user-content-line-breaks"></a>Line Breaks</h3>
+<p dir="auto">A good way to learn how line breaks work is to experiment and discover -- hit <kbd>Enter</kbd> once (i.e., insert one newline), then hit it twice (i.e., insert two newlines), see what happens. You'll soon learn to get what you want. The "Preview" tab is your friend.</p>
+<p dir="auto">Here are some things to try out:</p>
+<p dir="auto">Examples:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">Here's a line for us to start with.</span>
+<span class="line" id="LC2" lang="plaintext"></span>
+<span class="line" id="LC3" lang="plaintext">This line is separated from the one above by two newlines, so it will be a *separate paragraph*.</span>
+<span class="line" id="LC4" lang="plaintext"></span>
+<span class="line" id="LC5" lang="plaintext">This line is also a separate paragraph, but...</span>
+<span class="line" id="LC6" lang="plaintext">This line is only separated by a single newline, so it *does not break* and just follows the previous line in the *same paragraph*.</span>
+<span class="line" id="LC7" lang="plaintext"></span>
+<span class="line" id="LC8" lang="plaintext">This line is also a separate paragraph, and...  </span>
+<span class="line" id="LC9" lang="plaintext">This line is *on its own line*, because the previous line ends with two spaces. (but still in the *same paragraph*)</span>
+<span class="line" id="LC10" lang="plaintext"></span>
+<span class="line" id="LC11" lang="plaintext">spaces.</span></code></pre>
+<p dir="auto">Become:</p>
+<p dir="auto">Here's a line for us to start with.</p>
+<p dir="auto">This line is separated from the one above by two newlines, so it will be a <em>separate paragraph</em>.</p>
+<p dir="auto">This line is also a separate paragraph, but...
+This line is only separated by a single newline, so it <em>does not break</em> and just follows the previous line in the <em>same paragraph</em>.</p>
+<p dir="auto">This line is also a separate paragraph, and...<br/>
+This line is <em>on its own line</em>, because the previous line ends with two spaces. (but still in the <em>same paragraph</em>)</p>
+<p dir="auto">spaces.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#tables" id="user-content-tables"></a>Tables</h3>
+<p dir="auto">Tables aren't part of the core Markdown spec, but they are part of GFM.</p>
+<p dir="auto">Example:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">| header 1 | header 2 |</span>
+<span class="line" id="LC2" lang="plaintext">| -------- | -------- |</span>
+<span class="line" id="LC3" lang="plaintext">| cell 1   | cell 2   |</span>
+<span class="line" id="LC4" lang="plaintext">| cell 3   | cell 4   |</span></code></pre>
+<p dir="auto">Becomes:</p>
+<table dir="auto">
+<thead>
+<tr>
+<th>header 1</th>
+<th>header 2</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>cell 1</td>
+<td>cell 2</td>
+</tr>
+<tr>
+<td>cell 3</td>
+<td>cell 4</td>
+</tr>
+</tbody>
+</table>
+<p dir="auto"><strong>Note:</strong> The row of dashes between the table header and body must have at least three dashes in each column.</p>
+<p dir="auto">By including colons in the header row, you can align the text within that column.</p>
+<p dir="auto">Example:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">| Left Aligned | Centered | Right Aligned | Left Aligned | Centered | Right Aligned |</span>
+<span class="line" id="LC2" lang="plaintext">| :----------- | :------: | ------------: | :----------- | :------: | ------------: |</span>
+<span class="line" id="LC3" lang="plaintext">| Cell 1       | Cell 2   | Cell 3        | Cell 4       | Cell 5   | Cell 6        |</span>
+<span class="line" id="LC4" lang="plaintext">| Cell 7       | Cell 8   | Cell 9        | Cell 10      | Cell 11  | Cell 12       |</span></code></pre>
+<p dir="auto">Becomes:</p>
+<table dir="auto">
+<thead>
+<tr>
+<th align="left">Left Aligned</th>
+<th align="center">Centered</th>
+<th align="right">Right Aligned</th>
+<th align="left">Left Aligned</th>
+<th align="center">Centered</th>
+<th align="right">Right Aligned</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left">Cell 1</td>
+<td align="center">Cell 2</td>
+<td align="right">Cell 3</td>
+<td align="left">Cell 4</td>
+<td align="center">Cell 5</td>
+<td align="right">Cell 6</td>
+</tr>
+<tr>
+<td align="left">Cell 7</td>
+<td align="center">Cell 8</td>
+<td align="right">Cell 9</td>
+<td align="left">Cell 10</td>
+<td align="center">Cell 11</td>
+<td align="right">Cell 12</td>
+</tr>
+</tbody>
+</table>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#footnotes" id="user-content-footnotes"></a>Footnotes</h3>
+<p dir="auto">Example:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">You can add footnotes to your text as follows.[^2]</span>
+<span class="line" id="LC2" lang="plaintext">[^2]: This is my awesome footnote.</span></code></pre>
+<p dir="auto">Becomes:</p>
+<p dir="auto">You can add footnotes to your text as follows.<sup><a href="#fn1">[1]</a></sup></p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#superscripts-subscripts" id="user-content-superscripts-subscripts"></a>Superscripts / Subscripts</h3>
+<p dir="auto">CommonMark and GFM currently do not support the superscript syntax ( <code>x^2</code> ) that Redcarpet does.  You can use the standard HTML syntax for superscripts and subscripts.</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">The formula for water is H&lt;sub&gt;2&lt;/sub&gt;O</span>
+<span class="line" id="LC2" lang="plaintext">while the equation for the theory of relativity is E = mc&lt;sup&gt;2&lt;/sup&gt;.</span></code></pre>
+<p dir="auto">The formula for water is H<sub>2</sub>O while the equation for the theory of relativity is E = mc<sup>2</sup>.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#wiki-specific-markdown" id="user-content-wiki-specific-markdown"></a>Wiki-specific Markdown</h2>
+<p dir="auto">The following examples show how links inside wikis behave.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#wiki-direct-page-link" id="user-content-wiki-direct-page-link"></a>Wiki - Direct page link</h3>
+<p dir="auto">A link which just includes the slug for a page will point to that page,
+<em>at the base level of the wiki</em>.</p>
+<p dir="auto">This snippet would link to a <code>documentation</code> page at the root of your wiki:</p>
+<pre class="code highlight js-syntax-highlight markdown" lang="markdown" v-pre="true"><code><span class="line" id="LC1" lang="markdown"><span class="p">[</span><span class="nv">Link to Documentation</span><span class="p">](</span><span class="sx">documentation</span><span class="p">)</span></span></code></pre>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#wiki-direct-file-link" id="user-content-wiki-direct-file-link"></a>Wiki - Direct file link</h3>
+<p dir="auto">Links with a file extension point to that file, <em>relative to the current page</em>.</p>
+<p dir="auto">If this snippet was placed on a page at <code>&lt;your_wiki&gt;/documentation/related</code>,
+it would link to <code>&lt;your_wiki&gt;/documentation/file.md</code>:</p>
+<pre class="code highlight js-syntax-highlight markdown" lang="markdown" v-pre="true"><code><span class="line" id="LC1" lang="markdown"><span class="p">[</span><span class="nv">Link to File</span><span class="p">](</span><span class="sx">file.md</span><span class="p">)</span></span></code></pre>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#wiki-hierarchical-link" id="user-content-wiki-hierarchical-link"></a>Wiki - Hierarchical link</h3>
+<p dir="auto">A link can be constructed relative to the current wiki page using <code>./&lt;page&gt;</code>,
+<code>../&lt;page&gt;</code>, etc.</p>
+<ul dir="auto">
+<li>
+<p>If this snippet was placed on a page at <code>&lt;your_wiki&gt;/documentation/main</code>,
+it would link to <code>&lt;your_wiki&gt;/documentation/related</code>:</p>
+<pre class="code highlight js-syntax-highlight markdown" lang="markdown" v-pre="true"><code><span class="line" id="LC1" lang="markdown"><span class="p">[</span><span class="nv">Link to Related Page</span><span class="p">](</span><span class="sx">./related</span><span class="p">)</span></span></code></pre>
+</li>
+<li>
+<p>If this snippet was placed on a page at <code>&lt;your_wiki&gt;/documentation/related/content</code>,
+it would link to <code>&lt;your_wiki&gt;/documentation/main</code>:</p>
+<pre class="code highlight js-syntax-highlight markdown" lang="markdown" v-pre="true"><code><span class="line" id="LC1" lang="markdown"><span class="p">[</span><span class="nv">Link to Related Page</span><span class="p">](</span><span class="sx">../main</span><span class="p">)</span></span></code></pre>
+</li>
+<li>
+<p>If this snippet was placed on a page at <code>&lt;your_wiki&gt;/documentation/main</code>,
+it would link to <code>&lt;your_wiki&gt;/documentation/related.md</code>:</p>
+<pre class="code highlight js-syntax-highlight markdown" lang="markdown" v-pre="true"><code><span class="line" id="LC1" lang="markdown"><span class="p">[</span><span class="nv">Link to Related Page</span><span class="p">](</span><span class="sx">./related.md</span><span class="p">)</span></span></code></pre>
+</li>
+<li>
+<p>If this snippet was placed on a page at <code>&lt;your_wiki&gt;/documentation/related/content</code>,
+it would link to <code>&lt;your_wiki&gt;/documentation/main.md</code>:</p>
+<pre class="code highlight js-syntax-highlight markdown" lang="markdown" v-pre="true"><code><span class="line" id="LC1" lang="markdown"><span class="p">[</span><span class="nv">Link to Related Page</span><span class="p">](</span><span class="sx">../main.md</span><span class="p">)</span></span></code></pre>
+</li>
+</ul>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#wiki-root-link" id="user-content-wiki-root-link"></a>Wiki - Root link</h3>
+<p dir="auto">A link starting with a <code>/</code> is relative to the wiki root.</p>
+<ul dir="auto">
+<li>
+<p>This snippet links to <code>&lt;wiki_root&gt;/documentation</code>:</p>
+<pre class="code highlight js-syntax-highlight markdown" lang="markdown" v-pre="true"><code><span class="line" id="LC1" lang="markdown"><span class="p">[</span><span class="nv">Link to Related Page</span><span class="p">](</span><span class="sx">/documentation</span><span class="p">)</span></span></code></pre>
+</li>
+<li>
+<p>This snippet links to <code>&lt;wiki_root&gt;/miscellaneous.md</code>:</p>
+<pre class="code highlight js-syntax-highlight markdown" lang="markdown" v-pre="true"><code><span class="line" id="LC1" lang="markdown"><span class="p">[</span><span class="nv">Link to Related Page</span><span class="p">](</span><span class="sx">/miscellaneous.md</span><span class="p">)</span></span></code></pre>
+</li>
+</ul>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#references" id="user-content-references"></a>References</h2>
+<ul dir="auto">
+<li>This document leveraged heavily from the <a href="https://github.com/adam-p/markdown-here/wiki/Markdown-Cheatsheet" rel="nofollow noreferrer noopener" target="_blank">Markdown-Cheatsheet</a>.</li>
+<li>The <a href="https://daringfireball.net/projects/markdown/syntax" rel="nofollow noreferrer noopener" target="_blank">Markdown Syntax Guide</a> at Daring Fireball is an excellent resource for a detailed explanation of standard markdown.</li>
+<li>
+<a href="http://dillinger.io" rel="nofollow noreferrer noopener" target="_blank">Dillinger.io</a> is a handy tool for testing standard markdown.</li>
+</ul>
+<ol dir="auto">
+<li>
+<p>This is my awesome footnote. <a href="#fnref1"><gl-emoji data-name="leftwards_arrow_with_hook" data-unicode-version="1.1" title="leftwards arrow with hook">↩</gl-emoji></a></p>
+</li>
+</ol>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,55 @@
+#firstrunwizard {
+	margin: 12px;
+	text-align: center;
+}
+
+#firstrunwizard h1 {
+	font-size: 40px;
+	font-weight: 300;
+	line-height: 130%;
+	margin: 50px 0 20px;
+}
+
+#firstrunwizard h2 {
+	margin: 35px 0 10px;
+}
+
+#firstrunwizard .appsmall {
+	height: 16px;
+	width: 16px;
+	position: relative;
+}
+
+#firstrunwizard .appsmall-calendar,
+#firstrunwizard .appsmall-contacts {
+	filter: alpha(opacity=65);
+	opacity: 0.65;
+}
+
+#firstrunwizard .button {
+	display: inline-block;
+}
+
+#firstrunwizard p a {
+	font-weight: bold;
+}
+
+#firstrunwizard p a:focus,
+#firstrunwizard p a:hover {
+	color: #444;
+}
+
+#firstrunwizard .footnote {
+	margin-top: 40px;
+}
+
+#firstrunwizard .close {
+	position: absolute;
+	top: 0;
+	right: 0;
+	padding: 20px;
+}
+
+#cboxClose {
+	display: none;
+}

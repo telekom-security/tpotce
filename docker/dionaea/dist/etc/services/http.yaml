@@ -2,7 +2,7 @@
   config:
     root: "/opt/dionaea/var/dionaea/roots/www"
     ports:
-      - 80
+      - 81
     ssl_ports:
       - 443
     max_request_size: 32768 # maximum size in kbytes of the request (32MB)

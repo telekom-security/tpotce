@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+
+<html class="" lang="en">
+<head prefix="og: http://ogp.me/ns#">
+<meta charset="utf-8"/>
+<meta content="IE=edge" http-equiv="X-UA-Compatible"/>
+<meta content="object" property="og:type"/>
+<meta content="GitLab" property="og:site_name"/>
+<meta content="Using docker images · Docker · Ci · Help" property="og:title"/>
+<meta content="GitLab Community Edition" property="og:description"/>
+<meta content="http://172.20.254.127/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png" property="og:image"/>
+<meta content="64" property="og:image:width"/>
+<meta content="64" property="og:image:height"/>
+<meta content="http://172.20.254.127/help/ci/docker/using_docker_images.md" property="og:url"/>
+<meta content="summary" property="twitter:card"/>
+<meta content="Using docker images · Docker · Ci · Help" property="twitter:title"/>
+<meta content="GitLab Community Edition" property="twitter:description"/>
+<meta content="http://172.20.254.127/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png" property="twitter:image"/>
+<title>Using docker images · Docker · Ci · Help · GitLab</title>
+<meta content="GitLab Community Edition" name="description"/>
+<link data-original-href="/assets/favicon-7901bd695fb93edb07975966062049829afb56cf11511236e61bcf425070e36e.png" href="/assets/favicon-7901bd695fb93edb07975966062049829afb56cf11511236e61bcf425070e36e.png" id="favicon" rel="shortcut icon" type="image/png"/>
+<link href="/assets/application-266f2bfa52ff531258d13c702895a14fd5994ca591fa2df7338da00ab18c99ac.css" media="all" rel="stylesheet"/>
+<link href="/assets/print-c8ff536271f8974b8a9a5f75c0ca25d2b8c1dceb4cff3c01d1603862a0bdcbfc.css" media="print" rel="stylesheet"/>
+<script>
+//<![CDATA[
+window.gon={};gon.api_version="v4";gon.default_avatar_url="http://172.20.254.127/assets/no_avatar-849f9c04a3a0d0cea2424ae97b27447dc64a7dbfae83c036c45b403392f0e8ba.png";gon.max_file_size=10;gon.asset_host=null;gon.webpack_public_path="/assets/webpack/";gon.relative_url_root="";gon.shortcuts_path="/help/shortcuts";gon.user_color_scheme="white";gon.gitlab_url="http://172.20.254.127";gon.revision="63daf37";gon.gitlab_logo="/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png";gon.sprite_icons="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg";gon.sprite_file_icons="/assets/file_icons-7262fc6897e02f1ceaf8de43dc33afa5e4f9a2067f4f68ef77dcc87946575e9e.svg";gon.emoji_sprites_css_path="/assets/emoji_sprites-289eccffb1183c188b630297431be837765d9ff4aed6130cf738586fb307c170.css";gon.test_env=false;gon.suggested_label_colors=["#0033CC","#428BCA","#44AD8E","#A8D695","#5CB85C","#69D100","#004E00","#34495E","#7F8C8D","#A295D6","#5843AD","#8E44AD","#FFECDB","#AD4363","#D10069","#CC0033","#FF0000","#D9534F","#D1D100","#F0AD4E","#AD8D43"];
+//]]>
+</script>
+<script defer="defer" src="/assets/webpack/runtime.9fcb75d4.bundle.js"></script>
+<script defer="defer" src="/assets/webpack/main.a66b6c66.chunk.js"></script>
+<script defer="defer" src="/assets/webpack/pages.help.show.c42c0700.chunk.js"></script>
+<meta content="authenticity_token" name="csrf-param">
+<meta content="CyhWaKRPdCaRC9ODOMbkhB1buTghRaoIPCSYxfZe+IvmFruLkc4ZYbBRM4I0rX1SE+lhO1I5mzl+/o+++gj4Tw==" name="csrf-token">
+<meta content="origin-when-cross-origin" name="referrer"/>
+<meta content="width=device-width, initial-scale=1, maximum-scale=1" name="viewport"/>
+<meta content="#474D57" name="theme-color"/>
+<link href="/assets/touch-icon-iphone-5a9cee0e8a51212e70b90c87c12f382c428870c0ff67d1eb034d884b78d2dae7.png" rel="apple-touch-icon" type="image/x-icon"/>
+<link href="/assets/touch-icon-ipad-a6eec6aeb9da138e507593b464fdac213047e49d3093fc30e90d9a995df83ba3.png" rel="apple-touch-icon" sizes="76x76" type="image/x-icon"/>
+<link href="/assets/touch-icon-iphone-retina-72e2aadf86513a56e050e7f0f2355deaa19cc17ed97bbe5147847f2748e5a3e3.png" rel="apple-touch-icon" sizes="120x120" type="image/x-icon"/>
+<link href="/assets/touch-icon-ipad-retina-8ebe416f5313483d9c1bc772b5bbe03ecad52a54eba443e5215a22caed2a16a2.png" rel="apple-touch-icon" sizes="152x152" type="image/x-icon"/>
+<link color="rgb(226, 67, 41)" href="/assets/logo-d36b5212042cebc89b96df4bf6ac24e43db316143e89926c0db839ff694d2de4.svg" rel="mask-icon"/>
+<meta content="/assets/msapplication-tile-1196ec67452f618d39cdd85e2e3a542f76574c071051ae7effbfde01710eb17d.png" name="msapplication-TileImage"/>
+<meta content="#30353E" name="msapplication-TileColor"/>
+</meta></meta></head>
+<body class="ui-indigo " data-group="" data-page="help:show" data-project="">
+<header class="navbar navbar-gitlab qa-navbar navbar-expand-sm">
+<a class="sr-only gl-accessibility" href="#content-body" tabindex="1">Skip to content</a>
+<div class="container-fluid">
+<div class="header-content">
+<div class="title-container">
+<h1 class="title">
+<a href="/" id="logo" title="Dashboard"><svg class="tanuki-logo" height="24" viewbox="0 0 36 36" width="24">
+<path class="tanuki-shape tanuki-left-ear" d="M2 14l9.38 9v-9l-4-12.28c-.205-.632-1.176-.632-1.38 0z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-right-ear" d="M34 14l-9.38 9v-9l4-12.28c.205-.632 1.176-.632 1.38 0z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-nose" d="M18,34.38 3,14 33,14 Z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-left-eye" d="M18,34.38 11.38,14 2,14 6,25Z" fill="#fc6d26"></path>
+<path class="tanuki-shape tanuki-right-eye" d="M18,34.38 24.62,14 34,14 30,25Z" fill="#fc6d26"></path>
+<path class="tanuki-shape tanuki-left-cheek" d="M2 14L.1 20.16c-.18.565 0 1.2.5 1.56l17.42 12.66z" fill="#fca326"></path>
+<path class="tanuki-shape tanuki-right-cheek" d="M34 14l1.9 6.16c.18.565 0 1.2-.5 1.56L18 34.38z" fill="#fca326"></path>
+</svg>
+<span class="logo-text d-none d-sm-block">
+<svg viewbox="0 0 617 169" xmlns="http://www.w3.org/2000/svg"><path d="M315.26 2.97h-21.8l.1 162.5h88.3v-20.1h-66.5l-.1-142.4M465.89 136.95c-5.5 5.7-14.6 11.4-27 11.4-16.6 0-23.3-8.2-23.3-18.9 0-16.1 11.2-23.8 35-23.8 4.5 0 11.7.5 15.4 1.2v30.1h-.1m-22.6-98.5c-17.6 0-33.8 6.2-46.4 16.7l7.7 13.4c8.9-5.2 19.8-10.4 35.5-10.4 17.9 0 25.8 9.2 25.8 24.6v7.9c-3.5-.7-10.7-1.2-15.1-1.2-38.2 0-57.6 13.4-57.6 41.4 0 25.1 15.4 37.7 38.7 37.7 15.7 0 30.8-7.2 36-18.9l4 15.9h15.4v-83.2c-.1-26.3-11.5-43.9-44-43.9M557.63 149.1c-8.2 0-15.4-1-20.8-3.5V70.5c7.4-6.2 16.6-10.7 28.3-10.7 21.1 0 29.2 14.9 29.2 39 0 34.2-13.1 50.3-36.7 50.3m9.2-110.6c-19.5 0-30 13.3-30 13.3v-21l-.1-27.8h-21.3l.1 158.5c10.7 4.5 25.3 6.9 41.2 6.9 40.7 0 60.3-26 60.3-70.9-.1-35.5-18.2-59-50.2-59M77.9 20.6c19.3 0 31.8 6.4 39.9 12.9l9.4-16.3C114.5 6 97.3 0 78.9 0 32.5 0 0 28.3 0 85.4c0 59.8 35.1 83.1 75.2 83.1 20.1 0 37.2-4.7 48.4-9.4l-.5-63.9V75.1H63.6v20.1h38l.5 48.5c-5 2.5-13.6 4.5-25.3 4.5-32.2 0-53.8-20.3-53.8-63-.1-43.5 22.2-64.6 54.9-64.6M231.43 2.95h-21.3l.1 27.3v94.3c0 26.3 11.4 43.9 43.9 43.9 4.5 0 8.9-.4 13.1-1.2v-19.1c-3.1.5-6.4.7-9.9.7-17.9 0-25.8-9.2-25.8-24.6v-65h35.7v-17.8h-35.7l-.1-38.5M155.96 165.47h21.3v-124h-21.3v124M155.96 24.37h21.3V3.07h-21.3v21.3"></path></svg>
+</span>
+</a></h1>
+<ul class="list-unstyled navbar-sub-nav">
+<li class="home"><a class="dashboard-shortcuts-projects" href="/explore" title="Projects">Projects
+</a></li><li class=""><a class="dashboard-shortcuts-groups" href="/explore/groups" title="Groups">Groups
+</a></li><li class=""><a class="dashboard-shortcuts-snippets" href="/explore/snippets" title="Snippets">Snippets
+</a></li><li>
+<a href="/help" title="About GitLab CE">Help</a>
+</li>
+</ul>
+</div>
+<div class="navbar-collapse collapse">
+<ul class="nav navbar-nav">
+<li class="nav-item d-none d-sm-none d-md-block m-auto">
+<div class="search search-form">
+<form accept-charset="UTF-8" action="/search" class="form-inline" method="get"><input name="utf8" type="hidden" value="✓"/><div class="search-input-container">
+<div class="search-input-wrap">
+<div class="dropdown" data-url="/search/autocomplete">
+<input aria-label="Search" autocomplete="off" class="search-input dropdown-menu-toggle no-outline js-search-dashboard-options" data-issues-path="/dashboard/issues" data-mr-path="/dashboard/merge_requests" id="search" name="search" placeholder="Search" spellcheck="false" tabindex="1" type="search"/>
+<button class="hidden js-dropdown-search-toggle" data-toggle="dropdown" type="button"></button>
+<div class="dropdown-menu dropdown-select">
+<div class="dropdown-content"><ul>
+<li class="dropdown-menu-empty-item">
+<a>
+Loading...
+</a>
+</li>
+</ul>
+</div><div class="dropdown-loading"><i aria-hidden="true" class="fa fa-spinner fa-spin" data-hidden="true"></i></div>
+</div>
+<svg class="s16 search-icon"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#search"></use></svg>
+<svg class="s16 clear-icon js-clear-input"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#close"></use></svg>
+</div>
+</div>
+</div>
+<input class="js-search-group-options" id="group_id" name="group_id" type="hidden"/>
+<input class="js-search-project-options" id="search_project_id" name="project_id" type="hidden" value=""/>
+<input id="repository_ref" name="repository_ref" type="hidden"/>
+<div class="search-autocomplete-opts hide" data-autocomplete-path="/search/autocomplete"></div>
+</form></div>
+</li>
+<li class="nav-item d-inline-block d-sm-none d-md-none">
+<a aria-label="Search" data-container="body" data-placement="bottom" data-toggle="tooltip" href="/search" title="Search"><svg class="s16"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#search"></use></svg>
+</a></li>
+<li class="nav-item">
+<div>
+<a class="btn btn-sign-in" href="/users/sign_in?redirect_to_referer=yes">Sign in / Register</a>
+</div>
+</li>
+</ul>
+</div>
+<button class="navbar-toggler d-block d-sm-none" type="button">
+<span class="sr-only">Toggle navigation</span>
+<svg class="s12 more-icon js-navbar-toggle-right"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#more"></use></svg>
+<svg class="s12 close-icon js-navbar-toggle-left"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#close"></use></svg>
+</button>
+</div>
+</div>
+</header>
+<div class="layout-page">
+<div class="content-wrapper">
+<div class="mobile-overlay"></div>
+<div class="alert-wrapper">
+<nav class="breadcrumbs container-fluid container-limited" role="navigation">
+<div class="breadcrumbs-container">
+<div class="breadcrumbs-links js-title-container">
+<ul class="list-unstyled breadcrumbs-list js-breadcrumbs-list">
+<li><a href="/help">Help</a><svg class="s8 breadcrumbs-list-angle"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#angle-right"></use></svg></li>
+<li>
+<h2 class="breadcrumbs-sub-title"><a href="/help/ci/docker/using_docker_images.md">Help</a></h2>
+</li>
+</ul>
+</div>
+</div>
+</nav>
+<div class="flash-container flash-container-page">
+</div>
+</div>
+<div class="container-fluid container-limited ">
+<div class="content" id="content-body">
+<div class="documentation wiki prepend-top-default">
+<h1 dir="auto">
+<a aria-hidden="true" class="anchor" href="#using-docker-images" id="user-content-using-docker-images"></a>Using Docker images</h1>
+<p dir="auto">GitLab CI in conjunction with <a href="/runners/README.md">GitLab Runner</a> can use
+<a href="https://www.docker.com/" rel="nofollow noreferrer noopener" target="_blank">Docker Engine</a> to test and build any application.</p>
+<p dir="auto">Docker is an open-source project that allows you to use predefined images to
+run applications in independent "containers" that are run within a single Linux
+instance. <a href="https://hub.docker.com/" rel="nofollow noreferrer noopener" target="_blank">Docker Hub</a> has a rich database of pre-built images that can be
+used to test and build your applications.</p>
+<p dir="auto">Docker, when used with GitLab CI, runs each job in a separate and isolated
+container using the predefined image that is set up in
+<a href="/yaml/README.md"><code>.gitlab-ci.yml</code></a>.</p>
+<p dir="auto">This makes it easier to have a simple and reproducible build environment that
+can also run on your workstation. The added benefit is that you can test all
+the commands that we will explore later from your shell, rather than having to
+test them on a dedicated CI server.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#register-docker-runner" id="user-content-register-docker-runner"></a>Register Docker Runner</h2>
+<p dir="auto">To use GitLab Runner with Docker you need to <a href="https://docs.gitlab.com/runner/register/" rel="nofollow noreferrer noopener" target="_blank">register a new Runner</a>
+to use the <code>docker</code> executor.</p>
+<p dir="auto">A one-line example can be seen below:</p>
+<pre class="code highlight js-syntax-highlight shell" lang="shell" v-pre="true"><code><span class="line" id="LC1" lang="shell"><span class="nb">sudo </span>gitlab-runner register <span class="se">\</span></span>
+<span class="line" id="LC2" lang="shell">  <span class="nt">--url</span> <span class="s2">"https://gitlab.example.com/"</span> <span class="se">\</span></span>
+<span class="line" id="LC3" lang="shell">  <span class="nt">--registration-token</span> <span class="s2">"PROJECT_REGISTRATION_TOKEN"</span> <span class="se">\</span></span>
+<span class="line" id="LC4" lang="shell">  <span class="nt">--description</span> <span class="s2">"docker-ruby-2.1"</span> <span class="se">\</span></span>
+<span class="line" id="LC5" lang="shell">  <span class="nt">--executor</span> <span class="s2">"docker"</span> <span class="se">\</span></span>
+<span class="line" id="LC6" lang="shell">  <span class="nt">--docker-image</span> ruby:2.1 <span class="se">\</span></span>
+<span class="line" id="LC7" lang="shell">  <span class="nt">--docker-postgres</span> latest <span class="se">\</span></span>
+<span class="line" id="LC8" lang="shell">  <span class="nt">--docker-mysql</span> latest</span></code></pre>
+<p dir="auto">The registered runner will use the <code>ruby:2.1</code> Docker image and will run two
+services, <code>postgres:latest</code> and <code>mysql:latest</code>, both of which will be
+accessible during the build process.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#what-is-an-image" id="user-content-what-is-an-image"></a>What is an image</h2>
+<p dir="auto">The <code>image</code> keyword is the name of the Docker image the Docker executor
+will run to perform the CI tasks.</p>
+<p dir="auto">By default, the executor will only pull images from <a href="https://hub.docker.com/" rel="nofollow noreferrer noopener" target="_blank">Docker Hub</a>,
+but this can be configured in the <code>gitlab-runner/config.toml</code> by setting
+the <a href="https://docs.gitlab.com/runner/executors/docker.html#how-pull-policies-work" rel="nofollow noreferrer noopener" target="_blank">Docker pull policy</a> to allow using local images.</p>
+<p dir="auto">For more information about images and Docker Hub please read
+the <a href="https://docs.docker.com/engine/understanding-docker/" rel="nofollow noreferrer noopener" target="_blank">Docker Fundamentals</a> documentation.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#what-is-a-service" id="user-content-what-is-a-service"></a>What is a service</h2>
+<p dir="auto">The <code>services</code> keyword defines just another Docker image that is run during
+your job and is linked to the Docker image that the <code>image</code> keyword defines.
+This allows you to access the service image during build time.</p>
+<p dir="auto">The service image can run any application, but the most common use case is to
+run a database container, e.g., <code>mysql</code>. It's easier and faster to use an
+existing image and run it as an additional container than install <code>mysql</code> every
+time the project is built.</p>
+<p dir="auto">You are not limited to have only database services. You can add as many
+services you need to <code>.gitlab-ci.yml</code> or manually modify <code>config.toml</code>.
+Any image found at <a href="https://hub.docker.com/" rel="nofollow noreferrer noopener" target="_blank">Docker Hub</a> or your private Container Registry can be
+used as a service.</p>
+<p dir="auto">You can see some widely used services examples in the relevant documentation of
+<a href="/services/README.md">CI services examples</a>.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#how-services-are-linked-to-the-job" id="user-content-how-services-are-linked-to-the-job"></a>How services are linked to the job</h3>
+<p dir="auto">To better understand how the container linking works, read
+<a href="https://docs.docker.com/engine/userguide/networking/default_network/dockerlinks/" rel="nofollow noreferrer noopener" target="_blank">Linking containers together</a>.</p>
+<p dir="auto">To summarize, if you add <code>mysql</code> as service to your application, the image will
+then be used to create a container that is linked to the job container.</p>
+<p dir="auto">The service container for MySQL will be accessible under the hostname <code>mysql</code>.
+So, in order to access your database service you have to connect to the host
+named <code>mysql</code> instead of a socket or <code>localhost</code>. Read more in <a href="#accessing-the-services">accessing the
+services</a>.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#how-the-health-check-of-services-works" id="user-content-how-the-health-check-of-services-works"></a>How the health check of services works</h3>
+<p dir="auto">Services are designed to provide additional functionality which is <strong>network accessible</strong>.
+It may be a database like MySQL, or Redis, and even <code>docker:stable-dind</code> which
+allows you to use Docker in Docker. It can be practically anything that is
+required for the CI/CD job to proceed and is accessed by network.</p>
+<p dir="auto">To make sure this works, the Runner:</p>
+<ol dir="auto">
+<li>checks which ports are exposed from the container by default</li>
+<li>starts a special container that waits for these ports to be accessible</li>
+</ol>
+<p dir="auto">When the second stage of the check fails, either because there is no opened port in the
+service, or the service was not started properly before the timeout and the port is not
+responding, it prints the warning: <code>*** WARNING: Service XYZ probably didn't start properly</code>.</p>
+<p dir="auto">In most cases it will affect the job, but there may be situations when the job
+will still succeed even if that warning was printed. For example:</p>
+<ul dir="auto">
+<li>The service was started a little after the warning was raised, and the job is
+not using the linked service from the very beginning. In that case, when the
+job needed to access the service, it may have been already there waiting for
+connections.</li>
+<li>The service container is not providing any networking service, but it's doing
+something with the job's directory (all services have the job directory mounted
+as a volume under <code>/builds</code>). In that case, the service will do its job, and
+since the job is not trying to connect to it, it won't fail.</li>
+</ul>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#what-services-are-not-for" id="user-content-what-services-are-not-for"></a>What services are not for</h3>
+<p dir="auto">As it was mentioned before, this feature is designed to provide <strong>network accessible</strong>
+services. A database is the simplest example of such a service.</p>
+<p dir="auto">NOTE: <strong>Note:</strong>
+The services feature is not designed to, and will not add any software from the
+defined <code>services</code> image(s) to the job's container.</p>
+<p dir="auto">For example, if you have the following <code>services</code> defined in your job, the <code>php</code>,
+<code>node</code> or <code>go</code> commands will <strong>not</strong> be available for your script, and thus
+the job will fail:</p>
+<pre class="code highlight js-syntax-highlight yaml" lang="yaml" v-pre="true"><code><span class="line" id="LC1" lang="yaml"><span class="na">job</span><span class="pi">:</span></span>
+<span class="line" id="LC2" lang="yaml">  <span class="na">services</span><span class="pi">:</span></span>
+<span class="line" id="LC3" lang="yaml">  <span class="pi">-</span> <span class="s">php:7</span></span>
+<span class="line" id="LC4" lang="yaml">  <span class="pi">-</span> <span class="s">node:latest</span></span>
+<span class="line" id="LC5" lang="yaml">  <span class="pi">-</span> <span class="s">golang:1.10</span></span>
+<span class="line" id="LC6" lang="yaml">  <span class="na">image</span><span class="pi">:</span> <span class="s">alpine:3.7</span></span>
+<span class="line" id="LC7" lang="yaml">  <span class="na">script</span><span class="pi">:</span></span>
+<span class="line" id="LC8" lang="yaml">  <span class="pi">-</span> <span class="s">php -v</span></span>
+<span class="line" id="LC9" lang="yaml">  <span class="pi">-</span> <span class="s">node -v</span></span>
+<span class="line" id="LC10" lang="yaml">  <span class="pi">-</span> <span class="s">go version</span></span></code></pre>
+<p dir="auto">If you need to have <code>php</code>, <code>node</code> and <code>go</code> available for your script, you should
+either:</p>
+<ul dir="auto">
+<li>choose an existing Docker image that contains all required tools, or</li>
+<li>create your own Docker image, which will have all the required tools included
+and use that in your job</li>
+</ul>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#accessing-the-services" id="user-content-accessing-the-services"></a>Accessing the services</h3>
+<p dir="auto">Let's say that you need a Wordpress instance to test some API integration with
+your application.</p>
+<p dir="auto">You can then use for example the <a href="https://hub.docker.com/r/tutum/wordpress/" rel="nofollow noreferrer noopener" target="_blank">tutum/wordpress</a> image in your
+<code>.gitlab-ci.yml</code>:</p>
+<pre class="code highlight js-syntax-highlight yaml" lang="yaml" v-pre="true"><code><span class="line" id="LC1" lang="yaml"><span class="na">services</span><span class="pi">:</span></span>
+<span class="line" id="LC2" lang="yaml"><span class="pi">-</span> <span class="s">tutum/wordpress:latest</span></span></code></pre>
+<p dir="auto">If you don't <a href="#available-settings-for-services">specify a service alias</a>,
+when the job is run, <code>tutum/wordpress</code> will be started and you will have
+access to it from your build container under two hostnames to choose from:</p>
+<ul dir="auto">
+<li><code>tutum-wordpress</code></li>
+<li><code>tutum__wordpress</code></li>
+</ul>
+<blockquote dir="auto">
+<p><strong>Note:</strong>
+Hostnames with underscores are not RFC valid and may cause problems in 3rd party
+applications.</p>
+</blockquote>
+<p dir="auto">The default aliases for the service's hostname are created from its image name
+following these rules:</p>
+<ul dir="auto">
+<li>Everything after the colon (<code>:</code>) is stripped</li>
+<li>Slash (<code>/</code>) is replaced with double underscores (<code>__</code>) and the primary alias
+is created</li>
+<li>Slash (<code>/</code>) is replaced with a single dash (<code>-</code>) and the secondary alias is
+created (requires GitLab Runner v1.1.0 or higher)</li>
+</ul>
+<p dir="auto">To override the default behavior, you can
+<a href="#available-settings-for-services">specify a service alias</a>.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#define-image-and-services-from-gitlab-ciyml" id="user-content-define-image-and-services-from-gitlab-ciyml"></a>Define <code>image</code> and <code>services</code> from <code>.gitlab-ci.yml</code>
+</h2>
+<p dir="auto">You can simply define an image that will be used for all jobs and a list of
+services that you want to use during build time:</p>
+<pre class="code highlight js-syntax-highlight yaml" lang="yaml" v-pre="true"><code><span class="line" id="LC1" lang="yaml"><span class="na">image</span><span class="pi">:</span> <span class="s">ruby:2.2</span></span>
+<span class="line" id="LC2" lang="yaml"></span>
+<span class="line" id="LC3" lang="yaml"><span class="na">services</span><span class="pi">:</span></span>
+<span class="line" id="LC4" lang="yaml">  <span class="pi">-</span> <span class="s">postgres:9.3</span></span>
+<span class="line" id="LC5" lang="yaml"></span>
+<span class="line" id="LC6" lang="yaml"><span class="na">before_script</span><span class="pi">:</span></span>
+<span class="line" id="LC7" lang="yaml">  <span class="pi">-</span> <span class="s">bundle install</span></span>
+<span class="line" id="LC8" lang="yaml"></span>
+<span class="line" id="LC9" lang="yaml"><span class="na">test</span><span class="pi">:</span></span>
+<span class="line" id="LC10" lang="yaml">  <span class="na">script</span><span class="pi">:</span></span>
+<span class="line" id="LC11" lang="yaml">  <span class="pi">-</span> <span class="s">bundle exec rake spec</span></span></code></pre>
+<p dir="auto">It is also possible to define different images and services per job:</p>
+<pre class="code highlight js-syntax-highlight yaml" lang="yaml" v-pre="true"><code><span class="line" id="LC1" lang="yaml"><span class="na">before_script</span><span class="pi">:</span></span>
+<span class="line" id="LC2" lang="yaml">  <span class="pi">-</span> <span class="s">bundle install</span></span>
+<span class="line" id="LC3" lang="yaml"></span>
+<span class="line" id="LC4" lang="yaml"><span class="s">test:2.1</span><span class="pi">:</span></span>
+<span class="line" id="LC5" lang="yaml">  <span class="na">image</span><span class="pi">:</span> <span class="s">ruby:2.1</span></span>
+<span class="line" id="LC6" lang="yaml">  <span class="na">services</span><span class="pi">:</span></span>
+<span class="line" id="LC7" lang="yaml">  <span class="pi">-</span> <span class="s">postgres:9.3</span></span>
+<span class="line" id="LC8" lang="yaml">  <span class="na">script</span><span class="pi">:</span></span>
+<span class="line" id="LC9" lang="yaml">  <span class="pi">-</span> <span class="s">bundle exec rake spec</span></span>
+<span class="line" id="LC10" lang="yaml"></span>
+<span class="line" id="LC11" lang="yaml"><span class="s">test:2.2</span><span class="pi">:</span></span>
+<span class="line" id="LC12" lang="yaml">  <span class="na">image</span><span class="pi">:</span> <span class="s">ruby:2.2</span></span>
+<span class="line" id="LC13" lang="yaml">  <span class="na">services</span><span class="pi">:</span></span>
+<span class="line" id="LC14" lang="yaml">  <span class="pi">-</span> <span class="s">postgres:9.4</span></span>
+<span class="line" id="LC15" lang="yaml">  <span class="na">script</span><span class="pi">:</span></span>
+<span class="line" id="LC16" lang="yaml">  <span class="pi">-</span> <span class="s">bundle exec rake spec</span></span></code></pre>
+<p dir="auto">Or you can pass some <a href="#extended-docker-configuration-options">extended configuration options</a>
+for <code>image</code> and <code>services</code>:</p>
+<pre class="code highlight js-syntax-highlight yaml" lang="yaml" v-pre="true"><code><span class="line" id="LC1" lang="yaml"><span class="na">image</span><span class="pi">:</span></span>
+<span class="line" id="LC2" lang="yaml">  <span class="na">name</span><span class="pi">:</span> <span class="s">ruby:2.2</span></span>
+<span class="line" id="LC3" lang="yaml">  <span class="na">entrypoint</span><span class="pi">:</span> <span class="pi">[</span><span class="s2">"</span><span class="s">/bin/bash"</span><span class="pi">]</span></span>
+<span class="line" id="LC4" lang="yaml"></span>
+<span class="line" id="LC5" lang="yaml"><span class="na">services</span><span class="pi">:</span></span>
+<span class="line" id="LC6" lang="yaml"><span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">my-postgres:9.4</span></span>
+<span class="line" id="LC7" lang="yaml">  <span class="na">alias</span><span class="pi">:</span> <span class="s">db-postgres</span></span>
+<span class="line" id="LC8" lang="yaml">  <span class="na">entrypoint</span><span class="pi">:</span> <span class="pi">[</span><span class="s2">"</span><span class="s">/usr/local/bin/db-postgres"</span><span class="pi">]</span></span>
+<span class="line" id="LC9" lang="yaml">  <span class="na">command</span><span class="pi">:</span> <span class="pi">[</span><span class="s2">"</span><span class="s">start"</span><span class="pi">]</span></span>
+<span class="line" id="LC10" lang="yaml"></span>
+<span class="line" id="LC11" lang="yaml"><span class="na">before_script</span><span class="pi">:</span></span>
+<span class="line" id="LC12" lang="yaml"><span class="pi">-</span> <span class="s">bundle install</span></span>
+<span class="line" id="LC13" lang="yaml"></span>
+<span class="line" id="LC14" lang="yaml"><span class="na">test</span><span class="pi">:</span></span>
+<span class="line" id="LC15" lang="yaml">  <span class="na">script</span><span class="pi">:</span></span>
+<span class="line" id="LC16" lang="yaml">  <span class="pi">-</span> <span class="s">bundle exec rake spec</span></span></code></pre>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#extended-docker-configuration-options" id="user-content-extended-docker-configuration-options"></a>Extended Docker configuration options</h2>
+<blockquote dir="auto">
+<p>Introduced in GitLab and GitLab Runner 9.4.</p>
+</blockquote>
+<p dir="auto">When configuring the <code>image</code> or <code>services</code> entries, you can use a string or a map as
+options:</p>
+<ul dir="auto">
+<li>when using a string as an option, it must be the full name of the image to use
+(including the Registry part if you want to download the image from a Registry
+other than Docker Hub)</li>
+<li>when using a map as an option, then it must contain at least the <code>name</code>
+option, which is the same name of the image as used for the string setting</li>
+</ul>
+<p dir="auto">For example, the following two definitions are equal:</p>
+<ol dir="auto">
+<li>
+<p>Using a string as an option to <code>image</code> and <code>services</code>:</p>
+<pre class="code highlight js-syntax-highlight yaml" lang="yaml" v-pre="true"><code><span class="line" id="LC1" lang="yaml"><span class="na">image</span><span class="pi">:</span> <span class="s2">"</span><span class="s">registry.example.com/my/image:latest"</span></span>
+<span class="line" id="LC2" lang="yaml"></span>
+<span class="line" id="LC3" lang="yaml"><span class="na">services</span><span class="pi">:</span></span>
+<span class="line" id="LC4" lang="yaml"><span class="pi">-</span> <span class="s">postgresql:9.4</span></span>
+<span class="line" id="LC5" lang="yaml"><span class="pi">-</span> <span class="s">redis:latest</span></span></code></pre>
+</li>
+<li>
+<p>Using a map as an option to <code>image</code> and <code>services</code>. The use of <code>image:name</code> is
+required:</p>
+<pre class="code highlight js-syntax-highlight yaml" lang="yaml" v-pre="true"><code><span class="line" id="LC1" lang="yaml"><span class="na">image</span><span class="pi">:</span></span>
+<span class="line" id="LC2" lang="yaml">  <span class="na">name</span><span class="pi">:</span> <span class="s2">"</span><span class="s">registry.example.com/my/image:latest"</span></span>
+<span class="line" id="LC3" lang="yaml"></span>
+<span class="line" id="LC4" lang="yaml"><span class="na">services</span><span class="pi">:</span></span>
+<span class="line" id="LC5" lang="yaml"><span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">postgresql:9.4</span></span>
+<span class="line" id="LC6" lang="yaml"><span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">redis:latest</span></span></code></pre>
+</li>
+</ol>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#available-settings-for-image" id="user-content-available-settings-for-image"></a>Available settings for <code>image</code>
+</h3>
+<blockquote dir="auto">
+<p>Introduced in GitLab and GitLab Runner 9.4.</p>
+</blockquote>
+<table dir="auto">
+<thead>
+<tr>
+<th>Setting</th>
+<th>Required</th>
+<th>GitLab version</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td>yes, when used with any other option</td>
+<td>9.4</td>
+<td>Full name of the image that should be used. It should contain the Registry part if needed.</td>
+</tr>
+<tr>
+<td><code>entrypoint</code></td>
+<td>no</td>
+<td>9.4</td>
+<td>Command or script that should be executed as the container's entrypoint. It will be translated to Docker's <code>--entrypoint</code> option while creating the container. The syntax is similar to <a href="https://docs.docker.com/engine/reference/builder/#entrypoint" rel="nofollow noreferrer noopener" target="_blank"><code>Dockerfile</code>'s <code>ENTRYPOINT</code></a> directive, where each shell token is a separate string in the array.</td>
+</tr>
+</tbody>
+</table>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#available-settings-for-services" id="user-content-available-settings-for-services"></a>Available settings for <code>services</code>
+</h3>
+<blockquote dir="auto">
+<p>Introduced in GitLab and GitLab Runner 9.4.</p>
+</blockquote>
+<table dir="auto">
+<thead>
+<tr>
+<th>Setting</th>
+<th>Required</th>
+<th>GitLab version</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td>yes, when used with any other option</td>
+<td>9.4</td>
+<td>Full name of the image that should be used. It should contain the Registry part if needed.</td>
+</tr>
+<tr>
+<td><code>entrypoint</code></td>
+<td>no</td>
+<td>9.4</td>
+<td>Command or script that should be executed as the container's entrypoint. It will be translated to Docker's <code>--entrypoint</code> option while creating the container. The syntax is similar to <a href="https://docs.docker.com/engine/reference/builder/#entrypoint" rel="nofollow noreferrer noopener" target="_blank"><code>Dockerfile</code>'s <code>ENTRYPOINT</code></a> directive, where each shell token is a separate string in the array.</td>
+</tr>
+<tr>
+<td><code>command</code></td>
+<td>no</td>
+<td>9.4</td>
+<td>Command or script that should be used as the container's command. It will be translated to arguments passed to Docker after the image's name. The syntax is similar to <a href="https://docs.docker.com/engine/reference/builder/#cmd" rel="nofollow noreferrer noopener" target="_blank"><code>Dockerfile</code>'s <code>CMD</code></a> directive, where each shell token is a separate string in the array.</td>
+</tr>
+<tr>
+<td><code>alias</code></td>
+<td>no</td>
+<td>9.4</td>
+<td>Additional alias that can be used to access the service from the job's container. Read <a href="#accessing-the-services">Accessing the services</a> for more information.</td>
+</tr>
+</tbody>
+</table>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#starting-multiple-services-from-the-same-image" id="user-content-starting-multiple-services-from-the-same-image"></a>Starting multiple services from the same image</h3>
+<blockquote dir="auto">
+<p>Introduced in GitLab and GitLab Runner 9.4. Read more about the <a href="#extended-docker-configuration-options">extended
+configuration options</a>.</p>
+</blockquote>
+<p dir="auto">Before the new extended Docker configuration options, the following configuration
+would not work properly:</p>
+<pre class="code highlight js-syntax-highlight yaml" lang="yaml" v-pre="true"><code><span class="line" id="LC1" lang="yaml"><span class="na">services</span><span class="pi">:</span></span>
+<span class="line" id="LC2" lang="yaml"><span class="pi">-</span> <span class="s">mysql:latest</span></span>
+<span class="line" id="LC3" lang="yaml"><span class="pi">-</span> <span class="s">mysql:latest</span></span></code></pre>
+<p dir="auto">The Runner would start two containers using the <code>mysql:latest</code> image, but both
+of them would be added to the job's container with the <code>mysql</code> alias based on
+the <a href="#accessing-the-services">default hostname naming</a>. This would end with one
+of the services not being accessible.</p>
+<p dir="auto">After the new extended Docker configuration options, the above example would
+look like:</p>
+<pre class="code highlight js-syntax-highlight yaml" lang="yaml" v-pre="true"><code><span class="line" id="LC1" lang="yaml"><span class="na">services</span><span class="pi">:</span></span>
+<span class="line" id="LC2" lang="yaml"><span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">mysql:latest</span></span>
+<span class="line" id="LC3" lang="yaml">  <span class="na">alias</span><span class="pi">:</span> <span class="s">mysql-1</span></span>
+<span class="line" id="LC4" lang="yaml"><span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">mysql:latest</span></span>
+<span class="line" id="LC5" lang="yaml">  <span class="na">alias</span><span class="pi">:</span> <span class="s">mysql-2</span></span></code></pre>
+<p dir="auto">The Runner will still start two containers using the <code>mysql:latest</code> image,
+but now each of them will also be accessible with the alias configured
+in <code>.gitlab-ci.yml</code> file.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#setting-a-command-for-the-service" id="user-content-setting-a-command-for-the-service"></a>Setting a command for the service</h3>
+<blockquote dir="auto">
+<p>Introduced in GitLab and GitLab Runner 9.4. Read more about the <a href="#extended-docker-configuration-options">extended
+configuration options</a>.</p>
+</blockquote>
+<p dir="auto">Let's assume you have a <code>super/sql:latest</code> image with some SQL database
+inside it and you would like to use it as a service for your job. Let's also
+assume that this image doesn't start the database process while starting
+the container and the user needs to manually use <code>/usr/bin/super-sql run</code> as
+a command to start the database.</p>
+<p dir="auto">Before the new extended Docker configuration options, you would need to create
+your own image based on the <code>super/sql:latest</code> image, add the default command,
+and then use it in job's configuration, like:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext"># my-super-sql:latest image's Dockerfile</span>
+<span class="line" id="LC2" lang="plaintext"></span>
+<span class="line" id="LC3" lang="plaintext">FROM super/sql:latest</span>
+<span class="line" id="LC4" lang="plaintext">CMD ["/usr/bin/super-sql", "run"]</span></code></pre>
+<pre class="code highlight js-syntax-highlight yaml" lang="yaml" v-pre="true"><code><span class="line" id="LC1" lang="yaml"><span class="c1"># .gitlab-ci.yml</span></span>
+<span class="line" id="LC2" lang="yaml"></span>
+<span class="line" id="LC3" lang="yaml"><span class="na">services</span><span class="pi">:</span></span>
+<span class="line" id="LC4" lang="yaml"><span class="pi">-</span> <span class="s">my-super-sql:latest</span></span></code></pre>
+<p dir="auto">After the new extended Docker configuration options, you can now simply
+set a <code>command</code> in <code>.gitlab-ci.yml</code>, like:</p>
+<pre class="code highlight js-syntax-highlight yaml" lang="yaml" v-pre="true"><code><span class="line" id="LC1" lang="yaml"><span class="c1"># .gitlab-ci.yml</span></span>
+<span class="line" id="LC2" lang="yaml"></span>
+<span class="line" id="LC3" lang="yaml"><span class="na">services</span><span class="pi">:</span></span>
+<span class="line" id="LC4" lang="yaml"><span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">super/sql:latest</span></span>
+<span class="line" id="LC5" lang="yaml">  <span class="na">command</span><span class="pi">:</span> <span class="pi">[</span><span class="s2">"</span><span class="s">/usr/bin/super-sql"</span><span class="pi">,</span> <span class="s2">"</span><span class="s">run"</span><span class="pi">]</span></span></code></pre>
+<p dir="auto">As you can see, the syntax of <code>command</code> is similar to <a href="https://docs.docker.com/engine/reference/builder/#cmd" rel="nofollow noreferrer noopener" target="_blank">Dockerfile's <code>CMD</code></a>.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#overriding-the-entrypoint-of-an-image" id="user-content-overriding-the-entrypoint-of-an-image"></a>Overriding the entrypoint of an image</h3>
+<blockquote dir="auto">
+<p>Introduced in GitLab and GitLab Runner 9.4. Read more about the <a href="#extended-docker-configuration-options">extended
+configuration options</a>.</p>
+</blockquote>
+<p dir="auto">Before showing the available entrypoint override methods, let's describe shortly
+how the Runner starts and uses a Docker image for the containers used in the
+CI jobs:</p>
+<ol dir="auto">
+<li>The Runner starts a Docker container using the defined entrypoint (default
+from <code>Dockerfile</code> that may be overridden in <code>.gitlab-ci.yml</code>)</li>
+<li>The Runner attaches itself to a running container.</li>
+<li>The Runner prepares a script (the combination of
+<a href="../yaml/README.md#before_script"><code>before_script</code></a>,
+<a href="../yaml/README.md#script"><code>script</code></a>,
+and <a href="../yaml/README.md#after_script"><code>after_script</code></a>).</li>
+<li>The Runner sends the script to the container's shell STDIN and receives the
+output.</li>
+</ol>
+<p dir="auto">To override the entrypoint of a Docker image, the recommended solution is to
+define an empty <code>entrypoint</code> in <code>.gitlab-ci.yml</code>, so the Runner doesn't start
+a useless shell layer. However, that will not work for all Docker versions, and
+you should check which one your Runner is using. Specifically:</p>
+<ul dir="auto">
+<li>If Docker 17.06 or later is used, the <code>entrypoint</code> can be set to an empty value.</li>
+<li>If Docker 17.03 or previous versions are used, the <code>entrypoint</code> can be set to
+<code>/bin/sh -c</code>, <code>/bin/bash -c</code> or an equivalent shell available in the image.</li>
+</ul>
+<p dir="auto">The syntax of <code>image:entrypoint</code> is similar to <a href="https://docs.docker.com/engine/reference/builder/#entrypoint" rel="nofollow noreferrer noopener" target="_blank">Dockerfile's <code>ENTRYPOINT</code></a>.</p>
+<hr/>
+<p dir="auto">Let's assume you have a <code>super/sql:experimental</code> image with some SQL database
+inside it and you would like to use it as a base image for your job because you
+want to execute some tests with this database binary. Let's also assume that
+this image is configured with <code>/usr/bin/super-sql run</code> as an entrypoint. That
+means that when starting the container without additional options, it will run
+the database's process, while Runner expects that the image will have no
+entrypoint or that the entrypoint is prepared to start a shell command.</p>
+<p dir="auto">With the extended Docker configuration options, instead of creating your
+own image based on <code>super/sql:experimental</code>, setting the <code>ENTRYPOINT</code>
+to a shell, and then using the new image in your CI job, you can now simply
+define an <code>entrypoint</code> in <code>.gitlab-ci.yml</code>.</p>
+<p dir="auto"><strong>For Docker 17.06+:</strong></p>
+<pre class="code highlight js-syntax-highlight yaml" lang="yaml" v-pre="true"><code><span class="line" id="LC1" lang="yaml"><span class="na">image</span><span class="pi">:</span></span>
+<span class="line" id="LC2" lang="yaml">  <span class="na">name</span><span class="pi">:</span> <span class="s">super/sql:experimental</span></span>
+<span class="line" id="LC3" lang="yaml">  <span class="na">entrypoint</span><span class="pi">:</span> <span class="pi">[</span><span class="s2">"</span><span class="s">"</span><span class="pi">]</span></span></code></pre>
+<p dir="auto"><strong>For Docker =&lt; 17.03:</strong></p>
+<pre class="code highlight js-syntax-highlight yaml" lang="yaml" v-pre="true"><code><span class="line" id="LC1" lang="yaml"><span class="na">image</span><span class="pi">:</span></span>
+<span class="line" id="LC2" lang="yaml">  <span class="na">name</span><span class="pi">:</span> <span class="s">super/sql:experimental</span></span>
+<span class="line" id="LC3" lang="yaml">  <span class="na">entrypoint</span><span class="pi">:</span> <span class="pi">[</span><span class="s2">"</span><span class="s">/bin/sh"</span><span class="pi">,</span> <span class="s2">"</span><span class="s">-c"</span><span class="pi">]</span></span></code></pre>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#define-image-and-services-in-configtoml" id="user-content-define-image-and-services-in-configtoml"></a>Define image and services in <code>config.toml</code>
+</h2>
+<p dir="auto">Look for the <code>[runners.docker]</code> section:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">[runners.docker]</span>
+<span class="line" id="LC2" lang="plaintext">  image = "ruby:2.1"</span>
+<span class="line" id="LC3" lang="plaintext">  services = ["mysql:latest", "postgres:latest"]</span></code></pre>
+<p dir="auto">The image and services defined this way will be added to all job run by
+that runner.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#define-an-image-from-a-private-container-registry" id="user-content-define-an-image-from-a-private-container-registry"></a>Define an image from a private Container Registry</h2>
+<blockquote dir="auto">
+<p><strong>Notes:</strong></p>
+</blockquote>
+<ul dir="auto">
+<li>This feature requires GitLab Runner <strong>1.8</strong> or higher</li>
+<li>For GitLab Runner versions <strong>&gt;= 0.6, &lt;1.8</strong> there was a partial
+support for using private registries, which required manual configuration
+of credentials on runner's host. We recommend to upgrade your Runner to
+at least version <strong>1.8</strong> if you want to use private registries.</li>
+<li>If the repository is private you need to authenticate your GitLab Runner in the
+registry. Learn more about how <a href="http://docs.gitlab.com/runner/configuration/advanced-configuration.html#using-a-private-container-registry" rel="nofollow noreferrer noopener" target="_blank">GitLab Runner works in this case</a>.</li>
+</ul>
+<p dir="auto">As an example, let's assume that you want to use the <code>registry.example.com/private/image:latest</code>
+image which is private and requires you to login into a private container registry.</p>
+<p dir="auto">Let's also assume that these are the login credentials:</p>
+<table dir="auto">
+<thead>
+<tr>
+<th>Key</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>registry</td>
+<td>registry.example.com</td>
+</tr>
+<tr>
+<td>username</td>
+<td>my_username</td>
+</tr>
+<tr>
+<td>password</td>
+<td>my_password</td>
+</tr>
+</tbody>
+</table>
+<p dir="auto">To configure access for <code>registry.example.com</code>, follow these steps:</p>
+<ol dir="auto">
+<li>
+<p>Find what the value of <code>DOCKER_AUTH_CONFIG</code> should be. There are two ways to
+accomplish this:</p>
+<ul>
+<li>
+<p><strong>First way -</strong> Do a <code>docker login</code> on your local machine:</p>
+<pre class="code highlight js-syntax-highlight shell" lang="shell" v-pre="true"><code><span class="line" id="LC1" lang="shell">docker login registry.example.com <span class="nt">--username</span> my_username <span class="nt">--password</span> my_password</span></code></pre>
+<p>Then copy the content of <code>~/.docker/config.json</code>.</p>
+</li>
+<li>
+<p><strong>Second way -</strong> In some setups, it's possible that Docker client will use
+the available system keystore to store the result of <code>docker login</code>. In
+that case, it's impossible to read <code>~/.docker/config.json</code>, so you will
+need to prepare the required base64-encoded version of
+<code>${username}:${password}</code> manually. Open a terminal and execute the
+following command:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">```bash</span>
+<span class="line" id="LC2" lang="plaintext">echo -n "my_username:my_password" | base64</span>
+<span class="line" id="LC3" lang="plaintext"></span>
+<span class="line" id="LC4" lang="plaintext"># Example output to copy</span>
+<span class="line" id="LC5" lang="plaintext">bXlfdXNlcm5hbWU6bXlfcGFzc3dvcmQ=</span>
+<span class="line" id="LC6" lang="plaintext">```</span></code></pre>
+</li>
+</ul>
+</li>
+<li>
+<p>Create a <a href="../variables/README.md#variables">variable</a> <code>DOCKER_AUTH_CONFIG</code> with the content of the
+Docker configuration file as the value:</p>
+<pre class="code highlight js-syntax-highlight json" lang="json" v-pre="true"><code><span class="line" id="LC1" lang="json"><span class="p">{</span></span>
+<span class="line" id="LC2" lang="json"><span class="w">    </span><span class="s2">"auths"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span></span>
+<span class="line" id="LC3" lang="json"><span class="w">        </span><span class="s2">"registry.example.com"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span></span>
+<span class="line" id="LC4" lang="json"><span class="w">            </span><span class="s2">"auth"</span><span class="p">:</span><span class="w"> </span><span class="s2">"bXlfdXNlcm5hbWU6bXlfcGFzc3dvcmQ="</span></span>
+<span class="line" id="LC5" lang="json"><span class="w">        </span><span class="p">}</span></span>
+<span class="line" id="LC6" lang="json"><span class="w">    </span><span class="p">}</span></span>
+<span class="line" id="LC7" lang="json"><span class="p">}</span></span></code></pre>
+</li>
+<li>
+<p>Optionally,if you followed the first way of finding the <code>DOCKER_AUTH_CONFIG</code>
+value, do a <code>docker logout</code> on your computer if you don't need access to the
+registry from it:</p>
+<pre class="code highlight js-syntax-highlight shell" lang="shell" v-pre="true"><code><span class="line" id="LC1" lang="shell">docker <span class="nb">logout </span>registry.example.com</span></code></pre>
+</li>
+<li>
+<p>You can now use any private image from <code>registry.example.com</code> defined in
+<code>image</code> and/or <code>services</code> in your <code>.gitlab-ci.yml</code> file:</p>
+<pre class="code highlight js-syntax-highlight yaml" lang="yaml" v-pre="true"><code><span class="line" id="LC1" lang="yaml"><span class="na">image</span><span class="pi">:</span> <span class="s">my.registry.tld:5000/namespace/image:tag</span></span></code></pre>
+<p>In the example above, GitLab Runner will look at <code>my.registry.tld:5000</code> for the
+image <code>namespace/image:tag</code>.</p>
+</li>
+</ol>
+<p dir="auto">You can add configuration for as many registries as you want, adding more
+registries to the <code>"auths"</code> hash as described above.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#configuring-services" id="user-content-configuring-services"></a>Configuring services</h2>
+<p dir="auto">Many services accept environment variables which allow you to easily change
+database names or set account names depending on the environment.</p>
+<p dir="auto">GitLab Runner 0.5.0 and up passes all YAML-defined variables to the created
+service containers.</p>
+<p dir="auto">For all possible configuration variables check the documentation of each image
+provided in their corresponding Docker hub page.</p>
+<p dir="auto"><em>Note: All variables will be passed to all services containers. It's not
+designed to distinguish which variable should go where.</em></p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#postgresql-service-example" id="user-content-postgresql-service-example"></a>PostgreSQL service example</h3>
+<p dir="auto">See the specific documentation for
+<a href="/services/postgres.md">using PostgreSQL as a service</a>.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#mysql-service-example" id="user-content-mysql-service-example"></a>MySQL service example</h3>
+<p dir="auto">See the specific documentation for
+<a href="/services/mysql.md">using MySQL as a service</a>.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#how-docker-integration-works" id="user-content-how-docker-integration-works"></a>How Docker integration works</h2>
+<p dir="auto">Below is a high level overview of the steps performed by Docker during job
+time.</p>
+<ol dir="auto">
+<li>Create any service container: <code>mysql</code>, <code>postgresql</code>, <code>mongodb</code>, <code>redis</code>.</li>
+<li>Create cache container to store all volumes as defined in <code>config.toml</code> and
+<code>Dockerfile</code> of build image (<code>ruby:2.1</code> as in above example).</li>
+<li>Create build container and link any service container to build container.</li>
+<li>Start build container and send job script to the container.</li>
+<li>Run job script.</li>
+<li>Checkout code in: <code>/builds/group-name/project-name/</code>.</li>
+<li>Run any step defined in <code>.gitlab-ci.yml</code>.</li>
+<li>Check exit status of build script.</li>
+<li>Remove build container and all created service containers.</li>
+</ol>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#how-to-debug-a-job-locally" id="user-content-how-to-debug-a-job-locally"></a>How to debug a job locally</h2>
+<p dir="auto"><em>Note: The following commands are run without root privileges. You should be
+able to run Docker with your regular user account.</em></p>
+<p dir="auto">First start with creating a file named <code>build_script</code>:</p>
+<pre class="code highlight js-syntax-highlight shell" lang="shell" v-pre="true"><code><span class="line" id="LC1" lang="shell"><span class="nb">cat</span> <span class="o">&lt;&lt;</span><span class="no">EOF</span><span class="sh"> &gt; build_script</span></span>
+<span class="line" id="LC2" lang="shell"><span class="sh">git clone https://gitlab.com/gitlab-org/gitlab-runner.git /builds/gitlab-org/gitlab-runner</span></span>
+<span class="line" id="LC3" lang="shell"><span class="sh">cd /builds/gitlab-org/gitlab-runner</span></span>
+<span class="line" id="LC4" lang="shell"><span class="sh">make</span></span>
+<span class="line" id="LC5" lang="shell"><span class="no">EOF</span></span></code></pre>
+<p dir="auto">Here we use as an example the GitLab Runner repository which contains a
+Makefile, so running <code>make</code> will execute the commands defined in the Makefile.
+Your mileage may vary, so instead of <code>make</code> you could run the command which
+is specific to your project.</p>
+<p dir="auto">Then create some service containers:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">docker run -d --name service-mysql mysql:latest</span>
+<span class="line" id="LC2" lang="plaintext">docker run -d --name service-postgres postgres:latest</span></code></pre>
+<p dir="auto">This will create two service containers, named <code>service-mysql</code> and
+<code>service-postgres</code> which use the latest MySQL and PostgreSQL images
+respectively. They will both run in the background (<code>-d</code>).</p>
+<p dir="auto">Finally, create a build container by executing the <code>build_script</code> file we
+created earlier:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">docker run --name build -i --link=service-mysql:mysql --link=service-postgres:postgres ruby:2.1 /bin/bash &lt; build_script</span></code></pre>
+<p dir="auto">The above command will create a container named <code>build</code> that is spawned from
+the <code>ruby:2.1</code> image and has two services linked to it. The <code>build_script</code> is
+piped using STDIN to the bash interpreter which in turn executes the
+<code>build_script</code> in the <code>build</code> container.</p>
+<p dir="auto">When you finish testing and no longer need the containers, you can remove them
+with:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">docker rm -f -v build service-mysql service-postgres</span></code></pre>
+<p dir="auto">This will forcefully (<code>-f</code>) remove the <code>build</code> container, the two service
+containers as well as all volumes (<code>-v</code>) that were created with the container
+creation.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

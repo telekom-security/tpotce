@@ -1,0 +1,19 @@
+### This is only for testing purposes, do NOT use for production
+version: '2.3'
+
+networks:
+  hpfeeds_local:
+
+services:
+
+# hpfeeds service
+  hpfeeds:
+    build: .
+    container_name: hpfeeds
+    restart: always
+    stop_signal: SIGKILL
+    networks:
+     - hpfeeds_local
+    ports:
+     - "20000:20000"
+    image: "dtagdevsec/hpfeeds:latest"

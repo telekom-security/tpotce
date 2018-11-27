@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="IE=edge" http-equiv="X-UA-Compatible"/>
+<title>Gantt - Redmine</title>
+<meta content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" name="viewport"/>
+<meta content="Redmine" name="description">
+<meta content="issue,bug,tracker" name="keywords"/>
+<meta content="authenticity_token" name="csrf-param"/>
+<meta content="n4g+DRRKKEE211Nc1Y0tpH9VATjKWV64QA9sCTPwFcfyvAOj71e9+75REpFtC6nfvgeT7k6DjCpvUzDv96kYCw==" name="csrf-token"/>
+<link href="/favicon.ico?1528612569" rel="shortcut icon"/>
+<link href="/stylesheets/jquery/jquery-ui-1.11.0.css?1528612569" media="all" rel="stylesheet"/>
+<link href="/stylesheets/application.css?1528612569" media="all" rel="stylesheet"/>
+<link href="/stylesheets/responsive.css?1528612569" media="all" rel="stylesheet"/>
+<script src="/javascripts/jquery-1.11.1-ui-1.11.0-ujs-3.1.4.js?1528612568"></script>
+<script src="/javascripts/application.js?1528612569"></script>
+<script src="/javascripts/responsive.js?1528612569"></script>
+<script>
+//<![CDATA[
+$(window).load(function(){ warnLeavingUnsaved('The current page contains unsaved text that will be lost if you leave this page.'); });
+//]]>
+</script>
+<!-- page specific tags -->
+<script>
+//<![CDATA[
+var datepickerOptions={dateFormat: 'yy-mm-dd', firstDay: 0, showOn: 'button', buttonImageOnly: true, buttonImage: '/images/calendar.png?1528612567', showButtonPanel: true, showWeek: true, showOtherMonths: true, selectOtherMonths: true, changeMonth: true, changeYear: true, beforeShow: beforeShowDatePicker};
+//]]>
+</script> <script src="/javascripts/raphael.js?1528612568"></script>
+<script src="/javascripts/gantt.js?1528612568"></script>
+</meta></head>
+<body class="controller-gantts action-show">
+<div id="wrapper">
+<div class="flyout-menu js-flyout-menu">
+<div class="flyout-menu__search">
+<form accept-charset="UTF-8" action="/search" method="get"><input name="utf8" type="hidden" value="✓"/>
+<label class="search-magnifier search-magnifier--flyout" for="flyout-search">⚲</label>
+<input class="small js-search-input" id="flyout-search" name="q" placeholder="Search" type="text"/>
+</form> </div>
+<h3>Project</h3>
+<span class="js-project-menu"></span>
+<h3>General</h3>
+<span class="js-general-menu"></span>
+<span class="js-sidebar flyout-menu__sidebar"></span>
+<h3>Profile</h3>
+<span class="js-profile-menu"></span>
+</div>
+<div id="wrapper2">
+<div id="wrapper3">
+<div id="top-menu">
+<div id="account">
+<ul><li><a class="login" href="/login">Sign in</a></li><li><a class="register" href="/account/register">Register</a></li></ul> </div>
+<ul><li><a class="home" href="/">Home</a></li><li><a class="projects" href="/projects">Projects</a></li><li><a class="help" href="https://www.redmine.org/guide">Help</a></li></ul></div>
+<div id="header">
+<a class="mobile-toggle-button js-flyout-menu-toggle-button" href=""></a>
+<div id="quick-search">
+<form accept-charset="UTF-8" action="/search" method="get"><input name="utf8" type="hidden" value="✓"/>
+<input name="scope" type="hidden"/>
+<label for="q">
+<a accesskey="4" href="/search">Search</a>:
+        </label>
+<input accesskey="f" class="small" id="q" name="q" size="20" type="text"/>
+</form> <div class="drdn" id="project-jump"><span class="drdn-trigger">Jump to a project...</span><div class="drdn-content"><div class="quick-search"><input autocomplete="off" class="autocomplete" data-automcomplete-url="/projects/autocomplete.js?jump=gantt" id="projects-quick-search" name="q" type="text" value=""/></div><div class="drdn-items projects selection"></div><div class="drdn-items all-projects selection"><a class="selected" href="/projects?jump=gantt">All Projects</a></div></div></div>
+</div>
+<h1>Redmine</h1>
+<div class="tabs" id="main-menu">
+<ul><li><a class="projects" href="/projects">Projects</a></li><li><a class="activity" href="/activity">Activity</a></li><li><a class="issues" href="/issues">Issues</a></li><li><a class="time-entries" href="/time_entries">Spent time</a></li><li><a class="gantt selected" href="/issues/gantt">Gantt</a></li><li><a class="calendar" href="/issues/calendar">Calendar</a></li><li><a class="news" href="/news">News</a></li></ul>
+<div class="tabs-buttons" style="display:none;">
+<button class="tab-left" onclick="moveTabLeft(this); return false;"></button>
+<button class="tab-right" onclick="moveTabRight(this); return false;"></button>
+</div>
+</div>
+</div>
+<div class="" id="main">
+<div id="sidebar">
+<h3>Issues</h3>
+<ul>
+<li><a href="/issues?set_filter=1">View all issues</a></li>
+</ul>
+</div>
+<div id="content">
+<div class="contextual">
+</div>
+<h2>Gantt</h2>
+<form accept-charset="UTF-8" action="/issues/gantt?month=10&amp;months=6&amp;year=2018" id="query_form" method="get"><input name="utf8" type="hidden" value="✓"/>
+<input id="set_filter" name="set_filter" type="hidden" value="1"/>
+<input id="gantt" name="gantt" type="hidden" value="1"/>
+<fieldset class="collapsible " id="filters">
+<legend onclick="toggleFieldset(this);">Filters</legend>
+<div style="">
+<script>
+//<![CDATA[
+
+var operatorLabels = {"=":"is","!":"is not","o":"open","c":"closed","!*":"none","*":"any","\u003e=":"\u003e=","\u003c=":"\u003c=","\u003e\u003c":"between","\u003ct+":"in less than","\u003et+":"in more than","\u003e\u003ct+":"in the next","t+":"in","t":"today","ld":"yesterday","w":"this week","lw":"last week","l2w":"last 2 weeks","m":"this month","lm":"last month","y":"this year","\u003et-":"less than days ago","\u003ct-":"more than days ago","\u003e\u003ct-":"in the past","t-":"days ago","~":"contains","!~":"doesn't contain","=p":"any issues in project","=!p":"any issues not in project","!p":"no issues in project","*o":"any open issues","!o":"no open issues"};
+var operatorByType = {"list":["=","!"],"list_status":["o","=","!","c","*"],"list_optional":["=","!","!*","*"],"list_subprojects":["*","!*","=","!"],"date":["=","\u003e=","\u003c=","\u003e\u003c","\u003ct+","\u003et+","\u003e\u003ct+","t+","t","ld","w","lw","l2w","m","lm","y","\u003et-","\u003ct-","\u003e\u003ct-","t-","!*","*"],"date_past":["=","\u003e=","\u003c=","\u003e\u003c","\u003et-","\u003ct-","\u003e\u003ct-","t-","t","ld","w","lw","l2w","m","lm","y","!*","*"],"string":["=","~","!","!~","!*","*"],"text":["~","!~","!*","*"],"integer":["=","\u003e=","\u003c=","\u003e\u003c","!*","*"],"float":["=","\u003e=","\u003c=","\u003e\u003c","!*","*"],"relation":["=","=p","=!p","!p","*o","!o","!*","*"],"tree":["=","~","!*","*"]};
+var availableFilters = {"status_id":{"type":"list_status","name":"Status","remote":true,"values":[["New","1"],["In Progress","2"],["Resolved","3"],["Feedback","4"],["Closed","5"],["Rejected","6"]]},"project_id":{"type":"list","name":"Project","remote":true},"tracker_id":{"type":"list","name":"Tracker","values":[]},"priority_id":{"type":"list","name":"Priority","values":[["Low","1"],["Normal","2"],["High","3"],["Urgent","4"],["Immediate","5"]]},"author_id":{"type":"list","name":"Author","remote":true},"assigned_to_id":{"type":"list_optional","name":"Assignee","remote":true},"member_of_group":{"type":"list_optional","name":"Assignee's group","remote":true},"assigned_to_role":{"type":"list_optional","name":"Assignee's role","remote":true},"fixed_version_id":{"type":"list_optional","name":"Target version","remote":true},"fixed_version.due_date":{"type":"date","name":"Target version's Due date","values":null},"fixed_version.status":{"type":"list","name":"Target version's Status","values":[["open","open"],["locked","locked"],["closed","closed"]]},"subject":{"type":"text","name":"Subject","values":null},"description":{"type":"text","name":"Description","values":null},"created_on":{"type":"date_past","name":"Created","values":null},"updated_on":{"type":"date_past","name":"Updated","values":null},"closed_on":{"type":"date_past","name":"Closed","values":null},"start_date":{"type":"date","name":"Start date","values":null},"due_date":{"type":"date","name":"Due date","values":null},"estimated_hours":{"type":"float","name":"Estimated time","values":null},"done_ratio":{"type":"integer","name":"% Done","values":null},"attachment":{"type":"text","name":"File","values":null},"updated_by":{"type":"list","name":"Updated by","remote":true},"last_updated_by":{"type":"list","name":"Last updated by","remote":true},"relates":{"type":"relation","name":"Related to","remote":true},"duplicates":{"type":"relation","name":"Is duplicate of","remote":true},"duplicated":{"type":"relation","name":"Has duplicate","remote":true},"blocks":{"type":"relation","name":"Blocks","remote":true},"blocked":{"type":"relation","name":"Blocked by","remote":true},"precedes":{"type":"relation","name":"Precedes","remote":true},"follows":{"type":"relation","name":"Follows","remote":true},"copied_to":{"type":"relation","name":"Copied to","remote":true},"copied_from":{"type":"relation","name":"Copied from","remote":true},"parent_id":{"type":"tree","name":"Parent task","values":null},"child_id":{"type":"tree","name":"Subtasks","values":null},"issue_id":{"type":"integer","name":"Issue","values":null}};
+var labelDayPlural = "days";
+
+var filtersUrl = "\/queries\/filter?type=IssueQuery";
+
+$(document).ready(function(){
+  initFilters();
+  addFilter("status_id", "o", [""]);
+});
+
+//]]>
+</script>
+<table id="filters-table">
+</table>
+<div class="add-filter">
+<label for="add_filter_select">Add filter</label>
+<select id="add_filter_select"><option value=""> </option>
+<option value="status_id">Status</option>
+<option value="project_id">Project</option>
+<option value="tracker_id">Tracker</option>
+<option value="priority_id">Priority</option>
+<option value="author_id">Author</option>
+<option value="assigned_to_id">Assignee</option>
+<option value="fixed_version_id">Target version</option>
+<option value="subject">Subject</option>
+<option value="description">Description</option>
+<option value="estimated_hours">Estimated time</option>
+<option value="done_ratio">% Done</option>
+<option value="attachment">File</option>
+<option value="updated_by">Updated by</option>
+<option value="last_updated_by">Last updated by</option>
+<option value="issue_id">Issue</option><optgroup label="Assignee"><option value="member_of_group">Assignee's group</option>
+<option value="assigned_to_role">Assignee's role</option></optgroup><optgroup label="Target version"><option value="fixed_version.due_date">Target version's Due date</option>
+<option value="fixed_version.status">Target version's Status</option></optgroup><optgroup label="Date"><option value="created_on">Created</option>
+<option value="updated_on">Updated</option>
+<option value="closed_on">Closed</option>
+<option value="start_date">Start date</option>
+<option value="due_date">Due date</option></optgroup><optgroup label="Relations"><option value="relates">Related to</option>
+<option value="duplicates">Is duplicate of</option>
+<option value="duplicated">Has duplicate</option>
+<option value="blocks">Blocks</option>
+<option value="blocked">Blocked by</option>
+<option value="precedes">Precedes</option>
+<option value="follows">Follows</option>
+<option value="copied_to">Copied to</option>
+<option value="copied_from">Copied from</option>
+<option value="parent_id">Parent task</option>
+<option value="child_id">Subtasks</option></optgroup></select>
+</div>
+<input id="f_" name="f[]" type="hidden" value=""/>
+</div>
+</fieldset>
+<fieldset class="collapsible collapsed" id="options">
+<legend onclick="toggleFieldset(this);">Options</legend>
+<div style="display: none;">
+<table>
+<tr>
+<td>
+<fieldset>
+<legend>Related issues</legend>
+<label for="draw_relations">
+<input name="query[draw_relations]" type="hidden" value="0"/><input checked="checked" id="draw_relations" name="query[draw_relations]" type="checkbox" value="1"/>
+<span style="background-color: #F34F4F">   </span>
+                Blocks
+                <span style="background-color: #628FEA">   </span>
+                Precedes
+            </label>
+</fieldset>
+</td>
+<td>
+<fieldset>
+<legend>Progress line</legend>
+<label for="draw_progress_line">
+<input name="query[draw_progress_line]" type="hidden" value="0"/><input id="draw_progress_line" name="query[draw_progress_line]" type="checkbox" value="1"/>
+              Display
+            </label>
+</fieldset>
+</td>
+</tr>
+</table>
+</div>
+</fieldset>
+<p class="contextual">
+<a class="icon icon-zoom-in" href="/issues/gantt?action=show&amp;controller=gantts&amp;month=10&amp;months=6&amp;year=2018&amp;zoom=3">Zoom in</a>
+<a class="icon icon-zoom-out" href="/issues/gantt?action=show&amp;controller=gantts&amp;month=10&amp;months=6&amp;year=2018&amp;zoom=1">Zoom out</a>
+</p>
+<p class="buttons">
+<input id="months" name="months" size="2" type="text" value="6"/>
+months from
+<select id="month" name="month">
+<option value="1">January</option>
+<option value="2">February</option>
+<option value="3">March</option>
+<option value="4">April</option>
+<option value="5">May</option>
+<option value="6">June</option>
+<option value="7">July</option>
+<option value="8">August</option>
+<option value="9">September</option>
+<option selected="selected" value="10">October</option>
+<option value="11">November</option>
+<option value="12">December</option>
+</select>
+<select id="year" name="year">
+<option value="2013">2013</option>
+<option value="2014">2014</option>
+<option value="2015">2015</option>
+<option value="2016">2016</option>
+<option value="2017">2017</option>
+<option selected="selected" value="2018">2018</option>
+<option value="2019">2019</option>
+<option value="2020">2020</option>
+<option value="2021">2021</option>
+<option value="2022">2022</option>
+<option value="2023">2023</option>
+</select>
+<input id="zoom" name="zoom" type="hidden" value="2"/>
+<a class="icon icon-checked" href="" onclick='$("#query_form").submit(); return false;'>Apply</a>
+<a class="icon icon-reload" href="/issues/gantt?set_filter=1">Clear</a>
+</p>
+</form>
+<table style="width:100%; border:0; border-collapse: collapse;">
+<tr>
+<td class="gantt_subjects_column" style="width:330px; padding:0px;">
+<div class="gantt_subjects_container" style="position:relative;height: 330px;width: 331px;">
+<div class="gantt_hdr" style="right:-2px;width: 330px;height: 36px;background: #eee;"></div>
+<div class="gantt_hdr" style="right:-2px;width: 330px;height: 306px;border-left: 1px solid #c0c0c0;overflow: hidden;"></div>
+<div class="gantt_subjects">
+</div></div></td>
+<td>
+<div id="gantt_area" style="position:relative;height:330px;overflow:auto;">
+<div class="gantt_hdr" style="width: 727px;height: 36px;background: #eee;"> </div>
+<div class="gantt_hdr" style="left: 0px;width: 123px;height: 18px;">
+<a href="/issues/gantt?month=10&amp;months=6&amp;year=2018&amp;zoom=2" title="October 2018">2018-10</a>
+</div> <div class="gantt_hdr" style="left: 124px;width: 119px;height: 18px;">
+<a href="/issues/gantt?month=11&amp;months=6&amp;year=2018&amp;zoom=2" title="November 2018">2018-11</a>
+</div> <div class="gantt_hdr" style="left: 244px;width: 123px;height: 18px;">
+<a href="/issues/gantt?month=12&amp;months=6&amp;year=2018&amp;zoom=2" title="December 2018">2018-12</a>
+</div> <div class="gantt_hdr" style="left: 368px;width: 123px;height: 18px;">
+<a href="/issues/gantt?month=1&amp;months=6&amp;year=2019&amp;zoom=2" title="January 2019">2019-1</a>
+</div> <div class="gantt_hdr" style="left: 492px;width: 111px;height: 18px;">
+<a href="/issues/gantt?month=2&amp;months=6&amp;year=2019&amp;zoom=2" title="February 2019">2019-2</a>
+</div> <div class="gantt_hdr" style="left: 604px;width: 123px;height: 18px;">
+<a href="/issues/gantt?month=3&amp;months=6&amp;year=2019&amp;zoom=2" title="March 2019">2019-3</a>
+</div>
+<div class="gantt_hdr" style="left: 0px;top: 19px;width: 27px;height: 287px;">
+<small>
+        40
+</small></div> <div class="gantt_hdr" style="left: 28px;top: 19px;width: 27px;height: 287px;">
+<small>
+        41
+</small></div> <div class="gantt_hdr" style="left: 56px;top: 19px;width: 27px;height: 287px;">
+<small>
+        42
+</small></div> <div class="gantt_hdr" style="left: 84px;top: 19px;width: 27px;height: 287px;">
+<small>
+        43
+</small></div> <div class="gantt_hdr" style="left: 112px;top: 19px;width: 27px;height: 287px;">
+<small>
+        44
+</small></div> <div class="gantt_hdr" style="left: 140px;top: 19px;width: 27px;height: 287px;">
+<small>
+        45
+</small></div> <div class="gantt_hdr" style="left: 168px;top: 19px;width: 27px;height: 287px;">
+<small>
+        46
+</small></div> <div class="gantt_hdr" style="left: 196px;top: 19px;width: 27px;height: 287px;">
+<small>
+        47
+</small></div> <div class="gantt_hdr" style="left: 224px;top: 19px;width: 27px;height: 287px;">
+<small>
+        48
+</small></div> <div class="gantt_hdr" style="left: 252px;top: 19px;width: 27px;height: 287px;">
+<small>
+        49
+</small></div> <div class="gantt_hdr" style="left: 280px;top: 19px;width: 27px;height: 287px;">
+<small>
+        50
+</small></div> <div class="gantt_hdr" style="left: 308px;top: 19px;width: 27px;height: 287px;">
+<small>
+        51
+</small></div> <div class="gantt_hdr" style="left: 336px;top: 19px;width: 27px;height: 287px;">
+<small>
+        52
+</small></div> <div class="gantt_hdr" style="left: 364px;top: 19px;width: 27px;height: 287px;">
+<small>
+        1
+</small></div> <div class="gantt_hdr" style="left: 392px;top: 19px;width: 27px;height: 287px;">
+<small>
+        2
+</small></div> <div class="gantt_hdr" style="left: 420px;top: 19px;width: 27px;height: 287px;">
+<small>
+        3
+</small></div> <div class="gantt_hdr" style="left: 448px;top: 19px;width: 27px;height: 287px;">
+<small>
+        4
+</small></div> <div class="gantt_hdr" style="left: 476px;top: 19px;width: 27px;height: 287px;">
+<small>
+        5
+</small></div> <div class="gantt_hdr" style="left: 504px;top: 19px;width: 27px;height: 287px;">
+<small>
+        6
+</small></div> <div class="gantt_hdr" style="left: 532px;top: 19px;width: 27px;height: 287px;">
+<small>
+        7
+</small></div> <div class="gantt_hdr" style="left: 560px;top: 19px;width: 27px;height: 287px;">
+<small>
+        8
+</small></div> <div class="gantt_hdr" style="left: 588px;top: 19px;width: 27px;height: 287px;">
+<small>
+        9
+</small></div> <div class="gantt_hdr" style="left: 616px;top: 19px;width: 27px;height: 287px;">
+<small>
+        10
+</small></div> <div class="gantt_hdr" style="left: 644px;top: 19px;width: 27px;height: 287px;">
+<small>
+        11
+</small></div> <div class="gantt_hdr" style="left: 672px;top: 19px;width: 27px;height: 287px;">
+<small>
+        12
+</small></div> <div class="gantt_hdr" style="left: 700px;top: 19px;width: 27px;height: 287px;">
+<small>
+        13
+</small></div>
+<div id="gantt_draw_area" style="position: absolute;height: 270px;top: 37px;left: 0px;width: 727px;"></div>
+</div>
+</td>
+</tr>
+</table>
+<table style="width:100%">
+<tr>
+<td style="text-align:left;">
+<a accesskey="p" href="/issues/gantt?action=show&amp;controller=gantts&amp;month=4&amp;months=6&amp;year=2018&amp;zoom=2">« Previous</a>
+</td>
+<td style="text-align:right;">
+<a accesskey="n" href="/issues/gantt?action=show&amp;controller=gantts&amp;month=4&amp;months=6&amp;year=2019&amp;zoom=2">Next »</a>
+</td>
+</tr>
+</table>
+<p class="other-formats">Also available in:  <span><a class="pdf" href="/issues/gantt.pdf?month=10&amp;months=6&amp;year=2018&amp;zoom=2" rel="nofollow">PDF</a></span>
+<span><a class="png" href="/issues/gantt.png?month=10&amp;months=6&amp;year=2018&amp;zoom=2" rel="nofollow">PNG</a></span>
+</p>
+<script>
+//<![CDATA[
+
+  var issue_relation_type = {"blocks":{"landscape_margin":16,"color":"#F34F4F"},"precedes":{"landscape_margin":20,"color":"#628FEA"}};
+  $(document).ready(drawGanttHandler);
+  $(window).resize(drawGanttHandler);
+  $(function() {
+    $("#draw_relations").change(drawGanttHandler);
+    $("#draw_progress_line").change(drawGanttHandler);
+  });
+
+//]]>
+</script>
+<div style="clear:both;"></div>
+</div>
+</div>
+</div>
+<div id="ajax-indicator" style="display:none;"><span>Loading...</span></div>
+<div id="ajax-modal" style="display:none;"></div>
+<div id="footer">
+<div class="bgl"><div class="bgr">
+    Powered by <a href="https://bitnami.com/stack/redmine">Bitnami Redmine Stack</a> © 2006-2018 Jean-Philippe Lang
+  </div></div>
+</div>
+</div>
+</div>
+</body>
+</html>

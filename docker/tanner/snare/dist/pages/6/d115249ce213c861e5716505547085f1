@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="IE=edge" http-equiv="X-UA-Compatible"/>
+<title>News - Redmine</title>
+<meta content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" name="viewport"/>
+<meta content="Redmine" name="description">
+<meta content="issue,bug,tracker" name="keywords"/>
+<meta content="authenticity_token" name="csrf-param"/>
+<meta content="+ZQjs2UxbWgAUgWRJ+o7+K+RmRVFAJL6kDxGXmaEPM5kNjBhQVweevd2Pwat2xM3PbOSskifFms/rn0OzefV5w==" name="csrf-token"/>
+<link href="/favicon.ico?1528612569" rel="shortcut icon"/>
+<link href="/stylesheets/jquery/jquery-ui-1.11.0.css?1528612569" media="all" rel="stylesheet"/>
+<link href="/stylesheets/application.css?1528612569" media="all" rel="stylesheet"/>
+<link href="/stylesheets/responsive.css?1528612569" media="all" rel="stylesheet"/>
+<script src="/javascripts/jquery-1.11.1-ui-1.11.0-ujs-3.1.4.js?1528612568"></script>
+<script src="/javascripts/application.js?1528612569"></script>
+<script src="/javascripts/responsive.js?1528612569"></script>
+<script>
+//<![CDATA[
+$(window).load(function(){ warnLeavingUnsaved('The current page contains unsaved text that will be lost if you leave this page.'); });
+//]]>
+</script>
+<!-- page specific tags -->
+<link href="/news.atom" rel="alternate" title="ATOM" type="application/atom+xml"/>
+<link href="/stylesheets/scm.css?1528612569" media="screen" rel="stylesheet"/>
+</meta></head>
+<body class="controller-news action-index">
+<div id="wrapper">
+<div class="flyout-menu js-flyout-menu">
+<div class="flyout-menu__search">
+<form accept-charset="UTF-8" action="/search" method="get"><input name="utf8" type="hidden" value="✓"/>
+<input name="news" type="hidden" value="1"/>
+<label class="search-magnifier search-magnifier--flyout" for="flyout-search">⚲</label>
+<input class="small js-search-input" id="flyout-search" name="q" placeholder="Search" type="text"/>
+</form> </div>
+<h3>Project</h3>
+<span class="js-project-menu"></span>
+<h3>General</h3>
+<span class="js-general-menu"></span>
+<span class="js-sidebar flyout-menu__sidebar"></span>
+<h3>Profile</h3>
+<span class="js-profile-menu"></span>
+</div>
+<div id="wrapper2">
+<div id="wrapper3">
+<div id="top-menu">
+<div id="account">
+<ul><li><a class="login" href="/login">Sign in</a></li><li><a class="register" href="/account/register">Register</a></li></ul> </div>
+<ul><li><a class="home" href="/">Home</a></li><li><a class="projects" href="/projects">Projects</a></li><li><a class="help" href="https://www.redmine.org/guide">Help</a></li></ul></div>
+<div id="header">
+<a class="mobile-toggle-button js-flyout-menu-toggle-button" href=""></a>
+<div id="quick-search">
+<form accept-charset="UTF-8" action="/search" method="get"><input name="utf8" type="hidden" value="✓"/>
+<input name="scope" type="hidden"/>
+<input name="news" type="hidden" value="1"/>
+<label for="q">
+<a accesskey="4" href="/search">Search</a>:
+        </label>
+<input accesskey="f" class="small" id="q" name="q" size="20" type="text"/>
+</form> <div class="drdn" id="project-jump"><span class="drdn-trigger">Jump to a project...</span><div class="drdn-content"><div class="quick-search"><input autocomplete="off" class="autocomplete" data-automcomplete-url="/projects/autocomplete.js?jump=news" id="projects-quick-search" name="q" type="text" value=""/></div><div class="drdn-items projects selection"></div><div class="drdn-items all-projects selection"><a class="selected" href="/projects?jump=news">All Projects</a></div></div></div>
+</div>
+<h1>Redmine</h1>
+<div class="tabs" id="main-menu">
+<ul><li><a class="projects" href="/projects">Projects</a></li><li><a class="activity" href="/activity">Activity</a></li><li><a class="issues" href="/issues">Issues</a></li><li><a class="time-entries" href="/time_entries">Spent time</a></li><li><a class="gantt" href="/issues/gantt">Gantt</a></li><li><a class="calendar" href="/issues/calendar">Calendar</a></li><li><a class="news selected" href="/news">News</a></li></ul>
+<div class="tabs-buttons" style="display:none;">
+<button class="tab-left" onclick="moveTabLeft(this); return false;"></button>
+<button class="tab-right" onclick="moveTabRight(this); return false;"></button>
+</div>
+</div>
+</div>
+<div class="nosidebar" id="main">
+<div id="sidebar">
+</div>
+<div id="content">
+<div class="contextual">
+</div>
+<div id="add-news" style="display:none;">
+<h2>Add news</h2>
+<div class="wiki" id="preview"></div>
+</div>
+<h2>News</h2>
+<p class="nodata">No data to display</p>
+<span class="pagination"><ul class="pages"></ul><span><span class="items">(0-0/0)</span> </span></span>
+<p class="other-formats">Also available in:  <span><a class="atom" href="/news.atom" rel="nofollow">Atom</a></span>
+</p>
+<div style="clear:both;"></div>
+</div>
+</div>
+</div>
+<div id="ajax-indicator" style="display:none;"><span>Loading...</span></div>
+<div id="ajax-modal" style="display:none;"></div>
+<div id="footer">
+<div class="bgl"><div class="bgr">
+    Powered by <a href="https://bitnami.com/stack/redmine">Bitnami Redmine Stack</a> © 2006-2018 Jean-Philippe Lang
+  </div></div>
+</div>
+</div>
+</div>
+</body>
+</html>

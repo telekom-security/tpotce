@@ -1,0 +1,285 @@
+/* Copyright (c) 2011, Jan-Christoph Borchardt, http://jancborchardt.net
+ This file is licensed under the Affero General Public License version 3 or later.
+ See the COPYING-README file. */
+
+#dropdown {
+	background: #eee;
+	border-bottom-left-radius: 3px;
+	border-bottom-right-radius: 3px;
+	box-shadow: 0 2px 3px rgba(50, 50, 50, .4);
+	display: block;
+	margin-right: 0;
+	position: absolute;
+	right: 0;
+	width: 420px;
+	z-index: 500;
+	padding: 16px;
+}
+
+@media only screen and (min-width: 768px) and (max-width: 990px) {
+	#dropdown {
+		/* this limits the dropdown to float below the sidebar for mid narrow screens */
+		left: 20px;
+	}
+}
+
+.shareTabView .unshare.icon-loading-small {
+	margin-top: 1px;
+}
+
+.shareTabView .linkShare .icon-loading-small,
+.shareTabView .shareWithLoading {
+	display: inline-block !important;
+	padding-left: 10px;
+}
+
+.shareTabView .shareWithLoading {
+	position: relative;
+	right: 70px;
+	top: 2px;
+}
+
+.shareTabView .icon-loading-small.hidden {
+	display: none !important;
+}
+
+.shareTabView .avatar {
+	margin-right: 8px;
+	display: inline-block;
+	overflow: hidden;
+	vertical-align: middle;
+	width: 32px;
+	height: 32px;
+}
+
+.share-autocomplete-item {
+	display: flex;
+	max-width: 220px;
+}
+
+@media (min-width: 1152px) {
+	.share-autocomplete-item {
+		max-width: 20vw;
+	}
+}
+
+.share-autocomplete-item .autocomplete-item-text {
+	margin-left: 10px;
+	margin-right: 10px;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	overflow: hidden;
+	line-height: 32px;
+	vertical-align: middle;
+}
+
+.share-autocomplete-item .autocomplete-item-displayname {
+	margin-right: 5px;
+}
+
+.share-autocomplete-item .avatardiv {
+	flex-shrink: 0;
+}
+
+#shareWithList .user-additional-info,
+.share-autocomplete-item .autocomplete-item-additional-info {
+	color: #888;
+}
+
+#shareWithList {
+	list-style-type: none;
+	padding: 8px;
+}
+
+#shareWithList li {
+	padding-top: 10px;
+	padding-bottom: 10px;
+	font-weight: bold;
+	line-height: 21px;
+	white-space: normal;
+}
+
+#shareWithList .shareOption {
+	white-space: nowrap;
+	display: inline-block;
+}
+
+#shareWithList .showCruds img,
+#shareWithList .unshare img {
+	vertical-align: text-bottom;
+	/* properly align icons */
+}
+
+#shareWithList label input[type=checkbox] {
+	margin-left: 0;
+	position: relative;
+}
+
+#shareWithList .username {
+	padding-right: 8px;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	max-width: 254px;
+	display: inline-block;
+	overflow: hidden;
+	vertical-align: middle;
+}
+
+#shareWithList li label {
+	margin-right: 8px;
+}
+
+.shareTabView label {
+	font-weight: 400;
+	white-space: nowrap;
+}
+
+.shareTabView input[type="checkbox"] {
+	margin: 0 3px 0 8px;
+	vertical-align: middle;
+}
+
+a.showCruds {
+	display: inline;
+	opacity: 0.5;
+}
+
+a.unshare {
+	display: inline;
+	float: right;
+	opacity: 0.5;
+	padding: 10px;
+	margin-top: -5px;
+	margin-right: -10px;
+}
+
+#link {
+	border-top: 1px solid #ddd;
+	padding-top: 8px;
+}
+
+.shareTabView input[type="submit"] {
+	margin-left: 7px;
+}
+
+.shareTabView form {
+	font-size: 100%;
+	margin-left: 0;
+	margin-right: 0;
+}
+
+.shareTabView .error {
+	color: #e9322d;
+	border-color: #e9322d;
+	box-shadow: 0 0 6px #f8b9b7;
+}
+
+.shareTabView .linkShareView,
+.shareTabView .localShareView {
+	clear: left;
+}
+
+#link #showPassword img {
+	padding-left: 5px;
+	width: 12px;
+}
+
+#expiration label,
+#link label,
+.fileowner,
+.reshare {
+	display: inline-block;
+	padding: 6px 4px;
+}
+
+a.showCruds:hover,
+a.unshare:hover {
+	opacity: 1;
+}
+#defaultExpireMessage,
+/* fix expire message going out of box */
+.reshare {
+	/* fix shared by text going out of box */
+	white-space: normal;
+}
+
+#defaultExpireMessage {
+	/* show message on new line */
+	display: block;
+	padding-left: 4px;
+	/* TODO: style the dropdown in a proper way - border-box, etc. */
+	width: 90%;
+}
+
+.ui-autocomplete {
+	/* limit dropdown height to 4 1/2 entries */
+	max-height: 103px;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+.notCreatable {
+	padding-left: 12px;
+	padding-top: 12px;
+	color: #999;
+}
+
+/* Private Link share Form */
+
+.emailPrivateLinkForm {
+	position: relative;
+}
+
+.emailPrivateLinkForm--sending-indicator,
+.emailPrivateLinkForm--sent-indicator {
+	z-index: 2;
+	position: absolute;
+	left: 50%;
+	bottom: -8px;
+	transform: translate(-50%, 100%);
+
+	width: auto;
+	padding: 5px;
+	background-color: rgba(240,240,240,.9);
+	color: #555;
+	border: 1px solid rgba(240,240,240,.9);
+	border-radius: 3px;
+}
+
+.emailPrivateLinkForm--sent-indicator {
+	background-color: MediumSeaGreen;
+	border-color: MediumSeaGreen;
+	font-weight: 600;
+	color: #fff;
+}
+
+.emailPrivateLinkForm--addAddressButton {
+	position: absolute;
+	right: 13px;
+	margin-top: -30px;
+	z-index: 1;
+	color: #999;
+}
+
+.emailPrivateLinkForm--dropDown {
+	/* would love to get this from vars */
+	max-width: 484px;
+}
+
+.emailPrivateLinkForm--dropDown > .select2-choices {
+	border-color: #ddd;
+	background-image: none;
+}
+
+.select2-search-choice {
+	text-transform: lowercase;
+}
+
+.select2-container-multi .select2-search-choice-close {
+	left: inherit;
+	right: 3px;
+}
+
+.select2-container-multi .select2-choices .select2-search-choice {
+	padding: 3px 18px 3px 5px;
+}

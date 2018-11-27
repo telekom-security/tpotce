@@ -1,8 +1,8 @@
-[![](https://images.microbadger.com/badges/version/dtagdevsec/glastopf:1710.svg)](https://microbadger.com/images/dtagdevsec/glastopf:1710 "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/dtagdevsec/glastopf:1710.svg)](https://microbadger.com/images/dtagdevsec/glastopf:1710 "Get your own image badge on microbadger.com")
+[![](https://images.microbadger.com/badges/version/dtagdevsec/glastopf:1811.svg)](https://microbadger.com/images/dtagdevsec/glastopf:1811 "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/dtagdevsec/glastopf:1811.svg)](https://microbadger.com/images/dtagdevsec/glastopf:1811 "Get your own image badge on microbadger.com")
 
 # glastopf
 
-[glastopf](https://github.com/glastopf/glastopf) is a python web application honeypot.
+[glastopf](https://github.com/mushorg/glastopf) is a python web application honeypot.
 
 This dockerized version is part of the **[T-Pot community honeypot](http://dtag-dev-sec.github.io/)** of Deutsche Telekom AG.
 
@@ -12,4 +12,4 @@ The `docker-compose.yml` contains the necessary settings to test glastopf using 
 
 # Glastopf Dashboard
 
-![Glastopf Dashboard](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/docker/glastopf/doc/dashboard.png)
+![Glastopf Dashboard](doc/dashboard.png)

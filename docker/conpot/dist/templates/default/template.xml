@@ -1,0 +1,78 @@
+<core>
+    <template>
+        <!-- General information about the template -->
+        <entity name="unit">S7-200</entity>
+        <entity name="vendor">Siemens</entity>
+        <entity name="description">Rough simulation of a basic Siemens S7-200 CPU with 2 slaves</entity>
+        <entity name="protocols">HTTP, MODBUS, s7comm, SNMP</entity>
+        <entity name="creator">the conpot team</entity>
+    </template>
+    <databus>
+        <!-- Core value that can be retrieved from the databus by key -->
+        <key_value_mappings>
+            <key name="FacilityName">
+                <value type="value">"DoE Water Service"</value>
+            </key>
+            <key name="SystemName">
+                <value type="value">"Central Pump"</value>
+            </key>
+            <key name="SystemDescription">
+                <value type="value">"Pump Control Unit"</value>
+            </key>
+            <key name="Uptime">
+                <value type="function">conpot.emulators.misc.uptime.Uptime</value>
+            </key>
+            <key name="sysObjectID">
+                <value type="value">"0.0"</value>
+            </key>
+            <key name="sysContact">
+                <value type="value">"DoE"</value>
+            </key>
+            <key name="sysName">
+                <value type="value">"Pump Control Unit"</value>
+            </key>
+            <key name="sysLocation">
+                <value type="value">"DoE"</value>
+            </key>
+            <key name="sysServices">
+                <value type="value">"72"</value>
+            </key>
+            <key name="memoryModbusSlave0BlockA">
+                <value type="value">[random.randint(0,1) for b in range(0,128)]</value>
+            </key>
+            <key name="memoryModbusSlave0BlockB">
+                <value type="value">[random.randint(0,1) for b in range(0,32)]</value>
+            </key>
+            <key name="memoryModbusSlave255BlockA">
+                <value type="value">[random.randint(0,1) for b in range(0,128)]</value>
+            </key>
+            <key name="memoryModbusSlave255BlockB">
+                <value type="value">[random.randint(0,1) for b in range(0,32)]</value>
+            </key>
+            <key name="memoryModbusSlave1BlockA">
+                <value type="value">[random.randint(0,1) for b in range(0,128)]</value>
+            </key>
+            <key name="memoryModbusSlave1BlockB">
+                <value type="value">[random.randint(0,1) for b in range(0,32)]</value>
+            </key>
+            <key name="memoryModbusSlave2BlockC">
+                <value type="value">[random.randint(0,1) for b in range(0,8)]</value>
+            </key>
+            <key name="memoryModbusSlave2BlockD">
+                <value type="value">[0 for b in range(0,32)]</value>
+            </key>
+            <key name="Copyright">
+                <value type="value">"Original Siemens Equipment"</value>
+            </key>
+            <key name="s7_id">
+                <value type="value">"88111222"</value>
+            </key>
+            <key name="s7_module_type">
+                <value type="value">"IM151-8 PN/DP CPU"</value>
+            </key>
+            <key name="empty">
+                <value type="value">""</value>
+            </key>
+        </key_value_mappings>
+    </databus>
+</core>

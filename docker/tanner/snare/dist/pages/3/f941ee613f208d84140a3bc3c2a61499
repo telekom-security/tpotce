@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+
+<html dir="ltr" lang="en" prefix="content: http://purl.org/rss/1.0/modules/content/  dc: http://purl.org/dc/terms/  foaf: http://xmlns.com/foaf/0.1/  og: http://ogp.me/ns#  rdfs: http://www.w3.org/2000/01/rdf-schema#  schema: http://schema.org/  sioc: http://rdfs.org/sioc/ns#  sioct: http://rdfs.org/sioc/types#  skos: http://www.w3.org/2004/02/skos/core#  xsd: http://www.w3.org/2001/XMLSchema# ">
+<head>
+<meta charset="utf-8"/>
+<meta content="Drupal 8 (https://www.drupal.org)" name="Generator"/>
+<meta content="width" name="MobileOptimized"/>
+<meta content="true" name="HandheldFriendly"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="/core/misc/favicon.ico" rel="shortcut icon" type="image/vnd.microsoft.icon"/>
+<title>Create new account | user's Site</title>
+<link href="/sites/default/files/css/css_5Mz0wpOL20s_SQKXnhCWyA5ZJOgQQg26tUyGV0jHiCA.css?pdgcng" media="all" rel="stylesheet"/>
+<link href="/sites/default/files/css/css_Aln6EYLoBVVr9JB1s_nVnHtXs4PmhdLRs8M2OD50H3Y.css?pdgcng" media="all" rel="stylesheet"/>
+<link href="/sites/default/files/css/A.css_Z5jMg7P_bjcW9iUzujI7oaechMyxQTUqZhHJ_aYSq04.css,qpdgcng.pagespeed.cf.y5ovlwmdYo.css" media="print" rel="stylesheet"/>
+<!--[if lte IE 8]>
+<script src="/sites/default/files/js/js_VtafjXmRvoUgAzqzYTA3Wrjkx9wcWhjP0G4ZnnqRamA.js"></script>
+<![endif]-->
+<script src="/core/assets/vendor/modernizr/modernizr.min.js?v=3.3.1"></script>
+</head>
+<body class="layout-one-sidebar layout-sidebar-first path-user">
+<a class="visually-hidden focusable skip-link" href="#main-content">
+      Skip to main content
+    </a>
+<div class="dialog-off-canvas-main-canvas" data-off-canvas-main-canvas="">
+<div id="page-wrapper">
+<div id="page">
+<header aria-label="Site header" class="header" id="header" role="banner">
+<div class="section layout-container clearfix">
+<div class="region region-secondary-menu">
+<nav aria-labelledby="block-bartik-account-menu-menu" class="block block-menu navigation menu--account" id="block-bartik-account-menu" role="navigation">
+<h2 class="visually-hidden" id="block-bartik-account-menu-menu">User account menu</h2>
+<div class="content">
+<div class="menu-toggle-target menu-toggle-target-show" id="show-block-bartik-account-menu"></div>
+<div class="menu-toggle-target" id="hide-block-bartik-account-menu"></div>
+<a class="menu-toggle" href="#show-block-bartik-account-menu">Show — User account menu</a>
+<a class="menu-toggle menu-toggle--hide" href="#hide-block-bartik-account-menu">Hide — User account menu</a>
+<ul class="clearfix menu">
+<li class="menu-item">
+<a data-drupal-link-system-path="user/login" href="/user/login">Log in</a>
+</li>
+</ul>
+</div>
+</nav>
+</div>
+<div class="clearfix region region-header">
+<div class="clearfix site-branding block block-system block-system-branding-block" id="block-bartik-branding">
+<a class="site-branding__logo" href="/" rel="home" title="Home">
+<img alt="Home" src="/core/themes/bartik/logo.svg"/>
+</a>
+<div class="site-branding__text">
+<div class="site-branding__name">
+<a href="/" rel="home" title="Home">user's Site</a>
+</div>
+</div>
+</div>
+</div>
+<div class="region region-primary-menu">
+<nav aria-labelledby="block-bartik-main-menu-menu" class="block block-menu navigation menu--main" id="block-bartik-main-menu" role="navigation">
+<h2 class="visually-hidden" id="block-bartik-main-menu-menu">Main navigation</h2>
+<div class="content">
+<div class="menu-toggle-target menu-toggle-target-show" id="show-block-bartik-main-menu"></div>
+<div class="menu-toggle-target" id="hide-block-bartik-main-menu"></div>
+<a class="menu-toggle" href="#show-block-bartik-main-menu">Show — Main navigation</a>
+<a class="menu-toggle menu-toggle--hide" href="#hide-block-bartik-main-menu">Hide — Main navigation</a>
+<ul class="clearfix menu">
+<li class="menu-item">
+<a data-drupal-link-system-path="&lt;front&gt;" href="/">Home</a>
+</li>
+</ul>
+</div>
+</nav>
+</div>
+</div>
+</header>
+<div class="highlighted">
+<aside class="layout-container section clearfix" role="complementary">
+<div class="region region-highlighted">
+</div>
+</aside>
+</div>
+<div class="layout-main-wrapper layout-container clearfix" id="main-wrapper">
+<div class="layout-main clearfix" id="main">
+<div class="region region-breadcrumb">
+<div class="block block-system block-system-breadcrumb-block" id="block-bartik-breadcrumbs">
+<div class="content">
+<nav aria-labelledby="system-breadcrumb" class="breadcrumb" role="navigation">
+<h2 class="visually-hidden" id="system-breadcrumb">Breadcrumb</h2>
+<ol>
+<li>
+<a href="/">Home</a>
+</li>
+</ol>
+</nav>
+</div>
+</div>
+</div>
+<main class="column main-content" id="content" role="main">
+<section class="section">
+<a id="main-content" tabindex="-1"></a>
+<div class="region region-content">
+<div class="block block-core block-page-title-block" id="block-bartik-page-title">
+<div class="content">
+<h1 class="title page-title">Create new account</h1>
+</div>
+</div>
+<div class="block block-core block-local-tasks-block" id="block-bartik-local-tasks">
+<nav aria-label="Tabs" class="tabs" role="navigation">
+<h2 class="visually-hidden">Primary tabs</h2>
+<ul class="tabs primary"><li><a data-drupal-link-system-path="user/login" href="/user/login">Log in</a></li>
+<li class="is-active"><a class="is-active" data-drupal-link-system-path="user/register" href="/user/register">Create new account<span class="visually-hidden">(active tab)</span></a></li>
+<li><a data-drupal-link-system-path="user/password" href="/user/password">Reset your password</a></li>
+</ul>
+</nav>
+</div>
+<div class="block block-system block-system-main-block" id="block-bartik-content">
+<div class="content">
+<form accept-charset="UTF-8" action="/user/register" class="user-register-form user-form" data-drupal-selector="user-register-form" data-user-info-from-browser="" enctype="multipart/form-data" id="user-register-form" method="post">
+<div class="js-form-wrapper form-wrapper" data-drupal-selector="edit-account" id="edit-account"><div class="js-form-item form-item js-form-type-email form-type-email js-form-item-mail form-item-mail">
+<label class="js-form-required form-required" for="edit-mail">Email address</label>
+<input aria-describedby="edit-mail--description" aria-required="true" class="form-email required" data-drupal-selector="edit-mail" id="edit-mail" maxlength="254" name="mail" required="required" size="60" type="email" value=""/>
+<div class="description" id="edit-mail--description">
+      A valid email address. All emails from the system will be sent to this address. The email address is not made public and will only be used if you wish to receive a new password or wish to receive certain news or notifications by email.
+    </div>
+</div>
+<div class="js-form-item form-item js-form-type-textfield form-type-textfield js-form-item-name form-item-name">
+<label class="js-form-required form-required" for="edit-name">Username</label>
+<input aria-describedby="edit-name--description" aria-required="true" autocapitalize="off" autocorrect="off" class="username form-text required" data-drupal-selector="edit-name" id="edit-name" maxlength="60" name="name" required="required" size="60" spellcheck="false" type="text" value=""/>
+<div class="description" id="edit-name--description">
+      Several special characters are allowed, including space, period (.), hyphen (-), apostrophe ('), underscore (_), and the @ sign.
+    </div>
+</div>
+</div>
+<div class="field--type-image field--name-user-picture field--widget-image-image js-form-wrapper form-wrapper" data-drupal-selector="edit-user-picture-wrapper" id="edit-user-picture-wrapper"><div id="ajax-wrapper"><div class="js-form-item form-item js-form-type-managed-file form-type-managed-file js-form-item-user-picture-0 form-item-user-picture-0">
+<label for="edit-user-picture-0-upload">Picture</label>
+<div class="image-widget js-form-managed-file form-managed-file clearfix">
+<div class="image-widget-data">
+<input accept="image/*" class="js-form-file form-file" data-drupal-selector="edit-user-picture-0-upload" id="edit-user-picture-0-upload" name="files[user_picture_0]" size="22" type="file"/>
+<input class="js-hide button js-form-submit form-submit" data-drupal-selector="edit-user-picture-0-upload-button" formnovalidate="formnovalidate" id="edit-user-picture-0-upload-button" name="user_picture_0_upload_button" type="submit" value="Upload"/>
+<input data-drupal-selector="edit-user-picture-0-fids" name="user_picture[0][fids]" type="hidden"/>
+<input data-drupal-selector="edit-user-picture-0-display" name="user_picture[0][display]" type="hidden" value="1"/>
+</div>
+</div>
+<div class="description" id="edit-user-picture-0-upload--description">
+      Your virtual face or picture.<br/>One file only.<br/>40 MB limit.<br/>Allowed types: png gif jpg jpeg.
+
+    </div>
+</div>
+</div></div>
+<input autocomplete="off" data-drupal-selector="form-dpdos-mh7smuetqf-6p-fj5ur7z95yg1p0u1sx2f04u" name="form_build_id" type="hidden" value="form-dpdOs-mh7sMuEtqF-6p-fJ5uR7Z95yG1P0u1sx2F04U"/>
+<input data-drupal-selector="edit-user-register-form" name="form_id" type="hidden" value="user_register_form"/>
+<details class="js-form-wrapper form-wrapper" data-drupal-selector="edit-contact" id="edit-contact" open="open"> <summary aria-controls="edit-contact" aria-expanded="true" aria-pressed="true" role="button">Contact settings</summary><div class="details-wrapper">
+<div class="js-form-item form-item js-form-type-checkbox form-type-checkbox js-form-item-contact form-item-contact">
+<input aria-describedby="edit-contact--2--description" checked="checked" class="form-checkbox" data-drupal-selector="edit-contact" id="edit-contact--2" name="contact" type="checkbox" value="1"/>
+<label class="option" for="edit-contact--2">Personal contact form</label>
+<div class="description" id="edit-contact--2--description">
+      Allow other users to contact you via a personal contact form which keeps your email address hidden. Note that some privileged users such as site administrators are still able to contact you even if you choose to disable this feature.
+    </div>
+</div>
+</div>
+</details>
+<details class="js-form-wrapper form-wrapper" data-drupal-selector="edit-timezone" id="edit-timezone" open="open"> <summary aria-controls="edit-timezone" aria-expanded="true" aria-pressed="true" role="button">Locale settings</summary><div class="details-wrapper">
+<div class="js-form-item form-item js-form-type-select form-type-select js-form-item-timezone form-item-timezone">
+<label for="edit-timezone--2">Time zone</label>
+<select aria-describedby="edit-timezone--2--description" class="timezone-detect form-select" data-drupal-selector="edit-timezone" id="edit-timezone--2" name="timezone"><optgroup label="Africa"><option value="Africa/Abidjan">Abidjan</option><option value="Africa/Accra">Accra</option><option value="Africa/Addis_Ababa">Addis Ababa</option><option value="Africa/Algiers">Algiers</option><option value="Africa/Asmara">Asmara</option><option value="Africa/Bamako">Bamako</option><option value="Africa/Bangui">Bangui</option><option value="Africa/Banjul">Banjul</option><option value="Africa/Bissau">Bissau</option><option value="Africa/Blantyre">Blantyre</option><option value="Africa/Brazzaville">Brazzaville</option><option value="Africa/Bujumbura">Bujumbura</option><option value="Africa/Cairo">Cairo</option><option value="Africa/Casablanca">Casablanca</option><option value="Africa/Ceuta">Ceuta</option><option value="Africa/Conakry">Conakry</option><option value="Africa/Dakar">Dakar</option><option value="Africa/Dar_es_Salaam">Dar es Salaam</option><option value="Africa/Djibouti">Djibouti</option><option value="Africa/Douala">Douala</option><option value="Africa/El_Aaiun">El Aaiun</option><option value="Africa/Freetown">Freetown</option><option value="Africa/Gaborone">Gaborone</option><option value="Africa/Harare">Harare</option><option value="Africa/Johannesburg">Johannesburg</option><option value="Africa/Juba">Juba</option><option value="Africa/Kampala">Kampala</option><option value="Africa/Khartoum">Khartoum</option><option value="Africa/Kigali">Kigali</option><option value="Africa/Kinshasa">Kinshasa</option><option value="Africa/Lagos">Lagos</option><option value="Africa/Libreville">Libreville</option><option value="Africa/Lome">Lome</option><option value="Africa/Luanda">Luanda</option><option value="Africa/Lubumbashi">Lubumbashi</option><option value="Africa/Lusaka">Lusaka</option><option value="Africa/Malabo">Malabo</option><option value="Africa/Maputo">Maputo</option><option value="Africa/Maseru">Maseru</option><option value="Africa/Mbabane">Mbabane</option><option value="Africa/Mogadishu">Mogadishu</option><option value="Africa/Monrovia">Monrovia</option><option value="Africa/Nairobi">Nairobi</option><option value="Africa/Ndjamena">Ndjamena</option><option value="Africa/Niamey">Niamey</option><option value="Africa/Nouakchott">Nouakchott</option><option value="Africa/Ouagadougou">Ouagadougou</option><option value="Africa/Porto-Novo">Porto-Novo</option><option value="Africa/Sao_Tome">Sao Tome</option><option value="Africa/Tripoli">Tripoli</option><option value="Africa/Tunis">Tunis</option><option value="Africa/Windhoek">Windhoek</option></optgroup><optgroup label="America"><option value="America/Adak">Adak</option><option value="America/Anchorage">Anchorage</option><option value="America/Anguilla">Anguilla</option><option value="America/Antigua">Antigua</option><option value="America/Araguaina">Araguaina</option><option value="America/Aruba">Aruba</option><option value="America/Asuncion">Asuncion</option><option value="America/Atikokan">Atikokan</option><option value="America/Bahia">Bahia</option><option value="America/Bahia_Banderas">Bahia Banderas</option><option value="America/Barbados">Barbados</option><option value="America/Belem">Belem</option><option value="America/Belize">Belize</option><option value="America/North_Dakota/Beulah">Beulah (North Dakota)</option><option value="America/Blanc-Sablon">Blanc-Sablon</option><option value="America/Boa_Vista">Boa Vista</option><option value="America/Bogota">Bogota</option><option value="America/Boise">Boise</option><option value="America/Argentina/Buenos_Aires">Buenos Aires (Argentina)</option><option value="America/Cambridge_Bay">Cambridge Bay</option><option value="America/Campo_Grande">Campo Grande</option><option value="America/Cancun">Cancun</option><option value="America/Caracas">Caracas</option><option value="America/Argentina/Catamarca">Catamarca (Argentina)</option><option value="America/Cayenne">Cayenne</option><option value="America/Cayman">Cayman</option><option value="America/North_Dakota/Center">Center (North Dakota)</option><option value="America/Chicago">Chicago</option><option value="America/Chihuahua">Chihuahua</option><option value="America/Argentina/Cordoba">Cordoba (Argentina)</option><option value="America/Costa_Rica">Costa Rica</option><option value="America/Creston">Creston</option><option value="America/Cuiaba">Cuiaba</option><option value="America/Curacao">Curacao</option><option value="America/Danmarkshavn">Danmarkshavn</option><option value="America/Dawson">Dawson</option><option value="America/Dawson_Creek">Dawson Creek</option><option value="America/Denver">Denver</option><option value="America/Detroit">Detroit</option><option value="America/Dominica">Dominica</option><option value="America/Edmonton">Edmonton</option><option value="America/Eirunepe">Eirunepe</option><option value="America/El_Salvador">El Salvador</option><option value="America/Fort_Nelson">Fort Nelson</option><option value="America/Fortaleza">Fortaleza</option><option value="America/Glace_Bay">Glace Bay</option><option value="America/Godthab">Godthab</option><option value="America/Goose_Bay">Goose Bay</option><option value="America/Grand_Turk">Grand Turk</option><option value="America/Grenada">Grenada</option><option value="America/Guadeloupe">Guadeloupe</option><option value="America/Guatemala">Guatemala</option><option value="America/Guayaquil">Guayaquil</option><option value="America/Guyana">Guyana</option><option value="America/Halifax">Halifax</option><option value="America/Havana">Havana</option><option value="America/Hermosillo">Hermosillo</option><option value="America/Indiana/Indianapolis">Indianapolis (Indiana)</option><option value="America/Inuvik">Inuvik</option><option value="America/Iqaluit">Iqaluit</option><option value="America/Jamaica">Jamaica</option><option value="America/Argentina/Jujuy">Jujuy (Argentina)</option><option value="America/Juneau">Juneau</option><option value="America/Indiana/Knox">Knox (Indiana)</option><option value="America/Kralendijk">Kralendijk</option><option value="America/La_Paz">La Paz</option><option value="America/Argentina/La_Rioja">La Rioja (Argentina)</option><option value="America/Lima">Lima</option><option value="America/Los_Angeles">Los Angeles</option><option value="America/Kentucky/Louisville">Louisville (Kentucky)</option><option value="America/Lower_Princes">Lower Princes</option><option value="America/Maceio">Maceio</option><option value="America/Managua">Managua</option><option value="America/Manaus">Manaus</option><option value="America/Indiana/Marengo">Marengo (Indiana)</option><option value="America/Marigot">Marigot</option><option value="America/Martinique">Martinique</option><option value="America/Matamoros">Matamoros</option><option value="America/Mazatlan">Mazatlan</option><option value="America/Argentina/Mendoza">Mendoza (Argentina)</option><option value="America/Menominee">Menominee</option><option value="America/Merida">Merida</option><option value="America/Metlakatla">Metlakatla</option><option value="America/Mexico_City">Mexico City</option><option value="America/Miquelon">Miquelon</option><option value="America/Moncton">Moncton</option><option value="America/Monterrey">Monterrey</option><option value="America/Montevideo">Montevideo</option><option value="America/Kentucky/Monticello">Monticello (Kentucky)</option><option value="America/Montserrat">Montserrat</option><option value="America/Nassau">Nassau</option><option value="America/North_Dakota/New_Salem">New Salem (North Dakota)</option><option value="America/New_York">New York</option><option value="America/Nipigon">Nipigon</option><option value="America/Nome">Nome</option><option value="America/Noronha">Noronha</option><option value="America/Ojinaga">Ojinaga</option><option value="America/Panama">Panama</option><option value="America/Pangnirtung">Pangnirtung</option><option value="America/Paramaribo">Paramaribo</option><option value="America/Indiana/Petersburg">Petersburg (Indiana)</option><option value="America/Phoenix">Phoenix</option><option value="America/Port_of_Spain">Port of Spain</option><option value="America/Port-au-Prince">Port-au-Prince</option><option value="America/Porto_Velho">Porto Velho</option><option value="America/Puerto_Rico">Puerto Rico</option><option value="America/Punta_Arenas">Punta Arenas</option><option value="America/Rainy_River">Rainy River</option><option value="America/Rankin_Inlet">Rankin Inlet</option><option value="America/Recife">Recife</option><option value="America/Regina">Regina</option><option value="America/Resolute">Resolute</option><option value="America/Rio_Branco">Rio Branco</option><option value="America/Argentina/Rio_Gallegos">Rio Gallegos (Argentina)</option><option value="America/Argentina/Salta">Salta (Argentina)</option><option value="America/Argentina/San_Juan">San Juan (Argentina)</option><option value="America/Argentina/San_Luis">San Luis (Argentina)</option><option value="America/Santarem">Santarem</option><option value="America/Santiago">Santiago</option><option value="America/Santo_Domingo">Santo Domingo</option><option value="America/Sao_Paulo">Sao Paulo</option><option value="America/Scoresbysund">Scoresbysund</option><option value="America/Sitka">Sitka</option><option value="America/St_Barthelemy">St Barthelemy</option><option value="America/St_Johns">St Johns</option><option value="America/St_Kitts">St Kitts</option><option value="America/St_Lucia">St Lucia</option><option value="America/St_Thomas">St Thomas</option><option value="America/St_Vincent">St Vincent</option><option value="America/Swift_Current">Swift Current</option><option value="America/Tegucigalpa">Tegucigalpa</option><option value="America/Indiana/Tell_City">Tell City (Indiana)</option><option value="America/Thule">Thule</option><option value="America/Thunder_Bay">Thunder Bay</option><option value="America/Tijuana">Tijuana</option><option value="America/Toronto">Toronto</option><option value="America/Tortola">Tortola</option><option value="America/Argentina/Tucuman">Tucuman (Argentina)</option><option value="America/Argentina/Ushuaia">Ushuaia (Argentina)</option><option value="America/Vancouver">Vancouver</option><option value="America/Indiana/Vevay">Vevay (Indiana)</option><option value="America/Indiana/Vincennes">Vincennes (Indiana)</option><option value="America/Whitehorse">Whitehorse</option><option value="America/Indiana/Winamac">Winamac (Indiana)</option><option value="America/Winnipeg">Winnipeg</option><option value="America/Yakutat">Yakutat</option><option value="America/Yellowknife">Yellowknife</option></optgroup><optgroup label="Antarctica"><option value="Antarctica/Casey">Casey</option><option value="Antarctica/Davis">Davis</option><option value="Antarctica/DumontDUrville">DumontDUrville</option><option value="Antarctica/Macquarie">Macquarie</option><option value="Antarctica/Mawson">Mawson</option><option value="Antarctica/McMurdo">McMurdo</option><option value="Antarctica/Palmer">Palmer</option><option value="Antarctica/Rothera">Rothera</option><option value="Antarctica/Syowa">Syowa</option><option value="Antarctica/Troll">Troll</option><option value="Antarctica/Vostok">Vostok</option></optgroup><optgroup label="Arctic"><option value="Arctic/Longyearbyen">Longyearbyen</option></optgroup><optgroup label="Asia"><option value="Asia/Aden">Aden</option><option value="Asia/Almaty">Almaty</option><option value="Asia/Amman">Amman</option><option value="Asia/Anadyr">Anadyr</option><option value="Asia/Aqtau">Aqtau</option><option value="Asia/Aqtobe">Aqtobe</option><option value="Asia/Ashgabat">Ashgabat</option><option value="Asia/Atyrau">Atyrau</option><option value="Asia/Baghdad">Baghdad</option><option value="Asia/Bahrain">Bahrain</option><option value="Asia/Baku">Baku</option><option value="Asia/Bangkok">Bangkok</option><option value="Asia/Barnaul">Barnaul</option><option value="Asia/Beirut">Beirut</option><option value="Asia/Bishkek">Bishkek</option><option value="Asia/Brunei">Brunei</option><option value="Asia/Chita">Chita</option><option value="Asia/Choibalsan">Choibalsan</option><option value="Asia/Colombo">Colombo</option><option value="Asia/Damascus">Damascus</option><option value="Asia/Dhaka">Dhaka</option><option value="Asia/Dili">Dili</option><option value="Asia/Dubai">Dubai</option><option value="Asia/Dushanbe">Dushanbe</option><option value="Asia/Famagusta">Famagusta</option><option value="Asia/Gaza">Gaza</option><option value="Asia/Hebron">Hebron</option><option value="Asia/Ho_Chi_Minh">Ho Chi Minh</option><option value="Asia/Hong_Kong">Hong Kong</option><option value="Asia/Hovd">Hovd</option><option value="Asia/Irkutsk">Irkutsk</option><option value="Asia/Jakarta">Jakarta</option><option value="Asia/Jayapura">Jayapura</option><option value="Asia/Jerusalem">Jerusalem</option><option value="Asia/Kabul">Kabul</option><option value="Asia/Kamchatka">Kamchatka</option><option value="Asia/Karachi">Karachi</option><option value="Asia/Kathmandu">Kathmandu</option><option value="Asia/Khandyga">Khandyga</option><option value="Asia/Kolkata">Kolkata</option><option value="Asia/Krasnoyarsk">Krasnoyarsk</option><option value="Asia/Kuala_Lumpur">Kuala Lumpur</option><option value="Asia/Kuching">Kuching</option><option value="Asia/Kuwait">Kuwait</option><option value="Asia/Macau">Macau</option><option value="Asia/Magadan">Magadan</option><option value="Asia/Makassar">Makassar</option><option value="Asia/Manila">Manila</option><option value="Asia/Muscat">Muscat</option><option value="Asia/Nicosia">Nicosia</option><option value="Asia/Novokuznetsk">Novokuznetsk</option><option value="Asia/Novosibirsk">Novosibirsk</option><option value="Asia/Omsk">Omsk</option><option value="Asia/Oral">Oral</option><option value="Asia/Phnom_Penh">Phnom Penh</option><option value="Asia/Pontianak">Pontianak</option><option value="Asia/Pyongyang">Pyongyang</option><option value="Asia/Qatar">Qatar</option><option value="Asia/Qyzylorda">Qyzylorda</option><option value="Asia/Riyadh">Riyadh</option><option value="Asia/Sakhalin">Sakhalin</option><option value="Asia/Samarkand">Samarkand</option><option value="Asia/Seoul">Seoul</option><option value="Asia/Shanghai">Shanghai</option><option value="Asia/Singapore">Singapore</option><option value="Asia/Srednekolymsk">Srednekolymsk</option><option value="Asia/Taipei">Taipei</option><option value="Asia/Tashkent">Tashkent</option><option value="Asia/Tbilisi">Tbilisi</option><option value="Asia/Tehran">Tehran</option><option value="Asia/Thimphu">Thimphu</option><option value="Asia/Tokyo">Tokyo</option><option value="Asia/Tomsk">Tomsk</option><option value="Asia/Ulaanbaatar">Ulaanbaatar</option><option value="Asia/Urumqi">Urumqi</option><option value="Asia/Ust-Nera">Ust-Nera</option><option value="Asia/Vientiane">Vientiane</option><option value="Asia/Vladivostok">Vladivostok</option><option value="Asia/Yakutsk">Yakutsk</option><option value="Asia/Yangon">Yangon</option><option value="Asia/Yekaterinburg">Yekaterinburg</option><option value="Asia/Yerevan">Yerevan</option></optgroup><optgroup label="Atlantic"><option value="Atlantic/Azores">Azores</option><option value="Atlantic/Bermuda">Bermuda</option><option value="Atlantic/Canary">Canary</option><option value="Atlantic/Cape_Verde">Cape Verde</option><option value="Atlantic/Faroe">Faroe</option><option value="Atlantic/Madeira">Madeira</option><option value="Atlantic/Reykjavik">Reykjavik</option><option value="Atlantic/South_Georgia">South Georgia</option><option value="Atlantic/St_Helena">St Helena</option><option value="Atlantic/Stanley">Stanley</option></optgroup><optgroup label="Australia"><option value="Australia/Adelaide">Adelaide</option><option value="Australia/Brisbane">Brisbane</option><option value="Australia/Broken_Hill">Broken Hill</option><option value="Australia/Currie">Currie</option><option value="Australia/Darwin">Darwin</option><option value="Australia/Eucla">Eucla</option><option value="Australia/Hobart">Hobart</option><option value="Australia/Lindeman">Lindeman</option><option value="Australia/Lord_Howe">Lord Howe</option><option value="Australia/Melbourne">Melbourne</option><option value="Australia/Perth">Perth</option><option value="Australia/Sydney">Sydney</option></optgroup><optgroup label="Europe"><option value="Europe/Amsterdam">Amsterdam</option><option value="Europe/Andorra">Andorra</option><option value="Europe/Astrakhan">Astrakhan</option><option value="Europe/Athens">Athens</option><option value="Europe/Belgrade">Belgrade</option><option value="Europe/Berlin">Berlin</option><option value="Europe/Bratislava">Bratislava</option><option value="Europe/Brussels">Brussels</option><option value="Europe/Bucharest">Bucharest</option><option value="Europe/Budapest">Budapest</option><option value="Europe/Busingen">Busingen</option><option value="Europe/Chisinau">Chisinau</option><option value="Europe/Copenhagen">Copenhagen</option><option value="Europe/Dublin">Dublin</option><option value="Europe/Gibraltar">Gibraltar</option><option value="Europe/Guernsey">Guernsey</option><option value="Europe/Helsinki">Helsinki</option><option value="Europe/Isle_of_Man">Isle of Man</option><option value="Europe/Istanbul">Istanbul</option><option value="Europe/Jersey">Jersey</option><option value="Europe/Kaliningrad">Kaliningrad</option><option value="Europe/Kiev">Kiev</option><option value="Europe/Kirov">Kirov</option><option value="Europe/Lisbon">Lisbon</option><option value="Europe/Ljubljana">Ljubljana</option><option value="Europe/London">London</option><option value="Europe/Luxembourg">Luxembourg</option><option value="Europe/Madrid">Madrid</option><option value="Europe/Malta">Malta</option><option value="Europe/Mariehamn">Mariehamn</option><option value="Europe/Minsk">Minsk</option><option value="Europe/Monaco">Monaco</option><option value="Europe/Moscow">Moscow</option><option value="Europe/Oslo">Oslo</option><option value="Europe/Paris">Paris</option><option value="Europe/Podgorica">Podgorica</option><option value="Europe/Prague">Prague</option><option value="Europe/Riga">Riga</option><option value="Europe/Rome">Rome</option><option value="Europe/Samara">Samara</option><option value="Europe/San_Marino">San Marino</option><option value="Europe/Sarajevo">Sarajevo</option><option value="Europe/Saratov">Saratov</option><option value="Europe/Simferopol">Simferopol</option><option value="Europe/Skopje">Skopje</option><option value="Europe/Sofia">Sofia</option><option value="Europe/Stockholm">Stockholm</option><option value="Europe/Tallinn">Tallinn</option><option value="Europe/Tirane">Tirane</option><option value="Europe/Ulyanovsk">Ulyanovsk</option><option value="Europe/Uzhgorod">Uzhgorod</option><option value="Europe/Vaduz">Vaduz</option><option value="Europe/Vatican">Vatican</option><option value="Europe/Vienna">Vienna</option><option value="Europe/Vilnius">Vilnius</option><option value="Europe/Volgograd">Volgograd</option><option value="Europe/Warsaw">Warsaw</option><option value="Europe/Zagreb">Zagreb</option><option value="Europe/Zaporozhye">Zaporozhye</option><option value="Europe/Zurich">Zurich</option></optgroup><optgroup label="Indian"><option value="Indian/Antananarivo">Antananarivo</option><option value="Indian/Chagos">Chagos</option><option value="Indian/Christmas">Christmas</option><option value="Indian/Cocos">Cocos</option><option value="Indian/Comoro">Comoro</option><option value="Indian/Kerguelen">Kerguelen</option><option value="Indian/Mahe">Mahe</option><option value="Indian/Maldives">Maldives</option><option value="Indian/Mauritius">Mauritius</option><option value="Indian/Mayotte">Mayotte</option><option value="Indian/Reunion">Reunion</option></optgroup><optgroup label="Pacific"><option value="Pacific/Apia">Apia</option><option value="Pacific/Auckland">Auckland</option><option value="Pacific/Bougainville">Bougainville</option><option value="Pacific/Chatham">Chatham</option><option value="Pacific/Chuuk">Chuuk</option><option value="Pacific/Easter">Easter</option><option value="Pacific/Efate">Efate</option><option value="Pacific/Enderbury">Enderbury</option><option value="Pacific/Fakaofo">Fakaofo</option><option value="Pacific/Fiji">Fiji</option><option value="Pacific/Funafuti">Funafuti</option><option value="Pacific/Galapagos">Galapagos</option><option value="Pacific/Gambier">Gambier</option><option value="Pacific/Guadalcanal">Guadalcanal</option><option value="Pacific/Guam">Guam</option><option value="Pacific/Honolulu">Honolulu</option><option value="Pacific/Kiritimati">Kiritimati</option><option value="Pacific/Kosrae">Kosrae</option><option value="Pacific/Kwajalein">Kwajalein</option><option value="Pacific/Majuro">Majuro</option><option value="Pacific/Marquesas">Marquesas</option><option value="Pacific/Midway">Midway</option><option value="Pacific/Nauru">Nauru</option><option value="Pacific/Niue">Niue</option><option value="Pacific/Norfolk">Norfolk</option><option value="Pacific/Noumea">Noumea</option><option value="Pacific/Pago_Pago">Pago Pago</option><option value="Pacific/Palau">Palau</option><option value="Pacific/Pitcairn">Pitcairn</option><option value="Pacific/Pohnpei">Pohnpei</option><option value="Pacific/Port_Moresby">Port Moresby</option><option value="Pacific/Rarotonga">Rarotonga</option><option value="Pacific/Saipan">Saipan</option><option value="Pacific/Tahiti">Tahiti</option><option value="Pacific/Tarawa">Tarawa</option><option value="Pacific/Tongatapu">Tongatapu</option><option value="Pacific/Wake">Wake</option><option value="Pacific/Wallis">Wallis</option></optgroup><option selected="selected" value="UTC">UTC</option></select>
+<div class="description" id="edit-timezone--2--description">
+      Select the desired local time and time zone. Dates and times throughout this site will be displayed using this time zone.
+    </div>
+</div>
+</div>
+</details>
+<div class="form-actions js-form-wrapper form-wrapper" data-drupal-selector="edit-actions" id="edit-actions"><input class="button button--primary js-form-submit form-submit" data-drupal-selector="edit-submit" id="edit-submit" name="op" type="submit" value="Create new account"/>
+</div>
+</form>
+</div>
+</div>
+</div>
+</section>
+</main>
+<div class="column sidebar" id="sidebar-first">
+<aside class="section" role="complementary">
+<div class="region region-sidebar-first">
+<div class="search-block-form block block-search container-inline" data-drupal-selector="search-block-form" id="block-bartik-search" role="search">
+<h2>Search</h2>
+<div class="content container-inline">
+<form accept-charset="UTF-8" action="/search/node" class="search-form search-block-form" id="search-block-form" method="get">
+<div class="js-form-item form-item js-form-type-search form-type-search js-form-item-keys form-item-keys form-no-label">
+<label class="visually-hidden" for="edit-keys">Search</label>
+<input class="form-search" data-drupal-selector="edit-keys" id="edit-keys" maxlength="128" name="keys" size="15" title="Enter the terms you wish to search for." type="search" value=""/>
+</div>
+<div class="form-actions js-form-wrapper form-wrapper" data-drupal-selector="edit-actions" id="edit-actions"><input class="search-form__submit button js-form-submit form-submit" data-drupal-selector="edit-submit" id="edit-submit" type="submit" value="Search"/>
+</div>
+</form>
+</div>
+</div>
+</div>
+</aside>
+</div>
+</div>
+</div>
+<footer class="site-footer">
+<div class="layout-container">
+<div class="site-footer__bottom">
+<div class="region region-footer-fifth">
+<nav aria-labelledby="block-bartik-footer-menu" class="block block-menu navigation menu--footer" id="block-bartik-footer" role="navigation">
+<h2 class="visually-hidden" id="block-bartik-footer-menu">Footer menu</h2>
+<div class="content">
+<div class="menu-toggle-target menu-toggle-target-show" id="show-block-bartik-footer"></div>
+<div class="menu-toggle-target" id="hide-block-bartik-footer"></div>
+<a class="menu-toggle" href="#show-block-bartik-footer">Show — Footer menu</a>
+<a class="menu-toggle menu-toggle--hide" href="#hide-block-bartik-footer">Hide — Footer menu</a>
+<ul class="clearfix menu">
+<li class="menu-item">
+<a data-drupal-link-system-path="contact" href="/contact">Contact</a>
+</li>
+</ul>
+</div>
+</nav>
+<div class="block block-system block-system-powered-by-block" id="block-bartik-powered" role="complementary">
+<div class="content">
+<span>Powered by <a href="https://www.drupal.org">Drupal</a></span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</footer>
+</div>
+</div>
+</div>
+<script data-drupal-selector="drupal-settings-json" type="application/json">{"path":{"baseUrl":"\/","scriptPath":null,"pathPrefix":"","currentPath":"user\/register","currentPathIsAdmin":false,"isFront":false,"currentLanguage":"en"},"pluralDelimiter":"\u0003","ajaxPageState":{"libraries":"bartik\/global-styling,classy\/base,classy\/messages,core\/drupal.ajax,core\/drupal.collapse,core\/drupal.timezone,core\/html5shiv,core\/jquery.form,core\/normalize,file\/drupal.file,system\/base","theme":"bartik","theme_token":null},"ajaxTrustedUrl":{"\/search\/node":true,"form_action_p_pvdeGsVG5zNF_XLGPTvYSKCf43t8qZYSwcfZl2uzM":true,"\/user\/register?element_parents=user_picture\/widget\/0\u0026ajax_form=1":true},"ajax":{"edit-user-picture-0-upload-button":{"callback":["Drupal\\file\\Element\\ManagedFile","uploadAjaxCallback"],"wrapper":"ajax-wrapper","effect":"fade","progress":{"type":"throbber","message":null},"event":"mousedown","keypress":true,"prevent":"click","url":"\/user\/register?element_parents=user_picture\/widget\/0\u0026ajax_form=1","dialogType":"ajax","submit":{"_triggering_element_name":"user_picture_0_upload_button","_triggering_element_value":"Upload"}}},"file":{"elements":{"#edit-user-picture-0":"png,gif,jpg,jpeg"}},"user":{"uid":0,"permissionsHash":"c93be24fb6a92aa05caf37bff67b6796299efa09756186e75453383a4ca3191c"}}</script>
+<script src="/sites/default/files/js/js_HZq8rRmKhTD-OTLaIzTcx5lFAPkY4uf3935weuZQh6Q.js"></script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-[![](https://images.microbadger.com/badges/version/dtagdevsec/rdpy:1710.svg)](https://microbadger.com/images/dtagdevsec/rdpy:1710 "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/dtagdevsec/rdpy:1710.svg)](https://microbadger.com/images/dtagdevsec/rdpy:1710 "Get your own image badge on microbadger.com")
+[![](https://images.microbadger.com/badges/version/dtagdevsec/rdpy:1811.svg)](https://microbadger.com/images/dtagdevsec/rdpy:1811 "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/dtagdevsec/rdpy:1811.svg)](https://microbadger.com/images/dtagdevsec/rdpy:1811 "Get your own image badge on microbadger.com")
 
 # rdpy
 
@@ -12,4 +12,4 @@ The `docker-compose.yml` contains the necessary settings to test rdpy using `doc
 
 # RDPY Dashboard
 
-![RDPY Dashboard](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/docker/rdpy/doc/dashboard.png)
+![RDPY Dashboard](doc/dashboard.png)

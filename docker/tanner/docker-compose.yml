@@ -1,0 +1,104 @@
+version: '2.3'
+
+networks:
+  tanner_local:
+
+services:
+
+# Tanner Redis Service
+  tanner_redis:
+    container_name: tanner_redis
+    restart: always
+    stop_signal: SIGKILL
+    tty: true
+    networks:
+     - tanner_local
+    image: "dtagdevsec/redis:1811"
+    read_only: true
+
+# PHP Sandbox service
+  tanner_phpox:
+    build: ./phpox
+    container_name: tanner_phpox
+    restart: always
+    stop_signal: SIGKILL
+    tty: true
+    networks:
+     - tanner_local
+    image: "dtagdevsec/phpox:1811"
+    read_only: true
+
+# Tanner API Service
+  tanner_api:
+    build: ./tanner
+    container_name: tanner_api
+    restart: always
+    stop_signal: SIGKILL
+    tmpfs:
+     - /tmp/tanner:uid=2000,gid=2000
+    tty: true
+    networks:
+     - tanner_local
+    image: "dtagdevsec/tanner:1811"
+    read_only: true
+    volumes:
+     - /data/tanner/log:/var/log/tanner
+    command: tannerapi 
+    depends_on:
+     - tanner_redis
+
+# Tanner WEB Service
+  tanner_web:
+    build: ./tanner
+    container_name: tanner_web
+    restart: always
+    stop_signal: SIGKILL
+    tmpfs:
+     - /tmp/tanner:uid=2000,gid=2000
+    tty: true
+    networks:
+     - tanner_local
+    image: "dtagdevsec/tanner:1811"
+    command: tannerweb
+    read_only: true
+    volumes:
+     - /data/tanner/log:/var/log/tanner
+    depends_on:
+     - tanner_redis
+
+# Tanner Service
+  tanner:
+    build: ./tanner
+    container_name: tanner
+    restart: always
+    stop_signal: SIGKILL
+    tmpfs:
+     - /tmp/tanner:uid=2000,gid=2000
+    tty: true
+    networks:
+     - tanner_local
+    image: "dtagdevsec/tanner:1811"
+    command: tanner
+    read_only: true
+    volumes:
+     - /data/tanner/log:/var/log/tanner
+     - /data/tanner/files:/opt/tanner/files
+    depends_on:
+     - tanner_api
+     - tanner_web
+     - tanner_phpox
+
+# Snare Service
+  snare:
+    build: ./snare
+    container_name: snare
+    restart: always
+    stop_signal: SIGKILL
+    tty: true
+    networks:
+     - tanner_local
+    ports:
+     - "80:80"
+    image: "dtagdevsec/snare:1811"
+    depends_on:
+     - tanner

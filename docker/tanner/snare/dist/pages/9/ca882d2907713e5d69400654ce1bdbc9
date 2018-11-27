@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head profile="http://gmpg.org/xfn/11">
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Hello World! | user's Blog!</title>
+<link href="/stylesheets/theme/bootstrap.css" media="all" rel="stylesheet"/>
+<link href="/stylesheets/theme/style.css" media="all" rel="stylesheet"/>
+<link href="/assets/user-styles-4058cce4b243cb013f2814f27de5086a9d6ecaee093a8f76caae53f9923133a3.css" media="all" rel="stylesheet"/>
+<meta content="text/html; charset=utf-8" http-equiv="content-type"/>
+<meta content="Welcome to Publify. This is your first article. Edit or delete it, then start blogging!" name="description">
+<meta content="Publify 9.1.0" name="generator"/>
+<link href="/2018/08/07/hello-world.atom" rel="alternate" title="Atom" type="application/atom+xml"/>
+<link href="/2018/08/07/hello-world.rss" rel="alternate" title="RSS" type="application/rss+xml"/>
+<script async="async" src="/assets/publify-bb793c391bf5e36319aabe7e5f9e80cb733be118a31be962cf4cb93181d300f3.js"></script>
+<meta content="authenticity_token" name="csrf-param">
+<meta content="cXbbcW4xdfdt6coYNzpIEzV2rk4WkjHzUrlVNnScD9cebJgt/tN9TYfIrqe8cABE2JrU/GA8oZEmOALyCbihwA==" name="csrf-token">
+<link href="/assets/publify-ceb463e061731d204526c3139a26eeb79f678788538672a4b4b35df609953d29.css" media="screen" rel="stylesheet">
+<meta content="user's Blog!" name="og:site_name"/>
+<meta content="Hello World!" name="og:title"/>
+<link href="/humans.txt" ref="author"/>
+</link></meta></meta></meta></head>
+<body>
+<nav class="navbar navbar-default" role="navigation">
+<div class="container">
+<div class="navbar-header">
+<a class="navbar-brand" href=""><span class="glyphicon glyphicon-th"></span></a>
+</div>
+<ul class="nav navbar-nav pull-right">
+<li><a href="/notes">Statuses</a></li>
+<li><a href="/archives">Archives</a></li>
+<li><a href="/pages/about">About</a></li>
+</ul>
+</div>
+</nav>
+<div class="container" id="logo">
+<div class="row">
+<div class="col-lg-12 vertical-container">
+<div class="vertical">
+<h1><a href="">user's Blog!</a></h1>
+<p class="subtitle"></p>
+</div>
+</div>
+</div>
+</div>
+<div class="container" id="page">
+<div class="col-sm-8">
+<div class="article" id="article-1">
+<h1 class="page-header"><a href="/2018/08/07/hello-world">Hello World!</a></h1>
+<p>Welcome to Publify. This is your first article. Edit or delete it, then start blogging!</p>
+<div class="meta">
+<p>
+<small>
+    Published on 07/08/2018 at 13h06 by <span class="p-author h-card">UserName LastName</span>, tags 
+  </small>
+</p>
+</div>
+<h3 class="feedback" id="commentaires">
+<a href="/2018/08/07/hello-world">no comments</a>
+<a href="#commentform" ref="nofollow"> »</a>
+</h3>
+<ul class="unstyled" id="commentList">
+</ul>
+<form accept-charset="UTF-8" action="/comments?article_id=1" method="post"><input name="utf8" type="hidden" value="✓"/><input name="authenticity_token" type="hidden" value="CTpVlSaAynesDWABp38mfPFTnF5o3gzAA073EvCHLTtmIBbJtmLCzUYsBL4sNW4rHL/m7B5wnKJ3z6DWjaODLA=="/>
+<div id="commentform">
+<h3>comment <em>Hello World!</em></h3>
+<div class="form-group">
+<input class="form-control" id="comment_author" name="comment[author]" placeholder="Your name" type="text"/>
+</div>
+<div class="form-group">
+<input class="form-control" id="comment_email" name="comment[email]" placeholder="Email address" type="text"/>
+</div>
+<div class="form-group">
+<input class="form-control" id="comment_url" name="comment[url]" placeholder="Your website" type="text"/>
+</div>
+<div class="form-group">
+<textarea class="form-control" id="comment_body" name="comment[body]" rows="8">
+</textarea>
+</div>
+<div class="form-actions">
+<input class="btn btn-info" id="form-submit-button" type="submit" value="comment"/>
+</div>
+</div>
+</form>
+</div>
+</div>
+<div class="col-sm-3 col-sm-offset-1" id="sidebar">
+<h3 class="sidebar-title">Pages</h3>
+<div class="sidebar-body">
+<ul>
+<li>
+<a href="/pages/about">About</a>
+</li>
+</ul>
+</div>
+<h3 class="sidebar-title">Archives</h3>
+<div class="sidebar-body">
+<ul id="archives">
+<li>
+<a href="/2018/08">August 2018 <em>(1)</em></a>
+</li>
+</ul>
+</div>
+<h3 class="sidebar-title">Links</h3>
+<div class="sidebar-body">
+<ul>
+<li><a href="http://www.publify.co/" title="Publify">Publify</a></li>
+<li><a href="http://t37.net/" title="Le Rayon UX">Frédéric</a></li>
+<li><a href="http://www.matijs.net/" title="Matijs">Matijs</a></li>
+<li><a href="http://elsif.fr/" title="Yannick">Yannick</a></li>
+<li><a href="http://blog.ookook.fr/" title="Thomas">Thomas</a></li>
+<li><a href="/admin">Admin</a></li>
+</ul>
+</div>
+<h3 class="sidebar-title">Meta</h3>
+<div class="sidebar-body">
+<ul>
+<li><a href="/2018/08/07/hello-world.rss">RSS Feed</a></li>
+<li><a href="/admin">Admin</a></li>
+<li><a href="http://publify.co">Powered by Publify</a></li>
+</ul>
+</div>
+</div>
+</div>
+<div class="container" id="page">
+<div class="row">
+<div class="span1"></div>
+<div class="span7"></div>
+</div>
+</div>
+<p style="text-align: center"><small>Powered by <a href="http://publify.co">Publify</a> | Photo <a href="http://startupstockphotos.com/">Startup stock photos</a></small></p>
+</body>
+</html>

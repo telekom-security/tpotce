@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Redmine: Latest projects</title>
+  <link rel="self" href="http://172.20.254.134/projects.atom"/>
+  <link rel="alternate" href="http://172.20.254.134/projects"/>
+  <id>http://172.20.254.134/</id>
+  <icon>http://172.20.254.134/favicon.ico?1528612569</icon>
+  <updated>2018-08-14T13:37:17+00:00</updated>
+  <author>
+    <name>Redmine</name>
+  </author>
+  <generator uri="https://www.redmine.org/">
+Redmine  </generator>
+</feed>

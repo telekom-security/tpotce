@@ -1,0 +1,83 @@
+/* Copyright (c) 2015, Raghu Nayyar, http://raghunayyar.com
+ This file is licensed under the Affero General Public License version 3 or later.
+ See the COPYING-README file. */
+
+/* Global Components */
+
+/* Positioning */
+
+.absolute-center {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+}
+
+.full-width {
+	width: 100%;
+	max-width: 100%;
+}
+
+.pull-left {
+	float: left;
+}
+
+.pull-right {
+	float: right;
+}
+
+.clear-left {
+	clear: left;
+}
+
+.clear-right {
+	clear: right;
+}
+
+.clear-both {
+	clear: both;
+}
+
+.hidden.hidden {
+	display: none;
+}
+
+.hidden-visually {
+	position: absolute;
+	left: -10000px;
+	top: auto;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+}
+
+.bold {
+	font-weight: 600;
+}
+
+.text-small {
+	font-size: 80%;
+}
+
+.inlineblock {
+	display: inline-block;
+}
+
+/* Text */
+
+.text-right {
+	text-align: right;
+}
+
+.center,
+.text-center {
+	text-align: center;
+}
+
+.text-left {
+	text-align: left;
+}
+
+.nowrap {
+	white-space: nowrap;
+}

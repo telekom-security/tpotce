@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+
+<html class="" lang="en">
+<head prefix="og: http://ogp.me/ns#">
+<meta charset="utf-8"/>
+<meta content="IE=edge" http-equiv="X-UA-Compatible"/>
+<meta content="object" property="og:type"/>
+<meta content="GitLab" property="og:site_name"/>
+<meta content="Help" property="og:title"/>
+<meta content="GitLab Community Edition" property="og:description"/>
+<meta content="http://172.20.254.127/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png" property="og:image"/>
+<meta content="64" property="og:image:width"/>
+<meta content="64" property="og:image:height"/>
+<meta content="http://172.20.254.127/help" property="og:url"/>
+<meta content="summary" property="twitter:card"/>
+<meta content="Help" property="twitter:title"/>
+<meta content="GitLab Community Edition" property="twitter:description"/>
+<meta content="http://172.20.254.127/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png" property="twitter:image"/>
+<title>Help · GitLab</title>
+<meta content="GitLab Community Edition" name="description"/>
+<link data-original-href="/assets/favicon-7901bd695fb93edb07975966062049829afb56cf11511236e61bcf425070e36e.png" href="/assets/favicon-7901bd695fb93edb07975966062049829afb56cf11511236e61bcf425070e36e.png" id="favicon" rel="shortcut icon" type="image/png"/>
+<link href="/assets/application-266f2bfa52ff531258d13c702895a14fd5994ca591fa2df7338da00ab18c99ac.css" media="all" rel="stylesheet"/>
+<link href="/assets/print-c8ff536271f8974b8a9a5f75c0ca25d2b8c1dceb4cff3c01d1603862a0bdcbfc.css" media="print" rel="stylesheet"/>
+<script>
+//<![CDATA[
+window.gon={};gon.api_version="v4";gon.default_avatar_url="http://172.20.254.127/assets/no_avatar-849f9c04a3a0d0cea2424ae97b27447dc64a7dbfae83c036c45b403392f0e8ba.png";gon.max_file_size=10;gon.asset_host=null;gon.webpack_public_path="/assets/webpack/";gon.relative_url_root="";gon.shortcuts_path="/help/shortcuts";gon.user_color_scheme="white";gon.gitlab_url="http://172.20.254.127";gon.revision="63daf37";gon.gitlab_logo="/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png";gon.sprite_icons="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg";gon.sprite_file_icons="/assets/file_icons-7262fc6897e02f1ceaf8de43dc33afa5e4f9a2067f4f68ef77dcc87946575e9e.svg";gon.emoji_sprites_css_path="/assets/emoji_sprites-289eccffb1183c188b630297431be837765d9ff4aed6130cf738586fb307c170.css";gon.test_env=false;gon.suggested_label_colors=["#0033CC","#428BCA","#44AD8E","#A8D695","#5CB85C","#69D100","#004E00","#34495E","#7F8C8D","#A295D6","#5843AD","#8E44AD","#FFECDB","#AD4363","#D10069","#CC0033","#FF0000","#D9534F","#D1D100","#F0AD4E","#AD8D43"];
+//]]>
+</script>
+<script defer="defer" src="/assets/webpack/runtime.9fcb75d4.bundle.js"></script>
+<script defer="defer" src="/assets/webpack/main.a66b6c66.chunk.js"></script>
+<script defer="defer" src="/assets/webpack/pages.help.index.5a091206.chunk.js"></script>
+<meta content="authenticity_token" name="csrf-param">
+<meta content="HYLQiat6uRRUMPKWu8K8/8FcCbqW0QOXtFJxU99KUnVWDtbTXkgB7WuQcgroN+DmjmIcbX8kiT1GoOk8uBP/gw==" name="csrf-token">
+<meta content="origin-when-cross-origin" name="referrer"/>
+<meta content="width=device-width, initial-scale=1, maximum-scale=1" name="viewport"/>
+<meta content="#474D57" name="theme-color"/>
+<link href="/assets/touch-icon-iphone-5a9cee0e8a51212e70b90c87c12f382c428870c0ff67d1eb034d884b78d2dae7.png" rel="apple-touch-icon" type="image/x-icon"/>
+<link href="/assets/touch-icon-ipad-a6eec6aeb9da138e507593b464fdac213047e49d3093fc30e90d9a995df83ba3.png" rel="apple-touch-icon" sizes="76x76" type="image/x-icon"/>
+<link href="/assets/touch-icon-iphone-retina-72e2aadf86513a56e050e7f0f2355deaa19cc17ed97bbe5147847f2748e5a3e3.png" rel="apple-touch-icon" sizes="120x120" type="image/x-icon"/>
+<link href="/assets/touch-icon-ipad-retina-8ebe416f5313483d9c1bc772b5bbe03ecad52a54eba443e5215a22caed2a16a2.png" rel="apple-touch-icon" sizes="152x152" type="image/x-icon"/>
+<link color="rgb(226, 67, 41)" href="/assets/logo-d36b5212042cebc89b96df4bf6ac24e43db316143e89926c0db839ff694d2de4.svg" rel="mask-icon"/>
+<meta content="/assets/msapplication-tile-1196ec67452f618d39cdd85e2e3a542f76574c071051ae7effbfde01710eb17d.png" name="msapplication-TileImage"/>
+<meta content="#30353E" name="msapplication-TileColor"/>
+</meta></meta></head>
+<body class="ui-indigo " data-group="" data-page="help:index" data-project="">
+<header class="navbar navbar-gitlab qa-navbar navbar-expand-sm">
+<a class="sr-only gl-accessibility" href="#content-body" tabindex="1">Skip to content</a>
+<div class="container-fluid">
+<div class="header-content">
+<div class="title-container">
+<h1 class="title">
+<a href="/" id="logo" title="Dashboard"><svg class="tanuki-logo" height="24" viewbox="0 0 36 36" width="24">
+<path class="tanuki-shape tanuki-left-ear" d="M2 14l9.38 9v-9l-4-12.28c-.205-.632-1.176-.632-1.38 0z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-right-ear" d="M34 14l-9.38 9v-9l4-12.28c.205-.632 1.176-.632 1.38 0z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-nose" d="M18,34.38 3,14 33,14 Z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-left-eye" d="M18,34.38 11.38,14 2,14 6,25Z" fill="#fc6d26"></path>
+<path class="tanuki-shape tanuki-right-eye" d="M18,34.38 24.62,14 34,14 30,25Z" fill="#fc6d26"></path>
+<path class="tanuki-shape tanuki-left-cheek" d="M2 14L.1 20.16c-.18.565 0 1.2.5 1.56l17.42 12.66z" fill="#fca326"></path>
+<path class="tanuki-shape tanuki-right-cheek" d="M34 14l1.9 6.16c.18.565 0 1.2-.5 1.56L18 34.38z" fill="#fca326"></path>
+</svg>
+<span class="logo-text d-none d-sm-block">
+<svg viewbox="0 0 617 169" xmlns="http://www.w3.org/2000/svg"><path d="M315.26 2.97h-21.8l.1 162.5h88.3v-20.1h-66.5l-.1-142.4M465.89 136.95c-5.5 5.7-14.6 11.4-27 11.4-16.6 0-23.3-8.2-23.3-18.9 0-16.1 11.2-23.8 35-23.8 4.5 0 11.7.5 15.4 1.2v30.1h-.1m-22.6-98.5c-17.6 0-33.8 6.2-46.4 16.7l7.7 13.4c8.9-5.2 19.8-10.4 35.5-10.4 17.9 0 25.8 9.2 25.8 24.6v7.9c-3.5-.7-10.7-1.2-15.1-1.2-38.2 0-57.6 13.4-57.6 41.4 0 25.1 15.4 37.7 38.7 37.7 15.7 0 30.8-7.2 36-18.9l4 15.9h15.4v-83.2c-.1-26.3-11.5-43.9-44-43.9M557.63 149.1c-8.2 0-15.4-1-20.8-3.5V70.5c7.4-6.2 16.6-10.7 28.3-10.7 21.1 0 29.2 14.9 29.2 39 0 34.2-13.1 50.3-36.7 50.3m9.2-110.6c-19.5 0-30 13.3-30 13.3v-21l-.1-27.8h-21.3l.1 158.5c10.7 4.5 25.3 6.9 41.2 6.9 40.7 0 60.3-26 60.3-70.9-.1-35.5-18.2-59-50.2-59M77.9 20.6c19.3 0 31.8 6.4 39.9 12.9l9.4-16.3C114.5 6 97.3 0 78.9 0 32.5 0 0 28.3 0 85.4c0 59.8 35.1 83.1 75.2 83.1 20.1 0 37.2-4.7 48.4-9.4l-.5-63.9V75.1H63.6v20.1h38l.5 48.5c-5 2.5-13.6 4.5-25.3 4.5-32.2 0-53.8-20.3-53.8-63-.1-43.5 22.2-64.6 54.9-64.6M231.43 2.95h-21.3l.1 27.3v94.3c0 26.3 11.4 43.9 43.9 43.9 4.5 0 8.9-.4 13.1-1.2v-19.1c-3.1.5-6.4.7-9.9.7-17.9 0-25.8-9.2-25.8-24.6v-65h35.7v-17.8h-35.7l-.1-38.5M155.96 165.47h21.3v-124h-21.3v124M155.96 24.37h21.3V3.07h-21.3v21.3"></path></svg>
+</span>
+</a></h1>
+<ul class="list-unstyled navbar-sub-nav">
+<li class="home"><a class="dashboard-shortcuts-projects" href="/explore" title="Projects">Projects
+</a></li><li class=""><a class="dashboard-shortcuts-groups" href="/explore/groups" title="Groups">Groups
+</a></li><li class=""><a class="dashboard-shortcuts-snippets" href="/explore/snippets" title="Snippets">Snippets
+</a></li><li>
+<a href="/help" title="About GitLab CE">Help</a>
+</li>
+</ul>
+</div>
+<div class="navbar-collapse collapse">
+<ul class="nav navbar-nav">
+<li class="nav-item d-none d-sm-none d-md-block m-auto">
+<div class="search search-form">
+<form accept-charset="UTF-8" action="/search" class="form-inline" method="get"><input name="utf8" type="hidden" value="✓"/><div class="search-input-container">
+<div class="search-input-wrap">
+<div class="dropdown" data-url="/search/autocomplete">
+<input aria-label="Search" autocomplete="off" class="search-input dropdown-menu-toggle no-outline js-search-dashboard-options" data-issues-path="/dashboard/issues" data-mr-path="/dashboard/merge_requests" id="search" name="search" placeholder="Search" spellcheck="false" tabindex="1" type="search"/>
+<button class="hidden js-dropdown-search-toggle" data-toggle="dropdown" type="button"></button>
+<div class="dropdown-menu dropdown-select">
+<div class="dropdown-content"><ul>
+<li class="dropdown-menu-empty-item">
+<a>
+Loading...
+</a>
+</li>
+</ul>
+</div><div class="dropdown-loading"><i aria-hidden="true" class="fa fa-spinner fa-spin" data-hidden="true"></i></div>
+</div>
+<svg class="s16 search-icon"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#search"></use></svg>
+<svg class="s16 clear-icon js-clear-input"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#close"></use></svg>
+</div>
+</div>
+</div>
+<input class="js-search-group-options" id="group_id" name="group_id" type="hidden"/>
+<input class="js-search-project-options" id="search_project_id" name="project_id" type="hidden" value=""/>
+<input id="repository_ref" name="repository_ref" type="hidden"/>
+<div class="search-autocomplete-opts hide" data-autocomplete-path="/search/autocomplete"></div>
+</form></div>
+</li>
+<li class="nav-item d-inline-block d-sm-none d-md-none">
+<a aria-label="Search" data-container="body" data-placement="bottom" data-toggle="tooltip" href="/search" title="Search"><svg class="s16"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#search"></use></svg>
+</a></li>
+<li class="nav-item">
+<div>
+<a class="btn btn-sign-in" href="/users/sign_in?redirect_to_referer=yes">Sign in / Register</a>
+</div>
+</li>
+</ul>
+</div>
+<button class="navbar-toggler d-block d-sm-none" type="button">
+<span class="sr-only">Toggle navigation</span>
+<svg class="s12 more-icon js-navbar-toggle-right"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#more"></use></svg>
+<svg class="s12 close-icon js-navbar-toggle-left"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#close"></use></svg>
+</button>
+</div>
+</div>
+</header>
+<div class="layout-page">
+<div class="content-wrapper">
+<div class="mobile-overlay"></div>
+<div class="alert-wrapper">
+<nav class="breadcrumbs container-fluid container-limited" role="navigation">
+<div class="breadcrumbs-container">
+<div class="breadcrumbs-links js-title-container">
+<ul class="list-unstyled breadcrumbs-list js-breadcrumbs-list">
+<li><a href="/help">Help</a><svg class="s8 breadcrumbs-list-angle"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#angle-right"></use></svg></li>
+<li>
+<h2 class="breadcrumbs-sub-title"><a href="/help">Help</a></h2>
+</li>
+</ul>
+</div>
+</div>
+</nav>
+<div class="flash-container flash-container-page">
+</div>
+</div>
+<div class="container-fluid container-limited ">
+<div class="content" id="content-body">
+<div></div>
+<h1>
+GitLab
+Community Edition
+<hr/>
+</h1>
+<p class="slead">
+GitLab is open source software to collaborate on code.
+<br/>
+Manage git repositories with fine-grained access controls that keep your code secure.
+<br/>
+Perform code reviews and enhance collaboration with merge requests.
+<br/>
+Each project can also have an issue tracker and a wiki.
+<br/>
+Used by more than 100,000 organizations, GitLab is the most popular solution to manage git repositories on-premises.
+<br/>
+Read more about GitLab at <a href="https://about.gitlab.com" rel="noopener noreferrer" target="_blank">about.gitlab.com</a>.
+<p><a href="/help/instance_configuration">Check the current instance configuration </a></p>
+</p>
+<hr/>
+<div class="row prepend-top-default">
+<div class="col-md-8">
+<div class="documentation-index wiki">
+<h1 dir="auto">
+<a aria-hidden="true" class="anchor" href="#gitlab-documentation" id="user-content-gitlab-documentation"></a>GitLab Documentation</h1>
+<p dir="auto">Welcome to <a href="https://about.gitlab.com/" rel="nofollow noreferrer noopener" target="_blank">GitLab</a>, a Git-based fully featured
+platform for software development!</p>
+<p dir="auto">GitLab offers the most scalable Git-based fully integrated platform for
+software development, with flexible products and subscriptions.
+To understand what features you have access to, check the <a href="/help/#gitlab-subscriptions">GitLab subscriptions</a> below.</p>
+<p dir="auto"><strong>Shortcuts to GitLab's most visited docs:</strong></p>
+<table dir="auto">
+<thead>
+<tr>
+<th align="left">General documentation</th>
+<th align="left">GitLab CI/CD docs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left"><a href="/help/user/index.md">User documentation</a></td>
+<td align="left"><a href="/help/ci/quick_start/README.md">GitLab CI/CD quick start guide</a></td>
+</tr>
+<tr>
+<td align="left"><a href="/help/administration/index.md">Administrator documentation</a></td>
+<td align="left"><a href="/help/ci/examples/README.md">GitLab CI/CD examples</a></td>
+</tr>
+<tr>
+<td align="left"><a href="/help/#contributor-documentation">Contributor documentation</a></td>
+<td align="left"><a href="/help/ci/yaml/README.md">Configuring <code>.gitlab-ci.yml</code></a></td>
+</tr>
+<tr>
+<td align="left"><a href="/help/#getting-started-with-gitlab">Getting started with GitLab</a></td>
+<td align="left"><a href="/help/ci/docker/using_docker_images.md">Using Docker images</a></td>
+</tr>
+<tr>
+<td align="left"><a href="/help/api/README.md">API</a></td>
+<td align="left"><a href="/help/topics/autodevops/index.md">Auto DevOps</a></td>
+</tr>
+<tr>
+<td align="left"><a href="/help/ssh/README.md">SSH authentication</a></td>
+<td align="left"><a href="/help/user/project/clusters/index.md">Kubernetes integration</a></td>
+</tr>
+<tr>
+<td align="left"><a href="/help/user/project/pages/index.md">GitLab Pages</a></td>
+<td align="left"><a href="/help/user/project/container_registry.md">GitLab Container Registry</a></td>
+</tr>
+</tbody>
+</table>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#complete-devops-with-gitlab" id="user-content-complete-devops-with-gitlab"></a>Complete DevOps with GitLab</h2>
+<p dir="auto">GitLab is the first single application for software development, security,
+and operations that enables Concurrent DevOps, making the software lifecycle
+three times faster and radically improving the speed of business. GitLab
+provides solutions for all the stages of the DevOps lifecycle:
+<a href="/help/#plan">plan</a>, <a href="/help/#create">create</a>, <a href="/help/#verify">verify</a>, <a href="/help/#package">package</a>,
+<a href="/help/#release">release</a>, <a href="/help/#configure">configure</a>, <a href="/help/#monitor">monitor</a>.</p>
+<p dir="auto"><a class="no-attachment-icon" href="/help/img/devops_lifecycle.png" rel="noopener noreferrer" target="_blank"><img alt="DevOps Lifecycle" class="lazy" data-src="/help/img/devops_lifecycle.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#plan" id="user-content-plan"></a>Plan</h3>
+<p dir="auto">Whether you use Waterfall, Agile, or Conversational Development,
+GitLab streamlines your collaborative workflows. Visualize, prioritize,
+coordinate, and track your progress your way with GitLab’s flexible project
+management tools.</p>
+<ul dir="auto">
+<li>Chat operations
+<ul>
+<li><a href="/help/user/project/integrations/mattermost_slash_commands.md">Mattermost slash commands</a></li>
+<li><a href="/help/user/project/integrations/slack_slash_commands.md">Slack slash commands</a></li>
+</ul>
+</li>
+<li>
+<a href="/help/user/discussions/index.md">Discussions</a>: Threads, comments, and resolvable discussions in issues, commits, and  merge requests.</li>
+<li><a href="/help/user/project/issues/index.md">Issues</a></li>
+<li><a href="/help/user/project/issue_board.md">Project Issue Board</a></li>
+<li>
+<a href="/help/user/project/description_templates.md">Issues and merge requests templates</a>: Create templates for submitting new issues and merge requests.</li>
+<li>
+<a href="/help/user/project/labels.md">Labels</a>: Categorize your issues or merge requests based on descriptive titles.</li>
+<li>
+<a href="/help/user/project/milestones/index.md">Milestones</a>: Organize issues and merge requests into a cohesive group, optionally setting a due date.</li>
+<li>
+<a href="/help/workflow/todos.md">Todos</a>: A chronological list of to-dos that are waiting for your input, all in a simple dashboard.</li>
+<li>
+<a href="/help/user/project/quick_actions.md">GitLab Quick Actions</a>: Textual shortcuts for common actions on issues or merge requests that are usually done by clicking buttons or dropdowns in GitLab's UI.</li>
+</ul>
+<h4 dir="auto">
+<a aria-hidden="true" class="anchor" href="#migrate-and-import-your-projects-from-other-platforms" id="user-content-migrate-and-import-your-projects-from-other-platforms"></a>Migrate and import your projects from other platforms</h4>
+<ul dir="auto">
+<li>
+<a href="/help/user/project/import/index.md">Importing to GitLab</a>: Import your projects from GitHub, Bitbucket, GitLab.com, FogBugz and SVN into GitLab.</li>
+<li>
+<a href="/help/workflow/importing/migrating_from_svn.md">Migrating from SVN</a>: Convert a SVN repository to Git and GitLab.</li>
+</ul>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#create" id="user-content-create"></a>Create</h3>
+<p dir="auto">Consolidate source code into a single <a href="https://en.wikipedia.org/wiki/Distributed_version_control" rel="nofollow noreferrer noopener" target="_blank">DVCS</a>
+that’s easily managed and controlled without disrupting your workflow.
+GitLab’s git repositories come complete with branching tools and access
+controls, providing a scalable, single source of truth for collaborating
+on projects and code.</p>
+<h4 dir="auto">
+<a aria-hidden="true" class="anchor" href="#projects-and-groups" id="user-content-projects-and-groups"></a>Projects and groups</h4>
+<ul dir="auto">
+<li>
+<a href="/help/user/project/index.md">Projects</a>:
+<ul>
+<li><a href="/help/user/project/settings/index.md">Project settings</a></li>
+<li><a href="/help/gitlab-basics/create-project.md">Create a project</a></li>
+<li><a href="/help/gitlab-basics/fork-project.md">Fork a project</a></li>
+<li>
+<a href="/help/user/project/settings/import_export.md">Importing and exporting projects between instances</a>.</li>
+<li>
+<a href="/help/public_access/public_access.md">Project access</a>: Setting up your project's visibility to public, internal, or private.</li>
+<li>
+<a href="/help/user/project/pages/index.md">GitLab Pages</a>: Build, test, and deploy your static website with GitLab Pages.</li>
+</ul>
+</li>
+<li>
+<a href="/help/user/group/index.md">Groups</a>: Organize your projects in groups.
+<ul>
+<li><a href="/help/user/group/subgroups/index.md">Subgroups</a></li>
+</ul>
+</li>
+<li>
+<a href="/help/user/search/index.md">Search through GitLab</a>: Search for issues, merge requests, projects, groups, todos, and issues in Issue Boards.</li>
+<li>
+<a href="/help/user/snippets.md">Snippets</a>: Snippets allow you to create little bits of code.</li>
+<li>
+<a href="/help/user/project/wiki/index.md">Wikis</a>: Enhance your repository documentation with built-in wikis.</li>
+<li><a href="/help/user/project/web_ide/index.md">Web IDE</a></li>
+</ul>
+<h4 dir="auto">
+<a aria-hidden="true" class="anchor" href="#repositories" id="user-content-repositories"></a>Repositories</h4>
+<p dir="auto">Manage your <a href="/help/user/project/repository/index.md">repositories</a> from the UI (user interface):</p>
+<ul dir="auto">
+<li>
+<a href="/help/user/project/repository/index.md#files">Files</a>
+<ul>
+<li><a href="/help/user/project/repository/web_editor.md#create-a-file">Create a file</a></li>
+<li><a href="/help/user/project/repository/web_editor.md#upload-a-file">Upload a file</a></li>
+<li><a href="/help/user/project/repository/web_editor.md#template-dropdowns">File templates</a></li>
+<li><a href="/help/user/project/repository/index.md#jupyter-notebook-files">Jupyter Notebook files</a></li>
+<li><a href="/help/user/project/repository/web_editor.md#create-a-directory">Create a directory</a></li>
+<li>
+<a href="/help/user/project/repository/web_editor.md#tips">Start a merge request</a> (when committing via UI)</li>
+</ul>
+</li>
+<li>
+<a href="/help/user/project/repository/branches/index.md">Branches</a>
+<ul>
+<li><a href="/help/user/project/repository/branches/index.md#default-branch">Default branch</a></li>
+<li><a href="/help/user/project/repository/web_editor.md#create-a-new-branch">Create a branch</a></li>
+<li><a href="/help/user/project/protected_branches.md#protected-branches">Protected branches</a></li>
+<li><a href="/help/user/project/repository/branches/index.md#delete-merged-branches">Delete merged branches</a></li>
+</ul>
+</li>
+<li>
+<a href="/help/user/project/repository/index.md#commits">Commits</a>
+<ul>
+<li>
+<a href="/help/user/project/repository/gpg_signed_commits/index.md">Signing commits</a>: use GPG to sign your commits.</li>
+</ul>
+</li>
+</ul>
+<h4 dir="auto">
+<a aria-hidden="true" class="anchor" href="#merge-requests" id="user-content-merge-requests"></a>Merge Requests</h4>
+<ul dir="auto">
+<li>
+<a href="/help/user/project/merge_requests/index.md">Merge Requests</a>
+<ul>
+<li><a href="/help/user/project/merge_requests/work_in_progress_merge_requests.md">Work In Progress "WIP" Merge Requests</a></li>
+<li>
+<a href="/help/user/discussions/index.md#moving-a-single-discussion-to-a-new-issue">Merge Request discussion resolution</a>: Resolve discussions, move discussions in a merge request to an issue, only allow merge requests to be merged if all discussions are resolved.</li>
+<li><a href="/help/user/project/merge_requests/index.md#checkout-merge-requests-locally">Checkout merge requests locally</a></li>
+<li><a href="/help/user/project/merge_requests/cherry_pick_changes.md">Cherry-pick</a></li>
+</ul>
+</li>
+</ul>
+<h4 dir="auto">
+<a aria-hidden="true" class="anchor" href="#integrations" id="user-content-integrations"></a>Integrations</h4>
+<ul dir="auto">
+<li>
+<a href="/help/user/project/integrations/project_services.md">Project Services</a>: Integrate a project with external services, such as CI and chat.</li>
+<li>
+<a href="/help/integration/README.md">GitLab Integration</a>: Integrate with multiple third-party services with GitLab to allow external issue trackers and external authentication.</li>
+<li>
+<a href="/help/integration/trello_power_up.md">Trello Power-Up</a>: Integrate with GitLab's Trello Power-Up</li>
+</ul>
+<h4 dir="auto">
+<a aria-hidden="true" class="anchor" href="#automation" id="user-content-automation"></a>Automation</h4>
+<ul dir="auto">
+<li>
+<a href="/help/api/README.md">API</a>: Automate GitLab via a simple and powerful API.</li>
+<li>
+<a href="/help/user/project/integrations/webhooks.md">GitLab Webhooks</a>: Let GitLab notify you when new code has been pushed to your project.</li>
+</ul>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#verify" id="user-content-verify"></a>Verify</h3>
+<p dir="auto">Spot errors sooner, improve security and shorten feedback cycles with built-in
+static code analysis, code testing, code quality, dependency checking and review
+apps. Customize your approval workflow controls, automatically test the quality
+of your code, and spin up a staging environment for every code change. GitLab
+Continuous Integration is the most popular next generation testing system that
+scales to run your tests faster.</p>
+<ul dir="auto">
+<li>
+<a href="/help/ci/README.md">GitLab CI/CD</a>: Explore the features and capabilities of Continuous Integration, Continuous Delivery, and Continuous Deployment with GitLab.</li>
+<li>
+<a href="/help/ci/review_apps/index.md">Review Apps</a>: Preview changes to your app right from a merge request.</li>
+<li><a href="/help/ci/pipelines.md#pipeline-graphs">Pipeline Graphs</a></li>
+</ul>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#package" id="user-content-package"></a>Package</h3>
+<p dir="auto">GitLab Container Registry gives you the enhanced security and access controls of
+custom Docker images without 3rd party add-ons. Easily upload and download images
+from GitLab CI/CD with full Git repository management integration.</p>
+<ul dir="auto">
+<li>
+<a href="/help/user/project/container_registry.md">GitLab Container Registry</a>: Learn how to use GitLab's built-in Container Registry.</li>
+</ul>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#release" id="user-content-release"></a>Release</h3>
+<p dir="auto">Spend less time configuring your tools, and more time creating. Whether you’re
+deploying to one server or thousands, build, test, and release your code
+confidently and securely with GitLab’s built-in Continuous Delivery and Deployment.</p>
+<ul dir="auto">
+<li>
+<a href="/help/topics/autodevops/index.md#auto-deploy">Auto Deploy</a>: Configure GitLab CI for the deployment of your application.</li>
+<li>
+<a href="/help/ci/environments.md">Environments and deployments</a>: With environments, you can control the continuous deployment of your software within GitLab.</li>
+<li>
+<a href="/help/user/project/pages/index.md">GitLab Pages</a>: Build, test, and deploy a static site directly from GitLab.</li>
+<li><a href="/help/user/project/pipelines/schedules.md">Scheduled Pipelines</a></li>
+<li><a href="/help/ci/runners/README.md#protected-runners">Protected Runners</a></li>
+</ul>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#configure" id="user-content-configure"></a>Configure</h3>
+<p dir="auto">Automate your entire workflow from build to deploy and monitoring with GitLab
+Auto Devops. Best practice templates get you started with minimal to zero
+configuration. Then customize everything from buildpacks to CI/CD.</p>
+<ul dir="auto">
+<li><a href="/help/topics/autodevops/index.md">Auto DevOps</a></li>
+<li><a href="/help/user/project/clusters/index.md#installing-applications">Deployment of Helm, Ingress, and Prometheus on Kubernetes</a></li>
+<li><a href="/help/ci/variables/README.md#protected-variables">Protected variables</a></li>
+<li><a href="/help/user/project/clusters/index.md#adding-and-creating-a-new-gke-cluster-via-gitlab">Easy creation of Kubernetes clusters on GKE</a></li>
+</ul>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#monitor" id="user-content-monitor"></a>Monitor</h3>
+<p dir="auto">Measure how long it takes to go from planning to monitoring and ensure your
+applications are always responsive and available. GitLab collects and displays
+performance metrics for deployed apps using Prometheus so you can know in an
+instant how code changes impact your production environment.</p>
+<ul dir="auto">
+<li>
+<a href="/help/administration/monitoring/prometheus/index.md">GitLab Prometheus</a>: Configure the bundled Prometheus to collect various metrics from your GitLab instance.</li>
+<li>
+<a href="/help/user/project/integrations/prometheus.md">Prometheus project integration</a>: Configure the Prometheus integration per project and monitor your CI/CD environments.</li>
+<li>
+<a href="/help/user/project/integrations/prometheus_library/metrics.md">Prometheus metrics</a>: Let Prometheus collect metrics from various services, like Kubernetes, NGINX, NGINX ingress controller, HAProxy, and Amazon Cloud Watch.</li>
+<li>
+<a href="/help/administration/monitoring/performance/index.md">GitLab Performance Monitoring</a>: Use InfluxDB and Grafana to monitor the performance of your GitLab instance (will be eventually replaced by Prometheus).</li>
+<li>
+<a href="/help/user/admin_area/monitoring/health_check.md">Health check</a>: GitLab provides liveness and readiness probes to indicate service health and reachability to required services.</li>
+<li>
+<a href="/user/project/cycle_analytics.md">GitLab Cycle Analytics</a>: Cycle Analytics measures the time it takes to go from an <a href="https://about.gitlab.com/2016/08/05/continuous-integration-delivery-and-deployment-with-gitlab/#from-idea-to-production-with-gitlab" rel="nofollow noreferrer noopener" target="_blank">idea to production</a> for each project you have.</li>
+</ul>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#getting-started-with-gitlab" id="user-content-getting-started-with-gitlab"></a>Getting started with GitLab</h2>
+<ul dir="auto">
+<li>
+<a href="/help/gitlab-basics/README.md">GitLab Basics</a>: Start working on your command line and on GitLab.</li>
+<li>
+<a href="/help/workflow/README.md">GitLab Workflow</a>: Enhance your workflow with the best of GitLab Workflow.
+<ul>
+<li>See also <a href="https://about.gitlab.com/2016/10/25/gitlab-workflow-an-overview/" rel="nofollow noreferrer noopener" target="_blank">GitLab Workflow - an overview</a>.</li>
+</ul>
+</li>
+<li>
+<a href="/help/user/markdown.md">GitLab Markdown</a>: GitLab's advanced formatting system (GitLab Flavored Markdown).</li>
+</ul>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#user-account" id="user-content-user-account"></a>User account</h3>
+<ul dir="auto">
+<li>
+<a href="/help/user/profile/index.md">User account</a>: Manage your account
+<ul>
+<li>
+<a href="/help/topics/authentication/index.md">Authentication</a>: Account security with two-factor authentication, setup your ssh keys and deploy keys for secure access to your projects.</li>
+<li>
+<a href="/help/user/profile/index.md#profile-settings">Profile settings</a>: Manage your profile settings, two factor authentication and more.</li>
+</ul>
+</li>
+<li>
+<a href="/help/user/permissions.md">User permissions</a>: Learn what each role in a project (external/guest/reporter/developer/maintainer/owner) can do.</li>
+</ul>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#git-and-gitlab" id="user-content-git-and-gitlab"></a>Git and GitLab</h3>
+<ul dir="auto">
+<li>
+<a href="/help/topics/git/index.md">Git</a>: Getting started with Git, branching strategies, Git LFS, advanced use.</li>
+<li>
+<a href="https://about.gitlab.com/images/press/git-cheat-sheet.pdf" rel="nofollow noreferrer noopener" target="_blank">Git cheatsheet</a>: Download a PDF describing the most used Git operations.</li>
+<li>
+<a href="/help/workflow/gitlab_flow.md">GitLab Flow</a>: explore the best of Git with the GitLab Flow strategy.</li>
+</ul>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#administrator-documentation" id="user-content-administrator-documentation"></a>Administrator documentation</h2>
+<p dir="auto"><a href="/help/administration/index.md">Administration documentation</a> applies to admin users of GitLab
+self-hosted instances.</p>
+<p dir="auto">Learn how to install, configure, update, upgrade, integrate, and maintain your own instance.
+Regular users don't have access to GitLab administration tools and settings.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#contributor-documentation" id="user-content-contributor-documentation"></a>Contributor documentation</h2>
+<p dir="auto">GitLab Community Edition is <a href="https://gitlab.com/gitlab-org/gitlab-ce/" rel="nofollow noreferrer noopener" target="_blank">open source</a>
+and GitLab Enterprise Edition is <a href="https://gitlab.com/gitlab-org/gitlab-ee/" rel="nofollow noreferrer noopener" target="_blank">open-core</a>.
+Learn how to contribute to GitLab:</p>
+<ul dir="auto">
+<li>
+<a href="/help/development/README.md">Development</a>: All styleguides and explanations how to contribute.</li>
+<li>
+<a href="/help/legal/README.md">Legal</a>: Contributor license agreements.</li>
+<li>
+<a href="/help/development/documentation/index.md">Writing documentation</a>: Contributing to GitLab Docs.</li>
+</ul>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#gitlab-subscriptions" id="user-content-gitlab-subscriptions"></a>GitLab subscriptions</h2>
+<p dir="auto">You have two options to use GitLab:</p>
+<ul dir="auto">
+<li>GitLab self-hosted: Install, administer, and maintain your own GitLab instance.</li>
+<li>GitLab.com: GitLab's SaaS offering. You don't need to install anything to use GitLab.com,
+you only need to <a href="https://gitlab.com/users/sign_in" rel="nofollow noreferrer noopener" target="_blank">sign up</a> and start using GitLab
+straight away.</li>
+</ul>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#gitlab-self-hosted" id="user-content-gitlab-self-hosted"></a>GitLab self-hosted</h3>
+<p dir="auto">With GitLab self-hosted, you deploy your own GitLab instance on-premises or on a private cloud of your choice. GitLab self-hosted is available for <a href="https://about.gitlab.com/pricing/" rel="nofollow noreferrer noopener" target="_blank">free and with paid subscriptions</a>: Core, Starter, Premium, and Ultimate.</p>
+<p dir="auto">Every feature available in Core is also available in Starter, Premium, and Ultimate.
+Starter features are also available in Premium and Ultimate, and Premium features are also
+available in Ultimate.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#gitlabcom" id="user-content-gitlabcom"></a>GitLab.com</h3>
+<p dir="auto">GitLab.com is hosted, managed, and administered by GitLab, Inc., with
+<a href="https://about.gitlab.com/gitlab-com/" rel="nofollow noreferrer noopener" target="_blank">free and paid subscriptions</a> for individuals
+and teams: Free, Bronze, Silver, and Gold.</p>
+<p dir="auto">GitLab.com subscriptions grants access
+to the same features available in GitLab self-hosted, <strong>except
+<a href="/help/administration/index.md">administration</a> tools and settings</strong>:</p>
+<ul dir="auto">
+<li>GitLab.com Free includes the same features available in Core</li>
+<li>GitLab.com Bronze includes the same features available in GitLab Starter</li>
+<li>GitLab.com Silver includes the same features available in GitLab Premium</li>
+<li>GitLab.com Gold includes the same features available in GitLab Ultimate</li>
+</ul>
+<p dir="auto">For supporting the open source community and encouraging the development of
+open source projects, GitLab grants access to <strong>Gold</strong> features
+for all GitLab.com <strong>public</strong> projects, regardless of the subscription.</p>
+<p dir="auto">To know more about GitLab subscriptions and licensing, please refer to the
+<a href="https://about.gitlab.com/handbook/marketing/product-marketing/#tiers" rel="nofollow noreferrer noopener" target="_blank">GitLab Product Marketing Handbook</a>.</p>
+</div>
+</div>
+<div class="col-md-4">
+<div class="card">
+<div class="card-header">
+Quick help
+</div>
+<ul class="content-list">
+<li><a href="https://about.gitlab.com/getting-help/">See our website for getting help</a></li>
+<li>
+<button class="btn-blank btn-link js-trigger-search-bar" type="button">
+Use the search bar on the top of this page
+</button>
+</li>
+<li>
+<button class="btn-blank btn-link js-trigger-shortcut" type="button">
+Use shortcuts
+</button>
+</li>
+<li><a href="https://about.gitlab.com/pricing/">Get a support subscription</a></li>
+<li><a href="https://about.gitlab.com/features/#compare">Compare GitLab editions</a></li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

@@ -15,8 +15,9 @@ ExecStartPre=-/opt/tpot/bin/updateip.sh
 ExecStartPre=-/bin/bash -c '/opt/tpot/bin/clean.sh on'
 
 # Remove old containers, images and volumes
-ExecStartPre=-/usr/local/bin/docker-compose -f /opt/tpot/etc/tpot.yml down -v
-ExecStartPre=-/usr/local/bin/docker-compose -f /opt/tpot/etc/tpot.yml rm -v
+ExecStartPre=-/usr/bin/docker-compose -f /opt/tpot/etc/tpot.yml down -v
+ExecStartPre=-/usr/bin/docker-compose -f /opt/tpot/etc/tpot.yml rm -v
+ExecStartPre=-/bin/bash -c 'docker network rm $(docker network ls -q)'
 ExecStartPre=-/bin/bash -c 'docker volume rm $(docker volume ls -q)'
 ExecStartPre=-/bin/bash -c 'docker rm -v $(docker ps -aq)'
 ExecStartPre=-/bin/bash -c 'docker rmi $(docker images | grep "<none>" | awk \'{print $3}\')'
@@ -31,28 +32,16 @@ ExecStartPre=-/bin/chmod 666 /var/run/docker.sock
 
 # Set iptables accept rules to avoid forwarding to honeytrap / NFQUEUE
 # Forward all other connections to honeytrap / NFQUEUE
-ExecStartPre=/sbin/iptables -w -A INPUT -s 127.0.0.1 -j ACCEPT
-ExecStartPre=/sbin/iptables -w -A INPUT -d 127.0.0.1 -j ACCEPT
-ExecStartPre=/sbin/iptables -w -A INPUT -p tcp -m multiport --dports 64295:64303,7634 -j ACCEPT
-ExecStartPre=/sbin/iptables -w -A INPUT -p tcp -m multiport --dports 20:23,25,42,69,80,135,443,445,1433,1723,1883,1900 -j ACCEPT
-ExecStartPre=/sbin/iptables -w -A INPUT -p tcp -m multiport --dports 3306,3389,5060,5061,5601,5900,27017 -j ACCEPT
-ExecStartPre=/sbin/iptables -w -A INPUT -p tcp -m multiport --dports 1025,50100,8080,8081,9200 -j ACCEPT
-ExecStartPre=/sbin/iptables -w -A INPUT -p tcp --syn -m state --state NEW -j NFQUEUE
+ExecStartPre=/opt/tpot/bin/rules.sh /opt/tpot/etc/tpot.yml set
 
 # Compose T-Pot up
-ExecStart=/usr/local/bin/docker-compose -f /opt/tpot/etc/tpot.yml up --no-color
+ExecStart=/usr/bin/docker-compose -f /opt/tpot/etc/tpot.yml up --no-color
 
 # Compose T-Pot down, remove containers and volumes
-ExecStop=/usr/local/bin/docker-compose -f /opt/tpot/etc/tpot.yml down -v
+ExecStop=/usr/bin/docker-compose -f /opt/tpot/etc/tpot.yml down -v
 
 # Remove only previously set iptables rules
-ExecStopPost=/sbin/iptables -w -D INPUT -s 127.0.0.1 -j ACCEPT
-ExecStopPost=/sbin/iptables -w -D INPUT -d 127.0.0.1 -j ACCEPT
-ExecStopPost=/sbin/iptables -w -D INPUT -p tcp -m multiport --dports 64295:64303,7634 -j ACCEPT
-ExecStopPost=/sbin/iptables -w -D INPUT -p tcp -m multiport --dports 20:23,25,42,69,80,135,443,445,1433,1723,1883,1900 -j ACCEPT
-ExecStopPost=/sbin/iptables -w -D INPUT -p tcp -m multiport --dports 3306,3389,5060,5061,5601,5900,27017 -j ACCEPT
-ExecStopPost=/sbin/iptables -w -D INPUT -p tcp -m multiport --dports 1025,50100,8080,8081,9200 -j ACCEPT
-ExecStopPost=/sbin/iptables -w -D INPUT -p tcp --syn -m state --state NEW -j NFQUEUE
+ExecStopPost=/opt/tpot/bin/rules.sh /opt/tpot/etc/tpot.yml unset
 
 [Install]
 WantedBy=multi-user.target

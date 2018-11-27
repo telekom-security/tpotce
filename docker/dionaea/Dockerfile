@@ -1,5 +1,4 @@
 FROM debian:stretch-slim
-MAINTAINER MO
 ENV DEBIAN_FRONTEND noninteractive
 
 # Include dist
@@ -7,55 +6,46 @@ ADD dist/ /root/dist/
 
 # Install dependencies and packages
 RUN apt-get update -y && \
-    apt-get upgrade -y && \
+    apt-get dist-upgrade -y && \
     apt-get install -y --no-install-recommends \
-      autoconf \
-      automake \
-      build-essential \
-      ca-certificates \
-      check \
-      cython3 \
-      git \
-      libcurl4-openssl-dev \
-      libemu-dev \
-      libev-dev \
-      libglib2.0-dev \
-      libloudmouth1-dev \
-      libnetfilter-queue-dev \
-      libnl-3-dev \
-      libpcap-dev \
-      libssl-dev \
-      libtool \
-      libudns-dev \
-      procps \
-      python3 \
-      python3-dev \
-      python3-bson \
-      python3-yaml && \
+	build-essential \
+	ca-certificates \
+	check \
+	cmake \
+	cython3 \
+	git \
+        libcap2-bin \
+	libcurl4-openssl-dev \
+	libemu-dev \
+	libev-dev \
+	libglib2.0-dev \
+	libloudmouth1-dev \
+	libnetfilter-queue-dev \
+	libnl-3-dev \
+	libpcap-dev \
+	libssl-dev \
+	libtool \
+	libudns-dev \
+	procps \
+	python3 \
+	python3-dev \
+	python3-bson \
+	python3-yaml \
+	ttf-liberation && \
 
 # Get and install dionaea
-    git clone https://github.com/dinotools/dionaea /root/dionaea/ && \
+    git clone --depth=1 https://github.com/dinotools/dionaea -b 0.8.0 /root/dionaea/ && \
     cd /root/dionaea && \
-#    git checkout 99e9cfc88cfa8f3715813b18ec7006bca2622d76 && \
-    autoreconf -vi && \
-    ./configure \
-      --prefix=/opt/dionaea \
-      --with-python=/usr/bin/python3 \
-      --with-cython-dir=/usr/bin \
-      --enable-ev \
-      --with-ev-include=/usr/include \
-      --with-ev-lib=/usr/lib \
-      --with-emu-lib=/usr/lib/libemu \
-      --with-emu-include=/usr/include \
-      --with-nl-include=/usr/include/libnl3 \
-      --with-nl-lib=/usr/lib \
-      --enable-static && \
+    mkdir build && \
+    cd build && \
+    cmake -DCMAKE_INSTALL_PREFIX:PATH=/opt/dionaea .. && \
     make && \
     make install && \
 
 # Setup user and groups
     addgroup --gid 2000 dionaea && \
     adduser --system --no-create-home --shell /bin/bash --uid 2000 --disabled-password --disabled-login --gid 2000 dionaea && \
+    setcap cap_net_bind_service=+ep /opt/dionaea/bin/dionaea && \
 
 # Supply configs and set permissions
     chown -R dionaea:dionaea /opt/dionaea/var && \
@@ -64,11 +54,10 @@ RUN apt-get update -y && \
 
 # Setup runtime and clean up
     apt-get purge -y \
-      autoconf \
-      automake \
       build-essential \
       ca-certificates \
       check \
+      cmake \
       cython3 \
       git \
       libcurl4-openssl-dev \
@@ -85,7 +74,7 @@ RUN apt-get update -y && \
       python3 \
       python3-dev \   
       python3-bson \
-      python3-yaml && \
+      python3-yaml && \ 
 
     apt-get install -y \
       ca-certificates \
@@ -107,4 +96,5 @@ RUN apt-get update -y && \
     rm -rf /root/* /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Start dionaea
+USER dionaea:dionaea
 CMD ["/opt/dionaea/bin/dionaea", "-u", "dionaea", "-g", "dionaea", "-c", "/opt/dionaea/etc/dionaea/dionaea.cfg"]

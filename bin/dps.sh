@@ -1,44 +1,15 @@
 #/bin/bash
-# Show current status of all running containers
+# Show current status of T-Pot containers
 myPARAM="$1"
-myIMAGES="$(cat /opt/tpot/etc/tpot.yml | grep -v '#' | grep container_name | cut -d: -f2)"
+myCONTAINERS="$(cat /opt/tpot/etc/tpot.yml | grep -v '#' | grep container_name | cut -d: -f2 | sort | tr -d " ")"
 myRED="[1;31m"
 myGREEN="[1;32m"
 myBLUE="[1;34m"
 myWHITE="[0;0m"
 myMAGENTA="[1;35m"
 
-function fuCONTAINERSTATUS {
-local myNAME="$1"
-local mySTATUS="$(/usr/bin/docker ps -f name=$myNAME --format "table {{.Status}}" -f status=running -f status=exited | tail -n 1)"
-myDOWN="$(echo "$mySTATUS" | grep -o -E "(STATUS|NAMES|Exited)")"
-
-case "$myDOWN" in
-  STATUS)
-    mySTATUS="$myRED"DOWN"$myWHITE"
-  ;;
-  NAMES)
-    mySTATUS="$myRED"DOWN"$myWHITE"
-  ;;
-  Exited)
-    mySTATUS="$myRED$mySTATUS$myWHITE"
-  ;;
-  *)
-    mySTATUS="$myGREEN$mySTATUS$myWHITE"
-  ;;
-esac
-
-printf "$mySTATUS"
-}
-
-function fuCONTAINERPORTS {
-local myNAME="$1"
-local myPORTS="$(/usr/bin/docker ps -f name=$myNAME --format "table {{.Ports}}" -f status=running -f status=exited | tail -n 1 | sed s/","/",\n\t\t\t\t\t\t\t"/g)"
-
-if [ "$myPORTS" != "PORTS" ];
-  then
-    printf "$myBLUE$myPORTS$myWHITE"
-fi
+function fuGETSTATUS {
+grc docker ps -f status=running -f status=exited --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep -v "NAME" | sort
 }
 
 function fuGETSYS {
@@ -51,16 +22,20 @@ echo
 
 while true
   do
+    myDPS=$(fuGETSTATUS)
+    myDPSNAMES=$(echo "$myDPS" | awk '{ print $1 }' | sort)
     fuGETSYS
-    printf "%-19s %-36s %s\n" "NAME" "STATUS" "PORTS"
-    for i in $myIMAGES; do
-          myNAME="$myMAGENTA$i$myWHITE"
-          printf "%-32s %-49s %s" "$myNAME" "$(fuCONTAINERSTATUS $i)" "$(fuCONTAINERPORTS $i)"
-          echo
-      if [ "$myPARAM" = "vv" ]; 
-        then
-          /usr/bin/docker exec -t "$i" /bin/ps awfuwfxwf | egrep -v -E "awfuwfxwf|/bin/ps" 
-      fi      
+    printf "%-21s %-28s %s\n" "NAME" "STATUS" "PORTS"
+    if [ "$myDPS" != "" ];
+      then
+        echo "$myDPS"
+    fi
+    for i in $myCONTAINERS; do
+      myAVAIL=$(echo "$myDPSNAMES" | grep -o "$i" | uniq | wc -l)      	    
+      if [ "$myAVAIL" = "0" ];
+	then
+	  printf "%-28s %-28s\n" "$myRED$i" "DOWN$myWHITE"
+      fi
     done
     if [[ $myPARAM =~ ^([1-9]|[1-9][0-9]|[1-9][0-9][0-9])$ ]];
       then 

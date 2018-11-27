@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss xmlns:dc="http://purl.org/dc/elements/1.1/" version="2.0" xml:base="http://172.20.254.130/rss.xml">
+  <channel>
+    <title>user's Site</title>
+    <link>http://172.20.254.130/rss.xml</link>
+    <description/>
+    <language>en</language>
+    
+    
+  </channel>
+</rss>

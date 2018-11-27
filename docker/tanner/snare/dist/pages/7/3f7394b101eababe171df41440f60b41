@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- generator="Joomla! - Open Source Content Management" -->
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+	<channel>
+		<title>user's Site!</title>
+		<description><![CDATA[Joomla! - the dynamic portal engine and content management system]]></description>
+		<link>http://172.20.254.137/index.php/component/tags/tags</link>
+		<lastBuildDate>Tue, 14 Aug 2018 13:38:06 +0000</lastBuildDate>
+		<generator>Joomla! - Open Source Content Management</generator>
+		<atom:link rel="self" type="application/rss+xml" href="http://172.20.254.137/index.php/component/tags/?format=feed&amp;type=rss"/>
+		<language>en-gb</language>
+		<item>
+			<title>Joomla</title>
+			<link>http://172.20.254.137/index.php?option=com_tags&view=tag&id=2</link>
+			<guid isPermaLink="true">http://172.20.254.137/index.php?option=com_tags&view=tag&id=2</guid>
+			<description><![CDATA[]]></description>
+			<category>All Tags</category>
+			<pubDate>Sat, 16 Nov 2013 08:00:00 +0000</pubDate>
+		</item>
+	</channel>
+</rss>

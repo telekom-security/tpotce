@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="IE=edge" http-equiv="X-UA-Compatible"/>
+<title>Spent time - Report - Redmine</title>
+<meta content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" name="viewport"/>
+<meta content="Redmine" name="description">
+<meta content="issue,bug,tracker" name="keywords"/>
+<meta content="authenticity_token" name="csrf-param"/>
+<meta content="4Q88Beq4zw0nfGZumKfOSxghIkeH7tlFWttCUKzRGFqizzetiNKYjySXGXPQVhKwRHE2cfH35eZwC1GdGJrHaA==" name="csrf-token"/>
+<link href="/favicon.ico?1528612569" rel="shortcut icon"/>
+<link href="/stylesheets/jquery/jquery-ui-1.11.0.css?1528612569" media="all" rel="stylesheet"/>
+<link href="/stylesheets/application.css?1528612569" media="all" rel="stylesheet"/>
+<link href="/stylesheets/responsive.css?1528612569" media="all" rel="stylesheet"/>
+<script src="/javascripts/jquery-1.11.1-ui-1.11.0-ujs-3.1.4.js?1528612568"></script>
+<script src="/javascripts/application.js?1528612569"></script>
+<script src="/javascripts/responsive.js?1528612569"></script>
+<script>
+//<![CDATA[
+$(window).load(function(){ warnLeavingUnsaved('The current page contains unsaved text that will be lost if you leave this page.'); });
+//]]>
+</script>
+<!-- page specific tags -->
+<script>
+//<![CDATA[
+var datepickerOptions={dateFormat: 'yy-mm-dd', firstDay: 0, showOn: 'button', buttonImageOnly: true, buttonImage: '/images/calendar.png?1528612567', showButtonPanel: true, showWeek: true, showOtherMonths: true, selectOtherMonths: true, changeMonth: true, changeYear: true, beforeShow: beforeShowDatePicker};
+//]]>
+</script></meta></head>
+<body class="controller-timelog action-report">
+<div id="wrapper">
+<div class="flyout-menu js-flyout-menu">
+<div class="flyout-menu__search">
+<form accept-charset="UTF-8" action="/search" method="get"><input name="utf8" type="hidden" value="✓"/>
+<label class="search-magnifier search-magnifier--flyout" for="flyout-search">⚲</label>
+<input class="small js-search-input" id="flyout-search" name="q" placeholder="Search" type="text"/>
+</form> </div>
+<h3>Project</h3>
+<span class="js-project-menu"></span>
+<h3>General</h3>
+<span class="js-general-menu"></span>
+<span class="js-sidebar flyout-menu__sidebar"></span>
+<h3>Profile</h3>
+<span class="js-profile-menu"></span>
+</div>
+<div id="wrapper2">
+<div id="wrapper3">
+<div id="top-menu">
+<div id="account">
+<ul><li><a class="login" href="/login">Sign in</a></li><li><a class="register" href="/account/register">Register</a></li></ul> </div>
+<ul><li><a class="home" href="/">Home</a></li><li><a class="projects" href="/projects">Projects</a></li><li><a class="help" href="https://www.redmine.org/guide">Help</a></li></ul></div>
+<div id="header">
+<a class="mobile-toggle-button js-flyout-menu-toggle-button" href=""></a>
+<div id="quick-search">
+<form accept-charset="UTF-8" action="/search" method="get"><input name="utf8" type="hidden" value="✓"/>
+<input name="scope" type="hidden"/>
+<label for="q">
+<a accesskey="4" href="/search">Search</a>:
+        </label>
+<input accesskey="f" class="small" id="q" name="q" size="20" type="text"/>
+</form> <div class="drdn" id="project-jump"><span class="drdn-trigger">Jump to a project...</span><div class="drdn-content"><div class="quick-search"><input autocomplete="off" class="autocomplete" data-automcomplete-url="/projects/autocomplete.js?jump=time_entries" id="projects-quick-search" name="q" type="text" value=""/></div><div class="drdn-items projects selection"></div><div class="drdn-items all-projects selection"><a class="selected" href="/projects?jump=time_entries">All Projects</a></div></div></div>
+</div>
+<h1>Redmine</h1>
+<div class="tabs" id="main-menu">
+<ul><li><a class="projects" href="/projects">Projects</a></li><li><a class="activity" href="/activity">Activity</a></li><li><a class="issues" href="/issues">Issues</a></li><li><a class="time-entries selected" href="/time_entries">Spent time</a></li><li><a class="gantt" href="/issues/gantt">Gantt</a></li><li><a class="calendar" href="/issues/calendar">Calendar</a></li><li><a class="news" href="/news">News</a></li></ul>
+<div class="tabs-buttons" style="display:none;">
+<button class="tab-left" onclick="moveTabLeft(this); return false;"></button>
+<button class="tab-right" onclick="moveTabRight(this); return false;"></button>
+</div>
+</div>
+</div>
+<div class="nosidebar" id="main">
+<div id="sidebar">
+</div>
+<div id="content">
+<div class="contextual">
+</div>
+<h2>Spent time</h2>
+<form accept-charset="UTF-8" action="/time_entries/report" id="query_form" method="get"><input name="utf8" type="hidden" value="✓"/>
+<input id="set_filter" name="set_filter" type="hidden" value="1"/>
+<input disabled="disabled" id="query_type" name="type" type="hidden" value="TimeEntryQuery"/>
+<input name="sort" type="hidden" value="spent_on:desc"/>
+<div class="hide-when-print" id="query_form_with_buttons">
+<div id="query_form_content">
+<fieldset class="collapsible " id="filters">
+<legend onclick="toggleFieldset(this);">Filters</legend>
+<div style="">
+<script>
+//<![CDATA[
+
+var operatorLabels = {"=":"is","!":"is not","o":"open","c":"closed","!*":"none","*":"any","\u003e=":"\u003e=","\u003c=":"\u003c=","\u003e\u003c":"between","\u003ct+":"in less than","\u003et+":"in more than","\u003e\u003ct+":"in the next","t+":"in","t":"today","ld":"yesterday","w":"this week","lw":"last week","l2w":"last 2 weeks","m":"this month","lm":"last month","y":"this year","\u003et-":"less than days ago","\u003ct-":"more than days ago","\u003e\u003ct-":"in the past","t-":"days ago","~":"contains","!~":"doesn't contain","=p":"any issues in project","=!p":"any issues not in project","!p":"no issues in project","*o":"any open issues","!o":"no open issues"};
+var operatorByType = {"list":["=","!"],"list_status":["o","=","!","c","*"],"list_optional":["=","!","!*","*"],"list_subprojects":["*","!*","=","!"],"date":["=","\u003e=","\u003c=","\u003e\u003c","\u003ct+","\u003et+","\u003e\u003ct+","t+","t","ld","w","lw","l2w","m","lm","y","\u003et-","\u003ct-","\u003e\u003ct-","t-","!*","*"],"date_past":["=","\u003e=","\u003c=","\u003e\u003c","\u003et-","\u003ct-","\u003e\u003ct-","t-","t","ld","w","lw","l2w","m","lm","y","!*","*"],"string":["=","~","!","!~","!*","*"],"text":["~","!~","!*","*"],"integer":["=","\u003e=","\u003c=","\u003e\u003c","!*","*"],"float":["=","\u003e=","\u003c=","\u003e\u003c","!*","*"],"relation":["=","=p","=!p","!p","*o","!o","!*","*"],"tree":["=","~","!*","*"]};
+var availableFilters = {"spent_on":{"type":"date_past","name":"Date","values":null},"project_id":{"type":"list","name":"Project","remote":true},"issue_id":{"type":"tree","name":"Issue","values":null},"issue.tracker_id":{"type":"list","name":"Issue's Tracker","remote":true},"issue.status_id":{"type":"list","name":"Issue's Status","remote":true},"issue.fixed_version_id":{"type":"list","name":"Issue's Target version","remote":true},"user_id":{"type":"list_optional","name":"User","remote":true},"activity_id":{"type":"list","name":"Activity","values":[["Design","8"],["Development","9"]]},"comments":{"type":"text","name":"Comment","values":null},"hours":{"type":"float","name":"Hours","values":null}};
+var labelDayPlural = "days";
+
+var filtersUrl = "\/queries\/filter?type=TimeEntryQuery";
+
+$(document).ready(function(){
+  initFilters();
+  addFilter("spent_on", "*", []);
+});
+
+//]]>
+</script>
+<table id="filters-table">
+</table>
+<div class="add-filter">
+<label for="add_filter_select">Add filter</label>
+<select id="add_filter_select"><option value=""> </option>
+<option value="project_id">Project</option>
+<option value="issue_id">Issue</option>
+<option value="user_id">User</option>
+<option value="activity_id">Activity</option>
+<option value="comments">Comment</option>
+<option value="hours">Hours</option>
+<option value="spent_on">Date</option><optgroup label="Issue"><option value="issue.tracker_id">Issue's Tracker</option>
+<option value="issue.status_id">Issue's Status</option>
+<option value="issue.fixed_version_id">Issue's Target version</option></optgroup></select>
+</div>
+<input id="f_" name="f[]" type="hidden" value=""/>
+</div>
+</fieldset>
+<fieldset class="collapsible collapsed" id="options">
+<legend onclick="toggleFieldset(this);">Options</legend>
+<div style="display: none;">
+<table>
+<tr>
+<td class="field">Columns</td>
+<td>
+<table class="query-columns">
+<tr>
+<td style="padding-left:0">
+<label for="available_c">Available Columns</label>
+<br/>
+<select id="available_c" multiple="multiple" name="available_columns[]" ondblclick="moveOptions(this.form.available_c, this.form.selected_c);" size="10" style="width:150px"><option value="tweek">Week</option>
+<option value="issue.tracker">Tracker</option>
+<option value="issue.status">Status</option></select>
+</td>
+<td class="buttons">
+<input onclick="moveOptions(this.form.available_c, this.form.selected_c);" type="button" value="→"/><br/>
+<input onclick="moveOptions(this.form.selected_c, this.form.available_c);" type="button" value="←"/>
+</td>
+<td>
+<label for="selected_c">Selected Columns</label>
+<br/>
+<select id="selected_c" multiple="multiple" name="c[]" ondblclick="moveOptions(this.form.selected_c, this.form.available_c);" size="10" style="width:150px"><option value="project">Project</option>
+<option value="spent_on">Date</option>
+<option value="user">User</option>
+<option value="activity">Activity</option>
+<option value="issue">Issue</option>
+<option value="comments">Comment</option>
+<option value="hours">Hours</option></select>
+</td>
+<td class="buttons">
+<input onclick="moveOptionTop(this.form.selected_c);" type="button" value="⇈"/><br/>
+<input onclick="moveOptionUp(this.form.selected_c);" type="button" value="↑"/><br/>
+<input onclick="moveOptionDown(this.form.selected_c);" type="button" value="↓"/><br/>
+<input onclick="moveOptionBottom(this.form.selected_c);" type="button" value="⇊"/>
+</td>
+</tr>
+</table>
+<script>
+//<![CDATA[
+
+$(document).ready(function(){
+  $('.query-columns').closest('form').submit(function(){
+    $('#selected_c option').prop('selected', true);
+  });
+});
+
+//]]>
+</script></td>
+</tr>
+<tr>
+<td class="field"><label for="group_by">Group results by</label></td>
+<td><select id="group_by" name="group_by"><option value=""> </option>
+<option value="project">Project</option>
+<option value="spent_on">Date</option>
+<option value="user">User</option>
+<option value="activity">Activity</option></select></td>
+</tr>
+<tr>
+<td>Totals</td>
+<td><label class="inline"><input checked="checked" name="t[]" type="checkbox" value="hours"/> Hours</label><input id="t_" name="t[]" type="hidden" value=""/></td>
+</tr>
+</table>
+</div>
+</fieldset>
+</div>
+<p class="buttons">
+<a class="icon icon-checked" href="" onclick='$("#query_form").submit(); return false;'>Apply</a>
+<a class="icon icon-reload" href="/time_entries/report?set_filter=1&amp;sort=">Clear</a>
+</p>
+</div>
+<div class="tabs hide-when-print">
+<ul>
+<li><a href="/time_entries">Details</a></li>
+<li><a class="selected" href="/time_entries/report">Report</a></li>
+</ul>
+</div>
+<p><label for="columns">Details</label>: <select id="columns" name="columns" onchange="this.form.submit();"><option value="year">Year</option>
+<option selected="selected" value="month">Month</option>
+<option value="week">Week</option>
+<option value="day">Days</option></select>
+<label for="criterias">Add</label>: <select id="criterias" name="criteria[]" onchange="this.form.submit();" style="width: 200px"><option value=""> </option>
+<option value="project">Project</option>
+<option value="status">Status</option>
+<option value="version">Version</option>
+<option value="category">Category</option>
+<option value="user">User</option>
+<option value="tracker">Tracker</option>
+<option value="activity">Activity</option>
+<option value="issue">Issue</option></select>
+<a class="icon icon-reload" href="/time_entries/report">Clear</a></p>
+</form>
+<div style="clear:both;"></div>
+</div>
+</div>
+</div>
+<div id="ajax-indicator" style="display:none;"><span>Loading...</span></div>
+<div id="ajax-modal" style="display:none;"></div>
+<div id="footer">
+<div class="bgl"><div class="bgr">
+    Powered by <a href="https://bitnami.com/stack/redmine">Bitnami Redmine Stack</a> © 2006-2018 Jean-Philippe Lang
+  </div></div>
+</div>
+</div>
+</div>
+</body>
+</html>

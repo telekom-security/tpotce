@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+
+<html class="" lang="en">
+<head prefix="og: http://ogp.me/ns#">
+<meta charset="utf-8"/>
+<meta content="IE=edge" http-equiv="X-UA-Compatible"/>
+<meta content="object" property="og:type"/>
+<meta content="GitLab" property="og:site_name"/>
+<meta content="Index · Autodevops · Topics · Help" property="og:title"/>
+<meta content="GitLab Community Edition" property="og:description"/>
+<meta content="http://172.20.254.127/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png" property="og:image"/>
+<meta content="64" property="og:image:width"/>
+<meta content="64" property="og:image:height"/>
+<meta content="http://172.20.254.127/help/topics/autodevops/index.md" property="og:url"/>
+<meta content="summary" property="twitter:card"/>
+<meta content="Index · Autodevops · Topics · Help" property="twitter:title"/>
+<meta content="GitLab Community Edition" property="twitter:description"/>
+<meta content="http://172.20.254.127/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png" property="twitter:image"/>
+<title>Index · Autodevops · Topics · Help · GitLab</title>
+<meta content="GitLab Community Edition" name="description"/>
+<link data-original-href="/assets/favicon-7901bd695fb93edb07975966062049829afb56cf11511236e61bcf425070e36e.png" href="/assets/favicon-7901bd695fb93edb07975966062049829afb56cf11511236e61bcf425070e36e.png" id="favicon" rel="shortcut icon" type="image/png"/>
+<link href="/assets/application-266f2bfa52ff531258d13c702895a14fd5994ca591fa2df7338da00ab18c99ac.css" media="all" rel="stylesheet"/>
+<link href="/assets/print-c8ff536271f8974b8a9a5f75c0ca25d2b8c1dceb4cff3c01d1603862a0bdcbfc.css" media="print" rel="stylesheet"/>
+<script>
+//<![CDATA[
+window.gon={};gon.api_version="v4";gon.default_avatar_url="http://172.20.254.127/assets/no_avatar-849f9c04a3a0d0cea2424ae97b27447dc64a7dbfae83c036c45b403392f0e8ba.png";gon.max_file_size=10;gon.asset_host=null;gon.webpack_public_path="/assets/webpack/";gon.relative_url_root="";gon.shortcuts_path="/help/shortcuts";gon.user_color_scheme="white";gon.gitlab_url="http://172.20.254.127";gon.revision="63daf37";gon.gitlab_logo="/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png";gon.sprite_icons="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg";gon.sprite_file_icons="/assets/file_icons-7262fc6897e02f1ceaf8de43dc33afa5e4f9a2067f4f68ef77dcc87946575e9e.svg";gon.emoji_sprites_css_path="/assets/emoji_sprites-289eccffb1183c188b630297431be837765d9ff4aed6130cf738586fb307c170.css";gon.test_env=false;gon.suggested_label_colors=["#0033CC","#428BCA","#44AD8E","#A8D695","#5CB85C","#69D100","#004E00","#34495E","#7F8C8D","#A295D6","#5843AD","#8E44AD","#FFECDB","#AD4363","#D10069","#CC0033","#FF0000","#D9534F","#D1D100","#F0AD4E","#AD8D43"];
+//]]>
+</script>
+<script defer="defer" src="/assets/webpack/runtime.9fcb75d4.bundle.js"></script>
+<script defer="defer" src="/assets/webpack/main.a66b6c66.chunk.js"></script>
+<script defer="defer" src="/assets/webpack/pages.help.show.c42c0700.chunk.js"></script>
+<meta content="authenticity_token" name="csrf-param">
+<meta content="eB6Qpty8Og+e0G7EODe7BMfCZBKY2JK1MAVm2fN5u2XOd58WznttK57HIgyFiejH2oNn3lv+/f3qPOosUjA3Xw==" name="csrf-token">
+<meta content="origin-when-cross-origin" name="referrer"/>
+<meta content="width=device-width, initial-scale=1, maximum-scale=1" name="viewport"/>
+<meta content="#474D57" name="theme-color"/>
+<link href="/assets/touch-icon-iphone-5a9cee0e8a51212e70b90c87c12f382c428870c0ff67d1eb034d884b78d2dae7.png" rel="apple-touch-icon" type="image/x-icon"/>
+<link href="/assets/touch-icon-ipad-a6eec6aeb9da138e507593b464fdac213047e49d3093fc30e90d9a995df83ba3.png" rel="apple-touch-icon" sizes="76x76" type="image/x-icon"/>
+<link href="/assets/touch-icon-iphone-retina-72e2aadf86513a56e050e7f0f2355deaa19cc17ed97bbe5147847f2748e5a3e3.png" rel="apple-touch-icon" sizes="120x120" type="image/x-icon"/>
+<link href="/assets/touch-icon-ipad-retina-8ebe416f5313483d9c1bc772b5bbe03ecad52a54eba443e5215a22caed2a16a2.png" rel="apple-touch-icon" sizes="152x152" type="image/x-icon"/>
+<link color="rgb(226, 67, 41)" href="/assets/logo-d36b5212042cebc89b96df4bf6ac24e43db316143e89926c0db839ff694d2de4.svg" rel="mask-icon"/>
+<meta content="/assets/msapplication-tile-1196ec67452f618d39cdd85e2e3a542f76574c071051ae7effbfde01710eb17d.png" name="msapplication-TileImage"/>
+<meta content="#30353E" name="msapplication-TileColor"/>
+</meta></meta></head>
+<body class="ui-indigo " data-group="" data-page="help:show" data-project="">
+<header class="navbar navbar-gitlab qa-navbar navbar-expand-sm">
+<a class="sr-only gl-accessibility" href="#content-body" tabindex="1">Skip to content</a>
+<div class="container-fluid">
+<div class="header-content">
+<div class="title-container">
+<h1 class="title">
+<a href="/" id="logo" title="Dashboard"><svg class="tanuki-logo" height="24" viewbox="0 0 36 36" width="24">
+<path class="tanuki-shape tanuki-left-ear" d="M2 14l9.38 9v-9l-4-12.28c-.205-.632-1.176-.632-1.38 0z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-right-ear" d="M34 14l-9.38 9v-9l4-12.28c.205-.632 1.176-.632 1.38 0z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-nose" d="M18,34.38 3,14 33,14 Z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-left-eye" d="M18,34.38 11.38,14 2,14 6,25Z" fill="#fc6d26"></path>
+<path class="tanuki-shape tanuki-right-eye" d="M18,34.38 24.62,14 34,14 30,25Z" fill="#fc6d26"></path>
+<path class="tanuki-shape tanuki-left-cheek" d="M2 14L.1 20.16c-.18.565 0 1.2.5 1.56l17.42 12.66z" fill="#fca326"></path>
+<path class="tanuki-shape tanuki-right-cheek" d="M34 14l1.9 6.16c.18.565 0 1.2-.5 1.56L18 34.38z" fill="#fca326"></path>
+</svg>
+<span class="logo-text d-none d-sm-block">
+<svg viewbox="0 0 617 169" xmlns="http://www.w3.org/2000/svg"><path d="M315.26 2.97h-21.8l.1 162.5h88.3v-20.1h-66.5l-.1-142.4M465.89 136.95c-5.5 5.7-14.6 11.4-27 11.4-16.6 0-23.3-8.2-23.3-18.9 0-16.1 11.2-23.8 35-23.8 4.5 0 11.7.5 15.4 1.2v30.1h-.1m-22.6-98.5c-17.6 0-33.8 6.2-46.4 16.7l7.7 13.4c8.9-5.2 19.8-10.4 35.5-10.4 17.9 0 25.8 9.2 25.8 24.6v7.9c-3.5-.7-10.7-1.2-15.1-1.2-38.2 0-57.6 13.4-57.6 41.4 0 25.1 15.4 37.7 38.7 37.7 15.7 0 30.8-7.2 36-18.9l4 15.9h15.4v-83.2c-.1-26.3-11.5-43.9-44-43.9M557.63 149.1c-8.2 0-15.4-1-20.8-3.5V70.5c7.4-6.2 16.6-10.7 28.3-10.7 21.1 0 29.2 14.9 29.2 39 0 34.2-13.1 50.3-36.7 50.3m9.2-110.6c-19.5 0-30 13.3-30 13.3v-21l-.1-27.8h-21.3l.1 158.5c10.7 4.5 25.3 6.9 41.2 6.9 40.7 0 60.3-26 60.3-70.9-.1-35.5-18.2-59-50.2-59M77.9 20.6c19.3 0 31.8 6.4 39.9 12.9l9.4-16.3C114.5 6 97.3 0 78.9 0 32.5 0 0 28.3 0 85.4c0 59.8 35.1 83.1 75.2 83.1 20.1 0 37.2-4.7 48.4-9.4l-.5-63.9V75.1H63.6v20.1h38l.5 48.5c-5 2.5-13.6 4.5-25.3 4.5-32.2 0-53.8-20.3-53.8-63-.1-43.5 22.2-64.6 54.9-64.6M231.43 2.95h-21.3l.1 27.3v94.3c0 26.3 11.4 43.9 43.9 43.9 4.5 0 8.9-.4 13.1-1.2v-19.1c-3.1.5-6.4.7-9.9.7-17.9 0-25.8-9.2-25.8-24.6v-65h35.7v-17.8h-35.7l-.1-38.5M155.96 165.47h21.3v-124h-21.3v124M155.96 24.37h21.3V3.07h-21.3v21.3"></path></svg>
+</span>
+</a></h1>
+<ul class="list-unstyled navbar-sub-nav">
+<li class="home"><a class="dashboard-shortcuts-projects" href="/explore" title="Projects">Projects
+</a></li><li class=""><a class="dashboard-shortcuts-groups" href="/explore/groups" title="Groups">Groups
+</a></li><li class=""><a class="dashboard-shortcuts-snippets" href="/explore/snippets" title="Snippets">Snippets
+</a></li><li>
+<a href="/help" title="About GitLab CE">Help</a>
+</li>
+</ul>
+</div>
+<div class="navbar-collapse collapse">
+<ul class="nav navbar-nav">
+<li class="nav-item d-none d-sm-none d-md-block m-auto">
+<div class="search search-form">
+<form accept-charset="UTF-8" action="/search" class="form-inline" method="get"><input name="utf8" type="hidden" value="✓"/><div class="search-input-container">
+<div class="search-input-wrap">
+<div class="dropdown" data-url="/search/autocomplete">
+<input aria-label="Search" autocomplete="off" class="search-input dropdown-menu-toggle no-outline js-search-dashboard-options" data-issues-path="/dashboard/issues" data-mr-path="/dashboard/merge_requests" id="search" name="search" placeholder="Search" spellcheck="false" tabindex="1" type="search"/>
+<button class="hidden js-dropdown-search-toggle" data-toggle="dropdown" type="button"></button>
+<div class="dropdown-menu dropdown-select">
+<div class="dropdown-content"><ul>
+<li class="dropdown-menu-empty-item">
+<a>
+Loading...
+</a>
+</li>
+</ul>
+</div><div class="dropdown-loading"><i aria-hidden="true" class="fa fa-spinner fa-spin" data-hidden="true"></i></div>
+</div>
+<svg class="s16 search-icon"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#search"></use></svg>
+<svg class="s16 clear-icon js-clear-input"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#close"></use></svg>
+</div>
+</div>
+</div>
+<input class="js-search-group-options" id="group_id" name="group_id" type="hidden"/>
+<input class="js-search-project-options" id="search_project_id" name="project_id" type="hidden" value=""/>
+<input id="repository_ref" name="repository_ref" type="hidden"/>
+<div class="search-autocomplete-opts hide" data-autocomplete-path="/search/autocomplete"></div>
+</form></div>
+</li>
+<li class="nav-item d-inline-block d-sm-none d-md-none">
+<a aria-label="Search" data-container="body" data-placement="bottom" data-toggle="tooltip" href="/search" title="Search"><svg class="s16"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#search"></use></svg>
+</a></li>
+<li class="nav-item">
+<div>
+<a class="btn btn-sign-in" href="/users/sign_in?redirect_to_referer=yes">Sign in / Register</a>
+</div>
+</li>
+</ul>
+</div>
+<button class="navbar-toggler d-block d-sm-none" type="button">
+<span class="sr-only">Toggle navigation</span>
+<svg class="s12 more-icon js-navbar-toggle-right"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#more"></use></svg>
+<svg class="s12 close-icon js-navbar-toggle-left"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#close"></use></svg>
+</button>
+</div>
+</div>
+</header>
+<div class="layout-page">
+<div class="content-wrapper">
+<div class="mobile-overlay"></div>
+<div class="alert-wrapper">
+<nav class="breadcrumbs container-fluid container-limited" role="navigation">
+<div class="breadcrumbs-container">
+<div class="breadcrumbs-links js-title-container">
+<ul class="list-unstyled breadcrumbs-list js-breadcrumbs-list">
+<li><a href="/help">Help</a><svg class="s8 breadcrumbs-list-angle"><use xlink:href="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg#angle-right"></use></svg></li>
+<li>
+<h2 class="breadcrumbs-sub-title"><a href="/help/topics/autodevops/index.md">Help</a></h2>
+</li>
+</ul>
+</div>
+</div>
+</nav>
+<div class="flash-container flash-container-page">
+</div>
+</div>
+<div class="container-fluid container-limited ">
+<div class="content" id="content-body">
+<div class="documentation wiki prepend-top-default">
+<h1 dir="auto">
+<a aria-hidden="true" class="anchor" href="#auto-devops" id="user-content-auto-devops"></a>Auto DevOps</h1>
+<blockquote dir="auto">
+<p><a href="https://gitlab.com/gitlab-org/gitlab-ce/issues/37115" rel="nofollow noreferrer noopener" target="_blank">Introduced</a> in GitLab 10.0. Generally available on GitLab 11.0.</p>
+</blockquote>
+<p dir="auto">Auto DevOps automatically detects, builds, tests, deploys, and monitors your
+applications.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#overview" id="user-content-overview"></a>Overview</h2>
+<p dir="auto">With Auto DevOps, the software development process becomes easier to set up
+as every project can have a complete workflow from verification to monitoring
+without needing to configure anything. Just push your code and GitLab takes
+care of everything else. This makes it easier to start new projects and brings
+consistency to how applications are set up throughout a company.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#quick-start" id="user-content-quick-start"></a>Quick start</h2>
+<p dir="auto">If you are using GitLab.com, see the <a href="/quick_start_guide.md">quick start guide</a>
+for using Auto DevOps with GitLab.com and a Kubernetes cluster on Google Kubernetes
+Engine.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#comparison-to-application-platforms-and-paas" id="user-content-comparison-to-application-platforms-and-paas"></a>Comparison to application platforms and PaaS</h2>
+<p dir="auto">Auto DevOps provides functionality described by others as an application
+platform or as a Platform as a Service (PaaS). It takes inspiration from the
+innovative work done by <a href="https://www.heroku.com/" rel="nofollow noreferrer noopener" target="_blank">Heroku</a> and goes beyond it
+in a couple of ways:</p>
+<ol dir="auto">
+<li>Auto DevOps works with any Kubernetes cluster, you're not limited to running
+on GitLab's infrastructure (note that many features also work without Kubernetes).</li>
+<li>There is no additional cost (no markup on the infrastructure costs), and you
+can use a self-hosted Kubernetes cluster or Containers as a Service on any
+public cloud (for example <a href="https://cloud.google.com/kubernetes-engine/" rel="nofollow noreferrer noopener" target="_blank">Google Kubernetes Engine</a>).</li>
+<li>Auto DevOps has more features including security testing, performance testing,
+and code quality testing.</li>
+<li>It offers an incremental graduation path. If you need advanced customizations
+you can start modifying the templates without having to start over on a
+completely different platform.</li>
+</ol>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#features" id="user-content-features"></a>Features</h2>
+<p dir="auto">Comprised of a set of stages, Auto DevOps brings these best practices to your
+project in a simple and automatic way:</p>
+<ol dir="auto">
+<li><a href="#auto-build">Auto Build</a></li>
+<li><a href="#auto-test">Auto Test</a></li>
+<li>
+<a href="#auto-code-quality">Auto Code Quality</a> <strong>[STARTER]</strong>
+</li>
+<li>
+<a href="#auto-sast">Auto SAST (Static Application Security Testing)</a> <strong>[ULTIMATE]</strong>
+</li>
+<li>
+<a href="#auto-dependency-scanning">Auto Dependency Scanning</a> <strong>[ULTIMATE]</strong>
+</li>
+<li>
+<a href="#auto-license-management">Auto License Management</a> <strong>[ULTIMATE]</strong>
+</li>
+<li><a href="#auto-container-scanning">Auto Container Scanning</a></li>
+<li><a href="#auto-review-apps">Auto Review Apps</a></li>
+<li>
+<a href="#auto-dast">Auto DAST (Dynamic Application Security Testing)</a> <strong>[ULTIMATE]</strong>
+</li>
+<li><a href="#auto-deploy">Auto Deploy</a></li>
+<li>
+<a href="#auto-browser-performance-testing">Auto Browser Performance Testing</a> <strong>[PREMIUM]</strong>
+</li>
+<li><a href="#auto-monitoring">Auto Monitoring</a></li>
+</ol>
+<p dir="auto">As Auto DevOps relies on many different components, it's good to have a basic
+knowledge of the following:</p>
+<ul dir="auto">
+<li><a href="https://kubernetes.io/docs/home/" rel="nofollow noreferrer noopener" target="_blank">Kubernetes</a></li>
+<li><a href="https://docs.helm.sh/" rel="nofollow noreferrer noopener" target="_blank">Helm</a></li>
+<li><a href="https://docs.docker.com" rel="nofollow noreferrer noopener" target="_blank">Docker</a></li>
+<li><a href="https://docs.gitlab.com/runner/" rel="nofollow noreferrer noopener" target="_blank">GitLab Runner</a></li>
+<li><a href="https://prometheus.io/docs/introduction/overview/" rel="nofollow noreferrer noopener" target="_blank">Prometheus</a></li>
+</ul>
+<p dir="auto">Auto DevOps provides great defaults for all the stages; you can, however,
+<a href="#customizing">customize</a> almost everything to your needs.</p>
+<p dir="auto">For an overview on the creation of Auto DevOps, read the blog post <a href="https://about.gitlab.com/2017/06/29/whats-next-for-gitlab-ci/" rel="nofollow noreferrer noopener" target="_blank">From 2/3 of the Self-Hosted Git Market, to the Next-Generation CI System, to Auto DevOps</a>.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#requirements" id="user-content-requirements"></a>Requirements</h2>
+<p dir="auto">TIP: <strong>Tip:</strong>
+For self-hosted installations, the easiest way to make use of Auto DevOps is to
+install GitLab inside a Kubernetes cluster using the <a href="/install/kubernetes/gitlab_omnibus.md">GitLab Omnibus Helm Chart</a>
+which automatically installs and configures everything you need!</p>
+<p dir="auto">To make full use of Auto DevOps, you will need:</p>
+<ol dir="auto">
+<li>
+<strong>GitLab Runner</strong> (needed for all stages) - Your Runner needs to be
+configured to be able to run Docker. Generally this means using the
+<a href="https://docs.gitlab.com/runner/executors/docker.html" rel="nofollow noreferrer noopener" target="_blank">Docker</a> or <a href="https://docs.gitlab.com/runner/executors/kubernetes.html" rel="nofollow noreferrer noopener" target="_blank">Kubernetes
+executor</a>, with
+<a href="https://docs.gitlab.com/runner/executors/docker.html#use-docker-in-docker-with-privileged-mode" rel="nofollow noreferrer noopener" target="_blank">privileged mode enabled</a>.
+The Runners do not need to be installed in the Kubernetes cluster, but the
+Kubernetes executor is easy to use and is automatically autoscaling.
+Docker-based Runners can be configured to autoscale as well, using <a href="https://docs.gitlab.com/runner/install/autoscaling.html" rel="nofollow noreferrer noopener" target="_blank">Docker
+Machine</a>. Runners
+should be registered as <a href="../../ci/runners/README.md#registering-a-shared-runner">shared Runners</a>
+for the entire GitLab instance, or <a href="../../ci/runners/README.md#registering-a-specific-runner">specific Runners</a>
+that are assigned to specific projects.</li>
+<li>
+<strong>Base domain</strong> (needed for Auto Review Apps and Auto Deploy) - You will need
+a domain configured with wildcard DNS which is going to be used by all of your
+Auto DevOps applications. <a href="#auto-devops-base-domain">Read the specifics</a>.</li>
+<li>
+<strong>Kubernetes</strong> (needed for Auto Review Apps, Auto Deploy, and Auto Monitoring) -
+To enable deployments, you will need Kubernetes 1.5+. You need a <a href="/user/project/clusters/index.md">Kubernetes cluster</a>
+for the project, or a Kubernetes <a href="/user/project/integrations/services_templates.md">default service template</a>
+for the entire GitLab installation.
+<ol>
+<li>
+<strong>A load balancer</strong> - You can use NGINX ingress by deploying it to your
+Kubernetes cluster using the
+<a href="https://github.com/kubernetes/charts/tree/master/stable/nginx-ingress" rel="nofollow noreferrer noopener" target="_blank"><code>nginx-ingress</code></a>
+Helm chart.</li>
+<li>
+<strong>Wildcard TLS termination</strong> - You can deploy the
+<a href="https://github.com/kubernetes/charts/tree/master/stable/kube-lego" rel="nofollow noreferrer noopener" target="_blank"><code>kube-lego</code></a>
+Helm chart to your Kubernetes cluster to automatically issue certificates
+for your domains using Let's Encrypt.</li>
+</ol>
+</li>
+<li>
+<strong>Prometheus</strong> (needed for Auto Monitoring) - To enable Auto Monitoring, you
+will need Prometheus installed somewhere (inside or outside your cluster) and
+configured to scrape your Kubernetes cluster. To get response metrics
+(in addition to system metrics), you need to
+<a href="../../user/project/integrations/prometheus_library/nginx_ingress.md#configuring-prometheus-to-monitor-for-nginx-ingress-metrics">configure Prometheus to monitor NGINX</a>.
+The <a href="/user/project/integrations/prometheus.md">Prometheus service</a>
+integration needs to be enabled for the project, or enabled as a
+<a href="/user/project/integrations/services_templates.md">default service template</a>
+for the entire GitLab installation.</li>
+</ol>
+<p dir="auto">NOTE: <strong>Note:</strong>
+If you do not have Kubernetes or Prometheus installed, then Auto Review Apps,
+Auto Deploy, and Auto Monitoring will be silently skipped.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#auto-devops-base-domain" id="user-content-auto-devops-base-domain"></a>Auto DevOps base domain</h2>
+<p dir="auto">The Auto DevOps base domain is required if you want to make use of <a href="#auto-review-apps">Auto
+Review Apps</a> and <a href="#auto-deploy">Auto Deploy</a>. It can be defined
+in three places:</p>
+<ul dir="auto">
+<li>either under the project's CI/CD settings while <a href="#enabling-auto-devops">enabling Auto DevOps</a>
+</li>
+<li>or in instance-wide settings in the <strong>admin area &gt; Settings</strong> under the "Continuous Integration and Delivery" section</li>
+<li>or at the project or group level as a variable: <code>AUTO_DEVOPS_DOMAIN</code> (required if you want to use <a href="#using-multiple-kubernetes-clusters">multiple clusters</a>)</li>
+</ul>
+<p dir="auto">A wildcard DNS A record matching the base domain(s) is required, for example,
+given a base domain of <code>example.com</code>, you'd need a DNS entry like:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">*.example.com   3600     A     1.2.3.4</span></code></pre>
+<p dir="auto">In this case, <code>example.com</code> is the domain name under which the deployed apps will be served,
+and <code>1.2.3.4</code> is the IP address of your load balancer; generally NGINX
+(<a href="#requirements">see requirements</a>). How to set up the DNS record is beyond
+the scope of this document; you should check with your DNS provider.</p>
+<p dir="auto">Alternatively you can use free public services like <a href="http://nip.io" rel="nofollow noreferrer noopener" target="_blank">nip.io</a>
+which provide automatic wildcard DNS without any configuration. Just set the
+Auto DevOps base domain to <code>1.2.3.4.nip.io</code>.</p>
+<p dir="auto">Once set up, all requests will hit the load balancer, which in turn will route
+them to the Kubernetes pods that run your application(s).</p>
+<p dir="auto">NOTE: <strong>Note:</strong>
+If GitLab is installed using the <a href="/install/kubernetes/gitlab_omnibus.md">GitLab Omnibus Helm Chart</a>, there are two
+options: provide a static IP, or have one assigned. For more information see the
+relevant docs on the <a href="../../install/kubernetes/gitlab_omnibus.md#networking-prerequisites">network prerequisites</a>.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#using-multiple-kubernetes-clusters-premium" id="user-content-using-multiple-kubernetes-clusters-premium"></a>Using multiple Kubernetes clusters <strong>[PREMIUM]</strong>
+</h2>
+<p dir="auto">When using Auto DevOps, you may want to deploy different environments to
+different Kubernetes clusters. This is possible due to the 1:1 connection that
+<a href="../../user/project/clusters/index.md#multiple-kubernetes-clusters">exists between them</a>.</p>
+<p dir="auto">In the <a href="https://gitlab.com/gitlab-org/gitlab-ci-yml/blob/master/Auto-DevOps.gitlab-ci.yml" rel="nofollow noreferrer noopener" target="_blank">Auto DevOps template</a>
+(used behind the scenes by Auto DevOps), there are currently 3 defined environment names that you need to know:</p>
+<ul dir="auto">
+<li>
+<code>review/</code> (every environment starting with <code>review/</code>)</li>
+<li><code>staging</code></li>
+<li><code>production</code></li>
+</ul>
+<p dir="auto">Those environments are tied to jobs that use <a href="#auto-deploy">Auto Deploy</a>, so
+except for the environment scope, they would also need to have a different
+domain they would be deployed to. This is why you need to define a separate
+<code>AUTO_DEVOPS_DOMAIN</code> variable for all the above
+<a href="../../ci/variables/README.md#limiting-environment-scopes-of-variables">based on the environment</a>.</p>
+<p dir="auto">The following table is an example of how the three different clusters would
+be configured.</p>
+<table dir="auto">
+<thead>
+<tr>
+<th>Cluster name</th>
+<th>Cluster environment scope</th>
+<th>
+<code>AUTO_DEVOPS_DOMAIN</code> variable value</th>
+<th>Variable environment scope</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>review</td>
+<td><code>review/*</code></td>
+<td><code>review.example.com</code></td>
+<td><code>review/*</code></td>
+<td>The review cluster which will run all <a href="/ci/review_apps/index.md">Review Apps</a>. <code>*</code> is a wildcard, which means it will be used by every environment name starting with <code>review/</code>.</td>
+</tr>
+<tr>
+<td>staging</td>
+<td><code>staging</code></td>
+<td><code>staging.example.com</code></td>
+<td><code>staging</code></td>
+<td>(Optional) The staging cluster which will run the deployments of the staging environments. You need to <a href="#deploy-policy-for-staging-and-production-environments">enable it first</a>.</td>
+</tr>
+<tr>
+<td>production</td>
+<td><code>production</code></td>
+<td><code>example.com</code></td>
+<td><code>production</code></td>
+<td>The production cluster which will run the deployments of the production environment. You can use <a href="#incremental-rollout-to-production">incremental rollouts</a>.</td>
+</tr>
+</tbody>
+</table>
+<p dir="auto">To add a different cluster for each environment:</p>
+<ol dir="auto">
+<li>
+<p>Navigate to your project's <strong>Operations &gt; Kubernetes</strong> and create the Kubernetes clusters
+with their respective environment scope as described from the table above.</p>
+<p><a class="no-attachment-icon" href="/img/autodevops_multiple_clusters.png" rel="noopener noreferrer" target="_blank"><img alt="Auto DevOps multiple clusters" class="lazy" data-src="img/autodevops_multiple_clusters.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+</li>
+<li>
+<p>After the clusters are created, navigate to each one and install Helm Tiller
+and Ingress.</p>
+</li>
+<li>
+<p>Make sure you have <a href="#auto-devops-base-domain">configured your DNS</a> with the
+specified Auto DevOps domains.</p>
+</li>
+<li>
+<p>Navigate to your project's <strong>Settings &gt; CI/CD &gt; Variables</strong> and add
+the <code>AUTO_DEVOPS_DOMAIN</code> variables with their respective environment
+scope.</p>
+<p><a class="no-attachment-icon" href="/img/autodevops_domain_variables.png" rel="noopener noreferrer" target="_blank"><img alt="Auto DevOps domain variables" class="lazy" data-src="img/autodevops_domain_variables.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+</li>
+</ol>
+<p dir="auto">Now that all is configured, you can test your setup by creating a merge request
+and verifying that your app is deployed as a review app in the Kubernetes
+cluster with the <code>review/*</code> environment scope. Similarly, you can check the
+other environments.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#enabling-auto-devops" id="user-content-enabling-auto-devops"></a>Enabling Auto DevOps</h2>
+<p dir="auto">If you haven't done already, read the <a href="#requirements">requirements</a> to make
+full use of Auto DevOps. If this is your fist time, we recommend you follow the
+<a href="/quick_start_guide.md">quick start guide</a>.</p>
+<p dir="auto">To enable Auto DevOps to your project:</p>
+<ol dir="auto">
+<li>Check that your project doesn't have a <code>.gitlab-ci.yml</code>, or remove it otherwise</li>
+<li>Go to your project's <strong>Settings &gt; CI/CD &gt; Auto DevOps</strong>
+</li>
+<li>Select "Enable Auto DevOps"</li>
+<li>Optionally, but recommended, add in the <a href="#auto-devops-base-domain">base domain</a>
+that will be used by Kubernetes to <a href="#auto-deploy">deploy your application</a>
+and choose the <a href="#deployment-strategy">deployment strategy</a>
+</li>
+<li>Hit <strong>Save changes</strong> for the changes to take effect</li>
+</ol>
+<p dir="auto">Once saved, an Auto DevOps pipeline will be triggered on the default branch.</p>
+<p dir="auto">NOTE: <strong>Note:</strong>
+For GitLab versions 10.0 - 10.2, when enabling Auto DevOps, a pipeline needs to be
+manually triggered either by pushing a new commit to the repository or by visiting
+<code>https://example.gitlab.com/&lt;username&gt;/&lt;project&gt;/pipelines/new</code> and creating
+a new pipeline for your default branch, generally <code>master</code>.</p>
+<p dir="auto">NOTE: <strong>Note:</strong>
+If you are a GitLab Administrator, you can enable Auto DevOps instance wide
+in <strong>Admin Area &gt; Settings &gt; Continuous Integration and Deployment</strong>. Doing that,
+all the projects that haven't explicitly set an option will have Auto DevOps
+enabled by default.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#deployment-strategy" id="user-content-deployment-strategy"></a>Deployment strategy</h3>
+<blockquote dir="auto">
+<p><a href="https://gitlab.com/gitlab-org/gitlab-ce/issues/38542" rel="nofollow noreferrer noopener" target="_blank">Introduced</a> in GitLab 11.0.</p>
+</blockquote>
+<p dir="auto">You can change the deployment strategy used by Auto DevOps by going to your
+project's <strong>Settings &gt; CI/CD &gt; Auto DevOps</strong>.</p>
+<p dir="auto">The available options are:</p>
+<ul dir="auto">
+<li>
+<strong>Continuous deployment to production</strong> - enables <a href="#auto-deploy">Auto Deploy</a>
+by setting the <a href="#deploy-policy-for-staging-and-production-environments"><code>STAGING_ENABLED</code></a> and
+<a href="#incremental-rollout-to-production"><code>INCREMENTAL_ROLLOUT_ENABLED</code></a> variables
+to false.</li>
+<li>
+<strong>Automatic deployment to staging, manual deployment to production</strong> - sets the
+<a href="#deploy-policy-for-staging-and-production-environments"><code>STAGING_ENABLED</code></a> and
+<a href="#incremental-rollout-to-production"><code>INCREMENTAL_ROLLOUT_ENABLED</code></a> variables
+to true, and the user is responsible for manually deploying to staging and production.</li>
+</ul>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#stages-of-auto-devops" id="user-content-stages-of-auto-devops"></a>Stages of Auto DevOps</h2>
+<p dir="auto">The following sections describe the stages of Auto DevOps. Read them carefully
+to understand how each one works.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#auto-build" id="user-content-auto-build"></a>Auto Build</h3>
+<p dir="auto">Auto Build creates a build of the application in one of two ways:</p>
+<ul dir="auto">
+<li>If there is a <code>Dockerfile</code>, it will use <code>docker build</code> to create a Docker image.</li>
+<li>Otherwise, it will use <a href="https://github.com/gliderlabs/herokuish" rel="nofollow noreferrer noopener" target="_blank">Herokuish</a>
+and <a href="https://devcenter.heroku.com/articles/buildpacks" rel="nofollow noreferrer noopener" target="_blank">Heroku buildpacks</a>
+to automatically detect and build the application into a Docker image.</li>
+</ul>
+<p dir="auto">Either way, the resulting Docker image is automatically pushed to the
+<a href="/user/project/container_registry.md">Container Registry</a> and tagged with the commit SHA.</p>
+<p dir="auto">CAUTION: <strong>Important:</strong>
+If you are also using Auto Review Apps and Auto Deploy and choose to provide
+your own <code>Dockerfile</code>, make sure you expose your application to port
+<code>5000</code> as this is the port assumed by the default Helm chart.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#auto-test" id="user-content-auto-test"></a>Auto Test</h3>
+<p dir="auto">Auto Test automatically runs the appropriate tests for your application using
+<a href="https://github.com/gliderlabs/herokuish" rel="nofollow noreferrer noopener" target="_blank">Herokuish</a> and <a href="https://devcenter.heroku.com/articles/buildpacks" rel="nofollow noreferrer noopener" target="_blank">Heroku
+buildpacks</a> by analyzing
+your project to detect the language and framework. Several languages and
+frameworks are detected automatically, but if your language is not detected,
+you may succeed with a <a href="#custom-buildpacks">custom buildpack</a>. Check the
+<a href="#currently-supported-languages">currently supported languages</a>.</p>
+<p dir="auto">NOTE: <strong>Note:</strong>
+Auto Test uses tests you already have in your application. If there are no
+tests, it's up to you to add them.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#auto-code-quality-starter" id="user-content-auto-code-quality-starter"></a>Auto Code Quality <strong>[STARTER]</strong>
+</h3>
+<p dir="auto">Auto Code Quality uses the
+<a href="https://gitlab.com/gitlab-org/security-products/codequality" rel="nofollow noreferrer noopener" target="_blank">Code Quality image</a> to run
+static analysis and other code checks on the current code. The report is
+created, and is uploaded as an artifact which you can later download and check
+out.</p>
+<p dir="auto">In GitLab Starter, differences between the source and
+target branches are also
+<a href="https://docs.gitlab.com/ee/user/project/merge_requests/code_quality.html" rel="nofollow noreferrer noopener" target="_blank">shown in the merge request widget</a>.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#auto-sast-ultimate" id="user-content-auto-sast-ultimate"></a>Auto SAST <strong>[ULTIMATE]</strong>
+</h3>
+<blockquote dir="auto">
+<p>Introduced in <a href="https://about.gitlab.com/pricing/" rel="nofollow noreferrer noopener" target="_blank">GitLab Ultimate</a> 10.3.</p>
+</blockquote>
+<p dir="auto">Static Application Security Testing (SAST) uses the
+<a href="https://gitlab.com/gitlab-org/security-products/sast" rel="nofollow noreferrer noopener" target="_blank">SAST Docker image</a> to run static
+analysis on the current code and checks for potential security issues. Once the
+report is created, it's uploaded as an artifact which you can later download and
+check out.</p>
+<p dir="auto">In GitLab Ultimate, any security warnings are also
+<a href="https://docs.gitlab.com/ee//user/project/merge_requests/sast.html" rel="nofollow noreferrer noopener" target="_blank">shown in the merge request widget</a>.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#auto-dependency-scanning-ultimate" id="user-content-auto-dependency-scanning-ultimate"></a>Auto Dependency Scanning <strong>[ULTIMATE]</strong>
+</h3>
+<blockquote dir="auto">
+<p>Introduced in <a href="https://about.gitlab.com/pricing/" rel="nofollow noreferrer noopener" target="_blank">GitLab Ultimate</a> 10.7.</p>
+</blockquote>
+<p dir="auto">Dependency Scanning uses the
+<a href="https://gitlab.com/gitlab-org/security-products/dependency-scanning" rel="nofollow noreferrer noopener" target="_blank">Dependency Scanning Docker image</a>
+to run analysis on the project dependencies and checks for potential security issues. Once the
+report is created, it's uploaded as an artifact which you can later download and
+check out.</p>
+<p dir="auto">Any security warnings are also
+<a href="https://docs.gitlab.com/ee//user/project/merge_requests/dependency_scanning.html" rel="nofollow noreferrer noopener" target="_blank">shown in the merge request widget</a>.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#auto-license-management-ultimate" id="user-content-auto-license-management-ultimate"></a>Auto License Management <strong>[ULTIMATE]</strong>
+</h3>
+<blockquote dir="auto">
+<p>Introduced in <a href="https://about.gitlab.com/pricing/" rel="nofollow noreferrer noopener" target="_blank">GitLab Ultimate</a> 11.0.</p>
+</blockquote>
+<p dir="auto">License Management uses the
+<a href="https://gitlab.com/gitlab-org/security-products/license-management" rel="nofollow noreferrer noopener" target="_blank">License Management Docker image</a>
+to search the project dependencies for their license. Once the
+report is created, it's uploaded as an artifact which you can later download and
+check out.</p>
+<p dir="auto">Any licenses are also
+<a href="https://docs.gitlab.com/ee//user/project/merge_requests/license_management.html" rel="nofollow noreferrer noopener" target="_blank">shown in the merge request widget</a>.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#auto-container-scanning" id="user-content-auto-container-scanning"></a>Auto Container Scanning</h3>
+<blockquote dir="auto">
+<p>Introduced in GitLab 10.4.</p>
+</blockquote>
+<p dir="auto">Vulnerability Static Analysis for containers uses
+<a href="https://github.com/coreos/clair" rel="nofollow noreferrer noopener" target="_blank">Clair</a> to run static analysis on a
+Docker image and checks for potential security issues. Once the report is
+created, it's uploaded as an artifact which you can later download and
+check out.</p>
+<p dir="auto">In GitLab Ultimate, any security warnings are also
+<a href="https://docs.gitlab.com/ee//user/project/merge_requests/container_scanning.html" rel="nofollow noreferrer noopener" target="_blank">shown in the merge request widget</a>.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#auto-review-apps" id="user-content-auto-review-apps"></a>Auto Review Apps</h3>
+<p dir="auto">NOTE: <strong>Note:</strong>
+This is an optional step, since many projects do not have a Kubernetes cluster
+available. If the <a href="#requirements">requirements</a> are not met, the job will
+silently be skipped.</p>
+<p dir="auto">CAUTION: <strong>Caution:</strong>
+Your apps should <em>not</em> be manipulated outside of Helm (using Kubernetes directly.)
+This can cause confusion with Helm not detecting the change, and subsequent
+deploys with Auto DevOps can undo your changes. Also, if you change something
+and want to undo it by deploying again, Helm may not detect that anything changed
+in the first place, and thus not realize that it needs to re-apply the old config.</p>
+<p dir="auto"><a href="/ci/review_apps/index.md">Review Apps</a> are temporary application environments based on the
+branch's code so developers, designers, QA, product managers, and other
+reviewers can actually see and interact with code changes as part of the review
+process. Auto Review Apps create a Review App for each branch.</p>
+<p dir="auto">The Review App will have a unique URL based on the project name, the branch
+name, and a unique number, combined with the Auto DevOps base domain. For
+example, <code>user-project-branch-1234.example.com</code>. A link to the Review App shows
+up in the merge request widget for easy discovery. When the branch is deleted,
+for example after the merge request is merged, the Review App will automatically
+be deleted.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#auto-dast-ultimate" id="user-content-auto-dast-ultimate"></a>Auto DAST <strong>[ULTIMATE]</strong>
+</h3>
+<blockquote dir="auto">
+<p>Introduced in <a href="https://about.gitlab.com/pricing/" rel="nofollow noreferrer noopener" target="_blank">GitLab Ultimate</a> 10.4.</p>
+</blockquote>
+<p dir="auto">Dynamic Application Security Testing (DAST) uses the
+popular open source tool <a href="https://github.com/zaproxy/zaproxy" rel="nofollow noreferrer noopener" target="_blank">OWASP ZAProxy</a>
+to perform an analysis on the current code and checks for potential security
+issues. Once the report is created, it's uploaded as an artifact which you can
+later download and check out.</p>
+<p dir="auto">In GitLab Ultimate, any security warnings are also
+<a href="https://docs.gitlab.com/ee//user/project/merge_requests/dast.html" rel="nofollow noreferrer noopener" target="_blank">shown in the merge request widget</a>.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#auto-browser-performance-testing-premium" id="user-content-auto-browser-performance-testing-premium"></a>Auto Browser Performance Testing <strong>[PREMIUM]</strong>
+</h3>
+<blockquote dir="auto">
+<p>Introduced in <a href="https://about.gitlab.com/pricing/" rel="nofollow noreferrer noopener" target="_blank">GitLab Premium</a> 10.4.</p>
+</blockquote>
+<p dir="auto">Auto Browser Performance Testing utilizes the <a href="https://hub.docker.com/r/sitespeedio/sitespeed.io/" rel="nofollow noreferrer noopener" target="_blank">Sitespeed.io container</a> to measure the performance of a web page. A JSON report is created and uploaded as an artifact, which includes the overall performance score for each page. By default, the root page of Review and Production environments will be tested. If you would like to add additional URL's to test, simply add the paths to a file named <code>.gitlab-urls.txt</code> in the root directory, one per line. For example:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">/</span>
+<span class="line" id="LC2" lang="plaintext">/features</span>
+<span class="line" id="LC3" lang="plaintext">/direction</span></code></pre>
+<p dir="auto">In GitLab Premium, performance differences between the source
+and target branches are <a href="https://docs.gitlab.com/ee//user/project/merge_requests/browser_performance_testing.html" rel="nofollow noreferrer noopener" target="_blank">shown in the merge request widget</a>.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#auto-deploy" id="user-content-auto-deploy"></a>Auto Deploy</h3>
+<p dir="auto">NOTE: <strong>Note:</strong>
+This is an optional step, since many projects do not have a Kubernetes cluster
+available. If the <a href="#requirements">requirements</a> are not met, the job will
+silently be skipped.</p>
+<p dir="auto">CAUTION: <strong>Caution:</strong>
+Your apps should <em>not</em> be manipulated outside of Helm (using Kubernetes directly.)
+This can cause confusion with Helm not detecting the change, and subsequent
+deploys with Auto DevOps can undo your changes. Also, if you change something
+and want to undo it by deploying again, Helm may not detect that anything changed
+in the first place, and thus not realize that it needs to re-apply the old config.</p>
+<p dir="auto">After a branch or merge request is merged into the project's default branch (usually
+<code>master</code>), Auto Deploy deploys the application to a <code>production</code> environment in
+the Kubernetes cluster, with a namespace based on the project name and unique
+project ID, for example <code>project-4321</code>.</p>
+<p dir="auto">Auto Deploy doesn't include deployments to staging or canary by default, but the
+<a href="https://gitlab.com/gitlab-org/gitlab-ci-yml/blob/master/Auto-DevOps.gitlab-ci.yml" rel="nofollow noreferrer noopener" target="_blank">Auto DevOps template</a> contains job definitions for these tasks if you want to
+enable them.</p>
+<p dir="auto">You can make use of <a href="#helm-chart-variables">environment variables</a> to automatically
+scale your pod replicas.</p>
+<p dir="auto">It's important to note that when a project is deployed to a Kubernetes cluster,
+it relies on a Docker image that has been pushed to the
+<a href="/user/project/container_registry.md">GitLab Container Registry</a>. Kubernetes
+fetches this image and uses it to run the application. If the project is public,
+the image can be accessed by Kubernetes without any authentication, allowing us
+to have deployments more usable. If the project is private/internal, the
+Registry requires credentials to pull the image. Currently, this is addressed
+by providing <code>CI_JOB_TOKEN</code> as the password that can be used, but this token will
+no longer be valid as soon as the deployment job finishes. This means that
+Kubernetes can run the application, but in case it should be restarted or
+executed somewhere else, it cannot be accessed again.</p>
+<blockquote dir="auto">
+<p><a href="https://gitlab.com/gitlab-org/gitlab-ce/merge_requests/19507" rel="nofollow noreferrer noopener" target="_blank">Introduced</a> in GitLab 11.0.</p>
+</blockquote>
+<p dir="auto">For internal and private projects a <a href="../../user/project/deploy_tokens/index.md###gitlab-deploy-token">GitLab Deploy Token</a>
+will be automatically created, when Auto DevOps is enabled and the Auto DevOps settings are saved. This Deploy Token
+can be used for permanent access to the registry.</p>
+<p dir="auto">Note: <strong>Note</strong>
+When the GitLab Deploy Token has been manually revoked, it won't be automatically created.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#auto-monitoring" id="user-content-auto-monitoring"></a>Auto Monitoring</h3>
+<p dir="auto">NOTE: <strong>Note:</strong>
+Check the <a href="#requirements">requirements</a> for Auto Monitoring to make this stage
+work.</p>
+<p dir="auto">Once your application is deployed, Auto Monitoring makes it possible to monitor
+your application's server and response metrics right out of the box. Auto
+Monitoring uses <a href="/user/project/integrations/prometheus.md">Prometheus</a> to
+get system metrics such as CPU and memory usage directly from
+<a href="/user/project/integrations/prometheus_library/kubernetes.md">Kubernetes</a>,
+and response metrics such as HTTP error rates, latency, and throughput from the
+<a href="/user/project/integrations/prometheus_library/nginx_ingress.md">NGINX server</a>.</p>
+<p dir="auto">The metrics include:</p>
+<ul dir="auto">
+<li>
+<strong>Response Metrics:</strong> latency, throughput, error rate</li>
+<li>
+<strong>System Metrics:</strong> CPU utilization, memory utilization</li>
+</ul>
+<p dir="auto">If GitLab has been deployed using the <a href="/install/kubernetes/gitlab_omnibus.md">GitLab Omnibus Helm Chart</a>, no
+configuration is required.</p>
+<p dir="auto">If you have installed GitLab using a different method, you need to:</p>
+<ol dir="auto">
+<li>
+<a href="../../user/project/integrations/prometheus.md#configuring-your-own-prometheus-server-within-kubernetes">Deploy Prometheus</a> into your Kubernetes cluster</li>
+<li>If you would like response metrics, ensure you are running at least version
+0.9.0 of NGINX Ingress and
+<a href="https://github.com/kubernetes/ingress-nginx/blob/master/docs/examples/customization/custom-vts-metrics-prometheus/nginx-vts-metrics-conf.yaml" rel="nofollow noreferrer noopener" target="_blank">enable Prometheus metrics</a>.</li>
+<li>Finally, <a href="https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/" rel="nofollow noreferrer noopener" target="_blank">annotate</a>
+the NGINX Ingress deployment to be scraped by Prometheus using
+<code>prometheus.io/scrape: "true"</code> and <code>prometheus.io/port: "10254"</code>.</li>
+</ol>
+<p dir="auto">To view the metrics, open the
+<a href="../../ci/environments.md#monitoring-environments">Monitoring dashboard for a deployed environment</a>.</p>
+<p dir="auto"><a class="no-attachment-icon" href="/img/auto_monitoring.png" rel="noopener noreferrer" target="_blank"><img alt="Auto Metrics" class="lazy" data-src="img/auto_monitoring.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#customizing" id="user-content-customizing"></a>Customizing</h2>
+<p dir="auto">While Auto DevOps provides great defaults to get you started, you can customize
+almost everything to fit your needs; from custom <a href="#custom-buildpacks">buildpacks</a>,
+to <a href="#custom-dockerfile"><code>Dockerfile</code>s</a>, <a href="#custom-helm-chart">Helm charts</a>, or
+even copying the complete <a href="#customizing-gitlab-ci-yml">CI/CD configuration</a>
+into your project to enable staging and canary deployments, and more.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#custom-buildpacks" id="user-content-custom-buildpacks"></a>Custom buildpacks</h3>
+<p dir="auto">If the automatic buildpack detection fails for your project, or if you want to
+use a custom buildpack, you can override the buildpack(s) using a project variable
+or a <code>.buildpacks</code> file in your project:</p>
+<ul dir="auto">
+<li>
+<strong>Project variable</strong> - Create a project variable <code>BUILDPACK_URL</code> with the URL
+of the buildpack to use.</li>
+<li>
+<strong><code>.buildpacks</code> file</strong> - Add a file in your project's repo called  <code>.buildpacks</code>
+and add the URL of the buildpack to use on a line in the file. If you want to
+use multiple buildpacks, you can enter them in, one on each line.</li>
+</ul>
+<p dir="auto">CAUTION: <strong>Caution:</strong>
+Using multiple buildpacks isn't yet supported by Auto DevOps.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#custom-dockerfile" id="user-content-custom-dockerfile"></a>Custom <code>Dockerfile</code>
+</h3>
+<p dir="auto">If your project has a <code>Dockerfile</code> in the root of the project repo, Auto DevOps
+will build a Docker image based on the Dockerfile rather than using buildpacks.
+This can be much faster and result in smaller images, especially if your
+Dockerfile is based on <a href="https://hub.docker.com/_/alpine/" rel="nofollow noreferrer noopener" target="_blank">Alpine</a>.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#custom-helm-chart" id="user-content-custom-helm-chart"></a>Custom Helm Chart</h3>
+<p dir="auto">Auto DevOps uses <a href="https://helm.sh/" rel="nofollow noreferrer noopener" target="_blank">Helm</a> to deploy your application to Kubernetes.
+You can override the Helm chart used by bundling up a chart into your project
+repo or by specifying a project variable:</p>
+<ul dir="auto">
+<li>
+<strong>Bundled chart</strong> - If your project has a <code>./chart</code> directory with a <code>Chart.yaml</code>
+file in it, Auto DevOps will detect the chart and use it instead of the <a href="https://gitlab.com/charts/charts.gitlab.io/tree/master/charts/auto-deploy-app" rel="nofollow noreferrer noopener" target="_blank">default
+one</a>.
+This can be a great way to control exactly how your application is deployed.</li>
+<li>
+<strong>Project variable</strong> - Create a <a href="../../ci/variables/README.md#secret-variables">project variable</a>
+<code>AUTO_DEVOPS_CHART</code> with the URL of a custom chart to use.</li>
+</ul>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#customizing-gitlab-ciyml" id="user-content-customizing-gitlab-ciyml"></a>Customizing <code>.gitlab-ci.yml</code>
+</h3>
+<p dir="auto">If you want to modify the CI/CD pipeline used by Auto DevOps, you can copy the
+<a href="https://gitlab.com/gitlab-org/gitlab-ci-yml/blob/master/Auto-DevOps.gitlab-ci.yml" rel="nofollow noreferrer noopener" target="_blank">Auto DevOps template</a> into your project's repo and edit as you see fit.</p>
+<p dir="auto">Assuming that your project is new or it doesn't have a <code>.gitlab-ci.yml</code> file
+present:</p>
+<ol dir="auto">
+<li>From your project home page, either click on the "Set up CI/CD" button, or click
+on the plus button and (<code>+</code>), then "New file"</li>
+<li>Pick <code>.gitlab-ci.yml</code> as the template type</li>
+<li>Select "Auto-DevOps" from the template dropdown</li>
+<li>Edit the template or add any jobs needed</li>
+<li>Give an appropriate commit message and hit "Commit changes"</li>
+</ol>
+<p dir="auto">TIP: <strong>Tip:</strong> The Auto DevOps template includes useful comments to help you
+customize it. For example, if you want deployments to go to a staging environment
+instead of directly to a production one, you can enable the <code>staging</code> job by
+renaming <code>.staging</code> to <code>staging</code>. Then make sure to uncomment the <code>when</code> key of
+the <code>production</code> job to turn it into a manual action instead of deploying
+automatically.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#postgresql-database-support" id="user-content-postgresql-database-support"></a>PostgreSQL database support</h3>
+<p dir="auto">In order to support applications that require a database,
+<a href="https://www.postgresql.org/" rel="nofollow noreferrer noopener" target="_blank">PostgreSQL</a> is provisioned by default. The credentials to access
+the database are preconfigured, but can be customized by setting the associated
+<a href="#environment-variables">variables</a>. These credentials can be used for defining a
+<code>DATABASE_URL</code> of the format:</p>
+<pre class="code highlight js-syntax-highlight yaml" lang="yaml" v-pre="true"><code><span class="line" id="LC1" lang="yaml"><span class="s">postgres://user:password@postgres-host:postgres-port/postgres-database</span></span></code></pre>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#environment-variables" id="user-content-environment-variables"></a>Environment variables</h3>
+<p dir="auto">The following variables can be used for setting up the Auto DevOps domain,
+providing a custom Helm chart, or scaling your application. PostgreSQL can be
+also be customized, and you can easily use a <a href="#custom-buildpacks">custom buildpack</a>.</p>
+<table dir="auto">
+<thead>
+<tr>
+<th><strong>Variable</strong></th>
+<th><strong>Description</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AUTO_DEVOPS_DOMAIN</code></td>
+<td>The <a href="#auto-devops-domain">Auto DevOps domain</a>; by default set automatically by the <a href="#enabling-auto-devops">Auto DevOps setting</a>.</td>
+</tr>
+<tr>
+<td><code>AUTO_DEVOPS_CHART</code></td>
+<td>The Helm Chart used to deploy your apps; defaults to the one <a href="https://gitlab.com/charts/charts.gitlab.io/tree/master/charts/auto-deploy-app" rel="nofollow noreferrer noopener" target="_blank">provided by GitLab</a>.</td>
+</tr>
+<tr>
+<td><code>REPLICAS</code></td>
+<td>The number of replicas to deploy; defaults to 1.</td>
+</tr>
+<tr>
+<td><code>PRODUCTION_REPLICAS</code></td>
+<td>The number of replicas to deploy in the production environment. This takes precedence over <code>REPLICAS</code>; defaults to 1.</td>
+</tr>
+<tr>
+<td><code>CANARY_REPLICAS</code></td>
+<td>The number of canary replicas to deploy for <a href="https://docs.gitlab.com/ee/user/project/canary_deployments.html" rel="nofollow noreferrer noopener" target="_blank">Canary Deployments</a>; defaults to 1</td>
+</tr>
+<tr>
+<td><code>CANARY_PRODUCTION_REPLICAS</code></td>
+<td>The number of canary replicas to deploy for <a href="https://docs.gitlab.com/ee/user/project/canary_deployments.html" rel="nofollow noreferrer noopener" target="_blank">Canary Deployments</a> in the production environment. This takes precedence over <code>CANARY_REPLICAS</code>; defaults to 1</td>
+</tr>
+<tr>
+<td><code>POSTGRES_ENABLED</code></td>
+<td>Whether PostgreSQL is enabled; defaults to <code>"true"</code>. Set to <code>false</code> to disable the automatic deployment of PostgreSQL.</td>
+</tr>
+<tr>
+<td><code>POSTGRES_USER</code></td>
+<td>The PostgreSQL user; defaults to <code>user</code>. Set it to use a custom username.</td>
+</tr>
+<tr>
+<td><code>POSTGRES_PASSWORD</code></td>
+<td>The PostgreSQL password; defaults to <code>testing-password</code>. Set it to use a custom password.</td>
+</tr>
+<tr>
+<td><code>POSTGRES_DB</code></td>
+<td>The PostgreSQL database name; defaults to the value of <a href="../../ci/variables/README.md#predefined-variables-environment-variables"><code>$CI_ENVIRONMENT_SLUG</code></a>. Set it to use a custom database name.</td>
+</tr>
+<tr>
+<td><code>BUILDPACK_URL</code></td>
+<td>The buildpack's full URL. It can point to either Git repositories or a tarball URL. For Git repositories, it is possible to point to a specific <code>ref</code>, for example <code>https://github.com/heroku/heroku-buildpack-ruby.git#v142</code>
+</td>
+</tr>
+<tr>
+<td><code>SAST_CONFIDENCE_LEVEL</code></td>
+<td>The minimum confidence level of security issues you want to be reported; <code>1</code> for Low, <code>2</code> for Medium, <code>3</code> for High; defaults to <code>3</code>.</td>
+</tr>
+<tr>
+<td><code>DEP_SCAN_DISABLE_REMOTE_CHECKS</code></td>
+<td>Whether remote Dependency Scanning checks are disabled; defaults to <code>"false"</code>. Set to <code>"true"</code> to disable checks that send data to GitLab central servers. <a href="https://gitlab.com/gitlab-org/security-products/dependency-scanning#remote-checks" rel="nofollow noreferrer noopener" target="_blank">Read more about remote checks</a>.</td>
+</tr>
+<tr>
+<td><code>STAGING_ENABLED</code></td>
+<td>From GitLab 10.8, this variable can be used to define a <a href="#deploy-policy-for-staging-and-production-environments">deploy policy for staging and production environments</a>.</td>
+</tr>
+<tr>
+<td><code>CANARY_ENABLED</code></td>
+<td>From GitLab 11.0, this variable can be used to define a <a href="#deploy-policy-for-canary-environments">deploy policy for canary environments</a>.</td>
+</tr>
+<tr>
+<td><code>INCREMENTAL_ROLLOUT_ENABLED</code></td>
+<td>From GitLab 10.8, this variable can be used to enable an <a href="#incremental-rollout-to-production">incremental rollout</a> of your application for the production environment.</td>
+</tr>
+<tr>
+<td><code>TEST_DISABLED</code></td>
+<td>From GitLab 11.0, this variable can be used to disable the <code>test</code> job. If the variable is present, the job will not be created.</td>
+</tr>
+<tr>
+<td><code>CODEQUALITY_DISABLED</code></td>
+<td>From GitLab 11.0, this variable can be used to disable the <code>codequality</code> job. If the variable is present, the job will not be created.</td>
+</tr>
+<tr>
+<td><code>SAST_DISABLED</code></td>
+<td>From GitLab 11.0, this variable can be used to disable the <code>sast</code> job. If the variable is present, the job will not be created.</td>
+</tr>
+<tr>
+<td><code>DEPENDENCY_SCANNING_DISABLED</code></td>
+<td>From GitLab 11.0, this variable can be used to disable the <code>dependency_scanning</code> job. If the variable is present, the job will not be created.</td>
+</tr>
+<tr>
+<td><code>CONTAINER_SCANNING_DISABLED</code></td>
+<td>From GitLab 11.0, this variable can be used to disable the <code>sast:container</code> job. If the variable is present, the job will not be created.</td>
+</tr>
+<tr>
+<td><code>REVIEW_DISABLED</code></td>
+<td>From GitLab 11.0, this variable can be used to disable the <code>review</code> and the manual <code>review:stop</code> job. If the variable is present, these jobs will not be created.</td>
+</tr>
+<tr>
+<td><code>DAST_DISABLED</code></td>
+<td>From GitLab 11.0, this variable can be used to disable the <code>dast</code> job. If the variable is present, the job will not be created.</td>
+</tr>
+<tr>
+<td><code>PERFORMANCE_DISABLED</code></td>
+<td>From GitLab 11.0, this variable can be used to disable the <code>performance</code> job. If the variable is present, the job will not be created.</td>
+</tr>
+</tbody>
+</table>
+<p dir="auto">TIP: <strong>Tip:</strong>
+Set up the replica variables using a
+<a href="../../ci/variables/README.md#secret-variables">project variable</a>
+and scale your application by just redeploying it!</p>
+<p dir="auto">CAUTION: <strong>Caution:</strong>
+You should <em>not</em> scale your application using Kubernetes directly. This can
+cause confusion with Helm not detecting the change, and subsequent deploys with
+Auto DevOps can undo your changes.</p>
+<h4 dir="auto">
+<a aria-hidden="true" class="anchor" href="#advanced-replica-variables-setup" id="user-content-advanced-replica-variables-setup"></a>Advanced replica variables setup</h4>
+<p dir="auto">Apart from the two replica-related variables for production mentioned above,
+you can also use others for different environments.</p>
+<p dir="auto">There's a very specific mapping between Kubernetes' label named <code>track</code>,
+GitLab CI/CD environment names, and the replicas environment variable.
+The general rule is: <code>TRACK_ENV_REPLICAS</code>. Where:</p>
+<ul dir="auto">
+<li>
+<code>TRACK</code>: The capitalized value of the <code>track</code>
+<a href="https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/" rel="nofollow noreferrer noopener" target="_blank">Kubernetes label</a>
+in the Helm Chart app definition. If not set, it will not be taken into account
+to the variable name.</li>
+<li>
+<code>ENV</code>: The capitalized environment name of the deploy job that is set in
+<code>.gitlab-ci.yml</code>.</li>
+</ul>
+<p dir="auto">That way, you can define your own <code>TRACK_ENV_REPLICAS</code> variables with which
+you will be able to scale the pod's replicas easily.</p>
+<p dir="auto">In the example below, the environment's name is <code>qa</code> and it deploys the track
+<code>foo</code> which would result in looking for the <code>FOO_QA_REPLICAS</code> environment
+variable:</p>
+<pre class="code highlight js-syntax-highlight yaml" lang="yaml" v-pre="true"><code><span class="line" id="LC1" lang="yaml"><span class="na">QA testing</span><span class="pi">:</span></span>
+<span class="line" id="LC2" lang="yaml">  <span class="na">stage</span><span class="pi">:</span> <span class="s">deploy</span></span>
+<span class="line" id="LC3" lang="yaml">  <span class="na">environment</span><span class="pi">:</span></span>
+<span class="line" id="LC4" lang="yaml">    <span class="na">name</span><span class="pi">:</span> <span class="s">qa</span></span>
+<span class="line" id="LC5" lang="yaml">  <span class="na">script</span><span class="pi">:</span></span>
+<span class="line" id="LC6" lang="yaml">  <span class="pi">-</span> <span class="s">deploy foo</span></span></code></pre>
+<p dir="auto">The track <code>foo</code> being referenced would also need to be defined in the
+application's Helm chart, like:</p>
+<pre class="code highlight js-syntax-highlight yaml" lang="yaml" v-pre="true"><code><span class="line" id="LC1" lang="yaml"><span class="na">replicaCount</span><span class="pi">:</span> <span class="s">1</span></span>
+<span class="line" id="LC2" lang="yaml"><span class="na">image</span><span class="pi">:</span></span>
+<span class="line" id="LC3" lang="yaml">  <span class="na">repository</span><span class="pi">:</span> <span class="s">gitlab.example.com/group/project</span></span>
+<span class="line" id="LC4" lang="yaml">  <span class="na">tag</span><span class="pi">:</span> <span class="s">stable</span></span>
+<span class="line" id="LC5" lang="yaml">  <span class="na">pullPolicy</span><span class="pi">:</span> <span class="s">Always</span></span>
+<span class="line" id="LC6" lang="yaml">  <span class="na">secrets</span><span class="pi">:</span></span>
+<span class="line" id="LC7" lang="yaml">    <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">gitlab-registry</span></span>
+<span class="line" id="LC8" lang="yaml"><span class="na">application</span><span class="pi">:</span></span>
+<span class="line" id="LC9" lang="yaml">  <span class="na">track</span><span class="pi">:</span> <span class="s">foo</span></span>
+<span class="line" id="LC10" lang="yaml">  <span class="na">tier</span><span class="pi">:</span> <span class="s">web</span></span>
+<span class="line" id="LC11" lang="yaml"><span class="na">service</span><span class="pi">:</span></span>
+<span class="line" id="LC12" lang="yaml">  <span class="na">enabled</span><span class="pi">:</span> <span class="no">true</span></span>
+<span class="line" id="LC13" lang="yaml">  <span class="na">name</span><span class="pi">:</span> <span class="s">web</span></span>
+<span class="line" id="LC14" lang="yaml">  <span class="na">type</span><span class="pi">:</span> <span class="s">ClusterIP</span></span>
+<span class="line" id="LC15" lang="yaml">  <span class="na">url</span><span class="pi">:</span> <span class="s">http://my.host.com/</span></span>
+<span class="line" id="LC16" lang="yaml">  <span class="na">externalPort</span><span class="pi">:</span> <span class="s">5000</span></span>
+<span class="line" id="LC17" lang="yaml">  <span class="na">internalPort</span><span class="pi">:</span> <span class="s">5000</span></span></code></pre>
+<h4 dir="auto">
+<a aria-hidden="true" class="anchor" href="#deploy-policy-for-staging-and-production-environments" id="user-content-deploy-policy-for-staging-and-production-environments"></a>Deploy policy for staging and production environments</h4>
+<blockquote dir="auto">
+<p><a href="https://gitlab.com/gitlab-org/gitlab-ci-yml/merge_requests/160" rel="nofollow noreferrer noopener" target="_blank">Introduced</a>
+in GitLab 10.8.</p>
+</blockquote>
+<p dir="auto">TIP: <strong>Tip:</strong>
+You can also set this inside your <a href="#deployment-strategy">project's settings</a>.</p>
+<p dir="auto">The normal behavior of Auto DevOps is to use Continuous Deployment, pushing
+automatically to the <code>production</code> environment every time a new pipeline is run
+on the default branch. However, there are cases where you might want to use a
+staging environment and deploy to production manually. For this scenario, the
+<code>STAGING_ENABLED</code> environment variable was introduced.</p>
+<p dir="auto">If <code>STAGING_ENABLED</code> is defined in your project (e.g., set <code>STAGING_ENABLED</code> to
+<code>1</code> as a secret variable), then the application will be automatically deployed
+to a <code>staging</code> environment, and a  <code>production_manual</code> job will be created for
+you when you're ready to manually deploy to production.</p>
+<h4 dir="auto">
+<a aria-hidden="true" class="anchor" href="#deploy-policy-for-canary-environments-premium" id="user-content-deploy-policy-for-canary-environments-premium"></a>Deploy policy for canary environments <strong>[PREMIUM]</strong>
+</h4>
+<blockquote dir="auto">
+<p><a href="https://gitlab.com/gitlab-org/gitlab-ci-yml/merge_requests/171" rel="nofollow noreferrer noopener" target="_blank">Introduced</a>
+in GitLab 11.0.</p>
+</blockquote>
+<p dir="auto">A <a href="https://docs.gitlab.com/ee/user/project/canary_deployments.html" rel="nofollow noreferrer noopener" target="_blank">canary environment</a> can be used
+before any changes are deployed to production.</p>
+<p dir="auto">If <code>CANARY_ENABLED</code> is defined in your project (e.g., set <code>CANARY_ENABLED</code> to
+<code>1</code> as a secret variable) then two manual jobs will be created:</p>
+<ul dir="auto">
+<li>
+<code>canary</code> which will deploy the application to the canary environment</li>
+<li>
+<code>production_manual</code> which is to be used by you when you're ready to manually
+deploy to production.</li>
+</ul>
+<h4 dir="auto">
+<a aria-hidden="true" class="anchor" href="#incremental-rollout-to-production-premium" id="user-content-incremental-rollout-to-production-premium"></a>Incremental rollout to production <strong>[PREMIUM]</strong>
+</h4>
+<blockquote dir="auto">
+<p><a href="https://gitlab.com/gitlab-org/gitlab-ee/issues/5415" rel="nofollow noreferrer noopener" target="_blank">Introduced</a> in GitLab 10.8.</p>
+</blockquote>
+<p dir="auto">TIP: <strong>Tip:</strong>
+You can also set this inside your <a href="#deployment-strategy">project's settings</a>.</p>
+<p dir="auto">When you have a new version of your app to deploy in production, you may want
+to use an incremental rollout to replace just a few pods with the latest code.
+This will allow you to first check how the app is behaving, and later manually
+increasing the rollout up to 100%.</p>
+<p dir="auto">If <code>INCREMENTAL_ROLLOUT_ENABLED</code> is defined in your project (e.g., set
+<code>INCREMENTAL_ROLLOUT_ENABLED</code> to <code>1</code> as a secret variable), then instead of the
+standard <code>production</code> job, 4 different
+<a href="../../ci/pipelines.md#manual-actions-from-the-pipeline-graph">manual jobs</a>
+will be created:</p>
+<ol dir="auto">
+<li><code>rollout 10%</code></li>
+<li><code>rollout 25%</code></li>
+<li><code>rollout 50%</code></li>
+<li><code>rollout 100%</code></li>
+</ol>
+<p dir="auto">The percentage is based on the <code>REPLICAS</code> variable and defines the number of
+pods you want to have for your deployment. If you say <code>10</code>, and then you run
+the <code>10%</code> rollout job, there will be <code>1</code> new pod + <code>9</code> old ones.</p>
+<p dir="auto">To start a job, click on the play icon next to the job's name. You are not
+required to go from <code>10%</code> to <code>100%</code>, you can jump to whatever job you want.
+You can also scale down by running a lower percentage job, just before hitting
+<code>100%</code>. Once you get to <code>100%</code>, you cannot scale down, and you'd have to roll
+back by redeploying the old version using the
+<a href="../../ci/environments.md#rolling-back-changes">rollback button</a> in the
+environment page.</p>
+<p dir="auto">Below, you can see how the pipeline will look if the rollout or staging
+variables are defined.</p>
+<ul dir="auto">
+<li>
+<p><strong>Without <code>INCREMENTAL_ROLLOUT_ENABLED</code> and without <code>STAGING_ENABLED</code></strong></p>
+<p><a class="no-attachment-icon" href="/img/rollout_staging_disabled.png" rel="noopener noreferrer" target="_blank"><img alt="Staging and rollout disabled" class="lazy" data-src="img/rollout_staging_disabled.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+</li>
+<li>
+<p><strong>Without <code>INCREMENTAL_ROLLOUT_ENABLED</code> and with <code>STAGING_ENABLED</code></strong></p>
+<p><a class="no-attachment-icon" href="/img/staging_enabled.png" rel="noopener noreferrer" target="_blank"><img alt="Staging enabled" class="lazy" data-src="img/staging_enabled.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+</li>
+<li>
+<p><strong>With <code>INCREMENTAL_ROLLOUT_ENABLED</code> and without <code>STAGING_ENABLED</code></strong></p>
+<p><a class="no-attachment-icon" href="/img/rollout_enabled.png" rel="noopener noreferrer" target="_blank"><img alt="Rollout enabled" class="lazy" data-src="img/rollout_enabled.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+</li>
+<li>
+<p><strong>With <code>INCREMENTAL_ROLLOUT_ENABLED</code> and with <code>STAGING_ENABLED</code></strong></p>
+<p><a class="no-attachment-icon" href="/img/rollout_staging_enabled.png" rel="noopener noreferrer" target="_blank"><img alt="Rollout and staging enabled" class="lazy" data-src="img/rollout_staging_enabled.png" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="/></a></p>
+</li>
+</ul>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#currently-supported-languages" id="user-content-currently-supported-languages"></a>Currently supported languages</h2>
+<p dir="auto">NOTE: <strong>Note:</strong>
+Not all buildpacks support Auto Test yet, as it's a relatively new
+enhancement. All of Heroku's <a href="https://devcenter.heroku.com/articles/heroku-ci#currently-supported-languages" rel="nofollow noreferrer noopener" target="_blank">officially supported
+languages</a>
+support it, and some third-party buildpacks as well e.g., Go, Node, Java, PHP,
+Python, Ruby, Gradle, Scala, and Elixir all support Auto Test, but notably the
+multi-buildpack does not.</p>
+<p dir="auto">As of GitLab 10.0, the supported buildpacks are:</p>
+<pre class="code highlight js-syntax-highlight plaintext" lang="plaintext" v-pre="true"><code><span class="line" id="LC1" lang="plaintext">- heroku-buildpack-multi     v1.0.0</span>
+<span class="line" id="LC2" lang="plaintext">- heroku-buildpack-ruby      v168</span>
+<span class="line" id="LC3" lang="plaintext">- heroku-buildpack-nodejs    v99</span>
+<span class="line" id="LC4" lang="plaintext">- heroku-buildpack-clojure   v77</span>
+<span class="line" id="LC5" lang="plaintext">- heroku-buildpack-python    v99</span>
+<span class="line" id="LC6" lang="plaintext">- heroku-buildpack-java      v53</span>
+<span class="line" id="LC7" lang="plaintext">- heroku-buildpack-gradle    v23</span>
+<span class="line" id="LC8" lang="plaintext">- heroku-buildpack-scala     v78</span>
+<span class="line" id="LC9" lang="plaintext">- heroku-buildpack-play      v26</span>
+<span class="line" id="LC10" lang="plaintext">- heroku-buildpack-php       v122</span>
+<span class="line" id="LC11" lang="plaintext">- heroku-buildpack-go        v72</span>
+<span class="line" id="LC12" lang="plaintext">- heroku-buildpack-erlang    fa17af9</span>
+<span class="line" id="LC13" lang="plaintext">- buildpack-nginx            v8</span></code></pre>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#limitations" id="user-content-limitations"></a>Limitations</h2>
+<p dir="auto">The following restrictions apply.</p>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#private-project-support" id="user-content-private-project-support"></a>Private project support</h3>
+<p dir="auto">CAUTION: <strong>Caution:</strong> Private project support in Auto DevOps is experimental.</p>
+<p dir="auto">When a project has been marked as private, GitLab's <a href="/user/project/container_registry.md">Container
+Registry</a> requires authentication when downloading
+containers. Auto DevOps will automatically provide the required authentication
+information to Kubernetes, allowing temporary access to the registry.
+Authentication credentials will be valid while the pipeline is running, allowing
+for a successful initial deployment.</p>
+<p dir="auto">After the pipeline completes, Kubernetes will no longer be able to access the
+Container Registry. <strong>Restarting a pod, scaling a service, or other actions which
+require on-going access to the registry may fail</strong>. On-going secure access is
+planned for a subsequent release.</p>
+<h2 dir="auto">
+<a aria-hidden="true" class="anchor" href="#troubleshooting" id="user-content-troubleshooting"></a>Troubleshooting</h2>
+<ul dir="auto">
+<li>Auto Build and Auto Test may fail in detecting your language/framework. There
+may be no buildpack for your application, or your application may be missing the
+key files the buildpack is looking for. For example, for ruby apps, you must
+have a <code>Gemfile</code> to be properly detected, even though it is possible to write a
+Ruby app without a <code>Gemfile</code>. Try specifying a <a href="#custom-buildpacks">custom
+buildpack</a>.</li>
+<li>Auto Test may fail because of a mismatch between testing frameworks. In this
+case, you may need to customize your <code>.gitlab-ci.yml</code> with your test commands.</li>
+</ul>
+<h3 dir="auto">
+<a aria-hidden="true" class="anchor" href="#disable-the-banner-instance-wide" id="user-content-disable-the-banner-instance-wide"></a>Disable the banner instance wide</h3>
+<p dir="auto">If an administrator would like to disable the banners on an instance level, this
+feature can be disabled either through the console:</p>
+<pre class="code highlight js-syntax-highlight shell" lang="shell" v-pre="true"><code><span class="line" id="LC1" lang="shell"><span class="nb">sudo </span>gitlab-rails console</span></code></pre>
+<p dir="auto">Then run:</p>
+<pre class="code highlight js-syntax-highlight ruby" lang="ruby" v-pre="true"><code><span class="line" id="LC1" lang="ruby"><span class="no">Feature</span><span class="p">.</span><span class="nf">get</span><span class="p">(</span><span class="ss">:auto_devops_banner_disabled</span><span class="p">).</span><span class="nf">enable</span></span></code></pre>
+<p dir="auto">Or through the HTTP API with an admin access token:</p>
+<pre class="code highlight js-syntax-highlight shell" lang="shell" v-pre="true"><code><span class="line" id="LC1" lang="shell">curl <span class="nt">--data</span> <span class="s2">"value=true"</span> <span class="nt">--header</span> <span class="s2">"PRIVATE-TOKEN: personal_access_token"</span> https://gitlab.example.com/api/v4/features/auto_devops_banner_disabled</span></code></pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

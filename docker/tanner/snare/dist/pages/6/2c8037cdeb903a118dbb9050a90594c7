@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Redmine: Details of all changes</title>
+  <link rel="self" href="http://172.20.254.134/issues/changes.atom"/>
+  <link rel="alternate" href="http://172.20.254.134/"/>
+  <id>http://172.20.254.134/</id>
+  <icon>http://172.20.254.134/favicon.ico?1528612569</icon>
+  <updated>2018-08-14T13:37:18+00:00</updated>
+  <author>
+    <name>Redmine</name>
+  </author>
+</feed>

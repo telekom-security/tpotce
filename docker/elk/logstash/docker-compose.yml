@@ -1,0 +1,18 @@
+version: '2.3'
+
+services:
+
+## Logstash service
+  logstash:
+    build: .
+    container_name: logstash
+    restart: always
+#    depends_on:
+#      elasticsearch:
+#        condition: service_healthy
+    env_file:
+     - /opt/tpot/etc/compose/elk_environment
+    image: "dtagdevsec/logstash:1811"
+    volumes:
+     - /data:/data
+     - /root/tpotce/docker/elk/logstash/dist/logstash.conf:/etc/logstash/conf.d/logstash.conf

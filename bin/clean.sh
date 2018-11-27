@@ -32,10 +32,14 @@ fuLOGROTATE () {
   local myHONEYTRAPATTACKSTGZ="/data/honeytrap/attacks.tgz"
   local myHONEYTRAPDL="/data/honeytrap/downloads/"
   local myHONEYTRAPDLTGZ="/data/honeytrap/downloads.tgz"
+  local myTANNERF="/data/tanner/files/"
+  local myTANNERFTGZ="/data/tanner/files.tgz"
 
 # Ensure correct permissions and ownerships for logrotate to run without issues
 chmod 760 /data/ -R
 chown tpot:tpot /data -R
+chmod 644 /data/nginx/conf -R
+chmod 644 /data/nginx/cert -R
 
 # Run logrotate with force (-f) first, so the status file can be written and race conditions (with tar) be avoided
 logrotate -f -s $mySTATUS $myCONF
@@ -47,21 +51,30 @@ if [ "$(fuEMPTY $myDIONAEABI)" != "0" ]; then tar cvfz $myDIONAEABITGZ $myDIONAE
 if [ "$(fuEMPTY $myDIONAEABIN)" != "0" ]; then tar cvfz $myDIONAEABINTGZ $myDIONAEABIN; fi
 if [ "$(fuEMPTY $myHONEYTRAPATTACKS)" != "0" ]; then tar cvfz $myHONEYTRAPATTACKSTGZ $myHONEYTRAPATTACKS; fi
 if [ "$(fuEMPTY $myHONEYTRAPDL)" != "0" ]; then tar cvfz $myHONEYTRAPDLTGZ $myHONEYTRAPDL; fi
+if [ "$(fuEMPTY $myTANNERF)" != "0" ]; then tar cvfz $myTANNERFTGZ $myTANNERF; fi
 
 # Ensure correct permissions and ownership for previously created archives
-chmod 760 $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ
-chown tpot:tpot $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ
+chmod 760 $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ $myTANNERFTGZ
+chown tpot:tpot $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ $myTANNERFTGZ
 
 # Need to remove subfolders since too many files cause rm to exit with errors
-rm -rf $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL
+rm -rf $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL $myTANNERF
 
 # Recreate subfolders with correct permissions and ownership
-mkdir -p $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL
-chmod 760 $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL 
-chown tpot:tpot $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL
+mkdir -p $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL $myTANNERF
+chmod 760 $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL $myTANNERF
+chown tpot:tpot $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL $myTANNERF
 
 # Run logrotate again to account for previously created archives - DO NOT FORCE HERE!
 logrotate -s $mySTATUS $myCONF
+}
+
+# Let's create a function to clean up and prepare ciscoasa data
+fuCISCOASA () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/ciscoasa/*; fi
+  mkdir -p /data/ciscoasa/log
+  chmod 760 /data/ciscoasa -R
+  chown tpot:tpot /data/ciscoasa -R
 }
 
 # Let's create a function to clean up and prepare conpot data
@@ -101,25 +114,33 @@ fuELK () {
   # ELK data will be kept for <= 90 days, check /etc/crontab for curator modification
   # ELK daemon log files will be removed
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/elk/log/*; fi
-  mkdir -p /data/elk 
+  mkdir -p /data/elk
   chmod 760 /data/elk -R
   chown tpot:tpot /data/elk -R
-}
-
-# Let's create a function to clean up and prepare emobility data
-fuEMOBILITY () {
-  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/emobility/*; fi
-  mkdir -p /data/emobility/log
-  chmod 760 /data/emobility -R
-  chown tpot:tpot /data/emobility -R
 }
 
 # Let's create a function to clean up and prepare glastopf data
 fuGLASTOPF () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/glastopf/*; fi
-  mkdir -p /data/glastopf
+  mkdir -p /data/glastopf/db /data/glastopf/log
   chmod 760 /data/glastopf -R
   chown tpot:tpot /data/glastopf -R
+}
+
+# Let's create a function to clean up and prepare glastopf data
+fuGLUTTON () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/glutton/*; fi
+  mkdir -p /data/glutton/log
+  chmod 760 /data/glutton -R
+  chown tpot:tpot /data/glutton -R
+}
+
+# Let's create a function to clean up and prepare heralding data
+fuHERALDING () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/heralding/*; fi
+  mkdir -p /data/heralding/log
+  chmod 760 /data/heralding -R
+  chown tpot:tpot /data/heralding -R
 }
 
 # Let's create a function to clean up and prepare honeytrap data
@@ -136,6 +157,22 @@ fuMAILONEY () {
   mkdir -p /data/mailoney/log/
   chmod 760 /data/mailoney/ -R
   chown tpot:tpot /data/mailoney/ -R
+}
+
+# Let's create a function to clean up and prepare mailoney data
+fuMEDPOT () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/medpot/*; fi
+  mkdir -p /data/medpot/log/
+  chmod 760 /data/medpot/ -R
+  chown tpot:tpot /data/medpot/ -R
+}
+
+# Let's create a function to clean up nginx logs
+fuNGINX () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/nginx/log/*; fi
+  touch /data/nginx/log/error.log
+  chmod 644 /data/nginx/conf -R
+  chmod 644 /data/nginx/cert -R
 }
 
 # Let's create a function to clean up and prepare rdpy data
@@ -170,14 +207,13 @@ fuP0F () {
   chown tpot:tpot -R /data/p0f
 }
 
-# Let's create a function to clean up and prepare vnclowpot data
-fuVNCLOWPOT () {
-  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/vnclowpot/*; fi
-  mkdir -p /data/vnclowpot/log/
-  chmod 760 /data/vnclowpot/ -R
-  chown tpot:tpot /data/vnclowpot/ -R
+# Let's create a function to clean up and prepare p0f data
+fuTANNER () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/tanner/*; fi
+  mkdir -p /data/tanner/log /data/tanner/files
+  chmod 760 -R /data/tanner
+  chown tpot:tpot -R /data/tanner
 }
-
 
 # Avoid unwanted cleaning
 if [ "$myPERSISTENCE" = "" ];
@@ -201,19 +237,22 @@ if [ "$myPERSISTENCE" = "on" ];
     fuLOGROTATE
   else
     echo "Cleaning up and preparing data folders."
+    fuCISCOASA
     fuCONPOT
     fuCOWRIE
     fuDIONAEA
     fuELASTICPOT
     fuELK
-    fuEMOBILITY
     fuGLASTOPF
+    fuGLUTTON
+    fuHERALDING
     fuHONEYTRAP
     fuMAILONEY
+    fuMEDPOT
+    fuNGINX
     fuRDPY
     fuSPIDERFOOT
     fuSURICATA
     fuP0F
-    fuVNCLOWPOT
+    fuTANNER
   fi
-

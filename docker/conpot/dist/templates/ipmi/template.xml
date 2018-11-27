@@ -1,0 +1,18 @@
+<core>
+    <template>
+        <!-- General information about the template -->
+        <entity name="unit">371</entity>
+        <entity name="vendor">IPMI</entity>
+        <entity name="description">Creates a simple IPMI device</entity>
+        <entity name="protocols">IPMI</entity>
+        <entity name="creator">Lukas Rist</entity>
+    </template>
+    <databus>
+        <!-- Core value that can be retrieved from the databus by key -->
+        <key_value_mappings>
+          <key name="SystemName">
+              <value type="value">"DoE"</value>
+          </key>
+        </key_value_mappings>
+    </databus>
+</core>

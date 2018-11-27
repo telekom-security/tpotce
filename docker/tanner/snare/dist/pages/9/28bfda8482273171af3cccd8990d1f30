@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/css" href="/stylesheets/rss.css"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>user's Blog!</title>
+    <link>http://172.20.254.140:80</link>
+    <atom:link href="http://172.20.254.140/articles.rss" rel="self" type="application/rss+xml"/>
+    <language>en-us</language>
+    <ttl>40</ttl>
+    <description></description>
+    <item>
+      <title>Hello World!</title>
+      <description>&lt;p&gt;Welcome to Publify. This is your first article. Edit or delete it, then start blogging!&lt;/p&gt;</description>
+      <pubDate>Tue, 07 Aug 2018 13:06:10 +0000</pubDate>
+      <guid isPermaLink="false">urn:uuid:af558c3a-50f7-41f9-a01c-cf99a599119b</guid>
+      <dc:creator>UserName LastName</dc:creator>
+      <comments>http://172.20.254.140:80/2018/08/07/hello-world#comments</comments>
+      <link>http://172.20.254.140:80/2018/08/07/hello-world</link>
+    </item>
+  </channel>
+</rss>

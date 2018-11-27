@@ -1,6 +1,4 @@
-# T-Pot (Standard)
-# For docker-compose ...
-version: '2.1'
+version: '2.3'
 
 networks:
   spiderfoot_local:
@@ -9,12 +7,13 @@ services:
 
 # Spiderfoot service
   spiderfoot:
+    build: .
     container_name: spiderfoot
     restart: always
     networks:
      - spiderfoot_local
     ports:
      - "127.0.0.1:64303:8080"
-    image: "dtagdevsec/spiderfoot:1710"
+    image: "dtagdevsec/spiderfoot:1811"
     volumes:
      - /data/spiderfoot/spiderfoot.db:/home/spiderfoot/spiderfoot.db

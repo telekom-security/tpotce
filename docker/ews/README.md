@@ -1,4 +1,4 @@
-[![](https://images.microbadger.com/badges/version/dtagdevsec/ewsposter:1710.svg)](https://microbadger.com/images/dtagdevsec/ewsposter:1710 "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/dtagdevsec/ewsposter:1710.svg)](https://microbadger.com/images/dtagdevsec/ewsposter:1710 "Get your own image badge on microbadger.com")
+[![](https://images.microbadger.com/badges/version/dtagdevsec/ewsposter:1811.svg)](https://microbadger.com/images/dtagdevsec/ewsposter:1811 "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/dtagdevsec/ewsposter:1811.svg)](https://microbadger.com/images/dtagdevsec/ewsposter:1811 "Get your own image badge on microbadger.com")
 
 # ewsposter
 

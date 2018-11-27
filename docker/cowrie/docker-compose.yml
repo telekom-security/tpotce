@@ -1,6 +1,4 @@
-# T-Pot (Standard)
-# For docker-compose ...
-version: '2.1'
+version: '2.3'
 
 networks:
   cowrie_local:
@@ -9,16 +7,19 @@ services:
 
 # Cowrie service
   cowrie:
+    build: .
     container_name: cowrie
     restart: always
+    tmpfs:
+     - /tmp/cowrie:uid=2000,gid=2000
+     - /tmp/cowrie/data:uid=2000,gid=2000
     networks:
      - cowrie_local
-    cap_add:
-     - NET_BIND_SERVICE
     ports:
-     - "22:2222"
-     - "23:2223"
-    image: "dtagdevsec/cowrie:1710"
+     - "22:22"
+     - "23:23"
+    image: "dtagdevsec/cowrie:1811"
+    read_only: true
     volumes:
      - /data/cowrie/downloads:/home/cowrie/cowrie/dl
      - /data/cowrie/keys:/home/cowrie/cowrie/etc

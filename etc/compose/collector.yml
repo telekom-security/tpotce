@@ -1,0 +1,211 @@
+# T-Pot (Collector)
+# Do not erase ports sections, these are used by /opt/tpot/bin/rules.sh to setup iptables ACCEPT rules for NFQ (honeytrap / glutton)
+version: '2.3'
+
+networks:
+  cyberchef_local:
+  heralding_local:
+  ewsposter_local:
+  spiderfoot_local:
+
+services:
+
+##################
+#### Honeypots
+##################
+
+# Heralding service
+  heralding:
+    container_name: heralding
+    restart: always
+    tmpfs:
+     - /tmp/heralding:uid=2000,gid=2000
+    networks:
+     - heralding_local
+    ports:
+     - "21:21"
+     - "22:22"
+     - "23:23"
+     - "25:25"
+     - "80:80"
+     - "110:110"
+     - "143:143"
+     - "443:443"
+     - "993:993"
+     - "995:995"
+     - "5432:5432"
+     - "5900:5900"
+    image: "dtagdevsec/heralding:1811"
+    read_only: true
+    volumes:
+     - /data/heralding/log:/var/log/heralding
+
+# Honeytrap service
+  honeytrap:
+    container_name: honeytrap
+    restart: always
+    tmpfs:
+     - /tmp/honeytrap:uid=2000,gid=2000
+    network_mode: "host"
+    cap_add:
+     - NET_ADMIN
+    image: "dtagdevsec/honeytrap:1811"
+    read_only: true
+    volumes:
+     - /data/honeytrap/attacks:/opt/honeytrap/var/attacks
+     - /data/honeytrap/downloads:/opt/honeytrap/var/downloads
+     - /data/honeytrap/log:/opt/honeytrap/var/log
+
+
+##################
+#### NSM
+##################
+
+# P0f service
+  p0f:
+    container_name: p0f
+    restart: always
+    network_mode: "host"
+    image: "dtagdevsec/p0f:1811"
+    read_only: true
+    volumes:
+     - /data/p0f/log:/var/log/p0f
+
+# Suricata service
+  suricata:
+    container_name: suricata
+    restart: always
+    environment:
+    # For ET Pro ruleset replace "OPEN" with your OINKCODE
+     - OINKCODE=OPEN
+    network_mode: "host"
+    cap_add:
+     - NET_ADMIN
+     - SYS_NICE
+     - NET_RAW
+    image: "dtagdevsec/suricata:1811"
+    volumes:
+     - /data/suricata/log:/var/log/suricata
+
+
+##################
+#### Tools
+##################
+
+# Cyberchef service
+  cyberchef:
+    container_name: cyberchef
+    restart: always
+    networks:
+     - cyberchef_local
+    ports:
+     - "127.0.0.1:64299:8000"
+    image: "dtagdevsec/cyberchef:1811"
+    read_only: true
+
+#### ELK
+## Elasticsearch service
+  elasticsearch:
+    container_name: elasticsearch
+    restart: always
+    environment:
+     - bootstrap.memory_lock=true
+     - ES_JAVA_OPTS=-Xms1024m -Xmx1024m
+     - ES_TMPDIR=/tmp
+    cap_add:
+     - IPC_LOCK
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    mem_limit: 4g
+    ports:
+     - "127.0.0.1:64298:9200"
+    image: "dtagdevsec/elasticsearch:1811"
+    volumes:
+     - /data:/data
+
+## Kibana service
+  kibana:
+    container_name: kibana
+    restart: always
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    ports:
+     - "127.0.0.1:64296:5601"
+    image: "dtagdevsec/kibana:1811"
+
+## Logstash service
+  logstash:
+    container_name: logstash
+    restart: always
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    env_file:
+     - /opt/tpot/etc/compose/elk_environment
+    image: "dtagdevsec/logstash:1811"
+    volumes:
+     - /data:/data
+
+## Elasticsearch-head service
+  head:
+    container_name: head
+    restart: always
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    ports:
+     - "127.0.0.1:64302:9100"
+    image: "dtagdevsec/head:1811"
+    read_only: true
+
+# Ewsposter service
+  ewsposter:
+    container_name: ewsposter
+    restart: always
+    networks:
+     - ewsposter_local
+    env_file:
+     - /opt/tpot/etc/compose/elk_environment
+    image: "dtagdevsec/ewsposter:1811"
+    volumes:
+     - /data:/data
+     - /data/ews/conf/ews.ip:/opt/ewsposter/ews.ip
+
+# Nginx service
+  nginx:
+    container_name: nginx
+    restart: always
+    tmpfs:
+     - /var/tmp/nginx/client_body
+     - /var/tmp/nginx/proxy
+     - /var/tmp/nginx/fastcgi
+     - /var/tmp/nginx/uwsgi
+     - /var/tmp/nginx/scgi
+     - /run
+    network_mode: "host"
+    ports:
+     - "64297:64297"
+    image: "dtagdevsec/nginx:1811"
+    read_only: true
+    volumes:
+     - /data/nginx/cert/:/etc/nginx/cert/:ro
+     - /data/nginx/conf/nginxpasswd:/etc/nginx/nginxpasswd:ro
+     - /data/nginx/log/:/var/log/nginx/
+
+# Spiderfoot service
+  spiderfoot:
+    container_name: spiderfoot
+    restart: always
+    networks:
+     - spiderfoot_local
+    ports:
+     - "127.0.0.1:64303:8080"
+    image: "dtagdevsec/spiderfoot:1811"
+    volumes:
+     - /data/spiderfoot/spiderfoot.db:/home/spiderfoot/spiderfoot.db

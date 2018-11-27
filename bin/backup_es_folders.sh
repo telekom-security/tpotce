@@ -5,7 +5,7 @@ myES="http://127.0.0.1:64298/"
 myESSTATUS=$(curl -s -XGET ''$myES'_cluster/health' | jq '.' | grep -c green)
 if ! [ "$myESSTATUS" = "1" ]
   then
-    echo "### Elasticsearch is not available, try starting via 'systemctl start elk'."
+    echo "### Elasticsearch is not available, try starting via 'systemctl start tpot'."
     exit
   else
     echo "### Elasticsearch is available, now continuing."
@@ -16,7 +16,7 @@ fi
 myCOUNT=1
 myDATE=$(date +%Y%m%d%H%M)
 myELKPATH="/data/elk/data"
-myKIBANAINDEXNAME=$(curl -s -XGET ''$myES'_cat/indices/' | grep .kibana | awk '{ print $4 }')
+myKIBANAINDEXNAME=$(curl -s -XGET ''$myES'_cat/indices/' | grep -w ".kibana_1" | awk '{ print $4 }')
 myKIBANAINDEXPATH=$myELKPATH/nodes/0/indices/$myKIBANAINDEXNAME
 
 # Let's ensure normal operation on exit or if interrupted ...

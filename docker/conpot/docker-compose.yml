@@ -1,19 +1,131 @@
-version: '2.1'
+# CONPOT TEMPLATE=[default, IEC104, guardian_ast, ipmi, kamstrup_382, proxy]
+version: '2.3'
 
 networks:
-  conpot_local:
+  conpot_local_default:
+  conpot_local_IEC104:
+  conpot_local_guardian_ast:
+  conpot_local_ipmi:
+  conpot_local_kamstrup_382:
 
 services:
 
-# Conpot service
-  conpot:
-    container_name: conpot
+# Conpot default service
+  conpot_default:
+    build: .
+    container_name: conpot_default
     restart: always
+    environment:
+     - CONPOT_CONFIG=/etc/conpot/conpot.cfg
+     - CONPOT_JSON_LOG=/var/log/conpot/conpot_default.json
+     - CONPOT_LOG=/var/log/conpot/conpot_default.log
+     - CONPOT_TEMPLATE=default
+     - CONPOT_TMP=/tmp/conpot
+    tmpfs:
+     - /tmp/conpot:uid=2000,gid=2000
     networks:
-     - conpot_local
+     - conpot_local_default
+    ports:
+#    - "69:69"        
+     - "80:80"
+     - "102:102"
+     - "161:161"
+     - "502:502"
+#     - "623:623"
+     - "2121:21"
+     - "44818:44818"
+     - "47808:47808"
+    image: "dtagdevsec/conpot:1811"
+    read_only: true
+    volumes:
+     - /data/conpot/log:/var/log/conpot
+
+# Conpot IEC104 service
+  conpot_IEC104:
+    build: .
+    container_name: conpot_IEC104
+    restart: always
+    environment:
+     - CONPOT_CONFIG=/etc/conpot/conpot.cfg
+     - CONPOT_JSON_LOG=/var/log/conpot/conpot_IEC104.json
+     - CONPOT_LOG=/var/log/conpot/conpot_IEC104.log
+     - CONPOT_TEMPLATE=IEC104
+     - CONPOT_TMP=/tmp/conpot
+    tmpfs:
+     - /tmp/conpot:uid=2000,gid=2000
+    networks:
+     - conpot_local_IEC104
+    ports:
+#     - "161:161"
+     - "2404:2404"
+    image: "dtagdevsec/conpot:1811"
+    read_only: true
+    volumes:
+     - /data/conpot/log:/var/log/conpot
+
+# Conpot guardian_ast service
+  conpot_guardian_ast:
+    build: .
+    container_name: conpot_guardian_ast
+    restart: always
+    environment:
+     - CONPOT_CONFIG=/etc/conpot/conpot.cfg
+     - CONPOT_JSON_LOG=/var/log/conpot/conpot_guardian_ast.json
+     - CONPOT_LOG=/var/log/conpot/conpot_guardian_ast.log
+     - CONPOT_TEMPLATE=guardian_ast
+     - CONPOT_TMP=/tmp/conpot
+    tmpfs:
+     - /tmp/conpot:uid=2000,gid=2000
+    networks:
+     - conpot_local_guardian_ast
+    ports:
+     - "10001:10001"
+    image: "dtagdevsec/conpot:1811"
+    read_only: true
+    volumes:
+     - /data/conpot/log:/var/log/conpot
+
+# Conpot ipmi
+  conpot_ipmi:
+    build: .
+    container_name: conpot_ipmi
+    restart: always
+    environment:
+     - CONPOT_CONFIG=/etc/conpot/conpot.cfg
+     - CONPOT_JSON_LOG=/var/log/conpot/conpot_ipmi.json
+     - CONPOT_LOG=/var/log/conpot/conpot_ipmi.log
+     - CONPOT_TEMPLATE=ipmi
+     - CONPOT_TMP=/tmp/conpot
+    tmpfs:
+     - /tmp/conpot:uid=2000,gid=2000
+    networks:
+     - conpot_local_ipmi
+    ports:
+     - "623:623"
+    image: "dtagdevsec/conpot:1811"
+    read_only: true
+    volumes:
+     - /data/conpot/log:/var/log/conpot
+
+# Conpot kamstrup_382
+  conpot_kamstrup_382:
+    build: .
+    container_name: conpot_kamstrup_382
+    restart: always
+    environment:
+     - CONPOT_CONFIG=/etc/conpot/conpot.cfg
+     - CONPOT_JSON_LOG=/var/log/conpot/conpot_kamstrup_382.json
+     - CONPOT_LOG=/var/log/conpot/conpot_kamstrup_382.log
+     - CONPOT_TEMPLATE=kamstrup_382
+     - CONPOT_TMP=/tmp/conpot
+    tmpfs:
+     - /tmp/conpot:uid=2000,gid=2000
+    networks:
+     - conpot_local_kamstrup_382
     ports:
      - "1025:1025"
      - "50100:50100"
-    image: "dtagdevsec/conpot:1710"
+    image: "dtagdevsec/conpot:1811"
+    read_only: true
     volumes:
      - /data/conpot/log:/var/log/conpot

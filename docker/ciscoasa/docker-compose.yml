@@ -1,0 +1,19 @@
+version: '2.3'
+
+services:
+
+# Ciscoasa service
+  ciscoasa:
+    build: .
+    container_name: ciscoasa
+    restart: always
+    tmpfs:
+     - /tmp/ciscoasa:uid=2000,gid=2000
+    network_mode: "host"
+    ports:
+     - "5000:5000/udp"
+     - "8443:8443"
+    image: "dtagdevsec/ciscoasa:1811"
+    read_only: true
+    volumes:
+     - /data/ciscoasa/log:/var/log/ciscoasa

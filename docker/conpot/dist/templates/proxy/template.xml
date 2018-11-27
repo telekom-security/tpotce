@@ -1,0 +1,15 @@
+    <core>
+    <template>
+        <!-- General information about the template -->
+        <entity name="unit">Proxy</entity>
+        <entity name="vendor">None</entity>
+        <entity name="description">Sample template that demonstrates the proxy feature.</entity>
+        <entity name="protocols">Proxy</entity>
+        <entity name="creator">the conpot team</entity>
+    </template>
+    <databus>
+        <!-- Core value that can be retrieved from the databus by key -->
+        <key_value_mappings>
+        </key_value_mappings>
+    </databus>
+</core>

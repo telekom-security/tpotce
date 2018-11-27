@@ -1,0 +1,516 @@
+<core>
+    <template>
+        <!-- General information about the template -->
+        <entity name="unit">382</entity>
+        <entity name="vendor">Kamstrup</entity>
+        <entity name="description">Register clone of an existing Kamstrup 382 smart meter</entity>
+        <entity name="protocols">Kamstrup</entity>
+        <entity name="creator">Johnny Vestergaard</entity>
+    </template>
+    <databus>
+        <!-- Core value that can be retrieved from the databus by key -->
+        <key_value_mappings>
+            <key name="power_simulator">
+                <value type="function">conpot.protocols.kamstrup.usage_simulator.UsageSimulator</value>
+            </key>
+            <key name="register_1024">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1">
+                <value type="value">0</value>
+            </key>
+            <key name="register_2">
+                <value type="value">0</value>
+            </key>
+            <key name="register_13">
+                <value type="value">71832712</value>
+            </key>
+            <key name="register_14">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1054">
+                <value type="value">228</value>
+            </key>
+            <key name="register_1055">
+                <value type="value">229</value>
+            </key>
+            <key name="register_1056">
+                <value type="value">224</value>
+            </key>
+            <key name="register_1076">
+                <value type="value">511</value>
+            </key>
+            <key name="register_1077">
+                <value type="value">422</value>
+            </key>
+            <key name="register_1078">
+                <value type="value">144</value>
+            </key>
+            <key name="register_1080">
+                <value type="value">1000</value>
+            </key>
+            <key name="register_1081">
+                <value type="value">5499</value>
+            </key>
+            <key name="register_1082">
+                <value type="value">895</value>
+            </key>
+            <key name="register_3">
+                <value type="value">0</value>
+            </key>
+            <key name="register_4">
+                <value type="value">0</value>
+            </key>
+            <key name="register_5">
+                <value type="value">0</value>
+            </key>
+            <key name="register_6">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1025">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1033">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1034">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1035">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1036">
+                <value type="value">0</value>
+            </key>
+            <key name="register_15">
+                <value type="value">0</value>
+            </key>
+            <key name="register_16">
+                <value type="value">0</value>
+            </key>
+            <key name="register_17">
+                <value type="value">0</value>
+            </key>
+            <key name="register_18">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1027">
+                <value type="value">0</value>
+            </key>
+            <key name="register_20">
+                <value type="value">0</value>
+            </key>
+            <key name="register_21">
+                <value type="value">0</value>
+            </key>
+            <key name="register_22">
+                <value type="value">0</value>
+            </key>
+            <key name="register_23">
+                <value type="value">0</value>
+            </key>
+            <key name="register_24">
+                <value type="value">0</value>
+            </key>
+            <key name="register_25">
+                <value type="value">0</value>
+            </key>
+            <key name="register_26">
+                <value type="value">0</value>
+            </key>
+            <key name="register_27">
+                <value type="value">0</value>
+            </key>
+            <key name="register_28">
+                <value type="value">0</value>
+            </key>
+            <key name="register_29">
+                <value type="value">0</value>
+            </key>
+            <key name="register_30">
+                <value type="value">0</value>
+            </key>
+            <key name="register_31">
+                <value type="value">0</value>
+            </key>
+            <key name="register_32">
+                <value type="value">0</value>
+            </key>
+            <key name="register_33">
+                <value type="value">0</value>
+            </key>
+            <key name="register_34">
+                <value type="value">0</value>
+            </key>
+            <key name="register_35">
+                <value type="value">0</value>
+            </key>
+            <key name="register_36">
+                <value type="value">0</value>
+            </key>
+            <key name="register_37">
+                <value type="value">0</value>
+            </key>
+            <key name="register_38">
+                <value type="value">0</value>
+            </key>
+            <key name="register_39">
+                <value type="value">0</value>
+            </key>
+            <key name="register_40">
+                <value type="value">0</value>
+            </key>
+            <key name="register_41">
+                <value type="value">0</value>
+            </key>
+            <key name="register_42">
+                <value type="value">0</value>
+            </key>
+            <key name="register_43">
+                <value type="value">0</value>
+            </key>
+            <key name="register_44">
+                <value type="value">0</value>
+            </key>
+            <key name="register_45">
+                <value type="value">0</value>
+            </key>
+            <key name="register_46">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1071">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1072">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1073">
+                <value type="value">0</value>
+            </key>
+            <key name="register_50">
+                <value type="value">0</value>
+            </key>
+            <key name="register_51">
+                <value type="value">1258679</value>
+            </key>
+            <key name="register_52">
+                <value type="value">0</value>
+            </key>
+            <key name="register_53">
+                <value type="value">0</value>
+            </key>
+            <key name="register_54">
+                <value type="value">21000002</value>
+            </key>
+            <key name="register_55">
+                <value type="value">22201011</value>
+            </key>
+            <key name="register_56">
+                <value type="value">1000</value>
+            </key>
+            <key name="register_57">
+                <value type="value">0</value>
+            </key>
+            <key name="register_58">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1083">
+                <value type="value">34353</value>
+            </key>
+            <key name="register_1084">
+                <value type="value">256</value>
+            </key>
+            <key name="register_1086">
+                <value type="value">101110</value>
+            </key>
+            <key name="register_1205">
+                <value type="value">340282366920938463463374607431768211455</value>
+            </key>
+            <key name="register_1092">
+                <value type="value">1</value>
+            </key>
+            <key name="register_1037">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1038">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1112">
+                <value type="value">30</value>
+            </key>
+            <key name="register_1113">
+                <value type="value">30</value>
+            </key>
+            <key name="register_1114">
+                <value type="value">30</value>
+            </key>
+            <key name="register_1039">
+                <value type="value">99000</value>
+            </key>
+            <key name="register_1121">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1026">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1126">
+                <value type="value">3820031751153221778937193183286</value>
+            </key>
+            <key name="register_19">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1047">
+                <value type="value">9441543881752250126</value>
+            </key>
+            <key name="register_1049">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1050">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1028">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1051">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1189">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1202">
+                <value type="value">340282366920938463463374607431768211455</value>
+            </key>
+            <key name="register_1203">
+                <value type="value">340282366920938463463374607431768211455</value>
+            </key>
+            <key name="register_1204">
+                <value type="value">340282366920938463463374607431768211455</value>
+            </key>
+            <key name="register_1206">
+                <value type="value">340282366920938463463374607431768211455</value>
+            </key>
+            <key name="register_1207">
+                <value type="value">340282366920938463463374607431768211455</value>
+            </key>
+            <key name="register_1208">
+                <value type="value">340282366920938463463374607431768211455</value>
+            </key>
+            <key name="register_1209">
+                <value type="value">340282366920938463463374607431768211455</value>
+            </key>
+            <key name="register_1029">
+                <value type="value">100</value>
+            </key>
+            <key name="register_1058">
+                <value type="value">227691635558201180633139</value>
+            </key>
+            <key name="register_1115">
+                <value type="value">60</value>
+            </key>
+            <key name="register_1059">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1060">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1030">
+                <value type="value">46828625</value>
+            </key>
+            <key name="register_1061">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1062">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1063">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1064">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1065">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1031">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1066">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1067">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1068">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1069">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1070">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1074">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1075">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1079">
+                <value type="value">315</value>
+            </key>
+            <key name="register_1181">
+                <value type="value">433534329705531658</value>
+            </key>
+            <key name="register_1001">
+                <value type="value">15085488</value>
+            </key>
+            <key name="register_1002">
+                <value type="value">203513</value>
+            </key>
+            <key name="register_1003">
+                <value type="value">140727</value>
+            </key>
+            <key name="register_1004">
+                <value type="value">283</value>
+            </key>
+            <key name="register_1005">
+                <value type="value">53011401</value>
+            </key>
+            <key name="register_1010">
+                <value type="value">15085488</value>
+            </key>
+            <key name="register_1021">
+                <value type="value">0</value>
+            </key>
+            <key name="register_1023">
+                <value type="value">0</value>
+            </key>
+            <key name="reboot_signal">
+                <value type="value">0</value>
+            </key>
+            <key name="software_version">
+                <value type="value">'5.5 (E5)'</value>
+            </key>
+            <key name="access_control_status">
+                <value type="value">'DISABLED'</value>
+            </key>
+            <key name="access_control_1">
+                <value type="value">'0.0.0.0'</value>
+            </key>
+            <key name="access_control_2">
+                <value type="value">'0.0.0.0'</value>
+            </key>
+            <key name="access_control_3">
+                <value type="value">'0.0.0.0'</value>
+            </key>
+            <key name="access_control_4">
+                <value type="value">'0.0.0.0'</value>
+            </key>
+            <key name="access_control_5">
+                <value type="value">'0.0.0.0'</value>
+            </key>
+            <key name="device_name">
+                <value type="value">''</value>
+            </key>
+            <key name="nameserver_1">
+                <value type="value">'0.0.0.0'</value>
+            </key>
+            <key name="nameserver_2">
+                <value type="value">'0.0.0.0'</value>
+            </key>
+            <key name="nameserver_3">
+                <value type="value">'0.0.0.0'</value>
+            </key>
+            <key name="mac_address">
+                <value type="value">'00:13:EA:00:00:00'</value>
+            </key>
+            <key name="use_dhcp">
+                <value type="value">'YES'</value>
+            </key>
+            <key name="ip_addr">
+                <value type="value">'192.168.1.210'</value>
+            </key>
+            <key name="ip_gateway">
+                <value type="value">'192.168.1.1'</value>
+            </key>
+            <key name="ip_subnet">
+                <value type="value">'255.255.255.0'</value>
+            </key>
+            <key name="ip_addr_dhcp">
+                <value type="value">'192.168.0.1'</value>
+            </key>
+            <key name="ip_gateway_dhcp">
+                <value type="value">'192.168.0.254'</value>
+            </key>
+            <key name="ip_subnet_dhcp">
+                <value type="value">'255.255.255.0'</value>
+            </key>
+            <key name="kap_a_server_hostname">
+                <value type="value">'pwr_ctrl_mgmt01.int.local'</value>
+            </key>
+            <key name="kap_a_server_ip">
+                <value type="value">'10.232.15.242'</value>
+            </key>
+            <key name="kap_a_server_port">
+                <value type="value">'50'</value>
+            </key>
+            <key name="kap_b_server_ip">
+                <value type="value">'0.0.0.0'</value>
+            </key>
+            <key name="kap_b_server_port">
+                <value type="value">'50'</value>
+            </key>
+            <key name="channel_a_meternumber">
+                <value type="value">'A1 06 A1 02 B7 34 12 00 00 03'</value>
+            </key>
+            <key name="channel_b_meternumber">
+                <value type="value">'A1 06 A1 02 B7 34 12 00 00 03'</value>
+            </key>
+            <key name="channel_a_port">
+                <value type="value">'1025'</value>
+            </key>
+            <key name="channel_b_port">
+                <value type="value">'1027'</value>
+            </key>
+            <key name="kap_ack_server">
+                <value type="value">'NO'</value>
+            </key>
+            <key name="kap_local_port">
+                <value type="value">'800'</value>
+            </key>
+            <key name="alarm_server_status">
+                <value type="value">'DISABLED'</value>
+            </key>
+            <key name="alarm_server_ip">
+                <value type="value">''</value>
+            </key>
+            <key name="alarm_server_port">
+                <value type="value">'4000'</value>
+            </key>
+            <key name="kap_server_lookup">
+                <value type="value">'0 - none'</value>
+            </key>
+            <key name="software_watchdog">
+                <value type="value">'3600'</value>
+            </key>
+            <key name="kap_missing_warning">
+                <value type="value">'60'</value>
+            </key>
+            <key name="keep_alive_timer">
+                <value type="value">'10'</value>
+            </key>
+            <key name="serial_settings_a">
+                <value type="value">'Auto'</value>
+            </key>
+            <key name="serial_settings_b">
+                <value type="value">'115200,8,E,1'</value>
+            </key>
+            <key name="channel_a_connect_socket">
+                <value type="value">'0 - None'</value>
+            </key>
+            <key name="channel_b_connect_socket">
+                <value type="value">'0 - None'</value>
+            </key>
+        </key_value_mappings>
+    </databus>
+</core>

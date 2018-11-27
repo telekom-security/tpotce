@@ -1,0 +1,70 @@
+version: '2.3'
+
+services:
+
+# ELK services
+## Elasticsearch service
+  elasticsearch:
+    build: elasticsearch/.
+    container_name: elasticsearch
+    restart: always
+    environment:
+     - bootstrap.memory_lock=true
+     - ES_JAVA_OPTS=-Xms1024m -Xmx1024m
+     - ES_TMPDIR=/tmp
+    cap_add:
+     - IPC_LOCK
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    mem_limit: 4g
+    ports:
+     - "127.0.0.1:64298:9200"
+    image: "dtagdevsec/elasticsearch:1811"
+    volumes:
+     - /data:/data
+
+## Kibana service
+  kibana:
+    build: kibana/.
+    container_name: kibana
+    restart: always
+    stop_signal: SIGKILL
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    ports:
+     - "127.0.0.1:64296:5601"
+    image: "dtagdevsec/kibana:1811"
+
+## Logstash service
+  logstash:
+    build: logstash/.
+    container_name: logstash
+    restart: always
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    env_file:
+     - /opt/tpot/etc/compose/elk_environment
+    image: "dtagdevsec/logstash:1811"
+    volumes:
+     - /data:/data
+     - /root/tpotce/docker/elk/logstash/dist/logstash.conf:/etc/logstash/conf.d/logstash.conf
+
+## Elasticsearch-head service
+  head:
+    build: head/.
+    container_name: head
+    restart: always
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    ports:
+     - "127.0.0.1:64302:9100"
+    image: "dtagdevsec/head:1811"
+    read_only: true

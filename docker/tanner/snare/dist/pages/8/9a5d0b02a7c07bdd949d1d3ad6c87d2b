@@ -1,0 +1,99 @@
+
+<!DOCTYPE html>
+
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta content="IE=edge" http-equiv="X-UA-Compatible"/>
+<title>user Blog</title>
+<meta content="True" name="HandheldFriendly"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="/assets/built/screen.css?v=8cfc086fe8" rel="stylesheet" type="text/css"/>
+</head>
+<body class="error-template">
+<div class="site-wrapper">
+<header class="site-header outer no-cover">
+<div class="inner">
+<nav class="site-nav-center">
+<a class="site-nav-logo" href=""><img alt="user Blog" src="/v1.0.0/images/ghost-logo.svg"/></a>
+</nav>
+</div>
+</header>
+<main class="site-main outer" id="site-main">
+<div class="inner">
+<section class="error-message">
+<h1 class="error-code">404</h1>
+<p class="error-description">Page not found</p>
+<a class="error-link" href="">Go to the front page →</a>
+</section>
+</div>
+</main>
+<aside class="outer">
+<div class="inner">
+<div class="post-feed">
+<article class="post-card post">
+<a class="post-card-image-link" href="/welcome/">
+<div class="post-card-image" style="background-image: url(https://casper.ghost.org/v1.0.0/images/welcome.jpg)"></div>
+</a>
+<div class="post-card-content">
+<a class="post-card-content-link" href="/welcome/">
+<header class="post-card-header">
+<h2 class="post-card-title">Welcome to Ghost</h2>
+</header>
+<section class="post-card-excerpt">
+<p>Hey! Welcome to Ghost, it's great to have you :) We know that first impressions are important, so we've populated your new site with some initial Getting Started posts that will help you get</p>
+</section>
+</a>
+<footer class="post-card-meta">
+<ul class="author-list">
+</ul>
+<span class="reading-time">1 min read</span>
+</footer>
+</div>
+</article>
+<article class="post-card post">
+<a class="post-card-image-link" href="/the-editor/">
+<div class="post-card-image" style="background-image: url(https://casper.ghost.org/v1.0.0/images/writing.jpg)"></div>
+</a>
+<div class="post-card-content">
+<a class="post-card-content-link" href="/the-editor/">
+<header class="post-card-header">
+<h2 class="post-card-title">Using the Ghost editor</h2>
+</header>
+<section class="post-card-excerpt">
+<p>Ghost uses a language called Markdown to format text. When you go to edit a post and see special characters and colours intertwined between the words, those are Markdown shortcuts which tell Ghost</p>
+</section>
+</a>
+<footer class="post-card-meta">
+<ul class="author-list">
+</ul>
+<span class="reading-time">3 min read</span>
+</footer>
+</div>
+</article>
+<article class="post-card post">
+<a class="post-card-image-link" href="/using-tags/">
+<div class="post-card-image" style="background-image: url(https://casper.ghost.org/v1.0.0/images/tags.jpg)"></div>
+</a>
+<div class="post-card-content">
+<a class="post-card-content-link" href="/using-tags/">
+<header class="post-card-header">
+<h2 class="post-card-title">Organising your content with tags</h2>
+</header>
+<section class="post-card-excerpt">
+<p>Ghost has a single, powerful organisational taxonomy, called tags. It doesn't matter whether you want to call them categories, tags, boxes, or anything else. You can think of Ghost tags a lot like</p>
+</section>
+</a>
+<footer class="post-card-meta">
+<ul class="author-list">
+</ul>
+<span class="reading-time">2 min read</span>
+</footer>
+</div>
+</article>
+</div>
+</div>
+</aside>
+</div>
+</body>
+</html>

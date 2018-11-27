@@ -1,6 +1,4 @@
 FROM debian:stretch-slim 
-MAINTAINER MO
-
 ENV DEBIAN_FRONTEND noninteractive
 
 # Include dist
@@ -11,8 +9,21 @@ RUN apt-get update -y && \
     apt-get dist-upgrade -y && \
 
 # Install packages
-    apt-get install -y autoconf build-essential git iptables libnetfilter-queue1 libnetfilter-queue-dev \
-                       libjson-c-dev libtool libpq5 libpq-dev netbase procps wget && \
+    apt-get install -y autoconf \
+                       build-essential \
+                       git \
+                       iptables \
+                       libcap2 \
+                       libcap2-bin \
+                       libnetfilter-queue1 \
+                       libnetfilter-queue-dev \
+                       libjson-c-dev \
+                       libtool \
+                       libpq5 \
+                       libpq-dev \
+                       netbase \
+                       procps \
+                       wget && \
 
 # Install honeytrap from source
     cd /root/ && \
@@ -33,12 +44,18 @@ RUN apt-get update -y && \
     adduser --system --no-create-home --shell /bin/bash --uid 2000 --disabled-password --disabled-login --gid 2000 honeytrap && \
     mkdir -p /opt/honeytrap/etc/honeytrap/ /opt/honeytrap/var/attacks /opt/honeytrap/var/downloads /opt/honeytrap/var/log && \
     mv /root/dist/honeytrap.conf /opt/honeytrap/etc/honeytrap/ && \
+    setcap cap_net_admin=+ep /opt/honeytrap/sbin/honeytrap && \
 
 # Clean up
     rm -rf /root/* && \
-    apt-get purge -y autoconf build-essential git libnetfilter-queue-dev libpq-dev && \
+    apt-get purge -y autoconf \
+                     build-essential \
+                     git \
+                     libnetfilter-queue-dev \
+                     libpq-dev && \
     apt-get autoremove -y --purge && \
     apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Start honeytrap
-CMD ["/opt/honeytrap/sbin/honeytrap", "-D", "-C", "/opt/honeytrap/etc/honeytrap/honeytrap.conf", "-t", "5", "-u", "honeytrap", "-g", "honeytrap"]
+USER honeytrap:honeytrap
+CMD ["/opt/honeytrap/sbin/honeytrap", "-D", "-C", "/opt/honeytrap/etc/honeytrap/honeytrap.conf", "-P", "/tmp/honeytrap/honeytrap.pid", "-t", "5", "-u", "honeytrap", "-g", "honeytrap"]

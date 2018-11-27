@@ -25,6 +25,7 @@ d-i console-setup/detected note
 #########################
 ### Network Configuration
 #########################
+d-i netcfg/do_not_use_netplan true
 #d-i netcfg/choose_interface select auto
 #d-i netcfg/dhcp_timeout string 60
 d-i netcfg/get_hostname string t-pot
@@ -100,12 +101,18 @@ tasksel tasksel/first multiselect ubuntu-server
 ########################
 ### Package Installation
 ########################
-d-i pkgsel/include string apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount curl dialog dnsutils docker.io dstat ethtool genisoimage git glances html2text htop iptables iw jq libcrack2 libltdl7 lm-sensors man nginx-extras nodejs npm ntp openssh-server openssl prips syslinux psmisc pv python-pip unzip vim wireless-tools wpasupplicant
+d-i pkgsel/include string apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker curl debconf-utils dialog dnsutils docker.io docker-compose dstat ethtool fail2ban genisoimage git glances grc html2text htop ifupdown iptables iw jq libcrack2 libltdl7 lm-sensors man mosh multitail net-tools npm ntp openssh-server openssl pass prips software-properties-common syslinux psmisc pv python-pip unzip vim wireless-tools wpasupplicant
 
 #################
 ### Update Policy
 #################
 d-i pkgsel/update-policy select unattended-upgrades
+
+###############
+### Boot Splash
+###############
+d-i debian-installer/quiet boolean false
+d-i debian-installer/splash boolean false
 
 #########################################
 ### Post install (Grub & T-Pot Installer)

@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+
+<html class="client-nojs" dir="ltr" lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Recent changes - user's Wiki!</title>
+<script>document.documentElement.className = document.documentElement.className.replace( /(^|\s)client-nojs(\s|$)/, "$1client-js$2" );</script>
+<script>(window.RLQ=window.RLQ||[]).push(function(){mw.config.set({"wgCanonicalNamespace":"Special","wgCanonicalSpecialPageName":"Recentchanges","wgNamespaceNumber":-1,"wgPageName":"Special:RecentChanges","wgTitle":"RecentChanges","wgCurRevisionId":0,"wgRevisionId":0,"wgArticleId":0,"wgIsArticle":false,"wgIsRedirect":false,"wgAction":"view","wgUserName":null,"wgUserGroups":["*"],"wgCategories":[],"wgBreakFrames":true,"wgPageContentLanguage":"en","wgPageContentModel":"wikitext","wgSeparatorTransformTable":["",""],"wgDigitTransformTable":["",""],"wgDefaultDateFormat":"dmy","wgMonthNames":["","January","February","March","April","May","June","July","August","September","October","November","December"],"wgMonthNamesShort":["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],"wgRelevantPageName":"Special:RecentChanges","wgRelevantArticleId":0,"wgRequestId":"c3e14b6b3885cfb733a5e73e","wgIsProbablyEditable":false,"wgRelevantPageIsProbablyEditable":false});mw.loader.state({"site.styles":"ready","noscript":"ready","user.styles":"ready","user":"ready","site":"ready","user.options":"ready","user.tokens":"loading","mediawiki.helplink":"ready","mediawiki.special.changeslist.legend":"ready","mediawiki.special.changeslist":"ready","mediawiki.special.changeslist.enhanced":"ready","mediawiki.legacy.shared":"ready","mediawiki.legacy.commonPrint":"ready","mediawiki.sectionAnchor":"ready","mediawiki.feedlink":"ready","mediawiki.skinning.interface":"ready","skins.vector.styles":"ready"});mw.loader.implement("user.tokens@1cmymd6",function($,jQuery,require,module){/*@nomin*/mw.user.tokens.set({"editToken":"+\\","patrolToken":"+\\","watchToken":"+\\","csrfToken":"+\\"});
+});mw.loader.load(["mediawiki.special.changeslist.legend.js","mediawiki.special.recentchanges","jquery.makeCollapsible","mediawiki.icon","mediawiki.page.startup","mediawiki.user","mediawiki.hidpi","mediawiki.page.ready","mediawiki.searchSuggest","skins.vector.js"]);});</script>
+<link href="/load.php?debug=false&amp;lang=en&amp;modules=mediawiki.feedlink,helplink,sectionAnchor|mediawiki.legacy.commonPrint,shared|mediawiki.skinning.interface|mediawiki.special.changeslist|mediawiki.special.changeslist.enhanced,legend|skins.vector.styles&amp;only=styles&amp;skin=vector" rel="stylesheet"/>
+<script async="" src="/load.php?debug=false&amp;lang=en&amp;modules=startup&amp;only=scripts&amp;skin=vector"></script>
+<meta content="" name="ResourceLoaderDynamicStyles"/>
+<meta content="MediaWiki 1.31.0" name="generator"/>
+<meta content="noindex,nofollow" name="robots"/>
+<link href="/favicon.ico" rel="shortcut icon"/>
+<link href="/opensearch_desc.php" rel="search" title="user's Wiki! (en)" type="application/opensearchdescription+xml"/>
+<link href="/api.php?action=rsd" rel="EditURI" type="application/rsd+xml"/>
+<link href="/api.php?hidebots=1&amp;urlversion=1&amp;days=7&amp;limit=50&amp;action=feedrecentchanges&amp;feedformat=atom" rel="alternate" title='"Special:RecentChanges" Atom feed' type="application/atom+xml"/>
+<!--[if lt IE 9]><script src="/load.php?debug=false&amp;lang=en&amp;modules=html5shiv&amp;only=scripts&amp;skin=vector&amp;sync=1"></script><![endif]-->
+</head>
+<body class="mw-rcfilters-disabled mediawiki ltr sitedir-ltr mw-hide-empty-elt ns--1 ns-special mw-special-Recentchanges page-Special_RecentChanges rootpage-Special_RecentChanges skin-vector action-view"> <div class="noprint" id="mw-page-base"></div>
+<div class="noprint" id="mw-head-base"></div>
+<div class="mw-body" id="content" role="main">
+<a id="top"></a>
+<div class="mw-indicators mw-body-content">
+<div class="mw-indicator" id="mw-indicator-mw-helplink"><a class="mw-helplink" href="//meta.wikimedia.org/wiki/Special:MyLanguage/Help:Recent_changes" target="_blank">Help</a></div>
+</div>
+<h1 class="firstHeading" id="firstHeading" lang="en">Recent changes</h1> <div class="mw-body-content" id="bodyContent">
+<div id="contentSub"></div>
+<div class="mw-jump" id="jump-to-nav">
+					Jump to:					<a href="#mw-head">navigation</a>, 					<a href="#p-search">search</a>
+</div>
+<div id="mw-content-text"><div class="mw-specialpage-summary">
+<p>Track the most recent changes to the wiki on this page.
+</p>
+</div>
+<fieldset class="rcoptions cloptions">
+<legend>Recent changes options</legend>
+<div class="mw-changeslist-legend mw-collapsible"><strong>Legend:</strong><div class="mw-collapsible-content"><dl>
+<dt class="newpage">N</dt>
+<dd class="mw-changeslist-legend-newpage">This edit created a new page (also see <a href="/Special:NewPages" title="Special:NewPages">list of new pages</a>)</dd>
+<dt class="minoredit">m</dt>
+<dd class="mw-changeslist-legend-minor">This is a minor edit</dd>
+<dt class="botedit">b</dt>
+<dd class="mw-changeslist-legend-bot">This edit was performed by a bot</dd>
+<dt class="mw-plusminus-pos">(<em>±123</em>)</dt>
+<dd class="mw-changeslist-legend-plusminus">The page size changed by this number of bytes</dd>
+</dl>
+</div></div>
+<span class="rclinks">Show last <a data-keys="limit" data-params='{"limit":50}' href="/index.php?title=Special:RecentChanges&amp;limit=50" title="Special:RecentChanges"><strong>50</strong></a> | <a data-keys="limit" data-params='{"limit":100}' href="/index.php?title=Special:RecentChanges&amp;limit=100" title="Special:RecentChanges">100</a> | <a data-keys="limit" data-params='{"limit":250}' href="/index.php?title=Special:RecentChanges&amp;limit=250" title="Special:RecentChanges">250</a> | <a data-keys="limit" data-params='{"limit":500}' href="/index.php?title=Special:RecentChanges&amp;limit=500" title="Special:RecentChanges">500</a> changes in last <a data-keys="days,from" data-params='{"days":1,"from":""}' href="/index.php?title=Special:RecentChanges&amp;days=1&amp;from=" title="Special:RecentChanges">1</a> | <a data-keys="days,from" data-params='{"days":3,"from":""}' href="/index.php?title=Special:RecentChanges&amp;days=3&amp;from=" title="Special:RecentChanges">3</a> | <a data-keys="days,from" data-params='{"days":7,"from":""}' href="/index.php?title=Special:RecentChanges&amp;days=7&amp;from=" title="Special:RecentChanges"><strong>7</strong></a> | <a data-keys="days,from" data-params='{"days":14,"from":""}' href="/index.php?title=Special:RecentChanges&amp;days=14&amp;from=" title="Special:RecentChanges">14</a> | <a data-keys="days,from" data-params='{"days":30,"from":""}' href="/index.php?title=Special:RecentChanges&amp;days=30&amp;from=" title="Special:RecentChanges">30</a> days</span><br/><span class="rcshowhide"><span class="rcshowhideliu rcshowhideoption clshowhideoption" data-feature-in-structured-ui="1" data-filter-name="hideliu"><a data-keys="hideliu" data-params='{"hideliu":1}' href="/index.php?title=Special:RecentChanges&amp;hideliu=1" title="Special:RecentChanges">Hide</a> registered users</span> | <span class="rcshowhideanons rcshowhideoption clshowhideoption" data-feature-in-structured-ui="1" data-filter-name="hideanons"><a data-keys="hideanons" data-params='{"hideanons":1}' href="/index.php?title=Special:RecentChanges&amp;hideanons=1" title="Special:RecentChanges">Hide</a> anonymous users</span> | <span class="rcshowhidemine rcshowhideoption clshowhideoption" data-feature-in-structured-ui="1" data-filter-name="hidemyself"><a data-keys="hidemyself" data-params='{"hidemyself":1}' href="/index.php?title=Special:RecentChanges&amp;hidemyself=1" title="Special:RecentChanges">Hide</a> my edits</span> | <span class="rcshowhidebots rcshowhideoption clshowhideoption" data-feature-in-structured-ui="1" data-filter-name="hidebots"><a data-keys="hidebots" data-params='{"hidebots":0}' href="/index.php?title=Special:RecentChanges&amp;hidebots=0" title="Special:RecentChanges">Show</a> bots</span> | <span class="rcshowhideminor rcshowhideoption clshowhideoption" data-feature-in-structured-ui="1" data-filter-name="hideminor"><a data-keys="hideminor" data-params='{"hideminor":1}' href="/index.php?title=Special:RecentChanges&amp;hideminor=1" title="Special:RecentChanges">Hide</a> minor edits</span></span><br/><span class="rclistfrom"><a data-keys="from" data-params='{"from":"20180814133551"}' href="/index.php?title=Special:RecentChanges&amp;from=20180814133551" title="Special:RecentChanges">Show new changes starting from 06:35, 14 August 2018</a></span>
+<hr/>
+<form action="/index.php"><table class="mw-recentchanges-table"><tr class="namespaceForm"><td class="mw-label mw-namespace-label"><label for="namespace">Namespace:</label></td><td class="mw-input"><select id="namespace" name="namespace">
+<option selected="" value="">all</option>
+<option value="0">(Main)</option>
+<option value="1">Talk</option>
+<option value="2">User</option>
+<option value="3">User talk</option>
+<option value="4">user's Wiki!</option>
+<option value="5">user's Wiki! talk</option>
+<option value="6">File</option>
+<option value="7">File talk</option>
+<option value="8">MediaWiki</option>
+<option value="9">MediaWiki talk</option>
+<option value="10">Template</option>
+<option value="11">Template talk</option>
+<option value="12">Help</option>
+<option value="13">Help talk</option>
+<option value="14">Category</option>
+<option value="15">Category talk</option>
+</select> <input id="nsinvert" name="invert" title="Check this box to hide changes to pages within the selected namespace (and the associated namespace if checked)" type="checkbox" value="1"/> <label for="nsinvert" title="Check this box to hide changes to pages within the selected namespace (and the associated namespace if checked)">Invert selection</label> <input id="nsassociated" name="associated" title="Check this box to also include the talk or subject namespace associated with the selected namespace" type="checkbox" value="1"/> <label for="nsassociated" title="Check this box to also include the talk or subject namespace associated with the selected namespace">Associated namespace</label></td></tr><tr class="tagfilterForm"><td class="mw-label mw-tagfilter-label"><label for="tagfilter"><a href="/Special:Tags" title="Special:Tags">Tag</a> filter:</label></td><td class="mw-input"><input class="mw-tagfilter-input mw-ui-input mw-ui-input-inline" id="tagfilter" name="tagfilter" size="20" value=""/> <input type="submit" value="Show"/></td></tr></table><input name="title" type="hidden" value="Special:RecentChanges"/></form>
+</fieldset>
+<div class="mw-changeslist-empty">No changes during the given period match these criteria.</div></div> <div class="printfooter">
+						Retrieved from "<a dir="ltr" href="/Special:RecentChanges">http://172.20.254.132/Special:RecentChanges</a>"					</div>
+<div class="catlinks catlinks-allhidden" data-mw="interface" id="catlinks"></div> <div class="visualClear"></div>
+</div>
+</div>
+<div id="mw-navigation">
+<h2>Navigation menu</h2>
+<div id="mw-head">
+<div aria-labelledby="p-personal-label" class="" id="p-personal" role="navigation">
+<h3 id="p-personal-label">Personal tools</h3>
+<ul>
+<li id="pt-anonuserpage">Not logged in</li><li id="pt-anontalk"><a accesskey="n" href="/Special:MyTalk" title="Discussion about edits from this IP address [n]">Talk</a></li><li id="pt-anoncontribs"><a accesskey="y" href="/Special:MyContributions" title="A list of edits made from this IP address [y]">Contributions</a></li><li id="pt-createaccount"><a href="/index.php?title=Special:CreateAccount&amp;returnto=Special:RecentChanges" title="You are encouraged to create an account and log in; however, it is not mandatory">Create account</a></li><li id="pt-login"><a accesskey="o" href="/index.php?title=Special:UserLogin&amp;returnto=Special:RecentChanges" title="You are encouraged to log in; however, it is not mandatory [o]">Log in</a></li> </ul>
+</div>
+<div id="left-navigation">
+<div aria-labelledby="p-namespaces-label" class="vectorTabs" id="p-namespaces" role="navigation">
+<h3 id="p-namespaces-label">Namespaces</h3>
+<ul>
+<li class="selected" id="ca-nstab-special"><span><a href="/Special:RecentChanges" title="This is a special page, and it cannot be edited">Special page</a></span></li> </ul>
+</div>
+<div aria-labelledby="p-variants-label" class="vectorMenu emptyPortlet" id="p-variants" role="navigation">
+<input aria-labelledby="p-variants-label" class="vectorMenuCheckbox" type="checkbox"/>
+<h3 id="p-variants-label">
+<span>Variants</span>
+</h3>
+<div class="menu">
+<ul>
+</ul>
+</div>
+</div>
+</div>
+<div id="right-navigation">
+<div aria-labelledby="p-views-label" class="vectorTabs emptyPortlet" id="p-views" role="navigation">
+<h3 id="p-views-label">Views</h3>
+<ul>
+</ul>
+</div>
+<div aria-labelledby="p-cactions-label" class="vectorMenu emptyPortlet" id="p-cactions" role="navigation">
+<input aria-labelledby="p-cactions-label" class="vectorMenuCheckbox" type="checkbox"/>
+<h3 id="p-cactions-label"><span>More</span></h3>
+<div class="menu">
+<ul>
+</ul>
+</div>
+</div>
+<div id="p-search" role="search">
+<h3>
+<label for="searchInput">Search</label>
+</h3>
+<form action="/index.php" id="searchform">
+<div id="simpleSearch">
+<input accesskey="f" id="searchInput" name="search" placeholder="Search user's Wiki!" title="Search user's Wiki! [f]" type="search"/><input name="title" type="hidden" value="Special:Search"/><input class="searchButton mw-fallbackSearchButton" id="mw-searchButton" name="fulltext" title="Search the pages for this text" type="submit" value="Search"/><input class="searchButton" id="searchButton" name="go" title="Go to a page with this exact name if it exists" type="submit" value="Go"/> </div>
+</form>
+</div>
+</div>
+</div>
+<div id="mw-panel">
+<div id="p-logo" role="banner"><a class="mw-wiki-logo" href="/Main_Page" title="Visit the main page"></a></div>
+<div aria-labelledby="p-navigation-label" class="portal" id="p-navigation" role="navigation">
+<h3 id="p-navigation-label">Navigation</h3>
+<div class="body">
+<ul>
+<li id="n-mainpage-description"><a accesskey="z" href="/Main_Page" title="Visit the main page [z]">Main page</a></li><li id="n-recentchanges"><a accesskey="r" href="/Special:RecentChanges" title="A list of recent changes in the wiki [r]">Recent changes</a></li><li id="n-randompage"><a accesskey="x" href="/Special:Random" title="Load a random page [x]">Random page</a></li><li id="n-help"><a href="https://www.mediawiki.org/wiki/Special:MyLanguage/Help:Contents" title="The place to find out">Help</a></li> </ul>
+</div>
+</div>
+<div aria-labelledby="p-tb-label" class="portal" id="p-tb" role="navigation">
+<h3 id="p-tb-label">Tools</h3>
+<div class="body">
+<ul>
+<li id="feedlinks"><a class="feedlink" href="/api.php?hidebots=1&amp;urlversion=1&amp;days=7&amp;limit=50&amp;action=feedrecentchanges&amp;feedformat=atom" id="feed-atom" rel="alternate" title="Atom feed for this page" type="application/atom+xml">Atom</a></li><li id="t-specialpages"><a accesskey="q" href="/Special:SpecialPages" title="A list of all special pages [q]">Special pages</a></li><li id="t-print"><a accesskey="p" href="/index.php?title=Special:RecentChanges&amp;printable=yes" rel="alternate" title="Printable version of this page [p]">Printable version</a></li> </ul>
+</div>
+</div>
+</div>
+</div>
+<div id="footer" role="contentinfo">
+<ul id="footer-places">
+<li id="footer-places-privacy"><a href="/user's_Wiki!:Privacy_policy" title="user's Wiki!:Privacy policy">Privacy policy</a></li>
+<li id="footer-places-about"><a href="/user's_Wiki!:About" title="user's Wiki!:About">About user's Wiki!</a></li>
+<li id="footer-places-disclaimer"><a href="/user's_Wiki!:General_disclaimer" title="user's Wiki!:General disclaimer">Disclaimers</a></li>
+</ul>
+<ul class="noprint" id="footer-icons">
+<li id="footer-poweredbyico">
+<a href="//www.mediawiki.org/"><img alt="Powered by MediaWiki" height="31" src="/resources/assets/poweredby_mediawiki_88x31.png" srcset="/resources/assets/poweredby_mediawiki_132x47.png 1.5x, /resources/assets/poweredby_mediawiki_176x62.png 2x" width="88"/></a> </li>
+</ul>
+<div style="clear: both;"></div>
+</div>
+<script>(window.RLQ=window.RLQ||[]).push(function(){mw.config.set({"wgBackendResponseTime":66});});</script>
+</body>
+</html>

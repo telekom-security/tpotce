@@ -1,0 +1,33 @@
+version: '2.3'
+  
+networks:
+  heralding_local:
+
+services:
+
+# Heralding service
+  heralding:
+    build: .
+    container_name: heralding
+    restart: always
+    tmpfs:
+     - /tmp/heralding:uid=2000,gid=2000
+    networks:
+     - heralding_local
+    ports:
+     - "21:21"
+     - "22:22"
+     - "23:23"
+     - "25:25"
+     - "80:80"
+     - "110:110"
+     - "143:143"
+     - "443:443"
+     - "993:993"
+     - "995:995"
+     - "5432:5432"
+     - "5900:5900"
+    image: "dtagdevsec/heralding:1811"
+    read_only: true
+    volumes:
+     - /data/heralding/log:/var/log/heralding

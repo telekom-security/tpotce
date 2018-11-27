@@ -1,12 +1,17 @@
 FROM alpine
-MAINTAINER MO
 
 # Add source
 ADD . /opt/p0f
 
 # Install packages
-RUN apk -U upgrade && \
-    apk add bash build-base git jansson-dev libpcap-dev procps && \
+RUN apk -U --no-cache add \
+                       bash \
+                       build-base \
+                       jansson \
+                       jansson-dev \
+                       libcap \
+                       libpcap \
+                       libpcap-dev && \
 
 # Setup user, groups and configs
     addgroup -g 2000 p0f && \
@@ -15,13 +20,16 @@ RUN apk -U upgrade && \
 # Download and compile p0f
     cd /opt/p0f && \
     ./build.sh && \
+    setcap cap_sys_chroot,cap_setgid,cap_net_raw=+ep /opt/p0f/p0f && \
 
 # Clean up
-    apk del build-base git jansson-dev libpcap-dev && \
-    apk add jansson libpcap && \
+    apk del --purge build-base \
+                    jansson-dev \
+                    libpcap-dev && \
     rm -rf /root/* && \
     rm -rf /var/cache/apk/*
 
 # Start suricata
 WORKDIR /opt/p0f
-CMD /bin/bash -c "exec /opt/p0f/p0f -u p0f -j -o /var/log/p0f/p0f.json -i $(/sbin/ip address | grep '^2: ' | awk '{ print $2 }' | tr -d [:punct:])"
+USER p0f:p0f
+CMD exec /opt/p0f/p0f -u p0f -j -o /var/log/p0f/p0f.json -i $(/sbin/ip address | grep '^2: ' | awk '{ print $2 }' | tr -d [:punct:])

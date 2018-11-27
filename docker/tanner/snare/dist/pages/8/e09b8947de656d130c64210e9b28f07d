@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+
+<html ⚡="">
+<head>
+<meta charset="utf-8"/>
+<title>Advanced Markdown tips</title>
+<meta content="True" name="HandheldFriendly">
+<meta content="width=device-width,minimum-scale=1,initial-scale=1" name="viewport"/>
+<link href="/favicon.ico" rel="shortcut icon"/>
+<link href="/favicon.ico" rel="shortcut icon" type="image/x-icon">
+<link href="/advanced-markdown/" rel="canonical"/>
+<meta content="no-referrer-when-downgrade" name="referrer">
+<meta content="user Blog" property="og:site_name"/>
+<meta content="article" property="og:type"/>
+<meta content="Advanced Markdown tips" property="og:title"/>
+<meta content="There are lots of powerful things you can do with the Ghost editor If you've gotten pretty comfortable with all the basics of writing in Ghost, then you may enjoy some more advanced tips about the types of things you can do with Markdown! As with the last post about" property="og:description"/>
+<meta content="http://172.20.254.138:80/advanced-markdown/" property="og:url"/>
+<meta content="https://casper.ghost.org/v1.0.0/images/advanced.jpg" property="og:image"/>
+<meta content="2018-08-09T11:04:47.000Z" property="article:published_time"/>
+<meta content="2018-08-09T11:04:45.000Z" property="article:modified_time"/>
+<meta content="Getting Started" property="article:tag"/>
+<meta content="summary_large_image" name="twitter:card"/>
+<meta content="Advanced Markdown tips" name="twitter:title"/>
+<meta content="There are lots of powerful things you can do with the Ghost editor If you've gotten pretty comfortable with all the basics of writing in Ghost, then you may enjoy some more advanced tips about the types of things you can do with Markdown! As with the last post about" name="twitter:description"/>
+<meta content="http://172.20.254.138:80/advanced-markdown/" name="twitter:url"/>
+<meta content="https://casper.ghost.org/v1.0.0/images/advanced.jpg" name="twitter:image"/>
+<meta content="Written by" name="twitter:label1"/>
+<meta content="Ghost" name="twitter:data1"/>
+<meta content="Filed under" name="twitter:label2"/>
+<meta content="Getting Started" name="twitter:data2"/>
+<meta content="1400" property="og:image:width"/>
+<meta content="933" property="og:image:height"/>
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "user Blog",
+        "logo": "https://casper.ghost.org/v1.0.0/images/ghost-logo.svg"
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Ghost",
+        "url": "http://172.20.254.138:80/author/ghost/",
+        "sameAs": []
+    },
+    "headline": "Advanced Markdown tips",
+    "url": "http://172.20.254.138:80/advanced-markdown/",
+    "datePublished": "2018-08-09T11:04:47.000Z",
+    "dateModified": "2018-08-09T11:04:45.000Z",
+    "image": {
+        "@type": "ImageObject",
+        "url": "https://casper.ghost.org/v1.0.0/images/advanced.jpg",
+        "width": 1400,
+        "height": 933
+    },
+    "keywords": "Getting Started",
+    "description": "There are lots of powerful things you can do with the Ghost editor If you&#x27;ve gotten pretty comfortable with all the basics of writing in Ghost, then you may enjoy some more advanced tips about the types of things you can do with Markdown! As with the last post about",
+    "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "http://172.20.254.138:80/"
+    }
+}
+    </script>
+<meta content="Ghost 1.25" name="generator"/>
+<link href="/rss/" rel="alternate" title="user Blog" type="application/rss+xml"/>
+<link href="https://fonts.googleapis.com/css?family=Merriweather:300,700,700italic,300italic|Open+Sans:700,600,400" rel="stylesheet" type="text/css"/>
+<style amp-custom="">html{font-family:sans-serif;-ms-text-size-adjust:100%;-webkit-text-size-adjust:100%}body{margin:0}article,aside,details,figcaption,figure,footer,header,main,menu,nav,section,summary{display:block}audio,canvas,progress,video{display:inline-block;vertical-align:baseline}audio:not([controls]){display:none;height:0}[hidden],template{display:none}a{background-color:transparent}a:active,a:hover{outline:0}abbr[title]{border-bottom:1px dotted}b,strong{font-weight:bold}dfn{font-style:italic}h1{margin:.67em 0;font-size:2em}mark{background:#ff0;color:#000}small{font-size:80%}sub,sup{position:relative;vertical-align:baseline;font-size:75%;line-height:0}sup{top:-.5em}sub{bottom:-.25em}img{border:0}amp-img{border:0}svg:not(:root){overflow:hidden}figure{margin:1em 40px}hr{box-sizing:content-box;height:0}pre{overflow:auto}code,kbd,pre,samp{font-family:monospace,monospace;font-size:1em}button,input,optgroup,select,textarea{margin:0;color:inherit;font:inherit}button{overflow:visible}button,select{text-transform:none}button,html input[type="button"],input[type="reset"],input[type="submit"]{cursor:pointer;-webkit-appearance:button}button[disabled],html input[disabled]{cursor:default}button::-moz-focus-inner,input::-moz-focus-inner{padding:0;border:0}input{line-height:normal}input[type="checkbox"],input[type="radio"]{box-sizing:border-box;padding:0}input[type="number"]::-webkit-inner-spin-button,input[type="number"]::-webkit-outer-spin-button{height:auto}input[type="search"]{-webkit-appearance:textfield}input[type="search"]::-webkit-search-cancel-button,input[type="search"]::-webkit-search-decoration{-webkit-appearance:none}fieldset{margin:0 2px;padding:.35em .625em .75em;border:1px solid silver}legend{padding:0;border:0}textarea{overflow:auto}optgroup{font-weight:bold}table{border-spacing:0;border-collapse:collapse}td,th{padding:0}html{max-height:100%;height:100%;font-size:62.5%;-webkit-tap-highlight-color:rgba(0,0,0,0)}body{max-height:100%;height:100%;color:#3a4145;background:#f4f8fb;letter-spacing:.01rem;font-family:"Merriweather",serif;font-size:1.8rem;line-height:1.75em;text-rendering:geometricPrecision;-webkit-font-feature-settings:"kern" 1;-moz-font-feature-settings:"kern" 1;-o-font-feature-settings:"kern" 1}::-moz-selection{background:#d6edff}::selection{background:#d6edff}h1,h2,h3,h4,h5,h6{margin:0 0 .3em 0;color:#2e2e2e;font-family:"Open Sans",sans-serif;line-height:1.15em;text-rendering:geometricPrecision;-webkit-font-feature-settings:"dlig" 1 , "liga" 1 , "lnum" 1 , "kern" 1;-moz-font-feature-settings:"dlig" 1 , "liga" 1 , "lnum" 1 , "kern" 1;-o-font-feature-settings:"dlig" 1 , "liga" 1 , "lnum" 1 , "kern" 1}h1{text-indent:-2px;letter-spacing:-1px;font-size:2.6rem}h2{letter-spacing:0;font-size:2.4rem}h3{letter-spacing:-.6px;font-size:2.1rem}h4{font-size:1.9rem}h5{font-size:1.8rem}h6{font-size:1.8rem}a{color:#4a4a4a}a:hover{color:#111}p,ul,ol,dl{margin:0 0 2.5rem 0;font-size:1.5rem;text-rendering:geometricPrecision;-webkit-font-feature-settings:"liga" 1 , "onum" 1 , "kern" 1;-moz-font-feature-settings:"liga" 1 , "onum" 1 , "kern" 1;-o-font-feature-settings:"liga" 1 , "onum" 1 , "kern" 1}ol,ul{padding-left:2em}ol ol,ul ul,ul ol,ol ul{margin:0 0 .4em 0;padding-left:2em}dl dt{float:left;clear:left;overflow:hidden;margin-bottom:1em;width:180px;text-align:right;text-overflow:ellipsis;white-space:nowrap;font-weight:700}dl dd{margin-bottom:1em;margin-left:200px}li{margin:.4em 0}li li{margin:0}hr{display:block;margin:1.75em 0;padding:0;height:1px;border:0;border-top:#efefef 1px solid}blockquote{box-sizing:border-box;margin:1.75em 0 1.75em 0;padding:0 0 0 1.75em;border-left:#4a4a4a .4em solid;-moz-box-sizing:border-box}blockquote p{margin:.8em 0;font-style:italic}blockquote small{display:inline-block;margin:.8em 0 .8em 1.5em;color:#ccc;font-size:.9em}blockquote small:before{content:"\2014 \00A0"}blockquote cite{font-weight:700}blockquote cite a{font-weight:normal}mark{background-color:#fdffb6}code,tt{padding:1px 3px;border:#e3edf3 1px solid;background:#f7fafb;border-radius:2px;white-space:pre-wrap;font-family:Inconsolata,monospace,sans-serif;font-size:.85em;font-feature-settings:"liga" 0;-webkit-font-feature-settings:"liga" 0;-moz-font-feature-settings:"liga" 0}pre{overflow:auto;box-sizing:border-box;margin:0 0 1.75em 0;padding:10px;width:100%;border:#e3edf3 1px solid;background:#f7fafb;border-radius:3px;white-space:pre;font-family:Inconsolata,monospace,sans-serif;font-size:.9em;-moz-box-sizing:border-box}pre code,pre tt{padding:0;border:none;background:transparent;white-space:pre-wrap;font-size:inherit}kbd{display:inline-block;margin-bottom:.4em;padding:1px 8px;border:#ccc 1px solid;background:#f4f4f4;border-radius:4px;box-shadow:0 1px 0 rgba(0,0,0,.2) , 0 1px 0 0 #fff inset;color:#666;text-shadow:#fff 0 1px 0;font-size:.9em;font-weight:700}table{box-sizing:border-box;margin:1.75em 0;max-width:100%;width:100%;background-color:transparent;-moz-box-sizing:border-box}table th,table td{padding:8px;border-top:#efefef 1px solid;vertical-align:top;text-align:left;line-height:20px}table th{color:#000}table caption+thead tr:first-child th,table caption+thead tr:first-child td,table colgroup+thead tr:first-child th,table colgroup+thead tr:first-child td,table thead:first-child tr:first-child th,table thead:first-child tr:first-child td{border-top:0}table tbody+tbody{border-top:#efefef 2px solid}table table table{background-color:#fff}table tbody > tr:nth-child(odd) > td,table tbody > tr:nth-child(odd) > th{background-color:#f6f6f6}table.plain tbody > tr:nth-child(odd) > td,table.plain tbody > tr:nth-child(odd) > th{background:transparent}iframe,amp-iframe,.fluid-width-video-wrapper{display:block;margin:1.75em 0}.fluid-width-video-wrapper iframe,.fluid-width-video-wrapper amp-iframe{margin:0}textarea,select,input{margin:0 0 5px 0;padding:6px 9px;width:260px;outline:0;border:#e7eef2 1px solid;background:#fff;border-radius:4px;box-shadow:none;font-family:"Open Sans",sans-serif;font-size:1.6rem;line-height:1.4em;font-weight:100;-webkit-appearance:none}textarea{min-width:250px;min-height:80px;max-width:340px;width:100%;height:auto}input[type="text"]:focus,input[type="email"]:focus,input[type="search"]:focus,input[type="tel"]:focus,input[type="url"]:focus,input[type="password"]:focus,input[type="number"]:focus,input[type="date"]:focus,input[type="month"]:focus,input[type="week"]:focus,input[type="time"]:focus,input[type="datetime"]:focus,input[type="datetime-local"]:focus,textarea:focus{outline:none;outline-width:0;border:#bbc7cc 1px solid;background:#fff}select{width:270px;height:30px;line-height:30px}.clearfix:before,.clearfix:after{content:" ";display:table}.clearfix:after{clear:both}.clearfix{zoom:1}.main-header{position:relative;display:table;overflow:hidden;box-sizing:border-box;width:100%;height:50px;background:#5ba4e5 no-repeat center center;background-size:cover;text-align:left;-webkit-box-sizing:border-box;-moz-box-sizing:border-box}.content{background:#fff;padding-top:15px}.blog-title,.content{margin:auto;max-width:600px}.blog-title a{display:block;padding-right:16px;padding-left:16px;height:50px;color:#fff;text-decoration:none;font-family:"Open Sans",sans-serif;font-size:16px;line-height:50px;font-weight:600}.post{position:relative;margin-top:0;margin-right:16px;margin-left:16px;padding-bottom:0;max-width:100%;border-bottom:#ebf2f6 1px solid;word-wrap:break-word;font-size:.95em;line-height:1.65em}.post-header{margin-bottom:1rem}.post-title{margin-bottom:0}.post-title a{text-decoration:none}.post-meta{display:block;margin:3px 0 0 0;color:#9eabb3;font-family:"Open Sans",sans-serif;font-size:1.3rem;line-height:2.2rem}.post-meta a{color:#9eabb3;text-decoration:none}.post-meta a:hover{text-decoration:underline}.post-meta .author{margin:0;font-size:1.3rem;line-height:1.3em}.post-date{display:inline-block;text-transform:uppercase;white-space:nowrap;font-size:1.2rem;line-height:1.2em}.post-image{margin:0;padding-top:3rem;padding-bottom:30px;border-top:1px #e8e8e8 solid}.post-content amp-img,.post-content amp-anim{position:relative;left:50%;display:block;padding:0;min-width:0;max-width:112%;width:calc(100% + 32px);height:auto;transform:translateX(-50%);-webkit-transform:translateX(-50%);-ms-transform:translateX(-50%)}.footnotes{font-size:1.3rem;line-height:1.6em;font-style:italic}.footnotes li{margin:.6rem 0}.footnotes p{margin:0}.footnotes p a:last-child{text-decoration:none}.site-footer{position:relative;margin:0 auto 20px auto;padding:1rem 15px;max-width:600px;color:rgba(0,0,0,.5);font-family:"Open Sans",sans-serif;font-size:1.1rem;line-height:1.75em}.site-footer a{color:rgba(0,0,0,.5);text-decoration:none;font-weight:bold}.site-footer a:hover{border-bottom:#bbc7cc 1px solid}.poweredby{display:block;float:right;width:45%;text-align:right}.copyright{display:block;float:left;width:45%}</style>
+<style amp-boilerplate="">body{-webkit-animation:-amp-start 8s steps(1,end) 0s 1 normal both;-moz-animation:-amp-start 8s steps(1,end) 0s 1 normal both;-ms-animation:-amp-start 8s steps(1,end) 0s 1 normal both;animation:-amp-start 8s steps(1,end) 0s 1 normal both}@-webkit-keyframes -amp-start{from{visibility:hidden}to{visibility:visible}}@-moz-keyframes -amp-start{from{visibility:hidden}to{visibility:visible}}@-ms-keyframes -amp-start{from{visibility:hidden}to{visibility:visible}}@-o-keyframes -amp-start{from{visibility:hidden}to{visibility:visible}}@keyframes -amp-start{from{visibility:hidden}to{visibility:visible}}</style><noscript><style amp-boilerplate="">body{-webkit-animation:none;-moz-animation:none;-ms-animation:none;animation:none}</style></noscript>
+<script async="" src="/v0.js"></script>
+<script async="" custom-element="amp-iframe" src="/v0/amp-iframe-0.1.js"></script>
+</meta></link></meta></head>
+<body class="amp-template">
+<header class="main-header">
+<nav class="blog-title">
+<a href="">user Blog</a>
+</nav>
+</header>
+<main class="content" role="main">
+<article class="post">
+<header class="post-header">
+<h1 class="post-title">Advanced Markdown tips</h1>
+<section class="post-meta">
+<p class="author">by <a href="/author/ghost/">Ghost</a></p>
+<time class="post-date" datetime="2018-08-09">2018-08-09</time>
+</section>
+</header>
+<figure class="post-image">
+<amp-img height="400" layout="responsive" src="/v1.0.0/images/advanced.jpg" width="600"></amp-img>
+</figure>
+<section class="post-content">
+<div class="kg-card-markdown"><p>There are lots of powerful things you can do with the Ghost editor</p>
+<p>If you've gotten pretty comfortable with <a href="/the-editor/">all the basics</a> of writing in Ghost, then you may enjoy some more advanced tips about the types of things you can do with Markdown!</p>
+<p>As with the last post about the editor, you'll want to be actually editing this post as you read it so that you can see all the Markdown code we're using.</p>
+<h2 id="specialformatting">Special formatting</h2>
+<p>As well as bold and italics, you can also use some other special formatting in Markdown when the need arises, for example:</p>
+<ul>
+<li><s>strike through</s></li>
+<li><mark>highlight</mark></li>
+<li>*escaped characters*</li>
+</ul>
+<h2 id="writingcodeblocks">Writing code blocks</h2>
+<p>There are two types of code elements which can be inserted in Markdown, the first is inline, and the other is block. Inline code is formatted by wrapping any word or words in back-ticks, <code>like this</code>. Larger snippets of code can be displayed across multiple lines using triple back ticks:</p>
+<pre><code>.my-link {
+    text-decoration: underline;
+}
+</code></pre>
+<p>If you want to get really fancy, you can even add syntax highlighting using <a href="http://prismjs.com/">Prism.js</a>.</p>
+<h2 id="fullbleedimages">Full bleed images</h2>
+<p>One neat trick which you can use in Markdown to distinguish between different types of images is to add a <code>#hash</code> value to the end of the source URL, and then target images containing the hash with special styling. For example:</p>
+<p><amp-img alt="walking" height="800" layout="responsive" src="/v1.0.0/images/walking.jpg#full" width="1200"></amp-img></p>
+<p>which is styled with...</p>
+<pre><code>img[src$="#full"] {
+    max-width: 100vw;
+}
+</code></pre>
+<p>This creates full-bleed images in the Casper theme, which stretch beyond their usual boundaries right up to the edge of the window. Every theme handles these types of things slightly differently, but it's a great trick to play with if you want to have a variety of image sizes and styles.</p>
+<h2 id="referencelists">Reference lists</h2>
+<p><strong>The quick brown <a href="https://en.wikipedia.org/wiki/Fox" title="Wikipedia: Fox">fox</a>, jumped over the lazy <a href="https://en.wikipedia.org/wiki/Dog" title="Wikipedia: Dog">dog</a>.</strong></p>
+<p>Another way to insert links in markdown is using reference lists. You might want to use this style of linking to cite reference material in a Wikipedia-style. All of the links are listed at the end of the document, so you can maintain full separation between content and its source or reference.</p>
+<h2 id="creatingfootnotes">Creating footnotes</h2>
+<p>The quick brown fox<sup class="footnote-ref"><a href="#fn1" id="fnref1">[1]</a></sup> jumped over the lazy dog<sup class="footnote-ref"><a href="#fn2" id="fnref2">[2]</a></sup>.</p>
+<p>Footnotes are a great way to add additional contextual details when appropriate. Ghost will automatically add footnote content to the very end of your post.</p>
+<h2 id="fullhtml">Full HTML</h2>
+<p>Perhaps the best part of Markdown is that you're never limited to just Markdown. You can write HTML directly in the Ghost editor and it will just work as HTML usually does. No limits! Here's a standard YouTube embed code as an example:</p>
+<amp-iframe allowfullscreen="" frameborder="0" height="315" layout="responsive" sandbox="allow-scripts allow-same-origin" src="/embed/Cniqsc9QfDo?rel=0&amp;showinfo=0" width="560"></amp-iframe>
+<hr class="footnotes-sep"/>
+<section class="footnotes">
+<ol class="footnotes-list">
+<li class="footnote-item" id="fn1"><p>Foxes are red <a class="footnote-backref" href="#fnref1">↩︎</a></p>
+</li>
+<li class="footnote-item" id="fn2"><p>Dogs are usually not red <a class="footnote-backref" href="#fnref2">↩︎</a></p>
+</li>
+</ol>
+</section>
+</div>
+</section>
+</article>
+</main>
+<footer class="site-footer clearfix">
+<section class="copyright"><a href="">user Blog</a> © 2018</section>
+<section class="poweredby">Proudly published with <a href="https://ghost.org">Ghost</a></section>
+</footer>
+</body>
+</html>

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+
+<html dir="ltr" lang="en" prefix="content: http://purl.org/rss/1.0/modules/content/  dc: http://purl.org/dc/terms/  foaf: http://xmlns.com/foaf/0.1/  og: http://ogp.me/ns#  rdfs: http://www.w3.org/2000/01/rdf-schema#  schema: http://schema.org/  sioc: http://rdfs.org/sioc/ns#  sioct: http://rdfs.org/sioc/types#  skos: http://www.w3.org/2004/02/skos/core#  xsd: http://www.w3.org/2001/XMLSchema# ">
+<head>
+<meta charset="utf-8"/>
+<meta content="Drupal 8 (https://www.drupal.org)" name="Generator"/>
+<meta content="width" name="MobileOptimized"/>
+<meta content="true" name="HandheldFriendly"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="/core/misc/favicon.ico" rel="shortcut icon" type="image/vnd.microsoft.icon"/>
+<title>Page not found | user's Site</title>
+<link href="/sites/default/files/css/css_5Mz0wpOL20s_SQKXnhCWyA5ZJOgQQg26tUyGV0jHiCA.css?pdgcng" media="all" rel="stylesheet"/>
+<link href="/sites/default/files/css/css_1Vs-se15DhDFHRhxIEwgG9PQN6dfdJOpBMSoiTWSv9Q.css?pdgcng" media="all" rel="stylesheet"/>
+<link href="/sites/default/files/css/css_Z5jMg7P_bjcW9iUzujI7oaechMyxQTUqZhHJ_aYSq04.css?pdgcng" media="print" rel="stylesheet"/>
+<!--[if lte IE 8]>
+<script src="/sites/default/files/js/js_VtafjXmRvoUgAzqzYTA3Wrjkx9wcWhjP0G4ZnnqRamA.js"></script>
+<![endif]-->
+</head>
+<body class="layout-one-sidebar layout-sidebar-first path-status-404">
+<a class="visually-hidden focusable skip-link" href="#main-content">
+      Skip to main content
+    </a>
+<div class="dialog-off-canvas-main-canvas" data-off-canvas-main-canvas="">
+<div id="page-wrapper">
+<div id="page">
+<header aria-label="Site header" class="header" id="header" role="banner">
+<div class="section layout-container clearfix">
+<div class="region region-secondary-menu">
+<nav aria-labelledby="block-bartik-account-menu-menu" class="block block-menu navigation menu--account" id="block-bartik-account-menu" role="navigation">
+<h2 class="visually-hidden" id="block-bartik-account-menu-menu">User account menu</h2>
+<div class="content">
+<div class="menu-toggle-target menu-toggle-target-show" id="show-block-bartik-account-menu"></div>
+<div class="menu-toggle-target" id="hide-block-bartik-account-menu"></div>
+<a class="menu-toggle" href="#show-block-bartik-account-menu">Show — User account menu</a>
+<a class="menu-toggle menu-toggle--hide" href="#hide-block-bartik-account-menu">Hide — User account menu</a>
+<ul class="clearfix menu">
+<li class="menu-item">
+<a data-drupal-link-system-path="user/login" href="/user/login">Log in</a>
+</li>
+</ul>
+</div>
+</nav>
+</div>
+<div class="clearfix region region-header">
+<div class="clearfix site-branding block block-system block-system-branding-block" id="block-bartik-branding">
+<a class="site-branding__logo" href="/" rel="home" title="Home">
+<img alt="Home" src="/core/themes/bartik/logo.svg"/>
+</a>
+<div class="site-branding__text">
+<div class="site-branding__name">
+<a href="/" rel="home" title="Home">user's Site</a>
+</div>
+</div>
+</div>
+</div>
+<div class="region region-primary-menu">
+<nav aria-labelledby="block-bartik-main-menu-menu" class="block block-menu navigation menu--main" id="block-bartik-main-menu" role="navigation">
+<h2 class="visually-hidden" id="block-bartik-main-menu-menu">Main navigation</h2>
+<div class="content">
+<div class="menu-toggle-target menu-toggle-target-show" id="show-block-bartik-main-menu"></div>
+<div class="menu-toggle-target" id="hide-block-bartik-main-menu"></div>
+<a class="menu-toggle" href="#show-block-bartik-main-menu">Show — Main navigation</a>
+<a class="menu-toggle menu-toggle--hide" href="#hide-block-bartik-main-menu">Hide — Main navigation</a>
+<ul class="clearfix menu">
+<li class="menu-item">
+<a data-drupal-link-system-path="&lt;front&gt;" href="/">Home</a>
+</li>
+</ul>
+</div>
+</nav>
+</div>
+</div>
+</header>
+<div class="highlighted">
+<aside class="layout-container section clearfix" role="complementary">
+<div class="region region-highlighted">
+</div>
+</aside>
+</div>
+<div class="layout-main-wrapper layout-container clearfix" id="main-wrapper">
+<div class="layout-main clearfix" id="main">
+<main class="column main-content" id="content" role="main">
+<section class="section">
+<a id="main-content" tabindex="-1"></a>
+<div class="region region-content">
+<div class="block block-core block-page-title-block" id="block-bartik-page-title">
+<div class="content">
+<h1 class="title page-title">Page not found</h1>
+</div>
+</div>
+<div class="block block-system block-system-main-block" id="block-bartik-content">
+<div class="content">
+      The requested page could not be found.
+    </div>
+</div>
+</div>
+</section>
+</main>
+<div class="column sidebar" id="sidebar-first">
+<aside class="section" role="complementary">
+<div class="region region-sidebar-first">
+<div class="search-block-form block block-search container-inline" data-drupal-selector="search-block-form" id="block-bartik-search" role="search">
+<h2>Search</h2>
+<div class="content container-inline">
+<form accept-charset="UTF-8" action="/search/node" class="search-form search-block-form" id="search-block-form" method="get">
+<div class="js-form-item form-item js-form-type-search form-type-search js-form-item-keys form-item-keys form-no-label">
+<label class="visually-hidden" for="edit-keys">Search</label>
+<input class="form-search" data-drupal-selector="edit-keys" id="edit-keys" maxlength="128" name="keys" size="15" title="Enter the terms you wish to search for." type="search" value=""/>
+</div>
+<div class="form-actions js-form-wrapper form-wrapper" data-drupal-selector="edit-actions" id="edit-actions"><input class="search-form__submit button js-form-submit form-submit" data-drupal-selector="edit-submit" id="edit-submit" type="submit" value="Search"/>
+</div>
+</form>
+</div>
+</div>
+</div>
+</aside>
+</div>
+</div>
+</div>
+<footer class="site-footer">
+<div class="layout-container">
+<div class="site-footer__bottom">
+<div class="region region-footer-fifth">
+<nav aria-labelledby="block-bartik-footer-menu" class="block block-menu navigation menu--footer" id="block-bartik-footer" role="navigation">
+<h2 class="visually-hidden" id="block-bartik-footer-menu">Footer menu</h2>
+<div class="content">
+<div class="menu-toggle-target menu-toggle-target-show" id="show-block-bartik-footer"></div>
+<div class="menu-toggle-target" id="hide-block-bartik-footer"></div>
+<a class="menu-toggle" href="#show-block-bartik-footer">Show — Footer menu</a>
+<a class="menu-toggle menu-toggle--hide" href="#hide-block-bartik-footer">Hide — Footer menu</a>
+<ul class="clearfix menu">
+<li class="menu-item">
+<a data-drupal-link-system-path="contact" href="/contact">Contact</a>
+</li>
+</ul>
+</div>
+</nav>
+<div class="block block-system block-system-powered-by-block" id="block-bartik-powered" role="complementary">
+<div class="content">
+<span>Powered by <a href="https://www.drupal.org">Drupal</a></span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</footer>
+</div>
+</div>
+</div>
+</body>
+</html>

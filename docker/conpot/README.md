@@ -1,4 +1,4 @@
-[![](https://images.microbadger.com/badges/version/dtagdevsec/conpot:1710.svg)](https://microbadger.com/images/dtagdevsec/conpot:1710 "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/dtagdevsec/conpot:1710.svg)](https://microbadger.com/images/dtagdevsec/conpot:1710 "Get your own image badge on microbadger.com")
+[![](https://images.microbadger.com/badges/version/dtagdevsec/conpot:1811.svg)](https://microbadger.com/images/dtagdevsec/conpot:1811 "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/dtagdevsec/conpot:1811.svg)](https://microbadger.com/images/dtagdevsec/conpot:1811 "Get your own image badge on microbadger.com")
 
 # conpot
 
@@ -12,4 +12,4 @@ The `docker-compose.yml` contains the necessary settings to test conpot using `d
 
 # ConPot Dashboard
 
-![ConPot Dashboard](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/docker/conpot/doc/dashboard.png)
+![ConPot Dashboard](doc/dashboard.png)

@@ -1,0 +1,9 @@
+- name: emu_scripts
+  config:
+    # Maximum dumber of subdownloads
+    # max_subdownloads: 20
+    enabled_handlers:
+      - powershell
+      - vbscript
+      # Be very careful if you use the raw_url handler
+      #- raw_url

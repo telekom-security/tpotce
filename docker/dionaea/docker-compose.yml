@@ -1,27 +1,21 @@
-# T-Pot (Standard)
-# For docker-compose ...
-version: '2.1'
-
-networks:
-  dionaea_local:
+version: '2.3'
 
 services:
 
 # Dionaea service
   dionaea:
+    build: .
     container_name: dionaea
     stdin_open: true
+    tty: true
     restart: always
-    networks:
-     - dionaea_local
-    cap_add:
-     - NET_BIND_SERVICE
+    network_mode: "host"
     ports:
      - "20:20"
      - "21:21"
      - "42:42"
      - "69:69/udp"
-     - "8081:80"
+     - "81:81"
      - "135:135"
      - "443:443"
      - "445:445"
@@ -33,7 +27,8 @@ services:
      - "5060:5060/udp"
      - "5061:5061"
      - "27017:27017"
-    image: "dtagdevsec/dionaea:1710"
+    image: "dtagdevsec/dionaea:1811"
+    read_only: true
     volumes:
      - /data/dionaea/roots/ftp:/opt/dionaea/var/dionaea/roots/ftp
      - /data/dionaea/roots/tftp:/opt/dionaea/var/dionaea/roots/tftp

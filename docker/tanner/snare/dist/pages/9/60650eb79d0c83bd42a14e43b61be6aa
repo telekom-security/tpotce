@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+<meta content="text/html; charset=utf-8" http-equiv="Content-type"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>
+      user's Blog! - Log in
+
+  </title>
+<meta content="no" http-equiv="imagetoolbar"/>
+<script async="async" src="/assets/publify_admin-53c1088266ecc3517d6246e3e6bb3022d371c0262cac2813257d358a3ef6e185.js"></script>
+<link href="/assets/accounts-b5a8a4dea22457e53d43291d33a7c1b3b1632807cfc16038aa24b617c90b4f86.css" media="screen" rel="stylesheet"/>
+</head>
+<body>
+<div class="container">
+<div class="row">
+<div class="col-md-4 col-md-offset-4">
+<div class="panel panel-default">
+<div class="panel-heading">
+<h1 class="panel-title"><a href="http://publify.co">Publify</a></h1>
+</div>
+<div class="panel-body">
+<form accept-charset="UTF-8" action="/users/sign_in" class="new_user" id="new_user" method="post"><input name="utf8" type="hidden" value="✓"/><input name="authenticity_token" type="hidden" value="HQa/IikIbncbryZr4Sd8pdisq84YWU3ZURimQ576Axbr61LCk13KKBrkpKLPjrlLkVRja1luBIfA/tKlJnG5RA=="/>
+<fieldset>
+<div class="form-group">
+<label for="user_login">Login</label><br/>
+<input autofocus="autofocus" class="form-control" id="user_login" name="user[login]" type="text"/>
+</div>
+<div class="form-group">
+<label for="user_password">Password</label><br/>
+<input autocomplete="off" class="form-control" id="user_password" name="user[password]" type="password"/>
+</div>
+<div class="checkbox">
+<label for="user_remember_me">
+<input name="user[remember_me]" type="hidden" value="0"/><input id="user_remember_me" name="user[remember_me]" type="checkbox" value="1"/>
+        Remember me
+</label> </div>
+<div class="actions">
+<input class="btn btn-lg btn-success btn-block" data-disable-with="Log in" name="commit" type="submit" value="Log in"/>
+</div>
+</fieldset>
+</form>
+</div>
+</div>
+<small>
+<a href="/users/password/new">I've lost my password</a><br/>
+<a href="">← Back to user's Blog!</a>
+</small>
+</div>
+</div>
+</div>
+</body>
+</html>

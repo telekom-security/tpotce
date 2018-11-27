@@ -1,4 +1,4 @@
-[![](https://images.microbadger.com/badges/version/dtagdevsec/suricata:1710.svg)](https://microbadger.com/images/dtagdevsec/suricata:1710 "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/dtagdevsec/suricata:1710.svg)](https://microbadger.com/images/dtagdevsec/suricata:1710 "Get your own image badge on microbadger.com")
+[![](https://images.microbadger.com/badges/version/dtagdevsec/suricata:1811.svg)](https://microbadger.com/images/dtagdevsec/suricata:1811 "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/dtagdevsec/suricata:1811.svg)](https://microbadger.com/images/dtagdevsec/suricata:1811 "Get your own image badge on microbadger.com")
 
 # dockerized suricata
 
@@ -12,4 +12,4 @@ The `docker-compose.yml` contains the necessary settings to test suricata using 
 
 # Suricata Dashboard
 
-![Suricata Dashboard](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/docker/suricata/doc/dashboard.png)
+![Suricata Dashboard](doc/dashboard.png)

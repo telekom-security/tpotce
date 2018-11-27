@@ -1,4 +1,4 @@
-version: '2.1'
+version: '2.3'
 
 networks:
   mailoney_local:
@@ -7,12 +7,20 @@ services:
 
 # Mailoney service
   mailoney:
+    build: .
     container_name: mailoney
     restart: always
+    environment:
+     - HPFEEDS_SERVER=
+     - HPFEEDS_IDENT=user
+     - HPFEEDS_SECRET=pass
+     - HPFEEDS_PORT=20000
+     - HPFEEDS_CHANNELPREFIX=prefix
     networks:
      - mailoney_local
     ports:
-     - "25:2525"
-    image: "dtagdevsec/mailoney:1710"
-   volumes:
-    - /data/mailoney/log:/opt/mailoney/logs
+     - "25:25"
+    image: "dtagdevsec/mailoney:1811"
+    read_only: true
+    volumes:
+     - /data/mailoney/log:/opt/mailoney/logs

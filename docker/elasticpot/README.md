@@ -1,4 +1,4 @@
-[![](https://images.microbadger.com/badges/version/dtagdevsec/elasticpot:1710.svg)](https://microbadger.com/images/dtagdevsec/elasticpot:1710 "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/dtagdevsec/elasticpot:1710.svg)](https://microbadger.com/images/dtagdevsec/elasticpot:1710 "Get your own image badge on microbadger.com")
+[![](https://images.microbadger.com/badges/version/dtagdevsec/elasticpot:1811.svg)](https://microbadger.com/images/dtagdevsec/elasticpot:1811 "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/dtagdevsec/elasticpot:1811.svg)](https://microbadger.com/images/dtagdevsec/elasticpot:1811 "Get your own image badge on microbadger.com")
 
 # elasticpot
 
@@ -12,4 +12,4 @@ The `docker-compose.yml` contains the necessary settings to test elasticpot usin
 
 # ElasticPot Dashboard
 
-![ElasticPot Dashboard](https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/docker/elasticpot/doc/dashboard.png)
+![ElasticPot Dashboard](doc/dashboard.png)

@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+
+<html class="devise-layout-html">
+<head prefix="og: http://ogp.me/ns#">
+<meta charset="utf-8"/>
+<meta content="IE=edge" http-equiv="X-UA-Compatible"/>
+<meta content="object" property="og:type"/>
+<meta content="GitLab" property="og:site_name"/>
+<meta content="Sign in" property="og:title"/>
+<meta content="GitLab Community Edition" property="og:description"/>
+<meta content="http://172.20.254.127/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png" property="og:image"/>
+<meta content="64" property="og:image:width"/>
+<meta content="64" property="og:image:height"/>
+<meta content="http://172.20.254.127/users/sign_in" property="og:url"/>
+<meta content="summary" property="twitter:card"/>
+<meta content="Sign in" property="twitter:title"/>
+<meta content="GitLab Community Edition" property="twitter:description"/>
+<meta content="http://172.20.254.127/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png" property="twitter:image"/>
+<title>Sign in · GitLab</title>
+<meta content="GitLab Community Edition" name="description"/>
+<link data-original-href="/assets/favicon-7901bd695fb93edb07975966062049829afb56cf11511236e61bcf425070e36e.png" href="/assets/favicon-7901bd695fb93edb07975966062049829afb56cf11511236e61bcf425070e36e.png" id="favicon" rel="shortcut icon" type="image/png"/>
+<link href="/assets/application-266f2bfa52ff531258d13c702895a14fd5994ca591fa2df7338da00ab18c99ac.css" media="all" rel="stylesheet"/>
+<link href="/assets/print-c8ff536271f8974b8a9a5f75c0ca25d2b8c1dceb4cff3c01d1603862a0bdcbfc.css" media="print" rel="stylesheet"/>
+<script>
+//<![CDATA[
+window.gon={};gon.api_version="v4";gon.default_avatar_url="http://172.20.254.127/assets/no_avatar-849f9c04a3a0d0cea2424ae97b27447dc64a7dbfae83c036c45b403392f0e8ba.png";gon.max_file_size=10;gon.asset_host=null;gon.webpack_public_path="/assets/webpack/";gon.relative_url_root="";gon.shortcuts_path="/help/shortcuts";gon.user_color_scheme="white";gon.gitlab_url="http://172.20.254.127";gon.revision="63daf37";gon.gitlab_logo="/assets/gitlab_logo-7ae504fe4f68fdebb3c2034e36621930cd36ea87924c11ff65dbcb8ed50dca58.png";gon.sprite_icons="/assets/icons-07542808fffaf82e9b57b144464ea42620b32f65ce441c01528d23d4b96d5f11.svg";gon.sprite_file_icons="/assets/file_icons-7262fc6897e02f1ceaf8de43dc33afa5e4f9a2067f4f68ef77dcc87946575e9e.svg";gon.emoji_sprites_css_path="/assets/emoji_sprites-289eccffb1183c188b630297431be837765d9ff4aed6130cf738586fb307c170.css";gon.test_env=false;gon.suggested_label_colors=["#0033CC","#428BCA","#44AD8E","#A8D695","#5CB85C","#69D100","#004E00","#34495E","#7F8C8D","#A295D6","#5843AD","#8E44AD","#FFECDB","#AD4363","#D10069","#CC0033","#FF0000","#D9534F","#D1D100","#F0AD4E","#AD8D43"];
+//]]>
+</script>
+<script defer="defer" src="/assets/webpack/runtime.9fcb75d4.bundle.js"></script>
+<script defer="defer" src="/assets/webpack/main.a66b6c66.chunk.js"></script>
+<script defer="defer" src="/assets/webpack/commons~pages.ldap.omniauth_callbacks~pages.omniauth_callbacks~pages.sessions~pages.sessions.new.432e20dc.chunk.js"></script>
+<script defer="defer" src="/assets/webpack/pages.sessions.new.6dbf9c97.chunk.js"></script>
+<meta content="authenticity_token" name="csrf-param">
+<meta content="8OCgdrzMdTZsi+TRgcbPZ409KixpYrD0J3eq+JwCN9jErxgVP6PaCJ6ZlCLMqnMU3uuZkwWuXZhCeBvBKqtFcQ==" name="csrf-token">
+<meta content="origin-when-cross-origin" name="referrer"/>
+<meta content="width=device-width, initial-scale=1, maximum-scale=1" name="viewport"/>
+<meta content="#474D57" name="theme-color"/>
+<link href="/assets/touch-icon-iphone-5a9cee0e8a51212e70b90c87c12f382c428870c0ff67d1eb034d884b78d2dae7.png" rel="apple-touch-icon" type="image/x-icon"/>
+<link href="/assets/touch-icon-ipad-a6eec6aeb9da138e507593b464fdac213047e49d3093fc30e90d9a995df83ba3.png" rel="apple-touch-icon" sizes="76x76" type="image/x-icon"/>
+<link href="/assets/touch-icon-iphone-retina-72e2aadf86513a56e050e7f0f2355deaa19cc17ed97bbe5147847f2748e5a3e3.png" rel="apple-touch-icon" sizes="120x120" type="image/x-icon"/>
+<link href="/assets/touch-icon-ipad-retina-8ebe416f5313483d9c1bc772b5bbe03ecad52a54eba443e5215a22caed2a16a2.png" rel="apple-touch-icon" sizes="152x152" type="image/x-icon"/>
+<link color="rgb(226, 67, 41)" href="/assets/logo-d36b5212042cebc89b96df4bf6ac24e43db316143e89926c0db839ff694d2de4.svg" rel="mask-icon"/>
+<meta content="/assets/msapplication-tile-1196ec67452f618d39cdd85e2e3a542f76574c071051ae7effbfde01710eb17d.png" name="msapplication-TileImage"/>
+<meta content="#30353E" name="msapplication-TileColor"/>
+</meta></meta></head>
+<body class="ui-indigo login-page application navless" data-page="sessions:new">
+<div class="page-wrap">
+<header class="navbar fixed-top navbar-empty">
+<div class="container">
+<div class="mx-auto">
+<svg class="tanuki-logo" height="24" viewbox="0 0 36 36" width="24">
+<path class="tanuki-shape tanuki-left-ear" d="M2 14l9.38 9v-9l-4-12.28c-.205-.632-1.176-.632-1.38 0z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-right-ear" d="M34 14l-9.38 9v-9l4-12.28c.205-.632 1.176-.632 1.38 0z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-nose" d="M18,34.38 3,14 33,14 Z" fill="#e24329"></path>
+<path class="tanuki-shape tanuki-left-eye" d="M18,34.38 11.38,14 2,14 6,25Z" fill="#fc6d26"></path>
+<path class="tanuki-shape tanuki-right-eye" d="M18,34.38 24.62,14 34,14 30,25Z" fill="#fc6d26"></path>
+<path class="tanuki-shape tanuki-left-cheek" d="M2 14L.1 20.16c-.18.565 0 1.2.5 1.56l17.42 12.66z" fill="#fca326"></path>
+<path class="tanuki-shape tanuki-right-cheek" d="M34 14l1.9 6.16c.18.565 0 1.2-.5 1.56L18 34.38z" fill="#fca326"></path>
+</svg>
+</div>
+</div>
+</header>
+<div class="login-page-broadcast">
+</div>
+<div class="container navless-container">
+<div class="content">
+<div class="flash-container flash-container-page">
+</div>
+<div class="row">
+<div class="col-sm-7 brand-holder">
+<h1>
+GitLab Community Edition
+</h1>
+<h3>Open source software to collaborate on code</h3>
+<p>
+Manage Git repositories with fine-grained access controls that keep your code secure.
+Perform code reviews and enhance collaboration with merge requests.
+Each project can also have an issue tracker and a wiki.
+</p>
+</div>
+<div class="col-sm-5 new-session-forms-container">
+<div>
+<ul class="nav-links new-session-tabs nav-tabs nav" role="tablist">
+<li class="nav-item" role="presentation">
+<a class="nav-link active" data-toggle="tab" href="#login-pane" role="tab">Sign in</a>
+</li>
+<li class="nav-item" role="presentation">
+<a class="nav-link" data-toggle="tab" href="#register-pane" role="tab">Register</a>
+</li>
+</ul>
+<div class="tab-content">
+<div class="login-box tab-pane active" id="login-pane" role="tabpanel">
+<div class="login-body">
+<form accept-charset="UTF-8" action="/users/sign_in" aria-live="assertive" class="new_user gl-show-field-errors" id="new_user" method="post"><input name="utf8" type="hidden" value="✓"/><input name="authenticity_token" type="hidden" value="Ouom5F3H1IicNFe6j2gsXGam/5vuGpQjXDoQ1mJLy3oOpZ6H3qh7tm4mJ0nCBJAvNXBMJILWeU85NaHv1OK50w=="/><div class="form-group">
+<label for="user_login">Username or email</label>
+<input autocapitalize="off" autocorrect="off" autofocus="autofocus" class="form-control top" id="user_login" name="user[login]" required="required" title="This field is required." type="text"/>
+</div>
+<div class="form-group">
+<label for="user_password">Password</label>
+<input class="form-control bottom" id="user_password" name="user[password]" required="required" title="This field is required." type="password"/>
+</div>
+<div class="remember-me">
+<label for="user_remember_me">
+<input name="user[remember_me]" type="hidden" value="0"/><input class="remember-me-checkbox" id="user_remember_me" name="user[remember_me]" type="checkbox" value="1"/>
+<span>Remember me</span>
+</label>
+<div class="float-right forgot-password">
+<a href="/users/password/new">Forgot your password?</a>
+</div>
+</div>
+<div></div>
+<div class="submit-container move-submit-down">
+<input class="btn btn-save" name="commit" type="submit" value="Sign in"/>
+</div>
+</form>
+</div>
+</div>
+<div class="tab-pane login-box" id="register-pane" role="tabpanel">
+<div class="login-body">
+<form accept-charset="UTF-8" action="/users" aria-live="assertive" class="new_new_user gl-show-field-errors" id="new_new_user" method="post"><input name="utf8" type="hidden" value="✓"/><input name="authenticity_token" type="hidden" value="VayYMqpt2a/IVyBvyr4eM/fKN8qFZlAnb3QmKTg35IZh4yBRKQJ2kTpFUJyH0qJApByEdemqvUsKe5cQjp6WLw=="/><div class="devise-errors">
+</div>
+<div class="form-group">
+<label for="new_user_name">Full name</label>
+<input class="form-control top" id="new_user_name" name="new_user[name]" required="required" title="This field is required." type="text"/>
+</div>
+<div class="username form-group">
+<label for="new_user_username">Username</label>
+<input class="form-control middle" id="new_user_username" name="new_user[username]" pattern="[a-zA-Z0-9_\.][a-zA-Z0-9_\-\.]*[a-zA-Z0-9_\-]|[a-zA-Z0-9_]" required="required" title="Please create a username with only alphanumeric characters." type="text"/>
+<p class="validation-error hide">Username is already taken.</p>
+<p class="validation-success hide">Username is available.</p>
+<p class="validation-pending hide">Checking username availability...</p>
+</div>
+<div class="form-group">
+<label for="new_user_email">Email</label>
+<input class="form-control middle" id="new_user_email" name="new_user[email]" required="required" title="Please provide a valid email address." type="email" value=""/>
+</div>
+<div class="form-group">
+<label for="new_user_email_confirmation">Email confirmation</label>
+<input class="form-control middle" id="new_user_email_confirmation" name="new_user[email_confirmation]" required="required" title="Please retype the email address." type="email"/>
+</div>
+<div class="form-group append-bottom-20" id="password-strength">
+<label for="new_user_password">Password</label>
+<input class="form-control bottom" id="new_user_password" name="new_user[password]" pattern=".{8,}" required="required" title="Minimum length is 8 characters." type="password"/>
+<p class="gl-field-hint">Minimum length is 8 characters</p>
+</div>
+<div></div>
+<div class="submit-container">
+<input class="btn-register btn" name="commit" type="submit" value="Register"/>
+</div>
+</form></div>
+</div>
+<div class="clearfix submit-container">
+<p>
+<span class="light">Didn't receive a confirmation email?</span>
+<a href="/users/confirmation/new">Request a new one</a>.
+</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<hr class="footer-fixed"/>
+<div class="container footer-container">
+<div class="footer-links">
+<a href="/explore">Explore</a>
+<a href="/help">Help</a>
+<a href="https://about.gitlab.com/">About GitLab</a>
+</div>
+</div>
+</div>
+</body>
+</html>
