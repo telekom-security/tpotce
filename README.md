@@ -38,10 +38,6 @@ Furthermore we use the following tools
 3. Install the system in a [VM](#vm) or on [physical hardware](#hw) with [internet access](#placement).
 4. Enjoy your favorite beverage - [watch](https://sicherheitstacho.eu) and [analyze](#kibana).
 
-# Seeing is believing :bowtie:
-
-[![T-Pot 17.10](https://img.youtube.com/vi/G-_OabDowFU/0.jpg)](https://youtu.be/G-_OabDowFU)
-
 
 # Table of Contents
 - [Changelog](#changelog)
@@ -52,9 +48,11 @@ Furthermore we use the following tools
   - [Create your own ISO Image](#createiso)
   - [Running in a VM](#vm)
   - [Running on Hardware](#hardware)
-  - [Post Install](#postinstall)
+  - [Post Install Manual](#postinstall)
+  - [Post Install Auto](#postinstallauto)
   - [First Run](#firstrun)
   - [System Placement](#placement)
+- [Updates](#updates)
 - [Options](#options)
   - [SSH and web access](#ssh)
   - [Kibana Dashboard](#kibana)
@@ -73,47 +71,47 @@ Furthermore we use the following tools
 <a name="changelog"></a>
 # Changelog
 - **New honeypots**
-	- *Ciscoasa* a low interaction honeypot for the Cisco ASA component capable of detecting CVE-2018-0101, a DoS and remote code execution vulnerability.
-	- *Glutton* (NextGen) is the all eating honeypot
-	- *Heralding* a credentials catching honeypot.
-  - *Medpot* is a HL7 / FHIR honeypot.
-	- *Snare* is a web application honeypot sensor, is the successor of Glastopf. SNARE has feature parity with Glastopf and allows to convert existing web pages into attack surfaces.
-	- *Tanner* is SNARES' "brain". Every event is send from SNARE to TANNER, gets evaluated and TANNER decides how SNARE should respond to the client. This allows us to change the behaviour of many sensors on the fly. We are providing a TANNER instance for your use, but there is nothing stopping you from setting up your own instance.
+ - *Ciscoasa* a low interaction honeypot for the Cisco ASA component capable of detecting CVE-2018-0101, a DoS and remote code execution vulnerability.
+ - *Glutton* (NextGen) is the all eating honeypot
+ - *Heralding* a credentials catching honeypot.
+ - *Medpot* is a HL7 / FHIR honeypot.
+ - *Snare* is a web application honeypot sensor, is the successor of Glastopf. SNARE has feature parity with Glastopf and allows to convert existing web pages into attack surfaces.
+ - *Tanner* is SNARES' "brain". Every event is send from SNARE to TANNER, gets evaluated and TANNER decides how SNARE should respond to the client. This allows us to change the behaviour of many sensors on the fly. We are providing a TANNER instance for your use, but there is nothing stopping you from setting up your own instance.
 - **New tools**
-	- *Cockpit* is an interactive server admin interface. It is easy to use and very lightweight. Cockpit interacts directly with the operating system from a real Linux session in a browser.
-	- *Cyberchef* is the Cyber Swiss Army Knife - a web app for encryption, encoding, compression and data analysis.
-	- *grc* (commandline) is yet another colouriser (written in python) for beautifying your logfiles or output of commands.
-	- *multitail* (commandline) allows you to monitor logfiles and command output in multiple windows in a terminal, colorize, filter and merge.
-	- *tped.sh* (commandline) allows you to switch between T-Pot Editions after installation.
+ - *Cockpit* is an interactive server admin interface. It is easy to use and very lightweight. Cockpit interacts directly with the operating system from a real Linux session in a browser.
+ - *Cyberchef* is the Cyber Swiss Army Knife - a web app for encryption, encoding, compression and data analysis.
+ - *grc* (commandline) is yet another colouriser (written in python) for beautifying your logfiles or output of commands.
+ - *multitail* (commandline) allows you to monitor logfiles and command output in multiple windows in a terminal, colorize, filter and merge.
+ - *tped.sh* (commandline) allows you to switch between T-Pot Editions after installation.
 - **Deprecated tools**
-	- *Netdata*, *Portainer* and *WeTTY* were superseded by *Cockpit* which is much more lightweight, perfectly well integrated into Ubuntu 18.04 LTS and of course comes with the same but a more basic feature set.
+ - *Netdata*, *Portainer* and *WeTTY* were superseded by *Cockpit* which is much more lightweight, perfectly well integrated into Ubuntu 18.04 LTS and of course comes with the same but a more basic feature set.
 - **New Standard Installation**
-        - The new standard installation is now running a whopping *14* honeypot instances.
+ - The new standard installation is now running a whopping *14* honeypot instances.
 - **T-Pot Universal Installer**
-	- The T-Pot installer now also includes the option to install on a existing machine, the T-Pot-Autoinstaller is no longer necessary.
+ - The T-Pot installer now also includes the option to install on a existing machine, the T-Pot-Autoinstaller is no longer necessary.
 - **Tighten Security**
-	- The docker containers are now running mostly with a read-only file system
-	- If possible using `setcap` to start daemons without root or dropping privileges
-	- Introducing `fail2ban` to ease up on `authorized_keys` requirement which is no longer necessary for `SSH`. Also to further prevent brute-force attacks on `Cockpit` and `NGINX` allowing for faster load times of the WebUI.
+ - The docker containers are now running mostly with a read-only file system
+ - If possible using `setcap` to start daemons without root or dropping privileges
+ - Introducing `fail2ban` to ease up on `authorized_keys` requirement which is no longer necessary for `SSH`. Also to further prevent brute-force attacks on `Cockpit` and `NGINX` allowing for faster load times of the WebUI.
 - **Iptables exceptions for NFQ based honeypots**
-	- In previous versions `iptables`had manually be maintained, now a a script parses `/opt/tpot/etc/tpot.yml` and extracts port information to automatically generate exceptions for ports that should not be forwarded to NFQ.
+ - In previous versions `iptables`had manually be maintained, now a a script parses `/opt/tpot/etc/tpot.yml` and extracts port information to automatically generate exceptions for ports that should not be forwarded to NFQ.
 - **CI**
-	- The Kibana UI now uses a magenta theme.
+ - The Kibana UI now uses a magenta theme.
 - **ES HEAD**
-	- A Java Script now automatically enters the correct FQDN / IP. A manual step is no longer required.
+ - A Java Script now automatically enters the correct FQDN / IP. A manual step is no longer required.
 - **ELK STACK**
-	- The ELK Stack was updated to the latest 6.x versions.
-	- This also means you can now expect the availability of basic *X-Pack-Feaures*, the full feature set however is only available to users with a valid license.
+ - The ELK Stack was updated to the latest 6.x versions.
+ - This also means you can now expect the availability of basic *X-Pack-Feaures*, the full feature set however is only available to users with a valid license.
 - **Dashboards Makeover**
-	- Because Kibana 6.x introduced so much whitespace the dashboards and some of the visualizations needed some overhaul. While it probably needs some getting used to the key was to focus on displaying as much information while not compromising on clarity.  
-	- Because of the new honeypots we now have almost **200 Visualizations** pre-configured and compiled to 15 individual **Kibana Dashboards**. Monitor all *honeypot events* locally on your T-Pot installation. Aside from *honeypot events* you can also view *Suricata NSM and NGINX* events for a quick overview of local host events.
+ - Because Kibana 6.x introduced so much whitespace the dashboards and some of the visualizations needed some overhaul. While it probably needs some getting used to the key was to focus on displaying as much information while not compromising on clarity.  
+ - Because of the new honeypots we now more than **200 Visualizations** pre-configured and compiled to 16 individual **Kibana Dashboards**. Monitor all *honeypot events* locally on your T-Pot installation. Aside from *honeypot events* you can also view *Suricata NSM and NGINX* events for a quick overview of wire events.
 - **Honeypot updates and improvements**
-	- All honeypots were updated to their latest stable versions.
-	- Docker images were mostly overhauled to tighten security even further
-	- Some of the honeypot configurations were modified to keep things fresh
+ - All honeypots were updated to their latest stable versions.
+ - Docker images were mostly overhauled to tighten security even further
+ - Some of the honeypot configurations were modified to keep things fresh
 - **Update Feature**
-	- For the ones who like to live on the bleeding edge of T-Pot development there is now a update script available in `/opt/tpot/update.sh`.
-	- This feature is now in beta and is mostly intended to provide you with the latest development advances without the need of reinstalling T-Pot.
+ - For the ones who like to live on the bleeding edge of T-Pot development there is now a update script available in `/opt/tpot/update.sh`.
+ - This feature is now in beta and is mostly intended to provide you with the latest development advances without the need of reinstalling T-Pot.
 
 <a name="concept"></a>
 # Technical Concept
@@ -286,12 +284,12 @@ Whereas most CD burning tools allow you to burn from ISO images, the procedure t
 *Please note*: We will ensure the compatibility with the Intel NUC platform, as we really like the form factor, looks and build quality. Other platforms **remain untested**.
 
 <a name="postinstall"></a>
-## Post-Install
+## Post-Install Manual
 In some cases it is necessary to install Ubuntu Server 18.04 LTS on your own:
-	- Cloud provider does not offer mounting ISO images.
-	- Hardware setup needs special drivers and / or kernels.
-	- Within your company you have to setup special policies, software etc.
-	- You just like to stay on top of things.
+ - Cloud provider does not offer mounting ISO images.
+ - Hardware setup needs special drivers and / or kernels.
+ - Within your company you have to setup special policies, software etc.
+ - You just like to stay on top of things.
 
 While the T-Pot-Autoinstaller served us perfectly well in the past we decided to include the feature directly into T-Pot and its Universal Installer.
 
@@ -305,7 +303,20 @@ cd tpotce/iso/installer/
 
 The installer will now start and guide you through the install process.
 
-You can also let the installer run automatically if you provide your own `tpot.conf`. A example is available in `tpotce/iso/installer/tpot.conf.dist`.
+<a name="postinstallauto"></a>
+## Post-Install Auto
+You can also let the installer run automatically if you provide your own `tpot.conf`. A example is available in `tpotce/iso/installer/tpot.conf.dist`. This should make things easier in case you want to automate the installation i.e. with **Ansible**.
+
+Just follow these steps while adjusting `tpot.conf` to your needs:
+
+```
+git clone https://github.com/dtag-dev-sec/tpotce
+cd tpotce/iso/installer/
+cp tpot.conf.dist tpot.conf
+./install.sh --type=auto --conf=tpot.conf
+```
+
+The installer will start automatically and guide you through the install process.
 
 <a name="firstrun"></a>
 ## First Run
@@ -313,19 +324,19 @@ The installation requires very little interaction, only a locale and keyboard se
 
 Once the installation is finished, the system will automatically reboot and you will be presented with the T-Pot login screen. On the console you may login with:
 
-- user: **[tsec, user you chose during post install method]**
-- pass: **password you chose during the installation**
+- user: **[tsec or user]** *you chose during one of the post install methods*
+- pass: **[password]** *you chose during the installation*
 
 All honeypot services are preconfigured and are starting automatically.
 
 You can login from your browser and access the Admin UI: `https://<your.ip>:64294` or via SSH to access the command line: `ssh -l tsec -p 64295 <your.ip>`
 
-- user: **[tsec, user you chose during post install method]**
-- pass: **password you chose during the installation**
+- user: **[tsec or user]** *you chose during one of the post install methods*
+- pass: **[password]** *you chose during the installation*
 
 You can also login from your browser and access the Web UI: `https://<your.ip>:64297`
-- user: **user you chose during the installation**
-- pass: **password you chose during the installation**
+- user: **[user]** *you chose during the installation*
+- pass: **[password]** *you chose during the installation*
 
 
 <a name="placement"></a>
@@ -343,6 +354,25 @@ In case you need external Web UI access, forward TCP port 64297 to T-Pot, see be
 
 T-Pot requires outgoing git, http, https connections for updates (Ubuntu, Docker, GitHub, PyPi) and attack submission (ewsposter, hpfeeds). Ports and availability may vary based on your geographical location.
 
+<a name="updates"></a>
+# Updates
+For the ones of you who want to live on the bleeding edge of T-Pot development we introduced an update feature which will allow you to update all T-Pot relevant files to be up to date with the T-Pot master branch.
+**If you made any relevant changes to the T-Pot relevant config files make sure to create a backup first.**
+- The Update script will
+ - **mercyless** overwrite local changes to be in sync with the T-Pot master branch
+ - upgrade the system to the latest kernel within Ubuntu 18.04.x LTS
+ - upgrade the system to the latest packages available within Ubuntu 18.04.x LTS
+ - update all resources to be en par with the T-Pot master branch
+ - ensure all T-Pot relevant system files will be patched / copied into original T-Pot state
+
+You simply run the update script:
+```
+cd /opt/tpot/
+./update.sh -y
+```
+
+**Despite all our efforts please be reminded that updates sometimes may have unforeseen consequences. Please create a backup of the machine or the files with the most value to your work.**  
+
 <a name="options"></a>
 # Options
 The system is designed to run without any interaction or maintenance and automatically contributes to the community.<br>
@@ -354,8 +384,8 @@ By default, the SSH daemon allows access on **tcp/64295** with a user / password
 
 If you do not have a SSH client at hand and still want to access the machine via command line you can do so by accessing the Admin UI from `https://<your.ip>:64294`, enter
 
-- user: **[tsec, user you chose during post install method]**
-- pass: **password you chose during the installation**
+- user: **[tsec or user]** *you chose during one of the post install methods*
+- pass: **[password]** *you chose during the installation*
 
 ![Cockpit Terminal](doc/cockpit3.png)
 
@@ -363,8 +393,8 @@ If you do not have a SSH client at hand and still want to access the machine via
 ## Kibana Dashboard
 Just open a web browser and connect to `https://<your.ip>:64297`, enter
 
-- user: **user you chose during the installation**
-- pass: **password you chose during the installation**
+- user: **[user]** *you chose during the installation*
+- pass: **[password]** *you chose during the installation*
 
 and **Kibana** will automagically load. The Kibana dashboard can be customized to fit your needs. By default, we haven't added any filtering, because the filters depend on your setup. E.g. you might want to filter out your incoming administrative ssh connections and connections to update servers.
 
