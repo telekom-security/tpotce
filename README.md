@@ -71,47 +71,47 @@ Furthermore we use the following tools
 <a name="changelog"></a>
 # Changelog
 - **New honeypots**
- - *Ciscoasa* a low interaction honeypot for the Cisco ASA component capable of detecting CVE-2018-0101, a DoS and remote code execution vulnerability.
- - *Glutton* (NextGen) is the all eating honeypot
- - *Heralding* a credentials catching honeypot.
- - *Medpot* is a HL7 / FHIR honeypot.
- - *Snare* is a web application honeypot sensor, is the successor of Glastopf. SNARE has feature parity with Glastopf and allows to convert existing web pages into attack surfaces.
- - *Tanner* is SNARES' "brain". Every event is send from SNARE to TANNER, gets evaluated and TANNER decides how SNARE should respond to the client. This allows us to change the behaviour of many sensors on the fly. We are providing a TANNER instance for your use, but there is nothing stopping you from setting up your own instance.
+  - *Ciscoasa* a low interaction honeypot for the Cisco ASA component capable of detecting CVE-2018-0101, a DoS and remote code execution vulnerability.
+  - *Glutton* (NextGen) is the all eating honeypot
+  - *Heralding* a credentials catching honeypot.
+  - *Medpot* is a HL7 / FHIR honeypot.
+  - *Snare* is a web application honeypot sensor, is the successor of Glastopf. SNARE has feature parity with Glastopf and allows to convert existing web pages into attack surfaces.
+  - *Tanner* is SNARES' "brain". Every event is send from SNARE to TANNER, gets evaluated and TANNER decides how SNARE should respond to the client. This allows us to change the behaviour of many sensors on the fly. We are providing a TANNER instance for your use, but there is nothing stopping you from setting up your own instance.
 - **New tools**
- - *Cockpit* is an interactive server admin interface. It is easy to use and very lightweight. Cockpit interacts directly with the operating system from a real Linux session in a browser.
- - *Cyberchef* is the Cyber Swiss Army Knife - a web app for encryption, encoding, compression and data analysis.
- - *grc* (commandline) is yet another colouriser (written in python) for beautifying your logfiles or output of commands.
- - *multitail* (commandline) allows you to monitor logfiles and command output in multiple windows in a terminal, colorize, filter and merge.
- - *tped.sh* (commandline) allows you to switch between T-Pot Editions after installation.
+  - *Cockpit* is an interactive server admin interface. It is easy to use and very lightweight. Cockpit interacts directly with the operating system from a real Linux session in a browser.
+  - *Cyberchef* is the Cyber Swiss Army Knife - a web app for encryption, encoding, compression and data analysis.
+  - *grc* (commandline) is yet another colouriser (written in python) for beautifying your logfiles or output of commands.
+  - *multitail* (commandline) allows you to monitor logfiles and command output in multiple windows in a terminal, colorize, filter and merge.
+  - *tped.sh* (commandline) allows you to switch between T-Pot Editions after installation.
 - **Deprecated tools**
- - *Netdata*, *Portainer* and *WeTTY* were superseded by *Cockpit* which is much more lightweight, perfectly well integrated into Ubuntu 18.04 LTS and of course comes with the same but a more basic feature set.
+  - *Netdata*, *Portainer* and *WeTTY* were superseded by *Cockpit* which is much more lightweight, perfectly well integrated into Ubuntu 18.04 LTS and of course comes with the same but a more basic feature set.
 - **New Standard Installation**
- - The new standard installation is now running a whopping *14* honeypot instances.
+  - The new standard installation is now running a whopping *14* honeypot instances.
 - **T-Pot Universal Installer**
- - The T-Pot installer now also includes the option to install on a existing machine, the T-Pot-Autoinstaller is no longer necessary.
+  - The T-Pot installer now also includes the option to install on a existing machine, the T-Pot-Autoinstaller is no longer necessary.
 - **Tighten Security**
- - The docker containers are now running mostly with a read-only file system
- - If possible using `setcap` to start daemons without root or dropping privileges
- - Introducing `fail2ban` to ease up on `authorized_keys` requirement which is no longer necessary for `SSH`. Also to further prevent brute-force attacks on `Cockpit` and `NGINX` allowing for faster load times of the WebUI.
+  - The docker containers are now running mostly with a read-only file system
+  - If possible using `setcap` to start daemons without root or dropping privileges
+  - Introducing `fail2ban` to ease up on `authorized_keys` requirement which is no longer necessary for `SSH`. Also to further prevent brute-force attacks on `Cockpit` and `NGINX` allowing for faster load times of the WebUI.
 - **Iptables exceptions for NFQ based honeypots**
- - In previous versions `iptables`had manually be maintained, now a a script parses `/opt/tpot/etc/tpot.yml` and extracts port information to automatically generate exceptions for ports that should not be forwarded to NFQ.
+  - In previous versions `iptables`had manually be maintained, now a a script parses `/opt/tpot/etc/tpot.yml` and extracts port information to automatically generate exceptions for ports that should not be forwarded to NFQ.
 - **CI**
- - The Kibana UI now uses a magenta theme.
+  - The Kibana UI now uses a magenta theme.
 - **ES HEAD**
- - A Java Script now automatically enters the correct FQDN / IP. A manual step is no longer required.
+  - A Java Script now automatically enters the correct FQDN / IP. A manual step is no longer required.
 - **ELK STACK**
- - The ELK Stack was updated to the latest 6.x versions.
- - This also means you can now expect the availability of basic *X-Pack-Feaures*, the full feature set however is only available to users with a valid license.
+  - The ELK Stack was updated to the latest 6.x versions.
+  - This also means you can now expect the availability of basic *X-Pack-Feaures*, the full feature set however is only available to users with a valid license.
 - **Dashboards Makeover**
- - Because Kibana 6.x introduced so much whitespace the dashboards and some of the visualizations needed some overhaul. While it probably needs some getting used to the key was to focus on displaying as much information while not compromising on clarity.  
- - Because of the new honeypots we now more than **200 Visualizations** pre-configured and compiled to 16 individual **Kibana Dashboards**. Monitor all *honeypot events* locally on your T-Pot installation. Aside from *honeypot events* you can also view *Suricata NSM and NGINX* events for a quick overview of wire events.
+  - Because Kibana 6.x introduced so much whitespace the dashboards and some of the visualizations needed some overhaul. While it probably needs some getting used to the key was to focus on displaying as much information while not compromising on clarity.  
+  - Because of the new honeypots we now more than **200 Visualizations** pre-configured and compiled to 16 individual **Kibana Dashboards**. Monitor all *honeypot events* locally on your T-Pot installation. Aside from *honeypot events* you can also view *Suricata NSM and NGINX* events for a quick overview of wire events.
 - **Honeypot updates and improvements**
- - All honeypots were updated to their latest stable versions.
- - Docker images were mostly overhauled to tighten security even further
- - Some of the honeypot configurations were modified to keep things fresh
+  - All honeypots were updated to their latest stable versions.
+  - Docker images were mostly overhauled to tighten security even further
+  - Some of the honeypot configurations were modified to keep things fresh
 - **Update Feature**
- - For the ones who like to live on the bleeding edge of T-Pot development there is now a update script available in `/opt/tpot/update.sh`.
- - This feature is now in beta and is mostly intended to provide you with the latest development advances without the need of reinstalling T-Pot.
+  - For the ones who like to live on the bleeding edge of T-Pot development there is now a update script available in `/opt/tpot/update.sh`.
+  - This feature is now in beta and is mostly intended to provide you with the latest development advances without the need of reinstalling T-Pot.
 
 <a name="concept"></a>
 # Technical Concept
