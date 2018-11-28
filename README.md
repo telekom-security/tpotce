@@ -48,7 +48,7 @@ Furthermore we use the following tools
   - [Create your own ISO Image](#createiso)
   - [Running in a VM](#vm)
   - [Running on Hardware](#hardware)
-  - [Post Install Manual](#postinstall)
+  - [Post Install User](#postinstall)
   - [Post Install Auto](#postinstallauto)
   - [First Run](#firstrun)
   - [System Placement](#placement)
@@ -284,7 +284,7 @@ Whereas most CD burning tools allow you to burn from ISO images, the procedure t
 *Please note*: We will ensure the compatibility with the Intel NUC platform, as we really like the form factor, looks and build quality. Other platforms **remain untested**.
 
 <a name="postinstall"></a>
-## Post-Install Manual
+## Post-Install User
 In some cases it is necessary to install Ubuntu Server 18.04 LTS on your own:
  - Cloud provider does not offer mounting ISO images.
  - Hardware setup needs special drivers and / or kernels.
