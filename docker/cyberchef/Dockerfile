@@ -12,7 +12,7 @@ RUN apk -U --no-cache add \
 
 # Install CyberChef 
     cd /root && \
-    git clone https://github.com/gchq/cyberchef -b v7.11.1 --depth=1 && \
+    git clone https://github.com/gchq/cyberchef -b v8.12.3 --depth=1 && \
     chown -R nobody:nobody cyberchef && \
     cd cyberchef && \
     npm install && \
