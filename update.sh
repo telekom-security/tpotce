@@ -202,7 +202,8 @@ echo "Port 64295" >> /etc/ssh/sshd_config
 echo
 
 ### Ensure creation of T-Pot related folders, just in case
-mkdir -p /data/ciscoasa/log \
+mkdir -p /data/adbhoney/downloads /data/adbhoney/log \
+         /data/ciscoasa/log \
          /data/conpot/log \
          /data/cowrie/log/tty/ /data/cowrie/downloads/ /data/cowrie/keys/ /data/cowrie/misc/ \
          /data/dionaea/log /data/dionaea/bistreams /data/dionaea/binaries /data/dionaea/rtp /data/dionaea/roots/ftp /data/dionaea/roots/tftp /data/dionaea/roots/www /data/dionaea/roots/upnp \

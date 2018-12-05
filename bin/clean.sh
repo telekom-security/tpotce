@@ -20,6 +20,8 @@ echo $(ls $myFOLDER | wc -l)
 fuLOGROTATE () {
   local mySTATUS="/opt/tpot/etc/logrotate/status"
   local myCONF="/opt/tpot/etc/logrotate/logrotate.conf"
+  local myADBHONEYTGZ="/data/adbhoney/downloads.tgz"
+  local myADBHONEYDL="/data/adbhoney/downloads/"
   local myCOWRIETTYLOGS="/data/cowrie/log/tty/"
   local myCOWRIETTYTGZ="/data/cowrie/log/ttylogs.tgz"
   local myCOWRIEDL="/data/cowrie/downloads/"
@@ -45,6 +47,7 @@ chmod 644 /data/nginx/cert -R
 logrotate -f -s $mySTATUS $myCONF
 
 # Compressing some folders first and rotate them later
+if [ "$(fuEMPTY $myADBHONEYDL)" != "0" ]; then tar cvfz $myADBHONEYTGZ $myADBHONEYDL; fi
 if [ "$(fuEMPTY $myCOWRIETTYLOGS)" != "0" ]; then tar cvfz $myCOWRIETTYTGZ $myCOWRIETTYLOGS; fi
 if [ "$(fuEMPTY $myCOWRIEDL)" != "0" ]; then tar cvfz $myCOWRIEDLTGZ $myCOWRIEDL; fi
 if [ "$(fuEMPTY $myDIONAEABI)" != "0" ]; then tar cvfz $myDIONAEABITGZ $myDIONAEABI; fi
@@ -54,19 +57,27 @@ if [ "$(fuEMPTY $myHONEYTRAPDL)" != "0" ]; then tar cvfz $myHONEYTRAPDLTGZ $myHO
 if [ "$(fuEMPTY $myTANNERF)" != "0" ]; then tar cvfz $myTANNERFTGZ $myTANNERF; fi
 
 # Ensure correct permissions and ownership for previously created archives
-chmod 760 $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ $myTANNERFTGZ
-chown tpot:tpot $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ $myTANNERFTGZ
+chmod 760 $myADBHONEYTGZ $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ $myTANNERFTGZ
+chown tpot:tpot $myADBHONEYTGZ $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ $myTANNERFTGZ
 
 # Need to remove subfolders since too many files cause rm to exit with errors
-rm -rf $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL $myTANNERF
+rm -rf $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL $myTANNERF
 
 # Recreate subfolders with correct permissions and ownership
-mkdir -p $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL $myTANNERF
-chmod 760 $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL $myTANNERF
-chown tpot:tpot $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL $myTANNERF
+mkdir -p $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL $myTANNERF
+chmod 760 $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL $myTANNERF
+chown tpot:tpot $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL $myTANNERF
 
 # Run logrotate again to account for previously created archives - DO NOT FORCE HERE!
 logrotate -s $mySTATUS $myCONF
+}
+
+# Let's create a function to clean up and prepare honeytrap data
+fuADBHONEY () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/adbhoney/*; fi
+  mkdir -p /data/adbhoney/log/ /data/adbhoney/downloads/
+  chmod 760 /data/adbhoney/ -R
+  chown tpot:tpot /data/adbhoney/ -R
 }
 
 # Let's create a function to clean up and prepare ciscoasa data
@@ -237,6 +248,7 @@ if [ "$myPERSISTENCE" = "on" ];
     fuLOGROTATE
   else
     echo "Cleaning up and preparing data folders."
+    fuADBHONEY
     fuCISCOASA
     fuCONPOT
     fuCOWRIE

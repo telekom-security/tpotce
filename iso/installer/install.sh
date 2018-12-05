@@ -694,7 +694,8 @@ myCRONJOBS="
 echo "$myCRONJOBS" 2>&1 | tee -a /etc/crontab | dialog --title "[ Adding cronjobs ]" $myPROGRESSBOXCONF
 
 # Let's create some files and folders
-mkdir -p /data/ciscoasa/log \
+mkdir -p /data/adbhoney/downloads /data/adbhoney/log \
+         /data/ciscoasa/log \
 	 /data/conpot/log \
          /data/cowrie/log/tty/ /data/cowrie/downloads/ /data/cowrie/keys/ /data/cowrie/misc/ \
          /data/dionaea/log /data/dionaea/bistreams /data/dionaea/binaries /data/dionaea/rtp /data/dionaea/roots/ftp /data/dionaea/roots/tftp /data/dionaea/roots/www /data/dionaea/roots/upnp \
