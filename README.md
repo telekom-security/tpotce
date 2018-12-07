@@ -6,6 +6,7 @@ T-Pot 18.11 runs on the latest 18.04.x LTS Ubuntu Server Network Installer image
 
 and includes dockerized versions of the following honeypots
 
+* [adbhoney](https://github.com/huuck/ADBHoney),
 * [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot),
 * [conpot](http://conpot.org/),
 * [cowrie](http://www.micheloosterhof.com/cowrie/),
@@ -71,6 +72,7 @@ Furthermore we use the following tools
 <a name="changelog"></a>
 # Changelog
 - **New honeypots**
+  - *Adbhoney* Low interaction honeypot designed for Android Debug Bridge over TCP/IP.
   - *Ciscoasa* a low interaction honeypot for the Cisco ASA component capable of detecting CVE-2018-0101, a DoS and remote code execution vulnerability.
   - *Glutton* (NextGen) is the all eating honeypot
   - *Heralding* a credentials catching honeypot.
@@ -121,6 +123,7 @@ The honeypot daemons as well as other support components being used have been co
 This allows us to run multiple honeypot daemons on the same network interface while maintaining a small footprint and constrain each honeypot within its own environment.
 
 In T-Pot we combine the dockerized honeypots ...
+* [adbhoney](https://github.com/huuck/ADBHoney),
 * [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot),
 * [conpot](http://conpot.org/),
 * [cowrie](http://www.micheloosterhof.com/cowrie/),
@@ -166,8 +169,8 @@ The individual docker configurations are located in the [docker folder](https://
 # System Requirements
 Depending on your installation type, whether you install on [real hardware](#hardware) or in a [virtual machine](#vm), make sure your designated T-Pot system meets the following requirements:
 
-##### T-Pot Standard Installation
-- Honeypots: ciscoasa, conpot, cowrie, dionaea, elasticpot, heralding, honeytrap, mailoney, rdpy, snare, tanner and vnclowpot
+##### Standard Installation
+- Honeypots: adbhoney, ciscoasa, conpot, cowrie, dionaea, elasticpot, heralding, honeytrap, mailoney, rdpy, snare, tanner and vnclowpot
 - Tools: cockpit, cyberchef, ELK, elasticsearch head, ewsposter, NGINX, spiderfoot, p0f and suricata
 
 - 6-8 GB RAM (less RAM is possible but might introduce swapping)
@@ -176,7 +179,7 @@ Depending on your installation type, whether you install on [real hardware](#har
 - A working, non-proxied, internet connection
 
 ##### Sensor Installation
-- Honeypots: ciscoasa, conpot, cowrie, dionaea, elasticpot, heralding, honeytrap, mailoney, rdpy, snare, tanner and vnclowpot
+- Honeypots: adbhoney, ciscoasa, conpot, cowrie, dionaea, elasticpot, heralding, honeytrap, mailoney, rdpy, snare, tanner and vnclowpot
 - Tools: cockpit
 
 - 6-8 GB RAM (less RAM is possible but might introduce swapping)
@@ -203,7 +206,7 @@ Depending on your installation type, whether you install on [real hardware](#har
 - A working, non-proxied, internet connection
 
 ##### NextGen Installation (Glutton instead of Honeytrap)
-- Honeypots: ciscoasa, conpot, cowrie, dionaea, elasticpot, glutton, heralding, mailoney, rdpy, snare, tanner and vnclowpot
+- Honeypots: adbhoney, ciscoasa, conpot, cowrie, dionaea, elasticpot, glutton, heralding, mailoney, rdpy, snare, tanner and vnclowpot
 - Tools: cockpit, cyberchef, ELK, elasticsearch head, ewsposter, NGINX, spiderfoot, p0f and suricata
 
 - 6-8 GB RAM (less RAM is possible but might introduce swapping)
@@ -477,7 +480,7 @@ We hope you understand that we cannot provide support on an individual basis. We
 # Licenses
 The software that T-Pot is built on uses the following licenses.
 <br>GPLv2: [conpot)](https://github.com/mushorg/conpot/blob/master/LICENSE.txt), [dionaea](https://github.com/DinoTools/dionaea/blob/master/LICENSE), [honeytrap](https://github.com/armedpot/honeytrap/blob/master/LICENSE), [suricata](http://suricata-ids.org/about/open-source/)
-<br>GPLv3: [elasticpot](https://github.com/schmalle/ElasticPot), [ewsposter](https://github.com/dtag-dev-sec/ews/), [glastopf](https://github.com/glastopf/glastopf/blob/master/GPL), [rdpy](https://github.com/citronneur/rdpy/blob/master/LICENSE), [heralding](https://github.com/johnnykv/heralding/blob/master/LICENSE.txt), [snare](https://github.com/mushorg/snare/blob/master/LICENSE), [tanner](https://github.com/mushorg/snare/blob/master/LICENSE)
+<br>GPLv3: [adbhoney](https://github.com/huuck/ADBHoney), [elasticpot](https://github.com/schmalle/ElasticPot), [ewsposter](https://github.com/dtag-dev-sec/ews/), [glastopf](https://github.com/glastopf/glastopf/blob/master/GPL), [rdpy](https://github.com/citronneur/rdpy/blob/master/LICENSE), [heralding](https://github.com/johnnykv/heralding/blob/master/LICENSE.txt), [snare](https://github.com/mushorg/snare/blob/master/LICENSE), [tanner](https://github.com/mushorg/snare/blob/master/LICENSE)
 <br>Apache 2 License: [cyberchef](https://github.com/gchq/CyberChef/blob/master/LICENSE), [elasticsearch](https://github.com/elasticsearch/elasticsearch/blob/master/LICENSE.txt), [logstash](https://github.com/elasticsearch/logstash/blob/master/LICENSE), [kibana](https://github.com/elasticsearch/kibana/blob/master/LICENSE.md), [docker](https://github.com/docker/docker/blob/master/LICENSE), [elasticsearch-head](https://github.com/mobz/elasticsearch-head/blob/master/LICENCE)
 <br>MIT license: [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/blob/master/LICENSE), [ctop](https://github.com/bcicen/ctop/blob/master/LICENSE), [glutton](https://github.com/mushorg/glutton/blob/master/LICENSE)
 <br> Other: [cowrie](https://github.com/micheloosterhof/cowrie/blob/master/LICENSE.md), [mailoney](https://github.com/awhitehatter/mailoney), [Ubuntu licensing](http://www.ubuntu.com/about/about-ubuntu/licensing)
@@ -488,6 +491,7 @@ Without open source and the fruitful development community we are proud to be a 
 
 ### The developers and development communities of
 
+* [adbhoney](https://github.com/huuck/ADBHoney/graphs/contributors)
 * [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/graphs/contributors)
 * [cockpit](https://github.com/cockpit-project/cockpit/graphs/contributors)
 * [conpot](https://github.com/mushorg/conpot/graphs/contributors)
@@ -530,4 +534,4 @@ We will be releasing a new version of T-Pot about every 6-12 months.
 <a name="funfact"></a>
 # Fun Fact
 
-In an effort of saving the environment we are now brewing our own Mate Ice Tea and consumed 235 liters so far for the T-Pot 18.11 development 😇
+In an effort of saving the environment we are now brewing our own Mate Ice Tea and consumed 241 liters so far for the T-Pot 18.11 development 😇

@@ -3,6 +3,7 @@
 version: '2.3'
 
 networks:
+  adbhoney_local:
   conpot_local_IEC104:
   conpot_local_guardian_ast:
   conpot_local_ipmi:
@@ -22,6 +23,20 @@ services:
 ##################
 #### Honeypots
 ##################
+
+# Adbhoney service
+  adbhoney:
+    container_name: adbhoney
+    restart: always
+    networks:
+     - adbhoney_local
+    ports:
+     - "5555:5555"
+    image: "dtagdevsec/adbhoney:1811"
+    read_only: true
+    volumes:
+     - /data/adbhoney/log:/opt/adbhoney/log
+     - /data/adbhoney/downloads:/opt/adbhoney/dl
 
 # Ciscoasa service
   ciscoasa:
