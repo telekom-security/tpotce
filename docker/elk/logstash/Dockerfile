@@ -17,9 +17,9 @@ RUN apk -U add \
     git clone --depth=1 https://github.com/dtag-dev-sec/listbot /etc/listbot && \
     cd /root/dist/ && \
     mkdir -p /usr/share/logstash/ && \
-    wget https://artifacts.elastic.co/downloads/logstash/logstash-6.5.1.tar.gz && \
+    wget https://artifacts.elastic.co/downloads/logstash/logstash-6.5.2.tar.gz && \
     wget http://geolite.maxmind.com/download/geoip/database/GeoLite2-ASN.tar.gz && \
-    tar xvfz logstash-6.5.1.tar.gz --strip-components=1 -C /usr/share/logstash/ && \
+    tar xvfz logstash-6.5.2.tar.gz --strip-components=1 -C /usr/share/logstash/ && \
     /usr/share/logstash/bin/logstash-plugin install logstash-filter-translate && \
     /usr/share/logstash/bin/logstash-plugin install logstash-output-syslog && \
     tar xvfz GeoLite2-ASN.tar.gz --strip-components=1 -C /usr/share/logstash/vendor/bundle/jruby/2.3.0/gems/logstash-filter-geoip-5.0.3-java/vendor/ && \
@@ -30,7 +30,7 @@ RUN apk -U add \
     chmod u+x /usr/bin/update.sh && \
     mkdir -p /etc/logstash/conf.d && \
     cp logstash.conf /etc/logstash/conf.d/ && \
-    cp elasticsearch-template-es6x.json /usr/share/logstash/vendor/bundle/jruby/2.3.0/gems/logstash-output-elasticsearch-9.2.1-java/lib/logstash/outputs/elasticsearch/ && \
+    cp elasticsearch-template-es6x.json /usr/share/logstash/vendor/bundle/jruby/2.3.0/gems/logstash-output-elasticsearch-9.2.4-java/lib/logstash/outputs/elasticsearch/ && \
 
 # Setup user, groups and configs
     addgroup -g 2000 logstash && \
