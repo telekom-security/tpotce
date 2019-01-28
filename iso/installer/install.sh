@@ -6,11 +6,11 @@
 ##################################
 
 myLSB=$(lsb_release -r | awk '{ print $2 }')
-myLSB_SUPPORTED="18.04"
+myLSB_SUPPORTED="testing"
 myINFO="\
-############################################
-### T-Pot Installer for Ubuntu $myLSB_SUPPORTED LTS ###
-############################################
+##########################################
+### T-Pot Installer for Debian $myLSB_SUPPORTED ###
+##########################################
 
 Disclaimer:
 This script will install T-Pot on this system, by running the script you know what you are doing:
@@ -29,7 +29,7 @@ Example:
 
 if [ "$myLSB" != "$myLSB_SUPPORTED" ];
   then
-    echo "Aborting. Ubuntu $myLSB is not supported."
+    echo "Aborting. Debian $myLSB is not supported."
     exit
 fi
 if [ "$1" == "" ];
@@ -64,7 +64,7 @@ for i in "$@"
         echo "  A configuration example is available in \"tpotce/iso/installer/tpot.conf.dist\"."
         echo
         echo "--type=<[user, auto, iso]>"
-        echo "  user, use this if you want to manually install a T-Pot on a Ubuntu 18.04 LTS machine."
+	echo "  user, use this if you want to manually install a T-Pot on a Debian (testing) machine."
         echo "  auto, implied if a configuration file is passed as an argument for automatic deployment."
         echo "  iso, use this if you are a T-Pot developer and want to install a T-Pot from a pre-compiled iso."
         echo
@@ -129,7 +129,7 @@ function fuGET_DEPS {
 local myPACKAGES="apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker curl debconf-utils dialog dnsutils docker.io docker-compose dstat ethtool fail2ban genisoimage git glances grc html2text htop iptables iw jq libcrack2 libltdl7 lm-sensors man mosh multitail net-tools npm ntp openssh-server openssl pass prips software-properties-common syslinux psmisc pv python-pip unattended-upgrades unzip vim wireless-tools wpasupplicant"
 apt-get -y update
 apt-get -y install software-properties-common
-add-apt-repository "deb http://archive.ubuntu.com/ubuntu $(lsb_release -sc) main universe restricted multiverse"
+add-apt-repository "deb http://ftp.debian.org/debian testing main contrib non-free"
 echo
 echo "### Getting update information."
 echo
@@ -215,7 +215,7 @@ export DIALOGRC=/etc/dialogrc
 myBACKTITLE="T-Pot-Installer"
 myCONF_FILE="/root/installer/iso.conf"
 myPROGRESSBOXCONF=" --backtitle "$myBACKTITLE" --progressbox 24 80"
-mySITES="https://hub.docker.com https://github.com https://pypi.python.org https://ubuntu.com"
+mySITES="https://hub.docker.com https://github.com https://pypi.python.org https://debian.org"
 myTPOTCOMPOSE="/opt/tpot/etc/tpot.yml"
 
 #####################
@@ -375,7 +375,7 @@ if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ];
     printf "%s" "$myCONF_TPOT_USER:$myPASS1" | chpasswd
 fi
 
-# Let's ask for a web user credentials if deployment type is iso or user
+# Let's ask for web user credentials if deployment type is iso or user
 # In case of auto, credentials are created from config values
 # Skip this step entirely if SENSOR flavor
 if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ] || [ "$myTPOT_DEPLOYMENT_TYPE" == "user" ];
@@ -506,15 +506,15 @@ network={
   private_key_passwd="$myCONF_PFX_PW"
 }
 "
-#if [ "myCONF_PFX_USE" == "0" ];
-#  then
-#    cp $myCONF_PFX_FILE /etc/wpa_supplicant/ 2>&1 | dialog --title "[ Setting 802.1x networking ]" $myPROGRESSBOXCONF
-#    echo "$myNETWORK_INTERFACES" 2>&1 | tee -a /etc/network/interfaces | dialog --title "[ Setting 802.1x networking ]" $myPROGRESSBOXCONF
-#
-#    echo "$myNETWORK_WIRED8021x" 2>&1 | tee /etc/wpa_supplicant/wired8021x.conf | dialog --title "[ Setting 802.1x networking ]" $myPROGRESSBOXCONF
-#
-#    echo "$myNETWORK_WLAN8021x" 2>&1 | tee /etc/wpa_supplicant/wireless8021x.conf | dialog --title "[ Setting 802.1x networking ]" $myPROGRESSBOXCONF
-#fi
+if [ "myCONF_PFX_USE" == "0" ];
+  then
+    cp $myCONF_PFX_FILE /etc/wpa_supplicant/ 2>&1 | dialog --title "[ Setting 802.1x networking ]" $myPROGRESSBOXCONF
+    echo "$myNETWORK_INTERFACES" 2>&1 | tee -a /etc/network/interfaces | dialog --title "[ Setting 802.1x networking ]" $myPROGRESSBOXCONF
+
+    echo "$myNETWORK_WIRED8021x" 2>&1 | tee /etc/wpa_supplicant/wired8021x.conf | dialog --title "[ Setting 802.1x networking ]" $myPROGRESSBOXCONF
+
+    echo "$myNETWORK_WLAN8021x" 2>&1 | tee /etc/wpa_supplicant/wireless8021x.conf | dialog --title "[ Setting 802.1x networking ]" $myPROGRESSBOXCONF
+fi
 
 # Let's provide a wireless example config ...
 myNETWORK_WLANEXAMPLE="
@@ -545,7 +545,7 @@ myNETWORK_WLANEXAMPLE="
 #   wpa-key-mgmt WPA-PSK
 #   wpa-psk \"<your_password_here_without_brackets>\"
 "
-#echo "$myNETWORK_WLANEXAMPLE" 2>&1 | tee -a /etc/network/interfaces | dialog --title "[ Provide WLAN example config ]" $myPROGRESSBOXCONF
+echo "$myNETWORK_WLANEXAMPLE" 2>&1 | tee -a /etc/network/interfaces | dialog --title "[ Provide WLAN example config ]" $myPROGRESSBOXCONF
 
 # Let's modify the sources list
 sed -i '/cdrom/d' /etc/apt/sources.list
@@ -572,10 +572,6 @@ n=$(fuRANDOMWORD /opt/tpot/host/usr/share/dict/n.txt)
 myHOST=$a$n
 hostnamectl set-hostname $myHOST 2>&1 | dialog --title "[ Setting new hostname ]" $myPROGRESSBOXCONF
 sed -i 's#127.0.1.1.*#127.0.1.1\t'"$myHOST"'#g' /etc/hosts 2>&1 | dialog --title "[ Setting new hostname ]" $myPROGRESSBOXCONF
-if [ -f "/etc/cloud/cloud.cfg" ];
-  then
-    sed -i 's/preserve_hostname: false/preserve_hostname: true/' /etc/cloud/cloud.cfg
-fi
 
 # Let's patch cockpit.socket, sshd_config
 sed -i 's#ListenStream=9090#ListenStream=64294#' /lib/systemd/system/cockpit.socket 2>&1 | dialog --title "[ Cockpit listen on tcp/64294 ]" $myPROGRESSBOXCONF

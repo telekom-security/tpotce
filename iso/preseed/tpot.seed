@@ -25,7 +25,6 @@ d-i console-setup/detected note
 #########################
 ### Network Configuration
 #########################
-#d-i netcfg/do_not_use_netplan true
 #d-i netcfg/choose_interface select auto
 #d-i netcfg/dhcp_timeout string 60
 d-i netcfg/get_hostname string t-pot
@@ -71,8 +70,8 @@ d-i user-setup/encrypt-home boolean false
 ### Country Mirror & Proxy Configuration
 ########################################
 d-i mirror/country string manual
-d-i mirror/http/hostname string archive.ubuntu.com
-d-i mirror/http/directory string /ubuntu
+d-i mirror/http/hostname string deb.debian.org
+d-i mirror/http/directory string /debian
 d-i mirror/http/proxy string
 
 ###########################
@@ -91,17 +90,17 @@ d-i lilo-installer/skip boolean true
 d-i clock-setup/utc boolean true
 d-i time/zone string UTC
 d-i clock-setup/ntp boolean true
-d-i clock-setup/ntp-server string ntp.ubuntu.com
+d-i clock-setup/ntp-server string debian.pool.ntp.org
 
 ##################
 ### Package Groups
 ##################
-tasksel tasksel/first multiselect ubuntu-server
+tasksel tasksel/first multiselect ssh-server
 
 ########################
 ### Package Installation
 ########################
-d-i pkgsel/include string apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker curl debconf-utils dialog dnsutils docker.io docker-compose dstat ethtool fail2ban genisoimage git glances grc html2text htop ifupdown iptables iw jq libcrack2 libltdl7 lm-sensors man mosh multitail net-tools npm ntp openssh-server openssl pass prips software-properties-common syslinux psmisc pv python-pip unzip vim wireless-tools wpasupplicant
+d-i pkgsel/include string apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker curl debconf-utils dialog dnsutils docker.io docker-compose dstat ethtool fail2ban genisoimage git glances grc html2text htop iptables iw jq libcrack2 libltdl7 lm-sensors man mosh multitail net-tools npm ntp openssh-server openssl pass prips software-properties-common syslinux psmisc pv python-pip unzip vim wireless-tools wpasupplicant
 
 #################
 ### Update Policy
