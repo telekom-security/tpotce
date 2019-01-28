@@ -121,7 +121,7 @@ d-i preseed/late_command string \
 in-target apt-get -y install grub-pc; \
 in-target grub-install --force $(debconf-get partman-auto/disk); \
 in-target update-grub; \
-in-target git clone https://github.com/dtag-dev-sec/tpotce -b debian /opt/tpot; \
+in-target git clone https://github.com/dtag-dev-sec/tpotce -b netplan /opt/tpot; \
 cp /target/opt/tpot/iso/installer/rc.local.install /target/etc/rc.local; \
 cp /target/opt/tpot/iso/installer -R /target/root/;
 
