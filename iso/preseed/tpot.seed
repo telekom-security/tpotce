@@ -25,8 +25,8 @@ d-i console-setup/detected note
 #########################
 ### Network Configuration
 #########################
-#d-i netcfg/choose_interface select auto
-#d-i netcfg/dhcp_timeout string 60
+d-i netcfg/choose_interface select auto
+d-i netcfg/dhcp_timeout string 60
 d-i netcfg/get_hostname string t-pot
 d-i netcfg/get_domain string
 
@@ -81,8 +81,6 @@ d-i mirror/http/proxy string
 d-i mirror/suite string testing
 #d-i mirror/udeb/suite string testing
 
-######
-
 ###########################
 ### Skip Grub Configuration
 ###########################
@@ -105,12 +103,12 @@ d-i clock-setup/ntp-server string debian.pool.ntp.org
 ##################
 ### Package Groups
 ##################
-tasksel tasksel/first multiselect standard, ssh-server
+tasksel tasksel/first multiselect ssh-server
 
 ########################
 ### Package Installation
 ########################
-d-i pkgsel/include string apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker curl debconf-utils dialog dnsutils docker.io docker-compose dstat ethtool fail2ban genisoimage git glances grc html2text htop iptables iw jq libcrack2 libltdl7 lm-sensors man mosh multitail net-tools npm ntp openssh-server openssl pass prips software-properties-common syslinux psmisc pv python-pip unzip vim wireless-tools wpasupplicant
+d-i pkgsel/include string apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker curl debconf-utils dialog dnsutils docker.io docker-compose dstat ethtool fail2ban genisoimage git glances grc haveged html2text htop iptables iw jq libcrack2 libltdl7 lm-sensors man mosh multitail net-tools npm ntp openssh-server openssl pass prips software-properties-common syslinux psmisc pv python-pip unzip vim wireless-tools wpasupplicant
 popularity-contest popularity-contest/participate boolean false
 
 
@@ -133,6 +131,8 @@ d-i preseed/late_command string \
 #in-target grub-install --force $(debconf-get partman-auto/disk); \
 #in-target update-grub; \
 in-target git clone https://github.com/dtag-dev-sec/tpotce -b debian /opt/tpot; \
+in-target apt-get -y remove exim4-base; \
+in-target apt-get -y autoremove; \
 cp /target/opt/tpot/iso/installer/rc.local.install /target/etc/rc.local; \
 cp /target/opt/tpot/iso/installer -R /target/root/;
 

@@ -126,7 +126,7 @@ fi
 
 # Let's check if all dependencies are met
 function fuGET_DEPS {
-local myPACKAGES="apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker curl debconf-utils dialog dnsutils docker.io docker-compose dstat ethtool fail2ban genisoimage git glances grc html2text htop iptables iw jq libcrack2 libltdl7 lm-sensors man mosh multitail net-tools npm ntp openssh-server openssl pass prips software-properties-common syslinux psmisc pv python-pip unattended-upgrades unzip vim wireless-tools wpasupplicant"
+local myPACKAGES="apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker curl debconf-utils dialog dnsutils docker.io docker-compose dstat ethtool fail2ban genisoimage git glances grc haveged html2text htop iptables iw jq libcrack2 libltdl7 lm-sensors man mosh multitail net-tools npm ntp openssh-server openssl pass prips software-properties-common syslinux psmisc pv python-pip unattended-upgrades unzip vim wireless-tools wpasupplicant"
 apt-get -y update
 apt-get -y install software-properties-common
 add-apt-repository "deb http://ftp.debian.org/debian testing main contrib non-free"
@@ -145,6 +145,9 @@ echo
 echo "### Installing T-Pot dependencies."
 echo
 apt-get -y install $myPACKAGES
+# Remove exim4
+apt-get -y purge exim4-base
+apt-get -y autoremove
 }
 
 # Let's load dialog color theme
@@ -234,7 +237,7 @@ fuRANDOMWORD () {
 if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ];
   then
     sleep 5
-    tput civis
+    #tput civis
     dialog --no-ok --no-cancel --backtitle "$myBACKTITLE" --title "[ Wait to avoid interference with service messages ]" --pause "" 6 80 7
 fi
 
@@ -316,7 +319,7 @@ if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ] || [ "$myTPOT_DEPLOYMENT_TYPE" == "use
     done;
 fi
 # Let's put cursor back in standard form
-tput cnorm
+#tput cnorm
 
 ####################
 # User interaction #
@@ -440,7 +443,7 @@ fi
 ########################
 
 # Put cursor in invisible mode
-tput civis
+#tput civis
 
 # Let's generate a SSL self-signed certificate without interaction (browsers will see it invalid anyway)
 if ! [ "$myCONF_TPOT_FLAVOR" == "SENSOR" ];
