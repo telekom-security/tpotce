@@ -129,7 +129,18 @@ function fuGET_DEPS {
 local myPACKAGES="apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker curl debconf-utils dialog dnsutils docker.io docker-compose dstat ethtool fail2ban genisoimage git glances grc haveged html2text htop iptables iw jq libcrack2 libltdl7 lm-sensors man mosh multitail net-tools npm ntp openssh-server openssl pass prips software-properties-common syslinux psmisc pv python-pip unattended-upgrades unzip vim wireless-tools wpasupplicant"
 apt-get -y update
 apt-get -y install software-properties-common
-add-apt-repository "deb http://ftp.debian.org/debian testing main contrib non-free"
+#add-apt-repository "deb http://ftp.debian.org/debian testing main contrib non-free"
+tee /etc/apt/sources.list 2>&1>/dev/null <<EOF
+deb http://deb.debian.org/debian testing main contrib non-free
+deb-src http://deb.debian.org/debian testing main contrib non-free
+
+deb http://deb.debian.org/debian testing-updates main contrib non-free
+deb-src http://deb.debian.org/debian testing-updates main contrib non-free
+
+deb http://security.debian.org/debian-security/ testing/updates main contrib non-free
+deb-src http://security.debian.org/debian-security/ testing/updates main contrib non-free
+EOF
+
 echo
 echo "### Getting update information."
 echo
