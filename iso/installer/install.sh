@@ -730,7 +730,7 @@ chmod 644 -R /data/nginx/conf 2>&1 | dialog --title "[ Set permissions and owner
 chmod 644 -R /data/nginx/cert 2>&1 | dialog --title "[ Set permissions and ownerships ]" $myPROGRESSBOXCONF
 
 # Let's replace "quiet splash" options, set a console font for more screen canvas and update grub
-sed -i 's#GRUB_CMDLINE_LINUX_DEFAULT="quiet"#GRUB_CMDLINE_LINUX_DEFAULT="consoleblank=0"#' /etc/default/grub 2>&1>/dev/null
+sed -i 's#GRUB_CMDLINE_LINUX_DEFAULT="quiet"#GRUB_CMDLINE_LINUX_DEFAULT="quiet consoleblank=0"#' /etc/default/grub 2>&1>/dev/null
 sed -i 's#GRUB_CMDLINE_LINUX=""#GRUB_CMDLINE_LINUX="cgroup_enable=memory swapaccount=1"#' /etc/default/grub 2>&1>/dev/null
 update-grub 2>&1 | dialog --title "[ Update grub ]" $myPROGRESSBOXCONF
 cp /usr/share/consolefonts/Uni2-Terminus12x6.psf.gz /etc/console-setup/
@@ -776,5 +776,6 @@ if [ "$myTPOT_DEPLOYMENT_TYPE" == "auto" ];
     echo "Done. Please reboot."
   else
     dialog --no-ok --no-cancel --backtitle "$myBACKTITLE" --title "[ Thanks for your patience. Now rebooting. ]" --pause "" 6 80 2 && \
+    systemctl restart console-setup.service
     reboot
 fi
