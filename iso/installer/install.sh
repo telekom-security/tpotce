@@ -730,7 +730,7 @@ chmod 644 -R /data/nginx/conf 2>&1 | dialog --title "[ Set permissions and owner
 chmod 644 -R /data/nginx/cert 2>&1 | dialog --title "[ Set permissions and ownerships ]" $myPROGRESSBOXCONF
 
 # Let's replace "quiet splash" options, set a console font for more screen canvas and update grub
-sed -i 's#GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"#GRUB_CMDLINE_LINUX_DEFAULT="consoleblank=0"#' /etc/default/grub 2>&1>/dev/null
+sed -i 's#GRUB_CMDLINE_LINUX_DEFAULT="quiet"#GRUB_CMDLINE_LINUX_DEFAULT="consoleblank=0"#' /etc/default/grub 2>&1>/dev/null
 sed -i 's#GRUB_CMDLINE_LINUX=""#GRUB_CMDLINE_LINUX="cgroup_enable=memory swapaccount=1"#' /etc/default/grub 2>&1>/dev/null
 update-grub 2>&1 | dialog --title "[ Update grub ]" $myPROGRESSBOXCONF
 cp /usr/share/consolefonts/Uni2-Terminus12x6.psf.gz /etc/console-setup/
@@ -738,6 +738,7 @@ gunzip /etc/console-setup/Uni2-Terminus12x6.psf.gz
 sed -i 's#FONTFACE=".*#FONTFACE="Terminus"#' /etc/default/console-setup
 sed -i 's#FONTSIZE=".*#FONTSIZE="12x6"#' /etc/default/console-setup
 update-initramfs -u 2>&1 | dialog --title "[ Update initramfs ]" $myPROGRESSBOXCONF
+sed -i 's#After=.*#After=systemd-tmpfiles-setup.service console-screen.service kbd.service local-fs.target#' /etc/systemd/system/multi-user.target.wants/console-setup.service 2>&1 | dialog --title "[ Fix race with console setup ]" $myPROGRESSBOXCONF
 
 # Let's enable a color prompt and add /opt/tpot/bin to path
 myROOTPROMPT='PS1="\[\033[38;5;8m\][\[$(tput sgr0)\]\[\033[38;5;1m\]\u\[$(tput sgr0)\]\[\033[38;5;6m\]@\[$(tput sgr0)\]\[\033[38;5;4m\]\h\[$(tput sgr0)\]\[\033[38;5;6m\]:\[$(tput sgr0)\]\[\033[38;5;5m\]\w\[$(tput sgr0)\]\[\033[38;5;8m\]]\[$(tput sgr0)\]\[\033[38;5;1m\]\\$\[$(tput sgr0)\]\[\033[38;5;15m\] \[$(tput sgr0)\]"'
