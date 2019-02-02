@@ -6,10 +6,11 @@
 ##################################
 
 myLSB=$(lsb_release -r | awk '{ print $2 }')
-myLSB_SUPPORTED="testing"
+myLSB_STABLE_SUPPORTED="9.6"
+myLSB_TESTING_SUPPORTED="testing"
 myINFO="\
 ##########################################
-### T-Pot Installer for Debian $myLSB_SUPPORTED ###
+### T-Pot Installer for Debian testing ###
 ##########################################
 
 Disclaimer:
@@ -19,7 +20,7 @@ This script will install T-Pot on this system, by running the script you know wh
 3. Please ensure other means of access to this system in case something goes wrong.
 4. At best this script well be executed on the console instead through a SSH session.
 
-###########################################
+##########################################
 
 Usage:
         $0 --help - Help.
@@ -27,7 +28,7 @@ Usage:
 Example:
         $0 --type=user - Best option for most users."
 
-if [ "$myLSB" != "$myLSB_SUPPORTED" ];
+if [ "$myLSB" != "$myLSB_STABLE_SUPPORTED" ] && [ "$myLSB" != "$myLSB_TESTING_SUPPORTED" ];
   then
     echo "Aborting. Debian $myLSB is not supported."
     exit
@@ -127,8 +128,9 @@ fi
 # Let's check if all dependencies are met
 function fuGET_DEPS {
 local myPACKAGES="apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker curl debconf-utils dialog dnsutils docker.io docker-compose dstat ethtool fail2ban genisoimage git glances grc haveged html2text htop iptables iw jq libcrack2 libltdl7 lm-sensors man mosh multitail net-tools npm ntp openssh-server openssl pass prips software-properties-common syslinux psmisc pv python-pip unattended-upgrades unzip vim wireless-tools wpasupplicant"
+export DEBIAN_FRONTEND=noninteractive
 apt-get -y update
-apt-get -y install software-properties-common
+apt-get -y install libpq-dev software-properties-common
 #add-apt-repository "deb http://ftp.debian.org/debian testing main contrib non-free"
 tee /etc/apt/sources.list 2>&1>/dev/null <<EOF
 deb http://deb.debian.org/debian testing main contrib non-free
