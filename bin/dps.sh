@@ -9,7 +9,7 @@ myWHITE="[0;0m"
 myMAGENTA="[1;35m"
 
 function fuGETSTATUS {
-grc docker ps -f status=running -f status=exited --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep -v "NAME" | sort
+grc --colour=on docker ps -f status=running -f status=exited --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep -v "NAME" | sort
 }
 
 function fuGETSYS {

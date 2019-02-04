@@ -784,6 +784,10 @@ apt-get autoremove -y 2>&1 | dialog --title "[ Cleaning up ]" $myPROGRESSBOXCONF
 # Final steps
 cp /opt/tpot/host/etc/rc.local /etc/rc.local 2>&1>/dev/null && \
 rm -rf /root/installer 2>&1>/dev/null && \
+rm -rf /etc/issue.d/cockpit.issue 2>&1>/dev/null && \
+rm -rf /etc/motd.d/cockpit 2>&1>/dev/null && \
+rm -rf /etc/issue.net 2>&1>/dev/null && \
+rm -rf /etc/motd 2>&1>/dev/null && \
 if [ "$myTPOT_DEPLOYMENT_TYPE" == "auto" ];
   then
     echo "Done. Please reboot."
