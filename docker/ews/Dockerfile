@@ -20,7 +20,7 @@ RUN apk -U --no-cache add \
             py-requests \
             py-setuptools && \
     pip install --no-cache-dir -U pip && \
-    pip install --no-cache-dir pyOpenSSL && \
+    pip install --no-use-pep517 --no-cache-dir pyOpenSSL && \
 
 # Setup ewsposter
     git clone --depth=1 https://github.com/rep/hpfeeds /opt/hpfeeds && \
