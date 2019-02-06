@@ -8,7 +8,7 @@ RUN apk -U --no-cache add \
             build-base \
             git \
             libffi-dev \
-            libssl1.0 \
+            libssl1.1 \
             openssl-dev \
             python-dev \
             py-cffi \
