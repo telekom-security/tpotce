@@ -7,7 +7,8 @@ export DIALOGRC=/etc/dialogrc
 # Let's define some global vars
 myBACKTITLE="T-Pot - ISO Creator"
 # If you need latest hardware support, try using the hardware enablement (hwe) ISO, usually released later in time
-myMINIISOLINK="http://ftp.debian.org/debian/dists/testing/main/installer-amd64/current/images/netboot/mini.iso"
+#myMINIISOLINK="http://ftp.debian.org/debian/dists/testing/main/installer-amd64/current/images/netboot/mini.iso"
+myMINIISOLINK="https://d-i.debian.org/daily-images/amd64/daily/netboot/mini.iso"
 myMINIISO="mini.iso"
 myTPOTISO="tpot.iso"
 myTPOTDIR="tpotiso"
