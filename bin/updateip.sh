@@ -20,6 +20,7 @@ echo "| [1;30mWEB: https://$myLOCALIP:64297[0m" >> /etc/issue
 echo "| [0;37mADMIN: https://$myLOCALIP:64294[0m" >> /etc/issue
 echo "|" >> /etc/issue
 echo "\`----" >> /etc/issue
+echo >> /etc/issue
 tee /data/ews/conf/ews.ip << EOF
 [MAIN]
 ip = $myEXTIP
