@@ -5,13 +5,13 @@
 # Extract command line arguments #
 ##################################
 
-myLSB=$(lsb_release -r | awk '{ print $2 }')
-myLSB_STABLE_SUPPORTED="9.6"
-myLSB_TESTING_SUPPORTED="unstable"
+myLSB=$(lsb_release -c | awk '{ print $2 }')
+myLSB_STABLE_SUPPORTED="stretch"
+myLSB_TESTING_SUPPORTED="sid"
 myINFO="\
-##########################################
-### T-Pot Installer for Debian testing ###
-##########################################
+###########################################
+### T-Pot Installer for Debian unstable ###
+###########################################
 
 Disclaimer:
 This script will install T-Pot on this system, by running the script you know what you are doing:
@@ -131,18 +131,6 @@ local myPACKAGES="apache2-utils apparmor apt-transport-https aufs-tools bash-com
 export DEBIAN_FRONTEND=noninteractive
 apt-get -y update
 apt-get -y install libpq-dev software-properties-common
-#add-apt-repository "deb http://ftp.debian.org/debian testing main contrib non-free"
-#tee /etc/apt/sources.list 2>&1>/dev/null <<EOF
-#deb http://deb.debian.org/debian testing main contrib non-free
-#deb-src http://deb.debian.org/debian testing main contrib non-free
-#
-#deb http://deb.debian.org/debian testing-updates main contrib non-free
-#deb-src http://deb.debian.org/debian testing-updates main contrib non-free
-#
-#deb http://security.debian.org/debian-security/ testing/updates main contrib non-free
-#deb-src http://security.debian.org/debian-security/ testing/updates main contrib non-free
-#EOF
-
 tee /etc/apt/sources.list 2>&1>/dev/null <<EOF
 deb http://deb.debian.org/debian unstable main contrib non-free
 deb-src http://deb.debian.org/debian unstable main contrib non-free
@@ -166,21 +154,6 @@ apt-get -y install $myPACKAGES
 # Remove exim4
 apt-get -y purge exim4-base
 apt-get -y autoremove
-}
-
-# Let's load dialog color theme
-function fuDIALOG_SETUP {
-echo
-echo -n "### Checking for dialogrc: "
-if [ -f "dialogrc" ];
-  then
-    echo "[ OK ]"
-    cp dialogrc /etc/
-  else
-    echo "[ NOT OK ]"
-    echo "### 'dialogrc' is missing. Please run 'install.sh' from within the setup folder."
-    exit
-  fi
 }
 
 # Let's check for other services
@@ -218,16 +191,14 @@ echo "$myINFO" | head -n 3
 fuGOT_ROOT
 fuGET_DEPS
 fuCHECK_PORTS
-fuDIALOG_SETUP
 
 
 #############
 # Installer #
 #############
 
-# Set TERM, DIALOGRC
+# Set TERM
 export TERM=linux
-export DIALOGRC=/etc/dialogrc
 
 #######################
 # Global vars section #
@@ -245,7 +216,7 @@ myTPOTCOMPOSE="/opt/tpot/etc/tpot.yml"
 
 fuRANDOMWORD () {
   local myWORDFILE="$1"
-  local myLINES=$(cat $myWORDFILE  | wc -l)
+  local myLINES=$(cat $myWORDFILE | wc -l)
   local myRANDOM=$((RANDOM % $myLINES))
   local myNUM=$((myRANDOM * myRANDOM % $myLINES + 1))
   echo -n $(sed -n "$myNUM p" $myWORDFILE | tr -d \' | tr A-Z a-z)
@@ -255,14 +226,13 @@ fuRANDOMWORD () {
 if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ];
   then
     sleep 5
-    #tput civis
-    dialog --no-ok --no-cancel --backtitle "$myBACKTITLE" --title "[ Wait to avoid interference with service messages ]" --pause "" 6 80 7
+    dialog --keep-window --no-ok --no-cancel --backtitle "$myBACKTITLE" --title "[ Wait to avoid interference with service messages ]" --pause "" 6 80 7
 fi
 
-# Let's load the iso config file if there is one
+# Let' s load the iso config file if there is one
 if [ -f $myCONF_FILE ];
   then
-    dialog --backtitle "$myBACKTITLE" --title "[ Found personalized iso.config ]" --msgbox "\nYour personalized settings will be applied!" 7 47
+    dialog --keep-window --backtitle "$myBACKTITLE" --title "[ Found personalized iso.config ]" --msgbox "\nYour personalized settings will be applied!" 7 47
     source $myCONF_FILE
   else
     # dialog logic considers 1=false, 0=true
@@ -270,7 +240,6 @@ if [ -f $myCONF_FILE ];
     myCONF_PFX_USE="1"
     myCONF_NTP_USE="1"
 fi
-
 
 ### <--- Begin proxy setup
 # If a proxy is set in iso.conf it needs to be setup.
@@ -296,18 +265,18 @@ no_proxy=localhost,127.0.0.1,.sock
 if [ "$myCONF_PROXY_USE" == "0" ];
   then
     # Let's setup proxy for the environment
-    echo "$myPROXY_ENV" 2>&1 | tee -a /etc/environment | dialog --title "[ Setting up the proxy ]" $myPROGRESSBOXCONF
+    echo "$myPROXY_ENV" 2>&1 | tee -a /etc/environment | dialog --keep-window --title "[ Setting up the proxy ]" $myPROGRESSBOXCONF
     source /etc/environment
 
     # Let's setup the proxy for apt
-    echo "$myPROXY_APT" 2>&1 | tee /etc/apt/apt.conf | dialog --title "[ Setting up the proxy ]" $myPROGRESSBOXCONF
+    echo "$myPROXY_APT" 2>&1 | tee /etc/apt/apt.conf | dialog --keep-window --title "[ Setting up the proxy ]" $myPROGRESSBOXCONF
 
     # Let's add proxy settings to docker defaults
-    echo "$myPROXY_DOCKER" 2>&1 | tee -a /etc/default/docker | dialog --title "[ Setting up the proxy ]" $myPROGRESSBOXCONF
+    echo "$myPROXY_DOCKER" 2>&1 | tee -a /etc/default/docker | dialog --keep-window --title "[ Setting up the proxy ]" $myPROGRESSBOXCONF
 
     # Let's restart docker for proxy changes to take effect
-    systemctl stop docker 2>&1 | dialog --title "[ Stop docker service ]" $myPROGRESSBOXCONF
-    systemctl start docker 2>&1 | dialog --title "[ Start docker service ]" $myPROGRESSBOXCONF
+    systemctl stop docker 2>&1 | dialog --keep-window --title "[ Stop docker service ]" $myPROGRESSBOXCONF
+    systemctl start docker 2>&1 | dialog --keep-window --title "[ Start docker service ]" $myPROGRESSBOXCONF
 fi
 ### ---> End proxy setup
 
@@ -322,22 +291,20 @@ if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ] || [ "$myTPOT_DEPLOYMENT_TYPE" == "use
                                                                   --gauge "\n  Now checking: $i\n" 8 80 $(expr 100 \* $j / $mySITESCOUNT)
         if [ $? -ne 0 ];
           then
-            dialog --backtitle "$myBACKTITLE" --title "[ Continue? ]" --yesno "\nInternet connection test failed. This might indicate some problems with your connection. You can continue, but the installation might fail." 10 50
+            dialog --keep-window --backtitle "$myBACKTITLE" --title "[ Continue? ]" --yesno "\nInternet connection test failed. This might indicate some problems with your connection. You can continue, but the installation might fail." 10 50
             if [ $? = 1 ];
               then
-                dialog --backtitle "$myBACKTITLE" --title "[ Abort ]" --msgbox "\nInstallation aborted. Exiting the installer." 7 50
+                dialog --keep-window --backtitle "$myBACKTITLE" --title "[ Abort ]" --msgbox "\nInstallation aborted. Exiting the installer." 7 50
                 exit
               else
                 break;
             fi;
         fi;
       let j+=1
-      echo 2>&1>/dev/null | dialog --title "[ Testing the internet connection ]" --backtitle "$myBACKTITLE" \
+      echo 2>&1>/dev/null | dialog --keep-window --title "[ Testing the internet connection ]" --backtitle "$myBACKTITLE" \
                                                                                  --gauge "\n  Now checking: $i\n" 8 80 $(expr 100 \* $j / $mySITESCOUNT)
     done;
 fi
-# Let's put cursor back in standard form
-#tput cnorm
 
 ####################
 # User interaction #
@@ -346,7 +313,7 @@ fi
 # Let's ask the user for install flavor
 if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ] || [ "$myTPOT_DEPLOYMENT_TYPE" == "user" ];
   then
-    myCONF_TPOT_FLAVOR=$(dialog --no-cancel --backtitle "$myBACKTITLE" --title "[ Choose Your T-Pot NG Edition ]" --menu \
+    myCONF_TPOT_FLAVOR=$(dialog --keep-window --no-cancel --backtitle "$myBACKTITLE" --title "[ Choose Your T-Pot NG Edition ]" --menu \
     "\nRequired: 6GB RAM, 128GB SSD\nRecommended: 8GB RAM, 256GB SSD" 15 70 7 \
     "STANDARD" "Honeypots, ELK, NSM & Tools" \
     "SENSOR" "Just Honeypots, EWS Poster & NSM" \
@@ -367,16 +334,16 @@ if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ];
       do
         while [ "$myPASS1" == "pass1"  ] || [ "$myPASS1" == "" ]
           do
-            myPASS1=$(dialog --insecure --backtitle "$myBACKTITLE" \
+            myPASS1=$(dialog --keep-window --insecure --backtitle "$myBACKTITLE" \
                              --title "[ Enter password for console user (tsec) ]" \
                              --passwordbox "\nPassword" 9 60 3>&1 1>&2 2>&3 3>&-)
           done
-            myPASS2=$(dialog --insecure --backtitle "$myBACKTITLE" \
+            myPASS2=$(dialog --keep-window --insecure --backtitle "$myBACKTITLE" \
                              --title "[ Repeat password for console user (tsec) ]" \
                              --passwordbox "\nPassword" 9 60 3>&1 1>&2 2>&3 3>&-)
         if [ "$myPASS1" != "$myPASS2" ];
           then
-            dialog --backtitle "$myBACKTITLE" --title "[ Passwords do not match. ]" \
+            dialog --keep-window --backtitle "$myBACKTITLE" --title "[ Passwords do not match. ]" \
                    --msgbox "\nPlease re-enter your password." 7 60
             myPASS1="pass1"
             myPASS2="pass2"
@@ -384,7 +351,7 @@ if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ];
         mySECURE=$(printf "%s" "$myPASS1" | cracklib-check | grep -c "OK")
         if [ "$mySECURE" == "0" ] && [ "$myPASS1" == "$myPASS2" ];
           then
-            dialog --backtitle "$myBACKTITLE" --title "[ Password is not secure ]" --defaultno --yesno "\nKeep insecure password?" 7 50
+            dialog --keep-window --backtitle "$myBACKTITLE" --title "[ Password is not secure ]" --defaultno --yesno "\nKeep insecure password?" 7 50
             myOK=$?
             if [ "$myOK" == "1" ];
               then
@@ -408,9 +375,9 @@ if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ] || [ "$myTPOT_DEPLOYMENT_TYPE" == "use
     mySECURE="0"
     while [ 1 != 2 ]
       do
-        myCONF_WEB_USER=$(dialog --backtitle "$myBACKTITLE" --title "[ Enter your web user name ]" --inputbox "\nUsername (tsec not allowed)" 9 50 3>&1 1>&2 2>&3 3>&-)
+        myCONF_WEB_USER=$(dialog --keep-window --backtitle "$myBACKTITLE" --title "[ Enter your web user name ]" --inputbox "\nUsername (tsec not allowed)" 9 50 3>&1 1>&2 2>&3 3>&-)
         myCONF_WEB_USER=$(echo $myCONF_WEB_USER | tr -cd "[:alnum:]_.-")
-        dialog --backtitle "$myBACKTITLE" --title "[ Your username is ]" --yesno "\n$myCONF_WEB_USER" 7 50
+        dialog --keep-window --backtitle "$myBACKTITLE" --title "[ Your username is ]" --yesno "\n$myCONF_WEB_USER" 7 50
         myOK=$?
         if [ "$myOK" = "0" ] && [ "$myCONF_WEB_USER" != "tsec" ] && [ "$myCONF_WEB_USER" != "" ];
           then
@@ -421,16 +388,16 @@ if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ] || [ "$myTPOT_DEPLOYMENT_TYPE" == "use
       do
         while [ "$myCONF_WEB_PW" == "pass1"  ] || [ "$myCONF_WEB_PW" == "" ]
           do
-            myCONF_WEB_PW=$(dialog --insecure --backtitle "$myBACKTITLE" \
+            myCONF_WEB_PW=$(dialog --keep-window --insecure --backtitle "$myBACKTITLE" \
                              --title "[ Enter password for your web user ]" \
                              --passwordbox "\nPassword" 9 60 3>&1 1>&2 2>&3 3>&-)
           done
-        myCONF_WEB_PW2=$(dialog --insecure --backtitle "$myBACKTITLE" \
+        myCONF_WEB_PW2=$(dialog --keep-window --insecure --backtitle "$myBACKTITLE" \
                          --title "[ Repeat password for your web user ]" \
                          --passwordbox "\nPassword" 9 60 3>&1 1>&2 2>&3 3>&-)
         if [ "$myCONF_WEB_PW" != "$myCONF_WEB_PW2" ];
           then
-            dialog --backtitle "$myBACKTITLE" --title "[ Passwords do not match. ]" \
+            dialog --keep-window --backtitle "$myBACKTITLE" --title "[ Passwords do not match. ]" \
                    --msgbox "\nPlease re-enter your password." 7 60
             myCONF_WEB_PW="pass1"
             myCONF_WEB_PW2="pass2"
@@ -438,7 +405,7 @@ if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ] || [ "$myTPOT_DEPLOYMENT_TYPE" == "use
         mySECURE=$(printf "%s" "$myCONF_WEB_PW" | cracklib-check | grep -c "OK")
         if [ "$mySECURE" == "0" ] && [ "$myCONF_WEB_PW" == "$myCONF_WEB_PW2" ];
           then
-            dialog --backtitle "$myBACKTITLE" --title "[ Password is not secure ]" --defaultno --yesno "\nKeep insecure password?" 7 50
+            dialog --keep-window --backtitle "$myBACKTITLE" --title "[ Password is not secure ]" --defaultno --yesno "\nKeep insecure password?" 7 50
             myOK=$?
             if [ "$myOK" == "1" ];
               then
@@ -452,7 +419,7 @@ fi
 if ! [ "$myCONF_TPOT_FLAVOR" == "SENSOR" ];
   then
     mkdir -p /data/nginx/conf 2>&1
-    htpasswd -b -c /data/nginx/conf/nginxpasswd "$myCONF_WEB_USER" "$myCONF_WEB_PW" 2>&1 | dialog --title "[ Setting up user and password ]" $myPROGRESSBOXCONF;
+    htpasswd -b -c /data/nginx/conf/nginxpasswd "$myCONF_WEB_USER" "$myCONF_WEB_PW" 2>&1 | dialog --keep-window --title "[ Setting up user and password ]" $myPROGRESSBOXCONF;
 fi
 
 
@@ -460,13 +427,10 @@ fi
 # Installation section #
 ########################
 
-# Put cursor in invisible mode
-#tput civis
-
 # Let's generate a SSL self-signed certificate without interaction (browsers will see it invalid anyway)
 if ! [ "$myCONF_TPOT_FLAVOR" == "SENSOR" ];
 then
-mkdir -p /data/nginx/cert 2>&1 | dialog --title "[ Generating a self-signed-certificate for NGINX ]" $myPROGRESSBOXCONF;
+mkdir -p /data/nginx/cert 2>&1 | dialog --keep-window --title "[ Generating a self-signed-certificate for NGINX ]" $myPROGRESSBOXCONF;
 openssl req \
         -nodes \
         -x509 \
@@ -475,13 +439,13 @@ openssl req \
         -keyout "/data/nginx/cert/nginx.key" \
         -out "/data/nginx/cert/nginx.crt" \
         -days 3650 \
-        -subj '/C=AU/ST=Some-State/O=Internet Widgits Pty Ltd' 2>&1 | dialog --title "[ Generating a self-signed-certificate for NGINX ]" $myPROGRESSBOXCONF;
+        -subj '/C=AU/ST=Some-State/O=Internet Widgits Pty Ltd' 2>&1 | dialog --keep-window --title "[ Generating a self-signed-certificate for NGINX ]" $myPROGRESSBOXCONF;
 fi
 
 # Let's setup the ntp server
 if [ "$myCONF_NTP_USE" == "0" ];
   then
-    cp $myCONF_NTP_CONF_FILE /etc/ntp.conf 2>&1 | dialog --title "[ Setting up the ntp server ]" $myPROGRESSBOXCONF
+    cp $myCONF_NTP_CONF_FILE /etc/ntp.conf 2>&1 | dialog --keep-window --title "[ Setting up the ntp server ]" $myPROGRESSBOXCONF
 fi
 
 # Let's setup 802.1x networking
@@ -529,12 +493,12 @@ network={
 "
 if [ "myCONF_PFX_USE" == "0" ];
   then
-    cp $myCONF_PFX_FILE /etc/wpa_supplicant/ 2>&1 | dialog --title "[ Setting 802.1x networking ]" $myPROGRESSBOXCONF
-    echo "$myNETWORK_INTERFACES" 2>&1 | tee -a /etc/network/interfaces | dialog --title "[ Setting 802.1x networking ]" $myPROGRESSBOXCONF
+    cp $myCONF_PFX_FILE /etc/wpa_supplicant/ 2>&1 | dialog --keep-window --title "[ Setting 802.1x networking ]" $myPROGRESSBOXCONF
+    echo "$myNETWORK_INTERFACES" 2>&1 | tee -a /etc/network/interfaces | dialog --keep-window --title "[ Setting 802.1x networking ]" $myPROGRESSBOXCONF
 
-    echo "$myNETWORK_WIRED8021x" 2>&1 | tee /etc/wpa_supplicant/wired8021x.conf | dialog --title "[ Setting 802.1x networking ]" $myPROGRESSBOXCONF
+    echo "$myNETWORK_WIRED8021x" 2>&1 | tee /etc/wpa_supplicant/wired8021x.conf | dialog --keep-window --title "[ Setting 802.1x networking ]" $myPROGRESSBOXCONF
 
-    echo "$myNETWORK_WLAN8021x" 2>&1 | tee /etc/wpa_supplicant/wireless8021x.conf | dialog --title "[ Setting 802.1x networking ]" $myPROGRESSBOXCONF
+    echo "$myNETWORK_WLAN8021x" 2>&1 | tee /etc/wpa_supplicant/wireless8021x.conf | dialog --keep-window --title "[ Setting 802.1x networking ]" $myPROGRESSBOXCONF
 fi
 
 # Let's provide a wireless example config ...
@@ -566,38 +530,38 @@ myNETWORK_WLANEXAMPLE="
 #   wpa-key-mgmt WPA-PSK
 #   wpa-psk \"<your_password_here_without_brackets>\"
 "
-echo "$myNETWORK_WLANEXAMPLE" 2>&1 | tee -a /etc/network/interfaces | dialog --title "[ Provide WLAN example config ]" $myPROGRESSBOXCONF
+echo "$myNETWORK_WLANEXAMPLE" 2>&1 | tee -a /etc/network/interfaces | dialog --keep-window --title "[ Provide WLAN example config ]" $myPROGRESSBOXCONF
 
 # Let's modify the sources list
 sed -i '/cdrom/d' /etc/apt/sources.list
 
 # Let's make sure SSH roaming is turned off (CVE-2016-0777, CVE-2016-0778)
-echo "UseRoaming no" 2>&1 | tee -a /etc/ssh/ssh_config | dialog --title "[ Turn SSH roaming off ]" $myPROGRESSBOXCONF
+echo "UseRoaming no" 2>&1 | tee -a /etc/ssh/ssh_config | dialog --keep-window --title "[ Turn SSH roaming off ]" $myPROGRESSBOXCONF
 
 # Installing ctop, elasticdump, tpot, yq
-npm install https://github.com/taskrabbit/elasticsearch-dump -g 2>&1 | dialog --title "[ Installing elasticsearch-dump ]" $myPROGRESSBOXCONF
-pip install --upgrade pip 2>&1 | dialog --title "[ Installing pip ]" $myPROGRESSBOXCONF
-hash -r 2>&1 | dialog --title "[ Installing pip ]" $myPROGRESSBOXCONF
-pip install elasticsearch-curator yq 2>&1 | dialog --title "[ Installing elasticsearch-curator, yq ]" $myPROGRESSBOXCONF
-wget https://github.com/bcicen/ctop/releases/download/v0.7.1/ctop-0.7.1-linux-amd64 -O /usr/bin/ctop 2>&1 | dialog --title "[ Installing ctop ]" $myPROGRESSBOXCONF
-chmod +x /usr/bin/ctop 2>&1 | dialog --title "[ Installing ctop ]" $myPROGRESSBOXCONF
-git clone https://github.com/dtag-dev-sec/tpotce -b debian /opt/tpot 2>&1 | dialog --title "[ Cloning T-Pot ]" $myPROGRESSBOXCONF
+npm install https://github.com/taskrabbit/elasticsearch-dump -g 2>&1 | dialog --keep-window --title "[ Installing elasticsearch-dump ]" $myPROGRESSBOXCONF
+pip install --upgrade pip 2>&1 | dialog --keep-window --title "[ Installing pip ]" $myPROGRESSBOXCONF
+hash -r 2>&1 | dialog --keep-window --title "[ Installing pip ]" $myPROGRESSBOXCONF
+pip install elasticsearch-curator yq 2>&1 | dialog --keep-window --title "[ Installing elasticsearch-curator, yq ]" $myPROGRESSBOXCONF
+wget https://github.com/bcicen/ctop/releases/download/v0.7.1/ctop-0.7.1-linux-amd64 -O /usr/bin/ctop 2>&1 | dialog --keep-window --title "[ Installing ctop ]" $myPROGRESSBOXCONF
+chmod +x /usr/bin/ctop 2>&1 | dialog --keep-window --title "[ Installing ctop ]" $myPROGRESSBOXCONF
+git clone https://github.com/dtag-dev-sec/tpotce -b debian /opt/tpot 2>&1 | dialog --keep-window --title "[ Cloning T-Pot ]" $myPROGRESSBOXCONF
 
 # Let's create the T-Pot user
-addgroup --gid 2000 tpot 2>&1 | dialog --title "[ Adding T-Pot user ]" $myPROGRESSBOXCONF
-adduser --system --no-create-home --uid 2000 --disabled-password --disabled-login --gid 2000 tpot 2>&1 | dialog --title "[ Adding T-Pot user ]" $myPROGRESSBOXCONF
+addgroup --gid 2000 tpot 2>&1 | dialog --keep-window --title "[ Adding T-Pot user ]" $myPROGRESSBOXCONF
+adduser --system --no-create-home --uid 2000 --disabled-password --disabled-login --gid 2000 tpot 2>&1 | dialog --keep-window --title "[ Adding T-Pot user ]" $myPROGRESSBOXCONF
 
 # Let's set the hostname
 a=$(fuRANDOMWORD /opt/tpot/host/usr/share/dict/a.txt)
 n=$(fuRANDOMWORD /opt/tpot/host/usr/share/dict/n.txt)
 myHOST=$a$n
-hostnamectl set-hostname $myHOST 2>&1 | dialog --title "[ Setting new hostname ]" $myPROGRESSBOXCONF
-sed -i 's#127.0.1.1.*#127.0.1.1\t'"$myHOST"'#g' /etc/hosts 2>&1 | dialog --title "[ Setting new hostname ]" $myPROGRESSBOXCONF
+hostnamectl set-hostname $myHOST 2>&1 | dialog --keep-window --title "[ Setting new hostname ]" $myPROGRESSBOXCONF
+sed -i 's#127.0.1.1.*#127.0.1.1\t'"$myHOST"'#g' /etc/hosts 2>&1 | dialog --keep-window --title "[ Setting new hostname ]" $myPROGRESSBOXCONF
 
 # Let's patch cockpit.socket, sshd_config
-sed -i 's#ListenStream=9090#ListenStream=64294#' /lib/systemd/system/cockpit.socket 2>&1 | dialog --title "[ Cockpit listen on tcp/64294 ]" $myPROGRESSBOXCONF
-sed -i '/^port/Id' /etc/ssh/sshd_config 2>&1 | dialog --title "[ SSH listen on tcp/64295 ]" $myPROGRESSBOXCONF
-echo "Port 64295" >> /etc/ssh/sshd_config 2>&1 | dialog --title "[ SSH listen on tcp/64295 ]" $myPROGRESSBOXCONF
+sed -i 's#ListenStream=9090#ListenStream=64294#' /lib/systemd/system/cockpit.socket 2>&1 | dialog --keep-window --title "[ Cockpit listen on tcp/64294 ]" $myPROGRESSBOXCONF
+sed -i '/^port/Id' /etc/ssh/sshd_config 2>&1 | dialog --keep-window --title "[ SSH listen on tcp/64295 ]" $myPROGRESSBOXCONF
+echo "Port 64295" >> /etc/ssh/sshd_config 2>&1 | dialog --keep-window --title "[ SSH listen on tcp/64295 ]" $myPROGRESSBOXCONF
 
 # Let's make sure only myCONF_TPOT_FLAVOR images will be downloaded and started
 case $myCONF_TPOT_FLAVOR in
@@ -635,14 +599,14 @@ for name in $(cat $myTPOTCOMPOSE | grep -v '#' | grep image | cut -d'"' -f2 | un
 done
 wait
 }
-fuPULLIMAGES 2>&1 | dialog --title "[ Pulling docker images, please be patient ]" $myPROGRESSBOXCONF
+fuPULLIMAGES 2>&1 | dialog --keep-window --title "[ Pulling docker images, please be patient ]" $myPROGRESSBOXCONF
 
 # Let's add the daily update check with a weekly clean interval
 myUPDATECHECK="APT::Periodic::Update-Package-Lists \"1\";
 APT::Periodic::Download-Upgradeable-Packages \"0\";
 APT::Periodic::AutocleanInterval \"7\";
 "
-echo "$myUPDATECHECK" 2>&1 | tee /etc/apt/apt.conf.d/10periodic | dialog --title "[ Modifying update checks ]" $myPROGRESSBOXCONF
+echo "$myUPDATECHECK" 2>&1 | tee /etc/apt/apt.conf.d/10periodic | dialog --keep-window --title "[ Modifying update checks ]" $myPROGRESSBOXCONF
 
 # Let's make sure to reboot the system after a kernel panic
 mySYSCTLCONF="
@@ -655,7 +619,7 @@ net.ipv6.conf.all.disable_ipv6 = 1
 net.ipv6.conf.default.disable_ipv6 = 1
 net.ipv6.conf.lo.disable_ipv6 = 1
 "
-echo "$mySYSCTLCONF" 2>&1 | tee -a /etc/sysctl.conf | dialog --title "[ Tweak Sysctl ]" $myPROGRESSBOXCONF
+echo "$mySYSCTLCONF" 2>&1 | tee -a /etc/sysctl.conf | dialog --keep-window --title "[ Tweak Sysctl ]" $myPROGRESSBOXCONF
 
 # Let's setup fail2ban config
 myFAIL2BANCONF="[DEFAULT]
@@ -682,14 +646,14 @@ port    = 64295
 filter  = sshd
 logpath = /var/log/auth.log
 "
-echo "$myFAIL2BANCONF" 2>&1 | tee /etc/fail2ban/jail.d/tpot.conf | dialog --title "[ Setup fail2ban config ]" $myPROGRESSBOXCONF
+echo "$myFAIL2BANCONF" 2>&1 | tee /etc/fail2ban/jail.d/tpot.conf | dialog --keep-window --title "[ Setup fail2ban config ]" $myPROGRESSBOXCONF
 
 # Fix systemd error https://github.com/systemd/systemd/issues/3374
 mySYSTEMDFIX="[Link]
 NamePolicy=kernel database onboard slot path
 MACAddressPolicy=none
 "
-echo "$mySYSTEMDFIX" 2>&1 | tee /etc/systemd/network/99-default.link | dialog --title "[ systemd fix ]" $myPROGRESSBOXCONF
+echo "$mySYSTEMDFIX" 2>&1 | tee /etc/systemd/network/99-default.link | dialog --keep-window --title "[ systemd fix ]" $myPROGRESSBOXCONF
 
 # Let's add some cronjobs
 myCRONJOBS="
@@ -708,7 +672,7 @@ myCRONJOBS="
 # Check for updated packages every sunday, upgrade and reboot
 27 16 * * 0     root    apt-get autoclean -y && apt-get autoremove -y && apt-get update -y && apt-get upgrade -y && sleep 10 && reboot
 "
-echo "$myCRONJOBS" 2>&1 | tee -a /etc/crontab | dialog --title "[ Adding cronjobs ]" $myPROGRESSBOXCONF
+echo "$myCRONJOBS" 2>&1 | tee -a /etc/crontab | dialog --keep-window --title "[ Adding cronjobs ]" $myPROGRESSBOXCONF
 
 # Let's create some files and folders
 mkdir -p /data/adbhoney/downloads /data/adbhoney/log \
@@ -732,31 +696,31 @@ mkdir -p /data/adbhoney/downloads /data/adbhoney/log \
          /data/suricata/log /home/tsec/.ssh/ \
 	 /data/tanner/log /data/tanner/files \
          /data/p0f/log 2>&1 | dialog --title "[ Creating some files and folders ]" $myPROGRESSBOXCONF
-touch /data/spiderfoot/spiderfoot.db 2>&1 | dialog --title "[ Creating some files and folders ]" $myPROGRESSBOXCONF
-touch /data/nginx/log/error.log  2>&1 | dialog --title "[ Creating some files and folders ]" $myPROGRESSBOXCONF
+touch /data/spiderfoot/spiderfoot.db 2>&1 | dialog --keep-window --title "[ Creating some files and folders ]" $myPROGRESSBOXCONF
+touch /data/nginx/log/error.log  2>&1 | dialog --keep-window --title "[ Creating some files and folders ]" $myPROGRESSBOXCONF
 
 # Let's copy some files
-tar xvfz /opt/tpot/etc/objects/elkbase.tgz -C / 2>&1 | dialog --title "[ Extracting elkbase.tgz ]" $myPROGRESSBOXCONF
-cp /opt/tpot/host/etc/systemd/* /etc/systemd/system/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
-cp /opt/tpot/host/etc/issue /etc/ 2>&1 | dialog --title "[ Copy configs ]" $myPROGRESSBOXCONF
-systemctl enable tpot 2>&1 | dialog --title "[ Enabling service for tpot ]" $myPROGRESSBOXCONF
+tar xvfz /opt/tpot/etc/objects/elkbase.tgz -C / 2>&1 | dialog --keep-window --title "[ Extracting elkbase.tgz ]" $myPROGRESSBOXCONF
+cp /opt/tpot/host/etc/systemd/* /etc/systemd/system/ 2>&1 | dialog --keep-window --title "[ Copy configs ]" $myPROGRESSBOXCONF
+cp /opt/tpot/host/etc/issue /etc/ 2>&1 | dialog --keep-window --title "[ Copy configs ]" $myPROGRESSBOXCONF
+systemctl enable tpot 2>&1 | dialog --keep-window --title "[ Enabling service for tpot ]" $myPROGRESSBOXCONF
 
 # Let's take care of some files and permissions
-chmod 760 -R /data 2>&1 | dialog --title "[ Set permissions and ownerships ]" $myPROGRESSBOXCONF
-chown tpot:tpot -R /data 2>&1 | dialog --title "[ Set permissions and ownerships ]" $myPROGRESSBOXCONF
-chmod 644 -R /data/nginx/conf 2>&1 | dialog --title "[ Set permissions and ownerships ]" $myPROGRESSBOXCONF
-chmod 644 -R /data/nginx/cert 2>&1 | dialog --title "[ Set permissions and ownerships ]" $myPROGRESSBOXCONF
+chmod 760 -R /data 2>&1 | dialog --keep-window --title "[ Set permissions and ownerships ]" $myPROGRESSBOXCONF
+chown tpot:tpot -R /data 2>&1 | dialog --keep-window --title "[ Set permissions and ownerships ]" $myPROGRESSBOXCONF
+chmod 644 -R /data/nginx/conf 2>&1 | dialog --keep-window --title "[ Set permissions and ownerships ]" $myPROGRESSBOXCONF
+chmod 644 -R /data/nginx/cert 2>&1 | dialog --keep-window --title "[ Set permissions and ownerships ]" $myPROGRESSBOXCONF
 
 # Let's replace "quiet splash" options, set a console font for more screen canvas and update grub
 sed -i 's#GRUB_CMDLINE_LINUX_DEFAULT="quiet"#GRUB_CMDLINE_LINUX_DEFAULT="quiet consoleblank=0"#' /etc/default/grub 2>&1>/dev/null
 sed -i 's#GRUB_CMDLINE_LINUX=""#GRUB_CMDLINE_LINUX="cgroup_enable=memory swapaccount=1"#' /etc/default/grub 2>&1>/dev/null
-update-grub 2>&1 | dialog --title "[ Update grub ]" $myPROGRESSBOXCONF
+update-grub 2>&1 | dialog --keep-window --title "[ Update grub ]" $myPROGRESSBOXCONF
 cp /usr/share/consolefonts/Uni2-Terminus12x6.psf.gz /etc/console-setup/
 gunzip /etc/console-setup/Uni2-Terminus12x6.psf.gz
 sed -i 's#FONTFACE=".*#FONTFACE="Terminus"#' /etc/default/console-setup
 sed -i 's#FONTSIZE=".*#FONTSIZE="12x6"#' /etc/default/console-setup
-update-initramfs -u 2>&1 | dialog --title "[ Update initramfs ]" $myPROGRESSBOXCONF
-sed -i 's#After=.*#After=systemd-tmpfiles-setup.service console-screen.service kbd.service local-fs.target#' /etc/systemd/system/multi-user.target.wants/console-setup.service 2>&1 | dialog --title "[ Fix race with console setup ]" $myPROGRESSBOXCONF
+update-initramfs -u 2>&1 | dialog --keep-window --title "[ Update initramfs ]" $myPROGRESSBOXCONF
+sed -i 's#After=.*#After=systemd-tmpfiles-setup.service console-screen.service kbd.service local-fs.target#' /etc/systemd/system/multi-user.target.wants/console-setup.service 2>&1 | dialog --keep-window --title "[ Fix race with console setup ]" $myPROGRESSBOXCONF
 
 # Let's enable a color prompt and add /opt/tpot/bin to path
 myROOTPROMPT='PS1="\[\033[38;5;8m\][\[$(tput sgr0)\]\[\033[38;5;1m\]\u\[$(tput sgr0)\]\[\033[38;5;6m\]@\[$(tput sgr0)\]\[\033[38;5;4m\]\h\[$(tput sgr0)\]\[\033[38;5;6m\]:\[$(tput sgr0)\]\[\033[38;5;5m\]\w\[$(tput sgr0)\]\[\033[38;5;8m\]]\[$(tput sgr0)\]\[\033[38;5;1m\]\\$\[$(tput sgr0)\]\[\033[38;5;15m\] \[$(tput sgr0)\]"'
@@ -783,8 +747,8 @@ done
 /opt/tpot/bin/updateip.sh 2>&1>/dev/null
 
 # Let's clean up apt
-apt-get autoclean -y 2>&1 | dialog --title "[ Cleaning up ]" $myPROGRESSBOXCONF
-apt-get autoremove -y 2>&1 | dialog --title "[ Cleaning up ]" $myPROGRESSBOXCONF
+apt-get autoclean -y 2>&1 | dialog --keep-window --title "[ Cleaning up ]" $myPROGRESSBOXCONF
+apt-get autoremove -y 2>&1 | dialog --keep-window --title "[ Cleaning up ]" $myPROGRESSBOXCONF
 
 # Final steps
 cp /opt/tpot/host/etc/rc.local /etc/rc.local 2>&1>/dev/null && \
@@ -797,7 +761,7 @@ if [ "$myTPOT_DEPLOYMENT_TYPE" == "auto" ];
   then
     echo "Done. Please reboot."
   else
-    dialog --no-ok --no-cancel --backtitle "$myBACKTITLE" --title "[ Thanks for your patience. Now rebooting. ]" --pause "" 6 80 2 && \
+    dialog --keep-window --no-ok --no-cancel --backtitle "$myBACKTITLE" --title "[ Thanks for your patience. Now rebooting. ]" --pause "" 6 80 2 && \
     systemctl restart console-setup.service
     reboot
 fi

@@ -88,8 +88,8 @@ d-i mirror/suite string unstable
 #d-i grub-installer/confirm boolean true
 #d-i grub-installer/only_debian boolean true
 #d-i grub-installer/with_other_os boolean true
-d-i grub-installer/skip boolean true
 #d-i grub-installer/bootdev string default
+d-i grub-installer/skip boolean true
 d-i lilo-installer/skip boolean true
 
 ######################
