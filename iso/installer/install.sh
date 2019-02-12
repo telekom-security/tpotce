@@ -702,7 +702,6 @@ touch /data/nginx/log/error.log  2>&1 | dialog --keep-window --title "[ Creating
 # Let's copy some files
 tar xvfz /opt/tpot/etc/objects/elkbase.tgz -C / 2>&1 | dialog --keep-window --title "[ Extracting elkbase.tgz ]" $myPROGRESSBOXCONF
 cp /opt/tpot/host/etc/systemd/* /etc/systemd/system/ 2>&1 | dialog --keep-window --title "[ Copy configs ]" $myPROGRESSBOXCONF
-cp /opt/tpot/host/etc/issue /etc/ 2>&1 | dialog --keep-window --title "[ Copy configs ]" $myPROGRESSBOXCONF
 systemctl enable tpot 2>&1 | dialog --keep-window --title "[ Enabling service for tpot ]" $myPROGRESSBOXCONF
 
 # Let's take care of some files and permissions
