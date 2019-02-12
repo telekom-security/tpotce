@@ -2,7 +2,6 @@
 
 # Set TERM, DIALOGRC
 export TERM=linux
-export DIALOGRC=/etc/dialogrc
 
 # Let's define some global vars
 myBACKTITLE="T-Pot - ISO Creator"
@@ -48,9 +47,6 @@ if [ "$myINST" != "" ]
       apt-get install $myDEPS -y
     done
 fi
-
-# Let's load dialog color theme
-cp host/etc/dialogrc /etc/
 
 # Let's clean up at the end or if something goes wrong ...
 function fuCLEANUP {
