@@ -7,7 +7,7 @@
 
 myLSB=$(lsb_release -r | awk '{ print $2 }')
 myLSB_STABLE_SUPPORTED="9.6"
-myLSB_TESTING_SUPPORTED="testing"
+myLSB_TESTING_SUPPORTED="unstable"
 myINFO="\
 ##########################################
 ### T-Pot Installer for Debian testing ###
@@ -132,15 +132,20 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get -y update
 apt-get -y install libpq-dev software-properties-common
 #add-apt-repository "deb http://ftp.debian.org/debian testing main contrib non-free"
+#tee /etc/apt/sources.list 2>&1>/dev/null <<EOF
+#deb http://deb.debian.org/debian testing main contrib non-free
+#deb-src http://deb.debian.org/debian testing main contrib non-free
+#
+#deb http://deb.debian.org/debian testing-updates main contrib non-free
+#deb-src http://deb.debian.org/debian testing-updates main contrib non-free
+#
+#deb http://security.debian.org/debian-security/ testing/updates main contrib non-free
+#deb-src http://security.debian.org/debian-security/ testing/updates main contrib non-free
+#EOF
+
 tee /etc/apt/sources.list 2>&1>/dev/null <<EOF
-deb http://deb.debian.org/debian testing main contrib non-free
-deb-src http://deb.debian.org/debian testing main contrib non-free
-
-deb http://deb.debian.org/debian testing-updates main contrib non-free
-deb-src http://deb.debian.org/debian testing-updates main contrib non-free
-
-deb http://security.debian.org/debian-security/ testing/updates main contrib non-free
-deb-src http://security.debian.org/debian-security/ testing/updates main contrib non-free
+deb http://deb.debian.org/debian unstable main contrib non-free
+deb-src http://deb.debian.org/debian unstable main contrib non-free
 EOF
 
 echo

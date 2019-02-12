@@ -78,7 +78,8 @@ d-i mirror/http/proxy string
 ###################
 # Suite to install
 ###################
-d-i mirror/suite string testing
+d-i mirror/suite string unstable
+#d-i mirror/suite string testing
 #d-i mirror/udeb/suite string testing
 
 ###########################
@@ -94,7 +95,7 @@ d-i lilo-installer/skip boolean true
 ######################
 ### Time Configuration
 ######################
-##d-i time/zone string Europe/Berlin
+#d-i time/zone string Europe/Berlin
 d-i clock-setup/utc boolean true
 d-i time/zone string UTC
 d-i clock-setup/ntp boolean true
