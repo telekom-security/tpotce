@@ -58,7 +58,7 @@ function fuSELFUPDATE () {
       echo "###### $myBLUE""No updates found in repository.""$myWHITE"
       return
   fi
-  myRESULT=$(git diff --name-only origin/master | grep update.sh)
+  myRESULT=$(git diff --name-only origin/debian | grep update.sh)
   if [ "$myRESULT" == "update.sh" ];
     then
       echo "###### $myBLUE""Found newer version, will be pulling updates and restart myself.""$myWHITE"
@@ -76,8 +76,8 @@ echo
 
 # Let's check for version
 function fuCHECK_VERSION () {
-local myMINVERSION="18.04.0"
-local myMASTERVERSION="18.11.0"
+local myMINVERSION="19.03.0"
+local myMASTERVERSION="19.03.0"
 echo
 echo "### Checking for version tag ..."
 if [ -f "version" ];
@@ -185,12 +185,11 @@ npm install "https://github.com/taskrabbit/elasticsearch-dump" -g
 pip install --upgrade pip
 hash -r
 pip install --upgrade elasticsearch-curator yq
-wget https://github.com/bcicen/ctop/releases/download/v0.7.1/ctop-0.7.1-linux-amd64 -O /usr/bin/ctop && chmod +x /usr/bin/ctop
+wget https://github.com/bcicen/ctop/releases/download/v0.7.2/ctop-0.7.2-linux-amd64 -O /usr/bin/ctop && chmod +x /usr/bin/ctop
 echo
 
 echo "### Now replacing T-Pot related config files on host"
 cp host/etc/systemd/* /etc/systemd/system/
-cp host/etc/issue /etc/
 systemctl daemon-reload
 echo
 
@@ -234,7 +233,7 @@ echo "### Now pulling latest docker images"
 echo "######$myBLUE This might take a while, please be patient!$myWHITE"
 fuPULLIMAGES 2>&1>/dev/null
 
-fuREMOVEOLDIMAGES "1804"
+#fuREMOVEOLDIMAGES "1804"
 echo "### If you made changes to tpot.yml please ensure to add them again."
 echo "### We stored the previous version as backup in /root/."
 echo "### Done, please reboot."
@@ -267,7 +266,7 @@ fi
 
 fuCHECK_VERSION
 fuCONFIGCHECK
-fuCHECKINET "https://index.docker.io https://github.com https://pypi.python.org https://ubuntu.com"
+fuCHECKINET "https://index.docker.io https://github.com https://pypi.python.org https://debian.org"
 fuSTOP_TPOT
 fuBACKUP
 fuSELFUPDATE "$0" "$@"

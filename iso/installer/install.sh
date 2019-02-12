@@ -543,7 +543,7 @@ npm install https://github.com/taskrabbit/elasticsearch-dump -g 2>&1 | dialog --
 pip install --upgrade pip 2>&1 | dialog --keep-window --title "[ Installing pip ]" $myPROGRESSBOXCONF
 hash -r 2>&1 | dialog --keep-window --title "[ Installing pip ]" $myPROGRESSBOXCONF
 pip install elasticsearch-curator yq 2>&1 | dialog --keep-window --title "[ Installing elasticsearch-curator, yq ]" $myPROGRESSBOXCONF
-wget https://github.com/bcicen/ctop/releases/download/v0.7.1/ctop-0.7.1-linux-amd64 -O /usr/bin/ctop 2>&1 | dialog --keep-window --title "[ Installing ctop ]" $myPROGRESSBOXCONF
+wget https://github.com/bcicen/ctop/releases/download/v0.7.2/ctop-0.7.2-linux-amd64 -O /usr/bin/ctop 2>&1 | dialog --keep-window --title "[ Installing ctop ]" $myPROGRESSBOXCONF
 chmod +x /usr/bin/ctop 2>&1 | dialog --keep-window --title "[ Installing ctop ]" $myPROGRESSBOXCONF
 git clone https://github.com/dtag-dev-sec/tpotce -b debian /opt/tpot 2>&1 | dialog --keep-window --title "[ Cloning T-Pot ]" $myPROGRESSBOXCONF
 
