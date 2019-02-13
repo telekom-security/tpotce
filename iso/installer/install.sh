@@ -187,7 +187,7 @@ fi
 
 #!/bin/bash
 function fuBANNER {
-toilet -f smmono12 -o -F metal "$1" | pv -qL 4000
+toilet -f ivrit -F metal "$1" | pv -qL 3000
 }
 
 # Prepare running the installer
