@@ -548,7 +548,7 @@ fuBANNER "SSH roaming off"
 echo "UseRoaming no" 2>&1 | tee -a /etc/ssh/ssh_config
 
 # Installing ctop, elasticdump, tpot, yq
-fuBANNER "Installing packages"
+fuBANNER "Installing pkgs"
 npm install https://github.com/taskrabbit/elasticsearch-dump -g
 pip install --upgrade pip
 hash -r
@@ -572,7 +572,7 @@ hostnamectl set-hostname $myHOST
 sed -i 's#127.0.1.1.*#127.0.1.1\t'"$myHOST"'#g' /etc/hosts
 
 # Let's patch cockpit.socket, sshd_config
-fuBANNER "Adjust tcp ports"
+fuBANNER "Adjust ports"
 sed -i 's#ListenStream=9090#ListenStream=64294#' /lib/systemd/system/cockpit.socket
 sed -i '/^port/Id' /etc/ssh/sshd_config
 echo "Port 64295" >> /etc/ssh/sshd_config
@@ -621,7 +621,7 @@ myUPDATECHECK="APT::Periodic::Update-Package-Lists \"1\";
 APT::Periodic::Download-Upgradeable-Packages \"0\";
 APT::Periodic::AutocleanInterval \"7\";
 "
-fuBANNER "Modify update checks"
+fuBANNER "Modify checks"
 echo "$myUPDATECHECK" | tee /etc/apt/apt.conf.d/10periodic
 
 # Let's make sure to reboot the system after a kernel panic
@@ -635,7 +635,7 @@ net.ipv6.conf.all.disable_ipv6 = 1
 net.ipv6.conf.default.disable_ipv6 = 1
 net.ipv6.conf.lo.disable_ipv6 = 1
 "
-fuBANNER "Tweak systctl"
+fuBANNER "Tweak sysctl"
 echo "$mySYSCTLCONF" | tee -a /etc/sysctl.conf
 
 # Let's setup fail2ban config
@@ -695,7 +695,7 @@ fuBANNNER "Add cronjobs"
 echo "$myCRONJOBS" | tee -a /etc/crontab
 
 # Let's create some files and folders
-fuBANNER "Create files & folders"
+fuBANNER "Files & folders"
 mkdir -p /data/adbhoney/downloads /data/adbhoney/log \
          /data/ciscoasa/log \
 	 /data/conpot/log \
@@ -727,14 +727,14 @@ cp /opt/tpot/host/etc/systemd/* /etc/systemd/system/
 systemctl enable tpot
 
 # Let's take care of some files and permissions
-fuBANNER "Set permissions"
+fuBANNER "Permissions"
 chmod 760 -R /data
 chown tpot:tpot -R /data
 chmod 644 -R /data/nginx/conf
 chmod 644 -R /data/nginx/cert
 
 # Let's replace "quiet splash" options, set a console font for more screen canvas and update grub
-fuBANNER "Set options"
+fuBANNER "Options"
 sed -i 's#GRUB_CMDLINE_LINUX_DEFAULT="quiet"#GRUB_CMDLINE_LINUX_DEFAULT="quiet consoleblank=0"#' /etc/default/grub
 sed -i 's#GRUB_CMDLINE_LINUX=""#GRUB_CMDLINE_LINUX="cgroup_enable=memory swapaccount=1"#' /etc/default/grub
 update-grub 2>&1
@@ -748,7 +748,7 @@ update-initramfs -u
 sed -i 's#After=.*#After=systemd-tmpfiles-setup.service console-screen.service kbd.service local-fs.target#' /etc/systemd/system/multi-user.target.wants/console-setup.service
 
 # Let's enable a color prompt and add /opt/tpot/bin to path
-fuBANNER "Setup prompts"
+fuBANNER "Setup prompt"
 myROOTPROMPT='PS1="\[\033[38;5;8m\][\[$(tput sgr0)\]\[\033[38;5;1m\]\u\[$(tput sgr0)\]\[\033[38;5;6m\]@\[$(tput sgr0)\]\[\033[38;5;4m\]\h\[$(tput sgr0)\]\[\033[38;5;6m\]:\[$(tput sgr0)\]\[\033[38;5;5m\]\w\[$(tput sgr0)\]\[\033[38;5;8m\]]\[$(tput sgr0)\]\[\033[38;5;1m\]\\$\[$(tput sgr0)\]\[\033[38;5;15m\] \[$(tput sgr0)\]"'
 myUSERPROMPT='PS1="\[\033[38;5;8m\][\[$(tput sgr0)\]\[\033[38;5;2m\]\u\[$(tput sgr0)\]\[\033[38;5;6m\]@\[$(tput sgr0)\]\[\033[38;5;4m\]\h\[$(tput sgr0)\]\[\033[38;5;6m\]:\[$(tput sgr0)\]\[\033[38;5;5m\]\w\[$(tput sgr0)\]\[\033[38;5;8m\]]\[$(tput sgr0)\]\[\033[38;5;2m\]\\$\[$(tput sgr0)\]\[\033[38;5;15m\] \[$(tput sgr0)\]"'
 myROOTCOLORS="export LS_OPTIONS='--color=auto'

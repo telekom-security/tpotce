@@ -5,9 +5,10 @@ export TERM=linux
 
 # Let's define some global vars
 myBACKTITLE="T-Pot - ISO Creator"
-# If you need latest hardware support, try using the hardware enablement (hwe) ISO, usually released later in time
 #myMINIISOLINK="http://ftp.debian.org/debian/dists/testing/main/installer-amd64/current/images/netboot/mini.iso"
-myMINIISOLINK="https://d-i.debian.org/daily-images/amd64/daily/netboot/mini.iso"
+#myMINIISOLINK="https://d-i.debian.org/daily-images/amd64/daily/netboot/mini.iso"
+# For stability reasons Debian Sid installation is built on a stable installer
+myMINIISOLINK="http://ftp.debian.org/debian/dists/stretch/main/installer-amd64/current/images/netboot/mini.iso"
 myMINIISO="mini.iso"
 myTPOTISO="tpot.iso"
 myTPOTDIR="tpotiso"
@@ -274,5 +275,7 @@ do
       break;
   fi
 done
+
+dialog --clear
 
 exit 0
