@@ -185,7 +185,6 @@ npm install "https://github.com/taskrabbit/elasticsearch-dump" -g
 pip install --upgrade pip
 hash -r
 pip install --upgrade elasticsearch-curator yq
-wget https://github.com/bcicen/ctop/releases/download/v0.7.2/ctop-0.7.2-linux-amd64 -O /usr/bin/ctop && chmod +x /usr/bin/ctop
 echo
 
 echo "### Now replacing T-Pot related config files on host"

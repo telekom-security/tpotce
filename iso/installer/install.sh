@@ -560,7 +560,7 @@ echo "$myNETWORK_WLANEXAMPLE" | tee -a /etc/network/interfaces
 fuBANNER "SSH roaming off"
 echo "UseRoaming no" | tee -a /etc/ssh/ssh_config
 
-# Installing ctop, elasticdump, tpot, yq
+# Installing elasticdump, yq
 fuBANNER "Installing pkgs"
 npm install https://github.com/taskrabbit/elasticsearch-dump -g
 pip install --upgrade pip
