@@ -804,7 +804,7 @@ if [ "$myTPOT_DEPLOYMENT_TYPE" == "auto" ];
   then
     echo "Done. Please reboot."
   else
-    sleep 2
     fuBANNER "Rebooting ..."
+    sleep 2
     reboot
 fi
