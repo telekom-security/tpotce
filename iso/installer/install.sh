@@ -7,7 +7,7 @@
 
 # Check for LSB command
 myLSBCMD=$(which lsb_release)
-if [ "$myLSBCHECK" = "" ];
+if [ "$myLSBCMD" = "" ];
   then
     apt-get -y update
     apt-get -y install lsb-release
