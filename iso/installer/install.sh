@@ -5,6 +5,15 @@
 # Extract command line arguments #
 ##################################
 
+# Check for LSB command
+myLSBCMD=$(which lsb_release)
+if [ "$myLSBCHECK" = "" ];
+  then
+    apt-get -y update
+    apt-get -y install lsb-release
+fi
+
+# Check for Debian release
 myLSB=$(lsb_release -c | awk '{ print $2 }')
 myLSB_STABLE_SUPPORTED="stretch"
 myLSB_TESTING_SUPPORTED="sid"
