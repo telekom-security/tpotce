@@ -127,11 +127,11 @@ fi
 
 # Let's check if all dependencies are met
 function fuGET_DEPS {
-local myPACKAGES="apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker curl debconf-utils dialog dnsutils docker.io docker-compose dstat ethtool fail2ban figlet genisoimage git glances grc haveged html2text htop iptables iw jq libcrack2 libltdl7 lm-sensors man mosh multitail net-tools npm ntp openssh-server openssl pass prips software-properties-common syslinux psmisc pv python-pip toilet unattended-upgrades unzip vim wget wireless-tools wpasupplicant"
+local myPACKAGES="apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker console-setup console-setup-linux curl debconf-utils dialog dnsutils docker.io docker-compose dstat ethtool fail2ban figlet genisoimage git glances grc haveged html2text htop iptables iw jq kbd libcrack2 libltdl7 lm-sensors man mosh multitail net-tools npm ntp openssh-server openssl pass prips software-properties-common syslinux psmisc pv python-pip toilet unattended-upgrades unzip vim wget wireless-tools wpasupplicant"
 export DEBIAN_FRONTEND=noninteractive
 apt-get -y update
 apt-get -y install libpq-dev software-properties-common
-tee /etc/apt/sources.list 2>&1>/dev/null <<EOF
+tee /etc/apt/sources.list <<EOF
 deb http://deb.debian.org/debian unstable main contrib non-free
 deb-src http://deb.debian.org/debian unstable main contrib non-free
 EOF
@@ -432,7 +432,10 @@ dialog --clear
 # Installation section #
 ########################
 
-fuBANNER "Installing"
+exec 2> >(tee "/install.err")
+exec > >(tee "/install.log")
+
+fuBANNER "Installing ..."
 
 # Let's generate a SSL self-signed certificate without interaction (browsers will see it invalid anyway)
 if ! [ "$myCONF_TPOT_FLAVOR" == "SENSOR" ];
@@ -490,25 +493,25 @@ ctrl_interface_group=root
 eapol_version=1
 ap_scan=1
 network={
-  ssid="<your_ssid_here_without_brackets>"
+  ssid=\"<your_ssid_here_without_brackets>\"
   key_mgmt=WPA-EAP
   pairwise=CCMP
   group=CCMP
   eap=TLS
-  identity="host/$myCONF_PFX_HOST_ID"
-  private_key="/etc/wpa_supplicant/8021x.pfx"
-  private_key_passwd="$myCONF_PFX_PW"
+  identity=\"host/$myCONF_PFX_HOST_ID\"
+  private_key=\"/etc/wpa_supplicant/8021x.pfx\"
+  private_key_passwd=\"$myCONF_PFX_PW\"
 }
 "
 if [ "myCONF_PFX_USE" == "0" ];
   then
     fuBANNER "Setup 802.1x"
     cp $myCONF_PFX_FILE /etc/wpa_supplicant/
-    echo "$myNETWORK_INTERFACES" 2>&1 | tee -a /etc/network/interfaces
+    echo "$myNETWORK_INTERFACES" | tee -a /etc/network/interfaces
 
-    echo "$myNETWORK_WIRED8021x" 2>&1 | tee /etc/wpa_supplicant/wired8021x.conf
+    echo "$myNETWORK_WIRED8021x" | tee /etc/wpa_supplicant/wired8021x.conf
 
-    echo "$myNETWORK_WLAN8021x" 2>&1 | tee /etc/wpa_supplicant/wireless8021x.conf
+    echo "$myNETWORK_WLAN8021x" | tee /etc/wpa_supplicant/wireless8021x.conf
 fi
 
 # Let's provide a wireless example config ...
@@ -541,11 +544,11 @@ myNETWORK_WLANEXAMPLE="
 #   wpa-psk \"<your_password_here_without_brackets>\"
 "
 fuBANNER "Example config"
-echo "$myNETWORK_WLANEXAMPLE" 2>&1 | tee -a /etc/network/interfaces
+echo "$myNETWORK_WLANEXAMPLE" | tee -a /etc/network/interfaces
 
 # Let's make sure SSH roaming is turned off (CVE-2016-0777, CVE-2016-0778)
 fuBANNER "SSH roaming off"
-echo "UseRoaming no" 2>&1 | tee -a /etc/ssh/ssh_config
+echo "UseRoaming no" | tee -a /etc/ssh/ssh_config
 
 # Installing ctop, elasticdump, tpot, yq
 fuBANNER "Installing pkgs"
@@ -580,28 +583,28 @@ echo "Port 64295" >> /etc/ssh/sshd_config
 # Let's make sure only myCONF_TPOT_FLAVOR images will be downloaded and started
 case $myCONF_TPOT_FLAVOR in
   STANDARD)
-    echo "### Preparing STANDARD flavor installation."
-    ln -s /opt/tpot/etc/compose/standard.yml $myTPOTCOMPOSE 2>&1>/dev/null
+    fuBANNER "STANDARD flavor"
+    ln -s /opt/tpot/etc/compose/standard.yml $myTPOTCOMPOSE
   ;;
   SENSOR)
-    echo "### Preparing SENSOR flavor installation."
-    ln -s /opt/tpot/etc/compose/sensor.yml $myTPOTCOMPOSE 2>&1>/dev/null
+    fuBANNER "SENSOR flavor"
+    ln -s /opt/tpot/etc/compose/sensor.yml $myTPOTCOMPOSE
   ;;
   INDUSTRIAL)
-    echo "### Preparing INDUSTRIAL flavor installation."
-    ln -s /opt/tpot/etc/compose/industrial.yml $myTPOTCOMPOSE 2>&1>/dev/null
+    fuBANNER "INDUSTRIAL flavor"
+    ln -s /opt/tpot/etc/compose/industrial.yml $myTPOTCOMPOSE
   ;;
   COLLECTOR)
-    echo "### Preparing COLLECTOR flavor installation."
-    ln -s /opt/tpot/etc/compose/collector.yml $myTPOTCOMPOSE 2>&1>/dev/null
+    fuBANNER "COLLECTOR flavor"
+    ln -s /opt/tpot/etc/compose/collector.yml $myTPOTCOMPOSE
   ;;
   NEXTGEN)
-    echo "### Preparing NEXTGEN flavor installation."
-    ln -s /opt/tpot/etc/compose/nextgen.yml $myTPOTCOMPOSE 2>&1>/dev/null
+    fuBANNER "NEXTGEN flavor"
+    ln -s /opt/tpot/etc/compose/nextgen.yml $myTPOTCOMPOSE
   ;;
   LEGACY)
-    echo "### Preparing LEGACY flavor installation."
-    ln -s /opt/tpot/etc/compose/legacy.yml $myTPOTCOMPOSE 2>&1>/dev/null
+    fuBANNER "LEGACY flavor"
+    ln -s /opt/tpot/etc/compose/legacy.yml $myTPOTCOMPOSE
   ;;
 esac
 
@@ -691,7 +694,7 @@ myCRONJOBS="
 # Check for updated packages every sunday, upgrade and reboot
 27 16 * * 0     root    apt-get autoclean -y && apt-get autoremove -y && apt-get update -y && apt-get upgrade -y && sleep 10 && reboot
 "
-fuBANNNER "Add cronjobs"
+fuBANNER "Add cronjobs"
 echo "$myCRONJOBS" | tee -a /etc/crontab
 
 # Let's create some files and folders
@@ -737,7 +740,7 @@ chmod 644 -R /data/nginx/cert
 fuBANNER "Options"
 sed -i 's#GRUB_CMDLINE_LINUX_DEFAULT="quiet"#GRUB_CMDLINE_LINUX_DEFAULT="quiet consoleblank=0"#' /etc/default/grub
 sed -i 's#GRUB_CMDLINE_LINUX=""#GRUB_CMDLINE_LINUX="cgroup_enable=memory swapaccount=1"#' /etc/default/grub
-update-grub 2>&1
+update-grub
 
 fuBANNER "Setup console"
 cp /usr/share/consolefonts/Uni2-Terminus12x6.psf.gz /etc/console-setup/
@@ -779,12 +782,12 @@ apt-get autoclean -y
 apt-get autoremove -y
 
 # Final steps
-cp /opt/tpot/host/etc/rc.local /etc/rc.local 2>&1>/dev/null && \
-rm -rf /root/installer 2>&1>/dev/null && \
-rm -rf /etc/issue.d/cockpit.issue 2>&1>/dev/null && \
-rm -rf /etc/motd.d/cockpit 2>&1>/dev/null && \
-rm -rf /etc/issue.net 2>&1>/dev/null && \
-rm -rf /etc/motd 2>&1>/dev/null && \
+cp /opt/tpot/host/etc/rc.local /etc/rc.local && \
+rm -rf /root/installer && \
+rm -rf /etc/issue.d/cockpit.issue && \
+rm -rf /etc/motd.d/cockpit && \
+rm -rf /etc/issue.net && \
+rm -rf /etc/motd && \
 if [ "$myTPOT_DEPLOYMENT_TYPE" == "auto" ];
   then
     echo "Done. Please reboot."
