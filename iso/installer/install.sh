@@ -196,7 +196,8 @@ fi
 
 #!/bin/bash
 function fuBANNER {
-toilet -f ivrit -F metal "$1" | pv -qL 3000
+#toilet -f ivrit -F metal "$1" | pv -qL 3000
+toilet -f ivrit "$1"
 }
 
 # Prepare running the installer
@@ -592,27 +593,27 @@ echo "Port 64295" >> /etc/ssh/sshd_config
 # Let's make sure only myCONF_TPOT_FLAVOR images will be downloaded and started
 case $myCONF_TPOT_FLAVOR in
   STANDARD)
-    fuBANNER "STANDARD flavor"
+    fuBANNER "STANDARD"
     ln -s /opt/tpot/etc/compose/standard.yml $myTPOTCOMPOSE
   ;;
   SENSOR)
-    fuBANNER "SENSOR flavor"
+    fuBANNER "SENSOR"
     ln -s /opt/tpot/etc/compose/sensor.yml $myTPOTCOMPOSE
   ;;
   INDUSTRIAL)
-    fuBANNER "INDUSTRIAL flavor"
+    fuBANNER "INDUSTRIAL"
     ln -s /opt/tpot/etc/compose/industrial.yml $myTPOTCOMPOSE
   ;;
   COLLECTOR)
-    fuBANNER "COLLECTOR flavor"
+    fuBANNER "COLLECTOR"
     ln -s /opt/tpot/etc/compose/collector.yml $myTPOTCOMPOSE
   ;;
   NEXTGEN)
-    fuBANNER "NEXTGEN flavor"
+    fuBANNER "NEXTGEN"
     ln -s /opt/tpot/etc/compose/nextgen.yml $myTPOTCOMPOSE
   ;;
   LEGACY)
-    fuBANNER "LEGACY flavor"
+    fuBANNER "LEGACY"
     ln -s /opt/tpot/etc/compose/legacy.yml $myTPOTCOMPOSE
   ;;
 esac
@@ -801,7 +802,8 @@ if [ "$myTPOT_DEPLOYMENT_TYPE" == "auto" ];
   then
     echo "Done. Please reboot."
   else
-    dialog --no-ok --no-cancel --backtitle "$myBACKTITLE" --title "[ Thanks for your patience. Now rebooting. ]" --pause "" 6 80 2 && \
+    reset
+    dialog --clear --no-ok --no-cancel --backtitle "$myBACKTITLE" --title "[ Thanks for your patience. Now rebooting. ]" --pause "" 6 80 2 && \
     systemctl restart console-setup.service
     dialog --clear
     reboot
