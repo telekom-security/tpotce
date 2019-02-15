@@ -1,6 +1,6 @@
-# T-Pot 18.11
+# T-Pot 19.03 
 
-T-Pot 18.11 runs on the latest 18.04.x LTS Ubuntu Server Network Installer image, is based on
+T-Pot 19.03 runs on Debian (Sid), is based heavily on
 
 [docker](https://www.docker.com/), [docker-compose](https://docs.docker.com/compose/)
 
