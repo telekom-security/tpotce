@@ -798,13 +798,13 @@ rm -rf /etc/issue.d/cockpit.issue && \
 rm -rf /etc/motd.d/cockpit && \
 rm -rf /etc/issue.net && \
 rm -rf /etc/motd && \
+systemctl restart console-setup.service
+
 if [ "$myTPOT_DEPLOYMENT_TYPE" == "auto" ];
   then
     echo "Done. Please reboot."
   else
-    reset
-    dialog --clear --no-ok --no-cancel --backtitle "$myBACKTITLE" --title "[ Thanks for your patience. Now rebooting. ]" --pause "" 6 80 2 && \
-    systemctl restart console-setup.service
-    dialog --clear
+    sleep 2
+    fuBANNER "Rebooting ..."
     reboot
 fi
