@@ -1,19 +1,63 @@
 #!/bin/bash
 # T-Pot Universal Installer
 
-#######################################
-# Check for package requirements.     #
-# If not present ask for installation #
-#######################################
+#############
+# Got root? #
+#############
 
-###### TO DO ######
+function fuGOT_ROOT {
+echo
+echo -n "### Checking for root: "
+if [ "$(whoami)" != "root" ];
+  then
+    echo "[ NOT OK ]"
+    echo "### Please run as root."
+    echo "### Example: sudo $0"
+    exit
+  else
+    echo "[ OK ]"
+fi
+}
+fuGOT_ROOT
+
+############################################
+# Check for instaler package requirements. #
+# If not present ask for installation      #
+############################################
+
+function fuCHECKPACKAGES {
+  echo
+  echo -n "### Checking for installer dependencies: "
+  local myPACKAGES="$1"
+  local myINST=""
+  for myDEPS in $myPACKAGES;
+  do
+    myOK=$(dpkg -s $myDEPS | grep ok | awk '{ print $3 }' | head -n 1);
+    if [ "$myOK" != "ok" ]
+      then
+        myINST=$(echo $myINST $myDEPS)
+    fi
+  done
+  if [ "$myINST" != "" ]
+    then
+      echo "[ NOW INSTALLING ]"
+      apt-get update -y
+      for myDEPS in $myINST;
+      do
+        apt-get install $myDEPS -y
+      done
+    else
+      echo "[ OK ]"
+  fi
+}
+fuCHECKPACKAGES "curl dialog lsb-release"
 
 ##################################
 # Check if internet is available #
 ##################################
 
 function fuCHECKNET {
-  local mySITES=$1
+  local mySITES="$1"
   local myBACKTITLE="Network Check"
   mySITESCOUNT=$(echo $mySITES | wc -w)
   j=0
@@ -41,14 +85,6 @@ fuCHECKNET "https://hub.docker.com https://github.com https://pypi.python.org ht
 ##################################
 # Extract command line arguments #
 ##################################
-
-# Check for LSB command
-myLSBCMD=$(which lsb_release)
-if [ "$myLSBCMD" = "" ];
-  then
-    apt-get -y update
-    apt-get -y install lsb-release
-fi
 
 # Check for Debian release
 myLSB=$(lsb_release -c | awk '{ print $2 }')
@@ -156,21 +192,6 @@ fi
 # Prepare environment #
 #######################
 
-# Got root?
-function fuGOT_ROOT {
-echo
-echo -n "### Checking for root: "
-if [ "$(whoami)" != "root" ];
-  then
-    echo "[ NOT OK ]"
-    echo "### Please run as root."
-    echo "### Example: sudo $0"
-    exit
-  else
-    echo "[ OK ]"
-fi
-}
-
 # Let's check if all dependencies are met
 function fuGET_DEPS {
 local myPACKAGES="apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker console-setup console-setup-linux curl debconf-utils dialog dnsutils docker.io docker-compose dstat ethtool fail2ban figlet genisoimage git glances grc haveged html2text htop iptables iw jq kbd libcrack2 libltdl7 lm-sensors man mosh multitail net-tools npm ntp openssh-server openssl pass prips software-properties-common syslinux psmisc pv python-pip toilet unattended-upgrades unzip vim wget wireless-tools wpasupplicant"
@@ -231,15 +252,12 @@ if [ "$myTPOT_DEPLOYMENT_TYPE" == "user" ];
 fi
 }
 
-#!/bin/bash
 function fuBANNER {
-#toilet -f ivrit -F metal "$1" | pv -qL 3000
-toilet -f ivrit "$1"
+  toilet -f ivrit "$1"
 }
 
 # Prepare running the installer
 echo "$myINFO" | head -n 3
-fuGOT_ROOT
 fuGET_DEPS
 fuCHECK_PORTS
 
