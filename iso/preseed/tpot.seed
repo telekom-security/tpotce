@@ -109,7 +109,7 @@ tasksel tasksel/first multiselect ssh-server
 ########################
 ### Package Installation
 ########################
-d-i pkgsel/include string git lsb-release
+d-i pkgsel/include string curl dialog git lsb-release
 popularity-contest popularity-contest/participate boolean false
 
 #################
