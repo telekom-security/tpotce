@@ -13,7 +13,7 @@ myTPOTCOMPOSE="/opt/tpot/etc/tpot.yml"
 myLSB_STABLE_SUPPORTED="stretch"
 myLSB_TESTING_SUPPORTED="sid"
 myREMOTESITES="https://hub.docker.com https://github.com https://pypi.python.org https://debian.org"
-myPREINSTALLPACKAGES="apache2-utils curl dialog grc figlet libcrack2 libpq-dev lsb-release software-properties-common toilet"
+myPREINSTALLPACKAGES="apache2-utils curl dialog figlet grc libcrack2 libpq-dev lsb-release software-properties-common toilet"
 myINSTALLPACKAGES="apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker console-setup console-setup-linux curl debconf-utils dialog dnsutils docker.io docker-compose dstat ethtool fail2ban figlet genisoimage git glances grc haveged html2text htop iptables iw jq kbd libcrack2 libltdl7 lm-sensors man mosh multitail net-tools npm ntp openssh-server openssl pass prips software-properties-common syslinux psmisc pv python-pip toilet unattended-upgrades unzip vim wget wireless-tools wpasupplicant"
 myINFO="\
 ########################################
@@ -209,12 +209,6 @@ fi
 # If not present install them
 function fuCHECKPACKAGES {
   export DEBIAN_FRONTEND=noninteractive
-  # Point to Debian (Sid, unstable)
-  tee /etc/apt/sources.list <<EOF
-deb http://deb.debian.org/debian unstable main contrib non-free
-deb-src http://deb.debian.org/debian unstable main contrib non-free
-EOF
-  apt-get -y update
   echo -n "### Checking for installer dependencies: "
   local myPACKAGES="$1"
   local myINST=""
@@ -270,21 +264,30 @@ function fuCHECKNET {
 
 # Install T-Pot dependencies
 function fuGET_DEPS {
-export DEBIAN_FRONTEND=noninteractive
-echo
-echo "### Upgrading packages."
-echo
-# Downlaod and upgrade packages, but silently keep existing configs
-echo "docker.io docker.io/restart       boolean true" | debconf-set-selections -v
-echo "debconf debconf/frontend select noninteractive" | debconf-set-selections -v
-apt-get -y dist-upgrade -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes
-echo
-echo "### Installing T-Pot dependencies."
-echo
-apt-get -y install $myINSTALLPACKAGES
-# Remove exim4
-apt-get -y purge exim4-base
-apt-get -y autoremove
+  export DEBIAN_FRONTEND=noninteractive
+  # Point to Debian (Sid, unstable)
+  tee /etc/apt/sources.list <<EOF
+deb http://deb.debian.org/debian unstable main contrib non-free
+deb-src http://deb.debian.org/debian unstable main contrib non-free
+EOF
+  echo
+  echo "### Getting update information."
+  echo
+  apt-get -y update
+  echo
+  echo "### Upgrading packages."
+  echo
+  # Downlaod and upgrade packages, but silently keep existing configs
+  echo "docker.io docker.io/restart       boolean true" | debconf-set-selections -v
+  echo "debconf debconf/frontend select noninteractive" | debconf-set-selections -v
+  apt-get -y dist-upgrade -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes
+  echo
+  echo "### Installing T-Pot dependencies."
+  echo
+  apt-get -y install $myINSTALLPACKAGES
+  # Remove exim4
+  apt-get -y purge exim4-base
+  apt-get -y autoremove
 }
 
 # Check for other services
