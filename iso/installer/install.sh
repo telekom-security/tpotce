@@ -13,7 +13,7 @@ myTPOTCOMPOSE="/opt/tpot/etc/tpot.yml"
 myLSB_STABLE_SUPPORTED="stretch"
 myLSB_TESTING_SUPPORTED="sid"
 myREMOTESITES="https://hub.docker.com https://github.com https://pypi.python.org https://debian.org"
-myPREINSTALLPACKAGES="apache2-utils curl dialog figlet libcrack2 libpq-dev lsb-release software-properties-common toilet"
+myPREINSTALLPACKAGES="apache2-utils curl dialog figlet grc libcrack2 libpq-dev lsb-release net-tools software-properties-common toilet"
 myINSTALLPACKAGES="apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker console-setup console-setup-linux curl debconf-utils dialog dnsutils docker.io docker-compose dstat ethtool fail2ban figlet genisoimage git glances grc haveged html2text htop iptables iw jq kbd libcrack2 libltdl7 lm-sensors man mosh multitail net-tools npm ntp openssh-server openssl pass prips software-properties-common syslinux psmisc pv python-pip toilet unattended-upgrades unzip vim wget wireless-tools wpasupplicant"
 myINFO="\
 ########################################
@@ -297,7 +297,7 @@ if [ "$myTPOT_DEPLOYMENT_TYPE" == "user" ];
     echo
     echo "### Checking for active services."
     echo
-    netstat -tulpen
+    grc netstat -tulpen
     echo
     echo "### Please review your running services."
     echo "### We will take care of SSH (22), but other services i.e. FTP (21), TELNET (23), SMTP (25), HTTP (80), HTTPS (443), etc."
