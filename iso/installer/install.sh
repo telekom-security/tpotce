@@ -241,28 +241,31 @@ EOF
 
 # Check if remote sites are available
 function fuCHECKNET {
-  local mySITES="$1"
-  local myBACKTITLE="Availability check"
-  mySITESCOUNT=$(echo $mySITES | wc -w)
-  j=0
-  for i in $mySITES;
-    do
-      echo $(expr 100 \* $j / $mySITESCOUNT) | dialog --title "[ Availability check ]" --backtitle "$myBACKTITLE" --gauge "\n  Now checking: $i\n" 8 80
-      curl --connect-timeout 30 -IsS $i 2>&1>/dev/null
-      if [ $? -ne 0 ];
-        then
-          dialog --keep-window --backtitle "$myBACKTITLE" --title "[ Continue? ]" --yesno "\nAvailability check failed. You can continue, but the installation might fail." 10 50
-          if [ $? = 1 ];
+  if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ] || [ "$myTPOT_DEPLOYMENT_TYPE" == "user" ];
+    then
+      local mySITES="$1"
+      local myBACKTITLE="Availability check"
+      mySITESCOUNT=$(echo $mySITES | wc -w)
+      j=0
+      for i in $mySITES;
+        do
+          echo $(expr 100 \* $j / $mySITESCOUNT) | dialog --title "[ Availability check ]" --backtitle "$myBACKTITLE" --gauge "\n  Now checking: $i\n" 8 80
+          curl --connect-timeout 30 -IsS $i 2>&1>/dev/null
+          if [ $? -ne 0 ];
             then
-              dialog --keep-window --backtitle "$myBACKTITLE" --title "[ Abort ]" --msgbox "\nInstallation aborted. Exiting the installer." 7 50
-              exit
-            else
-              break;
+              dialog --keep-window --backtitle "$myBACKTITLE" --title "[ Continue? ]" --yesno "\nAvailability check failed. You can continue, but the installation might fail." 10 50
+              if [ $? = 1 ];
+                then
+                  dialog --keep-window --backtitle "$myBACKTITLE" --title "[ Abort ]" --msgbox "\nInstallation aborted. Exiting the installer." 7 50
+                  exit
+                else
+                  break;
+              fi;
           fi;
-      fi;
-    let j+=1
-    echo $(expr 100 \* $j / $mySITESCOUNT) | dialog --keep-window --title "[ Availability check ]" --backtitle "$myBACKTITLE" --gauge "\n  Now checking: $i\n" 8 80
-  done;
+        let j+=1
+        echo $(expr 100 \* $j / $mySITESCOUNT) | dialog --keep-window --title "[ Availability check ]" --backtitle "$myBACKTITLE" --gauge "\n  Now checking: $i\n" 8 80
+      done;
+  fi
 }
 
 # Install T-Pot dependencies
@@ -318,7 +321,6 @@ fi
 ############################
 fuGOT_ROOT
 fuCHECKPACKAGES "$myPREINSTALLPACKAGES"
-fuCHECKNET "$myREMOTESITES"
 
 #####################################
 # IV. Prepare installer environment #
@@ -417,6 +419,9 @@ if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ];
     sleep 5
     dialog --keep-window --no-ok --no-cancel --backtitle "$myBACKTITLE" --title "[ Wait to avoid interference with service messages ]" --pause "" 6 80 7
 fi
+
+# Check if remote sites are available
+fuCHECKNET "$myREMOTESITES"
 
 # Let' s load the iso config file if there is one
 if [ -f $myCONF_FILE ];
