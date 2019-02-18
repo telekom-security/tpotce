@@ -297,7 +297,7 @@ if [ "$myTPOT_DEPLOYMENT_TYPE" == "user" ];
     echo
     echo "### Checking for active services."
     echo
-    grc netstat -tulpen
+    netstat -tulpen
     echo
     echo "### Please review your running services."
     echo "### We will take care of SSH (22), but other services i.e. FTP (21), TELNET (23), SMTP (25), HTTP (80), HTTPS (443), etc."
