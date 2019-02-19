@@ -670,6 +670,9 @@ sed -i 's#ListenStream=9090#ListenStream=64294#' /lib/systemd/system/cockpit.soc
 sed -i '/^port/Id' /etc/ssh/sshd_config
 echo "Port 64295" >> /etc/ssh/sshd_config
 
+# Do not allow root login for cockpit
+sed -i '2i\auth requisite pam_succeed_if.so uid >= 1000' /etc/pam.d/cockpit
+
 # Let's make sure only myCONF_TPOT_FLAVOR images will be downloaded and started
 case $myCONF_TPOT_FLAVOR in
   STANDARD)
