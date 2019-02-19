@@ -1,4 +1,4 @@
-# T-Pot 19.03 
+# T-Pot 19.03
 
 T-Pot 19.03 runs on Debian (Sid), is based heavily on
 
@@ -70,47 +70,13 @@ Furthermore we use the following tools
 - [Fun Fact](#funfact)
 
 <a name="changelog"></a>
-# Changelog
-- **New honeypots**
-  - *Adbhoney* Low interaction honeypot designed for Android Debug Bridge over TCP/IP.
-  - *Ciscoasa* a low interaction honeypot for the Cisco ASA component capable of detecting CVE-2018-0101, a DoS and remote code execution vulnerability.
-  - *Glutton* (NextGen) is the all eating honeypot
-  - *Heralding* a credentials catching honeypot.
-  - *Medpot* is a HL7 / FHIR honeypot.
-  - *Snare* is a web application honeypot sensor, is the successor of Glastopf. SNARE has feature parity with Glastopf and allows to convert existing web pages into attack surfaces.
-  - *Tanner* is SNARES' "brain". Every event is send from SNARE to TANNER, gets evaluated and TANNER decides how SNARE should respond to the client. This allows us to change the behaviour of many sensors on the fly. We are providing a TANNER instance for your use, but there is nothing stopping you from setting up your own instance.
-- **New tools**
-  - *Cockpit* is an interactive server admin interface. It is easy to use and very lightweight. Cockpit interacts directly with the operating system from a real Linux session in a browser.
-  - *Cyberchef* is the Cyber Swiss Army Knife - a web app for encryption, encoding, compression and data analysis.
-  - *grc* (commandline) is yet another colouriser (written in python) for beautifying your logfiles or output of commands.
-  - *multitail* (commandline) allows you to monitor logfiles and command output in multiple windows in a terminal, colorize, filter and merge.
-  - *tped.sh* (commandline) allows you to switch between T-Pot Editions after installation.
+# Release Notes
+- **Move from Ubuntu 18.04 to Debian (Sid)**
+  - For almost 5 years Ubuntu LTS versions were our distributions of choice. Last year we made a design choice for T-Pot to be closer to a rolling release model and thus allowing us to issue smaller changes and releases in a timely manner. The distribution of choice is Debian (Sid / unstable) which will provide us with the latest advancements in Debian based distribution.
+- **Docker images will keep the 1811 tag**
+  - The docker images will keep the 1811 tag.
 - **Deprecated tools**
-  - *Netdata*, *Portainer* and *WeTTY* were superseded by *Cockpit* which is much more lightweight, perfectly well integrated into Ubuntu 18.04 LTS and of course comes with the same but a more basic feature set.
-- **New Standard Installation**
-  - The new standard installation is now running a whopping *14* honeypot instances.
-- **T-Pot Universal Installer**
-  - The T-Pot installer now also includes the option to install on a existing machine, the T-Pot-Autoinstaller is no longer necessary.
-- **Tighten Security**
-  - The docker containers are now running mostly with a read-only file system
-  - If possible using `setcap` to start daemons without root or dropping privileges
-  - Introducing `fail2ban` to ease up on `authorized_keys` requirement which is no longer necessary for `SSH`. Also to further prevent brute-force attacks on `Cockpit` and `NGINX` allowing for faster load times of the WebUI.
-- **Iptables exceptions for NFQ based honeypots**
-  - In previous versions `iptables`had manually be maintained, now a a script parses `/opt/tpot/etc/tpot.yml` and extracts port information to automatically generate exceptions for ports that should not be forwarded to NFQ.
-- **CI**
-  - The Kibana UI now uses a magenta theme.
-- **ES HEAD**
-  - A Java Script now automatically enters the correct FQDN / IP. A manual step is no longer required.
-- **ELK STACK**
-  - The ELK Stack was updated to the latest 6.x versions.
-  - This also means you can now expect the availability of basic *X-Pack-Feaures*, the full feature set however is only available to users with a valid license.
-- **Dashboards Makeover**
-  - Because Kibana 6.x introduced so much whitespace the dashboards and some of the visualizations needed some overhaul. While it probably needs some getting used to the key was to focus on displaying as much information while not compromising on clarity.  
-  - Because of the new honeypots we now more than **200 Visualizations** pre-configured and compiled to 16 individual **Kibana Dashboards**. Monitor all *honeypot events* locally on your T-Pot installation. Aside from *honeypot events* you can also view *Suricata NSM and NGINX* events for a quick overview of wire events.
-- **Honeypot updates and improvements**
-  - All honeypots were updated to their latest stable versions.
-  - Docker images were mostly overhauled to tighten security even further
-  - Some of the honeypot configurations were modified to keep things fresh
+  - *ctop* will no longer be part of T-Pot.
 - **Update Feature**
   - For the ones who like to live on the bleeding edge of T-Pot development there is now a update script available in `/opt/tpot/update.sh`.
   - This feature is now in beta and is mostly intended to provide you with the latest development advances without the need of reinstalling T-Pot.
@@ -118,7 +84,7 @@ Furthermore we use the following tools
 <a name="concept"></a>
 # Technical Concept
 
-T-Pot is based on the network installer of Ubuntu Server 18.04.x LTS.
+T-Pot is based on the network installer Debian (Stretch). During installation the whole system will be updated to Debian (Sid).
 The honeypot daemons as well as other support components being used have been containerized using [docker](http://docker.io).
 This allows us to run multiple honeypot daemons on the same network interface while maintaining a small footprint and constrain each honeypot within its own environment.
 
@@ -151,7 +117,7 @@ In T-Pot we combine the dockerized honeypots ...
 
 ![Architecture](doc/architecture.png)
 
-While data within docker containers is volatile we do now ensure a default 30 day persistence of all relevant honeypot and tool data in the well known `/data` folder and sub-folders. The persistence configuration may be adjusted in `/opt/tpot/etc/logrotate/logrotate.conf`. Once a docker container crashes, all other data produced within its environment is erased and a fresh instance is started from the corresponding docker image.<br>
+While data within docker containers is volatile we do ensure a default 30 day persistence of all relevant honeypot and tool data in the well known `/data` folder and sub-folders. The persistence configuration may be adjusted in `/opt/tpot/etc/logrotate/logrotate.conf`. Once a docker container crashes, all other data produced within its environment is erased and a fresh instance is started from the corresponding docker image.<br>
 
 Basically, what happens when the system is booted up is the following:
 
@@ -227,7 +193,7 @@ Depending on your installation type, whether you install on [real hardware](#har
 # Installation
 The installation of T-Pot is straight forward and heavily depends on a working, transparent and non-proxied up and running internet connection. Otherwise the installation **will fail!**
 
-Firstly, decide if you want to download our prebuilt installation ISO image from [GitHub](https://github.com/dtag-dev-sec/tpotce/releases), [create it yourself](#createiso) ***or*** [post-install on a existing Ubuntu Server 18.04 LTS](#postinstall).
+Firstly, decide if you want to download our prebuilt installation ISO image from [GitHub](https://github.com/dtag-dev-sec/tpotce/releases), [create it yourself](#createiso) ***or*** [post-install on an existing Debian 9.7 (Stretch)](#postinstall).
 
 Secondly, decide where you want to let the system run: [real hardware](#hardware) or in a [virtual machine](#vm)?
 
@@ -241,7 +207,7 @@ You can download the prebuilt installation image from [GitHub](https://github.co
 For transparency reasons and to give you the ability to customize your install, we provide you the [ISO Creator](https://github.com/dtag-dev-sec/tpotce) that enables you to create your own ISO installation image.
 
 **Requirements to create the ISO image:**
-- Ubuntu 18.04 LTS or newer as host system (others *may* work, but *remain* untested)
+- Debian 9.7 or newer as host system (others *may* work, but *remain* untested)
 - 4GB of free memory  
 - 32GB of free storage
 - A working internet connection
@@ -284,17 +250,17 @@ If you decide to run T-Pot on dedicated hardware, just follow these steps:
 Whereas most CD burning tools allow you to burn from ISO images, the procedure to create a bootable USB stick from an ISO image depends on your system. There are various Windows GUI tools available, e.g. [this tip](http://www.ubuntu.com/download/desktop/create-a-usb-stick-on-windows) might help you.<br> On [Linux](http://askubuntu.com/questions/59551/how-to-burn-a-iso-to-a-usb-device) or [MacOS](http://www.ubuntu.com/download/desktop/create-a-usb-stick-on-mac-osx) you can use the tool *dd* or create the USB stick with T-Pot's [ISO Creator](https://github.com/dtag-dev-sec).
 2. Boot from the USB stick and install.
 
-*Please note*: We will ensure the compatibility with the Intel NUC platform, as we really like the form factor, looks and build quality. Other platforms **remain untested**.
+*Please note*: While we are performing limited tests with the Intel NUC platform other hardware platforms **remain untested**. We can not provide hardware support of any kind.
 
 <a name="postinstall"></a>
 ## Post-Install User
-In some cases it is necessary to install Ubuntu Server 18.04 LTS on your own:
+In some cases it is necessary to install Debian 9.7 (Stretch) on your own:
  - Cloud provider does not offer mounting ISO images.
  - Hardware setup needs special drivers and / or kernels.
  - Within your company you have to setup special policies, software etc.
  - You just like to stay on top of things.
 
-While the T-Pot-Autoinstaller served us perfectly well in the past we decided to include the feature directly into T-Pot and its Universal Installer.
+The T-Pot Universal Installer will upgrade the system to Debian (Sid) and install all required T-Pot dependencies.
 
 Just follow these steps:
 
@@ -344,7 +310,7 @@ You can also login from your browser and access the Web UI: `https://<your.ip>:6
 
 <a name="placement"></a>
 # System Placement
-Make sure your system is reachable through the internet. Otherwise it will not capture any attacks, other than the ones from your  internal network! We recommend you put it in an unfiltered zone, where all TCP and UDP traffic is forwarded to T-Pot's network interface. However to avoid fingerprinting you can put T-Pot behind a firewall and forward all TCP / UDP traffic in the port range of 1-64000 to T-Pot while allowing access to ports > 64000 only from trusted IPs.
+Make sure your system is reachable through a network you suspect intruders in / from (i.e. the internet). Otherwise T-Pot will most likely not capture any attacks, other than the ones from your  internal network! We recommend you put it in an unfiltered zone, where all TCP and UDP traffic is forwarded to T-Pot's network interface. However to avoid fingerprinting you can put T-Pot behind a firewall and forward all TCP / UDP traffic in the port range of 1-64000 to T-Pot while allowing access to ports > 64000 only from trusted IPs.
 
 A list of all relevant ports is available as part of the [Technical Concept](#concept)
 <br>
@@ -355,7 +321,7 @@ In case you need external Admin UI access, forward TCP port 64294 to T-Pot, see 
 In case you need external SSH access, forward TCP port 64295 to T-Pot, see below.
 In case you need external Web UI access, forward TCP port 64297 to T-Pot, see below.
 
-T-Pot requires outgoing git, http, https connections for updates (Ubuntu, Docker, GitHub, PyPi) and attack submission (ewsposter, hpfeeds). Ports and availability may vary based on your geographical location.
+T-Pot requires outgoing git, http, https connections for updates (Debian, Docker, GitHub, PyPi) and attack submission (ewsposter, hpfeeds). Ports and availability may vary based on your geographical location.
 
 <a name="updates"></a>
 # Updates
@@ -363,10 +329,9 @@ For the ones of you who want to live on the bleeding edge of T-Pot development w
 **If you made any relevant changes to the T-Pot relevant config files make sure to create a backup first.**
 - The Update script will
  - **merciless** overwrite local changes to be in sync with the T-Pot master branch
- - upgrade the system to the latest kernel within Ubuntu 18.04.x LTS
- - upgrade the system to the latest packages available within Ubuntu 18.04.x LTS
- - update all resources to be en par with the T-Pot master branch
- - ensure all T-Pot relevant system files will be patched / copied into original T-Pot state
+ - upgrade the system to the packages available in Debian (Sid)
+ - update all resources to be in-sync with the T-Pot master branch
+ - ensure all T-Pot relevant system files will be patched / copied into the original T-Pot state
 
 You simply run the update script:
 ```
@@ -482,12 +447,12 @@ The software that T-Pot is built on uses the following licenses.
 <br>GPLv2: [conpot)](https://github.com/mushorg/conpot/blob/master/LICENSE.txt), [dionaea](https://github.com/DinoTools/dionaea/blob/master/LICENSE), [honeytrap](https://github.com/armedpot/honeytrap/blob/master/LICENSE), [suricata](http://suricata-ids.org/about/open-source/)
 <br>GPLv3: [adbhoney](https://github.com/huuck/ADBHoney), [elasticpot](https://github.com/schmalle/ElasticPot), [ewsposter](https://github.com/dtag-dev-sec/ews/), [glastopf](https://github.com/glastopf/glastopf/blob/master/GPL), [rdpy](https://github.com/citronneur/rdpy/blob/master/LICENSE), [heralding](https://github.com/johnnykv/heralding/blob/master/LICENSE.txt), [snare](https://github.com/mushorg/snare/blob/master/LICENSE), [tanner](https://github.com/mushorg/snare/blob/master/LICENSE)
 <br>Apache 2 License: [cyberchef](https://github.com/gchq/CyberChef/blob/master/LICENSE), [elasticsearch](https://github.com/elasticsearch/elasticsearch/blob/master/LICENSE.txt), [logstash](https://github.com/elasticsearch/logstash/blob/master/LICENSE), [kibana](https://github.com/elasticsearch/kibana/blob/master/LICENSE.md), [docker](https://github.com/docker/docker/blob/master/LICENSE), [elasticsearch-head](https://github.com/mobz/elasticsearch-head/blob/master/LICENCE)
-<br>MIT license: [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/blob/master/LICENSE), [ctop](https://github.com/bcicen/ctop/blob/master/LICENSE), [glutton](https://github.com/mushorg/glutton/blob/master/LICENSE)
-<br> Other: [cowrie](https://github.com/micheloosterhof/cowrie/blob/master/LICENSE.md), [mailoney](https://github.com/awhitehatter/mailoney), [Ubuntu licensing](http://www.ubuntu.com/about/about-ubuntu/licensing)
+<br>MIT license: [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/blob/master/LICENSE), [glutton](https://github.com/mushorg/glutton/blob/master/LICENSE)
+<br> Other: [cowrie](https://github.com/micheloosterhof/cowrie/blob/master/LICENSE.md), [mailoney](https://github.com/awhitehatter/mailoney), [Debian licensing](https://www.debian.org/legal/licenses/)
 
 <a name="credits"></a>
 # Credits
-Without open source and the fruitful development community we are proud to be a part of, T-Pot would not have been possible! Our thanks are extended but not limited to the following people and organizations:
+Without open source and the fruitful development community (we are proud to be a part of), T-Pot would not have been possible! Our thanks are extended but not limited to the following people and organizations:
 
 ### The developers and development communities of
 
@@ -519,7 +484,7 @@ Without open source and the fruitful development community we are proud to be a 
 * [ubuntu](http://www.ubuntu.com/)
 
 ### The following companies and organizations
-* [canonical](http://www.canonical.com/)
+* [debian](https://www.debian.org/)
 * [docker](https://www.docker.com/)
 * [elastic.io](https://www.elastic.co/)
 * [honeynet project](https://www.honeynet.org/)
@@ -534,4 +499,4 @@ We will be releasing a new version of T-Pot about every 6-12 months.
 <a name="funfact"></a>
 # Fun Fact
 
-In an effort of saving the environment we are now brewing our own Mate Ice Tea and consumed 241 liters so far for the T-Pot 18.11 development 😇
+In an effort of saving the environment we are now brewing our own Mate Ice Tea and consumed 57 liters so far for the T-Pot 19.03 development 😇
