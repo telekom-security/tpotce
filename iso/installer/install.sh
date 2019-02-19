@@ -596,6 +596,7 @@ if ! [ "$myCONF_TPOT_FLAVOR" == "SENSOR" ];
     fuBANNER "Webuser creds"
     mkdir -p /data/nginx/conf
     htpasswd -b -c /data/nginx/conf/nginxpasswd "$myCONF_WEB_USER" "$myCONF_WEB_PW"
+    echo
 fi
 
 # Let's generate a SSL self-signed certificate without interaction (browsers will see it invalid anyway)
