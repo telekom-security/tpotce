@@ -233,7 +233,6 @@ function fuCHECKNET {
   if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ] || [ "$myTPOT_DEPLOYMENT_TYPE" == "user" ];
     then
       local mySITES="$1"
-      local myBACKTITLE="Availability check"
       mySITESCOUNT=$(echo $mySITES | wc -w)
       j=0
       for i in $mySITES;
