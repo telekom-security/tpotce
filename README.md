@@ -72,14 +72,14 @@ Furthermore we use the following tools
 <a name="changelog"></a>
 # Release Notes
 - **Move from Ubuntu 18.04 to Debian (Sid)**
-  - For almost 5 years Ubuntu LTS versions were our distributions of choice. Last year we made a design choice for T-Pot to be closer to a rolling release model and thus allowing us to issue smaller changes and releases in a timely manner. The distribution of choice is Debian (Sid / unstable) which will provide us with the latest advancements in Debian based distribution.
+  - For almost 5 years Ubuntu LTS versions were our distributions of choice. Last year we made a design choice for T-Pot to be closer to a rolling release model and thus allowing us to issue smaller changes and releases in a more timely manner. The distribution of choice is Debian (Sid / unstable) which will provide us with the latest advancements in a Debian based distribution.
 - **Docker images will keep the 1811 tag**
   - The docker images will keep the 1811 tag.
 - **Deprecated tools**
   - *ctop* will no longer be part of T-Pot.
 - **Update Feature**
   - For the ones who like to live on the bleeding edge of T-Pot development there is now a update script available in `/opt/tpot/update.sh`.
-  - This feature is now in beta and is mostly intended to provide you with the latest development advances without the need of reinstalling T-Pot.
+  - This feature is beta and is mostly intended to provide you with the latest development advances without the need of reinstalling T-Pot.
 
 <a name="concept"></a>
 # Technical Concept
