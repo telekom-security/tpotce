@@ -92,7 +92,7 @@ myNETWORK_WLANEXAMPLE="
 
 ### Example wireless config without 802.1x
 ### This configuration was tested with the IntelNUC series
-### If problems occur you can try and change wpa-driver to "iwlwifi"
+### If problems occur you can try and change wpa-driver to \"iwlwifi\"
 #
 #auto wlan0
 #iface wlan0 inet dhcp
@@ -211,24 +211,19 @@ function fuCHECKPACKAGES {
   export DEBIAN_FRONTEND=noninteractive
   echo -n "### Checking for installer dependencies: "
   local myPACKAGES="$1"
-  local myINST=""
   for myDEPS in $myPACKAGES;
-  do
-    myOK=$(dpkg -s $myDEPS | grep ok | awk '{ print $3 }' | head -n 1);
-    if [ "$myOK" != "ok" ]
-      then
-        myINST=$(echo $myINST $myDEPS)
-    fi
+    do
+      myOK=$(dpkg -s $myDEPS 2>&1 | grep -w ok | awk '{ print $3 }' | head -n 1)
+      if [ "$myOK" != "ok" ];
+        then
+          echo "[ NOW INSTALLING ]"
+          apt-get update -y
+          apt-get install -y $myPACKAGES
+          break
+      fi
   done
-  if [ "$myINST" != "" ]
+  if [ "$myOK" = "ok" ];
     then
-      echo "[ NOW INSTALLING ]"
-      apt-get update -y
-      for myDEPS in $myINST;
-      do
-        apt-get install $myDEPS -y
-      done
-    else
       echo "[ OK ]"
   fi
 }
@@ -592,9 +587,9 @@ dialog --clear
 exec 2> >(tee "/install.err")
 exec > >(tee "/install.log")
 
-fuGET_DEPS
-
 fuBANNER "Installing ..."
+
+fuGET_DEPS
 
 # If flavor is SENSOR do not write credentials
 if ! [ "$myCONF_TPOT_FLAVOR" == "SENSOR" ];
