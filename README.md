@@ -393,7 +393,7 @@ If new versions of the components involved appear, we will test them and build n
 
 <a name="submission"></a>
 ## Community Data Submission
-We provide T-Pot in order to make it accessible to all parties interested in honeypot deployment. By default, the captured data is submitted to a community backend. This community backend uses the data to feed [Sicherheitstacho](https://sicherheitstacho.eu.
+We provide T-Pot in order to make it accessible to all parties interested in honeypot deployment. By default, the captured data is submitted to a community backend. This community backend uses the data to feed [Sicherheitstacho](https://sicherheitstacho.eu).
 You may opt out of the submission by removing the `# Ewsposter service` from `/opt/tpot/etc/tpot.yml`:
 1. Stop T-Pot services: `systemctl stop tpot`
 2. Remove Ewsposter service: `vi /opt/tpot/etc/tpot.yml`
