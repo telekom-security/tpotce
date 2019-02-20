@@ -23,10 +23,10 @@ function fuNFQCHECK {
 myNFQCHECK=$(grep -e '^\s*honeytrap:\|^\s*glutton:' $myDOCKERCOMPOSEYML | tr -d ': ' | uniq)
 if [ "$myNFQCHECK" == "" ];
   then
-    echo "No NFQ related honeypot detected, no iptables rules needed. Exiting."
+    echo "No NFQ related honeypot detected, no iptables-legacy rules needed. Exiting."
     exit
   else
-    echo "Detected $myNFQCHECK as NFQ based honeypot, iptables rules needed. Continuing."
+    echo "Detected $myNFQCHECK as NFQ based honeypot, iptables-legacy rules needed. Continuing."
 fi
 }
 
@@ -41,54 +41,54 @@ echo "$myRULESPORTS"
 }
 
 function fuSETRULES {
-### Setting up iptables rules for honeytrap
+### Setting up iptables-legacy rules for honeytrap
 if [ "$myNFQCHECK" == "honeytrap" ];
   then
-    /sbin/iptables -w -A INPUT -s 127.0.0.1 -j ACCEPT
-    /sbin/iptables -w -A INPUT -d 127.0.0.1 -j ACCEPT
+    /usr/sbin/iptables-legacy -w -A INPUT -s 127.0.0.1 -j ACCEPT
+    /usr/sbin/iptables-legacy -w -A INPUT -d 127.0.0.1 -j ACCEPT
 
     for myPORT in $myRULESPORTS; do
-      /sbin/iptables -w -A INPUT -p tcp --dport $myPORT -j ACCEPT
+      /usr/sbin/iptables-legacy -w -A INPUT -p tcp --dport $myPORT -j ACCEPT
     done
 
-    /sbin/iptables -w -A INPUT -p tcp --syn -m state --state NEW -j NFQUEUE
+    /usr/sbin/iptables-legacy -w -A INPUT -p tcp --syn -m state --state NEW -j NFQUEUE
 fi
 
-### Setting up iptables rules for glutton
+### Setting up iptables-legacy rules for glutton
 if [ "$myNFQCHECK" == "glutton" ];
   then
-    /sbin/iptables -w -t raw -A PREROUTING -s 127.0.0.1 -j ACCEPT
-    /sbin/iptables -w -t raw -A PREROUTING -d 127.0.0.1 -j ACCEPT
+    /usr/sbin/iptables-legacy -w -t raw -A PREROUTING -s 127.0.0.1 -j ACCEPT
+    /usr/sbin/iptables-legacy -w -t raw -A PREROUTING -d 127.0.0.1 -j ACCEPT
 
     for myPORT in $myRULESPORTS; do
-      /sbin/iptables -w -t raw -A PREROUTING -p tcp --dport $myPORT -j ACCEPT
+      /usr/sbin/iptables-legacy -w -t raw -A PREROUTING -p tcp --dport $myPORT -j ACCEPT
     done
     # No need for NFQ forwarding, such rules are set up by glutton
 fi
 }
 
 function fuUNSETRULES {
-### Removing  iptables rules for honeytrap
+### Removing  iptables-legacy rules for honeytrap
 if [ "$myNFQCHECK" == "honeytrap" ];
   then
-    /sbin/iptables -w -D INPUT -s 127.0.0.1 -j ACCEPT
-    /sbin/iptables -w -D INPUT -d 127.0.0.1 -j ACCEPT
+    /usr/sbin/iptables-legacy -w -D INPUT -s 127.0.0.1 -j ACCEPT
+    /usr/sbin/iptables-legacy -w -D INPUT -d 127.0.0.1 -j ACCEPT
 
     for myPORT in $myRULESPORTS; do
-      /sbin/iptables -w -D INPUT -p tcp --dport $myPORT -j ACCEPT
+      /usr/sbin/iptables-legacy -w -D INPUT -p tcp --dport $myPORT -j ACCEPT
     done
 
-    /sbin/iptables -w -D INPUT -p tcp --syn -m state --state NEW -j NFQUEUE
+    /usr/sbin/iptables-legacy -w -D INPUT -p tcp --syn -m state --state NEW -j NFQUEUE
 fi
 
-### Removing iptables rules for glutton
+### Removing iptables-legacy rules for glutton
 if [ "$myNFQCHECK" == "glutton" ];
   then
-    /sbin/iptables -w -t raw -D PREROUTING -s 127.0.0.1 -j ACCEPT
-    /sbin/iptables -w -t raw -D PREROUTING -d 127.0.0.1 -j ACCEPT
+    /usr/sbin/iptables-legacy -w -t raw -D PREROUTING -s 127.0.0.1 -j ACCEPT
+    /usr/sbin/iptables-legacy -w -t raw -D PREROUTING -d 127.0.0.1 -j ACCEPT
 
     for myPORT in $myRULESPORTS; do
-      /sbin/iptables -w -t raw -D PREROUTING -p tcp --dport $myPORT -j ACCEPT
+      /usr/sbin/iptables-legacy -w -t raw -D PREROUTING -p tcp --dport $myPORT -j ACCEPT
     done
     # No need for removing NFQ forwarding, such rules are removed by glutton
 fi
