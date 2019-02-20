@@ -78,7 +78,7 @@ Furthermore we use the following tools
 - **Deprecated tools**
   - *ctop* will no longer be part of T-Pot.
 - **Update Feature**
-  - For the ones who like to live on the bleeding edge of T-Pot development there is now a update script available in `/opt/tpot/update.sh`.
+  - For the ones who like to live on the bleeding edge of T-Pot development there is now an update script available in `/opt/tpot/update.sh`.
   - This feature is beta and is mostly intended to provide you with the latest development advances without the need of reinstalling T-Pot.
 
 <a name="concept"></a>
@@ -113,7 +113,7 @@ In T-Pot we combine the dockerized honeypots ...
 * [Spiderfoot](https://github.com/smicallef/spiderfoot) a open source intelligence automation tool.
 * [Suricata](http://suricata-ids.org/) a Network Security Monitoring engine.
 
-... to give you the best out-of-the-box experience possible and a easy-to-use multi-honeypot appliance.
+... to give you the best out-of-the-box experience possible and an easy-to-use multi-honeypot appliance.
 
 ![Architecture](doc/architecture.png)
 
@@ -274,7 +274,7 @@ The installer will now start and guide you through the install process.
 
 <a name="postinstallauto"></a>
 ## Post-Install Auto
-You can also let the installer run automatically if you provide your own `tpot.conf`. A example is available in `tpotce/iso/installer/tpot.conf.dist`. This should make things easier in case you want to automate the installation i.e. with **Ansible**.
+You can also let the installer run automatically if you provide your own `tpot.conf`. An example is available in `tpotce/iso/installer/tpot.conf.dist`. This should make things easier in case you want to automate the installation i.e. with **Ansible**.
 
 Just follow these steps while adjusting `tpot.conf` to your needs:
 
