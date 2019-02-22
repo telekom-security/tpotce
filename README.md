@@ -67,6 +67,7 @@ Furthermore we use the following tools
 - [Licenses](#licenses)
 - [Credits](#credits)
 - [Stay tuned](#staytuned)
+- [Testimonial](#testimonial)
 - [Fun Fact](#funfact)
 
 <a name="changelog"></a>
@@ -495,6 +496,11 @@ Without open source and the fruitful development community (we are proud to be a
 <a name="staytuned"></a>
 # Stay tuned ...
 We will be releasing a new version of T-Pot about every 6-12 months.
+
+<a name="testimonial"></a>
+# Testimonial
+One of the greatest feedback we have gotten so far is by one of the Conpot developers:<br>
+***"[...] I highly recommend T-Pot which is ... it's not exactly a swiss army knife .. it's more like a swiss army soldier, equipped with a swiss army knife. Inside a tank. A swiss tank. [...]"***
 
 <a name="funfact"></a>
 # Fun Fact
