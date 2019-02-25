@@ -147,6 +147,10 @@ mySYSTEMDFIX="[Link]
 NamePolicy=kernel database onboard slot path
 MACAddressPolicy=none
 "
+myCOCKPIT_SOCKET="[Socket]
+ListenStream=
+ListenStream=64294
+"
 myCRONJOBS="
 # Check if updated images are available and download them
 27 1 * * *      root    docker-compose -f /opt/tpot/etc/tpot.yml pull
@@ -666,7 +670,8 @@ sed -i 's#127.0.1.1.*#127.0.1.1\t'"$myHOST"'#g' /etc/hosts
 
 # Let's patch cockpit.socket, sshd_config
 fuBANNER "Adjust ports"
-sed -i 's#ListenStream=9090#ListenStream=64294#' /lib/systemd/system/cockpit.socket
+mkdir -p /etc/systemd/system/cockpit.socket.d
+echo "$myCOCKPIT_SOCKET" | tee /etc/systemd/system/cockpit.socket.d/listen.conf
 sed -i '/^port/Id' /etc/ssh/sshd_config
 echo "Port 64295" >> /etc/ssh/sshd_config
 
@@ -743,11 +748,11 @@ mkdir -p /data/adbhoney/downloads /data/adbhoney/log \
          /data/elk/data /data/elk/log \
          /data/glastopf/log /data/glastopf/db \
          /data/honeytrap/log/ /data/honeytrap/attacks/ /data/honeytrap/downloads/ \
-	       /data/glutton/log \
-	       /data/heralding/log \
+         /data/glutton/log \
+         /data/heralding/log \
          /data/mailoney/log \
          /data/medpot/log \
-	       /data/nginx/log \
+         /data/nginx/log \
          /data/emobility/log \
          /data/ews/conf \
          /data/rdpy/log \
