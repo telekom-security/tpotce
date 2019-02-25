@@ -8,7 +8,7 @@ RUN apk -U --no-cache add \
                autoconf \
                bind-tools \
                build-base \
-               cython \
+#               cython \
                git \
                libffi \
                libffi-dev \
@@ -17,6 +17,7 @@ RUN apk -U --no-cache add \
                make \
                php7 \
                php7-dev \
+               openssl-dev \
                py-mysqldb \
                py-openssl \
                py-pip \
