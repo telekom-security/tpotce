@@ -194,7 +194,6 @@ echo
 
 # Ensure some defaults
 echo "### Ensure some T-Pot defaults with regard to some folders, permissions and configs."
-sed -i 's#ListenStream=9090#ListenStream=64294#' /lib/systemd/system/cockpit.socket
 sed -i '/^port/Id' /etc/ssh/sshd_config
 echo "Port 64295" >> /etc/ssh/sshd_config
 echo
