@@ -9,7 +9,7 @@ RUN apk -U --no-cache add \
             		git \
             		libcap \
             		libffi-dev \
-            		libressl-dev \
+            		openssl-dev \
                         libzmq \
             		postgresql-dev \
             		python3 \
