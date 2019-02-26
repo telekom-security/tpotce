@@ -18,7 +18,7 @@ services:
     ports:
      - "22:22"
      - "23:23"
-    image: "dtagdevsec/cowrie:1811"
+    image: "dtagdevsec/cowrie:1903"
     read_only: true
     volumes:
      - /data/cowrie/downloads:/home/cowrie/cowrie/dl
