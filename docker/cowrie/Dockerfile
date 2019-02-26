@@ -13,6 +13,7 @@ RUN apk -U --no-cache add \
                        libffi-dev \
                        mpc1-dev \
                        mpfr-dev \
+                       openssl \
                        openssl-dev \
                        python \
                        python-dev \
