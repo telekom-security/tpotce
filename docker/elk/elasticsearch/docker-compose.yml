@@ -24,6 +24,6 @@ services:
     mem_limit: 2g
     ports:
      - "127.0.0.1:64298:9200"
-    image: "dtagdevsec/elasticsearch:1811"
+    image: "dtagdevsec/elasticsearch:1903"
     volumes:
      - /data:/data

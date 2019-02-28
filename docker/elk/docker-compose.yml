@@ -24,7 +24,7 @@ services:
     mem_limit: 4g
     ports:
      - "127.0.0.1:64298:9200"
-    image: "dtagdevsec/elasticsearch:1811"
+    image: "dtagdevsec/elasticsearch:1903"
     volumes:
      - /data:/data
 
@@ -39,7 +39,7 @@ services:
         condition: service_healthy
     ports:
      - "127.0.0.1:64296:5601"
-    image: "dtagdevsec/kibana:1811"
+    image: "dtagdevsec/kibana:1903"
 
 ## Logstash service
   logstash:
@@ -51,7 +51,7 @@ services:
         condition: service_healthy
     env_file:
      - /opt/tpot/etc/compose/elk_environment
-    image: "dtagdevsec/logstash:1811"
+    image: "dtagdevsec/logstash:1903"
     volumes:
      - /data:/data
      - /root/tpotce/docker/elk/logstash/dist/logstash.conf:/etc/logstash/conf.d/logstash.conf
@@ -66,5 +66,5 @@ services:
         condition: service_healthy
     ports:
      - "127.0.0.1:64302:9100"
-    image: "dtagdevsec/head:1811"
+    image: "dtagdevsec/head:1903"
     read_only: true
