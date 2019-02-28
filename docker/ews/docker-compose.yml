@@ -14,7 +14,7 @@ services:
      - ewsposter_local
     env_file:
      - /opt/tpot/etc/compose/elk_environment
-    image: "dtagdevsec/ewsposter:1811"
+    image: "dtagdevsec/ewsposter:1903"
     volumes:
      - /data:/data
      - /data/ews/conf/ews.ip:/opt/ewsposter/ews.ip

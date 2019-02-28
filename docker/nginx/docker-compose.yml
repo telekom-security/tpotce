@@ -17,7 +17,7 @@ services:
     network_mode: "host"
     ports:
      - "64297:64297"
-    image: "dtagdevsec/nginx:1811"
+    image: "dtagdevsec/nginx:1903"
     read_only: true
     volumes:
      - /data/nginx/cert/:/etc/nginx/cert/:ro

@@ -22,7 +22,7 @@ services:
      - rdpy_local
     ports:
      - "3389:3389"
-    image: "dtagdevsec/rdpy:1811"
+    image: "dtagdevsec/rdpy:1903"
     read_only: true
     volumes:
      - /data/rdpy/log:/var/log/rdpy

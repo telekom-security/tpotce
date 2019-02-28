@@ -14,5 +14,5 @@ services:
      - cyberchef_local
     ports:
      - "127.0.0.1:64299:8000"
-    image: "dtagdevsec/cyberchef:1811"
+    image: "dtagdevsec/cyberchef:1903"
     read_only: true
