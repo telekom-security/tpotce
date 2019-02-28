@@ -286,6 +286,7 @@ EOF
   # Remove exim4
   apt-get -y purge exim4-base
   apt-get -y autoremove
+  apt-mark hold exim4-base
 }
 
 # Check for other services
