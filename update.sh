@@ -186,8 +186,8 @@ npm install "https://github.com/taskrabbit/elasticsearch-dump" -g
 pip install --upgrade pip
 hash -r
 pip install --upgrade elasticsearch-curator yq
-apt-get -y purge exim4-base
-apt-mark hold exim4-base
+apt-get -y purge exim4-base mailutils
+apt-mark hold exim4-base mailutils
 echo
 
 echo "### Now replacing T-Pot related config files on host"

@@ -284,9 +284,9 @@ EOF
   echo
   apt-get -y install $myINSTALLPACKAGES
   # Remove exim4
-  apt-get -y purge exim4-base
+  apt-get -y purge exim4-base mailutils
   apt-get -y autoremove
-  apt-mark hold exim4-base
+  apt-mark hold exim4-base mailutils
 }
 
 # Check for other services
