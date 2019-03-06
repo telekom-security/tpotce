@@ -27,9 +27,6 @@ ExecStartPre=-/bin/bash -c '/sbin/ethtool --offload $(/sbin/ip address | grep "^
 ExecStartPre=/bin/bash -c '/sbin/ethtool -K $(/sbin/ip address | grep "^2: " | awk \'{ print $2 }\' | tr -d [:punct:]) gso off gro off'
 ExecStartPre=/bin/bash -c '/sbin/ip link set $(/sbin/ip address | grep "^2: " | awk \'{ print $2 }\' | tr -d [:punct:]) promisc on'
 
-# Modify access rights on docker.sock for netdata
-ExecStartPre=-/bin/chmod 666 /var/run/docker.sock
-
 # Set iptables accept rules to avoid forwarding to honeytrap / NFQUEUE
 # Forward all other connections to honeytrap / NFQUEUE
 ExecStartPre=/opt/tpot/bin/rules.sh /opt/tpot/etc/tpot.yml set
