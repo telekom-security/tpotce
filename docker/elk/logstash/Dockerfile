@@ -4,7 +4,8 @@ FROM alpine
 ADD dist/ /root/dist/
 
 # Setup env and apt
-RUN apk -U add \
+RUN sed -i 's/dl-cdn/dl-4/g' /etc/apk/repositories && \
+    apk -U --no-cache add \
              bash \
              curl \
              git \

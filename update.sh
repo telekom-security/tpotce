@@ -213,6 +213,7 @@ mkdir -p /data/adbhoney/downloads /data/adbhoney/log \
          /data/honeytrap/log/ /data/honeytrap/attacks/ /data/honeytrap/downloads/ \
          /data/glutton/log \
          /data/heralding/log \
+         /data/honeypy/log \
          /data/mailoney/log \
          /data/medpot/log \
          /data/nginx/log \

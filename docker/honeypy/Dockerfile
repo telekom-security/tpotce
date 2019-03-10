@@ -20,6 +20,14 @@ RUN sed -i 's/dl-cdn/dl-4/g' /etc/apk/repositories && \
 # Clone honeypy from git
     git clone --depth=1 https://github.com/foospidy/HoneyPy /opt/honeypy && \
     cd /opt/honeypy && \
+    sed -i 's/local_host/dest_ip/g' /opt/honeypy/loggers/file/honeypy_file.py && \
+    sed -i 's/local_port/dest_port/g' /opt/honeypy/loggers/file/honeypy_file.py && \
+    sed -i 's/remote_host/src_ip/g' /opt/honeypy/loggers/file/honeypy_file.py && \
+    sed -i 's/remote_port/src_port/g' /opt/honeypy/loggers/file/honeypy_file.py && \
+    sed -i 's/service/proto/g' /opt/honeypy/loggers/file/honeypy_file.py && \
+    sed -i 's/event/event_type/g' /opt/honeypy/loggers/file/honeypy_file.py && \
+    sed -i 's/bytes/size/g' /opt/honeypy/loggers/file/honeypy_file.py && \
+    sed -i 's/date_time/timestamp/g' /opt/honeypy/loggers/file/honeypy_file.py && \
     virtualenv env && \
     cp /root/dist/services.cfg /opt/honeypy/etc && \
     cp /root/dist/honeypy.cfg /opt/honeypy/etc && \
@@ -40,8 +48,6 @@ RUN sed -i 's/dl-cdn/dl-4/g' /etc/apk/repositories && \
     rm -rf /var/cache/apk/*
 
 # Set workdir and start mailoney
-#STOPSIGNAL SIGINT
 USER honeypy:honeypy
 WORKDIR /opt/honeypy
-#EXPOSE 7 8 23 24 25 69 80 123 2048 4096 5060 9200
 CMD ["/opt/honeypy/env/bin/python2", "/opt/honeypy/Honey.py", "-d"]
