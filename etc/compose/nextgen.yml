@@ -10,8 +10,8 @@ networks:
   conpot_local_kamstrup_382:
   cowrie_local:
   cyberchef_local:
-  elasticpot_local:
   heralding_local:
+  honeypy_local:
   mailoney_local:
   medpot_local:
   rdpy_local:
@@ -196,18 +196,22 @@ services:
      - /data/dionaea/log:/opt/dionaea/var/log
      - /data/dionaea/rtp:/opt/dionaea/var/dionaea/rtp
 
-# Elasticpot service
-  elasticpot:
-    container_name: elasticpot
+# Glutton service
+  glutton:
+    build: .
+    container_name: glutton
     restart: always
-    networks:
-     - elasticpot_local
-    ports:
-     - "9200:9200"
-    image: "dtagdevsec/elasticpot:1903"
+    tmpfs:
+     - /var/lib/glutton:uid=2000,gid=2000
+     - /run:uid=2000,gid=2000
+    network_mode: "host"
+    cap_add:
+     - NET_ADMIN
+    image: "dtagdevsec/glutton:1903"
     read_only: true
     volumes:
-     - /data/elasticpot/log:/opt/ElasticpotPY/log
+     - /data/glutton/log:/var/log/glutton
+#     - /root/tpotce/docker/glutton/dist/rules.yaml:/opt/glutton/rules/rules.yaml
 
 # Heralding service
   heralding:
@@ -235,22 +239,25 @@ services:
     volumes:
      - /data/heralding/log:/var/log/heralding
 
-# Glutton service
-  glutton:
+# HoneyPy service
+  honeypy:
     build: .
-    container_name: glutton
+    container_name: honeypy
     restart: always
-    tmpfs:
-     - /var/lib/glutton:uid=2000,gid=2000
-     - /run:uid=2000,gid=2000
-    network_mode: "host"
-    cap_add:
-     - NET_ADMIN
-    image: "dtagdevsec/glutton:1903"
+    networks:
+     - honeypy_local
+    ports:
+     - "7:7"
+     - "8:8"
+     - "2048:2048"
+     - "2323:2323"
+     - "2324:2324"
+     - "4096:4096"
+     - "9200:9200"
+    image: "dtagdevsec/honeypy:1903"
     read_only: true
     volumes:
-     - /data/glutton/log:/var/log/glutton
-#     - /root/tpotce/docker/glutton/dist/rules.yaml:/opt/glutton/rules/rules.yaml
+     - /data/honeypy/log:/opt/honeypy/log
 
 # Mailoney service
   mailoney:
@@ -513,6 +520,7 @@ services:
     volumes:
      - /data:/data
      - /data/ews/conf/ews.ip:/opt/ewsposter/ews.ip
+     - /data/ews/conf/ews.cfg:/opt/ewsposter/ews.cfg
 
 # Nginx service
   nginx:
