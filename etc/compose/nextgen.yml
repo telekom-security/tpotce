@@ -520,7 +520,6 @@ services:
     volumes:
      - /data:/data
      - /data/ews/conf/ews.ip:/opt/ewsposter/ews.ip
-     - /data/ews/conf/ews.cfg:/opt/ewsposter/ews.cfg
 
 # Nginx service
   nginx:
