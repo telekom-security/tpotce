@@ -4,7 +4,7 @@ FROM alpine
 ADD dist/ /root/dist/
 
 # Install packages
-RUN sed -i 's/dl-cdn/dl-4/g' /etc/apk/repositories && \
+RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     apk -U --no-cache add \
             build-base \
             git \
@@ -28,6 +28,7 @@ RUN sed -i 's/dl-cdn/dl-4/g' /etc/apk/repositories && \
     sed -i 's/event/event_type/g' /opt/honeypy/loggers/file/honeypy_file.py && \
     sed -i 's/bytes/size/g' /opt/honeypy/loggers/file/honeypy_file.py && \
     sed -i 's/date_time/timestamp/g' /opt/honeypy/loggers/file/honeypy_file.py && \
+    sed -i 's/data,/data.decode("hex"),/g' /opt/honeypy/loggers/file/honeypy_file.py && \
     virtualenv env && \
     cp /root/dist/services.cfg /opt/honeypy/etc && \
     cp /root/dist/honeypy.cfg /opt/honeypy/etc && \
