@@ -4,17 +4,19 @@ FROM alpine
 ADD dist/ /root/dist/
 
 # Setup env and apt
-RUN apk -U add \
+RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
+    apk -U --no-cache add \
+             aria2 \
              bash \
              curl \
-             openjdk8-jre \
-             wget && \
+             nss \
+             openjdk8-jre && \
 
 # Get and install packages
     cd /root/dist/ && \
     mkdir -p /usr/share/elasticsearch/ && \
-    wget https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-6.6.1.tar.gz && \
-    tar xvfz elasticsearch-6.6.1.tar.gz --strip-components=1 -C /usr/share/elasticsearch/ && \
+    aria2c -s 16 -x 16 https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-6.6.2.tar.gz && \
+    tar xvfz elasticsearch-6.6.2.tar.gz --strip-components=1 -C /usr/share/elasticsearch/ && \
 
 # Add and move files
     cd /root/dist/ && \
@@ -28,7 +30,7 @@ RUN apk -U add \
     rm -rf /usr/share/elasticsearch/modules/x-pack-ml && \
 
 # Clean up
-    apk del --purge wget && \
+    apk del --purge aria2 && \
     rm -rf /root/* && \
     rm -rf /tmp/* && \
     rm -rf /var/cache/apk/*

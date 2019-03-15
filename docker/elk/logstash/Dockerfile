@@ -4,26 +4,27 @@ FROM alpine
 ADD dist/ /root/dist/
 
 # Setup env and apt
-RUN sed -i 's/dl-cdn/dl-4/g' /etc/apk/repositories && \
+RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     apk -U --no-cache add \
+             aria2 \
              bash \
              curl \
              git \
              libc6-compat \
              libzmq \
-             openjdk8-jre \
-             wget && \
+             nss \
+             openjdk8-jre && \
 
 # Get and install packages
     git clone --depth=1 https://github.com/dtag-dev-sec/listbot /etc/listbot && \
     cd /root/dist/ && \
     mkdir -p /usr/share/logstash/ && \
-    wget https://artifacts.elastic.co/downloads/logstash/logstash-6.6.1.tar.gz && \
-    wget http://geolite.maxmind.com/download/geoip/database/GeoLite2-ASN.tar.gz && \
-    tar xvfz logstash-6.6.1.tar.gz --strip-components=1 -C /usr/share/logstash/ && \
+    aria2c -s 16 -x 16 https://artifacts.elastic.co/downloads/logstash/logstash-6.6.2.tar.gz && \
+    tar xvfz logstash-6.6.2.tar.gz --strip-components=1 -C /usr/share/logstash/ && \
     /usr/share/logstash/bin/logstash-plugin install logstash-filter-translate && \
     /usr/share/logstash/bin/logstash-plugin install logstash-output-syslog && \
-    tar xvfz GeoLite2-ASN.tar.gz --strip-components=1 -C /usr/share/logstash/vendor/bundle/jruby/2.3.0/gems/logstash-filter-geoip-5.0.3-java/vendor/ && \
+    aria2c -s 16 -x 16 -o GeoLite2-ASN.tar.gz http://geolite.maxmind.com/download/geoip/database/GeoLite2-ASN.tar.gz && \
+    tar xvfz GeoLite2-ASN.tar.gz --strip-components=1 -C /usr/share/logstash/vendor/bundle/jruby/2.3.0/gems/logstash-filter-geoip-5.0.3-java/vendor && \
 
 # Add and move files
     cd /root/dist/ && \
@@ -41,7 +42,7 @@ RUN sed -i 's/dl-cdn/dl-4/g' /etc/apk/repositories && \
     chmod 755 /usr/bin/update.sh && \
 
 # Clean up
-    apk del --purge wget && \
+    apk del --purge aria2 && \
     rm -rf /root/* && \
     rm -rf /tmp/* && \
     rm -rf /var/cache/apk/*
