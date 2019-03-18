@@ -9,7 +9,7 @@ and includes dockerized versions of the following honeypots
 * [adbhoney](https://github.com/huuck/ADBHoney),
 * [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot),
 * [conpot](http://conpot.org/),
-* [cowrie](http://www.micheloosterhof.com/cowrie/),
+* [cowrie](https://github.com/cowrie/cowrie),
 * [dionaea](https://github.com/DinoTools/dionaea),
 * [elasticpot](https://github.com/schmalle/ElasticPot),
 * [glastopf](http://mushmush.org/),
