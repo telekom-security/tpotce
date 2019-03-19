@@ -1,3 +1,4 @@
 not (host sicherheitstacho.eu or community.sicherheitstacho.eu) and
 not (host archive.ubuntu.com or security.ubuntu.com) and
-not (host index.docker.io or docker.io)
+not (host index.docker.io or docker.io) and
+not (host hpfeeds.sissden.eu)
