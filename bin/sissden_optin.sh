@@ -1,5 +1,14 @@
 #!/bin/bash
 
+# Run as root only.
+myWHOAMI=$(whoami)
+if [ "$myWHOAMI" != "root" ]
+  then
+    echo "Need to run as root ..."
+    sudo ./$0
+    exit
+fi
+
 myTPOTYMLFILE="/opt/tpot/etc/tpot.yml"
 
 echo "SISSDEN Delivery Opt-In for EWSPoster"

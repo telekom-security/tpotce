@@ -1,6 +1,5 @@
 #!/bin/bash
 # T-Pot Container Data Cleaner & Log Rotator
-
 # Set colors
 myRED="[0;31m"
 myGREEN="[0;32m"

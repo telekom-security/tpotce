@@ -1,5 +1,14 @@
 #!/bin/bash
 
+# Run as root only.
+myWHOAMI=$(whoami)
+if [ "$myWHOAMI" != "root" ]
+  then
+    echo "Need to run as root ..."
+    sudo ./$0
+    exit
+fi
+
 # set backtitle, get filename
 myBACKTITLE="T-Pot Edition Selection Tool"
 myYMLS=$(cd /opt/tpot/etc/compose/ && ls -1 *.yml)
