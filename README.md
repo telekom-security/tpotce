@@ -61,6 +61,7 @@ Furthermore we use the following tools
   - [Tools](#tools)
   - [Maintenance](#maintenance)
   - [Community Data Submission](#submission)
+  - [Opt-In SISSDEN Data Submission](#sissden-optin)
 - [Roadmap](#roadmap)
 - [Disclaimer](#disclaimer)
 - [FAQ](#faq)
@@ -111,6 +112,7 @@ In T-Pot we combine the dockerized honeypots ...
 * [glastopf](http://mushmush.org/),
 * [glutton](https://github.com/mushorg/glutton),
 * [heralding](https://github.com/johnnykv/heralding),
+* [honeypy](https://github.com/foospidy/HoneyPy),
 * [honeytrap](https://github.com/armedpot/honeytrap/),
 * [mailoney](https://github.com/awhitehatter/mailoney),
 * [medpot](https://github.com/schmalle/medpot),
@@ -420,6 +422,11 @@ Data is submitted in a structured ews-format, a XML stucture. Hence, you can par
 
 We encourage you not to disable the data submission as it is the main purpose of the community approach - as you all know **sharing is caring** 😍
 
+<a name="sissden-optin"></a>
+## Opt-In SISSDEN Data Submission
+As an Opt-In it is now possible to also share T-Pot data with [SISSDEN](https://sissden.eu).
+If you want to share your T-Pot data you simply have to regsiter an account with SISSDEN which will have its own benefits. Once registered you will receive an `Ident` and a `Secret` to share events with SISSDEN. In T-Pot you simply run `sissden_optin.sh` which will ask for your SISSDEN `Ident` and `Secret`. It will automatically update `/opt/tpot/etc/tpot.yml` to deliver events to SISSDEN.
+
 <a name="roadmap"></a>
 # Roadmap
 As with every development there is always room for improvements ...
@@ -465,6 +472,7 @@ Without open source and the fruitful development community (we are proud to be a
 * [cockpit](https://github.com/cockpit-project/cockpit/graphs/contributors)
 * [conpot](https://github.com/mushorg/conpot/graphs/contributors)
 * [cowrie](https://github.com/micheloosterhof/cowrie/graphs/contributors)
+* [debian](http://www.debian.org/)
 * [dionaea](https://github.com/DinoTools/dionaea/graphs/contributors)
 * [docker](https://github.com/docker/docker/graphs/contributors)
 * [elasticpot](https://github.com/schmalle/ElasticPot/graphs/contributors)
@@ -486,7 +494,6 @@ Without open source and the fruitful development community (we are proud to be a
 * [snare](https://github.com/mushorg/snare/graphs/contributors)
 * [tanner](https://github.com/mushorg/tanner/graphs/contributors)
 * [suricata](https://github.com/inliniac/suricata/graphs/contributors)
-* [ubuntu](http://www.ubuntu.com/)
 
 ### The following companies and organizations
 * [debian](https://www.debian.org/)
