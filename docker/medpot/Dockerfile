@@ -17,6 +17,7 @@ RUN apk -U --no-cache add \
     go get -d -v github.com/mozillazg/request && \
     go get -d -v go.uber.org/zap && \
     cd medpot && \
+    cp dist/etc/ews.cfg /etc/ && \
     go build medpot && \
 
 # Setup medpot
