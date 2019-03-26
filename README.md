@@ -477,7 +477,7 @@ Without open source and the fruitful development community (we are proud to be a
 * [debian](http://www.debian.org/)
 * [dionaea](https://github.com/DinoTools/dionaea/graphs/contributors)
 * [docker](https://github.com/docker/docker/graphs/contributors)
-* [elasticpot](https://github.com/schmalle/ElasticPot/graphs/contributors)
+* [elasticpot](https://github.com/schmalle/ElasticpotPY/graphs/contributors)
 * [elasticsearch](https://github.com/elastic/elasticsearch/graphs/contributors)
 * [elasticsearch-head](https://github.com/mobz/elasticsearch-head/graphs/contributors)
 * [ewsposter](https://github.com/armedpot/ewsposter/graphs/contributors)
