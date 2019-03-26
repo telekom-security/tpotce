@@ -78,6 +78,8 @@ Furthermore we use the following tools
   - For almost 5 years Ubuntu LTS versions were our distributions of choice. Last year we made a design choice for T-Pot to be closer to a rolling release model and thus allowing us to issue smaller changes and releases in a more timely manner. The distribution of choice is Debian (Sid / unstable) which will provide us with the latest advancements in a Debian based distribution.
 - **Include HoneyPy honeypot**
   - *HoneyPy* is now included in the NEXTGEN installation type
+- **Include Suricata 4.1.3**
+  - Building *Suricata 4.1.3* from scratch to enable JA3 and overall better protocol support.
 - **Update tools to the latest versions**
   - ELK Stack 6.6.2
   - CyberChef 8.27.0

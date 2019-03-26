@@ -3,14 +3,14 @@
 
 # Suricata configuration file. In addition to the comments describing all
 # options in this file, full documentation can be found at:
-# https://redmine.openinfosecfoundation.org/projects/suricata/wiki/Suricatayaml
+# https://suricata.readthedocs.io/en/latest/configuration/suricata-yaml.html
 
 ##
 ## Step 1: inform Suricata about your network
 ##
 
 vars:
-  # more specifc is better for alert accuracy and performance
+  # more specific is better for alert accuracy and performance
   address-groups:
     HOME_NET: "[192.168.0.0/16,10.0.0.0/8,172.16.0.0/12]"
     #HOME_NET: "[192.168.0.0/16]"
@@ -27,6 +27,7 @@ vars:
     DNS_SERVERS: "$HOME_NET"
     TELNET_SERVERS: "$HOME_NET"
     AIM_SERVERS: "$EXTERNAL_NET"
+    DC_SERVERS: "$HOME_NET"
     DNP3_SERVER: "$HOME_NET"
     DNP3_CLIENT: "$HOME_NET"
     MODBUS_CLIENT: "$HOME_NET"
@@ -41,76 +42,11 @@ vars:
     SSH_PORTS: "22,64295"
     DNP3_PORTS: 20000
     MODBUS_PORTS: 502
-
-
-##
-## Step 2: select the rules to enable or disable
-##
-
-default-rule-path: /etc/suricata/rules
-rule-files:
- - botcc.rules
- - botcc.portgrouped.rules
- - ciarmy.rules
- - compromised.rules
- - drop.rules
- - dshield.rules
- - emerging-activex.rules
- - emerging-attack_response.rules
- - emerging-chat.rules
- - emerging-current_events.rules
- - emerging-dns.rules
- - emerging-dos.rules
- - emerging-exploit.rules
- - emerging-ftp.rules
- - emerging-games.rules
- - emerging-icmp_info.rules
- - emerging-icmp.rules
- - emerging-imap.rules
- - emerging-inappropriate.rules
- - emerging-info.rules
- - emerging-malware.rules
- - emerging-misc.rules
- - emerging-mobile_malware.rules
- - emerging-netbios.rules
- - emerging-p2p.rules
- - emerging-policy.rules
- - emerging-pop3.rules
- - emerging-rpc.rules
- - emerging-scada.rules
-# - emerging-scada_special.rules
- - emerging-scan.rules
- - emerging-shellcode.rules
- - emerging-smtp.rules
- - emerging-snmp.rules
- - emerging-sql.rules
- - emerging-telnet.rules
- - emerging-tftp.rules
- - emerging-trojan.rules
- - emerging-user_agents.rules
- - emerging-voip.rules
- - emerging-web_client.rules
- - emerging-web_server.rules
- - emerging-web_specific_apps.rules
- - emerging-worm.rules
- - tor.rules
- - decoder-events.rules # available in suricata sources under rules dir
- - stream-events.rules  # available in suricata sources under rules dir
- - http-events.rules    # available in suricata sources under rules dir
- - smtp-events.rules    # available in suricata sources under rules dir
- - dns-events.rules     # available in suricata sources under rules dir
- - tls-events.rules     # available in suricata sources under rules dir
- - modbus-events.rules  # available in suricata sources under rules dir
- - app-layer-events.rules  # available in suricata sources under rules dir
- - dnp3-events.rules       # available in suricata sources under rules dir
-
-classification-file: /etc/suricata/rules/classification.config
-reference-config-file: /etc/suricata/reference.config
-# threshold-file: /etc/suricata/threshold.config
-
+    FILE_DATA_PORTS: "[$HTTP_PORTS,110,143]"
+    FTP_PORTS: 21
 
 ##
-## Step 3: select outputs to enable
+## Step 2: select outputs to enable
 ##
 
 # The default logging directory.  Any log or output file will be
@@ -124,6 +60,13 @@ stats:
   # The interval field (in seconds) controls at what interval
   # the loggers are invoked.
   interval: 8
+  # Add decode events as stats.
+  #decoder-events: true
+  # Decoder event prefix in stats. Has been 'decoder' before, but that leads
+  # to missing events in the eve.stats records. See issue #2225.
+  decoder-events-prefix: "decoder.event"
+  # Add stream events as stats.
+  #stream-events: false
 
 # Configure the type of alert (and other) logging you would like.
 outputs:
@@ -148,7 +91,10 @@ outputs:
       #redis:
       #  server: 127.0.0.1
       #  port: 6379
-      #  mode: list ## possible values: list (default), channel
+      #  async: true ## if redis replies are read asynchronously
+      #  mode: list ## possible values: list|lpush (default), rpush, channel|publish
+      #             ## lpush and rpush are using a Redis list. "list" is an alias for lpush
+      #             ## publish is using a Redis channel. "channel" is an alias for publish
       #  key: suricata ## key or channel to use (default to suricata)
       # Redis pipelining set up. This will enable to only do a query every
       # 'batch-size' events. This should lower the latency induced by network
@@ -157,54 +103,100 @@ outputs:
       #  pipelining:
       #    enabled: yes ## set enable to yes to enable query pipelining
       #    batch-size: 10 ## number of entry to keep in buffer
+
+      # Include top level metadata. Default yes.
+      #metadata: no
+
+      # include the name of the input pcap file in pcap file processing mode
+      pcap-file: false
+
+      # Community Flow ID
+      # Adds a 'community_id' field to EVE records. These are meant to give
+      # a records a predictable flow id that can be used to match records to
+      # output of other tools such as Bro.
+      #
+      # Takes a 'seed' that needs to be same across sensors and tools
+      # to make the id less predictable.
+
+      # enable/disable the community id feature.
+      community-id: false
+      # Seed value for the ID output. Valid values are 0-65535.
+      community-id-seed: 0
+
+      # HTTP X-Forwarded-For support by adding an extra field or overwriting
+      # the source or destination IP address (depending on flow direction)
+      # with the one reported in the X-Forwarded-For HTTP header. This is
+      # helpful when reviewing alerts for traffic that is being reverse
+      # or forward proxied.
+      xff:
+        enabled: yes
+        # Two operation modes are available, "extra-data" and "overwrite".
+        mode: extra-data
+        # Two proxy deployments are supported, "reverse" and "forward". In
+        # a "reverse" deployment the IP address used is the last one, in a
+        # "forward" deployment the first IP address is used.
+        deployment: reverse
+        # Header name where the actual IP address will be reported, if more
+        # than one IP address is present, the last IP address will be the
+        # one taken into consideration.
+        header: X-Forwarded-For
+
       types:
         - alert:
-            # payload: yes             # enable dumping payload in Base64
+            payload: yes             # enable dumping payload in Base64
             payload-buffer-size: 4kb # max size of payload buffer to output in eve-log
             payload-printable: yes   # enable dumping payload in printable (lossy) format
             # packet: yes              # enable dumping of packet (without stream segments)
-            http: yes                # enable dumping of http fields
-            tls: yes                 # enable dumping of tls fields
-            ssh: yes                 # enable dumping of ssh fields
-            smtp: yes                # enable dumping of smtp fields
-            dnp3: yes                # enable dumping of DNP3 fields
+            http-body: yes           # enable dumping of http body in Base64
+            http-body-printable: yes # enable dumping of http body in printable format
+            # metadata: no             # enable inclusion of app layer metadata with alert. Default yes
 
             # Enable the logging of tagged packets for rules using the
             # "tag" keyword.
             tagged-packets: yes
-
-            # HTTP X-Forwarded-For support by adding an extra field or overwriting
-            # the source or destination IP address (depending on flow direction)
-            # with the one reported in the X-Forwarded-For HTTP header. This is
-            # helpful when reviewing alerts for traffic that is being reverse
-            # or forward proxied.
-            xff:
-              enabled: yes
-              # Two operation modes are available, "extra-data" and "overwrite".
-              mode: extra-data
-              # Two proxy deployments are supported, "reverse" and "forward". In
-              # a "reverse" deployment the IP address used is the last one, in a
-              # "forward" deployment the first IP address is used.
-              deployment: reverse
-              # Header name where the actual IP address will be reported, if more
-              # than one IP address is present, the last IP address will be the
-              # one taken into consideration.
-              header: X-Forwarded-For
         - http:
             extended: yes     # enable this for extended logging information
             # custom allows additional http fields to be included in eve-log
             # the example below adds three additional fields when uncommented
             custom: [Accept-Encoding, Accept-Language, Authorization, Forwarded, From, Referer, Via]
         - dns:
-            # control logging of queries and answers
-            # default yes, no to disable
-            query: yes    # enable logging of DNS queries
-            answer: no    # enable logging of DNS answers
-            # control which RR types are logged
-            # all enabled if custom not specified
-            #custom: [a, aaaa, cname, mx, ns, ptr, txt]
+            # This configuration uses the new DNS logging format,
+            # the old configuration is still available:
+            # http://suricata.readthedocs.io/en/latest/configuration/suricata-yaml.html#eve-extensible-event-format
+            # Use version 2 logging with the new format:
+            # DNS answers will be logged in one single event
+            # rather than an event for each of it.
+            # Without setting a version the version
+            # will fallback to 1 for backwards compatibility.
+            version: 2
+
+            # Enable/disable this logger. Default: enabled.
+            #enabled: no
+
+            # Control logging of requests and responses:
+            # - requests: enable logging of DNS queries
+            # - responses: enable logging of DNS answers
+            # By default both requests and responses are logged.
+            #requests: no
+            #responses: no
+
+            # Format of answer logging:
+            # - detailed: array item per answer
+            # - grouped: answers aggregated by type
+            # Default: all
+            #formats: [detailed, grouped]
+
+            # Answer types to log.
+            # Default: all
+            #types: [a, aaaa, cname, mx, ns, ptr, txt]
         - tls:
             extended: yes     # enable this for extended logging information
+            # output TLS transaction where the session is resumed using a
+            # session id
+            #session-resumption: no
+            # custom allows to control which tls fields that are included
+            # in eve-log
+            custom: [subject, issuer, session_resumed, serial, fingerprint, sni, version, not_before, not_after, certificate, ja3]
         - files:
             force-magic: yes   # force logging magic on all logged files
             # force logging of checksums, available hash functions are md5,
@@ -227,16 +219,34 @@ outputs:
             # to yes
             md5: [body, subject]
 
+        - dnp3
+        - nfs
+        - smb
+        - tftp
+        - ikev2
+        - krb5
+        - dhcp:
+            # DHCP logging requires Rust.
+            enabled: no
+            # When extended mode is on, all DHCP messages are logged
+            # with full detail. When extended mode is off (the
+            # default), just enough information to map a MAC address
+            # to an IP address is logged.
+            extended: no
         - ssh
-        #- stats:
-        #    totals: no        # stats for all threads merged together
-        #    threads: no       # per thread stats
-        #    deltas: no        # include delta values
+        - stats:
+            totals: yes       # stats for all threads merged together
+            threads: no       # per thread stats
+            deltas: no        # include delta values
         # bi-directional flows
         #- flow
         # uni-directional flows
         #- netflow
-        #- dnp3
+
+        # Metadata event type. Triggered whenever a pktvar is saved
+        # and will include the pktvars, flowvars, flowbits and
+        # flowints.
+        #- metadata
 
   # alert output for use with Barnyard2
   - unified2-alert:
@@ -246,6 +256,11 @@ outputs:
       # File size limit.  Can be specified in kb, mb, gb.  Just a number
       # is parsed as bytes.
       #limit: 32mb
+
+      # By default unified2 log files have the file creation time (in
+      # unix epoch format) appended to the filename. Set this to yes to
+      # disable this behaviour.
+      #nostamp: no
 
       # Sensor ID field of unified2 alerts.
       #sensor-id: 0
@@ -260,7 +275,7 @@ outputs:
       # This is helpful when reviewing alerts for traffic that is being reverse
       # or forward proxied.
       xff:
-        enabled: no
+        enabled: yes
         # Two operation modes are available, "extra-data" and "overwrite". Note
         # that in the "overwrite" mode, if the reported IP address in the HTTP
         # X-Forwarded-For header is of a different version of the packet
@@ -290,8 +305,13 @@ outputs:
       enabled: no  # Log TLS connections.
       filename: tls.log # File to store TLS logs.
       append: yes
+      #extended: yes     # Log extended information like fingerprint
+      #custom: yes       # enabled the custom logging format (defined by customformat)
+      #customformat: "%{%D-%H:%M:%S}t.%z %a:%p -> %A:%P %v %n %d %D"
       #filetype: regular # 'regular', 'unix_stream' or 'unix_dgram'
-      #extended: yes # Log extended information like fingerprint
+      # output TLS transaction where the session is resumed using a
+      # session id
+      #session-resumption: no
 
   # output module to store certificates chain to disk
   - tls-store:
@@ -299,6 +319,7 @@ outputs:
       #certs-log-dir: certs # directory to store the certificates files
 
   # a line based log of DNS requests and/or replies (no alerts)
+  # Note: not available when Rust is enabled (--enable-rust).
   - dns-log:
       enabled: no
       filename: dns.log
@@ -346,6 +367,17 @@ outputs:
       # If set to a value will enable ring buffer mode. Will keep Maximum of "max-files" of size "limit"
       max-files: 2000
 
+      # Compression algorithm for pcap files. Possible values: none, lz4.
+      # Enabling compression is incompatible with the sguil mode. Note also
+      # that on Windows, enabling compression will *increase* disk I/O.
+      compression: none
+
+      # Further options for lz4 compression. The compression level can be set
+      # to a value between 0 and 16, where higher values result in higher
+      # compression.
+      #lz4-checksum: no
+      #lz4-level: 0
+
       mode: normal # normal, multi or sguil.
 
       # Directory to place pcap files. If not provided the default log
@@ -364,7 +396,7 @@ outputs:
       append: yes
       #filetype: regular # 'regular', 'unix_stream' or 'unix_dgram'
 
-  # alert output to prelude (http://www.prelude-technologies.com/) only
+  # alert output to prelude (https://www.prelude-siem.org/) only
   # available if Suricata has been compiled with --enable-prelude
   - alert-prelude:
       enabled: no
@@ -372,10 +404,11 @@ outputs:
       log-packet-content: no
       log-packet-header: yes
 
-  # Stats.log contains data from various counters of the suricata engine.
+  # Stats.log contains data from various counters of the Suricata engine.
   - stats:
       enabled: no
       filename: stats.log
+      append: yes       # append to file (yes) or overwrite it (no)
       totals: yes       # stats for all threads merged together
       threads: no       # per thread stats
       #null-values: yes  # print counters that have value 0
@@ -397,11 +430,80 @@ outputs:
       append: yes
       #filetype: regular # 'regular', 'unix_stream' or 'unix_dgram'
 
-  # output module to store extracted files to disk
+  # Output module for storing files on disk. Files are stored in a
+  # directory names consisting of the first 2 characters of the
+  # SHA256 of the file. Each file is given its SHA256 as a filename.
+  #
+  # When a duplicate file is found, the existing file is touched to
+  # have its timestamps updated.
+  #
+  # Unlike the older filestore, metadata is not written out by default
+  # as each file should already have a "fileinfo" record in the
+  # eve.log. If write-fileinfo is set to yes, the each file will have
+  # one more associated .json files that consists of the fileinfo
+  # record. A fileinfo file will be written for each occurrence of the
+  # file seen using a filename suffix to ensure uniqueness.
+  #
+  # To prune the filestore directory see the "suricatactl filestore
+  # prune" command which can delete files over a certain age.
+  - file-store:
+      version: 2
+      enabled: no
+
+      # Set the directory for the filestore. If the path is not
+      # absolute will be be relative to the default-log-dir.
+      #dir: filestore
+
+      # Write out a fileinfo record for each occurrence of a
+      # file. Disabled by default as each occurrence is already logged
+      # as a fileinfo record to the main eve-log.
+      #write-fileinfo: yes
+
+      # Force storing of all files. Default: no.
+      #force-filestore: yes
+
+      # Override the global stream-depth for sessions in which we want
+      # to perform file extraction. Set to 0 for unlimited.
+      #stream-depth: 0
+
+      # Uncomment the following variable to define how many files can
+      # remain open for filestore by Suricata. Default value is 0 which
+      # means files get closed after each write
+      #max-open-files: 1000
+
+      # Force logging of checksums, available hash functions are md5,
+      # sha1 and sha256. Note that SHA256 is automatically forced by
+      # the use of this output module as it uses the SHA256 as the
+      # file naming scheme.
+      #force-hash: [sha1, md5]
+      # NOTE: X-Forwarded configuration is ignored if write-fileinfo is disabled
+      # HTTP X-Forwarded-For support by adding an extra field or overwriting
+      # the source or destination IP address (depending on flow direction)
+      # with the one reported in the X-Forwarded-For HTTP header. This is
+      # helpful when reviewing alerts for traffic that is being reverse
+      # or forward proxied.
+      xff:
+        enabled: no
+        # Two operation modes are available, "extra-data" and "overwrite".
+        mode: extra-data
+        # Two proxy deployments are supported, "reverse" and "forward". In
+        # a "reverse" deployment the IP address used is the last one, in a
+        # "forward" deployment the first IP address is used.
+        deployment: reverse
+        # Header name where the actual IP address will be reported, if more
+        # than one IP address is present, the last IP address will be the
+        # one taken into consideration.
+        header: X-Forwarded-For
+
+  # output module to store extracted files to disk (old style, deprecated)
   #
   # The files are stored to the log-dir in a format "file.<id>" where <id> is
   # an incrementing number starting at 1. For each file "file.<id>" a meta
-  # file "file.<id>.meta" is created.
+  # file "file.<id>.meta" is created. Before they are finalized, they will
+  # have a ".tmp" suffix to indicate that they are still being processed.
+  #
+  # If include-pid is yes, then the files are instead "file.<pid>.<id>", with
+  # meta files named as "file.<pid>.<id>.meta"
   #
   # File extraction depends on a lot of things to be fully done:
   # - file-store stream-depth. For optimal results, set this to 0 (unlimited)
@@ -419,8 +521,15 @@ outputs:
       # perform file extraction. Set to 0 for unlimited.
       #stream-depth: 0
       #waldo: file.waldo # waldo file to store the file_id across runs
+      # uncomment to disable meta file writing
+      #write-meta: no
+      # uncomment the following variable to define how many files can
+      # remain open for filestore by Suricata. Default value is 0 which
+      # means files get closed after each write
+      #max-open-files: 1000
+      include-pid: no # set to yes to include pid in file names
 
-  # output module to log files tracked in a easily parsable json format
+  # output module to log files tracked in a easily parsable JSON format
   - file-log:
       enabled: no
       filename: files-json.log
@@ -457,7 +566,7 @@ outputs:
   # Lua Output Support - execute lua script to generate alert and event
   # output.
   # Documented at:
-  # https://redmine.openinfosecfoundation.org/projects/suricata/wiki/Lua_Output
+  # https://suricata.readthedocs.io/en/latest/output/lua-output.html
   - lua:
       enabled: no
       #scripts-dir: /etc/suricata/lua-output/
@@ -471,20 +580,20 @@ logging:
   # Note that debug level logging will only be emitted if Suricata was
   # compiled with the --enable-debug configure option.
   #
-  # This value is overriden by the SC_LOG_LEVEL env var.
+  # This value is overridden by the SC_LOG_LEVEL env var.
   default-log-level: notice
 
   # The default output format.  Optional parameter, should default to
-  # something reasonable if not provided.  Can be overriden in an
+  # something reasonable if not provided.  Can be overridden in an
   # output section.  You can leave this out to get the default.
   #
-  # This value is overriden by the SC_LOG_FORMAT env var.
+  # This value is overridden by the SC_LOG_FORMAT env var.
   #default-log-format: "[%i] %t - (%f:%l) <%d> (%n) -- "
 
   # A regex to filter output.  Can be overridden in an output section.
   # Defaults to empty (no filter).
   #
-  # This value is overriden by the SC_LOG_OP_FILTER env var.
+  # This value is overridden by the SC_LOG_OP_FILTER env var.
   default-output-filter:
 
   # Define your logging outputs.  If none are defined, or they are all
@@ -510,7 +619,7 @@ logging:
 ##
 ## See "Advanced Capture Options" below for more options, including NETMAP
 ## and PF_RING.
-##"
+##
 
 # Linux high speed capture support
 af-packet:
@@ -531,6 +640,8 @@ af-packet:
     #  Requires at least Linux 3.14.
     #  * cluster_rollover: kernel rotates between sockets filling each socket before moving
     #  to the next. Requires at least Linux 3.10.
+    #  * cluster_ebpf: eBPF file load balancing. See doc/userguide/capture-hardware/ebpf-xdp.rst for
+    #  more info.
     # Recommended modes are cluster_flow on most boxes and cluster_cpu or cluster_qm on system
     # with capture card using RSS (require cpu affinity tuning and system irq tuning)
     cluster-type: cluster_flow
@@ -543,10 +654,11 @@ af-packet:
     #rollover: yes
     # To use the ring feature of AF_PACKET, set 'use-mmap' to yes
     #use-mmap: yes
-    # Lock memory map to avoid it goes to swap. Be careful that over suscribing could lock
+    # Lock memory map to avoid it goes to swap. Be careful that over subscribing could lock
     # your system
     #mmap-locked: yes
-    # Use experimental tpacket_v3 capture mode, only active if use-mmap is true
+    # Use tpacket_v3 capture mode, only active if use-mmap is true
+    # Don't use it in IPS or TAP mode as it causes severe latency
     #tpacket-v3: yes
     # Ring size will be computed with respect to max_pending_packets and number
     # of threads. You can set manually the ring size in number of packets by setting
@@ -588,6 +700,8 @@ af-packet:
     # will not be copied.
     #copy-mode: ips
     #copy-iface: eth1
+    #  For eBPF and XDP setup including bypass, filter and load balancing, please
+    #  see doc/userguide/capture/ebpf-xdt.rst for more info.
 
   # Put default values here. These will be used for an interface that is not
   # in the list above.
@@ -611,7 +725,7 @@ pcap:
     # Possible values are:
     #  - yes: checksum validation is forced
     #  - no: checksum validation is disabled
-    #  - auto: suricata uses a statistical approach to detect when
+    #  - auto: Suricata uses a statistical approach to detect when
     #  checksum off-loading is used. (default)
     # Warning: 'checksum-validation' must be set to yes to have any validation
     #checksum-checks: auto
@@ -634,7 +748,7 @@ pcap-file:
   # Possible values are:
   #  - yes: checksum validation is forced
   #  - no: checksum validation is disabled
-  #  - auto: suricata uses a statistical approach to detect when
+  #  - auto: Suricata uses a statistical approach to detect when
   #  checksum off-loading is used. (default)
   # Warning: 'checksum-validation' must be set to yes to have checksum tested
   checksum-checks: auto
@@ -655,20 +769,37 @@ pcap-file:
 # "detection-only" enables protocol detection only (parser disabled).
 app-layer:
   protocols:
+    krb5:
+      enabled: yes
+    ikev2:
+      enabled: yes
     tls:
       enabled: yes
       detection-ports:
-        dp: "443,64297"
+        dp: 443
 
-      # Completely stop processing TLS/SSL session after the handshake
-      # completed. If bypass is enabled this will also trigger flow
-      # bypass. If disabled (the default), TLS/SSL session is still
-      # tracked for Heartbleed and other anomalies.
-      #no-reassemble: yes
+      # Generate JA3 fingerprint from client hello
+      ja3-fingerprints: yes
+
+      # What to do when the encrypted communications start:
+      # - default: keep tracking TLS session, check for protocol anomalies,
+      #            inspect tls_* keywords. Disables inspection of unmodified
+      #            'content' signatures.
+      # - bypass:  stop processing this flow as much as possible. No further
+      #            TLS parsing and inspection. Offload flow bypass to kernel
+      #            or hardware if possible.
+      # - full:    keep tracking and inspection as normal. Unmodified content
+      #            keyword signatures are inspected as well.
+      #
+      # For best performance, select 'bypass'.
+      #
+      #encrypt-handling: default
+
     dcerpc:
       enabled: yes
     ftp:
       enabled: yes
+      # memcap: 64mb
     ssh:
       enabled: yes
     smtp:
@@ -703,17 +834,26 @@ app-layer:
       enabled: detection-only
     msn:
       enabled: detection-only
+    # Note: --enable-rust is required for full SMB1/2 support. W/o rust
+    # only minimal SMB1 support is available.
     smb:
       enabled: yes
       detection-ports:
-        dp: "137, 138, 139, 445"
-    # smb2 detection is disabled internally inside the engine.
-    #smb2:
-    #  enabled: yes
+        dp: 139, 445
+
+      # Stream reassembly size for SMB streams. By default track it completely.
+      #stream-depth: 0
+
+    # Note: NFS parser depends on Rust support: pass --enable-rust
+    # to configure.
+    nfs:
+      enabled: yes
+    tftp:
+      enabled: yes
     dns:
       # memcaps. Globally and per flow/state.
-      #global-memcap: 16mb
-      #state-memcap: 512kb
+      global-memcap: 16mb
+      state-memcap: 512kb
 
       # How many unreplied DNS requests are considered a flood.
       # If the limit is reached, app-layer-event:dns.flooded; will match.
@@ -744,7 +884,7 @@ app-layer:
       #                           decompressed. Defaults to 2.
       #
       # server-config:            List of server configurations to use if address matches
-      #   address:                List of ip addresses or networks for this block
+      #   address:                List of IP addresses or networks for this block
       #   personalitiy:           List of personalities used by this block
       #   request-body-limit:     Limit reassembly of request body for inspection
       #                           by http_client_body & pcre /P option.
@@ -792,6 +932,20 @@ app-layer:
 
            # auto will use http-body-inline mode in IPS mode, yes or no set it statically
            http-body-inline: auto
+
+           # Decompress SWF files.
+           # 2 types: 'deflate', 'lzma', 'both' will decompress deflate and lzma
+           # compress-depth:
+           # Specifies the maximum amount of data to decompress,
+           # set 0 for unlimited.
+           # decompress-depth:
+           # Specifies the maximum amount of decompressed data to obtain,
+           # set 0 for unlimited.
+           swf-decompression:
+             enabled: yes
+             type: both
+             compress-depth: 0
+             decompress-depth: 0
 
            # Take a random value for inspection sizes around the specified value.
            # This lower the risk of some evasion technics but could lead
@@ -861,10 +1015,17 @@ app-layer:
 
     # SCADA EtherNet/IP and CIP protocol support
     enip:
-      enabled: yes
+      enabled: no
       detection-ports:
         dp: 44818
         sp: 44818
+
+    # Note: parser depends on Rust support
+    ntp:
+      enabled: yes
+
+    dhcp:
+      enabled: no
 
 # Limit for the maximum number of asn1 frames to decode (default 256)
 asn1-max-frames: 256
@@ -881,22 +1042,28 @@ asn1-max-frames: 256
 ##
 
 # Run suricata as user and group.
-run-as:
-  user: suri
-  group: suri
+#run-as:
+#  user: suri
+#  group: suri
 
 # Some logging module will use that name in event as identifier. The default
 # value is the hostname
 #sensor-name: suricata
 
-# Default pid file.
-# Will use this file if no --pidfile in command options.
+# Default location of the pid file. The pid file is only used in
+# daemon mode (start Suricata with -D). If not running in daemon mode
+# the --pidfile command line option must be used to create a pid file.
 #pid-file: /var/run/suricata.pid
 
 # Daemon working directory
 # Suricata will change directory to this one if provided
 # Default: "/"
 #daemon-directory: "/"
+
+# Umask.
+# Suricata will use this umask if it is provided. By default it will use the
+# umask passed on by the shell.
+#umask: 022
 
 # Suricata core dump configuration. Limits the size of the core dump file to
 # approximately max-dump. The actual core dump size will be a multiple of the
@@ -910,20 +1077,16 @@ run-as:
 coredump:
   max-dump: unlimited
 
-# If suricata box is a router for the sniffed networks, set it to 'router'. If
+# If Suricata box is a router for the sniffed networks, set it to 'router'. If
 # it is a pure sniffing setup, set it to 'sniffer-only'.
 # If set to auto, the variable is internally switch to 'router' in IPS mode
 # and 'sniffer-only' in IDS mode.
 # This feature is currently only used by the reject* keywords.
 host-mode: auto
 
-# Number of packets preallocated per thread. The default is 1024. A higher number
-# will make sure each CPU will be more easily kept busy, but may negatively
+# Number of packets preallocated per thread. The default is 1024. A higher number 
+# will make sure each CPU will be more easily kept busy, but may negatively 
 # impact caching.
-#
-# If you are using the CUDA pattern matcher (mpm-algo: ac-cuda), different rules
-# apply. In that case try something like 60000 or more. This is because the CUDA
-# pattern matcher buffers and scans as many packets as possible in parallel.
 #max-pending-packets: 1024
 
 # Runmode the engine should use. Please check --list-runmodes to get the available
@@ -938,7 +1101,7 @@ host-mode: auto
 # round-robin       - Flows assigned to threads in a round robin fashion.
 # active-packets    - Flows assigned to threads that have the lowest number of
 #                     unprocessed packets (default).
-# hash              - Flow alloted usihng the address hash. More of a random
+# hash              - Flow allocated using the address hash. More of a random
 #                     technique. Was the default in Suricata 1.2.1 and older.
 #
 #autofp-scheduler: active-packets
@@ -948,8 +1111,8 @@ host-mode: auto
 # packet size (MTU + hardware header) on your system.
 #default-packet-size: 1514
 
-# Unix command socket can be used to pass commands to suricata.
-# An external tool can then connect to get information from suricata
+# Unix command socket can be used to pass commands to Suricata.
+# An external tool can then connect to get information from Suricata
 # or trigger some modifications of the engine. Set enabled to yes
 # to activate the feature. In auto mode, the feature will only be
 # activated in live capture mode. You can use the filename variable to set
@@ -960,7 +1123,7 @@ unix-command:
 
 # Magic file. The extension .mgc is added to the value here.
 #magic-file: /usr/share/file/magic
-magic-file: /usr/share/misc/magic.mgc
+magic-file: /usr/share/misc/magic.mgc 
 
 legacy:
   uricontent: enabled
@@ -969,7 +1132,7 @@ legacy:
 ## Detection settings
 ##
 
-# Set the order of alerts bassed on actions
+# Set the order of alerts based on actions
 # The default order is pass, drop, reject, alert
 # action-order:
 #   - pass
@@ -1057,10 +1220,10 @@ defrag:
 # emergency-recovery is the percentage of flows that the engine need to
 # prune before unsetting the emergency state. The emergency state is activated
 # when the memcap limit is reached, allowing to create new flows, but
-# prunning them with the emergency timeouts (they are defined below).
+# pruning them with the emergency timeouts (they are defined below).
 # If the memcap is reached, the engine will try to prune flows
-# with the default timeouts. If it doens't find a flow to prune, it will set
-# the emergency bit and it will try again with more agressive timeouts.
+# with the default timeouts. If it doesn't find a flow to prune, it will set
+# the emergency bit and it will try again with more aggressive timeouts.
 # If that doesn't work, then it will try to kill the last time seen flows
 # not in use.
 # The memcap can be specified in kb, mb, gb.  Just a number indicates it's
@@ -1083,7 +1246,7 @@ vlan:
 
 # Specific timeouts for flows. Here you can specify the timeouts that the
 # active flows will wait to transit from the current state to another, on each
-# protocol. The value of "new" determine the seconds to wait after a hanshake or
+# protocol. The value of "new" determine the seconds to wait after a handshake or
 # stream startup before the engine free the data of that flow it doesn't
 # change the state to established (usually if we don't receive more packets
 # of that flow). The value of "established" is the amount of
@@ -1144,7 +1307,7 @@ flow-timeouts:
 #                               # packet. If csum validation is specified as
 #                               # "yes", then packet with invalid csum will not
 #                               # be processed by the engine stream/app layer.
-#                               # Warning: locally generated trafic can be
+#                               # Warning: locally generated traffic can be
 #                               # generated without checksum due to hardware offload
 #                               # of checksum. You can control the handling of checksum
 #                               # on a per-interface basis via the 'checksum-checks'
@@ -1153,6 +1316,7 @@ flow-timeouts:
 #   midstream: false            # don't allow midstream session pickups
 #   async-oneside: false        # don't enable async stream handling
 #   inline: no                  # stream inline mode
+#   drop-invalid: yes           # in inline mode, drop packets that are invalid with regards to streaming engine
 #   max-synack-queued: 5        # Max different SYN/ACKs to queue
 #   bypass: no                  # Bypass packets when stream.depth is reached
 #
@@ -1164,11 +1328,9 @@ flow-timeouts:
 #     toserver-chunk-size: 2560 # inspect raw stream in chunks of at least
 #                               # this size.  Can be specified in kb, mb,
 #                               # gb.  Just a number indicates it's in bytes.
-#                               # The max acceptable size is 4024 bytes.
 #     toclient-chunk-size: 2560 # inspect raw stream in chunks of at least
 #                               # this size.  Can be specified in kb, mb,
 #                               # gb.  Just a number indicates it's in bytes.
-#                               # The max acceptable size is 4024 bytes.
 #     randomize-chunk-size: yes # Take a random value for chunk size around the specified value.
 #                               # This lower the risk of some evasion technics but could lead
 #                               # detection change between runs. It is set to 'yes' by default.
@@ -1182,17 +1344,15 @@ flow-timeouts:
 #                               # raw is for content inspection by detection
 #                               # engine.
 #
-#     chunk-prealloc: 250       # Number of preallocated stream chunks. These
-#                               # are used during stream inspection (raw).
-#     segments:                 # Settings for reassembly segment pool.
-#       - size: 4               # Size of the (data)segment for a pool
-#         prealloc: 256         # Number of segments to prealloc and keep
-#                               # in the pool.
-#     zero-copy-size: 128       # This option sets in bytes the value at
-#                               # which segment data is passed to the app
-#                               # layer API directly. Data sizes equal to
-#                               # and higher than the value set are passed
-#                               # on directly.
+#     segment-prealloc: 2048    # number of segments preallocated per thread
+#
+#     check-overlap-different-data: true|false
+#                               # check if a segment contains different data
+#                               # than what we've already seen for that
+#                               # position in the stream.
+#                               # This is enabled automatically if inline mode
+#                               # is used or when stream-event:reassembly_overlap_different_data;
+#                               # is used in a rule.
 #
 stream:
   memcap: 64mb
@@ -1206,27 +1366,8 @@ stream:
     randomize-chunk-size: yes
     #randomize-chunk-range: 10
     #raw: yes
-    #chunk-prealloc: 250
-    #segments:
-    #  - size: 4
-    #    prealloc: 256
-    #  - size: 16
-    #    prealloc: 512
-    #  - size: 112
-    #    prealloc: 512
-    #  - size: 248
-    #    prealloc: 512
-    #  - size: 512
-    #    prealloc: 512
-    #  - size: 768
-    #    prealloc: 1024
-    # 'from_mtu' means that the size is mtu - 40,
-    # or 1460 if mtu couldn't be determined.
-    #  - size: from_mtu
-    #    prealloc: 1024
-    #  - size: 65535
-    #    prealloc: 128
-    #zero-copy-size: 128
+    #segment-prealloc: 2048
+    #check-overlap-different-data: true
 
 # Host table:
 #
@@ -1245,6 +1386,14 @@ host:
 #  hash-size: 4096
 #  prealloc: 1000
 #  memcap: 32mb
+
+# Decoder settings
+
+decoder:
+  # Teredo decoder is known to not be completely accurate
+  # it will sometimes detect non-teredo as teredo.
+  teredo:
+    enabled: true
 
 
 ##
@@ -1312,7 +1461,6 @@ detect:
 # The supported algorithms are:
 # "ac"      - Aho-Corasick, default implementation
 # "ac-bs"   - Aho-Corasick, reduced memory implementation
-# "ac-cuda" - Aho-Corasick, CUDA implementation
 # "ac-ks"   - Aho-Corasick, "Ken Steele" variant
 # "hs"      - Hyperscan, available when built with Hyperscan support
 #
@@ -1325,10 +1473,6 @@ detect:
 # to be set to "single", because of ac's memory requirements, unless the
 # ruleset is small enough to fit in one's memory, in which case one can
 # use "full" with "ac".  Rest of the mpms can be run in "full" mode.
-#
-# There is also a CUDA pattern matcher (only available if Suricata was
-# compiled with --enable-cuda: b2g_cuda. Make sure to update your
-# max-pending-packets setting above as well if you use b2g_cuda.
 
 mpm-algo: auto
 
@@ -1357,9 +1501,9 @@ threading:
   #
   cpu-affinity:
     - management-cpu-set:
-        cpu: [ 0 ]  # include only these cpus in affinity settings
+        cpu: [ 0 ]  # include only these CPUs in affinity settings
     - receive-cpu-set:
-        cpu: [ 0 ]  # include only these cpus in affinity settings
+        cpu: [ 0 ]  # include only these CPUs in affinity settings
     - worker-cpu-set:
         cpu: [ "all" ]
         mode: "exclusive"
@@ -1409,28 +1553,34 @@ profiling:
 
     # Profiling can be disabled here, but it will still have a
     # performance impact if compiled in.
-    enabled: yes
+    enabled: no
     filename: rule_perf.log
     append: yes
 
     # Sort options: ticks, avgticks, checks, matches, maxticks
-    sort: avgticks
+    # If commented out all the sort options will be used.
+    #sort: avgticks
 
-    # Limit the number of items printed at exit (ignored for json).
-    limit: 100
+    # Limit the number of sids for which stats are shown at exit (per sort).
+    limit: 10
 
     # output to json
     json: yes
 
   # per keyword profiling
   keywords:
-    enabled: yes
+    enabled: no
     filename: keyword_perf.log
+    append: yes
+
+  prefilter:
+    enabled: no
+    filename: prefilter_perf.log
     append: yes
 
   # per rulegroup profiling
   rulegroups:
-    enabled: yes
+    enabled: no
     filename: rule_group_perf.log
     append: yes
 
@@ -1439,7 +1589,7 @@ profiling:
 
     # Profiling can be disabled here, but it will still have a
     # performance impact if compiled in.
-    enabled: yes
+    enabled: no
     filename: packet_stats.log
     append: yes
 
@@ -1469,7 +1619,7 @@ profiling:
 
 # When running in NFQ inline mode, it is possible to use a simulated
 # non-terminal NFQUEUE verdict.
-# This permit to do send all needed packet to suricata via this a rule:
+# This permit to do send all needed packet to Suricata via this a rule:
 #        iptables -I FORWARD -m mark ! --mark $MARK/$MASK -j NFQUEUE
 # And below, you can have your standard filtering ruleset. To activate
 # this mode, you need to set mode to 'repeat'
@@ -1478,7 +1628,7 @@ profiling:
 # On linux >= 3.1, you can set batchcount to a value > 1 to improve performance
 # by processing several packets before sending a verdict (worker runmode only).
 # On linux >= 3.6, you can set the fail-open option to yes to have the kernel
-# accept the packet if suricata is not able to keep pace.
+# accept the packet if Suricata is not able to keep pace.
 # bypass mark and mask can be used to implement NFQ bypass. If bypass mark is
 # set then the NFQ bypass is activated. Suricata will set the bypass mark/mask
 # on packet of a flow that need to be bypassed. The Nefilter ruleset has to
@@ -1516,17 +1666,17 @@ nflog:
 
 # general settings affecting packet capture
 capture:
-  # disable NIC offloading. It's restored when Suricata exists.
-  # Enabled by default
+  # disable NIC offloading. It's restored when Suricata exits.
+  # Enabled by default.
   #disable-offloading: false
   #
   # disable checksum validation. Same as setting '-k none' on the
-  # commandline
+  # commandline.
   #checksum-validation: none
 
 # Netmap support
 #
-# Netmap operates with NIC directly in driver, so you need FreeBSD wich have
+# Netmap operates with NIC directly in driver, so you need FreeBSD which have
 # built-in netmap support or compile and install netmap module and appropriate
 # NIC driver on your Linux system.
 # To reach maximum throughput disable all receive-, segmentation-,
@@ -1561,7 +1711,7 @@ netmap:
    # Possible values are:
    #  - yes: checksum validation is forced
    #  - no: checksum validation is disabled
-   #  - auto: suricata uses a statistical approach to detect when
+   #  - auto: Suricata uses a statistical approach to detect when
    #  checksum off-loading is used.
    # Warning: 'checksum-validation' must be set to yes to have any validation
    #checksum-checks: auto
@@ -1578,9 +1728,9 @@ netmap:
 # for more info see http://www.ntop.org/products/pf_ring/
 pfring:
   - interface: eth0
-    # Number of receive threads (>1 will enable experimental flow pinned
-    # runmode)
-    threads: 1
+    # Number of receive threads. If set to 'auto' Suricata will first try
+    # to use CPU (core) count and otherwise RSS queue count.
+    threads: auto
 
     # Default clusterid.  PF_RING will load balance packets based on flow.
     # All threads/processes that will participate need to have the same
@@ -1590,8 +1740,15 @@ pfring:
     # Default PF_RING cluster type. PF_RING can load balance per flow.
     # Possible values are cluster_flow or cluster_round_robin.
     cluster-type: cluster_flow
+
     # bpf filter for this interface
     #bpf-filter: tcp
+
+    # If bypass is set then the PF_RING hw bypass is activated, when supported
+    # by the interface in use. Suricata will instruct the interface to bypass
+    # all future packets for a flow that need to be bypassed.
+    #bypass: yes
+
     # Choose checksum verification mode for the interface. At the moment
     # of the capture, some packets may be with an invalid checksum due to
     # offloading to the network card of the checksum computation.
@@ -1599,7 +1756,7 @@ pfring:
     #  - rxonly: only compute checksum for packets received by network card.
     #  - yes: checksum validation is forced
     #  - no: checksum validation is disabled
-    #  - auto: suricata uses a statistical approach to detect when
+    #  - auto: Suricata uses a statistical approach to detect when
     #  checksum off-loading is used. (default)
     # Warning: 'checksum-validation' must be set to yes to have any validation
     #checksum-checks: auto
@@ -1642,6 +1799,8 @@ ipfw:
 napatech:
     # The Host Buffer Allowance for all streams
     # (-1 = OFF, 1 - 100 = percentage of the host buffer that can be held back)
+    # This may be enabled when sharing streams with another application.
+    # Otherwise, it should be turned off.
     hba: -1
 
     # use_all_streams set to "yes" will query the Napatech service for all configured
@@ -1649,8 +1808,11 @@ napatech:
     # will be used.
     use-all-streams: yes
 
-    # The streams to listen on
-    streams: [1, 2, 3]
+    # The streams to listen on.  This can be either:
+    #   a list of individual streams (e.g. streams: [0,1,2,3])
+    # or
+    #   a range of streams (e.g. streams: ["0-3"])
+    streams: ["0-3"]
 
 # Tilera mpipe configuration. for use on Tilera TILE-Gx.
 mpipe:
@@ -1680,39 +1842,92 @@ mpipe:
     size16384: 0
 
 ##
-## Hardware accelaration
+## Configure Suricata to load Suricata-Update managed rules.
+##
+## If this section is completely commented out move down to the "Advanced rule
+## file configuration".
 ##
 
-# Cuda configuration.
-cuda:
-  # The "mpm" profile.  On not specifying any of these parameters, the engine's
-  # internal default values are used, which are same as the ones specified in
-  # in the default conf file.
-  mpm:
-    # The minimum length required to buffer data to the gpu.
-    # Anything below this is MPM'ed on the CPU.
-    # Can be specified in kb, mb, gb.  Just a number indicates it's in bytes.
-    # A value of 0 indicates there's no limit.
-    data-buffer-size-min-limit: 0
-    # The maximum length for data that we would buffer to the gpu.
-    # Anything over this is MPM'ed on the CPU.
-    # Can be specified in kb, mb, gb.  Just a number indicates it's in bytes.
-    data-buffer-size-max-limit: 1500
-    # The ring buffer size used by the CudaBuffer API to buffer data.
-    cudabuffer-buffer-size: 500mb
-    # The max chunk size that can be sent to the gpu in a single go.
-    gpu-transfer-size: 50mb
-    # The timeout limit for batching of packets in microseconds.
-    batching-timeout: 2000
-    # The device to use for the mpm.  Currently we don't support load balancing
-    # on multiple gpus.  In case you have multiple devices on your system, you
-    # can specify the device to use, using this conf.  By default we hold 0, to
-    # specify the first device cuda sees.  To find out device-id associated with
-    # the card(s) on the system run "suricata --list-cuda-cards".
-    device-id: 0
-    # No of Cuda streams used for asynchronous processing. All values > 0 are valid.
-    # For this option you need a device with Compute Capability > 1.0.
-    cuda-streams: 2
+#default-rule-path: /var/lib/suricata/rules
+#rule-files:
+# - suricata.rules
+
+##
+## Advanced rule file configuration.
+##
+## If this section is completely commented out then your configuration
+## is setup for suricata-update as it was most likely bundled and
+## installed with Suricata.
+##
+
+default-rule-path: /etc/suricata/rules
+
+rule-files:
+ - botcc.rules
+ - botcc.portgrouped.rules
+ - ciarmy.rules
+ - compromised.rules
+ - drop.rules
+ - dshield.rules
+ - emerging-activex.rules
+ - emerging-attack_response.rules
+ - emerging-chat.rules
+ - emerging-current_events.rules
+ - emerging-dns.rules
+ - emerging-dos.rules
+ - emerging-exploit.rules
+ - emerging-ftp.rules
+ - emerging-games.rules
+ - emerging-icmp_info.rules
+ - emerging-icmp.rules
+ - emerging-imap.rules
+ - emerging-inappropriate.rules
+ - emerging-info.rules
+ - emerging-malware.rules
+ - emerging-misc.rules
+ - emerging-mobile_malware.rules
+ - emerging-netbios.rules
+ - emerging-p2p.rules
+ - emerging-policy.rules
+ - emerging-pop3.rules
+ - emerging-rpc.rules
+ - emerging-scada.rules
+ #- emerging-scada_special.rules
+ - emerging-scan.rules
+ - emerging-shellcode.rules
+ - emerging-smtp.rules
+ - emerging-snmp.rules
+ - emerging-sql.rules
+ - emerging-telnet.rules
+ - emerging-tftp.rules
+ - emerging-trojan.rules
+ - emerging-user_agents.rules
+ - emerging-voip.rules
+ - emerging-web_client.rules
+ - emerging-web_server.rules
+ - emerging-web_specific_apps.rules
+ - emerging-worm.rules
+ - tor.rules
+ - decoder-events.rules # available in suricata sources under rules dir
+ - stream-events.rules  # available in suricata sources under rules dir
+ - http-events.rules    # available in suricata sources under rules dir
+ - smtp-events.rules    # available in suricata sources under rules dir
+ - dns-events.rules     # available in suricata sources under rules dir
+ - tls-events.rules     # available in suricata sources under rules dir
+ - modbus-events.rules  # available in suricata sources under rules dir
+ - app-layer-events.rules  # available in suricata sources under rules dir
+ - dnp3-events.rules       # available in suricata sources under rules dir
+ - ntp-events.rules       # available in suricata sources under rules dir
+ - ipsec-events.rules       # available in suricata sources under rules dir
+ - kerberos-events.rules       # available in suricata sources under rules dir
+
+##
+## Auxiliary configuration files.
+##
+
+classification-file: /etc/suricata/rules/classification.config
+reference-config-file: /etc/suricata/reference.config
+# threshold-file: /etc/suricata/threshold.config
 
 ##
 ## Include other configs
