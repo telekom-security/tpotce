@@ -238,7 +238,14 @@ fuPULLIMAGES 2>&1>/dev/null
 #fuREMOVEOLDIMAGES "1804"
 echo "### If you made changes to tpot.yml please ensure to add them again."
 echo "### We stored the previous version as backup in /root/."
-echo "### Done, please reboot."
+echo "### Some updates may need an import of the latest Kibana objects as well."
+echo "### Download the latest objects here if they recently changed:"
+echo "### https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/etc/objects/kibana_export.json.zip"
+echo "### Export and import the objects easily through the Kibana WebUI:"
+echo "### Go to Kibana > Management > Saved Objects > Export / Import"
+echo "### All objects will be overwritten upon import, make sure to run an export first."
+echo
+echo "### Please reboot."
 echo
 }
 

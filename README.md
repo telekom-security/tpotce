@@ -85,8 +85,20 @@ Furthermore we use the following tools
   - CyberChef 8.27.0
   - SpiderFoot v3.0
   - Cockpit 188
+  - NGINX is now built to enforce TLS 1.3 on the T-Pot WebUI
 - **Update honeypots**
-  - Where possible / feasible the honeypots have been updated to their latest version
+  - Where possible / feasible the honeypots have been updated to their latest versions.
+  - *Cowrie* now supports *HASSH* generated hashes which allows for an easier identification of an attacker accross IP adresses.
+  - *Heralding* now supports *SOCKS5* emulation.
+- **Update Dashboards & Visualizations**
+  - *Offset Dashboard* added to easily spot changes in attacks on a single dashboard in 24h time window.
+  - *Cowrie Dashboard* modified to integrate *HASSH* support / visualizations.
+  - *HoneyPy Dashboard* added to support latest honeypot addition.
+  - *Suricata Dashboard* modified to integrate *JA3* support / visualizations.
+- **Bugs**
+  - Fixed issue #298 where the import and export of objects on the shell did not work.
+  - Fixed issue #313 where Spiderfoot raised a KeyError, which was previously fixed in upstream.
+  - Fixed error in Suricata where path for reference.config changed.
 - **Release Cycle**
   - As far as possible we will integrate changes now faster into the master branch, eliminating the need for monolithic releases. The update feature will be continuously improved on that behalf. However this might not account for all feature changes.
 - **SISSDEN Opt-In**
