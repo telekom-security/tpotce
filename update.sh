@@ -79,6 +79,13 @@ function fuCHECK_VERSION () {
 local myMINVERSION="19.03.0"
 local myMASTERVERSION="19.03.0"
 echo
+echo "### Checking for Release ID"
+myRELEASE=$(lsb_release -i | grep Debian -c)
+if [ "$myRELEASE" == "0" ] 
+  then
+    echo "###### This version of T-Pot cannot be upgraded automatically. Please run a fresh install.$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+    exit
+fi
 echo "### Checking for version tag ..."
 if [ -f "version" ];
   then
