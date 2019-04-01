@@ -355,7 +355,7 @@ services:
      - EWS_HPFEEDS_CHANNELS=channels
      - EWS_HPFEEDS_IDENT=user
      - EWS_HPFEEDS_SECRET=secret
-     - EWS_HPFEEDS_TLSCERT=/opt/ewsposter/ca.pem
+     - EWS_HPFEEDS_TLSCERT=false
      - EWS_HPFEEDS_FORMAT=json
     env_file:
      - /opt/tpot/etc/compose/elk_environment
