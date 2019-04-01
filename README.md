@@ -443,7 +443,7 @@ We encourage you not to disable the data submission as it is the main purpose of
 <a name="hpfeeds-optin"></a>
 ## Opt-In HPFEEDS Data Submission
 As an Opt-In it is now possible to also share T-Pot data with 3rd party HPFEEDS brokers, such as [SISSDEN](https://sissden.eu).
-If you want to share your T-Pot data you simply have to regsiter an account with a 3rd party broker with its own benefits towards the community. Once registered you will receive your credentials to share events with the broker. In T-Pot you simply run `hpfeeds_optin.sh` which will ask for your credentials, in case of SISSDEN this is just `Ident` and `Secret`, everything else is pre-configured. It will automatically update `/opt/tpot/etc/tpot.yml` to deliver events to your desired broker.
+If you want to share your T-Pot data you simply have to register an account with a 3rd party broker with its own benefits towards the community. Once registered you will receive your credentials to share events with the broker. In T-Pot you simply run `hpfeeds_optin.sh` which will ask for your credentials, in case of SISSDEN this is just `Ident` and `Secret`, everything else is pre-configured. It will automatically update `/opt/tpot/etc/tpot.yml` to deliver events to your desired broker.
 
 <a name="roadmap"></a>
 # Roadmap
