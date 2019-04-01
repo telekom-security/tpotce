@@ -268,11 +268,6 @@ function fuGET_DEPS {
   echo "### Determine fastest mirror for your location."
   echo
   netselect-apt -n -a amd64 unstable && cp sources.list /etc/apt/
-#  # Point to Debian (Sid, unstable)
-#  tee /etc/apt/sources.list <<EOF
-#deb http://deb.debian.org/debian unstable main contrib non-free
-#deb-src http://deb.debian.org/debian unstable main contrib non-free
-#EOF
   echo
   echo "### Getting update information."
   echo
@@ -658,7 +653,7 @@ pip install elasticsearch-curator yq
 
 # Cloning T-Pot from GitHub
 fuBANNER "Cloning T-Pot"
-git clone https://github.com/dtag-dev-sec/tpotce -b debian /opt/tpot
+git clone https://github.com/dtag-dev-sec/tpotce /opt/tpot
 
 # Let's create the T-Pot user
 fuBANNER "Create user"
