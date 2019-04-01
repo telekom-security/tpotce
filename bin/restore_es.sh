@@ -2,10 +2,10 @@
 # Restore folder based ES backup
 # Make sure ES is available
 myES="http://127.0.0.1:64298/"
-myESSTATUS=$(curl -s -XGET ''$myES'_cluster/health' | jq '.' | grep -c green)
+myESSTATUS=$(curl -s -XGET ''$myES'_cluster/health' | jq '.' | grep -c "green\|yellow")
 if ! [ "$myESSTATUS" = "1" ]
   then
-    echo "### Elasticsearch is not available, try starting via 'systemctl start elk'."
+    echo "### Elasticsearch is not available, try starting via 'systemctl start tpot'."
     exit
   else
     echo "### Elasticsearch is available, now continuing."
@@ -41,17 +41,31 @@ echo $myCOL1"### Now unpacking tar archive: "$myDUMP $myCOL0
 tar xvf $myDUMP
 
 # Build indices list
-myINDICES=$(ls tmp/logstash*.gz | cut -c 5- | rev | cut -c 4- | rev)
+myINDICES="$(ls tmp/logstash*.gz | cut -c 5- | rev | cut -c 4- | rev)"
 myINDICES+=" .kibana"
 echo $myCOL1"### The following indices will be restored: "$myCOL0
 echo $myINDICES
 echo
 
+# Force single seat template for everything
+echo -n $myCOL1"### Forcing single seat template: "$myCOL0
+curl -s XPUT ''$myES'_template/.*' -H 'Content-Type: application/json' -d'
+{ "index_patterns": ".*",
+  "order": 1,
+  "settings": 
+    { 
+      "number_of_shards": 1,
+      "number_of_replicas": 0 
+    }
+}'
+echo
+
 # Restore indices
+curl -s -X DELETE ''$myES'.kibana*' > /dev/null
 for i in $myINDICES;
   do
     # Delete index if it already exists
-    curl -s -XDELETE $myES$i > /dev/null
+    curl -s -X DELETE $myES$i > /dev/null
     echo $myCOL1"### Now uncompressing: tmp/$i.gz" $myCOL0
     gunzip -f tmp/$i.gz
     # Restore index to ES

@@ -2,14 +2,14 @@
 
 # Set TERM, DIALOGRC
 export TERM=linux
-export DIALOGRC=/etc/dialogrc
 
 # Let's define some global vars
 myBACKTITLE="T-Pot - ISO Creator"
-# If you need latest hardware support, try using the hardware enablement (hwe) ISO, usually released later in time
-# myUBUNTULINK="http://archive.ubuntu.com/ubuntu/dists/bionic/main/installer-amd64/current/images/hwe-netboot/mini.iso"
-myUBUNTULINK="http://archive.ubuntu.com/ubuntu/dists/bionic/main/installer-amd64/current/images/netboot/mini.iso"
-myUBUNTUISO="mini.iso"
+#myMINIISOLINK="http://ftp.debian.org/debian/dists/testing/main/installer-amd64/current/images/netboot/mini.iso"
+#myMINIISOLINK="https://d-i.debian.org/daily-images/amd64/daily/netboot/mini.iso"
+# For stability reasons Debian Sid installation is built on a stable installer
+myMINIISOLINK="http://ftp.debian.org/debian/dists/stretch/main/installer-amd64/current/images/netboot/mini.iso"
+myMINIISO="mini.iso"
 myTPOTISO="tpot.iso"
 myTPOTDIR="tpotiso"
 myTPOTSEED="iso/preseed/tpot.seed"
@@ -49,9 +49,6 @@ if [ "$myINST" != "" ]
     done
 fi
 
-# Let's load dialog color theme
-cp host/etc/dialogrc /etc/
-
 # Let's clean up at the end or if something goes wrong ...
 function fuCLEANUP {
 rm -rf $myTMP $myTPOTDIR $myPFXFILE $myNTPCONFFILE $myCONF_FILE
@@ -81,7 +78,7 @@ function valid_ip()
 }
 
 # Let's ask if the user wants to run the script ...
-dialog --backtitle "$myBACKTITLE" --title "[ Continue? ]" --yesno "\nDownload latest supported Ubuntu Mini ISO and build the T-Pot Install Image." 8 50
+dialog --backtitle "$myBACKTITLE" --title "[ Continue? ]" --yesno "\nDownload latest supported Debian Mini ISO and build the T-Pot Install Image." 8 50
 mySTART=$?
 if [ "$mySTART" = "1" ];
   then
@@ -207,18 +204,18 @@ if [ "$myCONF_PROXY_USE" == "0" ] || [ "$myCONF_PFX_USE" == "0" ] || [ "$myCONF_
     echo "myCONF_NTP_CONF_FILE=\"/root/installer/ntp.conf\"" >> $myCONF_FILE
 fi
 
-# Let's download Ubuntu Minimal ISO
-if [ ! -f $myUBUNTUISO ]
+# Let's download Debian Minimal ISO
+if [ ! -f $myMINIISO ]
   then
-    wget $myUBUNTULINK --progress=dot 2>&1 | awk '{print $7+0} fflush()' | dialog --backtitle "$myBACKTITLE" --title "[ Downloading Ubuntu ... ]" --gauge "" 5 70;
-    echo 100 | dialog --backtitle "$myBACKTITLE" --title "[ Downloading Ubuntu ... Done! ]" --gauge "" 5 70;
+    wget $myMINIISOLINK --progress=dot 2>&1 | awk '{print $7+0} fflush()' | dialog --backtitle "$myBACKTITLE" --title "[ Downloading Debian ... ]" --gauge "" 5 70;
+    echo 100 | dialog --backtitle "$myBACKTITLE" --title "[ Downloading Debian ... Done! ]" --gauge "" 5 70;
   else
     dialog --infobox "Using previously downloaded .iso ..." 3 50;
 fi
 
 # Let's loop mount it and copy all contents
 mkdir -p $myTMP $myTPOTDIR
-mount -o loop $myUBUNTUISO $myTMP
+mount -o loop $myMINIISO $myTMP
 rsync -a $myTMP/ $myTPOTDIR
 umount $myTMP
 
@@ -278,5 +275,7 @@ do
       break;
   fi
 done
+
+dialog --clear
 
 exit 0

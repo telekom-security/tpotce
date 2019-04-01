@@ -1,5 +1,13 @@
 #!/bin/bash
 
+# Run as root only.
+myWHOAMI=$(whoami)
+if [ "$myWHOAMI" != "root" ]
+  then
+    echo "Need to run as root ..."
+    exit
+fi
+
 # set backtitle, get filename
 myBACKTITLE="T-Pot Edition Selection Tool"
 myYMLS=$(cd /opt/tpot/etc/compose/ && ls -1 *.yml)
@@ -21,7 +29,7 @@ for i in $myYMLS;
   do
     myITEMS+="$i $(echo $i | cut -d "." -f1 | tr [:lower:] [:upper:]) " 
 done
-myEDITION=$(dialog --backtitle "$myBACKTITLE" --menu "Select T-Pot Edition" 13 50 6 $myITEMS 3>&1 1>&2 2>&3 3>&-)
+myEDITION=$(dialog --backtitle "$myBACKTITLE" --menu "Select T-Pot Edition" 12 50 5 $myITEMS 3>&1 1>&2 2>&3 3>&-)
 if [ "$myEDITION" == "" ];
   then
     echo "Have a nice day!"

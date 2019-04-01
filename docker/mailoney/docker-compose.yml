@@ -20,7 +20,7 @@ services:
      - mailoney_local
     ports:
      - "25:25"
-    image: "dtagdevsec/mailoney:1811"
+    image: "dtagdevsec/mailoney:1903"
     read_only: true
     volumes:
      - /data/mailoney/log:/opt/mailoney/logs

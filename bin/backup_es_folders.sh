@@ -1,4 +1,12 @@
 #!/bin/bash
+# Run as root only.
+myWHOAMI=$(whoami)
+if [ "$myWHOAMI" != "root" ]
+  then
+    echo "Need to run as root ..."
+    exit
+fi
+
 # Backup all ES relevant folders
 # Make sure ES is available
 myES="http://127.0.0.1:64298/"
@@ -16,7 +24,7 @@ fi
 myCOUNT=1
 myDATE=$(date +%Y%m%d%H%M)
 myELKPATH="/data/elk/data"
-myKIBANAINDEXNAME=$(curl -s -XGET ''$myES'_cat/indices/' | grep -w ".kibana_1" | awk '{ print $4 }')
+myKIBANAINDEXNAME=$(curl -s -XGET ''$myES'_cat/indices/.kibana' | awk '{ print $4 }')
 myKIBANAINDEXPATH=$myELKPATH/nodes/0/indices/$myKIBANAINDEXNAME
 
 # Let's ensure normal operation on exit or if interrupted ...

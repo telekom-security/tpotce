@@ -1,4 +1,4 @@
-FROM alpine
+FROM alpine:3.8
 
 # Get and install dependencies & packages
 RUN apk -U --no-cache add \
@@ -12,7 +12,7 @@ RUN apk -U --no-cache add \
 
 # Install CyberChef 
     cd /root && \
-    git clone https://github.com/gchq/cyberchef -b v8.20.0 --depth=1 && \
+    git clone https://github.com/gchq/cyberchef --depth=1 && \
     chown -R nobody:nobody cyberchef && \
     cd cyberchef && \
     npm install && \

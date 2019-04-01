@@ -15,8 +15,8 @@ services:
     networks:
      - glastopf_local
     ports:
-     - "80:80"
-    image: "dtagdevsec/glastopf:1811"
+     - "8081:80"
+    image: "dtagdevsec/glastopf:1903"
     read_only: true
     volumes:
      - /data/glastopf/db:/tmp/glastopf/db

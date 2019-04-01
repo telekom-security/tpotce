@@ -150,3 +150,8 @@ capabilities:
     enabled: true
     port: 5900
     timeout: 30
+
+  socks5:
+    enabled: true
+    port: 1080
+    timeout: 30

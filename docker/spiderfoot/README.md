@@ -1,4 +1,4 @@
-[![](https://images.microbadger.com/badges/version/dtagdevsec/spiderfoot:1811.svg)](https://microbadger.com/images/dtagdevsec/spiderfoot:1811 "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/dtagdevsec/spiderfoot:1811.svg)](https://microbadger.com/images/dtagdevsec/spiderfoot:1811 "Get your own image badge on microbadger.com")
+[![](https://images.microbadger.com/badges/version/dtagdevsec/spiderfoot:1903.svg)](https://microbadger.com/images/dtagdevsec/spiderfoot:1903 "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/dtagdevsec/spiderfoot:1903.svg)](https://microbadger.com/images/dtagdevsec/spiderfoot:1903 "Get your own image badge on microbadger.com")
 
 [spiderfoot](https://github.com/smicallef/spiderfoot) the open source footprinting and intelligence-gathering tool.
 

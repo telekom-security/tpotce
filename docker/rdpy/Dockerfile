@@ -34,7 +34,7 @@ RUN apk -U --no-cache add \
                 pyasn1 && \
 
 # Install rdpy from git
-    mkdir /opt && \
+    mkdir -p /opt && \
     cd /opt && \
     git clone --depth=1 https://github.com/t3chn0m4g3/rdpy && \
     cd rdpy && \

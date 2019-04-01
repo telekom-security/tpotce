@@ -20,7 +20,7 @@ RUN apk -U --no-cache add \
             py-requests \
             py-setuptools && \
     pip install --no-cache-dir -U pip && \
-    pip install --no-use-pep517 --no-cache-dir pyOpenSSL && \
+    pip install --no-cache-dir pyOpenSSL xmljson && \
 
 # Setup ewsposter
     git clone --depth=1 https://github.com/rep/hpfeeds /opt/hpfeeds && \
@@ -36,6 +36,7 @@ RUN apk -U --no-cache add \
 
 # Supply configs
     mv /root/dist/ews.cfg /opt/ewsposter/ && \
+    mv /root/dist/*.pem /opt/ewsposter/ && \
 
 # Clean up
     apk del build-base \

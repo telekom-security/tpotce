@@ -12,4 +12,4 @@ services:
 #        condition: service_healthy
     ports:
      - "127.0.0.1:64296:5601"
-    image: "dtagdevsec/kibana:1811"
+    image: "dtagdevsec/kibana:1903"

@@ -14,7 +14,7 @@ services:
      - elasticpot_local
     ports:
      - "9200:9200"
-    image: "dtagdevsec/elasticpot:1811"
+    image: "dtagdevsec/elasticpot:1903"
     read_only: true
     volumes:
      - /data/elasticpot/log:/opt/ElasticpotPY/log

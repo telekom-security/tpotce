@@ -1,0 +1,124 @@
+#!/bin/bash
+
+# Run as root only.
+myWHOAMI=$(whoami)
+if [ "$myWHOAMI" != "root" ]
+  then
+    echo "Need to run as root ..."
+    exit
+fi
+
+myTPOTYMLFILE="/opt/tpot/etc/tpot.yml"
+
+function fuSISSDEN () {
+echo
+echo "You chose SISSDEN, you just need to provide ident and secret"
+echo
+myENABLE="true"
+myHOST="hpfeeds.sissden.eu"
+myPORT="10000"
+myCHANNEL="t-pot.events"
+myCERT="/opt/ewsposter/sissden.pem"
+read -p "Ident: " myIDENT
+read -p "Secret: " mySECRET
+myFORMAT="json"
+}
+
+function fuGENERIC () {
+echo
+echo "You chose generic, please provide all the details of the broker"
+echo
+myENABLE="true"
+read -p "Host URL: " myHOST
+read -p "Port: " myPORT
+read -p "Channel: " myCHANNEL
+echo "For generic providers set this to 'false'"
+echo "If you received a CA certficate mount it into the ewsposter container by modifying $myTPOTYMLFILE"
+read -p "TLS - 'false' or path to CA in container: " myCERT
+read -p "Ident: " myIDENT
+read -p "Secret: " mySECRET
+read -p "Format ews (xml) or json: " myFORMAT
+}
+
+function fuOPTOUT () {
+echo
+while [ 1 != 2 ]
+  do
+    read -s -n 1 -p "You chose to opt out (y/n)? " mySELECT
+      echo $mySELECT
+      case "$mySELECT" in
+        [y,Y])
+          echo "Opt out."
+          break
+          ;;
+        [n,N])
+          echo "Aborted."
+          exit
+          ;;
+      esac
+done
+myENABLE="false"
+myHOST="host"
+myPORT="port"
+myCHANNEL="channels"
+myCERT="false"
+myIDENT="user"
+mySECRET="secret"
+myFORMAT="json"
+}
+
+function fuAPPLY () {
+echo "Now stopping T-Pot ..."
+systemctl stop tpot
+echo "Applying your settings ... "
+sed --follow-symlinks -i "s/EWS_HPFEEDS_ENABLE.*/EWS_HPFEEDS_ENABLE=${myENABLE}/g" "$myTPOTYMLFILE"
+sed --follow-symlinks -i "s/EWS_HPFEEDS_HOST.*/EWS_HPFEEDS_HOST=${myHOST}/g" "$myTPOTYMLFILE"
+sed --follow-symlinks -i "s/EWS_HPFEEDS_PORT.*/EWS_HPFEEDS_PORT=${myPORT}/g" "$myTPOTYMLFILE"
+sed --follow-symlinks -i "s/EWS_HPFEEDS_CHANNELS.*/EWS_HPFEEDS_CHANNELS=${myCHANNEL}/g" "$myTPOTYMLFILE"
+sed --follow-symlinks -i "s#EWS_HPFEEDS_TLSCERT.*#EWS_HPFEEDS_TLSCERT=${myCERT}#g" "$myTPOTYMLFILE"
+sed --follow-symlinks -i "s/EWS_HPFEEDS_IDENT.*/EWS_HPFEEDS_IDENT=${myIDENT}/g" "$myTPOTYMLFILE"
+sed --follow-symlinks -i "s/EWS_HPFEEDS_SECRET.*/EWS_HPFEEDS_SECRET=${mySECRET}/g" "$myTPOTYMLFILE"
+sed --follow-symlinks -i "s/EWS_HPFEEDS_FORMAT.*/EWS_HPFEEDS_FORMAT=${myFORMAT}/g" "$myTPOTYMLFILE"
+echo "Now starting T-Pot ..."
+systemctl start tpot
+echo "You can always change or review your settings in the ewsposter section of $myTPOTYMLFILE"
+echo "Done."
+}
+
+echo "HPFEEDS Delivery Opt-In for T-Pot"
+echo "---------------------------------"
+echo "By running this script you agree to share your data with a 3rd party and agree to their corresponding sharing terms."
+echo
+echo
+echo "Please choose your broker"
+echo "---------------------------"
+echo "[1] - SISSDEN"
+echo "[2] - Generic (enter details manually)"
+echo "[0] - Opt out of HPFEEDS"
+echo "[q] - Do not agree end exit"
+echo
+while [ 1 != 2 ]
+  do
+    read -s -n 1 -p "Your choice: " mySELECT
+      echo $mySELECT
+      case "$mySELECT" in
+        [1])
+	  fuSISSDEN
+          break
+          ;;
+        [2])
+	  fuGENERIC
+          break
+          ;;
+        [0])
+	  fuOPTOUT
+          break
+          ;;
+        [q,Q])
+	  echo "Aborted."
+          exit
+          ;;
+      esac
+done
+fuAPPLY
+

@@ -1,6 +1,5 @@
 #!/bin/bash
 # T-Pot Container Data Cleaner & Log Rotator
-
 # Set colors
 myRED="[0;31m"
 myGREEN="[0;32m"
@@ -154,6 +153,14 @@ fuHERALDING () {
   chown tpot:tpot /data/heralding -R
 }
 
+# Let's create a function to clean up and prepare honeypy data
+fuHONEYPY () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/honeypy/*; fi
+  mkdir -p /data/honeypy/log
+  chmod 760 /data/honeypy -R
+  chown tpot:tpot /data/honeypy -R
+}
+
 # Let's create a function to clean up and prepare honeytrap data
 fuHONEYTRAP () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/honeytrap/*; fi
@@ -258,6 +265,7 @@ if [ "$myPERSISTENCE" = "on" ];
     fuGLASTOPF
     fuGLUTTON
     fuHERALDING
+    fuHONEYPY
     fuHONEYTRAP
     fuMAILONEY
     fuMEDPOT

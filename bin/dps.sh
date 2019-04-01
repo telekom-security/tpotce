@@ -1,4 +1,13 @@
 #/bin/bash
+
+# Run as root only.
+myWHOAMI=$(whoami)
+if [ "$myWHOAMI" != "root" ]
+  then
+    echo "Need to run as root ..."
+    exit
+fi
+
 # Show current status of T-Pot containers
 myPARAM="$1"
 myCONTAINERS="$(cat /opt/tpot/etc/tpot.yml | grep -v '#' | grep container_name | cut -d: -f2 | sort | tr -d " ")"
@@ -9,14 +18,13 @@ myWHITE="[0;0m"
 myMAGENTA="[1;35m"
 
 function fuGETSTATUS {
-grc docker ps -f status=running -f status=exited --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep -v "NAME" | sort
+grc --colour=on docker ps -f status=running -f status=exited --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep -v "NAME" | sort
 }
 
 function fuGETSYS {
 printf "========| System |========\n"
 printf "%+10s %-20s\n" "Date: " "$(date)"
 printf "%+10s %-20s\n" "Uptime: " "$(uptime | cut -b 2-)"
-printf "%+10s %-20s\n" "CPU temp: " "$(sensors | grep 'Physical' | awk '{ print $4" " }' | tr -d [:cntrl:])"
 echo
 }
 

@@ -25,9 +25,10 @@ services:
      - "443:443"
      - "993:993"
      - "995:995"
+     - "1080:1080"
      - "5432:5432"
      - "5900:5900"
-    image: "dtagdevsec/heralding:1811"
+    image: "dtagdevsec/heralding:1903"
     read_only: true
     volumes:
      - /data/heralding/log:/var/log/heralding

@@ -1,7 +1,8 @@
 FROM alpine
 
 # Get and install dependencies & packages
-RUN apk -U --no-cache add \
+RUN sed -i 's/dl-cdn/dl-4/g' /etc/apk/repositories && \
+    apk -U --no-cache add \
             build-base \
             curl \
             git \
@@ -13,26 +14,21 @@ RUN apk -U --no-cache add \
             openssl-dev \
             python \
             python-dev \
-            py-lxml \
-            py-netaddr \
-            py-mako \
-            py-markupsafe \
+            py-future \
             py-pip \
-            py-setuptools \
-            py-requests \
             swig && \
-    pip install --no-cache-dir --upgrade pip && \ 
-    pip install --no-cache-dir \
-                cherrypy \
-                bs4 \
-                m2crypto && \
 
 # Setup user
     addgroup -g 2000 spiderfoot && \
     adduser -S -s /bin/ash -u 2000 -D -g 2000 spiderfoot && \
 
 # Install spiderfoot 
-    git clone --depth=1 https://github.com/smicallef/spiderfoot -b v2.12.0-final /home/spiderfoot && \
+#    git clone --depth=1 https://github.com/smicallef/spiderfoot -b v2.12.0-final /home/spiderfoot && \
+    git clone --depth=1 https://github.com/smicallef/spiderfoot /home/spiderfoot && \
+    cd /home/spiderfoot && \
+    pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir wheel && \ 
+    pip install --no-cache-dir -r requirements.txt && \ 
     chown -R spiderfoot:spiderfoot /home/spiderfoot && \
     sed -i "s#'__docroot': ''#'__docroot': '\/spiderfoot'#" /home/spiderfoot/sf.py && \
     sed -i 's#raise cherrypy.HTTPRedirect("\/")#raise cherrypy.HTTPRedirect("\/spiderfoot")#' /home/spiderfoot/sfwebui.py && \
