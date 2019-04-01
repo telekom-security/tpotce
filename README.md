@@ -97,7 +97,7 @@ Furthermore we use the following tools
   - *Suricata Dashboard* modified to integrate *JA3* support / visualizations.
 - **Debian mirror selection**
   - During base install you now have to manually select a mirror.
-  - Upon T-Pot install the mirror closest to you will be determined automatically.
+  - Upon T-Pot install the mirror closest to you will be determined automatically, `netselect-apt` requires you to allow ICMP outbound.
   - This solves peering problems for most of the users speeding up installation and updates.
 - **Bugs**
   - Fixed issue #298 where the import and export of objects on the shell did not work.
