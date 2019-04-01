@@ -61,7 +61,7 @@ Furthermore we use the following tools
   - [Tools](#tools)
   - [Maintenance](#maintenance)
   - [Community Data Submission](#submission)
-  - [Opt-In SISSDEN Data Submission](#sissden-optin)
+  - [Opt-In HPFEEDS Data Submission](#hpfeeds-optin)
 - [Roadmap](#roadmap)
 - [Disclaimer](#disclaimer)
 - [FAQ](#faq)
@@ -101,8 +101,8 @@ Furthermore we use the following tools
   - Fixed error in Suricata where path for reference.config changed.
 - **Release Cycle**
   - As far as possible we will integrate changes now faster into the master branch, eliminating the need for monolithic releases. The update feature will be continuously improved on that behalf. However this might not account for all feature changes.
-- **SISSDEN Opt-In**
-  - If you want to share your T-Pot data with [SISSDEN](https://sissden.eu) you can do so by creating an account at the SISSDEN portal and run `sissden_optin.sh` on T-Pot.
+- **HPFEEDS Opt-In**
+  - If you want to share your T-Pot data with a 3rd party HPFEEDS broker such as [SISSDEN](https://sissden.eu) you can do so by creating an account at the SISSDEN portal and run `hpfeeds_optin.sh` on T-Pot.
 - **Update Feature**
   - For the ones who like to live on the bleeding edge of T-Pot development there is now an update script available in `/opt/tpot/update.sh`.
   - This feature is beta and is mostly intended to provide you with the latest development advances without the need of reinstalling T-Pot.
@@ -436,10 +436,10 @@ Data is submitted in a structured ews-format, a XML stucture. Hence, you can par
 
 We encourage you not to disable the data submission as it is the main purpose of the community approach - as you all know **sharing is caring** 😍
 
-<a name="sissden-optin"></a>
-## Opt-In SISSDEN Data Submission
-As an Opt-In it is now possible to also share T-Pot data with [SISSDEN](https://sissden.eu).
-If you want to share your T-Pot data you simply have to regsiter an account with SISSDEN which will have its own benefits. Once registered you will receive an `Ident` and a `Secret` to share events with SISSDEN. In T-Pot you simply run `sissden_optin.sh` which will ask for your SISSDEN `Ident` and `Secret`. It will automatically update `/opt/tpot/etc/tpot.yml` to deliver events to SISSDEN.
+<a name="hpfeeds-optin"></a>
+## Opt-In HPFEEDS Data Submission
+As an Opt-In it is now possible to also share T-Pot data with 3rd party HPFEEDS brokers, such as [SISSDEN](https://sissden.eu).
+If you want to share your T-Pot data you simply have to regsiter an account with a 3rd party broker with its own benefits towards the community. Once registered you will receive your credentials to share events with the broker. In T-Pot you simply run `hpfeeds_optin.sh` which will ask for your credentials, in case of SISSDEN this is just `Ident` and `Secret`, everything else is pre-configured. It will automatically update `/opt/tpot/etc/tpot.yml` to deliver events to your desired broker.
 
 <a name="roadmap"></a>
 # Roadmap
