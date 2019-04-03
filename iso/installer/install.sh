@@ -13,8 +13,8 @@ myTPOTCOMPOSE="/opt/tpot/etc/tpot.yml"
 myLSB_STABLE_SUPPORTED="stretch"
 myLSB_TESTING_SUPPORTED="sid"
 myREMOTESITES="https://hub.docker.com https://github.com https://pypi.python.org https://debian.org"
-myPREINSTALLPACKAGES="apache2-utils curl dialog figlet grc libcrack2 libpq-dev lsb-release netselect-apt net-tools software-properties-common toilet"
-myINSTALLPACKAGES="apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker console-setup console-setup-linux curl debconf-utils dialog dnsutils docker.io docker-compose dstat ethtool fail2ban figlet genisoimage git glances grc haveged html2text htop iptables iw jq kbd libcrack2 libltdl7 man mosh multitail netselect-apt net-tools npm ntp openssh-server openssl pass prips software-properties-common syslinux psmisc pv python-pip toilet unattended-upgrades unzip vim wget wireless-tools wpasupplicant"
+myPREINSTALLPACKAGES="aria2 apache2-utils curl dialog figlet grc libcrack2 libpq-dev lsb-release netselect-apt net-tools software-properties-common toilet"
+myINSTALLPACKAGES="aria2 apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker console-setup console-setup-linux curl debconf-utils dialog dnsutils docker.io docker-compose dstat ethtool fail2ban figlet genisoimage git glances grc haveged html2text htop iptables iw jq kbd libcrack2 libltdl7 man mosh multitail netselect-apt net-tools npm ntp openssh-server openssl pass prips software-properties-common syslinux psmisc pv python-pip toilet unattended-upgrades unzip vim wget wireless-tools wpasupplicant"
 myINFO="\
 ########################################
 ### T-Pot Installer for Debian (Sid) ###
@@ -213,6 +213,8 @@ fi
 # If not present install them
 function fuCHECKPACKAGES {
   export DEBIAN_FRONTEND=noninteractive
+  echo "### Installing apt-fast"
+  /bin/bash -c "$(curl -sL https://raw.githubusercontent.com/ilikenwf/apt-fast/master/quick-install.sh)"
   echo -n "### Checking for installer dependencies: "
   local myPACKAGES="$1"
   for myDEPS in $myPACKAGES;
@@ -221,8 +223,8 @@ function fuCHECKPACKAGES {
       if [ "$myOK" != "ok" ];
         then
           echo "[ NOW INSTALLING ]"
-          apt-get update -y
-          apt-get install -y $myPACKAGES
+          apt-fast update -y
+          apt-fast install -y $myPACKAGES
           break
       fi
   done
@@ -268,21 +270,31 @@ function fuGET_DEPS {
   echo "### Determine fastest mirror for your location."
   echo
   netselect-apt -n -a amd64 unstable && cp sources.list /etc/apt/
+  mySOURCESCHECK=$(cat /etc/apt/sources.list | grep -c unstable)
+  if [ "$mySOURCESCHECK" == "0" ]
+    then
+      echo "### Automatic mirror selection failed, using main mirror."
+      # Point to Debian (Sid, unstable)
+      tee /etc/apt/sources.list <<EOF
+      deb http://deb.debian.org/debian unstable main contrib non-free
+      deb-src http://deb.debian.org/debian unstable main contrib non-free
+EOF
+  fi
   echo
   echo "### Getting update information."
   echo
-  apt-get -y update
+  apt-fast -y update
   echo
   echo "### Upgrading packages."
   echo
   # Downlaod and upgrade packages, but silently keep existing configs
   echo "docker.io docker.io/restart       boolean true" | debconf-set-selections -v
   echo "debconf debconf/frontend select noninteractive" | debconf-set-selections -v
-  apt-get -y dist-upgrade -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes
+  apt-fast -y dist-upgrade -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes
   echo
   echo "### Installing T-Pot dependencies."
   echo
-  apt-get -y install $myINSTALLPACKAGES
+  apt-fast -y install $myINSTALLPACKAGES
   # Remove exim4
   apt-get -y purge exim4-base mailutils
   apt-get -y autoremove
@@ -653,7 +665,7 @@ pip install elasticsearch-curator yq
 
 # Cloning T-Pot from GitHub
 fuBANNER "Cloning T-Pot"
-git clone https://github.com/dtag-dev-sec/tpotce /opt/tpot
+git clone https://github.com/dtag-dev-sec/tpotce -b fast /opt/tpot
 
 # Let's create the T-Pot user
 fuBANNER "Create user"
