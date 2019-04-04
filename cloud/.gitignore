@@ -1,0 +1,8 @@
+# Ansible
+*.retry
+
+# Generated hosts
+hosts/
+
+# Cloned git repository
+otc-tools/
