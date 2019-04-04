@@ -176,24 +176,26 @@ echo
 
 function fuUPDATER () {
 export DEBIAN_FRONTEND=noninteractive
-local myPACKAGES="apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker console-setup console-setup-linux curl debconf-utils dialog dnsutils docker.io docker-compose dstat ethtool fail2ban figlet genisoimage git glances grc haveged html2text htop iptables iw jq kbd libcrack2 libltdl7 man mosh multitail netselect-apt net-tools npm ntp openssh-server openssl pass prips software-properties-common syslinux psmisc pv python-pip toilet unattended-upgrades unzip vim wget wireless-tools wpasupplicant"
+echo "### Installing apt-fast"
+/bin/bash -c "$(curl -sL https://raw.githubusercontent.com/ilikenwf/apt-fast/master/quick-install.sh)"
+local myPACKAGES="aria2 apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker console-setup console-setup-linux curl debconf-utils dialog dnsutils docker.io docker-compose dstat ethtool fail2ban figlet genisoimage git glances grc haveged html2text htop iptables iw jq kbd libcrack2 libltdl7 man mosh multitail netselect-apt net-tools npm ntp openssh-server openssl pass prips software-properties-common syslinux psmisc pv python-pip toilet unattended-upgrades unzip vim wget wireless-tools wpasupplicant"
 echo "### Now upgrading packages ..."
 dpkg --configure -a
-apt-get -y autoclean
-apt-get -y autoremove
-apt-get update
-apt-get -y install $myPACKAGES
+apt-fast -y autoclean
+apt-fast -y autoremove
+apt-fast update
+apt-fast -y install $myPACKAGES
 
 # Some updates require interactive attention, and the following settings will override that.
 echo "docker.io docker.io/restart       boolean true" | debconf-set-selections -v
 echo "debconf debconf/frontend select noninteractive" | debconf-set-selections -v
-apt-get -y dist-upgrade -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes
+apt-fast -y dist-upgrade -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes
 dpkg --configure -a
 npm install "https://github.com/taskrabbit/elasticsearch-dump" -g
 pip install --upgrade pip
 hash -r
 pip install --upgrade elasticsearch-curator yq
-apt-get -y purge exim4-base mailutils
+apt-fast -y purge exim4-base mailutils
 apt-mark hold exim4-base mailutils
 echo
 

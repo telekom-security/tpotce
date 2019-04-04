@@ -112,6 +112,11 @@ Furthermore we use the following tools
   - This feature is beta and is mostly intended to provide you with the latest development advances without the need of reinstalling T-Pot.
 - **Deprecated tools**
   - *ctop* will no longer be part of T-Pot.
+- **Fix #332**
+  - If T-Pot, opposed to the requirements, does not have full internet access netselect-apt fails to determine the fastest mirror as it needs ICMP and UDP outgoing. Should netselect-apt fail the default mirrors will be used.
+- **Improve install speed with apt-fast**
+  - Migrating from a stable base install to Debian (Sid) requires downloading lots of packages. Depending on your geo location the download speed was already improved by introducing netselect-apt to determine the fastest mirror. Wit
+h apt-fast the downloads will be even faster by downloading packages not only in parallel but also with multiple connections per package.
 
 <a name="concept"></a>
 # Technical Concept
@@ -486,6 +491,7 @@ Without open source and the fruitful development community (we are proud to be a
 ### The developers and development communities of
 
 * [adbhoney](https://github.com/huuck/ADBHoney/graphs/contributors)
+* [apt-fast](https://github.com/ilikenwf/apt-fast/graphs/contributors)
 * [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/graphs/contributors)
 * [cockpit](https://github.com/cockpit-project/cockpit/graphs/contributors)
 * [conpot](https://github.com/mushorg/conpot/graphs/contributors)
