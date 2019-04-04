@@ -165,7 +165,7 @@ myCRONJOBS="
 27 3 * * *      root    systemctl stop tpot && docker stop \$(docker ps -aq) || docker rm \$(docker ps -aq) || reboot
 
 # Check for updated packages every sunday, upgrade and reboot
-27 16 * * 0     root    apt-get autoclean -y && apt-get autoremove -y && apt-get update -y && apt-get upgrade -y && sleep 10 && reboot
+27 16 * * 0     root    apt-fast autoclean -y && apt-fast autoremove -y && apt-fast update -y && apt-fast upgrade -y && sleep 10 && reboot
 "
 myROOTPROMPT='PS1="\[\033[38;5;8m\][\[$(tput sgr0)\]\[\033[38;5;1m\]\u\[$(tput sgr0)\]\[\033[38;5;6m\]@\[$(tput sgr0)\]\[\033[38;5;4m\]\h\[$(tput sgr0)\]\[\033[38;5;6m\]:\[$(tput sgr0)\]\[\033[38;5;5m\]\w\[$(tput sgr0)\]\[\033[38;5;8m\]]\[$(tput sgr0)\]\[\033[38;5;1m\]\\$\[$(tput sgr0)\]\[\033[38;5;15m\] \[$(tput sgr0)\]"'
 myUSERPROMPT='PS1="\[\033[38;5;8m\][\[$(tput sgr0)\]\[\033[38;5;2m\]\u\[$(tput sgr0)\]\[\033[38;5;6m\]@\[$(tput sgr0)\]\[\033[38;5;4m\]\h\[$(tput sgr0)\]\[\033[38;5;6m\]:\[$(tput sgr0)\]\[\033[38;5;5m\]\w\[$(tput sgr0)\]\[\033[38;5;8m\]]\[$(tput sgr0)\]\[\033[38;5;2m\]\\$\[$(tput sgr0)\]\[\033[38;5;15m\] \[$(tput sgr0)\]"'
@@ -296,8 +296,8 @@ EOF
   echo
   apt-fast -y install $myINSTALLPACKAGES
   # Remove exim4
-  apt-get -y purge exim4-base mailutils
-  apt-get -y autoremove
+  apt-fast -y purge exim4-base mailutils
+  apt-fast -y autoremove
   apt-mark hold exim4-base mailutils
 }
 
@@ -820,8 +820,8 @@ fuBANNER "Update IP"
 
 # Let's clean up apt
 fuBANNER "Clean up"
-apt-get autoclean -y
-apt-get autoremove -y
+apt-fast autoclean -y
+apt-fast autoremove -y
 
 # Final steps
 cp /opt/tpot/host/etc/rc.local /etc/rc.local && \
