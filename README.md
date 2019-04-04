@@ -491,7 +491,7 @@ Without open source and the fruitful development community (we are proud to be a
 ### The developers and development communities of
 
 * [adbhoney](https://github.com/huuck/ADBHoney/graphs/contributors)
-* [aptfast](https://github.com/ilikenwf/apt-fast/graphs/contributors)
+* [apt-fast](https://github.com/ilikenwf/apt-fast/graphs/contributors)
 * [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/graphs/contributors)
 * [cockpit](https://github.com/cockpit-project/cockpit/graphs/contributors)
 * [conpot](https://github.com/mushorg/conpot/graphs/contributors)
