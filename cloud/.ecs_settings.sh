@@ -1,5 +1,5 @@
 # Set password for user linux
-linuxpass=LiNuXuSeRPaSs
+linuxpass=LiNuXuSeRPaSs#
 
 # Set ECS related stuff
 vpcname=your-vpc
