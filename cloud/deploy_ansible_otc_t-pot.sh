@@ -34,11 +34,11 @@ echo "### Creating new ECS host via OTC API..."
     --admin-pass          $linuxpass\
     --key-name            $keyname\
     --public              true\
-    --disksize            128\
+    --disksize            $disksize\
     --disktype            SATA\
     --az	          $az\
     --wait \
-2> /dev/null
+#2> /dev/null
 
 if [ "$(uname)" == "Darwin" ]; then
    PUBIP=$(./otc-tools/otc.sh ecs list 2>/dev/null | grep $HPNAME|cut -d "," -f2 |cut -d "\"" -f 2)
@@ -50,7 +50,7 @@ echo "[TPOT]" > ./hosts/$HPNAME
 echo $PUBIP  HPNAME=$HPNAME>> ./hosts/$HPNAME
 echo "### NEW HOST $HPNAME ON IP $PUBIP"
 
-ansible-playbook -i ./hosts/$HPNAME ./ansible/install.yaml
+#ansible-playbook -i ./hosts/$HPNAME ./ansible/install.yaml
 echo "***********************************************"
 echo "*****        SSH TO TARGET: "
 echo "*****        ssh linux@$PUBIP -p 64295"
