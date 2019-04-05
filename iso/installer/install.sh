@@ -213,6 +213,8 @@ fi
 # If not present install them
 function fuCHECKPACKAGES {
   export DEBIAN_FRONTEND=noninteractive
+  apt-get -y update
+  apt-get -y install curl
   echo "### Installing apt-fast"
   /bin/bash -c "$(curl -sL https://raw.githubusercontent.com/ilikenwf/apt-fast/master/quick-install.sh)"
   echo -n "### Checking for installer dependencies: "
