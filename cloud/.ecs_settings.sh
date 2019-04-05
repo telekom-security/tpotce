@@ -3,6 +3,7 @@ linuxpass=LiNuXuSeRPaSs#
 
 # Set ECS related stuff
 instance=s2.medium.8
+imagename=Standard_Debian_9_latest
 subnet=your-subnet
 vpcname=your-vpc
 secgroup=your-sg

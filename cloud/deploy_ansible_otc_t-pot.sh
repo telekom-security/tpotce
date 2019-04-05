@@ -27,7 +27,7 @@ echo "### Creating new ECS host via OTC API..."
 ./otc-tools/otc.sh ecs create \
     --instance-type       $instance\
     --instance-name       $HPNAME\
-    --image-name          Standard_Debian_9_latest\
+    --image-name          $imagename\
     --subnet-name         $subnet\
     --vpc-name            $vpcname\
     --security-group-name $secgroup\
