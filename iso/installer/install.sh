@@ -151,6 +151,9 @@ myCOCKPIT_SOCKET="[Socket]
 ListenStream=
 ListenStream=64294
 "
+mySSHPORT="
+PORT 64295
+"
 myCRONJOBS="
 # Check if updated images are available and download them
 27 1 * * *      root    docker-compose -f /opt/tpot/etc/tpot.yml pull
@@ -213,8 +216,15 @@ fi
 # If not present install them
 function fuCHECKPACKAGES {
   export DEBIAN_FRONTEND=noninteractive
-  apt-get -y update
-  apt-get -y install curl
+  # Make sure dependencies for apt-fast are installed
+  myCURL=$(which curl)
+  myWGET=$(which wget)
+  if [ "$myCURL" == "" ] || [ "$myWGET" == "" ]
+    then
+      echo "### Installing deps for apt-fast"
+      apt-get -y update
+      apt-get -y install curl wget
+  fi
   echo "### Installing apt-fast"
   /bin/bash -c "$(curl -sL https://raw.githubusercontent.com/ilikenwf/apt-fast/master/quick-install.sh)"
   echo -n "### Checking for installer dependencies: "
@@ -687,7 +697,7 @@ fuBANNER "Adjust ports"
 mkdir -p /etc/systemd/system/cockpit.socket.d
 echo "$myCOCKPIT_SOCKET" | tee /etc/systemd/system/cockpit.socket.d/listen.conf
 sed -i '/^port/Id' /etc/ssh/sshd_config
-echo "Port 64295" >> /etc/ssh/sshd_config
+echo "$mySSHPORT" | tee -a /etc/ssh/sshd_config
 
 # Do not allow root login for cockpit
 sed -i '2i\auth requisite pam_succeed_if.so uid >= 1000' /etc/pam.d/cockpit
