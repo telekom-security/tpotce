@@ -1,5 +1,11 @@
 # Changelog
 
+## 20190406
+- **Fix for SSH**
+  - In some situations the SSH Port was not written to a new line (thanks to @dpisano for reporting).
+- **Fix race condition for apt-fast**
+  - Curl and wget need to be installed before apt-fast installation.
+
 ## 20190404
 - **Fix #332**
   - If T-Pot, opposed to the requirements, does not have full internet access netselect-apt fails to determine the fastest mirror as it needs ICMP and UDP outgoing. Should netselect-apt fail the default mirrors will be used.
