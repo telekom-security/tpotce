@@ -152,7 +152,7 @@ ListenStream=
 ListenStream=64294
 "
 mySSHPORT="
-PORT 64295
+Port 64295
 "
 myCRONJOBS="
 # Check if updated images are available and download them
