@@ -42,26 +42,26 @@ echo "### Creating new ECS host via OTC API..."
 
 if [ $? -eq 0 ]; then
 
-if [ "$(uname)" == "Darwin" ]; then
-   PUBIP=$(./otc-tools/otc.sh ecs list 2>/dev/null | grep $HPNAME|cut -d "," -f2 |cut -d "\"" -f 2)
+    if [ "$(uname)" == "Darwin" ]; then
+        PUBIP=$(./otc-tools/otc.sh ecs list 2>/dev/null | grep $HPNAME|cut -d "," -f2 |cut -d "\"" -f 2)
+    else
+        PUBIP=$(./otc-tools/otc.sh ecs list 2>/dev/null | grep $HPNAME|cut -d " " -f17)
+    fi
+
+    echo "[TPOT]" > ./hosts/$HPNAME
+    echo $PUBIP  HPNAME=$HPNAME>> ./hosts/$HPNAME
+    echo "### NEW HOST $HPNAME ON IP $PUBIP"
+
+    ansible-playbook -i ./hosts/$HPNAME ./ansible/install.yaml
+    echo "***********************************************"
+    echo "*****        SSH TO TARGET: "
+    echo "*****        ssh linux@$PUBIP -p 64295"
+    echo "***********************************************"
+
 else
-   PUBIP=$(./otc-tools/otc.sh ecs list 2>/dev/null | grep $HPNAME|cut -d " " -f17)
-fi
 
-echo "[TPOT]" > ./hosts/$HPNAME
-echo $PUBIP  HPNAME=$HPNAME>> ./hosts/$HPNAME
-echo "### NEW HOST $HPNAME ON IP $PUBIP"
-
-ansible-playbook -i ./hosts/$HPNAME ./ansible/install.yaml
-echo "***********************************************"
-echo "*****        SSH TO TARGET: "
-echo "*****        ssh linux@$PUBIP -p 64295"
-echo "***********************************************"
-
-else
-
-echo "ECS creation unsuccessful. Aborting..."
-echo "Hint: Check your EIP or ECS quotas as these limits are a common error."
-echo "For further output, comment out '2> /dev/null' in the ECS creation command."
+    echo "ECS creation unsuccessful. Aborting..."
+    echo "Hint: Check your EIP or ECS quotas as these limits are a common error."
+    echo "For further output, comment out '2> /dev/null' in the ECS creation command."
 
 fi
