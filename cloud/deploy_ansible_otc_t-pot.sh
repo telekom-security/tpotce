@@ -40,6 +40,8 @@ echo "### Creating new ECS host via OTC API..."
     --wait \
 2> /dev/null
 
+if [ $? -eq 0 ]; then
+
 if [ "$(uname)" == "Darwin" ]; then
    PUBIP=$(./otc-tools/otc.sh ecs list 2>/dev/null | grep $HPNAME|cut -d "," -f2 |cut -d "\"" -f 2)
 else
@@ -55,3 +57,11 @@ echo "***********************************************"
 echo "*****        SSH TO TARGET: "
 echo "*****        ssh linux@$PUBIP -p 64295"
 echo "***********************************************"
+
+else
+
+echo "ECS creation unsuccessful. Aborting..."
+echo "Hint: Check your EIP or ECS quotas as these limits are a common error."
+echo "For further output, comment out '2> /dev/null' in the ECS creation command."
+
+fi
