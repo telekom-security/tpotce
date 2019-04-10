@@ -53,6 +53,15 @@ if [ $? -eq 0 ]; then
     echo "### NEW HOST $HPNAME ON IP $PUBIP"
 
     ansible-playbook -i ./hosts/$HPNAME ./ansible/install.yaml
+
+    if [ $custom_ews = true ]; then
+
+        ansible-playbook -i ./hosts/$HPNAME ./ansible/custom_ews.yaml
+
+    fi
+
+    ansible-playbook -i ./hosts/$HPNAME ./ansible/reboot.yaml
+
     echo "***********************************************"
     echo "*****        SSH TO TARGET: "
     echo "*****        ssh linux@$PUBIP -p 64295"
