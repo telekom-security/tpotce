@@ -1,0 +1,10 @@
+- name: Waiting for SSH connection
+  wait_for_connection:
+    timeout: 300
+
+- name: Gathering Facts
+  setup:
+
+- name: Finally rebooting t-pot in one minute - make sure your next login is on port 64295 or via https:// on port 64297
+  shell: /sbin/shutdown -r -t 1
+  become: true
