@@ -1,0 +1,17 @@
+- name: Waiting for SSH connection
+  wait_for_connection:
+    timeout: 300
+
+- name: Gathering Facts
+  setup:
+
+- name: Install ews configuration file
+  template:
+    src: ../templates/ews.cfg
+    dest: /data/ews/conf
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Patching tpot.yml
+  raw: sed -i '/\/opt\/ewsposter\/ews.ip/a\\ \ \ \ \ - /data/ews/conf/ews.cfg:/opt/ewsposter/ews.cfg' /opt/tpot/etc/tpot.yml
