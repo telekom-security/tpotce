@@ -794,6 +794,7 @@ systemctl enable tpot
 fuBANNER "Permissions"
 chmod 760 -R /data
 chown tpot:tpot -R /data
+chown tsec:tsec -R /home/tsec/.ssh
 chmod 644 -R /data/nginx/conf
 chmod 644 -R /data/nginx/cert
 
