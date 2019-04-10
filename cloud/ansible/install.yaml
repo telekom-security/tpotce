@@ -1,5 +1,3 @@
-
----
 # This playbook deploys a T-Pot
 
 - hosts: TPOT
