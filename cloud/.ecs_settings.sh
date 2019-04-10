@@ -1,6 +1,9 @@
 # Set password for user linux
 linuxpass=LiNuXuSeRPaSs#
 
+# Custom EWS config
+custom_ews=false
+
 # Set ECS related stuff
 instance=s2.medium.8
 imagename=Standard_Debian_9_latest
