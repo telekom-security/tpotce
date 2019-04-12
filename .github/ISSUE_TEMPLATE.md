@@ -1,31 +1,29 @@
-# Contribution
+# Issues
 
-Thank you for your decision to contribute to T-Pot.
+Before you post your issue make sure it has not been answered yet and provide `basic support information` if you come to the conclusion it is a new issue:
+- 🔍 Use the [search function](https://github.com/dtag-dev-sec/tpotce/issues?utf8=%E2%9C%93&q=) first
+- 🧐 Check our [WIKI](https://github.com/dtag-dev-sec/tpotce/wiki)
+- 📚 Consult the documentation of 💻 [Debian](https://www.debian.org/doc/), 🐳 [Docker](https://docs.docker.com/), the 🦌 [ELK stack](https://www.elastic.co/guide/index.html) and the 🍯 [T-Pot Readme](https://github.com/dtag-dev-sec/tpotce/blob/master/README.md).
+- **⚠️ Provide [basic support information](#info) or similiar information with regard to your issue or we can not help you and will close the issue without further notice ⚠️**
 
-## Issues
-
-Please feel free to post your problems, ideas and issues [here](https://github.com/dtag-dev-sec/tpotce/issues). We will try to answer ASAP, but to speed things up we encourage you to ...
-- [ ] Use the [search function](https://github.com/dtag-dev-sec/tpotce/issues?utf8=%E2%9C%93&q=) first
-- [ ] Check the FAQs in our [WIKI](https://github.com/dtag-dev-sec/tpotce/wiki)
-- [ ] Provide [basic support information](#info) with regard to your issue
-
-Thank you :smiley:
-
-
--
-
+<br>
+<br>
+<br>
 
 <a name="info"></a>
-### Basic support information
+## ⚠️ Basic support information (commands are expected to run as `root`) ⚠️
 
+- What version of the OS are you currently using `lsb_release -a` and `uname -a`?
 - What T-Pot version are you currently using?
-- Are you running on a Intel NUC or a VM?
+- What edition (Standard, Nextgen, etc.) of T-Pot are you running?
+- What architecture are you running on (i.e. hardware, cloud, VM, etc.)?
+- Did you have any problems during the install? If yes, please attach `/install.log` `/install.err`.
 - How long has your installation been running?
-- Did you install any upgrades or packages?
-- Did you modify any scripts?
-- Have you turned persistence on/off?
-- How much RAM is available (login via ssh and run `htop`)?
-- How much stress are the CPUs under (login via ssh and run `htop`)?
-- How much swap space is being used (login via ssh and run `htop`)?
-- How much free disk space is available (login via ssh and run `sudo df -h`)?
-- What is the current container status (login via ssh and run `sudo dps.sh`)?
+- Did you install upgrades, packages or use the update script?
+- Did you modify any scripts or configs? If yes, please attach the changes.
+- Please provide a screenshot of `glances` and `htop`.
+- How much free disk space is available (`df -h`)?
+- What is the current container status (`dps.sh`)?
+- What is the status of the T-Pot service (`systemctl status tpot`)?
+- What ports are being occupied? Stop T-Pot `systemctl stop tpot` and run `netstat -tulpen`
+- If a single container shows as `DOWN` you can run `docker logs <container-name>` for the latest log entries
