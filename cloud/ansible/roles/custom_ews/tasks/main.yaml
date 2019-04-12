@@ -15,3 +15,30 @@
 
 - name: Patching tpot.yml
   raw: sed -i '/\/opt\/ewsposter\/ews.ip/a\\ \ \ \ \ - /data/ews/conf/ews.cfg:/opt/ewsposter/ews.cfg' /opt/tpot/etc/tpot.yml
+
+- name: Lookup HPFEED environment variables
+  set_fact:
+    myENABLE: "{{ lookup('env', 'myENABLE') }}"
+    myHOST: "{{ lookup('env', 'myHOST') }}"
+    myPORT: "{{ lookup('env', 'myPORT') }}"
+    myCHANNEL: "{{ lookup('env', 'myCHANNEL') }}"
+    myIDENT: "{{ lookup('env', 'myIDENT') }}"
+    mySECRET: "{{ lookup('env', 'mySECRET') }}"
+    myCERT: "{{ lookup('env', 'myCERT') }}"
+    myFORMAT: "{{ lookup('env', 'myFORMAT') }}"
+
+- name: Apply HPFEED settings in tpot.yml
+  lineinfile:
+    path: /opt/tpot/etc/tpot.yml
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  with_items:
+    - { regexp: 'EWS_HPFEEDS_ENABLE.*', line: '     - EWS_HPFEEDS_ENABLE={{ myENABLE | lower }}' }
+    - { regexp: 'EWS_HPFEEDS_HOST.*', line: '     - EWS_HPFEEDS_HOST={{ myHOST }}' }
+    - { regexp: 'EWS_HPFEEDS_PORT.*', line: '     - EWS_HPFEEDS_PORT={{ myPORT }}' }
+    - { regexp: 'EWS_HPFEEDS_CHANNELS.*', line: '     - EWS_HPFEEDS_CHANNELS={{ myCHANNEL }}' }
+    - { regexp: 'EWS_HPFEEDS_IDENT.*', line: '     - EWS_HPFEEDS_IDENT={{ myIDENT }}' }
+    - { regexp: 'EWS_HPFEEDS_SECRET.*', line: '     - EWS_HPFEEDS_SECRET={{ mySECRET }}' }
+    - { regexp: 'EWS_HPFEEDS_TLSCERT.*', line: '     - EWS_HPFEEDS_TLSCERT={{ myCERT }}' }
+    - { regexp: 'EWS_HPFEEDS_TLSCERT.False', line: '     - EWS_HPFEEDS_TLSCERT={{ myCERT | lower }}' }
+    - { regexp: 'EWS_HPFEEDS_FORMAT.*', line: '     - EWS_HPFEEDS_FORMAT={{ myFORMAT }}' }
