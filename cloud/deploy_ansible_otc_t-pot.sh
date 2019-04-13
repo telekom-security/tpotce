@@ -20,6 +20,13 @@ if ! hash jq 2>/dev/null; then
     exit 1
 fi
 
+# Check for Agent Forwarding
+if ! printenv | grep SSH_AUTH_SOCK; then
+    echo "Agent forwarding seems to be disabled."
+    echo "In order to let Ansible do its work, please enable it."
+    exit 1
+fi
+
 # Import ECS settings
 source .ecs_settings.sh
 
