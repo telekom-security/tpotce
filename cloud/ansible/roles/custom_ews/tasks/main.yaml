@@ -1,4 +1,4 @@
-- name: Install ews configuration file
+- name: Copy ews configuration file
   template:
     src: ../templates/ews.cfg
     dest: /data/ews/conf
@@ -6,8 +6,11 @@
     group: root
     mode: 0644
 
-- name: Patching tpot.yml
-  raw: sed -i '/\/opt\/ewsposter\/ews.ip/a\\ \ \ \ \ - /data/ews/conf/ews.cfg:/opt/ewsposter/ews.cfg' /opt/tpot/etc/tpot.yml
+- name: Patching tpot.yml with custom ews configuration file
+  lineinfile:
+    path: /opt/tpot/etc/tpot.yml
+    insertafter: '/opt/ewsposter/ews.ip'
+    line: '     - /data/ews/conf/ews.cfg:/opt/ewsposter/ews.cfg'
 
 - name: Lookup HPFEED environment variables
   set_fact:
