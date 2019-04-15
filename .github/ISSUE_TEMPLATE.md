@@ -4,14 +4,14 @@ Before you post your issue make sure it has not been answered yet and provide `b
 - 🔍 Use the [search function](https://github.com/dtag-dev-sec/tpotce/issues?utf8=%E2%9C%93&q=) first
 - 🧐 Check our [WIKI](https://github.com/dtag-dev-sec/tpotce/wiki)
 - 📚 Consult the documentation of 💻 [Debian](https://www.debian.org/doc/), 🐳 [Docker](https://docs.docker.com/), the 🦌 [ELK stack](https://www.elastic.co/guide/index.html) and the 🍯 [T-Pot Readme](https://github.com/dtag-dev-sec/tpotce/blob/master/README.md).
-- **⚠️ Provide [basic support information](#info) or similiar information with regard to your issue or we can not help you and will close the issue without further notice ⚠️**
+- **⚠️ Provide [basic support information](#info) or similiar information with regard to your issue or we can not help you and will close the issue without further notice **
 
 <br>
 <br>
 <br>
 
 <a name="info"></a>
-## ⚠️ Basic support information (commands are expected to run as `root`) ⚠️
+## ⚠️ Basic support information (commands are expected to run as `root`)
 
 - What version of the OS are you currently using `lsb_release -a` and `uname -a`?
 - What T-Pot version are you currently using?
