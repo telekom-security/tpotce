@@ -33,7 +33,7 @@
     mode: 0644
 
 - name: Install t-pot on ECS -  be patient, this might take 15 to 30 minutes depending on the connection speed. No further output is given. 
-  raw: /root/tpot/iso/installer/install.sh --type=auto --conf=/root/tpot.conf
+  command: /root/tpot/iso/installer/install.sh --type=auto --conf=/root/tpot.conf
 
 - name: Delete t-pot configuration file
   file:
