@@ -117,6 +117,10 @@ Furthermore we use the following tools
 - **Improve install speed with apt-fast**
   - Migrating from a stable base install to Debian (Sid) requires downloading lots of packages. Depending on your geo location the download speed was already improved by introducing netselect-apt to determine the fastest mirror. Wit
 h apt-fast the downloads will be even faster by downloading packages not only in parallel but also with multiple connections per package.
+- **Reapply custom HPFEED settings after update**
+  - The `/opt/tpot/update.sh` script overwrites all local changes in `/opt/tpot/etc/tpot.yml`
+  - After pulling the latest files from GitHub, check in our backup whether the HPFEED settings were enabled before
+  - If they were enabled, the old HPFEED settings are extracted and reapplied to our new tpot.yml
 
 <a name="concept"></a>
 # Technical Concept
@@ -361,6 +365,7 @@ For the ones of you who want to live on the bleeding edge of T-Pot development w
  - upgrade the system to the packages available in Debian (Sid)
  - update all resources to be in-sync with the T-Pot master branch
  - ensure all T-Pot relevant system files will be patched / copied into the original T-Pot state
+ - restore your custom HPFEED settings from the backup
 
 You simply run the update script:
 ```
