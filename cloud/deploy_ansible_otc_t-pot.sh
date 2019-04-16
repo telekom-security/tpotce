@@ -78,7 +78,7 @@ echo "### Creating new ECS host via OTC API..."
     --disktype            SATA\
     --az	          $az\
     --wait \
-2> /dev/null
+2> otc_tools.log
 
 if [ $? -eq 0 ]; then
 
