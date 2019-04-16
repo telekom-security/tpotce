@@ -2,28 +2,28 @@
 
 # Check if required packages are installed
 if ! hash ansible 2>/dev/null; then
-    echo "Package 'ansible' is missing. Please install it with:"
+    echo "### Package 'ansible' is missing. Please install it with:"
     echo "    sudo apt-add-repository --yes --update ppa:ansible/ansible"
     echo "    sudo apt install ansible"
     exit 1
 fi
 
 if ! hash pwgen 2>/dev/null; then
-    echo "Package 'pwgen' is missing. Please install it with:"
+    echo "### Package 'pwgen' is missing. Please install it with:"
     echo "    sudo apt install pwgen"
     exit 1
 fi
 
 if ! hash jq 2>/dev/null; then
-    echo "Package 'jq' is missing. Please install it with:"
+    echo "### Package 'jq' is missing. Please install it with:"
     echo "    sudo apt install jq"
     exit 1
 fi
 
 # Check for Agent Forwarding
 if ! printenv | grep SSH_AUTH_SOCK > /dev/null; then
-    echo "Agent forwarding seems to be disabled."
-    echo "In order to let Ansible do its work, please enable it."
+    echo "### Agent forwarding seems to be disabled."
+    echo "### In order to let Ansible do its work, please enable it."
     exit 1
 fi
 
