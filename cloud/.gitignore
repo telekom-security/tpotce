@@ -6,3 +6,6 @@ hosts/
 
 # Cloned git repository
 otc-tools/
+
+# All log files
+*.log
