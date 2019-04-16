@@ -131,7 +131,7 @@ echo
 
 # Backup
 function fuBACKUP () {
-local myARCHIVE="/root/$(date +%Y%m%d%H%M)_tpot_backup.tgz"
+myARCHIVE="/root/$(date +%Y%m%d%H%M)_tpot_backup.tgz"
 local myPATH=$PWD
 echo "### Create a backup, just in case ... "
 echo -n "###### $myBLUE Building archive in $myARCHIVE $myWHITE"
@@ -258,6 +258,36 @@ echo "### Please reboot."
 echo
 }
 
+function fuRESTORE_HPFEED () {
+echo "### Restore HPFEED Settings in tpot.yml from backup"
+cd /tmp
+myEXTPATH=etc/compose/standard.yml
+tar -xzf $myARCHIVE $myEXTPATH
+
+if grep 'EWS_HPFEEDS_ENABLE=true' $myEXTPATH > /dev/null; then
+
+    myENABLE="true"
+    myHOST=$(grep EWS_HPFEEDS_HOST $myEXTPATH | cut -d= -f2)
+    myPORT=$(grep EWS_HPFEEDS_PORT $myEXTPATH | cut -d= -f2)
+    myCHANNEL=$(grep EWS_HPFEEDS_CHANNELS $myEXTPATH | cut -d= -f2)
+    myIDENT=$(grep EWS_HPFEEDS_IDENT $myEXTPATH | cut -d= -f2)
+    mySECRET=$(grep EWS_HPFEEDS_SECRET $myEXTPATH | cut -d= -f2)
+    myCERT=$( grep EWS_HPFEEDS_TLSCERT $myEXTPATH | cut -d= -f2)
+    myFORMAT=$(grep EWS_HPFEEDS_FORMAT $myEXTPATH | cut -d= -f2)
+
+    myTPOTYMLFILE="/opt/tpot/etc/tpot.yml"
+
+    sed --follow-symlinks -i "s/EWS_HPFEEDS_ENABLE.*/EWS_HPFEEDS_ENABLE=${myENABLE}/g" "$myTPOTYMLFILE"
+    sed --follow-symlinks -i "s/EWS_HPFEEDS_HOST.*/EWS_HPFEEDS_HOST=${myHOST}/g" "$myTPOTYMLFILE"
+    sed --follow-symlinks -i "s/EWS_HPFEEDS_PORT.*/EWS_HPFEEDS_PORT=${myPORT}/g" "$myTPOTYMLFILE"
+    sed --follow-symlinks -i "s/EWS_HPFEEDS_CHANNELS.*/EWS_HPFEEDS_CHANNELS=${myCHANNEL}/g" "$myTPOTYMLFILE"
+    sed --follow-symlinks -i "s/EWS_HPFEEDS_IDENT.*/EWS_HPFEEDS_IDENT=${myIDENT}/g" "$myTPOTYMLFILE"
+    sed --follow-symlinks -i "s/EWS_HPFEEDS_SECRET.*/EWS_HPFEEDS_SECRET=${mySECRET}/g" "$myTPOTYMLFILE"
+    sed --follow-symlinks -i "s#EWS_HPFEEDS_TLSCERT.*#EWS_HPFEEDS_TLSCERT=${myCERT}#g" "$myTPOTYMLFILE"
+    sed --follow-symlinks -i "s/EWS_HPFEEDS_FORMAT.*/EWS_HPFEEDS_FORMAT=${myFORMAT}/g" "$myTPOTYMLFILE"
+fi
+}
+
 
 ################
 # Main section #
@@ -289,3 +319,4 @@ fuSTOP_TPOT
 fuBACKUP
 fuSELFUPDATE "$0" "$@"
 fuUPDATER
+fuRESTORE_HPFEED
