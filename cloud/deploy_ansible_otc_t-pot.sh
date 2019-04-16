@@ -21,7 +21,7 @@ if ! hash jq 2>/dev/null; then
 fi
 
 # Check for Agent Forwarding
-if ! printenv | grep SSH_AUTH_SOCK; then
+if ! printenv | grep SSH_AUTH_SOCK > /dev/null; then
     echo "Agent forwarding seems to be disabled."
     echo "In order to let Ansible do its work, please enable it."
     exit 1
