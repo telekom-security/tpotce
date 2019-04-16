@@ -128,7 +128,6 @@ elif grep 'quota' otc_tools.log > /dev/null; then
     echo "### You can either delete unused resources or apply for a higher quota"
 fi
 
-
     echo "### ECS creation unsuccessful. Aborting..."
 
 fi
