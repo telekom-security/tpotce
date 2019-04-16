@@ -109,24 +109,24 @@ if [ $? -eq 0 ]; then
 
 else
 
-if grep 'Flavor' otc_tools.log > /dev/null; then
-    echo "### Specified ECS Flavor not found"
-elif grep 'No image found by name' otc_tools.log > /dev/null; then
-    echo "### Specified Image not found"
-elif grep 'No subnet found by name' otc_tools.log > /dev/null; then
-    echo "### Specified Subnet not found"
-elif grep 'No VPC found by name' otc_tools.log > /dev/null; then
-    echo "### Specified VPC not found"
-elif grep 'No security-group found by name' otc_tools.log > /dev/null; then
-    echo "### Specified Security Group not found"
-elif grep 'Invalid key_name provided' otc_tools.log > /dev/null; then
-    echo "### Specified Key Pair not found"
-elif grep 'availability_zone' otc_tools.log > /dev/null; then
-    echo "### Specified Availability Zone not found"
-elif grep 'quota' otc_tools.log > /dev/null; then
-    echo "### Quota exceeded. Please check your available quotas online"
-    echo "### You can either delete unused resources or apply for a higher quota"
-fi
+    if grep 'Flavor' otc_tools.log > /dev/null; then
+        echo "### Specified ECS Flavor not found"
+    elif grep 'No image found by name' otc_tools.log > /dev/null; then
+        echo "### Specified Image not found"
+    elif grep 'No subnet found by name' otc_tools.log > /dev/null; then
+        echo "### Specified Subnet not found"
+    elif grep 'No VPC found by name' otc_tools.log > /dev/null; then
+        echo "### Specified VPC not found"
+    elif grep 'No security-group found by name' otc_tools.log > /dev/null; then
+        echo "### Specified Security Group not found"
+    elif grep 'Invalid key_name provided' otc_tools.log > /dev/null; then
+        echo "### Specified Key Pair not found"
+    elif grep 'availability_zone' otc_tools.log > /dev/null; then
+        echo "### Specified Availability Zone not found"
+    elif grep 'quota' otc_tools.log > /dev/null; then
+        echo "### Quota exceeded. Please check your available quotas online"
+        echo "### You can either delete unused resources or apply for a higher quota"
+    fi
 
     echo "### ECS creation unsuccessful. Aborting..."
 
