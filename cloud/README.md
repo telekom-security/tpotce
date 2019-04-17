@@ -52,7 +52,7 @@ Agent forwarding must be enabled in order to let Ansible do its work.
     ForwardAgent yes
     ```
 - On Windows using Putty:  
-![Putty Agent Forwarding](cloud/doc/putty_agent_forwarding.png)
+![Putty Agent Forwarding](doc/putty_agent_forwarding.png)
 
 <a name="preparation"></a>
 # Preparations in Open Telekom Cloud Console
@@ -138,5 +138,5 @@ az=eu-de-03
 ## Optional: Custom `ews.cfg` 
 - custom_ews in .ecs_settings.sh; contact, username, token
 
-<a name="hpfeedss"></a>
+<a name="hpfeeds"></a>
 ## Optional: Configure `.hpfeeds_settings.sh`
