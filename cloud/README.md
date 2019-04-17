@@ -20,6 +20,8 @@ This example showcases the deployment on our own Public Cloud Offering [Open Tel
   - [Configure `tpot.conf.dist`](#tpot-conf)
   - [Optional: Custom `ews.cfg`](#ews-cfg)
   - [Optional: Configure `.hpfeeds_settings.sh`](#hpfeeds)
+- [Deploying a T-Pot](#deploy)
+- [Further documentation](#documentation)
 
 <a name="installation"></a>
 # Installation of Ansible Master
@@ -61,7 +63,7 @@ For that, go to the [Web Console](https://auth.otc.t-systems.com/authui/login) a
 
 <a name="project"></a>
 ## Create new project
-I strongly advice you, to create a separate project for the T-Pots in your tennant.  
+I strongly advise you, to create a separate project for the T-Pots in your tennant.  
 In my case I named it `tpot`.
 
 <a name="api-user"></a>
@@ -92,7 +94,7 @@ The settings are located in the following files:
 
 <a name="otc-env"></a>
 ## Configure `.otc_env.sh`
-Enter your API user credentials here (username, password, tennant-ID, project name):  
+Enter your Open Telekom Cloud API user credentials here (username, password, tennant-ID, project name):  
 ```
 export OS_USERNAME=your_api_user
 export OS_PASSWORD=your_password
@@ -172,3 +174,34 @@ token = your_token
 
 <a name="hpfeeds"></a>
 ## Optional: Configure `.hpfeeds_settings.sh`
+When the `custom_ews=true` setting is set in`.ecs_settings.sh` (see here:  [Configure `.ecs_settings.sh`](#ecs-settings)), you can also specify custom HPFEEDS in `.hpfeeds_settings.sh`.  
+e.g. for SISSDEN: 
+```
+myENABLE=true
+myHOST=hpfeeds.sissden.eu
+myPORT=10000
+myCHANNEL=t-pot.events
+myIDENT=your_user
+mySECRET=your_secret
+myCERT=/opt/ewsposter/sissden.pem
+myFORMAT=json
+```
+
+<a name="deploy"></a>
+# Deploying a T-Pot
+Now, after configuring everything, we can finally start deploying T-Pots:  
+`./deploy_ansible_otc_t-pot.sh`  
+(Yes, it is as easy as that :smile:)
+
+The script will first create an Open Telekom Cloud ECS via the API.  
+After that, the Ansible Playbooks are executed on the newly created Host to install the T-Pot and configure everything.
+
+You can see the progress of every step in the console output.  
+If something should go wrong, you will be provided with an according error message, that you can hopefully act upon and retry.
+
+<a name="documentation"></a>
+# Further documentation
+- [Ansible Documentation](https://docs.ansible.com/ansible/latest/)
+- [Open Telekom Cloud Help Center](https://docs.otc.t-systems.com/)
+- [Open Telekom Cloud API Overview](https://docs.otc.t-systems.com/en-us/api/wp/en-us_topic_0052070394.html)
+- [otc-tools](https://github.com/OpenTelekomCloud/otc-tools) on GitHub
