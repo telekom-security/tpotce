@@ -288,6 +288,13 @@ if grep 'EWS_HPFEEDS_ENABLE=true' $myEXTPATH > /dev/null; then
 fi
 }
 
+function fuRESTORE_EWSCFG () {
+echo "### Restore volume mount for ews.cfg in tpot.yml if it existed before"
+if grep '/data/ews/conf/ews.cfg:/opt/ewsposter/ews.cfg' $myEXTPATH > /dev/null; then
+    sed -i '/\/opt\/ewsposter\/ews.ip/a\\ \ \ \ \ - /data/ews/conf/ews.cfg:/opt/ewsposter/ews.cfg' /opt/tpot/etc/tpot.yml
+fi
+}
+
 
 ################
 # Main section #
@@ -320,3 +327,4 @@ fuBACKUP
 fuSELFUPDATE "$0" "$@"
 fuUPDATER
 fuRESTORE_HPFEED
+fuRESTORE_EWSCFG
