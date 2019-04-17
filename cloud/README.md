@@ -188,7 +188,7 @@ myFORMAT=json
 ```
 
 <a name="deploy"></a>
-# Deploying a T-Pot
+# Deploying a T-Pot 🍯🐝
 Now, after configuring everything, we can finally start deploying T-Pots:  
 `./deploy_ansible_otc_t-pot.sh`  
 (Yes, it is as easy as that :smile:)
