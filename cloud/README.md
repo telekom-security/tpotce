@@ -57,7 +57,7 @@ Agent forwarding must be enabled in order to let Ansible do its work.
 <a name="preparation"></a>
 # Preparations in Open Telekom Cloud Console
 Before we can start deploying, we have to prepare the Open Telekom Cloud Tennant.  
-For that, go to the Web [Console](https://auth.otc.t-systems.com/authui/login) and log in with an admin user.
+For that, go to the [Web Console](https://auth.otc.t-systems.com/authui/login) and log in with an admin user.
 
 <a name="project"></a>
 ## Create new project
@@ -87,7 +87,8 @@ All Ansible and automatic deployment related files are located in the `cloud` fo
 
 <a name="settings"></a>
 # Settings and recommended values
-You can configure all
+You can configure all aspects of your ECS and T-Pot before using the script.  
+The settings are located in the following files:
 
 <a name="otc-env"></a>
 ## Configure `.otc_env.sh`
@@ -103,15 +104,15 @@ export OS_AUTH_URL=https://iam.eu-de.otc.t-systems.com/v3
 <a name="ecs-settings"></a>
 ## Configure `.ecs_settings.sh`
 Here you can customize your Elastic Cloud Server (ECS):
-  - Password for the user `linux` (you should change that)
-  - For using a custom `ews.cfg` set to `true`; See here: [Optional: Custom `ews.cfg`](#ews-cfg)
-  - Change the instance type (flavor) of the ECS.  
+  - Password for the user `linux` (**you should definitely change that**)
+  - (Optional) For using a custom `ews.cfg` set to `true`; See here: [Optional: Custom `ews.cfg`](#ews-cfg)
+  - (Optional) Change the instance type (flavor) of the ECS.  
     `s2.medium.8` corresponds to 1 vCPU and 8GB of RAM and is the minimum required flavor.  
     A full list of flavors can be found [here](https://docs.otc.t-systems.com/en-us/usermanual/ecs/en-us_topic_0035470096.html).
-  - Change the OS (For T-Pots we need Debian 9)
+  - Change the OS (Don' touch; for T-Pot we need Debian 9)
   - Specify the VPC, Subnet, Security Group and Key Pair you created before
-  - Additionally you can change the disk size
-  - You can choose from multiple Availibility Zones (AZ). For reference see [here](https://docs.otc.t-systems.com/en-us/endpoint/index.html)
+  - (Optional) Change the disk size
+  - You can choose from multiple Availibility Zones (AZ). For reference see [here](https://docs.otc.t-systems.com/en-us/endpoint/index.html).
 
 ```
 # Set password for user linux
@@ -133,10 +134,41 @@ az=eu-de-03
 
 <a name="tpot-conf"></a>
 ## Configure `tpot.conf.dist`
+The file is located in `iso/installer/tpot.conf.dist`.  
+Here you can choose:
+  - between the various T-Pot editions
+  - a username for the web interface
+  - a password for the web interface (**you should definitely change that**)
+
+```
+# tpot configuration file
+# myCONF_TPOT_FLAVOR=[STANDARD, SENSOR, INDUSTRIAL, COLLECTOR, NEXTGEN, LEGACY]
+myCONF_TPOT_FLAVOR='STANDARD'
+myCONF_WEB_USER='webuser'
+myCONF_WEB_PW='w3b$ecret'
+```
 
 <a name="ews-cfg"></a>
-## Optional: Custom `ews.cfg` 
-- custom_ews in .ecs_settings.sh; contact, username, token
+## Optional: Custom `ews.cfg`
+To enable this feature, set `custom_ews=true` in `.ecs_settings.sh`; See here:  [Configure `.ecs_settings.sh`](#ecs-settings)  
+
+Here you can create a custom config file for `ewsposter`.  
+e.g. when you have your own credentials for delivering data to our [Sicherheitstacho](https://sicherheitstacho.eu/start/main).  
+You can find the `ews.cfg` template file here: `cloud/ansible/roles/custom_ews/templates/ews.cfg` and adapt it as you like.
+
+For setting custom credentials, these settings would be relevant for you (the rest of the file can stay as is):  
+```
+[MAIN]
+...
+contact = your_email_address
+...
+
+[EWS]
+...
+username = your_username
+token = your_token
+...
+```
 
 <a name="hpfeeds"></a>
 ## Optional: Configure `.hpfeeds_settings.sh`
