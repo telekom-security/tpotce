@@ -368,7 +368,7 @@ For the ones of you who want to live on the bleeding edge of T-Pot development w
  - upgrade the system to the packages available in Debian (Sid)
  - update all resources to be in-sync with the T-Pot master branch
  - ensure all T-Pot relevant system files will be patched / copied into the original T-Pot state
- - restore your custom HPFEED settings from the backup
+ - restore your custom HPFEED settings and the volume for our custom ews.cfg from the backup
 
 You simply run the update script:
 ```
