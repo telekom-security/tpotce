@@ -121,6 +121,9 @@ h apt-fast the downloads will be even faster by downloading packages not only in
   - The `/opt/tpot/update.sh` script overwrites all local changes in `/opt/tpot/etc/tpot.yml`
   - After pulling the latest files from GitHub, check in our backup whether the HPFEED settings were enabled before
   - If they were enabled, the old HPFEED settings are extracted and reapplied to our new tpot.yml
+- **Reapply custom ews.cfg volume mount after update**
+  - Check in our backup whether we had a custom ews.cfg volume mount before.
+  - If we had one, reapply it to our new tpot.yml
 
 <a name="concept"></a>
 # Technical Concept
