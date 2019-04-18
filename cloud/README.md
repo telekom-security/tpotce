@@ -69,25 +69,37 @@ For that, go to the [Web Console](https://auth.otc.t-systems.com/authui/login) a
 I strongly advise you, to create a separate project for the T-Pots in your tennant.  
 In my case I named it `tpot`.
 
+![Create new project](doc/otc_1_project.gif)
+
 <a name="api-user"></a>
 ## Create API user
 The next step is to create a new user account, which is restricted to the project.  
 This ensures that the API access is limited to that project.
 
+![Create API user](doc/otc_2_user.gif)
+
 <a name="key-pair"></a>
 ## Import Key Pair
-Now log in with the newly created user account and select your project.
+:warning: Now log in with the newly created user account and select your project.
+
+![Login as API user](doc/otc_3_login.gif)
 
 
 Import your SSH public key.
 
+![Import SSH Public Key](doc/otc_4_import_key.gif)
+
 <a name="vpc-subnet-securitygroup"></a>
 ## Create VPC, Subnet and Security Group
-- VPC and Subnet:  
+- VPC (Virtual Private Cloud) and Subnet:
+
+![Create VPC and Subnet](doc/otc_5_vpc_subnet.gif)
 
 - Security Group:  
 The configured Security Group should allow all incoming TCP / UDP traffic.  
 If you want to secure the management interfaces, you can limit the incoming "allow all" traffic to the port range of 1-64000 and allow access to ports > 64000 only from your trusted IPs.
+
+![Create Security Group](doc/otc_6_sec_group.gif)
 
 <a name="clone-git"></a>
 # Clone Git Repository
