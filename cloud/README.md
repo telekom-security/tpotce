@@ -76,13 +76,18 @@ This ensures that the API access is limited to that project.
 
 <a name="key-pair"></a>
 ## Import Key Pair
-Log in with the newly created user account and import your SSH public key.
+Now log in with the newly created user account and select your project.
+
+
+Import your SSH public key.
 
 <a name="vpc-subnet-securitygroup"></a>
 ## Create VPC, Subnet and Security Group
 - VPC and Subnet:  
 
 - Security Group:  
+The configured Security Group should allow all incoming TCP / UDP traffic.  
+If you want to secure the management interfaces, you can limit the incoming "allow all" traffic to the port range of 1-64000 and allow access to ports > 64000 only from your trusted IPs.
 
 <a name="clone-git"></a>
 # Clone Git Repository
