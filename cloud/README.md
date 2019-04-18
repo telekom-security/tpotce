@@ -111,7 +111,7 @@ Here you can customize your Elastic Cloud Server (ECS):
   - (Optional) Change the instance type (flavor) of the ECS.  
     `s2.medium.8` corresponds to 1 vCPU and 8GB of RAM and is the minimum required flavor.  
     A full list of flavors can be found [here](https://docs.otc.t-systems.com/en-us/usermanual/ecs/en-us_topic_0035470096.html).
-  - Change the OS (Don' touch; for T-Pot we need Debian 9)
+  - Change the OS (Don't touch; for T-Pot we need Debian 9)
   - Specify the VPC, Subnet, Security Group and Key Pair you created before
   - (Optional) Change the disk size
   - You can choose from multiple Availibility Zones (AZ). For reference see [here](https://docs.otc.t-systems.com/en-us/endpoint/index.html).
