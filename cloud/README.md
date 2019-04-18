@@ -58,6 +58,9 @@ Agent forwarding must be enabled in order to let Ansible do its work.
 
 <a name="preparation"></a>
 # Preparations in Open Telekom Cloud Console
+(You can skip this if you have already set up an API account, VPC and ...)  
+(Just make sure you know the naming for everything, as you will need it to configure the script.)
+
 Before we can start deploying, we have to prepare the Open Telekom Cloud Tennant.  
 For that, go to the [Web Console](https://auth.otc.t-systems.com/authui/login) and log in with an admin user.
 
