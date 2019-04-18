@@ -1,4 +1,4 @@
-# Ansible T-Pot Deployment on Open Telekom Cloud
+# Ansible T-Pot Deployment on Open Telekom Cloud :cloud:
 
 Here you can find a ready-to-use solution for your automated T-Pot deployment using [Ansible](https://www.ansible.com/).  
 It consists of multiple Ansible Playbooks, which can be reused across all Cloud Providers (like AWS, Azure, Digital Ocean).  
@@ -208,7 +208,7 @@ myFORMAT=json
 ```
 
 <a name="deploy"></a>
-# Deploying a T-Pot 🍯🐝
+# Deploying a T-Pot :honey_pot::honeybee:
 Now, after configuring everything, we can finally start deploying T-Pots:  
 `./deploy_ansible_otc_t-pot.sh`  
 (Yes, it is as easy as that :smile:)
