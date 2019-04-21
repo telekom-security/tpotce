@@ -52,6 +52,7 @@ Furthermore we use the following tools
   - [Running on Hardware](#hardware)
   - [Post Install User](#postinstall)
   - [Post Install Auto](#postinstallauto)
+  - [Ansible Deployment on Open Telekom Cloud](#ansible-otc)
   - [First Run](#firstrun)
   - [System Placement](#placement)
 - [Updates](#updates)
@@ -117,6 +118,9 @@ Furthermore we use the following tools
 - **Improve install speed with apt-fast**
   - Migrating from a stable base install to Debian (Sid) requires downloading lots of packages. Depending on your geo location the download speed was already improved by introducing netselect-apt to determine the fastest mirror. Wit
 h apt-fast the downloads will be even faster by downloading packages not only in parallel but also with multiple connections per package.
+- **Added Ansible T-Pot Deployment on Open Telekom Cloud**
+  - Reusable Ansible Playbooks for all cloud providers
+  - Example Showcase with our Open Telekom Cloud
 
 <a name="concept"></a>
 # Technical Concept
@@ -315,6 +319,14 @@ cp tpot.conf.dist tpot.conf
 ```
 
 The installer will start automatically and guide you through the install process.
+
+<a name="ansible-otc"></a>
+## Ansible Deployment on Open Telekom Cloud
+You can find an Ansible Playbook based automated T-Pot Deployment in the [`cloud`](cloud) folder.  
+The Playbooks in the [`cloud/ansible`](cloud/ansible) folder are reusable across all cloud providers (like AWS, Azure, Digital Ocean).  
+The [`deploy_ansible_otc_t-pot.sh`](cloud/deploy_ansible_otc_t-pot.sh) script is an example of how it works with our own Public Cloud Offering [Open Telekom Cloud](https://open-telekom-cloud.com/en).  
+It first creates a new Elastic Cloud Server via the Open Telekom Cloud API and then invokes the Ansible Playbooks to install and configure T-Pot.  
+You can have a look at the script and easily adapt it for other cloud providers.
 
 <a name="firstrun"></a>
 ## First Run
