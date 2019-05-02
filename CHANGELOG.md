@@ -1,5 +1,19 @@
 # Changelog
 
+## 20190502
+- **Fix KVPs**
+  - Some KVPs for Cowrie changed and the tagcloud was not showing any values in the Cowrie dashboard.
+  - New installations are not affected, however existing installations need to import the objects from /opt/tpot/etc/objects/kibana-objects.json.zip.
+- **Makeiso**
+  - Move to Xorriso for building the ISO image.
+  - This allows to support most of the Debian based distros, i.e. Debian, MxLinux and Ubuntu.
+
+## 20190428
+- **Rebuild ISO**
+  - The install ISO needed a rebuilt after some changes in the Debian mirrors.
+- **Disable Netselect**
+  - After some reports in the issues that some Debian mirrors were not fully synced and thus some packages were unavailable the netselect-apt feature was disabled.
+
 ## 20190406
 - **Fix for SSH**
   - In some situations the SSH Port was not written to a new line (thanks to @dpisano for reporting).
