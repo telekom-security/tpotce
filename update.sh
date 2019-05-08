@@ -235,7 +235,7 @@ mkdir -p /data/adbhoney/downloads /data/adbhoney/log \
          /data/p0f/log
 
 ### Let's take care of some files and permissions
-chmod 760 -R /data
+chmod 770 -R /data
 chown tpot:tpot -R /data
 chmod 644 -R /data/nginx/conf
 chmod 644 -R /data/nginx/cert
