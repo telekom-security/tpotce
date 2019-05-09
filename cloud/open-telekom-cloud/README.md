@@ -105,7 +105,7 @@ If you want to secure the management interfaces, you can limit the incoming "all
 # Clone Git Repository
 Clone the `tpotce` repository to your Ansible Master:  
 `git clone https://github.com/dtag-dev-sec/tpotce.git`  
-All Ansible and automatic deployment related files are located in the [`cloud`](../cloud) folder.
+All Ansible and automatic deployment related files are located in the [`cloud/open-telekom-cloud`](../../cloud/open-telekom-cloud) folder.
 
 <a name="settings"></a>
 # Settings and recommended values
