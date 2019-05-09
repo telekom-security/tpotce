@@ -52,7 +52,8 @@ Furthermore we use the following tools
   - [Running on Hardware](#hardware)
   - [Post Install User](#postinstall)
   - [Post Install Auto](#postinstallauto)
-  - [Ansible Deployment on Open Telekom Cloud](#ansible-otc)
+  - [Cloud Deployments](#cloud)
+    - [Ansible Deployment on Open Telekom Cloud](#ansible-otc)
   - [First Run](#firstrun)
   - [System Placement](#placement)
 - [Updates](#updates)
@@ -320,11 +321,17 @@ cp tpot.conf.dist tpot.conf
 
 The installer will start automatically and guide you through the install process.
 
+<a name="cloud"></a>
+## Cloud Deployments
+Located in the [`cloud`](cloud) folder.  
+Currently there is an example with Ansible.  
+If you would like to contribute you can add other cloud deployments like Terraform, Chef or Puppet.
+
 <a name="ansible-otc"></a>
-## Ansible Deployment on Open Telekom Cloud
-You can find an Ansible Playbook based automated T-Pot Deployment in the [`cloud`](cloud) folder.  
-The Playbooks in the [`cloud/ansible`](cloud/ansible) folder are reusable across all cloud providers (like AWS, Azure, Digital Ocean).  
-The [`deploy_ansible_otc_t-pot.sh`](cloud/deploy_ansible_otc_t-pot.sh) script is an example of how it works with our own Public Cloud Offering [Open Telekom Cloud](https://open-telekom-cloud.com/en).  
+### Ansible Deployment on Open Telekom Cloud
+You can find an Ansible Playbook based automated T-Pot Deployment in the [`cloud/open-telekom-cloud`](cloud/open-telekom-cloud) folder.  
+The Playbooks in the [`cloud/open-telekom-cloud/ansible`](cloud/open-telekom-cloud/ansible) folder are reusable across all cloud providers (like AWS, Azure, Digital Ocean).  
+The [`deploy_ansible_otc_t-pot.sh`](cloud/open-telekom-cloud/deploy_ansible_otc_t-pot.sh) script is an example of how it works with our own Public Cloud Offering [Open Telekom Cloud](https://open-telekom-cloud.com/en).  
 It first creates a new Elastic Cloud Server via the Open Telekom Cloud API and then invokes the Ansible Playbooks to install and configure T-Pot.  
 You can have a look at the script and easily adapt it for other cloud providers.
 
