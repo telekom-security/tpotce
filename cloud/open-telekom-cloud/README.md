@@ -156,7 +156,7 @@ az=eu-de-03
 
 <a name="tpot-conf"></a>
 ## Configure `tpot.conf.dist`
-The file is located in [`iso/installer/tpot.conf.dist`](../iso/installer/tpot.conf.dist).  
+The file is located in [`iso/installer/tpot.conf.dist`](../../iso/installer/tpot.conf.dist).  
 Here you can choose:
   - between the various T-Pot editions
   - a username for the web interface
@@ -176,7 +176,7 @@ To enable this feature, set `custom_ews=true` in `.ecs_settings.sh`; See here:  
 
 Here you can create a custom config file for `ewsposter`.  
 e.g. when you have your own credentials for delivering data to our [Sicherheitstacho](https://sicherheitstacho.eu/start/main).  
-You can find the `ews.cfg` template file here: [`cloud/ansible/roles/custom_ews/templates/ews.cfg`](../cloud/ansible/roles/custom_ews/templates/ews.cfg) and adapt it for your needs.
+You can find the `ews.cfg` template file here: [`ansible/roles/custom_ews/templates/ews.cfg`](ansible/roles/custom_ews/templates/ews.cfg) and adapt it for your needs.
 
 For setting custom credentials, these settings would be relevant for you (the rest of the file can stay as is):  
 ```

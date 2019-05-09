@@ -26,7 +26,7 @@
 
 - name: Copy t-pot configuration file
   template:
-    src: ../../../../../iso/installer/tpot.conf.dist
+    src: ../../../../../../iso/installer/tpot.conf.dist
     dest: /root/tpot.conf
     owner: root
     group: root
