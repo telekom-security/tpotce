@@ -126,7 +126,8 @@ export OS_AUTH_URL=https://iam.eu-de.otc.t-systems.com/v3
 <a name="ecs-settings"></a>
 ## Configure `.ecs_settings.sh`
 Here you can customize your Elastic Cloud Server (ECS):
-  - Password for the user `linux` (**you should definitely change that**)
+  - Password for the user `linux` (**you should definitely change that**)  
+    You may have to adjust the `remote_user` in the Ansible Playbooks under [ansible](ansible) if you are using a normal/default Debian base image
   - (Optional) For using a custom `ews.cfg` set to `true`; See here: [Optional: Custom `ews.cfg`](#ews-cfg)
   - (Optional) Change the instance type (flavor) of the ECS.  
     `s2.medium.8` corresponds to 1 vCPU and 8GB of RAM and is the minimum required flavor.  
