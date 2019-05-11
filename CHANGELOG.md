@@ -1,5 +1,9 @@
 # Changelog
 
+## 20190511
+- **Add hptest script**
+  - Quickly test if the honeypots are working with `hptest.sh <[ip,host]>` based on nmap.
+
 ## 20190508
 - **Add tsec / install user to tpot group**
   - For users being able to easily download logs from the /data folder the installer now adds the `tpot` or the logged in user (`who am i`) via `usermod -a -G tpot <user>` to the tpot group. Also /data permissions will now be enforced to `770`, which is necessary for directory listings.
