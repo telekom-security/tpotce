@@ -1,0 +1,13 @@
+# This playbook deploys a T-Pot
+
+- hosts: TPOT
+  remote_user: linux
+  become: yes
+  become_user: root
+  become_method: sudo
+  gather_facts: no
+
+  roles:
+    - install
+
+

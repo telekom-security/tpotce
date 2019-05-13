@@ -692,6 +692,11 @@ fuBANNER "Set hostname"
 hostnamectl set-hostname $myHOST
 sed -i 's#127.0.1.1.*#127.0.1.1\t'"$myHOST"'#g' /etc/hosts
 
+# Prevent cloud-init from overwriting our new hostname
+if [ -f '/etc/cloud/cloud.cfg' ]; then
+    sed -i 's/preserve_hostname.*/preserve_hostname: true/g' /etc/cloud/cloud.cfg
+fi
+
 # Let's patch cockpit.socket, sshd_config
 fuBANNER "Adjust ports"
 mkdir -p /etc/systemd/system/cockpit.socket.d

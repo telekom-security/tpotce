@@ -258,6 +258,13 @@ echo "### Please reboot."
 echo
 }
 
+function fuRESTORE_EWSCFG () {
+if [ -f '/data/ews/conf/ews.cfg' ] && ! grep 'ews.cfg' /opt/tpot/etc/tpot.yml > /dev/null; then
+    echo "### Restoring volume mount for ews.cfg in tpot.yml"
+    sed -i '/\/opt\/ewsposter\/ews.ip/a\\ \ \ \ \ - /data/ews/conf/ews.cfg:/opt/ewsposter/ews.cfg' /opt/tpot/etc/tpot.yml
+fi
+}
+
 
 ################
 # Main section #
@@ -289,3 +296,4 @@ fuSTOP_TPOT
 fuBACKUP
 fuSELFUPDATE "$0" "$@"
 fuUPDATER
+fuRESTORE_EWSCFG

@@ -1,0 +1,50 @@
+- name: Waiting for SSH connection
+  wait_for_connection:
+    delay: 30
+    timeout: 300
+
+- name: Gathering Facts
+  setup:
+
+- name: Cloning t-pot install directory
+  git:
+    repo: 'https://github.com/dtag-dev-sec/tpotce.git'
+    dest: /root/tpot
+
+- name: Prepare to set user password 
+  set_fact:
+    user_password: "{{ lookup('env', 'LINUX_PASS') }}"
+    user_salt: 's0mew1ck3dTpoT'
+
+- name: Changing password for user linux to {{ user_password }}
+  user:
+   name: "linux"
+   password: "{{ user_password | password_hash('sha512', user_salt) }}"
+   state: present
+   shell: /bin/bash
+   update_password: always
+
+- name: Copy t-pot configuration file
+  template:
+    src: ../../../../../../iso/installer/tpot.conf.dist
+    dest: /root/tpot.conf
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Install t-pot on ECS -  be patient, this might take 15 to 30 minutes depending on the connection speed. No further output is given. 
+  command: /root/tpot/iso/installer/install.sh --type=auto --conf=/root/tpot.conf
+
+- name: Delete t-pot configuration file
+  file:
+    path: /root/tpot.conf
+    state: absent
+
+- name: Change unattended-upgrades to take default action
+  blockinfile:
+    dest: /etc/apt/apt.conf.d/50unattended-upgrades
+    block: |
+      Dpkg::Options {
+        "--force-confdef";
+        "--force-confold";
+      }

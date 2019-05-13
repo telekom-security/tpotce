@@ -1,0 +1,10 @@
+# This playbook sets a custom EWS config on the T-Pot
+
+- hosts: TPOT
+  remote_user: linux
+  become: yes
+  become_user: root
+  become_method: sudo
+
+  roles:
+    - custom_ews
