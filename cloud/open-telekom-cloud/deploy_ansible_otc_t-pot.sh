@@ -109,7 +109,9 @@ if [ $? -eq 0 ]; then
 
 else
 
-    if grep 'Flavor' otc_tools.log > /dev/null; then
+    if grep '401 Unauthorized' otc_tools.log > /dev/null; then
+        echo "### API username or password is incorrect"
+    elif grep 'Flavor' otc_tools.log > /dev/null; then
         echo "### Specified ECS Flavor not found"
     elif grep 'No image found by name' otc_tools.log > /dev/null; then
         echo "### Specified Image not found"
