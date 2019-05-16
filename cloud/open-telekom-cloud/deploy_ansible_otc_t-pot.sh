@@ -33,21 +33,8 @@ source .ecs_settings.sh
 # Import OTC authentication credentials
 source .otc_env.sh
 
-# Import HPFEED settings
-source .hpfeeds_settings.sh
-
 # Password is later used by Ansible
 export LINUX_PASS=$linuxpass
-
-# HPFEED settings are later used by Ansible
-export myENABLE=$myENABLE
-export myHOST=$myHOST
-export myPORT=$myPORT
-export myCHANNEL=$myCHANNEL
-export myIDENT=$myIDENT
-export mySECRET=$mySECRET
-export myCERT=$myCERT
-export myFORMAT=$myFORMAT
 
 # Ignore ssh host keys as they are new anyway
 export ANSIBLE_HOST_KEY_CHECKING=False
