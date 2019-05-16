@@ -122,6 +122,10 @@ h apt-fast the downloads will be even faster by downloading packages not only in
 - **Added Ansible T-Pot Deployment on Open Telekom Cloud**
   - Reusable Ansible Playbooks for all cloud providers
   - Example Showcase with our Open Telekom Cloud
+- **HPFEEDS Opt-In commandline option**
+  - Pass a hpfeeds config file as a commandline argument
+  - hpfeeds config is saved in `/data/ews/conf/hpfeeds.cfg`
+  - Update script restores hpfeeds config
 
 <a name="concept"></a>
 # Technical Concept
