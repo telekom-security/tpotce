@@ -99,8 +99,8 @@ sed --follow-symlinks -i "s/EWS_HPFEEDS_SECRET.*/EWS_HPFEEDS_SECRET=${mySECRET}/
 sed --follow-symlinks -i "s/EWS_HPFEEDS_FORMAT.*/EWS_HPFEEDS_FORMAT=${myFORMAT}/g" "$myTPOTYMLFILE"
 echo "Now starting T-Pot ..."
 systemctl start tpot
-echo "You can always change or review your settings in /data/ews/conf/hpfeeds.cfg and apply changes with"
-echo "./hpfeeds_optin.sh --conf=/data/ews/conf/hpfeeds.cfg"
+echo "You can always change or review your settings in /data/ews/conf/hpfeeds.cfg and apply changes by"
+echo "running \"./hpfeeds_optin.sh --conf=/data/ews/conf/hpfeeds.cfg\""
 echo "Done."
 }
 
