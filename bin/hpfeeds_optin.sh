@@ -69,11 +69,11 @@ myFORMAT="json"
 
 function fuWRITETOFILE () {
 if [ -f '/data/ews/conf/hpfeeds.cfg' ]; then
-  echo "Creating backup of current config"
+  echo "Creating backup of current config in /data/ews/conf/hpfeeds.cfg.old"
   mv /data/ews/conf/hpfeeds.cfg /data/ews/conf/hpfeeds.cfg.old
 fi
 echo "Storing new config in /data/ews/conf/hpfeeds.cfg"
-cat >> /data/ews/conf/hpfeeds.cfg <<EOL
+cat >> /data/ews/conf/hpfeeds.cfg <<EOF
 myENABLE=$myENABLE
 myHOST=$myHOST
 myPORT=$myPORT
@@ -82,13 +82,13 @@ myIDENT=$myIDENT
 mySECRET=$mySECRET
 myCERT=$myCERT
 myFORMAT=$myFORMAT
-EOL
+EOF
 }
 
 function fuAPPLY () {
 echo "Now stopping T-Pot ..."
 systemctl stop tpot
-echo "Applying your settings ... "
+echo "Applying your settings in tpot.yml ... "
 sed --follow-symlinks -i "s/EWS_HPFEEDS_ENABLE.*/EWS_HPFEEDS_ENABLE=${myENABLE}/g" "$myTPOTYMLFILE"
 sed --follow-symlinks -i "s/EWS_HPFEEDS_HOST.*/EWS_HPFEEDS_HOST=${myHOST}/g" "$myTPOTYMLFILE"
 sed --follow-symlinks -i "s/EWS_HPFEEDS_PORT.*/EWS_HPFEEDS_PORT=${myPORT}/g" "$myTPOTYMLFILE"
@@ -99,7 +99,8 @@ sed --follow-symlinks -i "s/EWS_HPFEEDS_SECRET.*/EWS_HPFEEDS_SECRET=${mySECRET}/
 sed --follow-symlinks -i "s/EWS_HPFEEDS_FORMAT.*/EWS_HPFEEDS_FORMAT=${myFORMAT}/g" "$myTPOTYMLFILE"
 echo "Now starting T-Pot ..."
 systemctl start tpot
-echo "You can always change or review your settings in the ewsposter section of $myTPOTYMLFILE"
+echo "You can always change or review your settings in /data/ews/conf/hpfeeds.cfg and apply changes with"
+echo "./hpfeeds_optin.sh --conf=/data/ews/conf/hpfeeds.cfg"
 echo "Done."
 }
 
