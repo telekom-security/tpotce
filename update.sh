@@ -254,8 +254,6 @@ echo "### Export and import the objects easily through the Kibana WebUI:"
 echo "### Go to Kibana > Management > Saved Objects > Export / Import"
 echo "### All objects will be overwritten upon import, make sure to run an export first."
 echo
-echo "### Please reboot."
-echo
 }
 
 function fuRESTORE_EWSCFG () {
@@ -305,3 +303,7 @@ fuSELFUPDATE "$0" "$@"
 fuUPDATER
 fuRESTORE_EWSCFG
 fuRESTORE_HPFEEDS
+
+echo
+echo "### Please reboot."
+echo
