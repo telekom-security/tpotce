@@ -265,6 +265,13 @@ if [ -f '/data/ews/conf/ews.cfg' ] && ! grep 'ews.cfg' /opt/tpot/etc/tpot.yml > 
 fi
 }
 
+function fuRESTORE_HPFEEDS () {
+if [ -f '/data/ews/conf/hpfeeds.cfg' ]; then
+    echo "### Restoring HPFEEDS in tpot.yml"
+    ./bin/hpfeeds_optin.sh --conf=/data/ews/conf/hpfeeds.cfg
+fi
+}
+
 
 ################
 # Main section #
@@ -297,3 +304,4 @@ fuBACKUP
 fuSELFUPDATE "$0" "$@"
 fuUPDATER
 fuRESTORE_EWSCFG
+fuRESTORE_HPFEEDS
