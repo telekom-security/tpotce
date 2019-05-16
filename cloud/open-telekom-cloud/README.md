@@ -18,8 +18,7 @@ This example showcases the deployment on our own Public Cloud Offering [Open Tel
   - [Configure `.otc_env.sh`](#otc-env)
   - [Configure `.ecs_settings.sh`](#ecs-settings)
   - [Configure `tpot.conf.dist`](#tpot-conf)
-  - [Optional: Custom `ews.cfg`](#ews-cfg)
-  - [Optional: Configure `.hpfeeds_settings.sh`](#hpfeeds)
+  - [Optional: Custom `ews.cfg` and HPFEEDS](#ews-hpfeeds)
 - [Deploying a T-Pot](#deploy)
 - [Further documentation](#documentation)
 
@@ -171,11 +170,12 @@ myCONF_WEB_USER='webuser'
 myCONF_WEB_PW='w3b$ecret'
 ```
 
-<a name="ews-cfg"></a>
-## Optional: Custom `ews.cfg`
-To enable this feature, set `custom_ews=true` in `.ecs_settings.sh`; See here:  [Configure `.ecs_settings.sh`](#ecs-settings)  
+<a name="ews-hpfeeds"></a>
+## Optional: Custom `ews.cfg` and HPFEEDS
+To enable these features, set `custom_ews=true` in `.ecs_settings.sh`; See here:  [Configure `.ecs_settings.sh`](#ecs-settings)  
 
-Here you can create a custom config file for `ewsposter`.  
+### ews.cfg
+You can use a custom config file for `ewsposter`.  
 e.g. when you have your own credentials for delivering data to our [Sicherheitstacho](https://sicherheitstacho.eu/start/main).  
 You can find the `ews.cfg` template file here: [`ansible/roles/custom_ews/templates/ews.cfg`](ansible/roles/custom_ews/templates/ews.cfg) and adapt it for your needs.
 
@@ -193,20 +193,20 @@ token = your_token
 ...
 ```
 
-<a name="hpfeeds"></a>
-## Optional: Configure `.hpfeeds_settings.sh`
-When the `custom_ews=true` setting is set in`.ecs_settings.sh` (see here:  [Configure `.ecs_settings.sh`](#ecs-settings)), you can also specify custom HPFEEDS in `.hpfeeds_settings.sh`.  
-e.g. for SISSDEN: 
+### HPFEEDS
+You can also specify HPFEEDS in [`ansible/roles/custom_ews/templates/hpfeeds.cfg`](ansible/roles/custom_ews/templates/hpfeeds.cfg).  
+That file constains the defaults (turned off) and you can adapt it for your needs, e.g. for SISSDEN:
 ```
 myENABLE=true
 myHOST=hpfeeds.sissden.eu
 myPORT=10000
 myCHANNEL=t-pot.events
+myCERT=/opt/ewsposter/sissden.pem
 myIDENT=your_user
 mySECRET=your_secret
-myCERT=/opt/ewsposter/sissden.pem
 myFORMAT=json
 ```
+
 
 <a name="deploy"></a>
 # Deploying a T-Pot :honey_pot::honeybee:
