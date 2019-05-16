@@ -67,6 +67,24 @@ mySECRET="secret"
 myFORMAT="json"
 }
 
+function fuWRITETOFILE () {
+if [ -f '/data/ews/conf/hpfeeds.cfg' ]; then
+  echo "Creating backup of current config"
+  mv /data/ews/conf/hpfeeds.cfg /data/ews/conf/hpfeeds.cfg.old
+fi
+echo "Storing new config in /data/ews/conf/hpfeeds.cfg"
+cat >> /data/ews/conf/hpfeeds.cfg <<EOL
+myENABLE=$myENABLE
+myHOST=$myHOST
+myPORT=$myPORT
+myCHANNEL=$myCHANNEL
+myIDENT=$myIDENT
+mySECRET=$mySECRET
+myCERT=$myCERT
+myFORMAT=$myFORMAT
+EOL
+}
+
 function fuAPPLY () {
 echo "Now stopping T-Pot ..."
 systemctl stop tpot
@@ -85,6 +103,14 @@ echo "You can always change or review your settings in the ewsposter section of 
 echo "Done."
 }
 
+# Check for cmdline argument and parse config file
+filename=$(echo $@ | cut -d= -f2)
+if [ $# == 1 ] && echo $@ | grep '\-\-conf=' > /dev/null && [ ! -z $filename ] && [ -f $filename ]
+  then
+    source $filename
+else
+
+# Proceed with interactive setup when no config file is found
 echo "HPFEEDS Delivery Opt-In for T-Pot"
 echo "---------------------------------"
 echo "By running this script you agree to share your data with a 3rd party and agree to their corresponding sharing terms."
@@ -120,5 +146,7 @@ while [ 1 != 2 ]
           ;;
       esac
 done
-fuAPPLY
 
+fi
+fuWRITETOFILE
+fuAPPLY
