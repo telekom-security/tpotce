@@ -482,7 +482,7 @@ Your current config will also be stored in `/data/ews/conf/hpfeeds.cfg` where yo
 No worries: You old config is backed up in `/data/ews/conf/hpfeeds.cfg.old`  
 Be sure to apply any changes by running `./hpfeeds_optin.sh --conf=/data/ews/conf/hpfeeds.cfg`.
 
-Of course you can also rerun the `hpfeeds_optin.sh` to change and apply your settings interactively.
+Of course you can also rerun the `hpfeeds_optin.sh` script to change and apply your settings interactively.
 
 <a name="roadmap"></a>
 # Roadmap
