@@ -20,5 +20,5 @@
     group: root
     mode: 0644
 
--name: Applying hpfeeds settings
+- name: Applying hpfeeds settings
   command: /opt/tpot/bin/hpfeeds_optin.sh --conf=/data/ews/conf/hpfeeds.cfg
