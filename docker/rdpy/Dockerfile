@@ -4,7 +4,7 @@ FROM alpine
 ADD dist/ /root/dist/
 
 # Get and install dependencies & packages
-RUN apk -U --no-cache add \
+RUN apk -U add \
             build-base \
             git \
             libffi-dev \
@@ -14,8 +14,6 @@ RUN apk -U --no-cache add \
             python-dev \
             py-pip \
             py-setuptools && \
-    apk -U --no-cache add --repository http://dl-cdn.alpinelinux.org/alpine/edge/testing/ \
-            py-qt && \
 
 # Setup user
     addgroup -g 2000 rdpy && \
@@ -52,8 +50,7 @@ RUN apk -U --no-cache add \
                     libffi-dev \
                     openssl-dev \
                     python-dev \
-                    py-pip \
-                    py-qt && \
+                    py-pip && \ 
     rm -rf /var/cache/apk/*
 
 # Start rdpy
