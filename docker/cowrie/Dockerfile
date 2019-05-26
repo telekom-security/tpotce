@@ -17,6 +17,7 @@ RUN apk -U --no-cache add \
                        openssl-dev \
                        python \
                        python-dev \
+                       py-bcrypt \
                        py-mysqldb \
                        py-pip \
                        py-requests \
