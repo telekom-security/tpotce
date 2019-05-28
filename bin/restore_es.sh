@@ -60,6 +60,25 @@ curl -s XPUT ''$myES'_template/.*' -H 'Content-Type: application/json' -d'
 }'
 echo
 
+# Set logstash template
+echo -n $myCOL1"### Setting up logstash template: "$myCOL0
+curl -s XPUT ''$myES'_template/logstash' -H 'Content-Type: application/json' -d'
+{
+  "index_patterns": "logstash-*",
+    "settings" : {
+      "index" : { 
+        "number_of_shards": 1,
+        "number_of_replicas": 0,
+          "mapping" : { 
+            "total_fields" : {
+              "limit" : "2000"
+            } 
+          }  
+      }
+    }
+}'
+echo
+
 # Restore indices
 curl -s -X DELETE ''$myES'.kibana*' > /dev/null
 for i in $myINDICES;
