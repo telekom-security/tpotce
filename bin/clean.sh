@@ -129,6 +129,14 @@ fuELK () {
   chown tpot:tpot /data/elk -R
 }
 
+# Let's create a function to clean up and prepare fatt data
+fuFATT () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/fatt/*; fi
+  mkdir -p /data/fatt/log
+  chmod 770 -R /data/fatt
+  chown tpot:tpot -R /data/fatt
+}
+
 # Let's create a function to clean up and prepare glastopf data
 fuGLASTOPF () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/glastopf/*; fi
@@ -262,6 +270,7 @@ if [ "$myPERSISTENCE" = "on" ];
     fuDIONAEA
     fuELASTICPOT
     fuELK
+    fuFATT
     fuGLASTOPF
     fuGLUTTON
     fuHERALDING

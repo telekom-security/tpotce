@@ -3,7 +3,7 @@ version: '2.3'
 services:
 
 # Fatt service
-  suricata:
+  fatt:
     build: .
     container_name: fatt
     restart: always
@@ -14,4 +14,4 @@ services:
      - NET_RAW
     image: "dtagdevsec/fatt:1903"
     volumes:
-     - /data/fatt/log:/home/fatt/fatt/log
+     - /data/fatt/log:/opt/fatt/log

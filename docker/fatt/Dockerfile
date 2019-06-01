@@ -6,7 +6,6 @@ FROM alpine
 # Get and install dependencies & packages
 RUN apk -U add \
               git \
-              libcap \
               py3-libxml2 \
               py3-lxml \
               python3 \
@@ -18,16 +17,16 @@ RUN apk -U add \
     adduser -S -s /bin/ash -u 2000 -D -g 2000 fatt && \
 
 # Install fatt
-    mkdir -p /home/fatt && \
-    cd /home/fatt && \
-    mkdir -p log && \
+    mkdir -p /opt && \
+    cd /opt && \
     git clone --depth=1 https://github.com/0x4D31/fatt && \
     cd fatt && \
+    mkdir -p log && \
     pip3 install --upgrade pip && \
     pip3 install pyshark==0.4.2.2 && \
 
 # Setup configs
-    chown fatt:fatt -R /home/fatt/* && \
+    chown fatt:fatt -R /opt/fatt/* && \
 
 # Clean up
     apk del --purge git \
@@ -37,6 +36,6 @@ RUN apk -U add \
 
 # Start fatt
 STOPSIGNAL SIGINT
-ENV PYTHONPATH /home/fatt/fatt
-WORKDIR /home/fatt/fatt
+ENV PYTHONPATH /opt/fatt
+WORKDIR /opt/fatt
 CMD python3 fatt.py -i $(/sbin/ip address | grep '^2: ' | awk '{ print $2 }' | tr -d [:punct:]) --print_output --json_logging -o log/fatt.log
