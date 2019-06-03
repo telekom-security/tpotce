@@ -82,6 +82,8 @@ fuCHECKFORARGS
 
 echo "Starting scans ..."
 echo "$myMEDPOTPACKET" | nc "$myHOST" 2575 &
+curl -XGET "http://$myHOST:9200/logstash-*/_search" &
+echo "I20100" | timeout --foreground 3 nc "$myHOST" 10001 &
 fuSCAN "180" "7,8,102,135,161,1025,1080,5000,9200" "$myHOST" "-sC -sS -sU -sV"
 fuSCAN "180" "2048,4096,5432" "$myHOST" "-sC -sS -sU -sV --version-light"
 fuSCAN "120" "20,21" "$myHOST" "--script=ftp* -sC -sS -sV"
