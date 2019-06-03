@@ -772,7 +772,6 @@ mkdir -p /data/adbhoney/downloads /data/adbhoney/log \
          /data/elasticpot/log \
          /data/elk/data /data/elk/log \
 	 /data/fatt/log \
-         /data/glastopf/log /data/glastopf/db \
          /data/honeytrap/log/ /data/honeytrap/attacks/ /data/honeytrap/downloads/ \
          /data/glutton/log \
          /data/heralding/log \

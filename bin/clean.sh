@@ -138,14 +138,6 @@ fuFATT () {
 }
 
 # Let's create a function to clean up and prepare glastopf data
-fuGLASTOPF () {
-  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/glastopf/*; fi
-  mkdir -p /data/glastopf/db /data/glastopf/log
-  chmod 770 /data/glastopf -R
-  chown tpot:tpot /data/glastopf -R
-}
-
-# Let's create a function to clean up and prepare glastopf data
 fuGLUTTON () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/glutton/*; fi
   mkdir -p /data/glutton/log
@@ -271,7 +263,6 @@ if [ "$myPERSISTENCE" = "on" ];
     fuELASTICPOT
     fuELK
     fuFATT
-    fuGLASTOPF
     fuGLUTTON
     fuHERALDING
     fuHONEYPY
