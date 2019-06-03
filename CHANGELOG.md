@@ -1,5 +1,26 @@
 # Changelog
 
+## 20190601
+- **Start supporting Fatt, remove Glastopf**
+  - Build Dockerfile, Adjust logstash, installer, update and such.
+  - Glastopf is no longer supported within T-Pot
+
+## 20190528+20190531
+- **Increase total number of fields**
+  - Adjust total number of fileds for logstash templae from 1000 to 2000.
+
+## 20190526
+- **Fix build for Cowrie**
+  - Upstream changes required a new package `py-bcrypt`.
+
+## 20190525
+- **Fix build for RDPY**
+  - Building was prevented due to cache error which occurs lately on Alpine if `apk` is using `--no-ache' as options.
+
+## 20190520
+- **Adjust permissions for /data folder**
+  - Now it is possible to download files from `/data` using SCP, WINSCP or CyberDuck.
+
 ## 20190513
 - **Added Ansible T-Pot Deployment on Open Telekom Cloud**
   - Reusable Ansible Playbooks for all cloud providers
