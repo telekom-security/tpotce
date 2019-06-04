@@ -383,6 +383,7 @@ The Update script will:
 
 You simply run the update script:
 ```
+sudo su -
 cd /opt/tpot/
 ./update.sh -y
 ```
