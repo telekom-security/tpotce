@@ -1,5 +1,11 @@
 # Changelog
 
+## 20190604
+- **Finalize Fatt support**
+  - Build visualizations, searches, dashboards
+  - Rebuild index patterns
+  - Some finishing touches
+
 ## 20190601
 - **Start supporting Fatt, remove Glastopf**
   - Build Dockerfile, Adjust logstash, installer, update and such.

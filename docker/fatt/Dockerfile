@@ -1,8 +1,8 @@
 FROM alpine
-
+#
 # Include dist
 #ADD dist/ /root/dist/
-
+#
 # Get and install dependencies & packages
 RUN apk -U add \
               git \
@@ -11,11 +11,11 @@ RUN apk -U add \
               python3 \
               python3-dev && \
     apk -U add tshark --repository http://dl-3.alpinelinux.org/alpine/edge/community/ && \
-
+#
 # Setup user
     addgroup -g 2000 fatt && \
     adduser -S -s /bin/ash -u 2000 -D -g 2000 fatt && \
-
+#
 # Install fatt
     mkdir -p /opt && \
     cd /opt && \
@@ -24,16 +24,16 @@ RUN apk -U add \
     mkdir -p log && \
     pip3 install --upgrade pip && \
     pip3 install pyshark==0.4.2.2 && \
-
+#
 # Setup configs
     chown fatt:fatt -R /opt/fatt/* && \
-
+#
 # Clean up
     apk del --purge git \
                     python3-dev && \
     rm -rf /root/* && \
     rm -rf /var/cache/apk/* 
-
+#
 # Start fatt
 STOPSIGNAL SIGINT
 ENV PYTHONPATH /opt/fatt
