@@ -9,7 +9,7 @@ resource "aws_security_group" "tpot" {
   ingress {
     from_port   = 0
     to_port     = 64000
-    protocol    = "-1"
+    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
   ingress {
