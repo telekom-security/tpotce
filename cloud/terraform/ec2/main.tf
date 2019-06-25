@@ -13,6 +13,12 @@ resource "aws_security_group" "tpot" {
     cidr_blocks = ["0.0.0.0/0"]
   }
   ingress {
+    from_port   = 0
+    to_port     = 64000
+    protocol    = "udp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  ingress {
     from_port   = 64294
     to_port     = 64294
     protocol    = "tcp"
