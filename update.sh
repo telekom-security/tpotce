@@ -253,15 +253,21 @@ echo "### https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/etc/objec
 echo "### Export and import the objects easily through the Kibana WebUI:"
 echo "### Go to Kibana > Management > Saved Objects > Export / Import"
 echo "### All objects will be overwritten upon import, make sure to run an export first."
-echo
-echo "### Please reboot."
-echo
 }
 
 function fuRESTORE_EWSCFG () {
 if [ -f '/data/ews/conf/ews.cfg' ] && ! grep 'ews.cfg' /opt/tpot/etc/tpot.yml > /dev/null; then
+    echo
     echo "### Restoring volume mount for ews.cfg in tpot.yml"
     sed -i '/\/opt\/ewsposter\/ews.ip/a\\ \ \ \ \ - /data/ews/conf/ews.cfg:/opt/ewsposter/ews.cfg' /opt/tpot/etc/tpot.yml
+fi
+}
+
+function fuRESTORE_HPFEEDS () {
+if [ -f '/data/ews/conf/hpfeeds.cfg' ]; then
+    echo
+    echo "### Restoring HPFEEDS in tpot.yml"
+    ./bin/hpfeeds_optin.sh --conf=/data/ews/conf/hpfeeds.cfg
 fi
 }
 
@@ -297,3 +303,8 @@ fuBACKUP
 fuSELFUPDATE "$0" "$@"
 fuUPDATER
 fuRESTORE_EWSCFG
+fuRESTORE_HPFEEDS
+
+echo
+echo "### Please reboot."
+echo

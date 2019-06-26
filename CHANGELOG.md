@@ -1,5 +1,11 @@
 # Changelog
 
+## 20190626
+- **HPFEEDS Opt-In commandline option**
+  - Pass a hpfeeds config file as a commandline argument
+  - hpfeeds config is saved in `/data/ews/conf/hpfeeds.cfg`
+  - Update script restores hpfeeds config
+
 ## 20190604
 - **Finalize Fatt support**
   - Build visualizations, searches, dashboards

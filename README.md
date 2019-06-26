@@ -122,6 +122,10 @@ h apt-fast the downloads will be even faster by downloading packages not only in
 - **Added Ansible T-Pot Deployment on Open Telekom Cloud**
   - Reusable Ansible Playbooks for all cloud providers
   - Example Showcase with our Open Telekom Cloud
+- **HPFEEDS Opt-In commandline option**
+  - Pass a hpfeeds config file as a commandline argument
+  - hpfeeds config is saved in `/data/ews/conf/hpfeeds.cfg`
+  - Update script restores hpfeeds config
 
 <a name="concept"></a>
 # Technical Concept
@@ -375,11 +379,13 @@ T-Pot requires outgoing git, http, https connections for updates (Debian, Docker
 # Updates
 For the ones of you who want to live on the bleeding edge of T-Pot development we introduced an update feature which will allow you to update all T-Pot relevant files to be up to date with the T-Pot master branch.
 **If you made any relevant changes to the T-Pot relevant config files make sure to create a backup first.**
+
 The Update script will:
- - **merciless** overwrite local changes to be in sync with the T-Pot master branch
+ - **mercilessly** overwrite local changes to be in sync with the T-Pot master branch
  - upgrade the system to the packages available in Debian (Sid)
  - update all resources to be in-sync with the T-Pot master branch
  - ensure all T-Pot relevant system files will be patched / copied into the original T-Pot state
+ - restore your custom ews.cfg and HPFEED settings from `/data/ews/conf`
 
 You simply run the update script:
 ```
@@ -467,8 +473,17 @@ We encourage you not to disable the data submission as it is the main purpose of
 
 <a name="hpfeeds-optin"></a>
 ## Opt-In HPFEEDS Data Submission
-As an Opt-In it is now possible to also share T-Pot data with 3rd party HPFEEDS brokers, such as [SISSDEN](https://sissden.eu).
-If you want to share your T-Pot data you simply have to register an account with a 3rd party broker with its own benefits towards the community. Once registered you will receive your credentials to share events with the broker. In T-Pot you simply run `hpfeeds_optin.sh` which will ask for your credentials, in case of SISSDEN this is just `Ident` and `Secret`, everything else is pre-configured. It will automatically update `/opt/tpot/etc/tpot.yml` to deliver events to your desired broker.
+As an Opt-In it is now possible to also share T-Pot data with 3rd party HPFEEDS brokers, such as [SISSDEN](https://sissden.eu).  
+If you want to share your T-Pot data you simply have to register an account with a 3rd party broker with its own benefits towards the community. Once registered you will receive your credentials to share events with the broker. In T-Pot you simply run `hpfeeds_optin.sh` which will ask for your credentials, in case of SISSDEN this is just `Ident` and `Secret`, everything else is pre-configured.  
+It will automatically update `/opt/tpot/etc/tpot.yml` to deliver events to your desired broker.
+
+The script can accept a config file as an argument, e.g. `./hpfeeds_optin.sh --conf=hpfeeds.cfg`
+
+Your current config will also be stored in `/data/ews/conf/hpfeeds.cfg` where you can review or change it.  
+Be sure to apply any changes by running `./hpfeeds_optin.sh --conf=/data/ews/conf/hpfeeds.cfg`.  
+No worries: You old config gets backed up in `/data/ews/conf/hpfeeds.cfg.old`
+
+Of course you can also rerun the `hpfeeds_optin.sh` script to change and apply your settings interactively.
 
 <a name="roadmap"></a>
 # Roadmap
