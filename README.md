@@ -481,7 +481,7 @@ The script can accept a config file as an argument, e.g. `./hpfeeds_optin.sh --c
 
 Your current config will also be stored in `/data/ews/conf/hpfeeds.cfg` where you can review or change it.  
 Be sure to apply any changes by running `./hpfeeds_optin.sh --conf=/data/ews/conf/hpfeeds.cfg`.  
-No worries: You old config gets backed up in `/data/ews/conf/hpfeeds.cfg.old`
+No worries: Your old config gets backed up in `/data/ews/conf/hpfeeds.cfg.old`
 
 Of course you can also rerun the `hpfeeds_optin.sh` script to change and apply your settings interactively.
 
