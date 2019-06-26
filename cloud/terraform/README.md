@@ -29,7 +29,7 @@ The following resources are NOT automatically created and need to be specified i
 
 ### Terraform Variables
 
-In `ec2/variables.tf`, change the following variables to correspond to your existing EC2 infrastructure:
+In `aws/variables.tf`, change the following variables to correspond to your existing EC2 infrastructure:
 
 * `admin_ip` - source IP address(es) that you will use to administer the system. Connections to TCP ports 64294, 64295 and 64297 will be allowed from this IP only. Multiple IPs or CIDR blocks can be specified in the format: `["127.0.0.1/32", "192.168.0.0/24"]`
 * `ec2_vpc_id`
@@ -52,7 +52,7 @@ This will be used to configure credentials for the T-Pot Kibana interface. Refer
 The [`terraform init`](https://www.terraform.io/docs/commands/init.html) command is used to initialize a working directory containing Terraform configuration files.
 
 ```
-$ cd ec2
+$ cd aws
 $ terraform init
 
 Initializing the backend...
