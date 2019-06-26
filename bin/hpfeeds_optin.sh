@@ -88,7 +88,7 @@ EOF
 function fuAPPLY () {
 echo "Now stopping T-Pot ..."
 systemctl stop tpot
-echo "Applying your settings in tpot.yml ... "
+echo "Applying your settings to tpot.yml ... "
 sed --follow-symlinks -i "s/EWS_HPFEEDS_ENABLE.*/EWS_HPFEEDS_ENABLE=${myENABLE}/g" "$myTPOTYMLFILE"
 sed --follow-symlinks -i "s/EWS_HPFEEDS_HOST.*/EWS_HPFEEDS_HOST=${myHOST}/g" "$myTPOTYMLFILE"
 sed --follow-symlinks -i "s/EWS_HPFEEDS_PORT.*/EWS_HPFEEDS_PORT=${myPORT}/g" "$myTPOTYMLFILE"
