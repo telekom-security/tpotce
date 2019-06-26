@@ -1,0 +1,17 @@
+version: '2.3'
+
+services:
+
+# Fatt service
+  fatt:
+    build: .
+    container_name: fatt
+    restart: always
+    network_mode: "host"
+    cap_add:
+     - NET_ADMIN
+     - SYS_NICE
+     - NET_RAW
+    image: "dtagdevsec/fatt:1903"
+    volumes:
+     - /data/fatt/log:/opt/fatt/log

@@ -1,10 +1,37 @@
 # Changelog
 
-## 20190516
+## 20190626
 - **HPFEEDS Opt-In commandline option**
   - Pass a hpfeeds config file as a commandline argument
   - hpfeeds config is saved in `/data/ews/conf/hpfeeds.cfg`
   - Update script restores hpfeeds config
+
+## 20190604
+- **Finalize Fatt support**
+  - Build visualizations, searches, dashboards
+  - Rebuild index patterns
+  - Some finishing touches
+
+## 20190601
+- **Start supporting Fatt, remove Glastopf**
+  - Build Dockerfile, Adjust logstash, installer, update and such.
+  - Glastopf is no longer supported within T-Pot
+
+## 20190528+20190531
+- **Increase total number of fields**
+  - Adjust total number of fileds for logstash templae from 1000 to 2000.
+
+## 20190526
+- **Fix build for Cowrie**
+  - Upstream changes required a new package `py-bcrypt`.
+
+## 20190525
+- **Fix build for RDPY**
+  - Building was prevented due to cache error which occurs lately on Alpine if `apk` is using `--no-ache' as options.
+
+## 20190520
+- **Adjust permissions for /data folder**
+  - Now it is possible to download files from `/data` using SCP, WINSCP or CyberDuck.
 
 ## 20190513
 - **Added Ansible T-Pot Deployment on Open Telekom Cloud**

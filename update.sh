@@ -218,7 +218,7 @@ mkdir -p /data/adbhoney/downloads /data/adbhoney/log \
          /data/dionaea/log /data/dionaea/bistreams /data/dionaea/binaries /data/dionaea/rtp /data/dionaea/roots/ftp /data/dionaea/roots/tftp /data/dionaea/roots/www /data/dionaea/roots/upnp \
          /data/elasticpot/log \
          /data/elk/data /data/elk/log \
-         /data/glastopf/log /data/glastopf/db \
+	 /data/fatt/log \
          /data/honeytrap/log/ /data/honeytrap/attacks/ /data/honeytrap/downloads/ \
          /data/glutton/log \
          /data/heralding/log \

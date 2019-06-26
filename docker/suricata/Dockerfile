@@ -1,11 +1,11 @@
 FROM alpine
-
+#
 # Include dist
 ADD dist/ /root/dist/
-
+#
 # Install packages
-RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
-    apk -U --no-cache add \
+#RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
+RUN    apk -U --no-cache add \
                  ca-certificates \
                  curl \
                  file \
@@ -51,16 +51,16 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
                  py2-pip \
                  rust \
                  yaml-dev && \
-
+#
 # Upgrade pip, install virtualenv
     pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir suricata-update && \
-
+#
 # Get and build Suricata
     mkdir -p /opt/builder/ && \
-    wget https://www.openinfosecfoundation.org/download/suricata-4.1.3.tar.gz && \
-    tar xvfz suricata-4.1.3.tar.gz --strip-components=1 -C /opt/builder/ && \
-    rm suricata-4.1.3.tar.gz && \
+    wget https://www.openinfosecfoundation.org/download/suricata-4.1.4.tar.gz && \
+    tar xvfz suricata-4.1.4.tar.gz --strip-components=1 -C /opt/builder/ && \
+    rm suricata-4.1.4.tar.gz && \
     cd /opt/builder && \
     ./configure \
 	--prefix=/usr \
@@ -80,7 +80,7 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     make check && \
     make install && \
     make install-full && \
-
+#
 # Setup user, groups and configs
     addgroup -g 2000 suri && \
     adduser -S -H -u 2000 -D -g 2000 suri && \
@@ -89,12 +89,12 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     cp /root/dist/*.bpf /etc/suricata/ && \
     mkdir -p /etc/suricata/rules && \
     cp /opt/builder/rules/* /etc/suricata/rules/ && \
-
+#
 # Download the latest EmergingThreats ruleset, replace rulebase and enable all rules
     cp /root/dist/update.sh /usr/bin/ && \
     chmod 755 /usr/bin/update.sh && \
     update.sh OPEN && \
-
+#
 # Clean up
     apk del --purge \
                  automake \
@@ -124,7 +124,7 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     rm -rf /opt/builder && \
     rm -rf /root/* && \
     rm -rf /var/cache/apk/*
-
+#
 # Start suricata
 STOPSIGNAL SIGINT
 CMD SURICATA_CAPTURE_FILTER=$(update.sh $OINKCODE) && exec suricata -v -F $SURICATA_CAPTURE_FILTER -i $(/sbin/ip address | grep '^2: ' | awk '{ print $2 }' | tr -d [:punct:])
