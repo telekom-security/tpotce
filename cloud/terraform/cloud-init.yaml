@@ -1,0 +1,25 @@
+#cloud-config
+timezone: UTC
+
+package_update: true
+package_upgrade: true
+package_reboot_if_required: true
+
+packages:
+  - git
+
+runcmd:
+  - git clone https://github.com/dtag-dev-sec/tpotce /root/tpot
+  - /root/tpot/iso/installer/install.sh --type=auto --conf=/root/tpot.conf
+  - rm /root/tpot.conf
+  - /sbin/shutdown -r +5
+
+# The contents of tpot.conf will be base64 encoded and appended to this file
+# via the terraform configuration in main.tf
+#
+# Make sure there are no trailing new lines after "permissions" below
+write_files:
+  - encoding: b64
+    owner: root:root
+    path: /root/tpot.conf
+    permissions: '0600'

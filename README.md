@@ -54,6 +54,7 @@ Furthermore we use the following tools
   - [Post Install Auto](#postinstallauto)
   - [Cloud Deployments](#cloud)
     - [Ansible Deployment on Open Telekom Cloud](#ansible-otc)
+    - [Terraform](#terraform)
   - [First Run](#firstrun)
   - [System Placement](#placement)
 - [Updates](#updates)
@@ -338,6 +339,15 @@ The Playbooks in the [`cloud/open-telekom-cloud/ansible`](cloud/open-telekom-clo
 The [`deploy_ansible_otc_t-pot.sh`](cloud/open-telekom-cloud/deploy_ansible_otc_t-pot.sh) script is an example of how it works with our own Public Cloud Offering [Open Telekom Cloud](https://open-telekom-cloud.com/en).  
 It first creates a new Elastic Cloud Server via the Open Telekom Cloud API and then invokes the Ansible Playbooks to install and configure T-Pot.  
 You can have a look at the script and easily adapt it for other cloud providers.
+
+<a name="terraform"></a>
+### Terraform Configuration
+
+You can find [Terraform](https://www.terraform.io/) configuration in the [`cloud/terraform`](cloud/terraform) folder.
+
+This can be used to launch a virtual machine, bootstrap any dependencies and install T-Pot in a single step.
+
+Configuration for Amazon Web Services (AWS) is currently included and this can easily be extended to support other [Terraform providers](https://www.terraform.io/docs/providers/index.html).
 
 <a name="firstrun"></a>
 ## First Run
