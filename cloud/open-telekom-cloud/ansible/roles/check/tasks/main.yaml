@@ -1,0 +1,25 @@
+- name: Install pwgen
+  apt:
+    name: pwgen
+
+- name: Install setuptools
+  apt:
+    name: python-setuptools
+
+- name: Install pip
+  apt:
+    name: python-pip
+
+- name: Install openstacksdk
+  pip:
+    name: openstacksdk
+
+- name: Set fact for agent forwarding
+  set_fact:
+    agent_forwarding: "{{ lookup('env','SSH_AUTH_SOCK') }}"
+
+- name: Check if agent forwarding is enabled
+  fail:
+    msg: Please enable agent forwarding to allow Ansible to connect to the remote host!
+  ignore_errors: yes
+  when: agent_forwarding == ""
