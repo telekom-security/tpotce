@@ -1,3 +1,15 @@
-- name: Finally rebooting t-pot in one minute - make sure your next login is on port 64295 or via https:// on port 64297
+- name: Finally rebooting T-Pot in one minute
   shell: /sbin/shutdown -r -t 1
   become: true
+
+- name: Next login options
+  debug:
+    msg:
+    - "*****    SSH Access:"
+    - "*****    ssh {{ ansible_user }}@{{ ansible_host }} -p 64295"
+    - ""
+    - "*****    Web UI:"
+    - "*****    https://{{ ansible_host }}:64297"
+    - ""
+    - "*****    Admin UI:"
+    - "*****    https://{{ ansible_host }}:64294"
