@@ -53,7 +53,7 @@ Furthermore we use the following tools
   - [Post Install User](#postinstall)
   - [Post Install Auto](#postinstallauto)
   - [Cloud Deployments](#cloud)
-    - [Ansible Deployment on Open Telekom Cloud](#ansible-otc)
+    - [Ansible](#ansible)
     - [Terraform](#terraform)
   - [First Run](#firstrun)
   - [System Placement](#placement)
@@ -329,16 +329,17 @@ The installer will start automatically and guide you through the install process
 <a name="cloud"></a>
 ## Cloud Deployments
 Located in the [`cloud`](cloud) folder.  
-Currently there is an example with Ansible.  
-If you would like to contribute you can add other cloud deployments like Terraform, Chef or Puppet.
+Currently there are examples with Ansible & Terraform.  
+If you would like to contribute, you can add other cloud deployments like Chef or Puppet or extend current methods with other cloud providers.
 
-<a name="ansible-otc"></a>
-### Ansible Deployment on Open Telekom Cloud
-You can find an Ansible Playbook based automated T-Pot Deployment in the [`cloud/open-telekom-cloud`](cloud/open-telekom-cloud) folder.  
-The Playbooks in the [`cloud/open-telekom-cloud/ansible`](cloud/open-telekom-cloud/ansible) folder are reusable across all cloud providers (like AWS, Azure, Digital Ocean).  
-The [`deploy_ansible_otc_t-pot.sh`](cloud/open-telekom-cloud/deploy_ansible_otc_t-pot.sh) script is an example of how it works with our own Public Cloud Offering [Open Telekom Cloud](https://open-telekom-cloud.com/en).  
-It first creates a new Elastic Cloud Server via the Open Telekom Cloud API and then invokes the Ansible Playbooks to install and configure T-Pot.  
-You can have a look at the script and easily adapt it for other cloud providers.
+<a name="ansible"></a>
+### Ansible Deployment
+You can find an [Ansible](https://www.ansible.com/) based T-Pot Deployment in the [`cloud/ansible`](cloud/ansible) folder.  
+The Playbook in the [`cloud/ansible/openstack`](cloud/ansible/openstack) folder is reusable for all OpenStack clouds out of the box.
+
+It first creates a new server and then installs and configures T-Pot.
+
+You can have a look at the Playbook and easily adapt the deploy role for other [cloud providers](https://docs.ansible.com/ansible/latest/modules/list_of_cloud_modules.html).
 
 <a name="terraform"></a>
 ### Terraform Configuration
