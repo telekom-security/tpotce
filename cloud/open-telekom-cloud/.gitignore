@@ -1,11 +1,2 @@
 # Ansible
 *.retry
-
-# Generated hosts
-hosts/
-
-# Cloned git repository
-otc-tools/
-
-# All log files
-*.log
