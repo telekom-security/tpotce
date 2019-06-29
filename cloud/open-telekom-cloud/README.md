@@ -26,7 +26,7 @@ This example showcases the deployment on our own Public Cloud Offering [Open Tel
 # Installation of Ansible Master
 You can either run the deploy script locally on your Linux or MacOS machine or you can use an ECS (Elastic Cloud Server) on Open Telekom Cloud, which I did.  
 I used Ubuntu 18.04 for my Ansible Master Server, but other OSes are fine too.  
-Ansible works over the SSH Port, so you don't have to add any special rules to you Security Group.
+Ansible works over the SSH Port, so you don't have to add any special rules to your Security Group.
 
 <a name="packages"></a>
 ## Packages
