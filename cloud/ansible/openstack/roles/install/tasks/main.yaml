@@ -13,12 +13,13 @@
 
 - name: Prepare to set user password 
   set_fact:
+    user_name: "{{ ansible_user }}"
     user_password: "{{ linux_pass }}"
     user_salt: "s0mew1ck3dTpoT"
 
-- name: Changing password for user linux to {{ user_password }}
+- name: Changing password for user {{ user_name }} to {{ user_password }}
   user:
-   name: "linux"
+   name: "{{ ansible_user }}"
    password: "{{ user_password | password_hash('sha512', user_salt) }}"
    state: present
    shell: /bin/bash
