@@ -24,7 +24,8 @@ This example showcases the deployment on our own OpenStack based Public Cloud Of
   - [Instance settings](#instance-settings)
   - [User password](#user-password)
   - [Configure `tpot.conf.dist`](#tpot-conf)
-  - [Optional: Custom `ews.cfg` and HPFEEDS](#ews-hpfeeds)
+  - [Optional: Custom `ews.cfg`](#ews-cfg)
+  - [Optional: Custom HPFEEDS](#hpfeeds)
 - [Deploying a T-Pot](#deploy)
 - [Further documentation](#documentation)
 
@@ -182,14 +183,16 @@ myCONF_WEB_USER='webuser'
 myCONF_WEB_PW='w3b$ecret'
 ```
 
-<a name="ews-hpfeeds"></a>
-## Optional: Custom `ews.cfg` and HPFEEDS
-To enable these features, set `custom_ews=true` in `.ecs_settings.sh`; See here:  [Configure `.ecs_settings.sh`](#ecs-settings)  
+<a name="ews-cfg"></a>
+## Optional: Custom `ews.cfg`
+Enable this by uncommenting the role in the [deploy_tpot.yaml](openstack/deploy_tpot.yaml) playbook.
+```
+#    - custom_ews
+```
 
-### ews.cfg
 You can use a custom config file for `ewsposter`.  
 e.g. when you have your own credentials for delivering data to our [Sicherheitstacho](https://sicherheitstacho.eu/start/main).  
-You can find the `ews.cfg` template file here: [`ansible/roles/custom_ews/templates/ews.cfg`](ansible/roles/custom_ews/templates/ews.cfg) and adapt it for your needs.
+You can find the `ews.cfg` template file here: [`openstack/roles/custom_ews/templates/ews.cfg`](openstack/roles/custom_ews/templates/ews.cfg) and adapt it for your needs.
 
 For setting custom credentials, these settings would be relevant for you (the rest of the file can stay as is):  
 ```
@@ -205,8 +208,14 @@ token = your_token
 ...
 ```
 
-### HPFEEDS
-You can also specify HPFEEDS in [`ansible/roles/custom_ews/templates/hpfeeds.cfg`](ansible/roles/custom_ews/templates/hpfeeds.cfg).  
+<a name="hpfeeds"></a>
+## Optional: Custom HPFEEDS
+Enable this by uncommenting the role in the [deploy_tpot.yaml](openstack/deploy_tpot.yaml) playbook.
+```
+#    - custom_hpfeeds
+```
+
+You can also specify custom HPFEEDS in [`openstack/roles/custom_hpfeeds/templates/hpfeeds.cfg`](openstack/roles/custom_hpfeeds/templates/hpfeeds.cfg).  
 That file constains the defaults (turned off) and you can adapt it for your needs, e.g. for SISSDEN:
 ```
 myENABLE=true
@@ -219,22 +228,20 @@ mySECRET=your_secret
 myFORMAT=json
 ```
 
-
 <a name="deploy"></a>
 # Deploying a T-Pot :honey_pot::honeybee:
 Now, after configuring everything, we can finally start deploying T-Pots:  
-`./deploy_ansible_otc_t-pot.sh`  
+Go to the [`openstack`](openstack) folder and run the Anible Playbook with  
+`ansible-playbook deploy_tpot.yaml`  
 (Yes, it is as easy as that :smile:)
 
-The script will first create an Open Telekom Cloud ECS via the API.  
-After that, the Ansible Playbooks are executed on the newly created Host to install the T-Pot and configure everything.
-
-You can see the progress of every step in the console output.  
-If something should go wrong, you will be provided with an according error message, that you can hopefully act upon and retry.
+The Playbook will first install required packages on the Anible Master and then deploy a new server instance.  
+After that, T-Pot gets installed and configured on the newly created host, optionally custom configs are applied and finally it reboots.
 
 <a name="documentation"></a>
 # Further documentation
 - [Ansible Documentation](https://docs.ansible.com/ansible/latest/)
+- [Cloud modules — Ansible Documentation](https://docs.ansible.com/ansible/latest/modules/list_of_cloud_modules.html)
+- [os_server – Create/Delete Compute Instances from OpenStack — Ansible Documentation](https://docs.ansible.com/ansible/latest/modules/os_server_module.html)
 - [Open Telekom Cloud Help Center](https://docs.otc.t-systems.com/)
 - [Open Telekom Cloud API Overview](https://docs.otc.t-systems.com/en-us/api/wp/en-us_topic_0052070394.html)
-- [otc-tools](https://github.com/OpenTelekomCloud/otc-tools) on GitHub
