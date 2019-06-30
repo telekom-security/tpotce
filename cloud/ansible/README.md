@@ -230,8 +230,8 @@ myFORMAT=json
 
 <a name="deploy"></a>
 # Deploying a T-Pot :honey_pot::honeybee:
-Now, after configuring everything, we can finally start deploying T-Pots:  
-Go to the [`openstack`](openstack) folder and run the Anible Playbook with  
+Now, after configuring everything, we can finally start deploying T-Pots!  
+Go to the [`openstack`](openstack) folder and run the Anible Playbook with:  
 `ansible-playbook deploy_tpot.yaml`  
 (Yes, it is as easy as that :smile:)
 
