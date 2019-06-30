@@ -216,7 +216,7 @@ Enable this by uncommenting the role in the [deploy_tpot.yaml](openstack/deploy_
 ```
 
 You can specify custom HPFEEDS in [`openstack/roles/custom_hpfeeds/templates/hpfeeds.cfg`](openstack/roles/custom_hpfeeds/templates/hpfeeds.cfg).  
-That file constains the defaults (turned off) and you can adapt it for your needs, e.g. for SISSDEN:
+That file contains the defaults (turned off) and you can adapt it for your needs, e.g. for SISSDEN:
 ```
 myENABLE=true
 myHOST=hpfeeds.sissden.eu
