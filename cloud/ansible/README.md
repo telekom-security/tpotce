@@ -20,7 +20,9 @@ This example showcases the deployment on our own OpenStack based Public Cloud Of
 - [Clone Git Repository](#clone-git)
 - [Settings and recommended values](#settings)
   - [OpenStack authentication variables](#os-auth)
-  - [Configure `.ecs_settings.sh`](#ecs-settings)
+  - [Ansible remote user](#remote-user)
+  - [Instance settings](#instance-settings)
+  - [User password](#user-password)
   - [Configure `tpot.conf.dist`](#tpot-conf)
   - [Optional: Custom `ews.cfg` and HPFEEDS](#ews-hpfeeds)
 - [Deploying a T-Pot](#deploy)
@@ -114,7 +116,7 @@ The settings are located in the following Ansible vars files:
 
 <a name="os-auth"></a>
 ## OpenStack authentication variables
-Located in [`openstack/roles/deploy/vars/os_auth.yaml`](openstack/roles/deploy/vars/os_auth.yaml).  
+Located at [`openstack/roles/deploy/vars/os_auth.yaml`](openstack/roles/deploy/vars/os_auth.yaml).  
 Enter your Open Telekom Cloud API user credentials here (username, password, project name, user domain name):  
 ```
 auth_url: https://iam.eu-de.otc.t-systems.com/v3
@@ -126,36 +128,42 @@ os_user_domain_name: OTC-EU-DE-000000000010000XXXXX
 You can also perform different authentication methods like sourcing your `.ostackrc` file or using the OpenStack `clouds.yaml` file.  
 For more information have a look in the [os_server](https://docs.ansible.com/ansible/latest/modules/os_server_module.html) Ansible module documentation.
 
-<a name="ecs-settings"></a>
-## Configure `.ecs_settings.sh`
-Here you can customize your Elastic Cloud Server (ECS):
-  - Password for the user `linux` (**you should definitely change that**)  
-    You may have to adjust the `remote_user` in the Ansible Playbooks under [ansible](ansible) if you are using a normal/default Debian base image
-  - (Optional) For using a custom `ews.cfg` set to `true`; See here: [Optional: Custom `ews.cfg`](#ews-cfg)
-  - (Optional) Change the instance type (flavor) of the ECS.  
+<a name="remote-user"></a>
+## Ansible remote user
+You may have to adjust the `remote_user` in the Ansible Playbook under [`openstack/deploy_tpot.yaml`](openstack/deploy_tpot.yaml) depending on your Debian base image (e.g. on Open Telekom Cloud the default Debian user is `linux`).
+
+<a name="instance-settings"></a>
+## Instance settings
+Located at [`openstack/roles/deploy/vars/main.yaml`](openstack/roles/deploy/vars/main.yaml).  
+Here you can customize your virtual machine specifications:
+  - Specify the region name
+  - Choose an availibility zone. For Open Telekom Cloud reference see [here](https://docs.otc.t-systems.com/en-us/endpoint/index.html).
+  - Change the OS image (For T-Pot we need Debian 9)
+  - (Optional) Change the volume size
+  - Specify your key pair
+  - (Optional) Change the instance type (flavor)  
     `s2.medium.8` corresponds to 1 vCPU and 8GB of RAM and is the minimum required flavor.  
-    A full list of flavors can be found [here](https://docs.otc.t-systems.com/en-us/usermanual/ecs/en-us_topic_0035470096.html).
-  - Change the OS (Don't touch; for T-Pot we need Debian 9)
-  - Specify the VPC, Subnet, Security Group and Key Pair you created before
-  - (Optional) Change the disk size
-  - You can choose from multiple Availibility Zones (AZ). For reference see [here](https://docs.otc.t-systems.com/en-us/endpoint/index.html).
+    A full list of Open telekom Cloud flavors can be found [here](https://docs.otc.t-systems.com/en-us/usermanual/ecs/en-us_topic_0035470096.html).
+  - Specify the security group
+  - Specify the network ID (For Open Telekom Cloud you can find the ID in the Web Console under `Virtual Private Cloud --> your-vpc --> your-subnet --> Network ID`; In general for OpenStack clouds you can use the `python-openstackclient` to retrieve information about your resources)
 
 ```
-# Set password for user linux
-linuxpass=LiNuXuSeRPaSs#
+region_name: eu-de
+availability_zone: eu-de-03
+image: Standard_Debian_9_latest
+volume_size: 128
+key_name: your-KeyPair
+flavor: s2.medium.8
+security_groups: your-sg
+network: your-network-id
+```
 
-# Custom EWS config
-custom_ews=false
-
-# Set ECS related stuff
-instance=s2.medium.8
-imagename=Standard_Debian_9_latest
-subnet=your-subnet
-vpcname=your-vpc
-secgroup=your-sg
-keyname=your-KeyPair
-disksize=128
-az=eu-de-03
+<a name="user-password"></a>
+## User password
+Located at [`openstack/roles/install/vars/main.yaml`](openstack/roles/install/vars/main.yaml).  
+Here you can set the password for your Debian user (**you should definitely change that**).
+```
+user_password: LiNuXuSeRPaSs#
 ```
 
 <a name="tpot-conf"></a>
