@@ -14,7 +14,7 @@
 - name: Prepare to set user password 
   set_fact:
     user_name: "{{ ansible_user }}"
-    user_password: "{{ linux_pass }}"
+    user_password: "{{ user_password }}"
     user_salt: "s0mew1ck3dTpoT"
 
 - name: Changing password for user {{ user_name }} to {{ user_password }}
