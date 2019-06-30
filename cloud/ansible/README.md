@@ -9,8 +9,8 @@ The Playbook first creates a new server and then installs and configures T-Pot.
 This example showcases the deployment on our own OpenStack based Public Cloud Offering [Open Telekom Cloud](https://open-telekom-cloud.com/en).
 
 # Table of contents
-- [Installation of Ansible Master](#installation)
-  - [Packages](#packages)
+- [Preparation of Ansible Master](#ansible-master)
+  - [Ansible Installation](#ansible)
   - [Agent Forwarding](#agent-forwarding)
 - [Preparations in Open Telekom Cloud Console](#preparation)
   - [Create new project](#project)
@@ -19,27 +19,24 @@ This example showcases the deployment on our own OpenStack based Public Cloud Of
   - [Create VPC, Subnet and Security Group](#vpc-subnet-securitygroup)
 - [Clone Git Repository](#clone-git)
 - [Settings and recommended values](#settings)
-  - [Configure `.otc_env.sh`](#otc-env)
+  - [OpenStack authentication variables](#os-auth)
   - [Configure `.ecs_settings.sh`](#ecs-settings)
   - [Configure `tpot.conf.dist`](#tpot-conf)
   - [Optional: Custom `ews.cfg` and HPFEEDS](#ews-hpfeeds)
 - [Deploying a T-Pot](#deploy)
 - [Further documentation](#documentation)
 
-<a name="installation"></a>
-# Installation of Ansible Master
+<a name="ansible-master"></a>
+# Preparation of Ansible Master
 You can either run the deploy script locally on your Linux or MacOS machine or you can use an ECS (Elastic Cloud Server) on Open Telekom Cloud, which I did.  
 I used Ubuntu 18.04 for my Ansible Master Server, but other OSes are fine too.  
 Ansible works over the SSH Port, so you don't have to add any special rules to your Security Group.
 
-<a name="packages"></a>
-## Packages
+<a name="ansible"></a>
+## Ansible Installation
 At first we need to add the repository and install Ansible:  
 `sudo apt-add-repository --yes --update ppa:ansible/ansible`  
 `sudo apt install ansible`
-
-Also we need **pwegen** (for creating T-Pot names) and **jq** (a JSON processor):  
-`sudo apt install pwgen jq`
 
 <a name="agent-forwarding"></a>
 ## Agent Forwarding
@@ -51,7 +48,7 @@ Agent forwarding must be enabled in order to let Ansible do its work.
     Host ANSIBLE_MASTER_IP
     ForwardAgent yes
     ```
-  - If you execute the script locally, enable it for all Hosts, as this includes newly generated T-Pots:
+  - If you execute the script locally, enable it for all hosts, as this includes newly generated T-Pots:
     ```
     Host *
     ForwardAgent yes
@@ -61,15 +58,15 @@ Agent forwarding must be enabled in order to let Ansible do its work.
 
 <a name="preparation"></a>
 # Preparations in Open Telekom Cloud Console
-(You can skip this if you have already set up an API account, VPC and ...)  
-(Just make sure you know the naming for everything, as you will need it to configure the script.)
+(You can skip this if you have already set up an API account, VPC, Subnet and Security Group)  
+(Just make sure you know the naming for everything, as you will need it to configure the Ansible variables.)
 
-Before we can start deploying, we have to prepare the Open Telekom Cloud Tennant.  
+Before we can start deploying, we have to prepare the Open Telekom Cloud tenant.  
 For that, go to the [Web Console](https://auth.otc.t-systems.com/authui/login) and log in with an admin user.
 
 <a name="project"></a>
 ## Create new project
-I strongly advise you, to create a separate project for the T-Pots in your tennant.  
+I strongly advise you to create a separate project for the T-Pots in your tenant.  
 In my case I named it `tpot`.
 
 ![Create new project](doc/otc_1_project.gif)
@@ -83,7 +80,7 @@ This ensures that the API access is limited to that project.
 
 <a name="key-pair"></a>
 ## Import Key Pair
-:warning: Now log in with the newly created user account and select your project.
+:warning: Now log in with the newly created API user account and select your project.
 
 ![Login as API user](doc/otc_3_login.gif)
 
@@ -108,23 +105,26 @@ If you want to secure the management interfaces, you can limit the incoming "all
 # Clone Git Repository
 Clone the `tpotce` repository to your Ansible Master:  
 `git clone https://github.com/dtag-dev-sec/tpotce.git`  
-All Ansible and automatic deployment related files are located in the [`cloud/open-telekom-cloud`](../../cloud/open-telekom-cloud) folder.
+All Ansible related files are located in the [`cloud/ansible/openstack`](../../cloud/ansible/openstack) folder.
 
 <a name="settings"></a>
 # Settings and recommended values
-You can configure all aspects of your ECS and T-Pot before using the script.  
-The settings are located in the following files:
+You can configure all aspects of your Elastic Cloud Server and T-Pot before using the Playbook.  
+The settings are located in the following Ansible vars files:
 
-<a name="otc-env"></a>
-## Configure `.otc_env.sh`
-Enter your Open Telekom Cloud API user credentials here (username, password, tenant-ID, project name):  
+<a name="os-auth"></a>
+## OpenStack authentication variables
+Located in [`openstack/roles/deploy/vars/os_auth.yaml`](openstack/roles/deploy/vars/os_auth.yaml).  
+Enter your Open Telekom Cloud API user credentials here (username, password, project name, user domain name):  
 ```
-export OS_USERNAME=your_api_user
-export OS_PASSWORD=your_password
-export OS_USER_DOMAIN_NAME=OTC-EU-DE-000000000010000XXXXX
-export OS_PROJECT_NAME=eu-de_your_project
-export OS_AUTH_URL=https://iam.eu-de.otc.t-systems.com/v3
+auth_url: https://iam.eu-de.otc.t-systems.com/v3
+username: your_api_user
+password: your_password
+project_name: eu-de_your_project
+os_user_domain_name: OTC-EU-DE-000000000010000XXXXX
 ```
+You can also perform different authentication methods like sourcing your `.ostackrc` file or using the OpenStack `clouds.yaml` file.  
+For more information have a look in the [os_server](https://docs.ansible.com/ansible/latest/modules/os_server_module.html) Ansible module documentation.
 
 <a name="ecs-settings"></a>
 ## Configure `.ecs_settings.sh`
