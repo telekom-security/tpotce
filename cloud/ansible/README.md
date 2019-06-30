@@ -1,8 +1,12 @@
-# Ansible T-Pot Deployment on Open Telekom Cloud :cloud:
+# T-Pot Ansible
 
 Here you can find a ready-to-use solution for your automated T-Pot deployment using [Ansible](https://www.ansible.com/).  
-It consists of multiple Ansible Playbooks, which can be reused across all Cloud Providers (like AWS, Azure, Digital Ocean).  
-This example showcases the deployment on our own Public Cloud Offering [Open Telekom Cloud](https://open-telekom-cloud.com/en).
+It consists of an Ansible Playbook with multiple roles, which is reusable for all [OpenStack](https://www.openstack.org/) based clouds (e.g. Open Telekom Cloud, Orange Cloud, Telefonica Open Cloud, OVH) out of the box.  
+Apart from that you can easily adapt the deploy role to use other [cloud providers](https://docs.ansible.com/ansible/latest/modules/list_of_cloud_modules.html) (e.g. AWS, Azure, Digital Ocean, Google).
+
+The Playbook first creates a new server and then installs and configures T-Pot.
+
+This example showcases the deployment on our own OpenStack based Public Cloud Offering [Open Telekom Cloud](https://open-telekom-cloud.com/en).
 
 # Table of contents
 - [Installation of Ansible Master](#installation)
@@ -113,7 +117,7 @@ The settings are located in the following files:
 
 <a name="otc-env"></a>
 ## Configure `.otc_env.sh`
-Enter your Open Telekom Cloud API user credentials here (username, password, tennant-ID, project name):  
+Enter your Open Telekom Cloud API user credentials here (username, password, tenant-ID, project name):  
 ```
 export OS_USERNAME=your_api_user
 export OS_PASSWORD=your_password
