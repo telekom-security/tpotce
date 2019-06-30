@@ -31,7 +31,7 @@ This example showcases the deployment on our own OpenStack based Public Cloud Of
 
 <a name="ansible-master"></a>
 # Preparation of Ansible Master
-You can either run the deploy script locally on your Linux or MacOS machine or you can use an ECS (Elastic Cloud Server) on Open Telekom Cloud, which I did.  
+You can either run the deploy script locally on your Linux or macOS machine or you can use an ECS (Elastic Cloud Server) on Open Telekom Cloud, which I did.  
 I used Ubuntu 18.04 for my Ansible Master Server, but other OSes are fine too.  
 Ansible works over the SSH Port, so you don't have to add any special rules to your Security Group.
 
@@ -43,8 +43,8 @@ At first we need to add the repository and install Ansible:
 
 <a name="agent-forwarding"></a>
 ## Agent Forwarding
-Agent forwarding must be enabled in order to let Ansible do its work.  
-- On Linux or MacOS:  
+Agent Forwarding must be enabled in order to let Ansible do its work.  
+- On Linux or macOS:  
   - Create or edit `~/.ssh/config`
   - If you execute the script remotely on your Ansible Master Server:
     ```
@@ -138,7 +138,7 @@ You may have to adjust the `remote_user` in the Ansible Playbook under [`opensta
 Located at [`openstack/roles/deploy/vars/main.yaml`](openstack/roles/deploy/vars/main.yaml).  
 Here you can customize your virtual machine specifications:
   - Specify the region name
-  - Choose an availibility zone. For Open Telekom Cloud reference see [here](https://docs.otc.t-systems.com/en-us/endpoint/index.html).
+  - Choose an availability zone. For Open Telekom Cloud reference see [here](https://docs.otc.t-systems.com/en-us/endpoint/index.html).
   - Change the OS image (For T-Pot we need Debian 9)
   - (Optional) Change the volume size
   - Specify your key pair
