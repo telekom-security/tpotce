@@ -119,13 +119,15 @@ Furthermore we use the following tools
   - If T-Pot, opposed to the requirements, does not have full internet access netselect-apt fails to determine the fastest mirror as it needs ICMP and UDP outgoing. Should netselect-apt fail the default mirrors will be used.
 - **Improve install speed with apt-fast**
   - Migrating from a stable base install to Debian (Sid) requires downloading lots of packages. Depending on your geo location the download speed was already improved by introducing netselect-apt to determine the fastest mirror. With apt-fast the downloads will be even faster by downloading packages not only in parallel but also with multiple connections per package.
-- **Added Ansible T-Pot Deployment on Open Telekom Cloud**
-  - Reusable Ansible Playbooks for all cloud providers
-  - Example Showcase with our Open Telekom Cloud
 - **HPFEEDS Opt-In commandline option**
   - Pass a hpfeeds config file as a commandline argument
   - hpfeeds config is saved in `/data/ews/conf/hpfeeds.cfg`
   - Update script restores hpfeeds config
+- **Ansible T-Pot Deployment**
+  - Transitioned from bash script to all Ansible
+  - Reusable Ansible Playbooks for OpenStack clouds
+  - Example Showcase with our Open Telekom Cloud
+  - Adaptable for other cloud providers
 
 <a name="concept"></a>
 # Technical Concept
