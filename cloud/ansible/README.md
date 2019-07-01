@@ -49,17 +49,17 @@ For other OSes and Distros have a look at the official [Ansible Documentation](h
 Agent Forwarding must be enabled in order to let Ansible do its work.  
 - On Linux or macOS:  
   - Create or edit `~/.ssh/config`
-  - If you execute the script remotely on your Ansible Master Server:
+  - If you run the Ansible Playbook remotely on your Ansible Master Server:
     ```
     Host ANSIBLE_MASTER_IP
     ForwardAgent yes
     ```
-  - If you execute the script locally, enable it for all hosts, as this includes newly generated T-Pots:
+  - If you run the Ansible Playbook locally, enable it for all hosts, as this includes newly generated T-Pots:
     ```
     Host *
     ForwardAgent yes
     ```
-- On Windows using Putty:  
+- On Windows using Putty for connecting to your Ansible Master Server:  
 ![Putty Agent Forwarding](doc/putty_agent_forwarding.png)
 
 <a name="preparation"></a>
