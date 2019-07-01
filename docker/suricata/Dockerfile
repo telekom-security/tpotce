@@ -1,5 +1,9 @@
 FROM alpine
 #
+# Set tap interface
+ARG TAP_IFACE
+ENV TAP_IFACE $TAP_IFACE
+#
 # Include dist
 ADD dist/ /root/dist/
 #
@@ -127,4 +131,4 @@ RUN    apk -U --no-cache add \
 #
 # Start suricata
 STOPSIGNAL SIGINT
-CMD SURICATA_CAPTURE_FILTER=$(update.sh $OINKCODE) && exec suricata -v -F $SURICATA_CAPTURE_FILTER -i $(/sbin/ip address | grep '^2: ' | awk '{ print $2 }' | tr -d [:punct:])
+CMD SURICATA_CAPTURE_FILTER=$(update.sh $OINKCODE) && exec suricata -v -F $SURICATA_CAPTURE_FILTER -i ${TAP_IFACE:-$(/sbin/ip address | grep '^2: ' | awk '{ print $2 }' | tr -d [:punct:])}
