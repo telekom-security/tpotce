@@ -1,5 +1,12 @@
 # Changelog
 
+## 20190701
+- **Reworked Ansible T-Pot Deployment**
+  - Transitioned from bash script to all Ansible
+  - Reusable Ansible Playbooks for OpenStack clouds
+  - Example Showcase with our Open Telekom Cloud
+  - Adaptable for other cloud providers
+
 ## 20190626
 - **HPFEEDS Opt-In commandline option**
   - Pass a hpfeeds config file as a commandline argument
