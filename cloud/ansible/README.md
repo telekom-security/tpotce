@@ -31,7 +31,7 @@ This example showcases the deployment on our own OpenStack based Public Cloud Of
 
 <a name="ansible-master"></a>
 # Preparation of Ansible Master
-You can either run the deploy script locally on your Linux or macOS machine or you can use an ECS (Elastic Cloud Server) on Open Telekom Cloud, which I did.  
+You can either run the Ansible Playbook locally on your Linux or macOS machine or you can use an ECS (Elastic Cloud Server) on Open Telekom Cloud, which I did.  
 I used Ubuntu 18.04 for my Ansible Master Server, but other OSes are fine too.  
 Ansible works over the SSH Port, so you don't have to add any special rules to your Security Group.
 
