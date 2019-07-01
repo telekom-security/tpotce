@@ -1,14 +1,17 @@
 - name: Install pwgen
-  apt:
+  package:
     name: pwgen
+    state: present
 
 - name: Install setuptools
-  apt:
+  package:
     name: python-setuptools
+    state: present
 
 - name: Install pip
-  apt:
+  package:
     name: python-pip
+    state: present
 
 - name: Install openstacksdk
   pip:
