@@ -3,7 +3,7 @@
 ## 20190701
 - **Reworked Ansible T-Pot Deployment**
   - Transitioned from bash script to all Ansible
-  - Reusable Ansible Playbooks for OpenStack clouds
+  - Reusable Ansible Playbook for OpenStack clouds
   - Example Showcase with our Open Telekom Cloud
   - Adaptable for other cloud providers
 
