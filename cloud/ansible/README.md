@@ -234,14 +234,14 @@ myFORMAT=json
 <a name="deploy"></a>
 # Deploying a T-Pot :honey_pot::honeybee:
 Now, after configuring everything, we can finally start deploying T-Pots!  
-Go to the [`openstack`](openstack) folder and run the Anible Playbook with:  
+Go to the [`openstack`](openstack) folder and run the Ansible Playbook with:  
 `ansible-playbook deploy_tpot.yaml`  
 (Yes, it is as easy as that :smile:)
 
 If you are running on a machine which asks for a sudo password, you can use:  
 `ansible-playbook --ask-become-pass deploy_tpot.yaml`
 
-The Playbook will first install required packages on the Anible Master and then deploy a new server instance.  
+The Playbook will first install required packages on the Ansible Master and then deploy a new server instance.  
 After that, T-Pot gets installed and configured on the newly created host, optionally custom configs are applied and finally it reboots.
 
 <a name="documentation"></a>
