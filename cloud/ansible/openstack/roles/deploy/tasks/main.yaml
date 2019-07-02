@@ -1,5 +1,5 @@
 - name: Create T-Pot name
-  shell: echo t-pot-otc-$(pwgen -ns 6 -1)
+  shell: echo t-pot-ansible-$(pwgen -ns 6 -1)
   register: tpot_name
 
 - name: Import OpenStack authentication variables
