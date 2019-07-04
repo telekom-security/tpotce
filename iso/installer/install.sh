@@ -219,7 +219,8 @@ function fuCHECKPACKAGES {
   # Make sure dependencies for apt-fast are installed
   myCURL=$(which curl)
   myWGET=$(which wget)
-  if [ "$myCURL" == "" ] || [ "$myWGET" == "" ]
+  mySUDO=$(which sudo)
+  if [ "$myCURL" == "" ] || [ "$myWGET" == "" ] || [ "$mySUDO" == "" ]
     then
       echo "### Installing deps for apt-fast"
       apt-get -y update
