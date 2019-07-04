@@ -223,7 +223,7 @@ function fuCHECKPACKAGES {
     then
       echo "### Installing deps for apt-fast"
       apt-get -y update
-      apt-get -y install curl wget
+      apt-get -y install curl wget sudo
   fi
   echo "### Installing apt-fast"
   /bin/bash -c "$(curl -sL https://raw.githubusercontent.com/ilikenwf/apt-fast/master/quick-install.sh)"
