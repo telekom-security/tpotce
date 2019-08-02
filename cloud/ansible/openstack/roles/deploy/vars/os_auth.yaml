@@ -1,0 +1,5 @@
+auth_url: https://iam.eu-de.otc.t-systems.com/v3
+username: your_api_user
+password: your_password
+project_name: eu-de_your_project
+os_user_domain_name: OTC-EU-DE-000000000010000XXXXX

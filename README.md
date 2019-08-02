@@ -53,7 +53,7 @@ Furthermore we use the following tools
   - [Post Install User](#postinstall)
   - [Post Install Auto](#postinstallauto)
   - [Cloud Deployments](#cloud)
-    - [Ansible Deployment on Open Telekom Cloud](#ansible-otc)
+    - [Ansible](#ansible)
     - [Terraform](#terraform)
   - [First Run](#firstrun)
   - [System Placement](#placement)
@@ -118,15 +118,16 @@ Furthermore we use the following tools
 - **Fix #332**
   - If T-Pot, opposed to the requirements, does not have full internet access netselect-apt fails to determine the fastest mirror as it needs ICMP and UDP outgoing. Should netselect-apt fail the default mirrors will be used.
 - **Improve install speed with apt-fast**
-  - Migrating from a stable base install to Debian (Sid) requires downloading lots of packages. Depending on your geo location the download speed was already improved by introducing netselect-apt to determine the fastest mirror. Wit
-h apt-fast the downloads will be even faster by downloading packages not only in parallel but also with multiple connections per package.
-- **Added Ansible T-Pot Deployment on Open Telekom Cloud**
-  - Reusable Ansible Playbooks for all cloud providers
-  - Example Showcase with our Open Telekom Cloud
+  - Migrating from a stable base install to Debian (Sid) requires downloading lots of packages. Depending on your geo location the download speed was already improved by introducing netselect-apt to determine the fastest mirror. With apt-fast the downloads will be even faster by downloading packages not only in parallel but also with multiple connections per package.
 - **HPFEEDS Opt-In commandline option**
   - Pass a hpfeeds config file as a commandline argument
   - hpfeeds config is saved in `/data/ews/conf/hpfeeds.cfg`
   - Update script restores hpfeeds config
+- **Ansible T-Pot Deployment**
+  - Transitioned from bash script to all Ansible
+  - Reusable Ansible Playbook for OpenStack clouds
+  - Example Showcase with our Open Telekom Cloud
+  - Adaptable for other cloud providers
 
 <a name="concept"></a>
 # Technical Concept
@@ -329,16 +330,17 @@ The installer will start automatically and guide you through the install process
 <a name="cloud"></a>
 ## Cloud Deployments
 Located in the [`cloud`](cloud) folder.  
-Currently there is an example with Ansible.  
-If you would like to contribute you can add other cloud deployments like Terraform, Chef or Puppet.
+Currently there are examples with Ansible & Terraform.  
+If you would like to contribute, you can add other cloud deployments like Chef or Puppet or extend current methods with other cloud providers.
 
-<a name="ansible-otc"></a>
-### Ansible Deployment on Open Telekom Cloud
-You can find an Ansible Playbook based automated T-Pot Deployment in the [`cloud/open-telekom-cloud`](cloud/open-telekom-cloud) folder.  
-The Playbooks in the [`cloud/open-telekom-cloud/ansible`](cloud/open-telekom-cloud/ansible) folder are reusable across all cloud providers (like AWS, Azure, Digital Ocean).  
-The [`deploy_ansible_otc_t-pot.sh`](cloud/open-telekom-cloud/deploy_ansible_otc_t-pot.sh) script is an example of how it works with our own Public Cloud Offering [Open Telekom Cloud](https://open-telekom-cloud.com/en).  
-It first creates a new Elastic Cloud Server via the Open Telekom Cloud API and then invokes the Ansible Playbooks to install and configure T-Pot.  
-You can have a look at the script and easily adapt it for other cloud providers.
+<a name="ansible"></a>
+### Ansible Deployment
+You can find an [Ansible](https://www.ansible.com/) based T-Pot deployment in the [`cloud/ansible`](cloud/ansible) folder.  
+The Playbook in the [`cloud/ansible/openstack`](cloud/ansible/openstack) folder is reusable for all OpenStack clouds out of the box.
+
+It first creates a new server and then installs and configures T-Pot.
+
+You can have a look at the Playbook and easily adapt the deploy role for other [cloud providers](https://docs.ansible.com/ansible/latest/modules/list_of_cloud_modules.html).
 
 <a name="terraform"></a>
 ### Terraform Configuration
