@@ -219,11 +219,12 @@ function fuCHECKPACKAGES {
   # Make sure dependencies for apt-fast are installed
   myCURL=$(which curl)
   myWGET=$(which wget)
-  if [ "$myCURL" == "" ] || [ "$myWGET" == "" ]
+  mySUDO=$(which sudo)
+  if [ "$myCURL" == "" ] || [ "$myWGET" == "" ] || [ "$mySUDO" == "" ]
     then
       echo "### Installing deps for apt-fast"
       apt-get -y update
-      apt-get -y install curl wget
+      apt-get -y install curl wget sudo
   fi
   echo "### Installing apt-fast"
   /bin/bash -c "$(curl -sL https://raw.githubusercontent.com/ilikenwf/apt-fast/master/quick-install.sh)"
