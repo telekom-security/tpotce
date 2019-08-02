@@ -10,7 +10,7 @@ myCONF_FILE="/root/installer/iso.conf"
 myPROGRESSBOXCONF=" --backtitle "$myBACKTITLE" --progressbox 24 80"
 mySITES="https://hub.docker.com https://github.com https://pypi.python.org https://debian.org"
 myTPOTCOMPOSE="/opt/tpot/etc/tpot.yml"
-myLSB_STABLE_SUPPORTED="stretch"
+myLSB_STABLE_SUPPORTED="stretch buster"
 myLSB_TESTING_SUPPORTED="sid"
 myREMOTESITES="https://hub.docker.com https://github.com https://pypi.python.org https://debian.org"
 myPREINSTALLPACKAGES="aria2 apache2-utils curl dialog figlet grc libcrack2 libpq-dev lsb-release netselect-apt net-tools software-properties-common toilet"
@@ -355,7 +355,16 @@ fuCHECKPACKAGES "$myPREINSTALLPACKAGES"
 
 # Check for Debian release and extract command line arguments
 myLSB=$(lsb_release -c | awk '{ print $2 }')
-if [ "$myLSB" != "$myLSB_STABLE_SUPPORTED" ] && [ "$myLSB" != "$myLSB_TESTING_SUPPORTED" ];
+myVERSIONS="$myLSB_STABLE_SUPPORTED $myLSB_TESTING_SUPPORTED"
+mySUPPORT="FALSE"
+for i in $myVERSIONS
+  do
+    if [ "$myLSB" = "$i" ];
+      then
+        mySUPPORT="TRUE"
+    fi
+done
+if [ "$mySUPPORT" = "FALSE" ];
   then
     echo "Aborting. Debian $myLSB is not supported."
     exit
