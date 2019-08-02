@@ -1,5 +1,11 @@
 # Changelog
 
+
+## 20190802
+- **Add support for Buster as base image**
+  - Install ISO is now based on Debian Buster
+  - Installation upon Debian Buster is now supported
+
 ## 20190701
 - **Reworked Ansible T-Pot Deployment**
   - Transitioned from bash script to all Ansible
