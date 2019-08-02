@@ -741,13 +741,12 @@ case $myCONF_TPOT_FLAVOR in
   ;;
 esac
 
-# Let's load docker images in parallel
+# Let's load docker images
 function fuPULLIMAGES {
 for name in $(cat $myTPOTCOMPOSE | grep -v '#' | grep image | cut -d'"' -f2 | uniq)
   do
-    docker pull $name &
+    docker pull $name
 done
-wait
 }
 fuBANNER "Pull images"
 fuPULLIMAGES
