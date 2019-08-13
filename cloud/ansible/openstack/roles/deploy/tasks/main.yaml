@@ -6,6 +6,17 @@
   include_vars:
     file: roles/deploy/vars/os_auth.yaml
 
+- name: Create security group
+  os_security_group:
+    auth:
+      auth_url: "{{ auth_url }}"
+      username: "{{ username }}"
+      password: "{{ password }}"
+      project_name: "{{ project_name }}"
+      os_user_domain_name: "{{ os_user_domain_name }}"
+    name: sg-tpot-any
+    description: tpot any-any
+
 - name: Launch an instance
   os_server:
     auth:
