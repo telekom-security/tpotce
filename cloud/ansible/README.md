@@ -16,7 +16,7 @@ This example showcases the deployment on our own OpenStack based Public Cloud Of
   - [Create new project](#project)
   - [Create API user](#api-user)
   - [Import Key Pair](#key-pair)
-  - [Create VPC, Subnet and Security Group](#vpc-subnet-securitygroup)
+  - [Create VPC and Subnet](#vpc-subnet)
 - [Clone Git Repository](#clone-git)
 - [Settings and recommended values](#settings)
   - [OpenStack authentication variables](#os-auth)
@@ -95,17 +95,12 @@ Import your SSH public key.
 
 ![Import SSH Public Key](doc/otc_4_import_key.gif)
 
-<a name="vpc-subnet-securitygroup"></a>
-## Create VPC, Subnet and Security Group
+<a name="vpc-subnet"></a>
+## Create VPC and Subnet
 - VPC (Virtual Private Cloud) and Subnet:
 
 ![Create VPC and Subnet](doc/otc_5_vpc_subnet.gif)
 
-- Security Group:  
-The configured Security Group should allow all incoming TCP / UDP traffic.  
-If you want to secure the management interfaces, you can limit the incoming "allow all" traffic to the port range of 1-64000 and allow access to ports > 64000 only from your trusted IPs.
-
-![Create Security Group](doc/otc_6_sec_group.gif)
 
 <a name="clone-git"></a>
 # Clone Git Repository
