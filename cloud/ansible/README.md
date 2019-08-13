@@ -143,7 +143,6 @@ Here you can customize your virtual machine specifications:
   - (Optional) Change the instance type (flavor)  
     `s2.medium.8` corresponds to 1 vCPU and 8GB of RAM and is the minimum required flavor.  
     A full list of Open telekom Cloud flavors can be found [here](https://docs.otc.t-systems.com/en-us/usermanual/ecs/en-us_topic_0035470096.html).
-  - Specify the security group
   - Specify the network ID (For Open Telekom Cloud you can find the ID in the Web Console under `Virtual Private Cloud --> your-vpc --> your-subnet --> Network ID`; In general for OpenStack clouds you can use the `python-openstackclient` to retrieve information about your resources)
 
 ```
@@ -153,7 +152,6 @@ image: Standard_Debian_9_latest
 volume_size: 128
 key_name: your-KeyPair
 flavor: s2.medium.8
-security_groups: your-sg
 network: your-network-id
 ```
 
