@@ -38,7 +38,12 @@ Ansible works over the SSH Port, so you don't have to add any special rules to y
 <a name="ansible"></a>
 ## Ansible Installation
 Example for Ubuntu 18.04:  
-At first we need to add the repository and install Ansible:  
+
+At first we update the system:  
+`sudo apt update`  
+`sudo apt dist-upgrade`
+
+Then we need to add the repository and install Ansible:  
 `sudo apt-add-repository --yes --update ppa:ansible/ansible`  
 `sudo apt install ansible`
 
