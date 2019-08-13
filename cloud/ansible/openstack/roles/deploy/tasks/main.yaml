@@ -28,6 +28,43 @@
     security_group: sg-tpot-any
     remote_ip_prefix: 0.0.0.0/0
 
+- name: Create network
+  os_network:
+    auth:
+      auth_url: "{{ auth_url }}"
+      username: "{{ username }}"
+      password: "{{ password }}"
+      project_name: "{{ project_name }}"
+      os_user_domain_name: "{{ os_user_domain_name }}"
+    name: network-tpot
+
+- name: Create subnet
+  os_subnet:
+    auth:
+      auth_url: "{{ auth_url }}"
+      username: "{{ username }}"
+      password: "{{ password }}"
+      project_name: "{{ project_name }}"
+      os_user_domain_name: "{{ os_user_domain_name }}"
+    network_name: network-tpot
+    name: subnet-tpot
+    cidr: 192.168.0.0/24
+    dns_nameservers:
+      - 1.1.1.1
+      - 8.8.8.8
+
+- name: Create router
+  os_router:
+    auth:
+      auth_url: "{{ auth_url }}"
+      username: "{{ username }}"
+      password: "{{ password }}"
+      project_name: "{{ project_name }}"
+      os_user_domain_name: "{{ os_user_domain_name }}"
+    name: router-tpot
+    interfaces:
+      - subnet-tpot
+
 - name: Launch an instance
   os_server:
     auth:
@@ -46,7 +83,7 @@
     timeout: 200
     flavor: "{{ flavor }}"
     security_groups: sg-tpot-any
-    network: "{{ network }}"
+    network: network-tpot
   register: tpot
 
 - name: Add instance to inventory
