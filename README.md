@@ -338,7 +338,7 @@ If you would like to contribute, you can add other cloud deployments like Chef o
 You can find an [Ansible](https://www.ansible.com/) based T-Pot deployment in the [`cloud/ansible`](cloud/ansible) folder.  
 The Playbook in the [`cloud/ansible/openstack`](cloud/ansible/openstack) folder is reusable for all OpenStack clouds out of the box.
 
-It first creates a new server and then installs and configures T-Pot.
+It first creates all resources (security group, network, subnet, router), deploys a new server and then installs and configures T-Pot.
 
 You can have a look at the Playbook and easily adapt the deploy role for other [cloud providers](https://docs.ansible.com/ansible/latest/modules/list_of_cloud_modules.html).
 
