@@ -17,6 +17,17 @@
     name: sg-tpot-any
     description: tpot any-any
 
+- name: Add rules to security group
+  os_security_group_rule:
+    auth:
+      auth_url: "{{ auth_url }}"
+      username: "{{ username }}"
+      password: "{{ password }}"
+      project_name: "{{ project_name }}"
+      os_user_domain_name: "{{ os_user_domain_name }}"
+    security_group: sg-tpot-any
+    remote_ip_prefix: 0.0.0.0/0
+
 - name: Launch an instance
   os_server:
     auth:
@@ -34,7 +45,7 @@
     key_name: "{{ key_name }}"
     timeout: 200
     flavor: "{{ flavor }}"
-    security_groups: "{{ security_groups }}"
+    security_groups: sg-tpot-any
     network: "{{ network }}"
   register: tpot
 
