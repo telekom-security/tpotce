@@ -4,7 +4,7 @@ Here you can find a ready-to-use solution for your automated T-Pot deployment us
 It consists of an Ansible Playbook with multiple roles, which is reusable for all [OpenStack](https://www.openstack.org/) based clouds (e.g. Open Telekom Cloud, Orange Cloud, Telefonica Open Cloud, OVH) out of the box.  
 Apart from that you can easily adapt the deploy role to use other [cloud providers](https://docs.ansible.com/ansible/latest/modules/list_of_cloud_modules.html) (e.g. AWS, Azure, Digital Ocean, Google).
 
-The Playbook first creates a new server and then installs and configures T-Pot.
+The Playbook first creates all resources (security group, network, subnet, router), deploys a new server and then installs and configures T-Pot.
 
 This example showcases the deployment on our own OpenStack based Public Cloud Offering [Open Telekom Cloud](https://open-telekom-cloud.com/en).
 
@@ -16,7 +16,6 @@ This example showcases the deployment on our own OpenStack based Public Cloud Of
   - [Create new project](#project)
   - [Create API user](#api-user)
   - [Import Key Pair](#key-pair)
-  - [Create VPC and Subnet](#vpc-subnet)
 - [Clone Git Repository](#clone-git)
 - [Settings and recommended values](#settings)
   - [OpenStack authentication variables](#os-auth)
@@ -64,8 +63,8 @@ Agent Forwarding must be enabled in order to let Ansible do its work.
 
 <a name="preparation"></a>
 # Preparations in Open Telekom Cloud Console
-(You can skip this if you have already set up an API account, VPC, Subnet and Security Group)  
-(Just make sure you know the naming for everything, as you will need it to configure the Ansible variables.)
+(You can skip this if you have already set up a project and an API account with key pair)  
+(Just make sure you know the naming for everything, as you need to configure the Ansible variables.)
 
 Before we can start deploying, we have to prepare the Open Telekom Cloud tenant.  
 For that, go to the [Web Console](https://auth.otc.t-systems.com/authui/login) and log in with an admin user.
@@ -90,16 +89,9 @@ This ensures that the API access is limited to that project.
 
 ![Login as API user](doc/otc_3_login.gif)
 
-
 Import your SSH public key.
 
 ![Import SSH Public Key](doc/otc_4_import_key.gif)
-
-<a name="vpc-subnet"></a>
-## Create VPC and Subnet
-- VPC (Virtual Private Cloud) and Subnet:
-
-![Create VPC and Subnet](doc/otc_5_vpc_subnet.gif)
 
 
 <a name="clone-git"></a>
@@ -139,11 +131,10 @@ Here you can customize your virtual machine specifications:
   - Choose an availability zone. For Open Telekom Cloud reference see [here](https://docs.otc.t-systems.com/en-us/endpoint/index.html).
   - Change the OS image (For T-Pot we need Debian 9)
   - (Optional) Change the volume size
-  - Specify your key pair
+  - Specify your key pair (:warning: Mandatory)
   - (Optional) Change the instance type (flavor)  
     `s2.medium.8` corresponds to 1 vCPU and 8GB of RAM and is the minimum required flavor.  
     A full list of Open telekom Cloud flavors can be found [here](https://docs.otc.t-systems.com/en-us/usermanual/ecs/en-us_topic_0035470096.html).
-  - Specify the network ID (For Open Telekom Cloud you can find the ID in the Web Console under `Virtual Private Cloud --> your-vpc --> your-subnet --> Network ID`; In general for OpenStack clouds you can use the `python-openstackclient` to retrieve information about your resources)
 
 ```
 region_name: eu-de
@@ -152,7 +143,6 @@ image: Standard_Debian_9_latest
 volume_size: 128
 key_name: your-KeyPair
 flavor: s2.medium.8
-network: your-network-id
 ```
 
 <a name="user-password"></a>
