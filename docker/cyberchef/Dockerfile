@@ -1,5 +1,5 @@
-FROM alpine:3.8
-
+FROM alpine
+#
 # Get and install dependencies & packages
 RUN apk -U --no-cache add \
             curl \
@@ -9,7 +9,7 @@ RUN apk -U --no-cache add \
     npm install -g grunt-cli && \
     npm install -g http-server && \
     npm install npm@latest -g && \
-
+#
 # Install CyberChef 
     cd /root && \
     git clone https://github.com/gchq/cyberchef --depth=1 && \
@@ -20,16 +20,16 @@ RUN apk -U --no-cache add \
     mkdir -p /opt/cyberchef && \
     mv build/prod/* /opt/cyberchef && \
     cd / && \
-
+#
 # Clean up
     apk del --purge git \
                     npm && \
     rm -rf /root/* && \
     rm -rf /var/cache/apk/*
-
+#
 # Healthcheck
 HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:8000'
-
+#
 # Set user, workdir and start spiderfoot
 USER nobody:nobody
 WORKDIR /opt/cyberchef
