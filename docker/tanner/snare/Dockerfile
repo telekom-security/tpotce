@@ -16,7 +16,7 @@ RUN apk -U --no-cache add \
     cd /opt/snare/ && \
     pip3 install --no-cache-dir --upgrade pip setuptools && \
     pip3 install --no-cache-dir -r requirements.txt && \
-    python3.6 setup.py install && \
+    /usr/bin/python3.6 setup.py install && \
     cd / && \
     rm -rf /opt/snare && \
     clone --target http://example.com && \
