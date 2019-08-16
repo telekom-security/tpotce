@@ -1,5 +1,5 @@
 FROM alpine
-
+#
 # Get and install dependencies & packages
 RUN sed -i 's/dl-cdn/dl-4/g' /etc/apk/repositories && \
     apk -U --no-cache add \
@@ -17,11 +17,11 @@ RUN sed -i 's/dl-cdn/dl-4/g' /etc/apk/repositories && \
             py-future \
             py-pip \
             swig && \
-
+#
 # Setup user
     addgroup -g 2000 spiderfoot && \
     adduser -S -s /bin/ash -u 2000 -D -g 2000 spiderfoot && \
-
+#
 # Install spiderfoot 
 #    git clone --depth=1 https://github.com/smicallef/spiderfoot -b v2.12.0-final /home/spiderfoot && \
     git clone --depth=1 https://github.com/smicallef/spiderfoot /home/spiderfoot && \
@@ -32,7 +32,7 @@ RUN sed -i 's/dl-cdn/dl-4/g' /etc/apk/repositories && \
     chown -R spiderfoot:spiderfoot /home/spiderfoot && \
     sed -i "s#'__docroot': ''#'__docroot': '\/spiderfoot'#" /home/spiderfoot/sf.py && \
     sed -i 's#raise cherrypy.HTTPRedirect("\/")#raise cherrypy.HTTPRedirect("\/spiderfoot")#' /home/spiderfoot/sfwebui.py && \
-
+#
 # Clean up
     apk del --purge build-base \
                     git \
@@ -43,10 +43,10 @@ RUN sed -i 's/dl-cdn/dl-4/g' /etc/apk/repositories && \
                     py-pip \
                     py-setuptools && \
     rm -rf /var/cache/apk/*
-
+#
 # Healthcheck
 HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:8080'
-
+#
 # Set user, workdir and start spiderfoot
 USER spiderfoot:spiderfoot
 WORKDIR /home/spiderfoot

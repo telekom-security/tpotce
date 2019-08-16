@@ -12,5 +12,5 @@ services:
     #        condition: service_healthy
     ports:
      - "127.0.0.1:64302:9100"
-    image: "dtagdevsec/head:1811"
+    image: "dtagdevsec/head:1903"
     read_only: true
