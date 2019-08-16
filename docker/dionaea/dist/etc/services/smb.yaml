@@ -11,9 +11,9 @@
     os_type: 4
 
      # Additional config
-    primary_domain: WORKGROUP
-    oem_domain_name: WORKGROUP
-    server_name: WIN_SRV
+    primary_domain: DACH
+    oem_domain_name: DACH
+    server_name: ADFS
 
      ## Windows 7 ##
     native_os: Windows 7 Professional 7600
