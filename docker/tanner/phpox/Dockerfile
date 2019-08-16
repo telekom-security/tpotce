@@ -48,4 +48,4 @@ RUN apk -U --no-cache add \
 STOPSIGNAL SIGKILL
 USER nobody:nobody
 WORKDIR /opt/phpox
-CMD ["python3.6", "sandbox.py"]
+CMD ["python3", "sandbox.py"]
