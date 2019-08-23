@@ -686,6 +686,7 @@ echo "UseRoaming no" | tee -a /etc/ssh/ssh_config
 
 # Installing elasticdump, yq
 fuBANNER "Installing pkgs"
+chmod 755 /root/tpot/iso/installer
 npm install https://github.com/taskrabbit/elasticsearch-dump -g
 pip install --upgrade pip
 hash -r
@@ -816,11 +817,11 @@ chmod 770 -R /data
 if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ];
   then
     usermod -a -G tpot tsec
+    chown tsec:tsec -R /home/tsec/.ssh
   else
     usermod -a -G tpot $(who am i | awk '{ print $1 }')
 fi
 chown tpot:tpot -R /data
-chown tsec:tsec -R /home/tsec/.ssh
 chmod 644 -R /data/nginx/conf
 chmod 644 -R /data/nginx/cert
 
