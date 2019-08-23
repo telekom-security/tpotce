@@ -11,7 +11,7 @@ myPROGRESSBOXCONF=" --backtitle "$myBACKTITLE" --progressbox 24 80"
 mySITES="https://hub.docker.com https://github.com https://pypi.python.org https://debian.org"
 myTPOTCOMPOSE="/opt/tpot/etc/tpot.yml"
 myLSB_STABLE_SUPPORTED="stretch buster"
-myLSB_TESTING_SUPPORTED="sid"
+myLSB_TESTING_SUPPORTED="stretch buster"
 myREMOTESITES="https://hub.docker.com https://github.com https://pypi.python.org https://debian.org"
 myPREINSTALLPACKAGES="aria2 apache2-utils curl dialog figlet grc libcrack2 libpq-dev lsb-release netselect-apt net-tools software-properties-common toilet"
 myINSTALLPACKAGES="aria2 apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker console-setup console-setup-linux curl debconf-utils dialog dnsutils docker.io docker-compose dstat ethtool fail2ban figlet genisoimage git glances grc haveged html2text htop iptables iw jq kbd libcrack2 libltdl7 man mosh multitail netselect-apt net-tools npm ntp openssh-server openssl pass prips software-properties-common syslinux psmisc pv python-pip toilet unattended-upgrades unzip vim wget wireless-tools wpasupplicant"
@@ -289,8 +289,14 @@ function fuGET_DEPS {
 #      echo "### Automatic mirror selection failed, using main mirror."
 # Point to Debian (Sid, unstable)
 tee /etc/apt/sources.list <<EOF
-deb http://deb.debian.org/debian unstable main contrib non-free
-deb-src http://deb.debian.org/debian unstable main contrib non-free
+deb http://ftp.uk.debian.org/debian/ stable main contrib non-free
+deb-src http://ftp.uk.debian.org/debian/ stable main contrib non-free
+
+deb http://ftp.uk.debian.org/debian/ stable-updates main contrib non-free
+deb-src http://ftp.uk.debian.org/debian/ stable-updates main contrib non-free
+
+deb http://security.debian.org/ stable/updates main contrib non-free
+deb-src http://security.debian.org/ stable/updates main contrib non-free
 EOF
 #  fi
   echo
