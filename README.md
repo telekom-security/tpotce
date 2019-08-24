@@ -1,4 +1,4 @@
-# T-Pot 19.03
+![T-Pot](doc/tpotsocial.png)
 
 T-Pot 19.03 runs on Debian (Sid), is based heavily on
 
