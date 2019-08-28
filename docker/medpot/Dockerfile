@@ -1,12 +1,12 @@
 FROM alpine
-
+#
 # Setup apk
 RUN apk -U --no-cache add \
                    build-base \
                    git \
                    go \
                    g++ && \
-
+#
 # Setup go, build medpot
     export GOPATH=/opt/go/ && \
     mkdir -p /opt/go/src && \
@@ -19,18 +19,18 @@ RUN apk -U --no-cache add \
     cd medpot && \
     cp dist/etc/ews.cfg /etc/ && \
     go build medpot && \
-
+#
 # Setup medpot
     mkdir -p /opt/medpot \
              /var/log/medpot && \
     cp medpot /opt/medpot && \
     cp /opt/go/src/medpot/template/*.xml /opt/medpot/ && \
-
+#
 # Setup user, groups and configs
     addgroup -g 2000 medpot && \
     adduser -S -s /bin/ash -u 2000 -D -g 2000 medpot && \
     chown -R medpot:medpot /var/log/medpot && \
-
+#
 # Clean up
     apk del --purge build-base \
                     git \
@@ -39,7 +39,7 @@ RUN apk -U --no-cache add \
     rm -rf /var/cache/apk/* \
            /opt/go \
            /root/dist
-
+#
 # Start medpot
 WORKDIR /opt/medpot
 USER medpot:medpot
