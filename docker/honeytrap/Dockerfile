@@ -1,13 +1,13 @@
 FROM debian:stretch-slim 
 ENV DEBIAN_FRONTEND noninteractive
-
+#
 # Include dist
 ADD dist/ /root/dist/
-
+#
 # Setup apt
 RUN apt-get update -y && \
     apt-get dist-upgrade -y && \
-
+#
 # Install packages
     apt-get install -y autoconf \
                        build-essential \
@@ -24,7 +24,7 @@ RUN apt-get update -y && \
                        netbase \
                        procps \
                        wget && \
-
+#
 # Install honeytrap from source
     cd /root/ && \
     git clone https://github.com/armedpot/honeytrap && \
@@ -38,14 +38,14 @@ RUN apt-get update -y && \
     make && \
     make install && \
     make clean && \
-
+#
 # Setup user, groups and configs
     addgroup --gid 2000 honeytrap && \
     adduser --system --no-create-home --shell /bin/bash --uid 2000 --disabled-password --disabled-login --gid 2000 honeytrap && \
     mkdir -p /opt/honeytrap/etc/honeytrap/ /opt/honeytrap/var/attacks /opt/honeytrap/var/downloads /opt/honeytrap/var/log && \
     mv /root/dist/honeytrap.conf /opt/honeytrap/etc/honeytrap/ && \
     setcap cap_net_admin=+ep /opt/honeytrap/sbin/honeytrap && \
-
+#
 # Clean up
     rm -rf /root/* && \
     apt-get purge -y autoconf \
@@ -55,7 +55,7 @@ RUN apt-get update -y && \
                      libpq-dev && \
     apt-get autoremove -y --purge && \
     apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
+#
 # Start honeytrap
 USER honeytrap:honeytrap
 CMD ["/opt/honeytrap/sbin/honeytrap", "-D", "-C", "/opt/honeytrap/etc/honeytrap/honeytrap.conf", "-P", "/tmp/honeytrap/honeytrap.pid", "-t", "5", "-u", "honeytrap", "-g", "honeytrap"]
