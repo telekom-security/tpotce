@@ -1,5 +1,5 @@
 FROM alpine 
-
+#
 # Install packages
 RUN apk -U --no-cache add \
             autoconf \
@@ -11,7 +11,7 @@ RUN apk -U --no-cache add \
             py-pip \
             python \
             python-dev && \
-
+#
 # Install libemu    
     git clone --depth=1 https://github.com/buffer/libemu /root/libemu/ && \
     cd /root/libemu/ && \
@@ -19,22 +19,22 @@ RUN apk -U --no-cache add \
     ./configure && \
     make && \
     make install && \
-
+#
 # Install libemu python wrapper
     pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir \ 
                         hpfeeds \
                         pylibemu && \ 
-
+#
 # Install mailoney from git
     git clone --depth=1 https://github.com/awhitehatter/mailoney /opt/mailoney && \
-
+#
 # Setup user, groups and configs
     addgroup -g 2000 mailoney && \
     adduser -S -H -s /bin/ash -u 2000 -D -g 2000 mailoney && \
     chown -R mailoney:mailoney /opt/mailoney && \
     setcap cap_net_bind_service=+ep /usr/bin/python2.7 && \
-
+#
 # Clean up
     apk del --purge autoconf \
                     automake \
@@ -44,7 +44,7 @@ RUN apk -U --no-cache add \
                     python-dev && \
     rm -rf /root/* && \
     rm -rf /var/cache/apk/*
-
+#
 # Set workdir and start mailoney
 STOPSIGNAL SIGINT
 USER mailoney:mailoney
