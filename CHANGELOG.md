@@ -1,5 +1,36 @@
 # Changelog
 
+## 20190828
+- **Upgrades and rebuilds**
+  - Bump Medpot, Nginx and Adbhoney to latest master
+  - Bump ELK stack to 6.8.2
+  - Rebuild Mailoney, Honeytrap, Elasticpot and Ciscoasa
+  - Add 1080p T-Pot wallpaper for download
+
+## 20190824
+- **Add some logo work**
+  - Thanks to @thehadilps's suggestion adjusted social preview
+  - Added 4k T-Pot wallpaper for download
+
+## 20190823
+- **Fix for broken Fuse package**
+  - Fuse package in upstream is broken
+  - Adjust installer as workaround, fixes #442
+
+## 20190816
+- **Upgrades and rebuilds**
+  - Adjust Dionaea to avoid nmap detection, fixes #435 (thanks @iukea1)
+  - Bump Tanner, Cyberchef, Spiderfoot and ES Head to latest master
+
+## 20190815
+- **Bump ELK stack to 6.7.2**
+  - Transition to 7.x must iterate slowly through previous versions to prevent changes breaking T-Pots
+
+## 20190814
+- **Logstash Translation Maps improvement**
+  - Download translation maps rather than running a git pull
+  - Translation maps will now be bzip2 compressed to reduce traffic to a minimum
+  - Fixes #432
 
 ## 20190802
 - **Add support for Buster as base image**
