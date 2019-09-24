@@ -844,6 +844,7 @@ EOF
 for i in $(ls -d /home/*/)
   do
 tee -a $i.bashrc <<EOF
+$mySHELLCHECK
 $myUSERPROMPT
 PATH="$PATH:/opt/tpot/bin"
 EOF
