@@ -170,6 +170,7 @@ myCRONJOBS="
 # Check for updated packages every sunday, upgrade and reboot
 27 16 * * 0     root    apt-fast autoclean -y && apt-fast autoremove -y && apt-fast update -y && apt-fast upgrade -y && sleep 10 && reboot
 "
+mySHELLCHECK='[[ $- == *i* ]] || return'
 myROOTPROMPT='PS1="\[\033[38;5;8m\][\[$(tput sgr0)\]\[\033[38;5;1m\]\u\[$(tput sgr0)\]\[\033[38;5;6m\]@\[$(tput sgr0)\]\[\033[38;5;4m\]\h\[$(tput sgr0)\]\[\033[38;5;6m\]:\[$(tput sgr0)\]\[\033[38;5;5m\]\w\[$(tput sgr0)\]\[\033[38;5;8m\]]\[$(tput sgr0)\]\[\033[38;5;1m\]\\$\[$(tput sgr0)\]\[\033[38;5;15m\] \[$(tput sgr0)\]"'
 myUSERPROMPT='PS1="\[\033[38;5;8m\][\[$(tput sgr0)\]\[\033[38;5;2m\]\u\[$(tput sgr0)\]\[\033[38;5;6m\]@\[$(tput sgr0)\]\[\033[38;5;4m\]\h\[$(tput sgr0)\]\[\033[38;5;6m\]:\[$(tput sgr0)\]\[\033[38;5;5m\]\w\[$(tput sgr0)\]\[\033[38;5;8m\]]\[$(tput sgr0)\]\[\033[38;5;2m\]\\$\[$(tput sgr0)\]\[\033[38;5;15m\] \[$(tput sgr0)\]"'
 myROOTCOLORS="export LS_OPTIONS='--color=auto'
@@ -835,6 +836,7 @@ sed -i 's#After=.*#After=systemd-tmpfiles-setup.service console-screen.service k
 # Let's enable a color prompt and add /opt/tpot/bin to path
 fuBANNER "Setup prompt"
 tee -a /root/.bashrc <<EOF
+$mySHELLCHECK
 $myROOTPROMPT
 $myROOTCOLORS
 PATH="$PATH:/opt/tpot/bin"
@@ -842,6 +844,7 @@ EOF
 for i in $(ls -d /home/*/)
   do
 tee -a $i.bashrc <<EOF
+$mySHELLCHECK
 $myUSERPROMPT
 PATH="$PATH:/opt/tpot/bin"
 EOF
