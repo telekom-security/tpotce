@@ -1,6 +1,7 @@
 package glutton
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -10,13 +11,19 @@ import (
 	"time"
 )
 
-func countOpenFiles() int {
-	out, err := exec.Command("/bin/sh", "-c", fmt.Sprintf("lsof -p %v", os.Getpid())).Output()
-	if err != nil {
-		log.Fatal(err)
+func countOpenFiles() (int, error) {
+	if runtime.GOOS == "linux" {
+		if isCommandAvailable("lsof") {
+			out, err := exec.Command("/bin/sh", "-c", fmt.Sprintf("lsof -p %d", os.Getpid())).Output()
+			if err != nil {
+				log.Fatal(err)
+			}
+			lines := strings.Split(string(out), "\n")
+			return len(lines) - 1, nil
+		}
+		return 0, errors.New("lsof command does not exist. Kindly run sudo apt install lsof")
 	}
-	lines := strings.Split(string(out), "\n")
-	return len(lines) - 1
+	return 0, errors.New("Operating system type not supported for this command")
 }
 
 func countRunningRoutines() int {
@@ -35,4 +42,12 @@ func (g *Glutton) startMonitor(quit chan struct{}) {
 			}
 		}
 	}()
+}
+
+func isCommandAvailable(name string) bool {
+	cmd := exec.Command("/bin/sh", "-c", "command -v "+name)
+	if err := cmd.Run(); err != nil {
+		return false
+	}
+	return true
 }

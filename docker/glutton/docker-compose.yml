@@ -9,6 +9,7 @@ services:
     restart: always
     tmpfs:
      - /var/lib/glutton:uid=2000,gid=2000
+     - /run:uid=2000,gid=2000
     network_mode: "host"
     cap_add:
      - NET_ADMIN
