@@ -8,7 +8,14 @@ bind_host: 0.0.0.0
 activity_logging:
   file:
     enabled: true
-    session_log_file: "/var/log/heralding/session.csv"
+    # Session details common for all protocols (capabilities) in CSV format, 
+    # written to file when the session ends. Set to "" to disable.
+    session_csv_log_file: "/var/log/heralding/session.csv"
+    # Complete session details (including protocol specific data) in JSONL format,
+    # written to file when the session ends. Set to "" to disable
+    session_json_log_file: "/var/log/heralding/log_session.json"
+    # Writes each authentication attempt to file, including credentials,
+    # set to "" to disable
     authentication_log_file: "/var/log/heralding/auth.csv"
 
   syslog:
@@ -26,6 +33,10 @@ activity_logging:
   curiosum:
     enabled: false
     port: 23400
+
+hash_cracker:
+  enabled: true
+  wordlist_file: 'wordlist.txt'
 
 # protocols to enable
 capabilities:
@@ -155,3 +166,27 @@ capabilities:
     enabled: true
     port: 1080
     timeout: 30
+
+  mysql:
+    enabled: true
+    port: 3306
+    timeout: 30
+
+  rdp:
+    enabled: true
+    port: 3389
+    timeout: 30
+    protocol_specific_data:
+      banner: ""
+      # if a .pem file is not found in work dir, a new pem file will be created
+      # using these values
+      cert:
+        common_name: "*"
+        country: "US"
+        state: None
+        locality: None
+        organization: None
+        organizational_unit: None
+        # how many days should the certificate be valid for
+        valid_days: 365
+        serial_number: 0
