@@ -5,7 +5,7 @@
   - Install `cockpit-pcp` right from the start for machine monitoring in cockpit.
 
 ## 20191015
-- **Tweaking, Bump gluttoni, unlock ES script**
+- **Tweaking, Bump glutton, unlock ES script**
   - Add `unlock.sh` to unlock ES indices in case of lockdown after disk quota has been reached.
   - Prevent too much terminal logging from p0f and glutton since `daemon.log` was filled up.
   - Bump glutton to latest master now supporting payload_hex. Thanks to @glaslos.
