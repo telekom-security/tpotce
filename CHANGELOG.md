@@ -1,5 +1,34 @@
 # Changelog
 
+## 20191016
+- **Tweak installer**
+  - Install `cockpit-pcp` right from the start for machine monitoring in cockpit.
+
+## 20191015
+- **Tweaking, Bump gluttoni, unlock ES script**
+  - Add `unlock.sh` to unlock ES indices in case of lockdown after disk quota has been reached.
+  - Prevent too much terminal logging from p0f and glutton since `daemon.log` was filled up.
+  - Bump glutton to latest master now supporting payload_hex. Thanks to @glaslos.
+
+## 20191002
+- **Merge**
+  - Support Debian Buster images for AWS #454
+  - Thank you @piffey
+
+## 20190924
+- **Bump EWSPoster**
+  - Supports Python 3.x
+  - Thank you @Trixam
+
+## 20190919
+- **Merge**
+  - Handle non-interactive shells #454
+  - Thank you @Oogy
+
+## 20190907
+- **Logo tweaking**
+  - Add QR logo
+
 ## 20190828
 - **Upgrades and rebuilds**
   - Bump Medpot, Nginx and Adbhoney to latest master
