@@ -1,8 +1,10 @@
 # Changelog
 
 ## 20191016
-- **Tweak installer**
+- **Tweak installer, pip3, Heralding**
   - Install `cockpit-pcp` right from the start for machine monitoring in cockpit.
+  - Move installer and update script to use pip3.
+  - Bump heralding to latest master (1.0.6) - Thanks @johnnykv!
 
 ## 20191015
 - **Tweaking, Bump glutton, unlock ES script**
