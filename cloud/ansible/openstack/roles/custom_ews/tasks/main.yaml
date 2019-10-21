@@ -9,5 +9,5 @@
 - name: Patching tpot.yml with custom ews configuration file
   lineinfile:
     path: /opt/tpot/etc/tpot.yml
-    insertafter: '/opt/ewsposter/ews.ip'
-    line: '     - /data/ews/conf/ews.cfg:/opt/ewsposter/ews.cfg'
+    insertafter: "/opt/ewsposter/ews.ip"
+    line: "     - /data/ews/conf/ews.cfg:/opt/ewsposter/ews.cfg"
