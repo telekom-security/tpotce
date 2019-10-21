@@ -12,16 +12,14 @@
 - name: Prepare to set user password 
   set_fact:
     user_name: "{{ ansible_user }}"
-    user_password: "{{ user_password }}"
     user_salt: "s0mew1ck3dTpoT"
 
-- name: Changing password for user {{ user_name }} to {{ user_password }}
+- name: Changing password for user {{ user_name }}
   user:
    name: "{{ ansible_user }}"
    password: "{{ user_password | password_hash('sha512', user_salt) }}"
    state: present
    shell: /bin/bash
-   update_password: always
 
 - name: Copy T-Pot configuration file
   template:
