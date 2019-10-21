@@ -1,6 +1,6 @@
 - name: Copy hpfeeds configuration file
-  template:
-    src: ../templates/hpfeeds.cfg
+  copy:
+    src: ../files/hpfeeds.cfg
     dest: /data/ews/conf
     owner: root
     group: root
