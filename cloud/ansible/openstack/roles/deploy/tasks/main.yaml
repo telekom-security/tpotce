@@ -5,6 +5,7 @@
 - name: Import OpenStack authentication variables
   include_vars:
     file: roles/deploy/vars/os_auth.yaml
+  no_log: true
 
 - name: Create security group
   os_security_group:

@@ -13,6 +13,7 @@
   set_fact:
     user_name: "{{ ansible_user }}"
     user_salt: "s0mew1ck3dTpoT"
+  no_log: true
 
 - name: Changing password for user {{ user_name }}
   user:
