@@ -29,7 +29,7 @@
     group: root
     mode: 0644
 
-- name: Install T-Pot on instance -  be patient, this might take 15 to 30 minutes depending on the connection speed. No further output is given.
+- name: Install T-Pot on instance -  be patient, this might take 15 to 30 minutes depending on the connection speed.
   command: /root/tpot/iso/installer/install.sh --type=auto --conf=/root/tpot.conf
 
 - name: Delete T-Pot configuration file
