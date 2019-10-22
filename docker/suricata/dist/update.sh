@@ -14,12 +14,12 @@ function fuDLRULES {
 if [ "$myOINKCODE" != "" ] && [ "$myOINKCODE" == "OPEN" ];
   then
     echo "Downloading ET open ruleset."
-    wget -q --tries=2 --timeout=2 https://rules.emergingthreats.net/open/suricata-4.0/emerging.rules.tar.gz -O /tmp/rules.tar.gz
+    wget -q --tries=2 --timeout=2 https://rules.emergingthreats.net/open/suricata-5.0/emerging.rules.tar.gz -O /tmp/rules.tar.gz
   else
     if [ "$myOINKCODE" != "" ];
       then
 	echo "Downloading ET pro ruleset with Oinkcode $myOINKCODE."
-	wget -q --tries=2 --timeout=2 https://rules.emergingthreatspro.com/$myOINKCODE/suricata-4.0/etpro.rules.tar.gz -O /tmp/rules.tar.gz
+	wget -q --tries=2 --timeout=2 https://rules.emergingthreatspro.com/$myOINKCODE/suricata-5.0/etpro.rules.tar.gz -O /tmp/rules.tar.gz
       else	
         echo "Usage: update.sh <[OPEN, OINKCODE]>"
 	exit

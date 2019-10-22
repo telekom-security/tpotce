@@ -5,7 +5,7 @@ ADD dist/ /root/dist/
 #
 # Install packages
 #RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
-RUN    apk -U --no-cache add \
+RUN    apk -U add \
                  ca-certificates \
                  curl \
                  file \
@@ -13,8 +13,8 @@ RUN    apk -U --no-cache add \
                  hiredis \
                  jansson \
                  libcap-ng \
-                 libhtp \
                  libmagic \
+		 libmaxminddb \
                  libnet \
                  libnetfilter_queue \
                  libnfnetlink \
@@ -36,9 +36,9 @@ RUN    apk -U --no-cache add \
                  hiredis-dev \
                  jansson-dev \
                  libtool \
-                 libhtp-dev \
                  libcap-ng-dev \
                  luajit-dev \
+		 libmaxminddb-dev \
                  libpcap-dev \
                  libnet-dev \
                  libnetfilter_queue-dev \
@@ -47,20 +47,25 @@ RUN    apk -U --no-cache add \
                  nss-dev \
                  nspr-dev \
                  pcre-dev \
-                 python2 \
-                 py2-pip \
+                 python3 \
                  rust \
                  yaml-dev && \
 #
-# Upgrade pip, install virtualenv
-    pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir suricata-update && \
+# We need latest libhtp[-dev] which is only available in community
+    apk -U add --repository=http://dl-cdn.alpinelinux.org/alpine/edge/community \
+               libhtp \
+               libhtp-dev && \
+#
+# Upgrade pip, install suricata-update to meet deps, however we will not be using it 
+# to reduce image (no python needed) and use the update script.
+    pip3 install --no-cache-dir --upgrade pip && \
+    pip3 install --no-cache-dir suricata-update && \
 #
 # Get and build Suricata
     mkdir -p /opt/builder/ && \
-    wget https://www.openinfosecfoundation.org/download/suricata-4.1.4.tar.gz && \
-    tar xvfz suricata-4.1.4.tar.gz --strip-components=1 -C /opt/builder/ && \
-    rm suricata-4.1.4.tar.gz && \
+    wget https://www.openinfosecfoundation.org/download/suricata-5.0.0.tar.gz && \
+    tar xvfz suricata-5.0.0.tar.gz --strip-components=1 -C /opt/builder/ && \
+    rm suricata-5.0.0.tar.gz && \
     cd /opt/builder && \
     ./configure \
 	--prefix=/usr \
@@ -110,6 +115,7 @@ RUN    apk -U --no-cache add \
                  libcap-ng-dev \
                  luajit-dev \
                  libpcap-dev \
+		 libmaxminddb-dev \
                  libnet-dev \
                  libnetfilter_queue-dev \
                  libnfnetlink-dev \
@@ -117,12 +123,12 @@ RUN    apk -U --no-cache add \
                  nss-dev \
                  nspr-dev \
                  pcre-dev \
-                 python2 \
-                 py2-pip \
+		 python3 \
                  rust \
                  yaml-dev && \
     rm -rf /opt/builder && \
     rm -rf /root/* && \
+    rm -rf /tmp/* && \
     rm -rf /var/cache/apk/*
 #
 # Start suricata
