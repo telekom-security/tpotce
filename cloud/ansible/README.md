@@ -57,7 +57,7 @@ If you run the Ansible Playbook remotely on your Ansible Master Server, Agent Fo
     Host ANSIBLE_MASTER_IP
     ForwardAgent yes
     ```
-- On Windows using Putty for connecting to your Ansible Master Server:  
+- On Windows using Putty:  
 ![Putty Agent Forwarding](doc/putty_agent_forwarding.png)
 
 <a name="preparation"></a>
