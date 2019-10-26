@@ -178,7 +178,7 @@ function fuUPDATER () {
 export DEBIAN_FRONTEND=noninteractive
 echo "### Installing apt-fast"
 /bin/bash -c "$(curl -sL https://raw.githubusercontent.com/ilikenwf/apt-fast/master/quick-install.sh)"
-local myPACKAGES="aria2 apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker cockpit-pcp console-setup console-setup-linux curl debconf-utils dialog dnsutils docker.io docker-compose ethtool fail2ban figlet genisoimage git glances grc haveged html2text htop iptables iw jq kbd libcrack2 libltdl7 man mosh multitail netselect-apt net-tools npm ntp openssh-server openssl pass prips software-properties-common syslinux psmisc pv python3-pip toilet unattended-upgrades unzip vim wget wireless-tools wpasupplicant"
+local myPACKAGES="aria2 apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker console-setup console-setup-linux curl debconf-utils dialog dnsutils docker.io docker-compose ethtool fail2ban figlet genisoimage git glances grc haveged html2text htop iptables iw jq kbd libcrack2 libltdl7 man mosh multitail netselect-apt net-tools npm ntp openssh-server openssl pass prips software-properties-common syslinux psmisc pv python3-pip toilet unattended-upgrades unzip vim wget wireless-tools wpasupplicant"
 echo "### Now upgrading packages ..."
 dpkg --configure -a
 apt-fast -y autoclean
@@ -195,8 +195,9 @@ npm install "https://github.com/taskrabbit/elasticsearch-dump" -g
 pip3 install --upgrade pip
 hash -r
 pip3 install --upgrade elasticsearch-curator yq
-apt-fast -y purge exim4-base mailutils
-apt-mark hold exim4-base mailutils
+echo "### Removing and holding back problematic packages ..."
+apt-fast -y purge exim4-base mailutils pcp cockpit-pcp
+apt-mark hold exim4-base mailutils pcp cockpit-pcp
 echo
 
 echo "### Now replacing T-Pot related config files on host"
