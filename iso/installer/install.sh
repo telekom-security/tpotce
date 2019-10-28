@@ -683,8 +683,6 @@ echo "UseRoaming no" | tee -a /etc/ssh/ssh_config
 # Installing elasticdump, yq
 fuBANNER "Installing pkgs"
 npm install https://github.com/taskrabbit/elasticsearch-dump -g
-pip3 install --upgrade pip
-hash -r
 pip3 install elasticsearch-curator yq
 hash -r
 
