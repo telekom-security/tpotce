@@ -192,8 +192,6 @@ echo "debconf debconf/frontend select noninteractive" | debconf-set-selections -
 apt-fast -y dist-upgrade -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes
 dpkg --configure -a
 npm install "https://github.com/taskrabbit/elasticsearch-dump" -g
-pip3 install --upgrade pip
-hash -r
 pip3 install --upgrade elasticsearch-curator yq
 hash -r
 echo "### Removing and holding back problematic packages ..."
