@@ -686,6 +686,7 @@ npm install https://github.com/taskrabbit/elasticsearch-dump -g
 pip3 install --upgrade pip
 hash -r
 pip3 install elasticsearch-curator yq
+hash -r
 
 # Cloning T-Pot from GitHub
 fuBANNER "Cloning T-Pot"
