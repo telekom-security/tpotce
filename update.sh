@@ -195,6 +195,7 @@ npm install "https://github.com/taskrabbit/elasticsearch-dump" -g
 pip3 install --upgrade pip
 hash -r
 pip3 install --upgrade elasticsearch-curator yq
+hash -r
 echo "### Removing and holding back problematic packages ..."
 apt-fast -y purge exim4-base mailutils pcp cockpit-pcp
 apt-mark hold exim4-base mailutils pcp cockpit-pcp
