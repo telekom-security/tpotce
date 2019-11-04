@@ -1,8 +1,6 @@
 - name: Check host prerequisites
   hosts: localhost
   become: yes
-  become_user: root
-  become_method: sudo
   roles:
     - check
 
@@ -15,8 +13,6 @@
   hosts: TPOT
   remote_user: linux
   become: yes
-  become_user: root
-  become_method: sudo
   gather_facts: no
   roles:
     - install

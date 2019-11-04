@@ -1,6 +1,7 @@
-- name: Finally rebooting T-Pot in one minute
-  shell: /sbin/shutdown -r -t 1
-  become: true
+- name: Finally rebooting T-Pot
+  command: shutdown -r now
+  async: 1
+  poll: 0
 
 - name: Next login options
   debug:

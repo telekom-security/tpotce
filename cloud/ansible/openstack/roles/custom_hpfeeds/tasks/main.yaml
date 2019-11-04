@@ -1,10 +1,12 @@
 - name: Copy hpfeeds configuration file
-  template:
-    src: ../templates/hpfeeds.cfg
+  copy:
+    src: ../files/hpfeeds.cfg
     dest: /data/ews/conf
-    owner: root
-    group: root
-    mode: 0644
+    owner: tpot
+    group: tpot
+    mode: 0770
+  register: config
 
 - name: Applying hpfeeds settings
   command: /opt/tpot/bin/hpfeeds_optin.sh --conf=/data/ews/conf/hpfeeds.cfg
+  when: config.changed == true

@@ -1,7 +1,5 @@
 - name: Waiting for SSH connection
   wait_for_connection:
-    delay: 30
-    timeout: 300
 
 - name: Gathering facts
   setup:
@@ -14,16 +12,15 @@
 - name: Prepare to set user password 
   set_fact:
     user_name: "{{ ansible_user }}"
-    user_password: "{{ user_password }}"
     user_salt: "s0mew1ck3dTpoT"
+  no_log: true
 
-- name: Changing password for user {{ user_name }} to {{ user_password }}
+- name: Changing password for user {{ user_name }}
   user:
    name: "{{ ansible_user }}"
    password: "{{ user_password | password_hash('sha512', user_salt) }}"
    state: present
    shell: /bin/bash
-   update_password: always
 
 - name: Copy T-Pot configuration file
   template:
@@ -33,7 +30,7 @@
     group: root
     mode: 0644
 
-- name: Install T-Pot on instance -  be patient, this might take 15 to 30 minutes depending on the connection speed. No further output is given.
+- name: Install T-Pot on instance -  be patient, this might take 15 to 30 minutes depending on the connection speed.
   command: /root/tpot/iso/installer/install.sh --type=auto --conf=/root/tpot.conf
 
 - name: Delete T-Pot configuration file
