@@ -128,7 +128,7 @@ Located at [`openstack/roles/deploy/vars/main.yaml`](openstack/roles/deploy/vars
 Here you can customize your virtual machine specifications:
   - Specify the region name
   - Choose an availability zone. For Open Telekom Cloud reference see [here](https://docs.otc.t-systems.com/en-us/endpoint/index.html).
-  - Change the OS image (For T-Pot we need Debian 9)
+  - Change the OS image (For T-Pot we need Debian)
   - (Optional) Change the volume size
   - Specify your key pair (:warning: Mandatory)
   - (Optional) Change the instance type (flavor)  
@@ -138,7 +138,7 @@ Here you can customize your virtual machine specifications:
 ```
 region_name: eu-de
 availability_zone: eu-de-03
-image: Standard_Debian_9_latest
+image: Standard_Debian_10_latest
 volume_size: 128
 key_name: your-KeyPair
 flavor: s2.medium.8

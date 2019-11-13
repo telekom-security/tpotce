@@ -1,6 +1,6 @@
 region_name: eu-de
 availability_zone: eu-de-03
-image: Standard_Debian_9_latest
+image: Standard_Debian_10_latest
 volume_size: 128
 key_name: your-KeyPair
 flavor: s2.medium.8
