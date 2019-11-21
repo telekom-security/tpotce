@@ -4,11 +4,11 @@ FROM alpine
 ADD dist/ /root/dist/
 #
 # Install packages
-RUN apk -U --no-cache add \
+RUN apk -U add \
             git \
             libcap \
-            python \
-            python-dev && \
+            python3 \
+            python3-dev && \
 #
 # Install adbhoney from git
     git clone --depth=1 https://github.com/huuck/ADBHoney /opt/adbhoney && \
@@ -20,11 +20,11 @@ RUN apk -U --no-cache add \
     addgroup -g 2000 adbhoney && \
     adduser -S -H -s /bin/ash -u 2000 -D -g 2000 adbhoney && \
     chown -R adbhoney:adbhoney /opt/adbhoney && \
-    setcap cap_net_bind_service=+ep /usr/bin/python2.7 && \
+    setcap cap_net_bind_service=+ep /usr/bin/python3.7 && \
 #
 # Clean up
     apk del --purge git \
-                    python-dev && \
+                    python3-dev && \
     rm -rf /root/* && \
     rm -rf /var/cache/apk/*
 #
@@ -32,4 +32,4 @@ RUN apk -U --no-cache add \
 STOPSIGNAL SIGINT
 USER adbhoney:adbhoney
 WORKDIR /opt/adbhoney/
-CMD nohup /usr/bin/python run.py
+CMD nohup /usr/bin/python3 run.py
