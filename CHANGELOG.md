@@ -1,5 +1,32 @@
 # Changelog
 
+## 20191224
+- **Use pigz, optimize logrotate.conf**
+  - Use `pigz` for faster archiving, especially with regard to high volumes of logs - Thanks to @workandresearchgithub!
+  - Optimize `logrotate.conf` to improve archiving speed and get rid of multiple compression, also introduce `pigz`.
+
+## 20191121
+- **Bump ADBHoney to latest master**
+  - Use latest version of ADBHoney, which now fully support Python 3.x - Thanks to @huuck!
+
+## 20191113, 20191104, 20191103, 20191028
+- **Switch to Debian 10 on OTC, Ansible Improvements**
+  - OTC now supporting Debian 10 - Thanks to @shaderecker!
+
+## 20191028
+- **Fix an issue with pip3, yq**
+  - `yq` needs rehashing.
+
+## 20191026
+- **Remove cockpit-pcp**
+  - `cockpit-pcp` floods swap for some reason - removing for now.
+
+## 20191022
+- **Bump Suricata to 5.0.0**
+
+## 20191021
+- **Bump Cowrie to 2.0.0**
+
 ## 20191016
 - **Tweak installer, pip3, Heralding**
   - Install `cockpit-pcp` right from the start for machine monitoring in cockpit.
