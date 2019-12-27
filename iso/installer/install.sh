@@ -813,11 +813,11 @@ chmod 770 -R /data
 if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ];
   then
     usermod -a -G tpot tsec
+    chown tsec:tsec -R /home/tsec/.ssh
   else
     usermod -a -G tpot $(who am i | awk '{ print $1 }')
 fi
 chown tpot:tpot -R /data
-chown tsec:tsec -R /home/tsec/.ssh
 chmod 644 -R /data/nginx/conf
 chmod 644 -R /data/nginx/cert
 
