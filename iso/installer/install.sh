@@ -643,6 +643,7 @@ fi
 if ! [ "$myCONF_TPOT_FLAVOR" == "SENSOR" ];
 then
   fuBANNER "NGINX Certificate"
+  myINTIP=$(hostname -I | awk '{ print $1 }')
   mkdir -p /data/nginx/cert
   openssl req \
           -nodes \
@@ -653,6 +654,7 @@ then
           -out "/data/nginx/cert/nginx.crt" \
           -days 3650 \
           -subj '/C=AU/ST=Some-State/O=Internet Widgits Pty Ltd'
+          -addext "subjectAltName = IP:$myINTIP"
 fi
 
 # Let's setup the ntp server
