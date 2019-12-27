@@ -1,8 +1,8 @@
 FROM alpine
-
+#
 # Include dist
 ADD dist/ /root/dist/
-
+#
 # Install packages
 RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     apk -U --no-cache add \
@@ -12,11 +12,10 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
             python2 \
             python2-dev \
             py2-pip && \
-
+#
 # Upgrade pip, install virtualenv
-    pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir virtualenv && \
-
+#
 # Clone honeypy from git
     git clone --depth=1 https://github.com/foospidy/HoneyPy /opt/honeypy && \
     cd /opt/honeypy && \
@@ -33,13 +32,13 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     cp /root/dist/services.cfg /opt/honeypy/etc && \
     cp /root/dist/honeypy.cfg /opt/honeypy/etc && \
     /opt/honeypy/env/bin/pip install -r /opt/honeypy/requirements.txt && \
-
+#
 # Setup user, groups and configs
     addgroup -g 2000 honeypy && \
     adduser -S -H -s /bin/ash -u 2000 -D -g 2000 honeypy && \
     chown -R honeypy:honeypy /opt/honeypy && \
     setcap cap_net_bind_service=+ep /opt/honeypy/env/bin/python2 && \
-
+#
 # Clean up
     apk del --purge build-base \
                     git \
@@ -47,7 +46,7 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
                     py2-pip && \
     rm -rf /root/* && \
     rm -rf /var/cache/apk/*
-
+#
 # Set workdir and start mailoney
 USER honeypy:honeypy
 WORKDIR /opt/honeypy
