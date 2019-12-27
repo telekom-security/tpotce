@@ -1,10 +1,11 @@
 FROM alpine
-
+#
 # Include dist
 ADD dist/ /root/dist/
-
+#
 # Setup apt
-RUN apk -U add \
+RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
+    apk -U add \
              build-base \
              file \
              git \
@@ -21,7 +22,7 @@ RUN apk -U add \
              py-cryptography \
              tcpdump \
              wget && \
-
+#
 # Setup ConPot
     git clone --depth=1 https://github.com/mushorg/conpot /opt/conpot && \
     cd /opt/conpot/ && \
@@ -37,20 +38,20 @@ RUN apk -U add \
     sed -i 's/port="6969"/port="69"/' /opt/conpot/conpot/templates/default/tftp/tftp.xml && \ 
     sed -i 's/port="16100"/port="161"/' /opt/conpot/conpot/templates/IEC104/snmp/snmp.xml && \ 
     sed -i 's/port="6230"/port="623"/' /opt/conpot/conpot/templates/ipmi/ipmi/ipmi.xml && \ 
-    pip3 install --no-cache-dir -U pip setuptools && \
+    pip3 install --no-cache-dir -U setuptools && \
     pip3 install --no-cache-dir . && \
     cd / && \
     rm -rf /opt/conpot /tmp/* /var/tmp/* && \
-    setcap cap_net_bind_service=+ep /usr/bin/python3.6 && \
-    
+    setcap cap_net_bind_service=+ep /usr/bin/python3.7 && \
+#    
 # Get wireshark manuf db for scapy, setup configs, user, groups
     mkdir -p /etc/conpot /var/log/conpot /usr/share/wireshark && \
     wget https://github.com/wireshark/wireshark/raw/master/manuf -o /usr/share/wireshark/manuf && \
     cp /root/dist/conpot.cfg /etc/conpot/conpot.cfg && \
-    cp -R /root/dist/templates /usr/lib/python3.6/site-packages/conpot/ && \
+    cp -R /root/dist/templates /usr/lib/python3.7/site-packages/conpot/ && \
     addgroup -g 2000 conpot && \
     adduser -S -s /bin/ash -u 2000 -D -g 2000 conpot && \
-
+#
 # Clean up
     apk del --purge \
             build-base \
@@ -68,7 +69,7 @@ RUN apk -U add \
     rm -rf /root/* && \
     rm -rf /tmp/* && \
     rm -rf /var/cache/apk/*
-
+#
 # Start conpot
 STOPSIGNAL SIGINT
 USER conpot:conpot
