@@ -653,7 +653,7 @@ then
           -keyout "/data/nginx/cert/nginx.key" \
           -out "/data/nginx/cert/nginx.crt" \
           -days 3650 \
-          -subj '/C=AU/ST=Some-State/O=Internet Widgits Pty Ltd'
+          -subj '/C=AU/ST=Some-State/O=Internet Widgits Pty Ltd' \
           -addext "subjectAltName = IP:$myINTIP"
 fi
 
