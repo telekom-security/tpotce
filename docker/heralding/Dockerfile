@@ -1,10 +1,11 @@
-FROM alpine
+FROM alpine:3.10
 #  
 # Include dist
 ADD dist/ /root/dist/
 #
 # Install packages
-RUN apk -U --no-cache add \ 
+RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
+    apk -U --no-cache add \ 
             		build-base \
             		git \
             		libcap \
@@ -22,6 +23,7 @@ RUN apk -U --no-cache add \
     cd /opt/ && \
     git clone --depth=1 https://github.com/johnnykv/heralding && \
     cd heralding && \
+    sed -i 's/asyncssh/asyncssh==1.18.0/' requirements.txt && \
     pip3 install --no-cache-dir -r requirements.txt && \
     pip3 install --no-cache-dir . && \
 #
@@ -47,7 +49,7 @@ RUN apk -U --no-cache add \
            /var/cache/apk/* \
            /opt/heralding
 #
-# Start elasticpot
+# Start Heralding
 STOPSIGNAL SIGINT
 WORKDIR /tmp/heralding/
 USER heralding:heralding
