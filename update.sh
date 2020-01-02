@@ -281,7 +281,6 @@ myWHOAMI=$(whoami)
 if [ "$myWHOAMI" != "root" ]
   then
     echo "Need to run as root ..."
-    sudo ./$0
     exit
 fi
 
