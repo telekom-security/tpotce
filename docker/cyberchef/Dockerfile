@@ -1,7 +1,8 @@
-FROM alpine
+FROM alpine:3.10
 #
 # Get and install dependencies & packages
-RUN apk -U --no-cache add \
+RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
+    apk -U --no-cache add \
             curl \
             git \
             npm \
