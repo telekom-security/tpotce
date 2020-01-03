@@ -1,10 +1,11 @@
-FROM alpine
+FROM alpine:3.10
 #
 # Include dist
 ADD dist/ /root/dist/
 #
 # Install packages
-RUN apk -U --no-cache add \
+RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
+    apk -U --no-cache add \
                build-base \
                file \
                git \
@@ -14,7 +15,6 @@ RUN apk -U --no-cache add \
                python3 \
                python3-dev \
                re2c && \
-    pip3 install --no-cache-dir --upgrade pip && \
 #
 # Install bfr sandbox from git
     git clone --depth=1 https://github.com/mushorg/BFR /opt/BFR && \
