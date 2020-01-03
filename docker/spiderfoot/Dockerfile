@@ -1,11 +1,12 @@
-FROM alpine
+FROM alpine:3.10
 #
 # Get and install dependencies & packages
-RUN sed -i 's/dl-cdn/dl-4/g' /etc/apk/repositories && \
+RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     apk -U --no-cache add \
             build-base \
             curl \
             git \
+	    libffi-dev \
             libxml2 \
             libxml2-dev \
             libxslt \
@@ -14,6 +15,8 @@ RUN sed -i 's/dl-cdn/dl-4/g' /etc/apk/repositories && \
             openssl-dev \
             python \
             python-dev \
+	    py-cffi \
+	    py-pillow \
             py-future \
             py-pip \
             swig && \
@@ -26,8 +29,7 @@ RUN sed -i 's/dl-cdn/dl-4/g' /etc/apk/repositories && \
 #    git clone --depth=1 https://github.com/smicallef/spiderfoot -b v2.12.0-final /home/spiderfoot && \
     git clone --depth=1 https://github.com/smicallef/spiderfoot /home/spiderfoot && \
     cd /home/spiderfoot && \
-    pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir wheel && \ 
+    pip install --no-cache-dir openxmllib wheel && \ 
     pip install --no-cache-dir -r requirements.txt && \ 
     chown -R spiderfoot:spiderfoot /home/spiderfoot && \
     sed -i "s#'__docroot': ''#'__docroot': '\/spiderfoot'#" /home/spiderfoot/sf.py && \
@@ -36,6 +38,7 @@ RUN sed -i 's/dl-cdn/dl-4/g' /etc/apk/repositories && \
 # Clean up
     apk del --purge build-base \
                     git \
+		    libffi-dev \
                     libxml2-dev \
                     libxslt-dev \
                     openssl-dev \
