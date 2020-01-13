@@ -1,4 +1,4 @@
-#/bin/bash
+#!/bin/bash
 
 # Run as root only.
 myWHOAMI=$(whoami)
