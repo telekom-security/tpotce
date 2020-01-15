@@ -4,7 +4,7 @@
 - **Prepare integration of CitrixHoneypot**
   - Prepare integration of [CitrixHoneypot](https://github.com/MalwareTech/CitrixHoneypot) by MalwareTech
   - Integration into ELK is still open
-  - Please run `/opt/tpot/update.sh` for the necessary modifications
+  - Please run `/opt/tpot/update.sh` for the necessary modifications, omit the reboot and run `/opt/tpot/bin/tped.sh` to (re-)select the NextGen installation type.
 
 ## 20191224
 - **Use pigz, optimize logrotate.conf**
