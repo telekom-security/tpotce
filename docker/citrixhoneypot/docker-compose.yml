@@ -1,0 +1,21 @@
+version: '2.3'
+
+networks:
+  citrixhoneypot_local:
+
+services:
+
+# CitrixHoneypot service
+  citrixhoneypot:
+    build: .
+    container_name: citrixhoneypot
+    restart: always
+    networks:
+     - citrixhoneypot_local
+    ports:
+     - "443:443"
+    image: "dtagdevsec/citrixhoneypot:1903"
+#    read_only: true
+#    volumes:
+#     - /data/adbhoney/log:/opt/adbhoney/log
+#     - /data/adbhoney/downloads:/opt/adbhoney/dl
