@@ -8,6 +8,7 @@ and includes dockerized versions of the following honeypots
 
 * [adbhoney](https://github.com/huuck/ADBHoney),
 * [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot),
+* [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot),
 * [conpot](http://conpot.org/),
 * [cowrie](https://github.com/cowrie/cowrie),
 * [dionaea](https://github.com/DinoTools/dionaea),
@@ -139,6 +140,7 @@ This allows us to run multiple honeypot daemons on the same network interface wh
 In T-Pot we combine the dockerized honeypots ...
 * [adbhoney](https://github.com/huuck/ADBHoney),
 * [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot),
+* [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot),
 * [conpot](http://conpot.org/),
 * [cowrie](http://www.micheloosterhof.com/cowrie/),
 * [dionaea](https://github.com/DinoTools/dionaea),
@@ -221,7 +223,7 @@ Depending on your installation type, whether you install on [real hardware](#har
 - A working, non-proxied, internet connection
 
 ##### NextGen Installation (Glutton replacing Honeytrap, HoneyPy replacing Elasticpot)
-- Honeypots: adbhoney, ciscoasa, conpot, cowrie, dionaea, glutton, heralding, honeypy, mailoney, rdpy, snare & tanner
+- Honeypots: adbhoney, ciscoasa, citrixhoneypot, conpot, cowrie, dionaea, glutton, heralding, honeypy, mailoney, rdpy, snare & tanner
 - Tools: cockpit, cyberchef, ELK, elasticsearch head, ewsposter, fatt, NGINX, spiderfoot, p0f and suricata
 
 - 6-8 GB RAM (less RAM is possible but might introduce swapping)
@@ -529,7 +531,7 @@ The software that T-Pot is built on uses the following licenses.
 <br>GPLv3: [adbhoney](https://github.com/huuck/ADBHoney), [elasticpot](https://github.com/schmalle/ElasticpotPY), [ewsposter](https://github.com/dtag-dev-sec/ews/), [fatt](https://github.com/0x4D31/fatt/blob/master/LICENSE), [rdpy](https://github.com/citronneur/rdpy/blob/master/LICENSE), [heralding](https://github.com/johnnykv/heralding/blob/master/LICENSE.txt), [snare](https://github.com/mushorg/snare/blob/master/LICENSE), [tanner](https://github.com/mushorg/snare/blob/master/LICENSE)
 <br>Apache 2 License: [cyberchef](https://github.com/gchq/CyberChef/blob/master/LICENSE), [elasticsearch](https://github.com/elasticsearch/elasticsearch/blob/master/LICENSE.txt), [logstash](https://github.com/elasticsearch/logstash/blob/master/LICENSE), [kibana](https://github.com/elasticsearch/kibana/blob/master/LICENSE.md), [docker](https://github.com/docker/docker/blob/master/LICENSE), [elasticsearch-head](https://github.com/mobz/elasticsearch-head/blob/master/LICENCE)
 <br>MIT license: [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/blob/master/LICENSE), [glutton](https://github.com/mushorg/glutton/blob/master/LICENSE)
-<br> Other: [cowrie](https://github.com/micheloosterhof/cowrie/blob/master/LICENSE.md), [mailoney](https://github.com/awhitehatter/mailoney), [Debian licensing](https://www.debian.org/legal/licenses/)
+<br> Other: [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot#licencing-agreement-malwaretech-public-licence), [cowrie](https://github.com/micheloosterhof/cowrie/blob/master/LICENSE.md), [mailoney](https://github.com/awhitehatter/mailoney), [Debian licensing](https://www.debian.org/legal/licenses/)
 
 <a name="credits"></a>
 # Credits
@@ -540,6 +542,7 @@ Without open source and the fruitful development community (we are proud to be a
 * [adbhoney](https://github.com/huuck/ADBHoney/graphs/contributors)
 * [apt-fast](https://github.com/ilikenwf/apt-fast/graphs/contributors)
 * [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/graphs/contributors)
+* [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot/graphs/contributors)
 * [cockpit](https://github.com/cockpit-project/cockpit/graphs/contributors)
 * [conpot](https://github.com/mushorg/conpot/graphs/contributors)
 * [cowrie](https://github.com/micheloosterhof/cowrie/graphs/contributors)

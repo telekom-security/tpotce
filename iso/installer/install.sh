@@ -778,6 +778,7 @@ echo "$myCRONJOBS" | tee -a /etc/crontab
 fuBANNER "Files & folders"
 mkdir -p /data/adbhoney/downloads /data/adbhoney/log \
          /data/ciscoasa/log \
+	 /data/citrixhoneypot/logs \
       	 /data/conpot/log \
          /data/cowrie/log/tty/ /data/cowrie/downloads/ /data/cowrie/keys/ /data/cowrie/misc/ \
          /data/dionaea/log /data/dionaea/bistreams /data/dionaea/binaries /data/dionaea/rtp /data/dionaea/roots/ftp /data/dionaea/roots/tftp /data/dionaea/roots/www /data/dionaea/roots/upnp \

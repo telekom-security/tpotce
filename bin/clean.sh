@@ -90,6 +90,14 @@ fuCISCOASA () {
   chown tpot:tpot /data/ciscoasa -R
 }
 
+# Let's create a function to clean up and prepare citrixhoneypot data
+fuCITRIXHONEYPOT () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/citrixhoneypot/*; fi
+  mkdir -p /data/citrixhoneypot/log/
+  chmod 770 /data/citrixhoneypot/ -R
+  chown tpot:tpot /data/citrixhoneypot/ -R
+}
+
 # Let's create a function to clean up and prepare conpot data
 fuCONPOT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/conpot/*; fi
@@ -260,6 +268,7 @@ if [ "$myPERSISTENCE" = "on" ];
     echo "Cleaning up and preparing data folders."
     fuADBHONEY
     fuCISCOASA
+    fuCITRIXHONEYPOT
     fuCONPOT
     fuCOWRIE
     fuDIONAEA

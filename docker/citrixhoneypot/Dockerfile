@@ -1,8 +1,5 @@
 FROM alpine 
 #
-# Include dist
-#ADD dist/ /root/dist/
-#
 # Install packages
 RUN apk -U add \
             git \
@@ -11,17 +8,14 @@ RUN apk -U add \
             python3 \
             python3-dev && \
 #
-# Install Citrix Honeypot from GitHub
+# Install CitrixHoneypot from GitHub
     git clone --depth=1 https://github.com/malwaretech/citrixhoneypot /opt/citrixhoneypot && \
-#    sed -i 's/dst_ip/dest_ip/' /opt/adbhoney/adbhoney/core.py && \
-#    sed -i 's/dst_port/dest_port/' /opt/adbhoney/adbhoney/core.py && \
 #
 # Setup user, groups and configs
     mkdir -p /opt/citrixhoneypot/logs /opt/citrixhoneypot/ssl && \
     openssl req \
           -nodes \
           -x509 \
-          -sha512 \
           -newkey rsa:2048 \
           -keyout "/opt/citrixhoneypot/ssl/key.pem" \
           -out "/opt/citrixhoneypot/ssl/cert.pem" \

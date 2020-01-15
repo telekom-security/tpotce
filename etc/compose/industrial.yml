@@ -24,7 +24,6 @@ services:
 
 # Conpot default service
   conpot_default:
-    build: .
     container_name: conpot_default
     restart: always
     environment:

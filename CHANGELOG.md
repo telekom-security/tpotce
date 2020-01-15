@@ -1,5 +1,11 @@
 # Changelog
 
+## 20200115
+- **Prepare integration of CitrixHoneypot**
+  - Prepare integration of [CitrixHoneypot](https://github.com/MalwareTech/CitrixHoneypot) by MalwareTech
+  - Integration into ELK is still open
+  - Please run `/opt/tpot/update.sh` for the necessary modifications
+
 ## 20191224
 - **Use pigz, optimize logrotate.conf**
   - Use `pigz` for faster archiving, especially with regard to high volumes of logs - Thanks to @workandresearchgithub!

@@ -4,6 +4,7 @@ version: '2.3'
 
 networks:
   adbhoney_local:
+  citrixhoneypot_local:
   conpot_local_IEC104:
   conpot_local_guardian_ast:
   conpot_local_ipmi:
@@ -53,6 +54,19 @@ services:
     read_only: true
     volumes:
      - /data/ciscoasa/log:/var/log/ciscoasa
+
+# CitrixHoneypot service
+  citrixhoneypot:
+    container_name: citrixhoneypot
+    restart: always
+    networks:
+     - citrixhoneypot_local
+    ports:
+     - "443:443"
+    image: "dtagdevsec/citrixhoneypot:1903"
+    read_only: true
+    volumes:
+     - /data/citrixhoneypot/logs:/opt/citrixhoneypot/logs       
 
 # Conpot IEC104 service
   conpot_IEC104:
@@ -174,7 +188,7 @@ services:
      - "69:69/udp"
      - "81:81"
      - "135:135"
-     - "443:443"
+     # - "443:443"
      - "445:445"
      - "1433:1433"
      - "1723:1723"
@@ -198,7 +212,6 @@ services:
 
 # Glutton service
   glutton:
-    build: .
     container_name: glutton
     restart: always
     tmpfs:
@@ -244,7 +257,6 @@ services:
 
 # HoneyPy service
   honeypy:
-    build: .
     container_name: honeypy
     restart: always
     networks:
@@ -410,7 +422,6 @@ services:
 
 # Fatt service
   fatt:
-    build: .
     container_name: fatt
     restart: always
     network_mode: "host"

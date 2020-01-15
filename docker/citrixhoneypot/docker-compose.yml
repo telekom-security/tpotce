@@ -15,7 +15,6 @@ services:
     ports:
      - "443:443"
     image: "dtagdevsec/citrixhoneypot:1903"
-#    read_only: true
-#    volumes:
-#     - /data/adbhoney/log:/opt/adbhoney/log
-#     - /data/adbhoney/downloads:/opt/adbhoney/dl
+    read_only: true
+    volumes:
+     - /data/citrixhoneypot/logs:/opt/citrixhoneypot/logs
