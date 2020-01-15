@@ -8,8 +8,11 @@ RUN apk -U add \
             python3 \
             python3-dev && \
 #
+    pip3 install --no-cache-dir python-json-logger && \
+#
 # Install CitrixHoneypot from GitHub
-    git clone --depth=1 https://github.com/malwaretech/citrixhoneypot /opt/citrixhoneypot && \
+#    git clone --depth=1 https://github.com/malwaretech/citrixhoneypot /opt/citrixhoneypot && \
+    git clone --depth=1 https://github.com/vorband/CitrixHoneypot /opt/citrixhoneypot && \
 #
 # Setup user, groups and configs
     mkdir -p /opt/citrixhoneypot/logs /opt/citrixhoneypot/ssl && \
