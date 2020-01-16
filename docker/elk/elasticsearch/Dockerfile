@@ -15,8 +15,8 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
 # Get and install packages
     cd /root/dist/ && \
     mkdir -p /usr/share/elasticsearch/ && \
-    aria2c -s 16 -x 16 https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-6.8.2.tar.gz && \
-    tar xvfz elasticsearch-6.8.2.tar.gz --strip-components=1 -C /usr/share/elasticsearch/ && \
+    aria2c -s 16 -x 16 https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-6.8.6.tar.gz && \
+    tar xvfz elasticsearch-6.8.6.tar.gz --strip-components=1 -C /usr/share/elasticsearch/ && \
 #
 # Add and move files
     cd /root/dist/ && \

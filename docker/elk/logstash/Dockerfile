@@ -23,8 +23,8 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     bunzip2 *.bz2 && \
     cd /root/dist/ && \
     mkdir -p /usr/share/logstash/ && \
-    aria2c -s 16 -x 16 https://artifacts.elastic.co/downloads/logstash/logstash-6.8.2.tar.gz && \
-    tar xvfz logstash-6.8.2.tar.gz --strip-components=1 -C /usr/share/logstash/ && \
+    aria2c -s 16 -x 16 https://artifacts.elastic.co/downloads/logstash/logstash-6.8.6.tar.gz && \
+    tar xvfz logstash-6.8.6.tar.gz --strip-components=1 -C /usr/share/logstash/ && \
     /usr/share/logstash/bin/logstash-plugin install logstash-filter-translate && \
     /usr/share/logstash/bin/logstash-plugin install logstash-output-syslog && \
 #
