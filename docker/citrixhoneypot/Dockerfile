@@ -12,7 +12,8 @@ RUN apk -U add \
 #
 # Install CitrixHoneypot from GitHub
 #    git clone --depth=1 https://github.com/malwaretech/citrixhoneypot /opt/citrixhoneypot && \
-    git clone --depth=1 https://github.com/vorband/CitrixHoneypot /opt/citrixhoneypot && \
+#    git clone --depth=1 https://github.com/vorband/CitrixHoneypot /opt/citrixhoneypot && \
+    git clone --depth=1 https://github.com/t3chn0m4g3/CitrixHoneypot /opt/citrixhoneypot && \
 #
 # Setup user, groups and configs
     mkdir -p /opt/citrixhoneypot/logs /opt/citrixhoneypot/ssl && \
