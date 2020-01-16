@@ -1,5 +1,11 @@
 # Changelog
 
+## 20200116
+- **Bump ELK to latest 6.8.6**
+- **Include dashboards for CitrixHoneypot**
+  - Please run `/opt/tpot/update.sh` for the necessary modifications, omit the reboot and run `/opt/tpot/bin/tped.sh` to (re-)select the NextGen installation type.
+  - This update requires the latest Kibana objects as well. Download the latest from https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/etc/objects/kibana_export.json.zip, unzip and import the objects within Kibana WebUI > Management > Saved Objects > Export / Import". All objects will be overwritten upon import, make sure to run an export first.
+
 ## 20200115
 - **Prepare integration of CitrixHoneypot**
   - Prepare integration of [CitrixHoneypot](https://github.com/MalwareTech/CitrixHoneypot) by MalwareTech
