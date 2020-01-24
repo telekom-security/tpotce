@@ -1,0 +1,63 @@
+FROM alpine
+#
+# Include dist
+ADD dist/ /root/dist/
+#
+# Get and install dependencies & packages
+RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
+    apk -U --no-cache add \
+                       git \
+                       nginx \
+                       nginx-mod-http-headers-more \
+		       php7 \
+		       php7-cgi \
+		       php7-ctype \
+		       php7-fileinfo \
+		       php7-fpm \
+		       php7-json \
+		       php7-mbstring \
+		       php7-openssl \
+		       php7-pdo \
+		       php7-pdo_pgsql \
+		       php7-pdo_sqlite \
+		       php7-session \
+		       php7-sqlite3 \
+		       php7-tokenizer \
+		       php7-xml \
+		       php7-zip
+#
+# Clone Heimdall
+RUN git clone https://github.com/linuxserver/heimdall && \
+    cp -R heimdall/. /var/lib/nginx/html && \
+    rm -rf heimdall && \
+    cd /var/lib/nginx/html && \
+    cp .env.example .env && \
+    php artisan key:generate && \
+    mkdir -p /var/lib/nginx/html/storage/app/public/backgrounds/ && \
+    cp /root/dist/app/bg1.jpg /var/lib/nginx/html/public/img/bg1.jpg && \
+    #cp /root/dist/app/app.sqlite /var/lib/nginx/html/database/app.sqlite && \
+    cp /root/dist/html/favicon.ico /var/lib/nginx/html/public/favicon-16x16.png && \
+    cp /root/dist/html/favicon.ico /var/lib/nginx/html/public/favicon-32x32.png && \
+    cp /root/dist/html/favicon.ico /var/lib/nginx/html/public/favicon-96x96.png && \
+    cp /root/dist/html/favicon.ico /var/lib/nginx/html/public/favicon.ico && \
+    chown root:www-data -R /var/lib/nginx/html && \
+    chmod 775 -R /var/lib/nginx/html/storage && \
+    chmod 775 -R /var/lib/nginx/html/database && \
+# Setup configs
+    sed -i "s/user = nobody/user = nginx/g" /etc/php7/php-fpm.d/www.conf && \
+    sed -i "s/group = nobody/group = nginx/g" /etc/php7/php-fpm.d/www.conf && \
+    sed -i "s/9000/64304/g" /etc/php7/php-fpm.d/www.conf && \
+    sed -i "s/APP_NAME=Heimdall/APP_NAME=T-Pot/g" /var/lib/nginx/html/.env && \
+    #sed -i '/<?php/aecho("<title>T-Pot</title>");' /var/lib/nginx/html/public/index.php && \
+    mkdir -p /run/nginx && \
+    rm -rf /etc/nginx/conf.d/* /usr/share/nginx/html/* && \
+    cp /root/dist/conf/nginx.conf /etc/nginx/ && \
+    cp -R /root/dist/conf/ssl /etc/nginx/ && \
+    cp /root/dist/conf/tpotweb.conf /etc/nginx/conf.d/ && \
+#
+# Clean up
+    rm -rf /root/* && \
+    rm -rf /var/cache/apk/*
+#
+# Start nginx
+CMD php-fpm7 && exec nginx -g 'daemon off;'
