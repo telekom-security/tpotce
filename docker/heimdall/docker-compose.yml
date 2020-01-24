@@ -15,7 +15,7 @@ services:
      - /var/tmp/nginx/scgi
      - /run
      - /var/log/php7/
-     - /var/lib/nginx/tmp/
+     - /var/lib/nginx/tmp/:uid=100,gid=82
      - /var/lib/nginx/html/storage/logs:uid=100,gid=82
      - /var/lib/nginx/html/storage/framework/views:uid=100,gid=82
     network_mode: "host"
