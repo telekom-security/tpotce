@@ -7,13 +7,13 @@ services:
     build: .
     container_name: nginx
     restart: always
-    tmpfs:
-     - /var/tmp/nginx/client_body
-     - /var/tmp/nginx/proxy
-     - /var/tmp/nginx/fastcgi
-     - /var/tmp/nginx/uwsgi
-     - /var/tmp/nginx/scgi
-     - /run
+#    tmpfs:
+#     - /var/tmp/nginx/client_body
+#     - /var/tmp/nginx/proxy
+#     - /var/tmp/nginx/fastcgi
+#     - /var/tmp/nginx/uwsgi
+#     - /var/tmp/nginx/scgi
+#     - /run
     network_mode: "host"
     ports:
      - "64297:64297"
