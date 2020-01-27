@@ -791,7 +791,7 @@ mkdir -p /data/adbhoney/downloads /data/adbhoney/log \
          /data/honeypy/log \
          /data/mailoney/log \
          /data/medpot/log \
-         /data/nginx/log \
+         /data/nginx/log /data/nginx/heimdall \
          /data/emobility/log \
          /data/ews/conf \
          /data/rdpy/log \
