@@ -93,7 +93,7 @@ fuCISCOASA () {
 # Let's create a function to clean up and prepare citrixhoneypot data
 fuCITRIXHONEYPOT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/citrixhoneypot/*; fi
-  mkdir -p /data/citrixhoneypot/log/
+  mkdir -p /data/citrixhoneypot/logs/
   chmod 770 /data/citrixhoneypot/ -R
   chown tpot:tpot /data/citrixhoneypot/ -R
 }
