@@ -8,20 +8,25 @@ myGREEN="[0;32m"
 myWHITE="[0;0m"
 myBLUE="[0;34m"
 
-
 # Check for existing tpot.yml
 function fuCONFIGCHECK () {
   echo "### Checking for T-Pot configuration file ..."
-  echo -n "###### $myBLUE$myCONFIGFILE$myWHITE "
-  if ! [ -f $myCONFIGFILE ];
+  if ! [ -L $myCONFIGFILE ];
     then
-      echo
-      echo "[ $myRED""NOT OK""$myWHITE ] - No T-Pot configuration found."
-      echo "Please create a link to your desired config i.e. 'ln -s /opt/tpot/etc/compose/standard.yml /opt/tpot/etc/tpot.yml'."
-      echo
-      exit 1
+      echo -n "###### $myBLUE$myCONFIGFILE$myWHITE "
+      myFILE=$(head -n 1 $myCONFIGFILE | tr -d "()" | tr [:upper:] [:lower:] | awk '{ print $3 }')
+      myFILE+=".yml"
+      echo "[ $myRED""NOT OK""$myWHITE ] - Broken symlink, trying to reset to '$myFILE'."
+      rm -rf $myCONFIGFILE
+      ln -s $myCOMPOSEPATH/$myFILE $myCONFIGFILE
+  fi
+  if [ -L $myCONFIGFILE ];
+    then
+      echo "###### $myBLUE$myCONFIGFILE$myWHITE [ $myGREEN""OK""$myWHITE ]"
     else
-      echo "[ $myGREEN""OK""$myWHITE ]"
+      echo "[ $myRED""NOT OK""$myWHITE ] - Broken symlink and / or restore failed."
+      echo "Please create a link to your desired config i.e. 'ln -s /opt/tpot/etc/compose/standard.yml /opt/tpot/etc/tpot.yml'."
+      exit
   fi
 echo
 }
@@ -257,10 +262,10 @@ echo "### All objects will be overwritten upon import, make sure to run an expor
 }
 
 function fuRESTORE_EWSCFG () {
-if [ -f '/data/ews/conf/ews.cfg' ] && ! grep 'ews.cfg' /opt/tpot/etc/tpot.yml > /dev/null; then
+if [ -f '/data/ews/conf/ews.cfg' ] && ! grep 'ews.cfg' $myCONFIGFILE > /dev/null; then
     echo
     echo "### Restoring volume mount for ews.cfg in tpot.yml"
-    sed -i '/\/opt\/ewsposter\/ews.ip/a\\ \ \ \ \ - /data/ews/conf/ews.cfg:/opt/ewsposter/ews.cfg' /opt/tpot/etc/tpot.yml
+    sed -i --follow-symlinks '/\/opt\/ewsposter\/ews.ip/a\\ \ \ \ \ - /data/ews/conf/ews.cfg:/opt/ewsposter/ews.cfg' $myCONFIGFILE
 fi
 }
 
