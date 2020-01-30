@@ -46,4 +46,4 @@ RUN apk -U --no-cache add \
 # Run ewsposter
 STOPSIGNAL SIGINT
 USER ews:ews
-CMD sleep 10 && exec /usr/bin/python3 -u /opt/ewsposter/ews.py -l 60
+CMD sleep 10 && exec /usr/bin/python3 -u /opt/ewsposter/ews.py -l $(shuf -i 10-60 -n 1)
