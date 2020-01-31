@@ -32,7 +32,7 @@ trap fuCLEANUP EXIT
 # Export index patterns
 mkdir -p patterns
 echo $myCOL1"### Now exporting"$myCOL0 $myINDEXCOUNT $myCOL1"index pattern fields." $myCOL0
-curl -s -XGET ''$myKIBANA'api/saved_objects/index-pattern/'$myINDEXID'' | jq '. | {attributes}' > patterns/$myINDEXID.json &
+curl -s -XGET ''$myKIBANA'api/saved_objects/index-pattern/'$myINDEXID'' | jq '. | {attributes, references}' > patterns/$myINDEXID.json &
 echo
 
 # Export dashboards
@@ -41,7 +41,7 @@ echo $myCOL1"### Now exporting"$myCOL0 $(echo $myDASHBOARDS | wc -w) $myCOL1"das
 for i in $myDASHBOARDS;
   do
     echo $myCOL1"###### "$i $myCOL0
-    curl -s -XGET ''$myKIBANA'api/saved_objects/dashboard/'$i'' | jq '. | {attributes}' > dashboards/$i.json &
+    curl -s -XGET ''$myKIBANA'api/saved_objects/dashboard/'$i'' | jq '. | {attributes, references}' > dashboards/$i.json &
   done;
 echo
 
@@ -51,7 +51,7 @@ echo $myCOL1"### Now exporting"$myCOL0 $(echo $myVISUALIZATIONS | wc -w) $myCOL1
 for i in $myVISUALIZATIONS;
   do
     echo $myCOL1"###### "$i $myCOL0
-    curl -s -XGET ''$myKIBANA'api/saved_objects/visualization/'$i'' | jq '. | {attributes}' > visualizations/$i.json &
+    curl -s -XGET ''$myKIBANA'api/saved_objects/visualization/'$i'' | jq '. | {attributes, references}' > visualizations/$i.json &
   done;
 echo
 
@@ -61,7 +61,7 @@ echo $myCOL1"### Now exporting"$myCOL0 $(echo $mySEARCHES | wc -w) $myCOL1"searc
 for i in $mySEARCHES;
   do
     echo $myCOL1"###### "$i $myCOL0
-    curl -s -XGET ''$myKIBANA'api/saved_objects/search/'$i'' | jq '. | {attributes}' > searches/$i.json &
+    curl -s -XGET ''$myKIBANA'api/saved_objects/search/'$i'' | jq '. | {attributes, references}' > searches/$i.json &
   done;
 echo
 
