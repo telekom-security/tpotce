@@ -3,9 +3,12 @@
   "version" : 60001,
   "settings" : {
     "index.refresh_interval" : "5s",
-    "number_of_shards": 1,
+    "number_of_shards" : 1,
     "index.number_of_replicas" : "0",
-    "index.mapping.total_fields.limit": "2000"
+    "index.mapping.total_fields.limit" : "2000",
+    "index.query": {
+      "default_field": "fields.*"
+     }
   },
   "mappings" : {
     "dynamic_templates" : [ {
