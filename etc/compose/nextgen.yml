@@ -482,7 +482,7 @@ services:
     restart: always
     environment:
      - bootstrap.memory_lock=true
-     - ES_JAVA_OPTS=-Xms1024m -Xmx1024m
+     - ES_JAVA_OPTS=-Xms2048m -Xmx2048m
      - ES_TMPDIR=/tmp
     cap_add:
      - IPC_LOCK
