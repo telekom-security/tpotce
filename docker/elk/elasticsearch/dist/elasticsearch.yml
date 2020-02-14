@@ -9,6 +9,7 @@ path:
 http.host: 0.0.0.0
 http.cors.enabled: true
 http.cors.allow-origin: "*"
+indices.query.bool.max_clause_count: 2000
 cluster.initial_master_nodes:
 - "tpotcluster-node-01"
 discovery.zen.ping.unicast.hosts:

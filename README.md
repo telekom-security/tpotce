@@ -110,7 +110,7 @@ Furthermore we use the following tools
 - **Release Cycle**
   - As far as possible we will integrate changes now faster into the master branch, eliminating the need for monolithic releases. The update feature will be continuously improved on that behalf. However this might not account for all feature changes.
 - **HPFEEDS Opt-In**
-  - If you want to share your T-Pot data with a 3rd party HPFEEDS broker such as [SISSDEN](https://sissden.eu) you can do so by creating an account at the SISSDEN portal and run `hpfeeds_optin.sh` on T-Pot.
+  - If you want to share your T-Pot data with a 3rd party HPFEEDS broker such as you can do so by runnning `hpfeeds_optin.sh` on T-Pot.
 - **Update Feature**
   - For the ones who like to live on the bleeding edge of T-Pot development there is now an update script available in `/opt/tpot/update.sh`.
   - This feature is beta and is mostly intended to provide you with the latest development advances without the need of reinstalling T-Pot.
@@ -487,9 +487,8 @@ We encourage you not to disable the data submission as it is the main purpose of
 
 <a name="hpfeeds-optin"></a>
 ## Opt-In HPFEEDS Data Submission
-As an Opt-In it is now possible to also share T-Pot data with 3rd party HPFEEDS brokers, such as [SISSDEN](https://sissden.eu).  
-If you want to share your T-Pot data you simply have to register an account with a 3rd party broker with its own benefits towards the community. Once registered you will receive your credentials to share events with the broker. In T-Pot you simply run `hpfeeds_optin.sh` which will ask for your credentials, in case of SISSDEN this is just `Ident` and `Secret`, everything else is pre-configured.  
-It will automatically update `/opt/tpot/etc/tpot.yml` to deliver events to your desired broker.
+As an Opt-In it is now possible to also share T-Pot data with 3rd party HPFEEDS brokers.  
+If you want to share your T-Pot data you simply have to register an account with a 3rd party broker with its own benefits towards the community. You simply run `hpfeeds_optin.sh` which will ask for your credentials. It will automatically update `/opt/tpot/etc/tpot.yml` to deliver events to your desired broker.
 
 The script can accept a config file as an argument, e.g. `./hpfeeds_optin.sh --conf=hpfeeds.cfg`
 

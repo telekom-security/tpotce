@@ -32,7 +32,7 @@ RUN apk -U --no-cache add \
 #
 # Supply configs
     mv /root/dist/ews.cfg /opt/ewsposter/ && \
-    mv /root/dist/*.pem /opt/ewsposter/ && \
+#    mv /root/dist/*.pem /opt/ewsposter/ && \
 #
 # Clean up
     apk del build-base \
