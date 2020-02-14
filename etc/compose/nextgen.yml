@@ -34,7 +34,7 @@ services:
      - adbhoney_local
     ports:
      - "5555:5555"
-    image: "dtagdevsec/adbhoney:1903"
+    image: "dtagdevsec/adbhoney:2006"
     read_only: true
     volumes:
      - /data/adbhoney/log:/opt/adbhoney/log
@@ -166,7 +166,7 @@ services:
     ports:
      - "22:22"
      - "23:23"
-    image: "dtagdevsec/cowrie:1903"
+    image: "dtagdevsec/cowrie:2006"
     read_only: true
     volumes:
      - /data/cowrie/downloads:/home/cowrie/cowrie/dl

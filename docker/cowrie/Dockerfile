@@ -4,7 +4,8 @@ FROM alpine
 ADD dist/ /root/dist/
 #
 # Get and install dependencies & packages
-RUN apk -U add \
+RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
+    apk -U add \
                        bash \
                        build-base \
                        git \
@@ -29,16 +30,16 @@ RUN apk -U add \
 # Install cowrie
     mkdir -p /home/cowrie && \
     cd /home/cowrie && \
-    git clone --depth=1 https://github.com/micheloosterhof/cowrie -b v2.0.0 && \
+    git clone --depth=1 https://github.com/micheloosterhof/cowrie -b v2.0.2 && \
     cd cowrie && \
     mkdir -p log && \
     pip3 install --upgrade pip && \
     pip3 install --upgrade -r requirements.txt && \
 #
 # Setup configs
-    setcap cap_net_bind_service=+ep /usr/bin/python3.7 && \
+    setcap cap_net_bind_service=+ep /usr/bin/python3.8 && \
     cp /root/dist/cowrie.cfg /home/cowrie/cowrie/cowrie.cfg && \
-    chown cowrie:cowrie -R /home/cowrie/* /usr/lib/python3.7/site-packages/twisted/plugins && \
+    chown cowrie:cowrie -R /home/cowrie/* /usr/lib/python3.8/site-packages/twisted/plugins && \
 #
 # Start Cowrie once to prevent dropin.cache errors upon container start caused by read-only filesystem
     su - cowrie -c "export PYTHONPATH=/home/cowrie/cowrie:/home/cowrie/cowrie/src && \
