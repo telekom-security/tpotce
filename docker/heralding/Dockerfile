@@ -1,4 +1,4 @@
-FROM alpine:3.10
+FROM alpine:latest
 #  
 # Include dist
 ADD dist/ /root/dist/
@@ -23,7 +23,6 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     cd /opt/ && \
     git clone --depth=1 https://github.com/johnnykv/heralding && \
     cd heralding && \
-    sed -i 's/asyncssh/asyncssh==1.18.0/' requirements.txt && \
     pip3 install --no-cache-dir -r requirements.txt && \
     pip3 install --no-cache-dir . && \
 #
@@ -32,7 +31,7 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     adduser -S -H -s /bin/ash -u 2000 -D -g 2000 heralding && \
     mkdir -p /var/log/heralding/ /etc/heralding && \
     mv /root/dist/heralding.yml /etc/heralding/ && \
-    setcap cap_net_bind_service=+ep /usr/bin/python3.7 && \
+    setcap cap_net_bind_service=+ep /usr/bin/python3.8 && \
     chown -R heralding:heralding /var/log/heralding && \
 #
 # Clean up
