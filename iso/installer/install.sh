@@ -13,8 +13,8 @@ myTPOTCOMPOSE="/opt/tpot/etc/tpot.yml"
 myLSB_STABLE_SUPPORTED="stretch buster"
 myLSB_TESTING_SUPPORTED="sid"
 myREMOTESITES="https://hub.docker.com https://github.com https://pypi.python.org https://debian.org"
-myPREINSTALLPACKAGES="aria2 apache2-utils curl dialog figlet fuse grc libcrack2 libpq-dev lsb-release netselect-apt net-tools software-properties-common toilet"
-myINSTALLPACKAGES="aria2 apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker console-setup console-setup-linux curl debconf-utils dialog dnsutils docker.io docker-compose ethtool fail2ban figlet genisoimage git glances grc haveged html2text htop iptables iw jq kbd libcrack2 libltdl7 man mosh multitail netselect-apt net-tools npm ntp openssh-server openssl pass pigz prips software-properties-common syslinux psmisc pv python3-pip toilet unattended-upgrades unzip vim wget wireless-tools wpasupplicant"
+myPREINSTALLPACKAGES="aria2 apache2-utils cracklib-check curl dialog figlet fuse grc libcrack2 libpq-dev lsb-release netselect-apt net-tools software-properties-common toilet"
+myINSTALLPACKAGES="aria2 apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker console-setup console-setup-linux cracklib-check curl debconf-utils dialog dnsutils docker.io docker-compose ethtool fail2ban figlet genisoimage git glances grc haveged html2text htop iptables iw jq kbd libcrack2 libltdl7 man mosh multitail netselect-apt net-tools npm ntp openssh-server openssl pass pigz prips software-properties-common syslinux psmisc pv python3-pip toilet unattended-upgrades unzip vim wget wireless-tools wpasupplicant"
 myINFO="\
 ########################################
 ### T-Pot Installer for Debian (Sid) ###
