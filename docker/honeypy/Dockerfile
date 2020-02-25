@@ -1,4 +1,4 @@
-FROM alpine
+FROM alpine:latest
 #
 # Include dist
 ADD dist/ /root/dist/
@@ -28,6 +28,7 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     sed -i 's/bytes/size/g' /opt/honeypy/loggers/file/honeypy_file.py && \
     sed -i 's/date_time/timestamp/g' /opt/honeypy/loggers/file/honeypy_file.py && \
     sed -i 's/data,/data.decode("hex"),/g' /opt/honeypy/loggers/file/honeypy_file.py && \
+    sed -i 's/urllib3/urllib3 == 1.21.1/g' /opt/honeypy/requirements.txt && \
     virtualenv env && \
     cp /root/dist/services.cfg /opt/honeypy/etc && \
     cp /root/dist/honeypy.cfg /opt/honeypy/etc && \

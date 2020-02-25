@@ -1,10 +1,11 @@
-FROM alpine
+FROM alpine:latest
 #
 # Include dist
 ADD dist/ /root/dist/
 #
 # Install packages
-RUN apk -U --no-cache add \
+RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
+    apk -U --no-cache add \
             build-base \
             git \
             libffi-dev \
@@ -46,4 +47,4 @@ RUN apk -U --no-cache add \
 # Run ewsposter
 STOPSIGNAL SIGINT
 USER ews:ews
-CMD sleep 10 && exec /usr/bin/python3 -u /opt/ewsposter/ews.py -l $(shuf -i 10-60 -n 1)
+CMD sleep 10 && exec /usr/bin/python3 -u /opt/ewsposter/ews.py -l $(shuf -i 10-15 -n 1)
