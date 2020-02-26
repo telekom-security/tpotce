@@ -38,7 +38,7 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     addgroup -g 2000 honeypy && \
     adduser -S -H -s /bin/ash -u 2000 -D -g 2000 honeypy && \
     chown -R honeypy:honeypy /opt/honeypy && \
-    setcap cap_net_bind_service=+ep /opt/honeypy/env/bin/python2 && \
+    setcap cap_net_bind_service=+ep /opt/honeypy/env/bin/python && \
 #
 # Clean up
     apk del --purge build-base \
