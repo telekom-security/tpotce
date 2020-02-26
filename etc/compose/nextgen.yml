@@ -50,7 +50,7 @@ services:
     ports:
      - "5000:5000/udp"
      - "8443:8443"
-    image: "dtagdevsec/ciscoasa:1903"
+    image: "dtagdevsec/ciscoasa:2006"
     read_only: true
     volumes:
      - /data/ciscoasa/log:/var/log/ciscoasa
@@ -63,7 +63,7 @@ services:
      - citrixhoneypot_local
     ports:
      - "443:443"
-    image: "dtagdevsec/citrixhoneypot:1903"
+    image: "dtagdevsec/citrixhoneypot:2006"
     read_only: true
     volumes:
      - /data/citrixhoneypot/logs:/opt/citrixhoneypot/logs       
@@ -85,7 +85,7 @@ services:
     ports:
      - "161:161"
      - "2404:2404"
-    image: "dtagdevsec/conpot:1903"
+    image: "dtagdevsec/conpot:2006"
     read_only: true
     volumes:
      - /data/conpot/log:/var/log/conpot
@@ -106,7 +106,7 @@ services:
      - conpot_local_guardian_ast
     ports:
      - "10001:10001"
-    image: "dtagdevsec/conpot:1903"
+    image: "dtagdevsec/conpot:2006"
     read_only: true
     volumes:
      - /data/conpot/log:/var/log/conpot
@@ -127,7 +127,7 @@ services:
      - conpot_local_ipmi
     ports:
      - "623:623"
-    image: "dtagdevsec/conpot:1903"
+    image: "dtagdevsec/conpot:2006"
     read_only: true
     volumes:
      - /data/conpot/log:/var/log/conpot
@@ -149,7 +149,7 @@ services:
     ports:
      - "1025:1025"
      - "50100:50100"
-    image: "dtagdevsec/conpot:1903"
+    image: "dtagdevsec/conpot:2006"
     read_only: true
     volumes:
      - /data/conpot/log:/var/log/conpot
@@ -198,7 +198,7 @@ services:
      - "5060:5060/udp"
      - "5061:5061"
      - "27017:27017"
-    image: "dtagdevsec/dionaea:1903"
+    image: "dtagdevsec/dionaea:2006"
     read_only: true
     volumes:
      - /data/dionaea/roots/ftp:/opt/dionaea/var/dionaea/roots/ftp
@@ -220,7 +220,7 @@ services:
     network_mode: "host"
     cap_add:
      - NET_ADMIN
-    image: "dtagdevsec/glutton:1903"
+    image: "dtagdevsec/glutton:2006"
     read_only: true
     volumes:
      - /data/glutton/log:/var/log/glutton
@@ -269,7 +269,7 @@ services:
      - "2324:2324"
      - "4096:4096"
      - "9200:9200"
-    image: "dtagdevsec/honeypy:1903"
+    image: "dtagdevsec/honeypy:2006"
     read_only: true
     volumes:
      - /data/honeypy/log:/opt/honeypy/log
@@ -301,7 +301,7 @@ services:
      - medpot_local
     ports:
      - "2575:2575"
-    image: "dtagdevsec/medpot:1903"
+    image: "dtagdevsec/medpot:2006"
     read_only: true
     volumes:
      - /data/medpot/log/:/var/log/medpot
@@ -322,7 +322,7 @@ services:
      - rdpy_local
     ports:
      - "3389:3389"
-    image: "dtagdevsec/rdpy:1903"
+    image: "dtagdevsec/rdpy:2006"
     read_only: true
     volumes:
      - /data/rdpy/log:/var/log/rdpy
@@ -335,7 +335,7 @@ services:
     tty: true
     networks:
      - tanner_local
-    image: "dtagdevsec/redis:1903"
+    image: "dtagdevsec/redis:2006"
     read_only: true
 
 ## PHP Sandbox service
@@ -345,7 +345,7 @@ services:
     tty: true
     networks:
      - tanner_local
-    image: "dtagdevsec/phpox:1903"
+    image: "dtagdevsec/phpox:2006"
     read_only: true
 
 ## Tanner API Service
@@ -357,7 +357,7 @@ services:
     tty: true
     networks:
      - tanner_local
-    image: "dtagdevsec/tanner:1903"
+    image: "dtagdevsec/tanner:2006"
     read_only: true
     volumes:
      - /data/tanner/log:/var/log/tanner
@@ -374,7 +374,7 @@ services:
     tty: true
     networks:
      - tanner_local
-    image: "dtagdevsec/tanner:1903"
+    image: "dtagdevsec/tanner:2006"
     command: tannerweb
     read_only: true
     volumes:
@@ -391,7 +391,7 @@ services:
     tty: true
     networks:
      - tanner_local
-    image: "dtagdevsec/tanner:1903"
+    image: "dtagdevsec/tanner:2006"
     command: tanner
     read_only: true
     volumes:
@@ -411,7 +411,7 @@ services:
      - tanner_local
     ports:
      - "80:80"
-    image: "dtagdevsec/snare:1903"
+    image: "dtagdevsec/snare:2006"
     depends_on:
      - tanner
 
@@ -429,7 +429,7 @@ services:
      - NET_ADMIN
      - SYS_NICE
      - NET_RAW
-    image: "dtagdevsec/fatt:1903"
+    image: "dtagdevsec/fatt:2006"
     volumes:
      - /data/fatt/log:/opt/fatt/log
 
@@ -438,7 +438,7 @@ services:
     container_name: p0f
     restart: always
     network_mode: "host"
-    image: "dtagdevsec/p0f:1903"
+    image: "dtagdevsec/p0f:2006"
     read_only: true
     volumes:
      - /data/p0f/log:/var/log/p0f
@@ -472,7 +472,7 @@ services:
      - cyberchef_local
     ports:
      - "127.0.0.1:64299:8000"
-    image: "dtagdevsec/cyberchef:1903"
+    image: "dtagdevsec/cyberchef:2006"
     read_only: true
 
 #### ELK
@@ -599,6 +599,6 @@ services:
      - spiderfoot_local
     ports:
      - "127.0.0.1:64303:8080"
-    image: "dtagdevsec/spiderfoot:1903"
+    image: "dtagdevsec/spiderfoot:2006"
     volumes:
      - /data/spiderfoot/spiderfoot.db:/home/spiderfoot/spiderfoot.db
