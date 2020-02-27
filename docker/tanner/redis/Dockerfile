@@ -13,7 +13,7 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     rm -rf /tmp/* /var/tmp/* && \
     rm -rf /var/cache/apk/*
 #
-# Start conpot
+# Start redis
 STOPSIGNAL SIGKILL
 USER nobody:nobody
 CMD redis-server /etc/redis.conf

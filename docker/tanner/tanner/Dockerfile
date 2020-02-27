@@ -56,7 +56,7 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     rm -rf /tmp/* /var/tmp/* && \
     rm -rf /var/cache/apk/*
 #
-# Start conpot
+# Start tanner
 STOPSIGNAL SIGKILL
 USER tanner:tanner
 WORKDIR /opt/tanner
