@@ -18,8 +18,10 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
 #
 # Setup Tanner
     git clone --depth=1 https://github.com/mushorg/tanner /opt/tanner && \
-    cp /root/dist/config.py /opt/tanner/tanner/ && \
     cd /opt/tanner/ && \
+    git fetch origin pull/362/head:test && \
+    git checkout test && \
+    cp /root/dist/config.py /opt/tanner/tanner/ && \
     pip3 install --no-cache-dir setuptools && \
     pip3 install --no-cache-dir -r requirements.txt && \
     python3 setup.py install && \
