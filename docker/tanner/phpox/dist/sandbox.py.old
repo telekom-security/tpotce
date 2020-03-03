@@ -23,15 +23,11 @@ import json
 import asyncio
 import hashlib
 import argparse
-import functools
 
 from aiohttp import web
 from asyncio.subprocess import PIPE
 
 from pprint import pprint
-
-_pretty_dumps = functools.partial(json.dumps, sort_keys=True, indent=4)
-
 
 class PHPSandbox(object):
     @classmethod
@@ -55,7 +51,7 @@ class PHPSandbox(object):
                 self.stdout_value += line + b'\n'
 
     @asyncio.coroutine
-    def sandbox(self, script, phpbin="php7"):
+    def sandbox(self, script, phpbin="php7.0"):
         if not os.path.isfile(script):
             raise Exception("Sample not found: {0}".format(script))
 
@@ -100,12 +96,12 @@ def api(request):
         except KeyboardInterrupt:
             pass
         ret['file_md5'] = file_md5
-        return web.json_response(ret, dumps=_pretty_dumps)
+        return web.Response(body=json.dumps(ret, sort_keys=True, indent=4).encode('utf-8'))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--phpbin", help="PHP binary, ex: php7", default="php7")
+    parser.add_argument("--phpbin", help="PHP binary, ex: php7.0", default="php7.0")
     args = parser.parse_args()
     phpbin = args.phpbin
 
