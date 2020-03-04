@@ -63,7 +63,7 @@ function fuSELFUPDATE () {
       echo "###### $myBLUE""No updates found in repository.""$myWHITE"
       return
   fi
-  myRESULT=$(git diff --name-only origin/master | grep update.sh)
+  myRESULT=$(git diff --name-only origin/dev | grep update.sh)
   if [ "$myRESULT" == "update.sh" ];
     then
       echo "###### $myBLUE""Found newer version, will be pulling updates and restart myself.""$myWHITE"
@@ -183,7 +183,10 @@ function fuUPDATER () {
 export DEBIAN_FRONTEND=noninteractive
 echo "### Installing apt-fast"
 /bin/bash -c "$(curl -sL https://raw.githubusercontent.com/ilikenwf/apt-fast/master/quick-install.sh)"
-local myPACKAGES="aria2 apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker console-setup console-setup-linux cracklib-check curl debconf-utils dialog dnsutils docker.io docker-compose ethtool fail2ban figlet genisoimage git glances grc haveged html2text htop iptables iw jq kbd libcrack2 libltdl7 man mosh multitail netselect-apt net-tools npm ntp openssh-server openssl pass pigz prips software-properties-common syslinux psmisc pv python3-pip toilet unattended-upgrades unzip vim wget wireless-tools wpasupplicant"
+local myPACKAGES="aria2 apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker console-setup console-setup-linux cracklib-runtime curl debconf-utils dialog dnsutils docker.io docker-compose elasticsearch-curator ethtool fail2ban figlet genisoimage git glances grc haveged html2text htop iptables iw jq kbd libcrack2 libltdl7 man mosh multitail netselect-apt net-tools npm ntp openssh-server openssl pass pigz prips software-properties-common syslinux psmisc pv python3-elasticsearch-curator python3-pip toilet unattended-upgrades unzip vim wget wireless-tools wpasupplicant"
+echo "### Removing pip based install of elasticsearch-curator"
+pip3 uninstall elasticsearch-curator -y
+hash -r
 echo "### Now upgrading packages ..."
 dpkg --configure -a
 apt-fast -y autoclean
@@ -197,7 +200,7 @@ echo "debconf debconf/frontend select noninteractive" | debconf-set-selections -
 apt-fast -y dist-upgrade -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes
 dpkg --configure -a
 npm install "https://github.com/taskrabbit/elasticsearch-dump" -g
-pip3 install --upgrade elasticsearch-curator yq
+pip3 install --upgrade yq
 hash -r
 echo "### Removing and holding back problematic packages ..."
 apt-fast -y purge exim4-base mailutils pcp cockpit-pcp
