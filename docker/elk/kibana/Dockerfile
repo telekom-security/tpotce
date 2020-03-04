@@ -43,7 +43,7 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     echo "xpack.logstash.enabled: false" >> /usr/share/kibana/config/kibana.yml && \
     echo "xpack.canvas.enabled: false" >> /usr/share/kibana/config/kibana.yml && \
     echo "xpack.spaces.enabled: false" >> /usr/share/kibana/config/kibana.yml && \
-    echo "xpack.apm.enabled: false" >> /usr/share/kibana/config/kibana.yml && \
+#    echo "xpack.apm.enabled: false" >> /usr/share/kibana/config/kibana.yml && \
     echo "xpack.security.enabled: false" >> /usr/share/kibana/config/kibana.yml && \
     echo "xpack.uptime.enabled: false" >> /usr/share/kibana/config/kibana.yml && \
     echo "xpack.siem.enabled: false" >> /usr/share/kibana/config/kibana.yml && \
