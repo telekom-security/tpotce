@@ -55,7 +55,7 @@ services:
 # Honeytrap service
   honeytrap:
     build: honeytrap/.
-    image: "dtagdevsec/honeytrap:1903"
+    image: "dtagdevsec/honeytrap:2006"
 
 # Mailoney service
   mailoney:
