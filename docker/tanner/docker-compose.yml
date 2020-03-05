@@ -23,6 +23,8 @@ services:
     container_name: tanner_phpox
     restart: always
     stop_signal: SIGKILL
+    tmpfs:
+     - /tmp:uid=2000,gid=2000
     tty: true
     networks:
      - tanner_local
