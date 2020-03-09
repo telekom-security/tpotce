@@ -37,9 +37,10 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     pip3 install --upgrade -r requirements.txt && \
 #
 # Setup configs
-    setcap cap_net_bind_service=+ep /usr/bin/python3.8 && \
+    export PYTHON_DIR=$(python3 --version | tr '[A-Z]' '[a-z]' | tr -d ' ' | cut -d '.' -f 1,2 ) && \
+    setcap cap_net_bind_service=+ep /usr/bin/$PYTHON_DIR && \
     cp /root/dist/cowrie.cfg /home/cowrie/cowrie/cowrie.cfg && \
-    chown cowrie:cowrie -R /home/cowrie/* /usr/lib/python3.8/site-packages/twisted/plugins && \
+    chown cowrie:cowrie -R /home/cowrie/* /usr/lib/$PYTHON_DIR/site-packages/twisted/plugins && \
 #
 # Start Cowrie once to prevent dropin.cache errors upon container start caused by read-only filesystem
     su - cowrie -c "export PYTHONPATH=/home/cowrie/cowrie:/home/cowrie/cowrie/src && \
@@ -60,7 +61,8 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
                     py3-mysqlclient && \
     rm -rf /root/* /tmp/* && \
     rm -rf /var/cache/apk/* && \
-    rm -rf /home/cowrie/cowrie/cowrie.pid
+    rm -rf /home/cowrie/cowrie/cowrie.pid && \
+    unset PYTHON_DIR
 #
 # Start cowrie
 ENV PYTHONPATH /home/cowrie/cowrie:/home/cowrie/cowrie/src
