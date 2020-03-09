@@ -47,4 +47,4 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
 # Run ewsposter
 STOPSIGNAL SIGINT
 USER ews:ews
-CMD sleep 10 && exec /usr/bin/python3 -u /opt/ewsposter/ews.py -l $(shuf -i 10-15 -n 1)
+CMD sleep 10 && exec /usr/bin/python3 -u /opt/ewsposter/ews.py -l $(shuf -i 10-60 -n 1)
