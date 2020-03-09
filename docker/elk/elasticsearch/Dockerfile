@@ -1,5 +1,8 @@
 FROM alpine
 #
+# VARS
+ENV ES_VER=7.6.1 \
+    JAVA_HOME=/usr/lib/jvm/java-11-openjdk
 # Include dist
 ADD dist/ /root/dist/
 #
@@ -10,13 +13,13 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
              bash \
              curl \
              nss \
-             openjdk8-jre && \
+             openjdk11-jre && \
 #
 # Get and install packages
     cd /root/dist/ && \
     mkdir -p /usr/share/elasticsearch/ && \
-    aria2c -s 16 -x 16 https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-6.8.6.tar.gz && \
-    tar xvfz elasticsearch-6.8.6.tar.gz --strip-components=1 -C /usr/share/elasticsearch/ && \
+    aria2c -s 16 -x 16 https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-$ES_VER-linux-x86_64.tar.gz && \
+    tar xvfz elasticsearch-$ES_VER-linux-x86_64.tar.gz --strip-components=1 -C /usr/share/elasticsearch/ && \
 #
 # Add and move files
     cd /root/dist/ && \
@@ -40,5 +43,4 @@ HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:9200/_cat/health'
 #
 # Start ELK
 USER elasticsearch:elasticsearch
-ENV JAVA_HOME=/usr/lib/jvm/java-1.8-openjdk
 CMD ["/usr/share/elasticsearch/bin/elasticsearch"]

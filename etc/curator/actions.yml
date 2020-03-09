@@ -16,11 +16,11 @@ actions:
       disable_action: False
     filters:
     - filtertype: pattern
-      kind: prefix
-      value: logstash-
+      kind: timestring
+      value: '%Y.%m.%d'
     - filtertype: age
       source: name
       direction: older
       timestring: '%Y.%m.%d'
       unit: days
-      unit_count: 90
+      unit_count: 60

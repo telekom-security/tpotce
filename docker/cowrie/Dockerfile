@@ -4,7 +4,8 @@ FROM alpine
 ADD dist/ /root/dist/
 #
 # Get and install dependencies & packages
-RUN apk -U add \
+RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
+    apk -U add \
                        bash \
                        build-base \
                        git \
@@ -29,7 +30,7 @@ RUN apk -U add \
 # Install cowrie
     mkdir -p /home/cowrie && \
     cd /home/cowrie && \
-    git clone --depth=1 https://github.com/micheloosterhof/cowrie -b v2.0.0 && \
+    git clone --depth=1 https://github.com/micheloosterhof/cowrie -b v2.0.2 && \
     cd cowrie && \
     mkdir -p log && \
     pip3 install --upgrade pip && \

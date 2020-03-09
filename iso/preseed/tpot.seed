@@ -109,7 +109,7 @@ tasksel tasksel/first multiselect ssh-server
 ########################
 ### Package Installation
 ########################
-d-i pkgsel/include string apache2-utils curl dialog figlet git grc libcrack2 libpq-dev lsb-release netselect-apt net-tools software-properties-common toilet
+d-i pkgsel/include string apache2-utils cracklib-runtime curl dialog figlet git grc libcrack2 libpq-dev lsb-release netselect-apt net-tools software-properties-common toilet
 popularity-contest popularity-contest/participate boolean false
 
 #################

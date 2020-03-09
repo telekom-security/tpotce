@@ -1,10 +1,11 @@
-FROM alpine 
+FROM alpine:latest 
 #
 # Include dist
 ADD dist/ /root/dist/
 #
 # Install packages
-RUN apk -U add \
+RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
+    apk -U add \
             git \
             libcap \
             python3 \
@@ -20,7 +21,7 @@ RUN apk -U add \
     addgroup -g 2000 adbhoney && \
     adduser -S -H -s /bin/ash -u 2000 -D -g 2000 adbhoney && \
     chown -R adbhoney:adbhoney /opt/adbhoney && \
-    setcap cap_net_bind_service=+ep /usr/bin/python3.7 && \
+    setcap cap_net_bind_service=+ep /usr/bin/python3.8 && \
 #
 # Clean up
     apk del --purge git \

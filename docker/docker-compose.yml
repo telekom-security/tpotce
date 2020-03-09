@@ -1,0 +1,160 @@
+# T-Pot Image Builder (use only for building docker images)
+version: '2.3'
+
+services:
+
+##################
+#### Honeypots
+##################
+
+# Adbhoney service
+  adbhoney:
+    build: adbhoney/.
+    image: "dtagdevsec/adbhoney:2006"
+
+# Ciscoasa service
+  ciscoasa:
+    build: ciscoasa/.
+    image: "dtagdevsec/ciscoasa:2006"
+
+# CitrixHoneypot service
+  citrixhoneypot:
+    build: citrixhoneypot/.
+    image: "dtagdevsec/citrixhoneypot:2006"
+
+# Conpot IEC104 service
+  conpot_IEC104:
+    build: conpot/.
+    image: "dtagdevsec/conpot:2006"
+
+# Cowrie service
+  cowrie:
+    build: cowrie/.
+    image: "dtagdevsec/cowrie:2006"
+
+# Dionaea service
+  dionaea:
+    build: dionaea/.
+    image: "dtagdevsec/dionaea:2006"
+
+# Glutton service
+  glutton:
+    build: glutton/.
+    image: "dtagdevsec/glutton:2006"
+
+# Heralding service
+  heralding:
+    build: heralding/.
+    image: "dtagdevsec/heralding:2006"
+
+# HoneyPy service
+  honeypy:
+    build: honeypy/.
+    image: "dtagdevsec/honeypy:2006"
+
+# Honeytrap service
+  honeytrap:
+    build: honeytrap/.
+    image: "dtagdevsec/honeytrap:2006"
+
+# Mailoney service
+  mailoney:
+    build: mailoney/.
+    image: "dtagdevsec/mailoney:2006"
+
+# Medpot service
+  medpot:
+    build: medpot/.
+    image: "dtagdevsec/medpot:2006"
+
+# Rdpy service
+  rdpy:
+    build: rdpy/.
+    image: "dtagdevsec/rdpy:2006"
+
+#### Snare / Tanner
+## Tanner Redis Service
+  tanner_redis:
+    build: tanner/redis/.
+    image: "dtagdevsec/redis:2006"
+
+## PHP Sandbox service
+  tanner_phpox:
+    build: tanner/phpox/.
+    image: "dtagdevsec/phpox:2006"
+
+## Tanner API Service
+  tanner_api:
+    build: tanner/tanner/.
+    image: "dtagdevsec/tanner:2006"
+
+## Snare Service
+  snare:
+    build: tanner/snare/.
+    image: "dtagdevsec/snare:2006"
+
+
+##################
+#### NSM
+##################
+
+# Fatt service
+  fatt:
+    build: fatt/.
+    image: "dtagdevsec/fatt:2006"
+
+# P0f service
+  p0f:
+    build: p0f/.
+    image: "dtagdevsec/p0f:2006"
+
+# Suricata service
+  suricata:
+    build: suricata/.
+    image: "dtagdevsec/suricata:2006"
+
+
+##################
+#### Tools
+##################
+
+# Cyberchef service
+  cyberchef:
+    build: cyberchef/.
+    image: "dtagdevsec/cyberchef:2006"
+
+#### ELK
+## Elasticsearch service
+  elasticsearch:
+    build: elk/elasticsearch/.
+    image: "dtagdevsec/elasticsearch:2006"
+
+## Kibana service
+  kibana:
+    build: elk/kibana/.
+    image: "dtagdevsec/kibana:2006"
+
+## Logstash service
+  logstash:
+    build: elk/logstash/.
+    image: "dtagdevsec/logstash:2006"
+
+## Elasticsearch-head service
+  head:
+    build: elk/head/.
+    image: "dtagdevsec/head:2006"
+
+# Ewsposter service
+  ewsposter:
+    build: ews/.
+    image: "dtagdevsec/ewsposter:2006"
+
+# Nginx service
+  nginx:
+    build: heimdall/.
+    image: "dtagdevsec/nginx:2006"
+
+# Spiderfoot service
+  spiderfoot:
+    build: spiderfoot/.
+    image: "dtagdevsec/spiderfoot:2006"

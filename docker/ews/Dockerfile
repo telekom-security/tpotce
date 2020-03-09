@@ -1,10 +1,11 @@
-FROM alpine
+FROM alpine:latest
 #
 # Include dist
 ADD dist/ /root/dist/
 #
 # Install packages
-RUN apk -U --no-cache add \
+RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
+    apk -U --no-cache add \
             build-base \
             git \
             libffi-dev \
@@ -32,7 +33,7 @@ RUN apk -U --no-cache add \
 #
 # Supply configs
     mv /root/dist/ews.cfg /opt/ewsposter/ && \
-    mv /root/dist/*.pem /opt/ewsposter/ && \
+#    mv /root/dist/*.pem /opt/ewsposter/ && \
 #
 # Clean up
     apk del build-base \

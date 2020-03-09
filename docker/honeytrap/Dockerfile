@@ -1,4 +1,4 @@
-FROM debian:stretch-slim 
+FROM debian:buster-slim 
 ENV DEBIAN_FRONTEND noninteractive
 #
 # Include dist
@@ -26,8 +26,8 @@ RUN apt-get update -y && \
                        wget && \
 #
 # Install honeytrap from source
-    cd /root/ && \
-    git clone https://github.com/armedpot/honeytrap && \
+    git clone https://github.com/armedpot/honeytrap /root/honeytrap && \
+#    git clone https://github.com/t3chn0m4g3/honeytrap /root/honeytrap && \
     cd /root/honeytrap/ && \
     autoreconf -vfi && \
     ./configure \
