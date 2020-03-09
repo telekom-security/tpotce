@@ -1,5 +1,16 @@
 # Changelog
 
+## 20200309
+- **Bump Nextgen to 20.06**
+  - All NextGen images have been rebuilt to their latest master.
+  - ElasticStack bumped to 7.6.1 (Elasticsearch will need at least 2048MB of RAM now, T-Pot at least 8GB of RAM) and tweak to accomodate changes of 7.x.
+  - Fixed errors in Tanner / Snare which will now handle downloads of malware via SSL and store them correctly (thanks to @afeena).
+  - Fixed errors in Heralding which will now improve on RDP connections (thanks to @johnnykv, @realsdx).
+  - Fixed error in honeytrap which will now build in Debian/Buster (thanks to @tillmannw).
+  - Mailoney is now logging in JSON format (thanks to @monsherko).
+  - Base T-Pot landing page on Heimdall.
+  - Tweaking of tools and some minor bug fixing
+
 ## 20200116
 - **Bump ELK to latest 6.8.6**
 - **Update ISO image to fix upstream bug of missing kernel modules**
