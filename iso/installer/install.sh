@@ -279,21 +279,21 @@ function fuCHECKNET {
 # Install T-Pot dependencies
 function fuGET_DEPS {
   export DEBIAN_FRONTEND=noninteractive
-#  # Determine fastest mirror
-#  echo
-#  echo "### Determine fastest mirror for your location."
-#  echo
-#  netselect-apt -n -a amd64 unstable && cp sources.list /etc/apt/
-#  mySOURCESCHECK=$(cat /etc/apt/sources.list | grep -c unstable)
-#  if [ "$mySOURCESCHECK" == "0" ]
-#    then
-#      echo "### Automatic mirror selection failed, using main mirror."
-# Point to Debian (Sid, unstable)
+  # Determine fastest mirror
+  echo
+  echo "### Determine fastest mirror for your location."
+  echo
+  netselect-apt -n -a amd64 unstable && cp sources.list /etc/apt/
+  mySOURCESCHECK=$(cat /etc/apt/sources.list | grep -c unstable)
+  if [ "$mySOURCESCHECK" == "0" ]
+    then
+      echo "### Automatic mirror selection failed, using main mirror."
+      # Point to Debian (Sid, unstable)
 tee /etc/apt/sources.list <<EOF
 deb http://deb.debian.org/debian unstable main contrib non-free
 deb-src http://deb.debian.org/debian unstable main contrib non-free
 EOF
-#  fi
+  fi
   echo
   echo "### Getting update information."
   echo
