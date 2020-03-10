@@ -1,5 +1,11 @@
 # Changelog
 
+## 20203010
+- **Add 2FA to Cockpit**
+  - Just run `2fa.sh` to enable two factor authentication in Cockpit.
+- **Find fastest mirror with netselect-apt**
+  - Netselect-apt will find the fastest mirror close to you (outgoing ICMP required).
+
 ## 20200309
 - **Bump Nextgen to 20.06**
   - All NextGen images have been rebuilt to their latest master.
