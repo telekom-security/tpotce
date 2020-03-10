@@ -387,7 +387,7 @@ In case you need external Admin UI access, forward TCP port 64294 to T-Pot, see 
 In case you need external SSH access, forward TCP port 64295 to T-Pot, see below.
 In case you need external Web UI access, forward TCP port 64297 to T-Pot, see below.
 
-T-Pot requires outgoing git, http, https connections for updates (Debian, Docker, GitHub, PyPi) and attack submission (ewsposter, hpfeeds). Ports and availability may vary based on your geographical location.
+T-Pot requires outgoing git, http, https connections for updates (Debian, Docker, GitHub, PyPi) and attack submission (ewsposter, hpfeeds). Ports and availability may vary based on your geographical location. Also during first install outgoing ICMP is required additionally to find the closest and fastest mirror to you.
 
 <a name="updates"></a>
 # Updates
@@ -423,6 +423,8 @@ If you do not have a SSH client at hand and still want to access the machine via
 
 - user: **[tsec or user]** *you chose during one of the post install methods*
 - pass: **[password]** *you chose during the installation*
+
+You can also add two factor authentication to Cockpit just by running `2fa.sh` on the command line.
 
 ![Cockpit Terminal](doc/cockpit3.png)
 
