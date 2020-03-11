@@ -1,6 +1,6 @@
 # Changelog
 
-## 20203010
+## 20200310
 - **Add 2FA to Cockpit**
   - Just run `2fa.sh` to enable two factor authentication in Cockpit.
 - **Find fastest mirror with netselect-apt**
