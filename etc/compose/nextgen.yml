@@ -13,6 +13,7 @@ networks:
   cyberchef_local:
   heralding_local:
   honeypy_local:
+  honeysap_local:
   mailoney_local:
   medpot_local:
   rdpy_local:
@@ -273,6 +274,20 @@ services:
     read_only: true
     volumes:
      - /data/honeypy/log:/opt/honeypy/log
+
+# HoneySAP service
+  honeysap:
+    build: .
+    container_name: honeysap
+    restart: always
+    networks:
+     - honeysap_local
+    ports:
+     - "3299:3299"
+     - "8001:8001"
+    image: "dtagdevsec/honeysap:2006"
+    volumes:
+     - /data/honeysap/log:/opt/honeysap/log
 
 # Mailoney service
   mailoney:
