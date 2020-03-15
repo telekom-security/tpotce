@@ -199,7 +199,7 @@ echo "docker.io docker.io/restart       boolean true" | debconf-set-selections -
 echo "debconf debconf/frontend select noninteractive" | debconf-set-selections -v
 apt-fast -y dist-upgrade -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes
 dpkg --configure -a
-npm install "https://github.com/taskrabbit/elasticsearch-dump" -g
+npm install elasticdump -g
 pip3 install --upgrade yq
 hash -r
 echo "### Removing and holding back problematic packages ..."
