@@ -1,5 +1,9 @@
 # Changelog
 
+## 20200316
+- **Move from Sid to Stable**
+  - Debian Stable has now all the packages and versions we need for T-Pot. As a consequence we can now move to the `stable` branch.
+
 ## 20200310
 - **Add 2FA to Cockpit**
   - Just run `2fa.sh` to enable two factor authentication in Cockpit.
