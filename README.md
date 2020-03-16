@@ -73,7 +73,6 @@ Furthermore we use the following tools
 - [Credits](#credits)
 - [Stay tuned](#staytuned)
 - [Testimonial](#testimonial)
-- [Fun Fact](#funfact)
 
 <a name="concept"></a>
 # Technical Concept
@@ -532,8 +531,3 @@ We will be releasing a new version of T-Pot about every 6-12 months.
 # Testimonial
 One of the greatest feedback we have gotten so far is by one of the Conpot developers:<br>
 ***"[...] I highly recommend T-Pot which is ... it's not exactly a swiss army knife .. it's more like a swiss army soldier, equipped with a swiss army knife. Inside a tank. A swiss tank. [...]"***
-
-<a name="funfact"></a>
-# Fun Fact
-
-In an effort of saving the environment we are now brewing our own Mate Ice Tea and consumed 73 liters so far for the T-Pot 19.03 development 😇
