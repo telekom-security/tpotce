@@ -1,0 +1,103 @@
+# HoneSAP default external profile configuration
+# ==============================================
+
+# Console logging configuration
+# -----------------------------
+
+# Level of console logging
+verbose: 2
+
+# Use colored output
+colored_console: false
+
+
+# Miscellaneous configuration
+# ---------------------------
+
+# Enable reloading after a change in one of the configuration files
+reload: true
+
+# Address to listen for all services
+listener_address: 0.0.0.0
+
+
+# SAP instance configuration
+# --------------------------
+
+# Release version
+release: "720"
+
+
+# Services configuration
+# ----------------------
+
+services:
+    - 
+        # SAP Router configuration
+        # ------------------------
+        service: SAPRouterService
+        alias: ExternalSAPRouter
+        enabled: yes
+        listener_port: 3299
+
+        # Router version number
+        router_version: 40
+
+        # Router patch version
+        router_version_patch: 4
+
+        # Password for information requests. If present it will be required
+        info_password:
+
+        # Wether the external administration would be enabled on this SAP Router
+        external_admin: false
+
+        # Route table file
+        route_table: !include external_route_table.yml
+
+        # Hostname for the SAP Router
+        hostname: saprouter
+
+    -
+        # SAP Dispatcher configuration
+        # ----------------------------
+        service: SAPDispatcherService
+        alias: InternalDispatcherService
+        enabled: yes
+        virtual: yes
+        listener_port: 3200
+        listener_address: 10.0.0.100
+
+        # Name of the instance
+        instance: NSP
+        
+        # Client number
+        client_no: "001"
+        
+        # SID
+        sid: PRD
+        
+        # Hostname
+        hostname: uscasf-sap01
+
+
+# Feeds configuration
+# -------------------
+
+feeds:
+    -
+        feed: LogFeed
+        log_filename: log/honeysap-external.log
+        enabled: yes
+    -
+        feed: ConsoleFeed
+        enabled: yes
+    -
+        feed: HPFeed
+        channels:
+            - honeysap.events
+        feed_host: 10.250.250.20
+        feed_port: 20000
+        feed_ident: honeysap
+        feed_secret: password
+        enabled: no

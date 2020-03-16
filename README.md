@@ -1,6 +1,6 @@
 ![T-Pot](doc/tpotsocial.png)
 
-T-Pot 19.03 runs on Debian (Sid), is based heavily on
+T-Pot 19.03 runs on Debian (Stable), is based heavily on
 
 [docker](https://www.docker.com/), [docker-compose](https://docs.docker.com/compose/)
 
@@ -43,7 +43,6 @@ Furthermore we use the following tools
 
 
 # Table of Contents
-- [Changelog](#changelog)
 - [Technical Concept](#concept)
 - [System Requirements](#requirements)
 - [Installation](#installation)
@@ -76,64 +75,10 @@ Furthermore we use the following tools
 - [Testimonial](#testimonial)
 - [Fun Fact](#funfact)
 
-<a name="changelog"></a>
-# Release Notes
-- **Move from Ubuntu 18.04 to Debian (Sid)**
-  - For almost 5 years Ubuntu LTS versions were our distributions of choice. Last year we made a design choice for T-Pot to be closer to a rolling release model and thus allowing us to issue smaller changes and releases in a more timely manner. The distribution of choice is Debian (Sid / unstable) which will provide us with the latest advancements in a Debian based distribution.
-- **Include HoneyPy honeypot**
-  - *HoneyPy* is now included in the NEXTGEN installation type
-- **Include Suricata 4.1.3**
-  - Building *Suricata 4.1.3* from scratch to enable JA3 and overall better protocol support.
-- **Update tools to the latest versions**
-  - ELK Stack 6.6.2
-  - CyberChef 8.27.0
-  - SpiderFoot v3.0
-  - Cockpit 188
-  - NGINX is now built to enforce TLS 1.3 on the T-Pot WebUI
-- **Update honeypots**
-  - Where possible / feasible the honeypots have been updated to their latest versions.
-  - *Cowrie* now supports *HASSH* generated hashes which allows for an easier identification of an attacker accross IP adresses.
-  - *Heralding* now supports *SOCKS5* emulation.
-- **Update Dashboards & Visualizations**
-  - *Offset Dashboard* added to easily spot changes in attacks on a single dashboard in 24h time window.
-  - *Cowrie Dashboard* modified to integrate *HASSH* support / visualizations.
-  - *HoneyPy Dashboard* added to support latest honeypot addition.
-  - *Suricata Dashboard* modified to integrate *JA3* support / visualizations.
-- **Debian mirror selection**
-  - During base install you now have to manually select a mirror.
-  - Upon T-Pot install the mirror closest to you will be determined automatically, `netselect-apt` requires you to allow ICMP outbound.
-  - This solves peering problems for most of the users speeding up installation and updates.
-- **Bugs**
-  - Fixed issue #298 where the import and export of objects on the shell did not work.
-  - Fixed issue #313 where Spiderfoot raised a KeyError, which was previously fixed in upstream.
-  - Fixed error in Suricata where path for reference.config changed.
-- **Release Cycle**
-  - As far as possible we will integrate changes now faster into the master branch, eliminating the need for monolithic releases. The update feature will be continuously improved on that behalf. However this might not account for all feature changes.
-- **HPFEEDS Opt-In**
-  - If you want to share your T-Pot data with a 3rd party HPFEEDS broker such as you can do so by runnning `hpfeeds_optin.sh` on T-Pot.
-- **Update Feature**
-  - For the ones who like to live on the bleeding edge of T-Pot development there is now an update script available in `/opt/tpot/update.sh`.
-  - This feature is beta and is mostly intended to provide you with the latest development advances without the need of reinstalling T-Pot.
-- **Deprecated tools**
-  - *ctop* will no longer be part of T-Pot.
-- **Fix #332**
-  - If T-Pot, opposed to the requirements, does not have full internet access netselect-apt fails to determine the fastest mirror as it needs ICMP and UDP outgoing. Should netselect-apt fail the default mirrors will be used.
-- **Improve install speed with apt-fast**
-  - Migrating from a stable base install to Debian (Sid) requires downloading lots of packages. Depending on your geo location the download speed was already improved by introducing netselect-apt to determine the fastest mirror. With apt-fast the downloads will be even faster by downloading packages not only in parallel but also with multiple connections per package.
-- **HPFEEDS Opt-In commandline option**
-  - Pass a hpfeeds config file as a commandline argument
-  - hpfeeds config is saved in `/data/ews/conf/hpfeeds.cfg`
-  - Update script restores hpfeeds config
-- **Ansible T-Pot Deployment**
-  - Transitioned from bash script to all Ansible
-  - Reusable Ansible Playbook for OpenStack clouds
-  - Example Showcase with our Open Telekom Cloud
-  - Adaptable for other cloud providers
-
 <a name="concept"></a>
 # Technical Concept
 
-T-Pot is based on the network installer Debian (Stretch). During installation the whole system will be updated to Debian (Sid).
+T-Pot is based on the network installer Debian (Stable).
 The honeypot daemons as well as other support components being used have been containerized using [docker](http://docker.io).
 This allows us to run multiple honeypot daemons on the same network interface while maintaining a small footprint and constrain each honeypot within its own environment.
 
@@ -302,7 +247,7 @@ In some cases it is necessary to install Debian 9.7 (Stretch) on your own:
  - Within your company you have to setup special policies, software etc.
  - You just like to stay on top of things.
 
-The T-Pot Universal Installer will upgrade the system to Debian (Sid) and install all required T-Pot dependencies.
+The T-Pot Universal Installer will upgrade the system and install all required T-Pot dependencies.
 
 Just follow these steps:
 
@@ -396,7 +341,7 @@ For the ones of you who want to live on the bleeding edge of T-Pot development w
 
 The Update script will:
  - **mercilessly** overwrite local changes to be in sync with the T-Pot master branch
- - upgrade the system to the packages available in Debian (Sid)
+ - upgrade the system to the packages available in Debian (Stable)
  - update all resources to be in-sync with the T-Pot master branch
  - ensure all T-Pot relevant system files will be patched / copied into the original T-Pot state
  - restore your custom ews.cfg and HPFEED settings from `/data/ews/conf`

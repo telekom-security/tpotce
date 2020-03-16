@@ -11,22 +11,21 @@ myPROGRESSBOXCONF=" --backtitle "$myBACKTITLE" --progressbox 24 80"
 mySITES="https://hub.docker.com https://github.com https://pypi.python.org https://debian.org"
 myTPOTCOMPOSE="/opt/tpot/etc/tpot.yml"
 myLSB_STABLE_SUPPORTED="stretch buster"
-myLSB_TESTING_SUPPORTED="sid"
+myLSB_TESTING_SUPPORTED="stable"
 myREMOTESITES="https://hub.docker.com https://github.com https://pypi.python.org https://debian.org"
 myPREINSTALLPACKAGES="aria2 apache2-utils cracklib-runtime curl dialog figlet fuse grc libcrack2 libpq-dev lsb-release netselect-apt net-tools software-properties-common toilet"
-myINSTALLPACKAGES="aria2 apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker console-setup console-setup-linux cracklib-runtime curl debconf-utils dialog dnsutils docker.io docker-compose elasticsearch-curator ethtool fail2ban figlet genisoimage git glances grc haveged html2text htop iptables iw jq kbd libcrack2 libltdl7 libpam-google-authenticator man mosh multitail netselect-apt net-tools npm ntp openssh-server openssl pass pigz prips software-properties-common syslinux psmisc pv python3-pip toilet unattended-upgrades unzip vim wget wireless-tools wpasupplicant"
+myINSTALLPACKAGES="aria2 apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit console-setup console-setup-linux cracklib-runtime curl debconf-utils dialog dnsutils docker.io docker-compose elasticsearch-curator ethtool fail2ban figlet genisoimage git glances grc haveged html2text htop iptables iw jq kbd libcrack2 libltdl7 libpam-google-authenticator man mosh multitail netselect-apt net-tools npm ntp openssh-server openssl pass pigz prips software-properties-common syslinux psmisc pv python3-pip toilet unattended-upgrades unzip vim wget wireless-tools wpasupplicant"
 myINFO="\
-########################################
-### T-Pot Installer for Debian (Sid) ###
-########################################
+###########################################
+### T-Pot Installer for Debian (Stable) ###
+###########################################
 
 Disclaimer:
 This script will install T-Pot on this system.
 By running the script you know what you are doing:
 1. SSH will be reconfigured to tcp/64295.
-2. Your Debian installation will be upgraded to Sid / unstable.
-3. Please ensure other means of access to this system in case something goes wrong.
-4. At best this script will be executed on the console instead through a SSH session.
+2. Please ensure other means of access to this system in case something goes wrong.
+3. At best this script will be executed on the console instead through a SSH session.
 
 ########################################
 
@@ -283,15 +282,15 @@ function fuGET_DEPS {
   echo
   echo "### Determine fastest mirror for your location."
   echo
-  netselect-apt -n -a amd64 unstable && cp sources.list /etc/apt/
-  mySOURCESCHECK=$(cat /etc/apt/sources.list | grep -c unstable)
+  netselect-apt -n -a amd64 stable && cp sources.list /etc/apt/
+  mySOURCESCHECK=$(cat /etc/apt/sources.list | grep -c stable)
   if [ "$mySOURCESCHECK" == "0" ]
     then
       echo "### Automatic mirror selection failed, using main mirror."
-      # Point to Debian (Sid, unstable)
+      # Point to Debian (stable)
 tee /etc/apt/sources.list <<EOF
-deb http://deb.debian.org/debian unstable main contrib non-free
-deb-src http://deb.debian.org/debian unstable main contrib non-free
+deb http://deb.debian.org/debian stable main contrib non-free
+deb-src http://deb.debian.org/debian stable main contrib non-free
 EOF
   fi
   echo
@@ -403,7 +402,7 @@ for i in "$@"
         echo "  A configuration example is available in \"tpotce/iso/installer/tpot.conf.dist\"."
         echo
         echo "--type=<[user, auto, iso]>"
-	echo "  user, use this if you want to manually install a T-Pot on a Debian (testing) machine."
+	echo "  user, use this if you want to manually install a T-Pot on a Debian (Stable) machine."
         echo "  auto, implied if a configuration file is passed as an argument for automatic deployment."
         echo "  iso, use this if you are a T-Pot developer and want to install a T-Pot from a pre-compiled iso."
         echo
@@ -684,7 +683,7 @@ echo "UseRoaming no" | tee -a /etc/ssh/ssh_config
 
 # Installing elasticdump, yq
 fuBANNER "Installing pkgs"
-npm install https://github.com/taskrabbit/elasticsearch-dump -g
+npm install elasticdump -g
 pip3 install yq
 hash -r
 

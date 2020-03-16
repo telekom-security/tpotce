@@ -1,0 +1,6 @@
+# HoneSAP default external profile route table
+# ============================================
+#
+
+# Allow any protocols to 10.0.0.100 port 3200
+- allow,any,10.0.0.100,3200,
