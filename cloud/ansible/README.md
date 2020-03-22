@@ -18,7 +18,7 @@ This example showcases the deployment on our own OpenStack based Public Cloud Of
   - [Import Key Pair](#key-pair)
 - [Clone Git Repository](#clone-git)
 - [Settings and recommended values](#settings)
-  - [OpenStack authentication variables](#os-auth)
+  - [Clouds.yaml](#clouds-yaml)
   - [Ansible remote user](#remote-user)
   - [Instance settings](#instance-settings)
   - [User password](#user-password)
@@ -97,25 +97,27 @@ Import your SSH public key.
 # Clone Git Repository
 Clone the `tpotce` repository to your Ansible Master:  
 `git clone https://github.com/dtag-dev-sec/tpotce.git`  
-All Ansible related files are located in the [`cloud/ansible/openstack`](../../cloud/ansible/openstack) folder.
+All Ansible related files are located in the [`cloud/ansible/openstack`](openstack) folder.
 
 <a name="settings"></a>
 # Settings and recommended values
-You can configure all aspects of your Elastic Cloud Server and T-Pot before using the Playbook.  
-The settings are located in the following Ansible vars files:
+You can configure all aspects of your Elastic Cloud Server and T-Pot before using the Playbook:
 
-<a name="os-auth"></a>
-## OpenStack authentication variables
-Located at [`openstack/roles/deploy/vars/os_auth.yaml`](openstack/roles/deploy/vars/os_auth.yaml).  
+<a name="clouds-yaml"></a>
+## Clouds.yaml
+Located at [`openstack/clouds.yaml`](openstack/clouds.yaml).  
 Enter your Open Telekom Cloud API user credentials here (username, password, project name, user domain name):  
 ```
-auth_url: https://iam.eu-de.otc.t-systems.com/v3
-username: your_api_user
-password: your_password
-project_name: eu-de_your_project
-os_user_domain_name: OTC-EU-DE-000000000010000XXXXX
+clouds:
+  open-telekom-cloud:
+    profile: otc
+    auth:
+      project_name: eu-de_your_project
+      username: your_api_user
+      password: your_password
+      user_domain_name: OTC-EU-DE-000000000010000XXXXX
 ```
-You can also perform different authentication methods like sourcing your `.ostackrc` file or using the OpenStack `clouds.yaml` file.  
+You can also perform different authentication methods like sourcing OpenStack OS_* environment variables or providing an inline dictionary.  
 For more information have a look in the [os_server](https://docs.ansible.com/ansible/latest/modules/os_server_module.html) Ansible module documentation.
 
 <a name="remote-user"></a>
@@ -126,17 +128,15 @@ You may have to adjust the `remote_user` in the Ansible Playbook under [`opensta
 ## Instance settings
 Located at [`openstack/roles/deploy/vars/main.yaml`](openstack/roles/deploy/vars/main.yaml).  
 Here you can customize your virtual machine specifications:
-  - Specify the region name
   - Choose an availability zone. For Open Telekom Cloud reference see [here](https://docs.otc.t-systems.com/en-us/endpoint/index.html).
   - Change the OS image (For T-Pot we need Debian)
   - (Optional) Change the volume size
   - Specify your key pair (:warning: Mandatory)
   - (Optional) Change the instance type (flavor)  
     `s2.medium.8` corresponds to 1 vCPU and 8GB of RAM and is the minimum required flavor.  
-    A full list of Open telekom Cloud flavors can be found [here](https://docs.otc.t-systems.com/en-us/usermanual/ecs/en-us_topic_0035470096.html).
+    A full list of Open Telekom Cloud flavors can be found [here](https://docs.otc.t-systems.com/en-us/usermanual/ecs/en-us_topic_0177512565.html).
 
 ```
-region_name: eu-de
 availability_zone: eu-de-03
 image: Standard_Debian_10_latest
 volume_size: 128
@@ -154,7 +154,7 @@ user_password: LiNuXuSeRPaSs#
 
 <a name="tpot-conf"></a>
 ## Configure `tpot.conf.dist`
-The file is located in [`iso/installer/tpot.conf.dist`](../../iso/installer/tpot.conf.dist).  
+The file is located in [`iso/installer/tpot.conf.dist`](/iso/installer/tpot.conf.dist).  
 Here you can choose:
   - between the various T-Pot editions
   - a username for the web interface
