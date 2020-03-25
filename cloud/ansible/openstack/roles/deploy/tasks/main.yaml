@@ -2,51 +2,26 @@
   shell: echo t-pot-ansible-$(pwgen -ns 6 -1)
   register: tpot_name
 
-- name: Import OpenStack authentication variables
-  include_vars:
-    file: roles/deploy/vars/os_auth.yaml
-  no_log: true
-
 - name: Create security group
   os_security_group:
-    auth:
-      auth_url: "{{ auth_url }}"
-      username: "{{ username }}"
-      password: "{{ password }}"
-      project_name: "{{ project_name }}"
-      os_user_domain_name: "{{ os_user_domain_name }}"
+    cloud: open-telekom-cloud
     name: sg-tpot-any
     description: tpot any-any
 
 - name: Add rules to security group
   os_security_group_rule:
-    auth:
-      auth_url: "{{ auth_url }}"
-      username: "{{ username }}"
-      password: "{{ password }}"
-      project_name: "{{ project_name }}"
-      os_user_domain_name: "{{ os_user_domain_name }}"
+    cloud: open-telekom-cloud
     security_group: sg-tpot-any
     remote_ip_prefix: 0.0.0.0/0
 
 - name: Create network
   os_network:
-    auth:
-      auth_url: "{{ auth_url }}"
-      username: "{{ username }}"
-      password: "{{ password }}"
-      project_name: "{{ project_name }}"
-      os_user_domain_name: "{{ os_user_domain_name }}"
+    cloud: open-telekom-cloud
     name: network-tpot
 
 - name: Create subnet
   os_subnet:
-    auth:
-      auth_url: "{{ auth_url }}"
-      username: "{{ username }}"
-      password: "{{ password }}"
-      project_name: "{{ project_name }}"
-      os_user_domain_name: "{{ os_user_domain_name }}"
+    cloud: open-telekom-cloud
     network_name: network-tpot
     name: subnet-tpot
     cidr: 192.168.0.0/24
@@ -56,26 +31,15 @@
 
 - name: Create router
   os_router:
-    auth:
-      auth_url: "{{ auth_url }}"
-      username: "{{ username }}"
-      password: "{{ password }}"
-      project_name: "{{ project_name }}"
-      os_user_domain_name: "{{ os_user_domain_name }}"
+    cloud: open-telekom-cloud
     name: router-tpot
     interfaces:
       - subnet-tpot
 
 - name: Launch an instance
   os_server:
-    auth:
-      auth_url: "{{ auth_url }}"
-      username: "{{ username }}"
-      password: "{{ password }}"
-      project_name: "{{ project_name }}"
-      os_user_domain_name: "{{ os_user_domain_name }}"
+    cloud: open-telekom-cloud
     name: "{{ tpot_name.stdout }}"
-    region_name: "{{ region_name }}"
     availability_zone: "{{ availability_zone }}"
     image: "{{ image }}"
     boot_from_volume: yes
