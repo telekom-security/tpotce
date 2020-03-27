@@ -120,4 +120,4 @@ This will perform the following actions:
 
 ## Connecting to the Instance
 
-When the installation is completed, you can proceed with connecting/logging in to the T-Pot. Refer to the [documentation](https://github.com/dtag-dev-sec/tpotce#ssh-and-web-access) for further details.
+When the installation is completed, you can proceed with connecting/logging in to the T-Pot according to the [documentation](https://github.com/dtag-dev-sec/tpotce#ssh-and-web-access).
