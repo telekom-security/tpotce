@@ -37,15 +37,11 @@ In `aws/variables.tf`, change the following variables to correspond to your exis
 * `ec2_region`
 
 ### Admin Credentials
-
-In `tpot.conf`, change the following variables:
-
 ```
 myCONF_WEB_USER='webuser'
 myCONF_WEB_PW='w3b$ecret'
 ```
-
-This will be used to configure credentials for the T-Pot Kibana interface. Refer to [Options](https://github.com/dtag-dev-sec/tpotce#options) for more information.
+This will be used to configure credentials for the T-Pot Kibana interface.
 
 ## Initialising
 
@@ -54,32 +50,6 @@ The [`terraform init`](https://www.terraform.io/docs/commands/init.html) command
 ```
 $ cd aws
 $ terraform init
-
-Initializing the backend...
-
-Initializing provider plugins...
-- Checking for available provider plugins...
-- Downloading plugin for provider "aws" (terraform-providers/aws) 2.16.0...
-
-The following providers do not have any version constraints in configuration,
-so the latest version was installed.
-
-To prevent automatic upgrades to new major versions that may contain breaking
-changes, it is recommended to add version = "..." constraints to the
-corresponding provider blocks in configuration, with the constraint strings
-suggested below.
-
-* provider.aws: version = "~> 2.16"
-
-Terraform has been successfully initialized!
-
-You may now begin working with Terraform. Try running "terraform plan" to see
-any changes that are required for your infrastructure. All Terraform commands
-should now work.
-
-If you ever set or change modules or backend configuration for Terraform,
-rerun this command to reinitialize your working directory. If you forget, other
-commands will detect it and remind you to do so if necessary.
 ```
 
 ## Applying the Configuration
@@ -88,26 +58,6 @@ The [`terraform apply`](https://www.terraform.io/docs/commands/apply.html) comma
 
 ```
 $ terraform apply
-
-An execution plan has been generated and is shown below.
-Resource actions are indicated with the following symbols:
-  + create
-
-Terraform will perform the following actions:
-
-  # aws_instance.tpot will be created
-  ...
-
-  # aws_security_group.tpot will be created
-  ...
-
-Plan: 2 to add, 0 to change, 0 to destroy.
-
-Do you want to perform these actions?
-  Terraform will perform the actions described above.
-  Only 'yes' will be accepted to approve.
-
-  Enter a value:
 ```
 
 This will perform the following actions:
