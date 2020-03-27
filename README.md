@@ -282,7 +282,7 @@ If you would like to contribute, you can add other cloud deployments like Chef o
 <a name="ansible"></a>
 ### Ansible Deployment
 You can find an [Ansible](https://www.ansible.com/) based T-Pot deployment in the [`cloud/ansible`](cloud/ansible) folder.  
-The Playbook in the [`cloud/ansible/openstack`](cloud/ansible/openstack) folder is reusable for all OpenStack clouds out of the box.
+The Playbook in the [`cloud/ansible/openstack`](cloud/ansible/openstack) folder is reusable for all **OpenStack** clouds out of the box.
 
 It first creates all resources (security group, network, subnet, router), deploys a new server and then installs and configures T-Pot.
 
@@ -295,7 +295,8 @@ You can find [Terraform](https://www.terraform.io/) configuration in the [`cloud
 
 This can be used to launch a virtual machine, bootstrap any dependencies and install T-Pot in a single step.
 
-Configuration for Amazon Web Services (AWS) is currently included and this can easily be extended to support other [Terraform providers](https://www.terraform.io/docs/providers/index.html).
+Configuration for **Amazon Web Services** (AWS) and **Open Telekom Cloud** (OTC) is currently included.  
+This can easily be extended to support other [Terraform providers](https://www.terraform.io/docs/providers/index.html).
 
 <a name="firstrun"></a>
 ## First Run
