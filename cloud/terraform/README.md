@@ -20,24 +20,29 @@ This can easily be extended to support other [Terraform providers](https://www.t
 - [Applying the Configuration](#applying)
 - [Connecting to the Instance](#connecting)
 
-
 <a name="what-created"></a>
 ## What get's created
 
 <a name="what-created-aws"></a>
 ### Amazon Web Services (AWS)
 * EC2 instance:
-  * t3.large (2 vCPU, 8 GiB RAM)
-  * 128GB disk
-  * [Debian Buster](https://wiki.debian.org/Cloud/AmazonEC2Image/Buster)
-* AWS Security Group:
+  * t3.large (2 vCPUs, 8 GB RAM)
+  * 128 GB disk
+  * Debian 10
+  * Public IP
+* Security Group:
   * TCP/UDP ports <= 64000 open to the Internet
   * TCP ports 64294, 64295 and 64297 open to a chosen administrative IP
 
 <a name="what-created-otc"></a>
 ### Open Telekom Cloud (OTC)
-*
-*
+* ECS instance:
+  * s2.medium.8 (1 vCPU, 8 GB RAM)
+  * 128 GB disk
+  * Debian 10
+  * Public EIP
+* Security Group
+* Network, Subnet, Router (= Virtual Private Cloud [VPC])
 
 <a name="pre"></a>
 ## Pre-Requisites
@@ -48,37 +53,49 @@ This can easily be extended to support other [Terraform providers](https://www.t
 * AWS Account
   * Existing VPC: VPC ID needs to be specified in `aws/variables.tf`
   * Existing subnet: Subnet ID needs to be specified in `aws/variables.tf`
+  * Existing SSH key pair: Key name needs to be specified in `aws/variables.tf`
 * AWS Authentication credentials should be [set using environment variables](https://www.terraform.io/docs/providers/aws/index.html#environment-variables)
 
 <a name="pre-otc"></a>
 ### Open Telekom Cloud (OTC)
-*
-*
+* OTC Account
+  * Existing SSH key pair: Key name needs to be specified in `otc/variables.tf`
+* OTC Authentication credentials (Username, Password, Project Name, User Domain Name) can be set in the `otc/clouds.yaml` file
 
 <a name="variables"></a>
 ## Terraform Variables
 
 <a name="variables-common"></a>
 ### Common configuration items
-These variables exist in `aws/variables.tf` and `otc/variables.tf` respectively:  
-*
-* 
-*
-This will be used to configure credentials for the T-Pot Kibana interface.
+These variables exist in `aws/variables.tf` and `otc/variables.tf` respectively.  
+Settings for cloud-init:  
+* `timezone` - Set the Server's timezone
+* `linux_password`- Set a password for the Linux Operating System user (which is also used on the Admin UI)
+
+Settings for T-Pot:  
+* `tpot_flavor` - Set the flavor of the T-Pot (Available flavors are listed in the variable's description)
+* `web_user` - Set a username for the T-Pot Kibana Dasboard
+* `web_password` - Set a password for the T-Pot Kibana Dashboard
 
 <a name="variables-aws"></a>
 ### Amazon Web Services (AWS)
-In `aws/variables.tf`, change the following variables to correspond to your existing EC2 infrastructure:
-
+In `aws/variables.tf`, you can change the additional variables:
 * `admin_ip` - source IP address(es) that you will use to administer the system. Connections to TCP ports 64294, 64295 and 64297 will be allowed from this IP only. Multiple IPs or CIDR blocks can be specified in the format: `["127.0.0.1/32", "192.168.0.0/24"]`
-* `ec2_vpc_id`
-* `ec2_subnet_id`
+* `ec2_vpc_id` - Specify an existing VPC ID
+* `ec2_subnet_id` - Specify an existing Subnet ID
 * `ec2_region`
+* `ec2_ssh_key_name` - Specify an existing SSH key pair
+* `ec2_instance_type`
 
 <a name="variables-otc"></a>
 ### Open Telekom Cloud (OTC)
-*
-*
+In `otc/variables.tf`, you can change the additional variables:
+* `availabiliy_zone`
+* `flavor`
+* `key_pair` - Specify an existing SSH key pair
+* `image_id`
+* `volume_size`  
+Furthermore you can configure the naming of the created infrastructure (per default everything gets prefixed with "tpot-", e.g. "tpot-router").
 
 <a name="initialising"></a>
 ## Initialising
@@ -102,6 +119,8 @@ The [`terraform apply`](https://www.terraform.io/docs/commands/apply.html) comma
 $ terraform apply
 ```
 This will create your infrastructure and start a Cloud Server. On startup, the Server gets bootstrapped with cloud-init and will install T-Pot. Once this is done, the server will reboot.
+
+If you want the remove the built infrastructure, you can run [`terraform destroy`](https://www.terraform.io/docs/commands/destroy.html) to delete it.
 
 <a name="connecting"></a>
 ## Connecting to the Instance
