@@ -120,12 +120,4 @@ This will perform the following actions:
 
 ## Connecting to the Instance
 
-### SSH
-
-Prior to the final reboot, you will temporarily be able to SSH to port 22 as per standard. Following the reboot, port 22 is used for the honeypot. The *real* SSH server is listening on port **64295**
-
-### Browser
-
-https://www.example.com:64297/
-
-Replace with the FQDN of your EC2 instance. Refer to the [T-POT documentation](https://github.com/dtag-dev-sec/tpotce#ssh-and-web-access) for further details.
+When the installation is completed, you can proceed with connecting/logging in to the T-Pot. Refer to the [documentation](https://github.com/dtag-dev-sec/tpotce#ssh-and-web-access) for further details.
