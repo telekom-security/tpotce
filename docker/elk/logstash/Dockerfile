@@ -18,8 +18,8 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
 # Get and install packages
     mkdir -p /etc/listbot && \
     cd /etc/listbot && \
-    aria2c -s16 -x 16 https://raw.githubusercontent.com/dtag-dev-sec/listbot/master/cve.yaml.bz2 && \
-    aria2c -s16 -x 16 https://raw.githubusercontent.com/dtag-dev-sec/listbot/master/iprep.yaml.bz2 && \
+    aria2c -s16 -x 16 https://dtag-dev-sec.netlify.com/cve.yaml.bz2 && \
+    aria2c -s16 -x 16 https://dtag-dev-sec.netlify.com/iprep.yaml.bz2 && \
     bunzip2 *.bz2 && \
     cd /root/dist/ && \
     mkdir -p /usr/share/logstash/ && \
