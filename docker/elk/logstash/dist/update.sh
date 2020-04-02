@@ -22,13 +22,13 @@ for i in $mySITES;
 }
 
 # Check for connectivity and download latest translation maps
-myCHECK=$(fuCHECKINET "raw.githubusercontent.com")
+myCHECK=$(fuCHECKINET "dtag-dev-sec.netlify.com")
 if [ "$myCHECK" == "0" ];
   then
-    echo "Connection to Github looks good, now downloading latest translation maps."
+    echo "Connection to Netlify looks good, now downloading latest translation maps."
     cd /etc/listbot 
-    aria2c -s16 -x 16 https://raw.githubusercontent.com/dtag-dev-sec/listbot/master/cve.yaml.bz2 && \
-    aria2c -s16 -x 16 https://raw.githubusercontent.com/dtag-dev-sec/listbot/master/iprep.yaml.bz2 && \
+    aria2c -s16 -x 16 https://dtag-dev-sec.netlify.com/cve.yaml.bz2 && \
+    aria2c -s16 -x 16 https://dtag-dev-sec.netlify.com/iprep.yaml.bz2 && \
     bunzip2 -f *.bz2
     cd /
   else
