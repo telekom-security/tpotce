@@ -1,7 +1,7 @@
 FROM alpine
 #
 # VARS
-ENV LS_VER=7.6.1
+ENV LS_VER=7.6.2
 # Include dist
 ADD dist/ /root/dist/
 #
@@ -20,8 +20,8 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
 # Get and install packages
     mkdir -p /etc/listbot && \
     cd /etc/listbot && \
-    aria2c -s16 -x 16 https://raw.githubusercontent.com/dtag-dev-sec/listbot/master/cve.yaml.bz2 && \
-    aria2c -s16 -x 16 https://raw.githubusercontent.com/dtag-dev-sec/listbot/master/iprep.yaml.bz2 && \
+    aria2c -s16 -x 16 https://dtag-dev-sec.netlify.com/cve.yaml.bz2 && \
+    aria2c -s16 -x 16 https://dtag-dev-sec.netlify.com/iprep.yaml.bz2 && \
     bunzip2 *.bz2 && \
     cd /root/dist/ && \
     mkdir -p /usr/share/logstash/ && \
@@ -36,7 +36,7 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     chmod u+x /usr/bin/update.sh && \
     mkdir -p /etc/logstash/conf.d && \
     cp logstash.conf /etc/logstash/conf.d/ && \
-    cp elasticsearch-template-es7x.json /usr/share/logstash/vendor/bundle/jruby/2.5.0/gems/logstash-output-elasticsearch-10.3.1-java/lib/logstash/outputs/elasticsearch/ && \
+    cp elasticsearch-template-es7x.json /usr/share/logstash/vendor/bundle/jruby/2.5.0/gems/logstash-output-elasticsearch-10.3.3-java/lib/logstash/outputs/elasticsearch/ && \
 #
 # Setup user, groups and configs
     addgroup -g 2000 logstash && \
