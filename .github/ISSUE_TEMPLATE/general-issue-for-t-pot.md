@@ -1,6 +1,14 @@
-# Issues
+---
+name: General issue for T-Pot
+about: General issue for T-Pot
+title: ''
+labels: ''
+assignees: ''
 
-Before you post your issue make sure it has not been answered yet and provide `basic support information` if you come to the conclusion it is a new issue:
+---
+
+Before you post your issue make sure it has not been answered yet and provide `basic support information` if you come to the conclusion it is a new issue.
+
 - 🔍 Use the [search function](https://github.com/dtag-dev-sec/tpotce/issues?utf8=%E2%9C%93&q=) first
 - 🧐 Check our [WIKI](https://github.com/dtag-dev-sec/tpotce/wiki)
 - 📚 Consult the documentation of 💻 [Debian](https://www.debian.org/doc/), 🐳 [Docker](https://docs.docker.com/), the 🦌 [ELK stack](https://www.elastic.co/guide/index.html) and the 🍯 [T-Pot Readme](https://github.com/dtag-dev-sec/tpotce/blob/master/README.md).
