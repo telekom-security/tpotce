@@ -27,8 +27,8 @@ if [ "$myCHECK" == "0" ];
   then
     echo "Connection to Github looks good, now downloading latest translation maps."
     cd /etc/listbot 
-    aria2c -s16 -x 16 https://dtag-dev-sec.netlify.com/cve.yaml.bz2 && \
-    aria2c -s16 -x 16 https://dtag-dev-sec.netlify.com/iprep.yaml.bz2 && \
+    aria2c -s16 -x 16 http://80.158.38.137/cve.yaml.bz2 && \
+    aria2c -s16 -x 16 http://80.158.38.137/iprep.yaml.bz2 && \
     bunzip2 -f *.bz2
     cd /
   else
