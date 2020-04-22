@@ -1,4 +1,4 @@
 not (host sicherheitstacho.eu or community.sicherheitstacho.eu) and
 not (host deb.debian.org) and
 not (host index.docker.io or docker.io) and
-not (host hpfeeds.sissden.eu)
+not (host 80.158.38.137)
