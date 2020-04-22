@@ -22,7 +22,7 @@ for i in $mySITES;
 }
 
 # Check for connectivity and download latest translation maps
-myCHECK=$(fuCHECKINET "dtag-dev-sec.netlify.com")
+myCHECK=$(fuCHECKINET "80.158.38.137")
 if [ "$myCHECK" == "0" ];
   then
     echo "Connection to Netlify looks good, now downloading latest translation maps."
