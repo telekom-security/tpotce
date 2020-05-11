@@ -24,7 +24,7 @@
         path: C:\\Windows
         type: disktree
       C$:
-        coment: Default Share
+        comment: Default Share
         path: C:\\
         type:
           - disktree
@@ -45,7 +45,7 @@
 #        path: \\home\\admin
 #        type: disktree
 #      share:
-#        coment: Default Share
+#        comment: Default Share
 #        path: \\share
 #        type: disktree
 #      IPC$:
