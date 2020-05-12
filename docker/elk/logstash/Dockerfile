@@ -20,8 +20,8 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
 # Get and install packages
     mkdir -p /etc/listbot && \
     cd /etc/listbot && \
-    aria2c -s16 -x 16 http://80.158.38.137/cve.yaml.bz2 && \
-    aria2c -s16 -x 16 http://80.158.38.137/iprep.yaml.bz2 && \
+    aria2c -s16 -x 16 https://listbot.sicherheitstacho.eu/cve.yaml.bz2 && \
+    aria2c -s16 -x 16 https://listbot.sicherheitstacho.eu/iprep.yaml.bz2 && \
     bunzip2 *.bz2 && \
     cd /root/dist/ && \
     mkdir -p /usr/share/logstash/ && \

@@ -22,17 +22,17 @@ for i in $mySITES;
 }
 
 # Check for connectivity and download latest translation maps
-myCHECK=$(fuCHECKINET "dtag-dev-sec.netlify.com")
+myCHECK=$(fuCHECKINET "listbot.sicherheitstacho.eu")
 if [ "$myCHECK" == "0" ];
   then
-    echo "Connection to Netlify looks good, now downloading latest translation maps."
+    echo "Connection to Listbot looks good, now downloading latest translation maps."
     cd /etc/listbot 
-    aria2c -s16 -x 16 https://dtag-dev-sec.netlify.com/cve.yaml.bz2 && \
-    aria2c -s16 -x 16 https://dtag-dev-sec.netlify.com/iprep.yaml.bz2 && \
+    aria2c -s16 -x 16 https://listbot.sicherheitstacho.eu/cve.yaml.bz2 && \
+    aria2c -s16 -x 16 https://listbot.sicherheitstacho.eu/iprep.yaml.bz2 && \
     bunzip2 -f *.bz2
     cd /
   else
-    echo "Cannot reach Github, starting Logstash without latest translation maps."
+    echo "Cannot reach Listbot, starting Logstash without latest translation maps."
 fi
 
 # Make sure logstash can put latest logstash template by deleting the old one first

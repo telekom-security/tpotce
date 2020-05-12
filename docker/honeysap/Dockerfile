@@ -1,4 +1,4 @@
-FROM alpine:latest
+FROM alpine:3.10
 #
 # Include dist
 ADD dist/ /root/dist/
@@ -9,6 +9,7 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
             build-base \
             git \
             libcap \
+	    py2-markupsafe \
             python2 \
             python2-dev \
             py2-pip \
