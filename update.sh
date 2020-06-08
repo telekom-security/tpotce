@@ -183,9 +183,10 @@ function fuUPDATER () {
 export DEBIAN_FRONTEND=noninteractive
 echo "### Installing apt-fast"
 /bin/bash -c "$(curl -sL https://raw.githubusercontent.com/ilikenwf/apt-fast/master/quick-install.sh)"
-local myPACKAGES="aria2 apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit console-setup console-setup-linux cracklib-runtime curl debconf-utils dialog dnsutils docker.io docker-compose elasticsearch-curator ethtool fail2ban figlet genisoimage git glances grc haveged html2text htop iptables iw jq kbd libcrack2 libltdl7 libpam-google-authenticator man mosh multitail netselect-apt net-tools npm ntp openssh-server openssl pass pigz prips software-properties-common syslinux psmisc pv python3-elasticsearch-curator python3-pip toilet unattended-upgrades unzip vim wget wireless-tools wpasupplicant"
-echo "### Removing pip based install of elasticsearch-curator"
-pip3 uninstall elasticsearch-curator -y
+local myPACKAGES="aria2 apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit console-setup console-setup-linux cracklib-runtime curl debconf-utils dialog dnsutils docker.io docker-compose ethtool fail2ban figlet genisoimage git glances grc haveged html2text htop iptables iw jq kbd libcrack2 libltdl7 libpam-google-authenticator man mosh multitail netselect-apt net-tools npm ntp openssh-server openssl pass pigz prips software-properties-common syslinux psmisc pv python3-elasticsearch-curator python3-pip toilet unattended-upgrades unzip vim wget wireless-tools wpasupplicant"
+# Remove purge in the future
+echo "### Removing repository based install of elasticsearch-curator"
+apt-get purge elasticsearch-curator -y
 hash -r
 echo "### Now upgrading packages ..."
 dpkg --configure -a
@@ -201,10 +202,12 @@ apt-fast -y dist-upgrade -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::
 dpkg --configure -a
 npm install elasticdump -g
 pip3 install --upgrade yq
+# Remove --force switch in the future ...
+pip3 install elasticsearch-curator --force -y
 hash -r
 echo "### Removing and holding back problematic packages ..."
-apt-fast -y purge exim4-base mailutils pcp cockpit-pcp
-apt-mark hold exim4-base mailutils pcp cockpit-pcp
+apt-fast -y purge exim4-base mailutils pcp cockpit-pcp elasticsearch-curator
+apt-mark hold exim4-base mailutils pcp cockpit-pcp elasticsearch-curator
 echo
 
 echo "### Now replacing T-Pot related config files on host"
@@ -219,29 +222,30 @@ echo "Port 64295" >> /etc/ssh/sshd_config
 echo
 
 ### Ensure creation of T-Pot related folders, just in case
-mkdir -p /data/adbhoney/downloads /data/adbhoney/log \
+mkdir -vp /data/adbhoney/{downloads,log} \
          /data/ciscoasa/log \
          /data/conpot/log \
 	 /data/citrixhoneypot/logs \
-         /data/cowrie/log/tty/ /data/cowrie/downloads/ /data/cowrie/keys/ /data/cowrie/misc/ \
-         /data/dionaea/log /data/dionaea/bistreams /data/dionaea/binaries /data/dionaea/rtp /data/dionaea/roots/ftp /data/dionaea/roots/tftp /data/dionaea/roots/www /data/dionaea/roots/upnp \
+         /data/cowrie/{downloads,keys,misc,log,log/tty} \
+         /data/dionaea/{log,bistreams,binaries,rtp,roots,roots/ftp,roots/tftp,roots/www,roots/upnp} \
          /data/elasticpot/log \
-         /data/elk/data /data/elk/log \
+         /data/elk/{data,log} \
 	 /data/fatt/log \
-         /data/honeytrap/log/ /data/honeytrap/attacks/ /data/honeytrap/downloads/ \
+         /data/honeytrap/{log,attacks,downloads} \
          /data/glutton/log \
          /data/heralding/log \
          /data/honeypy/log \
          /data/mailoney/log \
          /data/medpot/log \
-         /data/nginx/log /data/nginx/heimdall \
+         /data/nginx/{log,heimdall} \
          /data/emobility/log \
          /data/ews/conf \
          /data/rdpy/log \
          /data/spiderfoot \
-         /data/suricata/log /home/tsec/.ssh/ \
-         /data/tanner/log /data/tanner/files \
-         /data/p0f/log
+         /data/suricata/log \
+         /data/tanner/{log,files} \
+         /data/p0f/log \
+	 /home/tsec/.ssh/
 
 ### Let's take care of some files and permissions
 chmod 770 -R /data
