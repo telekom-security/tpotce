@@ -12,9 +12,9 @@ mySITES="https://hub.docker.com https://github.com https://pypi.python.org https
 myTPOTCOMPOSE="/opt/tpot/etc/tpot.yml"
 myLSB_STABLE_SUPPORTED="stretch buster"
 myLSB_TESTING_SUPPORTED="stable"
-myREMOTESITES="https://hub.docker.com https://github.com https://pypi.python.org https://debian.org"
+myREMOTESITES="https://hub.docker.com https://github.com https://pypi.python.org https://debian.org https://listbot.sicherheitstacho.eu"
 myPREINSTALLPACKAGES="aria2 apache2-utils cracklib-runtime curl dialog figlet fuse grc libcrack2 libpq-dev lsb-release netselect-apt net-tools software-properties-common toilet"
-myINSTALLPACKAGES="aria2 apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit console-setup console-setup-linux cracklib-runtime curl debconf-utils dialog dnsutils docker.io docker-compose elasticsearch-curator ethtool fail2ban figlet genisoimage git glances grc haveged html2text htop iptables iw jq kbd libcrack2 libltdl7 libpam-google-authenticator man mosh multitail netselect-apt net-tools npm ntp openssh-server openssl pass pigz prips software-properties-common syslinux psmisc pv python3-pip toilet unattended-upgrades unzip vim wget wireless-tools wpasupplicant"
+myINSTALLPACKAGES="aria2 apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit console-setup console-setup-linux cracklib-runtime curl debconf-utils dialog dnsutils docker.io docker-compose ethtool fail2ban figlet genisoimage git glances grc haveged html2text htop iptables iw jq kbd libcrack2 libltdl7 libpam-google-authenticator man mosh multitail netselect-apt net-tools npm ntp openssh-server openssl pass pigz prips software-properties-common syslinux psmisc pv python3-pip toilet unattended-upgrades unzip vim wget wireless-tools wpasupplicant"
 myINFO="\
 ###########################################
 ### T-Pot Installer for Debian (Stable) ###
@@ -310,9 +310,9 @@ EOF
   apt-fast -y install $myINSTALLPACKAGES
   # Remove exim4
   echo "### Removing and holding back problematic packages ..."
-  apt-fast -y purge exim4-base mailutils pcp cockpit-pcp
+  apt-fast -y purge exim4-base mailutils pcp cockpit-pcp elasticsearch-curator
   apt-fast -y autoremove
-  apt-mark hold exim4-base mailutils pcp cockpit-pcp
+  apt-mark hold exim4-base mailutils pcp cockpit-pcp elasticsearch-curator
 }
 
 # Check for other services
@@ -681,10 +681,10 @@ echo "$myNETWORK_WLANEXAMPLE" | tee -a /etc/network/interfaces
 fuBANNER "SSH roaming off"
 echo "UseRoaming no" | tee -a /etc/ssh/ssh_config
 
-# Installing elasticdump, yq
+# Installing elasticdump, elasticsearch-curator, yq
 fuBANNER "Installing pkgs"
 npm install elasticdump -g
-pip3 install yq
+pip3 install elasticsearch-curator yq
 hash -r
 
 # Cloning T-Pot from GitHub
@@ -775,29 +775,30 @@ echo "$myCRONJOBS" | tee -a /etc/crontab
 
 # Let's create some files and folders
 fuBANNER "Files & folders"
-mkdir -p /data/adbhoney/downloads /data/adbhoney/log \
+mkdir -vp /data/adbhoney/{downloads,log} \
          /data/ciscoasa/log \
-	 /data/citrixhoneypot/logs \
-      	 /data/conpot/log \
-         /data/cowrie/log/tty/ /data/cowrie/downloads/ /data/cowrie/keys/ /data/cowrie/misc/ \
-         /data/dionaea/log /data/dionaea/bistreams /data/dionaea/binaries /data/dionaea/rtp /data/dionaea/roots/ftp /data/dionaea/roots/tftp /data/dionaea/roots/www /data/dionaea/roots/upnp \
+         /data/conpot/log \
+         /data/citrixhoneypot/logs \
+         /data/cowrie/{downloads,keys,misc,log,log/tty} \
+         /data/dionaea/{log,bistreams,binaries,rtp,roots,roots/ftp,roots/tftp,roots/www,roots/upnp} \
          /data/elasticpot/log \
-         /data/elk/data /data/elk/log \
-	 /data/fatt/log \
-         /data/honeytrap/log/ /data/honeytrap/attacks/ /data/honeytrap/downloads/ \
+         /data/elk/{data,log} \
+         /data/fatt/log \
+         /data/honeytrap/{log,attacks,downloads} \
          /data/glutton/log \
          /data/heralding/log \
          /data/honeypy/log \
          /data/mailoney/log \
          /data/medpot/log \
-         /data/nginx/log /data/nginx/heimdall \
+         /data/nginx/{log,heimdall} \
          /data/emobility/log \
          /data/ews/conf \
          /data/rdpy/log \
          /data/spiderfoot \
-         /data/suricata/log /home/tsec/.ssh/ \
-      	 /data/tanner/log /data/tanner/files \
-         /data/p0f/log
+         /data/suricata/log \
+         /data/tanner/{log,files} \
+         /data/p0f/log \
+         /home/tsec/.ssh/
 touch /data/spiderfoot/spiderfoot.db
 touch /data/nginx/log/error.log
 

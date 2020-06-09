@@ -1,7 +1,7 @@
 FROM node:10.19.0-alpine
 #
 # VARS
-ENV KB_VER=7.6.2
+ENV KB_VER=7.7.1
 # 
 # Include dist
 ADD dist/ /root/dist/
@@ -47,6 +47,7 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     echo "xpack.security.enabled: false" >> /usr/share/kibana/config/kibana.yml && \
     echo "xpack.uptime.enabled: false" >> /usr/share/kibana/config/kibana.yml && \
     echo "xpack.siem.enabled: false" >> /usr/share/kibana/config/kibana.yml && \
+    echo "xpack.ml.enabled: false" >> /usr/share/kibana/config/kibana.yml && \
     echo "elasticsearch.requestTimeout: 60000" >> /usr/share/kibana/config/kibana.yml && \
     echo "elasticsearch.shardTimeout: 60000" >> /usr/share/kibana/config/kibana.yml && \
     rm -rf /usr/share/kibana/optimize/bundles/* && \

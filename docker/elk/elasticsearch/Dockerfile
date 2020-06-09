@@ -1,7 +1,7 @@
 FROM alpine
 #
 # VARS
-ENV ES_VER=7.6.2 \
+ENV ES_VER=7.7.1 \
     JAVA_HOME=/usr/lib/jvm/java-11-openjdk
 # Include dist
 ADD dist/ /root/dist/
