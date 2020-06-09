@@ -200,10 +200,11 @@ echo "docker.io docker.io/restart       boolean true" | debconf-set-selections -
 echo "debconf debconf/frontend select noninteractive" | debconf-set-selections -v
 apt-fast -y dist-upgrade -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes
 dpkg --configure -a
+npm cache clean --force
 npm install elasticdump -g
 pip3 install --upgrade yq
 # Remove --force switch in the future ...
-pip3 install elasticsearch-curator --force -y
+pip3 install elasticsearch-curator --force
 hash -r
 echo "### Removing and holding back problematic packages ..."
 apt-fast -y purge exim4-base mailutils pcp cockpit-pcp elasticsearch-curator
