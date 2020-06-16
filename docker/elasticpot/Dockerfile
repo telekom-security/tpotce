@@ -6,8 +6,8 @@ ADD dist/ /root/dist/
 # Install packages
 RUN apk -U --no-cache add \
              git \
+	     py3-pip \
              python3 && \
-    pip3 install --no-cache-dir --upgrade pip && \
     pip3 install --no-cache-dir bottle \
                                 configparser \
                                 datetime \
