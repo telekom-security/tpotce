@@ -366,21 +366,21 @@ services:
      - tanner_redis
 
 ## Tanner WEB Service
-# tanner_web:
-#   container_name: tanner_web
-#   restart: always
-#   tmpfs:
-#    - /tmp/tanner:uid=2000,gid=2000
-#   tty: true
-#   networks:
-#    - tanner_local
-#   image: "dtagdevsec/tanner:2006"
-#   command: tannerweb
-#   read_only: true
-#   volumes:
-#    - /data/tanner/log:/var/log/tanner
-#   depends_on:
-#    - tanner_redis
+#  tanner_web:
+#    container_name: tanner_web
+#    restart: always
+#    tmpfs:
+#     - /tmp/tanner:uid=2000,gid=2000
+#    tty: true
+#    networks:
+#     - tanner_local
+#    image: "dtagdevsec/tanner:2006"
+#    command: tannerweb
+#    read_only: true
+#    volumes:
+#     - /data/tanner/log:/var/log/tanner
+#    depends_on:
+#     - tanner_redis
 
 ## Tanner Service
   tanner:
@@ -399,7 +399,7 @@ services:
      - /data/tanner/files:/opt/tanner/files
     depends_on:
      - tanner_api
-#    - tanner_web
+#     - tanner_web
      - tanner_phpox
 
 ## Snare Service

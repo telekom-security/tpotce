@@ -64,6 +64,19 @@ services:
 #### NSM
 ##################
 
+# Fatt service
+  fatt:
+    container_name: fatt
+    restart: always
+    network_mode: "host"
+    cap_add:
+     - NET_ADMIN
+     - SYS_NICE
+     - NET_RAW
+    image: "dtagdevsec/fatt:2006"
+    volumes:
+     - /data/fatt/log:/opt/fatt/log
+
 # P0f service
   p0f:
     container_name: p0f
@@ -113,7 +126,7 @@ services:
     restart: always
     environment:
      - bootstrap.memory_lock=true
-     - ES_JAVA_OPTS=-Xms1024m -Xmx1024m
+     - ES_JAVA_OPTS=-Xms2048m -Xmx2048m
      - ES_TMPDIR=/tmp
     cap_add:
      - IPC_LOCK
@@ -193,22 +206,34 @@ services:
   nginx:
     container_name: nginx
     restart: always
+    environment:
+    ### If set to YES all changes within Heimdall will remain for the next start
+    ### Make sure to uncomment the corresponding volume statements below, or the setting will prevent a successful start of T-Pot.
+     - HEIMDALL_PERSIST=NO
     tmpfs:
      - /var/tmp/nginx/client_body
      - /var/tmp/nginx/proxy
      - /var/tmp/nginx/fastcgi
      - /var/tmp/nginx/uwsgi
-     - /var/tmp/nginx/scgi
+     - /var/tmp/nginx/scgi 
      - /run
+     - /var/log/php7/
+     - /var/lib/nginx/tmp:uid=100,gid=82 
+     - /var/lib/nginx/html/storage/logs:uid=100,gid=82
+     - /var/lib/nginx/html/storage/framework/views:uid=100,gid=82
     network_mode: "host"
     ports:
      - "64297:64297"
+     - "127.0.0.1:64304:64304"
     image: "dtagdevsec/nginx:2006"
     read_only: true
     volumes:
      - /data/nginx/cert/:/etc/nginx/cert/:ro
      - /data/nginx/conf/nginxpasswd:/etc/nginx/nginxpasswd:ro
      - /data/nginx/log/:/var/log/nginx/
+    ### Enable the following volumes if you set HEIMDALL_PERSIST=YES
+    # - /data/nginx/heimdall/database:/var/lib/nginx/html/database
+    # - /data/nginx/heimdall/storage:/var/lib/nginx/html/storage
 
 # Spiderfoot service
   spiderfoot:
