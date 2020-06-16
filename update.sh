@@ -63,7 +63,7 @@ function fuSELFUPDATE () {
       echo "###### $myBLUE""No updates found in repository.""$myWHITE"
       return
   fi
-  myRESULT=$(git diff --name-only origin/master | grep update.sh)
+  myRESULT=$(git diff --name-only origin/dev | grep update.sh)
   if [ "$myRESULT" == "update.sh" ];
     then
       echo "###### $myBLUE""Found newer version, will be pulling updates and restart myself.""$myWHITE"
@@ -82,7 +82,7 @@ echo
 # Let's check for version
 function fuCHECK_VERSION () {
 local myMINVERSION="19.03.0"
-local myMASTERVERSION="19.03.3"
+local myMASTERVERSION="20.06.0"
 echo
 echo "### Checking for Release ID"
 myRELEASE=$(lsb_release -i | grep Debian -c)

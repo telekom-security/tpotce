@@ -38,7 +38,7 @@ services:
      - "3389:3389"
      - "5432:5432"
      - "5900:5900"
-    image: "dtagdevsec/heralding:1903"
+    image: "dtagdevsec/heralding:2006"
     read_only: true
     volumes:
      - /data/heralding/log:/var/log/heralding
@@ -52,7 +52,7 @@ services:
     network_mode: "host"
     cap_add:
      - NET_ADMIN
-    image: "dtagdevsec/honeytrap:1903"
+    image: "dtagdevsec/honeytrap:2006"
     read_only: true
     volumes:
      - /data/honeytrap/attacks:/opt/honeytrap/var/attacks
@@ -69,7 +69,7 @@ services:
     container_name: p0f
     restart: always
     network_mode: "host"
-    image: "dtagdevsec/p0f:1903"
+    image: "dtagdevsec/p0f:2006"
     read_only: true
     volumes:
      - /data/p0f/log:/var/log/p0f
@@ -86,7 +86,7 @@ services:
      - NET_ADMIN
      - SYS_NICE
      - NET_RAW
-    image: "dtagdevsec/suricata:1903"
+    image: "dtagdevsec/suricata:2006"
     volumes:
      - /data/suricata/log:/var/log/suricata
 
@@ -103,7 +103,7 @@ services:
      - cyberchef_local
     ports:
      - "127.0.0.1:64299:8000"
-    image: "dtagdevsec/cyberchef:1903"
+    image: "dtagdevsec/cyberchef:2006"
     read_only: true
 
 #### ELK
@@ -127,7 +127,7 @@ services:
     mem_limit: 4g
     ports:
      - "127.0.0.1:64298:9200"
-    image: "dtagdevsec/elasticsearch:1903"
+    image: "dtagdevsec/elasticsearch:2006"
     volumes:
      - /data:/data
 
@@ -140,7 +140,7 @@ services:
         condition: service_healthy
     ports:
      - "127.0.0.1:64296:5601"
-    image: "dtagdevsec/kibana:1903"
+    image: "dtagdevsec/kibana:2006"
 
 ## Logstash service
   logstash:
@@ -151,7 +151,7 @@ services:
         condition: service_healthy
     env_file:
      - /opt/tpot/etc/compose/elk_environment
-    image: "dtagdevsec/logstash:1903"
+    image: "dtagdevsec/logstash:2006"
     volumes:
      - /data:/data
 
@@ -164,7 +164,7 @@ services:
         condition: service_healthy
     ports:
      - "127.0.0.1:64302:9100"
-    image: "dtagdevsec/head:1903"
+    image: "dtagdevsec/head:2006"
     read_only: true
 
 # Ewsposter service
@@ -184,7 +184,7 @@ services:
      - EWS_HPFEEDS_FORMAT=json
     env_file:
      - /opt/tpot/etc/compose/elk_environment
-    image: "dtagdevsec/ewsposter:1903"
+    image: "dtagdevsec/ewsposter:2006"
     volumes:
      - /data:/data
      - /data/ews/conf/ews.ip:/opt/ewsposter/ews.ip
@@ -203,7 +203,7 @@ services:
     network_mode: "host"
     ports:
      - "64297:64297"
-    image: "dtagdevsec/nginx:1903"
+    image: "dtagdevsec/nginx:2006"
     read_only: true
     volumes:
      - /data/nginx/cert/:/etc/nginx/cert/:ro
@@ -218,6 +218,6 @@ services:
      - spiderfoot_local
     ports:
      - "127.0.0.1:64303:8080"
-    image: "dtagdevsec/spiderfoot:1903"
+    image: "dtagdevsec/spiderfoot:2006"
     volumes:
      - /data/spiderfoot/spiderfoot.db:/home/spiderfoot/spiderfoot.db
