@@ -10,7 +10,7 @@ if [ "$myEXTIP" = "" ];
 fi
 mySSHUSER=$(cat /etc/passwd | grep 1000 | cut -d ':' -f1)
 echo "[H[2J" > /etc/issue
-toilet -f ivrit -F metal --filter border:metal "T-Pot   19.03" | sed 's/\\/\\\\/g' >> /etc/issue
+toilet -f ivrit -F metal --filter border:metal "T-Pot   20.06" | sed 's/\\/\\\\/g' >> /etc/issue
 echo >> /etc/issue
 echo ",---- [ [1;34m\n[0m ] [ [0;34m\d[0m ] [ [1;30m\t[0m ]" >> /etc/issue
 echo "|" >> /etc/issue
