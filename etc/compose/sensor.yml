@@ -195,7 +195,7 @@ services:
      - /data/dionaea/log:/opt/dionaea/var/log
      - /data/dionaea/rtp:/opt/dionaea/var/dionaea/rtp
 
-# Elasticpot service
+# ElasticPot service
   elasticpot:
     container_name: elasticpot
     restart: always
@@ -206,7 +206,7 @@ services:
     image: "dtagdevsec/elasticpot:2006"
     read_only: true
     volumes:
-     - /data/elasticpot/log:/opt/ElasticpotPY/log
+     - /data/elasticpot/log:/opt/elasticpot/log
 
 # Heralding service
   heralding:

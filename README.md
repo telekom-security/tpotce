@@ -1,6 +1,6 @@
 ![T-Pot](doc/tpotsocial.png)
 
-T-Pot 19.03 runs on Debian (Stable), is based heavily on
+T-Pot 20.06 runs on Debian (Stable), is based heavily on
 
 [docker](https://www.docker.com/), [docker-compose](https://docs.docker.com/compose/)
 
@@ -12,7 +12,7 @@ and includes dockerized versions of the following honeypots
 * [conpot](http://conpot.org/),
 * [cowrie](https://github.com/cowrie/cowrie),
 * [dionaea](https://github.com/DinoTools/dionaea),
-* [elasticpot](https://github.com/schmalle/ElasticpotPY),
+* [elasticpot](https://gitlab.com/bontchev/elasticpot),
 * [glutton](https://github.com/mushorg/glutton),
 * [heralding](https://github.com/johnnykv/heralding),
 * [honeypy](https://github.com/foospidy/HoneyPy),
@@ -88,7 +88,7 @@ In T-Pot we combine the dockerized honeypots ...
 * [conpot](http://conpot.org/),
 * [cowrie](http://www.micheloosterhof.com/cowrie/),
 * [dionaea](https://github.com/DinoTools/dionaea),
-* [elasticpot](https://github.com/schmalle/ElasticpotPY),
+* [elasticpot](https://gitlab.com/bontchev/elasticpot),
 * [glutton](https://github.com/mushorg/glutton),
 * [heralding](https://github.com/johnnykv/heralding),
 * [honeypy](https://github.com/foospidy/HoneyPy),
@@ -179,7 +179,7 @@ Depending on your installation type, whether you install on [real hardware](#har
 # Installation
 The installation of T-Pot is straight forward and heavily depends on a working, transparent and non-proxied up and running internet connection. Otherwise the installation **will fail!**
 
-Firstly, decide if you want to download our prebuilt installation ISO image from [GitHub](https://github.com/dtag-dev-sec/tpotce/releases), [create it yourself](#createiso) ***or*** [post-install on an existing Debian 9.7 (Stretch)](#postinstall).
+Firstly, decide if you want to download our prebuilt installation ISO image from [GitHub](https://github.com/dtag-dev-sec/tpotce/releases), [create it yourself](#createiso) ***or*** [post-install on an existing Debian 10 (Buster)](#postinstall).
 
 Secondly, decide where you want to let the system run: [real hardware](#hardware) or in a [virtual machine](#vm)?
 
@@ -193,7 +193,7 @@ You can download the prebuilt installation image from [GitHub](https://github.co
 For transparency reasons and to give you the ability to customize your install, we provide you the [ISO Creator](https://github.com/dtag-dev-sec/tpotce) that enables you to create your own ISO installation image.
 
 **Requirements to create the ISO image:**
-- Debian 9.7 or newer as host system (others *may* work, but *remain* untested)
+- Debian 10 as host system (others *may* work, but *remain* untested)
 - 4GB of free memory  
 - 32GB of free storage
 - A working internet connection
@@ -240,7 +240,7 @@ Whereas most CD burning tools allow you to burn from ISO images, the procedure t
 
 <a name="postinstall"></a>
 ## Post-Install User
-In some cases it is necessary to install Debian 9.7 (Stretch) on your own:
+In some cases it is necessary to install Debian 10 (Buster) on your own:
  - Cloud provider does not offer mounting ISO images.
  - Hardware setup needs special drivers and / or kernels.
  - Within your company you have to setup special policies, software etc.
@@ -474,7 +474,7 @@ We hope you understand that we cannot provide support on an individual basis. We
 # Licenses
 The software that T-Pot is built on uses the following licenses.
 <br>GPLv2: [conpot](https://github.com/mushorg/conpot/blob/master/LICENSE.txt), [dionaea](https://github.com/DinoTools/dionaea/blob/master/LICENSE), [honeypy](https://github.com/foospidy/HoneyPy/blob/master/LICENSE), [honeytrap](https://github.com/armedpot/honeytrap/blob/master/LICENSE), [suricata](http://suricata-ids.org/about/open-source/)
-<br>GPLv3: [adbhoney](https://github.com/huuck/ADBHoney), [elasticpot](https://github.com/schmalle/ElasticpotPY), [ewsposter](https://github.com/dtag-dev-sec/ews/), [fatt](https://github.com/0x4D31/fatt/blob/master/LICENSE), [rdpy](https://github.com/citronneur/rdpy/blob/master/LICENSE), [heralding](https://github.com/johnnykv/heralding/blob/master/LICENSE.txt), [snare](https://github.com/mushorg/snare/blob/master/LICENSE), [tanner](https://github.com/mushorg/snare/blob/master/LICENSE)
+<br>GPLv3: [adbhoney](https://github.com/huuck/ADBHoney), [elasticpot](https://gitlab.com/bontchev/elasticpot/-/blob/master/LICENSE), [ewsposter](https://github.com/dtag-dev-sec/ews/), [fatt](https://github.com/0x4D31/fatt/blob/master/LICENSE), [rdpy](https://github.com/citronneur/rdpy/blob/master/LICENSE), [heralding](https://github.com/johnnykv/heralding/blob/master/LICENSE.txt), [snare](https://github.com/mushorg/snare/blob/master/LICENSE), [tanner](https://github.com/mushorg/snare/blob/master/LICENSE)
 <br>Apache 2 License: [cyberchef](https://github.com/gchq/CyberChef/blob/master/LICENSE), [elasticsearch](https://github.com/elasticsearch/elasticsearch/blob/master/LICENSE.txt), [logstash](https://github.com/elasticsearch/logstash/blob/master/LICENSE), [kibana](https://github.com/elasticsearch/kibana/blob/master/LICENSE.md), [docker](https://github.com/docker/docker/blob/master/LICENSE), [elasticsearch-head](https://github.com/mobz/elasticsearch-head/blob/master/LICENCE)
 <br>MIT license: [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/blob/master/LICENSE), [glutton](https://github.com/mushorg/glutton/blob/master/LICENSE)
 <br> Other: [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot#licencing-agreement-malwaretech-public-licence), [cowrie](https://github.com/micheloosterhof/cowrie/blob/master/LICENSE.md), [mailoney](https://github.com/awhitehatter/mailoney), [Debian licensing](https://www.debian.org/legal/licenses/)
@@ -495,7 +495,7 @@ Without open source and the fruitful development community (we are proud to be a
 * [debian](http://www.debian.org/)
 * [dionaea](https://github.com/DinoTools/dionaea/graphs/contributors)
 * [docker](https://github.com/docker/docker/graphs/contributors)
-* [elasticpot](https://github.com/schmalle/ElasticpotPY/graphs/contributors)
+* [elasticpot](https://gitlab.com/bontchev/elasticpot/-/project_members)
 * [elasticsearch](https://github.com/elastic/elasticsearch/graphs/contributors)
 * [elasticsearch-head](https://github.com/mobz/elasticsearch-head/graphs/contributors)
 * [ewsposter](https://github.com/armedpot/ewsposter/graphs/contributors)
