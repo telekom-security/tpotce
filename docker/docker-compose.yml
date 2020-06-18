@@ -32,6 +32,11 @@ services:
     build: cowrie/.
     image: "dtagdevsec/cowrie:2006"
 
+# Dicompot service
+  dicompot:
+    build: dicompot/.
+    image: "dtagdevsec/dicompot:2006"
+
 # Dionaea service
   dionaea:
     build: dionaea/.

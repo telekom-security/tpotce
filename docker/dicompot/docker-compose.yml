@@ -1,0 +1,20 @@
+version: '2.3'
+
+networks:
+  dicompot_local:
+
+services:
+
+# dicompot service
+  dicompot:
+    build: .
+    container_name: dicompot
+    restart: always
+    networks:
+     - dicompot_local
+    ports:
+     - "11112:11112"
+    image: "dtagdevsec/dicompot:2006"
+    read_only: true
+    volumes:
+     - /data/dicompot/log:/var/log/dicompot

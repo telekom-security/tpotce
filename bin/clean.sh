@@ -114,6 +114,14 @@ fuCOWRIE () {
   chown tpot:tpot /data/cowrie -R
 }
 
+# Let's create a function to clean up and prepare dicompot data
+fuDICOMPOT () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/dicompot/*; fi
+  mkdir -p /data/dicompot/log
+  chmod 770 /data/dicompot -R
+  chown tpot:tpot /data/dicompot -R
+}
+
 # Let's create a function to clean up and prepare dionaea data
 fuDIONAEA () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/dionaea/*; fi
@@ -271,6 +279,7 @@ if [ "$myPERSISTENCE" = "on" ];
     fuCITRIXHONEYPOT
     fuCONPOT
     fuCOWRIE
+    fuDICOMPOT
     fuDIONAEA
     fuELASTICPOT
     fuELK

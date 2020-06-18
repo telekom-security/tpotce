@@ -228,6 +228,7 @@ mkdir -vp /data/adbhoney/{downloads,log} \
          /data/conpot/log \
 	 /data/citrixhoneypot/logs \
          /data/cowrie/{downloads,keys,misc,log,log/tty} \
+	 /data/dicompot \
          /data/dionaea/{log,bistreams,binaries,rtp,roots,roots/ftp,roots/tftp,roots/www,roots/upnp} \
          /data/elasticpot/log \
          /data/elk/{data,log} \

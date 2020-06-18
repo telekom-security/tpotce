@@ -11,6 +11,7 @@ networks:
   conpot_local_kamstrup_382:
   cowrie_local:
   cyberchef_local:
+  dicompot_local:
   elasticpot_local:
   heralding_local:
   honeypy_local:
@@ -174,6 +175,19 @@ services:
      - /data/cowrie/keys:/home/cowrie/cowrie/etc
      - /data/cowrie/log:/home/cowrie/cowrie/log
      - /data/cowrie/log/tty:/home/cowrie/cowrie/log/tty
+
+# Dicompot service
+  dicompot:
+    container_name: dicompot
+    restart: always
+    networks:
+     - dicompot_local
+    ports:
+     - "11112:11112"
+    image: "dtagdevsec/dicompot:2006"
+    read_only: true
+    volumes:
+     - /data/dicompot/log:/var/log/dicompot
 
 # Dionaea service
   dionaea:
