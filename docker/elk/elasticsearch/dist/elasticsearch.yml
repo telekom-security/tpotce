@@ -2,7 +2,7 @@ cluster.name: tpotcluster
 node.name: "tpotcluster-node-01"
 xpack.ml.enabled: false
 xpack.security.enabled: false
-xpack.ilm.enabled: false
+#xpack.ilm.enabled: false
 path:
     logs: /data/elk/log
     data: /data/elk/data

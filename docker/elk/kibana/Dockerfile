@@ -1,7 +1,7 @@
-FROM node:10.19.0-alpine
+FROM node:10.21.0-alpine
 #
 # VARS
-ENV KB_VER=7.7.1
+ENV KB_VER=7.8.0
 # 
 # Include dist
 ADD dist/ /root/dist/
