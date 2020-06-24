@@ -7,7 +7,7 @@
     "index.number_of_replicas" : "0",
     "index.mapping.total_fields.limit" : "2000",
     "index.query": {
-      "default_field": "fields.*"
+      "default_field": "*"
      }
   },
   "mappings" : {
