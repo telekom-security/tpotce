@@ -13,10 +13,10 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
             		openssl-dev \
                         libzmq \
             		postgresql-dev \
+			py3-pip \
             		python3 \
             		python3-dev \
             		py-virtualenv && \
-    pip3 install --no-cache-dir --upgrade pip && \
 #
 # Setup heralding
     mkdir -p /opt && \

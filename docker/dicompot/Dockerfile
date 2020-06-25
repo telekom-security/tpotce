@@ -39,4 +39,5 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
 # Start dicompot
 WORKDIR /opt/dicompot
 USER dicompot:dicompot
+#CMD ["./server","-ip","0.0.0.0","-log","/var/log/dicompot/dicompot.log"]
 CMD ["./server","-ip","0.0.0.0"]

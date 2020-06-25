@@ -1,4 +1,4 @@
-FROM alpine:latest
+FROM alpine:3.11
 #
 # Include dist
 ADD dist/ /root/dist/
@@ -21,7 +21,6 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     adduser -S -s /bin/ash -u 2000 -D -g 2000 rdpy && \
 #
 # Install deps 
-    pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir --upgrade cffi && \
     pip install --no-cache-dir \
                 hpfeeds \
