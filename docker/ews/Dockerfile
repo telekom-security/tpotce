@@ -1,5 +1,7 @@
 FROM alpine:latest
 #
+# Correct installation of pip3
+RUN apk add python3 py3-pip
 # Include dist
 ADD dist/ /root/dist/
 #
