@@ -9,6 +9,7 @@ networks:
   conpot_local_ipmi:
   conpot_local_kamstrup_382:
   cowrie_local:
+  dionaea_local:
   elasticpot_local:
   heralding_local:
   mailoney_local:
@@ -16,7 +17,6 @@ networks:
   rdpy_local:
   tanner_local:
   ewsposter_local:
-  spiderfoot_local:
 
 services:
 
@@ -165,7 +165,8 @@ services:
     stdin_open: true
     tty: true
     restart: always
-    network_mode: "host"
+    networks:
+     - dionaea_local
     ports:
      - "20:20"
      - "21:21"
@@ -173,7 +174,7 @@ services:
      - "69:69/udp"
      - "81:81"
      - "135:135"
-     - "443:443"
+     # - "443:443"
      - "445:445"
      - "1433:1433"
      - "1723:1723"

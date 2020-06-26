@@ -12,6 +12,7 @@ networks:
   cowrie_local:
   cyberchef_local:
   dicompot_local:
+  dionaea_local:
   elasticpot_local:
   heralding_local:
   honeypy_local:
@@ -196,7 +197,8 @@ services:
     stdin_open: true
     tty: true
     restart: always
-    network_mode: "host"
+    networks:
+     - dionaea_local
     ports:
      - "20:20"
      - "21:21"
