@@ -51,7 +51,6 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
 		    musl-dev \
                     openssl-dev \
                     python3-dev \
-                    py3-pip \
 		    swig \
 		    tinyxml-dev && \
     rm -rf /var/cache/apk/*

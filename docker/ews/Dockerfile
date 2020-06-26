@@ -18,8 +18,8 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
 	    py3-lxml \
 	    py3-mysqlclient \
             py3-requests \
+	    py3-pip \
             py3-setuptools && \
-    pip3 install --no-cache-dir -U pip && \
     pip3 install --no-cache-dir configparser hpfeeds3 pyOpenSSL xmljson && \
 #
 # Setup ewsposter

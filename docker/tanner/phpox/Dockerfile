@@ -9,6 +9,7 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
                make \
                php7 \
                php7-dev \
+	       py3-pip \
                python3 \
                python3-dev \
                re2c && \
