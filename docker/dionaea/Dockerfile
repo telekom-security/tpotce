@@ -35,9 +35,10 @@ RUN apt-get update -y && \
 	fonts-liberation && \
 #
 # Get and install dionaea
-    git clone --depth=1 https://github.com/dinotools/dionaea /root/dionaea/ && \
+    # Latest master is unstable, SIP causes crashing
+    git clone --depth=1 https://github.com/dinotools/dionaea -b 0.8.0 /root/dionaea/ && \
     cd /root/dionaea && \
-    git checkout 1426750b9fd09c5bfeae74d506237333cd8505e2 && \
+    #git checkout 1426750b9fd09c5bfeae74d506237333cd8505e2 && \
     mkdir build && \
     cd build && \
     cmake -DCMAKE_INSTALL_PREFIX:PATH=/opt/dionaea .. && \

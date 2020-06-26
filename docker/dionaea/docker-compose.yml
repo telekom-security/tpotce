@@ -1,5 +1,8 @@
 version: '2.3'
 
+networks:
+  dionaea_local:
+
 services:
 
 # Dionaea service
@@ -9,7 +12,8 @@ services:
     stdin_open: true
     tty: true
     restart: always
-    network_mode: "host"
+    networks:
+     - dionaea_local
     ports:
      - "20:20"
      - "21:21"
@@ -38,3 +42,4 @@ services:
      - /data/dionaea/binaries:/opt/dionaea/var/dionaea/binaries
      - /data/dionaea/log:/opt/dionaea/var/log
      - /data/dionaea/rtp:/opt/dionaea/var/dionaea/rtp
+
