@@ -14,12 +14,11 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     cd /opt/go/ && \
     git clone https://github.com/nsmfoo/dicompot.git && \
     cd dicompot && \
-    sed -i 's#dicompot.log#/var/log/dicompot/dicompot.log#g' server/server.go && \
     go mod download && \
     go install -a -x github.com/nsmfoo/dicompot/server && \
 #
 # Setup dicompot
-    mkdir -p /opt/dicompot && \
+    mkdir -p /opt/dicompot/images && \
     cp /opt/go/bin/server /opt/dicompot && \
 #
 # Setup user, groups and configs
@@ -39,5 +38,4 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
 # Start dicompot
 WORKDIR /opt/dicompot
 USER dicompot:dicompot
-#CMD ["./server","-ip","0.0.0.0","-log","/var/log/dicompot/dicompot.log"]
-CMD ["./server","-ip","0.0.0.0"]
+CMD ["./server","-ip","0.0.0.0","-dir","images","-log","/var/log/dicompot/dicompot.log"]

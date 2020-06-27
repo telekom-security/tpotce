@@ -190,6 +190,7 @@ services:
     read_only: true
     volumes:
      - /data/dicompot/log:/var/log/dicompot
+#     - /path/to/dicom/images:/opt/dicompot/images       
 
 # Dionaea service
   dionaea:
