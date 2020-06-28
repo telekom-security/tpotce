@@ -116,8 +116,9 @@ fuCOWRIE () {
 
 # Let's create a function to clean up and prepare dicompot data
 fuDICOMPOT () {
-  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/dicompot/*; fi
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/dicompot/log; fi
   mkdir -p /data/dicompot/log
+  mkdir -p /data/dicompot/images
   chmod 770 /data/dicompot -R
   chown tpot:tpot /data/dicompot -R
 }

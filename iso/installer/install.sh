@@ -1,6 +1,14 @@
 #!/bin/bash
 # T-Pot Universal Installer
 
+# Installer can only be executed once.
+myTPOT_INSTALL_LOG="/install.log"
+if [ -s "$myTPOT_INSTALL_LOG" ];
+  then
+    echo "Aborting. Installer can only be executed once."
+    exit
+fi
+
 ##################
 # I. Global vars #
 ##################
@@ -153,21 +161,25 @@ ListenStream=64294
 mySSHPORT="
 Port 64295
 "
+myRANDOM_HOUR=$(shuf -i 2-22 -n 1)
+myRANDOM_MINUTE=$(shuf -i 0-59 -n 1)
+myDEL_HOUR=$(($myRANDOM_HOUR+1))
+myPULL_HOUR=$(($myRANDOM_HOUR-2))
 myCRONJOBS="
 # Check if updated images are available and download them
-27 1 * * *      root    docker-compose -f /opt/tpot/etc/tpot.yml pull
+$myRANDOM_MINUTE $myPULL_HOUR * *      root    docker-compose -f /opt/tpot/etc/tpot.yml pull
 
 # Delete elasticsearch logstash indices older than 90 days
-27 4 * * *      root    curator --config /opt/tpot/etc/curator/curator.yml /opt/tpot/etc/curator/actions.yml
+$myRANDOM_MINUTE $myDEL_HOUR * * *      root    curator --config /opt/tpot/etc/curator/curator.yml /opt/tpot/etc/curator/actions.yml
 
 # Uploaded binaries are not supposed to be downloaded
 */1 * * * *     root    mv --backup=numbered /data/dionaea/roots/ftp/* /data/dionaea/binaries/
 
 # Daily reboot
-27 3 * * *      root    systemctl stop tpot && docker stop \$(docker ps -aq) || docker rm \$(docker ps -aq) || reboot
+$myRANDOM_MINUTE $myRANDOM_HOUR * * 1-6      root    systemctl stop tpot && docker stop \$(docker ps -aq) || docker rm \$(docker ps -aq) || reboot
 
 # Check for updated packages every sunday, upgrade and reboot
-27 16 * * 0     root    apt-fast autoclean -y && apt-fast autoremove -y && apt-fast update -y && apt-fast upgrade -y && sleep 10 && reboot
+$myRANDOM_MINUTE $myRANDOM_HOUR * * 0     root    apt-fast autoclean -y && apt-fast autoremove -y && apt-fast update -y && apt-fast upgrade -y && sleep 10 && reboot
 "
 mySHELLCHECK='[[ $- == *i* ]] || return'
 myROOTPROMPT='PS1="\[\033[38;5;8m\][\[$(tput sgr0)\]\[\033[38;5;1m\]\u\[$(tput sgr0)\]\[\033[38;5;6m\]@\[$(tput sgr0)\]\[\033[38;5;4m\]\h\[$(tput sgr0)\]\[\033[38;5;6m\]:\[$(tput sgr0)\]\[\033[38;5;5m\]\w\[$(tput sgr0)\]\[\033[38;5;8m\]]\[$(tput sgr0)\]\[\033[38;5;1m\]\\$\[$(tput sgr0)\]\[\033[38;5;15m\] \[$(tput sgr0)\]"'
@@ -780,7 +792,7 @@ mkdir -vp /data/adbhoney/{downloads,log} \
          /data/conpot/log \
          /data/citrixhoneypot/logs \
          /data/cowrie/{downloads,keys,misc,log,log/tty} \
-	 /data/dicompot/log \
+	 /data/dicompot/{images,log} \
          /data/dionaea/{log,bistreams,binaries,rtp,roots,roots/ftp,roots/tftp,roots/www,roots/upnp} \
          /data/elasticpot/log \
          /data/elk/{data,log} \

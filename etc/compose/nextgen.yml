@@ -4,6 +4,7 @@ version: '2.3'
 
 networks:
   adbhoney_local:
+  ciscoasa_local:
   citrixhoneypot_local:
   conpot_local_IEC104:
   conpot_local_guardian_ast:
@@ -48,9 +49,10 @@ services:
   ciscoasa:
     container_name: ciscoasa
     restart: always
+    networks:
+      - ciscoasa_local
     tmpfs:
      - /tmp/ciscoasa:uid=2000,gid=2000
-    network_mode: "host"
     ports:
      - "5000:5000/udp"
      - "8443:8443"
@@ -179,6 +181,9 @@ services:
      - /data/cowrie/log/tty:/home/cowrie/cowrie/log/tty
 
 # Dicompot service
+# Get the Horos Client for testing: https://horosproject.org/
+# Get Dicom images (CC BY 3.0): https://www.cancerimagingarchive.net/collections/ 
+# Put images (which must be in Dicom DCM format or it will not work!) into /data/dicompot/images
   dicompot:
     container_name: dicompot
     restart: always
@@ -190,7 +195,7 @@ services:
     read_only: true
     volumes:
      - /data/dicompot/log:/var/log/dicompot
-#     - /path/to/dicom/images:/opt/dicompot/images       
+#     - /data/dicompot/images:/opt/dicompot/images
 
 # Dionaea service
   dionaea:
