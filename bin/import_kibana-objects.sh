@@ -20,7 +20,7 @@ myCOL0="[0;0m"
 
 # Let's ensure normal operation on exit or if interrupted ...
 function fuCLEANUP {
-  rm -rf patterns/ dashboards/ visualizations/ searches/
+  rm -rf patterns/ dashboards/ visualizations/ searches/ configs/
 }
 trap fuCLEANUP EXIT
 
@@ -98,6 +98,22 @@ for i in $mySEARCHES;
 echo
 wait
 
+# Restore configs
+myCONFIGS=$(ls configs/*.json | cut -c 9- | rev | cut -c 6- | rev)
+echo $myCOL1"### Now importing "$myCOL0$(echo $myCONFIGS | wc -w)$myCOL1 "configs." $myCOL0
+for i in $myCONFIGS;
+  do
+    curl -s -XDELETE ''$myKIBANA'api/saved_objects/configs/'$i'' -H "Content-Type: application/json" -H "kbn-xsrf: true" > /dev/null &
+  done;
+wait
+for i in $myCONFIGS;
+  do
+    echo $myCOL1"###### "$i $myCOL0
+    curl -s -XPOST ''$myKIBANA'api/saved_objects/configs/'$i'' -H "Content-Type: application/json" -H "kbn-xsrf: true" -d @configs/$i.json > /dev/null &
+  done;
+echo
+wait
+
 # Stats
 echo
 echo $myCOL1"### Statistics"
@@ -105,5 +121,6 @@ echo $myCOL1"###### Imported"$myCOL0 $myINDEXCOUNT $myCOL1"index patterns." $myC
 echo $myCOL1"###### Imported"$myCOL0 $(echo $myDASHBOARDS | wc -w) $myCOL1"dashboards." $myCOL0
 echo $myCOL1"###### Imported"$myCOL0 $(echo $myVISUALIZATIONS | wc -w) $myCOL1"visualizations." $myCOL0
 echo $myCOL1"###### Imported"$myCOL0 $(echo $mySEARCHES | wc -w) $myCOL1"searches." $myCOL0
+echo $myCOL1"###### Imported"$myCOL0 $(echo $myCONFIGS | wc -w) $myCOL1"configs." $myCOL0
 echo
 

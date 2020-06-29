@@ -5,7 +5,10 @@ networks:
 
 services:
 
-# dicompot service
+# Dicompot service
+# Get the Horos Client for testing: https://horosproject.org/
+# Get Dicom images (CC BY 3.0): https://www.cancerimagingarchive.net/collections/
+# Put images (which must be in Dicom DCM format or it will not work!) into /data/dicompot/images
   dicompot:
     build: .
     container_name: dicompot
@@ -18,5 +21,4 @@ services:
     read_only: true
     volumes:
      - /data/dicompot/log:/var/log/dicompot
-#     - /path/to/dicom/images:/opt/dicompot/images
-
+#     - /data/dicompot/images:/opt/dicompot/images

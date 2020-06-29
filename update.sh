@@ -260,7 +260,7 @@ echo "### Now pulling latest docker images"
 echo "######$myBLUE This might take a while, please be patient!$myWHITE"
 fuPULLIMAGES 2>&1>/dev/null
 
-#fuREMOVEOLDIMAGES "1804"
+#fuREMOVEOLDIMAGES "1903"
 echo "### If you made changes to tpot.yml please ensure to add them again."
 echo "### We stored the previous version as backup in /root/."
 echo "### Some updates may need an import of the latest Kibana objects as well."
@@ -268,7 +268,9 @@ echo "### Download the latest objects here if they recently changed:"
 echo "### https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/etc/objects/kibana_export.json.zip"
 echo "### Export and import the objects easily through the Kibana WebUI:"
 echo "### Go to Kibana > Management > Saved Objects > Export / Import"
-echo "### All objects will be overwritten upon import, make sure to run an export first."
+echo "### Or use the command:"
+echo "### import_kibana-objects.sh /opt/tpot/etc/objects/kibana-objects.tgz"
+echo "### All objects will be overwritten upon import, make sure to run an export first if you made changes."
 }
 
 function fuRESTORE_EWSCFG () {
@@ -321,5 +323,5 @@ fuRESTORE_EWSCFG
 fuRESTORE_HPFEEDS
 
 echo
-echo "### Please reboot."
+echo "### Done."
 echo
