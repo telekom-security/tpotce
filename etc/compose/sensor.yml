@@ -4,14 +4,19 @@ version: '2.3'
 
 networks:
   adbhoney_local:
+  ciscoasa_local:
+  citrixhoneypot_local:
   conpot_local_IEC104:
   conpot_local_guardian_ast:
   conpot_local_ipmi:
   conpot_local_kamstrup_382:
   cowrie_local:
+  dicompot_local:
   dionaea_local:
   elasticpot_local:
   heralding_local:
+  honeypy_local:
+  honeysap_local:
   mailoney_local:
   medpot_local:
   rdpy_local:
@@ -42,9 +47,10 @@ services:
   ciscoasa:
     container_name: ciscoasa
     restart: always
+    networks:
+      - ciscoasa_local
     tmpfs:
      - /tmp/ciscoasa:uid=2000,gid=2000
-    network_mode: "host"
     ports:
      - "5000:5000/udp"
      - "8443:8443"
@@ -52,6 +58,19 @@ services:
     read_only: true
     volumes:
      - /data/ciscoasa/log:/var/log/ciscoasa
+
+# CitrixHoneypot service
+  citrixhoneypot:
+    container_name: citrixhoneypot
+    restart: always
+    networks:
+     - citrixhoneypot_local
+    ports:
+     - "443:443"
+    image: "dtagdevsec/citrixhoneypot:2006"
+    read_only: true
+    volumes:
+     - /data/citrixhoneypot/logs:/opt/citrixhoneypot/logs
 
 # Conpot IEC104 service
   conpot_IEC104:
@@ -159,6 +178,23 @@ services:
      - /data/cowrie/log:/home/cowrie/cowrie/log
      - /data/cowrie/log/tty:/home/cowrie/cowrie/log/tty
 
+# Dicompot service
+# Get the Horos Client for testing: https://horosproject.org/
+# Get Dicom images (CC BY 3.0): https://www.cancerimagingarchive.net/collections/
+# Put images (which must be in Dicom DCM format or it will not work!) into /data/dicompot/images
+  dicompot:
+    container_name: dicompot
+    restart: always
+    networks:
+     - dicompot_local
+    ports:
+     - "11112:11112"
+    image: "dtagdevsec/dicompot:2006"
+    read_only: true
+    volumes:
+     - /data/dicompot/log:/var/log/dicompot
+#     - /data/dicompot/images:/opt/dicompot/images
+
 # Dionaea service
   dionaea:
     container_name: dionaea
@@ -237,6 +273,37 @@ services:
     read_only: true
     volumes:
      - /data/heralding/log:/var/log/heralding
+
+# HoneyPy service
+  honeypy:
+    container_name: honeypy
+    restart: always
+    networks:
+     - honeypy_local
+    ports:
+     - "7:7"
+     - "8:8"
+     - "2048:2048"
+     - "2323:2323"
+     - "2324:2324"
+     - "4096:4096"
+    # - "9200:9200"
+    image: "dtagdevsec/honeypy:2006"
+    read_only: true
+    volumes:
+     - /data/honeypy/log:/opt/honeypy/log
+
+# HoneySAP service
+  honeysap:
+    container_name: honeysap
+    restart: always
+    networks:
+     - honeysap_local
+    ports:
+     - "3299:3299"
+    image: "dtagdevsec/honeysap:2006"
+    volumes:
+     - /data/honeysap/log:/opt/honeysap/log
 
 # Honeytrap service
   honeytrap:
@@ -399,6 +466,19 @@ services:
 ##################
 #### NSM
 ##################
+
+# Fatt service
+  fatt:
+    container_name: fatt
+    restart: always
+    network_mode: "host"
+    cap_add:
+     - NET_ADMIN
+     - SYS_NICE
+     - NET_RAW
+    image: "dtagdevsec/fatt:2006"
+    volumes:
+     - /data/fatt/log:/opt/fatt/log
 
 # P0f service
   p0f:
