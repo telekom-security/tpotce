@@ -17,4 +17,4 @@ services:
     image: "dtagdevsec/elasticpot:2006"
     read_only: true
     volumes:
-     - /data/elasticpot/log:/opt/elasticpot/log
+     - /data/elasticpot/log:/opt/ElasticpotPY/log

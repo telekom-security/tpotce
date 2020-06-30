@@ -6,6 +6,7 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
             git \
             libcap \
 	    openssl \
+	    py3-pip \
             python3 \
             python3-dev && \
 #

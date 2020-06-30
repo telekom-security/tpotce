@@ -82,7 +82,7 @@ echo
 # Let's check for version
 function fuCHECK_VERSION () {
 local myMINVERSION="19.03.0"
-local myMASTERVERSION="19.03.3"
+local myMASTERVERSION="20.06.0"
 echo
 echo "### Checking for Release ID"
 myRELEASE=$(lsb_release -i | grep Debian -c)
@@ -183,7 +183,7 @@ function fuUPDATER () {
 export DEBIAN_FRONTEND=noninteractive
 echo "### Installing apt-fast"
 /bin/bash -c "$(curl -sL https://raw.githubusercontent.com/ilikenwf/apt-fast/master/quick-install.sh)"
-local myPACKAGES="aria2 apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit console-setup console-setup-linux cracklib-runtime curl debconf-utils dialog dnsutils docker.io docker-compose ethtool fail2ban figlet genisoimage git glances grc haveged html2text htop iptables iw jq kbd libcrack2 libltdl7 libpam-google-authenticator man mosh multitail netselect-apt net-tools npm ntp openssh-server openssl pass pigz prips software-properties-common syslinux psmisc pv python3-elasticsearch-curator python3-pip toilet unattended-upgrades unzip vim wget wireless-tools wpasupplicant"
+local myPACKAGES="aria2 apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker console-setup console-setup-linux cracklib-runtime curl debconf-utils dialog dnsutils docker.io docker-compose ethtool fail2ban figlet genisoimage git glances grc haveged html2text htop iptables iw jq kbd libcrack2 libltdl7 libpam-google-authenticator man mosh multitail netselect-apt net-tools npm ntp openssh-server openssl pass pigz prips software-properties-common syslinux psmisc pv python3-elasticsearch-curator python3-pip toilet unattended-upgrades unzip vim wget wireless-tools wpasupplicant"
 # Remove purge in the future
 echo "### Removing repository based install of elasticsearch-curator"
 apt-get purge elasticsearch-curator -y
@@ -228,6 +228,7 @@ mkdir -vp /data/adbhoney/{downloads,log} \
          /data/conpot/log \
 	 /data/citrixhoneypot/logs \
          /data/cowrie/{downloads,keys,misc,log,log/tty} \
+	 /data/dicompot/{images,log} \
          /data/dionaea/{log,bistreams,binaries,rtp,roots,roots/ftp,roots/tftp,roots/www,roots/upnp} \
          /data/elasticpot/log \
          /data/elk/{data,log} \
@@ -236,6 +237,7 @@ mkdir -vp /data/adbhoney/{downloads,log} \
          /data/glutton/log \
          /data/heralding/log \
          /data/honeypy/log \
+         /data/honeysap/log \
          /data/mailoney/log \
          /data/medpot/log \
          /data/nginx/{log,heimdall} \
@@ -258,7 +260,7 @@ echo "### Now pulling latest docker images"
 echo "######$myBLUE This might take a while, please be patient!$myWHITE"
 fuPULLIMAGES 2>&1>/dev/null
 
-#fuREMOVEOLDIMAGES "1804"
+#fuREMOVEOLDIMAGES "1903"
 echo "### If you made changes to tpot.yml please ensure to add them again."
 echo "### We stored the previous version as backup in /root/."
 echo "### Some updates may need an import of the latest Kibana objects as well."
@@ -266,7 +268,9 @@ echo "### Download the latest objects here if they recently changed:"
 echo "### https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/etc/objects/kibana_export.json.zip"
 echo "### Export and import the objects easily through the Kibana WebUI:"
 echo "### Go to Kibana > Management > Saved Objects > Export / Import"
-echo "### All objects will be overwritten upon import, make sure to run an export first."
+echo "### Or use the command:"
+echo "### import_kibana-objects.sh /opt/tpot/etc/objects/kibana-objects.tgz"
+echo "### All objects will be overwritten upon import, make sure to run an export first if you made changes."
 }
 
 function fuRESTORE_EWSCFG () {
@@ -319,5 +323,5 @@ fuRESTORE_EWSCFG
 fuRESTORE_HPFEEDS
 
 echo
-echo "### Please reboot."
+echo "### Done."
 echo

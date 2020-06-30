@@ -1,6 +1,14 @@
 #!/bin/bash
 # T-Pot Universal Installer
 
+# Installer can only be executed once.
+myTPOT_INSTALL_LOG="/install.log"
+if [ -s "$myTPOT_INSTALL_LOG" ];
+  then
+    echo "Aborting. Installer can only be executed once."
+    exit
+fi
+
 ##################
 # I. Global vars #
 ##################
@@ -14,7 +22,7 @@ myLSB_STABLE_SUPPORTED="stretch buster"
 myLSB_TESTING_SUPPORTED="stable"
 myREMOTESITES="https://hub.docker.com https://github.com https://pypi.python.org https://debian.org https://listbot.sicherheitstacho.eu"
 myPREINSTALLPACKAGES="aria2 apache2-utils cracklib-runtime curl dialog figlet fuse grc libcrack2 libpq-dev lsb-release netselect-apt net-tools software-properties-common toilet"
-myINSTALLPACKAGES="aria2 apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit console-setup console-setup-linux cracklib-runtime curl debconf-utils dialog dnsutils docker.io docker-compose ethtool fail2ban figlet genisoimage git glances grc haveged html2text htop iptables iw jq kbd libcrack2 libltdl7 libpam-google-authenticator man mosh multitail netselect-apt net-tools npm ntp openssh-server openssl pass pigz prips software-properties-common syslinux psmisc pv python3-pip toilet unattended-upgrades unzip vim wget wireless-tools wpasupplicant"
+myINSTALLPACKAGES="aria2 apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker console-setup console-setup-linux cracklib-runtime curl debconf-utils dialog dnsutils docker.io docker-compose ethtool fail2ban figlet genisoimage git glances grc haveged html2text htop iptables iw jq kbd libcrack2 libltdl7 libpam-google-authenticator man mosh multitail netselect-apt net-tools npm ntp openssh-server openssl pass pigz prips software-properties-common syslinux psmisc pv python3-pip toilet unattended-upgrades unzip vim wget wireless-tools wpasupplicant"
 myINFO="\
 ###########################################
 ### T-Pot Installer for Debian (Stable) ###
@@ -153,21 +161,25 @@ ListenStream=64294
 mySSHPORT="
 Port 64295
 "
+myRANDOM_HOUR=$(shuf -i 2-22 -n 1)
+myRANDOM_MINUTE=$(shuf -i 0-59 -n 1)
+myDEL_HOUR=$(($myRANDOM_HOUR+1))
+myPULL_HOUR=$(($myRANDOM_HOUR-2))
 myCRONJOBS="
 # Check if updated images are available and download them
-27 1 * * *      root    docker-compose -f /opt/tpot/etc/tpot.yml pull
+$myRANDOM_MINUTE $myPULL_HOUR * *      root    docker-compose -f /opt/tpot/etc/tpot.yml pull
 
 # Delete elasticsearch logstash indices older than 90 days
-27 4 * * *      root    curator --config /opt/tpot/etc/curator/curator.yml /opt/tpot/etc/curator/actions.yml
+$myRANDOM_MINUTE $myDEL_HOUR * * *      root    curator --config /opt/tpot/etc/curator/curator.yml /opt/tpot/etc/curator/actions.yml
 
 # Uploaded binaries are not supposed to be downloaded
 */1 * * * *     root    mv --backup=numbered /data/dionaea/roots/ftp/* /data/dionaea/binaries/
 
 # Daily reboot
-27 3 * * *      root    systemctl stop tpot && docker stop \$(docker ps -aq) || docker rm \$(docker ps -aq) || reboot
+$myRANDOM_MINUTE $myRANDOM_HOUR * * 1-6      root    systemctl stop tpot && docker stop \$(docker ps -aq) || docker rm \$(docker ps -aq) || reboot
 
 # Check for updated packages every sunday, upgrade and reboot
-27 16 * * 0     root    apt-fast autoclean -y && apt-fast autoremove -y && apt-fast update -y && apt-fast upgrade -y && sleep 10 && reboot
+$myRANDOM_MINUTE $myRANDOM_HOUR * * 0     root    apt-fast autoclean -y && apt-fast autoremove -y && apt-fast update -y && apt-fast upgrade -y && sleep 10 && reboot
 "
 mySHELLCHECK='[[ $- == *i* ]] || return'
 myROOTPROMPT='PS1="\[\033[38;5;8m\][\[$(tput sgr0)\]\[\033[38;5;1m\]\u\[$(tput sgr0)\]\[\033[38;5;6m\]@\[$(tput sgr0)\]\[\033[38;5;4m\]\h\[$(tput sgr0)\]\[\033[38;5;6m\]:\[$(tput sgr0)\]\[\033[38;5;5m\]\w\[$(tput sgr0)\]\[\033[38;5;8m\]]\[$(tput sgr0)\]\[\033[38;5;1m\]\\$\[$(tput sgr0)\]\[\033[38;5;15m\] \[$(tput sgr0)\]"'
@@ -514,13 +526,14 @@ fi
 # Let's ask the user for install flavor
 if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ] || [ "$myTPOT_DEPLOYMENT_TYPE" == "user" ];
   then
-    myCONF_TPOT_FLAVOR=$(dialog --keep-window --no-cancel --backtitle "$myBACKTITLE" --title "[ Choose Your T-Pot NG Edition ]" --menu \
-    "\nRequired: 6GB RAM, 128GB SSD\nRecommended: 8GB RAM, 256GB SSD" 14 70 6 \
+    myCONF_TPOT_FLAVOR=$(dialog --keep-window --no-cancel --backtitle "$myBACKTITLE" --title "[ Choose Your T-Pot Edition ]" --menu \
+    "\nRequired: 8GB RAM, 128GB SSD\nRecommended: 8GB RAM, 256GB SSD" 15 70 6 \
     "STANDARD" "Honeypots, ELK, NSM & Tools" \
     "SENSOR" "Just Honeypots, EWS Poster & NSM" \
     "INDUSTRIAL" "Conpot, RDPY, Vnclowpot, ELK, NSM & Tools" \
     "COLLECTOR" "Heralding, ELK, NSM & Tools" \
-    "NEXTGEN" "NextGen (Glutton, HoneyPy)" 3>&1 1>&2 2>&3 3>&-)
+    "NEXTGEN" "NextGen (Glutton, HoneyPy)" \
+    "MEDICAL" "Dicompot, Medpot, ELK, NSM & Tools" 3>&1 1>&2 2>&3 3>&-)
 fi
 
 # Let's ask for a secure tsec password if installation type is iso
@@ -688,8 +701,11 @@ pip3 install elasticsearch-curator yq
 hash -r
 
 # Cloning T-Pot from GitHub
-fuBANNER "Cloning T-Pot"
-git clone https://github.com/dtag-dev-sec/tpotce /opt/tpot
+if ! [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ];
+  then
+    fuBANNER "Cloning T-Pot"
+    git clone https://github.com/dtag-dev-sec/tpotce /opt/tpot
+fi
 
 # Let's create the T-Pot user
 fuBANNER "Create user"
@@ -741,6 +757,10 @@ case $myCONF_TPOT_FLAVOR in
     fuBANNER "NEXTGEN"
     ln -s /opt/tpot/etc/compose/nextgen.yml $myTPOTCOMPOSE
   ;;
+  MEDICAL)
+    fuBANNER "MEDICAL"
+    ln -s /opt/tpot/etc/compose/medical.yml $myTPOTCOMPOSE
+  ;;
 esac
 
 # Let's load docker images
@@ -780,6 +800,7 @@ mkdir -vp /data/adbhoney/{downloads,log} \
          /data/conpot/log \
          /data/citrixhoneypot/logs \
          /data/cowrie/{downloads,keys,misc,log,log/tty} \
+	 /data/dicompot/{images,log} \
          /data/dionaea/{log,bistreams,binaries,rtp,roots,roots/ftp,roots/tftp,roots/www,roots/upnp} \
          /data/elasticpot/log \
          /data/elk/{data,log} \
@@ -788,6 +809,7 @@ mkdir -vp /data/adbhoney/{downloads,log} \
          /data/glutton/log \
          /data/heralding/log \
          /data/honeypy/log \
+         /data/honeysap/log \
          /data/mailoney/log \
          /data/medpot/log \
          /data/nginx/{log,heimdall} \

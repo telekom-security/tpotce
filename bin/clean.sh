@@ -114,6 +114,15 @@ fuCOWRIE () {
   chown tpot:tpot /data/cowrie -R
 }
 
+# Let's create a function to clean up and prepare dicompot data
+fuDICOMPOT () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/dicompot/log; fi
+  mkdir -p /data/dicompot/log
+  mkdir -p /data/dicompot/images
+  chmod 770 /data/dicompot -R
+  chown tpot:tpot /data/dicompot -R
+}
+
 # Let's create a function to clean up and prepare dionaea data
 fuDIONAEA () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/dionaea/*; fi
@@ -170,6 +179,14 @@ fuHONEYPY () {
   mkdir -p /data/honeypy/log
   chmod 770 /data/honeypy -R
   chown tpot:tpot /data/honeypy -R
+}
+
+# Let's create a function to clean up and prepare honeysap data
+fuHONEYSAP () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/honeysap/*; fi
+  mkdir -p /data/honeysap/log
+  chmod 770 /data/honeysap -R
+  chown tpot:tpot /data/honeysap -R
 }
 
 # Let's create a function to clean up and prepare honeytrap data
@@ -271,12 +288,14 @@ if [ "$myPERSISTENCE" = "on" ];
     fuCITRIXHONEYPOT
     fuCONPOT
     fuCOWRIE
+    fuDICOMPOT
     fuDIONAEA
     fuELASTICPOT
     fuELK
     fuFATT
     fuGLUTTON
     fuHERALDING
+    fuHONEYSAP
     fuHONEYPY
     fuHONEYTRAP
     fuMAILONEY

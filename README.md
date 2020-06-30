@@ -1,6 +1,6 @@
 ![T-Pot](doc/tpotsocial.png)
 
-T-Pot 19.03 runs on Debian (Stable), is based heavily on
+T-Pot 20.06 runs on Debian (Stable), is based heavily on
 
 [docker](https://www.docker.com/), [docker-compose](https://docs.docker.com/compose/)
 
@@ -11,11 +11,13 @@ and includes dockerized versions of the following honeypots
 * [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot),
 * [conpot](http://conpot.org/),
 * [cowrie](https://github.com/cowrie/cowrie),
+* [dicompot](https://github.com/nsmfoo/dicompot),
 * [dionaea](https://github.com/DinoTools/dionaea),
-* [elasticpot](https://github.com/schmalle/ElasticpotPY),
+* [elasticpot](https://gitlab.com/bontchev/elasticpot),
 * [glutton](https://github.com/mushorg/glutton),
 * [heralding](https://github.com/johnnykv/heralding),
 * [honeypy](https://github.com/foospidy/HoneyPy),
+* [honeysap](https://github.com/SecureAuthCorp/HoneySAP),
 * [honeytrap](https://github.com/armedpot/honeytrap/),
 * [mailoney](https://github.com/awhitehatter/mailoney),
 * [medpot](https://github.com/schmalle/medpot),
@@ -24,7 +26,7 @@ and includes dockerized versions of the following honeypots
 * [tanner](http://mushmush.org/)
 
 
-Furthermore we use the following tools
+Furthermore T-Pot includes the following tools
 
 * [Cockpit](https://cockpit-project.org/running) for a lightweight, webui for docker, os, real-time performance monitoring and web terminal.
 * [Cyberchef](https://gchq.github.io/CyberChef/) a web app for encryption, encoding, compression and data analysis.
@@ -36,7 +38,7 @@ Furthermore we use the following tools
 
 
 # TL;DR
-1. Meet the [system requirements](#requirements). The T-Pot installation needs at least 6-8 GB RAM and 128 GB free disk space as well as a working internet connection.
+1. Meet the [system requirements](#requirements). The T-Pot installation needs at least 8 GB RAM and 128 GB free disk space as well as a working (outgoing non-filtered) internet connection.
 2. Download the T-Pot ISO from [GitHub](https://github.com/dtag-dev-sec/tpotce/releases) or [create it yourself](#createiso).
 3. Install the system in a [VM](#vm) or on [physical hardware](#hw) with [internet access](#placement).
 4. Enjoy your favorite beverage - [watch](https://sicherheitstacho.eu) and [analyze](#kibana).
@@ -45,6 +47,7 @@ Furthermore we use the following tools
 # Table of Contents
 - [Technical Concept](#concept)
 - [System Requirements](#requirements)
+- [Installation Types](#types)
 - [Installation](#installation)
   - [Prebuilt ISO Image](#prebuilt)
   - [Create your own ISO Image](#createiso)
@@ -60,6 +63,7 @@ Furthermore we use the following tools
 - [Updates](#updates)
 - [Options](#options)
   - [SSH and web access](#ssh)
+  - [T-Pot Landing Page](#heimdall)
   - [Kibana Dashboard](#kibana)
   - [Tools](#tools)
   - [Maintenance](#maintenance)
@@ -77,9 +81,9 @@ Furthermore we use the following tools
 <a name="concept"></a>
 # Technical Concept
 
-T-Pot is based on the network installer Debian (Stable).
-The honeypot daemons as well as other support components being used have been containerized using [docker](http://docker.io).
-This allows us to run multiple honeypot daemons on the same network interface while maintaining a small footprint and constrain each honeypot within its own environment.
+T-Pot is based on the Debian (Stable) network installer.
+The honeypot daemons as well as other support components are [dockered](http://docker.io).
+This allows T-Pot to run multiple honeypot daemons and tools on the same network interface while maintaining a small footprint and constrain each honeypot within its own environment.
 
 In T-Pot we combine the dockerized honeypots ...
 * [adbhoney](https://github.com/huuck/ADBHoney),
@@ -87,11 +91,13 @@ In T-Pot we combine the dockerized honeypots ...
 * [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot),
 * [conpot](http://conpot.org/),
 * [cowrie](http://www.micheloosterhof.com/cowrie/),
+* [dicompot](https://github.com/nsmfoo/dicompot),
 * [dionaea](https://github.com/DinoTools/dionaea),
-* [elasticpot](https://github.com/schmalle/ElasticpotPY),
+* [elasticpot](https://gitlab.com/bontchev/elasticpot),
 * [glutton](https://github.com/mushorg/glutton),
 * [heralding](https://github.com/johnnykv/heralding),
 * [honeypy](https://github.com/foospidy/HoneyPy),
+* [honeysap](https://github.com/SecureAuthCorp/HoneySAP),
 * [honeytrap](https://github.com/armedpot/honeytrap/),
 * [mailoney](https://github.com/awhitehatter/mailoney),
 * [medpot](https://github.com/schmalle/medpot),
@@ -112,7 +118,7 @@ In T-Pot we combine the dockerized honeypots ...
 
 ![Architecture](doc/architecture.png)
 
-While data within docker containers is volatile we do ensure a default 30 day persistence of all relevant honeypot and tool data in the well known `/data` folder and sub-folders. The persistence configuration may be adjusted in `/opt/tpot/etc/logrotate/logrotate.conf`. Once a docker container crashes, all other data produced within its environment is erased and a fresh instance is started from the corresponding docker image.<br>
+While data within docker containers is volatile T-Pot ensures a default 30 day persistence of all relevant honeypot and tool data in the well known `/data` folder and sub-folders. The persistence configuration may be adjusted in `/opt/tpot/etc/logrotate/logrotate.conf`. Once a docker container crashes, all other data produced within its environment is erased and a fresh instance is started from the corresponding docker image.<br>
 
 Basically, what happens when the system is booted up is the following:
 
@@ -120,80 +126,76 @@ Basically, what happens when the system is booted up is the following:
 - start all the necessary services (i.e. cockpit, docker, etc.)
 - start all docker containers via docker-compose (honeypots, nms, elk, etc.)
 
-Within the T-Pot project, we provide all the tools and documentation necessary to build your own honeypot system and contribute to our [Sicherheitstacho](https://sicherheitstacho.eu).
+The T-Pot project provides all the tools and documentation necessary to build your own honeypot system and contribute to our [Sicherheitstacho](https://sicherheitstacho.eu).
 
-The source code and configuration files are fully stored in the T-Pot GitHub repository. The docker images are pre-configured for the T-Pot environment. If you want to run the docker images separately, make sure you study the docker-compose configuration (`/opt/tpot/etc/tpot.yml`) and the T-Pot systemd script (`/etc/systemd/system/tpot.service`), as they provide a good starting point for implementing changes.
+The source code and configuration files are fully stored in the T-Pot GitHub repository. The docker images are preconfigured for the T-Pot environment. If you want to run the docker images separately, make sure you study the docker-compose configuration (`/opt/tpot/etc/tpot.yml`) and the T-Pot systemd script (`/etc/systemd/system/tpot.service`), as they provide a good starting point for implementing changes.
 
 The individual docker configurations are located in the [docker folder](https://github.com/dtag-dev-sec/tpotce/tree/master/docker).
 
 <a name="requirements"></a>
 # System Requirements
-Depending on your installation type, whether you install on [real hardware](#hardware) or in a [virtual machine](#vm), make sure your designated T-Pot system meets the following requirements:
+Depending on the installation type, whether installing on [real hardware](#hardware) or in a [virtual machine](#vm), make sure the designated system meets the following requirements:
 
-##### Standard Installation
-- Honeypots: adbhoney, ciscoasa, conpot, cowrie, dionaea, elasticpot, heralding, honeytrap, mailoney, medpot, rdpy, snare & tanner
-- Tools: cockpit, cyberchef, ELK, elasticsearch head, ewsposter, NGINX, spiderfoot, p0f and suricata
-
-- 6-8 GB RAM (less RAM is possible but might introduce swapping)
+- 8 GB RAM (less RAM is possible but might introduce swapping / instabilities)
 - 128 GB SSD (smaller is possible but limits the capacity of storing events)
 - Network via DHCP
 - A working, non-proxied, internet connection
 
-##### Sensor Installation
-- Honeypots: adbhoney, ciscoasa, conpot, cowrie, dionaea, elasticpot, heralding, honeytrap, mailoney, medpot, rdpy, snare & tanner
-- Tools: cockpit
 
-- 6-8 GB RAM (less RAM is possible but might introduce swapping)
-- 128 GB SSD (smaller is possible but limits the capacity of storing events)
-- Network via DHCP
-- A working, non-proxied, internet connection
+<a name="types"></a>
+# Installation Types
+There are prebuilt installation types available each focussing on different aspects to get you started right out of the box. The docker-compose files are located in `/opt/tpot/etc/compose`. If you want to build your own compose file just create a new one (based on the layout and settings of the prebuilds) in `/opt/tpot/etc/compose` and run `tped.sh` afterwards to point T-Pot to the new compose file and run you personalized edition.
 
-##### Industrial Installation
-- Honeypots: conpot, cowrie, heralding, medpot, rdpy
-- Tools: cockpit, cyberchef, ELK, elasticsearch head, ewsposter, NGINX, spiderfoot, p0f and suricata
+##### Standard
+- Honeypots: adbhoney, ciscoasa, citrixhoneypot, conpot, cowrie, dicompot, dionaea, elasticpot, heralding, honeysap, honeytrap, mailoney, medpot, rdpy, snare & tanner
+- Tools: cockpit, cyberchef, ELK, fatt, elasticsearch head, ewsposter, nginx / heimdall, spiderfoot, p0f & suricata
 
-- 6-8 GB RAM (less RAM is possible but might introduce swapping)
-- 128 GB SSD (smaller is possible but limits the capacity of storing events)
-- Network via DHCP
-- A working, non-proxied, internet connection
 
-##### Collector Installation (because sometimes all you want to do is catching credentials)
-- Honeypots: heralding
-- Tools: cockpit, cyberchef, ELK, elasticsearch head, ewsposter, NGINX, spiderfoot, p0f and suricata
+##### Sensor
+- Honeypots: adbhoney, ciscoasa, citrixhoneypot, conpot, cowrie, dicompot, dionaea, elasticpot, heralding, honeypy, honeysap, honeytrap, mailoney, medpot, rdpy, snare & tanner
+- Tools: cockpit, ewsposter, fatt, p0f & suricata
+- Since there is no ELK stack provided the Sensor Installation only requires 4 GB of RAM.
 
-- 6-8 GB RAM (less RAM is possible but might introduce swapping)
-- 128 GB SSD (smaller is possible but limits the capacity of storing events)
-- Network via DHCP
-- A working, non-proxied, internet connection
 
-##### NextGen Installation (Glutton replacing Honeytrap, HoneyPy replacing Elasticpot)
-- Honeypots: adbhoney, ciscoasa, citrixhoneypot, conpot, cowrie, dionaea, glutton, heralding, honeypy, mailoney, rdpy, snare & tanner
-- Tools: cockpit, cyberchef, ELK, elasticsearch head, ewsposter, fatt, NGINX, spiderfoot, p0f and suricata
+##### Industrial
+- Honeypots: conpot, cowrie, dicompot, heralding, honeysap, honeytrap, medpot & rdpy
+- Tools: cockpit, cyberchef, ELK, fatt, elasticsearch head, ewsposter, nginx / heimdall, spiderfoot, p0f & suricata
 
-- 6-8 GB RAM (less RAM is possible but might introduce swapping)
-- 128 GB SSD (smaller is possible but limits the capacity of storing events)
-- Network via DHCP
-- A working, non-proxied, internet connection
+
+##### Collector
+- Honeypots: heralding & honeytrap
+- Tools: cockpit, cyberchef, fatt, ELK, elasticsearch head, ewsposter, nginx / heimdall, spiderfoot, p0f & suricata
+
+
+##### NextGen
+- Honeypots: adbhoney, ciscoasa, citrixhoneypot, conpot, cowrie, dicompot, dionaea, glutton, heralding, honeypy, honeysap, mailoney, medpot, rdpy, snare & tanner
+- Tools: cockpit, cyberchef, ELK, fatt, elasticsearch head, ewsposter, nginx / heimdall, spiderfoot, p0f & suricata
+
+
+##### Medical
+- Honeypots: dicompot & medpot
+- Tools: cockpit, cyberchef, ELK, fatt, elasticsearch head, ewsposter, nginx / heimdall, spiderfoot, p0f & suricata
+
 
 <a name="installation"></a>
 # Installation
 The installation of T-Pot is straight forward and heavily depends on a working, transparent and non-proxied up and running internet connection. Otherwise the installation **will fail!**
 
-Firstly, decide if you want to download our prebuilt installation ISO image from [GitHub](https://github.com/dtag-dev-sec/tpotce/releases), [create it yourself](#createiso) ***or*** [post-install on an existing Debian 9.7 (Stretch)](#postinstall).
+Firstly, decide if you want to download the prebuilt installation ISO image from [GitHub](https://github.com/dtag-dev-sec/tpotce/releases), [create it yourself](#createiso) ***or*** [post-install on an existing Debian 10 (Buster)](#postinstall).
 
-Secondly, decide where you want to let the system run: [real hardware](#hardware) or in a [virtual machine](#vm)?
+Secondly, decide where you the system to run: [real hardware](#hardware) or in a [virtual machine](#vm)?
 
 <a name="prebuilt"></a>
 ## Prebuilt ISO Image
-We provide an installation ISO image for download (~50MB), which is created using the same [tool](https://github.com/dtag-dev-sec/tpotce) you can use yourself in order to create your own image. It will basically just save you some time downloading components and creating the ISO image.
-You can download the prebuilt installation image from [GitHub](https://github.com/dtag-dev-sec/tpotce/releases) and jump to the [installation](#vm) section.
+An installation ISO image is available for download (~50MB), which is created by the [ISO Creator](https://github.com/dtag-dev-sec/tpotce) you can use yourself in order to create your own image. It will basically just save you some time downloading components and creating the ISO image.
+You can download the prebuilt installation ISO from [GitHub](https://github.com/dtag-dev-sec/tpotce/releases) and jump to the [installation](#vm) section.
 
 <a name="createiso"></a>
 ## Create your own ISO Image
-For transparency reasons and to give you the ability to customize your install, we provide you the [ISO Creator](https://github.com/dtag-dev-sec/tpotce) that enables you to create your own ISO installation image.
+For transparency reasons and to give you the ability to customize your install you use the [ISO Creator](https://github.com/dtag-dev-sec/tpotce) that enables you to create your own ISO installation image.
 
 **Requirements to create the ISO image:**
-- Debian 9.7 or newer as host system (others *may* work, but *remain* untested)
+- Debian 10 as host system (others *may* work, but *remain* untested)
 - 4GB of free memory  
 - 32GB of free storage
 - A working internet connection
@@ -205,24 +207,24 @@ For transparency reasons and to give you the ability to customize your install, 
 git clone https://github.com/dtag-dev-sec/tpotce
 cd tpotce
 ```
-2. Invoke the script that builds the ISO image.
+2. Run the `makeiso.sh` script to build the ISO image.
 The script will download and install dependencies necessary to build the image on the invoking machine. It will further download the ubuntu network installer image (~50MB) which T-Pot is based on.
 ```
 sudo ./makeiso.sh
 ```
-After a successful build, you will find the ISO image `tpot.iso` along with a SHA256 checksum `tpot.sha256` in your directory.
+After a successful build, you will find the ISO image `tpot.iso` along with a SHA256 checksum `tpot.sha256` in your folder.
 
 <a name="vm"></a>
 ## Running in VM
 You may want to run T-Pot in a virtualized environment. The virtual system configuration depends on your virtualization provider.
 
-We successfully tested T-Pot with [VirtualBox](https://www.virtualbox.org) and [VMWare](http://www.vmware.com) with just little modifications to the default machine configurations.
+T-Pot is successfully tested with [VirtualBox](https://www.virtualbox.org) and [VMWare](http://www.vmware.com) with just little modifications to the default machine configurations.
 
-It is important to make sure you meet the [system requirements](#requirements) and assign a virtual harddisk and RAM according to the requirements while making sure networking is bridged.
+It is important to make sure you meet the [system requirements](#requirements) and assign virtual harddisk and RAM according to the requirements while making sure networking is bridged.
 
-You need to enable promiscuous mode for the network interface for suricata and p0f to work properly. Make sure you enable it during configuration.
+You need to enable promiscuous mode for the network interface for fatt, suricata and p0f to work properly. Make sure you enable it during configuration.
 
-If you want to use a wifi card as a primary NIC for T-Pot, please be aware of the fact that not all network interface drivers support all wireless cards. E.g. in VirtualBox, you then have to choose the *"MT SERVER"* model of the NIC.
+If you want to use a wifi card as a primary NIC for T-Pot, please be aware that not all network interface drivers support all wireless cards. In VirtualBox e.g. you have to choose the *"MT SERVER"* model of the NIC.
 
 Lastly, mount the `tpot.iso` ISO to the VM and continue with the installation.<br>
 
@@ -236,11 +238,11 @@ If you decide to run T-Pot on dedicated hardware, just follow these steps:
 Whereas most CD burning tools allow you to burn from ISO images, the procedure to create a bootable USB stick from an ISO image depends on your system. There are various Windows GUI tools available, e.g. [this tip](http://www.ubuntu.com/download/desktop/create-a-usb-stick-on-windows) might help you.<br> On [Linux](http://askubuntu.com/questions/59551/how-to-burn-a-iso-to-a-usb-device) or [MacOS](http://www.ubuntu.com/download/desktop/create-a-usb-stick-on-mac-osx) you can use the tool *dd* or create the USB stick with T-Pot's [ISO Creator](https://github.com/dtag-dev-sec).
 2. Boot from the USB stick and install.
 
-*Please note*: While we are performing limited tests with the Intel NUC platform other hardware platforms **remain untested**. We can not provide hardware support of any kind.
+*Please note*: Limited tests are performed for the Intel NUC platform other hardware platforms **remain untested**. There is no hardware support provided of any kind.
 
 <a name="postinstall"></a>
 ## Post-Install User
-In some cases it is necessary to install Debian 9.7 (Stretch) on your own:
+In some cases it is necessary to install Debian 10 (Buster) on your own:
  - Cloud provider does not offer mounting ISO images.
  - Hardware setup needs special drivers and / or kernels.
  - Within your company you have to setup special policies, software etc.
@@ -279,6 +281,8 @@ Located in the [`cloud`](cloud) folder.
 Currently there are examples with Ansible & Terraform.  
 If you would like to contribute, you can add other cloud deployments like Chef or Puppet or extend current methods with other cloud providers.
 
+*Please note*: Cloud providers usually offer adjusted Debian OS images, which might not be compatible with T-Pot. There is no cloud provider support provided of any kind.
+
 <a name="ansible"></a>
 ### Ansible Deployment
 You can find an [Ansible](https://www.ansible.com/) based T-Pot deployment in the [`cloud/ansible`](cloud/ansible) folder.  
@@ -287,6 +291,8 @@ The Playbook in the [`cloud/ansible/openstack`](cloud/ansible/openstack) folder 
 It first creates all resources (security group, network, subnet, router), deploys a new server and then installs and configures T-Pot.
 
 You can have a look at the Playbook and easily adapt the deploy role for other [cloud providers](https://docs.ansible.com/ansible/latest/modules/list_of_cloud_modules.html).
+
+*Please note*: Cloud providers usually offer adjusted Debian OS images, which might not be compatible with T-Pot. There is no cloud provider support provided of any kind.
 
 <a name="terraform"></a>
 ### Terraform Configuration
@@ -298,9 +304,11 @@ This can be used to launch a virtual machine, bootstrap any dependencies and ins
 Configuration for **Amazon Web Services** (AWS) and **Open Telekom Cloud** (OTC) is currently included.  
 This can easily be extended to support other [Terraform providers](https://www.terraform.io/docs/providers/index.html).
 
+*Please note*: Cloud providers usually offer adjusted Debian OS images, which might not be compatible with T-Pot. There is no cloud provider support provided of any kind.
+
 <a name="firstrun"></a>
 ## First Run
-The installation requires very little interaction, only a locale and keyboard setting have to be answered for the basic linux installation. The system will reboot and please maintain the active internet connection. The T-Pot installer will start and ask you for an installation type, password for the **tsec** user and credentials for a **web user**. Everything else will be configured automatically. All docker images and other componenents will be downloaded. Depending on your network connection and the chosen installation type, the installation may take some time. During our tests (250Mbit down, 40Mbit up), the installation was usually finished within a 15-30 minute timeframe.
+The installation requires very little interaction, only a locale and keyboard setting have to be answered for the basic linux installation. While the system reboots maintain the active internet connection. The T-Pot installer will start and ask you for an installation type, password for the **tsec** user and credentials for a **web user**. Everything else will be configured automatically. All docker images and other componenents will be downloaded. Depending on your network connection and the chosen installation type, the installation may take some time. With 250Mbit down / 40Mbit up the installation is usually finished within 15-30 minutes.
 
 Once the installation is finished, the system will automatically reboot and you will be presented with the T-Pot login screen. On the console you may login with:
 
@@ -321,18 +329,18 @@ You can also login from your browser and access the Web UI: `https://<your.ip>:6
 
 <a name="placement"></a>
 # System Placement
-Make sure your system is reachable through a network you suspect intruders in / from (i.e. the internet). Otherwise T-Pot will most likely not capture any attacks, other than the ones from your  internal network! We recommend you put it in an unfiltered zone, where all TCP and UDP traffic is forwarded to T-Pot's network interface. However to avoid fingerprinting you can put T-Pot behind a firewall and forward all TCP / UDP traffic in the port range of 1-64000 to T-Pot while allowing access to ports > 64000 only from trusted IPs.
+Make sure your system is reachable through a network you suspect intruders in / from (i.e. the internet). Otherwise T-Pot will most likely not capture any attacks, other than the ones from your internal network! For starters it is recommended to put T-Pot in an unfiltered zone, where all TCP and UDP traffic is forwarded to T-Pot's network interface. However to avoid fingerprinting you can put T-Pot behind a firewall and forward all TCP / UDP traffic in the port range of 1-64000 to T-Pot while allowing access to ports > 64000 only from trusted IPs.
 
 A list of all relevant ports is available as part of the [Technical Concept](#concept)
 <br>
 
-Basically, you can forward as many TCP ports as you want, as honeytrap dynamically binds any TCP port that is not covered by the other honeypot daemons.
+Basically, you can forward as many TCP ports as you want, as glutton & honeytrap dynamically bind any TCP port that is not covered by the other honeypot daemons.
 
 In case you need external Admin UI access, forward TCP port 64294 to T-Pot, see below.
 In case you need external SSH access, forward TCP port 64295 to T-Pot, see below.
 In case you need external Web UI access, forward TCP port 64297 to T-Pot, see below.
 
-T-Pot requires outgoing git, http, https connections for updates (Debian, Docker, GitHub, PyPi) and attack submission (ewsposter, hpfeeds). Ports and availability may vary based on your geographical location. Also during first install outgoing ICMP is required additionally to find the closest and fastest mirror to you.
+T-Pot requires outgoing git, http, https connections for updates (Debian, Docker, GitHub, PyPi), attack submission (ewsposter, hpfeeds) and CVE / IP reputation translation map updates (logstash, listbot). Ports and availability may vary based on your geographical location. Also during first install outgoing ICMP / TRACEROUTE is required additionally to find the closest and fastest mirror to you.
 
 <a name="updates"></a>
 # Updates
@@ -350,15 +358,15 @@ You simply run the update script:
 ```
 sudo su -
 cd /opt/tpot/
-./update.sh -y
+./update.sh
 ```
 
-**Despite all our efforts please be reminded that updates sometimes may have unforeseen consequences. Please create a backup of the machine or the files with the most value to your work.**  
+**Despite all testing efforts please be reminded that updates sometimes may have unforeseen consequences. Please create a backup of the machine or the files with the most value to your work.**  
 
 <a name="options"></a>
 # Options
 The system is designed to run without any interaction or maintenance and automatically contributes to the community.<br>
-We know, for some this may not be enough. So here come some ways to further inspect the system and change configuration parameters.
+For some this may not be enough. So here some examples to further inspect the system and change configuration parameters.
 
 <a name="ssh"></a>
 ## SSH and web access
@@ -373,20 +381,25 @@ You can also add two factor authentication to Cockpit just by running `2fa.sh` o
 
 ![Cockpit Terminal](doc/cockpit3.png)
 
-<a name="kibana"></a>
-## Kibana Dashboard
+<a name="heimdall"></a>
+## T-Pot Landing Page 
 Just open a web browser and connect to `https://<your.ip>:64297`, enter
 
 - user: **[user]** *you chose during the installation*
 - pass: **[password]** *you chose during the installation*
 
-and **Kibana** will automagically load. The Kibana dashboard can be customized to fit your needs. By default, we haven't added any filtering, because the filters depend on your setup. E.g. you might want to filter out your incoming administrative ssh connections and connections to update servers.
+and the **Landing Page** will automagically load. Now just click on the tool / link you want to start.
+
+![Dashbaord](doc/heimdall.png)
+
+<a name="kibana"></a>
+## Kibana Dashboard
 
 ![Dashbaord](doc/kibana.png)
 
 <a name="tools"></a>
 ## Tools
-We included some web based management tools to improve and ease up on your daily tasks.
+The following web based tools are included to improve and ease up daily tasks.
 
 ![Cockpit Overview](doc/cockpit1.png)
 
@@ -401,15 +414,15 @@ We included some web based management tools to improve and ease up on your daily
 
 <a name="maintenance"></a>
 ## Maintenance
-As mentioned before, the system is designed to be low maintenance. Basically, there is nothing you have to do but let it run.
+T-Pot is designed to be low maintenance. Basically, there is nothing you have to do but let it run.
 
 If you run into any problems, a reboot may fix it :bowtie:
 
-If new versions of the components involved appear, we will test them and build new docker images. Those new docker images will be pushed to docker hub and downloaded to T-Pot and activated accordingly.  
+If new versions of the components involved appear new docker images will be created and distributed. New images will be available from docker hub and downloaded automatically to T-Pot and activated accordingly.  
 
 <a name="submission"></a>
 ## Community Data Submission
-We provide T-Pot in order to make it accessible to all parties interested in honeypot deployment. By default, the captured data is submitted to a community backend. This community backend uses the data to feed [Sicherheitstacho](https://sicherheitstacho.eu).
+T-Pot is provided in order to make it accessible to all interested in honeypots. By default, the captured data is submitted to a community backend. This community backend uses the data to feed [Sicherheitstacho](https://sicherheitstacho.eu).
 You may opt out of the submission by removing the `# Ewsposter service` from `/opt/tpot/etc/tpot.yml`:
 1. Stop T-Pot services: `systemctl stop tpot`
 2. Remove Ewsposter service: `vi /opt/tpot/etc/tpot.yml`
@@ -421,7 +434,7 @@ You may opt out of the submission by removing the `# Ewsposter service` from `/o
     restart: always
     networks:
      - ewsposter_local
-    image: "dtagdevsec/ewsposter:1903"
+    image: "dtagdevsec/ewsposter:2006"
     volumes:
      - /data:/data
      - /data/ews/conf/ews.ip:/opt/ewsposter/ews.ip
@@ -430,7 +443,7 @@ You may opt out of the submission by removing the `# Ewsposter service` from `/o
 
 Data is submitted in a structured ews-format, a XML stucture. Hence, you can parse out the information that is relevant to you.
 
-We encourage you not to disable the data submission as it is the main purpose of the community approach - as you all know **sharing is caring** 😍
+It is encouraged not to disable the data submission as it is the main purpose of the community approach - as you all know **sharing is caring** 😍
 
 <a name="hpfeeds-optin"></a>
 ## Opt-In HPFEEDS Data Submission
@@ -458,8 +471,8 @@ You are always invited to participate in development on our [GitHub](https://git
 - We don't have access to your system. So we cannot remote-assist when you break your configuration. But you can simply reinstall.
 - The software was designed with best effort security, not to be in stealth mode. Because then, we probably would not be able to provide those kind of honeypot services.
 - You install and you run within your responsibility. Choose your deployment wisely as a system compromise can never be ruled out.
-- Honeypots should - by design - may not host any sensitive data. Make sure you don't add any.
-- By default, your data is submitted to the community dashboard. You can disable this in the config. But hey, wouldn't it be better to contribute to the community?
+- Honeypots - by design - should not host any sensitive data. Make sure you don't add any.
+- By default, your data is submitted to [SecurityMeter](https://www.sicherheitstacho.eu/start/main). You can disable this in the config. But hey, wouldn't it be better to contribute to the community?
 
 <a name="faq"></a>
 # FAQ
@@ -467,15 +480,15 @@ Please report any issues or questions on our [GitHub issue list](https://github.
 
 <a name="contact"></a>
 # Contact
-We provide the software **as is** in a Community Edition format. T-Pot is designed to run out of the box and with zero maintenance involved. <br>
+The software is provided **as is** in a Community Edition format. T-Pot is designed to run out of the box and with zero maintenance involved. <br>
 We hope you understand that we cannot provide support on an individual basis. We will try to address questions, bugs and problems on our [GitHub issue list](https://github.com/dtag-dev-sec/tpotce/issues).
 
 <a name="licenses"></a>
 # Licenses
 The software that T-Pot is built on uses the following licenses.
-<br>GPLv2: [conpot](https://github.com/mushorg/conpot/blob/master/LICENSE.txt), [dionaea](https://github.com/DinoTools/dionaea/blob/master/LICENSE), [honeypy](https://github.com/foospidy/HoneyPy/blob/master/LICENSE), [honeytrap](https://github.com/armedpot/honeytrap/blob/master/LICENSE), [suricata](http://suricata-ids.org/about/open-source/)
-<br>GPLv3: [adbhoney](https://github.com/huuck/ADBHoney), [elasticpot](https://github.com/schmalle/ElasticpotPY), [ewsposter](https://github.com/dtag-dev-sec/ews/), [fatt](https://github.com/0x4D31/fatt/blob/master/LICENSE), [rdpy](https://github.com/citronneur/rdpy/blob/master/LICENSE), [heralding](https://github.com/johnnykv/heralding/blob/master/LICENSE.txt), [snare](https://github.com/mushorg/snare/blob/master/LICENSE), [tanner](https://github.com/mushorg/snare/blob/master/LICENSE)
-<br>Apache 2 License: [cyberchef](https://github.com/gchq/CyberChef/blob/master/LICENSE), [elasticsearch](https://github.com/elasticsearch/elasticsearch/blob/master/LICENSE.txt), [logstash](https://github.com/elasticsearch/logstash/blob/master/LICENSE), [kibana](https://github.com/elasticsearch/kibana/blob/master/LICENSE.md), [docker](https://github.com/docker/docker/blob/master/LICENSE), [elasticsearch-head](https://github.com/mobz/elasticsearch-head/blob/master/LICENCE)
+<br>GPLv2: [conpot](https://github.com/mushorg/conpot/blob/master/LICENSE.txt), [dionaea](https://github.com/DinoTools/dionaea/blob/master/LICENSE), [honeysap](https://github.com/SecureAuthCorp/HoneySAP/blob/master/COPYING), [honeypy](https://github.com/foospidy/HoneyPy/blob/master/LICENSE), [honeytrap](https://github.com/armedpot/honeytrap/blob/master/LICENSE), [suricata](http://suricata-ids.org/about/open-source/)
+<br>GPLv3: [adbhoney](https://github.com/huuck/ADBHoney), [elasticpot](https://gitlab.com/bontchev/elasticpot/-/blob/master/LICENSE), [ewsposter](https://github.com/dtag-dev-sec/ews/), [fatt](https://github.com/0x4D31/fatt/blob/master/LICENSE), [rdpy](https://github.com/citronneur/rdpy/blob/master/LICENSE), [heralding](https://github.com/johnnykv/heralding/blob/master/LICENSE.txt), [snare](https://github.com/mushorg/snare/blob/master/LICENSE), [tanner](https://github.com/mushorg/snare/blob/master/LICENSE)
+<br>Apache 2 License: [cyberchef](https://github.com/gchq/CyberChef/blob/master/LICENSE), [dicompot](https://github.com/nsmfoo/dicompot/blob/master/LICENSE), [elasticsearch](https://github.com/elasticsearch/elasticsearch/blob/master/LICENSE.txt), [logstash](https://github.com/elasticsearch/logstash/blob/master/LICENSE), [kibana](https://github.com/elasticsearch/kibana/blob/master/LICENSE.md), [docker](https://github.com/docker/docker/blob/master/LICENSE), [elasticsearch-head](https://github.com/mobz/elasticsearch-head/blob/master/LICENCE)
 <br>MIT license: [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/blob/master/LICENSE), [glutton](https://github.com/mushorg/glutton/blob/master/LICENSE)
 <br> Other: [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot#licencing-agreement-malwaretech-public-licence), [cowrie](https://github.com/micheloosterhof/cowrie/blob/master/LICENSE.md), [mailoney](https://github.com/awhitehatter/mailoney), [Debian licensing](https://www.debian.org/legal/licenses/)
 
@@ -493,9 +506,10 @@ Without open source and the fruitful development community (we are proud to be a
 * [conpot](https://github.com/mushorg/conpot/graphs/contributors)
 * [cowrie](https://github.com/micheloosterhof/cowrie/graphs/contributors)
 * [debian](http://www.debian.org/)
+* [dicompot](https://github.com/nsmfoo/dicompot/graphs/contributors)
 * [dionaea](https://github.com/DinoTools/dionaea/graphs/contributors)
 * [docker](https://github.com/docker/docker/graphs/contributors)
-* [elasticpot](https://github.com/schmalle/ElasticpotPY/graphs/contributors)
+* [elasticpot](https://gitlab.com/bontchev/elasticpot/-/project_members)
 * [elasticsearch](https://github.com/elastic/elasticsearch/graphs/contributors)
 * [elasticsearch-head](https://github.com/mobz/elasticsearch-head/graphs/contributors)
 * [ewsposter](https://github.com/armedpot/ewsposter/graphs/contributors)
@@ -503,6 +517,7 @@ Without open source and the fruitful development community (we are proud to be a
 * [glutton](https://github.com/mushorg/glutton/graphs/contributors)
 * [heralding](https://github.com/johnnykv/heralding/graphs/contributors)
 * [honeypy](https://github.com/foospidy/HoneyPy/graphs/contributors)
+* [honeysap](https://github.com/SecureAuthCorp/HoneySAP/graphs/contributors)
 * [honeytrap](https://github.com/armedpot/honeytrap/graphs/contributors)
 * [kibana](https://github.com/elastic/kibana/graphs/contributors)
 * [logstash](https://github.com/elastic/logstash/graphs/contributors)
@@ -526,7 +541,7 @@ Without open source and the fruitful development community (we are proud to be a
 
 <a name="staytuned"></a>
 # Stay tuned ...
-We will be releasing a new version of T-Pot about every 6-12 months.
+A new version of T-Pot is released about every 6-12 months, development has shifted more and more towards rolling releases and the usage of `/opt/tpot/update.sh`.
 
 <a name="testimonial"></a>
 # Testimonial

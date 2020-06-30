@@ -36,9 +36,10 @@ if [ "$myCHECK" == "0" ];
 fi
 
 # Make sure logstash can put latest logstash template by deleting the old one first
-echo "Removing logstash template."
-curl -XDELETE http://elasticsearch:9200/_template/logstash
-echo
-echo "Checking if empty."
-curl -XGET http://elasticsearch:9200/_template/logstash
-echo
+# This is now done via common_configs.rb => overwrite default logstash template
+#echo "Removing logstash template."
+#curl -XDELETE http://elasticsearch:9200/_template/logstash
+#echo
+#echo "Checking if empty."
+#curl -XGET http://elasticsearch:9200/_template/logstash
+#echo

@@ -4,6 +4,7 @@ version: '2.3'
 
 networks:
   adbhoney_local:
+  ciscoasa_local:
   citrixhoneypot_local:
   conpot_local_IEC104:
   conpot_local_guardian_ast:
@@ -11,8 +12,12 @@ networks:
   conpot_local_kamstrup_382:
   cowrie_local:
   cyberchef_local:
+  dicompot_local:
+  dionaea_local:
+  elasticpot_local:
   heralding_local:
   honeypy_local:
+  honeysap_local:
   mailoney_local:
   medpot_local:
   rdpy_local:
@@ -44,9 +49,10 @@ services:
   ciscoasa:
     container_name: ciscoasa
     restart: always
+    networks:
+      - ciscoasa_local
     tmpfs:
      - /tmp/ciscoasa:uid=2000,gid=2000
-    network_mode: "host"
     ports:
      - "5000:5000/udp"
      - "8443:8443"
@@ -174,13 +180,31 @@ services:
      - /data/cowrie/log:/home/cowrie/cowrie/log
      - /data/cowrie/log/tty:/home/cowrie/cowrie/log/tty
 
+# Dicompot service
+# Get the Horos Client for testing: https://horosproject.org/
+# Get Dicom images (CC BY 3.0): https://www.cancerimagingarchive.net/collections/ 
+# Put images (which must be in Dicom DCM format or it will not work!) into /data/dicompot/images
+  dicompot:
+    container_name: dicompot
+    restart: always
+    networks:
+     - dicompot_local
+    ports:
+     - "11112:11112"
+    image: "dtagdevsec/dicompot:2006"
+    read_only: true
+    volumes:
+     - /data/dicompot/log:/var/log/dicompot
+#     - /data/dicompot/images:/opt/dicompot/images
+
 # Dionaea service
   dionaea:
     container_name: dionaea
     stdin_open: true
     tty: true
     restart: always
-    network_mode: "host"
+    networks:
+     - dionaea_local
     ports:
      - "20:20"
      - "21:21"
@@ -209,6 +233,19 @@ services:
      - /data/dionaea/binaries:/opt/dionaea/var/dionaea/binaries
      - /data/dionaea/log:/opt/dionaea/var/log
      - /data/dionaea/rtp:/opt/dionaea/var/dionaea/rtp
+
+# ElasticPot service
+  elasticpot:
+    container_name: elasticpot
+    restart: always
+    networks:
+     - elasticpot_local
+    ports:
+     - "9200:9200"
+    image: "dtagdevsec/elasticpot:2006"
+    read_only: true
+    volumes:
+     - /data/elasticpot/log:/opt/elasticpot/log
 
 # Glutton service
   glutton:
@@ -268,11 +305,23 @@ services:
      - "2323:2323"
      - "2324:2324"
      - "4096:4096"
-     - "9200:9200"
+    # - "9200:9200"
     image: "dtagdevsec/honeypy:2006"
     read_only: true
     volumes:
      - /data/honeypy/log:/opt/honeypy/log
+
+# HoneySAP service
+  honeysap:
+    container_name: honeysap
+    restart: always
+    networks:
+     - honeysap_local
+    ports:
+     - "3299:3299"
+    image: "dtagdevsec/honeysap:2006"
+    volumes:
+     - /data/honeysap/log:/opt/honeysap/log
 
 # Mailoney service
   mailoney:
@@ -366,21 +415,21 @@ services:
      - tanner_redis
 
 ## Tanner WEB Service
-# tanner_web:
-#   container_name: tanner_web
-#   restart: always
-#   tmpfs:
-#    - /tmp/tanner:uid=2000,gid=2000
-#   tty: true
-#   networks:
-#    - tanner_local
-#   image: "dtagdevsec/tanner:2006"
-#   command: tannerweb
-#   read_only: true
-#   volumes:
-#    - /data/tanner/log:/var/log/tanner
-#   depends_on:
-#    - tanner_redis
+#  tanner_web:
+#    container_name: tanner_web
+#    restart: always
+#    tmpfs:
+#     - /tmp/tanner:uid=2000,gid=2000
+#    tty: true
+#    networks:
+#     - tanner_local
+#    image: "dtagdevsec/tanner:2006"
+#    command: tannerweb
+#    read_only: true
+#    volumes:
+#     - /data/tanner/log:/var/log/tanner
+#    depends_on:
+#     - tanner_redis
 
 ## Tanner Service
   tanner:
@@ -399,7 +448,7 @@ services:
      - /data/tanner/files:/opt/tanner/files
     depends_on:
      - tanner_api
-#    - tanner_web
+#     - tanner_web
      - tanner_phpox
 
 ## Snare Service

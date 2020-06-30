@@ -1,4 +1,4 @@
-FROM alpine:latest
+FROM alpine:3.11
 #
 # Include dist
 ADD dist/ /root/dist/
@@ -13,7 +13,7 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
             python2-dev \
             py2-pip && \
 #
-# Upgrade pip, install virtualenv
+# Install virtualenv
     pip install --no-cache-dir virtualenv && \
 #
 # Clone honeypy from git

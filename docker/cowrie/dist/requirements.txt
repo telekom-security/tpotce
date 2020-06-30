@@ -1,0 +1,13 @@
+attrs==19.3.0
+bcrypt==3.1.7
+configparser==4.0.2
+cryptography==2.9.2
+packaging==20.3
+pyasn1_modules==0.2.8
+pyopenssl==19.1.0
+pyparsing==2.4.7
+python-dateutil==2.8.1
+service_identity==18.1.0
+tftpy==0.8.0
+treq==20.4.1
+twisted==20.3.0

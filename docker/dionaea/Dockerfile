@@ -1,4 +1,4 @@
-FROM debian:stretch-slim
+FROM debian:buster-slim
 ENV DEBIAN_FRONTEND noninteractive
 #
 # Include dist
@@ -29,13 +29,16 @@ RUN apt-get update -y && \
 	procps \
 	python3 \
 	python3-dev \
+	python3-boto3 \
 	python3-bson \
 	python3-yaml \
-	ttf-liberation && \
+	fonts-liberation && \
 #
 # Get and install dionaea
+    # Latest master is unstable, SIP causes crashing
     git clone --depth=1 https://github.com/dinotools/dionaea -b 0.8.0 /root/dionaea/ && \
     cd /root/dionaea && \
+    #git checkout 1426750b9fd09c5bfeae74d506237333cd8505e2 && \
     mkdir build && \
     cd build && \
     cmake -DCMAKE_INSTALL_PREFIX:PATH=/opt/dionaea .. && \
@@ -73,22 +76,24 @@ RUN apt-get update -y && \
       libudns-dev \
       python3 \
       python3-dev \   
+      python3-boto3 \
       python3-bson \
       python3-yaml && \ 
 #
     apt-get install -y \
       ca-certificates \
       python3 \
+      python3-boto3 \
       python3-bson \
       python3-yaml \
-      libcurl3 \
+      libcurl4 \
       libemu2 \
       libev4 \
       libglib2.0-0 \
       libnetfilter-queue1 \
       libnl-3-200 \
       libpcap0.8 \
-      libpython3.5 \
+      libpython3.7 \
       libudns0 && \
 #
     apt-get autoremove --purge -y && \

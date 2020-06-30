@@ -9,6 +9,7 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
               git \
               py3-libxml2 \
               py3-lxml \
+	      py3-pip \
               python3 \
               python3-dev && \
     apk -U add tshark --repository http://dl-3.alpinelinux.org/alpine/edge/community/ && \
@@ -23,7 +24,6 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     git clone --depth=1 https://github.com/0x4D31/fatt && \
     cd fatt && \
     mkdir -p log && \
-    pip3 install --upgrade pip && \
     pip3 install pyshark==0.4.2.2 && \
 #
 # Setup configs

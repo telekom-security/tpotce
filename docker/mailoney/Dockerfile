@@ -1,4 +1,4 @@
-FROM alpine:latest
+FROM alpine:3.11
 #
 # Install packages
 RUN apk -U --no-cache add \
@@ -21,7 +21,6 @@ RUN apk -U --no-cache add \
     make install && \
 #
 # Install libemu python wrapper
-    pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir \ 
                         hpfeeds \
                         pylibemu && \ 

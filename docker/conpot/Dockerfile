@@ -1,4 +1,4 @@
-FROM alpine:3.10
+FROM alpine:latest
 #
 # Include dist
 ADD dist/ /root/dist/
@@ -12,10 +12,12 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
              libev \
              libtool \
              libcap \
+	     libffi-dev \
              libxslt \
              libxslt-dev \
              mariadb-dev \
              pkgconfig \
+	     py3-pip \
              python3 \
              python3-dev \
              py-cffi \
@@ -42,13 +44,13 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     pip3 install --no-cache-dir . && \
     cd / && \
     rm -rf /opt/conpot /tmp/* /var/tmp/* && \
-    setcap cap_net_bind_service=+ep /usr/bin/python3.7 && \
+    setcap cap_net_bind_service=+ep /usr/bin/python3.8 && \
 #    
 # Get wireshark manuf db for scapy, setup configs, user, groups
     mkdir -p /etc/conpot /var/log/conpot /usr/share/wireshark && \
     wget https://github.com/wireshark/wireshark/raw/master/manuf -o /usr/share/wireshark/manuf && \
     cp /root/dist/conpot.cfg /etc/conpot/conpot.cfg && \
-    cp -R /root/dist/templates /usr/lib/python3.7/site-packages/conpot/ && \
+    cp -R /root/dist/templates /usr/lib/python3.8/site-packages/conpot/ && \
     addgroup -g 2000 conpot && \
     adduser -S -s /bin/ash -u 2000 -D -g 2000 conpot && \
 #

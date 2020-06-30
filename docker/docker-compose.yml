@@ -32,10 +32,20 @@ services:
     build: cowrie/.
     image: "dtagdevsec/cowrie:2006"
 
+# Dicompot service
+  dicompot:
+    build: dicompot/.
+    image: "dtagdevsec/dicompot:2006"
+
 # Dionaea service
   dionaea:
     build: dionaea/.
     image: "dtagdevsec/dionaea:2006"
+
+# ElasticPot service
+  elasticpot:
+    build: elasticpot/.
+    image: "dtagdevsec/elasticpot:2006"
 
 # Glutton service
   glutton:

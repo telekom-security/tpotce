@@ -1,4 +1,4 @@
-FROM alpine
+FROM alpine:latest
 #
 # Include dist
 ADD dist/ /root/dist/
@@ -16,6 +16,7 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
                        mpfr-dev \
                        openssl \
                        openssl-dev \
+		       py3-pip \
                        python3 \
                        python3-dev \
                        py3-bcrypt \
@@ -30,11 +31,11 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
 # Install cowrie
     mkdir -p /home/cowrie && \
     cd /home/cowrie && \
-    git clone --depth=1 https://github.com/micheloosterhof/cowrie -b v2.0.2 && \
+    git clone --depth=1 https://github.com/micheloosterhof/cowrie -b v2.1.0 && \
     cd cowrie && \
     mkdir -p log && \
-    pip3 install --upgrade pip && \
-    pip3 install --upgrade -r requirements.txt && \
+    cp /root/dist/requirements.txt . && \
+    pip3 install -r requirements.txt && \
 #
 # Setup configs
     export PYTHON_DIR=$(python3 --version | tr '[A-Z]' '[a-z]' | tr -d ' ' | cut -d '.' -f 1,2 ) && \
