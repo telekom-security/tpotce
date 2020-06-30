@@ -526,13 +526,14 @@ fi
 # Let's ask the user for install flavor
 if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ] || [ "$myTPOT_DEPLOYMENT_TYPE" == "user" ];
   then
-    myCONF_TPOT_FLAVOR=$(dialog --keep-window --no-cancel --backtitle "$myBACKTITLE" --title "[ Choose Your T-Pot NG Edition ]" --menu \
-    "\nRequired: 6GB RAM, 128GB SSD\nRecommended: 8GB RAM, 256GB SSD" 14 70 6 \
+    myCONF_TPOT_FLAVOR=$(dialog --keep-window --no-cancel --backtitle "$myBACKTITLE" --title "[ Choose Your T-Pot Edition ]" --menu \
+    "\nRequired: 8GB RAM, 128GB SSD\nRecommended: 8GB RAM, 256GB SSD" 15 70 6 \
     "STANDARD" "Honeypots, ELK, NSM & Tools" \
     "SENSOR" "Just Honeypots, EWS Poster & NSM" \
     "INDUSTRIAL" "Conpot, RDPY, Vnclowpot, ELK, NSM & Tools" \
     "COLLECTOR" "Heralding, ELK, NSM & Tools" \
-    "NEXTGEN" "NextGen (Glutton, HoneyPy)" 3>&1 1>&2 2>&3 3>&-)
+    "NEXTGEN" "NextGen (Glutton, HoneyPy)" \
+    "MEDICAL" "Dicompot, Medpot, ELK, NSM & Tools" 3>&1 1>&2 2>&3 3>&-)
 fi
 
 # Let's ask for a secure tsec password if installation type is iso
@@ -752,6 +753,10 @@ case $myCONF_TPOT_FLAVOR in
   NEXTGEN)
     fuBANNER "NEXTGEN"
     ln -s /opt/tpot/etc/compose/nextgen.yml $myTPOTCOMPOSE
+  ;;
+  MEDICAL)
+    fuBANNER "MEDICAL"
+    ln -s /opt/tpot/etc/compose/medical.yml $myTPOTCOMPOSE
   ;;
 esac
 
