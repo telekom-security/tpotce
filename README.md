@@ -47,6 +47,7 @@ Furthermore T-Pot includes the following tools
 # Table of Contents
 - [Technical Concept](#concept)
 - [System Requirements](#requirements)
+- [Installation Types](#types)
 - [Installation](#installation)
   - [Prebuilt ISO Image](#prebuilt)
   - [Create your own ISO Image](#createiso)
