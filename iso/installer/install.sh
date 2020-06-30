@@ -167,7 +167,7 @@ myDEL_HOUR=$(($myRANDOM_HOUR+1))
 myPULL_HOUR=$(($myRANDOM_HOUR-2))
 myCRONJOBS="
 # Check if updated images are available and download them
-$myRANDOM_MINUTE $myPULL_HOUR * *      root    docker-compose -f /opt/tpot/etc/tpot.yml pull
+$myRANDOM_MINUTE $myPULL_HOUR * * *      root    docker-compose -f /opt/tpot/etc/tpot.yml pull
 
 # Delete elasticsearch logstash indices older than 90 days
 $myRANDOM_MINUTE $myDEL_HOUR * * *      root    curator --config /opt/tpot/etc/curator/curator.yml /opt/tpot/etc/curator/actions.yml
