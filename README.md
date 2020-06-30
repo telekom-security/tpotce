@@ -135,50 +135,46 @@ The individual docker configurations are located in the [docker folder](https://
 # System Requirements
 Depending on the installation type, whether installing on [real hardware](#hardware) or in a [virtual machine](#vm), make sure the designated system meets the following requirements:
 
-##### Standard Installation
+- 8 GB RAM (less RAM is possible but might introduce swapping / instabilities)
+- 128 GB SSD (smaller is possible but limits the capacity of storing events)
+- Network via DHCP
+- A working, non-proxied, internet connection
+
+
+<a name="types"></a>
+# Installation Types
+There are prebuilt installation types available each focussing on different aspects to get you started right out of the box. The docker-compose files are located in `/opt/tpot/etc/compose`. If you want to build your own compose file just create a new one (based on the layout and settings of the prebuilds) in `/opt/tpot/etc/compose` and run `tped.sh` afterwards to point T-Pot to the new compose file and run you personalized edition.
+
+##### Standard
 - Honeypots: adbhoney, ciscoasa, citrixhoneypot, conpot, cowrie, dicompot, dionaea, elasticpot, heralding, honeysap, honeytrap, mailoney, medpot, rdpy, snare & tanner
 - Tools: cockpit, cyberchef, ELK, fatt, elasticsearch head, ewsposter, nginx / heimdall, spiderfoot, p0f & suricata
 
-- 8 GB RAM (less RAM is possible but might introduce swapping / instabilities)
-- 128 GB SSD (smaller is possible but limits the capacity of storing events)
-- Network via DHCP
-- A working, non-proxied, internet connection
 
-##### Sensor Installation
+##### Sensor
 - Honeypots: adbhoney, ciscoasa, citrixhoneypot, conpot, cowrie, dicompot, dionaea, elasticpot, heralding, honeypy, honeysap, honeytrap, mailoney, medpot, rdpy, snare & tanner
 - Tools: cockpit, ewsposter, fatt, p0f & suricata
+- Since there is no ELK stack provided the Sensor Installation only requires 4 GB of RAM.
 
-- 8 GB RAM (less RAM is possible but might introduce swapping / instabilities)
-- 128 GB SSD (smaller is possible but limits the capacity of storing events)
-- Network via DHCP
-- A working, non-proxied, internet connection
 
-##### Industrial Installation
+##### Industrial
 - Honeypots: conpot, cowrie, dicompot, heralding, honeysap, honeytrap, medpot & rdpy
 - Tools: cockpit, cyberchef, ELK, fatt, elasticsearch head, ewsposter, nginx / heimdall, spiderfoot, p0f & suricata
 
-- 8 GB RAM (less RAM is possible but might introduce swapping / instabilities)
-- 128 GB SSD (smaller is possible but limits the capacity of storing events)
-- Network via DHCP
-- A working, non-proxied, internet connection
 
-##### Collector Installation (because sometimes all you want to do is catching credentials)
+##### Collector
 - Honeypots: heralding & honeytrap
 - Tools: cockpit, cyberchef, fatt, ELK, elasticsearch head, ewsposter, nginx / heimdall, spiderfoot, p0f & suricata
 
-- 8 GB RAM (less RAM is possible but might introduce swapping / instabilities)
-- 128 GB SSD (smaller is possible but limits the capacity of storing events)
-- Network via DHCP
-- A working, non-proxied, internet connection
 
-##### NextGen Installation (Glutton replacing Honeytrap)
+##### NextGen
 - Honeypots: adbhoney, ciscoasa, citrixhoneypot, conpot, cowrie, dicompot, dionaea, glutton, heralding, honeypy, honeysap, mailoney, medpot, rdpy, snare & tanner
 - Tools: cockpit, cyberchef, ELK, fatt, elasticsearch head, ewsposter, nginx / heimdall, spiderfoot, p0f & suricata
 
-- 8 GB RAM (less RAM is possible but might introduce swapping / instabilities)
-- 128 GB SSD (smaller is possible but limits the capacity of storing events)
-- Network via DHCP
-- A working, non-proxied, internet connection
+
+##### Medical
+- Honeypots: dicompot & medpot
+- Tools: cockpit, cyberchef, ELK, fatt, elasticsearch head, ewsposter, nginx / heimdall, spiderfoot, p0f & suricata
+
 
 <a name="installation"></a>
 # Installation
