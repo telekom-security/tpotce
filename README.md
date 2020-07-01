@@ -544,6 +544,8 @@ Without open source and the fruitful development community (we are proud to be a
 A new version of T-Pot is released about every 6-12 months, development has shifted more and more towards rolling releases and the usage of `/opt/tpot/update.sh`.
 
 <a name="testimonial"></a>
-# Testimonial
+# Testimonials
 One of the greatest feedback we have gotten so far is by one of the Conpot developers:<br>
-***"[...] I highly recommend T-Pot which is ... it's not exactly a swiss army knife .. it's more like a swiss army soldier, equipped with a swiss army knife. Inside a tank. A swiss tank. [...]"***
+***"[...] I highly recommend T-Pot which is ... it's not exactly a swiss army knife .. it's more like a swiss army soldier, equipped with a swiss army knife. Inside a tank. A swiss tank. [...]"***<br>
+And from @robcowart (creator of [ElastiFlow](https://github.com/robcowart/elastiflow)):<br>
+***"#TPot is one of the most well put together turnkey honeypot solutions. It is a must-have for anyone wanting to analyze and understand the behavior of malicious actors and the threat they pose to your organization."***
