@@ -7,6 +7,8 @@ services:
     build: .
     container_name: logstash
     restart: always
+    environment:
+     - LS_JAVA_OPTS=-Xms2048m -Xmx2048m
 #    depends_on:
 #      elasticsearch:
 #        condition: service_healthy
@@ -15,4 +17,4 @@ services:
     image: "dtagdevsec/logstash:2006"
     volumes:
      - /data:/data
-     - /root/tpotce/docker/elk/logstash/dist/logstash.conf:/etc/logstash/conf.d/logstash.conf
+#     - /root/tpotce/docker/elk/logstash/dist/logstash.conf:/etc/logstash/conf.d/logstash.conf

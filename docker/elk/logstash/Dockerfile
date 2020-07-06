@@ -1,4 +1,4 @@
-FROM alpine
+FROM alpine:3.12
 #
 # VARS
 ENV LS_VER=7.8.0
@@ -56,4 +56,5 @@ HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:9600'
 #
 # Start logstash
 #USER logstash:logstash
+#CMD update.sh && exec /usr/share/logstash/bin/logstash -f /etc/logstash/conf.d/logstash.conf --config.reload.automatic --java-execution --log.level debug
 CMD update.sh && exec /usr/share/logstash/bin/logstash -f /etc/logstash/conf.d/logstash.conf --config.reload.automatic --java-execution
