@@ -1,11 +1,11 @@
-FROM alpine:latest
+FROM alpine:edge
 #
 # Include dist
 ADD dist/ /root/dist/
 #
 # Setup apt
-RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
-    apk -U add \
+#RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
+RUN apk -U add \
              build-base \
              file \
              git \
@@ -26,10 +26,9 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
              wget && \
 #
 # Setup ConPot
-    git clone --depth=1 https://github.com/mushorg/conpot /opt/conpot && \
+    git clone https://github.com/mushorg/conpot /opt/conpot && \
     cd /opt/conpot/ && \
-    # Patch to accept ENV for MIB path
-    sed -i "s/tmp_mib_dir = tempfile.mkdtemp()/tmp_mib_dir = tempfile.mkdtemp(dir=os.environ['CONPOT_TMP'])/" /opt/conpot/conpot/protocols/snmp/snmp_server.py && \
+    git checkout 7a77329cd99cee9c37ee20e2f05a48952d8eece9 && \
     # Change template default ports if <1024
     sed -i 's/port="2121"/port="21"/' /opt/conpot/conpot/templates/default/ftp/ftp.xml && \ 
     sed -i 's/port="8800"/port="80"/' /opt/conpot/conpot/templates/default/http/http.xml && \ 
@@ -75,4 +74,4 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
 # Start conpot
 STOPSIGNAL SIGINT
 USER conpot:conpot
-CMD exec /usr/bin/conpot --temp_dir $CONPOT_TMP --template $CONPOT_TEMPLATE --logfile $CONPOT_LOG --config $CONPOT_CONFIG
+CMD exec /usr/bin/conpot --mibcache $CONPOT_TMP --temp_dir $CONPOT_TMP --template $CONPOT_TEMPLATE --logfile $CONPOT_LOG --config $CONPOT_CONFIG

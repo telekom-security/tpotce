@@ -70,7 +70,7 @@
                 <value type="value">100000000</value>
             </key>
             <key name="ifPhysAddress">
-                <value type="value">"\x00\x0e\x8c\x29\xc5\x1a"</value>
+                <value type="value">"0x000e8c29c51a"</value>
             </key>
             <key name="ifAdminStatus">
                 <value type="value">1</value>
