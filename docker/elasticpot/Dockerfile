@@ -12,6 +12,7 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
              libffi-dev \
 	     openssl \
              openssl-dev \
+	     postgresql-dev \
              py3-mysqlclient \
              py3-requests \
 	     py3-pip \
@@ -33,6 +34,7 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
                     git \
                     libffi-dev \
 		    openssl-dev \
+		    postgresql-dev \
 		    python3-dev && \
     rm -rf /root/* && \
     rm -rf /var/cache/apk/*
