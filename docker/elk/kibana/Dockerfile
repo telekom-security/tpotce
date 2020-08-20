@@ -1,7 +1,7 @@
 FROM node:10.21.0-alpine
 #
 # VARS
-ENV KB_VER=7.8.1
+ENV KB_VER=7.9.0
 # 
 # Include dist
 ADD dist/ /root/dist/
@@ -46,10 +46,14 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     echo "xpack.apm.enabled: false" >> /usr/share/kibana/config/kibana.yml && \
     echo "xpack.security.enabled: false" >> /usr/share/kibana/config/kibana.yml && \
     echo "xpack.uptime.enabled: false" >> /usr/share/kibana/config/kibana.yml && \
-    echo "xpack.siem.enabled: false" >> /usr/share/kibana/config/kibana.yml && \
+    echo "xpack.securitySolution.enabled: false" >> /usr/share/kibana/config/kibana.yml && \
     echo "xpack.ml.enabled: false" >> /usr/share/kibana/config/kibana.yml && \
     echo "elasticsearch.requestTimeout: 60000" >> /usr/share/kibana/config/kibana.yml && \
     echo "elasticsearch.shardTimeout: 60000" >> /usr/share/kibana/config/kibana.yml && \
+# There is no switch to disable Enterprise Search, so we need to remove it
+# In order to remove all X-Pack features we need to use OSS versions
+#   /usr/share/kibana/bin/kibana-plugin remove x-pack --allow-root && \
+    rm -rf /usr/share/kibana/x-pack/plugins/enterprise_search && \
     rm -rf /usr/share/kibana/optimize/bundles/* && \
     /usr/share/kibana/bin/kibana --optimize --allow-root && \
     addgroup -g 2000 kibana && \
