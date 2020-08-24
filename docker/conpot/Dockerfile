@@ -41,6 +41,7 @@ RUN apk -U add \
     sed -i 's/port="6230"/port="623"/' /opt/conpot/conpot/templates/ipmi/ipmi/ipmi.xml && \ 
     pip3 install --no-cache-dir -U setuptools && \
     pip3 install --no-cache-dir . && \
+    pip3 install --no-cache-dir pysnmp-mibs && \
     cd / && \
     rm -rf /opt/conpot /tmp/* /var/tmp/* && \
     setcap cap_net_bind_service=+ep /usr/bin/python3.8 && \
