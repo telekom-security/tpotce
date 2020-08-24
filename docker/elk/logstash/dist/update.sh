@@ -35,11 +35,27 @@ if [ "$myCHECK" == "0" ];
     echo "Cannot reach Listbot, starting Logstash without latest translation maps."
 fi
 
-# Make sure logstash can put latest logstash template by deleting the old one first
+# We do want to enforce our es_template thus we always need to delete the default template, putting our default afterwards
 # This is now done via common_configs.rb => overwrite default logstash template
-#echo "Removing logstash template."
-#curl -XDELETE http://elasticsearch:9200/_template/logstash
-#echo
-#echo "Checking if empty."
-#curl -XGET http://elasticsearch:9200/_template/logstash
-#echo
+echo "Removing logstash template."
+curl -s -XDELETE http://elasticsearch:9200/_template/logstash
+echo
+echo "Checking if empty."
+curl -s -XGET http://elasticsearch:9200/_template/logstash
+echo
+echo "Putting default template."
+curl -s -XPUT "http://elasticsearch:9200/_template/logstash" -H 'Content-Type: application/json' -d'
+{
+  "index_patterns" : "logstash-*",
+  "version" : 60001,
+  "settings" : {
+    "index.refresh_interval" : "5s",
+    "number_of_shards" : 1,
+    "index.number_of_replicas" : "0",
+    "index.mapping.total_fields.limit" : "2000",
+    "index.query": {
+      "default_field": "*"
+     }
+  }   
+}'
+echo

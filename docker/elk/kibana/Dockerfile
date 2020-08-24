@@ -52,7 +52,6 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     echo "elasticsearch.shardTimeout: 60000" >> /usr/share/kibana/config/kibana.yml && \
 # There is no switch to disable Enterprise Search, so we need to remove it
 # In order to remove all X-Pack features we need to use OSS versions
-#   /usr/share/kibana/bin/kibana-plugin remove x-pack --allow-root && \
     rm -rf /usr/share/kibana/x-pack/plugins/enterprise_search && \
     rm -rf /usr/share/kibana/optimize/bundles/* && \
     /usr/share/kibana/bin/kibana --optimize --allow-root && \

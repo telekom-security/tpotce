@@ -36,8 +36,7 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     chmod u+x /usr/bin/update.sh && \
     mkdir -p /etc/logstash/conf.d && \
     cp logstash.conf /etc/logstash/conf.d/ && \
-    cp elasticsearch-template-es7x.json /usr/share/logstash/vendor/bundle/jruby/2.5.0/gems/logstash-output-elasticsearch-10.6.1-java/lib/logstash/outputs/elasticsearch/ && \
-    cp common_configs.rb /usr/share/logstash/vendor/bundle/jruby/2.5.0/gems/logstash-output-elasticsearch-10.6.1-java/lib/logstash/outputs/elasticsearch/ && \
+    cp tpot_es_template.json /etc/logstash/ && \
 #
 # Setup user, groups and configs
     addgroup -g 2000 logstash && \
