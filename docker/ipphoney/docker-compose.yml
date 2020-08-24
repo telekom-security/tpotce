@@ -1,0 +1,20 @@
+version: '2.3'
+
+networks:
+  ipphoney_local:
+
+services:
+
+# Ipphoney service
+  ipphoney:
+    build: .
+    container_name: ipphoney
+    restart: always
+    networks:
+     - ipphoney_local
+    ports:
+     - "631:631"
+    image: "dtagdevsec/ipphoney:2006"
+    read_only: true
+    volumes:
+     - /data/ipphoney/log:/opt/ipphoney/log
