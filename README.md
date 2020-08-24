@@ -19,6 +19,7 @@ and includes dockerized versions of the following honeypots
 * [honeypy](https://github.com/foospidy/HoneyPy),
 * [honeysap](https://github.com/SecureAuthCorp/HoneySAP),
 * [honeytrap](https://github.com/armedpot/honeytrap/),
+* [ipphoney](https://gitlab.com/bontchev/ipphoney),
 * [mailoney](https://github.com/awhitehatter/mailoney),
 * [medpot](https://github.com/schmalle/medpot),
 * [rdpy](https://github.com/citronneur/rdpy),
@@ -99,6 +100,7 @@ In T-Pot we combine the dockerized honeypots ...
 * [honeypy](https://github.com/foospidy/HoneyPy),
 * [honeysap](https://github.com/SecureAuthCorp/HoneySAP),
 * [honeytrap](https://github.com/armedpot/honeytrap/),
+* [ipphoney](https://gitlab.com/bontchev/ipphoney),
 * [mailoney](https://github.com/awhitehatter/mailoney),
 * [medpot](https://github.com/schmalle/medpot),
 * [rdpy](https://github.com/citronneur/rdpy),
@@ -168,7 +170,7 @@ There are prebuilt installation types available each focussing on different aspe
 
 
 ##### NextGen
-- Honeypots: adbhoney, ciscoasa, citrixhoneypot, conpot, cowrie, dicompot, dionaea, glutton, heralding, honeypy, honeysap, mailoney, medpot, rdpy, snare & tanner
+- Honeypots: adbhoney, ciscoasa, citrixhoneypot, conpot, cowrie, dicompot, dionaea, glutton, heralding, honeypy, honeysap, ipphoney, mailoney, medpot, rdpy, snare & tanner
 - Tools: cockpit, cyberchef, ELK, fatt, elasticsearch head, ewsposter, nginx / heimdall, spiderfoot, p0f & suricata
 
 
@@ -487,7 +489,7 @@ We hope you understand that we cannot provide support on an individual basis. We
 # Licenses
 The software that T-Pot is built on uses the following licenses.
 <br>GPLv2: [conpot](https://github.com/mushorg/conpot/blob/master/LICENSE.txt), [dionaea](https://github.com/DinoTools/dionaea/blob/master/LICENSE), [honeysap](https://github.com/SecureAuthCorp/HoneySAP/blob/master/COPYING), [honeypy](https://github.com/foospidy/HoneyPy/blob/master/LICENSE), [honeytrap](https://github.com/armedpot/honeytrap/blob/master/LICENSE), [suricata](http://suricata-ids.org/about/open-source/)
-<br>GPLv3: [adbhoney](https://github.com/huuck/ADBHoney), [elasticpot](https://gitlab.com/bontchev/elasticpot/-/blob/master/LICENSE), [ewsposter](https://github.com/dtag-dev-sec/ews/), [fatt](https://github.com/0x4D31/fatt/blob/master/LICENSE), [rdpy](https://github.com/citronneur/rdpy/blob/master/LICENSE), [heralding](https://github.com/johnnykv/heralding/blob/master/LICENSE.txt), [snare](https://github.com/mushorg/snare/blob/master/LICENSE), [tanner](https://github.com/mushorg/snare/blob/master/LICENSE)
+<br>GPLv3: [adbhoney](https://github.com/huuck/ADBHoney), [elasticpot](https://gitlab.com/bontchev/elasticpot/-/blob/master/LICENSE), [ewsposter](https://github.com/dtag-dev-sec/ews/), [fatt](https://github.com/0x4D31/fatt/blob/master/LICENSE), [rdpy](https://github.com/citronneur/rdpy/blob/master/LICENSE), [heralding](https://github.com/johnnykv/heralding/blob/master/LICENSE.txt), [ipphoney](https://gitlab.com/bontchev/ipphoney/-/blob/master/LICENSE), [snare](https://github.com/mushorg/snare/blob/master/LICENSE), [tanner](https://github.com/mushorg/snare/blob/master/LICENSE)
 <br>Apache 2 License: [cyberchef](https://github.com/gchq/CyberChef/blob/master/LICENSE), [dicompot](https://github.com/nsmfoo/dicompot/blob/master/LICENSE), [elasticsearch](https://github.com/elasticsearch/elasticsearch/blob/master/LICENSE.txt), [logstash](https://github.com/elasticsearch/logstash/blob/master/LICENSE), [kibana](https://github.com/elasticsearch/kibana/blob/master/LICENSE.md), [docker](https://github.com/docker/docker/blob/master/LICENSE), [elasticsearch-head](https://github.com/mobz/elasticsearch-head/blob/master/LICENCE)
 <br>MIT license: [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/blob/master/LICENSE), [glutton](https://github.com/mushorg/glutton/blob/master/LICENSE)
 <br> Other: [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot#licencing-agreement-malwaretech-public-licence), [cowrie](https://github.com/micheloosterhof/cowrie/blob/master/LICENSE.md), [mailoney](https://github.com/awhitehatter/mailoney), [Debian licensing](https://www.debian.org/legal/licenses/)
@@ -519,6 +521,7 @@ Without open source and the fruitful development community (we are proud to be a
 * [honeypy](https://github.com/foospidy/HoneyPy/graphs/contributors)
 * [honeysap](https://github.com/SecureAuthCorp/HoneySAP/graphs/contributors)
 * [honeytrap](https://github.com/armedpot/honeytrap/graphs/contributors)
+* [ipphoney](https://gitlab.com/bontchev/ipphoney/-/project_members)
 * [kibana](https://github.com/elastic/kibana/graphs/contributors)
 * [logstash](https://github.com/elastic/logstash/graphs/contributors)
 * [mailoney](https://github.com/awhitehatter/mailoney)

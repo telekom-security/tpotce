@@ -197,6 +197,14 @@ fuHONEYTRAP () {
   chown tpot:tpot /data/honeytrap/ -R
 }
 
+# Let's create a function to clean up and prepare ipphoney data
+fuIPPHONEY () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/ipphoney/*; fi
+  mkdir -p /data/ipphoney/log
+  chmod 770 /data/ipphoney -R
+  chown tpot:tpot /data/ipphoney -R
+}
+
 # Let's create a function to clean up and prepare mailoney data
 fuMAILONEY () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/mailoney/*; fi
@@ -298,6 +306,7 @@ if [ "$myPERSISTENCE" = "on" ];
     fuHONEYSAP
     fuHONEYPY
     fuHONEYTRAP
+    fuIPPHONEY
     fuMAILONEY
     fuMEDPOT
     fuNGINX

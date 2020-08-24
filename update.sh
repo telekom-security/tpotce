@@ -238,6 +238,7 @@ mkdir -vp /data/adbhoney/{downloads,log} \
          /data/heralding/log \
          /data/honeypy/log \
          /data/honeysap/log \
+	 /data/ipphoney/log \
          /data/mailoney/log \
          /data/medpot/log \
          /data/nginx/{log,heimdall} \
