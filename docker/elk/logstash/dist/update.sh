@@ -56,6 +56,42 @@ curl -s -XPUT "http://elasticsearch:9200/_template/logstash" -H 'Content-Type: a
     "index.query": {
       "default_field": "*"
      }
-  }   
+  },
+  "mappings" : {
+    "dynamic_templates" : [ {
+      "message_field" : {
+        "path_match" : "message",
+        "match_mapping_type" : "string",
+        "mapping" : {
+          "type" : "text",
+          "norms" : false
+        }
+      }
+    }, {
+      "string_fields" : {
+        "match" : "*",
+        "match_mapping_type" : "string",
+        "mapping" : {
+          "type" : "text", "norms" : false,
+          "fields" : {
+            "keyword" : { "type": "keyword", "ignore_above": 256 }
+          }
+        }
+      }
+    } ],
+    "properties" : {
+      "@timestamp": { "type": "date"},
+      "@version": { "type": "keyword"},
+      "geoip"  : {
+        "dynamic": true,
+        "properties" : {
+          "ip": { "type": "ip" },
+          "location" : { "type" : "geo_point" },
+          "latitude" : { "type" : "half_float" },
+          "longitude" : { "type" : "half_float" }
+        }
+      }
+    }
+  }
 }'
 echo
