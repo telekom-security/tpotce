@@ -34,7 +34,7 @@ variable "ecs_prefix" {
 }
 
 # ECS configuration
-variable "availabiliy_zone" {
+variable "availability_zone" {
   default = "eu-de-03"
   description = "Select an availability zone"
 }
@@ -50,7 +50,7 @@ variable "key_pair" {
 }
 
 variable "image_id" {
-  default = "d97dd29c-9318-4e4c-8d3a-7307d1513b77"
+  default = "fb7b0c9c-8b20-4e3f-832c-ea38c981c282"
   description = "Select a Debian 10 base image id"
 }
 
