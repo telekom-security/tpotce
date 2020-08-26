@@ -9,7 +9,7 @@ This can easily be extended to support other [Terraform providers](https://www.t
 - [What get's created](#what-created)
   - [Amazon Web Services (AWS)](#what-created-aws)
   - [Open Telekom Cloud (OTC)](#what-created-otc)
-- [Pre-Requisites](#pre)
+- [Prerequisites](#pre)
   - [Amazon Web Services (AWS)](#pre-aws)
   - [Open Telekom Cloud (OTC)](#pre-otc)
 - [Terraform Variables](#variables)
@@ -45,8 +45,8 @@ This can easily be extended to support other [Terraform providers](https://www.t
 * Network, Subnet, Router (= Virtual Private Cloud [VPC])
 
 <a name="pre"></a>
-## Pre-Requisites
-* [Terraform](https://www.terraform.io/) 0.12
+## Prerequisites
+* [Terraform](https://www.terraform.io/) 0.13
 
 <a name="pre-aws"></a>
 ### Amazon Web Services (AWS)
@@ -90,7 +90,7 @@ In `aws/variables.tf`, you can change the additional variables:
 <a name="variables-otc"></a>
 ### Open Telekom Cloud (OTC)
 In `otc/variables.tf`, you can change the additional variables:
-* `availabiliy_zone`
+* `availability_zone`
 * `flavor`
 * `key_pair` - Specify an existing SSH key pair
 * `image_id`
@@ -124,4 +124,4 @@ If you want the remove the built infrastructure, you can run [`terraform destroy
 
 <a name="connecting"></a>
 ## Connecting to the Instance
-When the installation is completed, you can proceed with connecting/logging in to the T-Pot according to the [documentation](https://github.com/dtag-dev-sec/tpotce#ssh-and-web-access).
+When the installation is completed, you can proceed with connecting/logging in to the T-Pot according to the [documentation](https://github.com/telekom-security/tpotce#ssh-and-web-access).
