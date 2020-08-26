@@ -34,7 +34,7 @@ variable "ecs_prefix" {
 }
 
 # ECS configuration
-variable "availabiliy_zone" {
+variable "availability_zone" {
   default = "eu-de-03"
   description = "Select an availability zone"
 }
