@@ -1,4 +1,4 @@
-FROM alpine:latest
+FROM alpine:3.12
 #
 # Include dist
 ADD dist/ /root/dist/
@@ -23,8 +23,9 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
 # Get and install packages
     mkdir -p /opt/ && \
     cd /opt/ && \
-    git clone --depth=1 https://github.com/cymmetria/ciscoasa_honeypot && \
+    git clone https://github.com/cymmetria/ciscoasa_honeypot && \
     cd ciscoasa_honeypot && \
+    git checkout d6e91f1aab7fe6fc01fabf2046e76b68dd6dc9e2 && \
     pip3 install --no-cache-dir -r requirements.txt && \
     cp /root/dist/asa_server.py /opt/ciscoasa_honeypot && \
     chown -R ciscoasa:ciscoasa /opt/ciscoasa_honeypot && \
