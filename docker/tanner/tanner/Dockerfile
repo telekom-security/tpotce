@@ -1,4 +1,4 @@
-FROM alpine:latest
+FROM alpine:3.12
 #
 # Include dist
 ADD dist/ /root/dist/
@@ -18,10 +18,11 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
                python3-dev && \ 
 #
 # Setup Tanner
-    git clone --depth=1 https://github.com/mushorg/tanner /opt/tanner && \
+    git clone https://github.com/mushorg/tanner /opt/tanner && \
     cd /opt/tanner/ && \
 #    git fetch origin pull/364/head:test && \	
 #    git checkout test && \
+    git checkout 40e2357119065445cbb06234e953a95e5a73ce93 && \
     cp /root/dist/config.yaml /opt/tanner/tanner/data && \
     pip3 install --no-cache-dir setuptools && \
     pip3 install --no-cache-dir -r requirements.txt && \

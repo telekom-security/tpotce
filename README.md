@@ -40,7 +40,7 @@ Furthermore T-Pot includes the following tools
 
 # TL;DR
 1. Meet the [system requirements](#requirements). The T-Pot installation needs at least 8 GB RAM and 128 GB free disk space as well as a working (outgoing non-filtered) internet connection.
-2. Download the T-Pot ISO from [GitHub](https://github.com/dtag-dev-sec/tpotce/releases) or [create it yourself](#createiso).
+2. Download the T-Pot ISO from [GitHub](https://github.com/telekom-security/tpotce/releases) or [create it yourself](#createiso).
 3. Install the system in a [VM](#vm) or on [physical hardware](#hw) with [internet access](#placement).
 4. Enjoy your favorite beverage - [watch](https://sicherheitstacho.eu) and [analyze](#kibana).
 
@@ -132,7 +132,7 @@ The T-Pot project provides all the tools and documentation necessary to build yo
 
 The source code and configuration files are fully stored in the T-Pot GitHub repository. The docker images are preconfigured for the T-Pot environment. If you want to run the docker images separately, make sure you study the docker-compose configuration (`/opt/tpot/etc/tpot.yml`) and the T-Pot systemd script (`/etc/systemd/system/tpot.service`), as they provide a good starting point for implementing changes.
 
-The individual docker configurations are located in the [docker folder](https://github.com/dtag-dev-sec/tpotce/tree/master/docker).
+The individual docker configurations are located in the [docker folder](https://github.com/telekom-security/tpotce/tree/master/docker).
 
 <a name="requirements"></a>
 # System Requirements
@@ -183,18 +183,18 @@ There are prebuilt installation types available each focussing on different aspe
 # Installation
 The installation of T-Pot is straight forward and heavily depends on a working, transparent and non-proxied up and running internet connection. Otherwise the installation **will fail!**
 
-Firstly, decide if you want to download the prebuilt installation ISO image from [GitHub](https://github.com/dtag-dev-sec/tpotce/releases), [create it yourself](#createiso) ***or*** [post-install on an existing Debian 10 (Buster)](#postinstall).
+Firstly, decide if you want to download the prebuilt installation ISO image from [GitHub](https://github.com/telekom-security/tpotce/releases), [create it yourself](#createiso) ***or*** [post-install on an existing Debian 10 (Buster)](#postinstall).
 
 Secondly, decide where you the system to run: [real hardware](#hardware) or in a [virtual machine](#vm)?
 
 <a name="prebuilt"></a>
 ## Prebuilt ISO Image
-An installation ISO image is available for download (~50MB), which is created by the [ISO Creator](https://github.com/dtag-dev-sec/tpotce) you can use yourself in order to create your own image. It will basically just save you some time downloading components and creating the ISO image.
-You can download the prebuilt installation ISO from [GitHub](https://github.com/dtag-dev-sec/tpotce/releases) and jump to the [installation](#vm) section.
+An installation ISO image is available for download (~50MB), which is created by the [ISO Creator](https://github.com/telekom-security/tpotce) you can use yourself in order to create your own image. It will basically just save you some time downloading components and creating the ISO image.
+You can download the prebuilt installation ISO from [GitHub](https://github.com/telekom-security/tpotce/releases) and jump to the [installation](#vm) section.
 
 <a name="createiso"></a>
 ## Create your own ISO Image
-For transparency reasons and to give you the ability to customize your install you use the [ISO Creator](https://github.com/dtag-dev-sec/tpotce) that enables you to create your own ISO installation image.
+For transparency reasons and to give you the ability to customize your install you use the [ISO Creator](https://github.com/telekom-security/tpotce) that enables you to create your own ISO installation image.
 
 **Requirements to create the ISO image:**
 - Debian 10 as host system (others *may* work, but *remain* untested)
@@ -206,7 +206,7 @@ For transparency reasons and to give you the ability to customize your install y
 
 1. Clone the repository and enter it.
 ```
-git clone https://github.com/dtag-dev-sec/tpotce
+git clone https://github.com/telekom-security/tpotce
 cd tpotce
 ```
 2. Run the `makeiso.sh` script to build the ISO image.
@@ -237,7 +237,7 @@ You can now jump [here](#firstrun).
 If you decide to run T-Pot on dedicated hardware, just follow these steps:
 
 1. Burn a CD from the ISO image or make a bootable USB stick using the image. <br>
-Whereas most CD burning tools allow you to burn from ISO images, the procedure to create a bootable USB stick from an ISO image depends on your system. There are various Windows GUI tools available, e.g. [this tip](http://www.ubuntu.com/download/desktop/create-a-usb-stick-on-windows) might help you.<br> On [Linux](http://askubuntu.com/questions/59551/how-to-burn-a-iso-to-a-usb-device) or [MacOS](http://www.ubuntu.com/download/desktop/create-a-usb-stick-on-mac-osx) you can use the tool *dd* or create the USB stick with T-Pot's [ISO Creator](https://github.com/dtag-dev-sec).
+Whereas most CD burning tools allow you to burn from ISO images, the procedure to create a bootable USB stick from an ISO image depends on your system. There are various Windows GUI tools available, e.g. [this tip](http://www.ubuntu.com/download/desktop/create-a-usb-stick-on-windows) might help you.<br> On [Linux](http://askubuntu.com/questions/59551/how-to-burn-a-iso-to-a-usb-device) or [MacOS](http://www.ubuntu.com/download/desktop/create-a-usb-stick-on-mac-osx) you can use the tool *dd* or create the USB stick with T-Pot's [ISO Creator](https://github.com/telekom-security).
 2. Boot from the USB stick and install.
 
 *Please note*: Limited tests are performed for the Intel NUC platform other hardware platforms **remain untested**. There is no hardware support provided of any kind.
@@ -255,7 +255,7 @@ The T-Pot Universal Installer will upgrade the system and install all required T
 Just follow these steps:
 
 ```
-git clone https://github.com/dtag-dev-sec/tpotce
+git clone https://github.com/telekom-security/tpotce
 cd tpotce/iso/installer/
 ./install.sh --type=user
 ```
@@ -269,7 +269,7 @@ You can also let the installer run automatically if you provide your own `tpot.c
 Just follow these steps while adjusting `tpot.conf` to your needs:
 
 ```
-git clone https://github.com/dtag-dev-sec/tpotce
+git clone https://github.com/telekom-security/tpotce
 cd tpotce/iso/installer/
 cp tpot.conf.dist tpot.conf
 ./install.sh --type=auto --conf=tpot.conf
@@ -436,7 +436,7 @@ You may opt out of the submission by removing the `# Ewsposter service` from `/o
     restart: always
     networks:
      - ewsposter_local
-    image: "dtagdevsec/ewsposter:2006"
+    image: "ghcr.io/telekom-security/ewsposter:2006"
     volumes:
      - /data:/data
      - /data/ews/conf/ews.ip:/opt/ewsposter/ews.ip
@@ -466,7 +466,7 @@ As with every development there is always room for improvements ...
 
 Some features may be provided with updated docker images, others may require some hands on from your side.
 
-You are always invited to participate in development on our [GitHub](https://github.com/dtag-dev-sec/tpotce) page.
+You are always invited to participate in development on our [GitHub](https://github.com/telekom-security/tpotce) page.
 
 <a name="disclaimer"></a>
 # Disclaimer
@@ -478,18 +478,18 @@ You are always invited to participate in development on our [GitHub](https://git
 
 <a name="faq"></a>
 # FAQ
-Please report any issues or questions on our [GitHub issue list](https://github.com/dtag-dev-sec/tpotce/issues), so the community can participate.
+Please report any issues or questions on our [GitHub issue list](https://github.com/telekom-security/tpotce/issues), so the community can participate.
 
 <a name="contact"></a>
 # Contact
 The software is provided **as is** in a Community Edition format. T-Pot is designed to run out of the box and with zero maintenance involved. <br>
-We hope you understand that we cannot provide support on an individual basis. We will try to address questions, bugs and problems on our [GitHub issue list](https://github.com/dtag-dev-sec/tpotce/issues).
+We hope you understand that we cannot provide support on an individual basis. We will try to address questions, bugs and problems on our [GitHub issue list](https://github.com/telekom-security/tpotce/issues).
 
 <a name="licenses"></a>
 # Licenses
 The software that T-Pot is built on uses the following licenses.
 <br>GPLv2: [conpot](https://github.com/mushorg/conpot/blob/master/LICENSE.txt), [dionaea](https://github.com/DinoTools/dionaea/blob/master/LICENSE), [honeysap](https://github.com/SecureAuthCorp/HoneySAP/blob/master/COPYING), [honeypy](https://github.com/foospidy/HoneyPy/blob/master/LICENSE), [honeytrap](https://github.com/armedpot/honeytrap/blob/master/LICENSE), [suricata](http://suricata-ids.org/about/open-source/)
-<br>GPLv3: [adbhoney](https://github.com/huuck/ADBHoney), [elasticpot](https://gitlab.com/bontchev/elasticpot/-/blob/master/LICENSE), [ewsposter](https://github.com/dtag-dev-sec/ews/), [fatt](https://github.com/0x4D31/fatt/blob/master/LICENSE), [rdpy](https://github.com/citronneur/rdpy/blob/master/LICENSE), [heralding](https://github.com/johnnykv/heralding/blob/master/LICENSE.txt), [ipphoney](https://gitlab.com/bontchev/ipphoney/-/blob/master/LICENSE), [snare](https://github.com/mushorg/snare/blob/master/LICENSE), [tanner](https://github.com/mushorg/snare/blob/master/LICENSE)
+<br>GPLv3: [adbhoney](https://github.com/huuck/ADBHoney), [elasticpot](https://gitlab.com/bontchev/elasticpot/-/blob/master/LICENSE), [ewsposter](https://github.com/telekom-security/ews/), [fatt](https://github.com/0x4D31/fatt/blob/master/LICENSE), [rdpy](https://github.com/citronneur/rdpy/blob/master/LICENSE), [heralding](https://github.com/johnnykv/heralding/blob/master/LICENSE.txt), [ipphoney](https://gitlab.com/bontchev/ipphoney/-/blob/master/LICENSE), [snare](https://github.com/mushorg/snare/blob/master/LICENSE), [tanner](https://github.com/mushorg/snare/blob/master/LICENSE)
 <br>Apache 2 License: [cyberchef](https://github.com/gchq/CyberChef/blob/master/LICENSE), [dicompot](https://github.com/nsmfoo/dicompot/blob/master/LICENSE), [elasticsearch](https://github.com/elasticsearch/elasticsearch/blob/master/LICENSE.txt), [logstash](https://github.com/elasticsearch/logstash/blob/master/LICENSE), [kibana](https://github.com/elasticsearch/kibana/blob/master/LICENSE.md), [docker](https://github.com/docker/docker/blob/master/LICENSE), [elasticsearch-head](https://github.com/mobz/elasticsearch-head/blob/master/LICENCE)
 <br>MIT license: [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/blob/master/LICENSE), [glutton](https://github.com/mushorg/glutton/blob/master/LICENSE)
 <br> Other: [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot#licencing-agreement-malwaretech-public-licence), [cowrie](https://github.com/micheloosterhof/cowrie/blob/master/LICENSE.md), [mailoney](https://github.com/awhitehatter/mailoney), [Debian licensing](https://www.debian.org/legal/licenses/)

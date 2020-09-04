@@ -1,4 +1,4 @@
-FROM alpine:latest
+FROM alpine:3.12
 #  
 # Include dist
 ADD dist/ /root/dist/
@@ -21,8 +21,9 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
 # Setup heralding
     mkdir -p /opt && \
     cd /opt/ && \
-    git clone --depth=1 https://github.com/johnnykv/heralding && \
+    git clone https://github.com/johnnykv/heralding && \
     cd heralding && \
+    git checkout bc1320e2d056c730c821cd42a19a262bfceebfd7 && \
     pip3 install --no-cache-dir -r requirements.txt && \
     pip3 install --no-cache-dir . && \
 #

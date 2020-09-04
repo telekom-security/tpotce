@@ -1,4 +1,4 @@
-FROM alpine:latest
+FROM alpine:3.12
 #
 # Include dist
 ADD dist/ /root/dist/
@@ -9,6 +9,7 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
                  ca-certificates \
                  curl \
                  file \
+		 hiredis \
                  libcap \
                  wget && \
     apk -U add --repository http://dl-cdn.alpinelinux.org/alpine/edge/community \

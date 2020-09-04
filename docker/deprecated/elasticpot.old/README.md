@@ -1,10 +1,10 @@
-[![](https://images.microbadger.com/badges/version/dtagdevsec/elasticpot:1903.svg)](https://microbadger.com/images/dtagdevsec/elasticpot:1903 "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/dtagdevsec/elasticpot:1903.svg)](https://microbadger.com/images/dtagdevsec/elasticpot:1903 "Get your own image badge on microbadger.com")
+[![](https://images.microbadger.com/badges/version/ghcr.io/telekom-security/elasticpot:1903.svg)](https://microbadger.com/images/ghcr.io/telekom-security/elasticpot:1903 "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/image/ghcr.io/telekom-security/elasticpot:1903.svg)](https://microbadger.com/images/ghcr.io/telekom-security/elasticpot:1903 "Get your own image badge on microbadger.com")
 
 # elasticpot
 
 [elasticpot](https://github.com/schmalle/ElasticPot) is a simple elastic search honeypot.
 
-This dockerized version is part of the **[T-Pot community honeypot](http://dtag-dev-sec.github.io/)** of Deutsche Telekom AG.
+This dockerized version is part of the **[T-Pot community honeypot](http://telekom-security.github.io/)** of Deutsche Telekom AG.
 
 The `Dockerfile` contains the blueprint for the dockerized elasticpot and will be used to setup the docker image.
 

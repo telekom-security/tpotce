@@ -17,8 +17,9 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     pip install --no-cache-dir virtualenv && \
 #
 # Clone honeypy from git
-    git clone --depth=1 https://github.com/foospidy/HoneyPy /opt/honeypy && \
+    git clone https://github.com/foospidy/HoneyPy /opt/honeypy && \
     cd /opt/honeypy && \
+    git checkout feccab56ca922bcab01cac4ffd82f588d61ab1c5 && \
     sed -i 's/local_host/dest_ip/g' /opt/honeypy/loggers/file/honeypy_file.py && \
     sed -i 's/local_port/dest_port/g' /opt/honeypy/loggers/file/honeypy_file.py && \
     sed -i 's/remote_host/src_ip/g' /opt/honeypy/loggers/file/honeypy_file.py && \

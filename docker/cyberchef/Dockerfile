@@ -13,7 +13,7 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
 #
 # Install CyberChef 
     cd /root && \
-    git clone https://github.com/gchq/cyberchef --depth=1 && \
+    git clone https://github.com/gchq/cyberchef -b v9.21.0 && \
     chown -R nobody:nobody cyberchef && \
     cd cyberchef && \
     npm install && \

@@ -18,6 +18,7 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
 #    git clone --depth=1 https://github.com/SecureAuthCorp/HoneySAP /opt/honeysap && \
     git clone --depth=1 https://github.com/t3chn0m4g3/HoneySAP /opt/honeysap && \
     cd /opt/honeysap && \
+    git checkout a3c355a710d399de9d543659a685effaa70e683d && \
     mkdir conf && \
     cp /root/dist/* conf/ && \
     python setup.py install && \

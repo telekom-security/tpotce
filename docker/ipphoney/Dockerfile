@@ -1,4 +1,4 @@
-FROM alpine:latest
+FROM alpine:3.12
 #
 # Include dist
 ADD dist/ /root/dist/
@@ -21,8 +21,9 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
              python3-dev && \
     mkdir -p /opt && \
     cd /opt/ && \
-    git clone --depth=1 https://gitlab.com/bontchev/ipphoney.git/ && \
+    git clone https://gitlab.com/bontchev/ipphoney.git/ && \
     cd ipphoney && \
+    git checkout db8c6e91bff27b5c376339c5effbb45355897ab5 && \
     pip3 install -r requirements.txt && \
     setcap cap_net_bind_service=+ep /usr/bin/python3.8 && \
 #

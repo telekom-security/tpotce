@@ -96,7 +96,7 @@ Import your SSH public key.
 <a name="clone-git"></a>
 # Clone Git Repository
 Clone the `tpotce` repository to your Ansible Master:  
-`git clone https://github.com/dtag-dev-sec/tpotce.git`  
+`git clone https://github.com/telekom-security/tpotce.git`  
 All Ansible related files are located in the [`cloud/ansible/openstack`](openstack) folder.
 
 <a name="settings"></a>
@@ -226,7 +226,7 @@ If you are running on a machine which asks for a sudo password, you can use:
 The Playbook will first install required packages on the Ansible Master and then deploy a new server instance.  
 After that, T-Pot gets installed and configured on the newly created host, optionally custom configs are applied and finally it reboots.
 
-Once this is done, you can proceed with connecting/logging in to the T-Pot according to the [documentation](https://github.com/dtag-dev-sec/tpotce#ssh-and-web-access).
+Once this is done, you can proceed with connecting/logging in to the T-Pot according to the [documentation](https://github.com/telekom-security/tpotce#ssh-and-web-access).
 
 <a name="documentation"></a>
 # Further documentation
