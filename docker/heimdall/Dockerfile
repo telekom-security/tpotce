@@ -1,4 +1,4 @@
-FROM alpine:latest
+FROM alpine:3.12
 #
 # Include dist
 ADD dist/ /root/dist/
@@ -28,6 +28,9 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
 #
 # Clone and setup Heimdall, Nginx
     git clone https://github.com/linuxserver/heimdall && \
+    cd heimdall && \
+    git checkout 3a9bdd2c431d70803b259990fa4d81db4b06dba4 && \
+    cd .. && \
     cp -R heimdall/. /var/lib/nginx/html && \
     rm -rf heimdall && \
     cd /var/lib/nginx/html && \

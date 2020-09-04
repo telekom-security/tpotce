@@ -14,6 +14,6 @@ services:
      - honeysap_local
     ports:
      - "3299:3299"
-    image: "dtagdevsec/honeysap:2006"
+    image: "ghcr.io/telekom-security/honeysap:2006"
     volumes:
      - /data/honeysap/log:/opt/honeysap/log

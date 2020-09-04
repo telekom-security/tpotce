@@ -1,4 +1,4 @@
-FROM alpine:latest
+FROM alpine:3.12
 #
 # Include dist
 ADD dist/ /root/dist/
@@ -20,8 +20,9 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
              python3-dev && \
     mkdir -p /opt && \
     cd /opt/ && \
-    git clone --depth=1 https://gitlab.com/bontchev/elasticpot.git/ && \
+    git clone https://gitlab.com/bontchev/elasticpot.git/ && \
     cd elasticpot && \
+    git checkout d12649730d819bd78ea622361b6c65120173ad45 && \
     pip3 install -r requirements.txt && \
 #
 # Setup user, groups and configs
