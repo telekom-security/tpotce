@@ -4,7 +4,7 @@
 
 [glastopf](https://github.com/mushorg/glastopf) is a python web application honeypot.
 
-This dockerized version is part of the **[T-Pot community honeypot](http://dtag-dev-sec.github.io/)** of Deutsche Telekom AG.
+This dockerized version is part of the **[T-Pot community honeypot](http://telekom-security.github.io/)** of Deutsche Telekom AG.
 
 The `Dockerfile` contains the blueprint for the dockerized glastopf and will be used to setup the docker image.
 

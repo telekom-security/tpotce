@@ -60,7 +60,7 @@ fi
 echo ""
 echo "[+] Creating config file with API UserID '$apiUser' and API Token '$apiToken'."
 echo "[+] Fetching config file from github. Outgoing https requests must be enabled!"
-wget -q https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/docker/ews/dist/ews.cfg -O ews.cfg.dist 
+wget -q https://raw.githubusercontent.com/telekom-security/tpotce/master/docker/ews/dist/ews.cfg -O ews.cfg.dist 
 if [[ -f "ews.cfg.dist" ]]; then
 	echo "[+] Successfully downloaded ews.cfg from github."
 else 

@@ -6,7 +6,7 @@
 
 - name: Cloning T-Pot install directory
   git:
-    repo: "https://github.com/dtag-dev-sec/tpotce.git"
+    repo: "https://github.com/telekom-security/tpotce.git"
     dest: /root/tpot
 
 - name: Prepare to set user password
