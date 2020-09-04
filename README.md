@@ -436,7 +436,7 @@ You may opt out of the submission by removing the `# Ewsposter service` from `/o
     restart: always
     networks:
      - ewsposter_local
-    image: "dtagdevsec/ewsposter:2006"
+    image: "ghcr.io/telekom-security/ewsposter:2006"
     volumes:
      - /data:/data
      - /data/ews/conf/ews.ip:/opt/ewsposter/ews.ip

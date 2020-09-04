@@ -704,7 +704,7 @@ hash -r
 if ! [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ];
   then
     fuBANNER "Cloning T-Pot"
-    git clone https://github.com/telekom-security/tpotce /opt/tpot
+    git clone https://github.com/telekom-security/tpotce -b ghcr /opt/tpot
 fi
 
 # Let's create the T-Pot user
