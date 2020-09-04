@@ -1,5 +1,15 @@
 # Changelog
 
+## 20200904
+- **Release T-Pot 20.06.1**
+  - Github offers a free Docker Container Registry for public packages. For our Open Source projects we want to make sure to have everything in one place and thus moving from Docker Hub to the GitHub Container Registry.
+- **Bump Elastic Stack**
+  - Update the Elastic Stack to 7.9.1.
+- **Rebuild Images**
+  - All docker images were rebuilt based on the latest (and stable running) versions of the tools and honeypots and have been pinned to specific Alpine / Debian versions and git commits so rebuilds will less likely fail.
+- **Cleaning up**
+  - Clean up old references and links.
+
 ## 20200630
 - **Release T-Pot 20.06**
   - After 4 months of public testing with the NextGen edition T-Pot 20.06 can finally be released.
