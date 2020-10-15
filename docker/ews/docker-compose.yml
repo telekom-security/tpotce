@@ -26,5 +26,4 @@ services:
     image: "ghcr.io/telekom-security/ewsposter:2006"
     volumes:
      - /data:/data
-     - /data/ews/conf/ews.ip:/opt/ewsposter/ews.ip
-
+#     - /data/ews/conf/ews.ip:/opt/ewsposter/ews.ip
