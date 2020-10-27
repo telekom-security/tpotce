@@ -14,7 +14,7 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     cd /opt/go/ && \
     git clone https://github.com/nsmfoo/dicompot.git && \
     cd dicompot && \
-    git checkout 17cddd73896e94fdfbfeb920023ccaf5aad5abbd && \
+    git checkout 41331194156bbb17078bcc1594f4952ac06a731e && \
     go mod download && \
     go install -a -x github.com/nsmfoo/dicompot/server && \
 #
