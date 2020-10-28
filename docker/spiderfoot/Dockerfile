@@ -33,7 +33,7 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     adduser -S -s /bin/ash -u 2000 -D -g 2000 spiderfoot && \
 #
 # Install spiderfoot 
-    git clone --depth=1 -b v3.1 https://github.com/smicallef/spiderfoot /home/spiderfoot && \
+    git clone --depth=1 -b v3.2.1 https://github.com/smicallef/spiderfoot /home/spiderfoot && \
     cd /home/spiderfoot && \
     pip3 install --no-cache-dir wheel && \ 
     pip3 install --no-cache-dir -r requirements.txt && \ 
