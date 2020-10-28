@@ -1,18 +1,16 @@
-FROM alpine:3.12
+FROM alpine:edge
 #
 # Include dist
 ADD dist/ /root/dist/
 #
 # Install packages
-RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
-    apk -U --no-cache add \
+RUN apk -U --no-cache add \
                  ca-certificates \
                  curl \
                  file \
 		 hiredis \
                  libcap \
-                 wget && \
-    apk -U add --repository http://dl-cdn.alpinelinux.org/alpine/edge/community \
+                 wget \
                  suricata && \
 #
 # Setup user, groups and configs
