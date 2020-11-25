@@ -44,7 +44,9 @@ vars:
     MODBUS_PORTS: 502
     FILE_DATA_PORTS: "[$HTTP_PORTS,110,143]"
     FTP_PORTS: 21
+    GENEVE_PORTS: 6081
     VXLAN_PORTS: 4789
+    TEREDO_PORTS: 3544
 
 ##
 ## Step 2: select outputs to enable
@@ -57,7 +59,7 @@ default-log-dir: /var/log/suricata/
 
 # global stats configuration
 stats:
-  enabled: no
+  enabled: yes
   # The interval field (in seconds) controls at what interval
   # the loggers are invoked.
   interval: 8
@@ -148,9 +150,9 @@ outputs:
             payload-buffer-size: 4kb # max size of payload buffer to output in eve-log
             payload-printable: yes   # enable dumping payload in printable (lossy) format
             # packet: yes              # enable dumping of packet (without stream segments)
-            http-body: yes           # enable dumping of http body in Base64
-            http-body-printable: yes # enable dumping of http body in printable format
             # metadata: no             # enable inclusion of app layer metadata with alert. Default yes
+            http-body: yes           # Requires metadata; enable dumping of http body in Base64
+            http-body-printable: yes # Requires metadata; enable dumping of http body in printable format
 
             # Enable the logging of tagged packets for rules using the
             # "tag" keyword.
@@ -194,6 +196,9 @@ outputs:
             # custom allows additional http fields to be included in eve-log
             # the example below adds three additional fields when uncommented
             custom: [Accept-Encoding, Accept-Language, Authorization, Forwarded, From, Referer, Via]
+            # set this value to one and only one among {both, request, response}
+            # to dump all http headers for every http request and/or response
+            # dump-all-headers: none
         - dns:
             # This configuration uses the new DNS logging format,
             # the old configuration is still available:
@@ -201,7 +206,7 @@ outputs:
 
             # As of Suricata 5.0, version 2 of the eve dns output
             # format is the default.
-            version: 2
+            #version: 2
 
             # Enable/disable this logger. Default: enabled.
             #enabled: yes
@@ -263,7 +268,6 @@ outputs:
         - snmp
         - sip
         - dhcp:
-            # DHCP logging requires Rust.
             enabled: no
             # When extended mode is on, all DHCP messages are logged
             # with full detail. When extended mode is off (the
@@ -438,7 +442,6 @@ outputs:
   #
   # To prune the filestore directory see the "suricatactl filestore
   # prune" command which can delete files over a certain age.
-
   - file-store:
       version: 2
       enabled: no
@@ -499,7 +502,7 @@ outputs:
   # 2 files per TCP session and stores the raw TCP data into them.
   # Using 'both' will enable both file and dir modes.
   #
-  # Note: limited by stream.depth
+  # Note: limited by stream.reassembly.depth
   - tcp-data:
       enabled: no
       type: file
@@ -584,15 +587,10 @@ af-packet:
     # Default AF_PACKET cluster type. AF_PACKET can load balance per flow or per hash.
     # This is only supported for Linux kernel > 3.1
     # possible value are:
-    #  * cluster_round_robin: round robin load balancing
     #  * cluster_flow: all packets of a given flow are send to the same socket
     #  * cluster_cpu: all packets treated in kernel by a CPU are send to the same socket
     #  * cluster_qm: all packets linked by network card to a RSS queue are sent to the same
     #  socket. Requires at least Linux 3.14.
-    #  * cluster_random: packets are sent randomly to sockets but with an equipartition.
-    #  Requires at least Linux 3.14.
-    #  * cluster_rollover: kernel rotates between sockets filling each socket before moving
-    #  to the next. Requires at least Linux 3.10.
     #  * cluster_ebpf: eBPF file load balancing. See doc/userguide/capture-hardware/ebpf-xdp.rst for
     #  more info.
     # Recommended modes are cluster_flow on most boxes and cluster_cpu or cluster_qm on system
@@ -601,10 +599,6 @@ af-packet:
     # In some fragmentation case, the hash can not be computed. If "defrag" is set
     # to yes, the kernel will do the needed defragmentation before sending the packets.
     defrag: yes
-    # After Linux kernel 3.10 it is possible to activate the rollover option: if a socket is
-    # full then kernel will send the packet on the next socket with room available. This option
-    # can minimize packet drop and increase the treated bandwidth on single intensive flow.
-    #rollover: yes
     # To use the ring feature of AF_PACKET, set 'use-mmap' to yes
     #use-mmap: yes
     # Lock memory map to avoid it goes to swap. Be careful that over subscribing could lock
@@ -654,14 +648,13 @@ af-packet:
     #copy-mode: ips
     #copy-iface: eth1
     #  For eBPF and XDP setup including bypass, filter and load balancing, please
-    #  see doc/userguide/capture/ebpf-xdt.rst for more info.
+    #  see doc/userguide/capture-hardware/ebpf-xdp.rst for more info.
 
   # Put default values here. These will be used for an interface that is not
   # in the list above.
   - interface: default
     #threads: auto
     #use-mmap: no
-    #rollover: yes
     #tpacket-v3: yes
 
 # Cross platform libpcap capture support
@@ -733,7 +726,8 @@ app-layer:
       detection-ports:
         dp: 443
 
-      # Generate JA3 fingerprint from client hello
+      # Generate JA3 fingerprint from client hello. If not specified it
+      # will be disabled by default, but enabled if rules require it.
       ja3-fingerprints: yes
 
       # What to do when the encrypted communications start:
@@ -748,19 +742,21 @@ app-layer:
       #
       # For best performance, select 'bypass'.
       #
-      #encrypt-handling: default
+      #encryption-handling: default
 
     dcerpc:
       enabled: yes
     ftp:
       enabled: yes
       # memcap: 64mb
+    # RDP, disabled by default.
     rdp:
       enabled: yes
     ssh:
       enabled: yes
     smtp:
       enabled: yes
+      raw-extraction: no
       # Configure SMTP-MIME Decoder
       mime:
         # Decode MIME messages from SMTP transactions
@@ -789,8 +785,6 @@ app-layer:
         content-inspect-window: 4096
     imap:
       enabled: detection-only
-    # Note: --enable-rust is required for full SMB1/2 support. W/o rust
-    # only minimal SMB1 support is available.
     smb:
       enabled: yes
       detection-ports:
@@ -799,8 +793,6 @@ app-layer:
       # Stream reassembly size for SMB streams. By default track it completely.
       #stream-depth: 0
 
-    # Note: NFS parser depends on Rust support: pass --enable-rust
-    # to configure.
     nfs:
       enabled: yes
     tftp:
@@ -895,6 +887,15 @@ app-layer:
            double-decode-path: no
            double-decode-query: no
 
+           # Can disable LZMA decompression
+           #lzma-enabled: yes
+           # Memory limit usage for LZMA decompression dictionary
+           # Data is decompressed until dictionary reaches this size
+           #lzma-memlimit: 1mb
+           # Maximum decompressed size with a compression ratio
+           # above 2048 (only LZMA can reach this ratio, deflate cannot)
+           #compression-bomb-limit: 1mb
+
          server-config:
 
            #- apache:
@@ -954,7 +955,6 @@ app-layer:
         dp: 44818
         sp: 44818
 
-    # Note: parser depends on Rust support
     ntp:
       enabled: yes
 
@@ -964,7 +964,6 @@ app-layer:
     # SIP, disabled by default.
     sip:
       enabled: yes
-
 
 # Limit for the maximum number of asn1 frames to decode (default 256)
 asn1-max-frames: 256
@@ -1029,21 +1028,18 @@ host-mode: auto
 #max-pending-packets: 1024
 
 # Runmode the engine should use. Please check --list-runmodes to get the available
-# runmodes for each packet acquisition method. Defaults to "autofp" (auto flow pinned
-# load balancing).
+# runmodes for each packet acquisition method. Default depends on selected capture
+# method. 'workers' generally gives best performance.
 #runmode: autofp
 
 # Specifies the kind of flow load balancer used by the flow pinned autofp mode.
 #
 # Supported schedulers are:
 #
-# round-robin       - Flows assigned to threads in a round robin fashion.
-# active-packets    - Flows assigned to threads that have the lowest number of
-#                     unprocessed packets (default).
-# hash              - Flow allocated using the address hash. More of a random
-#                     technique. Was the default in Suricata 1.2.1 and older.
+# hash     - Flow assigned to threads using the 5-7 tuple hash.
+# ippair   - Flow assigned to threads using addresses only.
 #
-#autofp-scheduler: active-packets
+#autofp-scheduler: hash
 
 # Preallocated size for packet. Default is 1514 which is the classical
 # size for pcap on ethernet. You should adjust this value to the highest
@@ -1063,6 +1059,10 @@ unix-command:
 # Magic file. The extension .mgc is added to the value here.
 #magic-file: /usr/share/file/magic
 magic-file: /usr/share/misc/magic.mgc 
+
+# GeoIP2 database file. Specify path and filename of GeoIP2 database
+# if using rules with "geoip" rule option.
+#geoip-database: /usr/local/share/GeoLite2/GeoLite2-Country.mmdb
 
 legacy:
   uricontent: enabled
@@ -1257,7 +1257,9 @@ flow-timeouts:
 #   inline: no                  # stream inline mode
 #   drop-invalid: yes           # in inline mode, drop packets that are invalid with regards to streaming engine
 #   max-synack-queued: 5        # Max different SYN/ACKs to queue
-#   bypass: no                  # Bypass packets when stream.depth is reached
+#   bypass: no                  # Bypass packets when stream.reassembly.depth is reached.
+#                               # Warning: first side to reach this triggers
+#                               # the bypass.
 #
 #   reassembly:
 #     memcap: 64mb              # Can be specified in kb, mb, gb.  Just a number
@@ -1330,10 +1332,28 @@ host:
 
 decoder:
   # Teredo decoder is known to not be completely accurate
-  # it will sometimes detect non-teredo as teredo.
+  # as it will sometimes detect non-teredo as teredo.
   teredo:
     enabled: true
+    # ports to look for Teredo. Max 4 ports. If no ports are given, or
+    # the value is set to 'any', Teredo detection runs on _all_ UDP packets.
+    ports: $TEREDO_PORTS # syntax: '[3544, 1234]' or '3533' or 'any'.
 
+  # VXLAN decoder is assigned to up to 4 UDP ports. By default only the
+  # IANA assigned port 4789 is enabled.
+  vxlan:
+    enabled: true
+    ports: $VXLAN_PORTS # syntax: '8472, 4789'
+  # ERSPAN Type I decode support
+  erspan:
+    typeI:
+      enabled: false
+
+  # Geneve decoder is assigned to up to 4 UDP ports. By default only the
+  # IANA assigned port 6081 is enabled.
+  geneve:
+    enabled: false
+    ports: $GENEVE_PORTS # syntax: '[6081, 1234]' or '6081'.
 
 ##
 ## Performance tuning and profiling
@@ -1615,7 +1635,7 @@ capture:
 
 # Netmap support
 #
-# Netmap operates with NIC directly in driver, so you need FreeBSD which have
+# Netmap operates with NIC directly in driver, so you need FreeBSD 11+ which have
 # built-in netmap support or compile and install netmap module and appropriate
 # NIC driver on your Linux system.
 # To reach maximum throughput disable all receive-, segmentation-,
@@ -1627,7 +1647,9 @@ capture:
 netmap:
    # To specify OS endpoint add plus sign at the end (e.g. "eth0+")
  - interface: eth2
-   # Number of receive threads. "auto" uses number of RSS queues on interface.
+   # Number of capture threads. "auto" uses number of RSS queues on interface.
+   # Warning: unless the RSS hashing is symmetrical, this will lead to
+   # accuracy issues.
    #threads: auto
    # You can use the following variables to activate netmap tap or IPS mode.
    # If copy-mode is set to ips or tap, the traffic coming to the current
@@ -1742,15 +1764,20 @@ napatech:
     # Otherwise, it should be turned off.
     hba: -1
 
-    # use_all_streams set to "yes" will query the Napatech service for all configured
-    # streams and listen on all of them. When set to "no" the streams config array
-    # will be used.
+    # When use_all_streams is set to "yes" the initialization code will query
+    # the Napatech service for all configured streams and listen on all of them.
+    # When set to "no" the streams config array will be used.
+    #
+    # This option necessitates running the appropriate NTPL commands to create
+    # the desired streams prior to running suricata.
     use-all-streams: yes
 
-    # The streams to listen on.  This can be either:
-    #   a list of individual streams (e.g. streams: [0,1,2,3])
+    # The streams to listen on when auto-config is disabled or when and threading
+    # cpu-affinity is disabled.  This can be either:
+    #   an individual stream (e.g. streams: [0])
     # or
     #   a range of streams (e.g. streams: ["0-3"])
+    #
     streams: ["0-3"]
 
     # When auto-config is enabled the streams will be created and assigned
@@ -1801,17 +1828,6 @@ napatech:
 ##
 
 #default-rule-path: /var/lib/suricata/rules
-#rule-files:
-# - suricata.rules
-
-##
-## Advanced rule file configuration.
-##
-## If this section is completely commented out then your configuration
-## is setup for suricata-update as it was most likely bundled and
-## installed with Suricata.
-##
-
 default-rule-path: /etc/suricata/rules
 
 rule-files:
