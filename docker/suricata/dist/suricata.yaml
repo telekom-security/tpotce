@@ -59,7 +59,7 @@ default-log-dir: /var/log/suricata/
 
 # global stats configuration
 stats:
-  enabled: yes
+  enabled: no
   # The interval field (in seconds) controls at what interval
   # the loggers are invoked.
   interval: 8
@@ -275,10 +275,10 @@ outputs:
             # to an IP address is logged.
             extended: no
         - ssh
-        - stats:
-            totals: yes       # stats for all threads merged together
-            threads: no       # per thread stats
-            deltas: no        # include delta values
+        #- stats:
+            #totals: yes       # stats for all threads merged together
+            #threads: no       # per thread stats
+            #deltas: no        # include delta values
         # bi-directional flows
         #- flow
         # uni-directional flows
