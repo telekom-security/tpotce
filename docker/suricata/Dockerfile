@@ -20,7 +20,7 @@ RUN apk -U --no-cache add \
     cp /root/dist/suricata.yaml /etc/suricata/suricata.yaml && \
     cp /root/dist/*.bpf /etc/suricata/ && \
 #
-# Download the latest EmergingThreats ruleset, replace rulebase and enable all rules
+# Download the latest EmergingThreats ruleset, replace rulebase and enable all rules except disabled ones
     cp /root/dist/update.sh /usr/bin/ && \
     chmod 755 /usr/bin/update.sh && \
     update.sh OPEN && \

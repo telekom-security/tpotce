@@ -27,6 +27,22 @@ if [ "$myOINKCODE" != "" ] && [ "$myOINKCODE" == "OPEN" ];
 fi
 }
 
+function fuENRULES {
+  # Cleanup old files and extract new files.
+  rm -rf /tmp/rules /tmp/tpotce.rules
+  tar xfz /tmp/rules.tar.gz -C /tmp/ 2>&1 > /dev/null
+  # Create the new ruleset by:
+  # - looping through rule files, except deleted ones;
+  # - enabling all disabled rules (performance should be OK);
+  # - removing unnecessary empty/comment lines.
+  ls /tmp/rules/*.rules | grep -v deleted.rules | while read f;
+    do
+      cat $f | sed "s/^#alert/alert/" | grep -Ev "^(#|$)" >> /tmp/tpotce.rules
+    done
+  # Copy the new ruleset and config to where they belong.
+  cp -f /tmp/tpotce.rules /tmp/rules/classification.config /etc/suricata/rules
+}
+
 # Check internet availability 
 function fuCHECKINET () {
 mySITES=$1
@@ -47,8 +63,7 @@ myCHECK=$(fuCHECKINET "rules.emergingthreatspro.com rules.emergingthreats.net")
 if [ "$myCHECK" == "0" ];
   then
     fuDLRULES 2>&1 > /dev/null
-    tar xvfz /tmp/rules.tar.gz -C /etc/suricata/ 2>&1 > /dev/null
-    sed -i s/^#alert/alert/ /etc/suricata/rules/*.rules 2>&1 > /dev/null
+    fuENRULES 2>&1 > /dev/null
     echo "/etc/suricata/capture-filter.bpf"
   else
     echo "/etc/suricata/null.bpf"
