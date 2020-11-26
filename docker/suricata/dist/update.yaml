@@ -1,0 +1,12 @@
+disable-conf: /etc/suricata/disable.conf
+enable-conf: /etc/suricata/enable.conf
+#drop-conf: /etc/suricata/drop.conf
+modify-conf: /etc/suricata/modify.conf
+
+ignore:
+  - "*deleted.rules"
+  - "dhcp-events.rules"  # DHCP is disabled in suricata.yaml
+  - "files.rules"  # file-store is disabled in suricata.yaml
+
+reload-command: suricatasc -c ruleset-reload-rules
+

@@ -9,24 +9,6 @@ trap fuCLEANUP EXIT
 ### Vars
 myOINKCODE="$1"
 
-function fuDLRULES {
-### Check if args are present then download rules, if not throw error
-if [ "$myOINKCODE" != "" ] && [ "$myOINKCODE" == "OPEN" ];
-  then
-    echo "Downloading ET open ruleset."
-    wget -q --tries=2 --timeout=2 https://rules.emergingthreats.net/open/suricata-5.0/emerging.rules.tar.gz -O /tmp/rules.tar.gz
-  else
-    if [ "$myOINKCODE" != "" ];
-      then
-	echo "Downloading ET pro ruleset with Oinkcode $myOINKCODE."
-	wget -q --tries=2 --timeout=2 https://rules.emergingthreatspro.com/$myOINKCODE/suricata-5.0/etpro.rules.tar.gz -O /tmp/rules.tar.gz
-      else	
-        echo "Usage: update.sh <[OPEN, OINKCODE]>"
-	exit
-    fi	
-fi
-}
-
 # Check internet availability 
 function fuCHECKINET () {
 mySITES=$1
@@ -46,9 +28,14 @@ for i in $mySITES;
 myCHECK=$(fuCHECKINET "rules.emergingthreatspro.com rules.emergingthreats.net")
 if [ "$myCHECK" == "0" ];
   then
-    fuDLRULES 2>&1 > /dev/null
-    tar xvfz /tmp/rules.tar.gz -C /etc/suricata/ 2>&1 > /dev/null
-    sed -i s/^#alert/alert/ /etc/suricata/rules/*.rules 2>&1 > /dev/null
+    if [ "$myOINKCODE" != "" ] && [ "$myOINKCODE" != "OPEN" ];
+      then
+        suricata-update -q enable-source et/pro secret-code=$myOINKCODE > /dev/null
+      else
+        # suricata-update uses et/open ruleset by default if not configured
+        rm -f /var/lib/suricata/update/sources/et-pro.yaml 2>&1 > /dev/null
+    fi
+    suricata-update -q --no-test --no-reload > /dev/null
     echo "/etc/suricata/capture-filter.bpf"
   else
     echo "/etc/suricata/null.bpf"
