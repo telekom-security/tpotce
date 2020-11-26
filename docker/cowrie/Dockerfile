@@ -31,9 +31,9 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
 # Install cowrie
     mkdir -p /home/cowrie && \
     cd /home/cowrie && \
-    git clone --depth=1 https://github.com/micheloosterhof/cowrie -b v2.1.0 && \
+    git clone --depth=1 https://github.com/micheloosterhof/cowrie -b v2.2.0 && \
     cd cowrie && \
-    sed -i s/logfile.DailyLogFile/logfile.LogFile/g src/cowrie/python/logfile.py && \
+#    sed -i s/logfile.DailyLogFile/logfile.LogFile/g src/cowrie/python/logfile.py && \
     mkdir -p log && \
     cp /root/dist/requirements.txt . && \
     pip3 install -r requirements.txt && \
