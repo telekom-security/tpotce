@@ -281,7 +281,7 @@ outputs:
             extended: no
         - ssh
         - mqtt:
-            # passwords: yes           # enable output of passwords
+            passwords: yes           # enable output of passwords
         # HTTP2 logging. HTTP2 support is currently experimental and
         # disabled by default. To enable, uncomment the following line
         # and be sure to enable http2 in the app-layer section.
@@ -720,8 +720,8 @@ app-layer:
         dp: 5900, 5901, 5902, 5903, 5904, 5905, 5906, 5907, 5908, 5909
     # MQTT, disabled by default.
     mqtt:
-      # enabled: no
-      # max-msg-length: 1mb
+      enabled: yes
+      max-msg-length: 1mb
     krb5:
       enabled: yes
     snmp:
