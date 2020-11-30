@@ -17,13 +17,15 @@ RUN apk -U --no-cache add \
     addgroup -g 2000 suri && \
     adduser -S -H -u 2000 -D -g 2000 suri && \
     chmod 644 /etc/suricata/*.config && \
-    cp /root/dist/suricata.yaml /etc/suricata/suricata.yaml && \
+    cp /root/dist/*.yaml /etc/suricata/ && \
+    cp /root/dist/*.conf /etc/suricata/ && \
     cp /root/dist/*.bpf /etc/suricata/ && \
 #
-# Download the latest EmergingThreats ruleset, replace rulebase and enable all rules
+# Download the latest EmergingThreats OPEN ruleset
     cp /root/dist/update.sh /usr/bin/ && \
     chmod 755 /usr/bin/update.sh && \
-    update.sh OPEN && \
+    suricata-update update-sources && \
+    suricata-update --no-reload && \
 #
 # Clean up
     rm -rf /root/* && \
