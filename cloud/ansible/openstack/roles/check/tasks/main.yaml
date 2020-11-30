@@ -3,7 +3,7 @@
     name:
       - pwgen
       - python-setuptools
-      - python-pip
+      - python3-pip
     state: present
 
 - name: Install openstacksdk
