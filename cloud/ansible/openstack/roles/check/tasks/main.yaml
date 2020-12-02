@@ -2,7 +2,7 @@
   package:
     name:
       - pwgen
-      - python-setuptools
+      - python3-setuptools
       - python3-pip
     state: present
 
