@@ -1,4 +1,4 @@
-FROM alpine:edge
+FROM alpine:3.12
 #
 # VARS
 ENV LS_VER=7.10.0
@@ -6,8 +6,8 @@ ENV LS_VER=7.10.0
 ADD dist/ /root/dist/
 #
 # Setup env and apt
-#RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
-RUN apk -U --no-cache add \
+RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
+    apk -U --no-cache add \
              aria2 \
              bash \
              bzip2 \
