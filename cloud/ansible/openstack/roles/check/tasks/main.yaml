@@ -1,8 +1,10 @@
 - name: Install dependencies
   package:
     name:
+      - gcc
       - pwgen
-      - python-setuptools
+      - python3-dev
+      - python3-setuptools
       - python3-pip
     state: present
 
