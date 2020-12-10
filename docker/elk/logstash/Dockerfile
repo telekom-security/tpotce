@@ -1,7 +1,7 @@
 FROM alpine:3.12
 #
 # VARS
-ENV LS_VER=7.10.0
+ENV LS_VER=7.10.1
 # Include dist
 ADD dist/ /root/dist/
 #
