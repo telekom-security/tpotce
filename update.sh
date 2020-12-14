@@ -296,9 +296,7 @@ fi
 ################
 
 # Got root?
-myWHOAMI=$(whoami)
-if [ "$myWHOAMI" != "root" ]
-  then
+if (( $EUID != 0 )); then
     echo "Need to run as root ..."
     exit
 fi
