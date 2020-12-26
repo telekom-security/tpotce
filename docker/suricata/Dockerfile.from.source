@@ -9,6 +9,7 @@ ADD dist/ /root/dist/
 # Install packages
 #RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
 RUN    apk -U add \
+		 py3-pip \
                  ca-certificates \
                  curl \
                  file \
@@ -83,16 +84,17 @@ RUN    apk -U add \
 	--enable-gccprotect \
 	--enable-pie \
 	--enable-luajit && \
-    make && \
-    make check && \
-    make install && \
-    make install-full && \
+    make -j $(nproc) && \
+    make check -j $(nproc) && \
+    make install -j $(nproc) && \
+    make install-full -j $(nproc) && \
 #
 # Setup user, groups and configs
     addgroup -g 2000 suri && \
     adduser -S -H -u 2000 -D -g 2000 suri && \
     chmod 644 /etc/suricata/*.config && \
     cp /root/dist/*.yaml /etc/suricata/ && \
+    touch /root/dist/empty.conf && \
     cp /root/dist/*.conf /etc/suricata/ && \
     cp /root/dist/*.bpf /etc/suricata/ && \
     mkdir -p /etc/suricata/rules && \
