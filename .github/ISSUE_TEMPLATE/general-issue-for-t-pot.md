@@ -7,6 +7,8 @@ assignees: ''
 
 ---
 
+🗨️ Please post your questions in [Discussions](https://github.com/telekom-security/tpotce/discussions) and keep the issues for **issues**. Thank you 😁.<br>
+
 Before you post your issue make sure it has not been answered yet and provide `basic support information` if you come to the conclusion it is a new issue.
 
 - 🔍 Use the [search function](https://github.com/dtag-dev-sec/tpotce/issues?utf8=%E2%9C%93&q=) first
