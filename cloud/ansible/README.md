@@ -160,14 +160,6 @@ Here you can choose:
   - a username for the web interface
   - a password for the web interface (**you should definitely change that**)
 
-```
-# tpot configuration file
-# myCONF_TPOT_FLAVOR=[STANDARD, SENSOR, INDUSTRIAL, COLLECTOR, NEXTGEN]
-myCONF_TPOT_FLAVOR='STANDARD'
-myCONF_WEB_USER='webuser'
-myCONF_WEB_PW='w3b$ecret'
-```
-
 <a name="ews-cfg"></a>
 ## Optional: Custom `ews.cfg`
 Enable this by uncommenting the role in the [deploy_tpot.yaml](openstack/deploy_tpot.yaml) playbook.
