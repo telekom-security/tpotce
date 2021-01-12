@@ -11,6 +11,7 @@
 - name: Install openstacksdk
   pip:
     name: openstacksdk
+    executable: pip3
 
 - name: Check if agent forwarding is enabled
   fail:
