@@ -13,8 +13,9 @@ RUN apk -U --no-cache add \
             python-dev && \
 #
 # Install libemu    
-    git clone --depth=1 https://github.com/buffer/libemu /root/libemu/ && \
+    git clone https://github.com/buffer/libemu /root/libemu/ && \
     cd /root/libemu/ && \
+    git checkout e2624361e13588da74a2ce3e1dea0abb59dcf1d0 && \
     autoreconf -vi && \
     ./configure && \
     make && \
@@ -26,7 +27,9 @@ RUN apk -U --no-cache add \
                         pylibemu && \ 
 #
 # Install mailoney from git
-    git clone --depth=1 https://github.com/t3chn0m4g3/mailoney /opt/mailoney && \
+    git clone https://github.com/t3chn0m4g3/mailoney /opt/mailoney && \
+    cd /opt/mailoney && \
+    git checkout 85c37649a99e1cec3f8d48d509653c9a8127ea4f && \
 #
 # Setup user, groups and configs
     addgroup -g 2000 mailoney && \

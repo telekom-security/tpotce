@@ -36,6 +36,8 @@ Ansible works over the SSH Port, so you don't have to add any special rules to y
 
 <a name="ansible"></a>
 ## Ansible Installation
+:warning: Ansible 2.10 or newer is required!
+
 Example for Ubuntu 18.04:  
 
 At first we update the system:  
@@ -47,6 +49,12 @@ Then we need to add the repository and install Ansible:
 `sudo apt install ansible`
 
 For other OSes and Distros have a look at the official [Ansible Documentation](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html).
+
+If your OS does not offer a recent version of Ansible (>= 2.10) you should consider [installing Ansible with pip](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html#installing-ansible-with-pip).  
+In short (if you already have Python3/pip3 installed):
+```
+pip3 install ansible
+```
 
 <a name="agent-forwarding"></a>
 ## Agent Forwarding
@@ -96,7 +104,7 @@ Import your SSH public key.
 <a name="clone-git"></a>
 # Clone Git Repository
 Clone the `tpotce` repository to your Ansible Master:  
-`git clone https://github.com/dtag-dev-sec/tpotce.git`  
+`git clone https://github.com/telekom-security/tpotce.git`  
 All Ansible related files are located in the [`cloud/ansible/openstack`](openstack) folder.
 
 <a name="settings"></a>
@@ -160,14 +168,6 @@ Here you can choose:
   - a username for the web interface
   - a password for the web interface (**you should definitely change that**)
 
-```
-# tpot configuration file
-# myCONF_TPOT_FLAVOR=[STANDARD, SENSOR, INDUSTRIAL, COLLECTOR, NEXTGEN]
-myCONF_TPOT_FLAVOR='STANDARD'
-myCONF_WEB_USER='webuser'
-myCONF_WEB_PW='w3b$ecret'
-```
-
 <a name="ews-cfg"></a>
 ## Optional: Custom `ews.cfg`
 Enable this by uncommenting the role in the [deploy_tpot.yaml](openstack/deploy_tpot.yaml) playbook.
@@ -226,7 +226,7 @@ If you are running on a machine which asks for a sudo password, you can use:
 The Playbook will first install required packages on the Ansible Master and then deploy a new server instance.  
 After that, T-Pot gets installed and configured on the newly created host, optionally custom configs are applied and finally it reboots.
 
-Once this is done, you can proceed with connecting/logging in to the T-Pot according to the [documentation](https://github.com/dtag-dev-sec/tpotce#ssh-and-web-access).
+Once this is done, you can proceed with connecting/logging in to the T-Pot according to the [documentation](https://github.com/telekom-security/tpotce#ssh-and-web-access).
 
 <a name="documentation"></a>
 # Further documentation

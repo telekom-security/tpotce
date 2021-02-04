@@ -1,4 +1,4 @@
-FROM alpine:latest
+FROM alpine:3.12
 #
 # Include dist
 ADD dist/ /root/dist/
@@ -23,7 +23,9 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     pip3 install --no-cache-dir configparser hpfeeds3 pyOpenSSL xmljson && \
 #
 # Setup ewsposter
-    git clone --depth=1 https://github.com/dtag-dev-sec/ewsposter /opt/ewsposter && \
+    git clone https://github.com/telekom-security/ewsposter /opt/ewsposter && \
+    cd /opt/ewsposter && \
+    git checkout 09508938de3a28856114f6ea5f3f529fdb776d79 && \
     mkdir -p /opt/ewsposter/spool /opt/ewsposter/log && \
 #
 # Setup user and groups

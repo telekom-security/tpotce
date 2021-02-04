@@ -82,7 +82,7 @@ echo
 # Let's check for version
 function fuCHECK_VERSION () {
 local myMINVERSION="19.03.0"
-local myMASTERVERSION="20.06.0"
+local myMASTERVERSION="20.06.1"
 echo
 echo "### Checking for Release ID"
 myRELEASE=$(lsb_release -i | grep Debian -c)
@@ -183,7 +183,7 @@ function fuUPDATER () {
 export DEBIAN_FRONTEND=noninteractive
 echo "### Installing apt-fast"
 /bin/bash -c "$(curl -sL https://raw.githubusercontent.com/ilikenwf/apt-fast/master/quick-install.sh)"
-local myPACKAGES="aria2 apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker console-setup console-setup-linux cracklib-runtime curl debconf-utils dialog dnsutils docker.io docker-compose ethtool fail2ban figlet genisoimage git glances grc haveged html2text htop iptables iw jq kbd libcrack2 libltdl7 libpam-google-authenticator man mosh multitail netselect-apt net-tools npm ntp openssh-server openssl pass pigz prips software-properties-common syslinux psmisc pv python3-elasticsearch-curator python3-pip toilet unattended-upgrades unzip vim wget wireless-tools wpasupplicant"
+local myPACKAGES="aria2 apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker console-setup console-setup-linux cracklib-runtime curl debconf-utils dialog dnsutils docker.io docker-compose ethtool fail2ban figlet genisoimage git glances grc haveged html2text htop iptables iw jq kbd libcrack2 libltdl7 libpam-google-authenticator man mosh multitail net-tools npm ntp openssh-server openssl pass pigz prips software-properties-common syslinux psmisc pv python3-elasticsearch-curator python3-pip toilet unattended-upgrades unzip vim wget wireless-tools wpasupplicant"
 # Remove purge in the future
 echo "### Removing repository based install of elasticsearch-curator"
 apt-get purge elasticsearch-curator -y
@@ -266,7 +266,7 @@ echo "### If you made changes to tpot.yml please ensure to add them again."
 echo "### We stored the previous version as backup in /root/."
 echo "### Some updates may need an import of the latest Kibana objects as well."
 echo "### Download the latest objects here if they recently changed:"
-echo "### https://raw.githubusercontent.com/dtag-dev-sec/tpotce/master/etc/objects/kibana_export.json.zip"
+echo "### https://raw.githubusercontent.com/telekom-security/tpotce/master/etc/objects/kibana_export.ndjson.zip"
 echo "### Export and import the objects easily through the Kibana WebUI:"
 echo "### Go to Kibana > Management > Saved Objects > Export / Import"
 echo "### Or use the command:"

@@ -34,8 +34,9 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
 # Install rdpy from git
     mkdir -p /opt && \
     cd /opt && \
-    git clone --depth=1 https://github.com/t3chn0m4g3/rdpy && \
+    git clone https://github.com/t3chn0m4g3/rdpy && \
     cd rdpy && \
+    git checkout 1d2a4132aefe0637d09cac1a6ab83ec5391f40ca && \
     python setup.py install && \
 #
 # Setup user, groups and configs

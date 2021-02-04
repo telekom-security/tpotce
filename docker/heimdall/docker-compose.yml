@@ -26,7 +26,7 @@ services:
     ports:
      - "64297:64297"
      - "127.0.0.1:64304:64304"
-    image: "dtagdevsec/nginx:2006"
+    image: "ghcr.io/telekom-security/nginx:2006"
     read_only: true
     volumes:
      - /data/nginx/cert/:/etc/nginx/cert/:ro

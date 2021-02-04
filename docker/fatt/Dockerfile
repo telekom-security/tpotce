@@ -1,4 +1,4 @@
-FROM alpine:latest
+FROM alpine:3.12
 #
 # Include dist
 #ADD dist/ /root/dist/
@@ -21,8 +21,9 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
 # Install fatt
     mkdir -p /opt && \
     cd /opt && \
-    git clone --depth=1 https://github.com/0x4D31/fatt && \
+    git clone https://github.com/0x4D31/fatt && \
     cd fatt && \
+    git checkout 314cd1ff7873b5a145a51ec4e85f6107828a2c79 && \
     mkdir -p log && \
     pip3 install pyshark==0.4.2.2 && \
 #
@@ -39,4 +40,4 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
 STOPSIGNAL SIGINT
 ENV PYTHONPATH /opt/fatt
 WORKDIR /opt/fatt
-CMD python3 fatt.py -i $(/sbin/ip address | grep '^2: ' | awk '{ print $2 }' | tr -d [:punct:]) --print_output --json_logging -o log/fatt.log
+CMD python3 fatt.py -i $(/sbin/ip address show | /usr/bin/awk '/inet.*brd/{ print $NF; exit }') --print_output --json_logging -o log/fatt.log

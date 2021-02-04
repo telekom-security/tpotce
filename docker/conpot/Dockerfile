@@ -28,7 +28,7 @@ RUN apk -U add \
 # Setup ConPot
     git clone https://github.com/mushorg/conpot /opt/conpot && \
     cd /opt/conpot/ && \
-    git checkout 7a77329cd99cee9c37ee20e2f05a48952d8eece9 && \
+    git checkout ff09e009d10d953aa7dcff2c06b7c890e6ffd4b7 && \
     # Change template default ports if <1024
     sed -i 's/port="2121"/port="21"/' /opt/conpot/conpot/templates/default/ftp/ftp.xml && \ 
     sed -i 's/port="8800"/port="80"/' /opt/conpot/conpot/templates/default/http/http.xml && \ 

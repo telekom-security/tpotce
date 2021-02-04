@@ -1,4 +1,4 @@
-FROM alpine:latest
+FROM alpine:3.12
 #
 # Add source
 ADD . /opt/p0f
@@ -29,7 +29,7 @@ RUN apk -U --no-cache add \
     rm -rf /root/* && \
     rm -rf /var/cache/apk/*
 #
-# Start suricata
+# Start p0f
 WORKDIR /opt/p0f
 USER p0f:p0f
-CMD exec /opt/p0f/p0f -u p0f -j -o /var/log/p0f/p0f.json -i $(/sbin/ip address | grep '^2: ' | awk '{ print $2 }' | tr -d [:punct:]) > /dev/null
+CMD exec /opt/p0f/p0f -u p0f -j -o /var/log/p0f/p0f.json -i $(/sbin/ip address show | /usr/bin/awk '/inet.*brd/{ print $NF; exit }') > /dev/null

@@ -14,7 +14,7 @@ services:
      - elasticpot_local
     ports:
      - "9200:9200"
-    image: "dtagdevsec/elasticpot:2006"
+    image: "ghcr.io/telekom-security/elasticpot:2006"
     read_only: true
     volumes:
      - /data/elasticpot/log:/opt/elasticpot/log

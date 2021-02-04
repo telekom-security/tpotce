@@ -1,4 +1,4 @@
-FROM alpine:latest
+FROM alpine:3.12
 #
 # Setup apk
 RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
@@ -14,6 +14,7 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     cd /opt/go/ && \
     git clone https://github.com/nsmfoo/dicompot.git && \
     cd dicompot && \
+    git checkout 41331194156bbb17078bcc1594f4952ac06a731e && \
     go mod download && \
     go install -a -x github.com/nsmfoo/dicompot/server && \
 #

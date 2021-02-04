@@ -1,4 +1,4 @@
-FROM alpine:latest
+FROM alpine:3.12
 #
 # Include dist
 ADD dist/ /root/dist/
@@ -22,6 +22,7 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     cd /opt/go/ && \
     git clone https://github.com/mushorg/glutton && \
     cd /opt/go/glutton/ && \
+    git checkout 08f364fff489a82667866ecff2bcc4815569a0c8 && \
     mv /root/dist/system.go /opt/go/glutton/ && \
     go mod download && \
     make build && \
@@ -52,4 +53,4 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
 # Start glutton 
 WORKDIR /opt/glutton
 USER glutton:glutton
-CMD exec bin/server -i $(/sbin/ip address | grep '^2: ' | awk '{ print $2 }' | tr -d [:punct:]) -l /var/log/glutton/glutton.log > /dev/null 2>&1
+CMD exec bin/server -i $(/sbin/ip address show | /usr/bin/awk '/inet.*brd/{ print $NF; exit }') -l /var/log/glutton/glutton.log > /dev/null 2>&1

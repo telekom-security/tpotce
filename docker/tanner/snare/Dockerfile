@@ -13,8 +13,9 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
                python3-dev && \ 
 #
 # Setup Snare 
-    git clone --depth=1 https://github.com/mushorg/snare /opt/snare && \
+    git clone https://github.com/mushorg/snare /opt/snare && \
     cd /opt/snare/ && \
+    git checkout 7762b762b272f0599c16e11ef997c37d2899d33e && \
     pip3 install --no-cache-dir setuptools && \
     pip3 install --no-cache-dir -r requirements.txt && \
     python3 setup.py install && \

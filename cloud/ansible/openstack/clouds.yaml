@@ -1,6 +1,7 @@
 clouds:
   open-telekom-cloud:
     profile: otc
+    region_name: eu-de
     auth:
       project_name: eu-de_your_project
       username: your_api_user

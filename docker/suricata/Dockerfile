@@ -1,30 +1,31 @@
-FROM alpine:latest
+FROM alpine:edge
 #
 # Include dist
 ADD dist/ /root/dist/
 #
 # Install packages
-RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
-    apk -U --no-cache add \
+RUN apk -U --no-cache add \
                  ca-certificates \
                  curl \
                  file \
+		 hiredis \
                  libcap \
-                 wget && \
-    apk -U add --repository http://dl-cdn.alpinelinux.org/alpine/edge/community \
+                 wget \
                  suricata && \
 #
 # Setup user, groups and configs
     addgroup -g 2000 suri && \
     adduser -S -H -u 2000 -D -g 2000 suri && \
     chmod 644 /etc/suricata/*.config && \
-    cp /root/dist/suricata.yaml /etc/suricata/suricata.yaml && \
+    cp /root/dist/*.yaml /etc/suricata/ && \
+    cp /root/dist/*.conf /etc/suricata/ && \
     cp /root/dist/*.bpf /etc/suricata/ && \
 #
-# Download the latest EmergingThreats ruleset, replace rulebase and enable all rules
+# Download the latest EmergingThreats OPEN ruleset
     cp /root/dist/update.sh /usr/bin/ && \
     chmod 755 /usr/bin/update.sh && \
-    update.sh OPEN && \
+    suricata-update update-sources && \
+    suricata-update --no-reload && \
 #
 # Clean up
     rm -rf /root/* && \
@@ -33,4 +34,4 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
 #
 # Start suricata
 STOPSIGNAL SIGINT
-CMD SURICATA_CAPTURE_FILTER=$(update.sh $OINKCODE) && exec suricata -v -F $SURICATA_CAPTURE_FILTER -i $(/sbin/ip address | grep '^2: ' | awk '{ print $2 }' | tr -d [:punct:])
+CMD SURICATA_CAPTURE_FILTER=$(update.sh $OINKCODE) && exec suricata -v -F $SURICATA_CAPTURE_FILTER -i $(/sbin/ip address show | /usr/bin/awk '/inet.*brd/{ print $NF; exit }')

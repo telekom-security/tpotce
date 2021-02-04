@@ -10,7 +10,9 @@ RUN apk -U add \
 # Get and install packages
     mkdir -p /usr/src/app/ && \
     cd /usr/src/app/ && \
-    git clone --depth=1 https://github.com/mobz/elasticsearch-head . && \
+    git clone https://github.com/mobz/elasticsearch-head . && \
+#    git checkout d0a25608854479f0b3f2dca24e8039a2fd66b0e2 && \
+    git checkout 2932af571b84017f87bc1c5beee5b6dfbf11b0a5 && \
     npm install http-server && \
     sed -i "s#\"http\:\/\/localhost\:9200\"#window.location.protocol \+ \'\/\/\' \+ window.location.hostname \+ \'\:\' \+ window.location.port \+ \'\/es\/\'#" /usr/src/app/_site/app.js && \
 #

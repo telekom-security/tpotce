@@ -1,4 +1,4 @@
-FROM alpine:latest
+FROM alpine:3.12
 #
 # Setup apk
 RUN apk -U --no-cache add \
@@ -12,6 +12,9 @@ RUN apk -U --no-cache add \
     mkdir -p /opt/go/src && \
     cd /opt/go/src && \
     git clone https://github.com/schmalle/medpot && \
+    cd medpot && \
+    git checkout 75a2e6134cf926c35b6017d62542274434c87388 && \
+    cd .. && \
     go get -d -v github.com/davecgh/go-spew/spew && \
     go get -d -v github.com/go-ini/ini && \
     go get -d -v github.com/mozillazg/request && \

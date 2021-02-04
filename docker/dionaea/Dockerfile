@@ -36,7 +36,7 @@ RUN apt-get update -y && \
 #
 # Get and install dionaea
     # Latest master is unstable, SIP causes crashing
-    git clone --depth=1 https://github.com/dinotools/dionaea -b 0.8.0 /root/dionaea/ && \
+    git clone --depth=1 https://github.com/dinotools/dionaea -b 0.11.0 /root/dionaea/ && \
     cd /root/dionaea && \
     #git checkout 1426750b9fd09c5bfeae74d506237333cd8505e2 && \
     mkdir build && \

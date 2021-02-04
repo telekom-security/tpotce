@@ -31,7 +31,7 @@ services:
      - "5060:5060/udp"
      - "5061:5061"
      - "27017:27017"
-    image: "dtagdevsec/dionaea:2006"
+    image: "ghcr.io/telekom-security/dionaea:2006"
     read_only: true
     volumes:
      - /data/dionaea/roots/ftp:/opt/dionaea/var/dionaea/roots/ftp
