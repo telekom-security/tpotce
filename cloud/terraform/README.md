@@ -93,7 +93,6 @@ In `otc/variables.tf`, you can change the additional variables:
 * `availability_zone`
 * `flavor`
 * `key_pair` - Specify an existing SSH key pair
-* `image_id`
 * `volume_size`  
 Furthermore you can configure the naming of the created infrastructure (per default everything gets prefixed with "tpot-", e.g. "tpot-router").
 

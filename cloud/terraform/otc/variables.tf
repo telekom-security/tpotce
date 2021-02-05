@@ -49,11 +49,6 @@ variable "key_pair" {
   description = "Specify your SSH key pair"
 }
 
-variable "image_id" {
-  default = "cf471250-a755-4df8-8c42-6faa5a224ea0"
-  description = "Select a Debian 10 base image id"
-}
-
 variable "volume_size" {
   default = "128"
   description = "Set the volume size"
