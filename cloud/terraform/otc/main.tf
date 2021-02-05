@@ -37,7 +37,7 @@ resource "random_id" "tpot" {
 
 resource "opentelekomcloud_compute_instance_v2" "ecs_1" {
   availability_zone = var.availability_zone
-  name              = random_id.tpot.b64
+  name              = random_id.tpot.b64_std
   flavor_name       = var.flavor
   key_pair          = var.key_pair
   security_groups   = [opentelekomcloud_networking_secgroup_v2.secgroup_1.name]
