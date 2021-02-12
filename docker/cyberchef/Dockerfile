@@ -1,20 +1,17 @@
 FROM alpine:3.10
 #
 # Get and install dependencies & packages
-RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
-    apk -U --no-cache add \
+RUN apk -U --no-cache add \
             curl \
             git \
             npm \
             nodejs && \
-    npm install -g grunt-cli && \
-    npm install -g http-server && \
     npm install npm@latest -g && \
+    npm install -g grunt-cli http-server && \
 #
 # Install CyberChef 
     cd /root && \
-    git clone https://github.com/gchq/cyberchef -b v9.21.0 && \
-    chown -R nobody:nobody cyberchef && \
+    git clone https://github.com/gchq/cyberchef -b v9.27.0 && \
     cd cyberchef && \
     npm install && \
     grunt prod && \
