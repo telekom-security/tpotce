@@ -1,4 +1,4 @@
-FROM alpine:3.12
+FROM alpine:3.13
 #
 # VARS
 ENV ES_VER=7.11.0 \
@@ -7,8 +7,8 @@ ENV ES_VER=7.11.0 \
 ADD dist/ /root/dist/
 #
 # Setup env and apt
-RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
-    apk -U --no-cache add \
+#RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
+RUN apk -U --no-cache add \
              aria2 \
              bash \
              curl \

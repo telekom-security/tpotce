@@ -1,4 +1,4 @@
-FROM alpine:3.12
+FROM alpine:3.13
 #
 # Setup env and apt
 RUN apk -U add \
@@ -11,8 +11,7 @@ RUN apk -U add \
     mkdir -p /usr/src/app/ && \
     cd /usr/src/app/ && \
     git clone https://github.com/mobz/elasticsearch-head . && \
-#    git checkout d0a25608854479f0b3f2dca24e8039a2fd66b0e2 && \
-    git checkout 2932af571b84017f87bc1c5beee5b6dfbf11b0a5 && \
+    git checkout 2d51fecac2980d350fcd3319fd9fe2999f63c9db && \
     npm install http-server && \
     sed -i "s#\"http\:\/\/localhost\:9200\"#window.location.protocol \+ \'\/\/\' \+ window.location.hostname \+ \'\:\' \+ window.location.port \+ \'\/es\/\'#" /usr/src/app/_site/app.js && \
 #
