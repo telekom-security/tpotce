@@ -7,7 +7,8 @@
 - name: Deploy instance
   hosts: localhost
   roles:
-    - deploy
+    - create_net
+    - create_vm
 
 - name: Install T-Pot on new instance
   hosts: tpot

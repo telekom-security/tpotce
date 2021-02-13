@@ -1,7 +1,3 @@
-- name: Generate T-Pot name
-  set_fact:
-    tpot_name: "t-pot-ansible-{{ lookup('password', '/dev/null chars=ascii_lowercase,digits length=6') }}"
-
 - name: Create security group
   os_security_group:
     cloud: open-telekom-cloud
@@ -35,24 +31,3 @@
     name: router-tpot
     interfaces:
       - subnet-tpot
-
-- name: Launch an instance
-  os_server:
-    cloud: open-telekom-cloud
-    name: "{{ tpot_name.stdout }}"
-    availability_zone: "{{ availability_zone }}"
-    image: "{{ image }}"
-    boot_from_volume: yes
-    volume_size: "{{ volume_size }}"
-    key_name: "{{ key_name }}"
-    timeout: 200
-    flavor: "{{ flavor }}"
-    security_groups: sg-tpot-any
-    network: network-tpot
-  register: tpot
-
-- name: Add instance to inventory
-  add_host:
-    hostname: "{{ tpot_name.stdout }}"
-    ansible_host: "{{ tpot.server.public_v4 }}"
-    groups: tpot
