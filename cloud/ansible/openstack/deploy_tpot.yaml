@@ -6,6 +6,7 @@
 
 - name: Deploy instance
   hosts: localhost
+  vars_files: my_os_cloud.yaml
   roles:
     - create_net
     - create_vm

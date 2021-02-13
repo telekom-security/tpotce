@@ -4,7 +4,7 @@
 
 - name: Create instance
   openstack.cloud.server:
-    cloud: open-telekom-cloud
+    cloud: "{{ cloud }}"
     name: "{{ tpot_name }}"
     availability_zone: "{{ availability_zone }}"
     image: "{{ image }}"
