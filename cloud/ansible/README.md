@@ -11,6 +11,7 @@ This example showcases the deployment on our own OpenStack based Public Cloud Of
 # Table of contents
 - [Preparation of Ansible Master](#ansible-master)
   - [Ansible Installation](#ansible)
+  - [OpenStack Collection Installation](#collection)
   - [Agent Forwarding](#agent-forwarding)
 - [Preparations in Open Telekom Cloud Console](#preparation)
   - [Create new project](#project)
@@ -55,6 +56,11 @@ In short (if you already have Python3/pip3 installed):
 ```
 pip3 install ansible
 ```
+
+<a name="collection"></a>
+## OpenStack Collection Installation
+For interacting with OpenStack resources in Ansible, you need to install the collection from Ansible Galaxy:  
+`ansible-galaxy collection install openstack.cloud`
 
 <a name="agent-forwarding"></a>
 ## Agent Forwarding
@@ -134,14 +140,14 @@ You may have to adjust the `remote_user` in the Ansible Playbook under [`opensta
 
 <a name="instance-settings"></a>
 ## Instance settings
-Located at [`openstack/roles/deploy/vars/main.yaml`](openstack/roles/deploy/vars/main.yaml).  
+Located at [`openstack/roles/create_vm/vars/main.yaml`](openstack/roles/create_vm/vars/main.yaml).  
 Here you can customize your virtual machine specifications:
   - Choose an availability zone. For Open Telekom Cloud reference see [here](https://docs.otc.t-systems.com/en-us/endpoint/index.html).
   - Change the OS image (For T-Pot we need Debian)
   - (Optional) Change the volume size
   - Specify your key pair (:warning: Mandatory)
   - (Optional) Change the instance type (flavor)  
-    `s2.medium.8` corresponds to 1 vCPU and 8GB of RAM and is the minimum required flavor.  
+    `s3.medium.8` corresponds to 1 vCPU and 8GB of RAM and is the minimum required flavor.  
     A full list of Open Telekom Cloud flavors can be found [here](https://docs.otc.t-systems.com/en-us/usermanual/ecs/en-us_topic_0177512565.html).
 
 ```
@@ -149,7 +155,7 @@ availability_zone: eu-de-03
 image: Standard_Debian_10_latest
 volume_size: 128
 key_name: your-KeyPair
-flavor: s2.medium.8
+flavor: s3.medium.8
 ```
 
 <a name="user-password"></a>
@@ -200,7 +206,7 @@ Enable this by uncommenting the role in the [deploy_tpot.yaml](openstack/deploy_
 #    - custom_hpfeeds
 ```
 
-You can specify custom HPFEEDS in [`openstack/roles/custom_hpfeeds/templates/hpfeeds.cfg`](openstack/roles/custom_hpfeeds/templates/hpfeeds.cfg).  
+You can specify custom HPFEEDS in [`openstack/roles/custom_hpfeeds/files/hpfeeds.cfg`](openstack/roles/custom_hpfeeds/files/hpfeeds.cfg).  
 That file contains the defaults (turned off) and you can adapt it for your needs, e.g. for SISSDEN:
 ```
 myENABLE=true
