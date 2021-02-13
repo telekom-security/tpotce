@@ -2,7 +2,7 @@
   ansible.builtin.set_fact:
     tpot_name: "t-pot-ansible-{{ lookup('password', '/dev/null chars=ascii_lowercase,digits length=6') }}"
 
-- name: Create instance
+- name: Create instance {{ ansible_loop.index }} of {{ ansible_loop.length }}
   openstack.cloud.server:
     cloud: "{{ cloud }}"
     name: "{{ tpot_name }}"
