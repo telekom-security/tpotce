@@ -2,7 +2,7 @@
 
 Here you can find a ready-to-use solution for your automated T-Pot deployment using [Ansible](https://www.ansible.com/).  
 It consists of an Ansible Playbook with multiple roles, which is reusable for all [OpenStack](https://www.openstack.org/) based clouds (e.g. Open Telekom Cloud, Orange Cloud, Telefonica Open Cloud, OVH) out of the box.  
-Apart from that you can easily adapt the deploy role to use other [cloud providers](https://docs.ansible.com/ansible/latest/modules/list_of_cloud_modules.html) (e.g. AWS, Azure, Digital Ocean, Google).
+Apart from that you can easily adapt the deploy role to use other [cloud providers](https://docs.ansible.com/ansible/latest/scenario_guides/cloud_guides.html). Check out [Ansible Galaxy](https://galaxy.ansible.com/search?keywords=&order_by=-relevance&page=1&deprecated=false&type=collection&tags=cloud) for more cloud collections.
 
 The Playbook first creates all resources (security group, network, subnet, router), deploys a new server and then installs and configures T-Pot.
 
@@ -231,7 +231,5 @@ Once this is done, you can proceed with connecting/logging in to the T-Pot accor
 <a name="documentation"></a>
 # Further documentation
 - [Ansible Documentation](https://docs.ansible.com/ansible/latest/)
-- [Cloud modules — Ansible Documentation](https://docs.ansible.com/ansible/latest/modules/list_of_cloud_modules.html)
-- [os_server – Create/Delete Compute Instances from OpenStack — Ansible Documentation](https://docs.ansible.com/ansible/latest/modules/os_server_module.html)
+- [openstack.cloud.server – Create/Delete Compute Instances from OpenStack](https://docs.ansible.com/ansible/latest/collections/openstack/cloud/server_module.html)
 - [Open Telekom Cloud Help Center](https://docs.otc.t-systems.com/)
-- [Open Telekom Cloud API Overview](https://docs.otc.t-systems.com/en-us/api/wp/en-us_topic_0052070394.html)
