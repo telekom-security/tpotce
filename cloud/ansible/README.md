@@ -4,7 +4,7 @@ Here you can find a ready-to-use solution for your automated T-Pot deployment us
 It consists of an Ansible Playbook with multiple roles, which is reusable for all [OpenStack](https://www.openstack.org/) based clouds (e.g. Open Telekom Cloud, Orange Cloud, Telefonica Open Cloud, OVH) out of the box.  
 Apart from that you can easily adapt the deploy role to use other [cloud providers](https://docs.ansible.com/ansible/latest/scenario_guides/cloud_guides.html). Check out [Ansible Galaxy](https://galaxy.ansible.com/search?keywords=&order_by=-relevance&page=1&deprecated=false&type=collection&tags=cloud) for more cloud collections.
 
-The Playbook first creates all resources (security group, network, subnet, router), deploys a new server and then installs and configures T-Pot.
+The Playbook first creates all resources (security group, network, subnet, router), deploys one (or more) new servers and then installs and configures T-Pot on them.
 
 This example showcases the deployment on our own OpenStack based Public Cloud Offering [Open Telekom Cloud](https://open-telekom-cloud.com/en).
 
@@ -19,8 +19,9 @@ This example showcases the deployment on our own OpenStack based Public Cloud Of
   - [Import Key Pair](#key-pair)
 - [Clone Git Repository](#clone-git)
 - [Settings and recommended values](#settings)
-  - [Clouds.yaml](#clouds-yaml)
+  - [clouds.yaml](#clouds-yaml)
   - [Ansible remote user](#remote-user)
+  - [Number of instances to deploy](#number)
   - [Instance settings](#instance-settings)
   - [User password](#user-password)
   - [Configure `tpot.conf.dist`](#tpot-conf)
@@ -118,7 +119,7 @@ All Ansible related files are located in the [`cloud/ansible/openstack`](opensta
 You can configure all aspects of your Elastic Cloud Server and T-Pot before using the Playbook:
 
 <a name="clouds-yaml"></a>
-## Clouds.yaml
+## clouds.yaml
 Located at [`openstack/clouds.yaml`](openstack/clouds.yaml).  
 Enter your Open Telekom Cloud API user credentials here (username, password, project name, user domain name):  
 ```
@@ -143,6 +144,14 @@ cloud: open-telekom-cloud
 <a name="remote-user"></a>
 ## Ansible remote user
 You may have to adjust the `remote_user` in the Ansible Playbook under [`openstack/deploy_tpot.yaml`](openstack/deploy_tpot.yaml) depending on your Debian base image (e.g. on Open Telekom Cloud the default Debian user is `linux`).
+
+<a name="number"></a>
+## Number of instances to deploy
+You can adjust the number of VMs/T-Pots that you want to create in [`openstack/deploy_tpot.yaml`](openstack/deploy_tpot.yaml):
+```
+loop: "{{ range(0, 1) }}"
+```
+One instance is set as the default, increase to your liking.
 
 <a name="instance-settings"></a>
 ## Instance settings
@@ -228,6 +237,7 @@ myFORMAT=json
 <a name="deploy"></a>
 # Deploying a T-Pot :honey_pot::honeybee:
 Now, after configuring everything, we can finally start deploying T-Pots!  
+
 Go to the [`openstack`](openstack) folder and run the Ansible Playbook with:  
 `ansible-playbook deploy_tpot.yaml`  
 (Yes, it is as easy as that :smile:)
@@ -235,8 +245,8 @@ Go to the [`openstack`](openstack) folder and run the Ansible Playbook with:
 If you are running on a machine which asks for a sudo password, you can use:  
 `ansible-playbook --ask-become-pass deploy_tpot.yaml`
 
-The Playbook will first install required packages on the Ansible Master and then deploy a new server instance.  
-After that, T-Pot gets installed and configured on the newly created host, optionally custom configs are applied and finally it reboots.
+The Playbook will first install required packages on the Ansible Master and then deploy one (or more) new server instances.  
+After that, T-Pot gets installed and configured on them, optionally custom configs are applied and finally it reboots.
 
 Once this is done, you can proceed with connecting/logging in to the T-Pot according to the [documentation](https://github.com/telekom-security/tpotce#ssh-and-web-access).
 
