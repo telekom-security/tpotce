@@ -5,7 +5,7 @@
 - name: Create instance
   openstack.cloud.server:
     cloud: open-telekom-cloud
-    name: "{{ tpot_name.stdout }}"
+    name: "{{ tpot_name }}"
     availability_zone: "{{ availability_zone }}"
     image: "{{ image }}"
     boot_from_volume: yes
