@@ -19,6 +19,6 @@
 
 - name: Add instance to inventory
   ansible.builtin.add_host:
-    hostname: "{{ tpot_name.stdout }}"
+    hostname: "{{ tpot_name }}"
     ansible_host: "{{ tpot.server.public_v4 }}"
     groups: tpot
