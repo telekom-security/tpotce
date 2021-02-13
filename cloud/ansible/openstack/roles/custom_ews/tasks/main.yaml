@@ -1,5 +1,5 @@
 - name: Copy ews configuration file
-  template:
+  ansible.builtin.template:
     src: ews.cfg
     dest: /data/ews/conf
     owner: root
@@ -7,7 +7,7 @@
     mode: 0644
 
 - name: Patching tpot.yml with custom ews configuration file
-  lineinfile:
+  ansible.builtin.lineinfile:
     path: /opt/tpot/etc/tpot.yml
     insertafter: "/opt/ewsposter/ews.ip"
     line: "     - /data/ews/conf/ews.cfg:/opt/ewsposter/ews.cfg"
