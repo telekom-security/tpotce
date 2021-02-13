@@ -132,7 +132,13 @@ clouds:
       user_domain_name: OTC-EU-DE-000000000010000XXXXX
 ```
 You can also perform different authentication methods like sourcing OpenStack OS_* environment variables or providing an inline dictionary.  
-For more information have a look in the [os_server](https://docs.ansible.com/ansible/latest/modules/os_server_module.html) Ansible module documentation.
+For more information have a look in the [openstack.cloud.server](https://docs.ansible.com/ansible/latest/collections/openstack/cloud/server_module.html) Ansible module documentation.
+
+If you already have your own `clouds.yaml` file or have multiple clouds in there, you can specify which one to use in the `openstack/my_os_cloud.yaml` file:
+```
+# Enter the name of your cloud to use from clouds.yaml
+cloud: open-telekom-cloud
+```
 
 <a name="remote-user"></a>
 ## Ansible remote user
