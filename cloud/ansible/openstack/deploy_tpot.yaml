@@ -10,7 +10,7 @@
     - deploy
 
 - name: Install T-Pot on new instance
-  hosts: TPOT
+  hosts: tpot
   remote_user: linux
   become: yes
   gather_facts: no

@@ -55,4 +55,4 @@
   add_host:
     hostname: "{{ tpot_name.stdout }}"
     ansible_host: "{{ tpot.server.public_v4 }}"
-    groups: TPOT
+    groups: tpot
