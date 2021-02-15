@@ -1,17 +1,17 @@
-FROM alpine:3.12
+FROM alpine:3.13
 #
 # Include dist
 ADD dist/ /root/dist/
 #
 # Setup env and apt
-RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
-    apk -U upgrade && \
+RUN apk -U upgrade && \
     apk add build-base \
             git \
             libffi \
             libffi-dev \
             openssl \
             openssl-dev \
+	    py3-cryptography \
 	    py3-pip \
             python3 \
             python3-dev && \

@@ -28,7 +28,7 @@ RUN apk -U --no-cache add \
 # Healthcheck
 HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:8000'
 #
-# Set user, workdir and start spiderfoot
+# Set user, workdir and start cyberchef
 USER nobody:nobody
 WORKDIR /opt/cyberchef
 CMD ["http-server", "-p", "8000"]
