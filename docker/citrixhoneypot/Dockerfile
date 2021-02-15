@@ -1,20 +1,17 @@
-FROM alpine:3.12
+FROM alpine:3.13
 #
 # Install packages
-RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
-    apk -U add \
+RUN apk -U add \
             git \
             libcap \
 	    openssl \
-	    py3-pip \
+            py3-pip \
             python3 \
             python3-dev && \
 #
     pip3 install --no-cache-dir python-json-logger && \
 #
 # Install CitrixHoneypot from GitHub
-#    git clone --depth=1 https://github.com/malwaretech/citrixhoneypot /opt/citrixhoneypot && \
-#    git clone --depth=1 https://github.com/vorband/CitrixHoneypot /opt/citrixhoneypot && \
     git clone https://github.com/t3chn0m4g3/CitrixHoneypot /opt/citrixhoneypot && \
     cd /opt/citrixhoneypot && \
     git checkout f59ad7320dc5bbb8c23c8baa5f111b52c52fbef3 && \
