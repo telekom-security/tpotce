@@ -290,9 +290,9 @@ If you would like to contribute, you can add other cloud deployments like Chef o
 You can find an [Ansible](https://www.ansible.com/) based T-Pot deployment in the [`cloud/ansible`](cloud/ansible) folder.  
 The Playbook in the [`cloud/ansible/openstack`](cloud/ansible/openstack) folder is reusable for all **OpenStack** clouds out of the box.
 
-It first creates all resources (security group, network, subnet, router), deploys a new server and then installs and configures T-Pot.
+It first creates all resources (security group, network, subnet, router), deploys one (or more) new servers and then installs and configures T-Pot on them.
 
-You can have a look at the Playbook and easily adapt the deploy role for other [cloud providers](https://docs.ansible.com/ansible/latest/modules/list_of_cloud_modules.html).
+You can have a look at the Playbook and easily adapt the deploy role for other [cloud providers](https://docs.ansible.com/ansible/latest/scenario_guides/cloud_guides.html). Check out [Ansible Galaxy](https://galaxy.ansible.com/search?keywords=&order_by=-relevance&page=1&deprecated=false&type=collection&tags=cloud) for more cloud collections.
 
 *Please note*: Cloud providers usually offer adjusted Debian OS images, which might not be compatible with T-Pot. There is no cloud provider support provided of any kind.
 
@@ -304,7 +304,7 @@ You can find [Terraform](https://www.terraform.io/) configuration in the [`cloud
 This can be used to launch a virtual machine, bootstrap any dependencies and install T-Pot in a single step.
 
 Configuration for **Amazon Web Services** (AWS) and **Open Telekom Cloud** (OTC) is currently included.  
-This can easily be extended to support other [Terraform providers](https://www.terraform.io/docs/providers/index.html).
+This can easily be extended to support other [Terraform providers](https://registry.terraform.io/browse/providers?category=public-cloud%2Ccloud-automation%2Cinfrastructure).
 
 *Please note*: Cloud providers usually offer adjusted Debian OS images, which might not be compatible with T-Pot. There is no cloud provider support provided of any kind.
 

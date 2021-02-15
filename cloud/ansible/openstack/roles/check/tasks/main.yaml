@@ -1,20 +1,19 @@
 - name: Install dependencies
-  package:
+  ansible.builtin.package:
     name:
       - gcc
-      - pwgen
       - python3-dev
       - python3-setuptools
       - python3-pip
     state: present
 
 - name: Install openstacksdk
-  pip:
+  ansible.builtin.pip:
     name: openstacksdk
     executable: pip3
 
 - name: Check if agent forwarding is enabled
-  fail:
+  ansible.builtin.fail:
     msg: Please enable agent forwarding to allow Ansible to connect to the remote host!
   ignore_errors: yes
   when: lookup('env','SSH_AUTH_SOCK') == ""

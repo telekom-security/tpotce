@@ -1,29 +1,29 @@
 - name: Waiting for SSH connection
-  wait_for_connection:
+  ansible.builtin.wait_for_connection:
 
 - name: Gathering facts
-  setup:
+  ansible.builtin.setup:
 
 - name: Cloning T-Pot install directory
-  git:
+  ansible.builtin.git:
     repo: "https://github.com/telekom-security/tpotce.git"
     dest: /root/tpot
 
 - name: Prepare to set user password
-  set_fact:
+  ansible.builtin.set_fact:
     user_name: "{{ ansible_user }}"
     user_salt: "s0mew1ck3dTpoT"
   no_log: true
 
 - name: Changing password for user {{ user_name }}
-  user:
+  ansible.builtin.user:
    name: "{{ ansible_user }}"
    password: "{{ user_password | password_hash('sha512', user_salt) }}"
    state: present
    shell: /bin/bash
 
 - name: Copy T-Pot configuration file
-  template:
+  ansible.builtin.template:
     src: ../../../../../../iso/installer/tpot.conf.dist
     dest: /root/tpot.conf
     owner: root
@@ -31,15 +31,15 @@
     mode: 0644
 
 - name: Install T-Pot on instance -  be patient, this might take 15 to 30 minutes depending on the connection speed.
-  command: /root/tpot/iso/installer/install.sh --type=auto --conf=/root/tpot.conf
+  ansible.builtin.command: /root/tpot/iso/installer/install.sh --type=auto --conf=/root/tpot.conf
 
 - name: Delete T-Pot configuration file
-  file:
+  ansible.builtin.file:
     path: /root/tpot.conf
     state: absent
 
 - name: Change unattended-upgrades to take default action
-  blockinfile:
+  ansible.builtin.blockinfile:
     dest: /etc/apt/apt.conf.d/50unattended-upgrades
     block: |
       Dpkg::Options {

@@ -1,0 +1,33 @@
+- name: Create security group
+  openstack.cloud.security_group:
+    cloud: "{{ cloud }}"
+    name: sg-tpot-any
+    description: tpot any-any
+
+- name: Add rules to security group
+  openstack.cloud.security_group_rule:
+    cloud: "{{ cloud }}"
+    security_group: sg-tpot-any
+    remote_ip_prefix: 0.0.0.0/0
+
+- name: Create network
+  openstack.cloud.network:
+    cloud: "{{ cloud }}"
+    name: network-tpot
+
+- name: Create subnet
+  openstack.cloud.subnet:
+    cloud: "{{ cloud }}"
+    network_name: network-tpot
+    name: subnet-tpot
+    cidr: 192.168.0.0/24
+    dns_nameservers:
+      - 1.1.1.1
+      - 8.8.8.8
+
+- name: Create router
+  openstack.cloud.router:
+    cloud: "{{ cloud }}"
+    name: router-tpot
+    interfaces:
+      - subnet-tpot
