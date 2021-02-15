@@ -1,11 +1,10 @@
-FROM alpine:3.12
+FROM alpine:3.13
 #
 # Include dist
 ADD dist/ /root/dist/
 #
 # Install packages
-RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
-    apk -U add \
+RUN apk -U add \
              build-base \
 	     ca-certificates \
              git \
@@ -13,6 +12,7 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
 	     openssl \
              openssl-dev \
 	     postgresql-dev \
+             py3-cryptography \
              py3-mysqlclient \
              py3-requests \
 	     py3-pip \
