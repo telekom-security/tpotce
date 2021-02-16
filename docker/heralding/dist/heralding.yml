@@ -62,6 +62,7 @@ capabilities:
     timeout: 30
     protocol_specific_data:
       max_attempts: 3
+      banner: "+OK POP3 server ready"
 
   pop3s:
     enabled: true
@@ -69,6 +70,7 @@ capabilities:
     timeout: 30
     protocol_specific_data:
       max_attempts: 3
+      banner: "+OK POP3 server ready"
       # if a .pem file is not found in work dir, a new pem file will be created
       # using these values
       cert:
@@ -156,6 +158,25 @@ capabilities:
       banner: "Microsoft ESMTP MAIL service ready"
       # If the fqdn option is commented out or empty, then fqdn of the host will be used
       fqdn: ""
+
+  smtps:
+    enabled: true
+    port: 465
+    timeout: 30
+    protocol_specific_data:
+      banner: "Microsoft ESMTP MAIL service ready"
+      # If the fqdn option is commented out or empty, then fqdn of the host will be used
+      fqdn: ""
+      cert:
+        common_name: "*"
+        country: "US"
+        state: None
+        locality: None
+        organization: None
+        organizational_unit: None
+        # how many days should the certificate be valid for
+        valid_days: 365
+        serial_number: 0
 
   vnc:
     enabled: true

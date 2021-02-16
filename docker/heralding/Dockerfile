@@ -1,11 +1,10 @@
-FROM alpine:3.12.1
+FROM alpine:3.13
 #  
 # Include dist
 ADD dist/ /root/dist/
 #
 # Install packages
-RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
-    apk -U --no-cache add \ 
+RUN apk -U --no-cache add \ 
             		build-base \
             		git \
             		libcap \
@@ -13,7 +12,9 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
             		openssl-dev \
                         libzmq \
             		postgresql-dev \
+			py3-cryptography \
 			py3-pip \
+			py3-pyzmq \
             		python3 \
             		python3-dev \
             		py-virtualenv && \
@@ -23,7 +24,7 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     cd /opt/ && \
     git clone https://github.com/johnnykv/heralding && \
     cd heralding && \
-    git checkout 9e9e9218f053c515ebb234667fb5575e6154ffa5 && \
+    git checkout 3f38976a2ab4d884d755b6324f2c71923ddadbdb && \
     pip3 install --no-cache-dir -r requirements.txt && \
     pip3 install --no-cache-dir . && \
 #
