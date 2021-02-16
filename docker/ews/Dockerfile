@@ -1,11 +1,10 @@
-FROM alpine:3.12
+FROM alpine:3.13
 #
 # Include dist
 ADD dist/ /root/dist/
 #
 # Install packages
-RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
-    apk -U --no-cache add \
+RUN apk -U --no-cache add \
             build-base \
             git \
             libffi-dev \
@@ -14,6 +13,7 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
 	    python3 \
             python3-dev \
             py3-cffi \
+	    py3-cryptography \
             py3-ipaddress \
 	    py3-lxml \
 	    py3-mysqlclient \
