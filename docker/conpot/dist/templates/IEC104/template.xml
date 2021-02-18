@@ -347,6 +347,10 @@
 
 
             <!-- IEC104 Protocol parameter -->
+            <!-- Common (Object) Address, aka COA, Station Address -->
+            <key name="CommonAddress">
+                <value type="value">"0x1e28"</value>
+            </key>
             <!-- Timeout of connection establishment -->
             <key name="T_0">
                 <value type="value">30</value>
