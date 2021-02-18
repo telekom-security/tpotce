@@ -1,28 +1,28 @@
-FROM alpine:3.12
+FROM alpine:3.13
 #
 # Include dist
 ADD dist/ /root/dist/
 #
 # Get and install dependencies & packages
-RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
-    apk -U add \
-                       bash \
-                       build-base \
-                       git \
-                       gmp-dev \
-                       libcap \
-                       libffi-dev \
-                       mpc1-dev \
-                       mpfr-dev \
-                       openssl \
-                       openssl-dev \
-		       py3-pip \
-                       python3 \
-                       python3-dev \
-                       py3-bcrypt \
-		       py3-mysqlclient \
-                       py3-requests \
-                       py3-setuptools && \
+RUN apk -U add \
+             bash \
+             build-base \
+             git \
+             gmp-dev \
+             libcap \
+             libffi-dev \
+             mpc1-dev \
+             mpfr-dev \
+             openssl \
+             openssl-dev \
+             py3-pip \
+             python3 \
+             python3-dev \
+	     py3-bcrypt \
+	     py3-cryptography \
+             py3-mysqlclient \
+             py3-requests \
+             py3-setuptools && \
 #
 # Setup user
     addgroup -g 2000 cowrie && \
