@@ -1,11 +1,10 @@
-FROM alpine:3.12
+FROM alpine:3.13
 #
 # Include dist
 ADD dist/ /root/dist/
 # 
 # Setup apk
-RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
-    apk -U --no-cache add \
+RUN apk -U --no-cache add \
                    build-base \
                    git \
                    go \
@@ -22,7 +21,7 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     cd /opt/go/ && \
     git clone https://github.com/mushorg/glutton && \
     cd /opt/go/glutton/ && \
-    git checkout 08f364fff489a82667866ecff2bcc4815569a0c8 && \
+    git checkout c25045b95b43ed9bfee89b2d14a50f5794a9cf2b && \
     mv /root/dist/system.go /opt/go/glutton/ && \
     go mod download && \
     make build && \
