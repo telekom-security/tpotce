@@ -1,11 +1,10 @@
-FROM alpine:3.12
+FROM alpine:3.13
 #
 # Include dist
 ADD dist/ /root/dist/
 #
 # Setup apt
-RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
-    apk -U --no-cache add \
+RUN apk -U --no-cache add \
                build-base \
                git \
                libcap \
@@ -22,7 +21,7 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     cd /opt/tanner/ && \
 #    git fetch origin pull/364/head:test && \	
 #    git checkout test && \
-    git checkout 40e2357119065445cbb06234e953a95e5a73ce93 && \
+    git checkout 1fd5465ef5658c2211e16e092c36b3bb05600730 && \
     cp /root/dist/config.yaml /opt/tanner/tanner/data && \
     pip3 install --no-cache-dir setuptools && \
     pip3 install --no-cache-dir -r requirements.txt && \
