@@ -1,5 +1,77 @@
 # Changelog
 
+## 20210219
+- **Rebuild Snare, Tanner, Redis, Phpox**
+  - Rebuild images to their latest masters and upgrade Alpine OS to 3.13 where possible.
+- **Bump Elastic Stack to 7.11.1**
+  - Updgrade Elastic Stack Images to 7.11.1 and update License Info to reflect new Elastic License.
+  - Prepare for new release.
+
+## 20210218
+- **Rebuild Conpot, EWSPoster, Cowrie, Glutton, Dionaea**
+  - Rebuild images to their latest masters and upgrade Alpine OS to 3.13 where possible.
+
+## 20210216
+- **Bump Heralding to 1.0.7**
+  - Rebuild and upgrade image to 1.0.7 and upgrade Alpine OS to 3.13.
+  - Enable SMTPS for Heralding.
+- **Rebuild IPPHoney, Fatt, EWSPoster, Spiderfoot**
+  - Rebuild images to their latest masters and upgrade Alpine OS to 3.13 where possible.
+  - Upgrade Spiderfoot to 3.3
+
+## 20210215
+- **Rebuild Dicompot, p0f, Medpot, Honeysap, Heimdall, Elasticpot, Citrixhoneypot, Ciscoasa**
+  - Rebuild images to their latest masters and upgrade Alpine OS to 3.13 where possible.
+
+## 20210212
+- **Rebuild Cyberchef, Adbhoney, Elastic Stack**
+  - Rebuild images to their latest masters and upgrade Alpine OS to 3.13 where possible.
+  - Bump Elastic Stack to 7.11.0
+  - Bump Cyberchef to 9.27.0
+
+## 20210119
+- **Bump Dionaea to 0.11.0**
+  - Upgrade Dionaea to 0.11.0, rebuild image and upgrade Alpine OS to 3.13.
+
+## 20210106
+- **Update Internet IF retrieval**
+  - To be consistent with @adepasquale PR #746 fatt, glutton and p0f Dockerfiles were updated accordingly.
+  - Merge PR #746 from @adepasquale, thank you!
+
+## 20201228
+- **Fix broken SQlite DB**
+  - Fix a broken `app.sqlite` in Heimdall
+- **Avoid ghcr.io because of slow transfers**
+- **Remove netselect-apt**
+  - causes too many unpredictable errors #733 as the latest example
+
+## 20201210
+- **Bump Elastic Stack 7.10.1, EWSPoster to 1.12**
+
+## 20201202
+- **Update Elastic Stack to 7.10.0**
+
+## 20201130
+- **Suricata, use suricata-update for rule management**
+  - As a bonus we can now run "suricata-update" using docker-exec, triggering both a rule update and a Suricata rule reload.
+  - Thanks to @adepasquale!
+
+## 20201126
+- **Suricata, update suricata.yaml for 6.x**
+  - Merge in the latest updates from suricata-6.0.x while at the same time keeping the custom T-Pot configuration.
+  - Thanks to @adepasquale!
+- **Bump Cowrie to 2.2.0**
+
+## 20201028
+- **Bump Suricata to 5.0.4, Spiderfoot to 3.2.1, Dionaea to 0.9.2, IPPHoney, Heralding, Conpot to latest masters**
+
+## 20201027
+- **Bump Dicompot to latest master, Elastic Stack to 7.9.3**
+
+## 20201005
+- **Bump Elastic Stack to 7.9.2**
+  - @brianlechthaler, thanks for PR #706, which had issues regarding Elastic Stack and resulted in reverting to 7.9.1
+
 ## 20200904
 - **Release T-Pot 20.06.1**
   - Github offers a free Docker Container Registry for public packages. For our Open Source projects we want to make sure to have everything in one place and thus moving from Docker Hub to the GitHub Container Registry.
