@@ -1,5 +1,8 @@
 # Changelog
 
+## 20210222
+- **New Release 20.06.2**
+
 ## 20210219
 - **Rebuild Snare, Tanner, Redis, Phpox**
   - Rebuild images to their latest masters and upgrade Alpine OS to 3.13 where possible.
