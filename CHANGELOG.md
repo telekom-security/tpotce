@@ -2,6 +2,8 @@
 
 ## 20210222
 - **New Release 20.06.2**
+- **Countless Cloud Contributions**
+  - Thanks to @shaderecker
 
 ## 20210219
 - **Rebuild Snare, Tanner, Redis, Phpox**
