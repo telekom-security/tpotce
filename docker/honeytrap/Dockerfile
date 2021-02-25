@@ -5,7 +5,11 @@ ENV DEBIAN_FRONTEND noninteractive
 ADD dist/ /root/dist/
 #
 # Setup apt
-RUN apt-get update -y && \
+RUN apt-get update && \
+    apt-get install netselect-apt -y && \
+    netselect-apt && \
+    mv sources.list /etc/apt/ && \
+    apt-get update -y && \
     apt-get dist-upgrade -y && \
 #
 # Install packages
