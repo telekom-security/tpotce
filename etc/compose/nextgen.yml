@@ -90,7 +90,7 @@ services:
     networks:
      - conpot_local_IEC104
     ports:
-     - "161:161"
+     - "161:161/udp"
      - "2404:2404"
     image: "dtagdevsec/conpot:2006"
     read_only: true
@@ -133,7 +133,7 @@ services:
     networks:
      - conpot_local_ipmi
     ports:
-     - "623:623"
+     - "623:623/udp"
     image: "dtagdevsec/conpot:2006"
     read_only: true
     volumes:
