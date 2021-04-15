@@ -13,8 +13,8 @@
     key_name: "{{ key_name }}"
     timeout: 200
     flavor: "{{ flavor }}"
-    security_groups: sg-tpot-any
-    network: network-tpot
+    security_groups: sg-tpot-ansible
+    network: network-tpot-ansible
   register: tpot
 
 - name: Add instance to inventory
