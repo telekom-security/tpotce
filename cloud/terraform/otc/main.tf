@@ -45,7 +45,7 @@ resource "opentelekomcloud_compute_instance_v2" "ecs_1" {
   flavor_name       = var.flavor
   key_pair          = var.key_pair
   security_groups   = [opentelekomcloud_networking_secgroup_v2.secgroup_1.name]
-  user_data         = templatefile("../cloud-init.yaml", {timezone = var.timezone, password = var.linux_password, tpot_flavor = var.tpot_flavor, web_user = var.web_user, web_password = var.web_password})
+  user_data         = templatefile("../cloud-init.yaml", { timezone = var.timezone, password = var.linux_password, tpot_flavor = var.tpot_flavor, web_user = var.web_user, web_password = var.web_password })
 
   network {
     name = opentelekomcloud_networking_network_v2.network_1.name

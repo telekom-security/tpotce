@@ -1,3 +1,3 @@
 provider "opentelekomcloud" {
-    cloud = "open-telekom-cloud"
+  cloud = "open-telekom-cloud"
 }
