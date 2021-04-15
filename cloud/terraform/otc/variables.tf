@@ -1,4 +1,4 @@
-# cloud-init configuration
+## cloud-init configuration ##
 variable "timezone" {
   default = "UTC"
 }
@@ -13,40 +13,52 @@ variable "linux_password" {
   }
 }
 
-# Cloud resources name configuration
+## Security Group ##
 variable "secgroup_name" {
-  default = "tpot-secgroup"
+  default = "sg-tpot"
 }
 
 variable "secgroup_desc" {
-  default = "T-Pot Security Group"
+  default = "Security Group for T-Pot"
 }
 
-variable "network_name" {
-  default = "tpot-network"
+## Virtual Private Cloud ##
+variable "vpc_name" {
+  default = "vpc-tpot"
 }
 
+variable "vpc_cidr" {
+  default = "192.168.0.0/16"
+}
+
+## Subnet ##
 variable "subnet_name" {
-  default = "tpot-subnet"
+  default = "subnet-tpot"
 }
 
-variable "router_name" {
-  default = "tpot-router"
+variable "subnet_cidr" {
+  default = "192.168.0.0/24"
 }
 
+variable "subnet_gateway_ip" {
+  default = "192.168.0.1"
+}
+
+## Elastic Cloud Server ##
 variable "ecs_prefix" {
   default = "tpot-"
 }
 
-# ECS configuration
-variable "availability_zone" {
-  default     = "eu-de-03"
-  description = "Select an availability zone"
+variable "ecs_flavor" {
+  default = "s3.medium.8"
 }
 
-variable "flavor" {
-  default     = "s3.medium.8"
-  description = "Select a compute flavor"
+variable "ecs_disk_size" {
+  default = "128"
+}
+
+variable "availability_zone" {
+  default = "eu-de-03"
 }
 
 variable "key_pair" {
@@ -59,12 +71,12 @@ variable "key_pair" {
   }
 }
 
-variable "volume_size" {
-  default     = "128"
-  description = "Set the volume size"
+## Elastic IP ##
+variable "eip_size" {
+  default = "100"
 }
 
-# These will go in the generated tpot.conf file
+## These will go in the generated tpot.conf file ##
 variable "tpot_flavor" {
   default     = "STANDARD"
   description = "Specify your tpot flavor [STANDARD, SENSOR, INDUSTRIAL, COLLECTOR, NEXTGEN, MEDICAL]"
