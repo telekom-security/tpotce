@@ -37,12 +37,13 @@ This can easily be extended to support other [Terraform providers](https://regis
 <a name="what-created-otc"></a>
 ### Open Telekom Cloud (OTC)
 * ECS instance:
-  * s2.medium.8 (1 vCPU, 8 GB RAM)
+  * s3.medium.8 (1 vCPU, 8 GB RAM)
   * 128 GB disk
   * Debian 10
   * Public EIP
 * Security Group
-* Network, Subnet, Router (= Virtual Private Cloud [VPC])
+  * All TCP/UDP ports are open to the Internet
+* Virtual Private Cloud (VPC) and Subnet
 
 <a name="pre"></a>
 ## Prerequisites
@@ -90,11 +91,13 @@ In `aws/variables.tf`, you can change the additional variables:
 <a name="variables-otc"></a>
 ### Open Telekom Cloud (OTC)
 In `otc/variables.tf`, you can change the additional variables:
+* `ecs_flavor`
+* `ecs_disk_size`
 * `availability_zone`
-* `flavor`
 * `key_pair` - Specify an existing SSH key pair
-* `volume_size`  
-Furthermore you can configure the naming of the created infrastructure (per default everything gets prefixed with "tpot-", e.g. "tpot-router").
+* `eip_size`
+
+... and some more, but these are the most relevant.
 
 <a name="initialising"></a>
 ## Initialising
