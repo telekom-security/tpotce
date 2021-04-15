@@ -3,11 +3,11 @@ terraform {
   required_providers {
     opentelekomcloud = {
       source  = "opentelekomcloud/opentelekomcloud"
-      version = "1.22.5"
+      version = "~> 1.23.4"
     }
     random = {
       source  = "hashicorp/random"
-      version = "~> 3.0.1"
+      version = "~> 3.1.0"
     }
   }
 }
