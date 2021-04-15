@@ -6,6 +6,11 @@ variable "timezone" {
 variable "linux_password" {
   #default = "LiNuXuSeRPaSs#"
   description = "Set a password for the default user"
+
+  validation {
+    condition     = length(var.linux_password) > 0
+    error_message = "Please specify a password for the default user."
+  }
 }
 
 # Cloud resources name configuration
@@ -47,6 +52,11 @@ variable "flavor" {
 variable "key_pair" {
   #default = ""
   description = "Specify your SSH key pair"
+
+  validation {
+    condition     = length(var.key_pair) > 0
+    error_message = "Please specify a Key Pair."
+  }
 }
 
 variable "volume_size" {
@@ -68,4 +78,9 @@ variable "web_user" {
 variable "web_password" {
   #default = "w3b$ecret"
   description = "Set a password for the web user"
+
+  validation {
+    condition     = length(var.web_password) > 0
+    error_message = "Please specify a password for the web user."
+  }
 }
