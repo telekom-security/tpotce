@@ -6,5 +6,5 @@
 **/terraform.*
 
 # OpenStack clouds
-clouds.yaml
-secure.yaml
+**/clouds.yaml
+**/secure.yaml
