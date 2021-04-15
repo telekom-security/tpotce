@@ -22,8 +22,8 @@
     name: subnet-tpot-ansible
     cidr: 192.168.0.0/24
     dns_nameservers:
-      - 1.1.1.1
-      - 8.8.8.8
+      - 100.125.4.25
+      - 100.125.129.199
 
 - name: Create router
   openstack.cloud.router:
