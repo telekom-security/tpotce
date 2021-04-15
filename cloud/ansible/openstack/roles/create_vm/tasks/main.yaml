@@ -11,10 +11,10 @@
     boot_from_volume: yes
     volume_size: "{{ volume_size }}"
     key_name: "{{ key_name }}"
-    timeout: 200
+    auto_ip: yes
     flavor: "{{ flavor }}"
-    security_groups: sg-tpot-any
-    network: network-tpot
+    security_groups: sg-tpot-ansible
+    network: network-tpot-ansible
   register: tpot
 
 - name: Add instance to inventory

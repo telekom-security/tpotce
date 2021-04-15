@@ -55,7 +55,7 @@ variable "ec2_ami" {
   }
 }
 
-# cloud-init configuration
+## cloud-init configuration ##
 variable "timezone" {
   default = "UTC"
 }
@@ -63,20 +63,30 @@ variable "timezone" {
 variable "linux_password" {
   #default = "LiNuXuSeRPaSs#"
   description = "Set a password for the default user"
+
+  validation {
+    condition     = length(var.linux_password) > 0
+    error_message = "Please specify a password for the default user."
+  }
 }
 
-# These will go in the generated tpot.conf file
+## These will go in the generated tpot.conf file ##
 variable "tpot_flavor" {
-  default = "STANDARD"
+  default     = "STANDARD"
   description = "Specify your tpot flavor [STANDARD, SENSOR, INDUSTRIAL, COLLECTOR, NEXTGEN, MEDICAL]"
 }
 
 variable "web_user" {
-  default = "webuser"
+  default     = "webuser"
   description = "Set a username for the web user"
 }
 
 variable "web_password" {
   #default = "w3b$ecret"
   description = "Set a password for the web user"
+
+  validation {
+    condition     = length(var.web_password) > 0
+    error_message = "Please specify a password for the web user."
+  }
 }

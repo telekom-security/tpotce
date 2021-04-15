@@ -14,24 +14,18 @@ resource "opentelekomcloud_networking_secgroup_rule_v2" "secgroup_rule_1" {
   security_group_id = opentelekomcloud_networking_secgroup_v2.secgroup_1.id
 }
 
-resource "opentelekomcloud_networking_network_v2" "network_1" {
-  name = var.network_name
+resource "opentelekomcloud_vpc_v1" "vpc_1" {
+  name = var.vpc_name
+  cidr = var.vpc_cidr
 }
 
-resource "opentelekomcloud_networking_subnet_v2" "subnet_1" {
-  name            = var.subnet_name
-  network_id      = opentelekomcloud_networking_network_v2.network_1.id
-  cidr            = "192.168.0.0/24"
-  dns_nameservers = ["1.1.1.1", "8.8.8.8"]
-}
+resource "opentelekomcloud_vpc_subnet_v1" "subnet_1" {
+  name   = var.subnet_name
+  cidr   = var.subnet_cidr
+  vpc_id = opentelekomcloud_vpc_v1.vpc_1.id
 
-resource "opentelekomcloud_networking_router_v2" "router_1" {
-  name = var.router_name
-}
-
-resource "opentelekomcloud_networking_router_interface_v2" "router_interface_1" {
-  router_id = opentelekomcloud_networking_router_v2.router_1.id
-  subnet_id = opentelekomcloud_networking_subnet_v2.subnet_1.id
+  gateway_ip = var.subnet_gateway_ip
+  dns_list   = ["100.125.4.25", "100.125.129.199"]
 }
 
 resource "random_id" "tpot" {
@@ -39,33 +33,35 @@ resource "random_id" "tpot" {
   prefix      = var.ecs_prefix
 }
 
-resource "opentelekomcloud_compute_instance_v2" "ecs_1" {
+resource "opentelekomcloud_ecs_instance_v1" "ecs_1" {
+  name     = random_id.tpot.b64_std
+  image_id = data.opentelekomcloud_images_image_v2.debian.id
+  flavor   = var.ecs_flavor
+  vpc_id   = opentelekomcloud_vpc_v1.vpc_1.id
+
+  nics {
+    network_id = opentelekomcloud_vpc_subnet_v1.subnet_1.id
+  }
+
+  system_disk_size  = var.ecs_disk_size
+  security_groups   = [opentelekomcloud_networking_secgroup_v2.secgroup_1.id]
   availability_zone = var.availability_zone
-  name              = random_id.tpot.b64_std
-  flavor_name       = var.flavor
-  key_pair          = var.key_pair
-  security_groups   = [opentelekomcloud_networking_secgroup_v2.secgroup_1.name]
-  user_data         = templatefile("../cloud-init.yaml", {timezone = var.timezone, password = var.linux_password, tpot_flavor = var.tpot_flavor, web_user = var.web_user, web_password = var.web_password})
-
-  network {
-    name = opentelekomcloud_networking_network_v2.network_1.name
-  }
-
-  block_device {
-    uuid                  = data.opentelekomcloud_images_image_v2.debian.id
-    source_type           = "image"
-    volume_size           = var.volume_size
-    destination_type      = "volume"
-    delete_on_termination = "true"
-  }
-
-  depends_on = [opentelekomcloud_networking_router_interface_v2.router_interface_1]
+  key_name          = var.key_pair
+  user_data         = templatefile("../cloud-init.yaml", { timezone = var.timezone, password = var.linux_password, tpot_flavor = var.tpot_flavor, web_user = var.web_user, web_password = var.web_password })
 }
 
-resource "opentelekomcloud_networking_floatingip_v2" "floatip_1" {
+resource "opentelekomcloud_vpc_eip_v1" "eip_1" {
+  publicip {
+    type = "5_bgp"
+  }
+  bandwidth {
+    name       = "bandwidth-${random_id.tpot.b64_std}"
+    size       = var.eip_size
+    share_type = "PER"
+  }
 }
 
-resource "opentelekomcloud_compute_floatingip_associate_v2" "fip_2" {
-  floating_ip = opentelekomcloud_networking_floatingip_v2.floatip_1.address
-  instance_id = opentelekomcloud_compute_instance_v2.ecs_1.id
+resource "opentelekomcloud_compute_floatingip_associate_v2" "fip_1" {
+  floating_ip = opentelekomcloud_vpc_eip_v1.eip_1.publicip.0.ip_address
+  instance_id = opentelekomcloud_ecs_instance_v1.ecs_1.id
 }
