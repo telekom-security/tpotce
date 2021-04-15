@@ -60,7 +60,7 @@ resource "aws_instance" "tpot" {
     volume_size           = 128
     delete_on_termination = true
   }
-  user_data         = templatefile("../cloud-init.yaml", {timezone = var.timezone, password = var.linux_password, tpot_flavor = var.tpot_flavor, web_user = var.web_user, web_password = var.web_password})
-  vpc_security_group_ids = [aws_security_group.tpot.id]
+  user_data                   = templatefile("../cloud-init.yaml", { timezone = var.timezone, password = var.linux_password, tpot_flavor = var.tpot_flavor, web_user = var.web_user, web_password = var.web_password })
+  vpc_security_group_ids      = [aws_security_group.tpot.id]
   associate_public_ip_address = true
 }
