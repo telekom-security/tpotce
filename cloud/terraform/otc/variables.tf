@@ -35,12 +35,12 @@ variable "ecs_prefix" {
 
 # ECS configuration
 variable "availability_zone" {
-  default = "eu-de-03"
+  default     = "eu-de-03"
   description = "Select an availability zone"
 }
 
 variable "flavor" {
-  default = "s3.medium.8"
+  default     = "s3.medium.8"
   description = "Select a compute flavor"
 }
 
@@ -50,18 +50,18 @@ variable "key_pair" {
 }
 
 variable "volume_size" {
-  default = "128"
+  default     = "128"
   description = "Set the volume size"
 }
 
 # These will go in the generated tpot.conf file
 variable "tpot_flavor" {
-  default = "STANDARD"
+  default     = "STANDARD"
   description = "Specify your tpot flavor [STANDARD, SENSOR, INDUSTRIAL, COLLECTOR, NEXTGEN, MEDICAL]"
 }
 
 variable "web_user" {
-  default = "webuser"
+  default     = "webuser"
   description = "Set a username for the web user"
 }
 
