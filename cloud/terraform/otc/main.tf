@@ -34,7 +34,7 @@ resource "random_id" "tpot" {
 }
 
 resource "opentelekomcloud_ecs_instance_v1" "ecs_1" {
-  name     = random_id.tpot.b64_std
+  name     = random_id.tpot.b64_url
   image_id = data.opentelekomcloud_images_image_v2.debian.id
   flavor   = var.ecs_flavor
   vpc_id   = opentelekomcloud_vpc_v1.vpc_1.id
