@@ -45,7 +45,7 @@ fi
 if [ "$FROMURL" != "" ] ; then
     SAVEIFS=$IFS ; IFS='|'
     for URL in $FROMURL; do
-        if [ $(curl -I --silent --output /dev/null --write-out "%{http_code}" $URL) -eq 200 ] ; then
+        if [ $(curl -I --silent --output /dev/null --write-out "%{http_code}" "$URL") -eq 200 ] ; then
            rm -rf /tmp/*
            curl "$URL" -o /tmp/rules.tar.gz
            tar -xvf /tmp/rules.tar.gz -C /tmp
