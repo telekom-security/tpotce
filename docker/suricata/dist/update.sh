@@ -40,3 +40,20 @@ if [ "$myCHECK" == "0" ];
   else
     echo "/etc/suricata/null.bpf"
 fi
+
+# Download rules via URL
+if [ "$FROMURL" != "" ] ; then
+    SAVEIFS=$IFS ; IFS='|'
+    for URL in $FROMURL; do
+        if [ $(curl -I --silent --output /dev/null --write-out "%{http_code}" "$URL") -eq 200 ] ; then
+           rm -rf /tmp/*
+           curl "$URL" -o /tmp/rules.tar.gz
+           tar -xvf /tmp/rules.tar.gz -C /tmp
+           suricata-update --local /tmp/rules --no-test
+           rm -rf /tmp/*
+        else
+          continue
+        fi
+    done
+    IFS=$SAVEIFS
+fi
