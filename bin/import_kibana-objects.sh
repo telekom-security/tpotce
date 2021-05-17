@@ -6,7 +6,7 @@ myKIBANA="http://127.0.0.1:64296/"
 myESSTATUS=$(curl -s -XGET ''$myES'_cluster/health' | jq '.' | grep -c green)
 if ! [ "$myESSTATUS" = "1" ]
   then
-    echo "### Elasticsearch is not available, try starting via 'systemctl start elk'."
+    echo "### Elasticsearch is not available, try starting via 'systemctl start tpot'."
     exit
   else
     echo "### Elasticsearch is available, now continuing."
@@ -43,7 +43,7 @@ tar xvfz $myDUMP > /dev/null
 
 # Restore index patterns
 myINDEXID=$(ls patterns/*.json | cut -c 10- | rev | cut -c 6- | rev)
-myINDEXCOUNT=$(cat patterns/$myINDEXID.json | tr '\\' '\n' | grep "scripted" | wc -w)
+myINDEXCOUNT=$(cat patterns/$myINDEXID.json | tr '\\' '\n' | grep -E "scripted|url" | wc -w)
 echo $myCOL1"### Now importing"$myCOL0 $myINDEXCOUNT $myCOL1"index pattern fields." $myCOL0
 curl -s -XDELETE ''$myKIBANA'api/saved_objects/index-pattern/logstash-*' -H "Content-Type: application/json" -H "kbn-xsrf: true" > /dev/null
 curl -s -XDELETE ''$myKIBANA'api/saved_objects/index-pattern/'$myINDEXID'' -H "Content-Type: application/json" -H "kbn-xsrf: true" > /dev/null

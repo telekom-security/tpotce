@@ -6,7 +6,7 @@ myKIBANA="http://127.0.0.1:64296/"
 myESSTATUS=$(curl -s -XGET ''$myES'_cluster/health' | jq '.' | grep -c green)
 if ! [ "$myESSTATUS" = "1" ]
   then
-    echo "### Elasticsearch is not available, try starting via 'systemctl start elk'."
+    echo "### Elasticsearch is not available, try starting via 'systemctl start tpot'."
     exit
   else
     echo "### Elasticsearch is available, now continuing."
@@ -15,7 +15,7 @@ fi
 
 # Set vars
 myDATE=$(date +%Y%m%d%H%M)
-myINDEXCOUNT=$(curl -s -XGET ''$myKIBANA'api/saved_objects/_find?type=index-pattern' | jq '.saved_objects[].attributes' | tr '\\' '\n' | grep "scripted" | wc -w)
+myINDEXCOUNT=$(curl -s -XGET ''$myKIBANA'api/saved_objects/_find?type=index-pattern' | jq '.saved_objects[].attributes' | tr '\\' '\n' | grep -E "scripted|url" | wc -w)
 myINDEXID=$(curl -s -XGET ''$myKIBANA'api/saved_objects/_find?type=index-pattern' | jq '.saved_objects[].id' | tr -d '"')
 myDASHBOARDS=$(curl -s -XGET ''$myKIBANA'api/saved_objects/_find?type=dashboard&per_page=500' | jq '.saved_objects[].id' | tr -d '"')
 myVISUALIZATIONS=$(curl -s -XGET ''$myKIBANA'api/saved_objects/_find?type=visualization&per_page=500' | jq '.saved_objects[].id' | tr -d '"')
