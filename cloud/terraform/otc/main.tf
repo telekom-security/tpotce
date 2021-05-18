@@ -44,6 +44,7 @@ resource "opentelekomcloud_ecs_instance_v1" "ecs_1" {
   }
 
   system_disk_size  = var.ecs_disk_size
+  system_disk_type  = "SAS"
   security_groups   = [opentelekomcloud_networking_secgroup_v2.secgroup_1.id]
   availability_zone = var.availability_zone
   key_name          = var.key_pair
