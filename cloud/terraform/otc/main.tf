@@ -56,7 +56,7 @@ resource "opentelekomcloud_vpc_eip_v1" "eip_1" {
     type = "5_bgp"
   }
   bandwidth {
-    name       = "bandwidth-${random_id.tpot.b64_std}"
+    name       = "bandwidth-${random_id.tpot.b64_url}"
     size       = var.eip_size
     share_type = "PER"
   }
