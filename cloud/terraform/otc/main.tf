@@ -44,6 +44,7 @@ resource "opentelekomcloud_ecs_instance_v1" "ecs_1" {
   }
 
   system_disk_size  = var.ecs_disk_size
+  system_disk_type  = "SAS"
   security_groups   = [opentelekomcloud_networking_secgroup_v2.secgroup_1.id]
   availability_zone = var.availability_zone
   key_name          = var.key_pair
@@ -55,7 +56,7 @@ resource "opentelekomcloud_vpc_eip_v1" "eip_1" {
     type = "5_bgp"
   }
   bandwidth {
-    name       = "bandwidth-${random_id.tpot.b64_std}"
+    name       = "bandwidth-${random_id.tpot.b64_url}"
     size       = var.eip_size
     share_type = "PER"
   }
