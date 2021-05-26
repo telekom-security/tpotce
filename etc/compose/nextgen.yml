@@ -546,7 +546,7 @@ services:
     restart: always
     environment:
      - bootstrap.memory_lock=true
-     - ES_JAVA_OPTS=-Xms2048m -Xmx2048m
+#     - ES_JAVA_OPTS=-Xms2048m -Xmx2048m
      - ES_TMPDIR=/tmp
     cap_add:
      - IPC_LOCK
@@ -557,7 +557,7 @@ services:
       nofile:
         soft: 65536
         hard: 65536
-    mem_limit: 4g
+#    mem_limit: 4g
     ports:
      - "127.0.0.1:64298:9200"
     image: "dtagdevsec/elasticsearch:2006"
@@ -579,8 +579,8 @@ services:
   logstash:
     container_name: logstash
     restart: always
-    environment:
-     - LS_JAVA_OPTS=-Xms2048m -Xmx2048m
+#    environment:
+#     - LS_JAVA_OPTS=-Xms2048m -Xmx2048m
     depends_on:
       elasticsearch:
         condition: service_healthy

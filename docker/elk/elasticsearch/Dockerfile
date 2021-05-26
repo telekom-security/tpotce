@@ -2,7 +2,7 @@ FROM alpine:3.13
 #
 # VARS
 ENV ES_VER=7.12.1 \
-    JAVA_HOME=/usr/lib/jvm/java-11-openjdk
+    ES_JAVA_HOME=/usr/lib/jvm/java-16-openjdk
 # Include dist
 ADD dist/ /root/dist/
 #
@@ -12,8 +12,9 @@ RUN apk -U --no-cache add \
              aria2 \
              bash \
              curl \
-             nss \
-             openjdk11-jre && \
+             nss && \
+#             openjdk16-jre && \
+    apk add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/testing openjdk16-jre && \
 #
 # Get and install packages
     cd /root/dist/ && \
@@ -30,6 +31,7 @@ RUN apk -U --no-cache add \
     addgroup -g 2000 elasticsearch && \
     adduser -S -H -s /bin/ash -u 2000 -D -g 2000 elasticsearch && \
     chown -R elasticsearch:elasticsearch /usr/share/elasticsearch/ && \
+    rm -rf /usr/share/elasticsearch/jdk && \
     rm -rf /usr/share/elasticsearch/modules/x-pack-ml && \
 #
 # Clean up

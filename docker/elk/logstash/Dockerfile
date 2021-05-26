@@ -14,8 +14,9 @@ RUN apk -U --no-cache add \
 	     curl \
              libc6-compat \
              libzmq \
-             nss \
-             openjdk11-jre && \
+             nss && \
+#             openjdk16-jre && \
+    apk add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/testing openjdk16-jre && \
 #
 # Get and install packages
     mkdir -p /etc/listbot && \
