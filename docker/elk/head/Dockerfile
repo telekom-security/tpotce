@@ -1,11 +1,12 @@
-FROM alpine:3.13
+FROM alpine:3.14
 #
 # Setup env and apt
 RUN apk -U add \
             curl \
             git \
             nodejs \
-            nodejs-npm && \
+            #nodejs-npm && \
+            npm && \
 #
 # Get and install packages
     mkdir -p /usr/src/app/ && \

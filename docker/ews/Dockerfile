@@ -1,4 +1,4 @@
-FROM alpine:3.13
+FROM alpine:3.14
 #
 # Include dist
 ADD dist/ /root/dist/
@@ -25,7 +25,7 @@ RUN apk -U --no-cache add \
 # Setup ewsposter
     git clone https://github.com/telekom-security/ewsposter /opt/ewsposter && \
     cd /opt/ewsposter && \
-    git checkout b0633af849687128171be1c7be7a43f3709a93ed && \
+    git checkout 4783c4bf9a5ea78da7203c5ccdc5711d811a708d && \
     mkdir -p /opt/ewsposter/spool /opt/ewsposter/log && \
 #
 # Setup user and groups

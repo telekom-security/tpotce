@@ -1,7 +1,7 @@
-FROM alpine:3.13
+FROM alpine:3.14
 #
 # VARS
-ENV LS_VER=7.13.1
+ENV LS_VER=7.13.2
 # Include dist
 ADD dist/ /root/dist/
 #
@@ -15,7 +15,6 @@ RUN apk -U --no-cache add \
              libc6-compat \
              libzmq \
              nss && \
-#             openjdk16-jre && \
     apk add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/testing openjdk16-jre && \
 #
 # Get and install packages
@@ -29,6 +28,8 @@ RUN apk -U --no-cache add \
     aria2c -s 16 -x 16 https://artifacts.elastic.co/downloads/logstash/logstash-$LS_VER-linux-x86_64.tar.gz && \
     tar xvfz logstash-$LS_VER-linux-x86_64.tar.gz --strip-components=1 -C /usr/share/logstash/ && \
     rm -rf /usr/share/logstash/jdk && \
+    # For some reason Alpine 3.14 does not report the -x flag correctly and thus elasticsearch does not find java
+    sed -i 's/! -x/! -e/g' /usr/share/logstash/bin/logstash.lib.sh && \
     /usr/share/logstash/bin/logstash-plugin install logstash-filter-translate && \
     /usr/share/logstash/bin/logstash-plugin install logstash-output-syslog && \
 #

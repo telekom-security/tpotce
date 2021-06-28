@@ -1,8 +1,9 @@
-FROM alpine:3.13
+FROM alpine:3.14
 #
 # VARS
-ENV ES_VER=7.13.1 \
+ENV ES_VER=7.13.2 \
     ES_JAVA_HOME=/usr/lib/jvm/java-16-openjdk
+
 # Include dist
 ADD dist/ /root/dist/
 #
@@ -13,7 +14,6 @@ RUN apk -U --no-cache add \
              bash \
              curl \
              nss && \
-#             openjdk16-jre && \
     apk add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/testing openjdk16-jre && \
 #
 # Get and install packages
@@ -21,6 +21,10 @@ RUN apk -U --no-cache add \
     mkdir -p /usr/share/elasticsearch/ && \
     aria2c -s 16 -x 16 https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-$ES_VER-linux-x86_64.tar.gz && \
     tar xvfz elasticsearch-$ES_VER-linux-x86_64.tar.gz --strip-components=1 -C /usr/share/elasticsearch/ && \
+    rm -rf /usr/share/elasticsearch/jdk && \
+    rm -rf /usr/share/elasticsearch/modules/x-pack-ml && \
+    # For some reason Alpine 3.14 does not report the -x flag correctly and thus elasticsearch does not find java
+    sed -i 's/! -x/! -e/g' /usr/share/elasticsearch/bin/elasticsearch-env && \
 #
 # Add and move files
     cd /root/dist/ && \
@@ -31,8 +35,6 @@ RUN apk -U --no-cache add \
     addgroup -g 2000 elasticsearch && \
     adduser -S -H -s /bin/ash -u 2000 -D -g 2000 elasticsearch && \
     chown -R elasticsearch:elasticsearch /usr/share/elasticsearch/ && \
-    rm -rf /usr/share/elasticsearch/jdk && \
-    rm -rf /usr/share/elasticsearch/modules/x-pack-ml && \
 #
 # Clean up
     apk del --purge aria2 && \
