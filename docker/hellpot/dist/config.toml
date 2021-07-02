@@ -1,0 +1,10 @@
+name = "HellPot 0.1"
+
+[http]
+  bind_addr = "0.0.0.0"
+  bind_port = "8080"
+  paths = ["wp-login.php","wp-login"]
+
+[logger]
+  debug = true
+  log_directory = "/var/log/hellpot/"

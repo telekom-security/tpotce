@@ -1,0 +1,20 @@
+version: '2.3'
+
+networks:
+  hellpot_local:
+
+services:
+
+# hellpot service
+  hellpot:
+    build: .
+    container_name: hellpot
+    restart: always
+    networks:
+     - hellpot_local
+    ports:
+     - "80:8080"    
+    image: "dtagdevsec/hellpot:2006"
+    read_only: true
+    volumes:
+     - /data/hellpot/log:/var/log/hellpot
