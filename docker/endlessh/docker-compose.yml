@@ -1,0 +1,20 @@
+version: '2.3'
+
+networks:
+  endlessh_local:
+
+services:
+
+# Endlessh service
+  endlessh:
+    build: .
+    container_name: endlessh
+    restart: always
+    networks:
+     - endlessh_local
+    ports:
+     - "22:2222"
+    image: "dtagdevsec/endlessh:2006"
+    read_only: true
+    volumes:
+     - /data/endlessh/log:/var/log/endlessh

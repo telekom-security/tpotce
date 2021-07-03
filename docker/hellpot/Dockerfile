@@ -8,10 +8,10 @@ RUN apk -U --no-cache add \
                    build-base \
                    git \
                    go \
-                   g++
+                   g++ && \
 #
 # Setup go, hellpot
-RUN cd /root && \
+    cd /root && \
     export GOPATH=/opt/go/ && \
     mkdir -p /opt/go && \ 
     git clone https://github.com/yunginnanet/HellPot && \
