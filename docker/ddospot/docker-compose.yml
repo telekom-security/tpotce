@@ -1,0 +1,26 @@
+version: '2.3'
+
+networks:
+  ddospot_local:
+
+services:
+
+# Ddospot service
+  ddospot:
+    build: .
+    container_name: ddospot
+    restart: always
+    networks:
+     - ddospot_local
+    ports:
+     - "19:19/udp"
+     - "53:53/udp"
+     - "123:123/udp"
+     - "161:161/udp"
+     - "1900:1900/udp"
+    image: "dtagdevsec/ddospot:2006"
+    read_only: true
+    volumes:
+     - /data/ddospot/log:/opt/ddospot/ddospot/logs
+     - /data/ddospot/bl:/opt/ddospot/ddospot/bl
+     - /data/ddospot/db:/opt/ddospot/ddospot/db
