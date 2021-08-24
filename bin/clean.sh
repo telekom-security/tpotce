@@ -114,6 +114,14 @@ fuCOWRIE () {
   chown tpot:tpot /data/cowrie -R
 }
 
+# Let's create a function to clean up and prepare ddospot data
+fuDDOSPOT () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/ddospot/log; fi
+  mkdir -p /data/ddospot/log
+  chmod 770 /data/ddospot -R
+  chown tpot:tpot /data/ddospot -R
+}
+
 # Let's create a function to clean up and prepare dicompot data
 fuDICOMPOT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/dicompot/log; fi
@@ -149,6 +157,14 @@ fuELK () {
   chown tpot:tpot /data/elk -R
 }
 
+# Let's create a function to clean up and prepare endlessh data
+fuENDLESSH () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/endlessh/log; fi
+  mkdir -p /data/endlessh/log
+  chmod 770 /data/endlessh -R
+  chown tpot:tpot /data/endlessh -R
+}
+
 # Let's create a function to clean up and prepare fatt data
 fuFATT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/fatt/*; fi
@@ -163,6 +179,14 @@ fuGLUTTON () {
   mkdir -p /data/glutton/log
   chmod 770 /data/glutton -R
   chown tpot:tpot /data/glutton -R
+}
+
+# Let's create a function to clean up and prepare hellpot data
+fuHELLPOT () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/hellpot/log; fi
+  mkdir -p /data/hellpot/log
+  chmod 770 /data/hellpot -R
+  chown tpot:tpot /data/hellpot -R
 }
 
 # Let's create a function to clean up and prepare heralding data
@@ -237,6 +261,14 @@ fuRDPY () {
   chown tpot:tpot /data/rdpy/ -R
 }
 
+# Let's create a function to clean up and prepare redishoneypot data
+fuREDISHONEYPOT () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/redishoneypot/log; fi
+  mkdir -p /data/redishoneypot/log
+  chmod 770 /data/redishoneypot -R
+  chown tpot:tpot /data/redishoneypot -R
+}
+
 # Let's create a function to prepare spiderfoot db
 fuSPIDERFOOT () {
   mkdir -p /data/spiderfoot
@@ -296,13 +328,16 @@ if [ "$myPERSISTENCE" = "on" ];
     fuCITRIXHONEYPOT
     fuCONPOT
     fuCOWRIE
+    fuDDOSPOT
     fuDICOMPOT
     fuDIONAEA
     fuELASTICPOT
     fuELK
+    fuENDLESSH
     fuFATT
     fuGLUTTON
     fuHERALDING
+    fuHELLPOT
     fuHONEYSAP
     fuHONEYPY
     fuHONEYTRAP
@@ -310,6 +345,7 @@ if [ "$myPERSISTENCE" = "on" ];
     fuMAILONEY
     fuMEDPOT
     fuNGINX
+    fuREDISHONEYPOT
     fuRDPY
     fuSPIDERFOOT
     fuSURICATA

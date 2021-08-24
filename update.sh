@@ -226,33 +226,37 @@ echo
 mkdir -vp /data/adbhoney/{downloads,log} \
          /data/ciscoasa/log \
          /data/conpot/log \
-	 /data/citrixhoneypot/logs \
+         /data/citrixhoneypot/logs \
          /data/cowrie/{downloads,keys,misc,log,log/tty} \
-	 /data/dicompot/{images,log} \
+         /data/ddospot/{bl,db,log} \
+         /data/dicompot/{images,log} \
          /data/dionaea/{log,bistreams,binaries,rtp,roots,roots/ftp,roots/tftp,roots/www,roots/upnp} \
          /data/elasticpot/log \
          /data/elk/{data,log} \
-	 /data/fatt/log \
+         /data/endlessh/log \
+         /data/fatt/log \
          /data/honeytrap/{log,attacks,downloads} \
          /data/glutton/log \
+         /data/hellpot/log \
          /data/heralding/log \
          /data/honeypy/log \
          /data/honeysap/log \
-	 /data/ipphoney/log \
+         /data/ipphoney/log \
          /data/mailoney/log \
          /data/medpot/log \
          /data/nginx/{log,heimdall} \
          /data/emobility/log \
          /data/ews/conf \
          /data/rdpy/log \
+         /data/redishoneypot/log \
          /data/spiderfoot \
          /data/suricata/log \
          /data/tanner/{log,files} \
          /data/p0f/log \
-	 /home/tsec/.ssh/
+         /home/tsec/.ssh/
 
 ### For some honeypots to work we need to ensure ntp.service is not listening
-echo "### Ensure ntp.service is not listening to avoid port potential port conflict with ddospot."
+echo "### Ensure ntp.service is not listening to avoid potential port conflict with ddospot."
 myNTP_IF_DISABLE="interface ignore wildcard
 interface ignore 127.0.0.1
 interface ignore ::1"

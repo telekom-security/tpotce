@@ -779,7 +779,7 @@ fuBANNER "Add cronjobs"
 echo "$myCRONJOBS" | tee -a /etc/crontab
 
 ### For some honeypots to work we need to ensure ntp.service is not listening
-echo "### Ensure ntp.service is not listening to avoid port potential port conflict with ddospot."
+echo "### Ensure ntp.service is not listening to avoid potential port conflict with ddospot."
 myNTP_IF_DISABLE="interface ignore wildcard
 interface ignore 127.0.0.1
 interface ignore ::1"
@@ -802,13 +802,16 @@ mkdir -vp /data/adbhoney/{downloads,log} \
          /data/conpot/log \
          /data/citrixhoneypot/logs \
          /data/cowrie/{downloads,keys,misc,log,log/tty} \
+	 /data/ddospot/{bl,db,log} \
 	 /data/dicompot/{images,log} \
          /data/dionaea/{log,bistreams,binaries,rtp,roots,roots/ftp,roots/tftp,roots/www,roots/upnp} \
          /data/elasticpot/log \
          /data/elk/{data,log} \
+	 /data/endlessh/log \
          /data/fatt/log \
          /data/honeytrap/{log,attacks,downloads} \
          /data/glutton/log \
+	 /data/hellpot/log \
          /data/heralding/log \
          /data/honeypy/log \
          /data/honeysap/log \
@@ -819,6 +822,7 @@ mkdir -vp /data/adbhoney/{downloads,log} \
          /data/emobility/log \
          /data/ews/conf \
          /data/rdpy/log \
+	 /data/redishoneypot/log \
          /data/spiderfoot \
          /data/suricata/log \
          /data/tanner/{log,files} \
