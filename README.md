@@ -11,11 +11,14 @@ and includes dockerized versions of the following honeypots
 * [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot),
 * [conpot](http://conpot.org/),
 * [cowrie](https://github.com/cowrie/cowrie),
+* [ddospot](https://github.com/aelth/ddospot),
 * [dicompot](https://github.com/nsmfoo/dicompot),
 * [dionaea](https://github.com/DinoTools/dionaea),
 * [elasticpot](https://gitlab.com/bontchev/elasticpot),
+* [endlessh](https://github.com/skeeto/endlessh),
 * [glutton](https://github.com/mushorg/glutton),
 * [heralding](https://github.com/johnnykv/heralding),
+* [hellpot](https://github.com/yunginnanet/HellPot),
 * [honeypy](https://github.com/foospidy/HoneyPy),
 * [honeysap](https://github.com/SecureAuthCorp/HoneySAP),
 * [honeytrap](https://github.com/armedpot/honeytrap/),
@@ -23,6 +26,7 @@ and includes dockerized versions of the following honeypots
 * [mailoney](https://github.com/awhitehatter/mailoney),
 * [medpot](https://github.com/schmalle/medpot),
 * [rdpy](https://github.com/citronneur/rdpy),
+* [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot),
 * [snare](http://mushmush.org/),
 * [tanner](http://mushmush.org/)
 
@@ -92,17 +96,21 @@ In T-Pot we combine the dockerized honeypots ...
 * [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot),
 * [conpot](http://conpot.org/),
 * [cowrie](http://www.micheloosterhof.com/cowrie/),
+* [ddospot](https://github.com/aelth/ddospot),
 * [dicompot](https://github.com/nsmfoo/dicompot),
 * [dionaea](https://github.com/DinoTools/dionaea),
 * [elasticpot](https://gitlab.com/bontchev/elasticpot),
+* [endlessh](https://github.com/skeeto/endlessh),
 * [glutton](https://github.com/mushorg/glutton),
 * [heralding](https://github.com/johnnykv/heralding),
+* [hellpot](https://github.com/yunginnanet/HellPot),
 * [honeypy](https://github.com/foospidy/HoneyPy),
 * [honeysap](https://github.com/SecureAuthCorp/HoneySAP),
 * [honeytrap](https://github.com/armedpot/honeytrap/),
 * [ipphoney](https://gitlab.com/bontchev/ipphoney),
 * [mailoney](https://github.com/awhitehatter/mailoney),
 * [medpot](https://github.com/schmalle/medpot),
+* [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot),
 * [rdpy](https://github.com/citronneur/rdpy),
 * [snare](http://mushmush.org/),
 * [tanner](http://mushmush.org/)
@@ -489,9 +497,10 @@ We hope you understand that we cannot provide support on an individual basis. We
 # Licenses
 The software that T-Pot is built on uses the following licenses.
 <br>GPLv2: [conpot](https://github.com/mushorg/conpot/blob/master/LICENSE.txt), [dionaea](https://github.com/DinoTools/dionaea/blob/master/LICENSE), [honeysap](https://github.com/SecureAuthCorp/HoneySAP/blob/master/COPYING), [honeypy](https://github.com/foospidy/HoneyPy/blob/master/LICENSE), [honeytrap](https://github.com/armedpot/honeytrap/blob/master/LICENSE), [suricata](http://suricata-ids.org/about/open-source/)
-<br>GPLv3: [adbhoney](https://github.com/huuck/ADBHoney), [elasticpot](https://gitlab.com/bontchev/elasticpot/-/blob/master/LICENSE), [ewsposter](https://github.com/telekom-security/ews/), [fatt](https://github.com/0x4D31/fatt/blob/master/LICENSE), [rdpy](https://github.com/citronneur/rdpy/blob/master/LICENSE), [heralding](https://github.com/johnnykv/heralding/blob/master/LICENSE.txt), [ipphoney](https://gitlab.com/bontchev/ipphoney/-/blob/master/LICENSE), [snare](https://github.com/mushorg/snare/blob/master/LICENSE), [tanner](https://github.com/mushorg/snare/blob/master/LICENSE)
+<br>GPLv3: [adbhoney](https://github.com/huuck/ADBHoney), [elasticpot](https://gitlab.com/bontchev/elasticpot/-/blob/master/LICENSE), [ewsposter](https://github.com/telekom-security/ews/), [fatt](https://github.com/0x4D31/fatt/blob/master/LICENSE), [rdpy](https://github.com/citronneur/rdpy/blob/master/LICENSE), [heralding](https://github.com/johnnykv/heralding/blob/master/LICENSE.txt), [ipphoney](https://gitlab.com/bontchev/ipphoney/-/blob/master/LICENSE), [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot/blob/main/LICENSE), [snare](https://github.com/mushorg/snare/blob/master/LICENSE), [tanner](https://github.com/mushorg/snare/blob/master/LICENSE)
 <br>Apache 2 License: [cyberchef](https://github.com/gchq/CyberChef/blob/master/LICENSE), [dicompot](https://github.com/nsmfoo/dicompot/blob/master/LICENSE), [elasticsearch](https://github.com/elasticsearch/elasticsearch/blob/master/LICENSE.txt), [logstash](https://github.com/elasticsearch/logstash/blob/master/LICENSE), [kibana](https://github.com/elasticsearch/kibana/blob/master/LICENSE.md), [docker](https://github.com/docker/docker/blob/master/LICENSE), [elasticsearch-head](https://github.com/mobz/elasticsearch-head/blob/master/LICENCE)
-<br>MIT license: [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/blob/master/LICENSE), [glutton](https://github.com/mushorg/glutton/blob/master/LICENSE)
+<br>MIT license: [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/blob/master/LICENSE), [ddospot](https://github.com/aelth/ddospot/blob/master/LICENSE), [glutton](https://github.com/mushorg/glutton/blob/master/LICENSE), [hellpot](https://github.com/yunginnanet/HellPot/blob/master/LICENSE)
+<br> Unlicense: [endlessh](https://github.com/skeeto/endlessh/blob/master/UNLICENSE)
 <br> Other: [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot#licencing-agreement-malwaretech-public-licence), [cowrie](https://github.com/micheloosterhof/cowrie/blob/master/LICENSE.md), [mailoney](https://github.com/awhitehatter/mailoney), [Debian licensing](https://www.debian.org/legal/licenses/), [Elastic License](https://www.elastic.co/licensing/elastic-license)
 
 <a name="credits"></a>
@@ -507,6 +516,7 @@ Without open source and the fruitful development community (we are proud to be a
 * [cockpit](https://github.com/cockpit-project/cockpit/graphs/contributors)
 * [conpot](https://github.com/mushorg/conpot/graphs/contributors)
 * [cowrie](https://github.com/micheloosterhof/cowrie/graphs/contributors)
+* [ddospot](https://github.com/aelth/ddospot/graphs/contributors)
 * [debian](http://www.debian.org/)
 * [dicompot](https://github.com/nsmfoo/dicompot/graphs/contributors)
 * [dionaea](https://github.com/DinoTools/dionaea/graphs/contributors)
@@ -514,9 +524,11 @@ Without open source and the fruitful development community (we are proud to be a
 * [elasticpot](https://gitlab.com/bontchev/elasticpot/-/project_members)
 * [elasticsearch](https://github.com/elastic/elasticsearch/graphs/contributors)
 * [elasticsearch-head](https://github.com/mobz/elasticsearch-head/graphs/contributors)
+* [endlessh](https://github.com/skeeto/endlessh/graphs/contributors)
 * [ewsposter](https://github.com/armedpot/ewsposter/graphs/contributors)
 * [fatt](https://github.com/0x4D31/fatt/graphs/contributors)
 * [glutton](https://github.com/mushorg/glutton/graphs/contributors)
+* [hellpot](https://github.com/yunginnanet/HellPot/graphs/contributors)
 * [heralding](https://github.com/johnnykv/heralding/graphs/contributors)
 * [honeypy](https://github.com/foospidy/HoneyPy/graphs/contributors)
 * [honeysap](https://github.com/SecureAuthCorp/HoneySAP/graphs/contributors)
@@ -528,6 +540,7 @@ Without open source and the fruitful development community (we are proud to be a
 * [medpot](https://github.com/schmalle/medpot/graphs/contributors)
 * [p0f](http://lcamtuf.coredump.cx/p0f3/)
 * [rdpy](https://github.com/citronneur/rdpy)
+* [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot/graphs/contributors)
 * [spiderfoot](https://github.com/smicallef/spiderfoot)
 * [snare](https://github.com/mushorg/snare/graphs/contributors)
 * [tanner](https://github.com/mushorg/tanner/graphs/contributors)
