@@ -16,4 +16,4 @@
   ansible.builtin.fail:
     msg: Please enable agent forwarding to allow Ansible to connect to the remote host!
   ignore_errors: yes
-  when: lookup('env','SSH_AUTH_SOCK') == ""
+  failed_when: lookup('env','SSH_AUTH_SOCK') == ""
