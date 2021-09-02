@@ -23,7 +23,7 @@
    shell: /bin/bash
 
 - name: Copy T-Pot configuration file
-  ansible.builtin.template:
+  ansible.builtin.copy:
     src: ../../../../../../iso/installer/tpot.conf.dist
     dest: /root/tpot.conf
     owner: root
