@@ -16,7 +16,7 @@ services:
      - "19:19/udp"
      - "53:53/udp"
      - "123:123/udp"
-     - "161:161/udp"
+#     - "161:161/udp"
      - "1900:1900/udp"
     image: "dtagdevsec/ddospot:2006"
     read_only: true

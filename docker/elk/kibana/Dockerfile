@@ -1,7 +1,7 @@
-FROM node:14.17.2-alpine
+FROM node:14.17.5-alpine3.14
 #
 # VARS
-ENV KB_VER=7.13.4
+ENV KB_VER=7.14.1
 # 
 # Include dist
 ADD dist/ /root/dist/
