@@ -1,4 +1,4 @@
-#!/bin/ash
+#!/bin/bash
 if [ "$(ls /var/lib/nginx/html/database)" = "" ] && [ "$HEIMDALL_PERSIST" = "YES" ];
   then
     tar xvfz /var/lib/nginx/first.tgz -C /
