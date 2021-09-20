@@ -1,4 +1,4 @@
-FROM alpine:3.13
+FROM alpine:3.14
 #
 # Install packages
 RUN apk -U add \
@@ -29,7 +29,7 @@ RUN apk -U add \
     addgroup -g 2000 citrixhoneypot && \
     adduser -S -H -s /bin/ash -u 2000 -D -g 2000 citrixhoneypot && \
     chown -R citrixhoneypot:citrixhoneypot /opt/citrixhoneypot && \
-    setcap cap_net_bind_service=+ep /usr/bin/python3.8 && \
+    setcap cap_net_bind_service=+ep /usr/bin/python3.9 && \
 #
 # Clean up
     apk del --purge git \

@@ -14,7 +14,7 @@ services:
      - citrixhoneypot_local
     ports:
      - "443:443"
-    image: "ghcr.io/telekom-security/citrixhoneypot:2006"
+    image: "dtagdevsec/citrixhoneypot:2006"
     read_only: true
     volumes:
      - /data/citrixhoneypot/logs:/opt/citrixhoneypot/logs
