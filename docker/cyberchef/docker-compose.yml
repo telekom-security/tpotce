@@ -14,5 +14,5 @@ services:
      - cyberchef_local
     ports:
      - "127.0.0.1:64299:8000"
-    image: "ghcr.io/telekom-security/cyberchef:2006"
+    image: "dtagdevsec/cyberchef:2006"
     read_only: true

@@ -14,7 +14,8 @@ services:
      - adbhoney_local
     ports:
      - "5555:5555"
-    image: "ghcr.io/telekom-security/adbhoney:2006"
+#    image: "ghcr.io/telekom-security/adbhoney:2006"
+    image: "dtagdevsec/adbhoney:2006"
     read_only: true
     volumes:
      - /data/adbhoney/log:/opt/adbhoney/log

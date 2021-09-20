@@ -1,4 +1,4 @@
-FROM alpine:3.13
+FROM alpine:3.14
 #
 # Include dist
 ADD dist/ /root/dist/
@@ -23,7 +23,7 @@ RUN apk -U add \
     addgroup -g 2000 adbhoney && \
     adduser -S -H -s /bin/ash -u 2000 -D -g 2000 adbhoney && \
     chown -R adbhoney:adbhoney /opt/adbhoney && \
-    setcap cap_net_bind_service=+ep /usr/bin/python3.8 && \
+    setcap cap_net_bind_service=+ep /usr/bin/python3.9 && \
 #
 # Clean up
     apk del --purge git \

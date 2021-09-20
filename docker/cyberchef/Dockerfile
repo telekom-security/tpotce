@@ -11,7 +11,7 @@ RUN apk -U --no-cache add \
 #
 # Install CyberChef 
     cd /root && \
-    git clone https://github.com/gchq/cyberchef -b v9.27.0 && \
+    git clone https://github.com/gchq/cyberchef -b v9.32.3 && \
     cd cyberchef && \
     npm install && \
     grunt prod && \
