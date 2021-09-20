@@ -1,20 +1,20 @@
-FROM alpine:3.11
+FROM debian:buster-slim
 #
 # Include dist
 ADD dist/ /root/dist/
 #
 # Install packages
-RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
-    apk -U --no-cache add \
-            build-base \
+RUN apt-get update -y && \
+    apt-get install -y \
+            build-essential \
             git \
-            libcap \
-            python2 \
-            python2-dev \
-            py2-pip && \
+            libcap2-bin \
+	    python2 \
+	    python2-dev \
+            python-pip && \
 #
 # Install virtualenv
-    pip install --no-cache-dir virtualenv && \
+    pip install --no-cache-dir virtualenv==20.4.7 && \
 #
 # Clone honeypy from git
     git clone https://github.com/foospidy/HoneyPy /opt/honeypy && \
@@ -36,20 +36,22 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     /opt/honeypy/env/bin/pip install -r /opt/honeypy/requirements.txt && \
 #
 # Setup user, groups and configs
-    addgroup -g 2000 honeypy && \
-    adduser -S -H -s /bin/ash -u 2000 -D -g 2000 honeypy && \
+    addgroup --gid 2000 honeypy && \
+    adduser --system --no-create-home --shell /bin/bash --uid 2000 --disabled-password --disabled-login --gid 2000 honeypy && \
     chown -R honeypy:honeypy /opt/honeypy && \
     setcap cap_net_bind_service=+ep /opt/honeypy/env/bin/python && \
 #
 # Clean up
-    apk del --purge build-base \
-                    git \
-                    python2-dev \
-                    py2-pip && \
-    rm -rf /root/* && \
-    rm -rf /var/cache/apk/*
+    apt-get purge -y \
+            build-essential \
+	    git \
+	    python2-dev \
+	    python-pip && \
+    apt-get autoremove --purge -y && \
+    apt-get clean && \
+    rm -rf /root/* /var/lib/apt/lists/* /tmp/* /var/tmp/*
 #
-# Set workdir and start mailoney
+# Set workdir and start honeypy 
 USER honeypy:honeypy
 WORKDIR /opt/honeypy
 CMD ["/opt/honeypy/env/bin/python2", "/opt/honeypy/Honey.py", "-d"]

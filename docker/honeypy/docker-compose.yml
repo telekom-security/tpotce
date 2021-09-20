@@ -20,7 +20,7 @@ services:
      - "2324:2324"
      - "4096:4096"
      - "9200:9200"
-    image: "ghcr.io/telekom-security/honeypy:2006"
+    image: "dtagdevsec/honeypy:2006"
     read_only: true
     volumes:
      - /data/honeypy/log:/opt/honeypy/log
