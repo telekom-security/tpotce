@@ -1,7 +1,7 @@
-FROM alpine:3.13
+FROM alpine:3.14
 #
 # Setup apk
-RUN apk -U add \
+RUN apk -U add --no-cache \
                    build-base \
                    git \
                    g++ && \
