@@ -20,7 +20,7 @@ services:
      - mailoney_local
     ports:
      - "25:25"
-    image: "ghcr.io/telekom-security/mailoney:2006"
+    image: "dtagdevsec/mailoney:2006"
     read_only: true
     volumes:
      - /data/mailoney/log:/opt/mailoney/logs
