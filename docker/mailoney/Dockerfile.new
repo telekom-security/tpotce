@@ -1,16 +1,17 @@
-FROM alpine:3.11
+FROM debian:buster-slim
 #
 # Install packages
-RUN apk -U --no-cache add \
+RUN apt-get update -y && \
+    apt-get install -y \
             autoconf \
-            automake \
-            build-base \
+	    automake \
+            build-essential \
             git \
-            libcap \
-            libtool \
-            py-pip \
-            python \
-            python-dev && \
+            libcap2-bin \
+	    libtool \
+	    python2 \
+	    python2-dev \
+            python-pip && \
 #
 # Install libemu    
     git clone https://github.com/buffer/libemu /root/libemu/ && \
@@ -32,23 +33,26 @@ RUN apk -U --no-cache add \
     git checkout 85c37649a99e1cec3f8d48d509653c9a8127ea4f && \
 #
 # Setup user, groups and configs
-    addgroup -g 2000 mailoney && \
-    adduser -S -H -s /bin/ash -u 2000 -D -g 2000 mailoney && \
+    addgroup --gid 2000 mailoney && \
+    adduser --system --no-create-home --shell /bin/bash --uid 2000 --disabled-password --disabled-login --gid 2000 mailoney && \
     chown -R mailoney:mailoney /opt/mailoney && \
     setcap cap_net_bind_service=+ep /usr/bin/python2.7 && \
 #
 # Clean up
-    apk del --purge autoconf \
-                    automake \
-                    build-base \
-                    git \
-                    py-pip \
-                    python-dev && \
-    rm -rf /root/* && \
-    rm -rf /var/cache/apk/*
+    apt-get purge -y \
+            autoconf \
+	    automake \
+            build-essential \
+	    git \
+	    libtool \
+	    python2-dev \
+	    python-pip && \
+    apt-get autoremove --purge -y && \
+    apt-get clean && \
+    rm -rf /root/* /var/lib/apt/lists/* /tmp/* /var/tmp/*
 #
 # Set workdir and start mailoney
 STOPSIGNAL SIGINT
 USER mailoney:mailoney
 WORKDIR /opt/mailoney/
-CMD ["/usr/bin/python","mailoney.py","-i","0.0.0.0","-p","25","-s","mailrelay.local","-t","schizo_open_relay"]
+CMD ["/usr/bin/python2","mailoney.py","-i","0.0.0.0","-p","25","-s","mailrelay.local","-t","schizo_open_relay"]
