@@ -1,24 +1,24 @@
-FROM alpine:3.11
+FROM debian:buster-slim
 #
 # Include dist
 ADD dist/ /root/dist/
 #
 # Get and install dependencies & packages
-RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
-    apk -U add \
-            build-base \
+RUN apt-get update -y && \
+    apt-get install -y \
+            build-essential \
             git \
             libffi-dev \
             openssl \
-            openssl-dev \
-            python \
-            python-dev \
-            py-pip \
-            py-setuptools && \
+            libssl-dev \
+            python2 \
+            python2-dev \
+            python-pip \
+            python-setuptools && \
 #
 # Setup user
-    addgroup -g 2000 rdpy && \
-    adduser -S -s /bin/ash -u 2000 -D -g 2000 rdpy && \
+    addgroup -gid 2000 rdpy && \
+    adduser --system --no-create-home --shell /bin/bash --uid 2000 --disabled-password --disabled-login --gid 2000 rdpy && \
 #
 # Install deps 
     pip install --no-cache-dir --upgrade cffi && \
@@ -27,8 +27,8 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
                 twisted \
                 pyopenssl \
                 qt4reactor \
+		rsa==4.5 \
                 service_identity \
-                rsa \
                 pyasn1 && \
 #
 # Install rdpy from git
@@ -45,15 +45,17 @@ RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
     mkdir -p /var/log/rdpy && \
 #
 # Clean up
-    rm -rf /root/* && \
-    apk del --purge build-base \
+    apt-get purge -y build-essential \
                     git \
                     libffi-dev \
-                    openssl-dev \
-                    python-dev \
-                    py-pip && \ 
-    rm -rf /var/cache/apk/*
+                    libssl-dev \
+                    python2-dev \
+                    python-pip && \
+    apt-get clean -y && \
+    apt-get autoremove --purge -y && \
+    apt-get install python-enum34 python-ipaddress python-six -y && \
+    rm -rf /root/* /var/lib/apt/lists/* /tmp/* /var/tmp/*		    
 #
 # Start rdpy
 USER rdpy:rdpy
-CMD exec /usr/bin/python2 -i /usr/bin/rdpy-rdphoneypot.py /opt/rdpy/$(shuf -i 1-3 -n 1) >> /var/log/rdpy/rdpy.log
+CMD exec /usr/bin/python2 -i /usr/local/bin/rdpy-rdphoneypot.py /opt/rdpy/$(shuf -i 1-3 -n 1) >> /var/log/rdpy/rdpy.log
