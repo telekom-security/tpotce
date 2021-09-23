@@ -176,7 +176,7 @@ $myRANDOM_MINUTE $myDEL_HOUR * * *      root    curator --config /opt/tpot/etc/c
 */1 * * * *     root    mv --backup=numbered /data/dionaea/roots/ftp/* /data/dionaea/binaries/
 
 # Daily reboot
-$myRANDOM_MINUTE $myRANDOM_HOUR * * 1-6      root    systemctl stop tpot && docker stop \$(docker ps -aq) || docker rm \$(docker ps -aq) || reboot
+$myRANDOM_MINUTE $myRANDOM_HOUR * * 1-6      root    systemctl stop tpot && docker stop \$(docker ps -aq) && docker rm \$(docker ps -aq); reboot
 
 # Check for updated packages every sunday, upgrade and reboot
 $myRANDOM_MINUTE $myRANDOM_HOUR * * 0     root    apt-fast autoclean -y && apt-fast autoremove -y && apt-fast update -y && apt-fast upgrade -y && sleep 10 && reboot

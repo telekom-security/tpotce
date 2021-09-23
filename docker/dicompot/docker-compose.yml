@@ -17,7 +17,7 @@ services:
      - dicompot_local
     ports:
      - "11112:11112"
-    image: "ghcr.io/telekom-security/dicompot:2006"
+    image: "dtagdevsec/dicompot:2006"
     read_only: true
     volumes:
      - /data/dicompot/log:/var/log/dicompot
