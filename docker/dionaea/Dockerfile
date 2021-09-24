@@ -1,4 +1,4 @@
-FROM debian:buster-slim
+FROM ubuntu:18.04
 ENV DEBIAN_FRONTEND noninteractive
 #
 # Include dist
@@ -6,9 +6,6 @@ ADD dist/ /root/dist/
 #
 # Install dependencies and packages
 RUN apt-get update && \
-    apt-get install netselect-apt -y && \
-    netselect-apt && \
-    mv sources.list /etc/apt/ && \
     apt-get update -y && \
     apt-get dist-upgrade -y && \
     apt-get install -y --no-install-recommends \
@@ -97,7 +94,7 @@ RUN apt-get update && \
       libnetfilter-queue1 \
       libnl-3-200 \
       libpcap0.8 \
-      libpython3.7 \
+      libpython3.6 \
       libudns0 && \
 #
     apt-get autoremove --purge -y && \
