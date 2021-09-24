@@ -1,4 +1,4 @@
-FROM alpine:3.10
+FROM alpine:3.11
 #
 # Include dist
 ADD dist/ /root/dist/
@@ -8,7 +8,6 @@ RUN apk -U --no-cache add \
             build-base \
             git \
 	    libstdc++ \
-	    py2-markupsafe \
             python2 \
             python2-dev \
             py2-pip \
@@ -22,6 +21,7 @@ RUN apk -U --no-cache add \
     mkdir conf && \
     cp /root/dist/* conf/ && \
     python setup.py install && \
+    pip install markupsafe && \
     pip install -r requirements-optional.txt && \
 #
 # Setup user, groups and configs
