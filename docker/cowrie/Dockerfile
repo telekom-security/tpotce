@@ -1,4 +1,4 @@
-FROM alpine:3.13
+FROM alpine:3.14
 #
 # Include dist
 ADD dist/ /root/dist/
@@ -17,12 +17,7 @@ RUN apk -U add \
              openssl-dev \
              py3-pip \
              python3 \
-             python3-dev \
-	     py3-bcrypt \
-	     py3-cryptography \
-             py3-mysqlclient \
-             py3-requests \
-             py3-setuptools && \
+             python3-dev && \
 #
 # Setup user
     addgroup -g 2000 cowrie && \
@@ -31,11 +26,13 @@ RUN apk -U add \
 # Install cowrie
     mkdir -p /home/cowrie && \
     cd /home/cowrie && \
-    git clone --depth=1 https://github.com/micheloosterhof/cowrie -b v2.2.0 && \
+    git clone --depth=1 https://github.com/micheloosterhof/cowrie && \
     cd cowrie && \
+    git checkout 6b1e82915478292f1e77ed776866771772b48f2e && \
 #    sed -i s/logfile.DailyLogFile/logfile.LogFile/g src/cowrie/python/logfile.py && \
     mkdir -p log && \
-    cp /root/dist/requirements.txt . && \
+    sed -i '/packaging.*/d' requirements.txt && \
+    pip3 install --upgrade pip && \
     pip3 install -r requirements.txt && \
 #
 # Setup configs
