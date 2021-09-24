@@ -1,4 +1,4 @@
-FROM alpine:3.10
+FROM alpine:3.13
 #
 # Install packages
 RUN apk -U --no-cache add \
@@ -16,7 +16,7 @@ RUN apk -U --no-cache add \
 # Install bfr sandbox from git
     git clone https://github.com/mushorg/BFR /opt/BFR && \
     cd /opt/BFR && \
-    git checkout 508729202428a35bcc6bb27dd97b831f7e5009b5 && \
+#    git checkout 508729202428a35bcc6bb27dd97b831f7e5009b5 && \
     phpize7 && \
     ./configure \
       --with-php-config=/usr/bin/php-config7 \
@@ -30,7 +30,7 @@ RUN apk -U --no-cache add \
 # Install PHP Sandbox
     git clone https://github.com/mushorg/phpox /opt/phpox && \
     cd /opt/phpox && \
-    git checkout 001437b9ed3e228fac3828e18fe90991a330578d && \
+    git checkout a62c8136ec7b3ebab0c989f4235e2960175121f8 && \
     pip3 install -r requirements.txt && \
     make && \
 #

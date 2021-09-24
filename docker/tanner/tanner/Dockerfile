@@ -9,7 +9,7 @@ RUN apk -U --no-cache add \
                git \
                libcap \
                libffi-dev \
-               libressl-dev \
+               openssl-dev \
                linux-headers \
 	       py3-pip \
                py3-yarl \
@@ -21,7 +21,8 @@ RUN apk -U --no-cache add \
     cd /opt/tanner/ && \
 #    git fetch origin pull/364/head:test && \	
 #    git checkout test && \
-    git checkout 1fd5465ef5658c2211e16e092c36b3bb05600730 && \
+    git checkout 20dabcbccc50f8878525677b925a4c9abcaf9f54 && \
+    sed -i 's/aioredis/aioredis==1.3.1/g' requirements.txt && \
     cp /root/dist/config.yaml /opt/tanner/tanner/data && \
     pip3 install --no-cache-dir setuptools && \
     pip3 install --no-cache-dir -r requirements.txt && \

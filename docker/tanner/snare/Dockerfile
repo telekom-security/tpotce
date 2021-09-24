@@ -1,4 +1,4 @@
-FROM alpine:3.10
+FROM alpine:3.14
 #
 # Include dist
 ADD dist/ /root/dist/
@@ -9,12 +9,13 @@ RUN apk -U --no-cache add \
                git \
                linux-headers \
                python3 \
-               python3-dev && \ 
+               python3-dev \ 
+               py3-pip && \ 
 #
 # Setup Snare 
     git clone https://github.com/mushorg/snare /opt/snare && \
     cd /opt/snare/ && \
-    git checkout 5af76755f367dae8acb347962be34eb8de14f85a && \
+    git checkout 0919a80838eb0823a3b7029b0264628ee0a36211 && \
     pip3 install --no-cache-dir setuptools && \
     pip3 install --no-cache-dir -r requirements.txt && \
     python3 setup.py install && \

@@ -14,7 +14,7 @@ services:
     tty: true
     networks:
      - tanner_local
-    image: "ghcr.io/telekom-security/redis:2006"
+    image: "dtagdevsec/redis:2006"
     read_only: true
 
 # PHP Sandbox service
@@ -28,7 +28,7 @@ services:
     tty: true
     networks:
      - tanner_local
-    image: "ghcr.io/telekom-security/phpox:2006"
+    image: "dtagdevsec/phpox:2006"
     read_only: true
 
 # Tanner API Service
@@ -42,7 +42,7 @@ services:
     tty: true
     networks:
      - tanner_local
-    image: "ghcr.io/telekom-security/tanner:2006"
+    image: "dtagdevsec/tanner:2006"
     read_only: true
     volumes:
      - /data/tanner/log:/var/log/tanner
@@ -63,7 +63,7 @@ services:
      - tanner_local
 #    ports:
 #     - "127.0.0.1:8091:8091"
-    image: "ghcr.io/telekom-security/tanner:2006"
+    image: "dtagdevsec/tanner:2006"
     command: tannerweb
     read_only: true
     volumes:
@@ -82,7 +82,7 @@ services:
     tty: true
     networks:
      - tanner_local
-    image: "ghcr.io/telekom-security/tanner:2006"
+    image: "dtagdevsec/tanner:2006"
     command: tanner
     read_only: true
     volumes:
@@ -104,6 +104,6 @@ services:
      - tanner_local
     ports:
      - "80:80"
-    image: "ghcr.io/telekom-security/snare:2006"
+    image: "dtagdevsec/snare:2006"
     depends_on:
      - tanner
