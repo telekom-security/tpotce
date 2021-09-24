@@ -1,4 +1,4 @@
-FROM debian:buster-slim 
+FROM ubuntu:18.04
 ENV DEBIAN_FRONTEND noninteractive
 #
 # Include dist
@@ -6,9 +6,6 @@ ADD dist/ /root/dist/
 #
 # Setup apt
 RUN apt-get update && \
-    apt-get install netselect-apt -y && \
-    netselect-apt && \
-    mv sources.list /etc/apt/ && \
     apt-get update -y && \
     apt-get dist-upgrade -y && \
 #
