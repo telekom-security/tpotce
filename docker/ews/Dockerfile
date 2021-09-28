@@ -25,7 +25,7 @@ RUN apk -U --no-cache add \
 # Setup ewsposter
     git clone https://github.com/telekom-security/ewsposter /opt/ewsposter && \
     cd /opt/ewsposter && \
-    git checkout 4783c4bf9a5ea78da7203c5ccdc5711d811a708d && \
+    git checkout 0502c39941bab10643502c27f7bd7eee301b21c0 && \
     mkdir -p /opt/ewsposter/spool /opt/ewsposter/log && \
 #
 # Setup user and groups

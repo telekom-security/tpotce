@@ -23,7 +23,7 @@ services:
      - EWS_HPFEEDS_FORMAT=json
     env_file:
      - /opt/tpot/etc/compose/elk_environment
-    image: "ghcr.io/telekom-security/ewsposter:2006"
+    image: "dtagdevsec/ewsposter:2006"
     volumes:
      - /data:/data
 #     - /data/ews/conf/ews.ip:/opt/ewsposter/ews.ip
