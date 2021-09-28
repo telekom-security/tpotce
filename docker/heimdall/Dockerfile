@@ -1,4 +1,4 @@
-FROM alpine:3.13
+FROM alpine:3.14
 #
 # Include dist
 ADD dist/ /root/dist/
@@ -64,6 +64,7 @@ RUN apk -U --no-cache add \
     sed -i "s/APP_NAME=Heimdall/APP_NAME=T-Pot/g" /var/lib/nginx/html/.env && \
 ## Add Nginx / T-Pot specific configs
     rm -rf /etc/nginx/conf.d/* /usr/share/nginx/html/* && \
+    mkdir -p /etc/nginx/conf.d && \
     cp /root/dist/conf/nginx.conf /etc/nginx/ && \
     cp -R /root/dist/conf/ssl /etc/nginx/ && \
     cp /root/dist/conf/tpotweb.conf /etc/nginx/conf.d/ && \
