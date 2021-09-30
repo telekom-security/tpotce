@@ -1,4 +1,6 @@
-FROM alpine:3.13
+# In case of problems Alpine 3.13 needs to be used:
+# https://wiki.alpinelinux.org/wiki/Release_Notes_for_Alpine_3.14.0#faccessat2
+FROM alpine:3.14
 #
 # Add source
 ADD . /opt/p0f

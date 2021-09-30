@@ -1,4 +1,4 @@
-FROM alpine:3.13
+FROM alpine:3.14
 #
 # Setup apk
 RUN apk -U --no-cache add \
@@ -9,6 +9,7 @@ RUN apk -U --no-cache add \
 #
 # Setup go, build medpot
     export GOPATH=/opt/go/ && \
+    export GO111MODULE=off && \
     mkdir -p /opt/go/src && \
     cd /opt/go/src && \
     git clone https://github.com/schmalle/medpot && \
