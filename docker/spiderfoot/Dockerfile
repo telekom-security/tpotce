@@ -1,4 +1,4 @@
-FROM alpine:3.13
+FROM alpine:3.14
 #
 # Get and install dependencies & packages
 RUN apk -U --no-cache add \
@@ -18,10 +18,10 @@ RUN apk -U --no-cache add \
             openssl-dev \
             python3 \
             python3-dev \
-	    py-cffi \
-	    py-cryptography \
-	    py-pillow \
-            py-future \
+#	    py-cffi \
+#	    py-cryptography \
+#	    py-pillow \
+#            py-future \
             py3-pip \
             swig \
 	    tinyxml \
@@ -33,8 +33,9 @@ RUN apk -U --no-cache add \
     adduser -S -s /bin/ash -u 2000 -D -g 2000 spiderfoot && \
 #
 # Install spiderfoot 
-    git clone --depth=1 -b v3.3 https://github.com/smicallef/spiderfoot /home/spiderfoot && \
+    git clone --depth=1 -b v3.4 https://github.com/smicallef/spiderfoot /home/spiderfoot && \
     cd /home/spiderfoot && \
+    pip3 install --upgrade pip && \
     pip3 install --no-cache-dir wheel && \ 
     pip3 install --no-cache-dir -r requirements.txt && \ 
     chown -R spiderfoot:spiderfoot /home/spiderfoot && \
@@ -62,4 +63,4 @@ HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:8080/spiderfoot/'
 # Set user, workdir and start spiderfoot
 USER spiderfoot:spiderfoot
 WORKDIR /home/spiderfoot
-CMD ["/usr/bin/python3.8", "sf.py","-l", "0.0.0.0:8080"]
+CMD ["/usr/bin/python3.9", "sf.py","-l", "0.0.0.0:8080"]
