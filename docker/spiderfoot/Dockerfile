@@ -18,10 +18,6 @@ RUN apk -U --no-cache add \
             openssl-dev \
             python3 \
             python3-dev \
-#	    py-cffi \
-#	    py-cryptography \
-#	    py-pillow \
-#            py-future \
             py3-pip \
             swig \
 	    tinyxml \
