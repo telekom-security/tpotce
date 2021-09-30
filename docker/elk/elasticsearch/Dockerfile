@@ -1,7 +1,7 @@
 FROM alpine:3.14
 #
 # VARS
-ENV ES_VER=7.14.1 \
+ENV ES_VER=7.15.0 \
     ES_JAVA_HOME=/usr/lib/jvm/java-16-openjdk
 
 # Include dist

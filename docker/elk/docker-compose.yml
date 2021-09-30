@@ -24,7 +24,7 @@ services:
 #    mem_limit: 4g
     ports:
      - "127.0.0.1:64298:9200"
-    image: "ghcr.io/telekom-security/elasticsearch:2006"
+    image: "dtagdevsec/elasticsearch:2006"
     volumes:
      - /data:/data
 
@@ -39,7 +39,7 @@ services:
         condition: service_healthy
     ports:
      - "127.0.0.1:64296:5601"
-    image: "ghcr.io/telekom-security/kibana:2006"
+    image: "dtagdevsec/kibana:2006"
 
 ## Logstash service
   logstash:
@@ -53,7 +53,7 @@ services:
         condition: service_healthy
     env_file:
      - /opt/tpot/etc/compose/elk_environment
-    image: "ghcr.io/telekom-security/logstash:2006"
+    image: "dtagdevsec/logstash:2006"
     volumes:
      - /data:/data
 #     - /root/tpotce/docker/elk/logstash/dist/logstash.conf:/etc/logstash/conf.d/logstash.conf
@@ -68,5 +68,5 @@ services:
         condition: service_healthy
     ports:
      - "127.0.0.1:64302:9100"
-    image: "ghcr.io/telekom-security/head:2006"
+    image: "dtagdevsec/head:2006"
     read_only: true
