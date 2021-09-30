@@ -21,6 +21,7 @@ RUN apk -U add \
     cd fatt && \
     git checkout 314cd1ff7873b5a145a51ec4e85f6107828a2c79 && \
     mkdir -p log && \
+    # pyshark >= 0.4.3 breaks fatt
     pip3 install pyshark==0.4.2.11 && \
 #
 # Setup configs

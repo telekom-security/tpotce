@@ -1,4 +1,4 @@
-FROM alpine:edge
+FROM alpine:3.14
 #
 # Include dist
 ADD dist/ /root/dist/
