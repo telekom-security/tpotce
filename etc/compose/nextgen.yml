@@ -418,44 +418,6 @@ services:
     volumes:
      - /data/redishoneypot/log:/var/log/redishoneypot
 
-#### Snare / Tanner
-## Tanner Redis Service
-  tanner_redis:
-    container_name: tanner_redis
-    restart: always
-    tty: true
-    networks:
-     - tanner_local
-    image: "dtagdevsec/redis:2006"
-    read_only: true
-
-## PHP Sandbox service
-  tanner_phpox:
-    container_name: tanner_phpox
-    restart: always
-    tty: true
-    networks:
-     - tanner_local
-    image: "dtagdevsec/phpox:2006"
-    read_only: true
-
-## Tanner API Service
-  tanner_api:
-    container_name: tanner_api
-    restart: always
-    tmpfs:
-     - /tmp/tanner:uid=2000,gid=2000
-    tty: true
-    networks:
-     - tanner_local
-    image: "dtagdevsec/tanner:2006"
-    read_only: true
-    volumes:
-     - /data/tanner/log:/var/log/tanner
-    command: tannerapi
-    depends_on:
-     - tanner_redis
-
 # Hellpot service
   hellpot:
     container_name: hellpot
