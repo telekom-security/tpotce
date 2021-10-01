@@ -1,4 +1,4 @@
-FROM alpine:edge
+FROM alpine:3.14
 #
 # Include dist
 ADD dist/ /root/dist/
@@ -28,7 +28,6 @@ RUN apk -U add \
 # Setup ConPot
     git clone https://github.com/mushorg/conpot /opt/conpot && \
     cd /opt/conpot/ && \
-#    git checkout ff09e009d10d953aa7dcff2c06b7c890e6ffd4b7 && \
     git checkout 804fd65aa3b7ffa31c07fd4e863d4a5500414cf3 && \
     # Change template default ports if <1024
     sed -i 's/port="2121"/port="21"/' /opt/conpot/conpot/templates/default/ftp/ftp.xml && \ 
@@ -45,13 +44,13 @@ RUN apk -U add \
     pip3 install --no-cache-dir pysnmp-mibs && \
     cd / && \
     rm -rf /opt/conpot /tmp/* /var/tmp/* && \
-    setcap cap_net_bind_service=+ep /usr/bin/python3.8 && \
+    setcap cap_net_bind_service=+ep /usr/bin/python3.9 && \
 #    
 # Get wireshark manuf db for scapy, setup configs, user, groups
     mkdir -p /etc/conpot /var/log/conpot /usr/share/wireshark && \
     wget https://github.com/wireshark/wireshark/raw/master/manuf -o /usr/share/wireshark/manuf && \
     cp /root/dist/conpot.cfg /etc/conpot/conpot.cfg && \
-    cp -R /root/dist/templates /usr/lib/python3.8/site-packages/conpot/ && \
+    cp -R /root/dist/templates /usr/lib/python3.9/site-packages/conpot/ && \
     addgroup -g 2000 conpot && \
     adduser -S -s /bin/ash -u 2000 -D -g 2000 conpot && \
 #
