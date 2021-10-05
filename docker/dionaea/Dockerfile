@@ -1,12 +1,14 @@
-FROM ubuntu:18.04
+FROM ubuntu:20.04
 ENV DEBIAN_FRONTEND noninteractive
 #
 # Include dist
 ADD dist/ /root/dist/
 #
 # Install dependencies and packages
-RUN apt-get update && \
-    apt-get update -y && \
+RUN apt-get update -y && \
+    apt-get install wget -y && \
+    wget http://archive.ubuntu.com/ubuntu/pool/universe/libe/libemu/libemu2_0.2.0+git20120122-1.2build1_amd64.deb http://archive.ubuntu.com/ubuntu/pool/universe/libe/libemu/libemu-dev_0.2.0+git20120122-1.2build1_amd64.deb && \
+    apt install ./libemu2_0.2.0+git20120122-1.2build1_amd64.deb ./libemu-dev_0.2.0+git20120122-1.2build1_amd64.deb -y && \
     apt-get dist-upgrade -y && \
     apt-get install -y --no-install-recommends \
 	build-essential \
@@ -17,7 +19,7 @@ RUN apt-get update && \
 	git \
         libcap2-bin \
 	libcurl4-openssl-dev \
-	libemu-dev \
+#	libemu-dev \
 	libev-dev \
 	libglib2.0-dev \
 	libloudmouth1-dev \
@@ -79,7 +81,8 @@ RUN apt-get update && \
       python3-dev \   
       python3-boto3 \
       python3-bson \
-      python3-yaml && \ 
+      python3-yaml \ 
+      wget && \ 
 #
     apt-get install -y \
       ca-certificates \
@@ -94,7 +97,8 @@ RUN apt-get update && \
       libnetfilter-queue1 \
       libnl-3-200 \
       libpcap0.8 \
-      libpython3.6 \
+#      libpython3.6 \
+      libpython3.8 \
       libudns0 && \
 #
     apt-get autoremove --purge -y && \
