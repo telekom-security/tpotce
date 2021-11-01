@@ -13,21 +13,25 @@ RUN apk -U --no-cache add \
 # Setup go, hellpot
     cd /root && \
     export GOPATH=/opt/go/ && \
+    mkdir -p /opt/hellpot && \
     mkdir -p /opt/go && \ 
     git clone https://github.com/yunginnanet/HellPot && \
     cd HellPot && \
-    git checkout 97fe39bf2f9e03a9a23327c5401a5627e0c37f9a && \
-    mv /root/dist/logger.go /root/HellPot/src/logger/ && \
-    go mod download && \
-    go install && \
-    mkdir -p /opt/hellpot && \
-    mv /opt/go/bin/HellPot /opt/hellpot/ && \
-    mv /root/dist/config.toml /opt/hellpot && \
+    git checkout f87b1f17e21b36edae41b7f49d4a54ae420a9bf8 && \
+  # Hellpot ignores setting the logpath, need to this hardcoded :(
+    sed -i 's#logDir = snek.GetString("logger.directory")#logDir = "/var/log/hellpot/"#g' config/logger.go && \
+    sed -i 's#tnow := "HellPot"#tnow := "hellpot"#g' config/logger.go && \
+    go build cmd/HellPot/HellPot.go && \
+    mv /root/HellPot/HellPot /opt/hellpot/ && \
 #
 # Setup user, groups and configs
     addgroup -g 2000 hellpot && \
     adduser -S -s /bin/ash -u 2000 -D -g 2000 hellpot && \
     mkdir -p /var/log/hellpot && \
+  # Hellpot wants to create .config folder always in user's home
+    mkdir -p /home/hellpot/.config/HellPot/logs && \
+    mv /root/dist/config.toml /home/hellpot/.config/HellPot/ && \
+    chown hellpot:hellpot -R /home/hellpot && \
 #
 # Clean up
     apk del --purge build-base \

@@ -1,10 +1,23 @@
-name = "HellPot 0.1"
-
 [http]
   bind_addr = "0.0.0.0"
   bind_port = "8080"
-  paths = ["wp-login.php","wp-login"]
+  paths = ["wp-login.php","wp-login","wp-json/omapp/v1/support"]
+
+  # Unix Socket Listener (will override default)
+  use_unix_socket = false
+  unix_socket = "/var/run/hellpot"
 
 [logger]
   debug = true
   log_directory = "/var/log/hellpot/"
+  nocolor = true
+  use_date_filename = false
+
+[performance]
+  # max_workers is only valid if restrict_concurrency is true
+  restrict_concurrency = false
+  max_workers = 256
+  
+[deception]
+  # Used as "Server: " header (if not proxied)
+  server_name = "nginx"
