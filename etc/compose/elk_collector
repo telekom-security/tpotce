@@ -1,0 +1,8 @@
+MY_ELK_COLLECTOR_HOST=elasticsearch:9200
+MY_ELK_COLLECTOR_AUTH=none
+# MY_ELK_COLLECTOR_HOST=https://you_collector_ip:64297/es/
+# MY_ELK_COLLECTOR_AUTH=basic
+# Password have to be created at collector host at file /data/nginx/conf/nginxpasswd
+# MY_ELK_COLLECTOR_USER=username
+# MY_ELK_COLLECTOR_PASSWORD=password
+

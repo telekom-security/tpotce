@@ -537,6 +537,7 @@ services:
         condition: service_healthy
     env_file:
      - /opt/tpot/etc/compose/elk_environment
+     - /opt/tpot/etc/compose/elk_collector
     image: "dtagdevsec/logstash:2006"
     volumes:
      - /data:/data
