@@ -19,6 +19,7 @@ and includes dockerized versions of the following honeypots
 * [glutton](https://github.com/mushorg/glutton),
 * [heralding](https://github.com/johnnykv/heralding),
 * [hellpot](https://github.com/yunginnanet/HellPot),
+* [honeypots](https://github.com/qeeqbox/honeypots),
 * [honeypy](https://github.com/foospidy/HoneyPy),
 * [honeysap](https://github.com/SecureAuthCorp/HoneySAP),
 * [honeytrap](https://github.com/armedpot/honeytrap/),
@@ -104,6 +105,7 @@ In T-Pot we combine the dockerized honeypots ...
 * [glutton](https://github.com/mushorg/glutton),
 * [heralding](https://github.com/johnnykv/heralding),
 * [hellpot](https://github.com/yunginnanet/HellPot),
+* [honeypots](https://github.com/qeeqbox/honeypots),
 * [honeypy](https://github.com/foospidy/HoneyPy),
 * [honeysap](https://github.com/SecureAuthCorp/HoneySAP),
 * [honeytrap](https://github.com/armedpot/honeytrap/),
@@ -502,6 +504,8 @@ The software that T-Pot is built on uses the following licenses.
 <br>MIT license: [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/blob/master/LICENSE), [ddospot](https://github.com/aelth/ddospot/blob/master/LICENSE), [glutton](https://github.com/mushorg/glutton/blob/master/LICENSE), [hellpot](https://github.com/yunginnanet/HellPot/blob/master/LICENSE)
 <br> Unlicense: [endlessh](https://github.com/skeeto/endlessh/blob/master/UNLICENSE)
 <br> Other: [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot#licencing-agreement-malwaretech-public-licence), [cowrie](https://github.com/micheloosterhof/cowrie/blob/master/LICENSE.md), [mailoney](https://github.com/awhitehatter/mailoney), [Debian licensing](https://www.debian.org/legal/licenses/), [Elastic License](https://www.elastic.co/licensing/elastic-license)
+<br> AGPL-3.0: [honeypots](https://github.com/qeeqbox/honeypots/blob/main/LICENSE)
+
 
 <a name="credits"></a>
 # Credits
@@ -530,6 +534,7 @@ Without open source and the fruitful development community (we are proud to be a
 * [glutton](https://github.com/mushorg/glutton/graphs/contributors)
 * [hellpot](https://github.com/yunginnanet/HellPot/graphs/contributors)
 * [heralding](https://github.com/johnnykv/heralding/graphs/contributors)
+* [honeypots](https://github.com/qeeqbox/honeypots/graphs/contributors)
 * [honeypy](https://github.com/foospidy/HoneyPy/graphs/contributors)
 * [honeysap](https://github.com/SecureAuthCorp/HoneySAP/graphs/contributors)
 * [honeytrap](https://github.com/armedpot/honeytrap/graphs/contributors)
