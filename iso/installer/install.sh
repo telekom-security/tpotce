@@ -802,27 +802,28 @@ mkdir -vp /data/adbhoney/{downloads,log} \
          /data/conpot/log \
          /data/citrixhoneypot/logs \
          /data/cowrie/{downloads,keys,misc,log,log/tty} \
-	 /data/ddospot/{bl,db,log} \
-	 /data/dicompot/{images,log} \
+	       /data/ddospot/{bl,db,log} \
+	       /data/dicompot/{images,log} \
          /data/dionaea/{log,bistreams,binaries,rtp,roots,roots/ftp,roots/tftp,roots/www,roots/upnp} \
          /data/elasticpot/log \
          /data/elk/{data,log} \
-	 /data/endlessh/log \
+	       /data/endlessh/log \
          /data/fatt/log \
          /data/honeytrap/{log,attacks,downloads} \
          /data/glutton/log \
-	 /data/hellpot/log \
+	       /data/hellpot/log \
          /data/heralding/log \
+         /data/honeypots/log \
          /data/honeypy/log \
          /data/honeysap/log \
-	 /data/ipphoney/log \
+	       /data/ipphoney/log \
          /data/mailoney/log \
          /data/medpot/log \
          /data/nginx/{log,heimdall} \
          /data/emobility/log \
          /data/ews/conf \
          /data/rdpy/log \
-	 /data/redishoneypot/log \
+	       /data/redishoneypot/log \
          /data/spiderfoot \
          /data/suricata/log \
          /data/tanner/{log,files} \
