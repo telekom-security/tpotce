@@ -1,4 +1,4 @@
-# T-Pot (Collector)
+# T-Pot (Mini)
 # Do not erase ports sections, these are used by /opt/tpot/bin/rules.sh to setup iptables ACCEPT rules for NFQ (honeytrap / glutton)
 version: '2.3'
 
