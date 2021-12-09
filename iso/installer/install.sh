@@ -158,7 +158,10 @@ myCOCKPIT_SOCKET="[Socket]
 ListenStream=
 ListenStream=64294
 "
-mySSHPORT="
+mySSHSETTINGS="
+Match Group tpotlogs
+        PermitOpen 127.0.0.1:64305
+        ForceCommand /usr/bin/false
 Port 64295
 "
 myRANDOM_HOUR=$(shuf -i 2-22 -n 1)
@@ -693,8 +696,10 @@ if ! [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ];
 fi
 
 # Let's create the T-Pot user
-fuBANNER "Create user"
+fuBANNER "Create groups"
 addgroup --gid 2000 tpot
+addgroup tpotlogs
+fuBANNER "Create user"
 adduser --system --no-create-home --uid 2000 --disabled-password --disabled-login --gid 2000 tpot
 
 # Let's set the hostname
@@ -715,7 +720,7 @@ fuBANNER "Adjust ports"
 mkdir -p /etc/systemd/system/cockpit.socket.d
 echo "$myCOCKPIT_SOCKET" | tee /etc/systemd/system/cockpit.socket.d/listen.conf
 sed -i '/^port/Id' /etc/ssh/sshd_config
-echo "$mySSHPORT" | tee -a /etc/ssh/sshd_config
+echo "$mySSHSETTINGS" | tee -a /etc/ssh/sshd_config
 
 # Do not allow root login for cockpit
 sed -i '2i\auth requisite pam_succeed_if.so uid >= 1000' /etc/pam.d/cockpit
