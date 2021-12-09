@@ -239,6 +239,7 @@ mkdir -vp /data/adbhoney/{downloads,log} \
          /data/glutton/log \
          /data/hellpot/log \
          /data/heralding/log \
+         /data/honeypots/log \
          /data/honeypy/log \
          /data/honeysap/log \
          /data/ipphoney/log \

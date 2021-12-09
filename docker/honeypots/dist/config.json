@@ -1,0 +1,120 @@
+{
+    "logs":"file,terminal",
+    "logs_location":"/var/log/honeypots/",
+    "honeypots": {
+        "dns": {
+            "port": 53,
+            "ip": "0.0.0.0",
+            "username": "administrator",
+            "password": "123456"
+            },
+        "ftp": {
+            "port": 21,
+            "ip": "0.0.0.0",
+            "username": "ftp",
+            "password": "anonymous"
+            },
+        "httpproxy": {
+            "port": 8080,
+            "ip": "0.0.0.0",
+            "username": "admin",
+            "password": "admin"
+            },
+        "http": {
+            "port": 80,
+            "ip": "0.0.0.0",
+            "username": "admin",
+            "password": "admin"
+            },
+        "https": {
+            "port": 443,
+            "ip": "0.0.0.0",
+            "username": "admin",
+            "password": "admin"
+            },
+        "imap": {
+            "port": 143,
+            "ip": "0.0.0.0",
+            "username": "root",
+            "password": "123456"
+            },
+        "mysql": {
+            "port": 3306,
+            "ip": "0.0.0.0",
+            "username": "root",
+            "password": "123456"
+            },
+        "pop3": {
+            "port": 110,
+            "ip": "0.0.0.0",
+            "username": "root",
+            "password": "123456"
+            },
+        "postgres": {
+            "port": 5432,
+            "ip": "0.0.0.0",
+            "username": "postgres",
+            "password": "123456"
+            },
+        "redis": {
+            "port": 6379,
+            "ip": "0.0.0.0",
+            "username": "root",
+            "password": ""
+            },
+        "smb": {
+            "port": 445,
+            "ip": "0.0.0.0",
+            "username": "administrator",
+            "password": "123456"
+            },
+        "smtp": {
+            "port": 25,
+            "ip": "0.0.0.0",
+            "username": "root",
+            "password": "123456"
+            },
+        "socks5": {
+            "port": 1080,
+            "ip": "0.0.0.0",
+            "username": "admin",
+            "password": "admin"
+            },
+        "ssh": {
+            "port": 22,
+            "ip": "0.0.0.0",
+            "username": "root",
+            "password": "123456"
+            },
+        "telnet": {
+            "port": 23,
+            "ip": "0.0.0.0",
+            "username": "root",
+            "password": "123456"
+            },
+        "vnc": {
+            "port": 5900,
+            "ip": "0.0.0.0",
+            "username": "administrator",
+            "password": "123456"
+            },
+        "elastic": {
+            "port": 9200,
+            "ip": "0.0.0.0",
+            "username": "elastic",
+            "password": "123456"
+            },
+        "mssql": {
+            "port": 1433,
+            "ip": "0.0.0.0",
+            "username": "sa",
+            "password": ""
+            },
+        "ldap": {
+            "port": 389,
+            "ip": "0.0.0.0",
+            "username": "administrator",
+            "password": "123456"
+            }
+        }
+}

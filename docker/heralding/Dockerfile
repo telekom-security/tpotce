@@ -10,7 +10,7 @@ RUN apk -U --no-cache add \
             		libcap \
             		libffi-dev \
             		openssl-dev \
-                        libzmq \
+                        py3-pyzmq \
             		postgresql-dev \
 			py3-pip \
             		python3 \
@@ -21,7 +21,7 @@ RUN apk -U --no-cache add \
     cd /opt/ && \
     git clone https://github.com/johnnykv/heralding && \
     cd heralding && \
-    git checkout 3f38976a2ab4d884d755b6324f2c71923ddadbdb && \
+    git checkout c31f99c55c7318c09272d8d9998e560c3d4de9aa && \
     pip3 install --upgrade pip && \
     pip3 install --no-cache-dir -r requirements.txt && \
     pip3 install --no-cache-dir . && \

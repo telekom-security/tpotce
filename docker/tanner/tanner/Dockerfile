@@ -23,6 +23,7 @@ RUN apk -U --no-cache add \
 #    git checkout test && \
     git checkout 20dabcbccc50f8878525677b925a4c9abcaf9f54 && \
     sed -i 's/aioredis/aioredis==1.3.1/g' requirements.txt && \
+    sed -i 's/^aiohttp$/aiohttp==3.7.4/g' requirements.txt && \
     cp /root/dist/config.yaml /opt/tanner/tanner/data && \
     pip3 install --no-cache-dir setuptools && \
     pip3 install --no-cache-dir -r requirements.txt && \

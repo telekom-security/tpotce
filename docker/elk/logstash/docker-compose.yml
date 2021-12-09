@@ -15,7 +15,10 @@ services:
     env_file:
      - /opt/tpot/etc/compose/elk_environment
      - /opt/tpot/etc/compose/elk_collector
+    ports:
+     - "127.0.0.1:64305:80"
     image: "dtagdevsec/logstash:2006"
     volumes:
      - /data:/data
 #     - /root/tpotce/docker/elk/logstash/dist/logstash.conf:/etc/logstash/conf.d/logstash.conf
+#     - /root/tpotce/docker/elk/logstash/dist/http.conf:/etc/logstash/conf.d/http.conf

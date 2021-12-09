@@ -31,7 +31,9 @@ RUN apk -U --no-cache add \
     # For some reason Alpine 3.14 does not report the -x flag correctly and thus elasticsearch does not find java
     sed -i 's/! -x/! -e/g' /usr/share/logstash/bin/logstash.lib.sh && \
     /usr/share/logstash/bin/logstash-plugin install logstash-filter-translate && \
+    /usr/share/logstash/bin/logstash-plugin install logstash-input-http && \
     /usr/share/logstash/bin/logstash-plugin install logstash-output-gelf && \
+    /usr/share/logstash/bin/logstash-plugin install logstash-output-http && \
     /usr/share/logstash/bin/logstash-plugin install logstash-output-syslog && \
 #
 # Add and move files
@@ -40,6 +42,8 @@ RUN apk -U --no-cache add \
     chmod u+x /usr/bin/update.sh && \
     mkdir -p /etc/logstash/conf.d && \
     cp logstash.conf /etc/logstash/conf.d/ && \
+    cp http.conf /etc/logstash/conf.d/ && \
+    cp pipelines.yml /usr/share/logstash/config/pipelines.yml && \
     cp tpot_es_template.json /etc/logstash/ && \
 #
 # Setup user, groups and configs
@@ -60,4 +64,5 @@ HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:9600'
 # Start logstash
 #USER logstash:logstash
 #CMD update.sh && exec /usr/share/logstash/bin/logstash -f /etc/logstash/conf.d/logstash.conf --config.reload.automatic --java-execution --log.level debug
-CMD update.sh && exec /usr/share/logstash/bin/logstash -f /etc/logstash/conf.d/logstash.conf --config.reload.automatic --java-execution
+#CMD update.sh && exec /usr/share/logstash/bin/logstash -f /etc/logstash/conf.d/logstash.conf --config.reload.automatic --java-execution
+CMD update.sh && exec /usr/share/logstash/bin/logstash --config.reload.automatic --java-execution

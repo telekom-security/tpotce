@@ -1,0 +1,42 @@
+version: '2.3'
+
+networks:
+  honeypots_local:
+
+services:
+
+# Honeypots service
+  honeypots:
+    build: .
+    container_name: honeypots
+    stdin_open: true
+    tty: true
+    restart: always
+    tmpfs:
+     - /tmp:uid=2000,gid=2000
+    networks:
+     - honeypots_local
+    ports:
+     - "21:21"
+     - "22:22"
+     - "23:23"
+     - "25:25"
+     - "53:53/udp"
+     - "80:80"
+     - "110:110"
+     - "143:143"
+     - "389:389"
+     - "443:443"
+     - "445:445"
+     - "1080:1080"
+     - "1433:1433"
+     - "3306:3306"
+     - "5432:5432"
+     - "5900:5900"
+     - "6379:6379"
+     - "8080:8080"
+     - "9200:9200"
+    image: "dtagdevsec/honeypots:2006"
+    read_only: true
+    volumes:
+     - /data/honeypots/log:/var/log/honeypots
