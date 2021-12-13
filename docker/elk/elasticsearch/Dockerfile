@@ -14,7 +14,7 @@ RUN apk -U --no-cache add \
              bash \
              curl \
              nss && \
-    apk add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/testing openjdk16-jre && \
+    apk add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/community openjdk16-jre && \
 #
 # Get and install packages
     cd /root/dist/ && \
@@ -47,4 +47,5 @@ HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:9200/_cat/health'
 #
 # Start ELK
 USER elasticsearch:elasticsearch
-CMD ["/usr/share/elasticsearch/bin/elasticsearch"]
+#CMD ["/usr/share/elasticsearch/bin/elasticsearch"]
+CMD export ES_JAVA_OPTS="$ES_JAVA_OPTS -Dlog4j2.formatMsgNoLookups=true" && exec "/usr/share/elasticsearch/bin/elasticsearch"
