@@ -1,7 +1,7 @@
 FROM alpine:3.14
 #
 # VARS
-ENV ES_VER=7.15.1 \
+ENV ES_VER=7.16.1 \
     ES_JAVA_HOME=/usr/lib/jvm/java-16-openjdk
 
 # Include dist
@@ -47,5 +47,4 @@ HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:9200/_cat/health'
 #
 # Start ELK
 USER elasticsearch:elasticsearch
-#CMD ["/usr/share/elasticsearch/bin/elasticsearch"]
-CMD export ES_JAVA_OPTS="$ES_JAVA_OPTS -Dlog4j2.formatMsgNoLookups=true" && exec "/usr/share/elasticsearch/bin/elasticsearch"
+CMD ["/usr/share/elasticsearch/bin/elasticsearch"]
