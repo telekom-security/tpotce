@@ -14,7 +14,8 @@ RUN apk -U --no-cache add \
 	     curl \
              libc6-compat \
              libzmq \
-             nss && \
+             nss \
+             zip && \
     apk add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/community openjdk16-jre && \
 #
 # Get and install packages
@@ -35,6 +36,8 @@ RUN apk -U --no-cache add \
     /usr/share/logstash/bin/logstash-plugin install logstash-output-gelf && \
     /usr/share/logstash/bin/logstash-plugin install logstash-output-http && \
     /usr/share/logstash/bin/logstash-plugin install logstash-output-syslog && \
+    # Remove log4j (https://discuss.elastic.co/t/apache-log4j2-remote-code-execution-rce-vulnerability-cve-2021-44228-esa-2021-31/291476)
+    zip -d /usr/share/logstash/logstash-core/lib/jars/log4j-core-2.* org/apache/logging/log4j/core/lookup/JndiLookup.class && \
 #
 # Add and move files
     cd /root/dist/ && \
