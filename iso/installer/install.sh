@@ -515,8 +515,9 @@ fi
 if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ] || [ "$myTPOT_DEPLOYMENT_TYPE" == "user" ];
   then
     myCONF_TPOT_FLAVOR=$(dialog --keep-window --no-cancel --backtitle "$myBACKTITLE" --title "[ Choose Your T-Pot Edition ]" --menu \
-    "\nRequired: 8GB RAM, 128GB SSD\nRecommended: 8GB RAM, 256GB SSD" 15 70 6 \
+    "\nRequired: 8GB RAM, 128GB SSD\nRecommended: 8GB RAM, 256GB SSD" 15 70 7 \
     "STANDARD" "Honeypots, ELK, NSM & Tools" \
+    "LOG4J" "Log4Pot, ELK, NSM & Tools" \
     "SENSOR" "Just Honeypots, EWS Poster & NSM" \
     "INDUSTRIAL" "Conpot, RDPY, Vnclowpot, ELK, NSM & Tools" \
     "COLLECTOR" "Heralding, ELK, NSM & Tools" \
