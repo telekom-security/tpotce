@@ -1,0 +1,23 @@
+version: '2.3'
+
+networks:
+  log4pot_local:
+
+services:
+
+# Log4pot service
+  log4pot:
+    build: .
+    container_name: log4pot
+    restart: always
+    networks:
+     - log4pot_local
+    ports:
+     - "80:8080"
+     - "443:8080"
+     - "8080:8080"
+     - "9200:8080"
+    image: "dtagdevsec/log4pot:2006"
+    read_only: true
+    volumes:
+     - /data/log4pot/log:/var/log/log4pot

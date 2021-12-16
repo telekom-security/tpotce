@@ -237,6 +237,14 @@ fuIPPHONEY () {
   chown tpot:tpot /data/ipphoney -R
 }
 
+# Let's create a function to clean up and prepare log4pot data
+fuLOG4POT () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/log4pot/*; fi
+  mkdir -p /data/log4pot/log
+  chmod 770 /data/log4pot -R
+  chown tpot:tpot /data/log4pot -R
+}
+
 # Let's create a function to clean up and prepare mailoney data
 fuMAILONEY () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/mailoney/*; fi
@@ -351,6 +359,7 @@ if [ "$myPERSISTENCE" = "on" ];
     fuHONEYPY
     fuHONEYTRAP
     fuIPPHONEY
+    fuLOG4POT
     fuMAILONEY
     fuMEDPOT
     fuNGINX
