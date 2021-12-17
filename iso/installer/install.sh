@@ -159,10 +159,10 @@ ListenStream=
 ListenStream=64294
 "
 mySSHSETTINGS="
+Port 64295
 Match Group tpotlogs
         PermitOpen 127.0.0.1:64305
         ForceCommand /usr/bin/false
-Port 64295
 "
 myRANDOM_HOUR=$(shuf -i 2-22 -n 1)
 myRANDOM_MINUTE=$(shuf -i 0-59 -n 1)
