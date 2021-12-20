@@ -10,6 +10,8 @@ services:
     build: .
     container_name: log4pot
     restart: always
+    tmpfs:
+     - /tmp:uid=2000,gid=2000
     networks:
      - log4pot_local
     ports:
@@ -17,7 +19,9 @@ services:
      - "443:8080"
      - "8080:8080"
      - "9200:8080"
+     - "25565:8080"
     image: "dtagdevsec/log4pot:2006"
     read_only: true
     volumes:
-     - /data/log4pot/log:/var/log/log4pot
+     - /data/log4pot/log:/var/log/log4pot/log
+     - /data/log4pot/payloads:/var/log/log4pot/payloads
