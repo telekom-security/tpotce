@@ -1,7 +1,7 @@
 FROM alpine:3.14
 #
 # VARS
-ENV LS_VER=7.16.2
+ENV LS_VER=7.15.1
 # Include dist
 ADD dist/ /root/dist/
 #
@@ -9,14 +9,12 @@ ADD dist/ /root/dist/
 #RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
 RUN apk -U --no-cache add \
              aria2 \
-	     autossh \
              bash \
              bzip2 \
 	     curl \
              libc6-compat \
              libzmq \
-             nss \
-             openssh && \
+             nss && \
     apk add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/community openjdk16-jre && \
 #
 # Get and install packages
@@ -44,8 +42,7 @@ RUN apk -U --no-cache add \
     chmod u+x /usr/bin/update.sh && \
     mkdir -p /etc/logstash/conf.d && \
     cp logstash.conf /etc/logstash/conf.d/ && \
-    cp http_input.conf /etc/logstash/conf.d/ && \
-    cp http_output.conf /etc/logstash/conf.d/ && \
+    cp http.conf /etc/logstash/conf.d/ && \
     cp pipelines.yml /usr/share/logstash/config/pipelines.yml && \
     cp tpot_es_template.json /etc/logstash/ && \
 #
@@ -67,4 +64,5 @@ HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:9600'
 # Start logstash
 #USER logstash:logstash
 #CMD update.sh && exec /usr/share/logstash/bin/logstash -f /etc/logstash/conf.d/logstash.conf --config.reload.automatic --java-execution --log.level debug
-CMD update.sh && exec /usr/share/logstash/bin/logstash -f /etc/logstash/conf.d/http_output.conf --config.reload.automatic --java-execution
+#CMD update.sh && exec /usr/share/logstash/bin/logstash -f /etc/logstash/conf.d/logstash.conf --config.reload.automatic --java-execution
+CMD update.sh && exec /usr/share/logstash/bin/logstash --config.reload.automatic --java-execution
