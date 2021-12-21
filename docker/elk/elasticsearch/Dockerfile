@@ -1,7 +1,7 @@
 FROM alpine:3.14
 #
 # VARS
-ENV ES_VER=7.15.1 \
+ENV ES_VER=7.16.2 \
     ES_JAVA_HOME=/usr/lib/jvm/java-16-openjdk
 
 # Include dist
@@ -14,7 +14,7 @@ RUN apk -U --no-cache add \
              bash \
              curl \
              nss && \
-    apk add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/testing openjdk16-jre && \
+    apk add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/community openjdk16-jre && \
 #
 # Get and install packages
     cd /root/dist/ && \

@@ -218,8 +218,13 @@ echo
 
 # Ensure some defaults
 echo "### Ensure some T-Pot defaults with regard to some folders, permissions and configs."
-sed -i '/^port/Id' /etc/ssh/sshd_config
-echo "Port 64295" >> /etc/ssh/sshd_config
+sed -i '/^port/I,$d' /etc/ssh/sshd_config
+tee -a /etc/ssh/sshd_config << EOF
+Port 64295
+Match Group tpotlogs
+        PermitOpen 127.0.0.1:64305
+        ForceCommand /usr/bin/false
+EOF
 echo
 
 ### Ensure creation of T-Pot related folders, just in case
@@ -243,6 +248,8 @@ mkdir -vp /data/adbhoney/{downloads,log} \
          /data/honeypy/log \
          /data/honeysap/log \
          /data/ipphoney/log \
+         /data/log4pot/{log,payloads} \
+         /data/log4pot/log \
          /data/mailoney/log \
          /data/medpot/log \
          /data/nginx/{log,heimdall} \

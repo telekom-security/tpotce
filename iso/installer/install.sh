@@ -159,10 +159,10 @@ ListenStream=
 ListenStream=64294
 "
 mySSHSETTINGS="
+Port 64295
 Match Group tpotlogs
         PermitOpen 127.0.0.1:64305
         ForceCommand /usr/bin/false
-Port 64295
 "
 myRANDOM_HOUR=$(shuf -i 2-22 -n 1)
 myRANDOM_MINUTE=$(shuf -i 0-59 -n 1)
@@ -515,8 +515,9 @@ fi
 if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ] || [ "$myTPOT_DEPLOYMENT_TYPE" == "user" ];
   then
     myCONF_TPOT_FLAVOR=$(dialog --keep-window --no-cancel --backtitle "$myBACKTITLE" --title "[ Choose Your T-Pot Edition ]" --menu \
-    "\nRequired: 8GB RAM, 128GB SSD\nRecommended: 8GB RAM, 256GB SSD" 15 70 6 \
+    "\nRequired: 8GB RAM, 128GB SSD\nRecommended: 8GB RAM, 256GB SSD" 15 70 7 \
     "STANDARD" "Honeypots, ELK, NSM & Tools" \
+    "LOG4J" "Log4Pot, ELK, NSM & Tools" \
     "SENSOR" "Just Honeypots, EWS Poster & NSM" \
     "INDUSTRIAL" "Conpot, RDPY, Vnclowpot, ELK, NSM & Tools" \
     "COLLECTOR" "Heralding, ELK, NSM & Tools" \
@@ -731,6 +732,10 @@ case $myCONF_TPOT_FLAVOR in
     fuBANNER "STANDARD"
     ln -s /opt/tpot/etc/compose/standard.yml $myTPOTCOMPOSE
   ;;
+  LOG4J)
+    fuBANNER "LOG4J"
+    ln -s /opt/tpot/etc/compose/log4j.yml $myTPOTCOMPOSE
+  ;;
   SENSOR)
     fuBANNER "SENSOR"
     ln -s /opt/tpot/etc/compose/sensor.yml $myTPOTCOMPOSE
@@ -807,28 +812,29 @@ mkdir -vp /data/adbhoney/{downloads,log} \
          /data/conpot/log \
          /data/citrixhoneypot/logs \
          /data/cowrie/{downloads,keys,misc,log,log/tty} \
-	       /data/ddospot/{bl,db,log} \
-	       /data/dicompot/{images,log} \
+         /data/ddospot/{bl,db,log} \
+         /data/dicompot/{images,log} \
          /data/dionaea/{log,bistreams,binaries,rtp,roots,roots/ftp,roots/tftp,roots/www,roots/upnp} \
          /data/elasticpot/log \
          /data/elk/{data,log} \
-	       /data/endlessh/log \
+         /data/endlessh/log \
          /data/fatt/log \
          /data/honeytrap/{log,attacks,downloads} \
          /data/glutton/log \
-	       /data/hellpot/log \
+         /data/hellpot/log \
          /data/heralding/log \
          /data/honeypots/log \
          /data/honeypy/log \
          /data/honeysap/log \
-	       /data/ipphoney/log \
+         /data/ipphoney/log \
+         /data/log4pot/{log,payloads} \
          /data/mailoney/log \
          /data/medpot/log \
          /data/nginx/{log,heimdall} \
          /data/emobility/log \
          /data/ews/conf \
          /data/rdpy/log \
-	       /data/redishoneypot/log \
+         /data/redishoneypot/log \
          /data/spiderfoot \
          /data/suricata/log \
          /data/tanner/{log,files} \
