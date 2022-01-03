@@ -1,0 +1,2 @@
+- pipeline.id: http_output
+  path.config: "/etc/logstash/conf.d/http_output.conf"

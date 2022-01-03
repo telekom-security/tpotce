@@ -47,6 +47,7 @@ RUN apk -U --no-cache add \
     cp http_input.conf /etc/logstash/conf.d/ && \
     cp http_output.conf /etc/logstash/conf.d/ && \
     cp pipelines.yml /usr/share/logstash/config/pipelines.yml && \
+    cp pipelines_pot.yml /usr/share/logstash/config/pipelines_pot.yml && \
     cp tpot_es_template.json /etc/logstash/ && \
 #
 # Setup user, groups and configs
@@ -67,4 +68,5 @@ HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:9600'
 # Start logstash
 #USER logstash:logstash
 #CMD update.sh && exec /usr/share/logstash/bin/logstash -f /etc/logstash/conf.d/logstash.conf --config.reload.automatic --java-execution --log.level debug
-CMD update.sh && exec /usr/share/logstash/bin/logstash -f /etc/logstash/conf.d/http_output.conf --config.reload.automatic --java-execution
+#CMD update.sh && exec /usr/share/logstash/bin/logstash -f /etc/logstash/conf.d/http_output.conf --config.reload.automatic --java-execution
+CMD update.sh && exec /usr/share/logstash/bin/logstash --config.reload.automatic --java-execution

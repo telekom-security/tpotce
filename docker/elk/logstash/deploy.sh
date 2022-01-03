@@ -16,6 +16,11 @@ fi
 }
 
 function fuDEPLOY_POT () {
+echo
+echo "###############################"
+echo "# Deploying to T-Pot Hive ... #"
+echo "###############################"
+echo
 sshpass -e ssh -4 -t -T -l "$MY_TPOT_USERNAME" -p 64295 "$MY_HIVE_IP" << EOF
 echo "$SSHPASS" | sudo -S bash -c 'useradd -m -s /sbin/nologin -G tpotlogs "$MY_HIVE_USERNAME";
 mkdir -p /home/"$MY_HIVE_USERNAME"/.ssh;
@@ -24,27 +29,65 @@ chmod 600 /home/"$MY_HIVE_USERNAME"/.ssh/authorized_keys;
 chmod 755 /home/"$MY_HIVE_USERNAME"/.ssh;
 chown "$MY_HIVE_USERNAME":"$MY_HIVE_USERNAME" -R /home/"$MY_HIVE_USERNAME"/.ssh'
 EOF
-exit
+
+echo
+echo "###########################"
+echo "# Done. Please reboot ... #"
+echo "###########################"
+echo
+
+exit 0
 }
 
 # Check Hive availability 
 function fuCHECK_HIVE () {
+echo
+echo "############################################"
+echo "# Checking for T-Pot Hive availability ... #"
+echo "############################################"
+echo
 sshpass -e ssh -4 -t -l "$MY_TPOT_USERNAME" -p 64295 -f -N -L64305:127.0.0.1:64305 "$MY_HIVE_IP"
 if [ $? -eq 0 ];
   then
-    echo ssh success
+    echo
+    echo "#########################"
+    echo "# T-Pot Hive available! #"
+    echo "#########################"
+    echo
     myHIVE_OK=$(curl -s http://127.0.0.1:64305)
     if [ "$myHIVE_OK" == "ok" ];
       then
-        echo ssh tunnel success
+	echo
+        echo "##############################"
+        echo "# T-Pot Hive tunnel test OK! #"
+        echo "##############################"
+        echo
         kill -9 $(pidof ssh)
       else
-	echo tunneled port 64305 on Hive unreachable
-	echo aborting
+        echo
+	echo "######################################################"
+        echo "# T-Pot Hive tunnel test FAILED!                     #"
+	echo "# Tunneled port tcp/64305 unreachable on T-Pot Hive. #"
+	echo "# Aborting.                                          #"
+        echo "######################################################"
+        echo
         kill -9 $(pidof ssh)
+	rm $MY_POT_PUBLICKEYFILE
+	rm $MY_POT_PRIVATEKEYFILE
+	rm $MY_LS_ENVCONFIGFILE
+	exit 1
     fi;
   else
-    echo ssh on Hive unreachable	
+    echo
+    echo "#################################################################"
+    echo "# Something went wrong, most likely T-Pot Hive was unreachable! #"
+    echo "# Aborting.                                                     #"
+    echo "#################################################################"
+    echo
+    rm $MY_POT_PUBLICKEYFILE
+    rm $MY_POT_PRIVATEKEYFILE
+    rm $MY_LS_ENVCONFIGFILE
+    exit 1
 fi;
 }
 
@@ -63,41 +106,63 @@ export SSHPASS
 read -p "IP / FQDN: " MY_HIVE_IP
 MY_HIVE_USERNAME="$(hostname)"
 MY_TPOT_TYPE="POT"
+MY_LS_ENVCONFIGFILE="/data/elk/logstash/ls_environment"
 
-echo "$MY_TPOT_USERNAME"
-echo "$MY_HIVE_USERNAME"
-echo "$SSHPASS"
-echo "$MY_HIVE_IP"
-echo "$MY_TPOT_TYPE"
+#echo "$SSHPASS"
 MY_POT_PUBLICKEYFILE="/data/elk/logstash/$MY_HIVE_USERNAME.pub"
 MY_POT_PRIVATEKEYFILE="/data/elk/logstash/$MY_HIVE_USERNAME"
 if ! [ -s "$MY_POT_PRIVATEKEYFILE" ] && ! [ -s "$MY_POT_PUBLICKEYFILE" ];
   then
-    echo "we need to gen a keyfile"
+    echo
+    echo "##############################"
+    echo "# Generating ssh keyfile ... #"
+    echo "##############################"
+    echo
     mkdir -p /data/elk/logstash
     ssh-keygen -f "$MY_POT_PRIVATEKEYFILE" -N "" -C "$MY_HIVE_USERNAME"
     MY_POT_PUBLICKEY="$(cat "$MY_POT_PUBLICKEYFILE")"
     echo "$MY_POT_PUBLICKEY"
   else
-    echo "there is a keyfile already, exiting"
-    exit
+    echo
+    echo "#############################################"
+    echo "# There is already a ssh keyfile. Aborting. #"
+    echo "#############################################"
+    echo
+    exit 1
 fi
+echo
+echo "###########################################################"
+echo "# Writing config to /data/elk/logstash/ls_environment.    #"
+echo "# If you make changes to this file, you need to reboot or #"
+echo "# run /opt/tpot/bin/updateip.sh.                          #"
+echo "###########################################################"
+echo
+tee $MY_LS_ENVCONFIGFILE << EOF
+MY_TPOT_TYPE="$MY_TPOT_TYPE"
+MY_POT_PRIVATEKEYFILE="$MY_POT_PRIVATEKEYFILE"
+MY_HIVE_USERNAME="$MY_HIVE_USERNAME"
+MY_HIVE_IP="$MY_HIVE_IP"
+EOF
 }
 
 # Deploy Pot to Hive
 fuGOT_ROOT
 echo
-echo "-----------------------------"
-echo "Ship T-Pot Logs to T-Pot Hive"
-echo "-----------------------------"
-echo "Executing this script will ship all logs to a T-Pot Hive installation."
+echo "#################################"
+echo "# Ship T-Pot Logs to T-Pot Hive #"
+echo "#################################"
+echo
+echo "If ..."
+echo "1. You already have a T-Pot Hive installation running and"
+echo "2. This T-Pot installation is running the type \"Pot\""
+echo "... the script will guide you to deploy this T-Pot's logs to the Hive."
 echo
 echo
-echo "------------------------------------"
-echo "Please provide data from your T-Pot "
-echo "------------------------------------"
+echo "###################################"
+echo "# Deploy T-Pot Logs to T-Pot Hive #"
+echo "###################################"
+echo 
 echo "[c] - Continue deplyoment"
-#echo "[0] - Rollback"
 echo "[q] - Abort and exit"
 echo
 while [ 1 != 2 ]
@@ -111,13 +176,9 @@ while [ 1 != 2 ]
 	  fuDEPLOY_POT
           break
           ;;
-#        [0])
-#          fuOPTOUT
-#          break
-#          ;;
         [q,Q])
           echo "Aborted."
-          exit
+          exit 0
           ;;
       esac
 done

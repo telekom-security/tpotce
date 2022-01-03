@@ -1,0 +1,132 @@
+# T-Pot (Hive)
+# Do not erase ports sections, these are used by /opt/tpot/bin/rules.sh to setup iptables ACCEPT rules for NFQ (honeytrap / glutton)
+version: '2.3'
+
+networks:
+  cyberchef_local:
+  spiderfoot_local:
+
+services:
+
+##################
+#### Tools
+##################
+
+# Cyberchef service
+  cyberchef:
+    container_name: cyberchef
+    restart: always
+    networks:
+     - cyberchef_local
+    ports:
+     - "127.0.0.1:64299:8000"
+    image: "dtagdevsec/cyberchef:2006"
+    read_only: true
+
+#### ELK
+## Elasticsearch service
+  elasticsearch:
+    container_name: elasticsearch
+    restart: always
+    environment:
+     - bootstrap.memory_lock=true
+#     - ES_JAVA_OPTS=-Xms2048m -Xmx2048m
+     - ES_TMPDIR=/tmp
+    cap_add:
+     - IPC_LOCK
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+#    mem_limit: 4g
+    ports:
+     - "127.0.0.1:64298:9200"
+    image: "dtagdevsec/elasticsearch:2006"
+    volumes:
+     - /data:/data
+
+## Kibana service
+  kibana:
+    container_name: kibana
+    restart: always
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    ports:
+     - "127.0.0.1:64296:5601"
+    image: "dtagdevsec/kibana:2006"
+
+## Logstash service
+  logstash:
+    container_name: logstash
+    restart: always
+#    environment:
+#     - LS_JAVA_OPTS=-Xms2048m -Xmx2048m
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    env_file:
+     - /opt/tpot/etc/compose/elk_environment
+    image: "dtagdevsec/logstash:2006"
+    volumes:
+     - /data:/data
+
+## Elasticsearch-head service
+  head:
+    container_name: head
+    restart: always
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    ports:
+     - "127.0.0.1:64302:9100"
+    image: "dtagdevsec/head:2006"
+    read_only: true
+
+# Nginx service
+  nginx:
+    container_name: nginx
+    restart: always
+    environment:
+    ### If set to YES all changes within Heimdall will remain for the next start
+    ### Make sure to uncomment the corresponding volume statements below, or the setting will prevent a successful start of T-Pot.
+     - HEIMDALL_PERSIST=NO
+    tmpfs:
+     - /var/tmp/nginx/client_body
+     - /var/tmp/nginx/proxy
+     - /var/tmp/nginx/fastcgi
+     - /var/tmp/nginx/uwsgi
+     - /var/tmp/nginx/scgi 
+     - /run
+     - /var/log/php7/
+     - /var/lib/nginx/tmp:uid=100,gid=82 
+     - /var/lib/nginx/html/storage/logs:uid=100,gid=82
+     - /var/lib/nginx/html/storage/framework/views:uid=100,gid=82
+    network_mode: "host"
+    ports:
+     - "64297:64297"
+     - "127.0.0.1:64304:64304"
+    image: "dtagdevsec/nginx:2006"
+    read_only: true
+    volumes:
+     - /data/nginx/cert/:/etc/nginx/cert/:ro
+     - /data/nginx/conf/nginxpasswd:/etc/nginx/nginxpasswd:ro
+     - /data/nginx/log/:/var/log/nginx/
+    ### Enable the following volumes if you set HEIMDALL_PERSIST=YES
+    # - /data/nginx/heimdall/database:/var/lib/nginx/html/database
+    # - /data/nginx/heimdall/storage:/var/lib/nginx/html/storage
+
+# Spiderfoot service
+  spiderfoot:
+    container_name: spiderfoot
+    restart: always
+    networks:
+     - spiderfoot_local
+    ports:
+     - "127.0.0.1:64303:8080"
+    image: "dtagdevsec/spiderfoot:2006"
+    volumes:
+     - /data/spiderfoot/spiderfoot.db:/home/spiderfoot/spiderfoot.db
