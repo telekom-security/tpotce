@@ -2,7 +2,6 @@
 # Let's add the first local ip to the /etc/issue and external ip to ews.ip file
 # If the external IP cannot be detected, the internal IP will be inherited.
 source /etc/environment
-source /data/elk/logstash/ls_environment
 myUUID=$(lsblk -o MOUNTPOINT,UUID | grep "/" | awk '{ print $2 }')
 myLOCALIP=$(hostname -I | awk '{ print $1 }')
 myEXTIP=$(/opt/tpot/bin/myip.sh)
