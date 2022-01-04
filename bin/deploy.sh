@@ -46,7 +46,7 @@ echo "############################################"
 echo "# Checking for T-Pot Hive availability ... #"
 echo "############################################"
 echo
-sshpass -e ssh -4 -t -l "$MY_TPOT_USERNAME" -p 64295 -f -N -L64305:127.0.0.1:64305 "$MY_HIVE_IP"
+sshpass -e ssh -4 -t -l "$MY_TPOT_USERNAME" -p 64295 -f -N -L64305:127.0.0.1:64305 "$MY_HIVE_IP" -o "StrictHostKeyChecking=no"
 if [ $? -eq 0 ];
   then
     echo
