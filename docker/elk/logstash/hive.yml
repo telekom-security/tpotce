@@ -70,6 +70,8 @@ services:
         condition: service_healthy
     env_file:
      - /opt/tpot/etc/compose/elk_environment
+    ports:
+     - "127.0.0.1:64305:80"
     image: "dtagdevsec/logstash:2006"
     volumes:
      - /data:/data

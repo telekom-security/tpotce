@@ -108,7 +108,6 @@ MY_HIVE_USERNAME="$(hostname)"
 MY_TPOT_TYPE="POT"
 MY_LS_ENVCONFIGFILE="/data/elk/logstash/ls_environment"
 
-#echo "$SSHPASS"
 MY_POT_PUBLICKEYFILE="/data/elk/logstash/$MY_HIVE_USERNAME.pub"
 MY_POT_PRIVATEKEYFILE="/data/elk/logstash/$MY_HIVE_USERNAME"
 if ! [ -s "$MY_POT_PRIVATEKEYFILE" ] && ! [ -s "$MY_POT_PUBLICKEYFILE" ];
@@ -121,7 +120,6 @@ if ! [ -s "$MY_POT_PRIVATEKEYFILE" ] && ! [ -s "$MY_POT_PUBLICKEYFILE" ];
     mkdir -p /data/elk/logstash
     ssh-keygen -f "$MY_POT_PRIVATEKEYFILE" -N "" -C "$MY_HIVE_USERNAME"
     MY_POT_PUBLICKEY="$(cat "$MY_POT_PUBLICKEYFILE")"
-    echo "$MY_POT_PUBLICKEY"
   else
     echo
     echo "#############################################"
@@ -138,10 +136,10 @@ echo "# run /opt/tpot/bin/updateip.sh.                          #"
 echo "###########################################################"
 echo
 tee $MY_LS_ENVCONFIGFILE << EOF
-MY_TPOT_TYPE="$MY_TPOT_TYPE"
-MY_POT_PRIVATEKEYFILE="$MY_POT_PRIVATEKEYFILE"
-MY_HIVE_USERNAME="$MY_HIVE_USERNAME"
-MY_HIVE_IP="$MY_HIVE_IP"
+MY_TPOT_TYPE=$MY_TPOT_TYPE
+MY_POT_PRIVATEKEYFILE=$MY_POT_PRIVATEKEYFILE
+MY_HIVE_USERNAME=$MY_HIVE_USERNAME
+MY_HIVE_IP=$MY_HIVE_IP
 EOF
 }
 
@@ -152,10 +150,10 @@ echo "#################################"
 echo "# Ship T-Pot Logs to T-Pot Hive #"
 echo "#################################"
 echo
-echo "If ..."
-echo "1. You already have a T-Pot Hive installation running and"
-echo "2. This T-Pot installation is running the type \"Pot\""
-echo "... the script will guide you to deploy this T-Pot's logs to the Hive."
+echo "If you already have a T-Pot Hive installation running and"
+echo "this T-Pot installation is running the type \"Pot\" the"
+echo "script will automagically setup this T-Pot to ship and"
+echo "prepare the Hive to receive logs from this T-Pot."
 echo
 echo
 echo "###################################"
