@@ -29,7 +29,7 @@ for i in $myYMLS;
   do
     myITEMS+="$i $(echo $i | cut -d "." -f1 | tr [:lower:] [:upper:]) " 
 done
-myEDITION=$(dialog --backtitle "$myBACKTITLE" --menu "Select T-Pot Edition" 17 50 5 $myITEMS 3>&1 1>&2 2>&3 3>&-)
+myEDITION=$(dialog --backtitle "$myBACKTITLE" --menu "Select T-Pot Edition" 17 50 10 $myITEMS 3>&1 1>&2 2>&3 3>&-)
 if [ "$myEDITION" == "" ];
   then
     echo "Have a nice day!"
