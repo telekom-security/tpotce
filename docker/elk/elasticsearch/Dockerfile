@@ -7,8 +7,6 @@ ENV ES_VER=7.16.2 \
 # Include dist
 ADD dist/ /root/dist/
 #
-# Setup env and apt
-#RUN sed -i 's/dl-cdn/dl-2/g' /etc/apk/repositories && \
 RUN apk -U --no-cache add \
              aria2 \
              bash \

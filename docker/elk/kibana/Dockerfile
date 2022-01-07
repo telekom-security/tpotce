@@ -6,7 +6,6 @@ ENV KB_VER=7.16.2
 # Include dist
 ADD dist/ /root/dist/
 #
-# Setup env and apt
 RUN apk -U --no-cache add \
             aria2 \
             curl \
@@ -27,25 +26,12 @@ RUN apk -U --no-cache add \
 #
 # Setup user, groups and configs
     sed -i 's/#server.basePath: ""/server.basePath: "\/kibana"/' /usr/share/kibana/config/kibana.yml && \
-    sed -i 's/#kibana.defaultAppId: "home"/kibana.defaultAppId: "dashboards"/' /usr/share/kibana/config/kibana.yml && \
     sed -i 's/#server.host: "localhost"/server.host: "0.0.0.0"/' /usr/share/kibana/config/kibana.yml && \
     sed -i 's/#elasticsearch.hosts: \["http:\/\/localhost:9200"\]/elasticsearch.hosts: \["http:\/\/elasticsearch:9200"\]/' /usr/share/kibana/config/kibana.yml && \
     sed -i 's/#server.rewriteBasePath: false/server.rewriteBasePath: false/' /usr/share/kibana/config/kibana.yml && \
-    echo "xpack.infra.enabled: false" >> /usr/share/kibana/config/kibana.yml && \ 
-    echo "xpack.logstash.enabled: false" >> /usr/share/kibana/config/kibana.yml && \
-    echo "xpack.canvas.enabled: false" >> /usr/share/kibana/config/kibana.yml && \
-    echo "xpack.spaces.enabled: false" >> /usr/share/kibana/config/kibana.yml && \
-    echo "xpack.apm.enabled: false" >> /usr/share/kibana/config/kibana.yml && \
-    echo "xpack.security.enabled: false" >> /usr/share/kibana/config/kibana.yml && \
-    echo "xpack.uptime.enabled: false" >> /usr/share/kibana/config/kibana.yml && \
-    echo "xpack.securitySolution.enabled: false" >> /usr/share/kibana/config/kibana.yml && \
-    echo "xpack.ml.enabled: false" >> /usr/share/kibana/config/kibana.yml && \
-    echo "xpack.fleet.enabled: false" >> /usr/share/kibana/config/kibana.yml && \
+    echo "xpack.reporting.roles.enabled: false" >> /usr/share/kibana/config/kibana.yml && \
     echo "elasticsearch.requestTimeout: 60000" >> /usr/share/kibana/config/kibana.yml && \
     echo "elasticsearch.shardTimeout: 60000" >> /usr/share/kibana/config/kibana.yml && \
-# There is no switch to disable Enterprise Search, so we need to remove it
-# In order to remove all X-Pack features we need to use OSS versions
-    rm -rf /usr/share/kibana/x-pack/plugins/enterprise_search && \
     rm -rf /usr/share/kibana/optimize/bundles/* && \
     /usr/share/kibana/bin/kibana --optimize --allow-root && \
     addgroup -g 2000 kibana && \

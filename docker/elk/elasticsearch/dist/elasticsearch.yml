@@ -2,7 +2,6 @@ cluster.name: tpotcluster
 node.name: "tpotcluster-node-01"
 xpack.ml.enabled: false
 xpack.security.enabled: false
-#xpack.ilm.enabled: false
 path:
     logs: /data/elk/log
     data: /data/elk/data
@@ -10,7 +9,5 @@ http.host: 0.0.0.0
 http.cors.enabled: true
 http.cors.allow-origin: "*"
 indices.query.bool.max_clause_count: 2000
-cluster.initial_master_nodes:
-- "tpotcluster-node-01"
-discovery.zen.ping.unicast.hosts:
-- localhost 
+cluster.routing.allocation.disk.watermark.enable_for_single_data_node: true
+discovery.type: single-node
