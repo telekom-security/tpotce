@@ -115,6 +115,30 @@
             "ip": "0.0.0.0",
             "username": "administrator",
             "password": "123456"
+            },
+        "ntp": {
+            "port": 123,
+            "ip": "0.0.0.0",
+            "username": "administrator",
+            "password": "123456"
+            },
+        "memcache": {
+            "port": 11211,
+            "ip": "0.0.0.0",
+            "username": "admin",
+            "password": "123456"
+            },
+        "oracle": {
+            "port": 1521,
+            "ip": "0.0.0.0",
+            "username": "bi",
+            "password": "123456"
+            },
+        "snmp": {
+            "port": 161,
+            "ip": "0.0.0.0",
+            "username": "privUser",
+            "password": "123456"
             }
         }
 }
