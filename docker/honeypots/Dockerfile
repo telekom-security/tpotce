@@ -29,7 +29,7 @@ RUN apk -U add \
              /var/log/honeypots && \
     cd /opt/ && \
     #git clone https://github.com/qeeqbox/honeypots && \
-    git clone https://github.com/t3chn0m4g3/honeypots -b openforreview && \
+    git clone https://github.com/t3chn0m4g3/honeypots && \
     cd honeypots && \
     #git checkout 7c654a3ef2c564ae6f1247bf302d652037080163 && \
     pip3 install --upgrade pip && \
