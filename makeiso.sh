@@ -8,7 +8,9 @@ myBACKTITLE="T-Pot - ISO Creator"
 #myMINIISOLINK="http://ftp.debian.org/debian/dists/testing/main/installer-amd64/current/images/netboot/mini.iso"
 #myMINIISOLINK="https://d-i.debian.org/daily-images/amd64/daily/netboot/mini.iso"
 # For stability reasons Debian Sid installation is built on a stable installer
-myMINIISOLINK="http://ftp.debian.org/debian/dists/buster/main/installer-amd64/current/images/netboot/mini.iso"
+### DEV
+#myMINIISOLINK="http://ftp.debian.org/debian/dists/buster/main/installer-amd64/current/images/netboot/mini.iso"
+myMINIISOLINK="http://ftp.debian.org/debian/dists/bullseye/main/installer-amd64/current/images/netboot/mini.iso"
 myMINIISO="mini.iso"
 myTPOTISO="tpot.iso"
 myTPOTDIR="tpotiso"

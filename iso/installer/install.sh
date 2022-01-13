@@ -18,11 +18,11 @@ myCONF_FILE="/root/installer/iso.conf"
 myPROGRESSBOXCONF=" --backtitle "$myBACKTITLE" --progressbox 24 80"
 mySITES="https://ghcr.io https://github.com https://pypi.python.org https://debian.org"
 myTPOTCOMPOSE="/opt/tpot/etc/tpot.yml"
-myLSB_STABLE_SUPPORTED="stretch buster"
+myLSB_STABLE_SUPPORTED="buster bullseye"
 myLSB_TESTING_SUPPORTED="stable"
 myREMOTESITES="https://hub.docker.com https://github.com https://pypi.python.org https://debian.org https://listbot.sicherheitstacho.eu"
 myPREINSTALLPACKAGES="aria2 apache2-utils cracklib-runtime curl dialog figlet fuse grc libcrack2 libpq-dev lsb-release net-tools software-properties-common toilet"
-myINSTALLPACKAGES="aria2 apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker console-setup console-setup-linux cracklib-runtime curl debconf-utils dialog dnsutils docker.io docker-compose ethtool fail2ban figlet genisoimage git glances grc haveged html2text htop iptables iw jq kbd libcrack2 libltdl7 libpam-google-authenticator man mosh multitail net-tools npm ntp openssh-server openssl pass pigz prips software-properties-common sshpass syslinux psmisc pv python3-pip toilet unattended-upgrades unzip vim wget wireless-tools wpasupplicant"
+myINSTALLPACKAGES="aria2 apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit console-setup console-setup-linux cracklib-runtime curl debconf-utils dialog dnsutils docker.io docker-compose ethtool fail2ban figlet genisoimage git grc haveged html2text htop iptables iw jq kbd libcrack2 libltdl7 libpam-google-authenticator man mosh multitail net-tools npm ntp openssh-server openssl pass pigz prips software-properties-common sshpass syslinux psmisc pv python3-pip toilet unattended-upgrades unzip vim wget wireless-tools wpasupplicant"
 myINFO="\
 ###########################################
 ### T-Pot Installer for Debian (Stable) ###
@@ -693,7 +693,8 @@ hash -r
 if ! [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ];
   then
     fuBANNER "Cloning T-Pot"
-    git clone https://github.com/telekom-security/tpotce /opt/tpot
+    ### DEV
+    git clone https://github.com/telekom-security/tpotce -b 22.x /opt/tpot
 fi
 
 # Let's create the T-Pot user
