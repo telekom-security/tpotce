@@ -23,6 +23,7 @@ RUN apk -U add \
     git clone https://gitlab.com/bontchev/elasticpot.git/ && \
     cd elasticpot && \
     git checkout d12649730d819bd78ea622361b6c65120173ad45 && \
+    pip3 install --ignore-installed packaging && \
     pip3 install -r requirements.txt && \
 #
 # Setup user, groups and configs
