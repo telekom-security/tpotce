@@ -2,6 +2,7 @@
   "index_patterns" : "logstash-*",
   "version" : 60001,
   "settings" : {
+    "index.lifecycle.name": "tpot",
     "index.refresh_interval" : "5s",
     "number_of_shards" : 1,
     "index.number_of_replicas" : "0",

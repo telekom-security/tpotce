@@ -36,7 +36,7 @@ services:
      - "6379:6379"
      - "8080:8080"
      - "9200:9200"
-    image: "dtagdevsec/honeypots:2006"
+    image: "dtagdevsec/honeypots:2203"
     read_only: true
     volumes:
      - /data/honeypots/log:/var/log/honeypots

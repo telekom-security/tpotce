@@ -14,7 +14,7 @@ services:
      - endlessh_local
     ports:
      - "22:2222"
-    image: "dtagdevsec/endlessh:2006"
+    image: "dtagdevsec/endlessh:2203"
     read_only: true
     volumes:
      - /data/endlessh/log:/var/log/endlessh

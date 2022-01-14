@@ -172,9 +172,6 @@ myCRONJOBS="
 # Check if updated images are available and download them
 $myRANDOM_MINUTE $myPULL_HOUR * * *      root    docker-compose -f /opt/tpot/etc/tpot.yml pull
 
-# Delete elasticsearch logstash indices older than 90 days
-$myRANDOM_MINUTE $myDEL_HOUR * * *      root    curator --config /opt/tpot/etc/curator/curator.yml /opt/tpot/etc/curator/actions.yml
-
 # Uploaded binaries are not supposed to be downloaded
 */1 * * * *     root    mv --backup=numbered /data/dionaea/roots/ftp/* /data/dionaea/binaries/
 
@@ -312,7 +309,7 @@ function fuGET_DEPS {
   echo "### Removing and holding back problematic packages ..."
   apt-fast -y purge exim4-base mailutils pcp cockpit-pcp elasticsearch-curator
   apt-fast -y autoremove
-  apt-mark hold exim4-base mailutils pcp cockpit-pcp elasticsearch-curator
+  apt-mark hold exim4-base mailutils pcp cockpit-pcp
 }
 
 # Check for other services
@@ -683,10 +680,10 @@ echo "$myNETWORK_WLANEXAMPLE" | tee -a /etc/network/interfaces
 fuBANNER "SSH roaming off"
 echo "UseRoaming no" | tee -a /etc/ssh/ssh_config
 
-# Installing elasticdump, elasticsearch-curator, yq
+# Installing elasticdump, yq
 fuBANNER "Installing pkgs"
 npm install elasticdump -g
-pip3 install elasticsearch-curator yq
+pip3 install yq
 hash -r
 
 # Cloning T-Pot from GitHub

@@ -14,7 +14,7 @@ services:
      - hellpot_local
     ports:
      - "80:8080"    
-    image: "dtagdevsec/hellpot:2006"
+    image: "dtagdevsec/hellpot:2203"
     read_only: true
     volumes:
      - /data/hellpot/log:/var/log/hellpot
