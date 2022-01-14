@@ -469,7 +469,6 @@ services:
     volumes:
      - /data/suricata/log:/var/log/suricata
 
-
 ##################
 #### Tools
 ##################
@@ -484,6 +483,7 @@ services:
 #     - LS_JAVA_OPTS=-Xms2048m -Xmx2048m
     env_file:
      - /opt/tpot/etc/compose/elk_environment
+    mem_limit: 2g
     image: "dtagdevsec/logstash:2203"
     volumes:
      - /data:/data
