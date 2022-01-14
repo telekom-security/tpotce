@@ -290,7 +290,7 @@ echo "### Now pulling latest docker images"
 echo "######$myBLUE This might take a while, please be patient!$myWHITE"
 fuPULLIMAGES 2>&1>/dev/null
 
-#fuREMOVEOLDIMAGES "1903"
+fuREMOVEOLDIMAGES "2006"
 echo "### If you made changes to tpot.yml please ensure to add them again."
 echo "### We stored the previous version as backup in /root/."
 echo "### Some updates may need an import of the latest Kibana objects as well."
