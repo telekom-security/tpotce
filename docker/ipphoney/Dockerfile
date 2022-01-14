@@ -24,6 +24,7 @@ RUN apk -U add \
     git clone https://gitlab.com/bontchev/ipphoney.git/ && \
     cd ipphoney && \
     git checkout 7ab1cac437baba17cb2cd25d5bb1400327e1bb79 && \
+    pip3 install --ignore-installed packaging && \
     pip3 install -r requirements.txt && \
     setcap cap_net_bind_service=+ep /usr/bin/python3.8 && \
 #
