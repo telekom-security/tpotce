@@ -36,7 +36,7 @@ services:
      - adbhoney_local
     ports:
      - "5555:5555"
-    image: "dtagdevsec/adbhoney:2006"
+    image: "dtagdevsec/adbhoney:2203"
     read_only: true
     volumes:
      - /data/adbhoney/log:/opt/adbhoney/log
@@ -52,7 +52,7 @@ services:
     ports:
      - "5000:5000/udp"
      - "8443:8443"
-    image: "dtagdevsec/ciscoasa:2006"
+    image: "dtagdevsec/ciscoasa:2203"
     read_only: true
     volumes:
      - /data/ciscoasa/log:/var/log/ciscoasa
@@ -65,7 +65,7 @@ services:
      - citrixhoneypot_local
     ports:
      - "443:443"
-    image: "dtagdevsec/citrixhoneypot:2006"
+    image: "dtagdevsec/citrixhoneypot:2203"
     read_only: true
     volumes:
      - /data/citrixhoneypot/logs:/opt/citrixhoneypot/logs
@@ -87,7 +87,7 @@ services:
     ports:
      - "161:161/udp"
      - "2404:2404"
-    image: "dtagdevsec/conpot:2006"
+    image: "dtagdevsec/conpot:2203"
     read_only: true
     volumes:
      - /data/conpot/log:/var/log/conpot
@@ -108,7 +108,7 @@ services:
      - conpot_local_guardian_ast
     ports:
      - "10001:10001"
-    image: "dtagdevsec/conpot:2006"
+    image: "dtagdevsec/conpot:2203"
     read_only: true
     volumes:
      - /data/conpot/log:/var/log/conpot
@@ -129,7 +129,7 @@ services:
      - conpot_local_ipmi
     ports:
      - "623:623/udp"
-    image: "dtagdevsec/conpot:2006"
+    image: "dtagdevsec/conpot:2203"
     read_only: true
     volumes:
      - /data/conpot/log:/var/log/conpot
@@ -151,7 +151,7 @@ services:
     ports:
      - "1025:1025"
      - "50100:50100"
-    image: "dtagdevsec/conpot:2006"
+    image: "dtagdevsec/conpot:2203"
     read_only: true
     volumes:
      - /data/conpot/log:/var/log/conpot
@@ -168,7 +168,7 @@ services:
     ports:
      - "22:22"
      - "23:23"
-    image: "dtagdevsec/cowrie:2006"
+    image: "dtagdevsec/cowrie:2203"
     read_only: true
     volumes:
      - /data/cowrie/downloads:/home/cowrie/cowrie/dl
@@ -187,7 +187,7 @@ services:
      - dicompot_local
     ports:
      - "11112:11112"
-    image: "dtagdevsec/dicompot:2006"
+    image: "dtagdevsec/dicompot:2203"
     read_only: true
     volumes:
      - /data/dicompot/log:/var/log/dicompot
@@ -218,7 +218,7 @@ services:
      - "5060:5060/udp"
      - "5061:5061"
      - "27017:27017"
-    image: "dtagdevsec/dionaea:2006"
+    image: "dtagdevsec/dionaea:2203"
     read_only: true
     volumes:
      - /data/dionaea/roots/ftp:/opt/dionaea/var/dionaea/roots/ftp
@@ -238,7 +238,7 @@ services:
      - elasticpot_local
     ports:
      - "9200:9200"
-    image: "dtagdevsec/elasticpot:2006"
+    image: "dtagdevsec/elasticpot:2203"
     read_only: true
     volumes:
      - /data/elasticpot/log:/opt/elasticpot/log
@@ -268,7 +268,7 @@ services:
      - "1080:1080"
      - "5432:5432"
      - "5900:5900"
-    image: "dtagdevsec/heralding:2006"
+    image: "dtagdevsec/heralding:2203"
     read_only: true
     volumes:
      - /data/heralding/log:/var/log/heralding
@@ -281,7 +281,7 @@ services:
      - honeysap_local
     ports:
      - "3299:3299"
-    image: "dtagdevsec/honeysap:2006"
+    image: "dtagdevsec/honeysap:2203"
     volumes:
      - /data/honeysap/log:/opt/honeysap/log
 
@@ -294,7 +294,7 @@ services:
     network_mode: "host"
     cap_add:
      - NET_ADMIN
-    image: "dtagdevsec/honeytrap:2006"
+    image: "dtagdevsec/honeytrap:2203"
     read_only: true
     volumes:
      - /data/honeytrap/attacks:/opt/honeytrap/var/attacks
@@ -315,7 +315,7 @@ services:
      - mailoney_local
     ports:
      - "25:25"
-    image: "dtagdevsec/mailoney:2006"
+    image: "dtagdevsec/mailoney:2203"
     read_only: true
     volumes:
      - /data/mailoney/log:/opt/mailoney/logs
@@ -328,7 +328,7 @@ services:
      - medpot_local
     ports:
      - "2575:2575"
-    image: "dtagdevsec/medpot:2006"
+    image: "dtagdevsec/medpot:2203"
     read_only: true
     volumes:
      - /data/medpot/log/:/var/log/medpot
@@ -349,7 +349,7 @@ services:
      - rdpy_local
     ports:
      - "3389:3389"
-    image: "dtagdevsec/rdpy:2006"
+    image: "dtagdevsec/rdpy:2203"
     read_only: true
     volumes:
      - /data/rdpy/log:/var/log/rdpy
@@ -362,7 +362,7 @@ services:
     tty: true
     networks:
      - tanner_local
-    image: "dtagdevsec/redis:2006"
+    image: "dtagdevsec/redis:2203"
     read_only: true
 
 ## PHP Sandbox service
@@ -372,7 +372,7 @@ services:
     tty: true
     networks:
      - tanner_local
-    image: "dtagdevsec/phpox:2006"
+    image: "dtagdevsec/phpox:2203"
     read_only: true
 
 ## Tanner API Service
@@ -384,7 +384,7 @@ services:
     tty: true
     networks:
      - tanner_local
-    image: "dtagdevsec/tanner:2006"
+    image: "dtagdevsec/tanner:2203"
     read_only: true
     volumes:
      - /data/tanner/log:/var/log/tanner
@@ -401,7 +401,7 @@ services:
     tty: true
     networks:
      - tanner_local
-    image: "dtagdevsec/tanner:2006"
+    image: "dtagdevsec/tanner:2203"
     command: tanner
     read_only: true
     volumes:
@@ -421,7 +421,7 @@ services:
      - tanner_local
     ports:
      - "80:80"
-    image: "dtagdevsec/snare:2006"
+    image: "dtagdevsec/snare:2203"
     depends_on:
      - tanner
 
@@ -439,7 +439,7 @@ services:
      - NET_ADMIN
      - SYS_NICE
      - NET_RAW
-    image: "dtagdevsec/fatt:2006"
+    image: "dtagdevsec/fatt:2203"
     volumes:
      - /data/fatt/log:/opt/fatt/log
 
@@ -448,7 +448,7 @@ services:
     container_name: p0f
     restart: always
     network_mode: "host"
-    image: "dtagdevsec/p0f:2006"
+    image: "dtagdevsec/p0f:2203"
     read_only: true
     volumes:
      - /data/p0f/log:/var/log/p0f
@@ -465,7 +465,7 @@ services:
      - NET_ADMIN
      - SYS_NICE
      - NET_RAW
-    image: "dtagdevsec/suricata:2006"
+    image: "dtagdevsec/suricata:2203"
     volumes:
      - /data/suricata/log:/var/log/suricata
 
@@ -484,7 +484,7 @@ services:
 #     - LS_JAVA_OPTS=-Xms2048m -Xmx2048m
     env_file:
      - /opt/tpot/etc/compose/elk_environment
-    image: "dtagdevsec/logstash:2006"
+    image: "dtagdevsec/logstash:2203"
     volumes:
      - /data:/data
 
@@ -505,7 +505,7 @@ services:
      - EWS_HPFEEDS_FORMAT=json
     env_file:
      - /opt/tpot/etc/compose/elk_environment
-    image: "dtagdevsec/ewsposter:2006"
+    image: "dtagdevsec/ewsposter:2203"
     volumes:
      - /data:/data
      - /data/ews/conf/ews.ip:/opt/ewsposter/ews.ip
