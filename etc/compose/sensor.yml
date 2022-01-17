@@ -15,7 +15,6 @@ networks:
   dionaea_local:
   elasticpot_local:
   heralding_local:
-  honeypy_local:
   honeysap_local:
   mailoney_local:
   medpot_local:
@@ -274,25 +273,6 @@ services:
     read_only: true
     volumes:
      - /data/heralding/log:/var/log/heralding
-
-# HoneyPy service
-  honeypy:
-    container_name: honeypy
-    restart: always
-    networks:
-     - honeypy_local
-    ports:
-     - "7:7"
-     - "8:8"
-     - "2048:2048"
-     - "2323:2323"
-     - "2324:2324"
-     - "4096:4096"
-    # - "9200:9200"
-    image: "dtagdevsec/honeypy:2203"
-    read_only: true
-    volumes:
-     - /data/honeypy/log:/opt/honeypy/log
 
 # HoneySAP service
   honeysap:

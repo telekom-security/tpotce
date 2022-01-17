@@ -57,11 +57,6 @@ services:
     build: heralding/.
     image: "dtagdevsec/heralding:2203"
 
-# HoneyPy service
-  honeypy:
-    build: honeypy/.
-    image: "dtagdevsec/honeypy:2203"
-
 # Honeytrap service
   honeytrap:
     build: honeytrap/.
