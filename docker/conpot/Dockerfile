@@ -1,4 +1,4 @@
-FROM alpine:3.14
+FROM alpine:3.15
 #
 # Include dist
 ADD dist/ /root/dist/
@@ -28,7 +28,8 @@ RUN apk -U add \
 # Setup ConPot
     git clone https://github.com/mushorg/conpot /opt/conpot && \
     cd /opt/conpot/ && \
-    git checkout 804fd65aa3b7ffa31c07fd4e863d4a5500414cf3 && \
+#    git checkout 804fd65aa3b7ffa31c07fd4e863d4a5500414cf3 && \
+    git checkout 1c2382ea290b611fdc6a0a5f9572c7504bcb616e && \
     # Change template default ports if <1024
     sed -i 's/port="2121"/port="21"/' /opt/conpot/conpot/templates/default/ftp/ftp.xml && \ 
     sed -i 's/port="8800"/port="80"/' /opt/conpot/conpot/templates/default/http/http.xml && \ 
