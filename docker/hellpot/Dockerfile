@@ -1,4 +1,4 @@
-FROM alpine:3.14
+FROM alpine:3.15
 #
 # Include dist
 ADD dist/ /root/dist/
@@ -17,10 +17,11 @@ RUN apk -U --no-cache add \
     mkdir -p /opt/go && \ 
     git clone https://github.com/yunginnanet/HellPot && \
     cd HellPot && \
-    git checkout f87b1f17e21b36edae41b7f49d4a54ae420a9bf8 && \
-  # Hellpot ignores setting the logpath, need to this hardcoded :(
+    git checkout 1312f20e719223099af8aad80f316420ee3dfcb1 && \
+  # Hellpot ignores setting the logpath, need to do this hardcoded ...
     sed -i 's#logDir = snek.GetString("logger.directory")#logDir = "/var/log/hellpot/"#g' config/logger.go && \
     sed -i 's#tnow := "HellPot"#tnow := "hellpot"#g' config/logger.go && \
+    sed -i 's#logFileName := "HellPot"#logFileName := "hellpot"#g' config/logger.go && \
     go build cmd/HellPot/HellPot.go && \
     mv /root/HellPot/HellPot /opt/hellpot/ && \
 #

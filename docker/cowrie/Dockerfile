@@ -29,7 +29,6 @@ RUN apk -U add \
     git clone --depth=1 https://github.com/micheloosterhof/cowrie -b v2.3.0 && \
     cd cowrie && \
 #    git checkout 6b1e82915478292f1e77ed776866771772b48f2e && \
-#    sed -i s/logfile.DailyLogFile/logfile.LogFile/g src/cowrie/python/logfile.py && \
     mkdir -p log && \
     sed -i '/packaging.*/d' requirements.txt && \
     pip3 install --upgrade pip && \

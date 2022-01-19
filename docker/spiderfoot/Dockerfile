@@ -1,4 +1,4 @@
-FROM alpine:3.14
+FROM alpine:3.15
 #
 # Get and install dependencies & packages
 RUN apk -U --no-cache add \
@@ -29,11 +29,12 @@ RUN apk -U --no-cache add \
     adduser -S -s /bin/ash -u 2000 -D -g 2000 spiderfoot && \
 #
 # Install spiderfoot 
-    git clone --depth=1 -b v3.4 https://github.com/smicallef/spiderfoot /home/spiderfoot && \
+    git clone --depth=1 -b v3.5 https://github.com/smicallef/spiderfoot /home/spiderfoot && \
     cd /home/spiderfoot && \
     pip3 install --upgrade pip && \
     pip3 install --no-cache-dir wheel && \ 
     pip3 install --no-cache-dir -r requirements.txt && \ 
+    mkdir -p /home/spiderfoot/.spiderfoot/logs && \
     chown -R spiderfoot:spiderfoot /home/spiderfoot && \
     sed -i "s#'root': '\/'#'root': '\/spiderfoot'#" /home/spiderfoot/sf.py && \
     sed -i "s#'root', '\/'#'root', '\/spiderfoot'#" /home/spiderfoot/sf.py && \
@@ -53,7 +54,6 @@ RUN apk -U --no-cache add \
     rm -rf /var/cache/apk/*
 #
 # Healthcheck
-#HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:8080'
 HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:8080/spiderfoot/'
 #
 # Set user, workdir and start spiderfoot

@@ -1,4 +1,4 @@
-FROM alpine:3.14
+FROM alpine:3.15
 #
 # Include dist
 ADD dist/ /root/dist/
@@ -62,4 +62,3 @@ STOPSIGNAL SIGINT
 USER honeypots:honeypots
 WORKDIR /opt/honeypots/
 CMD python3 -m honeypots --setup all --config config.json
-#CMD python3 -m honeypots --setup telnet --config config.json

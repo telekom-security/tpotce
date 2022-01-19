@@ -16,4 +16,4 @@ services:
      - "127.0.0.1:64303:8080"
     image: "dtagdevsec/spiderfoot:2203"
     volumes:
-     - /data/spiderfoot/spiderfoot.db:/home/spiderfoot/spiderfoot.db
+     - /data/spiderfoot/spiderfoot.db:/home/spiderfoot/.spiderfoot/spiderfoot.db

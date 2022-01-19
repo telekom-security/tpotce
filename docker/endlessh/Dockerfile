@@ -16,7 +16,7 @@ RUN apk -U add --no-cache \
     make && \
     mv /opt/endlessh/endlessh /root/dist
 #
-FROM alpine:3.14
+FROM alpine:3.15
 #
 COPY --from=builder /root/dist/* /opt/endlessh/
 #

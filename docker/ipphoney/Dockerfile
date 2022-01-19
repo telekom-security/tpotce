@@ -1,4 +1,4 @@
-FROM alpine:3.13
+FROM alpine:3.15
 #
 # Include dist
 ADD dist/ /root/dist/
@@ -26,7 +26,7 @@ RUN apk -U add \
     git checkout 7ab1cac437baba17cb2cd25d5bb1400327e1bb79 && \
     pip3 install --ignore-installed packaging && \
     pip3 install -r requirements.txt && \
-    setcap cap_net_bind_service=+ep /usr/bin/python3.8 && \
+    setcap cap_net_bind_service=+ep /usr/bin/python3.9 && \
 #
 # Setup user, groups and configs
     addgroup -g 2000 ipphoney && \
