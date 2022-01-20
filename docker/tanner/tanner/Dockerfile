@@ -1,4 +1,4 @@
-FROM alpine:3.13
+FROM alpine:3.15
 #
 # Include dist
 ADD dist/ /root/dist/
@@ -21,9 +21,10 @@ RUN apk -U --no-cache add \
     cd /opt/tanner/ && \
 #    git fetch origin pull/364/head:test && \	
 #    git checkout test && \
-    git checkout 20dabcbccc50f8878525677b925a4c9abcaf9f54 && \
-    sed -i 's/aioredis/aioredis==1.3.1/g' requirements.txt && \
-    sed -i 's/^aiohttp$/aiohttp==3.7.4/g' requirements.txt && \
+#    git checkout 20dabcbccc50f8878525677b925a4c9abcaf9f54 && \
+    git checkout 2fdce2e2ad7e125012c7e6dcbfa02b50f73c128e && \
+#    sed -i 's/aioredis/aioredis==1.3.1/g' requirements.txt && \
+#    sed -i 's/^aiohttp$/aiohttp==3.7.4/g' requirements.txt && \
     cp /root/dist/config.yaml /opt/tanner/tanner/data && \
     pip3 install --ignore-installed packaging && \
     pip3 install --no-cache-dir setuptools && \
