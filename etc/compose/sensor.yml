@@ -4,13 +4,13 @@ version: '2.3'
 
 networks:
   adbhoney_local:
-  ciscoasa_local:
   citrixhoneypot_local:
   conpot_local_IEC104:
   conpot_local_guardian_ast:
   conpot_local_ipmi:
   conpot_local_kamstrup_382:
   cowrie_local:
+  cyberchef_local:
   dicompot_local:
   dionaea_local:
   elasticpot_local:
@@ -46,10 +46,9 @@ services:
   ciscoasa:
     container_name: ciscoasa
     restart: always
-    networks:
-      - ciscoasa_local
     tmpfs:
      - /tmp/ciscoasa:uid=2000,gid=2000
+    network_mode: "host"
     ports:
      - "5000:5000/udp"
      - "8443:8443"
@@ -393,23 +392,6 @@ services:
     depends_on:
      - tanner_redis
 
-## Tanner WEB Service
-#  tanner_web:
-#    container_name: tanner_web
-#    restart: always
-#    tmpfs:
-#     - /tmp/tanner:uid=2000,gid=2000
-#    tty: true
-#    networks:
-#     - tanner_local
-#    image: "dtagdevsec/tanner:2203"
-#    command: tannerweb
-#    read_only: true
-#    volumes:
-#     - /data/tanner/log:/var/log/tanner
-#    depends_on:
-#     - tanner_redis
-
 ## Tanner Service
   tanner:
     container_name: tanner
@@ -427,7 +409,6 @@ services:
      - /data/tanner/files:/opt/tanner/files
     depends_on:
      - tanner_api
-#     - tanner_web
      - tanner_phpox
 
 ## Snare Service
@@ -478,8 +459,6 @@ services:
     environment:
     # For ET Pro ruleset replace "OPEN" with your OINKCODE
      - OINKCODE=OPEN
-    # Loading externel Rules from URL 
-    # - FROMURL="https://username:password@yoururl.com|https://username:password@otherurl.com"
     network_mode: "host"
     cap_add:
      - NET_ADMIN
@@ -493,6 +472,21 @@ services:
 ##################
 #### Tools
 ##################
+
+# Logstash service
+  logstash:
+    container_name: logstash
+    restart: always
+    networks:
+     - logstash_local
+#    environment:
+#     - LS_JAVA_OPTS=-Xms2048m -Xmx2048m
+    env_file:
+     - /opt/tpot/etc/compose/elk_environment
+    mem_limit: 2g
+    image: "dtagdevsec/logstash:2203"
+    volumes:
+     - /data:/data
 
 # Ewsposter service
   ewsposter:

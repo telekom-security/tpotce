@@ -15,7 +15,7 @@ if [ "$(whoami)" != "root" ];
 fi
 }
 
-function fuDEPLOY_POT () {
+function fuDEPLOY_SENSOR () {
 echo
 echo "###############################"
 echo "# Deploying to T-Pot Hive ... #"
@@ -24,7 +24,7 @@ echo
 sshpass -e ssh -4 -t -T -l "$MY_TPOT_USERNAME" -p 64295 "$MY_HIVE_IP" << EOF
 echo "$SSHPASS" | sudo -S bash -c 'useradd -m -s /sbin/nologin -G tpotlogs "$MY_HIVE_USERNAME";
 mkdir -p /home/"$MY_HIVE_USERNAME"/.ssh;
-echo "$MY_POT_PUBLICKEY" >> /home/"$MY_HIVE_USERNAME"/.ssh/authorized_keys;
+echo "$MY_SENSOR_PUBLICKEY" >> /home/"$MY_HIVE_USERNAME"/.ssh/authorized_keys;
 chmod 600 /home/"$MY_HIVE_USERNAME"/.ssh/authorized_keys;
 chmod 755 /home/"$MY_HIVE_USERNAME"/.ssh;
 chown "$MY_HIVE_USERNAME":"$MY_HIVE_USERNAME" -R /home/"$MY_HIVE_USERNAME"/.ssh'
@@ -72,8 +72,8 @@ if [ $? -eq 0 ];
         echo "######################################################"
         echo
         kill -9 $(pidof ssh)
-	rm $MY_POT_PUBLICKEYFILE
-	rm $MY_POT_PRIVATEKEYFILE
+	rm $MY_SENSOR_PUBLICKEYFILE
+	rm $MY_SENSOR_PRIVATEKEYFILE
 	rm $MY_LS_ENVCONFIGFILE
 	exit 1
     fi;
@@ -84,8 +84,8 @@ if [ $? -eq 0 ];
     echo "# Aborting.                                                     #"
     echo "#################################################################"
     echo
-    rm $MY_POT_PUBLICKEYFILE
-    rm $MY_POT_PRIVATEKEYFILE
+    rm $MY_SENSOR_PUBLICKEYFILE
+    rm $MY_SENSOR_PRIVATEKEYFILE
     rm $MY_LS_ENVCONFIGFILE
     exit 1
 fi;
@@ -105,12 +105,12 @@ echo
 export SSHPASS
 read -p "IP / FQDN: " MY_HIVE_IP
 MY_HIVE_USERNAME="$(hostname)"
-MY_TPOT_TYPE="POT"
+MY_TPOT_TYPE="SENSOR"
 MY_LS_ENVCONFIGFILE="/data/elk/logstash/ls_environment"
 
-MY_POT_PUBLICKEYFILE="/data/elk/logstash/$MY_HIVE_USERNAME.pub"
-MY_POT_PRIVATEKEYFILE="/data/elk/logstash/$MY_HIVE_USERNAME"
-if ! [ -s "$MY_POT_PRIVATEKEYFILE" ] && ! [ -s "$MY_POT_PUBLICKEYFILE" ];
+MY_SENSOR_PUBLICKEYFILE="/data/elk/logstash/$MY_HIVE_USERNAME.pub"
+MY_SENSOR_PRIVATEKEYFILE="/data/elk/logstash/$MY_HIVE_USERNAME"
+if ! [ -s "$MY_SENSOR_PRIVATEKEYFILE" ] && ! [ -s "$MY_SENSOR_PUBLICKEYFILE" ];
   then
     echo
     echo "##############################"
@@ -118,8 +118,8 @@ if ! [ -s "$MY_POT_PRIVATEKEYFILE" ] && ! [ -s "$MY_POT_PUBLICKEYFILE" ];
     echo "##############################"
     echo
     mkdir -p /data/elk/logstash
-    ssh-keygen -f "$MY_POT_PRIVATEKEYFILE" -N "" -C "$MY_HIVE_USERNAME"
-    MY_POT_PUBLICKEY="$(cat "$MY_POT_PUBLICKEYFILE")"
+    ssh-keygen -f "$MY_SENSOR_PRIVATEKEYFILE" -N "" -C "$MY_HIVE_USERNAME"
+    MY_SENSOR_PUBLICKEY="$(cat "$MY_SENSOR_PUBLICKEYFILE")"
   else
     echo
     echo "#############################################"
@@ -137,7 +137,7 @@ echo "###########################################################"
 echo
 tee $MY_LS_ENVCONFIGFILE << EOF
 MY_TPOT_TYPE=$MY_TPOT_TYPE
-MY_POT_PRIVATEKEYFILE=$MY_POT_PRIVATEKEYFILE
+MY_SENSOR_PRIVATEKEYFILE=$MY_SENSOR_PRIVATEKEYFILE
 MY_HIVE_USERNAME=$MY_HIVE_USERNAME
 MY_HIVE_IP=$MY_HIVE_IP
 EOF
@@ -171,7 +171,7 @@ while [ 1 != 2 ]
         [c,C])
           fuGET_DEPLOY_DATA
           fuCHECK_HIVE
-	  fuDEPLOY_POT
+	  fuDEPLOY_SENSOR
           break
           ;;
         [q,Q])

@@ -38,7 +38,7 @@ if [ -s "/data/elk/logstash/ls_environment" ];
     source /data/elk/logstash/ls_environment
     tee -a /opt/tpot/etc/compose/elk_environment << EOF
 MY_TPOT_TYPE=$MY_TPOT_TYPE
-MY_POT_PRIVATEKEYFILE=$MY_POT_PRIVATEKEYFILE
+MY_SENSOR_PRIVATEKEYFILE=$MY_SENSOR_PRIVATEKEYFILE
 MY_HIVE_USERNAME=$MY_HIVE_USERNAME
 MY_HIVE_IP=$MY_HIVE_IP
 EOF
