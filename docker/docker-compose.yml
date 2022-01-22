@@ -32,6 +32,11 @@ services:
     build: cowrie/.
     image: "dtagdevsec/cowrie:2203"
 
+# Ddospot service
+  ddospot:
+    build: ddospot/.
+    image: "dtagdevsec/ddospot:2203"
+
 # Dicompot service
   dicompot:
     build: dicompot/.
@@ -47,20 +52,45 @@ services:
     build: elasticpot/.
     image: "dtagdevsec/elasticpot:2203"
 
+# Endlessh service
+  endlessh:
+    build: endlessh/.
+    image: "dtagdevsec/endlessh:2203"
+
 # Glutton service
   glutton:
     build: glutton/.
     image: "dtagdevsec/glutton:2203"
+
+# Hellpot service
+  hellpot:
+    build: hellpot/.
+    image: "dtagdevsec/hellpot:2203"
 
 # Heralding service
   heralding:
     build: heralding/.
     image: "dtagdevsec/heralding:2203"
 
+# Honeypots service
+  honeypots:
+    build: honeypots/.
+    image: "dtagdevsec/honeypots:2203"
+
 # Honeytrap service
   honeytrap:
     build: honeytrap/.
     image: "dtagdevsec/honeytrap:2203"
+
+# IPPHoney service
+  ipphoney:
+    build: ipphoney/.
+    image: "dtagdevsec/ipphoney:2203"
+
+# Log4Pot service
+  log4pot:
+    build: log4pot/.
+    image: "dtagdevsec/log4pot:2203"
 
 # Mailoney service
   mailoney:
@@ -76,6 +106,11 @@ services:
   rdpy:
     build: rdpy/.
     image: "dtagdevsec/rdpy:2203"
+
+# Redishoneypot service
+  rdpy:
+    build: redishoneypot/.
+    image: "dtagdevsec/redishoneypot:2203"
 
 #### Snare / Tanner
 ## Tanner Redis Service
