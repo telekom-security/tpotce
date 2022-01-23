@@ -1,4 +1,6 @@
 - pipeline.id: logstash
   path.config: "/etc/logstash/conf.d/logstash.conf"
+  pipeline.ecs_compatibility: disabled
 - pipeline.id: http_input
   path.config: "/etc/logstash/conf.d/http_input.conf"
+  pipeline.ecs_compatibility: disabled

@@ -2,8 +2,7 @@ FROM ubuntu:20.04
 ENV DEBIAN_FRONTEND noninteractive
 #
 # Install packages
-RUN apt-get update && \
-    apt-get update -y && \
+RUN apt-get update -y && \
     apt-get dist-upgrade -y && \
     apt-get install -y \
              build-essential \
