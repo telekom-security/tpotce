@@ -28,8 +28,8 @@ RUN apk -U add \
     mkdir -p /opt \
              /var/log/honeypots && \
     cd /opt/ && \
-    #git clone https://github.com/qeeqbox/honeypots && \
-    git clone https://github.com/t3chn0m4g3/honeypots && \
+    git clone https://github.com/qeeqbox/honeypots && \
+    #git clone https://github.com/t3chn0m4g3/honeypots && \
     cd honeypots && \
     #git checkout 7c654a3ef2c564ae6f1247bf302d652037080163 && \
     pip3 install --upgrade pip && \
@@ -61,4 +61,4 @@ RUN apk -U add \
 STOPSIGNAL SIGINT
 USER honeypots:honeypots
 WORKDIR /opt/honeypots/
-CMD python3 -m honeypots --setup all --config config.json
+CMD python3 -E -m honeypots --setup all --config config.json

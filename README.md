@@ -37,7 +37,7 @@ Furthermore T-Pot includes the following tools
 * [Cockpit](https://cockpit-project.org/running) for a lightweight, webui for docker, os, real-time performance monitoring and web terminal.
 * [Cyberchef](https://gchq.github.io/CyberChef/) a web app for encryption, encoding, compression and data analysis.
 * [ELK stack](https://www.elastic.co/videos) to beautifully visualize all the events captured by T-Pot.
-* [Elasticsearch Head](https://mobz.github.io/elasticsearch-head/) a web front end for browsing and interacting with an Elastic Search cluster.
+* [Elasticvue](https://github.com/cars10/elasticvue/) a web front end for browsing and interacting with an Elastic Search cluster.
 * [Fatt](https://github.com/0x4D31/fatt) a pyshark based script for extracting network metadata and fingerprints from pcap files and live network traffic.
 * [Spiderfoot](https://github.com/smicallef/spiderfoot) a open source intelligence automation tool.
 * [Suricata](http://suricata-ids.org/) a Network Security Monitoring engine.
@@ -121,7 +121,7 @@ In T-Pot we combine the dockerized honeypots ...
 * [Cockpit](https://cockpit-project.org/running) for a lightweight, webui for docker, os, real-time performance monitoring and web terminal.
 * [Cyberchef](https://gchq.github.io/CyberChef/) a web app for encryption, encoding, compression and data analysis.
 * [ELK stack](https://www.elastic.co/videos) to beautifully visualize all the events captured by T-Pot.
-* [Elasticsearch Head](https://mobz.github.io/elasticsearch-head/) a web front end for browsing and interacting with an Elastic Search cluster.
+* [Elasticvue](https://github.com/cars10/elasticvue/) a web front end for browsing and interacting with an Elastic Search cluster.
 * [Fatt](https://github.com/0x4D31/fatt) a pyshark based script for extracting network metadata and fingerprints from pcap files and live network traffic.
 * [Spiderfoot](https://github.com/smicallef/spiderfoot) a open source intelligence automation tool.
 * [Suricata](http://suricata-ids.org/) a Network Security Monitoring engine.
@@ -160,7 +160,7 @@ There are prebuilt installation types available each focussing on different aspe
 
 ##### Standard
 - Honeypots: adbhoney, ciscoasa, citrixhoneypot, conpot, cowrie, dicompot, dionaea, elasticpot, heralding, honeysap, honeytrap, mailoney, medpot, rdpy, snare & tanner
-- Tools: cockpit, cyberchef, ELK, fatt, elasticsearch head, ewsposter, nginx / heimdall, spiderfoot, p0f & suricata
+- Tools: cockpit, cyberchef, ELK, fatt, elasticvue, ewsposter, nginx / heimdall, spiderfoot, p0f & suricata
 
 
 ##### Sensor
@@ -171,22 +171,22 @@ There are prebuilt installation types available each focussing on different aspe
 
 ##### Industrial
 - Honeypots: conpot, cowrie, dicompot, heralding, honeysap, honeytrap, medpot & rdpy
-- Tools: cockpit, cyberchef, ELK, fatt, elasticsearch head, ewsposter, nginx / heimdall, spiderfoot, p0f & suricata
+- Tools: cockpit, cyberchef, ELK, fatt, elasticvue, ewsposter, nginx / heimdall, spiderfoot, p0f & suricata
 
 
 ##### Collector
 - Honeypots: heralding & honeytrap
-- Tools: cockpit, cyberchef, fatt, ELK, elasticsearch head, ewsposter, nginx / heimdall, spiderfoot, p0f & suricata
+- Tools: cockpit, cyberchef, fatt, ELK, elasticvue, ewsposter, nginx / heimdall, spiderfoot, p0f & suricata
 
 
 ##### NextGen
 - Honeypots: adbhoney, ciscoasa, citrixhoneypot, conpot, cowrie, dicompot, dionaea, glutton, heralding, honeysap, ipphoney, mailoney, medpot, rdpy, snare & tanner
-- Tools: cockpit, cyberchef, ELK, fatt, elasticsearch head, ewsposter, nginx / heimdall, spiderfoot, p0f & suricata
+- Tools: cockpit, cyberchef, ELK, fatt, elasticvue, ewsposter, nginx / heimdall, spiderfoot, p0f & suricata
 
 
 ##### Medical
 - Honeypots: dicompot & medpot
-- Tools: cockpit, cyberchef, ELK, fatt, elasticsearch head, ewsposter, nginx / heimdall, spiderfoot, p0f & suricata
+- Tools: cockpit, cyberchef, ELK, fatt, elasticvue, ewsposter, nginx / heimdall, spiderfoot, p0f & suricata
 
 
 <a name="installation"></a>
@@ -419,8 +419,6 @@ The following web based tools are included to improve and ease up daily tasks.
 
 ![Cyberchef](doc/cyberchef.png)
 
-![ES Head Plugin](doc/headplugin.png)
-
 ![Spiderfoot](doc/spiderfoot.png)
 
 
@@ -500,8 +498,8 @@ We hope you understand that we cannot provide support on an individual basis. We
 The software that T-Pot is built on uses the following licenses.
 <br>GPLv2: [conpot](https://github.com/mushorg/conpot/blob/master/LICENSE.txt), [dionaea](https://github.com/DinoTools/dionaea/blob/master/LICENSE), [honeysap](https://github.com/SecureAuthCorp/HoneySAP/blob/master/COPYING), [honeytrap](https://github.com/armedpot/honeytrap/blob/master/LICENSE), [suricata](http://suricata-ids.org/about/open-source/)
 <br>GPLv3: [adbhoney](https://github.com/huuck/ADBHoney), [elasticpot](https://gitlab.com/bontchev/elasticpot/-/blob/master/LICENSE), [ewsposter](https://github.com/telekom-security/ews/), [log4pot](https://github.com/thomaspatzke/Log4Pot/blob/master/LICENSE), [fatt](https://github.com/0x4D31/fatt/blob/master/LICENSE), [rdpy](https://github.com/citronneur/rdpy/blob/master/LICENSE), [heralding](https://github.com/johnnykv/heralding/blob/master/LICENSE.txt), [ipphoney](https://gitlab.com/bontchev/ipphoney/-/blob/master/LICENSE), [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot/blob/main/LICENSE), [snare](https://github.com/mushorg/snare/blob/master/LICENSE), [tanner](https://github.com/mushorg/snare/blob/master/LICENSE)
-<br>Apache 2 License: [cyberchef](https://github.com/gchq/CyberChef/blob/master/LICENSE), [dicompot](https://github.com/nsmfoo/dicompot/blob/master/LICENSE), [elasticsearch](https://github.com/elasticsearch/elasticsearch/blob/master/LICENSE.txt), [logstash](https://github.com/elasticsearch/logstash/blob/master/LICENSE), [kibana](https://github.com/elasticsearch/kibana/blob/master/LICENSE.md), [docker](https://github.com/docker/docker/blob/master/LICENSE), [elasticsearch-head](https://github.com/mobz/elasticsearch-head/blob/master/LICENCE)
-<br>MIT license: [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/blob/master/LICENSE), [ddospot](https://github.com/aelth/ddospot/blob/master/LICENSE), [glutton](https://github.com/mushorg/glutton/blob/master/LICENSE), [hellpot](https://github.com/yunginnanet/HellPot/blob/master/LICENSE)
+<br>Apache 2 License: [cyberchef](https://github.com/gchq/CyberChef/blob/master/LICENSE), [dicompot](https://github.com/nsmfoo/dicompot/blob/master/LICENSE), [elasticsearch](https://github.com/elasticsearch/elasticsearch/blob/master/LICENSE.txt), [logstash](https://github.com/elasticsearch/logstash/blob/master/LICENSE), [kibana](https://github.com/elasticsearch/kibana/blob/master/LICENSE.md), [docker](https://github.com/docker/docker/blob/master/LICENSE)
+<br>MIT license: [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/blob/master/LICENSE), [ddospot](https://github.com/aelth/ddospot/blob/master/LICENSE), [elasticvue](https://github.com/cars10/elasticvue/blob/master/LICENSE), [glutton](https://github.com/mushorg/glutton/blob/master/LICENSE), [hellpot](https://github.com/yunginnanet/HellPot/blob/master/LICENSE)
 <br> Unlicense: [endlessh](https://github.com/skeeto/endlessh/blob/master/UNLICENSE)
 <br> Other: [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot#licencing-agreement-malwaretech-public-licence), [cowrie](https://github.com/micheloosterhof/cowrie/blob/master/LICENSE.md), [mailoney](https://github.com/awhitehatter/mailoney), [Debian licensing](https://www.debian.org/legal/licenses/), [Elastic License](https://www.elastic.co/licensing/elastic-license)
 <br> AGPL-3.0: [honeypots](https://github.com/qeeqbox/honeypots/blob/main/LICENSE)
@@ -527,7 +525,7 @@ Without open source and the fruitful development community (we are proud to be a
 * [docker](https://github.com/docker/docker/graphs/contributors)
 * [elasticpot](https://gitlab.com/bontchev/elasticpot/-/project_members)
 * [elasticsearch](https://github.com/elastic/elasticsearch/graphs/contributors)
-* [elasticsearch-head](https://github.com/mobz/elasticsearch-head/graphs/contributors)
+* [elasticvue](https://github.com/cars10/elasticvue/graphs/contributors)
 * [endlessh](https://github.com/skeeto/endlessh/graphs/contributors)
 * [ewsposter](https://github.com/armedpot/ewsposter/graphs/contributors)
 * [fatt](https://github.com/0x4D31/fatt/graphs/contributors)

@@ -179,11 +179,6 @@ services:
     build: elk/logstash/.
     image: "dtagdevsec/logstash:2203"
 
-## Elasticsearch-head service
-  head:
-    build: elk/head/.
-    image: "dtagdevsec/head:2203"
-
 # Ewsposter service
   ewsposter:
     build: ews/.

@@ -39,12 +39,14 @@ RUN apk -U --no-cache add \
     php7 artisan key:generate && \
 #
 ## Add previously configured content
-    mkdir -p /var/lib/nginx/html/storage/app/public/backgrounds/ && \
+    mkdir -p /var/lib/nginx/html/storage/app/public/backgrounds/ \
+             /var/lib/nginx/html/esvue && \
+    tar xvfz /root/dist/esvue.tgz -C /var/lib/nginx/html/esvue && \
     cp /root/dist/app/bg1.jpg /var/lib/nginx/html/public/img/bg1.jpg && \
     cp /root/dist/app/t-pot.png /var/lib/nginx/html/public/img/heimdall-icon-small.png && \
     cp /root/dist/app/app.sqlite /var/lib/nginx/html/database/app.sqlite && \
     cp /root/dist/app/cyberchef.png /var/lib/nginx/html/storage/app/public/icons/ZotKKZA2QKplZhdoF3WLx4UdKKhLFamf3lSMcLkr.png && \
-    cp /root/dist/app/eshead.png /var/lib/nginx/html/storage/app/public/icons/77KqFv4YIshXUDLDoOvZ1NUbsKDtsMAjJvg4sYqN.png && \
+    cp /root/dist/app/esvue.png /var/lib/nginx/html/storage/app/public/icons/3aLDl0Kq42sTHSpIrJtmrOTThpvHoL0Zk2Ay13YT.png && \
     cp /root/dist/app/tsec.png /var/lib/nginx/html/storage/app/public/icons/RHwXCfCeGNDdhYgzlShL9o4NBFL2LHZWajgyeL0a.png && \
     cp /root/dist/app/spiderfoot.png /var/lib/nginx/html/storage/app/public/icons/s7uPe1frJqjv76oI6SNqNbWUsgU1GHYqRALMlwYb.png && \
     cp /root/dist/html/*.html /var/lib/nginx/html/public/ && \
