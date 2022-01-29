@@ -1,219 +1,245 @@
 {
-  "logs": "file,terminal,json,tpot",
-  "logs_location":"/var/log/honeypots/",
-  "syslog_address": "",
-  "syslog_facility": 0,
-  "postgres": "",
-  "db_options": [],
-  "filter": "",
-  "interface": "",
-  "honeypots": {
-    "dns": {
-      "port": 53,
-      "ip": "0.0.0.0",
-      "username": "administrator",
-      "password": "123456",
-      "log_file_name": "dns.log",
-      "max_bytes": 10000,
-      "backup_count": 10
-    },
-    "ftp": {
-      "port": 21,
-      "ip": "0.0.0.0",
-      "username": "ftp",
-      "password": "anonymous",
-      "log_file_name": "ftp.log",
-      "max_bytes": 10000,
-      "backup_count": 10
-    },
-    "httpproxy": {
-      "port": 8080,
-      "ip": "0.0.0.0",
-      "username": "admin",
-      "password": "admin",
-      "log_file_name": "httpproxy.log",
-      "max_bytes": 10000,
-      "backup_count": 10
-    },
-    "http": {
-      "port": 80,
-      "ip": "0.0.0.0",
-      "username": "admin",
-      "password": "admin",
-      "log_file_name": "http.log",
-      "max_bytes": 10000,
-      "backup_count": 10
-    },
-    "https": {
-      "port": 443,
-      "ip": "0.0.0.0",
-      "username": "admin",
-      "password": "admin",
-      "log_file_name": "https.log",
-      "max_bytes": 10000,
-      "backup_count": 10
-    },
-    "imap": {
-      "port": 143,
-      "ip": "0.0.0.0",
-      "username": "root",
-      "password": "123456",
-      "log_file_name": "imap.log",
-      "max_bytes": 10000,
-      "backup_count": 10
-    },
-    "mysql": {
-      "port": 3306,
-      "ip": "0.0.0.0",
-      "username": "root",
-      "password": "123456",
-      "log_file_name": "mysql.log",
-      "max_bytes": 10000,
-      "backup_count": 10
-    },
-    "pop3": {
-      "port": 110,
-      "ip": "0.0.0.0",
-      "username": "root",
-      "password": "123456",
-      "log_file_name": "pop3.log",
-      "max_bytes": 10000,
-      "backup_count": 10
-    },
-    "postgres": {
-      "port": 5432,
-      "ip": "0.0.0.0",
-      "username": "postgres",
-      "password": "123456",
-      "log_file_name": "postgres.log",
-      "max_bytes": 10000,
-      "backup_count": 10
-    },
-    "redis": {
-      "port": 6379,
-      "ip": "0.0.0.0",
-      "username": "root",
-      "password": "",
-      "log_file_name": "redis.log",
-      "max_bytes": 10000,
-      "backup_count": 10
-    },
-    "smb": {
-      "port": 445,
-      "ip": "0.0.0.0",
-      "username": "administrator",
-      "password": "123456",
-      "log_file_name": "smb.log",
-      "max_bytes": 10000,
-      "backup_count": 10
-    },
-    "smtp": {
-      "port": 25,
-      "ip": "0.0.0.0",
-      "username": "root",
-      "password": "123456",
-      "log_file_name": "smtp.log",
-      "max_bytes": 10000,
-      "backup_count": 10
-    },
-    "socks5": {
-      "port": 1080,
-      "ip": "0.0.0.0",
-      "username": "admin",
-      "password": "admin",
-      "log_file_name": "socks5.log",
-      "max_bytes": 10000,
-      "backup_count": 10
-    },
-    "ssh": {
-      "port": 22,
-      "ip": "0.0.0.0",
-      "username": "root",
-      "password": "123456",
-      "log_file_name": "ssh.log",
-      "max_bytes": 10000,
-      "backup_count": 10
-    },
-    "telnet": {
-      "port": 23,
-      "ip": "0.0.0.0",
-      "username": "root",
-      "password": "123456",
-      "log_file_name": "telnet.log",
-      "max_bytes": 10000,
-      "backup_count": 10
-    },
-    "vnc": {
-      "port": 5900,
-      "ip": "0.0.0.0",
-      "username": "administrator",
-      "password": "123456",
-      "log_file_name": "vnc.log",
-      "max_bytes": 10000,
-      "backup_count": 10
-    },
-    "elastic": {
-      "port": 9200,
-      "ip": "0.0.0.0",
-      "username": "elastic",
-      "password": "123456",
-      "log_file_name": "elastic.log",
-      "max_bytes": 10000,
-      "backup_count": 10
-    },
-    "mssql": {
-      "port": 1433,
-      "ip": "0.0.0.0",
-      "username": "sa",
-      "password": "",
-      "log_file_name": "mssql.log",
-      "max_bytes": 10000,
-      "backup_count": 10
-    },
-    "ldap": {
-      "port": 389,
-      "ip": "0.0.0.0",
-      "username": "administrator",
-      "password": "123456",
-      "log_file_name": "ldap.log",
-      "max_bytes": 10000,
-      "backup_count": 10
-    },
-    "ntp": {
-      "port": 123,
-      "ip": "0.0.0.0",
-      "username": "administrator",
-      "password": "123456",
-      "log_file_name": "ntp.log",
-      "max_bytes": 10000,
-      "backup_count": 10
-    },
-    "memcache": {
-      "port": 11211,
-      "ip": "0.0.0.0",
-      "username": "admin",
-      "password": "123456",
-      "log_file_name": "memcache.log",
-      "max_bytes": 10000,
-      "backup_count": 10
-    },
-    "oracle": {
-      "port": 1521,
-      "ip": "0.0.0.0",
-      "username": "bi",
-      "password": "123456",
-      "log_file_name": "oracle.log",
-      "max_bytes": 10000,
-      "backup_count": 10
-    },
-    "snmp": {
-      "port": 161,
-      "ip": "0.0.0.0",
-      "username": "privUser",
-      "password": "123456",
-      "log_file_name": "snmp.log",
-      "max_bytes": 10000,
-      "backup_count": 10
-    }
-  }
+   "logs":"file,terminal,json,tpot",
+   "logs_location":"/var/log/honeypots/",
+   "syslog_address":"",
+   "syslog_facility":0,
+   "postgres":"",
+   "db_options":[
+      
+   ],
+   "filter":"",
+   "interface":"",
+   "honeypots":{
+      "dns":{
+         "port":53,
+         "ip":"0.0.0.0",
+         "username":"administrator",
+         "password":"123456",
+         "log_file_name":"dns.log",
+         "max_bytes":0,
+         "backup_count":10
+      },
+      "ftp":{
+         "port":21,
+         "ip":"0.0.0.0",
+         "username":"ftp",
+         "password":"anonymous",
+         "log_file_name":"ftp.log",
+         "max_bytes":0,
+         "backup_count":10
+      },
+      "httpproxy":{
+         "port":8080,
+         "ip":"0.0.0.0",
+         "username":"admin",
+         "password":"admin",
+         "log_file_name":"httpproxy.log",
+         "max_bytes":0,
+         "backup_count":10
+      },
+      "http":{
+         "port":80,
+         "ip":"0.0.0.0",
+         "username":"admin",
+         "password":"admin",
+         "log_file_name":"http.log",
+         "max_bytes":0,
+         "backup_count":10
+      },
+      "https":{
+         "port":443,
+         "ip":"0.0.0.0",
+         "username":"admin",
+         "password":"admin",
+         "log_file_name":"https.log",
+         "max_bytes":0,
+         "backup_count":10
+      },
+      "imap":{
+         "port":143,
+         "ip":"0.0.0.0",
+         "username":"root",
+         "password":"123456",
+         "log_file_name":"imap.log",
+         "max_bytes":0,
+         "backup_count":10
+      },
+      "mysql":{
+         "port":3306,
+         "ip":"0.0.0.0",
+         "username":"root",
+         "password":"123456",
+         "log_file_name":"mysql.log",
+         "max_bytes":0,
+         "backup_count":10
+      },
+      "pop3":{
+         "port":110,
+         "ip":"0.0.0.0",
+         "username":"root",
+         "password":"123456",
+         "log_file_name":"pop3.log",
+         "max_bytes":0,
+         "backup_count":10
+      },
+      "postgres":{
+         "port":5432,
+         "ip":"0.0.0.0",
+         "username":"postgres",
+         "password":"123456",
+         "log_file_name":"postgres.log",
+         "max_bytes":0,
+         "backup_count":10
+      },
+      "redis":{
+         "port":6379,
+         "ip":"0.0.0.0",
+         "username":"root",
+         "password":"",
+         "log_file_name":"redis.log",
+         "max_bytes":0,
+         "backup_count":10
+      },
+      "smb":{
+         "port":445,
+         "ip":"0.0.0.0",
+         "username":"administrator",
+         "password":"123456",
+         "log_file_name":"smb.log",
+         "max_bytes":0,
+         "backup_count":10
+      },
+      "smtp":{
+         "port":25,
+         "ip":"0.0.0.0",
+         "username":"root",
+         "password":"123456",
+         "log_file_name":"smtp.log",
+         "max_bytes":0,
+         "backup_count":10
+      },
+      "socks5":{
+         "port":1080,
+         "ip":"0.0.0.0",
+         "username":"admin",
+         "password":"admin",
+         "log_file_name":"socks5.log",
+         "max_bytes":0,
+         "backup_count":10
+      },
+      "ssh":{
+         "port":22,
+         "ip":"0.0.0.0",
+         "username":"root",
+         "password":"123456",
+         "log_file_name":"ssh.log",
+         "max_bytes":0,
+         "backup_count":10
+      },
+      "telnet":{
+         "port":23,
+         "ip":"0.0.0.0",
+         "username":"root",
+         "password":"123456",
+         "log_file_name":"telnet.log",
+         "max_bytes":0,
+         "backup_count":10
+      },
+      "vnc":{
+         "port":5900,
+         "ip":"0.0.0.0",
+         "username":"administrator",
+         "password":"123456",
+         "log_file_name":"vnc.log",
+         "max_bytes":0,
+         "backup_count":10
+      },
+      "elastic":{
+         "port":9200,
+         "ip":"0.0.0.0",
+         "username":"elastic",
+         "password":"123456",
+         "log_file_name":"elastic.log",
+         "max_bytes":0,
+         "backup_count":10
+      },
+      "mssql":{
+         "port":1433,
+         "ip":"0.0.0.0",
+         "username":"sa",
+         "password":"",
+         "log_file_name":"mssql.log",
+         "max_bytes":0,
+         "backup_count":10
+      },
+      "ldap":{
+         "port":389,
+         "ip":"0.0.0.0",
+         "username":"administrator",
+         "password":"123456",
+         "log_file_name":"ldap.log",
+         "max_bytes":0,
+         "backup_count":10
+      },
+      "ntp":{
+         "port":123,
+         "ip":"0.0.0.0",
+         "username":"administrator",
+         "password":"123456",
+         "log_file_name":"ntp.log",
+         "max_bytes":0,
+         "backup_count":10
+      },
+      "memcache":{
+         "port":11211,
+         "ip":"0.0.0.0",
+         "username":"admin",
+         "password":"123456",
+         "log_file_name":"memcache.log",
+         "max_bytes":0,
+         "backup_count":10
+      },
+      "oracle":{
+         "port":1521,
+         "ip":"0.0.0.0",
+         "username":"bi",
+         "password":"123456",
+         "log_file_name":"oracle.log",
+         "max_bytes":0,
+         "backup_count":10
+      },
+      "snmp":{
+         "port":161,
+         "ip":"0.0.0.0",
+         "username":"privUser",
+         "password":"123456",
+         "log_file_name":"snmp.log",
+         "max_bytes":0,
+         "backup_count":10
+      }
+   },
+   "custom_filter":{
+      "honeypots":{
+         "change":{
+            "server":"protocol"
+         },
+         "contains":[
+            "protocol",
+            "action",
+            "src_ip",
+            "src_port",
+            "dest_ip",
+            "dest_port"
+         ],
+         "remove":[
+            
+         ],
+         "options":[
+            "remove_errors",
+            "remove_init",
+            "remove_word_server"
+         ]
+      }
+   }
 }
+

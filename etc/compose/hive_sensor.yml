@@ -1,4 +1,4 @@
-# T-Pot (Sensor)
+# T-Pot (Hive-Sensor)
 # Do not erase ports sections, these are used by /opt/tpot/bin/rules.sh to setup iptables ACCEPT rules for NFQ (honeytrap / glutton)
 version: '2.3'
 
@@ -16,6 +16,7 @@ networks:
   elasticpot_local:
   heralding_local:
   honeysap_local:
+  logstash_local:
   mailoney_local:
   medpot_local:
   rdpy_local:
@@ -474,6 +475,21 @@ services:
 ##################
 #### Tools
 ##################
+
+# Logstash service
+  logstash:
+    container_name: logstash
+    restart: always
+    networks:
+     - logstash_local
+#    environment:
+#     - LS_JAVA_OPTS=-Xms2048m -Xmx2048m
+    env_file:
+     - /opt/tpot/etc/compose/elk_environment
+    mem_limit: 2g
+    image: "dtagdevsec/logstash:2203"
+    volumes:
+     - /data:/data
 
 # Ewsposter service
   ewsposter:

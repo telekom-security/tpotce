@@ -27,7 +27,7 @@ services:
      - "64297:64297"
      - "127.0.0.1:64304:64304"
     image: "dtagdevsec/nginx:2203"
-    #    read_only: true
+    #read_only: true
     volumes:
      - /data/nginx/cert/:/etc/nginx/cert/:ro
      - /data/nginx/conf/nginxpasswd:/etc/nginx/nginxpasswd:ro
