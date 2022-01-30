@@ -158,11 +158,6 @@ services:
 #### Tools
 ##################
 
-# Cyberchef service
-  cyberchef:
-    build: cyberchef/.
-    image: "dtagdevsec/cyberchef:2203"
-
 #### ELK
 ## Elasticsearch service
   elasticsearch:
@@ -186,7 +181,7 @@ services:
 
 # Nginx service
   nginx:
-    build: heimdall/.
+    build: nginx/.
     image: "dtagdevsec/nginx:2203"
 
 # Spiderfoot service

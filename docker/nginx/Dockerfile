@@ -9,14 +9,18 @@ RUN apk -U --no-cache add \
       nginx-mod-http-headers-more \
       && \
 #
-## Setup T-Pot Landing Page, Eleasticvue 
+## Setup T-Pot Landing Page, Eleasticvue, Cyberchef 
     cp -R /root/dist/html/* /var/lib/nginx/html/ && \
     cd /var/lib/nginx/html/esvue && \
     tar xvfz esvue.tgz && \
     rm esvue.tgz && \
+    cd /var/lib/nginx/html/cyberchef && \
+    tar xvfz cyberchef.tgz && \
+    rm cyberchef.tgz && \
 #
 ## Change ownership, permissions
     chown root:www-data -R /var/lib/nginx/html && \
+    chmod 755 -R /var/lib/nginx/html && \
 #
 ## Add Nginx / T-Pot specific configs
     rm -rf /etc/nginx/conf.d/* /usr/share/nginx/html/* && \
