@@ -11,6 +11,7 @@ RUN git clone https://github.com/gchq/cyberchef -b v9.32.3 . && \
     npm install && \
     grunt prod && \
     cd build/prod && \
+    rm CyberChef_v9.32.3.zip && \
     tar cvfz cyberchef.tgz *
 #    
 FROM scratch AS exporter
