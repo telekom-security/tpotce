@@ -11,6 +11,7 @@ myBACKTITLE="T-Pot - ISO Creator"
 ### DEV
 #myMINIISOLINK="http://ftp.debian.org/debian/dists/buster/main/installer-amd64/current/images/netboot/mini.iso"
 myMINIISOLINK="http://ftp.debian.org/debian/dists/bullseye/main/installer-amd64/current/images/netboot/mini.iso"
+#myMINIISOLINK="http://ftp.debian.org/debian/dists/bullseye/main/installer-arm64/current/images/netboot/mini.iso"
 myMINIISO="mini.iso"
 myTPOTISO="tpot.iso"
 myTPOTDIR="tpotiso"

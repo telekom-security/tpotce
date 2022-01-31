@@ -11,9 +11,7 @@ networks:
   cowrie_local:
   dicompot_local:
   heralding_local:
-  honeysap_local:
   medpot_local:
-  rdpy_local:
   ewsposter_local:
   spiderfoot_local:
 
@@ -204,18 +202,6 @@ services:
     volumes:
      - /data/heralding/log:/var/log/heralding
 
-# HoneySAP service
-  honeysap:
-    container_name: honeysap
-    restart: always
-    networks:
-     - honeysap_local
-    ports:
-     - "3299:3299"
-    image: "dtagdevsec/honeysap:2203"
-    volumes:
-     - /data/honeysap/log:/opt/honeysap/log
-
 # Honeytrap service
   honeytrap:
     container_name: honeytrap
@@ -244,28 +230,6 @@ services:
     read_only: true
     volumes:
      - /data/medpot/log/:/var/log/medpot
-
-# Rdpy service
-  rdpy:
-    container_name: rdpy
-    extra_hosts:
-     - hpfeeds.example.com:127.0.0.1
-    restart: always
-    environment:
-     - HPFEEDS_SERVER=hpfeeds.example.com
-     - HPFEEDS_IDENT=user
-     - HPFEEDS_SECRET=pass
-     - HPFEEDS_PORT=65000
-     - SERVERID=id
-    networks:
-     - rdpy_local
-    ports:
-     - "3389:3389"
-    image: "dtagdevsec/rdpy:2203"
-    read_only: true
-    volumes:
-     - /data/rdpy/log:/var/log/rdpy
-
 
 ##################
 #### NSM
