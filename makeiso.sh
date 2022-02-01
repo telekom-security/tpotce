@@ -5,15 +5,7 @@ export TERM=linux
 
 # Let's define some global vars
 myBACKTITLE="T-Pot - ISO Creator"
-#myMINIISOLINK="http://ftp.debian.org/debian/dists/testing/main/installer-amd64/current/images/netboot/mini.iso"
-#myMINIISOLINK="https://d-i.debian.org/daily-images/amd64/daily/netboot/mini.iso"
-# For stability reasons Debian Sid installation is built on a stable installer
 ### DEV
-#myMINIISOLINK="http://ftp.debian.org/debian/dists/buster/main/installer-amd64/current/images/netboot/mini.iso"
-myMINIISOLINK="http://ftp.debian.org/debian/dists/bullseye/main/installer-amd64/current/images/netboot/mini.iso"
-#myMINIISOLINK="http://ftp.debian.org/debian/dists/bullseye/main/installer-arm64/current/images/netboot/mini.iso"
-myMINIISO="mini.iso"
-myTPOTISO="tpot.iso"
 myTPOTDIR="tpotiso"
 myTPOTSEED="iso/preseed/tpot.seed"
 myPACKAGES="dialog genisoimage syslinux syslinux-utils pv rsync udisks2 xorriso"
@@ -80,13 +72,15 @@ function valid_ip()
     return $stat
 }
 
-# Let's ask if the user wants to run the script ...
-dialog --backtitle "$myBACKTITLE" --title "[ Continue? ]" --yesno "\nDownload latest supported Debian Mini ISO and build the T-Pot Install Image." 8 50
-mySTART=$?
-if [ "$mySTART" = "1" ];
+# Let's ask for the architecture and set VARs accordingly...
+myARCH=$(dialog --backtitle "$myBACKTITLE" --title "[ Architecture ]" --menu "Please choose." 9 60 2 "amd64" "For x64 AMD / Intel CPUs" "arm64" "For Apple Silicon, 64 Bit ARM based CPUs" 3>&1 1>&2 2>&3 3>&-)
+if [ "$myARCH" == "" ];
   then
     exit
 fi
+myMINIISOLINK="http://ftp.debian.org/debian/dists/bullseye/main/installer-$myARCH/current/images/netboot/mini.iso"
+myMINIISO="mini_$myARCH.iso"
+myTPOTISO="tpot_$myARCH.iso"
 
 # Let's load the default config file
 if [ -f $myCONF_DEFAULT_FILE ];
@@ -210,19 +204,18 @@ fi
 # Let's download Debian Minimal ISO
 if [ ! -f $myMINIISO ]
   then
-    wget $myMINIISOLINK --progress=dot 2>&1 | awk '{print $7+0} fflush()' | dialog --backtitle "$myBACKTITLE" --title "[ Downloading Debian ... ]" --gauge "" 5 70;
-    echo 100 | dialog --backtitle "$myBACKTITLE" --title "[ Downloading Debian ... Done! ]" --gauge "" 5 70;
+    wget $myMINIISOLINK --progress=dot 2>&1 | awk '{print $7+0} fflush()' | dialog --backtitle "$myBACKTITLE" --title "[ Downloading Debian for $myARCH ]" --gauge "" 5 70;
+    echo 100 | dialog --backtitle "$myBACKTITLE" --title "[ Downloading Debian for $myARCH ... Done! ]" --gauge "" 5 70;
+    # Need to rename after download or progresss bar does not work.
+    mv mini.iso $myMINIISO
   else
     dialog --infobox "Using previously downloaded .iso ..." 3 50;
 fi
 
-# Let's loop mount it and copy all contents
-mkdir -p $myTMP $myTPOTDIR
-mount -o loop $myMINIISO $myTMP
-rsync -a $myTMP/ $myTPOTDIR
-umount $myTMP
+# Let's extract ISO contents (using / to extract all from ISO root)
+xorriso -osirrox on -indev $myMINIISO -extract / $myTPOTDIR
 
-# Let's modify initrd
+# Let's modify initrd and create a tmp for the initrd filesystem we need to modify
 gunzip $myTPOTDIR/initrd.gz
 mkdir $myTPOTDIR/tmp
 cd $myTPOTDIR/tmp
@@ -234,8 +227,15 @@ cd ..
 # Let's add the files for the automated install
 mkdir -p $myTPOTDIR/tmp/opt/
 cp iso/installer -R $myTPOTDIR/tmp/opt/
-cp iso/isolinux/* $myTPOTDIR/
-cp iso/preseed/tpot.seed $myTPOTDIR/tmp/preseed.cfg
+# Isolinux is only necessary for AMD64
+if [ "$myARCH" = "amd64" ];
+  then
+    cp iso/isolinux/* $myTPOTDIR/
+  else
+    sed -i "s#menuentry 'Install'#menuentry 'Install T-Pot 22.x (ARM64)'#g" $myTPOTDIR/boot/grub/grub.cfg
+fi
+# For now we need architecture based preseeds
+cp iso/preseed/tpot_$myARCH.seed $myTPOTDIR/tmp/preseed.cfg
 
 # Let's create the new initrd
 cd $myTPOTDIR/tmp
@@ -245,13 +245,33 @@ gzip initrd
 rm -rf tmp
 cd ..
 
-# Let's create the new .iso
+# Since ARM64 needs EFI we need different methods to build the ISO
 cd $myTPOTDIR
-xorrisofs -gui -D -r -V "T-Pot" -cache-inodes -J -l -b isolinux.bin -c boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -o ../$myTPOTISO ../$myTPOTDIR 2>&1 | awk '{print $1+0} fflush()' | cut -f1 -d"." | dialog --backtitle "$myBACKTITLE" --title "[ Building T-Pot .iso ... ]" --gauge "" 5 70 0
-echo 100 | dialog --backtitle "$myBACKTITLE" --title "[ Building T-Pot .iso ... Done! ]" --gauge "" 5 70
-cd ..
-isohybrid $myTPOTISO
-sha256sum $myTPOTISO > tpot.sha256
+if [ "$myARCH" == "amd64" ];
+  then
+    # Create AMD64 .iso
+    xorrisofs -gui -D -r -V "T-Pot $myARCH" \
+      -cache-inodes -J -l -b isolinux.bin \
+      -c boot.cat -no-emul-boot -boot-load-size 4 \
+      -boot-info-table \
+      -o ../"$myTPOTISO" ../"$myTPOTDIR" 2>&1 | awk '{print $1+0} fflush()' | cut -f1 -d"." | dialog --backtitle "$myBACKTITLE" --title "[ Building T-Pot $myARCH .iso ... ]" --gauge "" 5 70 0
+    echo 100 | dialog --backtitle "$myBACKTITLE" --title "[ Building T-Pot $myARCH .iso ... Done! ]" --gauge "" 5 70
+    cd ..
+    isohybrid $myTPOTISO
+  else
+    # Create ARM64 .iso
+    xorriso -as mkisofs -r -V "T-Pot $myARCH" \
+      -J -joliet-long -cache-inodes \
+      -e boot/grub/efi.img \
+      -no-emul-boot \
+      -append_partition 2 0xef boot/grub/efi.img \
+      -partition_cyl_align all \
+      -o ../"$myTPOTISO" \
+      ../"$myTPOTDIR"
+      echo 100 | dialog --backtitle "$myBACKTITLE" --title "[ Building T-Pot $myARCH .iso ... Done! ]" --gauge "" 5 70
+    cd ..
+fi
+sha256sum $myTPOTISO > "tpot_$myARCH.sha256"
 
 # Let's write the image
 while true;
