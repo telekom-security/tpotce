@@ -1,7 +1,7 @@
 FROM ubuntu:20.04
 #
 # VARS
-ENV ES_VER=7.16.3
+ENV ES_VER=7.17.0
 #
 # Include dist
 ADD dist/ /root/dist/
