@@ -436,6 +436,16 @@ if [ -s "$myTPOT_CONF_FILE" ] && [ "$myTPOT_CONF_FILE" != "" ];
 fi
 
 # Prepare running the installer
+myUSERCHECK=$(grep "tpot" /etc/passwd | wc -l)
+if [ "$myUSERCHECK" -gt "0" ];
+  then
+    echo "### The user name \"tpot\" already exists. The tpot username and group may not previously exist or T-Pot will not work."
+    echo "### We recommend a fresh install according to the T-Pot Readme Post-Install method."
+    echo
+    echo "Aborting."
+    echo
+    exit 0
+fi
 echo "$myINFO" | head -n 3
 fuCHECK_PORTS
 

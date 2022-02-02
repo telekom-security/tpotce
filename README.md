@@ -262,6 +262,8 @@ In some cases it is necessary to install Debian 10 (Buster) on your own:
 
 The T-Pot Universal Installer will upgrade the system and install all required T-Pot dependencies.
 
+Important notice: The user / group `tpot` are reserved for T-Pot. The installation will abort if the user `tpot` exists. Make sure to use a different user name when preparing the OS installation for T-Pot.
+
 Just follow these steps:
 
 ```
