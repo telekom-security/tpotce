@@ -27,36 +27,74 @@ fi
 mkdir -p /etc/blackhole
 cd /etc/blackhole
 
-# Let's load ip reputation lists from listbot service
-if ! [ -f "iprep.yaml" ];
+# Calculate age of downloaded reputation list
+if [ -f "iprep.yaml" ];
   then
-    aria2c -s16 -x 16 https://listbot.sicherheitstacho.eu/iprep.yaml.bz2 && \
-    bunzip2 -f *.bz2
+    myNOW=$(date +%s)
+    myOLD=$(date +%s -r iprep.yaml)
+    myDAYS=$(( (now-old) / (60*60*24) ))
+    echo "### Downloaded reputation list is $myDAYS days old."
+    myBLACKHOLE_IPS=$(grep "mass scanner" iprep.yaml | cut -f 1 -d":" | tr -d '"')
 fi
 
+# Let's load ip reputation list from listbot service
+if [[ ! -f "iprep.yaml" && "$1" == "add" || "$myDAYS" -gt 30 ]];
+  then
+    echo "### Downloading reputation list."
+    aria2c -s16 -x 16 https://listbot.sicherheitstacho.eu/iprep.yaml.bz2 && \
+    bunzip2 -f *.bz2
+    myBLACKHOLE_IPS=$(grep "mass scanner" iprep.yaml | cut -f 1 -d":" | tr -d '"')
+fi
+
+myCOUNT=$(echo $myBLACKHOLE_IPS | wc -w)
 # Let's extract mass scanner IPs
-myBLACKHOLE_IPS=$(grep "mass scanner" iprep.yaml | cut -f 1 -d":" | tr -d '"')
+if [ "$myCOUNT" -lt "3000" ] && [ "$1" == "add" ];
+  then
+    echo "### Something went wrong. Please check contents of /etc/blackhole/iprep.yaml."
+    echo "### Aborting."
+    echo
+    exit
+elif [ "$(ip r | grep 'blackhole' -c)" -gt "3000" ] && [ "$1" == "add" ];
+  then
+    echo "### Blackhole already enabled."
+    echo "### Aborting."
+    echo
+    exit
+fi
 
 # Let's add blackhole routes for all mass scanner IPs
 # Your personal preferences may vary, feel free to adjust accordingly
 if [ "$1" == "add" ];
   then
-    echo "Now add blackhole routes."
+    echo
+    echo -n "Now adding $myCOUNT IPs to blackhole."
     for i in $myBLACKHOLE_IPS;
       do
-        echo "ip route add blackhole $i"
         ip route add blackhole $i
+	echo -n "."
     done
+    echo
+    echo "Added $(ip r | grep "blackhole" -c) IPs to blackhole."
+    echo
+    echo "### Remember!"
+    echo "### Routes are not added permanently, if you wish a persistent solution add this script to /etc/rc.local to be started after boot."
+    echo
+    exit
 fi
 
 # Let's delete blackhole routes for all mass scanner IPs
-if [ "$1" == "del" ];
+if [ "$1" == "del" ] && [ "$myCOUNT" -gt 3000 ];
   then
-    echo "Now deleting blackhole routes."
+    echo
+    echo -n "Now deleting $myCOUNT IPs from blackhole."
       for i in $myBLACKHOLE_IPS;
         do
-          echo "ip route del blackhole $i"
           ip route del blackhole $i
+	  echo -n "."
       done
-    rm iprep.yaml
+      echo
+      echo "$(ip r | grep 'blackhole' -c) IPs remaining in blackhole."
+      rm iprep.yaml
+  else
+    echo "Blackhole already disabled."
 fi
