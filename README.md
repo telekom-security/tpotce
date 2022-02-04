@@ -333,8 +333,8 @@ All honeypot services are preconfigured and are starting automatically.
 
 You can login from your browser and access the Admin UI: `https://<your.ip>:64294` or via SSH to access the command line: `ssh -l tsec -p 64295 <your.ip>`
 
-- user: **[tsec or user]** *you chose during one of the post install methods*
-- pass: **[password]** *you chose during the installation*
+- user: **[tsec or user]** *you´re system user*
+- pass: **[password]** *you´re system password*
 
 You can also login from your browser and access the Web UI: `https://<your.ip>:64297`
 - user: **[user]** *you chose during the installation*
