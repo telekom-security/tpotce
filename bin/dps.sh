@@ -29,7 +29,7 @@ fi
 function fuGETTPOT_STATUS {
 # T-Pot Status
 myTPOT_STATUS=$(systemctl status tpot | grep "Active" | awk '{ print $2 }')
-if [ "$myTPOT_STATUS" == "Active" ];
+if [ "$myTPOT_STATUS" == "active" ];
   then
     echo "${myGREEN}ACTIVE"
   else
