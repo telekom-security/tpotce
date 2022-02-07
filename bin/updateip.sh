@@ -10,12 +10,20 @@ if [ "$myEXTIP" = "" ];
     myEXTIP=$myLOCALIP
 fi
 
-myBLACKHOLE_STATUS=$(ip r | grep "blackhole" -c)
-if [ "$myBLACKHOLE_STATUS" -gt "3000" ];
+# Load Blackhole routes if enabled 
+myBLACKHOLE_FILE1="/etc/blackhole/mass_scanner.txt"
+myBLACKHOLE_FILE2="/etc/blackhole/mass_scanner_cidr.txt"
+if [ -f "$myBLACKHOLE_FILE1" ] || [ -f "$myBLACKHOLE_FILE2" ];
   then
-    myBLACKHOLE_STATUS="| [1;34mBLACKHOLING MASS SCANNERS: [ [0;37mENABLED[1;34m ][0m"
+    /opt/tpot/bin/blackhole.sh add
+fi
+
+myBLACKHOLE_STATUS=$(ip r | grep "blackhole" -c)
+if [ "$myBLACKHOLE_STATUS" -gt "500" ];
+  then
+    myBLACKHOLE_STATUS="| [1;34mBLACKHOLE: [ [0;37mENABLED[1;34m ][0m"
   else
-    myBLACKHOLE_STATUS="| [1;34mBLACKHOLING MASS SCANNERS: [ [1;30mDISABLED[1;34m ][0m"
+    myBLACKHOLE_STATUS="| [1;34mBLACKHOLE: [ [1;30mDISABLED[1;34m ][0m"
 fi
 
 mySSHUSER=$(cat /etc/passwd | grep 1000 | cut -d ':' -f1)

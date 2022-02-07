@@ -17,14 +17,36 @@ myBLUE="[1;34m"
 myWHITE="[0;0m"
 myMAGENTA="[1;35m"
 
+# Blackhole Status
+myBLACKHOLE_STATUS=$(ip r | grep "blackhole" -c)
+if [ "$myBLACKHOLE_STATUS" -gt "500" ];
+  then
+    myBLACKHOLE_STATUS="${myGREEN}ENABLED"
+  else
+    myBLACKHOLE_STATUS="${myRED}DISABLED"
+fi
+
+function fuGETTPOT_STATUS {
+# T-Pot Status
+myTPOT_STATUS=$(systemctl status tpot | grep "Active" | awk '{ print $2 }')
+if [ "$myTPOT_STATUS" == "Active" ];
+  then
+    echo "${myGREEN}ACTIVE"
+  else
+    echo "${myRED}INACTIVE"
+fi
+}
+
 function fuGETSTATUS {
 grc --colour=on docker ps -f status=running -f status=exited --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep -v "NAME" | sort
 }
 
 function fuGETSYS {
-printf "========| System |========\n"
-printf "%+10s %-20s\n" "Date: " "$(date)"
-printf "%+10s %-20s\n" "Uptime: " "$(uptime | cut -b 2-)"
+printf "[ ========| System |======== ]\n"
+printf "${myBLUE}%+11s ${myWHITE}%-20s\n" "DATE: " "$(date)"
+printf "${myBLUE}%+11s ${myWHITE}%-20s\n" "UPTIME: " "$(uptime | cut -b 2-)"
+printf "${myMAGENTA}%+11s %-20s\n" "T-POT: " "$(fuGETTPOT_STATUS)"
+printf "${myMAGENTA}%+11s %-20s\n" "BLACKHOLE: " "$myBLACKHOLE_STATUS${myWHITE}"
 echo
 }
 

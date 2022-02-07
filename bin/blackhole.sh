@@ -16,7 +16,8 @@ if [ "$1" == "" ];
     echo "### This script will download and add blackhole routes for known mass scanners in an attempt to decrease the chance of detection."
     echo "### IPs are neither curated or verified, use at your own risk!"
     echo "###"
-    echo "### Routes are not added permanently, if you wish a persistent solution add this script to /etc/rc.local to be started after boot."
+    echo "### As long as <blackhole.sh del> is not executed the routes will be re-added on T-Pot start through </opt/tpot/bin/updateip.sh>."
+    echo "### Check with <ip r> or <dps.sh> if blackhole is enabled."
     echo
     echo "Usage: blackhole.sh add (add blackhole routes)" 
     echo "       blackhole.sh del (delete blackhole routes)"
