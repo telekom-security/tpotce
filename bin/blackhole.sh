@@ -4,7 +4,8 @@
 myWHOAMI=$(whoami)
 if [ "$myWHOAMI" != "root" ]
   then
-    echo "Need to run as root ..."
+    echo "### Need to run as root ..."
+    echo
     exit
 fi
 
@@ -23,38 +24,44 @@ if [ "$1" == "" ];
     exit
 fi
 
-# QnD paths
+# QnD paths, files
 mkdir -p /etc/blackhole
 cd /etc/blackhole
+myFILE="mass_scanner.txt"
+myURL="https://raw.githubusercontent.com/stamparm/maltrail/master/trails/static/mass_scanner.txt"
+myBASELINE="3000"
+# Alternatively, using less routes, but blocking complete /24 networks
+#myFILE="mass_scanner_cidr.txt"
+#myURL="https://raw.githubusercontent.com/stamparm/maltrail/master/trails/static/mass_scanner_cidr.txt"
+#myBASELINE="500"
 
-# Calculate age of downloaded reputation list
-if [ -f "iprep.yaml" ];
+# Calculate age of downloaded list, read IPs
+if [ -f "$myFILE" ];
   then
     myNOW=$(date +%s)
-    myOLD=$(date +%s -r iprep.yaml)
+    myOLD=$(date +%s -r "$myFILE")
     myDAYS=$(( (now-old) / (60*60*24) ))
-    echo "### Downloaded reputation list is $myDAYS days old."
-    myBLACKHOLE_IPS=$(grep "mass scanner" iprep.yaml | cut -f 1 -d":" | tr -d '"')
+    echo "### Downloaded $myFILE list is $myDAYS days old."
+    myBLACKHOLE_IPS=$(grep -o -P "\b(?:\d{1,3}\.){3}\d{1,3}\b" "$myFILE" | sort -u)
 fi
 
-# Let's load ip reputation list from listbot service
-if [[ ! -f "iprep.yaml" && "$1" == "add" || "$myDAYS" -gt 30 ]];
+# Let's load ip list
+if [[ ! -f "$myFILE" && "$1" == "add" || "$myDAYS" -gt 30 ]];
   then
-    echo "### Downloading reputation list."
-    aria2c -s16 -x 16 https://listbot.sicherheitstacho.eu/iprep.yaml.bz2 && \
-    bunzip2 -f *.bz2
-    myBLACKHOLE_IPS=$(grep "mass scanner" iprep.yaml | cut -f 1 -d":" | tr -d '"')
+    echo "### Downloading $myFILE list."
+    aria2c --allow-overwrite -s16 -x 16 "$myURL" && \
+    myBLACKHOLE_IPS=$(grep -o -P "\b(?:\d{1,3}\.){3}\d{1,3}\b" "$myFILE" | sort -u) 
 fi
 
 myCOUNT=$(echo $myBLACKHOLE_IPS | wc -w)
 # Let's extract mass scanner IPs
-if [ "$myCOUNT" -lt "3000" ] && [ "$1" == "add" ];
+if [ "$myCOUNT" -lt "$myBASELINE" ] && [ "$1" == "add" ];
   then
-    echo "### Something went wrong. Please check contents of /etc/blackhole/iprep.yaml."
+    echo "### Something went wrong. Please check contents of /etc/blackhole/$myFILE."
     echo "### Aborting."
     echo
     exit
-elif [ "$(ip r | grep 'blackhole' -c)" -gt "3000" ] && [ "$1" == "add" ];
+elif [ "$(ip r | grep 'blackhole' -c)" -gt "$myBASELINE" ] && [ "$1" == "add" ];
   then
     echo "### Blackhole already enabled."
     echo "### Aborting."
@@ -63,14 +70,13 @@ elif [ "$(ip r | grep 'blackhole' -c)" -gt "3000" ] && [ "$1" == "add" ];
 fi
 
 # Let's add blackhole routes for all mass scanner IPs
-# Your personal preferences may vary, feel free to adjust accordingly
 if [ "$1" == "add" ];
   then
     echo
     echo -n "Now adding $myCOUNT IPs to blackhole."
     for i in $myBLACKHOLE_IPS;
       do
-        ip route add blackhole $i
+        ip route add blackhole "$i"
 	echo -n "."
     done
     echo
@@ -83,18 +89,20 @@ if [ "$1" == "add" ];
 fi
 
 # Let's delete blackhole routes for all mass scanner IPs
-if [ "$1" == "del" ] && [ "$myCOUNT" -gt 3000 ];
+if [ "$1" == "del" ] && [ "$myCOUNT" -gt "$myBASELINE" ];
   then
     echo
     echo -n "Now deleting $myCOUNT IPs from blackhole."
       for i in $myBLACKHOLE_IPS;
         do
-          ip route del blackhole $i
+          ip route del blackhole "$i"
 	  echo -n "."
       done
       echo
       echo "$(ip r | grep 'blackhole' -c) IPs remaining in blackhole."
-      rm iprep.yaml
+      echo
+      rm "$myFILE"
   else
-    echo "Blackhole already disabled."
+    echo "### Blackhole already disabled."
+    echo
 fi
