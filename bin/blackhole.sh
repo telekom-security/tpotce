@@ -30,11 +30,10 @@ mkdir -p /etc/blackhole
 cd /etc/blackhole
 myFILE="mass_scanner.txt"
 myURL="https://raw.githubusercontent.com/stamparm/maltrail/master/trails/static/mass_scanner.txt"
-myBASELINE="3000"
+myBASELINE="500"
 # Alternatively, using less routes, but blocking complete /24 networks
 #myFILE="mass_scanner_cidr.txt"
 #myURL="https://raw.githubusercontent.com/stamparm/maltrail/master/trails/static/mass_scanner_cidr.txt"
-#myBASELINE="500"
 
 # Calculate age of downloaded list, read IPs
 if [ -f "$myFILE" ];
@@ -84,7 +83,8 @@ if [ "$1" == "add" ];
     echo "Added $(ip r | grep "blackhole" -c) IPs to blackhole."
     echo
     echo "### Remember!"
-    echo "### Routes are not added permanently, if you wish a persistent solution add this script to /etc/rc.local to be started after boot."
+    echo "### As long as <blackhole.sh del> is not executed the routes will be re-added on T-Pot start through </opt/tpot/bin/updateip.sh>."
+    echo "### Check with <ip r> or <dps.sh> if blackhole is enabled."
     echo
     exit
 fi
