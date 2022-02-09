@@ -40,7 +40,7 @@ if [ -f "$myFILE" ];
   then
     myNOW=$(date +%s)
     myOLD=$(date +%s -r "$myFILE")
-    myDAYS=$(( (now-old) / (60*60*24) ))
+    myDAYS=$(( ($myNOW-$myOLD) / (60*60*24) ))
     echo "### Downloaded $myFILE list is $myDAYS days old."
     myBLACKHOLE_IPS=$(grep -o -P "\b(?:\d{1,3}\.){3}\d{1,3}\b" "$myFILE" | sort -u)
 fi
