@@ -8,6 +8,12 @@ myEXTIP=$(/opt/tpot/bin/myip.sh)
 if [ "$myEXTIP" = "" ];
   then
     myEXTIP=$myLOCALIP
+    myEXTIP_LAT="49.865835022498125"
+    myEXTIP_LONG="8.62606472775735"
+  else
+    myEXTIP_LOC=$(curl -s ipinfo.io/$myEXTIP/loc)
+    myEXTIP_LAT=$(echo "$myEXTIP_LOC" | cut -f1 -d",")
+    myEXTIP_LONG=$(echo "$myEXTIP_LOC" | cut -f2 -d",")
 fi
 
 # Load Blackhole routes if enabled 
@@ -27,6 +33,17 @@ if [ "$myBLACKHOLE_STATUS" -gt "500" ];
 fi
 
 mySSHUSER=$(cat /etc/passwd | grep 1000 | cut -d ':' -f1)
+
+# Export
+export myUUID
+export myLOCALIP
+export myEXTIP
+export myEXTIP_LAT
+export myEXTIP_LONG
+export myBLACKHOLE_STATUS
+export mySSHUSER
+
+# Build issue
 echo "[H[2J" > /etc/issue
 toilet -f ivrit -F metal --filter border:metal "T-Pot   22.03" | sed 's/\\/\\\\/g' >> /etc/issue
 echo >> /etc/issue
@@ -47,6 +64,8 @@ EOF
 tee /opt/tpot/etc/compose/elk_environment << EOF
 HONEY_UUID=$myUUID
 MY_EXTIP=$myEXTIP
+MY_EXTIP_LAT=$myEXTIP_LAT
+MY_EXTIP_LONG=$myEXTIP_LONG
 MY_INTIP=$myLOCALIP
 MY_HOSTNAME=$HOSTNAME
 EOF

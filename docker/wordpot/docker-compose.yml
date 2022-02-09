@@ -1,0 +1,20 @@
+version: '2.3'
+
+networks:
+  wordpot_local:
+
+services:
+
+# Wordpot service
+  wordpot:
+    build: .
+    container_name: wordpot
+    restart: always
+    networks:
+     - wordpot_local
+    ports:
+     - "80:80"
+    image: "dtagdevsec/wordpot:2203"
+    #    read_only: true
+    #    volumes:
+    #     - /data/ddospot/db:/opt/ddospot/ddospot/db
