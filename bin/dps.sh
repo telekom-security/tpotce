@@ -8,8 +8,14 @@ if [ "$myWHOAMI" != "root" ]
     exit
 fi
 
-# Show current status of T-Pot containers
 myPARAM="$1"
+if [[ $myPARAM =~ ^([1-9]|[1-9][0-9]|[1-9][0-9][0-9])$ ]];
+  then
+    watch --color -n $myPARAM "dps.sh"
+    exit
+fi
+
+# Show current status of T-Pot containers
 myCONTAINERS="$(cat /opt/tpot/etc/tpot.yml | grep -v '#' | grep container_name | cut -d: -f2 | sort | tr -d " ")"
 myRED="[1;31m"
 myGREEN="[1;32m"
@@ -50,8 +56,6 @@ printf "${myMAGENTA}%+11s %-20s\n" "BLACKHOLE: " "$myBLACKHOLE_STATUS${myWHITE}"
 echo
 }
 
-while true
-  do
     myDPS=$(fuGETSTATUS)
     myDPSNAMES=$(echo "$myDPS" | awk '{ print $1 }' | sort)
     fuGETSYS
@@ -67,10 +71,3 @@ while true
 	  printf "%-28s %-28s\n" "$myRED$i" "DOWN$myWHITE"
       fi
     done
-    if [[ $myPARAM =~ ^([1-9]|[1-9][0-9]|[1-9][0-9][0-9])$ ]];
-      then 
-        sleep "$myPARAM"
-      else 
-        break
-    fi
-done

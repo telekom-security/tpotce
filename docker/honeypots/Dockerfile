@@ -30,7 +30,7 @@ RUN apk -U add \
     cd /opt/ && \
     git clone https://github.com/qeeqbox/honeypots && \
     cd honeypots && \
-    git checkout b88cbbd5aa1d2724c6f7de5d723f0d0e753912bb && \
+    git checkout bee3147cf81837ba7639f1e27fe34d717ecccf29 && \
     pip3 install --upgrade pip && \
     pip3 install --ignore-installed hiredis packaging && \
     pip3 install . && \

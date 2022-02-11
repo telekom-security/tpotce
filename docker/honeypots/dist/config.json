@@ -44,7 +44,8 @@
          "password":"admin",
          "log_file_name":"http.log",
          "max_bytes":0,
-         "backup_count":10
+         "backup_count":10,
+	 "options":"fix_get_client_ip"
       },
       "https":{
          "port":443,

@@ -85,7 +85,7 @@ services:
     #    networks:
     #     - map_local
     ports:
-     - "9999:13337"
+     - "127.0.0.1:64299:64299"
     image: "dtagdevsec/map_web:2203"
     depends_on:
      - map_redis
