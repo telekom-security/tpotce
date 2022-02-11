@@ -6,7 +6,7 @@ packages:
 
 runcmd:
   - curl -sS --retry 5 https://github.com
-  - git clone https://github.com/telekom-security/tpotce /root/tpot
+  - git clone -b 22.x https://github.com/telekom-security/tpotce /root/tpot
   - /root/tpot/iso/installer/install.sh --type=auto --conf=/root/tpot.conf
   - rm /root/tpot.conf
   - /sbin/shutdown -r now

@@ -3,29 +3,13 @@ variable "admin_ip" {
   description = "admin IP addresses in CIDR format"
 }
 
-variable "ec2_vpc_id" {
-  description = "ID of AWS VPC"
-  default     = "vpc-XXX"
-}
-
-variable "ec2_subnet_id" {
-  description = "ID of AWS VPC subnet"
-  default     = "subnet-YYY"
-}
-
-variable "ec2_region" {
-  description = "AWS region to launch servers"
-  default     = "eu-west-1"
-}
-
 variable "ec2_ssh_key_name" {
   default = "default"
 }
 
 # https://aws.amazon.com/ec2/instance-types/
-# t3.large = 2 vCPU, 8 GiB RAM
 variable "ec2_instance_type" {
-  default = "t3.large"
+  default = "t3.xlarge"
 }
 
 # Refer to https://wiki.debian.org/Cloud/AmazonEC2Image/Bullseye
@@ -61,16 +45,6 @@ variable "timezone" {
   default = "UTC"
 }
 
-variable "linux_password" {
-  #default = "LiNuXuSeRPaSs#"
-  description = "Set a password for the default user"
-
-  validation {
-    condition     = length(var.linux_password) > 0
-    error_message = "Please specify a password for the default user."
-  }
-}
-
 ## These will go in the generated tpot.conf file ##
 variable "tpot_flavor" {
   default     = "STANDARD"
@@ -80,14 +54,4 @@ variable "tpot_flavor" {
 variable "web_user" {
   default     = "webuser"
   description = "Set a username for the web user"
-}
-
-variable "web_password" {
-  #default = "w3b$ecret"
-  description = "Set a password for the web user"
-
-  validation {
-    condition     = length(var.web_password) > 0
-    error_message = "Please specify a password for the web user."
-  }
 }
