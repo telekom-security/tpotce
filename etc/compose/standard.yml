@@ -535,8 +535,6 @@ services:
     ports:
      - "127.0.0.1:64299:64299"
     image: "dtagdevsec/map_server:2203"
-    depends_on:
-     - map_redis
 
 ## Map Data Service
   map_data:
@@ -552,8 +550,6 @@ services:
     stop_signal: SIGKILL
     tty: true
     image: "dtagdevsec/map_server:2203"
-    depends_on:
-     - map_redise
 #### /ELK
 
 # Ewsposter service
