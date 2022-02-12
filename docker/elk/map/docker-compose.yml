@@ -11,8 +11,6 @@ services:
     restart: always
     stop_signal: SIGKILL
     tty: true
-    #    networks:
-    #     - map_local
     ports:
       - "127.0.0.1:6379:6379"
     image: "dtagdevsec/redis:2203"
@@ -29,11 +27,9 @@ services:
      - /opt/tpot/etc/compose/elk_environment
     stop_signal: SIGKILL
     tty: true
-    #    networks:
-    #     - map_local
     ports:
      - "127.0.0.1:64299:64299"
-    image: "dtagdevsec/map_web:2203"
+    image: "dtagdevsec/map_server:2203"
     depends_on:
      - map_redis
 
@@ -47,8 +43,6 @@ services:
      - /opt/tpot/etc/compose/elk_environment
     stop_signal: SIGKILL
     tty: true
-    #    networks:
-    #     - map_local
-    image: "dtagdevsec/map_web:2203"
+    image: "dtagdevsec/map_server:2203"
     depends_on:
      - map_redis

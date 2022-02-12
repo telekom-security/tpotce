@@ -1,5 +1,8 @@
 FROM alpine:3.15
 #
+# Include dist
+#ADD dist/ /root/dist/
+#
 # Install packages
 RUN apk -U add \
              build-base \

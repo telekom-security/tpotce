@@ -511,6 +511,51 @@ services:
     volumes:
      - /data:/data
 
+## Map Redis Service
+  map_redis:
+    container_name: map_redis
+    restart: always
+    stop_signal: SIGKILL
+    tty: true
+    ports:
+      - "127.0.0.1:6379:6379"
+    image: "dtagdevsec/redis:2203"
+    read_only: true
+
+## Map Web Service
+  map_web:
+    container_name: map_web
+    restart: always
+    environment:
+     - MAP_COMMAND=AttackMapServer.py
+    env_file:
+     - /opt/tpot/etc/compose/elk_environment
+    stop_signal: SIGKILL
+    tty: true
+    ports:
+     - "127.0.0.1:64299:64299"
+    image: "dtagdevsec/map_server:2203"
+    depends_on:
+     - map_redis
+
+## Map Data Service
+  map_data:
+    container_name: map_data
+    restart: always
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    environment:
+     - MAP_COMMAND=DataServr_v2.py
+    env_file:
+     - /opt/tpot/etc/compose/elk_environment
+    stop_signal: SIGKILL
+    tty: true
+    image: "dtagdevsec/map_server:2203"
+    depends_on:
+     - map_redise
+#### /ELK
+
 # Ewsposter service
   ewsposter:
     container_name: ewsposter
