@@ -544,7 +544,7 @@ services:
       elasticsearch:
         condition: service_healthy
     environment:
-     - MAP_COMMAND=DataServr_v2.py
+     - MAP_COMMAND=DataServer_v2.py
     env_file:
      - /opt/tpot/etc/compose/elk_environment
     stop_signal: SIGKILL

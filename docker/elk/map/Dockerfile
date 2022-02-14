@@ -19,6 +19,7 @@ RUN apk -U add \
     cd geoip-attack-map && \
 #    git checkout 4dae740178455f371b667ee095f824cb271f07e8 && \
     #sed "s/MarkupSafe==1.0/MarkupSafe==1.1.1/g" -i requirements.txt && \
+    #cp /root/dist/* . && \
     pip3 install -r requirements.txt && \
     pip3 install flask && \
     setcap cap_net_bind_service=+ep /usr/bin/python3.9 && \
@@ -39,4 +40,4 @@ RUN apk -U add \
 STOPSIGNAL SIGINT
 USER map:map
 WORKDIR /opt/geoip-attack-map
-CMD exec /usr/bin/python3 $MAP_COMMAND
+CMD ./entrypoint.sh && exec /usr/bin/python3 $MAP_COMMAND
