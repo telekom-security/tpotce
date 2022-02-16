@@ -1,0 +1,94 @@
+{
+  "template": {
+    "settings": {
+      "index": {
+        "lifecycle": {
+          "name": "tpot"
+        },
+        "mapping": {
+          "total_fields": {
+            "limit": "2000"
+          }
+        },
+        "refresh_interval": "5s",
+        "number_of_shards": "1",
+        "number_of_replicas": "0",
+        "query": {
+          "default_field": "*"
+        }
+      }
+    },
+    "mappings": {
+      "dynamic": "true",
+      "dynamic_date_formats": [
+        "strict_date_optional_time",
+        "yyyy/MM/dd HH:mm:ss Z||yyyy/MM/dd Z"
+      ],
+      "dynamic_templates": [
+        {
+          "message_field": {
+            "path_match": "message",
+            "match_mapping_type": "string",
+            "mapping": {
+              "norms": false,
+              "type": "text"
+            }
+          }
+        },
+        {
+          "string_fields": {
+            "match": "*",
+            "match_mapping_type": "string",
+            "mapping": {
+              "fields": {
+                "keyword": {
+                  "ignore_above": 256,
+                  "type": "keyword"
+                }
+              },
+              "norms": false,
+              "type": "text"
+            }
+          }
+        }
+      ],
+      "date_detection": true,
+      "numeric_detection": false,
+      "properties": {
+        "geoip": {
+          "properties": {
+            "ip": {
+              "type": "ip"
+            },
+            "latitude": {
+              "type": "half_float"
+            },
+            "location": {
+              "type": "geo_point"
+            },
+            "longitude": {
+              "type": "half_float"
+            }
+          }
+        },
+        "geoip_ext": {
+          "properties": {
+            "ip": {
+              "type": "ip"
+            },
+            "latitude": {
+              "type": "half_float"
+            },
+            "location": {
+              "type": "geo_point"
+            },
+            "longitude": {
+              "type": "half_float"
+            }
+          }
+        }
+      }
+    },
+    "aliases": {}
+  }
+}

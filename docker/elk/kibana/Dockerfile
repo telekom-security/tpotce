@@ -1,7 +1,7 @@
 FROM ubuntu:20.04
 #
 # VARS
-ENV KB_VER=7.17.0
+ENV KB_VER=8.0.0
 # Include dist
 ADD dist/ /root/dist/
 #

@@ -1,7 +1,7 @@
 FROM ubuntu:20.04
 #
 # VARS
-ENV ES_VER=7.17.0
+ENV ES_VER=8.0.0
 #
 # Include dist
 ADD dist/ /root/dist/
@@ -22,7 +22,7 @@ RUN apt-get update -y && \
     dpkg -i elasticsearch-$ES_VER-$ES_ARCH.deb && \
 #
 # Add and move files
-    rm -rf /usr/share/elasticsearch/modules/x-pack-ml && \
+#    rm -rf /usr/share/elasticsearch/modules/x-pack-ml && \
     mkdir -p /usr/share/elasticsearch/config && \
     cp elasticsearch.yml /etc/elasticsearch/ && \
 #
