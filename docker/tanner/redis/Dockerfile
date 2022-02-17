@@ -3,16 +3,22 @@ FROM redis:alpine
 # Include dist
 ADD dist/ /root/dist/
 #
-# Setup apt
-RUN apk -U --no-cache add redis && \ 
+# Setup apk and redis
+RUN apk -U --no-cache add shadow && \
     cp /root/dist/redis.conf /etc && \
 #
+# Setup user and group
+    groupmod -g 2000 redis && \
+    usermod -u 2000 redis && \
+#
 # Clean up
+    apk del --purge \ 
+            shadow && \
     rm -rf /root/* && \
     rm -rf /tmp/* /var/tmp/* && \
     rm -rf /var/cache/apk/*
 #
 # Start redis
 STOPSIGNAL SIGKILL
-USER nobody:nobody
+USER redis:redis
 CMD redis-server /etc/redis.conf

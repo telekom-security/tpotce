@@ -12,7 +12,7 @@ services:
     stop_signal: SIGKILL
     tty: true
     ports:
-      - "127.0.0.1:6379:6379"
+     - "127.0.0.1:6379:6379"
     image: "dtagdevsec/redis:2203"
     read_only: true
 
