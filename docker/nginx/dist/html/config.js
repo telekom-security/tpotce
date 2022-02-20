@@ -55,6 +55,10 @@ const CONFIG = {
     ],
     secondList: [
       {
+        name: 'Attack Map',
+        link: '/map/',
+      },
+      {
         name: 'SecurityMeter',
         link: 'https://sicherheitstacho.eu',
       },
