@@ -19,7 +19,17 @@
       }
     },
     "mappings": {
-      "dynamic": "true",
+      "_source": {
+        "excludes": [],
+        "includes": [],
+        "enabled": true
+      },
+      "_routing": {
+        "required": false
+      },
+      "dynamic": true,
+      "numeric_detection": false,
+      "date_detection": true,
       "dynamic_date_formats": [
         "strict_date_optional_time",
         "yyyy/MM/dd HH:mm:ss Z||yyyy/MM/dd Z"
@@ -28,67 +38,60 @@
         {
           "message_field": {
             "path_match": "message",
-            "match_mapping_type": "string",
             "mapping": {
               "norms": false,
               "type": "text"
-            }
+            },
+            "match_mapping_type": "string"
           }
         },
         {
           "string_fields": {
-            "match": "*",
-            "match_mapping_type": "string",
             "mapping": {
+              "norms": false,
               "fields": {
                 "keyword": {
                   "ignore_above": 256,
                   "type": "keyword"
                 }
               },
-              "norms": false,
               "type": "text"
-            }
+            },
+            "match_mapping_type": "string",
+            "match": "*"
           }
         }
       ],
-      "date_detection": true,
-      "numeric_detection": false,
       "properties": {
-        "geoip": {
-          "properties": {
-            "ip": {
-              "type": "ip"
-            },
-            "latitude": {
-              "type": "half_float"
-            },
-            "location": {
-              "type": "geo_point"
-            },
-            "longitude": {
-              "type": "half_float"
-            }
-          }
+        "geoip.ip": {
+          "type": "ip"
         },
-        "geoip_ext": {
-          "properties": {
-            "ip": {
-              "type": "ip"
-            },
-            "latitude": {
-              "type": "half_float"
-            },
-            "location": {
-              "type": "geo_point"
-            },
-            "longitude": {
-              "type": "half_float"
-            }
-          }
+        "geoip.latitude": {
+          "type": "half_float"
+        },
+        "geoip.location": {
+          "type": "geo_point"
+        },
+        "geoip.longitude": {
+          "type": "half_float"
+        },
+        "geoip_ext.ip": {
+          "type": "ip"
+        },
+        "geoip_ext.latitude": {
+          "type": "half_float"
+        },
+        "geoip_ext.location": {
+          "type": "geo_point"
+        },
+        "geoip_ext.longitude": {
+          "type": "half_float"
         }
       }
-    },
-    "aliases": {}
-  }
+    }
+  },
+  "index_patterns": [
+    "logstash-*"
+  ],
+  "composed_of": []
 }
