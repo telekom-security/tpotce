@@ -17,4 +17,4 @@ services:
     image: "dtagdevsec/wordpot:2203"
     #    read_only: true
     #    volumes:
-    #     - /data/ddospot/db:/opt/ddospot/ddospot/db
+            # - /data/wordpot/log:/opt/ddospot/ddospot/db

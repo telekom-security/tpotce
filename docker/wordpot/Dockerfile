@@ -1,5 +1,7 @@
 FROM alpine:3.15
 #
+# Include dist
+ADD dist/ /root/dist/
 # Install packages
 RUN apk -U add \
              build-base \
@@ -16,6 +18,7 @@ RUN apk -U add \
     cd wordpot2 && \
     git checkout e93a2e00d84d280b0acd58ba6889b4bee8a6e4d2 && \
     sed "s/MarkupSafe==1.0/MarkupSafe==1.1.1/g" -i requirements.txt && \
+    cp /root/dist/views.py /opt/wordpot2/wordpot/views.py && \
     pip3 install -r requirements.txt && \
     setcap cap_net_bind_service=+ep /usr/bin/python3.9 && \
 #
@@ -35,4 +38,4 @@ RUN apk -U add \
 STOPSIGNAL SIGINT
 USER wordpot:wordpot
 WORKDIR /opt/wordpot2
-CMD ["/usr/bin/python3","wordpot2.py", "--host", "0.0.0.0", "--port", "80", "--title", "Crypto Plaza"]
+CMD ["/usr/bin/python3","wordpot2.py", "--host", "0.0.0.0", "--port", "80", "--title", "Wordpress"]

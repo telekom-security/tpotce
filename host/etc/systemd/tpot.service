@@ -34,6 +34,9 @@ ExecStartPre=/opt/tpot/bin/rules.sh /opt/tpot/etc/tpot.yml set
 # Compose T-Pot up
 ExecStart=/usr/bin/docker-compose -f /opt/tpot/etc/tpot.yml up --no-color
 
+# We want to see true source for UDP packets in container (https://github.com/moby/libnetwork/issues/1994)
+ExecStartPost=/bin/bash -c '/usr/bin/sleep 30 && /usr/sbin/conntrack -D -p udp'
+
 # Compose T-Pot down, remove containers and volumes
 ExecStop=/usr/bin/docker-compose -f /opt/tpot/etc/tpot.yml down -v
 
