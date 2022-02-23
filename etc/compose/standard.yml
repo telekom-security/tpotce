@@ -18,6 +18,7 @@ networks:
   medpot_local:
   tanner_local:
   ewsposter_local:
+  sentrypeer_local:
   spiderfoot_local:
 
 services:
@@ -212,8 +213,8 @@ services:
      - "1723:1723"
      - "1883:1883"
      - "3306:3306"
-     - "5060:5060"
-     - "5060:5060/udp"
+     # - "5060:5060"
+     # - "5060:5060/udp"
      - "5061:5061"
      - "27017:27017"
     image: "dtagdevsec/dionaea:2203"
@@ -318,6 +319,19 @@ services:
     read_only: true
     volumes:
      - /data/medpot/log/:/var/log/medpot
+
+# SentryPeer service
+  sentrypeer:
+    container_name: sentrypeer
+    restart: always
+    networks:
+     - sentrypeer_local
+    ports:
+     - "5060:5060/udp"
+    image: "dtagdevsec/sentrypeer:2203"
+    read_only: true
+    volumes:
+     - /data/sentrypeer/log:/var/log/sentrypeer
 
 #### Snare / Tanner
 ## Tanner Redis Service

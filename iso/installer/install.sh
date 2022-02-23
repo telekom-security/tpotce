@@ -842,6 +842,7 @@ mkdir -vp /data/adbhoney/{downloads,log} \
          /data/ews/conf \
          /data/rdpy/log \
          /data/redishoneypot/log \
+	 /data/sentrypeer/log \
          /data/spiderfoot \
          /data/suricata/log \
          /data/tanner/{log,files} \

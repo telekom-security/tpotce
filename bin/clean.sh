@@ -277,6 +277,14 @@ fuREDISHONEYPOT () {
   chown tpot:tpot /data/redishoneypot -R
 }
 
+# Let's create a function to clean up and prepare sentrypeer data
+fuSENTRYPEER () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/sentrypeer/log; fi
+  mkdir -p /data/sentrypeer/log
+  chmod 770 /data/sentrypeer -R
+  chown tpot:tpot /data/sentrypeer -R
+}
+
 # Let's create a function to prepare spiderfoot db
 fuSPIDERFOOT () {
   mkdir -p /data/spiderfoot
@@ -356,6 +364,7 @@ if [ "$myPERSISTENCE" = "on" ];
     fuNGINX
     fuREDISHONEYPOT
     fuRDPY
+    fuSENTRYPEER
     fuSPIDERFOOT
     fuSURICATA
     fuP0F
