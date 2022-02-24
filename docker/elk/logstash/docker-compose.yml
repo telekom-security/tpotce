@@ -15,7 +15,7 @@ services:
     env_file:
      - /opt/tpot/etc/compose/elk_environment
     ports:
-     - "127.0.0.1:64305:80"
+     - "127.0.0.1:64305:64305"
     image: "dtagdevsec/logstash:2203"
     volumes:
      - /data:/data
