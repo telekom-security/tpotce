@@ -1,7 +1,7 @@
 FROM alpine:3.15
 #
 # Include dist
-ADD dist/ /root/dist/
+#ADD dist/ /root/dist/
 #
 # Install packages
 RUN apk -U add \
@@ -18,8 +18,7 @@ RUN apk -U add \
     git clone https://github.com/t3chn0m4g3/geoip-attack-map && \
     cd geoip-attack-map && \
 #    git checkout 4dae740178455f371b667ee095f824cb271f07e8 && \
-    #sed "s/MarkupSafe==1.0/MarkupSafe==1.1.1/g" -i requirements.txt && \
-    cp /root/dist/* . && \
+#    cp /root/dist/* . && \
     pip3 install -r requirements.txt && \
     pip3 install flask && \
     setcap cap_net_bind_service=+ep /usr/bin/python3.9 && \

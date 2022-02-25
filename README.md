@@ -20,14 +20,13 @@ and includes dockerized versions of the following honeypots
 * [heralding](https://github.com/johnnykv/heralding),
 * [hellpot](https://github.com/yunginnanet/HellPot),
 * [honeypots](https://github.com/qeeqbox/honeypots),
-* [honeysap](https://github.com/SecureAuthCorp/HoneySAP),
 * [honeytrap](https://github.com/armedpot/honeytrap/),
 * [ipphoney](https://gitlab.com/bontchev/ipphoney),
 * [log4pot](https://github.com/thomaspatzke/Log4Pot),
 * [mailoney](https://github.com/awhitehatter/mailoney),
 * [medpot](https://github.com/schmalle/medpot),
-* [rdpy](https://github.com/citronneur/rdpy),
 * [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot),
+* [sentrypeer](https://github.com/SentryPeer/SentryPeer),
 * [snare](http://mushmush.org/),
 * [tanner](http://mushmush.org/)
 
@@ -106,14 +105,13 @@ In T-Pot we combine the dockerized honeypots ...
 * [heralding](https://github.com/johnnykv/heralding),
 * [hellpot](https://github.com/yunginnanet/HellPot),
 * [honeypots](https://github.com/qeeqbox/honeypots),
-* [honeysap](https://github.com/SecureAuthCorp/HoneySAP),
 * [honeytrap](https://github.com/armedpot/honeytrap/),
 * [ipphoney](https://gitlab.com/bontchev/ipphoney),
 * [log4pot](https://github.com/thomaspatzke/Log4Pot),
 * [mailoney](https://github.com/awhitehatter/mailoney),
 * [medpot](https://github.com/schmalle/medpot),
 * [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot),
-* [rdpy](https://github.com/citronneur/rdpy),
+* [sentrypeer](https://github.com/SentryPeer/SentryPeer),
 * [snare](http://mushmush.org/),
 * [tanner](http://mushmush.org/)
 
@@ -159,18 +157,18 @@ Depending on the installation type, whether installing on [real hardware](#hardw
 There are prebuilt installation types available each focussing on different aspects to get you started right out of the box. The docker-compose files are located in `/opt/tpot/etc/compose`. If you want to build your own compose file just create a new one (based on the layout and settings of the prebuilds) in `/opt/tpot/etc/compose` and run `tped.sh` afterwards to point T-Pot to the new compose file and run you personalized edition.
 
 ##### Standard
-- Honeypots: adbhoney, ciscoasa, citrixhoneypot, conpot, cowrie, dicompot, dionaea, elasticpot, heralding, honeysap, honeytrap, mailoney, medpot, rdpy, snare & tanner
+- Honeypots: adbhoney, ciscoasa, citrixhoneypot, conpot, cowrie, dicompot, dionaea, elasticpot, heralding, honeytrap, mailoney, medpot, snare & tanner
 - Tools: cockpit, cyberchef, ELK, fatt, elasticvue, ewsposter, nginx / heimdall, spiderfoot, p0f & suricata
 
 
 ##### Sensor
-- Honeypots: adbhoney, ciscoasa, citrixhoneypot, conpot, cowrie, dicompot, dionaea, elasticpot, heralding, honeysap, honeytrap, mailoney, medpot, rdpy, snare & tanner
+- Honeypots: adbhoney, ciscoasa, citrixhoneypot, conpot, cowrie, dicompot, dionaea, elasticpot, heralding, honeytrap, mailoney, medpot, snare & tanner
 - Tools: cockpit, ewsposter, fatt, p0f & suricata
 - Since there is no ELK stack provided the Sensor Installation only requires 4 GB of RAM.
 
 
 ##### Industrial
-- Honeypots: conpot, cowrie, dicompot, heralding, honeysap, honeytrap, medpot & rdpy
+- Honeypots: conpot, cowrie, dicompot, heralding, honeytrap & medpot 
 - Tools: cockpit, cyberchef, ELK, fatt, elasticvue, ewsposter, nginx / heimdall, spiderfoot, p0f & suricata
 
 
@@ -180,7 +178,7 @@ There are prebuilt installation types available each focussing on different aspe
 
 
 ##### NextGen
-- Honeypots: adbhoney, ciscoasa, citrixhoneypot, conpot, cowrie, dicompot, dionaea, glutton, heralding, honeysap, ipphoney, mailoney, medpot, rdpy, snare & tanner
+- Honeypots: adbhoney, ciscoasa, citrixhoneypot, conpot, cowrie, dicompot, dionaea, glutton, heralding, ipphoney, mailoney, medpot, snare & tanner
 - Tools: cockpit, cyberchef, ELK, fatt, elasticvue, ewsposter, nginx / heimdall, spiderfoot, p0f & suricata
 
 
@@ -498,8 +496,8 @@ We hope you understand that we cannot provide support on an individual basis. We
 <a name="licenses"></a>
 # Licenses
 The software that T-Pot is built on uses the following licenses.
-<br>GPLv2: [conpot](https://github.com/mushorg/conpot/blob/master/LICENSE.txt), [dionaea](https://github.com/DinoTools/dionaea/blob/master/LICENSE), [honeysap](https://github.com/SecureAuthCorp/HoneySAP/blob/master/COPYING), [honeytrap](https://github.com/armedpot/honeytrap/blob/master/LICENSE), [suricata](http://suricata-ids.org/about/open-source/)
-<br>GPLv3: [adbhoney](https://github.com/huuck/ADBHoney), [elasticpot](https://gitlab.com/bontchev/elasticpot/-/blob/master/LICENSE), [ewsposter](https://github.com/telekom-security/ews/), [log4pot](https://github.com/thomaspatzke/Log4Pot/blob/master/LICENSE), [fatt](https://github.com/0x4D31/fatt/blob/master/LICENSE), [rdpy](https://github.com/citronneur/rdpy/blob/master/LICENSE), [heralding](https://github.com/johnnykv/heralding/blob/master/LICENSE.txt), [ipphoney](https://gitlab.com/bontchev/ipphoney/-/blob/master/LICENSE), [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot/blob/main/LICENSE), [snare](https://github.com/mushorg/snare/blob/master/LICENSE), [tanner](https://github.com/mushorg/snare/blob/master/LICENSE)
+<br>GPLv2: [conpot](https://github.com/mushorg/conpot/blob/master/LICENSE.txt), [dionaea](https://github.com/DinoTools/dionaea/blob/master/LICENSE), [honeytrap](https://github.com/armedpot/honeytrap/blob/master/LICENSE), [suricata](http://suricata-ids.org/about/open-source/)
+<br>GPLv3: [adbhoney](https://github.com/huuck/ADBHoney), [elasticpot](https://gitlab.com/bontchev/elasticpot/-/blob/master/LICENSE), [ewsposter](https://github.com/telekom-security/ews/), [log4pot](https://github.com/thomaspatzke/Log4Pot/blob/master/LICENSE), [fatt](https://github.com/0x4D31/fatt/blob/master/LICENSE), [heralding](https://github.com/johnnykv/heralding/blob/master/LICENSE.txt), [ipphoney](https://gitlab.com/bontchev/ipphoney/-/blob/master/LICENSE), [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot/blob/main/LICENSE), [sentrypeer](https://github.com/SentryPeer/SentryPeer/blob/main/LICENSE.GPL-3.0-only), [snare](https://github.com/mushorg/snare/blob/master/LICENSE), [tanner](https://github.com/mushorg/snare/blob/master/LICENSE)
 <br>Apache 2 License: [cyberchef](https://github.com/gchq/CyberChef/blob/master/LICENSE), [dicompot](https://github.com/nsmfoo/dicompot/blob/master/LICENSE), [elasticsearch](https://github.com/elasticsearch/elasticsearch/blob/master/LICENSE.txt), [logstash](https://github.com/elasticsearch/logstash/blob/master/LICENSE), [kibana](https://github.com/elasticsearch/kibana/blob/master/LICENSE.md), [docker](https://github.com/docker/docker/blob/master/LICENSE)
 <br>MIT license: [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/blob/master/LICENSE), [ddospot](https://github.com/aelth/ddospot/blob/master/LICENSE), [elasticvue](https://github.com/cars10/elasticvue/blob/master/LICENSE), [glutton](https://github.com/mushorg/glutton/blob/master/LICENSE), [hellpot](https://github.com/yunginnanet/HellPot/blob/master/LICENSE), [maltrail](https://github.com/stamparm/maltrail/blob/master/LICENSE)
 <br> Unlicense: [endlessh](https://github.com/skeeto/endlessh/blob/master/UNLICENSE)
@@ -535,7 +533,6 @@ Without open source and the fruitful development community (we are proud to be a
 * [hellpot](https://github.com/yunginnanet/HellPot/graphs/contributors)
 * [heralding](https://github.com/johnnykv/heralding/graphs/contributors)
 * [honeypots](https://github.com/qeeqbox/honeypots/graphs/contributors)
-* [honeysap](https://github.com/SecureAuthCorp/HoneySAP/graphs/contributors)
 * [honeytrap](https://github.com/armedpot/honeytrap/graphs/contributors)
 * [ipphoney](https://gitlab.com/bontchev/ipphoney/-/project_members)
 * [kibana](https://github.com/elastic/kibana/graphs/contributors)
@@ -545,8 +542,8 @@ Without open source and the fruitful development community (we are proud to be a
 * [maltrail](https://github.com/stamparm/maltrail/graphs/contributors)
 * [medpot](https://github.com/schmalle/medpot/graphs/contributors)
 * [p0f](http://lcamtuf.coredump.cx/p0f3/)
-* [rdpy](https://github.com/citronneur/rdpy)
 * [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot/graphs/contributors)
+* [sentrypeer](https://github.com/SentryPeer/SentryPeer/graphs/contributors),
 * [spiderfoot](https://github.com/smicallef/spiderfoot)
 * [snare](https://github.com/mushorg/snare/graphs/contributors)
 * [tanner](https://github.com/mushorg/tanner/graphs/contributors)
