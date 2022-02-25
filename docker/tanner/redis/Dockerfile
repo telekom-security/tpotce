@@ -1,10 +1,10 @@
-FROM redis:alpine
+FROM alpine:3.15
 #
 # Include dist
 ADD dist/ /root/dist/
 #
 # Setup apk and redis
-RUN apk -U --no-cache add shadow && \
+RUN apk -U --no-cache add redis shadow && \
     cp /root/dist/redis.conf /etc && \
 #
 # Setup user and group
