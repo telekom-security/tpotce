@@ -848,7 +848,6 @@ mkdir -vp /data/adbhoney/{downloads,log} \
          /data/tanner/{log,files} \
          /data/p0f/log \
          /home/tsec/.ssh/
-touch /data/spiderfoot/spiderfoot.db
 touch /data/nginx/log/error.log
 
 # Let's copy some files

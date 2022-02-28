@@ -10,6 +10,7 @@ networks:
   conpot_local_ipmi:
   conpot_local_kamstrup_382:
   cowrie_local:
+  ddospot_local:
   dicompot_local:
   dionaea_local:
   elasticpot_local:
@@ -174,6 +175,25 @@ services:
      - /data/cowrie/keys:/home/cowrie/cowrie/etc
      - /data/cowrie/log:/home/cowrie/cowrie/log
      - /data/cowrie/log/tty:/home/cowrie/cowrie/log/tty
+
+# Ddospot service
+  ddospot:
+    container_name: ddospot
+    restart: always
+    networks:
+     - ddospot_local
+    ports:
+     - "19:19/udp"
+     - "53:53/udp"
+     - "123:123/udp"
+#     - "161:161/udp"
+     - "1900:1900/udp"
+    image: "dtagdevsec/ddospot:2203"
+    read_only: true
+    volumes:
+     - /data/ddospot/log:/opt/ddospot/ddospot/logs
+     - /data/ddospot/bl:/opt/ddospot/ddospot/bl
+     - /data/ddospot/db:/opt/ddospot/ddospot/db
 
 # Dicompot service
 # Get the Horos Client for testing: https://horosproject.org/
@@ -619,4 +639,4 @@ services:
      - "127.0.0.1:64303:8080"
     image: "dtagdevsec/spiderfoot:2203"
     volumes:
-     - /data/spiderfoot/spiderfoot.db:/home/spiderfoot/.spiderfoot/spiderfoot.db
+     - /data/spiderfoot:/home/spiderfoot/.spiderfoot
