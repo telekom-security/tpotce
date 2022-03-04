@@ -28,8 +28,8 @@ RUN apt-get update -y && \
     cd /opt/ && \
     git clone https://github.com/thomaspatzke/Log4Pot && \
     cd Log4Pot && \
-    git checkout b163858649801974e9b86cea397f5eb137c7c01b && \
-#    git checkout 4e9bac32605e4d2dd4bbc6df56365988b4815c4a && \
+#    git checkout b163858649801974e9b86cea397f5eb137c7c01b && \
+    git checkout fac539f470217347e51127c635f16749a887c0ac && \
     sed -i 's#"type": logtype,#"reason": logtype,#g' log4pot-server.py && \
     poetry install && \
     setcap cap_net_bind_service=+ep /usr/bin/python3.8 && \
