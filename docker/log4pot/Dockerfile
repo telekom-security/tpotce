@@ -3,7 +3,6 @@ ENV DEBIAN_FRONTEND noninteractive
 #
 # Install packages
 RUN apt-get update -y && \
-    apt-get dist-upgrade -y && \
     apt-get install -y \
              build-essential \
 	     cargo \
@@ -48,7 +47,7 @@ RUN apt-get update -y && \
 		    python3-dev \
 		    rust-all && \
     apt-get autoremove -y --purge && \
-    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /root/.cache /opt/Log4Pot/.git
 #
 # Start log4pot
 STOPSIGNAL SIGINT
