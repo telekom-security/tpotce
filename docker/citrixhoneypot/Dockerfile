@@ -1,7 +1,7 @@
 FROM alpine:3.15
 #
 # Install packages
-RUN apk -U add \
+RUN apk --no-cache -U add \
             git \
             libcap \
 	    openssl \
@@ -36,6 +36,7 @@ RUN apk -U add \
                     openssl \
                     python3-dev && \
     rm -rf /root/* && \
+    rm -rf /opt/citrixhoneypot/.git && \
     rm -rf /var/cache/apk/*
 #
 # Set workdir and start citrixhoneypot

@@ -1,10 +1,10 @@
-FROM alpine:3.14
+FROM alpine:3.15
 #
 # Include dist
-ADD dist/ /root/dist/
+COPY dist/ /root/dist/
 #
 # Get and install dependencies & packages
-RUN apk -U add \
+RUN apk --no-cache -U add \
              bash \
              build-base \
              git \
@@ -15,6 +15,7 @@ RUN apk -U add \
              mpfr-dev \
              openssl \
              openssl-dev \
+	     py3-mysqlclient \
              py3-pip \
              python3 \
              python3-dev && \
@@ -60,6 +61,7 @@ RUN apk -U add \
     rm -rf /root/* /tmp/* && \
     rm -rf /var/cache/apk/* && \
     rm -rf /home/cowrie/cowrie/cowrie.pid && \
+    rm -rf /home/cowrie/cowrie/.git && \
     unset PYTHON_DIR
 #
 # Start cowrie

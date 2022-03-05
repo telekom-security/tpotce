@@ -1,10 +1,10 @@
 FROM alpine:3.15
 #
 # Include dist
-ADD dist/ /root/dist/
+COPY dist/ /root/dist/
 #
 # Install packages
-RUN apk -U add \
+RUN apk --no-cache -U add \
             git \
             libcap \
 	    py3-pip \
@@ -30,6 +30,7 @@ RUN apk -U add \
     apk del --purge git \
                     python3-dev && \
     rm -rf /root/* && \
+    rm -rf /opt/adbhoney/.git && \
     rm -rf /var/cache/apk/*
 #
 # Set workdir and start adbhoney

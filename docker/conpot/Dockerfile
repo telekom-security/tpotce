@@ -1,11 +1,12 @@
 FROM alpine:3.15
 #
 # Include dist
-ADD dist/ /root/dist/
+COPY dist/ /root/dist/
 #
 # Setup apt
-RUN apk -U add \
+RUN apk --no-cache -U add \
              build-base \
+	     cython \
              file \
              git \
              libev \

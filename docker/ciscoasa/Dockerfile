@@ -1,11 +1,11 @@
 FROM alpine:3.15
 #
 # Include dist
-ADD dist/ /root/dist/
+COPY dist/ /root/dist/
 #
 # Setup env and apt
-RUN apk -U upgrade && \
-    apk add build-base \
+RUN apk --no-cache -U upgrade && \
+    apk --no-cache add build-base \
             git \
             libffi \
             libffi-dev \
@@ -37,6 +37,7 @@ RUN apk -U upgrade && \
                     openssl-dev \
                     python3-dev && \
     rm -rf /root/* && \
+    rm -rf /opt/ciscoasa_honeypot/.git && \
     rm -rf /var/cache/apk/*
 #
 # Start ciscoasa

@@ -42,7 +42,6 @@ services:
 
 # Conpot IEC104 service
   conpot_IEC104:
-    build: .
     container_name: conpot_IEC104
     restart: always
     environment:
@@ -65,7 +64,6 @@ services:
 
 # Conpot guardian_ast service
   conpot_guardian_ast:
-    build: .
     container_name: conpot_guardian_ast
     restart: always
     environment:
@@ -87,7 +85,6 @@ services:
 
 # Conpot ipmi
   conpot_ipmi:
-    build: .
     container_name: conpot_ipmi
     restart: always
     environment:
@@ -109,7 +106,6 @@ services:
 
 # Conpot kamstrup_382
   conpot_kamstrup_382:
-    build: .
     container_name: conpot_kamstrup_382
     restart: always
     environment:
