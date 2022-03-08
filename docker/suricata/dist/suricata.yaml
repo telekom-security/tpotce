@@ -988,9 +988,9 @@ asn1-max-frames: 256
 ##
 
 # Run Suricata with a specific user-id and group-id:
-#run-as:
-#  user: suri
-#  group: suri
+run-as:
+  user: suri
+  group: suri
 
 # Some logging modules will use that name in event as identifier. The default
 # value is the hostname
