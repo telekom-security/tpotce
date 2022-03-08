@@ -1,7 +1,7 @@
 FROM alpine:3.15
 #
 # Include dist
-ADD dist/ /root/dist/
+COPY dist/ /root/dist/
 #
 # Setup apk
 RUN apk -U --no-cache add \
@@ -41,7 +41,7 @@ RUN apk -U --no-cache add \
                     g++ && \
     rm -rf /var/cache/apk/* \
            /opt/go \
-           /root/dist
+           /root/*
 #
 # Start hellpot
 WORKDIR /opt/hellpot

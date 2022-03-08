@@ -3,10 +3,9 @@ FROM ubuntu:20.04
 # VARS
 ENV KB_VER=8.0.0
 # Include dist
-ADD dist/ /root/dist/
+COPY dist/ /root/dist/
 #
 RUN apt-get update -y && \
-    apt-get dist-upgrade -y && \
     apt-get install -y \
             aria2 \
             curl && \
@@ -47,7 +46,7 @@ RUN apt-get update -y && \
 # Clean up
     apt-get purge aria2 -y && \
     apt-get autoremove -y --purge && \
-    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /root/dist
+    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /root/.cache /root/*
 #
 # Healthcheck
 HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:5601'

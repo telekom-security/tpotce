@@ -1,10 +1,10 @@
 FROM alpine:3.15
 #
 # Include dist
-ADD dist/ /root/dist/
+COPY dist/ /root/dist/
 #
 # Install packages
-RUN apk -U add \
+RUN apk -U --no-cache add \
              build-base \
              git \
 	     libcap \
@@ -32,8 +32,7 @@ RUN apk -U add \
     apk del --purge build-base \
                     git \
 		    python3-dev && \
-    rm -rf /root/* && \
-    rm -rf /var/cache/apk/*
+    rm -rf /root/* /var/cache/apk/* /opt/geoip-attack-map/.git
 #
 # Start wordpot
 STOPSIGNAL SIGINT

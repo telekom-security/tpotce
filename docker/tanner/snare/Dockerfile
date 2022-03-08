@@ -1,7 +1,7 @@
 FROM alpine:3.15
 #
 # Include dist
-ADD dist/ /root/dist/
+COPY dist/ /root/dist/
 #
 # Setup apt
 RUN apk -U --no-cache add \
@@ -24,6 +24,12 @@ RUN apk -U --no-cache add \
     mkdir -p /opt/snare/pages && \
 #    clone --target http://example.com && \
     mv /root/dist/pages/* /opt/snare/pages/ && \
+#
+# Setup configs, user, groups
+    addgroup -g 2000 snare && \
+    adduser -S -s /bin/ash -u 2000 -D -g 2000 snare && \
+    mkdir /var/log/tanner && \
+    chown -R snare:snare /opt/snare && \
 #   
 # Clean up
     apk del --purge \
@@ -36,5 +42,6 @@ RUN apk -U --no-cache add \
 #
 # Start snare
 STOPSIGNAL SIGKILL
+USER snare:snare
 #CMD snare --tanner tanner --debug true --no-dorks true --auto-update false --host-ip 0.0.0.0 --port 80 --page-dir $(shuf -i 1-10 -n 1)
 CMD snare --tanner tanner --debug true --auto-update false --host-ip 0.0.0.0 --port 80 --page-dir $(shuf -i 1-10 -n 1)

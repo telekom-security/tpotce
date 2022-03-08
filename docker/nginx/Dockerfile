@@ -1,13 +1,12 @@
 FROM alpine:3.15
 #
 # Include dist
-ADD dist/ /root/dist/
+COPY dist/ /root/dist/
 #
 # Get and install dependencies & packages
 RUN apk -U --no-cache add \
       nginx \
-      nginx-mod-http-headers-more \
-      && \
+      nginx-mod-http-headers-more && \
 #
 ## Setup T-Pot Landing Page, Eleasticvue, Cyberchef 
     cp -R /root/dist/html/* /var/lib/nginx/html/ && \

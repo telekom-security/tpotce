@@ -2,7 +2,7 @@ FROM ubuntu:20.04
 ENV DEBIAN_FRONTEND noninteractive
 #
 # Include dist
-ADD dist/ /root/dist/
+COPY dist/ /root/dist/
 #
 # Determine arch, get and install packages
 RUN ARCH=$(arch) && \
@@ -16,7 +16,6 @@ RUN ARCH=$(arch) && \
          http://ftp.us.debian.org/debian/pool/main/libe/libemu/libemu-dev_0.2.0+git20120122-1.2+b1_$ARCH.deb && \
     apt install ./libemu2_0.2.0+git20120122-1.2+b1_$ARCH.deb \
                 ./libemu-dev_0.2.0+git20120122-1.2+b1_$ARCH.deb -y && \
-    apt-get dist-upgrade -y && \
     apt-get install -y --no-install-recommends \
 	build-essential \
 	ca-certificates \
@@ -108,7 +107,7 @@ RUN ARCH=$(arch) && \
 #
     apt-get autoremove --purge -y && \
     apt-get clean && \
-    rm -rf /root/* /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    rm -rf /root/* /var/lib/apt/lists/* /tmp/* /var/tmp/* /root/.cache /opt/dionaea/.git
 #
 # Start dionaea
 USER dionaea:dionaea

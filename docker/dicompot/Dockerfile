@@ -5,7 +5,7 @@ RUN apk -U add --no-cache \
                    build-base \
                    git \
                    g++ && \
-    apk -U add go --repository http://dl-3.alpinelinux.org/alpine/edge/community && \
+    apk -U add --no-cache go --repository http://dl-3.alpinelinux.org/alpine/edge/community && \
 #
 # Setup go, build dicompot 
     mkdir -p /opt/go && \

@@ -1,7 +1,7 @@
 FROM alpine:3.15
 #  
 # Include dist
-ADD dist/ /root/dist/
+COPY dist/ /root/dist/
 #
 # Install packages
 RUN apk -U --no-cache add \ 

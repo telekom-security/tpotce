@@ -3,7 +3,7 @@
 FROM alpine:3.15
 #
 # Add source
-ADD . /opt/p0f
+COPY . /opt/p0f
 #
 # Install packages
 RUN apk -U --no-cache add \

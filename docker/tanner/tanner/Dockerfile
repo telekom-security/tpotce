@@ -1,7 +1,7 @@
 FROM alpine:3.15
 #
 # Include dist
-ADD dist/ /root/dist/
+COPY dist/ /root/dist/
 #
 # Setup apt
 RUN apk -U --no-cache add \
@@ -59,8 +59,7 @@ RUN apk -U --no-cache add \
             linux-headers \
             python3-dev && \
     rm -rf /root/* && \
-    rm -rf /tmp/* /var/tmp/* && \
-    rm -rf /var/cache/apk/*
+    rm -rf /tmp/* /var/tmp/* /var/cache/apk/* /opt/tanner/.git
 #
 # Start tanner
 STOPSIGNAL SIGKILL

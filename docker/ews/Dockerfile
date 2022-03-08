@@ -1,7 +1,7 @@
 FROM alpine:3.15
 #
 # Include dist
-ADD dist/ /root/dist/
+COPY dist/ /root/dist/
 #
 # Install packages
 RUN apk -U --no-cache add \
@@ -20,6 +20,7 @@ RUN apk -U --no-cache add \
             py3-requests \
 	    py3-pip \
             py3-setuptools && \
+    pip3 install --upgrade pip && \
     pip3 install --no-cache-dir configparser hpfeeds3 influxdb influxdb-client pyOpenSSL xmljson && \
 #
 # Setup ewsposter
@@ -44,8 +45,7 @@ RUN apk -U --no-cache add \
             openssl-dev \
             python3-dev \
             py-setuptools && \
-    rm -rf /root/* && \
-    rm -rf /var/cache/apk/*
+    rm -rf /root/* /var/cache/apk/* /opt/ewsposter/.git
 #
 # Run ewsposter
 STOPSIGNAL SIGINT

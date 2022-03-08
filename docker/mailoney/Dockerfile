@@ -18,8 +18,7 @@ RUN apk -U --no-cache add \
 #
 # Clean up
     apk del --purge git && \
-    rm -rf /root/* && \
-    rm -rf /var/cache/apk/*
+    rm -rf /root/* /var/cache/apk/* /opt/mailoney/.git
 #
 # Set workdir and start mailoney
 STOPSIGNAL SIGINT

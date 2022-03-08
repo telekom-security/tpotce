@@ -39,8 +39,7 @@ RUN apk -U --no-cache add \
                     git \
                     php7-dev \
                     python3-dev && \
-    rm -rf /root/* && \
-    rm -rf /var/cache/apk/*
+    rm -rf /root/* /var/cache/apk/* /opt/phpox/.git
 #
 # Set workdir and start phpsandbox
 STOPSIGNAL SIGKILL

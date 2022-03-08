@@ -1,7 +1,7 @@
 FROM alpine:3.15
 #
 # Include dist
-ADD dist/ /root/dist/
+COPY dist/ /root/dist/
 #
 # Setup apk and redis
 RUN apk -U --no-cache add redis shadow && \

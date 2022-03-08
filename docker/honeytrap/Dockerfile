@@ -2,12 +2,11 @@ FROM ubuntu:20.04
 ENV DEBIAN_FRONTEND noninteractive
 #
 # Include dist
-ADD dist/ /root/dist/
+COPY dist/ /root/dist/
 #
 # Setup apt
 RUN apt-get update && \
     apt-get update -y && \
-    apt-get dist-upgrade -y && \
 #
 # Install packages
     apt-get install -y autoconf \
@@ -56,7 +55,7 @@ RUN apt-get update && \
                      libnetfilter-queue-dev \
                      libpq-dev && \
     apt-get autoremove -y --purge && \
-    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /root/.cache /root/* /opt/honeytrap/.git
 #
 # Start honeytrap
 USER honeytrap:honeytrap
