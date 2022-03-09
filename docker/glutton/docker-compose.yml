@@ -10,6 +10,8 @@ services:
     tmpfs:
      - /var/lib/glutton:uid=2000,gid=2000
      - /run:uid=2000,gid=2000
+    cpu_count: 1
+    cpus: 0.75
     network_mode: "host"
     cap_add:
      - NET_ADMIN

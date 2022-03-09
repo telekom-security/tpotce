@@ -23,6 +23,8 @@ services:
      - CONPOT_TMP=/tmp/conpot
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
+    cpu_count: 1
+    cpus: 0.25    
     networks:
      - conpot_local_default
     ports:
@@ -52,6 +54,8 @@ services:
      - CONPOT_TMP=/tmp/conpot
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
+    cpu_count: 1
+    cpus: 0.25
     networks:
      - conpot_local_IEC104
     ports:
@@ -74,6 +78,8 @@ services:
      - CONPOT_TMP=/tmp/conpot
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
+    cpu_count: 1
+    cpus: 0.25
     networks:
      - conpot_local_guardian_ast
     ports:
@@ -95,6 +101,8 @@ services:
      - CONPOT_TMP=/tmp/conpot
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
+    cpu_count: 1
+    cpus: 0.25
     networks:
      - conpot_local_ipmi
     ports:
@@ -116,6 +124,8 @@ services:
      - CONPOT_TMP=/tmp/conpot
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
+    cpu_count: 1
+    cpus: 0.25
     networks:
      - conpot_local_kamstrup_382
     ports:

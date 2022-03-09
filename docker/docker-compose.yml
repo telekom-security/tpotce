@@ -102,15 +102,15 @@ services:
     build: medpot/.
     image: "dtagdevsec/medpot:2203"
 
-# Rdpy service
-  rdpy:
-    build: rdpy/.
-    image: "dtagdevsec/rdpy:2203"
-
 # Redishoneypot service
-  rdpy:
+  redishoneypot:
     build: redishoneypot/.
     image: "dtagdevsec/redishoneypot:2203"
+
+# Sentrypeer service
+  sentrypeer:
+    build: sentrypeer/.
+    image: "dtagdevsec/sentrypeer:2203"
 
 #### Snare / Tanner
 ## Tanner Redis Service
@@ -188,3 +188,8 @@ services:
   spiderfoot:
     build: spiderfoot/.
     image: "dtagdevsec/spiderfoot:2203"
+
+# Map Web Service
+  map_web:
+    build: elk/map/.
+    image: "dtagdevsec/map_server:2203"
