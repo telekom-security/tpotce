@@ -91,19 +91,19 @@
                 <value type="value">1</value>
             </key>
             <key name="ifInOctets">
-                <value type="value">1618895</value>
+                <value type="function">conpot.emulators.misc.sysinfo.BytesRecv</value>		    
             </key>
             <key name="ifInUcastPkts">
-                <value type="value">7018</value>
+                <value type="function">conpot.emulators.misc.sysinfo.PacketsRecv</value> 
             </key>
             <key name="ifInNUcastPkts">
                 <value type="value">291</value>
             </key>
             <key name="ifOutOctets">
-                <value type="value">455107</value>
+                <value type="function">conpot.emulators.misc.sysinfo.BytesSent</value>
             </key>
             <key name="ifOutUcastPkts">
-                <value type="value">872264</value>
+                <value type="function">conpot.emulators.misc.sysinfo.PacketsSent</value> 
             </key>
             <key name="ifOutUNcastPkts">
                 <value type="value">143</value>
@@ -168,7 +168,7 @@
                 <value type="value">0</value>
             </key>
             <key name="ipAdEntAddr">
-                <value type="value">"217.172.190.137"</value>
+                <value type="function">conpot.emulators.misc.sysinfo.LocalIP</value>
             </key>
             <key name="ipAdEntIfIndex">
                 <value type="value">1</value>
@@ -290,7 +290,7 @@
                 <value type="value">45</value>
             </key>
             <key name="tcpCurrEstab">
-                <value type="value">0</value>
+                <value type="function">conpot.emulators.misc.sysinfo.TcpCurrEstab</value>
             </key>
             <key name="tcpInSegs">
                 <value type="value">30321</value>
@@ -305,7 +305,7 @@
                 <value type="value">2</value>
             </key>
             <key name="tcpConnLocalAddress">
-                <value type="value">"217.172.190.137"</value>
+                <value type="function">conpot.emulators.misc.sysinfo.LocalIP</value>
             </key>
             <key name="tcpConnLocalPort">
                 <value type="value">2404</value>
@@ -336,7 +336,7 @@
                 <value type="value">47</value>
             </key>
             <key name="udpLocalAddress">
-                <value type="value">"217.172.190.137"</value>
+                <value type="value">"163.172.189.137"</value>
             </key>
             <key name="udpLocalPort">
                 <value type="value">161</value>
