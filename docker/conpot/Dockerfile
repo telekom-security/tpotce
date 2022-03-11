@@ -17,6 +17,7 @@ RUN apk --no-cache -U add \
              libxslt-dev \
              mariadb-dev \
              pkgconfig \
+	     procps \
              python3 \
              python3-dev \
 	     py3-pip \
@@ -73,5 +74,7 @@ RUN apk --no-cache -U add \
 #
 # Start conpot
 STOPSIGNAL SIGINT
+# Conpot sometimes hangs at 100% CPU usage, if detected process will be killed and container restarts per docker-compose settings
+HEALTHCHECK CMD if [ $(ps -C mpv -p 1 -o %cpu | tail -n 1 | cut -f 1 -d ".") -gt 90 ]; then kill -2 1; else exit 0; fi
 USER conpot:conpot
 CMD exec /usr/bin/conpot --mibcache $CONPOT_TMP --temp_dir $CONPOT_TMP --template $CONPOT_TEMPLATE --logfile $CONPOT_LOG --config $CONPOT_CONFIG
