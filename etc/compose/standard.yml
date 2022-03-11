@@ -32,8 +32,6 @@ services:
   adbhoney:
     container_name: adbhoney
     restart: always
-    cpu_count: 1
-    cpus: 0.25
     networks:
      - adbhoney_local
     ports:
@@ -50,8 +48,6 @@ services:
     restart: always
     tmpfs:
      - /tmp/ciscoasa:uid=2000,gid=2000
-    cpu_count: 1
-    cpus: 0.25
     network_mode: "host"
     ports:
      - "5000:5000/udp"
@@ -65,8 +61,6 @@ services:
   citrixhoneypot:
     container_name: citrixhoneypot
     restart: always
-    cpu_count: 1
-    cpus: 0.25
     networks:
      - citrixhoneypot_local
     ports:
@@ -88,8 +82,6 @@ services:
      - CONPOT_TMP=/tmp/conpot
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
-    cpu_count: 1
-    cpus: 0.25
     networks:
      - conpot_local_IEC104
     ports:
@@ -112,8 +104,6 @@ services:
      - CONPOT_TMP=/tmp/conpot
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
-    cpu_count: 1
-    cpus: 0.25
     networks:
      - conpot_local_guardian_ast
     ports:
@@ -135,8 +125,6 @@ services:
      - CONPOT_TMP=/tmp/conpot
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
-    cpu_count: 1
-    cpus: 0.25
     networks:
      - conpot_local_ipmi
     ports:
@@ -158,8 +146,6 @@ services:
      - CONPOT_TMP=/tmp/conpot
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
-    cpu_count: 1
-    cpus: 0.25
     networks:
      - conpot_local_kamstrup_382
     ports:
@@ -177,8 +163,6 @@ services:
     tmpfs:
      - /tmp/cowrie:uid=2000,gid=2000
      - /tmp/cowrie/data:uid=2000,gid=2000
-    cpu_count: 1
-    cpus: 0.25
     networks:
      - cowrie_local
     ports:
@@ -196,8 +180,6 @@ services:
   ddospot:
     container_name: ddospot
     restart: always
-    cpu_count: 1
-    cpus: 0.25
     networks:
      - ddospot_local
     ports:
@@ -220,8 +202,6 @@ services:
   dicompot:
     container_name: dicompot
     restart: always
-    cpu_count: 1
-    cpus: 0.25
     networks:
      - dicompot_local
     ports:
@@ -238,8 +218,6 @@ services:
     stdin_open: true
     tty: true
     restart: always
-    cpu_count: 1
-    cpus: 0.25
     networks:
      - dionaea_local
     ports:
@@ -275,8 +253,6 @@ services:
   elasticpot:
     container_name: elasticpot
     restart: always
-    cpu_count: 1
-    cpus: 0.25
     networks:
      - elasticpot_local
     ports:
@@ -292,8 +268,6 @@ services:
     restart: always
     tmpfs:
      - /tmp/heralding:uid=2000,gid=2000
-    cpu_count: 1
-    cpus: 0.25
     networks:
      - heralding_local
     ports:
@@ -324,8 +298,6 @@ services:
     restart: always
     tmpfs:
      - /tmp/honeytrap:uid=2000,gid=2000
-    cpu_count: 1
-    cpus: 0.75
     network_mode: "host"
     cap_add:
      - NET_ADMIN
@@ -346,8 +318,6 @@ services:
      - HPFEEDS_SECRET=pass
      - HPFEEDS_PORT=20000
      - HPFEEDS_CHANNELPREFIX=prefix
-    cpu_count: 1
-    cpus: 0.25
     networks:
      - mailoney_local
     ports:
@@ -361,8 +331,6 @@ services:
   medpot:
     container_name: medpot
     restart: always
-    cpu_count: 1
-    cpus: 0.25
     networks:
      - medpot_local
     ports:
@@ -376,8 +344,6 @@ services:
   sentrypeer:
     container_name: sentrypeer
     restart: always
-    cpu_count: 1
-    cpus: 0.25
     networks:
      - sentrypeer_local
     ports:
@@ -393,8 +359,6 @@ services:
     container_name: tanner_redis
     restart: always
     tty: true
-    cpu_count: 1
-    cpus: 0.25
     networks:
      - tanner_local
     image: "dtagdevsec/redis:2203"
@@ -405,8 +369,6 @@ services:
     container_name: tanner_phpox
     restart: always
     tty: true
-    cpu_count: 1
-    cpus: 0.25
     networks:
      - tanner_local
     image: "dtagdevsec/phpox:2203"
@@ -419,8 +381,6 @@ services:
     tmpfs:
      - /tmp/tanner:uid=2000,gid=2000
     tty: true
-    cpu_count: 1
-    cpus: 0.25
     networks:
      - tanner_local
     image: "dtagdevsec/tanner:2203"
@@ -455,8 +415,6 @@ services:
     tmpfs:
      - /tmp/tanner:uid=2000,gid=2000
     tty: true
-    cpu_count: 1
-    cpus: 0.25
     networks:
      - tanner_local
     image: "dtagdevsec/tanner:2203"
@@ -475,8 +433,6 @@ services:
     container_name: snare
     restart: always
     tty: true
-    cpu_count: 1
-    cpus: 0.25
     networks:
      - tanner_local
     ports:
@@ -494,8 +450,6 @@ services:
   fatt:
     container_name: fatt
     restart: always
-    cpu_count: 1
-    cpus: 0.75
     network_mode: "host"
     cap_add:
      - NET_ADMIN
@@ -509,8 +463,6 @@ services:
   p0f:
     container_name: p0f
     restart: always
-    cpu_count: 1
-    cpus: 0.75
     network_mode: "host"
     image: "dtagdevsec/p0f:2203"
     read_only: true
@@ -636,8 +588,6 @@ services:
   ewsposter:
     container_name: ewsposter
     restart: always
-    cpu_count: 1
-    cpus: 0.75
     networks:
      - ewsposter_local
     environment:
@@ -668,8 +618,6 @@ services:
      - /var/tmp/nginx/scgi
      - /run
      - /var/lib/nginx/tmp:uid=100,gid=82
-    cpu_count: 1
-    cpus: 0.75
     network_mode: "host"
     ports:
      - "64297:64297"
@@ -685,8 +633,6 @@ services:
   spiderfoot:
     container_name: spiderfoot
     restart: always
-    cpu_count: 1
-    cpus: 0.75
     networks:
      - spiderfoot_local
     ports:

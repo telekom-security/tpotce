@@ -6,10 +6,8 @@ COPY dist/ /root/dist/
 # Install packages
 RUN apk --no-cache -U add \
             git \
-            libcap \
-	    py3-pip \
-            python3 \
-            python3-dev && \
+	    procps \
+            python3 && \
 #
 # Install adbhoney from git
     git clone https://github.com/huuck/ADBHoney /opt/adbhoney && \
@@ -24,17 +22,15 @@ RUN apk --no-cache -U add \
     addgroup -g 2000 adbhoney && \
     adduser -S -H -s /bin/ash -u 2000 -D -g 2000 adbhoney && \
     chown -R adbhoney:adbhoney /opt/adbhoney && \
-    setcap cap_net_bind_service=+ep /usr/bin/python3.9 && \
 #
 # Clean up
-    apk del --purge git \
-                    python3-dev && \
-    rm -rf /root/* && \
-    rm -rf /opt/adbhoney/.git && \
-    rm -rf /var/cache/apk/*
+    apk del --purge git && \
+    rm -rf /root/* /opt/adbhoney/.git /var/cache/apk/*
 #
 # Set workdir and start adbhoney
 STOPSIGNAL SIGINT
+# Adbhoney sometimes hangs at 100% CPU usage, if detected process will be killed and container restarts per docker-compose settings
+HEALTHCHECK CMD if [ $(ps -C mpv -p 1 -o %cpu | tail -n 1 | cut -f 1 -d ".") -gt 99 ]; then kill -2 1; else exit 0; fi
 USER adbhoney:adbhoney
 WORKDIR /opt/adbhoney/
-CMD nohup /usr/bin/python3 run.py
+CMD /usr/bin/python3 run.py
