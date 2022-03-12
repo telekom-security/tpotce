@@ -17,11 +17,12 @@ RUN apk -U --no-cache add \
             py3-ipaddress \
 	    py3-lxml \
 	    py3-mysqlclient \
+	    py3-openssl \
             py3-requests \
 	    py3-pip \
             py3-setuptools && \
     pip3 install --upgrade pip && \
-    pip3 install --no-cache-dir configparser hpfeeds3 influxdb influxdb-client pyOpenSSL xmljson && \
+    pip3 install --no-cache-dir configparser hpfeeds3 influxdb influxdb-client xmljson && \
 #
 # Setup ewsposter
     git clone https://github.com/telekom-security/ewsposter /opt/ewsposter && \

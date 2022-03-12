@@ -19,7 +19,31 @@ RUN apk -U --no-cache add \
              openssl \
              openssl-dev \
 	     postgresql-dev \
+	     py3-chardet \
+	     py3-click \
+	     py3-cryptography \
+	     py3-dnspython \
+	     py3-flask \
+	     py3-future \
+	     py3-hiredis \
+	     py3-impacket \
+	     py3-itsdangerous \
+	     py3-jinja2 \
+	     py3-ldap3 \
+	     py3-markupsafe \
+	     py3-netifaces \
+	     py3-openssl \
+	     py3-packaging \
+	     py3-paramiko \
 	     py3-pip \
+	     py3-psutil \
+	     py3-psycopg2 \
+	     py3-pycryptodomex \
+	     py3-requests \
+	     py3-service_identity \
+	     py3-twisted \
+	     py3-werkzeug \
+	     py3-wheel \
              python3 \
              python3-dev \
              zlib-dev && \
@@ -31,8 +55,8 @@ RUN apk -U --no-cache add \
     git clone https://github.com/qeeqbox/honeypots && \
     cd honeypots && \
     git checkout bee3147cf81837ba7639f1e27fe34d717ecccf29 && \
+    cp /root/dist/setup.py . && \
     pip3 install --upgrade pip && \
-    pip3 install --ignore-installed hiredis packaging && \
     pip3 install . && \
     setcap cap_net_bind_service=+ep /usr/bin/python3.9 && \
 #

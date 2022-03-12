@@ -1,0 +1,4 @@
+aiosmtpd
+asyncssh>=2.0.0
+pyaml
+hpfeeds3

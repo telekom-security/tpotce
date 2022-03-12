@@ -14,8 +14,8 @@ services:
     restart: always
     tmpfs:
      - /tmp:uid=2000,gid=2000
-    cpu_count: 1
-    cpus: 0.75
+#    cpu_count: 1
+#    cpus: 0.75
     networks:
      - honeypots_local
     ports:
