@@ -6,8 +6,7 @@ RUN apk --no-cache -U add \
             libcap \
 	    openssl \
             py3-pip \
-            python3 \
-            python3-dev && \
+            python3 && \
 #
     pip3 install --no-cache-dir python-json-logger && \
 #
@@ -33,8 +32,7 @@ RUN apk --no-cache -U add \
 #
 # Clean up
     apk del --purge git \
-                    openssl \
-                    python3-dev && \
+                    openssl && \
     rm -rf /root/* && \
     rm -rf /opt/citrixhoneypot/.git && \
     rm -rf /var/cache/apk/*
