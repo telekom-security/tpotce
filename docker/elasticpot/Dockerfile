@@ -13,9 +13,18 @@ RUN apk -U --no-cache add \
              openssl-dev \
 	     postgresql-dev \
              py3-cryptography \
+	     py3-elasticsearch \
+	     py3-geoip2 \
+	     py3-maxminddb \
              py3-mysqlclient \
+	     py3-packaging \
+	     py3-psycopg2 \
+	     py3-redis \
              py3-requests \
+	     py3-service_identity \
+	     py3-setuptools \
 	     py3-pip \
+	     py3-twisted \
              python3 \
              python3-dev && \
     mkdir -p /opt && \
@@ -23,7 +32,7 @@ RUN apk -U --no-cache add \
     git clone https://gitlab.com/bontchev/elasticpot.git/ && \
     cd elasticpot && \
     git checkout d12649730d819bd78ea622361b6c65120173ad45 && \
-    pip3 install --ignore-installed packaging && \
+    cp /root/dist/requirements.txt . && \
     pip3 install -r requirements.txt && \
 #
 # Setup user, groups and configs

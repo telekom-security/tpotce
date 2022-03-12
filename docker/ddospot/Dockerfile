@@ -9,6 +9,7 @@ RUN apk --no-cache -U add \
              git \
 	     libcap \
 	     py3-colorama \
+	     py3-greenlet \
 	     py3-pip \
 	     py3-schedule \
 	     py3-sqlalchemy \

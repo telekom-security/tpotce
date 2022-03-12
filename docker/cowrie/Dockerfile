@@ -21,6 +21,7 @@ RUN apk --no-cache -U add \
 	     py3-bcrypt \
 	     py3-cryptography \
 	     py3-dateutil \
+	     py3-greenlet \
 	     py3-mysqlclient \
 	     py3-openssl \
 	     py3-packaging \
