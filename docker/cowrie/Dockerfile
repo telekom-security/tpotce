@@ -44,7 +44,6 @@ RUN apk --no-cache -U add \
 #    git checkout 6b1e82915478292f1e77ed776866771772b48f2e && \
     mkdir -p log && \
     cp /root/dist/requirements.txt . && \
-    #sed -i '/packaging.*/d' requirements.txt && \
     pip3 install --upgrade pip && \
     pip3 install -r requirements.txt && \
 #
