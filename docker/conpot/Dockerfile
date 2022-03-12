@@ -32,17 +32,15 @@ RUN apk --no-cache -U add \
 	     py3-pycryptodomex \
 	     py3-pytest \
 	     py3-requests \
+             py3-pyserial \
 	     py3-setuptools \
 	     py3-slugify \
 	     py3-snmp \
 	     py3-sphinx \
 	     py3-wheel \
-             wget && \
-#
-    apk --no-cache -U add -X http://dl-cdn.alpinelinux.org/alpine/3.15/community \
-             py3-pyserial \
 	     py3-zope-event \
-	     py3-zope-interface && \
+	     py3-zope-interface \
+             wget && \
 #
 # Setup ConPot
     git clone https://github.com/mushorg/conpot /opt/conpot && \
