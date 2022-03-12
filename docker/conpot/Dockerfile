@@ -20,8 +20,29 @@ RUN apk --no-cache -U add \
 	     procps \
              python3 \
              python3-dev \
+	     py3-cffi \
+	     py3-cryptography \
+	     py3-freezegun \
+	     py3-gevent \
+	     py3-lxml \
+	     py3-natsort \
 	     py3-pip \
+	     py3-ply \
+	     py3-psutil \
+	     py3-pycryptodomex \
+	     py3-pytest \
+	     py3-requests \
+	     py3-setuptools \
+	     py3-slugify \
+	     py3-snmp \
+	     py3-sphinx \
+	     py3-wheel \
              wget && \
+#
+    apk --no-cache -U add -X http://dl-cdn.alpinelinux.org/alpine/3.15/community \
+             py3-pyserial \
+	     py3-zope-event \
+	     py3-zope-interface && \
 #
 # Setup ConPot
     git clone https://github.com/mushorg/conpot /opt/conpot && \
@@ -29,24 +50,22 @@ RUN apk --no-cache -U add \
     git checkout b3740505fd26d82473c0d7be405b372fa0f82575 && \
     #git checkout 1c2382ea290b611fdc6a0a5f9572c7504bcb616e && \
     # Change template default ports if <1024
-    sed -i 's/port="2121"/port="21"/' /opt/conpot/conpot/templates/default/ftp/ftp.xml && \ 
-    sed -i 's/port="8800"/port="80"/' /opt/conpot/conpot/templates/default/http/http.xml && \ 
-    sed -i 's/port="6230"/port="623"/' /opt/conpot/conpot/templates/default/ipmi/ipmi.xml && \ 
-    sed -i 's/port="5020"/port="502"/' /opt/conpot/conpot/templates/default/modbus/modbus.xml && \ 
-    sed -i 's/port="10201"/port="102"/' /opt/conpot/conpot/templates/default/s7comm/s7comm.xml && \ 
-    sed -i 's/port="16100"/port="161"/' /opt/conpot/conpot/templates/default/snmp/snmp.xml && \ 
-    sed -i 's/port="6969"/port="69"/' /opt/conpot/conpot/templates/default/tftp/tftp.xml && \ 
-    sed -i 's/port="16100"/port="161"/' /opt/conpot/conpot/templates/IEC104/snmp/snmp.xml && \ 
+    sed -i 's/port="2121"/port="21"/' /opt/conpot/conpot/templates/default/ftp/ftp.xml && \
+    sed -i 's/port="8800"/port="80"/' /opt/conpot/conpot/templates/default/http/http.xml && \
+    sed -i 's/port="6230"/port="623"/' /opt/conpot/conpot/templates/default/ipmi/ipmi.xml && \
+    sed -i 's/port="5020"/port="502"/' /opt/conpot/conpot/templates/default/modbus/modbus.xml && \
+    sed -i 's/port="10201"/port="102"/' /opt/conpot/conpot/templates/default/s7comm/s7comm.xml && \
+    sed -i 's/port="16100"/port="161"/' /opt/conpot/conpot/templates/default/snmp/snmp.xml && \
+    sed -i 's/port="6969"/port="69"/' /opt/conpot/conpot/templates/default/tftp/tftp.xml && \
+    sed -i 's/port="16100"/port="161"/' /opt/conpot/conpot/templates/IEC104/snmp/snmp.xml && \
     sed -i 's/port="6230"/port="623"/' /opt/conpot/conpot/templates/ipmi/ipmi/ipmi.xml && \
+    cp /root/dist/requirements.txt . && \
     pip3 install --no-cache-dir --upgrade pip && \
-    pip3 install --no-cache-dir -U cffi \
-                                   setuptools \
-                                   wheel && \
     pip3 install --no-cache-dir . && \
     cd / && \
     rm -rf /opt/conpot /tmp/* /var/tmp/* && \
     setcap cap_net_bind_service=+ep /usr/bin/python3.9 && \
-#    
+#
 # Get wireshark manuf db for scapy, setup configs, user, groups
     mkdir -p /etc/conpot /var/log/conpot /usr/share/wireshark && \
     wget https://github.com/wireshark/wireshark/raw/master/manuf -o /usr/share/wireshark/manuf && \

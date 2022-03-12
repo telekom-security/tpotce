@@ -1,0 +1,20 @@
+pysnmp-mibs
+pysmi
+libtaxii>=1.1.0
+crc16
+scapy==2.4.3rc1
+hpfeeds3
+modbus-tk
+stix-validator
+stix
+cybox
+bacpypes==0.17.0
+pyghmi==1.4.1
+mixbox
+modbus-tk
+cpppo
+fs==2.3.0
+tftpy
+# some freezegun versions broken
+pycrypto
+sphinx_rtd_theme
