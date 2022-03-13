@@ -15,8 +15,8 @@ services:
      - /var/tmp/nginx/scgi
      - /run
      - /var/lib/nginx/tmp:uid=100,gid=82
-    cpu_count: 1
-    cpus: 0.75
+#    cpu_count: 1
+#    cpus: 0.75
     network_mode: "host"
     ports:
      - "64297:64297"

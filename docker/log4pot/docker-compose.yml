@@ -12,8 +12,8 @@ services:
     restart: always
     tmpfs:
      - /tmp:uid=2000,gid=2000
-    cpu_count: 1
-    cpus: 0.25
+#    cpu_count: 1
+#    cpus: 0.25
     networks:
      - log4pot_local
     ports:

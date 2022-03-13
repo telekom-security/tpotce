@@ -16,8 +16,8 @@ services:
      - HPFEEDS_SECRET=pass
      - HPFEEDS_PORT=20000
      - HPFEEDS_CHANNELPREFIX=prefix
-    cpu_count: 1
-    cpus: 0.25
+#    cpu_count: 1
+#    cpus: 0.25
     networks:
      - mailoney_local
     ports:

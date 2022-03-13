@@ -25,6 +25,7 @@ RUN apk -U --no-cache add \
 	     py3-setuptools \
 	     py3-pip \
 	     py3-twisted \
+	     py3-wheel \
              python3 \
              python3-dev && \
     mkdir -p /opt && \

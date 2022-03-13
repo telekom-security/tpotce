@@ -23,6 +23,7 @@ RUN apk -U --no-cache add \
 			py3-requests \
 			py3-rsa \
 			py3-typing-extensions \
+			py3-wheel \
 			py3-yaml \
             		python3 \
             		python3-dev && \

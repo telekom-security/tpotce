@@ -12,8 +12,8 @@ services:
     restart: always
     stop_signal: SIGKILL
     tty: true
-    cpu_count: 1
-    cpus: 0.25
+#    cpu_count: 1
+#    cpus: 0.25
     networks:
      - tanner_local
     image: "dtagdevsec/redis:2203"
@@ -28,8 +28,8 @@ services:
     tmpfs:
      - /tmp:uid=2000,gid=2000
     tty: true
-    cpu_count: 1
-    cpus: 0.25
+#    cpu_count: 1
+#    cpus: 0.25
     networks:
      - tanner_local
     image: "dtagdevsec/phpox:2203"
@@ -44,8 +44,8 @@ services:
     tmpfs:
      - /tmp/tanner:uid=2000,gid=2000
     tty: true
-    cpu_count: 1
-    cpus: 0.25
+#    cpu_count: 1
+#    cpus: 0.25
     networks:
      - tanner_local
     image: "dtagdevsec/tanner:2203"
@@ -86,8 +86,8 @@ services:
     tmpfs:
      - /tmp/tanner:uid=2000,gid=2000
     tty: true
-    cpu_count: 1
-    cpus: 0.25
+#    cpu_count: 1
+#    cpus: 0.25
     networks:
      - tanner_local
     image: "dtagdevsec/tanner:2203"
@@ -108,8 +108,8 @@ services:
     restart: always
     stop_signal: SIGKILL
     tty: true
-    cpu_count: 1
-    cpus: 0.25
+#    cpu_count: 1
+#    cpus: 0.25
     networks:
      - tanner_local
     ports:

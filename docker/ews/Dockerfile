@@ -20,7 +20,8 @@ RUN apk -U --no-cache add \
 	    py3-openssl \
             py3-requests \
 	    py3-pip \
-            py3-setuptools && \
+            py3-setuptools \
+            py3-wheel && \
     pip3 install --upgrade pip && \
     pip3 install --no-cache-dir configparser hpfeeds3 influxdb influxdb-client xmljson && \
 #

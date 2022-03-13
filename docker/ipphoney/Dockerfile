@@ -14,9 +14,20 @@ RUN apk -U --no-cache add \
              openssl-dev \
 	     postgresql-dev \
 	     py3-cryptography \
+	     py3-elasticsearch \
+	     py3-geoip2 \
+	     py3-maxminddb \
              py3-mysqlclient \
              py3-requests \
+	     py3-packaging \
 	     py3-pip \
+	     py3-psycopg2 \
+	     py3-redis \
+	     py3-requests \
+	     py3-service_identity \
+	     py3-setuptools \
+	     py3-twisted \
+	     py3-wheel \
              python3 \
              python3-dev && \
     mkdir -p /opt && \
@@ -24,7 +35,7 @@ RUN apk -U --no-cache add \
     git clone https://gitlab.com/bontchev/ipphoney.git/ && \
     cd ipphoney && \
     git checkout 7ab1cac437baba17cb2cd25d5bb1400327e1bb79 && \
-    pip3 install --ignore-installed packaging && \
+    cp /root/dist/requirements.txt . && \
     pip3 install -r requirements.txt && \
     setcap cap_net_bind_service=+ep /usr/bin/python3.9 && \
 #
