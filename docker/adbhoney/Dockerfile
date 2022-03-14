@@ -30,7 +30,7 @@ RUN apk --no-cache -U add \
 # Set workdir and start adbhoney
 STOPSIGNAL SIGINT
 # Adbhoney sometimes hangs at 100% CPU usage, if detected process will be killed and container restarts per docker-compose settings
-HEALTHCHECK CMD if [ $(ps -C mpv -p 1 -o %cpu | tail -n 1 | cut -f 1 -d ".") -gt 90 ]; then kill -2 1; else exit 0; fi
+HEALTHCHECK CMD if [ $(ps -C mpv -p 1 -o %cpu | tail -n 1 | cut -f 1 -d ".") -gt 75 ]; then kill -2 1; else exit 0; fi
 USER adbhoney:adbhoney
 WORKDIR /opt/adbhoney/
 CMD /usr/bin/python3 run.py
