@@ -8,7 +8,7 @@ RUN apk -U --no-cache add \
                make \
                php7 \
                php7-dev \
-	       py3-pip \
+	       py3-aiohttp \
                python3 \
                python3-dev \
                re2c && \
@@ -31,7 +31,6 @@ RUN apk -U --no-cache add \
     git clone https://github.com/mushorg/phpox /opt/phpox && \
     cd /opt/phpox && \
     git checkout a62c8136ec7b3ebab0c989f4235e2960175121f8 && \
-    pip3 install -r requirements.txt && \
     make && \
 #
 # Clean up

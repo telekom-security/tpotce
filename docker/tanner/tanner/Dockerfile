@@ -11,7 +11,21 @@ RUN apk -U --no-cache add \
                libffi-dev \
                openssl-dev \
                linux-headers \
+	       py3-aiohttp \
+	       py3-geoip2 \
+	       py3-jinja2 \
+	       py3-jwt \
+	       py3-mako \
+	       py3-mysqlclient \
+	       py3-packaging \
 	       py3-pip \
+	       py3-redis \
+	       py3-pycodestyle \
+	       py3-setuptools \
+	       py3-tornado \
+	       py3-websocket-client \
+	       py3-wheel \
+	       py3-yaml \
                py3-yarl \
                python3 \
                python3-dev && \ 
@@ -26,8 +40,7 @@ RUN apk -U --no-cache add \
 #    sed -i 's/aioredis/aioredis==1.3.1/g' requirements.txt && \
 #    sed -i 's/^aiohttp$/aiohttp==3.7.4/g' requirements.txt && \
     cp /root/dist/config.yaml /opt/tanner/tanner/data && \
-    pip3 install --ignore-installed packaging && \
-    pip3 install --no-cache-dir setuptools && \
+    cp /root/dist/requirements.txt . && \
     pip3 install --no-cache-dir -r requirements.txt && \
     python3 setup.py install && \
     rm -rf .coveragerc \

@@ -9,14 +9,21 @@ RUN apk -U --no-cache add \
                git \
                linux-headers \
                python3 \
-               python3-dev \ 
-               py3-pip && \ 
+               python3-dev \
+	       py3-aiohttp \
+	       py3-beautifulsoup4 \
+	       py3-gitpython \
+	       py3-markupsafe \
+	       py3-setuptools \
+               py3-pip \
+	       py3-pycodestyle \
+	       py3-wheel && \
 #
 # Setup Snare 
     git clone https://github.com/mushorg/snare /opt/snare && \
     cd /opt/snare/ && \
     git checkout 0919a80838eb0823a3b7029b0264628ee0a36211 && \
-    pip3 install --no-cache-dir setuptools && \
+    cp /root/dist/requirements.txt . && \
     pip3 install --no-cache-dir -r requirements.txt && \
     python3 setup.py install && \
     cd / && \

@@ -1,13 +1,20 @@
 FROM alpine:3.15
 #
 # Include dist
-#COPY dist/ /root/dist/
+COPY dist/ /root/dist/
+#
 # Install packages
 RUN apk -U --no-cache add \
              build-base \
              git \
 	     libcap \
+	     py3-click \
+	     py3-flask \
+	     py3-itsdangerous \
+	     py3-jinja2 \
+	     py3-markupsafe \
 	     py3-pip \
+	     py3-werkzeug \
              python3 \
              python3-dev && \
 #	     
@@ -17,8 +24,8 @@ RUN apk -U --no-cache add \
     git clone https://github.com/Will-777/wordpot2 && \
     cd wordpot2 && \
     git checkout e93a2e00d84d280b0acd58ba6889b4bee8a6e4d2 && \
-    sed "s/MarkupSafe==1.0/MarkupSafe==1.1.1/g" -i requirements.txt && \
 #    cp /root/dist/views.py /opt/wordpot2/wordpot/views.py && \
+    cp /root/dist/requirements.txt . && \
     pip3 install -r requirements.txt && \
     setcap cap_net_bind_service=+ep /usr/bin/python3.9 && \
 #
