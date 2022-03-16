@@ -122,9 +122,6 @@ mySYSCTLCONF="
 kernel.panic = 1
 kernel.panic_on_oops = 1
 vm.max_map_count = 262144
-net.ipv6.conf.all.disable_ipv6 = 1
-net.ipv6.conf.default.disable_ipv6 = 1
-net.ipv6.conf.lo.disable_ipv6 = 1
 "
 myFAIL2BANCONF="[DEFAULT]
 ignore-ip = 127.0.0.1/8

@@ -125,6 +125,8 @@ if [ $? -ne 0 ];
     exit 1
   else
     echo "[ $myGREEN"OK"$myWHITE ]"
+    echo "###### $myBLUE Now disabling T-Pot service.$myWHITE "
+    systemctl disable tpot
     echo "###### $myBLUE Now cleaning up containers.$myWHITE "
     if [ "$(docker ps -aq)" != "" ];
       then
@@ -286,11 +288,16 @@ chown tpot:tpot -R /data
 chmod 644 -R /data/nginx/conf
 chmod 644 -R /data/nginx/cert
 
-echo "### Now pulling latest docker images"
+echo "### Now pulling latest docker images ..."
 echo "######$myBLUE This might take a while, please be patient!$myWHITE"
 fuPULLIMAGES 2>&1>/dev/null
 
 fuREMOVEOLDIMAGES "2006"
+
+echo "### Copying T-Pot service to systemd."
+cp /opt/tpot/host/etc/systemd/tpot.service /etc/systemd/system/
+systemctl enable tpot
+
 echo "### If you made changes to tpot.yml please ensure to add them again."
 echo "### We stored the previous version as backup in /root/."
 echo "### Some updates may need an import of the latest Kibana objects as well."
@@ -298,9 +305,6 @@ echo "### Download the latest objects here if they recently changed:"
 echo "### https://raw.githubusercontent.com/telekom-security/tpotce/master/etc/objects/kibana_export.ndjson.zip"
 echo "### Export and import the objects easily through the Kibana WebUI:"
 echo "### Go to Kibana > Management > Saved Objects > Export / Import"
-echo "### Or use the command:"
-echo "### import_kibana-objects.sh /opt/tpot/etc/objects/kibana-objects.tgz"
-echo "### All objects will be overwritten upon import, make sure to run an export first if you made changes."
 }
 
 function fuRESTORE_EWSCFG () {
