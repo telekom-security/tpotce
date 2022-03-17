@@ -15,12 +15,7 @@ ExecStartPre=-/opt/tpot/bin/updateip.sh
 ExecStartPre=-/bin/bash -c '/opt/tpot/bin/clean.sh on'
 
 # Remove old containers, images and volumes
-ExecStartPre=-/usr/bin/docker-compose -f /opt/tpot/etc/tpot.yml down -v
-ExecStartPre=-/usr/bin/docker-compose -f /opt/tpot/etc/tpot.yml rm -v
-ExecStartPre=-/bin/bash -c 'docker network rm $(docker network ls -q)'
-ExecStartPre=-/bin/bash -c 'docker volume rm $(docker volume ls -q)'
-ExecStartPre=-/bin/bash -c 'docker rm -v $(docker ps -aq)'
-ExecStartPre=-/bin/bash -c 'docker rmi $(docker images | grep "<none>" | awk \'{print $3}\')'
+ExecStartPre=/opt/tpot/bin/tpdclean.sh -y
 
 # Get IF, disable offloading, enable promiscious mode for p0f and suricata
 ExecStartPre=-/bin/bash -c '/sbin/ethtool --offload $(/sbin/ip address | grep "^2: " | awk \'{ print $2 }\' | tr -d [:punct:]) rx off tx off'
