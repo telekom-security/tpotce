@@ -19,6 +19,7 @@ docker-compose
 ethtool
 fail2ban
 figlet
+fuse
 genisoimage
 git
 grc
@@ -32,6 +33,8 @@ kbd
 libcrack2
 libltdl7
 libpam-google-authenticator
+libpq-dev
+lsb-release
 man
 mosh
 multitail

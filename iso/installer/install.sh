@@ -22,7 +22,7 @@ myLSB_STABLE_SUPPORTED="buster bullseye"
 myLSB_TESTING_SUPPORTED="stable"
 myREMOTESITES="https://hub.docker.com https://github.com https://pypi.python.org https://debian.org https://listbot.sicherheitstacho.eu"
 myPREINSTALLPACKAGES="aria2 apache2-utils cracklib-runtime curl dialog figlet fuse grc libcrack2 libpq-dev lsb-release net-tools software-properties-common toilet"
-myINSTALLPACKAGES="aria2 apache2-utils apparmor apt-transport-https bash-completion bat build-essential ca-certificates cgroupfs-mount cockpit conntrack console-setup console-setup-linux cracklib-runtime curl debconf-utils dialog dnsutils docker.io docker-compose ethtool fail2ban figlet genisoimage git grc haveged html2text htop iptables iw jq kbd libcrack2 libltdl7 libpam-google-authenticator man mosh multitail net-tools neovim npm ntp openssh-server openssl pass pigz prips software-properties-common sshpass psmisc pv python3-pip toilet unattended-upgrades unzip wget wireless-tools wpasupplicant"
+myINSTALLPACKAGES=$(cat /opt/tpot/packages.txt)
 myINFO="\
 ###########################################
 ### T-Pot Installer for Debian (Stable) ###
