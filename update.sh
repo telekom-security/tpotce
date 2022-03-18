@@ -3,6 +3,7 @@
 # Some global vars
 myCONFIGFILE="/opt/tpot/etc/tpot.yml"
 myCOMPOSEPATH="/opt/tpot/etc/compose"
+myLSB_RELEASE="bullseye"
 myRED="[0;31m"
 myGREEN="[0;32m"
 myWHITE="[0;0m"
@@ -86,10 +87,33 @@ local myMINVERSION="20.06.0"
 local myMASTERVERSION="22.03.0"
 echo
 echo "### Checking for Release ID"
-myRELEASE=$(lsb_release -i | grep Debian -c)
-if [ "$myRELEASE" == "0" ] 
+myRELEASE=$(lsb_release -c | awk '{ print $2 }')
+if [ "$myRELEASE" != "$myLSB_RELEASE" ] 
   then
-    echo "###### This version of T-Pot cannot be upgraded automatically. Please run a fresh install.$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+    echo "###### Need to upgrade to Debian 11 (Bullseye) first:$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+    echo "###### Upgrade may result in complete data loss and should not be run via SSH."
+    echo "###### If you installed T-Pot using the post-install method instead of the ISO it is recommended you upgrade manually to Debian 11 (Bullseye) and then re-run update.sh."
+    echo "###### Do you want to upgrade to Debian 11 (Bullseye) now?"
+    while [ "$myQST" != "y" ] && [ "$myQST" != "n" ];
+      do
+        read -p "Upgrade? (y/n) " myQST
+      done
+    if [ "$myQST" = "n" ];
+      then
+        echo $myGREEN"Aborting!"$myWHITE
+        exit
+      else
+	echo "###### Stopping and disabling T-Pot services ... "
+	systemctl stop tpot
+	systemctl disable tpot
+	echo "###### Switching /etc/apt/sources.list from buster to bullseye ... "
+	sed -i 's/buster/bullseye/g' /etc/apt/sources.list
+	echo "###### Updating repositories ... "
+	apt-fast update
+	echo "###### Running full upgrade ... "
+	apt-fast full-upgrade -y -o Dpkg::Options::="--force-confold"
+	echo "###### Please reboot now and re-run update.sh."
+    fi
     exit
 fi
 echo "### Checking for version tag ..."
