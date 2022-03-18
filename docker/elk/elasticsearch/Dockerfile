@@ -1,7 +1,7 @@
 FROM ubuntu:20.04
 #
 # VARS
-ENV ES_VER=8.0.0
+ENV ES_VER=8.0.1
 #
 # Include dist
 COPY dist/ /root/dist/
