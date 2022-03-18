@@ -7,8 +7,8 @@ services:
     build: .
     container_name: logstash
     restart: always
-    environment:
-     - LS_JAVA_OPTS=-Xms2048m -Xmx2048m
+#    environment:
+#     - LS_JAVA_OPTS=-Xms2048m -Xmx2048m
 #    depends_on:
 #      elasticsearch:
 #        condition: service_healthy

@@ -1,7 +1,7 @@
 FROM alpine:3.14
 #
 # VARS
-ENV LS_VER=7.16.2
+ENV LS_VER=7.17.0
 # Include dist
 ADD dist/ /root/dist/
 #
@@ -32,11 +32,11 @@ RUN apk -U --no-cache add \
     rm -rf /usr/share/logstash/jdk && \
     # For some reason Alpine 3.14 does not report the -x flag correctly and thus elasticsearch does not find java
     sed -i 's/! -x/! -e/g' /usr/share/logstash/bin/logstash.lib.sh && \
-    /usr/share/logstash/bin/logstash-plugin install logstash-filter-translate && \
-    /usr/share/logstash/bin/logstash-plugin install logstash-input-http && \
-    /usr/share/logstash/bin/logstash-plugin install logstash-output-gelf && \
-    /usr/share/logstash/bin/logstash-plugin install logstash-output-http && \
-    /usr/share/logstash/bin/logstash-plugin install logstash-output-syslog && \
+    /usr/share/logstash/bin/logstash-plugin install --preserve --no-verify logstash-filter-translate && \
+    /usr/share/logstash/bin/logstash-plugin install --preserve --no-verify logstash-input-http && \
+    /usr/share/logstash/bin/logstash-plugin install --preserve --no-verify logstash-output-gelf && \
+    /usr/share/logstash/bin/logstash-plugin install --preserve --no-verify logstash-output-http && \
+    /usr/share/logstash/bin/logstash-plugin install --preserve --no-verify logstash-output-syslog && \
 #
 # Add and move files
     cd /root/dist/ && \
