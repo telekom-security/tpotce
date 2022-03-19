@@ -100,19 +100,30 @@ if [ "$myRELEASE" != "$myLSB_RELEASE" ]
       done
     if [ "$myQST" = "n" ];
       then
+	echo
         echo $myGREEN"Aborting!"$myWHITE
+	echo
         exit
       else
 	echo "###### Stopping and disabling T-Pot services ... "
+	echo
 	systemctl stop tpot
 	systemctl disable tpot
 	echo "###### Switching /etc/apt/sources.list from buster to bullseye ... "
+	echo
 	sed -i 's/buster/bullseye/g' /etc/apt/sources.list
 	echo "###### Updating repositories ... "
+	echo
 	apt-fast update
 	echo "###### Running full upgrade ... "
-	apt-fast full-upgrade -y -o Dpkg::Options::="--force-confold"
-	echo "###### Please reboot now and re-run update.sh."
+	echo
+        echo "docker.io docker.io/restart       boolean true" | debconf-set-selections -v
+        echo "debconf debconf/frontend select noninteractive" | debconf-set-selections -v
+	apt-fast full-upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes
+        dpkg --configure -a
+        echo "###### $myBLUE""Finished with upgrading. Now restarting update.sh and to continue with T-Pot related updates.""$myWHITE"
+        exec "$0" "$@"
+	exit 1
     fi
     exit
 fi
@@ -211,9 +222,9 @@ export DEBIAN_FRONTEND=noninteractive
 echo "### Installing apt-fast"
 /bin/bash -c "$(curl -sL https://raw.githubusercontent.com/ilikenwf/apt-fast/master/quick-install.sh)"
 local myPACKAGES=$(cat /opt/tpot/packages.txt)
-# Remove purge in the future
-echo "### Removing repository based install of elasticsearch-curator"
-apt-get purge elasticsearch-curator -y
+echo "### Removing and holding back problematic packages ..."
+apt-fast -y purge cockpit-pcp elasticsearch-curator exim4-base glances mailutils pcp
+apt-mark hold exim4-base mailutils pcp cockpit-pcp
 hash -r
 echo "### Now upgrading packages ..."
 dpkg --configure -a
@@ -229,11 +240,8 @@ apt-fast -y dist-upgrade -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::
 dpkg --configure -a
 npm cache clean --force
 npm install elasticdump -g
-pip3 install --upgrade yq
+pip3 install --upgrade glances yq
 hash -r
-echo "### Removing and holding back problematic packages ..."
-apt-fast -y purge exim4-base mailutils pcp cockpit-pcp elasticsearch-curator
-apt-mark hold exim4-base mailutils pcp cockpit-pcp
 echo
 
 echo "### Now replacing T-Pot related config files on host"
@@ -254,39 +262,36 @@ echo
 
 ### Ensure creation of T-Pot related folders, just in case
 mkdir -vp /data/adbhoney/{downloads,log} \
-         /data/ciscoasa/log \
-         /data/conpot/log \
-         /data/citrixhoneypot/logs \
-         /data/cowrie/{downloads,keys,misc,log,log/tty} \
-         /data/ddospot/{bl,db,log} \
-         /data/dicompot/{images,log} \
-         /data/dionaea/{log,bistreams,binaries,rtp,roots,roots/ftp,roots/tftp,roots/www,roots/upnp} \
-         /data/elasticpot/log \
-         /data/elk/{data,log} \
-         /data/endlessh/log \
-         /data/fatt/log \
-         /data/honeytrap/{log,attacks,downloads} \
-         /data/glutton/log \
-         /data/hellpot/log \
-         /data/heralding/log \
-         /data/honeypots/log \
-         /data/honeysap/log \
-         /data/ipphoney/log \
-         /data/log4pot/{log,payloads} \
-         /data/log4pot/log \
-         /data/mailoney/log \
-         /data/medpot/log \
-         /data/nginx/{log,heimdall} \
-         /data/emobility/log \
-         /data/ews/conf \
-         /data/rdpy/log \
-         /data/redishoneypot/log \
-	 /data/sentrypeer/log \
-         /data/spiderfoot \
-         /data/suricata/log \
-         /data/tanner/{log,files} \
-         /data/p0f/log \
-         /home/tsec/.ssh/
+          /data/ciscoasa/log \
+          /data/conpot/log \
+          /data/citrixhoneypot/logs \
+          /data/cowrie/{downloads,keys,misc,log,log/tty} \
+          /data/ddospot/{bl,db,log} \
+          /data/dicompot/{images,log} \
+          /data/dionaea/{log,bistreams,binaries,rtp,roots,roots/ftp,roots/tftp,roots/www,roots/upnp} \
+          /data/elasticpot/log \
+          /data/elk/{data,log} \
+          /data/endlessh/log \
+          /data/ews/conf \
+          /data/fatt/log \
+          /data/glutton/log \
+          /data/hellpot/log \
+          /data/heralding/log \
+          /data/honeypots/log \
+          /data/honeysap/log \
+          /data/honeytrap/{log,attacks,downloads} \
+          /data/ipphoney/log \
+          /data/log4pot/{log,payloads} \
+          /data/mailoney/log \
+          /data/medpot/log \
+          /data/nginx/{log,heimdall} \
+          /data/p0f/log \
+          /data/redishoneypot/log \
+          /data/sentrypeer/log \
+          /data/spiderfoot \
+          /data/suricata/log \
+          /data/tanner/{log,files} \
+          /home/tsec/.ssh/
 
 ### For some honeypots to work we need to ensure ntp.service is not listening
 echo "### Ensure ntp.service is not listening to avoid potential port conflict with ddospot."

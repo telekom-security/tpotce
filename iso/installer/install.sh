@@ -18,7 +18,7 @@ myCONF_FILE="/root/installer/iso.conf"
 myPROGRESSBOXCONF=" --backtitle "$myBACKTITLE" --progressbox 24 80"
 mySITES="https://ghcr.io https://github.com https://pypi.python.org https://debian.org"
 myTPOTCOMPOSE="/opt/tpot/etc/tpot.yml"
-myLSB_STABLE_SUPPORTED="buster bullseye"
+myLSB_STABLE_SUPPORTED="bullseye"
 myLSB_TESTING_SUPPORTED="stable"
 myREMOTESITES="https://hub.docker.com https://github.com https://pypi.python.org https://debian.org https://listbot.sicherheitstacho.eu"
 myPREINSTALLPACKAGES="aria2 apache2-utils cracklib-runtime curl dialog figlet fuse grc libcrack2 libpq-dev lsb-release net-tools software-properties-common toilet"
@@ -813,38 +813,36 @@ fi
 # Let's create some files and folders
 fuBANNER "Files & folders"
 mkdir -vp /data/adbhoney/{downloads,log} \
-         /data/ciscoasa/log \
-         /data/conpot/log \
-         /data/citrixhoneypot/logs \
-         /data/cowrie/{downloads,keys,misc,log,log/tty} \
-         /data/ddospot/{bl,db,log} \
-         /data/dicompot/{images,log} \
-         /data/dionaea/{log,bistreams,binaries,rtp,roots,roots/ftp,roots/tftp,roots/www,roots/upnp} \
-         /data/elasticpot/log \
-         /data/elk/{data,log} \
-         /data/endlessh/log \
-         /data/fatt/log \
-         /data/honeytrap/{log,attacks,downloads} \
-         /data/glutton/log \
-         /data/hellpot/log \
-         /data/heralding/log \
-         /data/honeypots/log \
-         /data/honeysap/log \
-         /data/ipphoney/log \
-         /data/log4pot/{log,payloads} \
-         /data/mailoney/log \
-         /data/medpot/log \
-         /data/nginx/{log,heimdall} \
-         /data/emobility/log \
-         /data/ews/conf \
-         /data/rdpy/log \
-         /data/redishoneypot/log \
-	 /data/sentrypeer/log \
-         /data/spiderfoot \
-         /data/suricata/log \
-         /data/tanner/{log,files} \
-         /data/p0f/log \
-         /home/tsec/.ssh/
+          /data/ciscoasa/log \
+          /data/conpot/log \
+          /data/citrixhoneypot/logs \
+          /data/cowrie/{downloads,keys,misc,log,log/tty} \
+          /data/ddospot/{bl,db,log} \
+          /data/dicompot/{images,log} \
+          /data/dionaea/{log,bistreams,binaries,rtp,roots,roots/ftp,roots/tftp,roots/www,roots/upnp} \
+          /data/elasticpot/log \
+          /data/elk/{data,log} \
+          /data/endlessh/log \
+          /data/ews/conf \
+          /data/fatt/log \
+          /data/glutton/log \
+          /data/hellpot/log \
+          /data/heralding/log \
+          /data/honeypots/log \
+          /data/honeysap/log \
+          /data/honeytrap/{log,attacks,downloads} \
+          /data/ipphoney/log \
+          /data/log4pot/{log,payloads} \
+          /data/mailoney/log \
+          /data/medpot/log \
+          /data/nginx/{log,heimdall} \
+          /data/p0f/log \
+          /data/redishoneypot/log \
+          /data/sentrypeer/log \
+          /data/spiderfoot \
+          /data/suricata/log \
+          /data/tanner/{log,files} \
+          /home/tsec/.ssh/
 touch /data/nginx/log/error.log
 
 # Let's copy some files
