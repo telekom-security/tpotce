@@ -122,7 +122,8 @@ if [ "$myRELEASE" != "$myLSB_RELEASE" ]
 	echo "###### Running full upgrade ... "
 	echo
         echo "docker.io docker.io/restart       boolean true" | debconf-set-selections -v
-        echo "libc6 libc6/restart       	boolean true" | debconf-set-selections -v
+        echo "ssh ssh/restart		       	boolean true" | debconf-set-selections -v
+        echo "cron cron/restart			boolean true" | debconf-set-selections -v
         echo "debconf debconf/frontend select noninteractive" | debconf-set-selections -v
 	apt-fast full-upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes
         dpkg --configure -a
@@ -391,5 +392,5 @@ fuRESTORE_EWSCFG
 fuRESTORE_HPFEEDS
 
 echo
-echo "### Done."
+echo "### Done. Please reboot."
 echo
