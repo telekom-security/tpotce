@@ -109,6 +109,10 @@ if [ "$myRELEASE" != "$myLSB_RELEASE" ]
 	echo
 	systemctl stop tpot
 	systemctl disable tpot
+	systemctl stop docker
+	systemctl start docker
+        docker stop $(docker ps -aq)
+        docker rm -v $(docker ps -aq)
 	echo "###### Switching /etc/apt/sources.list from buster to bullseye ... "
 	echo
 	sed -i 's/buster/bullseye/g' /etc/apt/sources.list
@@ -118,11 +122,12 @@ if [ "$myRELEASE" != "$myLSB_RELEASE" ]
 	echo "###### Running full upgrade ... "
 	echo
         echo "docker.io docker.io/restart       boolean true" | debconf-set-selections -v
+        echo "libc6 libc6/restart       	boolean true" | debconf-set-selections -v
         echo "debconf debconf/frontend select noninteractive" | debconf-set-selections -v
 	apt-fast full-upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes
         dpkg --configure -a
         echo "###### $myBLUE""Finished with upgrading. Now restarting update.sh and to continue with T-Pot related updates.""$myWHITE"
-        exec "$0" "$@"
+	exec ./update.sh -y
 	exit 1
     fi
     exit
