@@ -11,6 +11,7 @@ myBLUE="[0;34m"
 
 # Check for existing tpot.yml
 function fuCONFIGCHECK () {
+  echo
   echo "### Checking for T-Pot configuration file ..."
   if ! [ -L $myCONFIGFILE ];
     then
@@ -35,6 +36,7 @@ echo
 # Let's test the internet connection
 function fuCHECKINET () {
 mySITES=$1
+  echo
   echo "### Now checking availability of ..."
   for i in $mySITES;
     do
@@ -56,6 +58,7 @@ echo
 
 # Update
 function fuSELFUPDATE () {
+  echo
   echo "### Now checking for newer files in repository ..."
   git fetch --all
   myREMOTESTAT=$(git status | grep -c "up-to-date")
@@ -133,6 +136,7 @@ if [ "$myRELEASE" != "$myLSB_RELEASE" ]
     fi
     exit
 fi
+echo
 echo "### Checking for version tag ..."
 if [ -f "version" ];
   then
@@ -154,6 +158,7 @@ echo
 
 # Stop T-Pot to avoid race conditions with running containers with regard to the current T-Pot config
 function fuSTOP_TPOT () {
+echo
 echo "### Need to stop T-Pot ..."
 echo -n "###### $myBLUE Now stopping T-Pot.$myWHITE "
 systemctl stop tpot
@@ -182,6 +187,7 @@ echo
 function fuBACKUP () {
 local myARCHIVE="/root/$(date +%Y%m%d%H%M)_tpot_backup.tgz"
 local myPATH=$PWD
+echo
 echo "### Create a backup, just in case ... "
 echo -n "###### $myBLUE Building archive in $myARCHIVE $myWHITE"
 cd /opt/tpot
@@ -207,6 +213,7 @@ local myOLDTAG=$1
 local myOLDIMAGES=$(docker images | grep -c "$myOLDTAG")
 if [ "$myOLDIMAGES" -gt "0" ];
   then
+    echo
     echo "### Removing old docker images."
     docker rmi $(docker images | grep "$myOLDTAG" | awk '{print $3}')
 fi
@@ -225,13 +232,16 @@ echo
 
 function fuUPDATER () {
 export DEBIAN_FRONTEND=noninteractive
+echo
 echo "### Installing apt-fast"
 /bin/bash -c "$(curl -sL https://raw.githubusercontent.com/ilikenwf/apt-fast/master/quick-install.sh)"
 local myPACKAGES=$(cat /opt/tpot/packages.txt)
+echo
 echo "### Removing and holding back problematic packages ..."
 apt-fast -y purge cockpit-pcp elasticsearch-curator exim4-base glances mailutils pcp
 apt-mark hold exim4-base mailutils pcp cockpit-pcp
 hash -r
+echo
 echo "### Now upgrading packages ..."
 dpkg --configure -a
 apt-fast -y autoclean
@@ -249,13 +259,12 @@ npm install elasticdump -g
 pip3 install --upgrade glances yq
 hash -r
 echo
-
 echo "### Now replacing T-Pot related config files on host"
 cp host/etc/systemd/* /etc/systemd/system/
 systemctl daemon-reload
-echo
 
 # Ensure some defaults
+echo
 echo "### Ensure some T-Pot defaults with regard to some folders, permissions and configs."
 sed -i '/^port/I,$d' /etc/ssh/sshd_config
 tee -a /etc/ssh/sshd_config << EOF
@@ -264,7 +273,6 @@ Match Group tpotlogs
         PermitOpen 127.0.0.1:64305
         ForceCommand /usr/bin/false
 EOF
-echo
 
 ### Ensure creation of T-Pot related folders, just in case
 mkdir -vp /data/adbhoney/{downloads,log} \
@@ -300,6 +308,7 @@ mkdir -vp /data/adbhoney/{downloads,log} \
           /home/tsec/.ssh/
 
 ### For some honeypots to work we need to ensure ntp.service is not listening
+echo
 echo "### Ensure ntp.service is not listening to avoid potential port conflict with ddospot."
 myNTP_IF_DISABLE="interface ignore wildcard
 interface ignore 127.0.0.1
@@ -307,12 +316,15 @@ interface ignore ::1"
 
 if [ "$(cat /etc/ntp.conf | grep "interface ignore wildcard" | wc -l)" != "1" ];
   then
+    echo
     echo "### Found active ntp listeners and updating config."
     echo "$myNTP_IF_DISABLE" | tee -a /etc/ntp.conf
+    echo
     echo "### Restarting ntp.service for changes to take effect."
     systemctl stop ntp.service
     systemctl start ntp.service
   else
+    echo
     echo "### Found no active ntp listeners."
 fi
 
@@ -323,16 +335,19 @@ chown tpot:tpot -R /data
 chmod 644 -R /data/nginx/conf
 chmod 644 -R /data/nginx/cert
 
+echo
 echo "### Now pulling latest docker images ..."
 echo "######$myBLUE This might take a while, please be patient!$myWHITE"
 fuPULLIMAGES 2>&1>/dev/null
 
 fuREMOVEOLDIMAGES "2006"
 
+echo
 echo "### Copying T-Pot service to systemd."
 cp /opt/tpot/host/etc/systemd/tpot.service /etc/systemd/system/
 systemctl enable tpot
 
+echo
 echo "### If you made changes to tpot.yml please ensure to add them again."
 echo "### We stored the previous version as backup in /root/."
 echo "### Some updates may need an import of the latest Kibana objects as well."
@@ -340,6 +355,7 @@ echo "### Download the latest objects here if they recently changed:"
 echo "### https://raw.githubusercontent.com/telekom-security/tpotce/master/etc/objects/kibana_export.ndjson.zip"
 echo "### Export and import the objects easily through the Kibana WebUI:"
 echo "### Go to Kibana > Management > Saved Objects > Export / Import"
+echo
 }
 
 function fuRESTORE_EWSCFG () {
@@ -367,12 +383,15 @@ fi
 myWHOAMI=$(whoami)
 if [ "$myWHOAMI" != "root" ]
   then
+    echo
     echo "Need to run as root ..."
+    echo
     exit
 fi
 
 # Only run with command switch
 if [ "$1" != "-y" ]; then
+  echo
   echo "This script will update / upgrade all T-Pot related scripts, tools and packages to the latest versions."
   echo "A backup of /opt/tpot will be written to /root. If you are unsure, you should save your work."
   echo "This is a beta feature and only recommended for experienced users."
