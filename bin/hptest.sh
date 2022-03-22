@@ -37,22 +37,32 @@ function fuCHECKFORARGS {
 if [ "$myHOST" != "" ];
   then
     echo "All arguments met. Continuing."
+    echo
   else
     echo "Usage: hptest.sh <[host or ip]>"
+    echo
     exit
 fi
 }
 
 function fuGETPORTS {
+myDOCKERCOMPOSEUDPPORTS=$(cat $myDOCKERCOMPOSEYML | grep "udp" | tr -d '"\|#\-' | cut -d ":" -f2 | cut -d "/" -f1 | sort -gu)
 myDOCKERCOMPOSEPORTS=$(cat $myDOCKERCOMPOSEYML | yq -r '.services[].ports' | grep ':' | sed -e s/127.0.0.1// | tr -d '", ' | sed -e s/^:// | cut -f1 -d ':' | grep -v "6429\|6430" | sort -gu)
-myPORTS=$(for i in $myDOCKERCOMPOSEPORTS; do echo -n "$i,"; done)
-echo "$myPORTS"
+myUDPPORTS=$(for i in $myDOCKERCOMPOSEUDPPORTS; do echo -n "U:$i,"; done)
+myPORTS=$(for i in $myDOCKERCOMPOSEPORTS; do echo -n "T:$i,"; done)
 }
 
 # Main
+fuGETPORTS
 fuGOTROOT
 fuCHECKDEPS
 fuCHECKFORARGS
-echo "Starting scan ..."
-nmap -sV -sC -v -p $(fuGETPORTS) $1
+echo
+echo "Starting scan on all UDP / TCP ports defined in /opt/tpot/etc/tpot.yml ..."
+nmap -sV -sC -v -p $myPORTS $1 &
+nmap -sU -sV -sC -v -p $myUDPPORTS $1 &
+echo
+wait
 echo "Done."
+echo
+
