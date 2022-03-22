@@ -122,6 +122,7 @@ if [ "$myRELEASE" != "$myLSB_RELEASE" ]
 	echo "###### Updating repositories ... "
 	echo
 	apt-fast update
+        export DEBIAN_FRONTEND=noninteractive
 	echo "###### Running full upgrade ... "
 	echo
         echo "docker.io docker.io/restart       boolean true" | debconf-set-selections -v
