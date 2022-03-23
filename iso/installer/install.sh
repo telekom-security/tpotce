@@ -738,29 +738,33 @@ case $myCONF_TPOT_FLAVOR in
     fuBANNER "STANDARD"
     ln -s /opt/tpot/etc/compose/standard.yml $myTPOTCOMPOSE
   ;;
-  LOG4J)
-    fuBANNER "LOG4J"
-    ln -s /opt/tpot/etc/compose/log4j.yml $myTPOTCOMPOSE
+  HIVE)
+    fuBANNER "HIVE"
+    ln -s /opt/tpot/etc/compose/hive.yml $myTPOTCOMPOSE
   ;;
-  SENSOR)
-    fuBANNER "SENSOR"
-    ln -s /opt/tpot/etc/compose/sensor.yml $myTPOTCOMPOSE
+  HIVE_SENSOR)
+    fuBANNER "HIVE_SENSOR"
+    ln -s /opt/tpot/etc/compose/hive_sensor.yml $myTPOTCOMPOSE
   ;;
   INDUSTRIAL)
     fuBANNER "INDUSTRIAL"
     ln -s /opt/tpot/etc/compose/industrial.yml $myTPOTCOMPOSE
   ;;
-  COLLECTOR)
-    fuBANNER "COLLECTOR"
-    ln -s /opt/tpot/etc/compose/collector.yml $myTPOTCOMPOSE
-  ;;
-  NEXTGEN)
-    fuBANNER "NEXTGEN"
-    ln -s /opt/tpot/etc/compose/nextgen.yml $myTPOTCOMPOSE
+  LOG4J)
+    fuBANNER "LOG4J"
+    ln -s /opt/tpot/etc/compose/log4j.yml $myTPOTCOMPOSE
   ;;
   MEDICAL)
     fuBANNER "MEDICAL"
     ln -s /opt/tpot/etc/compose/medical.yml $myTPOTCOMPOSE
+  ;;
+  MINI)
+    fuBANNER "MINI"
+    ln -s /opt/tpot/etc/compose/mini.yml $myTPOTCOMPOSE
+  ;;
+  SENSOR)
+    fuBANNER "SENSOR"
+    ln -s /opt/tpot/etc/compose/sensor.yml $myTPOTCOMPOSE
   ;;
 esac
 
