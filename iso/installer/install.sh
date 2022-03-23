@@ -519,14 +519,15 @@ fi
 if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ] || [ "$myTPOT_DEPLOYMENT_TYPE" == "user" ];
   then
     myCONF_TPOT_FLAVOR=$(dialog --keep-window --no-cancel --backtitle "$myBACKTITLE" --title "[ Choose Your T-Pot Edition ]" --menu \
-    "\nRequired: 8GB RAM, 128GB SSD\nRecommended: 8GB RAM, 256GB SSD" 15 70 7 \
-    "STANDARD" "Honeypots, ELK, NSM & Tools" \
+    "\nRequired: 8-16GB RAM, 128GB SSD\nRecommended: 16GB RAM, 256GB SSD" 17 70 1 \
+    "STANDARD" "T-Pot Standalone with everything you need" \
+    "HIVE" "T-Pot Hive: ELK & Tools" \
+    "HIVE_SENSOR" "T-Pot Hive Sensor: Honeypots & NSM" \
+    "INDUSTRIAL" "Same as Standard with focus on Conpot" \
     "LOG4J" "Log4Pot, ELK, NSM & Tools" \
-    "SENSOR" "Just Honeypots, EWS Poster & NSM" \
-    "INDUSTRIAL" "Conpot, RDPY, Vnclowpot, ELK, NSM & Tools" \
-    "COLLECTOR" "Heralding, ELK, NSM & Tools" \
-    "NEXTGEN" "NextGen (Glutton, HoneyPy)" \
-    "MEDICAL" "Dicompot, Medpot, ELK, NSM & Tools" 3>&1 1>&2 2>&3 3>&-)
+    "MEDICAL" "Dicompot, Medpot, ELK, NSM & Tools" \
+    "MINI" "Same as Standard with focus on qHoneypots" \
+    "SENSOR" "Just Honeypots & NSM" 3>&1 1>&2 2>&3 3>&-)
 fi
 
 # Let's ask for a secure tsec password if installation type is iso

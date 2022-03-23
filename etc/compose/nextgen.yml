@@ -10,9 +10,9 @@ networks:
   conpot_local_guardian_ast:
   conpot_local_ipmi:
   conpot_local_kamstrup_382:
+  ddospot_local:
   dicompot_local:
   dionaea_local:
-  ddospot_local:
   elasticpot_local:
   endlessh_local:
   hellpot_local:

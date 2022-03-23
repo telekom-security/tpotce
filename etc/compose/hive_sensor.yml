@@ -1,25 +1,29 @@
-# T-Pot (Hive-Sensor)
+# T-Pot (Hive_Sensor)
 # Do not erase ports sections, these are used by /opt/tpot/bin/rules.sh to setup iptables ACCEPT rules for NFQ (honeytrap / glutton)
 version: '2.3'
 
 networks:
   adbhoney_local:
+  ciscoasa_local:
   citrixhoneypot_local:
   conpot_local_IEC104:
   conpot_local_guardian_ast:
   conpot_local_ipmi:
   conpot_local_kamstrup_382:
   cowrie_local:
-  cyberchef_local:
+  ddospot_local:
   dicompot_local:
   dionaea_local:
   elasticpot_local:
   heralding_local:
-  logstash_local:
+  ipphoney_local:
   mailoney_local:
   medpot_local:
+  redishoneypot_local:
   tanner_local:
   ewsposter_local:
+  sentrypeer_local:
+  spiderfoot_local:
 
 services:
 
@@ -175,6 +179,25 @@ services:
      - /data/cowrie/log:/home/cowrie/cowrie/log
      - /data/cowrie/log/tty:/home/cowrie/cowrie/log/tty
 
+# Ddospot service
+  ddospot:
+    container_name: ddospot
+    restart: always
+    networks:
+     - ddospot_local
+    ports:
+     - "19:19/udp"
+     - "53:53/udp"
+     - "123:123/udp"
+#     - "161:161/udp"
+     - "1900:1900/udp"
+    image: "dtagdevsec/ddospot:2203"
+    read_only: true
+    volumes:
+     - /data/ddospot/log:/opt/ddospot/ddospot/logs
+     - /data/ddospot/bl:/opt/ddospot/ddospot/bl
+     - /data/ddospot/db:/opt/ddospot/ddospot/db
+
 # Dicompot service
 # Get the Horos Client for testing: https://horosproject.org/
 # Get Dicom images (CC BY 3.0): https://www.cancerimagingarchive.net/collections/
@@ -288,6 +311,19 @@ services:
      - /data/honeytrap/downloads:/opt/honeytrap/var/downloads
      - /data/honeytrap/log:/opt/honeytrap/var/log
 
+# Ipphoney service
+  ipphoney:
+    container_name: ipphoney
+    restart: always
+    networks:
+     - ipphoney_local
+    ports:
+     - "631:631"
+    image: "dtagdevsec/ipphoney:2203"
+    read_only: true
+    volumes:
+     - /data/ipphoney/log:/opt/ipphoney/log
+
 # Mailoney service
   mailoney:
     container_name: mailoney
@@ -319,6 +355,32 @@ services:
     read_only: true
     volumes:
      - /data/medpot/log/:/var/log/medpot
+
+# Redishoneypot service
+  redishoneypot:
+    container_name: redishoneypot
+    restart: always
+    networks:
+     - redishoneypot_local
+    ports:
+     - "6379:6379"
+    image: "dtagdevsec/redishoneypot:2203"
+    read_only: true
+    volumes:
+     - /data/redishoneypot/log:/var/log/redishoneypot
+
+# SentryPeer service
+  sentrypeer:
+    container_name: sentrypeer
+    restart: always
+    networks:
+     - sentrypeer_local
+    ports:
+     - "5060:5060/udp"
+    image: "dtagdevsec/sentrypeer:2203"
+    read_only: true
+    volumes:
+     - /data/sentrypeer/log:/var/log/sentrypeer
 
 #### Snare / Tanner
 ## Tanner Redis Service
@@ -375,6 +437,7 @@ services:
      - /data/tanner/files:/opt/tanner/files
     depends_on:
      - tanner_api
+#     - tanner_web
      - tanner_phpox
 
 ## Snare Service
@@ -441,14 +504,15 @@ services:
 #### Tools
 ##################
 
-# Logstash service
+## Logstash service
   logstash:
     container_name: logstash
     restart: always
-    networks:
-     - logstash_local
 #    environment:
 #     - LS_JAVA_OPTS=-Xms2048m -Xmx2048m
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
     env_file:
      - /opt/tpot/etc/compose/elk_environment
     mem_limit: 2g

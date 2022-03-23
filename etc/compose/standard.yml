@@ -4,6 +4,7 @@ version: '2.3'
 
 networks:
   adbhoney_local:
+  ciscoasa_local:
   citrixhoneypot_local:
   conpot_local_IEC104:
   conpot_local_guardian_ast:
@@ -15,8 +16,10 @@ networks:
   dionaea_local:
   elasticpot_local:
   heralding_local:
+  ipphoney_local:
   mailoney_local:
   medpot_local:
+  redishoneypot_local:
   tanner_local:
   ewsposter_local:
   sentrypeer_local:
@@ -308,6 +311,19 @@ services:
      - /data/honeytrap/downloads:/opt/honeytrap/var/downloads
      - /data/honeytrap/log:/opt/honeytrap/var/log
 
+# Ipphoney service
+  ipphoney:
+    container_name: ipphoney
+    restart: always
+    networks:
+     - ipphoney_local
+    ports:
+     - "631:631"
+    image: "dtagdevsec/ipphoney:2203"
+    read_only: true
+    volumes:
+     - /data/ipphoney/log:/opt/ipphoney/log
+
 # Mailoney service
   mailoney:
     container_name: mailoney
@@ -339,6 +355,19 @@ services:
     read_only: true
     volumes:
      - /data/medpot/log/:/var/log/medpot
+
+# Redishoneypot service
+  redishoneypot:
+    container_name: redishoneypot
+    restart: always
+    networks:
+     - redishoneypot_local
+    ports:
+     - "6379:6379"
+    image: "dtagdevsec/redishoneypot:2203"
+    read_only: true
+    volumes:
+     - /data/redishoneypot/log:/var/log/redishoneypot
 
 # SentryPeer service
   sentrypeer:
@@ -390,23 +419,6 @@ services:
     command: tannerapi
     depends_on:
      - tanner_redis
-
-## Tanner WEB Service
-#  tanner_web:
-#    container_name: tanner_web
-#    restart: always
-#    tmpfs:
-#     - /tmp/tanner:uid=2000,gid=2000
-#    tty: true
-#    networks:
-#     - tanner_local
-#    image: "dtagdevsec/tanner:2203"
-#    command: tannerweb
-#    read_only: true
-#    volumes:
-#     - /data/tanner/log:/var/log/tanner
-#    depends_on:
-#     - tanner_redis
 
 ## Tanner Service
   tanner:

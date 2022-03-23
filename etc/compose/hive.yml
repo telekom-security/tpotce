@@ -43,6 +43,7 @@ services:
     depends_on:
       elasticsearch:
         condition: service_healthy
+#    mem_limit: 1g
     ports:
      - "127.0.0.1:64296:5601"
     image: "dtagdevsec/kibana:2203"
@@ -60,6 +61,7 @@ services:
      - /opt/tpot/etc/compose/elk_environment
     ports:
      - "127.0.0.1:64305:64305"
+#    mem_limit: 2g
     image: "dtagdevsec/logstash:2203"
     volumes:
      - /data:/data

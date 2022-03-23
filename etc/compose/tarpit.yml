@@ -1,9 +1,11 @@
-# T-Pot (Log4j)
+# T-Pot (Tarpit)
 # Do not erase ports sections, these are used by /opt/tpot/bin/rules.sh to setup iptables ACCEPT rules for NFQ (honeytrap / glutton)
 version: '2.3'
 
 networks:
-  log4pot_local:
+  endlessh_local:
+  hellpot_local:
+  heralding_local:
   ewsposter_local:
   spiderfoot_local:
 
@@ -13,25 +15,48 @@ services:
 #### Honeypots
 ##################
 
-# Log4pot service
-  log4pot:
-    container_name: log4pot
+# Endlessh service
+  endlessh:
+    container_name: endlessh
     restart: always
-    tmpfs:
-     - /tmp:uid=2000,gid=2000
     networks:
-     - log4pot_local
+     - endlessh_local
     ports:
-     - "80:8080"
-     - "443:8080"
-     - "8080:8080"
-     - "9200:8080"
-     - "25565:8080"
-    image: "dtagdevsec/log4pot:2203"
+     - "22:2222"
+    image: "dtagdevsec/endlessh:2203"
     read_only: true
     volumes:
-     - /data/log4pot/log:/var/log/log4pot/log
-     - /data/log4pot/payloads:/var/log/log4pot/payloads
+     - /data/endlessh/log:/var/log/endlessh
+
+# Heralding service
+  heralding:
+    container_name: heralding
+    restart: always
+    tmpfs:
+     - /tmp/heralding:uid=2000,gid=2000
+    networks:
+     - heralding_local
+    ports:
+    # - "21:21"
+    # - "22:22"
+    # - "23:23"
+    # - "25:25"
+    # - "80:80"
+     - "110:110"
+     - "143:143"
+    # - "443:443"
+     - "465:465"
+     - "993:993"
+     - "995:995"
+    # - "3306:3306"
+    # - "3389:3389"
+     - "1080:1080"
+     - "5432:5432"
+     - "5900:5900"
+    image: "dtagdevsec/heralding:2203"
+    read_only: true
+    volumes:
+     - /data/heralding/log:/var/log/heralding
 
 # Honeytrap service
   honeytrap:
@@ -49,6 +74,18 @@ services:
      - /data/honeytrap/downloads:/opt/honeytrap/var/downloads
      - /data/honeytrap/log:/opt/honeytrap/var/log
 
+# Hellpot service
+  hellpot:
+    container_name: hellpot
+    restart: always
+    networks:
+     - hellpot_local
+    ports:
+     - "80:8080"
+    image: "dtagdevsec/hellpot:2203"
+    read_only: true
+    volumes:
+     - /data/hellpot/log:/var/log/hellpot
 
 ##################
 #### NSM
