@@ -2,6 +2,7 @@
 # Let's add the first local ip to the /etc/issue and external ip to ews.ip file
 # If the external IP cannot be detected, the internal IP will be inherited.
 source /etc/environment
+myCHECKIFSENSOR=$(head -n 1 /opt/tpot/etc/tpot.yml | grep "Sensor" | wc -l)
 myUUID=$(lsblk -o MOUNTPOINT,UUID | grep "/" | awk '{ print $2 }')
 myLOCALIP=$(hostname -I | awk '{ print $1 }')
 myEXTIP=$(/opt/tpot/bin/myip.sh)
@@ -51,7 +52,10 @@ echo ",---- [ [1;34m\n[0m ] [ [0;34m\d[0m ] [ [1;30m\t[0m ]" >> /etc/issue
 echo "|" >> /etc/issue
 echo "| [1;34mIP: $myLOCALIP ($myEXTIP)[0m" >> /etc/issue
 echo "| [0;34mSSH: ssh -l tsec -p 64295 $myLOCALIP[0m" >> /etc/issue 
-echo "| [1;30mWEB: https://$myLOCALIP:64297[0m" >> /etc/issue
+if [ "$myCHECKIFSENSOR" == "0" ];
+  then
+    echo "| [1;30mWEB: https://$myLOCALIP:64297[0m" >> /etc/issue
+fi
 echo "| [0;37mADMIN: https://$myLOCALIP:64294[0m" >> /etc/issue
 echo "$myBLACKHOLE_STATUS" >> /etc/issue
 echo "|" >> /etc/issue
