@@ -176,7 +176,7 @@ services:
 
 # Ewsposter service
   ewsposter:
-    build: ews/.
+    build: ewsposter/.
     image: "dtagdevsec/ewsposter:2203"
 
 # Nginx service
@@ -192,4 +192,4 @@ services:
 # Map Web Service
   map_web:
     build: elk/map/.
-    image: "dtagdevsec/map_server:2203"
+    image: "dtagdevsec/map:2203"

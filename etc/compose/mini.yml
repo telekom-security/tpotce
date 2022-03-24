@@ -193,7 +193,7 @@ services:
     tty: true
     ports:
      - "127.0.0.1:64299:64299"
-    image: "dtagdevsec/map_server:2203"
+    image: "dtagdevsec/map:2203"
 
 ## Map Data Service
   map_data:
@@ -208,7 +208,7 @@ services:
      - /opt/tpot/etc/compose/elk_environment
     stop_signal: SIGKILL
     tty: true
-    image: "dtagdevsec/map_server:2203"
+    image: "dtagdevsec/map:2203"
 #### /ELK
 
 # Ewsposter service
