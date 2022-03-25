@@ -13,6 +13,7 @@ RUN apk -U --no-cache add \
 	       py3-aiohttp \
 	       py3-beautifulsoup4 \
 	       py3-gitpython \
+	       py3-jinja2 \
 	       py3-markupsafe \
 	       py3-setuptools \
                py3-pip \
