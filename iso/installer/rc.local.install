@@ -1,3 +1,4 @@
 #!/bin/bash
-#plymouth --quit
+# Ensure client will receive a DHCP lease
+dhclient
 openvt -f -w -s /root/installer/wrapper.sh

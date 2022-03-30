@@ -458,7 +458,7 @@ export TERM=linux
 if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ];
   then
     sleep 5
-    dialog --keep-window --no-ok --no-cancel --backtitle "$myBACKTITLE" --title "[ Wait to avoid interference with service messages ]" --pause "" 6 80 7
+    dialog --keep-window --no-ok --no-cancel --backtitle "$myBACKTITLE" --title "[ Wait to avoid interference with service messages ]" --pause "" 7 80 7
 fi
 
 # Check if remote sites are available
@@ -691,7 +691,7 @@ echo "UseRoaming no" | tee -a /etc/ssh/ssh_config
 # Installing elasticdump, yq
 fuBANNER "Installing pkgs"
 npm install elasticdump -g
-pip3 install yq
+pip3 install glances yq
 hash -r
 
 # Cloning T-Pot from GitHub
