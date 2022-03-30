@@ -1,1 +1,1 @@
-path.config: "/usr/sahre/logstash/config/pipelines.yml"
+path.config: "/usr/share/logstash/config/pipelines.yml"
