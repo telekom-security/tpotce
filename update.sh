@@ -239,7 +239,7 @@ echo "### Installing apt-fast"
 local myPACKAGES=$(cat /opt/tpot/packages.txt)
 echo
 echo "### Removing and holding back problematic packages ..."
-apt-fast -y purge cockpit-pcp elasticsearch-curator exim4-base glances mailutils ntp pcp
+apt-fast -y purge cockpit-pcp elasticsearch-curator exim4-base mailutils ntp pcp
 apt-mark hold exim4-base mailutils ntp pcp cockpit-pcp
 hash -r
 echo
