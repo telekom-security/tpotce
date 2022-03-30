@@ -49,7 +49,8 @@ RUN apt-get update -y && \
     chown -R logstash:logstash /etc/listbot \
                                /var/log/logstash/ \
 			       /var/lib/logstash \
-			       /usr/share/logstash/data && \
+			       /usr/share/logstash/data \
+			       /usr/share/logstash/config/pipelines* && \
     chmod 755 /usr/bin/entrypoint.sh && \
 #
 # Clean up

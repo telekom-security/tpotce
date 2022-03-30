@@ -46,6 +46,8 @@ if [ "$MY_TPOT_TYPE" == "SENSOR" ];
     echo "Hive username: $MY_HIVE_USERNAME"
     echo "Hive IP: $MY_HIVE_IP"
     echo
+    # Ensure correct file permissions for private keyfile or SSH will ask for password
+    chmod 600 $MY_SENSOR_PRIVATEKEYFILE
     cp /usr/share/logstash/config/pipelines_sensor.yml /usr/share/logstash/config/pipelines.yml
     autossh -f -M 0 -4 -l $MY_HIVE_USERNAME -i $MY_SENSOR_PRIVATEKEYFILE -p 64295 -N -L64305:127.0.0.1:64305 $MY_HIVE_IP -o "ServerAliveInterval 30" -o "ServerAliveCountMax 3" -o "StrictHostKeyChecking=no" -o "UserKnownHostsFile=/dev/null"
     exit 0
