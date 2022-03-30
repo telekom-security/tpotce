@@ -239,8 +239,8 @@ echo "### Installing apt-fast"
 local myPACKAGES=$(cat /opt/tpot/packages.txt)
 echo
 echo "### Removing and holding back problematic packages ..."
-apt-fast -y purge cockpit-pcp elasticsearch-curator exim4-base glances mailutils pcp
-apt-mark hold exim4-base mailutils pcp cockpit-pcp
+apt-fast -y purge cockpit-pcp elasticsearch-curator exim4-base glances mailutils ntp pcp
+apt-mark hold exim4-base mailutils ntp pcp cockpit-pcp
 hash -r
 echo
 echo "### Now upgrading packages ..."
@@ -307,28 +307,6 @@ mkdir -vp /data/adbhoney/{downloads,log} \
           /data/suricata/log \
           /data/tanner/{log,files} \
           /home/tsec/.ssh/
-
-### For some honeypots to work we need to ensure ntp.service is not listening
-echo
-echo "### Ensure ntp.service is not listening to avoid potential port conflict with ddospot."
-myNTP_IF_DISABLE="interface ignore wildcard
-interface ignore 127.0.0.1
-interface ignore ::1"
-
-if [ "$(cat /etc/ntp.conf | grep "interface ignore wildcard" | wc -l)" != "1" ];
-  then
-    echo
-    echo "### Found active ntp listeners and updating config."
-    echo "$myNTP_IF_DISABLE" | tee -a /etc/ntp.conf
-    echo
-    echo "### Restarting ntp.service for changes to take effect."
-    systemctl stop ntp.service
-    systemctl start ntp.service
-  else
-    echo
-    echo "### Found no active ntp listeners."
-fi
-
 
 ### Let's take care of some files and permissions
 chmod 770 -R /data

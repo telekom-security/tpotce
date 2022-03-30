@@ -36,12 +36,12 @@ RUN apt-get update -y && \
     chmod u+x /usr/bin/entrypoint.sh && \
     mkdir -p /etc/logstash/conf.d /usr/share/logstash/config && \
     cp logstash.conf /etc/logstash/conf.d/ && \
-    cp logstash.yml /etc/logstash/conf.d/ && \
     cp http_input.conf /etc/logstash/conf.d/ && \
     cp http_output.conf /etc/logstash/conf.d/ && \
     cp pipelines.yml /usr/share/logstash/config/pipelines.yml && \
     cp pipelines_sensor.yml /usr/share/logstash/config/pipelines_sensor.yml && \
     cp tpot-template.json /etc/logstash/ && \
+    rm /etc/logstash/pipelines.yml && \
 #
 # Setup user, groups and configs
     groupmod -g 2000 logstash && \

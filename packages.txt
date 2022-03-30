@@ -41,7 +41,6 @@ multitail
 net-tools
 neovim
 npm
-ntp
 openssh-server
 openssl
 pass
@@ -52,6 +51,7 @@ sshpass
 psmisc
 pv
 python3-pip
+systemd-timesyncd
 toilet
 unattended-upgrades
 unzip
