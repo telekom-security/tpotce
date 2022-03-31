@@ -11,7 +11,7 @@ myTPOTSEED="iso/preseed/tpot.seed"
 myPACKAGES="dialog genisoimage syslinux syslinux-utils pv rsync udisks2 xorriso"
 myPFXFILE="iso/installer/keys/8021x.pfx"
 myINSTALLERPATH="iso/installer/install.sh"
-myNTPCONFFILE="iso/installer/ntp.conf"
+myNTPCONFFILE="iso/installer/timesyncd.conf"
 myTMP="tmp"
 myCONF_FILE="iso/installer/iso.conf"
 myCONF_DEFAULT_FILE="iso/installer/iso.conf.dist"
@@ -162,19 +162,25 @@ do
           if valid_ip $myCONF_NTP_IP; then myIPRESULT="true"; fi
       done
 tee $myNTPCONFFILE <<EOF
-driftfile /var/lib/ntp/ntp.drift
+#  This file is part of systemd.
+#
+#  systemd is free software; you can redistribute it and/or modify it
+#  under the terms of the GNU Lesser General Public License as published by
+#  the Free Software Foundation; either version 2.1 of the License, or
+#  (at your option) any later version.
+#
+# Entries in this file show the compile time defaults.
+# You can change settings by editing this file.
+# Defaults can be restored by simply deleting this file.
+#
+# See timesyncd.conf(5) for details.
 
-statistics loopstats peerstats clockstats
-filegen loopstats file loopstats type day enable
-filegen peerstats file peerstats type day enable
-filegen clockstats file clockstats type day enable
-
-server $myCONF_NTP_IP
-
-restrict -4 default kod notrap nomodify nopeer noquery
-restrict -6 default kod notrap nomodify nopeer noquery
-restrict 127.0.0.1
-restrict ::1
+[Time]
+NTP=$myCONF_NTP_IP
+#FallbackNTP=0.debian.pool.ntp.org 1.debian.pool.ntp.org 2.debian.pool.ntp.org 3.debian.pool.ntp.org
+#RootDistanceMaxSec=5
+#PollIntervalMinSec=32
+#PollIntervalMaxSec=2048
 EOF
 
       break
@@ -198,7 +204,7 @@ if [ "$myCONF_PROXY_USE" == "0" ] || [ "$myCONF_PFX_USE" == "0" ] || [ "$myCONF_
     echo "myCONF_PFX_HOST_ID=\"$myCONF_PFX_HOST_ID\"" >> $myCONF_FILE
     echo "myCONF_NTP_USE=\"$myCONF_NTP_USE\"" >> $myCONF_FILE
     echo "myCONF_NTP_IP=\"$myCONF_NTP_IP\"" >> $myCONF_FILE
-    echo "myCONF_NTP_CONF_FILE=\"/root/installer/ntp.conf\"" >> $myCONF_FILE
+    echo "myCONF_NTP_CONF_FILE=\"/root/installer/timesyncd.conf\"" >> $myCONF_FILE
 fi
 
 # Let's download Debian Minimal ISO

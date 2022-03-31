@@ -667,7 +667,7 @@ fi
 if [ "$myCONF_NTP_USE" == "0" ];
   then
     fuBANNER "Setup NTP"
-    cp $myCONF_NTP_CONF_FILE /etc/ntp.conf
+    cp $myCONF_NTP_CONF_FILE /etc/systemd/timesyncd.conf
 fi
 
 # Let's setup 802.1x networking
