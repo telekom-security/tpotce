@@ -18,7 +18,7 @@ RUN apk -U add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/testing \
             libosip2-dev
 #
 # Download SentryPeer sources and build
-RUN git clone https://github.com/SentryPeer/SentryPeer
+RUN git clone https://github.com/SentryPeer/SentryPeer -b v1.2.0
 #
 WORKDIR /SentryPeer
 #
