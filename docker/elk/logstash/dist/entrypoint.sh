@@ -82,6 +82,6 @@ if [ "$myTPOTILM" == "1" ];
       }
     }'
   else
-    echo "T-Pot ILM already configured."
+    echo "T-Pot ILM already configured or ES not available."
 fi
 echo
