@@ -87,7 +87,7 @@ echo
 # Let's check for version
 function fuCHECK_VERSION () {
 local myMINVERSION="20.06.0"
-local myMASTERVERSION="22.03.0"
+local myMASTERVERSION="22.04.0"
 echo
 echo "### Checking for Release ID"
 myRELEASE=$(lsb_release -c | awk '{ print $2 }')

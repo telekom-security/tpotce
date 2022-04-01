@@ -238,7 +238,7 @@ if [ "$myARCH" = "amd64" ];
   then
     cp iso/isolinux/* $myTPOTDIR/
   else
-    sed -i "s#menuentry 'Install'#menuentry 'Install T-Pot 22.x (ARM64)'#g" $myTPOTDIR/boot/grub/grub.cfg
+    sed -i "s#menuentry 'Install'#menuentry 'Install T-Pot 22.04.0 (ARM64)'#g" $myTPOTDIR/boot/grub/grub.cfg
 fi
 # For now we need architecture based preseeds
 cp iso/preseed/tpot_$myARCH.seed $myTPOTDIR/tmp/preseed.cfg
