@@ -48,7 +48,7 @@ variable "timezone" {
 ## These will go in the generated tpot.conf file ##
 variable "tpot_flavor" {
   default     = "STANDARD"
-  description = "Specify your tpot flavor [STANDARD, SENSOR, INDUSTRIAL, COLLECTOR, NEXTGEN, MEDICAL]"
+  description = "Specify your tpot flavor [STANDARD, HIVE, HIVE_SENSOR, INDUSTRIAL, LOG4J, MEDICAL, MINI, SENSOR]"
 }
 
 variable "web_user" {
