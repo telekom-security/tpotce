@@ -90,6 +90,7 @@ d-i debian-installer/splash boolean false
 ### Post install (Grub & T-Pot Installer)
 #########################################
 d-i preseed/late_command string \
+cp /opt/installer -R /target/root; \
 ### DEV
 in-target git clone --depth=1 https://github.com/telekom-security/tpotce -b 22.x /opt/tpot; \
 in-target sed -i 's/allow-hotplug/auto/g' /etc/network/interfaces; \
