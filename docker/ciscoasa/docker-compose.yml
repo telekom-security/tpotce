@@ -11,7 +11,8 @@ services:
      - /tmp/ciscoasa:uid=2000,gid=2000
 #    cpu_count: 1
 #    cpus: 0.25
-    network_mode: "host"
+    networks:
+     - ciscoasa_local
     ports:
      - "5000:5000/udp"
      - "8443:8443"

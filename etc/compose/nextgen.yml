@@ -48,10 +48,10 @@ services:
   ciscoasa:
     container_name: ciscoasa
     restart: always
-    networks:
-      - ciscoasa_local
     tmpfs:
      - /tmp/ciscoasa:uid=2000,gid=2000
+    networks:
+     - ciscoasa_local
     ports:
      - "5000:5000/udp"
      - "8443:8443"
