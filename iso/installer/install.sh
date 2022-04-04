@@ -873,14 +873,14 @@ tee -a /root/.bashrc <<EOF
 $mySHELLCHECK
 $myROOTPROMPT
 $myROOTCOLORS
-PATH="$PATH:/opt/tpot/bin"
+PATH="\$PATH:/opt/tpot/bin"
 EOF
 for i in $(ls -d /home/*/)
   do
 tee -a $i.bashrc <<EOF
 $mySHELLCHECK
 $myUSERPROMPT
-PATH="$PATH:/opt/tpot/bin"
+PATH="\$PATH:/opt/tpot/bin"
 EOF
 done
 

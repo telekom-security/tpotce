@@ -8,7 +8,7 @@ myBACKTITLE="T-Pot - ISO Creator"
 ### DEV
 myTPOTDIR="tpotiso"
 myTPOTSEED="iso/preseed/tpot.seed"
-myPACKAGES="dialog genisoimage syslinux syslinux-utils pv rsync udisks2 xorriso"
+myPACKAGES="dialog genisoimage pv rsync syslinux syslinux-utils udisks2 wget xorriso"
 myPFXFILE="iso/installer/keys/8021x.pfx"
 myINSTALLERPATH="iso/installer/install.sh"
 myNTPCONFFILE="iso/installer/timesyncd.conf"
