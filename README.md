@@ -1,96 +1,104 @@
+# T-Pot - The All In One Multi Honeypot Plattform
+
 ![T-Pot](doc/tpotsocial.png)
 
-T-Pot 20.06 runs on Debian (Stable), is based heavily on
+T-Pot is the all in one, optionally distributed, multiarch (amd64, arm64) honeypot plattform, supporting 20+ honeypots and countless visualization options using the Elastic Stack, animated live attack maps and lots of security tools to further improve the deception experience.
 
-[docker](https://www.docker.com/), [docker-compose](https://docs.docker.com/compose/)
-
-and includes dockerized versions of the following honeypots
-
-* [adbhoney](https://github.com/huuck/ADBHoney),
-* [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot),
-* [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot),
-* [conpot](http://conpot.org/),
-* [cowrie](https://github.com/cowrie/cowrie),
-* [ddospot](https://github.com/aelth/ddospot),
-* [dicompot](https://github.com/nsmfoo/dicompot),
-* [dionaea](https://github.com/DinoTools/dionaea),
-* [elasticpot](https://gitlab.com/bontchev/elasticpot),
-* [endlessh](https://github.com/skeeto/endlessh),
-* [glutton](https://github.com/mushorg/glutton),
-* [heralding](https://github.com/johnnykv/heralding),
-* [hellpot](https://github.com/yunginnanet/HellPot),
-* [honeypots](https://github.com/qeeqbox/honeypots),
-* [honeytrap](https://github.com/armedpot/honeytrap/),
-* [ipphoney](https://gitlab.com/bontchev/ipphoney),
-* [log4pot](https://github.com/thomaspatzke/Log4Pot),
-* [mailoney](https://github.com/awhitehatter/mailoney),
-* [medpot](https://github.com/schmalle/medpot),
-* [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot),
-* [sentrypeer](https://github.com/SentryPeer/SentryPeer),
-* [snare](http://mushmush.org/),
-* [tanner](http://mushmush.org/)
-
-
-Furthermore T-Pot includes the following tools
-
-* [Cockpit](https://cockpit-project.org/running) for a lightweight, webui for docker, os, real-time performance monitoring and web terminal.
-* [Cyberchef](https://gchq.github.io/CyberChef/) a web app for encryption, encoding, compression and data analysis.
-* [ELK stack](https://www.elastic.co/videos) to beautifully visualize all the events captured by T-Pot.
-* [Elasticvue](https://github.com/cars10/elasticvue/) a web front end for browsing and interacting with an Elastic Search cluster.
-* [Fatt](https://github.com/0x4D31/fatt) a pyshark based script for extracting network metadata and fingerprints from pcap files and live network traffic.
-* [Spiderfoot](https://github.com/smicallef/spiderfoot) a open source intelligence automation tool.
-* [Suricata](http://suricata-ids.org/) a Network Security Monitoring engine.
-
+T-Pot is based on the Debian 11 (Bullseye) Netinstaller and utilizes 
+[docker](https://www.docker.com/) and [docker-compose](https://docs.docker.com/compose/) to reach its goal of running as many tools as possible simultaneously and thus utilizing the host's hardware to its maximum.
+<br><br>
 
 # TL;DR
-1. Meet the [system requirements](#requirements). The T-Pot installation needs at least 8 GB RAM and 128 GB free disk space as well as a working (outgoing non-filtered) internet connection.
-2. Download the T-Pot ISO from [GitHub](https://github.com/telekom-security/tpotce/releases) or [create it yourself](#createiso).
+1. Meet the [system requirements](#requirements). The T-Pot installation needs at least 8-16 GB RAM and 128 GB free disk space as well as a working (outgoing non-filtered) internet connection.
+2. Download the T-Pot ISO from [GitHub](https://github.com/telekom-security/tpotce/releases) acording to your architecture (amd64, arm64) or [create it yourself](#createiso).
 3. Install the system in a [VM](#vm) or on [physical hardware](#hw) with [internet access](#placement).
 4. Enjoy your favorite beverage - [watch](https://sicherheitstacho.eu) and [analyze](#kibana).
-
+<br><br>
 
 # Table of Contents
-- [Technical Concept](#concept)
-- [System Requirements](#requirements)
-- [Installation Types](#types)
+- [Disclaimer](#disclaimer)
+- [Technical Concept](#technical-concept)
+  - [Technical Architecture](#technical-architecture)
+  - [Services](#services)
+  - [User Types](#user-types)
+- [System Requirements](#system-requirements)
+  - [Running in a VM](#runvm)
+  - [Running on Hardware](#runhardware)
+  - [Running in a Cloud](#runcloud)
+  - [Required Ports](#ports)
+- [System Placement](#sysplacement)
 - [Installation](#installation)
-  - [Prebuilt ISO Image](#prebuilt)
-  - [Create your own ISO Image](#createiso)
-  - [Running in a VM](#vm)
-  - [Running on Hardware](#hardware)
-  - [Post Install User](#postinstall)
-  - [Post Install Auto](#postinstallauto)
+  - [ISO Based](#isoinstall)
+    - [Download ISO Image](#downloadiso)
+    - [Build your own ISO Image](#makeiso)
+  - [T-Pot Installer](#tpotinstaller)
+    - [Installation Types](#installtypes)
+    - [Standalone](#standalonetype)
+    - [Distributed](#distributedtype)
+  - [Post Install](#postinstall)
+    - [Download Debian Netinstall Image](#downloadnetiso)
+    - [User](#postuser)
+    - [Auto](#postauto)
   - [Cloud Deployments](#cloud)
     - [Ansible](#ansible)
     - [Terraform](#terraform)
-  - [First Run](#firstrun)
-  - [System Placement](#placement)
-- [Updates](#updates)
-- [Options](#options)
-  - [SSH and web access](#ssh)
-  - [T-Pot Landing Page](#heimdall)
-  - [Kibana Dashboard](#kibana)
-  - [Tools](#tools)
-  - [Maintenance](#maintenance)
-  - [Community Data Submission](#submission)
+  - [Community Data Submission](#ews)
   - [Opt-In HPFEEDS Data Submission](#hpfeeds-optin)
-- [Roadmap](#roadmap)
-- [Disclaimer](#disclaimer)
-- [FAQ](#faq)
+- [Operations](#ops)
+  - [First Start](#firststart)
+    - [Standalone](#standalone1st)
+    - [Distributed](#distributed1st)
+  - [Remote Access & Tools](#access)
+    - [SSH and Cockpit](#ssh)
+    - [T-Pot Landing Page](#tpotwebui)
+    - [Kibana Dashboard](#kibana)
+    - [Attack Map](#attackmap)
+    - [Cyberchef](#cyberchef)
+    - [Elasticvue](#elasticvue)
+    - [Spiderfoot](#spiderfoot)
+  - [Maintenance](#maintenance)
+    - [Start T-Pot](#starttpot)
+    - [Stop T-Pot](#stoptpot)
+    - [T-Pot Data Folder](#datafolder)
+    - [Show Containers](#showcontainers)
+    - [Blackhole](#blackhole)
+    - [Clean Up](#cleanup)
+    - [Add user](#adduser)
+    - [Import objects](#import)
+    - [Switch editions](#switcheditions)
+    - [Redeploy Hive Sensor](#redeploy)
+    - [Adjust tpot.yml](#adjusttpot)
+    - [Enable 2FA](#enable2fa)
+  - [Troubleshooting](#troubleshooting)
+    - [Logging](#logging)
+    - [Fail2Ban](#fail2ban)
+    - [RAM](#logging)
+  - [Updates](#updates)
 - [Contact](#contact)
+  - [Discussions](#discussions)
+  - [Issues](#issues)
 - [Licenses](#licenses)
 - [Credits](#credits)
-- [Stay tuned](#staytuned)
-- [Testimonial](#testimonial)
+- [Testimonials](#testimonials)
+<br><br>
 
-<a name="concept"></a>
+<a name="disclaimer"></a>
+# Disclaimer
+- We don't have access to your system. So we cannot remote-assist when you break your system or configuration. For fast help research the [Issues](https://github.com/telekom-security/tpotce/issues) and [Discussions](https://github.com/telekom-security/tpotce/discussions).
+- The software is designed and offered with best effort in mind. As a community and opens source project it uses lots of other open source software and may contain bugs and issues. Report responsibly.
+- You install and run T-Pot within your responsibility. Choose your deployment wisely as a system compromise can never be ruled out.
+- Honeypots - by design - should not host any sensitive data. Make sure you don't add any.
+- By default, your data is submitted to [SecurityMeter](https://www.sicherheitstacho.eu/start/main). You can disable this in the config (`/opt/tpot/etc/tpot.yml`). But hey, wouldn't it be better to contribute to the community? Sharing in this case is really caring!
+<br><br>
+
+<a name="technical-concept"></a>
 # Technical Concept
 
-T-Pot is based on the Debian (Stable) network installer.
-The honeypot daemons as well as other support components are [dockered](http://docker.io).
-This allows T-Pot to run multiple honeypot daemons and tools on the same network interface while maintaining a small footprint and constrain each honeypot within its own environment.
+T-Pot is based on the Debian Netinstaller and utilizes 
+[docker](https://www.docker.com/) and [docker-compose](https://docs.docker.com/compose/) to reach its goal of running as many tools simultaneously as possible and thus utilizing the host's hardware to its maximum.
+<br><br>
 
-In T-Pot we combine the dockerized honeypots ...
+T-Pot offers docker images for the following honeypots ...
 * [adbhoney](https://github.com/huuck/ADBHoney),
 * [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot),
 * [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot),
@@ -121,11 +129,15 @@ In T-Pot we combine the dockerized honeypots ...
 * [ELK stack](https://www.elastic.co/videos) to beautifully visualize all the events captured by T-Pot.
 * [Elasticvue](https://github.com/cars10/elasticvue/) a web front end for browsing and interacting with an Elastic Search cluster.
 * [Fatt](https://github.com/0x4D31/fatt) a pyshark based script for extracting network metadata and fingerprints from pcap files and live network traffic.
+* [Geoip-Attack-Map](https://github.com/eddie4/geoip-attack-map) a beautifully animated attack map [optimized](https://github.com/t3chn0m4g3/geoip-attack-map) for T-Pot.
 * [Spiderfoot](https://github.com/smicallef/spiderfoot) a open source intelligence automation tool.
 * [Suricata](http://suricata-ids.org/) a Network Security Monitoring engine.
 
 ... to give you the best out-of-the-box experience possible and an easy-to-use multi-honeypot appliance.
+<br><br>
 
+
+## Technical Architecture
 ![Architecture](doc/architecture.png)
 
 While data within docker containers is volatile T-Pot ensures a default 30 day persistence of all relevant honeypot and tool data in the well known `/data` folder and sub-folders. The persistence configuration may be adjusted in `/opt/tpot/etc/logrotate/logrotate.conf`. Once a docker container crashes, all other data produced within its environment is erased and a fresh instance is started from the corresponding docker image.<br>
@@ -475,14 +487,6 @@ As with every development there is always room for improvements ...
 Some features may be provided with updated docker images, others may require some hands on from your side.
 
 You are always invited to participate in development on our [GitHub](https://github.com/telekom-security/tpotce) page.
-
-<a name="disclaimer"></a>
-# Disclaimer
-- We don't have access to your system. So we cannot remote-assist when you break your configuration. But you can simply reinstall.
-- The software was designed with best effort security, not to be in stealth mode. Because then, we probably would not be able to provide those kind of honeypot services.
-- You install and you run within your responsibility. Choose your deployment wisely as a system compromise can never be ruled out.
-- Honeypots - by design - should not host any sensitive data. Make sure you don't add any.
-- By default, your data is submitted to [SecurityMeter](https://www.sicherheitstacho.eu/start/main). You can disable this in the config. But hey, wouldn't it be better to contribute to the community?
 
 <a name="faq"></a>
 # FAQ
