@@ -188,11 +188,11 @@ During the installation and during the usage of T-Pot there are two different ty
 
 Depending on the installation setup, edition, installing on [real hardware](#running-on-hardware), in a [virtual machine](#running-in-a-vm) or [cloud](#running-in-a-cloud) there are different kind of requirements to be met regarding OS, RAM, storage and network for a successful installation of T-Pot (you can always adjust `/opt/tpot/etc/tpot.yml` to your needs to overcome these requirements).
 <br><br>
-| T-Pot Type  | RAM      | Storage         | Description                                                                              |
-| :---        | :---     | :---            | :---                                                                                     |
-| Standalone  | 8-16GB   | >=128GB SSD     | RAM requirements depend on the edition, storage on how much data you want to persist.    |
-| Hive        | >=8GB    | >=256GB SSD     | As a rule of thumb, the more sensors & data, the more RAM and storage is needed.         |
-| Hive_Sensor | >=8GB    | >=128GB SSD     | Since honeypot logs are persisted (/data) for 30 days, storage depends on attack volume. |
+| T-Pot Type  | RAM          | Storage         | Description                                                                              |
+| :---        | :---         | :---            | :---                                                                                     |
+| Standalone  | 8-16GB       | >=128GB SSD     | RAM requirements depend on the edition<br>, storage on how much data you want to persist.    |
+| Hive        | >=8GB        | >=256GB SSD     | As a rule of thumb, the more sensors & data<br>, the more RAM and storage is needed.         |
+| Hive_Sensor | >=8GB        | >=128GB SSD     | Since honeypot logs are persisted (/data)<br> for 30 days, storage depends on attack volume. |
 
 <br><br>
 
