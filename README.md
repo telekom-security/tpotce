@@ -22,11 +22,11 @@ T-Pot is based on the Debian 11 (Bullseye) Netinstaller and utilizes
   - [Services](#services)
   - [User Types](#user-types)
 - [System Requirements](#system-requirements)
-  - [Running in a VM](#runvm)
-  - [Running on Hardware](#runhardware)
-  - [Running in a Cloud](#runcloud)
-  - [Required Ports](#ports)
-- [System Placement](#sysplacement)
+  - [Running in a VM](#running-in-a-vm)
+  - [Running on Hardware](#running-on-hardware)
+  - [Running in a Cloud](#running-in-a-cloud)
+  - [Required Ports](#required-ports)
+- [System Placement](#system-placement)
 - [Installation](#installation)
   - [ISO Based](#isoinstall)
     - [Download ISO Image](#downloadiso)
@@ -60,9 +60,10 @@ T-Pot is based on the Debian 11 (Bullseye) Netinstaller and utilizes
     - [Start T-Pot](#starttpot)
     - [Stop T-Pot](#stoptpot)
     - [T-Pot Data Folder](#datafolder)
+    - [Log Persistence](#datafolder)
+    - [Clean Up](#cleanup)
     - [Show Containers](#showcontainers)
     - [Blackhole](#blackhole)
-    - [Clean Up](#cleanup)
     - [Add user](#adduser)
     - [Import objects](#import)
     - [Switch editions](#switcheditions)
@@ -82,13 +83,12 @@ T-Pot is based on the Debian 11 (Bullseye) Netinstaller and utilizes
 - [Testimonials](#testimonials)
 <br><br>
 
-<a name="disclaimer"></a>
 # Disclaimer
-- We don't have access to your system. So we cannot remote-assist when you break your system or configuration. For fast help research the [Issues](https://github.com/telekom-security/tpotce/issues) and [Discussions](https://github.com/telekom-security/tpotce/discussions).
-- The software is designed and offered with best effort in mind. As a community and opens source project it uses lots of other open source software and may contain bugs and issues. Report responsibly.
 - You install and run T-Pot within your responsibility. Choose your deployment wisely as a system compromise can never be ruled out.
+- For fast help research the [Issues](https://github.com/telekom-security/tpotce/issues) and [Discussions](https://github.com/telekom-security/tpotce/discussions).
+- The software is designed and offered with best effort in mind. As a community and open source project it uses lots of other open source software and may contain bugs and issues. Report responsibly.
 - Honeypots - by design - should not host any sensitive data. Make sure you don't add any.
-- By default, your data is submitted to [SecurityMeter](https://www.sicherheitstacho.eu/start/main). You can disable this in the config (`/opt/tpot/etc/tpot.yml`). But hey, wouldn't it be better to contribute to the community? Sharing in this case is really caring!
+- By default, your data is submitted to [SecurityMeter](https://www.sicherheitstacho.eu/start/main). You can disable this in the config (`/opt/tpot/etc/tpot.yml`) by remove the ewsposter section. But in this case sharing really is caring!
 <br><br>
 
 <a name="technical-concept"></a>
@@ -123,13 +123,14 @@ T-Pot offers docker images for the following honeypots ...
 * [snare](http://mushmush.org/),
 * [tanner](http://mushmush.org/)
 
-... with the following tools ...
-* [Cockpit](https://cockpit-project.org/running) for a lightweight, webui for docker, os, real-time performance monitoring and web terminal.
+... alongside the following tools ...
+* [Cockpit](https://cockpit-project.org/running) for a lightweight and secure WebManagement and WebTerminal.
 * [Cyberchef](https://gchq.github.io/CyberChef/) a web app for encryption, encoding, compression and data analysis.
-* [ELK stack](https://www.elastic.co/videos) to beautifully visualize all the events captured by T-Pot.
+* [Elastic Stack](https://www.elastic.co/videos) to beautifully visualize all the events captured by T-Pot.
 * [Elasticvue](https://github.com/cars10/elasticvue/) a web front end for browsing and interacting with an Elastic Search cluster.
 * [Fatt](https://github.com/0x4D31/fatt) a pyshark based script for extracting network metadata and fingerprints from pcap files and live network traffic.
 * [Geoip-Attack-Map](https://github.com/eddie4/geoip-attack-map) a beautifully animated attack map [optimized](https://github.com/t3chn0m4g3/geoip-attack-map) for T-Pot.
+* [P0f](https://lcamtuf.coredump.cx/p0f3/) P0f is a tool for purely passive traffic fingerprinting.
 * [Spiderfoot](https://github.com/smicallef/spiderfoot) a open source intelligence automation tool.
 * [Suricata](http://suricata-ids.org/) a Network Security Monitoring engine.
 
@@ -138,66 +139,137 @@ T-Pot offers docker images for the following honeypots ...
 
 
 ## Technical Architecture
-![Architecture](doc/architecture.png)
+![Architecture](doc/architecture.svg)
 
-While data within docker containers is volatile T-Pot ensures a default 30 day persistence of all relevant honeypot and tool data in the well known `/data` folder and sub-folders. The persistence configuration may be adjusted in `/opt/tpot/etc/logrotate/logrotate.conf`. Once a docker container crashes, all other data produced within its environment is erased and a fresh instance is started from the corresponding docker image.<br>
+The source code and configuration files are fully stored in the T-Pot GitHub repository. The docker images are built and preconfigured for the T-Pot environment. 
 
-Basically, what happens when the system is booted up is the following:
+The individual Dockerfiles and configurations are located in the [docker folder](https://github.com/telekom-security/tpotce/tree/master/docker).
+<br><br>
 
-- start host system
-- start all the necessary services (i.e. cockpit, docker, etc.)
-- start all docker containers via docker-compose (honeypots, nms, elk, etc.)
+## Services
+T-Pot offers a number of services which are basically divided into five groups:
+1. System services provided by the OS
+    * SSH for secure remote access.
+    * Cockpit for web based remote acccess, management and web terminal.
+2. Elastic Stack
+    * Elasticsearch for storing events.
+    * Logstash for ingesting, receiving and sending events to Elasticsearch.
+    * Kibana for displaying events on beautyfully rendered dashboards.
+3. Tools
+    * NGINX for providing secure remote access (reverse proxy) to Kibana, CyberChef, Elasticvue, GeoIP AttackMap and Spiderfoot.
+    * CyberChef a web app for encryption, encoding, compression and data analysis.
+    * Elasticvue a web front end for browsing and interacting with an Elastic Search cluster.
+    * Geoip Attack Map a beautifully animated attack map for T-Pot.
+    * Spiderfoot a open source intelligence automation tool.
+4. Honeypots
+    * A selection of the 22 available honeypots based on the selected edition and / or setup.
+5. Network Security Monitoring (NSM)
+    * Fatt a pyshark based script for extracting network metadata and fingerprints from pcap files and live network traffic.
+    * P0f is a tool for purely passive traffic fingerprinting.
+    * Suricata a Network Security Monitoring engine.
+<br><br>
 
-The T-Pot project provides all the tools and documentation necessary to build your own honeypot system and contribute to our [Sicherheitstacho](https://sicherheitstacho.eu).
+## User Types
+During the installation and during the usage of T-Pot there are two different types of accounts you will be working with. Make sure you know the differences of the different account types, since it is **by far** the most common reason for authentication errors and `fail2ban` lockouts.
 
-The source code and configuration files are fully stored in the T-Pot GitHub repository. The docker images are preconfigured for the T-Pot environment. If you want to run the docker images separately, make sure you study the docker-compose configuration (`/opt/tpot/etc/tpot.yml`) and the T-Pot systemd script (`/etc/systemd/system/tpot.service`), as they provide a good starting point for implementing changes.
+| Service             | Account      | Username         | Description                                                             |
+| :---                | :---         | :---             | :---                                                                    |
+| SSH, Cockpit        | OS           | `tsec`           | On ISO based installations the user `tsec` is predefined.               |
+| SSH, Cockpit        | OS           | `<os_username>`  | Any other installation, the `<username>` you chose during installation. |
+| Nginx               | BasicAuth    | `<web_user>`     | `<web_user>` you chose during the installation of T-Pot.                |
+| CyberChef           | BasicAuth    | `<web_user>`     | `<web_user>` you chose during the installation of T-Pot.                |
+| Elasticvue          | BasicAuth    | `<web_user>`     | `<web_user>` you chose during the installation of T-Pot.                |
+| Geoip Attack Map    | BasicAuth    | `<web_user>`     | `<web_user>` you chose during the installation of T-Pot.                |
+| Spiderfoot          | BasicAuth    | `<web_user>`     | `<web_user>` you chose during the installation of T-Pot.                |
+<br><br>
 
-The individual docker configurations are located in the [docker folder](https://github.com/telekom-security/tpotce/tree/master/docker).
-
-<a name="requirements"></a>
 # System Requirements
-Depending on the installation type, whether installing on [real hardware](#hardware) or in a [virtual machine](#vm), make sure the designated system meets the following requirements:
 
-- 8 GB RAM (less RAM is possible but might introduce swapping / instabilities)
-- 128 GB SSD (smaller is possible but limits the capacity of storing events)
-- Network via DHCP
-- A working, non-proxied, internet connection
+Depending on the installation setup, edition, installing on [real hardware](#running-on-hardware), in a [virtual machine](#running-in-a-vm) or [cloud](#running-in-a-cloud) there are different kind of requirements to be met regarding OS, RAM, storage and network for a successful installation of T-Pot (you can always adjust `/opt/tpot/etc/tpot.yml` to your needs to overcome these requirements).
+<br><br>
+| T-Pot Type  | RAM      | Storage         | Description                                                                              |
+| :---        | :---     | :---            | :---                                                                                     |
+| Standalone  | 8-16GB   | >=128GB SSD     | RAM requirements depend on the edition, storage on how much data you want to persist.    |
+| Hive        | >=8GB    | >=256GB SSD     | As a rule of thumb, the more sensors & data, the more RAM and storage is needed.         |
+| Hive_Sensor | >=8GB    | >=128GB SSD     | Since honeypot logs are persisted (/data) for 30 days, storage depends on attack volume. |
+<br><vr>
+
+Besides that all T-Pot installations will require ...
+- an IP address via DHCP
+- a working, non-proxied, internet connection
+
+... to work out of the box.
+<br>
+*If you need proxy support or static IP addresses please review the Debian and Docker documentation.*
+<br><br>
+
+## Running in a VM
+T-Pot is tested on and known to run with ...
+* ESXi
+* UTM (Intel & Apple Silicon)
+* VMWare Fusion (Intel & Apple Silicon) and Workstation
+* VirtualBox
+
+While Intel versions run stable, Apple Silicon (arm64) support for Debian has known issues which in UTM may require switching `Display` to `Console Only` during initial installation of T-Pot / Debian and afterwards back to `Full Graphics`.
+<br><br>
+
+## Running on Hardware
+T-Pot is tested on and known to run with ...
+* IntelNUC series (only some tested)
+* Some generic Intel hardware
+
+Since the number of possible hardware combinations is too high to make general recommendations. If you are unsure, you should test the hardware with the T-Pot ISO image or use the post install method.  
+<br><br>
+
+## Running in a Cloud
+T-Pot is tested on and known to run on ...
+* Telekom OTC using the post install method
+* Amazon AWS using the post install method (somehow limited)
+
+Some users report working installations on other clouds and hosters, i.e. Azure and GCP. Hardware requirements may be different. If you are unsure you should research [issues](https://github.com/telekom-security/tpotce/issues) and [discussions](https://github.com/telekom-security/tpotce/discussions) and run some functional tests. Cloud support is a community developed feature and hyperscalers are known to adjust linux images, so expect some necessary adjustments on your end. 
+<br><br>
+
+## Required Ports
+Besides the ports generally needed by the OS, i.e. obtaining a DHCP lease, DNS, etc. T-Pot will require the following ports for incomding / outgoing connections. Review the [T-Pot Architecure](#technical-architecture) for a visual representation. Also some ports will show up as duplicates, which is fine since used in different editions.
+| Port        | Protocol | Direction | Description                                                   |
+| :---        | :---     | :---      | :---                                                          |
+| 80, 443     | tcp      | outgoing  | T-Pot Management: Install, Updates, Logs (i.e. Debian,<br> GitHub, DockerHub, PyPi, Sicherheitstacho, etc. |
+| 64294       | tcp      | incoming  | T-Pot Management: Access to Cockpit                           |
+| 64295       | tcp      | incoming  | T-Pot Management: Access to SSH                               |
+| 64297       | tcp      | incoming  | T-Pot Management Access to NGINX reverse proxy                |
+| 5555        | tcp      | incoming  | Honeypot: ADBHoney                                            |
+| 5000        | udp      | incoming  | Honeypot: CiscoASA                                            |
+| 8443        | tcp      | incoming  | Honeypot: CiscoASA                                            |
+| 443         | tcp      | incoming  | Honeypot: CitrixHoneypot                                      |
+| 80, 102, 502, 1025, 2404,<br> 10001, 44818, 47808, 50100  | tcp      | incoming          | Honeypot: Conpot            |
+| 161, 623    | udp      | incoming  | Honeypot: Conpot                                              |
+| 22, 23      | tcp      | incoming  | Honeypot: Cowrie                                              |
+| 19, 53, 123, 1900 | udp| incoming  | Honeypot: Ddospot                                             |
+| 11112       | tcp      | incoming  | Honeypot: Dicompot                                            |
+| 21, 42, 135, 443, 445,<br> 1433, 1723, 1883, 3306, 8081 | tcp        | incoming          | Honeypot: Dionaea           |
+| 69          | udp      | incoming  | Honeypot: Dionaea                                             |
+| 9200        | tcp      | incoming  | Honeypot: Elasticpot                                          |
+| 22          | tcp      | incoming  | Honeypot: Endlessh                                            |
+| 21, 22, 23, 25, 80, 110, 143, 443,<br> 993, 995, 1080, 5432, 5900          | tcp      | incoming  | Honeypot: Heralding  |
+| 21, 22, 23, 25, 80, 110, 143, 389,<br> 443, 445, 1080, 1433, 1521,<br> 3306, 5432, 5900, 6379,<br> 8080, 9200, 11211 | tcp | incoming  | Honeypot: qHoneypots |
+| 53, 123, 161| udp      | incoming  | Honeypot: qHoneypots                                          |
+| 631         | tcp      | incoming  | Honeypot: IPPHoney                                            |
+| 80, 443, 8080, 9200, 25565 | tcp      | incoming  | Honeypot: Log4Pot                              |
+| 25          | tcp      | incoming  | Honeypot: Mailoney                                            |
+| 2575        | tcp      | incoming  | Honeypot: Medpot                                              |
+| 6379        | tcp      | incoming  | Honeypot: Redishoneypot                                       |
+| 5060        | udp      | incoming  | Honeypot: SentryPeer                                          |
+| 80          | tcp      | incoming  | Honeypot: Snare (Tanner)                                      |
 
 
-<a name="types"></a>
-# Installation Types
-There are prebuilt installation types available each focussing on different aspects to get you started right out of the box. The docker-compose files are located in `/opt/tpot/etc/compose`. If you want to build your own compose file just create a new one (based on the layout and settings of the prebuilds) in `/opt/tpot/etc/compose` and run `tped.sh` afterwards to point T-Pot to the new compose file and run you personalized edition.
+Ports and availability of SaaS services may vary based on your geographical location. Also during first install outgoing ICMP / TRACEROUTE is required additionally to find the closest and fastest mirror to you.
+<br><br>
 
-##### Standard
-- Honeypots: adbhoney, ciscoasa, citrixhoneypot, conpot, cowrie, dicompot, dionaea, elasticpot, heralding, honeytrap, mailoney, medpot, snare & tanner
-- Tools: cockpit, cyberchef, ELK, fatt, elasticvue, ewsposter, nginx / heimdall, spiderfoot, p0f & suricata
-
-
-##### Sensor
-- Honeypots: adbhoney, ciscoasa, citrixhoneypot, conpot, cowrie, dicompot, dionaea, elasticpot, heralding, honeytrap, mailoney, medpot, snare & tanner
-- Tools: cockpit, ewsposter, fatt, p0f & suricata
-- Since there is no ELK stack provided the Sensor Installation only requires 4 GB of RAM.
-
-
-##### Industrial
-- Honeypots: conpot, cowrie, dicompot, heralding, honeytrap & medpot 
-- Tools: cockpit, cyberchef, ELK, fatt, elasticvue, ewsposter, nginx / heimdall, spiderfoot, p0f & suricata
-
-
-##### Collector
-- Honeypots: heralding & honeytrap
-- Tools: cockpit, cyberchef, fatt, ELK, elasticvue, ewsposter, nginx / heimdall, spiderfoot, p0f & suricata
-
-
-##### NextGen
-- Honeypots: adbhoney, ciscoasa, citrixhoneypot, conpot, cowrie, dicompot, dionaea, glutton, heralding, ipphoney, mailoney, medpot, snare & tanner
-- Tools: cockpit, cyberchef, ELK, fatt, elasticvue, ewsposter, nginx / heimdall, spiderfoot, p0f & suricata
-
-
-##### Medical
-- Honeypots: dicompot & medpot
-- Tools: cockpit, cyberchef, ELK, fatt, elasticvue, ewsposter, nginx / heimdall, spiderfoot, p0f & suricata
-
+# System Placement
+It is recommended to get yourself familiar how T-Pot and it honeypots work before you start exposing it towards the interet. For a quickstart run a T-Pot installation in a virtual machine.
+<br><br>
+Once you are familiar how things work you should choose a network you suspect intruders in / from (i.e. the internet). Otherwise T-Pot will most likely not capture any attacks, other than the ones from your internal network! For starters it is recommended to put T-Pot in an unfiltered zone, where all TCP and UDP traffic is forwarded to T-Pot's network interface. However to avoid fingerprinting you can put T-Pot behind a firewall and forward all TCP / UDP traffic in the port range of 1-64000 to T-Pot while allowing access to ports > 64000 only from trusted IPs or only expose the [ports](#required-ports) you want. However if you wish to catch malware traffic on unknown ports you should not limit the ports you forward since glutton & honeytrap dynamically bind any TCP port that is not covered by the other honeypot daemons and thus give you a better representation what risks you are exposed to.
+<br><br>
 
 <a name="installation"></a>
 # Installation
@@ -253,7 +325,7 @@ Lastly, mount the `tpot.iso` ISO to the VM and continue with the installation.<b
 You can now jump [here](#firstrun).
 
 <a name="hardware"></a>
-## Running on Hardware
+## Running on hartware
 If you decide to run T-Pot on dedicated hardware, just follow these steps:
 
 1. Burn a CD from the ISO image or make a bootable USB stick using the image. <br>
@@ -351,20 +423,7 @@ You can also login from your browser and access the Web UI: `https://<your.ip>:6
 - pass: **[password]** *you chose during the installation*
 
 
-<a name="placement"></a>
-# System Placement
-Make sure your system is reachable through a network you suspect intruders in / from (i.e. the internet). Otherwise T-Pot will most likely not capture any attacks, other than the ones from your internal network! For starters it is recommended to put T-Pot in an unfiltered zone, where all TCP and UDP traffic is forwarded to T-Pot's network interface. However to avoid fingerprinting you can put T-Pot behind a firewall and forward all TCP / UDP traffic in the port range of 1-64000 to T-Pot while allowing access to ports > 64000 only from trusted IPs.
 
-A list of all relevant ports is available as part of the [Technical Concept](#concept)
-<br>
-
-Basically, you can forward as many TCP ports as you want, as glutton & honeytrap dynamically bind any TCP port that is not covered by the other honeypot daemons.
-
-In case you need external Admin UI access, forward TCP port 64294 to T-Pot, see below.
-In case you need external SSH access, forward TCP port 64295 to T-Pot, see below.
-In case you need external Web UI access, forward TCP port 64297 to T-Pot, see below.
-
-T-Pot requires outgoing git, http, https connections for updates (Debian, Docker, GitHub, PyPi), attack submission (ewsposter, hpfeeds) and CVE / IP reputation translation map updates (logstash, listbot). Ports and availability may vary based on your geographical location. Also during first install outgoing ICMP / TRACEROUTE is required additionally to find the closest and fastest mirror to you.
 
 <a name="updates"></a>
 # Updates
