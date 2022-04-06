@@ -42,12 +42,12 @@ T-Pot is based on the Debian 11 (Bullseye) Netinstaller and utilizes
   - [Cloud Deployments](#cloud)
     - [Ansible](#ansible)
     - [Terraform](#terraform)
-  - [Community Data Submission](#ews)
-  - [Opt-In HPFEEDS Data Submission](#hpfeeds-optin)
 - [Operations](#ops)
   - [First Start](#firststart)
     - [Standalone](#standalone1st)
     - [Distributed](#distributed1st)
+    - [Community Data Submission](#ews)
+    - [Opt-In HPFEEDS Data Submission](#hpfeeds-optin)
   - [Remote Access & Tools](#access)
     - [SSH and Cockpit](#ssh)
     - [T-Pot Landing Page](#tpotwebui)
@@ -190,8 +190,8 @@ Depending on the installation setup, edition, installing on [real hardware](#run
 <br><br>
 | T-Pot Type  | RAM          | Storage         | Description                                                                              |
 | :---        | :---         | :---            | :---                                                                                     |
-| Standalone  | 8-16GB       | >=128GB SSD     | RAM requirements depend on the edition<br>, storage on how much data you want to persist.    |
-| Hive        | >=8GB        | >=256GB SSD     | As a rule of thumb, the more sensors & data<br>, the more RAM and storage is needed.         |
+| Standalone  | 8-16GB       | >=128GB SSD     | RAM requirements depend on the edition,<br> storage on how much data you want to persist.    |
+| Hive        | >=8GB        | >=256GB SSD     | As a rule of thumb, the more sensors & data,<br> the more RAM and storage is needed.         |
 | Hive_Sensor | >=8GB        | >=128GB SSD     | Since honeypot logs are persisted (/data)<br> for 30 days, storage depends on attack volume. |
 
 <br><br>
@@ -212,7 +212,10 @@ T-Pot is tested on and known to run with ...
 * VMWare Fusion (Intel & Apple Silicon) and Workstation
 * VirtualBox
 
-While Intel versions run stable, Apple Silicon (arm64) support for Debian has known issues which in UTM may require switching `Display` to `Console Only` during initial installation of T-Pot / Debian and afterwards back to `Full Graphics`.
+Some configuration hints:
+- While Intel versions run stable, Apple Silicon (arm64) support for Debian has known issues which in UTM may require switching `Display` to `Console Only` during initial installation of T-Pot / Debian and afterwards back to `Full Graphics`.
+- During configuration you may need to enable promiscuous mode for the network interface in order for fatt, suricata and p0f to work properly.
+- If you want to use a wifi card as a primary NIC for T-Pot, please be aware that not all network interface drivers support all wireless cards. In VirtualBox e.g. you have to choose the *"MT SERVER"* model of the NIC.
 <br><br>
 
 ## Running on Hardware
@@ -273,26 +276,41 @@ It is recommended to get yourself familiar how T-Pot and it honeypots work befor
 Once you are familiar how things work you should choose a network you suspect intruders in / from (i.e. the internet). Otherwise T-Pot will most likely not capture any attacks, other than the ones from your internal network! For starters it is recommended to put T-Pot in an unfiltered zone, where all TCP and UDP traffic is forwarded to T-Pot's network interface. However to avoid fingerprinting you can put T-Pot behind a firewall and forward all TCP / UDP traffic in the port range of 1-64000 to T-Pot while allowing access to ports > 64000 only from trusted IPs or only expose the [ports](#required-ports) you want. However if you wish to catch malware traffic on unknown ports you should not limit the ports you forward since glutton & honeytrap dynamically bind any TCP port that is not covered by the other honeypot daemons and thus give you a better representation what risks you are exposed to.
 <br><br>
 
-<a name="installation"></a>
+
+- [Installation](#installation)
+  - [ISO Based](#isoinstall)
+    - [Download ISO Image](#downloadiso)
+    - [Build your own ISO Image](#makeiso)
+  - [T-Pot Installer](#tpotinstaller)
+    - [Installation Types](#installtypes)
+    - [Standalone](#standalonetype)
+    - [Distributed](#distributedtype)
+  - [Post Install](#postinstall)
+    - [Download Debian Netinstall Image](#downloadnetiso)
+    - [User](#postuser)
+    - [Auto](#postauto)
+  - [Cloud Deployments](#cloud)
+    - [Ansible](#ansible)
+    - [Terraform](#terraform)
+
 # Installation
-The installation of T-Pot is straight forward and heavily depends on a working, transparent and non-proxied up and running internet connection. Otherwise the installation **will fail!**
+The T-Pot installation is offered in different variations. While the overall the installation of T-Pot is straight forward it heavily depends on a working, non-proxied (unless you made modifications) up and running internet connection (also see [required ports](#required-ports)). If these conditions are not met the installation **will fail!** either as part of the Debian Installer or right after the first reboot before the T-Pot Installer is starting up.
+<br><br>
 
-Firstly, decide if you want to download the prebuilt installation ISO image from [GitHub](https://github.com/telekom-security/tpotce/releases), [create it yourself](#createiso) ***or*** [post-install on an existing Debian 10 (Buster)](#postinstall).
+## ISO Based
+Installing T-Pot based on an ISO image is basically the same routine as with any other ISO based distribution. Running on hardware You copy the ISO file to an USB drive (i.e. with [Etcher](https://github.com/balena-io/etcher)) and boot into the Debian installer or mount the ISO image as a virtual drive in one of the supported [VMs](#running-in-a-vm).
+<br><br> 
 
-Secondly, decide where you the system to run: [real hardware](#hardware) or in a [virtual machine](#vm)?
+### **Download ISO Image**
+On the [release page](https://github.com/telekom-security/tpotce/releases) you will find two prebuilt ISO images as download options `tpot_amd64.iso` and `tpot_arm64.iso`. Both are based on Debian 11 for x64 or arm64 based hardware. So far ARM64 support is limited, but works fine with UTM based VMs on Apple M1 Macs.
+<br><br>
 
-<a name="prebuilt"></a>
-## Prebuilt ISO Image
-An installation ISO image is available for download (~50MB), which is created by the [ISO Creator](https://github.com/telekom-security/tpotce) you can use yourself in order to create your own image. It will basically just save you some time downloading components and creating the ISO image.
-You can download the prebuilt installation ISO from [GitHub](https://github.com/telekom-security/tpotce/releases) and jump to the [installation](#vm) section.
-
-<a name="createiso"></a>
-## Create your own ISO Image
-For transparency reasons and to give you the ability to customize your install you use the [ISO Creator](https://github.com/telekom-security/tpotce) that enables you to create your own ISO installation image.
+### **Create your own ISO Image**
+In case you want to modify T-Pot for your environment or simply want to take things into your own hands you can use the [ISO Creator](https://github.com/telekom-security/tpotce) to build your own ISO image.
 
 **Requirements to create the ISO image:**
-- Debian 10 as host system (others *may* work, but *remain* untested)
-- 4GB of free memory  
+- Debian 11 as host system (others *may* work, but *remain* untested)
+- 4GB of free RAM
 - 32GB of free storage
 - A working internet connection
 
@@ -303,38 +321,17 @@ For transparency reasons and to give you the ability to customize your install y
 git clone https://github.com/telekom-security/tpotce
 cd tpotce
 ```
-2. Run the `makeiso.sh` script to build the ISO image.
-The script will download and install dependencies necessary to build the image on the invoking machine. It will further download the ubuntu network installer image (~50MB) which T-Pot is based on.
+2. Run `makeiso.sh` to build the ISO image.
+The script will download and install dependencies necessary to build the image. It will further download the Debian Netiso installer image (~50-150MB) which T-Pot is based on.
 ```
 sudo ./makeiso.sh
 ```
-After a successful build, you will find the ISO image `tpot.iso` along with a SHA256 checksum `tpot.sha256` in your folder.
+After a successful build, you will find the ISO image `tpot_[amd64,arm64].iso` along with a SHA256 checksum `tpot_[amd64,arm64].sha256` based on you architecture choice in your folder.
+<br><br>
 
-<a name="vm"></a>
-## Running in VM
-You may want to run T-Pot in a virtualized environment. The virtual system configuration depends on your virtualization provider.
 
-T-Pot is successfully tested with [VirtualBox](https://www.virtualbox.org) and [VMWare](http://www.vmware.com) with just little modifications to the default machine configurations.
 
-It is important to make sure you meet the [system requirements](#requirements) and assign virtual harddisk and RAM according to the requirements while making sure networking is bridged.
 
-You need to enable promiscuous mode for the network interface for fatt, suricata and p0f to work properly. Make sure you enable it during configuration.
-
-If you want to use a wifi card as a primary NIC for T-Pot, please be aware that not all network interface drivers support all wireless cards. In VirtualBox e.g. you have to choose the *"MT SERVER"* model of the NIC.
-
-Lastly, mount the `tpot.iso` ISO to the VM and continue with the installation.<br>
-
-You can now jump [here](#firstrun).
-
-<a name="hardware"></a>
-## Running on hartware
-If you decide to run T-Pot on dedicated hardware, just follow these steps:
-
-1. Burn a CD from the ISO image or make a bootable USB stick using the image. <br>
-Whereas most CD burning tools allow you to burn from ISO images, the procedure to create a bootable USB stick from an ISO image depends on your system. There are various Windows GUI tools available, e.g. [this tip](http://www.ubuntu.com/download/desktop/create-a-usb-stick-on-windows) might help you.<br> On [Linux](http://askubuntu.com/questions/59551/how-to-burn-a-iso-to-a-usb-device) or [MacOS](http://www.ubuntu.com/download/desktop/create-a-usb-stick-on-mac-osx) you can use the tool *dd* or create the USB stick with T-Pot's [ISO Creator](https://github.com/telekom-security).
-2. Boot from the USB stick and install.
-
-*Please note*: Limited tests are performed for the Intel NUC platform other hardware platforms **remain untested**. There is no hardware support provided of any kind.
 
 <a name="postinstall"></a>
 ## Post-Install User
