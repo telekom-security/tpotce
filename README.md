@@ -31,50 +31,49 @@ T-Pot is based on the Debian 11 (Bullseye) Netinstaller and utilizes
   - [ISO Based](#isoinstall)
     - [Download ISO Image](#downloadiso)
     - [Build your own ISO Image](#makeiso)
+  - [Post Install](#post-install)
+    - [Download Debian Netinstall Image](#download-debian-netinstall-image)
+    - [User](#post-install-user-method)
+    - [Auto](#postauto)
   - [T-Pot Installer](#tpotinstaller)
     - [Installation Types](#installtypes)
     - [Standalone](#standalonetype)
     - [Distributed](#distributedtype)
-  - [Post Install](#postinstall)
-    - [Download Debian Netinstall Image](#downloadnetiso)
-    - [User](#postuser)
-    - [Auto](#postauto)
   - [Cloud Deployments](#cloud)
-    - [Ansible](#ansible)
-    - [Terraform](#terraform)
-- [Operations](#ops)
-  - [First Start](#firststart)
-    - [Standalone](#standalone1st)
-    - [Distributed](#distributed1st)
-    - [Community Data Submission](#ews)
-    - [Opt-In HPFEEDS Data Submission](#hpfeeds-optin)
-  - [Remote Access & Tools](#access)
-    - [SSH and Cockpit](#ssh)
-    - [T-Pot Landing Page](#tpotwebui)
-    - [Kibana Dashboard](#kibana)
-    - [Attack Map](#attackmap)
-    - [Cyberchef](#cyberchef)
-    - [Elasticvue](#elasticvue)
-    - [Spiderfoot](#spiderfoot)
-  - [Maintenance](#maintenance)
-    - [Start T-Pot](#starttpot)
-    - [Stop T-Pot](#stoptpot)
-    - [T-Pot Data Folder](#datafolder)
-    - [Log Persistence](#datafolder)
-    - [Clean Up](#cleanup)
-    - [Show Containers](#showcontainers)
-    - [Blackhole](#blackhole)
-    - [Add user](#adduser)
-    - [Import objects](#import)
-    - [Switch editions](#switcheditions)
-    - [Redeploy Hive Sensor](#redeploy)
-    - [Adjust tpot.yml](#adjusttpot)
-    - [Enable 2FA](#enable2fa)
-  - [Troubleshooting](#troubleshooting)
-    - [Logging](#logging)
-    - [Fail2Ban](#fail2ban)
-    - [RAM](#logging)
+    - [Ansible](#ansible-deployment)
+    - [Terraform](#terraform-configuration)
+- [First Start](#first-start)
+  - [Standalone Start](#standalone-first-start)
+  - [Distributed Deployment](#distributed-deployment)
+  - [Community Data Submission](#community-data-submission)
+  - [Opt-In HPFEEDS Data Submission](#opt-in-hpfeeds-data-submission)
+- [Remote Access and Tools](#remote-access-and-tools)
+  - [SSH and Cockpit](#ssh)
+  - [T-Pot Landing Page](#t-pot-landing-page)
+  - [Kibana Dashboard](#kibana-dashboardibana)
+  - [Attack Map](#attack-map)
+  - [Cyberchef](#cyberchef)
+  - [Elasticvue](#elasticvue)
+  - [Spiderfoot](#spiderfoot)
+- [Maintenance](#maintenance)
   - [Updates](#updates)
+  - [Start T-Pot](#start-t-pot)
+  - [Stop T-Pot](#stop-t-pot)
+  - [T-Pot Data Folder](#t-pot-data-folder)
+  - [Log Persistence](#log-persistence)
+  - [Clean Up](#clean-up)
+  - [Show Containers](#show-containers)
+  - [Blackhole](#blackhole)
+  - [Add Users to Nginx (T-Pot WebUI)](#add-users-to-nginx-t-pot-webui)
+  - [Import and Export Kibana Objects](#import-and-export-kibana-objects)
+  - [Switch Editions](#switch-editions)
+  - [Redeploy Hive Sensor](#redeploy-hive-sensor)
+  - [Adjust tpot.yml](#adjust-tpotyml)
+  - [Enable Cockpit 2FA](#enable-cockpit-2fa)
+- [Troubleshooting](#troubleshooting)
+  - [Logging](#logging)
+  - [Fail2Ban](#fail2ban)
+  - [RAM](#logging)
 - [Contact](#contact)
   - [Discussions](#discussions)
   - [Issues](#issues)
@@ -88,10 +87,9 @@ T-Pot is based on the Debian 11 (Bullseye) Netinstaller and utilizes
 - For fast help research the [Issues](https://github.com/telekom-security/tpotce/issues) and [Discussions](https://github.com/telekom-security/tpotce/discussions).
 - The software is designed and offered with best effort in mind. As a community and open source project it uses lots of other open source software and may contain bugs and issues. Report responsibly.
 - Honeypots - by design - should not host any sensitive data. Make sure you don't add any.
-- By default, your data is submitted to [SecurityMeter](https://www.sicherheitstacho.eu/start/main). You can disable this in the config (`/opt/tpot/etc/tpot.yml`) by remove the ewsposter section. But in this case sharing really is caring!
+- By default, your data is submitted to [Sicherheitstacho](https://www.sicherheitstacho.eu/start/main). You can disable this in the config (`/opt/tpot/etc/tpot.yml`) by [removing](#community-data-submission) the ewsposter section. But in this case sharing really is caring!
 <br><br>
 
-<a name="technical-concept"></a>
 # Technical Concept
 
 T-Pot is based on the Debian Netinstaller and utilizes 
@@ -139,7 +137,7 @@ T-Pot offers docker images for the following honeypots ...
 
 
 ## Technical Architecture
-![Architecture](doc/architecture.svg)
+![Architecture](doc/architecture.png)
 
 The source code and configuration files are fully stored in the T-Pot GitHub repository. The docker images are built and preconfigured for the T-Pot environment. 
 
@@ -172,7 +170,7 @@ T-Pot offers a number of services which are basically divided into five groups:
 ## User Types
 During the installation and during the usage of T-Pot there are two different types of accounts you will be working with. Make sure you know the differences of the different account types, since it is **by far** the most common reason for authentication errors and `fail2ban` lockouts.
 
-| Service             | Account      | Username         | Description                                                             |
+| Service             | Account Type | Username / Group | Description                                                             |
 | :---                | :---         | :---             | :---                                                                    |
 | SSH, Cockpit        | OS           | `tsec`           | On ISO based installations the user `tsec` is predefined.               |
 | SSH, Cockpit        | OS           | `<os_username>`  | Any other installation, the `<username>` you chose during installation. |
@@ -181,6 +179,9 @@ During the installation and during the usage of T-Pot there are two different ty
 | Elasticvue          | BasicAuth    | `<web_user>`     | `<web_user>` you chose during the installation of T-Pot.                |
 | Geoip Attack Map    | BasicAuth    | `<web_user>`     | `<web_user>` you chose during the installation of T-Pot.                |
 | Spiderfoot          | BasicAuth    | `<web_user>`     | `<web_user>` you chose during the installation of T-Pot.                |
+| T-Pot               | OS           | `tpot`           | `tpot` this user / group is always reserved by the T-Pot services.      |
+| T-Pot Logs          | OS           | `tpotlogs`       | `tpotlogs` this group is always reserved by the T-Pot services.         |
+
 
 <br><br>
 
@@ -194,25 +195,24 @@ Depending on the installation setup, edition, installing on [real hardware](#run
 | Hive        | >=8GB        | >=256GB SSD     | As a rule of thumb, the more sensors & data,<br> the more RAM and storage is needed.         |
 | Hive_Sensor | >=8GB        | >=128GB SSD     | Since honeypot logs are persisted (/data)<br> for 30 days, storage depends on attack volume. |
 
-<br><br>
-
-Besides that all T-Pot installations will require ...
+All T-Pot installations will require ...
 - an IP address via DHCP
 - a working, non-proxied, internet connection
 
-... to work out of the box.
-<br>
-*If you need proxy support or static IP addresses please review the Debian and Docker documentation.*
+... for an installation to succeed.
+<br><br>
+*If you need proxy support or static IP addresses please review the [Debian](https://www.debian.org/doc/index.en.html) and / or [Docker documentation](https://docs.docker.com/).*
 <br><br>
 
 ## Running in a VM
-T-Pot is tested on and known to run with ...
-* ESXi
-* UTM (Intel & Apple Silicon)
-* VMWare Fusion (Intel & Apple Silicon) and Workstation
-* VirtualBox
+T-Pot is reported to run with with the following hypervisors, however not each and every combination is tested.
+* [UTM (Intel & Apple Silicon)](https://mac.getutm.app/)
+* [VirtualBox](https://www.virtualbox.org/)
+* [VMWare vSphere / ESXi](https://kb.vmware.com/s/article/2107518)
+* [VMWare Fusion](https://www.vmware.com/products/fusion/fusion-evaluation.html) and [VMWare Workstation](https://www.vmware.com/products/workstation-pro.html)
+* KVM is reported to work as well.
 
-Some configuration hints:
+***Some configuration hints:***
 - While Intel versions run stable, Apple Silicon (arm64) support for Debian has known issues which in UTM may require switching `Display` to `Console Only` during initial installation of T-Pot / Debian and afterwards back to `Full Graphics`.
 - During configuration you may need to enable promiscuous mode for the network interface in order for fatt, suricata and p0f to work properly.
 - If you want to use a wifi card as a primary NIC for T-Pot, please be aware that not all network interface drivers support all wireless cards. In VirtualBox e.g. you have to choose the *"MT SERVER"* model of the NIC.
@@ -268,41 +268,27 @@ Besides the ports generally needed by the OS, i.e. obtaining a DHCP lease, DNS, 
 
 
 Ports and availability of SaaS services may vary based on your geographical location. Also during first install outgoing ICMP / TRACEROUTE is required additionally to find the closest and fastest mirror to you.
+
+For some honeypots to reach full functionality (i.e. Cowrie or Log4Pot) outgoing connections are necessary as well, in order for them to download the attackers malware. Please see the individual honeypot's documentation to learn more by following the [links](#technical-concept) to their repositories.
+
 <br><br>
 
 # System Placement
-It is recommended to get yourself familiar how T-Pot and it honeypots work before you start exposing it towards the interet. For a quickstart run a T-Pot installation in a virtual machine.
+It is recommended to get yourself familiar how T-Pot and the honeypots work before you start exposing towards the interet. For a quickstart run a T-Pot installation in a virtual machine.
 <br><br>
-Once you are familiar how things work you should choose a network you suspect intruders in / from (i.e. the internet). Otherwise T-Pot will most likely not capture any attacks, other than the ones from your internal network! For starters it is recommended to put T-Pot in an unfiltered zone, where all TCP and UDP traffic is forwarded to T-Pot's network interface. However to avoid fingerprinting you can put T-Pot behind a firewall and forward all TCP / UDP traffic in the port range of 1-64000 to T-Pot while allowing access to ports > 64000 only from trusted IPs or only expose the [ports](#required-ports) you want. However if you wish to catch malware traffic on unknown ports you should not limit the ports you forward since glutton & honeytrap dynamically bind any TCP port that is not covered by the other honeypot daemons and thus give you a better representation what risks you are exposed to.
+Once you are familiar how things work you should choose a network you suspect intruders in or from (i.e. the internet). Otherwise T-Pot will most likely not capture any attacks (unless you want to proof a point)! For starters it is recommended to put T-Pot in an unfiltered zone, where all TCP and UDP traffic is forwarded to T-Pot's network interface. To avoid probing for T-Pot's management ports you can put T-Pot behind a firewall and forward all TCP / UDP traffic in the port range of 1-64000 to T-Pot while allowing access to ports > 64000 only from trusted IPs and / or only expose the [ports](#required-ports) relevant to your use-case. If you wish to catch malware traffic on unknown ports you should not limit the ports you forward since glutton and honeytrap dynamically bind any TCP port that is not covered by other honeypot daemons and thus give you a better representation what risks your setup is exposed to.
 <br><br>
-
-
-- [Installation](#installation)
-  - [ISO Based](#isoinstall)
-    - [Download ISO Image](#downloadiso)
-    - [Build your own ISO Image](#makeiso)
-  - [T-Pot Installer](#tpotinstaller)
-    - [Installation Types](#installtypes)
-    - [Standalone](#standalonetype)
-    - [Distributed](#distributedtype)
-  - [Post Install](#postinstall)
-    - [Download Debian Netinstall Image](#downloadnetiso)
-    - [User](#postuser)
-    - [Auto](#postauto)
-  - [Cloud Deployments](#cloud)
-    - [Ansible](#ansible)
-    - [Terraform](#terraform)
 
 # Installation
-The T-Pot installation is offered in different variations. While the overall the installation of T-Pot is straight forward it heavily depends on a working, non-proxied (unless you made modifications) up and running internet connection (also see [required ports](#required-ports)). If these conditions are not met the installation **will fail!** either as part of the Debian Installer or right after the first reboot before the T-Pot Installer is starting up.
+The T-Pot installation is offered in different variations. While the overall installation of T-Pot is straight forward it heavily depends on a working, non-proxied (unless you made modifications) up and running internet connection (also see [required outgoing ports](#required-ports)). If these conditions are not met the installation **will fail!** either during the execution of the Debian Installer, after the first reboot before the T-Pot Installer is starting up or while the T-Pot installer is trying to download all the necessary dependencies.
 <br><br>
 
 ## ISO Based
-Installing T-Pot based on an ISO image is basically the same routine as with any other ISO based distribution. Running on hardware You copy the ISO file to an USB drive (i.e. with [Etcher](https://github.com/balena-io/etcher)) and boot into the Debian installer or mount the ISO image as a virtual drive in one of the supported [VMs](#running-in-a-vm).
+Installing T-Pot based on an ISO image is basically the same routine as with any other ISO based Linux distribution. Running on hardware You copy the ISO file to an USB drive (i.e. with [Etcher](https://github.com/balena-io/etcher)) and boot into the Debian installer and choose to install **T-Pot** or you mount the ISO image as a virtual drive in one of the supported [hypervisors](#running-in-a-vm).
 <br><br> 
 
 ### **Download ISO Image**
-On the [release page](https://github.com/telekom-security/tpotce/releases) you will find two prebuilt ISO images as download options `tpot_amd64.iso` and `tpot_arm64.iso`. Both are based on Debian 11 for x64 or arm64 based hardware. So far ARM64 support is limited, but works fine with UTM based VMs on Apple M1 Macs.
+On the [T-Pot release page](https://github.com/telekom-security/tpotce/releases) you will find two prebuilt ISO images for download `tpot_amd64.iso` and `tpot_arm64.iso`. Both are based on Debian 11 for x64 / arm64 based hardware. So far ARM64 support is limited, but works mostly fine with [UTM](#running-in-a-vm) based VMs on Apple Silicon (M1x) Macs.
 <br><br>
 
 ### **Create your own ISO Image**
@@ -314,7 +300,7 @@ In case you want to modify T-Pot for your environment or simply want to take thi
 - 32GB of free storage
 - A working internet connection
 
-**How to create the ISO image:**
+**Steps to create the ISO image:**
 
 1. Clone the repository and enter it.
 ```
@@ -326,26 +312,19 @@ The script will download and install dependencies necessary to build the image. 
 ```
 sudo ./makeiso.sh
 ```
-After a successful build, you will find the ISO image `tpot_[amd64,arm64].iso` along with a SHA256 checksum `tpot_[amd64,arm64].sha256` based on you architecture choice in your folder.
+3. After a successful build, you will find the ISO image `tpot_[amd64,arm64].iso` along with a SHA256 checksum `tpot_[amd64,arm64].sha256` based on your architecture choice in your folder.
 <br><br>
 
+## Post Install
+In some cases it is necessary to install T-Pot after you installed Debian, i.e. your provider does not offer you the option of an ISO based installation, you need special drivers for your hardware to work, or you want to experiment with ARM64 hardware that is not supported by the ISO image. In that case you can clone the T-Pot repository on your own. Make sure you understand the different [user types](#user-types) before setting up your OS.
+<br><br>
 
+### **Download Debian Netinstall Image**
+Since T-Pot is based on the Debian Netinstall Image ([amd64](http://ftp.debian.org/debian/dists/bullseye/main/installer-amd64/current/images/netboot/mini.iso), [arm64](http://ftp.debian.org/debian/dists/bullseye/main/installer-arm64/current/images/netboot/mini.iso)) it is heavily recommended you use this image, too, if possible. It is very lightweight and only offers to install core services.
+<br><br>
 
-
-
-<a name="postinstall"></a>
-## Post-Install User
-In some cases it is necessary to install Debian 10 (Buster) on your own:
- - Cloud provider does not offer mounting ISO images.
- - Hardware setup needs special drivers and / or kernels.
- - Within your company you have to setup special policies, software etc.
- - You just like to stay on top of things.
-
-The T-Pot Universal Installer will upgrade the system and install all required T-Pot dependencies.
-
-Important notice: The user / group `tpot` are reserved for T-Pot. The installation will abort if the user `tpot` exists. Make sure to use a different user name when preparing the OS installation for T-Pot.
-
-Just follow these steps:
+### **Post Install User Method**
+The post install method must be executed by the `root` (`sudo su -`, `su -`), just follow the following steps:
 
 ```
 git clone https://github.com/telekom-security/tpotce
@@ -353,10 +332,10 @@ cd tpotce/iso/installer/
 ./install.sh --type=user
 ```
 
-The installer will now start and guide you through the install process.
+The installation will now start, you can now move on to the [T-Pot Installer](#t-pot-installer) section.
+<br><br>
 
-<a name="postinstallauto"></a>
-## Post-Install Auto
+### **Post-Install Auto**
 You can also let the installer run automatically if you provide your own `tpot.conf`. An example is available in `tpotce/iso/installer/tpot.conf.dist`. This should make things easier in case you want to automate the installation i.e. with **Ansible**.
 
 Just follow these steps while adjusting `tpot.conf` to your needs:
@@ -367,19 +346,38 @@ cd tpotce/iso/installer/
 cp tpot.conf.dist tpot.conf
 ./install.sh --type=auto --conf=tpot.conf
 ```
+<br><br>
 
-The installer will start automatically and guide you through the install process.
+# T-Pot Installer
+Usage of the T-Pot Installer is mostly self explanatory, since the installer will guide you through the setup process. Depending on your installation method [ISO Based](#iso-based) or [Post Install](#post-install) you will be asked to create a password for the user `tsec` and / or create a `<web-username>` and password. Make sure to remember the username and passwords you understand their meanings outlined in [User Types](#user-types).
+<br><br>
 
-<a name="cloud"></a>
+## Installation Types
+In the past T-Pot was only available as a [standalone](#standalone) solution with all services, tools, honeypots, etc. installed on to a single machine. Based on demand T-Pot now also offers a [distributed](#distributed) solution. While the standalone solution does not require additional explanation the distributed option requires you to select different editions (or flavors). 
+<br><br>
+
+### **Standalone**
+With T-Pot Standalone all services, tools, honeypots, etc. will be installed on to a single host. Make sure to meet the [system requirements](#system-requirements). You can choose from various pre-defined T-Pot editions (or flavors) depending on your personal use-case (you can always adjust `/opt/tpot/etc/tpot.yml` to your needs).
+Once the installation is finished you can proceed to [First Start](#first-start).
+<br><br>
+
+### **Distributed**
+The distributed version of T-Pot requires at least two hosts
+- the T-Pot **HIVE**, which will host the Elastic Stack and T-Pot tools (install this first!),
+- and a T-Pot **HIVE_SENSOR**, which will host the honeypots and transmit log data to the **HIVE's** Elastic Stack.
+
+To finalize the **HIVE_SENSOR** installation continue to [Distributed Deployment](#distributed-deployment).
+<br><br>
+
 ## Cloud Deployments
 Located in the [`cloud`](cloud) folder.  
-Currently there are examples with Ansible & Terraform.  
+Currently there are examples for Ansible & Terraform.  
 If you would like to contribute, you can add other cloud deployments like Chef or Puppet or extend current methods with other cloud providers.
-
+<br><br>
 *Please note*: Cloud providers usually offer adjusted Debian OS images, which might not be compatible with T-Pot. There is no cloud provider support provided of any kind.
+<br><br>
 
-<a name="ansible"></a>
-### Ansible Deployment
+### **Ansible Deployment**
 You can find an [Ansible](https://www.ansible.com/) based T-Pot deployment in the [`cloud/ansible`](cloud/ansible) folder.  
 The Playbook in the [`cloud/ansible/openstack`](cloud/ansible/openstack) folder is reusable for all **OpenStack** clouds out of the box.
 
@@ -388,125 +386,59 @@ It first creates all resources (security group, network, subnet, router), deploy
 You can have a look at the Playbook and easily adapt the deploy role for other [cloud providers](https://docs.ansible.com/ansible/latest/scenario_guides/cloud_guides.html). Check out [Ansible Galaxy](https://galaxy.ansible.com/search?keywords=&order_by=-relevance&page=1&deprecated=false&type=collection&tags=cloud) for more cloud collections.
 
 *Please note*: Cloud providers usually offer adjusted Debian OS images, which might not be compatible with T-Pot. There is no cloud provider support provided of any kind.
+<br><br>
 
-<a name="terraform"></a>
-### Terraform Configuration
-
-You can find [Terraform](https://www.terraform.io/) configuration in the [`cloud/terraform`](cloud/terraform) folder.
-
+### **Terraform Configuration**
+You can find a [Terraform](https://www.terraform.io/) configuration in the [`cloud/terraform`](cloud/terraform) folder.
 This can be used to launch a virtual machine, bootstrap any dependencies and install T-Pot in a single step.
 
-Configuration for **Amazon Web Services** (AWS) and **Open Telekom Cloud** (OTC) is currently included.  
+Configurations for **Amazon Web Services** (AWS) and **Open Telekom Cloud** (OTC) are currently included.  
 This can easily be extended to support other [Terraform providers](https://registry.terraform.io/browse/providers?category=public-cloud%2Ccloud-automation%2Cinfrastructure).
 
 *Please note*: Cloud providers usually offer adjusted Debian OS images, which might not be compatible with T-Pot. There is no cloud provider support provided of any kind.
-
-<a name="firstrun"></a>
-## First Run
-The installation requires very little interaction, only a locale and keyboard setting have to be answered for the basic linux installation. While the system reboots maintain the active internet connection. The T-Pot installer will start and ask you for an installation type, password for the **tsec** user and credentials for a **web user**. Everything else will be configured automatically. All docker images and other componenents will be downloaded. Depending on your network connection and the chosen installation type, the installation may take some time. With 250Mbit down / 40Mbit up the installation is usually finished within 15-30 minutes.
-
-Once the installation is finished, the system will automatically reboot and you will be presented with the T-Pot login screen. On the console you may login with:
-
-- user: **[tsec or user]** *you chose during one of the post install methods*
-- pass: **[password]** *you chose during the installation*
-
-All honeypot services are preconfigured and are starting automatically.
-
-You can login from your browser and access the Admin UI: `https://<your.ip>:64294` or via SSH to access the command line: `ssh -l tsec -p 64295 <your.ip>`
-
-- user: **[tsec or user]** *you chose during one of the post install methods*
-- pass: **[password]** *you chose during the installation*
-
-You can also login from your browser and access the Web UI: `https://<your.ip>:64297`
-- user: **[user]** *you chose during the installation*
-- pass: **[password]** *you chose during the installation*
+<br><br>
 
 
+# First Start
+Once the T-Pot Installer successfully finishes, the system will automatically reboot and you will be presented with the T-Pot login screen. Logins are according to the [User Types](#user-types):
 
+- user: **[`tsec` or `<os_username>`]**
+- pass: **[password]**
 
-<a name="updates"></a>
-# Updates
-For the ones of you who want to live on the bleeding edge of T-Pot development we introduced an update feature which will allow you to update all T-Pot relevant files to be up to date with the T-Pot master branch.
-**If you made any relevant changes to the T-Pot relevant config files make sure to create a backup first.**
+You can login from your browser and access Cockpit: `https://<your.ip>:64294` or via SSH to access the command line: `ssh -l [tsec,<os_username>] -p 64295 <your.ip>`:
 
-The Update script will:
- - **mercilessly** overwrite local changes to be in sync with the T-Pot master branch
- - upgrade the system to the packages available in Debian (Stable)
- - update all resources to be in-sync with the T-Pot master branch
- - ensure all T-Pot relevant system files will be patched / copied into the original T-Pot state
- - restore your custom ews.cfg and HPFEED settings from `/data/ews/conf`
+- user: **[`tsec` or `<os_username>`]**
+- pass: **[password]**
 
-You simply run the update script:
+You can also login from your browser and access the Nginx (T-Pot Web UI and tools): `https://<your.ip>:64297`
+- user: **[`<web_username>`]**
+- pass: **[password]**
+<br><br>
+
+## Standalone First Start
+There is not much to do except to login and check via `dps.sh` if all services and honeypots are starting up correctly and login to Kibana and / or Geoip Attack Map to monitor the attacks.
+<br><br>
+
+## Distributed Deployment
+With the distributed deployment firstly login to **HIVE** and the **HIVE_SENSOR** and check via `dps.sh` if all services and honeypots are starting up correctly. Once you have confirmed everything is working fine you need to deploy the **HIVE_SENSOR** to the **HIVE** in order to transmit honeypot logs to the Elastic Stack.
+<br><br>
+
+For **deployment** simply keep the **HIVE** login data ready and follow these steps while the `deploy.sh` script will setup the **HIVE** and **HIVE_SENSOR** for securely shipping and receiving logs:
 ```
 sudo su -
-cd /opt/tpot/
-./update.sh
+deploy.sh
 ```
 
-**Despite all testing efforts please be reminded that updates sometimes may have unforeseen consequences. Please create a backup of the machine or the files with the most value to your work.**  
-
-<a name="options"></a>
-# Options
-The system is designed to run without any interaction or maintenance and automatically contributes to the community.<br>
-For some this may not be enough. So here some examples to further inspect the system and change configuration parameters.
-
-<a name="ssh"></a>
-## SSH and web access
-By default, the SSH daemon allows access on **tcp/64295** with a user / password combination and prevents credential brute forcing attempts using `fail2ban`. This also counts for Admin UI (**tcp/64294**) and Web UI (**tcp/64297**) access.<br>
-
-If you do not have a SSH client at hand and still want to access the machine via command line you can do so by accessing the Admin UI from `https://<your.ip>:64294`, enter
-
-- user: **[tsec or user]** *you chose during one of the post install methods*
-- pass: **[password]** *you chose during the installation*
-
-You can also add two factor authentication to Cockpit just by running `2fa.sh` on the command line.
-
-![Cockpit Terminal](doc/cockpit3.png)
-
-<a name="heimdall"></a>
-## T-Pot Landing Page 
-Just open a web browser and connect to `https://<your.ip>:64297`, enter
-
-- user: **[user]** *you chose during the installation*
-- pass: **[password]** *you chose during the installation*
-
-and the **Landing Page** will automagically load. Now just click on the tool / link you want to start.
-
-![Dashbaord](doc/heimdall.png)
-
-<a name="kibana"></a>
-## Kibana Dashboard
-
-![Dashbaord](doc/kibana.png)
-
-<a name="tools"></a>
-## Tools
-The following web based tools are included to improve and ease up daily tasks.
-
-![Cockpit Overview](doc/cockpit1.png)
-
-![Cockpit Containers](doc/cockpit2.png)
-
-![Cyberchef](doc/cyberchef.png)
-
-![Spiderfoot](doc/spiderfoot.png)
+The script will ask for the **HIVE** login data, the **HIVE** IP address, will create SSH keys accordingly and deploy them securely over a SSH connection to the **HIVE**. On the **HIVE** machine a user with the **HIVE_SENSOR** hostname is created, belonging to a user group `tpotlogs` which may only open a SSH tunnel via port `64295` and transmit Logstash logs to port `127.0.0.1:64305`, with no permission to login on a shell. You may review the config in `/etc/ssh/sshd_config` and the corresponding `autossh` settings in `docker/elk/logstash/dist/entrypoint.sh`. Settings and keys are stored in `/data/elk/logstash` and loaded as part of `/opt/tpot/etc/tpot.yml`.
+<br><br> 
 
 
-<a name="maintenance"></a>
-## Maintenance
-T-Pot is designed to be low maintenance. Basically, there is nothing you have to do but let it run.
-
-If you run into any problems, a reboot may fix it :bowtie:
-
-If new versions of the components involved appear new docker images will be created and distributed. New images will be available from docker hub and downloaded automatically to T-Pot and activated accordingly.  
-
-<a name="submission"></a>
 ## Community Data Submission
 T-Pot is provided in order to make it accessible to all interested in honeypots. By default, the captured data is submitted to a community backend. This community backend uses the data to feed [Sicherheitstacho](https://sicherheitstacho.eu).
-You may opt out of the submission by removing the `# Ewsposter service` from `/opt/tpot/etc/tpot.yml`:
+You may opt out of the submission by removing the `# Ewsposter service` from `/opt/tpot/etc/tpot.yml` by following these steps:
 1. Stop T-Pot services: `systemctl stop tpot`
-2. Remove Ewsposter service: `vi /opt/tpot/etc/tpot.yml`
-3. Remove the following lines, save and exit vi (`:x!`):<br>
+2. Open `tpot.yml`: `vi /opt/tpot/etc/tpot.yml`
+3. Remove the following lines, save and exit vi (`:x!`):
 ```
 # Ewsposter service
   ewsposter:
@@ -514,18 +446,27 @@ You may opt out of the submission by removing the `# Ewsposter service` from `/o
     restart: always
     networks:
      - ewsposter_local
-    image: "ghcr.io/telekom-security/ewsposter:2006"
+    environment:
+     - EWS_HPFEEDS_ENABLE=false
+     - EWS_HPFEEDS_HOST=host
+     - EWS_HPFEEDS_PORT=port
+     - EWS_HPFEEDS_CHANNELS=channels
+     - EWS_HPFEEDS_IDENT=user
+     - EWS_HPFEEDS_SECRET=secret
+     - EWS_HPFEEDS_TLSCERT=false
+     - EWS_HPFEEDS_FORMAT=json
+    env_file:
+     - /opt/tpot/etc/compose/elk_environment
+    image: "dtagdevsec/ewsposter:2203"
     volumes:
      - /data:/data
      - /data/ews/conf/ews.ip:/opt/ewsposter/ews.ip
 ```
 4. Start T-Pot services: `systemctl start tpot`
 
-Data is submitted in a structured ews-format, a XML stucture. Hence, you can parse out the information that is relevant to you.
-
 It is encouraged not to disable the data submission as it is the main purpose of the community approach - as you all know **sharing is caring** 😍
+<br><br>
 
-<a name="hpfeeds-optin"></a>
 ## Opt-In HPFEEDS Data Submission
 As an Opt-In it is now possible to also share T-Pot data with 3rd party HPFEEDS brokers.  
 If you want to share your T-Pot data you simply have to register an account with a 3rd party broker with its own benefits towards the community. You simply run `hpfeeds_optin.sh` which will ask for your credentials. It will automatically update `/opt/tpot/etc/tpot.yml` to deliver events to your desired broker.
@@ -537,14 +478,204 @@ Be sure to apply any changes by running `./hpfeeds_optin.sh --conf=/data/ews/con
 No worries: Your old config gets backed up in `/data/ews/conf/hpfeeds.cfg.old`
 
 Of course you can also rerun the `hpfeeds_optin.sh` script to change and apply your settings interactively.
+<br><br>
 
-<a name="roadmap"></a>
-# Roadmap
-As with every development there is always room for improvements ...
 
-Some features may be provided with updated docker images, others may require some hands on from your side.
+# Remote Access and Tools
+T-Pot comes with some pre-installed services and tools which will make some of your research tasks or accessing T-Pot remote a lot easier.
+<br><br>
 
-You are always invited to participate in development on our [GitHub](https://github.com/telekom-security/tpotce) page.
+## SSH and Cockpit
+According to the [User Types](#user-types) you can login from your browser and access Cockpit: `https://<your.ip>:64294` or via SSH to access the command line: `ssh -l [tsec,<os_username>] -p 64295 <your.ip>`:
+
+- user: **[`tsec` or `<os_username>`]**
+- pass: **[password]**
+
+Especially if you do not have a SSH client at hand and still want to access the machine with a command line option you can do so by accessing Cockpit. You can also add two factor authentication to Cockpit just by running `2fa.sh` on the command line.
+
+![Cockpit Overview](doc/cockpit_a.png)
+![Cockpit Terminal](doc/cockpit_b.png)
+<br><br>
+
+## T-Pot Landing Page 
+According to the [User Types](#user-types) you can open the T-Pot Landing Page from your browser via `https://<your.ip>:64297`:
+
+- user: **[`<web_username>`]**
+- pass: **[password]**
+
+![T-Pot-WebUI](doc/tpotwebui.png)
+<br><br>
+
+## Kibana Dashboard
+On the T-Pot Landing Page just click on `Kibana` and you will be forwarded to Kibana. You can select from a large variety of dashboards and visualizations all tailored to the T-Pot supported honeypots.
+
+![Dashbaord](doc/kibana_a.png)
+<br><br>
+
+## Attack Map
+On the T-Pot Landing Page just click on `Attack Map` and you will be forwarded to the Attack Map. Since the Attack Map utilizes web sockets you need to re-enter the `<web_user>` credentials.
+
+![AttackMap](doc/attackmap.png)
+<br><br>
+
+## Cyberchef
+On the T-Pot Landing Page just click on `Cyberchef` and you will be forwarded to Cyberchef.
+
+![Cyberchef](doc/cyberchef.png)
+<br><br>
+
+## Elasticvue
+On the T-Pot Landing Page just click on `Elastivue` and you will be forwarded to Elastivue.
+
+![Elasticvue](doc/elasticvue.png)
+<br><br>
+
+## Spiderfoot
+On the T-Pot Landing Page just click on `Spiderfoot` and you will be forwarded to Spiderfoot.
+
+![Spiderfoot](doc/spiderfoot.png)
+<br><br>
+
+
+# Maintenance
+T-Pot is designed to be low maintenance. Basically there is nothing you have to do but let it run, however you should read this section closely.
+<br><br>
+
+## Updates
+While security update are installed automatically by the OS and docker images are pulled once per day (`/etc/crontab`) to check for updated images, T-Pot offers the option to be updated to the latest master and / or upgrade a previous version. Updating and upgrading always introduces the risk of loosing your data, so it is heavily encouraged you backup your machine before proceeding.
+<br><br>
+Should an update fail, opening an issue or a discussion will help to improve things in the future, but the solution will always be to perform a ***fresh install*** as we simply ***cannot*** provide any support for lost data!
+<br>
+## ***If you made any relevant changes to the T-Pot config files make sure to create a backup first!***
+## ***Updates may have unforeseen consequences. Create a backup of the machine or the files with the most value to your work!*** 
+<br>
+
+The update script will ...
+ - ***mercilessly*** overwrite local changes to be in sync with the T-Pot master branch
+ - upgrade the system to the latest packages available for the installed Debian version
+ - update all resources to be in sync with the T-Pot master branch
+ - ensure all T-Pot relevant system files will be patched / copied into the original T-Pot state
+ - restore your custom ews.cfg and HPFEED settings from `/data/ews/conf`
+
+You simply run the update script ***after you backed up any relevant data***:
+```
+sudo su -
+cd /opt/tpot/
+./update.sh
+```
+
+## Start T-Pot
+The T-Pot service automatically starts and stops on each reboot (which occurs once on a daily basis as setup in `/etc/crontab` during installation).
+<br>
+If you want to manually start the T-Pot service you can do so via `systemctl start tpot` and observe via `dps.sh 1` the startup of the containers.
+<br><br>
+
+## Stop T-Pot
+The T-Pot service automatically starts and stops on each reboot (which occurs once on a daily basis as setup in `/etc/crontab` during installation).
+<br>
+If you want to manually stop the T-Pot service you can do so via `systemctl stop tpot` and observe via `dps.sh 1` the shutdown of the containers.
+<br><br>
+
+## T-Pot Data Folder
+All persistent log files from the honeypots, tools and T-Pot related services are stored in `/data`. This includes collected artifacts which are not transmitted to the Elastic Stack.
+<br><br>
+
+## Log Persistence
+All log data stored in the [T-Pot Data Folder](#t-pot-data-folder) will be persisted for 30 days by default. The persistence for the log files can be changed in `/opt/tpot/etc/logrotate/logrotate.conf`.
+<br>
+Elasticsearch indices are handled by the `tpot` Index Lifecycle Policy which can be adjusted directly in Kibana.
+![IndexManagement1](doc/kibana_b.png)
+<br><br>
+
+
+By default the `tpot` Index Lifecycle Policy keeps the indices for 30 days. This offers a good balance between storage and speed. However you may adjust the policy to your needs.
+![IndexManagement2](doc/kibana_c.png)
+<br><br>
+
+## Clean Up
+All log data stored in the [T-Pot Data Folder](#t-pot-data-folder) (except for Elasticsearch indices, of course) can be erased by running `clean.sh`.
+<br><br>
+
+## Show Containers
+You can show all T-Pot relevant containers by running `dps.sh` or `dps.sh [interval]`. The `interval (s)` will re-run `dps.sh` automatically. You may also run `glances` which will also give you more insight into system usage and available resources while still showing the containers running.
+<br><br>
+
+## Blackhole
+Some users reported they wanted to have the option to run T-Pot in some sort of stealth mode without permanent visits of publicly known scanners and thus reducing the possibility of being exposed. While this is of course always a cat and mouse game T-Pot now offers a blackhole feature that is null routing all requests from [known mass scanners](https://raw.githubusercontent.com/stamparm/maltrail/master/trails/static/mass_scanner.txt) while still catching the events through Suricata.
+<br>
+The feature is activated by running `blackhole.sh add` which will download the mass scanner ip list, add the blackhole routes and re-add keep them active until `blackhole.sh del` permanently removes them.
+<br>
+Enabling this feature will drastically reduce some attackers visibility and consequently result in less activity. However as already mentioned it is neither a guarantee for being completely stealth nor will it prevent fingerprinting of some honeypot services.
+<br><br>
+
+## Add Users to Nginx (T-Pot WebUI)
+Nginx (T-Pot WebUI) allows to add as many `<web_user>` accounts as you want (according to the [User Types](#user-types)).
+
+To add a new user just follow these steps:
+```
+sudo su -
+systemctl stop tpot
+htpasswd /data/nginx/conf/nginxpasswd <username>
+> New password:
+> Re-type new password:
+> Adding password for user foobar
+systemctl start tpot
+```
+If you want to remove users you just modify `nginxpasswd` with `vi` or any other editor, remove the corresponding line and restart T-Pot again.
+<br><br>
+
+## Import and Export Kibana Objects
+Some T-Pot updates will require you to update the Kibana objects. Either to support new honeypots or to improve existing dashboards or visualizations. Make sure to ***export*** first so you do not loose any of your adjustments.
+
+### **Export**
+1. Go to Kibana
+2. Click on "Stack Management"
+3. Click on "Saved Objects"
+4. Click on "Export <no.> objetcs"
+5. Click on "Export all"
+This will export a NDJSON file with all your objects. Always run a full export to make sure all references are included.
+
+### **Import**
+1. [Download the NDJSON file](https://github.com/dtag-dev-sec/tpotce/blob/master/etc/objects/kibana_export.ndjson.zip) and unzip it.
+2. Go to Kibana
+3. Click on "Stack Management"
+4. Click on "Saved Objects"
+5. Click on "Import" and leave the defaults (check for existing objects and automatically overwrite conflicts) if you did not make personal changes to the Kibana objects.
+6. Browse NDJSON file
+When asked: "If any of the objects already exist, do you want to automatically overwrite them?" you answer with "Yes, overwrite all".
+<br><br>
+
+## Switch Editions
+You can switch between T-Pot editions (flavors) by running `tped.sh`.
+<br><br>
+
+## Redeploy Hive Sensor
+In case you need to re-deploy your Hive Sensor, i.e. the IP of your Hive has changed or you want to move the Hive Sensor to a new Hive, you simply follow these commands:
+```
+sudo su -
+systemctl stop tpot
+rm /data/elk/logstash/*
+deploy.sh
+reboot
+```
+<br><br>
+
+## Adjust tpot.yml
+Maybe the avaialble T-Pot editions do not apply to your use-case or you need a different set of honeypots. You can adjust `/opt/tpot/etc/tpot.yml` to your own preference. If you need examples how this works, just follow the configuration of the existing editions (docker-compose files) in `/opt/tpot/etc/compose` and follow the [Docker Compose Specification](https://docs.docker.com/compose/compose-file/).
+```
+sudo su -
+systemctl stop tpot
+vi /opt/tpot/etc/tpot.yml
+docker-compose -f /opt/tpot/etc/tpot.yml up (to see if everything works, CTRL+C)
+docker-compose -f /opt/tpot/etc/tpot.yml down -v
+systemctl start tpot 
+```
+<br><br>
+
+## Enable Cockpit 2FA
+You can enable two-factor-authentication for Cockpit by running `2fa.sh`.
+<br><br>
+
 
 <a name="faq"></a>
 # FAQ
