@@ -25,7 +25,7 @@ services:
      - EWS_HPFEEDS_FORMAT=json
     env_file:
      - /opt/tpot/etc/compose/elk_environment
-    image: "dtagdevsec/ewsposter:2203"
+    image: "dtagdevsec/ewsposter:2204"
     volumes:
      - /data:/data
 #     - /data/ews/conf/ews.ip:/opt/ewsposter/ews.ip

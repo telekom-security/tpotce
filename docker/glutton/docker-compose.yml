@@ -15,7 +15,7 @@ services:
     network_mode: "host"
     cap_add:
      - NET_ADMIN
-    image: "dtagdevsec/glutton:2203"
+    image: "dtagdevsec/glutton:2204"
     read_only: true
     volumes:
      - /data/glutton/log:/var/log/glutton

@@ -124,7 +124,7 @@ T-Pot offers docker images for the following honeypots ...
 * [Elasticvue](https://github.com/cars10/elasticvue/) a web front end for browsing and interacting with an Elastic Search cluster.
 * [Fatt](https://github.com/0x4D31/fatt) a pyshark based script for extracting network metadata and fingerprints from pcap files and live network traffic.
 * [Geoip-Attack-Map](https://github.com/eddie4/geoip-attack-map) a beautifully animated attack map [optimized](https://github.com/t3chn0m4g3/geoip-attack-map) for T-Pot.
-* [P0f](https://lcamtuf.coredump.cx/p0f3/) P0f is a tool for purely passive traffic fingerprinting.
+* [P0f](https://lcamtuf.coredump.cx/p0f3/) is a tool for purely passive traffic fingerprinting.
 * [Spiderfoot](https://github.com/smicallef/spiderfoot) a open source intelligence automation tool.
 * [Suricata](http://suricata-ids.org/) a Network Security Monitoring engine.
 

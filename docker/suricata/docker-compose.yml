@@ -17,6 +17,6 @@ services:
      - NET_ADMIN
      - SYS_NICE
      - NET_RAW
-    image: "dtagdevsec/suricata:2203"
+    image: "dtagdevsec/suricata:2204"
     volumes:
      - /data/suricata/log:/var/log/suricata

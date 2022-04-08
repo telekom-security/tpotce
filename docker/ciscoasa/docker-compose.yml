@@ -16,7 +16,7 @@ services:
     ports:
      - "5000:5000/udp"
      - "8443:8443"
-    image: "dtagdevsec/ciscoasa:2203"
+    image: "dtagdevsec/ciscoasa:2204"
     read_only: true
     volumes:
      - /data/ciscoasa/log:/var/log/ciscoasa

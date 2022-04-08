@@ -3,7 +3,7 @@
 # Setup Vars
 myPLATFORMS="linux/amd64,linux/arm64"
 myHUBORG="dtagdevsec"
-myTAG="2203"
+myTAG="2204"
 myIMAGESBASE="adbhoney ciscoasa citrixhoneypot conpot cowrie ddospot dicompot dionaea elasticpot endlessh ewsposter fatt glutton hellpot heralding honeypots honeytrap ipphoney log4pot mailoney medpot nginx p0f redishoneypot sentrypeer spiderfoot suricata wordpot"
 myIMAGESELK="elasticsearch kibana logstash map"
 myIMAGESTANNER="phpox redis snare tanner"

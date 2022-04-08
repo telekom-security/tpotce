@@ -16,7 +16,7 @@ services:
      - redishoneypot_local
     ports:
      - "6379:6379"    
-    image: "dtagdevsec/redishoneypot:2203"
+    image: "dtagdevsec/redishoneypot:2204"
     read_only: true
     volumes:
      - /data/redishoneypot/log:/var/log/redishoneypot

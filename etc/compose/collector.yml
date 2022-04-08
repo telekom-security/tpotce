@@ -38,7 +38,7 @@ services:
      - "3389:3389"
      - "5432:5432"
      - "5900:5900"
-    image: "dtagdevsec/heralding:2203"
+    image: "dtagdevsec/heralding:2204"
     read_only: true
     volumes:
      - /data/heralding/log:/var/log/heralding
@@ -52,7 +52,7 @@ services:
     network_mode: "host"
     cap_add:
      - NET_ADMIN
-    image: "dtagdevsec/honeytrap:2203"
+    image: "dtagdevsec/honeytrap:2204"
     read_only: true
     volumes:
      - /data/honeytrap/attacks:/opt/honeytrap/var/attacks
@@ -73,7 +73,7 @@ services:
      - NET_ADMIN
      - SYS_NICE
      - NET_RAW
-    image: "dtagdevsec/fatt:2203"
+    image: "dtagdevsec/fatt:2204"
     volumes:
      - /data/fatt/log:/opt/fatt/log
 
@@ -82,7 +82,7 @@ services:
     container_name: p0f
     restart: always
     network_mode: "host"
-    image: "dtagdevsec/p0f:2203"
+    image: "dtagdevsec/p0f:2204"
     read_only: true
     volumes:
      - /data/p0f/log:/var/log/p0f
@@ -101,7 +101,7 @@ services:
      - NET_ADMIN
      - SYS_NICE
      - NET_RAW
-    image: "dtagdevsec/suricata:2203"
+    image: "dtagdevsec/suricata:2204"
     volumes:
      - /data/suricata/log:/var/log/suricata
 
@@ -131,7 +131,7 @@ services:
     mem_limit: 4g
     ports:
      - "127.0.0.1:64298:9200"
-    image: "dtagdevsec/elasticsearch:2203"
+    image: "dtagdevsec/elasticsearch:2204"
     volumes:
      - /data:/data
 
@@ -145,7 +145,7 @@ services:
     mem_limit: 1g
     ports:
      - "127.0.0.1:64296:5601"
-    image: "dtagdevsec/kibana:2203"
+    image: "dtagdevsec/kibana:2204"
 
 ## Logstash service
   logstash:
@@ -159,7 +159,7 @@ services:
     env_file:
      - /opt/tpot/etc/compose/elk_environment
     mem_limit: 2g
-    image: "dtagdevsec/logstash:2203"
+    image: "dtagdevsec/logstash:2204"
     volumes:
      - /data:/data
 
@@ -169,7 +169,7 @@ services:
     restart: always
     stop_signal: SIGKILL
     tty: true
-    image: "dtagdevsec/redis:2203"
+    image: "dtagdevsec/redis:2204"
     read_only: true
 
 ## Map Web Service
@@ -184,7 +184,7 @@ services:
     tty: true
     ports:
      - "127.0.0.1:64299:64299"
-    image: "dtagdevsec/map:2203"
+    image: "dtagdevsec/map:2204"
 
 ## Map Data Service
   map_data:
@@ -199,7 +199,7 @@ services:
      - /opt/tpot/etc/compose/elk_environment
     stop_signal: SIGKILL
     tty: true
-    image: "dtagdevsec/map:2203"
+    image: "dtagdevsec/map:2204"
 #### /ELK
 
 # Ewsposter service
@@ -219,7 +219,7 @@ services:
      - EWS_HPFEEDS_FORMAT=json
     env_file:
      - /opt/tpot/etc/compose/elk_environment
-    image: "dtagdevsec/ewsposter:2203"
+    image: "dtagdevsec/ewsposter:2204"
     volumes:
      - /data:/data
      - /data/ews/conf/ews.ip:/opt/ewsposter/ews.ip
@@ -240,7 +240,7 @@ services:
     ports:
      - "64297:64297"
      - "127.0.0.1:64304:64304"
-    image: "dtagdevsec/nginx:2203"
+    image: "dtagdevsec/nginx:2204"
     read_only: true
     volumes:
      - /data/nginx/cert/:/etc/nginx/cert/:ro
@@ -255,6 +255,6 @@ services:
      - spiderfoot_local
     ports:
      - "127.0.0.1:64303:8080"
-    image: "dtagdevsec/spiderfoot:2203"
+    image: "dtagdevsec/spiderfoot:2204"
     volumes:
      - /data/spiderfoot:/home/spiderfoot/.spiderfoot
