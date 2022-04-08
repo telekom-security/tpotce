@@ -22,7 +22,12 @@ myLSB_STABLE_SUPPORTED="bullseye"
 myLSB_TESTING_SUPPORTED="stable"
 myREMOTESITES="https://hub.docker.com https://github.com https://pypi.python.org https://debian.org https://listbot.sicherheitstacho.eu"
 myPREINSTALLPACKAGES="aria2 apache2-utils cracklib-runtime curl dialog figlet fuse grc libcrack2 libpq-dev lsb-release net-tools software-properties-common toilet"
-myINSTALLPACKAGES=$(cat /opt/tpot/packages.txt)
+if [ -f "../../packages.txt" ];
+  then myINSTALLPACKAGESFILE="../../packages.txt"
+elif [ -f "/opt/tpot/packages.txt" ];
+  then myINSTALLPACKAGESFILE="/opt/tpot/packages.txt"
+fi
+myINSTALLPACKAGES=$(cat $myINSTALLPACKAGESFILE)
 myINFO="\
 ###########################################
 ### T-Pot Installer for Debian (Stable) ###
