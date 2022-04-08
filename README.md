@@ -3,16 +3,13 @@
 ![T-Pot](doc/tpotsocial.png)
 
 T-Pot is the all in one, optionally distributed, multiarch (amd64, arm64) honeypot plattform, supporting 20+ honeypots and countless visualization options using the Elastic Stack, animated live attack maps and lots of security tools to further improve the deception experience.
-
-T-Pot is based on the Debian 11 (Bullseye) Netinstaller and utilizes 
-[docker](https://www.docker.com/) and [docker-compose](https://docs.docker.com/compose/) to reach its goal of running as many tools as possible simultaneously and thus utilizing the host's hardware to its maximum.
 <br><br>
 
 # TL;DR
-1. Meet the [system requirements](#requirements). The T-Pot installation needs at least 8-16 GB RAM and 128 GB free disk space as well as a working (outgoing non-filtered) internet connection.
-2. Download the T-Pot ISO from [GitHub](https://github.com/telekom-security/tpotce/releases) acording to your architecture (amd64, arm64) or [create it yourself](#createiso).
-3. Install the system in a [VM](#vm) or on [physical hardware](#hw) with [internet access](#placement).
-4. Enjoy your favorite beverage - [watch](https://sicherheitstacho.eu) and [analyze](#kibana).
+1. Meet the [system requirements](#system-requirements). The T-Pot installation needs at least 8-16 GB RAM and 128 GB free disk space as well as a working (outgoing non-filtered) internet connection.
+2. Download the T-Pot ISO from [GitHub](https://github.com/telekom-security/tpotce/releases) acording to your architecture (amd64, arm64) or [create it yourself](#create-your-own-iso-image).
+3. Install the system in a [VM](#running-in-a-vm) or on [physical hardware](#running-on-hardware) with [internet access](#system-placement).
+4. Enjoy your favorite beverage - [watch](https://sicherheitstacho.eu) and [analyze](#kibana-dashboard).
 <br><br>
 
 # Table of Contents
@@ -91,9 +88,8 @@ T-Pot is based on the Debian 11 (Bullseye) Netinstaller and utilizes
 <br><br>
 
 # Technical Concept
-
-T-Pot is based on the Debian Netinstaller and utilizes 
-[docker](https://www.docker.com/) and [docker-compose](https://docs.docker.com/compose/) to reach its goal of running as many tools simultaneously as possible and thus utilizing the host's hardware to its maximum.
+T-Pot is based on the Debian 11 (Bullseye) Netinstaller and utilizes 
+[docker](https://www.docker.com/) and [docker-compose](https://docs.docker.com/compose/) to reach its goal of running as many tools as possible simultaneously and thus utilizing the host's hardware to its maximum.
 <br><br>
 
 T-Pot offers docker images for the following honeypots ...
@@ -411,7 +407,7 @@ You can login from your browser and access Cockpit: `https://<your.ip>:64294` or
 - pass: **[password]**
 
 You can also login from your browser and access the Nginx (T-Pot Web UI and tools): `https://<your.ip>:64297`
-- user: **[`<web_username>`]**
+- user: **[`<web_user>`]**
 - pass: **[password]**
 <br><br>
 
@@ -500,7 +496,7 @@ Especially if you do not have a SSH client at hand and still want to access the 
 ## T-Pot Landing Page 
 According to the [User Types](#user-types) you can open the T-Pot Landing Page from your browser via `https://<your.ip>:64297`:
 
-- user: **[`<web_username>`]**
+- user: **[`<web_user>`]**
 - pass: **[password]**
 
 ![T-Pot-WebUI](doc/tpotwebui.png)
@@ -676,17 +672,109 @@ systemctl start tpot
 You can enable two-factor-authentication for Cockpit by running `2fa.sh`.
 <br><br>
 
+# Troubleshooting
+Generally T-Pot is offered ***as is*** without any committment regarding support. Issues and discussions can opened, but be prepared to include basic necessary info, so the community is able to help.
+<br><br>
 
-<a name="faq"></a>
-# FAQ
-Please report any issues or questions on our [GitHub issue list](https://github.com/telekom-security/tpotce/issues), so the community can participate.
+## Logging
+* Check if your containers are running correctly: `dps.sh`
 
-<a name="contact"></a>
+* Check if your system ressources are not exhausted: `htop`, `glances`
+
+* Check if there is a port conflict:
+```
+systemctl stop tpot
+grc netstat -tulpen
+vi /opt/tpot/etc/tpot.yml up
+docker-compose -f /opt/tpot/etc/tpot.yml up
+CTRL+C
+docker-compose -f /opt/tpot/etc/tpot.yml down -v
+```
+
+* Check container logs: `docker logs -f <container_name>`
+
+* Check if you were locked out by [fail2ban](#fail2ban).
+<br><br>
+
+## Fail2Ban
+If you cannot login there are probably three possible reasons:
+1. You need to review [User Types](#user-types) and understand the different users.
+2. You are trying to SSH into T-Pot, but use `tcp/22` instead of `tcp/64295` or were using the incorrect user for Cockpit or Nginx (T-Pot WebUI).
+3. You had too many wrong attempts from the above and got locked out by `fail2ban`.
+
+To resolve Fail2Ban lockouts run `fail2ban-client status`:
+
+```
+fail2ban-client status
+Status
+|- Number of jail:	3
+nginx-http-auth, pam-generic, sshd
+```
+
+`nginx-http-auth` refers to missed BasicAuth login attempts (Nginx / T-Pot WebUI) on `tcp/64295`
+
+`sshd` refers to missed OS SSH login attempts on `tcp/64295`
+
+`pam-generic` refers to missed OS Cockpit login attempts on `tcp/64294`
+
+Check all jails, i.e. `sshd`:
+
+```
+fail2ban-client status sshd
+Status for the jail: sshd
+|- Filter
+|  |- Currently failed:	0
+|  |- Total failed:	0
+|  `- File list:	/var/log/auth.log
+`- Actions
+   |- Currently banned:	0
+   |- Total banned:	0
+   `- Banned IP list:
+```
+
+If there are any banned IPs you can unban these with `fail2ban-client unban --all` or `fail2ban-client unban <ip>`.
+<br><br>
+
+## RAM and Storage
+The Elastic Stack is hungry for RAM, specifically `logstash` and `elasticsearch`. If the Elastic Stack is unavailable, does not receive any logs or simply keeps crashing it is most likely a RAM or Storage issue.
+While T-Pot keeps trying to restart the services / containers run `docker logs -f <container_name>` (either `logstash` or `elasticsearch`) and check if there any warnings or failures involving RAM.
+
+Storage failures can be identified easier via `htop` or `glances`. 
+<br><br>
+
+
+- [Troubleshooting](#troubleshooting)
+  - [Logging](#logging)
+  - [Fail2Ban](#fail2ban)
+  - [RAM](#ram-and-storage)
+- [Contact](#contact)
+  - [Issues](#issues)
+  - [Discussions](#discussions)
+- [Licenses](#licenses)
+- [Credits](#credits)
+- [Testimonials](#testimonials)
+
+
 # Contact
-The software is provided **as is** in a Community Edition format. T-Pot is designed to run out of the box and with zero maintenance involved. <br>
-We hope you understand that we cannot provide support on an individual basis. We will try to address questions, bugs and problems on our [GitHub issue list](https://github.com/telekom-security/tpotce/issues).
+T-Pot is provided ***as is*** open source ***without*** any committment regarding support ([see the disclaimer](#disclaimer)).
 
-<a name="licenses"></a>
+If you are a company or institution and wish a personal contact aside from [issues](#issues) and [discussions](#discussions) please get in contact with our [sales team](https://www.t-systems.com/de/en/security).
+
+If you are a security researcher and want to responsibly report an issue please get in touch with our [CERT](https://www.telekom.com/en/corporate-responsibility/data-protection-data-security/security/details/introducing-deutsche-telekom-cert-358316).
+<br><br>
+
+## Issues
+Please report issues (errors) on our [GitHub Issues](https://github.com/telekom-security/tpotce/issues), but [troubleshoot](#troubleshooting) first. Issues not providing information to address the error will be closed or converted into [discussions](#discussions).
+
+Feel free to use the search function, it is possible a similar issues has been adressed already, with the solution just a search away.
+<br><br>
+
+## Discussions
+General questions, ideas, show & tell, etc. can be addressed on our [GitHub Discussions](https://github.com/telekom-security/tpotce/discussions).
+
+Feel free to use the search function, it is possible a similar discussion has been opened already, with an answer just a search away.
+<br><br>
+
 # Licenses
 The software that T-Pot is built on uses the following licenses.
 <br>GPLv2: [conpot](https://github.com/mushorg/conpot/blob/master/LICENSE.txt), [dionaea](https://github.com/DinoTools/dionaea/blob/master/LICENSE), [honeytrap](https://github.com/armedpot/honeytrap/blob/master/LICENSE), [suricata](http://suricata-ids.org/about/open-source/)
@@ -696,9 +784,8 @@ The software that T-Pot is built on uses the following licenses.
 <br> Unlicense: [endlessh](https://github.com/skeeto/endlessh/blob/master/UNLICENSE)
 <br> Other: [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot#licencing-agreement-malwaretech-public-licence), [cowrie](https://github.com/micheloosterhof/cowrie/blob/master/LICENSE.md), [mailoney](https://github.com/awhitehatter/mailoney), [Debian licensing](https://www.debian.org/legal/licenses/), [Elastic License](https://www.elastic.co/licensing/elastic-license)
 <br> AGPL-3.0: [honeypots](https://github.com/qeeqbox/honeypots/blob/main/LICENSE)
+<br><br>
 
-
-<a name="credits"></a>
 # Credits
 Without open source and the fruitful development community (we are proud to be a part of), T-Pot would not have been possible! Our thanks are extended but not limited to the following people and organizations:
 
@@ -742,22 +829,21 @@ Without open source and the fruitful development community (we are proud to be a
 * [tanner](https://github.com/mushorg/tanner/graphs/contributors)
 * [suricata](https://github.com/inliniac/suricata/graphs/contributors)
 
-### The following companies and organizations
+**The following companies and organizations**
 * [debian](https://www.debian.org/)
 * [docker](https://www.docker.com/)
 * [elastic.io](https://www.elastic.co/)
 * [honeynet project](https://www.honeynet.org/)
 * [intel](http://www.intel.com)
 
-### ... and of course ***you*** for joining the community!
+**... and of course ***you*** for joining the community!**
+<br><br>
 
-<a name="staytuned"></a>
-# Stay tuned ...
-A new version of T-Pot is released about every 6-12 months, development has shifted more and more towards rolling releases and the usage of `/opt/tpot/update.sh`.
-
-<a name="testimonial"></a>
 # Testimonials
 One of the greatest feedback we have gotten so far is by one of the Conpot developers:<br>
-***"[...] I highly recommend T-Pot which is ... it's not exactly a swiss army knife .. it's more like a swiss army soldier, equipped with a swiss army knife. Inside a tank. A swiss tank. [...]"***<br>
+***"[...] I highly recommend T-Pot which is ... it's not exactly a swiss army knife .. it's more like a swiss army soldier, equipped with a swiss army knife. Inside a tank. A swiss tank. [...]"***
+<br><br>
 And from @robcowart (creator of [ElastiFlow](https://github.com/robcowart/elastiflow)):<br>
 ***"#TPot is one of the most well put together turnkey honeypot solutions. It is a must-have for anyone wanting to analyze and understand the behavior of malicious actors and the threat they pose to your organization."***
+<br><br>
+**Thank you!**
