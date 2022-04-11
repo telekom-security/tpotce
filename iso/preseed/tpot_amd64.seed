@@ -133,7 +133,7 @@ update-dev; \
 in-target update-grub; \
 cp /opt/installer -R /target/root; \
 ### DEV
-in-target git clone --depth=1 https://github.com/telekom-security/tpotce -b 22.x /opt/tpot; \
+in-target git clone --depth=1 https://github.com/telekom-security/tpotce /opt/tpot; \
 in-target sed -i 's/allow-hotplug/auto/g' /etc/network/interfaces; \
 #in-target apt-get -y remove exim4-base; \
 #in-target apt-get -y autoremove; \
