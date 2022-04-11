@@ -780,6 +780,7 @@ Without open source and the fruitful development community (we are proud to be a
 
 * [adbhoney](https://github.com/huuck/ADBHoney/graphs/contributors)
 * [apt-fast](https://github.com/ilikenwf/apt-fast/graphs/contributors)
+* [bento](https://github.com/migueravila/Bento/graphs/contributors)
 * [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/graphs/contributors)
 * [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot/graphs/contributors)
 * [cockpit](https://github.com/cockpit-project/cockpit/graphs/contributors)
