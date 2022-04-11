@@ -70,10 +70,10 @@ T-Pot is the all in one, optionally distributed, multiarch (amd64, arm64) honeyp
 - [Troubleshooting](#troubleshooting)
   - [Logging](#logging)
   - [Fail2Ban](#fail2ban)
-  - [RAM](#logging)
+  - [RAM](#ram-and-storage)
 - [Contact](#contact)
-  - [Discussions](#discussions)
   - [Issues](#issues)
+  - [Discussions](#discussions)
 - [Licenses](#licenses)
 - [Credits](#credits)
 - [Testimonials](#testimonials)
@@ -741,19 +741,6 @@ While T-Pot keeps trying to restart the services / containers run `docker logs -
 
 Storage failures can be identified easier via `htop` or `glances`. 
 <br><br>
-
-
-- [Troubleshooting](#troubleshooting)
-  - [Logging](#logging)
-  - [Fail2Ban](#fail2ban)
-  - [RAM](#ram-and-storage)
-- [Contact](#contact)
-  - [Issues](#issues)
-  - [Discussions](#discussions)
-- [Licenses](#licenses)
-- [Credits](#credits)
-- [Testimonials](#testimonials)
-
 
 # Contact
 T-Pot is provided ***as is*** open source ***without*** any committment regarding support ([see the disclaimer](#disclaimer)).
