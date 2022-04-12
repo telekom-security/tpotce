@@ -90,51 +90,10 @@ local myMINVERSION="20.06.0"
 local myMASTERVERSION="22.04.0"
 echo
 echo "### Checking for Release ID"
-myRELEASE=$(lsb_release -c | awk '{ print $2 }')
-if [ "$myRELEASE" != "$myLSB_RELEASE" ] 
+myRELEASE=$(lsb_release -i | grep Debian -c)
+if [ "$myRELEASE" == "0" ] 
   then
-    echo "###### Need to upgrade to Debian 11 (Bullseye) first:$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
-    echo "###### Upgrade may result in complete data loss and should not be run via SSH."
-    echo "###### If you installed T-Pot using the post-install method instead of the ISO it is recommended you upgrade manually to Debian 11 (Bullseye) and then re-run update.sh."
-    echo "###### Do you want to upgrade to Debian 11 (Bullseye) now?"
-    while [ "$myQST" != "y" ] && [ "$myQST" != "n" ];
-      do
-        read -p "Upgrade? (y/n) " myQST
-      done
-    if [ "$myQST" = "n" ];
-      then
-	echo
-        echo $myGREEN"Aborting!"$myWHITE
-	echo
-        exit
-      else
-	echo "###### Stopping and disabling T-Pot services ... "
-	echo
-	systemctl stop tpot
-	systemctl disable tpot
-	systemctl stop docker
-	systemctl start docker
-        docker stop $(docker ps -aq)
-        docker rm -v $(docker ps -aq)
-	echo "###### Switching /etc/apt/sources.list from buster to bullseye ... "
-	echo
-	sed -i 's/buster/bullseye/g' /etc/apt/sources.list
-	echo "###### Updating repositories ... "
-	echo
-	apt-fast update
-        export DEBIAN_FRONTEND=noninteractive
-	echo "###### Running full upgrade ... "
-	echo
-        echo "docker.io docker.io/restart       boolean true" | debconf-set-selections -v
-        echo "ssh ssh/restart		       	boolean true" | debconf-set-selections -v
-        echo "cron cron/restart			boolean true" | debconf-set-selections -v
-        echo "debconf debconf/frontend select noninteractive" | debconf-set-selections -v
-	apt-fast full-upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes
-        dpkg --configure -a
-        echo "###### $myBLUE""Finished with upgrading. Now restarting update.sh and to continue with T-Pot related updates.""$myWHITE"
-	exec ./update.sh -y
-	exit 1
-    fi
+    echo "###### This version of T-Pot cannot be upgraded automatically. Please run a fresh install.$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
     exit
 fi
 echo
@@ -232,6 +191,56 @@ echo
 }
 
 function fuUPDATER () {
+# Need to check for Debian release after self update to run upgrade to Debian 11
+echo "### Checking for Release ID"
+myRELEASE=$(lsb_release -c | awk '{ print $2 }')
+if [ "$myRELEASE" != "$myLSB_RELEASE" ] 
+  then
+    echo "###### Need to upgrade to Debian 11 (Bullseye) first:$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+    echo "###### Upgrade may result in complete data loss and should not be run via SSH."
+    echo "###### If you installed T-Pot using the post-install method instead of the ISO it is recommended you upgrade manually to Debian 11 (Bullseye) and then re-run update.sh."
+    echo "###### Do you want to upgrade to Debian 11 (Bullseye) now?"
+    while [ "$myQST" != "y" ] && [ "$myQST" != "n" ];
+      do
+        read -p "Upgrade? (y/n) " myQST
+      done
+    if [ "$myQST" = "n" ];
+      then
+      	echo
+        echo $myGREEN"Aborting!"$myWHITE
+      	echo
+        exit
+      else
+	      echo "###### Stopping and disabling T-Pot services ... "
+	      echo
+	      systemctl stop tpot
+	      systemctl disable tpot
+	      systemctl stop docker
+	      systemctl start docker
+        docker stop $(docker ps -aq)
+        docker rm -v $(docker ps -aq)
+	      echo "###### Switching /etc/apt/sources.list from buster to bullseye ... "
+	      echo
+	      sed -i 's/buster/bullseye/g' /etc/apt/sources.list
+	      echo "###### Updating repositories ... "
+	      echo
+	      apt-fast update
+        export DEBIAN_FRONTEND=noninteractive
+	      echo "###### Running full upgrade ... "
+	      echo
+        echo "docker.io docker.io/restart       boolean true" | debconf-set-selections -v
+        echo "ssh ssh/restart		       	boolean true" | debconf-set-selections -v
+        echo "cron cron/restart			boolean true" | debconf-set-selections -v
+        echo "debconf debconf/frontend select noninteractive" | debconf-set-selections -v
+	      apt-fast full-upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes
+        dpkg --configure -a
+        echo "###### $myBLUE""Finished with upgrading. Now restarting update.sh and to continue with T-Pot related updates.""$myWHITE"
+	      exec ./update.sh -y
+	      exit 1
+    fi
+fi
+echo
+
 export DEBIAN_FRONTEND=noninteractive
 echo
 echo "### Installing apt-fast"
