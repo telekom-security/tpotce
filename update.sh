@@ -74,7 +74,7 @@ function fuSELFUPDATE () {
       echo "###### $myBLUE""Found newer version, will be pulling updates and restart myself.""$myWHITE"
       git reset --hard
       git pull --force
-      exec "$1" "$2"
+      exec ./update.sh -y
       exit 1
     else
       echo "###### $myBLUE""Pulling updates from repository.""$myWHITE"
