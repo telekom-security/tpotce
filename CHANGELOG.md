@@ -6,6 +6,7 @@ T-Pot 22.04.0 is probably the most feature rich release ever provided with long 
 * **ARM64** support for all provided Docker images
 * **GeoIP Attack Map** visualizing Live Attacks on a dedicated webpage
 * **Kibana Live Attack Map** visualizing Live Attacks from different **HIVE_SENSORS**
+* **Blackhole** is a script trying to avoid mass scanner detection 
 * **Elasticvue** a web front end for browsing and interacting with an Elastic Search cluster
 * **Ddospot** a honeypot for tracking and monitoring UDP-based Distributed Denial of Service (DDoS) attacks
 * **Endlessh** is a SSH tarpit that very slowly sends an endless, random SSH banner
