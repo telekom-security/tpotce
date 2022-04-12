@@ -1,0 +1,16 @@
+version: '2.3'
+
+services:
+
+## Elasticsearch-head service
+  head:
+    build: .
+    container_name: head
+    restart: always
+    #    depends_on:
+    #      elasticsearch:
+    #        condition: service_healthy
+    ports:
+     - "127.0.0.1:64302:9100"
+    image: "dtagdevsec/head:2204"
+    read_only: true

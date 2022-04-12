@@ -1,0 +1,26 @@
+version: '2.3'
+
+networks:
+  honeypy_local:
+
+services:
+
+# HoneyPy service
+  honeypy:
+    build: .
+    container_name: honeypy
+    restart: always
+    networks:
+     - honeypy_local
+    ports:
+     - "7:7"
+     - "8:8"
+     - "2048:2048"
+     - "2323:2323"
+     - "2324:2324"
+     - "4096:4096"
+     - "9200:9200"
+    image: "dtagdevsec/honeypy:2204"
+    read_only: true
+    volumes:
+     - /data/honeypy/log:/opt/honeypy/log

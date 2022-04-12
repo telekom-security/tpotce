@@ -1,0 +1,97 @@
+{
+  "template": {
+    "settings": {
+      "index": {
+        "lifecycle": {
+          "name": "tpot"
+        },
+        "mapping": {
+          "total_fields": {
+            "limit": "2000"
+          }
+        },
+        "refresh_interval": "5s",
+        "number_of_shards": "1",
+        "number_of_replicas": "0",
+        "query": {
+          "default_field": "*"
+        }
+      }
+    },
+    "mappings": {
+      "_source": {
+        "excludes": [],
+        "includes": [],
+        "enabled": true
+      },
+      "_routing": {
+        "required": false
+      },
+      "dynamic": true,
+      "numeric_detection": false,
+      "date_detection": true,
+      "dynamic_date_formats": [
+        "strict_date_optional_time",
+        "yyyy/MM/dd HH:mm:ss Z||yyyy/MM/dd Z"
+      ],
+      "dynamic_templates": [
+        {
+          "message_field": {
+            "path_match": "message",
+            "mapping": {
+              "norms": false,
+              "type": "text"
+            },
+            "match_mapping_type": "string"
+          }
+        },
+        {
+          "string_fields": {
+            "mapping": {
+              "norms": false,
+              "fields": {
+                "keyword": {
+                  "ignore_above": 256,
+                  "type": "keyword"
+                }
+              },
+              "type": "text"
+            },
+            "match_mapping_type": "string",
+            "match": "*"
+          }
+        }
+      ],
+      "properties": {
+        "geoip.ip": {
+          "type": "ip"
+        },
+        "geoip.latitude": {
+          "type": "half_float"
+        },
+        "geoip.location": {
+          "type": "geo_point"
+        },
+        "geoip.longitude": {
+          "type": "half_float"
+        },
+        "geoip_ext.ip": {
+          "type": "ip"
+        },
+        "geoip_ext.latitude": {
+          "type": "half_float"
+        },
+        "geoip_ext.location": {
+          "type": "geo_point"
+        },
+        "geoip_ext.longitude": {
+          "type": "half_float"
+        }
+      }
+    }
+  },
+  "index_patterns": [
+    "logstash-*"
+  ],
+  "composed_of": []
+}

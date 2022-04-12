@@ -1,0 +1,18 @@
+version: '2.3'
+
+networks:
+  cyberchef_local:
+
+services:
+
+# Cyberchef service
+  cyberchef:
+    build: .
+    container_name: cyberchef
+    restart: always
+    networks:
+     - cyberchef_local
+    ports:
+     - "127.0.0.1:64299:8000"
+    image: "dtagdevsec/cyberchef:2204"
+    read_only: true

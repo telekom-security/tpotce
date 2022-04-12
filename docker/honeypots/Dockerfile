@@ -1,10 +1,10 @@
-FROM alpine:3.14
+FROM alpine:3.15
 #
 # Include dist
-ADD dist/ /root/dist/
+COPY dist/ /root/dist/
 #
 # Install packages
-RUN apk -U add \
+RUN apk -U --no-cache add \
              build-base \
 	     freetds \
 	     freetds-dev \
@@ -19,7 +19,31 @@ RUN apk -U add \
              openssl \
              openssl-dev \
 	     postgresql-dev \
+	     py3-chardet \
+	     py3-click \
+	     py3-cryptography \
+	     py3-dnspython \
+	     py3-flask \
+	     py3-future \
+	     py3-hiredis \
+	     py3-impacket \
+	     py3-itsdangerous \
+	     py3-jinja2 \
+	     py3-ldap3 \
+	     py3-markupsafe \
+	     py3-netifaces \
+	     py3-openssl \
+	     py3-packaging \
+	     py3-paramiko \
 	     py3-pip \
+	     py3-psutil \
+	     py3-psycopg2 \
+	     py3-pycryptodomex \
+	     py3-requests \
+	     py3-service_identity \
+	     py3-twisted \
+	     py3-werkzeug \
+	     py3-wheel \
              python3 \
              python3-dev \
              zlib-dev && \
@@ -28,12 +52,11 @@ RUN apk -U add \
     mkdir -p /opt \
              /var/log/honeypots && \
     cd /opt/ && \
-    #git clone https://github.com/qeeqbox/honeypots && \
-    git clone https://github.com/t3chn0m4g3/honeypots && \
+    git clone https://github.com/qeeqbox/honeypots && \
     cd honeypots && \
-    #git checkout 7c654a3ef2c564ae6f1247bf302d652037080163 && \
+    git checkout bee3147cf81837ba7639f1e27fe34d717ecccf29 && \
+    cp /root/dist/setup.py . && \
     pip3 install --upgrade pip && \
-    pip3 install --ignore-installed hiredis packaging && \
     pip3 install . && \
     setcap cap_net_bind_service=+ep /usr/bin/python3.9 && \
 #
@@ -54,12 +77,11 @@ RUN apk -U add \
 		    postgresql-dev \
 		    python3-dev \
 		    zlib-dev && \
-    rm -rf /root/* && \
-    rm -rf /var/cache/apk/*
+    rm -rf /root/* /var/cache/apk/* /opt/honeypots/.git
+
 #
 # Start honeypots 
 STOPSIGNAL SIGINT
 USER honeypots:honeypots
 WORKDIR /opt/honeypots/
-CMD python3 -m honeypots --setup all --config config.json
-#CMD python3 -m honeypots --setup telnet --config config.json
+CMD python3 -E -m honeypots --setup all --config config.json

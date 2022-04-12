@@ -1,11 +1,20 @@
-FROM alpine:3.14
+FROM alpine:3.15
+#
+# Include dist
+COPY dist/ /root/dist/
 #
 # Install packages
-RUN apk -U add \
+RUN apk --no-cache -U add \
              build-base \
              git \
 	     libcap \
+	     py3-colorama \
+	     py3-greenlet \
 	     py3-pip \
+	     py3-schedule \
+	     py3-sqlalchemy \
+	     py3-twisted \
+	     py3-wheel \
              python3 \
              python3-dev && \
 #	     
@@ -30,6 +39,7 @@ RUN apk -U add \
     sed -i "s#rotate_size = 10#rotate_size = 9999#g" /opt/ddospot/ddospot/pots/generic/genericpot.conf && \
     sed -i "s#rotate_size = 10#rotate_size = 9999#g" /opt/ddospot/ddospot/pots/ntp/ntpot.conf && \
     sed -i "s#rotate_size = 10#rotate_size = 9999#g" /opt/ddospot/ddospot/pots/ssdp/ssdpot.conf && \
+    cp /root/dist/requirements.txt . && \
     pip3 install -r ddospot/requirements.txt && \
     setcap cap_net_bind_service=+ep /usr/bin/python3.9 && \
 #
@@ -43,6 +53,7 @@ RUN apk -U add \
                     git \
 		    python3-dev && \
     rm -rf /root/* && \
+    rm -rf /opt/ddospot/.git && \
     rm -rf /var/cache/apk/*
 #
 # Start ddospot

@@ -10,11 +10,13 @@ services:
     build: .
     container_name: ipphoney
     restart: always
+#    cpu_count: 1
+#    cpus: 0.25
     networks:
      - ipphoney_local
     ports:
      - "631:631"
-    image: "dtagdevsec/ipphoney:2006"
+    image: "dtagdevsec/ipphoney:2204"
     read_only: true
     volumes:
      - /data/ipphoney/log:/opt/ipphoney/log

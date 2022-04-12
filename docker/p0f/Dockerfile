@@ -1,9 +1,9 @@
 # In case of problems Alpine 3.13 needs to be used:
 # https://wiki.alpinelinux.org/wiki/Release_Notes_for_Alpine_3.14.0#faccessat2
-FROM alpine:3.14
+FROM alpine:3.15
 #
 # Add source
-ADD . /opt/p0f
+COPY . /opt/p0f
 #
 # Install packages
 RUN apk -U --no-cache add \

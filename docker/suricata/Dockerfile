@@ -1,7 +1,7 @@
-FROM alpine:3.14
+FROM alpine:edge
 #
 # Include dist
-ADD dist/ /root/dist/
+COPY dist/ /root/dist/
 #
 # Install packages
 RUN apk -U --no-cache add \
@@ -16,16 +16,18 @@ RUN apk -U --no-cache add \
 # Setup user, groups and configs
     addgroup -g 2000 suri && \
     adduser -S -H -u 2000 -D -g 2000 suri && \
-    chmod 644 /etc/suricata/*.config && \
     cp /root/dist/*.yaml /etc/suricata/ && \
     cp /root/dist/*.conf /etc/suricata/ && \
     cp /root/dist/*.bpf /etc/suricata/ && \
+    cp /root/dist/update.sh /usr/bin/ && \
+    chmod 644 /etc/suricata/*.config && \
+    chmod 755 -R /var/lib/suricata && \
+    chmod 755 /usr/bin/update.sh && \
+    chown -R root:suri /tmp /run && \
 #
 # Download the latest EmergingThreats OPEN ruleset
-    cp /root/dist/update.sh /usr/bin/ && \
-    chmod 755 /usr/bin/update.sh && \
     suricata-update update-sources && \
-    suricata-update --no-reload && \
+    suricata-update --no-test --no-reload && \
 #
 # Clean up
     rm -rf /root/* && \

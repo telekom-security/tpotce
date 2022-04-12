@@ -205,14 +205,6 @@ fuHONEYPOTS () {
   chown tpot:tpot /data/honeypots -R
 }
 
-# Let's create a function to clean up and prepare honeypy data
-fuHONEYPY () {
-  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/honeypy/*; fi
-  mkdir -p /data/honeypy/log
-  chmod 770 /data/honeypy -R
-  chown tpot:tpot /data/honeypy -R
-}
-
 # Let's create a function to clean up and prepare honeysap data
 fuHONEYSAP () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/honeysap/*; fi
@@ -283,6 +275,14 @@ fuREDISHONEYPOT () {
   mkdir -p /data/redishoneypot/log
   chmod 770 /data/redishoneypot -R
   chown tpot:tpot /data/redishoneypot -R
+}
+
+# Let's create a function to clean up and prepare sentrypeer data
+fuSENTRYPEER () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/sentrypeer/log; fi
+  mkdir -p /data/sentrypeer/log
+  chmod 770 /data/sentrypeer -R
+  chown tpot:tpot /data/sentrypeer -R
 }
 
 # Let's create a function to prepare spiderfoot db
@@ -356,7 +356,6 @@ if [ "$myPERSISTENCE" = "on" ];
     fuHELLPOT
     fuHONEYSAP
     fuHONEYPOTS
-    fuHONEYPY
     fuHONEYTRAP
     fuIPPHONEY
     fuLOG4POT
@@ -365,6 +364,7 @@ if [ "$myPERSISTENCE" = "on" ];
     fuNGINX
     fuREDISHONEYPOT
     fuRDPY
+    fuSENTRYPEER
     fuSPIDERFOOT
     fuSURICATA
     fuP0F

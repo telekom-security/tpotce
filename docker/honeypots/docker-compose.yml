@@ -14,6 +14,8 @@ services:
     restart: always
     tmpfs:
      - /tmp:uid=2000,gid=2000
+#    cpu_count: 1
+#    cpus: 0.75
     networks:
      - honeypots_local
     ports:
@@ -36,7 +38,7 @@ services:
      - "6379:6379"
      - "8080:8080"
      - "9200:9200"
-    image: "dtagdevsec/honeypots:2006"
+    image: "dtagdevsec/honeypots:2204"
     read_only: true
     volumes:
      - /data/honeypots/log:/var/log/honeypots

@@ -16,11 +16,13 @@ services:
      - HPFEEDS_SECRET=pass
      - HPFEEDS_PORT=20000
      - HPFEEDS_CHANNELPREFIX=prefix
+#    cpu_count: 1
+#    cpus: 0.25
     networks:
      - mailoney_local
     ports:
      - "25:25"
-    image: "dtagdevsec/mailoney:2006"
+    image: "dtagdevsec/mailoney:2204"
     read_only: true
     volumes:
      - /data/mailoney/log:/opt/mailoney/logs

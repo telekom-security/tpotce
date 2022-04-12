@@ -10,10 +10,12 @@ services:
     tmpfs:
      - /var/lib/glutton:uid=2000,gid=2000
      - /run:uid=2000,gid=2000
+#    cpu_count: 1
+#    cpus: 0.75
     network_mode: "host"
     cap_add:
      - NET_ADMIN
-    image: "dtagdevsec/glutton:2006"
+    image: "dtagdevsec/glutton:2204"
     read_only: true
     volumes:
      - /data/glutton/log:/var/log/glutton

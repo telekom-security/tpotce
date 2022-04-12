@@ -1,30 +1,28 @@
-FROM node:16.13.2-alpine3.14
+FROM ubuntu:20.04
 #
 # VARS
-ENV KB_VER=7.17.0
-# 
+ENV KB_VER=8.0.1
 # Include dist
-ADD dist/ /root/dist/
+COPY dist/ /root/dist/
 #
-RUN apk -U --no-cache add \
+RUN apt-get update -y && \
+    apt-get install -y \
             aria2 \
-            curl \
-            gcompat && \
+            curl && \
 #
-# Get and install packages
+# Determine arch, get and install packages
+    ARCH=$(arch) && \
+      if [ "$ARCH" = "x86_64" ]; then KB_ARCH="amd64"; fi && \
+      if [ "$ARCH" = "aarch64" ]; then KB_ARCH="arm64"; fi && \
+    echo "$ARCH" && \
     cd /root/dist/ && \
-    mkdir -p /usr/share/kibana/ && \
-    aria2c -s 16 -x 16 https://artifacts.elastic.co/downloads/kibana/kibana-$KB_VER-linux-x86_64.tar.gz && \
-    tar xvfz kibana-$KB_VER-linux-x86_64.tar.gz --strip-components=1 -C /usr/share/kibana/ && \
-#
-# Kibana's bundled node does not work in alpine
-    rm /usr/share/kibana/node/bin/node && \
-    ln -s /usr/local/bin/node /usr/share/kibana/node/bin/node && \
-#
-# Add and move files
-    cd /root/dist/ && \
+    aria2c -s 16 -x 16 https://artifacts.elastic.co/downloads/kibana/kibana-$KB_VER-$KB_ARCH.deb && \
+    dpkg -i kibana-$KB_VER-$KB_ARCH.deb && \
 #
 # Setup user, groups and configs
+    mkdir -p /usr/share/kibana/config \
+             /usr/share/kibana/data && \
+    cp /etc/kibana/kibana.yml /usr/share/kibana/config && \
     sed -i 's/#server.basePath: ""/server.basePath: "\/kibana"/' /usr/share/kibana/config/kibana.yml && \
     sed -i 's/#server.host: "localhost"/server.host: "0.0.0.0"/' /usr/share/kibana/config/kibana.yml && \
     sed -i 's/#elasticsearch.hosts: \["http:\/\/localhost:9200"\]/elasticsearch.hosts: \["http:\/\/elasticsearch:9200"\]/' /usr/share/kibana/config/kibana.yml && \
@@ -36,15 +34,19 @@ RUN apk -U --no-cache add \
     echo "kibana.autocompleteTerminateAfter: 1000000" >> /usr/share/kibana/config/kibana.yml && \
     rm -rf /usr/share/kibana/optimize/bundles/* && \
     /usr/share/kibana/bin/kibana --optimize --allow-root && \
-    addgroup -g 2000 kibana && \
-    adduser -S -H -s /bin/ash -u 2000 -D -g 2000 kibana && \
-    chown -R kibana:kibana /usr/share/kibana/ && \
+    groupmod -g 2000 kibana && \
+    usermod -u 2000 kibana && \
+    chown -R root:kibana /etc/kibana && \
+    chown -R kibana:kibana /usr/share/kibana/data \
+                           /run/kibana \
+			   /var/log/kibana \
+		     	   /var/lib/kibana && \
+    chmod 755 -R /usr/share/kibana/config && \
 #
 # Clean up
-    apk del --purge aria2 && \
-    rm -rf /root/* && \
-    rm -rf /tmp/* && \
-    rm -rf /var/cache/apk/*
+    apt-get purge aria2 -y && \
+    apt-get autoremove -y --purge && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /root/.cache /root/*
 #
 # Healthcheck
 HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:5601'

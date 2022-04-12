@@ -10,20 +10,16 @@ networks:
   conpot_local_guardian_ast:
   conpot_local_ipmi:
   conpot_local_kamstrup_382:
-  cyberchef_local:
+  ddospot_local:
   dicompot_local:
   dionaea_local:
-  ddospot_local:
   elasticpot_local:
   endlessh_local:
   hellpot_local:
   heralding_local:
-  honeypy_local:
-  honeysap_local:
   ipphoney_local:
   mailoney_local:
   medpot_local:
-  rdpy_local:
   redishoneypot_local:
   ewsposter_local:
   spiderfoot_local:
@@ -42,7 +38,7 @@ services:
      - adbhoney_local
     ports:
      - "5555:5555"
-    image: "dtagdevsec/adbhoney:2006"
+    image: "dtagdevsec/adbhoney:2204"
     read_only: true
     volumes:
      - /data/adbhoney/log:/opt/adbhoney/log
@@ -52,14 +48,14 @@ services:
   ciscoasa:
     container_name: ciscoasa
     restart: always
-    networks:
-      - ciscoasa_local
     tmpfs:
      - /tmp/ciscoasa:uid=2000,gid=2000
+    networks:
+     - ciscoasa_local
     ports:
      - "5000:5000/udp"
      - "8443:8443"
-    image: "dtagdevsec/ciscoasa:2006"
+    image: "dtagdevsec/ciscoasa:2204"
     read_only: true
     volumes:
      - /data/ciscoasa/log:/var/log/ciscoasa
@@ -72,7 +68,7 @@ services:
      - citrixhoneypot_local
     ports:
      - "443:443"
-    image: "dtagdevsec/citrixhoneypot:2006"
+    image: "dtagdevsec/citrixhoneypot:2204"
     read_only: true
     volumes:
      - /data/citrixhoneypot/logs:/opt/citrixhoneypot/logs       
@@ -94,7 +90,7 @@ services:
     ports:
      - "161:161/udp"
      - "2404:2404"
-    image: "dtagdevsec/conpot:2006"
+    image: "dtagdevsec/conpot:2204"
     read_only: true
     volumes:
      - /data/conpot/log:/var/log/conpot
@@ -115,7 +111,7 @@ services:
      - conpot_local_guardian_ast
     ports:
      - "10001:10001"
-    image: "dtagdevsec/conpot:2006"
+    image: "dtagdevsec/conpot:2204"
     read_only: true
     volumes:
      - /data/conpot/log:/var/log/conpot
@@ -136,7 +132,7 @@ services:
      - conpot_local_ipmi
     ports:
      - "623:623/udp"
-    image: "dtagdevsec/conpot:2006"
+    image: "dtagdevsec/conpot:2204"
     read_only: true
     volumes:
      - /data/conpot/log:/var/log/conpot
@@ -158,7 +154,7 @@ services:
     ports:
      - "1025:1025"
      - "50100:50100"
-    image: "dtagdevsec/conpot:2006"
+    image: "dtagdevsec/conpot:2204"
     read_only: true
     volumes:
      - /data/conpot/log:/var/log/conpot
@@ -175,7 +171,7 @@ services:
      - "123:123/udp"
 #     - "161:161/udp"
      - "1900:1900/udp"
-    image: "dtagdevsec/ddospot:2006"
+    image: "dtagdevsec/ddospot:2204"
     read_only: true
     volumes:
      - /data/ddospot/log:/opt/ddospot/ddospot/logs
@@ -193,7 +189,7 @@ services:
      - dicompot_local
     ports:
      - "11112:11112"
-    image: "dtagdevsec/dicompot:2006"
+    image: "dtagdevsec/dicompot:2204"
     read_only: true
     volumes:
      - /data/dicompot/log:/var/log/dicompot
@@ -220,11 +216,11 @@ services:
      - "1723:1723"
      - "1883:1883"
      - "3306:3306"
-     - "5060:5060"
-     - "5060:5060/udp"
-     - "5061:5061"
+     # - "5060:5060"
+     # - "5060:5060/udp"
+     # - "5061:5061"
      - "27017:27017"
-    image: "dtagdevsec/dionaea:2006"
+    image: "dtagdevsec/dionaea:2204"
     read_only: true
     volumes:
      - /data/dionaea/roots/ftp:/opt/dionaea/var/dionaea/roots/ftp
@@ -244,7 +240,7 @@ services:
      - elasticpot_local
     ports:
      - "9200:9200"
-    image: "dtagdevsec/elasticpot:2006"
+    image: "dtagdevsec/elasticpot:2204"
     read_only: true
     volumes:
      - /data/elasticpot/log:/opt/elasticpot/log
@@ -257,7 +253,7 @@ services:
      - endlessh_local
     ports:
      - "22:2222"
-    image: "dtagdevsec/endlessh:2006"
+    image: "dtagdevsec/endlessh:2204"
     read_only: true
     volumes:
      - /data/endlessh/log:/var/log/endlessh
@@ -272,7 +268,7 @@ services:
     network_mode: "host"
     cap_add:
      - NET_ADMIN
-    image: "dtagdevsec/glutton:2006"
+    image: "dtagdevsec/glutton:2204"
     read_only: true
     volumes:
      - /data/glutton/log:/var/log/glutton
@@ -303,41 +299,10 @@ services:
      - "1080:1080"
      - "5432:5432"
      - "5900:5900"
-    image: "dtagdevsec/heralding:2006"
+    image: "dtagdevsec/heralding:2204"
     read_only: true
     volumes:
      - /data/heralding/log:/var/log/heralding
-
-# HoneyPy service
-  honeypy:
-    container_name: honeypy
-    restart: always
-    networks:
-     - honeypy_local
-    ports:
-     - "7:7"
-     - "8:8"
-     - "2048:2048"
-     - "2323:2323"
-     - "2324:2324"
-     - "4096:4096"
-    # - "9200:9200"
-    image: "dtagdevsec/honeypy:2006"
-    read_only: true
-    volumes:
-     - /data/honeypy/log:/opt/honeypy/log
-
-# HoneySAP service
-  honeysap:
-    container_name: honeysap
-    restart: always
-    networks:
-     - honeysap_local
-    ports:
-     - "3299:3299"
-    image: "dtagdevsec/honeysap:2006"
-    volumes:
-     - /data/honeysap/log:/opt/honeysap/log
 
 # Ipphoney service
   ipphoney:
@@ -347,7 +312,7 @@ services:
      - ipphoney_local
     ports:
      - "631:631"
-    image: "dtagdevsec/ipphoney:2006"
+    image: "dtagdevsec/ipphoney:2204"
     read_only: true
     volumes:
      - /data/ipphoney/log:/opt/ipphoney/log
@@ -366,7 +331,7 @@ services:
      - mailoney_local
     ports:
      - "25:25"
-    image: "dtagdevsec/mailoney:2006"
+    image: "dtagdevsec/mailoney:2204"
     read_only: true
     volumes:
      - /data/mailoney/log:/opt/mailoney/logs
@@ -379,31 +344,10 @@ services:
      - medpot_local
     ports:
      - "2575:2575"
-    image: "dtagdevsec/medpot:2006"
+    image: "dtagdevsec/medpot:2204"
     read_only: true
     volumes:
      - /data/medpot/log/:/var/log/medpot
-
-# Rdpy service
-  rdpy:
-    container_name: rdpy
-    extra_hosts:
-     - hpfeeds.example.com:127.0.0.1
-    restart: always
-    environment:
-     - HPFEEDS_SERVER=hpfeeds.example.com
-     - HPFEEDS_IDENT=user
-     - HPFEEDS_SECRET=pass
-     - HPFEEDS_PORT=65000
-     - SERVERID=id
-    networks:
-     - rdpy_local
-    ports:
-     - "3389:3389"
-    image: "dtagdevsec/rdpy:2006"
-    read_only: true
-    volumes:
-     - /data/rdpy/log:/var/log/rdpy
 
 # Redishoneypot service
   redishoneypot:
@@ -413,7 +357,7 @@ services:
      - redishoneypot_local
     ports:
      - "6379:6379"
-    image: "dtagdevsec/redishoneypot:2006"
+    image: "dtagdevsec/redishoneypot:2204"
     read_only: true
     volumes:
      - /data/redishoneypot/log:/var/log/redishoneypot
@@ -426,7 +370,7 @@ services:
      - hellpot_local
     ports:
      - "80:8080"
-    image: "dtagdevsec/hellpot:2006"
+    image: "dtagdevsec/hellpot:2204"
     read_only: true
     volumes:
      - /data/hellpot/log:/var/log/hellpot
@@ -444,7 +388,7 @@ services:
      - NET_ADMIN
      - SYS_NICE
      - NET_RAW
-    image: "dtagdevsec/fatt:2006"
+    image: "dtagdevsec/fatt:2204"
     volumes:
      - /data/fatt/log:/opt/fatt/log
 
@@ -453,7 +397,7 @@ services:
     container_name: p0f
     restart: always
     network_mode: "host"
-    image: "dtagdevsec/p0f:2006"
+    image: "dtagdevsec/p0f:2204"
     read_only: true
     volumes:
      - /data/p0f/log:/var/log/p0f
@@ -465,12 +409,14 @@ services:
     environment:
     # For ET Pro ruleset replace "OPEN" with your OINKCODE
      - OINKCODE=OPEN
+    # Loading externel Rules from URL 
+    # - FROMURL="https://username:password@yoururl.com|https://username:password@otherurl.com"
     network_mode: "host"
     cap_add:
      - NET_ADMIN
      - SYS_NICE
      - NET_RAW
-    image: "dtagdevsec/suricata:2006"
+    image: "dtagdevsec/suricata:2204"
     volumes:
      - /data/suricata/log:/var/log/suricata
 
@@ -479,17 +425,6 @@ services:
 #### Tools
 ##################
 
-# Cyberchef service
-  cyberchef:
-    container_name: cyberchef
-    restart: always
-    networks:
-     - cyberchef_local
-    ports:
-     - "127.0.0.1:64299:8000"
-    image: "dtagdevsec/cyberchef:2006"
-    read_only: true
-
 #### ELK
 ## Elasticsearch service
   elasticsearch:
@@ -497,7 +432,7 @@ services:
     restart: always
     environment:
      - bootstrap.memory_lock=true
-#     - ES_JAVA_OPTS=-Xms2048m -Xmx2048m
+     - ES_JAVA_OPTS=-Xms2048m -Xmx2048m
      - ES_TMPDIR=/tmp
     cap_add:
      - IPC_LOCK
@@ -508,10 +443,10 @@ services:
       nofile:
         soft: 65536
         hard: 65536
-#    mem_limit: 4g
+    mem_limit: 4g
     ports:
      - "127.0.0.1:64298:9200"
-    image: "dtagdevsec/elasticsearch:2006"
+    image: "dtagdevsec/elasticsearch:2204"
     volumes:
      - /data:/data
 
@@ -522,36 +457,65 @@ services:
     depends_on:
       elasticsearch:
         condition: service_healthy
+    mem_limit: 1g
     ports:
      - "127.0.0.1:64296:5601"
-    image: "dtagdevsec/kibana:2006"
+    image: "dtagdevsec/kibana:2204"
 
 ## Logstash service
   logstash:
     container_name: logstash
     restart: always
-#    environment:
-#     - LS_JAVA_OPTS=-Xms2048m -Xmx2048m
+    environment:
+     - LS_JAVA_OPTS=-Xms1024m -Xmx1024m
     depends_on:
       elasticsearch:
         condition: service_healthy
     env_file:
      - /opt/tpot/etc/compose/elk_environment
-    image: "dtagdevsec/logstash:2006"
+    mem_limit: 2g
+    image: "dtagdevsec/logstash:2204"
     volumes:
      - /data:/data
 
-## Elasticsearch-head service
-  head:
-    container_name: head
+## Map Redis Service
+  map_redis:
+    container_name: map_redis
+    restart: always
+    stop_signal: SIGKILL
+    tty: true
+    image: "dtagdevsec/redis:2204"
+    read_only: true
+
+## Map Web Service
+  map_web:
+    container_name: map_web
+    restart: always
+    environment:
+     - MAP_COMMAND=AttackMapServer.py
+    env_file:
+     - /opt/tpot/etc/compose/elk_environment
+    stop_signal: SIGKILL
+    tty: true
+    ports:
+     - "127.0.0.1:64299:64299"
+    image: "dtagdevsec/map:2204"
+
+## Map Data Service
+  map_data:
+    container_name: map_data
     restart: always
     depends_on:
       elasticsearch:
         condition: service_healthy
-    ports:
-     - "127.0.0.1:64302:9100"
-    image: "dtagdevsec/head:2006"
-    read_only: true
+    environment:
+     - MAP_COMMAND=DataServer_v2.py
+    env_file:
+     - /opt/tpot/etc/compose/elk_environment
+    stop_signal: SIGKILL
+    tty: true
+    image: "dtagdevsec/map:2204"
+#### /ELK
 
 # Ewsposter service
   ewsposter:
@@ -570,7 +534,7 @@ services:
      - EWS_HPFEEDS_FORMAT=json
     env_file:
      - /opt/tpot/etc/compose/elk_environment
-    image: "dtagdevsec/ewsposter:2006"
+    image: "dtagdevsec/ewsposter:2204"
     volumes:
      - /data:/data
      - /data/ews/conf/ews.ip:/opt/ewsposter/ews.ip
@@ -579,34 +543,24 @@ services:
   nginx:
     container_name: nginx
     restart: always
-    environment:
-    ### If set to YES all changes within Heimdall will remain for the next start
-    ### Make sure to uncomment the corresponding volume statements below, or the setting will prevent a successful start of T-Pot.
-     - HEIMDALL_PERSIST=NO
     tmpfs:
      - /var/tmp/nginx/client_body
      - /var/tmp/nginx/proxy
      - /var/tmp/nginx/fastcgi
      - /var/tmp/nginx/uwsgi
-     - /var/tmp/nginx/scgi 
+     - /var/tmp/nginx/scgi
      - /run
-     - /var/log/php7/
-     - /var/lib/nginx/tmp:uid=100,gid=82 
-     - /var/lib/nginx/html/storage/logs:uid=100,gid=82
-     - /var/lib/nginx/html/storage/framework/views:uid=100,gid=82
+     - /var/lib/nginx/tmp:uid=100,gid=82
     network_mode: "host"
     ports:
      - "64297:64297"
      - "127.0.0.1:64304:64304"
-    image: "dtagdevsec/nginx:2006"
+    image: "dtagdevsec/nginx:2204"
     read_only: true
     volumes:
      - /data/nginx/cert/:/etc/nginx/cert/:ro
      - /data/nginx/conf/nginxpasswd:/etc/nginx/nginxpasswd:ro
      - /data/nginx/log/:/var/log/nginx/
-    ### Enable the following volumes if you set HEIMDALL_PERSIST=YES
-    # - /data/nginx/heimdall/database:/var/lib/nginx/html/database
-    # - /data/nginx/heimdall/storage:/var/lib/nginx/html/storage
 
 # Spiderfoot service
   spiderfoot:
@@ -616,6 +570,6 @@ services:
      - spiderfoot_local
     ports:
      - "127.0.0.1:64303:8080"
-    image: "dtagdevsec/spiderfoot:2006"
+    image: "dtagdevsec/spiderfoot:2204"
     volumes:
-     - /data/spiderfoot/spiderfoot.db:/home/spiderfoot/spiderfoot.db
+     - /data/spiderfoot:/home/spiderfoot/.spiderfoot

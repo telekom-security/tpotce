@@ -1,0 +1,3 @@
+- pipeline.id: http_output
+  path.config: "/etc/logstash/http_output.conf"
+  pipeline.ecs_compatibility: disabled

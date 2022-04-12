@@ -13,12 +13,14 @@ services:
     tmpfs:
      - /tmp/cowrie:uid=2000,gid=2000
      - /tmp/cowrie/data:uid=2000,gid=2000
+#    cpu_count: 1
+#    cpus: 0.25
     networks:
      - cowrie_local
     ports:
      - "22:22"
      - "23:23"
-    image: "dtagdevsec/cowrie:2006"
+    image: "dtagdevsec/cowrie:2204"
     read_only: true
     volumes:
      - /data/cowrie/downloads:/home/cowrie/cowrie/dl

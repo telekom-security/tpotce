@@ -11,7 +11,7 @@
         <!-- Core value that can be retrieved from the databus by key -->
         <key_value_mappings>
             <key name="power_simulator">
-                <value type="function">conpot.protocols.kamstrup.usage_simulator.UsageSimulator</value>
+                <value type="function">conpot.emulators.kamstrup.usage_simulator.UsageSimulator</value>
             </key>
             <key name="register_1024">
                 <value type="value">0</value>

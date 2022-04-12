@@ -1,0 +1,28 @@
+version: '2.3'
+
+networks:
+  rdpy_local:
+
+services:
+
+# Rdpy service
+  rdpy:
+    build: .
+    container_name: rdpy
+    extra_hosts:
+     - hpfeeds.example.com:127.0.0.1
+    restart: always
+    environment:
+     - HPFEEDS_SERVER=hpfeeds.example.com
+     - HPFEEDS_IDENT=user
+     - HPFEEDS_SECRET=pass
+     - HPFEEDS_PORT=65000
+     - SERVERID=id
+    networks:
+     - rdpy_local
+    ports:
+     - "3389:3389"
+    image: "dtagdevsec/rdpy:2204"
+    read_only: true
+    volumes:
+     - /data/rdpy/log:/var/log/rdpy

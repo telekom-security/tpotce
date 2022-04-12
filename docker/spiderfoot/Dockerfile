@@ -1,4 +1,7 @@
-FROM alpine:3.14
+FROM alpine:3.15
+#
+# Include dist
+COPY dist/ /root/dist/
 #
 # Get and install dependencies & packages
 RUN apk -U --no-cache add \
@@ -18,7 +21,31 @@ RUN apk -U --no-cache add \
             openssl-dev \
             python3 \
             python3-dev \
+	    py3-cryptography \
+	    py3-ipaddr \
+	    py3-beautifulsoup4 \
+	    py3-dnspython \
+	    py3-exifread \
+	    py3-future \
+	    py3-jaraco.classes \
+	    py3-jaraco.context \
+	    py3-jaraco.functools \
+	    py3-lxml \
+	    py3-mako \
+	    py3-more-itertools \
+	    py3-netaddr \
+	    py3-networkx \
+	    py3-openssl \
+	    py3-pillow \
+	    py3-portend \
+	    py3-pypdf2 \
+	    py3-phonenumbers \
             py3-pip \
+	    py3-pysocks \
+	    py3-requests \
+	    py3-tempora \
+	    py3-wheel \
+	    py3-xlsxwriter \
             swig \
 	    tinyxml \
 	    tinyxml-dev \
@@ -29,11 +56,12 @@ RUN apk -U --no-cache add \
     adduser -S -s /bin/ash -u 2000 -D -g 2000 spiderfoot && \
 #
 # Install spiderfoot 
-    git clone --depth=1 -b v3.4 https://github.com/smicallef/spiderfoot /home/spiderfoot && \
+    git clone --depth=1 -b v3.5 https://github.com/smicallef/spiderfoot /home/spiderfoot && \
     cd /home/spiderfoot && \
     pip3 install --upgrade pip && \
-    pip3 install --no-cache-dir wheel && \ 
+    cp /root/dist/requirements.txt . && \
     pip3 install --no-cache-dir -r requirements.txt && \ 
+    mkdir -p /home/spiderfoot/.spiderfoot/logs && \
     chown -R spiderfoot:spiderfoot /home/spiderfoot && \
     sed -i "s#'root': '\/'#'root': '\/spiderfoot'#" /home/spiderfoot/sf.py && \
     sed -i "s#'root', '\/'#'root', '\/spiderfoot'#" /home/spiderfoot/sf.py && \
@@ -50,13 +78,12 @@ RUN apk -U --no-cache add \
                     python3-dev \
 		    swig \
 		    tinyxml-dev && \
-    rm -rf /var/cache/apk/*
+    rm -rf /var/cache/apk/* /home/spiderfoot/.git
 #
 # Healthcheck
-#HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:8080'
 HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:8080/spiderfoot/'
 #
 # Set user, workdir and start spiderfoot
 USER spiderfoot:spiderfoot
 WORKDIR /home/spiderfoot
-CMD ["/usr/bin/python3.9", "sf.py","-l", "0.0.0.0:8080"]
+CMD echo -n >> /home/spiderfoot/.spiderfoot/spiderfoot.db && exec /usr/bin/python3.9 sf.py -l 0.0.0.0:8080

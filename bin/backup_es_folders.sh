@@ -1,9 +1,18 @@
 #!/bin/bash
 # Run as root only.
 myWHOAMI=$(whoami)
-if [ "$myWHOAMI" != "root" ]
+if [ "$myWHOAMI" != "root" ];
   then
     echo "Need to run as root ..."
+    exit
+fi
+
+if [ "$1" == "" ] || [ "$1" != "all" ] && [ "$1" != "base" ];
+  then
+    echo "Usage: backup_es_folders [all, base]"
+    echo "       all  = backup all ES folder"
+    echo "       base = backup only Kibana index".
+    echo
     exit
 fi
 
@@ -25,7 +34,7 @@ myCOUNT=1
 myDATE=$(date +%Y%m%d%H%M)
 myELKPATH="/data/elk/data"
 myKIBANAINDEXNAME=$(curl -s -XGET ''$myES'_cat/indices/.kibana' | awk '{ print $4 }')
-myKIBANAINDEXPATH=$myELKPATH/nodes/0/indices/$myKIBANAINDEXNAME
+myKIBANAINDEXPATH=$myELKPATH/indices/$myKIBANAINDEXNAME
 
 # Let's ensure normal operation on exit or if interrupted ...
 function fuCLEANUP {
@@ -42,5 +51,11 @@ sleep 2
 
 # Backup DB in 2 flavors
 echo "### Now backing up Elasticsearch folders ..."
-tar cvfz "elkall_"$myDATE".tgz" $myELKPATH
-tar cvfz "elkbase_"$myDATE".tgz" $myKIBANAINDEXPATH
+if [ "$1" == "all" ];
+  then
+    tar cvfz "elkall_"$myDATE".tgz" $myELKPATH
+elif [ "$1" == "base" ];
+  then
+    tar cvfz "elkbase_"$myDATE".tgz" $myKIBANAINDEXPATH
+fi
+

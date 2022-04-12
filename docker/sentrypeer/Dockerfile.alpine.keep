@@ -1,0 +1,96 @@
+FROM alpine:3.15 as builder
+#
+RUN apk -U add --no-cache \
+            argon2-dev \
+            autoconf \
+	    automake \
+	    autoconf-archive \
+	    build-base \
+	    curl-dev \
+	    cmocka-dev \
+	    czmq-dev \
+	    git \
+	    jansson-dev \
+	    libtool \
+	    libmicrohttpd-dev \
+            pcre2-dev \
+	    readline-dev \
+	    sqlite-dev \
+	    util-linux-dev \
+	    zeromq-dev
+#
+RUN apk -U add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/testing \
+            libosip2-dev
+RUN apk -U add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/community \
+            asio-dev \
+            msgpack-c-dev \
+	    msgpack-cxx-dev
+#
+# Download and build Zyre
+WORKDIR /tmp
+RUN git clone https://github.com/savoirfairelinux/opendht dht 
+WORKDIR /tmp/dht
+RUN ./autogen.sh
+RUN ./configure
+RUN make
+RUN make install
+RUN ldconfig /etc/ld.so.conf.d
+#
+WORKDIR /tmp
+RUN git clone --quiet https://github.com/zeromq/zyre zyre
+WORKDIR /tmp/zyre
+RUN ./autogen.sh 2> /dev/null
+RUN ./configure --quiet --without-docs
+RUN make
+RUN make install
+RUN ldconfig /etc/ld.so.conf.d
+#
+# Download SentryPeer sources and build
+WORKDIR /
+RUN git clone https://github.com/SentryPeer/SentryPeer.git
+#
+WORKDIR /SentryPeer
+#
+RUN cp -R /tmp/dht/* .
+RUN ./bootstrap.sh
+RUN ./configure
+RUN make CPPFLAGS=-D_POSIX_C_SOURCE=199309L
+RUN make check
+RUN make install
+RUN tar cvfz sp.tgz /SentryPeer/* && \
+    mv sp.tgz /
+#
+FROM alpine:3.15
+#
+#COPY --from=builder /sp.tgz /root
+COPY --from=builder /SentryPeer/sentrypeer /opt/sentrypeer/
+#
+# Install packages
+RUN apk -U add --no-cache \
+            jansson \
+            libmicrohttpd \
+	    libuuid \
+            pcre2 \
+	    sqlite-libs && \
+    apk -U add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/testing \
+            libosip2 && \
+#
+# Extract from builder
+#    mkdir /opt/sentrypeer && \
+#    tar xvfz /root/sp.tgz --strip-components=1 -C /opt/sentrypeer/ && \
+#
+# Setup user, groups and configs
+    mkdir -p /var/log/sentrypeer && \
+    addgroup -g 2000 sentrypeer && \
+    adduser -S -H -s /bin/ash -u 2000 -D -g 2000 sentrypeer && \
+    chown -R sentrypeer:sentrypeer /opt/sentrypeer && \
+#
+# Clean up
+    rm -rf /root/* && \
+    rm -rf /var/cache/apk/*
+#
+# Set workdir and start sentrypeer
+STOPSIGNAL SIGKILL
+USER sentrypeer:sentrypeer
+WORKDIR /opt/sentrypeer/
+CMD ./sentrypeer -draws

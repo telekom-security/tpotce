@@ -1,0 +1,174 @@
+/* 
+// ╔╗ ╔═╗╔╗╔╔╦╗╔═╗
+// ╠╩╗║╣ ║║║ ║ ║ ║
+// ╚═╝╚═╝╝╚╝ ╩ ╚═╝ 
+*/
+
+@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;700&display=swap');
+
+/* V A R I A B L E S */
+
+:root {
+  /* Fonts  */
+  --fsg: 12vh; /* Time and Greetings */
+  --fsm: 8vh; /* Date */
+  --fss: 3vh; /* Greetings and Weather widger */
+  --fses: 2vh; /* Links List */
+
+  --iconsize: 3vh;
+
+  /* Dark theme  */
+  --accent: #E20074; /* Hover color */
+  --bg: #19171a; /* Background color */
+  --sbg: #201e21a4; /* Cards color */
+  --fg: #d8dee9; /* Foreground color */
+  --sfg: #ffffff; /* Secondary Foreground color */
+
+  /* Image background  */
+  --imgbg: url(assets/background.jpg);
+  --imgcol: linear-gradient(
+    rgba(0, 0, 0, 0.1),
+    rgba(0, 0, 0, 0.1)
+  ); /* Filter color */
+}
+
+
+/* S T Y L E S */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Open Sans', sans-serif;
+  transition: 0.2s ease-in-out;
+}
+
+.notransition {
+  -webkit-transition: none;
+  -moz-transition: none;
+  -o-transition: none;
+  transition: none;
+}
+
+.withImageBackground {
+  background-image: var(--imgcol), var(--imgbg);
+  background-size: cover;
+}
+
+body {
+  width: 100vw;
+  height: 100vh;
+  background-color: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.container {
+  width: 145vh;
+  height: 85vh;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  grid-gap: 30px;
+  padding: 20px;
+}
+
+.card {
+  background-color: var(--sbg);
+  box-shadow: 0 5px 7px rgba(0, 0, 0, 0.4);
+  border-radius: 5px;
+}
+
+.card:hover {
+  transform: translateY(-0.5rem);
+  box-shadow: 0 10px 10px rgba(226, 0, 116, 0.4);
+}
+
+.timeBlock {
+  grid-row: 1 / span 2;
+  grid-column: 1 / span 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.clock {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#hour,
+#separator,
+#minutes {
+  font-size: var(--fsg);
+  font-weight: bolder;
+  color: var(--fg);
+}
+
+#greetings {
+  font-size: var(--fss);
+  color: var(--fg);
+}
+
+.list {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+}
+
+.list__1 {
+  grid-column: 1;
+  grid-row: 3 / span 2;
+}
+.list__2 {
+  grid-column: 2;
+  grid-row: 3 / span 2;
+}
+.list__head {
+  margin-top: 3vh;
+  margin-bottom: 2vh;
+  color: var(--fg);
+  width: var(--iconsize);
+  height: var(--iconsize);
+}
+.list__link {
+  text-decoration: none;
+  font-size: var(--fses);
+  color: var(--fg);
+  margin-top: 1vh;
+  padding: 8px 12px;
+  border-radius: 5px;
+  font-weight: bolder;
+  text-align: center;
+  width: 80%;
+}
+.list__link:hover {
+  background-color: var(--accent);
+  color: var(--sfg);
+}
+
+/* M E D I A - Q U E R I E S */
+
+@media only screen and (max-width: 68.75em) {
+  .container {
+    grid-gap: 20px;
+    padding: 40px;
+  }
+
+  .timeBlock {
+    grid-row: 1 / span 2;
+    grid-column: 1 / span 4;
+  }
+
+  #greetings {
+    font-size: var(--fss);
+  }
+
+  .list {
+    display: none;
+  }
+
+}

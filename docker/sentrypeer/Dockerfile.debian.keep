@@ -1,0 +1,95 @@
+FROM debian:bullseye as builder
+ENV DEBIAN_FRONTEND noninteractive
+#
+RUN apt-get update
+RUN apt-get dist-upgrade -y \
+            autoconf \
+	    automake \
+	    autoconf-archive \
+	    build-essential \
+	    git \
+	    libcmocka-dev \
+	    libcurl4-gnutls-dev \
+	    libczmq-dev \
+	    libjansson-dev \
+	    libmicrohttpd-dev \
+	    libopendht-dev \
+            libosip2-dev \
+	    libpcre2-dev \
+	    libsqlite3-dev \
+	    libtool
+#
+# Download and build OpenDHT
+WORKDIR /tmp
+RUN git clone https://github.com/savoirfairelinux/opendht opendht
+WORKDIR /tmp/opendht
+RUN ./autogen.sh
+RUN ./configure
+RUN make
+RUN make install
+RUN ldconfig
+#
+# Download and build Zyre
+WORKDIR /tmp
+RUN git clone https://github.com/zeromq/zyre -b v2.0.1 zyre
+WORKDIR /tmp/zyre
+RUN ./autogen.sh
+RUN ./configure --without-docs
+RUN make
+RUN make install
+RUN ldconfig
+#
+# Download and build SentryPeer
+WORKDIR /
+RUN git clone https://github.com/SentryPeer/SentryPeer -b v1.0.0
+#
+WORKDIR /SentryPeer
+#
+RUN cp -r /tmp/opendht .
+RUN ./bootstrap.sh
+RUN ./configure
+RUN make
+RUN make check
+RUN make install
+#RUN tar cvfz sp.tgz /SentryPeer/* && \
+#    mv sp.tgz /
+#RUN exit 1
+#
+FROM debian:bullseye
+#
+#COPY --from=builder /sp.tgz /root
+COPY --from=builder /SentryPeer/sentrypeer /opt/sentrypeer/
+#
+# Install packages
+RUN apt-get update && \
+    apt-get dist-upgrade -y && \
+    apt-get install -y \
+            libcmocka0 \
+            libcurl4 \
+            libczmq4 \
+            libjansson4 \
+            libmicrohttpd12 \
+            libosip2-11 \
+            libsqlite3-0 \
+            pcre2-utils && \
+#
+# Extract from builder
+#    mkdir /opt/sentrypeer && \
+#    tar xvfz /root/sp.tgz --strip-components=1 -C /opt/sentrypeer/ && \
+#
+# Setup user, groups and configs
+    mkdir -p /var/log/sentrypeer && \
+    addgroup --gid 2000 sentrypeer && \
+    adduser --system --no-create-home --shell /bin/bash --uid 2000 --disabled-password --disabled-login --gid 2000 sentrypeer && \
+    chown -R sentrypeer:sentrypeer /opt/sentrypeer && \
+#
+# Clean up
+    rm -rf /root/* && \
+    apt-get autoremove -y --purge && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+#
+# Set workdir and start sentrypeer
+STOPSIGNAL SIGKILL
+USER sentrypeer:sentrypeer
+WORKDIR /opt/sentrypeer/
+CMD ./sentrypeer -draws

@@ -10,11 +10,13 @@ services:
     environment:
     # For ET Pro ruleset replace "OPEN" with your OINKCODE
      - OINKCODE=OPEN
+    # Loading externel Rules from URL 
+    # - FROMURL="https://username:password@yoururl.com|https://username:password@otherurl.com"
     network_mode: "host"
     cap_add:
      - NET_ADMIN
      - SYS_NICE
      - NET_RAW
-    image: "dtagdevsec/suricata:2006"
+    image: "dtagdevsec/suricata:2204"
     volumes:
      - /data/suricata/log:/var/log/suricata

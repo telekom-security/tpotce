@@ -28,31 +28,31 @@ variable "ec2_instance_type" {
   default = "t3.large"
 }
 
-# Refer to https://wiki.debian.org/Cloud/AmazonEC2Image/Buster
+# Refer to https://wiki.debian.org/Cloud/AmazonEC2Image/Bullseye
 variable "ec2_ami" {
   type = map(string)
   default = {
-    "af-south-1"     = "ami-0272d4f5fb1b98a0d"
-    "ap-east-1"      = "ami-00d242e2f23abf6d2"
-    "ap-northeast-1" = "ami-001c6b4d627e8be53"
-    "ap-northeast-2" = "ami-0d841ed4bf80e764c"
-    "ap-northeast-3" = "ami-01b0a01d770321320"
-    "ap-south-1"     = "ami-04ba7e5bd7c6f6929"
-    "ap-southeast-1" = "ami-0dca3eabb09c32ae2"
-    "ap-southeast-2" = "ami-03ff8684dc585ddae"
-    "ca-central-1"   = "ami-08af22d7c0382fd83"
-    "eu-central-1"   = "ami-0f41e297b3c53fab8"
-    "eu-north-1"     = "ami-0bbc6a00971c77d6d"
-    "eu-south-1"     = "ami-03ff8684dc585ddae"
-    "eu-west-1"      = "ami-080684ad73d431a05"
-    "eu-west-2"      = "ami-04b259723891dfc53"
-    "eu-west-3"      = "ami-00662eead74f66895"
-    "me-south-1"     = "ami-021a6c6047091ab5b"
-    "sa-east-1"      = "ami-0aac091cce68a049c"
-    "us-east-1"      = "ami-05ad4ed7f9c48178b"
-    "us-east-2"      = "ami-07640f3f27c0ad3d3"
-    "us-west-1"      = "ami-0c053f1d5f22eb09f"
-    "us-west-2"      = "ami-090cd3aed687b1ee1"
+    "af-south-1"     = "ami-0c372f041acae6d49"
+    "ap-east-1"      = "ami-079b8d011d4655385"
+    "ap-northeast-1" = "ami-08dbbf1c0485a4aa8"
+    "ap-northeast-2" = "ami-0269fe7d013b8e2dd"
+    "ap-northeast-3" = "ami-0848d1e5fb6e3e3da"
+    "ap-south-1"     = "ami-020d429f17c9f1d0a"
+    "ap-southeast-1" = "ami-09625a221230d9fe6"
+    "ap-southeast-2" = "ami-03cbc6cddb06af2c2"
+    "ca-central-1"   = "ami-09125623b02302014"
+    "eu-central-1"   = "ami-00c36c60f07e21791"
+    "eu-north-1"     = "ami-052bea934e2d9dbfe"
+    "eu-south-1"     = "ami-04e2bb16d37324719"
+    "eu-west-1"      = "ami-0f87948fe2cf1b2a4"
+    "eu-west-2"      = "ami-02ed1bc837487d535"
+    "eu-west-3"      = "ami-080efd2add7e29430"
+    "me-south-1"     = "ami-0dbde382c834c4a72"
+    "sa-east-1"      = "ami-0a0792814cb068077"
+    "us-east-1"      = "ami-05dd1b6e7ef6f8378"
+    "us-east-2"      = "ami-04dd0542609808c50"
+    "us-west-1"      = "ami-07af5f877b3db9f73"
+    "us-west-2"      = "ami-0d0d8694ba492c02b"
   }
 }
 
@@ -74,7 +74,7 @@ variable "linux_password" {
 ## These will go in the generated tpot.conf file ##
 variable "tpot_flavor" {
   default     = "STANDARD"
-  description = "Specify your tpot flavor [STANDARD, SENSOR, INDUSTRIAL, COLLECTOR, NEXTGEN, MEDICAL]"
+  description = "Specify your tpot flavor [STANDARD, HIVE, HIVE_SENSOR, INDUSTRIAL, LOG4J, MEDICAL, MINI, SENSOR]"
 }
 
 variable "web_user" {

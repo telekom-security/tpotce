@@ -1,0 +1,46 @@
+version: '2.3'
+
+#networks:
+#  map_local:
+
+services:
+
+# Map Redis Service
+  map_redis:
+    container_name: map_redis
+    restart: always
+    stop_signal: SIGKILL
+    tty: true
+    image: "dtagdevsec/redis:2204"
+    read_only: true
+
+# Map Web Service
+  map_web:
+    build: .
+    container_name: map_web
+    restart: always
+    environment:
+     - MAP_COMMAND=AttackMapServer.py
+    env_file:
+     - /opt/tpot/etc/compose/elk_environment
+    stop_signal: SIGKILL
+    tty: true
+    ports:
+     - "127.0.0.1:64299:64299"
+    image: "dtagdevsec/map:2204"
+    depends_on:
+     - map_redis
+
+# Map Data Service
+  map_data:
+    container_name: map_data
+    restart: always
+    environment:
+     - MAP_COMMAND=DataServer_v2.py
+    env_file:
+     - /opt/tpot/etc/compose/elk_environment
+    stop_signal: SIGKILL
+    tty: true
+    image: "dtagdevsec/map:2204"
+    depends_on:
+     - map_redis

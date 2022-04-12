@@ -1,10 +1,10 @@
-FROM alpine:3.14
+FROM alpine:3.15
 #
 # Include dist
-ADD dist/ /root/dist/
+COPY dist/ /root/dist/
 #
 # Install packages
-RUN apk -U add \
+RUN apk -U --no-cache add \
              build-base \
 	     ca-certificates \
              git \
@@ -13,9 +13,19 @@ RUN apk -U add \
              openssl-dev \
 	     postgresql-dev \
              py3-cryptography \
+	     py3-elasticsearch \
+	     py3-geoip2 \
+	     py3-maxminddb \
              py3-mysqlclient \
+	     py3-packaging \
+	     py3-psycopg2 \
+	     py3-redis \
              py3-requests \
+	     py3-service_identity \
+	     py3-setuptools \
 	     py3-pip \
+	     py3-twisted \
+	     py3-wheel \
              python3 \
              python3-dev && \
     mkdir -p /opt && \
@@ -23,6 +33,7 @@ RUN apk -U add \
     git clone https://gitlab.com/bontchev/elasticpot.git/ && \
     cd elasticpot && \
     git checkout d12649730d819bd78ea622361b6c65120173ad45 && \
+    cp /root/dist/requirements.txt . && \
     pip3 install -r requirements.txt && \
 #
 # Setup user, groups and configs
@@ -38,7 +49,7 @@ RUN apk -U add \
 		    postgresql-dev \
 		    python3-dev && \
     rm -rf /root/* && \
-    rm -rf /var/cache/apk/*
+    rm -rf /var/cache/apk/* /opt/elasticpot/.git
 #
 # Start elasticpot
 STOPSIGNAL SIGINT

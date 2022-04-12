@@ -23,6 +23,8 @@ services:
      - CONPOT_TMP=/tmp/conpot
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
+#    cpu_count: 1
+#    cpus: 0.25    
     networks:
      - conpot_local_default
     ports:
@@ -35,14 +37,13 @@ services:
      - "2121:21"
      - "44818:44818"
      - "47808:47808/udp"
-    image: "dtagdevsec/conpot:2006"
+    image: "dtagdevsec/conpot:2204"
     read_only: true
     volumes:
      - /data/conpot/log:/var/log/conpot
 
 # Conpot IEC104 service
   conpot_IEC104:
-    build: .
     container_name: conpot_IEC104
     restart: always
     environment:
@@ -53,19 +54,20 @@ services:
      - CONPOT_TMP=/tmp/conpot
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
+#    cpu_count: 1
+#    cpus: 0.25
     networks:
      - conpot_local_IEC104
     ports:
 #     - "161:161/udp"
      - "2404:2404"
-    image: "dtagdevsec/conpot:2006"
+    image: "dtagdevsec/conpot:2204"
     read_only: true
     volumes:
      - /data/conpot/log:/var/log/conpot
 
 # Conpot guardian_ast service
   conpot_guardian_ast:
-    build: .
     container_name: conpot_guardian_ast
     restart: always
     environment:
@@ -76,18 +78,19 @@ services:
      - CONPOT_TMP=/tmp/conpot
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
+#    cpu_count: 1
+#    cpus: 0.25
     networks:
      - conpot_local_guardian_ast
     ports:
      - "10001:10001"
-    image: "dtagdevsec/conpot:2006"
+    image: "dtagdevsec/conpot:2204"
     read_only: true
     volumes:
      - /data/conpot/log:/var/log/conpot
 
 # Conpot ipmi
   conpot_ipmi:
-    build: .
     container_name: conpot_ipmi
     restart: always
     environment:
@@ -98,18 +101,19 @@ services:
      - CONPOT_TMP=/tmp/conpot
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
+#    cpu_count: 1
+#    cpus: 0.25
     networks:
      - conpot_local_ipmi
     ports:
      - "623:623/udp"
-    image: "dtagdevsec/conpot:2006"
+    image: "dtagdevsec/conpot:2204"
     read_only: true
     volumes:
      - /data/conpot/log:/var/log/conpot
 
 # Conpot kamstrup_382
   conpot_kamstrup_382:
-    build: .
     container_name: conpot_kamstrup_382
     restart: always
     environment:
@@ -120,12 +124,14 @@ services:
      - CONPOT_TMP=/tmp/conpot
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
+#    cpu_count: 1
+#    cpus: 0.25
     networks:
      - conpot_local_kamstrup_382
     ports:
      - "1025:1025"
      - "50100:50100"
-    image: "dtagdevsec/conpot:2006"
+    image: "dtagdevsec/conpot:2204"
     read_only: true
     volumes:
      - /data/conpot/log:/var/log/conpot

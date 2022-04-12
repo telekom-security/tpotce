@@ -18,11 +18,16 @@ myCONF_FILE="/root/installer/iso.conf"
 myPROGRESSBOXCONF=" --backtitle "$myBACKTITLE" --progressbox 24 80"
 mySITES="https://ghcr.io https://github.com https://pypi.python.org https://debian.org"
 myTPOTCOMPOSE="/opt/tpot/etc/tpot.yml"
-myLSB_STABLE_SUPPORTED="stretch buster"
+myLSB_STABLE_SUPPORTED="bullseye"
 myLSB_TESTING_SUPPORTED="stable"
 myREMOTESITES="https://hub.docker.com https://github.com https://pypi.python.org https://debian.org https://listbot.sicherheitstacho.eu"
 myPREINSTALLPACKAGES="aria2 apache2-utils cracklib-runtime curl dialog figlet fuse grc libcrack2 libpq-dev lsb-release net-tools software-properties-common toilet"
-myINSTALLPACKAGES="aria2 apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker console-setup console-setup-linux cracklib-runtime curl debconf-utils dialog dnsutils docker.io docker-compose ethtool fail2ban figlet genisoimage git glances grc haveged html2text htop iptables iw jq kbd libcrack2 libltdl7 libpam-google-authenticator man mosh multitail net-tools npm ntp openssh-server openssl pass pigz prips software-properties-common sshpass syslinux psmisc pv python3-pip toilet unattended-upgrades unzip vim wget wireless-tools wpasupplicant"
+if [ -f "../../packages.txt" ];
+  then myINSTALLPACKAGESFILE="../../packages.txt"
+elif [ -f "/opt/tpot/packages.txt" ];
+  then myINSTALLPACKAGESFILE="/opt/tpot/packages.txt"
+fi
+myINSTALLPACKAGES=$(cat $myINSTALLPACKAGESFILE)
 myINFO="\
 ###########################################
 ### T-Pot Installer for Debian (Stable) ###
@@ -122,9 +127,6 @@ mySYSCTLCONF="
 kernel.panic = 1
 kernel.panic_on_oops = 1
 vm.max_map_count = 262144
-net.ipv6.conf.all.disable_ipv6 = 1
-net.ipv6.conf.default.disable_ipv6 = 1
-net.ipv6.conf.lo.disable_ipv6 = 1
 "
 myFAIL2BANCONF="[DEFAULT]
 ignore-ip = 127.0.0.1/8
@@ -171,9 +173,6 @@ myPULL_HOUR=$(($myRANDOM_HOUR-2))
 myCRONJOBS="
 # Check if updated images are available and download them
 $myRANDOM_MINUTE $myPULL_HOUR * * *      root    docker-compose -f /opt/tpot/etc/tpot.yml pull
-
-# Delete elasticsearch logstash indices older than 90 days
-$myRANDOM_MINUTE $myDEL_HOUR * * *      root    curator --config /opt/tpot/etc/curator/curator.yml /opt/tpot/etc/curator/actions.yml
 
 # Uploaded binaries are not supposed to be downloaded
 */1 * * * *     root    mv --backup=numbered /data/dionaea/roots/ftp/* /data/dionaea/binaries/
@@ -312,7 +311,7 @@ function fuGET_DEPS {
   echo "### Removing and holding back problematic packages ..."
   apt-fast -y purge exim4-base mailutils pcp cockpit-pcp elasticsearch-curator
   apt-fast -y autoremove
-  apt-mark hold exim4-base mailutils pcp cockpit-pcp elasticsearch-curator
+  apt-mark hold exim4-base mailutils pcp cockpit-pcp
 }
 
 # Check for other services
@@ -439,6 +438,16 @@ if [ -s "$myTPOT_CONF_FILE" ] && [ "$myTPOT_CONF_FILE" != "" ];
 fi
 
 # Prepare running the installer
+myUSERCHECK=$(grep "tpot" /etc/passwd | wc -l)
+if [ "$myUSERCHECK" -gt "0" ];
+  then
+    echo "### The user name \"tpot\" already exists. The tpot username and group may not previously exist or T-Pot will not work."
+    echo "### We recommend a fresh install according to the T-Pot Readme Post-Install method."
+    echo
+    echo "Aborting."
+    echo
+    exit 0
+fi
 echo "$myINFO" | head -n 3
 fuCHECK_PORTS
 
@@ -454,7 +463,7 @@ export TERM=linux
 if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ];
   then
     sleep 5
-    dialog --keep-window --no-ok --no-cancel --backtitle "$myBACKTITLE" --title "[ Wait to avoid interference with service messages ]" --pause "" 6 80 7
+    dialog --keep-window --no-ok --no-cancel --backtitle "$myBACKTITLE" --title "[ Wait to avoid interference with service messages ]" --pause "" 7 80 7
 fi
 
 # Check if remote sites are available
@@ -515,14 +524,15 @@ fi
 if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ] || [ "$myTPOT_DEPLOYMENT_TYPE" == "user" ];
   then
     myCONF_TPOT_FLAVOR=$(dialog --keep-window --no-cancel --backtitle "$myBACKTITLE" --title "[ Choose Your T-Pot Edition ]" --menu \
-    "\nRequired: 8GB RAM, 128GB SSD\nRecommended: 8GB RAM, 256GB SSD" 15 70 7 \
-    "STANDARD" "Honeypots, ELK, NSM & Tools" \
+    "\nRequired: 8-16GB RAM, 128GB SSD\nRecommended: 16GB RAM, 256GB SSD" 17 70 1 \
+    "STANDARD" "T-Pot Standalone with everything you need" \
+    "HIVE" "T-Pot Hive: ELK & Tools" \
+    "HIVE_SENSOR" "T-Pot Hive Sensor: Honeypots & NSM" \
+    "INDUSTRIAL" "Same as Standard with focus on Conpot" \
     "LOG4J" "Log4Pot, ELK, NSM & Tools" \
-    "SENSOR" "Just Honeypots, EWS Poster & NSM" \
-    "INDUSTRIAL" "Conpot, RDPY, Vnclowpot, ELK, NSM & Tools" \
-    "COLLECTOR" "Heralding, ELK, NSM & Tools" \
-    "NEXTGEN" "NextGen (Glutton, HoneyPy)" \
-    "MEDICAL" "Dicompot, Medpot, ELK, NSM & Tools" 3>&1 1>&2 2>&3 3>&-)
+    "MEDICAL" "Dicompot, Medpot, ELK, NSM & Tools" \
+    "MINI" "Same as Standard with focus on qHoneypots" \
+    "SENSOR" "Just Honeypots & NSM" 3>&1 1>&2 2>&3 3>&-)
 fi
 
 # Let's ask for a secure tsec password if installation type is iso
@@ -662,7 +672,7 @@ fi
 if [ "$myCONF_NTP_USE" == "0" ];
   then
     fuBANNER "Setup NTP"
-    cp $myCONF_NTP_CONF_FILE /etc/ntp.conf
+    cp $myCONF_NTP_CONF_FILE /etc/systemd/timesyncd.conf
 fi
 
 # Let's setup 802.1x networking
@@ -683,16 +693,17 @@ echo "$myNETWORK_WLANEXAMPLE" | tee -a /etc/network/interfaces
 fuBANNER "SSH roaming off"
 echo "UseRoaming no" | tee -a /etc/ssh/ssh_config
 
-# Installing elasticdump, elasticsearch-curator, yq
+# Installing elasticdump, yq
 fuBANNER "Installing pkgs"
 npm install elasticdump -g
-pip3 install elasticsearch-curator yq
+pip3 install glances yq
 hash -r
 
 # Cloning T-Pot from GitHub
 if ! [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ];
   then
     fuBANNER "Cloning T-Pot"
+    ### DEV
     git clone https://github.com/telekom-security/tpotce /opt/tpot
 fi
 
@@ -732,29 +743,33 @@ case $myCONF_TPOT_FLAVOR in
     fuBANNER "STANDARD"
     ln -s /opt/tpot/etc/compose/standard.yml $myTPOTCOMPOSE
   ;;
-  LOG4J)
-    fuBANNER "LOG4J"
-    ln -s /opt/tpot/etc/compose/log4j.yml $myTPOTCOMPOSE
+  HIVE)
+    fuBANNER "HIVE"
+    ln -s /opt/tpot/etc/compose/hive.yml $myTPOTCOMPOSE
   ;;
-  SENSOR)
-    fuBANNER "SENSOR"
-    ln -s /opt/tpot/etc/compose/sensor.yml $myTPOTCOMPOSE
+  HIVE_SENSOR)
+    fuBANNER "HIVE_SENSOR"
+    ln -s /opt/tpot/etc/compose/hive_sensor.yml $myTPOTCOMPOSE
   ;;
   INDUSTRIAL)
     fuBANNER "INDUSTRIAL"
     ln -s /opt/tpot/etc/compose/industrial.yml $myTPOTCOMPOSE
   ;;
-  COLLECTOR)
-    fuBANNER "COLLECTOR"
-    ln -s /opt/tpot/etc/compose/collector.yml $myTPOTCOMPOSE
-  ;;
-  NEXTGEN)
-    fuBANNER "NEXTGEN"
-    ln -s /opt/tpot/etc/compose/nextgen.yml $myTPOTCOMPOSE
+  LOG4J)
+    fuBANNER "LOG4J"
+    ln -s /opt/tpot/etc/compose/log4j.yml $myTPOTCOMPOSE
   ;;
   MEDICAL)
     fuBANNER "MEDICAL"
     ln -s /opt/tpot/etc/compose/medical.yml $myTPOTCOMPOSE
+  ;;
+  MINI)
+    fuBANNER "MINI"
+    ln -s /opt/tpot/etc/compose/mini.yml $myTPOTCOMPOSE
+  ;;
+  SENSOR)
+    fuBANNER "SENSOR"
+    ln -s /opt/tpot/etc/compose/sensor.yml $myTPOTCOMPOSE
   ;;
 esac
 
@@ -788,59 +803,39 @@ echo "$mySYSTEMDFIX" | tee /etc/systemd/network/99-default.link
 fuBANNER "Add cronjobs"
 echo "$myCRONJOBS" | tee -a /etc/crontab
 
-### For some honeypots to work we need to ensure ntp.service is not listening
-echo "### Ensure ntp.service is not listening to avoid potential port conflict with ddospot."
-myNTP_IF_DISABLE="interface ignore wildcard
-interface ignore 127.0.0.1
-interface ignore ::1"
-
-if [ "$(cat /etc/ntp.conf | grep "interface ignore wildcard" | wc -l)" != "1" ];
-  then
-    echo "### Found active ntp listeners and updating config."
-    echo "$myNTP_IF_DISABLE" | tee -a /etc/ntp.conf
-    echo "### Restarting ntp.service for changes to take effect."
-    systemctl stop ntp.service
-    systemctl start ntp.service
-  else
-    echo "### Found no active ntp listeners."
-fi
-
 # Let's create some files and folders
 fuBANNER "Files & folders"
 mkdir -vp /data/adbhoney/{downloads,log} \
-         /data/ciscoasa/log \
-         /data/conpot/log \
-         /data/citrixhoneypot/logs \
-         /data/cowrie/{downloads,keys,misc,log,log/tty} \
-         /data/ddospot/{bl,db,log} \
-         /data/dicompot/{images,log} \
-         /data/dionaea/{log,bistreams,binaries,rtp,roots,roots/ftp,roots/tftp,roots/www,roots/upnp} \
-         /data/elasticpot/log \
-         /data/elk/{data,log} \
-         /data/endlessh/log \
-         /data/fatt/log \
-         /data/honeytrap/{log,attacks,downloads} \
-         /data/glutton/log \
-         /data/hellpot/log \
-         /data/heralding/log \
-         /data/honeypots/log \
-         /data/honeypy/log \
-         /data/honeysap/log \
-         /data/ipphoney/log \
-         /data/log4pot/{log,payloads} \
-         /data/mailoney/log \
-         /data/medpot/log \
-         /data/nginx/{log,heimdall} \
-         /data/emobility/log \
-         /data/ews/conf \
-         /data/rdpy/log \
-         /data/redishoneypot/log \
-         /data/spiderfoot \
-         /data/suricata/log \
-         /data/tanner/{log,files} \
-         /data/p0f/log \
-         /home/tsec/.ssh/
-touch /data/spiderfoot/spiderfoot.db
+          /data/ciscoasa/log \
+          /data/conpot/log \
+          /data/citrixhoneypot/logs \
+          /data/cowrie/{downloads,keys,misc,log,log/tty} \
+          /data/ddospot/{bl,db,log} \
+          /data/dicompot/{images,log} \
+          /data/dionaea/{log,bistreams,binaries,rtp,roots,roots/ftp,roots/tftp,roots/www,roots/upnp} \
+          /data/elasticpot/log \
+          /data/elk/{data,log} \
+          /data/endlessh/log \
+          /data/ews/conf \
+          /data/fatt/log \
+          /data/glutton/log \
+          /data/hellpot/log \
+          /data/heralding/log \
+          /data/honeypots/log \
+          /data/honeysap/log \
+          /data/honeytrap/{log,attacks,downloads} \
+          /data/ipphoney/log \
+          /data/log4pot/{log,payloads} \
+          /data/mailoney/log \
+          /data/medpot/log \
+          /data/nginx/{log,heimdall} \
+          /data/p0f/log \
+          /data/redishoneypot/log \
+          /data/sentrypeer/log \
+          /data/spiderfoot \
+          /data/suricata/log \
+          /data/tanner/{log,files} \
+          /home/tsec/.ssh/
 touch /data/nginx/log/error.log
 
 # Let's copy some files
@@ -883,14 +878,14 @@ tee -a /root/.bashrc <<EOF
 $mySHELLCHECK
 $myROOTPROMPT
 $myROOTCOLORS
-PATH="$PATH:/opt/tpot/bin"
+PATH="\$PATH:/opt/tpot/bin"
 EOF
 for i in $(ls -d /home/*/)
   do
 tee -a $i.bashrc <<EOF
 $mySHELLCHECK
 $myUSERPROMPT
-PATH="$PATH:/opt/tpot/bin"
+PATH="\$PATH:/opt/tpot/bin"
 EOF
 done
 

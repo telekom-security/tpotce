@@ -9,10 +9,12 @@ services:
     restart: always
     tmpfs:
      - /tmp/honeytrap:uid=2000,gid=2000
+#    cpu_count: 1
+#    cpus: 0.75
     network_mode: "host"
     cap_add:
      - NET_ADMIN
-    image: "dtagdevsec/honeytrap:2006"
+    image: "dtagdevsec/honeytrap:2204"
     read_only: true
     volumes:
      - /data/honeytrap/attacks:/opt/honeytrap/var/attacks

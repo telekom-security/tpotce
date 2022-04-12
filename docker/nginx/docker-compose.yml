@@ -1,0 +1,29 @@
+version: '2.3'
+
+services:
+
+# nginx service
+  nginx:
+    build: .
+    container_name: nginx
+    restart: always
+    tmpfs:
+     - /var/tmp/nginx/client_body
+     - /var/tmp/nginx/proxy
+     - /var/tmp/nginx/fastcgi
+     - /var/tmp/nginx/uwsgi
+     - /var/tmp/nginx/scgi
+     - /run
+     - /var/lib/nginx/tmp:uid=100,gid=82
+#    cpu_count: 1
+#    cpus: 0.75
+    network_mode: "host"
+    ports:
+     - "64297:64297"
+     - "127.0.0.1:64304:64304"
+    image: "dtagdevsec/nginx:2204"
+    read_only: true
+    volumes:
+     - /data/nginx/cert/:/etc/nginx/cert/:ro
+     - /data/nginx/conf/nginxpasswd:/etc/nginx/nginxpasswd:ro
+     - /data/nginx/log/:/var/log/nginx/

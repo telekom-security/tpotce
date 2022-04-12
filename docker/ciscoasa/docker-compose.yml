@@ -9,11 +9,14 @@ services:
     restart: always
     tmpfs:
      - /tmp/ciscoasa:uid=2000,gid=2000
-    network_mode: "host"
+#    cpu_count: 1
+#    cpus: 0.25
+    networks:
+     - ciscoasa_local
     ports:
      - "5000:5000/udp"
      - "8443:8443"
-    image: "dtagdevsec/ciscoasa:2006"
+    image: "dtagdevsec/ciscoasa:2204"
     read_only: true
     volumes:
      - /data/ciscoasa/log:/var/log/ciscoasa

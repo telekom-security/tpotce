@@ -1,10 +1,10 @@
-FROM alpine:3.14
+FROM alpine:3.15
 #
 # Include dist
-ADD dist/ /root/dist/
+COPY dist/ /root/dist/
 #
 # Get and install dependencies & packages
-RUN apk -U add \
+RUN apk --no-cache -U add \
              bash \
              build-base \
              git \
@@ -15,7 +15,21 @@ RUN apk -U add \
              mpfr-dev \
              openssl \
              openssl-dev \
+	     py3-appdirs \
+	     py3-asn1-modules \
+	     py3-attrs \
+	     py3-bcrypt \
+	     py3-cryptography \
+	     py3-dateutil \
+	     py3-greenlet \
+	     py3-mysqlclient \
+	     py3-openssl \
+	     py3-packaging \
+	     py3-parsing \
              py3-pip \
+	     py3-service_identity \
+	     py3-treq \
+	     py3-twisted \
              python3 \
              python3-dev && \
 #
@@ -29,9 +43,8 @@ RUN apk -U add \
     git clone --depth=1 https://github.com/micheloosterhof/cowrie -b v2.3.0 && \
     cd cowrie && \
 #    git checkout 6b1e82915478292f1e77ed776866771772b48f2e && \
-#    sed -i s/logfile.DailyLogFile/logfile.LogFile/g src/cowrie/python/logfile.py && \
     mkdir -p log && \
-    sed -i '/packaging.*/d' requirements.txt && \
+    cp /root/dist/requirements.txt . && \
     pip3 install --upgrade pip && \
     pip3 install -r requirements.txt && \
 #
@@ -61,6 +74,7 @@ RUN apk -U add \
     rm -rf /root/* /tmp/* && \
     rm -rf /var/cache/apk/* && \
     rm -rf /home/cowrie/cowrie/cowrie.pid && \
+    rm -rf /home/cowrie/cowrie/.git && \
     unset PYTHON_DIR
 #
 # Start cowrie

@@ -1,0 +1,8 @@
+aiomysql
+aiohttp_jinja2==1.1.0
+docker<2.6
+mimesis<3.0.0
+aioredis
+pymongo
+pylibinjection
+aiodocker

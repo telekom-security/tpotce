@@ -1,0 +1,23 @@
+version: '2.3'
+
+networks:
+  sentrypeer_local:
+
+services:
+
+# SentryPeer service
+  sentrypeer:
+    build: .
+    container_name: sentrypeer
+    restart: always
+#    cpu_count: 1
+#    cpus: 0.25
+    networks:
+     - sentrypeer_local
+    ports:
+     - "5060:5060/udp"
+    # - "127.0.0.1:8082:8082"
+    image: "dtagdevsec/sentrypeer:2204"
+    read_only: true
+    volumes:
+     - /data/sentrypeer/log:/var/log/sentrypeer

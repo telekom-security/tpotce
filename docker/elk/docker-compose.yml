@@ -10,7 +10,7 @@ services:
     restart: always
     environment:
      - bootstrap.memory_lock=true
-#     - ES_JAVA_OPTS=-Xms2048m -Xmx2048m
+     - ES_JAVA_OPTS=-Xms2048m -Xmx2048m
      - ES_TMPDIR=/tmp
     cap_add:
      - IPC_LOCK
@@ -21,10 +21,10 @@ services:
       nofile:
         soft: 65536
         hard: 65536
-#    mem_limit: 4g
+    mem_limit: 4g
     ports:
      - "127.0.0.1:64298:9200"
-    image: "dtagdevsec/elasticsearch:2006"
+    image: "dtagdevsec/elasticsearch:2204"
     volumes:
      - /data:/data
 
@@ -39,7 +39,7 @@ services:
         condition: service_healthy
     ports:
      - "127.0.0.1:64296:5601"
-    image: "dtagdevsec/kibana:2006"
+    image: "dtagdevsec/kibana:2204"
 
 ## Logstash service
   logstash:
@@ -53,20 +53,49 @@ services:
         condition: service_healthy
     env_file:
      - /opt/tpot/etc/compose/elk_environment
-    image: "dtagdevsec/logstash:2006"
+    image: "dtagdevsec/logstash:2204"
     volumes:
      - /data:/data
 #     - /root/tpotce/docker/elk/logstash/dist/logstash.conf:/etc/logstash/conf.d/logstash.conf
 
-## Elasticsearch-head service
-  head:
-    build: head/.
-    container_name: head
+# Map Redis Service
+  map_redis:
+    container_name: map_redis
     restart: always
-    depends_on:
-      elasticsearch:
-        condition: service_healthy
+    stop_signal: SIGKILL
+    tty: true
     ports:
-     - "127.0.0.1:64302:9100"
-    image: "dtagdevsec/head:2006"
+      - "127.0.0.1:6379:6379"
+    image: "dtagdevsec/redis:2204"
     read_only: true
+
+# Map Web Service
+  map_web:
+    build: .
+    container_name: map_web
+    restart: always
+    environment:
+     - MAP_COMMAND=AttackMapServer.py
+    env_file:
+     - /opt/tpot/etc/compose/elk_environment
+    stop_signal: SIGKILL
+    tty: true
+    ports:
+     - "127.0.0.1:64299:64299"
+    image: "dtagdevsec/map:2204"
+    depends_on:
+     - map_redis
+
+# Map Data Service
+  map_data:
+    container_name: map_data
+    restart: always
+    environment:
+     - MAP_COMMAND=DataServer_v2.py
+    env_file:
+     - /opt/tpot/etc/compose/elk_environment
+    stop_signal: SIGKILL
+    tty: true
+    image: "dtagdevsec/map:2204"
+    depends_on:
+     - map_redis

@@ -2,9 +2,7 @@ FROM ubuntu:20.04
 ENV DEBIAN_FRONTEND noninteractive
 #
 # Install packages
-RUN apt-get update && \
-    apt-get update -y && \
-    apt-get dist-upgrade -y && \
+RUN apt-get update -y && \
     apt-get install -y \
              build-essential \
 	     cargo \
@@ -29,9 +27,9 @@ RUN apt-get update && \
     cd /opt/ && \
     git clone https://github.com/thomaspatzke/Log4Pot && \
     cd Log4Pot && \
-#    git checkout 4269bf4a91457328fb64c3e7941cb2f520e5e911 && \
-    git checkout 4e9bac32605e4d2dd4bbc6df56365988b4815c4a && \
-    sed -i 's#"type": logtype,#"reason": logtype,#g' log4pot.py && \
+#    git checkout b163858649801974e9b86cea397f5eb137c7c01b && \
+    git checkout fac539f470217347e51127c635f16749a887c0ac && \
+    sed -i 's#"type": logtype,#"reason": logtype,#g' log4pot-server.py && \
     poetry install && \
     setcap cap_net_bind_service=+ep /usr/bin/python3.8 && \
 #
@@ -49,10 +47,10 @@ RUN apt-get update && \
 		    python3-dev \
 		    rust-all && \
     apt-get autoremove -y --purge && \
-    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /root/.cache /opt/Log4Pot/.git
 #
 # Start log4pot
 STOPSIGNAL SIGINT
 USER log4pot:log4pot
 WORKDIR /opt/Log4Pot/
-CMD ["/usr/bin/python3","log4pot.py","--port","8080","--log","/var/log/log4pot/log/log4pot.log","--download-dir","/var/log/log4pot/payloads/","--download-class","--download-payloads"]
+CMD ["/usr/bin/python3","log4pot-server.py","--port","8080","--log","/var/log/log4pot/log/log4pot.log","--payloader","--download-dir","/var/log/log4pot/payloads/","--download-timeout","15","--response","/opt/Log4Pot/responses/sap-netweaver.html"]

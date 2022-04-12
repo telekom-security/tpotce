@@ -12,6 +12,8 @@ services:
     stdin_open: true
     tty: true
     restart: always
+#    cpu_count: 1
+#    cpus: 0.25
     networks:
      - dionaea_local
     ports:
@@ -27,11 +29,11 @@ services:
      - "1723:1723"
      - "1883:1883"
      - "3306:3306"
-     - "5060:5060"
-     - "5060:5060/udp"
-     - "5061:5061"
+#     - "5060:5060"
+#     - "5060:5060/udp"
+#     - "5061:5061"
      - "27017:27017"
-    image: "dtagdevsec/dionaea:2006"
+    image: "dtagdevsec/dionaea:2204"
     read_only: true
     volumes:
      - /data/dionaea/roots/ftp:/opt/dionaea/var/dionaea/roots/ftp

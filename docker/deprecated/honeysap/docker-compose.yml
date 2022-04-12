@@ -1,0 +1,19 @@
+version: '2.3'
+
+networks:
+  honeysap_local:
+
+services:
+
+# HoneySAP service
+  honeysap:
+    build: .
+    container_name: honeysap
+    restart: always
+    networks:
+     - honeysap_local
+    ports:
+     - "3299:3299"
+    image: "dtagdevsec/honeysap:2204"
+    volumes:
+     - /data/honeysap/log:/opt/honeysap/log

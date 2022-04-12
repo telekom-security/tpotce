@@ -12,9 +12,11 @@ services:
     restart: always
     stop_signal: SIGKILL
     tty: true
+#    cpu_count: 1
+#    cpus: 0.25
     networks:
      - tanner_local
-    image: "dtagdevsec/redis:2006"
+    image: "dtagdevsec/redis:2204"
     read_only: true
 
 # PHP Sandbox service
@@ -26,9 +28,11 @@ services:
     tmpfs:
      - /tmp:uid=2000,gid=2000
     tty: true
+#    cpu_count: 1
+#    cpus: 0.25
     networks:
      - tanner_local
-    image: "dtagdevsec/phpox:2006"
+    image: "dtagdevsec/phpox:2204"
     read_only: true
 
 # Tanner API Service
@@ -40,9 +44,11 @@ services:
     tmpfs:
      - /tmp/tanner:uid=2000,gid=2000
     tty: true
+#    cpu_count: 1
+#    cpus: 0.25
     networks:
      - tanner_local
-    image: "dtagdevsec/tanner:2006"
+    image: "dtagdevsec/tanner:2204"
     read_only: true
     volumes:
      - /data/tanner/log:/var/log/tanner
@@ -51,25 +57,25 @@ services:
      - tanner_redis
 
 # Tanner WEB Service
-  tanner_web:
-    build: ./tanner
-    container_name: tanner_web
-    restart: always
-    stop_signal: SIGKILL
-    tmpfs:
-     - /tmp/tanner:uid=2000,gid=2000
-    tty: true
-    networks:
-     - tanner_local
+#  tanner_web:
+#    build: ./tanner
+#    container_name: tanner_web
+#    restart: always
+#    stop_signal: SIGKILL
+#    tmpfs:
+#     - /tmp/tanner:uid=2000,gid=2000
+#    tty: true
+#    networks:
+#     - tanner_local
 #    ports:
 #     - "127.0.0.1:8091:8091"
-    image: "dtagdevsec/tanner:2006"
-    command: tannerweb
-    read_only: true
-    volumes:
-     - /data/tanner/log:/var/log/tanner
-    depends_on:
-     - tanner_redis
+#    image: "dtagdevsec/tanner:2204"
+#    command: tannerweb
+#    read_only: true
+#    volumes:
+#     - /data/tanner/log:/var/log/tanner
+#    depends_on:
+#     - tanner_redis
 
 # Tanner Service
   tanner:
@@ -80,9 +86,11 @@ services:
     tmpfs:
      - /tmp/tanner:uid=2000,gid=2000
     tty: true
+#    cpu_count: 1
+#    cpus: 0.25
     networks:
      - tanner_local
-    image: "dtagdevsec/tanner:2006"
+    image: "dtagdevsec/tanner:2204"
     command: tanner
     read_only: true
     volumes:
@@ -90,7 +98,7 @@ services:
      - /data/tanner/files:/opt/tanner/files
     depends_on:
      - tanner_api
-     - tanner_web
+#     - tanner_web
      - tanner_phpox
 
 # Snare Service
@@ -100,10 +108,12 @@ services:
     restart: always
     stop_signal: SIGKILL
     tty: true
+#    cpu_count: 1
+#    cpus: 0.25
     networks:
      - tanner_local
     ports:
      - "80:80"
-    image: "dtagdevsec/snare:2006"
+    image: "dtagdevsec/snare:2204"
     depends_on:
      - tanner
