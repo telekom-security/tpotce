@@ -54,6 +54,12 @@ T-Pot is the all in one, optionally distributed, multiarch (amd64, arm64) honeyp
   - [Spiderfoot](#spiderfoot)
 - [Maintenance](#maintenance)
   - [Updates](#updates)
+    - [Update from 20.06.x](#update-from-2006x)
+    - [Updates for 22.04.x](#updates-for-2204x)
+  - [Known Issues](#known-issues)
+    - [Grub Fails to Reconfigure](#grub-fails-to-reconfigure)
+    - [Docker Images Fail to Download](#docker-images-fail-to-download)
+    - [Network Interface Fails](#network-interface-fails)
   - [Start T-Pot](#start-t-pot)
   - [Stop T-Pot](#stop-t-pot)
   - [T-Pot Data Folder](#t-pot-data-folder)
@@ -553,12 +559,77 @@ The update script will ...
  - ensure all T-Pot relevant system files will be patched / copied into the original T-Pot state
  - restore your custom ews.cfg and HPFEED settings from `/data/ews/conf`
 
-You simply run the update script ***after you backed up any relevant data***:
+
+### **Update from 20.06.x**
+If you are running T-Pot 20.06.x you simply follow these commands ***after you backed up any relevant data***:
+```
+sudo su -
+cd /opt/tpot/
+wget -O update.sh https://raw.githubusercontent.com/telekom-security/tpotce/master/update.sh
+./update.sh
+```
+
+### **Updates for 22.04.x**
+If you are already running T-Pot 22.04.x you simply run the update script ***after you backed up any relevant data***:
 ```
 sudo su -
 cd /opt/tpot/
 ./update.sh
 ```
+
+## Known Issues
+The following issues are known, simply follow the described steps to solve them.
+<br><br>
+
+### **Grub Fails to Reconfigure**
+In some cases Grub fails to reconfigure, follow these commands to correct that error:
+```
+sudo su -
+DEBIAN_FRONTEND=dialog dpkg --configure grub-pc
+```
+
+### **Docker Images Fail to Download**
+Some time ago Docker introduced download [rate limits](https://docs.docker.com/docker-hub/download-rate-limit/#:~:text=Docker%20Hub%20limits%20the%20number,pulls%20per%206%20hour%20period.). If you are frequently downloading Docker images via a single or shared IP, the IP address might have exhausted the Docker download rate limit. Login to your Docker account to extend the rate limit.
+```
+sudo su -
+docker login
+```
+
+### **Network Interface Fails**
+After the installation it is possible your network interfaces are using a different naming scheme (`ens` => `eth`). In this case you need to adjust `/etc/network/interfaces` to reflect your NIC.
+
+Example:
+```
+# This file describes the network interfaces available on your system
+# and how to activate them. For more information, see interfaces(5).
+
+source /etc/network/interfaces.d/*
+
+# The loopback network interface
+auto lo
+iface lo inet loopback
+
+# The primary network interface
+auto ens33
+iface ens33 inet dhcp
+```
+
+`ifconfig` / `ip a` revealed the interface is now named `eth0`, so you need to adjust `interfaces` accordingly:
+```
+# This file describes the network interfaces available on your system
+# and how to activate them. For more information, see interfaces(5).
+
+source /etc/network/interfaces.d/*
+
+# The loopback network interface
+auto lo
+iface lo inet loopback
+
+# The primary network interface
+auto eth0
+iface eth0 inet dhcp
+```
+
 
 ## Start T-Pot
 The T-Pot service automatically starts and stops on each reboot (which occurs once on a daily basis as setup in `/etc/crontab` during installation).
