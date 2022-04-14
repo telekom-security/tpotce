@@ -46,6 +46,7 @@ RUN apk -U --no-cache add \
 	    py3-tempora \
 	    py3-wheel \
 	    py3-xlsxwriter \
+	    py3-yaml \
             swig \
 	    tinyxml \
 	    tinyxml-dev \
@@ -56,7 +57,7 @@ RUN apk -U --no-cache add \
     adduser -S -s /bin/ash -u 2000 -D -g 2000 spiderfoot && \
 #
 # Install spiderfoot 
-    git clone --depth=1 -b v3.5 https://github.com/smicallef/spiderfoot /home/spiderfoot && \
+    git clone --depth=1 -b v4.0 https://github.com/smicallef/spiderfoot /home/spiderfoot && \
     cd /home/spiderfoot && \
     pip3 install --upgrade pip && \
     cp /root/dist/requirements.txt . && \
