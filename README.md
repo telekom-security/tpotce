@@ -25,29 +25,29 @@ T-Pot is the all in one, optionally distributed, multiarch (amd64, arm64) honeyp
   - [Required Ports](#required-ports)
 - [System Placement](#system-placement)
 - [Installation](#installation)
-  - [ISO Based](#isoinstall)
-    - [Download ISO Image](#downloadiso)
-    - [Build your own ISO Image](#makeiso)
+  - [ISO Based](#iso-based)
+    - [Download ISO Image](#download-iso-image)
+    - [Create your own ISO Image](#create-your-own-iso-image)
   - [Post Install](#post-install)
     - [Download Debian Netinstall Image](#download-debian-netinstall-image)
-    - [User](#post-install-user-method)
-    - [Auto](#postauto)
-  - [T-Pot Installer](#tpotinstaller)
-    - [Installation Types](#installtypes)
-    - [Standalone](#standalonetype)
-    - [Distributed](#distributedtype)
-  - [Cloud Deployments](#cloud)
-    - [Ansible](#ansible-deployment)
-    - [Terraform](#terraform-configuration)
+    - [Post Install User Method](#post-install-user-method)
+    - [Post Install Auto Method](#post-install-auto-method)
+  - [T-Pot Installer](#t-pot-installer)
+    - [Installation Types](#installation-types)
+    - [Standalone](#standalone)
+    - [Distributed](#distributed)
+  - [Cloud Deployments](#cloud-deployments)
+    - [Ansible Deployment](#ansible-deployment)
+    - [Terraform Configuration](#terraform-configuration)
 - [First Start](#first-start)
   - [Standalone Start](#standalone-first-start)
   - [Distributed Deployment](#distributed-deployment)
   - [Community Data Submission](#community-data-submission)
   - [Opt-In HPFEEDS Data Submission](#opt-in-hpfeeds-data-submission)
 - [Remote Access and Tools](#remote-access-and-tools)
-  - [SSH and Cockpit](#ssh)
+  - [SSH and Cockpit](#ssh-and-cockpit)
   - [T-Pot Landing Page](#t-pot-landing-page)
-  - [Kibana Dashboard](#kibana-dashboardibana)
+  - [Kibana Dashboard](#kibana-dashboard)
   - [Attack Map](#attack-map)
   - [Cyberchef](#cyberchef)
   - [Elasticvue](#elasticvue)
@@ -337,7 +337,7 @@ cd tpotce/iso/installer/
 The installation will now start, you can now move on to the [T-Pot Installer](#t-pot-installer) section.
 <br><br>
 
-### **Post-Install Auto**
+### **Post-Install Auto Method**
 You can also let the installer run automatically if you provide your own `tpot.conf`. An example is available in `tpotce/iso/installer/tpot.conf.dist`. This should make things easier in case you want to automate the installation i.e. with **Ansible**.
 
 Just follow these steps while adjusting `tpot.conf` to your needs:
