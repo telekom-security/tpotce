@@ -255,7 +255,7 @@ apt-fast -y dist-upgrade -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::
 dpkg --configure -a
 npm cache clean --force
 npm install elasticdump -g
-pip3 install --upgrade glances yq
+pip3 install --upgrade glances[docker] yq
 hash -r
 echo
 echo "### Now replacing T-Pot related config files on host"

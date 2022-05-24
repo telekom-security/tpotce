@@ -696,7 +696,7 @@ echo "UseRoaming no" | tee -a /etc/ssh/ssh_config
 # Installing elasticdump, yq
 fuBANNER "Installing pkgs"
 npm install elasticdump -g
-pip3 install glances yq
+pip3 install glances[docker] yq
 hash -r
 
 # Cloning T-Pot from GitHub
