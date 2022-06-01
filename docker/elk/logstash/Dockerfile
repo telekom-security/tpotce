@@ -1,7 +1,7 @@
 FROM ubuntu:20.04
 #
 # VARS
-ENV LS_VER=8.2.0
+ENV LS_VER=8.2.2
 # Include dist
 COPY dist/ /root/dist/
 #
@@ -13,7 +13,7 @@ RUN apt-get update -y && \
              bash \
              bzip2 \
 	     curl \
-             openjdk-11-jre \
+#             openjdk-11-jre \
              openssh-client && \
 #
 # Determine arch, get and install packages
