@@ -1,5 +1,8 @@
 version: '2.3'
 
+networks:
+  ciscoasa_local:
+
 services:
 
 # Ciscoasa service

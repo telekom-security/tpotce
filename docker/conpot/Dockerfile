@@ -1,4 +1,4 @@
-FROM alpine:3.15
+FROM alpine:3.16
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -62,13 +62,13 @@ RUN apk --no-cache -U add \
     pip3 install --no-cache-dir . && \
     cd / && \
     rm -rf /opt/conpot /tmp/* /var/tmp/* && \
-    setcap cap_net_bind_service=+ep /usr/bin/python3.9 && \
+    setcap cap_net_bind_service=+ep /usr/bin/python3.10 && \
 #
 # Get wireshark manuf db for scapy, setup configs, user, groups
     mkdir -p /etc/conpot /var/log/conpot /usr/share/wireshark && \
     wget https://github.com/wireshark/wireshark/raw/master/manuf -o /usr/share/wireshark/manuf && \
     cp /root/dist/conpot.cfg /etc/conpot/conpot.cfg && \
-    cp -R /root/dist/templates /usr/lib/python3.9/site-packages/conpot/ && \
+    cp -R /root/dist/templates /usr/lib/python3.10/site-packages/conpot/ && \
     addgroup -g 2000 conpot && \
     adduser -S -s /bin/ash -u 2000 -D -g 2000 conpot && \
 #

@@ -1,4 +1,4 @@
-FROM alpine:3.15
+FROM alpine:3.16
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -27,7 +27,7 @@ RUN apk -U --no-cache add \
 #    cp /root/dist/views.py /opt/wordpot2/wordpot/views.py && \
     cp /root/dist/requirements.txt . && \
     pip3 install -r requirements.txt && \
-    setcap cap_net_bind_service=+ep /usr/bin/python3.9 && \
+    setcap cap_net_bind_service=+ep /usr/bin/python3.10 && \
 #
 # Setup user, groups and configs
     addgroup -g 2000 wordpot && \
