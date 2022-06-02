@@ -1,4 +1,4 @@
-FROM alpine:3.15
+FROM alpine:3.16
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -87,4 +87,4 @@ HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:8080/spiderfoot/'
 # Set user, workdir and start spiderfoot
 USER spiderfoot:spiderfoot
 WORKDIR /home/spiderfoot
-CMD echo -n >> /home/spiderfoot/.spiderfoot/spiderfoot.db && exec /usr/bin/python3.9 sf.py -l 0.0.0.0:8080
+CMD echo -n >> /home/spiderfoot/.spiderfoot/spiderfoot.db && exec /usr/bin/python3 sf.py -l 0.0.0.0:8080
