@@ -1,66 +1,39 @@
-FROM alpine:3.15 as builder
+FROM alpine:3.16 as builder
 #
 RUN apk -U add --no-cache \
-            argon2-dev \
             autoconf \
 	    automake \
 	    autoconf-archive \
 	    build-base \
 	    curl-dev \
 	    cmocka-dev \
-	    czmq-dev \
 	    git \
 	    jansson-dev \
-	    libtool \
 	    libmicrohttpd-dev \
             pcre2-dev \
-	    readline-dev \
 	    sqlite-dev \
-	    util-linux-dev \
-	    zeromq-dev
+	    util-linux-dev
 #
 RUN apk -U add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/testing \
-            libosip2-dev
-RUN apk -U add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/community \
-            asio-dev \
-            msgpack-c-dev \
-	    msgpack-cxx-dev
-#
-# Download and build Zyre
-WORKDIR /tmp
-RUN git clone https://github.com/savoirfairelinux/opendht dht 
-WORKDIR /tmp/dht
-RUN ./autogen.sh
-RUN ./configure
-RUN make
-RUN make install
-RUN ldconfig /etc/ld.so.conf.d
-#
-WORKDIR /tmp
-RUN git clone --quiet https://github.com/zeromq/zyre zyre
-WORKDIR /tmp/zyre
-RUN ./autogen.sh 2> /dev/null
-RUN ./configure --quiet --without-docs
-RUN make
-RUN make install
-RUN ldconfig /etc/ld.so.conf.d
+            libosip2-dev \
+	    opendht-dev
 #
 # Download SentryPeer sources and build
-WORKDIR /
-RUN git clone https://github.com/SentryPeer/SentryPeer.git
+RUN git clone https://github.com/SentryPeer/SentryPeer -b v1.4.1
 #
 WORKDIR /SentryPeer
 #
-RUN cp -R /tmp/dht/* .
+RUN sed -i '/AM_LDFLAGS=/d' Makefile.am
 RUN ./bootstrap.sh
+#RUN ./configure --disable-opendht --disable-zyre
 RUN ./configure
-RUN make CPPFLAGS=-D_POSIX_C_SOURCE=199309L
+RUN make
 RUN make check
 RUN make install
-RUN tar cvfz sp.tgz /SentryPeer/* && \
-    mv sp.tgz /
+#RUN tar cvfz sp.tgz /SentryPeer/* && \
+#    mv sp.tgz /
 #
-FROM alpine:3.15
+FROM alpine:3.16
 #
 #COPY --from=builder /sp.tgz /root
 COPY --from=builder /SentryPeer/sentrypeer /opt/sentrypeer/
@@ -73,7 +46,8 @@ RUN apk -U add --no-cache \
             pcre2 \
 	    sqlite-libs && \
     apk -U add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/testing \
-            libosip2 && \
+            libosip2 \
+	    opendht-libs && \
 #
 # Extract from builder
 #    mkdir /opt/sentrypeer && \
@@ -93,4 +67,4 @@ RUN apk -U add --no-cache \
 STOPSIGNAL SIGKILL
 USER sentrypeer:sentrypeer
 WORKDIR /opt/sentrypeer/
-CMD ./sentrypeer -draws
+CMD ./sentrypeer -warpj -f /var/log/sentrypeer/sentrypeer.db -l /var/log/sentrypeer/sentrypeer.json

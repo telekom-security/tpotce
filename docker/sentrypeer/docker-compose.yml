@@ -15,8 +15,9 @@ services:
     networks:
      - sentrypeer_local
     ports:
+     - "4222:4222/udp"
      - "5060:5060/udp"
-    # - "127.0.0.1:8082:8082"
+     - "127.0.0.1:8082:8082"
     image: "dtagdevsec/sentrypeer:2204"
     read_only: true
     volumes:
