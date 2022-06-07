@@ -54,7 +54,8 @@ RUN apk -U --no-cache add \
     cd /opt/ && \
     git clone https://github.com/qeeqbox/honeypots && \
     cd honeypots && \
-    git checkout bee3147cf81837ba7639f1e27fe34d717ecccf29 && \
+#    git checkout bee3147cf81837ba7639f1e27fe34d717ecccf29 && \
+    git checkout 473541e1ac45d9a4df98098a5f8fee32a2fddc03 && \
     cp /root/dist/setup.py . && \
     pip3 install --upgrade pip && \
     pip3 install . && \
