@@ -374,6 +374,11 @@ services:
   sentrypeer:
     container_name: sentrypeer
     restart: always
+    ## SentryPeer offers to exchange bad actor data via DHT / P2P mode by setting the ENV to true (1)
+    ## In some cases (i.e. internally deployed T-Pots) this might be confusing as SentryPeer will show
+    ## the bad actors in its logs. Therefore this option is opt-in based.
+    environment:
+     - SENTRYPEER_PEER_TO_PEER=0
     networks:
      - sentrypeer_local
     ports:
