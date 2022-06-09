@@ -129,7 +129,7 @@ kernel.panic_on_oops = 1
 vm.max_map_count = 262144
 "
 myFAIL2BANCONF="[DEFAULT]
-ignore-ip = 127.0.0.1/8
+ignoreip = 127.0.0.1/8
 bantime = 3600
 findtime = 600
 maxretry = 5
