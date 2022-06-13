@@ -145,7 +145,7 @@
          "log_file_name":"ssh.log",
          "max_bytes":0,
          "backup_count":10,
-	 "options":["capture_commands"]
+	 "options":["capture_commands", "interactive"]
       },
       "telnet":{
          "port":23,
