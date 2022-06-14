@@ -1,4 +1,4 @@
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND noninteractive
 #
 # Include dist
@@ -88,7 +88,7 @@ RUN ARCH=$(arch) && \
       python3-bson \
       python3-yaml \ 
       wget && \ 
-#
+
     apt-get install -y \
       ca-certificates \
       python3 \
@@ -102,7 +102,7 @@ RUN ARCH=$(arch) && \
       libnetfilter-queue1 \
       libnl-3-200 \
       libpcap0.8 \
-      libpython3.8 \
+      libpython3.10 \
       libudns0 && \
 #
     apt-get autoremove --purge -y && \

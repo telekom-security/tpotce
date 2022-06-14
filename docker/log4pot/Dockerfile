@@ -1,4 +1,4 @@
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND noninteractive
 #
 # Install packages
@@ -31,7 +31,7 @@ RUN apt-get update -y && \
     git checkout fac539f470217347e51127c635f16749a887c0ac && \
     sed -i 's#"type": logtype,#"reason": logtype,#g' log4pot-server.py && \
     poetry install && \
-    setcap cap_net_bind_service=+ep /usr/bin/python3.8 && \
+    setcap cap_net_bind_service=+ep /usr/bin/python3.10 && \
 #
 # Setup user, groups and configs
     addgroup --gid 2000 log4pot && \
