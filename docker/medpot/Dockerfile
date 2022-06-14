@@ -44,7 +44,8 @@ RUN apk -U --no-cache add \
                     g++ && \
     rm -rf /var/cache/apk/* \
            /opt/go \
-           /root/dist
+           /root/dist \
+	   /tmp
 #
 # Start medpot
 WORKDIR /opt/medpot
