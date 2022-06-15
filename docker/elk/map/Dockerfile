@@ -19,6 +19,7 @@ RUN apk -U --no-cache add \
     cd geoip-attack-map && \
 #    git checkout 4dae740178455f371b667ee095f824cb271f07e8 && \
     cp /root/dist/* . && \
+    pip3 install --upgrade pip && \
     pip3 install -r requirements.txt && \
     pip3 install flask && \
     setcap cap_net_bind_service=+ep /usr/bin/python3.9 && \
