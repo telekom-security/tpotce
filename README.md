@@ -7,7 +7,7 @@ T-Pot is the all in one, optionally distributed, multiarch (amd64, arm64) honeyp
 
 # TL;DR
 1. Meet the [system requirements](#system-requirements). The T-Pot installation needs at least 8-16 GB RAM and 128 GB free disk space as well as a working (outgoing non-filtered) internet connection.
-2. Download the T-Pot ISO from [GitHub](https://github.com/telekom-security/tpotce/releases) acording to your architecture (amd64, arm64) or [create it yourself](#create-your-own-iso-image).
+2. Download the T-Pot ISO from [GitHub](https://github.com/telekom-security/tpotce/releases) according to your architecture (amd64, arm64) or [create it yourself](#create-your-own-iso-image).
 3. Install the system in a [VM](#running-in-a-vm) or on [physical hardware](#running-on-hardware) with [internet access](#system-placement).
 4. Enjoy your favorite beverage - [watch](https://sicherheitstacho.eu) and [analyze](#kibana-dashboard).
 <br><br>
@@ -131,7 +131,7 @@ T-Pot offers docker images for the following honeypots ...
 * [Fatt](https://github.com/0x4D31/fatt) a pyshark based script for extracting network metadata and fingerprints from pcap files and live network traffic.
 * [Geoip-Attack-Map](https://github.com/eddie4/geoip-attack-map) a beautifully animated attack map [optimized](https://github.com/t3chn0m4g3/geoip-attack-map) for T-Pot.
 * [P0f](https://lcamtuf.coredump.cx/p0f3/) is a tool for purely passive traffic fingerprinting.
-* [Spiderfoot](https://github.com/smicallef/spiderfoot) a open source intelligence automation tool.
+* [Spiderfoot](https://github.com/smicallef/spiderfoot) an open source intelligence automation tool.
 * [Suricata](http://suricata-ids.org/) a Network Security Monitoring engine.
 
 ... to give you the best out-of-the-box experience possible and an easy-to-use multi-honeypot appliance.
@@ -150,17 +150,17 @@ The individual Dockerfiles and configurations are located in the [docker folder]
 T-Pot offers a number of services which are basically divided into five groups:
 1. System services provided by the OS
     * SSH for secure remote access.
-    * Cockpit for web based remote acccess, management and web terminal.
+    * Cockpit for web based remote access, management and web terminal.
 2. Elastic Stack
     * Elasticsearch for storing events.
     * Logstash for ingesting, receiving and sending events to Elasticsearch.
-    * Kibana for displaying events on beautyfully rendered dashboards.
+    * Kibana for displaying events on beautifully rendered dashboards.
 3. Tools
     * NGINX for providing secure remote access (reverse proxy) to Kibana, CyberChef, Elasticvue, GeoIP AttackMap and Spiderfoot.
     * CyberChef a web app for encryption, encoding, compression and data analysis.
     * Elasticvue a web front end for browsing and interacting with an Elastic Search cluster.
     * Geoip Attack Map a beautifully animated attack map for T-Pot.
-    * Spiderfoot a open source intelligence automation tool.
+    * Spiderfoot an open source intelligence automation tool.
 4. Honeypots
     * A selection of the 22 available honeypots based on the selected edition and / or setup.
 5. Network Security Monitoring (NSM)
@@ -207,7 +207,7 @@ All T-Pot installations will require ...
 <br><br>
 
 ## Running in a VM
-T-Pot is reported to run with with the following hypervisors, however not each and every combination is tested.
+T-Pot is reported to run with the following hypervisors, however not each and every combination is tested.
 * [UTM (Intel & Apple Silicon)](https://mac.getutm.app/)
 * [VirtualBox](https://www.virtualbox.org/)
 * [VMWare vSphere / ESXi](https://kb.vmware.com/s/article/2107518)
@@ -237,7 +237,7 @@ Some users report working installations on other clouds and hosters, i.e. Azure 
 <br><br>
 
 ## Required Ports
-Besides the ports generally needed by the OS, i.e. obtaining a DHCP lease, DNS, etc. T-Pot will require the following ports for incomding / outgoing connections. Review the [T-Pot Architecure](#technical-architecture) for a visual representation. Also some ports will show up as duplicates, which is fine since used in different editions.
+Besides the ports generally needed by the OS, i.e. obtaining a DHCP lease, DNS, etc. T-Pot will require the following ports for incoming / outgoing connections. Review the [T-Pot Architecture](#technical-architecture) for a visual representation. Also some ports will show up as duplicates, which is fine since used in different editions.
 | Port        | Protocol | Direction | Description                                                   |
 | :---        | :---     | :---      | :---                                                          |
 | 80, 443     | tcp      | outgoing  | T-Pot Management: Install, Updates, Logs (i.e. Debian, GitHub, DockerHub, PyPi, Sicherheitstacho, etc. |
@@ -276,9 +276,9 @@ For some honeypots to reach full functionality (i.e. Cowrie or Log4Pot) outgoing
 <br><br>
 
 # System Placement
-It is recommended to get yourself familiar how T-Pot and the honeypots work before you start exposing towards the interet. For a quickstart run a T-Pot installation in a virtual machine.
+It is recommended to get yourself familiar how T-Pot and the honeypots work before you start exposing towards the internet. For a quickstart run a T-Pot installation in a virtual machine.
 <br><br>
-Once you are familiar how things work you should choose a network you suspect intruders in or from (i.e. the internet). Otherwise T-Pot will most likely not capture any attacks (unless you want to proof a point)! For starters it is recommended to put T-Pot in an unfiltered zone, where all TCP and UDP traffic is forwarded to T-Pot's network interface. To avoid probing for T-Pot's management ports you can put T-Pot behind a firewall and forward all TCP / UDP traffic in the port range of 1-64000 to T-Pot while allowing access to ports > 64000 only from trusted IPs and / or only expose the [ports](#required-ports) relevant to your use-case. If you wish to catch malware traffic on unknown ports you should not limit the ports you forward since glutton and honeytrap dynamically bind any TCP port that is not covered by other honeypot daemons and thus give you a better representation what risks your setup is exposed to.
+Once you are familiar how things work you should choose a network you suspect intruders in or from (i.e. the internet). Otherwise T-Pot will most likely not capture any attacks (unless you want to prove a point)! For starters it is recommended to put T-Pot in an unfiltered zone, where all TCP and UDP traffic is forwarded to T-Pot's network interface. To avoid probing for T-Pot's management ports you can put T-Pot behind a firewall and forward all TCP / UDP traffic in the port range of 1-64000 to T-Pot while allowing access to ports > 64000 only from trusted IPs and / or only expose the [ports](#required-ports) relevant to your use-case. If you wish to catch malware traffic on unknown ports you should not limit the ports you forward since glutton and honeytrap dynamically bind any TCP port that is not covered by other honeypot daemons and thus give you a better representation what risks your setup is exposed to.
 <br><br>
 
 # Installation
@@ -544,7 +544,7 @@ T-Pot is designed to be low maintenance. Basically there is nothing you have to 
 <br><br>
 
 ## Updates
-While security update are installed automatically by the OS and docker images are pulled once per day (`/etc/crontab`) to check for updated images, T-Pot offers the option to be updated to the latest master and / or upgrade a previous version. Updating and upgrading always introduces the risk of loosing your data, so it is heavily encouraged you backup your machine before proceeding.
+While security update are installed automatically by the OS and docker images are pulled once per day (`/etc/crontab`) to check for updated images, T-Pot offers the option to be updated to the latest master and / or upgrade a previous version. Updating and upgrading always introduces the risk of losing your data, so it is heavily encouraged you backup your machine before proceeding.
 <br><br>
 Should an update fail, opening an issue or a discussion will help to improve things in the future, but the solution will always be to perform a ***fresh install*** as we simply ***cannot*** provide any support for lost data!
 <br>
@@ -728,7 +728,7 @@ reboot
 <br><br>
 
 ## Adjust tpot.yml
-Maybe the avaialble T-Pot editions do not apply to your use-case or you need a different set of honeypots. You can adjust `/opt/tpot/etc/tpot.yml` to your own preference. If you need examples how this works, just follow the configuration of the existing editions (docker-compose files) in `/opt/tpot/etc/compose` and follow the [Docker Compose Specification](https://docs.docker.com/compose/compose-file/).
+Maybe the available T-Pot editions do not apply to your use-case or you need a different set of honeypots. You can adjust `/opt/tpot/etc/tpot.yml` to your own preference. If you need examples how this works, just follow the configuration of the existing editions (docker-compose files) in `/opt/tpot/etc/compose` and follow the [Docker Compose Specification](https://docs.docker.com/compose/compose-file/).
 ```
 sudo su -
 systemctl stop tpot
@@ -744,13 +744,13 @@ You can enable two-factor-authentication for Cockpit by running `2fa.sh`.
 <br><br>
 
 # Troubleshooting
-Generally T-Pot is offered ***as is*** without any committment regarding support. Issues and discussions can opened, but be prepared to include basic necessary info, so the community is able to help.
+Generally T-Pot is offered ***as is*** without any commitment regarding support. Issues and discussions can opened, but be prepared to include basic necessary info, so the community is able to help.
 <br><br>
 
 ## Logging
 * Check if your containers are running correctly: `dps.sh`
 
-* Check if your system ressources are not exhausted: `htop`, `glances`
+* Check if your system resources are not exhausted: `htop`, `glances`
 
 * Check if there is a port conflict:
 ```
@@ -814,7 +814,7 @@ Storage failures can be identified easier via `htop` or `glances`.
 <br><br>
 
 # Contact
-T-Pot is provided ***as is*** open source ***without*** any committment regarding support ([see the disclaimer](#disclaimer)).
+T-Pot is provided ***as is*** open source ***without*** any commitment regarding support ([see the disclaimer](#disclaimer)).
 
 If you are a company or institution and wish a personal contact aside from [issues](#issues) and [discussions](#discussions) please get in contact with our [sales team](https://www.t-systems.com/de/en/security).
 
@@ -824,7 +824,7 @@ If you are a security researcher and want to responsibly report an issue please 
 ## Issues
 Please report issues (errors) on our [GitHub Issues](https://github.com/telekom-security/tpotce/issues), but [troubleshoot](#troubleshooting) first. Issues not providing information to address the error will be closed or converted into [discussions](#discussions).
 
-Feel free to use the search function, it is possible a similar issues has been adressed already, with the solution just a search away.
+Feel free to use the search function, it is possible a similar issue has been addressed already, with the solution just a search away.
 <br><br>
 
 ## Discussions
