@@ -1,4 +1,4 @@
-# T-Pot - The All In One Multi Honeypot Plattform
+# T-Pot - The All In One Multi Honeypot Platform
 
 ![T-Pot](doc/tpotsocial.png)
 
@@ -127,7 +127,7 @@ T-Pot offers docker images for the following honeypots ...
 * [Cockpit](https://cockpit-project.org/running) for a lightweight and secure WebManagement and WebTerminal.
 * [Cyberchef](https://gchq.github.io/CyberChef/) a web app for encryption, encoding, compression and data analysis.
 * [Elastic Stack](https://www.elastic.co/videos) to beautifully visualize all the events captured by T-Pot.
-* [Elasticvue](https://github.com/cars10/elasticvue/) a web front end for browsing and interacting with an Elastic Search cluster.
+* [Elasticvue](https://github.com/cars10/elasticvue/) a web front end for browsing and interacting with an ElasticSearch cluster.
 * [Fatt](https://github.com/0x4D31/fatt) a pyshark based script for extracting network metadata and fingerprints from pcap files and live network traffic.
 * [Geoip-Attack-Map](https://github.com/eddie4/geoip-attack-map) a beautifully animated attack map [optimized](https://github.com/t3chn0m4g3/geoip-attack-map) for T-Pot.
 * [P0f](https://lcamtuf.coredump.cx/p0f3/) is a tool for purely passive traffic fingerprinting.
@@ -156,9 +156,9 @@ T-Pot offers a number of services which are basically divided into five groups:
     * Logstash for ingesting, receiving and sending events to Elasticsearch.
     * Kibana for displaying events on beautifully rendered dashboards.
 3. Tools
-    * NGINX for providing secure remote access (reverse proxy) to Kibana, CyberChef, Elasticvue, GeoIP AttackMap and Spiderfoot.
+    * NGINX provides secure remote access (reverse proxy) to Kibana, CyberChef, Elasticvue, GeoIP AttackMap and Spiderfoot.
     * CyberChef a web app for encryption, encoding, compression and data analysis.
-    * Elasticvue a web front end for browsing and interacting with an Elastic Search cluster.
+    * Elasticvue a web front end for browsing and interacting with an ElasticSearch cluster.
     * Geoip Attack Map a beautifully animated attack map for T-Pot.
     * Spiderfoot an open source intelligence automation tool.
 4. Honeypots
@@ -269,20 +269,20 @@ Besides the ports generally needed by the OS, i.e. obtaining a DHCP lease, DNS, 
 | 80          | tcp      | incoming  | Honeypot: Snare (Tanner)                                      |
 
 
-Ports and availability of SaaS services may vary based on your geographical location. Also during first install outgoing ICMP / TRACEROUTE is required additionally to find the closest and fastest mirror to you.
+Ports and availability of SaaS services may vary based on your geographical location. Also during the first install outgoing ICMP / TRACEROUTE is required additionally to find the closest and fastest mirror to you.
 
 For some honeypots to reach full functionality (i.e. Cowrie or Log4Pot) outgoing connections are necessary as well, in order for them to download the attackers malware. Please see the individual honeypot's documentation to learn more by following the [links](#technical-concept) to their repositories.
 
 <br><br>
 
 # System Placement
-It is recommended to get yourself familiar how T-Pot and the honeypots work before you start exposing towards the internet. For a quickstart run a T-Pot installation in a virtual machine.
+It is recommended to get yourself familiar with how T-Pot and the honeypots work before you start exposing towards the internet. For a quickstart run a T-Pot installation in a virtual machine.
 <br><br>
-Once you are familiar how things work you should choose a network you suspect intruders in or from (i.e. the internet). Otherwise T-Pot will most likely not capture any attacks (unless you want to prove a point)! For starters it is recommended to put T-Pot in an unfiltered zone, where all TCP and UDP traffic is forwarded to T-Pot's network interface. To avoid probing for T-Pot's management ports you can put T-Pot behind a firewall and forward all TCP / UDP traffic in the port range of 1-64000 to T-Pot while allowing access to ports > 64000 only from trusted IPs and / or only expose the [ports](#required-ports) relevant to your use-case. If you wish to catch malware traffic on unknown ports you should not limit the ports you forward since glutton and honeytrap dynamically bind any TCP port that is not covered by other honeypot daemons and thus give you a better representation what risks your setup is exposed to.
+Once you are familiar with how things work you should choose a network you suspect intruders in or from (i.e. the internet). Otherwise T-Pot will most likely not capture any attacks (unless you want to prove a point)! For starters it is recommended to put T-Pot in an unfiltered zone, where all TCP and UDP traffic is forwarded to T-Pot's network interface. To avoid probing for T-Pot's management ports you can put T-Pot behind a firewall and forward all TCP / UDP traffic in the port range of 1-64000 to T-Pot while allowing access to ports > 64000 only from trusted IPs and / or only expose the [ports](#required-ports) relevant to your use-case. If you wish to catch malware traffic on unknown ports you should not limit the ports you forward since glutton and honeytrap dynamically bind any TCP port that is not covered by other honeypot daemons and thus give you a better representation of what risks your setup is exposed to.
 <br><br>
 
 # Installation
-The T-Pot installation is offered in different variations. While the overall installation of T-Pot is straight forward it heavily depends on a working, non-proxied (unless you made modifications) up and running internet connection (also see [required outgoing ports](#required-ports)). If these conditions are not met the installation **will fail!** either during the execution of the Debian Installer, after the first reboot before the T-Pot Installer is starting up or while the T-Pot installer is trying to download all the necessary dependencies.
+The T-Pot installation is offered in different variations. While the overall installation of T-Pot is straightforward it heavily depends on a working, non-proxied (unless you made modifications) up and running internet connection (also see [required outgoing ports](#required-ports)). If these conditions are not met the installation **will fail!** either during the execution of the Debian Installer, after the first reboot before the T-Pot Installer is starting up or while the T-Pot installer is trying to download all the necessary dependencies.
 <br><br>
 
 ## ISO Based
@@ -359,7 +359,7 @@ In the past T-Pot was only available as a [standalone](#standalone) solution wit
 <br><br>
 
 ### **Standalone**
-With T-Pot Standalone all services, tools, honeypots, etc. will be installed on to a single host. Make sure to meet the [system requirements](#system-requirements). You can choose from various pre-defined T-Pot editions (or flavors) depending on your personal use-case (you can always adjust `/opt/tpot/etc/tpot.yml` to your needs).
+With T-Pot Standalone all services, tools, honeypots, etc. will be installed on to a single host. Make sure to meet the [system requirements](#system-requirements). You can choose from various predefined T-Pot editions (or flavors) depending on your personal use-case (you can always adjust `/opt/tpot/etc/tpot.yml` to your needs).
 Once the installation is finished you can proceed to [First Start](#first-start).
 <br><br>
 
@@ -544,7 +544,7 @@ T-Pot is designed to be low maintenance. Basically there is nothing you have to 
 <br><br>
 
 ## Updates
-While security update are installed automatically by the OS and docker images are pulled once per day (`/etc/crontab`) to check for updated images, T-Pot offers the option to be updated to the latest master and / or upgrade a previous version. Updating and upgrading always introduces the risk of losing your data, so it is heavily encouraged you backup your machine before proceeding.
+While security updates are installed automatically by the OS and docker images are pulled once per day (`/etc/crontab`) to check for updated images, T-Pot offers the option to be updated to the latest master and / or upgrade a previous version. Updating and upgrading always introduces the risk of losing your data, so it is heavily encouraged to backup your machine before proceeding.
 <br><br>
 Should an update fail, opening an issue or a discussion will help to improve things in the future, but the solution will always be to perform a ***fresh install*** as we simply ***cannot*** provide any support for lost data!
 <br>
@@ -692,13 +692,13 @@ If you want to remove users you just modify `nginxpasswd` with `vi` or any other
 <br><br>
 
 ## Import and Export Kibana Objects
-Some T-Pot updates will require you to update the Kibana objects. Either to support new honeypots or to improve existing dashboards or visualizations. Make sure to ***export*** first so you do not loose any of your adjustments.
+Some T-Pot updates will require you to update the Kibana objects. Either to support new honeypots or to improve existing dashboards or visualizations. Make sure to ***export*** first so you do not lose any of your adjustments.
 
 ### **Export**
 1. Go to Kibana
 2. Click on "Stack Management"
 3. Click on "Saved Objects"
-4. Click on "Export <no.> objetcs"
+4. Click on "Export <no.> objects"
 5. Click on "Export all"
 This will export a NDJSON file with all your objects. Always run a full export to make sure all references are included.
 
@@ -728,7 +728,7 @@ reboot
 <br><br>
 
 ## Adjust tpot.yml
-Maybe the available T-Pot editions do not apply to your use-case or you need a different set of honeypots. You can adjust `/opt/tpot/etc/tpot.yml` to your own preference. If you need examples how this works, just follow the configuration of the existing editions (docker-compose files) in `/opt/tpot/etc/compose` and follow the [Docker Compose Specification](https://docs.docker.com/compose/compose-file/).
+Maybe the available T-Pot editions do not apply to your use-case or you need a different set of honeypots. You can adjust `/opt/tpot/etc/tpot.yml` to your own preference. If you need examples of how this works, just follow the configuration of the existing editions (docker-compose files) in `/opt/tpot/etc/compose` and follow the [Docker Compose Specification](https://docs.docker.com/compose/compose-file/).
 ```
 sudo su -
 systemctl stop tpot
@@ -744,7 +744,7 @@ You can enable two-factor-authentication for Cockpit by running `2fa.sh`.
 <br><br>
 
 # Troubleshooting
-Generally T-Pot is offered ***as is*** without any commitment regarding support. Issues and discussions can opened, but be prepared to include basic necessary info, so the community is able to help.
+Generally T-Pot is offered ***as is*** without any commitment regarding support. Issues and discussions can be opened, but be prepared to include basic necessary info, so the community is able to help.
 <br><br>
 
 ## Logging
@@ -808,7 +808,7 @@ If there are any banned IPs you can unban these with `fail2ban-client unban --al
 
 ## RAM and Storage
 The Elastic Stack is hungry for RAM, specifically `logstash` and `elasticsearch`. If the Elastic Stack is unavailable, does not receive any logs or simply keeps crashing it is most likely a RAM or Storage issue.
-While T-Pot keeps trying to restart the services / containers run `docker logs -f <container_name>` (either `logstash` or `elasticsearch`) and check if there any warnings or failures involving RAM.
+While T-Pot keeps trying to restart the services / containers run `docker logs -f <container_name>` (either `logstash` or `elasticsearch`) and check if there are any warnings or failures involving RAM.
 
 Storage failures can be identified easier via `htop` or `glances`. 
 <br><br>
