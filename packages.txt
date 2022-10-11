@@ -13,7 +13,8 @@ console-setup-linux
 cracklib-runtime
 curl
 debconf-utils
-dialog dnsutils
+dialog
+dnsutils
 docker.io
 docker-compose
 ethtool
