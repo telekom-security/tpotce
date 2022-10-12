@@ -127,7 +127,7 @@ T-Pot offers docker images for the following honeypots ...
 * [Cockpit](https://cockpit-project.org/running) for a lightweight and secure WebManagement and WebTerminal.
 * [Cyberchef](https://gchq.github.io/CyberChef/) a web app for encryption, encoding, compression and data analysis.
 * [Elastic Stack](https://www.elastic.co/videos) to beautifully visualize all the events captured by T-Pot.
-* [Elasticvue](https://github.com/cars10/elasticvue/) a web front end for browsing and interacting with an ElasticSearch cluster.
+* [Elasticvue](https://github.com/cars10/elasticvue/) a web front end for browsing and interacting with an Elasticsearch cluster.
 * [Fatt](https://github.com/0x4D31/fatt) a pyshark based script for extracting network metadata and fingerprints from pcap files and live network traffic.
 * [Geoip-Attack-Map](https://github.com/eddie4/geoip-attack-map) a beautifully animated attack map [optimized](https://github.com/t3chn0m4g3/geoip-attack-map) for T-Pot.
 * [P0f](https://lcamtuf.coredump.cx/p0f3/) is a tool for purely passive traffic fingerprinting.
@@ -158,7 +158,7 @@ T-Pot offers a number of services which are basically divided into five groups:
 3. Tools
     * NGINX provides secure remote access (reverse proxy) to Kibana, CyberChef, Elasticvue, GeoIP AttackMap and Spiderfoot.
     * CyberChef a web app for encryption, encoding, compression and data analysis.
-    * Elasticvue a web front end for browsing and interacting with an ElasticSearch cluster.
+    * Elasticvue a web front end for browsing and interacting with an Elasticsearch cluster.
     * Geoip Attack Map a beautifully animated attack map for T-Pot.
     * Spiderfoot an open source intelligence automation tool.
 4. Honeypots
