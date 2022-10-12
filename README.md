@@ -103,7 +103,7 @@ T-Pot offers docker images for the following honeypots ...
 * [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot),
 * [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot),
 * [conpot](http://conpot.org/),
-* [cowrie](http://www.micheloosterhof.com/cowrie/),
+* [cowrie](https://github.com/cowrie/cowrie),
 * [ddospot](https://github.com/aelth/ddospot),
 * [dicompot](https://github.com/nsmfoo/dicompot),
 * [dionaea](https://github.com/DinoTools/dionaea),
@@ -840,7 +840,7 @@ The software that T-Pot is built on uses the following licenses.
 <br>Apache 2 License: [cyberchef](https://github.com/gchq/CyberChef/blob/master/LICENSE), [dicompot](https://github.com/nsmfoo/dicompot/blob/master/LICENSE), [elasticsearch](https://github.com/elasticsearch/elasticsearch/blob/master/LICENSE.txt), [logstash](https://github.com/elasticsearch/logstash/blob/master/LICENSE), [kibana](https://github.com/elasticsearch/kibana/blob/master/LICENSE.md), [docker](https://github.com/docker/docker/blob/master/LICENSE)
 <br>MIT license: [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/blob/master/LICENSE), [ddospot](https://github.com/aelth/ddospot/blob/master/LICENSE), [elasticvue](https://github.com/cars10/elasticvue/blob/master/LICENSE), [glutton](https://github.com/mushorg/glutton/blob/master/LICENSE), [hellpot](https://github.com/yunginnanet/HellPot/blob/master/LICENSE), [maltrail](https://github.com/stamparm/maltrail/blob/master/LICENSE)
 <br> Unlicense: [endlessh](https://github.com/skeeto/endlessh/blob/master/UNLICENSE)
-<br> Other: [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot#licencing-agreement-malwaretech-public-licence), [cowrie](https://github.com/micheloosterhof/cowrie/blob/master/LICENSE.md), [mailoney](https://github.com/awhitehatter/mailoney), [Debian licensing](https://www.debian.org/legal/licenses/), [Elastic License](https://www.elastic.co/licensing/elastic-license)
+<br> Other: [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot#licencing-agreement-malwaretech-public-licence), [cowrie](https://github.com/cowrie/cowrie/blob/master/LICENSE.rst), [mailoney](https://github.com/awhitehatter/mailoney), [Debian licensing](https://www.debian.org/legal/licenses/), [Elastic License](https://www.elastic.co/licensing/elastic-license)
 <br> AGPL-3.0: [honeypots](https://github.com/qeeqbox/honeypots/blob/main/LICENSE)
 <br><br>
 
@@ -856,7 +856,7 @@ Without open source and the fruitful development community (we are proud to be a
 * [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot/graphs/contributors)
 * [cockpit](https://github.com/cockpit-project/cockpit/graphs/contributors)
 * [conpot](https://github.com/mushorg/conpot/graphs/contributors)
-* [cowrie](https://github.com/micheloosterhof/cowrie/graphs/contributors)
+* [cowrie](https://github.com/cowrie/cowrie/graphs/contributors)
 * [ddospot](https://github.com/aelth/ddospot/graphs/contributors)
 * [debian](http://www.debian.org/)
 * [dicompot](https://github.com/nsmfoo/dicompot/graphs/contributors)
