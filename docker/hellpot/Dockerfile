@@ -17,11 +17,8 @@ RUN apk -U --no-cache add \
     mkdir -p /opt/go && \ 
     git clone https://github.com/yunginnanet/HellPot && \
     cd HellPot && \
-    git checkout 1312f20e719223099af8aad80f316420ee3dfcb1 && \
-  # Hellpot ignores setting the logpath, need to do this hardcoded ...
-    sed -i 's#logDir = snek.GetString("logger.directory")#logDir = "/var/log/hellpot/"#g' config/logger.go && \
-    sed -i 's#tnow := "HellPot"#tnow := "hellpot"#g' config/logger.go && \
-    sed -i 's#logFileName := "HellPot"#logFileName := "hellpot"#g' config/logger.go && \
+    git checkout cadca0adf9970d86124ae8f0246423d0c1f13cf4 && \
+    sed -i 's#logFileName := "HellPot"#logFileName := "hellpot"#g' internal/config/logger.go && \
     go build cmd/HellPot/HellPot.go && \
     mv /root/HellPot/HellPot /opt/hellpot/ && \
 #
