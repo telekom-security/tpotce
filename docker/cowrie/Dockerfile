@@ -76,6 +76,7 @@ RUN apk --no-cache -U add \
     rm -rf /var/cache/apk/* && \
     rm -rf /home/cowrie/cowrie/cowrie.pid && \
     rm -rf /home/cowrie/cowrie/.git && \
+    ln -s /usr/bin/python3 /usr/bin/python && \
     unset PYTHON_DIR
 #
 # Start cowrie
