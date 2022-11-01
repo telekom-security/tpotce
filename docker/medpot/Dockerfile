@@ -20,8 +20,8 @@ RUN apk -U --no-cache add \
 #    git clone https://github.com/schmalle/medpot && \
     git clone https://github.com/s9rA16Bf4/medpot && \
     cd medpot && \
-#    git checkout 75a2e6134cf926c35b6017d62542274434c87388 && \
-    git checkout dd9833786bb56cd40c11dfb15e0dd57298e249e8 && \
+#    git checkout dd9833786bb56cd40c11dfb15e0dd57298e249e8 && \
+    git checkout 0feb786cd8a7616498ba9749dbfda24b5dbd363e && \
     sed -i s/"ews = true"/"ews = false"/g template/ews.cfg && \
     go build -o medpot go/medpot.go go/logo.go && \
 #
