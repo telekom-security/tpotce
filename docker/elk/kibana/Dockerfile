@@ -1,7 +1,7 @@
 FROM ubuntu:22.04
 #
 # VARS
-ENV KB_VER=8.3.3
+ENV KB_VER=8.4.3
 # Include dist
 COPY dist/ /root/dist/
 #
