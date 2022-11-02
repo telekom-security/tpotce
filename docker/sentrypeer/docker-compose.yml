@@ -14,7 +14,7 @@ services:
 #    cpus: 0.25
     environment:
 #     - SENTRYPEER_WEB_GUI=0
-     - SENTRYPEER_PEER_TO_PEER=0
+#     - SENTRYPEER_PEER_TO_PEER=0
 #     - SENTRYPEER_BOOTSTRAP_NODE=bootstrap.sentrypeer.org
      - SENTRYPEER_VERBOSE=1
      - SENTRYPEER_DEBUG=1

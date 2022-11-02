@@ -17,4 +17,4 @@ RUN apk -U add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/testing \
 # Set workdir and start sentrypeer
 STOPSIGNAL SIGKILL
 USER sentrypeer:sentrypeer
-CMD /usr/bin/sentrypeer -b 127.0.0.1 -jar -f /var/log/sentrypeer/sentrypeer.db -l /var/log/sentrypeer/sentrypeer.json
+CMD /usr/bin/sentrypeer -jar -f /var/log/sentrypeer/sentrypeer.db -l /var/log/sentrypeer/sentrypeer.json
