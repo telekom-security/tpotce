@@ -170,8 +170,8 @@ while [ 1 != 2 ]
       case "$mySELECT" in
         [c,C])
           fuGET_DEPLOY_DATA
-          fuCHECK_HIVE
 	  fuDEPLOY_SENSOR
+	  fuCHECK_HIVE
           break
           ;;
         [q,Q])
