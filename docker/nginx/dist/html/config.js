@@ -60,7 +60,7 @@ const CONFIG = {
       },
       {
         name: 'SecurityMeter',
-        link: 'https://sicherheitstacho.eu',
+        link: 'https://www.sicherheitstacho.eu',
       },
       {
         name: 'T-Pot @ GitHub',
