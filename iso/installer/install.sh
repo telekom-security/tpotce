@@ -545,6 +545,15 @@ if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ] || [ "$myTPOT_DEPLOYMENT_TYPE" == "use
     GREEDYBEAR=$?
 fi
 
+# Let's ask the user for Greedybear flavor
+if [ "$GREEDYBEAR" -eq 0 ]; then
+    myGREEDYBEAR_FLAVOR=$(dialog --keep-window --no-cancel --backtitle "$myBACKTITLE" --title "[ Choose Your Greedybear ]" --menu \
+    "\n" 17 70 1 \
+    "http" "Plain HTTP (default)" \
+    "https" "HTTPS enabled" \
+    "local" "Local Development" 3>&1 1>&2 2>&3 3>&-)
+fi 
+
 # Let's ask for a secure tsec password if installation type is iso
 if [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ];
   then
@@ -920,7 +929,7 @@ systemctl restart console-setup.service
 # Install Greedybear, if choosen
 if [ "$GREEDYBEAR" -eq 0 ]; then
   cd /opt/tpot/iso/installer
-  ./install_greedybear.sh
+  ./install_greedybear.sh --type=$myGREEDYBEAR_FLAVOR
 fi 
 
 if [ "$myTPOT_DEPLOYMENT_TYPE" == "auto" ];
