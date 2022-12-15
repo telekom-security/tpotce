@@ -36,6 +36,7 @@ T-Pot is the all in one, optionally distributed, multiarch (amd64, arm64) honeyp
     - [Installation Types](#installation-types)
     - [Standalone](#standalone)
     - [Distributed](#distributed)
+    - [GreedyBear](#greedybear)
   - [Cloud Deployments](#cloud-deployments)
     - [Ansible Deployment](#ansible-deployment)
     - [Terraform Configuration](#terraform-configuration)
@@ -370,6 +371,9 @@ The distributed version of T-Pot requires at least two hosts
 
 To finalize the **HIVE_SENSOR** installation continue to [Distributed Deployment](#distributed-deployment).
 <br><br>
+
+### **GreedyBear**
+The includes the possability to additionally install [GreedyBear](https://github.com/intelowlproject/GreedyBear) on the TPot instance. 
 
 ## Cloud Deployments
 Located in the [`cloud`](cloud) folder.  
