@@ -1,4 +1,4 @@
-FROM alpine:3.15
+FROM alpine:3.17
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -12,17 +12,18 @@ RUN apk -U --no-cache add \
              python3 \
              python3-dev && \
 #	     
-# Install  Server from GitHub and setup
+# Install from GitHub and setup
     mkdir -p /opt && \
     cd /opt/ && \
-    git clone https://github.com/t3chn0m4g3/geoip-attack-map && \
+    git clone https://github.com/t3chn0m4g3/geoip-attack-map -b 1.0.0 && \
     cd geoip-attack-map && \
 #    git checkout 4dae740178455f371b667ee095f824cb271f07e8 && \
-    cp /root/dist/* . && \
+#    git branch -a && \
+#    git checkout multi && \
+#    cp /root/dist/index.html . && \
     pip3 install --upgrade pip && \
     pip3 install -r requirements.txt && \
-    pip3 install flask && \
-    setcap cap_net_bind_service=+ep /usr/bin/python3.9 && \
+    setcap cap_net_bind_service=+ep /usr/bin/python3.10 && \
 #
 # Setup user, groups and configs
     addgroup -g 2000 map && \
@@ -39,4 +40,4 @@ RUN apk -U --no-cache add \
 STOPSIGNAL SIGINT
 USER map:map
 WORKDIR /opt/geoip-attack-map
-CMD ./entrypoint.sh && exec /usr/bin/python3 $MAP_COMMAND
+CMD /usr/bin/python3 $MAP_COMMAND

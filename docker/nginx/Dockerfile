@@ -1,4 +1,4 @@
-FROM alpine:3.16
+FROM alpine:3.17
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -6,6 +6,7 @@ COPY dist/ /root/dist/
 # Get and install dependencies & packages
 RUN apk -U --no-cache add \
       nginx \
+      nginx-mod-http-brotli \
       nginx-mod-http-headers-more && \
 #
 ## Setup T-Pot Landing Page, Eleasticvue, Cyberchef 
