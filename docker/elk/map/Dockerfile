@@ -15,7 +15,7 @@ RUN apk -U --no-cache add \
 # Install from GitHub and setup
     mkdir -p /opt && \
     cd /opt/ && \
-    git clone https://github.com/t3chn0m4g3/geoip-attack-map -b 1.0.0 && \
+    git clone https://github.com/t3chn0m4g3/geoip-attack-map -b 1.0.1 && \
     cd geoip-attack-map && \
 #    git checkout 4dae740178455f371b667ee095f824cb271f07e8 && \
 #    git branch -a && \
