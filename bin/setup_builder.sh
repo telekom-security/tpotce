@@ -20,7 +20,7 @@ fi
 # Main
 mkdir -p /root/.docker/cli-plugins/
 cd /root/.docker/cli-plugins/
-wget https://github.com/docker/buildx/releases/download/v0.8.2/buildx-v0.8.2.linux-amd64 -O docker-buildx
+wget https://github.com/docker/buildx/releases/download/v0.10.0/buildx-v0.10.0.linux-amd64 -O docker-buildx
 chmod +x docker-buildx
 
 docker buildx ls
