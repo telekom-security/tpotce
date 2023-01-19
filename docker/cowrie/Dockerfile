@@ -1,4 +1,4 @@
-FROM alpine:3.16
+FROM alpine:3.17
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -40,7 +40,7 @@ RUN apk --no-cache -U add \
 # Install cowrie
     mkdir -p /home/cowrie && \
     cd /home/cowrie && \
-    git clone --depth=1 https://github.com/cowrie/cowrie -b v2.4.0 && \
+    git clone --depth=1 https://github.com/cowrie/cowrie -b v2.5.0 && \
     #git clone --depth=1 https://github.com/cowrie/cowrie && \
     cd cowrie && \
     #git checkout 8b1e1cf4db0d3b0e70b470cf40385bbbd3ed1733 && \
@@ -76,7 +76,7 @@ RUN apk --no-cache -U add \
     rm -rf /var/cache/apk/* && \
     rm -rf /home/cowrie/cowrie/cowrie.pid && \
     rm -rf /home/cowrie/cowrie/.git && \
-    ln -s /usr/bin/python3 /usr/bin/python && \
+#    ln -s /usr/bin/python3 /usr/bin/python && \
     unset PYTHON_DIR
 #
 # Start cowrie
