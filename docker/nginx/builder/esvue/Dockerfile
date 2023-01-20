@@ -10,7 +10,7 @@ RUN apk -U --no-cache add git && \
     cd /opt/app && \
     cp /opt/src/package.json . && \
     cp /opt/src/yarn.lock . && \
-    yarn install && \
+    yarn install --ignore-optional && \
     cp -R /opt/src/* . && \
 # We need to set this ENV so we can run Elasticvue in its own location rather than /
     VUE_APP_PUBLIC_PATH=/elasticvue/ yarn build && \
