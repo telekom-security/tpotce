@@ -26,7 +26,7 @@ RUN apk -U --no-cache add \
     make build && \
     mv /root/dist/rules.yaml /opt/go/glutton/rules/
 #
-FROM alpine:3.16
+FROM alpine:3.17
 #
 COPY --from=builder /opt/go/glutton/bin /opt/glutton/bin
 COPY --from=builder /opt/go/glutton/config /opt/glutton/config

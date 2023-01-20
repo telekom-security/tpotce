@@ -1,4 +1,4 @@
-FROM alpine:3.16
+FROM alpine:3.17
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -17,7 +17,7 @@ RUN apk -U --no-cache add \
     mkdir -p /opt/go && \ 
     git clone https://github.com/yunginnanet/HellPot && \
     cd HellPot && \
-    git checkout cadca0adf9970d86124ae8f0246423d0c1f13cf4 && \
+    git checkout 49433bf499b6af314786cbbc3cb8566cdb18c40c && \
     sed -i 's#logFileName := "HellPot"#logFileName := "hellpot"#g' internal/config/logger.go && \
     go build cmd/HellPot/HellPot.go && \
     mv /root/HellPot/HellPot /opt/hellpot/ && \

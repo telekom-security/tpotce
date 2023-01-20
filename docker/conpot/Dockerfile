@@ -1,4 +1,4 @@
-FROM alpine:3.16
+FROM alpine:3.17
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -75,7 +75,6 @@ RUN apk --no-cache -U add \
 # Clean up
     apk del --purge \
             build-base \
-            cython-dev \
             file \
             git \
             libev \
