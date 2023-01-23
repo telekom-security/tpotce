@@ -1,4 +1,4 @@
-FROM alpine:3.16
+FROM alpine:3.17
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -70,7 +70,7 @@ RUN apk -U --no-cache add \
 # Clean up
     apk del --purge build-base \
                     gcc \
-                    git \
+                   git \
 		    libffi-dev \
                     libxml2-dev \
                     libxslt-dev \
