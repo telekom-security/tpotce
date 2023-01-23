@@ -71,7 +71,7 @@ services:
 
 # Map Web Service
   map_web:
-    build: .
+    build: map/.
     container_name: map_web
     restart: always
     environment:
