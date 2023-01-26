@@ -561,13 +561,8 @@ The update script will ...
 
 
 ### **Update from 20.06.x**
-If you are running T-Pot 20.06.x you simply follow these commands ***after you backed up any relevant data***:
-```
-sudo su -
-cd /opt/tpot/
-wget -O update.sh https://raw.githubusercontent.com/telekom-security/tpotce/master/update.sh
-./update.sh
-```
+Due to massive changes in Elasticsearch automated updates from 20.06.x are no longer available. If you have not upgraded already a fresh install with 22.04.x is required.
+
 
 ### **Updates for 22.04.x**
 If you are already running T-Pot 22.04.x you simply run the update script ***after you backed up any relevant data***:

@@ -86,7 +86,7 @@ echo
 
 # Let's check for version, upgrade to Debian 11
 function fuCHECK_VERSION () {
-local myMINVERSION="20.06.0"
+local myMINVERSION="22.04.0"
 local myMASTERVERSION="22.04.0"
 echo
 echo "### Checking for Release ID"
