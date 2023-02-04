@@ -15,7 +15,7 @@ RUN apk -U --no-cache add \
 # Install from GitHub and setup
     mkdir -p /opt && \
     cd /opt/ && \
-    git clone https://github.com/t3chn0m4g3/t-pot-attack-map -b 1.1.2 && \
+    git clone https://github.com/t3chn0m4g3/t-pot-attack-map -b 1.2.0 && \
     cd t-pot-attack-map && \
 #    git checkout eaf8d123d72a62e4c12093e4e8487e10e6ef60f3 && \
 #    git branch -a && \
