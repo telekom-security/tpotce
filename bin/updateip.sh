@@ -3,7 +3,7 @@
 # If the external IP cannot be detected, the internal IP will be inherited.
 source /etc/environment
 myCHECKIFSENSOR=$(head -n 1 /opt/tpot/etc/tpot.yml | grep "Sensor" | wc -l)
-myUUID=$(lsblk -o MOUNTPOINT,UUID | grep "/" | awk '{ print $2 }')
+myUUID=$(lsblk -o MOUNTPOINT,UUID | grep -e "^/ " | awk '{ print $2 }')
 myLOCALIP=$(hostname -I | awk '{ print $1 }')
 myEXTIP=$(/opt/tpot/bin/myip.sh)
 if [ "$myEXTIP" = "" ];
