@@ -26,6 +26,11 @@ if [ -f "../../packages.txt" ];
   then myINSTALLPACKAGESFILE="../../packages.txt"
 elif [ -f "/opt/tpot/packages.txt" ];
   then myINSTALLPACKAGESFILE="/opt/tpot/packages.txt"
+elif [ -f "/root/tpot/packages.txt" ];
+  then myINSTALLPACKAGESFILE="/root/tpot/packages.txt"
+else
+  echo "packages.txt NOT FOUND."
+  exit 1
 fi
 myINSTALLPACKAGES=$(cat $myINSTALLPACKAGESFILE)
 myINFO="\
