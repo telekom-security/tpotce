@@ -4,7 +4,7 @@
 // ╚═╝╚═╝╝╚╝ ╩ ╚═╝ 
 */
 
-#@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;700&display=swap');
+/* @import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;700&display=swap'); */
 
 /* open-sans-300 - latin */
 @font-face {
@@ -94,7 +94,7 @@ body {
 
 .container {
   width: 145vh;
-  height: 85vh;
+  height: 90vh;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   grid-template-rows: repeat(4, 1fr);

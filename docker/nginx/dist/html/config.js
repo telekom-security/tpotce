@@ -5,6 +5,8 @@
 // │  │ ││││├┤ ││ ┬│ │├┬┘├─┤ │ ││ ││││
 // └─┘└─┘┘└┘└  ┴└─┘└─┘┴└─┴ ┴ ┴ ┴└─┘┘└┘
 
+// Create link for Cockpit redirection (instead of cockpit.html), so we can create links dynamically in assets/js/lists.js
+const redirectCockpit = window.location.protocol + '//' + window.location.hostname + ':64294'
 const CONFIG = {
   // ┌┐ ┌─┐┌─┐┬┌─┐┌─┐
   // ├┴┐├─┤└─┐││  └─┐
@@ -33,8 +35,12 @@ const CONFIG = {
   lists: {
     firstList: [
       {
+        name: 'Attack Map',
+        link: '/map/',
+      },
+      {
         name: 'Cockpit',
-        link: '/cockpit.html',
+        link: redirectCockpit,
       },
       {
         name: 'Cyberchef',
@@ -55,16 +61,12 @@ const CONFIG = {
     ],
     secondList: [
       {
-        name: 'Attack Map',
-        link: '/map/',
-      },
-      {
         name: 'SecurityMeter',
         link: 'https://sicherheitstacho.eu',
       },
       {
         name: 'T-Pot @ GitHub',
-        link: 'https://github.com/dtag-dev-sec/tpotce/',
+        link: 'https://github.com/telekom-security/tpotce/',
       },
       {
         name: 'T-Pot ReadMe',
