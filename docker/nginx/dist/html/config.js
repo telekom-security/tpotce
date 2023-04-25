@@ -5,8 +5,6 @@
 // │  │ ││││├┤ ││ ┬│ │├┬┘├─┤ │ ││ ││││
 // └─┘└─┘┘└┘└  ┴└─┘└─┘┴└─┴ ┴ ┴ ┴└─┘┘└┘
 
-// Create link for Cockpit redirection (instead of cockpit.html), so we can create links dynamically in assets/js/lists.js
-const redirectCockpit = window.location.protocol + '//' + window.location.hostname + ':64294'
 const CONFIG = {
   // ┌┐ ┌─┐┌─┐┬┌─┐┌─┐
   // ├┴┐├─┤└─┐││  └─┐
@@ -40,7 +38,7 @@ const CONFIG = {
       },
       {
         name: 'Cockpit',
-        link: redirectCockpit,
+        link: '/cockpit.html',
       },
       {
         name: 'Cyberchef',

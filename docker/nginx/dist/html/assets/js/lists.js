@@ -5,7 +5,7 @@
 // Print the first List
 const isLinkAvailable = async (link) => {
   try {
-    const response = await fetch(link, { method: 'HEAD', redirect: 'manual' });
+    const response = await fetch(link, { method: 'HEAD', mode: 'no-cors' });
     if (response.ok) {
       // The link is available
       return true;
@@ -13,7 +13,7 @@ const isLinkAvailable = async (link) => {
       // The link is a redirect, follow the redirect and check the final location
       const newLocation = response.headers.get('Location');
       if (newLocation) {
-        const newResponse = await fetch(newLocation, { method: 'HEAD' });
+        const newResponse = await fetch(newLocation, { method: 'HEAD', mode: 'no-cors' });
         if (newResponse.ok) {
           // The final location is available
           return true;
