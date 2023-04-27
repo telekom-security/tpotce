@@ -5,6 +5,8 @@ services:
 # nginx service
   nginx:
     build: .
+    environment:
+      - COCKPIT=false
     container_name: nginx
     restart: always
     tmpfs:

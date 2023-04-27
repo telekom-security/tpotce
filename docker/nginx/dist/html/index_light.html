@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>T-Pot</title>
+    <link
+      rel=" shortcut icon"
+      type="image/png"
+      href="assets/icons/favicon.png"
+    />
+    <link rel="stylesheet" href="app.css" />
+    <script src="assets/js/lucide.min.js"></script>
+  </head>
+
+  <!-- 
+      ╔╗ ╔═╗╔╗╔╔╦╗╔═╗
+      ╠╩╗║╣ ║║║ ║ ║ ║
+      ╚═╝╚═╝╝╚╝ ╩ ╚═╝
+      -->
+
+  <body class="">
+    <div class="container">
+      <!-- Clock and Greetings  -->
+
+      <div class="timeBlock">
+        <div class="clock">
+          <div id="hour" class=""></div>
+          <div id="separator" class=""></div>
+          <div id="minutes" class=""></div>
+        </div>
+        <div id="greetings"></div>
+      </div>
+
+      <!-- 
+        ┬  ┬┌─┐┌┬┐┌─┐
+        │  │└─┐ │ └─┐
+        ┴─┘┴└─┘ ┴ └─┘
+        -->
+
+      <div class="card list list__1" id="list_1"></div>
+
+      <div class="card list list__2" id="list_2"></div>
+    </div>
+
+    <!-- Config  -->
+    <script src="config_light.js"></script>
+
+    <!-- Scripts  -->
+    <script src="assets/js/time.js"></script>
+    <script src="assets/js/theme.js"></script>
+    <script src="assets/js/greeting.js"></script>
+    <script src="assets/js/lists.js"></script>
+    <script>
+      lucide.createIcons();
+    </script>
+  </body>
+
+  <!-- Developed and designed by Miguel R. Ávila: -->
+  <!-- https://github.com/migueravila -->
+</html>
