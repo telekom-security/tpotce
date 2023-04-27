@@ -26,7 +26,7 @@ RUN apk -U --no-cache add \
     pip3 install --no-cache-dir configparser hpfeeds3 influxdb influxdb-client xmljson && \
 #
 # Setup ewsposter
-    git clone https://github.com/telekom-security/ewsposter -b v1.24.0 /opt/ewsposter && \
+    git clone https://github.com/telekom-security/ewsposter -b v1.25.0 /opt/ewsposter && \
     mkdir -p /opt/ewsposter/spool /opt/ewsposter/log && \
 #
 # Setup user and groups
