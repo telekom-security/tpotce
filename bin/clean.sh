@@ -117,7 +117,7 @@ fuCOWRIE () {
 # Let's create a function to clean up and prepare ddospot data
 fuDDOSPOT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/ddospot/log; fi
-  mkdir -p /data/ddospot/log
+  mkdir -p /data/ddospot/bl /data/ddospot/db /data/ddospot/log
   chmod 770 /data/ddospot -R
   chown tpot:tpot /data/ddospot -R
 }
