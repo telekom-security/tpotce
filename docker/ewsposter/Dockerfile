@@ -34,8 +34,10 @@ RUN apk -U --no-cache add \
     adduser -S -H -u 2000 -D -g 2000 ews && \
     chown -R ews:ews /opt/ewsposter && \
 #
-# Supply configs
+# Supply config and entrypoint.sh
     mv /root/dist/ews.cfg /opt/ewsposter/ && \
+    mv /root/dist/entrypoint.sh /usr/bin/ && \
+    chmod 755 /usr/bin/entrypoint.sh && \
 #
 # Clean up
     apk del build-base \
@@ -48,4 +50,4 @@ RUN apk -U --no-cache add \
 # Run ewsposter
 STOPSIGNAL SIGINT
 USER ews:ews
-CMD sleep 10 && exec /usr/bin/python3 -u /opt/ewsposter/ews.py -l $(shuf -i 10-60 -n 1)
+CMD /usr/bin/entrypoint.sh

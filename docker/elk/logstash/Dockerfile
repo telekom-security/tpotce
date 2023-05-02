@@ -64,4 +64,4 @@ HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:9600'
 #
 # Start logstash
 USER logstash:logstash
-CMD entrypoint.sh && exec /usr/share/logstash/bin/logstash --config.reload.automatic
+CMD entrypoint.sh

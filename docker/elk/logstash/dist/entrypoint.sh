@@ -6,6 +6,13 @@ function fuCLEANUP {
 }
 trap fuCLEANUP EXIT
 
+# Source ENVs from file ...
+if [ -f "/data/tpot/etc/compose/elk_environment" ];
+  then
+    echo "Found .env, now exporting ..."
+    set -o allexport && source "/data/tpot/etc/compose/elk_environment" && set +o allexport
+fi
+
 # Check internet availability 
 function fuCHECKINET () {
 mySITES=$1
@@ -85,3 +92,5 @@ if [ "$myTPOTILM" == "1" ];
     echo "T-Pot ILM already configured or ES not available."
 fi
 echo
+
+exec /usr/share/logstash/bin/logstash --config.reload.automatic
