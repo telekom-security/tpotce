@@ -57,39 +57,41 @@ if [ "$MY_TPOT_TYPE" == "SENSOR" ];
     chmod 600 $MY_SENSOR_PRIVATEKEYFILE
     cp /usr/share/logstash/config/pipelines_sensor.yml /usr/share/logstash/config/pipelines.yml
     autossh -f -M 0 -4 -l $MY_HIVE_USERNAME -i $MY_SENSOR_PRIVATEKEYFILE -p 64295 -N -L64305:127.0.0.1:64305 $MY_HIVE_IP -o "ServerAliveInterval 30" -o "ServerAliveCountMax 3" -o "StrictHostKeyChecking=no" -o "UserKnownHostsFile=/dev/null"
-    exit 0
 fi
 
-# Index Management is happening through ILM, but we need to put T-Pot ILM setting on ES.
-myTPOTILM=$(curl -s -XGET "http://elasticsearch:9200/_ilm/policy/tpot" | grep "Lifecycle policy not found: tpot" -c)
-if [ "$myTPOTILM" == "1" ];
+if [ "$MY_TPOT_TYPE" != "SENSOR" ];
   then
-    echo "T-Pot ILM template not found on ES, putting it on ES now."
-    curl -XPUT "http://elasticsearch:9200/_ilm/policy/tpot" -H 'Content-Type: application/json' -d'
-    {
-      "policy": {
-        "phases": {
-          "hot": {
-            "min_age": "0ms",
-            "actions": {}
-          },
-          "delete": {
-            "min_age": "30d",
-            "actions": {
+    # Index Management is happening through ILM, but we need to put T-Pot ILM setting on ES.
+    myTPOTILM=$(curl -s -XGET "http://elasticsearch:9200/_ilm/policy/tpot" | grep "Lifecycle policy not found: tpot" -c)
+    if [ "$myTPOTILM" == "1" ];
+      then
+        echo "T-Pot ILM template not found on ES, putting it on ES now."
+        curl -XPUT "http://elasticsearch:9200/_ilm/policy/tpot" -H 'Content-Type: application/json' -d'
+        {
+          "policy": {
+            "phases": {
+              "hot": {
+                "min_age": "0ms",
+                "actions": {}
+              },
               "delete": {
-                "delete_searchable_snapshot": true
+                "min_age": "30d",
+                "actions": {
+                  "delete": {
+                    "delete_searchable_snapshot": true
+                  }
+                }
               }
+            },
+            "_meta": {
+              "managed": true,
+              "description": "T-Pot ILM policy with a retention of 30 days"
             }
           }
-        },
-        "_meta": {
-          "managed": true,
-          "description": "T-Pot ILM policy with a retention of 30 days"
-        }
-      }
-    }'
-  else
-    echo "T-Pot ILM already configured or ES not available."
+        }'
+      else
+        echo "T-Pot ILM already configured or ES not available."
+    fi
 fi
 echo
 
