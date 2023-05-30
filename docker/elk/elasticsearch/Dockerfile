@@ -1,7 +1,7 @@
 FROM ubuntu:22.04
 #
 # VARS
-ENV ES_VER=8.6.0
+ENV ES_VER=8.6.2
 #
 # Include dist
 COPY dist/ /root/dist/
