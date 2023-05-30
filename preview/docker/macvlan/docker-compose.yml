@@ -1,0 +1,35 @@
+### This is an example on how to use macvlan driver
+### which results in bridging the container fully
+### to your network.
+
+version: '3.9'
+
+services:
+  nginx:
+    container_name: nginx
+    restart: always
+    image: nginx
+    networks:
+      mynet:
+### unassigned ip from your local network
+        ipv4_address: 1.2.3.10
+
+  nginx2:
+    container_name: nginx2
+    restart: always
+    image: nginx
+    networks:
+      mynet:
+### unassigned ip from your local network
+        ipv4_address: 1.2.3.11
+
+networks:
+  mynet:
+    driver: macvlan
+    driver_opts:
+      parent: eth0
+    ipam:
+      config:
+### your local network with netmask and gateway
+        - subnet: 1.2.3.0/24
+          gateway: 1.2.3.1

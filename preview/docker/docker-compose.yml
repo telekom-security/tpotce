@@ -1,0 +1,15 @@
+version: '3.9'
+
+services:
+
+# T-Pot Init Service
+  tpotinit:
+    build: .
+    container_name: tpotinit
+    restart: "no" 
+    image: "dtagdevsec/tpotinit:2204"
+#    volumes:
+#      - /var/run/docker.sock:/var/run/docker.sock:ro
+    network_mode: "host"
+    cap_add:
+     - NET_ADMIN

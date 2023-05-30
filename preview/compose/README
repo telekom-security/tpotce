@@ -1,0 +1,9 @@
+This folder contains docker-compose.yml files, basically referring to installation types.
+
+Just copy the .yml file you want to use over the on in the parent folder, but unload docker compose first:
+> $ docker compose down -v
+> $ cd compose
+> $ cp standard.yml ../docker-compose.yml
+
+For Docker Desktop on macOS and Windows machines is only one .yml available "mac_win.yml" which is a stripped down
+version of T-Pot able to run with the constraints of Docker Desktop.
