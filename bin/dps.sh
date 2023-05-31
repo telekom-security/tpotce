@@ -11,7 +11,7 @@ fi
 myPARAM="$1"
 if [[ $myPARAM =~ ^([1-9]|[1-9][0-9]|[1-9][0-9][0-9])$ ]];
   then
-    watch --color -n $myPARAM "dps.sh"
+    watch --color -n $myPARAM "$0"
     exit
 fi
 
