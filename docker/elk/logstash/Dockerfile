@@ -42,6 +42,8 @@ RUN apt-get update -y && \
     cp pipelines.yml /usr/share/logstash/config/pipelines.yml && \
     cp pipelines_sensor.yml /usr/share/logstash/config/pipelines_sensor.yml && \
     cp tpot-template.json /etc/logstash/ && \
+    cd /usr/share/logstash && \
+    bin/logstash-plugin update logstash-filter-translate && \
     rm /etc/logstash/pipelines.yml && \
     rm /etc/logstash/logstash.yml && \
 #
