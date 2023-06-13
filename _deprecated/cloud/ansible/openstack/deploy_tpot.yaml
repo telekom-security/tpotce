@@ -1,0 +1,30 @@
+- name: Check host prerequisites
+  hosts: localhost
+  become: yes
+  roles:
+    - check
+
+- name: Deploy instances
+  hosts: localhost
+  vars_files: my_os_cloud.yaml
+  tasks:
+    - name: Create security group and network
+      ansible.builtin.include_role:
+        name: create_net
+    - name: Create one or more instances
+      ansible.builtin.include_role:
+        name: create_vm
+      loop: "{{ range(0, 1) }}"
+      loop_control:
+        extended: yes
+
+- name: Install T-Pot
+  hosts: tpot
+  remote_user: linux
+  become: yes
+  gather_facts: no
+  roles:
+    - install
+#    - custom_ews
+#    - custom_hpfeeds
+    - reboot

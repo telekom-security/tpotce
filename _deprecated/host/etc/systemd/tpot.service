@@ -1,0 +1,42 @@
+[Unit]
+Description=tpot
+Requires=docker.service
+After=docker.service
+
+[Service]
+Restart=always
+RestartSec=5
+TimeoutSec=infinity
+
+# Get and set internal, external IP infos, but ignore errors
+ExecStartPre=-/opt/tpot/bin/updateip.sh
+
+# Clear state or if persistence is enabled rotate and compress logs from /data
+ExecStartPre=-/bin/bash -c '/opt/tpot/bin/clean.sh on'
+
+# Remove old containers, images and volumes
+ExecStartPre=/opt/tpot/bin/tpdclean.sh -y
+
+# Get IF, disable offloading, enable promiscious mode for p0f and suricata
+ExecStartPre=-/bin/bash -c '/sbin/ethtool --offload $(/sbin/ip address | grep "^2: " | awk \'{ print $2 }\' | tr -d [:punct:]) rx off tx off'
+ExecStartPre=/bin/bash -c '/sbin/ethtool -K $(/sbin/ip address | grep "^2: " | awk \'{ print $2 }\' | tr -d [:punct:]) gso off gro off'
+ExecStartPre=/bin/bash -c '/sbin/ip link set $(/sbin/ip address | grep "^2: " | awk \'{ print $2 }\' | tr -d [:punct:]) promisc on'
+
+# Set iptables accept rules to avoid forwarding to honeytrap / NFQUEUE
+# Forward all other connections to honeytrap / NFQUEUE
+ExecStartPre=/opt/tpot/bin/rules.sh /opt/tpot/etc/tpot.yml set
+
+# Compose T-Pot up
+ExecStart=/usr/bin/docker-compose -f /opt/tpot/etc/tpot.yml up --no-color
+
+# We want to see true source for UDP packets in container (https://github.com/moby/libnetwork/issues/1994)
+ExecStartPost=/bin/bash -c '/usr/bin/sleep 30 && /usr/sbin/conntrack -D -p udp'
+
+# Compose T-Pot down, remove containers and volumes
+ExecStop=/usr/bin/docker-compose -f /opt/tpot/etc/tpot.yml down -v
+
+# Remove only previously set iptables rules
+ExecStopPost=/opt/tpot/bin/rules.sh /opt/tpot/etc/tpot.yml unset
+
+[Install]
+WantedBy=multi-user.target

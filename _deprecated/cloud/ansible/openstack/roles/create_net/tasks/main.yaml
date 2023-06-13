@@ -1,0 +1,33 @@
+- name: Create security group
+  openstack.cloud.security_group:
+    cloud: "{{ cloud }}"
+    name: sg-tpot-ansible
+    description: Security Group for T-Pot
+
+- name: Add rules to security group
+  openstack.cloud.security_group_rule:
+    cloud: "{{ cloud }}"
+    security_group: sg-tpot-ansible
+    remote_ip_prefix: 0.0.0.0/0
+
+- name: Create network
+  openstack.cloud.network:
+    cloud: "{{ cloud }}"
+    name: network-tpot-ansible
+
+- name: Create subnet
+  openstack.cloud.subnet:
+    cloud: "{{ cloud }}"
+    network_name: network-tpot-ansible
+    name: subnet-tpot-ansible
+    cidr: 192.168.0.0/24
+    dns_nameservers:
+      - 100.125.4.25
+      - 100.125.129.199
+
+- name: Create router
+  openstack.cloud.router:
+    cloud: "{{ cloud }}"
+    name: router-tpot-ansible
+    interfaces:
+      - subnet-tpot-ansible

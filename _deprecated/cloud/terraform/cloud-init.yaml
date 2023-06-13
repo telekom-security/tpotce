@@ -1,0 +1,26 @@
+#cloud-config
+timezone: ${timezone}
+
+packages:
+  - git
+
+runcmd:
+  - curl -sS --retry 5 https://github.com
+  - git clone https://github.com/telekom-security/tpotce /root/tpot
+  - /root/tpot/iso/installer/install.sh --type=auto --conf=/root/tpot.conf
+  - rm /root/tpot.conf
+  - /sbin/shutdown -r now
+
+password: ${password}
+chpasswd:
+  expire: false
+
+write_files:
+  - content: |
+      # tpot configuration file
+      myCONF_TPOT_FLAVOR='${tpot_flavor}'
+      myCONF_WEB_USER='${web_user}'
+      myCONF_WEB_PW='${web_password}'
+    owner: root:root
+    path: /root/tpot.conf
+    permissions: '0600'

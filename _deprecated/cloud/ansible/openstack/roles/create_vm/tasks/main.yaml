@@ -1,0 +1,24 @@
+- name: Generate T-Pot name
+  ansible.builtin.set_fact:
+    tpot_name: "t-pot-ansible-{{ lookup('password', '/dev/null chars=ascii_lowercase,digits length=6') }}"
+
+- name: Create instance {{ ansible_loop.index }} of {{ ansible_loop.length }}
+  openstack.cloud.server:
+    cloud: "{{ cloud }}"
+    name: "{{ tpot_name }}"
+    availability_zone: "{{ availability_zone }}"
+    image: "{{ image }}"
+    boot_from_volume: yes
+    volume_size: "{{ volume_size }}"
+    key_name: "{{ key_name }}"
+    auto_ip: yes
+    flavor: "{{ flavor }}"
+    security_groups: sg-tpot-ansible
+    network: network-tpot-ansible
+  register: tpot
+
+- name: Add instance to inventory
+  ansible.builtin.add_host:
+    hostname: "{{ tpot_name }}"
+    ansible_host: "{{ tpot.server.public_v4 }}"
+    groups: tpot

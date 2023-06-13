@@ -1,0 +1,12 @@
+- name: Copy hpfeeds configuration file
+  ansible.builtin.copy:
+    src: hpfeeds.cfg
+    dest: /data/ews/conf
+    owner: tpot
+    group: tpot
+    mode: 0770
+  register: config
+
+- name: Applying hpfeeds settings
+  ansible.builtin.command: /opt/tpot/bin/hpfeeds_optin.sh --conf=/data/ews/conf/hpfeeds.cfg
+  when: config.changed == true

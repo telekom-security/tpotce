@@ -1,0 +1,148 @@
+##############################################
+### T-Pot Preseed Configuration File by mo ###
+##############################################
+
+####################
+### Locale Selection
+####################
+#d-i debian-installer/country string DE
+d-i debian-installer/language string en
+d-i debian-installer/locale string en_US.UTF-8
+d-i localechooser/preferred-locale string en_US.UTF-8
+
+######################
+### Keyboard Selection
+######################
+d-i console-setup/ask_detect boolean true
+#d-i keyboard-configuration/layoutcode string de
+d-i console-setup/detected note
+
+#############################
+### Unmount Active Partitions
+#############################
+#d-i preseed/early_command string umount /media || :
+
+#########################
+### Network Configuration
+#########################
+d-i netcfg/choose_interface select auto
+d-i netcfg/dhcp_timeout string 60
+d-i netcfg/get_hostname string t-pot
+d-i netcfg/get_domain string
+
+###############
+### Disk Layout
+###############
+d-i partman/early_command string \
+debconf-set partman-auto/disk $(parted_devices | sort -k2nr | head -1 | cut -f1)
+
+d-i partman-auto/method string regular
+d-i partman-lvm/device_remove_lvm boolean true
+d-i partman-md/device_remove_md boolean true
+d-i partman-auto/choose_recipe select atomic
+d-i partman-auto/expert_recipe string \
+        root :: \
+                8192 8888 8192 linux-swap \
+                        $primary{ } \
+                        method{ swap } format{ } \
+                . \
+                40960 44444 -1 ext4 \
+                        $primary{ } $bootable{ } \
+                        method{ format } format{ } \
+                        use_filesystem{ } filesystem{ ext4 } \
+                        mountpoint{ / } \
+                .
+d-i partman-partitioning/confirm_write_new_label boolean true
+d-i partman/choose_partition select finish
+d-i partman/confirm boolean true
+d-i partman/confirm_nooverwrite boolean true
+
+######################
+### User Configuration
+######################
+d-i passwd/root-login boolean false
+d-i passwd/make-user boolean true
+d-i passwd/user-fullname string tsec
+d-i passwd/username string tsec
+d-i passwd/user-password-crypted password $1$jAw1TW8v$a2WFamxQJfpPYZmn4qJT71
+d-i user-setup/encrypt-home boolean false
+
+########################################
+### Country Mirror & Proxy Configuration
+########################################
+#d-i mirror/country string manual
+#d-i mirror/http/hostname string deb.debian.org
+#d-i mirror/http/directory string /debian
+#d-i mirror/http/proxy string
+
+###################
+# Suite to install
+###################
+#d-i mirror/suite string unstable
+#d-i mirror/suite string testing
+#d-i mirror/udeb/suite string testing
+
+###########################
+### Skip Grub Configuration
+###########################
+#d-i grub-installer/confirm boolean true
+#d-i grub-installer/only_debian boolean true
+#d-i grub-installer/with_other_os boolean true
+#d-i grub-installer/bootdev string default
+d-i grub-installer/skip boolean true
+d-i lilo-installer/skip boolean true
+
+######################
+### Time Configuration
+######################
+#d-i time/zone string Europe/Berlin
+d-i clock-setup/utc boolean true
+d-i time/zone string UTC
+d-i clock-setup/ntp boolean true
+d-i clock-setup/ntp-server string debian.pool.ntp.org
+
+##################
+### Package Groups
+##################
+tasksel tasksel/first multiselect ssh-server
+
+########################
+### Package Installation
+########################
+d-i pkgsel/include string apache2-utils cracklib-runtime curl dialog figlet git grc libcrack2 libpq-dev lsb-release net-tools software-properties-common toilet
+popularity-contest popularity-contest/participate boolean false
+
+#################
+### Update Policy
+#################
+d-i pkgsel/update-policy select unattended-upgrades
+
+###############
+### Boot Splash
+###############
+d-i debian-installer/quiet boolean false
+d-i debian-installer/splash boolean false
+
+#########################################
+### Post install (Grub & T-Pot Installer)
+#########################################
+d-i preseed/late_command string \
+in-target apt-get -y install grub-pc; \
+in-target grub-install --force $(debconf-get partman-auto/disk); \
+update-dev; \
+in-target update-grub; \
+cp /opt/installer -R /target/root; \
+### DEV
+in-target git clone --depth=1 https://github.com/telekom-security/tpotce /opt/tpot; \
+in-target sed -i 's/allow-hotplug/auto/g' /etc/network/interfaces; \
+#in-target apt-get -y remove exim4-base; \
+#in-target apt-get -y autoremove; \
+cp /target/opt/tpot/iso/installer/rc.local.install /target/etc/rc.local; \
+cp /target/opt/tpot/iso/installer -R /target/root/;
+
+##########
+### Reboot
+##########
+d-i nobootloader/confirmation_common note
+d-i finish-install/reboot_in_progress note
+d-i cdrom-detect/eject boolean true

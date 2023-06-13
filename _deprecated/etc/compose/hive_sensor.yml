@@ -1,0 +1,548 @@
+# T-Pot (Hive_Sensor)
+# Do not erase ports sections, these are used by /opt/tpot/bin/rules.sh to setup iptables ACCEPT rules for NFQ (honeytrap / glutton)
+version: '2.3'
+
+networks:
+  adbhoney_local:
+  ciscoasa_local:
+  citrixhoneypot_local:
+  conpot_local_IEC104:
+  conpot_local_guardian_ast:
+  conpot_local_ipmi:
+  conpot_local_kamstrup_382:
+  cowrie_local:
+  ddospot_local:
+  dicompot_local:
+  dionaea_local:
+  elasticpot_local:
+  heralding_local:
+  ipphoney_local:
+  mailoney_local:
+  medpot_local:
+  redishoneypot_local:
+  tanner_local:
+  ewsposter_local:
+  sentrypeer_local:
+  spiderfoot_local:
+
+services:
+
+##################
+#### Honeypots
+##################
+
+# Adbhoney service
+  adbhoney:
+    container_name: adbhoney
+    restart: always
+    networks:
+     - adbhoney_local
+    ports:
+     - "5555:5555"
+    image: "dtagdevsec/adbhoney:2204"
+    read_only: true
+    volumes:
+     - /data/adbhoney/log:/opt/adbhoney/log
+     - /data/adbhoney/downloads:/opt/adbhoney/dl
+
+# Ciscoasa service
+  ciscoasa:
+    container_name: ciscoasa
+    restart: always
+    tmpfs:
+     - /tmp/ciscoasa:uid=2000,gid=2000
+    networks:
+     - ciscoasa_local
+    ports:
+     - "5000:5000/udp"
+     - "8443:8443"
+    image: "dtagdevsec/ciscoasa:2204"
+    read_only: true
+    volumes:
+     - /data/ciscoasa/log:/var/log/ciscoasa
+
+# CitrixHoneypot service
+  citrixhoneypot:
+    container_name: citrixhoneypot
+    restart: always
+    networks:
+     - citrixhoneypot_local
+    ports:
+     - "443:443"
+    image: "dtagdevsec/citrixhoneypot:2204"
+    read_only: true
+    volumes:
+     - /data/citrixhoneypot/logs:/opt/citrixhoneypot/logs
+
+# Conpot IEC104 service
+  conpot_IEC104:
+    container_name: conpot_iec104
+    restart: always
+    environment:
+     - CONPOT_CONFIG=/etc/conpot/conpot.cfg
+     - CONPOT_JSON_LOG=/var/log/conpot/conpot_IEC104.json
+     - CONPOT_LOG=/var/log/conpot/conpot_IEC104.log
+     - CONPOT_TEMPLATE=IEC104
+     - CONPOT_TMP=/tmp/conpot
+    tmpfs:
+     - /tmp/conpot:uid=2000,gid=2000
+    networks:
+     - conpot_local_IEC104
+    ports:
+     - "161:161/udp"
+     - "2404:2404"
+    image: "dtagdevsec/conpot:2204"
+    read_only: true
+    volumes:
+     - /data/conpot/log:/var/log/conpot
+
+# Conpot guardian_ast service
+  conpot_guardian_ast:
+    container_name: conpot_guardian_ast
+    restart: always
+    environment:
+     - CONPOT_CONFIG=/etc/conpot/conpot.cfg
+     - CONPOT_JSON_LOG=/var/log/conpot/conpot_guardian_ast.json
+     - CONPOT_LOG=/var/log/conpot/conpot_guardian_ast.log
+     - CONPOT_TEMPLATE=guardian_ast
+     - CONPOT_TMP=/tmp/conpot
+    tmpfs:
+     - /tmp/conpot:uid=2000,gid=2000
+    networks:
+     - conpot_local_guardian_ast
+    ports:
+     - "10001:10001"
+    image: "dtagdevsec/conpot:2204"
+    read_only: true
+    volumes:
+     - /data/conpot/log:/var/log/conpot
+
+# Conpot ipmi
+  conpot_ipmi:
+    container_name: conpot_ipmi
+    restart: always
+    environment:
+     - CONPOT_CONFIG=/etc/conpot/conpot.cfg
+     - CONPOT_JSON_LOG=/var/log/conpot/conpot_ipmi.json
+     - CONPOT_LOG=/var/log/conpot/conpot_ipmi.log
+     - CONPOT_TEMPLATE=ipmi
+     - CONPOT_TMP=/tmp/conpot
+    tmpfs:
+     - /tmp/conpot:uid=2000,gid=2000
+    networks:
+     - conpot_local_ipmi
+    ports:
+     - "623:623/udp"
+    image: "dtagdevsec/conpot:2204"
+    read_only: true
+    volumes:
+     - /data/conpot/log:/var/log/conpot
+
+# Conpot kamstrup_382
+  conpot_kamstrup_382:
+    container_name: conpot_kamstrup_382
+    restart: always
+    environment:
+     - CONPOT_CONFIG=/etc/conpot/conpot.cfg
+     - CONPOT_JSON_LOG=/var/log/conpot/conpot_kamstrup_382.json
+     - CONPOT_LOG=/var/log/conpot/conpot_kamstrup_382.log
+     - CONPOT_TEMPLATE=kamstrup_382
+     - CONPOT_TMP=/tmp/conpot
+    tmpfs:
+     - /tmp/conpot:uid=2000,gid=2000
+    networks:
+     - conpot_local_kamstrup_382
+    ports:
+     - "1025:1025"
+     - "50100:50100"
+    image: "dtagdevsec/conpot:2204"
+    read_only: true
+    volumes:
+     - /data/conpot/log:/var/log/conpot
+
+# Cowrie service
+  cowrie:
+    container_name: cowrie
+    restart: always
+    tmpfs:
+     - /tmp/cowrie:uid=2000,gid=2000
+     - /tmp/cowrie/data:uid=2000,gid=2000
+    networks:
+     - cowrie_local
+    ports:
+     - "22:22"
+     - "23:23"
+    image: "dtagdevsec/cowrie:2204"
+    read_only: true
+    volumes:
+     - /data/cowrie/downloads:/home/cowrie/cowrie/dl
+     - /data/cowrie/keys:/home/cowrie/cowrie/etc
+     - /data/cowrie/log:/home/cowrie/cowrie/log
+     - /data/cowrie/log/tty:/home/cowrie/cowrie/log/tty
+
+# Ddospot service
+  ddospot:
+    container_name: ddospot
+    restart: always
+    networks:
+     - ddospot_local
+    ports:
+     - "19:19/udp"
+     - "53:53/udp"
+     - "123:123/udp"
+#     - "161:161/udp"
+     - "1900:1900/udp"
+    image: "dtagdevsec/ddospot:2204"
+    read_only: true
+    volumes:
+     - /data/ddospot/log:/opt/ddospot/ddospot/logs
+     - /data/ddospot/bl:/opt/ddospot/ddospot/bl
+     - /data/ddospot/db:/opt/ddospot/ddospot/db
+
+# Dicompot service
+# Get the Horos Client for testing: https://horosproject.org/
+# Get Dicom images (CC BY 3.0): https://www.cancerimagingarchive.net/collections/
+# Put images (which must be in Dicom DCM format or it will not work!) into /data/dicompot/images
+  dicompot:
+    container_name: dicompot
+    restart: always
+    networks:
+     - dicompot_local
+    ports:
+     - "11112:11112"
+    image: "dtagdevsec/dicompot:2204"
+    read_only: true
+    volumes:
+     - /data/dicompot/log:/var/log/dicompot
+#     - /data/dicompot/images:/opt/dicompot/images
+
+# Dionaea service
+  dionaea:
+    container_name: dionaea
+    stdin_open: true
+    tty: true
+    restart: always
+    networks:
+     - dionaea_local
+    ports:
+     - "20:20"
+     - "21:21"
+     - "42:42"
+     - "69:69/udp"
+     - "81:81"
+     - "135:135"
+     # - "443:443"
+     - "445:445"
+     - "1433:1433"
+     - "1723:1723"
+     - "1883:1883"
+     - "3306:3306"
+     # - "5060:5060"
+     # - "5060:5060/udp"
+     # - "5061:5061"
+     - "27017:27017"
+    image: "dtagdevsec/dionaea:2204"
+    read_only: true
+    volumes:
+     - /data/dionaea/roots/ftp:/opt/dionaea/var/dionaea/roots/ftp
+     - /data/dionaea/roots/tftp:/opt/dionaea/var/dionaea/roots/tftp
+     - /data/dionaea/roots/www:/opt/dionaea/var/dionaea/roots/www
+     - /data/dionaea/roots/upnp:/opt/dionaea/var/dionaea/roots/upnp
+     - /data/dionaea:/opt/dionaea/var/dionaea
+     - /data/dionaea/binaries:/opt/dionaea/var/dionaea/binaries
+     - /data/dionaea/log:/opt/dionaea/var/log
+     - /data/dionaea/rtp:/opt/dionaea/var/dionaea/rtp
+
+# ElasticPot service
+  elasticpot:
+    container_name: elasticpot
+    restart: always
+    networks:
+     - elasticpot_local
+    ports:
+     - "9200:9200"
+    image: "dtagdevsec/elasticpot:2204"
+    read_only: true
+    volumes:
+     - /data/elasticpot/log:/opt/elasticpot/log
+
+# Heralding service
+  heralding:
+    container_name: heralding
+    restart: always
+    tmpfs:
+     - /tmp/heralding:uid=2000,gid=2000
+    networks:
+     - heralding_local
+    ports:
+    # - "21:21"
+    # - "22:22"
+    # - "23:23"
+    # - "25:25"
+    # - "80:80"
+     - "110:110"
+     - "143:143"
+    # - "443:443"
+     - "465:465"
+     - "993:993"
+     - "995:995"
+    # - "3306:3306"
+    # - "3389:3389"
+     - "1080:1080"
+     - "5432:5432"
+     - "5900:5900"
+    image: "dtagdevsec/heralding:2204"
+    read_only: true
+    volumes:
+     - /data/heralding/log:/var/log/heralding
+
+# Honeytrap service
+  honeytrap:
+    container_name: honeytrap
+    restart: always
+    tmpfs:
+     - /tmp/honeytrap:uid=2000,gid=2000
+    network_mode: "host"
+    cap_add:
+     - NET_ADMIN
+    image: "dtagdevsec/honeytrap:2204"
+    read_only: true
+    volumes:
+     - /data/honeytrap/attacks:/opt/honeytrap/var/attacks
+     - /data/honeytrap/downloads:/opt/honeytrap/var/downloads
+     - /data/honeytrap/log:/opt/honeytrap/var/log
+
+# Ipphoney service
+  ipphoney:
+    container_name: ipphoney
+    restart: always
+    networks:
+     - ipphoney_local
+    ports:
+     - "631:631"
+    image: "dtagdevsec/ipphoney:2204"
+    read_only: true
+    volumes:
+     - /data/ipphoney/log:/opt/ipphoney/log
+
+# Mailoney service
+  mailoney:
+    container_name: mailoney
+    restart: always
+    environment:
+     - HPFEEDS_SERVER=
+     - HPFEEDS_IDENT=user
+     - HPFEEDS_SECRET=pass
+     - HPFEEDS_PORT=20000
+     - HPFEEDS_CHANNELPREFIX=prefix
+    networks:
+     - mailoney_local
+    ports:
+     - "25:25"
+    image: "dtagdevsec/mailoney:2204"
+    read_only: true
+    volumes:
+     - /data/mailoney/log:/opt/mailoney/logs
+
+# Medpot service
+  medpot:
+    container_name: medpot
+    restart: always
+    networks:
+     - medpot_local
+    ports:
+     - "2575:2575"
+    image: "dtagdevsec/medpot:2204"
+    read_only: true
+    volumes:
+     - /data/medpot/log/:/var/log/medpot
+
+# Redishoneypot service
+  redishoneypot:
+    container_name: redishoneypot
+    restart: always
+    networks:
+     - redishoneypot_local
+    ports:
+     - "6379:6379"
+    image: "dtagdevsec/redishoneypot:2204"
+    read_only: true
+    volumes:
+     - /data/redishoneypot/log:/var/log/redishoneypot
+
+# SentryPeer service
+  sentrypeer:
+    container_name: sentrypeer
+    restart: always
+# SentryPeer offers to exchange bad actor data via DHT / P2P mode by setting the ENV to true (1)
+# In some cases (i.e. internally deployed T-Pots) this might be confusing as SentryPeer will show
+# the bad actors in its logs. Therefore this option is opt-in based.
+#    environment:
+#     - SENTRYPEER_PEER_TO_PEER=0
+    networks:
+     - sentrypeer_local
+    ports:
+#     - "4222:4222/udp"
+     - "5060:5060/udp"
+#     - "127.0.0.1:8082:8082"
+    image: "dtagdevsec/sentrypeer:2204"
+    read_only: true
+    volumes:
+     - /data/sentrypeer/log:/var/log/sentrypeer
+
+#### Snare / Tanner
+## Tanner Redis Service
+  tanner_redis:
+    container_name: tanner_redis
+    restart: always
+    tty: true
+    networks:
+     - tanner_local
+    image: "dtagdevsec/redis:2204"
+    read_only: true
+
+## PHP Sandbox service
+  tanner_phpox:
+    container_name: tanner_phpox
+    restart: always
+    tty: true
+    networks:
+     - tanner_local
+    image: "dtagdevsec/phpox:2204"
+    read_only: true
+
+## Tanner API Service
+  tanner_api:
+    container_name: tanner_api
+    restart: always
+    tmpfs:
+     - /tmp/tanner:uid=2000,gid=2000
+    tty: true
+    networks:
+     - tanner_local
+    image: "dtagdevsec/tanner:2204"
+    read_only: true
+    volumes:
+     - /data/tanner/log:/var/log/tanner
+    command: tannerapi
+    depends_on:
+     - tanner_redis
+
+## Tanner Service
+  tanner:
+    container_name: tanner
+    restart: always
+    tmpfs:
+     - /tmp/tanner:uid=2000,gid=2000
+    tty: true
+    networks:
+     - tanner_local
+    image: "dtagdevsec/tanner:2204"
+    command: tanner
+    read_only: true
+    volumes:
+     - /data/tanner/log:/var/log/tanner
+     - /data/tanner/files:/opt/tanner/files
+    depends_on:
+     - tanner_api
+#     - tanner_web
+     - tanner_phpox
+
+## Snare Service
+  snare:
+    container_name: snare
+    restart: always
+    tty: true
+    networks:
+     - tanner_local
+    ports:
+     - "80:80"
+    image: "dtagdevsec/snare:2204"
+    depends_on:
+     - tanner
+
+
+##################
+#### NSM
+##################
+
+# Fatt service
+  fatt:
+    container_name: fatt
+    restart: always
+    network_mode: "host"
+    cap_add:
+     - NET_ADMIN
+     - SYS_NICE
+     - NET_RAW
+    image: "dtagdevsec/fatt:2204"
+    volumes:
+     - /data/fatt/log:/opt/fatt/log
+
+# P0f service
+  p0f:
+    container_name: p0f
+    restart: always
+    network_mode: "host"
+    image: "dtagdevsec/p0f:2204"
+    read_only: true
+    volumes:
+     - /data/p0f/log:/var/log/p0f
+
+# Suricata service
+  suricata:
+    container_name: suricata
+    restart: always
+    environment:
+    # For ET Pro ruleset replace "OPEN" with your OINKCODE
+     - OINKCODE=OPEN
+    # Loading externel Rules from URL 
+    # - FROMURL="https://username:password@yoururl.com|https://username:password@otherurl.com"
+    network_mode: "host"
+    cap_add:
+     - NET_ADMIN
+     - SYS_NICE
+     - NET_RAW
+    image: "dtagdevsec/suricata:2204"
+    volumes:
+     - /data/suricata/log:/var/log/suricata
+
+
+##################
+#### Tools
+##################
+
+## Logstash service
+  logstash:
+    container_name: logstash
+    restart: always
+    environment:
+     - LS_JAVA_OPTS=-Xms1024m -Xmx1024m
+    env_file:
+     - /opt/tpot/etc/compose/elk_environment
+    mem_limit: 2g
+    image: "dtagdevsec/logstash:2204"
+    volumes:
+     - /data:/data
+
+# Ewsposter service
+  ewsposter:
+    container_name: ewsposter
+    restart: always
+    networks:
+     - ewsposter_local
+    environment:
+     - EWS_HPFEEDS_ENABLE=false
+     - EWS_HPFEEDS_HOST=host
+     - EWS_HPFEEDS_PORT=port
+     - EWS_HPFEEDS_CHANNELS=channels
+     - EWS_HPFEEDS_IDENT=user
+     - EWS_HPFEEDS_SECRET=secret
+     - EWS_HPFEEDS_TLSCERT=false
+     - EWS_HPFEEDS_FORMAT=json
+    env_file:
+     - /opt/tpot/etc/compose/elk_environment
+    image: "dtagdevsec/ewsposter:2204"
+    volumes:
+     - /data:/data
+     - /data/ews/conf/ews.ip:/opt/ewsposter/ews.ip

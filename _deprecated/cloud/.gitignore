@@ -1,0 +1,10 @@
+# Ansible
+*.retry
+
+# Terraform
+**/.terraform
+**/terraform.*
+
+# OpenStack clouds
+**/clouds.yaml
+**/secure.yaml
