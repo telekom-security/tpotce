@@ -37,8 +37,8 @@ if [ -f "/data/uuid" ];
     if [ "${WEB_USER}" == "changeme" ] || [ "${WEB_PW}" == "changeme" ];
       then
         echo "# Please change WEB_USER and WEB_PW in the hidden \".env\" file."
-	echo "# Aborting." 
-	echo
+	      echo "# Aborting."
+      	echo
         exit 1
     fi
     echo
@@ -47,7 +47,7 @@ if [ -f "/data/uuid" ];
     mkdir -vp /data/ews/conf \
               /data/nginx/{cert,conf,log} \
               /data/tpot/etc/compose/ \
-	      /data/tpot/etc/logrotate/ \
+	            /data/tpot/etc/logrotate/ \
               /tmp/etc/
     echo
     echo "# Generating self signed certificate ..."
