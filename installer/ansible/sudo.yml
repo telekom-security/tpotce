@@ -1,0 +1,29 @@
+---
+# Become needs to happen in the task or root will be added to the sudo group instead of the user
+- name: On Debian, check if sudo is installed
+  hosts: all
+  gather_facts: true
+
+  pre_tasks:
+    - name: Check for non-root user id
+      debug:
+        msg: "Detected user: '{{ ansible_user_id }}'"
+      failed_when: ansible_user_id == "root"
+
+    - name: Install sudo package if not present already
+      become: true
+      become_method: su
+      apt:
+        name: sudo
+        state: present
+        update-cache: yes
+      when: ansible_distribution == "Debian"
+
+    - name: Add current user to sudo group
+      become: true
+      become_method: su
+      user:
+        name: "{{ ansible_user_id }}"
+        groups: sudo
+        append: yes
+      when: ansible_distribution == "Debian"

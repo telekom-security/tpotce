@@ -1,0 +1,165 @@
+---
+########################################
+# T-Pot - Install recommended packages #
+########################################
+
+- name: T-Pot - Install recommended packages 
+  hosts: all
+  gather_facts: true
+  become: true
+
+  tasks:
+    - name: Install recommended packages
+      package:
+        name:
+          - bash-completion
+          - ca-certificates
+          - curl 
+          - git
+          - gnupg
+          - grc
+          - neovim
+          - net-tools
+        state: present
+        update-cache: yes
+
+#################################################
+# T-Pot - Prepare for and install Docker Engine #
+#################################################
+
+- name: T-Pot - Prepare for and install Docker Engine
+  hosts: all
+  gather_facts: true
+  become: true
+
+  tasks:
+    - name: Remove distribution based Docker packages
+      package:
+        name:
+          - docker
+          - docker-engine
+          - docker.io
+          - containerd 
+          - runc
+        state: absent
+        update-cache: yes
+
+    - name: Add folder for Docker Engine GPG key
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: 0755
+
+    - name: Download Docker Engine GPG key
+      get_url:
+        url: https://download.docker.com/linux/{{ ansible_distribution | lower }}/gpg
+        dest: /etc/apt/keyrings/docker
+        mode: 0755
+
+    - name: Decrypt Docker Engine GPG key
+      shell: gpg --dearmor /etc/apt/keyrings/docker
+      args:
+        creates: /etc/apt/keyrings/docker.gpg
+
+    - name: Add Docker Engine repository
+      apt_repository:
+        filename: docker
+        repo: "deb [arch={{ ansible_architecture | replace('aarch64', 'arm64') }} signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} stable"
+        state: present
+        update-cache: yes
+
+    - name: Install Docker Engine packages
+      package:
+        name:
+          - docker-ce 
+          - docker-ce-cli 
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin 
+        state: present
+        update-cache: yes
+      notify: Restart Docker
+
+    - name: Enable Docker Engine upon boot
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+  handlers:
+    - name: Restart Docker
+      ansible.builtin.service:
+        name: docker
+        state: restarted
+        enabled: true
+
+######################################################
+# T-Pot - Adjust configs, add users and groups, etc. #
+######################################################
+
+- name: T-Pot - Adjust configs, add users and groups, etc.
+  hosts: all
+  gather_facts: true
+  become: true
+
+  tasks:
+    - name: Create T-Pot group
+      group:
+        name: tpot
+        gid: 2000
+        state: present
+
+    - name: Create T-Pot user
+      user:
+        name: tpot
+        uid: 2000
+        system: yes
+        shell: /bin/false
+        home: /nonexistent
+        group: tpot
+
+    - name: Change SSH Port to 64295
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        line: "Port 64295"
+        insertafter: EOF
+      notify: Restart SSH
+
+  handlers:
+    - name: Restart SSH
+      ansible.builtin.service:
+        name: sshd
+        state: restarted
+
+######################################
+# T-Pot - Adjust group users, bashrc #
+######################################
+
+- name: T-Pot - Adjust group users, bashrc
+  hosts: all
+  gather_facts: true
+
+  tasks:
+    - name: Add aliases
+      blockinfile:
+        path: ~/.bashrc
+        block: |
+          alias dps='grc --colour=on docker ps -f status=running -f status=exited --format "table {{'{{'}}.Names{{'}}'}}\t{{'{{'}}.Status{{'}}'}}\t{{'{{'}}.Ports{{'}}'}}" | sort'
+          alias dpsw='watch -c bash -ic dps'
+        marker: "# {mark} ANSIBLE MANAGED BLOCK"
+        insertafter: EOF
+        state: present
+
+    - name: Add current user to Docker, T-Pot group
+      become: true
+      user:
+        name: "{{ ansible_user_id }}"
+        groups: 
+          - docker
+          - tpot
+        append: yes
+
+    - name: Check for non-root user id
+      debug:
+        msg: "Detected user: '{{ ansible_user_id }}'"
+      failed_when: ansible_user_id == "root"

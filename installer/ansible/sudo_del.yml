@@ -1,0 +1,27 @@
+---
+# Become needs to happen in the task or root will be added to the sudo group instead of the user
+- name: On Debian, remove sudo
+  hosts: all
+  gather_facts: true
+
+  pre_tasks:
+    - name: Check for non-root user id
+      debug:
+        msg: "Detected user: '{{ ansible_user_id }}'"
+      failed_when: ansible_user_id == "root"
+
+    - name: Remove current user from sudo group
+      become: true
+      become_method: su
+      command: gpasswd -d "{{ ansible_user_id  }}" sudo
+      when: ansible_distribution == "Debian"
+
+    - name: Uninstall sudo package if present
+      become: true
+      become_method: su
+      apt:
+        name: sudo
+        state: absent
+        update-cache: no
+      when: ansible_distribution == "Debian"
+
