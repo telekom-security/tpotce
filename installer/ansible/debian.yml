@@ -9,6 +9,9 @@
   become: true
 
   tasks:
+    - name: Syncing clocks
+      shell: "hwclock --hctosys"
+
     - name: Install recommended packages
       package:
         name:
