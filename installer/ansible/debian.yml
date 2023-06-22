@@ -134,11 +134,11 @@
         name: sshd
         state: restarted
 
-######################################
-# T-Pot - Adjust group users, bashrc #
-######################################
+#######################################################################
+# T-Pot - Adjust group users, bashrc, clone / update T-Pot repository #
+#######################################################################
 
-- name: T-Pot - Adjust group users, bashrc
+- name: T-Pot - Adjust group users, bashrc, clone / update T-Pot repository
   hosts: all
   gather_facts: true
 
@@ -152,6 +152,14 @@
         marker: "# {mark} ANSIBLE MANAGED BLOCK"
         insertafter: EOF
         state: present
+
+    - name: Clone / Update T-Pot repository
+      git:
+        repo: 'https://github.com/telekom-security/tpotce'
+        dest: '/home/{{ ansible_user_id }}/tpot/'
+        version: dev
+        clone: yes
+        update: no
 
     - name: Add current user to Docker, T-Pot group
       become: true
