@@ -1,4 +1,18 @@
 ---
+################################
+# T-Pot - Abort if run as root #
+################################
+
+- name: T-Pot Abort if run as root
+  hosts: all
+  gather_facts: true
+  pre_tasks:
+    - name: Check if running as root
+      assert:
+        that: ansible_user_id != 'root'
+        fail_msg: "T-Pot playbook should not be run as root."
+        success_msg: "Running as user: {{ ansible_user_id }}."
+
 ########################################
 # T-Pot - Install recommended packages #
 ########################################
@@ -9,11 +23,11 @@
   become: true
 
   tasks:
-    - name: Syncing clocks
+    - name: Syncing clocks (All)
       shell: "hwclock --hctosys"
       when: ansible_distribution in ["Debian", "Fedora", "Ubuntu"]
 
-    - name: Install recommended packages
+    - name: Install recommended packages (Debian, Ubuntu)
       package:
         name:
           - bash-completion
@@ -24,9 +38,24 @@
           - grc
           - neovim
           - net-tools
-        state: present
-        update-cache: yes
+        state: latest
+        update_cache: yes
       when: ansible_distribution in ["Debian", "Ubuntu"]
+
+    - name: Install recommended packages (Fedora)
+      package:
+        name:
+          - bash-completion
+          - ca-certificates
+          - curl
+          - dnf-plugins-core
+          - git
+          - grc
+          - neovim
+          - net-tools
+        state: latest 
+        update_cache: yes
+      when: ansible_distribution in ["Fedora"]
 
 
 #################################################
@@ -39,7 +68,7 @@
   become: true
 
   tasks:
-    - name: Remove distribution based Docker packages
+    - name: Remove distribution based Docker packages (Debian, Fedora, Ubuntu)
       package:
         name:
           - docker
@@ -48,38 +77,47 @@
           - containerd 
           - runc
         state: absent
-        update-cache: yes
-      when: ansible_distribution in ["Debian", "Ubuntu"]
+        update_cache: yes
+      when: ansible_distribution in ["Debian", "Fedora", "Ubuntu"]
 
-    - name: Add folder for Docker Engine GPG key
+    - name: Add folder for Docker Engine GPG key (Debian, Ubuntu)
       file:
         path: /etc/apt/keyrings
         state: directory
         mode: 0755
       when: ansible_distribution in ["Debian", "Ubuntu"]
 
-    - name: Download Docker Engine GPG key
+    - name: Download Docker Engine GPG key (Debian, Ubuntu)
       get_url:
         url: https://download.docker.com/linux/{{ ansible_distribution | lower }}/gpg
         dest: /etc/apt/keyrings/docker
         mode: 0755
       when: ansible_distribution in ["Debian", "Ubuntu"]
 
-    - name: Decrypt Docker Engine GPG key
+    - name: Decrypt Docker Engine GPG key (Debian, Ubuntu)
       shell: gpg --dearmor /etc/apt/keyrings/docker
       args:
         creates: /etc/apt/keyrings/docker.gpg
       when: ansible_distribution in ["Debian", "Ubuntu"]
 
-    - name: Add Docker Engine repository
+    - name: Add Docker Engine repository (Debian, Ubuntu)
       apt_repository:
         filename: docker
         repo: "deb [arch={{ ansible_architecture | replace('aarch64', 'arm64') }} signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} stable"
         state: present
-        update-cache: yes
+        update_cache: yes
       when: ansible_distribution in ["Debian", "Ubuntu"]
 
-    - name: Install Docker Engine packages
+    - name: Check if Docker repository exists (Fedora)
+      command: dnf repolist docker-ce-stable
+      register: docker_repo_info
+      when: ansible_distribution in ["Fedora"]
+
+    - name: Add Docker repository (Fedora)
+      command: dnf -y config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo
+      when: docker_repo_info.rc != 0 and ansible_distribution in ["Fedora"]
+
+    - name: Install Docker Engine packages (Debian, Fedora, Ubuntu)
       package:
         name:
           - docker-ce 
@@ -87,12 +125,12 @@
           - containerd.io
           - docker-buildx-plugin
           - docker-compose-plugin 
-        state: present
-        update-cache: yes
+        state: latest
+        update_cache: yes
       notify: Restart Docker
       when: ansible_distribution in ["Debian", "Fedora", "Ubuntu"]
 
-    - name: Enable Docker Engine upon boot
+    - name: Enable Docker Engine upon boot (Debia, Fedora, Ubuntu)
       systemd:
         name: docker
         state: started
@@ -101,7 +139,7 @@
 
   handlers:
     - name: Restart Docker
-      ansible.builtin.service:
+      service:
         name: docker
         state: restarted
         enabled: true
@@ -117,14 +155,14 @@
   become: true
 
   tasks:
-    - name: Create T-Pot group
+    - name: Create T-Pot group (All)
       group:
         name: tpot
         gid: 2000
         state: present
       when: ansible_distribution in ["Debian", "Fedora", "Ubuntu"]
 
-    - name: Create T-Pot user
+    - name: Create T-Pot user (All)
       user:
         name: tpot
         uid: 2000
@@ -134,20 +172,20 @@
         group: tpot
       when: ansible_distribution in ["Debian", "Fedora", "Ubuntu"]
 
-    - name: Disable ssh.socket unit
+    - name: Disable ssh.socket unit (Ubuntu)
       systemd:
         name: ssh.socket
         state: stopped
         enabled: false
       when: ansible_distribution in ["Ubuntu"]
 
-    - name: Remove ssh.socket.conf file
+    - name: Remove ssh.socket.conf file (Ubuntu)
       file:
         path: /etc/systemd/system/ssh.service.d/00-socket.conf
         state: absent
       when: ansible_distribution in ["Ubuntu"]
 
-    - name: Change SSH Port to 64295
+    - name: Change SSH Port to 64295 (All)
       lineinfile:
         path: /etc/ssh/sshd_config
         line: "Port 64295"
@@ -155,49 +193,50 @@
       notify: Restart SSH
       when: ansible_distribution in ["Debian", "Fedora", "Ubuntu"]
 
-    - name: Add T-Pot SSH port to Firewall
+    - name: Add T-Pot SSH port to Firewall (Fedora)
       firewalld:
         port: 64295/tcp
         permanent: yes
         state: enabled
       when: ansible_distribution in ["Fedora"]
 
-    - name: Set T-Pot default target to ACCEPT
+    - name: Set T-Pot default target to ACCEPT (Fedora)
       firewalld:
-        default_zone: public
+        zone: public
         target: ACCEPT
         permanent: yes
+        state: enabled
       when: ansible_distribution in ["Fedora"]
 
-    - name: Get Firewall rules
+    - name: Get Firewall rules (Fedora)
       command: "firewall-cmd --list-all"
       register: firewall_output
       when: ansible_distribution in ["Fedora"]
 
-    - name: Print Firewall rules
+    - name: Print Firewall rules (Fedora)
       debug:
         var: firewall_output.stdout_lines
       when: ansible_distribution in ["Fedora"]
 
-    - name: Load kernel modules
+    - name: Load kernel modules (Fedora)
       command: modprobe -v iptable_filter
       when: ansible_distribution in ["Fedora"]
 
-    - name: Update iptables.conf
+    - name: Update iptables.conf (Fedora)
       lineinfile:
         path: /etc/modules-load.d/iptables.conf
         line: iptable_filter
         create: yes
       when: ansible_distribution in ["Fedora"]
 
-    - name: Update SELinux config
+    - name: Update SELinux config (Fedora)
       lineinfile:
         path: /etc/selinux/config
         regexp: '^SELINUX='
         line: 'SELINUX=permissive'
       when: ansible_distribution in ["Fedora"]
 
-    - name: Modify DNSStubListener in resolved.conf
+    - name: Modify DNSStubListener in resolved.conf (Fedora, Ubuntu)
       lineinfile:
         path: /etc/systemd/resolved.conf
         regexp: '^.*DNSStubListener=.*'
@@ -207,14 +246,14 @@
       when: ansible_distribution in ["Fedora", "Ubuntu"]
 
   handlers:
-    - name: Restart Resolved 
-      ansible.builtin.service:
+    - name: Restart Resolved
+      service:
         name: systemd-resolved
         state: restarted
       when: ansible_distribution in ["Fedora", "Ubuntu"]
 
     - name: Restart SSH
-      ansible.builtin.service:
+      service:
         name: "{{ 'sshd' if ansible_distribution == 'Debian' else 'ssh' }}"
         state: restarted
         enabled: true
@@ -229,7 +268,7 @@
   gather_facts: true
 
   tasks:
-    - name: Add aliases
+    - name: Add aliases (All)
       blockinfile:
         path: ~/.bashrc
         block: |
@@ -240,7 +279,7 @@
         state: present
       when: ansible_distribution in ["Debian", "Fedora", "Ubuntu"]
 
-    - name: Clone / Update T-Pot repository
+    - name: Clone / Update T-Pot repository (All)
       git:
         repo: 'https://github.com/telekom-security/tpotce'
         dest: '/home/{{ ansible_user_id }}/tpotce/'
@@ -249,7 +288,7 @@
         update: no
       when: ansible_distribution in ["Debian", "Fedora", "Ubuntu"]
 
-    - name: Add current user to Docker, T-Pot group
+    - name: Add current user to Docker, T-Pot group (All)
       become: true
       user:
         name: "{{ ansible_user_id }}"
@@ -259,7 +298,7 @@
         append: yes
       when: ansible_distribution in ["Debian", "Fedora", "Ubuntu"]
 
-    - name: Check for non-root user id
+    - name: Check for non-root user id (All)
       debug:
         msg: "Detected user: '{{ ansible_user_id }}'"
       when: ansible_distribution in ["Debian", "Fedora", "Ubuntu"]
