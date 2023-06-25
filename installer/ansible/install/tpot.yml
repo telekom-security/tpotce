@@ -62,6 +62,18 @@
         update_cache: yes
       when: ansible_distribution in ["Fedora"]
 
+    - name: Remove conflicting packages (openSUSE Tumbleweed)
+      package:
+        name:
+          - cups
+          - net-tools
+          - postfix
+          - yast2-auth-client
+          - yast2-auth-user
+        state: absent 
+        update_cache: yes
+      when: ansible_distribution in ["openSUSE Tumbleweed"]
+
     - name: Install recommended packages (openSUSE Tumbleweed)
       package:
         name:
@@ -75,18 +87,6 @@
         state: latest
         update_cache: yes
       when: ansible_distribution in ["openSUSE Tumbleweed"]
-
-    - name: Remove conflicting packages (openSUSE Tumbleweed)
-      package:
-        name:
-          - cups
-          - net-tools
-          - postfix
-          - yast2-auth-client
-          - yast2-auth-user
-        state: absent 
-      when: ansible_distribution in ["openSUSE Tumbleweed"]
-
 
 #################################################
 # T-Pot - Prepare for and install Docker Engine #
@@ -153,7 +153,6 @@
           - docker-compose 
         state: latest
         update_cache: yes
-      notify: Restart Docker
       when: ansible_distribution in ["openSUSE Tumbleweed"]
 
     - name: Install Docker Engine packages (Debian, Fedora, Ubuntu)
