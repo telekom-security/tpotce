@@ -46,7 +46,8 @@
         groups: 
           - docker
           - tpot
-        state: absent
+        state: present
+        remove: yes 
       when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
 
     - name: Check for non-root user id (All)
@@ -65,16 +66,11 @@
   become: true
 
   tasks:
-    - name: Remove T-Pot group (All)
-      group:
-        name: tpot
-        state: absent
-      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
-
     - name: Remove T-Pot user (All)
       user:
         name: tpot
         state: absent
+        remove: yes
       when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
 
     - name: Revert SELinux config (Fedora)
@@ -161,7 +157,6 @@
     - name: Stop all Docker containers (All)
       docker_container:
         state: absent 
-        force: true
         name: "*"
       when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
       ignore_errors: true
@@ -175,13 +170,6 @@
         volumes: true
       when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
       ignore_errors: true
-
-    - name: Stop Docker
-      service:
-        name: docker
-        state: stopped
-        enabled: false
-      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
 
     - name: Uninstall Docker Engine packages
       package:
@@ -235,7 +223,6 @@
       package:
         name:
           - busybox-net-tools
-          - git
           - grc
           - neovim
           - net-tools
@@ -250,7 +237,6 @@
           - net-tools
           - postfix
           - yast2-auth-client
-          - yast2-auth-user
-        state: latest
+        state: present
         update_cache: yes
       when: ansible_distribution == "openSUSE Tumbleweed"
