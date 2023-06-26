@@ -223,7 +223,7 @@
         state: absent
       when: ansible_distribution in ["Ubuntu"]
 
-    - name: Change SSH Port to 64295 (All)
+    - name: Change SSH Port to 64295 (Debian, Fedora, Ubuntu)
       lineinfile:
         path: /etc/ssh/sshd_config
         line: "Port 64295"
@@ -303,7 +303,7 @@
         name: "{{ 'sshd' if ansible_distribution == 'Debian' else 'ssh' }}"
         state: restarted
         enabled: true
-      when: ansible_distribution in ["Debian", "Ubuntu"]
+      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
 
 #######################################################################
 # T-Pot - Adjust group users, bashrc, clone / update T-Pot repository #
