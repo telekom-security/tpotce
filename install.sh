@@ -53,7 +53,7 @@ case $myCURRENT_DISTRIBUTION in
   "Debian"|"Ubuntu")
     if ! command -v sudo >/dev/null; 
       then
-	echo "### ‘sudo‘ is not installed. To continue you need to provide the ‘root‘ password... "
+	echo "### ‘sudo‘ is not installed. To continue you need to provide the ‘root‘ password ... "
 	echo "### ... or press CTRL-C to manually install ‘sudo‘ and add your user to the sudoers."
 	su -c "apt -y update && apt -y install sudo ${myPACKAGES}"
         su -c "/usr/sbin/usermod -aG sudo $(whoami)"
@@ -87,7 +87,7 @@ fi
 # Download tpot.yml if not found locally
 if [ ! -f installer/install/tpot.yml ];
   then
-    echo "### Now downloading T-Pot Ansible Installation Playbooks... "
+    echo "### Now downloading T-Pot Ansible Installation Playbook ... "
     wget -qO tpot.yml https://github.com/telekom-security/tpotce/raw/dev/installer/install/tpot.yml
     myANSIBLE_TPOT_PLAYBOOK="tpot.yml"
     echo
@@ -96,8 +96,8 @@ if [ ! -f installer/install/tpot.yml ];
     myANSIBLE_TPOT_PLAYBOOK="installer/install/tpot.yml"
 fi
 
-# Run Ansible Playbooks
-echo "### Now running T-Pot Ansible Installation Playbooks..."
+# Run Ansible Playbook
+echo "### Now running T-Pot Ansible Installation Playbook ..."
 echo "### Ansible will ask for the ‘BECOME password‘ which is typically the password you ’sudo’ with."
 echo
 ANSIBLE_LOG_PATH=$PWD/install_tpot.log ansible-playbook ${myANSIBLE_TPOT_PLAYBOOK} -i 127.0.0.1, -c local ${myANSIBLE_BECOME_OPTION}
