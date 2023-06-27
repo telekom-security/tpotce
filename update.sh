@@ -3,7 +3,7 @@
 # Some global vars
 myCONFIGFILE="/opt/tpot/etc/tpot.yml"
 myCOMPOSEPATH="/opt/tpot/etc/compose"
-myLSB_RELEASE="bullseye"
+myLSB_RELEASE=("bullseye" "bookworm")
 myRED="[0;31m"
 myGREEN="[0;32m"
 myWHITE="[0;0m"
@@ -91,7 +91,7 @@ local myMASTERVERSION="22.04.0"
 echo
 echo "### Checking for Release ID"
 myRELEASE=$(lsb_release -c | awk '{ print $2 }')
-if [ "$myRELEASE" != "$myLSB_RELEASE" ] 
+if [[ ! " ${myLSB_RELEASE[@]} " =~ " ${myRELEASE} " ]]; 
   then
     echo "###### Need to upgrade to Debian 11 (Bullseye) first:$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
     echo "###### Upgrade may result in complete data loss and should not be run via SSH."
