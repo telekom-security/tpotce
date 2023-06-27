@@ -227,9 +227,9 @@ services:
      - /run
      - /var/lib/nginx/tmp:uid=100,gid=82
     network_mode: "host"
-    ports:
-     - "64297:64297"
-     - "127.0.0.1:64304:64304"
+      #    ports:
+      #     - "64297:64297"
+      #     - "127.0.0.1:64304:64304"
     image: "dtagdevsec/nginx:2204"
     read_only: true
     volumes:

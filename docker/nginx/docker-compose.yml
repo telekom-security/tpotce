@@ -20,9 +20,9 @@ services:
 #    cpu_count: 1
 #    cpus: 0.75
     network_mode: "host"
-    ports:
-     - "64297:64297"
-     - "127.0.0.1:64304:64304"
+      #    ports:
+      #     - "64297:64297"
+      #     - "127.0.0.1:64304:64304"
     image: "dtagdevsec/nginx:2204"
     read_only: true
     volumes:
