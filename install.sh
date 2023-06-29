@@ -65,7 +65,7 @@ case $myCURRENT_DISTRIBUTION in
   "openSUSE Tumbleweed")
     sudo zypper refresh
     sudo zypper install -y ${myPACKAGES}
-    echo "export ANSIBLE_PYTHON_INTERPRETER=/bin/python3" | sudo tee -a /etc/profile.d/ansible.sh >/dev/null
+    echo "export ANSIBLE_PYTHON_INTERPRETER=/bin/python3" | sudo tee /etc/profile.d/ansible.sh >/dev/null
     source /etc/profile.d/ansible.sh
     ;;
 esac
@@ -101,6 +101,11 @@ echo "### Now running T-Pot Ansible Installation Playbook ..."
 echo "### Ansible will ask for the ‘BECOME password‘ which is typically the password you ’sudo’ with."
 echo
 ANSIBLE_LOG_PATH=$PWD/install_tpot.log ansible-playbook ${myANSIBLE_TPOT_PLAYBOOK} -i 127.0.0.1, -c local ${myANSIBLE_BECOME_OPTION}
+
+# Pull docker images
+echo "### Now pulling images ..."
+docker compose -f /home/$(whoami)/tpotce/docker-compose.yml pull
+echo
 
 # Done and show running services
 sudo grc netstat -tulpen
