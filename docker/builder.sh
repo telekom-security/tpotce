@@ -47,6 +47,20 @@ for i in $myARCHITECTURES;
   done
 echo
 
+# Let's ensure we have builder created with cache support
+echo "### Checking for mybuilder ..."
+if ! docker buildx ls | grep -q mybuilder;
+  then
+    echo "## Setting up mybuilder ..."
+    docker buildx create --name mybuilder
+    # Set as default, otherwise local cache is not supported
+    docker buildx use mybuilder
+    docker buildx inspect --bootstrap
+  else
+    echo "## Found mybuilder!"
+fi
+echo
+
 # Only run with command switch
 if [ "$1" == "" ]; then
   echo "### T-Pot Multi Arch Image Builder."
