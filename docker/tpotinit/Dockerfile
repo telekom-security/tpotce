@@ -33,9 +33,6 @@ RUN apk --no-cache -U add \
     addgroup -g 2000 tpot && \
     adduser -S -s /bin/ash -u 2000 -D -g 2000 tpot && \
 #
-# Install tpot
-    cp /root/dist/entrypoint.sh . && \
-#
 # Clean up
     apk del --purge git && \
     rm -rf /root/* /tmp/* && \
