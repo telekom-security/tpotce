@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Buildx Example: docker buildx build --platform linux/amd64,linux/arm64 -t username/demo:latest --push .
+
 # Setup Vars
 myPLATFORMS="linux/amd64,linux/arm64"
 myHUBORG="dtagdevsec"
@@ -23,8 +25,27 @@ fi
 docker buildx > /dev/null 2>&1 
 if [ "$?" == "1" ];
   then
-    echo "### Build environment not setup. Run bin/setup_builder.sh"
+    echo "### Build environment not setup. Install docker engine from docker:"
+    echo "### https://docs.docker.com/engine/install/debian/"
 fi
+
+# Let's ensure arm64 and amd64 are supported
+echo "### Let's ensure ARM64 and AMD64 are supported ..."
+myARCHITECTURES="amd64 arm64"
+mySUPPORTED=$(docker buildx inspect --bootstrap)
+
+for i in $myARCHITECTURES;
+  do
+    if ! echo $mySUPPORTED | grep -q linux/$i;
+      then
+        echo "## Installing $i support ..."
+        docker run --privileged --rm tonistiigi/binfmt --install $i
+        docker buildx inspect --bootstrap
+      else
+        echo "## $i support detected!"
+    fi
+  done
+echo
 
 # Only run with command switch
 if [ "$1" == "" ]; then
