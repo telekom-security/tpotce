@@ -347,6 +347,9 @@
         append: yes
       when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
 
+    - name: Refresh user session so docker commands will work
+      command: newgrp docker
+
     - name: Check for non-root user id (All)
       debug:
         msg: "Detected user: '{{ ansible_user_id }}'"
