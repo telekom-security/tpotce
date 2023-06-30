@@ -284,31 +284,39 @@
         line: 'SELINUX=permissive'
       when: ansible_distribution in ["Fedora"]
 
+    - name: Stop Docker
+      service:
+        name: docker
+        state: stopped
+      when: ansible_distribution in ["Fedora", "Ubuntu"]
+
+    - name: Stop Resolved
+      service:
+        name: systemd-resolved
+        state: stopped
+      when: ansible_distribution in ["Fedora", "Ubuntu"]
+
     - name: Modify DNSStubListener in resolved.conf (Fedora, Ubuntu)
       lineinfile:
         path: /etc/systemd/resolved.conf
         regexp: '^.*DNSStubListener=.*'
         line: 'DNSStubListener=no'
         state: present
-      notify:
-        - Restart Resolved
-        - Restart Docker
+      when: ansible_distribution in ["Fedora", "Ubuntu"]
+
+    - name: Start Resolved
+      service:
+        name: systemd-resolved
+        state: started
+      when: ansible_distribution in ["Fedora", "Ubuntu"]
+
+    - name: Start Docker
+      service:
+        name: docker
+        state: started
       when: ansible_distribution in ["Fedora", "Ubuntu"]
 
   handlers:
-    - name: Restart Docker
-      service:
-        name: docker
-        state: restarted
-        enabled: true
-      when: ansible_distribution in ["Fedora", "Ubuntu"]
-
-    - name: Restart Resolved
-      service:
-        name: systemd-resolved
-        state: restarted
-      when: ansible_distribution in ["Fedora", "Ubuntu"]
-
     - name: Restart SSH
       service:
         name: "{{ 'sshd' if ansible_distribution in ['Debian', 'openSUSE Tumbleweed'] else 'ssh' }}"
