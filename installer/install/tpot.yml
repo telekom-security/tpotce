@@ -290,10 +290,19 @@
         regexp: '^.*DNSStubListener=.*'
         line: 'DNSStubListener=no'
         state: present
-      notify: Restart Resolved
+      notify:
+        - Restart Resolved
+        - Restart Docker
       when: ansible_distribution in ["Fedora", "Ubuntu"]
 
   handlers:
+    - name: Restart Docker
+      service:
+        name: docker
+        state: restarted
+        enabled: true
+      when: ansible_distribution in ["Fedora", "Ubuntu"]
+
     - name: Restart Resolved
       service:
         name: systemd-resolved
