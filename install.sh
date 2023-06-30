@@ -18,7 +18,7 @@ if [ $EUID -eq 0 ];
 fi
 
 # Check if running on a supported distribution
-mySUPPORTED_DISTRIBUTIONS=("Fedora" "Debian" "openSUSE Tumbleweed" "Ubuntu")
+mySUPPORTED_DISTRIBUTIONS=("Fedora Linux" "Debian GNU/Linux" "openSUSE Tumbleweed" "Ubuntu")
 myCURRENT_DISTRIBUTION=$(awk -F= '/^NAME/{print $2}' /etc/os-release | tr -d '"')
 
 if [[ ! " ${mySUPPORTED_DISTRIBUTIONS[@]} " =~ " ${myCURRENT_DISTRIBUTION} " ]];
