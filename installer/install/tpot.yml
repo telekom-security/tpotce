@@ -302,7 +302,7 @@
 
     - name: Restart SSH
       service:
-        name: "{{ 'sshd' if ansible_distribution == 'Debian|openSUSE Tumbleweed' else 'ssh' }}"
+        name: "{{ 'sshd' if ansible_distribution == 'Debian|Fedora|openSUSE Tumbleweed' else 'ssh' }}"
         state: restarted
         enabled: true
       when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
