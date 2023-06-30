@@ -302,10 +302,10 @@
 
     - name: Restart SSH
       service:
-        name: "{{ 'sshd' if ansible_distribution in ['Debian', 'Fedora', 'openSUSE Tumbleweed'] else 'ssh' }}"
+        name: "{{ 'sshd' if ansible_distribution in ['Debian', 'openSUSE Tumbleweed'] else 'ssh' }}"
         state: restarted
         enabled: true
-      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
+      when: ansible_distribution in ["Debian", "openSUSE Tumbleweed", "Ubuntu"]
 
 #######################################################################
 # T-Pot - Adjust group users, bashrc, clone / update T-Pot repository #
