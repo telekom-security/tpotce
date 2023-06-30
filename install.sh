@@ -76,7 +76,7 @@ case ${myCURRENT_DISTRIBUTION} in
                chmod 440 /etc/sudoers.d/${myUSER}"
       else
         sudo apt update
-        sudo apt install -y cracklib ${myPACKAGES}
+        sudo apt install -y cracklib-runtime ${myPACKAGES}
     fi
     ;;
   "openSUSE Tumbleweed")
@@ -84,7 +84,7 @@ case ${myCURRENT_DISTRIBUTION} in
     echo ${myINSTALL_NOTIFICATION}
     echo
     sudo zypper refresh
-    sudo zypper install -y ${myPACKAGES}
+    sudo zypper install -y cracklib ${myPACKAGES}
     echo "export ANSIBLE_PYTHON_INTERPRETER=/bin/python3" | sudo tee /etc/profile.d/ansible.sh >/dev/null
     source /etc/profile.d/ansible.sh
     ;;
