@@ -3,6 +3,7 @@
 - name: On Debian, check if sudo is installed
   hosts: all
   gather_facts: true
+  become: false
 
   pre_tasks:
     - name: Check for non-root user id

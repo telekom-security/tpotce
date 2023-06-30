@@ -6,6 +6,8 @@
 - name: T-Pot Abort if run as root
   hosts: all
   gather_facts: true
+  become: false
+
   pre_tasks:
     - name: Check if running as root
       assert:
@@ -312,6 +314,7 @@
 - name: T-Pot - Adjust group users, bashrc, clone / update T-Pot repository
   hosts: all
   gather_facts: true
+  become: false
 
   tasks:
     - name: Add aliases (All)

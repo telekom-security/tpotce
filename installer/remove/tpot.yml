@@ -6,6 +6,7 @@
 - name: T-Pot Abort if run as root
   hosts: all
   gather_facts: true
+  become: false
 
   pre_tasks:
     - name: Check if running as root
@@ -27,6 +28,7 @@
 - name: T-Pot - Remove group users, bashrc 
   hosts: all
   gather_facts: true
+  become: false
 
   tasks:
     - name: Remove aliases (All)

@@ -53,10 +53,12 @@ case $myCURRENT_DISTRIBUTION in
   "Debian GNU/Linux"|"Ubuntu")
     if ! command -v sudo >/dev/null; 
       then
-	echo "### ‘sudo‘ is not installed. To continue you need to provide the ‘root‘ password ... "
-	echo "### ... or press CTRL-C to manually install ‘sudo‘ and add your user to the sudoers."
-	su -c "apt -y update && apt -y install sudo ${myPACKAGES}"
+        echo "### ‘sudo‘ is not installed. To continue you need to provide the ‘root‘ password ... "
+        echo "### ... or press CTRL-C to manually install ‘sudo‘ and add your user to the sudoers."
+        su -c "apt -y update && apt -y install sudo ${myPACKAGES}"
         su -c "/usr/sbin/usermod -aG sudo $(whoami)"
+        # Refresh groups, so sudo is directly usable
+        newgrp sudo
       else
         sudo apt update
         sudo apt install -y ${myPACKAGES}
@@ -71,16 +73,16 @@ case $myCURRENT_DISTRIBUTION in
 esac
 echo
 
-# Check if passwordless sudo access is available
+# Check if sudo access is available
 sudo -n true > /dev/null 2>&1
 if [ $? -eq 1 ]; 
   then
-    myANSIBLE_BECOME_OPTION="--become"
-    echo "### ‘sudo‘ is setup passwordless, setting ansible become option to ${myANSIBLE_BECOME_OPTION}."
-    echo
-  else
     myANSIBLE_BECOME_OPTION="--ask-become-pass"
     echo "### ‘sudo‘ is setup with password, setting ansible become option to ${myANSIBLE_BECOME_OPTION}."
+    echo
+  else
+    myANSIBLE_BECOME_OPTION="--become"
+    echo "### ‘sudo‘ is usable without password, setting ansible become option to ${myANSIBLE_BECOME_OPTION}."
     echo
 fi
 
@@ -115,4 +117,3 @@ echo "SMTP, HTTP, etc. might prevent T-Pot from starting."
 
 echo "Done. Please reboot and re-connect via SSH on tcp/64295."
 echo
-
