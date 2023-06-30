@@ -46,11 +46,11 @@ fi
 
 # Install packages based on the distribution
 case $myCURRENT_DISTRIBUTION in
-  "Fedora")
+  "Fedora Linux")
     sudo dnf update -y
     sudo dnf install -y ${myPACKAGES}
     ;;
-  "Debian"|"Ubuntu")
+  "Debian GNU/Linux"|"Ubuntu")
     if ! command -v sudo >/dev/null; 
       then
 	echo "### ‘sudo‘ is not installed. To continue you need to provide the ‘root‘ password ... "
