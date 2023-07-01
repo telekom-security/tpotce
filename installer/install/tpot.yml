@@ -152,7 +152,12 @@
       package:
         name:
           - docker
-          - docker-compose 
+          - docker-bash-completion
+          - docker-buildx
+          - docker-compose
+          - docker-compose-switch
+          - liblvm2cmd2_03
+          - lvm2
         state: latest
         update_cache: yes
       when: ansible_distribution in ["openSUSE Tumbleweed"]
@@ -183,7 +188,7 @@
         name: docker
         state: restarted
         enabled: true
-      when: ansible_distribution in ["Debian", "Fedora","openSUSE Tumbleweed", "Ubuntu"]
+      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
 
 ######################################################
 # T-Pot - Adjust configs, add users and groups, etc. #
