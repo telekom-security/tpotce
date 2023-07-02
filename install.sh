@@ -91,6 +91,14 @@ case ${myCURRENT_DISTRIBUTION} in
 esac
 echo
 
+# Define tag for Ansible
+if [ "${myCURRENT_DISTRIBUTION}" == "Debian GNU/Linux" ];
+  then
+    myANSIBLE_TAG="Debian"
+  else
+    myANSIBLE_TAG=${myCURRENT_DISTRIBUTION}
+fi
+
 # Check type of sudo access
 sudo -n true > /dev/null 2>&1
 if [ $? -eq 1 ]; 
@@ -120,7 +128,7 @@ fi
 echo "### Now running T-Pot Ansible Installation Playbook ..."
 echo "### Ansible will ask for the ‘BECOME password‘ which is typically the password you ’sudo’ with."
 echo
-ANSIBLE_LOG_PATH=${PWD}/install_tpot.log ansible-playbook ${myANSIBLE_TPOT_PLAYBOOK} -i 127.0.0.1, -c local ${myANSIBLE_BECOME_OPTION}
+ANSIBLE_LOG_PATH=${PWD}/install_tpot.log ansible-playbook ${myANSIBLE_TPOT_PLAYBOOK} -i 127.0.0.1, -c local --tags "${myANSIBLE_TAG}" ${myANSIBLE_BECOME_OPTION}
 
 # Asking for web user name
 myWEB_USER=""

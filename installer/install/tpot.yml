@@ -3,18 +3,23 @@
 # T-Pot - Abort if run as root #
 ################################
 
-- name: T-Pot Abort if run as root
+- name: T-Pot - Abort if run as root
   hosts: all
   gather_facts: true
   become: false
+  tags:
+    - "Debian"
+    - "Fedora"
+    - "openSUSE Tumbleweed"
+    - "Ubuntu"
 
   pre_tasks:
-    - name: Check if running as root
+    - name: Check if running as root (All)
       assert:
         that: ansible_user_id != 'root'
         fail_msg: "T-Pot playbook should not be run as root."
         success_msg: "Running as user: {{ ansible_user_id }}."
-    - name: Check if supported distribution 
+    - name: Check if supported distribution (All)
       assert:
         that: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
         fail_msg: "T-Pot is not supported on this plattform: {{ ansible_distribution }}."
@@ -33,6 +38,11 @@
     - name: Syncing clocks (All)
       shell: "hwclock --hctosys"
       when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
+      tags:
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Ubuntu"
 
     - name: Install recommended packages (Debian, Ubuntu)
       package:
@@ -48,6 +58,9 @@
         state: latest
         update_cache: yes
       when: ansible_distribution in ["Debian", "Ubuntu"]
+      tags:
+        - "Debian"
+        - "Ubuntu"
 
     - name: Install recommended packages (Fedora)
       package:
@@ -63,6 +76,8 @@
         state: latest 
         update_cache: yes
       when: ansible_distribution in ["Fedora"]
+      tags:
+        - "Fedora"
 
     - name: Remove conflicting packages (openSUSE Tumbleweed)
       package:
@@ -75,6 +90,8 @@
         state: absent 
         update_cache: yes
       when: ansible_distribution in ["openSUSE Tumbleweed"]
+      tags:
+        - "openSUSE Tumbleweed"
 
     - name: Install recommended packages (openSUSE Tumbleweed)
       package:
@@ -89,10 +106,12 @@
         state: latest
         update_cache: yes
       when: ansible_distribution in ["openSUSE Tumbleweed"]
+      tags:
+        - "openSUSE Tumbleweed"
 
-#################################################
-# T-Pot - Prepare for and install Docker Engine #
-#################################################
+#####################################
+# T-Pot - Prepare for Docker Engine #
+#####################################
 
 - name: T-Pot - Prepare for and install Docker Engine
   hosts: all
@@ -111,6 +130,10 @@
         state: absent
         update_cache: yes
       when: ansible_distribution in ["Debian", "Fedora", "Ubuntu"]
+      tags:
+        - "Debian"
+        - "Fedora"
+        - "Ubuntu"
 
     - name: Add folder for Docker Engine GPG key (Debian, Ubuntu)
       file:
@@ -118,6 +141,9 @@
         state: directory
         mode: 0755
       when: ansible_distribution in ["Debian", "Ubuntu"]
+      tags:
+        - "Debian"
+        - "Ubuntu"
 
     - name: Download Docker Engine GPG key (Debian, Ubuntu)
       get_url:
@@ -125,12 +151,18 @@
         dest: /etc/apt/keyrings/docker
         mode: 0755
       when: ansible_distribution in ["Debian", "Ubuntu"]
+      tags:
+        - "Debian"
+        - "Ubuntu"
 
     - name: Decrypt Docker Engine GPG key (Debian, Ubuntu)
       shell: gpg --dearmor /etc/apt/keyrings/docker
       args:
         creates: /etc/apt/keyrings/docker.gpg
       when: ansible_distribution in ["Debian", "Ubuntu"]
+      tags:
+        - "Debian"
+        - "Ubuntu"
 
     - name: Add Docker Engine repository (Debian, Ubuntu)
       apt_repository:
@@ -139,6 +171,9 @@
         state: present
         update_cache: yes
       when: ansible_distribution in ["Debian", "Ubuntu"]
+      tags:
+        - "Debian"
+        - "Ubuntu"
 
     - name: Add Docker repository (Fedora)
       shell: |
@@ -147,7 +182,19 @@
             dnf -y config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo
         fi
       when: ansible_distribution in ["Fedora"]
+      tags:
+        - "Fedora"
 
+#################################
+# T-Pot - Install Docker Engine #
+#################################
+
+- name: T-Pot - Install Docker Engine
+  hosts: all
+  gather_facts: true
+  become: true
+
+  tasks:
     - name: Install Docker Engine packages (openSUSE Tumbleweed)
       package:
         name:
@@ -161,6 +208,8 @@
         state: latest
         update_cache: yes
       when: ansible_distribution in ["openSUSE Tumbleweed"]
+      tags:
+        - "openSUSE Tumbleweed"
 
     - name: Install Docker Engine packages (Debian, Fedora, Ubuntu)
       package:
@@ -172,23 +221,23 @@
           - docker-compose-plugin 
         state: latest
         update_cache: yes
-      notify: Restart Docker
       when: ansible_distribution in ["Debian", "Fedora", "Ubuntu"]
+      tags:
+        - "Debian"
+        - "Fedora"
+        - "Ubuntu"
 
-    - name: Enable Docker Engine upon boot (Debian, Fedora, openSUSE Tumbleweed, Ubuntu)
+    - name: Stop Docker (All)
       service:
         name: docker
-        state: started
-        enabled: true 
+        state: stopped
+        enabled: false
       when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
-
-  handlers:
-    - name: Restart Docker
-      service:
-        name: docker
-        state: restarted
-        enabled: true
-      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
+      tags:
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Ubuntu"
 
 ######################################################
 # T-Pot - Adjust configs, add users and groups, etc. #
@@ -206,6 +255,11 @@
         gid: 2000
         state: present
       when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
+      tags:
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Ubuntu"
 
     - name: Create T-Pot user (All)
       user:
@@ -216,6 +270,11 @@
         home: /nonexistent
         group: tpot
       when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
+      tags:
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Ubuntu"
 
     - name: Disable ssh.socket unit (Ubuntu)
       systemd:
@@ -223,28 +282,36 @@
         state: stopped
         enabled: false
       when: ansible_distribution in ["Ubuntu"]
+      tags:
+        - "Ubuntu"
 
     - name: Remove ssh.socket.conf file (Ubuntu)
       file:
         path: /etc/systemd/system/ssh.service.d/00-socket.conf
         state: absent
       when: ansible_distribution in ["Ubuntu"]
+      tags:
+        - "Ubuntu"
 
     - name: Change SSH Port to 64295 (Debian, Fedora, Ubuntu)
       lineinfile:
         path: /etc/ssh/sshd_config
         line: "Port 64295"
         insertafter: EOF
-      notify: Restart SSH
       when: ansible_distribution in ["Debian", "Fedora", "Ubuntu"]
+      tags:
+        - "Debian"
+        - "Fedora"
+        - "Ubuntu"
 
     - name: Change SSH Port to 64295 (openSUSE Tumbleweed)
       lineinfile:
         path: /etc/ssh/sshd_config.d/port.conf
         line: "Port 64295"
         create: yes
-      notify: Restart SSH
       when: ansible_distribution in ["openSUSE Tumbleweed"]
+      tags:
+        - "openSUSE Tumbleweed"
 
     - name: Add T-Pot SSH port to Firewall (Fedora, openSUSE Tumbleweed)
       firewalld:
@@ -252,6 +319,9 @@
         permanent: yes
         state: enabled
       when: ansible_distribution in ["Fedora", "openSUSE Tumbleweed"]
+      tags:
+        - "Fedora"
+        - "openSUSE Tumbleweed"
 
     - name: Set T-Pot default target to ACCEPT (Fedora, openSUSE Tumbleweed)
       firewalld:
@@ -260,20 +330,31 @@
         permanent: yes
         state: enabled
       when: ansible_distribution in ["Fedora", "openSUSE Tumbleweed"]
+      tags:
+        - "Fedora"
+        - "openSUSE Tumbleweed"
 
     - name: Get Firewall rules (Fedora, openSUSE Tumbleweed)
       command: "firewall-cmd --list-all"
       register: firewall_output
       when: ansible_distribution in ["Fedora", "openSUSE Tumbleweed"]
+      tags:
+        - "Fedora"
+        - "openSUSE Tumbleweed"
 
-    - name: Print Firewall rules (Fedora)
+    - name: Print Firewall rules (Fedora, openSUSE Tumbleweed)
       debug:
         var: firewall_output.stdout_lines
       when: ansible_distribution in ["Fedora", "openSUSE Tumbleweed"]
+      tags:
+        - "Fedora"
+        - "openSUSE Tumbleweed"
 
     - name: Load kernel modules (Fedora)
       command: modprobe -v iptable_filter
       when: ansible_distribution in ["Fedora"]
+      tags:
+        - "Fedora"
 
     - name: Update iptables.conf (Fedora)
       lineinfile:
@@ -281,6 +362,8 @@
         line: iptable_filter
         create: yes
       when: ansible_distribution in ["Fedora"]
+      tags:
+        - "Fedora"
 
     - name: Update SELinux config (Fedora)
       lineinfile:
@@ -288,18 +371,17 @@
         regexp: '^SELINUX='
         line: 'SELINUX=permissive'
       when: ansible_distribution in ["Fedora"]
+      tags:
+        - "Fedora"
 
-    - name: Stop Docker
-      service:
-        name: docker
-        state: stopped
-      when: ansible_distribution in ["Fedora", "Ubuntu"]
-
-    - name: Stop Resolved
+    - name: Stop Resolved (Fedora, Ubuntu)
       service:
         name: systemd-resolved
         state: stopped
       when: ansible_distribution in ["Fedora", "Ubuntu"]
+      tags:
+        - "Fedora"
+        - "Ubuntu"
 
     - name: Modify DNSStubListener in resolved.conf (Fedora, Ubuntu)
       lineinfile:
@@ -308,26 +390,61 @@
         line: 'DNSStubListener=no'
         state: present
       when: ansible_distribution in ["Fedora", "Ubuntu"]
+      tags:
+        - "Fedora"
+        - "Ubuntu"
 
-    - name: Start Resolved
+############################
+# T-Pot - Restart services #
+############################
+
+- name: T-Pot - Restart services
+  hosts: all
+  gather_facts: true
+  become: true
+
+  tasks:
+    - name: Start Resolved (Fedora, Ubuntu)
       service:
         name: systemd-resolved
-        state: started
+        state: restarted
       when: ansible_distribution in ["Fedora", "Ubuntu"]
+      tags:
+        - "Fedora"
+        - "Ubuntu"
 
-    - name: Start Docker
+    - name: Restart Firewalld (Fedora, openSUSE Tumbleweed)
+      service:
+        name: firewalld
+        state: restarted
+      when: ansible_distribution in ["Fedora", "openSUSE Tumbleweed"]
+      tags:
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+
+    - name: Enable Docker Engine upon boot (All)
       service:
         name: docker
-        state: started
-      when: ansible_distribution in ["Fedora", "Ubuntu"]
+        state: restarted
+        enabled: true
+      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
+      tags:
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Ubuntu"
 
-  handlers:
-    - name: Restart SSH
+    - name: Restart SSH (All)
       service:
         name: "{{ 'sshd' if ansible_distribution in ['Debian', 'openSUSE Tumbleweed'] else 'ssh' }}"
         state: restarted
         enabled: true
-      when: ansible_distribution in ["Debian", "openSUSE Tumbleweed", "Ubuntu"]
+      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
+      tags:
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Ubuntu"
 
 #######################################################################
 # T-Pot - Adjust group users, bashrc, clone / update T-Pot repository #
@@ -337,6 +454,11 @@
   hosts: all
   gather_facts: true
   become: false
+  tags:
+    - "Debian"
+    - "Fedora"
+    - "openSUSE Tumbleweed"
+    - "Ubuntu"
 
   tasks:
     - name: Add aliases (All)
@@ -368,9 +490,6 @@
           - tpot
         append: yes
       when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
-
-    - name: Refresh user session so docker commands will work
-      command: newgrp docker
 
     - name: Check for non-root user id (All)
       debug:
