@@ -34,7 +34,6 @@ services:
 # T-Pot Init Service
   tpotinit:
     container_name: tpotinit
-    build: docker/.
     env_file:
       - .env
     restart: always

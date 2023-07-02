@@ -334,22 +334,6 @@
         - "Fedora"
         - "openSUSE Tumbleweed"
 
-    - name: Get Firewall rules (Fedora, openSUSE Tumbleweed)
-      command: "firewall-cmd --list-all"
-      register: firewall_output
-      when: ansible_distribution in ["Fedora", "openSUSE Tumbleweed"]
-      tags:
-        - "Fedora"
-        - "openSUSE Tumbleweed"
-
-    - name: Print Firewall rules (Fedora, openSUSE Tumbleweed)
-      debug:
-        var: firewall_output.stdout_lines
-      when: ansible_distribution in ["Fedora", "openSUSE Tumbleweed"]
-      tags:
-        - "Fedora"
-        - "openSUSE Tumbleweed"
-
     - name: Load kernel modules (Fedora)
       command: modprobe -v iptable_filter
       when: ansible_distribution in ["Fedora"]
@@ -417,6 +401,22 @@
       service:
         name: firewalld
         state: restarted
+      when: ansible_distribution in ["Fedora", "openSUSE Tumbleweed"]
+      tags:
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+
+    - name: Get Firewall rules (Fedora, openSUSE Tumbleweed)
+      command: "firewall-cmd --list-all"
+      register: firewall_output
+      when: ansible_distribution in ["Fedora", "openSUSE Tumbleweed"]
+      tags:
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+
+    - name: Print Firewall rules (Fedora, openSUSE Tumbleweed)
+      debug:
+        var: firewall_output.stdout_lines
       when: ansible_distribution in ["Fedora", "openSUSE Tumbleweed"]
       tags:
         - "Fedora"
