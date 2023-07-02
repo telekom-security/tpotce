@@ -74,6 +74,9 @@ case ${myCURRENT_DISTRIBUTION} in
                /usr/sbin/usermod -aG sudo ${myUSER} && \
                echo '${myUSER} ALL=(ALL:ALL) ALL' | tee /etc/sudoers.d/${myUSER} >/dev/null && \
                chmod 440 /etc/sudoers.d/${myUSER}"
+        echo "### We need sudo for Ansible, please enter the sudo password ..."
+        sudo echo "### ... sudo for Ansible acquired."
+        echo
       else
         sudo apt update
         sudo apt install -y cracklib-runtime ${myPACKAGES}
@@ -99,19 +102,6 @@ if [ "${myCURRENT_DISTRIBUTION}" == "Debian GNU/Linux" ];
     myANSIBLE_TAG=${myCURRENT_DISTRIBUTION}
 fi
 
-# Check type of sudo access
-sudo -n true > /dev/null 2>&1
-if [ $? -eq 1 ]; 
-  then
-    myANSIBLE_BECOME_OPTION="--ask-become-pass"
-    echo "### ‘sudo‘ is setup with password, setting ansible become option to ${myANSIBLE_BECOME_OPTION}."
-    echo
-  else
-    myANSIBLE_BECOME_OPTION="--become"
-    echo "### ‘sudo‘ is usable without password, setting ansible become option to ${myANSIBLE_BECOME_OPTION}."
-    echo
-fi
-
 # Download tpot.yml if not found locally
 if [ ! -f installer/install/tpot.yml ];
   then
@@ -124,9 +114,22 @@ if [ ! -f installer/install/tpot.yml ];
     myANSIBLE_TPOT_PLAYBOOK="installer/install/tpot.yml"
 fi
 
+# Check type of sudo access
+sudo -n true > /dev/null 2>&1
+if [ $? -eq 1 ];
+  then
+    myANSIBLE_BECOME_OPTION="--ask-become-pass"
+    echo "### ‘sudo‘ not acquired, setting ansible become option to ${myANSIBLE_BECOME_OPTION}."
+    echo "### Ansible will ask for the ‘BECOME password‘ which is typically the password you ’sudo’ with."
+    echo
+  else
+    myANSIBLE_BECOME_OPTION="--become"
+    echo "### ‘sudo‘ acquired, setting ansible become option to ${myANSIBLE_BECOME_OPTION}."
+    echo
+fi
+
 # Run Ansible Playbook
 echo "### Now running T-Pot Ansible Installation Playbook ..."
-echo "### Ansible will ask for the ‘BECOME password‘ which is typically the password you ’sudo’ with."
 echo
 ANSIBLE_LOG_PATH=${PWD}/install_tpot.log ansible-playbook ${myANSIBLE_TPOT_PLAYBOOK} -i 127.0.0.1, -c local --tags "${myANSIBLE_TAG}" ${myANSIBLE_BECOME_OPTION}
 
