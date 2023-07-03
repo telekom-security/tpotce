@@ -1,4 +1,4 @@
-# T-Pot - Technical Preview
+# T-Pot - Dev Preview
 
 T-Pot will be turning 10 years next year and this milestone will be celebrated when the time comes, which brings us today to the best time to reflect on how technology advanced, what this means for the project and how we can ensure T-Pot will meet the current and future requirements of the community.
 <br><br>
@@ -6,12 +6,10 @@ T-Pot will be turning 10 years next year and this milestone will be celebrated w
 # TL;DR
 1. [Download](#choose-your-distro) or use a running, supported distribution
 2. Install the ISO with as minimal packages / services as possible (SSH required!)
-3. Clone T-Pot: `$ git clone https://github.com/telekom-security/tpotce`
-4. Locate installer for your distribution: `$ cd tpotce/preview/installer/<distro>`
-5. Run installer as non-root: `$ ./install.sh`
+3. Install curl: `$ sudo [apt, dnf, zypper] install curl` if not installed already
+4. Run installer as non-root: `$ /bin/bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/dev/install.sh)"`
    * Follow instructions, read messages, check for possible port conflicts and reboot
-7. [Set](#t-pot-config-file) username and password in config `.env`: `vi preview/.env`
-8. [Start](#start-t-pot) T-Pot for the first time:
+5. [Start](#start-t-pot) T-Pot for the first time:
 ```
 $ cd tpotce/preview/
 $ docker compose up
@@ -84,12 +82,14 @@ The known T-Pot hardware (CPU, RAM, SSD) requirements and recommendations still 
 ## Choose your distro
 Choose a supported distro of your choice. It is recommended to use the minimum / netiso installers linked below and only install a minimalistic set of packages. SSH is mandatory or you will not be able to connect to the machine remotely.
 
-| Distribution Name                              | x64                                                                                                        | arm64 
-|:-----------------------------------------------|:-----------------------------------------------------------------------------------------------------------|:--------------
-| [Debian](https://www.debian.org/index.en.html) | [download](http://ftp.debian.org/debian/dists/stable/main/installer-amd64/current/images/netboot/mini.iso) | [download](http://ftp.debian.org/debian/dists/stable/main/installer-arm64/current/images/netboot/mini.iso)      
-| [Fedora](https://fedoraproject.org)            | [download](https://download.fedoraproject.org/pub/fedora/linux/releases/38/Server/x86_64/iso/Fedora-Server-netinst-x86_64-38-1.6.iso)                                                                                                       | [download](https://download.fedoraproject.org/pub/fedora/linux/releases/38/Server/aarch64/iso/Fedora-Server-netinst-aarch64-38-1.6.iso)      
-| [OpenSuse](https://www.opensuse.org)           | [download](https://download.opensuse.org/tumbleweed/iso/openSUSE-Tumbleweed-NET-x86_64-Current.iso)                                                                                                       | [download](https://download.opensuse.org/ports/aarch64/tumbleweed/iso/openSUSE-Tumbleweed-NET-aarch64-Current.iso)
-| [Ubuntu](https://ubuntu.com)                   | [download](https://releases.ubuntu.com/22.04.2/ubuntu-22.04.2-live-server-amd64.iso)                                                                                                       | [download](https://cdimage.ubuntu.com/releases/22.04/release/ubuntu-22.04.2-live-server-arm64.iso)
+| Distribution Name                              | x64                                                                                                                                   | arm64 
+|:-----------------------------------------------|:--------------------------------------------------------------------------------------------------------------------------------------|:--------------
+| [AlmaLinux](https://almalinux.org)             | [download](https://mirrors.almalinux.org/isos/x86_64/9.2.html)                                                                        | [download](https://mirrors.almalinux.org/isos/aarch64/9.2.html)
+| [Debian](https://www.debian.org/index.en.html) | [download](http://ftp.debian.org/debian/dists/stable/main/installer-amd64/current/images/netboot/mini.iso)                            | [download](http://ftp.debian.org/debian/dists/stable/main/installer-arm64/current/images/netboot/mini.iso)
+| [Fedora](https://fedoraproject.org)            | [download](https://download.fedoraproject.org/pub/fedora/linux/releases/38/Server/x86_64/iso/Fedora-Server-netinst-x86_64-38-1.6.iso) | [download](https://download.fedoraproject.org/pub/fedora/linux/releases/38/Server/aarch64/iso/Fedora-Server-netinst-aarch64-38-1.6.iso)
+| [OpenSuse](https://www.opensuse.org)           | [download](https://download.opensuse.org/tumbleweed/iso/openSUSE-Tumbleweed-NET-x86_64-Current.iso)                                   | [download](https://download.opensuse.org/ports/aarch64/tumbleweed/iso/openSUSE-Tumbleweed-NET-aarch64-Current.iso)
+| [Rocky Linux](https://rockylinux.org)          | [download](https://download.rockylinux.org/pub/rocky/9/isos/x86_64/Rocky-9.2-x86_64-minimal.iso)                                      | [download](https://download.rockylinux.org/pub/rocky/9/isos/aarch64/Rocky-9.2-aarch64-minimal.iso)
+| [Ubuntu](https://ubuntu.com)                   | [download](https://releases.ubuntu.com/22.04.2/ubuntu-22.04.2-live-server-amd64.iso)                                                  | [download](https://cdimage.ubuntu.com/releases/22.04/release/ubuntu-22.04.2-live-server-arm64.iso)
 
 
 <br><br> 
