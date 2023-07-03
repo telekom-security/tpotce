@@ -27,12 +27,12 @@ if [ ${EUID} -eq 0 ];
 fi
 
 # Check if running on a supported distribution
-mySUPPORTED_DISTRIBUTIONS=("Fedora Linux" "Debian GNU/Linux" "openSUSE Tumbleweed" "Rocky Linux" "Ubuntu")
+mySUPPORTED_DISTRIBUTIONS=("AlmaLinux" "Debian GNU/Linux" "Fedora Linux" "openSUSE Tumbleweed" "Rocky Linux" "Ubuntu")
 myCURRENT_DISTRIBUTION=$(awk -F= '/^NAME/{print $2}' /etc/os-release | tr -d '"')
 
 if [[ ! " ${mySUPPORTED_DISTRIBUTIONS[@]} " =~ " ${myCURRENT_DISTRIBUTION} " ]];
   then
-    echo "### Only the following distributions are supported: Fedora, Debian, openSUSE Tumbleweed, Rocky and Ubuntu."
+    echo "### Only the following distributions are supported: AlmaLinux, Fedora, Debian, openSUSE Tumbleweed, Rocky Linux and Ubuntu."
     echo
     exit 1
 fi
@@ -96,7 +96,7 @@ case ${myCURRENT_DISTRIBUTION} in
     echo "export ANSIBLE_PYTHON_INTERPRETER=/bin/python3" | sudo tee /etc/profile.d/ansible.sh >/dev/null
     source /etc/profile.d/ansible.sh
     ;;
-  "Rocky Linux")
+  "AlmaLinux"|"Rocky Linux")
     echo
     echo ${myINSTALL_NOTIFICATION}
     echo
