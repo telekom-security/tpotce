@@ -95,9 +95,9 @@ esac
 echo
 
 # Define tag for Ansible
-if [ "${myCURRENT_DISTRIBUTION}" == "Debian GNU/Linux" ];
+if [ "${myCURRENT_DISTRIBUTION}" == "Debian GNU/Linux" ] || [ "${myCURRENT_DISTRIBUTION}" == "Fedora Linux" ];
   then
-    myANSIBLE_TAG="Debian"
+    myANSIBLE_TAG=$(echo ${myCURRENT_DISTRIBUTION} | cut -d " " -f 1)
   else
     myANSIBLE_TAG=${myCURRENT_DISTRIBUTION}
 fi

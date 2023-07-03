@@ -349,11 +349,17 @@
       tags:
         - "Fedora"
 
-    - name: Update SELinux config (Fedora)
+    - name: Set SELinux config to permissive (Fedora)
       lineinfile:
         path: /etc/selinux/config
         regexp: '^SELINUX='
         line: 'SELINUX=permissive'
+      when: ansible_distribution in ["Fedora"]
+      tags:
+        - "Fedora"
+
+    - name: Set SELinux to permissive (Fedora)
+      command: "setenforce Permissive"
       when: ansible_distribution in ["Fedora"]
       tags:
         - "Fedora"
@@ -436,7 +442,7 @@
 
     - name: Restart SSH (All)
       service:
-        name: "{{ 'sshd' if ansible_distribution in ['Debian', 'openSUSE Tumbleweed'] else 'ssh' }}"
+        name: "{{ 'sshd' if ansible_distribution in ['Debian', 'Fedora', 'openSUSE Tumbleweed'] else 'ssh' }}"
         state: restarted
         enabled: true
       when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
