@@ -3,7 +3,12 @@
 myINSTALL_NOTIFICATION="### Now installing required packages ..."
 myUSER=$(whoami)
 myTPOT_CONF_FILE="/home/${myUSER}/tpotce/.env"
-myPACKAGES="ansible wget"
+myPACKAGES_DEBIAN="ansible cracklib-runtime wget"
+myPACKAGES_FEDORA="ansible cracklib wget"
+myPACKAGES_ROCKY="ansible-core ansible-collection-redhat-rhel_mgmt cracklib wget"
+myPACKAGES_OPENSUSE="ansible cracklib wget"
+
+
 myINSTALLER=$(cat << "EOF"
  _____     ____       _      ___           _        _ _
 |_   _|   |  _ \ ___ | |_   |_ _|_ __  ___| |_ __ _| | | ___ _ __
@@ -22,12 +27,12 @@ if [ ${EUID} -eq 0 ];
 fi
 
 # Check if running on a supported distribution
-mySUPPORTED_DISTRIBUTIONS=("Fedora Linux" "Debian GNU/Linux" "openSUSE Tumbleweed" "Ubuntu")
+mySUPPORTED_DISTRIBUTIONS=("Fedora Linux" "Debian GNU/Linux" "openSUSE Tumbleweed" "Rocky Linux" "Ubuntu")
 myCURRENT_DISTRIBUTION=$(awk -F= '/^NAME/{print $2}' /etc/os-release | tr -d '"')
 
 if [[ ! " ${mySUPPORTED_DISTRIBUTIONS[@]} " =~ " ${myCURRENT_DISTRIBUTION} " ]];
   then
-    echo "### Only the following distributions are supported: Fedora, Debian, openSUSE Tumbleweed and Ubuntu."
+    echo "### Only the following distributions are supported: Fedora, Debian, openSUSE Tumbleweed, Rocky and Ubuntu."
     echo
     exit 1
 fi
@@ -58,7 +63,7 @@ case ${myCURRENT_DISTRIBUTION} in
     echo ${myINSTALL_NOTIFICATION}
     echo
     sudo dnf update -y
-    sudo dnf install -y cracklib ${myPACKAGES}
+    sudo dnf install -y ${myPACKAGES_FEDORA}
     ;;
   "Debian GNU/Linux"|"Ubuntu")
     echo
@@ -70,7 +75,7 @@ case ${myCURRENT_DISTRIBUTION} in
         echo "### or press CTRL-C to manually install ‘sudo‘ and add your user to the sudoers."
         echo
         su -c "apt -y update && \
-               apt -y install sudo cracklib-runtime ${myPACKAGES} && \
+               apt -y install sudo ${myPACKAGES_DEBIAN} && \
                /usr/sbin/usermod -aG sudo ${myUSER} && \
                echo '${myUSER} ALL=(ALL:ALL) ALL' | tee /etc/sudoers.d/${myUSER} >/dev/null && \
                chmod 440 /etc/sudoers.d/${myUSER}"
@@ -79,7 +84,7 @@ case ${myCURRENT_DISTRIBUTION} in
         echo
       else
         sudo apt update
-        sudo apt install -y cracklib-runtime ${myPACKAGES}
+        sudo apt install -y ${myPACKAGES_DEBIAN}
     fi
     ;;
   "openSUSE Tumbleweed")
@@ -87,15 +92,24 @@ case ${myCURRENT_DISTRIBUTION} in
     echo ${myINSTALL_NOTIFICATION}
     echo
     sudo zypper refresh
-    sudo zypper install -y cracklib ${myPACKAGES}
+    sudo zypper install -y ${myPACKAGES_OPENSUSE}
     echo "export ANSIBLE_PYTHON_INTERPRETER=/bin/python3" | sudo tee /etc/profile.d/ansible.sh >/dev/null
     source /etc/profile.d/ansible.sh
+    ;;
+  "Rocky Linux")
+    echo
+    echo ${myINSTALL_NOTIFICATION}
+    echo
+    sudo dnf update -y
+    sudo dnf install -y ${myPACKAGES_ROCKY}
+    ansible-galaxy collection install ansible.posix
     ;;
 esac
 echo
 
 # Define tag for Ansible
-if [ "${myCURRENT_DISTRIBUTION}" == "Debian GNU/Linux" ] || [ "${myCURRENT_DISTRIBUTION}" == "Fedora Linux" ];
+myANSIBLE_DISTRIBUTIONS=("Fedora Linux" "Debian GNU/Linux" "Rocky Linux")
+if [[ "${myANSIBLE_DISTRIBUTIONS[@]}" =~ "${myCURRENT_DISTRIBUTION}" ]];
   then
     myANSIBLE_TAG=$(echo ${myCURRENT_DISTRIBUTION} | cut -d " " -f 1)
   else

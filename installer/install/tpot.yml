@@ -11,6 +11,7 @@
     - "Debian"
     - "Fedora"
     - "openSUSE Tumbleweed"
+    - "Rocky"
     - "Ubuntu"
 
   pre_tasks:
@@ -21,7 +22,7 @@
         success_msg: "Running as user: {{ ansible_user_id }}."
     - name: Check if supported distribution (All)
       assert:
-        that: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
+        that: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Rocky", "Ubuntu"]
         fail_msg: "T-Pot is not supported on this plattform: {{ ansible_distribution }}."
         success_msg: "T-Pot will now install on {{ ansible_distribution }}."
 
@@ -37,11 +38,12 @@
   tasks:
     - name: Syncing clocks (All)
       shell: "hwclock --hctosys"
-      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
+      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Rocky", "Ubuntu"]
       tags:
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
+        - "Rocky"
         - "Ubuntu"
 
     - name: Install recommended packages (Debian, Ubuntu)
@@ -62,7 +64,34 @@
         - "Debian"
         - "Ubuntu"
 
-    - name: Install recommended packages (Fedora)
+    - name: Install grc from remote repo (Rocky)
+      ansible.builtin.dnf:
+        name: 'https://github.com/kriipke/grc/releases/download/1.13.8/grc-1.13.8-1.el7.noarch.rpm'
+        disable_gpg_check: true
+        state: present
+      when: ansible_distribution in ["Rocky"]
+      tags:
+        - "Rocky"
+
+    - name: Install recommended packages (Fedora, Rocky)
+      package:
+        name:
+          - bash-completion
+          - ca-certificates
+          - curl
+          - dnf-plugins-core
+          - git
+          - grc
+          - neovim
+          - net-tools
+        state: latest
+        update_cache: yes
+      when: ansible_distribution in ["Fedora", "Rocky"]
+      tags:
+        - "Fedora"
+        - "Rocky"
+
+    - name: Install recommended packages (Fedora, Rocky)
       package:
         name:
           - bash-completion
@@ -78,6 +107,7 @@
       when: ansible_distribution in ["Fedora"]
       tags:
         - "Fedora"
+        - "Rocky"
 
     - name: Remove conflicting packages (openSUSE Tumbleweed)
       package:
@@ -119,7 +149,7 @@
   become: true
 
   tasks:
-    - name: Remove distribution based Docker packages (Debian, Fedora, Ubuntu)
+    - name: Remove distribution based Docker packages (Debian, Fedora, Rocky, Ubuntu)
       package:
         name:
           - docker
@@ -129,10 +159,11 @@
           - runc
         state: absent
         update_cache: yes
-      when: ansible_distribution in ["Debian", "Fedora", "Ubuntu"]
+      when: ansible_distribution in ["Debian", "Fedora", "Rocky", "Ubuntu"]
       tags:
         - "Debian"
         - "Fedora"
+        - "Rocky"
         - "Ubuntu"
 
     - name: Add folder for Docker Engine GPG key (Debian, Ubuntu)
@@ -185,6 +216,17 @@
       tags:
         - "Fedora"
 
+    - name: Add Docker repository (Rocky)
+      shell: |
+        if [ "$(dnf repolist docker-ce-stable)" == "" ];
+          then
+            dnf -y config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+        fi
+      when: ansible_distribution in ["Rocky"]
+      tags:
+        - "Rocky"
+
+
 #################################
 # T-Pot - Install Docker Engine #
 #################################
@@ -211,7 +253,7 @@
       tags:
         - "openSUSE Tumbleweed"
 
-    - name: Install Docker Engine packages (Debian, Fedora, Ubuntu)
+    - name: Install Docker Engine packages (Debian, Fedora, Rocky, Ubuntu)
       package:
         name:
           - docker-ce 
@@ -221,10 +263,11 @@
           - docker-compose-plugin 
         state: latest
         update_cache: yes
-      when: ansible_distribution in ["Debian", "Fedora", "Ubuntu"]
+      when: ansible_distribution in ["Debian", "Fedora", "Rocky", "Ubuntu"]
       tags:
         - "Debian"
         - "Fedora"
+        - "Rocky"
         - "Ubuntu"
 
     - name: Stop Docker (All)
@@ -232,11 +275,12 @@
         name: docker
         state: stopped
         enabled: false
-      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
+      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Rocky", "Ubuntu"]
       tags:
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
+        - "Rocky"
         - "Ubuntu"
 
 ######################################################
@@ -254,11 +298,12 @@
         name: tpot
         gid: 2000
         state: present
-      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
+      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Rocky", "Ubuntu"]
       tags:
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
+        - "Rocky"
         - "Ubuntu"
 
     - name: Create T-Pot user (All)
@@ -269,11 +314,12 @@
         shell: /bin/false
         home: /nonexistent
         group: tpot
-      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
+      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Rocky", "Ubuntu"]
       tags:
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
+        - "Rocky"
         - "Ubuntu"
 
     - name: Disable ssh.socket unit (Ubuntu)
@@ -293,15 +339,16 @@
       tags:
         - "Ubuntu"
 
-    - name: Change SSH Port to 64295 (Debian, Fedora, Ubuntu)
+    - name: Change SSH Port to 64295 (Debian, Fedora, Rocky, Ubuntu)
       lineinfile:
         path: /etc/ssh/sshd_config
         line: "Port 64295"
         insertafter: EOF
-      when: ansible_distribution in ["Debian", "Fedora", "Ubuntu"]
+      when: ansible_distribution in ["Debian", "Fedora", "Rocky", "Ubuntu"]
       tags:
         - "Debian"
         - "Fedora"
+        - "Rocky"
         - "Ubuntu"
 
     - name: Change SSH Port to 64295 (openSUSE Tumbleweed)
@@ -313,56 +360,62 @@
       tags:
         - "openSUSE Tumbleweed"
 
-    - name: Add T-Pot SSH port to Firewall (Fedora, openSUSE Tumbleweed)
+    - name: Add T-Pot SSH port to Firewall (Fedora, openSUSE Tumbleweed, Rocky)
       firewalld:
         port: 64295/tcp
         permanent: yes
         state: enabled
-      when: ansible_distribution in ["Fedora", "openSUSE Tumbleweed"]
+      when: ansible_distribution in ["Fedora", "openSUSE Tumbleweed", "Rocky"]
       tags:
         - "Fedora"
         - "openSUSE Tumbleweed"
+        - "Rocky"
 
-    - name: Set T-Pot default target to ACCEPT (Fedora, openSUSE Tumbleweed)
+    - name: Set T-Pot default target to ACCEPT (Fedora, openSUSE Tumbleweed, Rocky)
       firewalld:
         zone: public
         target: ACCEPT
         permanent: yes
         state: enabled
-      when: ansible_distribution in ["Fedora", "openSUSE Tumbleweed"]
+      when: ansible_distribution in ["Fedora", "openSUSE Tumbleweed", "Rocky"]
       tags:
         - "Fedora"
         - "openSUSE Tumbleweed"
+        - "Rocky"
 
-    - name: Load kernel modules (Fedora)
+    - name: Load kernel modules (Fedora, Rocky)
       command: modprobe -v iptable_filter
-      when: ansible_distribution in ["Fedora"]
+      when: ansible_distribution in ["Fedora", "Rocky"]
       tags:
         - "Fedora"
+        - "Rocky"
 
-    - name: Update iptables.conf (Fedora)
+    - name: Update iptables.conf (Fedora, Fedora)
       lineinfile:
         path: /etc/modules-load.d/iptables.conf
         line: iptable_filter
         create: yes
-      when: ansible_distribution in ["Fedora"]
+      when: ansible_distribution in ["Fedora", "Rocky"]
       tags:
         - "Fedora"
+        - "Rocky"
 
-    - name: Set SELinux config to permissive (Fedora)
+    - name: Set SELinux config to permissive (Fedora, Rocky)
       lineinfile:
         path: /etc/selinux/config
         regexp: '^SELINUX='
         line: 'SELINUX=permissive'
-      when: ansible_distribution in ["Fedora"]
+      when: ansible_distribution in ["Fedora", "Rocky"]
       tags:
         - "Fedora"
+        - "Rocky"
 
-    - name: Set SELinux to permissive (Fedora)
+    - name: Set SELinux to permissive (Fedora, Rocky)
       command: "setenforce Permissive"
-      when: ansible_distribution in ["Fedora"]
+      when: ansible_distribution in ["Fedora", "Rocky"]
       tags:
         - "Fedora"
+        - "Rocky"
 
     - name: Stop Resolved (Fedora, Ubuntu)
       service:
@@ -403,53 +456,58 @@
         - "Fedora"
         - "Ubuntu"
 
-    - name: Restart Firewalld (Fedora, openSUSE Tumbleweed)
+    - name: Restart Firewalld (Fedora, openSUSE Tumbleweed, Rocky)
       service:
         name: firewalld
         state: restarted
-      when: ansible_distribution in ["Fedora", "openSUSE Tumbleweed"]
+      when: ansible_distribution in ["Fedora", "openSUSE Tumbleweed", "Rocky"]
       tags:
         - "Fedora"
+        - "Rocky"
         - "openSUSE Tumbleweed"
 
-    - name: Get Firewall rules (Fedora, openSUSE Tumbleweed)
+    - name: Get Firewall rules (Fedora, openSUSE Tumbleweed, Rocky)
       command: "firewall-cmd --list-all"
       register: firewall_output
-      when: ansible_distribution in ["Fedora", "openSUSE Tumbleweed"]
+      when: ansible_distribution in ["Fedora", "openSUSE Tumbleweed", "Rocky"]
       tags:
         - "Fedora"
+        - "Rocky"
         - "openSUSE Tumbleweed"
 
-    - name: Print Firewall rules (Fedora, openSUSE Tumbleweed)
+    - name: Print Firewall rules (Fedora, openSUSE Tumbleweed, Rocky)
       debug:
         var: firewall_output.stdout_lines
-      when: ansible_distribution in ["Fedora", "openSUSE Tumbleweed"]
+      when: ansible_distribution in ["Fedora", "openSUSE Tumbleweed", "Rocky"]
       tags:
         - "Fedora"
         - "openSUSE Tumbleweed"
+        - "Rocky"
 
     - name: Enable Docker Engine upon boot (All)
       service:
         name: docker
         state: restarted
         enabled: true
-      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
+      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Rocky", "Ubuntu"]
       tags:
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
+        - "Rocky"
         - "Ubuntu"
 
     - name: Restart SSH (All)
       service:
-        name: "{{ 'sshd' if ansible_distribution in ['Debian', 'Fedora', 'openSUSE Tumbleweed'] else 'ssh' }}"
+        name: "{{ 'ssh' if ansible_distribution in ['Ubuntu'] else 'sshd' }}"
         state: restarted
         enabled: true
-      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
+      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Rocky", "Ubuntu"]
       tags:
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
+        - "Rocky"
         - "Ubuntu"
 
 #######################################################################
@@ -464,6 +522,7 @@
     - "Debian"
     - "Fedora"
     - "openSUSE Tumbleweed"
+    - "Rocky"
     - "Ubuntu"
 
   tasks:
@@ -476,7 +535,7 @@
         marker: "# {mark} ANSIBLE MANAGED BLOCK"
         insertafter: EOF
         state: present
-      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
+      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Rocky", "Ubuntu"]
 
     - name: Clone / Update T-Pot repository (All)
       git:
@@ -485,7 +544,7 @@
         version: dev
         clone: yes
         update: no
-      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
+      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Rocky", "Ubuntu"]
 
     - name: Add current user to Docker, T-Pot group (All)
       become: true
@@ -495,10 +554,10 @@
           - docker
           - tpot
         append: yes
-      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
+      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Rocky", "Ubuntu"]
 
     - name: Check for non-root user id (All)
       debug:
         msg: "Detected user: '{{ ansible_user_id }}'"
-      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
+      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Rocky", "Ubuntu"]
       failed_when: ansible_user_id == "root"
