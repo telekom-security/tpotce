@@ -7,12 +7,15 @@ T-Pot will be turning 10 years next year and this milestone will be celebrated w
 1. [Download](#choose-your-distro) or use a running, supported distribution
 2. Install the ISO with as minimal packages / services as possible (SSH required!)
 3. Install curl: `$ sudo [apt, dnf, zypper] install curl` if not installed already
-4. Run installer as non-root: `$ /bin/bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/dev/install.sh)"`
-   * Follow instructions, read messages, check for possible port conflicts and reboot
-5. [Start](#start-t-pot) T-Pot for the first time:
+4. Run installer as non-root:
 ```
-$ cd tpotce/preview/
-$ docker compose up
+/bin/bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/dev/install.sh)"
+```
+   * Follow instructions, read messages, check for possible port conflicts and reboot
+5. [Start](#start-t-pot) T-Pot as non-root for the first time:
+```
+cd tpotce/preview/
+docker compose up
 ```
 
 
