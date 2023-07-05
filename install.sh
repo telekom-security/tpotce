@@ -3,10 +3,10 @@
 myINSTALL_NOTIFICATION="### Now installing required packages ..."
 myUSER=$(whoami)
 myTPOT_CONF_FILE="/home/${myUSER}/tpotce/.env"
-myPACKAGES_DEBIAN="ansible cracklib-runtime wget"
-myPACKAGES_FEDORA="ansible cracklib wget"
-myPACKAGES_ROCKY="ansible-core ansible-collection-redhat-rhel_mgmt cracklib wget"
-myPACKAGES_OPENSUSE="ansible cracklib wget"
+myPACKAGES_DEBIAN="ansible apache2-utils cracklib-runtime wget"
+myPACKAGES_FEDORA="ansible cracklib httpd-tools wget"
+myPACKAGES_ROCKY="ansible-core ansible-collection-redhat-rhel_mgmt cracklib httpd-tools wget"
+myPACKAGES_OPENSUSE="ansible apache2-utils cracklib wget"
 
 
 myINSTALLER=$(cat << "EOF"
@@ -74,7 +74,7 @@ case ${myCURRENT_DISTRIBUTION} in
         echo "### or press CTRL-C to manually install ‘sudo‘ and add your user to the sudoers."
         echo
         su -c "apt -y update && \
-               apt -y install sudo ${myPACKAGES_DEBIAN} && \
+               NEEDRESTART_SUSPEND=1 apt -y install sudo ${myPACKAGES_DEBIAN} && \
                /usr/sbin/usermod -aG sudo ${myUSER} && \
                echo '${myUSER} ALL=(ALL:ALL) ALL' | tee /etc/sudoers.d/${myUSER} >/dev/null && \
                chmod 440 /etc/sudoers.d/${myUSER}"
@@ -83,7 +83,7 @@ case ${myCURRENT_DISTRIBUTION} in
         echo
       else
         sudo apt update
-        sudo apt install -y ${myPACKAGES_DEBIAN}
+        sudo NEEDRESTART_SUSPEND=1 apt install -y ${myPACKAGES_DEBIAN}
     fi
     ;;
   "openSUSE Tumbleweed")
@@ -204,11 +204,10 @@ while [ "${myWEB_PW}" != "${myWEB_PW2}"  ] && [ "${mySECURE}" == "0" ]
 done
 
 # Write username and password to T-Pot config file
-echo "### Writing username and password to T-Pot config file: ${myTPOT_CONF_FILE}"
-echo "### You can empty the password <WEB_PW=''> after the first start of T-Pot."
+echo "### Creating htpasswd username and password for T-Pot config file: ${myTPOT_CONF_FILE}"
+myWEB_USER_ENC=$(htpasswd -b -n "${myWEB_USER}" "${myWEB_PW}")
 echo
-sed -i "/^WEB_USER=/s/.*/WEB_USER='${myWEB_USER}'/" ${myTPOT_CONF_FILE}
-sed -i "/^WEB_PW=/s/.*/WEB_PW='${myWEB_PW}'/" ${myTPOT_CONF_FILE}
+sed -i "s|^WEB_USER=.*|WEB_USER='${myWEB_USER_ENC}'|" ${myTPOT_CONF_FILE}
 
 # Pull docker images
 echo "### Now pulling images ..."

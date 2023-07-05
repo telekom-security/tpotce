@@ -58,11 +58,11 @@
       tags:
         - "openSUSE Tumbleweed"
 
-################################
-# T-Pot - Abort if run as root #
-################################
+#####################################################################
+# T-Pot - Abort if run as tpot, root or on unsupported distribution #
+#####################################################################
 
-- name: T-Pot - Abort if run as root
+- name: T-Pot - Abort if run as tpot, root or on unsupported distribution
   hosts: all
   gather_facts: true
   become: false
@@ -117,14 +117,17 @@
     - name: Install recommended packages (Debian, Ubuntu)
       package:
         name:
+          - apache2-utils
           - bash-completion
           - ca-certificates
+          - cracklib-runtime
           - curl 
           - git
           - gnupg
           - grc
-          - vim
           - net-tools
+          - vim
+          - wget
         state: latest
         update_cache: yes
       when: ansible_distribution in ["Debian", "Ubuntu"]
@@ -147,12 +150,15 @@
         name:
           - bash-completion
           - ca-certificates
+          - cracklib
           - curl
           - dnf-plugins-core
           - git
           - grc
-          - vim
+          - httpd-tools
           - net-tools
+          - vim
+          - wget
         state: latest
         update_cache: yes
       when: ansible_distribution in ["AlmaLinux", "Fedora", "Rocky"]
@@ -178,13 +184,16 @@
     - name: Install recommended packages (openSUSE Tumbleweed)
       package:
         name:
+          - apache2-utils
           - bash-completion
           - busybox-net-tools
           - ca-certificates
+          - cracklib
           - curl
           - git
           - grc
           - vim
+          - wget
         state: latest
         update_cache: yes
       when: ansible_distribution in ["openSUSE Tumbleweed"]

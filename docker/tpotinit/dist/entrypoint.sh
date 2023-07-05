@@ -34,9 +34,9 @@ if [ -f "/data/uuid" ];
     figlet "${VERSION}"
     echo
     echo "# Checking for default user."
-    if [ "${WEB_USER}" == "changeme" ] || [ "${WEB_PW}" == "changeme" ];
+    if [ "${WEB_USER}" == "change:me" ];
       then
-        echo "# Please change WEB_USER and WEB_PW in the hidden \".env\" file."
+        echo "# Please change WEB_USER in the hidden \".env\" file."
 	      echo "# Aborting."
       	echo
         exit 1
@@ -66,7 +66,7 @@ if [ -f "/data/uuid" ];
     echo
     echo "# Creating web user from tpot.env, make sure to erase the password from the .env ..."
     echo
-    htpasswd -b -c /data/nginx/conf/nginxpasswd "${WEB_USER}" "${WEB_PW}"
+    echo "${WEB_USER}" > /data/nginx/conf/nginxpasswd
     echo
     echo "# Extracting objects, final touches and permissions ..."
     echo
