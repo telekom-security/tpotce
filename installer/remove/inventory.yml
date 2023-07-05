@@ -1,0 +1,8 @@
+tpotce:
+  hosts:
+    # Remote IP address, host name or alias:
+    192.168.100.100:
+      # Remote SSH port:
+      ansible_port: 22
+      # Remote SSH user:
+      ansible_user: tsec

@@ -62,8 +62,7 @@ case ${myCURRENT_DISTRIBUTION} in
     echo
     echo ${myINSTALL_NOTIFICATION}
     echo
-    sudo dnf update -y
-    sudo dnf install -y ${myPACKAGES_FEDORA}
+    sudo dnf -y --refresh install ${myPACKAGES_FEDORA}
     ;;
   "Debian GNU/Linux"|"Ubuntu")
     echo
@@ -100,8 +99,7 @@ case ${myCURRENT_DISTRIBUTION} in
     echo
     echo ${myINSTALL_NOTIFICATION}
     echo
-    sudo dnf update -y
-    sudo dnf install -y ${myPACKAGES_ROCKY}
+    sudo dnf -y --refresh install ${myPACKAGES_ROCKY}
     ansible-galaxy collection install ansible.posix
     ;;
 esac

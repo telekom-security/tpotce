@@ -1,5 +1,64 @@
 ---
 ################################
+# T-Pot - Bootstrapping Python #
+################################
+
+- name: T-Pot - Bootstrapping Python
+  hosts: all
+  gather_facts: false
+  become: true
+  become_method: sudo
+
+  tasks:
+    - name: Get distribution name (All)
+      raw: awk -F= '/^NAME/{print $2}' /etc/os-release | tr -d '"' | cut -d " " -f1
+      register: my_distribution
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Check if python3 is installed (All)
+      raw: echo $(command -v python3)
+      register: my_python3
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Add python package (Debian, Ubuntu)
+      raw: |
+        apt update
+        apt -y install python3
+      when: my_distribution.stdout | trim in ["Debian", "Ubuntu"] and my_python3.stdout | trim == ""
+      tags:
+        - "Debian"
+        - "Ubuntu"
+
+    - name: Add python package (Alma, Fedora, Rocky)
+      raw: |
+        dnf -y --refresh install python3
+      when: my_distribution.stdout | trim in ["AlmaLinux", "Fedora", "Rocky"] and my_python3.stdout | trim == ""
+      tags:
+        - "AlmaLinux"
+        - "Fedora"
+        - "Rocky"
+
+    - name: Add python package (openSUSE Tumbleweed)
+      raw: |
+        zypper refresh
+        zypper -y install python3
+      when: my_distribution.stdout | trim in ["AlmaLinux", "Fedora", "Rocky"] and my_python3.stdout | trim == ""
+      tags:
+        - "openSUSE Tumbleweed"
+
+################################
 # T-Pot - Abort if run as root #
 ################################
 
@@ -15,12 +74,19 @@
     - "Rocky"
     - "Ubuntu"
 
-  pre_tasks:
+  tasks:
     - name: Check if running as root (All)
       assert:
         that: ansible_user_id != 'root'
         fail_msg: "T-Pot playbook should not be run as root."
         success_msg: "Running as user: {{ ansible_user_id }}."
+
+    - name: Check if running as tpot (All)
+      assert:
+        that: ansible_user != 'tpot'
+        fail_msg: "Reserved username `tpot` detected."
+        success_msg: "Running as user: {{ ansible_user_id }}."
+
     - name: Check if supported distribution (All)
       assert:
         that: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Rocky", "Ubuntu"]
