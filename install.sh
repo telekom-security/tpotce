@@ -145,6 +145,18 @@ echo "### Now running T-Pot Ansible Installation Playbook ..."
 echo
 ANSIBLE_LOG_PATH=${PWD}/install_tpot.log ansible-playbook ${myANSIBLE_TPOT_PLAYBOOK} -i 127.0.0.1, -c local --tags "${myANSIBLE_TAG}" ${myANSIBLE_BECOME_OPTION}
 
+# Something went wrong
+if [ ! $? -eq 0 ];
+  then
+    echo "### Something went wrong with the Playbook, please review the output and / or install_tpot.log for clues."
+    echo "### Aborting."
+    echo
+    exit 1
+  else
+    echo "### Playbook was successful."
+    echo
+fi
+
 # Asking for web user name
 myWEB_USER=""
 while [ 1 != 2 ];
