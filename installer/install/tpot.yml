@@ -83,7 +83,7 @@
 
     - name: Check if running as tpot (All)
       assert:
-        that: ansible_user != 'tpot'
+        that: ansible_user_id != 'tpot'
         fail_msg: "Reserved username `tpot` detected."
         success_msg: "Running as user: {{ ansible_user_id }}."
 
