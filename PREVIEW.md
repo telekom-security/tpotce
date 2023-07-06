@@ -89,11 +89,17 @@ Choose a supported distro of your choice. It is recommended to use the minimum /
 |:-----------------------------------------------|:--------------------------------------------------------------------------------------------------------------------------------------|:--------------
 | [AlmaLinux](https://almalinux.org)             | [download](https://mirrors.almalinux.org/isos/x86_64/9.2.html)                                                                        | [download](https://mirrors.almalinux.org/isos/aarch64/9.2.html)
 | [Debian](https://www.debian.org/index.en.html) | [download](https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-12.0.0-amd64-netinst.iso)                                 | [download](https://cdimage.debian.org/debian-cd/current/arm64/iso-cd/debian-12.0.0-arm64-netinst.iso)
+| [DietPi](https://dietpi.com/#home)             |                                                                                                                                       | [download](https://dietpi.com/downloads/images/DietPi_RPi-ARMv8-Bookworm.7z)
 | [Fedora](https://fedoraproject.org)            | [download](https://download.fedoraproject.org/pub/fedora/linux/releases/38/Server/x86_64/iso/Fedora-Server-netinst-x86_64-38-1.6.iso) | [download](https://download.fedoraproject.org/pub/fedora/linux/releases/38/Server/aarch64/iso/Fedora-Server-netinst-aarch64-38-1.6.iso)
 | [OpenSuse](https://www.opensuse.org)           | [download](https://download.opensuse.org/tumbleweed/iso/openSUSE-Tumbleweed-NET-x86_64-Current.iso)                                   | [download](https://download.opensuse.org/ports/aarch64/tumbleweed/iso/openSUSE-Tumbleweed-NET-aarch64-Current.iso)
 | [Rocky Linux](https://rockylinux.org)          | [download](https://download.rockylinux.org/pub/rocky/9/isos/x86_64/Rocky-9.2-x86_64-minimal.iso)                                      | [download](https://download.rockylinux.org/pub/rocky/9/isos/aarch64/Rocky-9.2-aarch64-minimal.iso)
 | [Ubuntu](https://ubuntu.com)                   | [download](https://releases.ubuntu.com/22.04.2/ubuntu-22.04.2-live-server-amd64.iso)                                                  | [download](https://cdimage.ubuntu.com/releases/22.04/release/ubuntu-22.04.2-live-server-arm64.iso)
 
+## Raspberry Pi 4 (8GB) Support
+| Distribution Name                              | arm64                                                                                                                                               | Notes                                                                                                                                 
+|:-----------------------------------------------|:----------------------------------------------------------------------------------------------------------------------------------------------------|:--------------
+| [DietPi](https://dietpi.com/#home)             | [download](https://dietpi.com/downloads/images/DietPi_RPi-ARMv8-Bookworm.7z)                                                                        | In DietPi config you need to choose OpenSSH instead of Dropbear or T-Pot will fail to install
+| [Raspberry Pi OS](https://www.raspberrypi.com) | [download](https://downloads.raspberrypi.org/raspios_lite_arm64/images/raspios_lite_arm64-2023-05-03/2023-05-03-raspios-bullseye-arm64-lite.img.xz) | 
 
 <br><br> 
 

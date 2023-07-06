@@ -106,6 +106,7 @@
     - name: Syncing clocks (All)
       shell: "hwclock --hctosys"
       when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Rocky", "Ubuntu"]
+      ignore_errors: true
       tags:
         - "AlmaLinux"
         - "Debian"

@@ -42,7 +42,7 @@ echo "$myINSTALLER"
 echo
 echo
 echo "### This script will now install T-Pot and all of its dependencies."
-while [ "${myQST}" != "y" ] && [ "{$myQST}" != "n" ];
+while [ "${myQST}" != "y" ] && [ "${myQST}" != "n" ];
   do
     echo
     read -p "### Install? (y/n) " myQST
@@ -115,7 +115,7 @@ if [[ "${myANSIBLE_DISTRIBUTIONS[@]}" =~ "${myCURRENT_DISTRIBUTION}" ]];
 fi
 
 # Download tpot.yml if not found locally
-if [ ! -f installer/install/tpot.yml ];
+if [ ! -f installer/install/tpot.yml ] && [ ! -f tpot.yml ];
   then
     echo "### Now downloading T-Pot Ansible Installation Playbook ... "
     wget -qO tpot.yml https://github.com/telekom-security/tpotce/raw/dev/installer/install/tpot.yml
@@ -123,7 +123,12 @@ if [ ! -f installer/install/tpot.yml ];
     echo
   else
     echo "### Using local T-Pot Ansible Installation Playbook ... "
-    myANSIBLE_TPOT_PLAYBOOK="installer/install/tpot.yml"
+    if [ -f "installer/install/tpot.yml" ];
+      then
+        myANSIBLE_TPOT_PLAYBOOK="installer/install/tpot.yml"
+      else
+        myANSIBLE_TPOT_PLAYBOOK="tpot.yml"
+    fi
 fi
 
 # Check type of sudo access
@@ -157,6 +162,10 @@ if [ ! $? -eq 0 ];
     echo
 fi
 
+# Preparing web user for T-Pot
+echo
+echo "### T-Pot User Configuration ..."
+echo
 # Asking for web user name
 myWEB_USER=""
 while [ 1 != 2 ];
