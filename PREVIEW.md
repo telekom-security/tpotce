@@ -99,7 +99,7 @@ Choose a supported distro of your choice. It is recommended to use the minimum /
 | Distribution Name                              | arm64                                                                                                                                               | Notes                                                                                                                                 
 |:-----------------------------------------------|:----------------------------------------------------------------------------------------------------------------------------------------------------|:--------------
 | [DietPi](https://dietpi.com/#home)             | [download](https://dietpi.com/downloads/images/DietPi_RPi-ARMv8-Bookworm.7z)                                                                        | In DietPi config you need to choose OpenSSH instead of Dropbear or T-Pot will fail to install
-| [Raspberry Pi OS](https://www.raspberrypi.com) | [download](https://downloads.raspberrypi.org/raspios_lite_arm64/images/raspios_lite_arm64-2023-05-03/2023-05-03-raspios-bullseye-arm64-lite.img.xz) | 
+| [Raspberry Pi OS](https://www.raspberrypi.com) | [download](https://downloads.raspberrypi.org/raspios_lite_arm64/images/raspios_lite_arm64-2023-05-03/2023-05-03-raspios-bullseye-arm64-lite.img.xz) | Recommended, everything incl. Wifi works as expected right away (when using Raspberry Pi Imager)
 
 <br><br> 
 
