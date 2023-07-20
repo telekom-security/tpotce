@@ -10,7 +10,8 @@ RUN apk -U --no-cache add \
 	         libcap \
 	         py3-pip \
              python3 \
-             python3-dev && \
+             python3-dev \
+             tzdata && \
 #	     
 # Install from GitHub and setup
     mkdir -p /opt && \
