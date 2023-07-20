@@ -4,7 +4,8 @@
 
 # Setup Vars
 myPLATFORMS="linux/amd64,linux/arm64"
-myHUBORG="dtagdevsec"
+myHUBORG_DOCKER="dtagdevsec"
+myHUBORG_GITHUB="ghcr.io/telekom-security"
 myTAG="dev"
 myIMAGESBASE="tpotinit adbhoney ciscoasa citrixhoneypot conpot cowrie ddospot dicompot dionaea elasticpot endlessh ewsposter fatt glutton hellpot heralding honeypots honeytrap ipphoney log4pot mailoney medpot nginx p0f redishoneypot sentrypeer spiderfoot suricata wordpot"
 myIMAGESELK="elasticsearch kibana logstash map"
@@ -79,7 +80,12 @@ local myPUSHOPTION="$3"
 for myREPONAME in $myIMAGELIST;
   do
     echo -n "Now building: $myREPONAME in $myPATH$myREPONAME/."
-    docker buildx build --cache-from "type=local,src=$myBUILDCACHE" --cache-to "type=local,dest=$myBUILDCACHE" --platform $myPLATFORMS -t $myHUBORG/$myREPONAME:$myTAG $myPUSHOPTION $myPATH$myREPONAME/. >> $myBUILDERLOG 2>&1
+    docker buildx build --cache-from "type=local,src=$myBUILDCACHE" \
+                        --cache-to "type=local,dest=$myBUILDCACHE" \
+                        --platform $myPLATFORMS \
+                        -t $myHUBORG_DOCKER/$myREPONAME:$myTAG \
+                        -t $myHUBORG_GITHUB/$myREPONAME:$myTAG \
+                        $myPUSHOPTION $myPATH$myREPONAME/. >> $myBUILDERLOG 2>&1
     if [ "$?" != "0" ];
       then
 	echo " [ ERROR ] - Check logs!"
@@ -111,4 +117,3 @@ if [ "$1" == "push" ];
     fuBUILDIMAGES "elk/" "$myIMAGESELK" "--push"
     fuBUILDIMAGES "tanner/" "$myIMAGESTANNER" "--push"
 fi
-
