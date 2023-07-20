@@ -1,8 +1,11 @@
-# T-Pot: MAC_WIN
+# T-Pot: RASPBERRY_SHOWCASE
+# Note: This docker compose file has been adjusted to limit the number of tools, services and honeypots to run
+#       T-Pot on a Raspberry Pi 4 (8GB of RAM, SSD) with an enabled desktop environment.
+#       The standard docker compose file should work mostly fine (depending on traffic) if you do not enable a
+#       desktop environment such as LXDE and meet the minimum requirements of 8GB and a SSD.
 version: '3.9'
 
 networks:
-  tpotinit_local:
   adbhoney_local:
   ciscoasa_local:
   citrixhoneypot_local:
@@ -11,7 +14,6 @@ networks:
   conpot_local_ipmi:
   conpot_local_kamstrup_382:
   cowrie_local:
-  ddospot_local:
   dicompot_local:
   dionaea_local:
   elasticpot_local:
@@ -22,34 +24,35 @@ networks:
   redishoneypot_local:
   sentrypeer_local:
   tanner_local:
-  nginx_local:
+  spiderfoot_local:
   ewsposter_local:
 
 services:
 
-########################################
+#########################################
 #### DEV
-########################################
+#########################################
 #### T-Pot Init - Never delete this!
-########################################
+#########################################
 
 # T-Pot Init Service
   tpotinit:
     container_name: tpotinit
     env_file:
-     - .env
+      - .env
     restart: always
     tmpfs:
-     - /tmp/etc:uid=2000,gid=2000
-     - /tmp/:uid=2000,gid=2000
-    networks:
-     - tpotinit_local
+      - /tmp/etc:uid=2000,gid=2000
+      - /tmp/:uid=2000,gid=2000
+    network_mode: "host"
+    cap_add:
+     - NET_ADMIN
     image: ${TPOT_REPO}/tpotinit:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
     volumes:
-     - ${TPOT_DOCKER_COMPOSE}:/tmp/tpot/docker-compose.yml:ro
-     - ${TPOT_DATA_PATH}/blackhole:/etc/blackhole
-     - ${TPOT_DATA_PATH}:/data
+      - ${TPOT_DOCKER_COMPOSE}:/tmp/tpot/docker-compose.yml:ro
+      - ${TPOT_DATA_PATH}/blackhole:/etc/blackhole
+      - ${TPOT_DATA_PATH}:/data
 
 
 ##################
@@ -61,7 +64,7 @@ services:
     container_name: adbhoney
     restart: always
     depends_on:
-      tpotinit:
+      logstash:
         condition: service_healthy
     networks:
      - adbhoney_local
@@ -79,7 +82,7 @@ services:
     container_name: ciscoasa
     restart: always
     depends_on:
-      tpotinit:
+      logstash:
         condition: service_healthy
     tmpfs:
      - /tmp/ciscoasa:uid=2000,gid=2000
@@ -99,7 +102,7 @@ services:
     container_name: citrixhoneypot
     restart: always
     depends_on:
-      tpotinit:
+      logstash:
         condition: service_healthy
     networks:
      - citrixhoneypot_local
@@ -116,7 +119,7 @@ services:
     container_name: conpot_iec104
     restart: always
     depends_on:
-      tpotinit:
+      logstash:
         condition: service_healthy
     environment:
      - CONPOT_CONFIG=/etc/conpot/conpot.cfg
@@ -142,7 +145,7 @@ services:
     container_name: conpot_guardian_ast
     restart: always
     depends_on:
-      tpotinit:
+      logstash:
         condition: service_healthy
     environment:
      - CONPOT_CONFIG=/etc/conpot/conpot.cfg
@@ -167,7 +170,7 @@ services:
     container_name: conpot_ipmi
     restart: always
     depends_on:
-      tpotinit:
+      logstash:
         condition: service_healthy
     environment:
      - CONPOT_CONFIG=/etc/conpot/conpot.cfg
@@ -192,7 +195,7 @@ services:
     container_name: conpot_kamstrup_382
     restart: always
     depends_on:
-      tpotinit:
+      logstash:
         condition: service_healthy
     environment:
      - CONPOT_CONFIG=/etc/conpot/conpot.cfg
@@ -218,7 +221,7 @@ services:
     container_name: cowrie
     restart: always
     depends_on:
-      tpotinit:
+      logstash:
         condition: service_healthy
     tmpfs:
       - /tmp/cowrie:uid=2000,gid=2000
@@ -237,29 +240,6 @@ services:
       - ${TPOT_DATA_PATH}/cowrie/log:/home/cowrie/cowrie/log
       - ${TPOT_DATA_PATH}/cowrie/log/tty:/home/cowrie/cowrie/log/tty
 
-# Ddospot service
-  ddospot:
-    container_name: ddospot
-    restart: always
-    depends_on:
-      tpotinit:
-        condition: service_healthy
-    networks:
-     - ddospot_local
-    ports:
-     - "19:19/udp"
-     - "53:53/udp"
-     - "123:123/udp"
-#     - "161:161/udp"
-     - "1900:1900/udp"
-    image: ${TPOT_REPO}/ddospot:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
-    read_only: true
-    volumes:
-     - ${TPOT_DATA_PATH}/ddospot/log:/opt/ddospot/ddospot/logs
-     - ${TPOT_DATA_PATH}/ddospot/bl:/opt/ddospot/ddospot/bl
-     - ${TPOT_DATA_PATH}/ddospot/db:/opt/ddospot/ddospot/db
-
 # Dicompot service
 # Get the Horos Client for testing: https://horosproject.org/
 # Get Dicom images (CC BY 3.0): https://www.cancerimagingarchive.net/collections/
@@ -268,7 +248,7 @@ services:
     container_name: dicompot
     restart: always
     depends_on:
-      tpotinit:
+      logstash:
         condition: service_healthy
     networks:
      - dicompot_local
@@ -288,7 +268,7 @@ services:
     tty: true
     restart: always
     depends_on:
-      tpotinit:
+      logstash:
         condition: service_healthy
     networks:
      - dionaea_local
@@ -327,7 +307,7 @@ services:
     container_name: elasticpot
     restart: always
     depends_on:
-      tpotinit:
+      logstash:
         condition: service_healthy
     networks:
      - elasticpot_local
@@ -344,7 +324,7 @@ services:
     container_name: heralding
     restart: always
     depends_on:
-      tpotinit:
+      logstash:
         condition: service_healthy
     tmpfs:
      - /tmp/heralding:uid=2000,gid=2000
@@ -373,12 +353,32 @@ services:
     volumes:
      - ${TPOT_DATA_PATH}/heralding/log:/var/log/heralding
 
+# Honeytrap service
+  honeytrap:
+    container_name: honeytrap
+    restart: always
+    depends_on:
+      logstash:
+        condition: service_healthy
+    tmpfs:
+     - /tmp/honeytrap:uid=2000,gid=2000
+    network_mode: "host"
+    cap_add:
+     - NET_ADMIN
+    image: ${TPOT_REPO}/honeytrap:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    read_only: true
+    volumes:
+     - ${TPOT_DATA_PATH}/honeytrap/attacks:/opt/honeytrap/var/attacks
+     - ${TPOT_DATA_PATH}/honeytrap/downloads:/opt/honeytrap/var/downloads
+     - ${TPOT_DATA_PATH}/honeytrap/log:/opt/honeytrap/var/log
+
 # Ipphoney service
   ipphoney:
     container_name: ipphoney
     restart: always
     depends_on:
-      tpotinit:
+      logstash:
         condition: service_healthy
     networks:
      - ipphoney_local
@@ -395,7 +395,7 @@ services:
     container_name: mailoney
     restart: always
     depends_on:
-      tpotinit:
+      logstash:
         condition: service_healthy
     environment:
      - HPFEEDS_SERVER=
@@ -418,7 +418,7 @@ services:
     container_name: medpot
     restart: always
     depends_on:
-      tpotinit:
+      logstash:
         condition: service_healthy
     networks:
      - medpot_local
@@ -435,7 +435,7 @@ services:
     container_name: redishoneypot
     restart: always
     depends_on:
-      tpotinit:
+      logstash:
         condition: service_healthy
     networks:
      - redishoneypot_local
@@ -452,7 +452,7 @@ services:
     container_name: sentrypeer
     restart: always
     depends_on:
-      tpotinit:
+      logstash:
         condition: service_healthy
 # SentryPeer offers to exchange bad actor data via DHT / P2P mode by setting the ENV to true (1)
 # In some cases (i.e. internally deployed T-Pots) this might be confusing as SentryPeer will show
@@ -477,7 +477,7 @@ services:
     container_name: tanner_redis
     restart: always
     depends_on:
-      tpotinit:
+      logstash:
         condition: service_healthy
     tty: true
     networks:
@@ -491,7 +491,7 @@ services:
     container_name: tanner_phpox
     restart: always
     depends_on:
-      tpotinit:
+      logstash:
         condition: service_healthy
     tty: true
     networks:
@@ -554,68 +554,6 @@ services:
 
 
 ##################
-#### NSM
-##################
-
-# Fatt service
-  fatt:
-    container_name: fatt
-    restart: always
-    depends_on:
-      tpotinit:
-        condition: service_healthy
-    network_mode: "host"
-    cap_add:
-     - NET_ADMIN
-     - SYS_NICE
-     - NET_RAW
-    image: ${TPOT_REPO}/fatt:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
-    volumes:
-     - ${TPOT_DATA_PATH}/fatt/log:/opt/fatt/log
-
-# P0f service
-  p0f:
-    container_name: p0f
-    restart: always
-    depends_on:
-      tpotinit:
-        condition: service_healthy
-    network_mode: "host"
-    cap_add:
-     - NET_ADMIN
-     - SYS_NICE
-     - NET_RAW
-    image: ${TPOT_REPO}/p0f:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
-    read_only: true
-    volumes:
-     - ${TPOT_DATA_PATH}/p0f/log:/var/log/p0f
-
-# Suricata service
-  suricata:
-    container_name: suricata
-    restart: always
-    depends_on:
-      tpotinit:
-        condition: service_healthy
-    environment:
-    # For ET Pro ruleset replace "OPEN" with your OINKCODE
-     - OINKCODE=OPEN
-    # Loading externel Rules from URL
-    # - FROMURL="https://username:password@yoururl.com|https://username:password@otherurl.com"
-    network_mode: "host"
-    cap_add:
-     - NET_ADMIN
-     - SYS_NICE
-     - NET_RAW
-    image: ${TPOT_REPO}/suricata:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
-    volumes:
-     - ${TPOT_DATA_PATH}/suricata/log:/var/log/suricata
-
-
-##################
 #### Tools
 ##################
 
@@ -631,8 +569,6 @@ services:
      - bootstrap.memory_lock=true
      - ES_JAVA_OPTS=-Xms2048m -Xmx2048m
      - ES_TMPDIR=/tmp
-    networks:
-     - nginx_local
     cap_add:
      - IPC_LOCK
     ulimits:
@@ -650,21 +586,6 @@ services:
     volumes:
      - ${TPOT_DATA_PATH}:/data
 
-## Kibana service
-  kibana:
-    container_name: kibana
-    restart: always
-    depends_on:
-      elasticsearch:
-        condition: service_healthy
-    networks:
-     - nginx_local
-    mem_limit: 1g
-    ports:
-     - "127.0.0.1:64296:5601"
-    image: ${TPOT_REPO}/kibana:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
-
 ## Logstash service
   logstash:
     container_name: logstash
@@ -672,8 +593,6 @@ services:
     depends_on:
       elasticsearch:
         condition: service_healthy
-    networks:
-     - nginx_local
     environment:
      - LS_JAVA_OPTS=-Xms1024m -Xmx1024m
     mem_limit: 2g
@@ -687,10 +606,8 @@ services:
     container_name: map_redis
     restart: always
     depends_on:
-      tpotinit:
+      logstash:
         condition: service_healthy
-    networks:
-     - nginx_local
     stop_signal: SIGKILL
     tty: true
     image: ${TPOT_REPO}/redis:${TPOT_VERSION}
@@ -702,10 +619,8 @@ services:
     container_name: map_web
     restart: always
     depends_on:
-      tpotinit:
+      logstash:
         condition: service_healthy
-    networks:
-     - nginx_local
     environment:
      - MAP_COMMAND=AttackMapServer.py
     stop_signal: SIGKILL
@@ -720,10 +635,8 @@ services:
     container_name: map_data
     restart: always
     depends_on:
-      elasticsearch:
+      logstash:
         condition: service_healthy
-    networks:
-     - nginx_local
     environment:
      - MAP_COMMAND=DataServer_v2.py
      - TPOT_ATTACKMAP_TEXT=${TPOT_ATTACKMAP_TEXT}
@@ -739,7 +652,7 @@ services:
     container_name: ewsposter
     restart: always
     depends_on:
-      tpotinit:
+      logstash:
         condition: service_healthy
     networks:
      - ewsposter_local
@@ -776,8 +689,7 @@ services:
      - /var/tmp/nginx/scgi
      - /run
      - /var/lib/nginx/tmp:uid=100,gid=82
-    networks:
-     - nginx_local
+    network_mode: "host"
     ports:
      - "64297:64297"
      - "127.0.0.1:64304:64304"
@@ -788,19 +700,3 @@ services:
      - ${TPOT_DATA_PATH}/nginx/cert/:/etc/nginx/cert/:ro
      - ${TPOT_DATA_PATH}/nginx/conf/nginxpasswd:/etc/nginx/nginxpasswd:ro
      - ${TPOT_DATA_PATH}/nginx/log/:/var/log/nginx/
-
-# Spiderfoot service
-  spiderfoot:
-    container_name: spiderfoot
-    restart: always
-    depends_on:
-      tpotinit:
-        condition: service_healthy
-    networks:
-     - nginx_local
-    ports:
-     - "127.0.0.1:64303:8080"
-    image: ${TPOT_REPO}/spiderfoot:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
-    volumes:
-     - ${TPOT_DATA_PATH}/spiderfoot:/home/spiderfoot/.spiderfoot

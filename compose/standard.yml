@@ -1,3 +1,4 @@
+# T-Pot: STANDARD
 version: '3.9'
 
 networks:
@@ -25,11 +26,11 @@ networks:
 
 services:
 
-##############################################
+#########################################
 #### DEV
-##############################################
-#### T-Pot Light Init - Never delete this!
-##############################################
+#########################################
+#### T-Pot Init - Never delete this!
+#########################################
 
 # T-Pot Init Service
   tpotinit:
@@ -227,7 +228,7 @@ services:
     ports:
       - "22:22"
       - "23:23"
-    image: ${TPOT_REPO}/cowrie:${TPOT_VERSION} 
+    image: ${TPOT_REPO}/cowrie:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
     read_only: true
     volumes:
@@ -631,7 +632,7 @@ services:
 
 
 ##################
-#### Tools 
+#### Tools
 ##################
 
 #### ELK
@@ -729,6 +730,8 @@ services:
         condition: service_healthy
     environment:
      - MAP_COMMAND=DataServer_v2.py
+     - TPOT_ATTACKMAP_TEXT=${TPOT_ATTACKMAP_TEXT}
+     - TZ=${TPOT_ATTACKMAP_TEXT_TIMEZONE}
     stop_signal: SIGKILL
     tty: true
     image: ${TPOT_REPO}/map:${TPOT_VERSION}
