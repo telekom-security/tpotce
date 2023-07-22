@@ -606,7 +606,7 @@ services:
     container_name: map_redis
     restart: always
     depends_on:
-      logstash:
+      tpotinit:
         condition: service_healthy
     stop_signal: SIGKILL
     tty: true
@@ -619,7 +619,7 @@ services:
     container_name: map_web
     restart: always
     depends_on:
-      logstash:
+      tpotinit:
         condition: service_healthy
     environment:
      - MAP_COMMAND=AttackMapServer.py
