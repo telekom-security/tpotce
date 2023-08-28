@@ -1,10 +1,43 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
 cff-version: 1.2.0
-message: "If you use this software, please cite it as below."
+title: T-Pot
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
 authors:
-- affiliation: "Deutsche Telekom Security GmbH"
-- family-names: "Ochse"
-  given-names: "Marco"
-title: "T-Pot"
+  - name: Deutsche Telekom Security GmbH
+    address: Bonner Talweg 100
+    city: Bonn
+    country: DE
+    post-code: '53113'
+    website: 'https://github.com/telekom-security'
+  - given-names: Marco
+    family-names: Ochse
+    affiliation: Deutsche Telekom Security GmbH
+identifiers:
+  - type: url
+    value: >-
+      https://github.com/telekom-security/tpotce/releases/tag/22.04.0
+    description: T-Pot Release 22.04.0
+repository-code: 'https://github.com/telekom-security/tpotce'
+abstract: >-
+  T-Pot is the all in one, optionally distributed, multiarch
+  (amd64, arm64) honeypot plattform, supporting 20+
+  honeypots and countless visualization options using the
+  Elastic Stack, animated live attack maps and lots of
+  security tools to further improve the deception
+  experience.
+keywords:
+  - honeypot
+  - deception
+  - t-pot
+  - telekom security
+  - docker
+  - elk
+license: GPL-3.0
+commit: af09aa96b184f873ec83da4e7380762a0a5ce416
 version: 22.04.0
-date-released: 2022-04-12
-url: "https://github.com/telekom-security/tpotce/releases/tag/22.04.0"
+date-released: '2022-04-12'
