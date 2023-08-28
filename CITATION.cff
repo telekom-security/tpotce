@@ -1,0 +1,10 @@
+@manual{README.md,
+    title        = {T-Pot Documentation},
+    author       = {Marco Ochse},
+    year         = 2023,
+    month        = {January},
+    address      = {Bonner Talweg 100, 53113 Bonn},
+    note         = {Available at \url{https://github.com/telekom-security/tpotce/blob/7e60b46732109dffa780d754b5dc998c211626c6/README.md}},
+    organization = {Telekom Security},
+    edition      = {22.04}
+}
