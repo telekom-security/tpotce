@@ -776,6 +776,10 @@ case $myCONF_TPOT_FLAVOR in
     fuBANNER "SENSOR"
     ln -s /opt/tpot/etc/compose/sensor.yml $myTPOTCOMPOSE
   ;;
+  *)
+    echo "Aborting. TPot flavor $myCONF_TPOT_FLAVOR doesn't exist."
+    exit
+  ;;
 esac
 
 # Let's load docker images
