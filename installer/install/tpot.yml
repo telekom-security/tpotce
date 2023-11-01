@@ -18,6 +18,7 @@
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
+        - "Raspbian"
         - "Rocky"
         - "Ubuntu"
 
@@ -29,16 +30,18 @@
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
+        - "Raspbian"
         - "Rocky"
         - "Ubuntu"
 
-    - name: Add python package (Debian, Ubuntu)
+    - name: Add python package (Debian, Raspbian, Ubuntu)
       raw: |
         apt update
         apt -y install python3
-      when: my_distribution.stdout | trim in ["Debian", "Ubuntu"] and my_python3.stdout | trim == ""
+      when: my_distribution.stdout | trim in ["Debian", "Raspbian", "Ubuntu"] and my_python3.stdout | trim == ""
       tags:
         - "Debian"
+        - "Raspbian"
         - "Ubuntu"
 
     - name: Add python package (Alma, Fedora, Rocky)
@@ -71,6 +74,7 @@
     - "Debian"
     - "Fedora"
     - "openSUSE Tumbleweed"
+    - "Raspbian"
     - "Rocky"
     - "Ubuntu"
 
@@ -89,7 +93,7 @@
 
     - name: Check if supported distribution (All)
       assert:
-        that: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Rocky", "Ubuntu"]
+        that: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
         fail_msg: "T-Pot is not supported on this plattform: {{ ansible_distribution }}."
         success_msg: "T-Pot will now install on {{ ansible_distribution }}."
 
@@ -105,17 +109,18 @@
   tasks:
     - name: Syncing clocks (All)
       shell: "hwclock --hctosys"
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Rocky", "Ubuntu"]
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
       ignore_errors: true
       tags:
         - "AlmaLinux"
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
+        - "Raspbian"
         - "Rocky"
         - "Ubuntu"
 
-    - name: Install recommended packages (Debian, Ubuntu)
+    - name: Install recommended packages (Debian, Raspbian, Ubuntu)
       package:
         name:
           - apache2-utils
@@ -133,9 +138,10 @@
           - wget
         state: latest
         update_cache: yes
-      when: ansible_distribution in ["Debian", "Ubuntu"]
+      when: ansible_distribution in ["Debian", "Raspbian", "Ubuntu"]
       tags:
         - "Debian"
+        - "Raspbian"
         - "Ubuntu"
 
     - name: Install grc from remote repo (AlmaLinux, Rocky)
@@ -217,7 +223,7 @@
   become: true
 
   tasks:
-    - name: Remove distribution based Docker packages (AlmaLinux, Debian, Fedora, Rocky, Ubuntu)
+    - name: Remove distribution based Docker packages (AlmaLinux, Debian, Fedora, Raspbian, Rocky, Ubuntu)
       package:
         name:
           - docker
@@ -227,52 +233,57 @@
           - runc
         state: absent
         update_cache: yes
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "Rocky", "Ubuntu"]
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "Raspbian", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
         - "Fedora"
+        - "Raspbian"
         - "Rocky"
         - "Ubuntu"
 
-    - name: Add folder for Docker Engine GPG key (Debian, Ubuntu)
+    - name: Add folder for Docker Engine GPG key (Debian, Raspbian, Ubuntu)
       file:
         path: /etc/apt/keyrings
         state: directory
         mode: 0755
-      when: ansible_distribution in ["Debian", "Ubuntu"]
+      when: ansible_distribution in ["Debian", "Raspbian", "Ubuntu"]
       tags:
         - "Debian"
+        - "Raspbian"
         - "Ubuntu"
 
-    - name: Download Docker Engine GPG key (Debian, Ubuntu)
+    - name: Download Docker Engine GPG key (Debian, Raspbian, Ubuntu)
       get_url:
         url: https://download.docker.com/linux/{{ ansible_distribution | lower }}/gpg
         dest: /etc/apt/keyrings/docker
         mode: 0755
-      when: ansible_distribution in ["Debian", "Ubuntu"]
+      when: ansible_distribution in ["Debian", "Raspbian", "Ubuntu"]
       tags:
         - "Debian"
+        - "Raspbian"
         - "Ubuntu"
 
-    - name: Decrypt Docker Engine GPG key (Debian, Ubuntu)
+    - name: Decrypt Docker Engine GPG key (Debian, Raspbian, Ubuntu)
       shell: gpg --dearmor /etc/apt/keyrings/docker
       args:
         creates: /etc/apt/keyrings/docker.gpg
-      when: ansible_distribution in ["Debian", "Ubuntu"]
+      when: ansible_distribution in ["Debian", "Raspbian", "Ubuntu"]
       tags:
         - "Debian"
+        - "Raspbian"
         - "Ubuntu"
 
-    - name: Add Docker Engine repository (Debian, Ubuntu)
+    - name: Add Docker Engine repository (Debian, Raspbian, Ubuntu)
       apt_repository:
         filename: docker
         repo: "deb [arch={{ ansible_architecture | replace('aarch64', 'arm64') }} signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} stable"
         state: present
         update_cache: yes
-      when: ansible_distribution in ["Debian", "Ubuntu"]
+      when: ansible_distribution in ["Debian", "Raspbian", "Ubuntu"]
       tags:
         - "Debian"
+        - "Raspbian"
         - "Ubuntu"
 
     - name: Add Docker repository (Fedora)
@@ -323,7 +334,7 @@
       tags:
         - "openSUSE Tumbleweed"
 
-    - name: Install Docker Engine packages (AlmaLinux, Debian, Fedora, Rocky, Ubuntu)
+    - name: Install Docker Engine packages (AlmaLinux, Debian, Fedora, Raspbian, Rocky, Ubuntu)
       package:
         name:
           - docker-ce 
@@ -333,11 +344,12 @@
           - docker-compose-plugin 
         state: latest
         update_cache: yes
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "Rocky", "Ubuntu"]
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "Raspbian", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
         - "Fedora"
+        - "Raspbian"
         - "Rocky"
         - "Ubuntu"
 
@@ -346,12 +358,13 @@
         name: docker
         state: stopped
         enabled: false
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Rocky", "Ubuntu"]
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
+        - "Raspbian"
         - "Rocky"
         - "Ubuntu"
 
@@ -370,12 +383,13 @@
         name: tpot
         gid: 2000
         state: present
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Rocky", "Ubuntu"]
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
+        - "Raspbian"
         - "Rocky"
         - "Ubuntu"
 
@@ -387,12 +401,13 @@
         shell: /bin/false
         home: /nonexistent
         group: tpot
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Rocky", "Ubuntu"]
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
+        - "Raspbian"
         - "Rocky"
         - "Ubuntu"
 
@@ -413,16 +428,17 @@
       tags:
         - "Ubuntu"
 
-    - name: Change SSH Port to 64295 (AlmaLinux, Debian, Fedora, Rocky, Ubuntu)
+    - name: Change SSH Port to 64295 (AlmaLinux, Debian, Fedora, Raspbian, Rocky, Ubuntu)
       lineinfile:
         path: /etc/ssh/sshd_config
         line: "Port 64295"
         insertafter: EOF
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "Rocky", "Ubuntu"]
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "Raspbian", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
         - "Fedora"
+        - "Raspbian"
         - "Rocky"
         - "Ubuntu"
 
@@ -573,12 +589,13 @@
         name: docker
         state: restarted
         enabled: true
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Rocky", "Ubuntu"]
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
+        - "Raspbian"
         - "Rocky"
         - "Ubuntu"
 
@@ -587,12 +604,13 @@
         name: "{{ 'ssh' if ansible_distribution in ['Ubuntu'] else 'sshd' }}"
         state: restarted
         enabled: true
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Rocky", "Ubuntu"]
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
         - "Fedora"
         - "openSUSE Tumbleweed"
+        - "Raspbian"
         - "Rocky"
         - "Ubuntu"
 
@@ -609,6 +627,7 @@
     - "Debian"
     - "Fedora"
     - "openSUSE Tumbleweed"
+    - "Raspbian"
     - "Rocky"
     - "Ubuntu"
 
@@ -627,7 +646,7 @@
         marker: "# {mark} ANSIBLE MANAGED BLOCK"
         insertafter: EOF
         state: present
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Rocky", "Ubuntu"]
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
 
     - name: Clone / Update T-Pot repository (All)
       git:
@@ -636,7 +655,7 @@
         version: dev
         clone: yes
         update: no
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Rocky", "Ubuntu"]
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
 
     - name: Add current user to Docker, T-Pot group (All)
       become: true
@@ -646,10 +665,10 @@
           - docker
           - tpot
         append: yes
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Rocky", "Ubuntu"]
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
 
     - name: Check for non-root user id (All)
       debug:
         msg: "Detected user: '{{ ansible_user_id }}'"
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Rocky", "Ubuntu"]
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
       failed_when: ansible_user_id == "root"
