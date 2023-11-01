@@ -27,7 +27,7 @@ if [ ${EUID} -eq 0 ];
 fi
 
 # Check if running on a supported distribution
-mySUPPORTED_DISTRIBUTIONS=("AlmaLinux" "Debian GNU/Linux" "Fedora Linux" "openSUSE Tumbleweed" "Rocky Linux" "Ubuntu")
+mySUPPORTED_DISTRIBUTIONS=("AlmaLinux" "Debian GNU/Linux" "Fedora Linux" "openSUSE Tumbleweed" "Raspbian GNU/Linux" "Rocky Linux" "Ubuntu")
 myCURRENT_DISTRIBUTION=$(awk -F= '/^NAME/{print $2}' /etc/os-release | tr -d '"')
 
 if [[ ! " ${mySUPPORTED_DISTRIBUTIONS[@]} " =~ " ${myCURRENT_DISTRIBUTION} " ]];
@@ -64,7 +64,7 @@ case ${myCURRENT_DISTRIBUTION} in
     echo
     sudo dnf -y --refresh install ${myPACKAGES_FEDORA}
     ;;
-  "Debian GNU/Linux"|"Ubuntu")
+  "Debian GNU/Linux"|"Raspbian GNU/Linux"|"Ubuntu")
     echo
     echo ${myINSTALL_NOTIFICATION}
     echo
@@ -106,7 +106,7 @@ esac
 echo
 
 # Define tag for Ansible
-myANSIBLE_DISTRIBUTIONS=("Fedora Linux" "Debian GNU/Linux" "Rocky Linux")
+myANSIBLE_DISTRIBUTIONS=("Fedora Linux" "Debian GNU/Linux" "Raspbian GNU/Linux" "Rocky Linux")
 if [[ "${myANSIBLE_DISTRIBUTIONS[@]}" =~ "${myCURRENT_DISTRIBUTION}" ]];
   then
     myANSIBLE_TAG=$(echo ${myCURRENT_DISTRIBUTION} | cut -d " " -f 1)
