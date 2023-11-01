@@ -636,7 +636,7 @@
       blockinfile:
         path: ~/.bashrc
         block: |
-          alias dps='grc --colour=on docker ps -f status=running -f status=exited --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | sort'
+          alias dps='grc --colour=on docker ps -f status=running -f status=exited --format "table {{'{{'}}.Names{{'}}'}}\\t{{'{{'}}.Status{{'}}'}}\\t{{'{{'}}.Ports{{'}}'}}" | sort'
           alias dpsw='watch -c bash -ic dps'
           alias mi='micro'
           alias sudo='sudo '
