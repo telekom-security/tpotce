@@ -122,10 +122,12 @@
           - bash-completion
           - ca-certificates
           - cracklib-runtime
-          - curl 
+          - curl
+          - exa
           - git
           - gnupg
           - grc
+          - micro
           - net-tools
           - vim
           - wget
@@ -154,9 +156,11 @@
           - cracklib
           - curl
           - dnf-plugins-core
+          - exa
           - git
           - grc
           - httpd-tools
+          - micro
           - net-tools
           - vim
           - wget
@@ -191,8 +195,10 @@
           - ca-certificates
           - cracklib
           - curl
+          - exa
           - git
           - grc
+          - micro
           - vim
           - wget
         state: latest
@@ -611,8 +617,13 @@
       blockinfile:
         path: ~/.bashrc
         block: |
-          alias dps='grc --colour=on docker ps -f status=running -f status=exited --format "table {{'{{'}}.Names{{'}}'}}\t{{'{{'}}.Status{{'}}'}}\t{{'{{'}}.Ports{{'}}'}}" | sort'
+          alias dps='grc --colour=on docker ps -f status=running -f status=exited --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | sort'
           alias dpsw='watch -c bash -ic dps'
+          alias mi='micro'
+          alias sudo='sudo '
+          alias ls='exa'
+          alias ll='exa -hlg'
+          alias la='exa -hlag'
         marker: "# {mark} ANSIBLE MANAGED BLOCK"
         insertafter: EOF
         state: present
