@@ -1,6 +1,5 @@
 #!/bin/bash
 
-VERSION="T-Pot $(cat /opt/tpot/version)"
 COMPOSE="/tmp/tpot/docker-compose.yml"
 
 # Check for compatible OSType
@@ -23,7 +22,7 @@ fi
 if [ -f "/data/uuid" ];
   then
     figlet "Initializing ..."
-    figlet "${VERSION}"
+    figlet "T-Pot: ${TPOT_VERSION}"
     echo
     echo "# Data folder is present, just cleaning up, please be patient ..."
     echo
@@ -31,7 +30,7 @@ if [ -f "/data/uuid" ];
     echo
   else
     figlet "Setting up ..."
-    figlet "${VERSION}"
+    figlet "T-Pot: ${TPOT_VERSION}"
     echo
     echo "# Checking for default user."
     if [ "${WEB_USER}" == "change:me" ];

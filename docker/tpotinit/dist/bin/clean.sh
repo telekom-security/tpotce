@@ -20,8 +20,8 @@ echo $(ls $myFOLDER | wc -l)
 
 # Let's create a function to rotate and compress logs
 fuLOGROTATE () {
-  local mySTATUS="/data/tpot/etc/logrotate/status"
-  local myCONF="/data/tpot/etc/logrotate/logrotate.conf"
+  local mySTATUS="/opt/tpot/etc/logrotate/status"
+  local myCONF="/opt/tpot/etc/logrotate/logrotate.conf"
   local myADBHONEYTGZ="/data/adbhoney/downloads.tgz"
   local myADBHONEYDL="/data/adbhoney/downloads/"
   local myCOWRIETTYLOGS="/data/cowrie/log/tty/"
