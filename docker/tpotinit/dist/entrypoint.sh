@@ -2,6 +2,86 @@
 
 COMPOSE="/tmp/tpot/docker-compose.yml"
 
+# Function to check if a variable is set, not empty
+check_var() {
+    local var_name="$1"
+    local var_value=$(eval echo \$$var_name)
+
+    # Check if variable is set and not empty
+    if [[ -z "$var_value" ]]; 
+      then
+        echo "# Error: $var_name is not set or empty."
+        echo
+        echo "# Aborting"
+        exit 1
+    fi
+}
+
+# Function to check for potentially unsafe characters in most variables
+check_safety() {
+    local var_name="$1"
+    local var_value=$(eval echo \$$var_name)
+
+    # General safety check for most variables
+    if [[ $var_value =~ [^a-zA-Z0-9_/.:-] ]]; 
+      then
+        echo "# Error: Unsafe characters detected in $var_name."
+        echo
+        echo "# Aborting"
+        exit 1
+    fi
+}
+
+# Function to check the safety of the WEB_USER variable
+check_web_user_safety() {
+    local web_user="$1"
+
+    # Allow alphanumeric, $, ., /, and : for WEB_USER (to accommodate htpasswd hash)
+    if [[ ! $web_user =~ ^[a-zA-Z0-9]+:\$apr1\$[a-zA-Z0-9./]+\$[a-zA-Z0-9./]+$ ]]; 
+      then
+        echo "# Error: Unsafe characters detected in WEB_USER."
+        echo
+        echo "# Aborting"
+        exit 1
+    fi
+}
+
+# Function to validate specific variable formats
+validate_format() {
+    local var_name="$1"
+    local var_value=$(eval echo \$$var_name)
+
+    case "$var_name" in
+        TPOT_BLACKHOLE|TPOT_PERSISTENCE|TPOT_ATTACKMAP_TEXT|COCKPIT)
+            if ! [[ $var_value =~ ^(ENABLED|DISABLED|on|off|true|false)$ ]]; 
+              then
+                echo "# Error: Invalid value for $var_name. Expected ENABLED/DISABLED, on/off, true/false."
+		        echo
+		        echo "# Aborting"
+                exit 1
+            fi
+            ;;
+        *)
+            # Add additional specific format checks here if necessary
+            ;;
+    esac
+}
+
+# Validate environment variables
+for var in TPOT_BLACKHOLE TPOT_PERSISTENCE TPOT_ATTACKMAP_TEXT TPOT_ATTACKMAP_TEXT_TIMEZONE TPOT_REPO TPOT_VERSION TPOT_PULL_POLICY TPOT_OSTYPE; 
+  do
+    check_var "$var"
+    check_safety "$var"
+    validate_format "$var"
+done
+
+# Specific check for WEB_USER
+check_var "WEB_USER"
+check_web_user_safety "$WEB_USER"
+
+echo "# All settings seem to be valid."
+
+
 # Check for compatible OSType
 echo
 echo "# Checking if OSType is compatible."
@@ -26,7 +106,7 @@ if [ -f "/data/uuid" ];
     echo
     echo "# Data folder is present, just cleaning up, please be patient ..."
     echo
-    /opt/tpot/bin/clean.sh on
+    /opt/tpot/bin/clean.sh "${TPOT_PERSISTENCE}"
     echo
   else
     figlet "Setting up ..."
@@ -46,7 +126,7 @@ if [ -f "/data/uuid" ];
     mkdir -vp /data/ews/conf \
               /data/nginx/{cert,conf,log} \
               /data/tpot/etc/compose/ \
-	            /data/tpot/etc/logrotate/ \
+              /data/tpot/etc/logrotate/ \
               /tmp/etc/
     echo
     echo "# Generating self signed certificate ..."
@@ -148,7 +228,7 @@ fi
 # Done
 echo
 figlet "Starting ..."
-figlet "${VERSION}"
+figlet "T-Pot: ${TPOT_VERSION}"
 echo
 touch /tmp/success
 
