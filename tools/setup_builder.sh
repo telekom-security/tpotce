@@ -11,19 +11,12 @@ fi
 # Only run with command switch
 if [ "$1" != "-y" ]; then
   echo "### Setting up docker for Multi Arch Builds."
+  echo "### Requires Docker packages from https://get.docker.com/"
   echo "### Use on x64 only!"
-  echo "### Run with -y to install!"
+  echo "### Run with -y if you fit the requirements!"
   echo
   exit
 fi
-
-# Main
-mkdir -p /root/.docker/cli-plugins/
-cd /root/.docker/cli-plugins/
-wget https://github.com/docker/buildx/releases/download/v0.10.0/buildx-v0.10.0.linux-amd64 -O docker-buildx
-chmod +x docker-buildx
-
-docker buildx ls
 
 # We need to create a new builder as the default one cannot handle multi-arch builds
 # https://docs.docker.com/desktop/multi-arch/
