@@ -686,6 +686,8 @@ services:
         condition: service_healthy
     environment:
      - LS_JAVA_OPTS=-Xms1024m -Xmx1024m
+    ports:
+     - "127.0.0.1:64305:64305"
     mem_limit: 2g
     image: ${TPOT_REPO}/logstash:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
@@ -783,13 +785,13 @@ services:
     network_mode: "host"
     ports:
      - "64297:64297"
-     - "127.0.0.1:64304:64304"
     image: ${TPOT_REPO}/nginx:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
     read_only: true
     volumes:
      - ${TPOT_DATA_PATH}/nginx/cert/:/etc/nginx/cert/:ro
      - ${TPOT_DATA_PATH}/nginx/conf/nginxpasswd:/etc/nginx/nginxpasswd:ro
+     - ${TPOT_DATA_PATH}/nginx/conf/lswebpasswd:/etc/nginx/lswebpasswd:ro
      - ${TPOT_DATA_PATH}/nginx/log/:/var/log/nginx/
 
 # Spiderfoot service

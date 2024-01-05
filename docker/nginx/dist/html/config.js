@@ -37,10 +37,6 @@ const CONFIG = {
         link: '/map/',
       },
       {
-        name: 'Cockpit',
-        link: '/cockpit.html',
-      },
-      {
         name: 'Cyberchef',
         link: '/cyberchef/',
       },

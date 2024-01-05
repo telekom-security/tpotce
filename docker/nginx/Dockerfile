@@ -29,6 +29,7 @@ RUN apk -U --no-cache add \
     cp /root/dist/conf/nginx.conf /etc/nginx/ && \
     cp -R /root/dist/conf/ssl /etc/nginx/ && \
     cp /root/dist/conf/tpotweb.conf /etc/nginx/conf.d/ && \
+    cp /root/dist/conf/lsweb.conf /etc/nginx/conf.d/ && \
 #
 # Clean up
     rm -rf /root/* && \

@@ -146,6 +146,7 @@ if [ -f "/data/uuid" ];
     echo "# Creating web user from tpot.env, make sure to erase the password from the .env ..."
     echo
     echo "${WEB_USER}" > /data/nginx/conf/nginxpasswd
+    touch /data/nginx/conf/lswebpasswd
     echo
     echo "# Extracting objects, final touches and permissions ..."
     echo

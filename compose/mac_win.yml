@@ -780,7 +780,6 @@ services:
      - nginx_local
     ports:
      - "64297:64297"
-     - "127.0.0.1:64304:64304"
     image: ${TPOT_REPO}/nginx:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
     read_only: true
