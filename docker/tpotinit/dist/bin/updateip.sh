@@ -1,7 +1,6 @@
 #!/bin/bash
 # Let's add the first local ip to the /tmp/etc/issue and external ip to ews.ip file
 # If the external IP cannot be detected, the internal IP will be inherited.
-#myCHECKIFSENSOR=$(head -n 1 /opt/tpot/etc/tpot.yml | grep "Sensor" | wc -l)
 myUUID=$(cat /data/uuid)
 myLOCALIP=$(ip address show | awk '/inet .*brd/{split($2,a,"/"); print a[1]; exit}')
 myEXTIP=$(/opt/tpot/bin/myip.sh)
@@ -9,14 +8,6 @@ if [ "$myEXTIP" = "" ];
   then
     myEXTIP=$myLOCALIP
 fi
-
-# Load Blackhole routes if enabled 
-#myBLACKHOLE_FILE1="/etc/blackhole/mass_scanner.txt"
-#myBLACKHOLE_FILE2="/etc/blackhole/mass_scanner_cidr.txt"
-#if [ -f "$myBLACKHOLE_FILE1" ] || [ -f "$myBLACKHOLE_FILE2" ];
-#  then
-#    /opt/tpot/bin/blackhole.sh add
-#fi
 
 myBLACKHOLE_STATUS=$(ip r | grep "blackhole" -c)
 if [ "$myBLACKHOLE_STATUS" -gt "500" ];
@@ -53,17 +44,6 @@ MY_EXTIP=$myEXTIP
 MY_INTIP=$myLOCALIP
 MY_HOSTNAME=$HOSTNAME
 EOF
-
-#if [ -s "/data/elk/logstash/ls_environment" ];
-#  then
-#    source /data/elk/logstash/ls_environment
-#    tee -a /data/tpot/etc/compose/elk_environment << EOF
-#MY_TPOT_TYPE=$MY_TPOT_TYPE
-#MY_SENSOR_PRIVATEKEYFILE=$MY_SENSOR_PRIVATEKEYFILE
-#MY_HIVE_USERNAME=$MY_HIVE_USERNAME
-#MY_HIVE_IP=$MY_HIVE_IP
-#EOF
-#fi
 
 chown tpot:tpot /data/ews/conf/ews.ip
 chmod 770 /data/ews/conf/ews.ip

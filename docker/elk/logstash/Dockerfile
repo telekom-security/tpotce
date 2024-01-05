@@ -9,12 +9,9 @@ COPY dist/ /root/dist/
 RUN apt-get update -y && \
     apt-get install -y \
              aria2 \
-	     autossh \
              bash \
              bzip2 \
-	     curl \
-#             openjdk-11-jre \
-             openssh-client && \
+             curl && \
 #
 # Determine arch, get and install packages
     ARCH=$(arch) && \
