@@ -277,7 +277,7 @@
     - name: Add Docker Engine repository (Debian, Raspbian, Ubuntu)
       apt_repository:
         filename: docker
-        repo: "deb [arch={{ ansible_architecture | replace('aarch64', 'arm64') }} signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} stable"
+        repo: "deb [arch={{ ansible_architecture | replace('aarch64', 'arm64') | replace('x86_64', 'amd64') }} signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} stable"
         state: present
         update_cache: yes
       when: ansible_distribution in ["Debian", "Raspbian", "Ubuntu"]
