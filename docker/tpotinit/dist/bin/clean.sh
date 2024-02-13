@@ -317,6 +317,14 @@ fuTANNER () {
   chown tpot:tpot -R /data/tanner
 }
 
+# Let's create a function to clean up and prepare wordpot data
+fuWORDPOT () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/wordpot/log; fi
+  mkdir -p /data/wordpot/log
+  chmod 770 /data/wordpot -R
+  chown tpot:tpot /data/wordpot -R
+}
+
 # Avoid unwanted cleaning
 if [ "$myPERSISTENCE" = "" ];
   then
@@ -369,4 +377,5 @@ if [ "$myPERSISTENCE" = "on" ];
     fuSURICATA
     fuP0F
     fuTANNER
+    fuWORDPOT
   fi

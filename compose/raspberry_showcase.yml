@@ -1,8 +1,8 @@
-# T-Pot: RASPBERRY_SHOWCASE
+# T-Pot: MOBILE
 # Note: This docker compose file has been adjusted to limit the number of tools, services and honeypots to run
-#       T-Pot on a Raspberry Pi 4 (8GB of RAM, SSD).
+#       T-Pot on a Raspberry Pi 4 (8GB of RAM).
 #       The standard docker compose file should work mostly fine (depending on traffic) if you do not enable a
-#       desktop environment such as LXDE and meet the minimum requirements of 8GB and a SSD.
+#       desktop environment such as LXDE and meet the minimum requirements of 8GB RAM.
 version: '3.9'
 
 networks:
@@ -433,11 +433,8 @@ services:
     depends_on:
       logstash:
         condition: service_healthy
-# SentryPeer offers to exchange bad actor data via DHT / P2P mode by setting the ENV to true (1)
-# In some cases (i.e. internally deployed T-Pots) this might be confusing as SentryPeer will show
-# the bad actors in its logs. Therefore this option is opt-in based.
-#    environment:
-#     - SENTRYPEER_PEER_TO_PEER=0
+    environment:
+     - SENTRYPEER_PEER_TO_PEER=${SENTRYPEER_PEER_TO_PEER:-0} # Default to 0 if unset or NULL (value provided by T-Pot .env)
     networks:
      - sentrypeer_local
     ports:
@@ -574,6 +571,11 @@ services:
         condition: service_healthy
     environment:
      - LS_JAVA_OPTS=-Xms1024m -Xmx1024m
+     - TPOT_TYPE=${TPOT_TYPE:-HIVE}
+     - TPOT_HIVE_USER=${TPOT_HIVE_USER}
+     - TPOT_HIVE_IP=${TPOT_HIVE_IP}
+    ports:
+     - "127.0.0.1:64305:64305"
     mem_limit: 2g
     image: ${TPOT_REPO}/logstash:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}

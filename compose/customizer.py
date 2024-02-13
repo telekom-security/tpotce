@@ -2,9 +2,9 @@ from datetime import datetime
 import yaml
 
 version = \
-    """# T-Pot Service Builder v0.1
+    """# T-Pot Service Builder v0.2
     
-    This script is intended as a kickstarter for users who want to build a customzized docker-compose.yml for use with T-Pot.
+    This script is intended as a kickstarter for users who want to build a customized docker-compose.yml for use with T-Pot.
     
     T-Pot Service Builder will ask you for all the docker services you wish to include in your docker-compose configuration file.
     The configuration file will be checked for conflicting ports as some of the honeypots are meant to work on certain ports.
@@ -42,28 +42,31 @@ def prompt_service_include(service_name):
 
 
 def check_port_conflicts(selected_services):
-    all_ports = []
-    for config in selected_services.values():
+    all_ports = {}
+    conflict_ports = []
+
+    for service_name, config in selected_services.items():
         ports = config.get('ports', [])
         for port in ports:
             # Split the port mapping and take only the host port part
             parts = port.split(':')
-            if len(parts) == 3:
-                # Format: host_ip:host_port:container_port
-                host_port = parts[1]
-            elif len(parts) == 2:
-                # Format: host_port:container_port (or host_ip:host_port for default container_port)
-                host_port = parts[0] if parts[1].isdigit() else parts[1]
-            else:
-                # Single value, treated as host_port
-                host_port = parts[0]
+            host_port = parts[1] if len(parts) == 3 else (parts[0] if parts[1].isdigit() else parts[1])
 
-            # Check for port conflict
+            # Check for port conflict and associate it with the service name
             if host_port in all_ports:
-                print_color(f"Port conflict detected: {host_port}", "red")
-                return True
-            all_ports.append(host_port)
+                conflict_ports.append((service_name, host_port))
+                if all_ports[host_port] not in [service for service, _ in conflict_ports]:
+                    conflict_ports.append((all_ports[host_port], host_port))
+            else:
+                all_ports[host_port] = service_name
+
+    if conflict_ports:
+        print_color("Port conflict(s) detected:", "red")
+        for service, port in conflict_ports:
+            print_color(f"{service}: {port}", "red")
+        return True
     return False
+
 
 
 def print_color(text, color):
@@ -79,16 +82,25 @@ def enforce_dependencies(selected_services, services):
     # If snare or any tanner services are selected, ensure all are enabled
     tanner_services = {'snare', 'tanner', 'tanner_redis', 'tanner_phpox', 'tanner_api'}
     if tanner_services.intersection(selected_services):
+        print_color("For Snare / Tanner to work all required services have been added to your configuration.", "green")
         for service in tanner_services:
             selected_services[service] = services[service]
 
     # If kibana is enabled, also enable elasticsearch
     if 'kibana' in selected_services:
         selected_services['elasticsearch'] = services['elasticsearch']
+        print_color("Kibana requires Elasticsearch which has been added to your configuration.", "green")
+
+    # If spiderfoot is enabled, also enable nginx
+    if 'spiderfoot' in selected_services:
+        selected_services['nginx'] = services['nginx']
+        print_color("Spiderfoot requires Nginx which has been added to your configuration.","green")
+
 
     # If any map services are detected, enable logstash, elasticsearch, nginx, and all map services
     map_services = {'map_web', 'map_redis', 'map_data'}
     if map_services.intersection(selected_services):
+        print_color("For Map to work all required services have been added to your configuration.", "green")
         for service in map_services.union({'elasticsearch', 'nginx'}):
             selected_services[service] = services[service]
 
@@ -96,9 +108,7 @@ def enforce_dependencies(selected_services, services):
     if 'honeytrap' in selected_services and 'glutton' in selected_services:
         # Remove glutton and notify
         del selected_services['glutton']
-        print_color(
-            "Honeytrap and Glutton cannot be active at the same time. Glutton has been removed from your configuration.",
-            "red")
+        print_color("Honeytrap and Glutton cannot be active at the same time. Glutton has been removed from your configuration.","red")
 
 
 def remove_unused_networks(selected_services, services, networks):

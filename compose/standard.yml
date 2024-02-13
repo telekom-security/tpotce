@@ -474,11 +474,8 @@ services:
     depends_on:
       tpotinit:
         condition: service_healthy
-# SentryPeer offers to exchange bad actor data via DHT / P2P mode by setting the ENV to true (1)
-# In some cases (i.e. internally deployed T-Pots) this might be confusing as SentryPeer will show
-# the bad actors in its logs. Therefore this option is opt-in based.
-#    environment:
-#     - SENTRYPEER_PEER_TO_PEER=0
+    environment:
+     - SENTRYPEER_PEER_TO_PEER=${SENTRYPEER_PEER_TO_PEER:-0} # Default to 0 if unset or NULL (value provided by T-Pot .env)
     networks:
      - sentrypeer_local
     ports:
@@ -616,9 +613,8 @@ services:
       tpotinit:
         condition: service_healthy
     environment:
-    # For ET Pro ruleset replace "OPEN" with your OINKCODE
-     - OINKCODE=OPEN
-    # Loading externel Rules from URL
+     - OINKCODE=${OINKCODE:-OPEN} # Default to OPEN if unset or NULL (value provided by T-Pot .env)
+    # Loading external Rules from URL
     # - FROMURL="https://username:password@yoururl.com|https://username:password@otherurl.com"
     network_mode: "host"
     cap_add:
@@ -686,6 +682,9 @@ services:
         condition: service_healthy
     environment:
      - LS_JAVA_OPTS=-Xms1024m -Xmx1024m
+     - TPOT_TYPE=${TPOT_TYPE:-HIVE}
+     - TPOT_HIVE_USER=${TPOT_HIVE_USER}
+     - TPOT_HIVE_IP=${TPOT_HIVE_IP}
     ports:
      - "127.0.0.1:64305:64305"
     mem_limit: 2g
