@@ -42,8 +42,8 @@ fuLOGROTATE () {
 # Ensure correct permissions and ownerships for logrotate to run without issues
 chmod 770 /data/ -R
 chown tpot:tpot /data -R
-chmod 644 /data/nginx/conf -R
-chmod 644 /data/nginx/cert -R
+chmod 774 /data/nginx/conf -R
+chmod 774 /data/nginx/cert -R
 
 # Run logrotate with force (-f) first, so the status file can be written and race conditions (with tar) be avoided
 logrotate -f -s $mySTATUS $myCONF
@@ -74,10 +74,23 @@ chown tpot:tpot $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONA
 logrotate -s $mySTATUS $myCONF
 }
 
+# Let's create a function to clean up and prepare tpotinit data
+fuTPOTINIT () {
+  mkdir -vp /data/ews/conf \
+            /data/tpot/etc/{compose,logrotate} \
+            /tmp/etc/
+  chmod 770 /data/ews/ -R
+  chmod 770 /data/tpot/ -R
+  chmod 770 /tmp/etc/ -R
+  chown tpot:tpot /data/ews/ -R
+  chown tpot:tpot /data/tpot/ -R
+  chown tpot:tpot /tmp/etc/ -R
+}
+
 # Let's create a function to clean up and prepare honeytrap data
 fuADBHONEY () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/adbhoney/*; fi
-  mkdir -p /data/adbhoney/log/ /data/adbhoney/downloads/
+  mkdir -vp /data/adbhoney/{downloads,log}
   chmod 770 /data/adbhoney/ -R
   chown tpot:tpot /data/adbhoney/ -R
 }
@@ -85,7 +98,7 @@ fuADBHONEY () {
 # Let's create a function to clean up and prepare ciscoasa data
 fuCISCOASA () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/ciscoasa/*; fi
-  mkdir -p /data/ciscoasa/log
+  mkdir -vp /data/ciscoasa/log
   chmod 770 /data/ciscoasa -R
   chown tpot:tpot /data/ciscoasa -R
 }
@@ -93,7 +106,7 @@ fuCISCOASA () {
 # Let's create a function to clean up and prepare citrixhoneypot data
 fuCITRIXHONEYPOT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/citrixhoneypot/*; fi
-  mkdir -p /data/citrixhoneypot/logs/
+  mkdir -vp /data/citrixhoneypot/logs/
   chmod 770 /data/citrixhoneypot/ -R
   chown tpot:tpot /data/citrixhoneypot/ -R
 }
@@ -101,7 +114,7 @@ fuCITRIXHONEYPOT () {
 # Let's create a function to clean up and prepare conpot data
 fuCONPOT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/conpot/*; fi
-  mkdir -p /data/conpot/log
+  mkdir -vp /data/conpot/log
   chmod 770 /data/conpot -R
   chown tpot:tpot /data/conpot -R
 }
@@ -109,7 +122,7 @@ fuCONPOT () {
 # Let's create a function to clean up and prepare cowrie data
 fuCOWRIE () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/cowrie/*; fi
-  mkdir -p /data/cowrie/log/tty/ /data/cowrie/downloads/ /data/cowrie/keys/ /data/cowrie/misc/
+  mkdir -vp /data/cowrie/{downloads,keys,misc,log,log/tty}
   chmod 770 /data/cowrie -R
   chown tpot:tpot /data/cowrie -R
 }
@@ -117,7 +130,7 @@ fuCOWRIE () {
 # Let's create a function to clean up and prepare ddospot data
 fuDDOSPOT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/ddospot/log; fi
-  mkdir -p /data/ddospot/bl /data/ddospot/db /data/ddospot/log
+  mkdir -vp /data/ddospot/{bl,db,log}
   chmod 770 /data/ddospot -R
   chown tpot:tpot /data/ddospot -R
 }
@@ -125,8 +138,7 @@ fuDDOSPOT () {
 # Let's create a function to clean up and prepare dicompot data
 fuDICOMPOT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/dicompot/log; fi
-  mkdir -p /data/dicompot/log
-  mkdir -p /data/dicompot/images
+  mkdir -vp /data/dicompot/{images,log}
   chmod 770 /data/dicompot -R
   chown tpot:tpot /data/dicompot -R
 }
@@ -134,7 +146,12 @@ fuDICOMPOT () {
 # Let's create a function to clean up and prepare dionaea data
 fuDIONAEA () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/dionaea/*; fi
-  mkdir -p /data/dionaea/log /data/dionaea/bistreams /data/dionaea/binaries /data/dionaea/rtp /data/dionaea/roots/ftp /data/dionaea/roots/tftp /data/dionaea/roots/www /data/dionaea/roots/upnp
+  mkdir -vp /data/dionaea/{log,bistreams,binaries,rtp,roots,roots/ftp,roots/tftp,roots/www,roots/upnp}
+  touch /data/dionaea/dionaea-errors.log
+  touch /data/dionaea/sipaccounts.sqlite
+  touch /data/dionaea/sipaccounts.sqlite-journal
+  touch /data/dionaea/log/dionaea.json
+  touch /data/dionaea/log/dionaea.sqlite
   chmod 770 /data/dionaea -R
   chown tpot:tpot /data/dionaea -R
 }
@@ -142,7 +159,7 @@ fuDIONAEA () {
 # Let's create a function to clean up and prepare elasticpot data
 fuELASTICPOT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/elasticpot/*; fi
-  mkdir -p /data/elasticpot/log
+  mkdir -vp /data/elasticpot/log
   chmod 770 /data/elasticpot -R
   chown tpot:tpot /data/elasticpot -R
 }
@@ -152,7 +169,7 @@ fuELK () {
   # ELK data will be kept for <= 90 days, check /etc/crontab for curator modification
   # ELK daemon log files will be removed
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/elk/log/*; fi
-  mkdir -p /data/elk
+  mkdir -vp /data/elk/{data,log}
   chmod 770 /data/elk -R
   chown tpot:tpot /data/elk -R
 }
@@ -160,7 +177,7 @@ fuELK () {
 # Let's create a function to clean up and prepare endlessh data
 fuENDLESSH () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/endlessh/log; fi
-  mkdir -p /data/endlessh/log
+  mkdir -vp /data/endlessh/log
   chmod 770 /data/endlessh -R
   chown tpot:tpot /data/endlessh -R
 }
@@ -168,7 +185,7 @@ fuENDLESSH () {
 # Let's create a function to clean up and prepare fatt data
 fuFATT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/fatt/*; fi
-  mkdir -p /data/fatt/log
+  mkdir -vp /data/fatt/log
   chmod 770 -R /data/fatt
   chown tpot:tpot -R /data/fatt
 }
@@ -176,7 +193,7 @@ fuFATT () {
 # Let's create a function to clean up and prepare glastopf data
 fuGLUTTON () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/glutton/*; fi
-  mkdir -p /data/glutton/log
+  mkdir -vp /data/glutton/log
   chmod 770 /data/glutton -R
   chown tpot:tpot /data/glutton -R
 }
@@ -184,7 +201,7 @@ fuGLUTTON () {
 # Let's create a function to clean up and prepare hellpot data
 fuHELLPOT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/hellpot/log; fi
-  mkdir -p /data/hellpot/log
+  mkdir -vp /data/hellpot/log
   chmod 770 /data/hellpot -R
   chown tpot:tpot /data/hellpot -R
 }
@@ -192,7 +209,7 @@ fuHELLPOT () {
 # Let's create a function to clean up and prepare heralding data
 fuHERALDING () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/heralding/*; fi
-  mkdir -p /data/heralding/log
+  mkdir -vp /data/heralding/log
   chmod 770 /data/heralding -R
   chown tpot:tpot /data/heralding -R
 }
@@ -200,7 +217,7 @@ fuHERALDING () {
 # Let's create a function to clean up and prepare honeypots data
 fuHONEYPOTS () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/honeypots/*; fi
-  mkdir -p /data/honeypots/log
+  mkdir -vp /data/honeypots/log
   chmod 770 /data/honeypots -R
   chown tpot:tpot /data/honeypots -R
 }
@@ -208,7 +225,7 @@ fuHONEYPOTS () {
 # Let's create a function to clean up and prepare honeysap data
 fuHONEYSAP () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/honeysap/*; fi
-  mkdir -p /data/honeysap/log
+  mkdir -vp /data/honeysap/log
   chmod 770 /data/honeysap -R
   chown tpot:tpot /data/honeysap -R
 }
@@ -216,7 +233,7 @@ fuHONEYSAP () {
 # Let's create a function to clean up and prepare honeytrap data
 fuHONEYTRAP () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/honeytrap/*; fi
-  mkdir -p /data/honeytrap/log/ /data/honeytrap/attacks/ /data/honeytrap/downloads/
+  mkdir -vp /data/honeytrap/{log,attacks,downloads}
   chmod 770 /data/honeytrap/ -R
   chown tpot:tpot /data/honeytrap/ -R
 }
@@ -224,7 +241,7 @@ fuHONEYTRAP () {
 # Let's create a function to clean up and prepare ipphoney data
 fuIPPHONEY () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/ipphoney/*; fi
-  mkdir -p /data/ipphoney/log
+  mkdir -vp /data/ipphoney/log
   chmod 770 /data/ipphoney -R
   chown tpot:tpot /data/ipphoney -R
 }
@@ -232,7 +249,7 @@ fuIPPHONEY () {
 # Let's create a function to clean up and prepare log4pot data
 fuLOG4POT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/log4pot/*; fi
-  mkdir -p /data/log4pot/log
+  mkdir -vp /data/log4pot/{log,payloads}
   chmod 770 /data/log4pot -R
   chown tpot:tpot /data/log4pot -R
 }
@@ -240,7 +257,7 @@ fuLOG4POT () {
 # Let's create a function to clean up and prepare mailoney data
 fuMAILONEY () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/mailoney/*; fi
-  mkdir -p /data/mailoney/log/
+  mkdir -vp /data/mailoney/log/
   chmod 770 /data/mailoney/ -R
   chown tpot:tpot /data/mailoney/ -R
 }
@@ -248,7 +265,7 @@ fuMAILONEY () {
 # Let's create a function to clean up and prepare mailoney data
 fuMEDPOT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/medpot/*; fi
-  mkdir -p /data/medpot/log/
+  mkdir -vp /data/medpot/log/
   chmod 770 /data/medpot/ -R
   chown tpot:tpot /data/medpot/ -R
 }
@@ -256,23 +273,17 @@ fuMEDPOT () {
 # Let's create a function to clean up nginx logs
 fuNGINX () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/nginx/log/*; fi
+  mkdir -vp /data/nginx/{cert,conf,log}
   touch /data/nginx/log/error.log
-  chmod 644 /data/nginx/conf -R
-  chmod 644 /data/nginx/cert -R
-}
-
-# Let's create a function to clean up and prepare rdpy data
-fuRDPY () {
-  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/rdpy/*; fi
-  mkdir -p /data/rdpy/log/
-  chmod 770 /data/rdpy/ -R
-  chown tpot:tpot /data/rdpy/ -R
+  chmod 774 /data/nginx/conf -R
+  chmod 774 /data/nginx/cert -R
+  chown tpot:tpot /data/nginx -R
 }
 
 # Let's create a function to clean up and prepare redishoneypot data
 fuREDISHONEYPOT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/redishoneypot/log; fi
-  mkdir -p /data/redishoneypot/log
+  mkdir -vp /data/redishoneypot/log
   chmod 770 /data/redishoneypot -R
   chown tpot:tpot /data/redishoneypot -R
 }
@@ -280,14 +291,14 @@ fuREDISHONEYPOT () {
 # Let's create a function to clean up and prepare sentrypeer data
 fuSENTRYPEER () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/sentrypeer/log; fi
-  mkdir -p /data/sentrypeer/log
+  mkdir -vp /data/sentrypeer/log
   chmod 770 /data/sentrypeer -R
   chown tpot:tpot /data/sentrypeer -R
 }
 
 # Let's create a function to prepare spiderfoot db
 fuSPIDERFOOT () {
-  mkdir -p /data/spiderfoot
+  mkdir -vp /data/spiderfoot
   touch /data/spiderfoot/spiderfoot.db
   chmod 770 -R /data/spiderfoot
   chown tpot:tpot -R /data/spiderfoot
@@ -296,7 +307,7 @@ fuSPIDERFOOT () {
 # Let's create a function to clean up and prepare suricata data
 fuSURICATA () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/suricata/*; fi
-  mkdir -p /data/suricata/log
+  mkdir -vp /data/suricata/log
   chmod 770 -R /data/suricata
   chown tpot:tpot -R /data/suricata
 }
@@ -304,7 +315,7 @@ fuSURICATA () {
 # Let's create a function to clean up and prepare p0f data
 fuP0F () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/p0f/*; fi
-  mkdir -p /data/p0f/log
+  mkdir -vp /data/p0f/log
   chmod 770 -R /data/p0f
   chown tpot:tpot -R /data/p0f
 }
@@ -312,7 +323,7 @@ fuP0F () {
 # Let's create a function to clean up and prepare p0f data
 fuTANNER () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/tanner/*; fi
-  mkdir -p /data/tanner/log /data/tanner/files
+  mkdir -vp /data/tanner/{log,files}
   chmod 770 -R /data/tanner
   chown tpot:tpot -R /data/tanner
 }
@@ -320,7 +331,7 @@ fuTANNER () {
 # Let's create a function to clean up and prepare wordpot data
 fuWORDPOT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/wordpot/log; fi
-  mkdir -p /data/wordpot/log
+  mkdir -vp /data/wordpot/log
   chmod 770 /data/wordpot -R
   chown tpot:tpot /data/wordpot -R
 }
@@ -345,37 +356,38 @@ if [ "$myPERSISTENCE" = "on" ];
   then
     echo "Persistence enabled, now rotating and compressing logs."
     fuLOGROTATE
-  else
-    echo "Cleaning up and preparing data folders."
-    fuADBHONEY
-    fuCISCOASA
-    fuCITRIXHONEYPOT
-    fuCONPOT
-    fuCOWRIE
-    fuDDOSPOT
-    fuDICOMPOT
-    fuDIONAEA
-    fuELASTICPOT
-    fuELK
-    fuENDLESSH
-    fuFATT
-    fuGLUTTON
-    fuHERALDING
-    fuHELLPOT
-    fuHONEYSAP
-    fuHONEYPOTS
-    fuHONEYTRAP
-    fuIPPHONEY
-    fuLOG4POT
-    fuMAILONEY
-    fuMEDPOT
-    fuNGINX
-    fuREDISHONEYPOT
-    fuRDPY
-    fuSENTRYPEER
-    fuSPIDERFOOT
-    fuSURICATA
-    fuP0F
-    fuTANNER
-    fuWORDPOT
-  fi
+fi
+
+echo  
+echo "Checking and preparing data folders."
+fuTPOTINIT
+fuADBHONEY
+fuCISCOASA
+fuCITRIXHONEYPOT
+fuCONPOT
+fuCOWRIE
+fuDDOSPOT
+fuDICOMPOT
+fuDIONAEA
+fuELASTICPOT
+fuELK
+fuENDLESSH
+fuFATT
+fuGLUTTON
+fuHERALDING
+fuHELLPOT
+fuHONEYSAP
+fuHONEYPOTS
+fuHONEYTRAP
+fuIPPHONEY
+fuLOG4POT
+fuMAILONEY
+fuMEDPOT
+fuNGINX
+fuREDISHONEYPOT
+fuSENTRYPEER
+fuSPIDERFOOT
+fuSURICATA
+fuP0F
+fuTANNER
+fuWORDPOT

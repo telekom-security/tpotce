@@ -35,15 +35,18 @@ check_safety() {
 # Function to check the safety of the WEB_USER variable
 check_web_user_safety() {
     local web_user="$1"
+    local IFS=$'\n'  # Set the Internal Field Separator (IFS) to newline for the loop
 
-    # Allow alphanumeric, $, ., /, and : for WEB_USER (to accommodate htpasswd hash)
-    if [[ ! $web_user =~ ^[a-zA-Z0-9]+:\$apr1\$[a-zA-Z0-9./]+\$[a-zA-Z0-9./]+$ ]]; 
-      then
-        echo "# Error: Unsafe characters detected in WEB_USER."
-        echo
-        echo "# Aborting"
-        exit 1
-    fi
+    # Iterate over each line in web_user
+    for user in $web_user; do
+        # Allow alphanumeric, $, ., /, and : for WEB_USER (to accommodate htpasswd hash)
+        if [[ ! $user =~ ^[a-zA-Z0-9]+:\$apr1\$[a-zA-Z0-9./]+\$[a-zA-Z0-9./]+$ ]]; then
+            echo "# Error: Unsafe characters / wrong format detected in WEB_USER for user $user."
+            echo
+            echo "# Aborting"
+            exit 1
+        fi
+    done
 }
 
 # Function to validate specific variable formats
@@ -65,6 +68,14 @@ validate_format() {
             # Add additional specific format checks here if necessary
             ;;
     esac
+}
+
+create_web_users() {
+    echo
+    echo "# Creating web user from .env ..."
+    echo
+    echo "${WEB_USER}" > /data/nginx/conf/nginxpasswd
+    touch /data/nginx/conf/lswebpasswd
 }
 
 # Validate environment variables
@@ -103,6 +114,7 @@ if [ -f "/data/uuid" ];
   then
     figlet "Initializing ..."
     figlet "T-Pot: ${TPOT_VERSION}"
+    create_web_users
     echo
     echo "# Data folder is present, just cleaning up, please be patient ..."
     echo
@@ -123,11 +135,7 @@ if [ -f "/data/uuid" ];
     echo
     echo "# Setting up data folder structure ..."
     echo
-    mkdir -vp /data/ews/conf \
-              /data/nginx/{cert,conf,log} \
-              /data/tpot/etc/compose/ \
-              /data/tpot/etc/logrotate/ \
-              /tmp/etc/
+    /opt/tpot/bin/clean.sh off
     echo
     echo "# Generating self signed certificate ..."
     echo
@@ -143,15 +151,11 @@ if [ -f "/data/uuid" ];
           -subj '/C=AU/ST=Some-State/O=Internet Widgits Pty Ltd' \
           -addext "subjectAltName = IP:${myINTIP}"
     echo
-    echo "# Creating web user from tpot.env, make sure to erase the password from the .env ..."
-    echo
-    echo "${WEB_USER}" > /data/nginx/conf/nginxpasswd
-    touch /data/nginx/conf/lswebpasswd
+    create_web_users
     echo
     echo "# Extracting objects, final touches and permissions ..."
     echo
     tar xvfz /opt/tpot/etc/objects/elkbase.tgz -C /
-    /opt/tpot/bin/clean.sh off
     uuidgen > /data/uuid
 fi
 
@@ -164,16 +168,19 @@ if [ "${myOSTYPE}" == "linuxkit" ];
   else
     if [ "${TPOT_BLACKHOLE}" == "ENABLED" ] && [ ! -f "/etc/blackhole/mass_scanner.txt" ];
       then
+        echo
         echo "# Adding Blackhole routes."
         /opt/tpot/bin/blackhole.sh add
         echo
     fi
     if [ "${TPOT_BLACKHOLE}" == "DISABLED" ] && [ -f "/etc/blackhole/mass_scanner.txt" ];
       then
+        echo
         echo "# Removing Blackhole routes."
         /opt/tpot/bin/blackhole.sh del
         echo
       else
+        echo
         echo "# Blackhole is not active."
     fi
 fi
@@ -189,9 +196,9 @@ echo
 echo "# Updating permissions ..."
 echo
 chown -R tpot:tpot /data
-chmod -R 777 /data
-#chmod 644 -R /data/nginx/conf
-#chmod 644 -R /data/nginx/cert
+chmod -R 770 /data
+chmod 774 -R /data/nginx/conf
+chmod 774 -R /data/nginx/cert
 
 # Update interface settings (p0f and Suricata) and setup iptables to support NFQ based honeypots (glutton, honeytrap)
 ### This is currently not supported on Docker for Desktop, only on Docker Engine for Linux
