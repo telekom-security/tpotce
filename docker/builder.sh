@@ -6,7 +6,7 @@
 myPLATFORMS="linux/amd64,linux/arm64"
 myHUBORG_DOCKER="dtagdevsec"
 myHUBORG_GITHUB="ghcr.io/telekom-security"
-myTAG="dev"
+myTAG="alpha"
 myIMAGESBASE="tpotinit adbhoney ciscoasa citrixhoneypot conpot cowrie ddospot dicompot dionaea elasticpot endlessh ewsposter fatt glutton hellpot heralding honeypots honeytrap ipphoney log4pot mailoney medpot nginx p0f redishoneypot sentrypeer spiderfoot suricata wordpot"
 myIMAGESELK="elasticsearch kibana logstash map"
 myIMAGESTANNER="phpox redis snare tanner"

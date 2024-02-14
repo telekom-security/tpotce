@@ -38,7 +38,7 @@ services:
      - adbhoney_local
     ports:
      - "5555:5555"
-    image: "dtagdevsec/adbhoney:2204"
+    image: "dtagdevsec/adbhoney:alpha"
     read_only: true
     volumes:
      - /data/adbhoney/log:/opt/adbhoney/log
@@ -55,7 +55,7 @@ services:
     ports:
      - "5000:5000/udp"
      - "8443:8443"
-    image: "dtagdevsec/ciscoasa:2204"
+    image: "dtagdevsec/ciscoasa:alpha"
     read_only: true
     volumes:
      - /data/ciscoasa/log:/var/log/ciscoasa
@@ -68,7 +68,7 @@ services:
      - citrixhoneypot_local
     ports:
      - "443:443"
-    image: "dtagdevsec/citrixhoneypot:2204"
+    image: "dtagdevsec/citrixhoneypot:alpha"
     read_only: true
     volumes:
      - /data/citrixhoneypot/logs:/opt/citrixhoneypot/logs       
@@ -90,7 +90,7 @@ services:
     ports:
      - "161:161/udp"
      - "2404:2404"
-    image: "dtagdevsec/conpot:2204"
+    image: "dtagdevsec/conpot:alpha"
     read_only: true
     volumes:
      - /data/conpot/log:/var/log/conpot
@@ -111,7 +111,7 @@ services:
      - conpot_local_guardian_ast
     ports:
      - "10001:10001"
-    image: "dtagdevsec/conpot:2204"
+    image: "dtagdevsec/conpot:alpha"
     read_only: true
     volumes:
      - /data/conpot/log:/var/log/conpot
@@ -132,7 +132,7 @@ services:
      - conpot_local_ipmi
     ports:
      - "623:623/udp"
-    image: "dtagdevsec/conpot:2204"
+    image: "dtagdevsec/conpot:alpha"
     read_only: true
     volumes:
      - /data/conpot/log:/var/log/conpot
@@ -154,7 +154,7 @@ services:
     ports:
      - "1025:1025"
      - "50100:50100"
-    image: "dtagdevsec/conpot:2204"
+    image: "dtagdevsec/conpot:alpha"
     read_only: true
     volumes:
      - /data/conpot/log:/var/log/conpot
@@ -171,7 +171,7 @@ services:
      - "123:123/udp"
 #     - "161:161/udp"
      - "1900:1900/udp"
-    image: "dtagdevsec/ddospot:2204"
+    image: "dtagdevsec/ddospot:alpha"
     read_only: true
     volumes:
      - /data/ddospot/log:/opt/ddospot/ddospot/logs
@@ -189,7 +189,7 @@ services:
      - dicompot_local
     ports:
      - "11112:11112"
-    image: "dtagdevsec/dicompot:2204"
+    image: "dtagdevsec/dicompot:alpha"
     read_only: true
     volumes:
      - /data/dicompot/log:/var/log/dicompot
@@ -220,7 +220,7 @@ services:
      # - "5060:5060/udp"
      # - "5061:5061"
      - "27017:27017"
-    image: "dtagdevsec/dionaea:2204"
+    image: "dtagdevsec/dionaea:alpha"
     read_only: true
     volumes:
      - /data/dionaea/roots/ftp:/opt/dionaea/var/dionaea/roots/ftp
@@ -240,7 +240,7 @@ services:
      - elasticpot_local
     ports:
      - "9200:9200"
-    image: "dtagdevsec/elasticpot:2204"
+    image: "dtagdevsec/elasticpot:alpha"
     read_only: true
     volumes:
      - /data/elasticpot/log:/opt/elasticpot/log
@@ -253,7 +253,7 @@ services:
      - endlessh_local
     ports:
      - "22:2222"
-    image: "dtagdevsec/endlessh:2204"
+    image: "dtagdevsec/endlessh:alpha"
     read_only: true
     volumes:
      - /data/endlessh/log:/var/log/endlessh
@@ -268,7 +268,7 @@ services:
     network_mode: "host"
     cap_add:
      - NET_ADMIN
-    image: "dtagdevsec/glutton:2204"
+    image: "dtagdevsec/glutton:alpha"
     read_only: true
     volumes:
      - /data/glutton/log:/var/log/glutton
@@ -299,7 +299,7 @@ services:
      - "1080:1080"
      - "5432:5432"
      - "5900:5900"
-    image: "dtagdevsec/heralding:2204"
+    image: "dtagdevsec/heralding:alpha"
     read_only: true
     volumes:
      - /data/heralding/log:/var/log/heralding
@@ -312,7 +312,7 @@ services:
      - ipphoney_local
     ports:
      - "631:631"
-    image: "dtagdevsec/ipphoney:2204"
+    image: "dtagdevsec/ipphoney:alpha"
     read_only: true
     volumes:
      - /data/ipphoney/log:/opt/ipphoney/log
@@ -331,7 +331,7 @@ services:
      - mailoney_local
     ports:
      - "25:25"
-    image: "dtagdevsec/mailoney:2204"
+    image: "dtagdevsec/mailoney:alpha"
     read_only: true
     volumes:
      - /data/mailoney/log:/opt/mailoney/logs
@@ -344,7 +344,7 @@ services:
      - medpot_local
     ports:
      - "2575:2575"
-    image: "dtagdevsec/medpot:2204"
+    image: "dtagdevsec/medpot:alpha"
     read_only: true
     volumes:
      - /data/medpot/log/:/var/log/medpot
@@ -357,7 +357,7 @@ services:
      - redishoneypot_local
     ports:
      - "6379:6379"
-    image: "dtagdevsec/redishoneypot:2204"
+    image: "dtagdevsec/redishoneypot:alpha"
     read_only: true
     volumes:
      - /data/redishoneypot/log:/var/log/redishoneypot
@@ -370,7 +370,7 @@ services:
      - hellpot_local
     ports:
      - "80:8080"
-    image: "dtagdevsec/hellpot:2204"
+    image: "dtagdevsec/hellpot:alpha"
     read_only: true
     volumes:
      - /data/hellpot/log:/var/log/hellpot
@@ -388,7 +388,7 @@ services:
      - NET_ADMIN
      - SYS_NICE
      - NET_RAW
-    image: "dtagdevsec/fatt:2204"
+    image: "dtagdevsec/fatt:alpha"
     volumes:
      - /data/fatt/log:/opt/fatt/log
 
@@ -397,7 +397,7 @@ services:
     container_name: p0f
     restart: always
     network_mode: "host"
-    image: "dtagdevsec/p0f:2204"
+    image: "dtagdevsec/p0f:alpha"
     read_only: true
     volumes:
      - /data/p0f/log:/var/log/p0f
@@ -416,7 +416,7 @@ services:
      - NET_ADMIN
      - SYS_NICE
      - NET_RAW
-    image: "dtagdevsec/suricata:2204"
+    image: "dtagdevsec/suricata:alpha"
     volumes:
      - /data/suricata/log:/var/log/suricata
 
@@ -446,7 +446,7 @@ services:
     mem_limit: 4g
     ports:
      - "127.0.0.1:64298:9200"
-    image: "dtagdevsec/elasticsearch:2204"
+    image: "dtagdevsec/elasticsearch:alpha"
     volumes:
      - /data:/data
 
@@ -460,7 +460,7 @@ services:
     mem_limit: 1g
     ports:
      - "127.0.0.1:64296:5601"
-    image: "dtagdevsec/kibana:2204"
+    image: "dtagdevsec/kibana:alpha"
 
 ## Logstash service
   logstash:
@@ -474,7 +474,7 @@ services:
     env_file:
      - /opt/tpot/etc/compose/elk_environment
     mem_limit: 2g
-    image: "dtagdevsec/logstash:2204"
+    image: "dtagdevsec/logstash:alpha"
     volumes:
      - /data:/data
 
@@ -484,7 +484,7 @@ services:
     restart: always
     stop_signal: SIGKILL
     tty: true
-    image: "dtagdevsec/redis:2204"
+    image: "dtagdevsec/redis:alpha"
     read_only: true
 
 ## Map Web Service
@@ -499,7 +499,7 @@ services:
     tty: true
     ports:
      - "127.0.0.1:64299:64299"
-    image: "dtagdevsec/map:2204"
+    image: "dtagdevsec/map:alpha"
 
 ## Map Data Service
   map_data:
@@ -514,7 +514,7 @@ services:
      - /opt/tpot/etc/compose/elk_environment
     stop_signal: SIGKILL
     tty: true
-    image: "dtagdevsec/map:2204"
+    image: "dtagdevsec/map:alpha"
 #### /ELK
 
 # Ewsposter service
@@ -534,7 +534,7 @@ services:
      - EWS_HPFEEDS_FORMAT=json
     env_file:
      - /opt/tpot/etc/compose/elk_environment
-    image: "dtagdevsec/ewsposter:2204"
+    image: "dtagdevsec/ewsposter:alpha"
     volumes:
      - /data:/data
      - /data/ews/conf/ews.ip:/opt/ewsposter/ews.ip
@@ -555,7 +555,7 @@ services:
     ports:
      - "64297:64297"
      - "127.0.0.1:64304:64304"
-    image: "dtagdevsec/nginx:2204"
+    image: "dtagdevsec/nginx:alpha"
     read_only: true
     volumes:
      - /data/nginx/cert/:/etc/nginx/cert/:ro
@@ -570,6 +570,6 @@ services:
      - spiderfoot_local
     ports:
      - "127.0.0.1:64303:8080"
-    image: "dtagdevsec/spiderfoot:2204"
+    image: "dtagdevsec/spiderfoot:alpha"
     volumes:
      - /data/spiderfoot:/home/spiderfoot/.spiderfoot

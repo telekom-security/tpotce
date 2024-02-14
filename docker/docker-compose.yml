@@ -10,128 +10,133 @@ services:
 # Adbhoney service
   adbhoney:
     build: adbhoney/.
-    image: "dtagdevsec/adbhoney:2204"
+    image: "dtagdevsec/adbhoney:alpha"
 
 # Ciscoasa service
   ciscoasa:
     build: ciscoasa/.
-    image: "dtagdevsec/ciscoasa:2204"
+    image: "dtagdevsec/ciscoasa:alpha"
 
 # CitrixHoneypot service
   citrixhoneypot:
     build: citrixhoneypot/.
-    image: "dtagdevsec/citrixhoneypot:2204"
+    image: "dtagdevsec/citrixhoneypot:alpha"
 
 # Conpot IEC104 service
   conpot_IEC104:
     build: conpot/.
-    image: "dtagdevsec/conpot:2204"
+    image: "dtagdevsec/conpot:alpha"
 
 # Cowrie service
   cowrie:
     build: cowrie/.
-    image: "dtagdevsec/cowrie:2204"
+    image: "dtagdevsec/cowrie:alpha"
 
 # Ddospot service
   ddospot:
     build: ddospot/.
-    image: "dtagdevsec/ddospot:2204"
+    image: "dtagdevsec/ddospot:alpha"
 
 # Dicompot service
   dicompot:
     build: dicompot/.
-    image: "dtagdevsec/dicompot:2204"
+    image: "dtagdevsec/dicompot:alpha"
 
 # Dionaea service
   dionaea:
     build: dionaea/.
-    image: "dtagdevsec/dionaea:2204"
+    image: "dtagdevsec/dionaea:alpha"
 
 # ElasticPot service
   elasticpot:
     build: elasticpot/.
-    image: "dtagdevsec/elasticpot:2204"
+    image: "dtagdevsec/elasticpot:alpha"
 
 # Endlessh service
   endlessh:
     build: endlessh/.
-    image: "dtagdevsec/endlessh:2204"
+    image: "dtagdevsec/endlessh:alpha"
 
 # Glutton service
   glutton:
     build: glutton/.
-    image: "dtagdevsec/glutton:2204"
+    image: "dtagdevsec/glutton:alpha"
 
 # Hellpot service
   hellpot:
     build: hellpot/.
-    image: "dtagdevsec/hellpot:2204"
+    image: "dtagdevsec/hellpot:alpha"
 
 # Heralding service
   heralding:
     build: heralding/.
-    image: "dtagdevsec/heralding:2204"
+    image: "dtagdevsec/heralding:alpha"
 
 # Honeypots service
   honeypots:
     build: honeypots/.
-    image: "dtagdevsec/honeypots:2204"
+    image: "dtagdevsec/honeypots:alpha"
 
 # Honeytrap service
   honeytrap:
     build: honeytrap/.
-    image: "dtagdevsec/honeytrap:2204"
+    image: "dtagdevsec/honeytrap:alpha"
 
 # IPPHoney service
   ipphoney:
     build: ipphoney/.
-    image: "dtagdevsec/ipphoney:2204"
+    image: "dtagdevsec/ipphoney:alpha"
 
 # Log4Pot service
   log4pot:
     build: log4pot/.
-    image: "dtagdevsec/log4pot:2204"
+    image: "dtagdevsec/log4pot:alpha"
 
 # Mailoney service
   mailoney:
     build: mailoney/.
-    image: "dtagdevsec/mailoney:2204"
+    image: "dtagdevsec/mailoney:alpha"
 
 # Medpot service
   medpot:
     build: medpot/.
-    image: "dtagdevsec/medpot:2204"
+    image: "dtagdevsec/medpot:alpha"
 
 # Redishoneypot service
   redishoneypot:
     build: redishoneypot/.
-    image: "dtagdevsec/redishoneypot:2204"
+    image: "dtagdevsec/redishoneypot:alpha"
 
 # Sentrypeer service
   sentrypeer:
     build: sentrypeer/.
-    image: "dtagdevsec/sentrypeer:2204"
+    image: "dtagdevsec/sentrypeer:alpha"
 
 #### Snare / Tanner
 ## Tanner Redis Service
   tanner_redis:
     build: tanner/redis/.
-    image: "dtagdevsec/redis:2204"
+    image: "dtagdevsec/redis:alpha"
 
 ## PHP Sandbox service
   tanner_phpox:
     build: tanner/phpox/.
-    image: "dtagdevsec/phpox:2204"
+    image: "dtagdevsec/phpox:alpha"
 
 ## Tanner API Service
   tanner_api:
     build: tanner/tanner/.
-    image: "dtagdevsec/tanner:2204"
+    image: "dtagdevsec/tanner:alpha"
 
 ## Snare Service
   snare:
     build: tanner/snare/.
-    image: "dtagdevsec/snare:2204"
+    image: "dtagdevsec/snare:alpha"
+    
+## Wordpot Service
+  wordpot:
+    build: wordpot/.
+    image: "dtagdevsec/wordpot:alpha"
 
 
 ##################
@@ -141,17 +146,17 @@ services:
 # Fatt service
   fatt:
     build: fatt/.
-    image: "dtagdevsec/fatt:2204"
+    image: "dtagdevsec/fatt:alpha"
 
 # P0f service
   p0f:
     build: p0f/.
-    image: "dtagdevsec/p0f:2204"
+    image: "dtagdevsec/p0f:alpha"
 
 # Suricata service
   suricata:
     build: suricata/.
-    image: "dtagdevsec/suricata:2204"
+    image: "dtagdevsec/suricata:alpha"
 
 
 ##################
@@ -162,34 +167,34 @@ services:
 ## Elasticsearch service
   elasticsearch:
     build: elk/elasticsearch/.
-    image: "dtagdevsec/elasticsearch:2204"
+    image: "dtagdevsec/elasticsearch:alpha"
 
 ## Kibana service
   kibana:
     build: elk/kibana/.
-    image: "dtagdevsec/kibana:2204"
+    image: "dtagdevsec/kibana:alpha"
 
 ## Logstash service
   logstash:
     build: elk/logstash/.
-    image: "dtagdevsec/logstash:2204"
+    image: "dtagdevsec/logstash:alpha"
 
 # Ewsposter service
   ewsposter:
     build: ewsposter/.
-    image: "dtagdevsec/ewsposter:2204"
+    image: "dtagdevsec/ewsposter:alpha"
 
 # Nginx service
   nginx:
     build: nginx/.
-    image: "dtagdevsec/nginx:2204"
+    image: "dtagdevsec/nginx:alpha"
 
 # Spiderfoot service
   spiderfoot:
     build: spiderfoot/.
-    image: "dtagdevsec/spiderfoot:2204"
+    image: "dtagdevsec/spiderfoot:alpha"
 
 # Map Web Service
   map_web:
     build: elk/map/.
-    image: "dtagdevsec/map:2204"
+    image: "dtagdevsec/map:alpha"

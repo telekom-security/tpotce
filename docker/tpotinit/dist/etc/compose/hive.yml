@@ -32,7 +32,7 @@ services:
 #    mem_limit: 4g
     ports:
      - "127.0.0.1:64298:9200"
-    image: "dtagdevsec/elasticsearch:2204"
+    image: "dtagdevsec/elasticsearch:alpha"
     volumes:
      - /data:/data
 
@@ -46,7 +46,7 @@ services:
 #    mem_limit: 1g
     ports:
      - "127.0.0.1:64296:5601"
-    image: "dtagdevsec/kibana:2204"
+    image: "dtagdevsec/kibana:alpha"
 
 ## Logstash service
   logstash:
@@ -62,7 +62,7 @@ services:
     ports:
      - "127.0.0.1:64305:64305"
 #    mem_limit: 2g
-    image: "dtagdevsec/logstash:2204"
+    image: "dtagdevsec/logstash:alpha"
     volumes:
      - /data:/data
 
@@ -72,7 +72,7 @@ services:
     restart: always
     stop_signal: SIGKILL
     tty: true
-    image: "dtagdevsec/redis:2204"
+    image: "dtagdevsec/redis:alpha"
     read_only: true
 
 ## Map Web Service
@@ -87,7 +87,7 @@ services:
     tty: true
     ports:
      - "127.0.0.1:64299:64299"
-    image: "dtagdevsec/map:2204"
+    image: "dtagdevsec/map:alpha"
 
 ## Map Data Service
   map_data:
@@ -102,7 +102,7 @@ services:
      - /opt/tpot/etc/compose/elk_environment
     stop_signal: SIGKILL
     tty: true
-    image: "dtagdevsec/map:2204"
+    image: "dtagdevsec/map:alpha"
 #### /ELK
 
 # Nginx service
@@ -121,7 +121,7 @@ services:
     ports:
      - "64297:64297"
      - "127.0.0.1:64304:64304"
-    image: "dtagdevsec/nginx:2204"
+    image: "dtagdevsec/nginx:alpha"
     read_only: true
     volumes:
      - /data/nginx/cert/:/etc/nginx/cert/:ro
@@ -136,6 +136,6 @@ services:
      - spiderfoot_local
     ports:
      - "127.0.0.1:64303:8080"
-    image: "dtagdevsec/spiderfoot:2204"
+    image: "dtagdevsec/spiderfoot:alpha"
     volumes:
      - /data/spiderfoot:/home/spiderfoot/.spiderfoot

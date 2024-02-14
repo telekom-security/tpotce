@@ -11,7 +11,7 @@ services:
     restart: always
     stop_signal: SIGKILL
     tty: true
-    image: "dtagdevsec/redis:2204"
+    image: "dtagdevsec/redis:alpha"
     read_only: true
 
 # Map Web Service
@@ -27,7 +27,7 @@ services:
     tty: true
     ports:
      - "127.0.0.1:64299:64299"
-    image: "dtagdevsec/map:2204"
+    image: "dtagdevsec/map:alpha"
     depends_on:
      - map_redis
 
@@ -41,6 +41,6 @@ services:
      - /opt/tpot/etc/compose/elk_environment
     stop_signal: SIGKILL
     tty: true
-    image: "dtagdevsec/map:2204"
+    image: "dtagdevsec/map:alpha"
     depends_on:
      - map_redis

@@ -23,7 +23,7 @@ services:
       #    ports:
       #     - "64297:64297"
       #     - "127.0.0.1:64304:64304"
-    image: "dtagdevsec/nginx:2204"
+    image: "dtagdevsec/nginx:alpha"
     read_only: true
     volumes:
      - /data/nginx/cert/:/etc/nginx/cert/:ro

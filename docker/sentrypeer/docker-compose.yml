@@ -24,7 +24,7 @@ services:
      - "4222:4222/udp"
      - "5060:5060/udp"
      - "127.0.0.1:8082:8082"
-    image: "dtagdevsec/sentrypeer:2204"
+    image: "dtagdevsec/sentrypeer:alpha"
     read_only: true
     volumes:
      - /data/sentrypeer/log:/var/log/sentrypeer

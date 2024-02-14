@@ -22,7 +22,7 @@ services:
      - "8080:8080"
      - "9200:8080"
      - "25565:8080"
-    image: "dtagdevsec/log4pot:2204"
+    image: "dtagdevsec/log4pot:alpha"
     read_only: true
     volumes:
      - /data/log4pot/log:/var/log/log4pot/log

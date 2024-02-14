@@ -33,7 +33,7 @@ services:
      - "3389:3389"
      - "5432:5432"
      - "5900:5900"
-    image: "dtagdevsec/heralding:2204"
+    image: "dtagdevsec/heralding:alpha"
     read_only: true
     volumes:
      - /data/heralding/log:/var/log/heralding
