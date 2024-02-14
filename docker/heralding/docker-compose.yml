@@ -36,4 +36,4 @@ services:
     image: "dtagdevsec/heralding:alpha"
     read_only: true
     volumes:
-     - /data/heralding/log:/var/log/heralding
+     - $HOME/tpotce/data/heralding/log:/var/log/heralding

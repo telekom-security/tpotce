@@ -1,21 +1,20 @@
-FROM alpine:3.15
-#  
+FROM alpine:3.18
+#
 # Include dist
 COPY dist/ /root/dist/
 #
 # Install packages
-RUN apk -U --no-cache add \ 
-            		build-base \
-            		git \
-            		libcap \
-            		libffi-dev \
-            		openssl-dev \
-                        py3-pyzmq \
-            		postgresql-dev \
+RUN apk -U --no-cache add \
+            build-base \
+            git \
+            libcap \
+            libffi-dev \
+            openssl-dev \
+            py3-pyzmq \
+            postgresql-dev \
 			py3-attrs \
 			py3-mysqlclient \
 			py3-nose \
-			py3-openssl \
 			py3-pip \
 			py3-psycopg2 \
 			py3-pycryptodome \
@@ -25,15 +24,16 @@ RUN apk -U --no-cache add \
 			py3-typing-extensions \
 			py3-wheel \
 			py3-yaml \
-            		python3 \
-            		python3-dev && \
+            python3 \
+            python3-dev && \
 #
 # Setup heralding
     mkdir -p /opt && \
     cd /opt/ && \
-    git clone https://github.com/johnnykv/heralding && \
+#    git clone https://github.com/johnnykv/heralding && \
+    git clone https://github.com/t3chn0m4g3/heralding && \
     cd heralding && \
-    git checkout c31f99c55c7318c09272d8d9998e560c3d4de9aa && \
+    git checkout 319065810d6e8ba62fb696a96584ac7500752380 && \
     cp /root/dist/requirements.txt . && \
     pip3 install --upgrade pip && \
     pip3 install --no-cache-dir -r requirements.txt && \
@@ -44,7 +44,7 @@ RUN apk -U --no-cache add \
     adduser -S -H -s /bin/ash -u 2000 -D -g 2000 heralding && \
     mkdir -p /var/log/heralding/ /etc/heralding && \
     mv /root/dist/heralding.yml /etc/heralding/ && \
-    setcap cap_net_bind_service=+ep /usr/bin/python3.9 && \
+    setcap cap_net_bind_service=+ep /usr/bin/python3.11 && \
     chown -R heralding:heralding /var/log/heralding && \
 #
 # Clean up
@@ -53,7 +53,7 @@ RUN apk -U --no-cache add \
             git \
             libcap \
             libffi-dev \
-            libressl-dev \
+            openssl-dev \
             postgresql-dev \
             python3-dev && \
     rm -rf /root/* \
