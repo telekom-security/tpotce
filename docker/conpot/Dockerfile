@@ -66,7 +66,7 @@ RUN apk --no-cache -U add \
 #
 # Get wireshark manuf db for scapy, setup configs, user, groups
     mkdir -p /etc/conpot /var/log/conpot /usr/share/wireshark && \
-    wget https://github.com/wireshark/wireshark/raw/master/manuf -o /usr/share/wireshark/manuf && \
+    wget https://www.wireshark.org/download/automated/data/manuf -o /usr/share/wireshark/manuf && \
     cp /root/dist/conpot.cfg /etc/conpot/conpot.cfg && \
     cp -R /root/dist/templates /usr/lib/python3.10/site-packages/conpot/ && \
     addgroup -g 2000 conpot && \
