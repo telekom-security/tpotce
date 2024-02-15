@@ -55,7 +55,7 @@ validate_format() {
     local var_value=$(eval echo \$$var_name)
 
     case "$var_name" in
-        TPOT_BLACKHOLE|TPOT_PERSISTENCE|TPOT_ATTACKMAP_TEXT|COCKPIT)
+        TPOT_BLACKHOLE|TPOT_PERSISTENCE|TPOT_ATTACKMAP_TEXT)
             if ! [[ $var_value =~ ^(ENABLED|DISABLED|on|off|true|false)$ ]]; 
               then
                 echo "# Error: Invalid value for $var_name. Expected ENABLED/DISABLED, on/off, true/false."

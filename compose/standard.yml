@@ -768,7 +768,6 @@ services:
     container_name: nginx
     restart: always
     environment:
-      - COCKPIT=${COCKPIT}
       - TPOT_OSTYPE=${TPOT_OSTYPE}
     depends_on:
       tpotinit:
