@@ -1,6 +1,7 @@
 #!/bin/bash
 
 COMPOSE="/tmp/tpot/docker-compose.yml"
+exec > >(tee /data/tpotinit.log) 2>&1
 
 # Function to check if a variable is set, not empty
 check_var() {
@@ -10,7 +11,7 @@ check_var() {
     # Check if variable is set and not empty
     if [[ -z "$var_value" ]]; 
       then
-        echo "# Error: $var_name is not set or empty."
+        echo "# Error: $var_name is not set or empty. Please check T-Pot config file (.env)."
         echo
         echo "# Aborting"
         exit 1
@@ -25,7 +26,7 @@ check_safety() {
     # General safety check for most variables
     if [[ $var_value =~ [^a-zA-Z0-9_/.:-] ]]; 
       then
-        echo "# Error: Unsafe characters detected in $var_name."
+        echo "# Error: Unsafe characters detected in $var_name. Please check T-Pot config file (.env)."
         echo
         echo "# Aborting"
         exit 1
@@ -41,7 +42,7 @@ check_web_user_safety() {
     for user in $web_user; do
         # Allow alphanumeric, $, ., /, and : for WEB_USER (to accommodate htpasswd hash)
         if [[ ! $user =~ ^[a-zA-Z0-9]+:\$apr1\$[a-zA-Z0-9./]+\$[a-zA-Z0-9./]+$ ]]; then
-            echo "# Error: Unsafe characters / wrong format detected in WEB_USER for user $user."
+            echo "# Error: Unsafe characters / wrong format detected in (LS_)WEB_USER for user $user. Please check T-Pot config file (.env)."
             echo
             echo "# Aborting"
             exit 1
@@ -58,7 +59,7 @@ validate_format() {
         TPOT_BLACKHOLE|TPOT_PERSISTENCE|TPOT_ATTACKMAP_TEXT)
             if ! [[ $var_value =~ ^(ENABLED|DISABLED|on|off|true|false)$ ]]; 
               then
-                echo "# Error: Invalid value for $var_name. Expected ENABLED/DISABLED, on/off, true/false."
+                echo "# Error: Invalid value for $var_name. Expected ENABLED/DISABLED, on/off, true/false. Please check T-Pot config file (.env)."
 		        echo
 		        echo "# Aborting"
                 exit 1
@@ -70,28 +71,49 @@ validate_format() {
     esac
 }
 
-create_web_users() {
-    echo
-    echo "# Creating web user from .env ..."
-    echo
-    echo "${WEB_USER}" > /data/nginx/conf/nginxpasswd
-    touch /data/nginx/conf/lswebpasswd
+validate_ip_or_domain() {
+    local myCHECK=$1
+
+    # Regular expression for validating IPv4 addresses
+    local ipv4Regex='^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$'
+    
+    # Regular expression for validating domain names (including subdomains)
+    local domainRegex='^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$'
+
+    # Check if TPOT_HIVE_IP matches IPv4 or domain name
+    if [[ $myCHECK =~ $ipv4Regex ]]; then
+        echo "$myCHECK is a valid IPv4 address."
+    elif [[ $myCHECK =~ $domainRegex ]]; then
+        echo "$myCHECK is a valid domain name."
+    else
+        echo "# Error: $myCHECK is not a valid IPv4 address or domain name. Please check T-Pot config file (.env)."
+        echo
+        echo "# Aborting"
+        exit 1
+    fi
 }
 
-# Validate environment variables
-for var in TPOT_BLACKHOLE TPOT_PERSISTENCE TPOT_ATTACKMAP_TEXT TPOT_ATTACKMAP_TEXT_TIMEZONE TPOT_REPO TPOT_VERSION TPOT_PULL_POLICY TPOT_OSTYPE; 
-  do
-    check_var "$var"
-    check_safety "$var"
-    validate_format "$var"
-done
+validate_base64() {
+    local myCHECK=$1
 
-# Specific check for WEB_USER
-check_var "WEB_USER"
-check_web_user_safety "$WEB_USER"
+    # Base64 pattern match
+    if [[ $myCHECK =~ ^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$ ]]; then
+        echo "$myCHECK is a valid Base64 string."
+    else
+        echo "$myCHECK is not a valid Base64 string. Please check T-Pot config file (.env)"
+        echo
+        echo "# Aborting"
+        exit 1
+    fi
+}
 
-echo "# All settings seem to be valid."
-
+create_web_users() {
+    echo
+    echo "# Creating passwd files based on .env configuration ..."
+    echo
+    echo "${WEB_USER}" > /data/nginx/conf/nginxpasswd
+    echo "${LS_WEB_USER}" > /data/nginx/conf/lswebpasswd
+}
 
 # Check for compatible OSType
 echo
@@ -101,13 +123,51 @@ myOSTYPE=$(uname -a | grep -Eo "linuxkit")
 if [ "${myOSTYPE}" == "linuxkit" ] && [ "${TPOT_OSTYPE}" == "linux" ];
   then
     echo "# Docker Desktop for macOS or Windows detected."
-    echo "# 1. You need to adjust the OSType in the hidden \".env\" file."
+    echo "# 1. You need to adjust the OSType the T-Pot config file (.env)."
     echo "# 2. You need to use the macos or win docker compose file."
     echo
     echo "# Aborting."
     echo
     exit 1
 fi
+
+# Validate environment variables
+for var in TPOT_BLACKHOLE TPOT_PERSISTENCE TPOT_ATTACKMAP_TEXT TPOT_ATTACKMAP_TEXT_TIMEZONE TPOT_REPO TPOT_VERSION TPOT_PULL_POLICY TPOT_OSTYPE; 
+  do
+    check_var "$var"
+    check_safety "$var"
+    validate_format "$var"
+done
+
+if [ "${TPOT_TYPE}" == "HIVE" ];
+  then
+    # No $ for check_var
+    check_var "WEB_USER" 
+    check_web_user_safety "$WEB_USER"
+    TPOT_HIVE_USER=""
+    TPOT_HIVE_IP=""
+    if [ "${LS_WEB_USER}" == "" ];
+      then
+        echo "# Warning: No LS_WEB_USER detected! T-Pots of type SENSOR will not be able to submit logs to this HIVE."
+        echo
+      else
+        check_web_user_safety "$LS_WEB_USER"
+    fi
+fi
+if [ "${TPOT_TYPE}" == "SENSOR" ];
+ then      
+   # No $ for check_var
+   check_var "TPOT_HIVE_USER"
+   check_var "TPOT_HIVE_IP"
+   validate_base64 "$TPOT_HIVE_USER"
+   validate_ip_or_domain "$TPOT_HIVE_IP"
+   WEB_USER=""   
+fi
+echo
+
+echo
+echo "# All settings seem to be valid."
+echo
 
 # Data folder management
 if [ -f "/data/uuid" ];
@@ -123,15 +183,6 @@ if [ -f "/data/uuid" ];
   else
     figlet "Setting up ..."
     figlet "T-Pot: ${TPOT_VERSION}"
-    echo
-    echo "# Checking for default user."
-    if [ "${WEB_USER}" == "change:me" ];
-      then
-        echo "# Please change WEB_USER in the hidden \".env\" file."
-	      echo "# Aborting."
-      	echo
-        exit 1
-    fi
     echo
     echo "# Setting up data folder structure ..."
     echo
