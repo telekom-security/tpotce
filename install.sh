@@ -1,4 +1,4 @@
-#!/bin/bash
+#/usr/bin/env bash
 
 myINSTALL_NOTIFICATION="### Now installing required packages ..."
 myUSER=$(whoami)
@@ -162,73 +162,113 @@ if [ ! $? -eq 0 ];
     echo
 fi
 
-# Preparing web user for T-Pot
+# Ask for T-Pot Installation Type
 echo
-echo "### T-Pot User Configuration ..."
-echo
-# Asking for web user name
-myWEB_USER=""
-while [ 1 != 2 ];
-  do
-    myOK=""
-    read -rp "### Enter your web user name: " myWEB_USER
-    myWEB_USER=$(echo $myWEB_USER | tr -cd "[:alnum:]_.-")
-    echo "### Your username is: ${myWEB_USER}"
-    while [[ ! "${myOK}" =~ [YyNn] ]];
-      do
-        read -rp "### Is this correct? (y/n) " myOK
-      done
-    if [[ "${myOK}" =~ [Yy] ]] && [ "$myWEB_USER" != "" ];
-      then
-        break
-      else
-        echo
-    fi
-  done
-
-# Asking for web user password
-myWEB_PW="pass1"
-myWEB_PW2="pass2"
-mySECURE=0
-myOK=""
-while [ "${myWEB_PW}" != "${myWEB_PW2}"  ] && [ "${mySECURE}" == "0" ]
-  do
-    echo
-    while [ "${myWEB_PW}" == "pass1"  ] || [ "${myWEB_PW}" == "" ]
-      do
-        read -rsp "### Enter password for your web user: " myWEB_PW
-        echo
-      done
-    read -rsp "### Repeat password you your web user: " myWEB_PW2
-    echo
-    if [ "${myWEB_PW}" != "${myWEB_PW2}" ];
-      then
-        echo "### Passwords do not match."
-        myWEB_PW="pass1"
-        myWEB_PW2="pass2"
-    fi
-    mySECURE=$(printf "%s" "$myWEB_PW" | /usr/sbin/cracklib-check | grep -c "OK")
-    if [ "$mySECURE" == "0" ] && [ "$myWEB_PW" == "$myWEB_PW2" ];
-      then
-        while [[ ! "${myOK}" =~ [YyNn] ]];
-          do
-            read -rp "### Keep insecure password? (y/n) " myOK
-          done
-        if [[ "${myOK}" =~ [Nn] ]] || [ "$myWEB_PW" == "" ];
-          then
-            myWEB_PW="pass1"
-            myWEB_PW2="pass2"
-            mySECURE=0
-            myOK=""
-        fi
-    fi
+echo "### Choose your T-Pot type:"
+echo "### (H)ive   - T-Pot Standard / HIVE installation."
+echo "###            Includes also everything you need for a distributed setup with sensors."
+echo "### (S)ensor - T-Pot Sensor installation."
+echo "###            Optimized for a distributed installation, without WebUI, Elasticsearch and Kibana."
+while true; do
+  read -p "### Install Type? (h/s) " myTPOT_TYPE
+  case "${myTPOT_TYPE}" in
+    h|H)
+      echo
+      echo "### Installing T-Pot Standard / HIVE installation."
+      myTPOT_TYPE="HIVE"
+      break ;;
+    s|S)
+      echo
+      echo "### Installing T-Pot Sensor installation."
+      myTPOT_TYPE="SENSOR"
+      break ;;
+  esac
 done
 
-# Write username and password to T-Pot config file
-echo "### Creating htpasswd username and password for T-Pot config file: ${myTPOT_CONF_FILE}"
-myWEB_USER_ENC=$(htpasswd -b -n "${myWEB_USER}" "${myWEB_PW}")
-echo
-sed -i "s|^WEB_USER=.*|WEB_USER='${myWEB_USER_ENC}'|" ${myTPOT_CONF_FILE}
+if [ "${myTPOT_TYPE}" == "HIVE" ];
+  # Install T-Pot Type HIVE and ask for WebUI username and password
+  then
+	# Preparing web user for T-Pot
+	echo
+	echo "### T-Pot User Configuration ..."
+	echo
+	# Asking for web user name
+	myWEB_USER=""
+	while [ 1 != 2 ];
+	  do
+	    myOK=""
+	    read -rp "### Enter your web user name: " myWEB_USER
+	    myWEB_USER=$(echo $myWEB_USER | tr -cd "[:alnum:]_.-")
+	    echo "### Your username is: ${myWEB_USER}"
+	    while [[ ! "${myOK}" =~ [YyNn] ]];
+	      do
+	        read -rp "### Is this correct? (y/n) " myOK
+	      done
+	    if [[ "${myOK}" =~ [Yy] ]] && [ "$myWEB_USER" != "" ];
+	      then
+	        break
+	      else
+	        echo
+	    fi
+	  done
+
+	# Asking for web user password
+	myWEB_PW="pass1"
+	myWEB_PW2="pass2"
+	mySECURE=0
+	myOK=""
+	while [ "${myWEB_PW}" != "${myWEB_PW2}"  ] && [ "${mySECURE}" == "0" ]
+	  do
+	    echo
+	    while [ "${myWEB_PW}" == "pass1"  ] || [ "${myWEB_PW}" == "" ]
+	      do
+	        read -rsp "### Enter password for your web user: " myWEB_PW
+	        echo
+	      done
+	    read -rsp "### Repeat password you your web user: " myWEB_PW2
+	    echo
+	    if [ "${myWEB_PW}" != "${myWEB_PW2}" ];
+	      then
+	        echo "### Passwords do not match."
+	        myWEB_PW="pass1"
+	        myWEB_PW2="pass2"
+	    fi
+	    mySECURE=$(printf "%s" "$myWEB_PW" | /usr/sbin/cracklib-check | grep -c "OK")
+	    if [ "$mySECURE" == "0" ] && [ "$myWEB_PW" == "$myWEB_PW2" ];
+	      then
+	        while [[ ! "${myOK}" =~ [YyNn] ]];
+	          do
+	            read -rp "### Keep insecure password? (y/n) " myOK
+	          done
+	        if [[ "${myOK}" =~ [Nn] ]] || [ "$myWEB_PW" == "" ];
+	          then
+	            myWEB_PW="pass1"
+	            myWEB_PW2="pass2"
+	            mySECURE=0
+	            myOK=""
+	        fi
+	    fi
+	done
+
+	# Write username and password to T-Pot config file
+	echo "### Creating htpasswd username and password for T-Pot config file: ${myTPOT_CONF_FILE}"
+	myWEB_USER_ENC=$(htpasswd -b -n "${myWEB_USER}" "${myWEB_PW}")
+	echo
+	sed -i "s|^WEB_USER=.*|WEB_USER='${myWEB_USER_ENC}'|" ${myTPOT_CONF_FILE}
+
+    # Install T-Pot Type HIVE and use standard.yml for installation
+    cp ${HOME}/tpotce/compose/standard.yml ${HOME}/tpotce/docker-compose.yml
+    myINFO=""
+fi
+
+
+if [ "${myTPOT_TYPE}" == "SENSOR" ];
+  # Install T-Pot Type SENSOR and use sensor.yml for installation
+  then
+    cp ${HOME}/tpotce/compose/sensor.yml ${HOME}/tpotce/docker-compose.yml
+    myINFO="### Make sure to deploy SSH keys to this sensor and disable SSH password authentication.
+### On hive run the tpotce/tools/deploy.sh script to join this sensor to the hive."
+fi
 
 # Pull docker images
 echo "### Now pulling images ..."
@@ -244,5 +284,6 @@ sudo grc netstat -tulpen
 echo
 
 # Done
-echo "Done. Please reboot and re-connect via SSH on tcp/64295."
+echo "### Done. Please reboot and re-connect via SSH on tcp/64295."
+echo "${myINFO}"
 echo
