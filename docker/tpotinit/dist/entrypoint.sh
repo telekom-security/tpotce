@@ -11,7 +11,7 @@ check_var() {
     # Check if variable is set and not empty
     if [[ -z "$var_value" ]]; 
       then
-        echo "# Error: $var_name is not set or empty. Please check T-Pot config file (.env)."
+        echo "# Error: $var_name is not set or empty. Please check T-Pot .env config."
         echo
         echo "# Aborting"
         exit 1
@@ -26,27 +26,28 @@ check_safety() {
     # General safety check for most variables
     if [[ $var_value =~ [^a-zA-Z0-9_/.:-] ]]; 
       then
-        echo "# Error: Unsafe characters detected in $var_name. Please check T-Pot config file (.env)."
+        echo "# Error: Unsafe characters detected in $var_name. Please check T-Pot .env config."
         echo
         echo "# Aborting"
         exit 1
     fi
 }
 
-# Function to check the safety of the WEB_USER variable
-check_web_user_safety() {
-    local web_user="$1"
-    local IFS=$'\n'  # Set the Internal Field Separator (IFS) to newline for the loop
-
-    # Iterate over each line in web_user
-    for user in $web_user; do
-        # Allow alphanumeric, $, ., /, and : for WEB_USER (to accommodate htpasswd hash)
-        if [[ ! $user =~ ^[a-zA-Z0-9]+:\$apr1\$[a-zA-Z0-9./]+\$[a-zA-Z0-9./]+$ ]]; then
-            echo "# Error: Unsafe characters / wrong format detected in (LS_)WEB_USER for user $user. Please check T-Pot config file (.env)."
-            echo
-            echo "# Aborting"
-            exit 1
-        fi
+validate_base64() {
+    local myCHECK=$1
+    # base64 pattern match
+    for i in ${myCHECK};
+      do
+        if [[ $i =~ ^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$ ]];
+          then
+            echo -n "Found valid user: "
+            echo $i | base64 -d -w0 | cut -f1 -d":"
+          else
+	        echo "$i is not a valid base64 string. Please check T-Pot .env config."
+	        echo
+	        echo "# Aborting"
+	        exit 1
+	    fi
     done
 }
 
@@ -59,14 +60,11 @@ validate_format() {
         TPOT_BLACKHOLE|TPOT_PERSISTENCE|TPOT_ATTACKMAP_TEXT)
             if ! [[ $var_value =~ ^(ENABLED|DISABLED|on|off|true|false)$ ]]; 
               then
-                echo "# Error: Invalid value for $var_name. Expected ENABLED/DISABLED, on/off, true/false. Please check T-Pot config file (.env)."
+                echo "# Error: Invalid value for $var_name. Expected ENABLED/DISABLED, on/off, true/false. Please check T-Pot .env config."
 		        echo
 		        echo "# Aborting"
                 exit 1
             fi
-            ;;
-        *)
-            # Add additional specific format checks here if necessary
             ;;
     esac
 }
@@ -81,26 +79,12 @@ validate_ip_or_domain() {
     local domainRegex='^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$'
 
     # Check if TPOT_HIVE_IP matches IPv4 or domain name
-    if [[ $myCHECK =~ $ipv4Regex ]]; then
-        echo "$myCHECK is a valid IPv4 address."
-    elif [[ $myCHECK =~ $domainRegex ]]; then
-        echo "$myCHECK is a valid domain name."
+    if [[ ${myCHECK} =~ $ipv4Regex ]]; then
+        echo "${myCHECK} is a valid IPv4 address."
+    elif [[ ${myCHECK} =~ $domainRegex ]]; then
+        echo "${myCHECK} is a valid domain name."
     else
-        echo "# Error: $myCHECK is not a valid IPv4 address or domain name. Please check T-Pot config file (.env)."
-        echo
-        echo "# Aborting"
-        exit 1
-    fi
-}
-
-validate_base64() {
-    local myCHECK=$1
-
-    # Base64 pattern match
-    if [[ $myCHECK =~ ^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$ ]]; then
-        echo "$myCHECK is a valid Base64 string."
-    else
-        echo "$myCHECK is not a valid Base64 string. Please check T-Pot config file (.env)"
+        echo "# Error: $myCHECK is not a valid IPv4 address or domain name. Please check T-Pot .env config."
         echo
         echo "# Aborting"
         exit 1
@@ -109,10 +93,29 @@ validate_base64() {
 
 create_web_users() {
     echo
-    echo "# Creating passwd files based on .env configuration ..."
-    echo
-    echo "${WEB_USER}" > /data/nginx/conf/nginxpasswd
-    echo "${LS_WEB_USER}" > /data/nginx/conf/lswebpasswd
+    echo "# Creating passwd files based on T-Pot .env config ..."
+    # Clear / create the passwd files
+    : > /data/nginx/conf/nginxpasswd
+    : > /data/nginx/conf/lswebpasswd
+    for i in ${WEB_USER};
+      do
+	    if [[ -n $i ]]; 
+	      then
+	        # Need to control newlines as they kept coming up for some reason
+	        echo -n "$i" | base64 -d -w0 | tr -d '\n' >> /data/nginx/conf/nginxpasswd
+	        echo >> /data/nginx/conf/nginxpasswd
+	    fi
+    done
+
+    for i in ${LS_WEB_USER}; 
+      do
+        if [[ -n $i ]]; 
+          then
+            # Need to control newlines as they kept coming up for some reason
+            echo -n "$i" | base64 -d -w0 | tr -d '\n' >> /data/nginx/conf/lswebpasswd
+            echo >> /data/nginx/conf/lswebpasswd
+          fi
+    done
 }
 
 # Check for compatible OSType
@@ -123,7 +126,7 @@ myOSTYPE=$(uname -a | grep -Eo "linuxkit")
 if [ "${myOSTYPE}" == "linuxkit" ] && [ "${TPOT_OSTYPE}" == "linux" ];
   then
     echo "# Docker Desktop for macOS or Windows detected."
-    echo "# 1. You need to adjust the OSType the T-Pot config file (.env)."
+    echo "# 1. You need to adjust the OSType the T-Pot .env config."
     echo "# 2. You need to use the macos or win docker compose file."
     echo
     echo "# Aborting."
@@ -143,7 +146,7 @@ if [ "${TPOT_TYPE}" == "HIVE" ];
   then
     # No $ for check_var
     check_var "WEB_USER" 
-    check_web_user_safety "$WEB_USER"
+    validate_base64 "${WEB_USER}"
     TPOT_HIVE_USER=""
     TPOT_HIVE_IP=""
     if [ "${LS_WEB_USER}" == "" ];
@@ -151,7 +154,7 @@ if [ "${TPOT_TYPE}" == "HIVE" ];
         echo "# Warning: No LS_WEB_USER detected! T-Pots of type SENSOR will not be able to submit logs to this HIVE."
         echo
       else
-        check_web_user_safety "$LS_WEB_USER"
+        validate_base64 "${LS_WEB_USER}"
     fi
 fi
 if [ "${TPOT_TYPE}" == "SENSOR" ];
