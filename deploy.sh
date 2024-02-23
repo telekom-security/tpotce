@@ -38,11 +38,11 @@ if [[ ${mySENSOR_INSTALLED} != "y" ]];
       exit 1
 fi
 
-# Check if ssh key has been deployed
-read -p "# Has the SSH key been deployed to the SENSOR? (y/n): " mySSHKEY_DEPLOYED
-if [[ ${mySSHKEY_DEPLOYED} != "y" ]]; 
+# Ask for the remote user
+read -p "# Enter the remote username T-Pot SENSOR was installed with: " mySSHUSER
+if [[ ${mySSHUSER} == "" ]]; 
     then
-      echo "# Generate a SSH key using 'ssh-keygen' and deploy it to the SENSOR with 'ssh-copy-id user@sensor-ip'."
+      echo "# You need to enter a user. Aborting."
       exit 1
 fi
 
@@ -56,6 +56,14 @@ while true; do
       echo "# Invalid IP/domain. Please enter a valid IP or domain name."
   fi
 done
+
+# Check if ssh key has been deployed
+read -p "# Has a SSH key been deployed to the SENSOR? (y/n): " mySSHKEY_DEPLOYED
+if [[ ${mySSHKEY_DEPLOYED} != "y" ]]; 
+    then
+      echo "# Generate a SSH key using 'ssh-keygen' and deploy it to the SENSOR (Example: ssh-copy-id -p 64295 ${mySSHUSER}@${mySENSOR_IP})."
+      exit 1
+fi
 
 # Validate IP/domain name of HIVE
 while true; do
@@ -92,30 +100,38 @@ echo "# New SENSOR credentials base64 encoded: ${myTPOT_HIVE_USER}"
 # Read LS_WEB_USER from file
 myENV_LS_WEB_USER=$(grep "^LS_WEB_USER=" "${myENV_FILE}" | sed 's/^LS_WEB_USER=//g' | tr -d "\"'")
 
-# Add the new SENSOR and show a complete list of all the SENSORs
-myENV_LS_WEB_USER="${myENV_LS_WEB_USER} ${myLS_WEB_USER_ENC_B64}"
-
-# Update the T-Pot .env config and lswebpasswd (avoid the need to restart T-Pot) on the host
-echo "# Updating SENSOR users on this HIVE and in the T-Pot .env config:"
-sed -i "/^LS_WEB_USER=/c\LS_WEB_USER=${myENV_LS_WEB_USER}" "${myENV_FILE}"
-: > "${HOME}"/tpotce/data/nginx/conf/lswebpasswd
-for i in $myENV_LS_WEB_USER;
-  do
-    if [[ -n $i ]]; 
-      then
-        # Need to control newlines as they kept coming up for some reason
-        echo -n "$i" | base64 -d -w0
-        echo
-        echo -n "$i" | base64 -d -w0 | tr -d '\n' >> ${HOME}/tpotce/data/nginx/conf/lswebpasswd
-        echo >> ${HOME}/tpotce/data/nginx/conf/lswebpasswd
-      fi
-done
+# Add the new SENSOR user
+if [ "${myENV_LS_WEB_USER}" == "" ];
+  then
+    myENV_LS_WEB_USER="${myLS_WEB_USER_ENC_B64}"
+  else
+    myENV_LS_WEB_USER="${myENV_LS_WEB_USER} ${myLS_WEB_USER_ENC_B64}"
+fi
 
 # Need to export for Ansible
 export myTPOT_HIVE_USER
 export myTPOT_HIVE_IP
 
-ANSIBLE_LOG_PATH=${HOME}/tpotce/data/deploy_sensor.log ansible-playbook ${myANSIBLE_TPOT_PLAYBOOK} -i ${mySENSOR_IP}, --check -c ssh -e "ansible_port=${myANSIBLE_PORT}"
+ANSIBLE_LOG_PATH=${HOME}/tpotce/data/deploy_sensor.log ansible-playbook ${myANSIBLE_TPOT_PLAYBOOK} -i ${mySENSOR_IP}, -c ssh -u ${mySSHUSER} -e "ansible_port=${myANSIBLE_PORT}"
+
+if [ "$?" == 0 ];
+  then
+	# Update the T-Pot .env config and lswebpasswd (avoid the need to restart T-Pot) on the host
+	echo "# Updating SENSOR users on this HIVE and in the T-Pot .env config:"
+    sed -i "/^LS_WEB_USER=/c\LS_WEB_USER=$myENV_LS_WEB_USER" "${myENV_FILE}"
+	: > "${HOME}"/tpotce/data/nginx/conf/lswebpasswd
+	for i in $myENV_LS_WEB_USER;
+	  do
+	    if [[ -n $i ]]; 
+	      then
+	        # Need to control newlines as they kept coming up for some reason
+	        echo -n "$i" | base64 -d -w0
+	        echo
+	        echo -n "$i" | base64 -d -w0 | tr -d '\n' >> ${HOME}/tpotce/data/nginx/conf/lswebpasswd
+	        echo >> ${HOME}/tpotce/data/nginx/conf/lswebpasswd
+	      fi
+	done
+fi
 
 unset myTPOT_HIVE_USER
 unset myTPOT_HIVE_IP

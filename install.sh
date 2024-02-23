@@ -269,7 +269,7 @@ if [ "${myTPOT_TYPE}" == "SENSOR" ];
   then
     cp ${HOME}/tpotce/compose/sensor.yml ${HOME}/tpotce/docker-compose.yml
     myINFO="### Make sure to deploy SSH keys to this sensor and disable SSH password authentication.
-### On hive run the tpotce/tools/deploy.sh script to join this sensor to the hive."
+### On hive run the tpotce/deploy.sh script to join this sensor to the hive."
 fi
 
 # Pull docker images

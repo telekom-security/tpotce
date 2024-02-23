@@ -8,6 +8,12 @@
     remote_docker_compose_path: "~/tpotce/docker-compose.yml"
     env_file_path: "~/tpotce/.env"
   tasks:
+    - name: Ensure the destination directory exists
+      ansible.builtin.file:
+        path: "{{ remote_cert_path | dirname }}"
+        state: directory
+        mode: '770'
+
     - name: Copy nginx.crt from local to remote host
       ansible.builtin.copy:
         src: "{{ local_nginx_cert_path }}"
