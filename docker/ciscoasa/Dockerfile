@@ -1,4 +1,4 @@
-FROM alpine:3.17
+FROM alpine:3.19
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -27,7 +27,7 @@ RUN apk --no-cache -U upgrade && \
     cd ciscoasa_honeypot && \
     git checkout d6e91f1aab7fe6fc01fabf2046e76b68dd6dc9e2 && \
     sed -i "s/git+git/git+https/g" requirements.txt && \
-    pip3 install --no-cache-dir -r requirements.txt && \
+    pip3 install --break-system-packages --no-cache-dir -r requirements.txt && \
     cp /root/dist/asa_server.py /opt/ciscoasa_honeypot && \
     chown -R ciscoasa:ciscoasa /opt/ciscoasa_honeypot && \
 #

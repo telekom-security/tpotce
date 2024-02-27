@@ -19,5 +19,5 @@ services:
     image: "dtagdevsec/adbhoney:alpha"
     read_only: true
     volumes:
-     - /data/adbhoney/log:/opt/adbhoney/log
-     - /data/adbhoney/downloads:/opt/adbhoney/dl
+     - $HOME/tpotce/data/adbhoney/log:/opt/adbhoney/log
+     - $HOME/tpotce/data/adbhoney/downloads:/opt/adbhoney/dl

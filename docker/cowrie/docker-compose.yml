@@ -23,7 +23,7 @@ services:
     image: "dtagdevsec/cowrie:alpha"
     read_only: true
     volumes:
-     - /data/cowrie/downloads:/home/cowrie/cowrie/dl
-     - /data/cowrie/keys:/home/cowrie/cowrie/etc
-     - /data/cowrie/log:/home/cowrie/cowrie/log
-     - /data/cowrie/log/tty:/home/cowrie/cowrie/log/tty
+     - $HOME/tpotce/data/cowrie/downloads:/home/cowrie/cowrie/dl
+     - $HOME/tpotce/data/cowrie/keys:/home/cowrie/cowrie/etc
+     - $HOME/tpotce/data/cowrie/log:/home/cowrie/cowrie/log
+     - $HOME/tpotce/data/cowrie/log/tty:/home/cowrie/cowrie/log/tty

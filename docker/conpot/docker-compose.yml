@@ -40,7 +40,7 @@ services:
     image: "dtagdevsec/conpot:alpha"
     read_only: true
     volumes:
-     - /data/conpot/log:/var/log/conpot
+     - $HOME/tpotce/data/conpot/log:/var/log/conpot
 
 # Conpot IEC104 service
   conpot_IEC104:
@@ -64,7 +64,7 @@ services:
     image: "dtagdevsec/conpot:alpha"
     read_only: true
     volumes:
-     - /data/conpot/log:/var/log/conpot
+     - $HOME/tpotce/data/conpot/log:/var/log/conpot
 
 # Conpot guardian_ast service
   conpot_guardian_ast:
@@ -87,7 +87,7 @@ services:
     image: "dtagdevsec/conpot:alpha"
     read_only: true
     volumes:
-     - /data/conpot/log:/var/log/conpot
+     - $HOME/tpotce/data/conpot/log:/var/log/conpot
 
 # Conpot ipmi
   conpot_ipmi:
@@ -110,7 +110,7 @@ services:
     image: "dtagdevsec/conpot:alpha"
     read_only: true
     volumes:
-     - /data/conpot/log:/var/log/conpot
+     - $HOME/tpotce/data/conpot/log:/var/log/conpot
 
 # Conpot kamstrup_382
   conpot_kamstrup_382:
@@ -134,4 +134,4 @@ services:
     image: "dtagdevsec/conpot:alpha"
     read_only: true
     volumes:
-     - /data/conpot/log:/var/log/conpot
+     - $HOME/tpotce/data/conpot/log:/var/log/conpot

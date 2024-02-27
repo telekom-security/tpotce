@@ -1,14 +1,14 @@
-FROM alpine:3.17
+FROM alpine:3.19
 #
 # Install packages
 RUN apk --no-cache -U add \
             git \
             libcap \
-	    openssl \
+			openssl \
             py3-pip \
             python3 && \
 #
-    pip3 install --no-cache-dir python-json-logger && \
+    pip3 install --break-system-packages --no-cache-dir python-json-logger && \
 #
 # Install CitrixHoneypot from GitHub
     git clone https://github.com/t3chn0m4g3/CitrixHoneypot /opt/citrixhoneypot && \
@@ -28,7 +28,7 @@ RUN apk --no-cache -U add \
     addgroup -g 2000 citrixhoneypot && \
     adduser -S -H -s /bin/ash -u 2000 -D -g 2000 citrixhoneypot && \
     chown -R citrixhoneypot:citrixhoneypot /opt/citrixhoneypot && \
-    setcap cap_net_bind_service=+ep /usr/bin/python3.10 && \
+    setcap cap_net_bind_service=+ep $(readlink -f $(type -P python3)) && \
 #
 # Clean up
     apk del --purge git \

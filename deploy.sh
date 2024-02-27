@@ -22,12 +22,24 @@ EOF
 if ! grep -q 'TPOT_TYPE=HIVE' "$HOME/tpotce/.env";
   then
     echo "# This script is only supported on HIVE installations."
+    echo
+    exit 1
+fi
+
+# Check if running on a supported distribution
+mySUPPORTED_DISTRIBUTIONS=("AlmaLinux" "Debian GNU/Linux" "Fedora Linux" "openSUSE Tumbleweed" "Raspbian GNU/Linux" "Rocky Linux" "Ubuntu")
+myCURRENT_DISTRIBUTION=$(awk -F= '/^NAME/{print $2}' /etc/os-release | tr -d '"')
+
+if [[ ! " ${mySUPPORTED_DISTRIBUTIONS[@]} " =~ " ${myCURRENT_DISTRIBUTION} " ]];
+  then
+    echo "# Only the following distributions are supported: AlmaLinux, Fedora, Debian, openSUSE Tumbleweed, Rocky Linux and Ubuntu."
+    echo
     exit 1
 fi
 
 echo "${myDEPLOY}"
 echo
-echo "This script will prepare a T-Pot SENSOR installation to transmit logs into this HIVE."
+echo "# This script will prepare a T-Pot SENSOR installation to transmit logs into this HIVE."
 echo
 
 # Ask if a T-Pot SENSOR was installed

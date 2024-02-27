@@ -1,22 +1,22 @@
-FROM alpine:3.17
+FROM alpine:3.19
 #
 # Include dist
 COPY dist/ /root/dist/
 #
 # Install packages
 RUN apk --no-cache -U add \
-             build-base \
-             git \
-	     libcap \
-	     py3-colorama \
-	     py3-greenlet \
-	     py3-pip \
-	     py3-schedule \
-	     py3-sqlalchemy \
-	     py3-twisted \
-	     py3-wheel \
-             python3 \
-             python3-dev && \
+			build-base \
+			git \
+			libcap \
+			py3-colorama \
+			py3-greenlet \
+			py3-pip \
+			py3-schedule \
+			py3-sqlalchemy \
+			py3-twisted \
+			py3-wheel \
+			python3 \
+			python3-dev && \
 #	     
 # Install ddospot from GitHub and setup
     mkdir -p /opt && \
@@ -40,8 +40,8 @@ RUN apk --no-cache -U add \
     sed -i "s#rotate_size = 10#rotate_size = 9999#g" /opt/ddospot/ddospot/pots/ntp/ntpot.conf && \
     sed -i "s#rotate_size = 10#rotate_size = 9999#g" /opt/ddospot/ddospot/pots/ssdp/ssdpot.conf && \
     cp /root/dist/requirements.txt . && \
-    pip3 install -r ddospot/requirements.txt && \
-    setcap cap_net_bind_service=+ep /usr/bin/python3.10 && \
+    pip3 install --break-system-packages -r ddospot/requirements.txt && \
+    setcap cap_net_bind_service=+ep $(readlink -f $(type -P python3)) && \
 #
 # Setup user, groups and configs
     addgroup -g 2000 ddospot && \
@@ -50,8 +50,8 @@ RUN apk --no-cache -U add \
 #
 # Clean up
     apk del --purge build-base \
-                    git \
-		    python3-dev && \
+			git \
+			python3-dev && \
     rm -rf /root/* && \
     rm -rf /opt/ddospot/.git && \
     rm -rf /var/cache/apk/*

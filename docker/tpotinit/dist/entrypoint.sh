@@ -132,6 +132,14 @@ if [ "${myOSTYPE}" == "linuxkit" ] && [ "${TPOT_OSTYPE}" == "linux" ];
     echo "# Aborting."
     echo
     exit 1
+  else
+    if ! [ -S /var/run/docker.sock ];
+      then
+        echo "# Cannot access /var/run/docker.sock, check docker-compose.yml for proper volume definition."
+        echo
+        echo "# Aborting."
+        exit 1
+    fi
 fi
 
 # Validate environment variables
@@ -292,18 +300,23 @@ echo
 figlet "Starting ..."
 figlet "T-Pot: ${TPOT_VERSION}"
 echo
-touch /tmp/success
 
 # We want to see true source for UDP packets in container (https://github.com/moby/libnetwork/issues/1994)
+# Start autoheal if running on a supported os
 if [ "${myOSTYPE}" != "linuxkit" ];
   then
-    sleep 60
+    sleep 1
+    echo "# Dropping UDP connection tables to improve visibility of true source IPs."
     /usr/sbin/conntrack -D -p udp
+    # Starting container health monitoring
+    echo
+    figlet "Starting ..."
+    figlet "Autoheal"
+    echo "# Now monitoring healthcheck enabled containers to automatically restart them when unhealthy."
+    echo
+    exec /opt/tpot/autoheal.sh autoheal
   else
     echo
     echo "# Docker Desktop for macOS or Windows detected, Conntrack feature is not supported."
     echo 
-fi 
-
-# Keep the container running ...
-sleep infinity
+fi

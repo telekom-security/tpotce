@@ -11,7 +11,7 @@ services:
     restart: "no" 
     image: "ghcr.io/telekom-security/tpotinit:alpha"
     volumes:
-#      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
       - $HOME/tpotce/data:/data
     network_mode: "host"
     cap_add:

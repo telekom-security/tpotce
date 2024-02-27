@@ -51,7 +51,7 @@ services:
       - ${TPOT_DOCKER_COMPOSE}:/tmp/tpot/docker-compose.yml:ro
       - ${TPOT_DATA_PATH}/blackhole:/etc/blackhole
       - ${TPOT_DATA_PATH}:/data
-
+      - /var/run/docker.sock:/var/run/docker.sock:ro
 
 ##################
 #### Honeypots

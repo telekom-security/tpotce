@@ -22,4 +22,4 @@ services:
     image: "dtagdevsec/ciscoasa:alpha"
     read_only: true
     volumes:
-     - /data/ciscoasa/log:/var/log/ciscoasa
+     - $HOME/tpotce/data/ciscoasa/log:/var/log/ciscoasa
