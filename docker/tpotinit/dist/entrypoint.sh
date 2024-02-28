@@ -300,6 +300,7 @@ echo
 figlet "Starting ..."
 figlet "T-Pot: ${TPOT_VERSION}"
 echo
+touch /tmp/success
 
 # We want to see true source for UDP packets in container (https://github.com/moby/libnetwork/issues/1994)
 # Start autoheal if running on a supported os

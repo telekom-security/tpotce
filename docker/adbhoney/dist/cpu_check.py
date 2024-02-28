@@ -3,7 +3,7 @@ import sys
 import time
 
 if len(sys.argv) != 3:
-    print("Usage: script.py <PID> <CPU_USAGE_THRESHOLD>")
+    print("Usage: cpu_check.py <PID> <CPU_USAGE_THRESHOLD>")
     sys.exit(1)
 
 try:

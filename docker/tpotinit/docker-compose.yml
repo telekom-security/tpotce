@@ -9,7 +9,7 @@ services:
     env_file:
       - $HOME/tpotce/.env
     restart: "no" 
-    image: "ghcr.io/telekom-security/tpotinit:alpha"
+    image: "dtagdevsec/tpotinit:alpha"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - $HOME/tpotce/data:/data

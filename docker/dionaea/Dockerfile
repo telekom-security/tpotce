@@ -40,7 +40,6 @@ RUN ARCH=$(arch) && \
 		python3-boto3 \
 		python3-bson \
 		python3-yaml \
-		python3-psutil \
 		fonts-liberation && \
 #
 # Get and install dionaea
@@ -96,6 +95,7 @@ RUN ARCH=$(arch) && \
       python3 \
       python3-boto3 \
       python3-bson \
+      python3-psutil \
       python3-yaml \
       libcurl4 \
       libemu2 \

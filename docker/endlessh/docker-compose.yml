@@ -19,4 +19,4 @@ services:
     image: "dtagdevsec/endlessh:alpha"
     read_only: true
     volumes:
-     - /data/endlessh/log:/var/log/endlessh
+     - $HOME/tpotce/data/endlessh/log:/var/log/endlessh
