@@ -1,10 +1,13 @@
-FROM alpine:3.17
+FROM alpine:3.19
+#
+# Include dist
+COPY dist/ /root/dist/
 #
 # Setup apk
 RUN apk -U add --no-cache \
-                   build-base \
-                   git \
-                   g++ && \
+		build-base \
+		git \
+		g++ && \
     apk -U add --no-cache go --repository http://dl-3.alpinelinux.org/alpine/edge/community && \
 #
 # Setup go, build dicompot 
@@ -20,6 +23,7 @@ RUN apk -U add --no-cache \
 # Setup dicompot
     mkdir -p /opt/dicompot/images && \
     cp /opt/go/bin/server /opt/dicompot && \
+    cp -R /root/dist/dcm_pts/P1/ /opt/dicompot/images && \
 #
 # Setup user, groups and configs
     addgroup -g 2000 dicompot && \

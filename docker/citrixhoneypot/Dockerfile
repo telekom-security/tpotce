@@ -2,11 +2,11 @@ FROM alpine:3.19
 #
 # Install packages
 RUN apk --no-cache -U add \
-            git \
-            libcap \
-			openssl \
-            py3-pip \
-            python3 && \
+		git \
+		libcap \
+		openssl \
+		py3-pip \
+		python3 && \
 #
     pip3 install --break-system-packages --no-cache-dir python-json-logger && \
 #

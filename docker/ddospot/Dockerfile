@@ -5,18 +5,18 @@ COPY dist/ /root/dist/
 #
 # Install packages
 RUN apk --no-cache -U add \
-			build-base \
-			git \
-			libcap \
-			py3-colorama \
-			py3-greenlet \
-			py3-pip \
-			py3-schedule \
-			py3-sqlalchemy \
-			py3-twisted \
-			py3-wheel \
-			python3 \
-			python3-dev && \
+		build-base \
+		git \
+		libcap \
+		py3-colorama \
+		py3-greenlet \
+		py3-pip \
+		py3-schedule \
+		py3-sqlalchemy \
+		py3-twisted \
+		py3-wheel \
+		python3 \
+		python3-dev && \
 #	     
 # Install ddospot from GitHub and setup
     mkdir -p /opt && \

@@ -6,15 +6,15 @@ COPY dist/ /root/dist/
 # Setup env and apt
 RUN apk --no-cache -U upgrade && \
     apk --no-cache add build-base \
-            git \
-            libffi \
-            libffi-dev \
-            openssl \
-            openssl-dev \
-	    py3-cryptography \
-	    py3-pip \
-            python3 \
-            python3-dev && \
+		git \
+		libffi \
+		libffi-dev \
+		openssl \
+		openssl-dev \
+		py3-cryptography \
+		py3-pip \
+		python3 \
+		python3-dev && \
 #
 # Setup user
     addgroup -g 2000 ciscoasa && \

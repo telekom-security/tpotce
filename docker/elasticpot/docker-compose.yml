@@ -19,4 +19,4 @@ services:
     image: "dtagdevsec/elasticpot:alpha"
     read_only: true
     volumes:
-     - /data/elasticpot/log:/opt/elasticpot/log
+     - $HOME/tpotce/data/elasticpot/log:/opt/elasticpot/log

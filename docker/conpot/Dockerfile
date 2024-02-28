@@ -72,6 +72,7 @@ RUN apk --no-cache -U add \
     wget https://www.wireshark.org/download/automated/data/manuf -o /usr/share/wireshark/manuf && \
     cp /root/dist/conpot.cfg /etc/conpot/conpot.cfg && \
     cp -R /root/dist/templates /usr/lib/$(readlink -f $(type -P python3) | cut -f4 -d"/")/site-packages/conpot/ && \
+    cp /root/dist/cpu_check.py / && \
     addgroup -g 2000 conpot && \
     adduser -S -s /bin/ash -u 2000 -D -g 2000 conpot && \
 #
@@ -93,7 +94,7 @@ RUN apk --no-cache -U add \
 #
 # Start conpot
 STOPSIGNAL SIGINT
-# Conpot sometimes hangs at 100% CPU usage, if detected process will be killed and container restarts per docker-compose settings
-HEALTHCHECK CMD if [ $(ps -C mpv -p 1 -o %cpu | tail -n 1 | cut -f 1 -d ".") -gt 75 ]; then kill -2 1; else exit 0; fi
+# Conpot sometimes hangs at 100% CPU usage, if detected container will become unhealthy and restarted by tpotinit
+HEALTHCHECK --interval=5m --timeout=30s --retries=3 CMD python3 /cpu_check.py $(pgrep -of conpot) 99
 USER conpot:conpot
 CMD exec /usr/bin/conpot --mibcache $CONPOT_TMP --temp_dir $CONPOT_TMP --template $CONPOT_TEMPLATE --logfile $CONPOT_LOG --config $CONPOT_CONFIG

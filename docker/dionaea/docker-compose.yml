@@ -36,12 +36,12 @@ services:
     image: "dtagdevsec/dionaea:alpha"
     read_only: true
     volumes:
-     - /data/dionaea/roots/ftp:/opt/dionaea/var/dionaea/roots/ftp
-     - /data/dionaea/roots/tftp:/opt/dionaea/var/dionaea/roots/tftp
-     - /data/dionaea/roots/www:/opt/dionaea/var/dionaea/roots/www
-     - /data/dionaea/roots/upnp:/opt/dionaea/var/dionaea/roots/upnp
-     - /data/dionaea:/opt/dionaea/var/dionaea
-     - /data/dionaea/binaries:/opt/dionaea/var/dionaea/binaries
-     - /data/dionaea/log:/opt/dionaea/var/log
-     - /data/dionaea/rtp:/opt/dionaea/var/dionaea/rtp
+     - $HOME/tpotce/data/dionaea/roots/ftp:/opt/dionaea/var/dionaea/roots/ftp
+     - $HOME/tpotce/data/dionaea/roots/tftp:/opt/dionaea/var/dionaea/roots/tftp
+     - $HOME/tpotce/data/dionaea/roots/www:/opt/dionaea/var/dionaea/roots/www
+     - $HOME/tpotce/data/dionaea/roots/upnp:/opt/dionaea/var/dionaea/roots/upnp
+     - $HOME/tpotce/data/dionaea:/opt/dionaea/var/dionaea
+     - $HOME/tpotce/data/dionaea/binaries:/opt/dionaea/var/dionaea/binaries
+     - $HOME/tpotce/data/dionaea/log:/opt/dionaea/var/log
+     - $HOME/tpotce/data/dionaea/rtp:/opt/dionaea/var/dionaea/rtp
 

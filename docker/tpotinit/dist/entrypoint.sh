@@ -305,7 +305,7 @@ echo
 # Start autoheal if running on a supported os
 if [ "${myOSTYPE}" != "linuxkit" ];
   then
-    sleep 1
+    sleep 60
     echo "# Dropping UDP connection tables to improve visibility of true source IPs."
     /usr/sbin/conntrack -D -p udp
     # Starting container health monitoring

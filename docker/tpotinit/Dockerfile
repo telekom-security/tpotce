@@ -41,6 +41,6 @@ RUN apk --no-cache -U add \
 #
 # Run tpotinit
 WORKDIR /opt/tpot
-HEALTHCHECK --interval=5s CMD pgrep -f autoheal || exit 1
+HEALTHCHECK --interval=5m --timeout=30s --retries=3 CMD pgrep -f autoheal || exit 1
 STOPSIGNAL SIGKILL
 CMD ["/opt/tpot/entrypoint.sh"]

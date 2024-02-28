@@ -5,33 +5,33 @@ COPY dist/ /root/dist/
 #
 # Get and install dependencies & packages
 RUN apk --no-cache -U add \
-			bash \
-			build-base \
-			git \
-			gmp-dev \
-			libcap \
-			libffi-dev \
-			mpc1-dev \
-			mpfr-dev \
-			openssl \
-			openssl-dev \
-			py3-appdirs \
-			py3-asn1-modules \
-			py3-attrs \
-			py3-bcrypt \
-			py3-cryptography \
-			py3-dateutil \
-			py3-greenlet \
-			py3-mysqlclient \
-			py3-openssl \
-			py3-packaging \
-			py3-parsing \
-			py3-pip \
-			py3-service_identity \
-			py3-treq \
-			py3-twisted \
-			python3 \
-			python3-dev && \
+		bash \
+		build-base \
+		git \
+		gmp-dev \
+		libcap \
+		libffi-dev \
+		mpc1-dev \
+		mpfr-dev \
+		openssl \
+		openssl-dev \
+		py3-appdirs \
+		py3-asn1-modules \
+		py3-attrs \
+		py3-bcrypt \
+		py3-cryptography \
+		py3-dateutil \
+		py3-greenlet \
+		py3-mysqlclient \
+		py3-openssl \
+		py3-packaging \
+		py3-parsing \
+		py3-pip \
+		py3-service_identity \
+		py3-treq \
+		py3-twisted \
+		python3 \
+		python3-dev && \
 #
 # Setup user
     addgroup -g 2000 cowrie && \
