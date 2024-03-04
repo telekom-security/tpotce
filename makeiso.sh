@@ -8,10 +8,11 @@ myBACKTITLE="T-Pot - ISO Creator"
 ### DEV
 myTPOTDIR="tpotiso"
 myTPOTSEED="iso/preseed/tpot.seed"
-myPACKAGES="dialog genisoimage pv rsync syslinux syslinux-utils udisks2 wget xorriso"
+myPACKAGES="binutils dialog fakeroot genisoimage isolinux p7zip-full pv rsync syslinux syslinux-utils udisks2 wget xorriso"
 myPFXFILE="iso/installer/keys/8021x.pfx"
 myINSTALLERPATH="iso/installer/install.sh"
 myNTPCONFFILE="iso/installer/timesyncd.conf"
+myMBR_TEMPLATE="/usr/lib/ISOLINUX/isohdpfx.bin"
 myTMP="tmp"
 myCONF_FILE="iso/installer/iso.conf"
 myCONF_DEFAULT_FILE="iso/installer/iso.conf.dist"
@@ -256,14 +257,23 @@ cd $myTPOTDIR
 if [ "$myARCH" == "amd64" ];
   then
     # Create AMD64 .iso
-    xorrisofs -gui -D -r -V "T-Pot $myARCH" \
-      -cache-inodes -J -l -b isolinux.bin \
-      -c boot.cat -no-emul-boot -boot-load-size 4 \
-      -boot-info-table \
+    xorrisofs -r -V "T-Pot $myARCH" \
+      -iso-level 3 \
+      -full-iso9660-filenames \
+      --mbr-force-bootable -partition_offset 16 \
+      -joliet -joliet-long -rational-rock \
+      -isohybrid-mbr $myMBR_TEMPLATE \
+      -b isolinux.bin \
+        -no-emul-boot \
+        -boot-load-size 4 \
+        -boot-info-table \
+      -c boot.cat \
+      -eltorito-alt-boot \
+      	-no-emul-boot \
+      	-isohybrid-gpt-basdat \
       -o ../"$myTPOTISO" ../"$myTPOTDIR" 2>&1 | awk '{print $1+0} fflush()' | cut -f1 -d"." | dialog --backtitle "$myBACKTITLE" --title "[ Building T-Pot $myARCH .iso ... ]" --gauge "" 5 70 0
     echo 100 | dialog --backtitle "$myBACKTITLE" --title "[ Building T-Pot $myARCH .iso ... Done! ]" --gauge "" 5 70
     cd ..
-    isohybrid $myTPOTISO
   else
     # Create ARM64 .iso
     xorriso -as mkisofs -r -V "T-Pot $myARCH" \
