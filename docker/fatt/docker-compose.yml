@@ -16,4 +16,4 @@ services:
      - NET_RAW
     image: "dtagdevsec/fatt:alpha"
     volumes:
-     - /data/fatt/log:/opt/fatt/log
+     - $HOME/tpotce/data/fatt/log:/opt/fatt/log

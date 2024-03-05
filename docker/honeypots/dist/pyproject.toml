@@ -1,0 +1,150 @@
+[build-system]
+requires = [
+    "setuptools>=61.2",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "honeypots"
+version = "0.65"
+authors = [
+    { name = "QeeqBox", email = "gigaqeeq@gmail.com" },
+]
+description = "30 different honeypots in one package! (dhcp, dns, elastic, ftp, http proxy, https proxy, http, https, imap, ipp, irc, ldap, memcache, mssql, mysql, ntp, oracle, pjl, pop3, postgres, rdp, redis, sip, smb, smtp, snmp, socks5, ssh, telnet, vnc)"
+readme = "README.rst"
+requires-python = ">=3.8"
+dependencies = [
+    "twisted",
+    "psutil",
+    "psycopg2-binary",
+    "pycryptodome",
+    "requests",
+    "requests[socks]",
+    "impacket",
+    "paramiko",
+    "scapy",
+    "service_identity",
+    "netifaces",
+]
+license = {text = "AGPL-3.0"}
+
+[project.urls]
+Homepage = "https://github.com/qeeqbox/honeypots"
+
+[project.optional-dependencies]
+dev = [
+    "dnspython==2.4.2",
+    "elasticsearch",
+    "ldap3",
+    "mysql-connector",
+    "pre-commit",
+    "pymssql",
+    "pysnmplib",
+    "pytest",
+    "redis",
+    "redis",
+    "vncdotool",
+]
+
+[project.scripts]
+honeypots = "honeypots.__main__:main_logic"
+
+[tool.setuptools]
+packages = [
+    "honeypots",
+    "honeypots.data",
+]
+include-package-data = true
+
+[tool.setuptools.package-data]
+"honeypots.data" = [
+    "*.html",
+]
+
+[tool.ruff]
+select = [
+    "F",
+    "E",
+    "W",
+    "C90",
+    "N",
+    "UP",
+    "B",
+    "A",
+    "C4",
+    "EXE",
+    "FA",
+    "ISC",
+    "PIE",
+    "T20",
+    "PT",
+    "Q",
+    "RET",
+    "SIM",
+    "TCH",
+    "ARG",
+    "PTH",
+    "ERA",
+    "PL",
+    "PLR",
+    "PLW",
+    "PERF",
+    "RUF",
+]
+ignore = [
+    "A003",
+    "PERF203",
+    "PERF401",
+    "RUF001",
+    "RUF002",
+    "RUF003",
+    "RUF015",
+    # pydantic only supports these from python>=3.9
+    "UP006",
+    "UP007",
+    # rules may cause conflicts when used with the formatter
+    "ISC001",
+    "Q001",
+]
+fixable = [
+    "F",
+    "E",
+    "W",
+    "C90",
+    "N",
+    "UP",
+    "B",
+    "A",
+    "C4",
+    "EXE",
+    "FA",
+    "ISC",
+    "PIE",
+    "T20",
+    "PT",
+    "Q",
+    "RET",
+    "SIM",
+    "TCH",
+    "ARG",
+    "PTH",
+    "ERA",
+    "PL",
+    "PLR",
+    "PLW",
+    "PERF",
+    "RUF",
+]
+exclude = [
+    ".git",
+    ".ruff_cache",
+    ".venv",
+    "venv",
+    "data",
+]
+line-length = 99
+target-version = "py38"
+
+[tool.ruff.lint.per-file-ignores]
+# don't check for "magic value" in tests
+"tests/*" = ["PLR2004"]

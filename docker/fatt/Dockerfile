@@ -1,15 +1,15 @@
-FROM alpine:3.17
+FROM alpine:3.19
 #
 # Get and install dependencies & packages
 RUN apk -U --no-cache add \
-              git \
-	      libcap \
-              py3-libxml2 \
-              py3-lxml \
-	      py3-pip \
-              python3 \
-              python3-dev \
-              tshark && \
+		git \
+		libcap \
+		py3-libxml2 \
+		py3-lxml \
+		py3-pip \
+		python3 \
+		python3-dev \
+		tshark && \
 #
 # Setup user
     addgroup -g 2000 fatt && \
@@ -25,7 +25,7 @@ RUN apk -U --no-cache add \
     #git checkout 314cd1ff7873b5a145a51ec4e85f6107828a2c79 && \
     mkdir -p log && \
     # pyshark >= 0.4.3 breaks fatt
-    pip3 install pyshark==0.4.2.11 && \
+    pip3 install --break-system-packages pyshark==0.4.2.11 && \
 #
 # Setup configs
     chgrp fatt /usr/bin/dumpcap && \

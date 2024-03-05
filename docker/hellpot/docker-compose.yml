@@ -19,4 +19,4 @@ services:
     image: "dtagdevsec/hellpot:alpha"
     read_only: true
     volumes:
-     - /data/hellpot/log:/var/log/hellpot
+     - $HOME/tpotce/data/hellpot/log:/var/log/hellpot
