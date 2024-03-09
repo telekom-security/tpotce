@@ -1,11 +1,11 @@
-FROM alpine:3.17
+FROM golang:1.21-alpine as builder
 #
 # Setup apk
 RUN apk -U --no-cache add \
-                   build-base \
-                   git \
-                   go \
-                   g++ && \
+		build-base \
+		git \
+		go \
+		g++ && \
 #
 # Setup go, build medpot
     export GOPATH=/opt/go/ && \
@@ -22,27 +22,21 @@ RUN apk -U --no-cache add \
     go get -d -v go.uber.org/zap && \
     cd medpot && \
     cp dist/etc/ews.cfg /etc/ && \
-    go build medpot && \
+    go build medpot
+#
+FROM alpine:3.19
 #
 # Setup medpot
-    mkdir -p /opt/medpot \
-             /var/log/medpot && \
-    cp medpot /opt/medpot && \
-    cp /opt/go/src/medpot/template/*.xml /opt/medpot/ && \
+#
+COPY --from=builder /opt/go/src/medpot/medpot /opt/medpot/medpot
+COPY --from=builder /opt/go/src/medpot/template/*.xml /opt/medpot/
+COPY --from=builder /opt/go/src/medpot/dist/etc/ews.cfg /etc/ews.cfg
+RUN mkdir -p /var/log/medpot && \
 #
 # Setup user, groups and configs
     addgroup -g 2000 medpot && \
     adduser -S -s /bin/ash -u 2000 -D -g 2000 medpot && \
-    chown -R medpot:medpot /var/log/medpot && \
-#
-# Clean up
-    apk del --purge build-base \
-                    git \
-                    go \
-                    g++ && \
-    rm -rf /var/cache/apk/* \
-           /opt/go \
-           /root/dist
+    chown -R medpot:medpot /var/log/medpot
 #
 # Start medpot
 WORKDIR /opt/medpot

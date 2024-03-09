@@ -13,18 +13,18 @@ services:
 #    cpu_count: 1
 #    cpus: 0.25
     environment:
-#     - SENTRYPEER_WEB_GUI=0
-#     - SENTRYPEER_PEER_TO_PEER=0
+#     - SENTRYPEER_PEER_TO_PEER=1
 #     - SENTRYPEER_BOOTSTRAP_NODE=bootstrap.sentrypeer.org
      - SENTRYPEER_VERBOSE=1
      - SENTRYPEER_DEBUG=1
     networks:
      - sentrypeer_local
     ports:
-     - "4222:4222/udp"
+#     - "4222:4222/udp"
      - "5060:5060/udp"
-     - "127.0.0.1:8082:8082"
+     - "5060:5060/tcp"
+#     - "127.0.0.1:8082:8082"
     image: "dtagdevsec/sentrypeer:alpha"
     read_only: true
     volumes:
-     - /data/sentrypeer/log:/var/log/sentrypeer
+     - $HOME/tpotce/data/sentrypeer/log:/var/log/sentrypeer

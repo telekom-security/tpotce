@@ -19,4 +19,4 @@ services:
     image: "dtagdevsec/medpot:alpha"
     read_only: true
     volumes:
-     - /data/medpot/log/:/var/log/medpot
+     - $HOME/tpotce/data/medpot/log/:/var/log/medpot

@@ -16,8 +16,8 @@ services:
     cap_add:
      - NET_ADMIN
     image: "dtagdevsec/glutton:alpha"
-#    read_only: true
+    read_only: true
     volumes:
      - $HOME/tpotce/data/glutton/log:/var/log/glutton
-#     - $HOME/tpotce/data/glutton/payloads:/opt/glutton/payloads
+     - $HOME/tpotce/data/glutton/payloads:/opt/glutton/payloads
 #     - $HOME/tpotce/docker/glutton/dist/rules.yaml:/opt/glutton/rules/rules.yaml

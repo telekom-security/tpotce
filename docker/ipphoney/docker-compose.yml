@@ -19,4 +19,4 @@ services:
     image: "dtagdevsec/ipphoney:alpha"
     read_only: true
     volumes:
-     - /data/ipphoney/log:/opt/ipphoney/log
+     - $HOME/tpotce/data/ipphoney/log:/opt/ipphoney/log

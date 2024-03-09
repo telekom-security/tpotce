@@ -36,13 +36,14 @@ RUN apk -U --no-cache add \
 		libnetfilter_queue-dev \
 		libcap \
 		libpcap-dev && \
-    setcap cap_net_admin,cap_net_raw=+ep /opt/glutton/bin/server && \
-    setcap cap_net_admin,cap_net_raw=+ep /sbin/xtables-nft-multi && \
+		setcap cap_net_admin,cap_net_raw=+ep /opt/glutton/bin/server && \
+		setcap cap_net_admin,cap_net_raw=+ep /sbin/xtables-nft-multi && \
+		mkdir -p /var/log/glutton \
+		         /opt/glutton/payloads && \
 #
 # Setup user, groups and configs
     addgroup -g 2000 glutton && \
     adduser -S -s /bin/ash -u 2000 -D -g 2000 glutton && \
-    mkdir -p /var/log/glutton && \
 #
 # Clean up
     rm -rf /var/cache/apk/* \
@@ -50,5 +51,5 @@ RUN apk -U --no-cache add \
 #
 # Start glutton 
 WORKDIR /opt/glutton
-#USER glutton:glutton
+USER glutton:glutton
 CMD exec bin/server -d true -i $(/sbin/ip address show | /usr/bin/awk '/inet.*brd/{ print $NF; exit }') -l /var/log/glutton/glutton.log > /dev/null 2>&1

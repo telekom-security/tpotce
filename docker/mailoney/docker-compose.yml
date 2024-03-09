@@ -25,4 +25,4 @@ services:
     image: "dtagdevsec/mailoney:alpha"
     read_only: true
     volumes:
-     - /data/mailoney/log:/opt/mailoney/logs
+     - $HOME/tpotce/data/mailoney/log:/opt/mailoney/logs

@@ -19,4 +19,4 @@ services:
      - NET_RAW
     image: "dtagdevsec/suricata:alpha"
     volumes:
-     - /data/suricata/log:/var/log/suricata
+     - $HOME/tpotce/data/suricata/log:/var/log/suricata

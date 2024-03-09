@@ -13,4 +13,4 @@ services:
     image: "dtagdevsec/p0f:alpha"
     read_only: true
     volumes:
-     - /data/p0f/log:/var/log/p0f
+     - $HOME/tpotce/data/p0f/log:/var/log/p0f

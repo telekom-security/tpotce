@@ -16,7 +16,6 @@ networks:
   dionaea_local:
   elasticpot_local:
   endlessh_local:
-  glutton_local:
   hellpot_local:
   heralding_local:
   honeypots_local:
@@ -381,6 +380,7 @@ services:
     read_only: true
     volumes:
      - ${TPOT_DATA_PATH}/glutton/log:/var/log/glutton
+     - ${TPOT_DATA_PATH}/glutton/payloads:/opt/glutton/payloads
 
 # Hellpot service
   hellpot:
@@ -606,12 +606,13 @@ services:
     depends_on:
       tpotinit:
         condition: service_healthy
-    environment:
-     - SENTRYPEER_PEER_TO_PEER=${SENTRYPEER_PEER_TO_PEER:-0} # Default to 0 if unset or NULL (value provided by T-Pot .env)
+#    environment:
+#     - SENTRYPEER_PEER_TO_PEER=1
     networks:
      - sentrypeer_local
     ports:
 #     - "4222:4222/udp"
+     - "5060:5060/tcp"
      - "5060:5060/udp"
 #     - "127.0.0.1:8082:8082"
     image: ${TPOT_REPO}/sentrypeer:${TPOT_VERSION}

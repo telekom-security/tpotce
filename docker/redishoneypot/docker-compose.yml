@@ -19,4 +19,4 @@ services:
     image: "dtagdevsec/redishoneypot:alpha"
     read_only: true
     volumes:
-     - /data/redishoneypot/log:/var/log/redishoneypot
+     - $HOME/tpotce/data/redishoneypot/log:/var/log/redishoneypot

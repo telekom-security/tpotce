@@ -193,7 +193,7 @@ fuFATT () {
 # Let's create a function to clean up and prepare glastopf data
 fuGLUTTON () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/glutton/*; fi
-  mkdir -vp /data/glutton/log
+  mkdir -vp /data/glutton/{log,payloads}
   chmod 770 /data/glutton -R
   chown tpot:tpot /data/glutton -R
 }

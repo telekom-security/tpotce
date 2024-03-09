@@ -25,6 +25,6 @@ services:
     image: "dtagdevsec/nginx:alpha"
     read_only: true
     volumes:
-     - /data/nginx/cert/:/etc/nginx/cert/:ro
-     - /data/nginx/conf/nginxpasswd:/etc/nginx/nginxpasswd:ro
-     - /data/nginx/log/:/var/log/nginx/
+     - $HOME/tpotce/data/nginx/cert/:/etc/nginx/cert/:ro
+     - $HOME/tpotce/data/nginx/conf/nginxpasswd:/etc/nginx/nginxpasswd:ro
+     - $HOME/tpotce/data/nginx/log/:/var/log/nginx/

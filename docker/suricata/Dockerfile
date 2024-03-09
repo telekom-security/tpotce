@@ -5,13 +5,13 @@ COPY dist/ /root/dist/
 #
 # Install packages
 RUN apk -U --no-cache add \
-                 ca-certificates \
-                 curl \
-                 file \
-		 hiredis \
-                 libcap \
-                 wget \
-                 suricata && \
+		ca-certificates \
+		curl \
+		file \
+		hiredis \
+		libcap \
+		wget \
+		suricata && \
 #
 # Setup user, groups and configs
     addgroup -g 2000 suri && \

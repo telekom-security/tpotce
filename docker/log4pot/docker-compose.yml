@@ -25,5 +25,5 @@ services:
     image: "dtagdevsec/log4pot:alpha"
     read_only: true
     volumes:
-     - /data/log4pot/log:/var/log/log4pot/log
-     - /data/log4pot/payloads:/var/log/log4pot/payloads
+     - $HOME/tpotce/data/log4pot/log:/var/log/log4pot/log
+     - $HOME/tpotce/data/log4pot/payloads:/var/log/log4pot/payloads
