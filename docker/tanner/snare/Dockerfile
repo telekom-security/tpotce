@@ -1,31 +1,32 @@
-FROM alpine:3.17
+FROM alpine:3.19
 #
 # Include dist
 COPY dist/ /root/dist/
 #
 # Setup apt
 RUN apk -U --no-cache add \
-               build-base \
-               git \
-               linux-headers \
-               python3 \
-               python3-dev \
-	       py3-aiohttp \
-	       py3-beautifulsoup4 \
-	       py3-gitpython \
-	       py3-jinja2 \
-	       py3-markupsafe \
-	       py3-setuptools \
-               py3-pip \
-	       py3-pycodestyle \
-	       py3-wheel && \
+		build-base \
+		git \
+		linux-headers \
+		python3 \
+		python3-dev \
+		py3-aiohttp \
+		py3-beautifulsoup4 \
+		py3-gitpython \
+		py3-jinja2 \
+		py3-markupsafe \
+		py3-setuptools \
+		py3-pip \
+		py3-pycodestyle \
+		py3-wheel && \
 #
 # Setup Snare 
     git clone https://github.com/mushorg/snare /opt/snare && \
     cd /opt/snare/ && \
-    git checkout 0919a80838eb0823a3b7029b0264628ee0a36211 && \
+    # git checkout 0919a80838eb0823a3b7029b0264628ee0a36211 && \
+	git checkout 08c69b7165354ea2040b6170c37d92ff3c304f96 && \
     cp /root/dist/requirements.txt . && \
-    pip3 install --no-cache-dir -r requirements.txt && \
+    pip3 install --break-system-packages --no-cache-dir -r requirements.txt && \
     python3 setup.py install && \
     cd / && \
     rm -rf /opt/snare && \

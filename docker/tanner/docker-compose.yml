@@ -51,7 +51,7 @@ services:
     image: "dtagdevsec/tanner:alpha"
     read_only: true
     volumes:
-     - /data/tanner/log:/var/log/tanner
+     - $HOME/tpotce/data/tanner/log:/var/log/tanner
     command: tannerapi 
     depends_on:
      - tanner_redis
@@ -94,8 +94,8 @@ services:
     command: tanner
     read_only: true
     volumes:
-     - /data/tanner/log:/var/log/tanner
-     - /data/tanner/files:/opt/tanner/files
+     - $HOME/tpotce/data/tanner/log:/var/log/tanner
+     - $HOME/tpotce/data/tanner/files:/opt/tanner/files
     depends_on:
      - tanner_api
 #     - tanner_web

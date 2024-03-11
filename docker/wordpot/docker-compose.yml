@@ -17,6 +17,6 @@ services:
     ports:
      - "80:80"
     image: "dtagdevsec/wordpot:alpha"
-    #    read_only: true
-    #    volumes:
-            # - /data/wordpot/log:/opt/ddospot/ddospot/db
+    read_only: true
+    volumes:
+     - $HOME/tpotce/data/wordpot/log:/opt/wordpot/logs/
