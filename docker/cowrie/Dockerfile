@@ -41,7 +41,7 @@ RUN apk --no-cache -U add \
     mkdir -p /home/cowrie && \
     cd /home/cowrie && \
     # git clone --depth=1 https://github.com/cowrie/cowrie -b v2.5.0 && \
-    git clone --depth=1 https://github.com/cowrie/cowrie && \
+    git clone https://github.com/cowrie/cowrie && \
     cd cowrie && \
     git checkout 3394082040c02d91e79efa2c640ad68da9fe2231 && \
     mkdir -p log && \
