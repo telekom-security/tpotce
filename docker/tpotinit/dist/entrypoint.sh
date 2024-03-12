@@ -3,6 +3,25 @@
 COMPOSE="/tmp/tpot/docker-compose.yml"
 exec > >(tee /data/tpotinit.log) 2>&1
 
+# Function to handle SIGTERM
+cleanup() {
+  echo "# SIGTERM received, cleaning up ..."
+  echo
+  echo "## ... removing firewall rules."
+  /opt/tpot/bin/rules.sh ${COMPOSE} unset
+  echo
+  if [ "${TPOT_BLACKHOLE}" == "ENABLED" ] && [ -f "/etc/blackhole/mass_scanner.txt" ];
+    then
+      echo "## ... removing Blackhole routes."
+      /opt/tpot/bin/blackhole.sh del
+      echo
+  fi
+  kill -TERM "$PID"
+  echo "# Cleanup done."
+  echo
+}
+trap cleanup SIGTERM
+
 # Function to check if a variable is set, not empty
 check_var() {
     local var_name="$1"
@@ -315,7 +334,11 @@ if [ "${myOSTYPE}" != "linuxkit" ];
     figlet "Autoheal"
     echo "# Now monitoring healthcheck enabled containers to automatically restart them when unhealthy."
     echo
-    exec /opt/tpot/autoheal.sh autoheal
+    # exec /opt/tpot/autoheal.sh autoheal
+    /opt/tpot/autoheal.sh autoheal &
+    PID=$!
+    wait $PID
+    echo "# T-Pot Init and Autoheal were stopped. Exiting."
   else
     echo
     echo "# Docker Desktop for macOS or Windows detected, Conntrack feature is not supported."

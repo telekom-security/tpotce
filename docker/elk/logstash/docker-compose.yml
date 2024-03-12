@@ -12,13 +12,11 @@ services:
 #    depends_on:
 #      elasticsearch:
 #        condition: service_healthy
-    env_file:
-     - /opt/tpot/etc/compose/elk_environment
     ports:
      - "127.0.0.1:64305:64305"
     image: "dtagdevsec/logstash:alpha"
     volumes:
-     - /data:/data
-#     - /root/tpotce/docker/elk/logstash/dist/logstash.conf:/etc/logstash/conf.d/logstash.conf
-#     - /root/tpotce/docker/elk/logstash/dist/http.conf:/etc/logstash/conf.d/http.conf
-#     - /root/tpotce/docker/elk/logstash/dist/logstash.yml:/etc/logstash/conf.d/logstash.yml
+     - $HOME/tpotce/data:/data
+#     - /$HOME/tpotce/docker/elk/logstash/dist/logstash.conf:/etc/logstash/conf.d/logstash.conf
+#     - /$HOME/tpotce/docker/elk/logstash/dist/http.conf:/etc/logstash/conf.d/http.conf
+#     - /$HOME/tpotce/docker/elk/logstash/dist/logstash.yml:/etc/logstash/conf.d/logstash.yml

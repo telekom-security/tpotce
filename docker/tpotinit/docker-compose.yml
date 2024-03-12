@@ -8,7 +8,8 @@ services:
     container_name: tpotinit
     env_file:
       - $HOME/tpotce/.env
-    restart: "no" 
+    restart: "no"
+    stop_grace_period: 60s
     image: "dtagdevsec/tpotinit:alpha"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro

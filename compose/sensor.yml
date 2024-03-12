@@ -37,6 +37,7 @@ services:
     env_file:
       - .env
     restart: always
+    stop_grace_period: 60s
     tmpfs:
       - /tmp/etc:uid=2000,gid=2000
       - /tmp/:uid=2000,gid=2000
@@ -108,7 +109,7 @@ services:
     pull_policy: ${TPOT_PULL_POLICY}
     read_only: true
     volumes:
-     - ${TPOT_DATA_PATH}/citrixhoneypot/logs:/opt/citrixhoneypot/logs
+     - ${TPOT_DATA_PATH}/citrixhoneypot/log:/opt/citrixhoneypot/logs
 
 # Conpot IEC104 service
   conpot_IEC104:

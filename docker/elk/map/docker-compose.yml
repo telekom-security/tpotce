@@ -21,8 +21,6 @@ services:
     restart: always
     environment:
      - MAP_COMMAND=AttackMapServer.py
-    env_file:
-     - /opt/tpot/etc/compose/elk_environment
     stop_signal: SIGKILL
     tty: true
     ports:
@@ -37,8 +35,8 @@ services:
     restart: always
     environment:
      - MAP_COMMAND=DataServer_v2.py
-    env_file:
-     - /opt/tpot/etc/compose/elk_environment
+#     - TPOT_ATTACKMAP_TEXT=${TPOT_ATTACKMAP_TEXT}
+#     - TZ=${TPOT_ATTACKMAP_TEXT_TIMEZONE}
     stop_signal: SIGKILL
     tty: true
     image: "dtagdevsec/map:alpha"

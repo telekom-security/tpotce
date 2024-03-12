@@ -26,4 +26,4 @@ services:
      - "127.0.0.1:64298:9200"
     image: "dtagdevsec/elasticsearch:alpha"
     volumes:
-     - /data:/data
+     - $HOME/tpotce/data:/data

@@ -26,7 +26,7 @@ services:
      - "127.0.0.1:64298:9200"
     image: "dtagdevsec/elasticsearch:alpha"
     volumes:
-     - /data:/data
+     - $HOME/tpotce/data:/data
 
 ## Kibana service
   kibana:
@@ -37,6 +37,7 @@ services:
     depends_on:
       elasticsearch:
         condition: service_healthy
+    mem_limit: 1g
     ports:
      - "127.0.0.1:64296:5601"
     image: "dtagdevsec/kibana:alpha"
@@ -51,11 +52,9 @@ services:
     depends_on:
       elasticsearch:
         condition: service_healthy
-    env_file:
-     - /opt/tpot/etc/compose/elk_environment
     image: "dtagdevsec/logstash:alpha"
     volumes:
-     - /data:/data
+     - $HOME/tpotce/data:/data
 #     - /root/tpotce/docker/elk/logstash/dist/logstash.conf:/etc/logstash/conf.d/logstash.conf
 
 # Map Redis Service
@@ -76,8 +75,6 @@ services:
     restart: always
     environment:
      - MAP_COMMAND=AttackMapServer.py
-    env_file:
-     - /opt/tpot/etc/compose/elk_environment
     stop_signal: SIGKILL
     tty: true
     ports:
@@ -92,8 +89,6 @@ services:
     restart: always
     environment:
      - MAP_COMMAND=DataServer_v2.py
-    env_file:
-     - /opt/tpot/etc/compose/elk_environment
     stop_signal: SIGKILL
     tty: true
     image: "dtagdevsec/map:alpha"
