@@ -22,6 +22,7 @@ networks:
   redishoneypot_local:
   sentrypeer_local:
   tanner_local:
+  wordpot_local:
   nginx_local:
   ewsposter_local:
 
@@ -550,6 +551,22 @@ services:
      - "80:80"
     image: ${TPOT_REPO}/snare:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
+
+# Wordpot service
+  wordpot:
+    container_name: wordpot
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+    networks:
+     - wordpot_local
+    ports:
+     - "8080:80"
+    image: ${TPOT_REPO}/wordpot:${TPOT_VERSION}
+    read_only: true
+    volumes:
+     - ${TPOT_DATA_PATH}/wordpot/log:/opt/wordpot/logs/
 
 
 ##################
