@@ -1,4 +1,4 @@
-#/usr/bin/env bash
+#!/usr/bin/env bash
 
 myINSTALL_NOTIFICATION="### Now installing required packages ..."
 myUSER=$(whoami)
@@ -257,7 +257,7 @@ if [ "${myTPOT_TYPE}" == "HIVE" ];
     myWEB_USER_ENC_B64=$(echo -n "${myWEB_USER_ENC}" | base64 -w0)
     
 	echo
-	sed -i "s|^WEB_USER=.*|WEB_USER='${myWEB_USER_ENC_B64}'|" ${myTPOT_CONF_FILE}
+	sed -i "s|^WEB_USER=.*|WEB_USER=${myWEB_USER_ENC_B64}|" ${myTPOT_CONF_FILE}
 
     # Install T-Pot Type HIVE and use standard.yml for installation
     cp ${HOME}/tpotce/compose/standard.yml ${HOME}/tpotce/docker-compose.yml

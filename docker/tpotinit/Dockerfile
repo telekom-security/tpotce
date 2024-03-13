@@ -10,6 +10,7 @@ RUN apk --no-cache -U add \
         bash \
         bind-tools \
         conntrack-tools \
+		cracklib \
         curl \
         ethtool \
         figlet \

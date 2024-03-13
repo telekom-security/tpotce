@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 COMPOSE="/tmp/tpot/docker-compose.yml"
 exec > >(tee /data/tpotinit.log) 2>&1
