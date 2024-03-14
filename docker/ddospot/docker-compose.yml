@@ -8,6 +8,7 @@ services:
 # Ddospot service
   ddospot:
     build: .
+    network_mode: "host"
     container_name: ddospot
     restart: always
 #    cpu_count: 1
