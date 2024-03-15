@@ -409,6 +409,7 @@ services:
      - mailoney_local
     ports:
      - "25:25"
+     - "587:25"
     image: ${TPOT_REPO}/mailoney:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
     read_only: true

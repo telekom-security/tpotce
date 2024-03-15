@@ -18,7 +18,6 @@ RUN apk -U --no-cache add \
     git clone https://github.com/mushorg/glutton && \
     cd /opt/glutton/ && \
     git checkout c1204c65ce32bfdc0e08fb2a9abe89b3b8eeed62 && \
-    # git checkout c25045b95b43ed9bfee89b2d14a50f5794a9cf2b && \
     cp /root/dist/system.go . && \
     go mod download && \
     make build && \

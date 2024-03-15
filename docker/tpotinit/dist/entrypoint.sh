@@ -17,6 +17,7 @@ cleanup() {
       echo
   fi
   kill -TERM "$PID"
+  rm -f /tmp/success
   echo "# Cleanup done."
   echo
 }

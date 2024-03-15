@@ -45,4 +45,5 @@ WORKDIR /opt/tpot
 #HEALTHCHECK --interval=5s --timeout=30s --retries=3 CMD pgrep -f autoheal || exit 1
 HEALTHCHECK --retries=1000 --interval=5s CMD test -f /tmp/success || exit 1
 STOPSIGNAL SIGTERM
+# Using ENTRYPOINT so we can catch SIGTERM for cleanup
 ENTRYPOINT ["/opt/tpot/entrypoint.sh"]

@@ -20,4 +20,4 @@ services:
     volumes:
      - $HOME/tpotce/data/glutton/log:/var/log/glutton
      - $HOME/tpotce/data/glutton/payloads:/opt/glutton/payloads
-#     - $HOME/tpotce/docker/glutton/dist/rules.yaml:/opt/glutton/rules/rules.yaml
+#     - $HOME/tpotce/docker/glutton/dist/rules.yaml:/opt/glutton/config/rules.yaml

@@ -57,11 +57,11 @@ fi
 ### Setting up iptables-legacy rules for glutton
 if [ "$myNFQCHECK" == "glutton" ];
   then
-    iptables-legacy -w -t raw -A PREROUTING -s 127.0.0.1 -j ACCEPT
-    iptables-legacy -w -t raw -A PREROUTING -d 127.0.0.1 -j ACCEPT
+    iptables -w -t mangle -A PREROUTING -s 127.0.0.1 -j ACCEPT
+    iptables -w -t mangle -A PREROUTING -d 127.0.0.1 -j ACCEPT
 
     for myPORT in $myRULESPORTS; do
-      iptables-legacy -w -t raw -A PREROUTING -p tcp --dport $myPORT -j ACCEPT
+      iptables -w -t mangle -A PREROUTING -p tcp --dport $myPORT -j ACCEPT
     done
     # No need for NFQ forwarding, such rules are set up by glutton
 fi
@@ -84,11 +84,11 @@ fi
 ### Removing iptables-legacy rules for glutton
 if [ "$myNFQCHECK" == "glutton" ];
   then
-    iptables-legacy -w -t raw -D PREROUTING -s 127.0.0.1 -j ACCEPT
-    iptables-legacy -w -t raw -D PREROUTING -d 127.0.0.1 -j ACCEPT
+    iptables -w -t mangle -D PREROUTING -s 127.0.0.1 -j ACCEPT
+    iptables -w -t mangle -D PREROUTING -d 127.0.0.1 -j ACCEPT
 
     for myPORT in $myRULESPORTS; do
-      iptables-legacy -w -t raw -D PREROUTING -p tcp --dport $myPORT -j ACCEPT
+      iptables -w -t mangle -D PREROUTING -p tcp --dport $myPORT -j ACCEPT
     done
     # No need for removing NFQ forwarding, such rules are removed by glutton
 fi
