@@ -15,7 +15,7 @@ services:
     networks:
      - hellpot_local
     ports:
-     - "80:8080"    
+     - "80:8080"
     image: "dtagdevsec/hellpot:alpha"
     read_only: true
     volumes:

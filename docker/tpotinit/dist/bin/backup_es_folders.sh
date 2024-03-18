@@ -1,11 +1,4 @@
 #!/bin/bash
-# Run as root only.
-myWHOAMI=$(whoami)
-if [ "$myWHOAMI" != "root" ];
-  then
-    echo "Need to run as root ..."
-    exit
-fi
 
 if [ "$1" == "" ] || [ "$1" != "all" ] && [ "$1" != "base" ];
   then
@@ -22,7 +15,7 @@ myES="http://127.0.0.1:64298/"
 myESSTATUS=$(curl -s -XGET ''$myES'_cluster/health' | jq '.' | grep -c green)
 if ! [ "$myESSTATUS" = "1" ]
   then
-    echo "### Elasticsearch is not available, try starting via 'systemctl start tpot'."
+    echo "### Elasticsearch is not available."
     exit
   else
     echo "### Elasticsearch is available, now continuing."
@@ -30,32 +23,26 @@ if ! [ "$myESSTATUS" = "1" ]
 fi
 
 # Set vars
-myCOUNT=1
 myDATE=$(date +%Y%m%d%H%M)
-myELKPATH="/data/elk/data"
-myKIBANAINDEXNAME=$(curl -s -XGET ''$myES'_cat/indices/.kibana' | awk '{ print $4 }')
-myKIBANAINDEXPATH=$myELKPATH/indices/$myKIBANAINDEXNAME
-
-# Let's ensure normal operation on exit or if interrupted ...
-function fuCLEANUP {
-  ### Start ELK
-  systemctl start tpot
-  echo "### Now starting T-Pot ..."
-}
-trap fuCLEANUP EXIT
-
-# Stop T-Pot to lift db lock
-echo "### Now stopping T-Pot"
-systemctl stop tpot
-sleep 2
+myPATH=$PWD
+myELKPATH="data/elk/data"
+myKIBANAINDEXNAMES=$(curl -s -XGET ''$myES'_cat/indices/.kibana_*?v&s=index&h=uuid' | tail -n +2)
+#echo $myKIBANAINDEXNAMES
+for i in $myKIBANAINDEXNAMES;
+  do
+    myKIBANAINDEXPATHS="$myKIBANAINDEXPATHS $myELKPATH/indices/$i"
+done
 
 # Backup DB in 2 flavors
+cd $HOME/tpotce
+
 echo "### Now backing up Elasticsearch folders ..."
 if [ "$1" == "all" ];
   then
-    tar cvfz "elkall_"$myDATE".tgz" $myELKPATH
+    tar cvfz $myPATH"/elkall_"$myDATE".tgz" $myELKPATH
 elif [ "$1" == "base" ];
   then
-    tar cvfz "elkbase_"$myDATE".tgz" $myKIBANAINDEXPATH
+    tar cvfz $myPATH"/elkbase_"$myDATE".tgz" $myKIBANAINDEXPATHS
 fi
 
+cd $myPATH

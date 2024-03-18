@@ -18,7 +18,7 @@ RUN apk --no-cache -U add \
         grep \
         iproute2 \
         iptables \
-        iptables-legacy \
+#        iptables-legacy \
         jq \
         logrotate \
         lsblk \

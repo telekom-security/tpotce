@@ -44,14 +44,14 @@ function fuSETRULES {
 ### Setting up iptables-legacy rules for honeytrap
 if [ "$myNFQCHECK" == "honeytrap" ];
   then
-    iptables-legacy -w -A INPUT -s 127.0.0.1 -j ACCEPT
-    iptables-legacy -w -A INPUT -d 127.0.0.1 -j ACCEPT
+    iptables -w -A INPUT -s 127.0.0.1 -j ACCEPT
+    iptables -w -A INPUT -d 127.0.0.1 -j ACCEPT
 
     for myPORT in $myRULESPORTS; do
-      iptables-legacy -w -A INPUT -p tcp --dport $myPORT -j ACCEPT
+      iptables -w -A INPUT -p tcp --dport $myPORT -j ACCEPT
     done
 
-    iptables-legacy -w -A INPUT -p tcp --syn -m state --state NEW -j NFQUEUE
+    iptables -w -A INPUT -p tcp --syn -m state --state NEW -j NFQUEUE
 fi
 
 ### Setting up iptables-legacy rules for glutton
@@ -71,14 +71,14 @@ function fuUNSETRULES {
 ### Removing  iptables-legacy rules for honeytrap
 if [ "$myNFQCHECK" == "honeytrap" ];
   then
-    iptables-legacy -w -D INPUT -s 127.0.0.1 -j ACCEPT
-    iptables-legacy -w -D INPUT -d 127.0.0.1 -j ACCEPT
+    iptables -w -D INPUT -s 127.0.0.1 -j ACCEPT
+    iptables -w -D INPUT -d 127.0.0.1 -j ACCEPT
 
     for myPORT in $myRULESPORTS; do
-      iptables-legacy -w -D INPUT -p tcp --dport $myPORT -j ACCEPT
+      iptables -w -D INPUT -p tcp --dport $myPORT -j ACCEPT
     done
 
-    iptables-legacy -w -D INPUT -p tcp --syn -m state --state NEW -j NFQUEUE
+    iptables -w -D INPUT -p tcp --syn -m state --state NEW -j NFQUEUE
 fi
 
 ### Removing iptables-legacy rules for glutton

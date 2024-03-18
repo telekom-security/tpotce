@@ -54,8 +54,8 @@ RUN apk -U --no-cache add \
     cd /opt/ && \
     git clone https://github.com/qeeqbox/honeypots && \
     cd honeypots && \
-    # git checkout bee3147cf81837ba7639f1e27fe34d717ecccf29 && \
-    git checkout 5b3bfbecbf85c1f5235b320b333bdeff2d312372 && \
+    git checkout a990b2c1ab04ffafde229e478ced54ffbb665d5c && \
+    # git checkout 5b3bfbecbf85c1f5235b320b333bdeff2d312372 && \
     # cp /root/dist/pyproject.toml . && \
     pip3 install --break-system-packages --upgrade pip && \
     pip3 install --break-system-packages . && \
