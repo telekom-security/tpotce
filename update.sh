@@ -133,7 +133,7 @@ function fuBACKUP () {
 	echo "### Create a backup, just in case ... "
 	echo -n "###### $myBLUE Building archive in $myARCHIVE $myWHITE"
 	cd $HOME/tpotce
-	sudo tar cvfz $myARCHIVE * .env >/dev/null 2>&1
+	sudo tar cvf $myARCHIVE * .env >/dev/null 2>&1
 	sudo chown $LOGNAME:$LOGNAME $myARCHIVE
 	if [ $? -ne 0 ];
 	  then
@@ -185,7 +185,7 @@ function fuRESTORE () {
 	    sed -i '/- ${TPOT_DATA_PATH}:\/data/a \ \ \ \ \ - ${TPOT_DATA_PATH}/ews/conf/ews.cfg:/opt/ewsposter/ews.cfg' $myCOMPOSEFILE
 	fi
 	echo "### Restoring T-Pot config file .env"
-	tar xvfz $myARCHIVE .env -C $HOME/tpotce >/dev/null 2>&1
+	tar xvf $myARCHIVE .env -C $HOME/tpotce >/dev/null 2>&1
 }
 
 ################
