@@ -672,3 +672,42 @@
         msg: "Detected user: '{{ ansible_user_id }}'"
       when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
       failed_when: ansible_user_id == "root"
+
+###########################
+# T-Pot - Install service #
+###########################
+
+- name: T-Pot - Install service
+  hosts: all
+  gather_facts: true
+  become: false
+  tags:
+    - "AlmaLinux"
+    - "Debian"
+    - "Fedora"
+    - "openSUSE Tumbleweed"
+    - "Raspbian"
+    - "Rocky"
+    - "Ubuntu"
+
+  tasks:
+    - name: Install systemd service (All)
+      become: true
+      ansible.builtin.template:
+        src: '/home/{{ ansible_user_id }}/tpotce/installer/install/tpot.service'
+        dest: '/etc/systemd/system/tpot.service'
+        owner: root
+        group: root
+        mode: '0755'
+      notify: Reload systemd and enable service
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
+
+  handlers:
+    - name: Reload systemd and enable service
+      become: true
+      ansible.builtin.systemd:
+        name: tpot.service
+        daemon_reload: yes
+        state: stopped
+        enabled: yes
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
