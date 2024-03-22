@@ -17,76 +17,74 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/alpha/ins
    * Follow instructions, read messages, check for possible port conflicts and reboot
 
 # Table of Contents
-- [Disclaimer](#disclaimer)
-- [Technical Concept](#technical-concept)
-  - [Technical Architecture](#technical-architecture)
-  - [Services](#services)
-  - [User Types](#user-types)
-- [System Requirements](#system-requirements)
-  - [Running in a VM](#running-in-a-vm)
-  - [Running on Hardware](#running-on-hardware)
-  - [Running in a Cloud](#running-in-a-cloud)
-  - [Required Ports](#required-ports)
-- [System Placement](#system-placement)
-- [Installation](#installation)
-  - [ISO Based](#iso-based)
-    - [Download ISO Image](#download-iso-image)
-    - [Create your own ISO Image](#create-your-own-iso-image)
-  - [Post Install](#post-install)
-    - [Download Debian Netinstall Image](#download-debian-netinstall-image)
-    - [Post Install User Method](#post-install-user-method)
-    - [Post Install Auto Method](#post-install-auto-method)
-  - [T-Pot Installer](#t-pot-installer)
-    - [Installation Types](#installation-types)
-    - [Standalone](#standalone)
-    - [Distributed](#distributed)
-  - [Cloud Deployments](#cloud-deployments)
-    - [Ansible Deployment](#ansible-deployment)
-    - [Terraform Configuration](#terraform-configuration)
-- [First Start](#first-start)
-  - [Standalone Start](#standalone-first-start)
-  - [Distributed Deployment](#distributed-deployment)
-  - [Community Data Submission](#community-data-submission)
-  - [Opt-In HPFEEDS Data Submission](#opt-in-hpfeeds-data-submission)
-- [Remote Access and Tools](#remote-access-and-tools)
-  - [SSH and Cockpit](#ssh-and-cockpit)
-  - [T-Pot Landing Page](#t-pot-landing-page)
-  - [Kibana Dashboard](#kibana-dashboard)
-  - [Attack Map](#attack-map)
-  - [Cyberchef](#cyberchef)
-  - [Elasticvue](#elasticvue)
-  - [Spiderfoot](#spiderfoot)
-- [Maintenance](#maintenance)
-  - [Updates](#updates)
-    - [Update from 20.06.x](#update-from-2006x)
-    - [Updates for 22.04.x](#updates-for-2204x)
-  - [Known Issues](#known-issues)
-    - [Grub Fails to Reconfigure](#grub-fails-to-reconfigure)
-    - [Docker Images Fail to Download](#docker-images-fail-to-download)
-    - [Network Interface Fails](#network-interface-fails)
-  - [Start T-Pot](#start-t-pot)
-  - [Stop T-Pot](#stop-t-pot)
-  - [T-Pot Data Folder](#t-pot-data-folder)
-  - [Log Persistence](#log-persistence)
-  - [Clean Up](#clean-up)
-  - [Show Containers](#show-containers)
-  - [Blackhole](#blackhole)
-  - [Add Users to Nginx (T-Pot WebUI)](#add-users-to-nginx-t-pot-webui)
-  - [Import and Export Kibana Objects](#import-and-export-kibana-objects)
-  - [Switch Editions](#switch-editions)
-  - [Redeploy Hive Sensor](#redeploy-hive-sensor)
-  - [Adjust tpot.yml](#adjust-tpotyml)
-  - [Enable Cockpit 2FA](#enable-cockpit-2fa)
-- [Troubleshooting](#troubleshooting)
-  - [Logging](#logging)
-  - [Fail2Ban](#fail2ban)
-  - [RAM](#ram-and-storage)
-- [Contact](#contact)
-  - [Issues](#issues)
-  - [Discussions](#discussions)
-- [Licenses](#licenses)
-- [Credits](#credits)
-- [Testimonials](#testimonials)
+<!-- TOC -->
+* [T-Pot - The All In One Multi Honeypot Platform](#t-pot---the-all-in-one-multi-honeypot-platform)
+* [TL;DR](#tldr)
+* [Table of Contents](#table-of-contents)
+* [Disclaimer](#disclaimer)
+* [Technical Concept](#technical-concept)
+  * [Technical Architecture](#technical-architecture)
+  * [Services](#services)
+  * [User Types](#user-types)
+* [System Requirements](#system-requirements)
+  * [Running in a VM](#running-in-a-vm)
+  * [Running on Hardware](#running-on-hardware)
+  * [Running in a Cloud](#running-in-a-cloud)
+  * [Required Ports](#required-ports)
+* [System Placement](#system-placement)
+* [Installation](#installation)
+  * [Choose your distro](#choose-your-distro)
+  * [Raspberry Pi 4 (8GB) Support](#raspberry-pi-4-8gb-support)
+  * [Get and install T-Pot](#get-and-install-t-pot)
+  * [macOS & Windows](#macos--windows)
+  * [Installation Types](#installation-types)
+    * [**HIVE**](#hive)
+    * [**Distributed**](#distributed)
+  * [Uninstall T-Pot (Linux only!) (to do)](#uninstall-t-pot-linux-only-to-do)
+* [First Start](#first-start)
+  * [Standalone First Start](#standalone-first-start)
+  * [Distributed Deployment (to do)](#distributed-deployment-to-do)
+  * [Community Data Submission](#community-data-submission)
+  * [Opt-In HPFEEDS Data Submission](#opt-in-hpfeeds-data-submission)
+* [Remote Access and Tools](#remote-access-and-tools)
+  * [SSH](#ssh)
+  * [T-Pot Landing Page](#t-pot-landing-page-)
+  * [Kibana Dashboard](#kibana-dashboard)
+  * [Attack Map](#attack-map)
+  * [Cyberchef](#cyberchef)
+  * [Elasticvue](#elasticvue)
+  * [Spiderfoot](#spiderfoot)
+* [Configuration](#configuration)
+  * [T-Pot Config File](#t-pot-config-file)
+  * [Customize T-Pot Honeypots and Services](#customize-t-pot-honeypots-and-services)
+  * [Redeploy Hive Sensor (to do)](#redeploy-hive-sensor-to-do)
+* [Maintenance](#maintenance)
+  * [General Updates](#general-updates)
+  * [Update Script](#update-script)
+  * [Known Issues](#known-issues)
+    * [**Docker Images Fail to Download**](#docker-images-fail-to-download)
+  * [Start T-Pot](#start-t-pot)
+  * [Stop T-Pot](#stop-t-pot)
+  * [T-Pot Data Folder](#t-pot-data-folder)
+  * [Log Persistence](#log-persistence)
+  * [Factory Reset](#factory-reset)
+  * [Show Containers](#show-containers)
+  * [Blackhole](#blackhole)
+  * [Add Users to Nginx (T-Pot WebUI)](#add-users-to-nginx-t-pot-webui)
+  * [Import and Export Kibana Objects](#import-and-export-kibana-objects)
+    * [**Export**](#export)
+    * [**Import**](#import)
+* [Troubleshooting](#troubleshooting)
+  * [Logs](#logs)
+  * [RAM and Storage](#ram-and-storage)
+* [Contact](#contact)
+  * [Issues](#issues)
+  * [Discussions](#discussions)
+* [Licenses](#licenses)
+* [Credits](#credits)
+    * [The developers and development communities of](#the-developers-and-development-communities-of)
+* [Testimonials](#testimonials)
+<!-- TOC -->
 <br><br>
 
 # Disclaimer
@@ -279,10 +277,6 @@ Once you are familiar with how things work you should choose a network you suspe
 <br><br>
 
 # Installation
-The T-Pot installation is offered in different variations. While the overall installation of T-Pot is straightforward it heavily depends on a working, non-proxied (unless you made modifications) up and running internet connection (also see [required outgoing ports](#required-ports)). If these conditions are not met the installation **will fail!** either during the execution of the Debian Installer, after the first reboot before the T-Pot Installer is starting up or while the T-Pot installer is trying to download all the necessary dependencies.
-<br><br>
-
-# Installation
 [Download](#choose-your-distro) one of the [supported Linux distro images](#choose-your-distro), follow the [TL;DR](#tldr) instructions or `git clone` the T-Pot repository and run the installer `~/tpotce/install.sh`. Running T-Pot on top of a running and supported Linux system is possible, but a clean installation is recommended to avoid port conflicts with running services. The T-Pot installer will require direct access to the internet as described [here](#required-ports).
 <br><br>
 
@@ -297,6 +291,8 @@ Choose a supported distro of your choice. It is recommended to use the minimum /
 | [OpenSuse](https://www.opensuse.org)           | [download](https://download.opensuse.org/tumbleweed/iso/openSUSE-Tumbleweed-NET-x86_64-Current.iso)                                   | [download](https://download.opensuse.org/ports/aarch64/tumbleweed/iso/openSUSE-Tumbleweed-NET-aarch64-Current.iso)                      |
 | [Rocky Linux](https://rockylinux.org)          | [download](https://download.rockylinux.org/pub/rocky/9/isos/x86_64/Rocky-9.3-x86_64-minimal.iso)                                      | [download](https://download.rockylinux.org/pub/rocky/9/isos/aarch64/Rocky-9.3-aarch64-minimal.iso)                                      |
 | [Ubuntu](https://ubuntu.com)                   | [download](https://releases.ubuntu.com/22.04.4/ubuntu-22.04.4-live-server-amd64.iso)                                                  | [download](https://cdimage.ubuntu.com/releases/22.04/release/ubuntu-22.04.4-live-server-arm64.iso)                                      |
+
+<br>
 
 ## Raspberry Pi 4 (8GB) Support
 | Distribution Name                                                | arm64                                                                                                                                               |
@@ -327,6 +323,24 @@ Choose a supported distro of your choice. It is recommended to use the minimum /
 6. Reboot: `$ sudo reboot`
 <br><br>
 
+## macOS & Windows
+Sometimes it is just nice if you can spin up a T-Pot instance on macOS or Windows, i.e. for development, testing or just the fun of it. As Docker Desktop is rather limited not all honeypot types or T-Pot features are supported. Also remember, by default the macOS and Windows firewall are blocking access from remote, so testing is limited to the host. For production it is recommended to run T-Pot on [Linux](#choose-your-distro).<br>
+To get things up and running just follow these steps:
+1. Install Docker Desktop for [macOS](https://docs.docker.com/desktop/install/mac-install/) or [Windows](https://docs.docker.com/desktop/install/windows-install/).
+2. Clone the GitHub repository: `git clone https://github.com/telekom-security/tpotce -b alpha`.
+3. Go to: `cd ~/tpotce`
+4. Copy `cp compose/mac_win.yml ./docker-compose.yml`.
+5. Create a `WEB_USER` by running `~/tpotce/genuser.sh`
+6. Adjust the `.env` file by changing `TPOT_OSTYPE=linux` to either `mac` or `win`:
+   ```
+   # OSType (linux, mac, win)
+   #  Most docker features are available on linux
+   TPOT_OSTYPE=mac
+   ```
+7. You have to ensure on your own there are no port conflicts keeping T-Pot from starting up.
+8. Start T-Pot: `docker compose up` or `docker compose up -d` if you want T-Pot to run in the background.
+9. Stop T-Pot: `CTRL-C` (it if was running in the foreground) and / or `docker compose down -v` to stop T-Pot entirely.
+
 ## Installation Types
 
 ### **HIVE**
@@ -340,6 +354,11 @@ The distributed version of T-Pot requires at least two hosts
 - and a T-Pot **SENSOR**, which will host only the honeypots, some tools and transmit log data to the **HIVE**.
 
 To finalize the **SENSOR** installation continue to [Distributed Deployment](#distributed-deployment).
+<br><br>
+
+## Uninstall T-Pot (Linux only!) (to do)
+To uninstall T-Pot run `~/tpotce/uninstall.sh` and follow the uninstaller instructions, you will have to enter your password at least once.<br>
+Once the uninstall is finished reboot the machine `sudo reboot`
 <br><br>
 
 # First Start
@@ -363,16 +382,15 @@ There is not much to do except to login and check via `dps.sh` if all services a
 <br><br>
 
 ## Distributed Deployment (to do)
-With the distributed deployment firstly login to **HIVE** and the **HIVE_SENSOR** and check via `dps.sh` if all services and honeypots are starting up correctly. Once you have confirmed everything is working fine you need to deploy the **HIVE_SENSOR** to the **HIVE** in order to transmit honeypot logs to the Elastic Stack.
+With the distributed deployment firstly login to **HIVE** and the **SENSOR** and check via `dps` if all services and honeypots are starting up correctly. Once you have confirmed everything is working fine you need to deploy the **SENSOR** to the **HIVE** in order to transmit honeypot logs to the Elastic Stack.
 <br><br>
 
-For **deployment** simply keep the **HIVE** login data ready and follow these steps while the `deploy.sh` script will setup the **HIVE** and **HIVE_SENSOR** for securely shipping and receiving logs:
+For **deployment** simply keep the **HIVE** login data ready and follow these steps while the `deploy.sh` script will setup the **HIVE** and **SENSOR** for securely shipping and receiving logs:
 ```
-sudo su -
 deploy.sh
 ```
 
-The script will ask for the **HIVE** login data, the **HIVE** IP address, will create SSH keys accordingly and deploy them securely over a SSH connection to the **HIVE**. On the **HIVE** machine a user with the **HIVE_SENSOR** hostname is created, belonging to a user group `tpotlogs` which may only open a SSH tunnel via port `64295` and transmit Logstash logs to port `127.0.0.1:64305`, with no permission to login on a shell. You may review the config in `/etc/ssh/sshd_config` and the corresponding `autossh` settings in `docker/elk/logstash/dist/entrypoint.sh`. Settings and keys are stored in `/data/elk/logstash` and loaded as part of `/opt/tpot/etc/tpot.yml`.
+The script will ask for the **HIVE** login data, the **HIVE** IP address, will create SSH keys accordingly and deploy them securely over a SSH connection to the **HIVE**. On the **HIVE** machine a user with the **SENSOR** hostname is created, belonging to a user group `tpotlogs` which may only open a SSH tunnel via port `64295` and transmit Logstash logs to port `127.0.0.1:64305`, with no permission to login on a shell. You may review the config in `/etc/ssh/sshd_config` and the corresponding `autossh` settings in `docker/elk/logstash/dist/entrypoint.sh`. Settings and keys are stored in `/data/elk/logstash` and loaded as part of `/opt/tpot/etc/tpot.yml`.
 <br><br> 
 
 ## Community Data Submission
@@ -469,6 +487,53 @@ On the T-Pot Landing Page just click on `Spiderfoot` and you will be forwarded t
 ![Spiderfoot](doc/spiderfoot.png)
 <br><br>
 
+# Configuration
+
+## T-Pot Config File
+T-Pot offers a configuration file providing variables not only for the docker services (i.e. honeypots and tools) but also for the docker compose environment. The configuration file is hidden in `~/tpoce/.env`. There is also an example file (`env.example`) which holds the default configuration.<br>
+Before the first start run `~/tpotce/genuser.sh` or setup the `WEB_USER` manually as described [here](#add-users-to-nginx-t-pot-webui). 
+
+## Customize T-Pot Honeypots and Services
+
+In `~/tpotce/compose` you will find everything you need to adjust the T-Pot Standard / HIVE installation:
+```
+customizer.py
+mac_win.yml
+mini.yml
+mobile.yml
+raspberry_showcase.yml
+sensor.yml
+standard.yml
+tpot_services.yml
+```
+The `.yml` files are docker compose files, each representing a different set of honeypots and tools with `tpot_services.yml` being a template for `customizer.py` to create a customized docker compose file.<br><br>
+To activate a compose file follow these steps:
+1. Stop T-Pot with `systemctl stop tpot`.
+2. Copy the docker compose file `cp ~/tpotce/compose/<dockercompose.yml> ~/tpotce/docker-compose.yml`.
+3. Start T-Pot with `systemctl start tpot`.
+
+To create your customized docker compose file:
+1. Go to `cd ~/tpotce/compose`.
+2. Run `python3 customizer.py`.
+3. The script will guide you through the process of creating your own `docker-compose.yml`. As some honeypots and services occupy the same ports it will check if any port conflicts are present and notify regarding the conflicting services. You then can resolve them manually by adjusting `docker-compose-custom.yml` or re-run the script.
+4. Stop T-Pot with `systemctl stop tpot`.
+5. Check if everything works by running `docker-compose -f docker-compose-custom.yml up`. In case of errors follow the [Docker Compose Specification](https://docs.docker.com/compose/compose-file/) for mitigation. Most likely it is just a port conflict you can adjust by editing the docker compose file. 
+6. If everything works just fine press `CTRL-C` to stop the containers and run `docker-compose -f docker-compose-custom.yml down -v`.
+7. Copy the customized docker compose file `cp ~/tpotce/compose/docker-compose-custom.yml ~/tpotce/docker-compose.yml`.
+8. Start T-Pot with `systemctl start tpot`.
+<br><br>
+
+## Redeploy Hive Sensor (to do)
+In case you need to re-deploy your Hive Sensor, i.e. the IP of your Hive has changed or you want to move the Hive Sensor to a new Hive, you simply follow these commands:
+```
+sudo su -
+systemctl stop tpot
+rm /data/elk/logstash/*
+deploy.sh
+reboot
+```
+<br><br>
+
 
 # Maintenance
 T-Pot is designed to be low maintenance. Since almost everything is provided through docker images there is basically nothing you have to do but let it run. We will upgrade the docker images regularly to reduce the risks of compromise; however you should read this section closely.<br><br>
@@ -547,7 +612,7 @@ You can show all T-Pot relevant containers by running `dps` or `dpsw [interval]`
 <br><br>
 
 ## Blackhole
-Some users reported they wanted to have the option to run T-Pot in a stealth mode manner without permanent visits of publicly known scanners and thus reducing the possibility of being exposed. While this is of course always a cat and mouse game T-Pot offers a blackhole feature that is null routing all requests from [known mass scanners](https://raw.githubusercontent.com/stamparm/maltrail/master/trails/static/mass_scanner.txt) while still catching the events through Suricata.
+Blackhole will run T-Pot in kind of a stealth mode manner without permanent visits of publicly known scanners and thus reducing the possibility of being exposed. While this is of course always a cat and mouse game the blackhole feature is null routing all requests from [known mass scanners](https://raw.githubusercontent.com/stamparm/maltrail/master/trails/static/mass_scanner.txt) while still catching the events through Suricata.
 <br>
 The feature is activated by setting `TPOT_BLACKHOLE=DISABLED` in `~/tpotce/.env`, then run `systemctl stop tpot` and `systemctl start tpot` or `sudo reboot`.
 <br>
@@ -581,111 +646,35 @@ This will export a NDJSON file with all your objects. Always run a full export t
 When asked: "If any of the objects already exist, do you want to automatically overwrite them?" you answer with "Yes, overwrite all".
 <br><br>
 
-## Switch Editions
-You can switch between T-Pot editions (flavors) by running `tped.sh`.
-<br><br>
-
-## Redeploy Hive Sensor
-In case you need to re-deploy your Hive Sensor, i.e. the IP of your Hive has changed or you want to move the Hive Sensor to a new Hive, you simply follow these commands:
-```
-sudo su -
-systemctl stop tpot
-rm /data/elk/logstash/*
-deploy.sh
-reboot
-```
-<br><br>
-
-## Adjust tpot.yml
-Maybe the available T-Pot editions do not apply to your use-case or you need a different set of honeypots. You can adjust `/opt/tpot/etc/tpot.yml` to your own preference. If you need examples of how this works, just follow the configuration of the existing editions (docker-compose files) in `/opt/tpot/etc/compose` and follow the [Docker Compose Specification](https://docs.docker.com/compose/compose-file/).
-```
-sudo su -
-systemctl stop tpot
-vi /opt/tpot/etc/tpot.yml
-docker-compose -f /opt/tpot/etc/tpot.yml up (to see if everything works, CTRL+C)
-docker-compose -f /opt/tpot/etc/tpot.yml down -v
-systemctl start tpot 
-```
-<br><br>
-
-## Enable Cockpit 2FA
-You can enable two-factor-authentication for Cockpit by running `2fa.sh`.
-<br><br>
-
 # Troubleshooting
 Generally T-Pot is offered ***as is*** without any commitment regarding support. Issues and discussions can be opened, but be prepared to include basic necessary info, so the community is able to help.
 <br><br>
 
-## Logging
-* Check if your containers are running correctly: `dps.sh`
-
-* Check if your system resources are not exhausted: `htop`, `glances`
-
+## Logs
+* Check if your containers are running correctly: `dps`
+* Check if your system resources are not exhausted: `htop`, `docker stats`
 * Check if there is a port conflict:
 ```
 systemctl stop tpot
 grc netstat -tulpen
-vi /opt/tpot/etc/tpot.yml up
-docker-compose -f /opt/tpot/etc/tpot.yml up
+mi ~/tpotce/docker-compose.yml
+docker-compose -f ~/tpotce/docker-compose.yml up
 CTRL+C
-docker-compose -f /opt/tpot/etc/tpot.yml down -v
+docker-compose -f ~/tpotce/docker-compose.yml down -v
 ```
-
-* Check container logs: `docker logs -f <container_name>`
-
-* Check if you were locked out by [fail2ban](#fail2ban).
-<br><br>
-
-## Fail2Ban
-If you cannot login there are probably three possible reasons:
-1. You need to review [User Types](#user-types) and understand the different users.
-2. You are trying to SSH into T-Pot, but use `tcp/22` instead of `tcp/64295` or were using the incorrect user for Cockpit or Nginx (T-Pot WebUI).
-3. You had too many wrong attempts from the above and got locked out by `fail2ban`.
-
-To resolve Fail2Ban lockouts run `fail2ban-client status`:
-
-```
-fail2ban-client status
-Status
-|- Number of jail:	3
-nginx-http-auth, pam-generic, sshd
-```
-
-`nginx-http-auth` refers to missed BasicAuth login attempts (Nginx / T-Pot WebUI) on `tcp/64295`
-
-`sshd` refers to missed OS SSH login attempts on `tcp/64295`
-
-`pam-generic` refers to missed OS Cockpit login attempts on `tcp/64294`
-
-Check all jails, i.e. `sshd`:
-
-```
-fail2ban-client status sshd
-Status for the jail: sshd
-|- Filter
-|  |- Currently failed:	0
-|  |- Total failed:	0
-|  `- File list:	/var/log/auth.log
-`- Actions
-   |- Currently banned:	0
-   |- Total banned:	0
-   `- Banned IP list:
-```
-
-If there are any banned IPs you can unban these with `fail2ban-client unban --all` or `fail2ban-client unban <ip>`.
+* Check individual container logs: `docker logs -f <container_name>`
+* Check `tpotinit` log: `cat ~/tpotce/data/tpotinit.log`
 <br><br>
 
 ## RAM and Storage
-The Elastic Stack is hungry for RAM, specifically `logstash` and `elasticsearch`. If the Elastic Stack is unavailable, does not receive any logs or simply keeps crashing it is most likely a RAM or Storage issue.
+The Elastic Stack is hungry for RAM, specifically `logstash` and `elasticsearch`. If the Elastic Stack is unavailable, does not receive any logs or simply keeps crashing it is most likely a RAM or storage issue.<br>
 While T-Pot keeps trying to restart the services / containers run `docker logs -f <container_name>` (either `logstash` or `elasticsearch`) and check if there are any warnings or failures involving RAM.
 
-Storage failures can be identified easier via `htop` or `glances`. 
+Storage failures can be identified easier via `htop`. 
 <br><br>
 
 # Contact
 T-Pot is provided ***as is*** open source ***without*** any commitment regarding support ([see the disclaimer](#disclaimer)).
-
-If you are a company or institution and wish a personal contact aside from [issues](#issues) and [discussions](#discussions) please get in contact with our [sales team](https://www.t-systems.com/de/en/security).
 
 If you are a security researcher and want to responsibly report an issue please get in touch with our [CERT](https://www.telekom.com/en/corporate-responsibility/data-protection-data-security/security/details/introducing-deutsche-telekom-cert-358316).
 <br><br>
@@ -693,13 +682,13 @@ If you are a security researcher and want to responsibly report an issue please 
 ## Issues
 Please report issues (errors) on our [GitHub Issues](https://github.com/telekom-security/tpotce/issues), but [troubleshoot](#troubleshooting) first. Issues not providing information to address the error will be closed or converted into [discussions](#discussions).
 
-Feel free to use the search function, it is possible a similar issue has been addressed already, with the solution just a search away.
+Use the search function first, it is possible a similar issue has been addressed or discussed already, with the solution just a search away.
 <br><br>
 
 ## Discussions
 General questions, ideas, show & tell, etc. can be addressed on our [GitHub Discussions](https://github.com/telekom-security/tpotce/discussions).
 
-Feel free to use the search function, it is possible a similar discussion has been opened already, with an answer just a search away.
+Use the search function, it is possible a similar discussion has been opened already, with an answer just a search away.
 <br><br>
 
 # Licenses
@@ -709,25 +698,22 @@ The software that T-Pot is built on uses the following licenses.
 <br>Apache 2 License: [cyberchef](https://github.com/gchq/CyberChef/blob/master/LICENSE), [dicompot](https://github.com/nsmfoo/dicompot/blob/master/LICENSE), [elasticsearch](https://github.com/elasticsearch/elasticsearch/blob/master/LICENSE.txt), [logstash](https://github.com/elasticsearch/logstash/blob/master/LICENSE), [kibana](https://github.com/elasticsearch/kibana/blob/master/LICENSE.md), [docker](https://github.com/docker/docker/blob/master/LICENSE)
 <br>MIT license: [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/blob/master/LICENSE), [ddospot](https://github.com/aelth/ddospot/blob/master/LICENSE), [elasticvue](https://github.com/cars10/elasticvue/blob/master/LICENSE), [glutton](https://github.com/mushorg/glutton/blob/master/LICENSE), [hellpot](https://github.com/yunginnanet/HellPot/blob/master/LICENSE), [maltrail](https://github.com/stamparm/maltrail/blob/master/LICENSE)
 <br> Unlicense: [endlessh](https://github.com/skeeto/endlessh/blob/master/UNLICENSE)
-<br> Other: [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot#licencing-agreement-malwaretech-public-licence), [cowrie](https://github.com/cowrie/cowrie/blob/master/LICENSE.rst), [mailoney](https://github.com/awhitehatter/mailoney), [Debian licensing](https://www.debian.org/legal/licenses/), [Elastic License](https://www.elastic.co/licensing/elastic-license)
+<br> Other: [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot#licencing-agreement-malwaretech-public-licence), [cowrie](https://github.com/cowrie/cowrie/blob/master/LICENSE.rst), [mailoney](https://github.com/awhitehatter/mailoney), [Elastic License](https://www.elastic.co/licensing/elastic-license), [Wordpot](https://github.com/gbrindisi/wordpot)
 <br> AGPL-3.0: [honeypots](https://github.com/qeeqbox/honeypots/blob/main/LICENSE)
+<br> [Public Domain (CC)](https://creativecommons.org/publicdomain/zero/1.0/): [Harvard Dataverse](https://dataverse.harvard.edu/dataverse/harvard/?q=dicom) 
 <br><br>
 
 # Credits
-Without open source and the fruitful development community (we are proud to be a part of), T-Pot would not have been possible! Our thanks are extended but not limited to the following people and organizations:
+Without open source and the development community we are proud to be a part of, T-Pot would not have been possible! Our thanks are extended but not limited to the following people and organizations:
 
 ### The developers and development communities of
 
 * [adbhoney](https://github.com/huuck/ADBHoney/graphs/contributors)
-* [apt-fast](https://github.com/ilikenwf/apt-fast/graphs/contributors)
-* [bento](https://github.com/migueravila/Bento/graphs/contributors)
 * [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/graphs/contributors)
 * [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot/graphs/contributors)
-* [cockpit](https://github.com/cockpit-project/cockpit/graphs/contributors)
 * [conpot](https://github.com/mushorg/conpot/graphs/contributors)
 * [cowrie](https://github.com/cowrie/cowrie/graphs/contributors)
 * [ddospot](https://github.com/aelth/ddospot/graphs/contributors)
-* [debian](http://www.debian.org/)
 * [dicompot](https://github.com/nsmfoo/dicompot/graphs/contributors)
 * [dionaea](https://github.com/DinoTools/dionaea/graphs/contributors)
 * [docker](https://github.com/docker/docker/graphs/contributors)
@@ -751,21 +737,22 @@ Without open source and the fruitful development community (we are proud to be a
 * [medpot](https://github.com/schmalle/medpot/graphs/contributors)
 * [p0f](http://lcamtuf.coredump.cx/p0f3/)
 * [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot/graphs/contributors)
-* [sentrypeer](https://github.com/SentryPeer/SentryPeer/graphs/contributors),
+* [sentrypeer](https://github.com/SentryPeer/SentryPeer/graphs/contributors)
 * [spiderfoot](https://github.com/smicallef/spiderfoot)
 * [snare](https://github.com/mushorg/snare/graphs/contributors)
 * [tanner](https://github.com/mushorg/tanner/graphs/contributors)
 * [suricata](https://github.com/inliniac/suricata/graphs/contributors)
+* [wordpot](https://github.com/gbrindisi/wordpot)
 
 **The following companies and organizations**
-* [debian](https://www.debian.org/)
 * [docker](https://www.docker.com/)
 * [elastic.io](https://www.elastic.co/)
 * [honeynet project](https://www.honeynet.org/)
-* [intel](http://www.intel.com)
 
 **... and of course ***you*** for joining the community!**
 <br><br>
+
+Thank you for playing 💖
 
 # Testimonials
 One of the greatest feedback we have gotten so far is by one of the Conpot developers:<br>

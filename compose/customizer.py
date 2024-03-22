@@ -2,7 +2,7 @@ from datetime import datetime
 import yaml
 
 version = \
-    """# T-Pot Service Builder v0.2
+    """# T-Pot Service Builder v0.21
     
     This script is intended as a kickstarter for users who want to build a customized docker-compose.yml for use with T-Pot.
     
@@ -14,9 +14,9 @@ version = \
     """
 
 header = \
-    """# T-Pot: CUSTOM EDITION
-    # Generated on: {current_date}
-    """
+"""# T-Pot: CUSTOM EDITION
+# Generated on: {current_date}
+"""
 
 config_filename = "tpot_services.yml"
 service_filename = "docker-compose-custom.yml"

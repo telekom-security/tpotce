@@ -1,3 +1,0 @@
-#!/bin/bash
-/opt/tpot/bin/updateip.sh
-exit 0
