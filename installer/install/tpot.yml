@@ -132,6 +132,7 @@
           - git
           - gnupg
           - grc
+          - htop
           - micro
           - net-tools
           - vim
@@ -165,6 +166,7 @@
           - exa
           - git
           - grc
+          - htop
           - httpd-tools
           - micro
           - net-tools
@@ -204,6 +206,7 @@
           - exa
           - git
           - grc
+          - htop
           - micro
           - vim
           - wget
@@ -673,9 +676,9 @@
       when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
       failed_when: ansible_user_id == "root"
 
-###########################
-# T-Pot - Install service #
-###########################
+########################################
+# T-Pot - Install service and cron job #
+########################################
 
 - name: T-Pot - Install service
   hosts: all
@@ -710,4 +713,32 @@
         daemon_reload: yes
         state: stopped
         enabled: yes
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
+
+- name: T-Pot - Setup a randomized daily reboot
+  hosts: all
+  gather_facts: true
+  become: yes
+  tags:
+    - "AlmaLinux"
+    - "Debian"
+    - "Fedora"
+    - "openSUSE Tumbleweed"
+    - "Raspbian"
+    - "Rocky"
+    - "Ubuntu"
+
+  vars:
+    random_minute: "{{ range(0, 60) | random }}"
+    random_hour: "{{ range(0, 5) | random }}" # We want the reboot randomly happen at night
+
+  tasks:
+    - name: Setup a randomized daily reboot (All)
+      cron:
+        name: "T-Pot Daily Reboot"
+        user: root
+        minute: "{{ random_minute }}"
+        hour: "{{ random_hour }}"
+        job: "bash -c 'systemctl stop tpot.service && docker container prune -f; docker image prune -f; docker volume prune -f; /usr/sbin/shutdown -r +1 \"T-Pot Daily Reboot\"'"
+        state: present
       when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
