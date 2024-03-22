@@ -380,7 +380,7 @@ There is not much to do except to login and check via `dps.sh` if all services a
 <br><br>
 
 ## Distributed Deployment
-To continue with the distributed deployment login to **HIVE** and go to `cd ~/tpotce` folder.
+Once you have rebooted the **SENSOR** as instructed by the installer you can continue with the distributed deployment by logging into **HIVE** and go to `cd ~/tpotce` folder.
 
 If you have not done already generate a SSH key to securely login to the **SENSOR** and to allow `Ansible` to run a playbook on the sensor:
 1. Run `ssh-keygen`, follow the instructions and leave the passphrase empty:
