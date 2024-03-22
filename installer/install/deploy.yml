@@ -55,3 +55,12 @@
         regexp: '^LS_WEB_USER='
         line: 'LS_WEB_USER='
         create: yes
+
+    - name: Reboot the sensor
+      become: yes
+      ansible.builtin.reboot:
+        reboot_timeout: 600
+        pre_reboot_delay: 0
+        post_reboot_delay: 0
+        msg: "Reboot initiated by Ansible for T-Pot sensor deployment."
+        test_command: "uptime"

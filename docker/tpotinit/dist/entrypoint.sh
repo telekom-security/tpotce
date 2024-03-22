@@ -138,6 +138,19 @@ create_web_users() {
     done
 }
 
+update_permissions() {
+	echo
+	echo "# Updating permissions ..."
+	echo
+	chown -R tpot:tpot /data
+	chmod -R 770 /data
+	chmod 774 -R /data/nginx/conf
+	chmod 774 -R /data/nginx/cert
+}
+
+# Update permissions
+update_permissions
+
 # Check for compatible OSType
 echo
 echo "# Checking if OSType is compatible."
@@ -163,7 +176,7 @@ if [ "${myOSTYPE}" == "linuxkit" ] && [ "${TPOT_OSTYPE}" == "linux" ];
 fi
 
 # Validate environment variables
-for var in TPOT_BLACKHOLE TPOT_PERSISTENCE TPOT_ATTACKMAP_TEXT TPOT_ATTACKMAP_TEXT_TIMEZONE TPOT_REPO TPOT_VERSION TPOT_PULL_POLICY TPOT_OSTYPE; 
+for var in TPOT_BLACKHOLE TPOT_PERSISTENCE TPOT_ATTACKMAP_TEXT TPOT_ATTACKMAP_TEXT_TIMEZONE TPOT_REPO TPOT_VERSION TPOT_PULL_POLICY TPOT_OSTYPE;
   do
     check_var "$var"
     check_safety "$var"
@@ -173,7 +186,7 @@ done
 if [ "${TPOT_TYPE}" == "HIVE" ];
   then
     # No $ for check_var
-    check_var "WEB_USER" 
+    check_var "WEB_USER"
     validate_base64 "${WEB_USER}"
     TPOT_HIVE_USER=""
     TPOT_HIVE_IP=""
@@ -186,13 +199,13 @@ if [ "${TPOT_TYPE}" == "HIVE" ];
     fi
 fi
 if [ "${TPOT_TYPE}" == "SENSOR" ];
- then      
+ then
    # No $ for check_var
    check_var "TPOT_HIVE_USER"
    check_var "TPOT_HIVE_IP"
    validate_base64 "$TPOT_HIVE_USER"
    validate_ip_or_domain "$TPOT_HIVE_IP"
-   WEB_USER=""   
+   WEB_USER=""
 fi
 echo
 
@@ -246,7 +259,7 @@ if [ "${myOSTYPE}" == "linuxkit" ];
   then
     echo
     echo "# Docker Desktop for macOS or Windows detected, Blackhole feature is not supported."
-    echo 
+    echo
   else
     if [ "${TPOT_BLACKHOLE}" == "ENABLED" ] && [ ! -f "/etc/blackhole/mass_scanner.txt" ];
       then
@@ -274,13 +287,7 @@ echo
 /opt/tpot/bin/updateip.sh
 
 # Update permissions
-echo
-echo "# Updating permissions ..."
-echo
-chown -R tpot:tpot /data
-chmod -R 770 /data
-chmod 774 -R /data/nginx/conf
-chmod 774 -R /data/nginx/cert
+update_permissions
 
 # Update interface settings (p0f and Suricata) and setup iptables to support NFQ based honeypots (glutton, honeytrap)
 ### This is currently not supported on Docker for Desktop, only on Docker Engine for Linux

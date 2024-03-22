@@ -108,6 +108,10 @@ echo "# New SENSOR passowrd: ${myLS_WEB_PW}"
 echo "# New htpasswd encoded credentials: ${myLS_WEB_USER_ENC}"
 echo "# New htpasswd credentials base64 encoded: ${myLS_WEB_USER_ENC_B64}"
 echo "# New SENSOR credentials base64 encoded: ${myTPOT_HIVE_USER}"
+echo
+echo "# When asked for a 'BECOME password' enter the password for your user on the SENSOR machine."
+echo "# The password will allow Ansible to run a reboot via sudo on the SENSOR."
+echo
 
 # Read LS_WEB_USER from file
 myENV_LS_WEB_USER=$(grep "^LS_WEB_USER=" "${myENV_FILE}" | sed 's/^LS_WEB_USER=//g' | tr -d "\"'")
@@ -124,7 +128,7 @@ fi
 export myTPOT_HIVE_USER
 export myTPOT_HIVE_IP
 
-ANSIBLE_LOG_PATH=${HOME}/tpotce/data/deploy_sensor.log ansible-playbook ${myANSIBLE_TPOT_PLAYBOOK} -i ${mySENSOR_IP}, -c ssh -u ${mySSHUSER} -e "ansible_port=${myANSIBLE_PORT}"
+ANSIBLE_LOG_PATH=${HOME}/tpotce/data/deploy_sensor.log ansible-playbook ${myANSIBLE_TPOT_PLAYBOOK} -i ${mySENSOR_IP}, -c ssh -u ${mySSHUSER} --ask-become-pass -e "ansible_port=${myANSIBLE_PORT}"
 
 if [ "$?" == 0 ];
   then

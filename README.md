@@ -10,7 +10,7 @@ T-Pot is the all in one, optionally distributed, multiarch (amd64, arm64) honeyp
 2. [Download](#choose-your-distro) or use a running, supported distribution.
 3. Install the ISO with as minimal packages / services as possible (`ssh` required)
 4. Install `curl`: `$ sudo [apt, dnf, zypper] install curl` if not installed already
-5. Run installer as non-root:
+5. Run installer as non-root from `$HOME`:
 ```
 env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/alpha/install.sh)"
 ```
@@ -38,12 +38,12 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/alpha/ins
   * [Get and install T-Pot](#get-and-install-t-pot)
   * [macOS & Windows](#macos--windows)
   * [Installation Types](#installation-types)
-    * [**HIVE**](#hive)
+    * [Standard / HIVE](#standard--hive)
     * [**Distributed**](#distributed)
   * [Uninstall T-Pot (Linux only!) (to do)](#uninstall-t-pot-linux-only-to-do)
 * [First Start](#first-start)
   * [Standalone First Start](#standalone-first-start)
-  * [Distributed Deployment (to do)](#distributed-deployment-to-do)
+  * [Distributed Deployment](#distributed-deployment)
   * [Community Data Submission](#community-data-submission)
   * [Opt-In HPFEEDS Data Submission](#opt-in-hpfeeds-data-submission)
 * [Remote Access and Tools](#remote-access-and-tools)
@@ -57,7 +57,6 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/alpha/ins
 * [Configuration](#configuration)
   * [T-Pot Config File](#t-pot-config-file)
   * [Customize T-Pot Honeypots and Services](#customize-t-pot-honeypots-and-services)
-  * [Redeploy Hive Sensor (to do)](#redeploy-hive-sensor-to-do)
 * [Maintenance](#maintenance)
   * [General Updates](#general-updates)
   * [Update Script](#update-script)
@@ -343,8 +342,8 @@ To get things up and running just follow these steps:
 
 ## Installation Types
 
-### **HIVE**
-With T-Pot HIVE all services, tools, honeypots, etc. will be installed on to a single host which also serves as a HIVE endpoint. Make sure to meet the [system requirements](#system-requirements). You can adjust `~/tpotce/docker-compose.yml` to your personal use-case or create your very own configuration using `~/tpotce/compose/customizer.py` for a tailored T-Pot experience to your needs.
+### Standard / HIVE
+With T-Pot Standard / HIVE all services, tools, honeypots, etc. will be installed on to a single host which also serves as a HIVE endpoint. Make sure to meet the [system requirements](#system-requirements). You can adjust `~/tpotce/docker-compose.yml` to your personal use-case or create your very own configuration using `~/tpotce/compose/customizer.py` for a tailored T-Pot experience to your needs.
 Once the installation is finished you can proceed to [First Start](#first-start).
 <br><br>
 
@@ -352,8 +351,7 @@ Once the installation is finished you can proceed to [First Start](#first-start)
 The distributed version of T-Pot requires at least two hosts
 - the T-Pot **HIVE**, the standard installation of T-Pot (install this first!),
 - and a T-Pot **SENSOR**, which will host only the honeypots, some tools and transmit log data to the **HIVE**.
-
-To finalize the **SENSOR** installation continue to [Distributed Deployment](#distributed-deployment).
+- The **SENSOR** will not start before finalizing the **SENSOR** installation as described in [Distributed Deployment](#distributed-deployment).
 <br><br>
 
 ## Uninstall T-Pot (Linux only!) (to do)
@@ -381,17 +379,38 @@ You can also login from your browser and access the T-Pot WebUI and tools: `http
 There is not much to do except to login and check via `dps.sh` if all services and honeypots are starting up correctly and login to Kibana and / or Geoip Attack Map to monitor the attacks.
 <br><br>
 
-## Distributed Deployment (to do)
-With the distributed deployment firstly login to **HIVE** and the **SENSOR** and check via `dps` if all services and honeypots are starting up correctly. Once you have confirmed everything is working fine you need to deploy the **SENSOR** to the **HIVE** in order to transmit honeypot logs to the Elastic Stack.
+## Distributed Deployment
+To continue with the distributed deployment login to **HIVE** and go to `cd ~/tpotce` folder.
+
+If you have not done already generate a SSH key to securely login to the **SENSOR** and to allow `Ansible` to run a playbook on the sensor:
+1. Run `ssh-keygen`, follow the instructions and leave the passphrase empty:
+   ```
+   Generating public/private rsa key pair.
+   Enter file in which to save the key (/home/<your_user>/.ssh/id_rsa):
+   Enter passphrase (empty for no passphrase):
+   Enter same passphrase again:
+   Your identification has been saved in /home/<your_user>/.ssh/id_rsa
+   Your public key has been saved in /home/<your_user>/.ssh/id_rsa.pub
+   ```
+2. Deploy the key to the SENSOR by running `ssh-copy-id -p 64295 <SENSOR_SSH_USER>@<SENSOR_IP>)`:
+   ```
+   /usr/bin/ssh-copy-id: INFO: Source of key(s) to be installed: "/home/<your_user>/.ssh/id_rsa.pub"
+   The authenticity of host '[<SENSOR_IP>]:64295 ([<SENSOR_IP>]:64295)' can't be stablished.
+   ED25519 key fingerprint is SHA256:naIDxFiw/skPJadTcgmWZQtgt+CdfRbUCoZn5RmkOnQ.
+   This key is not known by any other names.
+   Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
+   /usr/bin/ssh-copy-id: INFO: attempting to log in with the new key(s), to filter out any that are already installed
+   /usr/bin/ssh-copy-id: INFO: 1 key(s) remain to be installed -- if you are prompted now it is to install the new keys
+   <your_user>@172.20.254.124's password:
+  
+   Number of key(s) added: 1
+  
+   Now try logging into the machine, with:   "ssh -p '64295' '<your_user>@<SENSOR_IP>'"
+   and check to make sure that only the key(s) you wanted were added.
+   ```
+3. As suggested follow the instructions to test the connection `ssh -p '64295' '<your_user>@<SENSOR_IP>'`.
+4. Once the key is successfully deployed run `./deploy.sh` and follow the instructions.
 <br><br>
-
-For **deployment** simply keep the **HIVE** login data ready and follow these steps while the `deploy.sh` script will setup the **HIVE** and **SENSOR** for securely shipping and receiving logs:
-```
-deploy.sh
-```
-
-The script will ask for the **HIVE** login data, the **HIVE** IP address, will create SSH keys accordingly and deploy them securely over a SSH connection to the **HIVE**. On the **HIVE** machine a user with the **SENSOR** hostname is created, belonging to a user group `tpotlogs` which may only open a SSH tunnel via port `64295` and transmit Logstash logs to port `127.0.0.1:64305`, with no permission to login on a shell. You may review the config in `/etc/ssh/sshd_config` and the corresponding `autossh` settings in `docker/elk/logstash/dist/entrypoint.sh`. Settings and keys are stored in `/data/elk/logstash` and loaded as part of `/opt/tpot/etc/tpot.yml`.
-<br><br> 
 
 ## Community Data Submission
 T-Pot is provided in order to make it accessible to everyone interested in honeypots. By default, the captured data is submitted to a community backend. This community backend uses the data to feed [Sicherheitstacho](https://sicherheitstacho.eu).
@@ -523,18 +542,6 @@ To create your customized docker compose file:
 7. Replace docker compose file with the new and successfully tested customized docker compose file `mv ~/tpotce/docker-compose-custom.yml ~/tpotce/docker-compose.yml`.
 8. Start T-Pot with `systemctl start tpot`.
 <br><br>
-
-## Redeploy Hive Sensor (to do)
-In case you need to re-deploy your Hive Sensor, i.e. the IP of your Hive has changed or you want to move the Hive Sensor to a new Hive, you simply follow these commands:
-```
-sudo su -
-systemctl stop tpot
-rm /data/elk/logstash/*
-deploy.sh
-reboot
-```
-<br><br>
-
 
 # Maintenance
 T-Pot is designed to be low maintenance. Since almost everything is provided through docker images there is basically nothing you have to do but let it run. We will upgrade the docker images regularly to reduce the risks of compromise; however you should read this section closely.<br><br>
