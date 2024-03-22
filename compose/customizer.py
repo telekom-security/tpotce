@@ -2,16 +2,19 @@ from datetime import datetime
 import yaml
 
 version = \
-    """# T-Pot Service Builder v0.21
+"""
+ ____  [T-Pot]         _            ____        _ _     _
+/ ___|  ___ _ ____   _(_) ___ ___  | __ ) _   _(_) | __| | ___ _ __
+\___ \ / _ \ '__\ \ / / |/ __/ _ \ |  _ \| | | | | |/ _` |/ _ \ '__|
+ ___) |  __/ |   \ V /| | (_|  __/ | |_) | |_| | | | (_| |  __/ |
+|____/ \___|_|    \_/ |_|\___\___| |____/ \__,_|_|_|\__,_|\___|_| v0.21
     
-    This script is intended as a kickstarter for users who want to build a customized docker-compose.yml for use with T-Pot.
-    
-    T-Pot Service Builder will ask you for all the docker services you wish to include in your docker-compose configuration file.
-    The configuration file will be checked for conflicting ports as some of the honeypots are meant to work on certain ports.
-    You have to manually resolve the port conflicts or re-run the script and exclude the conflicting services / honeypots.
-    
-    Review the resulting configuration and adjust the port settings to your needs by (un)commenting the corresponding lines in the config.
-    """
+# This script is intended for users who want to build a customized docker-compose.yml forT-Pot.
+# T-Pot Service Builder will ask for all the docker services to be included in docker-compose.yml.
+# The configuration file will be checked for conflicting ports.
+# Port conflicts have to be resolve manually or re-running the script and excluding the conflicting services.
+# Review the resulting docker-compose-custom.yml and adjust to your needs by (un)commenting the corresponding lines in the config.
+"""
 
 header = \
 """# T-Pot: CUSTOM EDITION
@@ -34,11 +37,17 @@ def load_config(filename):
 
 def prompt_service_include(service_name):
     while True:
-        response = input(f"Include {service_name}? (y/n): ").strip().lower()
-        if response in ['y', 'n']:
-            return response == 'y'
-        else:
-            print("Please enter 'y' for yes or 'n' for no.")
+        try:
+            response = input(f"Include {service_name}? (y/n): ").strip().lower()
+            if response in ['y', 'n']:
+                return response == 'y'
+            else:
+                print_color("Please enter 'y' for yes or 'n' for no.", "red")
+        except KeyboardInterrupt:
+            print()
+            print_color("Interrupted by user. Exiting.", "red")
+            print()
+            exit()
 
 
 def check_port_conflicts(selected_services):
@@ -61,7 +70,7 @@ def check_port_conflicts(selected_services):
                 all_ports[host_port] = service_name
 
     if conflict_ports:
-        print_color("Port conflict(s) detected:", "red")
+        print_color("[WARNING] - Port conflict(s) detected:", "red")
         for service, port in conflict_ports:
             print_color(f"{service}: {port}", "red")
         return True
@@ -73,34 +82,35 @@ def print_color(text, color):
     colors = {
         "red": "\033[91m",
         "green": "\033[92m",
+        "blue": "\033[94m",  # Added blue
+        "magenta": "\033[95m",  # Added magenta
         "end": "\033[0m",
     }
     print(f"{colors[color]}{text}{colors['end']}")
-
 
 def enforce_dependencies(selected_services, services):
     # If snare or any tanner services are selected, ensure all are enabled
     tanner_services = {'snare', 'tanner', 'tanner_redis', 'tanner_phpox', 'tanner_api'}
     if tanner_services.intersection(selected_services):
-        print_color("For Snare / Tanner to work all required services have been added to your configuration.", "green")
+        print_color("[OK] - For Snare / Tanner to work all required services have been added to your configuration.", "green")
         for service in tanner_services:
             selected_services[service] = services[service]
 
     # If kibana is enabled, also enable elasticsearch
     if 'kibana' in selected_services:
         selected_services['elasticsearch'] = services['elasticsearch']
-        print_color("Kibana requires Elasticsearch which has been added to your configuration.", "green")
+        print_color("[OK] - Kibana requires Elasticsearch which has been added to your configuration.", "green")
 
     # If spiderfoot is enabled, also enable nginx
     if 'spiderfoot' in selected_services:
         selected_services['nginx'] = services['nginx']
-        print_color("Spiderfoot requires Nginx which has been added to your configuration.","green")
+        print_color("[OK] - Spiderfoot requires Nginx which has been added to your configuration.","green")
 
 
     # If any map services are detected, enable logstash, elasticsearch, nginx, and all map services
     map_services = {'map_web', 'map_redis', 'map_data'}
     if map_services.intersection(selected_services):
-        print_color("For Map to work all required services have been added to your configuration.", "green")
+        print_color("[OK] - For AttackMap to work all required services have been added to your configuration.", "green")
         for service in map_services.union({'elasticsearch', 'nginx'}):
             selected_services[service] = services[service]
 
@@ -108,7 +118,7 @@ def enforce_dependencies(selected_services, services):
     if 'honeytrap' in selected_services and 'glutton' in selected_services:
         # Remove glutton and notify
         del selected_services['glutton']
-        print_color("Honeytrap and Glutton cannot be active at the same time. Glutton has been removed from your configuration.","red")
+        print_color("[OK] - Honeytrap and Glutton cannot be active at the same time. Glutton has been removed from your configuration.","green")
 
 
 def remove_unused_networks(selected_services, services, networks):
@@ -159,14 +169,14 @@ def main():
         yaml.dump(output_config, file, default_flow_style=False, sort_keys=False, indent=2)
 
     if check_port_conflicts(selected_services):
-        print_color(f"Adjust the conflicting ports in the {service_filename} or re-run the script and select services that do not occupy the same port(s).",
+        print_color(f"[WARNING] - Adjust the conflicting ports in the {service_filename} or re-run the script and select services that do not occupy the same port(s).",
             "red")
     else:
-        print_color(f"Custom {service_filename} has been generated without port conflicts.", "green")
-    print(f"Copy {service_filename} to tpotce/ and test with: docker compose -f {service_filename} up")
-    print(f"If everything works, exit with CTRL-C and replace docker-compose.yml with the new config.")
+        print_color(f"[OK] - Custom {service_filename} has been generated without port conflicts.", "green")
+    print_color(f"Copy {service_filename} to ~/tpotce and test with: docker compose -f {service_filename} up", "blue")
+    print_color(f"If everything works, exit with CTRL-C and replace docker-compose.yml with the new config.", "blue")
 
 
 if __name__ == "__main__":
-    print(version)
+    print_color(version, "magenta")
     main()
