@@ -127,6 +127,7 @@
           - bash-completion
           - ca-certificates
           - cracklib-runtime
+          - cron
           - curl
           - exa
           - git
