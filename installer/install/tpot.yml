@@ -155,16 +155,6 @@
         - "AlmaLinux"
         - "Rocky"
 
-    - name: Download and install micro editor (AlmaLinux, Rocky)
-      shell: "curl https://getmic.ro | bash && mv micro /usr/bin"
-      args:
-        executable: /bin/bash
-      register: curl_command
-      when: ansible_distribution in ["AlmaLinux", "Rocky"]
-      tags:
-        - "AlmaLinux"
-        - "Rocky"
-
     - name: Install recommended packages (AlmaLinux, Rocky)
       package:
         name:
@@ -179,10 +169,21 @@
           - htop
           - httpd-tools
           - net-tools
+          - tar
           - vim
           - wget
         state: latest
         update_cache: yes
+      when: ansible_distribution in ["AlmaLinux", "Rocky"]
+      tags:
+        - "AlmaLinux"
+        - "Rocky"
+
+    - name: Download and install micro editor (AlmaLinux, Rocky)
+      shell: "curl https://getmic.ro | bash && mv micro /usr/bin"
+      args:
+        executable: /bin/bash
+      register: curl_command
       when: ansible_distribution in ["AlmaLinux", "Rocky"]
       tags:
         - "AlmaLinux"
