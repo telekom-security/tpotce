@@ -155,7 +155,40 @@
         - "AlmaLinux"
         - "Rocky"
 
-    - name: Install recommended packages (AlmaLinux, Fedora, Rocky)
+    - name: Download and install micro editor (AlmaLinux, Rocky)
+      shell: "curl https://getmic.ro | bash && mv micro /usr/bin"
+      args:
+        executable: /bin/bash
+      register: curl_command
+      when: ansible_distribution in ["AlmaLinux", "Rocky"]
+      tags:
+        - "AlmaLinux"
+        - "Rocky"
+
+    - name: Install recommended packages (AlmaLinux, Rocky)
+      package:
+        name:
+          - bash-completion
+          - ca-certificates
+          - cracklib
+          - curl
+          - dnf-plugins-core
+          - exa
+          - git
+          - grc
+          - htop
+          - httpd-tools
+          - net-tools
+          - vim
+          - wget
+        state: latest
+        update_cache: yes
+      when: ansible_distribution in ["AlmaLinux", "Rocky"]
+      tags:
+        - "AlmaLinux"
+        - "Rocky"
+
+    - name: Install recommended packages (Fedora)
       package:
         name:
           - bash-completion
@@ -174,11 +207,9 @@
           - wget
         state: latest
         update_cache: yes
-      when: ansible_distribution in ["AlmaLinux", "Fedora", "Rocky"]
+      when: ansible_distribution in ["Fedora"]
       tags:
-        - "AlmaLinux"
         - "Fedora"
-        - "Rocky"
 
     - name: Remove conflicting packages (openSUSE Tumbleweed)
       package:

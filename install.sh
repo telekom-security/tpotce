@@ -5,7 +5,7 @@ myUSER=$(whoami)
 myTPOT_CONF_FILE="/home/${myUSER}/tpotce/.env"
 myPACKAGES_DEBIAN="ansible apache2-utils cracklib-runtime wget"
 myPACKAGES_FEDORA="ansible cracklib httpd-tools wget"
-myPACKAGES_ROCKY="ansible-core ansible-collection-redhat-rhel_mgmt cracklib httpd-tools wget"
+myPACKAGES_ROCKY="ansible-core ansible-collection-redhat-rhel_mgmt epel-release cracklib httpd-tools wget"
 myPACKAGES_OPENSUSE="ansible apache2-utils cracklib wget"
 
 
