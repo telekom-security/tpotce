@@ -180,14 +180,14 @@
         - "AlmaLinux"
         - "Rocky"
 
-    - name: Download and install micro editor (AlmaLinux, Rocky)
+    - name: Download and install micro editor (AlmaLinux, openSUSE Tumbleweed, Rocky)
       shell: "curl https://getmic.ro | bash && mv micro /usr/bin"
       args:
         executable: /bin/bash
-      register: curl_command
-      when: ansible_distribution in ["AlmaLinux", "Rocky"]
+      when: ansible_distribution in ["AlmaLinux", "openSUSE Tumbleweed", "Rocky"]
       tags:
         - "AlmaLinux"
+        - "openSUSE Tumbleweed"
         - "Rocky"
 
     - name: Install recommended packages (Fedora)
@@ -241,7 +241,6 @@
           - git
           - grc
           - htop
-          - micro
           - vim
           - wget
         state: latest
