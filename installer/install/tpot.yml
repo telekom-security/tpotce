@@ -195,6 +195,7 @@
           - bash-completion
           - ca-certificates
           - cracklib
+          - cronie
           - curl
           - dnf-plugins-core
           - exa
