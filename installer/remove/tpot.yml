@@ -327,7 +327,9 @@
         - "Fedora"
 
     - name: Remove Docker repository (AlmaLinux, Rocky)
-      shell: dnf -y config-manager --remove-repo https://download.docker.com/linux/centos/docker-ce.repo
+      file:
+        path: /etc/yum.repos.d/docker-ce.repo
+        state: absent
       when: ansible_distribution in ["AlmaLinux", "Rocky"]
       tags:
         - "AlmaLinux"
