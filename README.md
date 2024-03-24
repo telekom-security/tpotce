@@ -40,7 +40,7 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/alpha/ins
   * [Installation Types](#installation-types)
     * [Standard / HIVE](#standard--hive)
     * [**Distributed**](#distributed)
-  * [Uninstall T-Pot (Linux only!) (to do)](#uninstall-t-pot-linux-only-to-do)
+  * [Uninstall T-Pot](#uninstall-t-pot)
 * [First Start](#first-start)
   * [Standalone First Start](#standalone-first-start)
   * [Distributed Deployment](#distributed-deployment)
@@ -354,7 +354,8 @@ The distributed version of T-Pot requires at least two hosts
 - The **SENSOR** will not start before finalizing the **SENSOR** installation as described in [Distributed Deployment](#distributed-deployment).
 <br><br>
 
-## Uninstall T-Pot (Linux only!) (to do)
+## Uninstall T-Pot
+Uninstallation of T-Pot is only available on the [supported Linux distros](#choose-your-distro).<br>
 To uninstall T-Pot run `~/tpotce/uninstall.sh` and follow the uninstaller instructions, you will have to enter your password at least once.<br>
 Once the uninstall is finished reboot the machine `sudo reboot`
 <br><br>

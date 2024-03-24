@@ -1,244 +1,320 @@
 ---
-################################
-# T-Pot - Abort if run as root #
-################################
+###################
+# T-Pot - Removal #
+###################
 
-- name: T-Pot Abort if run as root
+#####################################################################
+# T-Pot - Abort if run as tpot, root or on unsupported distribution #
+#####################################################################
+
+- name: T-Pot - Abort if run as tpot, root or on unsupported distribution
   hosts: all
   gather_facts: true
   become: false
+  tags:
+    - "AlmaLinux"
+    - "Debian"
+    - "Fedora"
+    - "openSUSE Tumbleweed"
+    - "Raspbian"
+    - "Rocky"
+    - "Ubuntu"
 
-  pre_tasks:
-    - name: Check if running as root
+  tasks:
+    - name: Check if running as root (All)
       assert:
         that: ansible_user_id != 'root'
         fail_msg: "T-Pot playbook should not be run as root."
         success_msg: "Running as user: {{ ansible_user_id }}."
 
-    - name: Check if supported distribution 
+    - name: Check if running as tpot (All)
       assert:
-        that: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
-        fail_msg: "T-Pot is not supported on this plattform: {{ ansible_distribution }}."
-        success_msg: "T-Pot will now install on {{ ansible_distribution }}."
+        that: ansible_user_id != 'tpot'
+        fail_msg: "Reserved username `tpot` detected."
+        success_msg: "Running as user: {{ ansible_user_id }}."
 
-######################################
-# T-Pot - Remove group users, bashrc #
-######################################
+    - name: Check if supported distribution (All)
+      assert:
+        that: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
+        fail_msg: "T-Pot uninstall is not supported on this plattform: {{ ansible_distribution }}."
+        success_msg: "T-Pot will now be removed from {{ ansible_distribution }}."
 
-- name: T-Pot - Remove group users, bashrc 
+#######################################
+# T-Pot - Remove cron job and service #
+#######################################
+
+- name: Reverse T-Pot - Remove randomized daily reboot
   hosts: all
   gather_facts: true
-  become: false
+  become: true
+  tags:
+    - "AlmaLinux"
+    - "Debian"
+    - "Fedora"
+    - "openSUSE Tumbleweed"
+    - "Raspbian"
+    - "Rocky"
+    - "Ubuntu"
 
   tasks:
-    - name: Remove aliases (All)
+    - name: Remove the randomized daily reboot cron job (All)
+      cron:
+        name: "T-Pot Daily Reboot"
+        user: root
+        state: absent
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
+
+- name: Reverse T-Pot - Remove systemd service
+  hosts: all
+  gather_facts: true
+  become: true
+  tags:
+    - "AlmaLinux"
+    - "Debian"
+    - "Fedora"
+    - "openSUSE Tumbleweed"
+    - "Raspbian"
+    - "Rocky"
+    - "Ubuntu"
+
+  tasks:
+    - name: Stop and disable tpot.service (All)
+      ansible.builtin.systemd:
+        name: tpot.service
+        state: stopped
+        enabled: no
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
+
+    - name: Remove systemd service file for tpot
+      ansible.builtin.file:
+        path: '/etc/systemd/system/tpot.service'
+        state: absent
+      notify: Reload systemd
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
+
+  handlers:
+    - name: Reload systemd
+      become: true
+      ansible.builtin.systemd:
+        daemon_reload: yes
+
+##################################################
+# T-Pot - Adjust bashrc, remove T-Pot repository #
+##################################################
+
+- name: T-Pot - Reverse Adjustments
+  hosts: all
+  gather_facts: true
+  become: true
+  tags:
+    - "AlmaLinux"
+    - "Debian"
+    - "Fedora"
+    - "openSUSE Tumbleweed"
+    - "Raspbian"
+    - "Rocky"
+    - "Ubuntu"
+
+  tasks:
+    - name: Remove aliases from .bashrc (All)
       blockinfile:
         path: ~/.bashrc
-        block: |
-          alias dps='grc --colour=on docker ps -f status=running -f status=exited --format "table {{'{{'}}.Names{{'}}'}}\t{{'{{'}}.Status{{'}}'}}\t{{'{{'}}.Ports{{'}}'}}" | sort'
-          alias dpsw='watch -c bash -ic dps'
+        block: ""
         marker: "# {mark} ANSIBLE MANAGED BLOCK"
         state: absent
-      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
+      become: false
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
 
-    - name: Remove current user from Docker, T-Pot group (All)
-      become: true
-      user:
-        name: "{{ ansible_user_id }}"
-        groups: 
-          - docker
-          - tpot
-        state: present
-        remove: yes 
-      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
+##########################################################
+# T-Pot - Restore configs, remove users and groups, etc. #
+##########################################################
 
-    - name: Check for non-root user id (All)
-      debug:
-        msg: "Detected user: '{{ ansible_user_id }}'"
-      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
-      failed_when: ansible_user_id == "root"
-
-##################################################
-# T-Pot - Remove configs, users and groups, etc. #
-##################################################
-
-- name: T-Pot - Remove configs, users and groups, etc.
+- name: T-Pot - Adjust configs, add users and groups, etc.
   hosts: all
   gather_facts: true
   become: true
 
   tasks:
-    - name: Remove T-Pot user (All)
-      user:
-        name: tpot
-        state: absent
-        remove: yes
-      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
+    - name: Revert DNSStubListener setting in resolved.conf (Fedora, Ubuntu)
+      lineinfile:
+        path: /etc/systemd/resolved.conf
+        regexp: 'DNSStubListener=no'
+        line: 'DNSStubListener=yes'
+        state: present
+      when: ansible_distribution in ["Fedora", "Ubuntu"]
+      tags:
+        - "Fedora"
+        - "Ubuntu"
 
-    - name: Revert SELinux config (Fedora)
+    - name: Revert SELinux config to enforcing (AlmaLinux, Fedora, Rocky)
       lineinfile:
         path: /etc/selinux/config
         regexp: '^SELINUX='
         line: 'SELINUX=enforcing'
-        state: present
-      when: ansible_distribution in ["Fedora"]
+      when: ansible_distribution in ["AlmaLinux", "Fedora", "Rocky"]
+      tags:
+        - "AlmaLinux"
+        - "Fedora"
+        - "Rocky"
 
-    - name: Revert kernel module loading (Fedora)
-      command: modprobe -r iptable_filter
-      when: ansible_distribution in ["Fedora"]
-
-    - name: Remove iptables.conf (Fedora)
+    - name: Remove iptables.conf file (AlmaLinux, Fedora, Rocky)
       file:
         path: /etc/modules-load.d/iptables.conf
         state: absent
-      when: ansible_distribution in ["Fedora"]
+      when: ansible_distribution in ["AlmaLinux", "Fedora", "Rocky"]
+      tags:
+        - "AlmaLinux"
+        - "Fedora"
+        - "Rocky"
 
-    - name: Revert DNSStubListener in resolved.conf (Fedora, Ubuntu)
-      lineinfile:
-        path: /etc/systemd/resolved.conf
-        regexp: '^.*DNSStubListener=.*'
-        line: '#DNSStubListener=yes'
-        state: present
-      notify: Restart Resolved
-      when: ansible_distribution in ["Fedora", "Ubuntu"]
+    - name: Revert firewall to default target DROP (AlmaLinux, Fedora, openSUSE Tumbleweed, Rocky)
+      firewalld:
+        zone: public
+        target: DROP
+        permanent: yes
+        state: enabled
+      when: ansible_distribution in ["AlmaLinux", "Fedora", "openSUSE Tumbleweed", "Rocky"]
+      tags:
+        - "AlmaLinux"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Rocky"
 
-    - name: Revert SSH port change (Debian, Fedora, Ubuntu)
+    - name: Revert firewall to SSH default (AlmaLinux, Fedora, openSUSE Tumbleweed, Rocky)
+      firewalld:
+        port: 22/tcp
+        permanent: yes
+        state: enabled
+      when: ansible_distribution in ["AlmaLinux", "Fedora", "openSUSE Tumbleweed", "Rocky"]
+      tags:
+        - "AlmaLinux"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Rocky"
+
+    - name: Remove port.conf file to revert SSH to default port (openSUSE Tumbleweed)
+      file:
+        path: /etc/ssh/sshd_config.d/port.conf
+        state: absent
+      when: ansible_distribution in ["openSUSE Tumbleweed"]
+      tags:
+        - "openSUSE Tumbleweed"
+
+    - name: Revert SSH Port to 22 (AlmaLinux, Debian, Fedora, Raspbian, Rocky, Ubuntu)
       lineinfile:
         path: /etc/ssh/sshd_config
         line: "Port 64295"
         state: absent
-      notify: Restart SSH
-      when: ansible_distribution in ["Debian", "Fedora", "Ubuntu"]
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "Raspbian", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "Raspbian"
+        - "Rocky"
+        - "Ubuntu"
 
-    - name: Revert SSH port change (openSUSE Tumbleweed)
-      file:
-        path: /etc/ssh/sshd_config.d/port.conf
+    - name: Remove T-Pot user (All)
+      user:
+        name: tpot
         state: absent
-      notify: Restart SSH
-      when: ansible_distribution in ["openSUSE Tumbleweed"]
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "Rocky"
+        - "Ubuntu"
 
-    - name: Remove T-Pot SSH port from Firewall (Fedora, openSUSE Tumbleweed)
-      firewalld:
-        port: 64295/tcp
-        permanent: yes
-        state: disabled
-      when: ansible_distribution in ["Fedora", "openSUSE Tumbleweed"]
+    - name: Remove T-Pot group (All)
+      group:
+        name: tpot
+        state: absent
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "Rocky"
+        - "Ubuntu"
 
-    - name: Remove T-Pot default target modification (Fedora, openSUSE Tumbleweed)
-      firewalld:
-        zone: public
-        target: default
-        permanent: yes
-        state: enabled
-      when: ansible_distribution in ["Fedora", "openSUSE Tumbleweed"]
+################################
+# T-Pot - Remove Docker Engine #
+################################
 
-  handlers:
-    - name: Restart Resolved
-      service:
-        name: systemd-resolved
-        state: restarted
-      when: ansible_distribution in ["Fedora", "Ubuntu"]
-
-    - name: Restart SSH
-      service:
-        name: "{{ 'sshd' if ansible_distribution == 'Debian' else 'sshd' }}"
-        state: restarted
-        enabled: true
-      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
-
-#######################################################
-# T-Pot - Stop and prune everything related to Docker #
-#######################################################
-
-- name: T-Pot - Stop and prune everything related to Docker
+- name: T-Pot - Remove Docker Engine
   hosts: all
   gather_facts: true
   become: true
 
   tasks:
-    - name: Stop all Docker containers (All)
-      docker_container:
-        state: absent 
-        name: "*"
-      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
-      ignore_errors: true
-
-    - name: Prune everything related to Docker (All)
-      docker_prune:
-        builder_cache: true
-        containers: true
-        images: true
-        networks: true
-        volumes: true
-      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
-      ignore_errors: true
-
-    - name: Uninstall Docker Engine packages
+    - name: Remove Docker Engine packages (openSUSE Tumbleweed)
       package:
         name:
           - docker
+          - docker-bash-completion
+          - docker-buildx
+          - docker-compose
+          - docker-compose-switch
+          - liblvm2cmd2_03
+          - lvm2
+        state: absent
+      when: ansible_distribution in ["openSUSE Tumbleweed"]
+      tags:
+        - "openSUSE Tumbleweed"
+
+    - name: Remove Docker Engine packages (AlmaLinux, Debian, Fedora, Raspbian, Rocky, Ubuntu)
+      package:
+        name:
           - docker-ce
           - docker-ce-cli
           - containerd.io
           - docker-buildx-plugin
           - docker-compose-plugin
-          - docker-compose
         state: absent
-      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "Raspbian", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "Raspbian"
+        - "Rocky"
+        - "Ubuntu"
 
-    - name: Remove Docker repository (Fedora)
-      file:
-        path: /etc/yum.repos.d/docker-ce.repo
-        state: absent
-      when: ansible_distribution == "Fedora"
+######################################
+# T-Pot - Remove Docker Engine Repos #
+######################################
 
-    - name: Remove Docker Engine repository (Debian, Ubuntu)
-      apt_repository:
-        filename: docker
-        state: absent
-        update_cache: yes
-      when: ansible_distribution in ["Debian", "Ubuntu"]
-
-        #- name: Remove Docker Engine GPG key (Debian, Ubuntu)
-        #file:
-        #path: /etc/apt/keyrings/docker.gpg
-        #state: absent
-        #when: ansible_distribution in ["Debian", "Ubuntu"]
-
-    - name: Remove Docker Engine GPG key folder (Debian, Ubuntu)
-      file:
-        path: /etc/apt/keyrings
-        state: absent
-      when: ansible_distribution in ["Debian", "Ubuntu"]
-
-############################
-# T-Pot - Cleanup packages #
-############################
-
-- name: T-Pot - Cleanup packages
+- name: T-Pot - Revert Docker Engine preparation
   hosts: all
   gather_facts: true
   become: true
 
   tasks:
-    - name: Uninstall recommended packages (Debian, Fedora, openSUSE Tumbleweed, Ubuntu)
-      package:
-        name:
-          - busybox-net-tools
-          - grc
-          - neovim
-          - net-tools
+    - name: Remove Docker Engine repository (Debian, Raspbian, Ubuntu)
+      apt_repository:
+        filename: docker
         state: absent
-        update_cache: yes
-      when: ansible_distribution in ["Debian", "Fedora", "openSUSE Tumbleweed", "Ubuntu"]
+        when: ansible_distribution in ["Debian", "Raspbian", "Ubuntu"]
+      tags:
+        - "Debian"
+        - "Raspbian"
+        - "Ubuntu"
 
-    - name: Restore conflicting packages (openSUSE Tumbleweed)
-      package:
-        name:
-          - cups
-          - net-tools
-          - postfix
-          - yast2-auth-client
-        state: present
-        update_cache: yes
-      when: ansible_distribution == "openSUSE Tumbleweed"
+    - name: Remove Docker repository (Fedora)
+      shell: dnf -y config-manager --remove-repo https://download.docker.com/linux/fedora/docker-ce.repo
+      when: ansible_distribution in ["Fedora"]
+      tags:
+        - "Fedora"
+
+    - name: Remove Docker repository (AlmaLinux, Rocky)
+      shell: dnf -y config-manager --remove-repo https://download.docker.com/linux/centos/docker-ce.repo
+      when: ansible_distribution in ["AlmaLinux", "Rocky"]
+      tags:
+        - "AlmaLinux"
+        - "Rocky"
+

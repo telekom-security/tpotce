@@ -109,7 +109,7 @@ echo "# New htpasswd encoded credentials: ${myLS_WEB_USER_ENC}"
 echo "# New htpasswd credentials base64 encoded: ${myLS_WEB_USER_ENC_B64}"
 echo "# New SENSOR credentials base64 encoded: ${myTPOT_HIVE_USER}"
 echo
-echo "# When asked for a 'BECOME password' enter the password for your user on the SENSOR machine."
+echo "# Ansible will ask for the ‘BECOME password‘ which is typically the password you ’sudo’ with on the SENSOR."
 echo "# The password will allow Ansible to run a reboot via sudo on the SENSOR."
 echo
 

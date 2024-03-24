@@ -1,5 +1,9 @@
 ---
-- name: TPOT configuration playbook
+###########################
+# T-Pot Sensor Deployment #
+###########################
+
+- name: T-POT Sensor Deployment
   hosts: all
   vars:
     local_nginx_cert_path: "~/tpotce/data/nginx/cert/nginx.crt"
@@ -7,6 +11,7 @@
     remote_sensor_yml_path: "~/tpotce/compose/sensor.yml"
     remote_docker_compose_path: "~/tpotce/docker-compose.yml"
     env_file_path: "~/tpotce/.env"
+
   tasks:
     - name: Ensure the destination directory exists
       ansible.builtin.file:
@@ -23,19 +28,19 @@
       ansible.builtin.command:
         cmd: "cp {{ remote_sensor_yml_path }} {{ remote_docker_compose_path }}"
 
-    - name: Update TPOT_HIVE_USER in .env
+    - name: Update T-POT_HIVE_USER in .env
       ansible.builtin.lineinfile:
         path: "{{ env_file_path }}"
         regexp: '^TPOT_HIVE_USER='
         line: 'TPOT_HIVE_USER={{ lookup("env", "myTPOT_HIVE_USER") }}'
 
-    - name: Update TPOT_HIVE_IP in .env
+    - name: Update T-POT_HIVE_IP in .env
       ansible.builtin.lineinfile:
         path: "{{ env_file_path }}"
         regexp: '^TPOT_HIVE_IP='
         line: 'TPOT_HIVE_IP={{ lookup("env", "myTPOT_HIVE_IP") }}'
 
-    - name: Ensure TPOT_TYPE is set to SENSOR in .env
+    - name: Ensure T-POT_TYPE is set to SENSOR in .env
       ansible.builtin.lineinfile:
         path: "{{ env_file_path }}"
         regexp: '^TPOT_TYPE='

@@ -668,6 +668,12 @@
     - "Ubuntu"
 
   tasks:
+    - name: Check for non-root user id (All)
+      debug:
+        msg: "Detected user: '{{ ansible_user_id }}'"
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
+      failed_when: ansible_user_id == "root"
+
     - name: Add aliases (All)
       blockinfile:
         path: ~/.bashrc
@@ -702,12 +708,6 @@
           - tpot
         append: yes
       when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
-
-    - name: Check for non-root user id (All)
-      debug:
-        msg: "Detected user: '{{ ansible_user_id }}'"
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
-      failed_when: ansible_user_id == "root"
 
 ########################################
 # T-Pot - Install service and cron job #
