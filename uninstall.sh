@@ -79,7 +79,7 @@ fi
 # Run Ansible Playbook
 echo "### Now running T-Pot Ansible Uninstallation Playbook ..."
 echo
-rm ${HOME}/uninstall_tpot.log
+rm ${HOME}/uninstall_tpot.log > /dev/null 2>&1
 ANSIBLE_LOG_PATH=${HOME}/uninstall_tpot.log ansible-playbook ${myANSIBLE_TPOT_PLAYBOOK} -i 127.0.0.1, -c local --tags "${myANSIBLE_TAG}" ${myANSIBLE_BECOME_OPTION}
 
 # Something went wrong

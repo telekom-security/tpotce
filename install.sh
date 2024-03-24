@@ -149,7 +149,7 @@ fi
 # Run Ansible Playbook
 echo "### Now running T-Pot Ansible Installation Playbook ..."
 echo
-rm ${HOME}/install_tpot.log
+rm ${HOME}/install_tpot.log > /dev/null 2>&1
 ANSIBLE_LOG_PATH=${HOME}/install_tpot.log ansible-playbook ${myANSIBLE_TPOT_PLAYBOOK} -i 127.0.0.1, -c local --tags "${myANSIBLE_TAG}" ${myANSIBLE_BECOME_OPTION}
 
 # Something went wrong
