@@ -43,7 +43,7 @@
 # T-Pot - Remove cron job and service #
 #######################################
 
-- name: Reverse T-Pot - Remove randomized daily reboot
+- name: Remove T-Pot daily reboot
   hosts: all
   gather_facts: true
   become: true
@@ -64,7 +64,7 @@
         state: absent
       when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
 
-- name: Reverse T-Pot - Remove systemd service
+- name: Remove T-Pot systemd service
   hosts: all
   gather_facts: true
   become: true
@@ -83,6 +83,7 @@
         name: tpot.service
         state: stopped
         enabled: no
+      ignore_errors: yes
       when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
 
     - name: Remove systemd service file for tpot
@@ -102,7 +103,7 @@
 # T-Pot - Adjust bashrc, remove T-Pot repository #
 ##################################################
 
-- name: T-Pot - Reverse Adjustments
+- name: T-Pot - Revert Adjustments
   hosts: all
   gather_facts: true
   become: true
@@ -285,6 +286,20 @@
         - "Rocky"
         - "Ubuntu"
 
+    - name: Remove /var/lib/docker directory
+      file:
+        path: /var/lib/docker
+        state: absent
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "Rocky"
+        - "Ubuntu"
+
 ######################################
 # T-Pot - Remove Docker Engine Repos #
 ######################################
@@ -295,11 +310,11 @@
   become: true
 
   tasks:
-    - name: Remove Docker Engine repository (Debian, Raspbian, Ubuntu)
-      apt_repository:
-        filename: docker
+    - name: Remove Docker Engine repository file (Debian, Raspbian, Ubuntu)
+      file:
+        path: /etc/apt/sources.list.d/docker.list
         state: absent
-        when: ansible_distribution in ["Debian", "Raspbian", "Ubuntu"]
+      when: ansible_distribution in ["Debian", "Raspbian", "Ubuntu"]
       tags:
         - "Debian"
         - "Raspbian"
@@ -317,4 +332,3 @@
       tags:
         - "AlmaLinux"
         - "Rocky"
-

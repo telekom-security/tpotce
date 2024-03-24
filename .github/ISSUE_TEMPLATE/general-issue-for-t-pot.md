@@ -15,8 +15,6 @@ Before you post your issue make sure it has not been answered yet and provide **
 - 📚 Consult the documentation of 💻 your Linux OS, 🐳 [Docker](https://docs.docker.com/), the 🦌 [Elastic stack](https://www.elastic.co/guide/index.html) and the 🍯 [T-Pot Readme](https://github.com/dtag-dev-sec/tpotce/blob/master/README.md).
 - **⚠️ Provide [BASIC SUPPORT INFORMATION](#-basic-support-information-commands-are-expected-to-run-as-root) or similar detailed information with regard to your issue or we will close the issue or convert it into a discussion without further interaction from the maintainers**.<br>
 
-Questions such as **"Not seeing any attacks, containers are running fine"** or **"Cannot connect to the T-Pot WebUI, containers are running just fine"** are most likely caused by failures in routing and / or firewall setup and belong into the T-Pot [discussions](https://github.com/telekom-security/tpotce/discussions).
-
 # ⚠️ Basic support information (commands are expected to run as `root`)
 
 **We happily take the time to improve T-Pot and take care of things, but we need you to take the time to create an issue that provides us with all the information we need.** 
@@ -25,7 +23,7 @@ Questions such as **"Not seeing any attacks, containers are running fine"** or *
 - What is the version of the OS `lsb_release -a` and `uname -a`?
 - What T-Pot version are you currently using (only **T-Pot 24.04.x** is currently supported)?
 - What architecture are you running on (i.e. hardware, cloud, VM, etc.)?
-- Review the `~/tpotce/install_tpot.log`, attach the log and highlight the errors.
+- Review the `~/install_tpot.log`, attach the log and highlight the errors.
 - How long has your installation been running?
   - If it is a fresh install consult the documentation first.
   - Most likely it is a port conflict or a remote dependency was unavailable.
