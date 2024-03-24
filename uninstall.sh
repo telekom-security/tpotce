@@ -92,6 +92,7 @@ if [ ! $? -eq 0 ];
     echo "### Playbook was successful."
     echo "### Now removing ${HOME}/tpotce."
     rm -rf ${HOME}/tpotce
+    rm -rf ${HOME}/tpot.yml
     echo
 fi
 
