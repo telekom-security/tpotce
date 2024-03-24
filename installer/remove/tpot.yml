@@ -320,17 +320,12 @@
         - "Raspbian"
         - "Ubuntu"
 
-    - name: Remove Docker repository (Fedora)
-      shell: dnf -y config-manager --remove-repo https://download.docker.com/linux/fedora/docker-ce.repo
-      when: ansible_distribution in ["Fedora"]
-      tags:
-        - "Fedora"
-
     - name: Remove Docker repository (AlmaLinux, Rocky)
       file:
         path: /etc/yum.repos.d/docker-ce.repo
         state: absent
-      when: ansible_distribution in ["AlmaLinux", "Rocky"]
+      when: ansible_distribution in ["AlmaLinux", "Fedora", "Rocky"]
       tags:
         - "AlmaLinux"
+        - "Fedora"
         - "Rocky"
