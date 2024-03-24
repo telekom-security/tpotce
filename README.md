@@ -12,7 +12,7 @@ T-Pot is the all in one, optionally distributed, multiarch (amd64, arm64) honeyp
 4. Install `curl`: `$ sudo [apt, dnf, zypper] install curl` if not installed already
 5. Run installer as non-root from `$HOME`:
 ```
-env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/alpha/install.sh)"
+env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/24.04/install.sh)"
 ```
    * Follow instructions, read messages, check for possible port conflicts and reboot
 
@@ -326,7 +326,7 @@ Choose a supported distro of your choice. It is recommended to use the minimum /
 Sometimes it is just nice if you can spin up a T-Pot instance on macOS or Windows, i.e. for development, testing or just the fun of it. As Docker Desktop is rather limited not all honeypot types or T-Pot features are supported. Also remember, by default the macOS and Windows firewall are blocking access from remote, so testing is limited to the host. For production it is recommended to run T-Pot on [Linux](#choose-your-distro).<br>
 To get things up and running just follow these steps:
 1. Install Docker Desktop for [macOS](https://docs.docker.com/desktop/install/mac-install/) or [Windows](https://docs.docker.com/desktop/install/windows-install/).
-2. Clone the GitHub repository: `git clone https://github.com/telekom-security/tpotce -b alpha`.
+2. Clone the GitHub repository: `git clone https://github.com/telekom-security/tpotce -b 24.04`.
 3. Go to: `cd ~/tpotce`
 4. Copy `cp compose/mac_win.yml ./docker-compose.yml`.
 5. Create a `WEB_USER` by running `~/tpotce/genuser.sh`

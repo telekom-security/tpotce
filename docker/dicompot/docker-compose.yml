@@ -19,7 +19,7 @@ services:
      - dicompot_local
     ports:
      - "11112:11112"
-    image: "dtagdevsec/dicompot:alpha"
+    image: "dtagdevsec/dicompot:24.04"
     read_only: true
     volumes:
      - $HOME/tpotce/data/dicompot/log:/var/log/dicompot

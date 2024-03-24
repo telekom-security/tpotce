@@ -24,7 +24,7 @@ services:
     mem_limit: 4g
     ports:
      - "127.0.0.1:64298:9200"
-    image: "dtagdevsec/elasticsearch:alpha"
+    image: "dtagdevsec/elasticsearch:24.04"
     volumes:
      - $HOME/tpotce/data:/data
 
@@ -40,7 +40,7 @@ services:
     mem_limit: 1g
     ports:
      - "127.0.0.1:64296:5601"
-    image: "dtagdevsec/kibana:alpha"
+    image: "dtagdevsec/kibana:24.04"
 
 ## Logstash service
   logstash:
@@ -52,7 +52,7 @@ services:
     depends_on:
       elasticsearch:
         condition: service_healthy
-    image: "dtagdevsec/logstash:alpha"
+    image: "dtagdevsec/logstash:24.04"
     volumes:
      - $HOME/tpotce/data:/data
 #     - /root/tpotce/docker/elk/logstash/dist/logstash.conf:/etc/logstash/conf.d/logstash.conf
@@ -65,7 +65,7 @@ services:
     tty: true
     ports:
       - "127.0.0.1:6379:6379"
-    image: "dtagdevsec/redis:alpha"
+    image: "dtagdevsec/redis:24.04"
     read_only: true
 
 # Map Web Service
@@ -79,7 +79,7 @@ services:
     tty: true
     ports:
      - "127.0.0.1:64299:64299"
-    image: "dtagdevsec/map:alpha"
+    image: "dtagdevsec/map:24.04"
     depends_on:
      - map_redis
 
@@ -91,6 +91,6 @@ services:
      - MAP_COMMAND=DataServer_v2.py
     stop_signal: SIGKILL
     tty: true
-    image: "dtagdevsec/map:alpha"
+    image: "dtagdevsec/map:24.04"
     depends_on:
      - map_redis

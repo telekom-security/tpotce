@@ -10,7 +10,7 @@ services:
       - $HOME/tpotce/.env
     restart: "no"
     stop_grace_period: 60s
-    image: "dtagdevsec/tpotinit:alpha"
+    image: "dtagdevsec/tpotinit:24.04"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - $HOME/tpotce/data:/data

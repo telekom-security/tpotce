@@ -17,6 +17,6 @@ services:
      - NET_ADMIN
      - SYS_NICE
      - NET_RAW
-    image: "dtagdevsec/suricata:alpha"
+    image: "dtagdevsec/suricata:24.04"
     volumes:
      - $HOME/tpotce/data/suricata/log:/var/log/suricata

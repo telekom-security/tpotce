@@ -24,7 +24,7 @@ services:
      - "5060:5060/udp"
      - "5060:5060/tcp"
 #     - "127.0.0.1:8082:8082"
-    image: "dtagdevsec/sentrypeer:alpha"
+    image: "dtagdevsec/sentrypeer:24.04"
     read_only: true
     volumes:
      - $HOME/tpotce/data/sentrypeer/log:/var/log/sentrypeer

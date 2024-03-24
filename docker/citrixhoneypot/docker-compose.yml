@@ -16,7 +16,7 @@ services:
      - citrixhoneypot_local
     ports:
      - "443:443"
-    image: "dtagdevsec/citrixhoneypot:alpha"
+    image: "dtagdevsec/citrixhoneypot:24.04"
     read_only: true
     volumes:
      - $HOME/tpotce/data/citrixhoneypot/log:/opt/citrixhoneypot/logs

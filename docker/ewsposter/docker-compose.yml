@@ -23,7 +23,7 @@ services:
      - EWS_HPFEEDS_SECRET=secret
      - EWS_HPFEEDS_TLSCERT=false
      - EWS_HPFEEDS_FORMAT=json
-    image: "dtagdevsec/ewsposter:alpha"
+    image: "dtagdevsec/ewsposter:24.04"
     volumes:
      - $HOME/tpotce/data:/data
      - $HOME/tpotce/data/ews/conf/ews.ip:/opt/ewsposter/ews.ip

@@ -23,7 +23,7 @@ services:
     ports:
      - "25:25"
      - "587:25"
-    image: "dtagdevsec/mailoney:alpha"
+    image: "dtagdevsec/mailoney:24.04"
     read_only: true
     volumes:
      - $HOME/tpotce/data/mailoney/log:/opt/mailoney/logs

@@ -33,7 +33,7 @@ services:
      - "3389:3389"
      - "5432:5432"
      - "5900:5900"
-    image: "dtagdevsec/heralding:alpha"
+    image: "dtagdevsec/heralding:24.04"
     read_only: true
     volumes:
      - $HOME/tpotce/data/heralding/log:/var/log/heralding

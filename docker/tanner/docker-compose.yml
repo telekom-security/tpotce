@@ -16,7 +16,7 @@ services:
 #    cpus: 0.25
     networks:
      - tanner_local
-    image: "dtagdevsec/redis:alpha"
+    image: "dtagdevsec/redis:24.04"
     read_only: true
 
 # PHP Sandbox service
@@ -32,7 +32,7 @@ services:
 #    cpus: 0.25
     networks:
      - tanner_local
-    image: "dtagdevsec/phpox:alpha"
+    image: "dtagdevsec/phpox:24.04"
     read_only: true
 
 # Tanner API Service
@@ -48,7 +48,7 @@ services:
 #    cpus: 0.25
     networks:
      - tanner_local
-    image: "dtagdevsec/tanner:alpha"
+    image: "dtagdevsec/tanner:24.04"
     read_only: true
     volumes:
      - $HOME/tpotce/data/tanner/log:/var/log/tanner
@@ -69,7 +69,7 @@ services:
 #     - tanner_local
 #    ports:
 #     - "127.0.0.1:8091:8091"
-#    image: "dtagdevsec/tanner:alpha"
+#    image: "dtagdevsec/tanner:24.04"
 #    command: tannerweb
 #    read_only: true
 #    volumes:
@@ -90,7 +90,7 @@ services:
 #    cpus: 0.25
     networks:
      - tanner_local
-    image: "dtagdevsec/tanner:alpha"
+    image: "dtagdevsec/tanner:24.04"
     command: tanner
     read_only: true
     volumes:
@@ -114,6 +114,6 @@ services:
      - tanner_local
     ports:
      - "80:80"
-    image: "dtagdevsec/snare:alpha"
+    image: "dtagdevsec/snare:24.04"
     depends_on:
      - tanner

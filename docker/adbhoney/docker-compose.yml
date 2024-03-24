@@ -16,7 +16,7 @@ services:
      - adbhoney_local
     ports:
      - "5555:5555"
-    image: "dtagdevsec/adbhoney:alpha"
+    image: "dtagdevsec/adbhoney:24.04"
     read_only: true
     volumes:
      - $HOME/tpotce/data/adbhoney/log:/opt/adbhoney/log

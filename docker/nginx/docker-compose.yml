@@ -22,7 +22,7 @@ services:
       #    ports:
       #     - "64297:64297"
       #     - "127.0.0.1:64304:64304"
-    image: "dtagdevsec/nginx:alpha"
+    image: "dtagdevsec/nginx:24.04"
     read_only: true
     volumes:
      - $HOME/tpotce/data/nginx/cert/:/etc/nginx/cert/:ro
