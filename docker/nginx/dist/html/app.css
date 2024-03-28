@@ -53,7 +53,7 @@
   --sfg: #ffffff; /* Secondary Foreground color */
 
   /* Image background  */
-  --imgbg: url(assets/background.jpg);
+  --imgbg: url(assets/Multi-Cloud_Guard.png);
   --imgcol: linear-gradient(
     rgba(0, 0, 0, 0.1),
     rgba(0, 0, 0, 0.1)
