@@ -64,11 +64,11 @@ const CONFIG = {
       },
       {
         name: 'T-Pot @ GitHub',
-        link: 'https://github.com/telekom-security/tpotce/',
+        link: 'https://github.com/Shashank292002/tpotce/',
       },
       {
         name: 'T-Pot ReadMe',
-        link: 'https://github.com/telekom-security/tpotce/blob/master/README.md',
+        link: 'https://github.com/Shashank292002/tpotce/blob/master/README.md',
       },      
     ],
   },
