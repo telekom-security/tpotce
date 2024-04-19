@@ -38,6 +38,6 @@ keywords:
   - docker
   - elk
 license: GPL-3.0
-commit: unreleased, under heavy development
+commit: release
 version: 24.04.0
 date-released: '2024-04-22'
