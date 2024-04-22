@@ -20,9 +20,9 @@ services:
      - "123:123/udp"
 #     - "161:161/udp"
      - "1900:1900/udp"
-    image: "dtagdevsec/ddospot:2204"
+    image: "dtagdevsec/ddospot:24.04"
     read_only: true
     volumes:
-     - /data/ddospot/log:/opt/ddospot/ddospot/logs
-     - /data/ddospot/bl:/opt/ddospot/ddospot/bl
-     - /data/ddospot/db:/opt/ddospot/ddospot/db
+     - $HOME/tpotce/data/ddospot/log:/opt/ddospot/ddospot/logs
+     - $HOME/tpotce/data/ddospot/bl:/opt/ddospot/ddospot/bl
+     - $HOME/tpotce/data/ddospot/db:/opt/ddospot/ddospot/db

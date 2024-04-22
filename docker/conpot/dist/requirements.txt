@@ -12,9 +12,7 @@ bacpypes==0.17.0
 pyghmi==1.4.1
 mixbox
 modbus-tk
-cpppo
 fs==2.3.0
 tftpy
 # some freezegun versions broken
-pycrypto
 sphinx_rtd_theme

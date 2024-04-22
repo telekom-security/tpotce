@@ -1,0 +1,19 @@
+version: '3.9'
+
+services:
+
+# T-Pot Init Service
+  tpotinit:
+    build: .
+    container_name: tpotinit
+    env_file:
+      - $HOME/tpotce/.env
+    restart: "no"
+    stop_grace_period: 60s
+    image: "dtagdevsec/tpotinit:24.04"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - $HOME/tpotce/data:/data
+    network_mode: "host"
+    cap_add:
+     - NET_ADMIN

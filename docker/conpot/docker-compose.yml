@@ -37,10 +37,10 @@ services:
      - "2121:21"
      - "44818:44818"
      - "47808:47808/udp"
-    image: "dtagdevsec/conpot:2204"
+    image: "dtagdevsec/conpot:24.04"
     read_only: true
     volumes:
-     - /data/conpot/log:/var/log/conpot
+     - $HOME/tpotce/data/conpot/log:/var/log/conpot
 
 # Conpot IEC104 service
   conpot_IEC104:
@@ -61,10 +61,10 @@ services:
     ports:
 #     - "161:161/udp"
      - "2404:2404"
-    image: "dtagdevsec/conpot:2204"
+    image: "dtagdevsec/conpot:24.04"
     read_only: true
     volumes:
-     - /data/conpot/log:/var/log/conpot
+     - $HOME/tpotce/data/conpot/log:/var/log/conpot
 
 # Conpot guardian_ast service
   conpot_guardian_ast:
@@ -84,10 +84,10 @@ services:
      - conpot_local_guardian_ast
     ports:
      - "10001:10001"
-    image: "dtagdevsec/conpot:2204"
+    image: "dtagdevsec/conpot:24.04"
     read_only: true
     volumes:
-     - /data/conpot/log:/var/log/conpot
+     - $HOME/tpotce/data/conpot/log:/var/log/conpot
 
 # Conpot ipmi
   conpot_ipmi:
@@ -107,10 +107,10 @@ services:
      - conpot_local_ipmi
     ports:
      - "623:623/udp"
-    image: "dtagdevsec/conpot:2204"
+    image: "dtagdevsec/conpot:24.04"
     read_only: true
     volumes:
-     - /data/conpot/log:/var/log/conpot
+     - $HOME/tpotce/data/conpot/log:/var/log/conpot
 
 # Conpot kamstrup_382
   conpot_kamstrup_382:
@@ -131,7 +131,7 @@ services:
     ports:
      - "1025:1025"
      - "50100:50100"
-    image: "dtagdevsec/conpot:2204"
+    image: "dtagdevsec/conpot:24.04"
     read_only: true
     volumes:
-     - /data/conpot/log:/var/log/conpot
+     - $HOME/tpotce/data/conpot/log:/var/log/conpot

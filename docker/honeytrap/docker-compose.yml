@@ -14,7 +14,7 @@ services:
     network_mode: "host"
     cap_add:
      - NET_ADMIN
-    image: "dtagdevsec/honeytrap:2204"
+    image: "dtagdevsec/honeytrap:24.04"
     read_only: true
     volumes:
      - /data/honeytrap/attacks:/opt/honeytrap/var/attacks

@@ -11,7 +11,7 @@ services:
     restart: always
     stop_signal: SIGKILL
     tty: true
-    image: "dtagdevsec/redis:2204"
+    image: "dtagdevsec/redis:24.04"
     read_only: true
 
 # Map Web Service
@@ -21,13 +21,11 @@ services:
     restart: always
     environment:
      - MAP_COMMAND=AttackMapServer.py
-    env_file:
-     - /opt/tpot/etc/compose/elk_environment
     stop_signal: SIGKILL
     tty: true
     ports:
      - "127.0.0.1:64299:64299"
-    image: "dtagdevsec/map:2204"
+    image: "dtagdevsec/map:24.04"
     depends_on:
      - map_redis
 
@@ -37,10 +35,10 @@ services:
     restart: always
     environment:
      - MAP_COMMAND=DataServer_v2.py
-    env_file:
-     - /opt/tpot/etc/compose/elk_environment
+#     - TPOT_ATTACKMAP_TEXT=${TPOT_ATTACKMAP_TEXT}
+#     - TZ=${TPOT_ATTACKMAP_TEXT_TIMEZONE}
     stop_signal: SIGKILL
     tty: true
-    image: "dtagdevsec/map:2204"
+    image: "dtagdevsec/map:24.04"
     depends_on:
      - map_redis

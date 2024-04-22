@@ -1,0 +1,17 @@
+[Unit]
+Description=T-Pot
+Wants=docker.service network-online.target
+After=docker.service network-online.target
+
+[Service]
+Restart=always
+RestartSec=5
+Type=simple
+TimeoutSec=infinity
+ExecStartPre=-/usr/bin/docker compose -f /home/{{ ansible_user_id }}/tpotce/docker-compose.yml down -v
+ExecStart=/usr/bin/docker compose -f /home/{{ ansible_user_id }}/tpotce/docker-compose.yml up
+ExecStop=/usr/bin/docker compose -f /home/{{ ansible_user_id }}/tpotce/docker-compose.yml down -v
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

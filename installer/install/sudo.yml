@@ -1,0 +1,53 @@
+---
+#######################################
+# T-Pot - Debian Bootstrapping (sudo) #
+#######################################
+
+# Be sure to use root password as become password
+- name: T-Pot - Debian Bootstrapping (sudo)
+  hosts: all
+  gather_facts: false
+  become: false
+
+  tasks:
+    - name: Check if running as root
+      assert:
+        that: ansible_user != 'root'
+        fail_msg: "T-Pot playbook should not be run as root."
+        success_msg: "Running as user: {{ ansible_user }}."
+      tags:
+        - "Debian"
+
+    - name: Check if running as tpot
+      assert:
+        that: ansible_user != 'tpot'
+        fail_msg: "Reserved username `tpot` detected."
+        success_msg: "Running as user: {{ ansible_user }}."
+      tags:
+        - "Debian"
+
+    - name: Get distribution name
+      raw: awk -F= '/^NAME/{print $2}' /etc/os-release | tr -d '"' | cut -d " " -f1
+      register: my_distribution
+      tags:
+        - "Debian"
+
+    - name: Check if sudo is installed
+      # Use echo, or task will fail if sudo not found
+      raw: echo -n $(command -v sudo)
+      register: my_sudo
+      tags:
+        - "Debian"
+
+    - name: Add sudo package and add ansible_user to sudo group (Debian)
+      become: true
+      become_method: su
+      raw: |
+        apt update
+        apt -y install sudo
+        /usr/sbin/usermod -aG sudo {{ ansible_user }}
+        echo '{{ ansible_user }} ALL=(ALL:ALL) ALL' | tee /etc/sudoers.d/{{ ansible_user }}
+        chmod 440 /etc/sudoers.d/{{ ansible_user }}
+      when: my_distribution.stdout | trim in ["Debian"] and my_sudo.stdout | trim == ""
+      tags:
+        - "Debian"

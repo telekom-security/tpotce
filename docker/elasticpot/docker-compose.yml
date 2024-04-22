@@ -16,7 +16,7 @@ services:
      - elasticpot_local
     ports:
      - "9200:9200"
-    image: "dtagdevsec/elasticpot:2204"
+    image: "dtagdevsec/elasticpot:24.04"
     read_only: true
     volumes:
-     - /data/elasticpot/log:/opt/elasticpot/log
+     - $HOME/tpotce/data/elasticpot/log:/opt/elasticpot/log

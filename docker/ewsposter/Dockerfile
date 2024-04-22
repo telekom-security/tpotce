@@ -1,29 +1,30 @@
-FROM alpine:3.17
+FROM alpine:3.19
 #
 # Include dist
 COPY dist/ /root/dist/
 #
 # Install packages
 RUN apk -U --no-cache add \
-            build-base \
-            git \
-            libffi-dev \
-            libssl1.1 \
-            openssl-dev \
-	    python3 \
-            python3-dev \
-            py3-cffi \
-	    py3-cryptography \
-            py3-ipaddress \
-	    py3-lxml \
-	    py3-mysqlclient \
-	    py3-openssl \
-            py3-requests \
-	    py3-pip \
-            py3-setuptools \
-            py3-wheel && \
-    pip3 install --upgrade pip && \
-    pip3 install --no-cache-dir configparser hpfeeds3 influxdb influxdb-client xmljson && \
+		build-base \
+		git \
+		libffi-dev \
+		libssl3 \
+		openssl-dev \
+		python3 \
+		python3-dev \
+		py3-cffi \
+		py3-cryptography \
+		py3-ipaddress \
+		py3-lxml \
+		py3-mysqlclient \
+		py3-openssl \
+		py3-requests \
+		py3-pip \
+		py3-setuptools \
+		py3-wheel && \
+	pip3 install --break-system-packages --upgrade pip && \
+	pip3 install --break-system-packages --no-cache-dir configparser hpfeeds3 influxdb influxdb-client xmljson && \
+
 #
 # Setup ewsposter
     git clone https://github.com/telekom-security/ewsposter -b v1.25.0 /opt/ewsposter && \
@@ -41,10 +42,10 @@ RUN apk -U --no-cache add \
 #
 # Clean up
     apk del build-base \
-            git \
-            openssl-dev \
-            python3-dev \
-            py-setuptools && \
+		git \
+		openssl-dev \
+		python3-dev \
+		py-setuptools && \
     rm -rf /root/* /var/cache/apk/* /opt/ewsposter/.git
 #
 # Run ewsposter

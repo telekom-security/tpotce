@@ -1,19 +1,19 @@
 # In case of problems Alpine 3.13 needs to be used:
 # https://wiki.alpinelinux.org/wiki/Release_Notes_for_Alpine_3.14.0#faccessat2
-FROM alpine:3.17
+FROM alpine:3.19
 #
 # Add source
 COPY . /opt/p0f
 #
 # Install packages
 RUN apk -U --no-cache add \
-                       bash \
-                       build-base \
-                       jansson \
-                       jansson-dev \
-                       libcap \
-                       libpcap \
-                       libpcap-dev && \
+		bash \
+		build-base \
+		jansson \
+		jansson-dev \
+		libcap \
+		libpcap \
+		libpcap-dev && \
 #
 # Setup user, groups and configs
     addgroup -g 2000 p0f && \

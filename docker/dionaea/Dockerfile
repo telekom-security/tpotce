@@ -17,36 +17,36 @@ RUN ARCH=$(arch) && \
     apt install ./libemu2_0.2.0+git20120122-1.2+b1_$ARCH.deb \
                 ./libemu-dev_0.2.0+git20120122-1.2+b1_$ARCH.deb -y && \
     apt-get install -y --no-install-recommends \
-	build-essential \
-	ca-certificates \
-	check \
-	cmake \
-	cython3 \
-	git \
-        libcap2-bin \
-	libcurl4-openssl-dev \
-	libev-dev \
-	libglib2.0-dev \
-	libloudmouth1-dev \
-	libnetfilter-queue-dev \
-	libnl-3-dev \
-	libpcap-dev \
-	libssl-dev \
-	libtool \
-	libudns-dev \
-	procps \
-	python3 \
-	python3-dev \
-	python3-boto3 \
-	python3-bson \
-	python3-yaml \
-	fonts-liberation && \
+		build-essential \
+		ca-certificates \
+		check \
+		cmake \
+		cython3 \
+		git \
+		libcap2-bin \
+		libcurl4-openssl-dev \
+		libev-dev \
+		libglib2.0-dev \
+		libloudmouth1-dev \
+		libnetfilter-queue-dev \
+		libnl-3-dev \
+		libpcap-dev \
+		libssl-dev \
+		libtool \
+		libudns-dev \
+		procps \
+		python3 \
+		python3-dev \
+		python3-boto3 \
+		python3-bson \
+		python3-yaml \
+		fonts-liberation && \
 #
 # Get and install dionaea
-    # Latest master is unstable, SIP causes crashing
-    git clone --depth=1 https://github.com/dinotools/dionaea -b 0.11.0 /root/dionaea/ && \
+    # git clone --depth=1 https://github.com/dinotools/dionaea -b 0.11.0 /root/dionaea/ && \
+    git clone --depth=1 https://github.com/dinotools/dionaea /root/dionaea/ && \
     cd /root/dionaea && \
-    #git checkout 1426750b9fd09c5bfeae74d506237333cd8505e2 && \
+    git checkout 4e459f1b672a5b4c1e8335c0bff1b93738019215 && \
     mkdir build && \
     cd build && \
     cmake -DCMAKE_INSTALL_PREFIX:PATH=/opt/dionaea .. && \
@@ -62,6 +62,7 @@ RUN ARCH=$(arch) && \
     chown -R dionaea:dionaea /opt/dionaea/var && \
     rm -rf /opt/dionaea/etc/dionaea/* && \
     mv /root/dist/etc/* /opt/dionaea/etc/dionaea/ && \
+    cp /root/dist/cpu_check.py / && \
 #
 # Setup runtime and clean up
     apt-get purge -y \
@@ -88,12 +89,13 @@ RUN ARCH=$(arch) && \
       python3-bson \
       python3-yaml \ 
       wget && \ 
-
+#
     apt-get install -y \
       ca-certificates \
       python3 \
       python3-boto3 \
       python3-bson \
+      python3-psutil \
       python3-yaml \
       libcurl4 \
       libemu2 \
@@ -111,7 +113,8 @@ RUN ARCH=$(arch) && \
 #
 # Start dionaea
 STOPSIGNAL SIGINT
-# Dionaea sometimes hangs at 100% CPU usage, if detected process will be killed and container restarts per docker-compose settings
-HEALTHCHECK CMD if [ $(ps -C mpv -p 1 -o %cpu | tail -n 1 | cut -f 1 -d ".") -gt 75 ]; then kill -2 1; else exit 0; fi
+#
+# Dionaea sometimes hangs at 100% CPU usage, if detected container will become unhealthy and restarted by tpotinit
+HEALTHCHECK --interval=5m --timeout=30s --retries=3 CMD python3 /cpu_check.py $(pgrep -of dionaea) 99
 USER dionaea:dionaea
 CMD ["/opt/dionaea/bin/dionaea", "-u", "dionaea", "-g", "dionaea", "-c", "/opt/dionaea/etc/dionaea/dionaea.cfg"]

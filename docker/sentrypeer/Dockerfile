@@ -2,7 +2,7 @@ FROM alpine:edge
 #
 # Install packages
 RUN apk -U add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/testing \
-            sentrypeer && \
+		sentrypeer && \
 #
 # Setup user, groups and configs
     mkdir -p /var/log/sentrypeer && \

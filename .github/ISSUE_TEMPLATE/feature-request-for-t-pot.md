@@ -1,6 +1,6 @@
 ---
-name: Feature request for T-Pot
-about: Suggest an idea for T-Pot
+name: Feature request for T-Pot 24.04.x
+about: Suggest an idea for T-Pot 24.04.x
 title: ''
 labels: ''
 assignees: ''

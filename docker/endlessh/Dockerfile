@@ -1,13 +1,13 @@
-FROM alpine:3.13 as builder
+FROM alpine:3.16 as builder
 #
 # Include dist
 ADD dist/ /root/dist/
 #
 # Install packages
 RUN apk -U add --no-cache \
-            build-base \
-	    git \
-            libcap && \
+		build-base \
+		git \
+		libcap && \
 #
 # Install endlessh from git
     git clone https://github.com/skeeto/endlessh /opt/endlessh && \
@@ -16,13 +16,13 @@ RUN apk -U add --no-cache \
     make && \
     mv /opt/endlessh/endlessh /root/dist
 #
-FROM alpine:3.17
+FROM alpine:3.19
 #
 COPY --from=builder /root/dist/* /opt/endlessh/
 #
 # Install packages
 RUN apk -U add --no-cache \
-            libcap && \
+		libcap && \
 #
 # Setup user, groups and configs
     mkdir -p /var/log/endlessh && \

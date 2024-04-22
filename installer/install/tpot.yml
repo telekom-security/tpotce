@@ -1,0 +1,777 @@
+---
+################################
+# T-Pot - Bootstrapping Python #
+################################
+
+- name: T-Pot - Bootstrapping Python
+  hosts: all
+  gather_facts: false
+  become: true
+  become_method: sudo
+
+  tasks:
+    - name: Get distribution name (All)
+      raw: awk -F= '/^NAME/{print $2}' /etc/os-release | tr -d '"' | cut -d " " -f1
+      register: my_distribution
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Check if python3 is installed (All)
+      raw: echo $(command -v python3)
+      register: my_python3
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Add python package (Debian, Raspbian, Ubuntu)
+      raw: |
+        apt update
+        apt -y install python3
+      when: my_distribution.stdout | trim in ["Debian", "Raspbian", "Ubuntu"] and my_python3.stdout | trim == ""
+      tags:
+        - "Debian"
+        - "Raspbian"
+        - "Ubuntu"
+
+    - name: Add python package (Alma, Fedora, Rocky)
+      raw: |
+        dnf -y --refresh install python3
+      when: my_distribution.stdout | trim in ["AlmaLinux", "Fedora", "Rocky"] and my_python3.stdout | trim == ""
+      tags:
+        - "AlmaLinux"
+        - "Fedora"
+        - "Rocky"
+
+    - name: Add python package (openSUSE Tumbleweed)
+      raw: |
+        zypper refresh
+        zypper -y install python3
+      when: my_distribution.stdout | trim in ["AlmaLinux", "Fedora", "Rocky"] and my_python3.stdout | trim == ""
+      tags:
+        - "openSUSE Tumbleweed"
+
+#####################################################################
+# T-Pot - Abort if run as tpot, root or on unsupported distribution #
+#####################################################################
+
+- name: T-Pot - Abort if run as tpot, root or on unsupported distribution
+  hosts: all
+  gather_facts: true
+  become: false
+  tags:
+    - "AlmaLinux"
+    - "Debian"
+    - "Fedora"
+    - "openSUSE Tumbleweed"
+    - "Raspbian"
+    - "Rocky"
+    - "Ubuntu"
+
+  tasks:
+    - name: Check if running as root (All)
+      assert:
+        that: ansible_user_id != 'root'
+        fail_msg: "T-Pot playbook should not be run as root."
+        success_msg: "Running as user: {{ ansible_user_id }}."
+
+    - name: Check if running as tpot (All)
+      assert:
+        that: ansible_user_id != 'tpot'
+        fail_msg: "Reserved username `tpot` detected."
+        success_msg: "Running as user: {{ ansible_user_id }}."
+
+    - name: Check if supported distribution (All)
+      assert:
+        that: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
+        fail_msg: "T-Pot is not supported on this plattform: {{ ansible_distribution }}."
+        success_msg: "T-Pot will now install on {{ ansible_distribution }}."
+
+############################################################
+# T-Pot - Install recommended, remove conflicting packages #
+############################################################
+
+- name: T-Pot - Install recommended, remove conflicting packages 
+  hosts: all
+  gather_facts: true
+  become: true
+
+  tasks:
+    - name: Syncing clocks (All)
+      shell: "hwclock --hctosys"
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
+      ignore_errors: true
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Install recommended packages (Debian, Raspbian, Ubuntu)
+      package:
+        name:
+          - apache2-utils
+          - bash-completion
+          - ca-certificates
+          - cracklib-runtime
+          - cron
+          - curl
+          - exa
+          - git
+          - gnupg
+          - grc
+          - htop
+          - micro
+          - net-tools
+          - vim
+          - wget
+        state: latest
+        update_cache: yes
+      when: ansible_distribution in ["Debian", "Raspbian", "Ubuntu"]
+      tags:
+        - "Debian"
+        - "Raspbian"
+        - "Ubuntu"
+
+    - name: Install grc from remote repo (AlmaLinux, Rocky)
+      ansible.builtin.dnf:
+        name: 'https://github.com/kriipke/grc/releases/download/1.13.8/grc-1.13.8-1.el7.noarch.rpm'
+        disable_gpg_check: true
+        state: present
+      when: ansible_distribution in ["AlmaLinux", "Rocky"]
+      tags:
+        - "AlmaLinux"
+        - "Rocky"
+
+    - name: Install recommended packages (AlmaLinux, Rocky)
+      package:
+        name:
+          - bash-completion
+          - ca-certificates
+          - cracklib
+          - curl
+          - dnf-plugins-core
+          - exa
+          - git
+          - grc
+          - htop
+          - httpd-tools
+          - net-tools
+          - tar
+          - vim
+          - wget
+        state: latest
+        update_cache: yes
+      when: ansible_distribution in ["AlmaLinux", "Rocky"]
+      tags:
+        - "AlmaLinux"
+        - "Rocky"
+
+    - name: Download and install micro editor (AlmaLinux, openSUSE Tumbleweed, Rocky)
+      shell: "curl https://getmic.ro | bash && mv micro /usr/bin"
+      args:
+        executable: /bin/bash
+      when: ansible_distribution in ["AlmaLinux", "openSUSE Tumbleweed", "Rocky"]
+      tags:
+        - "AlmaLinux"
+        - "openSUSE Tumbleweed"
+        - "Rocky"
+
+    - name: Install recommended packages (Fedora)
+      package:
+        name:
+          - bash-completion
+          - ca-certificates
+          - cracklib
+          - cronie
+          - curl
+          - dnf-plugins-core
+          - exa
+          - git
+          - grc
+          - htop
+          - httpd-tools
+          - micro
+          - net-tools
+          - vim
+          - wget
+        state: latest
+        update_cache: yes
+      when: ansible_distribution in ["Fedora"]
+      tags:
+        - "Fedora"
+
+    - name: Remove conflicting packages (openSUSE Tumbleweed)
+      package:
+        name:
+          - cups
+          - net-tools
+          - postfix
+          - yast2-auth-client
+          - yast2-auth-user
+        state: absent 
+        update_cache: yes
+      when: ansible_distribution in ["openSUSE Tumbleweed"]
+      tags:
+        - "openSUSE Tumbleweed"
+
+    - name: Install recommended packages (openSUSE Tumbleweed)
+      package:
+        name:
+          - apache2-utils
+          - bash-completion
+          - busybox-net-tools
+          - ca-certificates
+          - cracklib
+          - curl
+          - exa
+          - git
+          - grc
+          - htop
+          - vim
+          - wget
+        state: latest
+        update_cache: yes
+      when: ansible_distribution in ["openSUSE Tumbleweed"]
+      tags:
+        - "openSUSE Tumbleweed"
+
+#####################################
+# T-Pot - Prepare for Docker Engine #
+#####################################
+
+- name: T-Pot - Prepare for and install Docker Engine
+  hosts: all
+  gather_facts: true
+  become: true
+
+  tasks:
+    - name: Remove distribution based Docker packages (AlmaLinux, Debian, Fedora, Raspbian, Rocky, Ubuntu)
+      package:
+        name:
+          - docker
+          - docker-engine
+          - docker.io
+          - containerd 
+          - runc
+        state: absent
+        update_cache: yes
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "Raspbian", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "Raspbian"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Add folder for Docker Engine GPG key (Debian, Raspbian, Ubuntu)
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: 0755
+      when: ansible_distribution in ["Debian", "Raspbian", "Ubuntu"]
+      tags:
+        - "Debian"
+        - "Raspbian"
+        - "Ubuntu"
+
+    - name: Download Docker Engine GPG key (Debian, Raspbian, Ubuntu)
+      get_url:
+        url: https://download.docker.com/linux/{{ ansible_distribution | lower }}/gpg
+        dest: /etc/apt/keyrings/docker
+        mode: 0755
+      when: ansible_distribution in ["Debian", "Raspbian", "Ubuntu"]
+      tags:
+        - "Debian"
+        - "Raspbian"
+        - "Ubuntu"
+
+    - name: Decrypt Docker Engine GPG key (Debian, Raspbian, Ubuntu)
+      shell: gpg --dearmor /etc/apt/keyrings/docker
+      args:
+        creates: /etc/apt/keyrings/docker.gpg
+      when: ansible_distribution in ["Debian", "Raspbian", "Ubuntu"]
+      tags:
+        - "Debian"
+        - "Raspbian"
+        - "Ubuntu"
+
+    - name: Add Docker Engine repository (Debian, Raspbian, Ubuntu)
+      apt_repository:
+        filename: docker
+        repo: "deb [arch={{ ansible_architecture | replace('aarch64', 'arm64') | replace('x86_64', 'amd64') }} signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} stable"
+        state: present
+        update_cache: yes
+      when: ansible_distribution in ["Debian", "Raspbian", "Ubuntu"]
+      tags:
+        - "Debian"
+        - "Raspbian"
+        - "Ubuntu"
+
+    - name: Add Docker repository (Fedora)
+      shell: |
+        if [ "$(dnf repolist docker-ce-stable)" == "" ];
+          then
+            dnf -y config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo
+        fi
+      when: ansible_distribution in ["Fedora"]
+      tags:
+        - "Fedora"
+
+    - name: Add Docker repository (AlmaLinux, Rocky)
+      shell: |
+        if [ "$(dnf repolist docker-ce-stable)" == "" ];
+          then
+            dnf -y config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+        fi
+      when: ansible_distribution in ["AlmaLinux", "Rocky"]
+      tags:
+        - "AlmaLinux"
+        - "Rocky"
+
+
+#################################
+# T-Pot - Install Docker Engine #
+#################################
+
+- name: T-Pot - Install Docker Engine
+  hosts: all
+  gather_facts: true
+  become: true
+
+  tasks:
+    - name: Install Docker Engine packages (openSUSE Tumbleweed)
+      package:
+        name:
+          - docker
+          - docker-bash-completion
+          - docker-buildx
+          - docker-compose
+          - docker-compose-switch
+          - liblvm2cmd2_03
+          - lvm2
+        state: latest
+        update_cache: yes
+      when: ansible_distribution in ["openSUSE Tumbleweed"]
+      tags:
+        - "openSUSE Tumbleweed"
+
+    - name: Install Docker Engine packages (AlmaLinux, Debian, Fedora, Raspbian, Rocky, Ubuntu)
+      package:
+        name:
+          - docker-ce 
+          - docker-ce-cli 
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin 
+        state: latest
+        update_cache: yes
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "Raspbian", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "Raspbian"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Stop Docker (All)
+      service:
+        name: docker
+        state: stopped
+        enabled: false
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "Rocky"
+        - "Ubuntu"
+
+######################################################
+# T-Pot - Adjust configs, add users and groups, etc. #
+######################################################
+
+- name: T-Pot - Adjust configs, add users and groups, etc.
+  hosts: all
+  gather_facts: true
+  become: true
+
+  tasks:
+    - name: Create T-Pot group (All)
+      group:
+        name: tpot
+        gid: 2000
+        state: present
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Create T-Pot user (All)
+      user:
+        name: tpot
+        uid: 2000
+        system: yes
+        shell: /bin/false
+        home: /nonexistent
+        group: tpot
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Disable ssh.socket unit (Ubuntu)
+      systemd:
+        name: ssh.socket
+        state: stopped
+        enabled: false
+      when: ansible_distribution in ["Ubuntu"]
+      tags:
+        - "Ubuntu"
+
+    - name: Remove ssh.socket.conf file (Ubuntu)
+      file:
+        path: /etc/systemd/system/ssh.service.d/00-socket.conf
+        state: absent
+      when: ansible_distribution in ["Ubuntu"]
+      tags:
+        - "Ubuntu"
+
+    - name: Change SSH Port to 64295 (AlmaLinux, Debian, Fedora, Raspbian, Rocky, Ubuntu)
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        line: "Port 64295"
+        insertafter: EOF
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "Raspbian", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "Raspbian"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Change SSH Port to 64295 (openSUSE Tumbleweed)
+      lineinfile:
+        path: /etc/ssh/sshd_config.d/port.conf
+        line: "Port 64295"
+        create: yes
+      when: ansible_distribution in ["openSUSE Tumbleweed"]
+      tags:
+        - "openSUSE Tumbleweed"
+
+    - name: Add T-Pot SSH port to Firewall (AlmaLinux, Fedora, openSUSE Tumbleweed, Rocky)
+      firewalld:
+        port: 64295/tcp
+        permanent: yes
+        state: enabled
+      when: ansible_distribution in ["AlmaLinux", "Fedora", "openSUSE Tumbleweed", "Rocky"]
+      tags:
+        - "AlmaLinux"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Rocky"
+
+    - name: Set T-Pot default target to ACCEPT (AlmaLinux, Fedora, openSUSE Tumbleweed, Rocky)
+      firewalld:
+        zone: public
+        target: ACCEPT
+        permanent: yes
+        state: enabled
+      when: ansible_distribution in ["AlmaLinux", "Fedora", "openSUSE Tumbleweed", "Rocky"]
+      tags:
+        - "AlmaLinux"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Rocky"
+
+    - name: Load kernel modules (AlmaLinux, Fedora, Rocky)
+      command: modprobe -v iptable_filter
+      when: ansible_distribution in ["AlmaLinux", "Fedora", "Rocky"]
+      tags:
+        - "AlmaLinux"
+        - "Fedora"
+        - "Rocky"
+
+    - name: Update iptables.conf (AlmaLinux, Fedora, Rocky)
+      lineinfile:
+        path: /etc/modules-load.d/iptables.conf
+        line: iptable_filter
+        create: yes
+      when: ansible_distribution in ["AlmaLinux", "Fedora", "Rocky"]
+      tags:
+        - "AlmaLinux"
+        - "Fedora"
+        - "Rocky"
+
+    - name: Set SELinux config to permissive (AlmaLinux, Fedora, Rocky)
+      lineinfile:
+        path: /etc/selinux/config
+        regexp: '^SELINUX='
+        line: 'SELINUX=permissive'
+      when: ansible_distribution in ["AlmaLinux", "Fedora", "Rocky"]
+      tags:
+        - "AlmaLinux"
+        - "Fedora"
+        - "Rocky"
+
+    - name: Set SELinux to permissive (AlmaLinux, Fedora, Rocky)
+      command: "setenforce Permissive"
+      when: ansible_distribution in ["AlmaLinux", "Fedora", "Rocky"]
+      tags:
+        - "AlmaLinux"
+        - "Fedora"
+        - "Rocky"
+
+    - name: Stop Resolved (Fedora, Ubuntu)
+      service:
+        name: systemd-resolved
+        state: stopped
+      when: ansible_distribution in ["Fedora", "Ubuntu"]
+      tags:
+        - "Fedora"
+        - "Ubuntu"
+
+    - name: Modify DNSStubListener in resolved.conf (Fedora, Ubuntu)
+      lineinfile:
+        path: /etc/systemd/resolved.conf
+        regexp: '^.*DNSStubListener=.*'
+        line: 'DNSStubListener=no'
+        state: present
+      when: ansible_distribution in ["Fedora", "Ubuntu"]
+      tags:
+        - "Fedora"
+        - "Ubuntu"
+
+############################
+# T-Pot - Restart services #
+############################
+
+- name: T-Pot - Restart services
+  hosts: all
+  gather_facts: true
+  become: true
+
+  tasks:
+    - name: Start Resolved (Fedora, Ubuntu)
+      service:
+        name: systemd-resolved
+        state: restarted
+      when: ansible_distribution in ["Fedora", "Ubuntu"]
+      tags:
+        - "Fedora"
+        - "Ubuntu"
+
+    - name: Restart Firewalld (AlmaLinux, Fedora, openSUSE Tumbleweed, Rocky)
+      service:
+        name: firewalld
+        state: restarted
+      when: ansible_distribution in ["AlmaLinux", "Fedora", "openSUSE Tumbleweed", "Rocky"]
+      tags:
+        - "AlmaLinux"
+        - "Fedora"
+        - "Rocky"
+        - "openSUSE Tumbleweed"
+
+    - name: Get Firewall rules (AlmaLinux, Fedora, openSUSE Tumbleweed, Rocky)
+      command: "firewall-cmd --list-all"
+      register: firewall_output
+      when: ansible_distribution in ["AlmaLinux", "Fedora", "openSUSE Tumbleweed", "Rocky"]
+      tags:
+        - "AlmaLinux"
+        - "Fedora"
+        - "Rocky"
+        - "openSUSE Tumbleweed"
+
+    - name: Print Firewall rules (AlmaLinux, Fedora, openSUSE Tumbleweed, Rocky)
+      debug:
+        var: firewall_output.stdout_lines
+      when: ansible_distribution in ["AlmaLinux", "Fedora", "openSUSE Tumbleweed", "Rocky"]
+      tags:
+        - "AlmaLinux"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Rocky"
+
+    - name: Enable Docker Engine upon boot (All)
+      service:
+        name: docker
+        state: restarted
+        enabled: true
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Restart SSH (All)
+      service:
+        name: "{{ 'ssh' if ansible_distribution in ['Ubuntu'] else 'sshd' }}"
+        state: restarted
+        enabled: true
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "Rocky"
+        - "Ubuntu"
+
+#######################################################################
+# T-Pot - Adjust group users, bashrc, clone / update T-Pot repository #
+#######################################################################
+
+- name: T-Pot - Adjust group users, bashrc, clone / update T-Pot repository
+  hosts: all
+  gather_facts: true
+  become: false
+  tags:
+    - "AlmaLinux"
+    - "Debian"
+    - "Fedora"
+    - "openSUSE Tumbleweed"
+    - "Raspbian"
+    - "Rocky"
+    - "Ubuntu"
+
+  tasks:
+    - name: Check for non-root user id (All)
+      debug:
+        msg: "Detected user: '{{ ansible_user_id }}'"
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
+      failed_when: ansible_user_id == "root"
+
+    - name: Add aliases (All)
+      blockinfile:
+        path: ~/.bashrc
+        block: |
+          alias dps='grc --colour=on docker ps -f status=running -f status=exited --format "table {{'{{'}}.Names{{'}}'}}\\t{{'{{'}}.Status{{'}}'}}\\t{{'{{'}}.Ports{{'}}'}}" | sort'
+          alias dpsw='watch -c bash -ic dps'
+          alias mi='micro'
+          alias sudo='sudo '
+          alias ls='exa'
+          alias ll='exa -hlg'
+          alias la='exa -hlag'
+        marker: "# {mark} ANSIBLE MANAGED BLOCK"
+        insertafter: EOF
+        state: present
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
+
+    - name: Clone / Update T-Pot repository (All)
+      git:
+        repo: 'https://github.com/telekom-security/tpotce'
+        dest: '/home/{{ ansible_user_id }}/tpotce/'
+        version: master
+        clone: yes
+        update: no
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
+
+    - name: Add current user to Docker, T-Pot group (All)
+      become: true
+      user:
+        name: "{{ ansible_user_id }}"
+        groups: 
+          - docker
+          - tpot
+        append: yes
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
+
+########################################
+# T-Pot - Install service and cron job #
+########################################
+
+- name: T-Pot - Install service
+  hosts: all
+  gather_facts: true
+  become: false
+  tags:
+    - "AlmaLinux"
+    - "Debian"
+    - "Fedora"
+    - "openSUSE Tumbleweed"
+    - "Raspbian"
+    - "Rocky"
+    - "Ubuntu"
+
+  tasks:
+    - name: Install systemd service (All)
+      become: true
+      ansible.builtin.template:
+        src: '/home/{{ ansible_user_id }}/tpotce/installer/install/tpot.service'
+        dest: '/etc/systemd/system/tpot.service'
+        owner: root
+        group: root
+        mode: '0755'
+      notify: Reload systemd and enable service
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
+
+  handlers:
+    - name: Reload systemd and enable service
+      become: true
+      ansible.builtin.systemd:
+        name: tpot.service
+        daemon_reload: yes
+        state: stopped
+        enabled: yes
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
+
+- name: T-Pot - Setup a randomized daily reboot
+  hosts: all
+  gather_facts: true
+  become: yes
+  tags:
+    - "AlmaLinux"
+    - "Debian"
+    - "Fedora"
+    - "openSUSE Tumbleweed"
+    - "Raspbian"
+    - "Rocky"
+    - "Ubuntu"
+
+  vars:
+    random_minute: "{{ range(0, 60) | random }}"
+    random_hour: "{{ range(0, 5) | random }}" # We want the reboot randomly happen at night
+
+  tasks:
+    - name: Setup a randomized daily reboot (All)
+      cron:
+        name: "T-Pot Daily Reboot"
+        user: root
+        minute: "{{ random_minute }}"
+        hour: "{{ random_hour }}"
+        job: "bash -c 'systemctl stop tpot.service && docker container prune -f; docker image prune -f; docker volume prune -f; /usr/sbin/shutdown -r +1 \"T-Pot Daily Reboot\"'"
+        state: present
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]

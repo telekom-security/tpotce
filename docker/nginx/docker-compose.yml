@@ -5,8 +5,7 @@ services:
 # nginx service
   nginx:
     build: .
-    environment:
-      - COCKPIT=false
+#    environment:
     container_name: nginx
     restart: always
     tmpfs:
@@ -23,9 +22,9 @@ services:
       #    ports:
       #     - "64297:64297"
       #     - "127.0.0.1:64304:64304"
-    image: "dtagdevsec/nginx:2204"
+    image: "dtagdevsec/nginx:24.04"
     read_only: true
     volumes:
-     - /data/nginx/cert/:/etc/nginx/cert/:ro
-     - /data/nginx/conf/nginxpasswd:/etc/nginx/nginxpasswd:ro
-     - /data/nginx/log/:/var/log/nginx/
+     - $HOME/tpotce/data/nginx/cert/:/etc/nginx/cert/:ro
+     - $HOME/tpotce/data/nginx/conf/nginxpasswd:/etc/nginx/nginxpasswd:ro
+     - $HOME/tpotce/data/nginx/log/:/var/log/nginx/

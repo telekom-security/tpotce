@@ -1,37 +1,42 @@
 ---
-name: Bug report for T-Pot
-about: Bug report for T-Pot
+name: Bug report for T-Pot 24.04.x
+about: Bug report for T-Pot 24.04.x
 title: ''
 labels: ''
 assignees: ''
 
 ---
 
-Before you post your issue make sure it has not been answered yet and provide `basic support information` if you come to the conclusion it is a new issue.
+# Successfully raise an issue
+Before you post your issue make sure it has not been answered yet and provide **⚠️ BASIC SUPPORT INFORMATION** (as requested below) if you come to the conclusion it is a new issue.
 
 - 🔍 Use the [search function](https://github.com/dtag-dev-sec/tpotce/issues?utf8=%E2%9C%93&q=) first
-- 🧐 Check our [WIKI](https://github.com/dtag-dev-sec/tpotce/wiki)
-- 📚 Consult the documentation of 💻 [Debian](https://www.debian.org/doc/), 🐳 [Docker](https://docs.docker.com/), the 🦌 [ELK stack](https://www.elastic.co/guide/index.html) and the 🍯 [T-Pot Readme](https://github.com/dtag-dev-sec/tpotce/blob/master/README.md).
-- **⚠️ Provide [basic support information](#info) or similiar information with regard to your issue or we can not help you and will close the issue without further notice**
+- 🧐 Check our [Wiki](https://github.com/dtag-dev-sec/tpotce/wiki) and the [discussions](https://github.com/telekom-security/tpotce/discussions)
+- 📚 Consult the documentation of 💻 your Linux OS, 🐳 [Docker](https://docs.docker.com/), the 🦌 [Elastic stack](https://www.elastic.co/guide/index.html) and the 🍯 [T-Pot Readme](https://github.com/dtag-dev-sec/tpotce/blob/master/README.md).
+- **⚠️ Provide [BASIC SUPPORT INFORMATION](#-basic-support-information-commands-are-expected-to-run-as-root) or similar detailed information with regard to your issue or we will close the issue or convert it into a discussion without further interaction from the maintainers**.<br>
 
-<br>
-<br>
-<br>
+# ⚠️ Basic support information (commands are expected to run as `root`)
 
-<a name="info"></a>
-## ⚠️ Basic support information (commands are expected to run as `root`)
+**We happily take the time to improve T-Pot and take care of things, but we need you to take the time to create an issue that provides us with all the information we need.** 
 
-- What version of the OS are you currently using `lsb_release -a` and `uname -a`?
-- What T-Pot version are you currently using?
-- What edition (Standard, Nextgen, etc.) of T-Pot are you running?
+- What OS are you T-Pot running on?
+- What is the version of the OS `lsb_release -a` and `uname -a`?
+- What T-Pot version are you currently using (only **T-Pot 24.04.x** is currently supported)?
 - What architecture are you running on (i.e. hardware, cloud, VM, etc.)?
-- Did you have any problems during the install? If yes, please attach `/install.log` `/install.err`.
+- Review the `~/install_tpot.log`, attach the log and highlight the errors.
 - How long has your installation been running?
+  - If it is a fresh install consult the documentation first.
+  - Most likely it is a port conflict or a remote dependency was unavailable.
+  - Retry a fresh installation and only open the issue if the error keeps coming up and is not resolved using the documentation as described [here](#how-to-raise-an-issue).  
 - Did you install upgrades, packages or use the update script?
 - Did you modify any scripts or configs? If yes, please attach the changes.
-- Please provide a screenshot of `glances` and `htop`.
+- Please provide a screenshot of `htop` and `docker stats`.
 - How much free disk space is available (`df -h`)?
 - What is the current container status (`dps.sh`)?
-- What is the status of the T-Pot service (`systemctl status tpot`)?
-- What ports are being occupied? Stop T-Pot `systemctl stop tpot` and run `netstat -tulpen`
+- On Linux: What is the status of the T-Pot service (`systemctl status tpot`)?
+- What ports are being occupied? Stop T-Pot `systemctl stop tpot` and run `grc netstat -tulpen`
+  - Stop T-Pot `systemctl stop tpot`
+  - Run `grc netstat -tulpen`
+  - Run T-Pot manually with `docker compose -f ~/tpotce/docker-compose.yml up` and check for errors
+  - Stop execution with `CTRL-C` and `docker compose -f ~/tpotce/docker-compose.yml down -v`
 - If a single container shows as `DOWN` you can run `docker logs <container-name>` for the latest log entries

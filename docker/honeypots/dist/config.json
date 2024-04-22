@@ -45,7 +45,7 @@
          "log_file_name":"http.log",
          "max_bytes":0,
          "backup_count":10,
-	 "options":["capture_commands","fix_get_client_ip"]
+		 "options":["capture_commands","fix_get_client_ip"]
       },
       "https":{
          "port":443,
@@ -55,7 +55,7 @@
          "log_file_name":"https.log",
          "max_bytes":0,
          "backup_count":10,
-	 "options":["capture_commands","fix_get_client_ip"]
+		 "options":["capture_commands","fix_get_client_ip"]
       },
       "imap":{
          "port":143,
@@ -65,7 +65,7 @@
          "log_file_name":"imap.log",
          "max_bytes":0,
          "backup_count":10,
-	 "options":["capture_commands"]
+		 "options":["capture_commands"]
       },
       "mysql":{
          "port":3306,
@@ -75,7 +75,7 @@
          "log_file_name":"mysql.log",
          "max_bytes":0,
          "backup_count":10,
-	 "options":["capture_commands"]
+		 "options":["capture_commands"]
       },
       "pop3":{
          "port":110,
@@ -85,7 +85,7 @@
          "log_file_name":"pop3.log",
          "max_bytes":0,
          "backup_count":10,
-	 "options":["capture_commands"]
+		 "options":["capture_commands"]
       },
       "postgres":{
          "port":5432,
@@ -95,7 +95,7 @@
          "log_file_name":"postgres.log",
          "max_bytes":0,
          "backup_count":10,
-	 "options":["capture_commands"]
+		 "options":["capture_commands"]
       },
       "redis":{
          "port":6379,
@@ -105,7 +105,7 @@
          "log_file_name":"redis.log",
          "max_bytes":0,
          "backup_count":10,
-	 "options":["capture_commands"]
+		 "options":["capture_commands"]
       },
       "smb":{
          "port":445,
@@ -115,7 +115,7 @@
          "log_file_name":"smb.log",
          "max_bytes":0,
          "backup_count":10,
-	 "options":["capture_commands"]
+		 "options":["capture_commands"]
       },
       "smtp":{
          "port":25,
@@ -125,7 +125,7 @@
          "log_file_name":"smtp.log",
          "max_bytes":10000,
          "backup_count":10,
-	 "options":["capture_commands"]
+		 "options":["capture_commands"]
       },
       "socks5":{
          "port":1080,
@@ -135,7 +135,7 @@
          "log_file_name":"socks5.log",
          "max_bytes":0,
          "backup_count":10,
-	 "options":["capture_commands"]
+		 "options":["capture_commands"]
       },
       "ssh":{
          "port":22,
@@ -145,7 +145,7 @@
          "log_file_name":"ssh.log",
          "max_bytes":0,
          "backup_count":10,
-	 "options":["capture_commands", "interactive"]
+		 "options":["capture_commands", "interactive"]
       },
       "telnet":{
          "port":23,
@@ -155,7 +155,7 @@
          "log_file_name":"telnet.log",
          "max_bytes":0,
          "backup_count":10,
-	 "options":["capture_commands"]
+		 "options":["capture_commands"]
       },
       "vnc":{
          "port":5900,
@@ -165,7 +165,7 @@
          "log_file_name":"vnc.log",
          "max_bytes":0,
          "backup_count":10,
-	 "options":["capture_commands"]
+		 "options":["capture_commands"]
       },
       "elastic":{
          "port":9200,
@@ -175,7 +175,7 @@
          "log_file_name":"elastic.log",
          "max_bytes":0,
          "backup_count":10,
-	 "options":["capture_commands"]
+		 "options":["capture_commands"]
       },
       "mssql":{
          "port":1433,
@@ -185,7 +185,7 @@
          "log_file_name":"mssql.log",
          "max_bytes":0,
          "backup_count":10,
-	 "options":["capture_commands"]
+		 "options":["capture_commands"]
       },
       "ldap":{
          "port":389,
@@ -195,7 +195,7 @@
          "log_file_name":"ldap.log",
          "max_bytes":0,
          "backup_count":10,
-	 "options":["capture_commands"]
+		 "options":["capture_commands"]
       },
       "ntp":{
          "port":123,
@@ -205,7 +205,7 @@
          "log_file_name":"ntp.log",
          "max_bytes":0,
          "backup_count":10,
-	 "options":["capture_commands"]
+		 "options":["capture_commands"]
       },
       "memcache":{
          "port":11211,
@@ -215,7 +215,7 @@
          "log_file_name":"memcache.log",
          "max_bytes":0,
          "backup_count":10,
-	 "options":["capture_commands"]
+		 "options":["capture_commands"]
       },
       "oracle":{
          "port":1521,
@@ -225,7 +225,7 @@
          "log_file_name":"oracle.log",
          "max_bytes":0,
          "backup_count":10,
-	 "options":["capture_commands"]
+		 "options":["capture_commands"]
       },
       "snmp":{
          "port":161,
@@ -235,7 +235,7 @@
          "log_file_name":"snmp.log",
          "max_bytes":0,
          "backup_count":10,
-	 "options":["capture_commands"]
+		 "options":["capture_commands"]
       },
       "sip":{
          "port":5060,
@@ -253,11 +253,41 @@
          "username":"",
          "password":"",
          "log_file_name":"irc.log",
-         "max_bytes":10000,
+         "max_bytes":0,
+         "backup_count":10,
+         "options":["capture_commands"]
+      },
+      "pjl":{
+         "port":9100,
+         "ip":"0.0.0.0",
+         "username":"",
+         "password":"",
+         "log_file_name":"pjl.log",
+         "max_bytes":0,
+         "backup_count":10,
+         "options":["capture_commands"]
+      },
+      "ipp":{
+         "port":631,
+         "ip":"0.0.0.0",
+         "username":"",
+         "password":"",
+         "log_file_name":"ipp.log",
+         "max_bytes":0,
+         "backup_count":10,
+         "options":["capture_commands"]
+      },
+      "rdp":{
+         "port":3389,
+         "ip":"0.0.0.0",
+         "username":"",
+         "password":"",
+         "log_file_name":"rdp.log",
+         "max_bytes":0,
          "backup_count":10,
          "options":["capture_commands"]
       }
-   },
+   },   
    "custom_filter":{
       "honeypots":{
          "change":{
@@ -282,4 +312,3 @@
       }
    }
 }
-

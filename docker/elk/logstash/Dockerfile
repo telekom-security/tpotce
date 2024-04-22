@@ -1,7 +1,7 @@
 FROM ubuntu:22.04
 #
 # VARS
-ENV LS_VER=8.6.2
+ENV LS_VER=8.12.2
 # Include dist
 COPY dist/ /root/dist/
 #
@@ -9,12 +9,9 @@ COPY dist/ /root/dist/
 RUN apt-get update -y && \
     apt-get install -y \
              aria2 \
-	     autossh \
              bash \
              bzip2 \
-	     curl \
-#             openjdk-11-jre \
-             openssh-client && \
+             curl && \
 #
 # Determine arch, get and install packages
     ARCH=$(arch) && \

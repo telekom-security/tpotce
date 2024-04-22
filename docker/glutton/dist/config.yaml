@@ -1,0 +1,23 @@
+ports:
+  tcp: 5000
+#  udp: 5001
+
+rules_path: config/rules.yaml
+
+addresses: ["1.2.3.4", "5.4.3.2"]
+
+producers:
+  enabled: false
+  http:
+    enabled: false
+    remote: https://localhost:9000
+  hpfeeds:
+    enabled: false
+    host: 172.26.0.2
+    port: 20000
+    ident: ident
+    auth: auth
+    channel: test
+
+conn_timeout: 45
+max_tcp_payload: 4096

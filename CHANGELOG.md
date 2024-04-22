@@ -1,45 +1,36 @@
 # Release Notes / Changelog
-T-Pot 22.04.0 is probably the most feature rich release ever provided with long awaited (wanted!) features readily available after installation. 
+T-Pot 24.04.0 marks probably the largest change in the history of the project. While most of the changes have been made to the underlying platform some changes will be standing out in particular - a T-Pot ISO image will no longer be provided with the benefit that T-Pot will now run on multiple Linux distributions (Alma Linux, Debian, Fedora, OpenSuse, Raspbian, Rocky Linux, Ubuntu), Raspberry Pi (optimized) and macOS / Windows (limited).
 
 ## New Features
-* **Distributed** Installation with **HIVE** and **HIVE_SENSOR**
-* **ARM64** support for all provided Docker images
-* **GeoIP Attack Map** visualizing Live Attacks on a dedicated webpage
-* **Kibana Live Attack Map** visualizing Live Attacks from different **HIVE_SENSORS**
-* **Blackhole** is a script trying to avoid mass scanner detection 
-* **Elasticvue** a web front end for browsing and interacting with an Elastic Search cluster
-* **Ddospot** a honeypot for tracking and monitoring UDP-based Distributed Denial of Service (DDoS) attacks
-* **Endlessh** is a SSH tarpit that very slowly sends an endless, random SSH banner
-* **HellPot** is an endless honeypot based on Heffalump that sends unruly HTTP bots to hell
-* **qHoneypots** 25 honeypots in a single container for monitoring network traffic, bots activities, and username \ password credentials
-* **Redishoneypot** is a honeypot mimicking some of the Redis' functions
-* **SentryPeer** a dedicated SIP honeypot
-* **Index Lifecycle Management** for Elasticseach indices is now being used
-
-## Upgrades
-* **Debian 11.x** is now being used for the T-Pot ISO images and required for post installs
-* **Elastic Stack 8.x** is now provided as Docker images
+* **Distributed** Installation is now using NGINX reverse proxy instead of SSH to transmit **HIVE_SENSOR** logs to **HIVE**
+* **`deploy.sh`**, will make the deployment of sensor much easier and will automatically take care of the configuration. You only have to install the T-Pot sensor.  
+* **T-Pot Init** is the foundation for running T-Pot on multiple Linux distributions and will also ensure to restart containers with failed healthchecks using **autoheal**
+* **T-Pot Installer** is now mostly Ansible based providing a universal playbook for the most common Linux distributions 
+* **T-Pot Uninstaller** allows to uninstall T-Pot, while not recommended for general usage, this comes in handy for testing purposes
+* **T-Pot Customizer (`compose/customizer.py`)** is here to assist you in the creation of a customized `docker-compose.yml`
+* **T-Pot Landing Page** has been redesigned and simplified
+![T-Pot-WebUI](doc/tpotwebui.png)
+* **Kibana Dashboards, Objects** fully refreshed in favor of Lens based objects
+![Dashbaord](doc/kibana_a.png)
+* **Wordpot** is added as new addition to the available honeypots within T-Pot and will run on `tcp/8080` by default.
+* **Raspberry Pi** is now supported using a dedicated `mobile.yml` (why this is called mobile will be revealed soon!)
+* **GeoIP Attack Map** is now aware of connects / disconnects and thus eliminating required reloads
+* **Docker**, where possible, will now be installed directly from the Docker repositories to avoid any incompatibilities
+* **`.env`** now provides a single configuration file for the T-Pot related settings
+* **`genuser.sh`** can now be used to add new users to the T-Pot Landing Page as part of the T-Pot configuration file (`.env`)
 
 ## Updates
-* **Honeypots** and **tools** were updated to their latest masters and releases
+* **Honeypots** and **tools** were updated to their latest pushed code and / or releases
+* Where possible Docker Images will now use Alpine 3.19
 * Updates will be provided continuously through Docker Images updates 
 
 ## Breaking Changes
-* For security reasons all Py2.x honeypots with the need of PyPi packages have been removed: **HoneyPy**, **HoneySAP** and **RDPY**
-* If you are upgrading from a previous version of T-Pot (20.06.x) you need to import the new Kibana objects or some of the functionality will be broken or will be unavailabe
-* **Cyberchef** is now part of the Nginx Docker image, no longer as individual image
-* **ElasticSearch Head** is superseded by **Elasticvue** and part the Nginx Docker image
-* **Heimdall** is no longer supported and superseded with a new Bento based landing page
-* **Elasticsearch Curator** is no longer supprted and superseded with **Index Lifecycle Policies** available through Kibana.
+* There is no option to migrate a previous installation to T-Pot 24.04.0, you can try to transfer the old `data` folder to the new T-Pot installation, but a working environment depends on too many other factors outside of our control and a new installation is simply faster.
+* Most of the support scripts were moved into the **T-Pot Init** image and are no longer available directly on the host.
+* Cockpit is no longer available as part of T-Pot itself. However, where supported, you can simply install the `cockpit` package.
 
 # Thanks & Credits
-* @ghenry, for some fun late night debugging and of course SentryPeer!
-* @giga-a, for adding much appreciated features (i.e. JSON logging, 
-X-Forwarded-For, etc.) and of course qHoneypots! 
 * @sp3t3rs, @trixam, for their backend and ews support!
-* @tadashi-oya, for spotting some errors and propose fixes!
-* @tmariuss, @shaderecker for their cloud contributions!
-* @vorband, for much appreciated and helpful insights regarding the GeoIP Attack Map!
-* @yunginnanet, on not giving up on squashing a bug and of course Hellpot!
+* @shark4ce for taking the time to test, debug and offer a solution #1472.
 
 ... and many others from the T-Pot community by opening valued issues and discussions, suggesting ideas and thus helping to improve T-Pot!

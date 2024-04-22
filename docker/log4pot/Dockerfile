@@ -4,21 +4,21 @@ ENV DEBIAN_FRONTEND noninteractive
 # Install packages
 RUN apt-get update -y && \
     apt-get install -y \
-             build-essential \
-	     cargo \
-	     cleo \
-             git \
-	     libcap2 \
-	     libcap2-bin \
-	     libcurl4 \
-	     libcurl4-nss-dev \
-	     libffi7 \
-	     libffi-dev \
-	     libssl-dev \
-	     python3-pip \
-             python3 \
-             python3-dev \
-             rust-all && \
+		build-essential \
+		cargo \
+		cleo \
+		git \
+		libcap2 \
+		libcap2-bin \
+		libcurl4 \
+		libcurl4-nss-dev \
+		libffi7 \
+		libffi-dev \
+		libssl-dev \
+		python3-pip \
+		python3 \
+		python3-dev \
+		rust-all && \
      pip3 install --upgrade pip && \
      pip3 install poetry pycurl && \
 #	     
@@ -31,23 +31,23 @@ RUN apt-get update -y && \
     git checkout e224c0f786efb68b4aab892e69857e379b75b0c6 && \
     sed -i 's#"type": logtype,#"reason": logtype,#g' log4pot-server.py && \
     poetry install && \
-    setcap cap_net_bind_service=+ep /usr/bin/python3.10 && \
+	setcap cap_net_bind_service=+ep $(readlink -f $(which python3)) && \
 #
 # Setup user, groups and configs
-    addgroup --gid 2000 log4pot && \
+	addgroup --gid 2000 log4pot && \
     adduser --system --no-create-home --shell /bin/bash -uid 2000 --disabled-password --disabled-login -gid 2000 log4pot && \
     chown log4pot:log4pot -R /opt/Log4Pot && \
 #
 # Clean up
-     apt-get purge -y build-essential \
-                    cargo \
-                    git \
-		    libffi-dev \
-		    libssl-dev \
-		    python3-dev \
-		    rust-all && \
-    apt-get autoremove -y --purge && \
-    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /root/.cache /opt/Log4Pot/.git
+    apt-get purge -y build-essential \
+		cargo \
+		git \
+		libffi-dev \
+		libssl-dev \
+		python3-dev \
+		rust-all && \
+   apt-get autoremove -y --purge && \
+   apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /root/.cache /opt/Log4Pot/.git
 #
 # Start log4pot
 STOPSIGNAL SIGINT

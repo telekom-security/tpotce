@@ -1,60 +1,163 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
+<head>
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self'; object-src 'none'">
+    <meta charset="UTF-8">
+    <!--Setup Font Awesome-->
+    <link href="assets/fonts/awesome/css/all.css" rel="stylesheet">
+    <!--Setup Particles, Particles Conf, Clock-->
+    <!-- Check integrity: openssl dgst -sha384 -binary your.file.name | openssl base64 -A-->
+    <script src="assets/js/particles.min.js" defer integrity="sha384-d+UOwmNNIC7V4izkTAKSXzWhjC2GxiS9PTykO1XdOPC3nc2z65UOS7SP6QdKPA70" crossorigin="anonymous"></script>
+    <script src="assets/js/particles_conf.js" defer integrity="sha384-0191YAiOrh905UCYh44ZxeO+pKbvuEOIDEmo3F6qHKDL8FO8s66r6P2w8NGMWp7I" crossorigin="anonymous"></script>
+    <script src="assets/js/clock.js" defer integrity="sha384-ymJnuq0yExd1vCEQFQAvYDv0IWfHL1XJYSRt2nyK73ofjF6GzG5baOjLN1dLkGLI" crossorigin="anonymous"></script>
+
     <title>T-Pot</title>
-    <link
-      rel=" shortcut icon"
-      type="image/png"
-      href="assets/icons/favicon.png"
-    />
-    <link rel="stylesheet" href="app.css" />
-    <script src="assets/js/lucide.min.js"></script>
-  </head>
+    <style>
+        /* russo-one-regular - latin */
+        @font-face {
+          font-display: swap; /* Check https://developer.mozilla.org/en-US/docs/Web/CSS/@font-face/font-display for other options. */
+          font-family: 'Russo One';
+          font-style: normal;
+          font-weight: 400;
+          src: url('assets/fonts/russo-one-v16-latin-regular.woff2') format('woff2'); /* Chrome 36+, Opera 23+, Firefox 39+, Safari 12+, iOS 10+ */
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Russo One', normal;
+        }
+        .header-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: absolute;
+            top: 0px;
+            left: 20px;
+            right: 20px;
+        }
+        .clock-container, .dynamic-text {
+            color: #e20074;
+            font-size: 72px;
+        }
+        .dynamic-text {
+            text-align: right;
+        }
+        .logo-container {
+            width: 100%;
+            display: flex;
+            justify-content: flex-end;
+            position: absolute;
+            top: 45%;
+            transform: translateY(-50%);
+        }
+        .logo {
+            width: 25vw;
+            height: auto;
+            position: relative;
+            opacity: 0.9;
+            right: 10%;
+            z-index: 1;
+        }
+        #particles-js {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        .boxes-container {
+            display: flex;
+            justify-content: flex-start;
+            position: absolute;
+            bottom: 50px;
+            left: 20px;
+            padding: 0 20px;
+        }
+        .link-box {
+            margin: 0 10px;
+            padding: 20px;
+            padding-top: 60px;
+            background: rgba(51, 51, 51, 0.3);
+            border-radius: 20px;
+            text-align: center;
+            transition: box-shadow 0.5s ease;
+            z-index: 10;
+            box-sizing: border-box;
+            position: relative;
+            width: 400px; /* Adjust as needed */
+            min-height: 500px;
+            max-width: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: top;
+            align-items: center;
+        }
+        .links-box::before, .tools-box::before {
+            font-family: 'FontAwesome';
+            content: attr(data-caption);
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: transparent;
+            color: #FFF;
+            padding: 0 10px;
+            font-size: 36px;
+            white-space: nowrap;
+        }
+        .link-box:hover {
+            box-shadow: 0 0 15px 5px rgba(226, 0, 116, 0.6);
+            background: rgba(51, 51, 51, 0.3);
+        }
+        .link-box:hover::before {
+            color: #e20074;
+            transition: color 0.5s ease;
+        }
+        .link {
+            display: block;
+            color: #FFF;
+            text-decoration: none;
+            margin: 10px 0;
+            font-size: 42px;
+            transition: color 0.5s ease;
+        }
+        .link:hover {
+            color: #e20074;
+        }
+    </style>
+</head>
+<body>
 
-  <!-- 
-      ╔╗ ╔═╗╔╗╔╔╦╗╔═╗
-      ╠╩╗║╣ ║║║ ║ ║ ║
-      ╚═╝╚═╝╝╚╝ ╩ ╚═╝
-      -->
+<div id="particles-js"></div>
 
-  <body class="">
-    <div class="container">
-      <!-- Clock and Greetings  -->
+<div class="header-container">
+    <div class="clock-container" id="clock"></div>
+    <div class="dynamic-text">T-Pot 24.04.0</div>
+</div>
 
-      <div class="timeBlock">
-        <div class="clock">
-          <div id="hour" class=""></div>
-          <div id="separator" class=""></div>
-          <div id="minutes" class=""></div>
-        </div>
-        <div id="greetings"></div>
-      </div>
+<div class="logo-container">
+    <img src="assets/img/logo.webp" alt="T-Pot Logo" class="logo">
+</div>
 
-      <!-- 
-        ┬  ┬┌─┐┌┬┐┌─┐
-        │  │└─┐ │ └─┐
-        ┴─┘┴└─┘ ┴ └─┘
-        -->
-
-      <div class="card list list__1" id="list_1"></div>
-
-      <div class="card list list__2" id="list_2"></div>
+<div class="boxes-container">
+    <div class="link-box tools-box" data-caption="&#xf085;">
+        <a href="/map/" class="link" target="_blank">Attack Map</a>
+        <a href="/cyberchef/" class="link" target="_blank">Cyberchef</a>
+        <a href="/elasticvue/" class="link" target="_blank">Elasticvue</a>
+        <a href="/kibana/" class="link" target="_blank">Kibana</a>
+        <a href="/spiderfoot/" class="link" target="_blank">Spiderfoot</a>
     </div>
-
-    <!-- Config  -->
-    <script src="config.js"></script>
-
-    <!-- Scripts  -->
-    <script src="assets/js/time.js"></script>
-    <script src="assets/js/theme.js"></script>
-    <script src="assets/js/greeting.js"></script>
-    <script src="assets/js/lists.js"></script>
-    <script>
-      lucide.createIcons();
-    </script>
-  </body>
-
-  <!-- Developed and designed by Miguel R. Ávila: -->
-  <!-- https://github.com/migueravila -->
+    <div class="link-box links-box" data-caption="&#xf0c1;">
+        <a href="https://sicherheitstacho.eu/" class="link" target="_blank">SecurityMeter</a>
+        <a href="https://github.com/telekom-security/tpotce/blob/master/README.md" class="link" target="_blank">T-Pot ReadMe</a>
+        <a href="https://github.com/telekom-security/tpotce/" class="link" target="_blank">T-Pot @ Github</a>
+    </div>
+</div>
+</body>
 </html>

@@ -2,19 +2,22 @@
 
 ## Supported Versions
 
-| Version   | Supported          |
-| -------   | ------------------ |
-| 22.04.x   | :white_check_mark: |
+| Version | Supported          |
+|-------|--------------------|
+| 24.04 | :white_check_mark: |
 
 
 ## Reporting a Vulnerability
 
-We take security of T-Pot very seriously. If one of T-Pot's components is affected, it is most likely that a upstream component we rely on is involved, such as a honeypot, docker image, tool or package. Together we will find the best possible way to remedy the situation.
+We prioritize the security of T-Pot highly. Often, vulnerabilities in T-Pot components stem from upstream dependencies, including honeypots, Docker images, tools, or packages. We are committed to working together to resolve any issues effectively.
 
-Before you submit a possible vulnerability, please ensure you have done the following:
-1. You have checked the documentation, issues and discussions if the detected behavior is typical and does not revolve around other issues. I.e. Cowrie will be detected with outgoing conncection requests or T-Pot opening all possible TCP ports which Honeytrap enabled install flavors will do as a feature.
-2. You have identified the vulnerable component and isolated your finding (honeypot, docker image, tool, package, etc.).
-3. You have a detailed description including log files, possibly debug files, with all steps necessary for us to reproduce / trigger the behaviour or vulnerability. At best you already have a possible solution, hotfix, fix or patch to remedy the situation and want to submit a PR. 
-4. You have checked if the possible vulnerability is known upstream. If a fix / patch is already available, please provide the necessary info.
+Please follow these steps before reporting a potential vulnerability:
 
-We will get back to you as fast as possible. In case you think this is an emergency for the whole T-Pot community feel free to speed things up by **responsibly** informing our [CERT](https://www.telekom.com/en/corporate-responsibility/data-protection-data-security/security/details/introducing-deutsche-telekom-cert-358316).
+1. Verify that the behavior you've observed isn't already documented as a normal aspect or unrelated issue of T-Pot. For example, Cowrie may initiate outgoing connections, or T-Pot might open all possible TCP ports—a feature enabled by Honeytrap.
+2. Clearly identify which component is vulnerable (e.g., a specific honeypot, Docker image, tool, package) and isolate the issue.
+3. Provide a detailed description of the issue, including log and, if available, debug files. Include all steps necessary to reproduce the vulnerability. If you have a proposed solution, hotfix, or patch, please be prepared to submit a pull request (PR).
+4. Check whether the vulnerability is already known upstream. If there is an existing fix or patch, include that information in your report.
+
+This approach ensures a thorough and efficient resolution process.
+
+We aim to respond as quickly as possible. If you believe the issue poses an immediate threat to the entire T-Pot community, you can expedite the process by responsibly alerting our [CERT](https://www.telekom.com/en/corporate-responsibility/data-protection-data-security/security/details/introducing-deutsche-telekom-cert-358316).

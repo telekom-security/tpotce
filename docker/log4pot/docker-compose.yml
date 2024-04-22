@@ -22,8 +22,8 @@ services:
      - "8080:8080"
      - "9200:8080"
      - "25565:8080"
-    image: "dtagdevsec/log4pot:2204"
+    image: "dtagdevsec/log4pot:24.04"
     read_only: true
     volumes:
-     - /data/log4pot/log:/var/log/log4pot/log
-     - /data/log4pot/payloads:/var/log/log4pot/payloads
+     - $HOME/tpotce/data/log4pot/log:/var/log/log4pot/log
+     - $HOME/tpotce/data/log4pot/payloads:/var/log/log4pot/payloads

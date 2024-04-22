@@ -7,6 +7,9 @@
   bind_addr = "0.0.0.0"
   bind_port = "8080"
 
+  # header name containing clients real IP, for reverse proxy deployments
+  real_ip_header = 'X-Real-IP'
+
   # this contains a list of blacklisted useragent strings. (case sensitive)
   # clients with useragents containing any of these strings will receive "Not found" for any requests.
   uagent_string_blacklist = ["Cloudflare-Traffic-Manager", "curl"]
@@ -22,14 +25,73 @@
     # Toggling this to false will prevent creation of robots.txt handler.
     makerobots = true
     # Handlers will be created for these paths, as well as robots.txt entries. Only valid if catchall = false.
-    paths = ["wp-json/omapp/v1/support", "wp-login.php", "wp-login"]
-
+    paths = [
+      "wp-json/omapp/v1/support", 
+      "wp-login.php", 
+      "wp-login",
+      "admin",
+      "admin.php",
+      "admin/login.php",
+      "admin/login",
+      "admin.asp",
+      "admin.aspx",
+      "wp-admin",
+      "login",
+      "xmlrpc.php",
+      ".env",
+      "config.php",
+      "config.yaml",
+      "config.json",
+      "db.php",
+      "db.yaml",
+      "db.json",
+      "admin.yaml",
+      "admin.json",
+      "user.yaml",
+      "user.json",
+      "site.yaml",
+      "site.json",
+      "mysql.php",
+      "mysql.yaml",
+      "mysql.json",
+      "mongodb.php",
+      "mongodb.yaml",
+      "mongodb.json",
+      "sql.php",
+      "sql.yaml",
+      "sql.json",
+      "install.php",
+      "setup.php",
+      "main.php",
+      "test.php",
+      "README.md",
+      "LICENSE",
+      ".git",
+      ".htaccess",
+      ".htpasswd",
+      "server-status",
+      "phpinfo.php",
+      "info.php",
+      "env",
+      "config/",
+      "admin/config/",
+      "admin.php/config/",
+      "admin.asp/config/",
+      "admin.aspx/config/",
+      "phpmyadmin",
+      "pma",
+      "dbadmin",
+      "mysql",
+      "myadmin",
+      "phpmyadmin2"
+    ]
+    
 [logger]
   # verbose (-v)
   debug = true
   # extra verbose (-vv)
   trace = false
-  # JSON log files will be storn in the below directory. 
+  # JSON log files will be stored in the below directory.
   directory = "/var/log/hellpot/"
   # disable all color in console output. when using Windows this will default to true.
   nocolor = true 

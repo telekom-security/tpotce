@@ -14,6 +14,6 @@ services:
      - honeysap_local
     ports:
      - "3299:3299"
-    image: "dtagdevsec/honeysap:2204"
+    image: "dtagdevsec/honeysap:24.04"
     volumes:
      - /data/honeysap/log:/opt/honeysap/log
