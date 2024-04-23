@@ -776,4 +776,4 @@ And from @robcowart (creator of [ElastiFlow](https://github.com/robcowart/elasti
 <br><br>
 **Thank you!**
 
-![Alt](https://repobeats.axiom.co/api/embed/642a1032ac85996c81b12cf9f6393103058b8a04.svg "Repobeats analytics image")
+![Alt](https://repobeats.axiom.co/api/embed/75368f879326a61370e485df52906ae0c1f59fbb.svg "Repobeats analytics image")
