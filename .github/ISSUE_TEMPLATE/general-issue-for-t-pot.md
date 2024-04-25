@@ -33,7 +33,7 @@ Before you post your issue make sure it has not been answered yet and provide **
 - Did you modify any scripts or configs? If yes, please attach the changes.
 - Please provide a screenshot of `htop` and `docker stats`.
 - How much free disk space is available (`df -h`)?
-- What is the current container status (`dps.sh`)?
+- What is the current container status (`dps`)?
 - On Linux: What is the status of the T-Pot service (`systemctl status tpot`)?
 - What ports are being occupied? Stop T-Pot `systemctl stop tpot` and run `grc netstat -tulpen`
   - Stop T-Pot `systemctl stop tpot`
