@@ -634,8 +634,9 @@ Enabling this feature will drastically reduce attackers visibility and consequen
 
 ## Add Users to Nginx (T-Pot WebUI)
 Nginx (T-Pot WebUI) allows you to add as many `<WEB_USER>` accounts as you want (according to the [User Types](#user-types)).<br>
-To **add** a new user run `~/tpotce/genuser.sh` which will also update the accounts without the need to restart T-Pot.<br>
-To **remove** users open `~/tpotce/.env`, locate `WEB_USER` and remove the corresponding base64 string (to decode: `echo <base64_string> | base64 -d`, or open CyberChef and load "From Base64" recipe). For the changes to take effect you need to restart T-Pot using `systemctl stop tpot` and `systemctl start tpot` or `sudo reboot`.
+To **add** a new user run `~/tpotce/genuser.sh`.<br>
+To **remove** users open `~/tpotce/.env`, locate `WEB_USER` and remove the corresponding base64 string (to decode: `echo <base64_string> | base64 -d`, or open CyberChef and load "From Base64" recipe).<br>
+For the changes to take effect you need to restart T-Pot using `systemctl stop tpot` and `systemctl start tpot` or `sudo reboot`.
 <br><br>
 
 ## Import and Export Kibana Objects
