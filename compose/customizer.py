@@ -9,10 +9,10 @@ version = \
  ___) |  __/ |   \ V /| | (_|  __/ | |_) | |_| | | | (_| |  __/ |
 |____/ \___|_|    \_/ |_|\___\___| |____/ \__,_|_|_|\__,_|\___|_| v0.21
     
-# This script is intended for users who want to build a customized docker-compose.yml forT-Pot.
+# This script is intended for users who want to build a customized docker-compose.yml for T-Pot.
 # T-Pot Service Builder will ask for all the docker services to be included in docker-compose.yml.
 # The configuration file will be checked for conflicting ports.
-# Port conflicts have to be resolve manually or re-running the script and excluding the conflicting services.
+# Port conflicts have to be resolved manually or re-running the script and excluding the conflicting services.
 # Review the resulting docker-compose-custom.yml and adjust to your needs by (un)commenting the corresponding lines in the config.
 """
 
