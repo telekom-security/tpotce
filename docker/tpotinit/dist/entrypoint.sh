@@ -165,14 +165,14 @@ if [ "${myOSTYPE}" == "linuxkit" ] && [ "${TPOT_OSTYPE}" == "linux" ];
     echo "# Aborting."
     echo
     exit 1
-  else
-    if ! [ -S /var/run/docker.sock ];
-      then
-        echo "# Cannot access /var/run/docker.sock, check docker-compose.yml for proper volume definition."
-        echo
-        echo "# Aborting."
-        exit 1
-    fi
+fi
+
+if ! [ "${myOSTYPE}" == "linuxkit" ] && ! [ -S /var/run/docker.sock ];
+  then
+    echo "# Cannot access /var/run/docker.sock, check docker-compose.yml for proper volume definition."
+    echo
+    echo "# Aborting."
+    exit 1
 fi
 
 # Validate environment variables
@@ -350,5 +350,6 @@ if [ "${myOSTYPE}" != "linuxkit" ];
   else
     echo
     echo "# Docker Desktop for macOS or Windows detected, Conntrack feature is not supported."
-    echo 
+    echo
+    sleep infinity 
 fi

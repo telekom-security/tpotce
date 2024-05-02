@@ -21,6 +21,7 @@ networks:
   medpot_local:
   redishoneypot_local:
   sentrypeer_local:
+  suricata_local:
   tanner_local:
   wordpot_local:
   nginx_local:
@@ -250,7 +251,7 @@ services:
      - ddospot_local
     ports:
      - "19:19/udp"
-     - "53:53/udp"
+#     - "53:53/udp"
      - "123:123/udp"
 #     - "161:161/udp"
      - "1900:1900/udp"
@@ -616,15 +617,16 @@ services:
     depends_on:
       tpotinit:
         condition: service_healthy
-    environment:
-     - OINKCODE=${OINKCODE:-OPEN} # Default to OPEN if unset or NULL (value provided by T-Pot .env)
-    # Loading external Rules from URL
-    # - FROMURL="https://username:password@yoururl.com|https://username:password@otherurl.com"
-    network_mode: "host"
+    networks:
+     - suricata_local
     cap_add:
      - NET_ADMIN
      - SYS_NICE
      - NET_RAW
+    environment:
+     - OINKCODE=${OINKCODE:-OPEN} # Default to OPEN if unset or NULL (value provided by T-Pot .env)
+    # Loading external Rules from URL
+    # - FROMURL="https://username:password@yoururl.com|https://username:password@otherurl.com"
     image: ${TPOT_REPO}/suricata:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
     volumes:
