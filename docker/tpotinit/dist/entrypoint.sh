@@ -7,14 +7,17 @@ exec > >(tee /data/tpotinit.log) 2>&1
 cleanup() {
   echo "# SIGTERM received, cleaning up ..."
   echo
-  echo "## ... removing firewall rules."
-  /opt/tpot/bin/rules.sh ${COMPOSE} unset
-  echo
-  if [ "${TPOT_BLACKHOLE}" == "ENABLED" ] && [ -f "/etc/blackhole/mass_scanner.txt" ];
+  if [ "${TPOT_OSTYPE}" = "linux" ];
     then
-      echo "## ... removing Blackhole routes."
-      /opt/tpot/bin/blackhole.sh del
+      echo "## ... removing firewall rules."
+      /opt/tpot/bin/rules.sh ${COMPOSE} unset
       echo
+      if [ "${TPOT_BLACKHOLE}" == "ENABLED" ] && [ -f "/etc/blackhole/mass_scanner.txt" ];
+        then
+          echo "## ... removing Blackhole routes."
+          /opt/tpot/bin/blackhole.sh del
+          echo
+      fi
   fi
   kill -TERM "$PID"
   rm -f /tmp/success
@@ -153,25 +156,42 @@ update_permissions
 
 # Check for compatible OSType
 echo
-echo "# Checking if OSType is compatible."
+echo "# Checking if OSType is set correctly."
 echo
-myOSTYPE=$(uname -a | grep -Eo "linuxkit")
-if [ "${myOSTYPE}" == "linuxkit" ] && [ "${TPOT_OSTYPE}" == "linux" ];
+myOSTYPE=$(uname -a | grep -Eo "microsoft|linuxkit")
+if [ "${myOSTYPE}" == "microsoft" ] && [ "${TPOT_OSTYPE}" != "win" ];
   then
-    echo "# Docker Desktop for macOS or Windows detected."
-    echo "# 1. You need to adjust the OSType the T-Pot .env config."
-    echo "# 2. You need to use the macos or win docker compose file."
+    echo "# Docker Desktop for Windows detected, but TPOT_OSTYPE is not set to win."
+    echo "# 1. You need to adjust the OSType in the T-Pot .env config."
+    echo "# 2. You need to copy compose/mac_win.yml to ./docker-compose.yml."
     echo
     echo "# Aborting."
     echo
+    sleep 1
     exit 1
 fi
 
-if ! [ "${myOSTYPE}" == "linuxkit" ] && ! [ -S /var/run/docker.sock ];
+if [ "${myOSTYPE}" == "linuxkit" ] && [ "${TPOT_OSTYPE}" != "mac" ];
   then
-    echo "# Cannot access /var/run/docker.sock, check docker-compose.yml for proper volume definition."
+    echo "# Docker Desktop for macOS detected, but TPOT_OSTYPE is not set to mac."
+    echo "# 1. You need to adjust the OSType in the T-Pot .env config."
+    echo "# 2. You need to copy compose/mac_win.yml to ./docker-compose.yml."
     echo
     echo "# Aborting."
+    echo
+    sleep 1
+    exit 1
+fi
+
+if [ "${myOSTYPE}" == "" ] && [ "${TPOT_OSTYPE}" != "linux" ];
+  then
+    echo "# Docker Engine detected, but TPOT_OSTYPE is not set to linux."
+    echo "# 1. You need to adjust the OSType in the T-Pot .env config."
+    echo "# 2. You need to copy compose/standard.yml to ./docker-compose.yml."
+    echo
+    echo "# Aborting."
+    echo
+    sleep 1
     exit 1
 fi
 
@@ -255,12 +275,8 @@ if [ -f "/data/uuid" ];
 fi
 
 # Check if TPOT_BLACKHOLE is enabled
-if [ "${myOSTYPE}" == "linuxkit" ];
+if [ "${TPOT_OSTYPE}" == "linux" ];
   then
-    echo
-    echo "# Docker Desktop for macOS or Windows detected, Blackhole feature is not supported."
-    echo
-  else
     if [ "${TPOT_BLACKHOLE}" == "ENABLED" ] && [ ! -f "/etc/blackhole/mass_scanner.txt" ];
       then
         echo
@@ -278,6 +294,10 @@ if [ "${myOSTYPE}" == "linuxkit" ];
         echo
         echo "# Blackhole is not active."
     fi
+  else
+    echo
+    echo "# T-Pot is configured for macOS / Windows. Blackhole is not supported."
+    echo 
 fi
 
 # Get IP
@@ -291,7 +311,7 @@ update_permissions
 
 # Update interface settings (p0f and Suricata) and setup iptables to support NFQ based honeypots (glutton, honeytrap)
 ### This is currently not supported on Docker for Desktop, only on Docker Engine for Linux
-if [ "${myOSTYPE}" != "linuxkit" ] && [ "${TPOT_OSTYPE}" == "linux" ];
+if [ "${TPOT_OSTYPE}" == "linux" ];
   then
     echo
     echo "# Get IF, disable offloading, enable promiscious mode for p0f and suricata ..."
@@ -303,10 +323,14 @@ if [ "${myOSTYPE}" != "linuxkit" ] && [ "${TPOT_OSTYPE}" == "linux" ];
     echo "# Adding firewall rules ..."
     echo
     /opt/tpot/bin/rules.sh ${COMPOSE} set
+  else
+    echo
+    echo "# T-Pot is configured for macOS / Windows. Setting up firewall rules on the host is not supported."
+    echo 
 fi
 
 # Display open ports
-if [ "${myOSTYPE}" != "linuxkit" ];
+if [ "${TPOT_OSTYPE}" = "linux" ];
   then
     echo
     echo "# This is a list of open ports on the host (netstat -tulpen)."
@@ -317,7 +341,7 @@ if [ "${myOSTYPE}" != "linuxkit" ];
     echo
   else
     echo
-    echo "# Docker Desktop for macOS or Windows detected, cannot show open ports on the host."
+    echo "# T-Pot is configured for macOS / Windows. Showing open ports from the host is not supported."
     echo 
 fi 
 
@@ -331,25 +355,20 @@ touch /tmp/success
 
 # We want to see true source for UDP packets in container (https://github.com/moby/libnetwork/issues/1994)
 # Start autoheal if running on a supported os
-if [ "${myOSTYPE}" != "linuxkit" ];
+if [ "${TPOT_OSTYPE}" = "linux" ];
   then
     sleep 60
     echo "# Dropping UDP connection tables to improve visibility of true source IPs."
     /usr/sbin/conntrack -D -p udp
+  else
     # Starting container health monitoring
     echo
     figlet "Starting ..."
     figlet "Autoheal"
     echo "# Now monitoring healthcheck enabled containers to automatically restart them when unhealthy."
     echo
-    # exec /opt/tpot/autoheal.sh autoheal
     /opt/tpot/autoheal.sh autoheal &
     PID=$!
     wait $PID
     echo "# T-Pot Init and Autoheal were stopped. Exiting."
-  else
-    echo
-    echo "# Docker Desktop for macOS or Windows detected, Conntrack feature is not supported."
-    echo
-    sleep infinity 
 fi

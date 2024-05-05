@@ -53,6 +53,7 @@ services:
      - ${TPOT_DOCKER_COMPOSE}:/tmp/tpot/docker-compose.yml:ro
      - ${TPOT_DATA_PATH}/blackhole:/etc/blackhole
      - ${TPOT_DATA_PATH}:/data
+     - /var/run/docker.sock:/var/run/docker.sock:ro
 
 
 ##################
@@ -190,32 +191,6 @@ services:
     volumes:
      - ${TPOT_DATA_PATH}/conpot/log:/var/log/conpot
 
-# Conpot kamstrup_382
-  conpot_kamstrup_382:
-    container_name: conpot_kamstrup_382
-    restart: always
-    depends_on:
-      tpotinit:
-        condition: service_healthy
-    environment:
-     - CONPOT_CONFIG=/etc/conpot/conpot.cfg
-     - CONPOT_JSON_LOG=/var/log/conpot/conpot_kamstrup_382.json
-     - CONPOT_LOG=/var/log/conpot/conpot_kamstrup_382.log
-     - CONPOT_TEMPLATE=kamstrup_382
-     - CONPOT_TMP=/tmp/conpot
-    tmpfs:
-     - /tmp/conpot:uid=2000,gid=2000
-    networks:
-     - conpot_local_kamstrup_382
-    ports:
-     - "1025:1025"
-     - "50100:50100"
-    image: ${TPOT_REPO}/conpot:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
-    read_only: true
-    volumes:
-     - ${TPOT_DATA_PATH}/conpot/log:/var/log/conpot
-
 # Cowrie service
   cowrie:
     container_name: cowrie
@@ -303,7 +278,7 @@ services:
      - "81:81"
      - "135:135"
      # - "443:443"
-     - "445:445"
+     # - "445:445"
      - "1433:1433"
      - "1723:1723"
      - "1883:1883"
