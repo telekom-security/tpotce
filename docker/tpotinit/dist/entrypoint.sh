@@ -32,7 +32,7 @@ check_var() {
     local var_value=$(eval echo \$$var_name)
 
     # Check if variable is set and not empty
-    if [[ -z "$var_value" ]]; 
+    if [[ -z "$var_value" ]];
       then
         echo "# Error: $var_name is not set or empty. Please check T-Pot .env config."
         echo
@@ -47,7 +47,7 @@ check_safety() {
     local var_value=$(eval echo \$$var_name)
 
     # General safety check for most variables
-    if [[ $var_value =~ [^a-zA-Z0-9_/.:-] ]]; 
+    if [[ $var_value =~ [^a-zA-Z0-9_/.:-] ]];
       then
         echo "# Error: Unsafe characters detected in $var_name. Please check T-Pot .env config."
         echo
@@ -81,7 +81,7 @@ validate_format() {
 
     case "$var_name" in
         TPOT_BLACKHOLE|TPOT_PERSISTENCE|TPOT_ATTACKMAP_TEXT)
-            if ! [[ $var_value =~ ^(ENABLED|DISABLED|on|off|true|false)$ ]]; 
+            if ! [[ $var_value =~ ^(ENABLED|DISABLED|on|off|true|false)$ ]];
               then
                 echo "# Error: Invalid value for $var_name. Expected ENABLED/DISABLED, on/off, true/false. Please check T-Pot .env config."
 		        echo
@@ -97,7 +97,7 @@ validate_ip_or_domain() {
 
     # Regular expression for validating IPv4 addresses
     local ipv4Regex='^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$'
-    
+
     # Regular expression for validating domain names (including subdomains)
     local domainRegex='^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$'
 
@@ -122,7 +122,7 @@ create_web_users() {
     : > /data/nginx/conf/lswebpasswd
     for i in ${WEB_USER};
       do
-	    if [[ -n $i ]]; 
+	    if [[ -n $i ]];
 	      then
 	        # Need to control newlines as they kept coming up for some reason
 	        echo -n "$i" | base64 -d -w0 | tr -d '\n' >> /data/nginx/conf/nginxpasswd
@@ -130,9 +130,9 @@ create_web_users() {
 	    fi
     done
 
-    for i in ${LS_WEB_USER}; 
+    for i in ${LS_WEB_USER};
       do
-        if [[ -n $i ]]; 
+        if [[ -n $i ]];
           then
             # Need to control newlines as they kept coming up for some reason
             echo -n "$i" | base64 -d -w0 | tr -d '\n' >> /data/nginx/conf/lswebpasswd
@@ -297,7 +297,7 @@ if [ "${TPOT_OSTYPE}" == "linux" ];
   else
     echo
     echo "# T-Pot is configured for macOS / Windows. Blackhole is not supported."
-    echo 
+    echo
 fi
 
 # Get IP
@@ -326,7 +326,7 @@ if [ "${TPOT_OSTYPE}" == "linux" ];
   else
     echo
     echo "# T-Pot is configured for macOS / Windows. Setting up firewall rules on the host is not supported."
-    echo 
+    echo
 fi
 
 # Display open ports
@@ -342,8 +342,8 @@ if [ "${TPOT_OSTYPE}" = "linux" ];
   else
     echo
     echo "# T-Pot is configured for macOS / Windows. Showing open ports from the host is not supported."
-    echo 
-fi 
+    echo
+fi
 
 
 # Done
@@ -360,15 +360,15 @@ if [ "${TPOT_OSTYPE}" = "linux" ];
     sleep 60
     echo "# Dropping UDP connection tables to improve visibility of true source IPs."
     /usr/sbin/conntrack -D -p udp
-  else
-    # Starting container health monitoring
-    echo
-    figlet "Starting ..."
-    figlet "Autoheal"
-    echo "# Now monitoring healthcheck enabled containers to automatically restart them when unhealthy."
-    echo
-    /opt/tpot/autoheal.sh autoheal &
-    PID=$!
-    wait $PID
-    echo "# T-Pot Init and Autoheal were stopped. Exiting."
 fi
+
+# Starting container health monitoring
+echo
+figlet "Starting ..."
+figlet "Autoheal"
+echo "# Now monitoring healthcheck enabled containers to automatically restart them when unhealthy."
+echo
+/opt/tpot/autoheal.sh autoheal &
+PID=$!
+wait $PID
+echo "# T-Pot Init and Autoheal were stopped. Exiting."
