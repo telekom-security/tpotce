@@ -6,10 +6,6 @@ networks:
   adbhoney_local:
   ciscoasa_local:
   citrixhoneypot_local:
-  conpot_local_IEC104:
-  conpot_local_guardian_ast:
-  conpot_local_ipmi:
-  conpot_local_kamstrup_382:
   cowrie_local:
   ddospot_local:
   dicompot_local:
@@ -114,82 +110,6 @@ services:
     read_only: true
     volumes:
      - ${TPOT_DATA_PATH}/citrixhoneypot/log:/opt/citrixhoneypot/logs
-
-# Conpot IEC104 service
-  conpot_IEC104:
-    container_name: conpot_iec104
-    restart: always
-    depends_on:
-      tpotinit:
-        condition: service_healthy
-    environment:
-     - CONPOT_CONFIG=/etc/conpot/conpot.cfg
-     - CONPOT_JSON_LOG=/var/log/conpot/conpot_IEC104.json
-     - CONPOT_LOG=/var/log/conpot/conpot_IEC104.log
-     - CONPOT_TEMPLATE=IEC104
-     - CONPOT_TMP=/tmp/conpot
-    tmpfs:
-     - /tmp/conpot:uid=2000,gid=2000
-    networks:
-     - conpot_local_IEC104
-    ports:
-     - "161:161/udp"
-     - "2404:2404"
-    image: ${TPOT_REPO}/conpot:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
-    read_only: true
-    volumes:
-     - ${TPOT_DATA_PATH}/conpot/log:/var/log/conpot
-
-# Conpot guardian_ast service
-  conpot_guardian_ast:
-    container_name: conpot_guardian_ast
-    restart: always
-    depends_on:
-      tpotinit:
-        condition: service_healthy
-    environment:
-     - CONPOT_CONFIG=/etc/conpot/conpot.cfg
-     - CONPOT_JSON_LOG=/var/log/conpot/conpot_guardian_ast.json
-     - CONPOT_LOG=/var/log/conpot/conpot_guardian_ast.log
-     - CONPOT_TEMPLATE=guardian_ast
-     - CONPOT_TMP=/tmp/conpot
-    tmpfs:
-     - /tmp/conpot:uid=2000,gid=2000
-    networks:
-     - conpot_local_guardian_ast
-    ports:
-     - "10001:10001"
-    image: ${TPOT_REPO}/conpot:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
-    read_only: true
-    volumes:
-     - ${TPOT_DATA_PATH}/conpot/log:/var/log/conpot
-
-# Conpot ipmi
-  conpot_ipmi:
-    container_name: conpot_ipmi
-    restart: always
-    depends_on:
-      tpotinit:
-        condition: service_healthy
-    environment:
-     - CONPOT_CONFIG=/etc/conpot/conpot.cfg
-     - CONPOT_JSON_LOG=/var/log/conpot/conpot_ipmi.json
-     - CONPOT_LOG=/var/log/conpot/conpot_ipmi.log
-     - CONPOT_TEMPLATE=ipmi
-     - CONPOT_TMP=/tmp/conpot
-    tmpfs:
-     - /tmp/conpot:uid=2000,gid=2000
-    networks:
-     - conpot_local_ipmi
-    ports:
-     - "623:623/udp"
-    image: ${TPOT_REPO}/conpot:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
-    read_only: true
-    volumes:
-     - ${TPOT_DATA_PATH}/conpot/log:/var/log/conpot
 
 # Cowrie service
   cowrie:
