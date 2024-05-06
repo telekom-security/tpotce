@@ -330,7 +330,7 @@ if [ "${TPOT_OSTYPE}" == "linux" ];
 fi
 
 # Display open ports
-if [ "${TPOT_OSTYPE}" = "linux" ];
+if [ "${TPOT_OSTYPE}" == "linux" ];
   then
     echo
     echo "# This is a list of open ports on the host (netstat -tulpen)."
@@ -355,7 +355,7 @@ touch /tmp/success
 
 # We want to see true source for UDP packets in container (https://github.com/moby/libnetwork/issues/1994)
 # Start autoheal if running on a supported os
-if [ "${TPOT_OSTYPE}" = "linux" ];
+if [ "${TPOT_OSTYPE}" == "linux" ];
   then
     sleep 60
     echo "# Dropping UDP connection tables to improve visibility of true source IPs."
