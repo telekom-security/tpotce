@@ -5,21 +5,19 @@ COPY dist/ /root/dist/
 # 
 # Setup apk
 RUN apk -U --no-cache add \
-		build-base \
-		git \
-        g++ \
+		make \
+  		git \
+		g++ \
 		iptables-dev \
 		libpcap-dev && \
 #
 # Setup go, glutton
-    export GO111MODULE=on && \
     mkdir -p /opt/ && \
     cd /opt/ && \
     git clone https://github.com/mushorg/glutton && \
     cd /opt/glutton/ && \
     git checkout c1204c65ce32bfdc0e08fb2a9abe89b3b8eeed62 && \
     cp /root/dist/system.go . && \
-    go mod download && \
     make build && \
 	mv /root/dist/config.yaml /opt/glutton/config/
 #
@@ -30,11 +28,8 @@ COPY --from=builder /opt/glutton/config /opt/glutton/config
 COPY --from=builder /opt/glutton/rules /opt/glutton/rules
 #
 RUN apk -U --no-cache add \
-		iptables \
 		iptables-dev \
-		libnetfilter_queue-dev \
-		libcap \
-		libpcap-dev && \
+  		libpcap-dev && \
 		setcap cap_net_admin,cap_net_raw=+ep /opt/glutton/bin/server && \
 		setcap cap_net_admin,cap_net_raw=+ep /sbin/xtables-nft-multi && \
 		mkdir -p /var/log/glutton \
