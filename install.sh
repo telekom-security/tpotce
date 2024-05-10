@@ -171,18 +171,25 @@ echo "### (H)ive   - T-Pot Standard / HIVE installation."
 echo "###            Includes also everything you need for a distributed setup with sensors."
 echo "### (S)ensor - T-Pot Sensor installation."
 echo "###            Optimized for a distributed installation, without WebUI, Elasticsearch and Kibana."
+echo "### (M)obile - T-Pot Mobile installation."
+echo "###            Includes everything to run T-Pot Mobile (available separately)."
 while true; do
   read -p "### Install Type? (h/s) " myTPOT_TYPE
   case "${myTPOT_TYPE}" in
     h|H)
       echo
-      echo "### Installing T-Pot Standard / HIVE installation."
+      echo "### Installing T-Pot Standard / HIVE."
       myTPOT_TYPE="HIVE"
       break ;;
     s|S)
       echo
-      echo "### Installing T-Pot Sensor installation."
+      echo "### Installing T-Pot Sensor."
       myTPOT_TYPE="SENSOR"
+      break ;;
+    m|M)
+      echo
+      echo "### Installing T-Pot Mobile."
+      myTPOT_TYPE="MOBILE"
       break ;;
   esac
 done
@@ -272,6 +279,12 @@ if [ "${myTPOT_TYPE}" == "SENSOR" ];
     cp ${HOME}/tpotce/compose/sensor.yml ${HOME}/tpotce/docker-compose.yml
     myINFO="### Make sure to deploy SSH keys to this sensor and disable SSH password authentication.
 ### On hive run the tpotce/deploy.sh script to join this sensor to the hive."
+fi
+
+if [ "${myTPOT_TYPE}" == "MOBILE" ];
+  # Install T-Pot Type MOBILE and use mobile.yml for installation
+  then
+    cp ${HOME}/tpotce/compose/mobile.yml ${HOME}/tpotce/docker-compose.yml
 fi
 
 # Pull docker images
