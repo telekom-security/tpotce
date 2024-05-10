@@ -174,7 +174,7 @@ echo "###            Optimized for a distributed installation, without WebUI, El
 echo "### (M)obile - T-Pot Mobile installation."
 echo "###            Includes everything to run T-Pot Mobile (available separately)."
 while true; do
-  read -p "### Install Type? (h/s) " myTPOT_TYPE
+  read -p "### Install Type? (h/s/m) " myTPOT_TYPE
   case "${myTPOT_TYPE}" in
     h|H)
       echo
