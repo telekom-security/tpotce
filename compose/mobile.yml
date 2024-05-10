@@ -347,6 +347,30 @@ services:
     volumes:
      - ${TPOT_DATA_PATH}/ipphoney/log:/opt/ipphoney/log
 
+# Log4pot service
+  log4pot:
+    container_name: log4pot
+    restart: always
+    depends_on:
+      logstash:
+        condition: service_healthy
+    tmpfs:
+     - /tmp:uid=2000,gid=2000
+    networks:
+     - log4pot_local
+    ports:
+    # - "80:8080"
+     - "443:8080"
+    # - "8080:8080"
+    # - "9200:8080"
+     - "25565:8080"
+    image: ${TPOT_REPO}/log4pot:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    read_only: true
+    volumes:
+     - ${TPOT_DATA_PATH}/log4pot/log:/var/log/log4pot/log
+     - ${TPOT_DATA_PATH}/log4pot/payloads:/var/log/log4pot/payloads
+
 # Mailoney service
   mailoney:
     container_name: mailoney
@@ -370,30 +394,6 @@ services:
     read_only: true
     volumes:
      - ${TPOT_DATA_PATH}/mailoney/log:/opt/mailoney/logs
-
-# Log4pot service
-  log4pot:
-    container_name: log4pot
-    restart: always
-    depends_on:
-      logstash:
-        condition: service_healthy
-    tmpfs:
-     - /tmp:uid=2000,gid=2000
-    networks:
-     - log4pot_local
-    ports:
-    # - "80:8080"
-    # - "443:8080"
-     - "8080:8080"
-    # - "9200:8080"
-     - "25565:8080"
-    image: ${TPOT_REPO}/log4pot:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
-    read_only: true
-    volumes:
-     - ${TPOT_DATA_PATH}/log4pot/log:/var/log/log4pot/log
-     - ${TPOT_DATA_PATH}/log4pot/payloads:/var/log/log4pot/payloads
 
 # Medpot service
   medpot:
@@ -537,7 +537,7 @@ services:
     container_name: wordpot
     restart: always
     depends_on:
-      tpotinit:
+      logstash:
         condition: service_healthy
     networks:
      - wordpot_local
