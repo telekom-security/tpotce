@@ -200,6 +200,7 @@
           - wget
         state: latest
         update_cache: yes
+      register: exa_install_result
       when: ansible_distribution in ["AlmaLinux", "Rocky"]
       tags:
         - "AlmaLinux"
@@ -235,6 +236,7 @@
           - wget
         state: latest
         update_cache: yes
+      register: exa_install_result
       when: ansible_distribution in ["Fedora"]
       tags:
         - "Fedora"
@@ -247,7 +249,7 @@
           - postfix
           - yast2-auth-client
           - yast2-auth-user
-        state: absent 
+        state: absent
         update_cache: yes
       when: ansible_distribution in ["openSUSE Tumbleweed"]
       tags:
@@ -270,6 +272,7 @@
           - wget
         state: latest
         update_cache: yes
+      register: exa_install_result
       when: ansible_distribution in ["openSUSE Tumbleweed"]
       tags:
         - "openSUSE Tumbleweed"
