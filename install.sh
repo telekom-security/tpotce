@@ -180,22 +180,29 @@ while true; do
       echo
       echo "### Installing T-Pot Standard / HIVE."
       myTPOT_TYPE="HIVE"
+      cp ${HOME}/tpotce/compose/standard.yml ${HOME}/tpotce/docker-compose.yml
+      myINFO=""
       break ;;
     s|S)
       echo
       echo "### Installing T-Pot Sensor."
       myTPOT_TYPE="SENSOR"
+      cp ${HOME}/tpotce/compose/sensor.yml ${HOME}/tpotce/docker-compose.yml
+      myINFO="### Make sure to deploy SSH keys to this SENSOR and disable SSH password authentication.
+### On HIVE run the tpotce/deploy.sh script to join this SENSOR to the HIVE."
       break ;;
     m|M)
       echo
       echo "### Installing T-Pot Mobile."
       myTPOT_TYPE="MOBILE"
+      cp ${HOME}/tpotce/compose/mobile.yml ${HOME}/tpotce/docker-compose.yml
+      myINFO=""
       break ;;
   esac
 done
 
-if [ "${myTPOT_TYPE}" == "HIVE" ];
-  # Install T-Pot Type HIVE and ask for WebUI username and password
+if [ "${myTPOT_TYPE}" != "SENSOR" ];
+  # T-Pot Type is HIVE / MOBILE; asking for WebUI username and password
   then
 	# Preparing web user for T-Pot
 	echo
@@ -266,25 +273,6 @@ if [ "${myTPOT_TYPE}" == "HIVE" ];
     
 	echo
 	sed -i "s|^WEB_USER=.*|WEB_USER=${myWEB_USER_ENC_B64}|" ${myTPOT_CONF_FILE}
-
-    # Install T-Pot Type HIVE and use standard.yml for installation
-    cp ${HOME}/tpotce/compose/standard.yml ${HOME}/tpotce/docker-compose.yml
-    myINFO=""
-fi
-
-
-if [ "${myTPOT_TYPE}" == "SENSOR" ];
-  # Install T-Pot Type SENSOR and use sensor.yml for installation
-  then
-    cp ${HOME}/tpotce/compose/sensor.yml ${HOME}/tpotce/docker-compose.yml
-    myINFO="### Make sure to deploy SSH keys to this sensor and disable SSH password authentication.
-### On hive run the tpotce/deploy.sh script to join this sensor to the hive."
-fi
-
-if [ "${myTPOT_TYPE}" == "MOBILE" ];
-  # Install T-Pot Type MOBILE and use mobile.yml for installation
-  then
-    cp ${HOME}/tpotce/compose/mobile.yml ${HOME}/tpotce/docker-compose.yml
 fi
 
 # Pull docker images
