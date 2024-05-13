@@ -201,8 +201,8 @@ while true; do
   esac
 done
 
-if [ "${myTPOT_TYPE}" != "SENSOR" ];
-  # T-Pot Type is HIVE / MOBILE; asking for WebUI username and password
+if [ "${myTPOT_TYPE}" == "HIVE" ];
+  # If T-Pot Type is HIVE ask for WebUI username and password
   then
 	# Preparing web user for T-Pot
 	echo
