@@ -565,6 +565,13 @@ The update script will ...
  - update all files in `~/tpotce` to be in sync with the T-Pot master branch
  - restore your custom `ews.cfg` from `~/tpotce/data/ews/conf` and the T-Pot configuration (`~/tpotce/.env`).
 
+## Daily Reboot
+By default T-Pot will add a daily reboot including some cleaning up. You can adjust this line with `sudo crontab -e` 
+```
+#Ansible: T-Pot Daily Reboot
+42 2 * * * bash -c 'systemctl stop tpot.service && docker container prune -f; docker image prune -f; docker volume prune -f; /usr/sbin/shutdown -r +1 "T-Pot Daily Reboot"'
+```
+
 ## Known Issues
 The following issues are known, simply follow the described steps to solve them.
 <br><br>
