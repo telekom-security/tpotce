@@ -16,11 +16,9 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/in
 ```
    * Follow instructions, read messages, check for possible port conflicts and reboot
 
-# Table of Contents
 <!-- TOC -->
 * [T-Pot - The All In One Multi Honeypot Platform](#t-pot---the-all-in-one-multi-honeypot-platform)
 * [TL;DR](#tldr)
-* [Table of Contents](#table-of-contents)
 * [Disclaimer](#disclaimer)
 * [Technical Concept](#technical-concept)
   * [Technical Architecture](#technical-architecture)
@@ -60,8 +58,10 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/in
 * [Maintenance](#maintenance)
   * [General Updates](#general-updates)
   * [Update Script](#update-script)
+  * [Daily Reboot](#daily-reboot)
   * [Known Issues](#known-issues)
     * [**Docker Images Fail to Download**](#docker-images-fail-to-download)
+    * [**T-Pot Networking Fails**](#t-pot-networking-fails)
   * [Start T-Pot](#start-t-pot)
   * [Stop T-Pot](#stop-t-pot)
   * [T-Pot Data Folder](#t-pot-data-folder)
