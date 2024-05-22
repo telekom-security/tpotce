@@ -42,6 +42,8 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/in
 * [First Start](#first-start)
   * [Standalone First Start](#standalone-first-start)
   * [Distributed Deployment](#distributed-deployment)
+    * [Planning and Certificates](#planning-and-certificates)
+    * [Deploying Sensors](#deploying-sensors)
   * [Community Data Submission](#community-data-submission)
   * [Opt-In HPFEEDS Data Submission](#opt-in-hpfeeds-data-submission)
 * [Remote Access and Tools](#remote-access-and-tools)
@@ -382,7 +384,32 @@ There is not much to do except to login and check via `dps.sh` if all services a
 <br><br>
 
 ## Distributed Deployment
-Once you have rebooted the **SENSOR** as instructed by the installer you can continue with the distributed deployment by logging into **HIVE** and go to `cd ~/tpotce` folder.
+### Planning and Certificates
+The distributed deployment involves planning as **T-Pot Init** will only create a self-signed certificate for the IP of the **HIVE** host which usually is suitable for simple setups. Since **logstash** will check for a valid certificate upon connection, a distributed setup involving **HIVE** to be reachable on multiple IPs (i.e. RFC 1918 and public NAT IP) and maybe even a domain name will result in a connection error where the certificate cannot be validated as such a setup needs a certificate with a common name and SANs (Subject Alternative Name).<br>
+Before deploying any sensors make sure you have planned out domain names and IPs properly to avoid issues with the certificate. For more details see [issue #1543](https://github.com/telekom-security/tpotce/issues/1543).<br>
+Adjust the example to your IP / domain setup and follow the commands to change the certificate of **HIVE**:
+
+```
+sudo systemctl stop tpot
+
+sudo openssl req \
+    -nodes \
+    -x509 \
+    -sha512 \
+    -newkey rsa:8192 \
+    -keyout "$HOME/tpotce/data/nginx/cert/nginx.key" \
+    -out "$HOME/tpotce/data/nginx/cert/nginx.crt" \
+    -days 3650 \
+    -subj '/C=AU/ST=Some-State/O=Internet Widgits Pty Ltd/CN=my.primary.domain' \
+    -addext "subjectAltName = IP:192.168.1.200, IP:1.2.3.4, DNS:my.secondary.domain"
+    
+sudo chmod 774 $HOME/tpotce/data/nginx/cert/*
+sudo chown tpot:tpot $HOME/tpotce/data/nginx/cert/*
+
+sudo systemctl start tpot
+```
+### Deploying Sensors
+Once you have rebooted the **SENSOR** as instructed by the installer you can continue with the distributed deployment by logging into **HIVE** and go to `cd ~/tpotce` folder. Make sure you understood the [Planning and Certificates](#planning-and-certificates) before continuing with the actual deployment.
 
 If you have not done already generate a SSH key to securely login to the **SENSOR** and to allow `Ansible` to run a playbook on the sensor:
 1. Run `ssh-keygen`, follow the instructions and leave the passphrase empty:
