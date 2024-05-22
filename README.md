@@ -400,8 +400,8 @@ sudo openssl req \
     -keyout "$HOME/tpotce/data/nginx/cert/nginx.key" \
     -out "$HOME/tpotce/data/nginx/cert/nginx.crt" \
     -days 3650 \
-    -subj '/C=AU/ST=Some-State/O=Internet Widgits Pty Ltd/CN=my.primary.domain' \
-    -addext "subjectAltName = IP:192.168.1.200, IP:1.2.3.4, DNS:my.secondary.domain"
+    -subj '/C=AU/ST=Some-State/O=Internet Widgits Pty Ltd' \
+    -addext "subjectAltName = IP:192.168.1.200, IP:1.2.3.4, DNS:my.primary.domain, DNS:my.secondary.domain"
     
 sudo chmod 774 $HOME/tpotce/data/nginx/cert/*
 sudo chown tpot:tpot $HOME/tpotce/data/nginx/cert/*
