@@ -10,7 +10,10 @@ trap fuCLEANUP EXIT
 if [ -f "/data/tpot/etc/compose/elk_environment" ];
   then
     echo "Found .env, now exporting ..."
-    set -o allexport && source "/data/tpot/etc/compose/elk_environment" && set +o allexport
+    set -o allexport
+    source "/data/tpot/etc/compose/elk_environment"
+    LS_SSL_VERIFICATION="${LS_SSL_VERIFICATION:-full}"
+    set +o allexport
 fi
 
 # Check internet availability 
@@ -50,6 +53,7 @@ if [ "$TPOT_TYPE" == "SENSOR" ];
     echo
     echo "T-Pot type: $TPOT_TYPE"
     echo "Hive IP: $TPOT_HIVE_IP"
+    echo "SSL verification: $LS_SSL_VERIFICATION"
     echo
    # Ensure correct file permissions for private keyfile or SSH will ask for password
     cp /usr/share/logstash/config/pipelines_sensor.yml /usr/share/logstash/config/pipelines.yml

@@ -411,6 +411,7 @@ services:
      - TPOT_TYPE=${TPOT_TYPE:-HIVE}
      - TPOT_HIVE_USER=${TPOT_HIVE_USER}
      - TPOT_HIVE_IP=${TPOT_HIVE_IP}
+     - LS_SSL_VERIFICATION=${LS_SSL_VERIFICATION:-full}
     ports:
      - "127.0.0.1:64305:64305"
     mem_limit: 2g
