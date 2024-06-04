@@ -37,7 +37,7 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/in
   * [macOS & Windows](#macos--windows)
   * [Installation Types](#installation-types)
     * [Standard / HIVE](#standard--hive)
-    * [**Distributed**](#distributed)
+    * [Distributed](#distributed)
   * [Uninstall T-Pot](#uninstall-t-pot)
 * [First Start](#first-start)
   * [Standalone First Start](#standalone-first-start)
@@ -62,8 +62,8 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/in
   * [Update Script](#update-script)
   * [Daily Reboot](#daily-reboot)
   * [Known Issues](#known-issues)
-    * [**Docker Images Fail to Download**](#docker-images-fail-to-download)
-    * [**T-Pot Networking Fails**](#t-pot-networking-fails)
+    * [Docker Images Fail to Download](#docker-images-fail-to-download)
+    * [T-Pot Networking Fails](#t-pot-networking-fails)
   * [Start T-Pot](#start-t-pot)
   * [Stop T-Pot](#stop-t-pot)
   * [T-Pot Data Folder](#t-pot-data-folder)
@@ -73,8 +73,8 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/in
   * [Blackhole](#blackhole)
   * [Add Users to Nginx (T-Pot WebUI)](#add-users-to-nginx-t-pot-webui)
   * [Import and Export Kibana Objects](#import-and-export-kibana-objects)
-    * [**Export**](#export)
-    * [**Import**](#import)
+    * [Export](#export)
+    * [Import](#import)
 * [Troubleshooting](#troubleshooting)
   * [Logs](#logs)
   * [RAM and Storage](#ram-and-storage)
@@ -350,7 +350,7 @@ With T-Pot Standard / HIVE all services, tools, honeypots, etc. will be installe
 Once the installation is finished you can proceed to [First Start](#first-start).
 <br><br>
 
-### **Distributed**
+### Distributed
 The distributed version of T-Pot requires at least two hosts
 - the T-Pot **HIVE**, the standard installation of T-Pot (install this first!),
 - and a T-Pot **SENSOR**, which will host only the honeypots, some tools and transmit log data to the **HIVE**.
@@ -408,6 +408,10 @@ sudo chown tpot:tpot $HOME/tpotce/data/nginx/cert/*
 
 sudo systemctl start tpot
 ```
+
+The T-Pot configuration file (`.env`) does allow to disable the SSL verification for logstash connections from **SENSOR** to the **HIVE** by setting `LS_SSL_VERIFICATION=none`. For security reasons this is only recommended for lab or test environments.<br><br>
+If you choose to use a valid certificate for the **HIVE** signed by a CA (i.e. Let's Encrypt), logstash, and therefore the **SENSOR**, should have no problems to connect and transmit its logs to the **HIVE**.
+
 ### Deploying Sensors
 Once you have rebooted the **SENSOR** as instructed by the installer you can continue with the distributed deployment by logging into **HIVE** and go to `cd ~/tpotce` folder. Make sure you understood the [Planning and Certificates](#planning-and-certificates) before continuing with the actual deployment.
 
@@ -603,14 +607,14 @@ By default T-Pot will add a daily reboot including some cleaning up. You can adj
 The following issues are known, simply follow the described steps to solve them.
 <br><br>
 
-### **Docker Images Fail to Download**
+### Docker Images Fail to Download
 Some time ago Docker introduced download [rate limits](https://docs.docker.com/docker-hub/download-rate-limit/#:~:text=Docker%20Hub%20limits%20the%20number,pulls%20per%206%20hour%20period.). If you are frequently downloading Docker images via a single or shared IP, the IP address might have exhausted the Docker download rate limit. Login to your Docker account to extend the rate limit.
 ```
 sudo su -
 docker login
 ```
 
-### **T-Pot Networking Fails**
+### T-Pot Networking Fails
 T-Pot is designed to only run on machines with a single NIC. T-Pot will try to grab the interface with the default route, however it is not guaranteed that this will always succeed. At best use T-Pot on machines with only a single NIC.
 
 ## Start T-Pot
@@ -676,7 +680,7 @@ For the changes to take effect you need to restart T-Pot using `systemctl stop t
 ## Import and Export Kibana Objects
 Some T-Pot updates will require you to update the Kibana objects. Either to support new honeypots or to improve existing dashboards or visualizations. Make sure to ***export*** first so you do not loose any of your adjustments.
 
-### **Export**
+### Export
 1. Go to Kibana
 2. Click on "Stack Management"
 3. Click on "Saved Objects"
@@ -684,7 +688,7 @@ Some T-Pot updates will require you to update the Kibana objects. Either to supp
 5. Click on "Export all"
 This will export a NDJSON file with all your objects. Always run a full export to make sure all references are included.
 
-### **Import**
+### Import
 1. [Download the NDJSON file](https://github.com/dtag-dev-sec/tpotce/blob/master/docker/tpotinit/dist/etc/objects/kibana_export.ndjson.zip) and unzip it.
 2. Go to Kibana
 3. Click on "Stack Management"
