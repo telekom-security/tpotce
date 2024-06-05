@@ -12,7 +12,8 @@ HoneyPot Data collector is software intended to collect information from all TPo
 1. Clone repo
 
 ``
-git clone https://github.com/nu11secur1ty/tpotce/tree/master/collector
+https://github.com/nu11secur1ty/tpotce/tree/master
+cd /tpotce/collector
 ``
 
 2. Install requirements
