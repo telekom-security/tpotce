@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>{% block title %}{% endblock %}</title>
+  {% load static %}
+  <link rel="stylesheet" href="{% static 'bootstrap/icons/bootstrap-icons.css' %}">
+  <link href="{% static 'bootstrap/css/bootstrap.min.css' %}" rel="stylesheet" integrity="sha384-F3w7mX95PdgyTmZZMECAngseQB83DfGTowi0iMjiWaeVhAn4FJkqJByhZMI3AhiU" crossorigin="anonymous">
+  <script src="{% static 'js/lib/jquery-3.6.0.min.js' %}" ></script>
+  <script src="{% static 'js/lib/jquery-ui-1.13.0-rc.2/jquery-ui.min.js' %}" ></script>
+  <script src="{% static 'js/lib/echarts.min.js' %}" ></script>
+  <script src="{% static 'js/lib/mathjax/tex-chtml.js' %}"></script>
+  <script src="{% static 'js/popper.min.js' %}"></script>
+  <script src="{% static 'bootstrap/js/bootstrap.js' %}"></script>
+  <script src="{% static 'bootstrap/js/bootstrap.bundle.js' %}"></script>
+
+  <script src="{% static 'js/code/main.js' %}" ></script>
+  <link rel='stylesheet' href="{% static 'css/default.css' %}">
+<script>
+  $(document).ready( function() {
+    $('.dropdown-toggle').dropdown();
+  });
+</script>
+</head>
+<body class="d-flex flex-column min-vh-100">
+<header>
+<!-- Image and text -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <a class="navbar-brand" href="#"><img src="{% static 'images/logo.png' %}" class="logo" width="35px" style="margin-right: 8px;">HoneyPot Admin</a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarSupportedContent">
+            <ul class="navbar-nav mr-auto">
+                {% if user.is_authenticated %}
+                <li class="nav-item active">
+                    {% url 'index' as the_url %}
+                    <a class="nav-link" href="{{ the_url }}" target="_blank">Overview</a>
+                </li>
+                <li class="nav-item">
+                    {% url 'reports' as the_url %}
+                    <a class="nav-link" href="{{ the_url }}" id="navbarReports"  target="_blank">
+                        Общи доклади
+                    </a>
+                </li>
+                {% if perms.CollectorAPI.adv_reports %}
+                <li class="nav-item">
+                    {% url 'reports_adv' as the_url %}
+                    <a class="nav-link" href="{{ the_url }}" id="navbarReports"  target="_blank">
+                        Подробни доклади
+                    </a>
+                </li>
+                {% endif %}
+                {% if perms.CollectorAPI.graphs %}
+                <li class="nav-item">
+                  {% url 'graphs' as the_url %}
+                    <a class="nav-link" href="{{ the_url }}" id="navbarReports"  target="_blank">
+                        Graphs
+                    </a>
+                </li>
+                    {% endif %}
+                    {% if perms.CollectorAPI.tables %}
+                <li class="nav-item">
+                  {% url 'tables' as the_url %}
+                    <a class="nav-link" href="{{ the_url }}" id="navbarReports"  target="_blank">
+                        Tables
+                    </a>
+                </li>
+                    {% endif %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" id="navbarDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">{{ user.username }}</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'logout' %}">(Излез</a>
+                    </li>
+                    <li>
+                        <a class="nav-link" href="{% url 'password_change' %}">Смени паролата)</a>
+                    </li>
+                {% else %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'login' %}">Log In</a>
+                    </li>
+                {% endif %}
+            </ul>
+        </div>
+    </nav>
+</header>
+  <main>
+    {% block content %}
+    {% endblock %}
+  </main>
+<!-- Footer -->
+<footer class="bg-dark text-center text-white mt-auto">
+  <!-- Grid container -->
+  <div class="container p-4">
+
+    <!-- Section: Text -->
+    <section class="mb-4">
+        <p>Статистическа система за анализ на информацията от HoneyPot порталите, поръчна и разработена за <a href="https://e-gov.bg" target="_blank">Държавна агенция "Електронно управление"</a></p>
+        <p>Внимание - Системата е само за вътрешно ползване!!!</p>
+    </section>
+    <!-- Section: Text -->
+  </div>
+  <!-- Grid container -->
+
+  <!-- Copyright -->
+  <!-- <div class="text-center p-3" style="background-color: rgba(0, 0, 0, 0.2);">
+    © 2021 Copyright:
+    <a class="text-white" href="https://anavaro.com/">Stanislav Atanasov</a> & <a class="text-white" href="https://www.linkedin.com/in/teodor-boyadzhiev-39463195/">Teodor Boyadzhiev</a>
+  </div> -->
+  <!-- Copyright -->
+</footer>
+<!-- Footer -->
+
+
+  <script>
+      {% block javascript %}
+      {% endblock %}
+  </script>
+
+</body>
+</html>

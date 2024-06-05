@@ -1,0 +1,94 @@
+<div id="attack-src-title"
+     class="stat-sec-title center">
+  <table class="fullwidth">
+    <tr>
+      <td class="fullwidth">
+        Attack Sources
+      </td>
+      <td class="section-controls">
+        <span id="attack-src-hide" class="button"
+             onclick="toggle('attack-src-body')"> Toggle </span>
+      </td>
+    </tr>
+  </table>
+
+</div>
+
+<div id="attack-src-body" class="stat-body">
+  <div id="attack-src-filters" class="stat-sec-filters center">
+    <table>
+      <tr>
+        <td class="filter-fields">
+          <table>
+            <tr>
+              <td>
+                <label for="attack-src-filters-startD"
+                       class="filter-label">Start Date: </label>
+              </td>
+              <td>
+                <input
+                    class="datepicker"
+                    id="attack-src-filters-startD"
+                    onchange="setIfLess('attack-src-filters-startD', 'attack-src-filters-endD')">
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <label for="attack-src-filters-endD"
+                        class="filter-label"> End Date: </label>
+              </td>
+              <td>
+                <input
+                    class="datepicker"
+                    id="attack-src-filters-endD"
+                    onchange="setIfGreater('attack-src-filters-endD', 'attack-src-filters-startD')">
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <label for="attack-src-filters-minattacks"
+                        class="filter-label"> Minimum Attacks: </label>
+              </td>
+              <td>
+                <input
+                    class="numberpicker"
+                    id="attack-src-filters-minattacks"
+                    onchange="verifyPositiveNumber('attack-src-filters-minattacks')"
+                    type="number">
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <label class="filter-label" for="attack-src-filters-bgonly"> Bulgarian IPs Only: </label>
+              </td>
+              <td>
+                <input id="attack-src-filters-bg_only" type="checkbox">
+              </td>
+            </tr>
+          </table>
+        </td>
+        <td>
+          <table class="filter-buttons">
+            <tr>
+              <td>
+                <span id="attack-src-filters-clear" class="button"
+                      onclick="clearFilters(['attack-src-filters-startD',
+                                             'attack-src-filters-endD',
+                                             'attack-src-filters-minattacks'])"> Clear </span>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <span id="attack-src-filters-apply" class="button"
+                      onclick="updateAttackGraph()"> Apply </span>
+              </td>
+            </tr>
+          </table>
+
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <div id="attack-src-canvas" class="ga-charts center canvas" onclick="resizeEChart($('#attack-src-canvas'))"></div>
+</div>

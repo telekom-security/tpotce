@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+
+{% block title %}Създаване на доклади{% endblock %}
+
+{% load static %}
+{% block content %}
+    <div class="container">
+        <div class="row justify-content-md-center">
+            <div class="col-md-12">
+                <H1>Създаване на репорти</H1>
+                <p>Можете да използвате предоставените връзки за да генерирате различни репорти. За удобство може да избирате между CSV и JSON.</p>
+            </div>
+        </div>
+        <div class="row justify-content-md-center">
+            <div class="col-md-12">
+                <form action="/reports_adv" method="post">
+                    {% csrf_token %}
+                    {{ form.as_p }}
+                    <input type="submit">
+                </form>
+            </div>
+        </div>
+        <div class="row justify-content-md-center">
+            <div class="col-md-12 center">
+                <h1>Генерирани доклади</h1>
+                <table class="table table-type-per-server-24H" id="table-type-per-server-24H">
+                    <thead>
+                        <tr>
+                            <th>Начална дата</th>
+                            <th>Крайна дата</th>
+                            <th>Хъни потове</th>
+                            <th>Държава</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for report in reports %}
+                            <tr>
+                                <td>{{ report.from_date }}</td>
+                                <td>{{ report.to_date }}</td>
+                                <td>
+                                    {% for honey in report.affected_honeys %}
+                                        {{ honey }} <br/>
+                                    {% endfor %}
+                                </td>
+                                <td>
+                                    {% for country in report.countries %}
+                                        {{ country }}
+                                    {% endfor %}
+                                </td>
+                                <td>
+                                    {% url 'reports_adv' as the_url %}
+                                    <a href="{{ the_url }}?r={{ report.id }}">CSV</a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+
+{% block javascript %}
+{% endblock %}

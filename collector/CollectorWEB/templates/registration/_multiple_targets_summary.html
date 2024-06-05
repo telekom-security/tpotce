@@ -1,0 +1,29 @@
+<div id="multiple-targets-summary-title"
+     class="stat-sec-title center">
+  <table class="fullwidth">
+    <tr>
+      <td class="fullwidth">
+        Multiple Targets Summary
+      </td>
+      <td class="section-controls">
+        <span id="attack-multi-summary-hide" class="button"
+             onclick="toggle('attack-multi-summary-body')"> Toggle </span>
+      </td>
+    </tr>
+  </table>
+</div>
+
+
+<div id="attack-multi-summary-body" class="stat-body" >
+  <div id="attack-multi-summary-filters" class="stat-sec-filters center">
+    <table class="filter-buttons">
+      <tr>
+        <td>
+          <span id="attack-multi-summary-filters-apply" class="button"
+                onclick="updateMultiSummary()"> Apply </span>
+        </td>
+      </tr>
+    </table>
+  </div>
+  <div id="attack-multi-summary-canvas" class="ga-charts center canvas" onclick="resizeEChart($('#attack-multi-summary-canvas'))"></div>
+</div>

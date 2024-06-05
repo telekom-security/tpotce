@@ -1,0 +1,122 @@
+<div id="attack-trend-title"
+     class="stat-sec-title center">
+  <table class="fullwidth">
+    <tr>
+      <td class="fullwidth">
+        Attack Trend
+      </td>
+      <td class="section-controls">
+        <span id="attack-trend-hide" class="button"
+             onclick="toggle('attack-trend-body')"> Toggle </span>
+      </td>
+    </tr>
+  </table>
+</div>
+<div id="attack-trend-body" class="stat-body">
+  <div id="attack-trend-filters" class="stat-sec-filters center">
+    <table>
+      <tr>
+        <td class="filter-fields">
+          <table>
+            <tr>
+              <td>
+                <label for="attack-trend-filters-startD"
+                       class="filter-label">Start Date: </label>
+              </td>
+              <td>
+                <input
+                    class="datepicker"
+                    id="attack-trend-filters-startD"
+                    onchange="setIfLess('attack-trend-filters-startD', 'attack-trend-filters-endD')">
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <label for="attack-trend-filters-endD"
+                        class="filter-label"> End Date: </label>
+              </td>
+              <td>
+                <input
+                    class="datepicker"
+                    id="attack-trend-filters-endD"
+                    onchange="setIfGreater('attack-trend-filters-endD', 'attack-trend-filters-startD')">
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <label for="attack-trend-filters-resolution"
+                        class="filter-label"> Resolution: </label>
+              </td>
+              <td>
+              <select class="select" id="attack-trend-filters-resolution">
+                <option value="hour"> Hour </option>
+                <option value="day" selected> Day </option>
+                <option value="week"> Week </option>
+              </select>
+            </td></tr>
+            <tr>
+              <td> <label
+                    for="attack-trend-filters-bg_only"
+                    class="filter-label"> Bulgarian IPs Only: </label> </td>
+              <td>
+                <input id="attack-trend-filters-bg_only" type="checkbox">
+              </td>
+            </tr>
+          </table>
+        </td>
+        <td>
+          <table class="filter-buttons">
+            <tr>
+              <td>
+                <span id="attack-trend-filters-clear" class="button"
+                      onclick="clearFilters(['attack-trend-filters-startD',
+                                             'attack-trend-filters-endD'])"> Clear </span>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <span id="attack-trend-filters-apply" class="button"
+                      onclick="updateAttackTrend()"> Apply </span>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </div>
+  <div id="attack-trend-canvas" class="ga-charts center canvas" onclick="resizeEChart($('#attack-trend-canvas'))"></div>
+  <div id="attack-trend-info-panel" class="info-panel"> </div>
+
+  <table id="attack-trend-parameters" class="parameter-table">
+    <tr><td class="column-title">Parameter</td><td class="column-title">Value</td></tr>
+    <tr><td>a</td><td id="attack-trend-param-value-a"></td></tr>
+    <tr><td>b</td><td id="attack-trend-param-value-b"></td></tr>
+    <tr><td>\(\sigma_a\)</td><td id="attack-trend-param-value-sigma_a"></td></tr>
+  </table>
+
+  <div class="details">
+    <details>
+      <summary>Details</summary>
+      <p> All numbers in the results are rounded to 2 digits after the decimal point. </p>
+      <p>
+        For modelling the trend of the attacks is used a linear model,
+        $$ y = a t + b + \epsilon$$
+        $$ \epsilon \sim N(0, \mu)$$
+        where y is the number of attacks, t is the time step, a is scale, and b is offset.
+        The time-step is determined by the resolution, which can be hour, day or week.
+      </p>
+
+      <p>
+        The parameters of the model are fit according to
+        $$ a = \frac{\sum_i (y - \mu_y)(t_i - \mu_t)}{\sum_i(t_i - \mu_t)^2} $$
+        $$ b = \mu_y - a \mu_t $$
+        $$ \mu_t = \frac{1}{n} \sum_{i=1}^n t_i $$
+        $$ \mu_y = \frac{1}{n} \sum_{i=1}^n y_i $$
+        Then the uncertainty of the scale is estimated by assuming Gaussian distribution of the errors, according to
+        $$ \sigma_a = \sqrt{\frac{\sum_i (y_i - a x_i - b)^2}{(n-2)\sum_i (x_i - \mu_x)^2}} $$
+      </p>
+
+      <p> For further details, please check <a href="https://en.wikipedia.org/wiki/Simple_linear_regression"> linear regression</a>. </p>
+    </details>
+  </div>
+</div>

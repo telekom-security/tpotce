@@ -1,0 +1,52 @@
+{% block title %}Детайли{% endblock %}
+<table class="tables-rows" id="table-details-value">
+  <tr class="column-title">
+    <td> Дата </td>
+    {% for target in targets %}
+      <td colspan="3"> {{ target }} </td>
+    {% endfor %}
+    <td colspan="3"> Общо </td>
+  </tr>
+
+  <tr>
+    <td></td>
+    {% for target in targets %}
+      <td> Всички </td>
+      <td> България </td>
+      <td> България IPs </td>
+    {% endfor %}
+    <td> Всички </td>
+    <td> България </td>
+    <td> България IPs </td>
+  </tr>
+  {% for time_point in time_points %}
+    <tr>
+    <td> {{ time_point }} </td>
+      {% for target in targets %}
+        {% if time_point in data and target in data|keyvalue:time_point %}
+          <td> {{ data|keyvalue:time_point|keyvalue:target|keyvalue:"all"|keyvalue:"attacks" }} </td>
+          <td> {{ data|keyvalue:time_point|keyvalue:target|keyvalue:"bg"|keyvalue:"attacks" }} </td>
+          <td> {{ data|keyvalue:time_point|keyvalue:target|keyvalue:"bg"|keyvalue:"ips" }} </td>
+        {% else %}
+          <td> 0 </td>
+          <td> 0 </td>
+          <td> 0 </td>
+        {% endif %}
+      {% endfor %}
+      <td class="summary"> {{ total_over_targets|keyvalue:time_point|keyvalue:"all"|keyvalue:"attacks" }}</td>
+      <td class="summary"> {{ total_over_targets|keyvalue:time_point|keyvalue:"bg"|keyvalue:"attacks" }}</td>
+      <td class="summary"> {{ total_over_targets|keyvalue:time_point|keyvalue:"bg"|keyvalue:"ips" }}</td>
+    </tr>
+  {% endfor %}
+  <tr class="summary">
+    <td></td>
+    {% for target in targets %}
+      <td> {{ total_over_time|keyvalue:target|keyvalue:"all"|keyvalue:"attacks" }}</td>
+      <td> {{ total_over_time|keyvalue:target|keyvalue:"bg"|keyvalue:"attacks" }}</td>
+      <td> {{ total_over_time|keyvalue:target|keyvalue:"bg"|keyvalue:"ips" }}</td>
+    {% endfor %}
+    <td> {{ total|keyvalue:"all"|keyvalue:"attacks" }}</td>
+    <td> {{ total|keyvalue:"bg"|keyvalue:"attacks" }}</td>
+    <td> {{ total|keyvalue:"bg"|keyvalue:"ips" }}</td>
+  </tr>
+</table>
