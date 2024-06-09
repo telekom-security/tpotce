@@ -710,38 +710,115 @@ services:
      # - ./config/wazuh_indexer/wazuh.indexer.yml:/usr/share/wazuh-indexer/opensearch.yml
 
 ## Wazuh Dashboard service
-  kibana:
-    container_name: kibana
+  wazuh.dashboard:
+    container_name: wazuh.dashboard
     restart: always
     depends_on:
-      elasticsearch:
+      wazuh.indexer:
         condition: service_healthy
-    mem_limit: 1g
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
     ports:
-     - "127.0.0.1:64296:5601"
-    image: ${TPOT_REPO}/kibana:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
+      - 443:5601
+    image: wazuh/wazuh-dashboard:4.7.5
+    environment:
+     - WAZUH_API_URL: https://wazuh.manager
+     - DASHBOARD_USERNAME: kibanaserver
+     - DASHBOARD_PASSWORD: kibanaserver
+     - API_USERNAME: wazuh-wui
+     - API_PASSWORD: MyS3cr37P450r.*-
+     - SERVER_HOST: 0.0.0.0
+     - SERVER_PORT: 5601
+     - OPENSEARCH_HOSTS: https://wazuh.indexer:9200
+     - OPENSEARCH_SSL_VERIFICATIONMODE: certificate
+     - OPENSEARCH_REQUESTHEADERSALLOWLIST: '["securitytenant","Authorization"]'
+     - OPENSEARCH_SECURITY_MULTITENANCY_ENABLED: "false"
+     - SERVER_SSL_ENABLED: "true"
+     - OPENSEARCH_SECURITY_READONLY_MODE_ROLES: '["kibana_read_only"]'
+     - SERVER_SSL_KEY: "/usr/share/wazuh-dashboard/certs/wazuh-dashboard-key.pem"
+     - SERVER_SSL_CERTIFICATE: "/usr/share/wazuh-dashboard/certs/wazuh-dashboard.pem"
+     - OPENSEARCH_SSL_CERTIFICATEAUTHORITIES: '["/usr/share/wazuh-dashboard/certs/root-ca.pem"]'
+     - UISETTINGS_OVERRIDES_DEFAULTROUTE: /app/wz-home
+    volumes:
+     - wazuh-dashboard-config:/usr/share/wazuh-dashboard/data/wazuh/config
+     - wazuh-dashboard-custom:/usr/share/wazuh-dashboard/plugins/wazuh/public/assets/custom
+     - ./config/wazuh_indexer_ssl_certs/wazuh.dashboard.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard.pem
+     - ./config/wazuh_indexer_ssl_certs/wazuh.dashboard-key.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard-key.pem
+     - ./config/wazuh_indexer_ssl_certs/root-ca.pem:/usr/share/wazuh-dashboard/certs/root-ca.pem
+     - ./config/wazuh_dashboard/wazuh.yml:/wazuh-config-mount/data/wazuh/config/wazuh.yml
+     #  if you need mount a custom opensearch-dashboards.yml, uncomment the next line and delete the environment variables
+     # - ./config/wazuh_dashboard/opensearch_dashboards.yml:/wazuh-config-mount/config/opensearch_dashboards.yml
+    links:
+     - wazuh.indexer:wazuh.indexer
+     - wazuh.manager:wazuh.manager
 
 ## Wazuh Manager service
-  logstash:
-    container_name: logstash
+  wazuh.manager:
+    container_name: wazuh.manager
     restart: always
     depends_on:
-      elasticsearch:
+      wazuh.indexer:
         condition: service_healthy
-    environment:
-     - LS_JAVA_OPTS=-Xms1024m -Xmx1024m
-     - TPOT_TYPE=${TPOT_TYPE:-HIVE}
-     - TPOT_HIVE_USER=${TPOT_HIVE_USER}
-     - TPOT_HIVE_IP=${TPOT_HIVE_IP}
-     - LS_SSL_VERIFICATION=${LS_SSL_VERIFICATION:-full}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 655360
+        hard: 655360
     ports:
-     - "127.0.0.1:64305:64305"
-    mem_limit: 2g
-    image: ${TPOT_REPO}/logstash:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
+      - "1514:1514"
+      - "1515:1515"
+      - "514:514/udp"
+      - "55000:55000"
+    environment:
+     - INDEXER_URL: https://wazuh.indexer:9200
+     - INDEXER_USERNAME: admin
+     - INDEXER_PASSWORD: admin
+     - FILEBEAT_SSL_VERIFICATION_MODE: full
+     - SSL_CERTIFICATE_AUTHORITIES: /etc/ssl/root-ca.pem
+     - SSL_CERTIFICATE: /etc/ssl/filebeat.pem
+     - SSL_KEY: /etc/ssl/filebeat.key
+     - API_USERNAME: wazuh-wui
+     - API_PASSWORD: MyS3cr37P450r.*-
+    image: wazuh/wazuh-manager:4.7.5
     volumes:
-     - ${TPOT_DATA_PATH}:/data
+     - wazuh_api_configuration:/var/ossec/api/configuration
+     - wazuh_etc:/var/ossec/etc
+     - wazuh_logs:/var/ossec/logs
+     - wazuh_queue:/var/ossec/queue
+     - wazuh_var_multigroups:/var/ossec/var/multigroups
+     - wazuh_integrations:/var/ossec/integrations
+     - wazuh_active_response:/var/ossec/active-response/bin
+     - wazuh_agentless:/var/ossec/agentless
+     - wazuh_wodles:/var/ossec/wodles
+     - filebeat_etc:/etc/filebeat
+     - filebeat_var:/var/lib/filebeat
+     - ./config/wazuh_indexer_ssl_certs/root-ca-manager.pem:/etc/ssl/root-ca.pem
+     - ./config/wazuh_indexer_ssl_certs/wazuh.manager.pem:/etc/ssl/filebeat.pem
+     - ./config/wazuh_indexer_ssl_certs/wazuh.manager-key.pem:/etc/ssl/filebeat.key
+     - ./config/wazuh_cluster/wazuh_manager.conf:/wazuh-config-mount/etc/ossec.conf
+
+volumes:
+  wazuh_api_configuration:
+  wazuh_etc:
+  wazuh_logs:
+  wazuh_queue:
+  wazuh_var_multigroups:
+  wazuh_integrations:
+  wazuh_active_response:
+  wazuh_agentless:
+  wazuh_wodles:
+  filebeat_etc:
+  filebeat_var:
+  wazuh-indexer-data:
+  wazuh-dashboard-config:
+  wazuh-dashboard-custom:
 
 ## Map Redis Service
   map_redis:
