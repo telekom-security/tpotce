@@ -652,20 +652,43 @@ services:
 #### Tools 
 ##################
 
-#### ELK
-## Elasticsearch service
-  elasticsearch:
-    container_name: elasticsearch
+#### Wazuh
+## Wazuh Indexer service
+  wazuh.indexer:
+    container_name: wazuh.indexer
     restart: always
     depends_on:
       tpotinit:
         condition: service_healthy
     environment:
-     - bootstrap.memory_lock=true
-     - ES_JAVA_OPTS=-Xms2048m -Xmx2048m
-     - ES_TMPDIR=/tmp
-    cap_add:
-     - IPC_LOCK
+     - OPENSEARCH_JAVA_OPTS: "-Xms1g -Xmx1g"
+     - bootstrap.memory_lock: "true"
+     - NODE_NAME: "wazuh.indexer"
+     - CLUSTER_INITIAL_MASTER_NODES: "wazuh.indexer"
+     - CLUSTER_NAME: "wazuh-cluster"
+     - PATH_DATA: /var/lib/wazuh-indexer
+     - PATH_LOGS: /var/log/wazuh-indexer
+     - HTTP_PORT: 9200-9299
+     - TRANSPORT_TCP_PORT: 9300-9399
+     - COMPATIBILITY_OVERRIDE_MAIN_RESPONSE_VERSION: "true"
+     - PLUGINS_SECURITY_SSL_HTTP_PEMCERT_FILEPATH: /usr/share/wazuh-indexer/certs/wazuh.indexer.pem
+     - PLUGINS_SECURITY_SSL_HTTP_PEMKEY_FILEPATH: /usr/share/wazuh-indexer/certs/wazuh.indexer.key
+     - PLUGINS_SECURITY_SSL_HTTP_PEMTRUSTEDCAS_FILEPATH: /usr/share/wazuh-indexer/certs/root-ca.pem
+     - PLUGINS_SECURITY_SSL_TRANSPORT_PEMCERT_FILEPATH: /usr/share/wazuh-indexer/certs/wazuh.indexer.pem
+     - PLUGINS_SECURITY_SSL_TRANSPORT_PEMKEY_FILEPATH: /usr/share/wazuh-indexer/certs/wazuh.indexer.key
+     - PLUGINS_SECURITY_SSL_TRANSPORT_PEMTRUSTEDCAS_FILEPATH: /usr/share/wazuh-indexer/certs/root-ca.pem
+     - PLUGINS_SECURITY_SSL_HTTP_ENABLED: "true"
+     - PLUGINS_SECURITY_SSL_TRANSPORT_ENFORCE_HOSTNAME_VERIFICATION: "false"
+     - PLUGINS_SECURITY_SSL_TRANSPORT_RESOLVE_HOSTNAME: "false"
+     - PLUGINS_SECURITY_AUTHCZ_ADMIN_DN: "CN=admin,OU=Wazuh,O=Wazuh,L=California,C=US"
+     - PLUGINS_SECURITY_CHECK_SNAPSHOT_RESTORE_WRITE_PRIVILEGES: "true"
+     - PLUGINS_SECURITY_ENABLE_SNAPSHOT_RESTORE_PRIVILEGE: "true"
+     - PLUGINS_SECURITY_NODES_DN: "CN=wazuh.indexer,OU=Wazuh,O=Wazuh,L=California,C=US"
+     - PLUGINS_SECURITY_RESTAPI_ROLES_ENABLED: '["all_access", "security_rest_api_access"]'
+     - PLUGINS_SECURITY_SYSTEM_INDICES_ENABLED: "true"
+     - PLUGINS_SECURITY_SYSTEM_INDICES_INDICES: '[".opendistro-alerting-config", ".opendistro-alerting-alert*", ".opendistro-anomaly-results*", ".opendistro-anomaly-detector*", ".opendistro-anomaly-checkpoints", ".opendistro-anomaly-detection-state", ".opendistro-reports-*", ".opendistro-notifications-*", ".opendistro-notebooks", ".opensearch-observability", ".opendistro-asynchronous-search-response*", ".replication-metadata-store"]'
+     - PLUGINS_SECURITY_ALLOW_DEFAULT_INIT_SECURITYINDEX: "true"
+     - CLUSTER_ROUTING_ALLOCATION_DISK_THRESHOLD_ENABLED: "false"
     ulimits:
       memlock:
         soft: -1
@@ -673,15 +696,20 @@ services:
       nofile:
         soft: 65536
         hard: 65536
-    mem_limit: 4g
     ports:
-     - "127.0.0.1:64298:9200"
-    image: ${TPOT_REPO}/elasticsearch:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
+     - "9200:9200"
+    image: wazuh/wazuh-indexer:4.7.5
     volumes:
-     - ${TPOT_DATA_PATH}:/data
+     - wazuh-indexer-data:/var/lib/wazuh-indexer
+     - ./config/wazuh_indexer_ssl_certs/root-ca.pem:/usr/share/wazuh-indexer/certs/root-ca.pem
+     - ./config/wazuh_indexer_ssl_certs/wazuh.indexer-key.pem:/usr/share/wazuh-indexer/certs/wazuh.indexer.key
+     - ./config/wazuh_indexer_ssl_certs/wazuh.indexer.pem:/usr/share/wazuh-indexer/certs/wazuh.indexer.pem
+     - ./config/wazuh_indexer_ssl_certs/admin.pem:/usr/share/wazuh-indexer/certs/admin.pem
+     - ./config/wazuh_indexer_ssl_certs/admin-key.pem:/usr/share/wazuh-indexer/certs/admin-key.pem
+     #  if you need mount a custom opensearch.yml, uncomment the next line and delete the environment variables
+     # - ./config/wazuh_indexer/wazuh.indexer.yml:/usr/share/wazuh-indexer/opensearch.yml
 
-## Kibana service
+## Wazuh Dashboard service
   kibana:
     container_name: kibana
     restart: always
@@ -694,7 +722,7 @@ services:
     image: ${TPOT_REPO}/kibana:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
 
-## Logstash service
+## Wazuh Manager service
   logstash:
     container_name: logstash
     restart: always
