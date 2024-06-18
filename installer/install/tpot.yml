@@ -587,6 +587,15 @@
         - "Fedora"
         - "Ubuntu"
 
+    - name: Copy resolved.conf to /etc/systemd (Fedora)
+      copy:
+        src: /usr/lib/systemd/resolved.conf
+        dest: /etc/systemd/resolved.conf
+      when: ansible_distribution in ["Fedora"]
+      ignore_errors: true
+      tags:
+        - "Fedora"
+
     - name: Modify DNSStubListener in resolved.conf (Fedora, Ubuntu)
       lineinfile:
         path: /etc/systemd/resolved.conf
