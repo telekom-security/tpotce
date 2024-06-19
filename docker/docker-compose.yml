@@ -1,6 +1,4 @@
 # T-Pot Image Builder (use only for building docker images)
-version: '2.3'
-
 services:
 
 ##################
@@ -58,9 +56,9 @@ services:
     image: "dtagdevsec/endlessh:24.04"
 
 # Glutton service
-  glutton:
-    build: glutton/.
-    image: "dtagdevsec/glutton:24.04"
+#  glutton:
+#    build: glutton/.
+#    image: "dtagdevsec/glutton:24.04"
 
 # Hellpot service
   hellpot:
@@ -162,6 +160,11 @@ services:
 ##################
 #### Tools
 ##################
+
+# T-Pot Init Service
+  tpotinit:
+    build: tpotinit/.
+    image: "dtagdevsec/tpotinit:24.04"
 
 #### ELK
 ## Elasticsearch service

@@ -1,6 +1,4 @@
 # T-Pot: MAC_WIN
-version: '3.9'
-
 networks:
   tpotinit_local:
   adbhoney_local:

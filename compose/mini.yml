@@ -1,6 +1,4 @@
 # T-Pot: MINI
-version: '3.9'
-
 networks:
   adbhoney_local:
   ciscoasa_local:

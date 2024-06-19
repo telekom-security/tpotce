@@ -157,7 +157,6 @@ def main():
     remove_unused_networks(selected_services, services, networks)
 
     output_config = {
-        'version': '3.9',
         'networks': networks,
         'services': selected_services,
     }

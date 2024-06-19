@@ -3,8 +3,6 @@
 #       T-Pot on a Raspberry Pi 4 (8GB of RAM).
 #       The standard docker compose file should work mostly fine (depending on traffic) if you do not enable a
 #       desktop environment such as LXDE and meet the minimum requirements of 8GB RAM.
-version: '3.9'
-
 networks:
   ciscoasa_local:
   citrixhoneypot_local:
