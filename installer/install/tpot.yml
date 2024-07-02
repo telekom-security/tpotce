@@ -296,6 +296,7 @@
           - containerd
           - runc
           - podman-docker
+          - podman
         state: absent
         update_cache: yes
       when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "Raspbian", "Rocky", "Ubuntu"]
