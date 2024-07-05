@@ -1,0 +1,49 @@
+name: "Check Basic Support Info"
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  check-issue:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out the repository
+      uses: actions/checkout@v4
+
+    - name: Install jq
+      run: sudo apt-get install jq -y
+
+    - name: Check issue for basic support info
+      id: check_issue
+      run: |
+        REQUIRED_INFO=("What OS are you T-Pot running on?" "What is the version of the OS" "What T-Pot version are you currently using" "What architecture are you running on" "Review the \`~/install_tpot.log\`" "How long has your installation been running?" "Did you install upgrades, packages or use the update script?" "Did you modify any scripts or configs?" "Please provide a screenshot of \`htop\` and \`docker stats\`." "How much free disk space is available" "What is the current container status" "What is the status of the T-Pot service" "What ports are being occupied?")
+
+        ISSUE_BODY=$(cat $GITHUB_EVENT_PATH | jq -r '.issue.body')
+        MISSING_INFO=()
+        
+        for info in "${REQUIRED_INFO[@]}"; do
+          if [[ "$ISSUE_BODY" != *"$info"* ]]; then
+            MISSING_INFO+=("$info")
+          fi
+        done
+        
+        if [ ${#MISSING_INFO[@]} -ne 0 ]; then
+          echo "missing=true" >> $GITHUB_ENV
+        else
+          echo "missing=false" >> $GITHUB_ENV
+        fi
+
+    - name: Add "no basic support info" label if necessary
+      if: env.missing == 'true'
+      run: gh issue edit "$NUMBER" --add-label "$LABELS"
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_REPO: ${{ github.repository }}
+        NUMBER: ${{ github.event.issue.number }}
+        LABELS: no basic support info
