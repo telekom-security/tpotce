@@ -287,14 +287,16 @@
   become: true
 
   tasks:
-    - name: Remove distribution based Docker packages (AlmaLinux, Debian, Fedora, Raspbian, Rocky, Ubuntu)
+    - name: Remove distribution based Docker packages and podman-docker (AlmaLinux, Debian, Fedora, Raspbian, Rocky, Ubuntu)
       package:
         name:
           - docker
           - docker-engine
           - docker.io
-          - containerd 
+          - containerd
           - runc
+          - podman-docker
+          - podman
         state: absent
         update_cache: yes
       when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "Raspbian", "Rocky", "Ubuntu"]
