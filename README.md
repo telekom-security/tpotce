@@ -451,6 +451,10 @@ If you have not done already generate a SSH key to securely login to the **SENSO
 4. Once the key is successfully deployed run `./deploy.sh` and follow the instructions.
 <br><br>
 
+### Removing Sensors
+Identify the `TPOT_HIVE_USER` ENV on the SENSOR in the `$HOME/tpotce/.env` config (it is a base64 encoded string). Now identify the same string in the `LS_WEB_USER` ENV on the HIVE in the `$HOME/tpotce/.env` config. Remove the string and restart T-Pot.<br>
+Now you can safely delete the SENSOR machine.
+
 ## Community Data Submission
 T-Pot is provided in order to make it accessible to everyone interested in honeypots. By default, the captured data is submitted to a community backend. This community backend uses the data to feed [Sicherheitstacho](https://sicherheitstacho.eu).
 You may opt out of the submission by removing the `# Ewsposter service` from `~/tpotce/docker-compose.yml` by following these steps:
