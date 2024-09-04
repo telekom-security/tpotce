@@ -761,7 +761,7 @@
       git:
         repo: 'https://github.com/telekom-security/tpotce'
         dest: '/home/{{ ansible_user_id }}/tpotce/'
-        version: master
+        version: 24.04.1
         clone: yes
         update: no
       when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]

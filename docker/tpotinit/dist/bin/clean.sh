@@ -87,12 +87,20 @@ fuTPOTINIT () {
   chown tpot:tpot /tmp/etc/ -R
 }
 
-# Let's create a function to clean up and prepare honeytrap data
+# Let's create a function to clean up and prepare adbhoney data
 fuADBHONEY () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/adbhoney/*; fi
   mkdir -vp /data/adbhoney/{downloads,log}
   chmod 770 /data/adbhoney/ -R
   chown tpot:tpot /data/adbhoney/ -R
+}
+
+# Let's create a function to clean up and prepare beelzebub data
+fuBEELZEBUB () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/beelzebub/*; fi
+  mkdir -vp /data/beelzebub/{key,log}
+  chmod 770 /data/beelzebub/ -R
+  chown tpot:tpot /data/beelzebub/ -R
 }
 
 # Let's create a function to clean up and prepare ciscoasa data
@@ -362,6 +370,7 @@ echo
 echo "Checking and preparing data folders."
 fuTPOTINIT
 fuADBHONEY
+fuBEELZEBUB
 fuCISCOASA
 fuCITRIXHONEYPOT
 fuCONPOT
