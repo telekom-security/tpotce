@@ -36,4 +36,4 @@ STOPSIGNAL SIGINT
 HEALTHCHECK --interval=5m --timeout=30s --retries=3 CMD python3 /cpu_check.py $(pgrep -of run.py) 99
 USER adbhoney:adbhoney
 WORKDIR /opt/adbhoney/
-CMD /usr/bin/python3 run.py
+CMD ["/usr/bin/python3", "run.py"]

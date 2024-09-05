@@ -1,4 +1,4 @@
-FROM alpine:3.16 as builder
+FROM alpine:3.16 AS builder
 #
 # Include dist
 ADD dist/ /root/dist/

@@ -36,4 +36,4 @@ RUN apk -U --no-cache add \
     rm -rf /var/cache/apk/*
 #
 # Start nginx
-CMD nginx -g 'daemon off;'
+CMD ["nginx", "-g", "daemon off;"]

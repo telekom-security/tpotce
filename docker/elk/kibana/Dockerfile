@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM debian:12
 #
 # VARS
 ENV KB_VER=8.14.2

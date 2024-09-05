@@ -1,4 +1,4 @@
-FROM golang:1.21-alpine as builder
+FROM golang:1.21-alpine AS builder
 #
 # Include dist
 COPY dist/ /root/dist/

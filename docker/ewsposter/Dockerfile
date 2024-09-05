@@ -24,7 +24,7 @@ RUN apk -U --no-cache add \
 		py3-wheel && \
 	pip3 install --break-system-packages --upgrade pip && \
 	pip3 install --break-system-packages --no-cache-dir configparser hpfeeds3 influxdb influxdb-client xmljson && \
-
+#
 #
 # Setup ewsposter
     git clone https://github.com/telekom-security/ewsposter -b v1.25.0 /opt/ewsposter && \
@@ -46,7 +46,7 @@ RUN apk -U --no-cache add \
 		openssl-dev \
 		python3-dev \
 		py-setuptools && \
-    rm -rf /root/* /var/cache/apk/* /opt/ewsposter/.git
+	rm -rf /root/* /var/cache/apk/* /opt/ewsposter/.git
 #
 # Run ewsposter
 STOPSIGNAL SIGINT

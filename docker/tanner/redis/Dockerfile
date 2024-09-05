@@ -21,4 +21,4 @@ RUN apk -U --no-cache add redis shadow && \
 # Start redis
 STOPSIGNAL SIGKILL
 USER redis:redis
-CMD redis-server /etc/redis.conf
+CMD ["redis-server", "/etc/redis.conf"]
