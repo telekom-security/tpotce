@@ -20,6 +20,17 @@ services:
 #### Tools
 ##################
 
+# T-Pot Init Service
+  tpotinit:
+    image: ${TPOT_DOCKER_REPO}/tpotinit:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/tpotinit:${TPOT_VERSION}
+      context: ../tpotinit/
+      dockerfile: ./Dockerfile
+      platforms:
+        - ${TPOT_AMD64}
+        - ${TPOT_ARM64}
 
 #### ELK
 ## Logstash service
