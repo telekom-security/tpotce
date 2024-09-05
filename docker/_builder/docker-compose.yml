@@ -1,0 +1,47 @@
+services:
+
+##################
+#### Honeypots
+##################
+
+# Beelzebub service
+  beelzebub:
+    image: ${TPOT_DOCKER_REPO}/beelzebub:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/beelzebub:${TPOT_VERSION}
+      context: ../beelzebub/
+      dockerfile: ./Dockerfile
+      platforms:
+        - ${TPOT_AMD64}
+        - ${TPOT_ARM64}
+
+##################
+#### Tools
+##################
+
+
+#### ELK
+## Logstash service
+  logstash:
+    image: ${TPOT_DOCKER_REPO}/logstash:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/logstash:${TPOT_VERSION}
+      context: ../elk/logstash/
+      dockerfile: ./Dockerfile
+      platforms:
+        - ${TPOT_AMD64}
+        - ${TPOT_ARM64}
+
+# Map Web Service
+  map:
+    image: ${TPOT_DOCKER_REPO}/map:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/map:${TPOT_VERSION}
+      context: ../elk/map/
+      dockerfile: ./Dockerfile
+      platforms:
+        - ${TPOT_AMD64}
+        - ${TPOT_ARM64}
