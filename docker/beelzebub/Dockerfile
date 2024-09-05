@@ -22,6 +22,7 @@ COPY --from=builder /root/beelzebub/configurations /opt/beelzebub/configurations
 #
 # Setup user, groups and configs
 RUN sed -i "s#logsPath: ./log#logsPath: ./configurations/log/beelzebub.json#g" /opt/beelzebub/configurations/beelzebub.yaml && \
+    sed -i 's/passwordRegex: "^(root|qwerty|Smoker666|123456|jenkins|minecraft|sinus|alex|postgres|Ly123456)$"/passwordRegex: ".*"/g' /opt/beelzebub/configurations/services/ssh-22.yaml && \
     addgroup -g 2000 beelzebub && \
     adduser -S -s /bin/ash -u 2000 -D -g 2000 beelzebub && \
     mkdir -p /beelzebub/configurations/key \
