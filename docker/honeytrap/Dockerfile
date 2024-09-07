@@ -1,12 +1,21 @@
 FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND noninteractive
+ARG PROXY
+ENV http_proxy=${PROXY}
 #
 # Include dist
 COPY dist/ /root/dist/
 #
+# Check if APT_PROXY is set and configure apt to use the proxy only if it's available
+RUN bash -c 'if [ -n "${http_proxy}" ]; then \
+                 echo "Using APT proxy at ${http_proxy}"; \
+                 echo "Acquire::http::Proxy \"${http_proxy}\";" > /etc/apt/apt.conf.d/01proxy; \
+               else \
+                 echo "APT proxy not configured, proceeding without proxy"; \
+             fi' && \
+#    bash -c 'echo "Acquire::http::Proxy::ports.ubuntu.com DIRECT;" > /etc/apt/apt.conf.d/99force-no-proxy' && \
 # Setup apt
-RUN apt-get update && \
-    apt-get update -y && \
+    apt-get update && \
 #
 # Install packages
     apt-get install -y autoconf \
@@ -56,6 +65,7 @@ RUN apt-get update && \
                      libpq-dev && \
     apt-get autoremove -y --purge && \
     apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /root/.cache /root/* /opt/honeytrap/.git
+ENV http_proxy=""
 #
 # Start honeytrap
 USER honeytrap:honeytrap

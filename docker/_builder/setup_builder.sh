@@ -39,15 +39,19 @@ echo "Docs: https://docs.docker.com/desktop/multi-arch/"
 echo
 echo "Example (build release): docker compose build"
 echo
-echo "Example (push release): docker compose build --push"
+echo "Example (build and push release): docker compose build --push"
 echo
 echo "Example (build single image): docker compose build tpotinit"
 echo
 echo "Example (build and push single image): docker compose build tpotinit --push"
 echo
-echo "Resolve problems running ..."
+echo "Resolve problems running buildx:"
 echo "docker buildx create --use --name mybuilder"
 echo "docker buildx inspect mybuilder --bootstrap"
 echo "docker login -u <username>"
 echo "docker login ghcr.io - <username>"
 echo
+echo "Resolve segmentation faults when building arm64 images in qemu on amd64:"
+echo "docker run --rm --privileged multiarch/qemu-user-static --reset -p yes"
+echo
+

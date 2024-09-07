@@ -1,12 +1,22 @@
 FROM ubuntu:22.04
-#
-# VARS
+ENV DEBIAN_FRONTEND noninteractive
+ARG PROXY
 ENV LS_VER=8.14.2
+ENV http_proxy=${PROXY}
+#
 # Include dist
 COPY dist/ /root/dist/
 #
-# Setup env and apt
-RUN apt-get update -y && \
+# Check if PROXY is set and configure apt to use the proxy
+RUN bash -c 'if [ -n "${http_proxy}" ]; then \
+                 echo "Using APT proxy at ${http_proxy}"; \
+                 echo "Acquire::http::Proxy \"${http_proxy}\";" > /etc/apt/apt.conf.d/01proxy; \
+               else \
+                 echo "APT proxy not configured, proceeding without proxy"; \
+             fi' && \
+#    bash -c 'echo "Acquire::http::Proxy::ports.ubuntu.com DIRECT;" > /etc/apt/apt.conf.d/99force-no-proxy' && \
+# Setup apt
+    apt-get update -y && \
     apt-get install -y \
              aria2 \
              bash \
@@ -57,10 +67,11 @@ RUN apt-get update -y && \
 # Clean up
     apt-get autoremove -y --purge && \
     apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /root/.cache /root/*
+ENV http_proxy=""
 #
 # Healthcheck
 HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:9600'
 #
 # Start logstash
 USER logstash:logstash
-CMD ["./entrypoint.sh"]
+CMD ["entrypoint.sh"]

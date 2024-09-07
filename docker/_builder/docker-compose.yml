@@ -7,6 +7,8 @@
 
 # Common build config
 x-common-build: &common-build
+  args:
+    PROXY: ${PROXY}
   dockerfile: ./Dockerfile
   platforms:
     - ${TPOT_AMD64}
