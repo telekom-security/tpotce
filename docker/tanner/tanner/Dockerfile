@@ -3,8 +3,8 @@ FROM alpine:3.17
 # Include dist
 COPY dist/ /root/dist/
 #
-# Setup apt
-RUN apk -U --no-cache add \
+# Install packages
+RUN apk --no-cache -U add \
 		build-base \
 		git \
 		libcap \
@@ -67,8 +67,11 @@ RUN apk -U --no-cache add \
 #            libressl-dev \
             linux-headers \
             python3-dev && \
-    rm -rf /root/* && \
-    rm -rf /tmp/* /var/tmp/* /var/cache/apk/* /opt/tanner/.git
+    rm -rf /root/* \
+           /tmp/* \
+           /var/tmp/* \
+           /var/cache/apk/* \
+           /opt/tanner/.git
 #
 # Start tanner
 STOPSIGNAL SIGKILL

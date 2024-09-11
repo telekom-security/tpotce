@@ -3,9 +3,8 @@ FROM alpine:3.19
 # Include dist
 COPY dist/ /root/dist/
 #
-# Setup apt
-RUN apk --no-cache -U add \
-			build-base \
+# Install packages
+RUN apk --no-cache -U add build-base \
 			cython \
 			file \
 			git \
@@ -88,9 +87,9 @@ RUN apk --no-cache -U add \
             pkgconfig \
             python3-dev \
             wget && \
-    rm -rf /root/* && \
-    rm -rf /tmp/* && \
-    rm -rf /var/cache/apk/*
+    rm -rf /root/* \
+           /tmp/* \
+           /var/cache/apk/*
 #
 # Start conpot
 STOPSIGNAL SIGINT

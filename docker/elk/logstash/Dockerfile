@@ -1,22 +1,12 @@
 FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND noninteractive
-ARG PROXY
 ENV LS_VER=8.14.2
-ENV http_proxy=${PROXY}
 #
 # Include dist
 COPY dist/ /root/dist/
 #
-# Check if PROXY is set and configure apt to use the proxy
-RUN bash -c 'if [ -n "${http_proxy}" ]; then \
-                 echo "Using APT proxy at ${http_proxy}"; \
-                 echo "Acquire::http::Proxy \"${http_proxy}\";" > /etc/apt/apt.conf.d/01proxy; \
-               else \
-                 echo "APT proxy not configured, proceeding without proxy"; \
-             fi' && \
-#    bash -c 'echo "Acquire::http::Proxy::ports.ubuntu.com DIRECT;" > /etc/apt/apt.conf.d/99force-no-proxy' && \
-# Setup apt
-    apt-get update -y && \
+# Install packages
+RUN apt-get update -y && \
     apt-get install -y \
              aria2 \
              bash \
@@ -66,8 +56,11 @@ RUN bash -c 'if [ -n "${http_proxy}" ]; then \
 #
 # Clean up
     apt-get autoremove -y --purge && \
-    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /root/.cache /root/*
-ENV http_proxy=""
+    apt-get clean && \
+        rm -rf /var/lib/apt/lists/* \
+            /tmp/* /var/tmp/* \
+            /root/.cache \
+            /root/*
 #
 # Healthcheck
 HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:9600'

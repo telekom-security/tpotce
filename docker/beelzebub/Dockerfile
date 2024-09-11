@@ -4,7 +4,8 @@ ENV GO111MODULE=on \
     CGO_ENABLED=0 \
     GOOS=linux
 #
-RUN apk add git
+# Install packages
+RUN apk -U add git
 #
 WORKDIR /root
 #

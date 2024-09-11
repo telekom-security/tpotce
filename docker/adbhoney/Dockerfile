@@ -1,19 +1,10 @@
 FROM alpine:3.19
-ARG PROXY
-ENV http_proxy=${PROXY}
 #
 # Include dist
 COPY dist/ /root/dist/
 #
-# Install packages, use proxy if available and cache using http
-RUN ash -c 'if [ -n "${http_proxy}" ]; then \
-                 sed -i "s/https/http/g" /etc/apk/repositories; \
-                 echo "Using HTTP Proxy at ${http_proxy}"; \
-               else \
-                 echo "HTTP Proxy not configured, proceeding without proxy"; \
-             fi' && \
-# Setup apk
-	apk --no-cache -U add \
+# Install packages
+RUN	apk --no-cache -U add \
 		git \
 		procps \
 		py3-psutil \
@@ -37,9 +28,7 @@ RUN ash -c 'if [ -n "${http_proxy}" ]; then \
 #
 # Clean up
     apk del --purge git && \
-    sed -i "s/http/https/g" /etc/apk/repositories && \
     rm -rf /root/* /opt/adbhoney/.git /var/cache/apk/*
-ENV http_proxy=""
 #
 # Set workdir and start adbhoney
 STOPSIGNAL SIGINT

@@ -1,7 +1,7 @@
 FROM alpine:3.19
 #
 # Install packages
-RUN apk -U --no-cache add \
+RUN apk --no-cache -U add \
 		build-base \
 		file \
 		git \

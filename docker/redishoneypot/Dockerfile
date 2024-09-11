@@ -3,14 +3,14 @@ FROM golang:1.21-alpine as builder
 # Include dist
 COPY dist/ /root/dist/
 #
-# Setup apk
-RUN apk -U --no-cache add \
+# Install packages
+RUN apk --no-cache -U add \
 		build-base \
 		git \
 		go \
 		g++ && \
 #
-# Setup go, hellpot
+# Setup go, redishoneypot
     cd /root && \
     export GOPATH=/opt/go/ && \
     mkdir -p /opt/go && \ 

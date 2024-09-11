@@ -3,9 +3,8 @@ FROM alpine:3.19
 # Include dist
 COPY dist/ /root/dist/
 #
-# Setup env and apt
-RUN apk --no-cache -U upgrade && \
-    apk --no-cache add build-base \
+# Install packages
+RUN apk --no-cache -U add build-base \
 		git \
 		libffi \
 		libffi-dev \
@@ -37,9 +36,9 @@ RUN apk --no-cache -U upgrade && \
                     libffi-dev \
                     openssl-dev \
                     python3-dev && \
-    rm -rf /root/* && \
-    rm -rf /opt/ciscoasa_honeypot/.git && \
-    rm -rf /var/cache/apk/*
+    rm -rf /root/* \
+           /opt/ciscoasa_honeypot/.git \
+           /var/cache/apk/*
 #
 # Start ciscoasa
 STOPSIGNAL SIGINT

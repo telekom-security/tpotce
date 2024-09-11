@@ -3,8 +3,8 @@ FROM golang:1.21-alpine AS builder
 # Include dist
 COPY dist/ /root/dist/
 #
-# Setup apk
-RUN apk -U --no-cache add \
+# Install packages
+RUN apk --no-cache -U add \
 		build-base \
 		git \
 		g++ && \

@@ -3,8 +3,8 @@ FROM alpine:3.19
 # Include dist
 COPY dist/ /root/dist/
 #
-# Setup apt
-RUN apk -U --no-cache add \
+# Install packages
+RUN apk --no-cache -U add \
 		build-base \
 		git \
 		linux-headers \
@@ -45,9 +45,9 @@ RUN apk -U --no-cache add \
             build-base \
             linux-headers \
             python3-dev && \
-    rm -rf /root/* && \
-    rm -rf /tmp/* /var/tmp/* && \
-    rm -rf /var/cache/apk/*
+    rm -rf /root/* \
+           /tmp/* /var/tmp/* \
+           /var/cache/apk/*
 #
 # Start snare
 STOPSIGNAL SIGKILL

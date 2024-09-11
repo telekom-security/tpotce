@@ -3,7 +3,7 @@ FROM alpine:edge
 # Include dist
 COPY dist/ /opt/tpot/
 #
-# Get and install dependencies & packages
+# Install packages
 RUN apk --no-cache -U add \
         aria2 \
         apache2-utils \
@@ -36,9 +36,10 @@ RUN apk --no-cache -U add \
 #
 # Clean up
     apk del --purge git && \
-    rm -rf /root/* /tmp/* && \
-    rm -rf /root/.cache /opt/tpot/.git && \
-    rm -rf /var/cache/apk/*
+    rm -rf /root/* /tmp/* \
+           /root/.cache \
+           /opt/tpot/.git \
+           /var/cache/apk/*
 #
 # Run tpotinit
 WORKDIR /opt/tpot

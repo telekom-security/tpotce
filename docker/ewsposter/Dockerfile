@@ -4,7 +4,7 @@ FROM alpine:3.19
 COPY dist/ /root/dist/
 #
 # Install packages
-RUN apk -U --no-cache add \
+RUN apk --no-cache -U add \
 		build-base \
 		git \
 		libffi-dev \
@@ -24,7 +24,6 @@ RUN apk -U --no-cache add \
 		py3-wheel && \
 	pip3 install --break-system-packages --upgrade pip && \
 	pip3 install --break-system-packages --no-cache-dir configparser hpfeeds3 influxdb influxdb-client xmljson && \
-#
 #
 # Setup ewsposter
     git clone https://github.com/telekom-security/ewsposter -b v1.25.0 /opt/ewsposter && \

@@ -52,9 +52,9 @@ RUN apk --no-cache -U add \
     apk del --purge build-base \
 			git \
 			python3-dev && \
-    rm -rf /root/* && \
-    rm -rf /opt/ddospot/.git && \
-    rm -rf /var/cache/apk/*
+    rm -rf /root/* \
+            /opt/ddospot/.git \
+            /var/cache/apk/*
 #
 # Start ddospot
 STOPSIGNAL SIGINT

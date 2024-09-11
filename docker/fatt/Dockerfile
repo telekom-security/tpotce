@@ -1,7 +1,7 @@
 FROM alpine:3.19
 #
-# Get and install dependencies & packages
-RUN apk -U --no-cache add \
+# Install packages
+RUN apk --no-cache -U add \
 		git \
 		libcap \
 		py3-libxml2 \
@@ -35,7 +35,9 @@ RUN apk -U --no-cache add \
 # Clean up
     apk del --purge git \
                     python3-dev && \
-    rm -rf /root/* /var/cache/apk/* /opt/fatt/.git
+    rm -rf /root/* \
+            /var/cache/apk/* \
+            /opt/fatt/.git
 #
 # Start fatt
 STOPSIGNAL SIGINT

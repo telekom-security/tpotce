@@ -33,9 +33,9 @@ RUN apk --no-cache -U add \
 # Clean up
     apk del --purge git \
                     openssl && \
-    rm -rf /root/* && \
-    rm -rf /opt/citrixhoneypot/.git && \
-    rm -rf /var/cache/apk/*
+    rm -rf /root/* \
+           /opt/citrixhoneypot/.git \
+           /var/cache/apk/*
 #
 # Set workdir and start citrixhoneypot
 STOPSIGNAL SIGINT

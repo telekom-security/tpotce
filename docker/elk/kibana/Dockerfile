@@ -1,12 +1,11 @@
 FROM node:20.13.1-alpine3.20
-#
-# VARS
 ENV KB_VER=8.14.2
 #
 # Include dist
 COPY dist/ /root/dist/
 #
-RUN apk -U --no-cache add \
+# Install packages
+RUN apk --no-cache -U add \
             aria2 \
             curl \
             gcompat && \
@@ -44,9 +43,9 @@ RUN apk -U --no-cache add \
 #
 # Clean up
     apk del --purge aria2 && \
-    rm -rf /root/* && \
-    rm -rf /tmp/* && \
-    rm -rf /var/cache/apk/*
+    rm -rf /root/* \
+        /tmp/* \
+        /var/cache/apk/*
 #
 # Healthcheck
 HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:5601'

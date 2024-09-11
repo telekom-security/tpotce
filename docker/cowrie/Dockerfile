@@ -3,7 +3,7 @@ FROM alpine:3.19
 # Include dist
 COPY dist/ /root/dist/
 #
-# Get and install dependencies & packages
+# Install packages
 RUN apk --no-cache -U add \
 		bash \
 		build-base \
@@ -50,7 +50,6 @@ RUN apk --no-cache -U add \
     pip3 install --break-system-packages -r requirements.txt && \
 #
 # Setup configs
-    #export PYTHON_DIR=$(python3 --version | tr '[A-Z]' '[a-z]' | tr -d ' ' | cut -d '.' -f 1,2 ) && \
     setcap cap_net_bind_service=+ep $(readlink -f $(type -P python3)) && \
     cp /root/dist/cowrie.cfg /home/cowrie/cowrie/cowrie.cfg && \
     chown cowrie:cowrie -R /home/cowrie/* /usr/lib/$(readlink -f $(type -P python3) | cut -f4 -d"/")/site-packages/twisted/plugins && \
@@ -72,12 +71,10 @@ RUN apk --no-cache -U add \
                     openssl-dev \
                     python3-dev \
                     py3-mysqlclient && \
-    rm -rf /root/* /tmp/* && \
-    rm -rf /var/cache/apk/* && \
-    rm -rf /home/cowrie/cowrie/cowrie.pid && \
-    rm -rf /home/cowrie/cowrie/.git && \
-#    ln -s /usr/bin/python3 /usr/bin/python && \
-    unset PYTHON_DIR
+    rm -rf /root/* /tmp/* \
+           /var/cache/apk/* \
+           /home/cowrie/cowrie/cowrie.pid \
+           /home/cowrie/cowrie/.git
 #
 # Start cowrie
 ENV PYTHONPATH /home/cowrie/cowrie:/home/cowrie/cowrie/src

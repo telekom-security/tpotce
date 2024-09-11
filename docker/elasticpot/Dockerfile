@@ -4,7 +4,7 @@ FROM alpine:3.19
 COPY dist/ /root/dist/
 #
 # Install packages
-RUN apk -U --no-cache add \
+RUN apk --no-cache -U add \
 		build-base \
 		ca-certificates \
 		git \
@@ -48,8 +48,9 @@ RUN apk -U --no-cache add \
 		openssl-dev \
 		postgresql-dev \
 		python3-dev && \
-    rm -rf /root/* && \
-    rm -rf /var/cache/apk/* /opt/elasticpot/.git
+	rm -rf /root/* \
+			/var/cache/apk/* \
+			/opt/elasticpot/.git
 #
 # Start elasticpot
 STOPSIGNAL SIGINT

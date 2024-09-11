@@ -4,7 +4,7 @@ FROM alpine:3.19
 COPY dist/ /root/dist/
 #
 # Install packages
-RUN apk -U --no-cache add \
+RUN apk --no-cache -U add \
 		build-base \
 		git \
 		libcap \
@@ -39,7 +39,9 @@ RUN apk -U --no-cache add \
     apk del --purge build-base \
 		git \
 		python3-dev && \
-    rm -rf /root/* /var/cache/apk/* /opt/wordpot/.git
+    rm -rf /root/* \
+			/var/cache/apk/* \
+			/opt/wordpot/.git
 #
 # Start wordpot
 STOPSIGNAL SIGINT

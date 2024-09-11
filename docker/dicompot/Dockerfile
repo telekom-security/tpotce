@@ -3,8 +3,8 @@ FROM golang:1.21-alpine AS builder
 # Include dist
 COPY dist/ /root/dist/
 #
-# Setup apk
-RUN apk -U add --no-cache \
+# Install packages
+RUN apk --no-cache -U add \
 		build-base \
 		git \
 		g++ && \
@@ -32,7 +32,7 @@ RUN addgroup -g 2000 dicompot && \
     adduser -S -s /bin/ash -u 2000 -D -g 2000 dicompot && \
     chown -R dicompot:dicompot /opt/dicompot
 #
-# Start dicompot
+# Start dicompot  
 WORKDIR /opt/dicompot
 USER dicompot:dicompot
 CMD ["./server","-ip","0.0.0.0","-dir","images","-log","/var/log/dicompot/dicompot.log"]

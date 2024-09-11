@@ -3,8 +3,8 @@ FROM alpine:3.19
 # Include dist
 COPY dist/ /root/dist/
 #
-# Get and install dependencies & packages
-RUN apk -U --no-cache add \
+# Install packages
+RUN apk --no-cache -U add \
 		build-base \
 		curl \
 		git \
@@ -82,7 +82,7 @@ RUN apk -U --no-cache add \
 		python3-dev \
 		swig \
 		tinyxml-dev && \
-    rm -rf /var/cache/apk/* /home/spiderfoot/.git
+	rm -rf /var/cache/apk/* /home/spiderfoot/.git
 #
 # Healthcheck
 HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:8080/spiderfoot/'

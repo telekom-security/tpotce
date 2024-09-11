@@ -1,13 +1,16 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # ANSI color codes for green (OK) and red (FAIL)
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-# Default flags
+# Default settings
 PUSH_IMAGES=false
 NO_CACHE=false
+PARALLELBUILDS=8
+UPLOAD_BANDWIDTH=40mbit # Set this to max 90% of available upload bandwidth
+INTERFACE=$(/sbin/ip address show | /usr/bin/awk '/inet.*brd/{ print $NF; exit }')
 
 # Help message
 usage() {
@@ -36,6 +39,45 @@ while getopts ":pnh" opt; do
             ;;
     esac
 done
+
+# Function to apply upload bandwidth limit using tc
+apply_bandwidth_limit() {
+    echo -n "Applying upload bandwidth limit of $UPLOAD_BANDWIDTH on interface $INTERFACE..."
+    if sudo tc qdisc add dev $INTERFACE root tbf rate $UPLOAD_BANDWIDTH burst 32kbit latency 400ms >/dev/null 2>&1; then
+        echo -e " [${GREEN}OK${NC}]"
+    else
+        echo -e " [${RED}FAIL${NC}]"
+        remove_bandwidth_limit
+
+        # Try to reapply the limit
+        echo -n "Reapplying upload bandwidth limit of $UPLOAD_BANDWIDTH on interface $INTERFACE..."
+        if sudo tc qdisc add dev $INTERFACE root tbf rate $UPLOAD_BANDWIDTH burst 32kbit latency 400ms >/dev/null 2>&1; then
+            echo -e " [${GREEN}OK${NC}]"
+        else
+            echo -e " [${RED}FAIL${NC}]"
+            echo "Failed to apply bandwidth limit on $INTERFACE. Exiting."
+            echo
+            exit 1
+        fi
+    fi
+}
+
+# Function to check if the bandwidth limit is set
+is_bandwidth_limit_set() {
+    sudo tc qdisc show dev $INTERFACE | grep -q 'tbf'
+}
+
+# Function to remove the bandwidth limit using tc if it is set
+remove_bandwidth_limit() {
+    if is_bandwidth_limit_set; then
+        echo -n "Removing upload bandwidth limit on interface $INTERFACE..."
+        if sudo tc qdisc del dev $INTERFACE root; then
+            echo -e " [${GREEN}OK${NC}]"
+        else
+            echo -e " [${RED}FAIL${NC}]"
+        fi
+    fi
+}
 
 echo "###########################"
 echo "# T-Pot Image Builder"
@@ -86,6 +128,24 @@ else
     echo -e " [${RED}FAIL${NC}]"
 fi
 
+# Apply bandwidth limit only if pushing images
+if $PUSH_IMAGES; then
+    echo
+    echo "########################################"
+    echo "# Setting Upload Bandwidth limit ..."
+    echo "########################################"
+    echo
+    apply_bandwidth_limit
+fi
+
+# Trap to ensure bandwidth limit is removed on script error, exit
+trap_cleanup() {
+    if is_bandwidth_limit_set; then
+        remove_bandwidth_limit
+    fi
+}
+trap trap_cleanup INT ERR EXIT
+
 echo
 echo "################################"
 echo "# Now building images ..."
@@ -95,11 +155,10 @@ echo
 mkdir -p log
 
 # List of services to build
-#services=$(docker compose config --services)
-services="tpotinit beelzebub nginx p0f"
+services=$(docker compose config --services | sort)
 
-# Loop through each service
-echo $services | tr ' ' '\n' | xargs -I {} -P 3 bash -c '
+# Loop through each service to build
+echo $services | tr ' ' '\n' | xargs -I {} -P $PARALLELBUILDS bash -c '
     echo "Building image: {}" && \
     build_cmd="docker compose build {}" && \
     if '$PUSH_IMAGES'; then \
@@ -109,9 +168,19 @@ echo $services | tr ' ' '\n' | xargs -I {} -P 3 bash -c '
         build_cmd="$build_cmd --no-cache"; \
     fi && \
     eval "$build_cmd 2>&1 > log/{}.log" && \
-    echo -e "Service {}: ['$GREEN'OK'$NC']" || \
-    echo -e "Service {}: ['$RED'FAIL'$NC']"
+    echo -e "Image {}: ['$GREEN'OK'$NC']" || \
+    echo -e "Image {}: ['$RED'FAIL'$NC']"
 '
+
+# Remove bandwidth limit if it was applied
+if is_bandwidth_limit_set; then
+    echo
+    echo "########################################"
+    echo "# Removiong Upload Bandwidth limit ..."
+    echo "########################################"
+    echo
+    remove_bandwidth_limit
+fi
 
 echo
 echo "#######################################################"

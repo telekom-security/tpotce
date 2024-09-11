@@ -1,7 +1,7 @@
 FROM golang:1.21-alpine AS builder
 #
-# Setup apk
-RUN apk -U --no-cache add \
+# Install packages
+RUN apk --no-cache -U add \
 		build-base \
 		git \
 		go \

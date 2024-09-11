@@ -3,8 +3,8 @@ FROM alpine:3.19
 # Include dist
 COPY dist/ /root/dist/
 #
-# Setup apk and redis
-RUN apk -U --no-cache add redis shadow && \
+# Install packages
+RUN apk --no-cache -U add redis shadow && \
     cp /root/dist/redis.conf /etc && \
 #
 # Setup user and group
@@ -14,9 +14,10 @@ RUN apk -U --no-cache add redis shadow && \
 # Clean up
     apk del --purge \ 
             shadow && \
-    rm -rf /root/* && \
-    rm -rf /tmp/* /var/tmp/* && \
-    rm -rf /var/cache/apk/*
+    rm -rf /root/* \
+           /tmp/* \
+           /var/tmp/* \
+           /var/cache/apk/*
 #
 # Start redis
 STOPSIGNAL SIGKILL

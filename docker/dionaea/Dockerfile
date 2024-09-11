@@ -1,7 +1,5 @@
 FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND noninteractive
-ARG PROXY
-ENV http_proxy=${PROXY}
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -121,8 +119,12 @@ RUN bash -c 'if [ -n "${http_proxy}" ]; then \
 #
     apt-get autoremove --purge -y && \
     apt-get clean && \
-    rm -rf /root/* /var/lib/apt/lists/* /tmp/* /var/tmp/* /root/.cache /opt/dionaea/.git
-ENV http_proxy=""
+    rm -rf /root/* \
+           /var/lib/apt/lists/* \
+           /tmp/* \
+           /var/tmp/* \
+           /root/.cache \
+           /opt/dionaea/.git
 #
 # Start dionaea
 STOPSIGNAL SIGINT

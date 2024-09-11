@@ -4,7 +4,7 @@ FROM alpine:3.19
 COPY dist/ /root/dist/
 #
 # Install packages
-RUN apk -U --no-cache add \
+RUN apk --no-cache -U add \
 		build-base \
 		freetds \
 		freetds-dev \
@@ -78,8 +78,9 @@ RUN apk -U --no-cache add \
 		postgresql-dev \
 		python3-dev \
 		zlib-dev && \
-    rm -rf /root/* /var/cache/apk/* /opt/honeypots/.git
-
+	rm -rf /root/* \
+			/var/cache/apk/* \
+			/opt/honeypots/.git
 #
 # Start honeypots 
 STOPSIGNAL SIGINT

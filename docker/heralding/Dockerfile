@@ -4,7 +4,7 @@ FROM alpine:3.19
 COPY dist/ /root/dist/
 #
 # Install packages
-RUN apk -U --no-cache add \
+RUN apk --no-cache -U add \
 		build-base \
 		git \
 		libcap \
