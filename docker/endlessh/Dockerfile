@@ -4,7 +4,8 @@ FROM alpine:3.16 AS builder
 COPY dist/ /root/dist/
 #
 # Install packages
-RUN build-base \
+RUN apk -U add --no-cache \
+		build-base \
 		git \
 		libcap && \
 #
