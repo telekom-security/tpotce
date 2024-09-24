@@ -21,7 +21,7 @@ services:
     environment:
       LLM_PROVIDER: "ollama"
       LLM_SERVER_URL: "http://ollama.local:11434"
-      LLM_MODEL: "gemma2"
+      LLM_MODEL: "llama3"
       # LLM_TEMPERATURE: ${GALAH_LLM_TEMPERATURE}
       # LLM_API_KEY: ${GALAH_LLM_API_KEY}
       # LLM_CLOUD_LOCATION: ${GALAH_LLM_CLOUD_LOCATION}

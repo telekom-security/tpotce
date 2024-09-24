@@ -22,7 +22,7 @@ services:
     environment:
       LLMMODEL: "ollama"
       LLMHOST: "http://ollama.local:11434/api/chat"
-      OLLAMAMODEL: "llama3.1"
+      OLLAMAMODEL: "openchat"
     image: "dtagdevsec/beelzebub:24.04"
     read_only: true
     volumes:

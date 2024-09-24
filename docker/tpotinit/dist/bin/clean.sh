@@ -198,6 +198,14 @@ fuFATT () {
   chown tpot:tpot -R /data/fatt
 }
 
+# Let's create a function to clean up and prepare galah data
+fuGALAH () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/galah/*; fi
+  mkdir -vp /data/galah/{cache,cert,log}
+  chmod 770 /data/galah/ -R
+  chown tpot:tpot /data/galah/ -R
+}
+
 # Let's create a function to clean up and prepare glastopf data
 fuGLUTTON () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/glutton/*; fi
@@ -382,6 +390,7 @@ fuELASTICPOT
 fuELK
 fuENDLESSH
 fuFATT
+fuGALAH
 fuGLUTTON
 fuHERALDING
 fuHELLPOT

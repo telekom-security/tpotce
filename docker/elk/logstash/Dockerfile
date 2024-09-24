@@ -1,5 +1,5 @@
 FROM ubuntu:22.04
-ENV DEBIAN_FRONTEND noninteractive
+ENV DEBIAN_FRONTEND=noninteractive
 ENV LS_VER=8.14.2
 #
 # Include dist

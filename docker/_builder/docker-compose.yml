@@ -117,6 +117,15 @@ services:
       context: ../endlessh/
       <<: *common-build
 
+# Galah
+  galah:
+    image: ${TPOT_DOCKER_REPO}/galah:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/galah:${TPOT_VERSION}
+      context: ../galah/
+      <<: *common-build
+
 # Glutton
 #  glutton:
 #    image: ${TPOT_DOCKER_REPO}/glutton:${TPOT_VERSION}
