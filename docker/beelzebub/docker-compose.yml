@@ -14,11 +14,10 @@ services:
      - beelzebub_local
     ports:
       - "22:22"
-      - "2222:2222"
-      - "8080:8080"
-      - "8081:8081"
       - "80:80"
+      - "2222:2222"
       - "3306:3306"
+      - "8080:8080"
     environment:
       LLMMODEL: "ollama"
       LLMHOST: "http://ollama.local:11434/api/chat"

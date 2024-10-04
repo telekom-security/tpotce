@@ -81,7 +81,7 @@ services:
       - "80:80"
       - "443:443"
       - "8443:8443"
-      - "8888:8888"
+      - "8080:8080"
     image: ${TPOT_REPO}/galah:${TPOT_VERSION}
     environment:
       LLM_PROVIDER: ${GALAH_LLM_PROVIDER}

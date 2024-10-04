@@ -16,7 +16,7 @@ services:
       - "80:80"
       - "443:443"
       - "8443:8443"
-      - "8888:8888"
+      - "8080:8080"
     image: dtagdevsec/galah:24.04
     environment:
       LLM_PROVIDER: "ollama"
