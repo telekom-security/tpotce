@@ -57,6 +57,7 @@ services:
     #  - "3306:3306"
     #  - "8080:8080"
     image: ${TPOT_REPO}/beelzebub:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
     environment:
       LLM_MODEL: ${BEELZEBUB_LLM_MODEL}
       LLM_HOST: ${BEELZEBUB_LLM_HOST}
@@ -83,6 +84,7 @@ services:
       - "8443:8443"
       - "8080:8080"
     image: ${TPOT_REPO}/galah:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
     environment:
       LLM_PROVIDER: ${GALAH_LLM_PROVIDER}
       LLM_SERVER_URL: ${GALAH_LLM_SERVER_URL}
