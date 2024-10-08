@@ -17,74 +17,78 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/24.04.1/i
    * Follow instructions, read messages, check for possible port conflicts and reboot
 
 <!-- TOC -->
-* [T-Pot - The All In One Multi Honeypot Platform](#t-pot---the-all-in-one-multi-honeypot-platform)
-* [TL;DR](#tldr)
-* [Disclaimer](#disclaimer)
-* [Technical Concept](#technical-concept)
-  * [Technical Architecture](#technical-architecture)
-  * [Services](#services)
-  * [User Types](#user-types)
-* [System Requirements](#system-requirements)
-  * [Running in a VM](#running-in-a-vm)
-  * [Running on Hardware](#running-on-hardware)
-  * [Running in a Cloud](#running-in-a-cloud)
-  * [Required Ports](#required-ports)
-* [System Placement](#system-placement)
-* [Installation](#installation)
-  * [Choose your distro](#choose-your-distro)
-  * [Raspberry Pi 4 (8GB) Support](#raspberry-pi-4-8gb-support)
-  * [Get and install T-Pot](#get-and-install-t-pot)
-  * [macOS & Windows](#macos--windows)
-  * [Installation Types](#installation-types)
-    * [Standard / HIVE](#standard--hive)
-    * [Distributed](#distributed)
-  * [Uninstall T-Pot](#uninstall-t-pot)
-* [First Start](#first-start)
-  * [Standalone First Start](#standalone-first-start)
-  * [Distributed Deployment](#distributed-deployment)
-    * [Planning and Certificates](#planning-and-certificates)
-    * [Deploying Sensors](#deploying-sensors)
-  * [Community Data Submission](#community-data-submission)
-  * [Opt-In HPFEEDS Data Submission](#opt-in-hpfeeds-data-submission)
-* [Remote Access and Tools](#remote-access-and-tools)
-  * [SSH](#ssh)
-  * [T-Pot Landing Page](#t-pot-landing-page-)
-  * [Kibana Dashboard](#kibana-dashboard)
-  * [Attack Map](#attack-map)
-  * [Cyberchef](#cyberchef)
-  * [Elasticvue](#elasticvue)
-  * [Spiderfoot](#spiderfoot)
-* [Configuration](#configuration)
-  * [T-Pot Config File](#t-pot-config-file)
-  * [Customize T-Pot Honeypots and Services](#customize-t-pot-honeypots-and-services)
-* [Maintenance](#maintenance)
-  * [General Updates](#general-updates)
-  * [Update Script](#update-script)
-  * [Daily Reboot](#daily-reboot)
-  * [Known Issues](#known-issues)
-    * [Docker Images Fail to Download](#docker-images-fail-to-download)
-    * [T-Pot Networking Fails](#t-pot-networking-fails)
-  * [Start T-Pot](#start-t-pot)
-  * [Stop T-Pot](#stop-t-pot)
-  * [T-Pot Data Folder](#t-pot-data-folder)
-  * [Log Persistence](#log-persistence)
-  * [Factory Reset](#factory-reset)
-  * [Show Containers](#show-containers)
-  * [Blackhole](#blackhole)
-  * [Add Users to Nginx (T-Pot WebUI)](#add-users-to-nginx-t-pot-webui)
-  * [Import and Export Kibana Objects](#import-and-export-kibana-objects)
-    * [Export](#export)
-    * [Import](#import)
-* [Troubleshooting](#troubleshooting)
-  * [Logs](#logs)
-  * [RAM and Storage](#ram-and-storage)
-* [Contact](#contact)
-  * [Issues](#issues)
-  * [Discussions](#discussions)
-* [Licenses](#licenses)
-* [Credits](#credits)
-    * [The developers and development communities of](#the-developers-and-development-communities-of)
-* [Testimonials](#testimonials)
+- [T-Pot - The All In One Multi Honeypot Platform](#t-pot---the-all-in-one-multi-honeypot-platform)
+- [TL;DR](#tldr)
+- [Disclaimer](#disclaimer)
+- [Technical Concept](#technical-concept)
+  - [Technical Architecture](#technical-architecture)
+  - [Services](#services)
+  - [User Types](#user-types)
+- [System Requirements](#system-requirements)
+  - [Running in a VM](#running-in-a-vm)
+  - [Running on Hardware](#running-on-hardware)
+  - [Running in a Cloud](#running-in-a-cloud)
+  - [Required Ports](#required-ports)
+  - [LLM-Based Honeypots](#llm-based-honeypots)
+    - [Ollama](#ollama)
+    - [ChatGPT](#chatgpt)
+- [System Placement](#system-placement)
+- [Installation](#installation)
+  - [Choose your distro](#choose-your-distro)
+  - [Raspberry Pi 4 (8GB) Support](#raspberry-pi-4-8gb-support)
+  - [Get and install T-Pot](#get-and-install-t-pot)
+  - [macOS \& Windows](#macos--windows)
+  - [Installation Types](#installation-types)
+    - [Standard / HIVE](#standard--hive)
+    - [Distributed](#distributed)
+  - [Uninstall T-Pot](#uninstall-t-pot)
+- [First Start](#first-start)
+  - [Standalone First Start](#standalone-first-start)
+  - [Distributed Deployment](#distributed-deployment)
+    - [Planning and Certificates](#planning-and-certificates)
+    - [Deploying Sensors](#deploying-sensors)
+    - [Removing Sensors](#removing-sensors)
+  - [Community Data Submission](#community-data-submission)
+  - [Opt-In HPFEEDS Data Submission](#opt-in-hpfeeds-data-submission)
+- [Remote Access and Tools](#remote-access-and-tools)
+  - [SSH](#ssh)
+  - [T-Pot Landing Page](#t-pot-landing-page)
+  - [Kibana Dashboard](#kibana-dashboard)
+  - [Attack Map](#attack-map)
+  - [Cyberchef](#cyberchef)
+  - [Elasticvue](#elasticvue)
+  - [Spiderfoot](#spiderfoot)
+- [Configuration](#configuration)
+  - [T-Pot Config File](#t-pot-config-file)
+  - [Customize T-Pot Honeypots and Services](#customize-t-pot-honeypots-and-services)
+- [Maintenance](#maintenance)
+  - [General Updates](#general-updates)
+  - [Update Script](#update-script)
+  - [Daily Reboot](#daily-reboot)
+  - [Known Issues](#known-issues)
+    - [Docker Images Fail to Download](#docker-images-fail-to-download)
+    - [T-Pot Networking Fails](#t-pot-networking-fails)
+  - [Start T-Pot](#start-t-pot)
+  - [Stop T-Pot](#stop-t-pot)
+  - [T-Pot Data Folder](#t-pot-data-folder)
+  - [Log Persistence](#log-persistence)
+  - [Factory Reset](#factory-reset)
+  - [Show Containers](#show-containers)
+  - [Blackhole](#blackhole)
+  - [Add Users to Nginx (T-Pot WebUI)](#add-users-to-nginx-t-pot-webui)
+  - [Import and Export Kibana Objects](#import-and-export-kibana-objects)
+    - [Export](#export)
+    - [Import](#import)
+- [Troubleshooting](#troubleshooting)
+  - [Logs](#logs)
+  - [RAM and Storage](#ram-and-storage)
+- [Contact](#contact)
+  - [Issues](#issues)
+  - [Discussions](#discussions)
+- [Licenses](#licenses)
+- [Credits](#credits)
+    - [The developers and development communities of](#the-developers-and-development-communities-of)
+- [Testimonials](#testimonials)
 <!-- TOC -->
 <br><br>
 
@@ -102,6 +106,7 @@ T-Pot's main components have been moved into the `tpotinit` Docker image allowin
 
 T-Pot offers docker images for the following honeypots ...
 * [adbhoney](https://github.com/huuck/ADBHoney),
+* [beelzebub](https://github.com/mariocandela/beelzebub),
 * [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot),
 * [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot),
 * [conpot](http://conpot.org/),
@@ -111,6 +116,7 @@ T-Pot offers docker images for the following honeypots ...
 * [dionaea](https://github.com/DinoTools/dionaea),
 * [elasticpot](https://gitlab.com/bontchev/elasticpot),
 * [endlessh](https://github.com/skeeto/endlessh),
+* [galah](https://github.com/0x4D31/galah),
 * [glutton](https://github.com/mushorg/glutton),
 * [hellpot](https://github.com/yunginnanet/HellPot),
 * [heralding](https://github.com/johnnykv/heralding),
@@ -175,7 +181,7 @@ T-Pot offers a number of services which are basically divided into five groups:
 During the installation and during the usage of T-Pot there are two different types of accounts you will be working with. Make sure you know the differences of the different account types, since it is **by far** the most common reason for authentication errors.
 
 | Service          | Account Type | Username / Group | Description                                                        |
-|:-----------------|:-------------|:-----------------|:-------------------------------------------------------------------|
+| :--------------- | :----------- | :--------------- | :----------------------------------------------------------------- |
 | SSH              | OS           | `<OS_USERNAME>`  | The user you chose during the installation of the OS.              |
 | Nginx            | BasicAuth    | `<WEB_USER>`     | `<web_user>` you chose during the installation of T-Pot.           |
 | CyberChef        | BasicAuth    | `<WEB_USER>`     | `<web_user>` you chose during the installation of T-Pot.           |
@@ -193,10 +199,10 @@ During the installation and during the usage of T-Pot there are two different ty
 Depending on the [supported Linux distro images](#choose-your-distro), hive / sensor, installing on [real hardware](#running-on-hardware), in a [virtual machine](#running-in-a-vm) or other environments there are different kind of requirements to be met regarding OS, RAM, storage and network for a successful installation of T-Pot (you can always adjust `~/tpotce/docker-compose.yml` and `~/tpotce/.env`to your needs to overcome these requirements).
 <br><br>
 
-| T-Pot Type | RAM  | Storage    | Description                                                                                      |
-|:-----------|:-----|:-----------|:-------------------------------------------------------------------------------------------------|
-| Hive       | 16GB | 256GB SSD  | As a rule of thumb, the more sensors & data, the more RAM and storage is needed.                 |
-| Sensor     | 8GB  | 128GB SSD  | Since honeypot logs are persisted (~/tpotce/data) for 30 days, storage depends on attack volume. |
+| T-Pot Type | RAM  | Storage   | Description                                                                                      |
+| :--------- | :--- | :-------- | :----------------------------------------------------------------------------------------------- |
+| Hive       | 16GB | 256GB SSD | As a rule of thumb, the more honeypots, sensors & data, the more RAM and storage is needed.      |
+| Sensor     | 8GB  | 128GB SSD | Since honeypot logs are persisted (~/tpotce/data) for 30 days, storage depends on attack volume. |
 
 T-Pot does require ...
 - an IPv4 address via DHCP or statically assigned
@@ -235,12 +241,14 @@ Some users report working installations on other clouds and hosters, i.e. Azure 
 Besides the ports generally needed by the OS, i.e. obtaining a DHCP lease, DNS, etc. T-Pot will require the following ports for incoming / outgoing connections. Review the [T-Pot Architecture](#technical-architecture) for a visual representation. Also some ports will show up as duplicates, which is fine since used in different editions.
 
 | Port                                                                                                                                  | Protocol | Direction | Description                                                                                         |
-|:--------------------------------------------------------------------------------------------------------------------------------------|:---------|:----------|:----------------------------------------------------------------------------------------------------|
+| :------------------------------------------------------------------------------------------------------------------------------------ | :------- | :-------- | :-------------------------------------------------------------------------------------------------- |
 | 80, 443                                                                                                                               | tcp      | outgoing  | T-Pot Management: Install, Updates, Logs (i.e. OS, GitHub, DockerHub, Sicherheitstacho, etc.        |
+| 11434                                                                                                                                 | tcp      | outgoing  | LLM based honeypots: Access your Ollama installation                                                |
 | 64294                                                                                                                                 | tcp      | incoming  | T-Pot Management: Sensor data transmission to hive (through NGINX reverse proxy) to 127.0.0.1:64305 |
 | 64295                                                                                                                                 | tcp      | incoming  | T-Pot Management: Access to SSH                                                                     |
 | 64297                                                                                                                                 | tcp      | incoming  | T-Pot Management Access to NGINX reverse proxy                                                      |
 | 5555                                                                                                                                  | tcp      | incoming  | Honeypot: ADBHoney                                                                                  |
+| 22                                                                                                                                    | tcp      | incoming  | Honeypot: Beelzebub  (LLM required)                                                                 |
 | 5000                                                                                                                                  | udp      | incoming  | Honeypot: CiscoASA                                                                                  |
 | 8443                                                                                                                                  | tcp      | incoming  | Honeypot: CiscoASA                                                                                  |
 | 443                                                                                                                                   | tcp      | incoming  | Honeypot: CitrixHoneypot                                                                            |
@@ -253,6 +261,7 @@ Besides the ports generally needed by the OS, i.e. obtaining a DHCP lease, DNS, 
 | 69                                                                                                                                    | udp      | incoming  | Honeypot: Dionaea                                                                                   |
 | 9200                                                                                                                                  | tcp      | incoming  | Honeypot: Elasticpot                                                                                |
 | 22                                                                                                                                    | tcp      | incoming  | Honeypot: Endlessh                                                                                  |
+| 80, 443, 8080, 8443                                                                                                                   | tcp      | incoming  | Honeypot: Galah  (LLM required)                                                                     |
 | 21, 22, 23, 25, 80, 110, 143, 443, 993, 995, 1080, 5432, 5900                                                                         | tcp      | incoming  | Honeypot: Heralding                                                                                 |
 | 21, 22, 23, 25, 80, 110, 143, 389, 443, 445, 631, 1080, 1433, 1521, 3306, 3389, 5060, 5432, 5900, 6379, 6667, 8080, 9100, 9200, 11211 | tcp      | incoming  | Honeypot: qHoneypots                                                                                |
 | 53, 123, 161, 5060                                                                                                                    | udp      | incoming  | Honeypot: qHoneypots                                                                                |
@@ -270,6 +279,14 @@ Ports and availability of SaaS services may vary based on your geographical loca
 
 For some honeypots to reach full functionality (i.e. Cowrie or Log4Pot) outgoing connections are necessary as well, in order for them to download the attacker's malware. Please see the individual honeypot's documentation to learn more by following the [links](#technical-concept) to their repositories.
 
+## LLM-Based Honeypots
+With the release of **T-Pot 24.04.1**, two LLM-based honeypots, **Beelzebub** and **Galah**, have been introduced. These honeypots require an installation of **Ollama**, which needs to be configured in the [T-Pot configuration file](#t-pot-config-file). You can also adjust the settings in this file for **ChatGPT** support, but note that changes will also be required in the docker compose file (`~/tpotce/compose/llm.yml`) to accommodate these updates.
+
+### Ollama
+To set up and run **Ollama**, refer to the [Ollama GitHub repository](https://github.com/ollama/ollama) for instructions. For entry-level or testing purposes, results can be achieved using a **Nvidia RTX 4060 Ti 16GB** or equivalent (AMD's ROCm is also supported by Ollama), with models like **openchat** and **Llama3**. As a general rule with LLM-based systems, the better and more hardware you use, the faster and more accurate the results will be, especially when tasks are offloaded to multiple GPUs and larger models. **CPU-based usage is not recommended**, not even for testing.
+
+### ChatGPT
+ChatGPT support for these honeypots will remain untested in relation to T-Pot.
 <br><br>
 
 # System Placement
@@ -292,19 +309,19 @@ Once you are familiar with how things work you should choose a network you suspe
 
 
 | Distribution Name                                                                  | x64                                                                                                                                    | arm64                                                                                                                                    |
-|:-----------------------------------------------------------------------------------|:---------------------------------------------------------------------------------------------------------------------------------------|:-----------------------------------------------------------------------------------------------------------------------------------------|
+| :--------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------- |
 | [Alma Linux OS 9.4 Boot ISO](https://almalinux.org)                                | [download](https://repo.almalinux.org/almalinux/9.4/isos/x86_64/AlmaLinux-9.4-x86_64-boot.iso)                                         | [download](https://repo.almalinux.org/almalinux/9.4/isos/aarch64/AlmaLinux-9.4-aarch64-boot.iso)                                         |
 | [Debian 12 Network Install](https://www.debian.org/CD/netinst/index.en.html)       | [download](https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-12.7.0-amd64-netinst.iso)                                  | [download](https://cdimage.debian.org/debian-cd/current/arm64/iso-cd/debian-12.7.0-arm64-netinst.iso)                                    |
 | [Fedora Server 40 Network Install](https://fedoraproject.org/server/download)      | [download](https://download.fedoraproject.org/pub/fedora/linux/releases/40/Server/x86_64/iso/Fedora-Server-netinst-x86_64-40-1.14.iso) | [download](https://download.fedoraproject.org/pub/fedora/linux/releases/40/Server/aarch64/iso/Fedora-Server-netinst-aarch64-40-1.14.iso) |
 | [OpenSuse Tumbleweed Network Image](https://get.opensuse.org/tumbleweed/#download) | [download](https://download.opensuse.org/tumbleweed/iso/openSUSE-Tumbleweed-NET-x86_64-Current.iso)                                    | [download](https://download.opensuse.org/ports/aarch64/tumbleweed/iso/openSUSE-Tumbleweed-NET-aarch64-Current.iso)                       |
 | [Rocky Linux OS 9.4 Boot ISO](https://rockylinux.org/download)                     | [download](https://download.rockylinux.org/pub/rocky/9.4/isos/x86_64/Rocky-9.4-x86_64-boot.iso)                                        | [download](https://download.rockylinux.org/pub/rocky/9.4/isos/aarch64/Rocky-9.4-aarch64-boot.iso)                                        |
-| [Ubuntu 24.04 Live Server](https://ubuntu.com/download/server)                     | [download](https://releases.ubuntu.com/24.04/ubuntu-24.04.1-live-server-amd64.iso)                                                       | [download](https://cdimage.ubuntu.com/releases/24.04/release/ubuntu-24.04.1-live-server-arm64.iso)                                         |
+| [Ubuntu 24.04.1 Live Server](https://ubuntu.com/download/server)                   | [download](https://releases.ubuntu.com/24.04/ubuntu-24.04.1-live-server-amd64.iso)                                                     | [download](https://cdimage.ubuntu.com/releases/24.04/release/ubuntu-24.04.1-live-server-arm64.iso)                                       |
 
 <br>
 
 ## Raspberry Pi 4 (8GB) Support
 | Distribution Name                                                | arm64                                                                                                                                               |
-|:-----------------------------------------------------------------|:----------------------------------------------------------------------------------------------------------------------------------------------------|
+| :--------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [Raspberry Pi OS (**64Bit, Lite**)](https://www.raspberrypi.com) | [download](https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2024-03-15/2024-03-15-raspios-bookworm-arm64-lite.img.xz) |
 
 <br><br> 
@@ -755,10 +772,10 @@ Use the search function, it is possible a similar discussion has been opened alr
 
 # Licenses
 The software that T-Pot is built on uses the following licenses.
-<br>GPLv2: [conpot](https://github.com/mushorg/conpot/blob/master/LICENSE.txt), [dionaea](https://github.com/DinoTools/dionaea/blob/master/LICENSE), [honeytrap](https://github.com/armedpot/honeytrap/blob/master/LICENSE), [suricata](https://suricata.io/features/open-source/)
+<br>GPLv2: [conpot](https://github.com/mushorg/conpot/blob/master/LICENSE.txt), [galah](https://github.com/0x4D31/galah?tab=Apache-2.0-1-ov-file#readme), [dionaea](https://github.com/DinoTools/dionaea/blob/master/LICENSE), [honeytrap](https://github.com/armedpot/honeytrap/blob/master/LICENSE), [suricata](https://suricata.io/features/open-source/)
 <br>GPLv3: [adbhoney](https://github.com/huuck/ADBHoney), [elasticpot](https://gitlab.com/bontchev/elasticpot/-/blob/master/LICENSE), [ewsposter](https://github.com/telekom-security/ews/), [log4pot](https://github.com/thomaspatzke/Log4Pot/blob/master/LICENSE), [fatt](https://github.com/0x4D31/fatt/blob/master/LICENSE), [heralding](https://github.com/johnnykv/heralding/blob/master/LICENSE.txt), [ipphoney](https://gitlab.com/bontchev/ipphoney/-/blob/master/LICENSE), [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot/blob/main/LICENSE), [sentrypeer](https://github.com/SentryPeer/SentryPeer/blob/main/LICENSE.GPL-3.0-only), [snare](https://github.com/mushorg/snare/blob/master/LICENSE), [tanner](https://github.com/mushorg/snare/blob/master/LICENSE)
 <br>Apache 2 License: [cyberchef](https://github.com/gchq/CyberChef/blob/master/LICENSE), [dicompot](https://github.com/nsmfoo/dicompot/blob/master/LICENSE), [elasticsearch](https://github.com/elasticsearch/elasticsearch/blob/master/LICENSE.txt), [logstash](https://github.com/elasticsearch/logstash/blob/master/LICENSE), [kibana](https://github.com/elasticsearch/kibana/blob/master/LICENSE.md), [docker](https://github.com/docker/docker/blob/master/LICENSE)
-<br>MIT license: [autoheal](https://github.com/willfarrell/docker-autoheal?tab=MIT-1-ov-file#readme), [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/blob/master/LICENSE), [ddospot](https://github.com/aelth/ddospot/blob/master/LICENSE), [elasticvue](https://github.com/cars10/elasticvue/blob/master/LICENSE), [glutton](https://github.com/mushorg/glutton/blob/master/LICENSE), [hellpot](https://github.com/yunginnanet/HellPot/blob/master/LICENSE), [maltrail](https://github.com/stamparm/maltrail/blob/master/LICENSE)
+<br>MIT license: [autoheal](https://github.com/willfarrell/docker-autoheal?tab=MIT-1-ov-file#readme), [beelzebub](https://github.com/mariocandela/beelzebub?tab=MIT-1-ov-file#readme), [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/blob/master/LICENSE), [ddospot](https://github.com/aelth/ddospot/blob/master/LICENSE), [elasticvue](https://github.com/cars10/elasticvue/blob/master/LICENSE), [glutton](https://github.com/mushorg/glutton/blob/master/LICENSE), [hellpot](https://github.com/yunginnanet/HellPot/blob/master/LICENSE), [maltrail](https://github.com/stamparm/maltrail/blob/master/LICENSE)
 <br> Unlicense: [endlessh](https://github.com/skeeto/endlessh/blob/master/UNLICENSE)
 <br> Other: [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot#licencing-agreement-malwaretech-public-licence), [cowrie](https://github.com/cowrie/cowrie/blob/master/LICENSE.rst), [mailoney](https://github.com/awhitehatter/mailoney), [Elastic License](https://www.elastic.co/licensing/elastic-license), [Wordpot](https://github.com/gbrindisi/wordpot)
 <br> AGPL-3.0: [honeypots](https://github.com/qeeqbox/honeypots/blob/main/LICENSE)
@@ -771,6 +788,7 @@ Without open source and the development community we are proud to be a part of, 
 ### The developers and development communities of
 
 * [adbhoney](https://github.com/huuck/ADBHoney/graphs/contributors)
+* [beelzebub](https://github.com/mariocandela/beelzebub/graphs/contributors)
 * [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/graphs/contributors)
 * [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot/graphs/contributors)
 * [conpot](https://github.com/mushorg/conpot/graphs/contributors)
@@ -785,6 +803,7 @@ Without open source and the development community we are proud to be a part of, 
 * [endlessh](https://github.com/skeeto/endlessh/graphs/contributors)
 * [ewsposter](https://github.com/armedpot/ewsposter/graphs/contributors)
 * [fatt](https://github.com/0x4D31/fatt/graphs/contributors)
+* [galah](https://github.com/0x4D31/galah/graphs/contributors)
 * [glutton](https://github.com/mushorg/glutton/graphs/contributors)
 * [hellpot](https://github.com/yunginnanet/HellPot/graphs/contributors)
 * [heralding](https://github.com/johnnykv/heralding/graphs/contributors)

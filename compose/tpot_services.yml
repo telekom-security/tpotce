@@ -4,6 +4,7 @@
 
 networks:
   adbhoney_local:
+  beelzebub_local:
   ciscoasa_local:
   citrixhoneypot_local:
   conpot_local_IEC104:
@@ -16,6 +17,7 @@ networks:
   dionaea_local:
   elasticpot_local:
   endlessh_local:
+  galah_local:
   hellpot_local:
   heralding_local:
   honeypots_local:
@@ -80,6 +82,34 @@ services:
     volumes:
      - ${TPOT_DATA_PATH}/adbhoney/log:/opt/adbhoney/log
      - ${TPOT_DATA_PATH}/adbhoney/downloads:/opt/adbhoney/dl
+
+# Beelzebub service
+  beelzebub:
+    container_name: beelzebub
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+#    cpu_count: 1
+#    cpus: 0.25
+    networks:
+     - beelzebub_local
+    ports:
+      - "22:22"
+    #  - "80:80"
+    #  - "2222:2222"
+    #  - "3306:3306"
+    #  - "8080:8080"
+    image: ${TPOT_REPO}/beelzebub:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    environment:
+      LLM_MODEL: ${BEELZEBUB_LLM_MODEL}
+      LLM_HOST: ${BEELZEBUB_LLM_HOST}
+      OLLAMA_MODEL: ${BEELZEBUB_OLLAMA_MODEL}
+    read_only: true
+    volumes:
+     - ${TPOT_DATA_PATH}/beelzebub/key:/opt/beelzebub/configurations/key
+     - ${TPOT_DATA_PATH}/beelzebub/log:/opt/beelzebub/configurations/log
 
 # Ciscoasa service
   ciscoasa:
@@ -362,6 +392,38 @@ services:
     read_only: true
     volumes:
      - ${TPOT_DATA_PATH}/endlessh/log:/var/log/endlessh
+
+# Galah service
+  galah:
+    container_name: galah
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+#    cpu_count: 1
+#    cpus: 0.25
+    networks:
+     - galah_local
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8443:8443"
+      - "8080:8080"
+    image: ${TPOT_REPO}/galah:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    environment:
+      LLM_PROVIDER: ${GALAH_LLM_PROVIDER}
+      LLM_SERVER_URL: ${GALAH_LLM_SERVER_URL}
+      LLM_MODEL: ${GALAH_LLM_MODEL}
+      # LLM_TEMPERATURE: ${GALAH_LLM_TEMPERATURE}
+      # LLM_API_KEY: ${GALAH_LLM_API_KEY}
+      # LLM_CLOUD_LOCATION: ${GALAH_LLM_CLOUD_LOCATION}
+      # LLM_CLOUD_PROJECT: ${GALAH_LLM_CLOUD_PROJECT}
+    read_only: true
+    volumes:
+     - ${TPOT_DATA_PATH}/galah/cache:/opt/galah/config/cache
+     - ${TPOT_DATA_PATH}/galah/cert:/opt/galah/config/cert
+     - ${TPOT_DATA_PATH}/galah/log:/opt/galah/log
 
 # # Glutton service
   # glutton:
