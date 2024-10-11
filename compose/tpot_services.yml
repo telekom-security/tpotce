@@ -18,6 +18,7 @@ networks:
   elasticpot_local:
   endlessh_local:
   galah_local:
+  go-pot_local:
   hellpot_local:
   heralding_local:
   honeypots_local:
@@ -444,6 +445,23 @@ services:
     # volumes:
      # - ${TPOT_DATA_PATH}/glutton/log:/var/log/glutton
      # - ${TPOT_DATA_PATH}/glutton/payloads:/opt/glutton/payloads
+
+# Go-pot service
+  go-pot:
+    container_name: go-pot
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+    networks:
+     - go-pot_local
+    ports:
+      - "8080:8080"
+    image: ${TPOT_REPO}/go-pot:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    read_only: true
+    volumes:
+     - ${TPOT_DATA_PATH}/go-pot/log:/opt/go-pot/log/
 
 # Hellpot service
   hellpot:

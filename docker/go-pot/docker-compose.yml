@@ -1,0 +1,20 @@
+networks:
+  go-pot_local:
+
+services:
+
+# Go-pot service
+  go-pot:
+    build: .
+    container_name: go-pot
+    restart: always
+#    cpu_count: 1
+#    cpus: 0.25
+    networks:
+     - go-pot_local
+    ports:
+      - "8080:8080"
+    image: dtagdevsec/go-pot:24.04
+    read_only: true
+    volumes:
+     - $HOME/tpotce/data/go-pot/log/:/opt/go-pot/log/

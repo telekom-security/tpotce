@@ -206,12 +206,20 @@ fuGALAH () {
   chown tpot:tpot /data/galah/ -R
 }
 
-# Let's create a function to clean up and prepare glastopf data
+# Let's create a function to clean up and prepare glutton data
 fuGLUTTON () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/glutton/*; fi
   mkdir -vp /data/glutton/{log,payloads}
   chmod 770 /data/glutton -R
   chown tpot:tpot /data/glutton -R
+}
+
+# Let's create a function to clean up and prepare go-pot data
+fuGOPOT () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/go-pot/*; fi
+  mkdir -vp /data/go-pot/log
+  chmod 770 /data/go-pot -R
+  chown tpot:tpot /data/go-pot -R
 }
 
 # Let's create a function to clean up and prepare hellpot data
@@ -392,6 +400,7 @@ fuENDLESSH
 fuFATT
 fuGALAH
 fuGLUTTON
+fuGOPOT
 fuHERALDING
 fuHELLPOT
 fuHONEYSAP
