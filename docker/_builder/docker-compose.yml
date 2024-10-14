@@ -135,6 +135,15 @@ services:
 #      context: ../glutton/
 #      <<: *common-build
 
+# Go-pot
+  go-pot:
+    image: ${TPOT_DOCKER_REPO}/go-pot:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/go-pot:${TPOT_VERSION}
+      context: ../go-pot/
+      <<: *common-build
+
 # Hellpot
   hellpot:
     image: ${TPOT_DOCKER_REPO}/hellpot:${TPOT_VERSION}
