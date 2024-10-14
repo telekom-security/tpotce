@@ -21,6 +21,7 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/24.04.1/i
 - [TL;DR](#tldr)
 - [Disclaimer](#disclaimer)
 - [Technical Concept](#technical-concept)
+  - [Honeypots and Tools](#honeypots-and-tools)
   - [Technical Architecture](#technical-architecture)
   - [Services](#services)
   - [User Types](#user-types)
@@ -104,6 +105,7 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/24.04.1/i
 T-Pot's main components have been moved into the `tpotinit` Docker image allowing T-Pot to now support multiple Linux distributions, even macOS and Windows (although both limited to the feature set of Docker Desktop). T-Pot uses [docker](https://www.docker.com/) and [docker compose](https://docs.docker.com/compose/) to reach its goal of running as many honeypots and tools as possible simultaneously and thus utilizing the host's hardware to its maximum.
 <br><br>
 
+## Honeypots and Tools
 T-Pot offers docker images for the following honeypots ...
 * [adbhoney](https://github.com/huuck/ADBHoney),
 * [beelzebub](https://github.com/mariocandela/beelzebub),
@@ -117,6 +119,7 @@ T-Pot offers docker images for the following honeypots ...
 * [elasticpot](https://gitlab.com/bontchev/elasticpot),
 * [endlessh](https://github.com/skeeto/endlessh),
 * [galah](https://github.com/0x4D31/galah),
+* [go-pot](https://github.com/ryanolee/go-pot),
 * [glutton](https://github.com/mushorg/glutton),
 * [hellpot](https://github.com/yunginnanet/HellPot),
 * [heralding](https://github.com/johnnykv/heralding),
@@ -262,6 +265,7 @@ Besides the ports generally needed by the OS, i.e. obtaining a DHCP lease, DNS, 
 | 9200                                                                                                                                  | tcp      | incoming  | Honeypot: Elasticpot                                                                                |
 | 22                                                                                                                                    | tcp      | incoming  | Honeypot: Endlessh                                                                                  |
 | 80, 443, 8080, 8443                                                                                                                   | tcp      | incoming  | Honeypot: Galah  (LLM required)                                                                     |
+| 8080                                                                                                                                  | tcp      | incoming  | Honeypot: Go-pot                                                                                    |
 | 21, 22, 23, 25, 80, 110, 143, 443, 993, 995, 1080, 5432, 5900                                                                         | tcp      | incoming  | Honeypot: Heralding                                                                                 |
 | 21, 22, 23, 25, 80, 110, 143, 389, 443, 445, 631, 1080, 1433, 1521, 3306, 3389, 5060, 5432, 5900, 6379, 6667, 8080, 9100, 9200, 11211 | tcp      | incoming  | Honeypot: qHoneypots                                                                                |
 | 53, 123, 161, 5060                                                                                                                    | udp      | incoming  | Honeypot: qHoneypots                                                                                |
@@ -280,10 +284,12 @@ Ports and availability of SaaS services may vary based on your geographical loca
 For some honeypots to reach full functionality (i.e. Cowrie or Log4Pot) outgoing connections are necessary as well, in order for them to download the attacker's malware. Please see the individual honeypot's documentation to learn more by following the [links](#technical-concept) to their repositories.
 
 ## LLM-Based Honeypots
-With the release of **T-Pot 24.04.1**, two LLM-based honeypots, **Beelzebub** and **Galah**, have been introduced. These honeypots require an installation of **Ollama**, which needs to be configured in the [T-Pot configuration file](#t-pot-config-file). You can also adjust the settings in this file for **ChatGPT** support, but note that changes will also be required in the docker compose file (`~/tpotce/compose/llm.yml`) to accommodate these updates.
+We think LLM-Based Honeypots mark the **beginning** of a game change for the deception / honeypot field. Consequently, starting with the release of **T-Pot 24.04.1**, two LLM-based honeypots, **Beelzebub** and **Galah**, have been introduced. These honeypots require an installation of **Ollama**, which needs to be configured in the [T-Pot configuration file](#t-pot-config-file). You can also adjust the settings in this file for **ChatGPT** support, but note that changes will also be required in the docker compose file (`~/tpotce/compose/llm.yml`) to accommodate these adjustments.<br><br>
+Follow the links in the [Honeypots and Tools](#honeypots-and-tools) section to find out more about **Beelzebub** and **Galah**.
 
 ### Ollama
-To set up and run **Ollama**, refer to the [Ollama GitHub repository](https://github.com/ollama/ollama) for instructions. For entry-level or testing purposes, results can be achieved using a **Nvidia RTX 4060 Ti 16GB** or equivalent (AMD's ROCm is also supported by Ollama), with models like **openchat** and **Llama3**. As a general rule with LLM-based systems, the better and more hardware you use, the faster and more accurate the results will be, especially when tasks are offloaded to multiple GPUs and larger models. **CPU-based usage is not recommended**, not even for testing.
+🚨 **CPU-based usage is not recommended**, not even for testing.<br><br>
+To set up and run **Ollama**, refer to the [Ollama GitHub repository](https://github.com/ollama/ollama) for instructions. For entry-level or testing purposes, results can be achieved using a **Nvidia RTX 4060 Ti 16GB** or equivalent (AMD's ROCm is also supported by Ollama), with models like **openchat** and **Llama3**. As a general rule with LLM-based systems, the better and more hardware you use, the faster and more accurate the results will be, especially when tasks are offloaded to multiple GPUs and larger models.
 
 ### ChatGPT
 ChatGPT support for these honeypots will remain untested in relation to T-Pot.
@@ -577,12 +583,13 @@ Before the first start run `~/tpotce/genuser.sh` or setup the `WEB_USER` manuall
 In `~/tpotce/compose` you will find everything you need to adjust the T-Pot Standard / HIVE installation:
 ```
 customizer.py
+llm.yml
 mac_win.yml
 mini.yml
 mobile.yml
-raspberry_showcase.yml
 sensor.yml
 standard.yml
+tarpit.yml
 tpot_services.yml
 ```
 The `.yml` files are docker compose files, each representing a different set of honeypots and tools with `tpot_services.yml` being a template for `customizer.py` to create a customized docker compose file.<br><br>
@@ -774,7 +781,7 @@ Use the search function, it is possible a similar discussion has been opened alr
 The software that T-Pot is built on uses the following licenses.
 <br>GPLv2: [conpot](https://github.com/mushorg/conpot/blob/master/LICENSE.txt), [galah](https://github.com/0x4D31/galah?tab=Apache-2.0-1-ov-file#readme), [dionaea](https://github.com/DinoTools/dionaea/blob/master/LICENSE), [honeytrap](https://github.com/armedpot/honeytrap/blob/master/LICENSE), [suricata](https://suricata.io/features/open-source/)
 <br>GPLv3: [adbhoney](https://github.com/huuck/ADBHoney), [elasticpot](https://gitlab.com/bontchev/elasticpot/-/blob/master/LICENSE), [ewsposter](https://github.com/telekom-security/ews/), [log4pot](https://github.com/thomaspatzke/Log4Pot/blob/master/LICENSE), [fatt](https://github.com/0x4D31/fatt/blob/master/LICENSE), [heralding](https://github.com/johnnykv/heralding/blob/master/LICENSE.txt), [ipphoney](https://gitlab.com/bontchev/ipphoney/-/blob/master/LICENSE), [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot/blob/main/LICENSE), [sentrypeer](https://github.com/SentryPeer/SentryPeer/blob/main/LICENSE.GPL-3.0-only), [snare](https://github.com/mushorg/snare/blob/master/LICENSE), [tanner](https://github.com/mushorg/snare/blob/master/LICENSE)
-<br>Apache 2 License: [cyberchef](https://github.com/gchq/CyberChef/blob/master/LICENSE), [dicompot](https://github.com/nsmfoo/dicompot/blob/master/LICENSE), [elasticsearch](https://github.com/elasticsearch/elasticsearch/blob/master/LICENSE.txt), [logstash](https://github.com/elasticsearch/logstash/blob/master/LICENSE), [kibana](https://github.com/elasticsearch/kibana/blob/master/LICENSE.md), [docker](https://github.com/docker/docker/blob/master/LICENSE)
+<br>Apache 2 License: [cyberchef](https://github.com/gchq/CyberChef/blob/master/LICENSE), [dicompot](https://github.com/nsmfoo/dicompot/blob/master/LICENSE), [elasticsearch](https://github.com/elasticsearch/elasticsearch/blob/master/LICENSE.txt), [go-pot](https://github.com/ryanolee/go-pot?tab=License-1-ov-file#readme), [logstash](https://github.com/elasticsearch/logstash/blob/master/LICENSE), [kibana](https://github.com/elasticsearch/kibana/blob/master/LICENSE.md), [docker](https://github.com/docker/docker/blob/master/LICENSE)
 <br>MIT license: [autoheal](https://github.com/willfarrell/docker-autoheal?tab=MIT-1-ov-file#readme), [beelzebub](https://github.com/mariocandela/beelzebub?tab=MIT-1-ov-file#readme), [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/blob/master/LICENSE), [ddospot](https://github.com/aelth/ddospot/blob/master/LICENSE), [elasticvue](https://github.com/cars10/elasticvue/blob/master/LICENSE), [glutton](https://github.com/mushorg/glutton/blob/master/LICENSE), [hellpot](https://github.com/yunginnanet/HellPot/blob/master/LICENSE), [maltrail](https://github.com/stamparm/maltrail/blob/master/LICENSE)
 <br> Unlicense: [endlessh](https://github.com/skeeto/endlessh/blob/master/UNLICENSE)
 <br> Other: [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot#licencing-agreement-malwaretech-public-licence), [cowrie](https://github.com/cowrie/cowrie/blob/master/LICENSE.rst), [mailoney](https://github.com/awhitehatter/mailoney), [Elastic License](https://www.elastic.co/licensing/elastic-license), [Wordpot](https://github.com/gbrindisi/wordpot)
@@ -805,6 +812,7 @@ Without open source and the development community we are proud to be a part of, 
 * [fatt](https://github.com/0x4D31/fatt/graphs/contributors)
 * [galah](https://github.com/0x4D31/galah/graphs/contributors)
 * [glutton](https://github.com/mushorg/glutton/graphs/contributors)
+* [go-pot](https://github.com/ryanolee/go-pot/graphs/contributors)
 * [hellpot](https://github.com/yunginnanet/HellPot/graphs/contributors)
 * [heralding](https://github.com/johnnykv/heralding/graphs/contributors)
 * [honeypots](https://github.com/qeeqbox/honeypots/graphs/contributors)
