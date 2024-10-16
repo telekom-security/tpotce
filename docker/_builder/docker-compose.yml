@@ -216,6 +216,15 @@ services:
       context: ../medpot/
       <<: *common-build
 
+# Miniprint
+  miniprint:
+    image: ${TPOT_DOCKER_REPO}/miniprint:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/miniprint:${TPOT_VERSION}
+      context: ../miniprint/
+      <<: *common-build
+
 # Redishoneypot
   redishoneypot:
     image: ${TPOT_DOCKER_REPO}/redishoneypot:${TPOT_VERSION}

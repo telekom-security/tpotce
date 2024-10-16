@@ -32,6 +32,8 @@ fuLOGROTATE () {
   local myDIONAEABITGZ="/data/dionaea/bistreams.tgz"
   local myDIONAEABIN="/data/dionaea/binaries/"
   local myDIONAEABINTGZ="/data/dionaea/binaries.tgz"
+  local myMINIPRINTU="/data/miniprint/uploads/"
+  local myMINIPRINTTGZ="/data/miniprint/uploads.tgz"
   local myHONEYTRAPATTACKS="/data/honeytrap/attacks/"
   local myHONEYTRAPATTACKSTGZ="/data/honeytrap/attacks.tgz"
   local myHONEYTRAPDL="/data/honeytrap/downloads/"
@@ -54,21 +56,22 @@ if [ "$(fuEMPTY $myCOWRIETTYLOGS)" != "0" ]; then tar -I $myPIGZ -cvf $myCOWRIET
 if [ "$(fuEMPTY $myCOWRIEDL)" != "0" ]; then tar -I $myPIGZ -cvf $myCOWRIEDLTGZ $myCOWRIEDL; fi
 if [ "$(fuEMPTY $myDIONAEABI)" != "0" ]; then tar -I $myPIGZ -cvf $myDIONAEABITGZ $myDIONAEABI; fi
 if [ "$(fuEMPTY $myDIONAEABIN)" != "0" ]; then tar -I $myPIGZ -cvf $myDIONAEABINTGZ $myDIONAEABIN; fi
+if [ "$(fuEMPTY $myMINIPRINTU)" != "0" ]; then tar -I $myPIGZ -cvf $myMINIPRINTTGZ $myMINIPRINTU; fi
 if [ "$(fuEMPTY $myHONEYTRAPATTACKS)" != "0" ]; then tar -I $myPIGZ -cvf $myHONEYTRAPATTACKSTGZ $myHONEYTRAPATTACKS; fi
 if [ "$(fuEMPTY $myHONEYTRAPDL)" != "0" ]; then tar -I $myPIGZ -cvf $myHONEYTRAPDLTGZ $myHONEYTRAPDL; fi
 if [ "$(fuEMPTY $myTANNERF)" != "0" ]; then tar -I $myPIGZ -cvf $myTANNERFTGZ $myTANNERF; fi
 
 # Ensure correct permissions and ownership for previously created archives
-chmod 770 $myADBHONEYTGZ $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ $myTANNERFTGZ
-chown tpot:tpot $myADBHONEYTGZ $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ $myTANNERFTGZ
+chmod 770 $myADBHONEYTGZ $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ $myMINIPRINTTGZ $myTANNERFTGZ
+chown tpot:tpot $myADBHONEYTGZ $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ $myMINIPRINTTGZ $myTANNERFTGZ
 
 # Need to remove subfolders since too many files cause rm to exit with errors
-rm -rf $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL $myTANNERF
+rm -rf $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL $myMINIPRINTU $myTANNERF
 
 # Recreate subfolders with correct permissions and ownership
-mkdir -p $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL $myTANNERF
-chmod 770 $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL $myTANNERF
-chown tpot:tpot $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL $myTANNERF
+mkdir -p $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL $myMINIPRINTU $myTANNERF
+chmod 770 $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL $myMINIPRINTU $myTANNERF
+chown tpot:tpot $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL $myMINIPRINTU $myTANNERF
 
 # Run logrotate again to account for previously created archives - DO NOT FORCE HERE!
 logrotate -s $mySTATUS $myCONF
@@ -294,6 +297,14 @@ fuMEDPOT () {
   chown tpot:tpot /data/medpot/ -R
 }
 
+# Let's create a function to clean up and prepare miniprint data
+fuMINIPRINT () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/miniprint/*; fi
+  mkdir -vp /data/miniprint/{log,uploads}
+  chmod 770 /data/miniprint/ -R
+  chown tpot:tpot /data/miniprint/ -R
+}
+
 # Let's create a function to clean up nginx logs
 fuNGINX () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/nginx/log/*; fi
@@ -410,6 +421,7 @@ fuIPPHONEY
 fuLOG4POT
 fuMAILONEY
 fuMEDPOT
+fuMINIPRINT
 fuNGINX
 fuREDISHONEYPOT
 fuSENTRYPEER

@@ -16,6 +16,7 @@ networks:
   ipphoney_local:
   mailoney_local:
   medpot_local:
+  miniprint_local:
   redishoneypot_local:
   sentrypeer_local:
   tanner_local:
@@ -450,6 +451,24 @@ services:
     volumes:
      - ${TPOT_DATA_PATH}/medpot/log/:/var/log/medpot
 
+# Miniprint service
+  miniprint:
+    container_name: miniprint
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+    networks:
+     - miniprint_local
+    ports:
+      - "9100:9100"
+    image: ${TPOT_REPO}/miniprint:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    read_only: true
+    volumes:
+     - ${TPOT_DATA_PATH}/miniprint/log/:/opt/miniprint/log/
+     - ${TPOT_DATA_PATH}/miniprint/uploads/:/opt/miniprint/uploads/
+
 # Redishoneypot service
   redishoneypot:
     container_name: redishoneypot
@@ -582,6 +601,7 @@ services:
     ports:
      - "8080:80"
     image: ${TPOT_REPO}/wordpot:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
     read_only: true
     volumes:
      - ${TPOT_DATA_PATH}/wordpot/log:/opt/wordpot/logs/
