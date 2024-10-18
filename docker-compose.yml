@@ -354,6 +354,7 @@ services:
     ports:
       - "3000:8080"
     image: ${TPOT_REPO}/honeyaml:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
     read_only: true
     volumes:
      - ${TPOT_DATA_PATH}/honeyaml/log:/opt/honeyaml/log/
@@ -422,8 +423,7 @@ services:
     networks:
      - ipphoney_local
     ports:
-     - "631:631/udp"
-     - "631:631/tcp"
+     - "631:631"
     image: ${TPOT_REPO}/ipphoney:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
     read_only: true

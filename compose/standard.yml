@@ -354,6 +354,7 @@ services:
     ports:
       - "3000:8080"
     image: ${TPOT_REPO}/honeyaml:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
     read_only: true
     volumes:
      - ${TPOT_DATA_PATH}/honeyaml/log:/opt/honeyaml/log/
