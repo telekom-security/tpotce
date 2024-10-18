@@ -162,6 +162,15 @@ services:
       context: ../heralding/
       <<: *common-build
 
+# Honeyaml
+  honeyaml:
+    image: ${TPOT_DOCKER_REPO}/honeyaml:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/honeyaml:${TPOT_VERSION}
+      context: ../honeyaml/
+      <<: *common-build
+
 # Honeypots
   honeypots:
     image: ${TPOT_DOCKER_REPO}/honeypots:${TPOT_VERSION}

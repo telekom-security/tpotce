@@ -22,6 +22,8 @@ addgroup -g 2000 go-pot
 adduser -S -s /bin/ash -u 2000 -D -g 2000 go-pot
 EOF
 #
+STOPSIGNAL SIGINT
+USER go-pot:go-pot
 WORKDIR /opt/go-pot
 CMD ["start", "--host", "0.0.0.0", "--config-file", "config.yml"]
 ENTRYPOINT ["./go-pot"]

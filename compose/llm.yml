@@ -46,8 +46,6 @@ services:
     depends_on:
       tpotinit:
         condition: service_healthy
-#    cpu_count: 1
-#    cpus: 0.25
     networks:
      - beelzebub_local
     ports:
@@ -74,8 +72,6 @@ services:
     depends_on:
       tpotinit:
         condition: service_healthy
-#    cpu_count: 1
-#    cpus: 0.25
     networks:
      - galah_local
     ports:

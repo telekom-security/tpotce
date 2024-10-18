@@ -1,0 +1,20 @@
+networks:
+  honeyaml_local:
+
+services:
+
+# Honeyaml service
+  honeyaml:
+    build: .
+    container_name: honeyaml
+    restart: always
+#    cpu_count: 1
+#    cpus: 0.25
+    networks:
+     - honeyaml_local
+    ports:
+      - "8080:8080"
+    image: dtagdevsec/honeyaml:24.04
+    read_only: true
+    volumes:
+     - $HOME/tpotce/data/honeyaml/log/:/opt/honeyaml/log/

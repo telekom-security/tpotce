@@ -21,6 +21,7 @@ networks:
   go-pot_local:
   hellpot_local:
   heralding_local:
+  honeyaml_local:
   honeypots_local:
   ipphoney_local:
   log4pot_local:
@@ -514,6 +515,22 @@ services:
     read_only: true
     volumes:
      - ${TPOT_DATA_PATH}/heralding/log:/var/log/heralding
+
+# Honeyaml service
+  honeyaml:
+    container_name: honeyaml
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+    networks:
+     - honeyaml_local
+    ports:
+      - "8080:8080"
+    image: ${TPOT_REPO}/honeyaml:${TPOT_VERSION}
+    read_only: true
+    volumes:
+     - ${TPOT_DATA_PATH}/honeyaml/log:/opt/honeyaml/log/
 
 # Honeypots service
   honeypots:

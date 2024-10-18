@@ -13,6 +13,7 @@ networks:
   dionaea_local:
   elasticpot_local:
   heralding_local:
+  honeyaml_local:
   ipphoney_local:
   mailoney_local:
   medpot_local:
@@ -341,6 +342,22 @@ services:
     volumes:
      - ${TPOT_DATA_PATH}/elasticpot/log:/opt/elasticpot/log
 
+# Honeyaml service
+  honeyaml:
+    container_name: honeyaml
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+    networks:
+     - honeyaml_local
+    ports:
+      - "3000:8080"
+    image: ${TPOT_REPO}/honeyaml:${TPOT_VERSION}
+    read_only: true
+    volumes:
+     - ${TPOT_DATA_PATH}/honeyaml/log:/opt/honeyaml/log/
+
 # Heralding service
   heralding:
     container_name: heralding
@@ -405,7 +422,8 @@ services:
     networks:
      - ipphoney_local
     ports:
-     - "631:631"
+     - "631:631/udp"
+     - "631:631/tcp"
     image: ${TPOT_REPO}/ipphoney:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
     read_only: true

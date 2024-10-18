@@ -241,6 +241,14 @@ fuHERALDING () {
   chown tpot:tpot /data/heralding -R
 }
 
+# Let's create a function to clean up and prepare honeyaml data
+fuHONEYAML () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/honeyaml/*; fi
+  mkdir -vp /data/honeyaml/log
+  chmod 770 -R /data/honeyaml
+  chown tpot:tpot -R /data/honeyaml
+}
+
 # Let's create a function to clean up and prepare honeypots data
 fuHONEYPOTS () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/honeypots/*; fi
@@ -414,6 +422,7 @@ fuGLUTTON
 fuGOPOT
 fuHERALDING
 fuHELLPOT
+fuHONEYAML
 fuHONEYSAP
 fuHONEYPOTS
 fuHONEYTRAP
