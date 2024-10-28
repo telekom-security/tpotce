@@ -7,9 +7,6 @@ assignees: ''
 
 ---
 
-# Ask T-Pot Assistant
-- 🤖 Ask [T-Pot Assistant (beta)](https://chatgpt.com/g/g-67OJ5idsQ-t-pot-assistant-beta) if you have not read the documentation yet and do not intent to do so (#1564)
-
 # Successfully raise an issue
 Before you post your issue make sure it has not been answered yet and provide **⚠️ BASIC SUPPORT INFORMATION** (as requested below) if you come to the conclusion it is a new issue.
 
