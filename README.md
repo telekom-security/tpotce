@@ -40,7 +40,7 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/24.04.1/i
   - [Get and install T-Pot](#get-and-install-t-pot)
   - [macOS \& Windows](#macos--windows)
   - [Installation Types](#installation-types)
-    - [Standard / HIVE](#standard--hive)
+    - [Standard / Hive](#standard--hive)
     - [Distributed](#distributed)
   - [Uninstall T-Pot](#uninstall-t-pot)
 - [First Start](#first-start)
@@ -378,16 +378,16 @@ To get things up and running just follow these steps:
 
 ## Installation Types
 
-### Standard / HIVE
-With T-Pot Standard / HIVE all services, tools, honeypots, etc. will be installed on to a single host which also serves as a HIVE endpoint. Make sure to meet the [system requirements](#system-requirements). You can adjust `~/tpotce/docker-compose.yml` to your personal use-case or create your very own configuration using `~/tpotce/compose/customizer.py` for a tailored T-Pot experience to your needs.
+### Standard / Hive
+With T-Pot Standard / Hive all services, tools, honeypots, etc. will be installed on to a single host which also serves as a Hive endpoint. Make sure to meet the [system requirements](#system-requirements). You can adjust `~/tpotce/docker-compose.yml` to your personal use-case or create your very own configuration using `~/tpotce/compose/customizer.py` for a tailored T-Pot experience to your needs.
 Once the installation is finished you can proceed to [First Start](#first-start).
 <br><br>
 
 ### Distributed
 The distributed version of T-Pot requires at least two hosts
-- the T-Pot **HIVE**, the standard installation of T-Pot (install this first!),
-- and a T-Pot **SENSOR**, which will host only the honeypots, some tools and transmit log data to the **HIVE**.
-- The **SENSOR** will not start before finalizing the **SENSOR** installation as described in [Distributed Deployment](#distributed-deployment).
+- the T-Pot **Hive**, the standard installation of T-Pot (install this first!),
+- and a T-Pot **Sensor**, which will host only the honeypots, some tools and transmit log data to the **Hive**.
+- The **Sensor** will not start before finalizing the **Sensor** installation as described in [Distributed Deployment](#distributed-deployment).
 <br><br>
 
 ## Uninstall T-Pot
@@ -418,9 +418,9 @@ There is not much to do except to login and check via `dps.sh` if all services a
 
 ## Distributed Deployment
 ### Planning and Certificates
-The distributed deployment involves planning as **T-Pot Init** will only create a self-signed certificate for the IP of the **HIVE** host which usually is suitable for simple setups. Since **logstash** will check for a valid certificate upon connection, a distributed setup involving **HIVE** to be reachable on multiple IPs (i.e. RFC 1918 and public NAT IP) and maybe even a domain name will result in a connection error where the certificate cannot be validated as such a setup needs a certificate with a common name and SANs (Subject Alternative Name).<br>
+The distributed deployment involves planning as **T-Pot Init** will only create a self-signed certificate for the IP of the **Hive** host which usually is suitable for simple setups. Since **logstash** will check for a valid certificate upon connection, a distributed setup involving **Hive** to be reachable on multiple IPs (i.e. RFC 1918 and public NAT IP) and maybe even a domain name will result in a connection error where the certificate cannot be validated as such a setup needs a certificate with a common name and SANs (Subject Alternative Name).<br>
 Before deploying any sensors make sure you have planned out domain names and IPs properly to avoid issues with the certificate. For more details see [issue #1543](https://github.com/telekom-security/tpotce/issues/1543).<br>
-Adjust the example to your IP / domain setup and follow the commands to change the certificate of **HIVE**:
+Adjust the example to your IP / domain setup and follow the commands to change the certificate of **Hive**:
 
 ```
 sudo systemctl stop tpot
@@ -442,13 +442,13 @@ sudo chown tpot:tpot $HOME/tpotce/data/nginx/cert/*
 sudo systemctl start tpot
 ```
 
-The T-Pot configuration file (`.env`) does allow to disable the SSL verification for logstash connections from **SENSOR** to the **HIVE** by setting `LS_SSL_VERIFICATION=none`. For security reasons this is only recommended for lab or test environments.<br><br>
-If you choose to use a valid certificate for the **HIVE** signed by a CA (i.e. Let's Encrypt), logstash, and therefore the **SENSOR**, should have no problems to connect and transmit its logs to the **HIVE**.
+The T-Pot configuration file (`.env`) does allow to disable the SSL verification for logstash connections from **Sensor** to the **Hive** by setting `LS_SSL_VERIFICATION=none`. For security reasons this is only recommended for lab or test environments.<br><br>
+If you choose to use a valid certificate for the **Hive** signed by a CA (i.e. Let's Encrypt), logstash, and therefore the **Sensor**, should have no problems to connect and transmit its logs to the **Hive**.
 
 ### Deploying Sensors
-Once you have rebooted the **SENSOR** as instructed by the installer you can continue with the distributed deployment by logging into **HIVE** and go to `cd ~/tpotce` folder. Make sure you understood the [Planning and Certificates](#planning-and-certificates) before continuing with the actual deployment.
+Once you have rebooted the **Sensor** as instructed by the installer you can continue with the distributed deployment by logging into **Hive** and go to `cd ~/tpotce` folder. Make sure you understood the [Planning and Certificates](#planning-and-certificates) before continuing with the actual deployment.
 
-If you have not done already generate a SSH key to securely login to the **SENSOR** and to allow `Ansible` to run a playbook on the sensor:
+If you have not done already generate a SSH key to securely login to the **Sensor** and to allow `Ansible` to run a playbook on the sensor:
 1. Run `ssh-keygen`, follow the instructions and leave the passphrase empty:
    ```
    Generating public/private rsa key pair.
@@ -458,10 +458,10 @@ If you have not done already generate a SSH key to securely login to the **SENSO
    Your identification has been saved in /home/<your_user>/.ssh/id_rsa
    Your public key has been saved in /home/<your_user>/.ssh/id_rsa.pub
    ```
-2. Deploy the key to the SENSOR by running `ssh-copy-id -p 64295 <SENSOR_SSH_USER>@<SENSOR_IP>)`:
+2. Deploy the key to the Sensor by running `ssh-copy-id -p 64295 <Sensor_SSH_USER>@<Sensor_IP>)`:
    ```
    /usr/bin/ssh-copy-id: INFO: Source of key(s) to be installed: "/home/<your_user>/.ssh/id_rsa.pub"
-   The authenticity of host '[<SENSOR_IP>]:64295 ([<SENSOR_IP>]:64295)' can't be stablished.
+   The authenticity of host '[<Sensor_IP>]:64295 ([<Sensor_IP>]:64295)' can't be stablished.
    ED25519 key fingerprint is SHA256:naIDxFiw/skPJadTcgmWZQtgt+CdfRbUCoZn5RmkOnQ.
    This key is not known by any other names.
    Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
@@ -471,16 +471,16 @@ If you have not done already generate a SSH key to securely login to the **SENSO
   
    Number of key(s) added: 1
   
-   Now try logging into the machine, with:   "ssh -p '64295' '<your_user>@<SENSOR_IP>'"
+   Now try logging into the machine, with:   "ssh -p '64295' '<your_user>@<Sensor_IP>'"
    and check to make sure that only the key(s) you wanted were added.
    ```
-3. As suggested follow the instructions to test the connection `ssh -p '64295' '<your_user>@<SENSOR_IP>'`.
+3. As suggested follow the instructions to test the connection `ssh -p '64295' '<your_user>@<Sensor_IP>'`.
 4. Once the key is successfully deployed run `./deploy.sh` and follow the instructions.
 <br><br>
 
 ### Removing Sensors
-Identify the `TPOT_HIVE_USER` ENV on the SENSOR in the `$HOME/tpotce/.env` config (it is a base64 encoded string). Now identify the same string in the `LS_WEB_USER` ENV on the HIVE in the `$HOME/tpotce/.env` config. Remove the string and restart T-Pot.<br>
-Now you can safely delete the SENSOR machine.
+Identify the `TPOT_HIVE_USER` ENV on the Sensor in the `$HOME/tpotce/.env` config (it is a base64 encoded string). Now identify the same string in the `LS_WEB_USER` ENV on the Hive in the `$HOME/tpotce/.env` config. Remove the string and restart T-Pot.<br>
+Now you can safely delete the Sensor machine.
 
 ## Community Data Submission
 T-Pot is provided in order to make it accessible to everyone interested in honeypots. By default, the captured data is submitted to a community backend. This community backend uses the data to feed [Sicherheitstacho](https://sicherheitstacho.eu).
@@ -584,7 +584,7 @@ Before the first start run `~/tpotce/genuser.sh` or setup the `WEB_USER` manuall
 
 ## Customize T-Pot Honeypots and Services
 
-In `~/tpotce/compose` you will find everything you need to adjust the T-Pot Standard / HIVE installation:
+In `~/tpotce/compose` you will find everything you need to adjust the T-Pot Standard / Hive installation:
 ```
 customizer.py
 llm.yml
