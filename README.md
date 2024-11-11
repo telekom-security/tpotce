@@ -565,7 +565,7 @@ On the T-Pot Landing Page just click on `Cyberchef` and you will be forwarded to
 <br><br>
 
 ## Elasticvue
-On the T-Pot Landing Page just click on `Elastivue` and you will be forwarded to Elastivue.
+On the T-Pot Landing Page just click on `Elasticvue` and you will be forwarded to Elasticvue.
 
 ![Elasticvue](doc/elasticvue.png)
 <br><br>
