@@ -19,6 +19,7 @@ networks:
   endlessh_local:
   galah_local:
   go-pot_local:
+  h0neytr4p_local:
   hellpot_local:
   heralding_local:
   honeyaml_local:
@@ -464,6 +465,25 @@ services:
     read_only: true
     volumes:
      - ${TPOT_DATA_PATH}/go-pot/log:/opt/go-pot/log/
+
+# H0neytr4p service
+  h0neytr4p:
+    container_name: h0neytr4p
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+    networks:
+     - h0neytr4p_local
+    ports:
+      - "443:443"
+    # - "80:80"
+    image: ${TPOT_REPO}/h0neytr4p:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    read_only: true
+    volumes:
+      - ${TPOT_DATA_PATH}/h0neytr4p/log/:/opt/h0neytr4p/log/
+      - ${TPOT_DATA_PATH}/h0neytr4p/payloads/:/data/h0neytr4p/payloads/
 
 # Hellpot service
   hellpot:

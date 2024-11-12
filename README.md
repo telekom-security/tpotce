@@ -88,8 +88,11 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/24.04.1/i
   - [Discussions](#discussions)
 - [Licenses](#licenses)
 - [Credits](#credits)
-    - [The developers and development communities of](#the-developers-and-development-communities-of)
+  - [The developers and development communities of](#the-developers-and-development-communities-of)
+  - [**The following companies and organizations**](#the-following-companies-and-organizations)
+  - [**And of course ***YOU*** for joining the community!**](#and-of-course-you-for-joining-the-community)
 - [Testimonials](#testimonials)
+- [Thank you 💖](#thank-you-)
 <!-- TOC -->
 <br><br>
 
@@ -106,38 +109,39 @@ T-Pot's main components have been moved into the `tpotinit` Docker image allowin
 <br><br>
 
 ## Honeypots and Tools
-T-Pot offers docker images for the following honeypots ...
-* [adbhoney](https://github.com/huuck/ADBHoney)
-* [beelzebub](https://github.com/mariocandela/beelzebub)
-* [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot)
-* [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot)
-* [conpot](http://conpot.org/)
-* [cowrie](https://github.com/cowrie/cowrie)
-* [ddospot](https://github.com/aelth/ddospot)
-* [dicompot](https://github.com/nsmfoo/dicompot)
-* [dionaea](https://github.com/DinoTools/dionaea)
-* [elasticpot](https://gitlab.com/bontchev/elasticpot)
-* [endlessh](https://github.com/skeeto/endlessh)
-* [galah](https://github.com/0x4D31/galah)
-* [go-pot](https://github.com/ryanolee/go-pot)
-* [glutton](https://github.com/mushorg/glutton)
-* [hellpot](https://github.com/yunginnanet/HellPot)
-* [heralding](https://github.com/johnnykv/heralding)
-* [honeyaml](https://github.com/mmta/honeyaml)
-* [honeypots](https://github.com/qeeqbox/honeypots)
-* [honeytrap](https://github.com/armedpot/honeytrap/)
-* [ipphoney](https://gitlab.com/bontchev/ipphoney)
-* [log4pot](https://github.com/thomaspatzke/Log4Pot)
-* [mailoney](https://github.com/awhitehatter/mailoney)
-* [medpot](https://github.com/schmalle/medpot)
-* [miniprint](https://github.com/sa7mon/miniprint)
-* [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot)
-* [sentrypeer](https://github.com/SentryPeer/SentryPeer)
-* [snare](http://mushmush.org/)
-* [tanner](http://mushmush.org/)
-* [wordpot](https://github.com/gbrindisi/wordpot)
+- T-Pot offers docker images for the following honeypots:<br>
+[adbhoney](https://github.com/huuck/ADBHoney),
+[beelzebub](https://github.com/mariocandela/beelzebub),
+[ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot),
+[citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot),
+[conpot](http://conpot.org/),
+[cowrie](https://github.com/cowrie/cowrie),
+[ddospot](https://github.com/aelth/ddospot),
+[dicompot](https://github.com/nsmfoo/dicompot),
+[dionaea](https://github.com/DinoTools/dionaea),
+[elasticpot](https://gitlab.com/bontchev/elasticpot),
+[endlessh](https://github.com/skeeto/endlessh),
+[galah](https://github.com/0x4D31/galah),
+[go-pot](https://github.com/ryanolee/go-pot),
+[glutton](https://github.com/mushorg/glutton),
+[h0neytr4p](https://github.com/pbssubhash/h0neytr4p),
+[hellpot](https://github.com/yunginnanet/HellPot),
+[heralding](https://github.com/johnnykv/heralding),
+[honeyaml](https://github.com/mmta/honeyaml),
+[honeypots](https://github.com/qeeqbox/honeypots),
+[honeytrap](https://github.com/armedpot/honeytrap/),
+[ipphoney](https://gitlab.com/bontchev/ipphoney),
+[log4pot](https://github.com/thomaspatzke/Log4Pot),
+[mailoney](https://github.com/awhitehatter/mailoney),
+[medpot](https://github.com/schmalle/medpot),
+[miniprint](https://github.com/sa7mon/miniprint),
+[redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot),
+[sentrypeer](https://github.com/SentryPeer/SentryPeer),
+[snare](http://mushmush.org/),
+[tanner](http://mushmush.org/),
+[wordpot](https://github.com/gbrindisi/wordpot)
 
-... alongside the following tools ...
+Alongside the following tools:
 * [Autoheal](https://github.com/willfarrell/docker-autoheal) a tool to automatically restart containers with failed healthchecks.
 * [Cyberchef](https://gchq.github.io/CyberChef/) a web app for encryption, encoding, compression and data analysis.
 * [Elastic Stack](https://www.elastic.co/videos) to beautifully visualize all the events captured by T-Pot.
@@ -268,6 +272,7 @@ Besides the ports generally needed by the OS, i.e. obtaining a DHCP lease, DNS, 
 | 22                                                                                                                                    | tcp      | incoming  | Honeypot: Endlessh                                                                                  |
 | 80, 443, 8080, 8443                                                                                                                   | tcp      | incoming  | Honeypot: Galah  (LLM required)                                                                     |
 | 8080                                                                                                                                  | tcp      | incoming  | Honeypot: Go-pot                                                                                    |
+| 80, 443                                                                                                                               | tcp      | incoming  | Honeypot: H0neytr4p                                                                                 |
 | 21, 22, 23, 25, 80, 110, 143, 443, 993, 995, 1080, 5432, 5900                                                                         | tcp      | incoming  | Honeypot: Heralding                                                                                 |
 | 3000                                                                                                                                  | tcp      | incoming  | Honeypot: Honeyaml                                                                                  |
 | 21, 22, 23, 25, 80, 110, 143, 389, 443, 445, 631, 1080, 1433, 1521, 3306, 3389, 5060, 5432, 5900, 6379, 6667, 8080, 9100, 9200, 11211 | tcp      | incoming  | Honeypot: qHoneypots                                                                                |
@@ -783,79 +788,123 @@ Use the search function, it is possible a similar discussion has been opened alr
 
 # Licenses
 The software that T-Pot is built on uses the following licenses.
-<br>GPLv2: [conpot](https://github.com/mushorg/conpot/blob/master/LICENSE.txt), [galah](https://github.com/0x4D31/galah?tab=Apache-2.0-1-ov-file#readme), [dionaea](https://github.com/DinoTools/dionaea/blob/master/LICENSE), [honeytrap](https://github.com/armedpot/honeytrap/blob/master/LICENSE), [suricata](https://suricata.io/features/open-source/)
-<br>GPLv3: [adbhoney](https://github.com/huuck/ADBHoney), [elasticpot](https://gitlab.com/bontchev/elasticpot/-/blob/master/LICENSE), [ewsposter](https://github.com/telekom-security/ews/), [log4pot](https://github.com/thomaspatzke/Log4Pot/blob/master/LICENSE), [fatt](https://github.com/0x4D31/fatt/blob/master/LICENSE), [heralding](https://github.com/johnnykv/heralding/blob/master/LICENSE.txt), [ipphoney](https://gitlab.com/bontchev/ipphoney/-/blob/master/LICENSE), [miniprint](https://github.com/sa7mon/miniprint?tab=GPL-3.0-1-ov-file#readme), [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot/blob/main/LICENSE), [sentrypeer](https://github.com/SentryPeer/SentryPeer/blob/main/LICENSE.GPL-3.0-only), [snare](https://github.com/mushorg/snare/blob/master/LICENSE), [tanner](https://github.com/mushorg/snare/blob/master/LICENSE)
-<br>Apache 2 License: [cyberchef](https://github.com/gchq/CyberChef/blob/master/LICENSE), [dicompot](https://github.com/nsmfoo/dicompot/blob/master/LICENSE), [elasticsearch](https://github.com/elasticsearch/elasticsearch/blob/master/LICENSE.txt), [go-pot](https://github.com/ryanolee/go-pot?tab=License-1-ov-file#readme), [logstash](https://github.com/elasticsearch/logstash/blob/master/LICENSE), [kibana](https://github.com/elasticsearch/kibana/blob/master/LICENSE.md), [docker](https://github.com/docker/docker/blob/master/LICENSE)
-<br>MIT license: [autoheal](https://github.com/willfarrell/docker-autoheal?tab=MIT-1-ov-file#readme), [beelzebub](https://github.com/mariocandela/beelzebub?tab=MIT-1-ov-file#readme), [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/blob/master/LICENSE), [ddospot](https://github.com/aelth/ddospot/blob/master/LICENSE), [elasticvue](https://github.com/cars10/elasticvue/blob/master/LICENSE), [glutton](https://github.com/mushorg/glutton/blob/master/LICENSE), [hellpot](https://github.com/yunginnanet/HellPot/blob/master/LICENSE), [honeyaml](https://github.com/mmta/honeyaml?tab=MIT-1-ov-file#readme), [maltrail](https://github.com/stamparm/maltrail/blob/master/LICENSE)
-<br> Unlicense: [endlessh](https://github.com/skeeto/endlessh/blob/master/UNLICENSE)
-<br> Other: [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot#licencing-agreement-malwaretech-public-licence), [cowrie](https://github.com/cowrie/cowrie/blob/master/LICENSE.rst), [mailoney](https://github.com/awhitehatter/mailoney), [Elastic License](https://www.elastic.co/licensing/elastic-license), [Wordpot](https://github.com/gbrindisi/wordpot)
-<br> AGPL-3.0: [honeypots](https://github.com/qeeqbox/honeypots/blob/main/LICENSE)
-<br> [Public Domain (CC)](https://creativecommons.org/publicdomain/zero/1.0/): [Harvard Dataverse](https://dataverse.harvard.edu/dataverse/harvard/?q=dicom) 
+<br>GPLv2:
+[conpot](https://github.com/mushorg/conpot/blob/master/LICENSE.txt),
+[galah](https://github.com/0x4D31/galah?tab=Apache-2.0-1-ov-file#readme),
+[dionaea](https://github.com/DinoTools/dionaea/blob/master/LICENSE),
+[honeytrap](https://github.com/armedpot/honeytrap/blob/master/LICENSE),
+[suricata](https://suricata.io/features/open-source/)
+<br>GPLv3:
+[adbhoney](https://github.com/huuck/ADBHoney),
+[elasticpot](https://gitlab.com/bontchev/elasticpot/-/blob/master/LICENSE),
+[ewsposter](https://github.com/telekom-security/ews/),
+[log4pot](https://github.com/thomaspatzke/Log4Pot/blob/master/LICENSE),
+[fatt](https://github.com/0x4D31/fatt/blob/master/LICENSE),
+[heralding](https://github.com/johnnykv/heralding/blob/master/LICENSE.txt),
+[ipphoney](https://gitlab.com/bontchev/ipphoney/-/blob/master/LICENSE),
+[miniprint](https://github.com/sa7mon/miniprint?tab=GPL-3.0-1-ov-file#readme),
+[redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot/blob/main/LICENSE),
+[sentrypeer](https://github.com/SentryPeer/SentryPeer/blob/main/LICENSE.GPL-3.0-only),
+[snare](https://github.com/mushorg/snare/blob/master/LICENSE),
+[tanner](https://github.com/mushorg/snare/blob/master/LICENSE)
+<br>Apache 2 License:
+[cyberchef](https://github.com/gchq/CyberChef/blob/master/LICENSE),
+[dicompot](https://github.com/nsmfoo/dicompot/blob/master/LICENSE),
+[elasticsearch](https://github.com/elasticsearch/elasticsearch/blob/master/LICENSE.txt),
+[go-pot](https://github.com/ryanolee/go-pot?tab=License-1-ov-file#readme),
+[h0neytr4p](https://github.com/pbssubhash/h0neytr4p?tab=Apache-2.0-1-ov-file#readme),
+[logstash](https://github.com/elasticsearch/logstash/blob/master/LICENSE),
+[kibana](https://github.com/elasticsearch/kibana/blob/master/LICENSE.md),
+[docker](https://github.com/docker/docker/blob/master/LICENSE)
+<br>MIT license:
+[autoheal](https://github.com/willfarrell/docker-autoheal?tab=MIT-1-ov-file#readme),
+[beelzebub](https://github.com/mariocandela/beelzebub?tab=MIT-1-ov-file#readme),
+[ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/blob/master/LICENSE),
+[ddospot](https://github.com/aelth/ddospot/blob/master/LICENSE),
+[elasticvue](https://github.com/cars10/elasticvue/blob/master/LICENSE),
+[glutton](https://github.com/mushorg/glutton/blob/master/LICENSE),
+[hellpot](https://github.com/yunginnanet/HellPot/blob/master/LICENSE),
+[honeyaml](https://github.com/mmta/honeyaml?tab=MIT-1-ov-file#readme),
+[maltrail](https://github.com/stamparm/maltrail/blob/master/LICENSE)
+<br>Unlicense:
+[endlessh](https://github.com/skeeto/endlessh/blob/master/UNLICENSE)
+<br>Other:
+[citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot#licencing-agreement-malwaretech-public-licence),
+[cowrie](https://github.com/cowrie/cowrie/blob/master/LICENSE.rst),
+[mailoney](https://github.com/awhitehatter/mailoney),
+[Elastic License](https://www.elastic.co/licensing/elastic-license),
+[Wordpot](https://github.com/gbrindisi/wordpot)
+<br>AGPL-3.0:
+[honeypots](https://github.com/qeeqbox/honeypots/blob/main/LICENSE)
+<br>[Public Domain (CC)](https://creativecommons.org/publicdomain/zero/1.0/):
+[Harvard Dataverse](https://dataverse.harvard.edu/dataverse/harvard/?q=dicom) 
 <br><br>
 
 # Credits
 Without open source and the development community we are proud to be a part of, T-Pot would not have been possible! Our thanks are extended but not limited to the following people and organizations:
-
-### The developers and development communities of
-
-* [adbhoney](https://github.com/huuck/ADBHoney/graphs/contributors)
-* [beelzebub](https://github.com/mariocandela/beelzebub/graphs/contributors)
-* [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/graphs/contributors)
-* [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot/graphs/contributors)
-* [conpot](https://github.com/mushorg/conpot/graphs/contributors)
-* [cowrie](https://github.com/cowrie/cowrie/graphs/contributors)
-* [ddospot](https://github.com/aelth/ddospot/graphs/contributors)
-* [dicompot](https://github.com/nsmfoo/dicompot/graphs/contributors)
-* [dionaea](https://github.com/DinoTools/dionaea/graphs/contributors)
-* [docker](https://github.com/docker/docker/graphs/contributors)
-* [elasticpot](https://gitlab.com/bontchev/elasticpot/-/project_members)
-* [elasticsearch](https://github.com/elastic/elasticsearch/graphs/contributors)
-* [elasticvue](https://github.com/cars10/elasticvue/graphs/contributors)
-* [endlessh](https://github.com/skeeto/endlessh/graphs/contributors)
-* [ewsposter](https://github.com/armedpot/ewsposter/graphs/contributors)
-* [fatt](https://github.com/0x4D31/fatt/graphs/contributors)
-* [galah](https://github.com/0x4D31/galah/graphs/contributors)
-* [glutton](https://github.com/mushorg/glutton/graphs/contributors)
-* [go-pot](https://github.com/ryanolee/go-pot/graphs/contributors)
-* [hellpot](https://github.com/yunginnanet/HellPot/graphs/contributors)
-* [heralding](https://github.com/johnnykv/heralding/graphs/contributors)
-* [honeyaml](https://github.com/mmta/honeyaml/graphs/contributors)
-* [honeypots](https://github.com/qeeqbox/honeypots/graphs/contributors)
-* [honeytrap](https://github.com/armedpot/honeytrap/graphs/contributors)
-* [ipphoney](https://gitlab.com/bontchev/ipphoney/-/project_members)
-* [kibana](https://github.com/elastic/kibana/graphs/contributors)
-* [logstash](https://github.com/elastic/logstash/graphs/contributors)
-* [log4pot](https://github.com/thomaspatzke/Log4Pot/graphs/contributors)
-* [mailoney](https://github.com/awhitehatter/mailoney)
-* [maltrail](https://github.com/stamparm/maltrail/graphs/contributors)
-* [medpot](https://github.com/schmalle/medpot/graphs/contributors)
-* [miniprint](https://github.com/sa7mon/miniprint/graphs/contributors)
-* [p0f](http://lcamtuf.coredump.cx/p0f3/)
-* [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot/graphs/contributors)
-* [sentrypeer](https://github.com/SentryPeer/SentryPeer/graphs/contributors)
-* [spiderfoot](https://github.com/smicallef/spiderfoot)
-* [snare](https://github.com/mushorg/snare/graphs/contributors)
-* [tanner](https://github.com/mushorg/tanner/graphs/contributors)
-* [suricata](https://github.com/OISF/suricata/graphs/contributors)
-* [wordpot](https://github.com/gbrindisi/wordpot)
-
-**The following companies and organizations**
-* [docker](https://www.docker.com/)
-* [elastic.io](https://www.elastic.co/)
-* [honeynet project](https://www.honeynet.org/)
-
-**... and of course ***you*** for joining the community!**
 <br><br>
 
-Thank you for playing 💖
+## The developers and development communities of
+
+* [adbhoney](https://github.com/huuck/ADBHoney/graphs/contributors),
+[beelzebub](https://github.com/mariocandela/beelzebub/graphs/contributors),
+[ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/graphs/contributors),
+[citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot/graphs/contributors),
+[conpot](https://github.com/mushorg/conpot/graphs/contributors),
+[cowrie](https://github.com/cowrie/cowrie/graphs/contributors),
+[ddospot](https://github.com/aelth/ddospot/graphs/contributors),
+[dicompot](https://github.com/nsmfoo/dicompot/graphs/contributors),
+[dionaea](https://github.com/DinoTools/dionaea/graphs/contributors),
+[docker](https://github.com/docker/docker/graphs/contributors),
+[elasticpot](https://gitlab.com/bontchev/elasticpot/-/project_members),
+[elasticsearch](https://github.com/elastic/elasticsearch/graphs/contributors),
+[elasticvue](https://github.com/cars10/elasticvue/graphs/contributors),
+[endlessh](https://github.com/skeeto/endlessh/graphs/contributors),
+[ewsposter](https://github.com/armedpot/ewsposter/graphs/contributors),
+[fatt](https://github.com/0x4D31/fatt/graphs/contributors),
+[galah](https://github.com/0x4D31/galah/graphs/contributors),
+[glutton](https://github.com/mushorg/glutton/graphs/contributors),
+[go-pot](https://github.com/ryanolee/go-pot/graphs/contributors),
+[h0neytr4p](https://github.com/pbssubhash/h0neytr4p/graphs/contributors),
+[hellpot](https://github.com/yunginnanet/HellPot/graphs/contributors),
+[heralding](https://github.com/johnnykv/heralding/graphs/contributors),
+[honeyaml](https://github.com/mmta/honeyaml/graphs/contributors),
+[honeypots](https://github.com/qeeqbox/honeypots/graphs/contributors),
+[honeytrap](https://github.com/armedpot/honeytrap/graphs/contributors),
+[ipphoney](https://gitlab.com/bontchev/ipphoney/-/project_members),
+[kibana](https://github.com/elastic/kibana/graphs/contributors),
+[logstash](https://github.com/elastic/logstash/graphs/contributors),
+[log4pot](https://github.com/thomaspatzke/Log4Pot/graphs/contributors),
+[mailoney](https://github.com/awhitehatter/mailoney),
+[maltrail](https://github.com/stamparm/maltrail/graphs/contributors),
+[medpot](https://github.com/schmalle/medpot/graphs/contributors),
+[miniprint](https://github.com/sa7mon/miniprint/graphs/contributors),
+[p0f](http://lcamtuf.coredump.cx/p0f3/),
+[redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot/graphs/contributors),
+[sentrypeer](https://github.com/SentryPeer/SentryPeer/graphs/contributors),
+[spiderfoot](https://github.com/smicallef/spiderfoot),
+[snare](https://github.com/mushorg/snare/graphs/contributors),
+[tanner](https://github.com/mushorg/tanner/graphs/contributors),
+[suricata](https://github.com/OISF/suricata/graphs/contributors),
+[wordpot](https://github.com/gbrindisi/wordpot)
+<br><br>
+
+## **The following companies and organizations**
+* [docker](https://www.docker.com/),
+[elastic.io](https://www.elastic.co/),
+[honeynet project](https://www.honeynet.org/)
+<br><br>
+
+## **And of course ***YOU*** for joining the community!**
+<br><br>
 
 # Testimonials
 One of the greatest feedback we have gotten so far is by one of the Conpot developers:<br>
 ***"[...] I highly recommend T-Pot which is ... it's not exactly a swiss army knife .. it's more like a swiss army soldier, equipped with a swiss army knife. Inside a tank. A swiss tank. [...]"***
 <br><br>
+
 And from @robcowart (creator of [ElastiFlow](https://github.com/robcowart/elastiflow)):<br>
 ***"#TPot is one of the most well put together turnkey honeypot solutions. It is a must-have for anyone wanting to analyze and understand the behavior of malicious actors and the threat they pose to your organization."***
 <br><br>
-**Thank you!**
 
-![Alt](https://repobeats.axiom.co/api/embed/75368f879326a61370e485df52906ae0c1f59fbb.svg "Repobeats analytics image")
+# Thank you 💖

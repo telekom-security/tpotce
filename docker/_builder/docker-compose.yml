@@ -144,6 +144,15 @@ services:
       context: ../go-pot/
       <<: *common-build
 
+# H0neytr4p
+  h0neytr4p:
+    image: ${TPOT_DOCKER_REPO}/h0neytr4p:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/h0neytr4p:${TPOT_VERSION}
+      context: ../h0neytr4p/
+      <<: *common-build
+
 # Hellpot
   hellpot:
     image: ${TPOT_DOCKER_REPO}/hellpot:${TPOT_VERSION}
