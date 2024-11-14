@@ -896,7 +896,7 @@ Without open source and the development community we are proud to be a part of, 
 <br><br>
 
 ## **And of course ***YOU*** for joining the community!**
-<br><br>
+<br>
 
 # Testimonials
 One of the greatest feedback we have gotten so far is by one of the Conpot developers:<br>
