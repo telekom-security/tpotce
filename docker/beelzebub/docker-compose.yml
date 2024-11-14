@@ -19,9 +19,9 @@ services:
       - "3306:3306"
       - "8080:8080"
     environment:
-      LLMMODEL: "ollama"
-      LLMHOST: "http://ollama.local:11434/api/chat"
-      OLLAMAMODEL: "openchat"
+      LLM_MODEL: "ollama"
+      LLM_HOST: "http://ollama.local:11434/api/chat"
+      OLLAMA_MODEL: "openchat"
     image: "dtagdevsec/beelzebub:24.04"
     read_only: true
     volumes:
