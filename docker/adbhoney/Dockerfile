@@ -4,15 +4,15 @@ FROM alpine:3.20 AS builder
 COPY dist/ /root/dist/
 #
 # Install packages
-RUN	echo "@testing http://dl-cdn.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories && \
-	apk --no-cache -U add \
+RUN	apk --no-cache -U add \
 		build-base \
 		git \
 		procps \
 		py3-psutil \
 		py3-requests \
-		py3-pyinstaller@testing \
+		py3-pip \
 		python3 && \
+		pip3 install --break-system-packages pyinstaller && \
 #
 # Install adbhoney from git
     git clone https://github.com/t3chn0m4g3/ADBHoney -b pyinstaller /opt/adbhoney && \
