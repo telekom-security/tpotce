@@ -2,7 +2,7 @@ pysnmp-mibs
 pysmi==0.3.4
 libtaxii>=1.1.0
 crc16
-scapy==2.4.3rc1
+scapy==2.4.5
 hpfeeds3
 modbus-tk
 stix-validator
