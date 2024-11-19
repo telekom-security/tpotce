@@ -1,4 +1,4 @@
-FROM alpine:3.19
+FROM alpine:3.20
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -40,10 +40,9 @@ RUN apk --no-cache -U add \
 # Install cowrie
     mkdir -p /home/cowrie && \
     cd /home/cowrie && \
-    # git clone --depth=1 https://github.com/cowrie/cowrie -b v2.5.0 && \
     git clone https://github.com/cowrie/cowrie && \
     cd cowrie && \
-    git checkout 3394082040c02d91e79efa2c640ad68da9fe2231 && \
+    git checkout 347b61fb081d68ae6e15e3d6d0da65c82985014a && \
     mkdir -p log && \
     cp /root/dist/requirements.txt . && \
     pip3 install --break-system-packages --upgrade pip && \
