@@ -15,7 +15,7 @@ RUN	apk --no-cache -U add \
 		pip3 install --break-system-packages pyinstaller && \
 #
 # Install adbhoney from git
-    git clone https://github.com/t3chn0m4g3/ADBHoney -b pyinstaller /opt/adbhoney && \
+    git clone https://github.com/t3chn0m4g3/ADBHoney /opt/adbhoney && \
     cd /opt/adbhoney && \
     cp /root/dist/adbhoney.cfg /opt/adbhoney && \
     sed -i 's/dst_ip/dest_ip/' /opt/adbhoney/adbhoney/core.py && \
