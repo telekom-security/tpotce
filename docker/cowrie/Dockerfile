@@ -42,7 +42,7 @@ RUN apk --no-cache -U add \
     cd /home/cowrie && \
     git clone https://github.com/cowrie/cowrie && \
     cd cowrie && \
-    git checkout 347b61fb081d68ae6e15e3d6d0da65c82985014a && \
+    git checkout 49c7c4aac87603e0d2449501c300841a1f59fd0f && \
     mkdir -p log && \
     cp /root/dist/requirements.txt . && \
     pip3 install --break-system-packages --upgrade pip && \
