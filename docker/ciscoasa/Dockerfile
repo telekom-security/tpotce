@@ -1,19 +1,19 @@
 FROM alpine:3.20 AS builder
 #
 # Install packages
-RUN apk --no-cache -U add build-base \
+RUN apk --no-cache add \
+		build-base \
 		git \
 		libffi \
 		libffi-dev \
 		openssl \
 		openssl-dev \
-		py3-cryptography \
 		py3-pip \
 		python3 \
 		python3-dev && \
 #
 # Get and install packages
-    mkdir -p /opt/ && \
+	mkdir -p /opt/ && \
     cd /opt/ && \
     git clone https://github.com/t3chn0m4g3/ciscoasa_honeypot && \
     cd ciscoasa_honeypot && \

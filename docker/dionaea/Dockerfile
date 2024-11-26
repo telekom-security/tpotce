@@ -1,20 +1,12 @@
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND noninteractive
 #
 # Include dist
 COPY dist/ /root/dist/
 #
-# Check if APT_PROXY is set and configure apt to use the proxy
-RUN bash -c 'if [ -n "${http_proxy}" ]; then \
-                 echo "Using APT proxy at ${http_proxy}"; \
-                 echo "Acquire::http::Proxy \"${http_proxy}\";" > /etc/apt/apt.conf.d/01proxy; \
-               else \
-                 echo "APT proxy not configured, proceeding without proxy"; \
-             fi' && \
-#    bash -c 'echo "Acquire::http::Proxy::ports.ubuntu.com DIRECT;" > /etc/apt/apt.conf.d/99force-no-proxy' && \
-#
+
 # Determine arch, get and install packages
-    ARCH=$(arch) && \
+RUN ARCH=$(arch) && \
       if [ "$ARCH" = "x86_64" ]; then ARCH="amd64"; fi && \
       if [ "$ARCH" = "aarch64" ]; then ARCH="arm64"; fi && \
     echo "$ARCH" && \
@@ -49,14 +41,13 @@ RUN bash -c 'if [ -n "${http_proxy}" ]; then \
 		python3-dev \
 		python3-boto3 \
 		python3-bson \
+		python3-setuptools \
 		python3-yaml \
 		fonts-liberation && \
 #
 # Get and install dionaea
-    # git clone --depth=1 https://github.com/dinotools/dionaea -b 0.11.0 /root/dionaea/ && \
-    git clone --depth=1 https://github.com/dinotools/dionaea /root/dionaea/ && \
+    git clone https://github.com/t3chn0m4g3/dionaea -b 0.11.1 /root/dionaea/ && \
     cd /root/dionaea && \
-    git checkout 4e459f1b672a5b4c1e8335c0bff1b93738019215 && \
     mkdir build && \
     cd build && \
     cmake -DCMAKE_INSTALL_PREFIX:PATH=/opt/dionaea .. && \
@@ -66,7 +57,7 @@ RUN bash -c 'if [ -n "${http_proxy}" ]; then \
 # Setup user and groups
     addgroup --gid 2000 dionaea && \
     adduser --system --no-create-home --shell /bin/bash --uid 2000 --disabled-password --disabled-login --gid 2000 dionaea && \
-    setcap cap_net_bind_service=+ep /opt/dionaea/bin/dionaea && \
+    setcap cap_net_bind_service=+ep /opt/dionaea/sbin/dionaea && \
 #
 # Supply configs and set permissions
     chown -R dionaea:dionaea /opt/dionaea/var && \
@@ -114,7 +105,7 @@ RUN bash -c 'if [ -n "${http_proxy}" ]; then \
       libnetfilter-queue1 \
       libnl-3-200 \
       libpcap0.8 \
-      libpython3.10 \
+      libpython3.12 \
       libudns0 && \
 #
     apt-get autoremove --purge -y && \
@@ -132,4 +123,4 @@ STOPSIGNAL SIGINT
 # Dionaea sometimes hangs at 100% CPU usage, if detected container will become unhealthy and restarted by tpotinit
 HEALTHCHECK --interval=5m --timeout=30s --retries=3 CMD python3 /cpu_check.py $(pgrep -of dionaea) 99
 USER dionaea:dionaea
-CMD ["/opt/dionaea/bin/dionaea", "-u", "dionaea", "-g", "dionaea", "-c", "/opt/dionaea/etc/dionaea/dionaea.cfg"]
+CMD ["/opt/dionaea/sbin/dionaea", "-u", "dionaea", "-g", "dionaea", "-c", "/opt/dionaea/etc/dionaea/dionaea.cfg"]

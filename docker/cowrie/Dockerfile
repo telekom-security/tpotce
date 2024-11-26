@@ -58,6 +58,7 @@ RUN apk --no-cache -U add \
                     cd /home/cowrie/cowrie && \
                     /usr/bin/twistd --uid=2000 --gid=2000 -y cowrie.tac --pidfile cowrie.pid cowrie &" && \
     sleep 10 && \
+    rm -rf /home/cowrie/cowrie/etc && \
 #
 # Clean up
     apk del --purge build-base \

@@ -16,6 +16,7 @@ services:
     networks:
      - dicompot_local
     ports:
+     - "104:11112"
      - "11112:11112"
     image: "dtagdevsec/dicompot:24.04"
     read_only: true
