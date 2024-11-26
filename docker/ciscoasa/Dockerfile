@@ -1,7 +1,7 @@
 FROM alpine:3.20 AS builder
 #
 # Install packages
-RUN apk --no-cache add \
+RUN apk --no-cache -U add \
 		build-base \
 		git \
 		libffi \

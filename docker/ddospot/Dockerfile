@@ -46,9 +46,9 @@ RUN pyinstaller ddospot.py \
        --hidden-import twisted.internet.reactor \
        --hidden-import twisted.names.client \
        --hidden-import twisted.names.server \
-       --hidden-import=twisted.python \
-       --hidden-import=OpenSSL.crypto \
-       --hidden-import=OpenSSL.SSL
+       --hidden-import twisted.python \
+       --hidden-import OpenSSL.crypto \
+       --hidden-import OpenSSL.SSL
 #
 FROM alpine:3.20
 COPY --from=builder /opt/ddospot/ddospot/dist/ddospot/ /opt/ddospot/ddospot
