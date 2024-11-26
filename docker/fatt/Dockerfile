@@ -1,4 +1,4 @@
-FROM alpine:3.19
+FROM alpine:3.20
 #
 # Install packages
 RUN apk --no-cache -U add \
@@ -21,11 +21,8 @@ RUN apk --no-cache -U add \
     git clone https://github.com/0x4D31/fatt && \
     cd fatt && \
     git checkout c29e553514281e50781f86932b82337a5ada5640 && \
-    #git checkout 45cabf0b8b59162b99a1732d853efb01614563fe && \
-    #git checkout 314cd1ff7873b5a145a51ec4e85f6107828a2c79 && \
     mkdir -p log && \
-    # pyshark >= 0.4.3 breaks fatt
-    pip3 install --break-system-packages pyshark==0.4.2.11 && \
+    pip3 install --break-system-packages pyshark && \
 #
 # Setup configs
     chgrp fatt /usr/bin/dumpcap && \
@@ -34,7 +31,7 @@ RUN apk --no-cache -U add \
 #
 # Clean up
     apk del --purge git \
-                    python3-dev && \
+            python3-dev && \
     rm -rf /root/* \
             /var/cache/apk/* \
             /opt/fatt/.git
