@@ -32,8 +32,8 @@ RUN apk --no-cache -U add \
     echo "xpack.reporting.roles.enabled: false" >> /usr/share/kibana/config/kibana.yml && \
     echo "elasticsearch.requestTimeout: 60000" >> /usr/share/kibana/config/kibana.yml && \
     echo "elasticsearch.shardTimeout: 60000" >> /usr/share/kibana/config/kibana.yml && \
-    echo "kibana.autocompleteTimeout: 60000" >> /usr/share/kibana/config/kibana.yml && \
-    echo "kibana.autocompleteTerminateAfter: 1000000" >> /usr/share/kibana/config/kibana.yml && \
+    echo "unifiedSearch.autocomplete.valueSuggestions.timeout: 60000" >> /usr/share/kibana/config/kibana.yml && \
+    echo "unifiedSearch.autocomplete.valueSuggestions.terminateAfter: 1000000" >> /usr/share/kibana/config/kibana.yml && \
     rm -rf /usr/share/kibana/optimize/bundles/* && \
     /usr/share/kibana/bin/kibana --optimize --allow-root && \
     addgroup -g 2000 kibana && \

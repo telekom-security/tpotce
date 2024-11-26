@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV LS_VER=8.14.2
 #
@@ -8,6 +8,7 @@ COPY dist/ /root/dist/
 # Install packages
 RUN apt-get update -y && \
     apt-get install -y \
+    		 adduser \
              aria2 \
              bash \
              bzip2 \
