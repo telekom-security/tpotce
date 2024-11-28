@@ -16,14 +16,9 @@ COPY --from=builder /opt/honeyaml/honeyaml /opt/honeyaml/
 COPY --from=builder /opt/honeyaml/api.yml /opt/honeyaml/
 #
 # Setup user, groups and configs
-RUN <<EOF
-apk update
-apk add libstdc++
-addgroup --gid 2000 honeyaml
-adduser -S -H -s /bin/sh -u 2000 -D honeyaml -G honeyaml
-EOF
+RUN apk -U --no-cache add libstdc++
 #
 STOPSIGNAL SIGINT
-USER honeyaml:honeyaml
+USER 2000:2000
 WORKDIR /opt/honeyaml
 CMD ["./honeyaml", "-d", "/opt/honeyaml/log"]
