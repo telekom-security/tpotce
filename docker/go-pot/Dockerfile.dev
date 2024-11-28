@@ -9,7 +9,7 @@ WORKDIR /opt/go-pot
 #
 RUN CGO_ENABLED=0 GOOS=linux go build -o /opt/go-pot/go-pot
 #
-FROM alpine:3.20
+FROM scratch
 #
 COPY --from=builder /opt/go-pot/go-pot /opt/go-pot/go-pot
 COPY dist/config.yml /opt/go-pot/config.yml

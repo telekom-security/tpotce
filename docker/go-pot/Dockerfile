@@ -11,7 +11,7 @@ RUN go get github.com/ua-parser/uap-go/uaparser
 RUN go mod download
 RUN CGO_ENABLED=0 GOOS=linux go build -o /opt/go-pot/go-pot
 #
-FROM alpine:3.20
+FROM scratch
 #
 COPY --from=builder /opt/go-pot/go-pot /opt/go-pot/go-pot
 COPY --from=builder /opt/go-pot/config.yml /opt/go-pot/config.yml
