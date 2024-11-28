@@ -1,0 +1,36 @@
+rules:
+  - match: tcp dst port 23 or port 2323 or port 23231
+    type: conn_handler
+    target: telnet
+  - match: tcp dst port 1883
+    type: conn_handler
+    target: mqtt
+  - match: tcp dst port 6969
+    type: conn_handler
+    target: bittorrent
+  - match: tcp dst port 25
+    type: conn_handler
+    target: smtp
+  - match: tcp dst port 3389
+    type: conn_handler
+    target: rdp
+  - match: tcp dst port 445
+    type: conn_handler
+    target: smb
+  - match: tcp dst port 21
+    type: conn_handler
+    target: ftp
+  - match: tcp dst port 5060
+    type: conn_handler
+    target: sip
+  - match: tcp dst port 5222 or port 5223
+    type: conn_handler
+    target: jabber
+  - match: tcp dst port 11211
+    type: conn_handler
+    target: memcache
+  - match: tcp
+    type: conn_handler
+    target: tcp
+  - match: udp
+    type: drop
