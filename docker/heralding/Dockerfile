@@ -1,4 +1,4 @@
-FROM alpine:3.19
+FROM alpine:3.20
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -30,10 +30,9 @@ RUN apk --no-cache -U add \
 # Setup heralding
     mkdir -p /opt && \
     cd /opt/ && \
-#    git clone https://github.com/johnnykv/heralding && \
-    git clone https://github.com/t3chn0m4g3/heralding && \
+    git clone https://github.com/johnnykv/heralding && \
     cd heralding && \
-    git checkout e863c8aa4cee6dd6308ccb20b2d6c816a0fda2a5 && \
+    git checkout ac12724ab38c4e2fe78f07d1bc35e6e586ba69c0 && \
     cp /root/dist/requirements.txt . && \
     pip3 install --break-system-packages --upgrade pip && \
     pip3 install --break-system-packages --no-cache-dir -r requirements.txt && \
