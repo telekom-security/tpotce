@@ -8,6 +8,15 @@
    "filter":"",
    "interface":"",
    "honeypots":{
+      "dhcp":{
+         "port":67,
+         "ip":"0.0.0.0",
+         "username":"administrator",
+         "password":"123456",
+         "log_file_name":"dhcp.log",
+         "max_bytes":0,
+         "backup_count":10
+      },
       "dns":{
          "port":53,
          "ip":"0.0.0.0",
