@@ -85,6 +85,7 @@ RUN apk --no-cache -U add build-base \
             libxslt-dev \
             mariadb-dev \
             pkgconfig \
+            py3-pip \
             python3-dev \
             wget && \
     rm -rf /root/* \

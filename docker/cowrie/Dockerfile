@@ -45,8 +45,8 @@ RUN apk --no-cache -U add \
     git checkout 49c7c4aac87603e0d2449501c300841a1f59fd0f && \
     mkdir -p log && \
     cp /root/dist/requirements.txt . && \
-    pip3 install --break-system-packages --upgrade pip && \
-    pip3 install --break-system-packages -r requirements.txt && \
+    pip3 install --break-system-packages --upgrade --no-cache-dir pip && \
+    pip3 install --break-system-packages --no-cache-dir -r requirements.txt && \
 #
 # Setup configs
     setcap cap_net_bind_service=+ep $(readlink -f $(type -P python3)) && \
