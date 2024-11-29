@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND noninteractive
 #
 # Install packages
@@ -10,27 +10,29 @@ RUN apt-get update -y && \
 		git \
 		libcap2 \
 		libcap2-bin \
-		libcurl4 \
-		libcurl4-nss-dev \
-		libffi7 \
+		libcurl4t64 \
+		libcurl4-gnutls-dev \
+		libffi8 \
 		libffi-dev \
 		libssl-dev \
 		python3-pip \
 		python3 \
 		python3-dev \
 		rust-all && \
-    pip3 install --upgrade pip && \
-    pip3 install poetry pycurl && \
+	pip3 install --no-cache-dir --break-system-packages \
+		poetry \
+		pycurl && \
 #	     
 # Install log4pot from GitHub and setup
     mkdir -p /opt /var/log/log4pot && \
     cd /opt/ && \
-    git clone https://github.com/thomaspatzke/Log4Pot && \
+    #git clone https://github.com/thomaspatzke/Log4Pot && \
+	git clone https://github.com/t3chn0m4g3/Log4Pot && \
     cd Log4Pot && \
-    # git checkout fac539f470217347e51127c635f16749a887c0ac && \
-    git checkout e224c0f786efb68b4aab892e69857e379b75b0c6 && \
+    git checkout 31115d1ed0e78560672c597cb1e09d0f7ee5ab19 && \
     sed -i 's#"type": logtype,#"reason": logtype,#g' log4pot-server.py && \
-    poetry install && \
+	# rm poetry.lock && \
+	poetry --no-cache install && \
 	setcap cap_net_bind_service=+ep $(readlink -f $(which python3)) && \
 #
 # Setup user, groups and configs
@@ -42,9 +44,11 @@ RUN apt-get update -y && \
     apt-get purge -y build-essential \
 		cargo \
 		git \
+		libcurl4-gnutls-dev \
 		libffi-dev \
 		libssl-dev \
 		python3-dev \
+		python3-pip \
 		rust-all && \
     apt-get autoremove -y --purge && \
     apt-get clean && \
