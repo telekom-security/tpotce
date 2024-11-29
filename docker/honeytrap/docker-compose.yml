@@ -15,6 +15,6 @@ services:
     image: "dtagdevsec/honeytrap:24.04"
     read_only: true
     volumes:
-     - /data/honeytrap/attacks:/opt/honeytrap/var/attacks
-     - /data/honeytrap/downloads:/opt/honeytrap/var/downloads
-     - /data/honeytrap/log:/opt/honeytrap/var/log
+     - $HOME/tpotce/data/honeytrap/attacks:/opt/honeytrap/var/attacks
+     - $HOME/tpotce/data/honeytrap/downloads:/opt/honeytrap/var/downloads
+     - $HOME/tpotce/data/honeytrap/log:/opt/honeytrap/var/log

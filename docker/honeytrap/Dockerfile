@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM ubuntu:24.10
 ENV DEBIAN_FRONTEND noninteractive
 #
 # Include dist
@@ -6,6 +6,7 @@ COPY dist/ /root/dist/
 #
 # Install packages
 RUN apt-get update && \
+    apt-get -y dist-upgrade && \
 #
 # Install packages
     apt-get install -y autoconf \
@@ -25,10 +26,8 @@ RUN apt-get update && \
                        wget && \
 #
 # Install honeytrap from source
-#    git clone https://github.com/armedpot/honeytrap /root/honeytrap && \
     git clone https://github.com/t3chn0m4g3/honeytrap /root/honeytrap && \
     cd /root/honeytrap/ && \
-#    git checkout 9aa4f734f2ea2f0da790b02d79afe18204a23982 && \
     autoreconf -vfi && \
     ./configure \
       --with-stream-mon=nfq \
