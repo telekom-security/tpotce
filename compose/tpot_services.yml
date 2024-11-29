@@ -429,25 +429,25 @@ services:
      - ${TPOT_DATA_PATH}/galah/cert:/opt/galah/config/cert
      - ${TPOT_DATA_PATH}/galah/log:/opt/galah/log
 
-# # Glutton service
-  # glutton:
-    # container_name: glutton
-    # restart: always
-    # depends_on:
-      # tpotinit:
-        # condition: service_healthy
-    # tmpfs:
-     # - /var/lib/glutton:uid=2000,gid=2000
-     # - /run:uid=2000,gid=2000
-    # network_mode: "host"
-    # cap_add:
-     # - NET_ADMIN
-    # image: ${TPOT_REPO}/glutton:${TPOT_VERSION}
-    # pull_policy: ${TPOT_PULL_POLICY}
-    # read_only: true
-    # volumes:
-     # - ${TPOT_DATA_PATH}/glutton/log:/var/log/glutton
-     # - ${TPOT_DATA_PATH}/glutton/payloads:/opt/glutton/payloads
+# Glutton service
+  glutton:
+    container_name: glutton
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+    tmpfs:
+     - /var/lib/glutton:uid=2000,gid=2000
+     - /run:uid=2000,gid=2000
+    network_mode: "host"
+    cap_add:
+     - NET_ADMIN
+    image: ${TPOT_REPO}/glutton:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    read_only: true
+    volumes:
+     - ${TPOT_DATA_PATH}/glutton/log:/var/log/glutton
+     - ${TPOT_DATA_PATH}/glutton/payloads:/opt/glutton/payloads
 
 # Go-pot service
   go-pot:
@@ -514,19 +514,19 @@ services:
     networks:
      - heralding_local
     ports:
-    # - "21:21"
-    # - "22:22"
-    # - "23:23"
-    # - "25:25"
-    # - "80:80"
+     - "21:21"
+     - "22:22"
+     - "23:23"
+     - "25:25"
+     - "80:80"
      - "110:110"
      - "143:143"
-    # - "443:443"
+     - "443:443"
      - "465:465"
      - "993:993"
      - "995:995"
-    # - "3306:3306"
-    # - "3389:3389"
+     - "3306:3306"
+     - "3389:3389"
      - "1080:1080"
      - "5432:5432"
      - "5900:5900"
@@ -572,6 +572,7 @@ services:
      - "23:23"
      - "25:25"
      - "53:53/udp"
+     - "67:67/udp"
      - "80:80"
      - "110:110"
      - "123:123"

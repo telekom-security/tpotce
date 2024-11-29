@@ -3,18 +3,18 @@ RUN <<EOF
 apk -U add git
 mkdir -p /opt
 cd /opt
-git clone https://github.com/t3chn0m4g3/go-pot
+git clone https://github.com/ryanolee/go-pot
+cd go-pot
+git checkout fbb3e66e454e5f6092b4294a52e2cfa44e5b7259
 EOF
 WORKDIR /opt/go-pot
 #
-RUN go get github.com/ua-parser/uap-go/uaparser
-RUN go mod download
 RUN CGO_ENABLED=0 GOOS=linux go build -o /opt/go-pot/go-pot
 #
 FROM scratch
 #
 COPY --from=builder /opt/go-pot/go-pot /opt/go-pot/go-pot
-COPY --from=builder /opt/go-pot/config.yml /opt/go-pot/config.yml
+COPY dist/config.yml /opt/go-pot/config.yml
 #
 STOPSIGNAL SIGINT
 USER 2000:2000
