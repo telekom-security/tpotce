@@ -45,8 +45,9 @@ RUN apk --no-cache -U add \
     mkdir -p /opt \
              /var/log/honeypots && \
     cd /opt/ && \
-    git clone https://github.com/t3chn0m4g3/honeypots && \
+    git clone https://github.com/qeeqbox/honeypots && \
     cd honeypots && \
+	git checkout 238c6732d28b36ab88f2008361bafc8aef054755 && \
     pip3 install --break-system-packages --no-cache-dir . && \
     setcap cap_net_bind_service=+ep $(readlink -f $(type -P python3)) && \
 #

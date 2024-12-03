@@ -7,13 +7,9 @@ services:
   mailoney:
     build: .
     container_name: mailoney
+    stdin_open: true
+    tty: true
     restart: always
-    environment:
-     - HPFEEDS_SERVER=
-     - HPFEEDS_IDENT=user
-     - HPFEEDS_SECRET=pass
-     - HPFEEDS_PORT=20000
-     - HPFEEDS_CHANNELPREFIX=prefix
 #    cpu_count: 1
 #    cpus: 0.25
     networks:

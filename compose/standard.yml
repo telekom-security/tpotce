@@ -435,16 +435,12 @@ services:
 # Mailoney service
   mailoney:
     container_name: mailoney
+    stdin_open: true
+    tty: true
     restart: always
     depends_on:
       tpotinit:
         condition: service_healthy
-    environment:
-     - HPFEEDS_SERVER=
-     - HPFEEDS_IDENT=user
-     - HPFEEDS_SECRET=pass
-     - HPFEEDS_PORT=20000
-     - HPFEEDS_CHANNELPREFIX=prefix
     networks:
      - mailoney_local
     ports:

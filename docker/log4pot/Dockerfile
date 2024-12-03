@@ -26,10 +26,10 @@ RUN apt-get update -y && \
 # Install log4pot from GitHub and setup
     mkdir -p /opt /var/log/log4pot && \
     cd /opt/ && \
-    #git clone https://github.com/thomaspatzke/Log4Pot && \
-	git clone https://github.com/t3chn0m4g3/Log4Pot && \
+    git clone https://github.com/thomaspatzke/Log4Pot && \
+	#git clone https://github.com/t3chn0m4g3/Log4Pot && \
     cd Log4Pot && \
-    git checkout 31115d1ed0e78560672c597cb1e09d0f7ee5ab19 && \
+    git checkout 5002b1fe0f82359ef32dbc3a899e8a701dc3256e && \
     sed -i 's#"type": logtype,#"reason": logtype,#g' log4pot-server.py && \
 	# rm poetry.lock && \
 	poetry --no-cache install && \
