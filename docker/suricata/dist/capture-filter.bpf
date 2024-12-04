@@ -1,3 +1,5 @@
 not (host sicherheitstacho.eu or community.sicherheitstacho.eu or listbot.sicherheitstacho.eu) and
-not (tcp port 64294) and
-not (tcp port 64305)
+not (tcp port 64294 or tcp port 64305) and
+not (udp port 138 or udp port 5353) and
+not (ip broadcast or ip multicast or ip6 multicast) and
+not ip proto 2

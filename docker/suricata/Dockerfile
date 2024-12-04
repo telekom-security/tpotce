@@ -4,7 +4,8 @@ FROM alpine:edge
 COPY dist/ /root/dist/
 #
 # Install packages
-RUN apk --no-cache -U add \
+RUN apk --no-cache -U upgrade && \
+    apk --no-cache -U add \
 		ca-certificates \
 		curl \
 		file \
