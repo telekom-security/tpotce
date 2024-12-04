@@ -17,10 +17,8 @@ RUN apk --no-cache -U add \
 RUN git clone https://github.com/nsmfoo/dicompot.git && \
     cd dicompot && \
     git checkout 41331194156bbb17078bcc1594f4952ac06a731e && \
-    cp /root/dist/go.mod . && \
-    pwd && ls -alR
+    cp /root/dist/go.mod .
 WORKDIR /go/dicompot
-RUN ls -alR
 RUN go mod tidy
 RUN go mod download
 RUN go build -o dicompot github.com/nsmfoo/dicompot/server

@@ -1,4 +1,4 @@
-FROM golang:1.21-alpine as builder
+FROM golang:1.23-alpine as builder
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -20,19 +20,14 @@ RUN apk --no-cache -U add \
     go mod download && \
     go install
 #
-FROM alpine:3.19
+FROM alpine:3.20
 #
 # Setup redishoneypot
 #
 COPY --from=builder /opt/go/bin/RedisHoneyPot /opt/redishoneypot/
 COPY --from=builder /root/dist/redis.conf /opt/redishoneypot/
 #
-# Setup user, groups and configs
-RUN addgroup -g 2000 redishoneypot && \
-    adduser -S -s /bin/ash -u 2000 -D -g 2000 redishoneypot && \
-    mkdir -p /var/log/redishoneypot
-#
 # Start redishoneypot
 WORKDIR /opt/redishoneypot
-USER redishoneypot:redishoneypot
+USER 2000:2000
 CMD ./RedisHoneyPot > /var/log/redishoneypot/redishoneypot.log 2>&1

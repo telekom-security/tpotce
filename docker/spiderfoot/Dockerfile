@@ -1,4 +1,4 @@
-FROM alpine:3.19
+FROM alpine:3.20
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -62,9 +62,9 @@ RUN apk --no-cache -U add \
     git clone https://github.com/smicallef/spiderfoot /home/spiderfoot && \
     cd /home/spiderfoot && \
     git checkout 0f815a203afebf05c98b605dba5cf0475a0ee5fd && \
-    pip3 install --break-system-packages --upgrade pip && \
+    pip3 install --no-cache-dir --break-system-packages --upgrade pip && \
     cp /root/dist/requirements.txt . && \
-    pip3 install --break-system-packages --no-cache-dir -r requirements.txt && \ 
+    pip3 install --no-cache-dir --break-system-packages --no-cache-dir -r requirements.txt && \ 
     mkdir -p /home/spiderfoot/.spiderfoot/logs && \
     chown -R spiderfoot:spiderfoot /home/spiderfoot && \
     sed -i "s#'root': '\/'#'root': '\/spiderfoot'#" /home/spiderfoot/sf.py && \

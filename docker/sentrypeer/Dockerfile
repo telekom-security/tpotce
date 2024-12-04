@@ -1,7 +1,8 @@
 FROM alpine:edge
 #
 # Install packages
-RUN apk -U add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/testing \
+RUN apk -U upgrade --no-cache && \
+	apk -U add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/testing \
 		sentrypeer && \
 #
 # Setup user, groups and configs
