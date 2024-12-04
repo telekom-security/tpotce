@@ -2,7 +2,7 @@
 FROM node:18-alpine as builder
 #
 # Prep and build Cyberchef
-ENV CY_VER=v10.8.2
+ENV CY_VER=v10.19.4
 RUN apk -U --no-cache add build-base git python3 && \
     chown -R node:node /srv && \
     npm install -g grunt-cli
