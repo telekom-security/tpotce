@@ -4,7 +4,8 @@ FROM alpine:edge
 COPY dist/ /opt/tpot/
 #
 # Install packages
-RUN apk --no-cache -U add \
+RUN apk --no-cache -U upgrade && \
+    apk --no-cache -U add \
         aria2 \
         apache2-utils \
         bash \
@@ -18,7 +19,6 @@ RUN apk --no-cache -U add \
         grep \
         iproute2 \
         iptables \
-#        iptables-legacy \
         jq \
         logrotate \
         lsblk \
