@@ -4,7 +4,8 @@ FROM alpine:3.17
 COPY dist/ /root/dist/
 #
 # Install packages
-RUN apk --no-cache -U add \
+RUN apk --no-cache -U upgrade && \
+    apk --no-cache -U add \
 		build-base \
 		git \
 		libcap \
@@ -31,7 +32,6 @@ RUN apk --no-cache -U add \
 		python3-dev && \ 
 #
 # Setup Tanner
-#    git clone https://github.com/t3chn0m4g3/tanner /opt/tanner && \
 	git clone https://github.com/mushorg/tanner /opt/tanner && \
     cd /opt/tanner/ && \
     git checkout 245d628f4023e5462c7035e760a6b5eed0a33fbe && \
@@ -64,7 +64,7 @@ RUN apk --no-cache -U add \
             git \
             libcap \
             libffi-dev \
-#            libressl-dev \
+            openssl-dev \
             linux-headers \
             python3-dev && \
     rm -rf /root/* \

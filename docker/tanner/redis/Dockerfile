@@ -1,10 +1,11 @@
-FROM alpine:3.19
+FROM alpine:3.20
 #
 # Include dist
 COPY dist/ /root/dist/
 #
 # Install packages
-RUN apk --no-cache -U add redis shadow && \
+RUN apk --no-cache -U upgrade && \
+    apk --no-cache -U add redis shadow && \
     cp /root/dist/redis.conf /etc && \
 #
 # Setup user and group

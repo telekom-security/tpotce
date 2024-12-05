@@ -4,7 +4,8 @@ FROM alpine:3.19
 COPY dist/ /root/dist/
 #
 # Install packages
-RUN apk --no-cache -U add \
+RUN apk --no-cache -U upgrade && \
+    apk --no-cache -U add \
 		build-base \
 		git \
 		linux-headers \
@@ -23,7 +24,6 @@ RUN apk --no-cache -U add \
 # Setup Snare 
     git clone https://github.com/mushorg/snare /opt/snare && \
     cd /opt/snare/ && \
-    # git checkout 0919a80838eb0823a3b7029b0264628ee0a36211 && \
 	git checkout 08c69b7165354ea2040b6170c37d92ff3c304f96 && \
     cp /root/dist/requirements.txt . && \
     pip3 install --break-system-packages --no-cache-dir -r requirements.txt && \
@@ -31,7 +31,6 @@ RUN apk --no-cache -U add \
     cd / && \
     rm -rf /opt/snare && \
     mkdir -p /opt/snare/pages && \
-#    clone --target http://example.com && \
     mv /root/dist/pages/* /opt/snare/pages/ && \
 #
 # Setup configs, user, groups
@@ -52,5 +51,4 @@ RUN apk --no-cache -U add \
 # Start snare
 STOPSIGNAL SIGKILL
 USER snare:snare
-#CMD snare --tanner tanner --debug true --no-dorks true --auto-update false --host-ip 0.0.0.0 --port 80 --page-dir $(shuf -i 1-10 -n 1)
 CMD snare --tanner tanner --debug true --auto-update false --host-ip 0.0.0.0 --port 80 --page-dir $(shuf -i 1-10 -n 1)
