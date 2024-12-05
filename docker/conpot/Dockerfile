@@ -4,7 +4,9 @@ FROM alpine:3.19
 COPY dist/ /root/dist/
 #
 # Install packages
-RUN apk --no-cache -U add build-base \
+RUN apk --no-cache -U upgrade && \
+    apk --no-cache -U add \
+            build-base \
 			cython \
 			file \
 			git \
@@ -44,12 +46,12 @@ RUN apk --no-cache -U add build-base \
 # Setup ConPot
     git clone https://github.com/t3chn0m4g3/cpppo /opt/cpppo && \
     cd /opt/cpppo && \
+    git checkout 350d5187a941e7359c53087dcb1f0e41ece5682c && \
     pip3 install --break-system-packages --no-cache-dir --upgrade pip && \
     pip3 install --break-system-packages --no-cache-dir . && \
     git clone https://github.com/mushorg/conpot /opt/conpot && \
     cd /opt/conpot/ && \
 	git checkout 26c67d11b08a855a28e87abd186d959741f46c7f && \
-    # git checkout b3740505fd26d82473c0d7be405b372fa0f82575 && \
     # Change template default ports if <1024
     sed -i 's/port="2121"/port="21"/' /opt/conpot/conpot/templates/default/ftp/ftp.xml && \
     sed -i 's/port="8800"/port="80"/' /opt/conpot/conpot/templates/default/http/http.xml && \
@@ -90,7 +92,9 @@ RUN apk --no-cache -U add build-base \
             wget && \
     rm -rf /root/* \
            /tmp/* \
-           /var/cache/apk/*
+           /var/cache/apk/* \
+           /opt/cpppo/.git \
+           /opt/conpot/.git
 #
 # Start conpot
 STOPSIGNAL SIGINT

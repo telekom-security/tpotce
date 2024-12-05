@@ -1,7 +1,8 @@
 FROM alpine:3.20
 #
 # Install packages
-RUN apk --no-cache -U add \
+RUN apk --no-cache -U upgrade && \
+    apk --no-cache -U add \
 		build-base \
 		git \
 		libcap \
@@ -28,7 +29,8 @@ RUN apk --no-cache -U add \
     apk del --purge build-base \
 		git \
 		python3-dev && \
-    rm -rf /root/* /var/cache/apk/* /opt/t-pot-attack-map/.git
+    rm -rf /root/* /var/cache/apk/* \
+           /opt/t-pot-attack-map/.git
 #
 # Start T-Pot-Attack-Map
 ENV TZ=UTC

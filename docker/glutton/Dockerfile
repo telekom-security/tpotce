@@ -4,7 +4,8 @@ FROM golang:1.23-alpine AS builder
 COPY dist/ /root/dist/
 # 
 # Setup apk
-RUN apk -U --no-cache add \
+RUN apk --no-cache -U upgrade && \
+	apk -U --no-cache add \
 		make \
   		git \
 		g++ \

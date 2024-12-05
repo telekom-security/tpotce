@@ -5,7 +5,8 @@ ENV KB_VER=8.14.2
 COPY dist/ /root/dist/
 #
 # Install packages
-RUN apk --no-cache -U add \
+RUN apk --no-cache -U upgrade && \
+    apk --no-cache -U add \
             aria2 \
             curl \
             gcompat && \

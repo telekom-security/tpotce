@@ -1,13 +1,13 @@
 FROM alpine:3.20 AS builder
 #
 # Install packages
-RUN apk --no-cache -U add \
+RUN apk --no-cache -U upgrade && \
+    apk --no-cache -U add \
         build-base \
 		git \
 		openssl \
 		py3-pip \
 		python3 && \
-#
     pip3 install --break-system-packages --no-cache-dir \
         pyinstaller \
         python-json-logger
@@ -15,7 +15,7 @@ RUN apk --no-cache -U add \
 # Install CitrixHoneypot from GitHub
 RUN git clone https://github.com/t3chn0m4g3/CitrixHoneypot /opt/citrixhoneypot && \
     cd /opt/citrixhoneypot && \
-#
+    git checkout dee32447033a0296d053e8f881bf190f9dd7ad44 && \
     mkdir -p /opt/citrixhoneypot/logs /opt/citrixhoneypot/ssl && \
     openssl req \
           -nodes \
@@ -31,6 +31,7 @@ WORKDIR /opt/citrixhoneypot
 RUN pyinstaller CitrixHoneypot.py
 #
 FROM alpine:3.20
+RUN apk --no-cache -U upgrade
 COPY --from=builder /opt/citrixhoneypot/dist/CitrixHoneypot/ /opt/citrixhoneypot
 COPY --from=builder /opt/citrixhoneypot/ssl /opt/citrixhoneypot/ssl
 COPY --from=builder /opt/citrixhoneypot/responses/ /opt/citrixhoneypot/responses

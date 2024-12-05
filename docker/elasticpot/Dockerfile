@@ -4,7 +4,8 @@ FROM alpine:3.20 AS builder
 COPY dist/ /root/dist/
 #
 # Install packages
-RUN apk --no-cache -U add \
+RUN apk --no-cache -U upgrade && \
+	apk --no-cache -U add \
 		build-base \
 		ca-certificates \
 		git \
@@ -42,6 +43,7 @@ RUN pyinstaller elasticpot.py \
 		--hidden-import output_plugins.jsonlog
 #
 FROM alpine:3.20
+RUN apk --no-cache -U upgrade
 COPY --from=builder /opt/elasticpot/dist/ /opt/
 COPY --from=builder /opt/elasticpot/responses/ /opt/elasticpot/responses/
 COPY --from=builder /root/dist/honeypot.cfg /opt/elasticpot/etc/

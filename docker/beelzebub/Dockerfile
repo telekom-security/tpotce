@@ -10,7 +10,9 @@ RUN apk -U add git
 WORKDIR /root
 #
 # Build beelzebub
-RUN git clone https://github.com/t3chn0m4g3/beelzebub
+RUN git clone https://github.com/t3chn0m4g3/beelzebub && \
+    cd beelzebub && \
+    git checkout 17a0854b8d9d1e41cf5435b5dc85354bbfb9093c
 WORKDIR /root/beelzebub
 RUN go mod download
 RUN go build -o main .

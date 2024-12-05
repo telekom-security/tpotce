@@ -1,7 +1,8 @@
 FROM alpine:3.20
 #
 # Install packages
-RUN apk --no-cache -U add \
+RUN apk --no-cache -U upgrade && \
+    apk --no-cache -U add \
 		git \
 		libcap \
 		py3-libxml2 \
@@ -22,7 +23,7 @@ RUN apk --no-cache -U add \
     cd fatt && \
     git checkout c29e553514281e50781f86932b82337a5ada5640 && \
     mkdir -p log && \
-    pip3 install --break-system-packages pyshark && \
+    pip3 install --no-cache-dir --break-system-packages pyshark && \
 #
 # Setup configs
     chgrp fatt /usr/bin/dumpcap && \

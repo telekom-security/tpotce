@@ -1,7 +1,8 @@
 FROM alpine:3.20 AS builder
 #
 # Install packages
-RUN apk --no-cache -U add \
+RUN apk --no-cache -U upgrade && \
+	apk --no-cache -U add \
 		build-base \
 		git \
 		libffi \
@@ -17,6 +18,7 @@ RUN apk --no-cache -U add \
     cd /opt/ && \
     git clone https://github.com/t3chn0m4g3/ciscoasa_honeypot && \
     cd ciscoasa_honeypot && \
+	git checkout 4bd2795cfa14320a87c00b7159fa3b7d6a8ba254 && \
     sed -i "s/git+git/git+https/g" requirements.txt && \
     pip3 install --break-system-packages pyinstaller && \
     pip3 install --break-system-packages --no-cache-dir -r requirements.txt
@@ -24,6 +26,7 @@ WORKDIR /opt/ciscoasa_honeypot
 RUN pyinstaller asa_server.py --add-data "./asa:./asa"
 #
 FROM alpine:3.20
+RUN apk --no-cache -U upgrade
 COPY --from=builder /opt/ciscoasa_honeypot/dist/ /opt/
 #
 # Start ciscoasa

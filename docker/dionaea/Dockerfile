@@ -4,7 +4,6 @@ ENV DEBIAN_FRONTEND noninteractive
 # Include dist
 COPY dist/ /root/dist/
 #
-
 # Determine arch, get and install packages
 RUN ARCH=$(arch) && \
       if [ "$ARCH" = "x86_64" ]; then ARCH="amd64"; fi && \
@@ -13,10 +12,11 @@ RUN ARCH=$(arch) && \
     cd /root/dist/ && \
 # Setup apt
     apt-get update -y && \
+    apt-get upgrade -y && \
     apt-get install wget -y && \
     wget http://ftp.us.debian.org/debian/pool/main/libe/libemu/libemu2_0.2.0+git20120122-1.2+b1_$ARCH.deb \
          http://ftp.us.debian.org/debian/pool/main/libe/libemu/libemu-dev_0.2.0+git20120122-1.2+b1_$ARCH.deb && \
-    apt install ./libemu2_0.2.0+git20120122-1.2+b1_$ARCH.deb \
+    apt-get install ./libemu2_0.2.0+git20120122-1.2+b1_$ARCH.deb \
                 ./libemu-dev_0.2.0+git20120122-1.2+b1_$ARCH.deb -y && \
     apt-get install -y --no-install-recommends \
 		build-essential \

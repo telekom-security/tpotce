@@ -17,7 +17,7 @@ RUN apk -U add --no-cache \
     mv /opt/endlessh/endlessh /root/dist
 #
 FROM alpine:3.20
-#
+RUN apk --no-cache -U upgrade
 COPY --from=builder /root/dist/* /opt/endlessh/
 #
 STOPSIGNAL SIGINT

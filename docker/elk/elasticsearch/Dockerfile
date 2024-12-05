@@ -7,6 +7,7 @@ COPY dist/ /root/dist/
 #
 # Install packages
 RUN	apt-get update -y && \
+    apt-get upgrade -y && \
     apt-get install -y \
 			adduser \
             aria2 \
@@ -18,15 +19,11 @@ RUN	apt-get update -y && \
       if [ "$ARCH" = "aarch64" ]; then ES_ARCH="arm64"; fi && \
     echo "$ARCH" && \
     cd /root/dist/ && \
-    mkdir -p /usr/share/elasticsearch/config /etc/elasticsearch && \
+    mkdir -p /usr/share/elasticsearch/config \
+             /etc/elasticsearch && \
     cp elasticsearch.yml /etc/elasticsearch/ && \
     aria2c -s 16 -x 16 https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-$ES_VER-$ES_ARCH.deb && \
     dpkg --force-confold -i elasticsearch-$ES_VER-$ES_ARCH.deb && \
-#
-# Add and move files
-#    rm -rf /usr/share/elasticsearch/modules/x-pack-ml && \
-#    mkdir -p /usr/share/elasticsearch/config && \
-#    cp elasticsearch.yml /etc/elasticsearch/ && \
 #
 # Setup user, groups and configs
     groupmod -g 2000 elasticsearch && \

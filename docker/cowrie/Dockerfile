@@ -4,7 +4,8 @@ FROM alpine:3.20
 COPY dist/ /root/dist/
 #
 # Install packages
-RUN apk --no-cache -U add \
+RUN apk --no-cache -U upgrade && \
+    apk --no-cache -U add \
 		bash \
 		build-base \
 		git \

@@ -4,7 +4,8 @@ FROM alpine:3.20 AS builder
 COPY dist/ /root/dist/
 #
 # Install packages
-RUN apk --no-cache -U add \
+RUN apk --no-cache -U upgrade && \
+    apk --no-cache -U add \
 		build-base \
 		git \
 		py3-colorama \
@@ -22,6 +23,7 @@ RUN apk --no-cache -U add \
     cd /opt/ && \
     git clone https://github.com/t3chn0m4g3/ddospot && \
     cd ddospot && \
+    git checkout 66b94f3cf56c66e2e26b55feff9e65493cfadf3c && \
     cp /root/dist/requirements.txt . && \
     pip3 install --break-system-packages -r ddospot/requirements.txt && \
     pip3 install --break-system-packages pyinstaller
@@ -51,6 +53,7 @@ RUN pyinstaller ddospot.py \
        --hidden-import OpenSSL.SSL
 #
 FROM alpine:3.20
+RUN apk --no-cache -U upgrade
 COPY --from=builder /opt/ddospot/ddospot/dist/ddospot/ /opt/ddospot/ddospot
 COPY --from=builder /opt/ddospot/ddospot/global.conf /opt/ddospot/ddospot/
 COPY --from=builder /opt/ddospot/ddospot/pots /opt/ddospot/ddospot/pots
