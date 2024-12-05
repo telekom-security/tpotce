@@ -4,7 +4,8 @@ FROM alpine:3.20
 COPY dist/ /root/dist/
 #
 # Install packages
-RUN apk --no-cache -U add \
+RUN apk --no-cache -U upgrade && \
+	apk --no-cache -U add \
 		build-base \
 		git \
 		libcap \
@@ -34,7 +35,7 @@ RUN apk --no-cache -U add \
     cd heralding && \
     git checkout ac12724ab38c4e2fe78f07d1bc35e6e586ba69c0 && \
     cp /root/dist/requirements.txt . && \
-    pip3 install --break-system-packages --upgrade pip && \
+    pip3 install --break-system-packages --no-cache-dir --upgrade pip && \
     pip3 install --break-system-packages --no-cache-dir -r requirements.txt && \
     pip3 install --break-system-packages --no-cache-dir . && \
 #

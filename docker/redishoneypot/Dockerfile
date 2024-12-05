@@ -4,7 +4,8 @@ FROM golang:1.23-alpine as builder
 COPY dist/ /root/dist/
 #
 # Install packages
-RUN apk --no-cache -U add \
+RUN apk --no-cache -U upgrade && \
+    apk --no-cache -U add \
 		build-base \
 		git \
 		go \

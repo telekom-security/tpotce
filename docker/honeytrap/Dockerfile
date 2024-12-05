@@ -6,7 +6,7 @@ COPY dist/ /root/dist/
 #
 # Install packages
 RUN apt-get update && \
-    apt-get -y dist-upgrade && \
+    apt-get -y upgrade && \
 #
 # Install packages
     apt-get install -y autoconf \
@@ -28,6 +28,7 @@ RUN apt-get update && \
 # Install honeytrap from source
     git clone https://github.com/t3chn0m4g3/honeytrap /root/honeytrap && \
     cd /root/honeytrap/ && \
+    git checkout 9b63a5452ed3d5004ca714a7965218c25226a504 && \
     autoreconf -vfi && \
     ./configure \
       --with-stream-mon=nfq \

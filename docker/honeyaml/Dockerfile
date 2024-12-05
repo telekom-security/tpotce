@@ -1,8 +1,15 @@
 FROM rust:latest AS builder
 #
-RUN apt update && apt install -y git musl-tools musl-dev libzstd-dev
+RUN apt update && \
+    apt upgrade -y && \
+    apt install -y git \
+                    musl-tools \
+                    musl-dev \
+                    libzstd-dev
 RUN update-ca-certificates
-RUN git clone https://github.com/t3chn0m4g3/honeyaml /opt/honeyaml
+RUN git clone https://github.com/t3chn0m4g3/honeyaml /opt/honeyaml && \
+    cd /opt/honeyaml && \
+    git checkout 9648c27bb31ad554ccabfdd9aeb77028219f24b0
 #
 WORKDIR /opt/honeyaml
 # Need to dynamically link, otherwise multi platform builds are breaking with zstd-sys

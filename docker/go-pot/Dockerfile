@@ -1,11 +1,12 @@
 FROM golang:1.23-alpine AS builder
 RUN <<EOF
+apk -U upgrade
 apk -U add git
 mkdir -p /opt
 cd /opt
-git clone https://github.com/ryanolee/go-pot
+git clone https://github.com/t3chn0m4g3/go-pot
 cd go-pot
-git checkout fbb3e66e454e5f6092b4294a52e2cfa44e5b7259
+git checkout 75a2cae856642fdccf3e9d47d0733cf4190ba70b
 EOF
 WORKDIR /opt/go-pot
 #

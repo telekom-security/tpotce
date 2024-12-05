@@ -5,7 +5,8 @@ ENV GO111MODULE=on \
     GOOS=linux
 #
 # Install packages
-RUN apk --no-cache -U add \
+RUN apk --no-cache -U upgrade && \
+    apk --no-cache -U add \
         build-base \
         git \
         g++

@@ -4,7 +4,8 @@ FROM alpine:3.20 AS builder
 COPY dist/ /root/dist/
 #
 # Install packages
-RUN apk --no-cache -U add \
+RUN apk --no-cache -U upgrade && \
+	apk --no-cache -U add \
 		build-base \
 		ca-certificates \
 		git \
@@ -45,6 +46,7 @@ RUN pyinstaller ipphoney.py \
 		--hidden-import output_plugins.jsonlog
 #
 FROM alpine:3.20
+RUN apk --no-cache -U upgrade
 COPY --from=builder /opt/ipphoney/dist/ /opt/
 COPY --from=builder /opt/ipphoney/responses/ /opt/ipphoney/responses/
 COPY dist/honeypot.cfg /opt/ipphoney/etc/

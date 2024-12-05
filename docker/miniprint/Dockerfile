@@ -1,7 +1,8 @@
 FROM alpine:3.20 AS builder
 #
 # Install packages
-RUN apk --no-cache -U add \
+RUN apk --no-cache -U upgrade && \
+	apk --no-cache -U add \
 	build-base \
 	git \	
 	python3 \
@@ -18,6 +19,7 @@ RUN pyinstaller server.py \
 		--add-data "./uploads:./uploads"
 #
 FROM alpine:3.20
+RUN apk --no-cache -U upgrade
 COPY --from=builder /opt/miniprint/dist/* /opt/miniprint/
 COPY --from=builder /opt/miniprint/fake-files/ /opt/miniprint/fake-files/
 COPY --from=builder /opt/miniprint/uploads/ /opt/miniprint/uploads/
