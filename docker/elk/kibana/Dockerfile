@@ -1,5 +1,5 @@
 FROM node:20.13.1-alpine3.20
-ENV KB_VER=8.14.2
+ENV KB_VER=8.16.1
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -20,10 +20,11 @@ RUN apk --no-cache -U upgrade && \
     aria2c -s 16 -x 16 https://artifacts.elastic.co/downloads/kibana/kibana-$KB_VER-linux-$KB_ARCH.tar.gz && \
     mkdir -p /usr/share/kibana && \
     tar xvfz kibana-$KB_VER-linux-$KB_ARCH.tar.gz --strip-components=1 -C /usr/share/kibana/ && \
+    echo "hello" && \
 #
 # Kibana's bundled node does not work in build pipeline
-    rm /usr/share/kibana/node/bin/node && \
-    ln -s /usr/local/bin/node /usr/share/kibana/node/bin/node && \
+#    rm /usr/share/kibana/node/bin/node && \
+#    ln -s /usr/local/bin/node /usr/share/kibana/node/bin/node && \
 #
 # Setup user, groups and configs
     sed -i 's/#server.basePath: ""/server.basePath: "\/kibana"/' /usr/share/kibana/config/kibana.yml && \
