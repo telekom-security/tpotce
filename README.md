@@ -418,7 +418,7 @@ You can also login from your browser and access the T-Pot WebUI and tools: `http
 <br><br>
 
 ## Standalone First Start
-There is not much to do except to login and check via `dps.sh` if all services and honeypots are starting up correctly and login to Kibana and / or Geoip Attack Map to monitor the attacks.
+There is not much to do except to login and check via `dps` if all services and honeypots are starting up correctly and login to Kibana and / or Geoip Attack Map to monitor the attacks.
 <br><br>
 
 ## Distributed Deployment
@@ -702,7 +702,7 @@ git reset --hard
 <br><br>
 
 ## Show Containers
-You can show all T-Pot relevant containers by running `dps` or `dpsw [interval]`. The `interval (s)` will re-run `dps.sh` periodically.
+You can show all T-Pot relevant containers by running `dps` or `dpsw [interval]`. The `interval (s)` will re-run `dps` periodically.
 <br><br>
 
 ## Blackhole
