@@ -127,13 +127,13 @@ services:
       <<: *common-build
 
 # Glutton
-#  glutton:
-#    image: ${TPOT_DOCKER_REPO}/glutton:${TPOT_VERSION}
-##    build:
-#      tags:
-#        - ${TPOT_GHCR_REPO}/glutton:${TPOT_VERSION}
-#      context: ../glutton/
-#      <<: *common-build
+  glutton:
+    image: ${TPOT_DOCKER_REPO}/glutton:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/glutton:${TPOT_VERSION}
+      context: ../glutton/
+      <<: *common-build
 
 # Go-pot
   go-pot:

@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 
+# Got root?
+myWHOAMI=$(whoami)
+if [ "$myWHOAMI" != "root" ]
+  then
+    echo "Need to run as root ..."
+    exit
+fi
+
 # ANSI color codes for green (OK) and red (FAIL)
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -8,7 +16,7 @@ NC='\033[0m' # No Color
 # Default settings
 PUSH_IMAGES=false
 NO_CACHE=false
-PARALLELBUILDS=8
+PARALLELBUILDS=2
 UPLOAD_BANDWIDTH=40mbit # Set this to max 90% of available upload bandwidth
 INTERFACE=$(/sbin/ip address show | /usr/bin/awk '/inet.*brd/{ print $NF; exit }')
 
@@ -26,6 +34,8 @@ while getopts ":pnh" opt; do
     case ${opt} in
         p )
             PUSH_IMAGES=true
+            docker login
+            docker login ghcr.io
             ;;
         n )
             NO_CACHE=true
@@ -43,7 +53,7 @@ done
 # Function to apply upload bandwidth limit using tc
 apply_bandwidth_limit() {
     echo -n "Applying upload bandwidth limit of $UPLOAD_BANDWIDTH on interface $INTERFACE..."
-    if sudo tc qdisc add dev $INTERFACE root tbf rate $UPLOAD_BANDWIDTH burst 32kbit latency 400ms >/dev/null 2>&1; then
+    if tc qdisc add dev $INTERFACE root tbf rate $UPLOAD_BANDWIDTH burst 32kbit latency 400ms >/dev/null 2>&1; then
         echo -e " [${GREEN}OK${NC}]"
     else
         echo -e " [${RED}FAIL${NC}]"
@@ -51,7 +61,7 @@ apply_bandwidth_limit() {
 
         # Try to reapply the limit
         echo -n "Reapplying upload bandwidth limit of $UPLOAD_BANDWIDTH on interface $INTERFACE..."
-        if sudo tc qdisc add dev $INTERFACE root tbf rate $UPLOAD_BANDWIDTH burst 32kbit latency 400ms >/dev/null 2>&1; then
+        if tc qdisc add dev $INTERFACE root tbf rate $UPLOAD_BANDWIDTH burst 32kbit latency 400ms >/dev/null 2>&1; then
             echo -e " [${GREEN}OK${NC}]"
         else
             echo -e " [${RED}FAIL${NC}]"
@@ -64,14 +74,14 @@ apply_bandwidth_limit() {
 
 # Function to check if the bandwidth limit is set
 is_bandwidth_limit_set() {
-    sudo tc qdisc show dev $INTERFACE | grep -q 'tbf'
+    tc qdisc show dev $INTERFACE | grep -q 'tbf'
 }
 
 # Function to remove the bandwidth limit using tc if it is set
 remove_bandwidth_limit() {
     if is_bandwidth_limit_set; then
         echo -n "Removing upload bandwidth limit on interface $INTERFACE..."
-        if sudo tc qdisc del dev $INTERFACE root; then
+        if tc qdisc del dev $INTERFACE root; then
             echo -e " [${GREEN}OK${NC}]"
         else
             echo -e " [${RED}FAIL${NC}]"
