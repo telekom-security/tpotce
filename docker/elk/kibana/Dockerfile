@@ -1,4 +1,4 @@
-FROM node:20.13.1-alpine3.20
+FROM node:20.15.1-alpine3.20
 ENV KB_VER=8.16.1
 #
 # Include dist
@@ -22,8 +22,8 @@ RUN apk --no-cache -U upgrade && \
     tar xvfz kibana-$KB_VER-linux-$KB_ARCH.tar.gz --strip-components=1 -C /usr/share/kibana/ && \
 #
 # Kibana's bundled node does not work in build pipeline
-#    rm /usr/share/kibana/node/bin/node && \
-#    ln -s /usr/local/bin/node /usr/share/kibana/node/bin/node && \
+    rm /usr/share/kibana/node/glibc-217/bin/node && \
+    ln -s /usr/local/bin/node /usr/share/kibana/node/glibc-217/bin/node && \
 #
 # Setup user, groups and configs
     sed -i 's/#server.basePath: ""/server.basePath: "\/kibana"/' /usr/share/kibana/config/kibana.yml && \
