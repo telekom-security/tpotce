@@ -4,9 +4,7 @@ apk -U upgrade
 apk -U add git
 mkdir -p /opt
 cd /opt
-git clone https://github.com/t3chn0m4g3/go-pot
-cd go-pot
-git checkout 75a2cae856642fdccf3e9d47d0733cf4190ba70b
+git clone https://github.com/ryanolee/go-pot -b v1.0.0
 EOF
 WORKDIR /opt/go-pot
 #
