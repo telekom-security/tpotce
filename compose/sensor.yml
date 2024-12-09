@@ -7,7 +7,6 @@ networks:
   conpot_local_ipmi:
   conpot_local_kamstrup_382:
   cowrie_local:
-  ddospot_local:
   dicompot_local:
   dionaea_local:
   elasticpot_local:
@@ -220,29 +219,6 @@ services:
       - ${TPOT_DATA_PATH}/cowrie/keys:/home/cowrie/cowrie/etc
       - ${TPOT_DATA_PATH}/cowrie/log:/home/cowrie/cowrie/log
       - ${TPOT_DATA_PATH}/cowrie/log/tty:/home/cowrie/cowrie/log/tty
-
-# Ddospot service
-  ddospot:
-    container_name: ddospot
-    restart: always
-    depends_on:
-      tpotinit:
-        condition: service_healthy
-    networks:
-     - ddospot_local
-    ports:
-     - "19:19/udp"
-     - "53:53/udp"
-     - "123:123/udp"
-#     - "161:161/udp"
-     - "1900:1900/udp"
-    image: ${TPOT_REPO}/ddospot:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
-    read_only: true
-    volumes:
-     - ${TPOT_DATA_PATH}/ddospot/log:/opt/ddospot/ddospot/logs
-     - ${TPOT_DATA_PATH}/ddospot/bl:/opt/ddospot/ddospot/bl
-     - ${TPOT_DATA_PATH}/ddospot/db:/opt/ddospot/ddospot/db
 
 # Dicompot service
 # Get the Horos Client for testing: https://horosproject.org/
