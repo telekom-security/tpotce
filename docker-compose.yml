@@ -235,6 +235,7 @@ services:
     networks:
      - dicompot_local
     ports:
+     - "104:11112"
      - "11112:11112"
     image: ${TPOT_REPO}/dicompot:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
