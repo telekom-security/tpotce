@@ -56,7 +56,7 @@ server:
     #   - device_brand: The type of device of the client (Inferred from the user agent)
     #   - phase: "start" or "end" depending on the phase of the request
     #   - duration: The duration of the request in milliseconds (Only available as a part of the end phase of a request)
-    fields_to_log: "timestamp,id,status,src_ip,method,path,qs,dest_port,type,host,user_agent,browser,browser_version,os,os_version,device,device_brand,phase,duration"
+    fields_to_log: "timestamp,id,status,src_ip,method,path,qs,dest_port,host,user_agent,browser,browser_version,os,os_version,device,device_brand,phase,duration"
 
 # Configuration for logging related settings for go-pot
 logging:
