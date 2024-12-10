@@ -167,6 +167,8 @@ function fuUPDATER () {
 	fuPULLIMAGES
 	fuREMOVEOLDIMAGES "dtagdevsec/*:dev"
 	fuREMOVEOLDIMAGES "ghcr.io/telekom-security/*:dev"
+	fuREMOVEOLDIMAGES "dtagdevsec/*:24.04"
+	fuREMOVEOLDIMAGES "ghcr.io/telekom-security/*:24.04"
 	echo
 	echo "### If you made changes to docker-compose.yml please ensure to add them again."
 	echo "### We stored the previous version as backup in $myARCHIVE."
