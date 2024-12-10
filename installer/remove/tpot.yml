@@ -215,6 +215,21 @@
         - "Rocky"
         - "Ubuntu"
 
+    - name: Remove vm.max_map_count setting (All)
+      lineinfile:
+        path: /etc/sysctl.conf
+        line: "vm.max_map_count=262144"
+        state: absent
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "Rocky"
+        - "Ubuntu"
+
     - name: Remove T-Pot user (All)
       user:
         name: tpot
