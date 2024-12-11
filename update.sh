@@ -61,7 +61,7 @@ function fuSELFUPDATE () {
 	    return
 	fi
 	### DEV
-	myRESULT=$(git diff --name-only origin/24.04.1 | grep "^update.sh")
+	myRESULT=$(git diff --name-only origin/master | grep "^update.sh")
 	if [ "$myRESULT" == "update.sh" ];
 	  then
 	    echo "###### $myBLUE""Found newer version, will be pulling updates and restart myself.""$myWHITE"
