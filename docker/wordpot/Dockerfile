@@ -1,10 +1,11 @@
-FROM alpine:3.19
+FROM alpine:3.20 AS builder
 #
 # Include dist
 COPY dist/ /root/dist/
 #
 # Install packages
-RUN apk -U --no-cache add \
+RUN apk --no-cache -U upgrade && \
+	apk --no-cache -U add \
 		build-base \
 		git \
 		libcap \
@@ -18,31 +19,32 @@ RUN apk -U --no-cache add \
 		py3-werkzeug \
 		py3-yaml \
 		python3 \
-		python3-dev && \
+		python3-dev
 #	     
 # Install wordpot from GitHub and setup
-    mkdir -p /opt && \
+RUN mkdir -p /opt && \
     cd /opt/ && \
     git clone https://github.com/t3chn0m4g3/wordpot && \
     cd wordpot && \
-    git checkout 8fedeb1b74e1d225da2a7273656bf0afa84a20aa && \
-    cp /root/dist/requirements.txt . && \
-    pip3 install --break-system-packages -r requirements.txt && \
-    setcap cap_net_bind_service=+ep $(readlink -f $(type -P python3)) && \
+    git checkout b2701cb6c7057ed2843187c0c425bb8c13845719 && \
+    cp /root/dist/requirements.txt .
+WORKDIR /opt/wordpot
+RUN pip3 install --no-cache-dir --break-system-packages pyinstaller
+RUN	pip3 install --no-cache-dir --break-system-packages -r requirements.txt
+RUN pyinstaller wordpot.py \
+		--hidden-import hpfeeds \
+		--add-data "./wordpot/static:./wordpot/static" \
+		--add-data "./wordpot/templates:./wordpot/templates" \
+		--add-data "./wordpot/plugins:./wordpot/plugins" \
+		--add-data "./wordpot.conf:./"
+RUN ls -alR
 #
-# Setup user, groups and configs
-    addgroup -g 2000 wordpot && \
-    adduser -S -H -s /bin/ash -u 2000 -D -g 2000 wordpot && \
-    chown wordpot:wordpot -R /opt/wordpot && \
-#
-# Clean up
-    apk del --purge build-base \
-		git \
-		python3-dev && \
-    rm -rf /root/* /var/cache/apk/* /opt/wordpot/.git
+FROM alpine:3.20
+RUN apk --no-cache -U upgrade
+COPY --from=builder /opt/wordpot/dist /opt/
 #
 # Start wordpot
 STOPSIGNAL SIGINT
-USER wordpot:wordpot
-WORKDIR /opt/wordpot
-CMD ["/usr/bin/python3","wordpot.py", "--host", "0.0.0.0", "--port", "80", "--title", "Wordpress"]
+USER 2000:2000
+WORKDIR /opt/wordpot/
+CMD ["./wordpot", "--host", "0.0.0.0", "--port", "80", "--title", "Wordpress"]

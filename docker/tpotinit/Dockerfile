@@ -3,8 +3,9 @@ FROM alpine:edge
 # Include dist
 COPY dist/ /opt/tpot/
 #
-# Get and install dependencies & packages
-RUN apk --no-cache -U add \
+# Install packages
+RUN apk --no-cache -U upgrade && \
+    apk --no-cache -U add \
         aria2 \
         apache2-utils \
         bash \
@@ -18,7 +19,6 @@ RUN apk --no-cache -U add \
         grep \
         iproute2 \
         iptables \
-#        iptables-legacy \
         jq \
         logrotate \
         lsblk \
@@ -36,9 +36,10 @@ RUN apk --no-cache -U add \
 #
 # Clean up
     apk del --purge git && \
-    rm -rf /root/* /tmp/* && \
-    rm -rf /root/.cache /opt/tpot/.git && \
-    rm -rf /var/cache/apk/*
+    rm -rf /root/* /tmp/* \
+           /root/.cache \
+           /opt/tpot/.git \
+           /var/cache/apk/*
 #
 # Run tpotinit
 WORKDIR /opt/tpot

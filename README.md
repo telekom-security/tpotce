@@ -17,74 +17,82 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/in
    * Follow instructions, read messages, check for possible port conflicts and reboot
 
 <!-- TOC -->
-* [T-Pot - The All In One Multi Honeypot Platform](#t-pot---the-all-in-one-multi-honeypot-platform)
-* [TL;DR](#tldr)
-* [Disclaimer](#disclaimer)
-* [Technical Concept](#technical-concept)
-  * [Technical Architecture](#technical-architecture)
-  * [Services](#services)
-  * [User Types](#user-types)
-* [System Requirements](#system-requirements)
-  * [Running in a VM](#running-in-a-vm)
-  * [Running on Hardware](#running-on-hardware)
-  * [Running in a Cloud](#running-in-a-cloud)
-  * [Required Ports](#required-ports)
-* [System Placement](#system-placement)
-* [Installation](#installation)
-  * [Choose your distro](#choose-your-distro)
-  * [Raspberry Pi 4 (8GB) Support](#raspberry-pi-4-8gb-support)
-  * [Get and install T-Pot](#get-and-install-t-pot)
-  * [macOS & Windows](#macos--windows)
-  * [Installation Types](#installation-types)
-    * [Standard / HIVE](#standard--hive)
-    * [Distributed](#distributed)
-  * [Uninstall T-Pot](#uninstall-t-pot)
-* [First Start](#first-start)
-  * [Standalone First Start](#standalone-first-start)
-  * [Distributed Deployment](#distributed-deployment)
-    * [Planning and Certificates](#planning-and-certificates)
-    * [Deploying Sensors](#deploying-sensors)
-  * [Community Data Submission](#community-data-submission)
-  * [Opt-In HPFEEDS Data Submission](#opt-in-hpfeeds-data-submission)
-* [Remote Access and Tools](#remote-access-and-tools)
-  * [SSH](#ssh)
-  * [T-Pot Landing Page](#t-pot-landing-page-)
-  * [Kibana Dashboard](#kibana-dashboard)
-  * [Attack Map](#attack-map)
-  * [Cyberchef](#cyberchef)
-  * [Elasticvue](#elasticvue)
-  * [Spiderfoot](#spiderfoot)
-* [Configuration](#configuration)
-  * [T-Pot Config File](#t-pot-config-file)
-  * [Customize T-Pot Honeypots and Services](#customize-t-pot-honeypots-and-services)
-* [Maintenance](#maintenance)
-  * [General Updates](#general-updates)
-  * [Update Script](#update-script)
-  * [Daily Reboot](#daily-reboot)
-  * [Known Issues](#known-issues)
-    * [Docker Images Fail to Download](#docker-images-fail-to-download)
-    * [T-Pot Networking Fails](#t-pot-networking-fails)
-  * [Start T-Pot](#start-t-pot)
-  * [Stop T-Pot](#stop-t-pot)
-  * [T-Pot Data Folder](#t-pot-data-folder)
-  * [Log Persistence](#log-persistence)
-  * [Factory Reset](#factory-reset)
-  * [Show Containers](#show-containers)
-  * [Blackhole](#blackhole)
-  * [Add Users to Nginx (T-Pot WebUI)](#add-users-to-nginx-t-pot-webui)
-  * [Import and Export Kibana Objects](#import-and-export-kibana-objects)
-    * [Export](#export)
-    * [Import](#import)
-* [Troubleshooting](#troubleshooting)
-  * [Logs](#logs)
-  * [RAM and Storage](#ram-and-storage)
-* [Contact](#contact)
-  * [Issues](#issues)
-  * [Discussions](#discussions)
-* [Licenses](#licenses)
-* [Credits](#credits)
-    * [The developers and development communities of](#the-developers-and-development-communities-of)
-* [Testimonials](#testimonials)
+- [T-Pot - The All In One Multi Honeypot Platform](#t-pot---the-all-in-one-multi-honeypot-platform)
+- [TL;DR](#tldr)
+- [Disclaimer](#disclaimer)
+- [Technical Concept](#technical-concept)
+  - [Honeypots and Tools](#honeypots-and-tools)
+  - [Technical Architecture](#technical-architecture)
+  - [Services](#services)
+  - [User Types](#user-types)
+- [System Requirements](#system-requirements)
+  - [Running in a VM](#running-in-a-vm)
+  - [Running on Hardware](#running-on-hardware)
+  - [Running in a Cloud](#running-in-a-cloud)
+  - [Required Ports](#required-ports)
+  - [LLM-Based Honeypots](#llm-based-honeypots)
+    - [Ollama](#ollama)
+    - [ChatGPT](#chatgpt)
+- [System Placement](#system-placement)
+- [Installation](#installation)
+  - [Choose your distro](#choose-your-distro)
+  - [Raspberry Pi 4 (8GB) Support](#raspberry-pi-4-8gb-support)
+  - [Get and install T-Pot](#get-and-install-t-pot)
+  - [macOS \& Windows](#macos--windows)
+  - [Installation Types](#installation-types)
+    - [Standard / Hive](#standard--hive)
+    - [Distributed](#distributed)
+  - [Uninstall T-Pot](#uninstall-t-pot)
+- [First Start](#first-start)
+  - [Standalone First Start](#standalone-first-start)
+  - [Distributed Deployment](#distributed-deployment)
+    - [Planning and Certificates](#planning-and-certificates)
+    - [Deploying Sensors](#deploying-sensors)
+    - [Removing Sensors](#removing-sensors)
+  - [Community Data Submission](#community-data-submission)
+  - [Opt-In HPFEEDS Data Submission](#opt-in-hpfeeds-data-submission)
+- [Remote Access and Tools](#remote-access-and-tools)
+  - [SSH](#ssh)
+  - [T-Pot Landing Page](#t-pot-landing-page)
+  - [Kibana Dashboard](#kibana-dashboard)
+  - [Attack Map](#attack-map)
+  - [Cyberchef](#cyberchef)
+  - [Elasticvue](#elasticvue)
+  - [Spiderfoot](#spiderfoot)
+- [Configuration](#configuration)
+  - [T-Pot Config File](#t-pot-config-file)
+  - [Customize T-Pot Honeypots and Services](#customize-t-pot-honeypots-and-services)
+- [Maintenance](#maintenance)
+  - [General Updates](#general-updates)
+  - [Update Script](#update-script)
+  - [Daily Reboot](#daily-reboot)
+  - [Known Issues](#known-issues)
+    - [Docker Images Fail to Download](#docker-images-fail-to-download)
+    - [T-Pot Networking Fails](#t-pot-networking-fails)
+  - [Start T-Pot](#start-t-pot)
+  - [Stop T-Pot](#stop-t-pot)
+  - [T-Pot Data Folder](#t-pot-data-folder)
+  - [Log Persistence](#log-persistence)
+  - [Factory Reset](#factory-reset)
+  - [Show Containers](#show-containers)
+  - [Blackhole](#blackhole)
+  - [Add Users to Nginx (T-Pot WebUI)](#add-users-to-nginx-t-pot-webui)
+  - [Import and Export Kibana Objects](#import-and-export-kibana-objects)
+    - [Export](#export)
+    - [Import](#import)
+- [Troubleshooting](#troubleshooting)
+  - [Logs](#logs)
+  - [RAM and Storage](#ram-and-storage)
+- [Contact](#contact)
+  - [Issues](#issues)
+  - [Discussions](#discussions)
+- [Licenses](#licenses)
+- [Credits](#credits)
+  - [The developers and development communities of](#the-developers-and-development-communities-of)
+  - [**The following companies and organizations**](#the-following-companies-and-organizations)
+  - [**And of course ***YOU*** for joining the community!**](#and-of-course-you-for-joining-the-community)
+- [Testimonials](#testimonials)
+- [Thank you 💖](#thank-you-)
 <!-- TOC -->
 <br><br>
 
@@ -100,33 +108,40 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/in
 T-Pot's main components have been moved into the `tpotinit` Docker image allowing T-Pot to now support multiple Linux distributions, even macOS and Windows (although both limited to the feature set of Docker Desktop). T-Pot uses [docker](https://www.docker.com/) and [docker compose](https://docs.docker.com/compose/) to reach its goal of running as many honeypots and tools as possible simultaneously and thus utilizing the host's hardware to its maximum.
 <br><br>
 
-T-Pot offers docker images for the following honeypots ...
-* [adbhoney](https://github.com/huuck/ADBHoney),
-* [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot),
-* [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot),
-* [conpot](http://conpot.org/),
-* [cowrie](https://github.com/cowrie/cowrie),
-* [ddospot](https://github.com/aelth/ddospot),
-* [dicompot](https://github.com/nsmfoo/dicompot),
-* [dionaea](https://github.com/DinoTools/dionaea),
-* [elasticpot](https://gitlab.com/bontchev/elasticpot),
-* [endlessh](https://github.com/skeeto/endlessh),
-* [glutton](https://github.com/mushorg/glutton),
-* [hellpot](https://github.com/yunginnanet/HellPot),
-* [heralding](https://github.com/johnnykv/heralding),
-* [honeypots](https://github.com/qeeqbox/honeypots),
-* [honeytrap](https://github.com/armedpot/honeytrap/),
-* [ipphoney](https://gitlab.com/bontchev/ipphoney),
-* [log4pot](https://github.com/thomaspatzke/Log4Pot),
-* [mailoney](https://github.com/awhitehatter/mailoney),
-* [medpot](https://github.com/schmalle/medpot),
-* [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot),
-* [sentrypeer](https://github.com/SentryPeer/SentryPeer),
-* [snare](http://mushmush.org/),
-* [tanner](http://mushmush.org/),
-* [wordpot](https://github.com/gbrindisi/wordpot)
+## Honeypots and Tools
+- T-Pot offers docker images for the following honeypots:<br>
+[adbhoney](https://github.com/huuck/ADBHoney),
+[beelzebub](https://github.com/mariocandela/beelzebub),
+[ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot),
+[citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot),
+[conpot](http://conpot.org/),
+[cowrie](https://github.com/cowrie/cowrie),
+[ddospot](https://github.com/aelth/ddospot),
+[dicompot](https://github.com/nsmfoo/dicompot),
+[dionaea](https://github.com/DinoTools/dionaea),
+[elasticpot](https://gitlab.com/bontchev/elasticpot),
+[endlessh](https://github.com/skeeto/endlessh),
+[galah](https://github.com/0x4D31/galah),
+[go-pot](https://github.com/ryanolee/go-pot),
+[glutton](https://github.com/mushorg/glutton),
+[h0neytr4p](https://github.com/pbssubhash/h0neytr4p),
+[hellpot](https://github.com/yunginnanet/HellPot),
+[heralding](https://github.com/johnnykv/heralding),
+[honeyaml](https://github.com/mmta/honeyaml),
+[honeypots](https://github.com/qeeqbox/honeypots),
+[honeytrap](https://github.com/armedpot/honeytrap/),
+[ipphoney](https://gitlab.com/bontchev/ipphoney),
+[log4pot](https://github.com/thomaspatzke/Log4Pot),
+[mailoney](https://github.com/awhitehatter/mailoney),
+[medpot](https://github.com/schmalle/medpot),
+[miniprint](https://github.com/sa7mon/miniprint),
+[redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot),
+[sentrypeer](https://github.com/SentryPeer/SentryPeer),
+[snare](http://mushmush.org/),
+[tanner](http://mushmush.org/),
+[wordpot](https://github.com/gbrindisi/wordpot)
 
-... alongside the following tools ...
+Alongside the following tools:
 * [Autoheal](https://github.com/willfarrell/docker-autoheal) a tool to automatically restart containers with failed healthchecks.
 * [Cyberchef](https://gchq.github.io/CyberChef/) a web app for encryption, encoding, compression and data analysis.
 * [Elastic Stack](https://www.elastic.co/videos) to beautifully visualize all the events captured by T-Pot.
@@ -175,7 +190,7 @@ T-Pot offers a number of services which are basically divided into five groups:
 During the installation and during the usage of T-Pot there are two different types of accounts you will be working with. Make sure you know the differences of the different account types, since it is **by far** the most common reason for authentication errors.
 
 | Service          | Account Type | Username / Group | Description                                                        |
-|:-----------------|:-------------|:-----------------|:-------------------------------------------------------------------|
+| :--------------- | :----------- | :--------------- | :----------------------------------------------------------------- |
 | SSH              | OS           | `<OS_USERNAME>`  | The user you chose during the installation of the OS.              |
 | Nginx            | BasicAuth    | `<WEB_USER>`     | `<web_user>` you chose during the installation of T-Pot.           |
 | CyberChef        | BasicAuth    | `<WEB_USER>`     | `<web_user>` you chose during the installation of T-Pot.           |
@@ -193,10 +208,10 @@ During the installation and during the usage of T-Pot there are two different ty
 Depending on the [supported Linux distro images](#choose-your-distro), hive / sensor, installing on [real hardware](#running-on-hardware), in a [virtual machine](#running-in-a-vm) or other environments there are different kind of requirements to be met regarding OS, RAM, storage and network for a successful installation of T-Pot (you can always adjust `~/tpotce/docker-compose.yml` and `~/tpotce/.env`to your needs to overcome these requirements).
 <br><br>
 
-| T-Pot Type | RAM  | Storage    | Description                                                                                      |
-|:-----------|:-----|:-----------|:-------------------------------------------------------------------------------------------------|
-| Hive       | 16GB | 256GB SSD  | As a rule of thumb, the more sensors & data, the more RAM and storage is needed.                 |
-| Sensor     | 8GB  | 128GB SSD  | Since honeypot logs are persisted (~/tpotce/data) for 30 days, storage depends on attack volume. |
+| T-Pot Type | RAM  | Storage   | Description                                                                                      |
+| :--------- | :--- | :-------- | :----------------------------------------------------------------------------------------------- |
+| Hive       | 16GB | 256GB SSD | As a rule of thumb, the more honeypots, sensors & data, the more RAM and storage is needed.      |
+| Sensor     | 8GB  | 128GB SSD | Since honeypot logs are persisted (~/tpotce/data) for 30 days, storage depends on attack volume. |
 
 T-Pot does require ...
 - an IPv4 address via DHCP or statically assigned
@@ -235,12 +250,14 @@ Some users report working installations on other clouds and hosters, i.e. Azure 
 Besides the ports generally needed by the OS, i.e. obtaining a DHCP lease, DNS, etc. T-Pot will require the following ports for incoming / outgoing connections. Review the [T-Pot Architecture](#technical-architecture) for a visual representation. Also some ports will show up as duplicates, which is fine since used in different editions.
 
 | Port                                                                                                                                  | Protocol | Direction | Description                                                                                         |
-|:--------------------------------------------------------------------------------------------------------------------------------------|:---------|:----------|:----------------------------------------------------------------------------------------------------|
+| :------------------------------------------------------------------------------------------------------------------------------------ | :------- | :-------- | :-------------------------------------------------------------------------------------------------- |
 | 80, 443                                                                                                                               | tcp      | outgoing  | T-Pot Management: Install, Updates, Logs (i.e. OS, GitHub, DockerHub, Sicherheitstacho, etc.        |
+| 11434                                                                                                                                 | tcp      | outgoing  | LLM based honeypots: Access your Ollama installation                                                |
 | 64294                                                                                                                                 | tcp      | incoming  | T-Pot Management: Sensor data transmission to hive (through NGINX reverse proxy) to 127.0.0.1:64305 |
 | 64295                                                                                                                                 | tcp      | incoming  | T-Pot Management: Access to SSH                                                                     |
 | 64297                                                                                                                                 | tcp      | incoming  | T-Pot Management Access to NGINX reverse proxy                                                      |
 | 5555                                                                                                                                  | tcp      | incoming  | Honeypot: ADBHoney                                                                                  |
+| 22                                                                                                                                    | tcp      | incoming  | Honeypot: Beelzebub  (LLM required)                                                                 |
 | 5000                                                                                                                                  | udp      | incoming  | Honeypot: CiscoASA                                                                                  |
 | 8443                                                                                                                                  | tcp      | incoming  | Honeypot: CiscoASA                                                                                  |
 | 443                                                                                                                                   | tcp      | incoming  | Honeypot: CitrixHoneypot                                                                            |
@@ -253,13 +270,18 @@ Besides the ports generally needed by the OS, i.e. obtaining a DHCP lease, DNS, 
 | 69                                                                                                                                    | udp      | incoming  | Honeypot: Dionaea                                                                                   |
 | 9200                                                                                                                                  | tcp      | incoming  | Honeypot: Elasticpot                                                                                |
 | 22                                                                                                                                    | tcp      | incoming  | Honeypot: Endlessh                                                                                  |
+| 80, 443, 8080, 8443                                                                                                                   | tcp      | incoming  | Honeypot: Galah  (LLM required)                                                                     |
+| 8080                                                                                                                                  | tcp      | incoming  | Honeypot: Go-pot                                                                                    |
+| 80, 443                                                                                                                               | tcp      | incoming  | Honeypot: H0neytr4p                                                                                 |
 | 21, 22, 23, 25, 80, 110, 143, 443, 993, 995, 1080, 5432, 5900                                                                         | tcp      | incoming  | Honeypot: Heralding                                                                                 |
+| 3000                                                                                                                                  | tcp      | incoming  | Honeypot: Honeyaml                                                                                  |
 | 21, 22, 23, 25, 80, 110, 143, 389, 443, 445, 631, 1080, 1433, 1521, 3306, 3389, 5060, 5432, 5900, 6379, 6667, 8080, 9100, 9200, 11211 | tcp      | incoming  | Honeypot: qHoneypots                                                                                |
 | 53, 123, 161, 5060                                                                                                                    | udp      | incoming  | Honeypot: qHoneypots                                                                                |
 | 631                                                                                                                                   | tcp      | incoming  | Honeypot: IPPHoney                                                                                  |
 | 80, 443, 8080, 9200, 25565                                                                                                            | tcp      | incoming  | Honeypot: Log4Pot                                                                                   |
 | 25                                                                                                                                    | tcp      | incoming  | Honeypot: Mailoney                                                                                  |
 | 2575                                                                                                                                  | tcp      | incoming  | Honeypot: Medpot                                                                                    |
+| 9100                                                                                                                                  | tcp      | incoming  | Honeypot: Miniprint                                                                                 |
 | 6379                                                                                                                                  | tcp      | incoming  | Honeypot: Redishoneypot                                                                             |
 | 5060                                                                                                                                  | tcp/udp  | incoming  | Honeypot: SentryPeer                                                                                |
 | 80                                                                                                                                    | tcp      | incoming  | Honeypot: Snare (Tanner)                                                                            |
@@ -270,6 +292,16 @@ Ports and availability of SaaS services may vary based on your geographical loca
 
 For some honeypots to reach full functionality (i.e. Cowrie or Log4Pot) outgoing connections are necessary as well, in order for them to download the attacker's malware. Please see the individual honeypot's documentation to learn more by following the [links](#technical-concept) to their repositories.
 
+## LLM-Based Honeypots
+We think LLM-Based Honeypots mark the **beginning** of a game change for the deception / honeypot field. Consequently, starting with the release of **T-Pot 24.04.1**, two LLM-based honeypots, **Beelzebub** and **Galah**, have been introduced. These honeypots require an installation of **Ollama**, which needs to be configured in the [T-Pot configuration file](#t-pot-config-file). You can also adjust the settings in this file for **ChatGPT** support, but note that changes will also be required in the docker compose file (`~/tpotce/compose/llm.yml`) to accommodate these adjustments.<br><br>
+Follow the links in the [Honeypots and Tools](#honeypots-and-tools) section to find out more about **Beelzebub** and **Galah**.
+
+### Ollama
+🚨 **CPU-based usage is not recommended**, not even for testing.<br><br>
+To set up and run **Ollama**, refer to the [Ollama GitHub repository](https://github.com/ollama/ollama) for instructions. For entry-level or testing purposes, results can be achieved using a **Nvidia RTX 4060 Ti 16GB** or equivalent (AMD's ROCm is also supported by Ollama), with models like **openchat** and **Llama3**. As a general rule with LLM-based systems, the better and more hardware you use, the faster and more accurate the results will be, especially when tasks are offloaded to multiple GPUs and larger models.
+
+### ChatGPT
+ChatGPT support for these honeypots will remain untested in relation to T-Pot.
 <br><br>
 
 # System Placement
@@ -291,20 +323,20 @@ Once you are familiar with how things work you should choose a network you suspe
 4. Make sure to install SSH, so you can connect to the machine remotely.
 
 
-| Distribution Name                                                                  | x64                                                                                                                                    | arm64                                                                                                                                    |
-|:-----------------------------------------------------------------------------------|:---------------------------------------------------------------------------------------------------------------------------------------|:-----------------------------------------------------------------------------------------------------------------------------------------|
-| [Alma Linux OS 9.4 Boot ISO](https://almalinux.org)                                | [download](https://repo.almalinux.org/almalinux/9.4/isos/x86_64/AlmaLinux-9.4-x86_64-boot.iso)                                         | [download](https://repo.almalinux.org/almalinux/9.4/isos/aarch64/AlmaLinux-9.4-aarch64-boot.iso)                                         |
-| [Debian 12 Network Install](https://www.debian.org/CD/netinst/index.en.html)       | [download](https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-12.8.0-amd64-netinst.iso)                                  | [download](https://cdimage.debian.org/debian-cd/current/arm64/iso-cd/debian-12.8.0-arm64-netinst.iso)                                    |
-| [Fedora Server 40 Network Install](https://fedoraproject.org/server/download)      | [download](https://download.fedoraproject.org/pub/fedora/linux/releases/40/Server/x86_64/iso/Fedora-Server-netinst-x86_64-40-1.14.iso) | [download](https://download.fedoraproject.org/pub/fedora/linux/releases/40/Server/aarch64/iso/Fedora-Server-netinst-aarch64-40-1.14.iso) |
-| [OpenSuse Tumbleweed Network Image](https://get.opensuse.org/tumbleweed/#download) | [download](https://download.opensuse.org/tumbleweed/iso/openSUSE-Tumbleweed-NET-x86_64-Current.iso)                                    | [download](https://download.opensuse.org/ports/aarch64/tumbleweed/iso/openSUSE-Tumbleweed-NET-aarch64-Current.iso)                       |
-| [Rocky Linux OS 9.4 Boot ISO](https://rockylinux.org/download)                     | [download](https://download.rockylinux.org/pub/rocky/9.4/isos/x86_64/Rocky-9.4-x86_64-boot.iso)                                        | [download](https://download.rockylinux.org/pub/rocky/9.4/isos/aarch64/Rocky-9.4-aarch64-boot.iso)                                        |
-| [Ubuntu 24.04 Live Server](https://ubuntu.com/download/server)                     | [download](https://releases.ubuntu.com/24.04/ubuntu-24.04.1-live-server-amd64.iso)                                                       | [download](https://cdimage.ubuntu.com/releases/24.04/release/ubuntu-24.04.1-live-server-arm64.iso)                                         |
+| Distribution Name                                                                  | x64                                                                                                                                   | arm64                                                                                                                                   |
+| :--------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------ | :-------------------------------------------------------------------------------------------------------------------------------------- |
+| [Alma Linux OS 9.5 Boot ISO](https://almalinux.org)                                | [download](https://repo.almalinux.org/almalinux/9.5/isos/x86_64/AlmaLinux-9.5-x86_64-boot.iso)                                        | [download](https://repo.almalinux.org/almalinux/9.5/isos/aarch64/AlmaLinux-9.5-aarch64-boot.iso)                                        |
+| [Debian 12 Network Install](https://www.debian.org/CD/netinst/index.en.html)       | [download](https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-12.8.0-amd64-netinst.iso)                                 | [download](https://cdimage.debian.org/debian-cd/current/arm64/iso-cd/debian-12.8.0-arm64-netinst.iso)                                   |
+| [Fedora Server 41 Network Install](https://fedoraproject.org/server/download)      | [download](https://download.fedoraproject.org/pub/fedora/linux/releases/41/Server/x86_64/iso/Fedora-Server-netinst-x86_64-41-1.4.iso) | [download](https://download.fedoraproject.org/pub/fedora/linux/releases/41/Server/aarch64/iso/Fedora-Server-netinst-aarch64-41-1.4.iso) |
+| [OpenSuse Tumbleweed Network Image](https://get.opensuse.org/tumbleweed/#download) | [download](https://download.opensuse.org/tumbleweed/iso/openSUSE-Tumbleweed-NET-x86_64-Current.iso)                                   | [download](https://download.opensuse.org/ports/aarch64/tumbleweed/iso/openSUSE-Tumbleweed-NET-aarch64-Current.iso)                      |
+| [Rocky Linux OS 9.5 Boot ISO](https://rockylinux.org/download)                     | [download](https://download.rockylinux.org/pub/rocky/9/isos/x86_64/Rocky-9.5-x86_64-minimal.iso)                                      | [download](https://download.rockylinux.org/pub/rocky/9/isos/aarch64/Rocky-9.5-aarch64-minimal.iso)                                      |
+| [Ubuntu 24.04.1 Live Server](https://ubuntu.com/download/server)                   | [download](https://releases.ubuntu.com/24.04/ubuntu-24.04.1-live-server-amd64.iso)                                                    | [download](https://cdimage.ubuntu.com/releases/24.04/release/ubuntu-24.04.1-live-server-arm64.iso)                                      |
 
 <br>
 
 ## Raspberry Pi 4 (8GB) Support
 | Distribution Name                                                | arm64                                                                                                                                               |
-|:-----------------------------------------------------------------|:----------------------------------------------------------------------------------------------------------------------------------------------------|
+| :--------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [Raspberry Pi OS (**64Bit, Lite**)](https://www.raspberrypi.com) | [download](https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2024-03-15/2024-03-15-raspios-bookworm-arm64-lite.img.xz) |
 
 <br><br> 
@@ -351,16 +383,16 @@ To get things up and running just follow these steps:
 
 ## Installation Types
 
-### Standard / HIVE
-With T-Pot Standard / HIVE all services, tools, honeypots, etc. will be installed on to a single host which also serves as a HIVE endpoint. Make sure to meet the [system requirements](#system-requirements). You can adjust `~/tpotce/docker-compose.yml` to your personal use-case or create your very own configuration using `~/tpotce/compose/customizer.py` for a tailored T-Pot experience to your needs.
+### Standard / Hive
+With T-Pot Standard / Hive all services, tools, honeypots, etc. will be installed on to a single host which also serves as a Hive endpoint. Make sure to meet the [system requirements](#system-requirements). You can adjust `~/tpotce/docker-compose.yml` to your personal use-case or create your very own configuration using `~/tpotce/compose/customizer.py` for a tailored T-Pot experience to your needs.
 Once the installation is finished you can proceed to [First Start](#first-start).
 <br><br>
 
 ### Distributed
 The distributed version of T-Pot requires at least two hosts
-- the T-Pot **HIVE**, the standard installation of T-Pot (install this first!),
-- and a T-Pot **SENSOR**, which will host only the honeypots, some tools and transmit log data to the **HIVE**.
-- The **SENSOR** will not start before finalizing the **SENSOR** installation as described in [Distributed Deployment](#distributed-deployment).
+- the T-Pot **Hive**, the standard installation of T-Pot (install this first!),
+- and a T-Pot **Sensor**, which will host only the honeypots, some tools and transmit log data to the **Hive**.
+- The **Sensor** will not start before finalizing the **Sensor** installation as described in [Distributed Deployment](#distributed-deployment).
 <br><br>
 
 ## Uninstall T-Pot
@@ -386,14 +418,14 @@ You can also login from your browser and access the T-Pot WebUI and tools: `http
 <br><br>
 
 ## Standalone First Start
-There is not much to do except to login and check via `dps.sh` if all services and honeypots are starting up correctly and login to Kibana and / or Geoip Attack Map to monitor the attacks.
+There is not much to do except to login and check via `dps` if all services and honeypots are starting up correctly and login to Kibana and / or Geoip Attack Map to monitor the attacks.
 <br><br>
 
 ## Distributed Deployment
 ### Planning and Certificates
-The distributed deployment involves planning as **T-Pot Init** will only create a self-signed certificate for the IP of the **HIVE** host which usually is suitable for simple setups. Since **logstash** will check for a valid certificate upon connection, a distributed setup involving **HIVE** to be reachable on multiple IPs (i.e. RFC 1918 and public NAT IP) and maybe even a domain name will result in a connection error where the certificate cannot be validated as such a setup needs a certificate with a common name and SANs (Subject Alternative Name).<br>
+The distributed deployment involves planning as **T-Pot Init** will only create a self-signed certificate for the IP of the **Hive** host which usually is suitable for simple setups. Since **logstash** will check for a valid certificate upon connection, a distributed setup involving **Hive** to be reachable on multiple IPs (i.e. RFC 1918 and public NAT IP) and maybe even a domain name will result in a connection error where the certificate cannot be validated as such a setup needs a certificate with a common name and SANs (Subject Alternative Name).<br>
 Before deploying any sensors make sure you have planned out domain names and IPs properly to avoid issues with the certificate. For more details see [issue #1543](https://github.com/telekom-security/tpotce/issues/1543).<br>
-Adjust the example to your IP / domain setup and follow the commands to change the certificate of **HIVE**:
+Adjust the example to your IP / domain setup and follow the commands to change the certificate of **Hive**:
 
 ```
 sudo systemctl stop tpot
@@ -415,13 +447,13 @@ sudo chown tpot:tpot $HOME/tpotce/data/nginx/cert/*
 sudo systemctl start tpot
 ```
 
-The T-Pot configuration file (`.env`) does allow to disable the SSL verification for logstash connections from **SENSOR** to the **HIVE** by setting `LS_SSL_VERIFICATION=none`. For security reasons this is only recommended for lab or test environments.<br><br>
-If you choose to use a valid certificate for the **HIVE** signed by a CA (i.e. Let's Encrypt), logstash, and therefore the **SENSOR**, should have no problems to connect and transmit its logs to the **HIVE**.
+The T-Pot configuration file (`.env`) does allow to disable the SSL verification for logstash connections from **Sensor** to the **Hive** by setting `LS_SSL_VERIFICATION=none`. For security reasons this is only recommended for lab or test environments.<br><br>
+If you choose to use a valid certificate for the **Hive** signed by a CA (i.e. Let's Encrypt), logstash, and therefore the **Sensor**, should have no problems to connect and transmit its logs to the **Hive**.
 
 ### Deploying Sensors
-Once you have rebooted the **SENSOR** as instructed by the installer you can continue with the distributed deployment by logging into **HIVE** and go to `cd ~/tpotce` folder. Make sure you understood the [Planning and Certificates](#planning-and-certificates) before continuing with the actual deployment.
+Once you have rebooted the **Sensor** as instructed by the installer you can continue with the distributed deployment by logging into **Hive** and go to `cd ~/tpotce` folder. Make sure you understood the [Planning and Certificates](#planning-and-certificates) before continuing with the actual deployment.
 
-If you have not done already generate a SSH key to securely login to the **SENSOR** and to allow `Ansible` to run a playbook on the sensor:
+If you have not done already generate a SSH key to securely login to the **Sensor** and to allow `Ansible` to run a playbook on the sensor:
 1. Run `ssh-keygen`, follow the instructions and leave the passphrase empty:
    ```
    Generating public/private rsa key pair.
@@ -431,10 +463,10 @@ If you have not done already generate a SSH key to securely login to the **SENSO
    Your identification has been saved in /home/<your_user>/.ssh/id_rsa
    Your public key has been saved in /home/<your_user>/.ssh/id_rsa.pub
    ```
-2. Deploy the key to the SENSOR by running `ssh-copy-id -p 64295 <SENSOR_SSH_USER>@<SENSOR_IP>)`:
+2. Deploy the key to the Sensor by running `ssh-copy-id -p 64295 <Sensor_SSH_USER>@<Sensor_IP>)`:
    ```
    /usr/bin/ssh-copy-id: INFO: Source of key(s) to be installed: "/home/<your_user>/.ssh/id_rsa.pub"
-   The authenticity of host '[<SENSOR_IP>]:64295 ([<SENSOR_IP>]:64295)' can't be stablished.
+   The authenticity of host '[<Sensor_IP>]:64295 ([<Sensor_IP>]:64295)' can't be stablished.
    ED25519 key fingerprint is SHA256:naIDxFiw/skPJadTcgmWZQtgt+CdfRbUCoZn5RmkOnQ.
    This key is not known by any other names.
    Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
@@ -444,16 +476,16 @@ If you have not done already generate a SSH key to securely login to the **SENSO
   
    Number of key(s) added: 1
   
-   Now try logging into the machine, with:   "ssh -p '64295' '<your_user>@<SENSOR_IP>'"
+   Now try logging into the machine, with:   "ssh -p '64295' '<your_user>@<Sensor_IP>'"
    and check to make sure that only the key(s) you wanted were added.
    ```
-3. As suggested follow the instructions to test the connection `ssh -p '64295' '<your_user>@<SENSOR_IP>'`.
+3. As suggested follow the instructions to test the connection `ssh -p '64295' '<your_user>@<Sensor_IP>'`.
 4. Once the key is successfully deployed run `./deploy.sh` and follow the instructions.
 <br><br>
 
 ### Removing Sensors
-Identify the `TPOT_HIVE_USER` ENV on the SENSOR in the `$HOME/tpotce/.env` config (it is a base64 encoded string). Now identify the same string in the `LS_WEB_USER` ENV on the HIVE in the `$HOME/tpotce/.env` config. Remove the string and restart T-Pot.<br>
-Now you can safely delete the SENSOR machine.
+Identify the `TPOT_HIVE_USER` ENV on the Sensor in the `$HOME/tpotce/.env` config (it is a base64 encoded string). Now identify the same string in the `LS_WEB_USER` ENV on the Hive in the `$HOME/tpotce/.env` config. Remove the string and restart T-Pot.<br>
+Now you can safely delete the Sensor machine.
 
 ## Community Data Submission
 T-Pot is provided in order to make it accessible to everyone interested in honeypots. By default, the captured data is submitted to a community backend. This community backend uses the data to feed [Sicherheitstacho](https://sicherheitstacho.eu).
@@ -557,15 +589,16 @@ Before the first start run `~/tpotce/genuser.sh` or setup the `WEB_USER` manuall
 
 ## Customize T-Pot Honeypots and Services
 
-In `~/tpotce/compose` you will find everything you need to adjust the T-Pot Standard / HIVE installation:
+In `~/tpotce/compose` you will find everything you need to adjust the T-Pot Standard / Hive installation:
 ```
 customizer.py
+llm.yml
 mac_win.yml
 mini.yml
 mobile.yml
-raspberry_showcase.yml
 sensor.yml
 standard.yml
+tarpit.yml
 tpot_services.yml
 ```
 The `.yml` files are docker compose files, each representing a different set of honeypots and tools with `tpot_services.yml` being a template for `customizer.py` to create a customized docker compose file.<br><br>
@@ -669,7 +702,7 @@ git reset --hard
 <br><br>
 
 ## Show Containers
-You can show all T-Pot relevant containers by running `dps` or `dpsw [interval]`. The `interval (s)` will re-run `dps.sh` periodically.
+You can show all T-Pot relevant containers by running `dps` or `dpsw [interval]`. The `interval (s)` will re-run `dps` periodically.
 <br><br>
 
 ## Blackhole
@@ -755,74 +788,123 @@ Use the search function, it is possible a similar discussion has been opened alr
 
 # Licenses
 The software that T-Pot is built on uses the following licenses.
-<br>GPLv2: [conpot](https://github.com/mushorg/conpot/blob/master/LICENSE.txt), [dionaea](https://github.com/DinoTools/dionaea/blob/master/LICENSE), [honeytrap](https://github.com/armedpot/honeytrap/blob/master/LICENSE), [suricata](https://suricata.io/features/open-source/)
-<br>GPLv3: [adbhoney](https://github.com/huuck/ADBHoney), [elasticpot](https://gitlab.com/bontchev/elasticpot/-/blob/master/LICENSE), [ewsposter](https://github.com/telekom-security/ews/), [log4pot](https://github.com/thomaspatzke/Log4Pot/blob/master/LICENSE), [fatt](https://github.com/0x4D31/fatt/blob/master/LICENSE), [heralding](https://github.com/johnnykv/heralding/blob/master/LICENSE.txt), [ipphoney](https://gitlab.com/bontchev/ipphoney/-/blob/master/LICENSE), [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot/blob/main/LICENSE), [sentrypeer](https://github.com/SentryPeer/SentryPeer/blob/main/LICENSE.GPL-3.0-only), [snare](https://github.com/mushorg/snare/blob/master/LICENSE), [tanner](https://github.com/mushorg/snare/blob/master/LICENSE)
-<br>Apache 2 License: [cyberchef](https://github.com/gchq/CyberChef/blob/master/LICENSE), [dicompot](https://github.com/nsmfoo/dicompot/blob/master/LICENSE), [elasticsearch](https://github.com/elasticsearch/elasticsearch/blob/master/LICENSE.txt), [logstash](https://github.com/elasticsearch/logstash/blob/master/LICENSE), [kibana](https://github.com/elasticsearch/kibana/blob/master/LICENSE.md), [docker](https://github.com/docker/docker/blob/master/LICENSE)
-<br>MIT license: [autoheal](https://github.com/willfarrell/docker-autoheal?tab=MIT-1-ov-file#readme), [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/blob/master/LICENSE), [ddospot](https://github.com/aelth/ddospot/blob/master/LICENSE), [elasticvue](https://github.com/cars10/elasticvue/blob/master/LICENSE), [glutton](https://github.com/mushorg/glutton/blob/master/LICENSE), [hellpot](https://github.com/yunginnanet/HellPot/blob/master/LICENSE), [maltrail](https://github.com/stamparm/maltrail/blob/master/LICENSE)
-<br> Unlicense: [endlessh](https://github.com/skeeto/endlessh/blob/master/UNLICENSE)
-<br> Other: [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot#licencing-agreement-malwaretech-public-licence), [cowrie](https://github.com/cowrie/cowrie/blob/master/LICENSE.rst), [mailoney](https://github.com/awhitehatter/mailoney), [Elastic License](https://www.elastic.co/licensing/elastic-license), [Wordpot](https://github.com/gbrindisi/wordpot)
-<br> AGPL-3.0: [honeypots](https://github.com/qeeqbox/honeypots/blob/main/LICENSE)
-<br> [Public Domain (CC)](https://creativecommons.org/publicdomain/zero/1.0/): [Harvard Dataverse](https://dataverse.harvard.edu/dataverse/harvard/?q=dicom) 
+<br>GPLv2:
+[conpot](https://github.com/mushorg/conpot/blob/master/LICENSE.txt),
+[galah](https://github.com/0x4D31/galah?tab=Apache-2.0-1-ov-file#readme),
+[dionaea](https://github.com/DinoTools/dionaea/blob/master/LICENSE),
+[honeytrap](https://github.com/armedpot/honeytrap/blob/master/LICENSE),
+[suricata](https://suricata.io/features/open-source/)
+<br>GPLv3:
+[adbhoney](https://github.com/huuck/ADBHoney),
+[elasticpot](https://gitlab.com/bontchev/elasticpot/-/blob/master/LICENSE),
+[ewsposter](https://github.com/telekom-security/ews/),
+[log4pot](https://github.com/thomaspatzke/Log4Pot/blob/master/LICENSE),
+[fatt](https://github.com/0x4D31/fatt/blob/master/LICENSE),
+[heralding](https://github.com/johnnykv/heralding/blob/master/LICENSE.txt),
+[ipphoney](https://gitlab.com/bontchev/ipphoney/-/blob/master/LICENSE),
+[miniprint](https://github.com/sa7mon/miniprint?tab=GPL-3.0-1-ov-file#readme),
+[redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot/blob/main/LICENSE),
+[sentrypeer](https://github.com/SentryPeer/SentryPeer/blob/main/LICENSE.GPL-3.0-only),
+[snare](https://github.com/mushorg/snare/blob/master/LICENSE),
+[tanner](https://github.com/mushorg/snare/blob/master/LICENSE)
+<br>Apache 2 License:
+[cyberchef](https://github.com/gchq/CyberChef/blob/master/LICENSE),
+[dicompot](https://github.com/nsmfoo/dicompot/blob/master/LICENSE),
+[elasticsearch](https://github.com/elasticsearch/elasticsearch/blob/master/LICENSE.txt),
+[go-pot](https://github.com/ryanolee/go-pot?tab=License-1-ov-file#readme),
+[h0neytr4p](https://github.com/pbssubhash/h0neytr4p?tab=Apache-2.0-1-ov-file#readme),
+[logstash](https://github.com/elasticsearch/logstash/blob/master/LICENSE),
+[kibana](https://github.com/elasticsearch/kibana/blob/master/LICENSE.md),
+[docker](https://github.com/docker/docker/blob/master/LICENSE)
+<br>MIT license:
+[autoheal](https://github.com/willfarrell/docker-autoheal?tab=MIT-1-ov-file#readme),
+[beelzebub](https://github.com/mariocandela/beelzebub?tab=MIT-1-ov-file#readme),
+[ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/blob/master/LICENSE),
+[ddospot](https://github.com/aelth/ddospot/blob/master/LICENSE),
+[elasticvue](https://github.com/cars10/elasticvue/blob/master/LICENSE),
+[glutton](https://github.com/mushorg/glutton/blob/master/LICENSE),
+[hellpot](https://github.com/yunginnanet/HellPot/blob/master/LICENSE),
+[honeyaml](https://github.com/mmta/honeyaml?tab=MIT-1-ov-file#readme),
+[maltrail](https://github.com/stamparm/maltrail/blob/master/LICENSE)
+<br>Unlicense:
+[endlessh](https://github.com/skeeto/endlessh/blob/master/UNLICENSE)
+<br>Other:
+[citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot#licencing-agreement-malwaretech-public-licence),
+[cowrie](https://github.com/cowrie/cowrie/blob/master/LICENSE.rst),
+[mailoney](https://github.com/awhitehatter/mailoney),
+[Elastic License](https://www.elastic.co/licensing/elastic-license),
+[Wordpot](https://github.com/gbrindisi/wordpot)
+<br>AGPL-3.0:
+[honeypots](https://github.com/qeeqbox/honeypots/blob/main/LICENSE)
+<br>[Public Domain (CC)](https://creativecommons.org/publicdomain/zero/1.0/):
+[Harvard Dataverse](https://dataverse.harvard.edu/dataverse/harvard/?q=dicom) 
 <br><br>
 
 # Credits
 Without open source and the development community we are proud to be a part of, T-Pot would not have been possible! Our thanks are extended but not limited to the following people and organizations:
-
-### The developers and development communities of
-
-* [adbhoney](https://github.com/huuck/ADBHoney/graphs/contributors)
-* [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/graphs/contributors)
-* [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot/graphs/contributors)
-* [conpot](https://github.com/mushorg/conpot/graphs/contributors)
-* [cowrie](https://github.com/cowrie/cowrie/graphs/contributors)
-* [ddospot](https://github.com/aelth/ddospot/graphs/contributors)
-* [dicompot](https://github.com/nsmfoo/dicompot/graphs/contributors)
-* [dionaea](https://github.com/DinoTools/dionaea/graphs/contributors)
-* [docker](https://github.com/docker/docker/graphs/contributors)
-* [elasticpot](https://gitlab.com/bontchev/elasticpot/-/project_members)
-* [elasticsearch](https://github.com/elastic/elasticsearch/graphs/contributors)
-* [elasticvue](https://github.com/cars10/elasticvue/graphs/contributors)
-* [endlessh](https://github.com/skeeto/endlessh/graphs/contributors)
-* [ewsposter](https://github.com/armedpot/ewsposter/graphs/contributors)
-* [fatt](https://github.com/0x4D31/fatt/graphs/contributors)
-* [glutton](https://github.com/mushorg/glutton/graphs/contributors)
-* [hellpot](https://github.com/yunginnanet/HellPot/graphs/contributors)
-* [heralding](https://github.com/johnnykv/heralding/graphs/contributors)
-* [honeypots](https://github.com/qeeqbox/honeypots/graphs/contributors)
-* [honeytrap](https://github.com/armedpot/honeytrap/graphs/contributors)
-* [ipphoney](https://gitlab.com/bontchev/ipphoney/-/project_members)
-* [kibana](https://github.com/elastic/kibana/graphs/contributors)
-* [logstash](https://github.com/elastic/logstash/graphs/contributors)
-* [log4pot](https://github.com/thomaspatzke/Log4Pot/graphs/contributors)
-* [mailoney](https://github.com/awhitehatter/mailoney)
-* [maltrail](https://github.com/stamparm/maltrail/graphs/contributors)
-* [medpot](https://github.com/schmalle/medpot/graphs/contributors)
-* [p0f](http://lcamtuf.coredump.cx/p0f3/)
-* [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot/graphs/contributors)
-* [sentrypeer](https://github.com/SentryPeer/SentryPeer/graphs/contributors)
-* [spiderfoot](https://github.com/smicallef/spiderfoot)
-* [snare](https://github.com/mushorg/snare/graphs/contributors)
-* [tanner](https://github.com/mushorg/tanner/graphs/contributors)
-* [suricata](https://github.com/OISF/suricata/graphs/contributors)
-* [wordpot](https://github.com/gbrindisi/wordpot)
-
-**The following companies and organizations**
-* [docker](https://www.docker.com/)
-* [elastic.io](https://www.elastic.co/)
-* [honeynet project](https://www.honeynet.org/)
-
-**... and of course ***you*** for joining the community!**
 <br><br>
 
-Thank you for playing 💖
+## The developers and development communities of
+
+* [adbhoney](https://github.com/huuck/ADBHoney/graphs/contributors),
+[beelzebub](https://github.com/mariocandela/beelzebub/graphs/contributors),
+[ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/graphs/contributors),
+[citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot/graphs/contributors),
+[conpot](https://github.com/mushorg/conpot/graphs/contributors),
+[cowrie](https://github.com/cowrie/cowrie/graphs/contributors),
+[ddospot](https://github.com/aelth/ddospot/graphs/contributors),
+[dicompot](https://github.com/nsmfoo/dicompot/graphs/contributors),
+[dionaea](https://github.com/DinoTools/dionaea/graphs/contributors),
+[docker](https://github.com/docker/docker/graphs/contributors),
+[elasticpot](https://gitlab.com/bontchev/elasticpot/-/project_members),
+[elasticsearch](https://github.com/elastic/elasticsearch/graphs/contributors),
+[elasticvue](https://github.com/cars10/elasticvue/graphs/contributors),
+[endlessh](https://github.com/skeeto/endlessh/graphs/contributors),
+[ewsposter](https://github.com/armedpot/ewsposter/graphs/contributors),
+[fatt](https://github.com/0x4D31/fatt/graphs/contributors),
+[galah](https://github.com/0x4D31/galah/graphs/contributors),
+[glutton](https://github.com/mushorg/glutton/graphs/contributors),
+[go-pot](https://github.com/ryanolee/go-pot/graphs/contributors),
+[h0neytr4p](https://github.com/pbssubhash/h0neytr4p/graphs/contributors),
+[hellpot](https://github.com/yunginnanet/HellPot/graphs/contributors),
+[heralding](https://github.com/johnnykv/heralding/graphs/contributors),
+[honeyaml](https://github.com/mmta/honeyaml/graphs/contributors),
+[honeypots](https://github.com/qeeqbox/honeypots/graphs/contributors),
+[honeytrap](https://github.com/armedpot/honeytrap/graphs/contributors),
+[ipphoney](https://gitlab.com/bontchev/ipphoney/-/project_members),
+[kibana](https://github.com/elastic/kibana/graphs/contributors),
+[logstash](https://github.com/elastic/logstash/graphs/contributors),
+[log4pot](https://github.com/thomaspatzke/Log4Pot/graphs/contributors),
+[mailoney](https://github.com/awhitehatter/mailoney),
+[maltrail](https://github.com/stamparm/maltrail/graphs/contributors),
+[medpot](https://github.com/schmalle/medpot/graphs/contributors),
+[miniprint](https://github.com/sa7mon/miniprint/graphs/contributors),
+[p0f](http://lcamtuf.coredump.cx/p0f3/),
+[redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot/graphs/contributors),
+[sentrypeer](https://github.com/SentryPeer/SentryPeer/graphs/contributors),
+[spiderfoot](https://github.com/smicallef/spiderfoot),
+[snare](https://github.com/mushorg/snare/graphs/contributors),
+[tanner](https://github.com/mushorg/tanner/graphs/contributors),
+[suricata](https://github.com/OISF/suricata/graphs/contributors),
+[wordpot](https://github.com/gbrindisi/wordpot)
+<br><br>
+
+## **The following companies and organizations**
+* [docker](https://www.docker.com/),
+[elastic.io](https://www.elastic.co/),
+[honeynet project](https://www.honeynet.org/)
+<br><br>
+
+## **And of course ***YOU*** for joining the community!**
+<br>
 
 # Testimonials
 One of the greatest feedback we have gotten so far is by one of the Conpot developers:<br>
 ***"[...] I highly recommend T-Pot which is ... it's not exactly a swiss army knife .. it's more like a swiss army soldier, equipped with a swiss army knife. Inside a tank. A swiss tank. [...]"***
 <br><br>
+
 And from @robcowart (creator of [ElastiFlow](https://github.com/robcowart/elastiflow)):<br>
 ***"#TPot is one of the most well put together turnkey honeypot solutions. It is a must-have for anyone wanting to analyze and understand the behavior of malicious actors and the threat they pose to your organization."***
 <br><br>
-**Thank you!**
 
-![Alt](https://repobeats.axiom.co/api/embed/75368f879326a61370e485df52906ae0c1f59fbb.svg "Repobeats analytics image")
+# Thank you 💖

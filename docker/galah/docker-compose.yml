@@ -1,0 +1,33 @@
+networks:
+  galah_local:
+
+services:
+
+# Galah service
+  galah:
+    build: .
+    container_name: galah
+    restart: always
+#    cpu_count: 1
+#    cpus: 0.25
+    networks:
+     - galah_local
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8443:8443"
+      - "8080:8080"
+    image: dtagdevsec/galah:24.04
+    environment:
+      LLM_PROVIDER: "ollama"
+      LLM_SERVER_URL: "http://ollama.local:11434"
+      LLM_MODEL: "llama3.1"
+      # LLM_TEMPERATURE: ${GALAH_LLM_TEMPERATURE}
+      # LLM_API_KEY: ${GALAH_LLM_API_KEY}
+      # LLM_CLOUD_LOCATION: ${GALAH_LLM_CLOUD_LOCATION}
+      # LLM_CLOUD_PROJECT: ${GALAH_LLM_CLOUD_PROJECT}
+    read_only: true
+    volumes:
+     - $HOME/tpotce/data/galah/cache:/opt/galah/config/cache
+     - $HOME/tpotce/data/galah/cert:/opt/galah/config/cert
+     - $HOME/tpotce/data/galah/log:/opt/galah/log

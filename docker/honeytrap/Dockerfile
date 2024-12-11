@@ -1,12 +1,12 @@
-FROM ubuntu:22.04
+FROM ubuntu:24.10
 ENV DEBIAN_FRONTEND noninteractive
 #
 # Include dist
 COPY dist/ /root/dist/
 #
-# Setup apt
+# Install packages
 RUN apt-get update && \
-    apt-get update -y && \
+    apt-get -y upgrade && \
 #
 # Install packages
     apt-get install -y autoconf \
@@ -26,10 +26,9 @@ RUN apt-get update && \
                        wget && \
 #
 # Install honeytrap from source
-#    git clone https://github.com/armedpot/honeytrap /root/honeytrap && \
     git clone https://github.com/t3chn0m4g3/honeytrap /root/honeytrap && \
     cd /root/honeytrap/ && \
-#    git checkout 9aa4f734f2ea2f0da790b02d79afe18204a23982 && \
+    git checkout 9b63a5452ed3d5004ca714a7965218c25226a504 && \
     autoreconf -vfi && \
     ./configure \
       --with-stream-mon=nfq \
@@ -55,7 +54,12 @@ RUN apt-get update && \
                      libnetfilter-queue-dev \
                      libpq-dev && \
     apt-get autoremove -y --purge && \
-    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /root/.cache /root/* /opt/honeytrap/.git
+    apt-get clean && \
+        rm -rf /var/lib/apt/lists/* \
+            /tmp/* /var/tmp/* \
+            /root/.cache \
+            /root/* \
+            /opt/honeytrap/.git
 #
 # Start honeytrap
 USER honeytrap:honeytrap

@@ -4,6 +4,7 @@
 
 networks:
   adbhoney_local:
+  beelzebub_local:
   ciscoasa_local:
   citrixhoneypot_local:
   conpot_local_IEC104:
@@ -16,18 +17,23 @@ networks:
   dionaea_local:
   elasticpot_local:
   endlessh_local:
+  galah_local:
+  go-pot_local:
+  h0neytr4p_local:
   hellpot_local:
   heralding_local:
+  honeyaml_local:
   honeypots_local:
   ipphoney_local:
   log4pot_local:
   mailoney_local:
   medpot_local:
+  miniprint_local:
   redishoneypot_local:
   sentrypeer_local:
   tanner_local:
   wordpot_local:
-  spiderfoot_local:
+  nginx_local:
   ewsposter_local:
 
 services:
@@ -80,6 +86,34 @@ services:
     volumes:
      - ${TPOT_DATA_PATH}/adbhoney/log:/opt/adbhoney/log
      - ${TPOT_DATA_PATH}/adbhoney/downloads:/opt/adbhoney/dl
+
+# Beelzebub service
+  beelzebub:
+    container_name: beelzebub
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+#    cpu_count: 1
+#    cpus: 0.25
+    networks:
+     - beelzebub_local
+    ports:
+      - "22:22"
+    #  - "80:80"
+    #  - "2222:2222"
+    #  - "3306:3306"
+    #  - "8080:8080"
+    image: ${TPOT_REPO}/beelzebub:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    environment:
+      LLM_MODEL: ${BEELZEBUB_LLM_MODEL}
+      LLM_HOST: ${BEELZEBUB_LLM_HOST}
+      OLLAMA_MODEL: ${BEELZEBUB_OLLAMA_MODEL}
+    read_only: true
+    volumes:
+     - ${TPOT_DATA_PATH}/beelzebub/key:/opt/beelzebub/configurations/key
+     - ${TPOT_DATA_PATH}/beelzebub/log:/opt/beelzebub/configurations/log
 
 # Ciscoasa service
   ciscoasa:
@@ -280,6 +314,7 @@ services:
     networks:
      - dicompot_local
     ports:
+     - "104:11112"
      - "11112:11112"
     image: ${TPOT_REPO}/dicompot:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
@@ -363,25 +398,93 @@ services:
     volumes:
      - ${TPOT_DATA_PATH}/endlessh/log:/var/log/endlessh
 
-# # Glutton service
-  # glutton:
-    # container_name: glutton
-    # restart: always
-    # depends_on:
-      # tpotinit:
-        # condition: service_healthy
-    # tmpfs:
-     # - /var/lib/glutton:uid=2000,gid=2000
-     # - /run:uid=2000,gid=2000
-    # network_mode: "host"
-    # cap_add:
-     # - NET_ADMIN
-    # image: ${TPOT_REPO}/glutton:${TPOT_VERSION}
-    # pull_policy: ${TPOT_PULL_POLICY}
-    # read_only: true
-    # volumes:
-     # - ${TPOT_DATA_PATH}/glutton/log:/var/log/glutton
-     # - ${TPOT_DATA_PATH}/glutton/payloads:/opt/glutton/payloads
+# Galah service
+  galah:
+    container_name: galah
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+#    cpu_count: 1
+#    cpus: 0.25
+    networks:
+     - galah_local
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8443:8443"
+      - "8080:8080"
+    image: ${TPOT_REPO}/galah:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    environment:
+      LLM_PROVIDER: ${GALAH_LLM_PROVIDER}
+      LLM_SERVER_URL: ${GALAH_LLM_SERVER_URL}
+      LLM_MODEL: ${GALAH_LLM_MODEL}
+      # LLM_TEMPERATURE: ${GALAH_LLM_TEMPERATURE}
+      # LLM_API_KEY: ${GALAH_LLM_API_KEY}
+      # LLM_CLOUD_LOCATION: ${GALAH_LLM_CLOUD_LOCATION}
+      # LLM_CLOUD_PROJECT: ${GALAH_LLM_CLOUD_PROJECT}
+    read_only: true
+    volumes:
+     - ${TPOT_DATA_PATH}/galah/cache:/opt/galah/config/cache
+     - ${TPOT_DATA_PATH}/galah/cert:/opt/galah/config/cert
+     - ${TPOT_DATA_PATH}/galah/log:/opt/galah/log
+
+# Glutton service
+  glutton:
+    container_name: glutton
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+    tmpfs:
+     - /var/lib/glutton:uid=2000,gid=2000
+     - /run:uid=2000,gid=2000
+    network_mode: "host"
+    cap_add:
+     - NET_ADMIN
+    image: ${TPOT_REPO}/glutton:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    read_only: true
+    volumes:
+     - ${TPOT_DATA_PATH}/glutton/log:/var/log/glutton
+     - ${TPOT_DATA_PATH}/glutton/payloads:/opt/glutton/payloads
+
+# Go-pot service
+  go-pot:
+    container_name: go-pot
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+    networks:
+     - go-pot_local
+    ports:
+      - "8080:8080"
+    image: ${TPOT_REPO}/go-pot:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    read_only: true
+    volumes:
+     - ${TPOT_DATA_PATH}/go-pot/log:/opt/go-pot/log/
+
+# H0neytr4p service
+  h0neytr4p:
+    container_name: h0neytr4p
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+    networks:
+     - h0neytr4p_local
+    ports:
+      - "443:443"
+    # - "80:80"
+    image: ${TPOT_REPO}/h0neytr4p:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    read_only: true
+    volumes:
+      - ${TPOT_DATA_PATH}/h0neytr4p/log/:/opt/h0neytr4p/log/
+      - ${TPOT_DATA_PATH}/h0neytr4p/payloads/:/data/h0neytr4p/payloads/
 
 # Hellpot service
   hellpot:
@@ -412,19 +515,19 @@ services:
     networks:
      - heralding_local
     ports:
-    # - "21:21"
-    # - "22:22"
-    # - "23:23"
-    # - "25:25"
-    # - "80:80"
+     - "21:21"
+     - "22:22"
+     - "23:23"
+     - "25:25"
+     - "80:80"
      - "110:110"
      - "143:143"
-    # - "443:443"
+     - "443:443"
      - "465:465"
      - "993:993"
      - "995:995"
-    # - "3306:3306"
-    # - "3389:3389"
+     - "3306:3306"
+     - "3389:3389"
      - "1080:1080"
      - "5432:5432"
      - "5900:5900"
@@ -433,6 +536,23 @@ services:
     read_only: true
     volumes:
      - ${TPOT_DATA_PATH}/heralding/log:/var/log/heralding
+
+# Honeyaml service
+  honeyaml:
+    container_name: honeyaml
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+    networks:
+     - honeyaml_local
+    ports:
+      - "8080:8080"
+    image: ${TPOT_REPO}/honeyaml:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    read_only: true
+    volumes:
+     - ${TPOT_DATA_PATH}/honeyaml/log:/opt/honeyaml/log/
 
 # Honeypots service
   honeypots:
@@ -453,6 +573,7 @@ services:
      - "23:23"
      - "25:25"
      - "53:53/udp"
+     - "67:67/udp"
      - "80:80"
      - "110:110"
      - "123:123"
@@ -546,16 +667,12 @@ services:
 # Mailoney service
   mailoney:
     container_name: mailoney
+    stdin_open: true
+    tty: true
     restart: always
     depends_on:
       tpotinit:
         condition: service_healthy
-    environment:
-     - HPFEEDS_SERVER=
-     - HPFEEDS_IDENT=user
-     - HPFEEDS_SECRET=pass
-     - HPFEEDS_PORT=20000
-     - HPFEEDS_CHANNELPREFIX=prefix
     networks:
      - mailoney_local
     ports:
@@ -583,6 +700,24 @@ services:
     read_only: true
     volumes:
      - ${TPOT_DATA_PATH}/medpot/log/:/var/log/medpot
+
+# Miniprint service
+  miniprint:
+    container_name: miniprint
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+    networks:
+     - miniprint_local
+    ports:
+      - "9100:9100"
+    image: ${TPOT_REPO}/miniprint:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    read_only: true
+    volumes:
+     - ${TPOT_DATA_PATH}/miniprint/log/:/opt/miniprint/log/
+     - ${TPOT_DATA_PATH}/miniprint/uploads/:/opt/miniprint/uploads/
 
 # Redishoneypot service
   redishoneypot:
@@ -791,6 +926,8 @@ services:
     depends_on:
       tpotinit:
         condition: service_healthy
+    networks:
+     - nginx_local
     environment:
      - bootstrap.memory_lock=true
      - ES_JAVA_OPTS=-Xms2048m -Xmx2048m
@@ -819,6 +956,8 @@ services:
     depends_on:
       elasticsearch:
         condition: service_healthy
+    networks:
+     - nginx_local
     mem_limit: 1g
     ports:
      - "127.0.0.1:64296:5601"
@@ -832,6 +971,8 @@ services:
     depends_on:
       elasticsearch:
         condition: service_healthy
+    networks:
+     - nginx_local
     environment:
      - LS_JAVA_OPTS=-Xms1024m -Xmx1024m
      - TPOT_TYPE=${TPOT_TYPE:-HIVE}
@@ -853,6 +994,8 @@ services:
     depends_on:
       tpotinit:
         condition: service_healthy
+    networks:
+     - nginx_local
     stop_signal: SIGKILL
     tty: true
     image: ${TPOT_REPO}/redis:${TPOT_VERSION}
@@ -866,6 +1009,8 @@ services:
     depends_on:
       tpotinit:
         condition: service_healthy
+    networks:
+     - nginx_local
     environment:
      - MAP_COMMAND=AttackMapServer.py
     stop_signal: SIGKILL
@@ -882,6 +1027,8 @@ services:
     depends_on:
       elasticsearch:
         condition: service_healthy
+    networks:
+     - nginx_local
     environment:
      - MAP_COMMAND=DataServer_v2.py
      - TPOT_ATTACKMAP_TEXT=${TPOT_ATTACKMAP_TEXT}
@@ -933,9 +1080,11 @@ services:
      - /var/tmp/nginx/scgi
      - /run
      - /var/lib/nginx/tmp:uid=100,gid=82
-    network_mode: "host"
+    networks:
+     - nginx_local
     ports:
      - "64297:64297"
+     - "64294:64294"
     image: ${TPOT_REPO}/nginx:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
     read_only: true
@@ -953,7 +1102,7 @@ services:
       tpotinit:
         condition: service_healthy
     networks:
-     - spiderfoot_local
+     - nginx_local
     ports:
      - "127.0.0.1:64303:8080"
     image: ${TPOT_REPO}/spiderfoot:${TPOT_VERSION}

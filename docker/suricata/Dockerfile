@@ -4,7 +4,8 @@ FROM alpine:edge
 COPY dist/ /root/dist/
 #
 # Install packages
-RUN apk -U --no-cache add \
+RUN apk --no-cache -U upgrade && \
+    apk --no-cache -U add \
 		ca-certificates \
 		curl \
 		file \
@@ -30,9 +31,9 @@ RUN apk -U --no-cache add \
     suricata-update --no-test --no-reload && \
 #
 # Clean up
-    rm -rf /root/* && \
-    rm -rf /tmp/* && \
-    rm -rf /var/cache/apk/*
+    rm -rf /root/* \
+           /tmp/* \
+           /var/cache/apk/*
 #
 # Start suricata
 STOPSIGNAL SIGINT

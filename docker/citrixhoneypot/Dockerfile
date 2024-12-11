@@ -1,21 +1,21 @@
-FROM alpine:3.19
+FROM alpine:3.20 AS builder
 #
 # Install packages
-RUN apk --no-cache -U add \
+RUN apk --no-cache -U upgrade && \
+    apk --no-cache -U add \
+        build-base \
 		git \
-		libcap \
 		openssl \
 		py3-pip \
 		python3 && \
-#
-    pip3 install --break-system-packages --no-cache-dir python-json-logger && \
+    pip3 install --break-system-packages --no-cache-dir \
+        pyinstaller \
+        python-json-logger
 #
 # Install CitrixHoneypot from GitHub
-    git clone https://github.com/t3chn0m4g3/CitrixHoneypot /opt/citrixhoneypot && \
+RUN git clone https://github.com/t3chn0m4g3/CitrixHoneypot /opt/citrixhoneypot && \
     cd /opt/citrixhoneypot && \
-    git checkout f59ad7320dc5bbb8c23c8baa5f111b52c52fbef3 && \
-#
-# Setup user, groups and configs
+    git checkout dee32447033a0296d053e8f881bf190f9dd7ad44 && \
     mkdir -p /opt/citrixhoneypot/logs /opt/citrixhoneypot/ssl && \
     openssl req \
           -nodes \
@@ -25,20 +25,19 @@ RUN apk --no-cache -U add \
           -out "/opt/citrixhoneypot/ssl/cert.pem" \
           -days 365 \
           -subj '/C=AU/ST=Some-State/O=Internet Widgits Pty Ltd' && \
-    addgroup -g 2000 citrixhoneypot && \
-    adduser -S -H -s /bin/ash -u 2000 -D -g 2000 citrixhoneypot && \
-    chown -R citrixhoneypot:citrixhoneypot /opt/citrixhoneypot && \
-    setcap cap_net_bind_service=+ep $(readlink -f $(type -P python3)) && \
+    chown 2000:2000 -R ssl/
 #
-# Clean up
-    apk del --purge git \
-                    openssl && \
-    rm -rf /root/* && \
-    rm -rf /opt/citrixhoneypot/.git && \
-    rm -rf /var/cache/apk/*
+WORKDIR /opt/citrixhoneypot
+RUN pyinstaller CitrixHoneypot.py
+#
+FROM alpine:3.20
+RUN apk --no-cache -U upgrade
+COPY --from=builder /opt/citrixhoneypot/dist/CitrixHoneypot/ /opt/citrixhoneypot
+COPY --from=builder /opt/citrixhoneypot/ssl /opt/citrixhoneypot/ssl
+COPY --from=builder /opt/citrixhoneypot/responses/ /opt/citrixhoneypot/responses
 #
 # Set workdir and start citrixhoneypot
 STOPSIGNAL SIGINT
-USER citrixhoneypot:citrixhoneypot
+USER 2000:2000
 WORKDIR /opt/citrixhoneypot/
-CMD nohup /usr/bin/python3 CitrixHoneypot.py
+CMD nohup ./CitrixHoneypot

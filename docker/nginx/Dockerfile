@@ -1,10 +1,11 @@
-FROM alpine:3.19
+FROM alpine:3.20
 #
 # Include dist
 COPY dist/ /root/dist/
 #
-# Get and install dependencies & packages
-RUN apk -U --no-cache add \
+# Install packages
+RUN apk --no-cache -U upgrade && \
+    apk --no-cache -U add \
       nginx \
       nginx-mod-http-brotli \
       nginx-mod-http-headers-more \
@@ -32,8 +33,8 @@ RUN apk -U --no-cache add \
     cp /root/dist/conf/lsweb.conf /etc/nginx/conf.d/ && \
 #
 # Clean up
-    rm -rf /root/* && \
-    rm -rf /var/cache/apk/*
+    rm -rf /root/* \
+           /var/cache/apk/*
 #
 # Start nginx
-CMD nginx -g 'daemon off;'
+CMD ["nginx", "-g", "daemon off;"]

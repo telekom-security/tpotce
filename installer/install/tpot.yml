@@ -477,6 +477,22 @@
         - "Rocky"
         - "Ubuntu"
 
+    - name: Ensure vm.max_map_count is set (All)
+      lineinfile:
+        path: /etc/sysctl.conf
+        line: "vm.max_map_count=262144"
+        state: present
+        create: yes
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "Rocky"
+        - "Ubuntu"
+
     - name: Disable ssh.socket unit (Ubuntu)
       systemd:
         name: ssh.socket

@@ -27,12 +27,12 @@ func (g *Glutton) startMonitor(quit chan struct{}) {
 		for {
 			select {
 			// case <-ticker.C:
-				// openFiles, err := countOpenFiles()
-				// if err != nil {
-					// fmt.Printf("Failed :%s", err)
-				// }
-				// runningRoutines := runtime.NumGoroutine()
-				// g.Logger.Info(fmt.Sprintf("running Go routines: %d, open files: %d", openFiles, runningRoutines))
+			// 	openFiles, err := countOpenFiles()
+			// 	if err != nil {
+			// 		fmt.Printf("Failed :%s", err)
+			// 	}
+			// 	runningRoutines := runtime.NumGoroutine()
+			// 	g.Logger.Info(fmt.Sprintf("running Go routines: %d, open files: %d", openFiles, runningRoutines))
 			case <-quit:
 				g.Logger.Info("monitoring stopped...")
 				ticker.Stop()

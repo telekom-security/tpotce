@@ -32,10 +32,14 @@ fuLOGROTATE () {
   local myDIONAEABITGZ="/data/dionaea/bistreams.tgz"
   local myDIONAEABIN="/data/dionaea/binaries/"
   local myDIONAEABINTGZ="/data/dionaea/binaries.tgz"
+  local myH0NEYTR4PP="/data/h0neytr4p/payloads/"
+  local myH0NEYTR4PTGZ="/data/h0neytr4p/payloads.tgz"
   local myHONEYTRAPATTACKS="/data/honeytrap/attacks/"
   local myHONEYTRAPATTACKSTGZ="/data/honeytrap/attacks.tgz"
   local myHONEYTRAPDL="/data/honeytrap/downloads/"
   local myHONEYTRAPDLTGZ="/data/honeytrap/downloads.tgz"
+  local myMINIPRINTU="/data/miniprint/uploads/"
+  local myMINIPRINTTGZ="/data/miniprint/uploads.tgz"
   local myTANNERF="/data/tanner/files/"
   local myTANNERFTGZ="/data/tanner/files.tgz"
 
@@ -54,21 +58,23 @@ if [ "$(fuEMPTY $myCOWRIETTYLOGS)" != "0" ]; then tar -I $myPIGZ -cvf $myCOWRIET
 if [ "$(fuEMPTY $myCOWRIEDL)" != "0" ]; then tar -I $myPIGZ -cvf $myCOWRIEDLTGZ $myCOWRIEDL; fi
 if [ "$(fuEMPTY $myDIONAEABI)" != "0" ]; then tar -I $myPIGZ -cvf $myDIONAEABITGZ $myDIONAEABI; fi
 if [ "$(fuEMPTY $myDIONAEABIN)" != "0" ]; then tar -I $myPIGZ -cvf $myDIONAEABINTGZ $myDIONAEABIN; fi
+if [ "$(fuEMPTY $myH0NEYTR4PP)" != "0" ]; then tar -I $myPIGZ -cvf $myH0NEYTR4PTGZ $myH0NEYTR4PP; fi
 if [ "$(fuEMPTY $myHONEYTRAPATTACKS)" != "0" ]; then tar -I $myPIGZ -cvf $myHONEYTRAPATTACKSTGZ $myHONEYTRAPATTACKS; fi
 if [ "$(fuEMPTY $myHONEYTRAPDL)" != "0" ]; then tar -I $myPIGZ -cvf $myHONEYTRAPDLTGZ $myHONEYTRAPDL; fi
+if [ "$(fuEMPTY $myMINIPRINTU)" != "0" ]; then tar -I $myPIGZ -cvf $myMINIPRINTTGZ $myMINIPRINTU; fi
 if [ "$(fuEMPTY $myTANNERF)" != "0" ]; then tar -I $myPIGZ -cvf $myTANNERFTGZ $myTANNERF; fi
 
 # Ensure correct permissions and ownership for previously created archives
-chmod 770 $myADBHONEYTGZ $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ $myTANNERFTGZ
-chown tpot:tpot $myADBHONEYTGZ $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ $myTANNERFTGZ
+chmod 770 $myADBHONEYTGZ $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myH0NEYTR4PTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ $myMINIPRINTTGZ $myTANNERFTGZ
+chown tpot:tpot $myADBHONEYTGZ $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myH0NEYTR4PTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ $myMINIPRINTTGZ $myTANNERFTGZ
 
 # Need to remove subfolders since too many files cause rm to exit with errors
-rm -rf $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL $myTANNERF
+rm -rf $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myH0NEYTR4PP $myHONEYTRAPATTACKS $myHONEYTRAPDL $myMINIPRINTU $myTANNERF
 
 # Recreate subfolders with correct permissions and ownership
-mkdir -p $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL $myTANNERF
-chmod 770 $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL $myTANNERF
-chown tpot:tpot $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myHONEYTRAPATTACKS $myHONEYTRAPDL $myTANNERF
+mkdir -p $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myH0NEYTR4PP $myHONEYTRAPATTACKS $myHONEYTRAPDL $myMINIPRINTU $myTANNERF
+chmod 770 $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myH0NEYTR4PP $myHONEYTRAPATTACKS $myHONEYTRAPDL $myMINIPRINTU $myTANNERF
+chown tpot:tpot $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myH0NEYTR4PP $myHONEYTRAPATTACKS $myHONEYTRAPDL $myMINIPRINTU $myTANNERF
 
 # Run logrotate again to account for previously created archives - DO NOT FORCE HERE!
 logrotate -s $mySTATUS $myCONF
@@ -87,12 +93,20 @@ fuTPOTINIT () {
   chown tpot:tpot /tmp/etc/ -R
 }
 
-# Let's create a function to clean up and prepare honeytrap data
+# Let's create a function to clean up and prepare adbhoney data
 fuADBHONEY () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/adbhoney/*; fi
   mkdir -vp /data/adbhoney/{downloads,log}
   chmod 770 /data/adbhoney/ -R
   chown tpot:tpot /data/adbhoney/ -R
+}
+
+# Let's create a function to clean up and prepare beelzebub data
+fuBEELZEBUB () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/beelzebub/*; fi
+  mkdir -vp /data/beelzebub/{key,log}
+  chmod 770 /data/beelzebub/ -R
+  chown tpot:tpot /data/beelzebub/ -R
 }
 
 # Let's create a function to clean up and prepare ciscoasa data
@@ -190,12 +204,36 @@ fuFATT () {
   chown tpot:tpot -R /data/fatt
 }
 
-# Let's create a function to clean up and prepare glastopf data
+# Let's create a function to clean up and prepare galah data
+fuGALAH () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/galah/*; fi
+  mkdir -vp /data/galah/{cache,cert,log}
+  chmod 770 /data/galah/ -R
+  chown tpot:tpot /data/galah/ -R
+}
+
+# Let's create a function to clean up and prepare glutton data
 fuGLUTTON () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/glutton/*; fi
   mkdir -vp /data/glutton/{log,payloads}
   chmod 770 /data/glutton -R
   chown tpot:tpot /data/glutton -R
+}
+
+# Let's create a function to clean up and prepare go-pot data
+fuGOPOT () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/go-pot/*; fi
+  mkdir -vp /data/go-pot/log
+  chmod 770 /data/go-pot -R
+  chown tpot:tpot /data/go-pot -R
+}
+
+# Let's create a function to clean up and prepare h0neytr4p data
+fuH0NEYTR4P () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/h0neytr4p/*; fi
+  mkdir -vp /data/h0neytr4p/{log,payloads}
+  chmod 770 /data/h0neytr4p/ -R
+  chown tpot:tpot /data/h0neytr4p/ -R
 }
 
 # Let's create a function to clean up and prepare hellpot data
@@ -212,6 +250,14 @@ fuHERALDING () {
   mkdir -vp /data/heralding/log
   chmod 770 /data/heralding -R
   chown tpot:tpot /data/heralding -R
+}
+
+# Let's create a function to clean up and prepare honeyaml data
+fuHONEYAML () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/honeyaml/*; fi
+  mkdir -vp /data/honeyaml/log
+  chmod 770 -R /data/honeyaml
+  chown tpot:tpot -R /data/honeyaml
 }
 
 # Let's create a function to clean up and prepare honeypots data
@@ -268,6 +314,14 @@ fuMEDPOT () {
   mkdir -vp /data/medpot/log/
   chmod 770 /data/medpot/ -R
   chown tpot:tpot /data/medpot/ -R
+}
+
+# Let's create a function to clean up and prepare miniprint data
+fuMINIPRINT () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/miniprint/*; fi
+  mkdir -vp /data/miniprint/{log,uploads}
+  chmod 770 /data/miniprint/ -R
+  chown tpot:tpot /data/miniprint/ -R
 }
 
 # Let's create a function to clean up nginx logs
@@ -362,6 +416,7 @@ echo
 echo "Checking and preparing data folders."
 fuTPOTINIT
 fuADBHONEY
+fuBEELZEBUB
 fuCISCOASA
 fuCITRIXHONEYPOT
 fuCONPOT
@@ -373,9 +428,13 @@ fuELASTICPOT
 fuELK
 fuENDLESSH
 fuFATT
+fuGALAH
 fuGLUTTON
+fuGOPOT
+fuH0NEYTR4P
 fuHERALDING
 fuHELLPOT
+fuHONEYAML
 fuHONEYSAP
 fuHONEYPOTS
 fuHONEYTRAP
@@ -383,6 +442,7 @@ fuIPPHONEY
 fuLOG4POT
 fuMAILONEY
 fuMEDPOT
+fuMINIPRINT
 fuNGINX
 fuREDISHONEYPOT
 fuSENTRYPEER

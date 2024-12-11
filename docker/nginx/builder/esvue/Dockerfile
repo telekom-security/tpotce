@@ -4,8 +4,7 @@ FROM node:20-alpine AS builder
 #
 # Prep and build Elasticvue 
 RUN apk -U --no-cache add git && \
-    # git clone https://github.com/cars10/elasticvue -b v1.0.4 /opt/src && \
-    git clone https://github.com/t3chn0m4g3/elasticvue /opt/src && \
+    git clone https://github.com/cars10/elasticvue -b v1.1.0 /opt/src && \
 # We need to adjust consts.ts so the user has connection suggestion for reverse proxied ES
     sed -i "s#export const DEFAULT_CLUSTER_URI = 'http://localhost:9200'#export const DEFAULT_CLUSTER_URI = window.location.origin + '/es'#g" /opt/src/src/consts.ts && \
     sed -i 's#href="/images/logo/favicon.ico"#href="images/logo/favicon.ico"#g' /opt/src/index.html && \

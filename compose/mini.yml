@@ -9,7 +9,7 @@ networks:
   dicompot_local:
   honeypots_local:
   medpot_local:
-  spiderfoot_local:
+  nginx_local:
   ewsposter_local:
 
 services:
@@ -199,6 +199,7 @@ services:
     networks:
      - dicompot_local
     ports:
+     - "104:11112"
      - "11112:11112"
     image: ${TPOT_REPO}/dicompot:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
@@ -225,6 +226,7 @@ services:
      - "22:22"
      - "23:23"
      - "25:25"
+     - "67:67/udp"
      - "53:53/udp"
      - "80:80"
      - "110:110"
@@ -363,6 +365,8 @@ services:
     depends_on:
       tpotinit:
         condition: service_healthy
+    networks:
+     - nginx_local
     environment:
      - bootstrap.memory_lock=true
      - ES_JAVA_OPTS=-Xms2048m -Xmx2048m
@@ -391,6 +395,8 @@ services:
     depends_on:
       elasticsearch:
         condition: service_healthy
+    networks:
+     - nginx_local
     mem_limit: 1g
     ports:
      - "127.0.0.1:64296:5601"
@@ -404,6 +410,8 @@ services:
     depends_on:
       elasticsearch:
         condition: service_healthy
+    networks:
+     - nginx_local
     environment:
      - LS_JAVA_OPTS=-Xms1024m -Xmx1024m
      - TPOT_TYPE=${TPOT_TYPE:-HIVE}
@@ -425,6 +433,8 @@ services:
     depends_on:
       tpotinit:
         condition: service_healthy
+    networks:
+     - nginx_local
     stop_signal: SIGKILL
     tty: true
     image: ${TPOT_REPO}/redis:${TPOT_VERSION}
@@ -438,6 +448,8 @@ services:
     depends_on:
       tpotinit:
         condition: service_healthy
+    networks:
+     - nginx_local
     environment:
      - MAP_COMMAND=AttackMapServer.py
     stop_signal: SIGKILL
@@ -454,6 +466,8 @@ services:
     depends_on:
       elasticsearch:
         condition: service_healthy
+    networks:
+     - nginx_local
     environment:
      - MAP_COMMAND=DataServer_v2.py
      - TPOT_ATTACKMAP_TEXT=${TPOT_ATTACKMAP_TEXT}
@@ -505,9 +519,11 @@ services:
      - /var/tmp/nginx/scgi
      - /run
      - /var/lib/nginx/tmp:uid=100,gid=82
-    network_mode: "host"
+    networks:
+     - nginx_local
     ports:
      - "64297:64297"
+     - "64294:64294"
     image: ${TPOT_REPO}/nginx:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
     read_only: true
@@ -525,7 +541,7 @@ services:
       tpotinit:
         condition: service_healthy
     networks:
-     - spiderfoot_local
+     - nginx_local
     ports:
      - "127.0.0.1:64303:8080"
     image: ${TPOT_REPO}/spiderfoot:${TPOT_VERSION}

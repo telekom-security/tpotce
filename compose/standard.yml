@@ -2,25 +2,26 @@
 networks:
   adbhoney_local:
   ciscoasa_local:
-  citrixhoneypot_local:
   conpot_local_IEC104:
   conpot_local_guardian_ast:
   conpot_local_ipmi:
   conpot_local_kamstrup_382:
   cowrie_local:
-  ddospot_local:
   dicompot_local:
   dionaea_local:
   elasticpot_local:
+  h0neytr4p_local:
   heralding_local:
+  honeyaml_local:
   ipphoney_local:
   mailoney_local:
   medpot_local:
+  miniprint_local:
   redishoneypot_local:
   sentrypeer_local:
   tanner_local:
-  spiderfoot_local:
   wordpot_local:
+  nginx_local:
   ewsposter_local:
 
 services:
@@ -94,23 +95,6 @@ services:
     read_only: true
     volumes:
      - ${TPOT_DATA_PATH}/ciscoasa/log:/var/log/ciscoasa
-
-# CitrixHoneypot service
-  citrixhoneypot:
-    container_name: citrixhoneypot
-    restart: always
-    depends_on:
-      tpotinit:
-        condition: service_healthy
-    networks:
-     - citrixhoneypot_local
-    ports:
-     - "443:443"
-    image: ${TPOT_REPO}/citrixhoneypot:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
-    read_only: true
-    volumes:
-     - ${TPOT_DATA_PATH}/citrixhoneypot/log:/opt/citrixhoneypot/logs
 
 # Conpot IEC104 service
   conpot_IEC104:
@@ -238,29 +222,6 @@ services:
       - ${TPOT_DATA_PATH}/cowrie/log:/home/cowrie/cowrie/log
       - ${TPOT_DATA_PATH}/cowrie/log/tty:/home/cowrie/cowrie/log/tty
 
-# Ddospot service
-  ddospot:
-    container_name: ddospot
-    restart: always
-    depends_on:
-      tpotinit:
-        condition: service_healthy
-    networks:
-     - ddospot_local
-    ports:
-     - "19:19/udp"
-     - "53:53/udp"
-     - "123:123/udp"
-#     - "161:161/udp"
-     - "1900:1900/udp"
-    image: ${TPOT_REPO}/ddospot:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
-    read_only: true
-    volumes:
-     - ${TPOT_DATA_PATH}/ddospot/log:/opt/ddospot/ddospot/logs
-     - ${TPOT_DATA_PATH}/ddospot/bl:/opt/ddospot/ddospot/bl
-     - ${TPOT_DATA_PATH}/ddospot/db:/opt/ddospot/ddospot/db
-
 # Dicompot service
 # Get the Horos Client for testing: https://horosproject.org/
 # Get Dicom images (CC BY 3.0): https://www.cancerimagingarchive.net/collections/
@@ -274,6 +235,7 @@ services:
     networks:
      - dicompot_local
     ports:
+     - "104:11112"
      - "11112:11112"
     image: ${TPOT_REPO}/dicompot:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
@@ -340,6 +302,25 @@ services:
     volumes:
      - ${TPOT_DATA_PATH}/elasticpot/log:/opt/elasticpot/log
 
+# H0neytr4p service
+  h0neytr4p:
+    container_name: h0neytr4p
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+    networks:
+     - h0neytr4p_local
+    ports:
+     - "443:443"
+    # - "80:80"
+    image: ${TPOT_REPO}/h0neytr4p:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    read_only: true
+    volumes:
+      - ${TPOT_DATA_PATH}/h0neytr4p/log/:/opt/h0neytr4p/log/
+      - ${TPOT_DATA_PATH}/h0neytr4p/payloads/:/data/h0neytr4p/payloads/
+
 # Heralding service
   heralding:
     container_name: heralding
@@ -373,6 +354,23 @@ services:
     read_only: true
     volumes:
      - ${TPOT_DATA_PATH}/heralding/log:/var/log/heralding
+
+# Honeyaml service
+  honeyaml:
+    container_name: honeyaml
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+    networks:
+     - honeyaml_local
+    ports:
+      - "3000:8080"
+    image: ${TPOT_REPO}/honeyaml:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    read_only: true
+    volumes:
+     - ${TPOT_DATA_PATH}/honeyaml/log:/opt/honeyaml/log/
 
 # Honeytrap service
   honeytrap:
@@ -414,16 +412,12 @@ services:
 # Mailoney service
   mailoney:
     container_name: mailoney
+    stdin_open: true
+    tty: true
     restart: always
     depends_on:
       tpotinit:
         condition: service_healthy
-    environment:
-     - HPFEEDS_SERVER=
-     - HPFEEDS_IDENT=user
-     - HPFEEDS_SECRET=pass
-     - HPFEEDS_PORT=20000
-     - HPFEEDS_CHANNELPREFIX=prefix
     networks:
      - mailoney_local
     ports:
@@ -451,6 +445,24 @@ services:
     read_only: true
     volumes:
      - ${TPOT_DATA_PATH}/medpot/log/:/var/log/medpot
+
+# Miniprint service
+  miniprint:
+    container_name: miniprint
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+    networks:
+     - miniprint_local
+    ports:
+      - "9100:9100"
+    image: ${TPOT_REPO}/miniprint:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    read_only: true
+    volumes:
+     - ${TPOT_DATA_PATH}/miniprint/log/:/opt/miniprint/log/
+     - ${TPOT_DATA_PATH}/miniprint/uploads/:/opt/miniprint/uploads/
 
 # Redishoneypot service
   redishoneypot:
@@ -584,6 +596,7 @@ services:
     ports:
      - "8080:80"
     image: ${TPOT_REPO}/wordpot:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
     read_only: true
     volumes:
      - ${TPOT_DATA_PATH}/wordpot/log:/opt/wordpot/logs/
@@ -658,6 +671,8 @@ services:
     depends_on:
       tpotinit:
         condition: service_healthy
+    networks:
+     - nginx_local
     environment:
      - bootstrap.memory_lock=true
      - ES_JAVA_OPTS=-Xms2048m -Xmx2048m
@@ -686,6 +701,8 @@ services:
     depends_on:
       elasticsearch:
         condition: service_healthy
+    networks:
+     - nginx_local
     mem_limit: 1g
     ports:
      - "127.0.0.1:64296:5601"
@@ -699,6 +716,8 @@ services:
     depends_on:
       elasticsearch:
         condition: service_healthy
+    networks:
+     - nginx_local
     environment:
      - LS_JAVA_OPTS=-Xms1024m -Xmx1024m
      - TPOT_TYPE=${TPOT_TYPE:-HIVE}
@@ -720,6 +739,8 @@ services:
     depends_on:
       tpotinit:
         condition: service_healthy
+    networks:
+     - nginx_local
     stop_signal: SIGKILL
     tty: true
     image: ${TPOT_REPO}/redis:${TPOT_VERSION}
@@ -733,6 +754,8 @@ services:
     depends_on:
       tpotinit:
         condition: service_healthy
+    networks:
+     - nginx_local
     environment:
      - MAP_COMMAND=AttackMapServer.py
     stop_signal: SIGKILL
@@ -749,6 +772,8 @@ services:
     depends_on:
       elasticsearch:
         condition: service_healthy
+    networks:
+     - nginx_local
     environment:
      - MAP_COMMAND=DataServer_v2.py
      - TPOT_ATTACKMAP_TEXT=${TPOT_ATTACKMAP_TEXT}
@@ -800,9 +825,11 @@ services:
      - /var/tmp/nginx/scgi
      - /run
      - /var/lib/nginx/tmp:uid=100,gid=82
-    network_mode: "host"
+    networks:
+     - nginx_local
     ports:
      - "64297:64297"
+     - "64294:64294"
     image: ${TPOT_REPO}/nginx:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
     read_only: true
@@ -820,7 +847,7 @@ services:
       tpotinit:
         condition: service_healthy
     networks:
-     - spiderfoot_local
+     - nginx_local
     ports:
      - "127.0.0.1:64303:8080"
     image: ${TPOT_REPO}/spiderfoot:${TPOT_VERSION}

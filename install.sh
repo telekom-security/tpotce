@@ -119,7 +119,7 @@ fi
 if [ ! -f installer/install/tpot.yml ] && [ ! -f tpot.yml ];
   then
     echo "### Now downloading T-Pot Ansible Installation Playbook ... "
-    wget -qO tpot.yml https://github.com/telekom-security/tpotce/raw/master/installer/install/tpot.yml
+    wget -qO tpot.yml https://raw.githubusercontent.com/telekom-security/tpotce/master/installer/install/tpot.yml
     myANSIBLE_TPOT_PLAYBOOK="tpot.yml"
     echo
   else
@@ -171,10 +171,19 @@ echo "### (H)ive   - T-Pot Standard / HIVE installation."
 echo "###            Includes also everything you need for a distributed setup with sensors."
 echo "### (S)ensor - T-Pot Sensor installation."
 echo "###            Optimized for a distributed installation, without WebUI, Elasticsearch and Kibana."
+echo "### (L)LM    - T-Pot LLM installation."
+echo "###            Uses LLM based honeypots Beelzebub & Galah."
+echo "###            Requires Ollama (recommended) or ChatGPT subscription."
+echo "### M(i)ni   - T-Pot Mini installation."
+echo "###            Run 30+ honeypots with just a couple of honeypot daemons."
 echo "### (M)obile - T-Pot Mobile installation."
 echo "###            Includes everything to run T-Pot Mobile (available separately)."
+echo "### (T)arpit - T-Pot Tarpit installation."
+echo "###            Feed data endlessly to attackers, bots and scanners."
+echo "###            Also runs a Denial of Service Honeypot (ddospot)."
+echo
 while true; do
-  read -p "### Install Type? (h/s/m) " myTPOT_TYPE
+  read -p "### Install Type? (h/s/l/i/m/t) " myTPOT_TYPE
   case "${myTPOT_TYPE}" in
     h|H)
       echo
@@ -191,11 +200,32 @@ while true; do
       myINFO="### Make sure to deploy SSH keys to this SENSOR and disable SSH password authentication.
 ### On HIVE run the tpotce/deploy.sh script to join this SENSOR to the HIVE."
       break ;;
+    l|L)
+      echo
+      echo "### Installing T-Pot LLM."
+      myTPOT_TYPE="HIVE"
+      cp ${HOME}/tpotce/compose/llm.yml ${HOME}/tpotce/docker-compose.yml
+      myINFO="Make sure to adjust the T-Pot config file (.env) for Ollama / ChatGPT settings."
+      break ;;
+    i|I)
+      echo
+      echo "### Installing T-Pot Mini."
+      myTPOT_TYPE="HIVE"
+      cp ${HOME}/tpotce/compose/mini.yml ${HOME}/tpotce/docker-compose.yml
+      myINFO=""
+      break ;;
     m|M)
       echo
       echo "### Installing T-Pot Mobile."
       myTPOT_TYPE="MOBILE"
       cp ${HOME}/tpotce/compose/mobile.yml ${HOME}/tpotce/docker-compose.yml
+      myINFO=""
+      break ;;
+    t|T)
+      echo
+      echo "### Installing T-Pot Tarpit."
+      myTPOT_TYPE="HIVE"
+      cp ${HOME}/tpotce/compose/tarpit.yml ${HOME}/tpotce/docker-compose.yml
       myINFO=""
       break ;;
   esac

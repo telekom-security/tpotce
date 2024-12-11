@@ -1,0 +1,406 @@
+# T-Pot: TARPIT
+networks:
+  ddospot_local:
+  endlessh_local:
+  go-pot_local:
+  hellpot_local:
+  heralding_local:
+  nginx_local:
+  ewsposter_local:
+
+services:
+
+#########################################
+#### DEV
+#########################################
+#### T-Pot Init - Never delete this!
+#########################################
+
+# T-Pot Init Service
+  tpotinit:
+    container_name: tpotinit
+    env_file:
+      - .env
+    restart: always
+    stop_grace_period: 60s
+    tmpfs:
+      - /tmp/etc:uid=2000,gid=2000
+      - /tmp/:uid=2000,gid=2000
+    network_mode: "host"
+    cap_add:
+     - NET_ADMIN
+    image: ${TPOT_REPO}/tpotinit:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    volumes:
+      - ${TPOT_DOCKER_COMPOSE}:/tmp/tpot/docker-compose.yml:ro
+      - ${TPOT_DATA_PATH}/blackhole:/etc/blackhole
+      - ${TPOT_DATA_PATH}:/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+
+##################
+#### Honeypots
+##################
+
+# Ddospot service
+  ddospot:
+    container_name: ddospot
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+    networks:
+     - ddospot_local
+    ports:
+     - "19:19/udp"
+     - "53:53/udp"
+     - "123:123/udp"
+#     - "161:161/udp"
+     - "1900:1900/udp"
+    image: ${TPOT_REPO}/ddospot:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    read_only: true
+    volumes:
+     - ${TPOT_DATA_PATH}/ddospot/log:/opt/ddospot/ddospot/logs
+     - ${TPOT_DATA_PATH}/ddospot/bl:/opt/ddospot/ddospot/bl
+     - ${TPOT_DATA_PATH}/ddospot/db:/opt/ddospot/ddospot/db
+
+# Endlessh service
+  endlessh:
+    container_name: endlessh
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+    networks:
+     - endlessh_local
+    ports:
+     - "22:2222"
+    image: ${TPOT_REPO}/endlessh:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    read_only: true
+    volumes:
+     - ${TPOT_DATA_PATH}/endlessh/log:/var/log/endlessh
+
+# Go-pot service
+  go-pot:
+    container_name: go-pot
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+    networks:
+     - go-pot_local
+    ports:
+      - "8080:8080"
+    image: ${TPOT_REPO}/go-pot:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    read_only: true
+    volumes:
+     - ${TPOT_DATA_PATH}/go-pot/log:/opt/go-pot/log/
+
+# Hellpot service
+  hellpot:
+    container_name: hellpot
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+    networks:
+     - hellpot_local
+    ports:
+     - "80:8080"
+    image: ${TPOT_REPO}/hellpot:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    read_only: true
+    volumes:
+     - ${TPOT_DATA_PATH}/hellpot/log:/var/log/hellpot
+
+# Heralding service
+  heralding:
+    container_name: heralding
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+    tmpfs:
+     - /tmp/heralding:uid=2000,gid=2000
+    networks:
+     - heralding_local
+    ports:
+     - "21:21"
+    # - "22:22"
+     - "23:23"
+     - "25:25"
+    # - "80:80"
+     - "110:110"
+     - "143:143"
+     - "443:443"
+     - "465:465"
+     - "993:993"
+     - "995:995"
+     - "3306:3306"
+     - "3389:3389"
+     - "1080:1080"
+     - "5432:5432"
+     - "5900:5900"
+    image: ${TPOT_REPO}/heralding:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    read_only: true
+    volumes:
+     - ${TPOT_DATA_PATH}/heralding/log:/var/log/heralding
+
+
+
+##################
+#### NSM
+##################
+
+# Fatt service
+  fatt:
+    container_name: fatt
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+    network_mode: "host"
+    cap_add:
+     - NET_ADMIN
+     - SYS_NICE
+     - NET_RAW
+    image: ${TPOT_REPO}/fatt:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    volumes:
+     - ${TPOT_DATA_PATH}/fatt/log:/opt/fatt/log
+
+# P0f service
+  p0f:
+    container_name: p0f
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+    network_mode: "host"
+    image: ${TPOT_REPO}/p0f:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    read_only: true
+    volumes:
+     - ${TPOT_DATA_PATH}/p0f/log:/var/log/p0f
+
+# Suricata service
+  suricata:
+    container_name: suricata
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+    environment:
+     - OINKCODE=${OINKCODE:-OPEN} # Default to OPEN if unset or NULL (value provided by T-Pot .env)
+    # Loading external Rules from URL
+    # - FROMURL="https://username:password@yoururl.com|https://username:password@otherurl.com"
+    network_mode: "host"
+    cap_add:
+     - NET_ADMIN
+     - SYS_NICE
+     - NET_RAW
+    image: ${TPOT_REPO}/suricata:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    volumes:
+     - ${TPOT_DATA_PATH}/suricata/log:/var/log/suricata
+
+
+##################
+#### Tools 
+##################
+
+#### ELK
+## Elasticsearch service
+  elasticsearch:
+    container_name: elasticsearch
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+    networks:
+     - nginx_local
+    environment:
+     - bootstrap.memory_lock=true
+     - ES_JAVA_OPTS=-Xms2048m -Xmx2048m
+     - ES_TMPDIR=/tmp
+    cap_add:
+     - IPC_LOCK
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    mem_limit: 4g
+    ports:
+     - "127.0.0.1:64298:9200"
+    image: ${TPOT_REPO}/elasticsearch:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    volumes:
+     - ${TPOT_DATA_PATH}:/data
+
+## Kibana service
+  kibana:
+    container_name: kibana
+    restart: always
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+     - nginx_local
+    mem_limit: 1g
+    ports:
+     - "127.0.0.1:64296:5601"
+    image: ${TPOT_REPO}/kibana:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+
+## Logstash service
+  logstash:
+    container_name: logstash
+    restart: always
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+     - nginx_local
+    environment:
+     - LS_JAVA_OPTS=-Xms1024m -Xmx1024m
+     - TPOT_TYPE=${TPOT_TYPE:-HIVE}
+     - TPOT_HIVE_USER=${TPOT_HIVE_USER}
+     - TPOT_HIVE_IP=${TPOT_HIVE_IP}
+     - LS_SSL_VERIFICATION=${LS_SSL_VERIFICATION:-full}
+    ports:
+     - "127.0.0.1:64305:64305"
+    mem_limit: 2g
+    image: ${TPOT_REPO}/logstash:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    volumes:
+     - ${TPOT_DATA_PATH}:/data
+
+## Map Redis Service
+  map_redis:
+    container_name: map_redis
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+    networks:
+     - nginx_local
+    stop_signal: SIGKILL
+    tty: true
+    image: ${TPOT_REPO}/redis:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    read_only: true
+
+## Map Web Service
+  map_web:
+    container_name: map_web
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+    networks:
+     - nginx_local
+    environment:
+     - MAP_COMMAND=AttackMapServer.py
+    stop_signal: SIGKILL
+    tty: true
+    ports:
+     - "127.0.0.1:64299:64299"
+    image: ${TPOT_REPO}/map:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+
+## Map Data Service
+  map_data:
+    container_name: map_data
+    restart: always
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+     - nginx_local
+    environment:
+     - MAP_COMMAND=DataServer_v2.py
+     - TPOT_ATTACKMAP_TEXT=${TPOT_ATTACKMAP_TEXT}
+     - TZ=${TPOT_ATTACKMAP_TEXT_TIMEZONE}
+    stop_signal: SIGKILL
+    tty: true
+    image: ${TPOT_REPO}/map:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+#### /ELK
+
+# Ewsposter service
+  ewsposter:
+    container_name: ewsposter
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+    networks:
+     - ewsposter_local
+    environment:
+     - EWS_HPFEEDS_ENABLE=false
+     - EWS_HPFEEDS_HOST=host
+     - EWS_HPFEEDS_PORT=port
+     - EWS_HPFEEDS_CHANNELS=channels
+     - EWS_HPFEEDS_IDENT=user
+     - EWS_HPFEEDS_SECRET=secret
+     - EWS_HPFEEDS_TLSCERT=false
+     - EWS_HPFEEDS_FORMAT=json
+    image: ${TPOT_REPO}/ewsposter:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    volumes:
+     - ${TPOT_DATA_PATH}:/data
+     - ${TPOT_DATA_PATH}/ews/conf/ews.ip:/opt/ewsposter/ews.ip
+
+# Nginx service
+  nginx:
+    container_name: nginx
+    restart: always
+    environment:
+      - TPOT_OSTYPE=${TPOT_OSTYPE}
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+    tmpfs:
+     - /var/tmp/nginx/client_body
+     - /var/tmp/nginx/proxy
+     - /var/tmp/nginx/fastcgi
+     - /var/tmp/nginx/uwsgi
+     - /var/tmp/nginx/scgi
+     - /run
+     - /var/lib/nginx/tmp:uid=100,gid=82
+    networks:
+     - nginx_local
+    ports:
+     - "64297:64297"
+     - "64294:64294"
+    image: ${TPOT_REPO}/nginx:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    read_only: true
+    volumes:
+     - ${TPOT_DATA_PATH}/nginx/cert/:/etc/nginx/cert/:ro
+     - ${TPOT_DATA_PATH}/nginx/conf/nginxpasswd:/etc/nginx/nginxpasswd:ro
+     - ${TPOT_DATA_PATH}/nginx/conf/lswebpasswd:/etc/nginx/lswebpasswd:ro
+     - ${TPOT_DATA_PATH}/nginx/log/:/var/log/nginx/
+
+# Spiderfoot service
+  spiderfoot:
+    container_name: spiderfoot
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+    networks:
+     - nginx_local
+    ports:
+     - "127.0.0.1:64303:8080"
+    image: ${TPOT_REPO}/spiderfoot:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    volumes:
+     - ${TPOT_DATA_PATH}/spiderfoot:/home/spiderfoot/.spiderfoot

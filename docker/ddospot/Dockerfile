@@ -1,13 +1,13 @@
-FROM alpine:3.19
+FROM alpine:3.20 AS builder
 #
 # Include dist
 COPY dist/ /root/dist/
 #
 # Install packages
-RUN apk --no-cache -U add \
+RUN apk --no-cache -U upgrade && \
+    apk --no-cache -U add \
 		build-base \
 		git \
-		libcap \
 		py3-colorama \
 		py3-greenlet \
 		py3-pip \
@@ -21,43 +21,45 @@ RUN apk --no-cache -U add \
 # Install ddospot from GitHub and setup
     mkdir -p /opt && \
     cd /opt/ && \
-    git clone https://github.com/aelth/ddospot && \
+    git clone https://github.com/t3chn0m4g3/ddospot && \
     cd ddospot && \
-    git checkout 49f515237bd2d5744290ed21dcca9b53def243ba && \
-    # We only want JSON events, setting logger format to ('') ...
-    sed -i "/handler.setFormatter(logging.Formatter(/{n;N;d}" /opt/ddospot/ddospot/core/potloader.py && \
-    sed -i "s#handler.setFormatter(logging.Formatter(#handler.setFormatter(logging.Formatter(''))#g" /opt/ddospot/ddospot/core/potloader.py && \
-    # ... and remove msg from log message for individual honeypots
-    sed -i "s#self.logger.info('\%s - \%s' \% (msg, raw_json))#self.logger.info(raw_json)#g" /opt/ddospot/ddospot/pots/chargen/chargen.py && \
-    sed -i "s#self.logger.info('New DNS query - \%s' \% (raw_json))#self.logger.info(raw_json)#g" /opt/ddospot/ddospot/pots/dns/dns.py && \
-    sed -i "s#self.logger.info('\%s - \%s' \% (msg, raw_json))#self.logger.info(raw_json)#g" /opt/ddospot/ddospot/pots/generic/generic.py && \
-    sed -i "s#self.logger.info('\%s - \%s' \% (msg, raw_json))#self.logger.info(raw_json)#g" /opt/ddospot/ddospot/pots/ntp/ntp.py && \
-    sed -i "s#self.logger.info('\%s - \%s' \% (msg, raw_json))#self.logger.info(raw_json)#g" /opt/ddospot/ddospot/pots/ssdp/ssdp.py && \
-    # We are using logrotate
-    sed -i "s#rotate_size = 10#rotate_size = 9999#g" /opt/ddospot/ddospot/pots/chargen/chargenpot.conf && \
-    sed -i "s#rotate_size = 10#rotate_size = 9999#g" /opt/ddospot/ddospot/pots/dns/dnspot.conf && \
-    sed -i "s#rotate_size = 10#rotate_size = 9999#g" /opt/ddospot/ddospot/pots/generic/genericpot.conf && \
-    sed -i "s#rotate_size = 10#rotate_size = 9999#g" /opt/ddospot/ddospot/pots/ntp/ntpot.conf && \
-    sed -i "s#rotate_size = 10#rotate_size = 9999#g" /opt/ddospot/ddospot/pots/ssdp/ssdpot.conf && \
+    git checkout 66b94f3cf56c66e2e26b55feff9e65493cfadf3c && \
     cp /root/dist/requirements.txt . && \
     pip3 install --break-system-packages -r ddospot/requirements.txt && \
-    setcap cap_net_bind_service=+ep $(readlink -f $(type -P python3)) && \
+    pip3 install --break-system-packages pyinstaller
+WORKDIR /opt/ddospot/ddospot
+RUN pyinstaller ddospot.py \
+       --add-data "core:core" \
+       --hidden-import core \
+       --hidden-import cmd \
+       --hidden-import configparser \
+       --hidden-import colorama \
+       --hidden-import tabulate \
+       --hidden-import logging.handlers \
+       --hidden-import hpfeeds \
+       --hidden-import json \
+       --hidden-import http.server \
+       --hidden-import sys \
+       --hidden-import sqlalchemy \
+       --hidden-import sqlalchemy.ext.declarative \
+       --hidden-import schedule \
+       --hidden-import twisted \
+       --hidden-import twisted.internet \
+       --hidden-import twisted.internet.reactor \
+       --hidden-import twisted.names.client \
+       --hidden-import twisted.names.server \
+       --hidden-import twisted.python \
+       --hidden-import OpenSSL.crypto \
+       --hidden-import OpenSSL.SSL
 #
-# Setup user, groups and configs
-    addgroup -g 2000 ddospot && \
-    adduser -S -H -s /bin/ash -u 2000 -D -g 2000 ddospot && \
-    chown ddospot:ddospot -R /opt/ddospot && \
-#
-# Clean up
-    apk del --purge build-base \
-			git \
-			python3-dev && \
-    rm -rf /root/* && \
-    rm -rf /opt/ddospot/.git && \
-    rm -rf /var/cache/apk/*
+FROM alpine:3.20
+RUN apk --no-cache -U upgrade
+COPY --from=builder /opt/ddospot/ddospot/dist/ddospot/ /opt/ddospot/ddospot
+COPY --from=builder /opt/ddospot/ddospot/global.conf /opt/ddospot/ddospot/
+COPY --from=builder /opt/ddospot/ddospot/pots /opt/ddospot/ddospot/pots
 #
 # Start ddospot
 STOPSIGNAL SIGINT
-USER ddospot:ddospot
-WORKDIR /opt/ddospot/ddospot/
-CMD ["/usr/bin/python3","ddospot.py", "-n"]
+USER 2000:2000
+WORKDIR /opt/ddospot/ddospot
+CMD ["./ddospot", "-n"]

@@ -1,0 +1,307 @@
+# Configuration reference file for go-pot
+# Please refer to config/config.go for more specifics on each field
+# Each value is the default value for the field if not specified in the configuration file
+
+# Configuration for the go-pot server
+server:
+  # If the http staller should be enabled
+  enabled: true
+
+  # Port for the go-pot server to listen on
+  port: 8080
+
+  # Host for the go-pot server to listen on
+  host: 127.0.0.1
+
+  # The network stack to listen on. One of: tcp, tcp4, tcp6
+  network: "tcp4"
+
+  # Trusted proxies for the server. This is a comma separated list of CIDR ranges, or Ip addresses (v4 or v6)
+  trusted_proxies: ""
+
+  # The header to use for the proxy header. This is the header that will be used to determine the IP address of the client
+  proxy_header: "X-Forwarded-For"
+
+  # Configuration related to access logging for the server
+  access_log:
+
+    # Given the nature of how requests are designed to hang by this service
+    # there are a number of different ways to log requests. The following are the available modes
+    #  - end: Logs the request after the request has been completed
+    #  - start: Logs the request as soon as the request is received
+    #  - both: Logs the request at both the start and the end of the request
+    #  - none: Disables access logging
+    mode: "both"
+
+    # The path to write the access log to. If this is not specified then the access log will be written to stdout
+    path: "/opt/go-pot/log/go-pot.json"
+
+    # Comma deliminated list of fields to log. The following fields are available:
+    #   - id: UUIDv4 generated for the request
+    #   - timestamp: The time the request was received in RFC3339 format
+    #   - status: The status code of the request
+    #   - src_ip: The ip of the connecting client
+    #   - method: The HTTP method of the request
+    #   - path: The path of the request
+    #   - qs: The query string of the request
+    #   - dest_port: The port the request was sent to
+    #   - type: The type of request (Always http)
+    #   - host: The host of the request
+    #   - user_agent: The user agent of the client
+    #   - browser: The browser of the client (Inferred from the user agent)
+    #   - browser_version: The version of the browser (Inferred from the user agent)
+    #   - os: The operating system of the client (Inferred from the user agent)
+    #   - os_version: The version of the operating system (Inferred from the user agent)
+    #   - device: The device of the client (Inferred from the user agent)
+    #   - device_brand: The type of device of the client (Inferred from the user agent)
+    #   - phase: "start" or "end" depending on the phase of the request
+    #   - duration: The duration of the request in milliseconds (Only available as a part of the end phase of a request)
+    fields_to_log: "timestamp,id,status,src_ip,method,path,qs,dest_port,host,user_agent,browser,browser_version,os,os_version,device,device_brand,phase,duration"
+
+# Configuration for logging related settings for go-pot
+logging:
+  # One of: debug, info, warn, error, dpanic, panic, fatal
+  level: info
+
+  # The path to write protocol specific logs to. If this is not specified then the log will be written to stdout
+  # note that this will be overridden by protocol specific log paths
+  path: ""
+
+  # If the startup log should be enabled. This log is not written to the access log
+  startup_log_enabled: true
+
+# Clustering related settings for go-pot
+cluster:
+  # Whether or not to enable clustering
+  enabled: false
+
+  # One of: lan, wan, fargate_ecs. Please refer to config/config.go for what each mode means
+  mode: "lan"
+
+  # The cluster communication port. Please note this should not be accessible from the internet
+  bind_port: 7946
+
+  # The cluster advertise port. This should be a valid ipv4 address the pot can be reached on
+  advertise_ip: ""
+
+  # Atleast one known peer is required for clustering to work upon startup
+  known_peer_ips: ""
+
+  # If logging should be enabled for cluster communication
+  enable_logging: false
+
+  # The maximum number of connection attempts to make to a peer before giving up
+  connection_attempts: 5
+
+  # The amount of time to wait before retrying a connection to a peer
+  connection_timeout_secs: 5
+
+timeout_watcher:
+  # If the timeout watcher is enabled. In the event that this is disabled
+  enabled: true
+
+  # The number of requests that are allowed before things begin slowing down
+  grace_requests: 3
+
+  # The timeout given by requests that are in the grace set of requests in milliseconds
+  grace_timeout_ms: 100
+
+  # The TTL (in seconds) for the hot cache pool [Memory of recent requests]
+  # 1 hour
+  hot_pool_ttl_sec: 3600 
+
+  # The TTL (in seconds) for the cold cache pool [Long term memory of requests]
+  #2 days
+  cold_pool_ttl_sec: 172800 
+
+  # The maximum amount of time a given IP can be hanging before we consider the IP
+  # to be vulnerable to hanging forever on a request. Any ips that get past this threshold
+  # will always be given the longest timeout
+  # 3 minutes
+  instant_commit_threshold_ms: 180000 
+
+  # The upper bound for increasing timeouts in milliseconds. Once the timeout increases to reach this bound we will hang forever.
+  # 1 minute
+  upper_timeout_bound_ms: 60000
+
+  # The smallest timeout we will ever give im milliseconds
+  # 1 second
+  lower_timeout_bound_ms: 1000
+
+  # The amount of time to wait when hanging an IP "forever"
+  # 7 days
+  longest_timeout_ms: 604800000
+
+  # The increment we will increase timeouts by for requests with timeouts larger than 30 seconds
+  # 10 seconds
+  timeout_over_thirty_increment_ms: 10000
+
+  # The increment we will increase timeouts by for requests with timeouts smaller than 30 seconds
+  # 5 seconds
+  timeout_sub_thirty_increment_ms: 5000
+
+  # The increment we will increase timeouts by for requests with timeouts smaller than 10 seconds
+  # 1 second
+  timeout_sub_ten_increment_ms: 1000
+
+  # The number of samples to take to detect a timeout
+  sample_size: 3
+
+  # How standard deviation of the last "sample_size" requests to take before committing to a timeout
+  sample_deviation_ms: 1000
+
+# Telemetry specific configuration
+telemetry:
+  # If telemetry is enabled or not
+  enabled: false
+
+  # The node name for identifying the said node
+  node_name: ""
+
+  # Using with prometheus push gateway
+  push_gateway:
+    enabled: false
+
+    # The address of the push gateway
+    endpoint: ""
+
+    # The username for the push gateway (For basic auth)
+    username: ""
+
+    # The password for the push gateway (For basic auth)
+    password: ""
+
+    # The interval in seconds to push metrics to the push gateway
+    # Default: 60
+    push_interval_secs: 60
+
+  prometheus:
+    # If the prometheus server is enabled
+    enabled: false
+
+    # The port for the prometheus collection endpoint
+    port: 9001
+
+    # The path for the prometheus endpoint
+    path: "/metrics"
+
+  metrics:
+    # If prometheus should expose the secrets generated metric
+    track_secrets_generated: true
+
+    # If prometheus should expose the time wasted metric
+    track_time_wasted: true
+
+# "Recast" specific configuration 
+# Recasting in this context is the process of shutting down the server after a certain amount of time
+# in the event the server has not wasted enough time
+recast:
+  # If the recast system is enabled or not
+  enabled: false
+
+  # The minimum interval in minutes to wait before recasting
+  minimum_recast_interval_min: 30
+
+  # The maximum interval in minutes to wait before recasting
+  maximum_recast_interval_min: 120
+
+  # The ratio of time wasted to time spent. If the ratio is less than this value then the node should recast
+  time_wasted_ratio: 0.05
+
+# Staller specific configuration
+staller:
+  # The maximum number of open connections that can be made to the pot at any given time
+  maximum_connections: 200
+
+  # The transfer rate for the staller (bytes per second)
+  bytes_per_second: 8
+
+# Metric configuration for the FTP side of the staller
+ftp_server:
+
+  # If the fep server should be enabled or not
+  enabled: false
+
+  # Port the FTP server should bind to
+  port: 2121
+
+  # The host for the go pot server
+  host: 0.0.0.0
+
+  # The range passive FTP connections should be exposed on
+  passive_port_range: 50000-50100
+
+  # The common certificate name for Sftp connections
+  common_cert_name: ""
+
+  # Throttle related configuration. Relates to rate limiting how fast commands to the FTP server can be made
+  throttle:
+
+    # The maximum number of open pending operations
+    max_pending_operations: 10
+
+    # The amount of time to wait between operations
+    wait_time: 1000
+
+  # Options relating to file downloads
+  transfer:
+
+    # The size of each chunk to transfer (in bytes)
+    chunk_size: 1
+
+    # The rate to send each chunk with (in MS)
+    chunk_rate: 1000
+
+    # The file size in bytes (20 MB by default)
+    file_size: 20971520
+
+  # Logging configuration for the FTP server
+  logging:
+    # The path to write the command log to. If this is not specified then the command log will be written to stdout
+    path: ""
+
+    # Comma delimitated commands to log (No spaces). Please note that commands to not 1 to 1 map to FTP commands 
+    # but relate to internal commands made to the "fake" filesystem the FTP client exposes.
+    # The following commands are available:
+    # - all: Logs all commands (Except for commands that are called often)
+    # - all_detailed: Logs all commands (Including commands that are called often)
+    # - create_file: Logs when a file is created including the file name as "path"
+    # - create_directory: Logs when a directory is created including the directory name as "path" and the permissions as "perm"
+    # - create_directory_recursive: Logs when a directory is created recursively including the directory name as "path"  and the permissions as "perm"
+    # - open: Called when a resource is opened includes the resource name as "path"
+    # - open_file: Called when a file is opened includes the file name as "path"
+    # - remove: Called when a resource is removed includes the resource name as "path"
+    # - remove_all: Called when a resource is removed recursively includes the resource name as "path"
+    # - rename: Called when a resource is renamed includes the resource name as "path" and the new name as "new_path"
+    # - stat: Called when a resource status is checked includes the resource name as "path"
+    # - chown: Called when a resource owner is changed includes the resource name as "path" and the new owner id as "uid" and the owner group id as "gid"
+    # - chtimes: Called when a resource time is changed includes the resource name as "path" and the new times as "atime" (Access time) and "mtime" (Modified time)
+    # - close_file: Called when a file is closed includes the file name as "path"
+    # - read_file: [Called often!] Called when a file is read includes the file name as "path" and the number of bytes requested as "data_requested"
+    # - read_file_at: [Called often!] Called when a file is read at a specific location includes the file name as "path" and the number of bytes requested as "data_requested" and the offset as "offset"
+    # - seek_file: Called when a file is seeked includes the file name as "path" and the offset as "offset" and the where to read to as "whence"
+    # - write_file: [Called often!] Called when a file is written to includes the file name as "path" and the number of bytes written as "data_written"
+    # - write_file_at: [Called often!] Called when a file is written to at a specific location includes the file name as "path" and the number of bytes written as "data_written" and the offset as "offset"
+    # - read_dir: Called when a directory is listed includes the directory name as "path" 
+    # - read_dir_names: Called when a directory is listed includes the directory name as "path"
+    # - sync: Called when a resource is synced includes the resource name as "path"
+    # - truncate: Called when a file is truncated includes the file name as "path" and the new size as "size"
+    # - write_string: Called when a string is written to a file includes the file name as "path" and the number of bytes written as "data_written"
+    # - client_connected: Called when a client connects to the FTP server 
+    # - client_disconnected: Called when a client disconnects from the FTP server
+    # - auth_user: Called when a user authenticates includes includes the client ip as "client_ip", the client version as "client_version", the client username as "user", the client password as "pass"
+    commands_to_log: "all"
+
+    # Comma delimitated fields to log (No spaces). Thease are extra fields added to EVERY log line for the FTP server
+    # The following fields are available:
+    #  - id: The ID of the connected client
+    #  - dest_addr: The destination address of the client
+    #  - dest_port: The destination port of the client
+    #  - dest_host: The destination host of the client
+    #  - src_addr: The source address of the client
+    #  - src_port: The source port of the client
+    #  - src_host: The source host of the client
+    #  - client_version: The version of the client if one is given
+    #  - type: always "ftp"
+    #  - none: No fields
+    additional_fields: "id"

@@ -2,7 +2,7 @@
 # Visit https://bit.ly/cffinit to generate yours today!
 
 cff-version: 1.2.0
-title: T-Pot 24.04.0
+title: T-Pot 24.04.1
 message: >-
   If you use this software, please cite it using the
   metadata from this file.
@@ -20,8 +20,8 @@ authors:
 identifiers:
   - type: url
     value: >-
-      https://github.com/telekom-security/tpotce/releases/tag/24.04.0
-    description: T-Pot Release 24.04.0
+      https://github.com/telekom-security/tpotce/releases/tag/24.04.1
+    description: T-Pot Release 24.04.1
 repository-code: 'https://github.com/telekom-security/tpotce'
 abstract: >-
   T-Pot is the all in one, optionally distributed, multiarch
@@ -39,5 +39,5 @@ keywords:
   - elk
 license: GPL-3.0
 commit: release
-version: 24.04.0
-date-released: '2024-04-22'
+version: 24.04.1
+date-released: '2024-12-11'

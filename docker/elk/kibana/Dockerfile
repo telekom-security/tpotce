@@ -1,28 +1,31 @@
-FROM ubuntu:22.04
+FROM node:20.15.1-alpine3.20
+ENV KB_VER=8.16.1
 #
-# VARS
-ENV KB_VER=8.14.2
 # Include dist
 COPY dist/ /root/dist/
 #
-RUN apt-get update -y && \
-    apt-get install -y \
+# Install packages
+RUN apk --no-cache -U upgrade && \
+    apk --no-cache -U add \
             aria2 \
-            curl && \
+            curl \
+            gcompat && \
 #
 # Determine arch, get and install packages
     ARCH=$(arch) && \
-      if [ "$ARCH" = "x86_64" ]; then KB_ARCH="amd64"; fi && \
-      if [ "$ARCH" = "aarch64" ]; then KB_ARCH="arm64"; fi && \
+      if [ "$ARCH" = "x86_64" ]; then KB_ARCH="x86_64"; fi && \
+      if [ "$ARCH" = "aarch64" ]; then KB_ARCH="aarch64"; fi && \
     echo "$ARCH" && \
     cd /root/dist/ && \
-    aria2c -s 16 -x 16 https://artifacts.elastic.co/downloads/kibana/kibana-$KB_VER-$KB_ARCH.deb && \
-    dpkg -i kibana-$KB_VER-$KB_ARCH.deb && \
+    aria2c -s 16 -x 16 https://artifacts.elastic.co/downloads/kibana/kibana-$KB_VER-linux-$KB_ARCH.tar.gz && \
+    mkdir -p /usr/share/kibana && \
+    tar xvfz kibana-$KB_VER-linux-$KB_ARCH.tar.gz --strip-components=1 -C /usr/share/kibana/ && \
+#
+# Kibana's bundled node does not work in build pipeline
+    rm /usr/share/kibana/node/glibc-217/bin/node && \
+    ln -s /usr/local/bin/node /usr/share/kibana/node/glibc-217/bin/node && \
 #
 # Setup user, groups and configs
-    mkdir -p /usr/share/kibana/config \
-             /usr/share/kibana/data && \
-    cp /etc/kibana/kibana.yml /usr/share/kibana/config && \
     sed -i 's/#server.basePath: ""/server.basePath: "\/kibana"/' /usr/share/kibana/config/kibana.yml && \
     sed -i 's/#server.host: "localhost"/server.host: "0.0.0.0"/' /usr/share/kibana/config/kibana.yml && \
     sed -i 's/#elasticsearch.hosts: \["http:\/\/localhost:9200"\]/elasticsearch.hosts: \["http:\/\/elasticsearch:9200"\]/' /usr/share/kibana/config/kibana.yml && \
@@ -30,23 +33,20 @@ RUN apt-get update -y && \
     echo "xpack.reporting.roles.enabled: false" >> /usr/share/kibana/config/kibana.yml && \
     echo "elasticsearch.requestTimeout: 60000" >> /usr/share/kibana/config/kibana.yml && \
     echo "elasticsearch.shardTimeout: 60000" >> /usr/share/kibana/config/kibana.yml && \
-    echo "kibana.autocompleteTimeout: 60000" >> /usr/share/kibana/config/kibana.yml && \
-    echo "kibana.autocompleteTerminateAfter: 1000000" >> /usr/share/kibana/config/kibana.yml && \
+    echo "unifiedSearch.autocomplete.valueSuggestions.timeout: 60000" >> /usr/share/kibana/config/kibana.yml && \
+    echo "unifiedSearch.autocomplete.valueSuggestions.terminateAfter: 1000000" >> /usr/share/kibana/config/kibana.yml && \
     rm -rf /usr/share/kibana/optimize/bundles/* && \
     /usr/share/kibana/bin/kibana --optimize --allow-root && \
-    groupmod -g 2000 kibana && \
-    usermod -u 2000 kibana && \
-    chown -R root:kibana /etc/kibana && \
-    chown -R kibana:kibana /usr/share/kibana/data \
-                           /run/kibana \
-			   /var/log/kibana \
-		     	   /var/lib/kibana && \
+    addgroup -g 2000 kibana && \
+    adduser -S -H -s /bin/ash -u 2000 -D -g 2000 kibana && \
+    chown -R kibana:kibana /usr/share/kibana/data && \
     chmod 755 -R /usr/share/kibana/config && \
 #
 # Clean up
-    apt-get purge aria2 -y && \
-    apt-get autoremove -y --purge && \
-    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /root/.cache /root/*
+    apk del --purge aria2 && \
+    rm -rf /root/* \
+        /tmp/* \
+        /var/cache/apk/*
 #
 # Healthcheck
 HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:5601'

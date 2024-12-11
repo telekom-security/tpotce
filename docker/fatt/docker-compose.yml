@@ -4,6 +4,8 @@ services:
   fatt:
     build: .
     container_name: fatt
+    stdin_open: true
+    tty: true
     restart: always
 #    cpu_count: 1
 #    cpus: 0.75

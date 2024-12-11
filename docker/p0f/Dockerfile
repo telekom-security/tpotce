@@ -1,12 +1,11 @@
-# In case of problems Alpine 3.13 needs to be used:
-# https://wiki.alpinelinux.org/wiki/Release_Notes_for_Alpine_3.14.0#faccessat2
-FROM alpine:3.19
+FROM alpine:3.20
 #
 # Add source
 COPY . /opt/p0f
 #
 # Install packages
-RUN apk -U --no-cache add \
+RUN apk --no-cache -U upgrade && \
+    apk --no-cache -U add \
 		bash \
 		build-base \
 		jansson \
@@ -28,8 +27,8 @@ RUN apk -U --no-cache add \
     apk del --purge build-base \
                     jansson-dev \
                     libpcap-dev && \
-    rm -rf /root/* && \
-    rm -rf /var/cache/apk/*
+    rm -rf /root/* \
+           /var/cache/apk/*
 #
 # Start p0f
 WORKDIR /opt/p0f

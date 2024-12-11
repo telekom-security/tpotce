@@ -3,8 +3,9 @@ FROM alpine:3.17
 # Include dist
 COPY dist/ /root/dist/
 #
-# Setup apt
-RUN apk -U --no-cache add \
+# Install packages
+RUN apk --no-cache -U upgrade && \
+    apk --no-cache -U add \
 		build-base \
 		git \
 		libcap \
@@ -31,7 +32,6 @@ RUN apk -U --no-cache add \
 		python3-dev && \ 
 #
 # Setup Tanner
-#    git clone https://github.com/t3chn0m4g3/tanner /opt/tanner && \
 	git clone https://github.com/mushorg/tanner /opt/tanner && \
     cd /opt/tanner/ && \
     git checkout 245d628f4023e5462c7035e760a6b5eed0a33fbe && \
@@ -64,11 +64,14 @@ RUN apk -U --no-cache add \
             git \
             libcap \
             libffi-dev \
-#            libressl-dev \
+            openssl-dev \
             linux-headers \
             python3-dev && \
-    rm -rf /root/* && \
-    rm -rf /tmp/* /var/tmp/* /var/cache/apk/* /opt/tanner/.git
+    rm -rf /root/* \
+           /tmp/* \
+           /var/tmp/* \
+           /var/cache/apk/* \
+           /opt/tanner/.git
 #
 # Start tanner
 STOPSIGNAL SIGKILL

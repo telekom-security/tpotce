@@ -1,0 +1,421 @@
+# T-Pot Docker Compose Image Builder (use only for building docker images)
+# Settings in .env
+
+##################
+#### Anchors
+##################
+
+# Common build config
+x-common-build: &common-build
+  dockerfile: ./Dockerfile
+  platforms:
+    - ${TPOT_AMD64}
+    - ${TPOT_ARM64}
+
+services:
+
+##################
+#### Honeypots
+##################
+
+# Adbhoney
+  adbhoney:
+    image: ${TPOT_DOCKER_REPO}/adbhoney:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/adbhoney:${TPOT_VERSION}
+      context: ../adbhoney/
+      <<: *common-build
+
+# Beelzebub
+  beelzebub:
+    image: ${TPOT_DOCKER_REPO}/beelzebub:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/beelzebub:${TPOT_VERSION}
+      context: ../beelzebub/
+      <<: *common-build
+
+# Ciscoasa
+  ciscoasa:
+    image: ${TPOT_DOCKER_REPO}/ciscoasa:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/ciscoasa:${TPOT_VERSION}
+      context: ../ciscoasa/
+      <<: *common-build
+
+# Citrixhoneypot
+  citrixhoneypot:
+    image: ${TPOT_DOCKER_REPO}/citrixhoneypot:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/citrixhoneypot:${TPOT_VERSION}
+      context: ../citrixhoneypot/
+      <<: *common-build
+
+# Conpot
+  conpot:
+    image: ${TPOT_DOCKER_REPO}/conpot:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/conpot:${TPOT_VERSION}
+      context: ../conpot/
+      <<: *common-build
+
+# Cowrie
+  cowrie:
+    image: ${TPOT_DOCKER_REPO}/cowrie:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/cowrie:${TPOT_VERSION}
+      context: ../cowrie/
+      <<: *common-build
+
+# Ddospot
+  ddospot:
+    image: ${TPOT_DOCKER_REPO}/ddospot:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/ddospot:${TPOT_VERSION}
+      context: ../ddospot/
+      <<: *common-build
+
+# Dicompot
+  dicompot:
+    image: ${TPOT_DOCKER_REPO}/dicompot:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/dicompot:${TPOT_VERSION}
+      context: ../dicompot/
+      <<: *common-build
+
+# Dionaea
+  dionaea:
+    image: ${TPOT_DOCKER_REPO}/dionaea:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/dionaea:${TPOT_VERSION}
+      context: ../dionaea/
+      <<: *common-build
+
+# Elasticpot
+  elasticpot:
+    image: ${TPOT_DOCKER_REPO}/elasticpot:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/elasticpot:${TPOT_VERSION}
+      context: ../elasticpot/
+      <<: *common-build
+
+# Endlessh
+  endlessh:
+    image: ${TPOT_DOCKER_REPO}/endlessh:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/endlessh:${TPOT_VERSION}
+      context: ../endlessh/
+      <<: *common-build
+
+# Galah
+  galah:
+    image: ${TPOT_DOCKER_REPO}/galah:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/galah:${TPOT_VERSION}
+      context: ../galah/
+      <<: *common-build
+
+# Glutton
+  glutton:
+    image: ${TPOT_DOCKER_REPO}/glutton:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/glutton:${TPOT_VERSION}
+      context: ../glutton/
+      <<: *common-build
+
+# Go-pot
+  go-pot:
+    image: ${TPOT_DOCKER_REPO}/go-pot:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/go-pot:${TPOT_VERSION}
+      context: ../go-pot/
+      <<: *common-build
+
+# H0neytr4p
+  h0neytr4p:
+    image: ${TPOT_DOCKER_REPO}/h0neytr4p:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/h0neytr4p:${TPOT_VERSION}
+      context: ../h0neytr4p/
+      <<: *common-build
+
+# Hellpot
+  hellpot:
+    image: ${TPOT_DOCKER_REPO}/hellpot:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/hellpot:${TPOT_VERSION}
+      context: ../hellpot/
+      <<: *common-build
+
+# Herlading
+  heralding:
+    image: ${TPOT_DOCKER_REPO}/heralding:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/heralding:${TPOT_VERSION}
+      context: ../heralding/
+      <<: *common-build
+
+# Honeyaml
+  honeyaml:
+    image: ${TPOT_DOCKER_REPO}/honeyaml:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/honeyaml:${TPOT_VERSION}
+      context: ../honeyaml/
+      <<: *common-build
+
+# Honeypots
+  honeypots:
+    image: ${TPOT_DOCKER_REPO}/honeypots:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/honeypots:${TPOT_VERSION}
+      context: ../honeypots/
+      <<: *common-build
+
+# Honeytrap
+  honeytrap:
+    image: ${TPOT_DOCKER_REPO}/honeytrap:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/honeytrap:${TPOT_VERSION}
+      context: ../honeytrap/
+      <<: *common-build
+
+# Ipphoney
+  ipphoney:
+    image: ${TPOT_DOCKER_REPO}/ipphoney:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/ipphoney:${TPOT_VERSION}
+      context: ../ipphoney/
+      <<: *common-build
+
+# Log4pot
+  log4pot:
+    image: ${TPOT_DOCKER_REPO}/log4pot:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/log4pot:${TPOT_VERSION}
+      context: ../log4pot/
+      <<: *common-build
+
+# Mailoney
+  mailoney:
+    image: ${TPOT_DOCKER_REPO}/mailoney:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/mailoney:${TPOT_VERSION}
+      context: ../mailoney/
+      <<: *common-build
+
+# Medpot
+  medpot:
+    image: ${TPOT_DOCKER_REPO}/medpot:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/medpot:${TPOT_VERSION}
+      context: ../medpot/
+      <<: *common-build
+
+# Miniprint
+  miniprint:
+    image: ${TPOT_DOCKER_REPO}/miniprint:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/miniprint:${TPOT_VERSION}
+      context: ../miniprint/
+      <<: *common-build
+
+# Redishoneypot
+  redishoneypot:
+    image: ${TPOT_DOCKER_REPO}/redishoneypot:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/redishoneypot:${TPOT_VERSION}
+      context: ../redishoneypot/
+      <<: *common-build
+
+# Sentrypeer
+  sentrypeer:
+    image: ${TPOT_DOCKER_REPO}/sentrypeer:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/sentrypeer:${TPOT_VERSION}
+      context: ../sentrypeer/
+      <<: *common-build
+
+#### Snare / Tanner
+## Tanner Redis
+  redis:
+    image: ${TPOT_DOCKER_REPO}/redis:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/redis:${TPOT_VERSION}
+      context: ../tanner/redis/
+      <<: *common-build
+
+## PHP Sandbox
+  phpox:
+    image: ${TPOT_DOCKER_REPO}/phpox:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/phpox:${TPOT_VERSION}
+      context: ../tanner/phpox/
+      <<: *common-build
+
+## Tanner
+  tanner:
+    image: ${TPOT_DOCKER_REPO}/tanner:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/tanner:${TPOT_VERSION}
+      context: ../tanner/tanner/
+      <<: *common-build
+
+## Snare
+  snare:
+    image: ${TPOT_DOCKER_REPO}/snare:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/snare:${TPOT_VERSION}
+      context: ../tanner/snare/
+      <<: *common-build
+####
+
+# Wordpot
+  wordpot:
+    image: ${TPOT_DOCKER_REPO}/wordpot:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/wordpot:${TPOT_VERSION}
+      context: ../wordpot/
+      <<: *common-build
+
+
+##################
+#### NSM
+##################
+
+# Fatt
+  fatt:
+    image: ${TPOT_DOCKER_REPO}/fatt:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/fatt:${TPOT_VERSION}
+      context: ../fatt/
+      <<: *common-build
+
+# P0f
+  p0f:
+    image: ${TPOT_DOCKER_REPO}/p0f:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/p0f:${TPOT_VERSION}
+      context: ../p0f/
+      <<: *common-build
+
+# Suricata
+  suricata:
+    image: ${TPOT_DOCKER_REPO}/suricata:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/suricata:${TPOT_VERSION}
+      context: ../suricata/
+      <<: *common-build
+
+
+##################
+#### Tools
+##################
+
+# T-Pot Init
+  tpotinit:
+    image: ${TPOT_DOCKER_REPO}/tpotinit:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/tpotinit:${TPOT_VERSION}
+      context: ../tpotinit/
+      <<: *common-build
+
+#### ELK
+## Elasticsearch
+  elasticsearch:
+    image: ${TPOT_DOCKER_REPO}/elasticsearch:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/elasticsearch:${TPOT_VERSION}
+      context: ../elk/elasticsearch/
+      <<: *common-build
+
+## Kibana
+  kibana:
+    image: ${TPOT_DOCKER_REPO}/kibana:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/kibana:${TPOT_VERSION}
+      context: ../elk/kibana/
+      <<: *common-build
+
+## Logstash
+  logstash:
+    image: ${TPOT_DOCKER_REPO}/logstash:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/logstash:${TPOT_VERSION}
+      context: ../elk/logstash/
+      <<: *common-build
+
+## Map Web
+  map:
+    image: ${TPOT_DOCKER_REPO}/map:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/map:${TPOT_VERSION}
+      context: ../elk/map/
+      <<: *common-build
+####
+
+# Ewsposter
+  ewsposter:
+    image: ${TPOT_DOCKER_REPO}/ewsposter:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/ewsposter:${TPOT_VERSION}
+      context: ../ewsposter/
+      <<: *common-build
+
+# Nginx
+  nginx:
+    image: ${TPOT_DOCKER_REPO}/nginx:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/nginx:${TPOT_VERSION}
+      context: ../nginx/
+      <<: *common-build
+
+# Spiderfoot
+  spiderfoot:
+    image: ${TPOT_DOCKER_REPO}/spiderfoot:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/spiderfoot:${TPOT_VERSION}
+      context: ../spiderfoot/
+      <<: *common-build
+

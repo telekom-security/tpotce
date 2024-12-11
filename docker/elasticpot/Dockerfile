@@ -1,10 +1,11 @@
-FROM alpine:3.19
+FROM alpine:3.20 AS builder
 #
 # Include dist
 COPY dist/ /root/dist/
 #
 # Install packages
-RUN apk -U --no-cache add \
+RUN apk --no-cache -U upgrade && \
+	apk --no-cache -U add \
 		build-base \
 		ca-certificates \
 		git \
@@ -31,28 +32,24 @@ RUN apk -U --no-cache add \
     mkdir -p /opt && \
     cd /opt/ && \
     git clone https://gitlab.com/bontchev/elasticpot.git/ && \
-    cd elasticpot && \
-    git checkout d12649730d819bd78ea622361b6c65120173ad45 && \
-    cp /root/dist/requirements.txt . && \
-    pip3 install --break-system-packages -r requirements.txt && \
+	cd elasticpot && \
+	git checkout d12649730d819bd78ea622361b6c65120173ad45 && \
+    cp /root/dist/requirements.txt .
+WORKDIR /opt/elasticpot
+RUN pip3 install --break-system-packages pyinstaller
+RUN pip3 install --break-system-packages -r requirements.txt
+RUN pyinstaller elasticpot.py \
+		--hidden-import output_plugins \
+		--hidden-import output_plugins.jsonlog
 #
-# Setup user, groups and configs
-    addgroup -g 2000 elasticpot && \
-    adduser -S -H -s /bin/ash -u 2000 -D -g 2000 elasticpot && \
-    mv /root/dist/honeypot.cfg /opt/elasticpot/etc/ && \
-#
-# Clean up
-    apk del --purge build-base \
-		git \
-		libffi-dev \
-		openssl-dev \
-		postgresql-dev \
-		python3-dev && \
-    rm -rf /root/* && \
-    rm -rf /var/cache/apk/* /opt/elasticpot/.git
+FROM alpine:3.20
+RUN apk --no-cache -U upgrade
+COPY --from=builder /opt/elasticpot/dist/ /opt/
+COPY --from=builder /opt/elasticpot/responses/ /opt/elasticpot/responses/
+COPY --from=builder /root/dist/honeypot.cfg /opt/elasticpot/etc/
 #
 # Start elasticpot
 STOPSIGNAL SIGINT
-USER elasticpot:elasticpot
+USER 2000:2000
 WORKDIR /opt/elasticpot/
-CMD ["/usr/bin/python3","elasticpot.py"]
+CMD ["./elasticpot"]

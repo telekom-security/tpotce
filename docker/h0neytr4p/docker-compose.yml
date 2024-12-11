@@ -1,0 +1,22 @@
+networks:
+  h0neytr4p_local:
+
+services:
+
+# H0neytr4p service
+  h0neytr4p:
+    build: .
+    container_name: h0neytr4p
+    restart: always
+#    cpu_count: 1
+#    cpus: 0.25
+    networks:
+     - h0neytr4p_local
+    ports:
+      - "80:80"
+      - "443:443"
+    image: "dtagdevsec/h0neytr4p:24.04"
+    read_only: true
+    volumes:
+      - $HOME/tpotce/data/h0neytr4p/log/:/opt/h0neytr4p/log/
+      - $HOME/tpotce/data/h0neytr4p/payloads/:/data/h0neytr4p/payloads/

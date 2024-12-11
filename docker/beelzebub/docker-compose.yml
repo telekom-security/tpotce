@@ -1,0 +1,29 @@
+networks:
+  beelzebub_local:
+
+services:
+
+# Beelzebub service
+  beelzebub:
+    build: .
+    container_name: beelzebub
+    restart: always
+#    cpu_count: 1
+#    cpus: 0.25
+    networks:
+     - beelzebub_local
+    ports:
+      - "22:22"
+      - "80:80"
+      - "2222:2222"
+      - "3306:3306"
+      - "8080:8080"
+    environment:
+      LLM_MODEL: "ollama"
+      LLM_HOST: "http://ollama.local:11434/api/chat"
+      OLLAMA_MODEL: "openchat"
+    image: "dtagdevsec/beelzebub:24.04"
+    read_only: true
+    volumes:
+     - $HOME/tpotce/data/beelzebub/key:/opt/beelzebub/configurations/key
+     - $HOME/tpotce/data/beelzebub/log:/opt/beelzebub/configurations/log

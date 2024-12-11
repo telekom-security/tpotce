@@ -1,0 +1,21 @@
+networks:
+  miniprint_local:
+
+services:
+
+# Miniprint service
+  miniprint:
+    build: .
+    container_name: miniprint
+    restart: always
+#    cpu_count: 1
+#    cpus: 0.25
+    networks:
+     - miniprint_local
+    ports:
+      - "9100:9100"
+    image: dtagdevsec/miniprint:24.04
+    read_only: true
+    volumes:
+     - $HOME/tpotce/data/miniprint/log/:/opt/miniprint/log/
+     - $HOME/tpotce/data/miniprint/uploads/:/opt/miniprint/uploads/

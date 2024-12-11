@@ -1,6 +1,7 @@
 ports:
   tcp: 5000
-#  udp: 5001
+  udp: 5001
+  ssh: 2222
 
 rules_path: config/rules.yaml
 

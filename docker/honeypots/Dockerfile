@@ -1,10 +1,11 @@
-FROM alpine:3.19
+FROM alpine:3.20
 #
 # Include dist
 COPY dist/ /root/dist/
 #
 # Install packages
-RUN apk -U --no-cache add \
+RUN apk --no-cache -U upgrade && \
+	apk --no-cache -U add \
 		build-base \
 		freetds \
 		freetds-dev \
@@ -26,22 +27,15 @@ RUN apk -U --no-cache add \
 		py3-flask \
 		py3-future \
 		py3-hiredis \
-		py3-impacket \
 		py3-itsdangerous \
 		py3-jinja2 \
 		py3-ldap3 \
 		py3-markupsafe \
-		py3-netifaces \
 		py3-openssl \
 		py3-packaging \
-		py3-paramiko \
 		py3-pip \
-		# py3-psutil \
 		py3-psycopg2 \
 		py3-pycryptodomex \
-		py3-requests \
-		py3-service_identity \
-		py3-twisted \
 		py3-werkzeug \
 		py3-wheel \
 		python3 \
@@ -54,11 +48,8 @@ RUN apk -U --no-cache add \
     cd /opt/ && \
     git clone https://github.com/qeeqbox/honeypots && \
     cd honeypots && \
-    git checkout a990b2c1ab04ffafde229e478ced54ffbb665d5c && \
-    # git checkout 5b3bfbecbf85c1f5235b320b333bdeff2d312372 && \
-    # cp /root/dist/pyproject.toml . && \
-    pip3 install --break-system-packages --upgrade pip && \
-    pip3 install --break-system-packages . && \
+	git checkout 238c6732d28b36ab88f2008361bafc8aef054755 && \
+    pip3 install --break-system-packages --no-cache-dir . && \
     setcap cap_net_bind_service=+ep $(readlink -f $(type -P python3)) && \
 #
 # Setup user, groups and configs
@@ -76,10 +67,12 @@ RUN apk -U --no-cache add \
 		libffi-dev \
 		openssl-dev \
 		postgresql-dev \
+		py3-pip \
 		python3-dev \
 		zlib-dev && \
-    rm -rf /root/* /var/cache/apk/* /opt/honeypots/.git
-
+	rm -rf /root/* \
+			/var/cache/apk/* \
+			/opt/honeypots/.git
 #
 # Start honeypots 
 STOPSIGNAL SIGINT

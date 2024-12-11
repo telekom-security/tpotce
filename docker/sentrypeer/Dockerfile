@@ -1,7 +1,8 @@
 FROM alpine:edge
 #
 # Install packages
-RUN apk -U add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/testing \
+RUN apk -U upgrade --no-cache && \
+	apk -U add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/testing \
 		sentrypeer && \
 #
 # Setup user, groups and configs
@@ -11,8 +12,8 @@ RUN apk -U add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/testing \
     chown -R sentrypeer:sentrypeer /usr/bin/sentrypeer && \
 #
 # Clean up
-    rm -rf /root/* && \
-    rm -rf /var/cache/apk/*
+    rm -rf /root/* \
+           /var/cache/apk/*
 #
 # Set workdir and start sentrypeer
 STOPSIGNAL SIGKILL

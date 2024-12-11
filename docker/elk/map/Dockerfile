@@ -1,7 +1,8 @@
-FROM alpine:3.19
+FROM alpine:3.20
 #
 # Install packages
-RUN apk -U --no-cache add \
+RUN apk --no-cache -U upgrade && \
+    apk --no-cache -U add \
 		build-base \
 		git \
 		libcap \
@@ -13,7 +14,7 @@ RUN apk -U --no-cache add \
 # Install from GitHub and setup
     mkdir -p /opt && \
     cd /opt/ && \
-    git clone https://github.com/t3chn0m4g3/t-pot-attack-map -b 2.2.0 && \
+    git clone https://github.com/t3chn0m4g3/t-pot-attack-map -b 2.2.6 && \
     cd t-pot-attack-map && \
     pip3 install --break-system-packages --upgrade pip && \
     pip3 install --break-system-packages -r requirements.txt && \
@@ -28,11 +29,12 @@ RUN apk -U --no-cache add \
     apk del --purge build-base \
 		git \
 		python3-dev && \
-    rm -rf /root/* /var/cache/apk/* /opt/t-pot-attack-map/.git
+    rm -rf /root/* /var/cache/apk/* \
+           /opt/t-pot-attack-map/.git
 #
 # Start T-Pot-Attack-Map
 ENV TZ=UTC
 STOPSIGNAL SIGINT
 USER map:map
 WORKDIR /opt/t-pot-attack-map
-CMD /usr/bin/python3 $MAP_COMMAND
+CMD ["/bin/sh", "-c", "/usr/bin/python3 $MAP_COMMAND"]
