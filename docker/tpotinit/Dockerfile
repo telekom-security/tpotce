@@ -30,9 +30,10 @@ RUN apk --no-cache -U upgrade && \
     apk --no-cache -U add --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community \
         yq && \
 #
-# Setup user
+# Setup user, logrotate permissions
     addgroup -g 2000 tpot && \
     adduser -S -s /bin/ash -u 2000 -D -g 2000 tpot && \
+    chmod 0600 /opt/tpot/etc/logrotate/logrotate.conf && \
 #
 # Clean up
     apk del --purge git && \
