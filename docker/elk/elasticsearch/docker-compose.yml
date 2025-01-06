@@ -22,6 +22,6 @@ services:
     mem_limit: 2g
     ports:
      - "127.0.0.1:64298:9200"
-    image: "dtagdevsec/elasticsearch:24.04"
+    image: "ghcr.io/telekom-security/elasticsearch:24.04.1"
     volumes:
      - $HOME/tpotce/data:/data

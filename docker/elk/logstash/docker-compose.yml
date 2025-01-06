@@ -12,7 +12,7 @@ services:
 #        condition: service_healthy
     ports:
      - "127.0.0.1:64305:64305"
-    image: "dtagdevsec/logstash:24.04"
+    image: "ghcr.io/telekom-security/logstash:24.04.1"
     volumes:
      - $HOME/tpotce/data:/data
 #     - /$HOME/tpotce/docker/elk/logstash/dist/logstash.conf:/etc/logstash/conf.d/logstash.conf
