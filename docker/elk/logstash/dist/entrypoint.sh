@@ -101,4 +101,8 @@ if [ "$TPOT_TYPE" != "SENSOR" ];
 fi
 echo
 
+ARCH=$(arch)
+if [ "$ARCH" = "aarch64" ]; then
+  export _JAVA_OPTIONS="-XX:UseSVE=0";
+fi
 exec /usr/share/logstash/bin/logstash --config.reload.automatic

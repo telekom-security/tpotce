@@ -18,8 +18,8 @@ RUN apt-get update -y && \
 #
 # Determine arch, get and install packages
     ARCH=$(arch) && \
-      if [ "$ARCH" = "x86_64" ]; then LS_ARCH="amd64"; fi && \
-      if [ "$ARCH" = "aarch64" ]; then LS_ARCH="arm64"; fi && \
+    if [ "$ARCH" = "x86_64" ]; then LS_ARCH="amd64"; export _JAVA_OPTIONS=""; fi && \
+    if [ "$ARCH" = "aarch64" ]; then LS_ARCH="arm64"; export _JAVA_OPTIONS="-XX:UseSVE=0"; fi && \
     echo "$ARCH" && \
     mkdir -p /etc/listbot && \
     cd /etc/listbot && \
