@@ -16,7 +16,8 @@ go build -o galah ./cmd/galah
 EOF
 #
 FROM alpine:3.20
-RUN apk --no-cache -U upgrade
+RUN apk --no-cache -U upgrade && \
+    apk --no-cache -U add openssl
 COPY --from=builder /opt/galah/ /opt/galah/
 #
 # Start galah

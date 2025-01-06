@@ -17,7 +17,7 @@ services:
       - "443:443"
       - "8443:8443"
       - "8080:8080"
-    image: dtagdevsec/galah:24.04
+    image: ghcr.io/telekom-security/galah:24.04.1
     environment:
       LLM_PROVIDER: "ollama"
       LLM_SERVER_URL: "http://ollama.local:11434"
