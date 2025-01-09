@@ -12,7 +12,7 @@ WORKDIR /root
 # Build beelzebub
 RUN git clone https://github.com/t3chn0m4g3/beelzebub && \
     cd beelzebub && \
-    git checkout 17a0854b8d9d1e41cf5435b5dc85354bbfb9093c
+    git checkout 0b9aba53ec1671f669d22782758142a1d411b858
 WORKDIR /root/beelzebub
 RUN go mod download
 RUN go build -o main .

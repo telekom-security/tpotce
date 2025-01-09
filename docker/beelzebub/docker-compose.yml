@@ -22,7 +22,7 @@ services:
       LLM_MODEL: "ollama"
       LLM_HOST: "http://ollama.local:11434/api/chat"
       OLLAMA_MODEL: "openchat"
-    image: "dtagdevsec/beelzebub:24.04"
+    image: "ghcr.io/telekom-security/beelzebub:24.04.1"
     read_only: true
     volumes:
      - $HOME/tpotce/data/beelzebub/key:/opt/beelzebub/configurations/key
