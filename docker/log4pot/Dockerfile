@@ -3,7 +3,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 #
 # Install packages
 RUN apt-get update -y && \
-	apt-get upgrade -y && \
+    apt-get upgrade -y && \
     apt-get install -y \
 		build-essential \
 		cargo \
@@ -21,21 +21,21 @@ RUN apt-get update -y && \
 		python3-dev \
 		rust-all && \
 	pip3 install --no-cache-dir --break-system-packages \
-		poetry \
+		poetry==1.8.3 \
 		pycurl && \
 #	     
 # Install log4pot from GitHub and setup
-	mkdir -p /opt /var/log/log4pot && \
+    mkdir -p /opt /var/log/log4pot && \
     cd /opt/ && \
     git clone https://github.com/thomaspatzke/Log4Pot && \
     cd Log4Pot && \
     git checkout 5002b1fe0f82359ef32dbc3a899e8a701dc3256e && \
     sed -i 's#"type": logtype,#"reason": logtype,#g' log4pot-server.py && \
-	poetry --no-cache --without=dev install && \
-	setcap cap_net_bind_service=+ep $(readlink -f $(which python3)) && \
+    poetry --no-cache --without=dev install && \
+    setcap cap_net_bind_service=+ep $(readlink -f $(which python3)) && \
 #
 # Setup user, groups and configs
-	addgroup --gid 2000 log4pot && \
+    addgroup --gid 2000 log4pot && \
     adduser --system --no-create-home --shell /bin/bash -uid 2000 --disabled-password --disabled-login -gid 2000 log4pot && \
     chown log4pot:log4pot -R /opt/Log4Pot && \
 #
