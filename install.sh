@@ -27,7 +27,7 @@ if [ ${EUID} -eq 0 ];
 fi
 
 # Check if running on a supported distribution
-mySUPPORTED_DISTRIBUTIONS=("AlmaLinux" "Debian GNU/Linux" "Fedora Linux" "openSUSE Tumbleweed" "Raspbian GNU/Linux" "Rocky Linux" "Ubuntu")
+mySUPPORTED_DISTRIBUTIONS=("AlmaLinux" "Debian GNU/Linux" "Fedora Linux" "oapenSUSE Tumbleweed" "openSUSE Leap" "Raspbian GNU/Linux" "Rocky Linux" "Ubuntu")
 myCURRENT_DISTRIBUTION=$(awk -F= '/^NAME/{print $2}' /etc/os-release | tr -d '"')
 
 if [[ ! " ${mySUPPORTED_DISTRIBUTIONS[@]} " =~ " ${myCURRENT_DISTRIBUTION} " ]];
@@ -88,6 +88,15 @@ case ${myCURRENT_DISTRIBUTION} in
     fi
     ;;
   "openSUSE Tumbleweed")
+    echo
+    echo ${myINSTALL_NOTIFICATION}
+    echo
+    sudo zypper refresh
+    sudo zypper install -y ${myPACKAGES_OPENSUSE}
+    echo "export ANSIBLE_PYTHON_INTERPRETER=/bin/python3" | sudo tee /etc/profile.d/ansible.sh >/dev/null
+    source /etc/profile.d/ansible.sh
+    ;;
+   "openSUSE Leap")
     echo
     echo ${myINSTALL_NOTIFICATION}
     echo
