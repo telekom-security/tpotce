@@ -145,32 +145,6 @@
         - "Raspbian"
         - "Ubuntu"
 
-    - name: Install exa (Debian, Raspbian, Ubuntu)
-      package:
-        name:
-          - exa
-        state: latest
-        update_cache: yes
-      register: exa_install_result
-      ignore_errors: yes
-      when: ansible_distribution in ["Debian", "Raspbian", "Ubuntu"]
-      tags:
-        - "Debian"
-        - "Raspbian"
-        - "Ubuntu"
-
-    - name: Install eza (if exa failed)
-      package:
-        name:
-          - eza
-        state: latest
-        update_cache: yes
-      when: exa_install_result is failed
-      tags:
-        - "Debian"
-        - "Raspbian"
-        - "Ubuntu"
-
     - name: Install grc from remote repo (AlmaLinux, Rocky)
       ansible.builtin.dnf:
         name: 'https://github.com/kriipke/grc/releases/download/1.13.8/grc-1.13.8-1.el7.noarch.rpm'
@@ -189,7 +163,6 @@
           - cracklib
           - curl
           - dnf-plugins-core
-          - exa
           - git
           - grc
           - htop
@@ -200,7 +173,6 @@
           - wget
         state: latest
         update_cache: yes
-      register: exa_install_result
       when: ansible_distribution in ["AlmaLinux", "Rocky"]
       tags:
         - "AlmaLinux"
@@ -225,7 +197,6 @@
           - cronie
           - curl
           - dnf-plugins-core
-          - exa
           - git
           - grc
           - htop
@@ -236,7 +207,6 @@
           - wget
         state: latest
         update_cache: yes
-      register: exa_install_result
       when: ansible_distribution in ["Fedora"]
       tags:
         - "Fedora"
@@ -264,7 +234,6 @@
           - ca-certificates
           - cracklib
           - curl
-          - exa
           - git
           - grc
           - htop
@@ -272,7 +241,6 @@
           - wget
         state: latest
         update_cache: yes
-      register: exa_install_result
       when: ansible_distribution in ["openSUSE Tumbleweed"]
       tags:
         - "openSUSE Tumbleweed"
@@ -729,7 +697,7 @@
       when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
       failed_when: ansible_user_id == "root"
 
-    - name: Add aliases with exa (All)
+    - name: Add aliases (All)
       blockinfile:
         path: ~/.bashrc
         block: |
@@ -737,13 +705,10 @@
           alias dpsw='watch -c bash -ic dps'
           alias mi='micro'
           alias sudo='sudo '
-          alias ls='exa'
-          alias ll='exa -hlg'
-          alias la='exa -hlag'
         marker: "# {mark} ANSIBLE MANAGED BLOCK"
         insertafter: EOF
         state: present
-      when: exa_install_result is succeeded and ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
@@ -751,26 +716,6 @@
         - "openSUSE Tumbleweed"
         - "Raspbian"
         - "Rocky"
-        - "Ubuntu"
-
-    - name: Add aliases with eza (Debian, Raspbian, Ubuntu)
-      blockinfile:
-        path: ~/.bashrc
-        block: |
-          alias dps='grc --colour=on docker ps -f status=running -f status=exited --format "table {{'{{'}}.Names{{'}}'}}\\t{{'{{'}}.Status{{'}}'}}\\t{{'{{'}}.Ports{{'}}'}}" | sort'
-          alias dpsw='watch -c bash -ic dps'
-          alias mi='micro'
-          alias sudo='sudo '
-          alias ls='eza'
-          alias ll='eza -hlg'
-          alias la='eza -hlag'
-        marker: "# {mark} ANSIBLE MANAGED BLOCK"
-        insertafter: EOF
-        state: present
-      when: exa_install_result is failed and ansible_distribution in ["Debian", "Raspbian", "Ubuntu"]
-      tags:
-        - "Debian"
-        - "Raspbian"
         - "Ubuntu"
 
     - name: Clone / Update T-Pot repository (All)
