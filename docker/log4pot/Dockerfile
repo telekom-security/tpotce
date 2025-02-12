@@ -31,6 +31,7 @@ RUN apt-get update -y && \
     cd Log4Pot && \
     git checkout 5002b1fe0f82359ef32dbc3a899e8a701dc3256e && \
     sed -i 's#"type": logtype,#"reason": logtype,#g' log4pot-server.py && \
+	rm poetry.lock && \
     poetry --no-cache --without=dev install && \
     setcap cap_net_bind_service=+ep $(readlink -f $(which python3)) && \
 #

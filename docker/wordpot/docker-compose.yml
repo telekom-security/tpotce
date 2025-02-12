@@ -14,7 +14,7 @@ services:
      - wordpot_local
     ports:
      - "80:80"
-    image: "dtagdevsec/wordpot:24.04"
+    image: "ghcr.io/telekom-security/wordpot:24.04.1"
     read_only: true
     volumes:
      - $HOME/tpotce/data/wordpot/log:/opt/wordpot/logs/
