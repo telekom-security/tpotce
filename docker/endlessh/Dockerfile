@@ -23,4 +23,4 @@ COPY --from=builder /root/dist/* /opt/endlessh/
 STOPSIGNAL SIGINT
 USER 2000:2000
 WORKDIR /opt/endlessh/
-CMD ./endlessh -f endlessh.conf >/var/log/endlessh/endlessh.log
+CMD ./endlessh -f endlessh.conf >> /var/log/endlessh/endlessh.log
