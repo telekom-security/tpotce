@@ -8,7 +8,7 @@ services:
       - $HOME/tpotce/.env
     restart: "no"
     stop_grace_period: 60s
-    image: "dtagdevsec/tpotinit:24.04"
+    image: "ghcr.io/telekom-security/tpotinit:24.04.1"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - $HOME/tpotce/data:/data
