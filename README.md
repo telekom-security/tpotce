@@ -1,4 +1,4 @@
-# T-Pot 🍯 - The All-in-One Honeypot Platform
+# T-Pot 🍯 - MacOS Installation & Testing 🖥️
 
 ## Table of Contents
 1. [Introduction](#introduction)
