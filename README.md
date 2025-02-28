@@ -159,7 +159,7 @@ Once the uninstall is finished reboot the machine sudo reboot
 
 ---
 
-<a name="data-analysis-and-insights)"></a>
+<a name="data-analysis-and-insights"></a>
 ## 3 Data Analysis and Insights 📊
 Recent studies, such as one conducted by **Jiuma Elhshik**, have demonstrated T-Pot's effectiveness in collecting and analyzing threat data. Over 48 hours, T-Pot captured **126,833 attacks**, providing valuable insights into current threat landscapes. Key findings include:
 
