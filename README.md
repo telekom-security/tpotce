@@ -129,4 +129,57 @@ Besides the ports generally needed by the OS, i.e. obtaining a DHCP lease, DNS, 
 | 19, 53, 123, 1900                                                                                                                     | udp      | incoming  | Honeypot: Ddospot                                                                                   |
 | 11112                                                                                                                                 | tcp      | incoming  | Honeypot: Dicompot                                                                                  |
 | 21, 42, 135, 443, 445, 1433, 1723, 1883, 3306, 8081                                                                                   | tcp      | incoming  | Honeypot: Dionaea                                                                                   |
-| 69                                                                                                                                    | udp      | incoming  | Honeypot
+| 69                                                                                                                                    | udp      | incoming  | Honeypot: Dionaea                                                                                   |
+| 9200                                                                                                                                  | tcp      | incoming  | Honeypot: Elasticpot                                                                                |
+| 22                                                                                                                                    | tcp      | incoming  | Honeypot: Endlessh                                                                                  |
+| 80, 443, 8080, 8443                                                                                                                   | tcp      | incoming  | Honeypot: Galah  (LLM required)                                                                     |
+| 8080                                                                                                                                  | tcp      | incoming  | Honeypot: Go-pot                                                                                    |
+| 80, 443                                                                                                                               | tcp      | incoming  | Honeypot: H0neytr4p                                                                                 |
+| 21, 22, 23, 25, 80, 110, 143, 443, 993, 995, 1080, 5432, 5900                                                                         | tcp      | incoming  | Honeypot: Heralding                                                                                 |
+| 3000                                                                                                                                  | tcp      | incoming  | Honeypot: Honeyaml                                                                                  |
+| 21, 22, 23, 25, 80, 110, 143, 389, 443, 445, 631, 1080, 1433, 1521, 3306, 3389, 5060, 5432, 5900, 6379, 6667, 8080, 9100, 9200, 11211 | tcp      | incoming  | Honeypot: qHoneypots                                                                                |
+| 53, 123, 161, 5060                                                                                                                    | udp      | incoming  | Honeypot: qHoneypots                                                                                |
+| 631                                                                                                                                   | tcp      | incoming  | Honeypot: IPPHoney                                                                                  |
+| 80, 443, 8080, 9200, 25565                                                                                                            | tcp      | incoming  | Honeypot: Log4Pot                                                                                   |
+| 25                                                                                                                                    | tcp      | incoming  | Honeypot: Mailoney                                                                                  |
+| 2575                                                                                                                                  | tcp      | incoming  | Honeypot: Medpot                                                                                    |
+| 9100                                                                                                                                  | tcp      | incoming  | Honeypot: Miniprint                                                                                 |
+| 6379                                                                                                                                  | tcp      | incoming  | Honeypot: Redishoneypot                                                                             |
+| 5060                                                                                                                                  | tcp/udp  | incoming  | Honeypot: SentryPeer                                                                                |
+| 80                                                                                                                                    | tcp      | incoming  | Honeypot: Snare (Tanner)                                                                            |
+| 8090                                                                                                                                  | tcp      | incoming  | Honeypot: Wordpot                                                                                   |
+
+---
+
+### Uninstall T-Pot 🧹
+Uninstallation of T-Pot is only available on the [supported Linux distros](#choose-your-distro).<br>
+To uninstall T-Pot run ~/tpotce/uninstall.sh and follow the uninstaller instructions, you will have to enter your password at least once.<br>
+Once the uninstall is finished reboot the machine sudo reboot
+<br><br>
+
+---
+
+## Data Analysis and Insights
+Recent studies, such as one conducted by **Jiuma Elhshik**, have demonstrated T-Pot's effectiveness in collecting and analyzing threat data. Over 48 hours, T-Pot captured **126,833 attacks**, providing valuable insights into current threat landscapes. Key findings include:
+
+1. **Most Targeted Honeypots**:
+   - **Dionaea**: Over 47,000 attacks, primarily targeting SMB (port 445).
+   - **DDospot**: Specialized in detecting DDoS attacks.
+   - **Honeytrap**: Attracted a wide range of attacks.
+
+2. **Geographical Origin of Attacks**:
+   - Most attacks originated from the **United States** and **China**, with significant activity from **Iran** and the **Netherlands**. Note that IP spoofing may obscure true origins.
+
+3. **Exploited Vulnerabilities**:
+   - **CVE-2023-50387 (KeyTrap)**: Targets DNS servers.
+   - **CVE-2023-46604**: A deserialization vulnerability in Apache ActiveMQ.
+
+4. **Attack Techniques**:
+   - Brute-force attempts on SSH and Telnet services.
+   - Use of backdoors like **DoublePulsar**.
+   - Detection of malware such as **Hajime**, a worm known for creating botnets.
+
+---
+
+## Conclusion 🔚
+T-Pot is a powerful and versatile platform for cybersecurity professionals and researchers. Its ability to integrate multiple honeypots, provide advanced visualization tools, and scale across different environments makes it an essential tool for understanding and mitigating cyber threats. By contributing to collective threat intelligence, T-Pot helps build a safer digital world. 🌐🔒
