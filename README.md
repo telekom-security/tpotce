@@ -160,7 +160,7 @@ Once the uninstall is finished reboot the machine sudo reboot
 ---
 
 <a name="data-analysis-and-insights)"></a>
-## 3 Data Analysis and Insights
+## 3 Data Analysis and Insights 📊
 Recent studies, such as one conducted by **Jiuma Elhshik**, have demonstrated T-Pot's effectiveness in collecting and analyzing threat data. Over 48 hours, T-Pot captured **126,833 attacks**, providing valuable insights into current threat landscapes. Key findings include:
 
 1. **Most Targeted Honeypots**:
@@ -184,3 +184,5 @@ Recent studies, such as one conducted by **Jiuma Elhshik**, have demonstrated T-
 <a name="conclusion"></a>
 ## 4 Conclusion 🔚
 T-Pot is a powerful and versatile platform for cybersecurity professionals and researchers. Its ability to integrate multiple honeypots, provide advanced visualization tools, and scale across different environments makes it an essential tool for understanding and mitigating cyber threats. By contributing to collective threat intelligence, T-Pot helps build a safer digital world. 🌐🔒
+
+---
