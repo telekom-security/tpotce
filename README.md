@@ -92,7 +92,7 @@ T-Pot also includes the following tools:
 - **Suricata**: A Network Security Monitoring engine.
 
 ---
-
+<a name="macos-installation"></a>
 ## 2 MacOS Installation 🍏
 Sometimes it is just nice if you can spin up a T-Pot instance on macOS or Windows, i.e. for development, testing or just the fun of it. As Docker Desktop is rather limited not all honeypot types or T-Pot features are supported. Also remember, by default the macOS and Windows firewall are blocking access from remote, so testing is limited to the host. For production it is recommended to run T-Pot on [Linux](#choose-your-distro).<br>
 To get things up and running just follow these steps:
@@ -158,6 +158,7 @@ Once the uninstall is finished reboot the machine sudo reboot
 <br><br>
 
 ---
+
 <a name="data-analysis-and-insights)"></a>
 ## 3 Data Analysis and Insights
 Recent studies, such as one conducted by **Jiuma Elhshik**, have demonstrated T-Pot's effectiveness in collecting and analyzing threat data. Over 48 hours, T-Pot captured **126,833 attacks**, providing valuable insights into current threat landscapes. Key findings include:
