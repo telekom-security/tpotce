@@ -2,13 +2,13 @@
 
 ## Table of Contents
 1. [Introduction](#introduction)
-2. [Features and Benefits](#features-and-benefits)
-3. [Architecture](#architecture)
-4. [Supported Honeypots](#supported-honeypots)
-5. [Tools Included](#tools-included)
-6. [MacOs Installation](#macos-installation)
-7. [Data Analysis and Insights](#data-analysis-and-insights)
-8. [Conclusion](#conclusion)
+1.1[Features and Benefits](#features-and-benefits)
+1.2. [Architecture](#architecture)
+1.3. [Supported Honeypots](#supported-honeypots)
+1.4. [Tools Included](#tools-included)
+2. [MacOs Installation](#macos-installation)
+3. [Data Analysis and Insights](#data-analysis-and-insights)
+4. [Conclusion](#conclusion)
 
 ---
 
