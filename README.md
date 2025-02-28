@@ -45,37 +45,37 @@ The core components of T-Pot have been moved into a Docker image called **tpotin
 T-Pot supports a wide range of honeypots, including:
 
 #### 1.3.1 Industrial and Medical Honeypots 🏭
-1. **Conpot**: Simulates Industrial Control Systems (ICS) and protocols like Modbus, SNMP, and S7comm.
-2. **Dicompot**: Emulates medical imaging systems (DICOM) to detect attacks on medical devices.
+1. **[Conpot](http://conpot.org/)**: Simulates Industrial Control Systems (ICS) and protocols like Modbus, SNMP, and S7comm.
+2. **[Dicompot](https://github.com/nsmfoo/dicompot)**: Emulates medical imaging systems (DICOM) to detect attacks on medical devices.
 3. **Medpot**: Simulates medical data management systems, focusing on healthcare sector attacks.
 
 #### 1.3.2 Network and IoT Honeypots 🌐
-1. **Adbhoney**: Simulates Android devices exposed via the ADB (Android Debug Bridge) protocol.
-2. **Ciscoasa**: Emulates Cisco ASA devices to detect attacks on firewalls and VPNs.
-3. **Citrixhoneypot**: Simulates known Citrix vulnerabilities, such as CVE-2019-19781.
-4. **Dionaea**: Emulates vulnerable network services (e.g., SMB, FTP) to capture malware and exploits.
-5. **Endlessh**: Simulates an SSH server that keeps connections open indefinitely, slowing down network scanners.
-6. **Ipphoney**: Emulates IPP (Internet Printing Protocol) services to detect attacks on network printers.
+1. **[Adbhoney](https://github.com/huuck/ADBHoney)**: Simulates Android devices exposed via the ADB (Android Debug Bridge) protocol.
+2. **[Ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot)**: Emulates Cisco ASA devices to detect attacks on firewalls and VPNs.
+3. **[Citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot)**: Simulates known Citrix vulnerabilities, such as CVE-2019-19781.
+4. **[Dionaea](https://github.com/DinoTools/dionaea)**: Emulates vulnerable network services (e.g., SMB, FTP) to capture malware and exploits.
+5. **[Endlessh](https://github.com/skeeto/endlessh)**: Simulates an SSH server that keeps connections open indefinitely, slowing down network scanners.
+6. **[Ipphoney](https://gitlab.com/bontchev/ipphoney)**: Emulates IPP (Internet Printing Protocol) services to detect attacks on network printers.
 
 #### 1.3.3 Web and Application Honeypots 🌍
-1. **Cowrie**: Emulates SSH and Telnet servers to capture brute-force attempts and malicious commands.
-2. **Hellpot**: Simulates vulnerable HTTP servers to capture "log4shell" attacks (CVE-2021-44228).
+1. **[Cowrie](https://github.com/cowrie/cowrie)**: Emulates SSH and Telnet servers to capture brute-force attempts and malicious commands.
+2. **[Hellpot](https://github.com/yunginnanet/HellPot)**: Simulates vulnerable HTTP servers to capture "log4shell" attacks (CVE-2021-44228).
 
 #### 1.3.4 DDoS and Anomaly Detection Honeypots ⚠️
-1. **Ddospot**: Detects and analyzes DDoS attacks by simulating vulnerable services.
-2. **Honeytrap**: Monitors network traffic and dynamically launches honeypots based on incoming requests.
+1. **[Ddospot](https://github.com/aelth/ddospot)**: Detects and analyzes DDoS attacks by simulating vulnerable services.
+2. **[Honeytrap](https://github.com/armedpot/honeytrap/)**: Monitors network traffic and dynamically launches honeypots based on incoming requests.
 
 #### 1.3.5 Email and Communication Honeypots 📧
-1. **Mailoney**: Emulates SMTP servers to capture spam and phishing attempts.
-2. **Heralding**: Simulates authentication services (e.g., SSH, FTP) to capture stolen credentials.
+1. **[Mailoney](https://github.com/awhitehatter/mailoney)**: Emulates SMTP servers to capture spam and phishing attempts.
+2. **[Heralding](https://github.com/johnnykv/heralding)**: Simulates authentication services (e.g., SSH, FTP) to capture stolen credentials.
 
 #### 1.3.6 Malware and Advanced Analysis Honeypots 🦠
-1. **Beelzebub**: Analyzes malware by emulating vulnerable services.
-2. **Snare / Tanner**: Snare captures interactions, while Tanner analyzes attacker behavior.
+1. **[Beelzebub](https://github.com/mariocandela/beelzebub)**: Analyzes malware by emulating vulnerable services.
+2. Snare / Tanner: Snare captures interactions, while Tanner analyzes attacker behavior.
 
 #### 1.3.7 Data Traps and Advanced Deception Honeypots 🎯
-1. **Elasticpot**: Simulates an unprotected Elasticsearch server, often targeted for data breaches.
-2. **H0neytr4p**: A generic honeypot for capturing interactions with exposed services.
+1. **[Elasticpot](https://gitlab.com/bontchev/elasticpot)**: Simulates an unprotected Elasticsearch server, often targeted for data breaches.
+2. **[H0neytr4p](https://github.com/pbssubhash/h0neytr4p)**: A generic honeypot for capturing interactions with exposed services.
 
 ---
 
