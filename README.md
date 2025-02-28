@@ -1,4 +1,4 @@
-# T-Pot 🍯 - MacOS Installation & Testing 🖥️
+# T-Pot 🍯 - MacOS🍎 Installation & Testing 📊
 
 ## Table of Contents
 - [Introduction](#introduction)
