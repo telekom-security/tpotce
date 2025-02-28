@@ -1,16 +1,16 @@
 # T-Pot 🍯 - MacOS Installation & Testing 🖥️
 
 ## Table of Contents
-1. [Introduction](#introduction)
-   1. [Features and Benefits](#features-and-benefits)
-   2. [Architecture](#architecture)
-   3. [Supported Honeypots](#supported-honeypots)
-   4. [Tools Included](#tools-included)
-2. [MacOS Installation](#macos-installation)
-   1. [Required Ports](#required-ports)
-   2. [Uninstall T-Pot](#uninstall-tpot)
-3. [Data Analysis and Insights](#data-analysis-and-insights)
-4. [Conclusion](#conclusion)
+- [Introduction](#introduction)
+  - [Features and Benefits](#features-and-benefits)
+  - [Architecture](#architecture)
+  - [Supported Honeypots](#supported-honeypots)
+  - [Tools Included](#tools-included)
+- [MacOS Installation](#macos-installation)
+  - [Required Ports](#required-ports)
+  - [Uninstall T-Pot](#uninstall-tpot)
+- [Data Analysis and Insights](#data-analysis-and-insights)
+  - [Conclusion](#conclusion)
 
 ---
 
