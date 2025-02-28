@@ -13,12 +13,12 @@
   - [Conclusion](#conclusion)
 
 ---
-
+<a name="introduction"></a>
 ## 1. Introduction 🌍
 **T-Pot** is an all-in-one honeypot platform designed by Deutsche Telekom. It supports multi-architectures (amd64, arm64) and offers a wide range of visualization options using the **Elastic Stack**, real-time animated attack maps, and numerous security tools to enhance the deception experience. 🍯
 
 ---
-
+<a name="features-and-benefits"></a>
 ### 1.1 Features and Benefits 💡
 T-Pot provides several key features that make it a powerful tool for cybersecurity professionals and researchers:
 
@@ -35,12 +35,12 @@ T-Pot provides several key features that make it a powerful tool for cybersecuri
 - **Community Data Sharing**: By default, T-Pot sends data to the **Sicherheitstacho** community backend, contributing to collective threat intelligence. This feature can be disabled if needed.
 
 ---
-
+<a name="architecture"></a>
 ### 1.2 Architecture 🏗️
 The core components of T-Pot have been moved into a Docker image called **tpotinit**. This change has made T-Pot compatible with multiple Linux distributions, macOS, and Windows (with some limitations due to Docker Desktop). T-Pot uses **Docker** and **Docker Compose** to run as many honeypots and tools as possible simultaneously, maximizing the host's hardware utilization.
 
 ---
-
+<a name="supported-honeypots"></a>
 ### 1.3 Supported Honeypots 🛡️
 T-Pot supports a wide range of honeypots, including:
 
@@ -78,7 +78,7 @@ T-Pot supports a wide range of honeypots, including:
 2. **[H0neytr4p](https://github.com/pbssubhash/h0neytr4p)**: A generic honeypot for capturing interactions with exposed services.
 
 ---
-
+<a name="tools-included"></a>
 ### 1.4 Tools Included 🛠️
 T-Pot also includes the following tools:
 - **Autoheal**: Automatically restarts containers with failed health checks.
@@ -107,7 +107,7 @@ To get things up and running just follow these steps:
 9. Stop T-Pot: `CTRL-C` (it if was running in the foreground) and / or `docker compose down -v` to stop T-Pot entirely.
 
 ---
-
+<a name="required-ports"></a>
 ### 2.1 Required Ports 🔌
 Besides the ports generally needed by the OS, i.e. obtaining a DHCP lease, DNS, etc. T-Pot will require the following ports for incoming / outgoing connections. Review the [T-Pot Architecture](#technical-architecture) for a visual representation. Also some ports will show up as duplicates, which is fine since used in different editions.
 
@@ -150,7 +150,7 @@ Besides the ports generally needed by the OS, i.e. obtaining a DHCP lease, DNS, 
 | 8090                                                                                                                                  | tcp      | incoming  | Honeypot: Wordpot                                                                                   |
 
 ---
-
+<a name="uninstall-tpot"></a>
 ### 2.2 Uninstall T-Pot 🧹
 Uninstallation of T-Pot is only available on the [supported Linux distros](#choose-your-distro).<br>
 To uninstall T-Pot run ~/tpotce/uninstall.sh and follow the uninstaller instructions, you will have to enter your password at least once.<br>
@@ -158,7 +158,7 @@ Once the uninstall is finished reboot the machine sudo reboot
 <br><br>
 
 ---
-
+<a name="data-analysis-and-insights)"></a>
 ## 3 Data Analysis and Insights
 Recent studies, such as one conducted by **Jiuma Elhshik**, have demonstrated T-Pot's effectiveness in collecting and analyzing threat data. Over 48 hours, T-Pot captured **126,833 attacks**, providing valuable insights into current threat landscapes. Key findings include:
 
@@ -180,6 +180,6 @@ Recent studies, such as one conducted by **Jiuma Elhshik**, have demonstrated T-
    - Detection of malware such as **Hajime**, a worm known for creating botnets.
 
 ---
-
+<a name="conclusion"></a>
 ## 4 Conclusion 🔚
 T-Pot is a powerful and versatile platform for cybersecurity professionals and researchers. Its ability to integrate multiple honeypots, provide advanced visualization tools, and scale across different environments makes it an essential tool for understanding and mitigating cyber threats. By contributing to collective threat intelligence, T-Pot helps build a safer digital world. 🌐🔒
