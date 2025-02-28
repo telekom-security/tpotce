@@ -93,7 +93,7 @@ T-Pot also includes the following tools:
 
 ---
 
-## 2. MacOs Installation 🍏
+## 2 MacOs Installation 🍏
 Sometimes it is just nice if you can spin up a T-Pot instance on macOS or Windows, i.e. for development, testing or just the fun of it. As Docker Desktop is rather limited not all honeypot types or T-Pot features are supported. Also remember, by default the macOS and Windows firewall are blocking access from remote, so testing is limited to the host. For production it is recommended to run T-Pot on [Linux](#choose-your-distro).<br>
 To get things up and running just follow these steps:
 1. Install Docker Desktop for [macOS](https://docs.docker.com/desktop/install/mac-install/) or [Windows](https://docs.docker.com/desktop/install/windows-install/).
@@ -151,7 +151,7 @@ Besides the ports generally needed by the OS, i.e. obtaining a DHCP lease, DNS, 
 
 ---
 
-### Uninstall T-Pot 🧹
+### 2.2 Uninstall T-Pot 🧹
 Uninstallation of T-Pot is only available on the [supported Linux distros](#choose-your-distro).<br>
 To uninstall T-Pot run ~/tpotce/uninstall.sh and follow the uninstaller instructions, you will have to enter your password at least once.<br>
 Once the uninstall is finished reboot the machine sudo reboot
@@ -159,7 +159,7 @@ Once the uninstall is finished reboot the machine sudo reboot
 
 ---
 
-## Data Analysis and Insights
+## 3 Data Analysis and Insights
 Recent studies, such as one conducted by **Jiuma Elhshik**, have demonstrated T-Pot's effectiveness in collecting and analyzing threat data. Over 48 hours, T-Pot captured **126,833 attacks**, providing valuable insights into current threat landscapes. Key findings include:
 
 1. **Most Targeted Honeypots**:
@@ -181,5 +181,5 @@ Recent studies, such as one conducted by **Jiuma Elhshik**, have demonstrated T-
 
 ---
 
-## Conclusion 🔚
+## 4 Conclusion 🔚
 T-Pot is a powerful and versatile platform for cybersecurity professionals and researchers. Its ability to integrate multiple honeypots, provide advanced visualization tools, and scale across different environments makes it an essential tool for understanding and mitigating cyber threats. By contributing to collective threat intelligence, T-Pot helps build a safer digital world. 🌐🔒
