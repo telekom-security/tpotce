@@ -14,12 +14,12 @@
 
 ---
 
-## 1. Introduction
+## 1. Introduction 🌍
 **T-Pot** is an all-in-one honeypot platform designed by Deutsche Telekom. It supports multi-architectures (amd64, arm64) and offers a wide range of visualization options using the **Elastic Stack**, real-time animated attack maps, and numerous security tools to enhance the deception experience. 🍯
 
 ---
 
-### 1.1 Features and Benefits
+### 1.1 Features and Benefits 💡
 T-Pot provides several key features that make it a powerful tool for cybersecurity professionals and researchers:
 
 - **Comprehensive Honeypot Integration**: T-Pot combines over 20 honeypots, each designed to capture different types of malicious activity. This integration allows for monitoring and analyzing a wide variety of attack vectors.
@@ -36,20 +36,20 @@ T-Pot provides several key features that make it a powerful tool for cybersecuri
 
 ---
 
-### 1.2 Architecture
+### 1.2 Architecture 🏗️
 The core components of T-Pot have been moved into a Docker image called **tpotinit**. This change has made T-Pot compatible with multiple Linux distributions, macOS, and Windows (with some limitations due to Docker Desktop). T-Pot uses **Docker** and **Docker Compose** to run as many honeypots and tools as possible simultaneously, maximizing the host's hardware utilization.
 
 ---
 
-### 1.3 Supported Honeypots
+### 1.3 Supported Honeypots 🛡️
 T-Pot supports a wide range of honeypots, including:
 
-#### 1.3.1 Industrial and Medical Honeypots
+#### 1.3.1 Industrial and Medical Honeypots 🏭
 1. **Conpot**: Simulates Industrial Control Systems (ICS) and protocols like Modbus, SNMP, and S7comm.
 2. **Dicompot**: Emulates medical imaging systems (DICOM) to detect attacks on medical devices.
 3. **Medpot**: Simulates medical data management systems, focusing on healthcare sector attacks.
 
-#### 1.3.2 Network and IoT Honeypots
+#### 1.3.2 Network and IoT Honeypots 🌐
 1. **Adbhoney**: Simulates Android devices exposed via the ADB (Android Debug Bridge) protocol.
 2. **Ciscoasa**: Emulates Cisco ASA devices to detect attacks on firewalls and VPNs.
 3. **Citrixhoneypot**: Simulates known Citrix vulnerabilities, such as CVE-2019-19781.
@@ -57,29 +57,29 @@ T-Pot supports a wide range of honeypots, including:
 5. **Endlessh**: Simulates an SSH server that keeps connections open indefinitely, slowing down network scanners.
 6. **Ipphoney**: Emulates IPP (Internet Printing Protocol) services to detect attacks on network printers.
 
-#### 1.3.3 Web and Application Honeypots
+#### 1.3.3 Web and Application Honeypots 🌍
 1. **Cowrie**: Emulates SSH and Telnet servers to capture brute-force attempts and malicious commands.
 2. **Hellpot**: Simulates vulnerable HTTP servers to capture "log4shell" attacks (CVE-2021-44228).
 
-#### 1.3.4 DDoS and Anomaly Detection Honeypots
+#### 1.3.4 DDoS and Anomaly Detection Honeypots ⚠️
 1. **Ddospot**: Detects and analyzes DDoS attacks by simulating vulnerable services.
 2. **Honeytrap**: Monitors network traffic and dynamically launches honeypots based on incoming requests.
 
-#### 1.3.5 Email and Communication Honeypots
+#### 1.3.5 Email and Communication Honeypots 📧
 1. **Mailoney**: Emulates SMTP servers to capture spam and phishing attempts.
 2. **Heralding**: Simulates authentication services (e.g., SSH, FTP) to capture stolen credentials.
 
-#### 1.3.6 Malware and Advanced Analysis Honeypots
+#### 1.3.6 Malware and Advanced Analysis Honeypots 🦠
 1. **Beelzebub**: Analyzes malware by emulating vulnerable services.
 2. **Snare / Tanner**: Snare captures interactions, while Tanner analyzes attacker behavior.
 
-#### 1.3.7 Data Traps and Advanced Deception Honeypots
+#### 1.3.7 Data Traps and Advanced Deception Honeypots 🎯
 1. **Elasticpot**: Simulates an unprotected Elasticsearch server, often targeted for data breaches.
 2. **H0neytr4p**: A generic honeypot for capturing interactions with exposed services.
 
 ---
 
-### 1.4 Tools Included
+### 1.4 Tools Included 🛠️
 T-Pot also includes the following tools:
 - **Autoheal**: Automatically restarts containers with failed health checks.
 - **CyberChef**: A web app for encryption, encoding, compression, and data analysis.
@@ -93,7 +93,7 @@ T-Pot also includes the following tools:
 
 ---
 
-## 2. MacOs Installation
+## 2. MacOs Installation 🍏
 Sometimes it is just nice if you can spin up a T-Pot instance on macOS or Windows, i.e. for development, testing or just the fun of it. As Docker Desktop is rather limited not all honeypot types or T-Pot features are supported. Also remember, by default the macOS and Windows firewall are blocking access from remote, so testing is limited to the host. For production it is recommended to run T-Pot on [Linux](#choose-your-distro).<br>
 To get things up and running just follow these steps:
 1. Install Docker Desktop for [macOS](https://docs.docker.com/desktop/install/mac-install/) or [Windows](https://docs.docker.com/desktop/install/windows-install/).
@@ -108,7 +108,7 @@ To get things up and running just follow these steps:
 
 ---
 
-### 2.1 Required Ports
+### 2.1 Required Ports 🔌
 Besides the ports generally needed by the OS, i.e. obtaining a DHCP lease, DNS, etc. T-Pot will require the following ports for incoming / outgoing connections. Review the [T-Pot Architecture](#technical-architecture) for a visual representation. Also some ports will show up as duplicates, which is fine since used in different editions.
 
 | Port                                                                                                                                  | Protocol | Direction | Description                                                                                         |
@@ -129,28 +129,4 @@ Besides the ports generally needed by the OS, i.e. obtaining a DHCP lease, DNS, 
 | 19, 53, 123, 1900                                                                                                                     | udp      | incoming  | Honeypot: Ddospot                                                                                   |
 | 11112                                                                                                                                 | tcp      | incoming  | Honeypot: Dicompot                                                                                  |
 | 21, 42, 135, 443, 445, 1433, 1723, 1883, 3306, 8081                                                                                   | tcp      | incoming  | Honeypot: Dionaea                                                                                   |
-| 69                                                                                                                                    | udp      | incoming  | Honeypot: Dionaea                                                                                   |
-| 9200                                                                                                                                  | tcp      | incoming  | Honeypot: Elasticpot                                                                                |
-| 22                                                                                                                                    | tcp      | incoming  | Honeypot: Endlessh                                                                                  |
-| 80, 443, 8080, 8443                                                                                                                   | tcp      | incoming  | Honeypot: Galah  (LLM required)                                                                     |
-| 8080                                                                                                                                  | tcp      | incoming  | Honeypot: Go-pot                                                                                    |
-| 80, 443                                                                                                                               | tcp      | incoming  | Honeypot: H0neytr4p                                                                                 |
-| 4444                                                                                                                                  | tcp      | incoming  | Honeypot: Mailoney                                                                                  |
-
----
-
-### 2.2 Uninstall T-Pot
-If you want to completely remove T-Pot from your system:
-1. Run the command `docker compose down -v` to stop all containers.
-2. Remove the T-Pot directory with `rm -rf ~/tpotce`.
-3. Optionally, uninstall Docker Desktop from your system.
-
----
-
-## 3. Data Analysis and Insights
-By leveraging T-Pot's data collection features, you can analyze malicious traffic captured by the honeypots. Utilize the Elastic Stack to create detailed visualizations of the attack data and gain actionable insights into emerging threats.
-
----
-
-## 4. Conclusion
-T-Pot provides an efficient and flexible honeypot solution with a wide array of supported honeypots and analysis tools. It’s an excellent choice for cybersecurity professionals looking to study threat behaviors and improve their defense strategies.
+| 69                                                                                                                                    | udp      | incoming  | Honeypot
