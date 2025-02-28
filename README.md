@@ -10,7 +10,7 @@
   - [Required Ports](#required-ports)
   - [Uninstall T-Pot](#uninstall-tpot)
 - [Data Analysis and Insights](#data-analysis-and-insights)
-  - [Conclusion](#conclusion)
+- [Conclusion](#conclusion)
 
 ---
 <a name="introduction"></a>
