@@ -181,6 +181,8 @@ Recent studies, such as one conducted by **Jiuma Elhshik**, have demonstrated T-
    - Use of backdoors like **DoublePulsar**.
    - Detection of malware such as **Hajime**, a worm known for creating botnets.
 
+For more detailed information, you can read the full study by Jiuma Elhshik on [Medium](https://medium.com/@jiumael/trap-the-hackers-building-and-analyzing-a-t-pot-honeypot-b15f3b6c5ea2).
+
 ---
 <a name="conclusion"></a>
 ## 4 Conclusion 🔚
