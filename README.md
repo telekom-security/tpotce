@@ -6,7 +6,7 @@
    2. [Architecture](#architecture)
    3. [Supported Honeypots](#supported-honeypots)
    4. [Tools Included](#tools-included)
-2. [MacOs Installation](#macos-installation)
+2. [MacOS Installation](#macos-installation)
    1. [Required Ports](#required-ports)
    2. [Uninstall T-Pot](#uninstall-tpot)
 3. [Data Analysis and Insights](#data-analysis-and-insights)
