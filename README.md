@@ -47,7 +47,7 @@ T-Pot supports a wide range of honeypots, including:
 #### 1.3.1 Industrial and Medical Honeypots 🏭
 1. **[Conpot](http://conpot.org/)**: Simulates Industrial Control Systems (ICS) and protocols like Modbus, SNMP, and S7comm.
 2. **[Dicompot](https://github.com/nsmfoo/dicompot)**: Emulates medical imaging systems (DICOM) to detect attacks on medical devices.
-3. **Medpot**: Simulates medical data management systems, focusing on healthcare sector attacks.
+3. **[medpot](https://github.com/schmalle/medpot)**: Simulates medical data management systems, focusing on healthcare sector attacks.
 
 #### 1.3.2 Network and IoT Honeypots 🌐
 1. **[Adbhoney](https://github.com/huuck/ADBHoney)**: Simulates Android devices exposed via the ADB (Android Debug Bridge) protocol.
@@ -71,7 +71,8 @@ T-Pot supports a wide range of honeypots, including:
 
 #### 1.3.6 Malware and Advanced Analysis Honeypots 🦠
 1. **[Beelzebub](https://github.com/mariocandela/beelzebub)**: Analyzes malware by emulating vulnerable services.
-2. Snare / Tanner: Snare captures interactions, while Tanner analyzes attacker behavior.
+2. **[snare](http://mushmush.org/)** / **[tanner](http://mushmush.org/)**: Snare captures interactions, while Tanner analyzes attacker behavior.
+3. 
 
 #### 1.3.7 Data Traps and Advanced Deception Honeypots 🎯
 1. **[Elasticpot](https://gitlab.com/bontchev/elasticpot)**: Simulates an unprotected Elasticsearch server, often targeted for data breaches.
