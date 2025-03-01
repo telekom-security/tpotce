@@ -143,8 +143,16 @@ To get things up and running just follow these steps:
     ```
 
 14. You have to ensure on your own there are no port conflicts keeping T-Pot from starting up. Check the [list of required ports](#required-ports).
-15. Start T-Pot: `docker compose up` or `docker compose up -d` if you want T-Pot to run in the background.
-16. Stop T-Pot: `CTRL-C` (it if was running in the foreground) and / or `docker compose down -v` to stop T-Pot entirely.
+15. To start T-Pot run:
+    ```
+    docker compose up
+    ```
+    or  if you want T-Pot to run in the background:
+    ```
+    docker compose up -d
+    ```
+16. During the first time running `docker-compose up`, you may encounter some issues. Check the [Installation Issues](#installation-issues) section to solve them. 
+17. To Stop T-Pot press: `CTRL-C` (it if was running in the foreground) and / or `docker compose down -v` to stop T-Pot entirely.
 
 ---
 <a name="installation-issues"></a>
