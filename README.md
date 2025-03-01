@@ -104,15 +104,30 @@ To get things up and running just follow these steps:
    ```
    git clone https://github.com/domedg/tpotce_MacOS/
    ```
-4. Go to : `cd tpotce_MacOS/`
-5. Copy `cp compose/mac_win.yml ./docker-compose.yml`
-6. Check if the script "genuser.sh" is executable, if is not run `chmod 777 genuser.sh`
-7. Create a `WEB_USER` by running `./genuser.sh`
+4. Go to repo folder:
+   ```
+   cd tpotce_MacOS/
+   ```
+6. Copy the docker configuration file
+   ```
+   cp compose/mac_win.yml ./docker-compose.yml
+   ```
+8. Check if the script `genuser.sh` is executable, if is not run:
+   ```
+   chmod 777 genuser.sh
+   ```
+10. Create a `WEB_USER` by running `./genuser.sh`
+    1. **Possible Issue**  
+       Sometimes
+       ```sh
+       chmod +x genuser.sh
+       ```
+       Then, run the script again.
    
-8. Adjust the `.env` file by changing `TPOT_OSTYPE=linux` to either `mac` or `win`:
-9. You have to ensure on your own there are no port conflicts keeping T-Pot from starting up. Check the [list of required ports](#required-ports).
-10. Start T-Pot: `docker compose up` or `docker compose up -d` if you want T-Pot to run in the background.
-11. Stop T-Pot: `CTRL-C` (it if was running in the foreground) and / or `docker compose down -v` to stop T-Pot entirely.
+12. Adjust the `.env` file by changing `TPOT_OSTYPE=linux` to either `mac` or `win`:
+13. You have to ensure on your own there are no port conflicts keeping T-Pot from starting up. Check the [list of required ports](#required-ports).
+14. Start T-Pot: `docker compose up` or `docker compose up -d` if you want T-Pot to run in the background.
+15. Stop T-Pot: `CTRL-C` (it if was running in the foreground) and / or `docker compose down -v` to stop T-Pot entirely.
 
 ---
 <a name="required-ports"></a>
