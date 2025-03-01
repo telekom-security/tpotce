@@ -8,6 +8,7 @@
   - [Tools Included](#tools-included)
 - [MacOS Installation](#macos-installation)
   - [Required Ports](#required-ports)
+  - [Update Script](#update-script)
   - [Uninstall T-Pot](#uninstall-tpot)
 - [Data Analysis and Insights](#data-analysis-and-insights)
 - [Conclusion](#conclusion)
@@ -109,7 +110,7 @@ To get things up and running just follow these steps:
 7. Create a `WEB_USER` by running `./genuser.sh`
    
 8. Adjust the `.env` file by changing `TPOT_OSTYPE=linux` to either `mac` or `win`:
-9. You have to ensure on your own there are no port conflicts keeping T-Pot from starting up.
+9. You have to ensure on your own there are no port conflicts keeping T-Pot from starting up. Check the [list of required ports](#required-ports).
 10. Start T-Pot: `docker compose up` or `docker compose up -d` if you want T-Pot to run in the background.
 11. Stop T-Pot: `CTRL-C` (it if was running in the foreground) and / or `docker compose down -v` to stop T-Pot entirely.
 
@@ -155,6 +156,23 @@ Besides the ports generally needed by the OS, i.e. obtaining a DHCP lease, DNS, 
 | 5060                                                                                                                                  | tcp/udp  | incoming  | Honeypot: SentryPeer                                                                                |
 | 80                                                                                                                                    | tcp      | incoming  | Honeypot: Snare (Tanner)                                                                            |
 | 8090                                                                                                                                  | tcp      | incoming  | Honeypot: Wordpot                                                                                   |
+
+---
+<a name="update-script"></a>
+### Update Script 🔄
+T-Pot releases are offered through GitHub and can be pulled using 
+```
+./update.sh
+```
+<br> 
+***If you made any relevant changes to the T-Pot config files make sure to create a backup first!***<br>
+***Updates may have unforeseen consequences. Create a backup of the machine or the files most valuable to your work!***<br>
+
+The update script will ...
+ - ***mercilessly*** overwrite local changes to be in sync with the T-Pot master branch
+ - create a full backup of the `~/tpotce` folder
+ - update all files in `~/tpotce` to be in sync with the T-Pot master branch
+ - restore your custom `ews.cfg` from `~/tpotce/data/ews/conf` and the T-Pot configuration (`~/tpotce/.env`).
 
 ---
 <a name="uninstall-tpot"></a>
