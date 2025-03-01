@@ -98,6 +98,9 @@ T-Pot also includes the following tools:
 ## 2 MacOS Installation 🍏
 As Docker Desktop is rather limited not all honeypot types or T-Pot features are supported. Also remember, by default the macOS are blocking access from remote, so testing is limited to the host.
 
+**System Requirements:**
+The T-Pot installation needs at least 8-16 GB RAM, 128 GB free disk space as well as a working (outgoing non-filtered) internet connection.
+
 To get things up and running just follow these steps:
 1. Install Docker Desktop for [macOS](https://docs.docker.com/desktop/install/mac-install/)
 2. Clone the GitHub repository:
