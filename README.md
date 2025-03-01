@@ -95,17 +95,23 @@ T-Pot also includes the following tools:
 ---
 <a name="macos-installation"></a>
 ## 2 MacOS Installation 🍏
-Sometimes it is just nice if you can spin up a T-Pot instance on macOS or Windows, i.e. for development, testing or just the fun of it. As Docker Desktop is rather limited not all honeypot types or T-Pot features are supported. Also remember, by default the macOS and Windows firewall are blocking access from remote, so testing is limited to the host. For production it is recommended to run T-Pot on [Linux](#choose-your-distro).<br>
+As Docker Desktop is rather limited not all honeypot types or T-Pot features are supported. Also remember, by default the macOS are blocking access from remote, so testing is limited to the host.
+
 To get things up and running just follow these steps:
-1. Install Docker Desktop for [macOS](https://docs.docker.com/desktop/install/mac-install/) or [Windows](https://docs.docker.com/desktop/install/windows-install/).
-2. Clone the GitHub repository: `git clone https://github.com/telekom-security/tpotce` (in Windows make sure the code is checked out with `LF` instead of `CRLF`!)
-3. Go to: `cd ~/tpotce`
-4. Copy `cp compose/mac_win.yml ./docker-compose.yml`
-5. Create a `WEB_USER` by running `~/tpotce/genuser.sh` (macOS) or `~/tpotce/genuserwin.ps1` (Windows)
-6. Adjust the `.env` file by changing `TPOT_OSTYPE=linux` to either `mac` or `win`:
-7. You have to ensure on your own there are no port conflicts keeping T-Pot from starting up.
-8. Start T-Pot: `docker compose up` or `docker compose up -d` if you want T-Pot to run in the background.
-9. Stop T-Pot: `CTRL-C` (it if was running in the foreground) and / or `docker compose down -v` to stop T-Pot entirely.
+1. Install Docker Desktop for [macOS](https://docs.docker.com/desktop/install/mac-install/)
+2. Clone the GitHub repository:
+   ```
+   git clone https://github.com/domedg/tpotce_MacOS/
+   ```
+4. Go to : `cd tpotce_MacOS/`
+5. Copy `cp compose/mac_win.yml ./docker-compose.yml`
+6. Check if the script "genuser.sh" is executable, if is not run `chmod 777 genuser.sh`
+7. Create a `WEB_USER` by running `./genuser.sh`
+   
+8. Adjust the `.env` file by changing `TPOT_OSTYPE=linux` to either `mac` or `win`:
+9. You have to ensure on your own there are no port conflicts keeping T-Pot from starting up.
+10. Start T-Pot: `docker compose up` or `docker compose up -d` if you want T-Pot to run in the background.
+11. Stop T-Pot: `CTRL-C` (it if was running in the foreground) and / or `docker compose down -v` to stop T-Pot entirely.
 
 ---
 <a name="required-ports"></a>
