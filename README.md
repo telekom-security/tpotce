@@ -117,12 +117,20 @@ To get things up and running just follow these steps:
    chmod 777 genuser.sh
    ```
 10. Create a `WEB_USER` by running `./genuser.sh`
-    1. **Possible Issue**  
-       Sometimes
-       ```sh
-       chmod +x genuser.sh
-       ```
-       Then, run the script again.
+    1. **Possible Issue**: WEB_USER Not Loaded  
+    Sometimes, running the `genuser.sh` script may not properly load the `WEB_USER` entry in the `.env` file.
+    To check, open the `.env` file and verify if the `WEB_USER` variable is empty.  
+    
+    If it is empty, generate a new value using the following command:  
+    ```sh
+    htpasswd -n -b "username" "password" | base64 -w0
+    ```
+    For example, running:
+    ```sh
+    htpasswd -n -b "tsec" "tsec" | base64 -w0
+    ```
+    Copy the generated string and manually replace the WEB_USER value in the .env file.
+    
    
 12. Adjust the `.env` file by changing `TPOT_OSTYPE=linux` to either `mac` or `win`:
 13. You have to ensure on your own there are no port conflicts keeping T-Pot from starting up. Check the [list of required ports](#required-ports).
