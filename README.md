@@ -162,8 +162,8 @@ In this section, you will find a guide to resolve the installation issues I enco
 
 #### Issue 1: Undefined Network in Docker Compose
 **Issue:** When running `docker compose up`, you receive the error:
-```
-service "citrixhoneypot" refers to undefined network citrixhoneypot_local: invalid compose project
+```diff
+- service "citrixhoneypot" refers to undefined network citrixhoneypot_local: invalid compose project
 ```
 **Solution:** Add the `citrixhoneypot_local` network to the `docker-compose.yml` file:
 ```yaml
