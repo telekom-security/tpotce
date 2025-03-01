@@ -117,7 +117,7 @@ To get things up and running just follow these steps:
    chmod 777 genuser.sh
    ```
 10. Create a `WEB_USER` by running `./genuser.sh`
-    1. **Possible Issue**: WEB_USER Not Loaded  
+    ### **Possible Issue**: WEB_USER Not Loaded  
     Sometimes, running the `genuser.sh` script may not properly load the `WEB_USER` entry in the `.env` file.
     To check, open the `.env` file and verify if the `WEB_USER` variable is empty.  
     
