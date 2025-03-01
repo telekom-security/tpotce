@@ -1,0 +1,6 @@
+# Ignore data folder
+data/
+_data/
+**/.DS_Store
+.idea
+install_tpot.log
