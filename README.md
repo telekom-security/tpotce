@@ -157,12 +157,84 @@ To get things up and running just follow these steps:
 ---
 <a name="installation-issues"></a>
 ### 2.1 Installation Issues 🤦‍♂️
-Section installation issues
+
+In this section, you will find a guide to resolve the installation issues I encountered. Each issue is followed by its respective solution.
+
+#### Issue 1: Undefined Network in Docker Compose
+**Issue:** When running `docker compose up`, you receive the error:
+```
+service "citrixhoneypot" refers to undefined network citrixhoneypot_local: invalid compose project
+```
+**Solution:** Add the `citrixhoneypot_local` network to the `docker-compose.yml` file:
+```yaml
+networks:
+    citrixhoneypot_local:
+```
+
+#### Issue 2: Port Already in Use for Citrixhoneypot
+**Issue:** Citrixhoneypot reports that port 443 is already in use.
+**Solution:** Change the port from 443 to another free (8445 in this example) in the `docker-compose.yml` file:
+```yaml
+# CitrixHoneypot service
+  citrixhoneypot:
+    container_name: citrixhoneypot
+    restart: always
+    depends_on:   
+      tpotinit:
+        condition: service_healthy
+    networks:
+     - citrixhoneypot_local
+    ports:
+     - "443:8445"
+    image: ${TPOT_REPO}/citrixhoneypot:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}  
+    read_only: true
+    volumes:
+     - ${TPOT_DATA_PATH}/citrixhoneypot/log:/opt/citrixhoneypot/logs
+```
+
+#### Issue 3: Kibana not working
+**Issue:** Kibana service not working
+**Solution:** Inside the Kibana container, you need to set the `server.rewriteBasePath=true` variable.
+
+Access the container using the `docker exec` command with the `-u root` option:
+```sh
+docker exec -u root -it <container_id> /bin/bash
+```
+To retrieve the container ID, run the following command:
+```sh
+docker ps -a
+```
+Edit the `/usr/share/kibana/config/kibana.yml` file by changing this variable from false to true:
+```yaml
+server.rewriteBasePath: true
+```
+
+#### Issue 4: Port Already Mapped for Snare
+**Issue:** Snare reports that port 80 is already mapped.
+**Solution:** Modify the `docker-compose.yml` file by changing the port mapping from 80 to another available port (5695 for example):
+```yaml
+## Snare Service   
+  snare:
+    container_name: snare
+    restart: always
+    depends_on:
+     - tanner  
+    tty: true  
+    networks:
+     - tanner_local
+    ports:   
+     - "80:5695"
+    image: ${TPOT_REPO}/snare:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+```
 
 ---
 <a name="management-tips"></a>
 ### 2.2 Management Tips 🛟
 Section management tips
+
+attenzione kibana non inizia subito dato che deve instaurare la connesione con elasticsearch, in generale i container che ci mettono piu a startare sono i vari conpot e kibana, per monitorare lo stato dei container puoi eseguire docker ps -a | grep starting per vedere quelli che ancora devono partire
 
 ---
 <a name="testing"></a>
