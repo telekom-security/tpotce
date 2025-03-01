@@ -101,19 +101,19 @@ As Docker Desktop is rather limited not all honeypot types or T-Pot features are
 To get things up and running just follow these steps:
 1. Install Docker Desktop for [macOS](https://docs.docker.com/desktop/install/mac-install/)
 2. Clone the GitHub repository:
-   ```
+   ```sh
    git clone https://github.com/domedg/tpotce_MacOS/
    ```
 4. Go to repo folder:
-   ```
+   ```sh
    cd tpotce_MacOS/
    ```
 6. Copy the docker configuration file
-   ```
+   ```sh
    cp compose/mac_win.yml ./docker-compose.yml
    ```
 8. Check if the script `genuser.sh` is executable, if is not run:
-   ```
+   ```sh
    chmod 777 genuser.sh
    ```
 10. Create a `WEB_USER` by running `./genuser.sh`
@@ -130,12 +130,15 @@ To get things up and running just follow these steps:
     htpasswd -n -b "tsec" "tsec" | base64 -w0
     ```
     Copy the generated string and manually replace the WEB_USER value in the .env file.
-    
-   
-12. Adjust the `.env` file by changing `TPOT_OSTYPE=linux` to either `mac` or `win`:
-13. You have to ensure on your own there are no port conflicts keeping T-Pot from starting up. Check the [list of required ports](#required-ports).
-14. Start T-Pot: `docker compose up` or `docker compose up -d` if you want T-Pot to run in the background.
-15. Stop T-Pot: `CTRL-C` (it if was running in the foreground) and / or `docker compose down -v` to stop T-Pot entirely.
+  
+12. Adjust the `.env` file by changing `TPOT_OSTYPE=linux` to `mac` or directly run:
+    ```sh
+    sed -i '' 's/^TPOT_OSTYPE=linux$/TPOT_OSTYPE=mac/' .env
+    ```
+
+14. You have to ensure on your own there are no port conflicts keeping T-Pot from starting up. Check the [list of required ports](#required-ports).
+15. Start T-Pot: `docker compose up` or `docker compose up -d` if you want T-Pot to run in the background.
+16. Stop T-Pot: `CTRL-C` (it if was running in the foreground) and / or `docker compose down -v` to stop T-Pot entirely.
 
 ---
 <a name="required-ports"></a>
