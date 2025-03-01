@@ -7,6 +7,9 @@
   - [Supported Honeypots](#supported-honeypots)
   - [Tools Included](#tools-included)
 - [MacOS Installation](#macos-installation)
+  - [Installation Issues](#installation-issues)
+  - [Management Tips](#management-tips)
+  - [Testing](#testing)
   - [Required Ports](#required-ports)
   - [Update Script](#update-script)
   - [Uninstall T-Pot](#uninstall-tpot)
@@ -144,8 +147,23 @@ To get things up and running just follow these steps:
 16. Stop T-Pot: `CTRL-C` (it if was running in the foreground) and / or `docker compose down -v` to stop T-Pot entirely.
 
 ---
+<a name="installation-issues"></a>
+### 2.1 Installation Issues 🤦‍♂️
+Section installation issues
+
+---
+<a name="management-tips"></a>
+### 2.2 Management Tips 🛟
+Section management tips
+
+---
+<a name="testing"></a>
+### 2.3 Testing 🦠
+Section testing
+
+---
 <a name="required-ports"></a>
-### 2.1 Required Ports 🔌
+### 2.4 Required Ports 🔌
 Besides the ports generally needed by the OS, i.e. obtaining a DHCP lease, DNS, etc. T-Pot will require the following ports for incoming / outgoing connections. Review the [T-Pot Architecture](#technical-architecture) for a visual representation. Also some ports will show up as duplicates, which is fine since used in different editions.
 
 | Port                                                                                                                                  | Protocol | Direction | Description                                                                                         |
