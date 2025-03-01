@@ -1,5 +1,7 @@
 # T-Pot 🍯 - MacOS🍎 Installation & Testing 📊
 
+<img width="871" alt="image" src="https://github.com/user-attachments/assets/233a2ce6-015c-48d4-96cc-b81347f9970d" />
+
 ## Table of Contents
 - [Introduction](#introduction)
   - [Features and Benefits](#features-and-benefits)
