@@ -322,7 +322,7 @@ nmap -sU -p- <indirizzo-IP>    # UDP scan (all ports)
 nmap -sV <indirizzo-IP>        # Service version detection
 ```
 
-**2.4 Testing (ModBusSploit) 🛠️**
+**Testing (ModBusSploit) 🛠️**
 
 In this section, we will perform tests on the **[ModBusSploit](https://github.com/C4l1b4n/ModBusSploit/)** tool to simulate attacks on the Conpot honeypot.
 
