@@ -129,8 +129,8 @@ To get things up and running just follow these steps:
     ```sh
     sed -i '' 's/^TPOT_OSTYPE=linux$/TPOT_OSTYPE=mac/' .env
     ```
-8. You have to ensure on your own there are no port conflicts keeping T-Pot from starting up. Check the [list of required ports](https://github.com/NOME-REPO/NOME-FILE.md).
-10. To start T-Pot run:
+8. You have to ensure on your own there are no port conflicts keeping T-Pot from starting up. Check the [list of required ports](https://github.com/telekom-security/tpotce?tab=readme-ov-file#required-ports).
+9. 10. To start T-Pot run:
     ```
     docker compose up
     ```
@@ -139,8 +139,8 @@ To get things up and running just follow these steps:
     docker compose up -d
     ```
     Before starting T-Pot, make sure Docker is running on your system.
-11. During the first time running `docker-compose up`, you may encounter some issues. Check the [Installation Issues](#installation-issues) section to solve them. 
-12. To Stop T-Pot press: `CTRL-C` (it if was running in the foreground) and / or `docker compose down -v` to stop T-Pot entirely.
+10. During the first time running `docker-compose up`, you may encounter some issues. Check the [Installation Issues](#installation-issues) section to solve them. 
+11. To Stop T-Pot press: `CTRL-C` (it if was running in the foreground) and / or `docker compose down -v` to stop T-Pot entirely.
 
 ---
 <a name="installation-issues"></a>
