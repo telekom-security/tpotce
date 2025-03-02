@@ -253,11 +253,19 @@ tpotinit        | chmod: /data/nginx/cert: Permission denied
 ```sh
 chmod -R 770 data
 ```
+**Note:** You may also encounter the following errors during T-Pot initialization:
+```
+tpotinit        | chmod: /data/adbhoney/downloads.tgz: No such file or directory
+tpotinit        | chmod: /data/cowrie/log/ttylogs.tgz: No such file or directory
+tpotinit        | chmod: /data/cowrie/downloads.tgz: No such file or directory
+```
+These errors are not critical and T-Pot should still function correctly.
+
 ---
 <a name="management-tips"></a>
 ### 2.2 Management Tips 🛟
 
-1. **Kibana **: Kibana does not start immediately as it needs to establish a connection with Elasticsearch. Generally, the containers that take the longest to start are Kibana, Dionaea and Conpot. To monitor the status of the containers, you can run:
+1. **Kibana**: Kibana does not start immediately as it needs to establish a connection with Elasticsearch. Generally, the containers that take the longest to start are Kibana, Dionaea and Conpot. To monitor the status of the containers, you can run:
     ```sh
     docker ps -a 
     ```
