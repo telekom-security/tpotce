@@ -11,7 +11,7 @@
 - [MacOS Installation](#macos-installation)
   - [Installation Issues](#installation-issues)
   - [Management Tips](#management-tips)
-  - [Testing](#testing)
+  - [Testing ConPot](#testing-conpot)
   - [Required Ports](#required-ports)
   - [Update Script](#update-script)
   - [Uninstall T-Pot](#uninstall-tpot)
@@ -50,6 +50,7 @@ The core components of T-Pot have been moved into a Docker image called **tpotin
 ### 1.3 Supported Honeypots 🛡️
 T-Pot supports a wide range of honeypots, including:
 
+<a name="#1.3.1-industrial-and-medical-honeypots"></a> 
 #### 1.3.1 Industrial and Medical Honeypots 🏭
 1. **[Conpot](http://conpot.org/)**: Simulates Industrial Control Systems (ICS) and protocols like Modbus, SNMP, and S7comm.
 2. **[Dicompot](https://github.com/nsmfoo/dicompot)**: Emulates medical imaging systems (DICOM) to detect attacks on medical devices.
@@ -307,10 +308,10 @@ These errors are not critical and T-Pot should still function correctly.
    
 
 ---
-<a name="testing"></a>
+<a name="testing-conpot"></a>
 ### 2.3 Testing (ConPot)🦠
 
-In this section, we will perform tests on the Conpot honeypot, as mentioned in section [1.3.1 Industrial and Medical Honeypots 🏭](#1.3.1-industrial-and-medical-honeypots).
+In this section, we will perform tests on the **[Conpot](http://conpot.org/)** honeypot, as mentioned in section [1.3.1 Industrial and Medical Honeypots 🏭](#1.3.1-industrial-and-medical-honeypots).
 
 1. **[Conpot](http://conpot.org/)**: Simulates Industrial Control Systems (ICS) and protocols like Modbus, SNMP, and S7comm.
 
