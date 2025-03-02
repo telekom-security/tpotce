@@ -242,9 +242,27 @@ Copy the generated string and manually replace the WEB_USER value in the .env fi
 ---
 <a name="management-tips"></a>
 ### 2.2 Management Tips 🛟
-Section management tips
 
-attenzione kibana non inizia subito dato che deve instaurare la connesione con elasticsearch, in generale i container che ci mettono piu a startare sono i vari conpot e kibana, per monitorare lo stato dei container puoi eseguire docker ps -a | grep starting per vedere quelli che ancora devono partire
+1. **Attenzione Kibana**: Kibana non inizia subito dato che deve instaurare la connessione con Elasticsearch. In generale, i container che ci mettono più a partire sono i vari componenti e Kibana. Per monitorare lo stato dei container, puoi eseguire:
+    ```sh
+    docker ps -a | grep starting
+    ```
+    Questo comando ti permette di vedere quelli che ancora devono partire.
+
+2. **Ottenere porte di un servizio**: Puoi ottenere le porte di un servizio con il seguente comando:
+    ```sh
+    docker inspect <container_id> | grep HostPort
+    ```
+
+3. **Ottenere indirizzo di un servizio**: Per ottenere l'indirizzo IP di un servizio, usa:
+    ```sh
+    docker inspect <container_id> | grep IPAddress
+    ```
+
+4. **Eseguire un container con permessi di root**: Per eseguire un container con permessi di root, utilizza:
+    ```sh
+    docker exec -it --user root <container_id>
+    ```
 
 ---
 <a name="testing"></a>
