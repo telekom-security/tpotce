@@ -284,7 +284,7 @@ htpasswd -n -b "tsec" "tsec" | base64 -w0
 ```
 Copy the generated string and manually replace the WEB_USER value in the .env file.
 
-#### ⚠️ Issue 5: Missing Directories in T-Pot Initialization
+#### ⚠️ Issue 6: Missing Directories in T-Pot Initialization
 **Issue:** When running `docker compose up`, you may see the following lines in the T-Pot init logs:
 ```
 tpotinit        | # Updating permissions ...
