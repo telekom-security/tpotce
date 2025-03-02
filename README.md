@@ -454,7 +454,7 @@ The update script will ...
 
 <a name="data-analysis-and-insights"></a>
 ## 3 Data Analysis and Insights 📊
-Recent studies, such as one conducted by **Jiuma Elhshik**, have demonstrated T-Pot's effectiveness in collecting and analyzing threat data. Over 48 hours, T-Pot captured **126,833 attacks**, providing valuable insights into current threat landscapes. Key findings include:
+Recent studies, such as one conducted by **Jiuma Elhshik** ([source](https://medium.com/@jiumael/trap-the-hackers-leveraging-t-pot-for-threat-intelligence-part-2-b7a96848a09b)), have demonstrated T-Pot's effectiveness in collecting and analyzing threat data. Over 48 hours, T-Pot captured **126,833 attacks**, providing valuable insights into current threat landscapes. Key findings include:
 
 1. **Most Targeted Honeypots**:
    - **Dionaea**: Over 47,000 attacks, primarily targeting SMB (port 445).
