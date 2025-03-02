@@ -124,8 +124,8 @@ To get things up and running just follow these steps:
    ```sh
    chmod 777 genuser.sh
    ```
-6. Create a `WEB_USER` by running `./genuser.sh`
-    If the `WEB_USER` is not properly set, check [Issue 5: WEB_USER Not Loaded](#issue-5-web_user-not-loaded).
+6. Create a `WEB_USER` by running `./genuser.sh` \n
+   If the `WEB_USER` is not properly set, check [Issue 5: WEB_USER Not Loaded](#issue-5-web_user-not-loaded).
     
 7. Adjust the `.env` file by changing `TPOT_OSTYPE=linux` to `mac` or directly run:
     ```sh
