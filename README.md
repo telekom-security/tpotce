@@ -311,55 +311,82 @@ These errors are not critical and T-Pot should still function correctly.
 <a name="testing-conpot"></a>
 ### 2.3 Testing ConPot 🦠
 
-In this section, we will perform tests on the **[Conpot](http://conpot.org/)** honeypot, as mentioned in section [1.3.1 Industrial and Medical Honeypots 🏭](#industrial-and-medical-honeypots).
-
-1. **[Conpot](http://conpot.org/)**: Simulates Industrial Control Systems (ICS) and protocols like Modbus, SNMP, and S7comm.
+In this section, we will perform tests on the **[Conpot](http://conpot.org/)** honeypot, as mentioned in section [1.3.1 Industrial and Medical Honeypots 🏭](#industrial-and-medical-honeypots) **[Conpot](http://conpot.org/)** simulates Industrial Control Systems (ICS) and protocols like Modbus (port 502), SNMP (port 161), and S7comm (port 102).
 
 **Verify if Conpot exposes the expected services (e.g., port 80 for HTTP, port 502 for Modbus, port 161 for SNMP):**
-
 ```sh
 nmap -sV -p 1-65535 <indirizzo-IP>
 
-nmap -sS -p- 127.0.0.1    # TCP SYN scan (all ports)
-nmap -sU -p- 127.0.0.1    # UDP scan (all ports)
-nmap -sV 127.0.0.1        # Service version detection
+nmap -sS -p- <indirizzo-IP>    # TCP SYN scan (all ports)
+nmap -sU -p- <indirizzo-IP>    # UDP scan (all ports)
+nmap -sV <indirizzo-IP>        # Service version detection
 ```
+
+**2.4 Testing (ModBusSploit) 🛠️**
+
+In this section, we will perform tests on the **[ModBusSploit](https://github.com/C4l1b4n/ModBusSploit/)** tool to simulate attacks on the Conpot honeypot.
+
+**Step 1: Clone the ModBusSploit repository:**
+```sh
+git clone https://github.com/C4l1b4n/ModBusSploit/
+cd ModBusSploit
+```
+
+**Step 2: Install the required dependencies:**
+```sh
+pip install -r requirements.txt
+```
+
+**Step 3: Run the script
+```sh
+python3 start.py
+```
+
+**Screenshots:**
+
+1. **Start Dos Attack:**
+<img width="537" alt="modbus" src="https://github.com/user-attachments/assets/63b1e25a-a938-4b65-8821-80e0d10b0af9" />
+
+2. **Result on conpot log:**
+![conpot_log](https://github.com/user-attachments/assets/e33cb1ab-e89c-4314-b395-9e63147b54b8)
+
+3. **Result on Kibana dashboard:**
+<img width="1188" alt="kibana_dash" src="https://github.com/user-attachments/assets/de9c841b-830d-42d9-b778-61c270cc9c8c" />
+
+   
 
 **Brute force attack examples using Hydra:**
-
 ```sh
-hydra -l <utente> -P <file_wordlist> ssh://127.0.0.1
-hydra -l <utente> -P <file_wordlist> ftp://127.0.0.1
-hydra -l <utente> -P <file_wordlist> http-get://127.0.0.1
+hydra -l <utente> -P <file_wordlist> ssh://<indirizzo-IP>
+hydra -l <utente> -P <file_wordlist> ftp://<indirizzo-IP>
+hydra -l <utente> -P <file_wordlist> http-get://<indirizzo-IP>
 ```
 
-**Exploitation example using Metasploit:**
 
+
+**Exploitation example using Metasploit:**
 ```sh
 msfconsole
 use exploit/linux/ssh/sshexec
-set RHOST 127.0.0.1
+set RHOST <indirizzo-IP>
 set USERNAME <utente>
 set PASSWORD <password>
 exploit
 ```
 
 **Example of an XSS attack using curl:**
-
 ```sh
-curl -X POST -d "username=<script>alert('XSS')</script>" http://127.0.0.1/login
+curl -X POST -d "username=<script>alert('XSS')</script>" http://<indirizzo-IP>/login
 ```
 
 **SQL injection example using sqlmap:**
-
 ```sh
-sqlmap -u "http://127.0.0.1/page?id=1" --risk=3 --level=5
+sqlmap -u "http://<indirizzo-IP>/page?id=1" --risk=3 --level=5
 ```
 
 **Netcat example to connect to port 80 (HTTP):**
-
 ```sh
-nc -v 127.0.0.1 80
+nc -v <indirizzo-IP> 80
 ```
 
 ---
