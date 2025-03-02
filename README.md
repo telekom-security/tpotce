@@ -308,8 +308,58 @@ These errors are not critical and T-Pot should still function correctly.
 
 ---
 <a name="testing"></a>
-### 2.3 Testing 🦠
-Section testing
+### 2.3 Testing (ConPot)🦠
+
+In this section, we will perform tests on the Conpot honeypot, as mentioned in section [1.3.1 Industrial and Medical Honeypots 🏭](#1.3.1-industrial-and-medical-honeypots).
+
+1. **[Conpot](http://conpot.org/)**: Simulates Industrial Control Systems (ICS) and protocols like Modbus, SNMP, and S7comm.
+
+**Verify if Conpot exposes the expected services (e.g., port 80 for HTTP, port 502 for Modbus, port 161 for SNMP):**
+
+```sh
+nmap -sV -p 1-65535 <indirizzo-IP>
+
+nmap -sS -p- 127.0.0.1    # TCP SYN scan (all ports)
+nmap -sU -p- 127.0.0.1    # UDP scan (all ports)
+nmap -sV 127.0.0.1        # Service version detection
+```
+
+**Brute force attack examples using Hydra:**
+
+```sh
+hydra -l <utente> -P <file_wordlist> ssh://127.0.0.1
+hydra -l <utente> -P <file_wordlist> ftp://127.0.0.1
+hydra -l <utente> -P <file_wordlist> http-get://127.0.0.1
+```
+
+**Exploitation example using Metasploit:**
+
+```sh
+msfconsole
+use exploit/linux/ssh/sshexec
+set RHOST 127.0.0.1
+set USERNAME <utente>
+set PASSWORD <password>
+exploit
+```
+
+**Example of an XSS attack using curl:**
+
+```sh
+curl -X POST -d "username=<script>alert('XSS')</script>" http://127.0.0.1/login
+```
+
+**SQL injection example using sqlmap:**
+
+```sh
+sqlmap -u "http://127.0.0.1/page?id=1" --risk=3 --level=5
+```
+
+**Netcat example to connect to port 80 (HTTP):**
+
+```sh
+nc -v 127.0.0.1 80
+```
 
 ---
 <a name="required-ports"></a>
