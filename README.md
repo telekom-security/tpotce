@@ -164,7 +164,7 @@ networks:
 #### Issue 2: Port Already in Use for Citrixhoneypot
 **Issue:** When running `docker compose up`:
 ```diff
-Citrixhoneypot reports that port 443 is already in use.
+- Citrixhoneypot reports that port 443 is already in use.
 ```
 **Solution:** Change the port from 443 to another free (8445 in this example) in the `docker-compose.yml` file:
 ```yaml
