@@ -225,7 +225,7 @@ Snare reports that port 80 is already in use.
     pull_policy: ${TPOT_PULL_POLICY}
 ```
 <a name="issue-5-web_user-not-loaded"></a>  
-#### ⚠️ **Issue 5: WEB_USER Not Loaded**
+#### ⚠️ Issue 5: WEB_USER Not Loaded
 **Issue:** Sometimes, running the `genuser.sh` script may not properly load the `WEB_USER` entry in the `.env` file.
 **Solution:**
 To check, open the `.env` file and verify if the `WEB_USER` variable is empty.  
