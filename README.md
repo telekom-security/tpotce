@@ -130,7 +130,7 @@ To get things up and running just follow these steps:
     sed -i '' 's/^TPOT_OSTYPE=linux$/TPOT_OSTYPE=mac/' .env
     ```
 8. You have to ensure on your own there are no port conflicts keeping T-Pot from starting up. Check the [list of required ports](https://github.com/telekom-security/tpotce?tab=readme-ov-file#required-ports).
-9. 10. To start T-Pot run:
+9. To start T-Pot run:
     ```
     docker compose up
     ```
