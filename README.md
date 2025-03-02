@@ -325,7 +325,7 @@ nmap -sV <indirizzo-IP>        # Service version detection
 
 #### **ModBusSploit 🛠️**
 
-In this section, we will perform tests on the **[ModBusSploit](https://github.com/C4l1b4n/ModBusSploit/)** tool to simulate attacks on the Conpot honeypot.
+In this section, we will perform tests on the **[ModBusSploit](https://github.com/C4l1b4n/ModBusSploit/)** tool to simulate attacks on the Conpot honeypot with protocols like Modbus.
 
 **Step 1: Clone the ModBusSploit repository:**
 ```sh
