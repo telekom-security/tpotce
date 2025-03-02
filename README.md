@@ -8,7 +8,6 @@
   - [Architecture](#architecture)
   - [Supported Honeypots](#supported-honeypots)
   - [Tools Included](#tools-included)
-  - [Required Ports](#required-ports)
 - [MacOS Installation](#macos-installation)
   - [Installation Issues](#installation-issues)
   - [Management Tips](#management-tips)
@@ -98,50 +97,6 @@ T-Pot also includes the following tools:
 - **Suricata**: A Network Security Monitoring engine.
 
 ---
-<a name="required-ports"></a>
-### 2.4 Required Ports 🔌
-Besides the ports generally needed by the OS, i.e. obtaining a DHCP lease, DNS, etc. T-Pot will require the following ports for incoming / outgoing connections. Review the [T-Pot Architecture](#technical-architecture) for a visual representation. Also some ports will show up as duplicates, which is fine since used in different editions.
-
-| Port                                                                                                                                  | Protocol | Direction | Description                                                                                         |
-| :------------------------------------------------------------------------------------------------------------------------------------ | :------- | :-------- | :-------------------------------------------------------------------------------------------------- |
-| 80, 443                                                                                                                               | tcp      | outgoing  | T-Pot Management: Install, Updates, Logs (i.e. OS, GitHub, DockerHub, Sicherheitstacho, etc.        |
-| 11434                                                                                                                                 | tcp      | outgoing  | LLM based honeypots: Access your Ollama installation                                                |
-| 64294                                                                                                                                 | tcp      | incoming  | T-Pot Management: Sensor data transmission to hive (through NGINX reverse proxy) to 127.0.0.1:64305 |
-| 64295                                                                                                                                 | tcp      | incoming  | T-Pot Management: Access to SSH                                                                     |
-| 64297                                                                                                                                 | tcp      | incoming  | T-Pot Management Access to NGINX reverse proxy                                                      |
-| 5555                                                                                                                                  | tcp      | incoming  | Honeypot: ADBHoney                                                                                  |
-| 22                                                                                                                                    | tcp      | incoming  | Honeypot: Beelzebub  (LLM required)                                                                 |
-| 5000                                                                                                                                  | udp      | incoming  | Honeypot: CiscoASA                                                                                  |
-| 8443                                                                                                                                  | tcp      | incoming  | Honeypot: CiscoASA                                                                                  |
-| 443                                                                                                                                   | tcp      | incoming  | Honeypot: CitrixHoneypot                                                                            |
-| 80, 102, 502, 1025, 2404, 10001, 44818, 47808, 50100                                                                                  | tcp      | incoming  | Honeypot: Conpot                                                                                    |
-| 161, 623                                                                                                                              | udp      | incoming  | Honeypot: Conpot                                                                                    |
-| 22, 23                                                                                                                                | tcp      | incoming  | Honeypot: Cowrie                                                                                    |
-| 19, 53, 123, 1900                                                                                                                     | udp      | incoming  | Honeypot: Ddospot                                                                                   |
-| 11112                                                                                                                                 | tcp      | incoming  | Honeypot: Dicompot                                                                                  |
-| 21, 42, 135, 443, 445, 1433, 1723, 1883, 3306, 8081                                                                                   | tcp      | incoming  | Honeypot: Dionaea                                                                                   |
-| 69                                                                                                                                    | udp      | incoming  | Honeypot: Dionaea                                                                                   |
-| 9200                                                                                                                                  | tcp      | incoming  | Honeypot: Elasticpot                                                                                |
-| 22                                                                                                                                    | tcp      | incoming  | Honeypot: Endlessh                                                                                  |
-| 80, 443, 8080, 8443                                                                                                                   | tcp      | incoming  | Honeypot: Galah  (LLM required)                                                                     |
-| 8080                                                                                                                                  | tcp      | incoming  | Honeypot: Go-pot                                                                                    |
-| 80, 443                                                                                                                               | tcp      | incoming  | Honeypot: H0neytr4p                                                                                 |
-| 21, 22, 23, 25, 80, 110, 143, 443, 993, 995, 1080, 5432, 5900                                                                         | tcp      | incoming  | Honeypot: Heralding                                                                                 |
-| 3000                                                                                                                                  | tcp      | incoming  | Honeypot: Honeyaml                                                                                  |
-| 21, 22, 23, 25, 80, 110, 143, 389, 443, 445, 631, 1080, 1433, 1521, 3306, 3389, 5060, 5432, 5900, 6379, 6667, 8080, 9100, 9200, 11211 | tcp      | incoming  | Honeypot: qHoneypots                                                                                |
-| 53, 123, 161, 5060                                                                                                                    | udp      | incoming  | Honeypot: qHoneypots                                                                                |
-| 631                                                                                                                                   | tcp      | incoming  | Honeypot: IPPHoney                                                                                  |
-| 80, 443, 8080, 9200, 25565                                                                                                            | tcp      | incoming  | Honeypot: Log4Pot                                                                                   |
-| 25                                                                                                                                    | tcp      | incoming  | Honeypot: Mailoney                                                                                  |
-| 2575                                                                                                                                  | tcp      | incoming  | Honeypot: Medpot                                                                                    |
-| 9100                                                                                                                                  | tcp      | incoming  | Honeypot: Miniprint                                                                                 |
-| 6379                                                                                                                                  | tcp      | incoming  | Honeypot: Redishoneypot                                                                             |
-| 5060                                                                                                                                  | tcp/udp  | incoming  | Honeypot: SentryPeer                                                                                |
-| 80                                                                                                                                    | tcp      | incoming  | Honeypot: Snare (Tanner)                                                                            |
-| 8090                                                                                                                                  | tcp      | incoming  | Honeypot: Wordpot                                                                                   |
-
-
----
 <a name="macos-installation"></a>
 ## 2 MacOS Installation 🍏
 As Docker Desktop is rather limited not all honeypot types or T-Pot features are supported. Also remember, by default the macOS are blocking access from remote, so testing is limited to the host.
@@ -174,9 +129,8 @@ To get things up and running just follow these steps:
     ```sh
     sed -i '' 's/^TPOT_OSTYPE=linux$/TPOT_OSTYPE=mac/' .env
     ```
-
-8. You have to ensure on your own there are no port conflicts keeping T-Pot from starting up. Check the [list of required ports](#required-ports).
-9. To start T-Pot run:
+8. You have to ensure on your own there are no port conflicts keeping T-Pot from starting up. Check the [list of required ports](https://github.com/NOME-REPO/NOME-FILE.md).
+10. To start T-Pot run:
     ```
     docker compose up
     ```
@@ -185,8 +139,8 @@ To get things up and running just follow these steps:
     docker compose up -d
     ```
     Before starting T-Pot, make sure Docker is running on your system.
-10. During the first time running `docker-compose up`, you may encounter some issues. Check the [Installation Issues](#installation-issues) section to solve them. 
-11. To Stop T-Pot press: `CTRL-C` (it if was running in the foreground) and / or `docker compose down -v` to stop T-Pot entirely.
+11. During the first time running `docker-compose up`, you may encounter some issues. Check the [Installation Issues](#installation-issues) section to solve them. 
+12. To Stop T-Pot press: `CTRL-C` (it if was running in the foreground) and / or `docker compose down -v` to stop T-Pot entirely.
 
 ---
 <a name="installation-issues"></a>
