@@ -50,7 +50,7 @@ The core components of T-Pot have been moved into a Docker image called **tpotin
 ### 1.3 Supported Honeypots 🛡️
 T-Pot supports a wide range of honeypots, including:
 
-<a name="#industrial-and-medical-honeypots"></a> 
+<a name="industrial-and-medical-honeypots"></a> 
 #### 1.3.1 Industrial and Medical Honeypots 🏭
 1. **[Conpot](http://conpot.org/)**: Simulates Industrial Control Systems (ICS) and protocols like Modbus, SNMP, and S7comm.
 2. **[Dicompot](https://github.com/nsmfoo/dicompot)**: Emulates medical imaging systems (DICOM) to detect attacks on medical devices.
