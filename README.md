@@ -321,7 +321,8 @@ nmap -sS -p- <indirizzo-IP>    # TCP SYN scan (all ports)
 nmap -sU -p- <indirizzo-IP>    # UDP scan (all ports)
 nmap -sV <indirizzo-IP>        # Service version detection
 ```
-
+<br>
+<br>
 
 **Testing (ModBusSploit) 🛠️**
 
@@ -354,7 +355,8 @@ python3 start.py
 3. **Result on Kibana dashboard:**
 <img width="1188" alt="kibana_dash" src="https://github.com/user-attachments/assets/de9c841b-830d-42d9-b778-61c270cc9c8c" />
 
-   
+<br>
+<br>
 
 **Brute force attack examples using Hydra:**
 ```sh
