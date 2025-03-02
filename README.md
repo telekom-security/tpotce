@@ -205,7 +205,7 @@ server.rewriteBasePath: true
 #### ⚠️ Issue 4: Port Already Mapped for Snare
 **Issue:** When running `docker compose up`:Snare reports that port 80 is already mapped.
 ```diff
-Snare reports that port 80 is already in use.
+- Snare reports that port 80 is already in use.
 ```
 **Solution:** Modify the `docker-compose.yml` file by changing the port mapping from 80 to another available port (5695 for example):
 ```yaml
