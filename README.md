@@ -441,8 +441,8 @@ T-Pot releases are offered through GitHub and can be pulled using
 ./update.sh
 ```
 <br> 
-**If you made any relevant changes to the T-Pot config files make sure to create a backup first!** <br>
-**Updates may have unforeseen consequences. Create a backup of the machine or the files most valuable to your work!** <br>
+**If you made any relevant changes to the T-Pot config files make sure to create a backup first!**  
+**Updates may have unforeseen consequences. Create a backup of the machine or the files most valuable to your work!**  
 
 The update script will ...
  - **mercilessly** overwrite local changes to be in sync with the T-Pot master branch
