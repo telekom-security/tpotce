@@ -112,40 +112,28 @@ To get things up and running just follow these steps:
    ```sh
    git clone https://github.com/domedg/tpotce_MacOS/
    ```
-4. Go to repo folder:
+3. Go to repo folder:
    ```sh
    cd tpotce_MacOS/
    ```
-6. Copy the docker configuration file
+4. Copy the docker configuration file
    ```sh
    cp compose/mac_win.yml ./docker-compose.yml
    ```
-8. Check if the script `genuser.sh` is executable, if is not run:
+5. Check if the script `genuser.sh` is executable, if is not run:
    ```sh
    chmod 777 genuser.sh
    ```
-10. Create a `WEB_USER` by running `./genuser.sh`
-    ### **Possible Issue**: WEB_USER Not Loaded  
-    Sometimes, running the `genuser.sh` script may not properly load the `WEB_USER` entry in the `.env` file.
-    To check, open the `.env` file and verify if the `WEB_USER` variable is empty.  
+6. Create a `WEB_USER` by running `./genuser.sh`
+    If the `WEB_USER` is not properly set, check [Issue 5: WEB_USER Not Loaded](#issue-5-web_user-not-loaded).
     
-    If it is empty, generate a new value using the following command:  
-    ```sh
-    htpasswd -n -b "username" "password" | base64 -w0
-    ```
-    For example, running:
-    ```sh
-    htpasswd -n -b "tsec" "tsec" | base64 -w0
-    ```
-    Copy the generated string and manually replace the WEB_USER value in the .env file.
-  
-12. Adjust the `.env` file by changing `TPOT_OSTYPE=linux` to `mac` or directly run:
+7. Adjust the `.env` file by changing `TPOT_OSTYPE=linux` to `mac` or directly run:
     ```sh
     sed -i '' 's/^TPOT_OSTYPE=linux$/TPOT_OSTYPE=mac/' .env
     ```
 
-14. You have to ensure on your own there are no port conflicts keeping T-Pot from starting up. Check the [list of required ports](#required-ports).
-15. To start T-Pot run:
+8. You have to ensure on your own there are no port conflicts keeping T-Pot from starting up. Check the [list of required ports](#required-ports).
+9. To start T-Pot run:
     ```
     docker compose up
     ```
@@ -153,8 +141,8 @@ To get things up and running just follow these steps:
     ```
     docker compose up -d
     ```
-16. During the first time running `docker-compose up`, you may encounter some issues. Check the [Installation Issues](#installation-issues) section to solve them. 
-17. To Stop T-Pot press: `CTRL-C` (it if was running in the foreground) and / or `docker compose down -v` to stop T-Pot entirely.
+10. During the first time running `docker-compose up`, you may encounter some issues. Check the [Installation Issues](#installation-issues) section to solve them. 
+11. To Stop T-Pot press: `CTRL-C` (it if was running in the foreground) and / or `docker compose down -v` to stop T-Pot entirely.
 
 ---
 <a name="installation-issues"></a>
@@ -174,7 +162,10 @@ networks:
 ```
 
 #### Issue 2: Port Already in Use for Citrixhoneypot
-**Issue:** Citrixhoneypot reports that port 443 is already in use.
+**Issue:** When running `docker compose up`:
+```diff
+Citrixhoneypot reports that port 443 is already in use.
+```
 **Solution:** Change the port from 443 to another free (8445 in this example) in the `docker-compose.yml` file:
 ```yaml
 # CitrixHoneypot service
@@ -213,7 +204,10 @@ server.rewriteBasePath: true
 ```
 
 #### Issue 4: Port Already Mapped for Snare
-**Issue:** Snare reports that port 80 is already mapped.
+**Issue:** When running `docker compose up`:Snare reports that port 80 is already mapped.
+```diff
+Snare reports that port 80 is already in use.
+```
 **Solution:** Modify the `docker-compose.yml` file by changing the port mapping from 80 to another available port (5695 for example):
 ```yaml
 ## Snare Service   
@@ -230,6 +224,21 @@ server.rewriteBasePath: true
     image: ${TPOT_REPO}/snare:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
 ```
+<a name="issue-5-web_user-not-loaded"></a>  
+#### Issue 5: WEB_USER Not Loaded  
+**Issue:** Sometimes, running the `genuser.sh` script may not properly load the `WEB_USER` entry in the `.env` file.
+**Solution:**
+To check, open the `.env` file and verify if the `WEB_USER` variable is empty.  
+
+If it is empty, generate a new value using the following command:  
+```sh
+htpasswd -n -b "username" "password" | base64 -w0
+```
+For example, running:
+```sh
+htpasswd -n -b "tsec" "tsec" | base64 -w0
+```
+Copy the generated string and manually replace the WEB_USER value in the .env file.
 
 ---
 <a name="management-tips"></a>
