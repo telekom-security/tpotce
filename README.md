@@ -27,7 +27,7 @@
 <a name="features-and-benefits"></a>
 ### 1.1 Features and Benefits 💡
 T-Pot provides several key features that make it a powerful tool for cybersecurity professionals and researchers:
-
+\textbf{\underline{\textsf{Docker and Docker Compose}}}
 - ${\textsf{\color{red}Comprehensive\ Honeypot\ Integration}}$: T-Pot combines over 20 honeypots, each designed to capture different types of malicious activity. This integration allows for monitoring and analyzing a wide variety of attack vectors.
 
 - ${\textsf{\color{orange}Elastic\ Stack\ Integration}}$: The platform includes the **ELK stack** (Elasticsearch, Logstash, and Kibana), facilitating data collection, analysis, and visualization. This integration offers powerful tools for real-time threat intelligence.
