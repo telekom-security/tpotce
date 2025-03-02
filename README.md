@@ -150,7 +150,7 @@ To get things up and running just follow these steps:
 
 In this section, you will find a guide to resolve the installation issues I encountered. Each issue is followed by its respective solution.
 
-#### Issue 1: Undefined Network in Docker Compose
+#### ⚠️ Issue 1: Undefined Network in Docker Compose
 **Issue:** When running `docker compose up`, you receive the error:
 ```diff
 - service "citrixhoneypot" refers to undefined network citrixhoneypot_local: invalid compose project
@@ -161,7 +161,7 @@ networks:
     citrixhoneypot_local:
 ```
 
-#### Issue 2: Port Already in Use for Citrixhoneypot
+#### ⚠️ Issue 2: Port Already in Use for Citrixhoneypot
 **Issue:** When running `docker compose up`:
 ```diff
 - Citrixhoneypot reports that port 443 is already in use.
@@ -186,7 +186,7 @@ networks:
      - ${TPOT_DATA_PATH}/citrixhoneypot/log:/opt/citrixhoneypot/logs
 ```
 
-#### Issue 3: Kibana not working
+#### ⚠️ Issue 3: Kibana not working
 **Issue:** Kibana service not working
 **Solution:** Inside the Kibana container, you need to set the `server.rewriteBasePath=true` variable.
 
@@ -203,7 +203,7 @@ Edit the `/usr/share/kibana/config/kibana.yml` file by changing this variable fr
 server.rewriteBasePath: true
 ```
 
-#### Issue 4: Port Already Mapped for Snare
+#### ⚠️ Issue 4: Port Already Mapped for Snare
 **Issue:** When running `docker compose up`:Snare reports that port 80 is already mapped.
 ```diff
 Snare reports that port 80 is already in use.
@@ -225,7 +225,7 @@ Snare reports that port 80 is already in use.
     pull_policy: ${TPOT_PULL_POLICY}
 ```
 <a name="issue-5-web_user-not-loaded"></a>  
-#### Issue 5: WEB_USER Not Loaded  
+#### ⚠️ **Issue 5: WEB_USER Not Loaded**
 **Issue:** Sometimes, running the `genuser.sh` script may not properly load the `WEB_USER` entry in the `.env` file.
 **Solution:**
 To check, open the `.env` file and verify if the `WEB_USER` variable is empty.  
