@@ -441,11 +441,11 @@ T-Pot releases are offered through GitHub and can be pulled using
 ./update.sh
 ```
 <br> 
-***If you made any relevant changes to the T-Pot config files make sure to create a backup first!***
-***Updates may have unforeseen consequences. Create a backup of the machine or the files most valuable to your work!*** <br>
+**If you made any relevant changes to the T-Pot config files make sure to create a backup first!** <br>
+**Updates may have unforeseen consequences. Create a backup of the machine or the files most valuable to your work!** <br>
 
 The update script will ...
- - ***mercilessly*** overwrite local changes to be in sync with the T-Pot master branch
+ - **mercilessly** overwrite local changes to be in sync with the T-Pot master branch
  - create a full backup of the `~/tpotce` folder
  - update all files in `~/tpotce` to be in sync with the T-Pot master branch
  - restore your custom `ews.cfg` from `~/tpotce/data/ews/conf` and the T-Pot configuration (`~/tpotce/.env`).
