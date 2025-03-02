@@ -36,9 +36,9 @@ T-Pot provides several key features that make it a powerful tool for cybersecuri
 
 - ${\textsf{\color{cyan}Advanced\ Visualization\ Tools}}$: T-Pot provides tools like **CyberChef**, **Elasticvue**, and a real-time attack map, making it easy to interpret and understand the data collected by the honeypots.
 
-- ${\textsf{\color{magenta}}Scalability\ and\ Flexibility}}$: T-Pot can be deployed on multiple Linux distributions, macOS, and Windows (with limited functionality). It can run on physical hardware, virtual machines, or cloud environments like AWS.
+- ${\textsf{\color{magenta}Scalability\ and\ Flexibility}}$: T-Pot can be deployed on multiple Linux distributions, macOS, and Windows (with limited functionality). It can run on physical hardware, virtual machines, or cloud environments like AWS.
 
-- ${\textsf{\color{DeepPink}}Community\ Data\ Sharing}}$: By default, T-Pot sends data to the **Sicherheitstacho** community backend, contributing to collective threat intelligence. This feature can be disabled if needed.
+- ${\textsf{\color{DeepPink}Community\ Data\ Sharing}}$: By default, T-Pot sends data to the **Sicherheitstacho** community backend, contributing to collective threat intelligence. This feature can be disabled if needed.
 
 ---
 <a name="architecture"></a>
