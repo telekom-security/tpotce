@@ -77,8 +77,7 @@ T-Pot supports a wide range of honeypots, including:
 
 #### 1.3.6 Malware and Advanced Analysis Honeypots 🦠
 1. **[Beelzebub](https://github.com/mariocandela/beelzebub)**: Analyzes malware by emulating vulnerable services.
-2. **[snare](http://mushmush.org/)** / **[tanner](http://mushmush.org/)**: Snare captures interactions, while Tanner analyzes attacker behavior.
-3. 
+2. **[Snare](http://mushmush.org/)** / **[Tanner](http://mushmush.org/)**: Snare captures interactions, while Tanner analyzes attacker behavior.
 
 #### 1.3.7 Data Traps and Advanced Deception Honeypots 🎯
 1. **[Elasticpot](https://gitlab.com/bontchev/elasticpot)**: Simulates an unprotected Elasticsearch server, often targeted for data breaches.
