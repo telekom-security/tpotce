@@ -264,156 +264,156 @@ These errors are not critical and T-Pot should still function correctly.
 
 **Solution:** To fix this issue:
 
-    **Step 1** Add the following entry to the `docker-compose.yml` file, in the `networks:` section:
-        ```yaml
-        conpot_local_default:
-        ```
-    Or, if you want to add all Conpot's template, add:
-        ```yaml
-        conpot_local_default:
-        conpot_local_IEC104:
-        conpot_local_guardian_ast:
-        conpot_local_ipmi:
-        conpot_local_kamstrup_382:
-        ```
-    **Step 2** Add the following entry to the `docker-compose.yml` file, in the `services:` section:
-        <details>
-        <summary>Click to expand</summary>
+  **Step 1** Add the following entry to the `docker-compose.yml` file, in the `networks:` section:
+      ```yaml
+      conpot_local_default:
+      ```
+  Or, if you want to add all Conpot's template, add:
+      ```yaml
+      conpot_local_default:
+      conpot_local_IEC104:
+      conpot_local_guardian_ast:
+      conpot_local_ipmi:
+      conpot_local_kamstrup_382:
+      ```
+  **Step 2** Add the following entry to the `docker-compose.yml` file, in the `services:` section:
+<details>
+<summary>Click to expand</summary>
 
-        ```yaml
-        # Conpot default service
-        conpot_default:
-          build: .
-          container_name: conpot_default
-          restart: always
-          environment:
-          - CONPOT_CONFIG=/etc/conpot/conpot.cfg
-          - CONPOT_JSON_LOG=/var/log/conpot/conpot_default.json
-          - CONPOT_LOG=/var/log/conpot/conpot_default.log
-          - CONPOT_TEMPLATE=default
-          - CONPOT_TMP=/tmp/conpot
-          tmpfs:
-          - /tmp/conpot:uid=2000,gid=2000
-      #    cpu_count: 1
-      #    cpus: 0.25    
-          networks:
-          - conpot_local_default
-          ports:
-      #    - "69:69/udp"        
-          - "80:80"
-          - "102:102"
-          - "161:161/udp"
-          - "502:502"
-      #     - "623:623/udp"
-          - "2121:21"
-          - "44818:44818"
-          - "47808:47808/udp"
-          image: "dtagdevsec/conpot:24.04"
-          read_only: false
-          volumes:
-      #     - $HOME/tpotce/data/conpot/log:/var/log/conpot
-          - ${TPOT_DATA_PATH}/conpot/log:/var/log/conpot
+  ```yaml
+  # Conpot default service
+  conpot_default:
+    build: .
+    container_name: conpot_default
+    restart: always
+    environment:
+    - CONPOT_CONFIG=/etc/conpot/conpot.cfg
+    - CONPOT_JSON_LOG=/var/log/conpot/conpot_default.json
+    - CONPOT_LOG=/var/log/conpot/conpot_default.log
+    - CONPOT_TEMPLATE=default
+    - CONPOT_TMP=/tmp/conpot
+    tmpfs:
+    - /tmp/conpot:uid=2000,gid=2000
+#    cpu_count: 1
+#    cpus: 0.25    
+    networks:
+    - conpot_local_default
+    ports:
+#    - "69:69/udp"        
+    - "80:80"
+    - "102:102"
+    - "161:161/udp"
+    - "502:502"
+#     - "623:623/udp"
+    - "2121:21"
+    - "44818:44818"
+    - "47808:47808/udp"
+    image: "dtagdevsec/conpot:24.04"
+    read_only: false
+    volumes:
+#     - $HOME/tpotce/data/conpot/log:/var/log/conpot
+    - ${TPOT_DATA_PATH}/conpot/log:/var/log/conpot
 
-      # Conpot IEC104 service
-        conpot_IEC104:
-          container_name: conpot_IEC104
-          restart: always
-          environment:
-          - CONPOT_CONFIG=/etc/conpot/conpot.cfg
-          - CONPOT_JSON_LOG=/var/log/conpot/conpot_IEC104.json
-          - CONPOT_LOG=/var/log/conpot/conpot_IEC104.log
-          - CONPOT_TEMPLATE=IEC104
-          - CONPOT_TMP=/tmp/conpot
-          tmpfs:
-          - /tmp/conpot:uid=2000,gid=2000
-      #    cpu_count: 1
-      #    cpus: 0.25
-          networks:
-          - conpot_local_IEC104
-          ports:
-      #     - "161:161/udp"
-          - "2404:2404"
-          image: "dtagdevsec/conpot:24.04"
-          read_only: true
-          volumes:
-      #     - $HOME/tpotce/data/conpot/log:/var/log/conpot
-            - ${TPOT_DATA_PATH}/conpot/log:/var/log/conpot
+# Conpot IEC104 service
+  conpot_IEC104:
+    container_name: conpot_IEC104
+    restart: always
+    environment:
+    - CONPOT_CONFIG=/etc/conpot/conpot.cfg
+    - CONPOT_JSON_LOG=/var/log/conpot/conpot_IEC104.json
+    - CONPOT_LOG=/var/log/conpot/conpot_IEC104.log
+    - CONPOT_TEMPLATE=IEC104
+    - CONPOT_TMP=/tmp/conpot
+    tmpfs:
+    - /tmp/conpot:uid=2000,gid=2000
+#    cpu_count: 1
+#    cpus: 0.25
+    networks:
+    - conpot_local_IEC104
+    ports:
+#     - "161:161/udp"
+    - "2404:2404"
+    image: "dtagdevsec/conpot:24.04"
+    read_only: true
+    volumes:
+#     - $HOME/tpotce/data/conpot/log:/var/log/conpot
+      - ${TPOT_DATA_PATH}/conpot/log:/var/log/conpot
 
-      # Conpot guardian_ast service
-        conpot_guardian_ast:
-          container_name: conpot_guardian_ast
-          restart: always
-          environment:
-          - CONPOT_CONFIG=/etc/conpot/conpot.cfg
-          - CONPOT_JSON_LOG=/var/log/conpot/conpot_guardian_ast.json
-          - CONPOT_LOG=/var/log/conpot/conpot_guardian_ast.log
-          - CONPOT_TEMPLATE=guardian_ast
-          - CONPOT_TMP=/tmp/conpot
-          tmpfs:
-          - /tmp/conpot:uid=2000,gid=2000
-      #    cpu_count: 1
-      #    cpus: 0.25
-          networks:
-          - conpot_local_guardian_ast
-          ports:
-          - "10001:10001"
-          image: "dtagdevsec/conpot:24.04"
-          read_only: true
-          volumes:
-      #     - $HOME/tpotce/data/conpot/log:/var/log/conpot
-          - ${TPOT_DATA_PATH}/conpot/log:/var/log/conpot
+# Conpot guardian_ast service
+  conpot_guardian_ast:
+    container_name: conpot_guardian_ast
+    restart: always
+    environment:
+    - CONPOT_CONFIG=/etc/conpot/conpot.cfg
+    - CONPOT_JSON_LOG=/var/log/conpot/conpot_guardian_ast.json
+    - CONPOT_LOG=/var/log/conpot/conpot_guardian_ast.log
+    - CONPOT_TEMPLATE=guardian_ast
+    - CONPOT_TMP=/tmp/conpot
+    tmpfs:
+    - /tmp/conpot:uid=2000,gid=2000
+#    cpu_count: 1
+#    cpus: 0.25
+    networks:
+    - conpot_local_guardian_ast
+    ports:
+    - "10001:10001"
+    image: "dtagdevsec/conpot:24.04"
+    read_only: true
+    volumes:
+#     - $HOME/tpotce/data/conpot/log:/var/log/conpot
+    - ${TPOT_DATA_PATH}/conpot/log:/var/log/conpot
 
-      # Conpot ipmi
-        conpot_ipmi:
-          container_name: conpot_ipmi
-          restart: always
-          environment:
-          - CONPOT_CONFIG=/etc/conpot/conpot.cfg
-          - CONPOT_JSON_LOG=/var/log/conpot/conpot_ipmi.json
-          - CONPOT_LOG=/var/log/conpot/conpot_ipmi.log
-          - CONPOT_TEMPLATE=ipmi
-          - CONPOT_TMP=/tmp/conpot
-          tmpfs:
-          - /tmp/conpot:uid=2000,gid=2000
-      #    cpu_count: 1
-      #    cpus: 0.25
-          networks:
-          - conpot_local_ipmi
-          ports:
-          - "623:623/udp"
-          image: "dtagdevsec/conpot:24.04"
-          read_only: true
-          volumes:
-      #     - $HOME/tpotce/data/conpot/log:/var/log/conpot
-          - ${TPOT_DATA_PATH}/conpot/log:/var/log/conpot
+# Conpot ipmi
+  conpot_ipmi:
+    container_name: conpot_ipmi
+    restart: always
+    environment:
+    - CONPOT_CONFIG=/etc/conpot/conpot.cfg
+    - CONPOT_JSON_LOG=/var/log/conpot/conpot_ipmi.json
+    - CONPOT_LOG=/var/log/conpot/conpot_ipmi.log
+    - CONPOT_TEMPLATE=ipmi
+    - CONPOT_TMP=/tmp/conpot
+    tmpfs:
+    - /tmp/conpot:uid=2000,gid=2000
+#    cpu_count: 1
+#    cpus: 0.25
+    networks:
+    - conpot_local_ipmi
+    ports:
+    - "623:623/udp"
+    image: "dtagdevsec/conpot:24.04"
+    read_only: true
+    volumes:
+#     - $HOME/tpotce/data/conpot/log:/var/log/conpot
+    - ${TPOT_DATA_PATH}/conpot/log:/var/log/conpot
 
-      # Conpot kamstrup_382
-        conpot_kamstrup_382:
-          container_name: conpot_kamstrup_382
-          restart: always
-          environment:
-          - CONPOT_CONFIG=/etc/conpot/conpot.cfg
-          - CONPOT_JSON_LOG=/var/log/conpot/conpot_kamstrup_382.json
-          - CONPOT_LOG=/var/log/conpot/conpot_kamstrup_382.log
-          - CONPOT_TEMPLATE=kamstrup_382
-          - CONPOT_TMP=/tmp/conpot
-          tmpfs:
-          - /tmp/conpot:uid=2000,gid=2000
-      #    cpu_count: 1
-      #    cpus: 0.25
-          networks:
-          - conpot_local_kamstrup_382
-          ports:
-          - "1025:1025"
-          - "50100:50100"
-          image: "dtagdevsec/conpot:24.04"
-          read_only: true
-          volumes:
-      #     - $HOME/tpotce/data/conpot/log:/var/log/conpot
-          - ${TPOT_DATA_PATH}/conpot/log:/var/log/conpot
+# Conpot kamstrup_382
+  conpot_kamstrup_382:
+    container_name: conpot_kamstrup_382
+    restart: always
+    environment:
+    - CONPOT_CONFIG=/etc/conpot/conpot.cfg
+    - CONPOT_JSON_LOG=/var/log/conpot/conpot_kamstrup_382.json
+    - CONPOT_LOG=/var/log/conpot/conpot_kamstrup_382.log
+    - CONPOT_TEMPLATE=kamstrup_382
+    - CONPOT_TMP=/tmp/conpot
+    tmpfs:
+    - /tmp/conpot:uid=2000,gid=2000
+#    cpu_count: 1
+#    cpus: 0.25
+    networks:
+    - conpot_local_kamstrup_382
+    ports:
+    - "1025:1025"
+    - "50100:50100"
+    image: "dtagdevsec/conpot:24.04"
+    read_only: true
+    volumes:
+#     - $HOME/tpotce/data/conpot/log:/var/log/conpot
+    - ${TPOT_DATA_PATH}/conpot/log:/var/log/conpot
 
-        ```
-        </details>
+  ```
+  </details>
 
 ---
 <a name="management-tips"></a>
