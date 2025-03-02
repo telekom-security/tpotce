@@ -32,13 +32,13 @@ T-Pot provides several key features that make it a powerful tool for cybersecuri
 
 - ${\textsf{\color{orange}Elastic\ Stack\ Integration}}$: The platform includes the **ELK stack** (Elasticsearch, Logstash, and Kibana), facilitating data collection, analysis, and visualization. This integration offers powerful tools for real-time threat intelligence.
 
--  ${\textsf{\color{gold}Docker\ and\ Docker\ Compose}}$: Using Docker and Docker Compose, T-Pot simplifies deployment and management. Each honeypot runs in its own container, ensuring isolation and ease of maintenance.
+- ${\textsf{\color{Goldenrod}Docker\ and\ Docker\ Compose}}$: Using Docker and Docker Compose, T-Pot simplifies deployment and management. Each honeypot runs in its own container, ensuring isolation and ease of maintenance.
 
-- $${\color{blue}Advanced\ Visualization\ Tools}$$: T-Pot provides tools like **CyberChef**, **Elasticvue**, and a real-time attack map, making it easy to interpret and understand the data collected by the honeypots.
+- ${\textsf{\color{cyan}Advanced\ Visualization\ Tools}}$: T-Pot provides tools like **CyberChef**, **Elasticvue**, and a real-time attack map, making it easy to interpret and understand the data collected by the honeypots.
 
-- $${\color{purple}Scalability\ and\ Flexibility}$$: T-Pot can be deployed on multiple Linux distributions, macOS, and Windows (with limited functionality). It can run on physical hardware, virtual machines, or cloud environments like AWS.
+- ${\textsf{\color{magenta}}Scalability\ and\ Flexibility}}$: T-Pot can be deployed on multiple Linux distributions, macOS, and Windows (with limited functionality). It can run on physical hardware, virtual machines, or cloud environments like AWS.
 
-- $${\color{pink}Community\ Data\ Sharing}$$: By default, T-Pot sends data to the **Sicherheitstacho** community backend, contributing to collective threat intelligence. This feature can be disabled if needed.
+- ${\textsf{\color{DeepPink}}Community\ Data\ Sharing}}$: By default, T-Pot sends data to the **Sicherheitstacho** community backend, contributing to collective threat intelligence. This feature can be disabled if needed.
 
 ---
 <a name="architecture"></a>
