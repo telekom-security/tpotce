@@ -32,7 +32,7 @@ T-Pot provides several key features that make it a powerful tool for cybersecuri
 
 - ${\textsf{\color{orange}Elastic\ Stack\ Integration}}$: The platform includes the **ELK stack** (Elasticsearch, Logstash, and Kibana), facilitating data collection, analysis, and visualization. This integration offers powerful tools for real-time threat intelligence.
 
--  ${\textsf{\color{yellow}Docker\ and\ Docker\ Compose}}$: Using Docker and Docker Compose, T-Pot simplifies deployment and management. Each honeypot runs in its own container, ensuring isolation and ease of maintenance.
+-  ${\textsf{\color{gold}Docker\ and\ Docker\ Compose}}$: Using Docker and Docker Compose, T-Pot simplifies deployment and management. Each honeypot runs in its own container, ensuring isolation and ease of maintenance.
 
 - $${\color{blue}Advanced\ Visualization\ Tools}$$: T-Pot provides tools like **CyberChef**, **Elasticvue**, and a real-time attack map, making it easy to interpret and understand the data collected by the honeypots.
 
