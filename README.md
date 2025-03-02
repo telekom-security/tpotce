@@ -140,6 +140,7 @@ To get things up and running just follow these steps:
     ```
     docker compose up -d
     ```
+    Before starting T-Pot, make sure Docker is running on your system.
 10. During the first time running `docker-compose up`, you may encounter some issues. Check the [Installation Issues](#installation-issues) section to solve them. 
 11. To Stop T-Pot press: `CTRL-C` (it if was running in the foreground) and / or `docker compose down -v` to stop T-Pot entirely.
 
@@ -239,6 +240,19 @@ htpasswd -n -b "tsec" "tsec" | base64 -w0
 ```
 Copy the generated string and manually replace the WEB_USER value in the .env file.
 
+#### ⚠️ Issue 5: Missing Directories in T-Pot Initialization
+**Issue:** When running `docker compose up`, you may see the following lines in the T-Pot init logs:
+```
+tpotinit        | # Updating permissions ...
+tpotinit        | 
+tpotinit        | chmod: /data/nginx/conf: Permission denied
+tpotinit        | chmod: /data/nginx/cert: Permission denied
+...
+```
+**Solution:** To correct this and other issues of the same type, run:
+```sh
+chmod -R 770 data
+```
 ---
 <a name="management-tips"></a>
 ### 2.2 Management Tips 🛟
@@ -272,7 +286,17 @@ Copy the generated string and manually replace the WEB_USER value in the .env fi
     ```sh
     docker exec -it --user root <container_id> /bin/sh
     ```
-    Or 
+7. **Prune Unused Networks**: If you encounter network issues, you can remove all unused networks with the following command:
+    ```sh
+    docker network prune
+    ```
+    This command will prompt for confirmation before deleting all unused networks.
+8. **Restart Containers**: Sometimes, simply restarting the containers can resolve issues. You can do this by bringing the containers down and then up again:
+    ```sh
+    docker-compose down && docker-compose up
+    ```
+    This command stops and removes the containers, then recreates and starts them.
+   
 
 ---
 <a name="testing"></a>
