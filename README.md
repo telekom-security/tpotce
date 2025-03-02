@@ -264,19 +264,19 @@ These errors are not critical and T-Pot should still function correctly.
 
 **Solution:** To fix this issue:
 
-  **Step 1** Add the following entry to the `docker-compose.yml` file, in the `networks:` section:
-      ```yaml
-      conpot_local_default:
-      ```
-  Or, if you want to add all Conpot's template, add:
-      ```yaml
-      conpot_local_default:
-      conpot_local_IEC104:
-      conpot_local_guardian_ast:
-      conpot_local_ipmi:
-      conpot_local_kamstrup_382:
-      ```
-  **Step 2** Add the following entry to the `docker-compose.yml` file, in the `services:` section:
+**Step 1** Add the following entry to the `docker-compose.yml` file, in the `networks:` section:
+    ```yaml
+    conpot_local_default:
+    ```
+Or, if you want to add all Conpot's template, add:
+    ```yaml
+    conpot_local_default:
+    conpot_local_IEC104:
+    conpot_local_guardian_ast:
+    conpot_local_ipmi:
+    conpot_local_kamstrup_382:
+    ```
+**Step 2** Add the following entry to the `docker-compose.yml` file, in the `services:` section:
 <details>
 <summary>Click to expand</summary>
 
