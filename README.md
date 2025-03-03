@@ -464,7 +464,7 @@ conpot_local_kamstrup_382:
 <a name="testing-conpot"></a>
 ### 2.3 Testing ConPot 🦠
 
-In this section, we will perform tests on the **[Conpot](http://conpot.org/)** honeypot, as mentioned in section [1.3.1 Industrial and Medical Honeypots 🏭](#industrial-and-medical-honeypots) **[Conpot](http://conpot.org/)** simulates Industrial Control Systems (ICS) and protocols like Modbus (port 502), SNMP (port 161), and S7comm (port 102).
+In this section, we will perform tests on the **[Conpot](http://conpot.org/)** honeypot, as mentioned in section [1.3.1 Industrial and Medical Honeypots 🏭](#industrial-and-medical-honeypots) **[Conpot](http://conpot.org/)** simulates Industrial Control Systems (ICS) and protocols like Modbus, SNMP and S7comm.
 
 **Verify if Conpot exposes the expected services (e.g., port 80 for HTTP, port 502 for Modbus, port 161 for SNMP):**
 ```sh
