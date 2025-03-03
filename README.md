@@ -110,18 +110,22 @@ To get things up and running just follow these steps:
    ```sh
    git clone https://github.com/domedg/tpotce_MacOS/
    ```
+   
 3. Go to repo folder:
    ```sh
    cd tpotce_MacOS/
    ```
+   
 4. Copy the docker configuration file
    ```sh
    cp compose/mac_win.yml ./docker-compose.yml
    ```
+   
 5. Check if the script `genuser.sh` is executable, if is not run:
    ```sh
    chmod 777 genuser.sh
    ```
+   
 6. Create a `WEB_USER` by running `./genuser.sh` <br>
    If the `WEB_USER` is not properly set, check [Issue 5: WEB_USER Not Loaded](#issue-5-web_user-not-loaded).
     
@@ -129,7 +133,9 @@ To get things up and running just follow these steps:
     ```sh
     sed -i '' 's/^TPOT_OSTYPE=linux$/TPOT_OSTYPE=mac/' .env
     ```
+    
 8. You have to ensure on your own there are no port conflicts keeping T-Pot from starting up. Check the [list of required ports](https://github.com/telekom-security/tpotce?tab=readme-ov-file#required-ports).
+
 9. To start T-Pot run:
     ```
     docker compose up
@@ -139,7 +145,9 @@ To get things up and running just follow these steps:
     docker compose up -d
     ```
     Before starting T-Pot, make sure Docker is running on your system.
+
 10. During the first time running `docker-compose up`, you may encounter some issues. Check the [Installation Issues](#installation-issues) section to solve them. 
+
 11. To Stop T-Pot press: `CTRL-C` (it if was running in the foreground) and / or `docker compose down -v` to stop T-Pot entirely.
 
 **Update T-Pot:**
@@ -456,16 +464,31 @@ conpot_local_kamstrup_382:
     ```sh
     docker exec -it --user root <container_id> /bin/sh
     ```
+    
 7. **Prune Unused Networks**: If you encounter network issues, you can remove all unused networks with the following command:
     ```sh
     docker network prune
     ```
     This command will prompt for confirmation before deleting all unused networks.
+
 8. **Restart Containers**: Sometimes, simply restarting the containers can resolve issues. You can do this by bringing the containers down and then up again:
     ```sh
     docker-compose down && docker-compose up
     ```
     This command stops and removes the containers, then recreates and starts them.
+
+9. **Monitor Ports with lsof**: To check which process is using a specific port, use:
+    ```sh
+    sudo lsof -i :<port>
+    ```
+    This command lists the process ID (PID) and other details of the process using the specified port.
+
+10. **Monitor Ports with netstat**: To list all listening ports and the associated processes, use:
+    ```sh
+    sudo netstat -tulpn
+    ```
+    This command provides a detailed view of all TCP and UDP ports in use, along with the corresponding process IDs and names.
+
    
 
 ---
@@ -516,8 +539,6 @@ python3 start.py
 <img width="1188" alt="kibana_dash" src="https://github.com/user-attachments/assets/de9c841b-830d-42d9-b778-61c270cc9c8c" />
 
 <br>
-<br>
-<br>
 
 ### **Brute force attack examples using Hydra:**
 ```sh
@@ -563,7 +584,7 @@ Recent studies, such as one conducted by **Jiuma Elhshik** ([source](https://med
    - **Honeytrap**: Attracted a wide range of attacks.
 
 2. **Geographical Origin of Attacks**:
-   - Most attacks originated from the **United States** and **China**, with significant activity from **Iran** and the **Netherlands**. Note that IP spoofing may obscure true origins.
+   - Most attacks originated from the **United States** and **China**, with significant activity from **Iran** and the                  **Netherlands**. Note that IP spoofing may obscure true origins.
 
 3. **Exploited Vulnerabilities**:
    - **CVE-2023-50387 (KeyTrap)**: Targets DNS servers.
