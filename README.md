@@ -142,6 +142,14 @@ To get things up and running just follow these steps:
 10. During the first time running `docker-compose up`, you may encounter some issues. Check the [Installation Issues](#installation-issues) section to solve them. 
 11. To Stop T-Pot press: `CTRL-C` (it if was running in the foreground) and / or `docker compose down -v` to stop T-Pot entirely.
 
+**Update T-Pot:**
+T-Pot releases are offered through GitHub and can be pulled using:
+### Update Script 🔄
+```
+./update.sh
+```
+Check the [full explanation](https://github.com/telekom-security/tpotce?tab=readme-ov-file#update-script).
+
 ---
 <a name="installation-issues"></a>
 ### 2.1 Installation Issues 🤦‍♂️
@@ -542,23 +550,6 @@ sqlmap -u "http://<indirizzo-IP>/page?id=1" --risk=3 --level=5
 ```sh
 nc -v <indirizzo-IP> 80
 ```
-
----
-<a name="update-script"></a>
-### Update Script 🔄
-T-Pot releases are offered through GitHub and can be pulled using 
-```
-./update.sh
-```
-
-***If you made any relevant changes to the T-Pot config files make sure to create a backup first!*** <br>
-***Updates may have unforeseen consequences. Create a backup of the machine or the files most valuable to your work!***  
-
-The update script will ...
- - **mercilessly** overwrite local changes to be in sync with the T-Pot master branch
- - create a full backup of the `~/tpotce` folder
- - update all files in `~/tpotce` to be in sync with the T-Pot master branch
- - restore your custom `ews.cfg` from `~/tpotce/data/ews/conf` and the T-Pot configuration (`~/tpotce/.env`).
 
 ---
 
