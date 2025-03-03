@@ -499,11 +499,11 @@ In this section, we will perform tests on the **[Conpot](http://conpot.org/)** h
 
 **Verify if Conpot exposes the expected services (e.g., port 80 for HTTP, port 502 for Modbus, port 161 for SNMP):**
 ```sh
-nmap -sV -p 1-65535 <indirizzo-IP>
+nmap -sV -p 1-65535 <IP-address>
 
-nmap -sS -p- <indirizzo-IP>    # TCP SYN scan (all ports)
-nmap -sU -p- <indirizzo-IP>    # UDP scan (all ports)
-nmap -sV <indirizzo-IP>        # Service version detection
+nmap -sS -p- <IP-address>    # TCP SYN scan (all ports)
+nmap -sU -p- <IP-address>    # UDP scan (all ports)
+nmap -sV <IP-address>        # Service version detection
 ```
 <br>
 
@@ -542,34 +542,34 @@ python3 start.py
 
 ### **Brute force attack examples using Hydra:**
 ```sh
-hydra -l <utente> -P <file_wordlist> ssh://<indirizzo-IP>
-hydra -l <utente> -P <file_wordlist> ftp://<indirizzo-IP>
-hydra -l <utente> -P <file_wordlist> http-get://<indirizzo-IP>
+hydra -l <user> -P <file_wordlist> ssh://<IP-address>
+hydra -l <user> -P <file_wordlist> ftp://<IP-address>
+hydra -l <user> -P <file_wordlist> http-get://<IP-address>
 ```
 
 ### **Exploitation example using Metasploit:**
 ```sh
 msfconsole
 use exploit/linux/ssh/sshexec
-set RHOST <indirizzo-IP>
-set USERNAME <utente>
+set RHOST <IP-address>
+set USERNAME <user>
 set PASSWORD <password>
 exploit
 ```
 
 ### **Example of an XSS attack using curl:**
 ```sh
-curl -X POST -d "username=<script>alert('XSS')</script>" http://<indirizzo-IP>/login
+curl -X POST -d "username=<script>alert('XSS')</script>" http://<IP-address>/login
 ```
 
 ### **SQL injection example using sqlmap:**
 ```sh
-sqlmap -u "http://<indirizzo-IP>/page?id=1" --risk=3 --level=5
+sqlmap -u "http://<IP-address>/page?id=1" --risk=3 --level=5
 ```
 
 ### **Netcat example to connect to port 80 (HTTP):**
 ```sh
-nc -v <indirizzo-IP> 80
+nc -v <IP-address> 80
 ```
 
 ---
