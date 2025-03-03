@@ -21,7 +21,7 @@ services:
      - EWS_HPFEEDS_SECRET=secret
      - EWS_HPFEEDS_TLSCERT=false
      - EWS_HPFEEDS_FORMAT=json
-    image: "dtagdevsec/ewsposter:24.04"
+    image: "ghcr.io/telekom-security/ewsposter:24.04.1"
     volumes:
      - $HOME/tpotce/data:/data
      - $HOME/tpotce/data/ews/conf/ews.ip:/opt/ewsposter/ews.ip

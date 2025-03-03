@@ -1,4 +1,4 @@
-FROM alpine:3.19
+FROM alpine:3.21
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -22,7 +22,8 @@ RUN apk --no-cache -U upgrade && \
 		py3-requests \
 		py3-pip \
 		py3-setuptools \
-		py3-wheel && \
+		py3-wheel \
+		py3-xmltodict && \
 	pip3 install --break-system-packages --upgrade pip && \
 	pip3 install --break-system-packages --no-cache-dir \
 			configparser \
@@ -32,7 +33,8 @@ RUN apk --no-cache -U upgrade && \
 			xmljson && \
 #
 # Setup ewsposter
-    git clone https://github.com/telekom-security/ewsposter -b v1.25.0 /opt/ewsposter && \
+#    git clone https://github.com/telekom-security/ewsposter -b V1.30.0 /opt/ewsposter && \
+	git clone https://github.com/telekom-security/ewsposter /opt/ewsposter && \
     mkdir -p /opt/ewsposter/spool /opt/ewsposter/log && \
 #
 # Setup user and groups
