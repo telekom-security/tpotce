@@ -93,23 +93,6 @@ services:
     volumes:
      - ${TPOT_DATA_PATH}/ciscoasa/log:/var/log/ciscoasa
 
-# CitrixHoneypot service
-  citrixhoneypot:
-    container_name: citrixhoneypot
-    restart: always
-    depends_on:
-      tpotinit:
-        condition: service_healthy
-    networks:
-     - citrixhoneypot_local
-    ports:
-     - "443:443"
-    image: ${TPOT_REPO}/citrixhoneypot:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
-    read_only: true
-    volumes:
-     - ${TPOT_DATA_PATH}/citrixhoneypot/log:/opt/citrixhoneypot/logs
-
 # Cowrie service
   cowrie:
     container_name: cowrie
