@@ -18,11 +18,11 @@ networks:
   medpot_local:
   miniprint_local:
   redishoneypot_local:
-  sentrypeer_local:
+#  sentrypeer_local:
   tanner_local:
   wordpot_local:
   nginx_local:
-  ewsposter_local:
+#  ewsposter_local:
 
 services:
 
@@ -482,26 +482,26 @@ services:
      - ${TPOT_DATA_PATH}/redishoneypot/log:/var/log/redishoneypot
 
 # SentryPeer service
-  sentrypeer:
-    container_name: sentrypeer
-    restart: always
-    depends_on:
-      tpotinit:
-        condition: service_healthy
-#    environment:
-#     - SENTRYPEER_PEER_TO_PEER=1
-    networks:
-     - sentrypeer_local
-    ports:
-#     - "4222:4222/udp"
-     - "5060:5060/tcp"
-     - "5060:5060/udp"
-#     - "127.0.0.1:8082:8082"
-    image: ${TPOT_REPO}/sentrypeer:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
-    read_only: true
-    volumes:
-     - ${TPOT_DATA_PATH}/sentrypeer/log:/var/log/sentrypeer
+#  sentrypeer:
+#    container_name: sentrypeer
+#    restart: always
+#    depends_on:
+#      tpotinit:
+#        condition: service_healthy
+##    environment:
+##     - SENTRYPEER_PEER_TO_PEER=1
+#    networks:
+#     - sentrypeer_local
+#    ports:
+##     - "4222:4222/udp"
+#     - "5060:5060/tcp"
+#     - "5060:5060/udp"
+##     - "127.0.0.1:8082:8082"
+#    image: ${TPOT_REPO}/sentrypeer:${TPOT_VERSION}
+#    pull_policy: ${TPOT_PULL_POLICY}
+#    read_only: true
+#    volumes:
+#     - ${TPOT_DATA_PATH}/sentrypeer/log:/var/log/sentrypeer
 
 #### Snare / Tanner
 ## Tanner Redis Service
@@ -785,28 +785,28 @@ services:
 #### /ELK
 
 # Ewsposter service
-  ewsposter:
-    container_name: ewsposter
-    restart: always
-    depends_on:
-      tpotinit:
-        condition: service_healthy
-    networks:
-     - ewsposter_local
-    environment:
-     - EWS_HPFEEDS_ENABLE=false
-     - EWS_HPFEEDS_HOST=host
-     - EWS_HPFEEDS_PORT=port
-     - EWS_HPFEEDS_CHANNELS=channels
-     - EWS_HPFEEDS_IDENT=user
-     - EWS_HPFEEDS_SECRET=secret
-     - EWS_HPFEEDS_TLSCERT=false
-     - EWS_HPFEEDS_FORMAT=json
-    image: ${TPOT_REPO}/ewsposter:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
-    volumes:
-     - ${TPOT_DATA_PATH}:/data
-     - ${TPOT_DATA_PATH}/ews/conf/ews.ip:/opt/ewsposter/ews.ip
+#  ewsposter:
+#    container_name: ewsposter
+#    restart: always
+#    depends_on:
+#      tpotinit:
+#        condition: service_healthy
+#    networks:
+#     - ewsposter_local
+#    environment:
+#     - EWS_HPFEEDS_ENABLE=false
+#     - EWS_HPFEEDS_HOST=host
+#     - EWS_HPFEEDS_PORT=port
+#     - EWS_HPFEEDS_CHANNELS=channels
+#     - EWS_HPFEEDS_IDENT=user
+#     - EWS_HPFEEDS_SECRET=secret
+#     - EWS_HPFEEDS_TLSCERT=false
+#     - EWS_HPFEEDS_FORMAT=json
+#    image: ${TPOT_REPO}/ewsposter:${TPOT_VERSION}
+#    pull_policy: ${TPOT_PULL_POLICY}
+#    volumes:
+#     - ${TPOT_DATA_PATH}:/data
+#     - ${TPOT_DATA_PATH}/ews/conf/ews.ip:/opt/ewsposter/ews.ip
 
 # Nginx service
   nginx:
