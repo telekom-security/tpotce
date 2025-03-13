@@ -545,24 +545,24 @@
         - "Fedora"
         - "Rocky"
 
-    - name: Set SELinux config to permissive (AlmaLinux, Fedora, Rocky)
-      lineinfile:
-        path: /etc/selinux/config
-        regexp: '^SELINUX='
-        line: 'SELINUX=permissive'
-      when: ansible_distribution in ["AlmaLinux", "Fedora", "Rocky"]
-      tags:
-        - "AlmaLinux"
-        - "Fedora"
-        - "Rocky"
+    #- name: Set SELinux config to permissive (AlmaLinux, Fedora, Rocky)
+    #  lineinfile:
+    #    path: /etc/selinux/config
+    #    regexp: '^SELINUX='
+    #    line: 'SELINUX=permissive'
+    #  when: ansible_distribution in ["AlmaLinux", "Fedora", "Rocky"]
+    #  tags:
+    #    - "AlmaLinux"
+    #    - "Fedora"
+    #    - "Rocky"
 
-    - name: Set SELinux to permissive (AlmaLinux, Fedora, Rocky)
-      command: "setenforce Permissive"
-      when: ansible_distribution in ["AlmaLinux", "Fedora", "Rocky"]
-      tags:
-        - "AlmaLinux"
-        - "Fedora"
-        - "Rocky"
+    #- name: Set SELinux to permissive (AlmaLinux, Fedora, Rocky)
+    #  command: "setenforce Permissive"
+    #  when: ansible_distribution in ["AlmaLinux", "Fedora", "Rocky"]
+    #  tags:
+    #    - "AlmaLinux"
+    #    - "Fedora"
+    #    - "Rocky"
 
     - name: Stop Resolved (Fedora, Ubuntu)
       service:
