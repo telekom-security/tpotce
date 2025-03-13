@@ -37,4 +37,4 @@ RUN apk --no-cache -U upgrade && \
 #
 # Start suricata
 STOPSIGNAL SIGINT
-CMD SURICATA_CAPTURE_FILTER=$(update.sh $OINKCODE) && exec suricata -v -F $SURICATA_CAPTURE_FILTER -i $(/sbin/ip address show | /usr/bin/awk '/inet.*(brd|global)/{ print $NF; exit }')
+CMD SURICATA_CAPTURE_FILTER=$(update.sh $OINKCODE) && exec suricata -v -F $SURICATA_CAPTURE_FILTER -i $(ip route | grep "^default" | awk '{ print $5 }')

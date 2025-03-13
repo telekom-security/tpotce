@@ -18,7 +18,7 @@ PUSH_IMAGES=false
 NO_CACHE=false
 PARALLELBUILDS=2
 UPLOAD_BANDWIDTH=40mbit # Set this to max 90% of available upload bandwidth
-INTERFACE=$(/sbin/ip address show | /usr/bin/awk '/inet.*(brd|global)/{ print $NF; exit }')
+INTERFACE=$(ip route | grep "^default" | awk '{ print $5 }')
 
 # Help message
 usage() {
