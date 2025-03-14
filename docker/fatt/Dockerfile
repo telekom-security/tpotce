@@ -42,4 +42,4 @@ STOPSIGNAL SIGINT
 ENV PYTHONPATH /opt/fatt
 WORKDIR /opt/fatt
 USER fatt:fatt
-CMD python3 fatt.py -i $(/sbin/ip address show | /usr/bin/awk '/inet.*brd/{ print $NF; exit }') --print_output --json_logging -o log/fatt.log
+CMD python3 fatt.py -i $(ip route | grep "^default" | awk '{ print $5 }') --print_output --json_logging -o log/fatt.log

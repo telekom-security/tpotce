@@ -40,4 +40,4 @@ RUN apk -U --no-cache upgrade && \
 # Start glutton 
 WORKDIR /opt/glutton
 USER 2000:2000
-CMD exec bin/server -d true -i $(/sbin/ip address show | /usr/bin/awk '/inet.*brd/{ print $NF; exit }') -l /var/log/glutton/glutton.log > /dev/null 2>&1
+CMD exec bin/server -d true -i $(ip route | grep "^default" | awk '{ print $5 }') -l /var/log/glutton/glutton.log > /dev/null 2>&1
