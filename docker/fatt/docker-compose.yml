@@ -14,6 +14,6 @@ services:
      - NET_ADMIN
      - SYS_NICE
      - NET_RAW
-    image: "dtagdevsec/fatt:24.04"
+    image: "ghcr.io/telekom-security/fatt:24.04.1"
     volumes:
      - $HOME/tpotce/data/fatt/log:/opt/fatt/log
