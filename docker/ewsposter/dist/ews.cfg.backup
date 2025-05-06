@@ -101,6 +101,11 @@ endlessh = true
 nodeid = endlessh-community-01
 logfile = /data/endlessh/log/endlessh.log
 
+[FATT]
+fatt = false
+nodeid = fatt-community-01
+logfile = /data/fatt/log/fatt.log
+
 [GALAH]
 galah = true
 nodeid = galah-community-01
@@ -183,6 +188,11 @@ logfile = /data/redishoneypot/log/redishoneypot.log
 sentrypeer = true
 nodeid = sentrypeer-community-01
 logfile = /data/sentrypeer/log/sentrypeer.json
+
+[SURICATA]
+suricata = false
+nodeid = suricata-community-01
+logfile = /data/suricata/log/eve.json
 
 [TANNER]
 tanner = true
