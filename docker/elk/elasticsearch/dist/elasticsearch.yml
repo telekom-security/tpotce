@@ -11,5 +11,5 @@ http.host: 0.0.0.0
 http.cors.enabled: true
 http.cors.allow-origin: "*"
 indices.query.bool.max_clause_count: 2000
-cluster.routing.allocation.disk.watermark.enable_for_single_data_node: true
+#cluster.routing.allocation.disk.watermark.enable_for_single_data_node: true
 discovery.type: single-node
