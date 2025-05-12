@@ -13,6 +13,9 @@ __        __   _     _   _  [ T-Pot ]
 EOF
 )
 
+# Add trap to ensure SIGINT, SIGTERM works
+trap 'echo; echo; echo "# User interrupt. Exiting."; exit 1' SIGINT
+
 # Generate T-Pot WebUser
 echo "$myPW"
 echo
