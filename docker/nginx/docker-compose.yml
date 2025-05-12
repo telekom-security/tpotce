@@ -20,7 +20,7 @@ services:
       #    ports:
       #     - "64297:64297"
       #     - "127.0.0.1:64304:64304"
-    image: "dtagdevsec/nginx:24.04"
+    image: "ghcr.io/telekom-security/nginx:24.04.1"
     read_only: true
     volumes:
      - $HOME/tpotce/data/nginx/cert/:/etc/nginx/cert/:ro
