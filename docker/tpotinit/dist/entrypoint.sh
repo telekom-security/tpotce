@@ -114,6 +114,20 @@ validate_ip_or_domain() {
     fi
 }
 
+# Function to validate if TPOT_PERSISTENCE_CYCLES is set and valid
+validate_tpot_persistence_cycles() {
+  # Check if the variable is unset, empty, not a number, or out of the valid range (1–999)
+  if [[ -z "$TPOT_PERSISTENCE_CYCLES" ]] || 
+     [[ ! "$TPOT_PERSISTENCE_CYCLES" =~ ^[0-9]+$ ]] || 
+     (( TPOT_PERSISTENCE_CYCLES < 1 )) || 
+     (( TPOT_PERSISTENCE_CYCLES > 999 )); then
+
+    # Set to default value
+    echo "WARNING! TPOT_PERSISTENCE_CYCLES is not set, invalid or out of bounds. Using default of 30 cycles."
+    TPOT_PERSISTENCE_CYCLES=30
+  fi
+}
+
 create_web_users() {
     echo
     echo "# Creating passwd files based on T-Pot .env config ..."
@@ -203,6 +217,9 @@ for var in TPOT_BLACKHOLE TPOT_PERSISTENCE TPOT_ATTACKMAP_TEXT TPOT_ATTACKMAP_TE
     validate_format "$var"
 done
 
+# Validate TPOT_PERSISTENCE_CYCLES
+validate_tpot_persistence_cycles
+
 if [ "${TPOT_TYPE}" == "HIVE" ];
   then
     # No $ for check_var
@@ -242,7 +259,7 @@ if [ -f "/data/uuid" ];
     echo
     echo "# Data folder is present, just cleaning up, please be patient ..."
     echo
-    /opt/tpot/bin/clean.sh "${TPOT_PERSISTENCE}"
+    /opt/tpot/bin/clean.sh "${TPOT_PERSISTENCE}" "${TPOT_PERSISTENCE_CYCLES}"
     echo
   else
     figlet "Setting up ..."

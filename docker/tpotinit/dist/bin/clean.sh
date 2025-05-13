@@ -10,12 +10,24 @@ myPIGZ=$(which pigz)
 
 # Set persistence
 myPERSISTENCE=$1
+myPERSISTENCE_CYCLES=$2
+myPERSISTENCE_CYCLES="${myPERSISTENCE_CYCLES:=30}"
+export myPERSISTENCE_CYCLES
 
 # Let's create a function to check if folder is empty
 fuEMPTY () {
   local myFOLDER=$1
 
 echo $(ls $myFOLDER | wc -l)
+}
+
+# Let's create a function to setup logrotate config
+fuLOGROTATECONF () {
+  local myLOGROTATECONF="/opt/tpot/etc/logrotate/logrotate.conf"
+  local myLOGROTATETEMP="/opt/tpot/etc/logrotate/logrotate.template"
+  envsubst < $myLOGROTATETEMP > $myLOGROTATECONF
+  chown root:root $myLOGROTATECONF
+  chmod 0600 $myLOGROTATECONF
 }
 
 # Let's create a function to rotate and compress logs
@@ -42,6 +54,9 @@ fuLOGROTATE () {
   local myMINIPRINTTGZ="/data/miniprint/uploads.tgz"
   local myTANNERF="/data/tanner/files/"
   local myTANNERFTGZ="/data/tanner/files.tgz"
+
+# Setup logrotate config
+fuLOGROTATECONF
 
 # Ensure correct permissions and ownerships for logrotate to run without issues
 chmod 770 /data/ -R
@@ -408,7 +423,7 @@ fi
 # Check persistence, if enabled compress and rotate logs
 if [ "$myPERSISTENCE" = "on" ];
   then
-    echo "Persistence enabled, now rotating and compressing logs."
+    echo "Persistence enabled for $myPERSISTENCE_CYCLES cycles, now rotating and compressing logs."
     fuLOGROTATE
 fi
 

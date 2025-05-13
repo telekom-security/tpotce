@@ -13,6 +13,7 @@ RUN apk --no-cache -U upgrade && \
         conntrack-tools \
 		cracklib \
         curl \
+        envsubst \
         ethtool \
         figlet \
         git \
@@ -32,7 +33,7 @@ RUN apk --no-cache -U upgrade && \
 # Setup user, logrotate permissions
     addgroup -g 2000 tpot && \
     adduser -S -s /bin/ash -u 2000 -D -g 2000 tpot && \
-    chmod 0600 /opt/tpot/etc/logrotate/logrotate.conf && \
+    chmod 0600 /opt/tpot/etc/logrotate/logrotate.* && \
 #
 # Clean up
     apk del --purge git && \
