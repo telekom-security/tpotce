@@ -677,7 +677,7 @@ All persistent log files from the honeypots, tools and T-Pot related services ar
 <br><br>
 
 ## Log Persistence
-All log data stored in the [T-Pot Data Folder](#t-pot-data-folder) will be persisted for 30 days by default.
+All log data is stored in the [T-Pot Data Folder](#t-pot-data-folder) and will be persisted for the number of cycles set for `TPOT_PERSISTENCE_CYCLES=<1-999>` in the T-Pot configuration file `~/tpotce/.env`. It defaults to 30.
 <br>
 Elasticsearch indices are handled by the `tpot` Index Lifecycle Policy which can be adjusted directly in Kibana (make sure to "Include managed system policies").
 ![IndexManagement1](doc/kibana_b.png)
