@@ -325,12 +325,12 @@ Once you are familiar with how things work you should choose a network you suspe
 
 | Distribution Name                                                                  | x64                                                                                                                                   | arm64                                                                                                                                   |
 | :--------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------ | :-------------------------------------------------------------------------------------------------------------------------------------- |
-| [Alma Linux OS 9.5 Boot ISO](https://almalinux.org)                                | [download](https://repo.almalinux.org/almalinux/9.5/isos/x86_64/AlmaLinux-9.5-x86_64-boot.iso)                                        | [download](https://repo.almalinux.org/almalinux/9.5/isos/aarch64/AlmaLinux-9.5-aarch64-boot.iso)                                        |
+| [Alma Linux OS 9.6 Boot ISO](https://almalinux.org)                                | [download](https://repo.almalinux.org/almalinux/9.6/isos/x86_64/AlmaLinux-9.6-x86_64-boot.iso)                                        | [download](https://repo.almalinux.org/almalinux/9.6/isos/aarch64/AlmaLinux-9.6-aarch64-boot.iso)                                        |
 | [Debian 12 Network Install](https://www.debian.org/CD/netinst/index.en.html)       | [download](https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-12.11.0-amd64-netinst.iso)                                 | [download](https://cdimage.debian.org/debian-cd/current/arm64/iso-cd/debian-12.11.0-arm64-netinst.iso)                                   |
 | [Fedora Server 42 Network Install](https://fedoraproject.org/server/download)      | [download](https://download.fedoraproject.org/pub/fedora/linux/releases/42/Server/x86_64/iso/Fedora-Server-netinst-x86_64-42-1.1.iso) | [download](https://download.fedoraproject.org/pub/fedora/linux/releases/42/Server/aarch64/iso/Fedora-Server-netinst-aarch64-42-1.1.iso) |
 | [OpenSuse Tumbleweed Network Image](https://get.opensuse.org/tumbleweed/#download) | [download](https://download.opensuse.org/tumbleweed/iso/openSUSE-Tumbleweed-NET-x86_64-Current.iso)                                   | [download](https://download.opensuse.org/ports/aarch64/tumbleweed/iso/openSUSE-Tumbleweed-NET-aarch64-Current.iso)                      |
 | [Rocky Linux OS 9.5 Boot ISO](https://rockylinux.org/download)                     | [download](https://download.rockylinux.org/pub/rocky/9/isos/x86_64/Rocky-9.5-x86_64-minimal.iso)                                      | [download](https://download.rockylinux.org/pub/rocky/9/isos/aarch64/Rocky-9.5-aarch64-minimal.iso)                                      |
-| [Ubuntu 24.04.1 Live Server](https://ubuntu.com/download/server)                   | [download](https://releases.ubuntu.com/24.04/ubuntu-24.04.1-live-server-amd64.iso)                                                    | [download](https://cdimage.ubuntu.com/releases/24.04/release/ubuntu-24.04.1-live-server-arm64.iso)                                      |
+| [Ubuntu 24.04.2 Live Server](https://ubuntu.com/download/server)                   | [download](https://releases.ubuntu.com/24.04/ubuntu-24.04.2-live-server-amd64.iso)                                                    | [download](https://cdimage.ubuntu.com/releases/24.04/release/ubuntu-24.04.2-live-server-arm64.iso)                                      |
 
 <br>
 
@@ -797,7 +797,7 @@ The software that T-Pot is built on uses the following licenses.
 <br>GPLv3:
 [adbhoney](https://github.com/huuck/ADBHoney),
 [elasticpot](https://gitlab.com/bontchev/elasticpot/-/blob/master/LICENSE),
-[ewsposter](https://github.com/telekom-security/ews/),
+[ewsposter](https://github.com/telekom-security/ewsposter),
 [log4pot](https://github.com/thomaspatzke/Log4Pot/blob/master/LICENSE),
 [fatt](https://github.com/0x4D31/fatt/blob/master/LICENSE),
 [heralding](https://github.com/johnnykv/heralding/blob/master/LICENSE.txt),
@@ -813,8 +813,8 @@ The software that T-Pot is built on uses the following licenses.
 [elasticsearch](https://github.com/elasticsearch/elasticsearch/blob/master/LICENSE.txt),
 [go-pot](https://github.com/ryanolee/go-pot?tab=License-1-ov-file#readme),
 [h0neytr4p](https://github.com/pbssubhash/h0neytr4p?tab=Apache-2.0-1-ov-file#readme),
-[logstash](https://github.com/elasticsearch/logstash/blob/master/LICENSE),
-[kibana](https://github.com/elasticsearch/kibana/blob/master/LICENSE.md),
+[logstash](https://github.com/elasticsearch/logstash/blob/master/LICENSE.txt),
+[kibana](https://github.com/elasticsearch/kibana/blob/master/LICENSE.txt),
 [docker](https://github.com/docker/docker/blob/master/LICENSE)
 <br>MIT license:
 [autoheal](https://github.com/willfarrell/docker-autoheal?tab=MIT-1-ov-file#readme),
