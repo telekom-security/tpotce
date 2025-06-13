@@ -14,7 +14,7 @@ RUN apk --no-cache -U upgrade && \
 # Install from GitHub and setup
     mkdir -p /opt && \
     cd /opt/ && \
-    git clone https://github.com/t3chn0m4g3/t-pot-attack-map -b 2.2.6 && \
+    git clone https://github.com/t3chn0m4g3/t-pot-attack-map -b 2.2.7 && \
     cd t-pot-attack-map && \
     pip3 install --break-system-packages --upgrade pip && \
     pip3 install --break-system-packages -r requirements.txt && \
