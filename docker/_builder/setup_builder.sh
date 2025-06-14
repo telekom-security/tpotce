@@ -19,8 +19,7 @@ fi
 if [ "$1" != "-y" ]; then
     echo "### Setting up Docker for Multi-Arch Builds."
     echo "### Requires Docker packages from https://get.docker.com/"
-    echo "### Use on x64 only!"
-    echo "### Run with -y if you fit the requirements!"
+    echo "### Run with -y if you meet the requirements!"
     exit 0
 fi
 
@@ -42,7 +41,7 @@ fi
 
 # Ensure QEMU is set up for cross-platform builds
 echo -n "Ensuring QEMU is configured for cross-platform builds..."
-if docker run --rm --privileged multiarch/qemu-user-static --reset -p yes >/dev/null 2>&1; then
+if docker run --rm --privileged tonistiigi/binfmt --install all >/dev/null 2>&1; then
     echo -e " [${GREEN}OK${NC}]"
 else
     echo -e " [${RED}FAIL${NC}]"
@@ -95,5 +94,5 @@ echo "    docker login -u <username>"
 echo "    docker login ghcr.io -u <username>"
 echo
 echo -e "${BLUE}Fix segmentation faults when building arm64 images:${NC}"
-echo "    docker run --rm --privileged multiarch/qemu-user-static --reset -p yes"
+echo "    docker buildx rm mybuilder && docker run --rm --privileged tonistiigi/binfmt --install all"
 echo

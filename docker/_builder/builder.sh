@@ -132,7 +132,7 @@ fi
 
 # Ensure QEMU is set up for cross-platform builds
 echo -n "Ensuring QEMU is configured for cross-platform builds..."
-if docker run --rm --privileged multiarch/qemu-user-static --reset -p yes > /dev/null 2>&1; then
+if docker run --rm --privileged tonistiigi/binfmt --install all > /dev/null 2>&1; then
     echo -e " [${GREEN}OK${NC}]"
 else
     echo -e " [${RED}FAIL${NC}]"
