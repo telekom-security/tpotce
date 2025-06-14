@@ -1,6 +1,6 @@
 FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND noninteractive
-ENV ES_VER=8.18.1
+ENV ES_VER=8.18.2
 #
 # Include dist
 COPY dist/ /root/dist/
