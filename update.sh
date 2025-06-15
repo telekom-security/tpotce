@@ -188,6 +188,10 @@ function fuRESTORE () {
 	fi
 	echo "### Restoring T-Pot config file .env"
 	tar xvf $myARCHIVE .env -C $HOME/tpotce >/dev/null 2>&1
+	# Backup file (.env) contains a record of the TPOT_VERSION that is used in docker-compose commmands. 
+	# We should upgrade the version in this file after restoring the backup.
+	newVERSION=$(cat version)
+	sed -i 's/^TPOT_VERSION=.*/TPOT_VERSION=${newVERSION}/' $HOME/tpotce/.env
 }
 
 ################
