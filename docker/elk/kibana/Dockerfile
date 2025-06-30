@@ -1,5 +1,5 @@
-FROM node:20.18.2-alpine3.20
-ENV KB_VER=8.18.2
+FROM node:20.19.2-alpine3.20
+ENV KB_VER=8.18.3
 #
 # Include dist
 COPY dist/ /root/dist/

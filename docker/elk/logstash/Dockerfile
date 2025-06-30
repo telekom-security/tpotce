@@ -1,6 +1,6 @@
 FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
-ENV LS_VER=8.18.2
+ENV LS_VER=8.18.3
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -42,6 +42,7 @@ RUN apt-get update -y && \
     cp tpot-template.json /etc/logstash/ && \
     cd /usr/share/logstash && \
     bin/logstash-plugin update logstash-filter-translate && \
+	bin/logstash-plugin install logstash-output-syslog && \
     rm /etc/logstash/pipelines.yml && \
     rm /etc/logstash/logstash.yml && \
 #
