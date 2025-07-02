@@ -481,7 +481,7 @@
     - name: Comment out Port(s) in sshd_config, can cause port conflicts on deploy (AlmaLinux, Debian, Fedora, Raspbian, Rocky, Ubuntu)
       ansible.builtin.replace:
         path: /etc/ssh/sshd_config
-        regexp: "(^Port [0-9]+)"
+        regexp: "^(Port [0-9]+)"
         replace: '# \1'
       when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "Raspbian", "Rocky", "Ubuntu"]
       tags:
