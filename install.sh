@@ -1,67 +1,77 @@
 #!/usr/bin/env bash
 
-
 print_help() {
-  echo "Usage: $0 [-s y|n] [-t h|s|l|i|m|t] -u <webuser name> -p <password for web user>"
-  echo "  -s: Supress Install(y/n) question. Value accepted: yes or no (optional)"
-  echo "  -t: Type of installation. Value accepted: h (hive),s (sensor), l (llm), i(mini),m(mobile),t(tarpit) (optional)"
-  echo "  -u: web username (mandatory for hive installation, otherwirse optional)"
-  echo "  -p: password for web user (mandatory for hive installation, otherwirse optional)"
+  cat <<EOF
+Usage: $0 [-s] -t <type> [-u <webuser>] [-p <password>]
+
+Options:
+  -s                Suppress installation confirmation prompt (sets myQST=y)
+  -t <type>         Type of installation (required if -s is used):
+                      h - hive      (requires -u and -p)
+                      s - sensor    (no user/pass required)
+                      l - llm       (requires -u and -p)
+                      i - mini      (requires -u and -p)
+                      m - mobile    (no user/pass required)
+                      t - tarpit    (requires -u and -p)
+  -u <webuser>      Web interface username (required for h/l/i/t)
+  -p <password>     Web interface password (required for h/l/i/t)
+  -h                Show this help message
+EOF
   exit 1
 }
 
-validate_s() {
-  if [[ -n "$myQST" ]]; then
-    if [[ "$myQST" =~ ^[yYnN]$ ]]; then
-      return 1 # Valid
-    else
-      print_help
-    fi
-  else
+validate_type() {
+  [[ "$myTPOT_TYPE" =~ ^[hslimtHSLIMT]$ ]] || {
+    echo "Invalid installation type: $myTPOT_TYPE"
     print_help
-  fi
-
+  }
 }
 
-validate_t() {
-  if [[ -n "$myTPOT_TYPE" ]]; then
-    if [[ "$myTPOT_TYPE" =~ ^[hslimtHSLIMT]$ ]]; then
-      return 1 # Valid
-    else
-      print_help
-    fi
-  else
-    print_help
-  fi
+# Defaults
+myQST=""
+myTPOT_TYPE=""
+myWEB_USER=""
+myWEB_PW=""
 
-}
-
-while getopts ":s:t:u:p:" opt; do
+while getopts ":st:u:p:h" opt; do
   case "$opt" in
-  s)
-    myQST="${OPTARG}"
-    validate_s
-    ;;
-  t)
-    myTPOT_TYPE="${OPTARG}"
-    validate_t
-    ;;
-  u)
-    export myWEB_USER="${OPTARG}"
-    ;;
-  p)
-    export myWEB_PW="${OPTARG}"
-    ;;
-  :)
-    echo "Option -${OPTARG} requires an argument."
-    print_help
-    exit 1
-    ;;
-  \?)
-    print_help
-    ;;
+    s)
+      myQST="y"
+      ;;
+    t)
+      myTPOT_TYPE="${OPTARG,,}"
+      validate_type
+      ;;
+    u)
+      export myWEB_USER="${OPTARG}"
+      ;;
+    p)
+      export myWEB_PW="${OPTARG}"
+      ;;
+    h|\?)
+      print_help
+      ;;
+    :)
+      echo "Option -${OPTARG} requires an argument."
+      print_help
+      ;;
   esac
 done
+
+# -s requires -t
+if [[ "$myQST" == "y" && -z "$myTPOT_TYPE" ]]; then
+  echo "Error: -t is required when using -s to suppress interaction."
+  print_help
+fi
+
+# Determine if user/pass are required based on install type
+if [[ "$myTPOT_TYPE" =~ ^[hlit]$ ]]; then
+  [[ -n "$myWEB_USER" && -n "$myWEB_PW" ]] || {
+    echo "Error: -u and -p are required for installation type '$myTPOT_TYPE'."
+    print_help
+  }
+fi
+
 myINSTALL_NOTIFICATION="### Now installing required packages ..."
 myUSER=$(whoami)
 myTPOT_CONF_FILE="/home/${myUSER}/tpotce/.env"
