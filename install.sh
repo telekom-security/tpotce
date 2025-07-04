@@ -3,10 +3,10 @@
 
 print_help() {
   echo "Usage: $0 [-s y|n] [-t h|s|l|i|m|t] -u <webuser name> -p <password for web user>"
-  echo "  -s: yes or no (optional)"
-  echo "  -t: h (host),s (sensor), l (llm), i(mini),m(mobile),t(tarpit) (optional)"
-  echo "  -u: web username (optional)"
-  echo "  -p: password for web user (optional)"
+  echo "  -s: Supress Install(y/n) question. Value accepted: yes or no (optional)"
+  echo "  -t: Type of installation. Value accepted: h (hive),s (sensor), l (llm), i(mini),m(mobile),t(tarpit) (optional)"
+  echo "  -u: web username (mandatory for hive installation, otherwirse optional)"
+  echo "  -p: password for web user (mandatory for hive installation, otherwirse optional)"
   exit 1
 }
 
