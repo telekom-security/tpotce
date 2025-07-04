@@ -215,6 +215,21 @@
         - "Rocky"
         - "Ubuntu"
 
+    - name: Revert Comment out Port(s) in sshd_config, can cause port conflicts on deploy (AlmaLinux, Debian, Fedora, openSUSE Tumbleweed, Raspbian, Rocky, Ubuntu)
+      ansible.builtin.replace:
+        path: /etc/ssh/sshd_config
+        regexp: '^# (Port (?!22$)[0-9]+)'
+        replace: '\1'
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "Rocky"
+        - "Ubuntu"
+
     - name: Remove vm.max_map_count setting (All)
       lineinfile:
         path: /etc/sysctl.conf

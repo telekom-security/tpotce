@@ -478,6 +478,21 @@
       tags:
         - "Ubuntu"
 
+    - name: Comment out Port(s) in sshd_config, can cause port conflicts on deploy (AlmaLinux, Debian, Fedora, openSUSE Tumbleweed, Raspbian, Rocky, Ubuntu)
+      ansible.builtin.replace:
+        path: /etc/ssh/sshd_config
+        regexp: '^(Port (?!64295$)[0-9]+)'
+        replace: '# \1'
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "Rocky"
+        - "Ubuntu"
+
     - name: Change SSH Port to 64295 (AlmaLinux, Debian, Fedora, Raspbian, Rocky, Ubuntu)
       lineinfile:
         path: /etc/ssh/sshd_config
