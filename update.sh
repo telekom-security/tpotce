@@ -72,11 +72,13 @@ function fuSELFUPDATE () {
 	  else
 	    echo "###### $myBLUE""Pulling updates from repository.""$myWHITE"
 	    git reset --hard
-	    git pull --force
+	    git pull --force	
 	fi
 	echo
 	# determines if variable TPOT_TYPE is set
 	if [ -z "$TPOT_TYPE" ]; then
+		cp compose/standard.yml docker-compose.yml
+	else
 		# There are 3 cases for TPOT_TYPE: HIVE, SENSOR and MOBILE
 		if "$TPOT_TYPE" == "HIVE" ]; then
 			cp compose/standard.yml docker-compose.yml
