@@ -18,6 +18,11 @@ myUPDATER=$(cat << "EOF"
 EOF
 )
 
+if [[ -n "$2" ]]; then
+  TPOT_TYPE=$2
+  echo "[ $myGREEN"Starting update procedure ARGS for T-Pot $TPOT_TYPE ... "$myWHITE ]"
+fi
+
 # Check if running with root privileges
 if [ ${EUID} -eq 0 ];
   then
@@ -67,7 +72,13 @@ function fuSELFUPDATE () {
 	    echo "###### $myBLUE""Found newer version, will be pulling updates and restart myself.""$myWHITE"
 	    git reset --hard
 	    git pull --force
-	    exec ./update.sh -y
+
+		if [ -z "$TPOT_TYPE" ]; then
+	    	exec ./update.sh -y
+		else
+	    	exec ./update.sh -y $TPOT_TYPE
+		fi
+
 	    exit 1
 	  else
 	    echo "###### $myBLUE""Pulling updates from repository.""$myWHITE"
@@ -210,16 +221,18 @@ function fuRESTORE () {
 }
 
 function fuGETTPOTTYPE () {
-	if [ -f .env ]; then
-		TPOT_TYPE=$(grep "^TPOT_TYPE=" .env | cut -d'=' -f2-)
-		if [ -z "$TPOT_TYPE" ]; then
-			echo "TPOT_TYPE is not set in .env file. Defaulting to 'HIVE'"
+	if [ -z "$TPOT_TYPE" ]; then
+		if [ -f .env ]; then
+			TPOT_TYPE=$(grep "^TPOT_TYPE=" .env | cut -d'=' -f2-)
+			if [ -z "$TPOT_TYPE" ]; then
+				echo "TPOT_TYPE is not set in .env file. Defaulting to 'HIVE'"
+				TPOT_TYPE=HIVE
+			fi
+		else
 			TPOT_TYPE=HIVE
 		fi
-	else
-		TPOT_TYPE=HIVE
+		echo "[ $myGREEN"Starting update procedure fuGETTPOTTYPE for T-Pot $TPOT_TYPE ... "$myWHITE ]"
 	fi
-	echo "[ $myGREEN"Starting update procedure for T-Pot $TPOT_TYPE ... "$myWHITE ]"
 }
 
 ################
@@ -239,9 +252,11 @@ if [ "$1" != "-y" ]; then
   exit
 fi
 
+
+
+fuGETTPOTTYPE
 fuCHECK_VERSION
 fuCHECKINET "https://index.docker.io https://github.com"
-fuGETTPOTTYPE
 fuSTOP_TPOT
 fuBACKUP
 fuSELFUPDATE "$0" "$@"
