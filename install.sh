@@ -1,5 +1,77 @@
 #!/usr/bin/env bash
 
+print_help() {
+  cat <<EOF
+Usage: $0 [-s] -t <type> [-u <webuser>] [-p <password>]
+
+Options:
+  -s                Suppress installation confirmation prompt (sets myQST=y)
+  -t <type>         Type of installation (required if -s is used):
+                      h - hive      (requires -u and -p)
+                      s - sensor    (no user/pass required)
+                      l - llm       (requires -u and -p)
+                      i - mini      (requires -u and -p)
+                      m - mobile    (no user/pass required)
+                      t - tarpit    (requires -u and -p)
+  -u <webuser>      Web interface username (required for h/l/i/t)
+  -p <password>     Web interface password (required for h/l/i/t)
+  -h                Show this help message
+EOF
+  exit 1
+}
+
+validate_type() {
+  [[ "$myTPOT_TYPE" =~ ^[hslimtHSLIMT]$ ]] || {
+    echo "Invalid installation type: $myTPOT_TYPE"
+    print_help
+  }
+}
+
+# Defaults
+myQST=""
+myTPOT_TYPE=""
+myWEB_USER=""
+myWEB_PW=""
+
+while getopts ":st:u:p:h" opt; do
+  case "$opt" in
+    s)
+      myQST="y"
+      ;;
+    t)
+      myTPOT_TYPE="${OPTARG,,}"
+      validate_type
+      ;;
+    u)
+      export myWEB_USER="${OPTARG}"
+      ;;
+    p)
+      export myWEB_PW="${OPTARG}"
+      ;;
+    h|\?)
+      print_help
+      ;;
+    :)
+      echo "Option -${OPTARG} requires an argument."
+      print_help
+      ;;
+  esac
+done
+
+# -s requires -t
+if [[ "$myQST" == "y" && -z "$myTPOT_TYPE" ]]; then
+  echo "Error: -t is required when using -s to suppress interaction."
+  print_help
+fi
+
+# Determine if user/pass are required based on install type
+if [[ "$myTPOT_TYPE" =~ ^[hlit]$ ]]; then
+  [[ -n "$myWEB_USER" && -n "$myWEB_PW" ]] || {
+    echo "Error: -u and -p are required for installation type '$myTPOT_TYPE'."
+    print_help
+  }
+fi
+
 myINSTALL_NOTIFICATION="### Now installing required packages ..."
 myUSER=$(whoami)
 myTPOT_CONF_FILE="/home/${myUSER}/tpotce/.env"
@@ -43,12 +115,13 @@ echo "$myINSTALLER"
 echo
 echo
 echo "### This script will now install T-Pot and all of its dependencies."
-while [ "${myQST}" != "y" ] && [ "${myQST}" != "n" ];
-  do
+if [[ -z "$myQST" ]]; then
+  while [ "${myQST}" != "y" ] && [ "${myQST}" != "n" ]; do
     echo
     read -p "### Install? (y/n) " myQST
     echo
   done
+fi
 if [ "${myQST}" = "n" ];
   then
     echo
@@ -183,7 +256,10 @@ echo "###            Feed data endlessly to attackers, bots and scanners."
 echo "###            Also runs a Denial of Service Honeypot (ddospot)."
 echo
 while true; do
-  read -p "### Install Type? (h/s/l/i/m/t) " myTPOT_TYPE
+  if [[ -z "$myTPOT_TYPE" ]]; then
+    read -p "### Install Type? (h/s/l/i/m/t) " myTPOT_TYPE
+  fi  
+  
   case "${myTPOT_TYPE}" in
     h|H)
       echo
@@ -234,75 +310,71 @@ done
 if [ "${myTPOT_TYPE}" == "HIVE" ];
   # If T-Pot Type is HIVE ask for WebUI username and password
   then
-	# Preparing web user for T-Pot
-	echo
-	echo "### T-Pot User Configuration ..."
-	echo
-	# Asking for web user name
-	myWEB_USER=""
-	while [ 1 != 2 ];
-	  do
-	    myOK=""
-	    read -rp "### Enter your web user name: " myWEB_USER
-	    myWEB_USER=$(echo $myWEB_USER | tr -cd "[:alnum:]_.-")
-	    echo "### Your username is: ${myWEB_USER}"
-	    while [[ ! "${myOK}" =~ [YyNn] ]];
-	      do
-	        read -rp "### Is this correct? (y/n) " myOK
-	      done
-	    if [[ "${myOK}" =~ [Yy] ]] && [ "$myWEB_USER" != "" ];
-	      then
-	        break
-	      else
-	        echo
-	    fi
-	  done
+  # Preparing web user for T-Pot
+  echo
+  echo "### T-Pot User Configuration ..."
+  echo
+  # Asking for web user name
+  if [[ -z "$myWEB_USER" ]]; then
+    myWEB_USER=""
+    while [ 1 != 2 ]; do
+      myOK=""
+      read -rp "### Enter your web user name: " myWEB_USER
+      myWEB_USER=$(echo $myWEB_USER | tr -cd "[:alnum:]_.-")
+      echo "### Your username is: ${myWEB_USER}"
+      while [[ ! "${myOK}" =~ [YyNn] ]]; do    
+        read -rp "### Is this correct? (y/n) " myOK
+      done
+      if [[ "${myOK}" =~ [Yy] ]] && [ "$myWEB_USER" != "" ]; then
+        break
+      else
+        echo
+      fi
+    done
+  fi
 
-	# Asking for web user password
-	myWEB_PW="pass1"
-	myWEB_PW2="pass2"
-	mySECURE=0
-	myOK=""
-	while [ "${myWEB_PW}" != "${myWEB_PW2}"  ] && [ "${mySECURE}" == "0" ]
-	  do
-	    echo
-	    while [ "${myWEB_PW}" == "pass1"  ] || [ "${myWEB_PW}" == "" ]
-	      do
-	        read -rsp "### Enter password for your web user: " myWEB_PW
-	        echo
-	      done
-	    read -rsp "### Repeat password you your web user: " myWEB_PW2
-	    echo
-	    if [ "${myWEB_PW}" != "${myWEB_PW2}" ];
-	      then
-	        echo "### Passwords do not match."
-	        myWEB_PW="pass1"
-	        myWEB_PW2="pass2"
-	    fi
-	    mySECURE=$(printf "%s" "$myWEB_PW" | /usr/sbin/cracklib-check | grep -c "OK")
-	    if [ "$mySECURE" == "0" ] && [ "$myWEB_PW" == "$myWEB_PW2" ];
-	      then
-	        while [[ ! "${myOK}" =~ [YyNn] ]];
-	          do
-	            read -rp "### Keep insecure password? (y/n) " myOK
-	          done
-	        if [[ "${myOK}" =~ [Nn] ]] || [ "$myWEB_PW" == "" ];
-	          then
-	            myWEB_PW="pass1"
-	            myWEB_PW2="pass2"
-	            mySECURE=0
-	            myOK=""
-	        fi
-	    fi
-	done
+  # Asking for web user password
+  if [[ -z "$myWEB_PW" ]]; then
+    myWEB_PW="pass1"
+    myWEB_PW2="pass2"
+    mySECURE=0
+    myOK=""
+    while [ "${myWEB_PW}" != "${myWEB_PW2}" ] && [ "${mySECURE}" == "0" ]; do
+      echo
+      while [ "${myWEB_PW}" == "pass1" ] || [ "${myWEB_PW}" == "" ]; do
+        read -rsp "### Enter password for your web user: " myWEB_PW
+        echo
+      done
+      read -rsp "### Repeat password you your web user: " myWEB_PW2
+      echo
+      if [ "${myWEB_PW}" != "${myWEB_PW2}" ]; then
+        echo "### Passwords do not match."
+        myWEB_PW="pass1"
+        myWEB_PW2="pass2"
+      fi
+      mySECURE=$(printf "%s" "$myWEB_PW" | /usr/sbin/cracklib-check | grep -c "OK")
+      if [ "$mySECURE" == "0" ] && [ "$myWEB_PW" == "$myWEB_PW2" ]; then
+        while [[ ! "${myOK}" =~ [YyNn] ]]; do
+          read -rp "### Keep insecure password? (y/n) " myOK
+        done
+        if [[ "${myOK}" =~ [Nn] ]] || [ "$myWEB_PW" == "" ]; then
+          myWEB_PW="pass1"
+          myWEB_PW2="pass2"
+          mySECURE=0
+          myOK=""
+        fi
+      fi
+    done
+  fi
 
-	# Write username and password to T-Pot config file
-	echo "### Creating base64 encoded htpasswd username and password for T-Pot config file: ${myTPOT_CONF_FILE}"
-	myWEB_USER_ENC=$(htpasswd -b -n "${myWEB_USER}" "${myWEB_PW}")
+
+  # Write username and password to T-Pot config file
+  echo "### Creating base64 encoded htpasswd username and password for T-Pot config file: ${myTPOT_CONF_FILE}"
+  myWEB_USER_ENC=$(htpasswd -b -n "${myWEB_USER}" "${myWEB_PW}")
     myWEB_USER_ENC_B64=$(echo -n "${myWEB_USER_ENC}" | base64 -w0)
     
-	echo
-	sed -i "s|^WEB_USER=.*|WEB_USER=${myWEB_USER_ENC_B64}|" ${myTPOT_CONF_FILE}
+  echo
+  sed -i "s|^WEB_USER=.*|WEB_USER=${myWEB_USER_ENC_B64}|" ${myTPOT_CONF_FILE}
 fi
 
 # Pull docker images
