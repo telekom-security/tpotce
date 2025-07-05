@@ -75,6 +75,19 @@ function fuSELFUPDATE () {
 	    git pull --force
 	fi
 	echo
+	# determines if variable TPOT_TYPE is set
+	if [ -z "$TPOT_TYPE" ]; then
+		# There are 3 cases for TPOT_TYPE: HIVE, SENSOR and MOBILE
+		if "$TPOT_TYPE" == "HIVE" ]; then
+			cp compose/standard.yml docker-compose.yml
+		elif [ "$TPOT_TYPE" == "SENSOR" ]; then
+			cp compose/sensor.yml docker-compose.yml
+		elif [ "$TPOT_TYPE" == "MOBILE" ]; then
+			cp compose/mobile.yml docker-compose.yml
+		else
+			TPOT_TYPE="HIVE"
+		fi
+	fi
 }
 
 function fuCHECK_VERSION () {
@@ -194,6 +207,19 @@ function fuRESTORE () {
 	sed -i "s/^TPOT_VERSION=.*/TPOT_VERSION=${newVERSION}/" $HOME/tpotce/.env
 }
 
+function fuGETTPOTTYPE () {
+	if [ -f .env ]; then
+		TPOT_TYPE=$(grep "^TPOT_TYPE=" .env | cut -d'=' -f2-)
+		if [ -z "$TPOT_TYPE" ]; then
+			echo "TPOT_TYPE is not set in .env file. Defaulting to 'HIVE'"
+			TPOT_TYPE=HIVE
+		fi
+	else
+		TPOT_TYPE=HIVE
+	fi
+	echo "[ $myGREEN"Starting update procedure for T-Pot $TPOT_TYPE ... "$myWHITE ]"
+}
+
 ################
 # Main section #
 ################
@@ -211,8 +237,10 @@ if [ "$1" != "-y" ]; then
   exit
 fi
 
+
 fuCHECK_VERSION
 fuCHECKINET "https://index.docker.io https://github.com"
+fuGETTPOTTYPE
 fuSTOP_TPOT
 fuBACKUP
 fuSELFUPDATE "$0" "$@"
