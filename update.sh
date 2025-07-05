@@ -85,7 +85,7 @@ function fuSELFUPDATE () {
 		elif [ "$TPOT_TYPE" == "MOBILE" ]; then
 			cp compose/mobile.yml docker-compose.yml
 		else
-			TPOT_TYPE="HIVE"
+			cp compose/standard.yml docker-compose.yml
 		fi
 	fi
 }
@@ -236,7 +236,6 @@ if [ "$1" != "-y" ]; then
   echo
   exit
 fi
-
 
 fuCHECK_VERSION
 fuCHECKINET "https://index.docker.io https://github.com"
