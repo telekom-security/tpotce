@@ -53,7 +53,7 @@ function fuCHECKINET () {
 function fuSELFUPDATE () {
 	echo
 	echo "### Now checking for newer files in repository ..."
-	echo "### fuSELFUPDATE T-Pot (2)... TPOT_TYPE is set to: $myTPOT_TYPE"
+	echo "### fuSELFUPDATE T-Pot... TPOT_TYPE is set to: $myTPOT_TYPE"
 	git fetch --all
 	myREMOTESTAT=$(git status | grep -c "up-to-date")
 	if [ "$myREMOTESTAT" != "0" ];
@@ -84,6 +84,12 @@ function fuSELFUPDATE () {
 	else
 		grep -q "^TPOT_TYPE=" .env && sed -i "s/^TPOT_TYPE=.*/TPOT_TYPE=${myTPOT_TYPE}/" .env
 		echo "### T-Pot type set to: $myTPOT_TYPE in .env"
+		if [ "$myTPOT_TYPE" == "SENSOR" ]; then
+			echo "### Copying compose/sensor.yml to docker-compose.yml"
+			cp compose/sensor.yml docker-compose.yml
+		else
+			echo "### No docker-compose-sensor.yml found, using default docker-compose.yml"
+		fi
 	fi
 	exit 1
 
