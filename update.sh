@@ -53,6 +53,7 @@ function fuCHECKINET () {
 function fuSELFUPDATE () {
 	echo
 	echo "### Now checking for newer files in repository ..."
+	echo "### fuSELFUPDATE T-Pot (2)... TPOT_TYPE is set to: $myTPOT_TYPE"
 	git fetch --all
 	myREMOTESTAT=$(git status | grep -c "up-to-date")
 	if [ "$myREMOTESTAT" != "0" ];
@@ -67,13 +68,24 @@ function fuSELFUPDATE () {
 	    echo "###### $myBLUE""Found newer version, will be pulling updates and restart myself.""$myWHITE"
 	    git reset --hard
 	    git pull --force
-	    exec ./update.sh -y
-	    exit 1
-	  else
+		# check if myTPOT_TYPE is set
+		if [ -z "$myTPOT_TYPE" ]; then
+	    	myTPOT_TYPE="HIVE"
+			exec ./update.sh -y $myTPOT_TYPE
+		else
+	    	exec ./update.sh -y $myTPOT_TYPE
+		fi
+	else
 	    echo "###### $myBLUE""Pulling updates from repository.""$myWHITE"
 	    git reset --hard
 	    git pull --force
 	fi
+	if [! -z "$myTPOT_TYPE" ]; then
+		echo "### Setting T-Pot type to: $myTPOT_TYPE in .env" 
+		grep -q "^TPOT_TYPE=" .env && sed -i "s/^TPOT_TYPE=.*/TPOT_TYPE=${myTPOT_TYPE}/" .env
+	fi
+	exit 1
+
 	echo
 }
 
@@ -194,6 +206,25 @@ function fuRESTORE () {
 	sed -i "s/^TPOT_VERSION=.*/TPOT_VERSION=${newVERSION}/" $HOME/tpotce/.env
 }
 
+
+function fuREADTPOT_TYPE () {
+	if [ -f .env ]; then
+		# reads the TPOT_TYPE from the .env file
+		myTPOT_TYPE=$(grep -E '^TPOT_TYPE=' .env | cut -d '=' -f2)
+		# Verify if TPOT_TYPE is set
+		if [ -z "$myTPOT_TYPE" ]; then
+			echo "### TPOT_TYPE not set in .env file. Defaulting to HIVE."
+			myTPOT_TYPE="HIVE"
+		fi
+		echo "### T-Pot type is set to: $myTPOT_TYPE"
+	else
+		echo "### No .env file found. Unable to determine T-Pot type."
+		echo "### Please ensure you are running this script from the tpotce directory."
+		echo "### Defaulting to HIVE."
+		myTPOT_TYPE="HIVE"
+	fi
+}
+
 ################
 # Main section #
 ################
@@ -211,13 +242,28 @@ if [ "$1" != "-y" ]; then
   exit
 fi
 
+# if exists second argument, use it as T-Pot type, only if SENSOR or HIVE
+if [ -n "$2" ]; then
+  if [[ "$2" == "SENSOR" || "$2" == "HIVE" ]]; then
+    echo "### Setting T-Pot type to: $2"
+	# Set the T-Pot type
+	myTPOT_TYPE="$2"
+  else
+	echo "Invalid T-Pot type specified. Please use 'SENSOR' or 'HIVE'."
+	exit 1
+  fi
+else
+  myTPOT_TYPE="HIVE"
+fi
+
+fuREADTPOT_TYPE
 fuCHECK_VERSION
 fuCHECKINET "https://index.docker.io https://github.com"
-fuSTOP_TPOT
-fuBACKUP
-fuSELFUPDATE "$0" "$@"
-fuUPDATER
-fuRESTORE
+#fuSTOP_TPOT
+#fuBACKUP
+fuSELFUPDATE "$0" "$@" "$myTPOT_TYPE"
+#fuUPDATER
+#fuRESTORE
 
 echo
 echo "### Done. You can now start T-Pot using 'systemctl start tpot' or 'docker compose up -d'."
