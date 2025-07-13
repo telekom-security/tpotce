@@ -70,19 +70,16 @@ function fuSELFUPDATE () {
 	    git pull --force
 		# check if myTPOT_TYPE is set
 		if [ -z "$myTPOT_TYPE" ]; then
-	    	myTPOT_TYPE="HIVE"
-			exec ./update.sh -y $myTPOT_TYPE
+			exec ./update.sh
 		else
 	    	exec ./update.sh -y $myTPOT_TYPE
+			grep -q "^TPOT_TYPE=" .env && sed -i "s/^TPOT_TYPE=.*/TPOT_TYPE=${myTPOT_TYPE}/" .env
+			echo "### T-Pot type set to: $myTPOT_TYPE in .env"
 		fi
 	else
 	    echo "###### $myBLUE""Pulling updates from repository.""$myWHITE"
 	    git reset --hard
 	    git pull origin update --force
-	fi
-	if [! -z "$myTPOT_TYPE" ]; then
-		echo "### Setting T-Pot type to: $myTPOT_TYPE"
-		grep -q "^TPOT_TYPE=" .env && sed -i "s/^TPOT_TYPE=.*/TPOT_TYPE=${myTPOT_TYPE}/" .env
 	fi
 	exit 1
 
