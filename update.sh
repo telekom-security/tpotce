@@ -210,14 +210,9 @@ function fuREADTPOT_TYPE () {
 		myTPOT_TYPE=$(grep -E '^TPOT_TYPE=' .env | cut -d '=' -f2)
 		# Verify if TPOT_TYPE is set
 		if [ -z "$myTPOT_TYPE" ]; then
-			echo "### TPOT_TYPE not set in .env file. Defaulting to HIVE."
 			myTPOT_TYPE="HIVE"
 		fi
-		echo "### T-Pot type is set to: $myTPOT_TYPE"
 	else
-		echo "### No .env file found. Unable to determine T-Pot type."
-		echo "### Please ensure you are running this script from the tpotce directory."
-		echo "### Defaulting to HIVE."
 		myTPOT_TYPE="HIVE"
 	fi
 }
@@ -242,12 +237,9 @@ fi
 # if exists second argument, use it as T-Pot type, only if SENSOR or HIVE
 if [ -n "$2" ]; then
   if [[ "$2" == "SENSOR" || "$2" == "HIVE" ]]; then
-    echo "### Setting T-Pot type to: $2"
-	# Set the T-Pot type
 	myTPOT_TYPE="$2"
   else
-	echo "Invalid T-Pot type specified. Please use 'SENSOR' or 'HIVE'."
-	exit 1
+	myTPOT_TYPE="HIVE"
   fi
 else
   myTPOT_TYPE="HIVE"
