@@ -81,7 +81,7 @@ function fuSELFUPDATE () {
 	    git pull --force
 	fi
 	if [! -z "$myTPOT_TYPE" ]; then
-		echo "### Setting T-Pot type to: $myTPOT_TYPE in .env" 
+		echo "### Setting T-Pot type to: $myTPOT_TYPE"
 		grep -q "^TPOT_TYPE=" .env && sed -i "s/^TPOT_TYPE=.*/TPOT_TYPE=${myTPOT_TYPE}/" .env
 	fi
 	exit 1
