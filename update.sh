@@ -53,7 +53,7 @@ function fuCHECKINET () {
 function fuSELFUPDATE () {
 	echo
 	echo "### Now checking for newer files in repository ..."
-	echo "### fuSELFUPDATE T-Pot... TPOT_TYPE is set to: $myTPOT_TYPE"
+	echo "### T-Pot... TPOT_TYPE is set to: $myTPOT_TYPE"
 	git fetch --all
 	myREMOTESTAT=$(git status | grep -c "up-to-date")
 	if [ "$myREMOTESTAT" != "0" ];
@@ -62,7 +62,7 @@ function fuSELFUPDATE () {
 	    return
 	fi
 	### DEV
-	myRESULT=$(git diff --name-only origin/update | grep "^update.sh")
+	myRESULT=$(git diff --name-only origin/master | grep "^update.sh")
 	if [ "$myRESULT" == "update.sh" ];
 	  then
 	    echo "###### $myBLUE""Found newer version, will be pulling updates and restart myself.""$myWHITE"
@@ -77,7 +77,7 @@ function fuSELFUPDATE () {
 	else
 	    echo "###### $myBLUE""Pulling updates from repository.""$myWHITE"
 	    git reset --hard
-	    git pull origin update --force
+	    git pull origin --force
 	fi
 	if [ -z "$myTPOT_TYPE" ]; then
 		echo
@@ -88,7 +88,7 @@ function fuSELFUPDATE () {
 			echo "### Copying compose/sensor.yml to docker-compose.yml"
 			cp compose/sensor.yml docker-compose.yml
 		else
-			echo "### No docker-compose-sensor.yml found, using default docker-compose.yml"
+			echo
 		fi
 	fi
 	exit 1
@@ -257,11 +257,11 @@ fi
 fuREADTPOT_TYPE
 fuCHECK_VERSION
 fuCHECKINET "https://index.docker.io https://github.com"
-#fuSTOP_TPOT
-#fuBACKUP
+fuSTOP_TPOT
+fuBACKUP
 fuSELFUPDATE "$0" "$@" "$myTPOT_TYPE"
-#fuUPDATER
-#fuRESTORE
+fuUPDATER
+fuRESTORE
 
 echo
 echo "### Done. You can now start T-Pot using 'systemctl start tpot' or 'docker compose up -d'."
