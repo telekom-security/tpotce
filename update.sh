@@ -79,15 +79,12 @@ function fuSELFUPDATE () {
 	    git reset --hard
 	    git pull origin update --force
 	fi
-
 	if [ -z "$myTPOT_TYPE" ]; then
-		echo "### TPOT_TYPE not set in .env file. Defaulting to HIVE."
+		echo
 	else
 		grep -q "^TPOT_TYPE=" .env && sed -i "s/^TPOT_TYPE=.*/TPOT_TYPE=${myTPOT_TYPE}/" .env
 		echo "### T-Pot type set to: $myTPOT_TYPE in .env"
 	fi
-
-
 	exit 1
 
 	echo
