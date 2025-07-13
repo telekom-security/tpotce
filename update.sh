@@ -77,7 +77,7 @@ function fuSELFUPDATE () {
 	else
 	    echo "###### $myBLUE""Pulling updates from repository.""$myWHITE"
 	    git reset --hard
-	    git pull origin --force
+	    git pull --force
 	fi
 	if [ -z "$myTPOT_TYPE" ]; then
 		echo
