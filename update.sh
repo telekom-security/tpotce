@@ -73,14 +73,21 @@ function fuSELFUPDATE () {
 			exec ./update.sh
 		else
 	    	exec ./update.sh -y $myTPOT_TYPE
-			grep -q "^TPOT_TYPE=" .env && sed -i "s/^TPOT_TYPE=.*/TPOT_TYPE=${myTPOT_TYPE}/" .env
-			echo "### T-Pot type set to: $myTPOT_TYPE in .env"
 		fi
 	else
 	    echo "###### $myBLUE""Pulling updates from repository.""$myWHITE"
 	    git reset --hard
 	    git pull origin update --force
 	fi
+
+	if [ -z "$myTPOT_TYPE" ]; then
+		echo "### TPOT_TYPE not set in .env file. Defaulting to HIVE."
+	else
+		grep -q "^TPOT_TYPE=" .env && sed -i "s/^TPOT_TYPE=.*/TPOT_TYPE=${myTPOT_TYPE}/" .env
+		echo "### T-Pot type set to: $myTPOT_TYPE in .env"
+	fi
+
+
 	exit 1
 
 	echo
@@ -202,7 +209,6 @@ function fuRESTORE () {
 	newVERSION=$(cat version)
 	sed -i "s/^TPOT_VERSION=.*/TPOT_VERSION=${newVERSION}/" $HOME/tpotce/.env
 }
-
 
 function fuREADTPOT_TYPE () {
 	if [ -f .env ]; then
