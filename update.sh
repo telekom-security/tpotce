@@ -72,7 +72,7 @@ function fuSELFUPDATE () {
 		if [ -z "$myTPOT_TYPE" ]; then
 			exec ./update.sh
 		else
-            exec ./update.sh -y $myTPOT_TYPE
+        	exec ./update.sh -y $myTPOT_TYPE
 		fi
 	else
 	    echo "###### $myBLUE""Pulling updates from repository.""$myWHITE"
