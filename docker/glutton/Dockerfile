@@ -17,12 +17,11 @@ RUN apk --no-cache -U upgrade && \
     cd /opt/ && \
     git clone https://github.com/mushorg/glutton && \
     cd /opt/glutton/ && \
-    git checkout b3b5944b79893ccb1da19e112571674841bbe124 && \
-    cp /root/dist/system.go . && \
+    git checkout 1e534801825dfa517a97a4e1899bf85e9384e463 && \
     make build && \
 	cp /root/dist/*.yaml /opt/glutton/config/
 #
-FROM alpine:3.20
+FROM alpine:3.22
 #
 COPY --from=builder /opt/glutton/bin /opt/glutton/bin
 COPY --from=builder /opt/glutton/config /opt/glutton/config
@@ -33,7 +32,7 @@ RUN apk -U --no-cache upgrade && \
 		libcap \
   		libpcap-dev && \
 		setcap cap_net_admin,cap_net_raw=+ep /opt/glutton/bin/server && \
-		setcap cap_net_admin,cap_net_raw=+ep /sbin/xtables-nft-multi && \
+		setcap cap_net_admin,cap_net_raw=+ep /usr/sbin/xtables-nft-multi && \
 		mkdir -p /var/log/glutton \
 		         /opt/glutton/payloads
 #

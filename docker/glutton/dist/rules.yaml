@@ -1,4 +1,6 @@
 rules:
+  - match: udp
+    type: drop
   - match: tcp dst port 23 or port 2323 or port 23231
     type: conn_handler
     target: telnet
@@ -29,8 +31,12 @@ rules:
   - match: tcp dst port 11211
     type: conn_handler
     target: memcache
+  - match: tcp dst port 3260
+    type: conn_handler
+    target: iscsi
+  - match: tcp dst port 27017
+    type: conn_handler
+    target: mongodb
   - match: tcp
     type: conn_handler
     target: tcp
-  - match: udp
-    type: drop
