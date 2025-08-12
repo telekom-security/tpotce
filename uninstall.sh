@@ -63,17 +63,23 @@ if [[ "${myANSIBLE_DISTRIBUTIONS[@]}" =~ "${myCURRENT_DISTRIBUTION}" ]];
 fi
 
 # Check type of sudo access
-sudo -n true > /dev/null 2>&1
-if [ $? -eq 1 ];
+if myANSIBLE_TAG="Debian";
+  # Debian 13 - sudo seems to apply stricter settings, we now ask for the become password
   then
-    myANSIBLE_BECOME_OPTION="--ask-become-pass"
-    echo "### ‘sudo‘ not acquired, setting ansible become option to ${myANSIBLE_BECOME_OPTION}."
-    echo "### Ansible will ask for the ‘BECOME password‘ which is typically the password you ’sudo’ with."
-    echo
+  	myANSIBLE_BECOME_OPTION="--become --ask-become-pass"
   else
-    myANSIBLE_BECOME_OPTION="--become"
-    echo "### ‘sudo‘ acquired, setting ansible become option to ${myANSIBLE_BECOME_OPTION}."
-    echo
+    sudo -n true > /dev/null 2>&1
+    if [ $? -eq 1 ];
+      then
+        myANSIBLE_BECOME_OPTION="--ask-become-pass"
+        echo "### ‘sudo‘ not acquired, setting ansible become option to ${myANSIBLE_BECOME_OPTION}."
+        echo "### Ansible will ask for the ‘BECOME password‘ which is typically the password you ’sudo’ with."
+        echo
+      else
+        myANSIBLE_BECOME_OPTION="--become"
+        echo "### ‘sudo‘ acquired, setting ansible become option to ${myANSIBLE_BECOME_OPTION}."
+        echo
+    fi
 fi
 
 # Run Ansible Playbook
