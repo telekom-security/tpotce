@@ -15,7 +15,7 @@ services:
     ports:
       - "80:80"
       - "443:443"
-    image: "dtagdevsec/h0neytr4p:24.04"
+    image: "ghcr.io/telekom-security/h0neytr4p:24.04.1"
     read_only: true
     volumes:
       - $HOME/tpotce/data/h0neytr4p/log/:/opt/h0neytr4p/log/

@@ -3,7 +3,7 @@ WORKDIR /app
 #
 RUN apk -U upgrade
 RUN apk -U add git openssl
-RUN git clone https://github.com/t3chn0m4g3/h0neytr4p -b v0.33 /app
+RUN git clone https://github.com/t3chn0m4g3/h0neytr4p -b v0.34 /app
 RUN go mod download
 RUN go mod tidy
 RUN go build -o /app/main
