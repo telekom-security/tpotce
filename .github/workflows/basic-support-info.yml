@@ -19,6 +19,17 @@ jobs:
     - name: Install jq
       run: sudo apt-get install jq -y
 
+    - name: Skip if issue has "investigate" label
+      id: skip_investigate
+      run: |
+        LABELS=$(cat $GITHUB_EVENT_PATH | jq -r '.issue.labels[].name')
+        for label in $LABELS; do
+          if [ "$label" = "investigate" ]; then
+            echo "Issue has 'investigate' label. Skipping workflow."
+            exit 0
+          fi
+        done
+
     - name: Check issue for basic support info
       id: check_issue
       run: |
