@@ -19,23 +19,24 @@ jobs:
     - name: Install jq
       run: sudo apt-get install jq -y
 
-    - name: Skip if issue has "investigate" label
+    - name: Check for "investigate" label
       id: skip_investigate
       run: |
-        LABELS=$(cat $GITHUB_EVENT_PATH | jq -r '.issue.labels[].name')
+        LABELS=$(jq -r '.issue.labels[].name' "$GITHUB_EVENT_PATH")
         for label in $LABELS; do
           if [ "$label" = "investigate" ]; then
-            echo "Issue has 'investigate' label. Skipping workflow."
-            exit 1
+            echo "skip=true" >> $GITHUB_ENV
+            exit 0
           fi
         done
+        echo "skip=false" >> $GITHUB_ENV
 
     - name: Check issue for basic support info
+      if: env.skip != 'true'
       id: check_issue
       run: |
         REQUIRED_INFO=("What OS are you T-Pot running on?" "What is the version of the OS" "What T-Pot version are you currently using" "What architecture are you running on" "Review the \`~/install_tpot.log\`" "How long has your installation been running?" "Did you install upgrades, packages or use the update script?" "Did you modify any scripts or configs?" "Please provide a screenshot of \`htop\` and \`docker stats\`." "How much free disk space is available" "What is the current container status" "What is the status of the T-Pot service" "What ports are being occupied?")
-
-        ISSUE_BODY=$(cat $GITHUB_EVENT_PATH | jq -r '.issue.body')
+        ISSUE_BODY=$(jq -r '.issue.body' "$GITHUB_EVENT_PATH")
         MISSING_INFO=()
         
         for info in "${REQUIRED_INFO[@]}"; do
@@ -51,10 +52,9 @@ jobs:
         fi
 
     - name: Add "no basic support info" label if necessary
-      if: env.missing == 'true'
-      run: gh issue edit "$NUMBER" --add-label "$LABELS"
+      if: env.missing == 'true' && env.skip != 'true'
+      run: gh issue edit "$NUMBER" --add-label "no basic support info"
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         GH_REPO: ${{ github.repository }}
         NUMBER: ${{ github.event.issue.number }}
-        LABELS: no basic support info
