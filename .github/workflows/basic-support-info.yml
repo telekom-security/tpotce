@@ -26,7 +26,7 @@ jobs:
         for label in $LABELS; do
           if [ "$label" = "investigate" ]; then
             echo "Issue has 'investigate' label. Skipping workflow."
-            exit 0
+            exit 1
           fi
         done
 
