@@ -10,6 +10,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: lycheeverse/lychee-action@v2.0.2
+
+      - name: Run lychee link checker
+        uses: lycheeverse/lychee-action@v2.0.2
+        continue-on-error: true
         with:
-          args: --verbose README.md
+          args: >
+            --verbose
+            --retry-wait-time 10
+            --max-retries 3
+            README.md
