@@ -28,7 +28,7 @@ T-Pot 24.04.1 brings significant updates and exciting new honeypot additions, es
 ### NGINX  
 - The container no longer runs in host mode, requiring changes to the `docker-compose.yml` and related services.  
 - To avoid confusion and downtime, the `24.04.1` tag for Docker images has been introduced.  
-- **Important**: Actively update T-Pot as described in the [README](https://github.com/telekom-security/tpotce/blob/master/README.md).  
+- **Important**: Actively update T-Pot as described in the [README](https://github.com/pedro-gallego/tpotce/blob/master/README.md).  
 - **Deprecation Notice**: The `24.04` tagged images will no longer be maintained and will be removed by **2025-01-31**.  
 
 ### Suricata  
