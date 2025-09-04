@@ -59,22 +59,22 @@ services:
 ##################
 
 # Adbhoney service
-  adbhoney:
-    container_name: adbhoney
-    restart: always
-    depends_on:
-      tpotinit:
-        condition: service_healthy
-    networks:
-     - adbhoney_local
-    ports:
-     - "5555:5555"
-    image: ${TPOT_REPO}/adbhoney:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
-    read_only: true
-    volumes:
-     - ${TPOT_DATA_PATH}/adbhoney/log:/opt/adbhoney/log
-     - ${TPOT_DATA_PATH}/adbhoney/downloads:/opt/adbhoney/dl
+#  adbhoney:
+#    container_name: adbhoney
+#    restart: always
+#    depends_on:
+#      tpotinit:
+#        condition: service_healthy
+#    networks:
+#     - adbhoney_local
+#    ports:
+#     - "5555:5555"
+#    image: ${TPOT_REPO}/adbhoney:${TPOT_VERSION}
+#    pull_policy: ${TPOT_PULL_POLICY}
+#    read_only: true
+#    volumes:
+#     - ${TPOT_DATA_PATH}/adbhoney/log:/opt/adbhoney/log
+#     - ${TPOT_DATA_PATH}/adbhoney/downloads:/opt/adbhoney/dl
 
 # Ciscoasa service
   ciscoasa:
@@ -226,23 +226,23 @@ services:
 # Get the Horos Client for testing: https://horosproject.org/
 # Get Dicom images (CC BY 3.0): https://www.cancerimagingarchive.net/collections/
 # Put images (which must be in Dicom DCM format or it will not work!) into /data/dicompot/images
-  dicompot:
-    container_name: dicompot
-    restart: always
-    depends_on:
-      tpotinit:
-        condition: service_healthy
-    networks:
-     - dicompot_local
-    ports:
-     - "104:11112"
-     - "11112:11112"
-    image: ${TPOT_REPO}/dicompot:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
-    read_only: true
-    volumes:
-     - ${TPOT_DATA_PATH}/dicompot/log:/var/log/dicompot
-#     - ${TPOT_DATA_PATH}/dicompot/images:/opt/dicompot/images
+#  dicompot:
+#    container_name: dicompot
+#    restart: always
+#    depends_on:
+#      tpotinit:
+#        condition: service_healthy
+#    networks:
+#     - dicompot_local
+#    ports:
+#     - "104:11112"
+#     - "11112:11112"
+#    image: ${TPOT_REPO}/dicompot:${TPOT_VERSION}
+#    pull_policy: ${TPOT_PULL_POLICY}
+#    read_only: true
+#    volumes:
+#     - ${TPOT_DATA_PATH}/dicompot/log:/var/log/dicompot
+##     - ${TPOT_DATA_PATH}/dicompot/images:/opt/dicompot/images
 
 # Dionaea service
   dionaea:
@@ -393,21 +393,21 @@ services:
      - ${TPOT_DATA_PATH}/honeytrap/log:/opt/honeytrap/var/log
 
 # Ipphoney service
-  ipphoney:
-    container_name: ipphoney
-    restart: always
-    depends_on:
-      tpotinit:
-        condition: service_healthy
-    networks:
-     - ipphoney_local
-    ports:
-     - "631:631"
-    image: ${TPOT_REPO}/ipphoney:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
-    read_only: true
-    volumes:
-     - ${TPOT_DATA_PATH}/ipphoney/log:/opt/ipphoney/log
+#  ipphoney:
+#    container_name: ipphoney
+#    restart: always
+#    depends_on:
+#      tpotinit:
+#        condition: service_healthy
+#    networks:
+#     - ipphoney_local
+#    ports:
+#     - "631:631"
+#    image: ${TPOT_REPO}/ipphoney:${TPOT_VERSION}
+#    pull_policy: ${TPOT_PULL_POLICY}
+#    read_only: true
+#    volumes:
+#     - ${TPOT_DATA_PATH}/ipphoney/log:/opt/ipphoney/log
 
 # Mailoney service
   mailoney:
@@ -430,39 +430,39 @@ services:
      - ${TPOT_DATA_PATH}/mailoney/log:/opt/mailoney/logs
 
 # Medpot service
-  medpot:
-    container_name: medpot
-    restart: always
-    depends_on:
-      tpotinit:
-        condition: service_healthy
-    networks:
-     - medpot_local
-    ports:
-     - "2575:2575"
-    image: ${TPOT_REPO}/medpot:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
-    read_only: true
-    volumes:
-     - ${TPOT_DATA_PATH}/medpot/log/:/var/log/medpot
+#  medpot:
+#    container_name: medpot
+#    restart: always
+#    depends_on:
+#      tpotinit:
+#        condition: service_healthy
+#    networks:
+#     - medpot_local
+#    ports:
+#     - "2575:2575"
+#    image: ${TPOT_REPO}/medpot:${TPOT_VERSION}
+#    pull_policy: ${TPOT_PULL_POLICY}
+#    read_only: true
+#    volumes:
+#     - ${TPOT_DATA_PATH}/medpot/log/:/var/log/medpot
 
 # Miniprint service
-  miniprint:
-    container_name: miniprint
-    restart: always
-    depends_on:
-      tpotinit:
-        condition: service_healthy
-    networks:
-     - miniprint_local
-    ports:
-      - "9100:9100"
-    image: ${TPOT_REPO}/miniprint:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
-    read_only: true
-    volumes:
-     - ${TPOT_DATA_PATH}/miniprint/log/:/opt/miniprint/log/
-     - ${TPOT_DATA_PATH}/miniprint/uploads/:/opt/miniprint/uploads/
+#  miniprint:
+#    container_name: miniprint
+#    restart: always
+#    depends_on:
+#      tpotinit:
+#        condition: service_healthy
+#    networks:
+#     - miniprint_local
+#    ports:
+#      - "9100:9100"
+#    image: ${TPOT_REPO}/miniprint:${TPOT_VERSION}
+#    pull_policy: ${TPOT_PULL_POLICY}
+#    read_only: true
+#    volumes:
+#     - ${TPOT_DATA_PATH}/miniprint/log/:/opt/miniprint/log/
+#     - ${TPOT_DATA_PATH}/miniprint/uploads/:/opt/miniprint/uploads/
 
 # Redishoneypot service
   redishoneypot:
