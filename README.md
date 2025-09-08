@@ -98,7 +98,7 @@ env bash -c "$(curl -sL https://github.com/pedro-gallego/tpotce/raw/master/insta
 
 # Disclaimer
 - You install and run T-Pot within your responsibility. Choose your deployment wisely as a system compromise can never be ruled out.
-- For fast help research the [Issues](https://github.com/telekom-security/tpotce/issues) and [Discussions](https://github.com/telekom-security/tpotce/discussions).
+- For fast help research the [Issues](https://github.com/pedro-gallego/tpotce/issues) and [Discussions](https://github.com/pedro-gallego/tpotce/discussions).
 - The software is designed and offered with best effort in mind. As a community and open source project it uses lots of other open source software and may contain bugs and issues. Report responsibly.
 - Honeypots - by design - should not host any sensitive data. Make sure you don't add any.
 - By default, your data is submitted to [Sicherheitstacho](https://www.sicherheitstacho.eu/start/main). You can disable this in the config (`~/tpotce/docker-compose.yml`) by [removing](#community-data-submission) the `ewsposter` section. But in this case sharing really is caring!
@@ -161,7 +161,7 @@ Alongside the following tools:
 
 The source code and configuration files are fully stored in the T-Pot GitHub repository. The docker images are built and preconfigured for the T-Pot environment. 
 
-The individual Dockerfiles and configurations are located in the [docker folder](https://github.com/telekom-security/tpotce/tree/master/docker).
+The individual Dockerfiles and configurations are located in the [docker folder](https://github.com/pedro-gallego/tpotce/tree/master/docker).
 <br><br>
 
 ## Services
@@ -243,7 +243,7 @@ T-Pot is tested on and known to run on ...
 * Telekom OTC using the post install method
 ... others may work, but remain untested. 
 
-Some users report working installations on other clouds and hosters, i.e. Azure and GCP. Hardware requirements may be different. If you are unsure you should research [issues](https://github.com/telekom-security/tpotce/issues) and [discussions](https://github.com/telekom-security/tpotce/discussions) and run some functional tests. With T-Pot 24.04.0 and forward we made sure to remove settings that were known to interfere with cloud based installations. 
+Some users report working installations on other clouds and hosters, i.e. Azure and GCP. Hardware requirements may be different. If you are unsure you should research [issues](https://github.com/pedro-gallego/tpotce/issues) and [discussions](https://github.com/pedro-gallego/tpotce/discussions) and run some functional tests. With T-Pot 24.04.0 and forward we made sure to remove settings that were known to interfere with cloud based installations. 
 <br><br>
 
 ## Required Ports
@@ -341,7 +341,7 @@ Once you are familiar with how things work you should choose a network you suspe
 
 <br><br> 
 ## Get and install T-Pot
-1. Clone the GitHub repository: `$ git clone https://github.com/telekom-security/tpotce` or follow the [TL;DR](#tldr) and skip this section.
+1. Clone the GitHub repository: `$ git clone https://github.com/pedro-gallego/tpotce` or follow the [TL;DR](#tldr) and skip this section.
 2. Change into the **tpotce/** folder: `$ cd tpotce`
 3. Run the installer as non-root: `$ ./install.sh`:
    * ⚠️ ***Depending on your Linux distribution of choice the installer will:***
@@ -356,7 +356,7 @@ Once you are familiar with how things work you should choose a network you suspe
      * Add `dps` and `dpsw` aliases (`grc docker ps -a`, `watch -c "grc --colour=on docker ps -a`)
      * Add `la`, `ll` and `ls` aliases (for `exa`, a improved `ls` command)
      * Add `mi` (for `micro`, a great alternative to `vi` and / or `nano`)
-     * Display open ports on the host (compare with T-Pot [required](https://github.com/telekom-security/tpotce#required-ports) ports)
+     * Display open ports on the host (compare with T-Pot [required](https://github.com/pedro-gallego/tpotce#required-ports) ports)
      * Add and enable `tpot.service` to `/etc/systemd/system` so T-Pot can automatically start and stop
 4. Follow the installer instructions, you will have to enter your user (`sudo` or `root`) password at least once
 5. Check the installer messages for errors and open ports that might cause port conflicts
@@ -367,7 +367,7 @@ Once you are familiar with how things work you should choose a network you suspe
 Sometimes it is just nice if you can spin up a T-Pot instance on macOS or Windows, i.e. for development, testing or just the fun of it. As Docker Desktop is rather limited not all honeypot types or T-Pot features are supported. Also remember, by default the macOS and Windows firewall are blocking access from remote, so testing is limited to the host. For production it is recommended to run T-Pot on [Linux](#choose-your-distro).<br>
 To get things up and running just follow these steps:
 1. Install Docker Desktop for [macOS](https://docs.docker.com/desktop/install/mac-install/) or [Windows](https://docs.docker.com/desktop/install/windows-install/).
-2. Clone the GitHub repository: `git clone https://github.com/telekom-security/tpotce` (in Windows make sure the code is checked out with `LF` instead of `CRLF`!)
+2. Clone the GitHub repository: `git clone https://github.com/pedro-gallego/tpotce` (in Windows make sure the code is checked out with `LF` instead of `CRLF`!)
 3. Go to: `cd ~/tpotce`
 4. Copy `cp compose/mac_win.yml ./docker-compose.yml`
 5. Create a `WEB_USER` by running `~/tpotce/genuser.sh` (macOS) or `~/tpotce/genuserwin.ps1` (Windows)
@@ -424,7 +424,7 @@ There is not much to do except to login and check via `dps` if all services and 
 ## Distributed Deployment
 ### Planning and Certificates
 The distributed deployment involves planning as **T-Pot Init** will only create a self-signed certificate for the IP of the **Hive** host which usually is suitable for simple setups. Since **logstash** will check for a valid certificate upon connection, a distributed setup involving **Hive** to be reachable on multiple IPs (i.e. RFC 1918 and public NAT IP) and maybe even a domain name will result in a connection error where the certificate cannot be validated as such a setup needs a certificate with a common name and SANs (Subject Alternative Name).<br>
-Before deploying any sensors make sure you have planned out domain names and IPs properly to avoid issues with the certificate. For more details see [issue #1543](https://github.com/telekom-security/tpotce/issues/1543).<br>
+Before deploying any sensors make sure you have planned out domain names and IPs properly to avoid issues with the certificate. For more details see [issue #1543](https://github.com/pedro-gallego/tpotce/issues/1543).<br>
 Adjust the example to your IP / domain setup and follow the commands to change the certificate of **Hive**:
 
 ```
@@ -775,13 +775,13 @@ If you are a security researcher and want to responsibly report an issue please 
 <br><br>
 
 ## Issues
-Please report issues (errors) on our [GitHub Issues](https://github.com/telekom-security/tpotce/issues), but [troubleshoot](#troubleshooting) first. Issues not providing information to address the error will be closed or converted into [discussions](#discussions).
+Please report issues (errors) on our [GitHub Issues](https://github.com/pedro-gallego/tpotce/issues), but [troubleshoot](#troubleshooting) first. Issues not providing information to address the error will be closed or converted into [discussions](#discussions).
 
 Use the search function first, it is possible a similar issue has been addressed or discussed already, with the solution just a search away.
 <br><br>
 
 ## Discussions
-General questions, ideas, show & tell, etc. can be addressed on our [GitHub Discussions](https://github.com/telekom-security/tpotce/discussions).
+General questions, ideas, show & tell, etc. can be addressed on our [GitHub Discussions](https://github.com/pedro-gallego/tpotce/discussions).
 
 Use the search function, it is possible a similar discussion has been opened already, with an answer just a search away.
 <br><br>

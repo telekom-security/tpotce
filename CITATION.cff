@@ -13,16 +13,16 @@ authors:
     city: Bonn
     country: DE
     post-code: '53113'
-    website: 'https://github.com/telekom-security'
+    website: 'https://github.com/pedro-gallego'
   - given-names: Marco
     family-names: Ochse
     affiliation: Deutsche Telekom Security GmbH
 identifiers:
   - type: url
     value: >-
-      https://github.com/telekom-security/tpotce/releases/tag/24.04.1
+      https://github.com/pedro-gallego/tpotce/releases/tag/24.04.1
     description: T-Pot Release 24.04.1
-repository-code: 'https://github.com/telekom-security/tpotce'
+repository-code: 'https://github.com/pedro-gallego/tpotce'
 abstract: >-
   T-Pot is the all in one, optionally distributed, multiarch
   (amd64, arm64) honeypot plattform, supporting 20+
