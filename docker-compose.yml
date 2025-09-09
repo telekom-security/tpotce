@@ -838,7 +838,8 @@ services:
      - ${TPOT_DATA_PATH}/nginx/conf/nginxpasswd:/etc/nginx/nginxpasswd:ro
      - ${TPOT_DATA_PATH}/nginx/conf/lswebpasswd:/etc/nginx/lswebpasswd:ro
      - ${TPOT_DATA_PATH}/nginx/log/:/var/log/nginx/
-     - ./docker/nginx/dist/html:/var/lib/nginx/html:ro
+#     - ./docker/nginx/dist/html/index.html:/var/lib/nginx/html/index.html:ro
+#     - ./docker/nginx/dist/html/assets/img/:/var/lib/nginx/html/assets/img/:ro
 
 # Spiderfoot service
   spiderfoot:
