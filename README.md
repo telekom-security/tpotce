@@ -1,8 +1,7 @@
-# T-Pot - The All In One Multi Honeypot Platform
+# ConfiPot23- The All In One Multi Honeypot Platform
 
-![T-Pot](doc/tpotsocial.png)
 
-T-Pot is the all in one, optionally distributed, multiarch (amd64, arm64) honeypot plattform, supporting 20+ honeypots and countless visualization options using the Elastic Stack, animated live attack maps and lots of security tools to further improve the deception experience.
+ConfiPot23 is the all in one, optionally distributed, multiarch (amd64, arm64) honeypot plattform, supporting 20+ honeypots and countless visualization options using the Elastic Stack, animated live attack maps and lots of security tools to further improve the deception experience.
 <br><br>
 
 # TL;DR
