@@ -3,24 +3,45 @@
 <head>
     <meta http-equiv="Content-Security-Policy" content="script-src 'self'; object-src 'none'">
     <meta charset="UTF-8">
-    <!--Setup Font Awesome-->
+    <!-- Font Awesome local -->
     <link href="assets/fonts/awesome/css/all.css" rel="stylesheet">
-    <!--Setup Particles, Particles Conf, Clock-->
-    <!-- Check integrity: openssl dgst -sha384 -binary your.file.name | openssl base64 -A-->
+    <!-- Particles, Config y Clock (local) -->
     <script src="assets/js/particles.min.js" defer integrity="sha384-d+UOwmNNIC7V4izkTAKSXzWhjC2GxiS9PTykO1XdOPC3nc2z65UOS7SP6QdKPA70" crossorigin="anonymous"></script>
     <script src="assets/js/particles_conf.js" defer integrity="sha384-0191YAiOrh905UCYh44ZxeO+pKbvuEOIDEmo3F6qHKDL8FO8s66r6P2w8NGMWp7I" crossorigin="anonymous"></script>
     <script src="assets/js/clock.js" defer integrity="sha384-ymJnuq0yExd1vCEQFQAvYDv0IWfHL1XJYSRt2nyK73ofjF6GzG5baOjLN1dLkGLI" crossorigin="anonymous"></script>
 
     <title>T-Pot</title>
     <style>
-        /* russo-one-regular - latin */
+        /* === Paleta Confianza23 ===
+           Azul oscuro: #003366
+           Azul medio:  #00539A
+           Azul claro:  #0A79D1
+           Acento (bandera): #E31E24 (rojo) / #F7C600 (amarillo) — usar muy sutil
+        */
+
+        /* russo-one-regular - latin (local) */
         @font-face {
-          font-display: swap; /* Check https://developer.mozilla.org/en-US/docs/Web/CSS/@font-face/font-display for other options. */
+          font-display: swap;
           font-family: 'Russo One';
           font-style: normal;
           font-weight: 400;
-          src: url('assets/fonts/russo-one-v16-latin-regular.woff2') format('woff2'); /* Chrome 36+, Opera 23+, Firefox 39+, Safari 12+, iOS 10+ */
+          src: url('assets/fonts/russo-one-v16-latin-regular.woff2') format('woff2');
         }
+
+        :root{
+            --c23-dark:#003366;
+            --c23-mid:#00539A;
+            --c23-light:#0A79D1;
+            --c23-bg:#0b1220; /* fondo base muy oscuro azulado */
+            --c23-panel: rgba(255,255,255,0.08);
+            --c23-panel-hover: rgba(255,255,255,0.12);
+            --c23-text:#EAF2FF;
+            --c23-muted:#A9C4E6;
+            --c23-shadow: rgba(10,121,209,0.45);
+        }
+
+        *{ box-sizing: border-box; }
+
         body, html {
             margin: 0;
             padding: 0;
@@ -30,25 +51,47 @@
             justify-content: center;
             align-items: center;
             overflow: hidden;
-            background-color: #000;
-            font-family: 'Russo One', normal;
+
+            /* Fondo con gradiente corporativo + fallback color */
+            background: var(--c23-bg);
+            background-image: radial-gradient(1200px 600px at 80% 30%, rgba(10,121,209,0.18), transparent 60%),
+                              radial-gradient(900px 500px at 20% 70%, rgba(0,83,154,0.22), transparent 60%),
+                              linear-gradient(180deg, #091326 0%, #070C17 100%);
+            color: var(--c23-text);
+            font-family: 'Russo One', system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, 'Helvetica Neue', Arial, sans-serif;
+            letter-spacing: .2px;
         }
+
+        /* Cabecera (reutiliza estructura original) */
         .header-container {
             display: flex;
             justify-content: space-between;
             align-items: center;
             position: absolute;
-            top: 0px;
+            top: 0;
             left: 20px;
             right: 20px;
+            padding: 14px 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            backdrop-filter: blur(6px);
         }
+
         .clock-container, .dynamic-text {
-            color: #e20074;
-            font-size: 72px;
+            color: var(--c23-light);
+            font-size: 64px;
+            line-height: 1;
+            text-shadow: 0 0 14px rgba(10,121,209,0.35);
         }
-        .dynamic-text {
+
+        /* Subtítulo versión */
+        .dynamic-text{
             text-align: right;
+            color: var(--c23-muted);
+            font-size: 40px;
+            text-shadow: none;
         }
+
+        /* Contenedor de logo centrado a la derecha (igual estructura) */
         .logo-container {
             width: 100%;
             display: flex;
@@ -56,79 +99,128 @@
             position: absolute;
             top: 45%;
             transform: translateY(-50%);
+            pointer-events: none;
         }
+
         .logo {
-            width: 25vw;
+            width: 26vw;
+            max-width: 520px;
             height: auto;
             position: relative;
-            opacity: 0.9;
             right: 10%;
             z-index: 1;
+            opacity: 0.92;
+            filter: drop-shadow(0 10px 24px rgba(0,0,0,0.35));
         }
+
+        /* Partículas por detrás */
         #particles-js {
             position: absolute;
             width: 100%;
             height: 100%;
             z-index: 1;
         }
+
+        /* Cajones de enlaces (misma estructura y enlaces) */
         .boxes-container {
             display: flex;
             justify-content: flex-start;
             position: absolute;
-            bottom: 50px;
+            bottom: 48px;
             left: 20px;
             padding: 0 20px;
+            gap: 20px;
+            z-index: 10;
         }
+
         .link-box {
             margin: 0 10px;
-            padding: 20px;
-            padding-top: 60px;
-            background: rgba(51, 51, 51, 0.3);
-            border-radius: 20px;
+            padding: 22px;
+            padding-top: 64px;
+            background: var(--c23-panel);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 16px;
             text-align: center;
-            transition: box-shadow 0.5s ease;
+            transition: box-shadow 280ms ease, background 220ms ease, transform 180ms ease;
             z-index: 10;
-            box-sizing: border-box;
             position: relative;
-            width: 400px; /* Adjust as needed */
+            width: 400px;
             min-height: 500px;
             max-width: 100%;
             display: flex;
             flex-direction: column;
-            justify-content: top;
+            justify-content: flex-start;
             align-items: center;
+            backdrop-filter: blur(6px);
         }
+
+        /* Títulos con iconos (no se tocan los data-caption ni clases) */
         .links-box::before, .tools-box::before {
             font-family: 'FontAwesome';
             content: attr(data-caption);
             position: absolute;
-            top: -20px;
+            top: -24px;
             left: 50%;
             transform: translateX(-50%);
-            background: transparent;
-            color: #FFF;
-            padding: 0 10px;
-            font-size: 36px;
-            white-space: nowrap;
+            background: linear-gradient(90deg, var(--c23-dark), var(--c23-mid));
+            color: #fff;
+            padding: 6px 14px;
+            font-size: 28px;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,0.10);
+            box-shadow: 0 6px 18px var(--c23-shadow);
         }
+
         .link-box:hover {
-            box-shadow: 0 0 15px 5px rgba(226, 0, 116, 0.6);
-            background: rgba(51, 51, 51, 0.3);
+            box-shadow: 0 12px 32px var(--c23-shadow);
+            background: var(--c23-panel-hover);
+            transform: translateY(-2px);
         }
+
         .link-box:hover::before {
-            color: #e20074;
-            transition: color 0.5s ease;
+            background: linear-gradient(90deg, var(--c23-mid), var(--c23-light));
         }
+
         .link {
             display: block;
-            color: #FFF;
+            color: var(--c23-text);
             text-decoration: none;
-            margin: 10px 0;
-            font-size: 42px;
-            transition: color 0.5s ease;
+            margin: 12px 0;
+            font-size: 36px;
+            line-height: 1.25;
+            transition: color 200ms ease, transform 120ms ease;
+            text-shadow: 0 1px 0 rgba(0,0,0,0.2);
         }
+
         .link:hover {
-            color: #e20074;
+            color: var(--c23-light);
+            transform: translateY(-1px);
+        }
+
+        /* Micro-detalle de acento “bandera” en la parte baja de las cajas */
+        .link-box::after{
+            content: "";
+            position: absolute;
+            bottom: 10px; left: 50%;
+            transform: translateX(-50%);
+            width: 46px; height: 4px;
+            background: linear-gradient(90deg, #E31E24 0 50%, #F7C600 50% 100%);
+            border-radius: 2px;
+            opacity: .85;
+        }
+
+        /* Responsivo básico */
+        @media (max-width: 1200px){
+            .clock-container{ font-size: 48px; }
+            .dynamic-text{ font-size: 28px; }
+            .logo{ width: 38vw; right: 6%; }
+            .link{ font-size: 28px; }
+            .link-box{ width: 340px; min-height: 440px; }
+        }
+        @media (max-width: 860px){
+            .boxes-container{ flex-direction: column; left: 50%; transform: translateX(-50%); }
+            .link-box{ width: 86vw; }
+            .logo{ display:none; }
         }
     </style>
 </head>
@@ -138,17 +230,19 @@
 
 <div class="header-container">
     <div class="clock-container" id="clock"></div>
-    <div class="dynamic-text">T-Pot 24.04.1</div>
+    <div class="dynamic-text">Confianza23 · ConfiPot v24.04.1</div>
 </div>
 
 <div class="logo-container">
-    <img src="assets/img/logo.webp" alt="T-Pot Logo" class="logo">
+    <!-- OPCIONAL: cambia a tu logo corporativo si ya lo tienes en assets -->
+    <!-- <img src="assets/img/confianza23_logo.png" alt="Confianza23" class="logo"> -->
+    <img src="assets/img/Confianza23.png" alt="C23 Logo" class="logo">
 </div>
 
 <div class="boxes-container">
     <div class="link-box tools-box" data-caption="&#xf085;">
         <a href="/map/" class="link" target="_blank">Attack Map</a>
-        <a href="/cyberchef/" class="link" target="_blank">Cyberchef</a>
+<!--        <a href="/cyberchef/" class="link" target="_blank">Cyberchef</a>-->
         <a href="/elasticvue/" class="link" target="_blank">Elasticvue</a>
         <a href="/kibana/" class="link" target="_blank">Kibana</a>
         <a href="/spiderfoot/" class="link" target="_blank">Spiderfoot</a>

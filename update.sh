@@ -174,7 +174,7 @@ function fuUPDATER () {
 	echo "### We stored the previous version as backup in $myARCHIVE."
 	echo "### Some updates may need an import of the latest Kibana objects as well."
 	echo "### Download the latest objects here if they recently changed:"
-	echo "### https://raw.githubusercontent.com/telekom-security/tpotce/master/etc/objects/kibana_export.ndjson.zip"
+	echo "### https://raw.githubusercontent.com/pedro-gallego/tpotce/master/etc/objects/kibana_export.ndjson.zip"
 	echo "### Export and import the objects easily through the Kibana WebUI:"
 	echo "### Go to Kibana > Management > Saved Objects > Export / Import"
 	echo
