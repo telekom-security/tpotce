@@ -206,7 +206,7 @@ if [ ! -f installer/install/tpot.yml ] && [ ! -f tpot.yml ];
 fi
 
 # Check type of sudo access
-if myANSIBLE_TAG="Debian";
+if [ "$myANSIBLE_TAG" = "Debian" ];
   # Debian 13 - sudo seems to apply stricter settings, we now ask for the become password
   then
   	myANSIBLE_BECOME_OPTION="--become --ask-become-pass"
