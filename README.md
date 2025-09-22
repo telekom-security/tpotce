@@ -39,6 +39,7 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/in
   - [Raspberry Pi 4 (8GB) Support](#raspberry-pi-4-8gb-support)
   - [Get and install T-Pot](#get-and-install-t-pot)
   - [macOS \& Windows](#macos--windows)
+  - [Red Hat Enterprise Linux](#red-hat-enterprise-linux)
   - [Installation Types](#installation-types)
     - [Standard / Hive](#standard--hive)
     - [Distributed](#distributed)
@@ -190,7 +191,7 @@ T-Pot offers a number of services which are basically divided into five groups:
 During the installation and during the usage of T-Pot there are two different types of accounts you will be working with. Make sure you know the differences of the different account types, since it is **by far** the most common reason for authentication errors.
 
 | Service          | Account Type | Username / Group | Description                                                        |
-| :--------------- | :----------- | :--------------- | :----------------------------------------------------------------- |
+|:-----------------|:-------------|:-----------------|:-------------------------------------------------------------------|
 | SSH              | OS           | `<OS_USERNAME>`  | The user you chose during the installation of the OS.              |
 | Nginx            | BasicAuth    | `<WEB_USER>`     | `<web_user>` you chose during the installation of T-Pot.           |
 | CyberChef        | BasicAuth    | `<WEB_USER>`     | `<web_user>` you chose during the installation of T-Pot.           |
@@ -209,7 +210,7 @@ Depending on the [supported Linux distro images](#choose-your-distro), hive / se
 <br><br>
 
 | T-Pot Type | RAM  | Storage   | Description                                                                                      |
-| :--------- | :--- | :-------- | :----------------------------------------------------------------------------------------------- |
+|:-----------|:-----|:----------|:-------------------------------------------------------------------------------------------------|
 | Hive       | 16GB | 256GB SSD | As a rule of thumb, the more honeypots, sensors & data, the more RAM and storage is needed.      |
 | Sensor     | 8GB  | 128GB SSD | Since honeypot logs are persisted (~/tpotce/data) for 30 days, storage depends on attack volume. |
 
@@ -250,7 +251,7 @@ Some users report working installations on other clouds and hosters, i.e. Azure 
 Besides the ports generally needed by the OS, i.e. obtaining a DHCP lease, DNS, etc. T-Pot will require the following ports for incoming / outgoing connections. Review the [T-Pot Architecture](#technical-architecture) for a visual representation. Also some ports will show up as duplicates, which is fine since used in different editions.
 
 | Port                                                                                                                                  | Protocol | Direction | Description                                                                                         |
-| :------------------------------------------------------------------------------------------------------------------------------------ | :------- | :-------- | :-------------------------------------------------------------------------------------------------- |
+|:--------------------------------------------------------------------------------------------------------------------------------------|:---------|:----------|:----------------------------------------------------------------------------------------------------|
 | 80, 443                                                                                                                               | tcp      | outgoing  | T-Pot Management: Install, Updates, Logs (i.e. OS, GitHub, DockerHub, Sicherheitstacho, etc.        |
 | 11434                                                                                                                                 | tcp      | outgoing  | LLM based honeypots: Access your Ollama installation                                                |
 | 64294                                                                                                                                 | tcp      | incoming  | T-Pot Management: Sensor data transmission to hive (through NGINX reverse proxy) to 127.0.0.1:64305 |
@@ -317,14 +318,14 @@ Once you are familiar with how things work you should choose a network you suspe
 ## Choose your distro
 **Steps to Follow:**
 
-1. Download a supported Linux distribution from the list below.
+1. Download a supported Linux distribution from the list below. (NOTE: Red Hat Enterprise Linux >= 8 is supported, but omitted from the list below due to its subscription-based nature. See [Red Hat Enterprise Linux](#red-hat-enterprise-linux) for details).
 2. During installation choose a **minimum**, **netinstall** or **server** version that will only install essential packages.
 3. **Never** install a graphical desktop environment such as Gnome or KDE. T-Pot will fail to work with it due to port conflicts. 
 4. Make sure to install SSH, so you can connect to the machine remotely.
 
 
 | Distribution Name                                                                  | x64                                                                                                                                   | arm64                                                                                                                                   |
-| :--------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------ | :-------------------------------------------------------------------------------------------------------------------------------------- |
+|:-----------------------------------------------------------------------------------|:--------------------------------------------------------------------------------------------------------------------------------------|:----------------------------------------------------------------------------------------------------------------------------------------|
 | [Alma Linux OS 9.6 Boot ISO](https://almalinux.org)                                | [download](https://repo.almalinux.org/almalinux/9.6/isos/x86_64/AlmaLinux-9.6-x86_64-boot.iso)                                        | [download](https://repo.almalinux.org/almalinux/9.6/isos/aarch64/AlmaLinux-9.6-aarch64-boot.iso)                                        |
 | [Debian 13 Network Install](https://www.debian.org/CD/netinst/index.en.html)       | [download](https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-13.0.0-amd64-netinst.iso)                                 | [download](https://cdimage.debian.org/debian-cd/current/arm64/iso-cd/debian-13.0.0-arm64-netinst.iso)                                   |
 | [Fedora Server 42 Network Install](https://fedoraproject.org/server/download)      | [download](https://download.fedoraproject.org/pub/fedora/linux/releases/42/Server/x86_64/iso/Fedora-Server-netinst-x86_64-42-1.1.iso) | [download](https://download.fedoraproject.org/pub/fedora/linux/releases/42/Server/aarch64/iso/Fedora-Server-netinst-aarch64-42-1.1.iso) |
@@ -336,7 +337,7 @@ Once you are familiar with how things work you should choose a network you suspe
 
 ## Raspberry Pi 4 (8GB) Support
 | Distribution Name                                                | arm64                                                                                                                                               |
-| :--------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------- |
+|:-----------------------------------------------------------------|:----------------------------------------------------------------------------------------------------------------------------------------------------|
 | [Raspberry Pi OS (**64Bit, Lite**)](https://www.raspberrypi.com) | [download](https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2024-03-15/2024-03-15-raspios-bookworm-arm64-lite.img.xz) |
 
 <br><br> 
@@ -380,6 +381,15 @@ To get things up and running just follow these steps:
 7. You have to ensure on your own there are no port conflicts keeping T-Pot from starting up.
 8. Start T-Pot: `docker compose up` or `docker compose up -d` if you want T-Pot to run in the background.
 9. Stop T-Pot: `CTRL-C` (it if was running in the foreground) and / or `docker compose down -v` to stop T-Pot entirely.
+
+## Red Hat Enterprise Linux
+
+Red Hat Enterprise Linux (RHEL) is a somewhat unique case in that:
+
+1. Connections to Red Hat repositories depend on a Red Hat subscription. You will not be able to update the OS or install new packages if the targeted machine is not subscribed. **If your server is not attached to a Red Hat subscription, installation will fail!** 
+2. Ansible is installed from a RHEL-specific repository by the installer. Do not attempt to install it from the upstream repositories. 
+3. Docker is installed from EPEL, which is installed by the installer script. Do not attempt to install it from the community installer script.
+2. T-Pot will only install successfully on RHEL >= 8. One of the convenience dependencies (`grc`) depends on Python 2, which was removed after RHEL 7. It is omitted from the RHEL installation of T-Pot.
 
 ## Installation Types
 

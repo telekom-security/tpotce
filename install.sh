@@ -27,6 +27,30 @@ validate_type() {
   }
 }
 
+rhel_version() {
+  # special case for RHEL due to its complicated repo infrastructure
+  # primarily used for EPEL repo selection
+  # supports RHEL 7-10
+  myRHEL_VERSION=$(grep PLATFORM_ID /etc/os-release | cut -d ':' -f2 | grep -Eo '([0-9]{1,2})')
+  if [ "$myRHEL_VERSION" -lt 7 ]; then
+    echo "Error: RHEL < 7 not supported!" >&2
+    exit 1
+  fi
+  echo "$myRHEL_VERSION"
+}
+
+rhel_ansible_repo() {
+  # rhel uses a dedicated repo for ansible that we need to enable through subscription-manager
+  myRHEL_ANSIBLE_REPO=$(sudo subscription-manager repos --list \
+    | grep -E "ansible-automation-platform-[0-9]{1}\.[0-9]{1}-for-rhel-$(rhel_version)-x86_64-rpms" \
+    | awk -F':' '{print $2}' \
+    | tr -d ' ' \
+    | sort -nr \
+    | head -n 1
+)
+  echo "$myRHEL_ANSIBLE_REPO"
+}
+
 # Defaults
 myQST=""
 myTPOT_TYPE=""
@@ -78,6 +102,7 @@ myTPOT_CONF_FILE="/home/${myUSER}/tpotce/.env"
 myPACKAGES_DEBIAN="ansible apache2-utils cracklib-runtime wget"
 myPACKAGES_FEDORA="ansible cracklib httpd-tools wget"
 myPACKAGES_ROCKY="ansible-core ansible-collection-redhat-rhel_mgmt epel-release cracklib httpd-tools wget"
+myPACKAGES_RHEL="ansible-core ansible-collection-redhat-rhel_mgmt cracklib httpd-tools wget"    
 myPACKAGES_OPENSUSE="ansible apache2-utils cracklib wget"
 
 
@@ -99,12 +124,12 @@ if [ ${EUID} -eq 0 ];
 fi
 
 # Check if running on a supported distribution
-mySUPPORTED_DISTRIBUTIONS=("AlmaLinux" "Debian GNU/Linux" "Fedora Linux" "openSUSE Tumbleweed" "Raspbian GNU/Linux" "Rocky Linux" "Ubuntu")
+mySUPPORTED_DISTRIBUTIONS=("AlmaLinux" "Debian GNU/Linux" "Fedora Linux" "openSUSE Tumbleweed" "Raspbian GNU/Linux" "Red Hat Enterprise Linux" "Rocky Linux" "Ubuntu")
 myCURRENT_DISTRIBUTION=$(awk -F= '/^NAME/{print $2}' /etc/os-release | tr -d '"')
 
 if [[ ! " ${mySUPPORTED_DISTRIBUTIONS[@]} " =~ " ${myCURRENT_DISTRIBUTION} " ]];
   then
-    echo "### Only the following distributions are supported: AlmaLinux, Fedora, Debian, openSUSE Tumbleweed, Rocky Linux and Ubuntu."
+    echo "### Only the following distributions are supported: AlmaLinux, Fedora, Debian, openSUSE Tumbleweed, RHEL, Rocky Linux and Ubuntu."
     echo "### Please follow the T-Pot documentation on how to run T-Pot on macOS, Windows and other currently unsupported platforms."
     echo
     exit 1
@@ -122,8 +147,7 @@ if [[ -z "$myQST" ]]; then
     echo
   done
 fi
-if [ "${myQST}" = "n" ];
-  then
+if [ "${myQST}" = "n" ]; then
     echo
     echo "### Aborting!"
     echo
@@ -176,14 +200,35 @@ case ${myCURRENT_DISTRIBUTION} in
     sudo dnf -y --refresh install ${myPACKAGES_ROCKY}
     ansible-galaxy collection install ansible.posix
     ;;
+  "Red Hat Enterprise Linux")
+    echo
+    echo ${myINSTALL_NOTIFICATION}
+    echo
+    echo "RHEL detected - configuring version and Ansible repo strings"
+    rhel_version
+    rhel_ansible_repo
+    sudo yum update
+    # extra repo required for EPEL on RHEL
+    sudo subscription-manager repos --enable codeready-builder-for-rhel-"$myRHEL_VERSION"-$(arch)-rpms
+    # epel installer is not standard on RHEL
+    sudo dnf -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-"$myRHEL_VERSION".noarch.rpm
+    # ansible comes from rhel subscription manager
+    sudo subscription-manager repos --enable "$myRHEL_ANSIBLE_REPO"
+    sudo dnf -y --refresh install ${myPACKAGES_RHEL}
+    ansible-galaxy collection install ansible.posix
 esac
 echo
 
 # Define tag for Ansible
-myANSIBLE_DISTRIBUTIONS=("Fedora Linux" "Debian GNU/Linux" "Raspbian GNU/Linux" "Rocky Linux")
+myANSIBLE_DISTRIBUTIONS=("Fedora Linux" "Debian GNU/Linux" "Raspbian GNU/Linux" "Rocky Linux" "Red Hat Enterprise Linux")
 if [[ "${myANSIBLE_DISTRIBUTIONS[@]}" =~ "${myCURRENT_DISTRIBUTION}" ]];
   then
-    myANSIBLE_TAG=$(echo ${myCURRENT_DISTRIBUTION} | cut -d " " -f 1)
+    # special case AGAIN, /etc/os-release doesn't match Ansible's tagging conventions
+    if [[ "${myCURRENT_DISTRIBUTION}" == "Red Hat Enterprise Linux" ]]; then
+      myANSIBLE_TAG="RedHat"
+    else
+      myANSIBLE_TAG=$(echo ${myCURRENT_DISTRIBUTION} | cut -d " " -f 1)
+    fi
   else
     myANSIBLE_TAG=${myCURRENT_DISTRIBUTION}
 fi
