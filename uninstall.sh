@@ -65,6 +65,7 @@ if [[ "${myANSIBLE_DISTRIBUTIONS[@]}" =~ "${myCURRENT_DISTRIBUTION}" ]];
     fi
   else
     myANSIBLE_TAG=${myCURRENT_DISTRIBUTION}
+  fi
 
 # Check type of sudo access
 if myANSIBLE_TAG="Debian";
