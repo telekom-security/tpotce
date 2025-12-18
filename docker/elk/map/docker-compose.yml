@@ -9,7 +9,7 @@ services:
     restart: always
     stop_signal: SIGKILL
     tty: true
-    image: "dtagdevsec/redis:24.04"
+    image: "ghcr.io/telekom-security/redis:24.04.1"
     read_only: true
 
 # Map Web Service
@@ -23,7 +23,7 @@ services:
     tty: true
     ports:
      - "127.0.0.1:64299:64299"
-    image: "dtagdevsec/map:24.04"
+    image: "ghcr.io/telekom-security/map:24.04.1"
     depends_on:
      - map_redis
 
@@ -37,6 +37,6 @@ services:
 #     - TZ=${TPOT_ATTACKMAP_TEXT_TIMEZONE}
     stop_signal: SIGKILL
     tty: true
-    image: "dtagdevsec/map:24.04"
+    image: "ghcr.io/telekom-security/map:24.04.1"
     depends_on:
      - map_redis

@@ -1,4 +1,4 @@
-FROM alpine:3.20
+FROM alpine:3.23
 #
 # Install packages
 RUN apk --no-cache -U upgrade && \
@@ -14,8 +14,9 @@ RUN apk --no-cache -U upgrade && \
 # Install from GitHub and setup
     mkdir -p /opt && \
     cd /opt/ && \
-    git clone https://github.com/t3chn0m4g3/t-pot-attack-map -b 2.2.7 && \
+    git clone https://github.com/t3chn0m4g3/t-pot-attack-map -b 3.0.0 && \
     cd t-pot-attack-map && \
+    mv DataServer.py DataServer_v2.py && \
     pip3 install --break-system-packages --upgrade pip && \
     pip3 install --break-system-packages -r requirements.txt && \
     setcap cap_net_bind_service=+ep $(readlink -f $(type -P python3)) && \
