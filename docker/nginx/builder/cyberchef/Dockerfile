@@ -1,4 +1,3 @@
-#FROM node:17.9.0-alpine3.15 as builder
 FROM node:18-alpine as builder
 #
 # Prep and build Cyberchef
