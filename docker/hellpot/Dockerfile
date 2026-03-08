@@ -12,7 +12,7 @@ RUN apk --no-cache -U upgrade && \
 #
 # Setup go, hellpot
     cd /root && \
-    git clone https://github.com/yunginnanet/HellPot && \
+    git clone https://github.com/bdk38/HellPot && \
     cd HellPot && \
     git checkout c48b70110148918255f93df4fa49c675ba5a5754 && \
     sed -i 's#logFileName := "HellPot"#logFileName := "hellpot"#g' internal/config/logger.go && \
