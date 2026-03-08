@@ -126,7 +126,7 @@ T-Pot's main components have been moved into the `tpotinit` Docker image allowin
 [go-pot](https://github.com/ryanolee/go-pot),
 [glutton](https://github.com/mushorg/glutton),
 [h0neytr4p](https://github.com/pbssubhash/h0neytr4p),
-[hellpot](https://github.com/yunginnanet/HellPot),
+[hellpot](https://github.com/bdk38/HellPot),
 [heralding](https://github.com/johnnykv/heralding),
 [honeyaml](https://github.com/mmta/honeyaml),
 [honeypots](https://github.com/qeeqbox/honeypots),
