@@ -68,7 +68,7 @@ if [[ "${myANSIBLE_DISTRIBUTIONS[@]}" =~ "${myCURRENT_DISTRIBUTION}" ]];
   fi
 
 # Check type of sudo access
-if myANSIBLE_TAG="Debian";
+if [ "$myANSIBLE_TAG" = "Debian" ];
   # Debian 13 - sudo seems to apply stricter settings, we now ask for the become password
   then
   	myANSIBLE_BECOME_OPTION="--become --ask-become-pass"
