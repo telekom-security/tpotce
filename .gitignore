@@ -1,6 +1,9 @@
 # Ignore data folder
 data/
 _data/
+data_backup/
 **/.DS_Store
 .idea
 install_tpot.log
+.env
+AGENTS.md

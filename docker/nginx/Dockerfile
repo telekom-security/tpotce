@@ -1,7 +1,29 @@
-FROM alpine:3.23
+ARG ALPINE_VERSION=3.23
+
+FROM alpine:${ALPINE_VERSION} AS assets
 #
-# Include dist
-COPY dist/ /root/dist/
+# Include dist and prepare final assets
+COPY dist/ /work/dist/
+RUN mkdir -p /out/var/lib/nginx/html /out/etc/nginx/conf.d && \
+    cd /work/dist/html/esvue && \
+    sha256sum -c esvue.tgz.sha256 && \
+    cd /work/dist/html/cyberchef && \
+    sha256sum -c cyberchef.tgz.sha256 && \
+    cp -R /work/dist/html/* /out/var/lib/nginx/html/ && \
+    cd /out/var/lib/nginx/html/esvue && \
+    tar xvfz esvue.tgz && \
+    rm -f esvue.tgz && \
+    cd /out/var/lib/nginx/html/cyberchef && \
+    tar xvfz cyberchef.tgz && \
+    rm -f cyberchef.tgz && \
+    find /out/var/lib/nginx/html -type d -exec chmod 755 {} \; && \
+    find /out/var/lib/nginx/html -type f -exec chmod 644 {} \; && \
+    cp /work/dist/conf/nginx.conf /out/etc/nginx/ && \
+    cp -R /work/dist/conf/ssl /out/etc/nginx/ && \
+    cp /work/dist/conf/tpotweb.conf /out/etc/nginx/conf.d/ && \
+    cp /work/dist/conf/lsweb.conf /out/etc/nginx/conf.d/
+
+FROM alpine:${ALPINE_VERSION}
 #
 # Install packages
 RUN apk --no-cache -U upgrade && \
@@ -9,32 +31,15 @@ RUN apk --no-cache -U upgrade && \
       nginx \
       nginx-mod-http-brotli \
       nginx-mod-http-headers-more \
-      nginx-mod-http-lua && \ 
+      nginx-mod-http-lua && \
+    rm -rf /etc/nginx/conf.d/* /usr/share/nginx/html/*
 #
-## Setup T-Pot Landing Page, Eleasticvue, Cyberchef 
-    cp -R /root/dist/html/* /var/lib/nginx/html/ && \
-    cd /var/lib/nginx/html/esvue && \
-    tar xvfz esvue.tgz && \
-    rm esvue.tgz && \
-    cd /var/lib/nginx/html/cyberchef && \
-    tar xvfz cyberchef.tgz && \
-    rm cyberchef.tgz && \
-#
-## Change ownership, permissions
-    chown root:www-data -R /var/lib/nginx/html && \
-    chmod 755 -R /var/lib/nginx/html && \
-#
-## Add Nginx / T-Pot specific configs
-    rm -rf /etc/nginx/conf.d/* /usr/share/nginx/html/* && \
-    mkdir -p /etc/nginx/conf.d && \
-    cp /root/dist/conf/nginx.conf /etc/nginx/ && \
-    cp -R /root/dist/conf/ssl /etc/nginx/ && \
-    cp /root/dist/conf/tpotweb.conf /etc/nginx/conf.d/ && \
-    cp /root/dist/conf/lsweb.conf /etc/nginx/conf.d/ && \
-#
-# Clean up
-    rm -rf /root/* \
-           /var/cache/apk/*
+## Add prepared web assets and Nginx / T-Pot specific configs
+COPY --from=assets --chown=root:www-data /out/var/lib/nginx/html/ /var/lib/nginx/html/
+COPY --from=assets /out/etc/nginx/nginx.conf /etc/nginx/nginx.conf
+COPY --from=assets /out/etc/nginx/ssl/ /etc/nginx/ssl/
+COPY --from=assets /out/etc/nginx/conf.d/tpotweb.conf /etc/nginx/conf.d/tpotweb.conf
+COPY --from=assets /out/etc/nginx/conf.d/lsweb.conf /etc/nginx/conf.d/lsweb.conf
 #
 # Start nginx
 CMD ["nginx", "-g", "daemon off;"]
