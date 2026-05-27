@@ -12,6 +12,7 @@ not touch production `data/` or `data_backup/` paths.
 ./docker/_tests/run.sh
 ./docker/_tests/run.sh adbhoney
 ./docker/_tests/run.sh ciscoasa
+./docker/_tests/run.sh citrixhoneypot
 ```
 
 Common options:
@@ -27,6 +28,7 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/adbhoney.sh
 ./docker/_tests/tests/adbhoney.sh --image dtagdevsec/adbhoney:24.04 --host-port 15555
 ./docker/_tests/tests/ciscoasa.sh --https-port 18443 --ike-port 15000
+./docker/_tests/tests/citrixhoneypot.sh --https-port 1443
 ```
 
 ## Conventions

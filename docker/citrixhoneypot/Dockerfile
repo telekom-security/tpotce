@@ -1,4 +1,4 @@
-FROM alpine:3.20 AS builder
+FROM alpine:3.23 AS builder
 #
 # Install packages
 RUN apk --no-cache -U upgrade && \
@@ -30,7 +30,7 @@ RUN git clone https://github.com/t3chn0m4g3/CitrixHoneypot /opt/citrixhoneypot &
 WORKDIR /opt/citrixhoneypot
 RUN pyinstaller CitrixHoneypot.py
 #
-FROM alpine:3.20
+FROM alpine:3.23
 RUN apk --no-cache -U upgrade
 COPY --from=builder /opt/citrixhoneypot/dist/CitrixHoneypot/ /opt/citrixhoneypot
 COPY --from=builder /opt/citrixhoneypot/ssl /opt/citrixhoneypot/ssl
@@ -40,4 +40,4 @@ COPY --from=builder /opt/citrixhoneypot/responses/ /opt/citrixhoneypot/responses
 STOPSIGNAL SIGINT
 USER 2000:2000
 WORKDIR /opt/citrixhoneypot/
-CMD nohup ./CitrixHoneypot
+CMD ["./CitrixHoneypot"]
