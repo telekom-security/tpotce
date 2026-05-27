@@ -62,6 +62,7 @@ RUN apk --no-cache -U upgrade && \
     sed -i 's/port="6969"/port="69"/' /opt/conpot/conpot/templates/default/tftp/tftp.xml && \
     sed -i 's/port="16100"/port="161"/' /opt/conpot/conpot/templates/IEC104/snmp/snmp.xml && \
     sed -i 's/port="6230"/port="623"/' /opt/conpot/conpot/templates/ipmi/ipmi/ipmi.xml && \
+    patch -p1 < /root/dist/patches/ipmi-json-events.patch && \
     cp /root/dist/requirements.txt . && \
     pip3 install --break-system-packages --no-cache-dir . && \
     cd / && \
