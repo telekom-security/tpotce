@@ -1,4 +1,4 @@
-FROM alpine:3.20 AS builder
+FROM alpine:3.23 AS builder
 #
 # Install packages
 RUN apk --no-cache -U upgrade && \
@@ -25,7 +25,7 @@ RUN apk --no-cache -U upgrade && \
 WORKDIR /opt/ciscoasa_honeypot
 RUN pyinstaller asa_server.py --add-data "./asa:./asa"
 #
-FROM alpine:3.20
+FROM alpine:3.23
 RUN apk --no-cache -U upgrade
 COPY --from=builder /opt/ciscoasa_honeypot/dist/ /opt/
 #
@@ -33,4 +33,4 @@ COPY --from=builder /opt/ciscoasa_honeypot/dist/ /opt/
 STOPSIGNAL SIGINT
 WORKDIR /opt/asa_server/
 USER 2000:2000
-CMD ./asa_server --ike-port 5000 --enable_ssl --port 8443 --verbose >> /var/log/ciscoasa/ciscoasa.log 2>&1
+CMD ["sh", "-c", "exec ./asa_server --ike-port 5000 --enable_ssl --port 8443 --verbose >> /var/log/ciscoasa/ciscoasa.log 2>&1"]
