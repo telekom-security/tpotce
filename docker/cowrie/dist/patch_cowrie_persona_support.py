@@ -23,6 +23,50 @@ def patch_protocol(cowrie_root):
     replace_once(path, "import traceback\n", "import traceback\nfrom pathlib import Path\n")
     replace_once(
         path,
+        """        if cmd in self.commands:
+            return self.commands[cmd]
+        if cmd[0] in (".", "/"):
+            path = self.fs.resolve_path(cmd, self.cwd)
+            if not self.fs.exists(path):
+                return None
+        else:
+            for i in [f"{self.fs.resolve_path(x, self.cwd)}/{cmd}" for x in paths]:
+                if self.fs.exists(i):
+                    path = i
+                    break
+
+        if path is None:
+            return None
+""",
+        """        skip_python_commands = {
+            command.strip()
+            for command in CowrieConfig.get(
+                "shell", "skip_python_commands", fallback=""
+            ).split(",")
+            if command.strip()
+        }
+
+        def skip_python_command(name):
+            return name in skip_python_commands or Path(name).name in skip_python_commands
+
+        if cmd in self.commands and not skip_python_command(cmd):
+            return self.commands[cmd]
+        if cmd[0] in (".", "/"):
+            path = self.fs.resolve_path(cmd, self.cwd)
+            if not self.fs.exists(path):
+                return None
+        else:
+            for i in [f"{self.fs.resolve_path(x, self.cwd)}/{cmd}" for x in paths]:
+                if self.fs.exists(i):
+                    path = i
+                    break
+
+        if path is None:
+            return None
+""",
+    )
+    replace_once(
+        path,
         """        try:
             binary_data = read_data_bytes("txtcmds", *path.lstrip("/").split("/"))
             return self.txtcmd(binary_data)
@@ -40,6 +84,15 @@ def patch_protocol(cowrie_root):
             return self.txtcmd(binary_data)
         except FileNotFoundError:
             pass
+""",
+    )
+    replace_once(
+        path,
+        """        if path in self.commands:
+            return self.commands[path]
+""",
+        """        if path in self.commands and not skip_python_command(path):
+            return self.commands[path]
 """,
     )
 

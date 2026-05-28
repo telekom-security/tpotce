@@ -433,6 +433,7 @@ assert_custom_filesystem() {
   docker exec -i "${TEST_CONTAINER_NAME}" python3 - <<'PY'
 import configparser
 import json
+import pickle
 from pathlib import Path
 import sys
 
@@ -441,7 +442,40 @@ personas_root = root / "personas"
 metadata_path = personas_root / "personas.json"
 selected_path = Path("/tmp/cowrie/persona")
 runtime_config_path = Path("/tmp/cowrie/runtime/cowrie.cfg")
+protocol_path = root / "src" / "cowrie" / "shell" / "protocol.py"
 offenders = []
+expected_package_managers = {
+    "debian-bookworm-vuln": {"apt", "apt-get", "dpkg"},
+    "fedora-36-vuln": {"dnf", "rpm", "yum"},
+    "rhel-9-vuln": {"dnf", "rpm", "yum"},
+    "dlink-dir859": set(),
+    "tplink-wr841n": set(),
+    "zyxel-nas326": set(),
+    "openwrt-1806": {"opkg"},
+    "qnap-qts": {"qpkg_cli"},
+    "synology-dsm": {"synopkg"},
+    "ubiquiti-edgerouter-x": {"apt-get", "dpkg"},
+}
+package_manager_paths = (
+    "bin/apt",
+    "bin/apt-get",
+    "bin/dnf",
+    "bin/opkg",
+    "bin/rpm",
+    "bin/yum",
+    "sbin/opkg",
+    "sbin/qpkg_cli",
+    "usr/bin/apt",
+    "usr/bin/apt-get",
+    "usr/bin/dnf",
+    "usr/bin/dpkg",
+    "usr/bin/opkg",
+    "usr/bin/rpm",
+    "usr/bin/yum",
+    "usr/sbin/opkg",
+    "usr/sbin/qpkg_cli",
+    "usr/syno/bin/synopkg",
+)
 
 
 def read_bytes(path):
@@ -474,12 +508,29 @@ def check_forbidden(path):
             offenders.append(str(path))
 
 
+def node_children(node):
+    return node[7] if len(node) > 7 and isinstance(node[7], list) else []
+
+
+def find_node(root_node, relative_path):
+    current = root_node
+    for part in Path(relative_path).parts:
+        if part in ("", "/"):
+            continue
+        current = next((child for child in node_children(current) if child[0] == part), None)
+        if current is None:
+            return None
+    return current
+
+
 if not metadata_path.is_file():
     fail(f"Missing Cowrie persona metadata: {metadata_path}")
 if not selected_path.is_file():
     fail(f"Missing selected Cowrie persona file: {selected_path}")
 if not runtime_config_path.is_file():
     fail(f"Missing runtime Cowrie config: {runtime_config_path}")
+if "skip_python_commands" not in protocol_path.read_text(encoding="utf-8"):
+    fail("Cowrie protocol.py does not contain persona command filtering patch")
 
 personas = json.loads(metadata_path.read_text(encoding="utf-8"))
 if len(personas) != 10:
@@ -508,6 +559,8 @@ if config.get("honeypot", "txtcmds_path", fallback="") != str(expected_txtcmds):
     fail("Runtime config does not point to the selected txtcmds")
 if config.get("ssh", "version", fallback="") != ids[selected]["ssh_banner"]:
     fail("Runtime config SSH banner does not match selected persona metadata")
+if "apt" not in config.get("shell", "skip_python_commands", fallback=""):
+    fail("Runtime config does not disable generic package-manager Python commands")
 
 for persona_id, persona in ids.items():
     persona_dir = personas_root / persona_id
@@ -531,6 +584,8 @@ for persona_id, persona in ids.items():
         fail(f"{persona_id} fs.pickle is unexpectedly small: {pickle_path.stat().st_size} bytes")
 
     pickle_bytes = read_bytes(pickle_path)
+    with pickle_path.open("rb") as handle:
+        pickle_tree = pickle.load(handle)
     if persona["user"].encode("utf-8") not in pickle_bytes:
         fail(f"{persona_id} fs.pickle does not contain persona user {persona['user']}")
     if persona["hostname"].encode("utf-8") not in pickle_bytes:
@@ -540,6 +595,12 @@ for persona_id, persona in ids.items():
     cmdoutput = json.loads(cmdoutput_path.read_text(encoding="utf-8"))
     if not cmdoutput.get("command", {}).get("ps"):
         fail(f"{persona_id} cmdoutput.json has no ps process list")
+    config_text = config_path.read_text(encoding="utf-8")
+    if "skip_python_commands =" not in config_text:
+        fail(f"{persona_id} config does not define skip_python_commands")
+    package_managers = set(persona.get("package_managers", []))
+    if package_managers != expected_package_managers[persona_id]:
+        fail(f"{persona_id} package managers do not match persona: {sorted(package_managers)}")
     for command_path in (
         "bin/df",
         "bin/dmesg",
@@ -551,6 +612,15 @@ for persona_id, persona in ids.items():
     ):
         if not (txtcmds_path / command_path).is_file():
             fail(f"{persona_id} txtcmds is missing {command_path}")
+    for command_path in package_manager_paths:
+        manager_name = Path(command_path).name
+        should_exist = manager_name in package_managers
+        exists_in_pickle = find_node(pickle_tree, command_path) is not None
+        exists_in_txtcmds = (txtcmds_path / command_path).is_file()
+        if should_exist and exists_in_txtcmds and not exists_in_pickle:
+            fail(f"{persona_id} package manager is missing from fs.pickle: {command_path}")
+        if not should_exist and (exists_in_pickle or exists_in_txtcmds):
+            fail(f"{persona_id} has mismatched package manager command: {command_path}")
 
     passwd = read_bytes(honeyfs / "etc" / "passwd")
     hostname = read_bytes(honeyfs / "etc" / "hostname")

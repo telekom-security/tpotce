@@ -34,6 +34,70 @@ TXTCMD_PATHS = [
     "usr/bin/top",
 ]
 RANDOM = random.SystemRandom()
+PACKAGE_MANAGER_PATHS = [
+    "bin/apt",
+    "bin/apt-get",
+    "bin/dnf",
+    "bin/opkg",
+    "bin/rpm",
+    "bin/yum",
+    "sbin/opkg",
+    "sbin/qpkg_cli",
+    "usr/bin/apt",
+    "usr/bin/apt-get",
+    "usr/bin/dnf",
+    "usr/bin/dpkg",
+    "usr/bin/opkg",
+    "usr/bin/rpm",
+    "usr/bin/yum",
+    "usr/sbin/opkg",
+    "usr/sbin/qpkg_cli",
+    "usr/syno/bin/synopkg",
+]
+HIGH_VARIANCE_COMMAND_PATHS = [
+    "bin/busybox",
+    "usr/bin/gcc",
+    "usr/bin/git",
+    "usr/bin/lspci",
+    "usr/bin/perl",
+    "usr/bin/python",
+    "usr/bin/python3",
+    "usr/bin/sudo",
+    "usr/sbin/service",
+]
+COMMON_SKIP_PYTHON_COMMANDS = [
+    "/bin/apt",
+    "/bin/apt-get",
+    "/bin/busybox",
+    "/bin/yum",
+    "/usr/bin/apt",
+    "/usr/bin/apt-get",
+    "/usr/bin/busybox",
+    "/usr/bin/gcc",
+    "/usr/bin/lspci",
+    "/usr/bin/sudo",
+    "/usr/bin/yum",
+    "/usr/sbin/service",
+    "apt",
+    "apt-get",
+    "busybox",
+    "gcc",
+    "lspci",
+    "sudo",
+    "yum",
+    "service",
+]
+EMBEDDED_SKIP_PYTHON_COMMANDS = [
+    "adduser",
+    "finger",
+    "git",
+    "groups",
+    "perl",
+    "python",
+    "python3",
+    "scp",
+    "systemctl",
+]
 
 A_NAME = 0
 A_TYPE = 1
@@ -261,6 +325,144 @@ def random_ps_start():
     return day.strftime("%b%d")
 
 
+def package_manager_txtcmds(persona):
+    family = persona["family"]
+    if family == "debian":
+        apt_version = "apt 2.6.1 (amd64)\n"
+        apt_help = """apt 2.6.1 (amd64)
+Usage: apt [options] command
+
+apt is a commandline package manager and provides commands for
+searching and managing as well as querying information about packages.
+
+Most used commands:
+  list - list packages based on package names
+  search - search in package descriptions
+  show - show package details
+  update - update list of available packages
+  install - install packages
+  remove - remove packages
+  upgrade - upgrade the system by installing/upgrading packages
+"""
+        dpkg_version = "Debian 'dpkg' package management program version 1.21.22 (amd64).\n"
+        return {
+            "usr/bin/apt": apt_help,
+            "usr/bin/apt-get": apt_version,
+            "usr/bin/dpkg": dpkg_version,
+        }
+    if family == "fedora":
+        dnf = """dnf 4.14.0
+usage: dnf [options] COMMAND
+
+List of Main Commands:
+install                 install a package or packages on your system
+remove                  remove a package or packages from your system
+upgrade                 upgrade a package or packages on your system
+search                  search package details for the given string
+repolist                display the configured software repositories
+"""
+        rpm = "RPM version 4.17.0\n"
+        return {
+            "usr/bin/dnf": dnf,
+            "usr/bin/yum": dnf,
+            "usr/bin/rpm": rpm,
+        }
+    if family == "rhel":
+        dnf = """dnf 4.14.0
+usage: dnf [options] COMMAND
+
+List of Main Commands:
+install                 install a package or packages on your system
+remove                  remove a package or packages from your system
+upgrade                 upgrade a package or packages on your system
+repolist                display the configured software repositories
+module                  interact with modular content
+"""
+        rpm = "RPM version 4.16.1.3\n"
+        return {
+            "usr/bin/dnf": dnf,
+            "usr/bin/yum": dnf,
+            "usr/bin/rpm": rpm,
+        }
+    if family == "openwrt":
+        opkg = """opkg must have one sub-command argument
+usage: opkg [options...] sub-command [arguments...]
+
+Package Manipulation:
+	update			Update list of available packages
+	install <pkg>		Install package(s)
+	remove <pkg>		Remove package(s)
+	list-installed		List installed packages
+"""
+        return {
+            "bin/opkg": opkg,
+        }
+    if family == "ubiquiti":
+        apt = """Reading package lists... Done
+Building dependency tree... Done
+E: Unable to locate package
+"""
+        dpkg = "Debian 'dpkg' package management program version 1.19.8 (mips).\n"
+        return {
+            "usr/bin/apt-get": apt,
+            "usr/bin/dpkg": dpkg,
+        }
+    if family == "qnap":
+        qpkg = """Usage: qpkg_cli [options]
+  --list           list installed packages
+  --status NAME    show package status
+  --help           show this help
+"""
+        return {
+            "sbin/qpkg_cli": qpkg,
+        }
+    if family == "synology":
+        synopkg = """Copyright (c) 2003-2023 Synology Inc. All rights reserved.
+Usage: synopkg <command> [package]
+  list
+  status <package>
+  start <package>
+  stop <package>
+"""
+        return {
+            "usr/syno/bin/synopkg": synopkg,
+        }
+    return {}
+
+
+def command_inventory_txtcmds(persona):
+    family = persona["family"]
+    txtcmds = {}
+
+    if family in {"debian", "fedora", "rhel"}:
+        txtcmds.update(
+            {
+                "usr/bin/lspci": "00:00.0 Host bridge: Intel Corporation 440FX - 82441FX PMC\n00:01.0 ISA bridge: Intel Corporation 82371SB PIIX3 ISA\n00:01.1 IDE interface: Intel Corporation 82371SB PIIX3 IDE\n00:02.0 VGA compatible controller: Device 1234:1111\n",
+                "usr/bin/sudo": "sudo: a password is required\n",
+                "usr/sbin/service": "Usage: service < option > | --status-all | [ service_name [ command | --full-restart ] ]\n",
+            }
+        )
+    elif family in {"qnap", "synology"}:
+        txtcmds["usr/bin/lspci"] = (
+            "00:00.0 Host bridge: Intel Corporation Atom Processor C3000 Host Bridge\n"
+            "00:14.0 USB controller: Intel Corporation Atom Processor C3000 USB 3.0 xHCI Controller\n"
+            "00:17.0 SATA controller: Intel Corporation Atom Processor C3000 SATA Controller\n"
+        )
+
+    if family in {"iot-router", "iot-nas", "openwrt", "qnap", "synology", "ubiquiti"}:
+        if "bin/busybox" in persona["files"]:
+            txtcmds["bin/busybox"] = persona["files"]["bin/busybox"]
+
+    return txtcmds
+
+
+def skip_python_commands_for_family(family):
+    commands = list(COMMON_SKIP_PYTHON_COMMANDS)
+    if family in {"iot-router", "iot-nas", "openwrt", "qnap", "synology", "ubiquiti"}:
+        commands.extend(EMBEDDED_SKIP_PYTHON_COMMANDS)
+    return sorted(set(commands))
+
+
 def ps_entry(user, pid, command, cpu=0.0, mem=0.1, vsz=0, rss=0, stat="S", tty="?", start=None):
     return {
         "USER": user,
@@ -418,7 +620,7 @@ cpu time               (seconds, -t) unlimited
 max user processes              (-u) 1024
 virtual memory          (kbytes, -v) unlimited
 """
-    return {
+    txtcmds = {
         "bin/df": df,
         "bin/dmesg": dmesg,
         "bin/mount": mount,
@@ -427,6 +629,9 @@ virtual memory          (kbytes, -v) unlimited
         "usr/bin/nproc": f"{cpu_count}\n",
         "usr/bin/top": top,
     }
+    txtcmds.update(package_manager_txtcmds(persona))
+    txtcmds.update(command_inventory_txtcmds(persona))
+    return txtcmds
 
 
 def profile(
@@ -488,6 +693,7 @@ def profile(
         "vulnerability": vulnerability,
         "shell": shell,
         "process_start": random_ps_start(),
+        "skip_python_commands": skip_python_commands_for_family(family),
     }
 
 
@@ -988,6 +1194,8 @@ def write_text_file(path, text, mode=0o644):
 def apply_persona_to_tree(tree, persona):
     for remove_path in persona["remove_paths"]:
         remove_node(tree, remove_path)
+    for remove_path in PACKAGE_MANAGER_PATHS + HIGH_VARIANCE_COMMAND_PATHS:
+        remove_node(tree, remove_path)
 
     for relative_path in COMMON_DIRS:
         mode = 0o755
@@ -1013,7 +1221,7 @@ def apply_persona_to_tree(tree, persona):
             mode = 0o755
         ensure_file(tree, relative_path, text.encode("utf-8"), 0, 0, mode)
 
-    for relative_path in TXTCMD_PATHS:
+    for relative_path in txtcmds_for_persona(persona):
         ensure_file(tree, relative_path, b"", 0, 0, 0o755)
 
 
@@ -1093,6 +1301,7 @@ kernel_build_string = {persona["kernel_build_string"]}
 hardware_platform = {persona["hardware_platform"]}
 operating_system = {persona["operating_system"]}
 ssh_version = {persona["shell_ssh_version"]}
+skip_python_commands = {",".join(persona["skip_python_commands"])}
 
 [ssh]
 enabled = true
@@ -1182,6 +1391,7 @@ def validate_persona(persona, persona_dir, runtime_persona_dir):
         )
 
     pickle_bytes = pickle_path.read_bytes()
+    pickle_tree = load_pickle(pickle_path)
     required = [
         persona["user"].encode("utf-8"),
         persona["hostname"].encode("utf-8"),
@@ -1207,9 +1417,21 @@ def validate_persona(persona, persona_dir, runtime_persona_dir):
     expected_start = persona["process_start"]
     if any(process.get("START") != expected_start for process in process_list):
         raise RuntimeError(f"{persona['id']} has inconsistent process start dates")
-    for relative_path in TXTCMD_PATHS:
+    expected_txtcmds = txtcmds_for_persona(persona)
+    for relative_path in expected_txtcmds:
         if not (txtcmds / relative_path).is_file():
             raise RuntimeError(f"{persona['id']} has no txtcmds/{relative_path}")
+    for relative_path in PACKAGE_MANAGER_PATHS:
+        has_command = relative_path in expected_txtcmds
+        in_pickle = find_node(pickle_tree, relative_path) is not None
+        in_honeyfs = (honeyfs / relative_path).exists()
+        if has_command and not in_pickle:
+            raise RuntimeError(f"{persona['id']} package manager missing from pickle: {relative_path}")
+        if not has_command and (in_pickle or in_honeyfs):
+            raise RuntimeError(f"{persona['id']} has mismatched package manager path: {relative_path}")
+    config_text = config_path.read_text(encoding="utf-8")
+    if "skip_python_commands =" not in config_text:
+        raise RuntimeError(f"{persona['id']} config does not define skip_python_commands")
     if not (honeyfs / "etc" / "hostname").is_file():
         raise RuntimeError(f"{persona['id']} honeyfs has no /etc/hostname")
 
@@ -1249,6 +1471,9 @@ def write_metadata(personas_root):
                 "user": persona["user"],
                 "arch": persona["arch"],
                 "ssh_banner": persona["ssh_banner"],
+                "package_managers": sorted(
+                    Path(path).name for path in package_manager_txtcmds(persona)
+                ),
                 "vulnerability": persona["vulnerability"],
             }
         )
