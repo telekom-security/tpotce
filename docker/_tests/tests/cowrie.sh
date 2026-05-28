@@ -11,6 +11,7 @@ DEFAULT_IMAGE="ghcr.io/telekom-security/cowrie:24.04.1"
 IMAGE=""
 SSH_PORT=""
 TELNET_PORT=""
+PERSONA=""
 LOG_DIR=""
 TTY_LOG_DIR=""
 DL_DIR=""
@@ -29,6 +30,7 @@ Options:
   --image IMAGE        Image to test. Defaults to docker/cowrie/docker-compose.yml.
   --ssh-port PORT      Host TCP port for SSH. Default: dynamic free port.
   --telnet-port PORT   Host TCP port for Telnet. Default: dynamic free port.
+  --persona ID         Force a generated Cowrie persona. Default: random.
   --timeout SEC        Timeout for startup, protocol, and log checks. Default: 30.
   --bind-ip IP         Host IP to bind. Default: 127.0.0.1.
   --keep-artifacts     Keep temporary compose file and logs for debugging.
@@ -64,6 +66,15 @@ parse_args() {
         ;;
       --telnet-port=*)
         TELNET_PORT="${1#*=}"
+        shift
+        ;;
+      --persona)
+        [[ $# -ge 2 ]] || test_die "--persona requires an argument"
+        PERSONA="$2"
+        shift 2
+        ;;
+      --persona=*)
+        PERSONA="${1#*=}"
         shift
         ;;
       --timeout)
@@ -107,6 +118,9 @@ validate_args() {
   if [[ -n "${TELNET_PORT}" ]]; then
     test_validate_port "${TELNET_PORT}"
   fi
+  if [[ -n "${PERSONA}" && ! "${PERSONA}" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+    test_die "--persona must contain only lowercase letters, numbers, and dashes"
+  fi
 }
 
 prepare_cowrie_harness() {
@@ -136,6 +150,8 @@ services:
     ports:
       - "${TEST_BIND_IP}:${SSH_PORT}:22"
       - "${TEST_BIND_IP}:${TELNET_PORT}:23"
+    environment:
+      COWRIE_PERSONA: "${PERSONA}"
     volumes:
       - "${DL_DIR}:/home/cowrie/cowrie/dl"
       - "${KEYS_DIR}:/home/cowrie/cowrie/etc"
@@ -415,12 +431,16 @@ PY
 
 assert_custom_filesystem() {
   docker exec -i "${TEST_CONTAINER_NAME}" python3 - <<'PY'
+import configparser
+import json
 from pathlib import Path
 import sys
 
 root = Path("/home/cowrie/cowrie")
-pickle_path = root / "src" / "cowrie" / "data" / "fs.pickle"
-honeyfs = root / "honeyfs"
+personas_root = root / "personas"
+metadata_path = personas_root / "personas.json"
+selected_path = Path("/tmp/cowrie/persona")
+runtime_config_path = Path("/tmp/cowrie/runtime/cowrie.cfg")
 offenders = []
 
 
@@ -432,50 +452,128 @@ def read_bytes(path):
         sys.exit(1)
 
 
-if not pickle_path.is_file():
-    print(f"Missing Cowrie filesystem pickle: {pickle_path}", file=sys.stderr)
-    sys.exit(1)
-if not honeyfs.is_dir():
-    print(f"Missing Cowrie honeyfs directory: {honeyfs}", file=sys.stderr)
+def fail(message):
+    print(message, file=sys.stderr)
     sys.exit(1)
 
-if b"phil" in read_bytes(pickle_path).lower():
-    offenders.append(str(pickle_path))
 
-for item in honeyfs.rglob("*"):
-    if "phil" in item.name.lower():
-        offenders.append(str(item))
-        continue
-    if item.is_file() and b"phil" in read_bytes(item).lower():
-        offenders.append(str(item))
+def check_forbidden(path):
+    if "phil" in path.name.lower():
+        offenders.append(str(path))
+    if path.is_file():
+        data = read_bytes(path).lower()
+        forbidden = (
+            b"phil",
+            b"ubuntu 22.04",
+            b"2.6.26-2-686",
+            b"2.6.26-19lenny",
+            b"com/ubuntu/upstart",
+            b"dannf@debian.org",
+        )
+        if any(marker in data for marker in forbidden):
+            offenders.append(str(path))
+
+
+if not metadata_path.is_file():
+    fail(f"Missing Cowrie persona metadata: {metadata_path}")
+if not selected_path.is_file():
+    fail(f"Missing selected Cowrie persona file: {selected_path}")
+if not runtime_config_path.is_file():
+    fail(f"Missing runtime Cowrie config: {runtime_config_path}")
+
+personas = json.loads(metadata_path.read_text(encoding="utf-8"))
+if len(personas) != 10:
+    fail(f"Expected 10 Cowrie personas, found {len(personas)}")
+
+ids = {persona["id"]: persona for persona in personas}
+selected = selected_path.read_text(encoding="utf-8").strip()
+if selected not in ids:
+    fail(f"Selected persona is not in personas.json: {selected}")
+
+config = configparser.ConfigParser()
+config.read(runtime_config_path)
+selected_dir = personas_root / selected
+expected_filesystem = selected_dir / "fs.pickle"
+expected_honeyfs = selected_dir / "honeyfs"
+expected_processes = selected_dir / "cmdoutput.json"
+expected_txtcmds = selected_dir / "txtcmds"
+
+if config.get("shell", "filesystem", fallback="") != str(expected_filesystem):
+    fail("Runtime config does not point to the selected fs.pickle")
+if config.get("honeypot", "contents_path", fallback="") != str(expected_honeyfs):
+    fail("Runtime config does not point to the selected honeyfs")
+if config.get("shell", "processes", fallback="") != str(expected_processes):
+    fail("Runtime config does not point to the selected cmdoutput.json")
+if config.get("honeypot", "txtcmds_path", fallback="") != str(expected_txtcmds):
+    fail("Runtime config does not point to the selected txtcmds")
+if config.get("ssh", "version", fallback="") != ids[selected]["ssh_banner"]:
+    fail("Runtime config SSH banner does not match selected persona metadata")
+
+for persona_id, persona in ids.items():
+    persona_dir = personas_root / persona_id
+    pickle_path = persona_dir / "fs.pickle"
+    honeyfs = persona_dir / "honeyfs"
+    config_path = persona_dir / "cowrie.cfg"
+    cmdoutput_path = persona_dir / "cmdoutput.json"
+    txtcmds_path = persona_dir / "txtcmds"
+
+    if not pickle_path.is_file():
+        fail(f"Missing Cowrie persona pickle: {pickle_path}")
+    if not honeyfs.is_dir():
+        fail(f"Missing Cowrie persona honeyfs: {honeyfs}")
+    if not config_path.is_file():
+        fail(f"Missing Cowrie persona config: {config_path}")
+    if not cmdoutput_path.is_file():
+        fail(f"Missing Cowrie persona cmdoutput.json: {cmdoutput_path}")
+    if not txtcmds_path.is_dir():
+        fail(f"Missing Cowrie persona txtcmds: {txtcmds_path}")
+    if pickle_path.stat().st_size < 1000000:
+        fail(f"{persona_id} fs.pickle is unexpectedly small: {pickle_path.stat().st_size} bytes")
+
+    pickle_bytes = read_bytes(pickle_path)
+    if persona["user"].encode("utf-8") not in pickle_bytes:
+        fail(f"{persona_id} fs.pickle does not contain persona user {persona['user']}")
+    if persona["hostname"].encode("utf-8") not in pickle_bytes:
+        fail(f"{persona_id} fs.pickle does not contain persona hostname {persona['hostname']}")
+    if persona["ssh_banner"] not in config_path.read_text(encoding="utf-8"):
+        fail(f"{persona_id} config does not contain persona SSH banner")
+    cmdoutput = json.loads(cmdoutput_path.read_text(encoding="utf-8"))
+    if not cmdoutput.get("command", {}).get("ps"):
+        fail(f"{persona_id} cmdoutput.json has no ps process list")
+    for command_path in (
+        "bin/df",
+        "bin/dmesg",
+        "bin/mount",
+        "bin/ulimit",
+        "usr/bin/lscpu",
+        "usr/bin/nproc",
+        "usr/bin/top",
+    ):
+        if not (txtcmds_path / command_path).is_file():
+            fail(f"{persona_id} txtcmds is missing {command_path}")
+
+    passwd = read_bytes(honeyfs / "etc" / "passwd")
+    hostname = read_bytes(honeyfs / "etc" / "hostname")
+    os_release = read_bytes(honeyfs / "etc" / "os-release")
+    if persona["user"].encode("utf-8") not in passwd:
+        fail(f"{persona_id} honeyfs /etc/passwd does not contain persona user")
+    if persona["hostname"].encode("utf-8") not in hostname:
+        fail(f"{persona_id} honeyfs /etc/hostname does not contain persona hostname")
+    if not os_release.strip():
+        fail(f"{persona_id} honeyfs /etc/os-release is empty")
+
+    check_forbidden(pickle_path)
+    check_forbidden(config_path)
+    check_forbidden(cmdoutput_path)
+    for item in honeyfs.rglob("*"):
+        check_forbidden(item)
+    for item in txtcmds_path.rglob("*"):
+        check_forbidden(item)
 
 if offenders:
-    print("Cowrie filesystem still contains 'phil': " + ", ".join(offenders), file=sys.stderr)
-    sys.exit(1)
+    fail("Cowrie persona filesystem contains forbidden markers: " + ", ".join(offenders))
 
-pickle_bytes = read_bytes(pickle_path)
-pickle_size = pickle_path.stat().st_size
-passwd = read_bytes(honeyfs / "etc" / "passwd")
-hostname = read_bytes(honeyfs / "etc" / "hostname")
-os_release = read_bytes(honeyfs / "etc" / "os-release")
-
-if pickle_size < 1000000:
-    print(f"fs.pickle is unexpectedly small: {pickle_size} bytes", file=sys.stderr)
-    sys.exit(1)
-
-checks = [
-    (b"ubuntu", pickle_bytes, "fs.pickle does not contain ubuntu"),
-    (b"ubuntu", passwd, "honeyfs /etc/passwd does not contain ubuntu"),
-    (b"srv01", hostname, "honeyfs /etc/hostname does not contain srv01"),
-    (b"Ubuntu 22.04", os_release, "honeyfs /etc/os-release does not describe Ubuntu 22.04"),
-]
-
-for needle, haystack, message in checks:
-    if needle not in haystack:
-        print(message, file=sys.stderr)
-        sys.exit(1)
-
-print("Cowrie filesystem profile validated: ubuntu@srv01 without phil")
+print(f"Cowrie persona pool validated: {selected} selected, {len(personas)} personas, no phil")
 PY
 }
 

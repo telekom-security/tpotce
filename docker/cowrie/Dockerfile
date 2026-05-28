@@ -48,17 +48,19 @@ RUN apk --no-cache -U upgrade && \
     pip3 install --break-system-packages --upgrade --no-cache-dir pip && \
     pip3 install --break-system-packages --no-cache-dir -r requirements.txt && \
     pip3 install --break-system-packages --no-cache-dir -e . && \
+    python3 /root/dist/patch_cowrie_persona_support.py --cowrie-root /home/cowrie/cowrie && \
     python3 /root/dist/generate_cowrie_fs.py --cowrie-root /home/cowrie/cowrie && \
+    install -m 0755 /root/dist/start-cowrie-persona.py /usr/local/bin/start-cowrie-persona && \
 #
 # Setup configs
     setcap cap_net_bind_service=+ep $(readlink -f $(type -P python3)) && \
-    cp /root/dist/cowrie.cfg /home/cowrie/cowrie/cowrie.cfg && \
+    cp /home/cowrie/cowrie/personas/debian-bookworm-vuln/cowrie.cfg /home/cowrie/cowrie/cowrie.cfg && \
     chown cowrie:cowrie -R /home/cowrie/* /usr/lib/$(readlink -f $(type -P python3) | cut -f4 -d"/")/site-packages/twisted/plugins && \
 #
 # Start Cowrie once to prevent dropin.cache errors upon container start caused by read-only filesystem
     su - cowrie -c "export PYTHONPATH=/home/cowrie/cowrie:/home/cowrie/cowrie/src && \
                     cd /home/cowrie/cowrie && \
-                    /usr/bin/twistd --uid=2000 --gid=2000 -y cowrie.tac --pidfile cowrie.pid cowrie &" && \
+                    /usr/bin/twistd --uid=2000 --gid=2000 --pidfile cowrie.pid cowrie &" && \
     sleep 10 && \
     rm -rf /home/cowrie/cowrie/etc && \
 #
@@ -82,4 +84,4 @@ RUN apk --no-cache -U upgrade && \
 ENV PYTHONPATH=/home/cowrie/cowrie:/home/cowrie/cowrie/src
 WORKDIR /home/cowrie/cowrie
 USER cowrie:cowrie
-CMD ["/usr/bin/twistd", "--nodaemon", "-y", "cowrie.tac", "--pidfile", "/tmp/cowrie/cowrie.pid", "cowrie"]
+CMD ["/usr/local/bin/start-cowrie-persona"]
