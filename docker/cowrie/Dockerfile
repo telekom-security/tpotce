@@ -1,4 +1,4 @@
-FROM alpine:3.20
+FROM alpine:3.23
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -41,13 +41,14 @@ RUN apk --no-cache -U upgrade && \
 # Install cowrie
     mkdir -p /home/cowrie && \
     cd /home/cowrie && \
-    git clone https://github.com/cowrie/cowrie && \
+    git clone https://github.com/cowrie/cowrie -b v3.0.0 && \
     cd cowrie && \
-    git checkout 7b18207485dbfc218082e82c615d948924429973 && \
     mkdir -p log && \
     # cp /root/dist/requirements.txt . && \
     pip3 install --break-system-packages --upgrade --no-cache-dir pip && \
     pip3 install --break-system-packages --no-cache-dir -r requirements.txt && \
+    pip3 install --break-system-packages --no-cache-dir -e . && \
+    python3 /root/dist/generate_cowrie_fs.py --cowrie-root /home/cowrie/cowrie && \
 #
 # Setup configs
     setcap cap_net_bind_service=+ep $(readlink -f $(type -P python3)) && \
@@ -78,7 +79,7 @@ RUN apk --no-cache -U upgrade && \
            /home/cowrie/cowrie/.git
 #
 # Start cowrie
-ENV PYTHONPATH /home/cowrie/cowrie:/home/cowrie/cowrie/src
+ENV PYTHONPATH=/home/cowrie/cowrie:/home/cowrie/cowrie/src
 WORKDIR /home/cowrie/cowrie
 USER cowrie:cowrie
 CMD ["/usr/bin/twistd", "--nodaemon", "-y", "cowrie.tac", "--pidfile", "/tmp/cowrie/cowrie.pid", "cowrie"]

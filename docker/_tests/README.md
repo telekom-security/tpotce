@@ -14,6 +14,7 @@ not touch production `data/` or `data_backup/` paths.
 ./docker/_tests/run.sh ciscoasa
 ./docker/_tests/run.sh citrixhoneypot
 ./docker/_tests/run.sh conpot
+./docker/_tests/run.sh cowrie
 ```
 
 Common options:
@@ -31,6 +32,8 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/ciscoasa.sh --https-port 18443 --ike-port 15000
 ./docker/_tests/tests/citrixhoneypot.sh --https-port 1443
 ./docker/_tests/tests/conpot.sh --guardian-ast-port 11001 --ipmi-port 1623
+./docker/_tests/tests/cowrie.sh
+./docker/_tests/tests/cowrie.sh --ssh-port 2222 --telnet-port 2323
 ```
 
 ## Conventions
