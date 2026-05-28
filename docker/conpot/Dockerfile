@@ -44,10 +44,9 @@ RUN apk --no-cache -U upgrade && \
 			wget && \
 #
 # Setup ConPot
-    # git clone https://github.com/mushorg/conpot /opt/conpot && \
-    git clone https://github.com/t3chn0m4g3/conpot /opt/conpot && \
+    git clone https://github.com/mushorg/conpot /opt/conpot && \
     cd /opt/conpot/ && \
-	# git checkout 79399adaf608c33103d076bc9a3a3c2d2172dd1a && \
+	git checkout 31b1f7d273ee4f8c121eb59dcfce4ec2cb35e612 && \
     # Change template default ports if <1024
     sed -i 's/port="2121"/port="21"/' /opt/conpot/conpot/templates/default/ftp/ftp.xml && \
     sed -i 's/port="8800"/port="80"/' /opt/conpot/conpot/templates/default/http/http.xml && \
