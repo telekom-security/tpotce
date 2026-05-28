@@ -1,4 +1,4 @@
-FROM alpine:3.20 AS builder
+FROM alpine:3.23 AS builder
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -52,7 +52,7 @@ RUN pyinstaller ddospot.py \
        --hidden-import OpenSSL.crypto \
        --hidden-import OpenSSL.SSL
 #
-FROM alpine:3.20
+FROM alpine:3.23
 RUN apk --no-cache -U upgrade
 COPY --from=builder /opt/ddospot/ddospot/dist/ddospot/ /opt/ddospot/ddospot
 COPY --from=builder /opt/ddospot/ddospot/global.conf /opt/ddospot/ddospot/

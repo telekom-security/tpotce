@@ -15,6 +15,7 @@ not touch production `data/` or `data_backup/` paths.
 ./docker/_tests/run.sh citrixhoneypot
 ./docker/_tests/run.sh conpot
 ./docker/_tests/run.sh cowrie
+./docker/_tests/run.sh ddospot
 ```
 
 Common options:
@@ -36,6 +37,8 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/cowrie.sh --ssh-port 2222 --telnet-port 2323
 ./docker/_tests/tests/cowrie.sh --persona debian-bookworm-vuln
 ./docker/_tests/tests/cowrie.sh --persona openwrt-1806
+./docker/_tests/tests/ddospot.sh
+./docker/_tests/tests/ddospot.sh --dns-port 1053 --ntp-port 1123 --ssdp-port 19000
 ```
 
 ## Conventions
