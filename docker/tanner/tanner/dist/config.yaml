@@ -40,9 +40,9 @@ EMULATOR_ENABLED:
   lfi: False
   xss: True
   cmd_exec: False
-  php_code_injection: True 
-  php_object_injection: True
-  crlf: True
+  php_code_injection: False
+  php_object_injection: False
+  crlf: False
   xxe_injection: True
   template_injection: False
 
