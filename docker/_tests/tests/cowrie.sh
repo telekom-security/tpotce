@@ -445,6 +445,7 @@ runtime_config_path = Path("/tmp/cowrie/runtime/cowrie.cfg")
 protocol_path = root / "src" / "cowrie" / "shell" / "protocol.py"
 offenders = []
 expected_package_managers = {
+    "ubuntu-jammy": {"apt", "apt-get", "dpkg"},
     "debian-bookworm-vuln": {"apt", "apt-get", "dpkg"},
     "fedora-36-vuln": {"dnf", "rpm", "yum"},
     "rhel-9-vuln": {"dnf", "rpm", "yum"},
@@ -456,6 +457,11 @@ expected_package_managers = {
     "synology-dsm": {"synopkg"},
     "ubiquiti-edgerouter-x": {"apt-get", "dpkg"},
 }
+ubuntu_only_markers = (
+    b"ubuntu 22.04",
+    b"id=ubuntu",
+    b"jammy jellyfish",
+)
 package_manager_paths = (
     "bin/apt",
     "bin/apt-get",
@@ -491,19 +497,20 @@ def fail(message):
     sys.exit(1)
 
 
-def check_forbidden(path):
+def check_forbidden(path, persona_id):
     if "phil" in path.name.lower():
         offenders.append(str(path))
     if path.is_file():
         data = read_bytes(path).lower()
-        forbidden = (
+        forbidden = [
             b"phil",
-            b"ubuntu 22.04",
             b"2.6.26-2-686",
             b"2.6.26-19lenny",
             b"com/ubuntu/upstart",
             b"dannf@debian.org",
-        )
+        ]
+        if persona_id != "ubuntu-jammy":
+            forbidden.extend(ubuntu_only_markers)
         if any(marker in data for marker in forbidden):
             offenders.append(str(path))
 
@@ -533,8 +540,8 @@ if "skip_python_commands" not in protocol_path.read_text(encoding="utf-8"):
     fail("Cowrie protocol.py does not contain persona command filtering patch")
 
 personas = json.loads(metadata_path.read_text(encoding="utf-8"))
-if len(personas) != 10:
-    fail(f"Expected 10 Cowrie personas, found {len(personas)}")
+if len(personas) != 11:
+    fail(f"Expected 11 Cowrie personas, found {len(personas)}")
 
 ids = {persona["id"]: persona for persona in personas}
 selected = selected_path.read_text(encoding="utf-8").strip()
@@ -590,6 +597,10 @@ for persona_id, persona in ids.items():
         fail(f"{persona_id} fs.pickle does not contain persona user {persona['user']}")
     if persona["hostname"].encode("utf-8") not in pickle_bytes:
         fail(f"{persona_id} fs.pickle does not contain persona hostname {persona['hostname']}")
+    if persona_id == "ubuntu-jammy":
+        for marker in ubuntu_only_markers:
+            if marker not in pickle_bytes.lower():
+                fail(f"{persona_id} fs.pickle does not contain Ubuntu marker {marker!r}")
     if persona["ssh_banner"] not in config_path.read_text(encoding="utf-8"):
         fail(f"{persona_id} config does not contain persona SSH banner")
     cmdoutput = json.loads(cmdoutput_path.read_text(encoding="utf-8"))
@@ -632,13 +643,13 @@ for persona_id, persona in ids.items():
     if not os_release.strip():
         fail(f"{persona_id} honeyfs /etc/os-release is empty")
 
-    check_forbidden(pickle_path)
-    check_forbidden(config_path)
-    check_forbidden(cmdoutput_path)
+    check_forbidden(pickle_path, persona_id)
+    check_forbidden(config_path, persona_id)
+    check_forbidden(cmdoutput_path, persona_id)
     for item in honeyfs.rglob("*"):
-        check_forbidden(item)
+        check_forbidden(item, persona_id)
     for item in txtcmds_path.rglob("*"):
-        check_forbidden(item)
+        check_forbidden(item, persona_id)
 
 if offenders:
     fail("Cowrie persona filesystem contains forbidden markers: " + ", ".join(offenders))
