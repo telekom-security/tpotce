@@ -18,6 +18,7 @@ not touch production `data/` or `data_backup/` paths.
 ./docker/_tests/run.sh ddospot
 ./docker/_tests/run.sh dionaea
 ./docker/_tests/run.sh dicompot
+./docker/_tests/run.sh elasticpot
 ```
 
 Common options:
@@ -48,6 +49,8 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/dionaea.sh --ftp-port 2121
 ./docker/_tests/tests/dicompot.sh
 ./docker/_tests/tests/dicompot.sh --host-port 11112
+./docker/_tests/tests/elasticpot.sh
+./docker/_tests/tests/elasticpot.sh --http-port 19200
 ```
 
 The Dionaea test maps the tested service ports to temporary loopback ports,
