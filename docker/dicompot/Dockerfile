@@ -1,26 +1,19 @@
-FROM golang:1.23-alpine AS builder
-#
-ENV GO111MODULE=on \
-    CGO_ENABLED=0 \
-    GOOS=linux
+FROM golang:1.26-alpine AS builder
 #
 # Include dist
 COPY dist/ /root/dist/
 #
 # Install packages
 RUN apk --no-cache -U add \
-		build-base \
-		git \
-		g++
+		git
 #
 # Setup go, build dicompot 
 RUN git clone https://github.com/nsmfoo/dicompot.git && \
     cd dicompot && \
-    git checkout 41331194156bbb17078bcc1594f4952ac06a731e && \
-    cp /root/dist/go.mod .
+    git checkout 7351dbec0d3ac66986912fe88710f99c17004188
 WORKDIR /go/dicompot
-RUN go mod tidy
-RUN go mod download
+ENV GOCACHE=/go-cache
+ENV GOMODCACHE=/gomod-cache
 RUN go build -o dicompot github.com/nsmfoo/dicompot/server
 #
 FROM scratch

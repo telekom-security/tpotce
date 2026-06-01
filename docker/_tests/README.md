@@ -16,6 +16,7 @@ not touch production `data/` or `data_backup/` paths.
 ./docker/_tests/run.sh conpot
 ./docker/_tests/run.sh cowrie
 ./docker/_tests/run.sh ddospot
+./docker/_tests/run.sh dicompot
 ```
 
 Common options:
@@ -24,6 +25,9 @@ Common options:
 ./docker/_tests/run.sh --timeout 45 --bind-ip 127.0.0.1
 ./docker/_tests/run.sh --keep-artifacts adbhoney
 ```
+
+The runner checks common and test-specific dependencies before starting
+containers, and fails early with a list of missing tools.
 
 Individual tests can also be run directly:
 
@@ -39,7 +43,12 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/cowrie.sh --persona openwrt-1806
 ./docker/_tests/tests/ddospot.sh
 ./docker/_tests/tests/ddospot.sh --dns-port 1053 --ntp-port 1123 --ssdp-port 19000
+./docker/_tests/tests/dicompot.sh
+./docker/_tests/tests/dicompot.sh --host-port 11112
 ```
+
+The Dicompot test additionally requires DCMTK client tools on the host:
+`echoscu`, `getscu`, `dcmdump`, and either `setscu` or `storescu`.
 
 ## Conventions
 

@@ -11,15 +11,13 @@ services:
     build: .
     container_name: dicompot
     restart: always
-#    cpu_count: 1
-#    cpus: 0.25
     networks:
      - dicompot_local
     ports:
      - "104:11112"
      - "11112:11112"
-    image: "dtagdevsec/dicompot:24.04"
+    image: "dtagdevsec/dicompot:24.04.1"
     read_only: true
     volumes:
      - $HOME/tpotce/data/dicompot/log:/var/log/dicompot
-#     - $HOME/tpotce/data/dicompot/images:/opt/dicompot/images
+     - $HOME/tpotce/data/dicompot/images:/opt/dicompot/images

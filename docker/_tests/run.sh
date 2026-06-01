@@ -10,6 +10,7 @@ TEST_TIMEOUT="30"
 TEST_BIND_IP="127.0.0.1"
 TEST_KEEP_ARTIFACTS="false"
 SELECTED_TESTS=()
+DEPENDENCY_ERRORS=()
 
 usage() {
   cat <<EOF
@@ -34,6 +35,31 @@ EOF
 die() {
   printf '[FAIL] %s\n' "$*" >&2
   exit 1
+}
+
+dependency_error() {
+  DEPENDENCY_ERRORS+=("$*")
+}
+
+require_command_for() {
+  local owner="$1"
+  local command_name="$2"
+
+  command -v "${command_name}" >/dev/null 2>&1 || dependency_error "${owner}: required command not found: ${command_name}"
+}
+
+require_one_command_for() {
+  local owner="$1"
+  shift
+  local command_name=""
+
+  for command_name in "$@"; do
+    if command -v "${command_name}" >/dev/null 2>&1; then
+      return 0
+    fi
+  done
+
+  dependency_error "${owner}: required command not found: one of $*"
 }
 
 parse_args() {
@@ -103,6 +129,58 @@ test_path_for() {
   printf '%s\n' "${test_path}"
 }
 
+validate_selected_tests() {
+  local test_name=""
+
+  for test_name in "${SELECTED_TESTS[@]}"; do
+    test_path_for "${test_name}" >/dev/null || die "Unknown test: ${test_name}"
+  done
+}
+
+check_common_dependencies() {
+  require_command_for "test runner" docker
+  require_command_for "test runner" python3
+
+  if command -v docker >/dev/null 2>&1; then
+    docker compose version >/dev/null 2>&1 || dependency_error "test runner: Docker Compose plugin is required"
+    docker info >/dev/null 2>&1 || dependency_error "test runner: Docker daemon is not accessible"
+  fi
+}
+
+check_test_dependencies() {
+  local test_name="$1"
+
+  case "${test_name}" in
+    dicompot)
+      require_command_for "${test_name}" echoscu
+      require_command_for "${test_name}" getscu
+      require_command_for "${test_name}" dcmdump
+      require_one_command_for "${test_name}" setscu storescu
+      ;;
+  esac
+}
+
+check_dependencies() {
+  local test_name=""
+  local error=""
+
+  DEPENDENCY_ERRORS=()
+  check_common_dependencies
+
+  for test_name in "${SELECTED_TESTS[@]}"; do
+    check_test_dependencies "${test_name}"
+  done
+
+  if [[ ${#DEPENDENCY_ERRORS[@]} -gt 0 ]]; then
+    printf '[FAIL] Missing dependencies for selected smoke tests:\n' >&2
+    for error in "${DEPENDENCY_ERRORS[@]}"; do
+      printf '  - %s\n' "${error}" >&2
+    done
+    printf 'Install the missing tools and retry.\n' >&2
+    exit 1
+  fi
+}
+
 main() {
   parse_args "$@"
   validate_args
@@ -117,6 +195,8 @@ main() {
   fi
 
   [[ ${#SELECTED_TESTS[@]} -gt 0 ]] || die "No tests found in ${TEST_DIR}"
+  validate_selected_tests
+  check_dependencies
 
   local common_args=(--timeout "${TEST_TIMEOUT}" --bind-ip "${TEST_BIND_IP}")
   if [[ "${TEST_KEEP_ARTIFACTS}" == "true" ]]; then
