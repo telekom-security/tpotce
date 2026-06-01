@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/common.sh"
 
 TEST_NAME="citrixhoneypot"
-DEFAULT_IMAGE="dtagdevsec/citrixhoneypot:24.04"
+DEFAULT_IMAGE="dtagdevsec/citrixhoneypot:24.04.1"
 IMAGE=""
 HTTPS_PORT="443"
 LOG_DIR=""

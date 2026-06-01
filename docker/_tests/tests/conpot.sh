@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/common.sh"
 
 TEST_NAME="conpot"
-DEFAULT_IMAGE="dtagdevsec/conpot:24.04"
+DEFAULT_IMAGE="dtagdevsec/conpot:24.04.1"
 IMAGE=""
 IEC104_PORT="2404"
 GUARDIAN_AST_PORT="10001"
