@@ -440,10 +440,12 @@ import sys
 root = Path("/home/cowrie/cowrie")
 personas_root = root / "personas"
 metadata_path = personas_root / "personas.json"
+source_commit_path = root / ".cowrie-source-commit"
 selected_path = Path("/tmp/cowrie/persona")
 runtime_config_path = Path("/tmp/cowrie/runtime/cowrie.cfg")
 protocol_path = root / "src" / "cowrie" / "shell" / "protocol.py"
 offenders = []
+expected_source_commit = "e74275223dbae611344e820364dad0d73338bb90"
 expected_package_managers = {
     "ubuntu-jammy": {"apt", "apt-get", "dpkg"},
     "debian-bookworm-vuln": {"apt", "apt-get", "dpkg"},
@@ -532,12 +534,19 @@ def find_node(root_node, relative_path):
 
 if not metadata_path.is_file():
     fail(f"Missing Cowrie persona metadata: {metadata_path}")
+if not source_commit_path.is_file():
+    fail(f"Missing Cowrie source commit marker: {source_commit_path}")
 if not selected_path.is_file():
     fail(f"Missing selected Cowrie persona file: {selected_path}")
 if not runtime_config_path.is_file():
     fail(f"Missing runtime Cowrie config: {runtime_config_path}")
-if "skip_python_commands" not in protocol_path.read_text(encoding="utf-8"):
+if source_commit_path.read_text(encoding="utf-8").strip() != expected_source_commit:
+    fail("Cowrie source commit does not match expected upstream pin")
+protocol_text = protocol_path.read_text(encoding="utf-8")
+if "skip_python_commands" not in protocol_text:
     fail("Cowrie protocol.py does not contain persona command filtering patch")
+if "operator_path = Path(txtcmds_path) / relpath" not in protocol_text:
+    fail("Cowrie protocol.py does not contain upstream txtcmds_path support")
 
 personas = json.loads(metadata_path.read_text(encoding="utf-8"))
 if len(personas) != 11:

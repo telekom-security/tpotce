@@ -1,4 +1,6 @@
 FROM alpine:3.23
+ARG COWRIE_COMMIT=e74275223dbae611344e820364dad0d73338bb90
+ENV COWRIE_COMMIT=${COWRIE_COMMIT}
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -41,10 +43,12 @@ RUN apk --no-cache -U upgrade && \
 # Install cowrie
     mkdir -p /home/cowrie && \
     cd /home/cowrie && \
-    git clone https://github.com/cowrie/cowrie -b v3.0.0 && \
+    git clone https://github.com/cowrie/cowrie && \
     cd cowrie && \
+    git checkout "${COWRIE_COMMIT}" && \
+    test "$(git rev-parse HEAD)" = "${COWRIE_COMMIT}" && \
+    printf "%s\n" "${COWRIE_COMMIT}" > .cowrie-source-commit && \
     mkdir -p log && \
-    # cp /root/dist/requirements.txt . && \
     pip3 install --break-system-packages --upgrade --no-cache-dir pip && \
     pip3 install --break-system-packages --no-cache-dir -r requirements.txt && \
     pip3 install --break-system-packages --no-cache-dir -e . && \

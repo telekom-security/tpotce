@@ -20,7 +20,17 @@ def replace_all(path, old, new):
 
 def patch_protocol(cowrie_root):
     path = cowrie_root / "src" / "cowrie" / "shell" / "protocol.py"
-    replace_once(path, "import traceback\n", "import traceback\nfrom pathlib import Path\n")
+    text = path.read_text(encoding="utf-8")
+    required_upstream = (
+        "from pathlib import Path",
+        'txtcmds_path = CowrieConfig.get("honeypot", "txtcmds_path", fallback="")',
+        "operator_path = Path(txtcmds_path) / relpath",
+    )
+    missing = [needle for needle in required_upstream if needle not in text]
+    if missing:
+        raise RuntimeError(
+            f"{path} does not contain upstream txtcmds_path support: {missing}"
+        )
     replace_once(
         path,
         """        if cmd in self.commands:
@@ -63,27 +73,6 @@ def patch_protocol(cowrie_root):
 
         if path is None:
             return None
-""",
-    )
-    replace_once(
-        path,
-        """        try:
-            binary_data = read_data_bytes("txtcmds", *path.lstrip("/").split("/"))
-            return self.txtcmd(binary_data)
-        except FileNotFoundError:
-            pass
-""",
-        """        txtcmds_path = CowrieConfig.get("honeypot", "txtcmds_path", fallback="")
-        if txtcmds_path:
-            operator_cmd = Path(txtcmds_path) / path.lstrip("/")
-            if operator_cmd.is_file():
-                return self.txtcmd(operator_cmd.read_bytes())
-
-        try:
-            binary_data = read_data_bytes("txtcmds", *path.lstrip("/").split("/"))
-            return self.txtcmd(binary_data)
-        except FileNotFoundError:
-            pass
 """,
     )
     replace_once(
