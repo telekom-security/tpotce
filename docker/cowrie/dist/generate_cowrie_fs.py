@@ -18,11 +18,15 @@ PERSONAS_DIRNAME = "personas"
 DEFAULT_BOOTSTRAP_PERSONA = "debian-bookworm-vuln"
 FORBIDDEN_MARKERS = [
     "phil",
-    "Ubuntu 22.04",
     "2.6.26-2-686",
     "2.6.26-19lenny",
     "com/ubuntu/upstart",
     "dannf@debian.org",
+]
+UBUNTU_ONLY_MARKERS = [
+    "Ubuntu 22.04",
+    "ID=ubuntu",
+    "Jammy Jellyfish",
 ]
 TXTCMD_PATHS = [
     "bin/df",
@@ -327,6 +331,29 @@ def random_ps_start():
 
 def package_manager_txtcmds(persona):
     family = persona["family"]
+    if family == "ubuntu":
+        apt_version = "apt 2.4.5 (amd64)\n"
+        apt_help = """apt 2.4.5 (amd64)
+Usage: apt [options] command
+
+apt is a commandline package manager and provides commands for
+searching and managing as well as querying information about packages.
+
+Most used commands:
+  list - list packages based on package names
+  search - search in package descriptions
+  show - show package details
+  update - update list of available packages
+  install - install packages
+  remove - remove packages
+  upgrade - upgrade the system by installing/upgrading packages
+"""
+        dpkg_version = "Debian 'dpkg' package management program version 1.21.1ubuntu2.3 (amd64).\n"
+        return {
+            "usr/bin/apt": apt_help,
+            "usr/bin/apt-get": apt_version,
+            "usr/bin/dpkg": dpkg_version,
+        }
     if family == "debian":
         apt_version = "apt 2.6.1 (amd64)\n"
         apt_help = """apt 2.6.1 (amd64)
@@ -434,7 +461,15 @@ def command_inventory_txtcmds(persona):
     family = persona["family"]
     txtcmds = {}
 
-    if family in {"debian", "fedora", "rhel"}:
+    if family == "ubuntu":
+        txtcmds.update(
+            {
+                "usr/bin/lspci": "00:00.0 Host bridge: Intel Corporation 440FX - 82441FX PMC\n00:01.0 ISA bridge: Intel Corporation 82371SB PIIX3 ISA\n00:01.1 IDE interface: Intel Corporation 82371SB PIIX3 IDE\n00:02.0 VGA compatible controller: Device 1234:1111\n",
+                "usr/bin/sudo": "sudo: a password is required\n",
+                "usr/sbin/service": "Usage: service < option > | --status-all | [ service_name [ command | --full-restart ] ]\n",
+            }
+        )
+    elif family in {"debian", "fedora", "rhel"}:
         txtcmds.update(
             {
                 "usr/bin/lspci": "00:00.0 Host bridge: Intel Corporation 440FX - 82441FX PMC\n00:01.0 ISA bridge: Intel Corporation 82371SB PIIX3 ISA\n00:01.1 IDE interface: Intel Corporation 82371SB PIIX3 IDE\n00:02.0 VGA compatible controller: Device 1234:1111\n",
@@ -483,6 +518,18 @@ def server_processes(persona):
     family = persona["family"]
     user = persona["user"]
     start = persona["process_start"]
+    if family == "ubuntu":
+        return [
+            ps_entry("root", 1, "/sbin/init", mem=0.6, vsz=168520, rss=8140, stat="Ss", start=start),
+            ps_entry("root", 308, "/lib/systemd/systemd-journald", mem=0.3, vsz=40632, rss=5192, stat="Ss", start=start),
+            ps_entry("root", 351, "/lib/systemd/systemd-udevd", mem=0.2, vsz=28844, rss=3588, stat="Ss", start=start),
+            ps_entry("systemd+", 569, "/lib/systemd/systemd-networkd", mem=0.2, vsz=24148, rss=4140, stat="Ss", start=start),
+            ps_entry("message+", 691, "/usr/bin/dbus-daemon --system --address=systemd:", mem=0.1, vsz=9240, rss=2984, stat="Ss", start=start),
+            ps_entry("root", 819, "sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups", mem=0.2, vsz=15492, rss=4980, stat="Ss", start=start),
+            ps_entry("root", 858, "/usr/sbin/cron -f -P", mem=0.1, vsz=6816, rss=2196, stat="Ss", start=start),
+            ps_entry("root", 1007, "/usr/bin/python3 /usr/share/unattended-upgrades/unattended-upgrade-shutdown --wait-for-signal", mem=0.2, vsz=27520, rss=6420, stat="S", start=start),
+            ps_entry(user, 1433, "-bash", mem=0.1, vsz=8688, rss=3376, stat="Ss", tty="pts/0", start=start),
+        ]
     if family == "fedora":
         return [
             ps_entry("root", 1, "/usr/lib/systemd/systemd --switched-root --system --deserialize 31", mem=0.6, vsz=177248, rss=8120, stat="Ss", start=start),
@@ -597,6 +644,11 @@ def txtcmds_for_persona(persona):
         mount = "/dev/md9 on / type ext4 (rw,relatime,data=ordered)\nproc on /proc type proc (rw,nosuid,nodev,noexec,relatime)\ntmpfs on /tmp type tmpfs (rw,nosuid,nodev,relatime)\n/dev/mapper/cachedev1 on /share/CACHEDEV1_DATA type ext4 (rw,relatime,data=ordered)\n"
         lscpu = f"Architecture:          {arch}\nCPU(s):                {cpu_count}\nByte Order:            Little Endian\nModel name:            embedded storage processor\n"
         top = "top - 12:00:01 up 14 days,  2:18,  1 user,  load average: 0.08, 0.05, 0.01\nTasks: 102 total,   1 running, 101 sleeping,   0 stopped,   0 zombie\n%Cpu(s):  1.2 us,  0.8 sy,  0.0 ni, 97.6 id,  0.2 wa\n"
+    elif family == "ubuntu":
+        df = "Filesystem     1K-blocks    Used Available Use% Mounted on\nudev              493852       0    493852   0% /dev\ntmpfs             101736     756    100980   1% /run\n/dev/sda1       20509264 4968828  14475488  26% /\ntmpfs             508680       0    508680   0% /dev/shm\ntmpfs               5120       0      5120   0% /run/lock\n"
+        mount = "/dev/sda1 on / type ext4 (rw,relatime,errors=remount-ro)\nproc on /proc type proc (rw,nosuid,nodev,noexec,relatime)\nsysfs on /sys type sysfs (rw,nosuid,nodev,noexec,relatime)\ntmpfs on /run type tmpfs (rw,nosuid,nodev,noexec,relatime,size=101736k,mode=755)\ntmpfs on /run/lock type tmpfs (rw,nosuid,nodev,noexec,relatime,size=5120k)\n"
+        lscpu = f"Architecture:          {arch}\nCPU op-mode(s):        32-bit, 64-bit\nByte Order:            Little Endian\nCPU(s):                {cpu_count}\nModel name:            Intel(R) Xeon(R) CPU E5-2676 v3 @ 2.40GHz\nBogoMIPS:              4800.00\n"
+        top = "top - 12:00:01 up 8 days,  4:22,  1 user,  load average: 0.02, 0.03, 0.00\nTasks: 93 total,   1 running, 92 sleeping,   0 stopped,   0 zombie\n%Cpu(s):  0.3 us,  0.4 sy,  0.0 ni, 99.1 id,  0.1 wa\n"
     else:
         df = "Filesystem     1K-blocks    Used Available Use% Mounted on\nudev              496124       0    496124   0% /dev\ntmpfs             101784     744    101040   1% /run\n/dev/sda1       20509264 4882112  14562204  26% /\ntmpfs             508904       0    508904   0% /dev/shm\n"
         mount = "/dev/sda1 on / type ext4 (rw,relatime,errors=remount-ro)\nproc on /proc type proc (rw,nosuid,nodev,noexec,relatime)\nsysfs on /sys type sysfs (rw,nosuid,nodev,noexec,relatime)\ntmpfs on /run type tmpfs (rw,nosuid,nodev,noexec,relatime,size=101784k)\n"
@@ -698,6 +750,61 @@ def profile(
 
 
 PERSONAS = [
+    profile(
+        "ubuntu-jammy",
+        "ubuntu",
+        "srv01",
+        "ubuntu",
+        1000,
+        1000,
+        "linux-x64-lsb",
+        "5.15.0-23-generic-amd64",
+        "#25~22.04-Ubuntu SMP",
+        "SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.10",
+        "OpenSSH_8.9p1, OpenSSL 3.0.2 15 Mar 2022",
+        "x86_64",
+        "GNU/Linux",
+        server_passwd("ubuntu", 1000, 1000, "Ubuntu"),
+        server_group("ubuntu", 1000),
+        server_shadow("ubuntu"),
+        {
+            "etc/os-release": """PRETTY_NAME="Ubuntu 22.04.4 LTS"
+NAME="Ubuntu"
+VERSION_ID="22.04"
+VERSION="22.04.4 LTS (Jammy Jellyfish)"
+VERSION_CODENAME=jammy
+ID=ubuntu
+ID_LIKE=debian
+HOME_URL="https://www.ubuntu.com/"
+SUPPORT_URL="https://help.ubuntu.com/"
+BUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"
+PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"
+UBUNTU_CODENAME=jammy
+""",
+            "etc/lsb-release": """DISTRIB_ID=Ubuntu
+DISTRIB_RELEASE=22.04
+DISTRIB_CODENAME=jammy
+DISTRIB_DESCRIPTION="Ubuntu 22.04.4 LTS"
+""",
+            "etc/debian_version": "bookworm/sid\n",
+            "etc/issue": "Ubuntu 22.04.4 LTS \\n \\l\n",
+            "etc/issue.net": "Ubuntu 22.04.4 LTS\n",
+            "etc/motd": "Welcome to Ubuntu 22.04.4 LTS (GNU/Linux 5.15.0-23-generic-amd64 x86_64)\n",
+            "etc/apt/sources.list": """deb http://archive.ubuntu.com/ubuntu jammy main restricted
+deb http://archive.ubuntu.com/ubuntu jammy-updates main restricted
+deb http://archive.ubuntu.com/ubuntu jammy universe
+deb http://security.ubuntu.com/ubuntu jammy-security main restricted
+deb http://security.ubuntu.com/ubuntu jammy-security universe
+""",
+            "var/log/apt/history.log": """Start-Date: 2024-04-12  06:32:11
+Commandline: apt upgrade
+Upgrade: openssh-client:amd64 (1:8.9p1-3ubuntu0.6, 1:8.9p1-3ubuntu0.10), openssh-server:amd64 (1:8.9p1-3ubuntu0.6, 1:8.9p1-3ubuntu0.10)
+End-Date: 2024-04-12  06:32:19
+""",
+        },
+        "Ubuntu 22.04 Jammy OpenSSH 8.9p1 server fingerprint",
+        shell="/bin/bash",
+    ),
     profile(
         "debian-bookworm-vuln",
         "debian",
@@ -1355,6 +1462,13 @@ def validate_no_marker(path, marker, offenders):
         offenders.append(str(path))
 
 
+def forbidden_markers_for_persona(persona):
+    markers = list(FORBIDDEN_MARKERS)
+    if persona["id"] != "ubuntu-jammy":
+        markers.extend(UBUNTU_ONLY_MARKERS)
+    return markers
+
+
 def validate_persona(persona, persona_dir, runtime_persona_dir):
     pickle_path = persona_dir / "fs.pickle"
     honeyfs = persona_dir / "honeyfs"
@@ -1368,7 +1482,8 @@ def validate_persona(persona, persona_dir, runtime_persona_dir):
             f"{persona['id']} generated pickle is unexpectedly small: {pickle_path.stat().st_size} bytes"
         )
 
-    for marker in FORBIDDEN_MARKERS:
+    forbidden_markers = forbidden_markers_for_persona(persona)
+    for marker in forbidden_markers:
         validate_no_marker(pickle_path, marker, offenders)
 
     for root in (honeyfs, txtcmds):
@@ -1377,10 +1492,10 @@ def validate_persona(persona, persona_dir, runtime_persona_dir):
                 offenders.append(str(item))
                 continue
             if item.is_file():
-                for marker in FORBIDDEN_MARKERS:
+                for marker in forbidden_markers:
                     validate_no_marker(item, marker, offenders)
 
-    for marker in FORBIDDEN_MARKERS:
+    for marker in forbidden_markers:
         validate_no_marker(config_path, marker, offenders)
         validate_no_marker(cmdoutput_path, marker, offenders)
 
@@ -1399,6 +1514,10 @@ def validate_persona(persona, persona_dir, runtime_persona_dir):
     for marker in required:
         if marker not in pickle_bytes:
             raise RuntimeError(f"{persona['id']} pickle does not contain {marker!r}")
+    if persona["id"] == "ubuntu-jammy":
+        for marker in UBUNTU_ONLY_MARKERS:
+            if marker.encode("utf-8") not in pickle_bytes:
+                raise RuntimeError(f"{persona['id']} pickle does not contain Ubuntu marker {marker!r}")
 
     if persona["ssh_banner"] not in config_path.read_text(encoding="utf-8"):
         raise RuntimeError(f"{persona['id']} config does not contain SSH banner")
@@ -1500,8 +1619,8 @@ def main():
     generated_root.mkdir()
 
     ids = [persona["id"] for persona in PERSONAS]
-    if len(ids) != 10 or len(set(ids)) != len(ids):
-        raise RuntimeError("Expected exactly 10 unique Cowrie personas")
+    if len(ids) != 11 or len(set(ids)) != len(ids):
+        raise RuntimeError("Expected exactly 11 unique Cowrie personas")
 
     for persona in PERSONAS:
         build_persona(default_tree, cowrie_root, generated_root, persona)
