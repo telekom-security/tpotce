@@ -1,5 +1,5 @@
 FROM ubuntu:24.04
-ENV DEBIAN_FRONTEND noninteractive
+ENV DEBIAN_FRONTEND=noninteractive
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -14,8 +14,8 @@ RUN ARCH=$(arch) && \
     apt-get update -y && \
     apt-get upgrade -y && \
     apt-get install wget -y && \
-    wget http://ftp.us.debian.org/debian/pool/main/libe/libemu/libemu2_0.2.0+git20120122-1.2+b1_$ARCH.deb \
-         http://ftp.us.debian.org/debian/pool/main/libe/libemu/libemu-dev_0.2.0+git20120122-1.2+b1_$ARCH.deb && \
+    wget https://archive.debian.org/debian/pool/main/libe/libemu/libemu2_0.2.0+git20120122-1.2+b1_$ARCH.deb \
+         https://archive.debian.org/debian/pool/main/libe/libemu/libemu-dev_0.2.0+git20120122-1.2+b1_$ARCH.deb && \
     apt-get install ./libemu2_0.2.0+git20120122-1.2+b1_$ARCH.deb \
                 ./libemu-dev_0.2.0+git20120122-1.2+b1_$ARCH.deb -y && \
     apt-get install -y --no-install-recommends \
@@ -85,11 +85,11 @@ RUN ARCH=$(arch) && \
       libtool \
       libudns-dev \
       python3 \
-      python3-dev \   
+      python3-dev \
       python3-boto3 \
       python3-bson \
-      python3-yaml \ 
-      wget && \ 
+      python3-yaml \
+      wget && \
 #
     apt-get install -y \
       ca-certificates \

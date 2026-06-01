@@ -347,9 +347,6 @@ services:
      - "1723:1723"
      - "1883:1883"
      - "3306:3306"
-     # - "5060:5060"
-     # - "5060:5060/udp"
-     # - "5061:5061"
      - "27017:27017"
     image: ${TPOT_REPO}/dionaea:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}

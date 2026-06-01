@@ -16,6 +16,7 @@ not touch production `data/` or `data_backup/` paths.
 ./docker/_tests/run.sh conpot
 ./docker/_tests/run.sh cowrie
 ./docker/_tests/run.sh ddospot
+./docker/_tests/run.sh dionaea
 ./docker/_tests/run.sh dicompot
 ```
 
@@ -43,9 +44,17 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/cowrie.sh --persona openwrt-1806
 ./docker/_tests/tests/ddospot.sh
 ./docker/_tests/tests/ddospot.sh --dns-port 1053 --ntp-port 1123 --ssdp-port 19000
+./docker/_tests/tests/dionaea.sh
+./docker/_tests/tests/dionaea.sh --ftp-port 2121
 ./docker/_tests/tests/dicompot.sh
 ./docker/_tests/tests/dicompot.sh --host-port 11112
 ```
+
+The Dionaea test maps the tested service ports to temporary loopback ports,
+mounts a temporary config without `services/sip.yaml`, and skips the SIP ports
+`5060/tcp`, `5060/udp`, and `5061/tcp`. The `--ftp-port` option pins only the
+host-side FTP control port; every other tested Dionaea port remains dynamically
+assigned.
 
 The Dicompot test additionally requires DCMTK client tools on the host:
 `echoscu`, `getscu`, `dcmdump`, and either `setscu` or `storescu`.
