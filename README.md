@@ -75,7 +75,7 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/in
   - [T-Pot Data Folder](#t-pot-data-folder)
   - [Log Persistence](#log-persistence)
   - [Factory Reset](#factory-reset)
-  - [Show Containers](#show-containers)
+  - [Show Containers and Images](#show-containers-and-images)
   - [Blackhole](#blackhole)
   - [Add Users to Nginx (T-Pot WebUI)](#add-users-to-nginx-t-pot-webui)
   - [Import and Export Kibana Objects](#import-and-export-kibana-objects)
@@ -356,7 +356,7 @@ Once you are familiar with how things work you should choose a network you suspe
      * Install recommended packages
      * Remove packages known to cause issues
      * Add the current user to the docker group (allow docker interaction without `sudo`)
-     * Add `dps` and `dpsw` aliases (`grc docker ps -a`, `watch -c "grc --colour=on docker ps -a`)
+     * Add `dps`, `dpsw` and `dim` aliases for formatted container and image overviews
      * Add `la`, `ll` and `ls` aliases (for `exa`, a improved `ls` command)
      * Add `mi` (for `micro`, a great alternative to `vi` and / or `nano`)
      * Display open ports on the host (compare with T-Pot [required](https://github.com/telekom-security/tpotce#required-ports) ports)
@@ -430,7 +430,7 @@ You can also login from your browser and access the T-Pot WebUI and tools: `http
 <br><br>
 
 ## Standalone First Start
-There is not much to do except to login and check via `dps` if all services and honeypots are starting up correctly and login to Kibana and / or Geoip Attack Map to monitor the attacks.
+There is not much to do except to login and check via `dps` if all services and honeypots are starting up correctly. You can use `dim` to review the installed Docker images including their `CREATED` age, then login to Kibana and / or Geoip Attack Map to monitor the attacks.
 <br><br>
 
 ## Distributed Deployment
@@ -713,8 +713,8 @@ git reset --hard
 5. Now you can run `~/tpotce/install.sh`.
 <br><br>
 
-## Show Containers
-You can show all T-Pot relevant containers by running `dps` or `dpsw [interval]`. The `interval (s)` will re-run `dps` periodically.
+## Show Containers and Images
+You can show all T-Pot relevant containers by running `dps` or `dpsw [interval]`. The `interval (s)` will re-run `dps` periodically. Use `dim` to show locally available Docker images including the `CREATED` column.
 <br><br>
 
 ## Blackhole
@@ -759,6 +759,7 @@ Generally T-Pot is offered ***as is*** without any commitment regarding support.
 
 ## Logs
 * Check if your containers are running correctly: `dps`
+* Check locally available Docker images and their age: `dim`
 * Check if your system resources are not exhausted: `htop`, `docker stats`
 * Check if there is a port conflict:
 ```

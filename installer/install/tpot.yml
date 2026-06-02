@@ -764,6 +764,7 @@
         path: ~/.bashrc
         block: |
           alias dps='{{ "grc --colour=on " if ansible_distribution != "RedHat" else "" }}docker ps -f status=running -f status=exited --format "table {{'{{'}}.Names{{'}}'}}\\t{{'{{'}}.Status{{'}}'}}\\t{{'{{'}}.Ports{{'}}'}}" | sort'
+          alias dim='{{ "grc --colour=on " if ansible_distribution != "RedHat" else "" }}docker images --format "table {{'{{'}}.Repository{{'}}'}}\\t{{'{{'}}.Tag{{'}}'}}\\t{{'{{'}}.ID{{'}}'}}\\t{{'{{'}}.Size{{'}}'}}\\t{{'{{'}}.CreatedSince{{'}}'}}\\t{{'{{'}}.Repository{{'}}'}}:{{'{{'}}.Tag{{'}}'}}"'
           alias dpsw='watch -c bash -ic dps'
           alias mi='micro'
           alias sudo='sudo '
