@@ -243,6 +243,15 @@ services:
       context: ../miniprint/
       <<: *common-build
 
+# RDPHoneypot
+  rdphoneypot:
+    image: ${TPOT_DOCKER_REPO}/rdphoneypot:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/rdphoneypot:${TPOT_VERSION}
+      context: ../rdphoneypot/
+      <<: *common-build
+
 # Redishoneypot
   redishoneypot:
     image: ${TPOT_DOCKER_REPO}/redishoneypot:${TPOT_VERSION}
@@ -418,4 +427,3 @@ services:
         - ${TPOT_GHCR_REPO}/spiderfoot:${TPOT_VERSION}
       context: ../spiderfoot/
       <<: *common-build
-

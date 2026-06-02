@@ -7,6 +7,7 @@ T-Pot 24.04.1 brings significant updates and exciting new honeypot additions, es
 * **Honeyaml** a configurable API server honeypot even supporting JWT-based HTTP bearer/token authentication.
 * **H0neytr4p** a HTTP/S honeypot capable of emulating vulnerabilities using configurable traps.
 * **Miniprint** a medium-interaction printer honeypot.
+* **RDPHoneypot** a Remote Desktop honeypot for RDP connection and credential telemetry.
 
 ## Updates
 * **Honeypots** were updated to their latest pushed code and / or releases.

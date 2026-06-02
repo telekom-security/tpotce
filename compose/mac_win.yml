@@ -14,6 +14,7 @@ networks:
   mailoney_local:
   medpot_local:
   miniprint_local:
+  rdphoneypot_local:
   redishoneypot_local:
   sentrypeer_local:
   suricata_local:
@@ -338,6 +339,24 @@ services:
     volumes:
      - ${TPOT_DATA_PATH}/miniprint/log/:/opt/miniprint/log/
      - ${TPOT_DATA_PATH}/miniprint/uploads/:/opt/miniprint/uploads/
+
+# RDPHoneypot service
+  rdphoneypot:
+    container_name: rdphoneypot
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+    networks:
+     - rdphoneypot_local
+    ports:
+     - "3389:3389"
+    image: ${TPOT_REPO}/rdphoneypot:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    read_only: true
+    volumes:
+     - ${TPOT_DATA_PATH}/rdphoneypot/cert:/opt/rdphoneypot/cert
+     - ${TPOT_DATA_PATH}/rdphoneypot/log:/opt/rdphoneypot/log
 
 # Redishoneypot service
   redishoneypot:

@@ -349,6 +349,14 @@ fuNGINX () {
   chown tpot:tpot /data/nginx -R
 }
 
+# Let's create a function to clean up and prepare rdphoneypot data
+fuRDPHONEYPOT () {
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/rdphoneypot/*; fi
+  mkdir -vp /data/rdphoneypot/{cert,log}
+  chmod 770 /data/rdphoneypot -R
+  chown tpot:tpot /data/rdphoneypot -R
+}
+
 # Let's create a function to clean up and prepare redishoneypot data
 fuREDISHONEYPOT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/redishoneypot/log; fi
@@ -459,6 +467,7 @@ fuMAILONEY
 fuMEDPOT
 fuMINIPRINT
 fuNGINX
+fuRDPHONEYPOT
 fuREDISHONEYPOT
 fuSENTRYPEER
 fuSPIDERFOOT
