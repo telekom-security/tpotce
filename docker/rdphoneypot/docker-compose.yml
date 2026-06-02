@@ -1,0 +1,19 @@
+networks:
+  rdphoneypot_local:
+
+services:
+
+# RDPHoneypot service
+  rdphoneypot:
+    build: .
+    container_name: rdphoneypot
+    restart: always
+    networks:
+     - rdphoneypot_local
+    ports:
+     - "3389:3389"
+    image: "dtagdevsec/rdphoneypot:24.04.1"
+    read_only: true
+    volumes:
+     - $HOME/tpotce/data/rdphoneypot/cert:/opt/rdphoneypot/cert
+     - $HOME/tpotce/data/rdphoneypot/log:/opt/rdphoneypot/log

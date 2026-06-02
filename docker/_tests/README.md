@@ -19,6 +19,7 @@ not touch production `data/` or `data_backup/` paths.
 ./docker/_tests/run.sh dionaea
 ./docker/_tests/run.sh dicompot
 ./docker/_tests/run.sh elasticpot
+./docker/_tests/run.sh rdphoneypot
 ```
 
 Common options:
@@ -51,6 +52,8 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/dicompot.sh --host-port 11112
 ./docker/_tests/tests/elasticpot.sh
 ./docker/_tests/tests/elasticpot.sh --http-port 19200
+./docker/_tests/tests/rdphoneypot.sh
+./docker/_tests/tests/rdphoneypot.sh --rdp-port 13389
 ```
 
 The Dionaea test maps the tested service ports to temporary loopback ports,
@@ -61,6 +64,9 @@ assigned.
 
 The Dicompot test additionally requires DCMTK client tools on the host:
 `echoscu`, `getscu`, `dcmdump`, and either `setscu` or `storescu`.
+
+The RDPHoneypot test also verifies that `server.pem` is written to the
+persistent cert volume and remains unchanged after a container restart.
 
 ## Conventions
 
