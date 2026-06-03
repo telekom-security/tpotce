@@ -16,11 +16,11 @@ RUN apk -U add --no-cache \
     make && \
     mv /opt/endlessh/endlessh /root/dist
 #
-FROM alpine:3.20
+FROM alpine:3.23
 RUN apk --no-cache -U upgrade
 COPY --from=builder /root/dist/* /opt/endlessh/
 #
 STOPSIGNAL SIGINT
 USER 2000:2000
 WORKDIR /opt/endlessh/
-CMD ./endlessh -f endlessh.conf >/var/log/endlessh/endlessh.log
+CMD ["sh", "-c", "exec ./endlessh -f endlessh.conf >/var/log/endlessh/endlessh.log"]
