@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/common.sh"
 
 TEST_NAME="fatt"
-DEFAULT_IMAGE="ghcr.io/telekom-security/fatt:24.04.1"
+DEFAULT_IMAGE="dtagdevsec/fatt:24.04.1"
 IMAGE=""
 LOG_DIR=""
 LOG_FILE=""
