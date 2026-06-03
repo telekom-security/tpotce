@@ -1,4 +1,4 @@
-FROM alpine:3.20
+FROM alpine:3.23
 #
 # Install packages
 RUN apk --no-cache -U upgrade && \
@@ -39,7 +39,7 @@ RUN apk --no-cache -U upgrade && \
 #
 # Start fatt
 STOPSIGNAL SIGINT
-ENV PYTHONPATH /opt/fatt
+ENV PYTHONPATH=/opt/fatt
 WORKDIR /opt/fatt
 USER fatt:fatt
-CMD python3 fatt.py -i $(ip route | grep "^default" | awk '{ print $5 }') --print_output --json_logging -o log/fatt.log
+CMD ["sh", "-c", "exec python3 fatt.py -i $(ip route | grep \"^default\" | awk '{ print $5 }') --print_output --json_logging -o log/fatt.log"]

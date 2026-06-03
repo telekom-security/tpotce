@@ -20,6 +20,7 @@ not touch production `data/` or `data_backup/` paths.
 ./docker/_tests/run.sh dicompot
 ./docker/_tests/run.sh elasticpot
 ./docker/_tests/run.sh endlessh
+./docker/_tests/run.sh fatt
 ./docker/_tests/run.sh rdphoneypot
 ```
 
@@ -55,6 +56,7 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/elasticpot.sh --http-port 19200
 ./docker/_tests/tests/endlessh.sh
 ./docker/_tests/tests/endlessh.sh --ssh-port 2222
+./docker/_tests/tests/fatt.sh
 ./docker/_tests/tests/rdphoneypot.sh
 ./docker/_tests/tests/rdphoneypot.sh --rdp-port 13389
 ```
