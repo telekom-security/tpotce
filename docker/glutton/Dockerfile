@@ -1,4 +1,4 @@
-FROM golang:1.23-alpine AS builder
+FROM golang:1.26-alpine AS builder
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -21,7 +21,7 @@ RUN apk --no-cache -U upgrade && \
     make build && \
 	cp /root/dist/*.yaml /opt/glutton/config/
 #
-FROM alpine:3.22
+FROM alpine:3.23
 #
 COPY --from=builder /opt/glutton/bin /opt/glutton/bin
 COPY --from=builder /opt/glutton/config /opt/glutton/config
@@ -39,4 +39,4 @@ RUN apk -U --no-cache upgrade && \
 # Start glutton 
 WORKDIR /opt/glutton
 USER 2000:2000
-CMD exec bin/server -d true -i $(ip route | grep "^default" | awk '{ print $5 }') -l /var/log/glutton/glutton.log > /dev/null 2>&1
+CMD ["sh", "-c", "exec bin/server -d true -i $(ip route | grep \"^default\" | awk '{ print $5 }') -l /var/log/glutton/glutton.log > /dev/null 2>&1"]
