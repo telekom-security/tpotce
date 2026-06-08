@@ -14,7 +14,7 @@ services:
      - go-pot_local
     ports:
       - "8080:8080"
-    image: dtagdevsec/go-pot:24.04
+    image: dtagdevsec/go-pot:24.04.1
     read_only: true
     volumes:
      - $HOME/tpotce/data/go-pot/log/:/opt/go-pot/log/
