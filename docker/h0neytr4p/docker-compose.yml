@@ -14,7 +14,10 @@ services:
      - h0neytr4p_local
     ports:
       - "80:80"
+      - "8080:80"
       - "443:443"
+      - "2087:443"
+      - "8443:443"
     image: "ghcr.io/telekom-security/h0neytr4p:24.04.1"
     read_only: true
     volumes:
