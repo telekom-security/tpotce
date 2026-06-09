@@ -22,6 +22,7 @@ not touch production `data/` or `data_backup/` paths.
 ./docker/_tests/run.sh endlessh
 ./docker/_tests/run.sh fatt
 ./docker/_tests/run.sh go-pot
+./docker/_tests/run.sh h0neytr4p
 ./docker/_tests/run.sh hellpot
 ./docker/_tests/run.sh rdphoneypot
 ```
@@ -61,6 +62,8 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/fatt.sh
 ./docker/_tests/tests/go-pot.sh
 ./docker/_tests/tests/go-pot.sh --http-port 18080
+./docker/_tests/tests/h0neytr4p.sh
+./docker/_tests/tests/h0neytr4p.sh --http-port 18080 --https-port 18443
 ./docker/_tests/tests/hellpot.sh
 ./docker/_tests/tests/hellpot.sh --http-port 18080
 ./docker/_tests/tests/rdphoneypot.sh
