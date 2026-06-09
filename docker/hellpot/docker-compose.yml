@@ -14,7 +14,7 @@ services:
      - hellpot_local
     ports:
      - "80:8080"
-    image: "dtagdevsec/hellpot:24.04"
+    image: "ghcr.io/telekom-security/hellpot:24.04.1"
     read_only: true
     volumes:
      - $HOME/tpotce/data/hellpot/log:/var/log/hellpot

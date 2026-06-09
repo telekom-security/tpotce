@@ -1,4 +1,4 @@
-FROM golang:1.23-alpine AS builder
+FROM golang:1.26-alpine AS builder
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -12,9 +12,8 @@ RUN apk --no-cache -U upgrade && \
 #
 # Setup go, hellpot
     cd /root && \
-    git clone https://github.com/yunginnanet/HellPot && \
+    git clone https://github.com/t3chn0m4g3/HellPot -b v0.60 && \
     cd HellPot && \
-    git checkout c48b70110148918255f93df4fa49c675ba5a5754 && \
     sed -i 's#logFileName := "HellPot"#logFileName := "hellpot"#g' internal/config/logger.go && \
     go mod download && \
     go vet -v ./... && \

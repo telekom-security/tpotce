@@ -22,8 +22,10 @@
   [http.router]
     # Toggling this to true will cause all GET requests to match. Forces makerobots = false.
     catchall = true
+
     # Toggling this to false will prevent creation of robots.txt handler.
     makerobots = true
+    
     # Handlers will be created for these paths, as well as robots.txt entries. Only valid if catchall = false.
     paths = [
       "wp-json/omapp/v1/support", 
@@ -87,16 +89,24 @@
     ]
     
 [logger]
-  # verbose (-v)
-  debug = true
-  # extra verbose (-vv)
+  # Keep container logs quiet by default.
+  debug = false
   trace = false
+
+  # Send structured logs to stdout and disable file logging.
+  docker_logging = false
+
   # JSON log files will be stored in the below directory.
   directory = "/var/log/hellpot/"
+
   # disable all color in console output. when using Windows this will default to true.
-  nocolor = true 
-  # toggles the use of the current date as the names for new log files.
+  nocolor = true
+
+  # Ignored when docker_logging is true.
   use_date_filename = false
+
+  # Go time format used by pretty console logs when docker_logging is false.
+  console_time_format = "15:04"
 
 [performance]
   # max_workers is only valid if restrict_concurrency is true
