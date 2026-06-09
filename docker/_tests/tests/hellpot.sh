@@ -11,6 +11,7 @@ DEFAULT_IMAGE="dtagdevsec/hellpot:24.04.1"
 IMAGE=""
 HTTP_PORT=""
 LOG_DIR=""
+CONTAINER_USER=""
 MAPPED_HTTP_PORT=""
 
 usage() {
@@ -99,6 +100,11 @@ prepare_hellpot_harness() {
 
   mkdir -p "${LOG_DIR}"
   chmod 0777 "${LOG_DIR}"
+  if chown 2000:2000 "${LOG_DIR}" >/dev/null 2>&1; then
+    CONTAINER_USER="2000:2000"
+  else
+    CONTAINER_USER="$(id -u):$(id -g)"
+  fi
 
   local port_mapping="${TEST_BIND_IP}::8080"
   if [[ -n "${HTTP_PORT}" ]]; then
@@ -112,7 +118,7 @@ services:
     container_name: "${TEST_CONTAINER_NAME}"
     restart: "no"
     read_only: true
-    user: "2000:2000"
+    user: "${CONTAINER_USER}"
     ports:
       - "${port_mapping}"
     volumes:
@@ -280,7 +286,7 @@ run_stream_probe_with_retries() {
   return 1
 }
 
-wait_for_json_log_event() {
+wait_for_log_event() {
   local token="$1"
 
   python3 - "${LOG_DIR}" "${token}" "${TEST_TIMEOUT}" <<'PY'
@@ -300,6 +306,15 @@ def has_token(value):
     return isinstance(value, str) and token in value
 
 
+def is_matching_plaintext(line):
+    return (
+        "NEW" in line
+        and "URL=" in line
+        and "USERAGENT=" in line
+        and token in line
+    )
+
+
 while time.monotonic() < deadline:
     files = sorted(path for path in log_dir.rglob("*") if path.is_file())
 
@@ -312,22 +327,28 @@ while time.monotonic() < deadline:
 
         for line_number, line in enumerate(lines, 1):
             stripped = line.strip()
-            if not stripped or not stripped.startswith("{"):
+            if not stripped:
                 continue
 
-            try:
-                event = json.loads(stripped)
-            except json.JSONDecodeError as exc:
-                print(f"Invalid JSON in {log_file}:{line_number}: {exc}", file=sys.stderr)
-                sys.exit(1)
+            if stripped.startswith("{"):
+                try:
+                    event = json.loads(stripped)
+                except json.JSONDecodeError as exc:
+                    print(f"Invalid JSON in {log_file}:{line_number}: {exc}", file=sys.stderr)
+                    sys.exit(1)
 
-            if (
-                isinstance(event, dict)
-                and event.get("message") == "NEW"
-                and has_token(event.get("USERAGENT"))
-                and has_token(event.get("URL"))
-            ):
-                print(f"HellPot NEW event found in {log_file}:{line_number}")
+                if (
+                    isinstance(event, dict)
+                    and event.get("message") == "NEW"
+                    and has_token(event.get("USERAGENT"))
+                    and has_token(event.get("URL"))
+                ):
+                    print(f"HellPot JSON NEW event found in {log_file}:{line_number}")
+                    sys.exit(0)
+                continue
+
+            if is_matching_plaintext(stripped):
+                print(f"HellPot plaintext NEW event found in {log_file}:{line_number}")
                 sys.exit(0)
 
     if not files:
@@ -336,7 +357,7 @@ while time.monotonic() < deadline:
 
 if last_error:
     print(last_error, file=sys.stderr)
-print(f"No matching HellPot NEW event found for token {token}", file=sys.stderr)
+print(f"No matching HellPot log event found for token {token}", file=sys.stderr)
 sys.exit(1)
 PY
 }
@@ -391,8 +412,8 @@ main() {
   run_stream_probe_with_retries "${token}" || test_die "HellPot stream probe failed on ${TEST_BIND_IP}:${MAPPED_HTTP_PORT}"
   test_wait_for_container || test_die "HellPot container stopped after stream probe"
 
-  test_info "Waiting for HellPot JSON log event"
-  wait_for_json_log_event "${token}" || test_die "Expected HellPot NEW event was not found in logs"
+  test_info "Waiting for HellPot log event"
+  wait_for_log_event "${token}" || test_die "Expected HellPot NEW event was not found in logs"
   test_ok "HellPot NEW event was written to logs"
 
   assert_no_runtime_errors
