@@ -47,7 +47,7 @@ services:
      - "9100:9100"
      - "9200:9200"
      - "11211:11211"
-    image: "dtagdevsec/honeypots:24.04"
+    image: "dtagdevsec/honeypots:24.04.1"
     read_only: true
     volumes:
      - $HOME/tpotce/data/honeypots/log:/var/log/honeypots

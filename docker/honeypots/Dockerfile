@@ -1,4 +1,4 @@
-FROM alpine:3.20
+FROM alpine:3.23
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -31,6 +31,7 @@ RUN apk --no-cache -U upgrade && \
 		py3-jinja2 \
 		py3-ldap3 \
 		py3-markupsafe \
+		py3-netifaces \
 		py3-openssl \
 		py3-packaging \
 		py3-pip \
@@ -48,8 +49,8 @@ RUN apk --no-cache -U upgrade && \
     cd /opt/ && \
     git clone https://github.com/qeeqbox/honeypots && \
     cd honeypots && \
-	# git checkout 238c6732d28b36ab88f2008361bafc8aef054755 && \
-	git checkout 3f52129fbe9a712e86c54207ceb088c3b2c2af17 && \
+	git checkout f337a32e3351e2add3a455a3bcaf1f02ded5744b && \
+	# git checkout 3f52129fbe9a712e86c54207ceb088c3b2c2af17 && \
     pip3 install --break-system-packages --no-cache-dir . && \
     setcap cap_net_bind_service=+ep $(readlink -f $(type -P python3)) && \
 #
@@ -79,4 +80,4 @@ RUN apk --no-cache -U upgrade && \
 STOPSIGNAL SIGINT
 USER honeypots:honeypots
 WORKDIR /opt/honeypots/
-CMD python3 -E -m honeypots --setup all --config config.json
+CMD ["python3", "-E", "-m", "honeypots", "--setup", "all", "--config", "config.json"]
