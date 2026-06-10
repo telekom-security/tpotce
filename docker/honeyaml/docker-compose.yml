@@ -14,7 +14,7 @@ services:
      - honeyaml_local
     ports:
       - "8080:8080"
-    image: dtagdevsec/honeyaml:24.04
+    image: dtagdevsec/honeyaml:24.04.1
     read_only: true
     volumes:
      - $HOME/tpotce/data/honeyaml/log/:/opt/honeyaml/log/

@@ -9,7 +9,7 @@ RUN apt update && \
 RUN update-ca-certificates
 RUN git clone https://github.com/t3chn0m4g3/honeyaml /opt/honeyaml && \
     cd /opt/honeyaml && \
-    git checkout 9648c27bb31ad554ccabfdd9aeb77028219f24b0
+    git checkout 79b48b36c23ab651353ef072313b99a0996d82ac
 #
 WORKDIR /opt/honeyaml
 # Need to dynamically link, otherwise multi platform builds are breaking with zstd-sys
