@@ -1,5 +1,5 @@
 FROM ubuntu:22.04
-ENV DEBIAN_FRONTEND noninteractive
+ENV DEBIAN_FRONTEND=noninteractive
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -28,7 +28,6 @@ RUN apt-get update && \
 # Install honeytrap from source
     git clone https://github.com/t3chn0m4g3/honeytrap /root/honeytrap && \
     cd /root/honeytrap/ && \
-#    git checkout 9aa4f734f2ea2f0da790b02d79afe18204a23982 && \
     autoreconf -vfi && \
     ./configure \
       --with-stream-mon=nfq \
