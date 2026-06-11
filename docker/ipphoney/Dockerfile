@@ -1,4 +1,4 @@
-FROM alpine:3.20 AS builder
+FROM alpine:3.23 AS builder
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -34,25 +34,25 @@ RUN apk --no-cache -U upgrade && \
 		python3-dev && \
     mkdir -p /opt && \
     cd /opt/ && \
-    git clone https://gitlab.com/bontchev/ipphoney.git/ && \
+    git clone https://gitlab.com/bontchev/ipphoney.git/ -b v2.0.2 && \
     cd ipphoney && \
-    git checkout 9da0a9e7f9d839e4522f56b3bb2b790d87d65457 && \
     cp /root/dist/requirements.txt .
 WORKDIR /opt/ipphoney
 RUN pip3 install --break-system-packages pyinstaller
 RUN pip3 install --break-system-packages -r requirements.txt
-RUN pyinstaller ipphoney.py \
+RUN pyinstaller honeypot.py \
 		--hidden-import output_plugins \
 		--hidden-import output_plugins.jsonlog
+RUN ls /opt/ipphoney -alR
 #
-FROM alpine:3.20
+FROM alpine:3.23
 RUN apk --no-cache -U upgrade
-COPY --from=builder /opt/ipphoney/dist/ /opt/
-COPY --from=builder /opt/ipphoney/responses/ /opt/ipphoney/responses/
+COPY --from=builder /opt/ipphoney/dist/* /opt/ipphoney/
+COPY --from=builder /opt/ipphoney/ipphoney/data/responses/ /opt/ipphoney/responses/
 COPY dist/honeypot.cfg /opt/ipphoney/etc/
 #
 # Start ipphoney
 STOPSIGNAL SIGINT
 USER 2000:2000
 WORKDIR /opt/ipphoney/
-CMD ["./ipphoney"]
+CMD ["./honeypot"]
