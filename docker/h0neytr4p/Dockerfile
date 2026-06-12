@@ -3,7 +3,7 @@ WORKDIR /app
 #
 RUN apk -U upgrade
 RUN apk -U add ca-certificates git openssl
-RUN git clone https://github.com/t3chn0m4g3/h0neytr4p -b v0.42 /app
+RUN git clone https://github.com/t3chn0m4g3/h0neytr4p -b v0.43 /app
 RUN go mod download
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/h0neytr4p .
 RUN openssl req \
