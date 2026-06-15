@@ -1,62 +1,62 @@
-FROM ubuntu:24.04
-ENV DEBIAN_FRONTEND=noninteractive
+# syntax=docker/dockerfile:1
+FROM --platform=$BUILDPLATFORM alpine:3.23 AS log4pot-src
 #
-# Install packages
-RUN apt-get update -y && \
-    apt-get upgrade -y && \
-    apt-get install -y \
-		build-essential \
-		cargo \
-		cleo \
-		git \
-		libcap2 \
-		libcap2-bin \
-		libcurl4t64 \
-		libcurl4-gnutls-dev \
-		libffi8 \
-		libffi-dev \
-		libssl-dev \
-		python3-pip \
-		python3 \
-		python3-dev \
-		rust-all && \
-	pip3 install --no-cache-dir --break-system-packages \
-		poetry==1.8.3 \
-		pycurl && \
-#	     
-# Install log4pot from GitHub and setup
-    mkdir -p /opt /var/log/log4pot && \
-    cd /opt/ && \
-    git clone https://github.com/thomaspatzke/Log4Pot && \
-    cd Log4Pot && \
-    git checkout 5002b1fe0f82359ef32dbc3a899e8a701dc3256e && \
+# Fetch log4pot source on the build platform to keep multiarch builds light.
+RUN apk --no-cache -U add \
+		ca-certificates \
+		git && \
+    mkdir -p /opt/Log4Pot && \
+    cd /opt/Log4Pot && \
+    git -c init.defaultBranch=master init --quiet && \
+    git remote add origin https://github.com/thomaspatzke/Log4Pot && \
+    git fetch --quiet --depth 1 origin 5002b1fe0f82359ef32dbc3a899e8a701dc3256e && \
+    git -c advice.detachedHead=false checkout --quiet FETCH_HEAD && \
     sed -i 's#"type": logtype,#"reason": logtype,#g' log4pot-server.py && \
-	rm poetry.lock && \
-    poetry --no-cache --without=dev install && \
-    setcap cap_net_bind_service=+ep $(readlink -f $(which python3)) && \
+    rm -rf .git
 #
-# Setup user, groups and configs
-    addgroup --gid 2000 log4pot && \
-    adduser --system --no-create-home --shell /bin/bash -uid 2000 --disabled-password --disabled-login -gid 2000 log4pot && \
-    chown log4pot:log4pot -R /opt/Log4Pot && \
+FROM --platform=$BUILDPLATFORM alpine:3.23 AS python-deps
+ARG TARGETARCH
+#
+# Resolve wheel-only Python dependencies on the build platform for the target platform.
+RUN apk --no-cache -U add py3-uv && \
+    case "${TARGETARCH}" in \
+		amd64) UV_PLATFORM="x86_64-unknown-linux-musl" ;; \
+		arm64) UV_PLATFORM="aarch64-unknown-linux-musl" ;; \
+		*) echo "Unsupported target architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+	esac && \
+    uv pip install \
+		--target /opt/python-deps \
+		--python-version 3.12 \
+		--python-platform "${UV_PLATFORM}" \
+		--no-cache \
+		--only-binary :all: \
+		azure-storage-blob==12.30.0
+#
+FROM alpine:3.23
+ENV PYTHONPATH=/opt/python-deps
+#
+# Install runtime packages
+RUN apk --no-cache -U upgrade && \
+    apk --no-cache -U add \
+		ca-certificates \
+		libcap \
+		py3-boto3 \
+		py3-curl \
+		py3-pandas \
+		python3 && \
+#
+# Setup user, groups, capabilities and writable paths
+    mkdir -p /var/log/log4pot/log /var/log/log4pot/payloads && \
+    addgroup -g 2000 log4pot && \
+    adduser -S -H -s /bin/ash -u 2000 -D -G log4pot log4pot && \
+    chown -R log4pot:log4pot /var/log/log4pot && \
+    setcap cap_net_bind_service=+ep $(readlink -f /usr/bin/python3) && \
 #
 # Clean up
-    apt-get purge -y build-essential \
-		cargo \
-		git \
-		libcurl4-gnutls-dev \
-		libffi-dev \
-		libssl-dev \
-		python3-dev \
-		python3-pip \
-		rust-all && \
-    apt-get autoremove -y --purge && \
-    apt-get clean && \
-	rm -rf /var/lib/apt/lists/* \
-		/tmp/* \
-		/var/tmp/* \
-		/root/.cache \
-		/opt/Log4Pot/.git
+    rm -rf /root/* /var/cache/apk/*
+#
+COPY --from=python-deps /opt/python-deps /opt/python-deps
+COPY --from=log4pot-src --chown=2000:2000 /opt/Log4Pot /opt/Log4Pot
 #
 # Start log4pot
 STOPSIGNAL SIGINT

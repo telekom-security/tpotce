@@ -27,6 +27,7 @@ not touch production `data/` or `data_backup/` paths.
 ./docker/_tests/run.sh heralding
 ./docker/_tests/run.sh honeyaml
 ./docker/_tests/run.sh honeypots
+./docker/_tests/run.sh log4pot
 ./docker/_tests/run.sh rdphoneypot
 ```
 
@@ -75,6 +76,8 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/honeyaml.sh --image dtagdevsec/honeyaml:24.04.1
 ./docker/_tests/tests/honeypots.sh
 ./docker/_tests/tests/honeypots.sh --image dtagdevsec/honeypots:24.04.1
+./docker/_tests/tests/log4pot.sh
+./docker/_tests/tests/log4pot.sh --image log4pot:alpine-check --http-port 18080
 ./docker/_tests/tests/rdphoneypot.sh
 ./docker/_tests/tests/rdphoneypot.sh --rdp-port 13389
 ```
