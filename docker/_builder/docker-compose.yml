@@ -340,6 +340,15 @@ services:
       context: ../p0f/
       <<: *common-build
 
+# Satori
+  satori:
+    image: ${TPOT_DOCKER_REPO}/satori:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/satori:${TPOT_VERSION}
+      context: ../satori/
+      <<: *common-build
+
 # Suricata
   suricata:
     image: ${TPOT_DOCKER_REPO}/suricata:${TPOT_VERSION}

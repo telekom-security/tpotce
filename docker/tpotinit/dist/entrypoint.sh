@@ -326,12 +326,12 @@ echo
 # Update permissions
 update_permissions
 
-# Update interface settings (p0f and Suricata) and setup iptables to support NFQ based honeypots (glutton, honeytrap)
+# Update interface settings (NSM services) and setup iptables to support NFQ based honeypots (glutton, honeytrap)
 ### This is currently not supported on Docker for Desktop, only on Docker Engine for Linux
 if [ "${TPOT_OSTYPE}" == "linux" ];
   then
     echo
-    echo "# Get IF, disable offloading, enable promiscious mode for p0f and suricata ..."
+    echo "# Get IF, disable offloading, enable promiscious mode for NSM services ..."
     echo
     ethtool --offload $(/sbin/ip address | grep "^2: " | awk '{ print $2 }' | tr -d [:punct:]) rx off tx off
     ethtool -K $(/sbin/ip address | grep "^2: " | awk '{ print $2 }' | tr -d [:punct:]) gso off gro off

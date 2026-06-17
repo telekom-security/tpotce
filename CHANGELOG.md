@@ -8,6 +8,7 @@ T-Pot 24.04.1 brings significant updates and exciting new honeypot additions, es
 * **H0neytr4p** a HTTP/S honeypot capable of emulating vulnerabilities using configurable traps.
 * **Miniprint** a medium-interaction printer honeypot.
 * **RDPHoneypot** a Remote Desktop honeypot for RDP connection and credential telemetry.
+* **Satori** has been added as a passive fingerprinting NSM service running in parallel to P0f with normalized JSON logging.
 
 ## Updates
 * **Honeypots** were updated to their latest pushed code and / or releases.
@@ -17,6 +18,7 @@ T-Pot 24.04.1 brings significant updates and exciting new honeypot additions, es
 * **Cyberchef** has been updated to the latest release.
 * **Elasticvue** has been updated to 1.1.0.
 * **Suricata** has been updated to 7.0.7, now supporting JA4 hashes.
+* **P0f** remains enabled, but its passive OS distribution views now support the Satori transition path.
 * Most honeypots now use **PyInstaller** (for Python) and **Scratch** (for Go) to minimize Docker image sizes.
 * All new honeypots have been integrated with **Kibana**, featuring dedicated dashboards and visualizations.
 * **Github Container Registry** is now the default container registry for the T-Pot configuration file `.env`.

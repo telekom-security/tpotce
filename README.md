@@ -151,6 +151,7 @@ Alongside the following tools:
 * [Fatt](https://github.com/0x4D31/fatt) a pyshark based script for extracting network metadata and fingerprints from pcap files and live network traffic.
 * [T-Pot-Attack-Map](https://github.com/t3chn0m4g3/t-pot-attack-map) a beautifully animated attack map for T-Pot.
 * [P0f](https://lcamtuf.coredump.cx/p0f3/) is a tool for purely passive traffic fingerprinting.
+* [Satori](https://github.com/xnih/satori) is a passive OS, application and protocol fingerprinting tool.
 * [Spiderfoot](https://github.com/smicallef/spiderfoot) an open source intelligence automation tool.
 * [Suricata](https://suricata.io/) a Network Security Monitoring engine.
 
@@ -185,6 +186,7 @@ T-Pot offers a number of services which are basically divided into five groups:
 5. Network Security Monitoring (NSM)
     * Fatt a pyshark based script for extracting network metadata and fingerprints from pcap files and live network traffic.
     * P0f is a tool for purely passive traffic fingerprinting.
+    * Satori is a passive OS, application and protocol fingerprinting tool. It runs in parallel to P0f during the transition period and writes normalized JSON logs. Runtime modules default to TCP and are controlled by container command switches.
     * Suricata a Network Security Monitoring engine.
 <br><br>
 
@@ -232,7 +234,7 @@ All of the [supported Linux distro images](#choose-your-distro) will run in a VM
 
 ***Some configuration / setup hints:***
 - While Intel versions run stable, Apple Silicon (arm64) support has known issues which in UTM may require switching `Display` to `Console Only` during initial installation of the OS and afterwards back to `Full Graphics`.
-- During configuration you may need to enable promiscuous mode for the network interface in order for fatt, suricata and p0f to work properly.
+- During configuration you may need to enable promiscuous mode for the network interface in order for fatt, satori, suricata and p0f to work properly.
 - If you want to use a wifi card as a primary NIC for T-Pot, please be aware that not all network interface drivers support all wireless cards. In VirtualBox e.g. you have to choose the *"MT SERVER"* model of the NIC.
 <br><br>
 
@@ -806,6 +808,7 @@ The software that T-Pot is built on uses the following licenses.
 [galah](https://github.com/0x4D31/galah?tab=Apache-2.0-1-ov-file#readme),
 [dionaea](https://github.com/DinoTools/dionaea/blob/master/LICENSE),
 [honeytrap](https://github.com/armedpot/honeytrap/blob/master/LICENSE),
+[satori](https://github.com/xnih/satori/blob/master/LICENSE),
 [suricata](https://suricata.io/features/open-source/)
 <br>GPLv3:
 [adbhoney](https://github.com/huuck/ADBHoney),
@@ -897,6 +900,7 @@ Without open source and the development community we are proud to be a part of, 
 [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot/graphs/contributors),
 [rdphoneypot](https://gitlab.com/bontchev/rdphoneypot/-/project_members),
 [sentrypeer](https://github.com/SentryPeer/SentryPeer/graphs/contributors),
+[satori](https://github.com/xnih/satori/graphs/contributors),
 [spiderfoot](https://github.com/smicallef/spiderfoot),
 [snare](https://github.com/mushorg/snare/graphs/contributors),
 [tanner](https://github.com/mushorg/tanner/graphs/contributors),
