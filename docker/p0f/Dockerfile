@@ -1,4 +1,4 @@
-FROM alpine:3.20
+FROM alpine:3.23
 #
 # Add source
 COPY . /opt/p0f
@@ -33,4 +33,4 @@ RUN apk --no-cache -U upgrade && \
 # Start p0f
 WORKDIR /opt/p0f
 USER p0f:p0f
-CMD exec /opt/p0f/p0f -u p0f -j -o /var/log/p0f/p0f.json -i $(ip route | grep "^default" | awk '{ print $5 }') > /dev/null
+CMD ["/bin/bash", "-c", "exec /opt/p0f/p0f -u p0f -j -o /var/log/p0f/p0f.json -i $(ip route | grep \"^default\" | awk '{ print $5 }') > /dev/null"]

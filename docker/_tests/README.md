@@ -31,6 +31,8 @@ not touch production `data/` or `data_backup/` paths.
 ./docker/_tests/run.sh mailoney
 ./docker/_tests/run.sh medpot
 ./docker/_tests/run.sh miniprint
+./docker/_tests/run.sh p0f
+./docker/_tests/run.sh redishoneypot
 ./docker/_tests/run.sh rdphoneypot
 ```
 
@@ -87,6 +89,10 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/medpot.sh --image dtagdevsec/medpot:24.04.1 --host-port 12575
 ./docker/_tests/tests/miniprint.sh
 ./docker/_tests/tests/miniprint.sh --image dtagdevsec/miniprint:24.04 --raw-port 19100
+./docker/_tests/tests/p0f.sh
+./docker/_tests/tests/p0f.sh --image dtagdevsec/p0f:24.04.1
+./docker/_tests/tests/redishoneypot.sh
+./docker/_tests/tests/redishoneypot.sh --redis-port 16379
 ./docker/_tests/tests/rdphoneypot.sh
 ./docker/_tests/tests/rdphoneypot.sh --rdp-port 13389
 ```
@@ -99,6 +105,9 @@ assigned.
 
 The Dicompot test additionally requires DCMTK client tools on the host:
 `echoscu`, `getscu`, `dcmdump`, and either `setscu` or `storescu`.
+
+The p0f test generates HTTP traffic inside an isolated Docker network and
+verifies that p0f writes matching `syn` and `http request` JSON events.
 
 The RDPHoneypot test also verifies that `server.pem` is written to the
 persistent cert volume and remains unchanged after a container restart.
