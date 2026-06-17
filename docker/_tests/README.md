@@ -29,6 +29,7 @@ not touch production `data/` or `data_backup/` paths.
 ./docker/_tests/run.sh honeypots
 ./docker/_tests/run.sh log4pot
 ./docker/_tests/run.sh mailoney
+./docker/_tests/run.sh medpot
 ./docker/_tests/run.sh rdphoneypot
 ```
 
@@ -81,6 +82,8 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/log4pot.sh --image log4pot:alpine-check --http-port 18080
 ./docker/_tests/tests/mailoney.sh
 ./docker/_tests/tests/mailoney.sh --image mailoney:test --smtp-port 10025
+./docker/_tests/tests/medpot.sh
+./docker/_tests/tests/medpot.sh --image dtagdevsec/medpot:24.04.1 --host-port 12575
 ./docker/_tests/tests/rdphoneypot.sh
 ./docker/_tests/tests/rdphoneypot.sh --rdp-port 13389
 ```
