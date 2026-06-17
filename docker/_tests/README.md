@@ -32,6 +32,7 @@ not touch production `data/` or `data_backup/` paths.
 ./docker/_tests/run.sh medpot
 ./docker/_tests/run.sh miniprint
 ./docker/_tests/run.sh p0f
+./docker/_tests/run.sh redishoneypot
 ./docker/_tests/run.sh rdphoneypot
 ```
 
@@ -90,6 +91,8 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/miniprint.sh --image dtagdevsec/miniprint:24.04 --raw-port 19100
 ./docker/_tests/tests/p0f.sh
 ./docker/_tests/tests/p0f.sh --image dtagdevsec/p0f:24.04.1
+./docker/_tests/tests/redishoneypot.sh
+./docker/_tests/tests/redishoneypot.sh --redis-port 16379
 ./docker/_tests/tests/rdphoneypot.sh
 ./docker/_tests/tests/rdphoneypot.sh --rdp-port 13389
 ```
