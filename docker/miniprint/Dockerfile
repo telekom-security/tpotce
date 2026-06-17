@@ -1,4 +1,4 @@
-FROM alpine:3.20 AS builder
+FROM alpine:3.23 AS builder
 #
 # Install packages
 RUN apk --no-cache -U upgrade && \
@@ -18,7 +18,7 @@ RUN pyinstaller server.py \
 		--add-data "./fake-files:./fake-files" \
 		--add-data "./uploads:./uploads"
 #
-FROM alpine:3.20
+FROM alpine:3.23
 RUN apk --no-cache -U upgrade
 COPY --from=builder /opt/miniprint/dist/* /opt/miniprint/
 COPY --from=builder /opt/miniprint/fake-files/ /opt/miniprint/fake-files/
