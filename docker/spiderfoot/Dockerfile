@@ -1,4 +1,4 @@
-FROM alpine:3.20
+FROM alpine:3.23
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -23,7 +23,6 @@ RUN apk --no-cache -U upgrade && \
 		python3 \
 		python3-dev \
 		py3-cryptography \
-		py3-ipaddr \
 		py3-beautifulsoup4 \
 		py3-dnspython \
 		py3-exifread \
@@ -65,7 +64,7 @@ RUN apk --no-cache -U upgrade && \
     git checkout 0f815a203afebf05c98b605dba5cf0475a0ee5fd && \
     pip3 install --no-cache-dir --break-system-packages --upgrade pip && \
     cp /root/dist/requirements.txt . && \
-    pip3 install --no-cache-dir --break-system-packages --no-cache-dir -r requirements.txt && \ 
+    pip3 install --no-cache-dir --break-system-packages --no-cache-dir -r requirements.txt && \
     mkdir -p /home/spiderfoot/.spiderfoot/logs && \
     chown -R spiderfoot:spiderfoot /home/spiderfoot && \
     sed -i "s#'root': '\/'#'root': '\/spiderfoot'#" /home/spiderfoot/sf.py && \
@@ -91,4 +90,4 @@ HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:8080/spiderfoot/'
 # Set user, workdir and start spiderfoot
 USER spiderfoot:spiderfoot
 WORKDIR /home/spiderfoot
-CMD echo -n >> /home/spiderfoot/.spiderfoot/spiderfoot.db && exec /usr/bin/python3 sf.py -l 0.0.0.0:8080
+CMD ["sh", "-c", "echo -n >> /home/spiderfoot/.spiderfoot/spiderfoot.db && exec /usr/bin/python3 sf.py -l 0.0.0.0:8080"]
