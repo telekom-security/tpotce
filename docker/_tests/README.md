@@ -34,6 +34,7 @@ not touch production `data/` or `data_backup/` paths.
 ./docker/_tests/run.sh p0f
 ./docker/_tests/run.sh redishoneypot
 ./docker/_tests/run.sh rdphoneypot
+./docker/_tests/run.sh sentrypeer
 ```
 
 Common options:
@@ -95,6 +96,8 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/redishoneypot.sh --redis-port 16379
 ./docker/_tests/tests/rdphoneypot.sh
 ./docker/_tests/tests/rdphoneypot.sh --rdp-port 13389
+./docker/_tests/tests/sentrypeer.sh
+./docker/_tests/tests/sentrypeer.sh --tcp-port 15060 --udp-port 15060
 ```
 
 The Dionaea test maps the tested service ports to temporary loopback ports,
@@ -111,6 +114,9 @@ verifies that p0f writes matching `syn` and `http request` JSON events.
 
 The RDPHoneypot test also verifies that `server.pem` is written to the
 persistent cert volume and remains unchanged after a container restart.
+
+The SentryPeer test sends SIP OPTIONS probes over TCP and UDP, verifies SIP
+responses, and checks matching JSON events in `sentrypeer.json`.
 
 ## Conventions
 

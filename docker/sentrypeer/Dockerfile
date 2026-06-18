@@ -24,4 +24,4 @@ RUN apk -U upgrade --no-cache && \
 STOPSIGNAL SIGKILL
 USER sentrypeer:sentrypeer
 WORKDIR /var/log/sentrypeer/
-CMD /usr/bin/sentrypeer -jar -f /var/log/sentrypeer/sentrypeer.db -l /var/log/sentrypeer/sentrypeer.json
+CMD ["/usr/bin/sentrypeer", "-jar", "-f", "/var/log/sentrypeer/sentrypeer.db", "-l", "/var/log/sentrypeer/sentrypeer.json"]
