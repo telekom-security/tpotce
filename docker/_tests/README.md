@@ -35,6 +35,7 @@ not touch production `data/` or `data_backup/` paths.
 ./docker/_tests/run.sh redishoneypot
 ./docker/_tests/run.sh rdphoneypot
 ./docker/_tests/run.sh sentrypeer
+./docker/_tests/run.sh suricata
 ```
 
 Common options:
@@ -98,6 +99,7 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/rdphoneypot.sh --rdp-port 13389
 ./docker/_tests/tests/sentrypeer.sh
 ./docker/_tests/tests/sentrypeer.sh --tcp-port 15060 --udp-port 15060
+./docker/_tests/tests/suricata.sh
 ```
 
 The Dionaea test maps the tested service ports to temporary loopback ports,
@@ -117,6 +119,9 @@ persistent cert volume and remains unchanged after a container restart.
 
 The SentryPeer test sends SIP OPTIONS probes over TCP and UDP, verifies SIP
 responses, and checks matching JSON events in `sentrypeer.json`.
+
+The Suricata test replays a generated HTTP PCAP and verifies a matching HTTP
+event in `eve.json` plus the Suricata runtime log.
 
 ## Conventions
 
