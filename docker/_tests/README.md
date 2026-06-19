@@ -37,6 +37,7 @@ not touch production `data/` or `data_backup/` paths.
 ./docker/_tests/run.sh sentrypeer
 ./docker/_tests/run.sh suricata
 ./docker/_tests/run.sh tanner
+./docker/_tests/run.sh wordpot
 ```
 
 Common options:
@@ -103,6 +104,8 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/suricata.sh
 ./docker/_tests/tests/tanner.sh
 ./docker/_tests/tests/tanner.sh --snare-port 18080
+./docker/_tests/tests/wordpot.sh
+./docker/_tests/tests/wordpot.sh --http-port 18080
 ```
 
 The Dionaea test maps the tested service ports to temporary loopback ports,

@@ -1,4 +1,4 @@
-FROM alpine:3.20 AS builder
+FROM alpine:3.23 AS builder
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -39,7 +39,7 @@ RUN pyinstaller wordpot.py \
 		--add-data "./wordpot.conf:./"
 RUN ls -alR
 #
-FROM alpine:3.20
+FROM alpine:3.23
 RUN apk --no-cache -U upgrade
 COPY --from=builder /opt/wordpot/dist /opt/
 #
