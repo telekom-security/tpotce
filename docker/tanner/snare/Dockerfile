@@ -1,4 +1,4 @@
-FROM alpine:3.19
+FROM alpine:3.23
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -27,6 +27,8 @@ RUN apk --no-cache -U upgrade && \
 	git checkout 08c69b7165354ea2040b6170c37d92ff3c304f96 && \
     cp /root/dist/requirements.txt . && \
     pip3 install --break-system-packages --no-cache-dir -r requirements.txt && \
+    sed -i 's/parser.add_argument("--port", help="port to listen on", default=.8080.)/parser.add_argument("--port", help="port to listen on", default=8080, type=int)/' bin/snare && \
+    sed -i '1,/loop = asyncio.get_event_loop()/s/loop = asyncio.get_event_loop()/loop = asyncio.new_event_loop(); asyncio.set_event_loop(loop)/' bin/snare && \
     python3 setup.py install && \
     cd / && \
     rm -rf /opt/snare && \
@@ -51,4 +53,4 @@ RUN apk --no-cache -U upgrade && \
 # Start snare
 STOPSIGNAL SIGKILL
 USER snare:snare
-CMD snare --tanner tanner --debug true --auto-update false --host-ip 0.0.0.0 --port 80 --page-dir $(shuf -i 1-10 -n 1)
+CMD ["sh", "-c", "exec snare --tanner tanner --debug true --auto-update false --host-ip 0.0.0.0 --port 80 --page-dir $(shuf -i 1-10 -n 1)"]
