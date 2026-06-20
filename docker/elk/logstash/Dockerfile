@@ -1,6 +1,6 @@
 FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
-ENV LS_VER=9.2.3
+ENV LS_VER=9.3.5
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -50,19 +50,19 @@ RUN apt-get update -y && \
     groupmod -g 2000 logstash && \
     usermod -u 2000 logstash && \
     chown -R logstash:logstash /etc/listbot \
-                               /var/log/logstash/ \
-			       /var/lib/logstash \
-			       /usr/share/logstash/data \
-			       /usr/share/logstash/config/pipelines* && \
+        /var/log/logstash/ \
+        /var/lib/logstash \
+        /usr/share/logstash/data \
+        /usr/share/logstash/config/pipelines* && \
     chmod 755 /usr/bin/entrypoint.sh && \
 #
 # Clean up
     apt-get autoremove -y --purge && \
     apt-get clean && \
-        rm -rf /var/lib/apt/lists/* \
-            /tmp/* /var/tmp/* \
-            /root/.cache \
-            /root/*
+    rm -rf /var/lib/apt/lists/* \
+        /tmp/* /var/tmp/* \
+        /root/.cache \
+        /root/*
 #
 # Healthcheck
 HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:9600'
