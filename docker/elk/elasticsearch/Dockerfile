@@ -1,6 +1,6 @@
 FROM ubuntu:24.04
-ENV DEBIAN_FRONTEND noninteractive
-ENV ES_VER=9.2.3
+ENV DEBIAN_FRONTEND=noninteractive
+ENV ES_VER=9.3.5
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -15,8 +15,8 @@ RUN	apt-get update -y && \
 #
 # Determine arch, get and install packages
     ARCH=$(arch) && \
-      if [ "$ARCH" = "x86_64" ]; then ES_ARCH="amd64"; export _JAVA_OPTIONS=""; fi && \
-      if [ "$ARCH" = "aarch64" ]; then ES_ARCH="arm64"; export _JAVA_OPTIONS="-XX:UseSVE=0"; fi && \
+    if [ "$ARCH" = "x86_64" ]; then ES_ARCH="amd64"; export _JAVA_OPTIONS=""; fi && \
+    if [ "$ARCH" = "aarch64" ]; then ES_ARCH="arm64"; export _JAVA_OPTIONS="-XX:UseSVE=0"; fi && \
     echo "$ARCH" && \
     cd /root/dist/ && \
     mkdir -p /usr/share/elasticsearch/config \
@@ -47,7 +47,4 @@ HEALTHCHECK --retries=10 CMD curl -s -XGET 'http://127.0.0.1:9200/_cat/health'
 #
 # Start ELK
 USER elasticsearch:elasticsearch
-#CMD ["/usr/share/elasticsearch/bin/elasticsearch"]
-CMD ARCH=$(arch) && \
-    if [ "$ARCH" = "aarch64" ]; then export _JAVA_OPTIONS="-XX:UseSVE=0"; fi && \
-    exec /usr/share/elasticsearch/bin/elasticsearch
+CMD ["sh", "-c", "ARCH=$(arch) && if [ \"$ARCH\" = \"aarch64\" ]; then export _JAVA_OPTIONS=\"-XX:UseSVE=0\"; fi && exec /usr/share/elasticsearch/bin/elasticsearch"]
