@@ -35,6 +35,9 @@ not touch production `data/` or `data_backup/` paths.
 ./docker/_tests/run.sh redishoneypot
 ./docker/_tests/run.sh rdphoneypot
 ./docker/_tests/run.sh sentrypeer
+./docker/_tests/run.sh suricata
+./docker/_tests/run.sh tanner
+./docker/_tests/run.sh wordpot
 ```
 
 Common options:
@@ -98,6 +101,11 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/rdphoneypot.sh --rdp-port 13389
 ./docker/_tests/tests/sentrypeer.sh
 ./docker/_tests/tests/sentrypeer.sh --tcp-port 15060 --udp-port 15060
+./docker/_tests/tests/suricata.sh
+./docker/_tests/tests/tanner.sh
+./docker/_tests/tests/tanner.sh --snare-port 18080
+./docker/_tests/tests/wordpot.sh
+./docker/_tests/tests/wordpot.sh --http-port 18080
 ```
 
 The Dionaea test maps the tested service ports to temporary loopback ports,
@@ -117,6 +125,14 @@ persistent cert volume and remains unchanged after a container restart.
 
 The SentryPeer test sends SIP OPTIONS probes over TCP and UDP, verifies SIP
 responses, and checks matching JSON events in `sentrypeer.json`.
+
+The Suricata test replays a generated HTTP PCAP and verifies a matching HTTP
+event in `eve.json` plus the Suricata runtime log.
+
+The Tanner test starts Snare, Tanner, Tanner API, PHPox, and Redis in an
+isolated Compose stack. It sends a request through Snare, checks Snare and
+Tanner JSON logs, verifies Redis/Tanner API state, and probes PHPox directly
+over the Compose network.
 
 ## Conventions
 

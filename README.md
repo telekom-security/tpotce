@@ -746,7 +746,7 @@ Some T-Pot updates will require you to update the Kibana objects. Either to supp
 This will export a NDJSON file with all your objects. Always run a full export to make sure all references are included.
 
 ### Import
-1. [Download the NDJSON file](https://github.com/dtag-dev-sec/tpotce/blob/master/docker/tpotinit/dist/etc/objects/kibana_export.ndjson.zip) and unzip it.
+1. [Download the NDJSON file](https://raw.githubusercontent.com/telekom-security/tpotce/refs/heads/master/docker/tpotinit/dist/etc/objects/kibana_export.ndjson.zip) and unzip it.
 2. Go to Kibana
 3. Click on "Stack Management"
 4. Click on "Saved Objects"

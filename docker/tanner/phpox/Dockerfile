@@ -1,4 +1,4 @@
-FROM alpine:3.20
+FROM alpine:3.23
 #
 # Install packages
 RUN apk --no-cache -U upgrade && \
@@ -9,6 +9,7 @@ RUN apk --no-cache -U upgrade && \
 		make \
 		php83 \
 		php83-dev \
+		php83-tokenizer \
 		py3-aiohttp \
 		python3 \
 		python3-dev \
@@ -32,6 +33,10 @@ RUN apk --no-cache -U upgrade && \
     cd /opt/phpox && \
     git checkout 55a6cbdc2c62f08eb45acffaf84f23f06a1d4703 && \
     make && \
+    sed -i \
+      -e 's/"php8.1"/"php83"/g' \
+      -e "s/host='127.0.0.1'/host='0.0.0.0'/" \
+      sandbox.py && \
 #
 # Clean up
     apk del --purge build-base \
