@@ -112,7 +112,7 @@ T-Pot's main components have been moved into the `tpotinit` Docker image allowin
 ## Honeypots and Tools
 - T-Pot offers docker images for the following honeypots:<br>
 [adbhoney](https://github.com/huuck/ADBHoney),
-[beelzebub](https://github.com/mariocandela/beelzebub),
+[beelzebub](https://github.com/beelzebub-labs/beelzebub),
 [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot),
 [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot),
 [conpot](http://conpot.org/),
@@ -133,7 +133,7 @@ T-Pot's main components have been moved into the `tpotinit` Docker image allowin
 [honeytrap](https://github.com/armedpot/honeytrap/),
 [ipphoney](https://gitlab.com/bontchev/ipphoney),
 [log4pot](https://github.com/thomaspatzke/Log4Pot),
-[mailoney](https://github.com/awhitehatter/mailoney),
+[mailoney](https://github.com/phin3has/mailoney),
 [medpot](https://github.com/schmalle/medpot),
 [miniprint](https://github.com/sa7mon/miniprint),
 [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot),
@@ -149,7 +149,7 @@ Alongside the following tools:
 * [Elastic Stack](https://www.elastic.co/videos) to beautifully visualize all the events captured by T-Pot.
 * [Elasticvue](https://github.com/cars10/elasticvue/) a web front end for browsing and interacting with an Elasticsearch cluster.
 * [Fatt](https://github.com/0x4D31/fatt) a pyshark based script for extracting network metadata and fingerprints from pcap files and live network traffic.
-* [T-Pot-Attack-Map](https://github.com/t3chn0m4g3/t-pot-attack-map) a beautifully animated attack map for T-Pot.
+* [T-Pot-Attack-Map](https://github.com/telekom-security/t-pot-attack-map) a beautifully animated attack map for T-Pot.
 * [P0f](https://lcamtuf.coredump.cx/p0f3/) is a tool for purely passive traffic fingerprinting.
 * [Spiderfoot](https://github.com/smicallef/spiderfoot) an open source intelligence automation tool.
 * [Suricata](https://suricata.io/) a Network Security Monitoring engine.
@@ -227,7 +227,7 @@ T-Pot does require ...
 All of the [supported Linux distro images](#choose-your-distro) will run in a VM which means T-Pot will just run fine. The following were tested / reported to work:
 * [UTM (Intel & Apple Silicon)](https://mac.getutm.app/)
 * [VirtualBox](https://www.virtualbox.org/)
-* [VMWare Fusion](https://www.vmware.com/products/fusion/fusion-evaluation.html) and [VMWare Workstation](https://www.vmware.com/products/workstation-pro.html)
+* [VMWare Fusion](https://www.vmware.com/products/desktop-hypervisor/workstation-and-fusion) and [VMWare Workstation](https://www.vmware.com/products/desktop-hypervisor/workstation-and-fusion)
 * KVM is reported to work as well.
 
 ***Some configuration / setup hints:***
@@ -369,7 +369,7 @@ Once you are familiar with how things work you should choose a network you suspe
 ## macOS & Windows
 Sometimes it is just nice if you can spin up a T-Pot instance on macOS or Windows, i.e. for development, testing or just the fun of it. As Docker Desktop is rather limited not all honeypot types or T-Pot features are supported. Also remember, by default the macOS and Windows firewall are blocking access from remote, so testing is limited to the host. For production it is recommended to run T-Pot on [Linux](#choose-your-distro).<br>
 To get things up and running just follow these steps:
-1. Install Docker Desktop for [macOS](https://docs.docker.com/desktop/install/mac-install/) or [Windows](https://docs.docker.com/desktop/install/windows-install/).
+1. Install Docker Desktop for [macOS](https://docs.docker.com/desktop/setup/install/mac-install/) or [Windows](https://docs.docker.com/desktop/setup/install/windows-install/).
 2. Clone the GitHub repository: `git clone https://github.com/telekom-security/tpotce` (in Windows make sure the code is checked out with `LF` instead of `CRLF`!)
 3. Go to: `cd ~/tpotce`
 4. Copy `cp compose/mac_win.yml ./docker-compose.yml`
@@ -500,7 +500,7 @@ Identify the `TPOT_HIVE_USER` ENV on the Sensor in the `$HOME/tpotce/.env` confi
 Now you can safely delete the Sensor machine.
 
 ## Community Data Submission
-T-Pot is provided in order to make it accessible to everyone interested in honeypots. By default, the captured data is submitted to a community backend. This community backend uses the data to feed [Sicherheitstacho](https://sicherheitstacho.eu).
+T-Pot is provided in order to make it accessible to everyone interested in honeypots. By default, the captured data is submitted to a community backend. This community backend uses the data to feed [Sicherheitstacho](https://www.sicherheitstacho.eu/).
 You may opt out of the submission by removing the `# Ewsposter service` from `~/tpotce/docker-compose.yml` by following these steps:
 1. Stop T-Pot services: `systemctl stop tpot`
 2. Open `~/tpotce/docker-compose.yml`: `micro ~/tpotce/docker-compose.yml`
@@ -625,7 +625,7 @@ To create your customized docker compose file:
 3. The script will guide you through the process of creating your own `docker-compose.yml`. As some honeypots and services occupy the same ports it will check if any port conflicts are present and notify regarding the conflicting services. You then can resolve them manually by adjusting `docker-compose-custom.yml` or re-run the script.
 4. Stop T-Pot with `systemctl stop tpot`.
 5. Copy the custom docker compose file: `cp docker-compose-custom.yml ~/tpotce` and `cd ~/tpotce`.
-6. Check if everything works by running `docker-compose -f docker-compose-custom.yml up`. In case of errors follow the [Docker Compose Specification](https://docs.docker.com/compose/compose-file/) for mitigation. Most likely it is just a port conflict you can adjust by editing the docker compose file. 
+6. Check if everything works by running `docker-compose -f docker-compose-custom.yml up`. In case of errors follow the [Docker Compose Specification](https://docs.docker.com/reference/compose-file/) for mitigation. Most likely it is just a port conflict you can adjust by editing the docker compose file.
 6. If everything works just fine press `CTRL-C` to stop the containers and run `docker-compose -f docker-compose-custom.yml down -v`.
 7. Replace docker compose file with the new and successfully tested customized docker compose file `mv ~/tpotce/docker-compose-custom.yml ~/tpotce/docker-compose.yml`.
 8. Start T-Pot with `systemctl start tpot`.
@@ -784,7 +784,7 @@ Storage failures can be identified easier via `htop`.
 # Contact
 T-Pot is provided ***as is*** open source ***without*** any commitment regarding support ([see the disclaimer](#disclaimer)).
 
-If you are a security researcher and want to responsibly report an issue please get in touch with our [CERT](https://www.telekom.com/en/corporate-responsibility/data-protection-data-security/security/details/introducing-deutsche-telekom-cert-358316).
+If you are a security researcher and want to responsibly report an issue please get in touch with our [CERT](https://www.telekom.com/en/company/data-privacy-and-security/news/introducing-deutsche-telekom-cert-358316).
 <br><br>
 
 ## Issues
@@ -819,33 +819,33 @@ The software that T-Pot is built on uses the following licenses.
 [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot/blob/main/LICENSE),
 [rdphoneypot](https://gitlab.com/bontchev/rdphoneypot/-/blob/master/LICENSE),
 [sentrypeer](https://github.com/SentryPeer/SentryPeer/blob/main/LICENSE.GPL-3.0-only),
-[snare](https://github.com/mushorg/snare/blob/master/LICENSE),
-[tanner](https://github.com/mushorg/snare/blob/master/LICENSE)
+[snare](https://github.com/mushorg/snare/blob/main/LICENSE),
+[tanner](https://github.com/mushorg/snare/blob/main/LICENSE)
 <br>Apache 2 License:
 [cyberchef](https://github.com/gchq/CyberChef/blob/master/LICENSE),
 [dicompot](https://github.com/nsmfoo/dicompot/blob/master/LICENSE),
-[elasticsearch](https://github.com/elasticsearch/elasticsearch/blob/master/LICENSE.txt),
+[elasticsearch](https://github.com/elastic/elasticsearch/blob/master/LICENSE.txt),
 [go-pot](https://github.com/ryanolee/go-pot?tab=License-1-ov-file#readme),
 [h0neytr4p](https://github.com/pbssubhash/h0neytr4p?tab=Apache-2.0-1-ov-file#readme),
-[logstash](https://github.com/elasticsearch/logstash/blob/master/LICENSE.txt),
-[kibana](https://github.com/elasticsearch/kibana/blob/master/LICENSE.txt),
-[docker](https://github.com/docker/docker/blob/master/LICENSE)
+[logstash](https://github.com/elastic/logstash/blob/main/LICENSE.txt),
+[kibana](https://github.com/elastic/kibana/blob/main/LICENSE.txt),
+[docker](https://github.com/moby/moby/blob/master/LICENSE)
 <br>MIT license:
 [autoheal](https://github.com/willfarrell/docker-autoheal?tab=MIT-1-ov-file#readme),
-[beelzebub](https://github.com/mariocandela/beelzebub?tab=MIT-1-ov-file#readme),
+[beelzebub](https://github.com/beelzebub-labs/beelzebub?tab=MIT-1-ov-file#readme),
 [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/blob/master/LICENSE),
 [ddospot](https://github.com/aelth/ddospot/blob/master/LICENSE),
 [elasticvue](https://github.com/cars10/elasticvue/blob/master/LICENSE),
-[glutton](https://github.com/mushorg/glutton/blob/master/LICENSE),
-[hellpot](https://github.com/yunginnanet/HellPot/blob/master/LICENSE),
+[glutton](https://github.com/mushorg/glutton/blob/main/LICENSE),
+[hellpot](https://github.com/yunginnanet/HellPot/blob/main/LICENSE),
 [honeyaml](https://github.com/mmta/honeyaml?tab=MIT-1-ov-file#readme),
 [maltrail](https://github.com/stamparm/maltrail/blob/master/LICENSE)
 <br>Unlicense:
 [endlessh](https://github.com/skeeto/endlessh/blob/master/UNLICENSE)
 <br>Other:
 [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot#licencing-agreement-malwaretech-public-licence),
-[cowrie](https://github.com/cowrie/cowrie/blob/master/LICENSE.rst),
-[mailoney](https://github.com/awhitehatter/mailoney),
+[cowrie](https://github.com/cowrie/cowrie/blob/main/LICENSE.rst),
+[mailoney](https://github.com/phin3has/mailoney),
 [Elastic License](https://www.elastic.co/licensing/elastic-license),
 [Wordpot](https://github.com/gbrindisi/wordpot)
 <br>AGPL-3.0:
@@ -861,7 +861,7 @@ Without open source and the development community we are proud to be a part of, 
 ## The developers and development communities of
 
 * [adbhoney](https://github.com/huuck/ADBHoney/graphs/contributors),
-[beelzebub](https://github.com/mariocandela/beelzebub/graphs/contributors),
+[beelzebub](https://github.com/beelzebub-labs/beelzebub/graphs/contributors),
 [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/graphs/contributors),
 [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot/graphs/contributors),
 [conpot](https://github.com/mushorg/conpot/graphs/contributors),
@@ -869,7 +869,7 @@ Without open source and the development community we are proud to be a part of, 
 [ddospot](https://github.com/aelth/ddospot/graphs/contributors),
 [dicompot](https://github.com/nsmfoo/dicompot/graphs/contributors),
 [dionaea](https://github.com/DinoTools/dionaea/graphs/contributors),
-[docker](https://github.com/docker/docker/graphs/contributors),
+[docker](https://github.com/moby/moby/graphs/contributors),
 [elasticpot](https://gitlab.com/bontchev/elasticpot/-/project_members),
 [elasticsearch](https://github.com/elastic/elasticsearch/graphs/contributors),
 [elasticvue](https://github.com/cars10/elasticvue/graphs/contributors),
@@ -889,11 +889,11 @@ Without open source and the development community we are proud to be a part of, 
 [kibana](https://github.com/elastic/kibana/graphs/contributors),
 [logstash](https://github.com/elastic/logstash/graphs/contributors),
 [log4pot](https://github.com/thomaspatzke/Log4Pot/graphs/contributors),
-[mailoney](https://github.com/awhitehatter/mailoney),
+[mailoney](https://github.com/phin3has/mailoney),
 [maltrail](https://github.com/stamparm/maltrail/graphs/contributors),
 [medpot](https://github.com/schmalle/medpot/graphs/contributors),
 [miniprint](https://github.com/sa7mon/miniprint/graphs/contributors),
-[p0f](http://lcamtuf.coredump.cx/p0f3/),
+[p0f](https://lcamtuf.coredump.cx/p0f3/),
 [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot/graphs/contributors),
 [rdphoneypot](https://gitlab.com/bontchev/rdphoneypot/-/project_members),
 [sentrypeer](https://github.com/SentryPeer/SentryPeer/graphs/contributors),
