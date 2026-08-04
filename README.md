@@ -718,9 +718,9 @@ You can show all T-Pot relevant containers by running `dps` or `dpsw [interval]`
 <br><br>
 
 ## Blackhole
-Blackhole will run T-Pot in kind of a stealth mode manner without permanent visits of publicly known scanners and thus reducing the possibility of being exposed. While this is of course always a cat and mouse game the blackhole feature is null routing all requests from [known mass scanners](https://raw.githubusercontent.com/stamparm/maltrail/master/trails/static/mass_scanner.txt) while still catching the events through Suricata.
+Blackhole will run T-Pot in kind of a stealth mode manner without permanent visits of publicly known scanners and thus reducing the possibility of being exposed. While this is of course always a cat and mouse game, the blackhole feature null routes all requests from [known mass scanners](https://raw.githubusercontent.com/stamparm/maltrail/master/trails/static/mass_scanner.txt) while still catching the events through Suricata.
 <br>
-The feature is activated by setting `TPOT_BLACKHOLE=DISABLED` in `~/tpotce/.env`, then run `systemctl stop tpot` and `systemctl start tpot` or `sudo reboot`.
+The feature is activated by setting `TPOT_BLACKHOLE=ENABLED` in `~/tpotce/.env`, then run `systemctl stop tpot` and `systemctl start tpot` or `sudo reboot`.
 <br>
 Enabling this feature will drastically reduce attackers visibility and consequently result in less activity. However as already mentioned it is neither a guarantee for being completely stealth nor will it prevent fingerprinting of some honeypot services.
 <br><br>
