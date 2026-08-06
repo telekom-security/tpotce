@@ -251,23 +251,17 @@ if [ ! -f installer/install/tpot.yml ] && [ ! -f tpot.yml ];
 fi
 
 # Check type of sudo access
-if [ "$myANSIBLE_TAG" = "Debian" ];
-  # Debian 13 - sudo seems to apply stricter settings, we now ask for the become password
+sudo -n true > /dev/null 2>&1
+if [ $? -eq 1 ];
   then
-  	myANSIBLE_BECOME_OPTION="--become --ask-become-pass"
+    myANSIBLE_BECOME_OPTION="--ask-become-pass"
+    echo "### ‘sudo’ not acquired, setting ansible become option to ${myANSIBLE_BECOME_OPTION}."
+    echo "### Ansible will ask for the ‘BECOME password’ which is typically the password you ‘sudo’ with."
+    echo
   else
-    sudo -n true > /dev/null 2>&1
-    if [ $? -eq 1 ];
-      then
-        myANSIBLE_BECOME_OPTION="--ask-become-pass"
-        echo "### ‘sudo‘ not acquired, setting ansible become option to ${myANSIBLE_BECOME_OPTION}."
-        echo "### Ansible will ask for the ‘BECOME password‘ which is typically the password you ’sudo’ with."
-        echo
-      else
-        myANSIBLE_BECOME_OPTION="--become"
-        echo "### ‘sudo‘ acquired, setting ansible become option to ${myANSIBLE_BECOME_OPTION}."
-        echo
-    fi
+    myANSIBLE_BECOME_OPTION="--become"
+    echo "### ‘sudo’ acquired, setting ansible become option to ${myANSIBLE_BECOME_OPTION}."
+    echo
 fi
 
 # Run Ansible Playbook
