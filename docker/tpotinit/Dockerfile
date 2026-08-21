@@ -24,6 +24,7 @@ RUN apk --no-cache -U upgrade && \
         logrotate \
         lsblk \
         net-tools \
+        nftables \
         openssl \
         pigz \
         tar \

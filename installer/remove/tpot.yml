@@ -254,6 +254,22 @@
         - "Rocky"
         - "Ubuntu"
 
+    - name: Remove IPv4 forwarding setting (All)
+      lineinfile:
+        path: /etc/sysctl.conf
+        line: "net.ipv4.ip_forward=1"
+        state: absent
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
     - name: Remove vm.max_map_count setting (All)
       lineinfile:
         path: /etc/sysctl.conf

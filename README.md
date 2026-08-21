@@ -322,7 +322,7 @@ Once you are familiar with how things work you should choose a network you suspe
 ## Choose your distro
 **Steps to Follow:**
 
-1. Download a supported Linux distribution from the list below. (NOTE: Red Hat Enterprise Linux >= 8 is supported, but omitted from the list below due to its subscription-based nature. See [Red Hat Enterprise Linux](#red-hat-enterprise-linux) for details).
+1. Download a supported Linux distribution from the list below. T-Pot follows the current release of each distribution, the installer will stop on an older one. (NOTE: Red Hat Enterprise Linux 10 is supported, but omitted from the list below due to its subscription-based nature. See [Red Hat Enterprise Linux](#red-hat-enterprise-linux) for details).
 2. During installation choose a **minimum**, **netinstall** or **server** version that will only install essential packages.
 3. **Never** install a graphical desktop environment such as Gnome or KDE. T-Pot will fail to work with it due to port conflicts. 
 4. Make sure to install SSH, so you can connect to the machine remotely.
@@ -330,12 +330,12 @@ Once you are familiar with how things work you should choose a network you suspe
 
 | Distribution Name                                                                  | x64                                                                                                                                   | arm64                                                                                                                                   |
 |:-----------------------------------------------------------------------------------|:--------------------------------------------------------------------------------------------------------------------------------------|:----------------------------------------------------------------------------------------------------------------------------------------|
-| [Alma Linux OS 9.x Minimal ISO](https://almalinux.org)                                | [download](https://repo.almalinux.org/almalinux/9/isos/x86_64/AlmaLinux-9.8-x86_64-minimal.iso)                                        | [download](https://repo.almalinux.org/almalinux/9/isos/aarch64/AlmaLinux-9.8-aarch64-minimal.iso)                                        |
-| [Debian 13 Network Install](https://www.debian.org/CD/netinst/index.en.html)       | [download](https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-13.5.0-amd64-netinst.iso)                                 | [download](https://cdimage.debian.org/debian-cd/current/arm64/iso-cd/debian-13.5.0-arm64-netinst.iso)                                   |
-| [Fedora Server 42 Network Install](https://fedoraproject.org/server/download)      | [download](https://download.fedoraproject.org/pub/fedora/linux/releases/42/Server/x86_64/iso/Fedora-Server-netinst-x86_64-42-1.1.iso) | [download](https://download.fedoraproject.org/pub/fedora/linux/releases/42/Server/aarch64/iso/Fedora-Server-netinst-aarch64-42-1.1.iso) |
+| [Alma Linux OS 10.x Minimal ISO](https://almalinux.org)                               | [download](https://repo.almalinux.org/almalinux/10/isos/x86_64/AlmaLinux-10-latest-x86_64-minimal.iso)                                 | [download](https://repo.almalinux.org/almalinux/10/isos/aarch64/AlmaLinux-10-latest-aarch64-minimal.iso)                                 |
+| [Debian 13 Network Install](https://www.debian.org/CD/netinst/index.en.html)       | [download](https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-13.6.0-amd64-netinst.iso)                                 | [download](https://cdimage.debian.org/debian-cd/current/arm64/iso-cd/debian-13.6.0-arm64-netinst.iso)                                   |
+| [Fedora Server 44 Network Install](https://fedoraproject.org/server/download)      | [download](https://download.fedoraproject.org/pub/fedora/linux/releases/44/Server/x86_64/iso/Fedora-Server-netinst-x86_64-44-1.7.iso) | [download](https://download.fedoraproject.org/pub/fedora/linux/releases/44/Server/aarch64/iso/Fedora-Server-netinst-aarch64-44-1.7.iso) |
 | [OpenSuse Tumbleweed Network Image](https://get.opensuse.org/tumbleweed/#download) | [download](https://download.opensuse.org/tumbleweed/iso/openSUSE-Tumbleweed-NET-x86_64-Current.iso)                                   | [download](https://download.opensuse.org/ports/aarch64/tumbleweed/iso/openSUSE-Tumbleweed-NET-aarch64-Current.iso)                      |
-| [Rocky Linux OS 9.x Minimal ISO](https://rockylinux.org/download)                     | [download](https://download.rockylinux.org/pub/rocky/9/isos/x86_64/Rocky-9.8-x86_64-minimal.iso)                                      | [download](https://download.rockylinux.org/pub/rocky/9/isos/aarch64/Rocky-9.8-aarch64-minimal.iso)                                      |
-| [Ubuntu 24.04.x Live Server](https://ubuntu.com/download/server)                   | [download](https://releases.ubuntu.com/24.04/ubuntu-24.04.3-live-server-amd64.iso)                                                    | [download](https://cdimage.ubuntu.com/releases/24.04/release/ubuntu-24.04.3-live-server-arm64.iso)                                      |
+| [Rocky Linux OS 10.x Minimal ISO](https://rockylinux.org/download)                    | [download](https://download.rockylinux.org/pub/rocky/10/isos/x86_64/Rocky-10-latest-x86_64-minimal.iso)                               | [download](https://download.rockylinux.org/pub/rocky/10/isos/aarch64/Rocky-10-latest-aarch64-minimal.iso)                               |
+| [Ubuntu 26.04 Live Server](https://ubuntu.com/download/server)                     | [download](https://releases.ubuntu.com/26.04/ubuntu-26.04-live-server-amd64.iso)                                                     | [download](https://cdimage.ubuntu.com/releases/26.04/release/ubuntu-26.04-live-server-arm64.iso)                                        |
 
 <br>
 
@@ -437,7 +437,7 @@ Red Hat Enterprise Linux (RHEL) is a somewhat unique case in that:
 1. Connections to Red Hat repositories depend on a Red Hat subscription. You will not be able to update the OS or install new packages if the targeted machine is not subscribed. **If your server is not attached to a Red Hat subscription, installation will fail!** 
 2. Ansible is installed from a RHEL-specific repository by the installer. Do not attempt to install it from the upstream repositories. 
 3. Docker is installed from EPEL, which is installed by the installer script. Do not attempt to install it from the community installer script.
-2. T-Pot will only install successfully on RHEL >= 8. One of the convenience dependencies (`grc`) depends on Python 2, which was removed after RHEL 7. It is omitted from the RHEL installation of T-Pot.
+2. T-Pot will only install successfully on RHEL 10. The convenience dependency `grc` is not available for RHEL and is omitted from the RHEL installation of T-Pot.
 
 ## Installation Types
 

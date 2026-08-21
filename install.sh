@@ -146,10 +146,10 @@ check_port_conflicts() {
 rhel_version() {
   # special case for RHEL due to its complicated repo infrastructure
   # primarily used for EPEL repo selection
-  # supports RHEL 7-10
+  # T-Pot follows the current release, which is RHEL 10
   myRHEL_VERSION=$(grep PLATFORM_ID /etc/os-release | cut -d ':' -f2 | grep -Eo '([0-9]{1,2})')
-  if [ "$myRHEL_VERSION" -lt 7 ]; then
-    echo "Error: RHEL < 7 not supported!" >&2
+  if [ "$myRHEL_VERSION" -lt 10 ]; then
+    echo "Error: RHEL < 10 not supported!" >&2
     exit 1
   fi
   echo "$myRHEL_VERSION"
@@ -158,7 +158,7 @@ rhel_version() {
 rhel_ansible_repo() {
   # rhel uses a dedicated repo for ansible that we need to enable through subscription-manager
   myRHEL_ANSIBLE_REPO=$(sudo subscription-manager repos --list \
-    | grep -E "ansible-automation-platform-[0-9]{1}\.[0-9]{1}-for-rhel-$(rhel_version)-x86_64-rpms" \
+    | grep -E "ansible-automation-platform-[0-9]{1}\.[0-9]{1}-for-rhel-$(rhel_version)-$(arch)-rpms" \
     | awk -F':' '{print $2}' \
     | tr -d ' ' \
     | sort -nr \
@@ -264,6 +264,41 @@ if [[ ! " ${mySUPPORTED_DISTRIBUTIONS[@]} " =~ " ${myCURRENT_DISTRIBUTION} " ]];
   then
     echo "### Only the following distributions are supported: AlmaLinux, Fedora, Debian, openSUSE Tumbleweed, RHEL, Rocky Linux and Ubuntu."
     echo "### Please follow the T-Pot documentation on how to run T-Pot on macOS, Windows and other currently unsupported platforms."
+    echo
+    exit 1
+fi
+
+# Check if running on a supported distribution version. T-Pot follows the
+# current release of each distribution, the packages and repositories it uses
+# are only available there. openSUSE Tumbleweed rolls and is not pinned.
+myVERSION_ID=$(awk -F= '/^VERSION_ID/{print $2}' /etc/os-release | tr -d '"')
+case ${myCURRENT_DISTRIBUTION} in
+  "AlmaLinux"|"Red Hat Enterprise Linux"|"Rocky Linux")
+    mySUPPORTED_VERSION="10"
+    myCURRENT_VERSION="${myVERSION_ID%%.*}"
+    ;;
+  "Fedora Linux")
+    mySUPPORTED_VERSION="44"
+    myCURRENT_VERSION="${myVERSION_ID%%.*}"
+    ;;
+  "Debian GNU/Linux"|"Raspbian GNU/Linux")
+    mySUPPORTED_VERSION="13"
+    myCURRENT_VERSION="${myVERSION_ID%%.*}"
+    ;;
+  "Ubuntu")
+    # Ubuntu releases twice a year, its version is major and minor
+    mySUPPORTED_VERSION="26.04"
+    myCURRENT_VERSION="${myVERSION_ID}"
+    ;;
+  *)
+    mySUPPORTED_VERSION=""
+    ;;
+esac
+
+if [ -n "${mySUPPORTED_VERSION}" ] && [ "${myCURRENT_VERSION}" != "${mySUPPORTED_VERSION}" ];
+  then
+    echo "### T-Pot supports ${myCURRENT_DISTRIBUTION} ${mySUPPORTED_VERSION}, this system runs ${myCURRENT_VERSION}."
+    echo "### Please install T-Pot on the current release of your distribution."
     echo
     exit 1
 fi

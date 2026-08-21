@@ -101,6 +101,27 @@
         fail_msg: "T-Pot is not supported on this platform: {{ ansible_distribution }}."
         success_msg: "T-Pot will now install on {{ ansible_distribution }}."
 
+    - name: Check if supported distribution version (All)
+      # T-Pot follows the current release of each distribution, the packages and
+      # repositories it uses are only available there. openSUSE Tumbleweed rolls
+      # and is not listed, so the check skips it.
+      assert:
+        that: my_current_version == my_supported_version[ansible_distribution]
+        fail_msg: "T-Pot supports {{ ansible_distribution }} {{ my_supported_version[ansible_distribution] }}, this system runs {{ my_current_version }}."
+        success_msg: "T-Pot will now install on {{ ansible_distribution }} {{ my_current_version }}."
+      vars:
+        my_supported_version:
+          AlmaLinux: "10"
+          Debian: "13"
+          Fedora: "44"
+          Raspbian: "13"
+          RedHat: "10"
+          Rocky: "10"
+          Ubuntu: "26.04"
+        # Ubuntu is identified by major and minor, every other one by major
+        my_current_version: "{{ ansible_distribution_version if ansible_distribution == 'Ubuntu' else ansible_distribution_major_version }}"
+      when: ansible_distribution in my_supported_version
+
     - name: Count default routes (All)
       ansible.builtin.shell: ip route show default | wc -l
       args:
@@ -356,6 +377,7 @@
         - "Ubuntu"
 
     - name: Add Docker repository (Fedora)
+      # `addrepo` is dnf5 syntax, Fedora 44 ships dnf5
       shell: |
         if [ "$(dnf repolist docker-ce-stable)" == "" ];
           then
@@ -364,18 +386,23 @@
       when: ansible_distribution in ["Fedora"]
       tags:
         - "Fedora"
-    
+
     - name: Add Docker repository (RHEL)
+      # RHEL 10 ships dnf 4, whose config-manager only knows `--add-repo` - the
+      # dnf5 `addrepo` subcommand fails there with "unrecognized arguments"
       shell: |
         if [ "$(dnf repolist docker-ce-stable)" == "" ];
           then
-            dnf -y config-manager addrepo --from-repofile=https://download.docker.com/linux/rhel/docker-ce.repo
+            dnf -y config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo
         fi
       when: ansible_distribution in ["RedHat"]
       tags:
         - "RedHat"
 
     - name: Add Docker repository (AlmaLinux, Rocky)
+      # deliberately the centos repository: download.docker.com/linux/alma and
+      # /rocky do exist, but they only carry containerd.io and the plugins, not
+      # docker-ce and docker-ce-cli. Same dnf 4 syntax as RHEL above.
       shell: |
         if [ "$(dnf repolist docker-ce-stable)" == "" ];
           then
@@ -500,6 +527,40 @@
         line: "vm.max_map_count=262144"
         state: present
         create: yes
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Ensure IPv4 forwarding is enabled (All)
+      # Containers need it. Docker used to enable it on its own, with the
+      # nftables firewall backend it refuses to start instead.
+      lineinfile:
+        path: /etc/sysctl.conf
+        line: "net.ipv4.ip_forward=1"
+        state: present
+        create: yes
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Enable IPv4 forwarding now (All)
+      # Docker is started further down in this run, the value has to be live by
+      # then and not only after the reboot
+      command: sysctl -w net.ipv4.ip_forward=1
       when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
@@ -663,6 +724,133 @@
         - "Fedora"
         - "RedHat"
         - "Rocky"
+
+    - name: Look for the xt_addrtype module (All)
+      # Docker's iptables backend needs the xtables extensions. RHEL 10 and its
+      # rebuilds ship a kernel without them, dockerd then aborts with
+      # "Extension addrtype revision 0 not supported, missing kernel module?"
+      # and cannot create its bridge network. Docker 28 and up can talk to
+      # nftables directly instead.
+      ansible.builtin.command: modprobe -n xt_addrtype
+      register: my_xt_addrtype
+      changed_when: false
+      failed_when: false
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Look for the nftables firewall backend in dockerd (All, kernels without xtables)
+      ansible.builtin.shell: dockerd --help | grep -q -- --firewall-backend
+      args:
+        executable: /bin/bash
+      register: my_dockerd_nftables
+      changed_when: false
+      failed_when: false
+      when: my_xt_addrtype.rc | default(0) != 0
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Abort if Docker cannot manage the firewall on this kernel (All, kernels without xtables)
+      assert:
+        that: my_dockerd_nftables.rc == 0
+        fail_msg: |
+          This kernel ships no xtables modules, so Docker cannot use its
+          iptables firewall backend, and this Docker Engine does not offer the
+          nftables backend either. A newer Docker Engine is required.
+        success_msg: "Docker will manage the firewall through nftables."
+      when: my_xt_addrtype.rc | default(0) != 0
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Create the Docker configuration directory (All, kernels without xtables)
+      file:
+        path: /etc/docker
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      when: my_xt_addrtype.rc | default(0) != 0
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Look for an existing Docker configuration (All, kernels without xtables)
+      stat:
+        path: /etc/docker/daemon.json
+      register: my_docker_json
+      when: my_xt_addrtype.rc | default(0) != 0
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Read an existing Docker configuration (All, kernels without xtables)
+      slurp:
+        src: /etc/docker/daemon.json
+      register: my_docker_json_content
+      when: my_docker_json.stat.exists | default(false)
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Switch Docker to the nftables firewall backend (All, kernels without xtables)
+      # merged into an existing daemon.json so hand made settings survive
+      copy:
+        dest: /etc/docker/daemon.json
+        content: "{{ my_docker_config | combine({'firewall-backend': 'nftables'}) | to_nice_json }}\n"
+        owner: root
+        group: root
+        mode: '0644'
+      vars:
+        my_docker_config: "{{ (my_docker_json_content.content | b64decode | from_json) if my_docker_json.stat.exists | default(false) else {} }}"
+      when: my_xt_addrtype.rc | default(0) != 0
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
 
     - name: Set SELinux config to permissive (AlmaLinux, Fedora, RHEL, Rocky)
       lineinfile:
