@@ -230,7 +230,7 @@ myUSER=$(whoami)
 myTPOT_CONF_FILE="${HOME}/tpotce/.env"
 myPACKAGES_DEBIAN="ansible apache2-utils cracklib-runtime wget"
 myPACKAGES_FEDORA="ansible cracklib httpd-tools wget"
-myPACKAGES_ROCKY="ansible-core ansible-collection-redhat-rhel_mgmt epel-release cracklib httpd-tools wget"
+myPACKAGES_ROCKY="ansible-core epel-release cracklib httpd-tools wget"
 myPACKAGES_RHEL="ansible-core ansible-collection-redhat-rhel_mgmt cracklib httpd-tools wget"    
 myPACKAGES_OPENSUSE="ansible apache2-utils cracklib wget"
 # Ports a honeypot needs that a distribution service is likely to hold. A
