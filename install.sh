@@ -98,7 +98,7 @@ fi
 
 myINSTALL_NOTIFICATION="### Now installing required packages ..."
 myUSER=$(whoami)
-myTPOT_CONF_FILE="/home/${myUSER}/tpotce/.env"
+myTPOT_CONF_FILE="${HOME}/tpotce/.env"
 myPACKAGES_DEBIAN="ansible apache2-utils cracklib-runtime wget"
 myPACKAGES_FEDORA="ansible cracklib httpd-tools wget"
 myPACKAGES_ROCKY="ansible-core ansible-collection-redhat-rhel_mgmt epel-release cracklib httpd-tools wget"
@@ -177,7 +177,7 @@ case ${myCURRENT_DISTRIBUTION} in
                echo '${myUSER} ALL=(ALL:ALL) ALL' | tee /etc/sudoers.d/${myUSER} >/dev/null && \
                chmod 440 /etc/sudoers.d/${myUSER}"
         echo "### We need sudo for Ansible, please enter the sudo password ..."
-        sudo echo "### ... sudo for Ansible acquired."
+        sudo echo "### ... sudo works. Note that Ansible needs it without a password prompt, see below."
         echo
       else
         sudo apt update
@@ -250,24 +250,32 @@ if [ ! -f installer/install/tpot.yml ] && [ ! -f tpot.yml ];
     fi
 fi
 
-# Check type of sudo access
-if [ "$myANSIBLE_TAG" = "Debian" ];
-  # Debian 13 - sudo seems to apply stricter settings, we now ask for the become password
+# Check type of sudo access.
+# `-k` ignores a cached credential: the package installation above already
+# refreshed the sudo timestamp, so a plain `sudo -n true` would succeed on a
+# password protected system and Ansible would then fail once the timestamp
+# expires in the middle of the playbook. Applies to every distribution - making
+# an exception for one of them breaks unattended installation there.
+if sudo -n -k true > /dev/null 2>&1;
   then
-  	myANSIBLE_BECOME_OPTION="--become --ask-become-pass"
+    myANSIBLE_BECOME_OPTION="--become"
+    echo "### Passwordless ‘sudo‘ available, setting ansible become option to ${myANSIBLE_BECOME_OPTION}."
+    echo
   else
-    sudo -n true > /dev/null 2>&1
-    if [ $? -eq 1 ];
+    if [ "${myQST}" = "y" ];
+      # -s promises an unattended run, and --ask-become-pass would prompt.
       then
-        myANSIBLE_BECOME_OPTION="--ask-become-pass"
-        echo "### ‘sudo‘ not acquired, setting ansible become option to ${myANSIBLE_BECOME_OPTION}."
-        echo "### Ansible will ask for the ‘BECOME password‘ which is typically the password you ’sudo’ with."
+        echo "### ‘sudo‘ requires a password, so -s cannot be honoured."
+        echo "### Either configure passwordless sudo for ${myUSER}, e.g."
+        echo "###   echo '${myUSER} ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/${myUSER}"
+        echo "### or run the installer without -s and enter the password when asked."
         echo
-      else
-        myANSIBLE_BECOME_OPTION="--become"
-        echo "### ‘sudo‘ acquired, setting ansible become option to ${myANSIBLE_BECOME_OPTION}."
-        echo
+        exit 1
     fi
+    myANSIBLE_BECOME_OPTION="--become --ask-become-pass"
+    echo "### ‘sudo‘ requires a password, setting ansible become option to ${myANSIBLE_BECOME_OPTION}."
+    echo "### Ansible will ask for the ‘BECOME password‘ which is typically the password you ’sudo’ with."
+    echo
 fi
 
 # Run Ansible Playbook
@@ -430,7 +438,7 @@ fi
 
 # Pull docker images
 echo "### Now pulling images ..."
-sudo docker compose -f /home/${myUSER}/tpotce/docker-compose.yml pull
+sudo docker compose -f "${HOME}/tpotce/docker-compose.yml" pull
 echo
 
 # Show running services
