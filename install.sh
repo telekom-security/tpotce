@@ -2,10 +2,17 @@
 
 print_help() {
   cat <<EOF
-Usage: $0 [-s] -t <type> [-u <webuser>] [-p <password>]
+Usage: $0 [-s] -t <type> [-u <webuser>] [-p <password>] [-b <branch>] [-r <url>]
 
 Options:
-  -s                Suppress installation confirmation prompt (sets myQST=y)
+  -s                Suppress installation confirmation prompt, unattended run
+                    (requires passwordless sudo, see below)
+  -b <branch>       Branch, tag or commit to install from. Default: the branch
+                    of the local clone this script runs from, otherwise master
+  -r <url>          Repository to install from, https URL, the raw URL for the
+                    playbook is derived from it. Default: the origin of the
+                    local clone this script runs from, otherwise
+                    https://github.com/telekom-security/tpotce
   -t <type>         Type of installation (required if -s is used):
                       h - hive      (requires -u and -p)
                       s - sensor    (no user/pass required)
@@ -25,6 +32,115 @@ validate_type() {
     echo "Invalid installation type: $myTPOT_TYPE"
     print_help
   }
+}
+
+git_source() {
+  # Reads $1 ("branch" or "repo") from the clone this script runs from. `$0` is
+  # a path only when the script runs as a file - piped through
+  # `bash -c "$(curl ...)"` it is not, and a clone in the current directory has
+  # nothing to do with the script that is running, so it must not be used.
+  command -v git >/dev/null || return
+  [ -f "$0" ] || return
+  myDIR=$(cd "$(dirname "$0")" 2>/dev/null && pwd)
+  git -C "${myDIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return
+  case "$1" in
+    branch)
+      myREF=$(git -C "${myDIR}" rev-parse --abbrev-ref HEAD 2>/dev/null)
+      # a detached HEAD has no branch name, the commit works just as well
+      [ "${myREF}" = "HEAD" ] && myREF=$(git -C "${myDIR}" rev-parse HEAD 2>/dev/null)
+      echo "${myREF}"
+      ;;
+    repo)
+      git -C "${myDIR}" remote get-url origin 2>/dev/null
+      ;;
+  esac
+}
+
+normalize_repo() {
+  # compare repository URLs without a trailing slash or `.git`
+  myURL="${1%/}"
+  echo "${myURL%.git}"
+}
+
+resolve_tpot_source() {
+  # -b and -r win, then the environment, then the local clone, then master
+  [ -z "${myTPOT_BRANCH}" ] && myTPOT_BRANCH=$(git_source branch)
+  [ -z "${myTPOT_BRANCH}" ] && myTPOT_BRANCH="master"
+  [ -z "${myTPOT_REPO_URL}" ] && myTPOT_REPO_URL=$(git_source repo)
+  [ -z "${myTPOT_REPO_URL}" ] && myTPOT_REPO_URL="https://github.com/telekom-security/tpotce"
+  myTPOT_REPO_URL=$(normalize_repo "${myTPOT_REPO_URL}")
+}
+
+check_tpot_clone() {
+  # `update: no` in the playbook means Ansible keeps an existing ~/tpotce as it
+  # is, without looking at the requested repository or branch - a test would
+  # silently run against the previous checkout.
+  [ -d "${HOME}/tpotce" ] || return
+  if ! git -C "${HOME}/tpotce" rev-parse --is-inside-work-tree >/dev/null 2>&1;
+    then
+      echo "### ${HOME}/tpotce exists but is not a git repository, its origin cannot be verified."
+      echo
+      return
+  fi
+  myCLONE_BRANCH=$(git -C "${HOME}/tpotce" rev-parse --abbrev-ref HEAD 2>/dev/null)
+  [ "${myCLONE_BRANCH}" = "HEAD" ] && myCLONE_BRANCH=$(git -C "${HOME}/tpotce" rev-parse HEAD 2>/dev/null)
+  myCLONE_REPO=$(normalize_repo "$(git -C "${HOME}/tpotce" remote get-url origin 2>/dev/null)")
+  if [ "${myCLONE_BRANCH}" != "${myTPOT_BRANCH}" ] || [ "${myCLONE_REPO}" != "${myTPOT_REPO_URL}" ];
+    then
+      echo "### ${HOME}/tpotce already exists and does not match what was requested:"
+      echo "###   found:     ${myCLONE_REPO} at ${myCLONE_BRANCH}"
+      echo "###   requested: ${myTPOT_REPO_URL} at ${myTPOT_BRANCH}"
+      echo "### T-Pot would be installed from the existing checkout. Remove it and run"
+      echo "### the installer again, or clone what you want to test into ${HOME}/tpotce:"
+      echo "###   sudo rm -rf ${HOME}/tpotce"
+      echo
+      exit 1
+  fi
+}
+
+sudo_password_required() {
+  # `-k` ignores a cached credential: installing the packages refreshes the sudo
+  # timestamp, so a plain `sudo -n true` would succeed on a password protected
+  # system and Ansible would then fail once the timestamp expires in the middle
+  # of the playbook.
+  ! sudo -n -k true > /dev/null 2>&1
+}
+
+abort_unattended() {
+  echo "### ‘sudo‘ requires a password, so -s cannot be honoured."
+  echo "### Either configure passwordless sudo for ${myUSER}, e.g."
+  echo "###   echo '${myUSER} ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/${myUSER}"
+  echo "### or run the installer without -s and enter the password when asked."
+  echo
+  exit 1
+}
+
+check_port_conflicts() {
+  myPORT_CONFLICT=""
+  for myENTRY in ${myCONFLICT_PORTS}; do
+    myPROTO="${myENTRY%%/*}"
+    myPORT="${myENTRY##*/}"
+    # a socket is listed without root, only the process behind it is not
+    myLINE=$(ss -H -ln --"${myPROTO}" "sport = :${myPORT}" 2>/dev/null | head -n 1)
+    [ -z "${myLINE}" ] && continue
+    # naming the process needs root, and on the Debian branch below `sudo` may
+    # not be installed yet - the occupied port is reported either way
+    myPROC=""
+    if command -v sudo >/dev/null;
+      then
+        myPROC=$(sudo ss -H -lnp --"${myPROTO}" "sport = :${myPORT}" 2>/dev/null \
+                 | sed -n 's/.*users:(("\([^"]*\)".*/\1/p' \
+                 | head -n 1)
+    fi
+    # The playbook turns the resolved stub listener off, so it is not a blocker.
+    # `ss` truncates process names to 15 characters, hence systemd-resolve.
+    if [ "${myPROC}" = "systemd-resolve" ];
+      then
+        continue
+    fi
+    echo "###   ${myPROTO}/${myPORT} is occupied by ${myPROC:-an unidentified process}"
+    myPORT_CONFLICT="y"
+  done
 }
 
 rhel_version() {
@@ -53,14 +169,25 @@ rhel_ansible_repo() {
 
 # Defaults
 myQST=""
+myUNATTENDED=""
 myTPOT_TYPE=""
 myWEB_USER=""
 myWEB_PW=""
+# Where to install T-Pot from. Empty means: work it out in resolve_tpot_source.
+myTPOT_BRANCH="${TPOT_BRANCH}"
+myTPOT_REPO_URL="${TPOT_REPO_URL}"
 
-while getopts ":st:u:p:h" opt; do
+while getopts ":sb:r:t:u:p:h" opt; do
   case "$opt" in
     s)
       myQST="y"
+      myUNATTENDED="y"
+      ;;
+    b)
+      myTPOT_BRANCH="${OPTARG}"
+      ;;
+    r)
+      myTPOT_REPO_URL="${OPTARG}"
       ;;
     t)
       myTPOT_TYPE="${OPTARG,,}"
@@ -83,7 +210,7 @@ while getopts ":st:u:p:h" opt; do
 done
 
 # -s requires -t
-if [[ "$myQST" == "y" && -z "$myTPOT_TYPE" ]]; then
+if [[ "$myUNATTENDED" == "y" && -z "$myTPOT_TYPE" ]]; then
   echo "Error: -t is required when using -s to suppress interaction."
   print_help
 fi
@@ -96,6 +223,8 @@ if [[ "$myTPOT_TYPE" =~ ^[hlit]$ ]]; then
   }
 fi
 
+resolve_tpot_source
+
 myINSTALL_NOTIFICATION="### Now installing required packages ..."
 myUSER=$(whoami)
 myTPOT_CONF_FILE="${HOME}/tpotce/.env"
@@ -104,6 +233,10 @@ myPACKAGES_FEDORA="ansible cracklib httpd-tools wget"
 myPACKAGES_ROCKY="ansible-core ansible-collection-redhat-rhel_mgmt epel-release cracklib httpd-tools wget"
 myPACKAGES_RHEL="ansible-core ansible-collection-redhat-rhel_mgmt cracklib httpd-tools wget"    
 myPACKAGES_OPENSUSE="ansible apache2-utils cracklib wget"
+# Ports a honeypot needs that a distribution service is likely to hold. A
+# service on 127.0.0.1 conflicts with a container publishing the same port on
+# 0.0.0.0, so a loopback listener counts as well.
+myCONFLICT_PORTS="tcp/25 tcp/53 udp/53"
 
 
 myINSTALLER=$(cat << "EOF"
@@ -140,6 +273,7 @@ echo "$myINSTALLER"
 echo
 echo
 echo "### This script will now install T-Pot and all of its dependencies."
+echo "### Source: ${myTPOT_REPO_URL} at ${myTPOT_BRANCH}"
 if [[ -z "$myQST" ]]; then
   while [ "${myQST}" != "y" ] && [ "${myQST}" != "n" ]; do
     echo
@@ -152,6 +286,48 @@ if [ "${myQST}" = "n" ]; then
     echo "### Aborting!"
     echo
     exit 0
+fi
+
+# Fail before anything is installed if an existing ~/tpotce would be used
+# instead of the repository and branch that were asked for.
+check_tpot_clone
+
+# Fail before anything is installed: -s promises an unattended run, but Ansible
+# would ask for the become password. Only possible where sudo already exists -
+# the Debian branch below installs it and the check is repeated afterwards.
+if [ "${myUNATTENDED}" = "y" ] && command -v sudo >/dev/null && sudo_password_required;
+  then
+    abort_unattended
+fi
+
+# Abort before anything is installed if a service holds a port a honeypot needs.
+# The warning at the end of this script comes too late to act on, and an
+# unattended run cannot act on it at all.
+if ! command -v ss >/dev/null;
+  then
+    echo "### ‘ss‘ was not found, so the check for conflicting services cannot run."
+    echo "### Install it and run the installer again:"
+    echo "###   Debian, Raspbian, Ubuntu:       sudo apt install iproute2"
+    echo "###   AlmaLinux, Fedora, RHEL, Rocky: sudo dnf install iproute"
+    echo "###   openSUSE Tumbleweed:            sudo zypper install iproute2"
+    echo
+    exit 1
+fi
+echo "### Now checking for services on ports T-Pot needs ..."
+check_port_conflicts
+if [ "${myPORT_CONFLICT}" = "y" ];
+  then
+    echo "### T-Pot publishes these ports for its honeypots, so a clean installation"
+    echo "### is required. Identify and disable the services, then run the installer"
+    echo "### again:"
+    echo "###   sudo ss -lntup"
+    echo "###   sudo systemctl list-sockets    # for a process that reads ‘systemd‘"
+    echo "###   sudo systemctl disable --now <unit>"
+    echo
+    exit 1
+  else
+    echo "### ... no services found on ports T-Pot needs."
+    echo
 fi
 
 # Install packages based on the distribution
@@ -171,10 +347,21 @@ case ${myCURRENT_DISTRIBUTION} in
         echo "### ‘sudo‘ is not installed. To continue you need to provide the ‘root‘ password"
         echo "### or press CTRL-C to manually install ‘sudo‘ and add your user to the sudoers."
         echo
+        # Ansible cannot be handed a become password by -s, so an unattended
+        # run needs a passwordless rule for the user we are about to add.
+        if [ "${myUNATTENDED}" = "y" ];
+          then
+            mySUDOERS_RULE="${myUSER} ALL=(ALL) NOPASSWD:ALL"
+            echo "### ‘-s‘ was given, so ${myUSER} will get passwordless sudo."
+            echo "### Remove /etc/sudoers.d/${myUSER} after the installation to undo it."
+            echo
+          else
+            mySUDOERS_RULE="${myUSER} ALL=(ALL:ALL) ALL"
+        fi
         su -c "apt -y update && \
                NEEDRESTART_SUSPEND=1 apt -y install sudo ${myPACKAGES_DEBIAN} && \
                /usr/sbin/usermod -aG sudo ${myUSER} && \
-               echo '${myUSER} ALL=(ALL:ALL) ALL' | tee /etc/sudoers.d/${myUSER} >/dev/null && \
+               echo '${mySUDOERS_RULE}' | tee /etc/sudoers.d/${myUSER} >/dev/null && \
                chmod 440 /etc/sudoers.d/${myUSER}"
         echo "### We need sudo for Ansible, please enter the sudo password ..."
         sudo echo "### ... sudo works. Note that Ansible needs it without a password prompt, see below."
@@ -237,7 +424,16 @@ fi
 if [ ! -f installer/install/tpot.yml ] && [ ! -f tpot.yml ];
   then
     echo "### Now downloading T-Pot Ansible Installation Playbook ... "
-    wget -qO tpot.yml https://raw.githubusercontent.com/telekom-security/tpotce/master/installer/install/tpot.yml
+    myANSIBLE_TPOT_PLAYBOOK_URL="${myTPOT_REPO_URL/github.com/raw.githubusercontent.com}/${myTPOT_BRANCH}/installer/install/tpot.yml"
+    if ! wget -qO tpot.yml "${myANSIBLE_TPOT_PLAYBOOK_URL}";
+      # a mistyped branch ends up here, and would fail with a confusing Ansible
+      # error further down
+      then
+        echo "### Download failed: ${myANSIBLE_TPOT_PLAYBOOK_URL}"
+        echo "### Check the repository and the branch, then run the installer again."
+        echo
+        exit 1
+    fi
     myANSIBLE_TPOT_PLAYBOOK="tpot.yml"
     echo
   else
@@ -250,27 +446,19 @@ if [ ! -f installer/install/tpot.yml ] && [ ! -f tpot.yml ];
     fi
 fi
 
-# Check type of sudo access.
-# `-k` ignores a cached credential: the package installation above already
-# refreshed the sudo timestamp, so a plain `sudo -n true` would succeed on a
-# password protected system and Ansible would then fail once the timestamp
-# expires in the middle of the playbook. Applies to every distribution - making
-# an exception for one of them breaks unattended installation there.
-if sudo -n -k true > /dev/null 2>&1;
+# Check type of sudo access. Applies to every distribution - making an
+# exception for one of them breaks unattended installation there.
+if ! sudo_password_required;
   then
     myANSIBLE_BECOME_OPTION="--become"
     echo "### Passwordless ‘sudo‘ available, setting ansible become option to ${myANSIBLE_BECOME_OPTION}."
     echo
   else
-    if [ "${myQST}" = "y" ];
-      # -s promises an unattended run, and --ask-become-pass would prompt.
+    # -s promises an unattended run, and --ask-become-pass would prompt. On the
+    # Debian branch sudo may have been installed after the check above.
+    if [ "${myUNATTENDED}" = "y" ];
       then
-        echo "### ‘sudo‘ requires a password, so -s cannot be honoured."
-        echo "### Either configure passwordless sudo for ${myUSER}, e.g."
-        echo "###   echo '${myUSER} ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/${myUSER}"
-        echo "### or run the installer without -s and enter the password when asked."
-        echo
-        exit 1
+        abort_unattended
     fi
     myANSIBLE_BECOME_OPTION="--become --ask-become-pass"
     echo "### ‘sudo‘ requires a password, setting ansible become option to ${myANSIBLE_BECOME_OPTION}."
@@ -282,7 +470,10 @@ fi
 echo "### Now running T-Pot Ansible Installation Playbook ..."
 echo
 rm ${HOME}/install_tpot.log > /dev/null 2>&1
-ANSIBLE_LOG_PATH=${HOME}/install_tpot.log ansible-playbook ${myANSIBLE_TPOT_PLAYBOOK} -i 127.0.0.1, -c local --tags "${myANSIBLE_TAG}" ${myANSIBLE_BECOME_OPTION}
+# neither a repository URL nor a git reference contains a space, so the
+# unquoted expansion below splits into exactly four arguments
+myANSIBLE_EXTRA_VARS="-e tpot_repo=${myTPOT_REPO_URL} -e tpot_branch=${myTPOT_BRANCH}"
+ANSIBLE_LOG_PATH=${HOME}/install_tpot.log ansible-playbook ${myANSIBLE_TPOT_PLAYBOOK} -i 127.0.0.1, -c local --tags "${myANSIBLE_TAG}" ${myANSIBLE_BECOME_OPTION} ${myANSIBLE_EXTRA_VARS}
 
 # Something went wrong
 if [ ! $? -eq 0 ];

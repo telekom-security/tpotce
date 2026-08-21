@@ -61,7 +61,12 @@ function fuSELFUPDATE () {
 	    return
 	fi
 	### DEV
-	myRESULT=$(git diff --name-only origin/master | grep "^update.sh")
+	# compare against the checked out branch, an installation from a testing
+	# branch would otherwise always look outdated
+	myBRANCH=$(git rev-parse --abbrev-ref HEAD)
+	# a branch that only exists locally has no remote counterpart to diff against
+	git rev-parse --verify --quiet "origin/${myBRANCH}" >/dev/null || myBRANCH="master"
+	myRESULT=$(git diff --name-only "origin/${myBRANCH}" | grep "^update.sh")
 	if [ "$myRESULT" == "update.sh" ];
 	  then
 	    echo "###### $myBLUE""Found newer version, will be pulling updates and restart myself.""$myWHITE"

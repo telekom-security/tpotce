@@ -140,12 +140,27 @@
   become: true
 
   tasks:
-    - name: Revert DNSStubListener setting in resolved.conf (Fedora, Ubuntu)
+    - name: Remove the T-Pot resolved drop-in (All)
+      file:
+        path: /etc/systemd/resolved.conf.d/tpot.conf
+        state: absent
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Revert DNSStubListener setting in resolved.conf, for installations that predate the drop-in (Fedora, Ubuntu)
       lineinfile:
         path: /etc/systemd/resolved.conf
-        regexp: 'DNSStubListener=no'
-        line: 'DNSStubListener=yes'
-        state: present
+        regexp: '^DNSStubListener=no'
+        state: absent
+      # a missing file is reported as "file not present", not as an error
       when: ansible_distribution in ["Fedora", "Ubuntu"]
       tags:
         - "Fedora"

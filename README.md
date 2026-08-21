@@ -38,6 +38,8 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/in
   - [Choose your distro](#choose-your-distro)
   - [Raspberry Pi 4 (8GB) Support](#raspberry-pi-4-8gb-support)
   - [Get and install T-Pot](#get-and-install-t-pot)
+  - [Unattended Installation](#unattended-installation)
+  - [Testing a Branch](#testing-a-branch)
   - [macOS \& Windows](#macos--windows)
   - [Red Hat Enterprise Linux](#red-hat-enterprise-linux)
   - [Installation Types](#installation-types)
@@ -348,6 +350,7 @@ Once you are familiar with how things work you should choose a network you suspe
 2. Change into the **tpotce/** folder: `$ cd tpotce`
 3. Run the installer as non-root: `$ ./install.sh`:
    * ⚠️ ***Depending on your Linux distribution of choice the installer will:***
+     * Abort if a service occupies the DNS or SMTP ports the honeypots need, before anything is changed
      * Change the SSH port to `tcp/64295`
      * Disable the DNS Stub Listener to avoid port conflicts with honeypots
      * Set SELinux to Monitor Mode
@@ -364,6 +367,49 @@ Once you are familiar with how things work you should choose a network you suspe
 4. Follow the installer instructions, you will have to enter your user (`sudo` or `root`) password at least once
 5. Check the installer messages for errors and open ports that might cause port conflicts
 6. Reboot: `$ sudo reboot`
+<br><br>
+
+## Unattended Installation
+The installer can run without any interaction, i.e. for automated tests or cloud provisioning:
+```
+./install.sh -s -t <type> [-u <webuser>] [-p <password>]
+```
+| Option | Description |
+|---|---|
+| `-s` | Skip the confirmation prompt and every following question |
+| `-t` | Installation type: `h` hive, `s` sensor, `l` llm, `i` mini, `m` mobile, `t` tarpit |
+| `-u` | Web user name, required for `h`, `l`, `i` and `t` |
+| `-p` | Web user password, required for `h`, `l`, `i` and `t` |
+
+⚠️ ***`-s` requires passwordless `sudo` for the user running the installer.*** Ansible would otherwise ask for the `BECOME password` and the run would stall, so the installer stops right away and tells you so. Grant it before you start:
+```
+echo "$(whoami) ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/$(whoami)
+sudo chmod 440 /etc/sudoers.d/$(whoami)
+```
+Remove `/etc/sudoers.d/<user>` after the installation if you do not want to keep it. On Debian without `sudo` installed the installer creates this rule itself, because it has to add `sudo` anyway - it says so when it does.
+<br><br>
+
+## Testing a Branch
+By default T-Pot installs from `master`. To test changes to the installer itself, the installer, the Ansible playbook and the T-Pot repository can be taken from any branch, tag or commit - and from a fork:
+```
+# from a local clone, the checked out branch is used automatically
+git clone -b my-feature https://github.com/telekom-security/tpotce ~/tpotce
+~/tpotce/install.sh
+
+# explicitly, works the same for an unattended run
+./install.sh -b my-feature -r https://github.com/someuser/tpotce -s -t h -u user -p pass
+
+# as environment variables, i.e. for the one-liner or cloud provisioning
+TPOT_BRANCH=my-feature env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/my-feature/install.sh)"
+```
+| Option | Environment | Description |
+|---|---|---|
+| `-b` | `TPOT_BRANCH` | Branch, tag or commit to install from |
+| `-r` | `TPOT_REPO_URL` | Repository to install from, https URL |
+
+The installer takes the first of these it finds: the options, the environment variables, the branch and `origin` of the local clone it runs from, and finally `master` of `https://github.com/telekom-security/tpotce`. It prints what it settled on before it changes anything. Two things to keep in mind:
+* With the one-liner the branch appears twice, in the URL you download `install.sh` from and in `TPOT_BRANCH` - they have to match, the script cannot tell where it was downloaded from.
+* An existing `~/tpotce` is always used as it is, so the installer stops if it is on a different repository or branch than the one requested. Remove it (`sudo rm -rf ~/tpotce`) and run the installer again.
 <br><br>
 
 ## macOS & Windows

@@ -101,48 +101,6 @@
         fail_msg: "T-Pot is not supported on this platform: {{ ansible_distribution }}."
         success_msg: "T-Pot will now install on {{ ansible_distribution }}."
 
-    - name: Look for services occupying honeypot ports (All)
-      # become is required: without root, `ss -p` shows no process for sockets
-      # owned by other users, every entry would read "unknown" and the
-      # exceptions below could never match.
-      become: true
-      ansible.builtin.shell: |
-        ss -H -lntup 2>/dev/null | awk '
-          {
-            n = split($5, a, ":"); port = a[n]
-            if (port !~ /^[0-9]+$/) next
-            # T-Pot keeps 64000 and above for itself
-            if (port + 0 >= 64000) next
-            proc = "unknown"
-            if (match($0, /users:\(\("[^"]+"/)) proc = substr($0, RSTART + 9, RLENGTH - 10)
-            # Sockets that never conflict with a honeypot. ss truncates process
-            # names to 15 characters, hence systemd-resolve and systemd-network.
-            #   sshd            moved to tcp/64295 by this installer
-            #   systemd-resolve stub listener is disabled by this installer
-            #   systemd-network DHCP client sockets (udp/68, udp/546)
-            #   chronyd, ntpd   NTP client sockets
-            #   docker-proxy    a published T-Pot port, the desired end state
-            if (proc ~ /^(sshd|systemd-resolve|systemd-network|NetworkManager|dhclient|dhcpcd|chronyd|chrony|systemd-timesyn|ntpd|avahi-daemon|docker-proxy|dockerd|docker)$/) next
-            print port "/" proc
-          }' | sort -u | tr '\n' ' '
-      args:
-        executable: /bin/bash
-      register: my_port_conflicts
-      changed_when: false
-      failed_when: false
-
-    - name: Abort if other services occupy honeypot ports (All)
-      assert:
-        that: my_port_conflicts.stdout | trim | length == 0
-        fail_msg: |
-          These services occupy ports T-Pot needs: {{ my_port_conflicts.stdout | trim }}
-          T-Pot's honeypots publish nearly every port below 64000, so a clean
-          installation is required. Identify and disable them, then run the
-          installer again:
-            sudo ss -lntup
-            sudo systemctl disable --now <unit>
-        success_msg: "No services detected on honeypot ports."
-
     - name: Count default routes (All)
       ansible.builtin.shell: ip route show default | wc -l
       args:
@@ -704,24 +662,52 @@
         - "RedHat"
         - "Rocky"
 
-    - name: Stop Resolved (Fedora, RHEL, Ubuntu)
+    - name: Look for the systemd-resolved unit (All)
+      # Wherever systemd-resolved runs it holds tcp/53 and udp/53 on 127.0.0.53
+      # and 127.0.0.54, which keeps the DNS honeypots from binding - a cloud
+      # image of any distribution may ship it, so ask the system instead of
+      # listing distributions. A masked unit cannot listen and is left alone.
+      ansible.builtin.command: systemctl list-unit-files systemd-resolved.service
+      register: my_resolved_unit
+      changed_when: false
+      failed_when: false
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Remember whether the resolved stub listener can be running (All)
+      ansible.builtin.set_fact:
+        my_resolved_present: "{{ 'systemd-resolved.service' in my_resolved_unit.stdout and 'masked' not in my_resolved_unit.stdout }}"
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Stop Resolved (All)
       service:
         name: systemd-resolved
         state: stopped
-      when: ansible_distribution in ["Fedora", "RedHat", "Ubuntu"]
+      when: my_resolved_present | bool
       tags:
+        - "AlmaLinux"
+        - "Debian"
         - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
         - "RedHat"
+        - "Rocky"
         - "Ubuntu"
-
-    - name: Copy resolved.conf to /etc/systemd (Fedora)
-      copy:
-        src: /usr/lib/systemd/resolved.conf
-        dest: /etc/systemd/resolved.conf
-      when: ansible_distribution in ["Fedora"]
-      ignore_errors: true
-      tags:
-        - "Fedora"
 
     - name: Copy resolv.conf to /etc/systemd (RHEL)
       copy:
@@ -732,15 +718,47 @@
       tags:
         - "RedHat"
 
-    - name: Modify DNSStubListener in resolved.conf (Fedora, Ubuntu)
-      lineinfile:
-        path: /etc/systemd/resolved.conf
-        regexp: '^.*DNSStubListener=.*'
-        line: 'DNSStubListener=no'
-        state: present
-      when: ansible_distribution in ["Fedora", "Ubuntu"]
+    - name: Create the resolved drop-in directory (All)
+      file:
+        path: /etc/systemd/resolved.conf.d
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      when: my_resolved_present | bool
       tags:
+        - "AlmaLinux"
+        - "Debian"
         - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Disable the resolved stub listener (All)
+      # A drop-in works no matter whether the distribution ships an
+      # /etc/systemd/resolved.conf, and the uninstaller only has to delete it.
+      copy:
+        dest: /etc/systemd/resolved.conf.d/tpot.conf
+        content: |
+          # T-Pot honeypots publish tcp/53 and udp/53, the stub listener on
+          # 127.0.0.53 and 127.0.0.54 would keep them from binding. Name
+          # resolution on the host keeps working through nss-resolve.
+          [Resolve]
+          DNSStubListener=no
+        owner: root
+        group: root
+        mode: '0644'
+      when: my_resolved_present | bool
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
         - "Ubuntu"
 
 ############################
@@ -753,14 +771,19 @@
   become: true
 
   tasks:
-    - name: Start Resolved (Fedora, RHEL, Ubuntu)
+    - name: Start Resolved (All)
       service:
         name: systemd-resolved
         state: restarted
-      when: ansible_distribution in ["Fedora", "RedHat", "Ubuntu"]
+      when: my_resolved_present | default(false) | bool
       tags:
+        - "AlmaLinux"
+        - "Debian"
         - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
         - "RedHat"
+        - "Rocky"
         - "Ubuntu"
 
     - name: Restart Firewalld (AlmaLinux, Fedora, openSUSE Tumbleweed, Rocky)
@@ -877,11 +900,18 @@
         - "Rocky"
         - "Ubuntu"
 
+    - name: Report the T-Pot repository and branch (All)
+      debug:
+        msg: "Cloning {{ tpot_repo | default('https://github.com/telekom-security/tpotce', true) }} at {{ tpot_branch | default('master', true) }}."
+      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+
     - name: Clone / Update T-Pot repository (All)
+      # install.sh passes both as extra vars, a standalone playbook run without
+      # them stays on master
       git:
-        repo: 'https://github.com/telekom-security/tpotce'
+        repo: "{{ tpot_repo | default('https://github.com/telekom-security/tpotce', true) }}"
         dest: '{{ ansible_user_dir }}/tpotce/'
-        version: master
+        version: "{{ tpot_branch | default('master', true) }}"
         clone: yes
         update: no
       when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
