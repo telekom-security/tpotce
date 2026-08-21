@@ -620,8 +620,16 @@
         - "RedHat"
         - "Rocky"
 
-    - name: Load kernel modules (AlmaLinux, Fedora, RHEL, Rocky)
-      command: modprobe -v iptable_filter
+    - name: Look for the iptable_filter module (AlmaLinux, Fedora, RHEL, Rocky)
+      # RHEL 10 and its rebuilds ship a kernel without the legacy xtables
+      # modules, `modprobe iptable_filter` is fatal there. Those systems provide
+      # `iptables` as the nftables based frontend instead, which relies on
+      # nf_tables and loads it on its own - nothing has to be preloaded.
+      # `-n` is a dry run, it reports whether the module exists without loading.
+      ansible.builtin.command: modprobe -n iptable_filter
+      register: my_iptable_filter
+      changed_when: false
+      failed_when: false
       when: ansible_distribution in ["AlmaLinux", "Fedora", "RedHat", "Rocky"]
       tags:
         - "AlmaLinux"
@@ -629,12 +637,27 @@
         - "RedHat"
         - "Rocky"
 
+    - name: Load kernel modules (AlmaLinux, Fedora, RHEL, Rocky)
+      command: modprobe -v iptable_filter
+      when:
+        - ansible_distribution in ["AlmaLinux", "Fedora", "RedHat", "Rocky"]
+        - my_iptable_filter.rc | default(1) == 0
+      tags:
+        - "AlmaLinux"
+        - "Fedora"
+        - "RedHat"
+        - "Rocky"
+
     - name: Update iptables.conf (AlmaLinux, Fedora, RHEL, Rocky)
+      # only where the module exists, systemd-modules-load logs a failure for
+      # every entry it cannot find
       lineinfile:
         path: /etc/modules-load.d/iptables.conf
         line: iptable_filter
         create: yes
-      when: ansible_distribution in ["AlmaLinux", "Fedora", "RedHat", "Rocky"]
+      when:
+        - ansible_distribution in ["AlmaLinux", "Fedora", "RedHat", "Rocky"]
+        - my_iptable_filter.rc | default(1) == 0
       tags:
         - "AlmaLinux"
         - "Fedora"
