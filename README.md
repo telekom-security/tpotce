@@ -412,6 +412,21 @@ TPOT_BRANCH=my-feature env bash -c "$(curl -sL https://github.com/telekom-securi
 The installer takes the first of these it finds: the options, the environment variables, the branch and `origin` of the local clone it runs from, and finally `master` of `https://github.com/telekom-security/tpotce`. It prints what it settled on before it changes anything. Two things to keep in mind:
 * With the one-liner the branch appears twice, in the URL you download `install.sh` from and in `TPOT_BRANCH` - they have to match, the script cannot tell where it was downloaded from.
 * An existing `~/tpotce` is always used as it is, so the installer stops if it is on a different repository or branch than the one requested. Remove it (`sudo rm -rf ~/tpotce`) and run the installer again.
+
+`update.sh` takes the same two options, so an existing installation can be moved to another branch or fork to test the update procedure itself:
+```
+# update an existing installation from a branch, -y is still required
+~/tpotce/update.sh -y -b my-feature
+
+# the same from a fork, this replaces the URL of 'origin' in ~/tpotce
+~/tpotce/update.sh -y -b my-feature -r https://github.com/someuser/tpotce
+
+# back to the released version
+~/tpotce/update.sh -y -b master
+```
+The branch is checked out for good, so every following `update.sh -y` keeps updating from it. Here `-b` names a branch, not a tag or commit, and there are two more differences to the installer:
+* Without `-b` and `-r` nothing changes, the branch and `origin` of `~/tpotce` are kept - a plain `update.sh -y` behaves as it always has.
+* If a branch has moved the version tag on, `update.sh` only warns about it as long as `-b` or `-r` is given. On such an installation keep passing the option, a plain `update.sh -y` refuses to update a version it does not know.
 <br><br>
 
 ## macOS & Windows
@@ -694,10 +709,12 @@ T-Pot releases are offered through GitHub and can be pulled using `~/tpotce/upda
 ***Updates may have unforeseen consequences. Create a backup of the machine or the files most valuable to your work!***<br>
 
 The update script will ...
- - ***mercilessly*** overwrite local changes to be in sync with the T-Pot master branch
+ - ***mercilessly*** overwrite local changes to be in sync with the branch the installation follows, `master` by default
  - create a full backup of the `~/tpotce` folder
- - update all files in `~/tpotce` to be in sync with the T-Pot master branch
+ - update all files in `~/tpotce` to be in sync with that branch
  - restore your custom `ews.cfg` from `~/tpotce/data/ews/conf` and the T-Pot configuration (`~/tpotce/.env`).
+
+To update from a different branch or fork, i.e. to test changes before they are merged, see [Testing a Branch](#testing-a-branch).
 
 ## Daily Reboot
 By default T-Pot will add a daily reboot including some cleaning up. You can adjust this line with `sudo crontab -e` 
