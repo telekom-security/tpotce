@@ -38,6 +38,8 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/in
   - [Choose your distro](#choose-your-distro)
   - [Raspberry Pi 4 (8GB) Support](#raspberry-pi-4-8gb-support)
   - [Get and install T-Pot](#get-and-install-t-pot)
+  - [Unattended Installation](#unattended-installation)
+  - [Testing a Branch](#testing-a-branch)
   - [macOS \& Windows](#macos--windows)
   - [Red Hat Enterprise Linux](#red-hat-enterprise-linux)
   - [Installation Types](#installation-types)
@@ -112,7 +114,7 @@ T-Pot's main components have been moved into the `tpotinit` Docker image allowin
 ## Honeypots and Tools
 - T-Pot offers docker images for the following honeypots:<br>
 [adbhoney](https://github.com/huuck/ADBHoney),
-[beelzebub](https://github.com/mariocandela/beelzebub),
+[beelzebub](https://github.com/beelzebub-labs/beelzebub),
 [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot),
 [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot),
 [conpot](http://conpot.org/),
@@ -133,7 +135,7 @@ T-Pot's main components have been moved into the `tpotinit` Docker image allowin
 [honeytrap](https://github.com/armedpot/honeytrap/),
 [ipphoney](https://gitlab.com/bontchev/ipphoney),
 [log4pot](https://github.com/thomaspatzke/Log4Pot),
-[mailoney](https://github.com/awhitehatter/mailoney),
+[mailoney](https://github.com/phin3has/mailoney),
 [medpot](https://github.com/schmalle/medpot),
 [miniprint](https://github.com/sa7mon/miniprint),
 [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot),
@@ -149,7 +151,7 @@ Alongside the following tools:
 * [Elastic Stack](https://www.elastic.co/videos) to beautifully visualize all the events captured by T-Pot.
 * [Elasticvue](https://github.com/cars10/elasticvue/) a web front end for browsing and interacting with an Elasticsearch cluster.
 * [Fatt](https://github.com/0x4D31/fatt) a pyshark based script for extracting network metadata and fingerprints from pcap files and live network traffic.
-* [T-Pot-Attack-Map](https://github.com/t3chn0m4g3/t-pot-attack-map) a beautifully animated attack map for T-Pot.
+* [T-Pot-Attack-Map](https://github.com/telekom-security/t-pot-attack-map) a beautifully animated attack map for T-Pot.
 * [P0f](https://lcamtuf.coredump.cx/p0f3/) is a tool for purely passive traffic fingerprinting.
 * [Satori](https://github.com/xnih/satori) is a passive OS, application and protocol fingerprinting tool.
 * [Spiderfoot](https://github.com/smicallef/spiderfoot) an open source intelligence automation tool.
@@ -229,7 +231,7 @@ T-Pot does require ...
 All of the [supported Linux distro images](#choose-your-distro) will run in a VM which means T-Pot will just run fine. The following were tested / reported to work:
 * [UTM (Intel & Apple Silicon)](https://mac.getutm.app/)
 * [VirtualBox](https://www.virtualbox.org/)
-* [VMWare Fusion](https://www.vmware.com/products/fusion/fusion-evaluation.html) and [VMWare Workstation](https://www.vmware.com/products/workstation-pro.html)
+* [VMWare Fusion](https://www.vmware.com/products/desktop-hypervisor/workstation-and-fusion) and [VMWare Workstation](https://www.vmware.com/products/desktop-hypervisor/workstation-and-fusion)
 * KVM is reported to work as well.
 
 ***Some configuration / setup hints:***
@@ -322,7 +324,7 @@ Once you are familiar with how things work you should choose a network you suspe
 ## Choose your distro
 **Steps to Follow:**
 
-1. Download a supported Linux distribution from the list below. (NOTE: Red Hat Enterprise Linux >= 8 is supported, but omitted from the list below due to its subscription-based nature. See [Red Hat Enterprise Linux](#red-hat-enterprise-linux) for details).
+1. Download a supported Linux distribution from the list below. T-Pot follows the current release of each distribution, the installer will stop on an older one. (NOTE: Red Hat Enterprise Linux 10 is supported, but omitted from the list below due to its subscription-based nature. See [Red Hat Enterprise Linux](#red-hat-enterprise-linux) for details).
 2. During installation choose a **minimum**, **netinstall** or **server** version that will only install essential packages.
 3. **Never** install a graphical desktop environment such as Gnome or KDE. T-Pot will fail to work with it due to port conflicts. 
 4. Make sure to install SSH, so you can connect to the machine remotely.
@@ -330,12 +332,12 @@ Once you are familiar with how things work you should choose a network you suspe
 
 | Distribution Name                                                                  | x64                                                                                                                                   | arm64                                                                                                                                   |
 |:-----------------------------------------------------------------------------------|:--------------------------------------------------------------------------------------------------------------------------------------|:----------------------------------------------------------------------------------------------------------------------------------------|
-| [Alma Linux OS 9.x Minimal ISO](https://almalinux.org)                                | [download](https://repo.almalinux.org/almalinux/9.7/isos/x86_64/AlmaLinux-9.7-x86_64-minimal.iso)                                        | [download](https://repo.almalinux.org/almalinux/9.7/isos/aarch64/AlmaLinux-9.7-aarch64-minimal.iso)                                        |
-| [Debian 13 Network Install](https://www.debian.org/CD/netinst/index.en.html)       | [download](https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-13.3.0-amd64-netinst.iso)                                 | [download](https://cdimage.debian.org/debian-cd/current/arm64/iso-cd/debian-13.3.0-arm64-netinst.iso)                                   |
-| [Fedora Server 42 Network Install](https://fedoraproject.org/server/download)      | [download](https://download.fedoraproject.org/pub/fedora/linux/releases/42/Server/x86_64/iso/Fedora-Server-netinst-x86_64-42-1.1.iso) | [download](https://download.fedoraproject.org/pub/fedora/linux/releases/42/Server/aarch64/iso/Fedora-Server-netinst-aarch64-42-1.1.iso) |
+| [Alma Linux OS 10.x Minimal ISO](https://almalinux.org)                               | [download](https://repo.almalinux.org/almalinux/10/isos/x86_64/AlmaLinux-10-latest-x86_64-minimal.iso)                                 | [download](https://repo.almalinux.org/almalinux/10/isos/aarch64/AlmaLinux-10-latest-aarch64-minimal.iso)                                 |
+| [Debian 13 Network Install](https://www.debian.org/CD/netinst/index.en.html)       | [download](https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-13.6.0-amd64-netinst.iso)                                 | [download](https://cdimage.debian.org/debian-cd/current/arm64/iso-cd/debian-13.6.0-arm64-netinst.iso)                                   |
+| [Fedora Server 44 Network Install](https://fedoraproject.org/server/download)      | [download](https://download.fedoraproject.org/pub/fedora/linux/releases/44/Server/x86_64/iso/Fedora-Server-netinst-x86_64-44-1.7.iso) | [download](https://download.fedoraproject.org/pub/fedora/linux/releases/44/Server/aarch64/iso/Fedora-Server-netinst-aarch64-44-1.7.iso) |
 | [OpenSuse Tumbleweed Network Image](https://get.opensuse.org/tumbleweed/#download) | [download](https://download.opensuse.org/tumbleweed/iso/openSUSE-Tumbleweed-NET-x86_64-Current.iso)                                   | [download](https://download.opensuse.org/ports/aarch64/tumbleweed/iso/openSUSE-Tumbleweed-NET-aarch64-Current.iso)                      |
-| [Rocky Linux OS 9.x Minimal ISO](https://rockylinux.org/download)                     | [download](https://download.rockylinux.org/pub/rocky/9/isos/x86_64/Rocky-9.7-x86_64-minimal.iso)                                      | [download](https://download.rockylinux.org/pub/rocky/9/isos/aarch64/Rocky-9.7-aarch64-minimal.iso)                                      |
-| [Ubuntu 24.04.x Live Server](https://ubuntu.com/download/server)                   | [download](https://releases.ubuntu.com/24.04/ubuntu-24.04.3-live-server-amd64.iso)                                                    | [download](https://cdimage.ubuntu.com/releases/24.04/release/ubuntu-24.04.3-live-server-arm64.iso)                                      |
+| [Rocky Linux OS 10.x Minimal ISO](https://rockylinux.org/download)                    | [download](https://download.rockylinux.org/pub/rocky/10/isos/x86_64/Rocky-10-latest-x86_64-minimal.iso)                               | [download](https://download.rockylinux.org/pub/rocky/10/isos/aarch64/Rocky-10-latest-aarch64-minimal.iso)                               |
+| [Ubuntu 26.04 Live Server](https://ubuntu.com/download/server)                     | [download](https://releases.ubuntu.com/26.04/ubuntu-26.04-live-server-amd64.iso)                                                     | [download](https://cdimage.ubuntu.com/releases/26.04/release/ubuntu-26.04-live-server-arm64.iso)                                        |
 
 <br>
 
@@ -350,6 +352,7 @@ Once you are familiar with how things work you should choose a network you suspe
 2. Change into the **tpotce/** folder: `$ cd tpotce`
 3. Run the installer as non-root: `$ ./install.sh`:
    * ⚠️ ***Depending on your Linux distribution of choice the installer will:***
+     * Abort if a service occupies the DNS or SMTP ports the honeypots need, before anything is changed
      * Change the SSH port to `tcp/64295`
      * Disable the DNS Stub Listener to avoid port conflicts with honeypots
      * Set SELinux to Monitor Mode
@@ -366,12 +369,72 @@ Once you are familiar with how things work you should choose a network you suspe
 4. Follow the installer instructions, you will have to enter your user (`sudo` or `root`) password at least once
 5. Check the installer messages for errors and open ports that might cause port conflicts
 6. Reboot: `$ sudo reboot`
+
+On **Ubuntu 26.04** `sudo` is [sudo-rs](https://github.com/trifectatechfoundation/sudo-rs), which formats its password prompt differently. Ansible does not recognise that prompt and privilege escalation times out, a fix exists upstream but is not released yet. The installer detects this and runs Ansible against the traditional sudo that Ubuntu still ships as `/usr/bin/sudo.ws` - nothing to do, it says so when it happens. If you would rather have it system wide, switch the alternative: `$ sudo update-alternatives --set sudo /usr/bin/sudo.ws`.
+<br><br>
+
+## Unattended Installation
+The installer can run without any interaction, i.e. for automated tests or cloud provisioning:
+```
+./install.sh -s -t <type> [-u <webuser>] [-p <password>]
+```
+| Option | Description |
+|---|---|
+| `-s` | Skip the confirmation prompt and every following question |
+| `-t` | Installation type: `h` hive, `s` sensor, `l` llm, `i` mini, `m` mobile, `t` tarpit |
+| `-u` | Web user name, required for `h`, `l`, `i` and `t` |
+| `-p` | Web user password, required for `h`, `l`, `i` and `t` |
+
+⚠️ ***`-s` requires passwordless `sudo` for the user running the installer.*** Ansible would otherwise ask for the `BECOME password` and the run would stall, so the installer stops right away and tells you so. Grant it before you start:
+```
+echo "$(whoami) ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/$(whoami)
+sudo chmod 440 /etc/sudoers.d/$(whoami)
+```
+Remove `/etc/sudoers.d/<user>` after the installation if you do not want to keep it. On Debian without `sudo` installed the installer creates this rule itself, because it has to add `sudo` anyway - it says so when it does.
+<br><br>
+
+## Testing a Branch
+By default T-Pot installs from `master`. To test changes to the installer itself, the installer, the Ansible playbook and the T-Pot repository can be taken from any branch, tag or commit - and from a fork:
+```
+# from a local clone, the checked out branch is used automatically
+git clone -b my-feature https://github.com/telekom-security/tpotce ~/tpotce
+~/tpotce/install.sh
+
+# explicitly, works the same for an unattended run
+./install.sh -b my-feature -r https://github.com/someuser/tpotce -s -t h -u user -p pass
+
+# as environment variables, i.e. for the one-liner or cloud provisioning
+TPOT_BRANCH=my-feature env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/my-feature/install.sh)"
+```
+| Option | Environment | Description |
+|---|---|---|
+| `-b` | `TPOT_BRANCH` | Branch, tag or commit to install from |
+| `-r` | `TPOT_REPO_URL` | Repository to install from, https URL |
+
+The installer takes the first of these it finds: the options, the environment variables, the branch and `origin` of the local clone it runs from, and finally `master` of `https://github.com/telekom-security/tpotce`. It prints what it settled on before it changes anything. Two things to keep in mind:
+* With the one-liner the branch appears twice, in the URL you download `install.sh` from and in `TPOT_BRANCH` - they have to match, the script cannot tell where it was downloaded from.
+* An existing `~/tpotce` is always used as it is, so the installer stops if it is on a different repository or branch than the one requested. Remove it (`sudo rm -rf ~/tpotce`) and run the installer again.
+
+`update.sh` takes the same two options, so an existing installation can be moved to another branch or fork to test the update procedure itself:
+```
+# update an existing installation from a branch, -y is still required
+~/tpotce/update.sh -y -b my-feature
+
+# the same from a fork, this replaces the URL of 'origin' in ~/tpotce
+~/tpotce/update.sh -y -b my-feature -r https://github.com/someuser/tpotce
+
+# back to the released version
+~/tpotce/update.sh -y -b master
+```
+The branch is checked out for good, so every following `update.sh -y` keeps updating from it. Here `-b` names a branch, not a tag or commit, and there are two more differences to the installer:
+* Without `-b` and `-r` nothing changes, the branch and `origin` of `~/tpotce` are kept - a plain `update.sh -y` behaves as it always has.
+* If a branch has moved the version tag on, `update.sh` only warns about it as long as `-b` or `-r` is given. On such an installation keep passing the option, a plain `update.sh -y` refuses to update a version it does not know.
 <br><br>
 
 ## macOS & Windows
 Sometimes it is just nice if you can spin up a T-Pot instance on macOS or Windows, i.e. for development, testing or just the fun of it. As Docker Desktop is rather limited not all honeypot types or T-Pot features are supported. Also remember, by default the macOS and Windows firewall are blocking access from remote, so testing is limited to the host. For production it is recommended to run T-Pot on [Linux](#choose-your-distro).<br>
 To get things up and running just follow these steps:
-1. Install Docker Desktop for [macOS](https://docs.docker.com/desktop/install/mac-install/) or [Windows](https://docs.docker.com/desktop/install/windows-install/).
+1. Install Docker Desktop for [macOS](https://docs.docker.com/desktop/setup/install/mac-install/) or [Windows](https://docs.docker.com/desktop/setup/install/windows-install/).
 2. Clone the GitHub repository: `git clone https://github.com/telekom-security/tpotce` (in Windows make sure the code is checked out with `LF` instead of `CRLF`!)
 3. Go to: `cd ~/tpotce`
 4. Copy `cp compose/mac_win.yml ./docker-compose.yml`
@@ -393,7 +456,7 @@ Red Hat Enterprise Linux (RHEL) is a somewhat unique case in that:
 1. Connections to Red Hat repositories depend on a Red Hat subscription. You will not be able to update the OS or install new packages if the targeted machine is not subscribed. **If your server is not attached to a Red Hat subscription, installation will fail!** 
 2. Ansible is installed from a RHEL-specific repository by the installer. Do not attempt to install it from the upstream repositories. 
 3. Docker is installed from EPEL, which is installed by the installer script. Do not attempt to install it from the community installer script.
-2. T-Pot will only install successfully on RHEL >= 8. One of the convenience dependencies (`grc`) depends on Python 2, which was removed after RHEL 7. It is omitted from the RHEL installation of T-Pot.
+2. T-Pot will only install successfully on RHEL 10. The convenience dependency `grc` is not available for RHEL and is omitted from the RHEL installation of T-Pot.
 
 ## Installation Types
 
@@ -502,7 +565,7 @@ Identify the `TPOT_HIVE_USER` ENV on the Sensor in the `$HOME/tpotce/.env` confi
 Now you can safely delete the Sensor machine.
 
 ## Community Data Submission
-T-Pot is provided in order to make it accessible to everyone interested in honeypots. By default, the captured data is submitted to a community backend. This community backend uses the data to feed [Sicherheitstacho](https://sicherheitstacho.eu).
+T-Pot is provided in order to make it accessible to everyone interested in honeypots. By default, the captured data is submitted to a community backend. This community backend uses the data to feed [Sicherheitstacho](https://www.sicherheitstacho.eu/).
 You may opt out of the submission by removing the `# Ewsposter service` from `~/tpotce/docker-compose.yml` by following these steps:
 1. Stop T-Pot services: `systemctl stop tpot`
 2. Open `~/tpotce/docker-compose.yml`: `micro ~/tpotce/docker-compose.yml`
@@ -627,7 +690,7 @@ To create your customized docker compose file:
 3. The script will guide you through the process of creating your own `docker-compose.yml`. As some honeypots and services occupy the same ports it will check if any port conflicts are present and notify regarding the conflicting services. You then can resolve them manually by adjusting `docker-compose-custom.yml` or re-run the script.
 4. Stop T-Pot with `systemctl stop tpot`.
 5. Copy the custom docker compose file: `cp docker-compose-custom.yml ~/tpotce` and `cd ~/tpotce`.
-6. Check if everything works by running `docker-compose -f docker-compose-custom.yml up`. In case of errors follow the [Docker Compose Specification](https://docs.docker.com/compose/compose-file/) for mitigation. Most likely it is just a port conflict you can adjust by editing the docker compose file. 
+6. Check if everything works by running `docker-compose -f docker-compose-custom.yml up`. In case of errors follow the [Docker Compose Specification](https://docs.docker.com/reference/compose-file/) for mitigation. Most likely it is just a port conflict you can adjust by editing the docker compose file.
 6. If everything works just fine press `CTRL-C` to stop the containers and run `docker-compose -f docker-compose-custom.yml down -v`.
 7. Replace docker compose file with the new and successfully tested customized docker compose file `mv ~/tpotce/docker-compose-custom.yml ~/tpotce/docker-compose.yml`.
 8. Start T-Pot with `systemctl start tpot`.
@@ -648,10 +711,12 @@ T-Pot releases are offered through GitHub and can be pulled using `~/tpotce/upda
 ***Updates may have unforeseen consequences. Create a backup of the machine or the files most valuable to your work!***<br>
 
 The update script will ...
- - ***mercilessly*** overwrite local changes to be in sync with the T-Pot master branch
+ - ***mercilessly*** overwrite local changes to be in sync with the branch the installation follows, `master` by default
  - create a full backup of the `~/tpotce` folder
- - update all files in `~/tpotce` to be in sync with the T-Pot master branch
+ - update all files in `~/tpotce` to be in sync with that branch
  - restore your custom `ews.cfg` from `~/tpotce/data/ews/conf` and the T-Pot configuration (`~/tpotce/.env`).
+
+To update from a different branch or fork, i.e. to test changes before they are merged, see [Testing a Branch](#testing-a-branch).
 
 ## Daily Reboot
 By default T-Pot will add a daily reboot including some cleaning up. You can adjust this line with `sudo crontab -e` 
@@ -720,9 +785,9 @@ You can show all T-Pot relevant containers by running `dps` or `dpsw [interval]`
 <br><br>
 
 ## Blackhole
-Blackhole will run T-Pot in kind of a stealth mode manner without permanent visits of publicly known scanners and thus reducing the possibility of being exposed. While this is of course always a cat and mouse game the blackhole feature is null routing all requests from [known mass scanners](https://raw.githubusercontent.com/stamparm/maltrail/master/trails/static/mass_scanner.txt) while still catching the events through Suricata.
+Blackhole will run T-Pot in kind of a stealth mode manner without permanent visits of publicly known scanners and thus reducing the possibility of being exposed. While this is of course always a cat and mouse game, the blackhole feature null routes all requests from [known mass scanners](https://raw.githubusercontent.com/stamparm/maltrail/master/trails/static/mass_scanner.txt) while still catching the events through Suricata.
 <br>
-The feature is activated by setting `TPOT_BLACKHOLE=DISABLED` in `~/tpotce/.env`, then run `systemctl stop tpot` and `systemctl start tpot` or `sudo reboot`.
+The feature is activated by setting `TPOT_BLACKHOLE=ENABLED` in `~/tpotce/.env`, then run `systemctl stop tpot` and `systemctl start tpot` or `sudo reboot`.
 <br>
 Enabling this feature will drastically reduce attackers visibility and consequently result in less activity. However as already mentioned it is neither a guarantee for being completely stealth nor will it prevent fingerprinting of some honeypot services.
 <br><br>
@@ -786,7 +851,7 @@ Storage failures can be identified easier via `htop`.
 # Contact
 T-Pot is provided ***as is*** open source ***without*** any commitment regarding support ([see the disclaimer](#disclaimer)).
 
-If you are a security researcher and want to responsibly report an issue please get in touch with our [CERT](https://www.telekom.com/en/corporate-responsibility/data-protection-data-security/security/details/introducing-deutsche-telekom-cert-358316).
+If you are a security researcher and want to responsibly report an issue please get in touch with our [CERT](https://www.telekom.com/en/company/data-privacy-and-security/news/introducing-deutsche-telekom-cert-358316).
 <br><br>
 
 ## Issues
@@ -822,33 +887,33 @@ The software that T-Pot is built on uses the following licenses.
 [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot/blob/main/LICENSE),
 [rdphoneypot](https://gitlab.com/bontchev/rdphoneypot/-/blob/master/LICENSE),
 [sentrypeer](https://github.com/SentryPeer/SentryPeer/blob/main/LICENSE.GPL-3.0-only),
-[snare](https://github.com/mushorg/snare/blob/master/LICENSE),
-[tanner](https://github.com/mushorg/snare/blob/master/LICENSE)
+[snare](https://github.com/mushorg/snare/blob/main/LICENSE),
+[tanner](https://github.com/mushorg/snare/blob/main/LICENSE)
 <br>Apache 2 License:
 [cyberchef](https://github.com/gchq/CyberChef/blob/master/LICENSE),
 [dicompot](https://github.com/nsmfoo/dicompot/blob/master/LICENSE),
-[elasticsearch](https://github.com/elasticsearch/elasticsearch/blob/master/LICENSE.txt),
+[elasticsearch](https://github.com/elastic/elasticsearch/blob/master/LICENSE.txt),
 [go-pot](https://github.com/ryanolee/go-pot?tab=License-1-ov-file#readme),
 [h0neytr4p](https://github.com/pbssubhash/h0neytr4p?tab=Apache-2.0-1-ov-file#readme),
-[logstash](https://github.com/elasticsearch/logstash/blob/master/LICENSE.txt),
-[kibana](https://github.com/elasticsearch/kibana/blob/master/LICENSE.txt),
-[docker](https://github.com/docker/docker/blob/master/LICENSE)
+[logstash](https://github.com/elastic/logstash/blob/main/LICENSE.txt),
+[kibana](https://github.com/elastic/kibana/blob/main/LICENSE.txt),
+[docker](https://github.com/moby/moby/blob/master/LICENSE)
 <br>MIT license:
 [autoheal](https://github.com/willfarrell/docker-autoheal?tab=MIT-1-ov-file#readme),
-[beelzebub](https://github.com/mariocandela/beelzebub?tab=MIT-1-ov-file#readme),
+[beelzebub](https://github.com/beelzebub-labs/beelzebub?tab=MIT-1-ov-file#readme),
 [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/blob/master/LICENSE),
 [ddospot](https://github.com/aelth/ddospot/blob/master/LICENSE),
 [elasticvue](https://github.com/cars10/elasticvue/blob/master/LICENSE),
-[glutton](https://github.com/mushorg/glutton/blob/master/LICENSE),
-[hellpot](https://github.com/yunginnanet/HellPot/blob/master/LICENSE),
+[glutton](https://github.com/mushorg/glutton/blob/main/LICENSE),
+[hellpot](https://github.com/yunginnanet/HellPot/blob/main/LICENSE),
 [honeyaml](https://github.com/mmta/honeyaml?tab=MIT-1-ov-file#readme),
 [maltrail](https://github.com/stamparm/maltrail/blob/master/LICENSE)
 <br>Unlicense:
 [endlessh](https://github.com/skeeto/endlessh/blob/master/UNLICENSE)
 <br>Other:
 [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot#licencing-agreement-malwaretech-public-licence),
-[cowrie](https://github.com/cowrie/cowrie/blob/master/LICENSE.rst),
-[mailoney](https://github.com/awhitehatter/mailoney),
+[cowrie](https://github.com/cowrie/cowrie/blob/main/LICENSE.rst),
+[mailoney](https://github.com/phin3has/mailoney),
 [Elastic License](https://www.elastic.co/licensing/elastic-license),
 [Wordpot](https://github.com/gbrindisi/wordpot)
 <br>AGPL-3.0:
@@ -864,7 +929,7 @@ Without open source and the development community we are proud to be a part of, 
 ## The developers and development communities of
 
 * [adbhoney](https://github.com/huuck/ADBHoney/graphs/contributors),
-[beelzebub](https://github.com/mariocandela/beelzebub/graphs/contributors),
+[beelzebub](https://github.com/beelzebub-labs/beelzebub/graphs/contributors),
 [ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/graphs/contributors),
 [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot/graphs/contributors),
 [conpot](https://github.com/mushorg/conpot/graphs/contributors),
@@ -872,7 +937,7 @@ Without open source and the development community we are proud to be a part of, 
 [ddospot](https://github.com/aelth/ddospot/graphs/contributors),
 [dicompot](https://github.com/nsmfoo/dicompot/graphs/contributors),
 [dionaea](https://github.com/DinoTools/dionaea/graphs/contributors),
-[docker](https://github.com/docker/docker/graphs/contributors),
+[docker](https://github.com/moby/moby/graphs/contributors),
 [elasticpot](https://gitlab.com/bontchev/elasticpot/-/project_members),
 [elasticsearch](https://github.com/elastic/elasticsearch/graphs/contributors),
 [elasticvue](https://github.com/cars10/elasticvue/graphs/contributors),
@@ -892,11 +957,11 @@ Without open source and the development community we are proud to be a part of, 
 [kibana](https://github.com/elastic/kibana/graphs/contributors),
 [logstash](https://github.com/elastic/logstash/graphs/contributors),
 [log4pot](https://github.com/thomaspatzke/Log4Pot/graphs/contributors),
-[mailoney](https://github.com/awhitehatter/mailoney),
+[mailoney](https://github.com/phin3has/mailoney),
 [maltrail](https://github.com/stamparm/maltrail/graphs/contributors),
 [medpot](https://github.com/schmalle/medpot/graphs/contributors),
 [miniprint](https://github.com/sa7mon/miniprint/graphs/contributors),
-[p0f](http://lcamtuf.coredump.cx/p0f3/),
+[p0f](https://lcamtuf.coredump.cx/p0f3/),
 [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot/graphs/contributors),
 [rdphoneypot](https://gitlab.com/bontchev/rdphoneypot/-/project_members),
 [sentrypeer](https://github.com/SentryPeer/SentryPeer/graphs/contributors),

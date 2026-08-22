@@ -8,9 +8,9 @@ Restart=always
 RestartSec=5
 Type=simple
 TimeoutSec=infinity
-ExecStartPre=-/usr/bin/docker compose -f /home/{{ ansible_user_id }}/tpotce/docker-compose.yml down -v
-ExecStart=/usr/bin/docker compose -f /home/{{ ansible_user_id }}/tpotce/docker-compose.yml up
-ExecStop=/usr/bin/docker compose -f /home/{{ ansible_user_id }}/tpotce/docker-compose.yml down -v
+ExecStartPre=-/usr/bin/docker compose -f {{ ansible_facts.user_dir }}/tpotce/docker-compose.yml down -v
+ExecStart=/usr/bin/docker compose -f {{ ansible_facts.user_dir }}/tpotce/docker-compose.yml up
+ExecStop=/usr/bin/docker compose -f {{ ansible_facts.user_dir }}/tpotce/docker-compose.yml down -v
 RemainAfterExit=yes
 
 [Install]

@@ -24,21 +24,21 @@
   tasks:
     - name: Check if running as root (All)
       assert:
-        that: ansible_user_id != 'root'
+        that: ansible_facts.user_id != 'root'
         fail_msg: "T-Pot playbook should not be run as root."
-        success_msg: "Running as user: {{ ansible_user_id }}."
+        success_msg: "Running as user: {{ ansible_facts.user_id }}."
 
     - name: Check if running as tpot (All)
       assert:
-        that: ansible_user_id != 'tpot'
+        that: ansible_facts.user_id != 'tpot'
         fail_msg: "Reserved username `tpot` detected."
-        success_msg: "Running as user: {{ ansible_user_id }}."
+        success_msg: "Running as user: {{ ansible_facts.user_id }}."
 
     - name: Check if supported distribution (All)
       assert:
-        that: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
-        fail_msg: "T-Pot uninstall is not supported on this plattform: {{ ansible_distribution }}."
-        success_msg: "T-Pot will now be removed from {{ ansible_distribution }}."
+        that: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+        fail_msg: "T-Pot uninstall is not supported on this plattform: {{ ansible_facts.distribution }}."
+        success_msg: "T-Pot will now be removed from {{ ansible_facts.distribution }}."
 
 #######################################
 # T-Pot - Remove cron job and service #
@@ -64,7 +64,7 @@
         name: "T-Pot Daily Reboot"
         user: root
         state: absent
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
 
 - name: Remove T-Pot systemd service
   hosts: all
@@ -87,14 +87,14 @@
         state: stopped
         enabled: no
       ignore_errors: yes
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
 
     - name: Remove systemd service file for tpot
       ansible.builtin.file:
         path: '/etc/systemd/system/tpot.service'
         state: absent
       notify: Reload systemd
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
 
   handlers:
     - name: Reload systemd
@@ -128,7 +128,7 @@
         marker: "# {mark} ANSIBLE MANAGED BLOCK"
         state: absent
       become: false
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
 
 ##########################################################
 # T-Pot - Restore configs, remove users and groups, etc. #
@@ -140,33 +140,50 @@
   become: true
 
   tasks:
-    - name: Revert DNSStubListener setting in resolved.conf (Fedora, Ubuntu)
+    - name: Remove the T-Pot resolved drop-in (All)
+      file:
+        path: /etc/systemd/resolved.conf.d/tpot.conf
+        state: absent
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Revert DNSStubListener setting in resolved.conf, for installations that predate the drop-in (Fedora, Ubuntu)
       lineinfile:
         path: /etc/systemd/resolved.conf
-        regexp: 'DNSStubListener=no'
-        line: 'DNSStubListener=yes'
-        state: present
-      when: ansible_distribution in ["Fedora", "Ubuntu"]
+        regexp: '^DNSStubListener=no'
+        state: absent
+      # a missing file is reported as "file not present", not as an error
+      when: ansible_facts.distribution in ["Fedora", "Ubuntu"]
       tags:
         - "Fedora"
         - "Ubuntu"
 
-    - name: Revert SELinux config to enforcing (AlmaLinux, Fedora, RHEL, Rocky)
+    - name: Revert SELinux config to enforcing (AlmaLinux, Fedora, openSUSE Tumbleweed, RHEL, Rocky)
       lineinfile:
         path: /etc/selinux/config
         regexp: '^SELINUX='
         line: 'SELINUX=enforcing'
-      when: ansible_distribution in ["AlmaLinux", "Fedora", "RedHat", "Rocky"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky"]
       tags:
         - "AlmaLinux"
         - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "RedHat"
         - "Rocky"
 
     - name: Remove iptables.conf file (AlmaLinux, Fedora, RHEL, Rocky)
       file:
         path: /etc/modules-load.d/iptables.conf
         state: absent
-      when: ansible_distribution in ["AlmaLinux", "Fedora", "RedHat", "Rocky"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Fedora", "RedHat", "Rocky"]
       tags:
         - "AlmaLinux"
         - "Fedora"
@@ -179,7 +196,7 @@
         target: DROP
         permanent: yes
         state: enabled
-      when: ansible_distribution in ["AlmaLinux", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky"]
       tags:
         - "AlmaLinux"
         - "Fedora"
@@ -192,7 +209,7 @@
         port: 22/tcp
         permanent: yes
         state: enabled
-      when: ansible_distribution in ["AlmaLinux", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky"]
       tags:
         - "AlmaLinux"
         - "Fedora"
@@ -204,7 +221,7 @@
       file:
         path: /etc/ssh/sshd_config.d/port.conf
         state: absent
-      when: ansible_distribution in ["openSUSE Tumbleweed"]
+      when: ansible_facts.distribution in ["openSUSE Tumbleweed"]
       tags:
         - "openSUSE Tumbleweed"
 
@@ -213,7 +230,7 @@
         path: /etc/ssh/sshd_config
         line: "Port 64295"
         state: absent
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "Raspbian", "Rocky", "RedHat", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "Raspbian", "Rocky", "RedHat", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
@@ -223,12 +240,54 @@
         - "Rocky"
         - "Ubuntu"
 
-    - name: Revert Comment out Port(s) in sshd_config, can cause port conflicts on deploy (AlmaLinux, Debian, Fedora, openSUSE Tumbleweed, Raspbian, RHEL, Rocky, Ubuntu)
+    - name: Look for the files that configure sshd (All)
+      # openSUSE Tumbleweed keeps the vendor configuration in /usr/etc and has
+      # no /etc/ssh/sshd_config at all, the other distributions include
+      # /etc/ssh/sshd_config.d/*.conf from theirs. sshd listens on every port it
+      # is given, so a port left behind in any of these files keeps getting in
+      # the way of the honeypots.
+      ansible.builtin.find:
+        paths:
+          - /etc/ssh
+          - /etc/ssh/sshd_config.d
+        patterns:
+          - "sshd_config"
+          - "*.conf"
+      register: my_sshd_config
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Revert the commented out Port(s) (All)
       ansible.builtin.replace:
-        path: /etc/ssh/sshd_config
+        path: "{{ item }}"
         regexp: '^# (Port (?!22$)[0-9]+)'
         replace: '\1'
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      loop: "{{ my_sshd_config.files | default([]) | map(attribute='path') | sort }}"
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Remove IPv4 forwarding setting (All)
+      lineinfile:
+        path: /etc/sysctl.conf
+        line: "net.ipv4.ip_forward=1"
+        state: absent
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
@@ -244,7 +303,7 @@
         path: /etc/sysctl.conf
         line: "vm.max_map_count=262144"
         state: absent
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
@@ -259,7 +318,7 @@
       user:
         name: tpot
         state: absent
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
@@ -274,7 +333,7 @@
       group:
         name: tpot
         state: absent
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
@@ -306,7 +365,7 @@
           - liblvm2cmd2_03
           - lvm2
         state: absent
-      when: ansible_distribution in ["openSUSE Tumbleweed"]
+      when: ansible_facts.distribution in ["openSUSE Tumbleweed"]
       tags:
         - "openSUSE Tumbleweed"
 
@@ -319,7 +378,7 @@
           - docker-buildx-plugin
           - docker-compose-plugin
         state: absent
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
@@ -332,7 +391,7 @@
       file:
         path: /var/lib/docker
         state: absent
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
@@ -353,11 +412,19 @@
   become: true
 
   tasks:
-    - name: Remove Docker Engine repository file (Debian, Raspbian, Ubuntu)
+    - name: Remove Docker Engine repository and key files (Debian, Raspbian, Ubuntu)
+      # docker.sources and docker.asc come from deb822_repository, the other
+      # three from installations that predate it
       file:
-        path: /etc/apt/sources.list.d/docker.list
+        path: "{{ item }}"
         state: absent
-      when: ansible_distribution in ["Debian", "Raspbian", "Ubuntu"]
+      loop:
+        - /etc/apt/sources.list.d/docker.sources
+        - /etc/apt/sources.list.d/docker.list
+        - /etc/apt/keyrings/docker.asc
+        - /etc/apt/keyrings/docker.gpg
+        - /etc/apt/keyrings/docker
+      when: ansible_facts.distribution in ["Debian", "Raspbian", "Ubuntu"]
       tags:
         - "Debian"
         - "Raspbian"
@@ -367,7 +434,7 @@
       file:
         path: /etc/yum.repos.d/docker-ce.repo
         state: absent
-      when: ansible_distribution in ["AlmaLinux", "Fedora", "Rocky"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Fedora", "Rocky"]
       tags:
         - "AlmaLinux"
         - "Fedora"

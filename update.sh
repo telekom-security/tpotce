@@ -8,6 +8,12 @@ myGREEN="[0;32m"
 myWHITE="[0;0m"
 myBLUE="[0;34m"
 
+# Where to update from. Empty means: keep the branch and the origin of the
+# current checkout, which is what a plain `update.sh -y` has always done.
+myTPOT_BRANCH="${TPOT_BRANCH}"
+myTPOT_REPO_URL="${TPOT_REPO_URL}"
+myTPOT_SOURCE_GIVEN=""
+
 myUPDATER=$(cat << "EOF"
  _____     ____       _     _   _           _       _
 |_   _|   |  _ \ ___ | |_  | | | |_ __   __| | __ _| |_ ___ _ __
@@ -17,6 +23,24 @@ myUPDATER=$(cat << "EOF"
                                  |_|
 EOF
 )
+
+function fuPRINT_HELP () {
+	cat <<EOF
+Usage: $0 -y [-b <branch>] [-r <url>]
+
+Options:
+  -y                Confirm the update, required
+  -b <branch>       Branch to update from, i.e. to test a branch before it is
+                    merged. The branch is checked out, so every following
+                    update stays on it until another branch is requested.
+                    Default: the branch of ~/tpotce, environment: TPOT_BRANCH
+  -r <url>          Repository to update from, https URL. Replaces the URL of
+                    'origin' in ~/tpotce.
+                    Default: the origin of ~/tpotce, environment: TPOT_REPO_URL
+  -h                Show this help message
+EOF
+	exit 1
+}
 
 # Check if running with root privileges
 if [ ${EUID} -eq 0 ];
@@ -49,30 +73,102 @@ function fuCHECKINET () {
 	echo
 }
 
+# Compare repository URLs without a trailing slash or `.git`
+function fuNORMALIZE_REPO () {
+	myURL="${1%/}"
+	echo "${myURL%.git}"
+}
+
+# Work out where to update from. The options and the environment variables win,
+# otherwise the current checkout is kept as it is.
+function fuCHECK_SOURCE () {
+	echo
+	echo "### Checking the update source ..."
+	myCURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+	myCURRENT_REPO=$(fuNORMALIZE_REPO "$(git remote get-url origin 2>/dev/null)")
+	[ -z "${myTPOT_BRANCH}" ] && myTPOT_BRANCH="${myCURRENT_BRANCH}"
+	[ -z "${myTPOT_REPO_URL}" ] && myTPOT_REPO_URL="${myCURRENT_REPO}"
+	myTPOT_REPO_URL=$(fuNORMALIZE_REPO "${myTPOT_REPO_URL}")
+	echo "###### $myBLUE${myTPOT_REPO_URL} at ${myTPOT_BRANCH}$myWHITE"
+	if [ -z "${myTPOT_SOURCE_GIVEN}" ];
+	  then
+	    echo
+	    return
+	fi
+	# A typo in a branch name must not take T-Pot down, so the requested source
+	# is checked before anything is stopped or overwritten. `ls-remote` asks the
+	# repository itself and leaves the local checkout alone.
+	if [ -z "${myTPOT_BRANCH}" ] || [ "${myTPOT_BRANCH}" == "HEAD" ];
+	  then
+	    echo "###### $myBLUE""Unable to determine the current branch, please name one with '-b'.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	    echo "Exiting.""$myWHITE"
+	    echo
+	    exit 1
+	fi
+	if ! git ls-remote --heads "${myTPOT_REPO_URL}" "refs/heads/${myTPOT_BRANCH}" 2>/dev/null | grep -q .;
+	  then
+	    echo "###### $myBLUE""Branch ${myTPOT_BRANCH} does not exist in ${myTPOT_REPO_URL}.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	    echo "Exiting.""$myWHITE"
+	    echo
+	    exit 1
+	  else
+	    echo "###### $myBLUE""Repository and branch are available.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	fi
+	echo
+}
+
+# Move the checkout over to the requested repository and branch. The branch is
+# checked out for good, so a later `update.sh -y` without options keeps updating
+# from it.
+function fuSWITCH_SOURCE () {
+	[ -n "${myTPOT_SOURCE_GIVEN}" ] || return
+	local mySWITCH=""
+	if [ "${myTPOT_REPO_URL}" != "${myCURRENT_REPO}" ];
+	  then
+	    echo "###### $myBLUE""Now switching origin from ${myCURRENT_REPO} to ${myTPOT_REPO_URL}.""$myWHITE"
+	    git remote set-url origin "${myTPOT_REPO_URL}"
+	    mySWITCH="1"
+	fi
+	if [ "${myTPOT_BRANCH}" != "${myCURRENT_BRANCH}" ];
+	  then
+	    echo "###### $myBLUE""Now switching from branch ${myCURRENT_BRANCH} to ${myTPOT_BRANCH}.""$myWHITE"
+	    mySWITCH="1"
+	fi
+	[ -n "${mySWITCH}" ] || return
+	git fetch origin --prune
+	git reset --hard
+	if ! git checkout -B "${myTPOT_BRANCH}" "origin/${myTPOT_BRANCH}";
+	  then
+	    echo "###### $myBLUE""Could not check out ${myTPOT_BRANCH}.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	    echo "Exiting.""$myWHITE"
+	    echo
+	    exit 1
+	fi
+	# a branch that existed locally before keeps whatever it tracked, the pull
+	# below has to follow the branch that was just requested
+	git branch --set-upstream-to="origin/${myTPOT_BRANCH}" "${myTPOT_BRANCH}"
+}
+
 # Update
 function fuSELFUPDATE () {
 	echo
 	echo "### Now checking for newer files in repository ..."
+	# The running script may be replaced by the update, either by newer commits
+	# or by a switch to a different branch, and then has to restart itself.
+	myOLDSUM=$(sha256sum "$0" | awk '{ print $1 }')
+	fuSWITCH_SOURCE
+	echo "###### $myBLUE""Pulling updates from repository.""$myWHITE"
 	git fetch --all
-	myREMOTESTAT=$(git status | grep -c "up-to-date")
-	if [ "$myREMOTESTAT" != "0" ];
+	git reset --hard
+	git pull --force
+	if [ "${myOLDSUM}" != "$(sha256sum "$0" | awk '{ print $1 }')" ];
 	  then
-	    echo "###### $myBLUE""No updates found in repository.""$myWHITE"
-	    return
-	fi
-	### DEV
-	myRESULT=$(git diff --name-only origin/master | grep "^update.sh")
-	if [ "$myRESULT" == "update.sh" ];
-	  then
-	    echo "###### $myBLUE""Found newer version, will be pulling updates and restart myself.""$myWHITE"
-	    git reset --hard
-	    git pull --force
-	    exec ./update.sh -y
+	    echo "###### $myBLUE""Found newer version of update.sh, restarting myself.""$myWHITE"
+	    # `-y` is repeated on purpose: after a switch to an older branch the
+	    # restarted script is that branch's update.sh, which only looks at `$1`
+	    # for the confirmation and would just print its usage otherwise
+	    exec bash "$0" -y "$@"
 	    exit 1
-	  else
-	    echo "###### $myBLUE""Pulling updates from repository.""$myWHITE"
-	    git reset --hard
-	    git pull --force
 	fi
 	echo
 }
@@ -88,6 +184,11 @@ function fuCHECK_VERSION () {
 	    if [[ "$myVERSION" > "$myMINVERSION" || "$myVERSION" == "$myMINVERSION" ]] && [[ "$myVERSION" < "$myMASTERVERSION" || "$myVERSION" == "$myMASTERVERSION" ]]
 	      then
 	        echo "###### $myBLUE$myVERSION is eligible for the update procedure.$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	      elif [ -n "${myTPOT_SOURCE_GIVEN}" ];
+	        then
+	          # A branch or a fork may have moved the version tag on already,
+	          # that must not stop a test of the update procedure itself.
+	          echo "###### $myBLUE $myVERSION is outside the supported range, continuing because an update source was requested.$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
 	      else
 	        echo "###### $myBLUE $myVERSION cannot be upgraded automatically. Please run a fresh install.$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
 		exit
@@ -198,10 +299,34 @@ function fuRESTORE () {
 # Main section #
 ################
 
+while getopts ":yb:r:h" opt; do
+  case "$opt" in
+    y)
+      myCONFIRMED="y"
+      ;;
+    b)
+      myTPOT_BRANCH="${OPTARG}"
+      ;;
+    r)
+      myTPOT_REPO_URL="${OPTARG}"
+      ;;
+    h|\?)
+      fuPRINT_HELP
+      ;;
+    :)
+      echo "Option -${OPTARG} requires an argument."
+      fuPRINT_HELP
+      ;;
+  esac
+done
+
+# -b, -r, TPOT_BRANCH and TPOT_REPO_URL all name an update source explicitly
+[ -n "${myTPOT_BRANCH}${myTPOT_REPO_URL}" ] && myTPOT_SOURCE_GIVEN="1"
+
 # Only run with command switch
 sudo echo "$myUPDATER"
 
-if [ "$1" != "-y" ]; then
+if [ "${myCONFIRMED}" != "y" ]; then
   echo
   echo "This script will update T-Pot to the latest version."
   echo "A backup of ~/tpotce will be written to $HOME. If you are unsure, you should save your work."
@@ -213,9 +338,10 @@ fi
 
 fuCHECK_VERSION
 fuCHECKINET "https://index.docker.io https://github.com"
+fuCHECK_SOURCE
 fuSTOP_TPOT
 fuBACKUP
-fuSELFUPDATE "$0" "$@"
+fuSELFUPDATE "$@"
 fuUPDATER
 fuRESTORE
 
