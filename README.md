@@ -367,6 +367,8 @@ Once you are familiar with how things work you should choose a network you suspe
 4. Follow the installer instructions, you will have to enter your user (`sudo` or `root`) password at least once
 5. Check the installer messages for errors and open ports that might cause port conflicts
 6. Reboot: `$ sudo reboot`
+
+On **Ubuntu 26.04** `sudo` is [sudo-rs](https://github.com/trifectatechfoundation/sudo-rs), which formats its password prompt differently. Ansible does not recognise that prompt and privilege escalation times out, a fix exists upstream but is not released yet. The installer detects this and runs Ansible against the traditional sudo that Ubuntu still ships as `/usr/bin/sudo.ws` - nothing to do, it says so when it happens. If you would rather have it system wide, switch the alternative: `$ sudo update-alternatives --set sudo /usr/bin/sudo.ws`.
 <br><br>
 
 ## Unattended Installation

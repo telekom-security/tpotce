@@ -106,6 +106,38 @@ sudo_password_required() {
   ! sudo -n -k true > /dev/null 2>&1
 }
 
+sudo_rs_become_exe() {
+  # Ubuntu 26.04 makes sudo-rs the active `sudo`. It wraps the prompt it is
+  # given with `-p` into "[sudo: <prompt>] Password:", while Ansible waits for a
+  # line that starts with its own prompt and gives up with "Timed out waiting
+  # for become success or become password prompt". The fix landed in
+  # ansible-core devel only, so point Ansible at the traditional sudo, which
+  # Ubuntu still ships next to sudo-rs. Only needed where a become password is
+  # entered, passwordless sudo never shows a prompt.
+  if [ -n "${myANSIBLE_BECOME_EXE}" ];
+    then
+      return
+  fi
+  sudo --version 2>&1 | grep -qi "sudo-rs" || return
+  for myEXE in /usr/bin/sudo.ws $(update-alternatives --list sudo 2>/dev/null | grep -v -- '-rs$'); do
+    if [ -x "${myEXE}" ];
+      then
+        myANSIBLE_BECOME_EXE="-e ansible_become_exe=${myEXE}"
+        echo "### ‘sudo‘ is sudo-rs, whose password prompt Ansible cannot read."
+        echo "### Setting the Ansible become executable to ${myEXE}."
+        echo
+        return
+    fi
+  done
+  echo "### ‘sudo‘ is sudo-rs and no traditional sudo was found next to it."
+  echo "### Ansible cannot read the sudo-rs password prompt, so either install the"
+  echo "### traditional sudo or configure passwordless sudo for ${myUSER}:"
+  echo "###   sudo apt install sudo"
+  echo "###   echo '${myUSER} ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/${myUSER}"
+  echo
+  exit 1
+}
+
 abort_unattended() {
   echo "### ‘sudo‘ requires a password, so -s cannot be honoured."
   echo "### Either configure passwordless sudo for ${myUSER}, e.g."
@@ -173,6 +205,9 @@ myUNATTENDED=""
 myTPOT_TYPE=""
 myWEB_USER=""
 myWEB_PW=""
+# Ansible become executable, empty means the Ansible default. See
+# sudo_rs_become_exe.
+myANSIBLE_BECOME_EXE=""
 # Where to install T-Pot from. Empty means: work it out in resolve_tpot_source.
 myTPOT_BRANCH="${TPOT_BRANCH}"
 myTPOT_REPO_URL="${TPOT_REPO_URL}"
@@ -335,6 +370,14 @@ if [ "${myUNATTENDED}" = "y" ] && command -v sudo >/dev/null && sudo_password_re
     abort_unattended
 fi
 
+# Same here: a become password will be needed, so settle the sudo-rs question
+# before anything is installed. On the Debian branch below sudo may not exist
+# yet, the check is repeated with the become option further down.
+if command -v sudo >/dev/null && sudo_password_required;
+  then
+    sudo_rs_become_exe
+fi
+
 # Abort before anything is installed if a service holds a port a honeypot needs.
 # The warning at the end of this script comes too late to act on, and an
 # unattended run cannot act on it at all.
@@ -495,6 +538,7 @@ if ! sudo_password_required;
       then
         abort_unattended
     fi
+    sudo_rs_become_exe
     myANSIBLE_BECOME_OPTION="--become --ask-become-pass"
     echo "### ‘sudo‘ requires a password, setting ansible become option to ${myANSIBLE_BECOME_OPTION}."
     echo "### Ansible will ask for the ‘BECOME password‘ which is typically the password you ’sudo’ with."
@@ -508,7 +552,7 @@ rm ${HOME}/install_tpot.log > /dev/null 2>&1
 # neither a repository URL nor a git reference contains a space, so the
 # unquoted expansion below splits into exactly four arguments
 myANSIBLE_EXTRA_VARS="-e tpot_repo=${myTPOT_REPO_URL} -e tpot_branch=${myTPOT_BRANCH}"
-ANSIBLE_LOG_PATH=${HOME}/install_tpot.log ansible-playbook ${myANSIBLE_TPOT_PLAYBOOK} -i 127.0.0.1, -c local --tags "${myANSIBLE_TAG}" ${myANSIBLE_BECOME_OPTION} ${myANSIBLE_EXTRA_VARS}
+ANSIBLE_LOG_PATH=${HOME}/install_tpot.log ansible-playbook ${myANSIBLE_TPOT_PLAYBOOK} -i 127.0.0.1, -c local --tags "${myANSIBLE_TAG}" ${myANSIBLE_BECOME_OPTION} ${myANSIBLE_BECOME_EXE} ${myANSIBLE_EXTRA_VARS}
 
 # Something went wrong
 if [ ! $? -eq 0 ];
