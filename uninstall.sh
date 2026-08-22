@@ -1,9 +1,46 @@
 #!/usr/bin/env bash
 
+sudo_password_required() {
+  # `-k` ignores a cached credential, so a system that only appears to have
+  # passwordless sudo does not slip through and Ansible fail once the timestamp
+  # expires in the middle of the playbook.
+  ! sudo -n -k true > /dev/null 2>&1
+}
+
+sudo_rs_become_exe() {
+  # Ubuntu 26.04 makes sudo-rs the active `sudo`. It wraps the prompt it is
+  # given with `-p` into "[sudo: <prompt>] Password:", while Ansible waits for a
+  # line that starts with its own prompt and gives up with "Timed out waiting
+  # for become success or become password prompt". The fix landed in
+  # ansible-core devel only, so point Ansible at the traditional sudo, which
+  # Ubuntu still ships next to sudo-rs.
+  sudo --version 2>&1 | grep -qi "sudo-rs" || return
+  for myEXE in /usr/bin/sudo.ws $(update-alternatives --list sudo 2>/dev/null | grep -v -- '-rs$'); do
+    if [ -x "${myEXE}" ];
+      then
+        myANSIBLE_BECOME_EXE="-e ansible_become_exe=${myEXE}"
+        echo "### ‘sudo‘ is sudo-rs, whose password prompt Ansible cannot read."
+        echo "### Setting the Ansible become executable to ${myEXE}."
+        echo
+        return
+    fi
+  done
+  echo "### ‘sudo‘ is sudo-rs and no traditional sudo was found next to it."
+  echo "### Ansible cannot read the sudo-rs password prompt, so either install the"
+  echo "### traditional sudo or configure passwordless sudo for ${myUSER}:"
+  echo "###   sudo apt install sudo"
+  echo "###   echo '${myUSER} ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/${myUSER}"
+  echo
+  exit 1
+}
+
 myUNINSTALL_NOTIFICATION="### Now installing required packages ..."
 myUSER=$(whoami)
 myTPOT_CONF_FILE="/home/${myUSER}/tpotce/.env"
 myANSIBLE_TPOT_PLAYBOOK="installer/remove/tpot.yml"
+# Ansible become executable, empty means the Ansible default. See
+# sudo_rs_become_exe.
+myANSIBLE_BECOME_EXE=""
 
 myUNINSTALLER=$(cat << "EOF"
  _____     ____       _     _   _       _           _        _ _
@@ -67,31 +104,28 @@ if [[ "${myANSIBLE_DISTRIBUTIONS[@]}" =~ "${myCURRENT_DISTRIBUTION}" ]];
     myANSIBLE_TAG=${myCURRENT_DISTRIBUTION}
   fi
 
-# Check type of sudo access
-if [ "$myANSIBLE_TAG" = "Debian" ];
-  # Debian 13 - sudo seems to apply stricter settings, we now ask for the become password
+# Check type of sudo access. Applies to every distribution - making an
+# exception for one of them asks for a password where none is needed.
+if ! sudo_password_required;
   then
-  	myANSIBLE_BECOME_OPTION="--become --ask-become-pass"
+    myANSIBLE_BECOME_OPTION="--become"
+    echo "### Passwordless ‘sudo‘ available, setting ansible become option to ${myANSIBLE_BECOME_OPTION}."
+    echo
   else
-    sudo -n true > /dev/null 2>&1
-    if [ $? -eq 1 ];
-      then
-        myANSIBLE_BECOME_OPTION="--ask-become-pass"
-        echo "### ‘sudo‘ not acquired, setting ansible become option to ${myANSIBLE_BECOME_OPTION}."
-        echo "### Ansible will ask for the ‘BECOME password‘ which is typically the password you ’sudo’ with."
-        echo
-      else
-        myANSIBLE_BECOME_OPTION="--become"
-        echo "### ‘sudo‘ acquired, setting ansible become option to ${myANSIBLE_BECOME_OPTION}."
-        echo
-    fi
+    sudo_rs_become_exe
+    myANSIBLE_BECOME_OPTION="--become --ask-become-pass"
+    echo "### ‘sudo‘ requires a password, setting ansible become option to ${myANSIBLE_BECOME_OPTION}."
+    echo "### Ansible will ask for the ‘BECOME password‘ which is typically the password you ’sudo’ with."
+    echo
 fi
 
 # Run Ansible Playbook
 echo "### Now running T-Pot Ansible Uninstallation Playbook ..."
 echo
 rm ${HOME}/uninstall_tpot.log > /dev/null 2>&1
-ANSIBLE_LOG_PATH=${HOME}/uninstall_tpot.log ansible-playbook ${myANSIBLE_TPOT_PLAYBOOK} -i 127.0.0.1, -c local --tags "${myANSIBLE_TAG}" ${myANSIBLE_BECOME_OPTION}
+# see install.sh for why these two are set explicitly
+ANSIBLE_INJECT_FACT_VARS=False ANSIBLE_PYTHON_INTERPRETER=auto_silent \
+ANSIBLE_LOG_PATH=${HOME}/uninstall_tpot.log ansible-playbook ${myANSIBLE_TPOT_PLAYBOOK} -i 127.0.0.1, -c local --tags "${myANSIBLE_TAG}" ${myANSIBLE_BECOME_OPTION} ${myANSIBLE_BECOME_EXE}
 
 # Something went wrong
 if [ ! $? -eq 0 ];

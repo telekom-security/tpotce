@@ -85,21 +85,58 @@
   tasks:
     - name: Check if running as root (All)
       assert:
-        that: ansible_user_id != 'root'
+        that: ansible_facts.user_id != 'root'
         fail_msg: "T-Pot playbook should not be run as root."
-        success_msg: "Running as user: {{ ansible_user_id }}."
+        success_msg: "Running as user: {{ ansible_facts.user_id }}."
 
     - name: Check if running as tpot (All)
       assert:
-        that: ansible_user_id != 'tpot'
+        that: ansible_facts.user_id != 'tpot'
         fail_msg: "Reserved username `tpot` detected."
-        success_msg: "Running as user: {{ ansible_user_id }}."
+        success_msg: "Running as user: {{ ansible_facts.user_id }}."
 
     - name: Check if supported distribution (All)
       assert:
-        that: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
-        fail_msg: "T-Pot is not supported on this platform: {{ ansible_distribution }}."
-        success_msg: "T-Pot will now install on {{ ansible_distribution }}."
+        that: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+        fail_msg: "T-Pot is not supported on this platform: {{ ansible_facts.distribution }}."
+        success_msg: "T-Pot will now install on {{ ansible_facts.distribution }}."
+
+    - name: Check if supported distribution version (All)
+      # T-Pot follows the current release of each distribution, the packages and
+      # repositories it uses are only available there. openSUSE Tumbleweed rolls
+      # and is not listed, so the check skips it.
+      assert:
+        that: my_current_version == my_supported_version[ansible_facts.distribution]
+        fail_msg: "T-Pot supports {{ ansible_facts.distribution }} {{ my_supported_version[ansible_facts.distribution] }}, this system runs {{ my_current_version }}."
+        success_msg: "T-Pot will now install on {{ ansible_facts.distribution }} {{ my_current_version }}."
+      vars:
+        my_supported_version:
+          AlmaLinux: "10"
+          Debian: "13"
+          Fedora: "44"
+          Raspbian: "13"
+          RedHat: "10"
+          Rocky: "10"
+          Ubuntu: "26.04"
+        # Ubuntu is identified by major and minor, every other one by major
+        my_current_version: "{{ ansible_facts.distribution_version if ansible_facts.distribution == 'Ubuntu' else ansible_facts.distribution_major_version }}"
+      when: ansible_facts.distribution in my_supported_version
+
+    - name: Count default routes (All)
+      ansible.builtin.shell: ip route show default | wc -l
+      args:
+        executable: /bin/bash
+      register: my_default_routes
+      changed_when: false
+      failed_when: false
+
+    - name: Warn about multiple default routes (All)
+      debug:
+        msg: |
+          WARNING: {{ my_default_routes.stdout | trim }} default routes detected.
+          fatt, p0f and suricata derive their capture interface from the default
+          route and cannot handle more than one name, they will restart-loop.
+      when: my_default_routes.stdout | trim != "1"
 
 ############################################################
 # T-Pot - Install recommended, remove conflicting packages #
@@ -113,7 +150,7 @@
   tasks:
     - name: Syncing clocks (All)
       shell: "hwclock --hctosys"
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
       ignore_errors: true
       tags:
         - "AlmaLinux"
@@ -123,6 +160,18 @@
         - "Raspbian"
         - "RedHat"
         - "Rocky"
+        - "Ubuntu"
+
+    - name: Install cron without recommends (Debian, Raspbian, Ubuntu)
+      ansible.builtin.apt:
+        name: cron
+        state: present
+        install_recommends: no
+        update_cache: yes
+      when: ansible_facts.distribution in ["Debian", "Raspbian", "Ubuntu"]
+      tags:
+        - "Debian"
+        - "Raspbian"
         - "Ubuntu"
 
     - name: Install recommended packages (Debian, Raspbian, Ubuntu)
@@ -144,7 +193,7 @@
           - wget
         state: latest
         update_cache: yes
-      when: ansible_distribution in ["Debian", "Raspbian", "Ubuntu"]
+      when: ansible_facts.distribution in ["Debian", "Raspbian", "Ubuntu"]
       tags:
         - "Debian"
         - "Raspbian"
@@ -155,7 +204,7 @@
         name: 'https://github.com/kriipke/grc/releases/download/1.13.8/grc-1.13.8-1.el7.noarch.rpm'
         disable_gpg_check: true
         state: present
-      when: ansible_distribution in ["AlmaLinux", "Rocky"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Rocky"]
       tags:
         - "AlmaLinux"
         - "Rocky"
@@ -178,7 +227,7 @@
           - wget
         state: latest
         update_cache: yes
-      when: ansible_distribution in ["AlmaLinux", "Rocky"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Rocky"]
       tags:
         - "AlmaLinux"
         - "Rocky"
@@ -187,7 +236,7 @@
       shell: "curl https://getmic.ro | bash && mv micro /usr/bin"
       args:
         executable: /bin/bash
-      when: ansible_distribution in ["AlmaLinux", "openSUSE Tumbleweed", "RedHat", "Rocky"]
+      when: ansible_facts.distribution in ["AlmaLinux", "openSUSE Tumbleweed", "RedHat", "Rocky"]
       tags:
         - "AlmaLinux"
         - "openSUSE Tumbleweed"
@@ -213,7 +262,7 @@
           - wget
         state: latest
         update_cache: yes
-      when: ansible_distribution in ["Fedora"]
+      when: ansible_facts.distribution in ["Fedora"]
       tags:
         - "Fedora"
 
@@ -227,7 +276,7 @@
           - yast2-auth-user
         state: absent
         update_cache: yes
-      when: ansible_distribution in ["openSUSE Tumbleweed"]
+      when: ansible_facts.distribution in ["openSUSE Tumbleweed"]
       tags:
         - "openSUSE Tumbleweed"
 
@@ -239,6 +288,8 @@
           - busybox-net-tools
           - ca-certificates
           - cracklib
+          # the daily reboot is a cron job, the Minimal-VM image ships no cron
+          - cron
           - curl
           - git
           - grc
@@ -247,7 +298,7 @@
           - wget
         state: latest
         update_cache: yes
-      when: ansible_distribution in ["openSUSE Tumbleweed"]
+      when: ansible_facts.distribution in ["openSUSE Tumbleweed"]
       tags:
         - "openSUSE Tumbleweed"
 
@@ -273,7 +324,7 @@
           - podman
         state: absent
         update_cache: yes
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
@@ -283,77 +334,82 @@
         - "Rocky"
         - "Ubuntu"
 
-    - name: Add folder for Docker Engine GPG key (Debian, Raspbian, Ubuntu)
+    - name: Remove the one line Docker Engine repository file (Debian, Raspbian, Ubuntu)
+      # installations that predate deb822_repository have docker.list, apt would
+      # report "configured multiple times" next to the docker.sources below
       file:
-        path: /etc/apt/keyrings
-        state: directory
-        mode: 0755
-      when: ansible_distribution in ["Debian", "Raspbian", "Ubuntu"]
-      tags:
-        - "Debian"
-        - "Raspbian"
-        - "Ubuntu"
-
-    - name: Download Docker Engine GPG key (Debian, Raspbian, Ubuntu)
-      get_url:
-        url: https://download.docker.com/linux/{{ ansible_distribution | lower }}/gpg
-        dest: /etc/apt/keyrings/docker
-        mode: 0755
-      when: ansible_distribution in ["Debian", "Raspbian", "Ubuntu"]
-      tags:
-        - "Debian"
-        - "Raspbian"
-        - "Ubuntu"
-
-    - name: Decrypt Docker Engine GPG key (Debian, Raspbian, Ubuntu)
-      shell: gpg --dearmor /etc/apt/keyrings/docker
-      args:
-        creates: /etc/apt/keyrings/docker.gpg
-      when: ansible_distribution in ["Debian", "Raspbian", "Ubuntu"]
+        path: /etc/apt/sources.list.d/docker.list
+        state: absent
+      when: ansible_facts.distribution in ["Debian", "Raspbian", "Ubuntu"]
       tags:
         - "Debian"
         - "Raspbian"
         - "Ubuntu"
 
     - name: Add Docker Engine repository (Debian, Raspbian, Ubuntu)
-      apt_repository:
-        filename: docker
-        repo: "deb [arch={{ ansible_architecture | replace('aarch64', 'arm64') | replace('x86_64', 'amd64') }} signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} stable"
+      # deb822_repository fetches the key itself, detects the ASCII armor and
+      # stores it as /etc/apt/keyrings/docker.asc, so the separate keyring
+      # directory, download and `gpg --dearmor` steps are gone. apt_repository is
+      # deprecated and will be removed in ansible-core 2.25.
+      ansible.builtin.deb822_repository:
+        name: docker
+        types: deb
+        uris: "https://download.docker.com/linux/{{ ansible_facts.distribution | lower }}"
+        suites: "{{ ansible_facts.distribution_release }}"
+        components: stable
+        architectures: "{{ ansible_facts.architecture | replace('aarch64', 'arm64') | replace('x86_64', 'amd64') }}"
+        signed_by: "https://download.docker.com/linux/{{ ansible_facts.distribution | lower }}/gpg"
         state: present
+        enabled: true
+      when: ansible_facts.distribution in ["Debian", "Raspbian", "Ubuntu"]
+      tags:
+        - "Debian"
+        - "Raspbian"
+        - "Ubuntu"
+
+    - name: Update apt cache (Debian, Raspbian, Ubuntu)
+      # deb822_repository has no update_cache of its own
+      ansible.builtin.apt:
         update_cache: yes
-      when: ansible_distribution in ["Debian", "Raspbian", "Ubuntu"]
+      when: ansible_facts.distribution in ["Debian", "Raspbian", "Ubuntu"]
       tags:
         - "Debian"
         - "Raspbian"
         - "Ubuntu"
 
     - name: Add Docker repository (Fedora)
+      # `addrepo` is dnf5 syntax, Fedora 44 ships dnf5
       shell: |
         if [ "$(dnf repolist docker-ce-stable)" == "" ];
           then
             dnf -y config-manager addrepo --from-repofile=https://download.docker.com/linux/fedora/docker-ce.repo
         fi
-      when: ansible_distribution in ["Fedora"]
+      when: ansible_facts.distribution in ["Fedora"]
       tags:
         - "Fedora"
-    
+
     - name: Add Docker repository (RHEL)
+      # RHEL 10 ships dnf 4, whose config-manager only knows `--add-repo` - the
+      # dnf5 `addrepo` subcommand fails there with "unrecognized arguments"
       shell: |
         if [ "$(dnf repolist docker-ce-stable)" == "" ];
           then
-            dnf -y config-manager addrepo --from-repofile=https://download.docker.com/linux/rhel/docker-ce.repo
+            dnf -y config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo
         fi
-      when: ansible_distribution in ["RedHat"]
+      when: ansible_facts.distribution in ["RedHat"]
       tags:
         - "RedHat"
 
     - name: Add Docker repository (AlmaLinux, Rocky)
+      # deliberately the centos repository: download.docker.com/linux/alma and
+      # /rocky do exist, but they only carry containerd.io and the plugins, not
+      # docker-ce and docker-ce-cli. Same dnf 4 syntax as RHEL above.
       shell: |
         if [ "$(dnf repolist docker-ce-stable)" == "" ];
           then
             dnf -y config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
         fi
-      when: ansible_distribution in ["AlmaLinux", "Rocky"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Rocky"]
       tags:
         - "AlmaLinux"
         - "Rocky"
@@ -381,7 +437,7 @@
           - lvm2
         state: latest
         update_cache: yes
-      when: ansible_distribution in ["openSUSE Tumbleweed"]
+      when: ansible_facts.distribution in ["openSUSE Tumbleweed"]
       tags:
         - "openSUSE Tumbleweed"
 
@@ -395,7 +451,7 @@
           - docker-compose-plugin 
         state: latest
         update_cache: yes
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
@@ -410,7 +466,7 @@
         name: docker
         state: stopped
         enabled: false
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
@@ -436,7 +492,7 @@
         name: tpot
         gid: 2000
         state: present
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
@@ -455,7 +511,7 @@
         shell: /bin/false
         home: /nonexistent
         group: tpot
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
@@ -472,7 +528,41 @@
         line: "vm.max_map_count=262144"
         state: present
         create: yes
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Ensure IPv4 forwarding is enabled (All)
+      # Containers need it. Docker used to enable it on its own, with the
+      # nftables firewall backend it refuses to start instead.
+      lineinfile:
+        path: /etc/sysctl.conf
+        line: "net.ipv4.ip_forward=1"
+        state: present
+        create: yes
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Enable IPv4 forwarding now (All)
+      # Docker is started further down in this run, the value has to be live by
+      # then and not only after the reboot
+      command: sysctl -w net.ipv4.ip_forward=1
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
@@ -488,7 +578,7 @@
         name: ssh.socket
         state: stopped
         enabled: false
-      when: ansible_distribution in ["Ubuntu"]
+      when: ansible_facts.distribution in ["Ubuntu"]
       tags:
         - "Ubuntu"
 
@@ -496,16 +586,42 @@
       file:
         path: /etc/systemd/system/ssh.service.d/00-socket.conf
         state: absent
-      when: ansible_distribution in ["Ubuntu"]
+      when: ansible_facts.distribution in ["Ubuntu"]
       tags:
         - "Ubuntu"
 
-    - name: Comment out Port(s) in sshd_config, can cause port conflicts on deploy (AlmaLinux, Debian, Fedora, openSUSE Tumbleweed, Raspbian, RHEL, Rocky, Ubuntu)
+    - name: Look for the files that configure sshd (All)
+      # openSUSE Tumbleweed keeps the vendor configuration in /usr/etc and has
+      # no /etc/ssh/sshd_config at all, the other distributions include
+      # /etc/ssh/sshd_config.d/*.conf from theirs. sshd listens on every port it
+      # is given, so a port left behind in any of these files keeps getting in
+      # the way of the honeypots.
+      ansible.builtin.find:
+        paths:
+          - /etc/ssh
+          - /etc/ssh/sshd_config.d
+        patterns:
+          - "sshd_config"
+          - "*.conf"
+      register: my_sshd_config
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Comment out Port(s) other than 64295, they can cause port conflicts on deploy (All)
       ansible.builtin.replace:
-        path: /etc/ssh/sshd_config
+        path: "{{ item }}"
         regexp: '^(Port (?!64295$)[0-9]+)'
         replace: '# \1'
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      loop: "{{ my_sshd_config.files | default([]) | map(attribute='path') | sort }}"
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
@@ -521,7 +637,7 @@
         path: /etc/ssh/sshd_config
         line: "Port 64295"
         insertafter: EOF
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
@@ -536,16 +652,41 @@
         path: /etc/ssh/sshd_config.d/port.conf
         line: "Port 64295"
         create: yes
-      when: ansible_distribution in ["openSUSE Tumbleweed"]
+      when: ansible_facts.distribution in ["openSUSE Tumbleweed"]
       tags:
         - "openSUSE Tumbleweed"
+
+    - name: Install firewalld (AlmaLinux, Fedora, openSUSE Tumbleweed, RHEL, Rocky)
+      package:
+        name: firewalld
+        state: present
+      when: ansible_facts.distribution in ["AlmaLinux", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky"]
+      tags:
+        - "AlmaLinux"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "RedHat"
+        - "Rocky"
+
+    - name: Start firewalld (AlmaLinux, Fedora, openSUSE Tumbleweed, RHEL, Rocky)
+      service:
+        name: firewalld
+        state: started
+        enabled: true
+      when: ansible_facts.distribution in ["AlmaLinux", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky"]
+      tags:
+        - "AlmaLinux"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "RedHat"
+        - "Rocky"
 
     - name: Add T-Pot SSH port to Firewall (AlmaLinux, Fedora, openSUSE Tumbleweed, RHEL, Rocky)
       firewalld:
         port: 64295/tcp
         permanent: yes
         state: enabled
-      when: ansible_distribution in ["AlmaLinux", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky"]
       tags:
         - "AlmaLinux"
         - "Fedora"
@@ -559,7 +700,7 @@
         target: ACCEPT
         permanent: yes
         state: enabled
-      when: ansible_distribution in ["AlmaLinux", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky"]
       tags:
         - "AlmaLinux"
         - "Fedora"
@@ -567,9 +708,28 @@
         - "RedHat"
         - "Rocky"
 
+    - name: Look for the iptable_filter module (AlmaLinux, Fedora, RHEL, Rocky)
+      # RHEL 10 and its rebuilds ship a kernel without the legacy xtables
+      # modules, `modprobe iptable_filter` is fatal there. Those systems provide
+      # `iptables` as the nftables based frontend instead, which relies on
+      # nf_tables and loads it on its own - nothing has to be preloaded.
+      # `-n` is a dry run, it reports whether the module exists without loading.
+      ansible.builtin.command: modprobe -n iptable_filter
+      register: my_iptable_filter
+      changed_when: false
+      failed_when: false
+      when: ansible_facts.distribution in ["AlmaLinux", "Fedora", "RedHat", "Rocky"]
+      tags:
+        - "AlmaLinux"
+        - "Fedora"
+        - "RedHat"
+        - "Rocky"
+
     - name: Load kernel modules (AlmaLinux, Fedora, RHEL, Rocky)
       command: modprobe -v iptable_filter
-      when: ansible_distribution in ["AlmaLinux", "Fedora", "RedHat", "Rocky"]
+      when:
+        - ansible_facts.distribution in ["AlmaLinux", "Fedora", "RedHat", "Rocky"]
+        - my_iptable_filter.rc | default(1) == 0
       tags:
         - "AlmaLinux"
         - "Fedora"
@@ -577,75 +737,273 @@
         - "Rocky"
 
     - name: Update iptables.conf (AlmaLinux, Fedora, RHEL, Rocky)
+      # only where the module exists, systemd-modules-load logs a failure for
+      # every entry it cannot find
       lineinfile:
         path: /etc/modules-load.d/iptables.conf
         line: iptable_filter
         create: yes
-      when: ansible_distribution in ["AlmaLinux", "Fedora", "RedHat", "Rocky"]
+      when:
+        - ansible_facts.distribution in ["AlmaLinux", "Fedora", "RedHat", "Rocky"]
+        - my_iptable_filter.rc | default(1) == 0
       tags:
         - "AlmaLinux"
         - "Fedora"
         - "RedHat"
         - "Rocky"
 
-    - name: Set SELinux config to permissive (AlmaLinux, Fedora, RHEL, Rocky)
+    - name: Look for the xt_addrtype module (All)
+      # Docker's iptables backend needs the xtables extensions. RHEL 10 and its
+      # rebuilds ship a kernel without them, dockerd then aborts with
+      # "Extension addrtype revision 0 not supported, missing kernel module?"
+      # and cannot create its bridge network. Docker 28 and up can talk to
+      # nftables directly instead.
+      ansible.builtin.command: modprobe -n xt_addrtype
+      register: my_xt_addrtype
+      changed_when: false
+      failed_when: false
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Look for the nftables firewall backend in dockerd (All, kernels without xtables)
+      ansible.builtin.shell: dockerd --help | grep -q -- --firewall-backend
+      args:
+        executable: /bin/bash
+      register: my_dockerd_nftables
+      changed_when: false
+      failed_when: false
+      when: my_xt_addrtype.rc | default(0) != 0
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Abort if Docker cannot manage the firewall on this kernel (All, kernels without xtables)
+      assert:
+        that: my_dockerd_nftables.rc == 0
+        fail_msg: |
+          This kernel ships no xtables modules, so Docker cannot use its
+          iptables firewall backend, and this Docker Engine does not offer the
+          nftables backend either. A newer Docker Engine is required.
+        success_msg: "Docker will manage the firewall through nftables."
+      when: my_xt_addrtype.rc | default(0) != 0
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Create the Docker configuration directory (All, kernels without xtables)
+      file:
+        path: /etc/docker
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      when: my_xt_addrtype.rc | default(0) != 0
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Look for an existing Docker configuration (All, kernels without xtables)
+      stat:
+        path: /etc/docker/daemon.json
+      register: my_docker_json
+      when: my_xt_addrtype.rc | default(0) != 0
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Read an existing Docker configuration (All, kernels without xtables)
+      slurp:
+        src: /etc/docker/daemon.json
+      register: my_docker_json_content
+      when: my_docker_json.stat.exists | default(false)
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Switch Docker to the nftables firewall backend (All, kernels without xtables)
+      # merged into an existing daemon.json so hand made settings survive
+      copy:
+        dest: /etc/docker/daemon.json
+        content: "{{ my_docker_config | combine({'firewall-backend': 'nftables'}) | to_nice_json }}\n"
+        owner: root
+        group: root
+        mode: '0644'
+      vars:
+        my_docker_config: "{{ (my_docker_json_content.content | b64decode | from_json) if my_docker_json.stat.exists | default(false) else {} }}"
+      when: my_xt_addrtype.rc | default(0) != 0
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Set SELinux config to permissive (AlmaLinux, Fedora, openSUSE Tumbleweed, RHEL, Rocky)
+      # openSUSE Tumbleweed enforces SELinux as well since it switched to the
+      # targeted policy. T-Pot binds sshd to 64295 and the honeypots to ports
+      # all over the range, none of which the policy knows about.
       lineinfile:
         path: /etc/selinux/config
         regexp: '^SELINUX='
         line: 'SELINUX=permissive'
-      when: ansible_distribution in ["AlmaLinux", "Fedora", "RedHat", "Rocky"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky"]
       tags:
         - "AlmaLinux"
         - "Fedora"
+        - "openSUSE Tumbleweed"
         - "RedHat"
         - "Rocky"
 
-    - name: Set SELinux to permissive (AlmaLinux, Fedora, RHEL, Rocky)
+    - name: Set SELinux to permissive (AlmaLinux, Fedora, openSUSE Tumbleweed, RHEL, Rocky)
+      # the config above only takes effect after the reboot, sshd is restarted
+      # on the new port in this run
       command: "setenforce Permissive"
-      when: ansible_distribution in ["AlmaLinux", "Fedora", "RedHat", "Rocky"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky"]
       tags:
         - "AlmaLinux"
         - "Fedora"
+        - "openSUSE Tumbleweed"
         - "RedHat"
         - "Rocky"
 
-    - name: Stop Resolved (Fedora, RHEL, Ubuntu)
+    - name: Look for the systemd-resolved unit (All)
+      # Wherever systemd-resolved runs it holds tcp/53 and udp/53 on 127.0.0.53
+      # and 127.0.0.54, which keeps the DNS honeypots from binding - a cloud
+      # image of any distribution may ship it, so ask the system instead of
+      # listing distributions. A masked unit cannot listen and is left alone.
+      ansible.builtin.command: systemctl list-unit-files systemd-resolved.service
+      register: my_resolved_unit
+      changed_when: false
+      failed_when: false
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Remember whether the resolved stub listener can be running (All)
+      ansible.builtin.set_fact:
+        my_resolved_present: "{{ 'systemd-resolved.service' in my_resolved_unit.stdout and 'masked' not in my_resolved_unit.stdout }}"
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Stop Resolved (All)
       service:
         name: systemd-resolved
         state: stopped
-      when: ansible_distribution in ["Fedora", "RedHat", "Ubuntu"]
+      when: my_resolved_present | bool
       tags:
+        - "AlmaLinux"
+        - "Debian"
         - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
         - "RedHat"
+        - "Rocky"
         - "Ubuntu"
-
-    - name: Copy resolved.conf to /etc/systemd (Fedora)
-      copy:
-        src: /usr/lib/systemd/resolved.conf
-        dest: /etc/systemd/resolved.conf
-      when: ansible_distribution in ["Fedora"]
-      ignore_errors: true
-      tags:
-        - "Fedora"
 
     - name: Copy resolv.conf to /etc/systemd (RHEL)
       copy:
         src: /usr/lib/systemd/resolv.conf
         dest: /etc/systemd/resolv.conf
-      when: ansible_distribution in ["RedHat"]
+      when: ansible_facts.distribution in ["RedHat"]
       ignore_errors: true
       tags:
         - "RedHat"
 
-    - name: Modify DNSStubListener in resolved.conf (Fedora, Ubuntu)
-      lineinfile:
-        path: /etc/systemd/resolved.conf
-        regexp: '^.*DNSStubListener=.*'
-        line: 'DNSStubListener=no'
-        state: present
-      when: ansible_distribution in ["Fedora", "Ubuntu"]
+    - name: Create the resolved drop-in directory (All)
+      file:
+        path: /etc/systemd/resolved.conf.d
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      when: my_resolved_present | bool
       tags:
+        - "AlmaLinux"
+        - "Debian"
         - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Disable the resolved stub listener (All)
+      # A drop-in works no matter whether the distribution ships an
+      # /etc/systemd/resolved.conf, and the uninstaller only has to delete it.
+      copy:
+        dest: /etc/systemd/resolved.conf.d/tpot.conf
+        content: |
+          # T-Pot honeypots publish tcp/53 and udp/53, the stub listener on
+          # 127.0.0.53 and 127.0.0.54 would keep them from binding. Name
+          # resolution on the host keeps working through nss-resolve.
+          [Resolve]
+          DNSStubListener=no
+        owner: root
+        group: root
+        mode: '0644'
+      when: my_resolved_present | bool
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
         - "Ubuntu"
 
 ############################
@@ -658,21 +1016,26 @@
   become: true
 
   tasks:
-    - name: Start Resolved (Fedora, RHEL, Ubuntu)
+    - name: Start Resolved (All)
       service:
         name: systemd-resolved
         state: restarted
-      when: ansible_distribution in ["Fedora", "RedHat", "Ubuntu"]
+      when: my_resolved_present | default(false) | bool
       tags:
+        - "AlmaLinux"
+        - "Debian"
         - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
         - "RedHat"
+        - "Rocky"
         - "Ubuntu"
 
     - name: Restart Firewalld (AlmaLinux, Fedora, openSUSE Tumbleweed, Rocky)
       service:
         name: firewalld
         state: restarted
-      when: ansible_distribution in ["AlmaLinux", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky"]
       tags:
         - "AlmaLinux"
         - "Fedora"
@@ -683,7 +1046,7 @@
     - name: Get Firewall rules (AlmaLinux, Fedora, openSUSE Tumbleweed, RHEL, Rocky)
       command: "firewall-cmd --list-all"
       register: firewall_output
-      when: ansible_distribution in ["AlmaLinux", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky"]
       tags:
         - "AlmaLinux"
         - "Fedora"
@@ -694,7 +1057,7 @@
     - name: Print Firewall rules (AlmaLinux, Fedora, openSUSE Tumbleweed, RHEL, Rocky)
       debug:
         var: firewall_output.stdout_lines
-      when: ansible_distribution in ["AlmaLinux", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky"]
       tags:
         - "AlmaLinux"
         - "Fedora"
@@ -707,7 +1070,7 @@
         name: docker
         state: restarted
         enabled: true
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
@@ -720,10 +1083,10 @@
 
     - name: Restart SSH (All)
       service:
-        name: "{{ 'ssh' if ansible_distribution in ['Ubuntu'] else 'sshd' }}"
+        name: "{{ 'ssh' if ansible_facts.distribution in ['Ubuntu'] else 'sshd' }}"
         state: restarted
         enabled: true
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
@@ -755,23 +1118,23 @@
   tasks:
     - name: Check for non-root user id (All)
       debug:
-        msg: "Detected user: '{{ ansible_user_id }}'"
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
-      failed_when: ansible_user_id == "root"
+        msg: "Detected user: '{{ ansible_facts.user_id }}'"
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      failed_when: ansible_facts.user_id == "root"
 
     - name: Add aliases
       blockinfile:
         path: ~/.bashrc
         block: |
-          alias dps='{{ "grc --colour=on " if ansible_distribution != "RedHat" else "" }}docker ps -f status=running -f status=exited --format "table {{'{{'}}.Names{{'}}'}}\\t{{'{{'}}.Status{{'}}'}}\\t{{'{{'}}.Ports{{'}}'}}" | sort'
-          alias dim='{{ "grc --colour=on " if ansible_distribution != "RedHat" else "" }}docker images --format "table {{'{{'}}.Repository{{'}}'}}\\t{{'{{'}}.Tag{{'}}'}}\\t{{'{{'}}.ID{{'}}'}}\\t{{'{{'}}.Size{{'}}'}}\\t{{'{{'}}.CreatedSince{{'}}'}}\\t{{'{{'}}.Repository{{'}}'}}:{{'{{'}}.Tag{{'}}'}}"'
+          alias dps='{{ "grc --colour=on " if ansible_facts.distribution != "RedHat" else "" }}docker ps -f status=running -f status=exited --format "table {{'{{'}}.Names{{'}}'}}\\t{{'{{'}}.Status{{'}}'}}\\t{{'{{'}}.Ports{{'}}'}}" | sort'
+          alias dim='{{ "grc --colour=on " if ansible_facts.distribution != "RedHat" else "" }}docker images --format "table {{'{{'}}.Repository{{'}}'}}\\t{{'{{'}}.Tag{{'}}'}}\\t{{'{{'}}.ID{{'}}'}}\\t{{'{{'}}.Size{{'}}'}}\\t{{'{{'}}.CreatedSince{{'}}'}}\\t{{'{{'}}.Repository{{'}}'}}:{{'{{'}}.Tag{{'}}'}}"'
           alias dpsw='watch -c bash -ic dps'
           alias mi='micro'
           alias sudo='sudo '
         marker: "# {mark} ANSIBLE MANAGED BLOCK"
         insertafter: EOF
         state: present
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
         - "Debian"
@@ -782,24 +1145,31 @@
         - "Rocky"
         - "Ubuntu"
 
+    - name: Report the T-Pot repository and branch (All)
+      debug:
+        msg: "Cloning {{ tpot_repo | default('https://github.com/telekom-security/tpotce', true) }} at {{ tpot_branch | default('master', true) }}."
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+
     - name: Clone / Update T-Pot repository (All)
+      # install.sh passes both as extra vars, a standalone playbook run without
+      # them stays on master
       git:
-        repo: 'https://github.com/telekom-security/tpotce'
-        dest: '/home/{{ ansible_user_id }}/tpotce/'
-        version: master
+        repo: "{{ tpot_repo | default('https://github.com/telekom-security/tpotce', true) }}"
+        dest: '{{ ansible_facts.user_dir }}/tpotce/'
+        version: "{{ tpot_branch | default('master', true) }}"
         clone: yes
         update: no
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
 
     - name: Add current user to Docker, T-Pot group (All)
       become: true
       user:
-        name: "{{ ansible_user_id }}"
+        name: "{{ ansible_facts.user_id }}"
         groups: 
           - docker
           - tpot
         append: yes
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
 
 ########################################
 # T-Pot - Install service and cron job #
@@ -823,13 +1193,13 @@
     - name: Install systemd service (All)
       become: true
       ansible.builtin.template:
-        src: '/home/{{ ansible_user_id }}/tpotce/installer/install/tpot.service'
+        src: '{{ ansible_facts.user_dir }}/tpotce/installer/install/tpot.service'
         dest: '/etc/systemd/system/tpot.service'
         owner: root
         group: root
         mode: '0755'
       notify: Reload systemd and enable service
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
 
   handlers:
     - name: Reload systemd and enable service
@@ -839,7 +1209,7 @@
         daemon_reload: yes
         state: stopped
         enabled: yes
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
 
 - name: T-Pot - Setup a randomized daily reboot
   hosts: all
@@ -868,4 +1238,4 @@
         hour: "{{ random_hour }}"
         job: "bash -c 'systemctl stop tpot.service && docker container prune -f; docker image prune -f; docker volume prune -f; /usr/sbin/shutdown -r +1 \"T-Pot Daily Reboot\"'"
         state: present
-      when: ansible_distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]

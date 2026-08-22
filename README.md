@@ -38,6 +38,8 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/in
   - [Choose your distro](#choose-your-distro)
   - [Raspberry Pi 4 (8GB) Support](#raspberry-pi-4-8gb-support)
   - [Get and install T-Pot](#get-and-install-t-pot)
+  - [Unattended Installation](#unattended-installation)
+  - [Testing a Branch](#testing-a-branch)
   - [macOS \& Windows](#macos--windows)
   - [Red Hat Enterprise Linux](#red-hat-enterprise-linux)
   - [Installation Types](#installation-types)
@@ -320,7 +322,7 @@ Once you are familiar with how things work you should choose a network you suspe
 ## Choose your distro
 **Steps to Follow:**
 
-1. Download a supported Linux distribution from the list below. (NOTE: Red Hat Enterprise Linux >= 8 is supported, but omitted from the list below due to its subscription-based nature. See [Red Hat Enterprise Linux](#red-hat-enterprise-linux) for details).
+1. Download a supported Linux distribution from the list below. T-Pot follows the current release of each distribution, the installer will stop on an older one. (NOTE: Red Hat Enterprise Linux 10 is supported, but omitted from the list below due to its subscription-based nature. See [Red Hat Enterprise Linux](#red-hat-enterprise-linux) for details).
 2. During installation choose a **minimum**, **netinstall** or **server** version that will only install essential packages.
 3. **Never** install a graphical desktop environment such as Gnome or KDE. T-Pot will fail to work with it due to port conflicts. 
 4. Make sure to install SSH, so you can connect to the machine remotely.
@@ -328,12 +330,12 @@ Once you are familiar with how things work you should choose a network you suspe
 
 | Distribution Name                                                                  | x64                                                                                                                                   | arm64                                                                                                                                   |
 |:-----------------------------------------------------------------------------------|:--------------------------------------------------------------------------------------------------------------------------------------|:----------------------------------------------------------------------------------------------------------------------------------------|
-| [Alma Linux OS 9.x Minimal ISO](https://almalinux.org)                                | [download](https://repo.almalinux.org/almalinux/9/isos/x86_64/AlmaLinux-9.8-x86_64-minimal.iso)                                        | [download](https://repo.almalinux.org/almalinux/9/isos/aarch64/AlmaLinux-9.8-aarch64-minimal.iso)                                        |
-| [Debian 13 Network Install](https://www.debian.org/CD/netinst/index.en.html)       | [download](https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-13.5.0-amd64-netinst.iso)                                 | [download](https://cdimage.debian.org/debian-cd/current/arm64/iso-cd/debian-13.5.0-arm64-netinst.iso)                                   |
-| [Fedora Server 42 Network Install](https://fedoraproject.org/server/download)      | [download](https://download.fedoraproject.org/pub/fedora/linux/releases/42/Server/x86_64/iso/Fedora-Server-netinst-x86_64-42-1.1.iso) | [download](https://download.fedoraproject.org/pub/fedora/linux/releases/42/Server/aarch64/iso/Fedora-Server-netinst-aarch64-42-1.1.iso) |
+| [Alma Linux OS 10.x Minimal ISO](https://almalinux.org)                               | [download](https://repo.almalinux.org/almalinux/10/isos/x86_64/AlmaLinux-10-latest-x86_64-minimal.iso)                                 | [download](https://repo.almalinux.org/almalinux/10/isos/aarch64/AlmaLinux-10-latest-aarch64-minimal.iso)                                 |
+| [Debian 13 Network Install](https://www.debian.org/CD/netinst/index.en.html)       | [download](https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-13.6.0-amd64-netinst.iso)                                 | [download](https://cdimage.debian.org/debian-cd/current/arm64/iso-cd/debian-13.6.0-arm64-netinst.iso)                                   |
+| [Fedora Server 44 Network Install](https://fedoraproject.org/server/download)      | [download](https://download.fedoraproject.org/pub/fedora/linux/releases/44/Server/x86_64/iso/Fedora-Server-netinst-x86_64-44-1.7.iso) | [download](https://download.fedoraproject.org/pub/fedora/linux/releases/44/Server/aarch64/iso/Fedora-Server-netinst-aarch64-44-1.7.iso) |
 | [OpenSuse Tumbleweed Network Image](https://get.opensuse.org/tumbleweed/#download) | [download](https://download.opensuse.org/tumbleweed/iso/openSUSE-Tumbleweed-NET-x86_64-Current.iso)                                   | [download](https://download.opensuse.org/ports/aarch64/tumbleweed/iso/openSUSE-Tumbleweed-NET-aarch64-Current.iso)                      |
-| [Rocky Linux OS 9.x Minimal ISO](https://rockylinux.org/download)                     | [download](https://download.rockylinux.org/pub/rocky/9/isos/x86_64/Rocky-9.8-x86_64-minimal.iso)                                      | [download](https://download.rockylinux.org/pub/rocky/9/isos/aarch64/Rocky-9.8-aarch64-minimal.iso)                                      |
-| [Ubuntu 24.04.x Live Server](https://ubuntu.com/download/server)                   | [download](https://releases.ubuntu.com/24.04/ubuntu-24.04.3-live-server-amd64.iso)                                                    | [download](https://cdimage.ubuntu.com/releases/24.04/release/ubuntu-24.04.3-live-server-arm64.iso)                                      |
+| [Rocky Linux OS 10.x Minimal ISO](https://rockylinux.org/download)                    | [download](https://download.rockylinux.org/pub/rocky/10/isos/x86_64/Rocky-10-latest-x86_64-minimal.iso)                               | [download](https://download.rockylinux.org/pub/rocky/10/isos/aarch64/Rocky-10-latest-aarch64-minimal.iso)                               |
+| [Ubuntu 26.04 Live Server](https://ubuntu.com/download/server)                     | [download](https://releases.ubuntu.com/26.04/ubuntu-26.04-live-server-amd64.iso)                                                     | [download](https://cdimage.ubuntu.com/releases/26.04/release/ubuntu-26.04-live-server-arm64.iso)                                        |
 
 <br>
 
@@ -348,6 +350,7 @@ Once you are familiar with how things work you should choose a network you suspe
 2. Change into the **tpotce/** folder: `$ cd tpotce`
 3. Run the installer as non-root: `$ ./install.sh`:
    * ⚠️ ***Depending on your Linux distribution of choice the installer will:***
+     * Abort if a service occupies the DNS or SMTP ports the honeypots need, before anything is changed
      * Change the SSH port to `tcp/64295`
      * Disable the DNS Stub Listener to avoid port conflicts with honeypots
      * Set SELinux to Monitor Mode
@@ -364,6 +367,66 @@ Once you are familiar with how things work you should choose a network you suspe
 4. Follow the installer instructions, you will have to enter your user (`sudo` or `root`) password at least once
 5. Check the installer messages for errors and open ports that might cause port conflicts
 6. Reboot: `$ sudo reboot`
+
+On **Ubuntu 26.04** `sudo` is [sudo-rs](https://github.com/trifectatechfoundation/sudo-rs), which formats its password prompt differently. Ansible does not recognise that prompt and privilege escalation times out, a fix exists upstream but is not released yet. The installer detects this and runs Ansible against the traditional sudo that Ubuntu still ships as `/usr/bin/sudo.ws` - nothing to do, it says so when it happens. If you would rather have it system wide, switch the alternative: `$ sudo update-alternatives --set sudo /usr/bin/sudo.ws`.
+<br><br>
+
+## Unattended Installation
+The installer can run without any interaction, i.e. for automated tests or cloud provisioning:
+```
+./install.sh -s -t <type> [-u <webuser>] [-p <password>]
+```
+| Option | Description |
+|---|---|
+| `-s` | Skip the confirmation prompt and every following question |
+| `-t` | Installation type: `h` hive, `s` sensor, `l` llm, `i` mini, `m` mobile, `t` tarpit |
+| `-u` | Web user name, required for `h`, `l`, `i` and `t` |
+| `-p` | Web user password, required for `h`, `l`, `i` and `t` |
+
+⚠️ ***`-s` requires passwordless `sudo` for the user running the installer.*** Ansible would otherwise ask for the `BECOME password` and the run would stall, so the installer stops right away and tells you so. Grant it before you start:
+```
+echo "$(whoami) ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/$(whoami)
+sudo chmod 440 /etc/sudoers.d/$(whoami)
+```
+Remove `/etc/sudoers.d/<user>` after the installation if you do not want to keep it. On Debian without `sudo` installed the installer creates this rule itself, because it has to add `sudo` anyway - it says so when it does.
+<br><br>
+
+## Testing a Branch
+By default T-Pot installs from `master`. To test changes to the installer itself, the installer, the Ansible playbook and the T-Pot repository can be taken from any branch, tag or commit - and from a fork:
+```
+# from a local clone, the checked out branch is used automatically
+git clone -b my-feature https://github.com/telekom-security/tpotce ~/tpotce
+~/tpotce/install.sh
+
+# explicitly, works the same for an unattended run
+./install.sh -b my-feature -r https://github.com/someuser/tpotce -s -t h -u user -p pass
+
+# as environment variables, i.e. for the one-liner or cloud provisioning
+TPOT_BRANCH=my-feature env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/my-feature/install.sh)"
+```
+| Option | Environment | Description |
+|---|---|---|
+| `-b` | `TPOT_BRANCH` | Branch, tag or commit to install from |
+| `-r` | `TPOT_REPO_URL` | Repository to install from, https URL |
+
+The installer takes the first of these it finds: the options, the environment variables, the branch and `origin` of the local clone it runs from, and finally `master` of `https://github.com/telekom-security/tpotce`. It prints what it settled on before it changes anything. Two things to keep in mind:
+* With the one-liner the branch appears twice, in the URL you download `install.sh` from and in `TPOT_BRANCH` - they have to match, the script cannot tell where it was downloaded from.
+* An existing `~/tpotce` is always used as it is, so the installer stops if it is on a different repository or branch than the one requested. Remove it (`sudo rm -rf ~/tpotce`) and run the installer again.
+
+`update.sh` takes the same two options, so an existing installation can be moved to another branch or fork to test the update procedure itself:
+```
+# update an existing installation from a branch, -y is still required
+~/tpotce/update.sh -y -b my-feature
+
+# the same from a fork, this replaces the URL of 'origin' in ~/tpotce
+~/tpotce/update.sh -y -b my-feature -r https://github.com/someuser/tpotce
+
+# back to the released version
+~/tpotce/update.sh -y -b master
+```
+The branch is checked out for good, so every following `update.sh -y` keeps updating from it. Here `-b` names a branch, not a tag or commit, and there are two more differences to the installer:
+* Without `-b` and `-r` nothing changes, the branch and `origin` of `~/tpotce` are kept - a plain `update.sh -y` behaves as it always has.
+* If a branch has moved the version tag on, `update.sh` only warns about it as long as `-b` or `-r` is given. On such an installation keep passing the option, a plain `update.sh -y` refuses to update a version it does not know.
 <br><br>
 
 ## macOS & Windows
@@ -391,7 +454,7 @@ Red Hat Enterprise Linux (RHEL) is a somewhat unique case in that:
 1. Connections to Red Hat repositories depend on a Red Hat subscription. You will not be able to update the OS or install new packages if the targeted machine is not subscribed. **If your server is not attached to a Red Hat subscription, installation will fail!** 
 2. Ansible is installed from a RHEL-specific repository by the installer. Do not attempt to install it from the upstream repositories. 
 3. Docker is installed from EPEL, which is installed by the installer script. Do not attempt to install it from the community installer script.
-2. T-Pot will only install successfully on RHEL >= 8. One of the convenience dependencies (`grc`) depends on Python 2, which was removed after RHEL 7. It is omitted from the RHEL installation of T-Pot.
+2. T-Pot will only install successfully on RHEL 10. The convenience dependency `grc` is not available for RHEL and is omitted from the RHEL installation of T-Pot.
 
 ## Installation Types
 
@@ -646,10 +709,12 @@ T-Pot releases are offered through GitHub and can be pulled using `~/tpotce/upda
 ***Updates may have unforeseen consequences. Create a backup of the machine or the files most valuable to your work!***<br>
 
 The update script will ...
- - ***mercilessly*** overwrite local changes to be in sync with the T-Pot master branch
+ - ***mercilessly*** overwrite local changes to be in sync with the branch the installation follows, `master` by default
  - create a full backup of the `~/tpotce` folder
- - update all files in `~/tpotce` to be in sync with the T-Pot master branch
+ - update all files in `~/tpotce` to be in sync with that branch
  - restore your custom `ews.cfg` from `~/tpotce/data/ews/conf` and the T-Pot configuration (`~/tpotce/.env`).
+
+To update from a different branch or fork, i.e. to test changes before they are merged, see [Testing a Branch](#testing-a-branch).
 
 ## Daily Reboot
 By default T-Pot will add a daily reboot including some cleaning up. You can adjust this line with `sudo crontab -e` 
