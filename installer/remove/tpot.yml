@@ -384,10 +384,18 @@
   become: true
 
   tasks:
-    - name: Remove Docker Engine repository file (Debian, Raspbian, Ubuntu)
+    - name: Remove Docker Engine repository and key files (Debian, Raspbian, Ubuntu)
+      # docker.sources and docker.asc come from deb822_repository, the other
+      # three from installations that predate it
       file:
-        path: /etc/apt/sources.list.d/docker.list
+        path: "{{ item }}"
         state: absent
+      loop:
+        - /etc/apt/sources.list.d/docker.sources
+        - /etc/apt/sources.list.d/docker.list
+        - /etc/apt/keyrings/docker.asc
+        - /etc/apt/keyrings/docker.gpg
+        - /etc/apt/keyrings/docker
       when: ansible_facts.distribution in ["Debian", "Raspbian", "Ubuntu"]
       tags:
         - "Debian"
