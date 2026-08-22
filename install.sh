@@ -552,6 +552,13 @@ rm ${HOME}/install_tpot.log > /dev/null 2>&1
 # neither a repository URL nor a git reference contains a space, so the
 # unquoted expansion below splits into exactly four arguments
 myANSIBLE_EXTRA_VARS="-e tpot_repo=${myTPOT_REPO_URL} -e tpot_branch=${myTPOT_BRANCH}"
+# INJECT_FACTS_AS_VARS=False: the playbooks read facts as ansible_facts.<name>,
+# the auto injected top-level copies are deprecated and gone in ansible-core
+# 2.24. Setting it explicitly makes a leftover fail here and now instead of
+# silently working until then, and it keeps the deprecation warnings out of the
+# log. PYTHON_INTERPRETER=auto_silent keeps the interpreter discovery hint out,
+# the discovery itself is unchanged.
+ANSIBLE_INJECT_FACT_VARS=False ANSIBLE_PYTHON_INTERPRETER=auto_silent \
 ANSIBLE_LOG_PATH=${HOME}/install_tpot.log ansible-playbook ${myANSIBLE_TPOT_PLAYBOOK} -i 127.0.0.1, -c local --tags "${myANSIBLE_TAG}" ${myANSIBLE_BECOME_OPTION} ${myANSIBLE_BECOME_EXE} ${myANSIBLE_EXTRA_VARS}
 
 # Something went wrong
