@@ -166,15 +166,17 @@
         - "Fedora"
         - "Ubuntu"
 
-    - name: Revert SELinux config to enforcing (AlmaLinux, Fedora, RHEL, Rocky)
+    - name: Revert SELinux config to enforcing (AlmaLinux, Fedora, openSUSE Tumbleweed, RHEL, Rocky)
       lineinfile:
         path: /etc/selinux/config
         regexp: '^SELINUX='
         line: 'SELINUX=enforcing'
-      when: ansible_facts.distribution in ["AlmaLinux", "Fedora", "RedHat", "Rocky"]
+      when: ansible_facts.distribution in ["AlmaLinux", "Fedora", "openSUSE Tumbleweed", "RedHat", "Rocky"]
       tags:
         - "AlmaLinux"
         - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "RedHat"
         - "Rocky"
 
     - name: Remove iptables.conf file (AlmaLinux, Fedora, RHEL, Rocky)
@@ -238,11 +240,37 @@
         - "Rocky"
         - "Ubuntu"
 
-    - name: Revert Comment out Port(s) in sshd_config, can cause port conflicts on deploy (AlmaLinux, Debian, Fedora, openSUSE Tumbleweed, Raspbian, RHEL, Rocky, Ubuntu)
+    - name: Look for the files that configure sshd (All)
+      # openSUSE Tumbleweed keeps the vendor configuration in /usr/etc and has
+      # no /etc/ssh/sshd_config at all, the other distributions include
+      # /etc/ssh/sshd_config.d/*.conf from theirs. sshd listens on every port it
+      # is given, so a port left behind in any of these files keeps getting in
+      # the way of the honeypots.
+      ansible.builtin.find:
+        paths:
+          - /etc/ssh
+          - /etc/ssh/sshd_config.d
+        patterns:
+          - "sshd_config"
+          - "*.conf"
+      register: my_sshd_config
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Revert the commented out Port(s) (All)
       ansible.builtin.replace:
-        path: /etc/ssh/sshd_config
+        path: "{{ item }}"
         regexp: '^# (Port (?!22$)[0-9]+)'
         replace: '\1'
+      loop: "{{ my_sshd_config.files | default([]) | map(attribute='path') | sort }}"
       when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
