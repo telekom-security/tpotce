@@ -34,6 +34,11 @@ myBACKUP_RESERVE_PERCENT=10
 # `--full` takes all of data/ along as well
 myFULL=""
 
+# Both are published on the loopback interface by every edition that ships them,
+# so neither needs a detour through a container.
+myKIBANA="http://127.0.0.1:64296"
+myES="http://127.0.0.1:64298"
+
 # Working directory, cleaned up when the script ends
 myTMPDIR=""
 myRED="[0;31m"
@@ -204,6 +209,7 @@ function fuBACKUP_SIZE () {
 	        [ -e "$HOME/tpotce/${myJEWEL}" ] && myPATHS+=("$HOME/tpotce/${myJEWEL}")
 	      done;
 	fi
+	[ -d "${myTMPDIR}/stage/elastic" ] && myPATHS+=("${myTMPDIR}/stage/elastic")
 	if [ ${#myPATHS[@]} -gt 0 ];
 	  then
 	    mySUM=$(sudo du -scb "${myPATHS[@]}" 2>/dev/null | tail -1 | cut -f1)
@@ -490,6 +496,66 @@ function fuSTOP_TPOT () {
 	echo
 }
 
+# Save the state that lives in Elasticsearch rather than in a file: the user's own
+# Kibana objects and the ILM policy the retention hangs on. Runs before fuSTOP_TPOT
+# because both need a running instance. The README used to ask the user to export
+# this by hand, and update.sh gave that hint at the end of the run - too late to
+# act on.
+function fuEXPORT_ELASTIC () {
+	local myOUT=""
+	echo
+	echo "### Saving the Elasticsearch state ..."
+	fuTMPDIR
+	myOUT="${myTMPDIR}/stage/elastic"
+	mkdir -p "${myOUT}"
+	# Two independent probes rather than one: a SENSOR runs neither service, MOBILE
+	# runs Elasticsearch without Kibana.
+	if curl -s -f -o /dev/null --connect-timeout 5 "${myKIBANA}/api/status";
+	  then
+	    echo -n "###### $myBLUE Exporting Kibana objects.$myWHITE "
+	    if curl -s -f -X POST "${myKIBANA}/api/saved_objects/_export" \
+	         -H "kbn-xsrf: true" -H "Content-Type: application/json" \
+	         -d '{"type":"*","excludeExportDetails":true}' \
+	         -o "${myOUT}/kibana_export.ndjson";
+	      then
+	        echo "[ $myGREEN"OK"$myWHITE ] $(grep -c . "${myOUT}/kibana_export.ndjson") objects"
+	      else
+	        echo " [ $myRED""WARNING""$myWHITE ]"
+	        rm -f "${myOUT}/kibana_export.ndjson"
+	    fi
+	  else
+	    echo "###### $myBLUE""Kibana is not available on ${myKIBANA}, skipping its objects.""$myWHITE"
+	fi
+	# The ILM policy is not a saved object, it comes from Elasticsearch itself. What
+	# GET returns is wrapped in the policy name, which PUT rejects, so it is stored
+	# ready to be put back - restoring it is then a single curl.
+	if curl -s -f -o /dev/null --connect-timeout 5 "${myES}";
+	  then
+	    echo -n "###### $myBLUE Exporting the ILM policy.$myWHITE "
+	    if curl -s -f "${myES}/_ilm/policy/tpot" -o "${myTMPDIR}/ilm_raw.json" \
+	       && python3 -c "
+import json
+myRAW = json.load(open('${myTMPDIR}/ilm_raw.json'))
+json.dump({'policy': myRAW['tpot']['policy']}, open('${myOUT}/ilm_policy_tpot.json', 'w'), indent=2)
+" 2>/dev/null;
+	      then
+	        echo "[ $myGREEN"OK"$myWHITE ]"
+	      else
+	        echo " [ $myRED""WARNING""$myWHITE ]"
+	        rm -f "${myOUT}/ilm_policy_tpot.json"
+	    fi
+	  else
+	    echo "###### $myBLUE""Elasticsearch is not available on ${myES}, skipping the ILM policy.""$myWHITE"
+	fi
+	if [ -z "$(ls -A "${myOUT}" 2>/dev/null)" ];
+	  then
+	    rmdir "${myOUT}" 2>/dev/null
+	  else
+	    echo "###### $myBLUE""Saved to the archive under 'elastic/'.""$myWHITE"
+	fi
+	echo
+}
+
 # Backup
 #
 # Only what cannot be restored otherwise goes in. Everything tracked comes back
@@ -515,6 +581,7 @@ function fuBACKUP () {
 	    exit 1
 	fi
 	myARCHIVE=$(fuARCHIVE_NAME)
+	# fuEXPORT_ELASTIC may already have put elastic/ in here
 	myStage="${myTMPDIR}/stage"
 	mkdir -p "${myStage}"
 
@@ -631,11 +698,11 @@ function fuUPDATER () {
 	    echo "### We stored your previous docker-compose.yml in $myCOMPOSE_BAK."
 	fi
 	echo "### We stored the previous version as backup in $myARCHIVE."
-	echo "### Some updates may need an import of the latest Kibana objects as well."
-	echo "### Download the latest objects here if they recently changed:"
+	echo "### Your own Kibana objects and the ILM policy were saved to the archive before"
+	echo "### T-Pot was stopped, 'restore.sh' can put them back."
+	echo "### Some updates ship newer Kibana objects. Download them here if they changed:"
 	echo "### https://raw.githubusercontent.com/telekom-security/tpotce/refs/heads/master/docker/tpotinit/dist/etc/objects/kibana_export.ndjson.zip"
-	echo "### Export and import the objects easily through the Kibana WebUI:"
-	echo "### Go to Kibana > Management > Saved Objects > Export / Import"
+	echo "### Import through the Kibana WebUI: Management > Saved Objects > Import"
 	echo
 }
 
@@ -791,6 +858,8 @@ fuCHECKINET "https://index.docker.io https://github.com"
 fuCHECK_SOURCE
 fuCHECK_EDITION
 fuCHECK_BACKUP_SPACE
+# The Elasticsearch export needs a running instance, so it goes before the stop
+fuEXPORT_ELASTIC
 fuSTOP_TPOT
 fuBACKUP
 fuSELFUPDATE "$@"
