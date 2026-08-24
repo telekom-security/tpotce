@@ -619,7 +619,9 @@ function fuBACKUP () {
 	# tight inside the archive already - extracting must not widen them
 	chmod -R go-rwx "${myStage}"
 
-	myTARGETS="MANIFEST rollback.txt env tracked.patch"
+	myTARGETS="MANIFEST rollback.txt tracked.patch"
+	# Only name what is actually there, or tar stops at a missing member
+	[ -f "${myStage}/env" ]                && myTARGETS="${myTARGETS} env"
 	[ -f "${myStage}/docker-compose.yml" ] && myTARGETS="${myTARGETS} docker-compose.yml"
 	[ -d "${myStage}/untracked" ]          && myTARGETS="${myTARGETS} untracked"
 	[ -d "${myStage}/elastic" ]            && myTARGETS="${myTARGETS} elastic"
