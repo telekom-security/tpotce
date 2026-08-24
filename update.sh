@@ -21,6 +21,19 @@ data/beelzebub/key
 data/galah/cert
 data/rdphoneypot/cert"
 
+# How many archives are kept. Regular and full archives rotate separately, so a
+# full backup never pushes out the small rollback points and the other way round.
+myBACKUP_RETAIN=10
+myBACKUP_RETAIN_FULL=2
+
+# Share of the partition that has to stay free after writing. The archive usually
+# sits on the same filesystem as data/, so an oversized one takes the disk away
+# from the honeypots.
+myBACKUP_RESERVE_PERCENT=10
+
+# `--full` takes all of data/ along as well
+myFULL=""
+
 # Working directory, cleaned up when the script ends
 myTMPDIR=""
 myRED="[0;31m"
@@ -55,10 +68,13 @@ EOF
 
 function fuPRINT_HELP () {
 	cat <<EOF
-Usage: $0 -y [-b <branch>] [-r <url>]
+Usage: $0 -y [-b <branch>] [-r <url>] [--full]
 
 Options:
   -y                Confirm the update, required
+  --full            Include the whole data/ folder in the backup. Off by default:
+                    the update never touches data/, and on a busy sensor it turns
+                    a 1 MB archive into tens of GB. Kept uncompressed either way.
   -b <branch>       Branch to update from, i.e. to test a branch before it is
                     merged. The branch is checked out, so every following
                     update stays on it until another branch is requested.
@@ -119,7 +135,7 @@ function fuTMPDIR () {
 # Find a free archive name. The timestamp has second resolution, and a name that
 # already exists gets a counter - two runs must not overwrite each other.
 function fuARCHIVE_NAME () {
-	local myBASE="${myBACKUPDIR}/${myDATE}_tpot_backup"
+	local myBASE="${myBACKUPDIR}/${myDATE}_tpot_backup${myFULL:+_full}"
 	local myTRY="${myBASE}.tar"
 	local myNUM=1
 	while [ -e "${myTRY}" ];
@@ -128,6 +144,116 @@ function fuARCHIVE_NAME () {
 	    myNUM=$((myNUM+1))
 	done
 	echo "${myTRY}"
+}
+
+# All archives of one kind, oldest first
+function fuARCHIVE_LIST () {   # $1 = full | small
+	local myAll=""
+	myAll=$(ls -1tr "${myBACKUPDIR}"/*_tpot_backup*.tar 2>/dev/null)
+	[ -z "${myAll}" ] && return
+	if [ "$1" == "full" ];
+	  then echo "${myAll}" | grep "_tpot_backup_full"
+	  else echo "${myAll}" | grep -v "_tpot_backup_full"
+	fi
+}
+
+# Remove the oldest archive to make room. The newest one always stays - it is the
+# most likely rollback point.
+function fuDROP_OLDEST () {
+	local myAll="" myVictim="" myCount=0
+	myAll=$(ls -1tr "${myBACKUPDIR}"/*_tpot_backup*.tar 2>/dev/null)
+	myCount=$(echo "${myAll}" | grep -c .)
+	[ "${myCount}" -lt 2 ] && return 1
+	myVictim=$(echo "${myAll}" | head -1)
+	echo "###### $myBLUE""Removing ${myVictim} ($(du -h "${myVictim}" | cut -f1)) to make room.""$myWHITE"
+	rm -f "${myVictim}"
+}
+
+# Clean up after writing, deliberately not before: an archive is never sacrificed
+# for a backup that then fails.
+function fuROTATE () {
+	local myKind="small" myKeep="${myBACKUP_RETAIN}" myList="" myCount=0 myVictim=""
+	if [ -n "${myFULL}" ];
+	  then
+	    myKind="full"
+	    myKeep="${myBACKUP_RETAIN_FULL}"
+	fi
+	while :;
+	  do
+	    myList=$(fuARCHIVE_LIST "${myKind}")
+	    myCount=$(echo "${myList}" | grep -c .)
+	    [ "${myCount}" -le "${myKeep}" ] && break
+	    myVictim=$(echo "${myList}" | head -1)
+	    echo "###### $myBLUE""Keeping the last ${myKeep} ${myKind} backups, removing ${myVictim} ($(du -h "${myVictim}" | cut -f1)).""$myWHITE"
+	    rm -f "${myVictim}" || break
+	done
+}
+
+# Roughly what the archive needs. The allowance covers MANIFEST, the patch and the
+# Elasticsearch export that is added later.
+function fuBACKUP_SIZE () {
+	local myPATHS=() myJEWEL="" mySUM=0
+	[ -f "$HOME/tpotce/.env" ] && myPATHS+=("$HOME/tpotce/.env")
+	[ -f "$HOME/tpotce/docker-compose.yml" ] && myPATHS+=("$HOME/tpotce/docker-compose.yml")
+	if [ -n "${myFULL}" ];
+	  then
+	    [ -d "$HOME/tpotce/data" ] && myPATHS+=("$HOME/tpotce/data")
+	  else
+	    for myJEWEL in ${myJEWELS};
+	      do
+	        [ -e "$HOME/tpotce/${myJEWEL}" ] && myPATHS+=("$HOME/tpotce/${myJEWEL}")
+	      done;
+	fi
+	if [ ${#myPATHS[@]} -gt 0 ];
+	  then
+	    mySUM=$(sudo du -scb "${myPATHS[@]}" 2>/dev/null | tail -1 | cut -f1)
+	fi
+	echo $((mySUM + 4194304))
+}
+
+# Does the archive still fit without closing the disk for the honeypots? Runs
+# before fuSTOP_TPOT on purpose, so that giving up leaves T-Pot running.
+function fuCHECK_BACKUP_SPACE () {
+	local myNEED=0 myFREE=0 myTOTAL=0 myRESERVE=0
+	echo
+	echo "### Checking the space for the backup ..."
+	if ! mkdir -p "${myBACKUPDIR}" || ! chmod 0700 "${myBACKUPDIR}";
+	  then
+	    echo "###### $myBLUE""Could not prepare ${myBACKUPDIR}.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	    echo "Exiting.""$myWHITE"
+	    echo
+	    exit 1
+	fi
+	myTOTAL=$(df -B1 --output=size "${myBACKUPDIR}" 2>/dev/null | tail -1 | tr -d " ")
+	myRESERVE=$(( myTOTAL / 100 * myBACKUP_RESERVE_PERCENT ))
+	while :;
+	  do
+	    myNEED=$(fuBACKUP_SIZE)
+	    myFREE=$(df -B1 --output=avail "${myBACKUPDIR}" 2>/dev/null | tail -1 | tr -d " ")
+	    echo "###### $myBLUE""Archive needs about $((myNEED / 1048576)) MB, $((myFREE / 1048576)) MB free, keeping $((myRESERVE / 1048576)) MB in reserve.""$myWHITE"
+	    if [ $((myFREE - myNEED)) -ge "${myRESERVE}" ];
+	      then
+	        echo "###### $myBLUE""Enough room.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	        echo
+	        return
+	    fi
+	    if fuDROP_OLDEST;
+	      then
+	        continue
+	    fi
+	    # Nothing left to free. A full backup is dispensable, the regular one is not.
+	    if [ -n "${myFULL}" ];
+	      then
+	        echo "###### $myBLUE""Not enough room for a full backup, falling back to the regular one.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	        myFULL=""
+	        continue
+	    fi
+	    echo "###### $myBLUE""Not enough room for a backup and T-Pot needs the disk.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	    echo "###### $myBLUE""Free up space in ${myBACKUPDIR} or on the filesystem, T-Pot was left running.""$myWHITE"
+	    echo "Exiting.""$myWHITE"
+	    echo
+	    exit 1
+	done
 }
 
 # Compare repository URLs without a trailing slash or `.git`
@@ -431,17 +557,23 @@ function fuBACKUP () {
 	[ -d "${myStage}/untracked" ]          && myTARGETS="${myTARGETS} untracked"
 	[ -d "${myStage}/elastic" ]            && myTARGETS="${myTARGETS} elastic"
 
-	# These belong to tpot:tpot with 0770, which the archive has to record
-	for myJEWEL in ${myJEWELS};
-	  do
-	    [ -e "$HOME/tpotce/${myJEWEL}" ] && myJEWELLIST+=("${myJEWEL}")
-	  done;
+	# With `--full` all of data/, otherwise only the irreplaceable files. Both belong
+	# to tpot:tpot with 0770, which the archive has to record.
+	if [ -n "${myFULL}" ];
+	  then
+	    [ -d "$HOME/tpotce/data" ] && myJEWELLIST+=("data")
+	  else
+	    for myJEWEL in ${myJEWELS};
+	      do
+	        [ -e "$HOME/tpotce/${myJEWEL}" ] && myJEWELLIST+=("${myJEWEL}")
+	      done;
+	fi
 	if [ ${#myJEWELLIST[@]} -gt 0 ];
 	  then
 	    myJEWELARGS=(-C "$HOME/tpotce" "${myJEWELLIST[@]}")
 	fi
 
-	echo -n "###### $myBLUE Building archive in $myARCHIVE $myWHITE"
+	echo -n "###### $myBLUE Building ${myFULL:+full }archive in $myARCHIVE $myWHITE"
 	# A single tar run: intermediate files created under sudo belong to root and
 	# could not be moved afterwards.
 	if ! sudo tar cf "${myARCHIVE}" -p --numeric-owner \
@@ -464,6 +596,7 @@ function fuBACKUP () {
 	fi
 	echo "[ $myGREEN"OK"$myWHITE ]"
 	echo "###### $myBLUE""Archive holds $(tar tf "${myARCHIVE}" | wc -l) entries, $(du -h "${myARCHIVE}" | cut -f1).""$myWHITE"
+	fuROTATE
 	# Point at the old archives from before this directory existed, once
 	if ls "$HOME"/*_tpot_backup.tgz >/dev/null 2>&1;
 	  then
@@ -602,10 +735,24 @@ function fuRESTORE_EDITION () {
 # Main section #
 ################
 
-while getopts ":yb:r:h" opt; do
+# getopts has no long options, so `--full` is translated before they are read
+myARGV=()
+for myARG in "$@";
+  do
+    case "${myARG}" in
+      --full) myARGV+=("-F") ;;
+      *)      myARGV+=("${myARG}") ;;
+    esac
+done
+set -- "${myARGV[@]}"
+
+while getopts ":yFb:r:h" opt; do
   case "$opt" in
     y)
       myCONFIRMED="y"
+      ;;
+    F)
+      myFULL="1"
       ;;
     b)
       myTPOT_BRANCH="${OPTARG}"
@@ -643,6 +790,7 @@ fuCHECK_VERSION
 fuCHECKINET "https://index.docker.io https://github.com"
 fuCHECK_SOURCE
 fuCHECK_EDITION
+fuCHECK_BACKUP_SPACE
 fuSTOP_TPOT
 fuBACKUP
 fuSELFUPDATE "$@"
