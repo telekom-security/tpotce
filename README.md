@@ -713,6 +713,8 @@ The update script will ...
  - create a full backup of the `~/tpotce` folder
  - update all files in `~/tpotce` to be in sync with that branch
  - restore your custom `ews.cfg` from `~/tpotce/data/ews/conf` and the T-Pot configuration (`~/tpotce/.env`).
+ - detect the installed T-Pot edition (i.e. `SENSOR`, `MINI`, `LLM`, `TARPIT`, `MOBILE`) and restore it, using this release's `~/tpotce/compose/<edition>.yml` so that new honeypots and changes of the release are included.
+ - store your previous `docker-compose.yml` in `$HOME/<date>_docker-compose.yml`. If you made changes to it (i.e. removing the `ewsposter` section or a `docker-compose.yml` built with `~/tpotce/compose/customizer.py`) you need to add them again.
 
 To update from a different branch or fork, i.e. to test changes before they are merged, see [Testing a Branch](#testing-a-branch).
 

@@ -14,6 +14,15 @@ myTPOT_BRANCH="${TPOT_BRANCH}"
 myTPOT_REPO_URL="${TPOT_REPO_URL}"
 myTPOT_SOURCE_GIVEN=""
 
+# The installed T-Pot edition. It only exists as the marker comment in the first
+# line of docker-compose.yml, a tracked file, so the update overwrites it with the
+# STANDARD edition. Everything needed to put it back is read before the update and
+# handed over to a restarted update.sh through the environment, see fuSELFUPDATE.
+myEDITION="${TPOT_UPDATE_EDITION}"
+myCOMPOSE_BAK="${TPOT_UPDATE_COMPOSE_BAK}"
+myCOMPOSE_CUSTOMIZED="${TPOT_UPDATE_COMPOSE_CUSTOMIZED}"
+myEDITIONS="STANDARD SENSOR MINI LLM TARPIT MOBILE MAC_WIN"
+
 myUPDATER=$(cat << "EOF"
  _____     ____       _     _   _           _       _
 |_   _|   |  _ \ ___ | |_  | | | |_ __   __| | __ _| |_ ___ _ __
@@ -117,6 +126,79 @@ function fuCHECK_SOURCE () {
 	echo
 }
 
+# The template of an edition, i.e. STANDARD -> compose/standard.yml
+function fuEDITION_TEMPLATE () {
+	echo "$HOME/tpotce/compose/$(echo "${myEDITION}" | tr '[:upper:]' '[:lower:]').yml"
+}
+
+# An edition is installed by copying one of the compose/*.yml over
+# docker-compose.yml, which is tracked by git, so the `git reset --hard` in
+# fuSELFUPDATE puts the STANDARD edition back. The edition is read here, before
+# anything is stopped, backed up or overwritten.
+function fuCHECK_EDITION () {
+	local myCOMPOSE=""
+	local myKNOWN=""
+	local i=""
+	echo
+	echo "### Checking the installed T-Pot edition ..."
+	# A restarted update.sh inherits the result of the first run, the compose file
+	# has already been reset by then and cannot be read again.
+	if [ -n "${myEDITION}" ];
+	  then
+	    echo "###### $myBLUE""Edition ${myEDITION} was detected before the restart.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	    echo
+	    return
+	fi
+	# Only the tracked ./docker-compose.yml is overwritten by the update, a compose
+	# file under a different name is untracked and stays as it is.
+	myCOMPOSE=$(grep -E "^TPOT_DOCKER_COMPOSE=" "$HOME/tpotce/.env" 2>/dev/null | tail -1 | cut -d "=" -f2-)
+	myCOMPOSE="${myCOMPOSE:-./docker-compose.yml}"
+	if [ "$(basename "${myCOMPOSE}")" != "docker-compose.yml" ];
+	  then
+	    echo "###### $myBLUE""TPOT_DOCKER_COMPOSE points to ${myCOMPOSE}, which the update leaves alone.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	    echo
+	    return
+	fi
+	if [ ! -f "$HOME/tpotce/docker-compose.yml" ];
+	  then
+	    echo "###### $myBLUE""There is no docker-compose.yml, so there is no edition to remember.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	    echo
+	    return
+	fi
+	myEDITION=$(head -1 "$HOME/tpotce/docker-compose.yml" | sed -n 's/^# T-Pot: *//p')
+	# Only an edition that ships a template in compose/ can be restored from one, a
+	# file built with compose/customizer.py has none.
+	for i in ${myEDITIONS};
+	  do
+	    [ "${myEDITION}" == "$i" ] && myKNOWN="1"
+	  done;
+	[ -n "${myKNOWN}" ] || myEDITION="UNKNOWN"
+	# The only source for the edition once the update has overwritten the file, and
+	# for the changes of a user who edited it. Kept outside of the checkout so that
+	# `git reset --hard` cannot touch it.
+	myCOMPOSE_BAK="$HOME/${myDATE}_docker-compose.yml"
+	if ! cp "$HOME/tpotce/docker-compose.yml" "${myCOMPOSE_BAK}";
+	  then
+	    echo "###### $myBLUE""Could not save docker-compose.yml to ${myCOMPOSE_BAK}.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	    echo "Exiting.""$myWHITE"
+	    echo
+	    exit 1
+	fi
+	if [ "${myEDITION}" == "UNKNOWN" ];
+	  then
+	    echo "###### $myBLUE""Unable to determine the edition, docker-compose.yml is restored as it is.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	  else
+	    # A compose file that differs from its own template was edited by the user.
+	    # The update cannot merge that, so it has to be handed back manually.
+	    if ! cmp -s "$HOME/tpotce/docker-compose.yml" "$(fuEDITION_TEMPLATE)";
+	      then
+	        myCOMPOSE_CUSTOMIZED="1"
+	    fi
+	    echo "###### $myBLUE""Edition ${myEDITION}${myCOMPOSE_CUSTOMIZED:+ (customized)}.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	fi
+	echo
+}
+
 # Move the checkout over to the requested repository and branch. The branch is
 # checked out for good, so a later `update.sh -y` without options keeps updating
 # from it.
@@ -164,6 +246,11 @@ function fuSELFUPDATE () {
 	if [ "${myOLDSUM}" != "$(sha256sum "$0" | awk '{ print $1 }')" ];
 	  then
 	    echo "###### $myBLUE""Found newer version of update.sh, restarting myself.""$myWHITE"
+	    # The edition was read from a file the pull above has just overwritten, so
+	    # the restarted script cannot read it again and inherits it instead.
+	    export TPOT_UPDATE_EDITION="${myEDITION}"
+	    export TPOT_UPDATE_COMPOSE_BAK="${myCOMPOSE_BAK}"
+	    export TPOT_UPDATE_COMPOSE_CUSTOMIZED="${myCOMPOSE_CUSTOMIZED}"
 	    # `-y` is repeated on purpose: after a switch to an older branch the
 	    # restarted script is that branch's update.sh, which only looks at `$1`
 	    # for the confirmation and would just print its usage otherwise
@@ -271,7 +358,11 @@ function fuUPDATER () {
 	fuREMOVEOLDIMAGES "dtagdevsec/*:24.04"
 	fuREMOVEOLDIMAGES "ghcr.io/telekom-security/*:24.04"
 	echo
-	echo "### If you made changes to docker-compose.yml please ensure to add them again."
+	if [ -n "${myCOMPOSE_CUSTOMIZED}" ];
+	  then
+	    echo "### If you made changes to docker-compose.yml please ensure to add them again."
+	    echo "### We stored your previous docker-compose.yml in $myCOMPOSE_BAK."
+	fi
 	echo "### We stored the previous version as backup in $myARCHIVE."
 	echo "### Some updates may need an import of the latest Kibana objects as well."
 	echo "### Download the latest objects here if they recently changed:"
@@ -293,6 +384,64 @@ function fuRESTORE () {
 	# We should upgrade the version in this file after restoring the backup.
 	newVERSION=$(cat version)
 	sed -i "s/^TPOT_VERSION=.*/TPOT_VERSION=${newVERSION}/" $HOME/tpotce/.env
+}
+
+# Put the edition back that fuCHECK_EDITION found, using this release's template so
+# that the update brings its new service definitions along. Has to run before the
+# images are pulled, as every edition needs a different set of them.
+function fuRESTORE_EDITION () {
+	local myTEMPLATE=""
+	echo
+	echo "### Restoring the T-Pot edition ..."
+	if [ -z "${myEDITION}" ];
+	  then
+	    echo "###### $myBLUE""No edition was detected, nothing to restore.""$myWHITE"
+	    echo
+	    return
+	fi
+	# An update.sh from before this function existed reset docker-compose.yml to
+	# the STANDARD edition without remembering anything, in which case TPOT_TYPE in
+	# the restored .env is the only hint that is left.
+	if [ "${myEDITION}" == "STANDARD" ] || [ "${myEDITION}" == "UNKNOWN" ];
+	  then
+	    if grep -qE "^TPOT_TYPE=SENSOR" "$HOME/tpotce/.env" 2>/dev/null;
+	      then
+	        echo "###### $myBLUE""TPOT_TYPE is SENSOR, restoring the SENSOR edition instead of ${myEDITION}.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	        myEDITION="SENSOR"
+	    fi
+	fi
+	[ "${myEDITION}" != "UNKNOWN" ] && myTEMPLATE=$(fuEDITION_TEMPLATE)
+	if [ -n "${myTEMPLATE}" ] && [ -f "${myTEMPLATE}" ];
+	  then
+	    echo -n "###### $myBLUE Now restoring the ${myEDITION} edition.$myWHITE "
+	    if ! cp "${myTEMPLATE}" "$HOME/tpotce/docker-compose.yml";
+	      then
+	        echo " [ $myRED""NOT OK""$myWHITE ]"
+	        echo "###### $myBLUE""Please copy ${myTEMPLATE} to ~/tpotce/docker-compose.yml manually.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	        echo
+	        return
+	    fi
+	    echo "[ $myGREEN"OK"$myWHITE ]"
+	    if [ -n "${myCOMPOSE_CUSTOMIZED}" ];
+	      then
+	        echo "###### $myBLUE""Your docker-compose.yml had been modified. The ${myEDITION} edition of this release is in place now, please add your changes again.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	        echo "###### $myBLUE""Compare with: diff ${myCOMPOSE_BAK} $HOME/tpotce/docker-compose.yml""$myWHITE"
+	    fi
+	  else
+	    # Without a template the file the user had is put back unchanged, which
+	    # keeps it on the service definitions of the previous release.
+	    echo -n "###### $myBLUE Now restoring your own docker-compose.yml.$myWHITE "
+	    if ! cp "${myCOMPOSE_BAK}" "$HOME/tpotce/docker-compose.yml";
+	      then
+	        echo " [ $myRED""NOT OK""$myWHITE ]"
+	        echo "###### $myBLUE""Please copy ${myCOMPOSE_BAK} to ~/tpotce/docker-compose.yml manually.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	        echo
+	        return
+	    fi
+	    echo "[ $myGREEN"OK"$myWHITE ]"
+	    echo "###### $myBLUE""Your docker-compose.yml does not match any edition in compose/, so the changes of this release were not applied to it.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	fi
+	echo
 }
 
 ################
@@ -339,12 +488,20 @@ fi
 fuCHECK_VERSION
 fuCHECKINET "https://index.docker.io https://github.com"
 fuCHECK_SOURCE
+fuCHECK_EDITION
 fuSTOP_TPOT
 fuBACKUP
 fuSELFUPDATE "$@"
-fuUPDATER
+# The config and the edition have to be back in place before the images are
+# pulled, `docker compose pull` reads both.
 fuRESTORE
+fuRESTORE_EDITION
+fuUPDATER
 
 echo
+if [ -n "${myEDITION}" ] && [ "${myEDITION}" != "UNKNOWN" ];
+  then
+    echo "### The T-Pot ${myEDITION} edition was restored to ~/tpotce/docker-compose.yml."
+fi
 echo "### Done. You can now start T-Pot using 'systemctl start tpot' or 'docker compose up -d'."
 echo
