@@ -2,7 +2,27 @@
 
 # Some global vars
 myCOMPOSEFILE="~/tpotce/docker-compose.yml"
-myDATE=$(date +%Y%m%d%H%M)
+myDATE=$(date +%Y%m%d%H%M%S)
+
+# Where the backups live. Its own directory with 0700, because the archives carry
+# the credentials from .env.
+myBACKUPDIR="${HOME}/tpot_backups"
+
+# What of data/ belongs in the archive: everything that exists only there and
+# cannot be reproduced. Missing paths are skipped, `hive.crt` only exists on a
+# SENSOR. The password files are deliberately left out - they are generated from
+# .env on every start.
+myJEWELS="data/uuid
+data/hive.crt
+data/nginx/cert
+data/ews/conf
+data/cowrie/keys
+data/beelzebub/key
+data/galah/cert
+data/rdphoneypot/cert"
+
+# Working directory, cleaned up when the script ends
+myTMPDIR=""
 myRED="[0;31m"
 myGREEN="[0;32m"
 myWHITE="[0;0m"
@@ -80,6 +100,34 @@ function fuCHECKINET () {
 	        fi
 	  done;
 	echo
+}
+
+# One working directory for the whole run, gone when the script ends
+function fuTMPDIR () {
+	[ -n "${myTMPDIR}" ] && return
+	myTMPDIR=$(mktemp -d)
+	if [ ! -d "${myTMPDIR}" ];
+	  then
+	    echo "###### $myBLUE""Could not create a temporary directory.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	    echo "Exiting.""$myWHITE"
+	    echo
+	    exit 1
+	fi
+	trap 'rm -rf "${myTMPDIR}"' EXIT
+}
+
+# Find a free archive name. The timestamp has second resolution, and a name that
+# already exists gets a counter - two runs must not overwrite each other.
+function fuARCHIVE_NAME () {
+	local myBASE="${myBACKUPDIR}/${myDATE}_tpot_backup"
+	local myTRY="${myBASE}.tar"
+	local myNUM=1
+	while [ -e "${myTRY}" ];
+	  do
+	    myTRY="${myBASE}_${myNUM}.tar"
+	    myNUM=$((myNUM+1))
+	done
+	echo "${myTRY}"
 }
 
 # Compare repository URLs without a trailing slash or `.git`
@@ -175,8 +223,9 @@ function fuCHECK_EDITION () {
 	[ -n "${myKNOWN}" ] || myEDITION="UNKNOWN"
 	# The only source for the edition once the update has overwritten the file, and
 	# for the changes of a user who edited it. Kept outside of the checkout so that
-	# `git reset --hard` cannot touch it.
-	myCOMPOSE_BAK="$HOME/${myDATE}_docker-compose.yml"
+	# `git reset --hard` cannot touch it, next to the backup archives.
+	mkdir -p "${myBACKUPDIR}" && chmod 0700 "${myBACKUPDIR}"
+	myCOMPOSE_BAK="${myBACKUPDIR}/${myDATE}_docker-compose.yml"
 	if ! cp "$HOME/tpotce/docker-compose.yml" "${myCOMPOSE_BAK}";
 	  then
 	    echo "###### $myBLUE""Could not save docker-compose.yml to ${myCOMPOSE_BAK}.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
@@ -251,6 +300,8 @@ function fuSELFUPDATE () {
 	    export TPOT_UPDATE_EDITION="${myEDITION}"
 	    export TPOT_UPDATE_COMPOSE_BAK="${myCOMPOSE_BAK}"
 	    export TPOT_UPDATE_COMPOSE_CUSTOMIZED="${myCOMPOSE_CUSTOMIZED}"
+	    # an `exec` does not fire the EXIT trap, so clean up here
+	    [ -n "${myTMPDIR}" ] && rm -rf "${myTMPDIR}"
 	    # `-y` is repeated on purpose: after a switch to an older branch the
 	    # restarted script is that branch's update.sh, which only looks at `$1`
 	    # for the confirmation and would just print its usage otherwise
@@ -314,26 +365,109 @@ function fuSTOP_TPOT () {
 }
 
 # Backup
+#
+# Only what cannot be restored otherwise goes in. Everything tracked comes back
+# from git and an update never touches `data/`, so what is irreplaceable are the
+# user's own changes, the configuration and a handful of files under `data/`. Hence
+# a list instead of a glob, and hence no compression: the archive is small enough
+# that compressing it would only cost time.
 function fuBACKUP () {
-	myARCHIVE="$HOME/${myDATE}_tpot_backup.tgz"
-	local myPATH=$PWD
+	local myStage=""
+	local myTARGETS=""
+	local myJEWEL=""
+	local myFILE=""
+	local myJEWELLIST=()
+	local myJEWELARGS=()
 	echo
 	echo "### Create a backup, just in case ... "
-	echo -n "###### $myBLUE Building archive in $myARCHIVE $myWHITE"
-	cd $HOME/tpotce
-	sudo tar cvf $myARCHIVE * .env >/dev/null 2>&1
-	sudo chown $LOGNAME:$LOGNAME $myARCHIVE
-	if [ $? -ne 0 ];
+	fuTMPDIR
+	if ! mkdir -p "${myBACKUPDIR}" || ! chmod 0700 "${myBACKUPDIR}";
 	  then
-	    echo " [ $myRED""NOT OK""$myWHITE ]"
-	    echo "###### $myBLUE""Something went wrong.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	    echo "###### $myBLUE""Could not prepare ${myBACKUPDIR}.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
 	    echo "Exiting.""$myWHITE"
 	    echo
-	    cd $myPATH
 	    exit 1
-	  else
-	    echo "[ $myGREEN"OK"$myWHITE ]"
-	    cd $myPATH
+	fi
+	myARCHIVE=$(fuARCHIVE_NAME)
+	myStage="${myTMPDIR}/stage"
+	mkdir -p "${myStage}"
+
+	# What git cannot bring back
+	git -C "$HOME/tpotce" diff HEAD > "${myStage}/tracked.patch"
+	git -C "$HOME/tpotce" rev-parse HEAD > "${myStage}/rollback.txt"
+	cp "$HOME/tpotce/.env" "${myStage}/env" 2>/dev/null
+	[ -f "$HOME/tpotce/docker-compose.yml" ] && cp "$HOME/tpotce/docker-compose.yml" "${myStage}/"
+
+	# Untracked files that are not ignored, with their paths
+	while IFS= read -r myFILE;
+	  do
+	    [ -z "${myFILE}" ] && continue
+	    mkdir -p "${myStage}/untracked/$(dirname "${myFILE}")"
+	    cp -a "$HOME/tpotce/${myFILE}" "${myStage}/untracked/${myFILE}" 2>/dev/null
+	  done < <(git -C "$HOME/tpotce" ls-files --others --exclude-standard)
+
+	# A note saying what this is and how to get back
+	{
+	  echo "T-Pot backup"
+	  echo "Created:      $(date '+%Y-%m-%d %H:%M:%S %z')"
+	  echo "Hostname:     $(hostname)"
+	  echo "Edition:      ${myEDITION:-unknown}"
+	  echo "TPOT_TYPE:    $(grep -E '^TPOT_TYPE=' "$HOME/tpotce/.env" 2>/dev/null | tail -1 | cut -d= -f2-)"
+	  echo "TPOT_VERSION: $(grep -E '^TPOT_VERSION=' "$HOME/tpotce/.env" 2>/dev/null | tail -1 | cut -d= -f2-)"
+	  echo "Commit:       $(git -C "$HOME/tpotce" rev-parse HEAD) ($(git -C "$HOME/tpotce" rev-parse --abbrev-ref HEAD))"
+	  echo "Repository:   $(git -C "$HOME/tpotce" remote get-url origin 2>/dev/null)"
+	  echo
+	  echo "Restore with 'restore.sh -f <this archive>'."
+	  echo "To go back to the commit before the update:"
+	  echo "  cd ~/tpotce && git reset --hard \$(cat rollback.txt)"
+	} > "${myStage}/MANIFEST"
+
+	# env and tracked.patch carry the credentials from .env, so the modes have to be
+	# tight inside the archive already - extracting must not widen them
+	chmod -R go-rwx "${myStage}"
+
+	myTARGETS="MANIFEST rollback.txt env tracked.patch"
+	[ -f "${myStage}/docker-compose.yml" ] && myTARGETS="${myTARGETS} docker-compose.yml"
+	[ -d "${myStage}/untracked" ]          && myTARGETS="${myTARGETS} untracked"
+	[ -d "${myStage}/elastic" ]            && myTARGETS="${myTARGETS} elastic"
+
+	# These belong to tpot:tpot with 0770, which the archive has to record
+	for myJEWEL in ${myJEWELS};
+	  do
+	    [ -e "$HOME/tpotce/${myJEWEL}" ] && myJEWELLIST+=("${myJEWEL}")
+	  done;
+	if [ ${#myJEWELLIST[@]} -gt 0 ];
+	  then
+	    myJEWELARGS=(-C "$HOME/tpotce" "${myJEWELLIST[@]}")
+	fi
+
+	echo -n "###### $myBLUE Building archive in $myARCHIVE $myWHITE"
+	# A single tar run: intermediate files created under sudo belong to root and
+	# could not be moved afterwards.
+	if ! sudo tar cf "${myARCHIVE}" -p --numeric-owner \
+	        -C "${myStage}" ${myTARGETS} "${myJEWELARGS[@]}" 2>"${myTMPDIR}/tar.err";
+	  then
+	    echo " [ $myRED""NOT OK""$myWHITE ]"
+	    echo "###### $myBLUE""tar failed:""$myWHITE"
+	    sed 's/^/###### /' "${myTMPDIR}/tar.err"
+	    echo "Exiting.""$myWHITE"
+	    echo
+	    exit 1
+	fi
+	if ! sudo chown "$(id -u):$(id -g)" "${myARCHIVE}" || ! chmod 0600 "${myARCHIVE}";
+	  then
+	    echo " [ $myRED""NOT OK""$myWHITE ]"
+	    echo "###### $myBLUE""Could not take ownership of ${myARCHIVE}.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	    echo "Exiting.""$myWHITE"
+	    echo
+	    exit 1
+	fi
+	echo "[ $myGREEN"OK"$myWHITE ]"
+	echo "###### $myBLUE""Archive holds $(tar tf "${myARCHIVE}" | wc -l) entries, $(du -h "${myARCHIVE}" | cut -f1).""$myWHITE"
+	# Point at the old archives from before this directory existed, once
+	if ls "$HOME"/*_tpot_backup.tgz >/dev/null 2>&1;
+	  then
+	    echo "###### $myBLUE""Note: older backups are still in $HOME, new ones go to ${myBACKUPDIR}.""$myWHITE"
 	fi
 	echo
 }
@@ -379,7 +513,27 @@ function fuRESTORE () {
 	    sed -i '/- ${TPOT_DATA_PATH}:\/data/a \ \ \ \ \ - ${TPOT_DATA_PATH}/ews/conf/ews.cfg:/opt/ewsposter/ews.cfg' $myCOMPOSEFILE
 	fi
 	echo "### Restoring T-Pot config file .env"
-	tar xvf $myARCHIVE .env -C $HOME/tpotce >/dev/null 2>&1
+	fuTMPDIR
+	# `-C` only applies to the members named after it, hence it comes first. And the
+	# return value is checked: a restore that failed silently left T-Pot starting
+	# without a web login while the run still reported "Done".
+	if ! tar xf "${myARCHIVE}" -C "${myTMPDIR}" env 2>"${myTMPDIR}/untar.err";
+	  then
+	    echo "###### $myBLUE""Could not read 'env' from ${myARCHIVE}.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	    sed 's/^/###### /' "${myTMPDIR}/untar.err"
+	    echo "###### $myBLUE""Refusing to continue with a default configuration.""$myWHITE"
+	    echo "Exiting.""$myWHITE"
+	    echo
+	    exit 1
+	fi
+	if ! cp "${myTMPDIR}/env" "$HOME/tpotce/.env";
+	  then
+	    echo "###### $myBLUE""Could not write $HOME/tpotce/.env.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	    echo "Exiting.""$myWHITE"
+	    echo
+	    exit 1
+	fi
+	echo "###### $myBLUE""Restored from ${myARCHIVE}.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
 	# Backup file (.env) contains a record of the TPOT_VERSION that is used in docker-compose commmands. 
 	# We should upgrade the version in this file after restoring the backup.
 	newVERSION=$(cat version)
