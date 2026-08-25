@@ -74,7 +74,7 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/in
   - [Known Issues](#known-issues)
     - [Docker Images Fail to Download](#docker-images-fail-to-download)
     - [T-Pot Networking Fails](#t-pot-networking-fails)
-  - [Update Script Loops on a Detached HEAD](#update-script-loops-on-a-detached-head)
+    - [Update Script Loops on a Detached HEAD](#update-script-loops-on-a-detached-head)
   - [Start T-Pot](#start-t-pot)
   - [Stop T-Pot](#stop-t-pot)
   - [T-Pot Data Folder](#t-pot-data-folder)
