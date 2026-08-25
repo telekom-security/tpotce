@@ -68,11 +68,13 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/in
 - [Maintenance](#maintenance)
   - [General Updates](#general-updates)
   - [Update Script](#update-script)
+  - [Updating From an Older Release](#updating-from-an-older-release)
   - [Restore Script](#restore-script)
   - [Daily Reboot](#daily-reboot)
   - [Known Issues](#known-issues)
     - [Docker Images Fail to Download](#docker-images-fail-to-download)
     - [T-Pot Networking Fails](#t-pot-networking-fails)
+  - [Update Script Loops on a Detached HEAD](#update-script-loops-on-a-detached-head)
   - [Start T-Pot](#start-t-pot)
   - [Stop T-Pot](#stop-t-pot)
   - [T-Pot Data Folder](#t-pot-data-folder)
@@ -738,6 +740,22 @@ your honeypot data. If that does not work out it drops the oldest archives and d
 a regular backup; if even that does not fit it stops before touching anything, leaving T-Pot up and
 running rather than filling the disk.
 
+### Updating From an Older Release
+When `update.sh` finds a newer version of itself it pulls, restarts, and the new script finishes the
+job. Scripts older than this release do not hand anything over when they restart, so the new script
+starts from a checkout that has already been reset - your `.env` and your edition are gone by then,
+and it will happily restore the upstream defaults instead. Fetch the current `update.sh` first and
+run that, then the backup is taken before anything is reset and everything survives.
+```
+cd ~/tpotce
+git switch master
+curl -fsSL -o update.sh https://raw.githubusercontent.com/telekom-security/tpotce/master/update.sh
+chmod +x update.sh
+./update.sh -y
+```
+This is only needed once, coming from a release that predates this behaviour. Afterwards a plain
+`./update.sh -y` carries everything across on its own.
+
 To update from a different branch or fork, i.e. to test changes before they are merged, see [Testing a Branch](#testing-a-branch).
 
 ## Restore Script
@@ -782,6 +800,21 @@ docker login
 
 ### T-Pot Networking Fails
 T-Pot is designed to only run on machines with a single NIC. T-Pot will try to grab the interface with the default route, however it is not guaranteed that this will always succeed. At best use T-Pot on machines with only a single NIC.
+
+### Update Script Loops on a Detached HEAD
+If `~/tpotce` is not on a branch - after `git checkout <tag>`, for example - there is no upstream to
+pull into and `git pull` refuses. Current versions of `update.sh` detect this and stop before
+anything is touched. The script shipped with 24.04.0 does not: it restarts itself whenever it finds
+a newer `update.sh` upstream, and because the pull can never succeed that condition never clears,
+so it loops and writes a backup on every pass. Interrupt it with `CTRL-C` and put the checkout back
+on a branch, then update again.
+```
+cd ~/tpotce
+git switch master
+./update.sh -y
+```
+Alternatively name the branch and let the script check it out for you, which also works from a
+detached HEAD: `./update.sh -y -b master`.
 
 ## Start T-Pot
 The T-Pot service automatically starts and stops on each reboot (which occurs once on a daily basis as setup in `sudo crontab -l` during installation).

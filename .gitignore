@@ -7,3 +7,4 @@ data_backup/
 install_tpot.log
 .env
 AGENTS.md
+UPDATE_SH_FIXES.md
