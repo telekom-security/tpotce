@@ -56,6 +56,12 @@ myTPOT_SOURCE_GIVEN=""
 # line of docker-compose.yml, a tracked file, so the update overwrites it with the
 # STANDARD edition. Everything needed to put it back is read before the update and
 # handed over to a restarted update.sh through the environment, see fuSELFUPDATE.
+# A restarted update.sh inherits what the first pass already did, so it neither
+# stops T-Pot again nor writes a second backup - and it restores from the FIRST
+# archive, the only one taken before the checkout was reset.
+myPREPARED="${TPOT_UPDATE_PREPARED}"
+myARCHIVE="${TPOT_UPDATE_ARCHIVE}"
+
 myEDITION="${TPOT_UPDATE_EDITION}"
 myCOMPOSE_BAK="${TPOT_UPDATE_COMPOSE_BAK}"
 myCOMPOSE_CUSTOMIZED="${TPOT_UPDATE_COMPOSE_CUSTOMIZED}"
@@ -223,6 +229,12 @@ function fuCHECK_BACKUP_SPACE () {
 	local myNEED=0 myFREE=0 myTOTAL=0 myRESERVE=0
 	echo
 	echo "### Checking the space for the backup ..."
+	if [ -n "${myPREPARED}" ];
+	  then
+	    echo "###### $myBLUE""The backup was already taken before the restart, nothing to check.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	    echo
+	    return
+	fi
 	if ! mkdir -p "${myBACKUPDIR}" || ! chmod 0700 "${myBACKUPDIR}";
 	  then
 	    echo "###### $myBLUE""Could not prepare ${myBACKUPDIR}.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
@@ -279,6 +291,18 @@ function fuCHECK_SOURCE () {
 	[ -z "${myTPOT_REPO_URL}" ] && myTPOT_REPO_URL="${myCURRENT_REPO}"
 	myTPOT_REPO_URL=$(fuNORMALIZE_REPO "${myTPOT_REPO_URL}")
 	echo "###### $myBLUE${myTPOT_REPO_URL} at ${myTPOT_BRANCH}$myWHITE"
+	# A detached HEAD - a tag or a bare commit checked out - has no upstream to pull
+	# into, `git pull` refuses outright. Without a branch the update cannot do
+	# anything, so it stops here while T-Pot is still running and untouched. `-b`
+	# still works: fuSWITCH_SOURCE checks the branch out and ends the detached state.
+	if [ -z "${myTPOT_BRANCH}" ] || [ "${myTPOT_BRANCH}" == "HEAD" ];
+	  then
+	    echo "###### $myBLUE""The checkout is not on a branch (detached at $(git describe --tags --always 2>/dev/null)), so there is nothing to update from.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	    echo "###### $myBLUE""Switch to a branch first, i.e. 'git -C $HOME/tpotce switch master', or name one with '-b <branch>'.""$myWHITE"
+	    echo "Exiting.""$myWHITE"
+	    echo
+	    exit 1
+	fi
 	if [ -z "${myTPOT_SOURCE_GIVEN}" ];
 	  then
 	    echo
@@ -287,13 +311,6 @@ function fuCHECK_SOURCE () {
 	# A typo in a branch name must not take T-Pot down, so the requested source
 	# is checked before anything is stopped or overwritten. `ls-remote` asks the
 	# repository itself and leaves the local checkout alone.
-	if [ -z "${myTPOT_BRANCH}" ] || [ "${myTPOT_BRANCH}" == "HEAD" ];
-	  then
-	    echo "###### $myBLUE""Unable to determine the current branch, please name one with '-b'.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
-	    echo "Exiting.""$myWHITE"
-	    echo
-	    exit 1
-	fi
 	if ! git ls-remote --heads "${myTPOT_REPO_URL}" "refs/heads/${myTPOT_BRANCH}" 2>/dev/null | grep -q .;
 	  then
 	    echo "###### $myBLUE""Branch ${myTPOT_BRANCH} does not exist in ${myTPOT_REPO_URL}.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
@@ -421,14 +438,24 @@ function fuSELFUPDATE () {
 	myOLDSUM=$(sha256sum "$0" | awk '{ print $1 }')
 	fuSWITCH_SOURCE
 	echo "###### $myBLUE""Pulling updates from repository.""$myWHITE"
-	git fetch --all
-	git reset --hard
-	git pull --force
+	# Checked, because a failed pull used to leave the checkout untouched while the
+	# run went on to report "Done" - an update that silently did nothing.
+	if ! git fetch --all || ! git reset --hard || ! git pull --force;
+	  then
+	    echo "###### $myBLUE""Could not pull the updates.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	    echo "###### $myBLUE""The checkout may be left mid-merge, check it with 'git -C $HOME/tpotce status'.""$myWHITE"
+	    echo "###### $myBLUE""T-Pot is stopped, start it again with 'systemctl start tpot'. The backup is in ${myARCHIVE}.""$myWHITE"
+	    echo "Exiting.""$myWHITE"
+	    echo
+	    exit 1
+	fi
 	if [ "${myOLDSUM}" != "$(sha256sum "$0" | awk '{ print $1 }')" ];
 	  then
 	    echo "###### $myBLUE""Found newer version of update.sh, restarting myself.""$myWHITE"
 	    # The edition was read from a file the pull above has just overwritten, so
 	    # the restarted script cannot read it again and inherits it instead.
+	    export TPOT_UPDATE_PREPARED="1"
+	    export TPOT_UPDATE_ARCHIVE="${myARCHIVE}"
 	    export TPOT_UPDATE_EDITION="${myEDITION}"
 	    export TPOT_UPDATE_COMPOSE_BAK="${myCOMPOSE_BAK}"
 	    export TPOT_UPDATE_COMPOSE_CUSTOMIZED="${myCOMPOSE_CUSTOMIZED}"
@@ -474,6 +501,12 @@ function fuCHECK_VERSION () {
 function fuSTOP_TPOT () {
 	echo
 	echo "### Need to stop T-Pot ..."
+	if [ -n "${myPREPARED}" ];
+	  then
+	    echo "###### $myBLUE""Already stopped before the restart.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	    echo
+	    return
+	fi
 	echo -n "###### $myBLUE Now stopping T-Pot.$myWHITE "
 	sudo systemctl stop tpot.service
 	if [ $? -ne 0 ];
@@ -505,6 +538,12 @@ function fuEXPORT_ELASTIC () {
 	local myOUT=""
 	echo
 	echo "### Saving the Elasticsearch state ..."
+	if [ -n "${myPREPARED}" ];
+	  then
+	    echo "###### $myBLUE""Already saved before the restart, T-Pot is stopped by now.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	    echo
+	    return
+	fi
 	fuTMPDIR
 	myOUT="${myTMPDIR}/stage/elastic"
 	mkdir -p "${myOUT}"
@@ -572,6 +611,15 @@ function fuBACKUP () {
 	local myJEWELARGS=()
 	echo
 	echo "### Create a backup, just in case ... "
+	# The second pass would archive the checkout that the pull has already reset, and
+	# fuRESTORE would then put that back - the user's configuration would be gone
+	# while the run still reported success.
+	if [ -n "${myPREPARED}" ];
+	  then
+	    echo "###### $myBLUE""Keeping the backup from before the restart: ${myARCHIVE}""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	    echo
+	    return
+	fi
 	fuTMPDIR
 	if ! mkdir -p "${myBACKUPDIR}" || ! chmod 0700 "${myBACKUPDIR}";
 	  then
@@ -736,10 +784,19 @@ function fuRESTORE () {
 	    exit 1
 	fi
 	echo "###### $myBLUE""Restored from ${myARCHIVE}.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
-	# Backup file (.env) contains a record of the TPOT_VERSION that is used in docker-compose commmands. 
-	# We should upgrade the version in this file after restoring the backup.
+	# Backup file (.env) contains a record of the TPOT_VERSION that is used in docker-compose commmands.
+	# We should upgrade the version in this file after restoring the backup - but only
+	# when it looks like a release version. A deliberate `dev` or a branch tag is a
+	# choice, not something to overwrite.
 	newVERSION=$(cat version)
-	sed -i "s/^TPOT_VERSION=.*/TPOT_VERSION=${newVERSION}/" $HOME/tpotce/.env
+	myOLDVERSION=$(grep -E "^TPOT_VERSION=" "$HOME/tpotce/.env" | tail -1 | cut -d= -f2-)
+	if echo "${myOLDVERSION}" | grep -qE "^[0-9]+\.[0-9]+\.[0-9]+$";
+	  then
+	    sed -i "s/^TPOT_VERSION=.*/TPOT_VERSION=${newVERSION}/" $HOME/tpotce/.env
+	    echo "###### $myBLUE""TPOT_VERSION ${myOLDVERSION} -> ${newVERSION}.""$myWHITE"
+	  else
+	    echo "###### $myBLUE""Keeping TPOT_VERSION=${myOLDVERSION}, it is not a release version.""$myWHITE"
+	fi
 }
 
 # Put the edition back that fuCHECK_EDITION found, using this release's template so
