@@ -81,7 +81,6 @@ myPREPARED="${TPOT_UPDATE_PREPARED}"
 myARCHIVE="${TPOT_UPDATE_ARCHIVE}"
 
 myEDITION="${TPOT_UPDATE_EDITION}"
-myCOMPOSE_BAK="${TPOT_UPDATE_COMPOSE_BAK}"
 myCOMPOSE_CUSTOMIZED="${TPOT_UPDATE_COMPOSE_CUSTOMIZED}"
 myEDITIONS="STANDARD SENSOR MINI LLM TARPIT MOBILE MAC_WIN"
 
@@ -390,18 +389,8 @@ function fuCHECK_EDITION () {
 	    [ "${myEDITION}" == "$i" ] && myKNOWN="1"
 	  done;
 	[ -n "${myKNOWN}" ] || myEDITION="UNKNOWN"
-	# The only source for the edition once the update has overwritten the file, and
-	# for the changes of a user who edited it. Kept outside of the checkout so that
-	# `git reset --hard` cannot touch it, next to the backup archives.
-	mkdir -p "${myBACKUPDIR}" && chmod 0700 "${myBACKUPDIR}"
-	myCOMPOSE_BAK="${myBACKUPDIR}/${myDATE}_docker-compose.yml"
-	if ! cp "$HOME/tpotce/docker-compose.yml" "${myCOMPOSE_BAK}";
-	  then
-	    echo "###### $myBLUE""Could not save docker-compose.yml to ${myCOMPOSE_BAK}.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
-	    echo "Exiting.""$myWHITE"
-	    echo
-	    exit 1
-	fi
+	# No separate copy is kept here: fuBACKUP puts docker-compose.yml into the archive
+	# before the checkout is reset, and that is the copy everything below works from.
 	if [ "${myEDITION}" == "UNKNOWN" ];
 	  then
 	    echo "###### $myBLUE""Unable to determine the edition, docker-compose.yml is restored as it is.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
@@ -477,7 +466,6 @@ function fuSELFUPDATE () {
 	    export TPOT_UPDATE_PREPARED="1"
 	    export TPOT_UPDATE_ARCHIVE="${myARCHIVE}"
 	    export TPOT_UPDATE_EDITION="${myEDITION}"
-	    export TPOT_UPDATE_COMPOSE_BAK="${myCOMPOSE_BAK}"
 	    export TPOT_UPDATE_COMPOSE_CUSTOMIZED="${myCOMPOSE_CUSTOMIZED}"
 	    # an `exec` does not fire the EXIT trap, so clean up here
 	    [ -n "${myTMPDIR}" ] && rm -rf "${myTMPDIR}"
@@ -871,7 +859,7 @@ function fuUPDATER () {
 	if [ -n "${myCOMPOSE_CUSTOMIZED}" ];
 	  then
 	    echo "### If you made changes to docker-compose.yml please ensure to add them again."
-	    echo "### We stored your previous docker-compose.yml in $myCOMPOSE_BAK."
+	    echo "### Your previous one is in the backup as 'docker-compose.yml'."
 	fi
 	echo "### We stored the previous version as backup in $myARCHIVE."
 	echo "### Your own Kibana objects and the ILM policy were saved to the archive before"
@@ -944,6 +932,18 @@ function fuRESTORE () {
 	fi
 }
 
+# The docker-compose.yml as it was before the update, taken from the archive. It is
+# the fifth member, ahead of data/, so this stays cheap even for a --full archive.
+function fuCOMPOSE_FROM_ARCHIVE () {
+	if [ -z "${myARCHIVE}" ] || [ ! -f "${myARCHIVE}" ];
+	  then
+	    return 1
+	fi
+	fuTMPDIR
+	tar xf "${myARCHIVE}" -C "${myTMPDIR}" docker-compose.yml 2>/dev/null \
+	  && [ -s "${myTMPDIR}/docker-compose.yml" ]
+}
+
 # Put the edition back that fuCHECK_EDITION found, using this release's template so
 # that the update brings its new service definitions along. Has to run before the
 # images are pulled, as every edition needs a different set of them.
@@ -983,16 +983,19 @@ function fuRESTORE_EDITION () {
 	    if [ -n "${myCOMPOSE_CUSTOMIZED}" ];
 	      then
 	        echo "###### $myBLUE""Your docker-compose.yml had been modified. The ${myEDITION} edition of this release is in place now, please add your changes again.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
-	        echo "###### $myBLUE""Compare with: diff ${myCOMPOSE_BAK} $HOME/tpotce/docker-compose.yml""$myWHITE"
+	        echo "###### $myBLUE""Your previous file is in the backup, compare it with:""$myWHITE"
+	        echo "######   $myBLUE""tar xOf ${myARCHIVE} docker-compose.yml | diff - $HOME/tpotce/docker-compose.yml""$myWHITE"
 	    fi
 	  else
 	    # Without a template the file the user had is put back unchanged, which
 	    # keeps it on the service definitions of the previous release.
-	    echo -n "###### $myBLUE Now restoring your own docker-compose.yml.$myWHITE "
-	    if ! cp "${myCOMPOSE_BAK}" "$HOME/tpotce/docker-compose.yml";
+	    echo -n "###### $myBLUE Now restoring your own docker-compose.yml from the backup.$myWHITE "
+	    if ! fuCOMPOSE_FROM_ARCHIVE \
+	       || ! cp "${myTMPDIR}/docker-compose.yml" "$HOME/tpotce/docker-compose.yml";
 	      then
 	        echo " [ $myRED""NOT OK""$myWHITE ]"
-	        echo "###### $myBLUE""Please copy ${myCOMPOSE_BAK} to ~/tpotce/docker-compose.yml manually.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	        echo "###### $myBLUE""Could not take it from ${myARCHIVE}. Put it back by hand with:""$myWHITE"
+	        echo "######   $myBLUE""tar xf ${myARCHIVE} -C $HOME/tpotce docker-compose.yml""$myWHITE"
 	        echo
 	        return
 	    fi
