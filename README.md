@@ -74,7 +74,7 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/in
   - [Known Issues](#known-issues)
     - [Docker Images Fail to Download](#docker-images-fail-to-download)
     - [T-Pot Networking Fails](#t-pot-networking-fails)
-    - [Update Script Loops on a Detached HEAD](#update-script-loops-on-a-detached-head)
+    - [Update Script Loops](#update-script-loops)
   - [Start T-Pot](#start-t-pot)
   - [Stop T-Pot](#stop-t-pot)
   - [T-Pot Data Folder](#t-pot-data-folder)
@@ -756,14 +756,24 @@ When `update.sh` finds a newer version of itself it pulls, restarts, and the new
 job. Scripts older than this release do not hand anything over when they restart, so the new script
 starts from a checkout that has already been reset - your `.env` and your edition are gone by then,
 and it will happily restore the upstream defaults instead. Fetch the current `update.sh` first and
-run that, then the backup is taken before anything is reset and everything survives.
+run it with `-b master`, then the backup is taken before anything is reset and everything survives.
 ```
 cd ~/tpotce
-git switch master
 curl -fsSL -o update.sh https://raw.githubusercontent.com/telekom-security/tpotce/master/update.sh
 chmod +x update.sh
-./update.sh -y
+./update.sh -y -b master
 ```
+`-b master` is what makes this work, and switching the branch by hand beforehand is not an
+alternative: `.env` is tracked, so git refuses to leave a branch while your configuration differs
+from it. The script does the switch itself, after the backup has been written, and puts your
+configuration back afterwards. It is also what keeps the `update.sh` you just fetched in place -
+that file is tracked as well, so resetting the checkout discards it, and only a switch to `master`
+brings the very same file back.
+
+Without `-b master` the run stops after restoring your configuration and says so. It has to: your
+checkout would still be on the older release, and finishing there would pull that release's images
+and remove the ones your installation is running on.
+
 This is only needed once, coming from a release that predates this behaviour. Afterwards a plain
 `./update.sh -y` carries everything across on its own.
 
@@ -812,20 +822,31 @@ docker login
 ### T-Pot Networking Fails
 T-Pot is designed to only run on machines with a single NIC. T-Pot will try to grab the interface with the default route, however it is not guaranteed that this will always succeed. At best use T-Pot on machines with only a single NIC.
 
-### Update Script Loops on a Detached HEAD
-If `~/tpotce` is not on a branch - after `git checkout <tag>`, for example - there is no upstream to
-pull into and `git pull` refuses. Current versions of `update.sh` detect this and stop before
-anything is touched. The script shipped with 24.04.0 does not: it restarts itself whenever it finds
-a newer `update.sh` upstream, and because the pull can never succeed that condition never clears,
-so it loops and writes a backup on every pass. Interrupt it with `CTRL-C` and put the checkout back
-on a branch, then update again.
+### Update Script Loops
+The `update.sh` shipped with 24.04.0 decides whether to restart itself by comparing its own file
+against `origin/master`. That comparison only ever clears on `master`: on any other branch, and on a
+detached HEAD after a `git checkout <tag>`, its `update.sh` differs from the one on `master` no
+matter how often it pulls, so it keeps restarting itself and writes a backup on every pass. Current
+versions restart on a checksum of their own file instead, stop on a detached HEAD before anything is
+touched, and never restart into an older script.
+
+Interrupt the loop with `CTRL-C`. Every pass resets the checkout before it restarts, so your `.env`
+is back at the branch default by now, and the pass that still had your configuration is the
+**first** one. Recover it before doing anything else:
 ```
-cd ~/tpotce
-git switch master
-./update.sh -y
+ls -ltr ~/*_tpot_backup.tgz
+tar xOf ~/<the oldest archive of this run>_tpot_backup.tgz .env > ~/tpotce/.env
+grep -E "^(WEB_USER|TPOT_TYPE)=" ~/tpotce/.env
 ```
-Alternatively name the branch and let the script check it out for you, which also works from a
-detached HEAD: `./update.sh -y -b master`.
+Those archive names carry the time down to the minute only, so a loop that stayed within one minute
+wrote every pass to the same file and the last one won - if `WEB_USER` comes back empty, the login
+has to be created again with `~/tpotce/genuser.sh`. Then update with the current script, which stops
+rather than loops:
+```
+curl -fsSL -o update.sh https://raw.githubusercontent.com/telekom-security/tpotce/master/update.sh
+chmod +x update.sh
+./update.sh -y -b master
+```
 
 ## Start T-Pot
 The T-Pot service automatically starts and stops on each reboot (which occurs once on a daily basis as setup in `sudo crontab -l` during installation).

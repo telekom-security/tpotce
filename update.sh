@@ -39,6 +39,12 @@ myFULL=""
 # from a test run included - and only takes up disk.
 myREPOS="dtagdevsec ghcr.io/telekom-security"
 
+# Set when the checkout turns out to ship an older release than the running script.
+# Nothing after the pull is an update then: the compose file, .env and the image tags
+# all belong to the older release. The run puts the configuration back and stops
+# rather than pulling that release's images and removing the ones in use.
+myOLDER_CHECKOUT=""
+
 # Whether the image pull went through. A failed pull is not fatal on its own, but
 # T-Pot cannot start without the images, so it changes what the run reports.
 myPULLOK=""
@@ -317,7 +323,7 @@ function fuCHECK_SOURCE () {
 	if [ -z "${myTPOT_BRANCH}" ] || [ "${myTPOT_BRANCH}" == "HEAD" ];
 	  then
 	    echo "###### $myBLUE""The checkout is not on a branch (detached at $(git describe --tags --always 2>/dev/null)), so there is nothing to update from.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
-	    echo "###### $myBLUE""Switch to a branch first, i.e. 'git -C $HOME/tpotce switch master', or name one with '-b <branch>'.""$myWHITE"
+	    echo "###### $myBLUE""Name a branch with '-b master' and it is checked out for you, or switch by hand first: 'git -C $HOME/tpotce switch master'.""$myWHITE"
 	    echo "Exiting.""$myWHITE"
 	    echo
 	    exit 1
@@ -460,6 +466,21 @@ function fuSELFUPDATE () {
 	fi
 	if [ "${myOLDSUM}" != "$(sha256sum "$0" | awk '{ print $1 }')" ];
 	  then
+	    # A changed update.sh is not necessarily a newer one. The `git reset --hard`
+	    # above throws away a hand-placed update.sh, and `-b` to an older branch
+	    # brings that branch's script - both leave an OLDER file here. Restarting
+	    # into one is never useful: it knows nothing of the handover, so it stops
+	    # T-Pot and writes a backup a second time, and the released 24.04.0 script
+	    # keeps restarting itself forever unless the checkout is on master. The
+	    # handover variable is the marker, it only exists from 24.04.1 onwards.
+	    if ! grep -q "TPOT_UPDATE_PREPARED" "$0";
+	      then
+	        echo "###### $myBLUE""The update.sh of this checkout predates the one running, so this checkout is an older release.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	        echo "###### $myBLUE""Not restarting into it. Putting the configuration back, then stopping.""$myWHITE"
+	        myOLDER_CHECKOUT="1"
+	        echo
+	        return
+	    fi
 	    echo "###### $myBLUE""Found newer version of update.sh, restarting myself.""$myWHITE"
 	    # The edition was read from a file the pull above has just overwritten, so
 	    # the restarted script cannot read it again and inherits it instead.
@@ -1078,6 +1099,25 @@ fuSELFUPDATE "$@"
 # pulled, `docker compose pull` reads both.
 fuRESTORE
 fuRESTORE_EDITION
+
+# Everything below belongs to the release of the checkout - the image tag .env now
+# carries, and the cleanup that removes every other tag. On an older checkout that
+# combination pulls the previous release and deletes the images this machine runs
+# on, so the run ends here, after the configuration is safely back.
+if [ -n "${myOLDER_CHECKOUT}" ];
+  then
+    echo
+    echo "### This is a downgrade, not an update, so nothing was pulled or removed."
+    echo "###### $myBLUE""The checkout is at $(git rev-parse --abbrev-ref HEAD 2>/dev/null), whose update.sh predates the one you started. Its .env and its compose file ask for the images of that release, and the cleanup would remove the ones in use.""$myWHITE"
+    echo "###### $myBLUE""Your configuration and your edition are back in place, no image was touched, T-Pot is stopped.""$myWHITE"
+    echo "###### $myBLUE""To update to the current release instead:""$myWHITE"
+    echo "######   $myBLUE""./update.sh -y -b master""$myWHITE"
+    echo "###### $myBLUE""To leave things as they are, start T-Pot again with 'systemctl start tpot'.""$myWHITE"
+    echo "###### $myBLUE""The backup of this run is in ${myARCHIVE}.""$myWHITE"
+    echo
+    exit 1
+fi
+
 fuUPDATER
 
 echo
