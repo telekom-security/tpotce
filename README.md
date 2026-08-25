@@ -68,10 +68,13 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/in
 - [Maintenance](#maintenance)
   - [General Updates](#general-updates)
   - [Update Script](#update-script)
+  - [Updating From an Older Release](#updating-from-an-older-release)
+  - [Restore Script](#restore-script)
   - [Daily Reboot](#daily-reboot)
   - [Known Issues](#known-issues)
     - [Docker Images Fail to Download](#docker-images-fail-to-download)
     - [T-Pot Networking Fails](#t-pot-networking-fails)
+    - [Update Script Loops on a Detached HEAD](#update-script-loops-on-a-detached-head)
   - [Start T-Pot](#start-t-pot)
   - [Stop T-Pot](#stop-t-pot)
   - [T-Pot Data Folder](#t-pot-data-folder)
@@ -712,11 +715,78 @@ T-Pot releases are offered through GitHub and can be pulled using `~/tpotce/upda
 
 The update script will ...
  - ***mercilessly*** overwrite local changes to be in sync with the branch the installation follows, `master` by default
- - create a full backup of the `~/tpotce` folder
+ - write a backup to `~/tpot_backups/<date>_tpot_backup.tar` before it touches anything
  - update all files in `~/tpotce` to be in sync with that branch
- - restore your custom `ews.cfg` from `~/tpotce/data/ews/conf` and the T-Pot configuration (`~/tpotce/.env`).
+ - restore the T-Pot configuration (`~/tpotce/.env`) from that backup and carry its image tag
+   (`TPOT_VERSION`) forward to the one this release ships, so the new compose file does not ask for
+   images of the old version. A tag you pinned yourself - `dev`, a branch name - is left alone.
+ - move `TPOT_REPO` from `dtagdevsec` to `ghcr.io/telekom-security` if it is still on that old
+   default, which avoids the Docker Hub [rate limits](#docker-images-fail-to-download). A registry
+   you set yourself is left alone.
+ - remove docker images of earlier versions, keeping the tag your `.env` now names
+ - detect the installed T-Pot edition (i.e. `SENSOR`, `MINI`, `LLM`, `TARPIT`, `MOBILE`) and restore it, using this release's `~/tpotce/compose/<edition>.yml` so that new honeypots and changes of the release are included.
+ - store your previous `docker-compose.yml` in `~/tpot_backups/<date>_docker-compose.yml`. If you made changes to it (i.e. removing the `ewsposter` section or a `docker-compose.yml` built with `~/tpotce/compose/customizer.py`) you need to add them again.
+
+The backup holds what git cannot bring back: `~/tpotce/.env`, your `docker-compose.yml`, a patch of
+your changes to tracked files, your untracked files, the commit to roll back to, and the files under
+`~/tpotce/data` that exist nowhere else - the installation `uuid`, the nginx certificate your sensors
+depend on, `hive.crt`, the `ews` configuration and the honeypot host keys. Everything else in
+`~/tpotce` is tracked and comes back from git, and the honeypot data under `~/tpotce/data` is never
+touched by an update. That keeps the archive at roughly a megabyte, which is why it is not
+compressed - on a Raspberry Pi compression would cost time for nothing. Add `--full` if you want
+`~/tpotce/data` in there as well; be aware that on a busy hive this turns a megabyte into tens of
+gigabytes.
+
+Your own Kibana objects and the ILM policy live in Elasticsearch rather than in a file, so they are
+exported into the same archive **before** T-Pot is stopped. You no longer need to export them by
+hand ahead of an update.
+
+Backups rotate: the last ten regular and the last two `--full` archives are kept, counted
+separately, and the newest is never removed. Before writing, the script checks that the archive
+still leaves 10% of the partition free - `~/tpot_backups` usually sits on the same filesystem as
+your honeypot data. If that does not work out it drops the oldest archives and degrades `--full` to
+a regular backup; if even that does not fit it stops before touching anything, leaving T-Pot up and
+running rather than filling the disk.
+
+### Updating From an Older Release
+When `update.sh` finds a newer version of itself it pulls, restarts, and the new script finishes the
+job. Scripts older than this release do not hand anything over when they restart, so the new script
+starts from a checkout that has already been reset - your `.env` and your edition are gone by then,
+and it will happily restore the upstream defaults instead. Fetch the current `update.sh` first and
+run that, then the backup is taken before anything is reset and everything survives.
+```
+cd ~/tpotce
+git switch master
+curl -fsSL -o update.sh https://raw.githubusercontent.com/telekom-security/tpotce/master/update.sh
+chmod +x update.sh
+./update.sh -y
+```
+This is only needed once, coming from a release that predates this behaviour. Afterwards a plain
+`./update.sh -y` carries everything across on its own.
 
 To update from a different branch or fork, i.e. to test changes before they are merged, see [Testing a Branch](#testing-a-branch).
+
+## Restore Script
+`~/tpotce/restore.sh` puts a backup back.
+
+```
+restore.sh -l                     # list the backups and what they hold
+restore.sh                        # restore from the newest one, asking per group
+restore.sh -f <archive> -y        # restore everything from this archive, no questions
+```
+
+Without `-y` every group is offered separately, so you can bring back just the configuration
+without touching anything else. The groups are the rollback of the git checkout, your changes to
+tracked files, the configuration, your untracked files, the files under `data/`, and the Kibana
+objects with the ILM policy.
+
+T-Pot is stopped for the file part and started again for the Kibana import, because that one needs
+a running instance. The files under `data/` are restored with the owner and mode from the archive
+(`tpot:tpot`, uid/gid 2000) - without those the containers will not start.
+
+If you would rather do it by hand, the archive is a plain tar: `tar tvf <archive>` lists it,
+`MANIFEST` says which edition and commit it came from, and `rollback.txt` holds the commit to go
+back to with `cd ~/tpotce && git reset --hard $(cat rollback.txt)`.
 
 ## Daily Reboot
 By default T-Pot will add a daily reboot including some cleaning up. You can adjust this line with `sudo crontab -e` 
@@ -738,6 +808,21 @@ docker login
 
 ### T-Pot Networking Fails
 T-Pot is designed to only run on machines with a single NIC. T-Pot will try to grab the interface with the default route, however it is not guaranteed that this will always succeed. At best use T-Pot on machines with only a single NIC.
+
+### Update Script Loops on a Detached HEAD
+If `~/tpotce` is not on a branch - after `git checkout <tag>`, for example - there is no upstream to
+pull into and `git pull` refuses. Current versions of `update.sh` detect this and stop before
+anything is touched. The script shipped with 24.04.0 does not: it restarts itself whenever it finds
+a newer `update.sh` upstream, and because the pull can never succeed that condition never clears,
+so it loops and writes a backup on every pass. Interrupt it with `CTRL-C` and put the checkout back
+on a branch, then update again.
+```
+cd ~/tpotce
+git switch master
+./update.sh -y
+```
+Alternatively name the branch and let the script check it out for you, which also works from a
+detached HEAD: `./update.sh -y -b master`.
 
 ## Start T-Pot
 The T-Pot service automatically starts and stops on each reboot (which occurs once on a daily basis as setup in `sudo crontab -l` during installation).
