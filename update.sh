@@ -39,6 +39,11 @@ myFULL=""
 myKIBANA="http://127.0.0.1:64296"
 myES="http://127.0.0.1:64298"
 
+# How long to wait for a service this installation runs but that is not answering
+# yet. Kibana needs about a minute after a start before it does, and an update run
+# right after a reboot would otherwise walk away without the saved objects.
+myELASTIC_GRACE="${TPOT_ELASTIC_GRACE:-120}"
+
 # Working directory, cleaned up when the script ends
 myTMPDIR=""
 myRED="[0;31m"
@@ -529,6 +534,61 @@ function fuSTOP_TPOT () {
 	echo
 }
 
+# Does this installation run the service at all? A SENSOR runs neither Kibana nor
+# Elasticsearch, MOBILE runs Elasticsearch without Kibana - waiting for something
+# that was never deployed would only delay every single update.
+function fuCOMPOSE_HAS () {   # $1 = service name
+	grep -qE "^  $1:" "$HOME/tpotce/docker-compose.yml" 2>/dev/null
+}
+
+# Is the container there? Distinguishes "still starting" from "T-Pot is stopped" -
+# waiting only makes sense for the former.
+function fuCONTAINER_UP () {   # $1 = container name
+	docker ps --format "{{.Names}}" 2>/dev/null | grep -qx "$1"
+}
+
+# Wait for an endpoint to answer, but no longer than the grace period.
+function fuWAIT_FOR () {   # $1 = URL, $2 = label
+	local myWAIT=0
+	curl -s -f -o /dev/null --connect-timeout 5 "$1" && return 0
+	echo -n "###### $myBLUE Waiting up to ${myELASTIC_GRACE}s for $2 $myWHITE"
+	while [ "${myWAIT}" -lt "${myELASTIC_GRACE}" ];
+	  do
+	    sleep 5
+	    myWAIT=$((myWAIT+5))
+	    echo -n "."
+	    if curl -s -f -o /dev/null --connect-timeout 5 "$1";
+	      then
+	        echo " [ $myGREEN"OK"$myWHITE ] after ${myWAIT}s"
+	        return 0
+	    fi
+	done
+	echo " [ $myRED""WARNING""$myWHITE ]"
+	return 1
+}
+
+# Is the service reachable, waiting for it if it is still coming up? Returns 1 and
+# says why if there is nothing to wait for.
+function fuELASTIC_READY () {   # $1 = service, $2 = container, $3 = URL, $4 = label
+	if ! fuCOMPOSE_HAS "$1";
+	  then
+	    echo "###### $myBLUE""This edition does not run $4, nothing to save.""$myWHITE"
+	    return 1
+	fi
+	if ! fuCONTAINER_UP "$2";
+	  then
+	    echo "###### $myBLUE""$4 is not running, so it cannot be saved. Start T-Pot first if you want it in the backup.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	    return 1
+	fi
+	if ! fuWAIT_FOR "$3" "$4";
+	  then
+	    echo "###### $myBLUE""$4 did not answer within ${myELASTIC_GRACE}s, it is NOT in the backup.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	    echo "###### $myBLUE""Raise the wait with TPOT_ELASTIC_GRACE=<seconds> if this machine needs longer.""$myWHITE"
+	    return 1
+	fi
+	return 0
+}
+
 # Save the state that lives in Elasticsearch rather than in a file: the user's own
 # Kibana objects and the ILM policy the retention hangs on. Runs before fuSTOP_TPOT
 # because both need a running instance. The README used to ask the user to export
@@ -547,9 +607,9 @@ function fuEXPORT_ELASTIC () {
 	fuTMPDIR
 	myOUT="${myTMPDIR}/stage/elastic"
 	mkdir -p "${myOUT}"
-	# Two independent probes rather than one: a SENSOR runs neither service, MOBILE
+	# Two independent checks rather than one: a SENSOR runs neither service, MOBILE
 	# runs Elasticsearch without Kibana.
-	if curl -s -f -o /dev/null --connect-timeout 5 "${myKIBANA}/api/status";
+	if fuELASTIC_READY kibana kibana "${myKIBANA}/api/status" "Kibana";
 	  then
 	    echo -n "###### $myBLUE Exporting Kibana objects.$myWHITE "
 	    if curl -s -f -X POST "${myKIBANA}/api/saved_objects/_export" \
@@ -562,13 +622,11 @@ function fuEXPORT_ELASTIC () {
 	        echo " [ $myRED""WARNING""$myWHITE ]"
 	        rm -f "${myOUT}/kibana_export.ndjson"
 	    fi
-	  else
-	    echo "###### $myBLUE""Kibana is not available on ${myKIBANA}, skipping its objects.""$myWHITE"
 	fi
 	# The ILM policy is not a saved object, it comes from Elasticsearch itself. What
 	# GET returns is wrapped in the policy name, which PUT rejects, so it is stored
 	# ready to be put back - restoring it is then a single curl.
-	if curl -s -f -o /dev/null --connect-timeout 5 "${myES}";
+	if fuELASTIC_READY elasticsearch elasticsearch "${myES}" "Elasticsearch";
 	  then
 	    echo -n "###### $myBLUE Exporting the ILM policy.$myWHITE "
 	    if curl -s -f "${myES}/_ilm/policy/tpot" -o "${myTMPDIR}/ilm_raw.json" \
@@ -583,8 +641,6 @@ json.dump({'policy': myRAW['tpot']['policy']}, open('${myOUT}/ilm_policy_tpot.js
 	        echo " [ $myRED""WARNING""$myWHITE ]"
 	        rm -f "${myOUT}/ilm_policy_tpot.json"
 	    fi
-	  else
-	    echo "###### $myBLUE""Elasticsearch is not available on ${myES}, skipping the ILM policy.""$myWHITE"
 	fi
 	if [ -z "$(ls -A "${myOUT}" 2>/dev/null)" ];
 	  then
