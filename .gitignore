@@ -3,6 +3,8 @@ data/
 _data/
 data_backup/
 **/.DS_Store
+__pycache__/
+*.py[cod]
 .idea
 install_tpot.log
 .env

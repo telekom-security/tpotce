@@ -36,11 +36,16 @@ myCHECK=$(fuCHECKINET "listbot.sicherheitstacho.eu")
 if [ "$myCHECK" == "0" ];
   then
     echo "Connection to Listbot looks good, now downloading latest translation maps."
-    cd /etc/listbot 
-    aria2c -s16 -x 16 https://listbot.sicherheitstacho.eu/cve.yaml.bz2 && \
-    aria2c -s16 -x 16 https://listbot.sicherheitstacho.eu/iprep.yaml.bz2 && \
-    bunzip2 -f *.bz2
-    cd /
+    myTMPDIR=$(mktemp -d)
+    if curl -fsSL https://listbot.sicherheitstacho.eu/cve.yaml.bz2 | bunzip2 -c > "$myTMPDIR/cve.yaml" && \
+       curl -fsSL https://listbot.sicherheitstacho.eu/iprep.yaml.bz2 | bunzip2 -c > "$myTMPDIR/iprep.yaml";
+      then
+        mv "$myTMPDIR/cve.yaml" /etc/listbot/cve.yaml
+        mv "$myTMPDIR/iprep.yaml" /etc/listbot/iprep.yaml
+      else
+        echo "Could not download latest translation maps, keeping existing maps."
+    fi
+    rm -rf "$myTMPDIR"
   else
     echo "Cannot reach Listbot, starting Logstash without latest translation maps."
 fi

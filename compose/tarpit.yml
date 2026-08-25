@@ -187,6 +187,24 @@ services:
     volumes:
      - ${TPOT_DATA_PATH}/p0f/log:/var/log/p0f
 
+# Satori service
+  satori:
+    container_name: satori
+    restart: always
+    depends_on:
+      tpotinit:
+        condition: service_healthy
+    network_mode: "host"
+    cap_add:
+     - NET_ADMIN
+     - SYS_NICE
+     - NET_RAW
+    image: ${TPOT_REPO}/satori:${TPOT_VERSION}
+    pull_policy: ${TPOT_PULL_POLICY}
+    read_only: true
+    volumes:
+     - ${TPOT_DATA_PATH}/satori/log:/var/log/satori
+
 # Suricata service
   suricata:
     container_name: suricata
