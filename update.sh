@@ -34,6 +34,10 @@ myBACKUP_RESERVE_PERCENT=10
 # `--full` takes all of data/ along as well
 myFULL=""
 
+# `-s` brings T-Pot back up at the end. Off by default, so a plain run leaves the
+# services stopped the way it always has.
+mySTART=""
+
 # Both are published on the loopback interface by every edition that ships them,
 # so neither needs a detour through a container.
 myKIBANA="http://127.0.0.1:64296"
@@ -88,6 +92,8 @@ Usage: $0 -y [-b <branch>] [-r <url>] [--full]
 
 Options:
   -y                Confirm the update, required
+  -s, --start       Start T-Pot again once the update is through. Off by default,
+                    so an unattended run leaves the services stopped unless asked.
   --full            Include the whole data/ folder in the backup. Off by default:
                     the update never touches data/, and on a busy sensor it turns
                     a 1 MB archive into tens of GB. Kept uncompressed either way.
@@ -651,6 +657,26 @@ json.dump({'policy': myRAW['tpot']['policy']}, open('${myOUT}/ilm_policy_tpot.js
 	echo
 }
 
+# Bring T-Pot back up. Only on request, so nothing changes for anyone who relies on
+# the services staying down after a run.
+function fuSTART_TPOT () {
+	echo -n "### Now starting T-Pot ... "
+	if sudo systemctl start tpot.service 2>/dev/null;
+	  then
+	    echo "[ $myGREEN"OK"$myWHITE ]"
+	    return
+	fi
+	echo "[ $myRED""WARNING""$myWHITE ]"
+	echo "###### $myBLUE""Could not start tpot.service, trying docker compose.""$myWHITE"
+	if [ -f "$HOME/tpotce/docker-compose.yml" ] \
+	   && ( cd "$HOME/tpotce" && docker compose up -d ) >/dev/null 2>&1;
+	  then
+	    echo "###### $myBLUE""Started with docker compose.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	  else
+	    echo "###### $myBLUE""Please start T-Pot yourself.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	fi
+}
+
 # Backup
 #
 # Only what cannot be restored otherwise goes in. Everything tracked comes back
@@ -922,19 +948,23 @@ myARGV=()
 for myARG in "$@";
   do
     case "${myARG}" in
-      --full) myARGV+=("-F") ;;
+      --full)  myARGV+=("-F") ;;
+      --start) myARGV+=("-s") ;;
       *)      myARGV+=("${myARG}") ;;
     esac
 done
 set -- "${myARGV[@]}"
 
-while getopts ":yFb:r:h" opt; do
+while getopts ":yFsb:r:h" opt; do
   case "$opt" in
     y)
       myCONFIRMED="y"
       ;;
     F)
       myFULL="1"
+      ;;
+    s)
+      mySTART="1"
       ;;
     b)
       myTPOT_BRANCH="${OPTARG}"
@@ -989,5 +1019,12 @@ if [ -n "${myEDITION}" ] && [ "${myEDITION}" != "UNKNOWN" ];
   then
     echo "### The T-Pot ${myEDITION} edition was restored to ~/tpotce/docker-compose.yml."
 fi
-echo "### Done. You can now start T-Pot using 'systemctl start tpot' or 'docker compose up -d'."
+if [ -n "${mySTART}" ];
+  then
+    fuSTART_TPOT
+    echo "### Done."
+  else
+    echo "### Done. You can now start T-Pot using 'systemctl start tpot' or 'docker compose up -d'."
+    echo "### Run with '-s' to have update.sh start it for you."
+fi
 echo
