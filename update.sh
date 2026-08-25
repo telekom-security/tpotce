@@ -34,6 +34,15 @@ myBACKUP_RESERVE_PERCENT=10
 # `--full` takes all of data/ along as well
 myFULL=""
 
+# T-Pot images live in these two registries. Anything there that does not carry the
+# tag this installation uses is left over from an earlier version - `:dev` images
+# from a test run included - and only takes up disk.
+myREPOS="dtagdevsec ghcr.io/telekom-security"
+
+# Whether the image pull went through. A failed pull is not fatal on its own, but
+# T-Pot cannot start without the images, so it changes what the run reports.
+myPULLOK=""
+
 # `-s` brings T-Pot back up at the end. Off by default, so a plain run leaves the
 # services stopped the way it always has.
 mySTART=""
@@ -664,7 +673,7 @@ function fuSTART_TPOT () {
 	if sudo systemctl start tpot.service 2>/dev/null;
 	  then
 	    echo "[ $myGREEN"OK"$myWHITE ]"
-	    return
+	    return 0
 	fi
 	echo "[ $myRED""WARNING""$myWHITE ]"
 	echo "###### $myBLUE""Could not start tpot.service, trying docker compose.""$myWHITE"
@@ -672,9 +681,10 @@ function fuSTART_TPOT () {
 	   && ( cd "$HOME/tpotce" && docker compose up -d ) >/dev/null 2>&1;
 	  then
 	    echo "###### $myBLUE""Started with docker compose.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
-	  else
-	    echo "###### $myBLUE""Please start T-Pot yourself.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	    return 0
 	fi
+	echo "###### $myBLUE""Please start T-Pot yourself.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	return 1
 }
 
 # Backup
@@ -804,11 +814,37 @@ function fuBACKUP () {
 	echo
 }
 
-# Remove old images for specific tag
+# Remove the images of earlier versions. "Earlier" is every tag other than the one
+# .env names now - no hardcoded list that has to be bumped with each release, and
+# nothing that is in use can be caught, because the tag in use is the one kept.
 function fuREMOVEOLDIMAGES () {
-	local myOLDTAG=$1
-    echo "### Removing old docker images."
-    docker rmi $(docker images -q "$myOLDTAG") >/dev/null 2>&1
+	local myKEEP="" myREPO="" myTAG="" myLIST="" myTOTAL=0
+	myKEEP=$(grep -E "^TPOT_VERSION=" "$HOME/tpotce/.env" 2>/dev/null | tail -1 | cut -d= -f2-)
+	echo
+	if [ -z "${myKEEP}" ];
+	  then
+	    echo "### Not touching any images, cannot tell from .env which tag is in use."
+	    return
+	fi
+	echo "### Removing docker images of earlier versions, keeping :${myKEEP} ..."
+	for myREPO in ${myREPOS};
+	  do
+	    myLIST=$(docker images --format "{{.Repository}}:{{.Tag}}" 2>/dev/null \
+	             | grep "^${myREPO}/" | grep -v ":${myKEEP}$")
+	    [ -z "${myLIST}" ] && continue
+	    for myTAG in $(echo "${myLIST}" | sed "s/.*://" | sort -u);
+	      do
+	        echo "###### $myBLUE""${myREPO}: $(echo "${myLIST}" | grep -c ":${myTAG}$") image(s) tagged :${myTAG}""$myWHITE"
+	      done;
+	    myTOTAL=$((myTOTAL + $(echo "${myLIST}" | grep -c .)))
+	    echo "${myLIST}" | xargs -r docker rmi >/dev/null 2>&1
+	done;
+	if [ "${myTOTAL}" -eq 0 ];
+	  then
+	    echo "###### $myBLUE""Nothing to remove.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	  else
+	    echo "###### $myBLUE""Removed ${myTOTAL} image(s).""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	fi
 }
 
 function fuPULLIMAGES {
@@ -818,11 +854,19 @@ function fuPULLIMAGES {
 function fuUPDATER () {
 	echo "### Now pulling latest docker images ..."
 	echo "######$myBLUE This might take a while, please be patient!$myWHITE"
-	fuPULLIMAGES
-	fuREMOVEOLDIMAGES "dtagdevsec/*:dev"
-	fuREMOVEOLDIMAGES "ghcr.io/telekom-security/*:dev"
-	fuREMOVEOLDIMAGES "dtagdevsec/*:24.04"
-	fuREMOVEOLDIMAGES "ghcr.io/telekom-security/*:24.04"
+	if fuPULLIMAGES;
+	  then
+	    myPULLOK="1"
+	  else
+	    echo
+	    echo "###### $myBLUE""Could not pull all images.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	    echo "###### $myBLUE""Every service pulls on start, so T-Pot will not come up until they are there.""$myWHITE"
+	    echo "###### $myBLUE""Your .env asks for $(grep -E "^TPOT_REPO=" "$HOME/tpotce/.env" | tail -1 | cut -d= -f2-)/*:$(grep -E "^TPOT_VERSION=" "$HOME/tpotce/.env" | tail -1 | cut -d= -f2-), this release ships ${newVERSION}.""$myWHITE"
+	    echo "###### $myBLUE""If the tag is pinned on purpose, make sure those images exist. Otherwise:""$myWHITE"
+	    echo "######   $myBLUE""sed -i 's|^TPOT_VERSION=.*|TPOT_VERSION=${newVERSION}|' $HOME/tpotce/.env""$myWHITE"
+	    echo "######   $myBLUE""docker compose -f $HOME/tpotce/docker-compose.yml pull""$myWHITE"
+	fi
+	fuREMOVEOLDIMAGES
 	echo
 	if [ -n "${myCOMPOSE_CUSTOMIZED}" ];
 	  then
@@ -866,18 +910,37 @@ function fuRESTORE () {
 	    exit 1
 	fi
 	echo "###### $myBLUE""Restored from ${myARCHIVE}.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
-	# Backup file (.env) contains a record of the TPOT_VERSION that is used in docker-compose commmands.
-	# We should upgrade the version in this file after restoring the backup - but only
-	# when it looks like a release version. A deliberate `dev` or a branch tag is a
-	# choice, not something to overwrite.
-	newVERSION=$(cat version)
+	# .env records the TPOT_VERSION that docker compose resolves the image tags from,
+	# so it has to follow the release - otherwise the new compose file asks for images
+	# of the old version, and honeypots added since then have no image at all.
+	#
+	# The tag comes from env.example, not from `version`: at 24.04.0 those differed
+	# (release 24.04.0, images tagged 24.04), and env.example is the file that ships
+	# what .env should hold.
+	newVERSION=$(grep -E "^TPOT_VERSION=" env.example 2>/dev/null | tail -1 | cut -d= -f2-)
+	[ -z "${newVERSION}" ] && newVERSION=$(cat version)
 	myOLDVERSION=$(grep -E "^TPOT_VERSION=" "$HOME/tpotce/.env" | tail -1 | cut -d= -f2-)
-	if echo "${myOLDVERSION}" | grep -qE "^[0-9]+\.[0-9]+\.[0-9]+$";
+	# Digits and dots are a release tag, `24.04` as much as `24.04.1`. Only a value
+	# with something else in it - `dev`, a branch name - is a deliberate pin.
+	if echo "${myOLDVERSION}" | grep -qE "^[0-9]+(\.[0-9]+)+$";
 	  then
-	    sed -i "s/^TPOT_VERSION=.*/TPOT_VERSION=${newVERSION}/" $HOME/tpotce/.env
-	    echo "###### $myBLUE""TPOT_VERSION ${myOLDVERSION} -> ${newVERSION}.""$myWHITE"
+	    if [ "${myOLDVERSION}" != "${newVERSION}" ];
+	      then
+	        sed -i "s|^TPOT_VERSION=.*|TPOT_VERSION=${newVERSION}|" "$HOME/tpotce/.env"
+	        echo "###### $myBLUE""TPOT_VERSION ${myOLDVERSION} -> ${newVERSION}.""$myWHITE"
+	    fi
 	  else
 	    echo "###### $myBLUE""Keeping TPOT_VERSION=${myOLDVERSION}, it is not a release version.""$myWHITE"
+	fi
+	# dtagdevsec was the default before the images moved to ghcr, and Docker Hub rate
+	# limits are a known issue. An installation still on that old default is raised;
+	# a registry someone picked themselves is left alone.
+	myOLDREPO=$(grep -E "^TPOT_REPO=" "$HOME/tpotce/.env" | tail -1 | cut -d= -f2-)
+	myNEWREPO=$(grep -E "^TPOT_REPO=" env.example 2>/dev/null | tail -1 | cut -d= -f2-)
+	if [ "${myOLDREPO}" == "dtagdevsec" ] && [ -n "${myNEWREPO}" ] && [ "${myNEWREPO}" != "dtagdevsec" ];
+	  then
+	    sed -i "s|^TPOT_REPO=.*|TPOT_REPO=${myNEWREPO}|" "$HOME/tpotce/.env"
+	    echo "###### $myBLUE""TPOT_REPO dtagdevsec -> ${myNEWREPO}, which avoids the Docker Hub rate limits.""$myWHITE"
 	fi
 }
 
@@ -1021,8 +1084,18 @@ if [ -n "${myEDITION}" ] && [ "${myEDITION}" != "UNKNOWN" ];
 fi
 if [ -n "${mySTART}" ];
   then
-    fuSTART_TPOT
-    echo "### Done."
+    # A failed pull alone is only a warning - the update itself is through, and every
+    # start pulls again. But if a start was asked for and it does not come up, the
+    # machine is not doing its job and an unattended run has to say so.
+    if fuSTART_TPOT;
+      then
+        echo "### Done."
+      else
+        echo "### The update is through, but T-Pot is not running."
+        [ -z "${myPULLOK}" ] && echo "### The image pull failed earlier, which is the likely reason."
+        echo
+        exit 1
+    fi
   else
     echo "### Done. You can now start T-Pot using 'systemctl start tpot' or 'docker compose up -d'."
     echo "### Run with '-s' to have update.sh start it for you."

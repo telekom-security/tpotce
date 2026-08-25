@@ -715,7 +715,13 @@ The update script will ...
  - ***mercilessly*** overwrite local changes to be in sync with the branch the installation follows, `master` by default
  - write a backup to `~/tpot_backups/<date>_tpot_backup.tar` before it touches anything
  - update all files in `~/tpotce` to be in sync with that branch
- - restore the T-Pot configuration (`~/tpotce/.env`) from that backup
+ - restore the T-Pot configuration (`~/tpotce/.env`) from that backup and carry its image tag
+   (`TPOT_VERSION`) forward to the one this release ships, so the new compose file does not ask for
+   images of the old version. A tag you pinned yourself - `dev`, a branch name - is left alone.
+ - move `TPOT_REPO` from `dtagdevsec` to `ghcr.io/telekom-security` if it is still on that old
+   default, which avoids the Docker Hub [rate limits](#docker-images-fail-to-download). A registry
+   you set yourself is left alone.
+ - remove docker images of earlier versions, keeping the tag your `.env` now names
  - detect the installed T-Pot edition (i.e. `SENSOR`, `MINI`, `LLM`, `TARPIT`, `MOBILE`) and restore it, using this release's `~/tpotce/compose/<edition>.yml` so that new honeypots and changes of the release are included.
  - store your previous `docker-compose.yml` in `~/tpot_backups/<date>_docker-compose.yml`. If you made changes to it (i.e. removing the `ewsposter` section or a `docker-compose.yml` built with `~/tpotce/compose/customizer.py`) you need to add them again.
 
