@@ -723,7 +723,10 @@ The update script will ...
    you set yourself is left alone.
  - remove docker images of earlier versions, keeping the tag your `.env` now names
  - detect the installed T-Pot edition (i.e. `SENSOR`, `MINI`, `LLM`, `TARPIT`, `MOBILE`) and restore it, using this release's `~/tpotce/compose/<edition>.yml` so that new honeypots and changes of the release are included.
- - store your previous `docker-compose.yml` in `~/tpot_backups/<date>_docker-compose.yml`. If you made changes to it (i.e. removing the `ewsposter` section or a `docker-compose.yml` built with `~/tpotce/compose/customizer.py`) you need to add them again.
+ - keep your previous `docker-compose.yml` in the backup archive. If you made changes to it (i.e.
+   removing the `ewsposter` section or a `docker-compose.yml` built with
+   `~/tpotce/compose/customizer.py`) you need to add them again - the run tells you how to compare
+   the two.
 
 The backup holds what git cannot bring back: `~/tpotce/.env`, your `docker-compose.yml`, a patch of
 your changes to tracked files, your untracked files, the commit to roll back to, and the files under
