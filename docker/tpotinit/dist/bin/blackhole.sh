@@ -29,11 +29,11 @@ fi
 mkdir -p /etc/blackhole
 cd /etc/blackhole
 myFILE="mass_scanner.txt"
-myURL="https://raw.githubusercontent.com/stamparm/maltrail/master/trails/static/mass_scanner.txt"
+myURL="https://raw.githubusercontent.com/stamparm/maltrail/master/data/mass_scanner.txt"
 myBASELINE="500"
 # Alternatively, using less routes, but blocking complete /24 networks
 #myFILE="mass_scanner_cidr.txt"
-#myURL="https://raw.githubusercontent.com/stamparm/maltrail/master/trails/static/mass_scanner_cidr.txt"
+#myURL="https://raw.githubusercontent.com/stamparm/maltrail/master/data/mass_scanner_cidr.txt"
 
 # Calculate age of downloaded list, read IPs
 if [ -f "$myFILE" ];
