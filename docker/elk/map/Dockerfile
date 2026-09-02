@@ -1,9 +1,8 @@
 FROM alpine:3.23
 #
 # Install packages
-# Policy (t-pot-attack-map HANDOFF-v2 D40, §15): application/tool dependencies
-# are exact-pinned (requirements.txt, tools/basemap.lock); Alpine OS packages
-# are intentionally refreshed within the pinned 3.23 channel at image build.
+# Application/tool dependencies are exact-pinned (requirements.txt, tools/basemap.lock);
+# Alpine OS packages are intentionally refreshed within the pinned 3.23 channel at image build.
 # No floating pip: Alpine 3.23's py3-pip installs the pinned wheels as-is.
 RUN apk --no-cache -U upgrade && \
     apk --no-cache -U add \
