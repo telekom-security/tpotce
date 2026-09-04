@@ -958,7 +958,7 @@ Storage failures can be identified easier via `htop`.
 # Contact
 T-Pot is provided ***as is*** open source ***without*** any commitment regarding support ([see the disclaimer](#disclaimer)).
 
-If you are a security researcher and want to responsibly report an issue please get in touch with our [CERT](https://www.telekom.com/en/company/data-privacy-and-security/news/introducing-deutsche-telekom-cert-358316).
+If you are a security researcher and want to responsibly report an issue please get in touch with our [CERT](https://www.telekom.com/en/about-us/data-privacy-and-security/working-together-for-security/telekom-cert).
 <br><br>
 
 ## Issues
