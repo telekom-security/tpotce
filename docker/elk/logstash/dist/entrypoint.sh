@@ -31,19 +31,71 @@ for i in $mySITES;
   echo $error
 }
 
-# Check for connectivity and download latest translation maps
-myCHECK=$(fuCHECKINET "listbot.sicherheitstacho.eu")
-if [ "$myCHECK" == "0" ];
+# Translation maps are cached in /data/elk/listbot and only downloaded if missing or >= 24h old
+myLISTBOTURL="https://listbot.sicherheitstacho.eu"
+myLISTBOTCACHE="/data/elk/listbot"
+myLISTBOTFILES="cve.yaml.bz2 iprep.yaml.bz2"
+
+# Check if a cached translation map is missing, empty or 24h and older
+function fuNEEDSUPDATE () {
+  local myFILE=$1
+  if [ ! -s "$myFILE" ] || [ -n "$(find "$myFILE" -mmin +1439)" ];
+    then
+      return 0
+  fi
+  return 1
+}
+
+# Fallback in case tpotinit did not create the cache folder
+if [ ! -d "$myLISTBOTCACHE" ];
   then
-    echo "Connection to Listbot looks good, now downloading latest translation maps."
-    cd /etc/listbot 
-    aria2c -s16 -x 16 https://listbot.sicherheitstacho.eu/cve.yaml.bz2 && \
-    aria2c -s16 -x 16 https://listbot.sicherheitstacho.eu/iprep.yaml.bz2 && \
-    bunzip2 -f *.bz2
-    cd /
-  else
-    echo "Cannot reach Listbot, starting Logstash without latest translation maps."
+    mkdir -p "$myLISTBOTCACHE"
+    chmod 770 "$myLISTBOTCACHE"
 fi
+
+# Check for connectivity only if needed and download latest translation maps
+myCHECK=""
+for myFILE in $myLISTBOTFILES;
+  do
+    if ! fuNEEDSUPDATE "$myLISTBOTCACHE/$myFILE";
+      then
+        echo "Cached $myFILE is current (< 24h), skipping download."
+        continue
+    fi
+    if [ -z "$myCHECK" ];
+      then
+        myCHECK=$(fuCHECKINET "listbot.sicherheitstacho.eu")
+    fi
+    if [ "$myCHECK" != "0" ];
+      then
+        echo "Cannot reach Listbot, skipping download of $myFILE."
+        continue
+    fi
+    echo "Downloading latest $myFILE from Listbot."
+    if wget -q --no-use-server-timestamps --timeout=30 --tries=3 -O "$myLISTBOTCACHE/$myFILE.tmp" "$myLISTBOTURL/$myFILE" && \
+       bunzip2 -t "$myLISTBOTCACHE/$myFILE.tmp" 2>/dev/null;
+      then
+        mv -f "$myLISTBOTCACHE/$myFILE.tmp" "$myLISTBOTCACHE/$myFILE"
+        chmod 770 "$myLISTBOTCACHE/$myFILE"
+      else
+        echo "Download of $myFILE failed, keeping cached version if present."
+        rm -f "$myLISTBOTCACHE/$myFILE.tmp"
+    fi
+done
+
+# Provide translation maps where Logstash expects them, fall back to image defaults
+for myFILE in $myLISTBOTFILES;
+  do
+    if [ -s "$myLISTBOTCACHE/$myFILE" ] && \
+       bunzip2 -c "$myLISTBOTCACHE/$myFILE" > "/etc/listbot/${myFILE%.bz2}.tmp";
+      then
+        mv -f "/etc/listbot/${myFILE%.bz2}.tmp" "/etc/listbot/${myFILE%.bz2}"
+        echo "Using cached $myFILE."
+      else
+        rm -f "/etc/listbot/${myFILE%.bz2}.tmp"
+        echo "No usable cached $myFILE, starting Logstash with translation map from image."
+    fi
+done
 
 # Distributed T-Pot installation needs a different pipeline config 
 if [ "$TPOT_TYPE" == "SENSOR" ];

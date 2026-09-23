@@ -198,7 +198,7 @@ fuELK () {
   # ELK data will be kept for <= 90 days, check /etc/crontab for curator modification
   # ELK daemon log files will be removed
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/elk/log/*; fi
-  mkdir -vp /data/elk/{data,log}
+  mkdir -vp /data/elk/{data,log,listbot}
   chmod 770 /data/elk -R
   chown tpot:tpot /data/elk -R
 }
