@@ -22,8 +22,8 @@ RUN apt-get update -y && \
     echo "$ARCH" && \
     mkdir -p /etc/listbot && \
     cd /etc/listbot && \
-    wget -q https://listbot.sicherheitstacho.eu/cve.yaml.bz2 && \
-    wget -q https://listbot.sicherheitstacho.eu/iprep.yaml.bz2 && \
+    wget -q --user-agent=listbot https://listbot.sicherheitstacho.eu/cve.yaml.bz2 && \
+    wget -q --user-agent=listbot https://listbot.sicherheitstacho.eu/iprep.yaml.bz2 && \
     bunzip2 *.bz2 && \
     cd /root/dist/ && \
     wget -q https://artifacts.elastic.co/downloads/logstash/logstash-$LS_VER-$LS_ARCH.deb && \
