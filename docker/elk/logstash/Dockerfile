@@ -17,8 +17,8 @@ RUN microdnf install -y \
     /usr/share/logstash/bin/logstash-plugin install logstash-output-syslog && \
     mkdir -p /etc/listbot && \
     cd /etc/listbot && \
-    wget -q https://listbot.sicherheitstacho.eu/cve.yaml.bz2 && \
-    wget -q https://listbot.sicherheitstacho.eu/iprep.yaml.bz2 && \
+    wget -q --user-agent=listbot https://listbot.sicherheitstacho.eu/cve.yaml.bz2 && \
+    wget -q --user-agent=listbot https://listbot.sicherheitstacho.eu/iprep.yaml.bz2 && \
     bunzip2 -f *.bz2 && \
     cd / && \
     chmod 755 /usr/local/bin/tpot-logstash-entrypoint.sh && \

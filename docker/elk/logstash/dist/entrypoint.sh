@@ -16,13 +16,29 @@ if [ -f "/data/tpot/etc/compose/elk_environment" ];
     set +o allexport
 fi
 
+# Identify requests to Listbot by user agent and T-Pot UUID (only if the UUID is valid)
+myLISTBOTUA="listbot"
+myTPOTUUID="${HONEY_UUID:-$(cat /data/uuid 2>/dev/null)}"
+if [[ ! "$myTPOTUUID" =~ ^[0-9a-fA-F-]{36}$ ]];
+  then
+    echo "No valid T-Pot UUID found, sending requests to Listbot without X-TPot-UUID header."
+    myTPOTUUID=""
+fi
+myCURLOPTS=(-A "$myLISTBOTUA")
+myWGETOPTS=(--user-agent="$myLISTBOTUA")
+if [ -n "$myTPOTUUID" ];
+  then
+    myCURLOPTS+=(-H "X-TPot-UUID: $myTPOTUUID")
+    myWGETOPTS+=(--header="X-TPot-UUID: $myTPOTUUID")
+fi
+
 # Check internet availability 
 function fuCHECKINET () {
 mySITES=$1
 error=0
 for i in $mySITES;
   do
-    curl --connect-timeout 5 -Is $i 2>&1 > /dev/null
+    curl "${myCURLOPTS[@]}" --connect-timeout 5 -Is $i 2>&1 > /dev/null
       if [ $? -ne 0 ];
         then
           let error+=1
@@ -72,7 +88,7 @@ for myFILE in $myLISTBOTFILES;
         continue
     fi
     echo "Downloading latest $myFILE from Listbot."
-    if wget -q --no-use-server-timestamps --timeout=30 --tries=3 -O "$myLISTBOTCACHE/$myFILE.tmp" "$myLISTBOTURL/$myFILE" && \
+    if wget "${myWGETOPTS[@]}" -q --no-use-server-timestamps --timeout=30 --tries=3 -O "$myLISTBOTCACHE/$myFILE.tmp" "$myLISTBOTURL/$myFILE" && \
        bunzip2 -t "$myLISTBOTCACHE/$myFILE.tmp" 2>/dev/null;
       then
         mv -f "$myLISTBOTCACHE/$myFILE.tmp" "$myLISTBOTCACHE/$myFILE"
