@@ -108,9 +108,11 @@ Options:
   -y                Confirm the update, required
   -s, --start       Start T-Pot again once the update is through. Off by default,
                     so an unattended run leaves the services stopped unless asked.
-  --full            Include the whole data/ folder in the backup. Off by default:
-                    the update never touches data/, and on a busy sensor it turns
-                    a 1 MB archive into tens of GB. Kept uncompressed either way.
+  --full            Include the whole data/ folder in the backup. Off by default,
+                    on a busy hive it turns a 1 MB archive into tens of GB. Use it
+                    when a release brings a newer Elastic Stack: Elasticsearch and
+                    Kibana upgrade their data in data/elk/ on the first start, and
+                    that cannot be undone. Kept uncompressed either way.
   -b <branch>       Branch to update from, i.e. to test a branch before it is
                     merged. The branch is checked out, so every following
                     update stays on it until another branch is requested.
@@ -284,12 +286,16 @@ function fuCHECK_BACKUP_SPACE () {
 	      then
 	        continue
 	    fi
-	    # Nothing left to free. A full backup is dispensable, the regular one is not.
+	    # Nothing left to free. `--full` was asked for, usually because the update
+	    # brings a new Elastic Stack whose data upgrade cannot be undone - quietly
+	    # taking the regular backup instead would leave no way back.
 	    if [ -n "${myFULL}" ];
 	      then
-	        echo "###### $myBLUE""Not enough room for a full backup, falling back to the regular one.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
-	        myFULL=""
-	        continue
+	        echo "###### $myBLUE""Not enough room for a full backup.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	        echo "###### $myBLUE""Free up space in ${myBACKUPDIR} or on the filesystem, or run without '--full'. T-Pot was left running.""$myWHITE"
+	        echo "Exiting.""$myWHITE"
+	        echo
+	        exit 1
 	    fi
 	    echo "###### $myBLUE""Not enough room for a backup and T-Pot needs the disk.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
 	    echo "###### $myBLUE""Free up space in ${myBACKUPDIR} or on the filesystem, T-Pot was left running.""$myWHITE"
@@ -696,13 +702,121 @@ function fuSTART_TPOT () {
 	return 1
 }
 
+# Where the data folder really is. TPOT_DATA_PATH is relative to ~/tpotce unless
+# it is absolute.
+function fuDATA_PATH () {
+	local myPATH=""
+	myPATH=$(grep -E "^TPOT_DATA_PATH=" "$HOME/tpotce/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d "\"'")
+	[ -z "${myPATH}" ] && myPATH="./data"
+	case "${myPATH}" in
+	  /*) ;;
+	  *)  myPATH="$HOME/tpotce/${myPATH#./}" ;;
+	esac
+	echo "${myPATH%/}"
+}
+
+# Put the checkout and the configuration back to where they were before this run,
+# so that neither a start nor the daily reboot picks up the new release. Only
+# possible if the archive of this run points at an older commit.
+function fuROLLBACK_CHECKOUT () {
+	local myCOMMIT=""
+	myCOMMIT=$(tar xOf "${myARCHIVE}" rollback.txt 2>/dev/null | tr -d "[:space:]")
+	if [ -z "${myCOMMIT}" ] || [ "${myCOMMIT}" == "$(git -C "$HOME/tpotce" rev-parse HEAD)" ] || [ ! -x "$HOME/tpotce/restore.sh" ];
+	  then
+	    echo "###### $myBLUE""The archive holds no earlier commit to go back to, the checkout stays on this release.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	    echo "###### $myBLUE""Starting T-Pot now runs the new Elastic Stack on the existing data, free up space first.""$myWHITE"
+	    return 1
+	fi
+	echo "###### $myBLUE""Putting the checkout and the configuration back to the state before this update.""$myWHITE"
+	"$HOME/tpotce/restore.sh" -f "${myARCHIVE}" -c
+}
+
+# Elasticsearch and Kibana upgrade their data in place on the first start of a
+# newer version, and there is no way back to the older one. Runs after the pull of
+# the repository and before the pull of the images, in the restarted script as
+# well: everything before the stop is done by the update.sh the user started,
+# which may be an older one. T-Pot is stopped at this point.
+function fuCHECK_ELASTIC () {
+	local myNEW="" myOLD="" myDATA="" myUSED=0 myCOUNT=0
+	fuCOMPOSE_HAS elasticsearch || return
+	echo
+	echo "### Checking the Elastic Stack update ..."
+	myNEW=$(sed -n "s/^ARG ES_VER=//p" "$HOME/tpotce/docker/elk/elasticsearch/Dockerfile" 2>/dev/null | head -1)
+	if [ -z "${myNEW}" ];
+	  then
+	    echo "###### $myBLUE""Cannot tell which Elasticsearch version this release ships, skipping the check.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	    echo
+	    return
+	fi
+	# The images of the previous version are still there, fuSTOP_TPOT only prunes
+	# the untagged ones. ES_VER is set in every T-Pot Elasticsearch image.
+	myOLD=$(docker image inspect --format '{{range .Config.Env}}{{println .}}{{end}}' \
+	        "$(grep -E "^TPOT_REPO=" "$HOME/tpotce/.env" | tail -1 | cut -d= -f2-)/elasticsearch:${myOLDVERSION}" 2>/dev/null \
+	        | sed -n "s/^ES_VER=//p" | head -1)
+	if [ "${myOLD}" == "${myNEW}" ];
+	  then
+	    echo "###### $myBLUE""Elasticsearch stays on ${myNEW}.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	    echo
+	    return
+	fi
+	if [ -z "${myOLD}" ];
+	  then
+	    echo "###### $myBLUE""Cannot tell which Elasticsearch version ran so far, assuming it changes to ${myNEW}.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	  else
+	    echo "###### $myBLUE""Elasticsearch ${myOLD} -> ${myNEW}.""$myWHITE"
+	fi
+	# Elasticsearch stops allocating new shards at 90%, the next daily index would
+	# stay red and nothing gets indexed any more
+	myDATA=$(fuDATA_PATH)
+	myUSED=$(df --output=pcent "${myDATA}" 2>/dev/null | tail -1 | tr -dc "0-9")
+	if [ -n "${myUSED}" ] && [ "${myUSED}" -ge 90 ];
+	  then
+	    echo "###### $myBLUE""${myDATA} is ${myUSED}% full, Elasticsearch needs it below 90%.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	    echo "###### $myBLUE""Nothing was pulled and no image was removed.""$myWHITE"
+	    fuROLLBACK_CHECKOUT
+	    echo "###### $myBLUE""Free up space and run the update again. T-Pot is stopped, 'systemctl start tpot' brings it back.""$myWHITE"
+	    echo "Exiting.""$myWHITE"
+	    echo
+	    exit 1
+	fi
+	if [ -n "${myUSED}" ] && [ "${myUSED}" -ge 85 ];
+	  then
+	    echo "###### $myBLUE""${myDATA} is ${myUSED}% full, Elasticsearch starts to complain at 85%.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	fi
+	# A `--full` archive of ~/tpotce/data is the only way back to the old version
+	if [ "${myDATA}" == "$HOME/tpotce/data" ] && tar tf "${myARCHIVE}" data/elk/data >/dev/null 2>&1;
+	  then
+	    echo "###### $myBLUE""The Elasticsearch data is in ${myARCHIVE}.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	    echo
+	    return
+	fi
+	echo "###### $myBLUE""Elasticsearch and Kibana will upgrade their data in ${myDATA}/elk on the next start.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	echo "###### $myBLUE""This cannot be undone, and the backup of this run does not hold that data.""$myWHITE"
+	echo "###### $myBLUE""T-Pot is stopped right now, so this is the moment to copy it, e.g.:""$myWHITE"
+	echo "######   $myBLUE""sudo cp -a ${myDATA}/elk/data ${myBACKUPDIR}/elk_data_${myOLD:-old}""$myWHITE"
+	echo "###### $myBLUE""The checkout and .env are already on the new release, afterwards finish with:""$myWHITE"
+	echo "######   $myBLUE""docker compose -f $HOME/tpotce/docker-compose.yml pull && sudo systemctl start tpot""$myWHITE"
+	if [ -t 0 ] && [ -t 1 ];
+	  then
+	    echo -n "###### $myBLUE Press Ctrl+C to stop here and copy it first, continuing in $myWHITE"
+	    for myCOUNT in $(seq 15 -1 1);
+	      do
+	        echo -n "${myCOUNT} "
+	        sleep 1
+	      done;
+	    echo
+	fi
+	echo
+}
+
 # Backup
 #
 # Only what cannot be restored otherwise goes in. Everything tracked comes back
-# from git and an update never touches `data/`, so what is irreplaceable are the
-# user's own changes, the configuration and a handful of files under `data/`. Hence
-# a list instead of a glob, and hence no compression: the archive is small enough
-# that compressing it would only cost time.
+# from git and an update leaves `data/` alone - apart from Elasticsearch and Kibana
+# upgrading their data on a new Elastic Stack, see fuCHECK_ELASTIC and `--full` -
+# so what is irreplaceable are the user's own changes, the configuration and a
+# handful of files under `data/`. Hence a list instead of a glob, and hence no
+# compression: the archive is small enough that compressing it would only cost time.
 function fuBACKUP () {
 	local myStage=""
 	local myTARGETS=""
@@ -1118,6 +1232,9 @@ if [ -n "${myOLDER_CHECKOUT}" ];
     exit 1
 fi
 
+# Still before the image pull: the images of the previous version tell which
+# Elasticsearch version ran so far
+fuCHECK_ELASTIC
 fuUPDATER
 
 echo

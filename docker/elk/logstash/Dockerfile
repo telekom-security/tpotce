@@ -1,4 +1,7 @@
-FROM docker.elastic.co/logstash/logstash:9.3.5
+ARG LS_VER=9.5.4
+FROM docker.elastic.co/logstash/logstash:${LS_VER}
+ARG LS_VER
+ENV LS_VER=${LS_VER}
 
 USER root
 
@@ -25,6 +28,7 @@ RUN microdnf install -y \
     sed -i 's/^logstash:x:1000:1000:/logstash:x:2000:2000:/' /etc/passwd && \
     sed -i 's/^logstash:x:1000:/logstash:x:2000:/' /etc/group && \
     sed -i 's/^root:x:0:/root:x:0:logstash/' /etc/group && \
+    [ "$(id -u logstash):$(id -g logstash)" = "2000:2000" ] && \
     chown -R logstash:logstash \
         /etc/listbot \
         /usr/share/logstash/config \

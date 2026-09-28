@@ -4,9 +4,7 @@ services:
   kibana:
     build: .
     container_name: kibana
-#    mem_limit: 2g
-#    environment:
-#      NODE_OPTIONS: "--max-old-space-size=1024"
+    mem_limit: 2g
     restart: always
 #    depends_on:
 #      elasticsearch:

@@ -68,6 +68,7 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/in
 - [Maintenance](#maintenance)
   - [General Updates](#general-updates)
   - [Update Script](#update-script)
+  - [Elastic Stack Upgrades](#elastic-stack-upgrades)
   - [Updating From an Older Release](#updating-from-an-older-release)
   - [Restore Script](#restore-script)
   - [Daily Reboot](#daily-reboot)
@@ -452,6 +453,8 @@ To get things up and running just follow these steps:
 8. Start T-Pot: `docker compose up` or `docker compose up -d` if you want T-Pot to run in the background.
 9. Stop T-Pot: `CTRL-C` (it if was running in the foreground) and / or `docker compose down -v` to stop T-Pot entirely.
 
+There is no `update.sh` for macOS and Windows. When updating to a release with a newer Elastic Stack, stop T-Pot and copy `~/tpotce/data/elk/data` somewhere safe before `git pull` and `docker compose pull` - the upgrade of that data cannot be undone, see [Elastic Stack Upgrades](#elastic-stack-upgrades).
+
 ## Red Hat Enterprise Linux
 
 Red Hat Enterprise Linux (RHEL) is a somewhat unique case in that:
@@ -734,8 +737,9 @@ The backup holds what git cannot bring back: `~/tpotce/.env`, your `docker-compo
 your changes to tracked files, your untracked files, the commit to roll back to, and the files under
 `~/tpotce/data` that exist nowhere else - the installation `uuid`, the nginx certificate your sensors
 depend on, `hive.crt`, the `ews` configuration and the honeypot host keys. Everything else in
-`~/tpotce` is tracked and comes back from git, and the honeypot data under `~/tpotce/data` is never
-touched by an update. That keeps the archive at roughly a megabyte, which is why it is not
+`~/tpotce` is tracked and comes back from git, and an update leaves the honeypot data under
+`~/tpotce/data` alone - except for the Elasticsearch data when a release brings a newer Elastic
+Stack, see [Elastic Stack Upgrades](#elastic-stack-upgrades). That keeps the archive at roughly a megabyte, which is why it is not
 compressed - on a Raspberry Pi compression would cost time for nothing. Add `--full` if you want
 `~/tpotce/data` in there as well; be aware that on a busy hive this turns a megabyte into tens of
 gigabytes.
@@ -747,9 +751,31 @@ hand ahead of an update.
 Backups rotate: the last ten regular and the last two `--full` archives are kept, counted
 separately, and the newest is never removed. Before writing, the script checks that the archive
 still leaves 10% of the partition free - `~/tpot_backups` usually sits on the same filesystem as
-your honeypot data. If that does not work out it drops the oldest archives and degrades `--full` to
-a regular backup; if even that does not fit it stops before touching anything, leaving T-Pot up and
-running rather than filling the disk.
+your honeypot data. If that does not work out it drops the oldest archives; if even that does not
+fit it stops before touching anything, leaving T-Pot up and running rather than filling the disk.
+That includes `--full`: it is never quietly swapped for the regular backup.
+
+### Elastic Stack Upgrades
+When a release ships a newer Elastic Stack, Elasticsearch and Kibana upgrade their data in
+`~/tpotce/data/elk` in place on the first start. ***This cannot be undone*** - the older version
+refuses to start on upgraded data. Run such an update with `--full`, or take a snapshot of the
+machine first:
+```
+./update.sh -y --full
+```
+Before it pulls the new images `update.sh` compares the Elasticsearch version that ran so far with
+the one of the release and, if they differ,
+ - stops if the data partition is 90% full or more - Elasticsearch no longer allocates new indices
+   then. The checkout and your configuration are put back to the state before the update, nothing
+   was pulled, and T-Pot is left stopped.
+ - warns at 85% and more.
+ - warns if the backup of the run does not hold `data/elk/data`, and tells you how to copy it while
+   T-Pot is still stopped.
+
+The first start after the upgrade takes longer than usual, give it a few minutes. To go back, stop
+T-Pot and restore the `--full` archive of that update with `restore.sh -f <archive> -y`: it replaces
+`data/elk/data` with the copy from the archive and brings back the checkout and `.env`, so T-Pot
+starts on the previous images again.
 
 ### Updating From an Older Release
 When `update.sh` finds a newer version of itself it pulls, restarts, and the new script finishes the
@@ -786,6 +812,7 @@ To update from a different branch or fork, i.e. to test changes before they are 
 restore.sh -l                     # list the backups and what they hold
 restore.sh                        # restore from the newest one, asking per group
 restore.sh -f <archive> -y        # restore everything from this archive, no questions
+restore.sh -f <archive> -c        # only roll back the checkout and the configuration, no questions
 ```
 
 Without `-y` every group is offered separately, so you can bring back just the configuration
@@ -795,7 +822,9 @@ objects with the ILM policy.
 
 T-Pot is stopped for the file part and started again for the Kibana import, because that one needs
 a running instance. The files under `data/` are restored with the owner and mode from the archive
-(`tpot:tpot`, uid/gid 2000) - without those the containers will not start.
+(`tpot:tpot`, uid/gid 2000) - without those the containers will not start. If the archive holds the
+Elasticsearch data (`--full`), the current `data/elk/data` is removed first: Elasticsearch data cannot
+be merged with an older copy.
 
 If you would rather do it by hand, the archive is a plain tar: `tar tvf <archive>` lists it,
 `MANIFEST` says which edition and commit it came from, and `rollback.txt` holds the commit to go
@@ -953,6 +982,8 @@ docker-compose -f ~/tpotce/docker-compose.yml down -v
 ## RAM and Storage
 The Elastic Stack is hungry for RAM, specifically `logstash` and `elasticsearch`. If the Elastic Stack is unavailable, does not receive any logs or simply keeps crashing it is most likely a RAM or storage issue.<br>
 While T-Pot keeps trying to restart the services / containers run `docker logs -f <container_name>` (either `logstash` or `elasticsearch`) and check if there are any warnings or failures involving RAM.
+
+Kibana runs with a 1 GB Node.js heap inside a `mem_limit` of 2 GB. The heap is set by `KIBANA_HEAP_MB` in `~/tpotce/docker/elk/kibana/Dockerfile` (or `--build-arg KIBANA_HEAP_MB=<MB>`) and has to stay well below the `mem_limit` of the `kibana` service in `docker-compose.yml`. If you use a `docker-compose.yml` of your own, raise its Kibana `mem_limit` to `2g`.
 
 Storage failures can be identified easier via `htop`. 
 <br><br>

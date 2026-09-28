@@ -11,6 +11,7 @@ myTPOTDIR="${HOME}/tpotce"
 myBACKUPDIR="${HOME}/tpot_backups"
 myARCHIVE=""
 myCONFIRMED=""
+myCONFIG_ONLY=""
 myKIBANA="http://127.0.0.1:64296"
 myES="http://127.0.0.1:64298"
 
@@ -38,7 +39,7 @@ EOF
 
 function fuPRINT_HELP () {
 	cat <<EOF
-Usage: $0 [-l] [-f <archive>] [-y]
+Usage: $0 [-l] [-f <archive>] [-y | -c]
 
 Restores a backup written by update.sh.
 
@@ -48,6 +49,9 @@ Options:
                     ${myBACKUPDIR}
   -y                Restore everything without asking, including the rollback
                     of the git checkout
+  -c                Only roll the checkout back and restore the configuration
+                    (.env, docker-compose.yml, your changes to tracked files),
+                    without asking. Leaves data/ alone and does not start T-Pot.
   -h                Show this help message
 
 Without -y every group is offered separately, so you can bring back just the
@@ -320,6 +324,19 @@ function fuDO_DATA () {
 	[ -z "${myDO_DATA}" ] && return
 	echo
 	echo "### Restoring the files from data/ ..."
+	# Elasticsearch data cannot be merged: extracting over a data folder that a
+	# newer version has already upgraded leaves its files behind, and the older
+	# Elasticsearch of the archive refuses to start on that mix.
+	if fuHAS "^data/elk/data/";
+	  then
+	    echo -n "###### $myBLUE Removing the current data/elk/data, the archive brings its own.$myWHITE "
+	    if sudo rm -rf "${myTPOTDIR}/data/elk/data";
+	      then
+	        echo "[ $myGREEN"OK"$myWHITE ]"
+	      else
+	        echo " [ $myRED""NOT OK""$myWHITE ]"
+	    fi
+	fi
 	echo -n "###### $myBLUE $(grep -c '^data/' "${myTMPDIR}/toc") entries.$myWHITE "
 	if sudo tar xf "${myARCHIVE}" -C "${myTPOTDIR}" -p --numeric-owner --wildcards "data/*" 2>"${myTMPDIR}/data.err";
 	  then
@@ -403,7 +420,7 @@ function fuDO_ELASTIC () {
 # Main section #
 ################
 
-while getopts ":lf:yh" opt; do
+while getopts ":lf:ych" opt; do
   case "$opt" in
     l)
       myLIST="1"
@@ -413,6 +430,9 @@ while getopts ":lf:yh" opt; do
       ;;
     y)
       myCONFIRMED="y"
+      ;;
+    c)
+      myCONFIG_ONLY="1"
       ;;
     h|\?)
       fuPRINT_HELP
@@ -438,7 +458,13 @@ fi
 
 fuPICK_ARCHIVE
 
-if [ -n "${myCONFIRMED}" ];
+if [ -n "${myCONFIG_ONLY}" ];
+  then
+    echo "### Restoring the checkout and the configuration from this archive."
+    fuHAS "^rollback.txt$"   && myDO_GIT="1"
+    fuHAS "^tracked.patch$"  && myDO_PATCH="1"
+    fuHAS "^env$"            && myDO_CONFIG="1"
+elif [ -n "${myCONFIRMED}" ];
   then
     echo "### Restoring everything from this archive."
     fuHAS "^rollback.txt$"   && myDO_GIT="1"

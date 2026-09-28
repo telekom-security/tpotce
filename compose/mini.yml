@@ -415,7 +415,7 @@ services:
         condition: service_healthy
     networks:
      - nginx_local
-    mem_limit: 1g
+    mem_limit: 2g
     ports:
      - "127.0.0.1:64296:5601"
     image: ${TPOT_REPO}/kibana:${TPOT_VERSION}
