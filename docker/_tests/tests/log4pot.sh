@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/common.sh"
 
 TEST_NAME="log4pot"
-DEFAULT_IMAGE="dtagdevsec/log4pot:24.04.1"
+DEFAULT_IMAGE="dtagdevsec/log4pot:24.04.2"
 IMAGE=""
 HTTP_PORT=""
 LOG_DIR=""
@@ -22,7 +22,7 @@ Usage: $0 [options]
 Run an isolated post-build smoke test for the Log4Pot image.
 
 Options:
-  --image IMAGE      Image to test. Defaults to dtagdevsec/log4pot:24.04.1.
+  --image IMAGE      Image to test. Defaults to dtagdevsec/log4pot:24.04.2.
   --http-port PORT   Host TCP port for HTTP. Default: dynamic loopback port.
   --timeout SEC      Timeout for startup, protocol, and log checks. Default: 30.
   --bind-ip IP       Host IP to bind. Default: 127.0.0.1.

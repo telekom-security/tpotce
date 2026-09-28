@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/common.sh"
 
 TEST_NAME="h0neytr4p"
-DEFAULT_IMAGE="dtagdevsec/h0neytr4p:24.04.1"
+DEFAULT_IMAGE="dtagdevsec/h0neytr4p:24.04.2"
 IMAGE=""
 HTTP_PORT=""
 HTTPS_PORT=""

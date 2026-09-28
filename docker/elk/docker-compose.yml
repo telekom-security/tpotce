@@ -22,7 +22,7 @@ services:
     mem_limit: 4g
     ports:
      - "127.0.0.1:64298:9200"
-    image: "ghcr.io/telekom-security/elasticsearch:24.04.1"
+    image: "ghcr.io/telekom-security/elasticsearch:24.04.2"
     volumes:
      - $HOME/tpotce/data:/data
 
@@ -38,7 +38,7 @@ services:
     mem_limit: 2g
     ports:
      - "127.0.0.1:64296:5601"
-    image: "ghcr.io/telekom-security/kibana:24.04.1"
+    image: "ghcr.io/telekom-security/kibana:24.04.2"
 
 ## Logstash service
   logstash:
@@ -50,7 +50,7 @@ services:
     depends_on:
       elasticsearch:
         condition: service_healthy
-    image: "ghcr.io/telekom-security/logstash:24.04.1"
+    image: "ghcr.io/telekom-security/logstash:24.04.2"
     volumes:
      - $HOME/tpotce/data:/data
 #     - /root/tpotce/docker/elk/logstash/dist/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
@@ -63,7 +63,7 @@ services:
     tty: true
     ports:
       - "127.0.0.1:6379:6379"
-    image: "ghcr.io/telekom-security/redis:24.04.1"
+    image: "ghcr.io/telekom-security/redis:24.04.2"
     read_only: true
 
 # Map Web Service
@@ -77,7 +77,7 @@ services:
     tty: true
     ports:
      - "127.0.0.1:64299:64299"
-    image: "ghcr.io/telekom-security/map:24.04.1"
+    image: "ghcr.io/telekom-security/map:24.04.2"
     depends_on:
      - map_redis
 
@@ -89,6 +89,6 @@ services:
      - MAP_COMMAND=DataServer_v2.py
     stop_signal: SIGKILL
     tty: true
-    image: "ghcr.io/telekom-security/map:24.04.1"
+    image: "ghcr.io/telekom-security/map:24.04.2"
     depends_on:
      - map_redis

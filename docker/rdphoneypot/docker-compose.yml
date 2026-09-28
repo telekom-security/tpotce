@@ -12,7 +12,7 @@ services:
      - rdphoneypot_local
     ports:
      - "3389:3389"
-    image: "dtagdevsec/rdphoneypot:24.04.1"
+    image: "dtagdevsec/rdphoneypot:24.04.2"
     read_only: true
     volumes:
      - $HOME/tpotce/data/rdphoneypot/cert:/opt/rdphoneypot/cert

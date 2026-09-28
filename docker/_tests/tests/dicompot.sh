@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/common.sh"
 
 TEST_NAME="dicompot"
-DEFAULT_IMAGE="dtagdevsec/dicompot:24.04.1"
+DEFAULT_IMAGE="dtagdevsec/dicompot:24.04.2"
 IMAGE=""
 HOST_PORT=""
 LOG_DIR=""

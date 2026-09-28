@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/common.sh"
 
 TEST_NAME="honeytrap"
-DEFAULT_IMAGE="dtagdevsec/honeytrap:24.04.1"
+DEFAULT_IMAGE="dtagdevsec/honeytrap:24.04.2"
 IMAGE=""
 LOG_DIR=""
 ATTACKS_DIR=""
@@ -28,7 +28,7 @@ The test configures NFQUEUE rules inside the temporary Honeytrap container
 namespace only. It does not modify host firewall rules or repository data.
 
 Options:
-  --image IMAGE      Image to test. Defaults to dtagdevsec/honeytrap:24.04.1.
+  --image IMAGE      Image to test. Defaults to dtagdevsec/honeytrap:24.04.2.
   --timeout SEC      Timeout for startup, protocol, and log checks. Default: 30.
   --bind-ip IP       Accepted for runner compatibility; Honeytrap exposes no host port.
   --keep-artifacts   Keep temporary compose file and logs for debugging.

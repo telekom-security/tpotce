@@ -29,7 +29,7 @@ services:
 #     - "5060:5060/udp"
 #     - "5061:5061"
      - "27017:27017"
-    image: "dtagdevsec/dionaea:24.04.1"
+    image: "dtagdevsec/dionaea:24.04.2"
     read_only: true
     volumes:
      - $HOME/tpotce/data/dionaea/roots/ftp:/opt/dionaea/var/dionaea/roots/ftp

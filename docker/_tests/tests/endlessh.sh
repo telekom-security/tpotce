@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/common.sh"
 
 TEST_NAME="endlessh"
-DEFAULT_IMAGE="dtagdevsec/endlessh:24.04.1"
+DEFAULT_IMAGE="dtagdevsec/endlessh:24.04.2"
 IMAGE=""
 SSH_PORT=""
 LOG_DIR=""

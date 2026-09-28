@@ -1,49 +1,50 @@
+<!-- Draft for T-Pot 24.04.2 - review and complete before the release -->
 # Release Notes / Changelog
-T-Pot 24.04.1 brings significant updates and exciting new honeypot additions, especially the LLM-based honeypots **Beelzebub** and **Galah**!
+T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, makes updating a lot safer with backups you can actually restore, and adds new honeypots and NSM tooling.
 
 ## New Features
-* **Beelzebub** (SSH) and **Galah** (HTTP) are the first LLM-based honeypots included in T-Pot (requires Ollama installation or a ChatGPT subscription).
-* **Go-Pot** a HTTP tarpit designed to maximize bot misery by slowly feeding them an infinite stream of fake secrets.
-* **Honeyaml** a configurable API server honeypot even supporting JWT-based HTTP bearer/token authentication.
-* **H0neytr4p** a HTTP/S honeypot capable of emulating vulnerabilities using configurable traps.
-* **Miniprint** a medium-interaction printer honeypot.
 * **RDPHoneypot** a Remote Desktop honeypot for RDP connection and credential telemetry.
 * **Satori** has been added as a passive fingerprinting NSM service running in parallel to P0f with normalized JSON logging.
+* **Restore Script** `restore.sh` puts a backup written by `update.sh` back, as a whole or per group (checkout, configuration, `data/`, Kibana objects and ILM policy).
+* **Update Script** has been reworked:
+  * Backups go to `~/tpot_backups`, rotate, are checked for space and hold what git cannot bring back; `--full` adds all of `data/`.
+  * Your Kibana objects and the ILM policy are exported before T-Pot is stopped.
+  * The installed edition is detected and restored, `-b <branch>` / `-r <repo>` allow testing branches and forks, `-s` starts T-Pot after the update.
+  * Before pulling a new Elastic Stack the update checks the disk space and warns if the backup does not hold the Elasticsearch data.
+* **Cowrie Personas** let Cowrie present itself as different systems.
+* **Smoke Tests** for the honeypot images (`docker/_tests`) and an end-to-end test of the Attack Map pipeline (`attackmap_pipeline_test.sh`).
+* **Listbot** translation maps are cached.
 
 ## Updates
-* **Honeypots** were updated to their latest pushed code and / or releases.
-* **Editions** have been re-introduced. You can now additionally choose to install T-Pot as **Mini**, **LLM** and **Tarpit** edition.
-* **Attack Map** has been updated to 2.2.6 including support for all new honeypots.
-* **Elastic Stack** has been upgrade to 8.16.1.
-* **Cyberchef** has been updated to the latest release.
-* **Elasticvue** has been updated to 1.1.0.
-* **Suricata** has been updated to 7.0.7, now supporting JA4 hashes.
-* **P0f** remains enabled, but its passive OS distribution views now support the Satori transition path.
-* Most honeypots now use **PyInstaller** (for Python) and **Scratch** (for Go) to minimize Docker image sizes.
-* All new honeypots have been integrated with **Kibana**, featuring dedicated dashboards and visualizations.
-* **Github Container Registry** is now the default container registry for the T-Pot configuration file `.env`.
-* Compatibility tested with **Alma 9.5**, **Fedora 41**, **Rocky 9.5**, and **Ubuntu 24.04.1**, with updated supported ISO links.
-* Docker images now use **Alpine 3.20** or **Scratch** wherever possible.
-* Updates for `24.04.1` images will be provided continuously through Docker image updates.
-* **Ddospot** has been moved from the Hive / Sensor installation to the Tarpit installation.
+* **Elastic Stack** has been updated to 9.5.4 and is now built on the official Elastic images.
+* **Kibana** now runs with a 1 GB Node.js heap (`KIBANA_HEAP_MB` in `docker/elk/kibana/Dockerfile`) within a `mem_limit` of 2 GB.
+* **Attack Map** has been updated to 4.0.0.
+* **Cowrie** has been updated to 3.0.0 (latest main).
+* **Suricata** has been updated to 8.
+* **Cyberchef** has been updated to 11.0.0.
+* **Elasticvue** has been updated to 1.15.0.
+* **Honeypots** were updated to their latest pushed code and / or releases, Docker images now use **Alpine 3.23 / 3.24** or **Scratch** wherever possible.
+* **Installer** supports unattended installations, **RHEL / Alma / Rocky 10**, **Debian 13** and **Ubuntu 26.04** (sudo-rs).
+* **Persistence** cycles for logrotate are configurable through `TPOT_PERSISTENCE_CYCLES` in `.env`.
+* Updates for `24.04.2` images will be provided continuously through Docker image updates.
 
-## Breaking Changes  
-### NGINX  
-- The container no longer runs in host mode, requiring changes to the `docker-compose.yml` and related services.  
-- To avoid confusion and downtime, the `24.04.1` tag for Docker images has been introduced.  
-- **Important**: Actively update T-Pot as described in the [README](https://github.com/telekom-security/tpotce/blob/master/README.md).  
-- **Deprecation Notice**: The `24.04` tagged images will no longer be maintained and will be removed by **2025-01-31**.  
+## Breaking Changes
+### Elastic Stack
+- Elasticsearch and Kibana upgrade their data in `~/tpotce/data/elk` on the first start, ***this cannot be undone***. Run the update with `update.sh -y --full` or take a snapshot of the machine first, see [Elastic Stack Upgrades](README.md#elastic-stack-upgrades).
+- If you use a `docker-compose.yml` of your own, raise the `mem_limit` of the `kibana` service to `2g`.
+- The official Elastic images are based on UBI 9 and require a **x86-64-v2** capable CPU on x86 hosts (VM CPU models such as `kvm64` / `qemu64` are not sufficient).
 
-### Suricata  
-- Capture filters have been updated to exclude broadcast, multicast, NetBIOS, IGMP, and MDNS traffic.  
+### Update Script
+- Updates are supported from **24.04.1** onwards. Installations of 24.04.0 need a fresh install.
+
+### Dionaea
+- The SIP service has been removed.
 
 ## Thanks & Credits
 A heartfelt thank you to the contributors who made this release possible:
-* @elivlo, @mancasa, koalafiedTroll, @trixam, for their backend and ews support!
-* @mariocandela for his work and updates on Beelzebub based on our discussions!
-* @ryanolee for approaching us and adding valuable features to go-pot based on our discussions! 
-* @neon-ninja for the work on #1661!
-* @sarkoziadam for the work on #1643!
-* @glaslos for the work on #1538!
+* @plygrnd for adding support for Red Hat Enterprise Linux!
+* @regulartim for reporting #1866!
+* Kevin Setz for pointing out exposed ENVs!
+* @trixam for the fix of #1807!
 
 … and to the entire T-Pot community for opening issues, sharing ideas, and helping improve T-Pot!

@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/common.sh"
 
 TEST_NAME="mailoney"
-DEFAULT_IMAGE="dtagdevsec/mailoney:24.04.1"
+DEFAULT_IMAGE="dtagdevsec/mailoney:24.04.2"
 IMAGE=""
 SMTP_PORT=""
 LOG_DIR=""

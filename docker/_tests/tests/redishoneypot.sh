@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/common.sh"
 
 TEST_NAME="redishoneypot"
-DEFAULT_IMAGE="dtagdevsec/redishoneypot:24.04.1"
+DEFAULT_IMAGE="dtagdevsec/redishoneypot:24.04.2"
 IMAGE=""
 REDIS_PORT=""
 LOG_DIR=""

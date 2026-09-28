@@ -12,7 +12,7 @@ services:
      - NET_ADMIN
      - SYS_NICE
      - NET_RAW
-    image: "ghcr.io/telekom-security/satori:24.04.1"
+    image: "ghcr.io/telekom-security/satori:24.04.2"
     read_only: true
     volumes:
      - $HOME/tpotce/data/satori/log:/var/log/satori

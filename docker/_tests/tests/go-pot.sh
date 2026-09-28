@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/common.sh"
 
 TEST_NAME="go-pot"
-DEFAULT_IMAGE="dtagdevsec/go-pot:24.04.1"
+DEFAULT_IMAGE="dtagdevsec/go-pot:24.04.2"
 IMAGE=""
 HTTP_PORT=""
 LOG_DIR=""

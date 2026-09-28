@@ -80,21 +80,21 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/hellpot.sh
 ./docker/_tests/tests/hellpot.sh --http-port 18080
 ./docker/_tests/tests/heralding.sh
-./docker/_tests/tests/heralding.sh --image dtagdevsec/heralding:24.04.1
+./docker/_tests/tests/heralding.sh --image dtagdevsec/heralding:24.04.2
 ./docker/_tests/tests/honeyaml.sh
-./docker/_tests/tests/honeyaml.sh --image dtagdevsec/honeyaml:24.04.1
+./docker/_tests/tests/honeyaml.sh --image dtagdevsec/honeyaml:24.04.2
 ./docker/_tests/tests/honeypots.sh
-./docker/_tests/tests/honeypots.sh --image dtagdevsec/honeypots:24.04.1
+./docker/_tests/tests/honeypots.sh --image dtagdevsec/honeypots:24.04.2
 ./docker/_tests/tests/log4pot.sh
 ./docker/_tests/tests/log4pot.sh --image log4pot:alpine-check --http-port 18080
 ./docker/_tests/tests/mailoney.sh
 ./docker/_tests/tests/mailoney.sh --image mailoney:test --smtp-port 10025
 ./docker/_tests/tests/medpot.sh
-./docker/_tests/tests/medpot.sh --image dtagdevsec/medpot:24.04.1 --host-port 12575
+./docker/_tests/tests/medpot.sh --image dtagdevsec/medpot:24.04.2 --host-port 12575
 ./docker/_tests/tests/miniprint.sh
 ./docker/_tests/tests/miniprint.sh --image dtagdevsec/miniprint:24.04 --raw-port 19100
 ./docker/_tests/tests/p0f.sh
-./docker/_tests/tests/p0f.sh --image dtagdevsec/p0f:24.04.1
+./docker/_tests/tests/p0f.sh --image dtagdevsec/p0f:24.04.2
 ./docker/_tests/tests/redishoneypot.sh
 ./docker/_tests/tests/redishoneypot.sh --redis-port 16379
 ./docker/_tests/tests/rdphoneypot.sh

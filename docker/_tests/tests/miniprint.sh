@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/common.sh"
 
 TEST_NAME="miniprint"
-DEFAULT_IMAGE="dtagdevsec/miniprint:24.04.1"
+DEFAULT_IMAGE="dtagdevsec/miniprint:24.04.2"
 IMAGE=""
 RAW_PORT=""
 LOG_DIR=""
@@ -22,7 +22,7 @@ Usage: $0 [options]
 Run an isolated post-build smoke test for the Miniprint image.
 
 Options:
-  --image IMAGE      Image to test. Defaults to dtagdevsec/miniprint:24.04.1.
+  --image IMAGE      Image to test. Defaults to dtagdevsec/miniprint:24.04.2.
   --raw-port PORT    Host TCP port for raw printer traffic. Default: dynamic loopback port.
   --timeout SEC      Timeout for startup, protocol, and log checks. Default: 30.
   --bind-ip IP       Host IP to bind. Default: 127.0.0.1.

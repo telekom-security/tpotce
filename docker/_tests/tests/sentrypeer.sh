@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/common.sh"
 
 TEST_NAME="sentrypeer"
-DEFAULT_IMAGE="dtagdevsec/sentrypeer:24.04.1"
+DEFAULT_IMAGE="dtagdevsec/sentrypeer:24.04.2"
 IMAGE=""
 TCP_PORT=""
 UDP_PORT=""

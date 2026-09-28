@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/common.sh"
 
 TEST_NAME="heralding"
-DEFAULT_IMAGE="dtagdevsec/heralding:24.04.1"
+DEFAULT_IMAGE="dtagdevsec/heralding:24.04.2"
 IMAGE=""
 LOG_DIR=""
 HERALDING_LOG_FILE=""
@@ -36,7 +36,7 @@ Usage: $0 [options]
 Run an isolated post-build smoke test for the Heralding image.
 
 Options:
-  --image IMAGE       Image to test. Defaults to dtagdevsec/heralding:24.04.1.
+  --image IMAGE       Image to test. Defaults to dtagdevsec/heralding:24.04.2.
   --timeout SEC       Timeout for startup, protocol, and log checks. Default: 30.
   --bind-ip IP        Host IP to bind. Default: 127.0.0.1.
   --keep-artifacts    Keep temporary compose file and logs for debugging.
