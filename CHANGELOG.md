@@ -17,6 +17,7 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 
 ## Updates
 * **Elastic Stack** has been updated to 9.5.4 (from 8.16.1) and is now built on the official Elastic images.
+* **Elasticsearch** no longer rejects events once a daily index reaches its field limit (now 3000), further new fields are not indexed then but stay in the document.
 * **Kibana** now runs with a 1 GB Node.js heap (`KIBANA_HEAP_MB` in `docker/elk/kibana/Dockerfile`) within a `mem_limit` of 2 GB.
 * **Attack Map** has been updated to 4.0.0.
 * **Beelzebub** has been updated to 3.9.2 and is built from upstream again instead of the T-Pot fork. The log format, the dashboards and the SSH host key stay as they were, further services (Telnet, MCP, LDAP, SMB, MSSQL, MQTT, RDP, PostgreSQL, VNC, Redis, Memcached) are prepared and can be enabled in the compose file.

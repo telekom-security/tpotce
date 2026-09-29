@@ -1000,6 +1000,8 @@ docker-compose -f ~/tpotce/docker-compose.yml down -v
 The Elastic Stack is hungry for RAM, specifically `logstash` and `elasticsearch`. If the Elastic Stack is unavailable, does not receive any logs or simply keeps crashing it is most likely a RAM or storage issue.<br>
 While T-Pot keeps trying to restart the services / containers run `docker logs -f <container_name>` (either `logstash` or `elasticsearch`) and check if there are any warnings or failures involving RAM.
 
+Elasticsearch runs with a 2 GB heap (`ES_JAVA_OPTS`) inside a `mem_limit` of 4 GB. On hosts with many CPU cores (about 28 or more) raise both, otherwise free text searches in Kibana over a daily index that holds close to its limit of 3000 fields may fail with `field expansion matches too many fields`. Elasticsearch derives that limit from the heap size and the number of search threads.
+
 Kibana runs with a 1 GB Node.js heap inside a `mem_limit` of 2 GB. The heap is set by `KIBANA_HEAP_MB` in `~/tpotce/docker/elk/kibana/Dockerfile` (or `--build-arg KIBANA_HEAP_MB=<MB>`) and has to stay well below the `mem_limit` of the `kibana` service in `docker-compose.yml`. If you use a `docker-compose.yml` of your own, raise its Kibana `mem_limit` to `2g`.
 
 Storage failures can be identified easier via `htop`. 
