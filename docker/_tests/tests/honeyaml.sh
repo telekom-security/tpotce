@@ -136,9 +136,17 @@ networks:
 EOF
 }
 
+# The image is built from scratch, without a shell, so the file is copied out
+# of a created (not started) container.
 extract_api_config() {
-  docker run --rm --entrypoint /bin/sh "${IMAGE}" -c 'cat /opt/honeyaml/api.yml' > "${API_FILE}" \
-    || test_die "Could not extract /opt/honeyaml/api.yml from ${IMAGE}"
+  local cid=""
+
+  cid="$(docker create "${IMAGE}")" || test_die "Could not create a container from ${IMAGE}"
+  if ! docker cp "${cid}:/opt/honeyaml/api.yml" "${API_FILE}" >/dev/null 2>&1; then
+    docker rm "${cid}" >/dev/null 2>&1 || true
+    test_die "Could not extract /opt/honeyaml/api.yml from ${IMAGE}"
+  fi
+  docker rm "${cid}" >/dev/null 2>&1 || true
   [[ -s "${API_FILE}" ]] || test_die "Extracted api.yml is empty"
   cp "${API_FILE}" "${LOG_DIR}/api.yml"
 }

@@ -31,6 +31,7 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 * **Go-Pot** has been updated to 1.2.0-rc-7.
 * **H0neytr4p** has been updated to 0.44.
 * **Hellpot** has been updated to 0.60.
+* **Honeyaml** builds again: its Rust dependencies have been updated and it is now a static binary on a scratch image (branch `tpot-24.04.2` of the T-Pot fork, upstream is no longer maintained).
 * **IPPHoney** has been updated to 2.0.2.
 * **Honeypots** without releases were updated to their latest pushed code, pinned to a commit.
 * Docker images now use **Alpine 3.23** (Suricata 3.24), **Go 1.26** or **Scratch** wherever possible; **Log4Pot** moved from Ubuntu to Alpine.

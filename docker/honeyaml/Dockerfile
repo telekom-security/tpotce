@@ -1,29 +1,34 @@
-FROM rust:latest AS builder
+# syntax=docker/dockerfile:1
 #
-RUN apt update && \
-    apt upgrade -y && \
-    apt install -y git \
-                    musl-tools \
-                    musl-dev \
-                    libzstd-dev
-RUN update-ca-certificates
-RUN git clone https://github.com/t3chn0m4g3/honeyaml /opt/honeyaml && \
-    cd /opt/honeyaml && \
-    git checkout 79b48b36c23ab651353ef072313b99a0996d82ac
+# The builder always runs on the build platform and cross-compiles a static
+# musl binary for the target, rustc under QEMU emulation crashes (SIGSEGV).
+FROM --platform=$BUILDPLATFORM tonistiigi/xx:1.9.0 AS xx
 #
+FROM --platform=$BUILDPLATFORM rust:1.98.1-alpine3.23 AS builder
+COPY --from=xx / /
+ARG TARGETPLATFORM
+#
+# Install packages, native ones for the tests and target ones for the build
+RUN apk --no-cache -U add clang lld git musl-dev && \
+    xx-apk --no-cache add musl-dev gcc
+#
+# Fetch honeyaml, branch tpot-24.04.2 of the T-Pot fork (upstream is no longer maintained)
 WORKDIR /opt/honeyaml
-# Need to dynamically link, otherwise multi platform builds are breaking with zstd-sys
-RUN cargo build --release && \
-    cp target/release/honeyaml /opt/honeyaml/
+RUN git -c init.defaultBranch=master init --quiet && \
+    git remote add origin https://github.com/t3chn0m4g3/honeyaml && \
+    git fetch --quiet --depth 1 origin 39e524adf12ac7825b902d24b5df935b7735599c && \
+    git -c advice.detachedHead=false checkout --quiet FETCH_HEAD
 #
-# Using wolfi instead of ubuntu because of smaller footprint (and required full glibc support)
-FROM chainguard/wolfi-base:latest
+# Test on the build platform, then cross-compile for the target
+RUN cargo test && \
+    xx-cargo build --release --target-dir ./build && \
+    cp ./build/$(xx-cargo --print-target-triple)/release/honeyaml /opt/honeyaml/honeyaml-bin && \
+    xx-verify --static /opt/honeyaml/honeyaml-bin
 #
-COPY --from=builder /opt/honeyaml/honeyaml /opt/honeyaml/
+FROM scratch
+#
+COPY --from=builder /opt/honeyaml/honeyaml-bin /opt/honeyaml/honeyaml
 COPY --from=builder /opt/honeyaml/api.yml /opt/honeyaml/
-#
-# Setup user, groups and configs
-RUN apk -U --no-cache add libstdc++
 #
 STOPSIGNAL SIGINT
 USER 2000:2000
