@@ -22,10 +22,13 @@ services:
       LLM_PROVIDER: "ollama"
       LLM_SERVER_URL: "http://ollama.local:11434"
       LLM_MODEL: "llama3.1"
-      # LLM_TEMPERATURE: ${GALAH_LLM_TEMPERATURE}
-      # LLM_API_KEY: ${GALAH_LLM_API_KEY}
-      # LLM_CLOUD_LOCATION: ${GALAH_LLM_CLOUD_LOCATION}
-      # LLM_CLOUD_PROJECT: ${GALAH_LLM_CLOUD_PROJECT}
+      LLM_TEMPERATURE: "1"
+    #  LLM_PROVIDER: "openai"
+    #  LLM_SERVER_URL: ""
+    #  LLM_MODEL: "gpt-4o"
+    #  LLM_API_KEY: "sk-proj-123456"
+    #  LLM_CLOUD_LOCATION: ""
+    #  LLM_CLOUD_PROJECT: ""
     read_only: true
     volumes:
      - $HOME/tpotce/data/galah/cache:/opt/galah/config/cache

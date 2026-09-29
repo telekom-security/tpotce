@@ -1,0 +1,22 @@
+diff --git a/internal/logger/logger.go b/internal/logger/logger.go
+index ddd36f7..2a67c1e 100644
+--- a/internal/logger/logger.go
++++ b/internal/logger/logger.go
+@@ -56,7 +56,7 @@ func (l *Logger) LogError(r *http.Request, resp, port string, err error) {
+ 		},
+ 	}
+ 
+-	l.EventLogger.Error("failedResponse: returned 500 internal server error", mapToArgs(fields)...)
++	l.tpotWrite("error", "failedResponse: returned 500 internal server error", fields)
+ }
+ 
+ // LogEvent logs a successfulResponse event, including any matched Suricata rules.
+@@ -86,7 +86,7 @@ func (l *Logger) LogEvent(r *http.Request, resp llm.JSONResponse, port, respSour
+ 		fields["suricataMatches"] = matches
+ 	}
+ 
+-	l.EventLogger.Info("successfulResponse", mapToArgs(fields)...)
++	l.tpotWrite("info", "successfulResponse", fields)
+ }
+ 
+ func (l *Logger) commonFields(r *http.Request, port string) map[string]any {

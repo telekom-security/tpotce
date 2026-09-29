@@ -24,6 +24,7 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 * **Suricata** has been updated to 8.0.7 (Alpine 3.24 package).
 * **Nginx** has been updated to 1.28.3 (Alpine 3.23 package).
 * **Cyberchef** has been updated to 11.0.0.
+* **Galah** has been updated to 1.1.1 and is built from upstream again instead of the T-Pot fork. The log format stays as it was, failed LLM responses now show up in the Galah dashboard, and all LLM settings (API key, temperature, GCP Vertex AI) can be set in `.env`.
 * **Elasticvue** has been updated to 1.15.0.
 * **EWSPoster** has been updated to 1.33.
 * **Go-Pot** has been updated to 1.2.0-rc-7.
@@ -48,6 +49,9 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 
 ### Dionaea
 - The SIP service has been removed.
+
+### Galah
+- In Elasticsearch the request and response fields of Galah are now `http_request.*` and `http_response.*` (i.e. `http_request.method`, `http_request.requestURI`), as ConPot and Miniprint log `request` / `response` as text and the daily index could only hold one of them. Import the Kibana objects of this release to get the updated Galah dashboard, older events keep the previous field names.
 
 ### Beelzebub
 - The LLM settings in `.env` are now `BEELZEBUB_LLM_PROVIDER` (`ollama` or `openai`), `BEELZEBUB_LLM_MODEL` (the model name, i.e. `openchat` or `gpt-4o`), `BEELZEBUB_LLM_HOST` and `BEELZEBUB_LLM_API_KEY`. `update.sh` migrates the previous settings (`BEELZEBUB_LLM_MODEL: "ollama"` / `"gpt4-o"`, `BEELZEBUB_OLLAMA_MODEL`), a `docker-compose.yml` of your own needs the new `environment` block of the `beelzebub` service from `compose/llm.yml`.
