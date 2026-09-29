@@ -1,0 +1,27 @@
+apiVersion: "v1"
+protocol: "tcp"
+wireEncoding: "latin1"
+framing:
+  # MQTT Remaining Length is a 1-4 byte base-128 varint beginning after the
+  # fixed-header byte. Regex handlers therefore see one complete MQTT packet.
+  mode: "varint-length-prefix"
+  lengthOffset: 1
+  maxLengthBytes: 4
+address: ":1883"
+description: "MQTT Broker"
+banner: ""
+commands:
+  - regex: "(?s)^\\x10"
+    handler: "\x20\x02\x00\x00"
+    name: "connect_ack"
+  - regex: "(?s)^\\x30"
+    handler: "\x40\x02\x00\x00"
+    name: "publish_ack"
+  - regex: "(?s)^\\x82"
+    handler: "\x90\x03\x00\x00\x00"
+    name: "subscribe_ack"
+  - regex: "^(.+)$"
+    handler: ""
+    name: "catch_all"
+deadlineTimeoutSeconds: 60
+serverName: "MQTT-BROKER-01"

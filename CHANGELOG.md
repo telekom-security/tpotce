@@ -19,6 +19,7 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 * **Elastic Stack** has been updated to 9.5.4 (from 8.16.1) and is now built on the official Elastic images.
 * **Kibana** now runs with a 1 GB Node.js heap (`KIBANA_HEAP_MB` in `docker/elk/kibana/Dockerfile`) within a `mem_limit` of 2 GB.
 * **Attack Map** has been updated to 4.0.0.
+* **Beelzebub** has been updated to 3.9.2 and is built from upstream again instead of the T-Pot fork. The log format, the dashboards and the SSH host key stay as they were, further services (Telnet, MCP, LDAP, SMB, MSSQL, MQTT, RDP, PostgreSQL, VNC, Redis, Memcached) are prepared and can be enabled in the compose file.
 * **Cowrie** has been updated to 3.0.0, pinned to a later commit of the main branch.
 * **Suricata** has been updated to 8.0.7 (Alpine 3.24 package).
 * **Nginx** has been updated to 1.28.3 (Alpine 3.23 package).
@@ -46,6 +47,9 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 
 ### Dionaea
 - The SIP service has been removed.
+
+### Beelzebub
+- The LLM settings in `.env` are now `BEELZEBUB_LLM_PROVIDER` (`ollama` or `openai`), `BEELZEBUB_LLM_MODEL` (the model name, i.e. `openchat` or `gpt-4o`), `BEELZEBUB_LLM_HOST` and `BEELZEBUB_LLM_API_KEY`. `update.sh` migrates the previous settings (`BEELZEBUB_LLM_MODEL: "ollama"` / `"gpt4-o"`, `BEELZEBUB_OLLAMA_MODEL`), a `docker-compose.yml` of your own needs the new `environment` block of the `beelzebub` service from `compose/llm.yml`.
 
 ## Thanks & Credits
 A heartfelt thank you to the contributors who made this release possible:

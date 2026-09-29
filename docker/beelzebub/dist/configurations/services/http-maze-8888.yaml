@@ -1,0 +1,139 @@
+apiVersion: "v1"
+protocol: "http"
+address: ":8888"
+description: "Apache Directory Listing Maze Honeypot"
+serverVersion: "Apache/2.4.41 (Ubuntu)"
+serverName: "files.internal.company.com"
+commands:
+  - regex: "^/icons/blank\\.svg$"
+    handler: >
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="22" viewBox="0 0 20 22"></svg>
+    headers:
+      - "Content-Type: image/svg+xml"
+      - "Server: Apache/2.4.41 (Ubuntu)"
+      - "Cache-Control: public, max-age=86400"
+    statusCode: 200
+
+  - regex: "^/icons/folder\\.svg$"
+    handler: >
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="22" viewBox="0 0 20 22">
+        <path d="M1 5h7l2-3h9v16H1V5z" fill="#e8a33d" stroke="#b07424" stroke-width="0.5"/>
+        <path d="M1 7h18v11H1V7z" fill="#f4ca64" stroke="#b07424" stroke-width="0.5"/>
+      </svg>
+    headers:
+      - "Content-Type: image/svg+xml"
+      - "Server: Apache/2.4.41 (Ubuntu)"
+      - "Cache-Control: public, max-age=86400"
+    statusCode: 200
+
+  - regex: "^/icons/back\\.svg$"
+    handler: >
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="22" viewBox="0 0 20 22">
+        <path d="M1 5h7l2-3h9v16H1V5z" fill="#e8a33d" stroke="#b07424" stroke-width="0.5"/>
+        <path d="M1 7h18v11H1V7z" fill="#f4ca64" stroke="#b07424" stroke-width="0.5"/>
+        <path d="M14 12H6M9 9l-3 3 3 3" fill="none" stroke="#805300" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    headers:
+      - "Content-Type: image/svg+xml"
+      - "Server: Apache/2.4.41 (Ubuntu)"
+      - "Cache-Control: public, max-age=86400"
+    statusCode: 200
+
+  - regex: "^/icons/text\\.svg$"
+    handler: >
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="22" viewBox="0 0 20 22">
+        <path d="M3 1h10l4 4v16H3V1z" fill="#fff" stroke="#999" stroke-width="0.5"/>
+        <path d="M13 1v4h4" fill="none" stroke="#999" stroke-width="0.5"/>
+        <line x1="6" y1="8" x2="14" y2="8" stroke="#999" stroke-width="0.8"/>
+        <line x1="6" y1="11" x2="14" y2="11" stroke="#999" stroke-width="0.8"/>
+        <line x1="6" y1="14" x2="11" y2="14" stroke="#999" stroke-width="0.8"/>
+      </svg>
+    headers:
+      - "Content-Type: image/svg+xml"
+      - "Server: Apache/2.4.41 (Ubuntu)"
+      - "Cache-Control: public, max-age=86400"
+    statusCode: 200
+
+  - regex: "^/icons/compressed\\.svg$"
+    handler: >
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="22" viewBox="0 0 20 22">
+        <path d="M3 1h10l4 4v16H3V1z" fill="#fff" stroke="#999" stroke-width="0.5"/>
+        <path d="M13 1v4h4" fill="none" stroke="#999" stroke-width="0.5"/>
+        <rect x="8" y="3" width="3" height="2" fill="#c66" stroke="#a44" stroke-width="0.3"/>
+        <rect x="8" y="6" width="3" height="2" fill="#c66" stroke="#a44" stroke-width="0.3"/>
+        <rect x="8" y="9" width="3" height="2" fill="#c66" stroke="#a44" stroke-width="0.3"/>
+        <rect x="8" y="12" width="3" height="4" fill="#c66" stroke="#a44" stroke-width="0.3"/>
+        <rect x="9" y="13" width="1" height="1" fill="#a44"/>
+      </svg>
+    headers:
+      - "Content-Type: image/svg+xml"
+      - "Server: Apache/2.4.41 (Ubuntu)"
+      - "Cache-Control: public, max-age=86400"
+    statusCode: 200
+
+  - regex: "^/icons/script\\.svg$"
+    handler: >
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="22" viewBox="0 0 20 22">
+        <path d="M3 1h10l4 4v16H3V1z" fill="#fff" stroke="#999" stroke-width="0.5"/>
+        <path d="M13 1v4h4" fill="none" stroke="#999" stroke-width="0.5"/>
+        <text x="5" y="14" font-family="monospace" font-size="6" fill="#333">#!</text>
+        <line x1="6" y1="16" x2="13" y2="16" stroke="#4a4" stroke-width="0.8"/>
+        <line x1="6" y1="18" x2="11" y2="18" stroke="#4a4" stroke-width="0.8"/>
+      </svg>
+    headers:
+      - "Content-Type: image/svg+xml"
+      - "Server: Apache/2.4.41 (Ubuntu)"
+      - "Cache-Control: public, max-age=86400"
+    statusCode: 200
+
+  - regex: "^/icons/layout\\.svg$"
+    handler: >
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="22" viewBox="0 0 20 22">
+        <path d="M3 1h10l4 4v16H3V1z" fill="#fff" stroke="#999" stroke-width="0.5"/>
+        <path d="M13 1v4h4" fill="none" stroke="#999" stroke-width="0.5"/>
+        <line x1="6" y1="8" x2="8" y2="8" stroke="#48c" stroke-width="0.8"/>
+        <line x1="9" y1="8" x2="14" y2="8" stroke="#999" stroke-width="0.8"/>
+        <line x1="6" y1="11" x2="8" y2="11" stroke="#48c" stroke-width="0.8"/>
+        <line x1="9" y1="11" x2="13" y2="11" stroke="#999" stroke-width="0.8"/>
+        <line x1="6" y1="14" x2="8" y2="14" stroke="#48c" stroke-width="0.8"/>
+        <line x1="9" y1="14" x2="12" y2="14" stroke="#999" stroke-width="0.8"/>
+      </svg>
+    headers:
+      - "Content-Type: image/svg+xml"
+      - "Server: Apache/2.4.41 (Ubuntu)"
+      - "Cache-Control: public, max-age=86400"
+    statusCode: 200
+
+  - regex: "^/icons/key\\.svg$"
+    handler: >
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="22" viewBox="0 0 20 22">
+        <path d="M3 1h10l4 4v16H3V1z" fill="#fff" stroke="#999" stroke-width="0.5"/>
+        <path d="M13 1v4h4" fill="none" stroke="#999" stroke-width="0.5"/>
+        <circle cx="8" cy="11" r="2.5" fill="none" stroke="#c90" stroke-width="1"/>
+        <line x1="10" y1="11" x2="15" y2="11" stroke="#c90" stroke-width="1"/>
+        <line x1="14" y1="11" x2="14" y2="13" stroke="#c90" stroke-width="1"/>
+        <line x1="12" y1="11" x2="12" y2="13" stroke="#c90" stroke-width="1"/>
+      </svg>
+    headers:
+      - "Content-Type: image/svg+xml"
+      - "Server: Apache/2.4.41 (Ubuntu)"
+      - "Cache-Control: public, max-age=86400"
+    statusCode: 200
+
+  - regex: "^/icons/unknown\\.svg$"
+    handler: >
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="22" viewBox="0 0 20 22">
+        <path d="M3 1h10l4 4v16H3V1z" fill="#fff" stroke="#999" stroke-width="0.5"/>
+        <path d="M13 1v4h4" fill="none" stroke="#999" stroke-width="0.5"/>
+      </svg>
+    headers:
+      - "Content-Type: image/svg+xml"
+      - "Server: Apache/2.4.41 (Ubuntu)"
+      - "Cache-Control: public, max-age=86400"
+    statusCode: 200
+
+fallbackCommand:
+  plugin: "MazeHoneypot"
+  statusCode: 200
+  headers:
+    - "Server: Apache/2.4.41 (Ubuntu)"

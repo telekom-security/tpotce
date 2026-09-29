@@ -1,0 +1,11 @@
+apiVersion: "v1"
+protocol: "http"
+address: ":8080"
+description: "Apache 401"
+commands:
+  - regex: ".*"
+    handler: "Unauthorized"
+    headers:
+      - "www-Authenticate: Basic"
+      - "server: Apache"
+    statusCode: 401

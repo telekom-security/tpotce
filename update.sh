@@ -1065,6 +1065,72 @@ function fuRESTORE () {
 	    sed -i "s|^TPOT_REPO=.*|TPOT_REPO=${myNEWREPO}|" "$HOME/tpotce/.env"
 	    echo "###### $myBLUE""TPOT_REPO dtagdevsec -> ${myNEWREPO}, which avoids the Docker Hub rate limits.""$myWHITE"
 	fi
+	fuMIGRATE_BEELZEBUB_ENV "$HOME/tpotce/.env"
+}
+
+# Value of a .env setting, written as KEY=value or KEY: "value".
+function fuENV_VALUE () {
+	grep -E "^$2[[:space:]]*[:=]" "$1" 2>/dev/null | tail -1 \
+	  | sed -E "s/^[^:=]*[:=][[:space:]]*//; s/[[:space:]]*$//; s/^[\"']//; s/[\"']$//"
+}
+
+# 24.04.2 builds Beelzebub from upstream, which splits the LLM setting into a
+# provider and a model name. The old section (BEELZEBUB_LLM_MODEL "ollama" or
+# "gpt4-o" plus BEELZEBUB_OLLAMA_MODEL) is rewritten once, BEELZEBUB_LLM_HOST is
+# kept. Runs again without effect once BEELZEBUB_LLM_PROVIDER is there.
+function fuMIGRATE_BEELZEBUB_ENV () {
+	local myENVFILE="$1"
+	local myOLDMODEL myOLLAMAMODEL myHOST myAPIKEY myPROVIDER myMODEL
+	if grep -qE "^BEELZEBUB_LLM_PROVIDER[[:space:]]*[:=]" "${myENVFILE}" \
+	   || ! grep -qE "^BEELZEBUB_LLM_MODEL[[:space:]]*[:=]" "${myENVFILE}";
+	  then
+	    return 0
+	fi
+	myOLDMODEL=$(fuENV_VALUE "${myENVFILE}" BEELZEBUB_LLM_MODEL)
+	myOLLAMAMODEL=$(fuENV_VALUE "${myENVFILE}" BEELZEBUB_OLLAMA_MODEL)
+	myHOST=$(fuENV_VALUE "${myENVFILE}" BEELZEBUB_LLM_HOST)
+	myAPIKEY=$(fuENV_VALUE "${myENVFILE}" BEELZEBUB_OPENAISECRETKEY)
+	case "${myOLDMODEL}" in
+	  ollama)
+	    myPROVIDER="ollama"
+	    myMODEL="${myOLLAMAMODEL:-openchat}"
+	    ;;
+	  gpt4-o)
+	    myPROVIDER="openai"
+	    myMODEL="gpt-4o"
+	    # The Ollama default never worked with OpenAI, empty means the OpenAI endpoint
+	    [ "${myHOST}" == "http://ollama.local:11434/api/chat" ] && myHOST=""
+	    ;;
+	  *)
+	    echo "###### $myBLUE""BEELZEBUB_LLM_MODEL=${myOLDMODEL} is neither \"ollama\" nor \"gpt4-o\", please set up the Beelzebub section of .env as in env.example.""$myWHITE"
+	    return 0
+	    ;;
+	esac
+	# The old comments describe the old settings, the new block replaces the old assignment
+	if ! awk -v provider="${myPROVIDER}" -v model="${myMODEL}" -v host="${myHOST}" -v apikey="${myAPIKEY}" '
+	  /^# BEELZEBUB_(LLM_MODEL|LLM_HOST|OLLAMA_MODEL|OPENAISECRETKEY):/ { next }
+	  /^BEELZEBUB_(LLM_HOST|OLLAMA_MODEL|OPENAISECRETKEY)[[:space:]]*[:=]/ { next }
+	  /^BEELZEBUB_LLM_MODEL[[:space:]]*[:=]/ {
+	    print "# BEELZEBUB_LLM_PROVIDER: Set to \"ollama\" or \"openai\"."
+	    print "# BEELZEBUB_LLM_MODEL: Set to the model served by the provider, i.e. \"openchat\" (ollama) or \"gpt-4o\" (openai)."
+	    print "# BEELZEBUB_LLM_HOST: Full URL of the chat endpoint, leave empty to use the provider default."
+	    print "# BEELZEBUB_LLM_API_KEY: Only required for \"openai\"."
+	    print "BEELZEBUB_LLM_PROVIDER: \"" provider "\""
+	    print "BEELZEBUB_LLM_MODEL: \"" model "\""
+	    print "BEELZEBUB_LLM_HOST: \"" host "\""
+	    print "BEELZEBUB_LLM_API_KEY: \"" apikey "\""
+	    next
+	  }
+	  { print }
+	' "${myENVFILE}" > "${myENVFILE}.beelzebub";
+	  then
+	    rm -f "${myENVFILE}.beelzebub"
+	    echo "###### $myBLUE""Could not migrate the Beelzebub settings in ${myENVFILE}, please set them up as in env.example.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	    return 0
+	fi
+	# cat keeps the owner and the mode of .env, it holds credentials
+	cat "${myENVFILE}.beelzebub" > "${myENVFILE}" && rm -f "${myENVFILE}.beelzebub"
+	echo "###### $myBLUE""Beelzebub settings moved to BEELZEBUB_LLM_PROVIDER=${myPROVIDER}, BEELZEBUB_LLM_MODEL=${myMODEL}.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
 }
 
 # The docker-compose.yml as it was before the update, taken from the archive. It is

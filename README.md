@@ -31,6 +31,7 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/in
   - [Running in a Cloud](#running-in-a-cloud)
   - [Required Ports](#required-ports)
   - [LLM-Based Honeypots](#llm-based-honeypots)
+    - [Beelzebub](#beelzebub)
     - [Ollama](#ollama)
     - [ChatGPT](#chatgpt)
 - [System Placement](#system-placement)
@@ -304,8 +305,20 @@ Ports and availability of SaaS services may vary based on your geographical loca
 For some honeypots to reach full functionality (i.e. Cowrie or Log4Pot) outgoing connections are necessary as well, in order for them to download the attacker's malware. Please see the individual honeypot's documentation to learn more by following the [links](#technical-concept) to their repositories.
 
 ## LLM-Based Honeypots
-We think LLM-Based Honeypots mark the **beginning** of a game change for the deception / honeypot field. Consequently, starting with the release of **T-Pot 24.04.1**, two LLM-based honeypots, **Beelzebub** and **Galah**, have been introduced. These honeypots require an installation of **Ollama**, which needs to be configured in the [T-Pot configuration file](#t-pot-config-file). You can also adjust the settings in this file for **ChatGPT** support, but note that changes will also be required in the docker compose file (`~/tpotce/compose/llm.yml`) to accommodate these adjustments.<br><br>
+We think LLM-Based Honeypots mark the **beginning** of a game change for the deception / honeypot field. Consequently, starting with the release of **T-Pot 24.04.1**, two LLM-based honeypots, **Beelzebub** and **Galah**, have been introduced. These honeypots require an installation of **Ollama**, which needs to be configured in the [T-Pot configuration file](#t-pot-config-file). You can also adjust the settings in this file for **ChatGPT** support. For Galah, changes will also be required in the docker compose file (`~/tpotce/compose/llm.yml`) to accommodate these adjustments, Beelzebub takes the API key from `BEELZEBUB_LLM_API_KEY`.<br><br>
 Follow the links in the [Honeypots and Tools](#honeypots-and-tools) section to find out more about **Beelzebub** and **Galah**.
+
+### Beelzebub
+Beelzebub is configured through these settings in `~/tpotce/.env`:
+
+| Setting                  | Description                                                                                          |
+| :----------------------- | :--------------------------------------------------------------------------------------------------- |
+| `BEELZEBUB_LLM_PROVIDER` | `ollama` or `openai`                                                                                 |
+| `BEELZEBUB_LLM_MODEL`    | The model served by the provider, i.e. `openchat` (Ollama) or `gpt-4o` (OpenAI)                      |
+| `BEELZEBUB_LLM_HOST`     | Full URL of the chat endpoint, i.e. `http://ollama.local:11434/api/chat`, empty for the provider default |
+| `BEELZEBUB_LLM_API_KEY`  | Only required for `openai`                                                                           |
+
+In the LLM edition only the LLM-driven SSH service on port `22` is exposed. Beelzebub also runs a static SSH service (`2222`), a HTTP service (`80`, `8080`), MySQL (`3306`) and further prepared services: Telnet (`23`), LDAP (`389`), SMB (`445`), MSSQL (`1433`), MQTT (`1883`), RDP (`3389`), PostgreSQL with LLM (`5432`), VNC (`5900`), Redis (`6379`), MCP (`8000`), HTTP (`8081`, `8888`) and Memcached (`11211`). To expose one of them, uncomment its port in the `beelzebub` service of `~/tpotce/docker-compose.yml`. Make sure the port is not used by another honeypot, `80` and `8080` for example are taken by Galah in the LLM edition.
 
 ### Ollama
 🚨 **CPU-based usage is not recommended**, not even for testing.<br><br>

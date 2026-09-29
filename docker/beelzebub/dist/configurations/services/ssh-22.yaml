@@ -1,0 +1,15 @@
+apiVersion: "v1"
+protocol: "ssh"
+address: ":22"
+description: "SSH interactive LLM"
+commands:
+  - regex: "^(.+)$"
+    plugin: "LLMHoneypot"
+serverVersion: "OpenSSH_7.9p1"
+serverName: "ubuntu"
+passwordRegex: ".*"
+deadlineTimeoutSeconds: 6000
+plugin:
+  llmProvider: "${LLM_PROVIDER}"
+  llmModel: "${LLM_MODEL}"
+  host: "${LLM_HOST}"

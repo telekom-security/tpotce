@@ -1,0 +1,22 @@
+apiVersion: "v1"
+protocol: "tcp"
+wireEncoding: "latin1"
+framing:
+  mode: "length-prefix"
+  lengthOffset: 2
+  lengthSize: 2
+  headerSize: 8
+  bigEndian: true
+  lengthIncludesHeader: true
+address: ":1433"
+description: "Microsoft SQL Server 2019"
+banner: ""
+commands:
+  - regex: "\\x12\\x01"
+    handler: "\x04\x01\x00\x2b\x00\x00\x01\x00\x00\x00\x1a\x00\x06\x01\x00\x20\x00\x01\x02\x00\x21\x00\x01\x03\x00\x22\x00\x04\x04\x00\x26\x00\x01\xff"
+    name: "prelogin_response"
+  - regex: "^(.+)$"
+    handler: ""
+    name: "catch_all"
+deadlineTimeoutSeconds: 30
+serverName: "MSSQL-PROD-01"

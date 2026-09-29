@@ -1,0 +1,20 @@
+apiVersion: "v1"
+protocol: "tcp"
+wireEncoding: "latin1"
+framing:
+  mode: "ber"
+address: ":389"
+description: "Active Directory LDAP Domain Controller"
+banner: ""
+commands:
+  - regex: "\\x30.*\\x60"
+    handler: "0\x84\x00\x00\x00\x10\x02\x01\x01\x61\x84\x00\x00\x00\x07\x0a\x01\x00\x04\x00\x04\x00"
+    name: "ldap_bind_response"
+  - regex: "\\x30.*\\x63"
+    handler: "0\x84\x00\x00\x00\x2a\x02\x01\x02\x65\x84\x00\x00\x00\x21\x04\x00\x30\x84\x00\x00\x00\x00\x30\x84\x00\x00\x00\x00"
+    name: "ldap_search_result_done"
+  - regex: "^(.+)$"
+    handler: ""
+    name: "catch_all"
+deadlineTimeoutSeconds: 30
+serverName: "DC01.corp.local"

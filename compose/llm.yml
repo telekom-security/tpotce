@@ -50,16 +50,32 @@ services:
      - beelzebub_local
     ports:
       - "22:22"
-    #  - "80:80"
+    # Prepared Beelzebub services, uncomment to expose (check for port conflicts)
+    #  - "23:23"
+    #  - "389:389"
+    #  - "445:445"
+    #  - "1433:1433"
+    #  - "1883:1883"
     #  - "2222:2222"
     #  - "3306:3306"
+    #  - "3389:3389"
+    #  - "5432:5432"
+    #  - "5900:5900"
+    #  - "6379:6379"
+    #  - "8000:8000"
+    #  - "8081:8081"
+    #  - "8888:8888"
+    #  - "11211:11211"
+    # 80 and 8080 conflict with Galah
+    #  - "80:80"
     #  - "8080:8080"
     image: ${TPOT_REPO}/beelzebub:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
     environment:
-      LLM_MODEL: ${BEELZEBUB_LLM_MODEL}
-      LLM_HOST: ${BEELZEBUB_LLM_HOST}
-      OLLAMA_MODEL: ${BEELZEBUB_OLLAMA_MODEL}
+      LLM_PROVIDER: ${BEELZEBUB_LLM_PROVIDER:-ollama}
+      LLM_MODEL: ${BEELZEBUB_LLM_MODEL:-openchat}
+      LLM_HOST: ${BEELZEBUB_LLM_HOST:-}
+      OPEN_AI_SECRET_KEY: ${BEELZEBUB_LLM_API_KEY:-}
     read_only: true
     volumes:
      - ${TPOT_DATA_PATH}/beelzebub/key:/opt/beelzebub/configurations/key

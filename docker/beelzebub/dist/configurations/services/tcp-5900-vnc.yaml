@@ -1,0 +1,61 @@
+apiVersion: "v1"
+protocol: "tcp"
+address: ":5900"
+description: "VNC Server (RFB Protocol) with VNC Authentication credential capture"
+wireEncoding: "latin1"
+banner: "RFB 003.008"
+framing:
+  # RFB starts with a fixed 12-byte ProtocolVersion. Commands transition the
+  # same buffered reader to the 1-byte selection and 16-byte auth response.
+  mode: "fixed"
+  fixedSize: 12
+# Only the VNC wire-plugin runs for this service (avoids unrelated plugins
+# scanning VNC traffic). Empty/absent runs no wire plugins.
+wirePlugins:
+  - "vnc"
+commands:
+  # NOTE: handler order matters because commands are matched top-to-bottom and
+  # the first match wins. The 16-byte auth-response regex below is intentionally
+  # broad to capture brute-force attempts; future 16-byte commands must be
+  # placed before it. The 12-byte RFB version and 1-byte security selection do
+  # not overlap with this match.
+
+  # Client echoes the ProtocolVersion → offer a single security type:
+  # VNC Authentication (type 2, the DES challenge-response scheme).
+  - regex: "^RFB 003\\.008\\n$"
+    handler: "\x01\x02"
+    name: "vnc_security_types"
+    nextFraming:
+      mode: "fixed"
+      fixedSize: 1
+
+  # Client sends its 16-byte DES-encrypted response to our challenge.
+  # The vnc wire-plugin extracts it (correlated with the stored challenge);
+  # we reply SecurityResult=failed. RFB 3.8 requires a failure reason after the
+  # 4-byte result: a 4-byte big-endian length followed by the reason text, so a
+  # conformant client (e.g. RealVNC/TigerVNC) shows the auth error rather than
+  # treating the short reply as a malformed packet (a honeypot tell).
+  #   00 00 00 01            SecurityResult = failed
+  #   00 00 00 15            reason length = 21
+  #   "Authentication failed"
+  # Intentionally broad: matches any exactly-16-byte message (see note above).
+  - regex: "(?s)^.{16}$"
+    handler: "\x00\x00\x00\x01\x00\x00\x00\x15Authentication failed"
+    name: "vnc_auth_response"
+    closeAfter: true
+
+  # Client selects security type 2 → send a 16-byte random challenge.
+  # The random patch fills the challenge; the wire-plugin captures it.
+  - regex: "(?s)^\\x02$"
+    handler: "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+    name: "vnc_challenge"
+    patches:
+      - type: "random"
+        offset: 0
+        length: 16
+    nextFraming:
+      mode: "fixed"
+      fixedSize: 16
+
+deadlineTimeoutSeconds: 30
+serverName: "VNC-SERVER-01"

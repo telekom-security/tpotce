@@ -1,0 +1,16 @@
+# T-Pot: the event log (configurations/log/beelzebub.json) is written by the
+# T-Pot trace strategy, the logger below only writes to stdout (docker logs).
+# Prometheus, RabbitMQ and Beelzebub Cloud are disabled.
+core:
+  logging:
+    debug: false
+    debugReportCaller: false
+    logDisableTimestamp: false
+  tracings:
+    rabbit-mq:
+      enabled: false
+      uri: ""
+  beelzebub-cloud:
+    enabled: false
+    uri: ""
+    auth-token: ""

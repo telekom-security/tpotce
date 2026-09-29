@@ -1,0 +1,22 @@
+apiVersion: "v1"
+protocol: "tcp"
+wireEncoding: "latin1"
+framing:
+  mode: "length-prefix"
+  lengthOffset: 2
+  lengthSize: 2
+  headerSize: 4
+  bigEndian: true
+  lengthIncludesHeader: true
+address: ":3389"
+description: "Windows Remote Desktop Service"
+banner: ""
+commands:
+  - regex: "\\x03\\x00"
+    handler: "\x03\x00\x00\x13\x0e\xd0\x00\x00\x12\x34\x00\x02\x01\x08\x00\x02\x00\x00\x00"
+    name: "x224_connection_confirm"
+  - regex: "^(.+)$"
+    handler: "\x03\x00\x00\x09\x02\xf0\x80\x21\x80"
+    name: "rdp_generic_response"
+deadlineTimeoutSeconds: 15
+serverName: "WIN-DC01"

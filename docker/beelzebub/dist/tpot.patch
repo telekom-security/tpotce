@@ -1,0 +1,37 @@
+diff --git a/internal/builder/director.go b/internal/builder/director.go
+index b50eb56..620b8c3 100644
+--- a/internal/builder/director.go
++++ b/internal/builder/director.go
+@@ -28,7 +28,7 @@ func (d *Director) BuildBeelzebub(beelzebubCoreConfigurations *parser.BeelzebubC
+ 		return nil, err
+ 	}
+ 
+-	d.builder.setTraceStrategy(d.standardOutStrategy)
++	d.builder.setTraceStrategy(tpotTraceStrategy(d.standardOutStrategy, beelzebubServicesConfiguration))
+ 
+ 	if beelzebubCoreConfigurations.Core.Tracings.RabbitMQ.Enabled {
+ 		d.builder.setTraceStrategy(d.rabbitMQTraceStrategy)
+diff --git a/internal/parser/configurations_parser.go b/internal/parser/configurations_parser.go
+index 3606600..f0177eb 100644
+--- a/internal/parser/configurations_parser.go
++++ b/internal/parser/configurations_parser.go
+@@ -378,6 +378,7 @@ func (bp configurationsParser) readConfigurationsServices(strict bool) ([]Beelze
+ 			issues = append(issues, ValidationIssue{Level: LevelError, Message: err.Error(), Filename: servicesName})
+ 			continue
+ 		}
++		buf = tpotExpandEnv(buf)
+ 
+ 		beelzebubServiceConfiguration := &BeelzebubServiceConfiguration{}
+ 		err = yaml.Unmarshal(buf, beelzebubServiceConfiguration)
+diff --git a/internal/protocols/strategies/SSH/ssh.go b/internal/protocols/strategies/SSH/ssh.go
+index 8f5dfa6..922658f 100644
+--- a/internal/protocols/strategies/SSH/ssh.go
++++ b/internal/protocols/strategies/SSH/ssh.go
+@@ -203,6 +203,7 @@ func (sshStrategy *SSHStrategy) Init(servConf parser.BeelzebubServiceConfigurati
+ 				return matched
+ 			},
+ 		}
++		tpotAddHostKey(server)
+ 		err := server.ListenAndServe()
+ 		if err != nil {
+ 			log.Errorf("error during init SSH Protocol: %s", err.Error())

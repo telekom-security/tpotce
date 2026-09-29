@@ -1,0 +1,16 @@
+apiVersion: "v1"
+protocol: "http"
+address: ":8081"
+description: "HTTP method example"
+commands:
+  - regex: "^/hello$"
+    methods: [GET]
+    handler: "Hello!"
+    statusCode: 200
+  - regex: "^/submit$"
+    methods: [POST]
+    handler: "Submitted!"
+    statusCode: 200
+fallbackCommand:
+  handler: "404 Not Found!"
+  statusCode: 404
