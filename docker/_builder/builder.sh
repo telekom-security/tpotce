@@ -110,6 +110,14 @@ else
     echo -e " [${GREEN}OK${NC}]"
 fi
 
+# Ensure QEMU is set up for cross-platform builds, before the platforms are checked
+echo -n "Ensuring QEMU is configured for cross-platform builds..."
+if docker run --rm --privileged tonistiigi/binfmt --install all > /dev/null 2>&1; then
+    echo -e " [${GREEN}OK${NC}]"
+else
+    echo -e " [${RED}FAIL${NC}]"
+fi
+
 # Ensure arm64 and amd64 platforms are active
 echo -n "Ensuring 'mybuilder' supports linux/arm64 and linux/amd64..."
 
@@ -120,22 +128,19 @@ if [[ "$active_platforms" == *"linux/arm64"* && "$active_platforms" == *"linux/a
     echo -e " [${GREEN}OK${NC}]"
 else
     echo
-    echo -n "  Enabling platforms linux/arm64 and linux/amd64..."
-    if docker buildx create --name mybuilder --driver docker-container --use --platform linux/amd64,linux/arm64 >/dev/null 2>&1 && \
-       docker buildx inspect mybuilder --bootstrap >/dev/null 2>&1; then
+    # BuildKit only detects the QEMU emulators present when it starts, so a builder
+    # started before they were registered has to be restarted - creating it
+    # again fails, it already exists
+    echo -n "  Restarting 'mybuilder' to enable linux/arm64 and linux/amd64..."
+    if docker buildx stop mybuilder >/dev/null 2>&1 && \
+       docker buildx inspect mybuilder --bootstrap >/dev/null 2>&1 && \
+       active_platforms=$(docker buildx inspect mybuilder | grep -oP '(?<=Platforms: ).*') && \
+       [[ "$active_platforms" == *"linux/arm64"* && "$active_platforms" == *"linux/amd64"* ]]; then
         echo -e " [${GREEN}OK${NC}]"
     else
         echo -e " [${RED}FAIL${NC}]"
         exit 1
     fi
-fi
-
-# Ensure QEMU is set up for cross-platform builds
-echo -n "Ensuring QEMU is configured for cross-platform builds..."
-if docker run --rm --privileged tonistiigi/binfmt --install all > /dev/null 2>&1; then
-    echo -e " [${GREEN}OK${NC}]"
-else
-    echo -e " [${RED}FAIL${NC}]"
 fi
 
 # Apply bandwidth limit only if pushing images
@@ -168,18 +173,21 @@ mkdir -p log
 services=$(docker compose config --services | sort)
 
 # Loop through each service to build
+# Plain progress and both streams in the log: builds run in parallel, and with
+# only stdout redirected compose picks tty progress for a file and fails with
+# "failed to get console" (docker/compose#14182)
 echo $services | tr ' ' '\n' | xargs -I {} -P $PARALLELBUILDS bash -c '
     echo "Building image: {}" && \
-    build_cmd="docker compose build {}" && \
+    build_cmd="docker compose --progress plain build {}" && \
     if '$PUSH_IMAGES'; then \
         build_cmd="$build_cmd --push"; \
     fi && \
     if '$NO_CACHE'; then \
         build_cmd="$build_cmd --no-cache"; \
     fi && \
-    eval "$build_cmd 2>&1 > log/{}.log" && \
+    eval "$build_cmd > log/{}.log 2>&1 < /dev/null" && \
     echo -e "Image {}: ['$GREEN'OK'$NC']" || \
-    echo -e "Image {}: ['$RED'FAIL'$NC']"
+    echo -e "Image {}: ['$RED'FAIL'$NC'] (see log/{}.log)"
 '
 
 # Remove bandwidth limit if it was applied
