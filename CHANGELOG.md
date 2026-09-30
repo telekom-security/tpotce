@@ -25,6 +25,7 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 * **Suricata** has been updated to 8.0.7 (Alpine 3.24 package). The rules are now cached in `data/suricata/rules` and updated once in 24 hours (`SURICATA_RULES_UPDATE=off` never downloads them), a failed update or a start without internet access uses the latest cached rules, and the capture filter keeps excluding the T-Pot ports without DNS.
 * **NSM services** (Suricata, P0f, Fatt, Satori, Glutton) capture on the interface of the route to the internet, so hosts with more than one default route no longer end up in a restart loop. `TPOT_CAPTURE_INTERFACE` in `.env` sets the interface manually.
 * **Update Script** adds settings that are new in `env.example` to an existing `.env` and comments out those that are no longer used.
+* **T-Pot Init** validates all settings of `.env` and reports every invalid one at once before T-Pot starts. Settings of a service are only checked if it runs in the active edition, `TPOT_CAPTURE_INTERFACE` and the Attack Map time zone are checked against the host.
 * **Nginx** has been updated to 1.28.3 (Alpine 3.23 package).
 * **Cyberchef** has been updated to 11.0.0.
 * **Galah** has been updated to 1.1.1 and is built from upstream again instead of the T-Pot fork. The log format stays as it was, failed LLM responses now show up in the Galah dashboard, and all LLM settings (API key, temperature, GCP Vertex AI) can be set in `.env`.
@@ -56,6 +57,9 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 
 ### Galah
 - In Elasticsearch the request and response fields of Galah are now `http_request.*` and `http_response.*` (i.e. `http_request.method`, `http_request.requestURI`), as ConPot and Miniprint log `request` / `response` as text and the daily index could only hold one of them. Import the Kibana objects of this release to get the updated Galah dashboard, older events keep the previous field names.
+
+### T-Pot Config File
+- `TPOT_PERSISTENCE` accepts only `on` / `off`, `TPOT_BLACKHOLE` and `TPOT_ATTACKMAP_TEXT` only `ENABLED` / `DISABLED`. Other values such as `true` passed the check before but were not acted on; with `TPOT_PERSISTENCE=true` the honeypot logs were deleted on every start. `update.sh` rewrites these values, T-Pot does not start with any other value.
 
 ### Beelzebub
 - The LLM settings in `.env` are now `BEELZEBUB_LLM_PROVIDER` (`ollama` or `openai`), `BEELZEBUB_LLM_MODEL` (the model name, i.e. `openchat` or `gpt-4o`), `BEELZEBUB_LLM_HOST` and `BEELZEBUB_LLM_API_KEY`. `update.sh` migrates the previous settings (`BEELZEBUB_LLM_MODEL: "ollama"` / `"gpt4-o"`, `BEELZEBUB_OLLAMA_MODEL`), a `docker-compose.yml` of your own needs the new `environment` block of the `beelzebub` service from `compose/llm.yml`.

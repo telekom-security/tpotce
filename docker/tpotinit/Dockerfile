@@ -28,6 +28,7 @@ RUN apk --no-cache -U upgrade && \
         openssl \
         pigz \
         tar \
+        tzdata \
         uuidgen \
         yq-go && \
 #

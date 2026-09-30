@@ -1066,6 +1066,7 @@ function fuRESTORE () {
 	    echo "###### $myBLUE""TPOT_REPO dtagdevsec -> ${myNEWREPO}, which avoids the Docker Hub rate limits.""$myWHITE"
 	fi
 	fuMIGRATE_BEELZEBUB_ENV "$HOME/tpotce/.env"
+	fuMIGRATE_TOGGLES "$HOME/tpotce/.env"
 	# After the migrations, which look for the settings of the previous release.
 	# A compose file of its own (the one of the archive) may use settings env.example
 	# does not know, those are kept.
@@ -1136,6 +1137,44 @@ function fuMIGRATE_BEELZEBUB_ENV () {
 	# cat keeps the owner and the mode of .env, it holds credentials
 	cat "${myENVFILE}.beelzebub" > "${myENVFILE}" && rm -f "${myENVFILE}.beelzebub"
 	echo "###### $myBLUE""Beelzebub settings moved to BEELZEBUB_LLM_PROVIDER=${myPROVIDER}, BEELZEBUB_LLM_MODEL=${myMODEL}.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+}
+
+# tpotinit accepts only the values the scripts act on. Synonyms that passed its
+# validation before are rewritten once, i.e. TPOT_PERSISTENCE=true did not keep the
+# logs, only "on" does. Unknown values are reported, tpotinit refuses them.
+function fuMIGRATE_TOGGLES () {
+	local myENVFILE="$1" myKEY myOLD myNEW
+	for myKEY in TPOT_PERSISTENCE TPOT_BLACKHOLE TPOT_ATTACKMAP_TEXT;
+	  do
+	    myOLD=$(fuENV_VALUE "${myENVFILE}" "${myKEY}")
+	    [ -z "${myOLD}" ] && continue
+	    case "${myKEY}:$(echo "${myOLD}" | tr '[:upper:]' '[:lower:]')" in
+	      TPOT_PERSISTENCE:on|TPOT_PERSISTENCE:true|TPOT_PERSISTENCE:enabled|TPOT_PERSISTENCE:yes)
+	        myNEW="on" ;;
+	      TPOT_PERSISTENCE:off|TPOT_PERSISTENCE:false|TPOT_PERSISTENCE:disabled|TPOT_PERSISTENCE:no)
+	        myNEW="off" ;;
+	      *:on|*:true|*:enabled|*:yes)
+	        myNEW="ENABLED" ;;
+	      *:off|*:false|*:disabled|*:no)
+	        myNEW="DISABLED" ;;
+	      *)
+	        echo "###### $myBLUE""${myKEY}=${myOLD} is not a valid value, T-Pot will not start until it is set as described in env.example.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	        continue ;;
+	    esac
+	    [ "${myOLD}" == "${myNEW}" ] && continue
+	    sed -i -E "s/^(${myKEY}[[:space:]]*[:=][[:space:]]*)[\"']?${myOLD}[\"']?[[:space:]]*$/\1${myNEW}/" "${myENVFILE}"
+	    if [ "$(fuENV_VALUE "${myENVFILE}" "${myKEY}")" != "${myNEW}" ];
+	      then
+	        echo "###### $myBLUE""Could not change ${myKEY}=${myOLD} to ${myNEW}, please set it in .env.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	        continue
+	    fi
+	    if [ "${myKEY}" == "TPOT_PERSISTENCE" ] && [ "${myNEW}" == "on" ];
+	      then
+	        echo "###### $myBLUE""TPOT_PERSISTENCE ${myOLD} -> on, with ${myOLD} the logs were deleted on every start, only \"on\" keeps them.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	      else
+	        echo "###### $myBLUE""${myKEY} ${myOLD} -> ${myNEW}.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	    fi
+	done
 }
 
 # Keys of a .env style file in file order, written as KEY=value or KEY: "value".

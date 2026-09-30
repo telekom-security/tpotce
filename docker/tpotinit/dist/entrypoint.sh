@@ -26,91 +26,115 @@ cleanup() {
 }
 trap cleanup SIGTERM
 
+# The .env validation collects all errors and aborts once, after all checks
+myENV_ERRORS=()
+myENV_WARNINGS=0
+
+fuENV_ERROR() {
+    myENV_ERRORS+=("$1: $2")
+}
+
+fuENV_WARN() {
+    echo "# Warning: $1: $2"
+    myENV_WARNINGS=$(( myENV_WARNINGS + 1 ))
+}
+
+# Value of a variable by its name
+fuVAL() {
+    printf '%s' "${!1}"
+}
+
 # Function to check if a variable is set, not empty
 check_var() {
-    local var_name="$1"
-    local var_value=$(eval echo \$$var_name)
-
-    # Check if variable is set and not empty
-    if [[ -z "$var_value" ]];
+    if [[ -z "$(fuVAL "$1")" ]];
       then
-        echo "# Error: $var_name is not set or empty. Please check T-Pot .env config."
-        echo
-        echo "# Aborting"
-        exit 1
+        fuENV_ERROR "$1" "is not set or empty."
+        return 1
     fi
 }
 
 # Function to check for potentially unsafe characters in most variables
 check_safety() {
-    local var_name="$1"
-    local var_value=$(eval echo \$$var_name)
-
-    # General safety check for most variables
-    if [[ $var_value =~ [^a-zA-Z0-9_/.:-] ]];
+    if [[ "$(fuVAL "$1")" =~ [^a-zA-Z0-9_/.:-] ]];
       then
-        echo "# Error: Unsafe characters detected in $var_name. Please check T-Pot .env config."
-        echo
-        echo "# Aborting"
-        exit 1
+        fuENV_ERROR "$1" "contains unsafe characters."
+        return 1
     fi
 }
 
-validate_base64() {
-    local myCHECK=$1
-    # base64 pattern match
-    for i in ${myCHECK};
+# Exact match against the allowed values, $1 = variable, $2... = allowed values
+fuCHOICE() {
+    local myVAR="$1" myVALUE myALLOWED
+    shift
+    myVALUE="$(fuVAL "${myVAR}")"
+    for myALLOWED in "$@";
       do
-        if [[ $i =~ ^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$ ]];
+        [[ "${myVALUE}" == "${myALLOWED}" ]] && return 0
+    done
+    fuENV_ERROR "${myVAR}" "invalid value \"${myVALUE}\", allowed: $*."
+    return 1
+}
+
+# True if the active compose file runs one of the services
+fuCOMPOSE_HAS() {
+    local myPATTERN
+    myPATTERN="$(IFS='|'; echo "$*")"
+    grep -qE "^  (${myPATTERN}):" "${COMPOSE}" 2>/dev/null
+}
+
+# Every entry has to be base64 of "name:secret", $1 = variable, $2 = htpasswd (the
+# secret is a htpasswd hash, as genuser.sh creates it) | basic (a plain password,
+# as for the basic auth of a SENSOR). Only the names are shown.
+fuCREDENTIALS() {
+    local myVAR="$1" myMODE="$2" myENTRY myLINE
+    local myBASE64='^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$'
+    local myHTPASSWD='^([^:[:space:]]+):(\$apr1\$|\$2[aby]\$|\$5\$|\$6\$|\{SHA\})'
+    local myBASIC='^([^:[:space:]]+):.+'
+    for myENTRY in $(fuVAL "${myVAR}");
+      do
+        if ! [[ ${myENTRY} =~ ${myBASE64} ]];
           then
-            echo -n "Found valid user: "
-            echo $i | base64 -d -w0 | cut -f1 -d":"
+            fuENV_ERROR "${myVAR}" "an entry is not a valid base64 string."
+            continue
+        fi
+        myLINE="$(echo -n "${myENTRY}" | base64 -d 2>/dev/null | tr -d '\n')"
+        if [ "${myMODE}" == "htpasswd" ] && [[ ${myLINE} =~ ${myHTPASSWD} ]];
+          then
+            echo "Found valid user in ${myVAR}: ${BASH_REMATCH[1]}"
+          elif [ "${myMODE}" == "basic" ] && [[ ${myLINE} =~ ${myBASIC} ]];
+            then
+              echo "Found valid user in ${myVAR}: ${BASH_REMATCH[1]}"
+          elif [ "${myMODE}" == "htpasswd" ];
+            then
+              fuENV_ERROR "${myVAR}" "an entry is not a htpasswd user (name:hash), please create it with genuser.sh."
           else
-	        echo "$i is not a valid base64 string. Please check T-Pot .env config."
-	        echo
-	        echo "# Aborting"
-	        exit 1
-	    fi
+            fuENV_ERROR "${myVAR}" "an entry is not base64 of name:password."
+        fi
     done
 }
 
-# Function to validate specific variable formats
-validate_format() {
-    local var_name="$1"
-    local var_value=$(eval echo \$$var_name)
-
-    case "$var_name" in
-        TPOT_BLACKHOLE|TPOT_PERSISTENCE|TPOT_ATTACKMAP_TEXT)
-            if ! [[ $var_value =~ ^(ENABLED|DISABLED|on|off|true|false)$ ]];
-              then
-                echo "# Error: Invalid value for $var_name. Expected ENABLED/DISABLED, on/off, true/false. Please check T-Pot .env config."
-		        echo
-		        echo "# Aborting"
-                exit 1
-            fi
-            ;;
-    esac
+# IPv4, IPv6 or a domain name
+fuHOST() {
+    local myVAR="$1" myCHECK
+    myCHECK="$(fuVAL "$1")"
+    local myIPV4='^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$'
+    local myIPV6='^[0-9A-Fa-f]{0,4}(:[0-9A-Fa-f]{0,4}){2,7}$'
+    local myDOMAIN='^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$'
+    if [[ ${myCHECK} =~ ${myIPV4} ]] || [[ ${myCHECK} =~ ${myIPV6} ]] || [[ ${myCHECK} =~ ${myDOMAIN} ]];
+      then
+        echo "${myVAR}: ${myCHECK} is a valid IP address or domain name."
+      else
+        fuENV_ERROR "${myVAR}" "\"${myCHECK}\" is not a valid IPv4 / IPv6 address or domain name."
+    fi
 }
 
-validate_ip_or_domain() {
-    local myCHECK=$1
-
-    # Regular expression for validating IPv4 addresses
-    local ipv4Regex='^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$'
-
-    # Regular expression for validating domain names (including subdomains)
-    local domainRegex='^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$'
-
-    # Check if TPOT_HIVE_IP matches IPv4 or domain name
-    if [[ ${myCHECK} =~ $ipv4Regex ]]; then
-        echo "${myCHECK} is a valid IPv4 address."
-    elif [[ ${myCHECK} =~ $domainRegex ]]; then
-        echo "${myCHECK} is a valid domain name."
-    else
-        echo "# Error: $myCHECK is not a valid IPv4 address or domain name. Please check T-Pot .env config."
-        echo
-        echo "# Aborting"
-        exit 1
+# Empty or an http(s) URL
+fuURL() {
+    local myVALUE
+    myVALUE="$(fuVAL "$1")"
+    if [ -n "${myVALUE}" ] && [[ ! ${myVALUE} =~ ^https?://[^[:space:]]+$ ]];
+      then
+        fuENV_ERROR "$1" "\"${myVALUE}\" is not an http(s) URL."
     fi
 }
 
@@ -209,45 +233,124 @@ if [ "${myOSTYPE}" == "" ] && [ "${TPOT_OSTYPE}" != "linux" ];
     exit 1
 fi
 
-# Validate environment variables
-for var in TPOT_BLACKHOLE TPOT_PERSISTENCE TPOT_ATTACKMAP_TEXT TPOT_ATTACKMAP_TEXT_TIMEZONE TPOT_REPO TPOT_VERSION TPOT_PULL_POLICY TPOT_OSTYPE;
+# Validate environment variables, all errors are collected and reported at once
+echo
+echo "# Validating the T-Pot .env config ..."
+echo
+for var in TPOT_ATTACKMAP_TEXT_TIMEZONE TPOT_REPO TPOT_VERSION TPOT_PULL_POLICY TPOT_OSTYPE;
   do
-    check_var "$var"
-    check_safety "$var"
-    validate_format "$var"
+    check_var "$var" && check_safety "$var"
 done
+# Only the values the scripts and services actually act on, anything else was
+# silently ignored before (i.e. TPOT_PERSISTENCE=true deleted the logs on every start)
+fuCHOICE TPOT_TYPE HIVE SENSOR
+fuCHOICE TPOT_PERSISTENCE on off
+fuCHOICE TPOT_BLACKHOLE ENABLED DISABLED
+fuCHOICE TPOT_ATTACKMAP_TEXT ENABLED DISABLED
+if [ -n "${TPOT_ATTACKMAP_TEXT_TIMEZONE}" ] && \
+   { [[ "${TPOT_ATTACKMAP_TEXT_TIMEZONE}" == *..* ]] || [ ! -f "/usr/share/zoneinfo/${TPOT_ATTACKMAP_TEXT_TIMEZONE}" ]; };
+  then
+    fuENV_ERROR TPOT_ATTACKMAP_TEXT_TIMEZONE "\"${TPOT_ATTACKMAP_TEXT_TIMEZONE}\" is not a known time zone (i.e. UTC, Europe/Berlin)."
+fi
+if [ -n "${TPOT_PULL_POLICY}" ] && [[ ! "${TPOT_PULL_POLICY}" =~ ^(always|missing|never|build|daily|weekly|every_[0-9a-z]+)$ ]];
+  then
+    fuENV_ERROR TPOT_PULL_POLICY "invalid value \"${TPOT_PULL_POLICY}\", allowed: always missing never build daily weekly every_<duration>."
+fi
 
 # Validate TPOT_PERSISTENCE_CYCLES
 validate_tpot_persistence_cycles
 
 if [ "${TPOT_TYPE}" == "HIVE" ];
   then
-    # No $ for check_var
-    check_var "WEB_USER"
-    validate_base64 "${WEB_USER}"
+    check_var "WEB_USER" && fuCREDENTIALS WEB_USER htpasswd
     TPOT_HIVE_USER=""
     TPOT_HIVE_IP=""
     if [ "${LS_WEB_USER}" == "" ];
       then
-        echo "# Warning: No LS_WEB_USER detected! T-Pots of type SENSOR will not be able to submit logs to this HIVE."
-        echo
+        fuENV_WARN LS_WEB_USER "not set, T-Pots of type SENSOR will not be able to submit logs to this HIVE."
       else
-        validate_base64 "${LS_WEB_USER}"
+        fuCREDENTIALS LS_WEB_USER htpasswd
     fi
 fi
 if [ "${TPOT_TYPE}" == "SENSOR" ];
- then
-   # No $ for check_var
-   check_var "TPOT_HIVE_USER"
-   check_var "TPOT_HIVE_IP"
-   validate_base64 "$TPOT_HIVE_USER"
-   validate_ip_or_domain "$TPOT_HIVE_IP"
-   WEB_USER=""
+  then
+    check_var "TPOT_HIVE_USER" && fuCREDENTIALS TPOT_HIVE_USER basic
+    check_var "TPOT_HIVE_IP" && fuHOST TPOT_HIVE_IP
+    # Empty uses the default of Logstash (full)
+    [ -n "${LS_SSL_VERIFICATION}" ] && fuCHOICE LS_SSL_VERIFICATION full none
+    WEB_USER=""
+fi
+
+# Settings of services are only checked if the active compose file runs them
+if fuCOMPOSE_HAS suricata p0f fatt satori glutton && [ -n "${TPOT_CAPTURE_INTERFACE}" ];
+  then
+    if [[ ! "${TPOT_CAPTURE_INTERFACE}" =~ ^[A-Za-z0-9_.:@-]{1,15}$ ]];
+      then
+        fuENV_ERROR TPOT_CAPTURE_INTERFACE "is not a valid interface name."
+      elif ! ip link show dev "${TPOT_CAPTURE_INTERFACE}" > /dev/null 2>&1;
+        then
+          fuENV_ERROR TPOT_CAPTURE_INTERFACE "interface \"${TPOT_CAPTURE_INTERFACE}\" does not exist on this host, available: $(ip -o link show | awk -F': ' '{ sub(/@.*/, "", $2); print $2 }' | grep -vE '^(lo|docker|br-|veth)' | tr '\n' ' ')"
+    fi
+fi
+if fuCOMPOSE_HAS suricata;
+  then
+    if [ -n "${OINKCODE}" ] && [ "${OINKCODE}" != "OPEN" ] && [[ ! "${OINKCODE}" =~ ^[A-Za-z0-9]+$ ]];
+      then
+        fuENV_ERROR OINKCODE "has to be OPEN or your Oinkcode (letters and digits only)."
+    fi
+    [ -n "${SURICATA_RULES_UPDATE}" ] && fuCHOICE SURICATA_RULES_UPDATE on off
+fi
+if fuCOMPOSE_HAS beelzebub;
+  then
+    [ -n "${BEELZEBUB_LLM_PROVIDER}" ] && fuCHOICE BEELZEBUB_LLM_PROVIDER ollama openai
+    fuURL BEELZEBUB_LLM_HOST
+    if [ "${BEELZEBUB_LLM_PROVIDER}" == "openai" ] && [ -z "${BEELZEBUB_LLM_API_KEY}" ];
+      then
+        fuENV_WARN BEELZEBUB_LLM_API_KEY "not set, the openai provider needs one."
+    fi
+fi
+if fuCOMPOSE_HAS galah;
+  then
+    myGALAH="${GALAH_LLM_PROVIDER:-ollama}"
+    [ -n "${GALAH_LLM_PROVIDER}" ] && fuCHOICE GALAH_LLM_PROVIDER ollama openai anthropic googleai gcp-vertex cohere
+    fuURL GALAH_LLM_SERVER_URL
+    if [ "${myGALAH}" == "ollama" ] && [ -z "${GALAH_LLM_SERVER_URL}" ];
+      then
+        fuENV_ERROR GALAH_LLM_SERVER_URL "is required for the ollama provider."
+    fi
+    if [ -n "${GALAH_LLM_TEMPERATURE}" ] && \
+       { [[ ! "${GALAH_LLM_TEMPERATURE}" =~ ^[0-9]+(\.[0-9]+)?$ ]] || \
+         awk -v myT="${GALAH_LLM_TEMPERATURE}" 'BEGIN { exit !(myT > 2) }'; };
+      then
+        fuENV_ERROR GALAH_LLM_TEMPERATURE "has to be a number from 0 to 2."
+    fi
+    case "${myGALAH}" in
+      openai|anthropic|googleai|cohere)
+        [ -z "${GALAH_LLM_API_KEY}" ] && fuENV_ERROR GALAH_LLM_API_KEY "is required for the ${myGALAH} provider."
+        ;;
+      gcp-vertex)
+        [ -z "${GALAH_LLM_CLOUD_LOCATION}" ] && fuENV_ERROR GALAH_LLM_CLOUD_LOCATION "is required for the gcp-vertex provider."
+        [ -z "${GALAH_LLM_CLOUD_PROJECT}" ] && fuENV_ERROR GALAH_LLM_CLOUD_PROJECT "is required for the gcp-vertex provider."
+        ;;
+    esac
 fi
 echo
 
+if [ "${#myENV_ERRORS[@]}" -gt 0 ];
+  then
+    for myERROR in "${myENV_ERRORS[@]}";
+      do
+        echo "# Error: ${myERROR}"
+    done
+    echo
+    echo "# ${#myENV_ERRORS[@]} error(s) found. Please check T-Pot .env config."
+    echo
+    echo "# Aborting"
+    exit 1
+fi
+
 echo
-echo "# All settings seem to be valid."
+echo "# All settings seem to be valid.$([ "${myENV_WARNINGS}" -gt 0 ] && echo " ${myENV_WARNINGS} warning(s), see above.")"
 echo
 
 # Data folder management
