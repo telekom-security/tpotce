@@ -333,9 +333,18 @@ if [ "${TPOT_OSTYPE}" == "linux" ];
     echo
     echo "# Get IF, disable offloading, enable promiscious mode for NSM services ..."
     echo
-    ethtool --offload $(/sbin/ip address | grep "^2: " | awk '{ print $2 }' | tr -d [:punct:]) rx off tx off
-    ethtool -K $(/sbin/ip address | grep "^2: " | awk '{ print $2 }' | tr -d [:punct:]) gso off gro off
-    ip link set $(/sbin/ip address | grep "^2: " | awk '{ print $2 }' | tr -d [:punct:]) promisc on
+    # Same detection as in the NSM containers (TPOT_CAPTURE_INTERFACE or the route
+    # to the internet), so the settings apply to the interface they capture on.
+    # Without an interface only the NSM services fail, T-Pot itself keeps running.
+    if myIF="$(sh /opt/tpot/bin/capture-if.sh)";
+      then
+        echo "Capture interface: ${myIF}"
+        ethtool --offload "${myIF}" rx off tx off
+        ethtool -K "${myIF}" gso off gro off
+        ip link set "${myIF}" promisc on
+      else
+        echo "# Warning: No capture interface found, skipping offload / promiscuous mode settings. NSM services will not start."
+    fi
     echo
     echo "# Adding firewall rules ..."
     echo

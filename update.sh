@@ -1066,6 +1066,11 @@ function fuRESTORE () {
 	    echo "###### $myBLUE""TPOT_REPO dtagdevsec -> ${myNEWREPO}, which avoids the Docker Hub rate limits.""$myWHITE"
 	fi
 	fuMIGRATE_BEELZEBUB_ENV "$HOME/tpotce/.env"
+	# After the migrations, which look for the settings of the previous release.
+	# A compose file of its own (the one of the archive) may use settings env.example
+	# does not know, those are kept.
+	fuCOMPOSE_FROM_ARCHIVE || true
+	fuMERGE_ENV_KEYS "$HOME/tpotce/.env" "$HOME/tpotce/env.example" "$HOME/tpotce/docker-compose.yml" "${myTMPDIR}/docker-compose.yml"
 }
 
 # Value of a .env setting, written as KEY=value or KEY: "value".
@@ -1131,6 +1136,104 @@ function fuMIGRATE_BEELZEBUB_ENV () {
 	# cat keeps the owner and the mode of .env, it holds credentials
 	cat "${myENVFILE}.beelzebub" > "${myENVFILE}" && rm -f "${myENVFILE}.beelzebub"
 	echo "###### $myBLUE""Beelzebub settings moved to BEELZEBUB_LLM_PROVIDER=${myPROVIDER}, BEELZEBUB_LLM_MODEL=${myMODEL}.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+}
+
+# Keys of a .env style file in file order, written as KEY=value or KEY: "value".
+function fuENV_KEYS () {
+	grep -oE '^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*[:=]' "$1" 2>/dev/null | sed -E 's/[[:space:]]*[:=]$//' | awk '!mySEEN[$0]++'
+}
+
+# A restored .env only knows the settings of its release. Settings that are new in
+# env.example are added with their comments and defaults, settings env.example no
+# longer knows are commented out, unless a compose file still uses them. Existing
+# values are never changed, a second run changes nothing.
+# $1 = .env, $2 = env.example, $3... = compose files to check for references
+function fuMERGE_ENV_KEYS () {
+	local myENVFILE="$1" myEXAMPLE="$2"
+	shift 2
+	local myVERSION myMARKER myKEY myKEYLINE myTARGET myCOMPOSE myADDED="" myOBSOLETE="" myKEPT=""
+	[ -f "${myEXAMPLE}" ] && [ -f "${myENVFILE}" ] || return 0
+	myVERSION=$(grep -E "^TPOT_VERSION=" "${myEXAMPLE}" | tail -1 | cut -d= -f2-)
+	myMARKER=$(grep -n "^# NEVER MAKE CHANGES" "${myEXAMPLE}" | head -1 | cut -d: -f1)
+	: > "${myENVFILE}.user"
+	: > "${myENVFILE}.system"
+	for myKEY in $(fuENV_KEYS "${myEXAMPLE}");
+	  do
+	    fuENV_KEYS "${myENVFILE}" | grep -qx "${myKEY}" && continue
+	    case "${myKEY}" in
+	      WEB_USER|LS_WEB_USER|TPOT_HIVE_USER)
+	        # Credentials are never set to the example values
+	        echo "###### $myBLUE""${myKEY} is missing in .env, please set it as described in env.example.""$myWHITE"
+	        continue
+	        ;;
+	    esac
+	    myKEYLINE=$(grep -nE "^${myKEY}[[:space:]]*[:=]" "${myEXAMPLE}" | head -1 | cut -d: -f1)
+	    myTARGET="${myENVFILE}.user"
+	    [ -n "${myMARKER}" ] && [ "${myKEYLINE}" -gt "${myMARKER}" ] && myTARGET="${myENVFILE}.system"
+	    # The key line and the comments right above it, without the section rulers
+	    awk -v myAT="${myKEYLINE}" '
+	      { myLINE[NR] = $0 }
+	      END {
+	        myFIRST = myAT
+	        while (myFIRST > 1 && myLINE[myFIRST - 1] ~ /^#/ && myLINE[myFIRST - 1] !~ /^####/) myFIRST--
+	        print ""
+	        for (i = myFIRST; i <= myAT; i++) print myLINE[i]
+	      }' "${myEXAMPLE}" >> "${myTARGET}"
+	    myADDED="${myADDED} ${myKEY}"
+	done
+	for myKEY in $(fuENV_KEYS "${myENVFILE}");
+	  do
+	    fuENV_KEYS "${myEXAMPLE}" | grep -qx "${myKEY}" && continue
+	    for myCOMPOSE in "$@";
+	      do
+	        if [ -f "${myCOMPOSE}" ] && grep -qE "\\\$\\{${myKEY}([:}-]|\$)" "${myCOMPOSE}";
+	          then
+	            myKEPT="${myKEPT} ${myKEY}"
+	            continue 2
+	        fi
+	    done
+	    myOBSOLETE="${myOBSOLETE} ${myKEY}"
+	done
+	if [ -n "${myADDED}" ] || [ -n "${myOBSOLETE}" ];
+	  then
+	    # New settings go in front of the ruler above "# NEVER MAKE CHANGES", system settings to the end
+	    if awk -v myUSERFILE="${myENVFILE}.user" -v mySYSTEMFILE="${myENVFILE}.system" -v myOBSOLETE=" ${myOBSOLETE} " -v myVERSION="${myVERSION}" '
+	      function fuBLOCK(myFILE,  myL, myN) {
+	        myN = 0
+	        while ((getline myL < myFILE) > 0) { if (!myN++) printf "# Added by update.sh for T-Pot %s", myVERSION; print (myN == 1 && myL == "" ? "" : myL) }
+	        close(myFILE)
+	        if (myN) print ""
+	      }
+	      function fuOBSOLETE(myL,  myKEY) {
+	        if (myL !~ /^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*[:=]/) return 0
+	        myKEY = myL
+	        sub(/[[:space:]]*[:=].*/, "", myKEY)
+	        return index(myOBSOLETE, " " myKEY " ")
+	      }
+	      { myLINE[NR] = $0 }
+	      /^# NEVER MAKE CHANGES/ && !myAT { myAT = (NR > 1 && myLINE[NR - 1] ~ /^####/) ? NR - 1 : NR }
+	      END {
+	        if (!myAT) myAT = NR + 1
+	        for (i = 1; i <= NR; i++) {
+	          if (i == myAT) fuBLOCK(myUSERFILE)
+	          if (fuOBSOLETE(myLINE[i])) print "# " myLINE[i] "  # obsolete since T-Pot " myVERSION ", commented out by update.sh"
+	          else print myLINE[i]
+	        }
+	        if (myAT > NR) fuBLOCK(myUSERFILE)
+	        fuBLOCK(mySYSTEMFILE)
+	      }' "${myENVFILE}" > "${myENVFILE}.merge";
+	      then
+	        # cat keeps the owner and the mode of .env, it holds credentials
+	        cat "${myENVFILE}.merge" > "${myENVFILE}"
+	        [ -n "${myADDED}" ] && echo "###### $myBLUE""New settings added to .env with their defaults:${myADDED}""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	        [ -n "${myOBSOLETE}" ] && echo "###### $myBLUE""Settings no longer used, commented out in .env:${myOBSOLETE}""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	      else
+	        echo "###### $myBLUE""Could not add the new settings to ${myENVFILE}, please compare it with env.example.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	    fi
+	fi
+	[ -n "${myKEPT}" ] && echo "###### $myBLUE""Not in env.example, kept as a compose file uses them:${myKEPT}""$myWHITE"
+	rm -f "${myENVFILE}.user" "${myENVFILE}.system" "${myENVFILE}.merge"
+	return 0
 }
 
 # The docker-compose.yml as it was before the update, taken from the archive. It is

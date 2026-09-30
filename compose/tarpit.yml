@@ -163,6 +163,8 @@ services:
     depends_on:
       tpotinit:
         condition: service_healthy
+    environment:
+     - TPOT_CAPTURE_INTERFACE=${TPOT_CAPTURE_INTERFACE:-} # Empty: automatic (value provided by T-Pot .env)
     network_mode: "host"
     cap_add:
      - NET_ADMIN
@@ -180,6 +182,8 @@ services:
     depends_on:
       tpotinit:
         condition: service_healthy
+    environment:
+     - TPOT_CAPTURE_INTERFACE=${TPOT_CAPTURE_INTERFACE:-} # Empty: automatic (value provided by T-Pot .env)
     network_mode: "host"
     image: ${TPOT_REPO}/p0f:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
@@ -194,6 +198,8 @@ services:
     depends_on:
       tpotinit:
         condition: service_healthy
+    environment:
+     - SATORI_INTERFACE=${TPOT_CAPTURE_INTERFACE:-} # Empty: automatic (value provided by T-Pot .env)
     network_mode: "host"
     cap_add:
      - NET_ADMIN
@@ -214,6 +220,8 @@ services:
         condition: service_healthy
     environment:
      - OINKCODE=${OINKCODE:-OPEN} # Default to OPEN if unset or NULL (value provided by T-Pot .env)
+     - SURICATA_RULES_UPDATE=${SURICATA_RULES_UPDATE:-on} # Rules are cached for 24h, off: never download (value provided by T-Pot .env)
+     - TPOT_CAPTURE_INTERFACE=${TPOT_CAPTURE_INTERFACE:-} # Empty: automatic (value provided by T-Pot .env)
     # Loading external Rules from URL
     # - FROMURL="https://username:password@yoururl.com|https://username:password@otherurl.com"
     network_mode: "host"
@@ -225,6 +233,7 @@ services:
     pull_policy: ${TPOT_PULL_POLICY}
     volumes:
      - ${TPOT_DATA_PATH}/suricata/log:/var/log/suricata
+     - ${TPOT_DATA_PATH}/suricata/rules:/var/lib/suricata/tpot
 
 
 ##################

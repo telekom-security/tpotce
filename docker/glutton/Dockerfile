@@ -25,6 +25,7 @@ FROM alpine:3.23
 #
 COPY --from=builder /opt/glutton/bin /opt/glutton/bin
 COPY --from=builder /opt/glutton/config /opt/glutton/config
+COPY --chmod=0755 dist/capture-if.sh /usr/bin/capture-if.sh
 #
 RUN apk -U --no-cache upgrade && \
 	apk -U --no-cache add \
@@ -39,4 +40,4 @@ RUN apk -U --no-cache upgrade && \
 # Start glutton 
 WORKDIR /opt/glutton
 USER 2000:2000
-CMD ["sh", "-c", "exec bin/server -d true -i $(ip route | grep \"^default\" | awk '{ print $5 }') -l /var/log/glutton/glutton.log > /dev/null 2>&1"]
+CMD ["sh", "-c", "myIF=\"$(capture-if.sh)\" || exit 1; exec bin/server -d true -i \"${myIF}\" -l /var/log/glutton/glutton.log > /dev/null 2>&1"]

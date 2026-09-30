@@ -7,6 +7,9 @@ services:
     restart: always
 #    cpu_count: 1
 #    cpus: 0.75
+    environment:
+    # Capture interface, empty: automatic
+     - SATORI_INTERFACE=
     network_mode: "host"
     cap_add:
      - NET_ADMIN

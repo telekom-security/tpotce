@@ -2,6 +2,7 @@ FROM alpine:3.23
 #
 # Add source
 COPY . /opt/p0f
+COPY --chmod=0755 dist/capture-if.sh /usr/bin/capture-if.sh
 #
 # Install packages
 RUN apk --no-cache -U upgrade && \
@@ -33,4 +34,4 @@ RUN apk --no-cache -U upgrade && \
 # Start p0f
 WORKDIR /opt/p0f
 USER p0f:p0f
-CMD ["/bin/bash", "-c", "exec /opt/p0f/p0f -u p0f -j -o /var/log/p0f/p0f.json -i $(ip route | grep \"^default\" | awk '{ print $5 }') > /dev/null"]
+CMD ["/bin/bash", "-c", "myIF=\"$(capture-if.sh)\" || exit 1; exec /opt/p0f/p0f -u p0f -j -o /var/log/p0f/p0f.json -i \"${myIF}\" > /dev/null"]

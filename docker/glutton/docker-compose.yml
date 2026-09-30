@@ -10,6 +10,9 @@ services:
      - /run:uid=2000,gid=2000
 #    cpu_count: 1
 #    cpus: 0.75
+    environment:
+    # Capture interface, empty: automatic
+     - TPOT_CAPTURE_INTERFACE=
     network_mode: "host"
     cap_add:
      - NET_ADMIN

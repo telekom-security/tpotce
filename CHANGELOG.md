@@ -22,7 +22,9 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 * **Attack Map** has been updated to 4.0.0.
 * **Beelzebub** has been updated to 3.9.2 and is built from upstream again instead of the T-Pot fork. The log format, the dashboards and the SSH host key stay as they were, further services (Telnet, MCP, LDAP, SMB, MSSQL, MQTT, RDP, PostgreSQL, VNC, Redis, Memcached) are prepared and can be enabled in the compose file.
 * **Cowrie** has been updated to 3.0.0, pinned to a later commit of the main branch.
-* **Suricata** has been updated to 8.0.7 (Alpine 3.24 package).
+* **Suricata** has been updated to 8.0.7 (Alpine 3.24 package). The rules are now cached in `data/suricata/rules` and updated once in 24 hours (`SURICATA_RULES_UPDATE=off` never downloads them), a failed update or a start without internet access uses the latest cached rules, and the capture filter keeps excluding the T-Pot ports without DNS.
+* **NSM services** (Suricata, P0f, Fatt, Satori, Glutton) capture on the interface of the route to the internet, so hosts with more than one default route no longer end up in a restart loop. `TPOT_CAPTURE_INTERFACE` in `.env` sets the interface manually.
+* **Update Script** adds settings that are new in `env.example` to an existing `.env` and comments out those that are no longer used.
 * **Nginx** has been updated to 1.28.3 (Alpine 3.23 package).
 * **Cyberchef** has been updated to 11.0.0.
 * **Galah** has been updated to 1.1.1 and is built from upstream again instead of the T-Pot fork. The log format stays as it was, failed LLM responses now show up in the Galah dashboard, and all LLM settings (API key, temperature, GCP Vertex AI) can be set in `.env`.

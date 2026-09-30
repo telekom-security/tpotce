@@ -1,5 +1,7 @@
 FROM alpine:3.23
 #
+COPY --chmod=0755 dist/capture-if.sh /usr/bin/capture-if.sh
+#
 # Install packages
 RUN apk --no-cache -U upgrade && \
     apk --no-cache -U add \
@@ -42,4 +44,4 @@ STOPSIGNAL SIGINT
 ENV PYTHONPATH=/opt/fatt
 WORKDIR /opt/fatt
 USER fatt:fatt
-CMD ["sh", "-c", "exec python3 fatt.py -i $(ip route | grep \"^default\" | awk '{ print $5 }') --print_output --json_logging -o log/fatt.log"]
+CMD ["sh", "-c", "myIF=\"$(capture-if.sh)\" || exit 1; exec python3 fatt.py -i \"${myIF}\" --print_output --json_logging -o log/fatt.log"]

@@ -384,7 +384,7 @@ fuSPIDERFOOT () {
 # Let's create a function to clean up and prepare suricata data
 fuSURICATA () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/suricata/*; fi
-  mkdir -vp /data/suricata/log
+  mkdir -vp /data/suricata/{log,rules}
   chmod 770 -R /data/suricata
   chown tpot:tpot -R /data/suricata
 }

@@ -19,17 +19,25 @@ ETHERNET = None
 
 
 def default_interface():
-    proc = subprocess.run(
+    # Same order as capture-if.sh of the other NSM services: the route the kernel
+    # uses for outgoing traffic (a lookup only, nothing is sent) comes first, as
+    # a host may have more than one default route.
+    for command in (
+        ["ip", "route", "get", "1.1.1.1"],
+        ["ip", "-6", "route", "get", "2606:4700:4700::1111"],
         ["ip", "route", "show", "default"],
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-        text=True,
-    )
-    for line in proc.stdout.splitlines():
-        fields = line.split()
-        if "dev" in fields:
-            return fields[fields.index("dev") + 1]
+    ):
+        proc = subprocess.run(
+            command,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+        for line in proc.stdout.splitlines():
+            fields = line.split()
+            if "dev" in fields and fields.index("dev") + 1 < len(fields):
+                return fields[fields.index("dev") + 1]
     return "eth0"
 
 

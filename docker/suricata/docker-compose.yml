@@ -8,6 +8,10 @@ services:
     environment:
     # For ET Pro ruleset replace "OPEN" with your OINKCODE
      - OINKCODE=OPEN
+    # Rules are cached for 24h in data/suricata/rules, off: never download
+     - SURICATA_RULES_UPDATE=on
+    # Capture interface, empty: automatic
+     - TPOT_CAPTURE_INTERFACE=
     # Loading external Rules from URL 
     # - FROMURL="https://username:password@yoururl.com|https://username:password@otherurl.com"
     network_mode: "host"
@@ -18,3 +22,4 @@ services:
     image: "dtagdevsec/suricata:24.04.2"
     volumes:
      - $HOME/tpotce/data/suricata/log:/var/log/suricata
+     - $HOME/tpotce/data/suricata/rules:/var/lib/suricata/tpot

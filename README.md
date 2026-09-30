@@ -687,6 +687,12 @@ On the T-Pot Landing Page just click on `Spiderfoot` and you will be forwarded t
 T-Pot offers a configuration file providing variables not only for the docker services (i.e. honeypots and tools) but also for the docker compose environment. The configuration file is hidden in `~/tpoce/.env`. There is also an example file (`env.example`) which holds the default configuration.<br>
 Before the first start run `~/tpotce/genuser.sh` or setup the `WEB_USER` manually as described [here](#add-users-to-nginx-t-pot-webui). 
 
+`update.sh` adds settings that are new in `env.example` to your `.env` with their defaults and comments out settings that are no longer used (unless your `docker-compose.yml` still uses them), your values are never changed.
+
+Settings for the NSM services (Suricata, P0f, Fatt, Satori):
+- `TPOT_CAPTURE_INTERFACE`: The interface to capture on. Empty (default) picks the interface of the route to the internet, or without a default route the first interface with a global IPv4 address. Set it if the host has more than one uplink or you capture on a mirror port.
+- `SURICATA_RULES_UPDATE`: The Suricata rules are cached in `~/tpotce/data/suricata/rules` and updated once in 24 hours, without internet access the latest cached rules are used. Set it to `off` for isolated deployments to never download rules.
+
 ## Customize T-Pot Honeypots and Services
 
 In `~/tpotce/compose` you will find everything you need to adjust the T-Pot Standard / Hive installation:

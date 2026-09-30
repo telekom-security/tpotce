@@ -1,3 +1,7 @@
+# T-Pot: the downloaded rulesets are kept in the data folder, so they survive
+# restarts and a ruleset can be rebuilt offline (suricata-update --offline)
+cache-directory: /var/lib/suricata/tpot/cache
+
 disable-conf: /etc/suricata/disable.conf
 enable-conf: /etc/suricata/enable.conf
 #drop-conf: /etc/suricata/drop.conf
