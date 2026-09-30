@@ -1,4 +1,4 @@
-FROM alpine:3.23 AS builder
+FROM alpine:3.24 AS builder
 #
 # Install packages
 RUN apk --no-cache -U upgrade && \
@@ -25,7 +25,7 @@ RUN apk --no-cache -U upgrade && \
 WORKDIR /opt/ciscoasa_honeypot
 RUN pyinstaller asa_server.py --add-data "./asa:./asa"
 #
-FROM alpine:3.23
+FROM alpine:3.24
 RUN apk --no-cache -U upgrade
 COPY --from=builder /opt/ciscoasa_honeypot/dist/ /opt/
 #

@@ -1,4 +1,4 @@
-FROM alpine:3.16 AS builder
+FROM alpine:3.24 AS builder
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -16,7 +16,7 @@ RUN apk -U add --no-cache \
     make && \
     mv /opt/endlessh/endlessh /root/dist
 #
-FROM alpine:3.23
+FROM alpine:3.24
 RUN apk --no-cache -U upgrade
 COPY --from=builder /root/dist/* /opt/endlessh/
 #

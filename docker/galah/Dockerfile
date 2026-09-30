@@ -34,7 +34,7 @@ RUN go mod download && \
     xx-go build -trimpath -ldflags="-s -w" -o /root/galah-bin ./cmd/galah && \
     xx-verify /root/galah-bin
 #
-FROM alpine:3.23
+FROM alpine:3.24
 RUN apk --no-cache -U upgrade && \
     apk --no-cache -U add openssl
 COPY --from=builder /root/galah-bin /opt/galah/galah

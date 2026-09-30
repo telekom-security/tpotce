@@ -1,4 +1,4 @@
-FROM alpine:3.23 AS builder
+FROM alpine:3.24 AS builder
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -43,7 +43,7 @@ RUN pyinstaller --name elasticpot honeypot.py \
 		--hidden-import output_plugins \
 		--hidden-import output_plugins.jsonlog
 #
-FROM alpine:3.23
+FROM alpine:3.24
 RUN apk --no-cache -U upgrade
 COPY --from=builder /opt/elasticpot/dist/ /opt/
 COPY --from=builder /opt/elasticpot/elasticpot/data/responses/ /opt/elasticpot/responses/

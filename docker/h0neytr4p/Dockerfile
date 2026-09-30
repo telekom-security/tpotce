@@ -1,4 +1,4 @@
-FROM golang:1.26.4-alpine3.23 AS builder
+FROM golang:1.26.4-alpine3.24 AS builder
 WORKDIR /app
 #
 RUN apk -U upgrade

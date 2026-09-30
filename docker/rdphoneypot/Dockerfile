@@ -1,4 +1,4 @@
-FROM alpine:3.23 AS builder
+FROM alpine:3.24 AS builder
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -38,7 +38,7 @@ RUN pyinstaller --name rdphoneypot honeypot.py \
 		--hidden-import output_plugins \
 		--hidden-import output_plugins.jsonlog
 #
-FROM alpine:3.23
+FROM alpine:3.24
 RUN apk --no-cache -U upgrade && \
     mkdir -p /opt/rdphoneypot/cert /opt/rdphoneypot/log
 COPY --from=builder /opt/rdphoneypot/dist/ /opt/

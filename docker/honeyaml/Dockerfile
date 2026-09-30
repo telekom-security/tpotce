@@ -4,7 +4,7 @@
 # musl binary for the target, rustc under QEMU emulation crashes (SIGSEGV).
 FROM --platform=$BUILDPLATFORM tonistiigi/xx:1.9.0 AS xx
 #
-FROM --platform=$BUILDPLATFORM rust:1.98.1-alpine3.23 AS builder
+FROM --platform=$BUILDPLATFORM rust:1.98.1-alpine3.24 AS builder
 COPY --from=xx / /
 ARG TARGETPLATFORM
 #

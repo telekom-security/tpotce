@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM --platform=$BUILDPLATFORM alpine:3.23 AS log4pot-src
+FROM --platform=$BUILDPLATFORM alpine:3.24 AS log4pot-src
 #
 # Fetch log4pot source on the build platform to keep multiarch builds light.
 RUN apk --no-cache -U add \
@@ -14,7 +14,7 @@ RUN apk --no-cache -U add \
     sed -i 's#"type": logtype,#"reason": logtype,#g' log4pot-server.py && \
     rm -rf .git
 #
-FROM --platform=$BUILDPLATFORM alpine:3.23 AS python-deps
+FROM --platform=$BUILDPLATFORM alpine:3.24 AS python-deps
 ARG TARGETARCH
 #
 # Resolve wheel-only Python dependencies on the build platform for the target platform.
@@ -26,13 +26,13 @@ RUN apk --no-cache -U add py3-uv && \
 	esac && \
     uv pip install \
 		--target /opt/python-deps \
-		--python-version 3.12 \
+		--python-version 3.14 \
 		--python-platform "${UV_PLATFORM}" \
 		--no-cache \
 		--only-binary :all: \
 		azure-storage-blob==12.30.0
 #
-FROM alpine:3.23
+FROM alpine:3.24
 ENV PYTHONPATH=/opt/python-deps
 #
 # Install runtime packages

@@ -1,9 +1,9 @@
-FROM alpine:3.23
+FROM alpine:3.24
 #
 # Install packages
 # Application/tool dependencies are exact-pinned (requirements.txt, tools/basemap.lock);
-# Alpine OS packages are intentionally refreshed within the pinned 3.23 channel at image build.
-# No floating pip: Alpine 3.23's py3-pip installs the pinned wheels as-is.
+# Alpine OS packages are intentionally refreshed within the pinned 3.24 channel at image build.
+# No floating pip: Alpine 3.24's py3-pip installs the pinned wheels as-is.
 RUN apk --no-cache -U upgrade && \
     apk --no-cache -U add \
 		build-base \

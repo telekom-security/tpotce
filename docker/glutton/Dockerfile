@@ -21,7 +21,7 @@ RUN apk --no-cache -U upgrade && \
     make build && \
 	cp /root/dist/*.yaml /opt/glutton/config/
 #
-FROM alpine:3.23
+FROM alpine:3.24
 #
 COPY --from=builder /opt/glutton/bin /opt/glutton/bin
 COPY --from=builder /opt/glutton/config /opt/glutton/config

@@ -1,4 +1,4 @@
-FROM alpine:3.23 AS builder
+FROM alpine:3.24 AS builder
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -24,7 +24,7 @@ RUN	apk --no-cache -U upgrade && \
     sed -i 's/dst_port/dest_port/' /opt/adbhoney/adbhoney/core.py && \
     pyinstaller adbhoney.spec
 #
-FROM alpine:3.23
+FROM alpine:3.24
 RUN apk --no-cache -U upgrade
 COPY --from=builder /opt/adbhoney/dist/adbhoney/ /opt/adbhoney/
 #

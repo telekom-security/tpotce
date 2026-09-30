@@ -1,5 +1,5 @@
 # Mailoney still imports asyncore, asynchat and smtpd; Python 3.12+ needs backports.
-FROM alpine:3.23
+FROM alpine:3.24
 #
 # Install packages
 RUN apk --no-cache -U upgrade && \

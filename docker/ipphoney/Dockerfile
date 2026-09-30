@@ -1,4 +1,4 @@
-FROM alpine:3.23 AS builder
+FROM alpine:3.24 AS builder
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -45,7 +45,7 @@ RUN pyinstaller honeypot.py \
 		--hidden-import output_plugins.jsonlog
 RUN ls /opt/ipphoney -alR
 #
-FROM alpine:3.23
+FROM alpine:3.24
 RUN apk --no-cache -U upgrade
 COPY --from=builder /opt/ipphoney/dist/* /opt/ipphoney/
 COPY --from=builder /opt/ipphoney/ipphoney/data/responses/ /opt/ipphoney/responses/
