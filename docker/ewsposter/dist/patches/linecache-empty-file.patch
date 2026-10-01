@@ -1,0 +1,100 @@
+Upstream: https://github.com/telekom-security/ewsposter/pull/22 (branch linecache-empty-file)
+Delete this file once the PR is merged and EWSPOSTER_COMMIT includes it.
+
+diff --git a/modules/ealert.py b/modules/ealert.py
+index d5226f4..efe50f6 100644
+--- a/modules/ealert.py
++++ b/modules/ealert.py
+@@ -49,6 +49,11 @@ class EAlert:
+         else:
+             linecounter = linenumber
+ 
++        # Python >= 3.13 returns '\n' for line 1 of an empty file, not ''
++        if not os.path.isfile(filename) or os.path.getsize(filename) == 0:
++            linecache.clearcache()
++            return()
++
+         lcache = linecache.getline(filename, linecounter)
+ 
+         if linenumber is None and lcache != '':
+diff --git a/tests/__init__.py b/tests/__init__.py
+new file mode 100644
+index 0000000..8f363d0
+--- /dev/null
++++ b/tests/__init__.py
+@@ -0,0 +1 @@
++# Test package for unittest module paths.
+diff --git a/tests/test_ealert.py b/tests/test_ealert.py
+new file mode 100644
+index 0000000..54ad856
+--- /dev/null
++++ b/tests/test_ealert.py
+@@ -0,0 +1,68 @@
++import importlib.util
++import linecache
++import os
++import tempfile
++import unittest
++
++
++MODULE_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "modules", "ealert.py")
++SPEC = importlib.util.spec_from_file_location("ealert_under_test", MODULE_PATH)
++ealert_module = importlib.util.module_from_spec(SPEC)
++SPEC.loader.exec_module(ealert_module)
++
++
++class LineReadTest(unittest.TestCase):
++    def setUp(self):
++        self.tmpdir = tempfile.TemporaryDirectory()
++        self.counter = 1
++        self.alert = ealert_module.EAlert.__new__(ealert_module.EAlert)
++        self.alert.MODUL = "TEST"
++        self.alert.jsonfailcounter = 0
++        self.alert.alertCount = self.fake_alert_count
++        linecache.clearcache()
++
++    def tearDown(self):
++        linecache.clearcache()
++        self.tmpdir.cleanup()
++
++    def fake_alert_count(self, section, counting, item="index"):
++        if counting == "get_counter":
++            return str(self.counter)
++        if counting == "add_counter":
++            self.counter += 1
++        return ()
++
++    def write(self, content):
++        path = os.path.join(self.tmpdir.name, "test.log")
++        with open(path, "w") as handle:
++            handle.write(content)
++        return path
++
++    def test_empty_file_simple(self):
++        path = self.write("")
++        self.assertEqual(self.alert.lineREAD(path, "simple"), ())
++        self.assertEqual(self.counter, 1)
++
++    def test_empty_file_json(self):
++        path = self.write("")
++        self.assertEqual(self.alert.lineREAD(path, "json"), ())
++        self.assertEqual(self.counter, 1)
++        self.assertEqual(self.alert.jsonfailcounter, 0)
++
++    def test_missing_file(self):
++        path = os.path.join(self.tmpdir.name, "missing.log")
++        self.assertEqual(self.alert.lineREAD(path, "simple"), ())
++        self.assertEqual(self.counter, 1)
++
++    def test_first_line_after_file_was_empty(self):
++        path = self.write("")
++        self.assertEqual(self.alert.lineREAD(path, "json"), ())
++        self.write('{"src_ip": "192.0.2.1"}\n')
++        self.assertEqual(self.alert.lineREAD(path, "json"), {"src_ip": "192.0.2.1"})
++        self.assertEqual(self.counter, 2)
++        self.assertEqual(self.alert.lineREAD(path, "json"), ())
++        self.assertEqual(self.counter, 2)
++
++
++if __name__ == "__main__":
++    unittest.main()

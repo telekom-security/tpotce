@@ -20,6 +20,7 @@ not touch production `data/` or `data_backup/` paths.
 ./docker/_tests/run.sh dicompot
 ./docker/_tests/run.sh elasticpot
 ./docker/_tests/run.sh endlessh
+./docker/_tests/run.sh ewsposter
 ./docker/_tests/run.sh fatt
 ./docker/_tests/run.sh go-pot
 ./docker/_tests/run.sh h0neytr4p
@@ -72,6 +73,8 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/elasticpot.sh --http-port 19200
 ./docker/_tests/tests/endlessh.sh
 ./docker/_tests/tests/endlessh.sh --ssh-port 2222
+./docker/_tests/tests/ewsposter.sh
+./docker/_tests/tests/ewsposter.sh --image dtagdevsec/ewsposter:24.04.2
 ./docker/_tests/tests/fatt.sh
 ./docker/_tests/tests/go-pot.sh
 ./docker/_tests/tests/go-pot.sh --http-port 18080
@@ -122,6 +125,13 @@ identity survives a restart, abuses every TCP service with half-open, partial
 and oversized frames and expects no container to stay busy afterwards, and
 validates the JSON events against the Conpot 1.0 event schema. The OPC UA probe
 runs the `asyncua` client of the image inside the container's network namespace.
+
+The EWSPoster test runs `ews.py` twice in verbose mode with EWS submission
+disabled, first against empty Honeytrap, Endlessh, Heralding and IPPHoney logs,
+then with one line added to the Honeytrap and IPPHoney logs. Both runs must
+finish without a traceback and the second run must report the events from
+line 1. The container needs outbound network access, EWSPoster looks up the
+external IP via `api.ipify.org` on every start.
 
 The Dicompot test additionally requires DCMTK client tools on the host:
 `echoscu`, `getscu`, `dcmdump`, and either `setscu` or `storescu`.
