@@ -92,7 +92,7 @@ myEDITIONS="STANDARD SENSOR MINI LLM TARPIT MOBILE MAC_WIN"
 
 # Services that are no longer part of T-Pot. Their images are not built for this
 # release, a docker-compose.yml of your own that still has them fails on the pull.
-myDROPPED_SERVICES="spiderfoot"
+myDROPPED_SERVICES="spiderfoot fatt"
 
 myUPDATER=$(cat << "EOF"
  _____     ____       _     _   _           _       _

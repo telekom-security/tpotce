@@ -322,15 +322,6 @@ services:
 #### NSM
 ##################
 
-# Fatt
-  fatt:
-    image: ${TPOT_DOCKER_REPO}/fatt:${TPOT_VERSION}
-    build:
-      tags:
-        - ${TPOT_GHCR_REPO}/fatt:${TPOT_VERSION}
-      context: ../fatt/
-      <<: *common-build
-
 # P0f
   p0f:
     image: ${TPOT_DOCKER_REPO}/p0f:${TPOT_VERSION}

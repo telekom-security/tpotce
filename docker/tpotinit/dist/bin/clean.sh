@@ -211,14 +211,6 @@ fuENDLESSH () {
   chown tpot:tpot /data/endlessh -R
 }
 
-# Let's create a function to clean up and prepare fatt data
-fuFATT () {
-  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/fatt/*; fi
-  mkdir -vp /data/fatt/log
-  chmod 770 -R /data/fatt
-  chown tpot:tpot -R /data/fatt
-}
-
 # Let's create a function to clean up and prepare galah data
 fuGALAH () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/galah/*; fi
@@ -450,7 +442,6 @@ fuDIONAEA
 fuELASTICPOT
 fuELK
 fuENDLESSH
-fuFATT
 fuGALAH
 fuGLUTTON
 fuGOPOT

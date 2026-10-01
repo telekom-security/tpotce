@@ -156,25 +156,6 @@ services:
 #### NSM
 ##################
 
-# Fatt service
-  fatt:
-    container_name: fatt
-    restart: always
-    depends_on:
-      tpotinit:
-        condition: service_healthy
-    environment:
-     - TPOT_CAPTURE_INTERFACE=${TPOT_CAPTURE_INTERFACE:-} # Empty: automatic (value provided by T-Pot .env)
-    network_mode: "host"
-    cap_add:
-     - NET_ADMIN
-     - SYS_NICE
-     - NET_RAW
-    image: ${TPOT_REPO}/fatt:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
-    volumes:
-     - ${TPOT_DATA_PATH}/fatt/log:/opt/fatt/log
-
 # P0f service
   p0f:
     container_name: p0f

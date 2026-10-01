@@ -21,7 +21,6 @@ not touch production `data/` or `data_backup/` paths.
 ./docker/_tests/run.sh elasticpot
 ./docker/_tests/run.sh endlessh
 ./docker/_tests/run.sh ewsposter
-./docker/_tests/run.sh fatt
 ./docker/_tests/run.sh go-pot
 ./docker/_tests/run.sh h0neytr4p
 ./docker/_tests/run.sh hellpot
@@ -75,7 +74,6 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/endlessh.sh --ssh-port 2222
 ./docker/_tests/tests/ewsposter.sh
 ./docker/_tests/tests/ewsposter.sh --image dtagdevsec/ewsposter:24.04.2
-./docker/_tests/tests/fatt.sh
 ./docker/_tests/tests/go-pot.sh
 ./docker/_tests/tests/go-pot.sh --http-port 18080
 ./docker/_tests/tests/h0neytr4p.sh

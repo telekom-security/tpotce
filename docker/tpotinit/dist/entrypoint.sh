@@ -282,7 +282,7 @@ if [ "${TPOT_TYPE}" == "SENSOR" ];
 fi
 
 # Settings of services are only checked if the active compose file runs them
-if fuCOMPOSE_HAS suricata p0f fatt satori glutton && [ -n "${TPOT_CAPTURE_INTERFACE}" ];
+if fuCOMPOSE_HAS suricata p0f satori glutton && [ -n "${TPOT_CAPTURE_INTERFACE}" ];
   then
     if [[ ! "${TPOT_CAPTURE_INTERFACE}" =~ ^[A-Za-z0-9_.:@-]{1,15}$ ]];
       then

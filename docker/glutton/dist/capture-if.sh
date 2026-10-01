@@ -2,7 +2,7 @@
 # T-Pot: print the network interface the NSM services capture on.
 #
 # Keep in sync! This is the original, identical copies live in
-# docker/{suricata,p0f,fatt,glutton}/dist/capture-if.sh (separate build contexts).
+# docker/{suricata,p0f,glutton}/dist/capture-if.sh (separate build contexts).
 #
 # 1. TPOT_CAPTURE_INTERFACE from the T-Pot .env, if set it has to exist.
 # 2. The interface of the route the kernel uses for outgoing traffic. This is a

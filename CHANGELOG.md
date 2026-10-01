@@ -25,7 +25,7 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 * **Conpot** has been updated to 1.0.0, pinned to a later commit of the master branch (asyncio, TOML templates, new event schema). All Conpot and upstream default strings of the deployed templates have been replaced. T-Pot fixes a busy loop in Guardian AST that kept a core at 100% CPU after a client sent anything but a command and closed the connection (the reason for the former CPU health check, which has been removed), and IPMI answers again to clients that come back from a new source port.
 * **Cowrie** has been updated to 3.0.0, pinned to a later commit of the main branch.
 * **Suricata** has been updated to 8.0.7 (Alpine 3.24 package). The rules are now cached in `data/suricata/rules` and updated once in 24 hours (`SURICATA_RULES_UPDATE=off` never downloads them), a failed update or a start without internet access uses the latest cached rules, and the capture filter keeps excluding the T-Pot ports without DNS.
-* **NSM services** (Suricata, P0f, Fatt, Satori, Glutton) capture on the interface of the route to the internet, so hosts with more than one default route no longer end up in a restart loop. `TPOT_CAPTURE_INTERFACE` in `.env` sets the interface manually.
+* **NSM services** (Suricata, P0f, Satori, Glutton) capture on the interface of the route to the internet, so hosts with more than one default route no longer end up in a restart loop. `TPOT_CAPTURE_INTERFACE` in `.env` sets the interface manually.
 * **Update Script** adds settings that are new in `env.example` to an existing `.env` and comments out those that are no longer used.
 * **T-Pot Init** validates all settings of `.env` and reports every invalid one at once before T-Pot starts. Settings of a service are only checked if it runs in the active edition, `TPOT_CAPTURE_INTERFACE` and the Attack Map time zone are checked against the host.
 * **Nginx** has been updated to 1.28.3 (Alpine 3.23 package).
@@ -43,6 +43,7 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 * **Installer** supports unattended installations and has been tested with **Alma 10**, **Debian 13**, **Fedora 44**, **OpenSuse Tumbleweed**, **Rocky 10**, **RHEL 10** and **Ubuntu 26.04** (sudo-rs).
 * **Persistence** cycles for logrotate are configurable through `TPOT_PERSISTENCE_CYCLES` in `.env`.
 * **Beelzebub** and **Honeypots** log their status as text (i.e. `Stateless`, `failed`), it is now indexed as `status_text`. So far Elasticsearch could not index it in the numeric `status` field, some values ended up as `0` and with 24.04.1 part of these events were not indexed at all.
+* **Fatt** has been removed, see [Breaking Changes](#fatt).
 * **Spiderfoot** has been removed, see [Breaking Changes](#spiderfoot).
 * Updates for `24.04.2` images will be provided continuously through Docker image updates.
 
@@ -62,6 +63,12 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 
 ### Dionaea
 - The SIP service has been removed.
+
+### Fatt
+- Fatt has been removed, Suricata already logs its fingerprints (JA3 / JA3S / JA4, HASSH, RDP, HTTP, QUIC) and detects the protocols on every port, Fatt only looked at a fixed set of ports. The Dockerfile has moved to `docker/deprecated/fatt`.
+- The Suricata dashboard now also shows SSH HASSH, RDP client names and HTTP URLs. Import the Kibana objects of this release to get it; the import does not delete the Fatt dashboard, remove it under Stack Management → Saved Objects (tag `Fatt`).
+- `update.sh` removes the `fatt` service from a `docker-compose.yml` of your own, the previous file stays in the backup.
+- The logs in `~/tpotce/data/fatt` are kept. If you no longer need them, remove the folder with `sudo rm -rf ~/tpotce/data/fatt`.
 
 ### Spiderfoot
 - Spiderfoot has been removed. As an OSINT / reconnaissance tool it does not fit the defensive scope of T-Pot. The service, the `/spiderfoot/` route and the link on the landing page are gone, the Dockerfile has moved to `docker/deprecated/spiderfoot`.

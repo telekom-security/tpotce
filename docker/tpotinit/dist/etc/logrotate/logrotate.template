@@ -17,7 +17,6 @@
 /data/elasticpot/log/elasticpot.json
 /data/elk/log/*.log
 /data/endlessh/log/*.log
-/data/fatt/log/fatt.log
 /data/galah/log/*.json
 /data/glutton/log/*.log
 /data/glutton/log/*.err

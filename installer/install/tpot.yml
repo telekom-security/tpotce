@@ -134,7 +134,7 @@
       debug:
         msg: |
           WARNING: {{ my_default_routes.stdout | trim }} default routes detected.
-          fatt, p0f and suricata derive their capture interface from the default
+          p0f and suricata derive their capture interface from the default
           route and cannot handle more than one name, they will restart-loop.
       when: my_default_routes.stdout | trim != "1"
 
