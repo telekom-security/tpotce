@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 import argparse
 import datetime
+import importlib.metadata
 import ipaddress
 import json
 import os
 import signal
 import subprocess
 import sys
-import warnings
+import types
 from pathlib import Path
 
 
@@ -353,11 +354,19 @@ def parse_args(argv=None):
     return parser.parse_args(argv)
 
 
+def install_pkg_resources_shim():
+    # setuptools >= 82 no longer ships pkg_resources; satoriCommon.py imports it
+    # and only uses get_distribution(name).version.
+    shim = types.ModuleType("pkg_resources")
+    shim.get_distribution = lambda name: types.SimpleNamespace(version=importlib.metadata.version(name))
+    sys.modules["pkg_resources"] = shim
+
+
 def load_satori():
     global ETHERNET
 
     sys.path.insert(0, "/opt/satori")
-    warnings.filterwarnings("ignore", message="pkg_resources is deprecated as an API", category=UserWarning)
+    install_pkg_resources_shim()
     try:
         import pcapy
     except ImportError:

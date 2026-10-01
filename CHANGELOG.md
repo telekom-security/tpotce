@@ -4,7 +4,7 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 
 ## New Features
 * **RDPHoneypot** a Remote Desktop honeypot for RDP connection and credential telemetry.
-* **Satori** has been added as a passive fingerprinting NSM service running in parallel to P0f with normalized JSON logging.
+* **Satori** a passive OS fingerprinting NSM service that runs in parallel to P0f. It matches the TCP SYN and SYN+ACK packets on the capture interface against the Satori fingerprint database and writes normalized JSON logs (saved search `Satori-Logs` in Kibana). Further modules (DHCP, HTTP, TLS, SMB, DNS, NTP, SSH) can be enabled with `--modules` in the `command` of the `satori` service.
 * **Restore Script** `restore.sh` puts a backup written by `update.sh` back, as a whole or per group (checkout, configuration, `data/`, Kibana objects and ILM policy).
 * **Update Script** has been reworked:
   * Backups go to `~/tpot_backups`, rotate, are checked for space and hold what git cannot bring back; `--full` adds all of `data/`.

@@ -1,6 +1,6 @@
 FROM ghcr.io/astral-sh/uv:0.11.21-alpine AS uv-bin
 
-FROM --platform=$BUILDPLATFORM alpine:3.23 AS satori-src
+FROM --platform=$BUILDPLATFORM alpine:3.24 AS satori-src
 
 ARG SATORI_COMMIT=73fa88fe6549995c68760be10631382df4ec1d1c
 RUN apk add --no-cache \
@@ -14,7 +14,7 @@ RUN apk add --no-cache \
     git -c advice.detachedHead=false checkout --quiet FETCH_HEAD && \
     rm -rf .git
 
-FROM alpine:3.23 AS python-deps
+FROM alpine:3.24 AS python-deps
 
 ENV UV_NO_CACHE=1
 
@@ -30,12 +30,12 @@ RUN apk add --no-cache \
     uv pip install \
         --target /opt/python-deps \
         --python /usr/bin/python3 \
-        pcapyplus \
+        pcapy-ng \
         pypacker \
         requests \
         untangle
 
-FROM alpine:3.23
+FROM alpine:3.24
 
 ARG SATORI_COMMIT=73fa88fe6549995c68760be10631382df4ec1d1c
 ENV SATORI_COMMIT=${SATORI_COMMIT} \
@@ -49,11 +49,8 @@ RUN apk add --no-cache \
         ca-certificates \
         iproute2 \
         libcap \
-        libpcap \
-        libstdc++ \
         python3 \
-        py3-netifaces \
-        py3-setuptools && \
+        py3-netifaces && \
 #
 # Setup user
     addgroup -g 2000 -S satori && \
