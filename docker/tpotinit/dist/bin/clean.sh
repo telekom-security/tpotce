@@ -143,7 +143,7 @@ fuCITRIXHONEYPOT () {
 # Let's create a function to clean up and prepare conpot data
 fuCONPOT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/conpot/*; fi
-  mkdir -vp /data/conpot/log
+  mkdir -vp /data/conpot/{identity,log}
   chmod 770 /data/conpot -R
   chown tpot:tpot /data/conpot -R
 }

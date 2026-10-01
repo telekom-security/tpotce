@@ -12,6 +12,7 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
   * The installed edition is detected and restored, `-b <branch>` / `-r <repo>` allow testing branches and forks, `-s` starts T-Pot after the update.
   * Before pulling a new Elastic Stack the update checks the disk space and warns if the backup does not hold the Elasticsearch data.
 * **Cowrie Personas** let Cowrie present itself as different systems.
+* **Conpot** emulates five further ICS devices: a Beckhoff CX embedded PC (ADS, ADS discovery, OPC UA), a LOYTEC building automation server (KNXnet/IP, BACnet/IP), a WirelessHART gateway (HART-IP), an ICCP / TASE.2 endpoint and a Schneider Modicon M340 (Modbus/TCP), the IEC 104 RTU now also speaks DNP3. Serial numbers, MAC and IP addresses, host names and similar identifiers are generated once per installation (`data/conpot/identity`) instead of shipping the same values on every T-Pot.
 * **Smoke Tests** for the honeypot images (`docker/_tests`) and an end-to-end test of the Attack Map pipeline (`attackmap_pipeline_test.sh`).
 * **Listbot** translation maps are cached.
 
@@ -21,6 +22,7 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 * **Kibana** now runs with a 1 GB Node.js heap (`KIBANA_HEAP_MB` in `docker/elk/kibana/Dockerfile`) within a `mem_limit` of 2 GB.
 * **Attack Map** has been updated to 4.0.0.
 * **Beelzebub** has been updated to 3.9.2 and is built from upstream again instead of the T-Pot fork. The log format, the dashboards and the SSH host key stay as they were, further services (Telnet, MCP, LDAP, SMB, MSSQL, MQTT, RDP, PostgreSQL, VNC, Redis, Memcached) are prepared and can be enabled in the compose file.
+* **Conpot** has been updated to 1.0.0, pinned to a later commit of the master branch (asyncio, TOML templates, new event schema). All Conpot and upstream default strings of the deployed templates have been replaced. T-Pot fixes a busy loop in Guardian AST that kept a core at 100% CPU after a client sent anything but a command and closed the connection (the reason for the former CPU health check, which has been removed), and IPMI answers again to clients that come back from a new source port.
 * **Cowrie** has been updated to 3.0.0, pinned to a later commit of the main branch.
 * **Suricata** has been updated to 8.0.7 (Alpine 3.24 package). The rules are now cached in `data/suricata/rules` and updated once in 24 hours (`SURICATA_RULES_UPDATE=off` never downloads them), a failed update or a start without internet access uses the latest cached rules, and the capture filter keeps excluding the T-Pot ports without DNS.
 * **NSM services** (Suricata, P0f, Fatt, Satori, Glutton) capture on the interface of the route to the internet, so hosts with more than one default route no longer end up in a restart loop. `TPOT_CAPTURE_INTERFACE` in `.env` sets the interface manually.
@@ -51,6 +53,11 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 
 ### Update Script
 - Updates are supported from **24.04.1** onwards. Installations of 24.04.0 need a fresh install.
+
+### Conpot
+- Conpot logs the event schema of Conpot 1.0: `protocol` replaces `data_type`, `session_id` replaces `id`, `event_time` and `session_time` replace `timestamp`, further protocol details are indexed as `conpot_data`. Import the Kibana objects of this release, the Conpot dashboard then shows the protocol from `protocol`; older events keep `data_type`.
+- EWSPoster reads both formats, older EWSPoster images stop with an error on the new Conpot logs.
+- If you use a `docker-compose.yml` of your own, add the volume `${TPOT_DATA_PATH}/conpot/identity:/var/lib/conpot` to the Conpot services and take the new services from `compose/standard.yml`.
 
 ### Dionaea
 - The SIP service has been removed.

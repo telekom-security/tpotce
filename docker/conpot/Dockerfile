@@ -1,4 +1,4 @@
-FROM alpine:3.23
+FROM alpine:3.24
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -7,93 +7,50 @@ COPY dist/ /root/dist/
 RUN apk --no-cache -U upgrade && \
     apk --no-cache -U add \
             build-base \
-			cython \
-			file \
-			git \
-			libev \
-			libtool \
-			libcap \
-			libffi-dev \
-			libxslt \
-			libxslt-dev \
-			mariadb-dev \
-			pkgconfig \
-			procps \
-			python3 \
-			python3-dev \
-			py3-cffi \
-			py3-cryptography \
-			py3-freezegun \
-			py3-gevent \
-			py3-lxml \
-			py3-natsort \
-			py3-pip \
-			py3-ply \
-			py3-psutil \
-			py3-pycryptodomex \
-			py3-pytest \
-			py3-requests \
-			py3-pyserial \
-			py3-setuptools \
-			py3-slugify \
-			py3-snmp \
-			py3-sphinx \
-			py3-wheel \
-			py3-zope-event \
-			py3-zope-interface \
-			wget && \
+            git \
+            libcap \
+            libffi-dev \
+            python3 \
+            python3-dev \
+            py3-pip \
+            py3-tomli-w && \
 #
 # Setup ConPot
     git clone https://github.com/mushorg/conpot /opt/conpot && \
     cd /opt/conpot/ && \
-	git checkout 31b1f7d273ee4f8c121eb59dcfce4ec2cb35e612 && \
-    # Change template default ports if <1024
-    sed -i 's/port="2121"/port="21"/' /opt/conpot/conpot/templates/default/ftp/ftp.xml && \
-    sed -i 's/port="8800"/port="80"/' /opt/conpot/conpot/templates/default/http/http.xml && \
-    sed -i 's/port="6230"/port="623"/' /opt/conpot/conpot/templates/default/ipmi/ipmi.xml && \
-    sed -i 's/port="5020"/port="502"/' /opt/conpot/conpot/templates/default/modbus/modbus.xml && \
-    sed -i 's/port="10201"/port="102"/' /opt/conpot/conpot/templates/default/s7comm/s7comm.xml && \
-    sed -i 's/port="16100"/port="161"/' /opt/conpot/conpot/templates/default/snmp/snmp.xml && \
-    sed -i 's/port="6969"/port="69"/' /opt/conpot/conpot/templates/default/tftp/tftp.xml && \
-    sed -i 's/port="16100"/port="161"/' /opt/conpot/conpot/templates/IEC104/snmp/snmp.xml && \
-    sed -i 's/port="6230"/port="623"/' /opt/conpot/conpot/templates/ipmi/ipmi/ipmi.xml && \
-    cp /root/dist/requirements.txt . && \
+    git checkout 3be619a868982df7d584e8e2865ad74d9b4eb409 && \
+    # T-Pot hooks (see dist/tpot.patch), then T-Pot templates and overrides
+    git apply /root/dist/tpot.patch && \
+    python3 /root/dist/tpot/tpot_templates.py build conpot/templates /root/dist/tpot/templates.toml && \
     pip3 install --break-system-packages --no-cache-dir . && \
+    python3 /root/dist/tpot/tpot_templates.py check /root/dist/tpot/templates.toml && \
     cd / && \
     rm -rf /opt/conpot /tmp/* /var/tmp/* && \
     setcap cap_net_bind_service=+ep $(readlink -f $(type -P python3)) && \
 #
-# Get wireshark manuf db for scapy, setup configs, user, groups
-    mkdir -p /etc/conpot /var/log/conpot /usr/share/wireshark && \
-    wget https://www.wireshark.org/download/automated/data/manuf -O /usr/share/wireshark/manuf && \
-    cp /root/dist/conpot.cfg /etc/conpot/conpot.cfg && \
-    cp -R /root/dist/templates /usr/lib/$(readlink -f $(type -P python3) | cut -f4 -d"/")/site-packages/conpot/ && \
-    cp /root/dist/cpu_check.py / && \
+# Setup configs, user, groups
+    mkdir -p /etc/conpot /opt/tpot /var/lib/conpot /var/log/conpot && \
+    sed "s#@@PURELIB@@#$(python3 -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')#" /root/dist/conpot.cfg > /etc/conpot/conpot.cfg && \
+    cp /root/dist/tpot/tpot_templates.py /root/dist/tpot/templates.toml /opt/tpot/ && \
     addgroup -g 2000 conpot && \
     adduser -S -s /bin/ash -u 2000 -D -g 2000 conpot && \
+    chown conpot:conpot /var/lib/conpot && \
 #
 # Clean up
     apk del --purge \
             build-base \
-            file \
             git \
-            libev \
-            libtool \
-            libxslt-dev \
-            mariadb-dev \
-            pkgconfig \
+            libcap \
+            libffi-dev \
             py3-pip \
-            python3-dev \
-            wget && \
+            py3-tomli-w \
+            python3-dev && \
     rm -rf /root/* \
            /tmp/* \
-           /var/cache/apk/* \
-           /opt/cpppo/.git \
-           /opt/conpot/.git
+           /var/cache/apk/*
 #
 # Start conpot
 STOPSIGNAL SIGINT
-# Conpot sometimes hangs at 100% CPU usage, if detected container will become unhealthy and restarted by tpotinit
-HEALTHCHECK --interval=5m --timeout=30s --retries=3 CMD python3 /cpu_check.py $(pgrep -of conpot) 99
+ENV TMPDIR=/tmp/conpot
 USER conpot:conpot
-CMD ["/bin/sh", "-c", "exec /usr/bin/conpot --mibcache \"$CONPOT_TMP\" --temp_dir \"$CONPOT_TMP\" --template \"$CONPOT_TEMPLATE\" --logfile \"$CONPOT_LOG\" --config \"$CONPOT_CONFIG\""]
+CMD ["/bin/sh", "-c", "exec python3 /opt/tpot/tpot_templates.py render \"$CONPOT_TEMPLATE\""]

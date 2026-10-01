@@ -1,0 +1,379 @@
+# T-Pot overrides for the upstream Conpot templates, applied by tpot_templates.py.
+#
+#   base     upstream template to copy from (default: same name, edited in place)
+#   include  { "<file in template>" = "<upstream template>/<file>" }
+#   template replaces [core.template]; its protocols must match the <proto>.toml files
+#   set      { "<file>" = { "dotted.key.path" = value } }, the path must exist upstream
+#   add      like set, for keys that must not exist upstream yet
+#   replace  { "<file>" = { "literal" = "replacement" } }, the literal must occur
+#   identity per-install values, generated on first start and kept in /var/lib/conpot
+#            gen: lan_ip | mac (oui) | digits (n) | hex (n, upper) | hexbytes (n) | int (min, max) | choice (values)
+#            derive (from "of"): mac_tail | mac_hex | mac_plain | ip_gateway | ip_suffix | format
+#
+# "@@TOKEN@@" in quotes becomes a typed TOML value, @@TOKEN@@ inside a string its text.
+# Only templates with deploy = true are checked against the guard list.
+
+[guard]
+deny = [
+    "conpot",
+    "technodrome",
+    "mouser",
+    "venus",
+    "statoil",
+    "evilpowerprovider",
+    "163.172.189.137",
+    "202.202.202.1",
+    "freeopcua",
+    "compagnie generale des eaux",
+    "@@",
+]
+
+# ---------------------------------------------------------------------------
+# Substation RTU: IEC 60870-5-104, DNP3, SNMP
+# ---------------------------------------------------------------------------
+[templates.IEC104]
+deploy = true
+include = { "dnp3.toml" = "dnp3/dnp3.toml" }
+
+[templates.IEC104.template]
+unit = "S7-300"
+vendor = "Siemens"
+description = "S7-300 telecontrol station, CP 343-1 (IEC 60870-5-104) and TIM 3V-IE DNP3"
+protocols = ["IEC104", "dnp3", "snmp"]
+creator = "T-Pot"
+
+[templates.IEC104.set."template.toml"]
+# T-Pot values since 24.04
+"core.databus.key_value_mappings.sysContact" = "Corporate IT"
+"core.databus.key_value_mappings.sysName" = "DE-BER01"
+"core.databus.key_value_mappings.sysLocation" = "BER01, T2E"
+# upstream defaults
+"core.databus.key_value_mappings.FacilityName" = "BER01 Substation"
+"core.databus.key_value_mappings.ifPhysAddress" = "@@MAC_HEX@@"
+"core.databus.key_value_mappings.ipAdEntAddr" = "@@LAN_IP@@"
+"core.databus.key_value_mappings.ipAdEntNetMask" = "255.255.255.0"
+"core.databus.key_value_mappings.tcpConnLocalAddress" = "@@LAN_IP@@"
+"core.databus.key_value_mappings.udpLocalAddress" = "@@LAN_IP@@"
+"core.databus.key_value_mappings.CommonAddress" = "@@COMMON_ADDRESS@@"
+
+[templates.IEC104.set."snmp.toml"]
+"snmp.port" = 161
+
+[templates.IEC104.set."dnp3.toml"]
+"dnp3.outstation_address" = "@@DNP3_ADDRESS@@"
+"dnp3.device_info.vendor_name" = "SIEMENS AG"
+"dnp3.device_info.product_code" = "6NH7803-3BA00-0AA0"
+
+[templates.IEC104.replace."snmp.toml"]
+"163.172.189.137" = "@@LAN_IP@@"
+
+[templates.IEC104.identity]
+LAN_IP = { gen = "lan_ip" }
+MAC = { gen = "mac", oui = "00:0E:8C" }
+MAC_HEX = { derive = "mac_hex", of = "MAC" }
+COMMON = { gen = "int", min = 1, max = 9999 }
+COMMON_ADDRESS = { derive = "format", of = "COMMON", fmt = "0x{:04x}" }
+DNP3_ADDRESS = { gen = "int", min = 1, max = 254 }
+
+# ---------------------------------------------------------------------------
+# Tank gauge
+# ---------------------------------------------------------------------------
+[templates.guardian_ast]
+deploy = true
+
+[templates.guardian_ast.template]
+unit = "TLS-350"
+vendor = "Veeder-Root"
+description = "Automatic tank gauge"
+protocols = ["guardian_ast"]
+creator = "T-Pot"
+
+[templates.guardian_ast.set."template.toml"]
+# T-Pot values since 24.04
+"core.databus.key_value_mappings.product4" = { value = '"ADBLUE"' }
+"core.databus.key_value_mappings.station_name" = { value = '"AVIA"' }
+
+# ---------------------------------------------------------------------------
+# Server BMC
+# ---------------------------------------------------------------------------
+[templates.ipmi]
+deploy = true
+
+[templates.ipmi.template]
+unit = "BMC"
+vendor = "Supermicro"
+description = "Baseboard management controller, IPMI 2.0"
+protocols = ["ipmi"]
+creator = "T-Pot"
+
+[templates.ipmi.set."template.toml"]
+# T-Pot value since 24.04
+"core.databus.key_value_mappings.SystemName" = "DoE"
+
+[templates.ipmi.set."ipmi.toml"]
+"ipmi.user_list" = [
+    { user_name = "ADMIN", password = "ADMIN", privilege = 4, active = true, fixed = true },
+    { user_name = "operator", password = "@@OPERATOR_PASSWORD@@", privilege = 3, active = true, fixed = false },
+    { user_name = "monitor", password = "@@MONITOR_PASSWORD@@", privilege = 2, active = false, fixed = false },
+]
+
+[templates.ipmi.identity]
+OPERATOR_PASSWORD = { gen = "hex", n = 10 }
+MONITOR_PASSWORD = { gen = "hex", n = 10 }
+
+# ---------------------------------------------------------------------------
+# Smart meter
+# ---------------------------------------------------------------------------
+[templates.kamstrup_382]
+deploy = true
+
+[templates.kamstrup_382.template]
+unit = "382"
+vendor = "Kamstrup"
+description = "Kamstrup 382 electricity meter"
+protocols = ["kamstrup_management", "kamstrup_meter"]
+creator = "T-Pot"
+
+[templates.kamstrup_382.set."template.toml"]
+# T-Pot values since 24.04
+"core.databus.key_value_mappings.kap_a_server_hostname" = { value = "'pwr_ctrl_mgmt01.int.local'" }
+"core.databus.key_value_mappings.kap_a_server_ip" = { value = "'10.232.15.242'" }
+# upstream defaults
+"core.databus.key_value_mappings.mac_address" = { value = "'@@MAC@@'" }
+"core.databus.key_value_mappings.ip_addr" = { value = "'@@LAN_IP@@'" }
+"core.databus.key_value_mappings.ip_gateway" = { value = "'@@LAN_GW@@'" }
+"core.databus.key_value_mappings.channel_a_meternumber" = { value = "'@@METERNUMBER@@'" }
+"core.databus.key_value_mappings.channel_b_meternumber" = { value = "'@@METERNUMBER@@'" }
+"core.databus.key_value_mappings.register_1001" = { value = "@@SERIAL@@" }
+"core.databus.key_value_mappings.register_1010" = { value = "@@SERIAL@@" }
+
+[templates.kamstrup_382.set."kamstrup_meter.toml"]
+"kamstrup_meter.login_pin" = "@@LOGIN_PIN@@"
+
+[templates.kamstrup_382.identity]
+LAN_IP = { gen = "lan_ip" }
+LAN_GW = { derive = "ip_gateway", of = "LAN_IP" }
+MAC = { gen = "mac", oui = "00:13:EA" }
+SERIAL = { gen = "digits", n = 8 }
+METER_ID = { gen = "hexbytes", n = 3 }
+METERNUMBER = { derive = "format", of = "METER_ID", fmt = "A1 06 A1 02 {} 00 00 03" }
+LOGIN_PIN = { gen = "int", min = 10000, max = 99999 }
+
+# ---------------------------------------------------------------------------
+# Beckhoff Embedded PC CX5140 (Win10 IoT LTSC 2019, TwinCAT 3.1.4024): ADS, OPC UA
+# Hostname CX-<last 3 MAC bytes>, AMS NetID <IP>.1.1, TF6100 OPC UA server naming
+# ---------------------------------------------------------------------------
+[templates.beckhoff_cx]
+deploy = true
+base = "ads"
+include = { "opcua.toml" = "opcua/opcua.toml" }
+
+[templates.beckhoff_cx.template]
+unit = "CX5140"
+vendor = "Beckhoff Automation"
+description = "Embedded PC, TwinCAT 3 PLC runtime with ADS and TwinCAT OPC UA Server"
+protocols = ["ads", "opcua"]
+creator = "T-Pot"
+
+[templates.beckhoff_cx.set."ads.toml"]
+"ads.ams_net_id" = "@@AMS_NET_ID@@"
+"ads.device_name" = "Plc30 App"
+"ads.version_build" = 4024
+"ads.hostname" = "@@HOSTNAME@@"
+"ads.tc_version_build" = 4024
+"ads.os_build" = 17763
+
+[templates.beckhoff_cx.set."opcua.toml"]
+"opcua.endpoint_path" = "/"
+"opcua.server_name" = "TcOpcUaServer@@@HOSTNAME@@"
+"opcua.namespace_uri" = "urn:BeckhoffAutomation:Ua:PLC1"
+"opcua.application_uri" = "urn:@@HOSTNAME@@:BeckhoffAutomation:TcOpcUaServer"
+"opcua.variables" = [
+    { name = "MAIN.fTemperature", type = "float", value = 21.4 },
+    { name = "MAIN.fPressure", type = "float", value = 3.82 },
+    { name = "MAIN.bPumpRunning", type = "boolean", value = true },
+    { name = "MAIN.nBatchId", type = "integer", value = 1187 },
+]
+
+[templates.beckhoff_cx.add."opcua.toml"]
+"opcua.endpoint_host" = "@@HOSTNAME@@"
+"opcua.folder_name" = "PLC1"
+"opcua.product_uri" = "urn:BeckhoffAutomation:TcOpcUaServer"
+"opcua.manufacturer_name" = "Beckhoff Automation"
+"opcua.product_name" = "TwinCAT OPC UA Server"
+"opcua.software_version" = "5.1.120"
+"opcua.build_number" = "120"
+
+[templates.beckhoff_cx.identity]
+LAN_IP = { gen = "lan_ip" }
+AMS_NET_ID = { derive = "ip_suffix", of = "LAN_IP", suffix = ".1.1" }
+MAC = { gen = "mac", oui = "00:01:05" }
+HOST_SUFFIX = { derive = "mac_tail", of = "MAC" }
+HOSTNAME = { derive = "format", of = "HOST_SUFFIX", fmt = "CX-{}" }
+
+# ---------------------------------------------------------------------------
+# LOYTEC LINX-153 automation server: KNXnet/IP server and BACnet/IP
+# KNX manufacturer 0x00B5, BACnet vendor 178, OUI 00:0A:B0
+# ---------------------------------------------------------------------------
+[templates.building_automation]
+deploy = true
+base = "knxnetip"
+include = { "bacnet.toml" = "default/bacnet.toml" }
+
+[templates.building_automation.template]
+unit = "LINX-153"
+vendor = "LOYTEC electronics GmbH"
+description = "Automation server, KNXnet/IP and BACnet/IP"
+protocols = ["bacnet", "knxnetip"]
+creator = "T-Pot"
+
+[templates.building_automation.add."template.toml"]
+"core.databus.key_value_mappings.SystemName" = "LINX-153"
+
+[templates.building_automation.set."knxnetip.toml"]
+"knxnetip.friendly_name" = "LINX-153"
+"knxnetip.individual_address" = "@@KNX_ADDRESS@@"
+"knxnetip.serial_number" = "00b5@@KNX_SERIAL@@"
+"knxnetip.mac_address" = "@@MAC@@"
+"knxnetip.manufacturer_id" = 181
+
+[templates.building_automation.add."knxnetip.toml"]
+"knxnetip.advertise_ip" = "@@LAN_IP@@"
+
+[templates.building_automation.set."bacnet.toml"]
+"bacnet.device_info.device_identifier" = "@@BACNET_INSTANCE@@"
+"bacnet.device_info.vendor_name" = "LOYTEC electronics GmbH"
+"bacnet.device_info.vendor_identifier" = 178
+"bacnet.device_info.model_name" = "LINX-153"
+"bacnet.device_info.firmware_revision" = "7.6"
+"bacnet.device_info.application_software_version" = "8.4.2"
+"bacnet.device_info.description" = "Automation Server"
+"bacnet.device_info.location" = "Technikzentrale"
+"bacnet.object_list.0.properties.object_name" = "AHU1 Fan Status"
+"bacnet.object_list.1.properties.object_name" = "AHU1 Supply Air Temp"
+"bacnet.object_list.2.properties.object_name" = "Door Plant Room"
+
+[templates.building_automation.identity]
+LAN_IP = { gen = "lan_ip" }
+MAC = { gen = "mac", oui = "00:0A:B0" }
+KNX_SERIAL = { gen = "hex", n = 8 }
+KNX_LINE = { gen = "int", min = 1, max = 15 }
+KNX_ADDRESS = { derive = "format", of = "KNX_LINE", fmt = "1.{}.0" }
+BACNET_INSTANCE = { gen = "int", min = 1000, max = 99999 }
+
+# ---------------------------------------------------------------------------
+# WirelessHART gateway (Rosemount / Emerson, HART manufacturer 0x26), HART-IP
+# ---------------------------------------------------------------------------
+[templates.hart_gateway]
+deploy = true
+base = "hartip"
+
+[templates.hart_gateway.template]
+unit = "1420"
+vendor = "Emerson"
+description = "Smart Wireless Gateway, HART-IP"
+protocols = ["hartip"]
+creator = "T-Pot"
+
+[templates.hart_gateway.set."hartip.toml"]
+"hartip.manufacturer_id" = 38
+"hartip.private_label_distributor" = 38
+"hartip.expanded_device_type" = 9874
+"hartip.device_id" = "@@DEVICE_ID@@"
+"hartip.long_tag" = "WIHART-GW-@@TAG_NO@@"
+"hartip.software_revision" = 4
+"hartip.hardware_revision" = 2
+
+[templates.hart_gateway.identity]
+DEVICE_ID = { gen = "hex", n = 6 }
+TAG_NO = { gen = "digits", n = 2 }
+
+# ---------------------------------------------------------------------------
+# ICCP / TASE.2 endpoint on the SISCO MMS-EASE Lite stack
+# ---------------------------------------------------------------------------
+[templates.iccp]
+deploy = true
+
+[templates.iccp.template]
+unit = "MMS-LITE-80X-001"
+vendor = "SISCO"
+description = "ICCP / TASE.2 server"
+protocols = ["iccp"]
+creator = "T-Pot"
+
+[templates.iccp.set."iccp.toml"]
+"iccp.vendor" = "SISCO"
+"iccp.model" = "MMS-LITE-80X-001"
+"iccp.revision" = "6.0000.3"
+"iccp.domain" = "BER01_ICC"
+"iccp.points.0.name" = "BER01_T1_MW"
+"iccp.points.1.name" = "BER01_Q0_CB"
+"iccp.points.2.name" = "BER01_T1_TAP"
+
+# ---------------------------------------------------------------------------
+# Schneider Modicon M340 BMX P34 2020, Modbus/TCP with UMAS
+# ---------------------------------------------------------------------------
+[templates.plc_modbus]
+deploy = true
+
+[templates.plc_modbus.template]
+unit = "BMX P34 2020"
+vendor = "Schneider Electric"
+description = "Modicon M340 PLC, Modbus/TCP"
+protocols = ["modbus"]
+creator = "T-Pot"
+
+[templates.plc_modbus.set."modbus.toml"]
+"modbus.port" = 502
+"modbus.device_info.VendorName" = "Schneider Electric  "
+"modbus.device_info.ProductCode" = "BMX P34 2020"
+"modbus.device_info.MajorMinorRevision" = "v3.3"
+
+# ---------------------------------------------------------------------------
+# Not deployed in T-Pot, kept for docker/conpot/docker-compose.yml
+# ---------------------------------------------------------------------------
+[templates.default]
+deploy = false
+
+[templates.default.template]
+unit = "S7-200"
+vendor = "Siemens"
+description = "Multi-protocol PLC"
+protocols = ["bacnet", "enip", "ftp", "http", "ipmi", "modbus", "s7comm", "snmp", "tftp"]
+creator = "T-Pot"
+
+[templates.default.set."template.toml"]
+# T-Pot values since 24.04
+"core.databus.key_value_mappings.FacilityName" = "DoE Water Service"
+"core.databus.key_value_mappings.SystemName" = "Central Pump"
+"core.databus.key_value_mappings.SystemDescription" = "Pump Control Unit"
+"core.databus.key_value_mappings.sysContact" = "DoE"
+"core.databus.key_value_mappings.sysName" = "Pump Control Unit"
+"core.databus.key_value_mappings.sysLocation" = "DoE"
+
+[templates.default.set."ftp.toml"]
+"ftp.port" = 21
+"ftp.device_info.motd" = "Central Pump - DoE Water Service. Authorized personnel only"
+"ftp.device_info.stou_prefix" = "tmp"
+"ftp.device_info.stou_suffix" = "upl"
+
+[templates.default.set."http.toml"]
+"http.port" = 80
+
+[templates.default.set."ipmi.toml"]
+"ipmi.port" = 623
+
+[templates.default.set."modbus.toml"]
+"modbus.port" = 502
+
+[templates.default.set."s7comm.toml"]
+"s7comm.port" = 102
+
+[templates.default.set."snmp.toml"]
+"snmp.port" = 161
+
+[templates.default.set."tftp.toml"]
+"tftp.port" = 69
+
+[templates.proxy]
+deploy = false

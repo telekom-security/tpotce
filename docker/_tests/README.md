@@ -114,6 +114,15 @@ mounts a temporary config without `services/sip.yaml`, and skips the SIP ports
 host-side FTP control port; every other tested Dionaea port remains dynamically
 assigned.
 
+The Conpot test starts all nine deployed templates in one Docker network on
+dynamic loopback ports (`--<key>-port` pins one, see `--help`). The probes
+compare each answer with the rendered template and the stored identity and
+reject Conpot / upstream default strings. The test also checks that the
+identity survives a restart, abuses every TCP service with half-open, partial
+and oversized frames and expects no container to stay busy afterwards, and
+validates the JSON events against the Conpot 1.0 event schema. The OPC UA probe
+runs the `asyncua` client of the image inside the container's network namespace.
+
 The Dicompot test additionally requires DCMTK client tools on the host:
 `echoscu`, `getscu`, `dcmdump`, and either `setscu` or `storescu`.
 

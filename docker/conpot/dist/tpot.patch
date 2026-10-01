@@ -1,0 +1,212 @@
+diff --git a/conpot/protocols/guardian_ast/guardian_ast_server.py b/conpot/protocols/guardian_ast/guardian_ast_server.py
+index 3979ff7..bc5c252 100644
+--- a/conpot/protocols/guardian_ast/guardian_ast_server.py
++++ b/conpot/protocols/guardian_ast/guardian_ast_server.py
+@@ -333,7 +333,15 @@ class GuardianASTServer(object):
+                     if not request:
+                         break
+                     while not (b"\n" in request or b"00" in request):
+-                        request += sock.recv(4096)
++                        chunk = sock.recv(4096)
++                        # recv() returns b"" once the peer closed: without this check
++                        # the loop spins at 100% CPU, the size cap stops flooding
++                        if not chunk or len(request) > 65536:
++                            request = b""
++                            break
++                        request += chunk
++                    if not request:
++                        break
+                     # Accept real SOH (\x01) or the literal "^A" typed in telnet/ncat
+                     # thanks John(achillean) for the help
+                     if request[:1] == b"\x01":
+diff --git a/conpot/protocols/iccp/iccp_server.py b/conpot/protocols/iccp/iccp_server.py
+index cf9b7a9..410eb14 100644
+--- a/conpot/protocols/iccp/iccp_server.py
++++ b/conpot/protocols/iccp/iccp_server.py
+@@ -199,7 +199,12 @@ class ICCPServer(object):
+ 
+         try:
+             while True:
+-                raw = self._recv_tpkt(sock)
++                try:
++                    raw = self._recv_tpkt(sock)
++                except TPKTError as exc:
++                    logger.debug("ICCP framing error from %s: %s", addr, exc)
++                    session.log_event(error=str(exc))
++                    break
+                 if raw is None:
+                     break
+                 try:
+diff --git a/conpot/protocols/ipmi/ipmi_server.py b/conpot/protocols/ipmi/ipmi_server.py
+index 300f6a6..05e66c9 100644
+--- a/conpot/protocols/ipmi/ipmi_server.py
++++ b/conpot/protocols/ipmi/ipmi_server.py
+@@ -115,8 +115,13 @@ class IpmiServer(object):
+ 
+     def handle(self, data, address):
+         self._ensure_sock()
++        # Sessions are kept per (ip, port): keyed by ip only, a client that comes
++        # back from a new source port got the answers sent to its old port.
++        key = (address[0], address[1])
++        if key in self.sessions:
++            self.session = self.sessions[key]
+         # make sure self.session exists
+-        if not address[0] in self.sessions.keys() or not hasattr(self, "session"):
++        if key not in self.sessions or not hasattr(self, "session"):
+             # new session for new source
+             logger.info("New IPMI traffic from %s", address)
+             self._log_event(
+@@ -130,7 +135,9 @@ class IpmiServer(object):
+             self.kg = None
+ 
+             self.session.socket = self.sock
+-            self.sessions[address[0]] = self.session
++            while len(self.sessions) >= 1024:
++                self.sessions.pop(next(iter(self.sessions)))
++            self.sessions[key] = self.session
+             self.initiate_session(data, address, self.session)
+         else:
+             # session already exists
+@@ -223,7 +230,7 @@ class IpmiServer(object):
+         logger.info("IPMI Session closed %s", self.session.sockaddr[0])
+         # cleanup session
+         self._log_event(self.session.sockaddr, event_type="CONNECTION_LOST")
+-        del self.sessions[self.session.sockaddr[0]]
++        self.sessions.pop(tuple(self.session.sockaddr[:2]), None)
+         self.attack_sessions.pop(self.session.sockaddr[0], None)
+         del self.session
+ 
+diff --git a/conpot/protocols/kamstrup_management/kamstrup_management_server.py b/conpot/protocols/kamstrup_management/kamstrup_management_server.py
+index 16f2d1d..fad0ada 100644
+--- a/conpot/protocols/kamstrup_management/kamstrup_management_server.py
++++ b/conpot/protocols/kamstrup_management/kamstrup_management_server.py
+@@ -68,7 +68,8 @@ class KamstrupManagementServer(object):
+                     logger.info("Kamstrup client disconnected. (%s)", session.id)
+                     session.log_event(event_type="CONNECTION_LOST")
+                     break
+-                request = data.decode()
++                # binary input must not kill the handler
++                request = data.decode(errors="replace")
+                 response = self.command_responder.respond(request)
+                 logger.info(
+                     "Kamstrup management traffic from %s: %s (%s)",
+diff --git a/conpot/protocols/kamstrup_meter/request_parser.py b/conpot/protocols/kamstrup_meter/request_parser.py
+index 6423d92..0fe876d 100644
+--- a/conpot/protocols/kamstrup_meter/request_parser.py
++++ b/conpot/protocols/kamstrup_meter/request_parser.py
+@@ -50,7 +50,8 @@ class KamstrupRequestParser(object):
+         while position < bytes_len:
+             d = self.bytes[position]
+             if not self.parsing and d != kamstrup_constants.REQUEST_MAGIC:
+-                logger.info(
++                # debug: one line per byte lets any client flood the log
++                logger.debug(
+                     "Kamstrup skipping byte, expected kamstrup_meter request magic but got: {0}".format(
+                         hex(d)
+                     )
+diff --git a/conpot/protocols/knxnetip/knxnetip_server.py b/conpot/protocols/knxnetip/knxnetip_server.py
+index b67e395..0ca4c7f 100644
+--- a/conpot/protocols/knxnetip/knxnetip_server.py
++++ b/conpot/protocols/knxnetip/knxnetip_server.py
+@@ -56,7 +56,10 @@ class KnxnetipServer(object):
+ 
+     def _control_endpoint(self, peer_ip: str) -> tuple[str, int]:
+         host = self.server.server_host
+-        if host in ("0.0.0.0", "", "::"):
++        advertise_ip = self.template.get("advertise_ip")
++        if advertise_ip:
++            host = str(advertise_ip)
++        elif host in ("0.0.0.0", "", "::"):
+             host = get_interface_ip(peer_ip)
+         return host, int(self.server.server_port)
+ 
+diff --git a/conpot/protocols/opcua/opcua_server.py b/conpot/protocols/opcua/opcua_server.py
+index fd8cc3d..d972cb7 100644
+--- a/conpot/protocols/opcua/opcua_server.py
++++ b/conpot/protocols/opcua/opcua_server.py
+@@ -12,6 +12,7 @@ from __future__ import annotations
+ import asyncio
+ import logging
+ from contextlib import contextmanager
++from datetime import datetime, timezone
+ from types import SimpleNamespace
+ 
+ from asyncua import Server, ua
+@@ -96,7 +97,9 @@ class OPCUAServer(object):
+         self._ua.set_security_policy([ua.SecurityPolicyType.NoSecurity])
+ 
+         idx = await self._ua.register_namespace(self.namespace_uri)
+-        folder = await self._ua.nodes.objects.add_object(idx, "Plant")
++        folder = await self._ua.nodes.objects.add_object(
++            idx, str(self.template.get("folder_name", "Plant"))
++        )
+         if not self._variables:
+             var = await folder.add_variable(idx, "Temperature", 25.0)
+             await var.set_writable()
+@@ -115,8 +118,25 @@ class OPCUAServer(object):
+         with _quiet_nodeset_load():
+             self._ua = Server()
+             await self._ua.init()
+-        endpoint = f"opc.tcp://{host}:{port}{self.endpoint_path}"
++        endpoint_host = self.template.get("endpoint_host") or host
++        endpoint = f"opc.tcp://{endpoint_host}:{port}{self.endpoint_path}"
+         self._ua.set_endpoint(endpoint)
++        if self.template.get("endpoint_host"):
++            # advertise the configured host, neither the client's URL nor the socket address
++            self._ua.set_match_discovery_endpoint_url(False)
++            self._ua.set_match_discovery_client_ip(False)
++        if self.template.get("product_name"):
++            self._ua.product_uri = str(self.template.get("product_uri", self.application_uri))
++            self._ua.manufacturer_name = str(self.template.get("manufacturer_name", ""))
++            self._ua.name = self.server_name
++            await self._ua.set_build_info(
++                self._ua.product_uri,
++                self._ua.manufacturer_name,
++                str(self.template["product_name"]),
++                str(self.template.get("software_version", "")),
++                str(self.template.get("build_number", "")),
++                datetime.now(timezone.utc),
++            )
+         await self._init_address_space()
+         await self._ua._setup_server_nodes()
+         await self._ua.iserver.start()
+diff --git a/conpot/protocols/schemas.py b/conpot/protocols/schemas.py
+index c4ce950..7b1ddd5 100644
+--- a/conpot/protocols/schemas.py
++++ b/conpot/protocols/schemas.py
+@@ -379,6 +379,13 @@ opcua = Schema(
+             Optional("server_name"): str,
+             Optional("namespace_uri"): str,
+             Optional("application_uri"): str,
++            Optional("endpoint_host"): str,
++            Optional("folder_name"): str,
++            Optional("product_uri"): str,
++            Optional("manufacturer_name"): str,
++            Optional("product_name"): str,
++            Optional("software_version"): str,
++            Optional("build_number"): str,
+             Optional("variables"): [
+                 {
+                     "name": str,
+@@ -405,6 +412,7 @@ knxnetip = Schema(
+             Optional("device_status"): int,
+             Optional("project_installation_id"): int,
+             Optional("multicast_group"): str,
++            Optional("advertise_ip"): str,
+         }
+     }
+ )
+diff --git a/conpot/utils/asyncio_serve.py b/conpot/utils/asyncio_serve.py
+index a6cfded..1d6c50e 100644
+--- a/conpot/utils/asyncio_serve.py
++++ b/conpot/utils/asyncio_serve.py
+@@ -77,6 +77,9 @@ async def serve_tcp_sync_handler(
+         conn.setblocking(True)
+         try:
+             await loop.run_in_executor(None, handler_obj.handle, conn, peer)
++        except ConnectionError as exc:
++            # reset / broken pipe by the client is not a handler bug
++            logger.info("%s connection closed by %s: %s", name, peer, exc)
+         except Exception:
+             logger.exception("%s connection handler crashed for %s", name, peer)
+         finally:

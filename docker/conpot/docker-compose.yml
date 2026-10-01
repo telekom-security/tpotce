@@ -1,10 +1,11 @@
-# CONPOT TEMPLATE=[default, IEC104, guardian_ast, ipmi, kamstrup_382, proxy]
+# CONPOT TEMPLATE=[default, IEC104, guardian_ast, ipmi, kamstrup_382, beckhoff_cx, building_automation, hart_gateway, iccp, plc_modbus, proxy]
 networks:
   conpot_local_default:
   conpot_local_IEC104:
   conpot_local_guardian_ast:
   conpot_local_ipmi:
   conpot_local_kamstrup_382:
+  conpot_local_ics:
 
 services:
 
@@ -25,24 +26,26 @@ services:
 #    cpus: 0.25    
     networks:
      - conpot_local_default
+    # 102, 161/udp, 502, 623/udp and 47808/udp are used by the other templates below
     ports:
-#    - "69:69/udp"        
+#     - "69:69/udp"
      - "80:80"
-     - "102:102"
-     - "161:161/udp"
-     - "502:502"
+#     - "102:102"
+#     - "161:161/udp"
+#     - "502:502"
 #     - "623:623/udp"
      - "2121:21"
      - "44818:44818"
-     - "47808:47808/udp"
+#     - "47808:47808/udp"
     image: "dtagdevsec/conpot:24.04.2"
     read_only: true
     volumes:
      - $HOME/tpotce/data/conpot/log:/var/log/conpot
+     - $HOME/tpotce/data/conpot/identity:/var/lib/conpot
 
 # Conpot IEC104 service
   conpot_IEC104:
-    container_name: conpot_IEC104
+    container_name: conpot_iec104
     restart: always
     environment:
      - CONPOT_CONFIG=/etc/conpot/conpot.cfg
@@ -57,12 +60,14 @@ services:
     networks:
      - conpot_local_IEC104
     ports:
-#     - "161:161/udp"
+     - "161:161/udp"
      - "2404:2404"
+     - "20000:20000"
     image: "dtagdevsec/conpot:24.04.2"
     read_only: true
     volumes:
      - $HOME/tpotce/data/conpot/log:/var/log/conpot
+     - $HOME/tpotce/data/conpot/identity:/var/lib/conpot
 
 # Conpot guardian_ast service
   conpot_guardian_ast:
@@ -86,6 +91,7 @@ services:
     read_only: true
     volumes:
      - $HOME/tpotce/data/conpot/log:/var/log/conpot
+     - $HOME/tpotce/data/conpot/identity:/var/lib/conpot
 
 # Conpot ipmi
   conpot_ipmi:
@@ -109,6 +115,7 @@ services:
     read_only: true
     volumes:
      - $HOME/tpotce/data/conpot/log:/var/log/conpot
+     - $HOME/tpotce/data/conpot/identity:/var/lib/conpot
 
 # Conpot kamstrup_382
   conpot_kamstrup_382:
@@ -133,3 +140,127 @@ services:
     read_only: true
     volumes:
      - $HOME/tpotce/data/conpot/log:/var/log/conpot
+     - $HOME/tpotce/data/conpot/identity:/var/lib/conpot
+
+# Conpot Beckhoff CX (ADS, OPC UA)
+  conpot_beckhoff_cx:
+    container_name: conpot_beckhoff_cx
+    restart: always
+    environment:
+     - CONPOT_CONFIG=/etc/conpot/conpot.cfg
+     - CONPOT_JSON_LOG=/var/log/conpot/conpot_beckhoff_cx.json
+     - CONPOT_LOG=/var/log/conpot/conpot_beckhoff_cx.log
+     - CONPOT_TEMPLATE=beckhoff_cx
+     - CONPOT_TMP=/tmp/conpot
+    tmpfs:
+     - /tmp/conpot:uid=2000,gid=2000
+#    cpu_count: 1
+#    cpus: 0.25
+    networks:
+     - conpot_local_ics
+    ports:
+     - "48898:48898"
+     - "48899:48899/udp"
+     - "4840:4840"
+    image: "dtagdevsec/conpot:24.04.2"
+    read_only: true
+    volumes:
+     - $HOME/tpotce/data/conpot/log:/var/log/conpot
+     - $HOME/tpotce/data/conpot/identity:/var/lib/conpot
+
+# Conpot building automation (KNXnet/IP, BACnet/IP)
+  conpot_building_automation:
+    container_name: conpot_building_automation
+    restart: always
+    environment:
+     - CONPOT_CONFIG=/etc/conpot/conpot.cfg
+     - CONPOT_JSON_LOG=/var/log/conpot/conpot_building_automation.json
+     - CONPOT_LOG=/var/log/conpot/conpot_building_automation.log
+     - CONPOT_TEMPLATE=building_automation
+     - CONPOT_TMP=/tmp/conpot
+    tmpfs:
+     - /tmp/conpot:uid=2000,gid=2000
+#    cpu_count: 1
+#    cpus: 0.25
+    networks:
+     - conpot_local_ics
+    ports:
+     - "3671:3671/udp"
+     - "47808:47808/udp"
+    image: "dtagdevsec/conpot:24.04.2"
+    read_only: true
+    volumes:
+     - $HOME/tpotce/data/conpot/log:/var/log/conpot
+     - $HOME/tpotce/data/conpot/identity:/var/lib/conpot
+
+# Conpot HART-IP gateway
+  conpot_hart_gateway:
+    container_name: conpot_hart_gateway
+    restart: always
+    environment:
+     - CONPOT_CONFIG=/etc/conpot/conpot.cfg
+     - CONPOT_JSON_LOG=/var/log/conpot/conpot_hart_gateway.json
+     - CONPOT_LOG=/var/log/conpot/conpot_hart_gateway.log
+     - CONPOT_TEMPLATE=hart_gateway
+     - CONPOT_TMP=/tmp/conpot
+    tmpfs:
+     - /tmp/conpot:uid=2000,gid=2000
+#    cpu_count: 1
+#    cpus: 0.25
+    networks:
+     - conpot_local_ics
+    ports:
+     - "5094:5094"
+    image: "dtagdevsec/conpot:24.04.2"
+    read_only: true
+    volumes:
+     - $HOME/tpotce/data/conpot/log:/var/log/conpot
+     - $HOME/tpotce/data/conpot/identity:/var/lib/conpot
+
+# Conpot ICCP / TASE.2
+  conpot_iccp:
+    container_name: conpot_iccp
+    restart: always
+    environment:
+     - CONPOT_CONFIG=/etc/conpot/conpot.cfg
+     - CONPOT_JSON_LOG=/var/log/conpot/conpot_iccp.json
+     - CONPOT_LOG=/var/log/conpot/conpot_iccp.log
+     - CONPOT_TEMPLATE=iccp
+     - CONPOT_TMP=/tmp/conpot
+    tmpfs:
+     - /tmp/conpot:uid=2000,gid=2000
+#    cpu_count: 1
+#    cpus: 0.25
+    networks:
+     - conpot_local_ics
+    ports:
+     - "102:102"
+    image: "dtagdevsec/conpot:24.04.2"
+    read_only: true
+    volumes:
+     - $HOME/tpotce/data/conpot/log:/var/log/conpot
+     - $HOME/tpotce/data/conpot/identity:/var/lib/conpot
+
+# Conpot Modbus PLC
+  conpot_plc_modbus:
+    container_name: conpot_plc_modbus
+    restart: always
+    environment:
+     - CONPOT_CONFIG=/etc/conpot/conpot.cfg
+     - CONPOT_JSON_LOG=/var/log/conpot/conpot_plc_modbus.json
+     - CONPOT_LOG=/var/log/conpot/conpot_plc_modbus.log
+     - CONPOT_TEMPLATE=plc_modbus
+     - CONPOT_TMP=/tmp/conpot
+    tmpfs:
+     - /tmp/conpot:uid=2000,gid=2000
+#    cpu_count: 1
+#    cpus: 0.25
+    networks:
+     - conpot_local_ics
+    ports:
+     - "502:502"
+    image: "dtagdevsec/conpot:24.04.2"
+    read_only: true
+    volumes:
+     - $HOME/tpotce/data/conpot/log:/var/log/conpot
+     - $HOME/tpotce/data/conpot/identity:/var/lib/conpot
