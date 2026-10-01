@@ -373,14 +373,6 @@ fuSENTRYPEER () {
   chown tpot:tpot /data/sentrypeer -R
 }
 
-# Let's create a function to prepare spiderfoot db
-fuSPIDERFOOT () {
-  mkdir -vp /data/spiderfoot
-  touch /data/spiderfoot/spiderfoot.db
-  chmod 770 -R /data/spiderfoot
-  chown tpot:tpot -R /data/spiderfoot
-}
-
 # Let's create a function to clean up and prepare suricata data
 fuSURICATA () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/suricata/*; fi
@@ -478,7 +470,6 @@ fuNGINX
 fuRDPHONEYPOT
 fuREDISHONEYPOT
 fuSENTRYPEER
-fuSPIDERFOOT
 fuSURICATA
 fuP0F
 fuSATORI

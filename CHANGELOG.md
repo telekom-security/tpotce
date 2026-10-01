@@ -43,6 +43,7 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 * **Installer** supports unattended installations and has been tested with **Alma 10**, **Debian 13**, **Fedora 44**, **OpenSuse Tumbleweed**, **Rocky 10**, **RHEL 10** and **Ubuntu 26.04** (sudo-rs).
 * **Persistence** cycles for logrotate are configurable through `TPOT_PERSISTENCE_CYCLES` in `.env`.
 * **Beelzebub** and **Honeypots** log their status as text (i.e. `Stateless`, `failed`), it is now indexed as `status_text`. So far Elasticsearch could not index it in the numeric `status` field, some values ended up as `0` and with 24.04.1 part of these events were not indexed at all.
+* **Spiderfoot** has been removed, see [Breaking Changes](#spiderfoot).
 * Updates for `24.04.2` images will be provided continuously through Docker image updates.
 
 ## Breaking Changes
@@ -61,6 +62,11 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 
 ### Dionaea
 - The SIP service has been removed.
+
+### Spiderfoot
+- Spiderfoot has been removed. As an OSINT / reconnaissance tool it does not fit the defensive scope of T-Pot. The service, the `/spiderfoot/` route and the link on the landing page are gone, the Dockerfile has moved to `docker/deprecated/spiderfoot`.
+- `update.sh` removes the `spiderfoot` service from a `docker-compose.yml` of your own, the previous file stays in the backup.
+- Your scans in `~/tpotce/data/spiderfoot` are kept. If you no longer need them, remove the folder with `sudo rm -rf ~/tpotce/data/spiderfoot`.
 
 ### Galah
 - In Elasticsearch the request and response fields of Galah are now `http_request.*` and `http_response.*` (i.e. `http_request.method`, `http_request.requestURI`), as ConPot and Miniprint log `request` / `response` as text and the daily index could only hold one of them. Import the Kibana objects of this release to get the updated Galah dashboard, older events keep the previous field names.

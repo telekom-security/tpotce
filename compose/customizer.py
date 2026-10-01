@@ -101,11 +101,6 @@ def enforce_dependencies(selected_services, services):
         selected_services['elasticsearch'] = services['elasticsearch']
         print_color("[OK] - Kibana requires Elasticsearch which has been added to your configuration.", "green")
 
-    # If spiderfoot is enabled, also enable nginx
-    if 'spiderfoot' in selected_services:
-        selected_services['nginx'] = services['nginx']
-        print_color("[OK] - Spiderfoot requires Nginx which has been added to your configuration.","green")
-
 
     # If any map services are detected, enable logstash, elasticsearch, nginx, and all map services
     map_services = {'map_web', 'map_redis', 'map_data'}

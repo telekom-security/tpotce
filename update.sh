@@ -90,6 +90,10 @@ myEDITION="${TPOT_UPDATE_EDITION}"
 myCOMPOSE_CUSTOMIZED="${TPOT_UPDATE_COMPOSE_CUSTOMIZED}"
 myEDITIONS="STANDARD SENSOR MINI LLM TARPIT MOBILE MAC_WIN"
 
+# Services that are no longer part of T-Pot. Their images are not built for this
+# release, a docker-compose.yml of your own that still has them fails on the pull.
+myDROPPED_SERVICES="spiderfoot"
+
 myUPDATER=$(cat << "EOF"
  _____     ____       _     _   _           _       _
 |_   _|   |  _ \ ___ | |_  | | | |_ __   __| | __ _| |_ ___ _ __
@@ -1348,6 +1352,47 @@ function fuRESTORE_EDITION () {
 	echo
 }
 
+# A docker-compose.yml restored from the backup can still hold services of the
+# previous release that are gone now. Their block goes, along with the comment
+# lines right above it; the templates never have them, so this is a no-op there.
+function fuREMOVE_DROPPED_SERVICES () {
+	local mySERVICE="" myFOUND=""
+	for mySERVICE in ${myDROPPED_SERVICES};
+	  do
+	    fuCOMPOSE_HAS "${mySERVICE}" || continue
+	    if [ -z "${myFOUND}" ];
+	      then
+	        myFOUND="1"
+	        echo "### Removing services that are no longer part of T-Pot ..."
+	    fi
+	    fuTMPDIR
+	    echo -n "###### $myBLUE Now removing ${mySERVICE} from docker-compose.yml, it is no longer part of T-Pot.$myWHITE "
+	    if ! awk -v svc="${mySERVICE}" '
+	         /^[^ #]/ { insvc = ($0 ~ /^services:/) }
+	         skip && (/^[^ #]/ || /^  [^ #]/) { skip = 0; printf "%s", pend; pend = "" }
+	         skip && (/^#/ || /^[[:space:]]*$/) { pend = pend $0 "\n"; next }
+	         skip { pend = ""; next }
+	         insvc && $0 ~ ("^  " svc ":[[:space:]]*$") {
+	           b = 0; for (i = 1; i <= n; i++) if (hl[i] ~ /^[[:space:]]*$/) b = i
+	           for (i = 1; i < b; i++) print hl[i]
+	           n = 0; skip = 1; next
+	         }
+	         /^#/ || /^[[:space:]]*$/ { hl[++n] = $0; next }
+	         { for (i = 1; i <= n; i++) print hl[i]; n = 0; print }
+	         END { if (!skip) for (i = 1; i <= n; i++) print hl[i] }
+	       ' "$HOME/tpotce/docker-compose.yml" > "${myTMPDIR}/docker-compose.yml" \
+	       || ! cp "${myTMPDIR}/docker-compose.yml" "$HOME/tpotce/docker-compose.yml";
+	      then
+	        echo " [ $myRED""NOT OK""$myWHITE ]"
+	        echo "###### $myBLUE""Please remove the ${mySERVICE} service from ~/tpotce/docker-compose.yml manually, T-Pot will not start with it.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	        continue
+	    fi
+	    echo "[ $myGREEN"OK"$myWHITE ]"
+	    echo "###### $myBLUE""Your previous file is in the backup: tar xOf ${myARCHIVE} docker-compose.yml""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	done
+	[ -n "${myFOUND}" ] && echo
+}
+
 ################
 # Main section #
 ################
@@ -1421,6 +1466,7 @@ fuSELFUPDATE "$@"
 # pulled, `docker compose pull` reads both.
 fuRESTORE
 fuRESTORE_EDITION
+fuREMOVE_DROPPED_SERVICES
 
 # Everything below belongs to the release of the checkout - the image tag .env now
 # carries, and the cleanup that removes every other tag. On an older checkout that

@@ -63,7 +63,6 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/in
   - [Attack Map](#attack-map)
   - [Cyberchef](#cyberchef)
   - [Elasticvue](#elasticvue)
-  - [Spiderfoot](#spiderfoot)
 - [Configuration](#configuration)
   - [T-Pot Config File](#t-pot-config-file)
   - [Customize T-Pot Honeypots and Services](#customize-t-pot-honeypots-and-services)
@@ -160,7 +159,6 @@ Alongside the following tools:
 * [T-Pot-Attack-Map](https://github.com/telekom-security/t-pot-attack-map) a beautifully animated attack map for T-Pot.
 * [P0f](https://lcamtuf.coredump.cx/p0f3/) is a tool for purely passive traffic fingerprinting.
 * [Satori](https://github.com/xnih/satori) is a passive OS, application and protocol fingerprinting tool.
-* [Spiderfoot](https://github.com/smicallef/spiderfoot) an open source intelligence automation tool.
 * [Suricata](https://suricata.io/) a Network Security Monitoring engine.
 
 ... to give you the best out-of-the-box experience possible and an easy-to-use multi-honeypot system.
@@ -184,11 +182,10 @@ T-Pot offers a number of services which are basically divided into five groups:
     * Logstash for ingesting, receiving and sending events to Elasticsearch.
     * Kibana for displaying events on beautifully rendered dashboards.
 3. Tools
-    * NGINX provides secure remote access (reverse proxy) to Kibana, CyberChef, Elasticvue, GeoIP AttackMap, Spiderfoot and allows for T-Pot sensors to securely transmit event data to the T-Pot hive.
+    * NGINX provides secure remote access (reverse proxy) to Kibana, CyberChef, Elasticvue, GeoIP AttackMap and allows for T-Pot sensors to securely transmit event data to the T-Pot hive.
     * CyberChef a web app for encryption, encoding, compression and data analysis.
     * Elasticvue a web front end for browsing and interacting with an Elasticsearch cluster.
     * T-Pot Attack Map a beautifully animated attack map for T-Pot.
-    * Spiderfoot an open source intelligence automation tool.
 4. Honeypots
     * A selection of the 23 available honeypots based on the selected `docker-compose.yml`.
 5. Network Security Monitoring (NSM)
@@ -208,7 +205,6 @@ During the installation and during the usage of T-Pot there are two different ty
 | CyberChef        | BasicAuth    | `<WEB_USER>`     | `<web_user>` you chose during the installation of T-Pot.           |
 | Elasticvue       | BasicAuth    | `<WEB_USER>`     | `<web_user>` you chose during the installation of T-Pot.           |
 | Geoip Attack Map | BasicAuth    | `<WEB_USER>`     | `<web_user>` you chose during the installation of T-Pot.           |
-| Spiderfoot       | BasicAuth    | `<WEB_USER>`     | `<web_user>` you chose during the installation of T-Pot.           |
 | T-Pot            | OS           | `tpot`           | `tpot` this user / group is always reserved by the T-Pot services. |
 | T-Pot Logs       | BasicAuth    | `<LS_WEB_USER>`  | `LS_WEB_USER` are automatically managed.                           |
 
@@ -675,12 +671,6 @@ On the T-Pot Landing Page just click on `Elasticvue` and you will be forwarded t
 ![Elasticvue](doc/elasticvue.png)
 <br><br>
 
-## Spiderfoot
-On the T-Pot Landing Page just click on `Spiderfoot` and you will be forwarded to Spiderfoot.
-
-![Spiderfoot](doc/spiderfoot.png)
-<br><br>
-
 # Configuration
 
 ## T-Pot Config File
@@ -1131,7 +1121,6 @@ Without open source and the development community we are proud to be a part of, 
 [rdphoneypot](https://gitlab.com/bontchev/rdphoneypot/-/project_members),
 [sentrypeer](https://github.com/SentryPeer/SentryPeer/graphs/contributors),
 [satori](https://github.com/xnih/satori/graphs/contributors),
-[spiderfoot](https://github.com/smicallef/spiderfoot),
 [snare](https://github.com/mushorg/snare/graphs/contributors),
 [tanner](https://github.com/mushorg/tanner/graphs/contributors),
 [suricata](https://github.com/OISF/suricata/graphs/contributors),

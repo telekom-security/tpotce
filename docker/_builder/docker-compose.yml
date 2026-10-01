@@ -427,12 +427,3 @@ services:
         - ${TPOT_GHCR_REPO}/nginx:${TPOT_VERSION}
       context: ../nginx/
       <<: *common-build
-
-# Spiderfoot
-  spiderfoot:
-    image: ${TPOT_DOCKER_REPO}/spiderfoot:${TPOT_VERSION}
-    build:
-      tags:
-        - ${TPOT_GHCR_REPO}/spiderfoot:${TPOT_VERSION}
-      context: ../spiderfoot/
-      <<: *common-build
