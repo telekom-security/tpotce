@@ -211,3 +211,113 @@ capabilities:
         # how many days should the certificate be valid for
         valid_days: 365
         serial_number: 0
+
+  # Heralding 2.0: compose profiles publish only ports free in that profile.
+  ldap:
+    enabled: true
+    port: 389
+    timeout: 30
+    protocol_specific_data:
+      max_attempts: 10
+
+  ldaps:
+    enabled: true
+    port: 636
+    timeout: 30
+    protocol_specific_data:
+      max_attempts: 10
+      cert:
+        common_name: '*'
+        country: US
+        state: None
+        locality: None
+        organization: None
+        organizational_unit: None
+        valid_days: 365
+        serial_number: 0
+
+  ftps:
+    enabled: true
+    port: 990
+    timeout: 30
+    protocol_specific_data:
+      max_attempts: 3
+      banner: ''
+      syst_type: ''
+      cert:
+        common_name: '*'
+        country: US
+        state: None
+        locality: None
+        organization: None
+        organizational_unit: None
+        valid_days: 365
+        serial_number: 0
+
+  mqtts:
+    enabled: true
+    port: 8883
+    timeout: 30
+    protocol_specific_data:
+      cert:
+        common_name: '*'
+        country: US
+        state: None
+        locality: None
+        organization: None
+        organizational_unit: None
+        valid_days: 365
+        serial_number: 0
+
+  submission:
+    enabled: true
+    port: 587
+    timeout: 30
+    protocol_specific_data:
+      banner: ''
+      fqdn: ''
+      cert:
+        common_name: '*'
+        country: US
+        state: None
+        locality: None
+        organization: None
+        organizational_unit: None
+        valid_days: 365
+        serial_number: 0
+
+  mssql:
+    enabled: true
+    port: 1433
+    timeout: 30
+    protocol_specific_data:
+      version: ''
+
+  mqtt:
+    enabled: true
+    port: 1883
+    timeout: 30
+
+  sip:
+    enabled: true
+    port: 5060
+    timeout: 30
+
+  redis:
+    enabled: true
+    port: 6379
+    timeout: 30
+    protocol_specific_data:
+      max_attempts: 10
+
+  http_proxy:
+    enabled: true
+    port: 8080
+    timeout: 30
+    protocol_specific_data:
+      banner: ''
+
+  smb:
+    enabled: true
+    port: 445
+    timeout: 30

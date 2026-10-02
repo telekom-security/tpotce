@@ -1,68 +1,47 @@
-FROM alpine:3.23
-#
-# Include dist
-COPY dist/ /root/dist/
-#
-# Install packages
-RUN apk --no-cache -U upgrade && \
-	apk --no-cache -U add \
-		build-base \
-		git \
-		libcap \
-		libffi-dev \
-		openssl-dev \
-		py3-pyzmq \
-		postgresql-dev \
-		py3-attrs \
-		py3-mysqlclient \
-		py3-nose \
-		py3-pip \
-		py3-psycopg2 \
-		py3-pycryptodome \
-		py3-pyzmq \
-		py3-requests \
-		py3-rsa \
-		py3-typing-extensions \
-		py3-wheel \
-		py3-yaml \
-		python3 \
-		python3-dev && \
-#
-# Setup heralding
-    mkdir -p /opt && \
-    cd /opt/ && \
-    git clone https://github.com/johnnykv/heralding && \
-    cd heralding && \
-    git checkout ac12724ab38c4e2fe78f07d1bc35e6e586ba69c0 && \
-    sed -i '/^from ez_setup import use_setuptools$/d;/^use_setuptools()/d' setup.py && \
-    cp /root/dist/requirements.txt . && \
-    pip3 install --break-system-packages --no-cache-dir --upgrade pip && \
-    pip3 install --break-system-packages --no-cache-dir -r requirements.txt && \
-    pip3 install --break-system-packages --no-cache-dir . && \
-#
-# Setup user, groups and configs
-    addgroup -g 2000 heralding && \
-    adduser -S -H -s /bin/ash -u 2000 -D -g 2000 heralding && \
-    mkdir -p /var/log/heralding/ /etc/heralding && \
-    mv /root/dist/heralding.yml /etc/heralding/ && \
-    setcap cap_net_bind_service=+ep $(readlink -f $(type -P python3)) && \
-    chown -R heralding:heralding /var/log/heralding && \
-#
-# Clean up
-    apk del --purge \
-		build-base \
-		git \
-		libcap \
-		libffi-dev \
-		openssl-dev \
-		postgresql-dev \
-		python3-dev && \
-    rm -rf /root/* \
-		/var/cache/apk/* \
-		/opt/heralding
-#
-# Start Heralding
+# syntax=docker/dockerfile:1
+# Heralding 2.0 – credentials catching honeypot
+# Build: see README.md for a local source archive and the named context.
+# Run:   docker run --read-only --tmpfs /tmp/heralding:uid=2000,gid=2000 \
+#          -v "$PWD/log:/var/log/heralding" -p 21:21 -p 22:22 ... heralding
+
+# The local-only delivery uses --build-context heralding_source=<archive-root>.
+# Its archive-root contains heralding/ from the pinned commit below.
+FROM python:3.14-alpine@sha256:2e740b2c28a426e74f11396c05e38afb3191acced75045b8d62df573c1dc8ce8 AS heralding_source
+ARG HERALDING_REPOSITORY=https://github.com/t3chn0m4g3/heralding.git
+ARG HERALDING_COMMIT=3715207ed2bed42bd2fa55ee7800113d6fa393f2
+RUN apk --no-cache add git \
+    && git clone "$HERALDING_REPOSITORY" /heralding \
+    && git -C /heralding checkout --detach "$HERALDING_COMMIT" \
+    && test "$(git -C /heralding rev-parse HEAD)" = "$HERALDING_COMMIT"
+
+FROM python:3.14-alpine@sha256:2e740b2c28a426e74f11396c05e38afb3191acced75045b8d62df573c1dc8ce8 AS build
+COPY --from=ghcr.io/astral-sh/uv:0.12@sha256:f513a91fc62fe7c17567eee97230dd198e43edb8a9fbecca843714a4358fe1bc /uv /usr/local/bin/uv
+ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
+WORKDIR /opt/heralding
+# dependencies first (cached layer), then the project itself
+COPY --from=heralding_source /heralding/pyproject.toml /heralding/uv.lock /heralding/README.md ./
+RUN uv sync --locked --no-dev --no-install-project
+COPY --from=heralding_source /heralding/heralding ./heralding
+RUN rm -rf heralding/tests \
+    && uv sync --locked --no-dev --no-editable
+
+FROM python:3.14-alpine@sha256:2e740b2c28a426e74f11396c05e38afb3191acced75045b8d62df573c1dc8ce8
+RUN apk --no-cache add libcap \
+    && addgroup -g 2000 heralding \
+    && adduser -S -H -s /sbin/nologin -u 2000 -G heralding heralding \
+    && mkdir -p /etc/heralding /var/log/heralding /tmp/heralding \
+    && chown heralding:heralding /var/log/heralding /tmp/heralding
+COPY --from=build /opt/heralding /opt/heralding
+COPY dist/heralding.yml /etc/heralding/heralding.yml
+# bind ports < 1024 without root; the venv's python links to the system binary
+RUN setcap cap_net_bind_service=+ep "$(readlink -f /opt/heralding/.venv/bin/python)" \
+    && apk del libcap
+ENV PATH=/opt/heralding/.venv/bin:$PATH
+
+EXPOSE 21 22 23 25 80 110 143 389 443 445 465 587 636 990 993 995 1080 1433 1883 \
+       3306 3389 5060 5060/udp 5432 5900 6379 8080 8883
+
 STOPSIGNAL SIGINT
-WORKDIR /tmp/heralding/
+WORKDIR /tmp/heralding
 USER heralding:heralding
 CMD ["heralding", "-c", "/etc/heralding/heralding.yml", "-l", "/var/log/heralding/heralding.log"]

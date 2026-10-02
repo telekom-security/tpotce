@@ -415,7 +415,7 @@ def socks5_probe():
         packet = b"\x01" + bytes([len(username_bytes)]) + username_bytes + bytes([len(password_bytes)]) + password_bytes
         sock.sendall(packet)
         response = recv_exact(sock, 2)
-        if response != b"\x02\xff":
+        if response not in (b"\x01\xff", b"\x02\xff"):
             raise ProbeError(f"Unexpected SOCKS5 auth response: {response!r}")
 
 
