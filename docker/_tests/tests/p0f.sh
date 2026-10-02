@@ -444,6 +444,51 @@ PY
   done
 }
 
+# Offline mode: arguments go to p0f, which reads a pcap and writes NDJSON to stdout
+check_offline_mode() {
+  local pcap_dir="${TEST_TMP_ROOT}/pcap"
+  local out="" err=""
+
+  mkdir -p "${pcap_dir}"
+  # one Linux 4.19+ SYN from 198.51.100.7, packet time 2023-11-14 22:13:20 UTC
+  python3 - "${pcap_dir}/syn.pcap" <<'PY'
+import struct, sys
+opts = struct.pack("!BBH", 2, 4, 1460) + b"\x04\x02" + struct.pack("!BBII", 8, 10, 12345, 0) + b"\x01" + struct.pack("!BBB", 3, 3, 7)
+tcp = struct.pack("!HHIIBBHHH", 40001, 22, 1, 0, (20 + len(opts)) // 4 << 4, 0x02, 64240, 0, 0) + opts
+ip = struct.pack("!BBHHHBBH4s4s", 0x45, 0, 20 + len(tcp), 1, 0x4000, 56, 6, 0, bytes([198, 51, 100, 7]), bytes([192, 0, 2, 1]))
+s = sum(struct.unpack("!10H", ip)); s = (s >> 16) + (s & 0xFFFF); ip = ip[:10] + struct.pack("!H", ~(s + (s >> 16)) & 0xFFFF) + ip[12:]
+frame = b"\x02\x00\x00\x00\x00\x01\x02\x00\x00\x00\x00\x02\x08\x00" + ip + tcp
+open(sys.argv[1], "wb").write(struct.pack("<IHHiIII", 0xA1B2C3D4, 2, 4, 0, 0, 65535, 1)
+                              + struct.pack("<IIII", 1700000000, 0, len(frame), len(frame)) + frame)
+PY
+  chmod -R a+rX "${pcap_dir}"
+
+  out="$(docker run --rm --network none -v "${pcap_dir}:/pcap:ro" "${IMAGE}" -r /pcap/syn.pcap 2>/dev/null)" \
+    || test_die "p0f offline mode failed: docker run ${IMAGE} -r <pcap>"
+  python3 - "${out}" "${LINUX_OS}" <<'PY' || test_die "p0f offline mode did not write the expected NDJSON to stdout"
+import json, sys
+out, linux_os = sys.argv[1], sys.argv[2]
+events = []
+for line in out.splitlines():
+    try:
+        events.append(json.loads(line))
+    except json.JSONDecodeError:
+        sys.exit(f"stdout holds a line that is not JSON: {line!r}")
+syn = [e for e in events if e.get("mod") == "syn" and e.get("client_ip") == "198.51.100.7"]
+if len(syn) != 1:
+    sys.exit(f"expected one syn event from 198.51.100.7, got {events}")
+e = syn[0]
+if e.get("timestamp") != "2023/11/14 22:13:20" or e.get("os") != linux_os or e.get("os_family") != "Linux":
+    sys.exit(f"unexpected syn event: {e}")
+print(f"offline: {e['timestamp']} {e['client_ip']} os={e['os']!r} os_family={e['os_family']}")
+PY
+
+  # a BPF filter after the options is passed on to p0f
+  out="$(docker run --rm --network none -v "${pcap_dir}:/pcap:ro" "${IMAGE}" -r /pcap/syn.pcap 'not src host 198.51.100.7' 2>/dev/null)" \
+    || test_die "p0f offline mode with a BPF filter failed"
+  [[ -z "${out}" ]] || test_die "p0f offline mode ignored the BPF filter: ${out}"
+}
+
 cleanup_scanner() {
   docker rm -f "${SCANNER_CONTAINER_NAME}" >/dev/null 2>&1 || true
 }
@@ -526,6 +571,9 @@ main() {
 
   check_conf_parser
   test_ok "p0f rejects malformed conf fields in p0f.fp"
+
+  check_offline_mode
+  test_ok "p0f offline mode writes NDJSON to stdout (pcap time stamps, BPF filter)"
 
   test_ok "p0f post-build smoke test completed successfully"
 }

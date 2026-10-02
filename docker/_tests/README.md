@@ -142,7 +142,9 @@ masscan and expects both to be recognised as tools; the scanners are installed
 with apk, so this part needs network access (`--skip-scanners` leaves it out).
 The Linux SYN has to carry `os_family`, `os_confidence` and `os_samples` from the
 `conf` field of `p0f.fp`, the scanners `os_family: Scanner`, and p0f has to refuse
-a `p0f.fp` with malformed `conf` fields.
+a `p0f.fp` with malformed `conf` fields. Finally the offline mode
+(`docker run <image> -r <pcap>`) has to write only NDJSON to stdout, with the
+time stamps of the pcap, and honour a BPF filter.
 
 The RDPHoneypot test also verifies that `server.pem` is written to the
 persistent cert volume and remains unchanged after a container restart.

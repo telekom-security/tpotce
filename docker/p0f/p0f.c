@@ -97,6 +97,8 @@ static u8 stop_soon;                    /* Ctrl-C or so pressed?              */
 u8 daemon_mode;                         /* Running in daemon mode?            */
 u8 json_mode;                           /* Log in JSON?                       */
 u8 line_buffered_mode;                  /* Line Buffered Mode?                */
+static u8 log_stdout;                   /* T-Pot: -o - (log to stdout)?       */
+static s32 stdout_fd = -1;              /* T-Pot: real stdout for -o -        */
 
 static u8 set_promisc;                  /* Use promiscuous mode?              */
 
@@ -135,7 +137,7 @@ static void usage(void) {
 "Operating mode and output settings:\n"
 "\n"
 "  -f file   - read fingerprint database from 'file' (%s)\n"
-"  -o file   - write information to the specified log file\n"
+"  -o file   - write information to the specified log file ('-' = stdout)\n"
 "  -j        - Log in JSON format.\n"
 "  -l        - Line buffered mode for logging to output file.\n"
 #ifndef __CYGWIN__
@@ -203,13 +205,13 @@ static void close_spare_fds(void) {
   if (!d) {
     /* Best we could do... */
     for (i = 3; i < 256; i++) 
-      if (!close(i)) closed++;
+      if (i != stdout_fd && !close(i)) closed++;
     return;
   }
 
   while ((de = readdir(d))) {
     i = atol(de->d_name);
-    if (i > 2 && !close(i)) closed++;
+    if (i > 2 && i != stdout_fd && !close(i)) closed++;   /* T-Pot: keep -o - */
   }
 
   closedir(d);
@@ -226,6 +228,14 @@ static void open_log(void) {
 
   struct stat st;
   s32 log_fd;
+
+  if (log_stdout) {
+
+    lf = fdopen(stdout_fd, "w");
+    if (!lf) PFATAL("fdopen() on stdout failed.");
+    return;
+
+  }
 
   log_fd = open((char*)log_file, O_WRONLY | O_APPEND | O_NOFOLLOW | O_LARGEFILE);
 
@@ -319,7 +329,7 @@ void start_observation(char* keyword, u8 field_cnt, u8 to_srv,
 
   if (obs_fields) FATAL("Premature end of observation.");
 
-  if (!daemon_mode) {
+  if (!daemon_mode && !log_stdout) {
 
     SAYF(".-[ %s/%u -> ", addr_to_str(f->client->addr, f->client->ip_ver),
          f->cli_port);
@@ -370,7 +380,7 @@ static void add_observation(char* key, u8* value, json_t* jvalue) {
 
   if (!obs_fields) FATAL("Unexpected observation field ('%s').", key);
 
-  if (!daemon_mode)
+  if (!daemon_mode && !log_stdout)
     SAYF("| %-8s = %s\n", key, value ? value : (u8*)"???");
 
   if (log_file && json_mode) {
@@ -385,7 +395,7 @@ static void add_observation(char* key, u8* value, json_t* jvalue) {
 
   if (!obs_fields) {
 
-    if (!daemon_mode) SAYF("|\n`----\n\n");
+    if (!daemon_mode && !log_stdout) SAYF("|\n`----\n\n");
 
     if (log_file){
 
@@ -1074,8 +1084,6 @@ int main(int argc, char** argv) {
 
   setlinebuf(stdout);
 
-  SAYF("--- p0f " VERSION " by Michal Zalewski <lcamtuf@coredump.cx> ---\n\n");
-
   if (getuid() != geteuid())
     FATAL("Please don't make me setuid. See README for more.\n");
 
@@ -1227,6 +1235,22 @@ int main(int argc, char** argv) {
     default: usage();
 
   }
+
+  /* T-Pot: '-o -' writes the log to stdout (offline mode: pcap to NDJSON).
+     The log keeps a copy of the real stdout, everything p0f prints for
+     humans goes to stderr from here on, the banner included. */
+
+  if (log_file && !strcmp((char*)log_file, "-")) {
+
+    if ((stdout_fd = dup(STDOUT_FILENO)) < 0 ||
+        dup2(STDERR_FILENO, STDOUT_FILENO) < 0)
+      PFATAL("dup() for '-o -' failed.");
+
+    log_stdout = 1;
+
+  }
+
+  SAYF("--- p0f " VERSION " by Michal Zalewski <lcamtuf@coredump.cx> ---\n\n");
 
   if (optind < argc) {
 

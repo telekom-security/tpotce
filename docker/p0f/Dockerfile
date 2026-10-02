@@ -3,6 +3,7 @@ FROM alpine:3.24
 # Add source
 COPY . /opt/p0f
 COPY --chmod=0755 dist/capture-if.sh /usr/bin/capture-if.sh
+COPY --chmod=0755 dist/run.sh /usr/bin/p0f-run.sh
 #
 # Install packages
 RUN apk --no-cache -U upgrade && \
@@ -31,7 +32,7 @@ RUN apk --no-cache -U upgrade && \
     rm -rf /root/* \
            /var/cache/apk/*
 #
-# Start p0f
+# Start p0f: live capture, or with arguments offline (pcap to JSON on stdout)
 WORKDIR /opt/p0f
 USER p0f:p0f
-CMD ["/bin/bash", "-c", "myIF=\"$(capture-if.sh)\" || exit 1; exec /opt/p0f/p0f -u p0f -j -o /var/log/p0f/p0f.json -i \"${myIF}\" > /dev/null"]
+ENTRYPOINT ["/usr/bin/p0f-run.sh"]
