@@ -243,6 +243,27 @@ void parse_packet(void* junk, const struct pcap_pkthdr* hdr, const u8* data) {
 
   }
 
+  /* T-Pot: the fixed Ethernet offset only fits untagged frames, so skip up to
+     two VLAN tags (802.1Q, QinQ) per packet; tagged and untagged frames may
+     be mixed. data[-2] is the EtherType in front of the current header. */
+
+  if (link_type == DLT_EN10MB && link_off == 14) {
+
+    u8 tags = 0;
+
+    while (tags < 2 && packet_len >= 4 &&
+           ((data[-2] == 0x81 && data[-1] == 0x00) ||
+            (data[-2] == 0x88 && data[-1] == 0xa8) ||
+            (data[-2] == 0x91 && data[-1] == 0x00))) {
+
+      data += 4;
+      packet_len -= 4;
+      tags++;
+
+    }
+
+  }
+
   /* If there is no way we could have received a complete TCP packet, bail
      out early. */
 

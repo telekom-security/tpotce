@@ -612,8 +612,10 @@ retry_no_vlan:
 
   if (!orig_rule) {
 
+    /* T-Pot: one or two VLAN tags (802.1Q, QinQ). */
+
     if (vlan_support) {
-      final_rule = (u8*)"tcp or (vlan and tcp)";
+      final_rule = (u8*)"tcp or (vlan and (tcp or (vlan and tcp)))";
     } else {
       final_rule = (u8*)"tcp";
     }
@@ -622,10 +624,10 @@ retry_no_vlan:
 
     if (vlan_support) {
 
-      final_rule = ck_alloc(strlen((char*)orig_rule) * 2 + 64);
+      final_rule = ck_alloc(strlen((char*)orig_rule) * 3 + 96);
 
-      sprintf((char*)final_rule, "(tcp and (%s)) or (vlan and tcp and (%s))",
-              orig_rule, orig_rule);
+      sprintf((char*)final_rule, "(tcp and (%s)) or (vlan and ((tcp and (%s)) "
+              "or (vlan and tcp and (%s))))", orig_rule, orig_rule, orig_rule);
 
     } else {
 

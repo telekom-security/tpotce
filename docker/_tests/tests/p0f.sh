@@ -446,16 +446,23 @@ check_offline_mode() {
   local out="" err=""
 
   mkdir -p "${pcap_dir}"
-  # one Linux 4.19+ SYN from 198.51.100.7, packet time 2023-11-14 22:13:20 UTC
-  python3 - "${pcap_dir}/syn.pcap" <<'PY'
+  # syn.pcap: one Linux 4.19+ SYN from 198.51.100.7, packet time 2023-11-14 22:13:20 UTC
+  # vlan.pcap: the same SYN from .8 untagged, .9 with an 802.1Q tag, .10 with QinQ tags
+  python3 - "${pcap_dir}" <<'PY'
 import struct, sys
-opts = struct.pack("!BBH", 2, 4, 1460) + b"\x04\x02" + struct.pack("!BBII", 8, 10, 12345, 0) + b"\x01" + struct.pack("!BBB", 3, 3, 7)
-tcp = struct.pack("!HHIIBBHHH", 40001, 22, 1, 0, (20 + len(opts)) // 4 << 4, 0x02, 64240, 0, 0) + opts
-ip = struct.pack("!BBHHHBBH4s4s", 0x45, 0, 20 + len(tcp), 1, 0x4000, 56, 6, 0, bytes([198, 51, 100, 7]), bytes([192, 0, 2, 1]))
-s = sum(struct.unpack("!10H", ip)); s = (s >> 16) + (s & 0xFFFF); ip = ip[:10] + struct.pack("!H", ~(s + (s >> 16)) & 0xFFFF) + ip[12:]
-frame = b"\x02\x00\x00\x00\x00\x01\x02\x00\x00\x00\x00\x02\x08\x00" + ip + tcp
-open(sys.argv[1], "wb").write(struct.pack("<IHHiIII", 0xA1B2C3D4, 2, 4, 0, 0, 65535, 1)
-                              + struct.pack("<IIII", 1700000000, 0, len(frame), len(frame)) + frame)
+def frame(src, tags=b""):
+    opts = struct.pack("!BBH", 2, 4, 1460) + b"\x04\x02" + struct.pack("!BBII", 8, 10, 12345, 0) + b"\x01" + struct.pack("!BBB", 3, 3, 7)
+    tcp = struct.pack("!HHIIBBHHH", 40001, 22, 1, 0, (20 + len(opts)) // 4 << 4, 0x02, 64240, 0, 0) + opts
+    ip = struct.pack("!BBHHHBBH4s4s", 0x45, 0, 20 + len(tcp), 1, 0x4000, 56, 6, 0, bytes([198, 51, 100, src]), bytes([192, 0, 2, 1]))
+    s = sum(struct.unpack("!10H", ip)); s = (s >> 16) + (s & 0xFFFF); ip = ip[:10] + struct.pack("!H", ~(s + (s >> 16)) & 0xFFFF) + ip[12:]
+    return b"\x02\x00\x00\x00\x00\x01\x02\x00\x00\x00\x00\x02" + tags + b"\x08\x00" + ip + tcp
+def pcap(name, frames):
+    with open(f"{sys.argv[1]}/{name}", "wb") as fh:
+        fh.write(struct.pack("<IHHiIII", 0xA1B2C3D4, 2, 4, 0, 0, 65535, 1))
+        for n, f in enumerate(frames):
+            fh.write(struct.pack("<IIII", 1700000000 + n, 0, len(f), len(f)) + f)
+pcap("syn.pcap", [frame(7)])
+pcap("vlan.pcap", [frame(8), frame(9, b"\x81\x00\x00\x65"), frame(10, b"\x88\xa8\x00\x64\x81\x00\x00\x65")])
 PY
   chmod -R a+rX "${pcap_dir}"
 
@@ -478,6 +485,23 @@ if e.get("timestamp") != "2023/11/14 22:13:20" or e.get("os") != linux_os or e.g
     sys.exit(f"unexpected syn event: {e}")
 print(f"offline: {e['timestamp']} {e['client_ip']} os={e['os']!r} os_family={e['os_family']}")
 PY
+
+  # VLAN tags (802.1Q, QinQ) are skipped per packet, untagged frames in between still work
+  out="$(docker run --rm --network none -v "${pcap_dir}:/pcap:ro" "${IMAGE}" -r /pcap/vlan.pcap 2>/dev/null)" \
+    || test_die "p0f offline mode failed on a VLAN pcap"
+  python3 - "${out}" "${LINUX_OS}" <<'PY' || test_die "p0f did not fingerprint VLAN tagged SYNs"
+import json, sys
+seen = {e["client_ip"]: e.get("os") for e in map(json.loads, sys.argv[1].splitlines()) if e.get("mod") == "syn"}
+want = {"198.51.100.8": "untagged", "198.51.100.9": "802.1Q", "198.51.100.10": "QinQ"}
+missing = [f"{ip} ({kind})" for ip, kind in want.items() if seen.get(ip) != sys.argv[2]]
+if missing:
+    sys.exit(f"no {sys.argv[2]!r} syn event for {', '.join(missing)}; got {seen}")
+print("offline: untagged, 802.1Q and QinQ SYNs fingerprinted")
+PY
+  out="$(docker run --rm --network none -v "${pcap_dir}:/pcap:ro" "${IMAGE}" -r /pcap/vlan.pcap 'src host 198.51.100.10' 2>/dev/null)" \
+    || test_die "p0f offline mode with a BPF filter failed on a VLAN pcap"
+  grep -q '"client_ip": "198.51.100.10"' <<<"${out}" && ! grep -q '"client_ip": "198.51.100.9"' <<<"${out}" \
+    || test_die "p0f BPF filter does not apply to QinQ tagged SYNs: ${out}"
 
   # a BPF filter after the options is passed on to p0f
   out="$(docker run --rm --network none -v "${pcap_dir}:/pcap:ro" "${IMAGE}" -r /pcap/syn.pcap 'not src host 198.51.100.7' 2>/dev/null)" \
@@ -591,7 +615,7 @@ main() {
   test_ok "p0f rejects malformed conf fields in p0f.fp"
 
   check_offline_mode
-  test_ok "p0f offline mode writes NDJSON to stdout (pcap time stamps, BPF filter)"
+  test_ok "p0f offline mode writes NDJSON to stdout (pcap time stamps, VLAN tags, BPF filter)"
 
   test_ok "p0f post-build smoke test completed successfully"
 }
