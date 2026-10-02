@@ -278,6 +278,7 @@ static void tcp_find_match(u8 to_srv, struct tcp_sig* ts, u8 dupe_det,
 
 void tcp_register_sig(u8 to_srv, u8 generic, s32 sig_class, u32 sig_name,
                       u8* sig_flavor, u32 label_id, u32* sys, u32 sys_cnt,
+                      u8* conf_family, float conf_share, u32 conf_n,
                       u8* val, u32 line_no) {
 
   s8  ver, win_type, pay_class;
@@ -724,6 +725,10 @@ void tcp_register_sig(u8 to_srv, u8 generic, s32 sig_class, u32 sig_name,
   trec->sig      = tsig;
   trec->bad_ttl  = bad_ttl;
 
+  trec->conf_family = conf_family;
+  trec->conf_share  = conf_share;
+  trec->conf_n      = conf_n;
+
   /* All done, phew. */
 
 }
@@ -1162,6 +1167,8 @@ struct tcp_sig* fingerprint_tcp(u8 to_srv, struct packet_data* pk,
 
   struct tcp_sig* sig;
   struct tcp_sig_record* m;
+  u8* os_family = NULL;
+  u8  os_conf = 0;
 
   sig = ck_alloc(sizeof(struct tcp_sig));
   packet_to_sig(pk, sig);
@@ -1173,12 +1180,28 @@ struct tcp_sig* fingerprint_tcp(u8 to_srv, struct packet_data* pk,
   if (pk->tcp_type == TCP_SYN && pk->win == SPECIAL_WIN &&
       pk->mss == SPECIAL_MSS) f->sendsyn = 1;
 
+  tcp_find_match(to_srv, sig, 0, f->syn_mss);
+
+  /* T-Pot: OS family of client SYNs; userland tools are scanners, OS labels
+     take it from their 'conf' field. The confidence was measured on exact
+     matches, so fuzzy matches only get the family. */
+
+  if (to_srv && !f->sendsyn && (m = sig->matched)) {
+
+    if (m->class_id == -1) {
+      os_family = (u8*)"Scanner";
+    } else if (m->conf_family) {
+      os_family = m->conf_family;
+      os_conf   = !sig->fuzzy;
+    }
+
+  }
+
   if (to_srv) 
-    start_observation(f->sendsyn ? "sendsyn probe" : "syn", 4, 1, f);
+    start_observation(f->sendsyn ? "sendsyn probe" : "syn",
+                      4 + !!os_family + 2 * os_conf, 1, f);
   else
     start_observation(f->sendsyn ? "sendsyn response" : "syn+ack", 4, 0, f);
-
-  tcp_find_match(to_srv, sig, 0, f->syn_mss);
 
   if ((m = sig->matched)) {
 
@@ -1208,6 +1231,13 @@ struct tcp_sig* fingerprint_tcp(u8 to_srv, struct packet_data* pk,
   add_observation_field("params", dump_flags(pk, sig));
 
   add_observation_field("raw_sig", dump_sig(pk, sig, f->syn_mss));
+
+  if (os_family) add_observation_field("os_family", os_family);
+
+  if (os_conf) {
+    add_observation_number("os_confidence", m->conf_share, 0);
+    add_observation_number("os_samples", m->conf_n, 1);
+  }
 
   if (pk->tcp_type == TCP_SYN) f->syn_mss = pk->mss;
 

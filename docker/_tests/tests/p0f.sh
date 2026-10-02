@@ -308,6 +308,13 @@ for line_number, event in events:
             print(f"p0f SYN event in {log_file}:{line_number} has os={event.get('os')!r}, expected {linux_os!r} "
                   f"(raw_sig {event.get('raw_sig')})", file=sys.stderr)
             sys.exit(1)
+        # conf field of the label in p0f.fp: family, share and sample count
+        conf, samples = event.get("os_confidence"), event.get("os_samples")
+        if (event.get("os_family") != "Linux" or not isinstance(conf, float) or not 0.9 <= conf <= 1
+                or not isinstance(samples, int) or samples <= 0):
+            print(f"p0f SYN event in {log_file}:{line_number} has os_family={event.get('os_family')!r} "
+                  f"os_confidence={conf!r} os_samples={samples!r}, expected Linux, >= 0.9, > 0", file=sys.stderr)
+            sys.exit(1)
         syn_event = (line_number, event)
 
     if event.get("mod") == "http request" and token in str(event.get("raw_sig", "")):
@@ -371,7 +378,10 @@ for line in open(log_file, encoding="utf-8", errors="replace"):
         continue
     event = json.loads(line)
     if event.get("mod") == "syn" and event.get("client_ip") == scanner_ip and event.get("server_ip") == p0f_ip:
-        seen.setdefault(int(event.get("server_port", 0)), set()).add(event.get("app") or event.get("os"))
+        # tools get os_family Scanner, but no confidence (the datasets hold no scanners)
+        tag = "" if event.get("os_family") == "Scanner" and "os_confidence" not in event else \
+            f" (os_family={event.get('os_family')!r}, os_confidence={event.get('os_confidence')!r})"
+        seen.setdefault(int(event.get("server_port", 0)), set()).add((event.get("app") or event.get("os")) + tag)
 failed = False
 for port, app in expected.items():
     if app in seen.get(port, set()):
@@ -381,6 +391,57 @@ for port, app in expected.items():
         failed = True
 sys.exit(1 if failed else 0)
 PY
+}
+
+# p0f has to refuse a p0f.fp with a malformed conf field (and still load the shipped one)
+check_conf_parser() {
+  local fp_dir="${TEST_TMP_ROOT}/fp"
+  local case_name="" line="" expect="" rc=0 out=""
+
+  mkdir -p "${fp_dir}"
+  docker run --rm --entrypoint /bin/cat "${IMAGE}" /opt/p0f/p0f.fp > "${fp_dir}/p0f.fp"
+  python3 -c 'import struct,sys; open(sys.argv[1],"wb").write(struct.pack("<IHHiIII",0xA1B2C3D4,2,4,0,0,65535,1))' "${fp_dir}/empty.pcap"
+  chmod -R a+rX "${fp_dir}"
+
+  run_p0f_on() {
+    docker run --rm --entrypoint /opt/p0f/p0f -v "${fp_dir}:/fp:ro" "${IMAGE}" -f "/fp/$1" -r /fp/empty.pcap 2>&1
+  }
+
+  out="$(run_p0f_on p0f.fp)" || test_die "p0f does not load its own p0f.fp: ${out}"
+
+  for case_name in share family placement userland duplicate; do
+    case "${case_name}" in
+      share) line="conf = Linux:high:100"; expect="Malformed 'conf' share" ;;
+      family) line="conf = BeOS:0.9:100"; expect="Unknown OS family 'BeOS'" ;;
+      placement) line="conf = Linux:0.9:100"; expect="Misplaced 'conf'" ;;
+      userland) line="conf = Linux:0.9:100"; expect="Misplaced 'conf'" ;;
+      duplicate) line="conf = Linux:0.9:100"; expect="Misplaced 'conf'" ;;
+    esac
+    python3 - "${fp_dir}/p0f.fp" "${fp_dir}/bad-${case_name}.fp" "${case_name}" "${line}" <<'PY'
+import re, sys
+src, dst, case, line = sys.argv[1:5]
+text = open(src).read()
+req = text.index("[tcp:request]")
+if case == "userland":
+    m = re.compile(r"^sys\s*=.*$", re.M).search(text, req)          # after a userland label
+elif case == "placement":
+    lab = re.compile(r"^label\s*=\s*\S:unix:Linux:.*$", re.M).search(text, req)
+    m = re.compile(r"^sig\s*=.*$", re.M).search(text, lab.end())    # after a sig of an OS label
+elif case == "duplicate":
+    m = re.compile(r"^conf\s*=.*$", re.M).search(text, req)         # second conf for one label
+else:
+    m = re.compile(r"^label\s*=\s*\S:unix:Linux:.*$", re.M).search(text, req)
+    m = re.compile(r"^(conf\s*=.*\n)?", re.M).match(text, m.end() + 1)
+    open(dst, "w").write(text[:m.start()] + line + "\n" + text[m.end():])
+    sys.exit(0)
+open(dst, "w").write(text[:m.end()] + "\n" + line + text[m.end():])
+PY
+    rc=0
+    out="$(run_p0f_on "bad-${case_name}.fp")" || rc=$?
+    if [[ "${rc}" -eq 0 ]] || ! grep -qF "${expect}" <<<"${out}"; then
+      test_die "p0f accepted a p0f.fp with a malformed conf field (${case_name}): rc=${rc} ${out}"
+    fi
+  done
 }
 
 cleanup_scanner() {
@@ -462,6 +523,9 @@ main() {
 
   assert_no_runtime_errors
   test_ok "No p0f runtime errors found in logs"
+
+  check_conf_parser
+  test_ok "p0f rejects malformed conf fields in p0f.fp"
 
   test_ok "p0f post-build smoke test completed successfully"
 }

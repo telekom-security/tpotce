@@ -45,6 +45,16 @@ static u8* sig_flavor;                  /* Signature flavor                   */
 static u32* cur_sys;                    /* Current 'sys' values               */
 static u32  cur_sys_cnt;                /* Number of 'sys' entries            */
 
+static u8*  conf_family;                /* T-Pot: 'conf' OS family of label   */
+static float conf_share;                /* T-Pot: 'conf' share of that family */
+static u32  conf_n;                     /* T-Pot: 'conf' number of samples    */
+static u8   conf_open;                  /* T-Pot: 'conf' allowed here?        */
+
+/* OS families a 'conf' field may name (T-Pot, see docker/p0f/tools/). */
+
+static u8* conf_families[] = { (u8*)"Android", (u8*)"Apple", (u8*)"Linux",
+                               (u8*)"Windows", NULL };
+
 u8 **fp_os_classes,                     /* Map of OS classes                  */
    **fp_os_names;                       /* Map of OS names                    */
 
@@ -52,6 +62,44 @@ static u32 class_cnt,                   /* Sizes for maps                     */
            name_cnt,
            label_id,                    /* Current label ID                   */
            line_no;                     /* Current line number                */
+
+
+/* T-Pot: parse 'conf = <family>:<share>:<samples>', the share of the label's
+   OS family in the public datasets and the number of samples behind it. */
+
+static void config_parse_conf(u8* val) {
+
+  u8* nxt;
+  u32 i;
+  double share;
+  unsigned long n;
+
+  nxt = (u8*)strchr((char*)val, ':');
+  if (!nxt) FATAL("Malformed 'conf' in line %u.", line_no);
+
+  *nxt++ = 0;
+
+  for (i = 0; conf_families[i]; i++)
+    if (!strcmp((char*)val, (char*)conf_families[i])) break;
+
+  if (!conf_families[i])
+    FATAL("Unknown OS family '%s' in 'conf' in line %u.", val, line_no);
+
+  val = nxt;
+  share = strtod((char*)val, (char**)&nxt);
+  if (nxt == val || *nxt != ':' || share < 0 || share > 1)
+    FATAL("Malformed 'conf' share in line %u.", line_no);
+
+  val = nxt + 1;
+  n = strtoul((char*)val, (char**)&nxt, 10);
+  if (nxt == val || *nxt || !isdigit(*val) || !n || n > 0xFFFFFFFFUL)
+    FATAL("Malformed 'conf' sample count in line %u.", line_no);
+
+  conf_family = conf_families[i];
+  conf_share  = share;
+  conf_n      = n;
+
+}
 
 
 /* Parse 'classes' parameter by populating fp_os_classes. */
@@ -338,6 +386,20 @@ static void config_parse_line(u8* line) {
     if (mod_type != CF_MOD_MTU && sig_class < 0) state = CF_NEED_SYS;
     else state = CF_NEED_SIG;
 
+    conf_family = NULL;
+    conf_share  = 0;
+    conf_n      = 0;
+    conf_open   = (mod_type == CF_MOD_TCP && mod_to_srv && sig_class >= 0);
+
+  } else if (!strcmp((char*)line, "conf")) {
+
+    if (!conf_open || state != CF_NEED_SIG)
+      FATAL("Misplaced 'conf' in line %u (once per OS label in [tcp:request], "
+            "before its first 'sig').", line_no);
+
+    config_parse_conf(val);
+    conf_open = 0;
+
   } else if (!strcmp((char*)line, "sys")) {
 
     if (state != CF_NEED_SYS)
@@ -351,11 +413,14 @@ static void config_parse_line(u8* line) {
 
     if (state != CF_NEED_SIG) FATAL("Misplaced 'sig' in line %u.", line_no);
 
+    conf_open = 0;
+
     switch (mod_type) {
 
       case CF_MOD_TCP:
         tcp_register_sig(mod_to_srv, generic, sig_class, sig_name, sig_flavor,
-                         label_id, cur_sys, cur_sys_cnt, val, line_no);
+                         label_id, cur_sys, cur_sys_cnt, conf_family,
+                         conf_share, conf_n, val, line_no);
         break;
 
       case CF_MOD_MTU:

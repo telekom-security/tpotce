@@ -70,6 +70,10 @@ struct tcp_sig_record {
 
   u32  line_no;                         /* Line number in p0f.fp              */
 
+  u8*   conf_family;                    /* T-Pot: 'conf' OS family or NULL    */
+  float conf_share;                     /* T-Pot: 'conf' share of the family  */
+  u32   conf_n;                         /* T-Pot: 'conf' number of samples    */
+
   u8  bad_ttl;                          /* TTL is generated randomly          */
 
   struct tcp_sig* sig;                  /* Actual signature data              */
@@ -83,6 +87,7 @@ struct packet_flow;
 
 void tcp_register_sig(u8 to_srv, u8 generic, s32 sig_class, u32 sig_name,
                       u8* sig_flavor, u32 label_id, u32* sys, u32 sys_cnt,
+                      u8* conf_family, float conf_share, u32 conf_n,
                       u8* val, u32 line_no);
 
 struct tcp_sig* fingerprint_tcp(u8 to_srv, struct packet_data* pk,

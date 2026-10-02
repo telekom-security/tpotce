@@ -364,21 +364,21 @@ void start_observation(char* keyword, u8 field_cnt, u8 to_srv,
 }
 
 
-/* Add log item. */
+/* Add log item; jvalue is its JSON value (NULL = the string value). */
 
-void add_observation_field(char* key, u8* value) {
+static void add_observation(char* key, u8* value, json_t* jvalue) {
 
   if (!obs_fields) FATAL("Unexpected observation field ('%s').", key);
 
   if (!daemon_mode)
     SAYF("| %-8s = %s\n", key, value ? value : (u8*)"???");
 
-  if (log_file) {
-    if (json_mode) {
-      json_object_set_new(json_record, key, json_string( (char *)(value ? value : (u8*)"???") ));
-    } else {
-      LOGF("|%s=%s", key, value ? value : (u8*)"???");
-    }
+  if (log_file && json_mode) {
+    json_object_set_new(json_record, key, jvalue ? jvalue :
+                        json_string( (char *)(value ? value : (u8*)"???") ));
+  } else {
+    if (jvalue) json_decref(jvalue);
+    if (log_file) LOGF("|%s=%s", key, value ? value : (u8*)"???");
   }
 
   obs_fields--;
@@ -390,7 +390,7 @@ void add_observation_field(char* key, u8* value) {
     if (log_file){
 
       if (json_mode) {
-        json_dumpf(json_record, lf, 0);
+        json_dumpf(json_record, lf, JSON_REAL_PRECISION(3));
         json_decref(json_record);
       }
 
@@ -401,6 +401,25 @@ void add_observation_field(char* key, u8* value) {
     }
 
   }
+
+}
+
+
+void add_observation_field(char* key, u8* value) {
+
+  add_observation(key, value, NULL);
+
+}
+
+
+/* Add a numeric log item (T-Pot: os_confidence / os_samples). */
+
+void add_observation_number(char* key, double value, u8 integer) {
+
+  u8 tmp[32];
+
+  snprintf((char*)tmp, sizeof(tmp), integer ? "%.0f" : "%.3f", value);
+  add_observation(key, tmp, integer ? json_integer((json_int_t)value) : json_real(value));
 
 }
 
