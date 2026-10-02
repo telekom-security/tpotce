@@ -8,7 +8,7 @@
 # Its archive-root contains heralding/ from the pinned commit below.
 FROM python:3.14-alpine@sha256:2e740b2c28a426e74f11396c05e38afb3191acced75045b8d62df573c1dc8ce8 AS heralding_source
 ARG HERALDING_REPOSITORY=https://github.com/t3chn0m4g3/heralding.git
-ARG HERALDING_COMMIT=3715207ed2bed42bd2fa55ee7800113d6fa393f2
+ARG HERALDING_COMMIT=0f9b48ba19e4c60ad1e9e9b0193e9057ed64a2af
 RUN apk --no-cache add git \
     && git clone "$HERALDING_REPOSITORY" /heralding \
     && git -C /heralding checkout --detach "$HERALDING_COMMIT" \

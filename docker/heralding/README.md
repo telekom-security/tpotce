@@ -1,7 +1,7 @@
 # Heralding 2.0 integration
 
 Python 3.14 with a pinned Python/uv build and source commit
-`3715207ed2bed42bd2fa55ee7800113d6fa393f2` from `t3chn0m4g3/heralding`.
+`0f9b48ba19e4c60ad1e9e9b0193e9057ed64a2af` from `t3chn0m4g3/heralding`.
 The image runs as uid/gid 2000 with cap_net_bind_service, read-only rootfs and a writable
 `/tmp/heralding` tmpfs. Logs remain in `/var/log/heralding`. No tests are shipped in the image.
 
