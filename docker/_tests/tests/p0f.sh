@@ -570,24 +570,26 @@ if len(h) != 1 or h[0].get("app") != "tpot-test" or "ua_dishonest" in h[0] or "u
 print("offline: no ua_dishonest without User-Agent / expected software")
 PY
 
-  # stdout and stderr on one stream (terminal, 2>&1): the JSON must be complete
-  # before p0f's closing message, no line may mix both
+  # -o - keeps quiet on success: stdout and stderr on one stream (terminal,
+  # 2>&1, a pipe in front of stdout) hold the JSON lines only, no banner or
+  # 'All done' that could land between them; errors still go to stderr
   out="$(docker run --rm --network none -v "${pcap_dir}:/pcap:ro" --entrypoint /bin/sh "${IMAGE}" -c \
     '/usr/bin/p0f-run.sh -r /pcap/vlan.pcap 2>&1')" || test_die "p0f offline mode failed with stderr on stdout"
-  python3 - "${out}" <<'PY' || test_die "p0f mixed its JSON log and its messages on one stream"
+  python3 - "${out}" <<'PY' || test_die "p0f wrote more than JSON in offline mode"
 import json, sys
 lines = [l for l in sys.argv[1].splitlines() if l.strip()]
-json_idx = [i for i, l in enumerate(lines) if l.startswith("{")]
-done = [i for i, l in enumerate(lines) if "All done" in l]
 for l in lines:
-    if l.startswith("{"):
+    try:
         json.loads(l)
-    elif "{" in l or '"' in l:
-        sys.exit(f"line mixes JSON and messages: {l!r}")
-if not json_idx or len(done) != 1 or done[0] < json_idx[-1]:
-    sys.exit(f"'All done' is not after the last JSON line: {lines}")
-print("offline: JSON complete before p0f's closing message")
+    except ValueError:
+        sys.exit(f"line that is no JSON: {l!r}")
+if not lines:
+    sys.exit("no output")
+print(f"offline: {len(lines)} JSON lines, no messages on success")
 PY
+  out="$(docker run --rm --network none -v "${pcap_dir}:/pcap:ro" "${IMAGE}" -r /pcap/missing.pcap 2>&1 >/dev/null)" \
+    && test_die "p0f offline mode accepted a missing pcap"
+  grep -q "Can't access file" <<<"${out}" || test_die "p0f offline mode hides its errors: ${out}"
 
   # own -j / -o - next to the entrypoint's defaults
   for args in "-r /pcap/syn.pcap -j" "-o - -r /pcap/syn.pcap" "-jo - -r /pcap/syn.pcap" "-r /pcap/syn.pcap -lj"; do

@@ -148,7 +148,8 @@ a `p0f.fp` with malformed `conf` or `ua_family` fields. HTTP requests with a
 Windows, Android, forged Chrome, curl, FreeBSD, non-UTF-8 and proxied
 (X-Forwarded-For) User-Agent check `ua_os`, `ua_os_mismatch`, `ua_dishonest`,
 `user_agent` and `http_proxy`. Finally the offline mode
-(`docker run <image> -r <pcap>`) has to write only NDJSON to stdout, with the
+(`docker run <image> -r <pcap>`) has to write only NDJSON (nothing else on
+stderr unless there is an error), with the
 time stamps of the pcap, fingerprint SYNs with 802.1Q and QinQ tags, and honour a BPF filter.
 
 The RDPHoneypot test also verifies that `server.pem` is written to the

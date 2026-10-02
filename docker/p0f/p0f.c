@@ -1277,17 +1277,23 @@ int main(int argc, char** argv) {
   }
 
   /* T-Pot: '-o -' writes the log to stdout (offline mode: pcap to NDJSON).
-     The log keeps a copy of the real stdout, everything p0f prints for
-     humans goes to stderr from here on, the banner included. */
+     The log keeps a copy of the real stdout. What p0f prints for humans
+     (banner, progress, 'All done') goes to /dev/null, so a terminal or a
+     pipe sees JSON lines only; warnings and errors stay on stderr. */
 
   if (log_file && !strcmp((char*)log_file, "-")) {
+
+    s32 devnull;
 
     /* Above 2: with a closed stdin dup() would return 0, which -d replaces
        by /dev/null. */
 
     if ((stdout_fd = fcntl(STDOUT_FILENO, F_DUPFD, 3)) < 0 ||
-        dup2(STDERR_FILENO, STDOUT_FILENO) < 0)
+        (devnull = open("/dev/null", O_WRONLY)) < 0 ||
+        dup2(devnull, STDOUT_FILENO) < 0)
       PFATAL("dup() for '-o -' failed.");
+
+    close(devnull);
 
     log_stdout = 1;
 
