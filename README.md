@@ -187,7 +187,7 @@ T-Pot offers a number of services which are basically divided into five groups:
 4. Honeypots
     * A selection of the 23 available honeypots based on the selected `docker-compose.yml`.
 5. Network Security Monitoring (NSM)
-    * P0f is a tool for purely passive traffic fingerprinting.
+    * P0f is a tool for purely passive traffic fingerprinting. T-Pot ships its own fingerprints with an OS family and a confidence from public datasets (`os_family`, `os_confidence`), and the image also reads pcap files: `docker run --rm -v "$PWD:/pcap:ro" dtagdevsec/p0f:24.04.2 -r /pcap/capture.pcap` prints the results as JSON.
     * Suricata a Network Security Monitoring engine.
 <br><br>
 
@@ -1067,6 +1067,11 @@ The software that T-Pot is built on uses the following licenses.
 [Wordpot](https://github.com/gbrindisi/wordpot)
 <br>AGPL-3.0:
 [honeypots](https://github.com/qeeqbox/honeypots/blob/main/LICENSE)
+<br>LGPL 2.1:
+[p0f](https://lcamtuf.coredump.cx/p0f3/)
+<br>[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), data for the p0f `conf` fields:
+[CESNET 2024](https://doi.org/10.5281/zenodo.14703490) (M. Hulák, V. Bartoš, T. Čejka: Transferability of TCP/IP-based OS fingerprinting models, IFIP Networking 2025),
+[MUNI 2021](https://doi.org/10.5281/zenodo.7635138) (M. Laštovička et al.: Passive operating system fingerprinting revisited: Evaluation and current challenges, Computer Networks 229, 2023)
 <br>[Public Domain (CC)](https://creativecommons.org/publicdomain/zero/1.0/):
 [Harvard Dataverse](https://dataverse.harvard.edu/dataverse/harvard/?q=dicom) 
 <br><br>
