@@ -187,7 +187,7 @@ T-Pot offers a number of services which are basically divided into five groups:
 4. Honeypots
     * A selection of the 23 available honeypots based on the selected `docker-compose.yml`.
 5. Network Security Monitoring (NSM)
-    * P0f is a tool for purely passive traffic fingerprinting. T-Pot ships its own fingerprints with an OS family and a confidence from public datasets (`os_family`, `os_confidence`), and the image also reads pcap files: `docker run --rm -v "$PWD:/pcap:ro" dtagdevsec/p0f:24.04.2 -r /pcap/capture.pcap` prints the results as JSON.
+    * P0f is a tool for purely passive traffic fingerprinting. T-Pot ships its own fingerprints with an OS family and a confidence from public datasets (`os_family`, `os_confidence`), flags clients whose User-Agent names another OS than their TCP stack (`ua_os_mismatch`, dashboard **P0f**), and the image also reads pcap files: `docker run --rm -v "$PWD:/pcap:ro" dtagdevsec/p0f:24.04.2 -r /pcap/capture.pcap` prints the results as JSON.
     * Suricata a Network Security Monitoring engine.
 <br><br>
 
