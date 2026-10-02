@@ -424,7 +424,8 @@ check_conf_parser() {
   # ua_family: unknown family and malformed entries stop p0f with their own message
   for case_name in "BeOS=[Haiku]|Unknown OS family 'BeOS' in 'ua_family'|family" "Linux|Malformed 'ua_family'|format" \
                    "|Malformed 'ua_family'|empty" "Linux=[Linux],|Malformed 'ua_family'|comma" \
-                   "Linux=[Linux],BSD=[Linux]|Duplicate 'ua_family' entry 'Linux'|dup"; do
+                   "Linux=[Linux],BSD=[Linux]|Duplicate 'ua_family' entry 'Linux'|dup" \
+                   "Apple=[Mac],Apple=[Macintosh]|'ua_family' entry 'Macintosh' never matches, 'Mac' comes first|shadow"; do
     expect="${case_name#*|}"; line="${case_name%%|*}"; expect="${expect%|*}"
     # one file per case, Docker Desktop may serve a stale copy of a rewritten file
     python3 -c 'import re,sys; t=open(sys.argv[1]).read(); n=re.subn(r"^ua_family = .*$", "ua_family = " + sys.argv[3], t, flags=re.M); assert n[1] == 1; open(sys.argv[2],"w").write(n[0])' \
@@ -570,7 +571,7 @@ print("offline: no ua_dishonest without User-Agent / expected software")
 PY
 
   # own -j / -o - next to the entrypoint's defaults
-  for args in "-r /pcap/syn.pcap -j" "-o - -r /pcap/syn.pcap"; do
+  for args in "-r /pcap/syn.pcap -j" "-o - -r /pcap/syn.pcap" "-jo - -r /pcap/syn.pcap" "-r /pcap/syn.pcap -lj"; do
     # shellcheck disable=SC2086
     out="$(docker run --rm --network none -v "${pcap_dir}:/pcap:ro" "${IMAGE}" ${args} 2>&1 >/dev/null)" \
       || test_die "p0f offline mode refuses '${args}': ${out}"
@@ -598,8 +599,9 @@ check_ua_signals() {
   local bsd_ua="Mozilla/5.0 (X11; FreeBSD amd64; rv:125.0) Gecko/20100101 Firefox/125.0 tpot-bsd"
   local utf8_ua="Mozilla/5.0 (X11; Linux x86_64) \\xff Firefox/125.0 tpot-utf8"
   local proxy_ua="Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0 tpot-proxy"
+  local emptyxff_ua="Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0 tpot-emptyxff"
 
-  for case_name in win android dishonest curl bsd utf8 proxy; do
+  for case_name in win android dishonest curl bsd utf8 proxy emptyxff; do
     case "${case_name}" in
       win) req="GET / HTTP/1.1\r\nHost: p0f\r\nUser-Agent: ${win_ua}\r\nConnection: close\r\n\r\n" ;;
       android) req="GET / HTTP/1.1\r\nHost: p0f\r\nUser-Agent: ${android_ua}\r\nConnection: close\r\n\r\n" ;;
@@ -611,6 +613,8 @@ check_ua_signals() {
       # a byte that is no UTF-8 (0xff) must not cost the user_agent field
       utf8) req="GET / HTTP/1.1\r\nHost: p0f\r\nUser-Agent: ${utf8_ua}\r\nConnection: close\r\n\r\n" ;;
       proxy) req="GET / HTTP/1.1\r\nHost: p0f\r\nUser-Agent: ${proxy_ua}\r\nX-Forwarded-For: 198.51.100.99\r\nConnection: close\r\n\r\n" ;;
+      # an empty X-Forwarded-For still means a proxy
+      emptyxff) req="GET / HTTP/1.1\r\nHost: p0f\r\nUser-Agent: ${emptyxff_ua}\r\nX-Forwarded-For:\r\nConnection: close\r\n\r\n" ;;
     esac
     docker exec "${HTTP_CLIENT_CONTAINER_NAME}" /bin/bash -c \
       "exec 3<>/dev/tcp/${P0F_CONTAINER_IP}/${HTTP_PORT} && printf '${req}' >&3 && read -r -t 2 _ <&3; exec 3<&-" \
@@ -634,6 +638,7 @@ want = {
     "bsd": {"ua_os": "BSD", "os_family": "Linux", "ua_os_mismatch": True},
     "utf8": {"ua_os": "Linux", "ua_os_mismatch": False},
     "proxy": {"ua_os": "Windows", "ua_os_mismatch": True, "http_proxy": True},
+    "emptyxff": {"ua_os": "Windows", "http_proxy": True},
 }
 failed = False
 u = events.get("utf8")

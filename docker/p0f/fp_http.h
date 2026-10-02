@@ -61,6 +61,7 @@ struct http_sig {
 
   struct http_sig_record* matched;      /* NULL = no match                    */
   u8  dishonest;                        /* "sw" looks forged?                 */
+  u8  proxy_hdr;                        /* T-Pot: Via / X-Forwarded-For seen? */
 
 };
 

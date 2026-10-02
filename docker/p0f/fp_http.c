@@ -886,11 +886,22 @@ void http_parse_ua_family(u8* val, u32 line_no) {
     if (val == nxt || !*nxt)
       FATAL("Malformed 'ua_family' in line %u.", line_no);
 
-    for (i = 0; i < ua_fam_cnt; i++)
-      if (strlen((char*)ua_fam[i].needle) == (u32)(nxt - val) &&
+    for (i = 0; i < ua_fam_cnt; i++) {
+
+      u32 nlen = strlen((char*)ua_fam[i].needle);
+
+      if (nlen == (u32)(nxt - val) &&
           !strncmp((char*)val, (char*)ua_fam[i].needle, nxt - val))
         FATAL("Duplicate 'ua_family' entry '%.*s' in line %u.",
               (int)(nxt - val), val, line_no);
+
+      /* First match wins: an earlier substring hides this entry for good. */
+
+      if (memmem(val, nxt - val, ua_fam[i].needle, nlen))
+        FATAL("'ua_family' entry '%.*s' never matches, '%s' comes first "
+              "(line %u).", (int)(nxt - val), val, ua_fam[i].needle, line_no);
+
+    }
 
     ua_fam = DFL_ck_realloc(ua_fam, (ua_fam_cnt + 1) *
                             sizeof(struct ua_family_record));
@@ -967,7 +978,7 @@ static void fingerprint_http(u8 to_srv, struct packet_flow* f) {
                f->http_tmp.sw;
 
     extra = !!f->http_tmp.sw + !!ua_os + !!f->syn_family + !!f->syn_has_conf +
-            (ua_os && f->syn_family) + ua_check + !!f->http_tmp.via;
+            (ua_os && f->syn_family) + ua_check + !!f->http_tmp.proxy_hdr;
 
   }
 
@@ -1021,7 +1032,7 @@ static void fingerprint_http(u8 to_srv, struct packet_flow* f) {
     /* Via / X-Forwarded-For: the TCP stack may be the proxy's, not the
        client's, so a User-Agent mismatch is no strong signal here. */
 
-    if (f->http_tmp.via) add_observation_bool("http_proxy", 1);
+    if (f->http_tmp.proxy_hdr) add_observation_bool("http_proxy", 1);
 
   }
 
@@ -1303,6 +1314,11 @@ static u8 parse_pairs(u8 to_srv, struct packet_flow* f, u8 can_get_more) {
       f->http_tmp.hdr_bloom4 |= bloom4_64(hid);
 
     }
+
+    /* T-Pot: a Via / X-Forwarded-For header marks a proxy even without a
+       value (p0f's own 'via' needs one). */
+
+    if (to_srv && (hid == HDR_VIA || hid == HDR_XFF)) f->http_tmp.proxy_hdr = 1;
 
     /* If there's a value, store that too. For U-A and Server, also update
        'sw'; and for requests, collect Accept-Language. */
