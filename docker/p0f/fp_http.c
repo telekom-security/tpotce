@@ -856,8 +856,10 @@ header_check:
 
 void http_parse_ua_family(u8* val, u32 line_no) {
 
-  u8* nxt;
+  u8 *nxt, *fam;
   u32 i;
+
+  if (!*val) FATAL("Malformed 'ua_family' in line %u.", line_no);
 
   while (*val) {
 
@@ -875,6 +877,8 @@ void http_parse_ua_family(u8* val, u32 line_no) {
       FATAL("Unknown OS family '%.*s' in 'ua_family' in line %u.",
             (int)(nxt - val), val, line_no);
 
+    fam = conf_families[i];
+
     val = nxt + 2;
     nxt = val;
     while (*nxt && *nxt != ']') nxt++;
@@ -882,17 +886,24 @@ void http_parse_ua_family(u8* val, u32 line_no) {
     if (val == nxt || !*nxt)
       FATAL("Malformed 'ua_family' in line %u.", line_no);
 
+    for (i = 0; i < ua_fam_cnt; i++)
+      if (strlen((char*)ua_fam[i].needle) == (u32)(nxt - val) &&
+          !strncmp((char*)val, (char*)ua_fam[i].needle, nxt - val))
+        FATAL("Duplicate 'ua_family' entry '%.*s' in line %u.",
+              (int)(nxt - val), val, line_no);
+
     ua_fam = DFL_ck_realloc(ua_fam, (ua_fam_cnt + 1) *
                             sizeof(struct ua_family_record));
 
-    ua_fam[ua_fam_cnt].family = conf_families[i];
+    ua_fam[ua_fam_cnt].family = fam;
     ua_fam[ua_fam_cnt].needle = DFL_ck_memdup_str(val, nxt - val);
     ua_fam_cnt++;
 
     val = nxt + 1;
 
-    if (*val == ',') val++;
-    else if (*val) FATAL("Malformed 'ua_family' in line %u.", line_no);
+    if (*val == ',') {
+      if (!*++val) FATAL("Malformed 'ua_family' in line %u.", line_no);
+    } else if (*val) FATAL("Malformed 'ua_family' in line %u.", line_no);
 
   }
 

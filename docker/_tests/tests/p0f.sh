@@ -412,8 +412,16 @@ check_conf_parser() {
   chmod a+r "${fp_dir}/short.fp"
   out="$(run_p0f_on short.fp)" || test_die "p0f does not load the conf short form 'conf = Linux': ${out}"
 
+  # blanks and CR at the end of a line (hand edits, CRLF files) have to load
+  python3 -c 'import re,sys; t=open(sys.argv[1]).read(); t=re.sub(r"^(conf = .*)$", r"\1 \r", t, count=1, flags=re.M); t=re.sub(r"^(ua_family = .*)$", r"\1  \r", t, count=1, flags=re.M); open(sys.argv[2],"w",newline="").write(t)' \
+    "${fp_dir}/p0f.fp" "${fp_dir}/trailing.fp"
+  chmod a+r "${fp_dir}/trailing.fp"
+  out="$(run_p0f_on trailing.fp)" || test_die "p0f does not load conf / ua_family lines with blanks or CR at the end: ${out}"
+
   # ua_family: unknown family and malformed entries stop p0f with their own message
-  for case_name in "BeOS=[Haiku]|Unknown OS family 'BeOS' in 'ua_family'|family" "Linux|Malformed 'ua_family'|format"; do
+  for case_name in "BeOS=[Haiku]|Unknown OS family 'BeOS' in 'ua_family'|family" "Linux|Malformed 'ua_family'|format" \
+                   "|Malformed 'ua_family'|empty" "Linux=[Linux],|Malformed 'ua_family'|comma" \
+                   "Linux=[Linux],BSD=[Linux]|Duplicate 'ua_family' entry 'Linux'|dup"; do
     expect="${case_name#*|}"; line="${case_name%%|*}"; expect="${expect%|*}"
     # one file per case, Docker Desktop may serve a stale copy of a rewritten file
     python3 -c 'import re,sys; t=open(sys.argv[1]).read(); n=re.subn(r"^ua_family = .*$", "ua_family = " + sys.argv[3], t, flags=re.M); assert n[1] == 1; open(sys.argv[2],"w").write(n[0])' \
@@ -426,9 +434,11 @@ check_conf_parser() {
     fi
   done
 
-  for case_name in share family placement userland duplicate; do
+  for case_name in share nan inf family placement userland duplicate; do
     case "${case_name}" in
       share) line="conf = Linux:high:100"; expect="Malformed 'conf' share" ;;
+      nan) line="conf = Linux:nan:100"; expect="Malformed 'conf' share" ;;
+      inf) line="conf = Linux:inf:100"; expect="Malformed 'conf' share" ;;
       family) line="conf = BeOS:0.9:100"; expect="Unknown OS family 'BeOS'" ;;
       placement) line="conf = Linux:0.9:100"; expect="Misplaced 'conf'" ;;
       userland) line="conf = Linux:0.9:100"; expect="Misplaced 'conf'" ;;

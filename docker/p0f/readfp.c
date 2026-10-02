@@ -91,9 +91,15 @@ static void config_parse_conf(u8* val) {
     return;
   }
 
+  /* Digits and a dot only: strtod() would also take nan, inf or hex. */
+
   val = nxt;
+  for (nxt = val; isdigit(*nxt) || *nxt == '.'; nxt++);
+  if (nxt == val || *nxt != ':')
+    FATAL("Malformed 'conf' share in line %u.", line_no);
+
   share = strtod((char*)val, (char**)&nxt);
-  if (nxt == val || *nxt != ':' || share < 0 || share > 1)
+  if (*nxt != ':' || !(share >= 0 && share <= 1))
     FATAL("Malformed 'conf' share in line %u.", line_no);
 
   val = nxt + 1;
@@ -466,7 +472,7 @@ void read_config(u8* fname) {
 
   s32 f;
   struct stat st;
-  u8  *data, *cur;
+  u8  *data, *cur, *end;
 
   f = open((char*)fname, O_RDONLY);
   if (f < 0) PFATAL("Cannot open '%s' for reading.", fname);
@@ -500,9 +506,14 @@ void read_config(u8* fname) {
     eol = cur;
     while (*eol && *eol != '\n') eol++;
 
-    if (*cur != ';' && cur != eol) {
+    /* T-Pot: ignore blanks and CR at the end of a line (hand edits, CRLF). */
 
-      u8* line = ck_memdup_str(cur, eol - cur);
+    end = eol;
+    while (end > cur && isspace(end[-1])) end--;
+
+    if (*cur != ';' && cur != end) {
+
+      u8* line = ck_memdup_str(cur, end - cur);
 
       config_parse_line(line);
 
