@@ -26,8 +26,9 @@ class) becomes one synthetic SYN with the default option layout and window scale
 the key's majority family; the real p0f reads them with -r. So all flows of a key go
 to the label of the majority layout, minority flows count against that label.
 
-Usage (needs Docker and a p0f image; conf lines are stripped before p0f reads the file,
-so any p0f build works):
+Usage (needs Docker and a p0f image built from this tree, docker compose build in
+docker/p0f: p0f.fp holds T-Pot fields like ua_family that older images refuse; the
+conf lines themselves are stripped before p0f reads the file):
   build_os_confidence.py --cesnet DIR --muni FILE [--fp PATH] [--image IMG] [--min-samples 20] [--min-share 0.5]
 """
 import argparse
@@ -200,9 +201,14 @@ def run_p0f(image, fp_text, pkts):
             os.chmod(os.path.join(d, name), 0o644)
         # -o - writes the JSON log to stdout; a file written by p0f in the container
         # would belong to its user and could not be read back on native Linux Docker
-        out = subprocess.run(["docker", "run", "--rm", "--network", "none", "-v", f"{d}:/work:ro", "--entrypoint",
-                              "/opt/p0f/p0f", image, "-f", "/work/p0f.fp", "-r", "/work/syn.pcap", "-j", "-o", "-"],
-                             check=True, capture_output=True, text=True).stdout
+        try:
+            out = subprocess.run(["docker", "run", "--rm", "--network", "none", "-v", f"{d}:/work:ro", "--entrypoint",
+                                  "/opt/p0f/p0f", image, "-f", "/work/p0f.fp", "-r", "/work/syn.pcap", "-j", "-o", "-"],
+                                 check=True, capture_output=True, text=True).stdout
+        except subprocess.CalledProcessError as err:
+            reason = next((l.strip() for l in err.stderr.splitlines() if "ABORT" in l or "ERROR" in l), err.stderr.strip()[-300:])
+            sys.exit(f"p0f in {image} failed: {reason}\n"
+                     f"Build the image from this tree first (cd docker/p0f && docker compose build) or pass --image.")
         res = {}
         for line in out.splitlines():
             e = json.loads(line)
