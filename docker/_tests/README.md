@@ -135,9 +135,10 @@ external IP via `api.ipify.org` on every start.
 The Dicompot test additionally requires DCMTK client tools on the host:
 `echoscu`, `getscu`, `dcmdump`, and either `setscu` or `storescu`.
 
-The p0f test generates HTTP traffic inside an isolated Docker network and
-verifies that p0f writes matching `syn` (label `Linux 4.19 or newer`) and
-`http request` JSON events. It then scans the p0f container with `nmap -sS` and
+The p0f test sends HTTP requests from a client container to a listener in the
+p0f container and verifies that p0f writes matching `syn` (label
+`Linux 4.19 or newer`) and `http request` JSON events, but no `syn` for
+connections the p0f container opens itself. It then scans the p0f container with `nmap -sS` and
 masscan and expects both to be recognised as tools; the scanners are installed
 with apk, so this part needs network access (`--skip-scanners` leaves it out).
 The Linux SYN has to carry `os_family`, `os_confidence` and `os_samples` from the

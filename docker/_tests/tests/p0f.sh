@@ -11,10 +11,10 @@ DEFAULT_IMAGE="dtagdevsec/p0f:24.04.2"
 IMAGE=""
 LOG_DIR=""
 JSON_LOG_FILE=""
-HTTP_TARGET_CONTAINER_NAME=""
+HTTP_CLIENT_CONTAINER_NAME=""
 P0F_CONTAINER_IP=""
-HTTP_TARGET_IP=""
-HTTP_TARGET_PORT="8080"
+HTTP_CLIENT_IP=""
+HTTP_PORT="8080"
 SCANNER_CONTAINER_NAME=""
 SCANNER_IMAGE="alpine:3.24"
 SCANNER_IP=""
@@ -30,9 +30,10 @@ Usage: $0 [options]
 
 Run an isolated post-build smoke test for the p0f image.
 
-The test starts p0f on a temporary Docker network, generates HTTP traffic from
-inside the p0f container, and verifies that p0f writes matching JSON log events
-(SYN with the label "${LINUX_OS}", HTTP request). It then scans the p0f container
+The test starts p0f on a temporary Docker network, sends HTTP requests from a
+client container to a listener in the p0f container, and verifies that p0f writes
+matching JSON log events (SYN with the label "${LINUX_OS}", HTTP request), but no
+SYN for connections the p0f host opens itself. It then scans the p0f container
 with nmap -sS and masscan from a helper container and verifies that both are
 recognised as tools. The scanner part installs nmap and masscan with apk and needs
 outbound network access, --skip-scanners leaves it out.
@@ -105,7 +106,7 @@ prepare_p0f_harness() {
 
   LOG_DIR="${TEST_TMP_ROOT}/log"
   JSON_LOG_FILE="${LOG_DIR}/p0f.json"
-  HTTP_TARGET_CONTAINER_NAME="${TEST_PROJECT_NAME}-http-target"
+  HTTP_CLIENT_CONTAINER_NAME="${TEST_PROJECT_NAME}-http-client"
   SCANNER_CONTAINER_NAME="${TEST_PROJECT_NAME}-scanner"
   TEST_ARTIFACT_LOG_DIR="${LOG_DIR}"
 
@@ -123,17 +124,12 @@ services:
     read_only: true
     volumes:
       - "${LOG_DIR}:/var/log/p0f"
-  http-target:
+  http-client:
     image: "${IMAGE}"
-    container_name: "${HTTP_TARGET_CONTAINER_NAME}"
+    container_name: "${HTTP_CLIENT_CONTAINER_NAME}"
     restart: "no"
     read_only: true
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        while true; do
-          nc -l -p ${HTTP_TARGET_PORT} -e /bin/cat
-        done
+    entrypoint: ["/bin/sh", "-c", "while true; do sleep 3600; done"]
 networks:
   default:
     name: "${TEST_PROJECT_NAME}_net"
@@ -173,7 +169,7 @@ get_container_ipv4() {
 run_http_probe() {
   local token="$1"
 
-  docker exec -i "${TEST_CONTAINER_NAME}" /bin/bash -s -- "http-target" "${HTTP_TARGET_PORT}" "${token}" "${TEST_TIMEOUT}" <<'BASH'
+  docker exec -i "${HTTP_CLIENT_CONTAINER_NAME}" /bin/bash -s -- "${P0F_CONTAINER_IP}" "${HTTP_PORT}" "${token}" "${TEST_TIMEOUT}" <<'BASH'
 set -Eeuo pipefail
 
 host="$1"
@@ -217,15 +213,15 @@ BASH
 find_p0f_log_events() {
   local token="$1"
 
-  python3 - "${JSON_LOG_FILE}" "${P0F_CONTAINER_IP}" "${HTTP_TARGET_IP}" "${HTTP_TARGET_PORT}" "${token}" "${LINUX_OS}" <<'PY'
+  python3 - "${JSON_LOG_FILE}" "${HTTP_CLIENT_IP}" "${P0F_CONTAINER_IP}" "${HTTP_PORT}" "${token}" "${LINUX_OS}" <<'PY'
 import json
 import sys
 from pathlib import Path
 
 log_file = Path(sys.argv[1])
-p0f_ip = sys.argv[2]
-target_ip = sys.argv[3]
-target_port = int(sys.argv[4])
+client_ip = sys.argv[2]
+p0f_ip = sys.argv[3]
+http_port = int(sys.argv[4])
 token = sys.argv[5]
 linux_os = sys.argv[6]
 
@@ -277,9 +273,9 @@ def is_probe_flow(event):
         return False
 
     return (
-        event.get("client_ip") == p0f_ip
-        and event.get("server_ip") == target_ip
-        and server_port == target_port
+        event.get("client_ip") == client_ip
+        and event.get("server_ip") == p0f_ip
+        and server_port == http_port
         and client_port > 0
         and event.get("subject") == "cli"
     )
@@ -326,14 +322,14 @@ if not syn_event or not http_event:
         {
             str(event.get("mod"))
             for _, event in events
-            if event.get("client_ip") == p0f_ip
-            and event.get("server_ip") == target_ip
-            and event.get("server_port") == target_port
+            if event.get("client_ip") == client_ip
+            and event.get("server_ip") == p0f_ip
+            and event.get("server_port") == http_port
         }
     )
     print(
         "Expected p0f syn and http request events were not found "
-        f"for {p0f_ip} -> {target_ip}:{target_port}; seen mods: {', '.join(seen) or 'none'}",
+        f"for {client_ip} -> {p0f_ip}:{http_port}; seen mods: {', '.join(seen) or 'none'}",
         file=sys.stderr,
     )
     sys.exit(1)
@@ -489,6 +485,21 @@ PY
   [[ -z "${out}" ]] || test_die "p0f offline mode ignored the BPF filter: ${out}"
 }
 
+# connections the p0f host opens itself must not show up as client SYNs
+check_self_filter() {
+  docker exec "${TEST_CONTAINER_NAME}" /bin/sh -c \
+    "for i in 1 2 3; do nc -w 1 ${HTTP_CLIENT_IP} 9 </dev/null >/dev/null 2>&1; done" || true
+  sleep 2
+  python3 - "${JSON_LOG_FILE}" "${P0F_CONTAINER_IP}" <<'PY'
+import json, sys
+own = [l for l in open(sys.argv[1], encoding="utf-8", errors="replace")
+       if l.strip() and json.loads(l).get("mod") == "syn" and json.loads(l).get("client_ip") == sys.argv[2]]
+if own:
+    sys.exit(f"p0f logged {len(own)} SYN(s) the p0f host sent itself, e.g. {own[0].strip()}")
+print("no SYN of the p0f host itself in the log")
+PY
+}
+
 cleanup_scanner() {
   docker rm -f "${SCANNER_CONTAINER_NAME}" >/dev/null 2>&1 || true
 }
@@ -542,22 +553,29 @@ main() {
   test_enable_cleanup
   trap 'cleanup_scanner; test_cleanup' EXIT
 
-  test_info "Starting isolated p0f container and HTTP target"
+  test_info "Starting isolated p0f container and HTTP client"
   test_compose up -d --no-build >/dev/null
 
   test_wait_for_container || test_die "p0f container did not stay running"
-  wait_for_named_container "${HTTP_TARGET_CONTAINER_NAME}" || test_die "p0f HTTP target container did not stay running"
+  wait_for_named_container "${HTTP_CLIENT_CONTAINER_NAME}" || test_die "p0f HTTP client container did not stay running"
   test_ok "Containers are running"
 
   P0F_CONTAINER_IP="$(get_container_ipv4 "${TEST_CONTAINER_NAME}")"
-  HTTP_TARGET_IP="$(get_container_ipv4 "${HTTP_TARGET_CONTAINER_NAME}")"
-  test_ok "Container addresses: p0f=${P0F_CONTAINER_IP}, http-target=${HTTP_TARGET_IP}"
+  HTTP_CLIENT_IP="$(get_container_ipv4 "${HTTP_CLIENT_CONTAINER_NAME}")"
+  test_ok "Container addresses: p0f=${P0F_CONTAINER_IP}, http-client=${HTTP_CLIENT_IP}"
+
+  # the HTTP listener runs in the p0f container: p0f sees the client's SYN and
+  # needs its own SYN+ACK to follow the connection to the HTTP request
+  docker exec -d "${TEST_CONTAINER_NAME}" /bin/sh -c "nc -lk -p ${HTTP_PORT} -e /bin/cat"
 
   local token="p0f-test-$(date +%s)-$$"
-  test_info "Generating HTTP traffic from p0f container with token: ${token}"
+  test_info "Generating HTTP traffic from the client container with token: ${token}"
   run_probe_until_logged "${token}" || test_die "p0f did not log the generated HTTP probe"
   test_wait_for_container || test_die "p0f container stopped after HTTP probe"
   test_ok "p0f captured the generated SYN (${LINUX_OS}) and HTTP request"
+
+  check_self_filter || test_die "p0f logged SYNs of its own host"
+  test_ok "p0f skips SYNs the p0f host sends itself"
 
   if [[ "${SKIP_SCANNERS}" != "true" ]]; then
     test_info "Scanning the p0f container with nmap -sS and masscan"
