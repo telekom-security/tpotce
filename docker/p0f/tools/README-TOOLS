@@ -1,4 +1,5 @@
-This directory contains several helper tools mentioned in ../README:
+This directory contains several helper tools mentioned in ../README.md, and
+build_os_confidence.py, the generator for the T-Pot 'conf' fields in ../p0f.fp:
 
   p0f-sendsyn.c   - a tool for gathering new SYN+ACK signatures
 

@@ -2,7 +2,7 @@
 ; p0f - fingerprint database
 ; --------------------------
 ;
-; See section 5 in the README for a detailed discussion of the format used here.
+; See README.md (Fingerprint database) for the format used here.
 ;
 ; Copyright (C) 2012 by Michal Zalewski <lcamtuf@coredump.cx>
 ;
