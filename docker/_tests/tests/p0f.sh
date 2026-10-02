@@ -122,6 +122,9 @@ services:
     container_name: "${TEST_CONTAINER_NAME}"
     restart: "no"
     read_only: true
+    # NET_ADMIN: the self filter test adds an address after p0f has started
+    cap_add:
+      - NET_ADMIN
     volumes:
       - "${LOG_DIR}:/var/log/p0f"
   http-client:
@@ -566,6 +569,18 @@ if len(h) != 1 or h[0].get("app") != "tpot-test" or "ua_dishonest" in h[0] or "u
 print("offline: no ua_dishonest without User-Agent / expected software")
 PY
 
+  # own -j / -o - next to the entrypoint's defaults
+  for args in "-r /pcap/syn.pcap -j" "-o - -r /pcap/syn.pcap"; do
+    # shellcheck disable=SC2086
+    out="$(docker run --rm --network none -v "${pcap_dir}:/pcap:ro" "${IMAGE}" ${args} 2>&1 >/dev/null)" \
+      || test_die "p0f offline mode refuses '${args}': ${out}"
+  done
+  # -d needs a live capture (p0f refuses it with -r): loopback of a container without network
+  out="$(docker run --rm --network none --entrypoint /bin/sh "${IMAGE}" -c \
+    'exec 0<&-; /opt/p0f/p0f -i lo -j -o - -d > /tmp/out 2>/dev/null; sleep 1; nc -w 1 127.0.0.1 9 </dev/null >/dev/null 2>&1; sleep 2; cat /tmp/out')"
+  grep -q '"mod": "syn"' <<<"${out}" \
+    || test_die "p0f -o - -d with a closed stdin lost the JSON log: ${out}"
+
   # a BPF filter after the options is passed on to p0f
   out="$(docker run --rm --network none -v "${pcap_dir}:/pcap:ro" "${IMAGE}" -r /pcap/syn.pcap 'not src net 198.51.100.0/24' 2>/dev/null)" \
     || test_die "p0f offline mode with a BPF filter failed"
@@ -643,13 +658,18 @@ PY
 
 # connections the p0f host opens itself must not show up as client SYNs
 check_self_filter() {
+  # a second address that only shows up after p0f has started (DHCP, SLAAC, ...)
+  local late_ip="${P0F_CONTAINER_IP%.*}.200"
+
+  docker exec -u 0 "${TEST_CONTAINER_NAME}" ip addr add "${late_ip}/16" dev eth0 \
+    || test_die "could not add ${late_ip} to the p0f container"
   docker exec "${TEST_CONTAINER_NAME}" /bin/sh -c \
-    "for i in 1 2 3; do nc -w 1 ${HTTP_CLIENT_IP} 9 </dev/null >/dev/null 2>&1; done" || true
+    "for i in 1 2 3; do nc -w 1 ${HTTP_CLIENT_IP} 9 </dev/null >/dev/null 2>&1; nc -w 1 -s ${late_ip} ${HTTP_CLIENT_IP} 9 </dev/null >/dev/null 2>&1; done" || true
   sleep 2
-  python3 - "${JSON_LOG_FILE}" "${P0F_CONTAINER_IP}" <<'PY'
+  python3 - "${JSON_LOG_FILE}" "${P0F_CONTAINER_IP}" "${late_ip}" <<'PY'
 import json, sys
 own = [l for l in open(sys.argv[1], encoding="utf-8", errors="replace")
-       if l.strip() and json.loads(l).get("mod") == "syn" and json.loads(l).get("client_ip") == sys.argv[2]]
+       if l.strip() and json.loads(l).get("mod") == "syn" and json.loads(l).get("client_ip") in sys.argv[2:]]
 if own:
     sys.exit(f"p0f logged {len(own)} SYN(s) the p0f host sent itself, e.g. {own[0].strip()}")
 print("no SYN of the p0f host itself in the log")

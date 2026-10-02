@@ -1277,7 +1277,10 @@ int main(int argc, char** argv) {
 
   if (log_file && !strcmp((char*)log_file, "-")) {
 
-    if ((stdout_fd = dup(STDOUT_FILENO)) < 0 ||
+    /* Above 2: with a closed stdin dup() would return 0, which -d replaces
+       by /dev/null. */
+
+    if ((stdout_fd = fcntl(STDOUT_FILENO, F_DUPFD, 3)) < 0 ||
         dup2(STDERR_FILENO, STDOUT_FILENO) < 0)
       PFATAL("dup() for '-o -' failed.");
 
