@@ -708,11 +708,12 @@ sig   = 4:64:0:1460:mss*25,0:mss:df,id+:0
 
 ua_os = Linux,Windows,iOS=[iPad],iOS=[iPhone],Mac OS X,FreeBSD,OpenBSD,NetBSD,Solaris=[SunOS]
 
-; T-Pot: OS family a User-Agent names (first match wins, case sensitive). p0f
+; T-Pot: OS family a User-Agent names (first match wins, case sensitive; X11
+; last, BSD and Solaris browsers name it too). p0f
 ; logs it as ua_os in 'http request' events and sets ua_os_mismatch if it
 ; differs from the family of the connection's SYN (Linux = Android).
 
-ua_family = Android=[Android],Apple=[iPhone],Apple=[iPad],Apple=[iPod],Apple=[Mac OS X],Apple=[Macintosh],Windows=[Windows],Linux=[CrOS],Linux=[Linux],Linux=[X11],BSD=[FreeBSD],BSD=[OpenBSD],BSD=[NetBSD],Other=[SunOS]
+ua_family = Android=[Android],Apple=[iPhone],Apple=[iPad],Apple=[iPod],Apple=[Mac OS X],Apple=[Macintosh],Windows=[Windows],BSD=[FreeBSD],BSD=[OpenBSD],BSD=[NetBSD],Other=[SunOS],Linux=[CrOS],Linux=[Linux],Linux=[X11]
 
 ; -------
 ; Firefox

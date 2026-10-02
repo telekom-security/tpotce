@@ -544,14 +544,17 @@ check_ua_signals() {
   local android_ua="Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36 tpot-android"
   local chrome_ua="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36 tpot-dishonest"
   local curl_ua="curl/8.5.0 tpot-curl"
+  local bsd_ua="Mozilla/5.0 (X11; FreeBSD amd64; rv:125.0) Gecko/20100101 Firefox/125.0 tpot-bsd"
 
-  for case_name in win android dishonest curl; do
+  for case_name in win android dishonest curl bsd; do
     case "${case_name}" in
       win) req="GET / HTTP/1.1\r\nHost: p0f\r\nUser-Agent: ${win_ua}\r\nConnection: close\r\n\r\n" ;;
       android) req="GET / HTTP/1.1\r\nHost: p0f\r\nUser-Agent: ${android_ua}\r\nConnection: close\r\n\r\n" ;;
       # header order of p0f's curl signature, but a Chrome User-Agent
       dishonest) req="GET / HTTP/1.1\r\nUser-Agent: ${chrome_ua}\r\nHost: p0f\r\nAccept: */*\r\n\r\n" ;;
       curl) req="GET / HTTP/1.1\r\nUser-Agent: ${curl_ua}\r\nHost: p0f\r\nAccept: */*\r\n\r\n" ;;
+      # desktop BSD User-Agents carry X11 as well, BSD has to win over Linux
+      bsd) req="GET / HTTP/1.1\r\nHost: p0f\r\nUser-Agent: ${bsd_ua}\r\nConnection: close\r\n\r\n" ;;
     esac
     docker exec "${HTTP_CLIENT_CONTAINER_NAME}" /bin/bash -c \
       "exec 3<>/dev/tcp/${P0F_CONTAINER_IP}/${HTTP_PORT} && printf '${req}' >&3 && read -r -t 2 _ <&3; exec 3<&-" \
@@ -572,6 +575,7 @@ want = {
     "android": {"ua_os": "Android", "os_family": "Linux", "ua_os_mismatch": False},
     "dishonest": {"ua_os": "Linux", "ua_os_mismatch": False, "ua_dishonest": True},
     "curl": {"ua_os": None, "ua_os_mismatch": None, "ua_dishonest": False},
+    "bsd": {"ua_os": "BSD", "os_family": "Linux", "ua_os_mismatch": True},
 }
 failed = False
 for case, fields in want.items():
