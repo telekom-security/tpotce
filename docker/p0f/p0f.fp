@@ -88,6 +88,50 @@ sig   = 16436
 
 [tcp:request]
 
+; -------------------------------------------------------
+; Internet-wide scanners and bots (T-Pot, from tool source)
+; -------------------------------------------------------
+
+; Listed first: p0f rejects a signature that an earlier one already covers, and
+; the duplicate check treats a missing 'df,id+' as covered.
+
+; masscan, src/templ-pkt.c default_tcp_template: TTL 255, no DF, window 1024,
+; MSS 1460 as the only option (master); release 1.3.2 sends no option at all.
+
+label = s:!:masscan:SYN scan
+sys   = @unix,@win
+sig   = *:255:0:1460:1024,0:mss::0
+sig   = *:255:0:*:1024,0:::0
+
+; zmap, src/probe_modules/packet.c: IP ID 54321, no DF, window 65535, TTL 255
+; (master) or 64 (zmap 4.3 as packaged in Alpine, lab capture); the options follow
+; --probe-args: windows (default), smallest-probes (MSS only, also the default of
+; older releases), linux, bsd. Unlike the real stacks the layouts mimic, zmap sets
+; no DF (empty quirks).
+
+label = s:!:zmap:SYN scan
+sys   = @unix,@win
+sig   = *:255:0:1460:65535,8:mss,nop,ws,nop,nop,sok::0
+sig   = *:255:0:1460:65535,0:mss::0
+sig   = *:255:0:1460:65535,7:mss,sok,ts,nop,ws::0
+sig   = *:255:0:1460:65535,6:mss,nop,ws,nop,nop,ts,sok,eol+1::0
+sig   = *:64:0:1460:65535,8:mss,nop,ws,nop,nop,sok::0
+sig   = *:64:0:1460:65535,0:mss::0
+sig   = *:64:0:1460:65535,7:mss,sok,ts,nop,ws::0
+sig   = *:64:0:1460:65535,6:mss,nop,ws,nop,nop,ts,sok,eol+1::0
+
+; Real TCP stacks always send at least MSS. SYNs without any option come from
+; raw-socket scanners and bots, e.g. Mirai (bot/scanner.c: TTL 64, random window)
+; or hping3 (TTL 64, window 512 in 3.0.0, sometimes a non-zero ACK number).
+
+label = g:!:raw SYN:no TCP options (Mirai, hping or similar)
+sys   = @unix,@win
+sig   = *:64:0:*:*,0:::0
+sig   = *:64:0:*:*,0::ack+:0
+sig   = *:64:0:*:*,0::df,id+:0
+sig   = *:128:0:*:*,0:::0
+sig   = *:255:0:*:*,0:::0
+
 ; -----
 ; Linux
 ; -----
@@ -148,9 +192,29 @@ sig   = *:64:0:3884:mss*8,0:mss,sok,ts,nop,ws:df,id+:0
 label = s:unix:Linux:2.6.x (Google crawler)
 sig   = 4:64:0:1430:mss*4,6:mss,sok,ts,nop,ws::0
 
+; T-Pot: Android keeps a 65535 window (CESNET 2024 / MUNI 2021: 95-99 % Android).
+; IPv6 SYNs of current stacks carry a flow label (quirk 'flow'); the '*' signatures
+; drop 'flow' only for IPv4, so every IPv6 variant needs its own '6' signature.
+
 label = s:unix:Linux:(Android)
 sig   = *:64:0:*:mss*44,1:mss,sok,ts,nop,ws:df,id+:0
 sig   = *:64:0:*:mss*44,3:mss,sok,ts,nop,ws:df,id+:0
+sig   = *:64:0:*:65535,*:mss,sok,ts,nop,ws:df,id+:0
+sig   = 6:64:0:*:65535,*:mss,sok,ts,nop,ws:flow:0
+
+; T-Pot: since 4.19 Linux rounds the initial window down to a multiple of the MSS
+; below 64 KB: 64240 (MSS 1460) = mss*44, 64800 (MSS 1440, IPv6) or 65340
+; (MSS 1452, PPPoE) = mss*45, mss*46 for an MSS of 1400-1424. A router that
+; clamps the MSS leaves the window at 64240.
+
+label = s:unix:Linux:4.19 or newer
+sig   = *:64:0:*:mss*44,*:mss,sok,ts,nop,ws:df,id+:0
+sig   = *:64:0:*:64240,*:mss,sok,ts,nop,ws:df,id+:0
+sig   = *:64:0:*:mss*45,*:mss,sok,ts,nop,ws:df,id+:0
+sig   = *:64:0:*:mss*46,*:mss,sok,ts,nop,ws:df,id+:0
+sig   = 6:64:0:*:mss*44,*:mss,sok,ts,nop,ws:flow:0
+sig   = 6:64:0:*:mss*45,*:mss,sok,ts,nop,ws:flow:0
+sig   = 6:64:0:*:mss*46,*:mss,sok,ts,nop,ws:flow:0
 
 ; Catch-all rules:
 
@@ -160,13 +224,15 @@ sig   = *:64:0:*:mss*10,*:mss,sok,ts,nop,ws:df,id+:0
 label = g:unix:Linux:2.4.x-2.6.x
 sig   = *:64:0:*:mss*4,*:mss,sok,ts,nop,ws:df,id+:0
 
-label = g:unix:Linux:2.2.x-3.x
+label = g:unix:Linux:
 sig   = *:64:0:*:*,*:mss,sok,ts,nop,ws:df,id+:0
+sig   = 6:64:0:*:*,*:mss,sok,ts,nop,ws:flow:0
 
-label = g:unix:Linux:2.2.x-3.x (no timestamps)
+label = g:unix:Linux:(no timestamps)
 sig   = *:64:0:*:*,*:mss,nop,nop,sok,nop,ws:df,id+:0
+sig   = 6:64:0:*:*,*:mss,nop,nop,sok,nop,ws:flow:0
 
-label = g:unix:Linux:2.2.x-3.x (barebone)
+label = g:unix:Linux:(barebone)
 sig   = *:64:0:*:*,0:mss:df,id+:0
 
 ; -------
@@ -185,6 +251,20 @@ sig   = *:128:0:*:8192,0:mss,nop,nop,sok:df,id+:0
 sig   = *:128:0:*:8192,2:mss,nop,ws,nop,nop,sok:df,id+:0
 sig   = *:128:0:*:8192,8:mss,nop,ws,nop,nop,sok:df,id+:0
 sig   = *:128:0:*:8192,2:mss,nop,ws,sok,ts:df,id+:0
+
+; T-Pot: Windows 10 and newer use a fixed initial window of 64240 (IPv4) or 64800
+; (IPv6), Windows 8 and newer 65535 with window scale 8 (CESNET 2024: 99-100 %
+; Windows). IPv6 takes the hop limit from the router advertisement, usually 64.
+
+label = s:win:Windows:10 or newer
+sig   = *:128:0:*:64240,8:mss,nop,ws,nop,nop,sok:df,id+:0
+sig   = 6:128:0:*:64800,8:mss,nop,ws,nop,nop,sok:flow:0
+sig   = 6:64:0:*:64800,8:mss,nop,ws,nop,nop,sok:flow:0
+
+label = s:win:Windows:8 or newer
+sig   = *:128:0:*:65535,8:mss,nop,ws,nop,nop,sok:df,id+:0
+sig   = 6:128:0:*:65535,8:mss,nop,ws,nop,nop,sok:flow:0
+sig   = 6:64:0:*:65535,8:mss,nop,ws,nop,nop,sok:flow:0
 
 ; Robots with distinctive fingerprints:
 
@@ -207,6 +287,9 @@ sig   = *:128:0:*:8192,*:mss,nop,ws,nop,nop,sok:df,id+:0
 label = g:win:Windows:NT kernel
 sig   = *:128:0:*:*,*:mss,nop,nop,sok:df,id+:0
 sig   = *:128:0:*:*,*:mss,nop,ws,nop,nop,sok:df,id+:0
+sig   = 6:128:0:*:*,*:mss,nop,ws,nop,nop,sok:flow:0
+sig   = 6:64:0:*:*,*:mss,nop,ws,nop,nop,sok:flow:0
+sig   = *:128:0:*:*,*:mss,nop,ws,sok,ts:df,id+:0
 
 ; ------
 ; Mac OS
@@ -216,16 +299,41 @@ label = s:unix:Mac OS X:10.x
 sig   = *:64:0:*:65535,1:mss,nop,ws,nop,nop,ts,sok,eol+1:df,id+:0
 sig   = *:64:0:*:65535,3:mss,nop,ws,nop,nop,ts,sok,eol+1:df,id+:0
 
+; T-Pot: window scale 5/6 is macOS, 7/8 mostly iOS (MUNI 2021: 92 % macOS for 6,
+; 94 % iOS for 7). Current macOS sends the SYN without DF, with IP ID 0 and with
+; ECN (lab capture, macOS 26: quirks id-,ecn).
+
 label = s:unix:MacOS X:10.9 or newer (sometimes iPhone or iPad)
 sig   = *:64:0:*:65535,4:mss,nop,ws,nop,nop,ts,sok,eol+1:df,id+:0
+sig   = *:64:0:*:65535,5:mss,nop,ws,nop,nop,ts,sok,eol+1:df,id+:0
+sig   = *:64:0:*:65535,6:mss,nop,ws,nop,nop,ts,sok,eol+1:df,id+:0
+sig   = 6:64:0:*:65535,4:mss,nop,ws,nop,nop,ts,sok,eol+1:flow:0
+sig   = 6:64:0:*:65535,5:mss,nop,ws,nop,nop,ts,sok,eol+1:flow:0
+sig   = 6:64:0:*:65535,6:mss,nop,ws,nop,nop,ts,sok,eol+1:flow:0
+sig   = *:64:0:*:65535,5:mss,nop,ws,nop,nop,ts,sok,eol+1:id-,ecn:0
+sig   = *:64:0:*:65535,6:mss,nop,ws,nop,nop,ts,sok,eol+1:id-,ecn:0
+sig   = 6:64:0:*:65535,5:mss,nop,ws,nop,nop,ts,sok,eol+1:flow,ecn:0
+sig   = 6:64:0:*:65535,6:mss,nop,ws,nop,nop,ts,sok,eol+1:flow,ecn:0
 
 label = s:unix:iOS:iPhone or iPad
 sig   = *:64:0:*:65535,2:mss,nop,ws,nop,nop,ts,sok,eol+1:df,id+:0
+sig   = *:64:0:*:65535,7:mss,nop,ws,nop,nop,ts,sok,eol+1:df,id+:0
+sig   = *:64:0:*:65535,8:mss,nop,ws,nop,nop,ts,sok,eol+1:df,id+:0
+sig   = 6:64:0:*:65535,2:mss,nop,ws,nop,nop,ts,sok,eol+1:flow:0
+sig   = 6:64:0:*:65535,7:mss,nop,ws,nop,nop,ts,sok,eol+1:flow:0
+sig   = 6:64:0:*:65535,8:mss,nop,ws,nop,nop,ts,sok,eol+1:flow:0
+sig   = *:64:0:*:65535,7:mss,nop,ws,nop,nop,ts,sok,eol+1:id-,ecn:0
+sig   = *:64:0:*:65535,8:mss,nop,ws,nop,nop,ts,sok,eol+1:id-,ecn:0
+sig   = 6:64:0:*:65535,7:mss,nop,ws,nop,nop,ts,sok,eol+1:flow,ecn:0
+sig   = 6:64:0:*:65535,8:mss,nop,ws,nop,nop,ts,sok,eol+1:flow,ecn:0
 
 ; Catch-all rules:
 
 label = g:unix:Mac OS X:
 sig   = *:64:0:*:65535,*:mss,nop,ws,nop,nop,ts,sok,eol+1:df,id+:0
+sig   = 6:64:0:*:65535,*:mss,nop,ws,nop,nop,ts,sok,eol+1:flow:0
+sig   = *:64:0:*:65535,*:mss,nop,ws,nop,nop,ts,sok,eol+1:id-,ecn:0
+sig   = 6:64:0:*:65535,*:mss,nop,ws,nop,nop,ts,sok,eol+1:flow,ecn:0
 
 ; -------
 ; FreeBSD

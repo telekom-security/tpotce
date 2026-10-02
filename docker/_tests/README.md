@@ -96,6 +96,7 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/miniprint.sh --image dtagdevsec/miniprint:24.04 --raw-port 19100
 ./docker/_tests/tests/p0f.sh
 ./docker/_tests/tests/p0f.sh --image dtagdevsec/p0f:24.04.2
+./docker/_tests/tests/p0f.sh --skip-scanners
 ./docker/_tests/tests/redishoneypot.sh
 ./docker/_tests/tests/redishoneypot.sh --redis-port 16379
 ./docker/_tests/tests/rdphoneypot.sh
@@ -135,7 +136,10 @@ The Dicompot test additionally requires DCMTK client tools on the host:
 `echoscu`, `getscu`, `dcmdump`, and either `setscu` or `storescu`.
 
 The p0f test generates HTTP traffic inside an isolated Docker network and
-verifies that p0f writes matching `syn` and `http request` JSON events.
+verifies that p0f writes matching `syn` (label `Linux 4.19 or newer`) and
+`http request` JSON events. It then scans the p0f container with `nmap -sS` and
+masscan and expects both to be recognised as tools; the scanners are installed
+with apk, so this part needs network access (`--skip-scanners` leaves it out).
 
 The RDPHoneypot test also verifies that `server.pem` is written to the
 persistent cert volume and remains unchanged after a container restart.

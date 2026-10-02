@@ -15,6 +15,14 @@ HTTP_TARGET_CONTAINER_NAME=""
 P0F_CONTAINER_IP=""
 HTTP_TARGET_IP=""
 HTTP_TARGET_PORT="8080"
+SCANNER_CONTAINER_NAME=""
+SCANNER_IMAGE="alpine:3.24"
+SCANNER_IP=""
+NMAP_PORT="8081"
+MASSCAN_PORT="8082"
+SKIP_SCANNERS="false"
+# Label of p0f.fp for the SYN of the Docker host kernel (any Linux 4.19 or newer)
+LINUX_OS="Linux 4.19 or newer"
 
 usage() {
   cat <<EOF
@@ -23,13 +31,18 @@ Usage: $0 [options]
 Run an isolated post-build smoke test for the p0f image.
 
 The test starts p0f on a temporary Docker network, generates HTTP traffic from
-inside the p0f container, and verifies that p0f writes matching JSON log events.
+inside the p0f container, and verifies that p0f writes matching JSON log events
+(SYN with the label "${LINUX_OS}", HTTP request). It then scans the p0f container
+with nmap -sS and masscan from a helper container and verifies that both are
+recognised as tools. The scanner part installs nmap and masscan with apk and needs
+outbound network access, --skip-scanners leaves it out.
 
 Options:
   --image IMAGE      Image to test. Defaults to docker/p0f/docker-compose.yml.
   --timeout SEC      Timeout for startup, protocol, and log checks. Default: 30.
   --bind-ip IP       Accepted for runner compatibility; p0f exposes no host port.
   --keep-artifacts   Keep temporary compose file and logs for debugging.
+  --skip-scanners    Do not run the nmap / masscan part (no network access).
   -h, --help         Show this help message.
 EOF
 }
@@ -68,6 +81,10 @@ parse_args() {
         TEST_KEEP_ARTIFACTS="true"
         shift
         ;;
+      --skip-scanners)
+        SKIP_SCANNERS="true"
+        shift
+        ;;
       -h|--help)
         usage
         exit 0
@@ -89,6 +106,7 @@ prepare_p0f_harness() {
   LOG_DIR="${TEST_TMP_ROOT}/log"
   JSON_LOG_FILE="${LOG_DIR}/p0f.json"
   HTTP_TARGET_CONTAINER_NAME="${TEST_PROJECT_NAME}-http-target"
+  SCANNER_CONTAINER_NAME="${TEST_PROJECT_NAME}-scanner"
   TEST_ARTIFACT_LOG_DIR="${LOG_DIR}"
 
   mkdir -p "${LOG_DIR}"
@@ -199,7 +217,7 @@ BASH
 find_p0f_log_events() {
   local token="$1"
 
-  python3 - "${JSON_LOG_FILE}" "${P0F_CONTAINER_IP}" "${HTTP_TARGET_IP}" "${HTTP_TARGET_PORT}" "${token}" <<'PY'
+  python3 - "${JSON_LOG_FILE}" "${P0F_CONTAINER_IP}" "${HTTP_TARGET_IP}" "${HTTP_TARGET_PORT}" "${token}" "${LINUX_OS}" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -209,6 +227,7 @@ p0f_ip = sys.argv[2]
 target_ip = sys.argv[3]
 target_port = int(sys.argv[4])
 token = sys.argv[5]
+linux_os = sys.argv[6]
 
 if not log_file.exists():
     print(f"{log_file} does not exist yet", file=sys.stderr)
@@ -285,6 +304,10 @@ for line_number, event in events:
 
     if event.get("mod") == "syn":
         require_fields(line_number, event, ("timestamp", "os", "dist", "params", "raw_sig"))
+        if event.get("os") != linux_os:
+            print(f"p0f SYN event in {log_file}:{line_number} has os={event.get('os')!r}, expected {linux_os!r} "
+                  f"(raw_sig {event.get('raw_sig')})", file=sys.stderr)
+            sys.exit(1)
         syn_event = (line_number, event)
 
     if event.get("mod") == "http request" and token in str(event.get("raw_sig", "")):
@@ -319,6 +342,49 @@ print(
     f"raw_sig contains token {token!r}"
 )
 PY
+}
+
+run_scanners() {
+  docker run -d --name "${SCANNER_CONTAINER_NAME}" --network "${TEST_PROJECT_NAME}_net" \
+    --cap-add NET_RAW --cap-add NET_ADMIN "${SCANNER_IMAGE}" sleep 300 >/dev/null
+  SCANNER_IP="$(get_container_ipv4 "${SCANNER_CONTAINER_NAME}")"
+  docker exec "${SCANNER_CONTAINER_NAME}" apk add --no-cache -q nmap masscan >/dev/null \
+    || test_die "Could not install nmap and masscan in ${SCANNER_IMAGE} (network access needed, or use --skip-scanners)"
+  # The scanners probe the p0f container itself: a Docker bridge does not forward
+  # unicast between two other containers to it.
+  docker exec "${SCANNER_CONTAINER_NAME}" nmap -Pn -sS -p "${NMAP_PORT}" "${P0F_CONTAINER_IP}" >/dev/null 2>&1 || true
+  # masscan 1.3.2 often does not exit after the scan, so it gets a fixed run time
+  docker exec -d "${SCANNER_CONTAINER_NAME}" masscan "${P0F_CONTAINER_IP}" -p"${MASSCAN_PORT}" --rate 10 --wait 1
+  sleep 4
+}
+
+find_scanner_events() {
+  python3 - "${JSON_LOG_FILE}" "${SCANNER_IP}" "${P0F_CONTAINER_IP}" "${NMAP_PORT}" "${MASSCAN_PORT}" <<'PY'
+import json
+import sys
+
+log_file, scanner_ip, p0f_ip = sys.argv[1:4]
+expected = {int(sys.argv[4]): "NMap SYN scan", int(sys.argv[5]): "masscan SYN scan"}
+seen = {}
+for line in open(log_file, encoding="utf-8", errors="replace"):
+    if not line.strip():
+        continue
+    event = json.loads(line)
+    if event.get("mod") == "syn" and event.get("client_ip") == scanner_ip and event.get("server_ip") == p0f_ip:
+        seen.setdefault(int(event.get("server_port", 0)), set()).add(event.get("app") or event.get("os"))
+failed = False
+for port, app in expected.items():
+    if app in seen.get(port, set()):
+        print(f"p0f recognised {app!r} on port {port}")
+    else:
+        print(f"Expected {app!r} for port {port}, p0f logged {sorted(seen.get(port, {'nothing'}))}", file=sys.stderr)
+        failed = True
+sys.exit(1 if failed else 0)
+PY
+}
+
+cleanup_scanner() {
+  docker rm -f "${SCANNER_CONTAINER_NAME}" >/dev/null 2>&1 || true
 }
 
 run_probe_until_logged() {
@@ -368,6 +434,7 @@ main() {
 
   prepare_p0f_harness
   test_enable_cleanup
+  trap 'cleanup_scanner; test_cleanup' EXIT
 
   test_info "Starting isolated p0f container and HTTP target"
   test_compose up -d --no-build >/dev/null
@@ -384,7 +451,14 @@ main() {
   test_info "Generating HTTP traffic from p0f container with token: ${token}"
   run_probe_until_logged "${token}" || test_die "p0f did not log the generated HTTP probe"
   test_wait_for_container || test_die "p0f container stopped after HTTP probe"
-  test_ok "p0f captured the generated SYN and HTTP request"
+  test_ok "p0f captured the generated SYN (${LINUX_OS}) and HTTP request"
+
+  if [[ "${SKIP_SCANNERS}" != "true" ]]; then
+    test_info "Scanning the p0f container with nmap -sS and masscan"
+    run_scanners
+    find_scanner_events || test_die "p0f did not recognise the scanners"
+    test_ok "p0f recognised nmap and masscan"
+  fi
 
   assert_no_runtime_errors
   test_ok "No p0f runtime errors found in logs"
