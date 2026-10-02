@@ -412,6 +412,20 @@ check_conf_parser() {
   chmod a+r "${fp_dir}/short.fp"
   out="$(run_p0f_on short.fp)" || test_die "p0f does not load the conf short form 'conf = Linux': ${out}"
 
+  # ua_family: unknown family and malformed entries stop p0f with their own message
+  for case_name in "BeOS=[Haiku]|Unknown OS family 'BeOS' in 'ua_family'|family" "Linux|Malformed 'ua_family'|format"; do
+    expect="${case_name#*|}"; line="${case_name%%|*}"; expect="${expect%|*}"
+    # one file per case, Docker Desktop may serve a stale copy of a rewritten file
+    python3 -c 'import re,sys; t=open(sys.argv[1]).read(); n=re.subn(r"^ua_family = .*$", "ua_family = " + sys.argv[3], t, flags=re.M); assert n[1] == 1; open(sys.argv[2],"w").write(n[0])' \
+      "${fp_dir}/p0f.fp" "${fp_dir}/bad-ua-${case_name##*|}.fp" "${line}" || test_die "could not build the ua_family test file"
+    chmod a+r "${fp_dir}/bad-ua-${case_name##*|}.fp"
+    rc=0
+    out="$(run_p0f_on "bad-ua-${case_name##*|}.fp")" || rc=$?
+    if [[ "${rc}" -eq 0 ]] || ! grep -qF "${expect}" <<<"${out}"; then
+      test_die "p0f accepted a p0f.fp with a bad ua_family (${line}): rc=${rc} ${out}"
+    fi
+  done
+
   for case_name in share family placement userland duplicate; do
     case "${case_name}" in
       share) line="conf = Linux:high:100"; expect="Malformed 'conf' share" ;;
@@ -522,6 +536,56 @@ PY
   [[ -z "${out}" ]] || test_die "p0f offline mode ignored the BPF filter: ${out}"
 }
 
+# User-Agent signals in http request events: one HTTP request per connection from the
+# Linux client container, each User-Agent ends with a case tag
+check_ua_signals() {
+  local case_name="" ua="" req=""
+  local win_ua="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36 tpot-win"
+  local android_ua="Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36 tpot-android"
+  local chrome_ua="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36 tpot-dishonest"
+  local curl_ua="curl/8.5.0 tpot-curl"
+
+  for case_name in win android dishonest curl; do
+    case "${case_name}" in
+      win) req="GET / HTTP/1.1\r\nHost: p0f\r\nUser-Agent: ${win_ua}\r\nConnection: close\r\n\r\n" ;;
+      android) req="GET / HTTP/1.1\r\nHost: p0f\r\nUser-Agent: ${android_ua}\r\nConnection: close\r\n\r\n" ;;
+      # header order of p0f's curl signature, but a Chrome User-Agent
+      dishonest) req="GET / HTTP/1.1\r\nUser-Agent: ${chrome_ua}\r\nHost: p0f\r\nAccept: */*\r\n\r\n" ;;
+      curl) req="GET / HTTP/1.1\r\nUser-Agent: ${curl_ua}\r\nHost: p0f\r\nAccept: */*\r\n\r\n" ;;
+    esac
+    docker exec "${HTTP_CLIENT_CONTAINER_NAME}" /bin/bash -c \
+      "exec 3<>/dev/tcp/${P0F_CONTAINER_IP}/${HTTP_PORT} && printf '${req}' >&3 && read -r -t 2 _ <&3; exec 3<&-" \
+      >/dev/null 2>&1 || true
+  done
+  sleep 2
+
+  python3 - "${JSON_LOG_FILE}" <<'PY'
+import json, sys
+events = {}
+for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
+    if line.strip():
+        e = json.loads(line)
+        if e.get("mod") == "http request" and " tpot-" in str(e.get("user_agent", "")):
+            events[e["user_agent"].rsplit(" tpot-", 1)[1]] = e
+want = {
+    "win": {"ua_os": "Windows", "os_family": "Linux", "ua_os_mismatch": True},
+    "android": {"ua_os": "Android", "os_family": "Linux", "ua_os_mismatch": False},
+    "dishonest": {"ua_os": "Linux", "ua_os_mismatch": False, "ua_dishonest": True},
+    "curl": {"ua_os": None, "ua_os_mismatch": None, "ua_dishonest": False},
+}
+failed = False
+for case, fields in want.items():
+    e = events.get(case)
+    bad = {k: (e or {}).get(k) for k, v in fields.items() if (e or {}).get(k) != v}
+    if e is None or bad:
+        print(f"User-Agent case {case}: expected {fields}, got {bad if e else 'no http request event'}", file=sys.stderr)
+        failed = True
+    else:
+        print(f"User-Agent case {case}: " + ", ".join(f"{k}={e.get(k)}" for k in fields))
+sys.exit(1 if failed else 0)
+PY
+}
+
 # connections the p0f host opens itself must not show up as client SYNs
 check_self_filter() {
   docker exec "${TEST_CONTAINER_NAME}" /bin/sh -c \
@@ -614,6 +678,9 @@ main() {
   check_self_filter || test_die "p0f logged SYNs of its own host"
   test_ok "p0f skips SYNs the p0f host sends itself"
 
+  check_ua_signals || test_die "p0f did not log the expected User-Agent signals"
+  test_ok "p0f logs User-Agent vs TCP stack and header order signals"
+
   if [[ "${SKIP_SCANNERS}" != "true" ]]; then
     test_info "Scanning the p0f container with nmap -sS and masscan"
     run_scanners
@@ -625,7 +692,7 @@ main() {
   test_ok "No p0f runtime errors found in logs"
 
   check_conf_parser
-  test_ok "p0f rejects malformed conf fields in p0f.fp"
+  test_ok "p0f rejects malformed conf and ua_family fields in p0f.fp"
 
   check_offline_mode
   test_ok "p0f offline mode writes NDJSON to stdout (pcap time stamps, VLAN tags, BPF filter)"

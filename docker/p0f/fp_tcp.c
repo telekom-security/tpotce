@@ -1198,6 +1198,14 @@ struct tcp_sig* fingerprint_tcp(u8 to_srv, struct packet_data* pk,
 
   }
 
+  /* Kept for the User-Agent check of this connection (fp_http.c). */
+
+  if (to_srv && pk->tcp_type == TCP_SYN) {
+    f->syn_family   = os_family;
+    f->syn_has_conf = os_conf;
+    f->syn_conf     = os_conf ? m->conf_share : 0;
+  }
+
   if (to_srv) 
     start_observation(f->sendsyn ? "sendsyn probe" : "syn",
                       4 + !!os_family + 2 * os_conf, 1, f);

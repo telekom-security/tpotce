@@ -422,6 +422,15 @@ void add_observation_field(char* key, u8* value) {
 }
 
 
+/* Add a boolean log item (T-Pot: ua_os_mismatch / ua_dishonest). */
+
+void add_observation_bool(char* key, u8 value) {
+
+  add_observation(key, (u8*)(value ? "true" : "false"), json_boolean(value));
+
+}
+
+
 /* Add a numeric log item (T-Pot: os_confidence / os_samples). */
 
 void add_observation_number(char* key, double value, u8 integer) {

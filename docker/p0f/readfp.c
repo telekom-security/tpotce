@@ -379,6 +379,15 @@ static void config_parse_line(u8* line) {
 
     http_parse_ua(val, line_no);
 
+  } else if (!strcmp((char*)line, "ua_family")) {
+
+    /* T-Pot: User-Agent substrings -> OS family, see fp_http.c. */
+
+    if (state != CF_NEED_LABEL || mod_to_srv != 1 || mod_type != CF_MOD_HTTP) 
+      FATAL("misplaced 'ua_family' in line %u.", line_no);
+
+    http_parse_ua_family(val, line_no);
+
   } else if (!strcmp((char*)line, "label")) {
 
     /* We will drop sig_sys / sig_flavor on the floor if no signatures

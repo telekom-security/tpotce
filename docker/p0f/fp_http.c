@@ -48,6 +48,17 @@ static u32 sig_cnt[2];
 static struct ua_map_record* ua_map;   /* Mappings between U-A and OS        */
 static u32 ua_map_cnt;
 
+/* T-Pot: User-Agent substring -> OS family ('ua_family' in p0f.fp), first
+   match wins. */
+
+struct ua_family_record {
+  u8* family;                           /* One of conf_families (readfp.c)    */
+  u8* needle;                           /* Substring of the User-Agent        */
+};
+
+static struct ua_family_record* ua_fam;
+static u32 ua_fam_cnt;
+
 #define SLOF(_str) (u8*)_str, strlen((char*)_str)
 
 
@@ -841,16 +852,110 @@ header_check:
 }
 
 
+/* T-Pot: parse 'ua_family = <family>=[<substring>],...'. */
+
+void http_parse_ua_family(u8* val, u32 line_no) {
+
+  u8* nxt;
+  u32 i;
+
+  while (*val) {
+
+    nxt = val;
+    while (isalnum(*nxt)) nxt++;
+
+    if (val == nxt || nxt[0] != '=' || nxt[1] != '[')
+      FATAL("Malformed 'ua_family' in line %u.", line_no);
+
+    for (i = 0; conf_families[i]; i++)
+      if (strlen((char*)conf_families[i]) == (u32)(nxt - val) &&
+          !strncmp((char*)val, (char*)conf_families[i], nxt - val)) break;
+
+    if (!conf_families[i])
+      FATAL("Unknown OS family '%.*s' in 'ua_family' in line %u.",
+            (int)(nxt - val), val, line_no);
+
+    val = nxt + 2;
+    nxt = val;
+    while (*nxt && *nxt != ']') nxt++;
+
+    if (val == nxt || !*nxt)
+      FATAL("Malformed 'ua_family' in line %u.", line_no);
+
+    ua_fam = DFL_ck_realloc(ua_fam, (ua_fam_cnt + 1) *
+                            sizeof(struct ua_family_record));
+
+    ua_fam[ua_fam_cnt].family = conf_families[i];
+    ua_fam[ua_fam_cnt].needle = DFL_ck_memdup_str(val, nxt - val);
+    ua_fam_cnt++;
+
+    val = nxt + 1;
+
+    if (*val == ',') val++;
+    else if (*val) FATAL("Malformed 'ua_family' in line %u.", line_no);
+
+  }
+
+}
+
+
+/* T-Pot: OS family a User-Agent names, NULL if none. */
+
+static u8* ua_family(u8* sw) {
+
+  u32 i;
+
+  if (!sw) return NULL;
+
+  for (i = 0; i < ua_fam_cnt; i++)
+    if (strstr((char*)sw, (char*)ua_fam[i].needle)) return ua_fam[i].family;
+
+  return NULL;
+
+}
+
+
+/* T-Pot: same OS family? Android runs a Linux kernel, so a Linux TCP stack
+   with an Android User-Agent (and the other way round) is no mismatch. */
+
+static u8 same_family(u8* a, u8* b) {
+
+  if (!strcmp((char*)a, (char*)b)) return 1;
+
+  if ((!strcmp((char*)a, "Linux") && !strcmp((char*)b, "Android")) ||
+      (!strcmp((char*)a, "Android") && !strcmp((char*)b, "Linux"))) return 1;
+
+  return 0;
+
+}
+
+
 /* Look up HTTP signature, create an observation. */
 
 static void fingerprint_http(u8 to_srv, struct packet_flow* f) {
 
   struct http_sig_record* m;
   u8* lang = NULL;
+  u8* ua_os = NULL;
+  u8  extra = 0;
 
   http_find_match(to_srv, &f->http_tmp, 0);
 
-  start_observation(to_srv ? "http request" : "http response", 4, to_srv, f);
+  /* T-Pot: for requests also the User-Agent, the OS family it names, the
+     family of this connection's SYN, and whether they (or User-Agent and
+     header order) disagree. */
+
+  if (to_srv) {
+
+    ua_os = ua_family(f->http_tmp.sw);
+
+    extra = !!f->http_tmp.sw + !!ua_os + !!f->syn_family + !!f->syn_has_conf +
+            (ua_os && f->syn_family) + !!f->http_tmp.matched;
+
+  }
+
+  start_observation(to_srv ? "http request" : "http response", 4 + extra,
+                    to_srv, f);
 
   if ((m = f->http_tmp.matched)) {
 
@@ -881,6 +986,22 @@ static void fingerprint_http(u8 to_srv, struct packet_flow* f) {
   add_observation_field("params", dump_flags(&f->http_tmp, m));
 
   add_observation_field("raw_sig", dump_sig(to_srv, &f->http_tmp));
+
+  if (to_srv) {
+
+    if (f->http_tmp.sw) add_observation_field("user_agent", f->http_tmp.sw);
+    if (ua_os) add_observation_field("ua_os", ua_os);
+
+    if (f->syn_family) add_observation_field("os_family", f->syn_family);
+
+    if (f->syn_has_conf) add_observation_number("os_confidence", f->syn_conf, 0);
+
+    if (ua_os && f->syn_family)
+      add_observation_bool("ua_os_mismatch", !same_family(ua_os, f->syn_family));
+
+    if (m) add_observation_bool("ua_dishonest", f->http_tmp.dishonest);
+
+  }
 
   score_nat(to_srv, f);
 

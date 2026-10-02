@@ -91,6 +91,8 @@ struct packet_flow;
 
 void http_parse_ua(u8* val, u32 line_no);
 
+void http_parse_ua_family(u8* val, u32 line_no);
+
 void http_register_sig(u8 to_srv, u8 generic, s32 sig_class, u32 sig_name,
                        u8* sig_flavor, u32 label_id, u32* sys, u32 sys_cnt,
                        u8* val, u32 line_no);

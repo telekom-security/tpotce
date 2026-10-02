@@ -183,6 +183,10 @@ struct packet_flow {
   u32 next_srv_seq;                     /* Next seq on srv -> cli packet      */
   u16 syn_mss;                          /* MSS on SYN packet                  */
 
+  u8*   syn_family;                     /* T-Pot: OS family of the client SYN */
+  float syn_conf;                       /* T-Pot: its os_confidence           */
+  u8    syn_has_conf;                   /* T-Pot: syn_conf set?               */
+
   u32 created;                          /* Flow creation date (unix time)     */
 
   /* Application-level fingerprinting: */
