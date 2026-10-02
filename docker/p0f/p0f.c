@@ -233,6 +233,11 @@ static void open_log(void) {
 
     lf = fdopen(stdout_fd, "w");
     if (!lf) PFATAL("fdopen() on stdout failed.");
+
+    /* Whole records only: stderr (messages, 'All done') often ends up on the
+       same terminal or pipe, a block buffer would split records there. */
+
+    line_buffered_mode = 1;
     return;
 
   }
