@@ -157,7 +157,6 @@ Alongside the following tools:
 * [Elasticvue](https://github.com/cars10/elasticvue/) a web front end for browsing and interacting with an Elasticsearch cluster.
 * [T-Pot-Attack-Map](https://github.com/telekom-security/t-pot-attack-map) a beautifully animated attack map for T-Pot.
 * [P0f](https://lcamtuf.coredump.cx/p0f3/) is a tool for purely passive traffic fingerprinting.
-* [Satori](https://github.com/xnih/satori) is a passive OS, application and protocol fingerprinting tool.
 * [Suricata](https://suricata.io/) a Network Security Monitoring engine.
 
 ... to give you the best out-of-the-box experience possible and an easy-to-use multi-honeypot system.
@@ -189,7 +188,6 @@ T-Pot offers a number of services which are basically divided into five groups:
     * A selection of the 23 available honeypots based on the selected `docker-compose.yml`.
 5. Network Security Monitoring (NSM)
     * P0f is a tool for purely passive traffic fingerprinting.
-    * Satori is a passive OS, application and protocol fingerprinting tool. It runs in parallel to P0f during the transition period and writes normalized JSON logs. Runtime modules default to TCP and are controlled by container command switches.
     * Suricata a Network Security Monitoring engine.
 <br><br>
 
@@ -236,7 +234,7 @@ All of the [supported Linux distro images](#choose-your-distro) will run in a VM
 
 ***Some configuration / setup hints:***
 - While Intel versions run stable, Apple Silicon (arm64) support has known issues which in UTM may require switching `Display` to `Console Only` during initial installation of the OS and afterwards back to `Full Graphics`.
-- During configuration you may need to enable promiscuous mode for the network interface in order for satori, suricata and p0f to work properly.
+- During configuration you may need to enable promiscuous mode for the network interface in order for suricata and p0f to work properly.
 - If you want to use a wifi card as a primary NIC for T-Pot, please be aware that not all network interface drivers support all wireless cards. In VirtualBox e.g. you have to choose the *"MT SERVER"* model of the NIC.
 <br><br>
 
@@ -677,7 +675,7 @@ Before the first start run `~/tpotce/genuser.sh` or setup the `WEB_USER` manuall
 
 `update.sh` adds settings that are new in `env.example` to your `.env` with their defaults and comments out settings that are no longer used (unless your `docker-compose.yml` still uses them), your values are never changed.
 
-Settings for the NSM services (Suricata, P0f, Satori):
+Settings for the NSM services (Suricata, P0f, Glutton):
 - `TPOT_CAPTURE_INTERFACE`: The interface to capture on. Empty (default) picks the interface of the route to the internet, or without a default route the first interface with a global IPv4 address. Set it if the host has more than one uplink or you capture on a mirror port.
 - `SURICATA_RULES_UPDATE`: The Suricata rules are cached in `~/tpotce/data/suricata/rules` and updated once in 24 hours, without internet access the latest cached rules are used. Set it to `off` for isolated deployments to never download rules.
 
@@ -1026,7 +1024,6 @@ The software that T-Pot is built on uses the following licenses.
 [galah](https://github.com/0x4D31/galah?tab=Apache-2.0-1-ov-file#readme),
 [dionaea](https://github.com/DinoTools/dionaea/blob/master/LICENSE),
 [honeytrap](https://github.com/armedpot/honeytrap/blob/master/LICENSE),
-[satori](https://github.com/xnih/satori/blob/master/LICENSE),
 [suricata](https://suricata.io/features/open-source/)
 <br>GPLv3:
 [adbhoney](https://github.com/huuck/ADBHoney),
@@ -1116,7 +1113,6 @@ Without open source and the development community we are proud to be a part of, 
 [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot/graphs/contributors),
 [rdphoneypot](https://gitlab.com/bontchev/rdphoneypot/-/project_members),
 [sentrypeer](https://github.com/SentryPeer/SentryPeer/graphs/contributors),
-[satori](https://github.com/xnih/satori/graphs/contributors),
 [snare](https://github.com/mushorg/snare/graphs/contributors),
 [tanner](https://github.com/mushorg/tanner/graphs/contributors),
 [suricata](https://github.com/OISF/suricata/graphs/contributors),

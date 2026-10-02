@@ -381,14 +381,6 @@ fuP0F () {
   chown tpot:tpot -R /data/p0f
 }
 
-# Let's create a function to clean up and prepare satori data
-fuSATORI () {
-  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/satori/*; fi
-  mkdir -vp /data/satori/log
-  chmod 770 -R /data/satori
-  chown tpot:tpot -R /data/satori
-}
-
 # Let's create a function to clean up and prepare tanner data
 fuTANNER () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/tanner/*; fi
@@ -463,6 +455,5 @@ fuREDISHONEYPOT
 fuSENTRYPEER
 fuSURICATA
 fuP0F
-fuSATORI
 fuTANNER
 fuWORDPOT

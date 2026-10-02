@@ -4,7 +4,6 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 
 ## New Features
 * **RDPHoneypot** a Remote Desktop honeypot for RDP connection and credential telemetry.
-* **Satori** a passive OS fingerprinting NSM service that runs in parallel to P0f. It matches the TCP SYN and SYN+ACK packets on the capture interface against the Satori fingerprint database and writes normalized JSON logs (saved search `Satori-Logs` in Kibana). Further modules (DHCP, HTTP, TLS, SMB, DNS, NTP, SSH) can be enabled with `--modules` in the `command` of the `satori` service.
 * **Restore Script** `restore.sh` puts a backup written by `update.sh` back, as a whole or per group (checkout, configuration, `data/`, Kibana objects and ILM policy).
 * **Update Script** has been reworked:
   * Backups go to `~/tpot_backups`, rotate, are checked for space and hold what git cannot bring back; `--full` adds all of `data/`.
@@ -25,7 +24,7 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 * **Conpot** has been updated to 1.0.0, pinned to a later commit of the master branch (asyncio, TOML templates, new event schema). All Conpot and upstream default strings of the deployed templates have been replaced. The pinned commit includes fixes contributed upstream: Guardian AST no longer keeps a core at 100% CPU after a client sent anything but a command and closed the connection (the reason for the former CPU health check, which has been removed), IPMI answers again to clients that come back from a new source port, and Kamstrup and ICCP no longer crash on binary or malformed input.
 * **Cowrie** has been updated to 3.0.0, pinned to a later commit of the main branch.
 * **Suricata** has been updated to 8.0.7 (Alpine 3.24 package). The rules are now cached in `data/suricata/rules` and updated once in 24 hours (`SURICATA_RULES_UPDATE=off` never downloads them), a failed update or a start without internet access uses the latest cached rules, and the capture filter keeps excluding the T-Pot ports without DNS.
-* **NSM services** (Suricata, P0f, Satori, Glutton) capture on the interface of the route to the internet, so hosts with more than one default route no longer end up in a restart loop. `TPOT_CAPTURE_INTERFACE` in `.env` sets the interface manually.
+* **NSM services** (Suricata, P0f, Glutton) capture on the interface of the route to the internet, so hosts with more than one default route no longer end up in a restart loop. `TPOT_CAPTURE_INTERFACE` in `.env` sets the interface manually.
 * **Update Script** adds settings that are new in `env.example` to an existing `.env` and comments out those that are no longer used.
 * **T-Pot Init** validates all settings of `.env` and reports every invalid one at once before T-Pot starts. Settings of a service are only checked if it runs in the active edition, `TPOT_CAPTURE_INTERFACE` and the Attack Map time zone are checked against the host.
 * **Nginx** has been updated to 1.28.3 (Alpine 3.23 package).

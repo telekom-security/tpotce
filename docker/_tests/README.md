@@ -34,7 +34,6 @@ not touch production `data/` or `data_backup/` paths.
 ./docker/_tests/run.sh p0f
 ./docker/_tests/run.sh redishoneypot
 ./docker/_tests/run.sh rdphoneypot
-./docker/_tests/run.sh satori
 ./docker/_tests/run.sh sentrypeer
 ./docker/_tests/run.sh suricata
 ./docker/_tests/run.sh tanner
@@ -101,8 +100,6 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/redishoneypot.sh --redis-port 16379
 ./docker/_tests/tests/rdphoneypot.sh
 ./docker/_tests/tests/rdphoneypot.sh --rdp-port 13389
-./docker/_tests/tests/satori.sh
-./docker/_tests/tests/satori.sh --image dtagdevsec/satori:24.04.2 --modules all
 ./docker/_tests/tests/sentrypeer.sh
 ./docker/_tests/tests/sentrypeer.sh --tcp-port 15060 --udp-port 15060
 ./docker/_tests/tests/suricata.sh
@@ -139,11 +136,6 @@ The Dicompot test additionally requires DCMTK client tools on the host:
 
 The p0f test generates HTTP traffic inside an isolated Docker network and
 verifies that p0f writes matching `syn` and `http request` JSON events.
-
-The Satori test does the same with TCP connections and verifies matching `syn`
-and `syn+ack` JSON events. `--modules` selects the Satori modules (default
-`tcp`, as in T-Pot); the capture loop swallows exceptions, so the test also
-checks the Docker logs for import and capture errors.
 
 The RDPHoneypot test also verifies that `server.pem` is written to the
 persistent cert volume and remains unchanged after a container restart.
