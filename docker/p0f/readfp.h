@@ -33,6 +33,7 @@
 
 extern u8** fp_os_classes;
 extern u8** fp_os_names;
+extern u8*  conf_families[];             /* T-Pot: OS families for 'conf'      */
 
 void read_config(u8* fname);
 

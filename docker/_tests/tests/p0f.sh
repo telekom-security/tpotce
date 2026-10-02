@@ -405,6 +405,13 @@ check_conf_parser() {
 
   out="$(run_p0f_on p0f.fp)" || test_die "p0f does not load its own p0f.fp: ${out}"
 
+  # the short form 'conf = <family>' (family only) has to load
+  python3 -c 'import re,sys; t=open(sys.argv[1]).read(); open(sys.argv[2],"w").write(re.sub(r"^conf = [A-Za-z]+:.*$", "conf = Linux", t, count=1, flags=re.M))' \
+    "${fp_dir}/p0f.fp" "${fp_dir}/short.fp"
+  grep -qx "conf = Linux" "${fp_dir}/short.fp" || test_die "could not build the conf short form test file"
+  chmod a+r "${fp_dir}/short.fp"
+  out="$(run_p0f_on short.fp)" || test_die "p0f does not load the conf short form 'conf = Linux': ${out}"
+
   for case_name in share family placement userland duplicate; do
     case "${case_name}" in
       share) line="conf = Linux:high:100"; expect="Malformed 'conf' share" ;;
@@ -450,9 +457,10 @@ check_offline_mode() {
   # vlan.pcap: the same SYN from .8 untagged, .9 with an 802.1Q tag, .10 with QinQ tags
   python3 - "${pcap_dir}" <<'PY'
 import struct, sys
-def frame(src, tags=b""):
-    opts = struct.pack("!BBH", 2, 4, 1460) + b"\x04\x02" + struct.pack("!BBII", 8, 10, 12345, 0) + b"\x01" + struct.pack("!BBB", 3, 3, 7)
-    tcp = struct.pack("!HHIIBBHHH", 40001, 22, 1, 0, (20 + len(opts)) // 4 << 4, 0x02, 64240, 0, 0) + opts
+LINUX = struct.pack("!BBH", 2, 4, 1460) + b"\x04\x02" + struct.pack("!BBII", 8, 10, 12345, 0) + b"\x01" + struct.pack("!BBB", 3, 3, 7)
+FREEBSD = struct.pack("!BBH", 2, 4, 1460) + b"\x01" + struct.pack("!BBB", 3, 3, 6) + b"\x04\x02" + struct.pack("!BBII", 8, 10, 12345, 0)
+def frame(src, tags=b"", opts=LINUX, win=64240):
+    tcp = struct.pack("!HHIIBBHHH", 40001, 22, 1, 0, (20 + len(opts)) // 4 << 4, 0x02, win, 0, 0) + opts
     ip = struct.pack("!BBHHHBBH4s4s", 0x45, 0, 20 + len(tcp), 1, 0x4000, 56, 6, 0, bytes([198, 51, 100, src]), bytes([192, 0, 2, 1]))
     s = sum(struct.unpack("!10H", ip)); s = (s >> 16) + (s & 0xFFFF); ip = ip[:10] + struct.pack("!H", ~(s + (s >> 16)) & 0xFFFF) + ip[12:]
     return b"\x02\x00\x00\x00\x00\x01\x02\x00\x00\x00\x00\x02" + tags + b"\x08\x00" + ip + tcp
@@ -461,7 +469,7 @@ def pcap(name, frames):
         fh.write(struct.pack("<IHHiIII", 0xA1B2C3D4, 2, 4, 0, 0, 65535, 1))
         for n, f in enumerate(frames):
             fh.write(struct.pack("<IIII", 1700000000 + n, 0, len(f), len(f)) + f)
-pcap("syn.pcap", [frame(7)])
+pcap("syn.pcap", [frame(7), frame(11, opts=FREEBSD, win=65535)])
 pcap("vlan.pcap", [frame(8), frame(9, b"\x81\x00\x00\x65"), frame(10, b"\x88\xa8\x00\x64\x81\x00\x00\x65")])
 PY
   chmod -R a+rX "${pcap_dir}"
@@ -484,6 +492,11 @@ e = syn[0]
 if e.get("timestamp") != "2023/11/14 22:13:20" or e.get("os") != linux_os or e.get("os_family") != "Linux":
     sys.exit(f"unexpected syn event: {e}")
 print(f"offline: {e['timestamp']} {e['client_ip']} os={e['os']!r} os_family={e['os_family']}")
+# a label without data in the datasets: family only (conf short form), no confidence
+b = [e for e in events if e.get("mod") == "syn" and e.get("client_ip") == "198.51.100.11"]
+if len(b) != 1 or b[0].get("os") != "FreeBSD 9.x or newer" or b[0].get("os_family") != "BSD" or "os_confidence" in b[0]:
+    sys.exit(f"expected FreeBSD 9.x or newer with os_family BSD and no os_confidence, got {b}")
+print("offline: FreeBSD SYN has os_family BSD without os_confidence")
 PY
 
   # VLAN tags (802.1Q, QinQ) are skipped per packet, untagged frames in between still work
@@ -504,7 +517,7 @@ PY
     || test_die "p0f BPF filter does not apply to QinQ tagged SYNs: ${out}"
 
   # a BPF filter after the options is passed on to p0f
-  out="$(docker run --rm --network none -v "${pcap_dir}:/pcap:ro" "${IMAGE}" -r /pcap/syn.pcap 'not src host 198.51.100.7' 2>/dev/null)" \
+  out="$(docker run --rm --network none -v "${pcap_dir}:/pcap:ro" "${IMAGE}" -r /pcap/syn.pcap 'not src net 198.51.100.0/24' 2>/dev/null)" \
     || test_die "p0f offline mode with a BPF filter failed"
   [[ -z "${out}" ]] || test_die "p0f offline mode ignored the BPF filter: ${out}"
 }

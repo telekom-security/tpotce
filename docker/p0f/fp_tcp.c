@@ -1184,7 +1184,8 @@ struct tcp_sig* fingerprint_tcp(u8 to_srv, struct packet_data* pk,
 
   /* T-Pot: OS family of client SYNs; userland tools are scanners, OS labels
      take it from their 'conf' field. The confidence was measured on exact
-     matches, so fuzzy matches only get the family. */
+     matches, so fuzzy matches only get the family, and so do labels whose
+     'conf' has no share (conf_n == 0). */
 
   if (to_srv && !f->sendsyn && (m = sig->matched)) {
 
@@ -1192,7 +1193,7 @@ struct tcp_sig* fingerprint_tcp(u8 to_srv, struct packet_data* pk,
       os_family = (u8*)"Scanner";
     } else if (m->conf_family) {
       os_family = m->conf_family;
-      os_conf   = !sig->fuzzy;
+      os_conf   = !sig->fuzzy && m->conf_n;
     }
 
   }

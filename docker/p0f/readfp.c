@@ -52,8 +52,8 @@ static u8   conf_open;                  /* T-Pot: 'conf' allowed here?        */
 
 /* OS families a 'conf' field may name (T-Pot, see docker/p0f/tools/). */
 
-static u8* conf_families[] = { (u8*)"Android", (u8*)"Apple", (u8*)"Linux",
-                               (u8*)"Windows", NULL };
+u8* conf_families[] = { (u8*)"Android", (u8*)"Apple", (u8*)"Linux",
+                        (u8*)"Windows", (u8*)"BSD", (u8*)"Other", NULL };
 
 u8 **fp_os_classes,                     /* Map of OS classes                  */
    **fp_os_names;                       /* Map of OS names                    */
@@ -65,7 +65,8 @@ static u32 class_cnt,                   /* Sizes for maps                     */
 
 
 /* T-Pot: parse 'conf = <family>:<share>:<samples>', the share of the label's
-   OS family in the public datasets and the number of samples behind it. */
+   OS family in the public datasets and the number of samples behind it, or
+   'conf = <family>' for labels without data (family only, no confidence). */
 
 static void config_parse_conf(u8* val) {
 
@@ -75,15 +76,20 @@ static void config_parse_conf(u8* val) {
   unsigned long n;
 
   nxt = (u8*)strchr((char*)val, ':');
-  if (!nxt) FATAL("Malformed 'conf' in line %u.", line_no);
-
-  *nxt++ = 0;
+  if (nxt) *nxt++ = 0;
 
   for (i = 0; conf_families[i]; i++)
     if (!strcmp((char*)val, (char*)conf_families[i])) break;
 
   if (!conf_families[i])
     FATAL("Unknown OS family '%s' in 'conf' in line %u.", val, line_no);
+
+  if (!nxt) {
+    conf_family = conf_families[i];
+    conf_share  = 0;
+    conf_n      = 0;
+    return;
+  }
 
   val = nxt;
   share = strtod((char*)val, (char**)&nxt);
