@@ -374,6 +374,27 @@ void start_observation(char* keyword, u8 field_cnt, u8 to_srv,
 }
 
 
+/* T-Pot: JSON string for a value that is no valid UTF-8 (jansson refuses
+   those): bytes from 0x80 up become \xNN, the rest stays. */
+
+static json_t* json_string_escaped(u8* value) {
+
+  u32 len = strlen((char*)value), i, o = 0;
+  u8* tmp = ck_alloc(len * 4 + 1);
+  json_t* ret;
+
+  for (i = 0; i < len; i++) {
+    if (value[i] < 0x80) tmp[o++] = value[i];
+    else o += sprintf((char*)tmp + o, "\\x%02x", value[i]);
+  }
+
+  ret = json_string((char*)tmp);
+  ck_free(tmp);
+  return ret;
+
+}
+
+
 /* Add log item; jvalue is its JSON value (NULL = the string value). */
 
 static void add_observation(char* key, u8* value, json_t* jvalue) {
@@ -384,8 +405,11 @@ static void add_observation(char* key, u8* value, json_t* jvalue) {
     SAYF("| %-8s = %s\n", key, value ? value : (u8*)"???");
 
   if (log_file && json_mode) {
-    json_object_set_new(json_record, key, jvalue ? jvalue :
-                        json_string( (char *)(value ? value : (u8*)"???") ));
+    if (!jvalue) {
+      jvalue = json_string((char *)(value ? value : (u8*)"???"));
+      if (!jvalue) jvalue = json_string_escaped(value);
+    }
+    json_object_set_new(json_record, key, jvalue);
   } else {
     if (jvalue) json_decref(jvalue);
     if (log_file) LOGF("|%s=%s", key, value ? value : (u8*)"???");

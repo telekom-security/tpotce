@@ -495,7 +495,22 @@ def pcap(name, frames):
             fh.write(struct.pack("<IIII", 1700000000 + n, 0, len(f), len(f)) + f)
 pcap("syn.pcap", [frame(7), frame(11, opts=FREEBSD, win=65535)])
 pcap("vlan.pcap", [frame(8), frame(9, b"\x81\x00\x00\x65"), frame(10, b"\x88\xa8\x00\x64\x81\x00\x00\x65")])
+# noua.pcap: Linux handshake from 198.51.100.13, then an HTTP request without User-Agent
+def tcp4(src, dst, sport, dport, seq, ack, flags, win, opts=b"", payload=b"", ttl=56):
+    tcp = struct.pack("!HHIIBBHHH", sport, dport, seq, ack, (20 + len(opts)) // 4 << 4, flags, win, 0, 0) + opts + payload
+    ip = struct.pack("!BBHHHBBH4s4s", 0x45, 0, 20 + len(tcp), 9, 0x4000, ttl, 6, 0, bytes(src), bytes(dst))
+    s = sum(struct.unpack("!10H", ip)); s = (s >> 16) + (s & 0xFFFF); ip = ip[:10] + struct.pack("!H", ~(s + (s >> 16)) & 0xFFFF) + ip[12:]
+    return b"\x02\x00\x00\x00\x00\x01\x02\x00\x00\x00\x00\x02\x08\x00" + ip + tcp
+cli, srv = [198, 51, 100, 13], [192, 0, 2, 1]
+pcap("noua.pcap", [tcp4(cli, srv, 41000, 80, 1000, 0, 0x02, 64240, LINUX),
+                   tcp4(srv, cli, 80, 41000, 5000, 1001, 0x12, 65160, struct.pack("!BBH", 2, 4, 1460), ttl=64),
+                   tcp4(cli, srv, 41000, 80, 1001, 5001, 0x18, 64240, payload=b"GET / HTTP/1.1\r\nHost: target\r\nAccept: */*\r\n\r\n")])
 PY
+  # a p0f.fp with an HTTP signature that expects no User-Agent (no sw): the
+  # request matches it, but there is nothing to call dishonest
+  docker run --rm --entrypoint /bin/cat "${IMAGE}" /opt/p0f/p0f.fp \
+    | python3 -c 'import sys; t=sys.stdin.read(); i=t.index("[http:response]"); sys.stdout.write(t[:i] + "label = s:!:tpot-test:\nsys   = @unix\nsig   = *:Host,Accept=[*/*]:User-Agent:\n\n" + t[i:])' \
+    > "${pcap_dir}/nosw.fp"
   chmod -R a+rX "${pcap_dir}"
 
   out="$(docker run --rm --network none -v "${pcap_dir}:/pcap:ro" "${IMAGE}" -r /pcap/syn.pcap 2>/dev/null)" \
@@ -540,6 +555,17 @@ PY
   grep -q '"client_ip": "198.51.100.10"' <<<"${out}" && ! grep -q '"client_ip": "198.51.100.9"' <<<"${out}" \
     || test_die "p0f BPF filter does not apply to QinQ tagged SYNs: ${out}"
 
+  # ua_dishonest only where the check applies (matched signature with sw, request with User-Agent)
+  out="$(docker run --rm --network none -v "${pcap_dir}:/pcap:ro" "${IMAGE}" -f /pcap/nosw.fp -r /pcap/noua.pcap 2>/dev/null)" \
+    || test_die "p0f offline mode failed on the request without User-Agent"
+  python3 - "${out}" <<'PY' || test_die "p0f wrote ua_dishonest for a request it could not check"
+import json, sys
+h = [e for e in map(json.loads, sys.argv[1].splitlines()) if e.get("mod") == "http request"]
+if len(h) != 1 or h[0].get("app") != "tpot-test" or "ua_dishonest" in h[0] or "user_agent" in h[0]:
+    sys.exit(f"expected one http request matched by tpot-test without ua_dishonest / user_agent, got {h}")
+print("offline: no ua_dishonest without User-Agent / expected software")
+PY
+
   # a BPF filter after the options is passed on to p0f
   out="$(docker run --rm --network none -v "${pcap_dir}:/pcap:ro" "${IMAGE}" -r /pcap/syn.pcap 'not src net 198.51.100.0/24' 2>/dev/null)" \
     || test_die "p0f offline mode with a BPF filter failed"
@@ -555,8 +581,10 @@ check_ua_signals() {
   local chrome_ua="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36 tpot-dishonest"
   local curl_ua="curl/8.5.0 tpot-curl"
   local bsd_ua="Mozilla/5.0 (X11; FreeBSD amd64; rv:125.0) Gecko/20100101 Firefox/125.0 tpot-bsd"
+  local utf8_ua="Mozilla/5.0 (X11; Linux x86_64) \\xff Firefox/125.0 tpot-utf8"
+  local proxy_ua="Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0 tpot-proxy"
 
-  for case_name in win android dishonest curl bsd; do
+  for case_name in win android dishonest curl bsd utf8 proxy; do
     case "${case_name}" in
       win) req="GET / HTTP/1.1\r\nHost: p0f\r\nUser-Agent: ${win_ua}\r\nConnection: close\r\n\r\n" ;;
       android) req="GET / HTTP/1.1\r\nHost: p0f\r\nUser-Agent: ${android_ua}\r\nConnection: close\r\n\r\n" ;;
@@ -565,6 +593,9 @@ check_ua_signals() {
       curl) req="GET / HTTP/1.1\r\nUser-Agent: ${curl_ua}\r\nHost: p0f\r\nAccept: */*\r\n\r\n" ;;
       # desktop BSD User-Agents carry X11 as well, BSD has to win over Linux
       bsd) req="GET / HTTP/1.1\r\nHost: p0f\r\nUser-Agent: ${bsd_ua}\r\nConnection: close\r\n\r\n" ;;
+      # a byte that is no UTF-8 (0xff) must not cost the user_agent field
+      utf8) req="GET / HTTP/1.1\r\nHost: p0f\r\nUser-Agent: ${utf8_ua}\r\nConnection: close\r\n\r\n" ;;
+      proxy) req="GET / HTTP/1.1\r\nHost: p0f\r\nUser-Agent: ${proxy_ua}\r\nX-Forwarded-For: 198.51.100.99\r\nConnection: close\r\n\r\n" ;;
     esac
     docker exec "${HTTP_CLIENT_CONTAINER_NAME}" /bin/bash -c \
       "exec 3<>/dev/tcp/${P0F_CONTAINER_IP}/${HTTP_PORT} && printf '${req}' >&3 && read -r -t 2 _ <&3; exec 3<&-" \
@@ -586,8 +617,18 @@ want = {
     "dishonest": {"ua_os": "Linux", "ua_os_mismatch": False, "ua_dishonest": True},
     "curl": {"ua_os": None, "ua_os_mismatch": None, "ua_dishonest": False},
     "bsd": {"ua_os": "BSD", "os_family": "Linux", "ua_os_mismatch": True},
+    "utf8": {"ua_os": "Linux", "ua_os_mismatch": False},
+    "proxy": {"ua_os": "Windows", "ua_os_mismatch": True, "http_proxy": True},
 }
 failed = False
+u = events.get("utf8")
+# raw_sig: p0f itself cuts the software string at the first non-printable byte
+if not u or "\\xff" not in u.get("user_agent", "") or not u.get("raw_sig"):
+    print(f"User-Agent case utf8: expected user_agent with \\xff and a raw_sig, got {u}", file=sys.stderr)
+    failed = True
+if "http_proxy" in events.get("win", {}):
+    print("User-Agent case win: http_proxy set without Via / X-Forwarded-For", file=sys.stderr)
+    failed = True
 for case, fields in want.items():
     e = events.get(case)
     bad = {k: (e or {}).get(k) for k, v in fields.items() if (e or {}).get(k) != v}

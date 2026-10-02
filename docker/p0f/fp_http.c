@@ -948,7 +948,7 @@ static void fingerprint_http(u8 to_srv, struct packet_flow* f) {
   struct http_sig_record* m;
   u8* lang = NULL;
   u8* ua_os = NULL;
-  u8  extra = 0;
+  u8  extra = 0, ua_check = 0;
 
   http_find_match(to_srv, &f->http_tmp, 0);
 
@@ -960,8 +960,14 @@ static void fingerprint_http(u8 to_srv, struct packet_flow* f) {
 
     ua_os = ua_family(f->http_tmp.sw);
 
+    /* Header order vs. User-Agent can only be judged with a User-Agent and
+       a matched signature that expects some software. */
+
+    ua_check = f->http_tmp.matched && f->http_tmp.matched->sig->sw &&
+               f->http_tmp.sw;
+
     extra = !!f->http_tmp.sw + !!ua_os + !!f->syn_family + !!f->syn_has_conf +
-            (ua_os && f->syn_family) + !!f->http_tmp.matched;
+            (ua_os && f->syn_family) + ua_check + !!f->http_tmp.via;
 
   }
 
@@ -1010,7 +1016,12 @@ static void fingerprint_http(u8 to_srv, struct packet_flow* f) {
     if (ua_os && f->syn_family)
       add_observation_bool("ua_os_mismatch", !same_family(ua_os, f->syn_family));
 
-    if (m) add_observation_bool("ua_dishonest", f->http_tmp.dishonest);
+    if (ua_check) add_observation_bool("ua_dishonest", f->http_tmp.dishonest);
+
+    /* Via / X-Forwarded-For: the TCP stack may be the proxy's, not the
+       client's, so a User-Agent mismatch is no strong signal here. */
+
+    if (f->http_tmp.via) add_observation_bool("http_proxy", 1);
 
   }
 
