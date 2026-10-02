@@ -138,14 +138,16 @@ The Dicompot test additionally requires DCMTK client tools on the host:
 The p0f test sends HTTP requests from a client container to a listener in the
 p0f container and verifies that p0f writes matching `syn` (label
 `Linux 4.19 or newer`) and `http request` JSON events, but no `syn` for
-connections the p0f container opens itself. It then scans the p0f container with `nmap -sS` and
+connections the p0f container opens itself, also from an address added after
+p0f started. It then scans the p0f container with `nmap -sS` and
 masscan and expects both to be recognised as tools; the scanners are installed
 with apk, so this part needs network access (`--skip-scanners` leaves it out).
 The Linux SYN has to carry `os_family`, `os_confidence` and `os_samples` from the
 `conf` field of `p0f.fp`, the scanners `os_family: Scanner`, and p0f has to refuse
 a `p0f.fp` with malformed `conf` or `ua_family` fields. HTTP requests with a
-Windows, Android, forged Chrome and curl User-Agent check `ua_os`,
-`ua_os_mismatch` and `ua_dishonest`. Finally the offline mode
+Windows, Android, forged Chrome, curl, FreeBSD, non-UTF-8 and proxied
+(X-Forwarded-For) User-Agent check `ua_os`, `ua_os_mismatch`, `ua_dishonest`,
+`user_agent` and `http_proxy`. Finally the offline mode
 (`docker run <image> -r <pcap>`) has to write only NDJSON to stdout, with the
 time stamps of the pcap, fingerprint SYNs with 802.1Q and QinQ tags, and honour a BPF filter.
 
