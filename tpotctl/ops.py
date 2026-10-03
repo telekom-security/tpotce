@@ -1,0 +1,231 @@
+"""What tpot knows about the installation and does to it, no user interface.
+
+Everything goes through the tools that are there anyway: docker, systemctl and the
+scripts in ~/tpotce (update.sh, restore.sh), which stay the ones doing the work.
+"""
+
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+from dataclasses import dataclass
+from typing import Callable, Dict, List, Optional
+
+from tpotctl.bootstrap import REPO_DIR
+
+SERVICE = "tpot"
+_EDITION_RE = re.compile(r"^# T-Pot: (\S.*?)\s*$")
+
+
+class OpsError(Exception):
+    """Something tpot cannot do here."""
+
+
+def linux_host() -> bool:
+    """A T-Pot host: Linux with systemd. mac_win installations only get the customizer."""
+    return sys.platform.startswith("linux") and shutil.which("systemctl") is not None
+
+
+def require_linux_host(what: str) -> None:
+    if not linux_host():
+        raise OpsError(f"'{what}' needs a T-Pot host (Linux with systemd), here only 'tpot customize' works")
+
+
+# ---------------------------------------------------------------------------
+# configuration
+# ---------------------------------------------------------------------------
+
+def env_values(repo_dir: str = REPO_DIR) -> Dict[str, str]:
+    """KEY=value and the KEY: "value" form of the LLM blocks, comments skipped."""
+    values = {}
+    try:
+        with open(os.path.join(repo_dir, ".env"), encoding="utf-8") as handle:
+            for line in handle:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                match = re.match(r'^([A-Za-z_][A-Za-z0-9_]*)\s*(?:=|:\s)\s*(.*)$', line)
+                if match:
+                    values[match.group(1)] = match.group(2).strip().strip("'\"")
+    except OSError:
+        pass
+    return values
+
+
+def compose_path(repo_dir: str = REPO_DIR, env: Optional[Dict[str, str]] = None) -> str:
+    env = env_values(repo_dir) if env is None else env
+    path = env.get("TPOT_DOCKER_COMPOSE") or "./docker-compose.yml"
+    return os.path.normpath(os.path.join(repo_dir, path))
+
+
+def edition(repo_dir: str = REPO_DIR) -> str:
+    """STANDARD, SENSOR, ... or CUSTOM (from STANDARD) for a customizer file."""
+    try:
+        with open(compose_path(repo_dir), encoding="utf-8") as handle:
+            head = [handle.readline() for _ in range(3)]
+    except OSError:
+        return "none"
+    match = _EDITION_RE.match(head[0])
+    if not match:
+        return "unknown"
+    name = match.group(1)
+    base = re.search(r"base=(\S+)", head[1]) if head[1].startswith("# customizer:") else None
+    return f"{name} (from {base.group(1)})" if base else name
+
+
+def git(repo_dir: str, *args: str) -> str:
+    try:
+        return subprocess.check_output(["git", "-C", repo_dir] + list(args), stderr=subprocess.DEVNULL,
+                                       universal_newlines=True).strip()
+    except (OSError, subprocess.CalledProcessError):
+        return ""
+
+
+@dataclass
+class Status:
+    version: str
+    branch: str
+    commit: str
+    edition: str
+    tpot_type: str
+    service: str        # active, inactive, failed, ... or "n/a" without systemd
+    repo_dir: str
+
+
+def status(repo_dir: str = REPO_DIR, run: Callable = subprocess.run) -> Status:
+    env = env_values(repo_dir)
+    service = "n/a"
+    if shutil.which("systemctl"):
+        proc = run(["systemctl", "is-active", SERVICE], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                   universal_newlines=True)
+        service = (proc.stdout or "").strip() or "unknown"
+    return Status(
+        version=env.get("TPOT_VERSION", "?"),
+        branch=git(repo_dir, "rev-parse", "--abbrev-ref", "HEAD") or "?",
+        commit=git(repo_dir, "rev-parse", "--short", "HEAD") or "?",
+        edition=edition(repo_dir),
+        tpot_type=env.get("TPOT_TYPE", "?"),
+        service=service,
+        repo_dir=repo_dir,
+    )
+
+
+# ---------------------------------------------------------------------------
+# containers and images (dps, dim)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class Container:
+    name: str
+    state: str          # running, exited, ...
+    status: str         # "Up 3 hours (healthy)"
+    health: str         # healthy, unhealthy, starting or ""
+    ports: str
+    image: str
+
+
+@dataclass
+class Image:
+    repository: str
+    tag: str
+    id: str
+    size: str
+    created: str
+
+    @property
+    def ref(self) -> str:
+        return f"{self.repository}:{self.tag}"
+
+
+def compact_ports(ports: str) -> str:
+    """0.0.0.0:80->80/tcp, [::]:80->80/tcp -> 80->80/tcp, local ports keep their address."""
+    seen, out = set(), []
+    for part in filter(None, (p.strip() for p in ports.split(","))):
+        short = re.sub(r"^(0\.0\.0\.0|\[::\]|::):", "", part)
+        if short not in seen:
+            seen.add(short)
+            out.append(short)
+    return ", ".join(out)
+
+
+def health_of(status_text: str) -> str:
+    match = re.search(r"\((healthy|unhealthy|health: starting)\)", status_text)
+    if not match:
+        return ""
+    return "starting" if match.group(1) == "health: starting" else match.group(1)
+
+
+def parse_ps(output: str) -> List[Container]:
+    containers = []
+    for line in output.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        item = json.loads(line)
+        containers.append(Container(
+            name=item.get("Names", ""),
+            state=item.get("State", ""),
+            status=item.get("Status", ""),
+            health=health_of(item.get("Status", "")),
+            ports=compact_ports(item.get("Ports", "")),
+            image=item.get("Image", ""),
+        ))
+    return sorted(containers, key=lambda c: c.name)
+
+
+def parse_images(output: str) -> List[Image]:
+    images = []
+    for line in output.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        item = json.loads(line)
+        images.append(Image(item.get("Repository", ""), item.get("Tag", ""), item.get("ID", ""),
+                            item.get("Size", ""), item.get("CreatedSince", "")))
+    return sorted(images, key=lambda i: i.ref)
+
+
+def docker(args: List[str], run: Callable = subprocess.run) -> str:
+    if not shutil.which("docker"):
+        raise OpsError("docker is not installed")
+    proc = run(["docker"] + args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+    if proc.returncode != 0:
+        raise OpsError((proc.stderr or "").strip() or f"docker {' '.join(args)} failed")
+    return proc.stdout
+
+
+def containers(run: Callable = subprocess.run) -> List[Container]:
+    # all of them: dps only showed running and exited ones, which hid restart loops
+    return parse_ps(docker(["ps", "--all", "--format", "{{json .}}"], run))
+
+
+def images(run: Callable = subprocess.run) -> List[Image]:
+    return parse_images(docker(["images", "--format", "{{json .}}"], run))
+
+
+# ---------------------------------------------------------------------------
+# actions
+# ---------------------------------------------------------------------------
+
+def service_command(action: str) -> List[str]:
+    if action not in ("start", "stop", "restart"):
+        raise OpsError(f"unknown action {action}")
+    return ["sudo", "systemctl", action, SERVICE]
+
+
+def script_command(name: str, args: List[str], repo_dir: str = REPO_DIR) -> List[str]:
+    if name not in ("update.sh", "restore.sh"):
+        raise OpsError(f"unknown script {name}")
+    return [os.path.join(repo_dir, name)] + list(args)
+
+
+def backups(home: Optional[str] = None) -> List[str]:
+    """Archives update.sh wrote, newest first."""
+    folder = os.path.join(home or os.path.expanduser("~"), "tpot_backups")
+    try:
+        names = [n for n in os.listdir(folder) if "_tpot_backup" in n and n.endswith(".tar")]
+    except OSError:
+        return []
+    return sorted((os.path.join(folder, n) for n in names), key=os.path.getmtime, reverse=True)

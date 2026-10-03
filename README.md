@@ -64,6 +64,7 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/in
   - [Cyberchef](#cyberchef)
   - [Elasticvue](#elasticvue)
 - [Configuration](#configuration)
+  - [The tpot Command](#the-tpot-command)
   - [T-Pot Config File](#t-pot-config-file)
   - [Customize T-Pot Honeypots and Services](#customize-t-pot-honeypots-and-services)
 - [Maintenance](#maintenance)
@@ -374,7 +375,7 @@ Once you are familiar with how things work you should choose a network you suspe
      * Install recommended packages
      * Remove packages known to cause issues
      * Add the current user to the docker group (allow docker interaction without `sudo`)
-     * Add `dps`, `dpsw` and `dim` aliases for formatted container and image overviews
+     * Add the [`tpot`](#the-tpot-command) command, with the aliases `dps`, `dpsw` and `dim` for its container and image overviews
      * Add `la`, `ll` and `ls` aliases (for `exa`, a improved `ls` command)
      * Add `mi` (for `micro`, a great alternative to `vi` and / or `nano`)
      * Display open ports on the host (compare with T-Pot [required](https://github.com/telekom-security/tpotce#required-ports) ports)
@@ -669,6 +670,24 @@ On the T-Pot Landing Page just click on `Elasticvue` and you will be forwarded t
 
 # Configuration
 
+## The tpot Command
+`tpot` configures and runs T-Pot from one place. Without arguments it opens a menu (status, edition & services, images, update & backup), every menu entry is a command as well:
+
+| Command | Does |
+|---|---|
+| `tpot` | the menu |
+| `tpot status` | version, edition, type, service state and containers |
+| `tpot ps [--watch [SECONDS]]` | containers with status and ports, `dps` / `dpsw` are short for it |
+| `tpot images` | Docker images, `dim` is short for it |
+| `tpot start` / `stop` / `restart` | `sudo systemctl … tpot` |
+| `tpot update [OPTIONS]` | runs `~/tpotce/update.sh` with your options, i.e. `tpot update -y` |
+| `tpot restore [OPTIONS]` | runs `~/tpotce/restore.sh` with your options |
+| `tpot customize [OPTIONS]` | the [customizer](#customize-t-pot-honeypots-and-services) |
+| `tpot setup` | sets up or refreshes the Python packages of `tpot` |
+
+The installer links `~/tpotce/tpot` to `/usr/local/bin/tpot` and `update.sh` keeps it up to date. `tpot` runs from a Python venv of its own in `~/.local/share/tpotce/venv`, set up on first use from pinned and hash-checked packages (it needs pypi.org once, and `python3-venv` on Debian / Ubuntu, which the installer brings along). `update.sh`, `restore.sh` and the other scripts keep working on their own, `tpot` only calls them. Do not run `tpot` as root, it uses `sudo` where needed. On macOS and Windows only `tpot customize` and `tpot setup` are available.
+<br><br>
+
 ## T-Pot Config File
 T-Pot offers a configuration file providing variables not only for the docker services (i.e. honeypots and tools) but also for the docker compose environment. The configuration file is hidden in `~/tpoce/.env`. There is also an example file (`env.example`) which holds the default configuration.<br>
 Before the first start run `~/tpotce/genuser.sh` or setup the `WEB_USER` manually as described [here](#add-users-to-nginx-t-pot-webui). 
@@ -700,16 +719,16 @@ To activate a compose file follow these steps:
 3. Start T-Pot with `systemctl start tpot`.
 
 To create your customized docker compose file:
-1. Go to `cd ~/tpotce/compose`.
-2. Run `python3 customizer.py`. It needs PyYAML, which the installer and `update.sh` bring along as a package of your distribution (`python3-yaml` on Debian / Raspbian / Ubuntu, `python3-pyyaml` on Fedora / AlmaLinux / Rocky / RHEL, `python3-PyYAML` on openSUSE). Where it is missing, i.e. on macOS or Windows, the customizer sets up a venv of its own in `~/.cache/tpotce/customizer-venv` on first use, which needs internet once; `python3 customizer.py --setup` does only that.
-3. Pick the edition to start from (`b`, the installed one is preselected) and switch services on and off with the cursor keys and `space`, `enter` folds a group. Dependencies come along on their own (i.e. Snare brings Tanner, Kibana brings Elasticsearch and Nginx), services that cannot run together and port conflicts are marked with `!`. `p` opens the host ports of a service: change or remove them by hand or take a suggestion (`v`), i.e. the port another edition uses for it. The status line counts the Docker networks, Docker's default address pools leave room for about 29.
-4. `s` shows a summary and writes `~/tpotce/docker-compose-custom.yml` - only without errors, and only after `docker compose config` accepted it.
-5. Stop T-Pot with `systemctl stop tpot`.
-6. Check if everything works: `cd ~/tpotce && docker compose -f docker-compose-custom.yml up`. If it does, press `CTRL-C` and run `docker compose -f docker-compose-custom.yml down -v`.
-7. Replace the docker compose file: `mv ~/tpotce/docker-compose-custom.yml ~/tpotce/docker-compose.yml`.
-8. Start T-Pot with `systemctl start tpot`.
+1. Run `tpot customize`, or open *Edition & services* in the `tpot` menu. `cd ~/tpotce/compose && python3 customizer.py` does the same.
+2. Pick the edition to start from (`b`, the installed one is preselected) and switch services on and off with `space`, `enter` folds a group. Dependencies come along on their own (i.e. Snare brings Tanner, Kibana brings Elasticsearch and Nginx), services that cannot run together and port conflicts are marked with `!`. `p` opens the host ports of a service: change or remove them, or take a suggestion (`v`), i.e. the port another edition uses for it. The status bar counts the Docker networks, Docker's default address pools leave room for about 29.
+3. `s` shows a summary and writes `~/tpotce/docker-compose-custom.yml` - only without errors, and only after `docker compose config` accepted it. From the `tpot` menu you can then replace `docker-compose.yml` with it and restart T-Pot right away.
+4. To try it first instead: stop T-Pot with `systemctl stop tpot`, run `cd ~/tpotce && docker compose -f docker-compose-custom.yml up`, and if everything works press `CTRL-C` and run `docker compose -f docker-compose-custom.yml down -v`.
+5. Replace the docker compose file: `mv ~/tpotce/docker-compose-custom.yml ~/tpotce/docker-compose.yml`.
+6. Start T-Pot with `systemctl start tpot`.
 
-Running the customizer again starts from your current configuration. Without a terminal, or with `--text`, it asks the same as numbered lists. It also works without any dialog:
+The full screen dialog comes from the venv of `tpot`. Only for the headless use and for `update.sh` the customizer is content with PyYAML of your distribution (`python3-yaml` on Debian / Raspbian / Ubuntu, `python3-pyyaml` on Fedora / AlmaLinux / Rocky / RHEL, `python3-PyYAML` on openSUSE), which the installer and `update.sh` bring along.
+
+Running the customizer again starts from your current configuration. Without a terminal, without the venv, or with `--text`, it asks the same as numbered lists. It also works without any dialog:
 ```
 python3 customizer.py --base standard --add citrixhoneypot --remove honeytrap --port citrixhoneypot:443=8444
 ```
@@ -936,7 +955,7 @@ git reset --hard
 <br><br>
 
 ## Show Containers and Images
-You can show all T-Pot relevant containers by running `dps` or `dpsw [interval]`. The `interval (s)` will re-run `dps` periodically. Use `dim` to show locally available Docker images including the `CREATED` column.
+You can show all containers, including the ones stuck in a restart loop, by running `tpot ps` (or `dps`) and keep watching them with `tpot ps --watch [interval]` (or `dpsw [interval]`), the `interval (s)` defaults to 2. Use `tpot images` (or `dim`) to show locally available Docker images including the `CREATED` column. The menu of `tpot` shows the same on its Status and Images pages.
 <br><br>
 
 ## Blackhole

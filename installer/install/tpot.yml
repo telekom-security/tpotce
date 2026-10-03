@@ -1144,9 +1144,9 @@
       blockinfile:
         path: ~/.bashrc
         block: |
-          alias dps='{{ "grc --colour=on " if ansible_facts.distribution != "RedHat" else "" }}docker ps -f status=running -f status=exited --format "table {{'{{'}}.Names{{'}}'}}\\t{{'{{'}}.Status{{'}}'}}\\t{{'{{'}}.Ports{{'}}'}}" | sort'
-          alias dim='{{ "grc --colour=on " if ansible_facts.distribution != "RedHat" else "" }}docker images --format "table {{'{{'}}.Repository{{'}}'}}\\t{{'{{'}}.Tag{{'}}'}}\\t{{'{{'}}.ID{{'}}'}}\\t{{'{{'}}.Size{{'}}'}}\\t{{'{{'}}.CreatedSince{{'}}'}}\\t{{'{{'}}.Repository{{'}}'}}:{{'{{'}}.Tag{{'}}'}}"'
-          alias dpsw='watch -c bash -ic dps'
+          alias dps='tpot ps'
+          alias dim='tpot images'
+          alias dpsw='tpot ps --watch'
           alias mi='micro'
           alias sudo='sudo '
         marker: "# {mark} ANSIBLE MANAGED BLOCK"
@@ -1179,19 +1179,34 @@
         update: no
       when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
 
-    - name: Check that compose/customizer.py finds PyYAML (All)
-      # only a check: PyYAML comes with the packages above, without it the customizer
-      # sets up a venv in ~/.cache/tpotce on first use
-      command: "python3 {{ ansible_facts.user_dir }}/tpotce/compose/customizer.py --setup"
-      register: my_customizer_setup
+    - name: Look for an existing /usr/local/bin/tpot (All)
+      stat:
+        path: /usr/local/bin/tpot
+      register: my_tpot_link
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+
+    - name: Link the tpot command (All)
+      # a file of your own at that place is left alone, only a link is (re)pointed
+      become: true
+      file:
+        src: '{{ ansible_facts.user_dir }}/tpotce/tpot'
+        dest: /usr/local/bin/tpot
+        state: link
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"] and (not my_tpot_link.stat.exists or my_tpot_link.stat.islnk)
+
+    - name: Set up the Python packages of tpot (All)
+      # a venv in ~/.local/share/tpotce, needs pypi.org once; tpot sets it up on first
+      # use as well, so a failure here only warns
+      command: '{{ ansible_facts.user_dir }}/tpotce/tpot setup'
+      register: my_tpot_setup
       changed_when: false
       failed_when: false
       when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
 
-    - name: Warn if compose/customizer.py misses PyYAML (All)
+    - name: Warn if tpot could not set up its Python packages (All)
       debug:
-        msg: "compose/customizer.py cannot use PyYAML yet: {{ my_customizer_setup.stderr | default('') }}"
-      when: my_customizer_setup.rc | default(0) != 0
+        msg: "tpot setup failed, run it again later: {{ my_tpot_setup.stderr | default('') }}"
+      when: my_tpot_setup.rc | default(0) != 0
 
     - name: Add current user to Docker, T-Pot group (All)
       become: true

@@ -1,0 +1,52 @@
+#!/usr/bin/env python3
+"""tpot - configure and run T-Pot. `tpot -h` lists the commands, `tpot` opens the menu.
+
+The installer links this file to /usr/local/bin/tpot. It only uses the standard
+library and runs everything else from the venv of tpot (tpotctl/bootstrap.py).
+"""
+
+import os
+import sys
+
+REPO_DIR = os.path.dirname(os.path.realpath(__file__))
+sys.path.insert(0, REPO_DIR)
+
+from tpotctl import bootstrap  # noqa: E402
+
+
+def fail(text, code=2):
+    print(f"[ERROR] - {text}", file=sys.stderr)
+    sys.exit(code)
+
+
+def main():
+    argv = sys.argv[1:]
+    if hasattr(os, "geteuid") and os.geteuid() == 0:
+        fail("do not run tpot as root, it calls sudo itself where needed")
+    home = os.path.join(os.path.expanduser("~"), "tpotce")
+    on_host = sys.platform.startswith("linux")
+    if on_host and not os.environ.get(bootstrap.GUARD) and os.path.realpath(home) != REPO_DIR:
+        print(f"[WARNING] - tpot runs from {REPO_DIR}, but T-Pot's scripts expect {home}.", file=sys.stderr)
+    # update and restore must work even when the venv is broken
+    if argv[:1] in (["update"], ["restore"]):
+        from tpotctl import cli
+        sys.exit(cli.main(argv))
+    if argv[:1] == ["setup"]:
+        try:
+            python = bootstrap.setup_venv()
+        except bootstrap.BootstrapError as err:
+            fail(str(err), 1)
+        print(f"[OK] - The Python packages of tpot are ready ({os.path.dirname(os.path.dirname(python))}).")
+        sys.exit(0)
+    try:
+        python = bootstrap.ensure("ui")
+    except bootstrap.BootstrapError as err:
+        fail(str(err), 1)
+    if python:
+        sys.exit(bootstrap.reexec(python, os.path.realpath(__file__), argv))
+    from tpotctl import cli
+    sys.exit(cli.main(argv))
+
+
+if __name__ == "__main__":
+    main()

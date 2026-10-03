@@ -8,8 +8,6 @@ Rebuild:       python3 customizer.py --rebuild ~/tpotce/docker-compose.yml
 
 import argparse
 import os
-import shutil
-import subprocess
 import sys
 
 version = \
@@ -21,108 +19,49 @@ version = \
 |____/ \\___|_|    \\_/ |_|\\___\\___| |____/ \\__,_|_|_|\\__,_|\\___|_| v2.0
 """
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+COMPOSE_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, COMPOSE_DIR)
+sys.path.insert(0, os.path.dirname(COMPOSE_DIR))
 
-# PyYAML comes from the distribution on a T-Pot host (installer, update.sh). Where it
-# is missing, i.e. on macOS or Windows, the customizer runs from a venv of its own,
-# set up on first use outside ~/tpotce so it is neither backed up nor reset.
-VENV_MARKER = "TPOT_CUSTOMIZER_VENV"
-VENV_REQUIREMENT = "PyYAML>=6,<7"
+# PyYAML of the distribution is enough for everything but the full screen dialog,
+# which needs Textual from the venv of tpot (tpotctl/bootstrap.py).
+from tpotctl import bootstrap  # noqa: E402
 
-
-def venv_dir():
-    cache = os.environ.get("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache")
-    return os.path.join(cache, "tpotce", "customizer-venv")
+HEADLESS = ("--base", "--add", "--remove", "--port", "--rebuild", "--setup", "-h", "--help", "--text")
 
 
-def venv_python(directory):
-    if os.name == "nt":
-        return os.path.join(directory, "Scripts", "python.exe")
-    return os.path.join(directory, "bin", "python3")
+def wants_ui(argv):
+    if any(arg.split("=", 1)[0] in HEADLESS for arg in argv):
+        return False
+    return sys.stdin.isatty() and sys.stdout.isatty()
 
 
-def has_yaml(python):
-    return subprocess.call([python, "-c", "import yaml"],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
-
-
-def install_hint():
-    if sys.platform == "darwin":
-        return "Install Python from python.org or Homebrew (brew install python), both can create a venv."
-    if os.name == "nt":
-        return "Install Python from python.org, it can create a venv."
-    ids = []
-    try:
-        with open("/etc/os-release", encoding="utf-8") as handle:
-            for line in handle:
-                key, _, value = line.strip().partition("=")
-                if key in ("ID", "ID_LIKE"):
-                    ids += value.strip('"').lower().split()
-    except OSError:
-        pass
-    if {"debian", "ubuntu", "raspbian"} & set(ids):
-        return "sudo apt install python3-yaml   (or python3-venv, then the customizer sets up its venv)"
-    if {"fedora", "rhel", "centos", "almalinux", "rocky"} & set(ids):
-        return "sudo dnf install python3-pyyaml"
-    if any("suse" in i for i in ids):
-        return "sudo zypper install python3-PyYAML"
-    return "install PyYAML for this Python with the package manager of your system"
-
-
-def give_up(reason):
-    print(f"[ERROR] - The customizer needs PyYAML: {reason}\n  {install_hint()}", file=sys.stderr)
-    sys.exit(2)
-
-
-def ensure_yaml():
-    """None if PyYAML is importable here, else the Python of a venv that has it."""
-    try:
-        import yaml  # noqa: F401
-        return None
-    except ImportError:
-        pass
-    if os.environ.get(VENV_MARKER):
-        give_up(f"it is missing in {sys.prefix} as well")
-    directory = venv_dir()
-    python = venv_python(directory)
-    if os.path.exists(python) and has_yaml(python):
-        return python
-    print(f"[INFO] - PyYAML is missing, setting up {directory} once (needs internet) ...", file=sys.stderr)
-    # a venv that lost its Python, i.e. after an upgrade, is built anew
-    shutil.rmtree(directory, ignore_errors=True)
-    os.makedirs(os.path.dirname(directory), exist_ok=True)
-    if subprocess.call([sys.executable, "-m", "venv", directory],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) != 0 or not os.path.exists(python):
-        shutil.rmtree(directory, ignore_errors=True)
-        give_up(f"{sys.executable} cannot create a venv")
-    if subprocess.call([python, "-m", "pip", "install", "--quiet", "--disable-pip-version-check",
-                        VENV_REQUIREMENT]) != 0 or not has_yaml(python):
-        shutil.rmtree(directory, ignore_errors=True)
-        give_up(f"it could not be installed into {directory}")
-    return python
-
-
-def run_in_venv(python):
-    """Start this script again with the venv's Python and hand back its exit code."""
-    env = dict(os.environ)
-    env[VENV_MARKER] = "1"
-    proc = subprocess.Popen([python, os.path.abspath(__file__)] + sys.argv[1:], env=env)
-    while True:
+def prepare(argv):
+    """The Python to run with (None: this one) and the arguments, --text without Textual."""
+    if wants_ui(argv):
         try:
-            return proc.wait()
-        except KeyboardInterrupt:    # the child gets it as well and decides
-            continue
+            return bootstrap.ensure("ui"), argv
+        except bootstrap.BootstrapError as err:
+            print(f"[WARNING] - No full screen dialog: {err}. Using the text dialog.", file=sys.stderr)
+            argv = argv + ["--text"]
+    try:
+        return bootstrap.ensure("yaml"), argv
+    except bootstrap.BootstrapError as err:
+        print(f"[ERROR] - The customizer needs PyYAML: {err}", file=sys.stderr)
+        sys.exit(2)
 
 
 if __name__ == "__main__":
-    _python = ensure_yaml()
+    _python, _argv = prepare(sys.argv[1:])
     if _python:
-        sys.exit(run_in_venv(_python))
+        sys.exit(bootstrap.reexec(_python, os.path.abspath(__file__), _argv))
+    sys.argv[1:] = _argv
 
 import customizer_core as core  # noqa: E402
 
-COLORS = {"red": "\033[91m", "green": "\033[92m", "blue": "\033[94m", "magenta": "\033[95m",
-          "yellow": "\033[93m", "end": "\033[0m"}
+# Telekom magenta #E20074, on terminals without true colour the closest of the 256
+MAGENTA = "\033[38;2;226;0;116m" if os.environ.get("COLORTERM") in ("truecolor", "24bit") else "\033[38;5;162m"
+COLORS = {"red": "\033[91m", "green": "\033[92m", "magenta": MAGENTA, "yellow": "\033[93m", "end": "\033[0m"}
 
 
 def print_color(text, color, stream=sys.stdout):
@@ -161,7 +100,7 @@ def parse_args(argv):
                         help=f"bridge networks Docker can create (default {core.DEFAULT_MAX_NETWORKS})")
     parser.add_argument("--text", action="store_true", help="plain text dialog instead of the full screen one")
     parser.add_argument("--setup", action="store_true",
-                        help="only make sure PyYAML is there (setting up the venv if needed), then exit")
+                        help="only make sure PyYAML is there (setting up the venv of tpot if needed), then exit")
     return parser.parse_args(argv)
 
 
@@ -191,17 +130,17 @@ def next_steps(path):
     print_color(f"[OK] - {path} is written.", "green")
     if os.path.abspath(path) == os.path.join(core.REPO_DIR, "docker-compose.yml"):
         return
-    print_color("To use it:", "blue")
-    print_color("  sudo systemctl stop tpot", "blue")
-    print_color(f"  cd {core.REPO_DIR} && docker compose -f {name} up", "blue")
-    print_color(f"  CTRL-C once everything works, then: docker compose -f {name} down -v", "blue")
-    print_color(f"  mv {name} docker-compose.yml && sudo systemctl start tpot", "blue")
+    print_color("To use it:", "magenta")
+    print_color("  sudo systemctl stop tpot", "magenta")
+    print_color(f"  cd {core.REPO_DIR} && docker compose -f {name} up", "magenta")
+    print_color(f"  CTRL-C once everything works, then: docker compose -f {name} down -v", "magenta")
+    print_color(f"  mv {name} docker-compose.yml && sudo systemctl start tpot", "magenta")
 
 
 def main(argv=None):
     args = parse_args(sys.argv[1:] if argv is None else argv)
     if args.setup:
-        where = f"the venv {sys.prefix}" if os.environ.get(VENV_MARKER) else sys.executable
+        where = f"the venv {sys.prefix}" if os.environ.get(bootstrap.GUARD) else sys.executable
         print_color(f"[OK] - PyYAML is available to the customizer ({where}).", "green")
         return 0
     try:
@@ -233,19 +172,15 @@ def main(argv=None):
             if result.errors:
                 return 1
         else:
-            import customizer_tui as tui
-            curses_ok = sys.stdin.isatty() and sys.stdout.isatty() and not args.text
-            if curses_ok:
-                try:
-                    import curses  # noqa: F401
-                except ImportError:
-                    curses_ok = False
-            if not curses_ok:
+            if not args.text and wants_ui([]) and bootstrap.importable(bootstrap.NEEDS["ui"]):
+                from tpotctl.app import run_customizer
+                chosen = run_customizer(catalog, selection, args.max_networks)
+            else:
+                import customizer_tui as tui
                 print_color(version, "magenta")
-            run = tui.run_curses if curses_ok else tui.run_text
-            chosen = run(catalog, selection, args.max_networks)
+                chosen = tui.run_text(catalog, selection, args.max_networks)
             if chosen is None:
-                print_color("Nothing written.", "blue")
+                print_color("Nothing written.", "magenta")
                 return 0
             result = core.resolve(catalog, chosen, args.max_networks, strict=True)
             report(result)

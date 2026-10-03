@@ -1380,35 +1380,58 @@ function fuRESTORE_EDITION () {
 	echo
 }
 
-# compose/customizer.py needs PyYAML. The installer brings the package of the
-# distribution along, older installations get it here. Without it the customizer
-# sets up a venv of its own on first use, which needs python3-venv on Debian.
+# The tpot command and compose/customizer.py need PyYAML and the venv module (for
+# the venv of tpot). The installer brings both along, older installations get them
+# here: Debian and Ubuntu split the venv module off into python3-venv, the other
+# distributions ship it with python3.
 function fuCUSTOMIZER_DEPS () {
-	local myINSTALL=()
-	python3 -c "import yaml" 2>/dev/null && return
+	local myPKGS=() myINSTALL=() myVENV=""
+	python3 -c "import ensurepip" 2>/dev/null || myVENV="1"
 	if command -v apt-get >/dev/null 2>&1;
 	  then
-	    sudo apt-get update -qq >/dev/null 2>&1
-	    myINSTALL=(env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3-yaml)
+	    python3 -c "import yaml" 2>/dev/null || myPKGS+=(python3-yaml)
+	    [ -n "${myVENV}" ] && myPKGS+=(python3-venv)
+	    myINSTALL=(env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq)
 	elif command -v dnf >/dev/null 2>&1;
 	  then
-	    myINSTALL=(dnf -y -q install python3-pyyaml)
+	    python3 -c "import yaml" 2>/dev/null || myPKGS+=(python3-pyyaml)
+	    myINSTALL=(dnf -y -q install)
 	elif command -v zypper >/dev/null 2>&1;
 	  then
-	    myINSTALL=(zypper -n -q install python3-PyYAML)
-	else
-	    echo "###### $myBLUE""No apt-get, dnf or zypper found, the customizer will set up PyYAML in a venv of its own.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
-	    echo
-	    return
+	    python3 -c "import yaml" 2>/dev/null || myPKGS+=(python3-PyYAML)
+	    myINSTALL=(zypper -n -q install)
 	fi
-	echo "### Installing PyYAML for compose/customizer.py ..."
-	echo -n "###### $myBLUE Now running ${myINSTALL[*]}.$myWHITE "
-	if sudo "${myINSTALL[@]}" >/dev/null 2>&1 && python3 -c "import yaml" 2>/dev/null;
+	[ ${#myPKGS[@]} -eq 0 ] && return
+	echo "### Installing Python packages for tpot and compose/customizer.py ..."
+	[ "${myINSTALL[0]}" == "env" ] && sudo apt-get update -qq >/dev/null 2>&1
+	echo -n "###### $myBLUE Now installing ${myPKGS[*]}.$myWHITE "
+	if sudo "${myINSTALL[@]}" "${myPKGS[@]}" >/dev/null 2>&1;
 	  then
 	    echo "[ $myGREEN"OK"$myWHITE ]"
 	  else
 	    echo "[ $myRED""WARNING""$myWHITE ]"
-	    echo "###### $myBLUE""PyYAML could not be installed, the customizer will try a venv of its own.""$myWHITE"
+	    echo "###### $myBLUE""Could not install ${myPKGS[*]}, tpot and the customizer may not start.""$myWHITE"
+	fi
+	echo
+}
+
+# The tpot command: refresh its venv (the pinned packages may have changed with the
+# release) and link it for installations that predate it. Only warns, T-Pot itself
+# does not need it, and pypi.org is not part of the internet check above.
+function fuTPOT_SETUP () {
+	local myTPOT="$HOME/tpotce/tpot"
+	[ -x "${myTPOT}" ] || return
+	echo "### Setting up the tpot command ..."
+	if [ ! -e /usr/local/bin/tpot ] || [ -L /usr/local/bin/tpot ];
+	  then
+	    sudo ln -sfn "${myTPOT}" /usr/local/bin/tpot \
+	      || echo "###### $myBLUE""Could not link /usr/local/bin/tpot, run ${myTPOT} directly.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	fi
+	if "${myTPOT}" setup </dev/null;
+	  then
+	    echo "###### $myBLUE""tpot is ready.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	  else
+	    echo "###### $myBLUE""tpot could not set up its Python packages, it tries again on its next start.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
 	fi
 	echo
 }
@@ -1585,6 +1608,8 @@ if [ -n "${myOLDER_CHECKOUT}" ];
     echo
     exit 1
 fi
+
+fuTPOT_SETUP
 
 # Still before the image pull: the images of the previous version tell which
 # Elasticsearch version ran so far

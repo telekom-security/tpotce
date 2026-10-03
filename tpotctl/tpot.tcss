@@ -1,0 +1,120 @@
+/* tpot, colours come from the theme in theme.py ($primary is Telekom magenta) */
+
+Screen {
+    background: $background;
+}
+
+.bar {
+    height: 1;
+    background: $primary;
+    color: $text;
+    text-style: bold;
+    padding: 0 1;
+}
+
+.bar.-errors {
+    background: $error;
+}
+
+#sidebar {
+    width: 26;
+    border-right: tall $primary;
+}
+
+#sidebar > ListItem {
+    padding: 0 1;
+}
+
+#sidebar > ListItem.-highlight {
+    background: $primary;
+    color: $text;
+}
+
+.pane {
+    padding: 1 2;
+}
+
+.pane-title {
+    color: $primary;
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+.info {
+    margin-bottom: 1;
+}
+
+.actions {
+    height: auto;
+    margin-top: 1;
+}
+
+.actions Button {
+    margin-right: 2;
+}
+
+DataTable {
+    height: 1fr;
+}
+
+DataTable > .datatable--header {
+    color: $primary;
+    text-style: bold;
+}
+
+/* customizer */
+
+#cz-body {
+    height: 1fr;
+}
+
+#cz-tree {
+    width: 3fr;
+    border-right: tall $primary;
+    overflow-x: hidden;
+}
+
+#cz-detail {
+    width: 2fr;
+    padding: 0 1;
+}
+
+/* dialogs */
+
+ModalScreen {
+    align: center middle;
+    background: $background 60%;
+}
+
+.dialog {
+    width: 80%;
+    max-width: 110;
+    height: auto;
+    max-height: 90%;
+    border: thick $primary;
+    background: $surface;
+    padding: 1 2;
+}
+
+.dialog-title {
+    color: $primary;
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+.dialog DataTable, .dialog OptionList {
+    height: auto;
+    max-height: 20;
+}
+
+.dialog .actions {
+    align-horizontal: right;
+}
+
+.error-text {
+    color: $error;
+}
+
+.warning-text {
+    color: $warning;
+}

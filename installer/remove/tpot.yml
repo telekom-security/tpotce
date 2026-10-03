@@ -130,6 +130,26 @@
       become: false
       when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
 
+    - name: Look for the tpot command (All)
+      stat:
+        path: /usr/local/bin/tpot
+      register: my_tpot_link
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+
+    - name: Remove the tpot command (All)
+      # only the link the installer made, not a file of your own
+      file:
+        path: /usr/local/bin/tpot
+        state: absent
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"] and my_tpot_link.stat.islnk | default(false) and (my_tpot_link.stat.lnk_target | default('')) is search('tpotce/tpot$')
+
+    - name: Remove the Python packages of tpot (All)
+      file:
+        path: ~/.local/share/tpotce
+        state: absent
+      become: false
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+
 ##########################################################
 # T-Pot - Restore configs, remove users and groups, etc. #
 ##########################################################
