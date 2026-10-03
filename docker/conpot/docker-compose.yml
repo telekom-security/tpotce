@@ -1,11 +1,9 @@
 # CONPOT TEMPLATE=[default, IEC104, guardian_ast, ipmi, kamstrup_382, beckhoff_cx, building_automation, hart_gateway, iccp, plc_modbus, proxy]
 networks:
-  conpot_local_default:
-  conpot_local_IEC104:
-  conpot_local_guardian_ast:
-  conpot_local_ipmi:
-  conpot_local_kamstrup_382:
-  conpot_local_ics:
+  conpot_local:
+    # shared by all Conpot templates to save address pools, ICC off keeps them apart
+    driver_opts:
+      com.docker.network.bridge.enable_icc: "false"
 
 services:
 
@@ -25,7 +23,7 @@ services:
 #    cpu_count: 1
 #    cpus: 0.25    
     networks:
-     - conpot_local_default
+     - conpot_local
     # 102, 161/udp, 502, 623/udp and 47808/udp are used by the other templates below
     ports:
 #     - "69:69/udp"
@@ -58,7 +56,7 @@ services:
 #    cpu_count: 1
 #    cpus: 0.25
     networks:
-     - conpot_local_IEC104
+     - conpot_local
     ports:
      - "161:161/udp"
      - "2404:2404"
@@ -84,7 +82,7 @@ services:
 #    cpu_count: 1
 #    cpus: 0.25
     networks:
-     - conpot_local_guardian_ast
+     - conpot_local
     ports:
      - "10001:10001"
     image: "dtagdevsec/conpot:24.04.2"
@@ -108,7 +106,7 @@ services:
 #    cpu_count: 1
 #    cpus: 0.25
     networks:
-     - conpot_local_ipmi
+     - conpot_local
     ports:
      - "623:623/udp"
     image: "dtagdevsec/conpot:24.04.2"
@@ -132,7 +130,7 @@ services:
 #    cpu_count: 1
 #    cpus: 0.25
     networks:
-     - conpot_local_kamstrup_382
+     - conpot_local
     ports:
      - "1025:1025"
      - "50100:50100"
@@ -157,7 +155,7 @@ services:
 #    cpu_count: 1
 #    cpus: 0.25
     networks:
-     - conpot_local_ics
+     - conpot_local
     ports:
      - "48898:48898"
      - "48899:48899/udp"
@@ -183,7 +181,7 @@ services:
 #    cpu_count: 1
 #    cpus: 0.25
     networks:
-     - conpot_local_ics
+     - conpot_local
     ports:
      - "3671:3671/udp"
      - "47808:47808/udp"
@@ -208,7 +206,7 @@ services:
 #    cpu_count: 1
 #    cpus: 0.25
     networks:
-     - conpot_local_ics
+     - conpot_local
     ports:
      - "5094:5094"
     image: "dtagdevsec/conpot:24.04.2"
@@ -232,7 +230,7 @@ services:
 #    cpu_count: 1
 #    cpus: 0.25
     networks:
-     - conpot_local_ics
+     - conpot_local
     ports:
      - "102:102"
     image: "dtagdevsec/conpot:24.04.2"
@@ -256,7 +254,7 @@ services:
 #    cpu_count: 1
 #    cpus: 0.25
     networks:
-     - conpot_local_ics
+     - conpot_local
     ports:
      - "502:502"
     image: "dtagdevsec/conpot:24.04.2"

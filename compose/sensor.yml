@@ -2,11 +2,10 @@
 networks:
   adbhoney_local:
   ciscoasa_local:
-  conpot_local_IEC104:
-  conpot_local_guardian_ast:
-  conpot_local_ipmi:
-  conpot_local_kamstrup_382:
-  conpot_local_ics:
+  conpot_local:
+    # shared by all Conpot templates to save address pools, ICC off keeps them apart
+    driver_opts:
+      com.docker.network.bridge.enable_icc: "false"
   cowrie_local:
   dicompot_local:
   dionaea_local:
@@ -112,7 +111,7 @@ services:
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
     networks:
-     - conpot_local_IEC104
+     - conpot_local
     ports:
      - "161:161/udp"
      - "2404:2404"
@@ -140,7 +139,7 @@ services:
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
     networks:
-     - conpot_local_guardian_ast
+     - conpot_local
     ports:
      - "10001:10001"
     image: ${TPOT_REPO}/conpot:${TPOT_VERSION}
@@ -166,7 +165,7 @@ services:
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
     networks:
-     - conpot_local_ipmi
+     - conpot_local
     ports:
      - "623:623/udp"
     image: ${TPOT_REPO}/conpot:${TPOT_VERSION}
@@ -192,7 +191,7 @@ services:
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
     networks:
-     - conpot_local_kamstrup_382
+     - conpot_local
     ports:
      - "1025:1025"
      - "50100:50100"
@@ -219,7 +218,7 @@ services:
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
     networks:
-     - conpot_local_ics
+     - conpot_local
     ports:
      - "48898:48898"
      - "48899:48899/udp"
@@ -247,7 +246,7 @@ services:
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
     networks:
-     - conpot_local_ics
+     - conpot_local
     ports:
      - "3671:3671/udp"
      - "47808:47808/udp"
@@ -274,7 +273,7 @@ services:
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
     networks:
-     - conpot_local_ics
+     - conpot_local
     ports:
      - "5094:5094"
     image: ${TPOT_REPO}/conpot:${TPOT_VERSION}
@@ -300,7 +299,7 @@ services:
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
     networks:
-     - conpot_local_ics
+     - conpot_local
     ports:
      - "102:102"
     image: ${TPOT_REPO}/conpot:${TPOT_VERSION}
@@ -326,7 +325,7 @@ services:
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
     networks:
-     - conpot_local_ics
+     - conpot_local
     ports:
      - "502:502"
     image: ${TPOT_REPO}/conpot:${TPOT_VERSION}

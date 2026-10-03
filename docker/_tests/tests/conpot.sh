@@ -174,8 +174,8 @@ prepare_conpot_harness() {
   write_probes
 
   {
-    # one network for all containers, a T-Pot host has few free address pools left
-    printf 'networks:\n  conpot_local:\n\nservices:\n'
+    # one network for all containers with ICC off, as in the T-Pot compose files
+    printf 'networks:\n  conpot_local:\n    driver_opts:\n      com.docker.network.bridge.enable_icc: "false"\n\nservices:\n'
     for template in "${TEMPLATES[@]}"; do
       CONPOT_CONTAINER_NAMES+=("$(container_name "${template}")")
       cat <<EOF
