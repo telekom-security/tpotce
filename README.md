@@ -701,7 +701,7 @@ To activate a compose file follow these steps:
 
 To create your customized docker compose file:
 1. Go to `cd ~/tpotce/compose`.
-2. Run `python3 customizer.py`. It needs PyYAML, which the installer brings along (`python3-yaml` on Debian / Ubuntu, `python3-pyyaml` on Fedora / AlmaLinux / Rocky / RHEL, `python3-PyYAML` on openSUSE).
+2. Run `python3 customizer.py`. It needs PyYAML, which the installer and `update.sh` bring along as a package of your distribution (`python3-yaml` on Debian / Raspbian / Ubuntu, `python3-pyyaml` on Fedora / AlmaLinux / Rocky / RHEL, `python3-PyYAML` on openSUSE). Where it is missing, i.e. on macOS or Windows, the customizer sets up a venv of its own in `~/.cache/tpotce/customizer-venv` on first use, which needs internet once; `python3 customizer.py --setup` does only that.
 3. Pick the edition to start from (`b`, the installed one is preselected) and switch services on and off with the cursor keys and `space`, `enter` folds a group. Dependencies come along on their own (i.e. Snare brings Tanner, Kibana brings Elasticsearch and Nginx), services that cannot run together and port conflicts are marked with `!`. `p` opens the host ports of a service: change or remove them by hand or take a suggestion (`v`), i.e. the port another edition uses for it. The status line counts the Docker networks, Docker's default address pools leave room for about 29.
 4. `s` shows a summary and writes `~/tpotce/docker-compose-custom.yml` - only without errors, and only after `docker compose config` accepted it.
 5. Stop T-Pot with `systemctl stop tpot`.

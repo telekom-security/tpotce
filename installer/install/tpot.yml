@@ -189,7 +189,8 @@
           - htop
           - micro
           - net-tools
-          # compose/customizer.py
+          # compose/customizer.py, venv for its fallback (Debian has no ensurepip without it)
+          - python3-venv
           - python3-yaml
           - vim
           - wget
@@ -1177,6 +1178,20 @@
         clone: yes
         update: no
       when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+
+    - name: Check that compose/customizer.py finds PyYAML (All)
+      # only a check: PyYAML comes with the packages above, without it the customizer
+      # sets up a venv in ~/.cache/tpotce on first use
+      command: "python3 {{ ansible_facts.user_dir }}/tpotce/compose/customizer.py --setup"
+      register: my_customizer_setup
+      changed_when: false
+      failed_when: false
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+
+    - name: Warn if compose/customizer.py misses PyYAML (All)
+      debug:
+        msg: "compose/customizer.py cannot use PyYAML yet: {{ my_customizer_setup.stderr | default('') }}"
+      when: my_customizer_setup.rc | default(0) != 0
 
     - name: Add current user to Docker, T-Pot group (All)
       become: true

@@ -8,6 +8,8 @@ Rebuild:       python3 customizer.py --rebuild ~/tpotce/docker-compose.yml
 
 import argparse
 import os
+import shutil
+import subprocess
 import sys
 
 version = \
@@ -21,15 +23,101 @@ version = \
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-try:
-    import yaml  # noqa: F401
-except ImportError:
-    print("The customizer needs PyYAML. Install it with the package of your distribution:\n"
-          "  Debian, Ubuntu: sudo apt install python3-yaml\n"
-          "  Fedora, AlmaLinux, Rocky, RHEL: sudo dnf install python3-pyyaml\n"
-          "  openSUSE: sudo zypper install python3-PyYAML\n"
-          "  macOS: python3 -m pip install --user pyyaml", file=sys.stderr)
+# PyYAML comes from the distribution on a T-Pot host (installer, update.sh). Where it
+# is missing, i.e. on macOS or Windows, the customizer runs from a venv of its own,
+# set up on first use outside ~/tpotce so it is neither backed up nor reset.
+VENV_MARKER = "TPOT_CUSTOMIZER_VENV"
+VENV_REQUIREMENT = "PyYAML>=6,<7"
+
+
+def venv_dir():
+    cache = os.environ.get("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache")
+    return os.path.join(cache, "tpotce", "customizer-venv")
+
+
+def venv_python(directory):
+    if os.name == "nt":
+        return os.path.join(directory, "Scripts", "python.exe")
+    return os.path.join(directory, "bin", "python3")
+
+
+def has_yaml(python):
+    return subprocess.call([python, "-c", "import yaml"],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
+
+
+def install_hint():
+    if sys.platform == "darwin":
+        return "Install Python from python.org or Homebrew (brew install python), both can create a venv."
+    if os.name == "nt":
+        return "Install Python from python.org, it can create a venv."
+    ids = []
+    try:
+        with open("/etc/os-release", encoding="utf-8") as handle:
+            for line in handle:
+                key, _, value = line.strip().partition("=")
+                if key in ("ID", "ID_LIKE"):
+                    ids += value.strip('"').lower().split()
+    except OSError:
+        pass
+    if {"debian", "ubuntu", "raspbian"} & set(ids):
+        return "sudo apt install python3-yaml   (or python3-venv, then the customizer sets up its venv)"
+    if {"fedora", "rhel", "centos", "almalinux", "rocky"} & set(ids):
+        return "sudo dnf install python3-pyyaml"
+    if any("suse" in i for i in ids):
+        return "sudo zypper install python3-PyYAML"
+    return "install PyYAML for this Python with the package manager of your system"
+
+
+def give_up(reason):
+    print(f"[ERROR] - The customizer needs PyYAML: {reason}\n  {install_hint()}", file=sys.stderr)
     sys.exit(2)
+
+
+def ensure_yaml():
+    """None if PyYAML is importable here, else the Python of a venv that has it."""
+    try:
+        import yaml  # noqa: F401
+        return None
+    except ImportError:
+        pass
+    if os.environ.get(VENV_MARKER):
+        give_up(f"it is missing in {sys.prefix} as well")
+    directory = venv_dir()
+    python = venv_python(directory)
+    if os.path.exists(python) and has_yaml(python):
+        return python
+    print(f"[INFO] - PyYAML is missing, setting up {directory} once (needs internet) ...", file=sys.stderr)
+    # a venv that lost its Python, i.e. after an upgrade, is built anew
+    shutil.rmtree(directory, ignore_errors=True)
+    os.makedirs(os.path.dirname(directory), exist_ok=True)
+    if subprocess.call([sys.executable, "-m", "venv", directory],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) != 0 or not os.path.exists(python):
+        shutil.rmtree(directory, ignore_errors=True)
+        give_up(f"{sys.executable} cannot create a venv")
+    if subprocess.call([python, "-m", "pip", "install", "--quiet", "--disable-pip-version-check",
+                        VENV_REQUIREMENT]) != 0 or not has_yaml(python):
+        shutil.rmtree(directory, ignore_errors=True)
+        give_up(f"it could not be installed into {directory}")
+    return python
+
+
+def run_in_venv(python):
+    """Start this script again with the venv's Python and hand back its exit code."""
+    env = dict(os.environ)
+    env[VENV_MARKER] = "1"
+    proc = subprocess.Popen([python, os.path.abspath(__file__)] + sys.argv[1:], env=env)
+    while True:
+        try:
+            return proc.wait()
+        except KeyboardInterrupt:    # the child gets it as well and decides
+            continue
+
+
+if __name__ == "__main__":
+    _python = ensure_yaml()
+    if _python:
+        sys.exit(run_in_venv(_python))
 
 import customizer_core as core  # noqa: E402
 
@@ -72,6 +160,8 @@ def parse_args(argv):
     parser.add_argument("--max-networks", type=int, default=core.DEFAULT_MAX_NETWORKS,
                         help=f"bridge networks Docker can create (default {core.DEFAULT_MAX_NETWORKS})")
     parser.add_argument("--text", action="store_true", help="plain text dialog instead of the full screen one")
+    parser.add_argument("--setup", action="store_true",
+                        help="only make sure PyYAML is there (setting up the venv if needed), then exit")
     return parser.parse_args(argv)
 
 
@@ -110,6 +200,10 @@ def next_steps(path):
 
 def main(argv=None):
     args = parse_args(sys.argv[1:] if argv is None else argv)
+    if args.setup:
+        where = f"the venv {sys.prefix}" if os.environ.get(VENV_MARKER) else sys.executable
+        print_color(f"[OK] - PyYAML is available to the customizer ({where}).", "green")
+        return 0
     try:
         catalog = core.Catalog()
         if args.rebuild:

@@ -1380,10 +1380,43 @@ function fuRESTORE_EDITION () {
 	echo
 }
 
+# compose/customizer.py needs PyYAML. The installer brings the package of the
+# distribution along, older installations get it here. Without it the customizer
+# sets up a venv of its own on first use, which needs python3-venv on Debian.
+function fuCUSTOMIZER_DEPS () {
+	local myINSTALL=()
+	python3 -c "import yaml" 2>/dev/null && return
+	if command -v apt-get >/dev/null 2>&1;
+	  then
+	    sudo apt-get update -qq >/dev/null 2>&1
+	    myINSTALL=(env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3-yaml)
+	elif command -v dnf >/dev/null 2>&1;
+	  then
+	    myINSTALL=(dnf -y -q install python3-pyyaml)
+	elif command -v zypper >/dev/null 2>&1;
+	  then
+	    myINSTALL=(zypper -n -q install python3-PyYAML)
+	else
+	    echo "###### $myBLUE""No apt-get, dnf or zypper found, the customizer will set up PyYAML in a venv of its own.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	    echo
+	    return
+	fi
+	echo "### Installing PyYAML for compose/customizer.py ..."
+	echo -n "###### $myBLUE Now running ${myINSTALL[*]}.$myWHITE "
+	if sudo "${myINSTALL[@]}" >/dev/null 2>&1 && python3 -c "import yaml" 2>/dev/null;
+	  then
+	    echo "[ $myGREEN"OK"$myWHITE ]"
+	  else
+	    echo "[ $myRED""WARNING""$myWHITE ]"
+	    echo "###### $myBLUE""PyYAML could not be installed, the customizer will try a venv of its own.""$myWHITE"
+	fi
+	echo
+}
+
 # A docker-compose.yml from compose/customizer.py names its edition and the changes
 # made to it in its header, so it is built again from this release's catalog and
-# editions. Edited by hand, or without a customizer that can rebuild (an older
-# checkout, no PyYAML), the file is put back unchanged.
+# editions. Edited by hand, without a customizer that can rebuild (an older
+# checkout) or without PyYAML, the file is put back unchanged.
 function fuRESTORE_CUSTOM () {
 	local myCUSTOMIZER="$HOME/tpotce/compose/customizer.py"
 	if ! fuCOMPOSE_FROM_ARCHIVE;
@@ -1398,9 +1431,6 @@ function fuRESTORE_CUSTOM () {
 	elif ! grep -q -- "--rebuild" "${myCUSTOMIZER}" 2>/dev/null;
 	  then
 	    echo "###### $myBLUE""The customizer of this checkout cannot rebuild your docker-compose.yml.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
-	elif ! python3 -c "import yaml" 2>/dev/null;
-	  then
-	    echo "###### $myBLUE""The customizer needs PyYAML (python3-yaml) to rebuild your docker-compose.yml.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
 	else
 	    echo "###### $myBLUE""Now rebuilding your custom docker-compose.yml from this release.""$myWHITE"
 	    if python3 "${myCUSTOMIZER}" --rebuild "${myTMPDIR}/docker-compose.yml" -o "$HOME/tpotce/docker-compose.yml" </dev/null;
@@ -1534,6 +1564,7 @@ fuSELFUPDATE "$@"
 # The config and the edition have to be back in place before the images are
 # pulled, `docker compose pull` reads both.
 fuRESTORE
+fuCUSTOMIZER_DEPS
 fuRESTORE_EDITION
 fuREMOVE_DROPPED_SERVICES
 
