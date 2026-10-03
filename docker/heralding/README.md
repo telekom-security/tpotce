@@ -1,7 +1,7 @@
 # Heralding 2.0 integration
 
 Python 3.14 with a pinned Python/uv build and source commit
-`6a6840d11e4ec46f56b818ee8a12d0c3acffc0b4` from `t3chn0m4g3/heralding`.
+`5a68009277997a6c78aff8bc278841fbfb2b32f0` from `t3chn0m4g3/heralding`.
 The image runs as uid/gid 2000 with cap_net_bind_service, read-only rootfs and a writable
 `/tmp/heralding` tmpfs. Logs remain in `/var/log/heralding`. No tests are shipped in the image.
 
@@ -65,3 +65,18 @@ The obsolete requirements.txt override has been removed; uv.lock owns dependenci
 The reported Windows App 11.4.1 (3092) error 0x204 requires a client retest; the exact
 Microsoft app has not been exercised automatically. Authentication is deliberately refused,
 and no remote desktop is provided. NLA captures NTLM hashes, not a plaintext password.
+
+
+## RDP Windows App compatibility follow-up
+
+Windows App 11.4.1 (3092) reported error 0x204. Initial client retesting showed a
+CredSSP EOF and a failed TLS-only parse. The subsequent source fix supports both
+PER Client Info length forms and records the handshake phase and negotiated TLS
+version before capture. T-Pot caps only RDP at `tls_max_version: TLSv1_2`; generic
+Heralding provides this optional setting without selecting a default ceiling.
+The user's exact Windows App retest remains pending; FreeRDP TLS/NLA are smoke-tested.
+
+The baseline capability comparison permits only this added RDP TLS ceiling; existing
+banners, ports and other settings remain unchanged. Generic image: `heralding:generic-dev`.
+T-Pot image: `heralding:tpot-dev`, also tagged locally `heralding:2.0-dev` to match the
+user's existing standalone Compose setting. No running stack was restarted.

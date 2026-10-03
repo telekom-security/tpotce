@@ -10,7 +10,14 @@ config = yaml.safe_load((root / "docker/heralding/dist/heralding.yml").read_text
 original = yaml.safe_load(
     (Path(__file__).resolve().parent / "fixtures/tpot_heralding.yml").read_text()
 )
-assert all(config["capabilities"][key] == value for key, value in original["capabilities"].items())
+for key, value in original["capabilities"].items():
+    current = config["capabilities"][key]
+    if key == "rdp":
+        import copy
+
+        current = copy.deepcopy(current)
+        assert current["protocol_specific_data"].pop("tls_max_version") == "TLSv1_2"
+    assert current == value, f"Existing settings changed for {key}"
 
 
 def mapping_key(mapping):
