@@ -198,7 +198,7 @@ capabilities:
     port: 3389
     timeout: 30
     protocol_specific_data:
-      # Compatibility with Microsoft Windows App; generic Heralding has no ceiling.
+      # Explicit RDP compatibility ceiling; also the generic Heralding default.
       tls_max_version: TLSv1_2
       banner: ""
       # if a .pem file is not found in work dir, a new pem file will be created

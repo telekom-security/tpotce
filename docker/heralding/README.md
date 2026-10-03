@@ -1,7 +1,7 @@
 # Heralding 2.0 integration
 
 Python 3.14 with a pinned Python/uv build and source commit
-`5a68009277997a6c78aff8bc278841fbfb2b32f0` from `t3chn0m4g3/heralding`.
+`f3e9474c20da4950859b806a594f756757d20f7a` from `t3chn0m4g3/heralding`.
 The image runs as uid/gid 2000 with cap_net_bind_service, read-only rootfs and a writable
 `/tmp/heralding` tmpfs. Logs remain in `/var/log/heralding`. No tests are shipped in the image.
 
@@ -62,21 +62,34 @@ The obsolete requirements.txt override has been removed; uv.lock owns dependenci
 - FreeRDP TLS and NLA both capture credentials/material; NLA returns explicit logon failure.
 - The upstream-oriented image keeps `log_auth.csv`; this image uses `auth.csv` from `dist/heralding.yml`.
 
-The reported Windows App 11.4.1 (3092) error 0x204 requires a client retest; the exact
-Microsoft app has not been exercised automatically. Authentication is deliberately refused,
+The user confirmed Windows App 11.4.1 (3092) credential capture through its TLS-only
+fallback; error 0x204 remains after capture. Authentication is deliberately refused,
 and no remote desktop is provided. NLA captures NTLM hashes, not a plaintext password.
 
 
 ## RDP Windows App compatibility follow-up
 
-Windows App 11.4.1 (3092) reported error 0x204. Initial client retesting showed a
-CredSSP EOF and a failed TLS-only parse. The subsequent source fix supports both
-PER Client Info length forms and records the handshake phase and negotiated TLS
-version before capture. T-Pot caps only RDP at `tls_max_version: TLSv1_2`; generic
-Heralding provides this optional setting without selecting a default ceiling.
-The user's exact Windows App retest remains pending; FreeRDP TLS/NLA are smoke-tested.
+The source pin includes the generic PER length fix, distinct MCS user-channel allocation
+and RDP TLS 1.2 default. T-Pot explicitly keeps `tls_max_version: TLSv1_2` in its own config.
+Generic Heralding also defaults to this ceiling and permits an explicit TLS 1.3 override.
+The extended smoke checks TLS 1.2 for both TLS/NLA captures and validates the TLS-only
+user-channel ID and the complete set of joined channels. Both compatibility fixtures
+assert the effective TLS ceiling on the started RDP handler.
 
-The baseline capability comparison permits only this added RDP TLS ceiling; existing
-banners, ports and other settings remain unchanged. Generic image: `heralding:generic-dev`.
-T-Pot image: `heralding:tpot-dev`, also tagged locally `heralding:2.0-dev` to match the
-user's existing standalone Compose setting. No running stack was restarted.
+The user confirmed credential capture with Windows App 11.4.1 (3092) on macOS on
+2026-10-03: after an initial NLA connection ended before sending a CredSSP message,
+its TLS-only fallback logged one plaintext username/password attempt over TLS 1.2.
+With four static channels, the user channel was 1008 and the joined channels were
+1003 through 1008. No client credentials are retained here. Error 0x204 still appeared
+because the honeypot ends the connection without a desktop or successful login.
+This confirms the app's TLS-only fallback; FreeRDP and pyspnego separately verify NLA.
+It does not prove NLA credential capture by this Windows App version or isolate the
+contribution of TLS and channel fixes, which were changed together.
+
+Current validation: 245 generic tests on macOS and Linux/Alpine, nine T-Pot compatibility
+tests, all 27 capabilities in the extended image smoke and all eight free-port profiles.
+The baseline comparison permits only the added RDP TLS ceiling; existing banners,
+ports and other settings remain unchanged. Generic image: `heralding:generic-dev`.
+T-Pot image: `heralding:tpot-dev`. The user's standalone Compose currently points to
+`heralding:generic-dev` and was preserved. The older `heralding:2.0-dev` alias was not
+rebuilt in this follow-up. No running user stack was restarted or image published.

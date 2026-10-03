@@ -271,6 +271,24 @@ while time.monotonic() < deadline:
             for e in nla
             for a in e["auth_attempts"]
         )
+        rdp_sessions = [
+            e
+            for e in events
+            if e["protocol"] == "rdp" and e.get("session_ended") and e["auth_attempts"]
+        ]
+        assert all(e["auxiliary_data"]["tls_version"] == "TLSv1.2" for e in rdp_sessions)
+        for e in rdp_sessions:
+            data = e["auxiliary_data"]
+            if data["rdp_security"] == "tls":
+                count = data["rdp_static_channel_count"]
+                user_id = data["rdp_user_channel_id"]
+                assert user_id == 1004 + count
+                assert user_id not in range(1004, 1004 + count)
+                assert set(data["rdp_joined_channel_ids"]) == {
+                    1003,
+                    user_id,
+                    *range(1004, 1004 + count),
+                }
         print(
             "Extended auth/session checks passed: all 27 capabilities, RDP TLS/NLA and SIP TCP/UDP (including 11 basic probes)"
         )

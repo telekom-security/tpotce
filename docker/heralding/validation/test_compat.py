@@ -113,6 +113,8 @@ def test_session_start_event_does_not_alias_live_lists(tmp_path):
 @pytest.mark.parametrize("fixture_name", ["tpot_heralding.yml", "tpot_heralding_2.yml"])
 async def test_honeypot_starts_with_tpot_config(tmp_path, monkeypatch, fixture_name):
     """Review focus 1: T-Pot's config (no persona key, mysql without protocol_specific_data)."""
+    import ssl
+
     from heralding.capabilities import smtp
     from heralding.capabilities.handlerbase import HandlerBase
     from heralding.honeypot import Honeypot
@@ -133,6 +135,8 @@ async def test_honeypot_starts_with_tpot_config(tmp_path, monkeypatch, fixture_n
         await honeypot.start()
         assert len(honeypot._servers) == len(config["capabilities"])
         assert HandlerBase.persona is not None
+        rdp_handler = next(cap for cap in honeypot._capabilities if cap.NAME == "rdp")
+        assert rdp_handler.tls_context.maximum_version == ssl.TLSVersion.TLSv1_2
         # CRAM-MD5 challenges use the persona FQDN, never the container's real host name
         assert smtp.SMTPHandler.fqdn == HandlerBase.persona.fqdn
         assert (tmp_path / "persona.state").exists()
