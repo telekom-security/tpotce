@@ -12,6 +12,8 @@ IMAGE=""
 LOG_DIR=""
 HERALDING_LOG_FILE=""
 TOKEN=""
+EXTENDED="false"
+CLIENTS_IMAGE="heralding:validation-tools"
 
 PROBED_PROTOCOLS=(ftp telnet pop3 pop3s imap imaps smtp smtps http https socks5)
 declare -A CONTAINER_PORTS=(
@@ -40,6 +42,8 @@ Options:
   --timeout SEC       Timeout for startup, protocol, and log checks. Default: 30.
   --bind-ip IP        Host IP to bind. Default: 127.0.0.1.
   --keep-artifacts    Keep temporary compose file and logs for debugging.
+  --extended          Test all 27 capabilities and RDP TLS/NLA with standard clients.
+  --clients-image IMG Standard-client image for --extended. Default: heralding:validation-tools.
   -h, --help          Show this help message.
 EOF
 }
@@ -73,6 +77,15 @@ parse_args() {
       --bind-ip=*)
         TEST_BIND_IP="${1#*=}"
         shift
+        ;;
+      --extended)
+        EXTENDED="true"
+        shift
+        ;;
+      --clients-image)
+        [[ $# -ge 2 ]] || test_die "--clients-image requires an argument"
+        CLIENTS_IMAGE="$2"
+        shift 2
         ;;
       --keep-artifacts)
         TEST_KEEP_ARTIFACTS="true"
@@ -566,6 +579,10 @@ main() {
   test_info "Using image: ${IMAGE}"
   test_require_image "${IMAGE}" "docker compose -f docker/${TEST_NAME}/docker-compose.yml build ${TEST_NAME}"
 
+  if [[ "${EXTENDED}" == "true" ]]; then
+    test_require_image "${CLIENTS_IMAGE}" "docker build -f docker/heralding/validation/Dockerfile.clients -t ${CLIENTS_IMAGE} docker/heralding/validation"
+  fi
+
   prepare_heralding_harness
   test_enable_cleanup
 
@@ -583,6 +600,14 @@ main() {
   TOKEN="heralding-smoke-$(date +%s)-$$"
   test_info "Running Heralding protocol probes with token: ${TOKEN}"
   run_protocol_probes || test_die "One or more Heralding protocol probes failed"
+  if [[ "${EXTENDED}" == "true" ]]; then
+    test_info "Running standard-client probes for remaining capabilities, RDP TLS/NLA and SIP TCP/UDP"
+    docker run --rm --network "${TEST_PROJECT_NAME}_net" \
+      -v "${SCRIPT_DIR}/../../heralding/validation:/probes:ro" \
+      -v "${LOG_DIR}:/logs:ro" "${CLIENTS_IMAGE}" \
+      python /probes/extended_logins.py "${TEST_CONTAINER_NAME}" "${TOKEN}" \
+      || test_die "Extended credential/session probes failed"
+  fi
   test_wait_for_container || test_die "Heralding container stopped after protocol probes"
 
   test_info "Waiting for Heralding auth.csv and log_session.json events"

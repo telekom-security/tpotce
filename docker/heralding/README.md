@@ -1,20 +1,22 @@
 # Heralding 2.0 integration
 
 Python 3.14 with a pinned Python/uv build and source commit
-`0f9b48ba19e4c60ad1e9e9b0193e9057ed64a2af` from `t3chn0m4g3/heralding`.
+`6a6840d11e4ec46f56b818ee8a12d0c3acffc0b4` from `t3chn0m4g3/heralding`.
 The image runs as uid/gid 2000 with cap_net_bind_service, read-only rootfs and a writable
 `/tmp/heralding` tmpfs. Logs remain in `/var/log/heralding`. No tests are shipped in the image.
 
 ## Local-only build
 
-The source commit has not been pushed. Use the Heralding checkout's helper, which archives
+The source commit has not been pushed. Use T-Pot's integration helper, which archives
 the exact pinned commit into a temporary named build context and bypasses the remote fetch:
 
 ```sh
-# In the Heralding checkout, with tpotce as a sibling checkout.
-tools/validation/build_tpot.sh ../tpotce heralding:tpot-dev
-../tpotce/docker/_tests/tests/heralding.sh --image heralding:tpot-dev
-uv run python tools/validation/check_tpot.py ../tpotce
+# In the T-Pot checkout, with heralding as a sibling checkout.
+docker/heralding/validation/build_tpot.sh ../heralding heralding:tpot-dev
+docker build -f docker/heralding/validation/Dockerfile.clients -t heralding:validation-tools docker/heralding/validation
+docker/_tests/tests/heralding.sh --image heralding:tpot-dev --extended
+uv run --project ../heralding pytest -q docker/heralding/validation/test_compat.py --import-mode=importlib
+uv run --project ../heralding python docker/heralding/validation/check_tpot.py .
 ```
 
 The underlying Docker command is:
@@ -51,12 +53,15 @@ The obsolete requirements.txt override has been removed; uv.lock owns dependenci
 ## Verified locally
 
 - Docker build with the pinned local source archive.
-- Existing 11-service Heralding smoke against the built T-Pot image, auth/session logs present.
+- Basic 11-service smoke and extended probes for all 27 capabilities, actual auth/session events.
 - LDAP, LDAPS, FTPS and MQTTS credential capture using ldap3, ftplib and paho-mqtt.
 - Free-port policy for every Heralding profile; `docker compose config --quiet` for all eight
   changed compose files.
 - Installed package in site-packages, no tests in the image, uid 2000.
-- Heralding's original and updated T-Pot fixtures start/stop in its standard-client suite.
+- Both T-Pot fixtures start/stop in T-Pot's own compatibility suite.
+- FreeRDP TLS and NLA both capture credentials/material; NLA returns explicit logon failure.
+- The upstream-oriented image keeps `log_auth.csv`; this image uses `auth.csv` from `dist/heralding.yml`.
 
-The Heralding checkout's docs/TPOT.md and completion audit describe protocol limits and
-manual FreeRDP/Hydra/smbclient/nmap/sipsak/Hashcat results.
+The reported Windows App 11.4.1 (3092) error 0x204 requires a client retest; the exact
+Microsoft app has not been exercised automatically. Authentication is deliberately refused,
+and no remote desktop is provided. NLA captures NTLM hashes, not a plaintext password.

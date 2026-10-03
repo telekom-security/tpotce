@@ -1,0 +1,213 @@
+# will request and log the public ip every hours from ipify
+public_ip_as_destination_ip: true
+
+# ip address to listen on
+bind_host: 0.0.0.0
+
+# logging of sessions and authentication attempts 
+activity_logging:
+  file:
+    enabled: true
+    # Session details common for all protocols (capabilities) in CSV format, 
+    # written to file when the session ends. Set to "" to disable.
+    session_csv_log_file: "/var/log/heralding/session.csv"
+    # Complete session details (including protocol specific data) in JSONL format,
+    # written to file when the session ends. Set to "" to disable
+    session_json_log_file: "/var/log/heralding/log_session.json"
+    # Writes each authentication attempt to file, including credentials,
+    # set to "" to disable
+    authentication_log_file: "/var/log/heralding/auth.csv"
+
+  syslog:
+    enabled: false
+
+  hpfeeds:
+    enabled: false
+    session_channel: "heralding.session"
+    auth_channel: "heralding.auth"
+    host: 
+    port: 20000
+    ident:
+    secret:
+
+  curiosum:
+    enabled: false
+    port: 23400
+
+hash_cracker:
+  enabled: true
+  wordlist_file: 'wordlist.txt'
+
+# protocols to enable
+capabilities:
+  ftp:
+    enabled: true
+    port: 21
+    timeout: 30
+    protocol_specific_data:
+      max_attempts: 3
+      banner: "Microsoft FTP Server"
+      syst_type: "Windows-NT"
+
+  telnet:
+    enabled: true
+    port: 23
+    timeout: 30
+    protocol_specific_data:
+      max_attempts: 3
+
+  pop3:
+    enabled: true
+    port: 110
+    timeout: 30
+    protocol_specific_data:
+      max_attempts: 3
+      banner: "+OK POP3 server ready"
+
+  pop3s:
+    enabled: true
+    port: 995
+    timeout: 30
+    protocol_specific_data:
+      max_attempts: 3
+      banner: "+OK POP3 server ready"
+      # if a .pem file is not found in work dir, a new pem file will be created
+      # using these values
+      cert:
+        common_name: "*"
+        country: "US"
+        state: None
+        locality: None
+        organization: None
+        organizational_unit: None
+        # how many days should the certificate be valid for
+        valid_days: 365
+        serial_number: 0
+
+  postgresql:
+    enabled: true
+    port: 5432
+    timeout: 30
+ 
+  imap:
+    enabled: true
+    port: 143
+    timeout: 30
+    protocol_specific_data:
+      max_attempts: 3
+      banner: "* OK IMAP4rev1 Server Ready"
+
+  imaps:
+    enabled: true
+    port: 993
+    timeout: 30
+    protocol_specific_data:
+      max_attempts: 3
+      banner: "* OK IMAP4rev1 Server Ready"
+      # if a .pem file is not found in work dir, a new pem file will be created
+      # using these values
+      cert:
+        common_name: "*"
+        country: "US"
+        state: None
+        locality: None
+        organization: None
+        organizational_unit: None
+        # how many days should the certificate be valid for
+        valid_days: 365
+        serial_number: 0
+
+  ssh:
+    enabled: true
+    port: 22
+    timeout: 30
+    protocol_specific_data:
+      banner: "SSH-2.0-OpenSSH_6.6.1p1 Ubuntu-2ubuntu2.8"
+
+  http:
+    enabled: true
+    port: 80
+    timeout: 30
+    protocol_specific_data:
+      banner: ""
+
+  https:
+    enabled: true
+    port: 443
+    timeout: 30
+    protocol_specific_data:
+      banner: ""
+      # if a .pem file is not found in work dir, a new pem file will be created
+      # using these values
+      cert:
+        common_name: "*"
+        country: "US"
+        state: None
+        locality: None
+        organization: None
+        organizational_unit: None
+        # how many days should the certificate be valid for
+        valid_days: 365
+        serial_number: 0
+
+  smtp:
+    enabled: true
+    port: 25
+    timeout: 30
+    protocol_specific_data:
+      banner: "Microsoft ESMTP MAIL service ready"
+      # If the fqdn option is commented out or empty, then fqdn of the host will be used
+      fqdn: ""
+
+  smtps:
+    enabled: true
+    port: 465
+    timeout: 30
+    protocol_specific_data:
+      banner: "Microsoft ESMTP MAIL service ready"
+      # If the fqdn option is commented out or empty, then fqdn of the host will be used
+      fqdn: ""
+      cert:
+        common_name: "*"
+        country: "US"
+        state: None
+        locality: None
+        organization: None
+        organizational_unit: None
+        # how many days should the certificate be valid for
+        valid_days: 365
+        serial_number: 0
+
+  vnc:
+    enabled: true
+    port: 5900
+    timeout: 30
+
+  socks5:
+    enabled: true
+    port: 1080
+    timeout: 30
+
+  mysql:
+    enabled: true
+    port: 3306
+    timeout: 30
+
+  rdp:
+    enabled: true
+    port: 3389
+    timeout: 30
+    protocol_specific_data:
+      banner: ""
+      # if a .pem file is not found in work dir, a new pem file will be created
+      # using these values
+      cert:
+        common_name: "*"
+        country: "US"
+        state: None
+        locality: None
+        organization: None
+        organizational_unit: None
+        # how many days should the certificate be valid for
+        valid_days: 365
+        serial_number: 0
