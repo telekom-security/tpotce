@@ -1,6 +1,18 @@
 # T-Pot: Docker Services Base Configuration
 #        This is only to be used with the T-Pot Customizer
 #        Editing the contents may result in broken custom configurations!
+#
+# Every service carries an x-tpot line for compose/customizer.py, docker compose
+# ignores it and the customizer strips it from what it writes:
+#   group        honeypots, conpot, nsm, elk, tools or core, the customizer groups by it
+#   description  one line shown next to the service
+#   required     always part of the configuration (tpotinit, logstash)
+#   requires     services that have to come along, beyond depends_on
+#   conflicts    services that cannot run next to this one
+#   hidden       helper, only selected through depends_on / requires
+#   hive_only    not offered when starting from the SENSOR edition
+#   linux_only   not offered when starting from the MAC_WIN edition
+# Run `python3 -m unittest discover compose/tests` after changes.
 
 networks:
   adbhoney_local:
@@ -47,6 +59,7 @@ services:
 
 # T-Pot Init Service
   tpotinit:
+    x-tpot: {group: core, description: "T-Pot init, prepares the host and data folder", required: true}
     container_name: tpotinit
     env_file:
       - .env
@@ -72,6 +85,7 @@ services:
 
 # Adbhoney service
   adbhoney:
+    x-tpot: {group: honeypots, description: "Android Debug Bridge"}
     container_name: adbhoney
     restart: always
     depends_on:
@@ -90,6 +104,7 @@ services:
 
 # Beelzebub service
   beelzebub:
+    x-tpot: {group: honeypots, description: "SSH, HTTP, TCP, optional LLM backend"}
     container_name: beelzebub
     restart: always
     depends_on:
@@ -134,6 +149,7 @@ services:
 
 # Ciscoasa service
   ciscoasa:
+    x-tpot: {group: honeypots, description: "Cisco ASA (CVE-2018-0101)"}
     container_name: ciscoasa
     restart: always
     depends_on:
@@ -154,6 +170,7 @@ services:
 
 # CitrixHoneypot service
   citrixhoneypot:
+    x-tpot: {group: honeypots, description: "Citrix ADC (CVE-2019-19781)"}
     container_name: citrixhoneypot
     restart: always
     depends_on:
@@ -171,6 +188,7 @@ services:
 
 # Conpot IEC104 service
   conpot_IEC104:
+    x-tpot: {group: conpot, description: "Siemens S7-300 RTU: IEC 104, DNP3, SNMP"}
     container_name: conpot_iec104
     restart: always
     depends_on:
@@ -199,6 +217,7 @@ services:
 
 # Conpot guardian_ast service
   conpot_guardian_ast:
+    x-tpot: {group: conpot, description: "Guardian AST tank gauge"}
     container_name: conpot_guardian_ast
     restart: always
     depends_on:
@@ -225,6 +244,7 @@ services:
 
 # Conpot ipmi
   conpot_ipmi:
+    x-tpot: {group: conpot, description: "Supermicro BMC: IPMI"}
     container_name: conpot_ipmi
     restart: always
     depends_on:
@@ -251,6 +271,7 @@ services:
 
 # Conpot kamstrup_382
   conpot_kamstrup_382:
+    x-tpot: {group: conpot, description: "Kamstrup 382 smart meter"}
     container_name: conpot_kamstrup_382
     restart: always
     depends_on:
@@ -278,6 +299,7 @@ services:
 
 # Conpot Beckhoff CX (ADS, OPC UA)
   conpot_beckhoff_cx:
+    x-tpot: {group: conpot, description: "Beckhoff CX PLC: ADS, OPC UA"}
     container_name: conpot_beckhoff_cx
     restart: always
     depends_on:
@@ -306,6 +328,7 @@ services:
 
 # Conpot building automation (KNXnet/IP, BACnet/IP)
   conpot_building_automation:
+    x-tpot: {group: conpot, description: "LOYTEC building automation: KNXnet/IP, BACnet/IP"}
     container_name: conpot_building_automation
     restart: always
     depends_on:
@@ -333,6 +356,7 @@ services:
 
 # Conpot HART-IP gateway
   conpot_hart_gateway:
+    x-tpot: {group: conpot, description: "WirelessHART gateway: HART-IP"}
     container_name: conpot_hart_gateway
     restart: always
     depends_on:
@@ -359,6 +383,7 @@ services:
 
 # Conpot ICCP / TASE.2
   conpot_iccp:
+    x-tpot: {group: conpot, description: "Control center: ICCP / TASE.2"}
     container_name: conpot_iccp
     restart: always
     depends_on:
@@ -385,6 +410,7 @@ services:
 
 # Conpot Modbus PLC
   conpot_plc_modbus:
+    x-tpot: {group: conpot, description: "Schneider M340 PLC: Modbus, UMAS"}
     container_name: conpot_plc_modbus
     restart: always
     depends_on:
@@ -411,6 +437,7 @@ services:
 
 # Cowrie service
   cowrie:
+    x-tpot: {group: honeypots, description: "SSH and Telnet"}
     container_name: cowrie
     restart: always
     depends_on:
@@ -435,6 +462,7 @@ services:
 
 # Ddospot service
   ddospot:
+    x-tpot: {group: honeypots, description: "DDoS amplification: CHARGEN, DNS, NTP, SSDP"}
     container_name: ddospot
     restart: always
     depends_on:
@@ -461,6 +489,7 @@ services:
 # Get Dicom images (CC BY 3.0): https://www.cancerimagingarchive.net/collections/
 # Put images (which must be in Dicom DCM format or it will not work!) into /data/dicompot/images
   dicompot:
+    x-tpot: {group: honeypots, description: "DICOM medical imaging"}
     container_name: dicompot
     restart: always
     depends_on:
@@ -480,6 +509,7 @@ services:
 
 # Dionaea service
   dionaea:
+    x-tpot: {group: honeypots, description: "Malware capture: SMB, FTP, MSSQL, MySQL, MQTT and more"}
     container_name: dionaea
     stdin_open: true
     tty: true
@@ -518,6 +548,7 @@ services:
 
 # ElasticPot service
   elasticpot:
+    x-tpot: {group: honeypots, description: "Elasticsearch"}
     container_name: elasticpot
     restart: always
     depends_on:
@@ -535,6 +566,7 @@ services:
 
 # Endlessh service
   endlessh:
+    x-tpot: {group: honeypots, description: "SSH tarpit"}
     container_name: endlessh
     restart: always
     depends_on:
@@ -552,6 +584,7 @@ services:
 
 # Galah service
   galah:
+    x-tpot: {group: honeypots, description: "Web honeypot answered by an LLM"}
     container_name: galah
     restart: always
     depends_on:
@@ -584,6 +617,7 @@ services:
 
 # Glutton service
   glutton:
+    x-tpot: {group: honeypots, description: "Catch-all for every port without a honeypot (NFQ)", conflicts: [honeytrap], linux_only: true}
     container_name: glutton
     restart: always
     depends_on:
@@ -606,6 +640,7 @@ services:
 
 # Go-pot service
   go-pot:
+    x-tpot: {group: honeypots, description: "HTTP tarpit"}
     container_name: go-pot
     restart: always
     depends_on:
@@ -623,6 +658,7 @@ services:
 
 # H0neytr4p service
   h0neytr4p:
+    x-tpot: {group: honeypots, description: "HTTP and HTTPS with trap definitions"}
     container_name: h0neytr4p
     restart: always
     depends_on:
@@ -643,6 +679,7 @@ services:
 
 # Hellpot service
   hellpot:
+    x-tpot: {group: honeypots, description: "HTTP tarpit"}
     container_name: hellpot
     restart: always
     depends_on:
@@ -660,6 +697,7 @@ services:
 
 # Heralding service
   heralding:
+    x-tpot: {group: honeypots, description: "Credential catcher for many protocols"}
     container_name: heralding
     restart: always
     depends_on:
@@ -697,6 +735,7 @@ services:
 
 # Honeyaml service
   honeyaml:
+    x-tpot: {group: honeypots, description: "API honeypot from YAML definitions"}
     container_name: honeyaml
     restart: always
     depends_on:
@@ -714,6 +753,7 @@ services:
 
 # Honeypots service
   honeypots:
+    x-tpot: {group: honeypots, description: "30 low-interaction honeypots in one container"}
     container_name: honeypots
     stdin_open: true
     tty: true
@@ -763,6 +803,7 @@ services:
 
 # Honeytrap service
   honeytrap:
+    x-tpot: {group: honeypots, description: "Catch-all for every port without a honeypot (NFQ)", conflicts: [glutton], linux_only: true}
     container_name: honeytrap
     restart: always
     depends_on:
@@ -783,6 +824,7 @@ services:
 
 # Ipphoney service
   ipphoney:
+    x-tpot: {group: honeypots, description: "Internet Printing Protocol"}
     container_name: ipphoney
     restart: always
     depends_on:
@@ -800,6 +842,7 @@ services:
 
 # Log4pot service
   log4pot:
+    x-tpot: {group: honeypots, description: "Log4Shell (CVE-2021-44228)"}
     container_name: log4pot
     restart: always
     depends_on:
@@ -824,6 +867,7 @@ services:
 
 # Mailoney service
   mailoney:
+    x-tpot: {group: honeypots, description: "SMTP"}
     container_name: mailoney
     stdin_open: true
     tty: true
@@ -844,6 +888,7 @@ services:
 
 # Medpot service
   medpot:
+    x-tpot: {group: honeypots, description: "HL7 / FHIR medical"}
     container_name: medpot
     restart: always
     depends_on:
@@ -861,6 +906,7 @@ services:
 
 # Miniprint service
   miniprint:
+    x-tpot: {group: honeypots, description: "Network printer"}
     container_name: miniprint
     restart: always
     depends_on:
@@ -879,6 +925,7 @@ services:
 
 # RDPHoneypot service
   rdphoneypot:
+    x-tpot: {group: honeypots, description: "RDP"}
     container_name: rdphoneypot
     restart: always
     depends_on:
@@ -897,6 +944,7 @@ services:
 
 # Redishoneypot service
   redishoneypot:
+    x-tpot: {group: honeypots, description: "Redis"}
     container_name: redishoneypot
     restart: always
     depends_on:
@@ -914,6 +962,7 @@ services:
 
 # SentryPeer service
   sentrypeer:
+    x-tpot: {group: honeypots, description: "SIP"}
     container_name: sentrypeer
     restart: always
     depends_on:
@@ -937,6 +986,7 @@ services:
 #### Snare / Tanner
 ## Tanner Redis Service
   tanner_redis:
+    x-tpot: {group: honeypots, description: "Redis for Tanner", hidden: true}
     container_name: tanner_redis
     restart: always
     depends_on:
@@ -951,6 +1001,7 @@ services:
 
 ## PHP Sandbox service
   tanner_phpox:
+    x-tpot: {group: honeypots, description: "PHP sandbox for Tanner", hidden: true}
     container_name: tanner_phpox
     restart: always
     depends_on:
@@ -965,6 +1016,7 @@ services:
 
 ## Tanner API service
   tanner_api:
+    x-tpot: {group: honeypots, description: "Tanner API", hidden: true}
     container_name: tanner_api
     restart: always
     depends_on:
@@ -983,6 +1035,7 @@ services:
 
 ## Tanner service
   tanner:
+    x-tpot: {group: honeypots, description: "Tanner, analyzes Snare requests", hidden: true}
     container_name: tanner
     restart: always
     depends_on:
@@ -1003,6 +1056,7 @@ services:
 
 ## Snare service
   snare:
+    x-tpot: {group: honeypots, description: "Web application honeypot, brings Tanner along"}
     container_name: snare
     restart: always
     depends_on:
@@ -1017,6 +1071,7 @@ services:
 
 # Wordpot service
   wordpot:
+    x-tpot: {group: honeypots, description: "WordPress"}
     container_name: wordpot
     restart: always
     depends_on:
@@ -1039,6 +1094,7 @@ services:
 
 # P0f service
   p0f:
+    x-tpot: {group: nsm, description: "Passive OS fingerprinting"}
     container_name: p0f
     restart: always
     depends_on:
@@ -1055,6 +1111,7 @@ services:
 
 # Suricata service
   suricata:
+    x-tpot: {group: nsm, description: "Network IDS"}
     container_name: suricata
     restart: always
     depends_on:
@@ -1085,6 +1142,7 @@ services:
 #### ELK
 ## Elasticsearch service
   elasticsearch:
+    x-tpot: {group: elk, description: "Elasticsearch, stores all events", hive_only: true}
     container_name: elasticsearch
     restart: always
     depends_on:
@@ -1115,6 +1173,7 @@ services:
 
 ## Kibana service
   kibana:
+    x-tpot: {group: elk, description: "Kibana dashboards", requires: [nginx], hive_only: true}
     container_name: kibana
     restart: always
     depends_on:
@@ -1130,6 +1189,7 @@ services:
 
 ## Logstash service
   logstash:
+    x-tpot: {group: elk, description: "Logstash, collects the honeypot logs", required: true}
     container_name: logstash
     restart: always
     depends_on:
@@ -1153,6 +1213,7 @@ services:
 
 ## Map Redis Service
   map_redis:
+    x-tpot: {group: elk, description: "Redis for the Attack Map", hidden: true, hive_only: true}
     container_name: map_redis
     restart: always
     depends_on:
@@ -1168,6 +1229,7 @@ services:
 
 ## Map Web Service
   map_web:
+    x-tpot: {group: elk, description: "Attack Map", requires: [map_data, map_redis, nginx], hive_only: true}
     container_name: map_web
     restart: always
     depends_on:
@@ -1186,6 +1248,7 @@ services:
 
 ## Map Data Service
   map_data:
+    x-tpot: {group: elk, description: "Attack Map data feed", hidden: true, hive_only: true}
     container_name: map_data
     restart: always
     depends_on:
@@ -1205,6 +1268,7 @@ services:
 
 # Ewsposter service
   ewsposter:
+    x-tpot: {group: tools, description: "Sends events to the T-Pot community backend"}
     container_name: ewsposter
     restart: always
     depends_on:
@@ -1229,6 +1293,7 @@ services:
 
 # Nginx service
   nginx:
+    x-tpot: {group: tools, description: "Web UI and sensor ingest on 64297 / 64294", hive_only: true}
     container_name: nginx
     restart: always
     environment:

@@ -693,7 +693,7 @@ standard.yml
 tarpit.yml
 tpot_services.yml
 ```
-The `.yml` files are docker compose files, each representing a different set of honeypots and tools with `tpot_services.yml` being a template for `customizer.py` to create a customized docker compose file.<br><br>
+The `.yml` files are docker compose files, each representing a different set of honeypots and tools with `tpot_services.yml` being the catalog of all services `customizer.py` builds a customized docker compose file from.<br><br>
 To activate a compose file follow these steps:
 1. Stop T-Pot with `systemctl stop tpot`.
 2. Copy the docker compose file `cp ~/tpotce/compose/<dockercompose.yml> ~/tpotce/docker-compose.yml`.
@@ -701,14 +701,21 @@ To activate a compose file follow these steps:
 
 To create your customized docker compose file:
 1. Go to `cd ~/tpotce/compose`.
-2. Run `python3 customizer.py`.
-3. The script will guide you through the process of creating your own `docker-compose.yml`. As some honeypots and services occupy the same ports it will check if any port conflicts are present and notify regarding the conflicting services. You then can resolve them manually by adjusting `docker-compose-custom.yml` or re-run the script.
-4. Stop T-Pot with `systemctl stop tpot`.
-5. Copy the custom docker compose file: `cp docker-compose-custom.yml ~/tpotce` and `cd ~/tpotce`.
-6. Check if everything works by running `docker-compose -f docker-compose-custom.yml up`. In case of errors follow the [Docker Compose Specification](https://docs.docker.com/reference/compose-file/) for mitigation. Most likely it is just a port conflict you can adjust by editing the docker compose file.
-6. If everything works just fine press `CTRL-C` to stop the containers and run `docker-compose -f docker-compose-custom.yml down -v`.
-7. Replace docker compose file with the new and successfully tested customized docker compose file `mv ~/tpotce/docker-compose-custom.yml ~/tpotce/docker-compose.yml`.
+2. Run `python3 customizer.py`. It needs PyYAML, which the installer brings along (`python3-yaml` on Debian / Ubuntu, `python3-pyyaml` on Fedora / AlmaLinux / Rocky / RHEL, `python3-PyYAML` on openSUSE).
+3. Pick the edition to start from (`b`, the installed one is preselected) and switch services on and off with the cursor keys and `space`, `enter` folds a group. Dependencies come along on their own (i.e. Snare brings Tanner, Kibana brings Elasticsearch and Nginx), services that cannot run together and port conflicts are marked with `!`. `p` opens the host ports of a service: change or remove them by hand or take a suggestion (`v`), i.e. the port another edition uses for it. The status line counts the Docker networks, Docker's default address pools leave room for about 29.
+4. `s` shows a summary and writes `~/tpotce/docker-compose-custom.yml` - only without errors, and only after `docker compose config` accepted it.
+5. Stop T-Pot with `systemctl stop tpot`.
+6. Check if everything works: `cd ~/tpotce && docker compose -f docker-compose-custom.yml up`. If it does, press `CTRL-C` and run `docker compose -f docker-compose-custom.yml down -v`.
+7. Replace the docker compose file: `mv ~/tpotce/docker-compose-custom.yml ~/tpotce/docker-compose.yml`.
 8. Start T-Pot with `systemctl start tpot`.
+
+Running the customizer again starts from your current configuration. Without a terminal, or with `--text`, it asks the same as numbered lists. It also works without any dialog:
+```
+python3 customizer.py --base standard --add citrixhoneypot --remove honeytrap --port citrixhoneypot:443=8444
+```
+`--port SERVICE:HOSTPORT[/udp]=NEWPORT` moves a host port, `=-` removes it, `-o FILE` writes somewhere else, `python3 customizer.py -h` lists everything.
+
+The customizer writes the edition and your changes into the header of the file. `update.sh` builds it again from the new release, so new honeypots of the edition and changed service definitions are included. That only works as long as you change the file with the customizer: once you edit it by hand, `update.sh` puts it back unchanged and you have to run the customizer again. A file that `TPOT_DOCKER_COMPOSE` in `.env` points to is never touched by `update.sh`.
 <br><br>
 
 # Maintenance
@@ -737,10 +744,11 @@ The update script will ...
    you set yourself is left alone.
  - remove docker images of earlier versions, keeping the tag your `.env` now names
  - detect the installed T-Pot edition (i.e. `SENSOR`, `MINI`, `LLM`, `TARPIT`, `MOBILE`) and restore it, using this release's `~/tpotce/compose/<edition>.yml` so that new honeypots and changes of the release are included.
- - keep your previous `docker-compose.yml` in the backup archive. If you made changes to it (i.e.
-   removing the `ewsposter` section or a `docker-compose.yml` built with
-   `~/tpotce/compose/customizer.py`) you need to add them again - the run tells you how to compare
-   the two.
+ - rebuild a `docker-compose.yml` made with `~/tpotce/compose/customizer.py` from this release,
+   with the edition and the changes the customizer noted in its header.
+ - keep your previous `docker-compose.yml` in the backup archive. If you made changes to it by hand
+   (i.e. removing the `ewsposter` section) you need to add them again - the run tells you how to
+   compare the two.
 
 The backup holds what git cannot bring back: `~/tpotce/.env`, your `docker-compose.yml`, a patch of
 your changes to tracked files, your untracked files, the commit to roll back to, and the files under

@@ -363,6 +363,19 @@ function fuEDITION_TEMPLATE () {
 	echo "$HOME/tpotce/compose/$(echo "${myEDITION}" | tr '[:upper:]' '[:lower:]').yml"
 }
 
+# Was the compose file built by compose/customizer.py (v2 or later)?
+function fuCUSTOM_FILE () {   # $1 = compose file
+	sed -n 2p "$1" 2>/dev/null | grep -q "^# customizer: version="
+}
+
+# The customizer hashes everything below its header, a mismatch means the file was
+# edited by hand and must not be rebuilt over.
+function fuCUSTOM_CHECKSUM () {   # $1 = compose file
+	local mySUM=""
+	mySUM=$(sed -n 's/^# customizer: sha256=\([0-9a-f]\{64\}\)$/\1/p' "$1" | head -1)
+	[ -n "${mySUM}" ] && [ "$(sed '1,/^# customizer: sha256=/d' "$1" | sha256sum | awk '{ print $1 }')" == "${mySUM}" ]
+}
+
 # An edition is installed by copying one of the compose/*.yml over
 # docker-compose.yml, which is tracked by git, so the `git reset --hard` in
 # fuSELFUPDATE puts the STANDARD edition back. The edition is read here, before
@@ -398,8 +411,17 @@ function fuCHECK_EDITION () {
 	    return
 	fi
 	myEDITION=$(head -1 "$HOME/tpotce/docker-compose.yml" | sed -n 's/^# T-Pot: *//p')
+	# A file built with compose/customizer.py has no template, it is built again from
+	# its header instead, unless it was edited by hand since.
+	if [ "${myEDITION}" == "CUSTOM" ] && fuCUSTOM_FILE "$HOME/tpotce/docker-compose.yml";
+	  then
+	    fuCUSTOM_CHECKSUM "$HOME/tpotce/docker-compose.yml" || myCOMPOSE_CUSTOMIZED="1"
+	    echo "###### $myBLUE""Edition CUSTOM, built by compose/customizer.py${myCOMPOSE_CUSTOMIZED:+ and edited by hand since}.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	    echo
+	    return
+	fi
 	# Only an edition that ships a template in compose/ can be restored from one, a
-	# file built with compose/customizer.py has none.
+	# compose file of your own has none.
 	for i in ${myEDITIONS};
 	  do
 	    [ "${myEDITION}" == "$i" ] && myKNOWN="1"
@@ -1304,6 +1326,12 @@ function fuRESTORE_EDITION () {
 	    echo
 	    return
 	fi
+	if [ "${myEDITION}" == "CUSTOM" ];
+	  then
+	    fuRESTORE_CUSTOM
+	    echo
+	    return
+	fi
 	# An update.sh from before this function existed reset docker-compose.yml to
 	# the STANDARD edition without remembering anything, in which case TPOT_TYPE in
 	# the restored .env is the only hint that is left.
@@ -1350,6 +1378,47 @@ function fuRESTORE_EDITION () {
 	    echo "###### $myBLUE""Your docker-compose.yml does not match any edition in compose/, so the changes of this release were not applied to it.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
 	fi
 	echo
+}
+
+# A docker-compose.yml from compose/customizer.py names its edition and the changes
+# made to it in its header, so it is built again from this release's catalog and
+# editions. Edited by hand, or without a customizer that can rebuild (an older
+# checkout, no PyYAML), the file is put back unchanged.
+function fuRESTORE_CUSTOM () {
+	local myCUSTOMIZER="$HOME/tpotce/compose/customizer.py"
+	if ! fuCOMPOSE_FROM_ARCHIVE;
+	  then
+	    echo "###### $myBLUE""Could not take docker-compose.yml from ${myARCHIVE}. Put it back by hand with:""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	    echo "######   $myBLUE""tar xf ${myARCHIVE} -C $HOME/tpotce docker-compose.yml""$myWHITE"
+	    return
+	fi
+	if [ -n "${myCOMPOSE_CUSTOMIZED}" ];
+	  then
+	    echo "###### $myBLUE""Your docker-compose.yml was edited after the customizer built it, so it is not rebuilt.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	elif ! grep -q -- "--rebuild" "${myCUSTOMIZER}" 2>/dev/null;
+	  then
+	    echo "###### $myBLUE""The customizer of this checkout cannot rebuild your docker-compose.yml.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	elif ! python3 -c "import yaml" 2>/dev/null;
+	  then
+	    echo "###### $myBLUE""The customizer needs PyYAML (python3-yaml) to rebuild your docker-compose.yml.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	else
+	    echo "###### $myBLUE""Now rebuilding your custom docker-compose.yml from this release.""$myWHITE"
+	    if python3 "${myCUSTOMIZER}" --rebuild "${myTMPDIR}/docker-compose.yml" -o "$HOME/tpotce/docker-compose.yml" </dev/null;
+	      then
+	        return
+	    fi
+	    echo "###### $myBLUE""The rebuild failed, see above.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	fi
+	echo -n "###### $myBLUE Now restoring your docker-compose.yml from the backup.$myWHITE "
+	if ! cp "${myTMPDIR}/docker-compose.yml" "$HOME/tpotce/docker-compose.yml";
+	  then
+	    echo " [ $myRED""NOT OK""$myWHITE ]"
+	    echo "###### $myBLUE""Put it back by hand with: tar xf ${myARCHIVE} -C $HOME/tpotce docker-compose.yml""$myWHITE"
+	    return
+	fi
+	echo "[ $myGREEN"OK"$myWHITE ]"
+	echo "###### $myBLUE""The changes of this release were not applied to it. Run the customizer again to build it anew:""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	echo "######   $myBLUE""cd $HOME/tpotce/compose && python3 customizer.py""$myWHITE"
 }
 
 # A docker-compose.yml restored from the backup can still hold services of the

@@ -189,6 +189,8 @@
           - htop
           - micro
           - net-tools
+          # compose/customizer.py
+          - python3-yaml
           - vim
           - wget
         state: latest
@@ -222,6 +224,8 @@
           - htop
           - httpd-tools
           - net-tools
+          # compose/customizer.py
+          - python3-pyyaml
           - tar
           - vim
           - wget
@@ -258,6 +262,8 @@
           - httpd-tools
           - micro
           - net-tools
+          # compose/customizer.py
+          - python3-pyyaml
           - vim
           - wget
         state: latest
@@ -294,6 +300,8 @@
           - git
           - grc
           - htop
+          # compose/customizer.py
+          - python3-PyYAML
           - vim
           - wget
         state: latest
@@ -301,6 +309,15 @@
       when: ansible_facts.distribution in ["openSUSE Tumbleweed"]
       tags:
         - "openSUSE Tumbleweed"
+
+    - name: Install PyYAML for compose/customizer.py (RHEL)
+      package:
+        name:
+          - python3-pyyaml
+        state: latest
+      when: ansible_facts.distribution in ["RedHat"]
+      tags:
+        - "RedHat"
 
 #####################################
 # T-Pot - Prepare for Docker Engine #
