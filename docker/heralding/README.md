@@ -1,13 +1,14 @@
 # Heralding 2.0 integration
 
 Python 3.14 with a pinned Python/uv build and source commit
-`f3e9474c20da4950859b806a594f756757d20f7a` from `t3chn0m4g3/heralding`.
+`86a0ccab9e9b603ef639c832a60c9d61ff5e635c` from `t3chn0m4g3/heralding`.
 The image runs as uid/gid 2000 with cap_net_bind_service, read-only rootfs and a writable
 `/tmp/heralding` tmpfs. Logs remain in `/var/log/heralding`. No tests are shipped in the image.
 
 ## Local-only build
 
-The source commit has not been pushed. Use T-Pot's integration helper, which archives
+The pin is the local Heralding master merge of modernize/2.0. It has not been pushed.
+Use T-Pot's integration helper, which archives
 the exact pinned commit into a temporary named build context and bypasses the remote fetch:
 
 ```sh
@@ -58,7 +59,9 @@ The obsolete requirements.txt override has been removed; uv.lock owns dependenci
 - Free-port policy for every Heralding profile; `docker compose config --quiet` for all eight
   changed compose files.
 - Installed package in site-packages, no tests in the image, uid 2000.
-- Both T-Pot fixtures start/stop in T-Pot's own compatibility suite.
+- Both fixtures start/stop in T-Pot's own compatibility suite: `tpot_heralding_legacy.yml`
+  preserves the old 16-service baseline, while `tpot_heralding_current.yml` mirrors
+  `dist/heralding.yml` with 27 services.
 - FreeRDP TLS and NLA both capture credentials/material; NLA returns explicit logon failure.
 - The upstream-oriented image keeps `log_auth.csv`; this image uses `auth.csv` from `dist/heralding.yml`.
 

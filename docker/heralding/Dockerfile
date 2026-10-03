@@ -5,10 +5,10 @@
 #          -v "$PWD/log:/var/log/heralding" -p 21:21 -p 22:22 ... heralding
 
 # The local-only delivery uses --build-context heralding_source=<archive-root>.
-# Its archive-root contains heralding/ from the pinned commit below.
+# Its archive-root contains heralding/ from the pinned local master merge below.
 FROM python:3.14-alpine@sha256:2e740b2c28a426e74f11396c05e38afb3191acced75045b8d62df573c1dc8ce8 AS heralding_source
 ARG HERALDING_REPOSITORY=https://github.com/t3chn0m4g3/heralding.git
-ARG HERALDING_COMMIT=f3e9474c20da4950859b806a594f756757d20f7a
+ARG HERALDING_COMMIT=86a0ccab9e9b603ef639c832a60c9d61ff5e635c
 RUN apk --no-cache add git \
     && git clone "$HERALDING_REPOSITORY" /heralding \
     && git -C /heralding checkout --detach "$HERALDING_COMMIT" \

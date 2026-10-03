@@ -64,7 +64,7 @@ def test_session_json_contract(tmp_path):
 
 
 def test_tpot_config_loads():
-    config = yaml.safe_load((FIXTURES / "tpot_heralding.yml").read_text())
+    config = yaml.safe_load((FIXTURES / "tpot_heralding_legacy.yml").read_text())
     assert (
         config["activity_logging"]["file"]["authentication_log_file"]
         == "/var/log/heralding/auth.csv"
@@ -110,7 +110,9 @@ def test_session_start_event_does_not_alias_live_lists(tmp_path):
     assert start_event["auth_attempts"] == []  # a copy taken at emit time, not the live list
 
 
-@pytest.mark.parametrize("fixture_name", ["tpot_heralding.yml", "tpot_heralding_2.yml"])
+@pytest.mark.parametrize(
+    "fixture_name", ["tpot_heralding_legacy.yml", "tpot_heralding_current.yml"]
+)
 async def test_honeypot_starts_with_tpot_config(tmp_path, monkeypatch, fixture_name):
     """Review focus 1: T-Pot's config (no persona key, mysql without protocol_specific_data)."""
     import ssl
@@ -204,7 +206,7 @@ async def test_unloadable_starttls_cert_keeps_plain_auth_working(
     monkeypatch.chdir(tmp_path)
     (tmp_path / f"{name}.pem").write_text("not a certificate")
     caplog.set_level(logging.WARNING)
-    config = yaml.safe_load((FIXTURES / "tpot_heralding.yml").read_text())
+    config = yaml.safe_load((FIXTURES / "tpot_heralding_legacy.yml").read_text())
     config["public_ip_as_destination_ip"] = False
     config["bind_host"] = "127.0.0.1"
     cap_config = dict(config["capabilities"]["ftp"], port=0)

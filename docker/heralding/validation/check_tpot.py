@@ -8,7 +8,7 @@ import yaml
 root = Path(sys.argv[1])
 config = yaml.safe_load((root / "docker/heralding/dist/heralding.yml").read_text())
 original = yaml.safe_load(
-    (Path(__file__).resolve().parent / "fixtures/tpot_heralding.yml").read_text()
+    (Path(__file__).resolve().parent / "fixtures/tpot_heralding_legacy.yml").read_text()
 )
 for key, value in original["capabilities"].items():
     current = config["capabilities"][key]
