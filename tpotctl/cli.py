@@ -53,6 +53,35 @@ def build_parser() -> argparse.ArgumentParser:
     remove = user_actions.add_parser("remove", help="remove a web user, not the last working one")
     remove.add_argument("name")
     remove.add_argument("-y", "--yes", action="store_true", help="do not ask")
+    sensors = sub.add_parser("sensors", help="sensors of this HIVE (default: list)")
+    sensor_actions = sensors.add_subparsers(dest="sensors_command", metavar="ACTION")
+    listing = sensor_actions.add_parser("list", help="sensors, their access and when they were last seen")
+    listing.add_argument("--days", type=int, default=7, help="look for events of the last DAYS days (default 7)")
+    add = sensor_actions.add_parser("add", help="deploy a sensor over SSH (was: deploy.sh)")
+    add.add_argument("--host", help="IP or name of the sensor, asked for if left out")
+    add.add_argument("--ssh-user", help="user T-Pot was installed with on the sensor")
+    add.add_argument("--ssh-port", type=int, default=64295, help="SSH port of the sensor (default 64295, T-Pot's)")
+    add.add_argument("--hive-address", help="IP or name the sensor reaches this HIVE on")
+    add.add_argument("--no-become-pass", action="store_true", help="sudo on the sensor needs no password")
+    add.add_argument("-y", "--yes", action="store_true", help="do not ask, renew the certificate if needed")
+    remove = sensor_actions.add_parser("remove", help="revoke the access of a sensor, nothing is done on it")
+    remove.add_argument("name")
+    remove.add_argument("-y", "--yes", action="store_true", help="do not ask")
+    change = sensor_actions.add_parser("set", help="add where a sensor is, i.e. for sensors of earlier releases")
+    change.add_argument("name")
+    change.add_argument("--host")
+    change.add_argument("--ssh-user")
+    change.add_argument("--ssh-port", type=int)
+    change.add_argument("--hive-address")
+    cert = sensor_actions.add_parser("cert", help="the certificate the sensors check this HIVE with")
+    cert.add_argument("--add", action="append", default=[], metavar="ADDRESS",
+                      help="an IP or name of this HIVE the certificate has to cover, repeatable")
+    cert.add_argument("--renew", action="store_true", help="issue it anew for its addresses and the --add ones")
+    cert.add_argument("--distribute", nargs="*", metavar="NAME",
+                      help="copy it to these registered sensors (all if no NAME) and restart their Logstash")
+    cert.add_argument("--no-restart", action="store_true", help="do not restart T-Pot after --renew")
+    cert.add_argument("--no-become-pass", action="store_true", help="sudo on the sensors needs no password")
+    cert.add_argument("-y", "--yes", action="store_true", help="do not ask")
     sub.add_parser("setup", help="set up or refresh the Python packages of tpot")
     return parser
 
@@ -307,6 +336,222 @@ def run_users(args) -> int:
     return 0
 
 
+def confirm(question: str, yes: bool) -> bool:
+    if yes:
+        return True
+    if not sys.stdin.isatty():
+        raise SystemExit(f"[ERROR] - {question} Add --yes to do it without a terminal.")
+    return ask(f"{question} [y/N] ").lower() == "y"
+
+
+def sensors_table(registry, status, days: int):
+    from rich import box
+    from rich.table import Table
+    from rich.text import Text
+    table = Table(box=box.SIMPLE_HEAD, header_style=f"bold {MAGENTA}", pad_edge=False)
+    for column in ("SENSOR", "HOST", "HOSTNAME", "LAST SEEN", "STATE"):
+        table.add_column(column, overflow="fold")
+    for sensor in registry.sensors():
+        seen = status.sensors.get(sensor.name)
+        if not sensor.access:
+            state = Text("no access (LS_WEB_USER)", style="red")
+        elif seen:
+            state = Text("sending", style="green")
+        elif status.problem:
+            state = Text("unknown", style="yellow")
+        else:
+            state = Text(f"nothing in {days} days", style="yellow")
+        source = "" if sensor.source == "deployed" else " (migrated)"
+        table.add_row(sensor.name + source, sensor.host or "-", (seen.hostname if seen else sensor.hostname) or "-",
+                      seen.last[:19].replace("T", " ") if seen else "-", state)
+    return table
+
+
+def run_sensors(args) -> int:
+    from rich.text import Text
+    from tpotctl import sensors as tsensors
+    registry = tsensors.Registry()
+    console = _console()
+    command = args.sensors_command or "list"
+    if registry.migrated:
+        console.print(Text(f"Taken over from LS_WEB_USER: {', '.join(registry.migrated)}. Add where they are "
+                           f"with: tpot sensors set NAME --host ... --ssh-user ...", style=MAGENTA))
+    if command == "list":
+        status = tsensors.fetch_status(args.days)
+        tsensors.link_hostnames(registry, status)
+        if not registry.sensors():
+            console.print("No sensors yet, deploy one with: tpot sensors add")
+        else:
+            console.print(sensors_table(registry, status, args.days))
+        if status.problem:
+            console.print(Text(status.problem, style="yellow"))
+        for hostname, seen in sorted(status.unlinked.items()):
+            console.print(Text(f"Events from {hostname} ({seen.ip_ext or seen.ip_int}, last {seen.last[:19]}) "
+                               f"carry no sensor name: they are older, or the nginx and Logstash images of this "
+                               f"HIVE do not pass it on yet (update T-Pot).", style="dim"))
+        return 0
+    if command == "remove":
+        registry.get(args.name)
+        if not confirm(f"Revoke the access of {args.name}? It cannot send to this HIVE any more.", args.yes):
+            return 1
+        note = registry.revoke(args.name)
+        console.print(Text(f"[OK] - {args.name} is removed, {note}. Nothing was done on the sensor itself.",
+                           style="green"))
+        return 0
+    if command == "set":
+        sensor = registry.get(args.name)
+        if args.host:
+            sensor.host = tsensors.check_address(args.host)
+        if args.ssh_user:
+            sensor.ssh_user = tsensors.check_user(args.ssh_user)
+        if args.hive_address:
+            sensor.hive_address = tsensors.check_address(args.hive_address)
+        if args.ssh_port:
+            sensor.ssh_port = tsensors.check_port(args.ssh_port)
+        registry.record(sensor)
+        console.print(Text(f"[OK] - {args.name} is updated.", style="green"))
+        return 0
+    if command == "cert":
+        return run_sensor_cert(args, registry, console)
+    return run_sensor_add(args, registry, console)
+
+
+def renew_certificate(registry, addresses, console, yes: bool, restart: bool) -> bool:
+    import subprocess
+    from rich.text import Text
+    from tpotctl import sensors as tsensors
+    current = tsensors.cert_sans(registry.cert)
+    sans = list(dict.fromkeys(current + [tsensors.san_of(a) for a in addresses]))
+    console.print(f"The new certificate covers: {', '.join(sans)}")
+    if not confirm("Issue the certificate of this HIVE anew? Every sensor needs the new one afterwards "
+                   "(tpot sensors cert --distribute).", yes):
+        return False
+    console.print("Creating a 8192 bit key, this can take a minute ...")
+    stamp = tsensors.renew_cert(registry, sans)
+    console.print(Text(f"[OK] - New certificate, the old one is kept as nginx.crt.bak-{stamp}.", style="green"))
+    if restart and linux_host_ok() and confirm("Restart T-Pot now, so that nginx uses it?", yes):
+        subprocess.call(ops.service_command("restart"))
+    return True
+
+
+def linux_host_ok() -> bool:
+    return ops.linux_host()
+
+
+def run_sensor_cert(args, registry, console) -> int:
+    import subprocess
+    from rich.text import Text
+    from tpotctl import sensors as tsensors
+    sans = tsensors.cert_sans(registry.cert)
+    console.print(f"The certificate of this HIVE covers: {', '.join(sans) or 'nothing'}")
+    missing = [a for a in registry.hive_addresses() + args.add if not tsensors.covers(a, sans)]
+    if missing:
+        console.print(Text(f"Not covered: {', '.join(missing)} - sensors checking with full verification "
+                           f"cannot connect there.", style="yellow"))
+    if args.renew:
+        if not renew_certificate(registry, registry.hive_addresses() + args.add, console, args.yes,
+                                 not args.no_restart):
+            return 1
+    if args.distribute is not None:
+        chosen = [registry.get(n) for n in args.distribute] if args.distribute else registry.sensors()
+        reachable = [s for s in chosen if s.host and s.ssh_user and s.access]
+        for sensor in chosen:
+            if sensor not in reachable:
+                console.print(Text(f"{sensor.name} is skipped, add where it is: tpot sensors set {sensor.name} "
+                                   f"--host ... --ssh-user ...", style="yellow"))
+        if not reachable:
+            return 1
+        with tempfile_inventory(tsensors.inventory_text(reachable)) as inventory:
+            code = subprocess.call(tsensors.distribute_command(inventory, not args.no_become_pass), cwd=REPO_DIR)
+        if code != 0:
+            error("the certificate could not be copied to all sensors, see above")
+            return 1
+        names = ", ".join(s.name for s in reachable)
+        console.print(Text(f"[OK] - {names} {'has' if len(reachable) == 1 else 'have'} the new certificate.",
+                           style="green"))
+    return 0
+
+
+class tempfile_inventory:
+    def __init__(self, text: str):
+        self.text = text
+
+    def __enter__(self) -> str:
+        import tempfile
+        handle, self.path = tempfile.mkstemp(prefix="tpot-sensors-", suffix=".ini")
+        with os.fdopen(handle, "w") as out:
+            out.write(self.text)
+        return self.path
+
+    def __exit__(self, *_exc) -> None:
+        os.unlink(self.path)
+
+
+def run_sensor_add(args, registry, console) -> int:
+    import subprocess
+    from rich.text import Text
+    from tpotctl import sensors as tsensors
+    interactive = sys.stdin.isatty()
+    host = tsensors.check_address(args.host or (ask("IP or name of the sensor: ") if interactive else ""))
+    user = tsensors.check_user(args.ssh_user or (ask("User T-Pot was installed with on the sensor: ")
+                                                 if interactive else ""))
+    proposal = tsensors.default_hive_address(host)
+    hive = args.hive_address or (ask(f"IP or name the sensor reaches this HIVE on [{proposal}]: ")
+                                 if interactive else "") or proposal
+    hive = tsensors.check_address(hive)
+
+    port = tsensors.check_port(args.ssh_port)
+    # 1. SSH with a key, on the port T-Pot moves sshd to
+    state = tsensors.check_ssh(host, user, port=port)
+    if state == "key":
+        if not tsensors.has_ssh_key():
+            if not confirm("There is no SSH key on this HIVE. Create one?", args.yes):
+                return 1
+            subprocess.call(tsensors.keygen_command())
+        if not interactive:
+            error(f"no key login on {user}@{host}, run: {' '.join(tsensors.copy_id_command(host, user, port))}")
+            return 1
+        console.print(f"Copying the SSH key to {user}@{host}, enter the password of {user} there.")
+        subprocess.call(tsensors.copy_id_command(host, user, port))
+        state = tsensors.check_ssh(host, user, port=port)
+    if state != "ok":
+        error(f"cannot log in to {user}@{host} on port {port} with a key "
+              f"(is T-Pot installed there, is the address right?)")
+        return 1
+    console.print(Text(f"[OK] - SSH to {user}@{host} works.", style="green"))
+
+    # 2. the sensor checks this HIVE against its certificate
+    if not tsensors.covers(hive, tsensors.cert_sans(registry.cert)):
+        console.print(Text(f"The certificate of this HIVE does not cover {hive}, the sensor would not trust it.",
+                           style="yellow"))
+        if not renew_certificate(registry, registry.hive_addresses() + [hive], console, args.yes, True):
+            return 1
+        others = [s.name for s in registry.sensors()]
+        if others:
+            console.print(Text(f"Remember: {', '.join(others)} need the new certificate as well: "
+                               f"tpot sensors cert --distribute", style="yellow"))
+
+    # 3. access first, so the sensor can send as soon as it is up; taken back if the deployment fails
+    name = tsensors.new_name(set(registry.records))
+    password = tsensors.new_password()
+    registry.grant(name, password)
+    console.print(f"Deploying {name} to {host}, this reboots the sensor.")
+    code = subprocess.call(tsensors.deploy_command(host, user, not args.no_become_pass, port=port),
+                           env=tsensors.deploy_env(tsensors.hive_user(name, password), hive), cwd=REPO_DIR)
+    if code != 0:
+        registry.revoke(name)
+        error(f"the deployment failed (see data/deploy_sensor.log), the access for {name} is taken back")
+        return 1
+    import time as _time
+    registry.record(tsensors.Sensor(name=name, host=host, ssh_user=user, ssh_port=port, hive_address=hive,
+                                    added=_time.strftime("%Y-%m-%d %H:%M"),
+                                    version=ops.env_values().get("TPOT_VERSION", ""), source="deployed"))
+    console.print(Text(f"[OK] - {name} is deployed to {host} and sends to {hive}.", style="green"))
+    console.print(Text(f"Its password, shown only now: {password}", style=f"bold {MAGENTA}"))
+    console.print("The sensor has it already, keep it only if you want to set the sensor up again by hand.")
+    return 0
+
+
 def envschema_sections():
     from tpotctl import envschema
     return envschema.SECTIONS
@@ -373,6 +618,13 @@ def main(argv: Optional[List[str]] = None) -> int:
             try:
                 return run_users(args)
             except tusers.UsersError as err:
+                error(str(err))
+                return 1
+        if args.command == "sensors":
+            from tpotctl import sensors as tsensors
+            try:
+                return run_sensors(args)
+            except tsensors.SensorsError as err:
                 error(str(err))
                 return 1
         if args.command in ("start", "stop", "restart"):

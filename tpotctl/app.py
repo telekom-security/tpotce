@@ -19,7 +19,7 @@ from textual.widgets import Button, ContentSwitcher, DataTable, Footer, Input, L
 
 from tpotctl import ops
 from tpotctl.bootstrap import REPO_DIR
-from tpotctl.screens.dialogs import ConfirmDialog, UserDialog
+from tpotctl.screens.dialogs import ConfirmDialog, SensorDialog, UserDialog
 from tpotctl.theme import apply as apply_theme
 
 LAUNCHER = os.path.join(REPO_DIR, "tpot")
@@ -55,6 +55,14 @@ class Backend:
     def users(self):
         from tpotctl import users
         return users.load()
+
+    def sensors(self):
+        from tpotctl import sensors
+        return sensors.Registry()
+
+    def sensor_status(self, days: int = 7):
+        from tpotctl import sensors
+        return sensors.fetch_status(days)
 
 
 class Runner:
@@ -411,6 +419,116 @@ class UsersPane(Vertical):
         self.show()
 
 
+class SensorsPane(Vertical):
+    """Sensors of this HIVE: access, where they are, when they were last seen."""
+
+    def compose(self) -> ComposeResult:
+        yield Label("Sensors", classes="pane-title")
+        yield Static("", id="sensors-info", classes="info")
+        yield DataTable(id="sensors-table", cursor_type="row", zebra_stripes=True)
+        with Horizontal(classes="actions"):
+            yield Button("Deploy a sensor", id="sensor-add", variant="primary")
+            yield Button("Remove", id="sensor-remove")
+            yield Button("Renew certificate", id="sensor-cert-renew")
+            yield Button("Send certificate", id="sensor-cert-send")
+            yield Button("Refresh", id="sensor-refresh")
+
+    def on_mount(self) -> None:
+        self.query_one(DataTable).add_columns("SENSOR", "HOST", "HOSTNAME", "LAST SEEN", "STATE")
+        self.registry = None
+        self.load()
+
+    @work(thread=True, exclusive=True, group="sensors")
+    def load(self) -> None:
+        from tpotctl import sensors as tsensors
+        try:
+            registry = self.app.backend.sensors()
+            status = self.app.backend.sensor_status()
+            tsensors.link_hostnames(registry, status)
+            problem = ""
+        except tsensors.SensorsError as err:
+            registry, status, problem = None, None, str(err)
+        self.app.call_from_thread(self.show, registry, status, problem)
+
+    def show(self, registry, status, problem: str) -> None:
+        self.registry = registry
+        table = self.query_one(DataTable)
+        table.clear()
+        info = Text()
+        if registry is None:
+            info.append(problem, style="red")
+            self.query_one("#sensors-info", Static).update(info)
+            return
+        for sensor in registry.sensors():
+            seen = status.sensors.get(sensor.name)
+            if not sensor.access:
+                state = Text("no access", style="red")
+            elif seen:
+                state = Text("sending", style="green")
+            else:
+                state = Text("unknown" if status.problem else "nothing in 7 days", style="yellow")
+            table.add_row(sensor.name + ("" if sensor.source == "deployed" else " (migrated)"), sensor.host or "-",
+                          (seen.hostname if seen else sensor.hostname) or "-",
+                          seen.last[:19].replace("T", " ") if seen else "-", state, key=sensor.name)
+        if not registry.sensors():
+            info.append("No sensors yet.", style="dim")
+        if registry.migrated:
+            info.append(f"Taken over from LS_WEB_USER: {', '.join(registry.migrated)}. ", style="#E20074")
+        if status.problem:
+            info.append(f"\n{status.problem}", style="yellow")
+        for hostname, seen in sorted(status.unlinked.items()):
+            info.append(f"\nEvents from {hostname} carry no sensor name: older ones, or this HIVE does not pass it "
+                        f"on yet (update T-Pot).", style="dim")
+        self.query_one("#sensors-info", Static).update(info)
+
+    def selected(self) -> str:
+        table = self.query_one(DataTable)
+        if not table.row_count:
+            return ""
+        return str(table.coordinate_to_cell_key((table.cursor_row, 0)).row_key.value)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        from tpotctl import sensors as tsensors
+        button = event.button.id
+        if button == "sensor-refresh":
+            self.load()
+        elif button == "sensor-add":
+            self.app.push_screen(SensorDialog(tsensors.check_address, tsensors.check_user,
+                                              tsensors.default_hive_address), self.deploy)
+        elif button == "sensor-remove" and self.selected() and self.registry is not None:
+            name = self.selected()
+            self.app.push_screen(ConfirmDialog(f"Revoke the access of {name}? It cannot send to this HIVE any more, "
+                                               f"nothing is done on the sensor itself.", yes="Revoke"),
+                                 lambda yes: self.revoke(name) if yes else None)
+        elif button == "sensor-cert-renew":
+            self.app.runner([LAUNCHER, "sensors", "cert", "--renew"], cwd=REPO_DIR)
+            self.load()
+        elif button == "sensor-cert-send":
+            self.app.runner([LAUNCHER, "sensors", "cert", "--distribute"], cwd=REPO_DIR)
+            self.load()
+
+    def deploy(self, result) -> None:
+        if not result:
+            return
+        command = [LAUNCHER, "sensors", "add", "--host", result["host"], "--ssh-user", result["user"]]
+        if result["hive"]:
+            command += ["--hive-address", result["hive"]]
+        if result["nopass"]:
+            command.append("--no-become-pass")
+        self.app.runner(command, cwd=REPO_DIR)
+        self.load()
+
+    def revoke(self, name: str) -> None:
+        from tpotctl.sensors import SensorsError
+        try:
+            note = self.registry.revoke(name)
+        except SensorsError as err:
+            self.app.notify(str(err), title="Not removed", severity="error", timeout=10)
+            return
+        self.app.notify(f"{name} is removed, {note}.", title="Sensors")
+        self.load()
+
+
 class UpdatePane(Vertical):
 
     def compose(self) -> ComposeResult:
@@ -454,6 +572,7 @@ PANES = [
     ("edition", "Edition & services", EditionPane, False),
     ("settings", "Settings", SettingsPane, False),
     ("users", "Web users", UsersPane, False),
+    ("sensors", "Sensors", SensorsPane, True),
     ("images", "Images", ImagesPane, True),
     ("update", "Update & backup", UpdatePane, True),
 ]
@@ -475,7 +594,8 @@ class TpotApp(App):
         self.backend = backend or Backend()
         self.runner = runner or Runner(self)
         sensor = self.backend.tpot_type() == "SENSOR"
-        self.panes = [p for p in PANES if (self.backend.linux_host() or not p[3]) and not (sensor and p[0] == "users")]
+        self.panes = [p for p in PANES if (self.backend.linux_host() or not p[3])
+                      and not (sensor and p[0] in ("users", "sensors"))]
 
     def compose(self) -> ComposeResult:
         yield Static("T-Pot", id="title", classes="bar")

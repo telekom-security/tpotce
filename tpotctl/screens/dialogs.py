@@ -7,7 +7,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Label, OptionList, Static
+from textual.widgets import Button, Checkbox, Input, Label, OptionList, Static
 
 
 def finding_lines(lines: List[str]) -> Text:
@@ -176,6 +176,66 @@ class UserDialog(ModalScreen):
             return
         name, password, _repeat = self.values()
         self.dismiss((name, password))
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+
+class SensorDialog(ModalScreen):
+    """Where a new sensor is, dismissed with a dict or None."""
+
+    BINDINGS = [Binding("escape", "cancel", "Back")]
+
+    def __init__(self, check_address=None, check_user=None, default_hive=None):
+        super().__init__()
+        self.check_address, self.check_user, self.default_hive = check_address, check_user, default_hive
+
+    def compose(self) -> ComposeResult:
+        with Vertical(classes="dialog"):
+            yield Label("Deploy a sensor", classes="dialog-title")
+            yield Static(Text("T-Pot has to be installed on it already. The deployment runs in the terminal "
+                              "(SSH key, sudo password) and reboots the sensor.", style="dim"))
+            yield Input(placeholder="IP or name of the sensor", id="sensor-host")
+            yield Input(placeholder="user T-Pot was installed with on the sensor", id="sensor-user")
+            yield Input(placeholder="IP or name the sensor reaches this HIVE on", id="sensor-hive")
+            yield Checkbox("sudo on the sensor needs no password", id="sensor-nopass")
+            yield Label("", id="sensor-hint")
+            with Horizontal(classes="actions"):
+                yield Button("Deploy", variant="primary", id="sensor-deploy")
+                yield Button("Back", id="sensor-back")
+
+    def on_mount(self) -> None:
+        self.query_one("#sensor-host", Input).focus()
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if event.input.id == "sensor-host" and self.default_hive:
+            hive = self.query_one("#sensor-hive", Input)
+            if not hive.value:
+                hive.placeholder = f"IP or name the sensor reaches this HIVE on [{self.default_hive(event.value)}]" \
+                    if event.value else "IP or name the sensor reaches this HIVE on"
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        self.focus_next()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id != "sensor-deploy":
+            self.dismiss(None)
+            return
+        host = self.query_one("#sensor-host", Input).value.strip()
+        user = self.query_one("#sensor-user", Input).value.strip()
+        hive = self.query_one("#sensor-hive", Input).value.strip()
+        try:
+            if self.check_address:
+                self.check_address(host)
+                if hive:
+                    self.check_address(hive)
+            if self.check_user:
+                self.check_user(user)
+        except Exception as err:   # SensorsError, kept generic to stay UI-only
+            self.query_one("#sensor-hint", Label).update(Text(str(err), style="bold red"))
+            return
+        self.dismiss({"host": host, "user": user, "hive": hive,
+                      "nopass": self.query_one("#sensor-nopass", Checkbox).value})
 
     def action_cancel(self) -> None:
         self.dismiss(None)

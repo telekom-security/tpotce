@@ -113,11 +113,12 @@ class EnvFile:
 
     def save(self) -> None:
         """Atomically, with the owner and mode of the old file (it holds credentials)."""
+        path = os.path.realpath(self.path)   # a linked .env is written where it really is
         try:
-            stat = os.stat(self.path)
+            stat = os.stat(path)
         except OSError as err:
             raise EnvError(f"cannot read {self.path}: {err}")
-        directory = os.path.dirname(os.path.abspath(self.path))
+        directory = os.path.dirname(path)
         handle, temp = tempfile.mkstemp(prefix=".env-", dir=directory)
         try:
             with os.fdopen(handle, "w", encoding="utf-8") as out:
@@ -128,7 +129,7 @@ class EnvFile:
                     os.chown(temp, stat.st_uid, stat.st_gid)
                 except PermissionError:
                     raise EnvError(f"{self.path} belongs to another user, change it as that user")
-            os.replace(temp, self.path)
+            os.replace(temp, path)
         except OSError as err:
             raise EnvError(f"cannot write {self.path}: {err}")
         finally:

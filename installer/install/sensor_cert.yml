@@ -1,0 +1,30 @@
+---
+#########################################
+# T-Pot Sensors - New HIVE certificate  #
+#########################################
+# Run by `tpot sensors cert --distribute` on the HIVE after the certificate of the
+# HIVE was renewed: the sensors verify the HIVE against their copy of it.
+
+- name: T-Pot - Update the HIVE certificate on the sensors
+  hosts: all
+  vars:
+    local_nginx_cert_path: "~/tpotce/data/nginx/cert/nginx.crt"
+    # not ~, the copy runs with become (it would be the home of root)
+    remote_cert_path: "{{ ansible_facts.user_dir }}/tpotce/data/hive.crt"
+
+  tasks:
+    - name: Copy the HIVE certificate to the sensor
+      # tpotinit hands data/ to tpot:tpot with 770 on every start, the old copy is
+      # not the user's any more
+      become: yes
+      ansible.builtin.copy:
+        src: "{{ local_nginx_cert_path }}"
+        dest: "{{ remote_cert_path }}"
+        owner: tpot
+        group: tpot
+        mode: '0770'
+
+    - name: Restart Logstash, it reads the certificate on start
+      ansible.builtin.command:
+        cmd: docker restart logstash
+      changed_when: true

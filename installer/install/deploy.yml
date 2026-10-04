@@ -24,6 +24,37 @@
         src: "{{ local_nginx_cert_path }}"
         dest: "{{ remote_cert_path }}"
 
+    - name: Look for sudo-rs on the sensor
+      # Ubuntu 26.04 makes sudo-rs the active `sudo`. It wraps the prompt it is
+      # given with `-p`, so Ansible does not recognise it and the become below
+      # times out. The traditional sudo is still shipped next to it, and every
+      # task up to here runs without become, so this can be settled here.
+      ansible.builtin.shell: |
+        if sudo --version 2>&1 | grep -qi sudo-rs && [ -x /usr/bin/sudo.ws ];
+          then
+            echo /usr/bin/sudo.ws
+        fi
+      args:
+        executable: /bin/bash
+      register: my_sudo_ws
+      changed_when: false
+      failed_when: false
+
+    - name: Use the traditional sudo for become on the sensor
+      ansible.builtin.set_fact:
+        ansible_become_exe: "{{ my_sudo_ws.stdout | trim }}"
+      when: my_sudo_ws.stdout | trim | length > 0
+
+    - name: Stop T-Pot with the compose file of the previous edition
+      # The service removes the containers of the compose file in place. Once
+      # sensor.yml replaced it, the services of a HIVE (Elasticsearch, Kibana,
+      # nginx, ...) would be left running as orphans after the reboot.
+      become: yes
+      ansible.builtin.systemd:
+        name: tpot.service
+        state: stopped
+      failed_when: false
+
     - name: Copy sensor.yml to docker-compose.yml on the remote host
       ansible.builtin.command:
         cmd: "cp {{ remote_sensor_yml_path }} {{ remote_docker_compose_path }}"
@@ -60,27 +91,6 @@
         regexp: '^LS_WEB_USER='
         line: 'LS_WEB_USER='
         create: yes
-
-    - name: Look for sudo-rs on the sensor
-      # Ubuntu 26.04 makes sudo-rs the active `sudo`. It wraps the prompt it is
-      # given with `-p`, so Ansible does not recognise it and the become below
-      # times out. The traditional sudo is still shipped next to it, and every
-      # task up to here runs without become, so this can be settled here.
-      ansible.builtin.shell: |
-        if sudo --version 2>&1 | grep -qi sudo-rs && [ -x /usr/bin/sudo.ws ];
-          then
-            echo /usr/bin/sudo.ws
-        fi
-      args:
-        executable: /bin/bash
-      register: my_sudo_ws
-      changed_when: false
-      failed_when: false
-
-    - name: Use the traditional sudo for become on the sensor
-      ansible.builtin.set_fact:
-        ansible_become_exe: "{{ my_sudo_ws.stdout | trim }}"
-      when: my_sudo_ws.stdout | trim | length > 0
 
     - name: Reboot the sensor
       become: yes

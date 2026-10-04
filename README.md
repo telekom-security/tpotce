@@ -53,6 +53,7 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/in
   - [Distributed Deployment](#distributed-deployment)
     - [Planning and Certificates](#planning-and-certificates)
     - [Deploying Sensors](#deploying-sensors)
+    - [Sensor Status](#sensor-status)
     - [Removing Sensors](#removing-sensors)
   - [Community Data Submission](#community-data-submission)
   - [Opt-In HPFEEDS Data Submission](#opt-in-hpfeeds-data-submission)
@@ -477,7 +478,7 @@ Red Hat Enterprise Linux (RHEL) is a somewhat unique case in that:
 ## Installation Types
 
 ### Standard / Hive
-With T-Pot Standard / Hive all services, tools, honeypots, etc. will be installed on to a single host which also serves as a Hive endpoint. Make sure to meet the [system requirements](#system-requirements). You can adjust `~/tpotce/docker-compose.yml` to your personal use-case or create your very own configuration using `~/tpotce/compose/customizer.py` for a tailored T-Pot experience to your needs.
+With T-Pot Standard / Hive all services, tools, honeypots, etc. will be installed on to a single host which also serves as a Hive endpoint. Make sure to meet the [system requirements](#system-requirements). You can adjust `~/tpotce/docker-compose.yml` to your personal use-case or create your very own configuration with `tpot customize` (`~/tpotce/compose/customizer.py`) for a tailored T-Pot experience to your needs.
 Once the installation is finished you can proceed to [First Start](#first-start).
 <br><br>
 
@@ -515,11 +516,30 @@ There is not much to do except to login and check via `dps` if all services and 
 <br><br>
 
 ## Distributed Deployment
-### Planning and Certificates
-The distributed deployment involves planning as **T-Pot Init** will only create a self-signed certificate for the IP of the **Hive** host which usually is suitable for simple setups. Since **logstash** will check for a valid certificate upon connection, a distributed setup involving **Hive** to be reachable on multiple IPs (i.e. RFC 1918 and public NAT IP) and maybe even a domain name will result in a connection error where the certificate cannot be validated as such a setup needs a certificate with a common name and SANs (Subject Alternative Name).<br>
-Before deploying any sensors make sure you have planned out domain names and IPs properly to avoid issues with the certificate. For more details see [issue #1543](https://github.com/telekom-security/tpotce/issues/1543).<br>
-Adjust the example to your IP / domain setup and follow the commands to change the certificate of **Hive**:
+A distributed T-Pot is one **Hive** and any number of **Sensors**. Install the **Sensor** with the installer first (type `s`), then manage everything from the **Hive** with [`tpot sensors`](#the-tpot-command), or on the *Sensors* page of the `tpot` menu:
 
+| Command | Does |
+|---|---|
+| `tpot sensors` | lists the sensors with their access, address, hostname and when they were last seen |
+| `tpot sensors add` | deploys a sensor over SSH (`./deploy.sh` does the same) |
+| `tpot sensors remove NAME` | revokes the access of a sensor |
+| `tpot sensors set NAME --host … --ssh-user …` | adds where a sensor is, i.e. for sensors of earlier releases |
+| `tpot sensors cert` | shows the addresses the certificate of the **Hive** covers, `--renew` issues it anew, `--distribute` copies it to the sensors |
+
+The **Hive** keeps a list of its sensors in `~/tpotce/data/sensors.json` (names, addresses, SSH user, date and version, no passwords). Sensors deployed with an earlier release are taken over from `LS_WEB_USER` the first time `tpot sensors` runs, add their addresses with `tpot sensors set` to manage them as well.
+
+### Planning and Certificates
+The **Sensor** checks the **Hive** against a copy of its certificate (`~/tpotce/data/hive.crt` on the **Sensor**), so the certificate has to cover the address the **Sensor** connects to. **T-Pot Init** only creates a self-signed certificate for one IP of the **Hive** host, which suits simple setups. A **Hive** reachable on more than one address (i.e. RFC 1918 and a public NAT IP) or a domain name needs these as SANs (Subject Alternative Name), otherwise Logstash on the **Sensor** cannot validate the connection. For more details see [issue #1543](https://github.com/telekom-security/tpotce/issues/1543).
+
+`tpot sensors add` checks this for the address you give and offers to renew the certificate if it is missing. To do it ahead of time:
+```
+tpot sensors cert                                            # the addresses it covers now
+tpot sensors cert --renew --add my.primary.domain --add 1.2.3.4
+tpot sensors cert --distribute                               # copy it to the sensors you have
+```
+`--renew` keeps the addresses the certificate has, adds the ones of `--add` and those the sensors use, keeps the old certificate as `nginx.crt.bak-<time>` and restarts T-Pot. Every sensor needs the new certificate afterwards, `--distribute` copies it over SSH and restarts Logstash there (it asks for the sudo password on the sensors, `--no-become-pass` if they need none).
+
+Without `tpot` the certificate can be changed by hand:
 ```
 sudo systemctl stop tpot
 
@@ -544,41 +564,28 @@ The T-Pot configuration file (`.env`) does allow to disable the SSL verification
 If you choose to use a valid certificate for the **Hive** signed by a CA (i.e. Let's Encrypt), logstash, and therefore the **Sensor**, should have no problems to connect and transmit its logs to the **Hive**.
 
 ### Deploying Sensors
-Once you have rebooted the **Sensor** as instructed by the installer you can continue with the distributed deployment by logging into **Hive** and go to `cd ~/tpotce` folder. Make sure you understood the [Planning and Certificates](#planning-and-certificates) before continuing with the actual deployment.
+Once you have rebooted the **Sensor** as instructed by the installer, log into the **Hive** and run:
+```
+tpot sensors add
+```
+It asks for the address of the **Sensor**, the user T-Pot was installed with there and the address the **Sensor** reaches the **Hive** on (proposed from the route to the sensor), or take them as options: `--host`, `--ssh-user`, `--hive-address`, `--ssh-port` (default `64295`, i.e. for a sensor behind NAT), `--no-become-pass` (sudo on the sensor needs no password), `--yes` (do not ask). Then it
+1. checks that it can log in with an SSH key on port `64295`, and offers to create a key (`ssh-keygen`) and copy it to the **Sensor** (`ssh-copy-id`, you enter the password of the sensor user once),
+2. checks the certificate of the **Hive** covers the address of the **Hive** (see [Planning and Certificates](#planning-and-certificates)),
+3. creates the access of the sensor (a name like `sensor-<adjective>-<noun>` and a random password, added to `LS_WEB_USER` of the **Hive**),
+4. runs the Ansible playbook `installer/install/deploy.yml` on the **Sensor**: it stops T-Pot there, copies the certificate, switches to the `SENSOR` edition, sets `TPOT_TYPE`, `TPOT_HIVE_USER` and `TPOT_HIVE_IP` and reboots the **Sensor** (Ansible asks for the sudo password on it),
+5. records the sensor and shows its password once - the **Sensor** has it already, keep it only if you want to set the **Sensor** up again by hand.
 
-If you have not done already generate a SSH key to securely login to the **Sensor** and to allow `Ansible` to run a playbook on the sensor:
-1. Run `ssh-keygen`, follow the instructions and leave the passphrase empty:
-   ```
-   Generating public/private rsa key pair.
-   Enter file in which to save the key (/home/<your_user>/.ssh/id_rsa):
-   Enter passphrase (empty for no passphrase):
-   Enter same passphrase again:
-   Your identification has been saved in /home/<your_user>/.ssh/id_rsa
-   Your public key has been saved in /home/<your_user>/.ssh/id_rsa.pub
-   ```
-2. Deploy the key to the Sensor by running `ssh-copy-id -p 64295 <Sensor_SSH_USER>@<Sensor_IP>)`:
-   ```
-   /usr/bin/ssh-copy-id: INFO: Source of key(s) to be installed: "/home/<your_user>/.ssh/id_rsa.pub"
-   The authenticity of host '[<Sensor_IP>]:64295 ([<Sensor_IP>]:64295)' can't be stablished.
-   ED25519 key fingerprint is SHA256:naIDxFiw/skPJadTcgmWZQtgt+CdfRbUCoZn5RmkOnQ.
-   This key is not known by any other names.
-   Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
-   /usr/bin/ssh-copy-id: INFO: attempting to log in with the new key(s), to filter out any that are already installed
-   /usr/bin/ssh-copy-id: INFO: 1 key(s) remain to be installed -- if you are prompted now it is to install the new keys
-   <your_user>@172.20.254.124's password:
-  
-   Number of key(s) added: 1
-  
-   Now try logging into the machine, with:   "ssh -p '64295' '<your_user>@<Sensor_IP>'"
-   and check to make sure that only the key(s) you wanted were added.
-   ```
-3. As suggested follow the instructions to test the connection `ssh -p '64295' '<your_user>@<Sensor_IP>'`.
-4. Once the key is successfully deployed run `./deploy.sh` and follow the instructions.
+If the deployment fails the access is taken back, the log is in `~/tpotce/data/deploy_sensor.log`. Without `tpot` (i.e. no internet to set up its Python packages) `./deploy.sh` runs the previous interactive deployment; deploy an SSH key to the **Sensor** first then (`ssh-keygen`, `ssh-copy-id -p 64295 <Sensor_SSH_USER>@<Sensor_IP>`).
+<br><br>
+
+### Sensor Status
+`tpot sensors` shows for every sensor whether it may send (`LS_WEB_USER`), its hostname and when its last event arrived (from Elasticsearch on the **Hive**, the last 7 days, `--days` for more). The **Hive** knows which sensor sent an event because its nginx passes the sensor user on and Logstash stores it as `t-pot_sensor` with every event, this works for sensors of earlier releases as well. Events from before that carry no sensor name, `tpot sensors` lists their hostnames separately.
 <br><br>
 
 ### Removing Sensors
-Identify the `TPOT_HIVE_USER` ENV on the Sensor in the `$HOME/tpotce/.env` config (it is a base64 encoded string). Now identify the same string in the `LS_WEB_USER` ENV on the Hive in the `$HOME/tpotce/.env` config. Remove the string and restart T-Pot.<br>
-Now you can safely delete the Sensor machine.
+Run `tpot sensors remove <NAME>` on the **Hive**. It removes the sensor from `LS_WEB_USER` and from the list of sensors, it cannot send to the **Hive** from then on, no restart needed. Nothing is changed on the **Sensor** itself, now you can safely delete the **Sensor** machine.<br>
+By hand: decode the entries of `LS_WEB_USER` in `~/tpotce/.env` of the **Hive** (`echo <base64_string> | base64 -d`), remove the one with the name of the sensor and restart T-Pot.
+<br><br>
 
 ## Community Data Submission
 T-Pot is provided in order to make it accessible to everyone interested in honeypots. By default, the captured data is submitted to a community backend. This community backend uses the data to feed [Sicherheitstacho](https://www.sicherheitstacho.eu/).
@@ -671,7 +678,7 @@ On the T-Pot Landing Page just click on `Elasticvue` and you will be forwarded t
 # Configuration
 
 ## The tpot Command
-`tpot` configures and runs T-Pot from one place. Without arguments it opens a menu (status, edition & services, settings, web users, images, update & backup), every menu entry is a command as well:
+`tpot` configures and runs T-Pot from one place. Without arguments it opens a menu (status, edition & services, settings, web users, sensors, images, update & backup), every menu entry is a command as well:
 
 | Command | Does |
 |---|---|
@@ -687,6 +694,7 @@ On the T-Pot Landing Page just click on `Elasticvue` and you will be forwarded t
 | `tpot env get KEY` / `tpot env set KEY=VALUE …` | read or change a setting, it is only written if it is valid afterwards |
 | `tpot env check` | checks `.env` as T-Pot does on start, exit code 1 on errors |
 | `tpot users [list\|add\|passwd\|remove]` | the [web users](#add-users-to-nginx-t-pot-webui), changes count right away |
+| `tpot sensors [list\|add\|remove\|set\|cert]` | the [sensors](#distributed-deployment) of a HIVE |
 | `tpot setup` | sets up or refreshes the Python packages of `tpot` |
 
 The installer links `~/tpotce/tpot` to `/usr/local/bin/tpot` and `update.sh` keeps it up to date. `tpot` runs from a Python venv of its own in `~/.local/share/tpotce/venv`, set up on first use from pinned and hash-checked packages (it needs pypi.org once, and `python3-venv` on Debian / Ubuntu, which the installer brings along). `update.sh`, `restore.sh` and the other scripts keep working on their own, `tpot` only calls them. Do not run `tpot` as root, it uses `sudo` where needed. On macOS and Windows only `tpot customize` and `tpot setup` are available.

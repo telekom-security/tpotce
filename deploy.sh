@@ -1,4 +1,14 @@
 #!/usr/bin/env bash
+# Deploy a T-Pot SENSOR from this HIVE. This is `tpot sensors add` now (pre-checks,
+# certificate, registry, access taken back if it fails); without the Python packages
+# of tpot (i.e. no internet to set them up) the steps below run as before.
+myTPOT="$HOME/tpotce/tpot"
+if [ -x "${myTPOT}" ] && "${myTPOT}" setup > /dev/null 2>&1;
+  then
+    exec "${myTPOT}" sensors add "$@"
+fi
+echo "### tpot is not available, using the previous deployment."
+cd "$HOME/tpotce" || exit 1
 
 myANSIBLE_PORT=64295
 myANSIBLE_TPOT_PLAYBOOK="installer/install/deploy.yml"
@@ -95,7 +105,7 @@ myLS_WEB_USER="sensor-${myADJECTIVE}-${myNOUN}"
 myLS_WEB_PW=$(tr -dc 'a-zA-Z0-9' < /dev/urandom | fold -w 32 | head -n 1)
 
 # Create myLS_WEB_USER_ENC
-myLS_WEB_USER_ENC=$(htpasswd -b -n "${myLS_WEB_USER}" "${myLS_WEB_PW}")
+myLS_WEB_USER_ENC=$(htpasswd -B -b -n "${myLS_WEB_USER}" "${myLS_WEB_PW}")
 myLS_WEB_USER_ENC_B64=$(echo -n "${myLS_WEB_USER_ENC}" | base64 -w0)
 
 # Create myTPOT_HIVE_USER, since this is for Logstash on the SENSOR, it needs to directly base64 encoded

@@ -16,8 +16,8 @@ from tpotctl.envfile import EnvError, EnvFile
 # who maintains the keys tpot only shows
 MANAGED_BY = {
     "WEB_USER": "tpot users",
-    "LS_WEB_USER": "deploy.sh",
-    "TPOT_HIVE_USER": "deploy.sh",
+    "LS_WEB_USER": "tpot sensors",
+    "TPOT_HIVE_USER": "tpot sensors on the HIVE",
 }
 
 
