@@ -86,7 +86,8 @@ done
 
 # Write username and password to T-Pot config file
 echo "### Creating base64 encoded htpasswd username and password for T-Pot config file: ${myTPOT_CONF_FILE}"
-myWEB_USER_ENC=$(htpasswd -b -n "${myWEB_USER}" "${myWEB_PW}")
+# bcrypt, as `tpot users` creates them
+myWEB_USER_ENC=$(htpasswd -B -b -n "${myWEB_USER}" "${myWEB_PW}")
 myWEB_USER_ENC_B64=$(echo -n "${myWEB_USER_ENC}" | base64 -w0)
 
 # Add the new web user

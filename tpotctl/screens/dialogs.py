@@ -104,3 +104,78 @@ class PortInputDialog(ModalScreen):
 
     def action_cancel(self) -> None:
         self.dismiss("")
+
+
+class UserDialog(ModalScreen):
+    """Name (for a new user) and password twice, dismissed with (name, password) or None."""
+
+    BINDINGS = [Binding("escape", "cancel", "Back")]
+
+    def __init__(self, title: str, name: str = "", check_name=None, weakness=None):
+        super().__init__()
+        self.title_text, self.fixed_name = title, name
+        self.check_name, self.weakness = check_name, weakness
+
+    def compose(self) -> ComposeResult:
+        with Vertical(classes="dialog"):
+            yield Label(self.title_text, classes="dialog-title")
+            if not self.fixed_name:
+                yield Input(placeholder="user name: letters, digits, _ . -", id="user-name")
+            yield Input(placeholder="password", password=True, id="user-password")
+            yield Input(placeholder="repeat the password", password=True, id="user-repeat")
+            yield Label("", id="user-hint")
+            with Horizontal(classes="actions"):
+                yield Button("Save", variant="primary", id="user-save")
+                yield Button("Back", id="user-back")
+
+    def on_mount(self) -> None:
+        self.query(Input).first().focus()
+
+    def values(self):
+        name = self.fixed_name or self.query_one("#user-name", Input).value.strip()
+        return name, self.query_one("#user-password", Input).value, self.query_one("#user-repeat", Input).value
+
+    def problem(self) -> str:
+        name, password, repeat = self.values()
+        if not self.fixed_name and self.check_name:
+            try:
+                self.check_name(name)
+            except Exception as err:   # UsersError, kept generic to stay UI-only
+                return str(err)
+        if not password:
+            return "enter a password"
+        if password != repeat:
+            return "the passwords do not match"
+        return ""
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        hint = self.query_one("#user-hint", Label)
+        problem = self.problem()
+        if problem:
+            hint.update(Text(problem, style="yellow"))
+            return
+        weak = self.weakness(self.values()[1]) if self.weakness else None
+        hint.update(Text(f"weak: {weak}" if weak else "strong enough", style="yellow" if weak else "green"))
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id == "user-repeat":
+            self.save()
+        else:
+            self.focus_next()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "user-save":
+            self.save()
+        else:
+            self.dismiss(None)
+
+    def save(self) -> None:
+        problem = self.problem()
+        if problem:
+            self.query_one("#user-hint", Label).update(Text(problem, style="bold red"))
+            return
+        name, password, _repeat = self.values()
+        self.dismiss((name, password))
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)

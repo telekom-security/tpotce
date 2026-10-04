@@ -1,4 +1,14 @@
 #!/usr/bin/env bash
+# Add a user of the T-Pot web UI. This is `tpot users add` now (bcrypt, the change
+# counts at once); without the Python packages of tpot (i.e. no internet to set them
+# up) the tpotinit container asks for the user as before.
+myTPOT="$HOME/tpotce/tpot"
+if [ -x "${myTPOT}" ] && "${myTPOT}" setup > /dev/null 2>&1;
+  then
+    exec "${myTPOT}" users add "$@"
+fi
+echo "### tpot is not available, using the tpotinit container."
+cd "$HOME/tpotce" || exit 1
 TPOT_REPO=$(grep -E "^TPOT_REPO" .env | cut -d "=" -f2-)
 TPOT_VERSION=$(grep -E "^TPOT_VERSION" .env | cut -d "=" -f2-)
 USER=$(id -u)

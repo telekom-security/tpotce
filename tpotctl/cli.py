@@ -42,6 +42,17 @@ def build_parser() -> argparse.ArgumentParser:
     change = actions.add_parser("set", help="change settings, only written if they are valid afterwards")
     change.add_argument("assignments", nargs="+", metavar="KEY=VALUE")
     actions.add_parser("check", help="check .env as tpotinit does on start, exit code 1 on errors")
+    users = sub.add_parser("users", help="users of the T-Pot web UI (default: list)")
+    user_actions = users.add_subparsers(dest="users_command", metavar="ACTION")
+    user_actions.add_parser("list", help="the web users, entries T-Pot would not start with are marked")
+    for name, text in (("add", "add a web user (was: genuser.sh)"), ("passwd", "change the password of a web user")):
+        action = user_actions.add_parser(name, help=text)
+        action.add_argument("name", nargs="?", help="asked for if left out" if name == "add" else None)
+        action.add_argument("--password-stdin", action="store_true", help="read the password from stdin")
+        action.add_argument("--allow-weak", action="store_true", help="accept a password cracklib calls weak")
+    remove = user_actions.add_parser("remove", help="remove a web user, not the last working one")
+    remove.add_argument("name")
+    remove.add_argument("-y", "--yes", action="store_true", help="do not ask")
     sub.add_parser("setup", help="set up or refresh the Python packages of tpot")
     return parser
 
@@ -227,6 +238,75 @@ def run_env(args) -> int:
     return 0
 
 
+def ask(prompt: str) -> str:
+    try:
+        return input(prompt).strip()
+    except EOFError:
+        return ""
+
+
+def read_password(args) -> str:
+    import getpass
+    if args.password_stdin:
+        return sys.stdin.readline().rstrip("\n")
+    if not sys.stdin.isatty():
+        raise SystemExit("[ERROR] - no terminal to ask for the password, use --password-stdin")
+    first = getpass.getpass("Password: ")
+    if getpass.getpass("Repeat the password: ") != first:
+        raise SystemExit("[ERROR] - the passwords do not match")
+    return first
+
+
+def run_users(args) -> int:
+    from rich.text import Text
+    from tpotctl import users as tusers
+    store = tusers.load()
+    console = _console()
+    command = args.users_command or "list"
+    if command == "list":
+        entries = store.users()
+        if not sys.stdout.isatty():
+            for user in entries:
+                print(f"{user.name}\t{user.scheme or '-'}\t{user.problem or 'ok'}")
+            return 0 if all(u.ok for u in entries) and entries else 1
+        from rich import box
+        from rich.table import Table
+        table = Table(box=box.SIMPLE_HEAD, header_style=f"bold {MAGENTA}", pad_edge=False)
+        for column in ("USER", "HASH", "STATE"):
+            table.add_column(column)
+        for user in entries:
+            state = Text("ok", style="green") if user.ok else Text(
+                f"! {user.problem}, T-Pot will not start - tpot users "
+                f"{'passwd' if tusers.NAME_RE.match(user.name) else 'remove'} '{user.name}'", style="bold red")
+            table.add_row(user.name, user.scheme or "-", state)
+        console.print(table if entries else Text("No web users, add one with: tpot users add", style="red"))
+        return 0 if entries and all(u.ok for u in entries) else 1
+    if command == "remove":
+        if not args.yes:
+            if not sys.stdin.isatty():
+                error("add --yes to remove a user without a terminal")
+                return 2
+            if ask(f"Remove the web user {args.name}? [y/N] ").lower() != "y":
+                return 1
+        note = store.remove(args.name)
+        console.print(Text(f"[OK] - {args.name} is removed, {note}.", style="green"))
+        return 0
+    name = args.name or (ask("Name of the new web user: ") if sys.stdin.isatty() else "")
+    tusers.check_name(name)
+    password = read_password(args)
+    weak = tusers.weakness(password)
+    if weak and not args.allow_weak:
+        if args.password_stdin or not sys.stdin.isatty():
+            error(f"the password is weak ({weak}), add --allow-weak to keep it anyway")
+            return 1
+        if ask(f"The password is weak ({weak}). Keep it anyway? [y/N] ").lower() != "y":
+            return 1
+    note = store.add(name, password) if command == "add" else store.passwd(name, password)
+    what = "is added" if command == "add" else "has a new password"
+    console.print(Text(f"[OK] - {name} {what} (bcrypt), {note}.", style="green"))
+    return 0
+
+
 def envschema_sections():
     from tpotctl import envschema
     return envschema.SECTIONS
@@ -286,6 +366,13 @@ def main(argv: Optional[List[str]] = None) -> int:
             try:
                 return run_env(args)
             except tsettings.SettingsError as err:
+                error(str(err))
+                return 1
+        if args.command == "users":
+            from tpotctl import users as tusers
+            try:
+                return run_users(args)
+            except tusers.UsersError as err:
                 error(str(err))
                 return 1
         if args.command in ("start", "stop", "restart"):

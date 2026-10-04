@@ -19,7 +19,7 @@ from textual.widgets import Button, ContentSwitcher, DataTable, Footer, Input, L
 
 from tpotctl import ops
 from tpotctl.bootstrap import REPO_DIR
-from tpotctl.screens.dialogs import ConfirmDialog
+from tpotctl.screens.dialogs import ConfirmDialog, UserDialog
 from tpotctl.theme import apply as apply_theme
 
 LAUNCHER = os.path.join(REPO_DIR, "tpot")
@@ -48,6 +48,13 @@ class Backend:
     def settings(self):
         from tpotctl import settings
         return settings.load()
+
+    def tpot_type(self) -> str:
+        return ops.env_values().get("TPOT_TYPE", "HIVE")
+
+    def users(self):
+        from tpotctl import users
+        return users.load()
 
 
 class Runner:
@@ -314,6 +321,96 @@ class SettingsPane(Vertical):
                 self.app.notify("Saved, restart T-Pot to use the new settings.", title="Settings")
 
 
+class UsersPane(Vertical):
+    """Users of the web UI (WEB_USER), changes count at once."""
+
+    def compose(self) -> ComposeResult:
+        yield Label("Web users", classes="pane-title")
+        yield Static("", id="users-info", classes="info")
+        yield DataTable(id="users-table", cursor_type="row", zebra_stripes=True)
+        with Horizontal(classes="actions"):
+            yield Button("Add", id="user-add", variant="primary")
+            yield Button("Change password", id="user-passwd")
+            yield Button("Remove", id="user-remove")
+
+    def on_mount(self) -> None:
+        self.query_one(DataTable).add_columns("USER", "HASH", "STATE")
+        self.show()
+
+    def show(self) -> None:
+        from tpotctl.users import UsersError
+        table = self.query_one(DataTable)
+        table.clear()
+        info = Text()
+        try:
+            self.store = self.app.backend.users()
+            entries = self.store.users()
+        except UsersError as err:
+            self.store, entries = None, []
+            info.append(str(err), style="red")
+        for user in entries:
+            state = Text("ok", style="green") if user.ok else Text(f"! {user.problem}", style="bold red")
+            table.add_row(user.name, user.scheme or "-", state, key=user.name)
+        if self.store is not None:
+            info.append("New and changed passwords are bcrypt, nginx uses them right away.", style="dim")
+            if any(not u.ok for u in entries):
+                info.append("\nT-Pot does not start with the marked entries: change their password or remove "
+                            "them.", style="bold red")
+        self.query_one("#users-info", Static).update(info)
+
+    def selected(self) -> str:
+        table = self.query_one(DataTable)
+        if not table.row_count:
+            return ""
+        return str(table.coordinate_to_cell_key((table.cursor_row, 0)).row_key.value)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        from tpotctl import users as tusers
+        if self.store is None:
+            return
+        name = self.selected()
+        if event.button.id == "user-add":
+            self.app.push_screen(UserDialog("Add a web user", check_name=tusers.check_name,
+                                            weakness=tusers.weakness),
+                                 lambda result: self.save("add", result))
+        elif event.button.id == "user-passwd" and name:
+            if not tusers.NAME_RE.match(name):
+                self.app.notify(f"{name} cannot be read, remove it", severity="warning")
+                return
+            self.app.push_screen(UserDialog(f"New password for {name}", name=name, weakness=tusers.weakness),
+                                 lambda result: self.save("passwd", result))
+        elif event.button.id == "user-remove" and name:
+            self.app.push_screen(ConfirmDialog(f"Remove the web user {name}?", yes="Remove"),
+                                 lambda yes: self.run_change(lambda: self.store.remove(name),
+                                                             f"{name} is removed") if yes else None)
+
+    def save(self, action: str, result) -> None:
+        from tpotctl import users as tusers
+        if not result:
+            return
+        name, password = result
+        weak = tusers.weakness(password)
+        change = (lambda: self.store.add(name, password)) if action == "add" else \
+            (lambda: self.store.passwd(name, password))
+        done = f"{name} is added" if action == "add" else f"{name} has a new password"
+        if weak:
+            self.app.push_screen(ConfirmDialog(f"The password is weak ({weak}). Keep it anyway?", yes="Keep it",
+                                               no="Back"),
+                                 lambda yes: self.run_change(change, done) if yes else None)
+        else:
+            self.run_change(change, done)
+
+    def run_change(self, change, done: str) -> None:
+        from tpotctl.users import UsersError
+        try:
+            note = change()
+        except UsersError as err:
+            self.app.notify(str(err), title="Not changed", severity="error", timeout=10)
+            return
+        self.app.notify(f"{done}, {note}.", title="Web users")
+        self.show()
+
+
 class UpdatePane(Vertical):
 
     def compose(self) -> ComposeResult:
@@ -356,6 +453,7 @@ PANES = [
     ("status", "Status", StatusPane, True),
     ("edition", "Edition & services", EditionPane, False),
     ("settings", "Settings", SettingsPane, False),
+    ("users", "Web users", UsersPane, False),
     ("images", "Images", ImagesPane, True),
     ("update", "Update & backup", UpdatePane, True),
 ]
@@ -376,7 +474,8 @@ class TpotApp(App):
         super().__init__()
         self.backend = backend or Backend()
         self.runner = runner or Runner(self)
-        self.panes = [p for p in PANES if self.backend.linux_host() or not p[3]]
+        sensor = self.backend.tpot_type() == "SENSOR"
+        self.panes = [p for p in PANES if (self.backend.linux_host() or not p[3]) and not (sensor and p[0] == "users")]
 
     def compose(self) -> ComposeResult:
         yield Static("T-Pot", id="title", classes="bar")

@@ -671,7 +671,7 @@ On the T-Pot Landing Page just click on `Elasticvue` and you will be forwarded t
 # Configuration
 
 ## The tpot Command
-`tpot` configures and runs T-Pot from one place. Without arguments it opens a menu (status, edition & services, settings, images, update & backup), every menu entry is a command as well:
+`tpot` configures and runs T-Pot from one place. Without arguments it opens a menu (status, edition & services, settings, web users, images, update & backup), every menu entry is a command as well:
 
 | Command | Does |
 |---|---|
@@ -686,6 +686,7 @@ On the T-Pot Landing Page just click on `Elasticvue` and you will be forwarded t
 | `tpot env [list [--all] [--show-secrets]]` | the [settings](#t-pot-config-file) in `.env` that matter for this T-Pot, secrets masked |
 | `tpot env get KEY` / `tpot env set KEY=VALUE …` | read or change a setting, it is only written if it is valid afterwards |
 | `tpot env check` | checks `.env` as T-Pot does on start, exit code 1 on errors |
+| `tpot users [list\|add\|passwd\|remove]` | the [web users](#add-users-to-nginx-t-pot-webui), changes count right away |
 | `tpot setup` | sets up or refreshes the Python packages of `tpot` |
 
 The installer links `~/tpotce/tpot` to `/usr/local/bin/tpot` and `update.sh` keeps it up to date. `tpot` runs from a Python venv of its own in `~/.local/share/tpotce/venv`, set up on first use from pinned and hash-checked packages (it needs pypi.org once, and `python3-venv` on Debian / Ubuntu, which the installer brings along). `update.sh`, `restore.sh` and the other scripts keep working on their own, `tpot` only calls them. Do not run `tpot` as root, it uses `sudo` where needed. On macOS and Windows only `tpot customize` and `tpot setup` are available.
@@ -972,10 +973,15 @@ Enabling this feature will drastically reduce attackers visibility and consequen
 <br><br>
 
 ## Add Users to Nginx (T-Pot WebUI)
-Nginx (T-Pot WebUI) allows you to add as many `<WEB_USER>` accounts as you want (according to the [User Types](#user-types)).<br>
-To **add** a new user run `~/tpotce/genuser.sh`.<br>
-To **remove** users open `~/tpotce/.env`, locate `WEB_USER` and remove the corresponding base64 string (to decode: `echo <base64_string> | base64 -d`, or open CyberChef and load "From Base64" recipe).<br>
-For the changes to take effect you need to restart T-Pot using `systemctl stop tpot` and `systemctl start tpot` or `sudo reboot`.
+Nginx (T-Pot WebUI) allows you to add as many `<WEB_USER>` accounts as you want (according to the [User Types](#user-types)). Manage them with [`tpot`](#the-tpot-command), on the *Web users* page of its menu or with:
+- `tpot users` lists the users, with the hash of each, and marks entries T-Pot would not start with.
+- `tpot users add [NAME]` adds a user (`~/tpotce/genuser.sh` does the same).
+- `tpot users passwd NAME` changes a password, this also repairs an entry T-Pot does not accept.
+- `tpot users remove NAME` removes a user, the last working one stays.
+
+The password is asked twice and checked with cracklib (without cracklib: at least 12 characters), a weak one has to be confirmed (`--allow-weak`). New and changed passwords are stored as bcrypt; users of earlier releases keep working as they are until their password is changed. `--password-stdin` reads the password from stdin for scripts. The change counts right away, no restart needed.
+
+Without `tpot` (i.e. no internet to set up its Python packages) `genuser.sh` asks for a new user in the `tpotinit` container as before; then restart T-Pot (`systemctl restart tpot`) for the change to take effect. By hand: `WEB_USER` in `~/tpotce/.env` holds one base64 string of `name:htpasswd hash` per user (to decode: `echo <base64_string> | base64 -d`).
 <br><br>
 
 ## Import and Export Kibana Objects
