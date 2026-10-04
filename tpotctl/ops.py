@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional
 
 from tpotctl.bootstrap import REPO_DIR
+from tpotctl.envfile import read_values
 
 SERVICE = "tpot"
 _EDITION_RE = re.compile(r"^# T-Pot: (\S.*?)\s*$")
@@ -39,19 +40,7 @@ def require_linux_host(what: str) -> None:
 
 def env_values(repo_dir: str = REPO_DIR) -> Dict[str, str]:
     """KEY=value and the KEY: "value" form of the LLM blocks, comments skipped."""
-    values = {}
-    try:
-        with open(os.path.join(repo_dir, ".env"), encoding="utf-8") as handle:
-            for line in handle:
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-                match = re.match(r'^([A-Za-z_][A-Za-z0-9_]*)\s*(?:=|:\s)\s*(.*)$', line)
-                if match:
-                    values[match.group(1)] = match.group(2).strip().strip("'\"")
-    except OSError:
-        pass
-    return values
+    return read_values(os.path.join(repo_dir, ".env"))
 
 
 def compose_path(repo_dir: str = REPO_DIR, env: Optional[Dict[str, str]] = None) -> str:

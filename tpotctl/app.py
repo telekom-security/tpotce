@@ -14,8 +14,8 @@ from rich.text import Text
 from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
-from textual.widgets import Button, ContentSwitcher, DataTable, Footer, Label, ListItem, ListView, Static
+from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.widgets import Button, ContentSwitcher, DataTable, Footer, Input, Label, ListItem, ListView, Select, Static
 
 from tpotctl import ops
 from tpotctl.bootstrap import REPO_DIR
@@ -44,6 +44,10 @@ class Backend:
 
     def backups(self) -> List[str]:
         return ops.backups()
+
+    def settings(self):
+        from tpotctl import settings
+        return settings.load()
 
 
 class Runner:
@@ -186,6 +190,130 @@ class EditionPane(Vertical):
             self.app.action_customize()
 
 
+class SettingRow(Vertical):
+    """One setting: title, the field for it, help and its problem."""
+
+    def __init__(self, rule, value: str, fixed: str):
+        super().__init__(classes="setting")
+        self.rule, self.value, self.fixed = rule, value, fixed
+
+    def compose(self) -> ComposeResult:
+        from tpotctl import settings as tsettings
+        rule = self.rule
+        title = Text(rule.title, style="bold")
+        title.append(f"  {rule.key}", style="dim")
+        yield Label(title)
+        if not rule.editable:
+            shown = tsettings.shown(rule, self.value) or "(empty)"
+            yield Static(Text(f"{shown}  ({self.fixed})", style="dim"))
+        elif rule.type == "enum":
+            current = self.value if self.value in rule.values else Select.NULL
+            yield Select([(v, v) for v in rule.values], value=current, id=f"set-{rule.key}",
+                         allow_blank=rule.optional or current is Select.NULL)
+        else:
+            yield Input(self.value, password=rule.secret, id=f"set-{rule.key}", placeholder=rule.default)
+        if rule.help:
+            yield Static(Text(rule.help, style="dim"))
+        yield Static("", id=f"err-{rule.key}")
+
+
+class SettingsPane(Vertical):
+    """The settings of this T-Pot in .env, checked against the schema while you type."""
+
+    def compose(self) -> ComposeResult:
+        yield Label("Settings", classes="pane-title")
+        yield Static("", id="settings-status", classes="info")
+        yield VerticalScroll(id="settings-form")
+        with Horizontal(classes="actions"):
+            yield Button("Save", id="settings-save", variant="primary", disabled=True)
+            yield Button("Revert", id="settings-revert")
+
+    def on_mount(self) -> None:
+        self.reload()
+
+    def reload(self) -> None:
+        from tpotctl import envschema
+        from tpotctl.settings import SettingsError
+        form = self.query_one("#settings-form", VerticalScroll)
+        form.remove_children()
+        try:
+            self.current = self.app.backend.settings()
+        except (SettingsError, OSError) as err:
+            self.current = None
+            self.query_one("#settings-status", Static).update(Text(str(err), style="red"))
+            return
+        self.draft = dict(self.current.values)
+        rows, section = [], None
+        for rule in self.current.relevant():
+            if rule.section != section:
+                section = rule.section
+                rows.append(Label(dict(envschema.SECTIONS).get(section, section), classes="settings-section"))
+            rows.append(SettingRow(rule, self.draft.get(rule.key, ""), self.current.why_fixed(rule.key)))
+        form.mount(*rows)
+        self.call_after_refresh(self.check)
+
+    def changes(self):
+        if self.current is None:
+            return {}
+        saved = self.current.values
+        return {key: value for key, value in self.draft.items()
+                if key in self.current.schema and self.current.schema[key].editable and saved.get(key, "") != value}
+
+    def check(self) -> None:
+        if self.current is None:
+            return
+        problems = self.current.problems(self.draft)
+        by_key = {}
+        for problem in problems:
+            by_key.setdefault(problem.key, []).append(problem)
+        for widget in self.query(".setting Static"):
+            if widget.id and widget.id.startswith("err-"):
+                key = widget.id[4:]
+                text = Text()
+                for problem in by_key.get(key, []):
+                    text.append(f"! {problem.text}\n", style="bold red" if problem.level == "error" else "yellow")
+                widget.update(text)
+        changes = self.changes()
+        blocking = self.current.blocking(problems, changes)
+        self.query_one("#settings-save", Button).disabled = not changes or bool(blocking)
+        status = Text()
+        status.append(self.current.path, style="dim")
+        if changes:
+            status.append(f"\n{len(changes)} change(s): {', '.join(changes)}", style="bold #E20074")
+        others = [p for p in problems if p.level == "error" and p.key not in changes]
+        if others:
+            status.append(f"\n{len(others)} error(s) T-Pot would not start with, see below", style="red")
+        self.query_one("#settings-status", Static).update(status)
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if event.input.id and event.input.id.startswith("set-"):
+            self.draft[event.input.id[4:]] = event.value
+            self.check()
+
+    def on_select_changed(self, event: Select.Changed) -> None:
+        if event.select.id and event.select.id.startswith("set-"):
+            self.draft[event.select.id[4:]] = "" if event.value is Select.NULL else str(event.value)
+            self.check()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        from tpotctl.settings import SettingsError
+        if event.button.id == "settings-revert":
+            self.reload()
+        elif event.button.id == "settings-save":
+            try:
+                self.current.change(self.changes())
+            except SettingsError as err:
+                self.app.notify(str(err), title="Not saved", severity="error", timeout=10)
+                return
+            self.reload()
+            if self.app.backend.linux_host():
+                self.app.push_screen(ConfirmDialog("Saved. Restart T-Pot now, so that it uses the new settings?",
+                                                   yes="Restart", no="Later"),
+                                     lambda yes: self.app.runner(ops.service_command("restart")) if yes else None)
+            else:
+                self.app.notify("Saved, restart T-Pot to use the new settings.", title="Settings")
+
+
 class UpdatePane(Vertical):
 
     def compose(self) -> ComposeResult:
@@ -227,6 +355,7 @@ class UpdatePane(Vertical):
 PANES = [
     ("status", "Status", StatusPane, True),
     ("edition", "Edition & services", EditionPane, False),
+    ("settings", "Settings", SettingsPane, False),
     ("images", "Images", ImagesPane, True),
     ("update", "Update & backup", UpdatePane, True),
 ]

@@ -61,7 +61,7 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             switcher = app.query_one("ContentSwitcher")
             self.assertEqual(switcher.current, "status")
             self.assertEqual(app.query_one("#containers").row_count, 2)
-            await pilot.press("down", "down")
+            await pilot.press("down", "down", "down")
             await pilot.pause(0.2)
             self.assertEqual(switcher.current, "images")
             self.assertEqual(app.query_one("#images-table").row_count, 1)
@@ -83,7 +83,7 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
         app = tapp.TpotApp(backend=FakeBackend(), runner=runner)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause(0.2)
-            await pilot.press("down", "down", "down")
+            await pilot.press("down", "down", "down", "down")
             await pilot.pause(0.2)
             await pilot.click("#run-update")
             await pilot.pause(0.2)
@@ -96,10 +96,11 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
         app = tapp.TpotApp(backend=FakeBackend(host=False), runner=Recorder())
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause(0.2)
-            self.assertEqual([p[0] for p in app.panes], ["edition"])
+            self.assertEqual([p[0] for p in app.panes], ["edition", "settings"])
 
     def test_every_menu_pane_has_a_command(self):
-        commands = {"status": "status", "edition": "customize", "images": "images", "update": "update"}
+        commands = {"status": "status", "edition": "customize", "settings": "env", "images": "images",
+                    "update": "update"}
         help_text = cli.build_parser().format_help()
         for key, _title, _cls, _host in tapp.PANES:
             self.assertIn(key, commands, f"menu pane {key} needs a tpot command")

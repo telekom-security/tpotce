@@ -1,0 +1,152 @@
+# Cases for the .env validation, shared by both implementations of the rules in
+# docker/tpotinit/dist/etc/env.schema.yml:
+#   bash in tpotinit:  docker/_tests/tests/tpotinit_env.sh
+#   Python in tpot:    tpotctl/tests/test_envschema.py
+# Every case starts from env.example plus `base`, then applies `set`. services are
+# the services of the compose file. errors / warnings list the keys that must have
+# one, nothing else may.
+base:
+  # tsec:tsec, the example of env.example
+  WEB_USER: dHNlYzokYXByMSRYUnE2SC5rbiRVRjZQM1VVQmJVNWJUQmNmSGRuUFQxCgo=
+cases:
+  - name: defaults of a hive
+    services: [tpotinit, suricata, p0f, logstash]
+    warnings: [LS_WEB_USER]
+  - name: hive without web user
+    set: {WEB_USER: ""}
+    errors: [WEB_USER]
+    warnings: [LS_WEB_USER]
+  - name: web user not base64
+    set: {WEB_USER: "not*base64"}
+    errors: [WEB_USER]
+    warnings: [LS_WEB_USER]
+  - name: web user without htpasswd hash
+    # base64 of user:password
+    set: {WEB_USER: dXNlcjpwYXNzd29yZA==}
+    errors: [WEB_USER]
+    warnings: [LS_WEB_USER]
+  - name: two web users and a sensor user
+    set:
+      WEB_USER: dHNlYzokYXByMSRYUnE2SC5rbiRVRjZQM1VVQmJVNWJUQmNmSGRuUFQxCgo= dHNlYzokYXByMSR6VUFHVWdmOCRROXI3a09CTjFjY3lCeU1DTloyanEvCgo=
+      LS_WEB_USER: c2Vuc29yOiRhcHIxJGVpMHdzUmdYJHNyWHF4UG53ZzZqWUc3aEFaUWxrWDEKCg==
+  - name: unknown type checks neither hive nor sensor keys
+    set: {TPOT_TYPE: MOBILE, WEB_USER: ""}
+    errors: [TPOT_TYPE]
+  - name: toggles only take their own values
+    set: {TPOT_PERSISTENCE: "true", TPOT_BLACKHOLE: enabled, TPOT_ATTACKMAP_TEXT: ""}
+    errors: [TPOT_PERSISTENCE, TPOT_BLACKHOLE, TPOT_ATTACKMAP_TEXT]
+    warnings: [LS_WEB_USER]
+  - name: persistence cycles not a number
+    set: {TPOT_PERSISTENCE_CYCLES: abc}
+    warnings: [LS_WEB_USER, TPOT_PERSISTENCE_CYCLES]
+  - name: persistence cycles empty
+    set: {TPOT_PERSISTENCE_CYCLES: ""}
+    warnings: [LS_WEB_USER, TPOT_PERSISTENCE_CYCLES]
+  - name: persistence cycles out of range
+    set: {TPOT_PERSISTENCE_CYCLES: "1000"}
+    warnings: [LS_WEB_USER, TPOT_PERSISTENCE_CYCLES]
+  - name: persistence cycles at the limits
+    set: {TPOT_PERSISTENCE_CYCLES: "999"}
+    warnings: [LS_WEB_USER]
+  - name: unknown time zone
+    set: {TPOT_ATTACKMAP_TEXT_TIMEZONE: Mars/Olympus}
+    errors: [TPOT_ATTACKMAP_TEXT_TIMEZONE]
+    warnings: [LS_WEB_USER]
+  - name: time zone path traversal
+    set: {TPOT_ATTACKMAP_TEXT_TIMEZONE: ../../etc/passwd}
+    errors: [TPOT_ATTACKMAP_TEXT_TIMEZONE]
+    warnings: [LS_WEB_USER]
+  - name: time zone missing
+    set: {TPOT_ATTACKMAP_TEXT_TIMEZONE: ""}
+    errors: [TPOT_ATTACKMAP_TEXT_TIMEZONE]
+    warnings: [LS_WEB_USER]
+  - name: time zone with a city
+    set: {TPOT_ATTACKMAP_TEXT_TIMEZONE: Europe/Berlin}
+    warnings: [LS_WEB_USER]
+  - name: unsafe registry
+    set: {TPOT_REPO: "ghcr.io/x;reboot"}
+    errors: [TPOT_REPO]
+    warnings: [LS_WEB_USER]
+  - name: pull policy with a duration
+    set: {TPOT_PULL_POLICY: every_12h}
+    warnings: [LS_WEB_USER]
+  - name: unknown pull policy
+    set: {TPOT_PULL_POLICY: sometimes}
+    errors: [TPOT_PULL_POLICY]
+    warnings: [LS_WEB_USER]
+  - name: version missing
+    set: {TPOT_VERSION: ""}
+    errors: [TPOT_VERSION]
+    warnings: [LS_WEB_USER]
+  - name: sensor
+    set: {TPOT_TYPE: SENSOR, WEB_USER: "", TPOT_HIVE_USER: dXNlcjpwYXNzd29yZA==, TPOT_HIVE_IP: 192.168.1.10}
+  - name: sensor with an IPv6 hive and no ssl verification
+    set: {TPOT_TYPE: SENSOR, TPOT_HIVE_USER: dXNlcjpwYXNzd29yZA==, TPOT_HIVE_IP: "fe80::1", LS_SSL_VERIFICATION: none}
+  - name: sensor with a domain hive and empty ssl verification
+    set: {TPOT_TYPE: SENSOR, TPOT_HIVE_USER: dXNlcjpwYXNzd29yZA==, TPOT_HIVE_IP: hive.example.org, LS_SSL_VERIFICATION: ""}
+  - name: sensor without hive
+    set: {TPOT_TYPE: SENSOR, TPOT_HIVE_USER: "", TPOT_HIVE_IP: ""}
+    errors: [TPOT_HIVE_USER, TPOT_HIVE_IP]
+  - name: sensor with broken hive settings
+    set: {TPOT_TYPE: SENSOR, TPOT_HIVE_USER: "bm9jb2xvbg==", TPOT_HIVE_IP: "hive host", LS_SSL_VERIFICATION: maybe}
+    errors: [TPOT_HIVE_USER, TPOT_HIVE_IP, LS_SSL_VERIFICATION]
+  - name: suricata settings
+    services: [suricata]
+    set: {OINKCODE: abc-123, SURICATA_RULES_UPDATE: "yes"}
+    errors: [OINKCODE, SURICATA_RULES_UPDATE]
+    warnings: [LS_WEB_USER]
+  - name: suricata settings without suricata
+    services: [cowrie]
+    set: {OINKCODE: abc-123, SURICATA_RULES_UPDATE: "yes", TPOT_CAPTURE_INTERFACE: "eth0;x"}
+    warnings: [LS_WEB_USER]
+  - name: oinkcode
+    services: [suricata]
+    set: {OINKCODE: ABCdef0123456789}
+    warnings: [LS_WEB_USER]
+  - name: capture interface name
+    services: [p0f]
+    set: {TPOT_CAPTURE_INTERFACE: "eth0;x"}
+    errors: [TPOT_CAPTURE_INTERFACE]
+    warnings: [LS_WEB_USER]
+  - name: beelzebub provider and url
+    services: [beelzebub]
+    set: {BEELZEBUB_LLM_PROVIDER: claude, BEELZEBUB_LLM_HOST: ollama.local}
+    errors: [BEELZEBUB_LLM_PROVIDER, BEELZEBUB_LLM_HOST]
+    warnings: [LS_WEB_USER]
+  - name: beelzebub openai without key
+    services: [beelzebub]
+    set: {BEELZEBUB_LLM_PROVIDER: openai, BEELZEBUB_LLM_HOST: "", BEELZEBUB_LLM_API_KEY: ""}
+    warnings: [LS_WEB_USER, BEELZEBUB_LLM_API_KEY]
+  - name: galah openai without key
+    services: [galah]
+    set: {GALAH_LLM_PROVIDER: openai, GALAH_LLM_SERVER_URL: "", GALAH_LLM_API_KEY: ""}
+    errors: [GALAH_LLM_API_KEY]
+    warnings: [LS_WEB_USER]
+  - name: galah default provider needs the ollama url
+    services: [galah]
+    set: {GALAH_LLM_PROVIDER: "", GALAH_LLM_SERVER_URL: ""}
+    errors: [GALAH_LLM_SERVER_URL]
+    warnings: [LS_WEB_USER]
+  - name: galah temperature
+    services: [galah]
+    set: {GALAH_LLM_TEMPERATURE: "3"}
+    errors: [GALAH_LLM_TEMPERATURE]
+    warnings: [LS_WEB_USER]
+  - name: galah negative temperature
+    services: [galah]
+    set: {GALAH_LLM_TEMPERATURE: "-1"}
+    errors: [GALAH_LLM_TEMPERATURE]
+    warnings: [LS_WEB_USER]
+  - name: galah decimal temperature
+    services: [galah]
+    set: {GALAH_LLM_TEMPERATURE: "1.5"}
+    warnings: [LS_WEB_USER]
+  - name: galah gcp-vertex needs the cloud keys
+    services: [galah]
+    set: {GALAH_LLM_PROVIDER: gcp-vertex, GALAH_LLM_SERVER_URL: ""}
+    errors: [GALAH_LLM_CLOUD_LOCATION, GALAH_LLM_CLOUD_PROJECT]
+    warnings: [LS_WEB_USER]
+  - name: galah settings without galah
+    services: [cowrie]
+    set: {GALAH_LLM_PROVIDER: nope, GALAH_LLM_TEMPERATURE: "9"}
+    warnings: [LS_WEB_USER]

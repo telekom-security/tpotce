@@ -32,6 +32,16 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("update", help="update T-Pot, runs update.sh with your options")
     sub.add_parser("restore", help="restore a backup, runs restore.sh with your options")
     sub.add_parser("customize", help="choose edition, services and ports, runs compose/customizer.py")
+    env = sub.add_parser("env", help="list, check and change the settings in .env (default: list)")
+    actions = env.add_subparsers(dest="env_command", metavar="ACTION")
+    listing = actions.add_parser("list", help="the settings of this T-Pot, secrets masked")
+    listing.add_argument("--all", action="store_true", help="also the ones of services that do not run here")
+    listing.add_argument("--show-secrets", action="store_true", help="do not mask passwords and keys")
+    get = actions.add_parser("get", help="print the value of one setting")
+    get.add_argument("key")
+    change = actions.add_parser("set", help="change settings, only written if they are valid afterwards")
+    change.add_argument("assignments", nargs="+", metavar="KEY=VALUE")
+    actions.add_parser("check", help="check .env as tpotinit does on start, exit code 1 on errors")
     sub.add_parser("setup", help="set up or refresh the Python packages of tpot")
     return parser
 
@@ -139,6 +149,89 @@ def print_status() -> int:
     return 0
 
 
+def print_problems(problems, console) -> None:
+    from rich.text import Text
+    for problem in problems:
+        style = "red" if problem.level == "error" else "yellow"
+        console.print(Text(f"[{problem.level.upper()}] - {problem.key}: {problem.text}", style=style))
+
+
+def run_env(args) -> int:
+    from rich.markup import escape
+    from tpotctl import settings as tsettings
+    current = tsettings.load()
+    console = _console()
+    command = args.env_command or "list"
+    if command == "get":
+        value = current.values.get(args.key)
+        if value is None:
+            error(f"{args.key} is not set in {current.path}")
+            return 1
+        print(value)
+        return 0
+    if command == "check":
+        problems = current.problems()
+        print_problems(problems, console)
+        errors = [p for p in problems if p.level == "error"]
+        if errors:
+            console.print(f"[red]{len(errors)} error(s), T-Pot will not start like this.[/]")
+            return 1
+        console.print("[green]All settings seem to be valid.[/]")
+        return 0
+    if command == "set":
+        changes = {}
+        for item in args.assignments:
+            key, sep, value = item.partition("=")
+            if not sep or not key:
+                error(f"'{item}' is not KEY=VALUE")
+                return 2
+            changes[key.strip()] = value
+        try:
+            remaining = current.change(changes)
+        except tsettings.SettingsError as err:
+            error(str(err))
+            return 1
+        print_problems(remaining, console)
+        for key in changes:
+            console.print(f"[green][OK] - {key} is set.[/]")
+        console.print(f"[{MAGENTA}]Restart T-Pot to apply it: tpot restart[/]")
+        return 0
+    # list
+    values = current.values
+    rules = current.relevant(include_all=getattr(args, "all", False))
+    reveal = getattr(args, "show_secrets", False)
+    problems = {p.key: p for p in current.problems()}
+    if not sys.stdout.isatty():
+        for rule in rules:
+            print(f"{rule.key}={tsettings.shown(rule, values.get(rule.key, ''), reveal)}")
+        return 0
+    from rich import box
+    from rich.table import Table
+    table = Table(box=box.SIMPLE_HEAD, header_style=f"bold {MAGENTA}", pad_edge=False)
+    table.add_column("SETTING", style="bold", no_wrap=True)
+    table.add_column("VALUE", overflow="fold")
+    table.add_column("WHAT", overflow="fold")
+    section = None
+    for rule in rules:
+        if rule.section != section:
+            section = rule.section
+            title = dict(envschema_sections()).get(section, section)
+            table.add_row(f"[{MAGENTA}]{title}[/]", "", "")
+        value = escape(tsettings.shown(rule, values.get(rule.key, ""), reveal))
+        problem = problems.get(rule.key)
+        if problem:
+            value += f"  [{'red' if problem.level == 'error' else 'yellow'}]! {escape(problem.text)}[/]"
+        what = rule.title + ("" if rule.editable else f" [dim]({current.why_fixed(rule.key)})[/]")
+        table.add_row(rule.key, value, what)
+    console.print(table)
+    return 0
+
+
+def envschema_sections():
+    from tpotctl import envschema
+    return envschema.SECTIONS
+
+
 def error(text: str) -> None:
     print(f"[ERROR] - {text}", file=sys.stderr)
 
@@ -188,6 +281,13 @@ def main(argv: Optional[List[str]] = None) -> int:
             python = bootstrap.setup_venv()
             print(f"[OK] - The Python packages of tpot are ready ({os.path.dirname(os.path.dirname(python))}).")
             return 0
+        if args.command == "env":
+            from tpotctl import settings as tsettings
+            try:
+                return run_env(args)
+            except tsettings.SettingsError as err:
+                error(str(err))
+                return 1
         if args.command in ("start", "stop", "restart"):
             return run_service(args.command)
         ops.require_linux_host(args.command)

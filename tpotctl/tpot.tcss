@@ -62,6 +62,27 @@ DataTable > .datatable--header {
     text-style: bold;
 }
 
+/* settings */
+
+#settings-form {
+    height: 1fr;
+}
+
+.setting {
+    height: auto;
+    margin-bottom: 1;
+}
+
+.setting Input, .setting Select {
+    width: 70;
+}
+
+.settings-section {
+    color: $primary;
+    text-style: bold;
+    margin: 1 0;
+}
+
 /* customizer */
 
 #cz-body {

@@ -37,6 +37,7 @@ not touch production `data/` or `data_backup/` paths.
 ./docker/_tests/run.sh sentrypeer
 ./docker/_tests/run.sh suricata
 ./docker/_tests/run.sh tanner
+./docker/_tests/run.sh tpotinit_env
 ./docker/_tests/run.sh wordpot
 ```
 

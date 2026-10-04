@@ -671,7 +671,7 @@ On the T-Pot Landing Page just click on `Elasticvue` and you will be forwarded t
 # Configuration
 
 ## The tpot Command
-`tpot` configures and runs T-Pot from one place. Without arguments it opens a menu (status, edition & services, images, update & backup), every menu entry is a command as well:
+`tpot` configures and runs T-Pot from one place. Without arguments it opens a menu (status, edition & services, settings, images, update & backup), every menu entry is a command as well:
 
 | Command | Does |
 |---|---|
@@ -683,6 +683,9 @@ On the T-Pot Landing Page just click on `Elasticvue` and you will be forwarded t
 | `tpot update [OPTIONS]` | runs `~/tpotce/update.sh` with your options, i.e. `tpot update -y` |
 | `tpot restore [OPTIONS]` | runs `~/tpotce/restore.sh` with your options |
 | `tpot customize [OPTIONS]` | the [customizer](#customize-t-pot-honeypots-and-services) |
+| `tpot env [list [--all] [--show-secrets]]` | the [settings](#t-pot-config-file) in `.env` that matter for this T-Pot, secrets masked |
+| `tpot env get KEY` / `tpot env set KEY=VALUE …` | read or change a setting, it is only written if it is valid afterwards |
+| `tpot env check` | checks `.env` as T-Pot does on start, exit code 1 on errors |
 | `tpot setup` | sets up or refreshes the Python packages of `tpot` |
 
 The installer links `~/tpotce/tpot` to `/usr/local/bin/tpot` and `update.sh` keeps it up to date. `tpot` runs from a Python venv of its own in `~/.local/share/tpotce/venv`, set up on first use from pinned and hash-checked packages (it needs pypi.org once, and `python3-venv` on Debian / Ubuntu, which the installer brings along). `update.sh`, `restore.sh` and the other scripts keep working on their own, `tpot` only calls them. Do not run `tpot` as root, it uses `sudo` where needed. On macOS and Windows only `tpot customize` and `tpot setup` are available.
@@ -693,6 +696,8 @@ T-Pot offers a configuration file providing variables not only for the docker se
 Before the first start run `~/tpotce/genuser.sh` or setup the `WEB_USER` manually as described [here](#add-users-to-nginx-t-pot-webui). 
 
 `update.sh` adds settings that are new in `env.example` to your `.env` with their defaults and comments out settings that are no longer used (unless your `docker-compose.yml` still uses them), your values are never changed.
+
+T-Pot checks `.env` on every start and does not start with an invalid value, all problems are listed at once in the log of `tpotinit` (`docker logs tpotinit`). Settings of a honeypot or tool are only checked if your `docker-compose.yml` runs it. The rules are in `docker/tpotinit/dist/etc/env.schema.yml`, the *Settings* page of the [`tpot`](#the-tpot-command) menu and `tpot env` use the same ones: they only show what matters for your T-Pot, mask passwords and keys, check while you type and only write valid values, keeping the rest of `.env` as it is. `tpot env check` shows the problems without starting T-Pot. The web and sensor users stay with `genuser.sh` and `deploy.sh`.
 
 Settings for the NSM services (Suricata, P0f, Glutton):
 - `TPOT_CAPTURE_INTERFACE`: The interface to capture on. Empty (default) picks the interface of the route to the internet, or without a default route the first interface with a global IPv4 address. Set it if the host has more than one uplink or you capture on a mirror port.
