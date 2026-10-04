@@ -15,6 +15,9 @@ from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from tpotctl.tests import isolate  # noqa: E402
+
+isolate()   # keeps the user's config out of the tests
 
 from tpotctl import sensors, users  # noqa: E402
 from tpotctl.bootstrap import REPO_DIR  # noqa: E402

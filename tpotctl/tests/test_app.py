@@ -9,6 +9,9 @@ import sys
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from tpotctl.tests import isolate  # noqa: E402
+
+isolate()   # keeps the user's config out of the tests
 
 try:
     import textual  # noqa: F401
@@ -39,6 +42,17 @@ if textual:
 
         def backups(self):
             return []
+
+        def tpot_type(self):
+            return "HIVE"
+
+        def system(self):
+            from tpotctl import system
+            return system.System(12.0, system.Usage(1, 4), system.Usage(1, 10), "/data")
+
+        def attacks(self):
+            from tpotctl import events
+            return events.Attacks([0, 3, 9, 4] * 15, 1234, [("Cowrie", 900), ("Dionaea", 334)])
 
     class Recorder:
         def __init__(self):

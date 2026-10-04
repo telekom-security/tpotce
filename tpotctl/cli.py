@@ -41,6 +41,9 @@ def build_parser() -> argparse.ArgumentParser:
     get.add_argument("key")
     change = actions.add_parser("set", help="change settings, only written if they are valid afterwards")
     change.add_argument("assignments", nargs="+", metavar="KEY=VALUE")
+    change.add_argument("--unlock", action="store_true",
+                        help="also change fixed keys of the system section (TPOT_VERSION, TPOT_DATA_PATH, ...), "
+                             "after their warning")
     actions.add_parser("check", help="check .env as tpotinit does on start, exit code 1 on errors")
     users = sub.add_parser("users", help="users of the T-Pot web UI (default: list)")
     user_actions = users.add_subparsers(dest="users_command", metavar="ACTION")
@@ -100,12 +103,16 @@ def ps_table(containers: List[ops.Container]):
     from rich.table import Table
     from rich.text import Text
     table = Table(box=box.SIMPLE_HEAD, header_style=f"bold {MAGENTA}", pad_edge=False)
-    table.add_column("NAME", style="bold", no_wrap=True)
-    table.add_column("STATUS", no_wrap=True)
-    table.add_column("PORTS", overflow="fold")
+    from tpotctl import glyphs
+    table.add_column("Name", style="bold", no_wrap=True)
+    table.add_column("Status", no_wrap=True)
+    table.add_column("Ports", overflow="fold")
     for c in containers:
         style = HEALTH_STYLE.get(c.health) or ("red" if c.state != "running" else "")
-        table.add_row(c.name, Text(c.status, style=style), c.ports)
+        status = Text()
+        status.append(f"{glyphs.g(ops.cell_state(c)[0])} ", style=style or "green")
+        status.append(c.status, style=style)
+        table.add_row(c.name, status, c.ports)
     return table
 
 
@@ -113,8 +120,8 @@ def images_table(images: List[ops.Image]):
     from rich import box
     from rich.table import Table
     table = Table(box=box.SIMPLE_HEAD, header_style=f"bold {MAGENTA}", pad_edge=False)
-    for column in ("REPOSITORY", "TAG", "IMAGE ID", "SIZE", "CREATED", "REPOSITORY:TAG"):
-        table.add_column(column, no_wrap=column != "REPOSITORY:TAG")
+    for column in ("Repository", "Tag", "Image ID", "Size", "Created", "Repository:tag"):
+        table.add_column(column, no_wrap=column != "Repository:tag")
     for i in images:
         table.add_row(i.repository, i.tag, i.id, i.size, i.created, i.ref)
     return table
@@ -226,8 +233,11 @@ def run_env(args) -> int:
                 error(f"'{item}' is not KEY=VALUE")
                 return 2
             changes[key.strip()] = value
+        unlocked = [key for key in changes if current.can_unlock(key)] if args.unlock else []
+        for key in unlocked:
+            console.print(f"[yellow][WARNING] - {key} is unlocked: {current.schema[key].unlock}[/]")
         try:
-            remaining = current.change(changes)
+            remaining = current.change(changes, unlocked=unlocked)
         except tsettings.SettingsError as err:
             error(str(err))
             return 1
@@ -248,9 +258,9 @@ def run_env(args) -> int:
     from rich import box
     from rich.table import Table
     table = Table(box=box.SIMPLE_HEAD, header_style=f"bold {MAGENTA}", pad_edge=False)
-    table.add_column("SETTING", style="bold", no_wrap=True)
-    table.add_column("VALUE", overflow="fold")
-    table.add_column("WHAT", overflow="fold")
+    table.add_column("Setting", style="bold", no_wrap=True)
+    table.add_column("Value", overflow="fold")
+    table.add_column("What", overflow="fold")
     section = None
     for rule in rules:
         if rule.section != section:
@@ -301,7 +311,7 @@ def run_users(args) -> int:
         from rich import box
         from rich.table import Table
         table = Table(box=box.SIMPLE_HEAD, header_style=f"bold {MAGENTA}", pad_edge=False)
-        for column in ("USER", "HASH", "STATE"):
+        for column in ("User", "Hash", "State"):
             table.add_column(column)
         for user in entries:
             state = Text("ok", style="green") if user.ok else Text(
@@ -349,7 +359,7 @@ def sensors_table(registry, status, days: int):
     from rich.table import Table
     from rich.text import Text
     table = Table(box=box.SIMPLE_HEAD, header_style=f"bold {MAGENTA}", pad_edge=False)
-    for column in ("SENSOR", "HOST", "HOSTNAME", "LAST SEEN", "STATE"):
+    for column in ("Sensor", "Host", "Hostname", "Last seen", "State"):
         table.add_column(column, overflow="fold")
     for sensor in registry.sensors():
         seen = status.sensors.get(sensor.name)

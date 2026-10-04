@@ -15,14 +15,15 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen, Screen
 from textual.widgets import DataTable, Footer, Label, Static, Tree
 
+from tpotctl import glyphs, theme
 from tpotctl.bootstrap import REPO_DIR
 from tpotctl.screens.dialogs import ChoiceDialog, ConfirmDialog, PortInputDialog, finding_lines
+from tpotctl.widgets.header import chip
 
 sys.path.insert(0, os.path.join(REPO_DIR, "compose"))
 import customizer_core as core  # noqa: E402
 from customizer_tui import State  # noqa: E402
 
-MARK_ON, MARK_OFF, MARK_LOCKED = "☑", "☐", "▣"
 
 
 class ServiceTree(Tree):
@@ -81,33 +82,47 @@ class CustomizerScreen(Screen):
     def service_label(self, name: str) -> Text:
         state, result = self.state, self.state.result
         selected = state.selected(name)
-        mark = MARK_LOCKED if selected and state.locked(name) else MARK_ON if selected else MARK_OFF
+        mark = glyphs.g("locked") if selected and state.locked(name) else glyphs.g("on") if selected \
+            else glyphs.g("off")
         problems = result.problems_of(name)
-        style = "bold red" if problems else "green" if selected else ""
+        colour = theme.color("error") if problems else theme.color("magenta") if selected else theme.color("wax")
         label = Text()
-        label.append(f"{mark} ", style=style)
-        label.append(f"{name:<27}", style=style)
-        label.append(self.catalog.description(name), style="dim" if not selected else "")
+        label.append(f"{mark} ", style=f"bold {colour}")
+        label.append(f"{name:<27}", style=f"bold {theme.color('error')}" if problems else "bold" if selected else
+                     theme.color("mist"))
+        label.append(self.catalog.description(name), style="" if selected else theme.color("mist"))
         if problems:
-            label.append("  !", style="bold red")
+            label.append(f"  {glyphs.g('warn')}", style=f"bold {theme.color('error')}")
         return label
 
     def refresh_view(self) -> None:
         state, result = self.state, self.state.result
         for group, node in self.groups.items():
-            node.set_label(Text(f"{core.GROUP_TITLES.get(group, group)}  "
-                                f"{sum(state.selected(n) for n in state.visible(group))}/"
-                                f"{len(state.visible(group))}", style="bold"))
+            members = state.visible(group)
+            label = Text(core.GROUP_TITLES.get(group, group), style="bold")
+            label.append(f"  {sum(state.selected(n) for n in members)} of {len(members)}",
+                         style=theme.color("mist"))
+            node.set_label(label)
         for name, node in self.nodes.items():
             node.set_label(self.service_label(name))
-        bar = self.query_one("#cz-status", Static)
-        bar.update(f"Edition & services  ·  base {state.selection.base} ({result.role()})  ·  "
-                   f"{len(result.services)} services  ·  networks {len(result.networks)}/{state.max_networks}  ·  "
-                   f"{len(result.errors)} errors")
-        bar.set_class(bool(result.errors), "-errors")
+        bar = Text()
+        bar.append("customizer  ", style=f"bold {theme.color('magenta')}")
+        bar.append_text(chip(f"from {state.selection.base}", "petrol"))
+        bar.append("  ")
+        bar.append_text(chip(result.role(), "comb"))
+        bar.append(f"   {len(result.services)} services   networks {len(result.networks)} of {state.max_networks}",
+                   style=theme.color("mist"))
+        if result.errors:
+            bar.append(f"   {glyphs.g('fail')} {len(result.errors)} error{'s' if len(result.errors) > 1 else ''}",
+                       style=f"bold {theme.color('error')}")
+        else:
+            bar.append(f"   {glyphs.g('ok')} ready to write", style=theme.color("ok"))
+        status = self.query_one("#cz-status", Static)
+        status.update(bar)
+        status.set_class(bool(result.errors), "-errors")
         self.show_detail()
         message = self.query_one("#cz-message", Static)
-        message.update(Text(state.message, style="yellow") if state.message else "")
+        message.update(Text(state.message, style=theme.color("warn")) if state.message else "")
         state.message = ""
 
     def current(self):
@@ -117,27 +132,36 @@ class CustomizerScreen(Screen):
     def show_detail(self) -> None:
         kind, name = self.current()
         state, result = self.state, self.state.result
+        mist, error, warn = theme.color("mist"), theme.color("error"), theme.color("warn")
         text = Text()
+        detail = self.query_one("#cz-detail", Static)
         if kind == "service":
+            detail.border_title = name
             source = result.sources.get(name) or self.catalog.source(state.selection.base, name)
             origin = f"{source.edition} edition" if source.edition else "catalog"
-            text.append(f"{name}\n", style="bold")
-            text.append(f"{self.catalog.description(name)}\n", style="")
-            text.append(f"from the {origin}\n\n", style="dim")
+            selected = state.selected(name)
+            text.append(f"{glyphs.g('on') if selected else glyphs.g('off')} ",
+                        style=f"bold {theme.color('magenta') if selected else theme.color('wax')}")
+            text.append("on" if selected else "off", style="bold")
+            text.append(f"   from the {origin}\n\n", style=mist)
+            text.append(f"{self.catalog.description(name)}\n\n")
             ports = [state.mapping(name, p).split(" (")[0] for p in state.original_ports(name)]
-            text.append("Ports\n", style="bold")
+            text.append("Host ports\n", style=f"bold {theme.color('magenta')}")
             text.append(("\n".join(f"  {p}" for p in ports) or "  none") + "\n\n")
-            why = state.locked(name) if state.selected(name) else ""
+            why = state.locked(name) if selected else ""
             if why:
-                text.append(why + "\n\n", style="dim")
+                text.append(f"{glyphs.g('locked')} {why}\n\n", style=mist)
             for finding in result.problems_of(name):
-                text.append(f"! {finding.text}\n", style="bold red")
+                text.append(f"{glyphs.g('fail')} {finding.text}\n", style=f"bold {error}")
         elif kind == "group":
-            text.append("space switches the whole group, enter folds it\n", style="dim")
+            detail.border_title = core.GROUP_TITLES.get(name, name)
+            text.append("space switches the whole group, enter folds it\n", style=mist)
         others = [f for f in result.errors if not f.services] + result.warnings
         for finding in others:
-            text.append(f"\n{finding.level}: {finding.text}", style="red" if finding.level == "error" else "yellow")
-        self.query_one("#cz-detail", Static).update(text)
+            is_error = finding.level == "error"
+            text.append(f"\n{glyphs.g('fail') if is_error else glyphs.g('warn')} {finding.text}",
+                        style=error if is_error else warn)
+        detail.update(text)
 
     def on_tree_node_highlighted(self, event: Tree.NodeHighlighted) -> None:
         self.show_detail()
@@ -225,7 +249,7 @@ class PortsDialog(ModalScreen):
 
     def on_mount(self) -> None:
         table = self.query_one(DataTable)
-        table.add_columns("HOST PORT", "NOW", "CONTAINER", "PROBLEM")
+        table.add_columns("Host port", "Now", "Container", "Problem")
         self.fill()
         table.focus()
 
@@ -243,7 +267,7 @@ class PortsDialog(ModalScreen):
             problems = [f.text for f in self.state.result.problems_of(self.service, "port")
                         if f.text.startswith(f"port {key} ")]
             table.add_row(port.key, "removed" if new is None else key, f"{port.container}/{port.proto}",
-                          Text(problems[0] if problems else "", style="red"))
+                          Text(problems[0] if problems else "", style=theme.color("error")))
         if self.ports:
             table.move_cursor(row=min(row, len(self.ports) - 1))
 
@@ -278,7 +302,7 @@ class PortsDialog(ModalScreen):
         options = core.suggestions(self.state.catalog, self.state.selection, self.service, self.state.max_networks)
         message = self.query_one("#ports-message", Static)
         if not options:
-            message.update(Text("no conflict-free suggestion, enter a port by hand", style="yellow"))
+            message.update(Text("no conflict-free suggestion, enter a port by hand", style=theme.color("warn")))
             return
 
         def picked(index: Optional[int]) -> None:

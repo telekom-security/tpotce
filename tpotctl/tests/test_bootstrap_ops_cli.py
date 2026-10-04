@@ -13,6 +13,9 @@ import unittest
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from tpotctl.tests import isolate  # noqa: E402
+
+isolate()   # keeps the user's config out of the tests
 
 from tpotctl import bootstrap, cli, ops  # noqa: E402
 
@@ -58,6 +61,8 @@ class BootstrapTest(unittest.TestCase):
                 self.assertIn("--hash=sha256:", block, block.split()[0])
 
     def test_ensure_yaml_uses_this_python(self):
+        if not bootstrap.importable(["yaml"]):
+            self.skipTest("this Python has no PyYAML, ensure() takes the venv then")
         self.assertIsNone(bootstrap.ensure("yaml"))
 
     def test_guard_stops_loops(self):

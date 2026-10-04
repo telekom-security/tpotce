@@ -18,6 +18,8 @@ from tpotctl.bootstrap import REPO_DIR
 SCHEMA_PATH = os.path.join(REPO_DIR, "docker", "tpotinit", "dist", "etc", "env.schema.yml")
 TYPES = {"text", "path", "enum", "int", "number", "regex", "host", "url", "timezone", "interface",
          "htpasswd_list", "basic_cred"}
+# how tpot shows a key, tpotinit does not read these
+WIDGETS = {"", "switch", "choice", "interface", "timezone", "llm_model"}
 SECTIONS = [("base", "T-Pot"), ("honeypots", "Honeypots and tools"), ("system", "Advanced")]
 
 _SAFE_BAD = re.compile(r"[^a-zA-Z0-9_/.:-]")
@@ -59,6 +61,12 @@ class Rule:
     warn_message: str = ""
     secret: bool = False
     editable: bool = True
+    widget: str = ""
+    choices: List[Dict[str, str]] = field(default_factory=list)
+    custom: bool = False
+    show_when: Dict = field(default_factory=dict)
+    llm: Dict[str, str] = field(default_factory=dict)
+    unlock: str = ""
 
 
 @dataclass
@@ -78,6 +86,8 @@ def load_schema(path: str = SCHEMA_PATH) -> Dict[str, Rule]:
             spec[name] = [str(v) for v in spec.get(name) or []]
         for name in ("default",):
             spec[name] = "" if spec.get(name) is None else str(spec[name])
+        spec["choices"] = [{"value": str(c["value"]), "label": str(c.get("label") or c["value"])}
+                           for c in spec.get("choices") or []]
         rules[key] = Rule(key=key, **spec)
     return rules
 
@@ -97,6 +107,15 @@ def applies(rule: Rule, values: Dict[str, str], services: Iterable[str]) -> bool
     if rule.services and not set(rule.services) & set(services):
         return False
     return True
+
+
+def shown_now(rule: Rule, values: Dict[str, str], schema: Dict[str, Rule]) -> bool:
+    """show_when of tpot: the key (or its default) is one of the values; tpotinit ignores it."""
+    if not rule.show_when:
+        return True
+    other = rule.show_when["key"]
+    value = values.get(other) or (schema[other].default if other in schema else "")
+    return value in [str(v) for v in rule.show_when.get("values") or []]
 
 
 def _fill(text: str, value: str = "", when: str = "") -> str:

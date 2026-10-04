@@ -10,6 +10,9 @@ from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from tpotctl.tests import isolate  # noqa: E402
+
+isolate()   # keeps the user's config out of the tests
 
 try:
     import yaml  # noqa: F401
@@ -100,8 +103,101 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(self.load().values["TPOT_ATTACKMAP_TEXT"], "DISABLED")
 
 
+@unittest.skipUnless(yaml, "PyYAML is not installed")
+class UnlockTest(unittest.TestCase):
+
+    def setUp(self):
+        from tpotctl import settings
+        self.settings = settings
+        self.repo = make_checkout(self)
+
+    def test_fixed_keys_need_an_unlock(self):
+        current = self.settings.load(self.repo)
+        self.assertTrue(current.can_unlock("TPOT_VERSION"))
+        self.assertFalse(current.can_unlock("WEB_USER"))          # managed with tpot users
+        self.assertFalse(current.can_unlock("TPOT_BLACKHOLE"))    # not fixed at all
+        with self.assertRaises(self.settings.SettingsError) as caught:
+            current.change({"TPOT_VERSION": "24.04.1"})
+        self.assertIn("--unlock", str(caught.exception))
+        with self.assertRaises(self.settings.SettingsError):
+            current.change({"WEB_USER": "x"}, unlocked=["WEB_USER"])
+        current.change({"TPOT_VERSION": "24.04.1"}, unlocked=["TPOT_VERSION"])
+        self.assertEqual(self.settings.load(self.repo).values["TPOT_VERSION"], "24.04.1")
+
+    def test_unlocked_values_are_still_checked(self):
+        current = self.settings.load(self.repo)
+        with self.assertRaises(self.settings.SettingsError):
+            current.change({"TPOT_OSTYPE": "linux; rm -rf /"}, unlocked=["TPOT_OSTYPE"])
+
+    def test_every_fixed_system_key_has_a_warning(self):
+        current = self.settings.load(self.repo)
+        for key, rule in current.schema.items():
+            if not rule.editable and key not in self.settings.MANAGED_BY:
+                self.assertTrue(rule.unlock, f"{key} needs an unlock warning")
+
+    @unittest.skipUnless(rich, "Rich is not installed")
+    def test_cli_unlock(self):
+        from tpotctl import cli
+        original = self.settings.load
+        with mock.patch.object(self.settings, "load", lambda: original(self.repo)):
+            out = io.StringIO()
+            with redirect_stdout(out), redirect_stderr(out):
+                refused = cli.main(["env", "set", "TPOT_DATA_PATH=/srv/tpot"])
+            self.assertEqual(refused, 1)
+            out = io.StringIO()
+            with redirect_stdout(out), redirect_stderr(out):
+                done = cli.main(["env", "set", "--unlock", "TPOT_DATA_PATH=/srv/tpot"])
+            self.assertEqual(done, 0, out.getvalue())
+            self.assertIn("unlocked", out.getvalue())
+        self.assertEqual(self.settings.load(self.repo).values["TPOT_DATA_PATH"], "/srv/tpot")
+
+
 @unittest.skipUnless(textual and yaml, "Textual is not installed, run with the venv of tpot")
 class SettingsPaneTest(unittest.IsolatedAsyncioTestCase):
+
+    async def test_unlock_a_fixed_key(self):
+        from tpotctl import app as tapp, events, ops, settings
+        from tpotctl.screens.dialogs import ConfirmDialog
+        repo = make_checkout(self)
+
+        class Backend(tapp.Backend):
+            def linux_host(self):
+                return False
+
+            def tpot_type(self):
+                return "HIVE"
+
+            def status(self):
+                return ops.Status("24.04.2", "dev", "abc", "STANDARD", "HIVE", "n/a", repo)
+
+            def settings(self):
+                return settings.load(repo)
+
+            def attacks(self):
+                return events.Attacks(problem="none")
+
+        app = tapp.TpotApp(backend=Backend(), runner=lambda command, cwd=None: 0)
+        async with app.run_test(size=(150, 50)) as pilot:
+            await pilot.pause(0.3)
+            app.goto_setting("TPOT_DATA_PATH")
+            await pilot.pause(0.4)
+            self.assertFalse(app.query("#set-TPOT_DATA_PATH"))         # fixed
+            self.assertEqual(app.focused.id, "unlock-TPOT_DATA_PATH")
+            await pilot.press("enter")
+            await pilot.pause(0.3)
+            self.assertIsInstance(app.screen, ConfirmDialog)
+            self.assertIn("empty one", str(app.screen.query("Static").last().render()))
+            await pilot.click("#yes")
+            await pilot.pause(0.4)
+            field = app.query_one("#set-TPOT_DATA_PATH")
+            self.assertEqual(app.focused, field)
+            self.assertIn("unlocked", str(app.query_one("#row-TPOT_DATA_PATH .setting-title").render()))
+            field.value = "/srv/tpot"
+            await pilot.pause(0.3)
+            await pilot.click("#settings-save")
+            await pilot.pause(0.4)
+            self.assertFalse(app.query("#set-TPOT_DATA_PATH"))         # fixed again after saving
+        self.assertEqual(settings.load(repo).values["TPOT_DATA_PATH"], "/srv/tpot")
 
     async def test_edit_save_restart(self):
         from tpotctl import app as tapp, ops, settings
@@ -127,6 +223,13 @@ class SettingsPaneTest(unittest.IsolatedAsyncioTestCase):
             def settings(self):
                 return settings.load(repo)
 
+            def system(self):
+                return None
+
+            def attacks(self):
+                from tpotctl import events
+                return events.Attacks(problem="no Elasticsearch in the tests")
+
         commands = []
         app = tapp.TpotApp(backend=Backend(), runner=lambda command, cwd=None: commands.append(command) or 0)
         async with app.run_test(size=(140, 50)) as pilot:
@@ -142,7 +245,7 @@ class SettingsPaneTest(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(save.disabled)                     # out of range
             self.assertIn("default", str(app.query_one("#err-TPOT_PERSISTENCE_CYCLES").render()))
             field.value = "45"
-            app.query_one("#set-TPOT_BLACKHOLE").value = "ENABLED"
+            app.query_one("#set-TPOT_BLACKHOLE").value = True        # a switch, it writes ENABLED
             await pilot.pause(0.3)
             self.assertFalse(save.disabled)
             self.assertEqual(set(pane.changes()), {"TPOT_PERSISTENCE_CYCLES", "TPOT_BLACKHOLE"})

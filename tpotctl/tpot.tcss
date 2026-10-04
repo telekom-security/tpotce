@@ -1,43 +1,96 @@
-/* tpot, colours come from the theme in theme.py ($primary is Telekom magenta) */
+/* tpot: the colours are the theme in theme.py ($primary is Telekom magenta,
+   $comb / $wax / $petrol / $mist come from the T-Pot logo). Rounded borders with a
+   title only where they group something: dialogs and the blocks of the Status page. */
 
 Screen {
     background: $background;
+    color: $foreground;
 }
 
-.bar {
-    height: 1;
-    background: $primary;
-    color: $text;
-    text-style: bold;
+VerticalScroll, DataTable, OptionList, Tree {
+    scrollbar-size-vertical: 1;
+}
+
+/* head */
+
+#header {
+    height: 4;
     padding: 0 1;
+    border-bottom: solid $wax;
 }
 
-.bar.-errors {
-    background: $error;
+#wordmark {
+    width: auto;
+    height: 3;
+    padding: 0 1;
+    background: $primary;
+}
+
+#header-chips {
+    width: 1fr;
+    height: 3;
+    padding: 0 0 0 3;
+}
+
+#header-service {
+    width: auto;
+    height: 1;
+}
+
+Screen.-narrow #header-chips {
+    padding-left: 1;
+}
+
+/* menu */
+
+#body {
+    height: 1fr;
 }
 
 #sidebar {
-    width: 26;
-    border-right: tall $primary;
+    width: 24;
+    height: 1fr;
+    padding: 1 0;
+    background: $background;
+    border-right: solid $wax;
 }
 
 #sidebar > ListItem {
-    padding: 0 1;
+    padding: 0 1 0 1;
+    border-left: blank;
+    background: $background;
 }
 
+/* the page you are on: a honeycomb bar; while the menu has the focus: magenta */
 #sidebar > ListItem.-highlight {
+    background: $comb;
+    border-left: outer $primary;
+}
+
+#sidebar:focus > ListItem.-highlight {
     background: $primary;
-    color: $text;
+    color: $glass;
+    border-left: outer $glass;
+}
+
+.menu-short {
+    display: none;
+}
+
+Screen.-narrow #sidebar {
+    width: 14;
+}
+
+Screen.-narrow .menu-long {
+    display: none;
+}
+
+Screen.-narrow .menu-short {
+    display: block;
 }
 
 .pane {
     padding: 1 2;
-}
-
-.pane-title {
-    color: $primary;
-    text-style: bold;
-    margin-bottom: 1;
 }
 
 .info {
@@ -53,37 +106,326 @@ Screen {
     margin-right: 2;
 }
 
+Button {
+    border: none;
+    height: 1;
+    min-width: 10;
+    padding: 0 2;
+    background: $secondary;
+    color: $glass;
+    text-style: none;
+}
+
+Button:hover {
+    background: $secondary-lighten-1;
+}
+
+Button:focus {
+    text-style: bold reverse;
+}
+
+Button.-primary {
+    background: $primary;
+    color: $glass;
+}
+
+Button.-primary:hover {
+    background: $primary-lighten-1;
+}
+
+Button:disabled {
+    background: $comb;
+    color: $mist;
+}
+
 DataTable {
     height: 1fr;
+    background: $background;
 }
 
 DataTable > .datatable--header {
+    background: $background;
     color: $primary;
     text-style: bold;
+}
+
+DataTable > .datatable--even-row {
+    background: $comb 50%;
+}
+
+/* status */
+
+#dash {
+    height: auto;
+}
+
+.block {
+    height: auto;
+    border: round $wax;
+    border-title-color: $primary;
+    border-title-style: bold;
+    padding: 0 1;
+}
+
+#hive-block {
+    width: 1fr;
+}
+
+#side-blocks {
+    width: 50;
+    height: auto;
+    margin-left: 1;
+}
+
+#pot {
+    display: none;
+    width: 28;
+    height: auto;
+    margin-left: 2;
+}
+
+Screen.-wide #pot {
+    display: block;
+}
+
+Screen.-narrow #dash {
+    layout: vertical;
+}
+
+Screen.-narrow #side-blocks {
+    width: 1fr;
+    margin-left: 0;
+}
+
+Screen.-short #containers {
+    display: none;
+}
+
+#status-info {
+    margin: 1 0 0 0;
 }
 
 /* settings */
 
-#settings-form {
-    height: 1fr;
-}
-
-.setting {
+#settings-head {
     height: auto;
     margin-bottom: 1;
 }
 
-.setting Input, .setting Select {
-    width: 70;
+#settings-status {
+    width: 1fr;
 }
 
-.settings-section {
+#settings-head Button {
+    margin-left: 2;
+}
+
+#settings-tabs {
+    height: 1fr;
+}
+
+.settings-form {
+    height: 1fr;
+    padding: 1 1 0 0;
+}
+
+/* every row has a border, invisible until it means something: focus (magenta),
+   an error (red), a warning (yellow); a change is the tag next to the title */
+.setting {
+    height: auto;
+    padding: 0 1;
+    border: blank;
+}
+
+.setting.-warning {
+    border: round $warning 70%;
+}
+
+.setting.-problem {
+    border: round $error 80%;
+}
+
+.setting:focus-within {
+    border: round $primary;
+}
+
+.setting:focus-within .setting-title {
     color: $primary;
+}
+
+.setting-key {
+    color: $key;
+}
+
+.setting-line {
+    height: auto;
+}
+
+.setting-name {
+    width: 32;
+    height: auto;
+}
+
+.setting-control {
+    width: 54;
+    height: auto;
+}
+
+.setting-control Input, .setting-control Select {
+    width: 1fr;
+}
+
+.setting-control Input.own {
+    width: 22;
+    margin-left: 1;
+}
+
+.setting-control .small {
+    min-width: 8;
+    margin-left: 1;
+}
+
+.setting-control .reveal {
+    min-width: 3;
+    padding: 0 1;
+}
+
+.switch-state {
+    padding: 0 1;
+}
+
+/* help on the right of the field only with room for it, else below */
+.help {
+    display: none;
+    width: 1fr;
+    padding: 0 0 0 2;
+    color: $ash;
+}
+
+.help-below {
+    color: $ash;
+}
+
+Screen.-wide .help {
+    display: block;
+}
+
+Screen.-wide .help-below {
+    display: none;
+}
+
+.setting-problems {
+    display: none;
+    height: auto;
+}
+
+.setting.-problem .setting-problems, .setting.-warning .setting-problems {
+    display: block;
+}
+
+Screen.-narrow .setting-line {
+    layout: vertical;
+}
+
+Screen.-narrow .setting-name, Screen.-narrow .setting-control {
+    width: 1fr;
+}
+
+Input {
+    border: tall $wax;
+    background: $comb;
+}
+
+Input:focus {
+    border: tall $primary;
+}
+
+/* the fields of the settings stay one row high, also with the focus or the menu open */
+Input.-textual-compact {
+    border: none;
+    background: $comb;
+    color: $glass;
+}
+
+Input.-textual-compact > .input--placeholder {
+    color: $ash;
+}
+
+Input.-textual-compact:focus {
+    background: $primary 35%;
+}
+
+Select.-textual-compact > SelectCurrent, Select.-textual-compact:focus > SelectCurrent,
+Select.-textual-compact.-expanded > SelectCurrent {
+    border: none;
+    background: $comb;
+    color: $glass;
+}
+
+Select.-textual-compact:focus > SelectCurrent {
+    background: $primary 35%;
+}
+
+Select > SelectOverlay {
+    border: round $primary;
+    background: $background;
+}
+
+Switch {
+    border: none;
+    height: 1;
+    width: 6;
+    padding: 0;
+    background: $comb;
+}
+
+Switch:focus {
+    background: $primary 35%;
+}
+
+Switch > .switch--slider {
+    color: $wax;
+    background: $comb;
+}
+
+Switch.-on > .switch--slider {
+    color: $primary;
+}
+
+TabbedContent Tabs {
+    background: $background;
+}
+
+Tab {
+    color: $ash;
+}
+
+Tab.-active {
+    color: $glass;
     text-style: bold;
-    margin: 1 0;
+}
+
+Tabs:focus Tab.-active {
+    background: $primary;
+    color: $glass;
+}
+
+Tabs Underline > .underline--bar {
+    color: $primary;
+    background: $wax;
 }
 
 /* customizer */
+
+#cz-status {
+    height: 1;
+    padding: 0 1;
+    background: $comb;
+}
+
+#cz-status.-errors {
+    background: $error 30%;
+}
 
 #cz-body {
     height: 1fr;
@@ -91,29 +433,49 @@ DataTable > .datatable--header {
 
 #cz-tree {
     width: 3fr;
-    border-right: tall $primary;
+    background: $background;
     overflow-x: hidden;
 }
 
 #cz-detail {
     width: 2fr;
+    height: auto;
+    max-height: 100%;
+    border: round $wax;
+    border-title-color: $primary;
+    border-title-style: bold;
     padding: 0 1;
+    margin: 0 1;
+}
+
+#cz-message {
+    height: auto;
+    padding: 0 1;
+}
+
+Tree > .tree--cursor {
+    background: $comb;
+    text-style: bold;
+}
+
+Tree:focus > .tree--cursor {
+    background: $comb;
 }
 
 /* dialogs */
 
 ModalScreen {
     align: center middle;
-    background: $background 60%;
+    background: $background 70%;
 }
 
 .dialog {
     width: 80%;
-    max-width: 110;
+    max-width: 104;
     height: auto;
     max-height: 90%;
-    border: thick $primary;
-    background: $surface;
+    border: round $primary;
+    background: $background;
     padding: 1 2;
 }
 
@@ -132,10 +494,67 @@ ModalScreen {
     align-horizontal: right;
 }
 
+.dialog .hint {
+    color: $mist;
+    margin-bottom: 1;
+}
+
+.picker OptionList {
+    height: 16;
+    max-height: 16;
+    margin-top: 1;
+    background: $background;
+    border: none;
+}
+
+OptionList > .option-list--option-highlighted {
+    background: $comb;
+    text-style: bold;
+}
+
+.picker .actions Checkbox {
+    margin-right: 2;
+    background: $background;
+    border: none;
+}
+
 .error-text {
     color: $error;
 }
 
 .warning-text {
     color: $warning;
+}
+
+Footer {
+    background: $background;
+}
+
+Toast {
+    background: $comb;
+    border-left: outer $primary;
+}
+
+/* splash */
+
+#splash {
+    background: $background;
+}
+
+#splash-canvas {
+    width: auto;
+}
+
+.setting-control .fixed {
+    width: 1fr;
+}
+
+.setting-control .unlock {
+    background: $warning 25%;
+    color: $glass;
+}
+
+.setting-control .unlock:focus {
+    background: $warning;
+    color: $background;
 }

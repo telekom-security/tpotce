@@ -1,8 +1,9 @@
-"""The tpot menu: status, edition & services, images, update & backup.
+"""The tpot menu: status, edition & services, settings, users, sensors, images, update.
 
 Data comes from a Backend (tpotctl.ops on a host, fakes in the tests). Commands that
 need the real terminal (sudo, update.sh, restore.sh) go through a Runner, which
-suspends the app while they run.
+suspends the app while they run. The look (theme, icons, logo) is in theme.py,
+glyphs.py and logo.py, the user's choice of it in prefs.py.
 """
 
 import os
@@ -15,15 +16,19 @@ from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.widgets import Button, ContentSwitcher, DataTable, Footer, Input, Label, ListItem, ListView, Select, Static
+from textual.widgets import (Button, ContentSwitcher, DataTable, Footer, Label, ListItem, ListView, Static,
+                             TabbedContent, TabPane)
 
-from tpotctl import ops
+from tpotctl import glyphs, logo, ops, prefs, theme
 from tpotctl.bootstrap import REPO_DIR
+from tpotctl.commands import TpotCommands
 from tpotctl.screens.dialogs import ConfirmDialog, SensorDialog, UserDialog
 from tpotctl.theme import apply as apply_theme
+from tpotctl.ops import cell_state
+from tpotctl.widgets.comb import Honeycomb
+from tpotctl.widgets.header import TpotHeader
 
 LAUNCHER = os.path.join(REPO_DIR, "tpot")
-HEALTH_STYLE = {"healthy": "green", "unhealthy": "bold red", "starting": "yellow"}
 CUSTOM_OUTPUT = os.path.join(REPO_DIR, "docker-compose-custom.yml")
 
 
@@ -64,6 +69,16 @@ class Backend:
         from tpotctl import sensors
         return sensors.fetch_status(days)
 
+    def system(self):
+        from tpotctl import system
+        if not hasattr(self, "_meter"):
+            self._meter = system.Meter()
+        return self._meter.read(ops.env_values())
+
+    def attacks(self):
+        from tpotctl import events
+        return events.fetch()
+
 
 class Runner:
     """Run a command in the normal terminal, the app is suspended meanwhile."""
@@ -88,14 +103,80 @@ class Runner:
 
 def container_rows(containers: List[ops.Container]):
     for c in containers:
-        style = HEALTH_STYLE.get(c.health) or ("red" if c.state != "running" else "")
-        yield c.name, (c.name, Text(c.status, style=style), c.ports)
+        glyph, colour = cell_state(c)
+        status = Text()
+        status.append(f"{glyphs.g(glyph)} ", style=f"bold {theme.color(colour)}")
+        status.append(c.status, style=theme.color(colour) if colour != "ok" else "")
+        yield c.name, (c.name, status, c.ports)
+
+
+def meter(label: str, percent: Optional[float], detail: str = "", width: int = 12) -> Text:
+    """CPU   ▰▰▰▰▱▱▱▱▱▱▱▱  41 %  detail"""
+    text = Text()
+    text.append(f"{label:<6}", style="bold")
+    if percent is None:
+        text.append("measuring ...", style=theme.color("mist"))
+        return text
+    filled = round(min(max(percent, 0), 100) / 100 * width)
+    colour = theme.color("ok" if percent < 70 else "warn" if percent < 90 else "error")
+    text.append(glyphs.g("bar_on") * filled, style=colour)
+    text.append(glyphs.g("bar_off") * (width - filled), style=theme.color("wax"))
+    text.append(f" {percent:3.0f} %", style="bold")
+    if detail:
+        text.append(f"  {detail}", style=theme.color("mist"))
+    return text
+
+
+def system_text(state) -> Text:
+    from tpotctl.system import human
+    text = Text()
+    text.append_text(meter("CPU", state.cpu))
+    text.append("\n")
+    memory = state.memory
+    text.append_text(meter("RAM", memory.percent if memory else None,
+                           f"{human(memory.used)} of {human(memory.total)}" if memory else ""))
+    text.append("\n")
+    disk = state.disk
+    text.append_text(meter("Data", disk.percent if disk else None,
+                           f"{human(disk.used)} of {human(disk.total)}" if disk else ""))
+    return text
+
+
+def attacks_text(attacks, width: int) -> Text:
+    from tpotctl import events
+    text = Text()
+    if attacks is None:
+        return Text("asking Elasticsearch ...", style=theme.color("mist"))
+    if attacks.problem:
+        return Text(attacks.problem, style=theme.color("mist"))
+    values = attacks.per_minute[-max(10, width):]
+    if not any(values):
+        text.append("a quiet hour, no attacks\n\n", style=theme.color("mist"))
+    for line in [] if not any(values) else events.sparkline(values, glyphs.spark(), rows=1 if glyphs.mode() == "ascii" else 2):
+        text.append(line, style=theme.color("magenta"))
+        text.append("\n")
+    text.append(f"{sum(attacks.per_minute):,}".replace(",", " "), style="bold")
+    text.append(" in the last hour   ", style=theme.color("mist"))
+    text.append(f"{attacks.last_day:,}".replace(",", " "), style="bold")
+    text.append(" in 24 hours\n", style=theme.color("mist"))
+    for name, count in attacks.top:
+        text.append(f"{name} ", style=theme.color("glass"))
+        text.append(f"{count:,}   ".replace(",", " "), style=theme.color("mist"))
+    return text
 
 
 class StatusPane(Vertical):
 
     def compose(self) -> ComposeResult:
-        yield Label("Status", classes="pane-title")
+        with Horizontal(id="dash"):
+            with Vertical(id="hive-block", classes="block"):
+                yield Honeycomb(id="comb")
+            with Vertical(id="side-blocks"):
+                with Vertical(id="attacks-block", classes="block"):
+                    yield Static(attacks_text(None, 40), id="attacks")
+                with Vertical(id="system-block", classes="block"):
+                    yield Static("", id="system")
+            yield Static(logo.pot(), id="pot")
         yield Static("", id="status-info", classes="info")
         yield DataTable(id="containers", cursor_type="row", zebra_stripes=True)
         with Horizontal(classes="actions"):
@@ -104,9 +185,18 @@ class StatusPane(Vertical):
             yield Button("Restart", id="svc-restart", variant="primary")
 
     def on_mount(self) -> None:
-        self.query_one(DataTable).add_columns("NAME", "STATUS", "PORTS")
+        self.query_one("#hive-block").border_title = "Hive"
+        self.query_one("#attacks-block").border_title = "Attacks"
+        self.query_one("#system-block").border_title = "System"
+        self.hive = self.app.backend.tpot_type() != "SENSOR"
+        self.query_one("#attacks-block").display = self.hive
+        self.attacks = None
+        self.query_one(DataTable).add_columns("Name", "Status", "Ports")
         self.load()
         self.set_interval(2.0, self.load)
+        if self.hive:
+            self.load_attacks()
+            self.set_interval(30.0, self.load_attacks)
 
     @work(thread=True, exclusive=True, group="status")
     def load(self) -> None:
@@ -115,27 +205,46 @@ class StatusPane(Vertical):
             state, containers, problem = backend.status(), backend.containers(), ""
         except ops.OpsError as err:
             state, containers, problem = None, [], str(err)
-        self.app.call_from_thread(self.show, state, containers, problem)
+        try:
+            machine = backend.system()
+        except Exception:      # nothing in /proc is worth a crash of the menu
+            machine = None
+        self.app.call_from_thread(self.show, state, containers, problem, machine)
 
-    def show(self, state: Optional[ops.Status], containers: List[ops.Container], problem: str) -> None:
-        info = Text()
+    @work(thread=True, exclusive=True, group="attacks")
+    def load_attacks(self) -> None:
+        attacks = self.app.backend.attacks()
+        self.app.call_from_thread(self.show_attacks, attacks)
+
+    def show_attacks(self, attacks) -> None:
+        self.attacks = attacks
+        width = self.query_one("#attacks").content_region.width or 40
+        self.query_one("#attacks", Static).update(attacks_text(attacks, width))
+
+    def repaint(self) -> None:
+        """After a change of theme or icons."""
+        self.query_one("#pot", Static).update(logo.pot())
+        self.query_one(Honeycomb).repaint()
+        if self.attacks is not None:
+            self.show_attacks(self.attacks)
+        if getattr(self, "shown", None):
+            self.show(*self.shown)
+
+    def show(self, state: Optional[ops.Status], containers: List[ops.Container], problem: str,
+             machine=None) -> None:
+        self.shown = (state, containers, problem, machine)
         if state is not None:
-            for label, value in (("Version", f"{state.version} ({state.branch} {state.commit})"),
-                                 ("Edition", state.edition), ("Type", state.tpot_type),
-                                 ("Service", state.service)):
-                info.append(f"{label:<9}", style="bold #E20074")
-                info.append(f"{value}\n", style="red" if label == "Service" and state.service != "active" else "")
+            self.app.update_header(state)
+        self.query_one(Honeycomb).show(containers)
+        if machine is not None:
+            self.query_one("#system", Static).update(system_text(machine))
+        info = Text()
         running = sum(c.state == "running" for c in containers)
-        unhealthy = sum(c.health == "unhealthy" for c in containers)
-        restarting = sum(c.state == "restarting" for c in containers)
-        info.append(f"{'Running':<9}", style="bold #E20074")
-        info.append(f"{running}/{len(containers)} containers", style="")
-        if restarting:
-            info.append(f", {restarting} restarting", style="bold red")
-        if unhealthy:
-            info.append(f", {unhealthy} unhealthy", style="bold red")
+        info.append(f"{running} of {len(containers)} containers running", style="bold")
+        if state is not None and state.service not in ("active", "n/a"):
+            info.append(f"   the tpot service is {state.service}", style=theme.color("error"))
         if problem:
-            info.append(f"\n{problem}", style="red")
+            info.append(f"   {problem}", style=theme.color("error"))
         self.query_one("#status-info", Static).update(info)
         table = self.query_one(DataTable)
         row = table.cursor_row
@@ -153,13 +262,12 @@ class StatusPane(Vertical):
 class ImagesPane(Vertical):
 
     def compose(self) -> ComposeResult:
-        yield Label("Images", classes="pane-title")
         yield DataTable(id="images-table", cursor_type="row", zebra_stripes=True)
         with Horizontal(classes="actions"):
             yield Button("Refresh", id="images-refresh")
 
     def on_mount(self) -> None:
-        self.query_one(DataTable).add_columns("REPOSITORY", "TAG", "IMAGE ID", "SIZE", "CREATED")
+        self.query_one(DataTable).add_columns("Repository", "Tag", "Image ID", "Size", "Created")
         self.load()
 
     @work(thread=True, exclusive=True, group="images")
@@ -184,7 +292,6 @@ class ImagesPane(Vertical):
 class EditionPane(Vertical):
 
     def compose(self) -> ComposeResult:
-        yield Label("Edition & services", classes="pane-title")
         yield Static("", id="edition-info", classes="info")
         with Horizontal(classes="actions"):
             yield Button("Open the customizer", id="open-customizer", variant="primary")
@@ -194,8 +301,8 @@ class EditionPane(Vertical):
 
     def show(self) -> None:
         info = Text()
-        info.append("Installed  ", style="bold #E20074")
-        info.append(f"{ops.edition()}\n\n")
+        info.append("Installed   ", style=theme.color("mist"))
+        info.append(f"{ops.edition()}\n\n", style=f"bold {theme.color('magenta')}")
         info.append("Choose an edition to start from, switch services on and off and move host ports. "
                     "The customizer writes docker-compose-custom.yml and only does so without errors.")
         self.query_one("#edition-info", Static).update(info)
@@ -205,66 +312,66 @@ class EditionPane(Vertical):
             self.app.action_customize()
 
 
-class SettingRow(Vertical):
-    """One setting: title, the field for it, help and its problem."""
+class SettingsForm(VerticalScroll, inherit_bindings=False):
+    """The settings of one tab; up and down go to the page, they move between the settings."""
 
-    def __init__(self, rule, value: str, fixed: str):
-        super().__init__(classes="setting")
-        self.rule, self.value, self.fixed = rule, value, fixed
-
-    def compose(self) -> ComposeResult:
-        from tpotctl import settings as tsettings
-        rule = self.rule
-        title = Text(rule.title, style="bold")
-        title.append(f"  {rule.key}", style="dim")
-        yield Label(title)
-        if not rule.editable:
-            shown = tsettings.shown(rule, self.value) or "(empty)"
-            yield Static(Text(f"{shown}  ({self.fixed})", style="dim"))
-        elif rule.type == "enum":
-            current = self.value if self.value in rule.values else Select.NULL
-            yield Select([(v, v) for v in rule.values], value=current, id=f"set-{rule.key}",
-                         allow_blank=rule.optional or current is Select.NULL)
-        else:
-            yield Input(self.value, password=rule.secret, id=f"set-{rule.key}", placeholder=rule.default)
-        if rule.help:
-            yield Static(Text(rule.help, style="dim"))
-        yield Static("", id=f"err-{rule.key}")
+    BINDINGS = [
+        Binding("pageup", "page_up", show=False),
+        Binding("pagedown", "page_down", show=False),
+        Binding("home", "scroll_home", show=False),
+        Binding("end", "scroll_end", show=False),
+    ]
 
 
 class SettingsPane(Vertical):
     """The settings of this T-Pot in .env, checked against the schema while you type."""
 
+    BINDINGS = [
+        Binding("down", "move(1)", "Next setting", show=False),
+        Binding("up", "move(-1)", "Previous setting", show=False),
+    ]
+
     def compose(self) -> ComposeResult:
-        yield Label("Settings", classes="pane-title")
-        yield Static("", id="settings-status", classes="info")
-        yield VerticalScroll(id="settings-form")
-        with Horizontal(classes="actions"):
-            yield Button("Save", id="settings-save", variant="primary", disabled=True)
+        with Horizontal(id="settings-head"):
+            yield Static("", id="settings-status")
             yield Button("Revert", id="settings-revert")
+            yield Button("Save", id="settings-save", variant="primary", disabled=True)
+        yield TabbedContent(id="settings-tabs")
 
-    def on_mount(self) -> None:
-        self.reload()
+    async def on_mount(self) -> None:
+        self.current = None
+        self.rows = {}
+        self.unlocked = set()
+        await self.reload()
 
-    def reload(self) -> None:
+    async def reload(self) -> None:
         from tpotctl import envschema
         from tpotctl.settings import SettingsError
-        form = self.query_one("#settings-form", VerticalScroll)
-        form.remove_children()
+        from tpotctl.widgets.fields import SettingRow
+        tabs = self.query_one("#settings-tabs", TabbedContent)
+        active = tabs.active
+        await tabs.clear_panes()
+        self.rows = {}
         try:
             self.current = self.app.backend.settings()
         except (SettingsError, OSError) as err:
             self.current = None
-            self.query_one("#settings-status", Static).update(Text(str(err), style="red"))
+            self.query_one("#settings-status", Static).update(Text(str(err), style=theme.color("error")))
             return
         self.draft = dict(self.current.values)
-        rows, section = [], None
+        self.unlocked = set()
+        by_section = {}
         for rule in self.current.relevant():
-            if rule.section != section:
-                section = rule.section
-                rows.append(Label(dict(envschema.SECTIONS).get(section, section), classes="settings-section"))
-            rows.append(SettingRow(rule, self.draft.get(rule.key, ""), self.current.why_fixed(rule.key)))
-        form.mount(*rows)
+            row = SettingRow(rule, self.draft.get(rule.key, ""), self.current.why_fixed(rule.key),
+                             unlockable=self.current.can_unlock(rule.key))
+            self.rows[rule.key] = row
+            by_section.setdefault(rule.section, []).append(row)
+        for section, title in envschema.SECTIONS:
+            if by_section.get(section):
+                await tabs.add_pane(TabPane(title, SettingsForm(*by_section[section], classes="settings-form"),
+                                            id=f"tab-{section}"))
+        if active and active in [f"tab-{section}" for section in by_section]:
+            tabs.active = active
         self.call_after_refresh(self.check)
 
     def changes(self):
@@ -272,55 +379,183 @@ class SettingsPane(Vertical):
             return {}
         saved = self.current.values
         return {key: value for key, value in self.draft.items()
-                if key in self.current.schema and self.current.schema[key].editable and saved.get(key, "") != value}
+                if key in self.current.schema and (self.current.schema[key].editable or key in self.unlocked)
+                and saved.get(key, "") != value}
 
     def check(self) -> None:
+        from tpotctl import envschema
         if self.current is None:
             return
         problems = self.current.problems(self.draft)
         by_key = {}
         for problem in problems:
             by_key.setdefault(problem.key, []).append(problem)
-        for widget in self.query(".setting Static"):
-            if widget.id and widget.id.startswith("err-"):
-                key = widget.id[4:]
-                text = Text()
-                for problem in by_key.get(key, []):
-                    text.append(f"! {problem.text}\n", style="bold red" if problem.level == "error" else "yellow")
-                widget.update(text)
         changes = self.changes()
+        errors_in = {}
+        for key, row in self.rows.items():
+            if not row.is_mounted:
+                continue
+            row.display = envschema.shown_now(row.rule, self.draft, self.current.schema) or bool(by_key.get(key))
+            row.mark(key in changes, by_key.get(key, []))
+            if any(p.level == "error" for p in by_key.get(key, [])):
+                errors_in[row.rule.section] = errors_in.get(row.rule.section, 0) + 1
+        tabs = self.query_one("#settings-tabs", TabbedContent)
+        for section, title in envschema.SECTIONS:
+            try:
+                tab = tabs.get_tab(f"tab-{section}")
+            except Exception:      # no keys of that section here
+                continue
+            label = Text(title)
+            if errors_in.get(section):
+                label.append(f" {glyphs.g('fail')} {errors_in[section]}", style=f"bold {theme.color('error')}")
+            tab.label = label
         blocking = self.current.blocking(problems, changes)
         self.query_one("#settings-save", Button).disabled = not changes or bool(blocking)
+        self.query_one("#settings-revert", Button).disabled = not changes
         status = Text()
-        status.append(self.current.path, style="dim")
         if changes:
-            status.append(f"\n{len(changes)} change(s): {', '.join(changes)}", style="bold #E20074")
+            status.append(f"{glyphs.g('changed')} {len(changes)} change{'s' if len(changes) > 1 else ''}",
+                          style=f"bold {theme.color('magenta')}")
+            status.append(f"  {', '.join(changes)}", style=theme.color("mist"))
+        else:
+            status.append(self.current.path.replace(os.path.expanduser("~"), "~", 1), style=theme.color("mist"))
         others = [p for p in problems if p.level == "error" and p.key not in changes]
         if others:
-            status.append(f"\n{len(others)} error(s) T-Pot would not start with, see below", style="red")
+            status.append(f"\n{glyphs.g('fail')} T-Pot would not start with {len(others)} of the values, "
+                          f"they are marked", style=theme.color("error"))
         self.query_one("#settings-status", Static).update(status)
 
-    def on_input_changed(self, event: Input.Changed) -> None:
-        if event.input.id and event.input.id.startswith("set-"):
-            self.draft[event.input.id[4:]] = event.value
-            self.check()
+    def on_setting_row_changed(self, event) -> None:
+        self.draft[event.key] = event.value
+        self.check()
 
-    def on_select_changed(self, event: Select.Changed) -> None:
-        if event.select.id and event.select.id.startswith("set-"):
-            self.draft[event.select.id[4:]] = "" if event.value is Select.NULL else str(event.value)
-            self.check()
+    def on_setting_row_unlock(self, event) -> None:
+        row = event.row
+        rule = row.rule
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
+        async def answered(yes: bool) -> None:
+            if yes:
+                await self.unlock(row)
+
+        self.app.push_screen(ConfirmDialog(f"Unlock {rule.title} ({rule.key})?",
+                                           Text(f"{rule.unlock}\n\nIt stays unlocked until you save or revert, "
+                                                f"T-Pot checks the value as always.", style=theme.color("glass")),
+                                           yes="Unlock", no="Keep it fixed"), answered)
+
+    async def unlock(self, row) -> None:
+        import dataclasses
+        from tpotctl.widgets.fields import SettingRow
+        key = row.rule.key
+        self.unlocked.add(key)
+        editable = SettingRow(dataclasses.replace(row.rule, editable=True), self.draft.get(key, ""), "",
+                              unlocked=True)
+        parent = row.parent
+        place = list(parent.children).index(row)
+        await row.remove()
+        if place < len(parent.children):
+            await parent.mount(editable, before=place)
+        else:
+            await parent.mount(editable)
+        self.rows[key] = editable
+        self.focus_row(editable)
+        self.check()
+
+    def on_setting_row_pick(self, event) -> None:
+        from tpotctl.screens import pickers
+        from tpotctl.widgets.fields import llm_settings
+        row, rule = event.row, event.row.rule
+        if event.detect:
+            self.detect(row)
+            return
+        current = self.draft.get(rule.key, "")
+        if rule.widget == "interface":
+            picker = pickers.interface_picker(current)
+        elif rule.widget == "timezone":
+            picker = pickers.timezone_picker(current)
+        else:
+            llm = llm_settings(rule, self.draft, self.current.schema)
+            picker = pickers.model_picker(current, llm["provider"], llm["url"], llm["api_key"])
+        self.app.push_screen(picker, lambda value: row.set_value(value) if value is not None else None)
+
+    @work(thread=True, exclusive=True, group="detect")
+    def detect(self, row) -> None:
+        from tpotctl import netinfo, tz
+        found = netinfo.detect() if row.rule.widget == "interface" else tz.detect()
+        self.app.call_from_thread(self.detected, row, found)
+
+    def detected(self, row, found: str) -> None:
+        if not found:
+            self.app.notify("Nothing detected on this host.", title=row.rule.title, severity="warning")
+            return
+        row.set_value(found)
+        note = (f"{found} has the route to the internet. Empty picks it automatically, and follows "
+                f"when the route changes." if row.rule.widget == "interface" else f"{found} is the time zone "
+                f"of this host.")
+        self.app.notify(note, title=row.rule.title)
+
+    def visible_rows(self):
+        active = self.query_one("#settings-tabs", TabbedContent).active
+        return [row for row in self.rows.values()
+                if row.is_mounted and row.display and f"tab-{row.rule.section}" == active]
+
+    def action_move(self, step: int) -> None:
+        """up / down: from setting to setting, above the first one is the tab bar."""
+        from tpotctl.widgets.fields import SettingRow
+        from textual.widgets import Tabs
+        rows = self.visible_rows()
+        focused = self.app.focused
+        row = next((w for w in (focused.ancestors_with_self if focused else []) if isinstance(w, SettingRow)), None)
+        if row is None:
+            if focused is not None and any(isinstance(w, Tabs) for w in focused.ancestors_with_self) and step > 0:
+                self.focus_row(rows[0] if rows else None)
+            return
+        index = rows.index(row) if row in rows else 0
+        if index + step < 0:
+            self.query_one("#settings-tabs", TabbedContent).query_one(Tabs).focus()
+        elif index + step < len(rows):
+            self.focus_row(rows[index + step])
+
+    def focus_row(self, row) -> None:
+        if row is None:
+            return
+        controls = row.controls()
+        (controls[0] if controls else row).focus()
+        row.scroll_visible()
+
+    def enter(self) -> None:
+        """From the menu into the page: the first setting of the open tab."""
+        rows = self.visible_rows()
+        if rows:
+            self.focus_row(rows[0])
+
+    def focus_setting(self, key: str) -> None:
+        row = self.rows.get(key)
+        if row is None:
+            return
+        self.query_one("#settings-tabs", TabbedContent).active = f"tab-{row.rule.section}"
+
+        def focus() -> None:
+            row.display = True
+            control = row.query(f"#set-{key}")
+            if control:
+                control.first().focus()
+                row.scroll_visible()
+            else:
+                self.focus_row(row)
+
+        self.call_after_refresh(focus)
+
+    async def on_button_pressed(self, event: Button.Pressed) -> None:
         from tpotctl.settings import SettingsError
         if event.button.id == "settings-revert":
-            self.reload()
+            await self.reload()
         elif event.button.id == "settings-save":
             try:
-                self.current.change(self.changes())
+                self.current.change(self.changes(), unlocked=self.unlocked)
             except SettingsError as err:
                 self.app.notify(str(err), title="Not saved", severity="error", timeout=10)
                 return
-            self.reload()
+            await self.reload()
             if self.app.backend.linux_host():
                 self.app.push_screen(ConfirmDialog("Saved. Restart T-Pot now, so that it uses the new settings?",
                                                    yes="Restart", no="Later"),
@@ -333,7 +568,6 @@ class UsersPane(Vertical):
     """Users of the web UI (WEB_USER), changes count at once."""
 
     def compose(self) -> ComposeResult:
-        yield Label("Web users", classes="pane-title")
         yield Static("", id="users-info", classes="info")
         yield DataTable(id="users-table", cursor_type="row", zebra_stripes=True)
         with Horizontal(classes="actions"):
@@ -342,7 +576,7 @@ class UsersPane(Vertical):
             yield Button("Remove", id="user-remove")
 
     def on_mount(self) -> None:
-        self.query_one(DataTable).add_columns("USER", "HASH", "STATE")
+        self.query_one(DataTable).add_columns("User", "Hash", "State")
         self.show()
 
     def show(self) -> None:
@@ -355,15 +589,20 @@ class UsersPane(Vertical):
             entries = self.store.users()
         except UsersError as err:
             self.store, entries = None, []
-            info.append(str(err), style="red")
+            info.append(str(err), style=theme.color("error"))
         for user in entries:
-            state = Text("ok", style="green") if user.ok else Text(f"! {user.problem}", style="bold red")
+            state = Text(f"{glyphs.g('ok')} ok", style=theme.color("ok")) if user.ok else \
+                Text(f"{glyphs.g('fail')} {user.problem}", style=f"bold {theme.color('error')}")
             table.add_row(user.name, user.scheme or "-", state, key=user.name)
         if self.store is not None:
-            info.append("New and changed passwords are bcrypt, nginx uses them right away.", style="dim")
+            if not entries:
+                info.append("No web users yet. Add one, without a user nobody can open the T-Pot web UI.\n",
+                            style=f"bold {theme.color('warn')}")
+            info.append("New and changed passwords are bcrypt, nginx uses them right away.",
+                        style=theme.color("mist"))
             if any(not u.ok for u in entries):
                 info.append("\nT-Pot does not start with the marked entries: change their password or remove "
-                            "them.", style="bold red")
+                            "them.", style=f"bold {theme.color('error')}")
         self.query_one("#users-info", Static).update(info)
 
     def selected(self) -> str:
@@ -423,7 +662,6 @@ class SensorsPane(Vertical):
     """Sensors of this HIVE: access, where they are, when they were last seen."""
 
     def compose(self) -> ComposeResult:
-        yield Label("Sensors", classes="pane-title")
         yield Static("", id="sensors-info", classes="info")
         yield DataTable(id="sensors-table", cursor_type="row", zebra_stripes=True)
         with Horizontal(classes="actions"):
@@ -434,7 +672,7 @@ class SensorsPane(Vertical):
             yield Button("Refresh", id="sensor-refresh")
 
     def on_mount(self) -> None:
-        self.query_one(DataTable).add_columns("SENSOR", "HOST", "HOSTNAME", "LAST SEEN", "STATE")
+        self.query_one(DataTable).add_columns("Sensor", "Host", "Hostname", "Last seen", "State")
         self.registry = None
         self.load()
 
@@ -456,29 +694,33 @@ class SensorsPane(Vertical):
         table.clear()
         info = Text()
         if registry is None:
-            info.append(problem, style="red")
+            info.append(problem, style=theme.color("error"))
             self.query_one("#sensors-info", Static).update(info)
             return
         for sensor in registry.sensors():
             seen = status.sensors.get(sensor.name)
             if not sensor.access:
-                state = Text("no access", style="red")
+                state = Text(f"{glyphs.g('fail')} no access", style=theme.color("error"))
             elif seen:
-                state = Text("sending", style="green")
+                state = Text(f"{glyphs.g('running')} sending", style=theme.color("ok"))
             else:
-                state = Text("unknown" if status.problem else "nothing in 7 days", style="yellow")
+                state = Text(f"{glyphs.g('stopped')} " + ("unknown" if status.problem else "nothing in 7 days"),
+                             style=theme.color("warn"))
             table.add_row(sensor.name + ("" if sensor.source == "deployed" else " (migrated)"), sensor.host or "-",
                           (seen.hostname if seen else sensor.hostname) or "-",
                           seen.last[:19].replace("T", " ") if seen else "-", state, key=sensor.name)
         if not registry.sensors():
-            info.append("No sensors yet.", style="dim")
+            info.append("No sensors yet. Deploy a sensor to send its events to this HIVE.",
+                        style=theme.color("mist"))
         if registry.migrated:
-            info.append(f"Taken over from LS_WEB_USER: {', '.join(registry.migrated)}. ", style="#E20074")
+            info.append(f"Taken over from LS_WEB_USER: {', '.join(registry.migrated)}. ", style=theme.color("magenta"))
         if status.problem:
-            info.append(f"\n{status.problem}", style="yellow")
+            info.append(f"\n{status.problem}", style=theme.color("warn"))
         for hostname, seen in sorted(status.unlinked.items()):
             info.append(f"\nEvents from {hostname} carry no sensor name: older ones, or this HIVE does not pass it "
-                        f"on yet (update T-Pot).", style="dim")
+                        f"on yet (update T-Pot).", style=theme.color("mist"))
+        if info.plain.startswith("\n"):
+            info = info[1:]
         self.query_one("#sensors-info", Static).update(info)
 
     def selected(self) -> str:
@@ -532,7 +774,6 @@ class SensorsPane(Vertical):
 class UpdatePane(Vertical):
 
     def compose(self) -> ComposeResult:
-        yield Label("Update & backup", classes="pane-title")
         yield Static("", id="update-info", classes="info")
         with Horizontal(classes="actions"):
             yield Button("Update", id="run-update", variant="primary")
@@ -541,13 +782,13 @@ class UpdatePane(Vertical):
         yield DataTable(id="backups", cursor_type="row")
 
     def on_mount(self) -> None:
-        self.query_one(DataTable).add_columns("BACKUPS IN ~/tpot_backups", "SIZE")
+        self.query_one(DataTable).add_columns("Backups in ~/tpot_backups", "Size")
         self.show()
 
     def show(self) -> None:
         info = Text()
         info.append("update.sh stops T-Pot, writes a backup, pulls the release of your branch and puts your "
-                    "edition and settings back. restore.sh brings a backup back.", style="")
+                    "edition and settings back. restore.sh brings a backup back.", style=theme.color("mist"))
         self.query_one("#update-info", Static).update(info)
         table = self.query_one(DataTable)
         table.clear()
@@ -576,6 +817,21 @@ PANES = [
     ("images", "Images", ImagesPane, True),
     ("update", "Update & backup", UpdatePane, True),
 ]
+SHORT = {"edition": "Edition", "users": "Users", "update": "Update"}
+REPAINT = {"status": "repaint", "edition": "show", "settings": "check", "users": "show", "sensors": "load",
+           "images": "load", "update": "show"}
+
+
+def menu_text(key: str, title: str, active: bool) -> Text:
+    text = Text()
+    if glyphs.mode() == "nerd":
+        icon = glyphs.icon_pane(key)
+    else:
+        icon = glyphs.g("on") if active else glyphs.g("off")
+    # bright on the page you are on: it sits on magenta while the menu has the focus
+    text.append(f"{icon} ", style=f"bold {theme.color('glass')}" if active else theme.color("mist"))
+    text.append(title, style="bold" if active else "")
+    return text
 
 
 class TpotApp(App):
@@ -583,37 +839,150 @@ class TpotApp(App):
 
     CSS_PATH = "tpot.tcss"
     TITLE = "T-Pot"
+    COMMANDS = App.COMMANDS | {TpotCommands}
+    HORIZONTAL_BREAKPOINTS = [(0, "-narrow"), (100, "-normal"), (150, "-wide")]
+    VERTICAL_BREAKPOINTS = [(0, "-short"), (34, "-tall")]
     BINDINGS = [
         Binding("q", "quit", "Quit"),
         Binding("c", "customize", "Customizer"),
         Binding("r", "restart_service", "Restart T-Pot", show=False),
+        Binding("f2", "next_icons", "Icons"),
+        Binding("escape", "menu", "Menu", show=False),
+        Binding("right", "enter_page", "Open", show=False),
     ]
 
-    def __init__(self, backend: Optional[Backend] = None, runner: Optional[Callable] = None):
+    def __init__(self, backend: Optional[Backend] = None, runner: Optional[Callable] = None, splash: bool = False):
         super().__init__()
         self.backend = backend or Backend()
         self.runner = runner or Runner(self)
+        self.splash = splash
+        apply_theme(self)
         sensor = self.backend.tpot_type() == "SENSOR"
         self.panes = [p for p in PANES if (self.backend.linux_host() or not p[3])
                       and not (sensor and p[0] in ("users", "sensors"))]
 
     def compose(self) -> ComposeResult:
-        yield Static("T-Pot", id="title", classes="bar")
-        with Horizontal():
-            yield ListView(*[ListItem(Label(title), id=f"menu-{key}") for key, title, _cls, _host in self.panes],
-                           id="sidebar")
+        yield TpotHeader(id="header")
+        with Horizontal(id="body"):
+            yield ListView(*[ListItem(Label(menu_text(key, title, False), classes="menu-long"),
+                                      Label(menu_text(key, SHORT.get(key, title), False), classes="menu-short"),
+                                      id=f"menu-{key}")
+                             for key, title, _cls, _host in self.panes], id="sidebar")
             with ContentSwitcher(initial=self.panes[0][0], id="panes"):
                 for key, _title, cls, _host in self.panes:
                     yield cls(id=key, classes="pane")
         yield Footer()
 
+    def get_theme_variable_defaults(self):
+        return theme.variable_defaults()
+
     def on_mount(self) -> None:
-        apply_theme(self)
+        from tpotctl.screens.splash import SplashScreen, fits
+        self.paint_menu()
         self.query_one("#sidebar", ListView).focus()
+        if self.splash and fits(self.size.width, self.size.height):
+            self.push_screen(SplashScreen(ops.env_values().get("TPOT_VERSION", "")))
+        if not any(key == "status" for key, *_rest in self.panes):
+            self.load_header()
+
+    @work(thread=True, exclusive=True, group="header")
+    def load_header(self) -> None:
+        try:
+            state = self.backend.status()
+        except ops.OpsError:
+            return
+        self.call_from_thread(self.update_header, state)
+
+    def update_header(self, state: ops.Status) -> None:
+        self.query_one(TpotHeader).repaint(state)
+
+    def paint_menu(self) -> None:
+        current = self.query_one(ContentSwitcher).current
+        for key, title, _cls, _host in self.panes:
+            item = self.query_one(f"#menu-{key}", ListItem)
+            item.query_one(".menu-long", Label).update(menu_text(key, title, key == current))
+            item.query_one(".menu-short", Label).update(menu_text(key, SHORT.get(key, title), key == current))
 
     def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
         if event.item is not None and event.item.id:
             self.query_one(ContentSwitcher).current = event.item.id[len("menu-"):]
+            self.paint_menu()
+
+    def check_action(self, action: str, parameters):
+        # the customizer and the dialogs are screens of their own, c there would open a second one
+        if action in ("customize", "restart_service") and len(self.screen_stack) > 1:
+            return False
+        return True
+
+    def action_menu(self) -> None:
+        """esc: back to the menu on the left."""
+        if len(self.screen_stack) == 1:
+            self.query_one("#sidebar", ListView).focus()
+
+    def action_enter_page(self) -> None:
+        """right or enter in the menu: into the page."""
+        if self.focused is not self.query_one("#sidebar", ListView):
+            return
+        pane = self.query_one(f"#{self.query_one(ContentSwitcher).current}")
+        if hasattr(pane, "enter"):
+            pane.enter()
+            return
+        target = next((w for w in pane.query("*") if w.focusable), None)
+        if target is not None:
+            target.focus()
+
+    def on_list_view_selected(self, event: ListView.Selected) -> None:
+        self.action_enter_page()
+
+    def get_system_commands(self, screen):
+        # one theme, the T-Pot colours: no theme picker
+        for command in super().get_system_commands(screen):
+            if command.title != "Theme":
+                yield command
+
+    # -- navigation ----------------------------------------------------------
+
+    def goto(self, key: str) -> None:
+        keys = [k for k, *_rest in self.panes]
+        if key in keys:
+            self.query_one("#sidebar", ListView).index = keys.index(key)
+            self.query_one(ContentSwitcher).current = key
+            self.paint_menu()
+
+    def setting_keys(self):
+        pane = self.query("#settings")
+        current = getattr(pane.first(), "current", None) if pane else None
+        if current is None:
+            return []
+        return [(rule.key, rule.title) for rule in current.relevant()]
+
+    def goto_setting(self, key: str) -> None:
+        self.goto("settings")
+        self.query_one("#settings", SettingsPane).focus_setting(key)
+
+    # -- look ----------------------------------------------------------------
+
+    def action_next_icons(self) -> None:
+        self.set_icons(glyphs.MODES[(glyphs.MODES.index(glyphs.mode()) + 1) % len(glyphs.MODES)])
+
+    def set_icons(self, mode: str) -> None:
+        glyphs.set_mode(mode)
+        chosen = prefs.load()
+        chosen.icons = mode
+        self.remember(chosen, f"Icons {mode}" + (", they need a Nerd Font in your terminal" if mode == "nerd" else ""))
+
+    def remember(self, chosen: prefs.Prefs, what: str) -> None:
+        saved = prefs.save(chosen)
+        self.repaint()
+        self.notify(what if saved else f"{what}, for this run only ({prefs.path()} cannot be written)",
+                    title="Look", timeout=4)
+
+    def repaint(self) -> None:
+        """Rich texts carry their colours and glyphs, draw them anew."""
+        self.query_one(TpotHeader).repaint()
+        self.paint_menu()
+        for key, *_rest in self.panes:
+            getattr(self.query_one(f"#{key}"), REPAINT[key])()
 
     # -- actions -------------------------------------------------------------
 
@@ -679,7 +1048,7 @@ class TpotApp(App):
         self.push_screen(ConfirmDialog(
             "docker-compose-custom.yml is written. Replace docker-compose.yml with it and restart T-Pot now?",
             Text("Not sure? Choose 'Not now' and test it first with docker compose -f "
-                 "docker-compose-custom.yml up.", style="dim"), yes="Replace and restart", no="Not now"), replace)
+                 "docker-compose-custom.yml up.", style=theme.color("mist")), yes="Replace and restart", no="Not now"), replace)
 
 
 class CustomizerApp(App):
@@ -691,10 +1060,13 @@ class CustomizerApp(App):
     def __init__(self, catalog, selection, max_networks: int):
         super().__init__()
         self.catalog, self.selection, self.max_networks = catalog, selection, max_networks
+        apply_theme(self)
+
+    def get_theme_variable_defaults(self):
+        return theme.variable_defaults()
 
     def on_mount(self) -> None:
         from tpotctl.screens.customizer import CustomizerScreen
-        apply_theme(self)
         self.push_screen(CustomizerScreen(self.catalog, self.selection, self.max_networks), self.exit)
 
 
@@ -702,8 +1074,13 @@ def run_customizer(catalog, selection, max_networks: int):
     return CustomizerApp(catalog, selection, max_networks).run()
 
 
+def splash_wanted() -> bool:
+    """The logo for a person at a terminal, not with TPOT_SPLASH=off."""
+    return sys.stdout.isatty() and os.environ.get("TPOT_SPLASH", "on").lower() not in ("off", "0", "no", "false")
+
+
 def run_app() -> int:
-    result = TpotApp().run()
+    result = TpotApp(splash=splash_wanted()).run()
     if result == "restart":
         os.execv(sys.executable, [sys.executable, LAUNCHER])
     return 0

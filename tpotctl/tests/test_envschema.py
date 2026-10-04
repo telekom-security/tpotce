@@ -12,6 +12,9 @@ import tempfile
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from tpotctl.tests import isolate  # noqa: E402
+
+isolate()   # keeps the user's config out of the tests
 
 try:
     import yaml

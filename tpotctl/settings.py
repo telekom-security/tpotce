@@ -7,7 +7,7 @@ it, tpotinit reports those on the next start anyway.
 
 import os
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Set
+from typing import Dict, Iterable, List, Optional, Set
 
 from tpotctl import envschema, ops
 from tpotctl.bootstrap import REPO_DIR
@@ -62,14 +62,22 @@ class Settings:
             return f"managed with {MANAGED_BY[key]}"
         return "fixed by the release or the installer"
 
-    def change(self, changes: Dict[str, str]) -> List[envschema.Problem]:
-        """Write the changes, give back the warnings that remain; SettingsError if not written."""
+    def can_unlock(self, key: str) -> bool:
+        """A fixed key with a warning in the schema; the managed ones have their own commands."""
+        rule = self.schema.get(key)
+        return rule is not None and not rule.editable and bool(rule.unlock) and key not in MANAGED_BY
+
+    def change(self, changes: Dict[str, str], unlocked: Iterable[str] = ()) -> List[envschema.Problem]:
+        """Write the changes, give back the warnings that remain; SettingsError if not written.
+        A fixed key is only written if it is in unlocked (and can be unlocked)."""
+        unlocked = set(unlocked)
         for key, value in changes.items():
             rule = self.schema.get(key)
             if rule is None:
                 raise SettingsError(f"{key} is not a T-Pot setting, see tpot env list --all")
-            if not rule.editable:
-                raise SettingsError(f"{key} is {self.why_fixed(key)}, tpot does not change it")
+            if not rule.editable and not (key in unlocked and self.can_unlock(key)):
+                hint = f", unlock it with: tpot env set --unlock {key}=..." if self.can_unlock(key) else ""
+                raise SettingsError(f"{key} is {self.why_fixed(key)}, tpot does not change it{hint}")
         values = dict(self.values)
         values.update(changes)
         problems = self.problems(values)

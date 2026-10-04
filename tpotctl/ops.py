@@ -11,7 +11,7 @@ import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
 from tpotctl.bootstrap import REPO_DIR
 from tpotctl.envfile import read_values
@@ -126,6 +126,15 @@ class Image:
     @property
     def ref(self) -> str:
         return f"{self.repository}:{self.tag}"
+
+
+def cell_state(container: Container) -> Tuple[str, str]:
+    """(glyph name, colour name) of a container, see tpotctl.glyphs and tpotctl.theme.STYLE."""
+    if container.state == "restarting":
+        return "warn", "error"
+    if container.state != "running":
+        return "off", "error" if container.state in ("exited", "dead") else "mist"
+    return "on", {"unhealthy": "error", "starting": "warn"}.get(container.health, "ok")
 
 
 def compact_ports(ports: str) -> str:

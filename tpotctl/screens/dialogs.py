@@ -9,12 +9,18 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, Checkbox, Input, Label, OptionList, Static
 
+from tpotctl import glyphs, theme
+
 
 def finding_lines(lines: List[str]) -> Text:
     text = Text()
     for line in lines:
-        style = "bold red" if line.startswith("ERROR") else "yellow" if line.startswith("WARNING") else ""
-        text.append(line + "\n", style=style)
+        if line.startswith("ERROR"):
+            text.append(f"{glyphs.g('fail')} {line}\n", style=f"bold {theme.color('error')}")
+        elif line.startswith("WARNING"):
+            text.append(f"{glyphs.g('warn')} {line}\n", style=theme.color("warn"))
+        else:
+            text.append(line + "\n")
     return text
 
 
@@ -152,10 +158,11 @@ class UserDialog(ModalScreen):
         hint = self.query_one("#user-hint", Label)
         problem = self.problem()
         if problem:
-            hint.update(Text(problem, style="yellow"))
+            hint.update(Text(problem, style=theme.color("warn")))
             return
         weak = self.weakness(self.values()[1]) if self.weakness else None
-        hint.update(Text(f"weak: {weak}" if weak else "strong enough", style="yellow" if weak else "green"))
+        hint.update(Text(f"{glyphs.g('warn')} weak: {weak}" if weak else f"{glyphs.g('ok')} strong enough",
+                         style=theme.color("warn") if weak else theme.color("ok")))
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id == "user-repeat":
@@ -172,7 +179,7 @@ class UserDialog(ModalScreen):
     def save(self) -> None:
         problem = self.problem()
         if problem:
-            self.query_one("#user-hint", Label).update(Text(problem, style="bold red"))
+            self.query_one("#user-hint", Label).update(Text(problem, style=f"bold {theme.color('error')}"))
             return
         name, password, _repeat = self.values()
         self.dismiss((name, password))
@@ -194,7 +201,7 @@ class SensorDialog(ModalScreen):
         with Vertical(classes="dialog"):
             yield Label("Deploy a sensor", classes="dialog-title")
             yield Static(Text("T-Pot has to be installed on it already. The deployment runs in the terminal "
-                              "(SSH key, sudo password) and reboots the sensor.", style="dim"))
+                              "(SSH key, sudo password) and reboots the sensor."), classes="hint")
             yield Input(placeholder="IP or name of the sensor", id="sensor-host")
             yield Input(placeholder="user T-Pot was installed with on the sensor", id="sensor-user")
             yield Input(placeholder="IP or name the sensor reaches this HIVE on", id="sensor-hive")
@@ -232,7 +239,7 @@ class SensorDialog(ModalScreen):
             if self.check_user:
                 self.check_user(user)
         except Exception as err:   # SensorsError, kept generic to stay UI-only
-            self.query_one("#sensor-hint", Label).update(Text(str(err), style="bold red"))
+            self.query_one("#sensor-hint", Label).update(Text(str(err), style=f"bold {theme.color('error')}"))
             return
         self.dismiss({"host": host, "user": user, "hive": hive,
                       "nopass": self.query_one("#sensor-nopass", Checkbox).value})
