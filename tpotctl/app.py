@@ -462,36 +462,26 @@ class SettingsPane(Vertical):
 
     def on_setting_row_pick(self, event) -> None:
         from tpotctl.screens import pickers
-        from tpotctl.widgets.fields import llm_settings
-        row, rule = event.row, event.row.rule
+        row = event.row
         if event.detect:
             self.detect(row)
             return
-        current = self.draft.get(rule.key, "")
-        if rule.widget == "interface":
-            picker = pickers.interface_picker(current)
-        elif rule.widget == "timezone":
-            picker = pickers.timezone_picker(current)
-        else:
-            llm = llm_settings(rule, self.draft, self.current.schema)
-            picker = pickers.model_picker(current, llm["provider"], llm["url"], llm["api_key"])
-        self.app.push_screen(picker, lambda value: row.set_value(value) if value is not None else None)
+        self.app.push_screen(pickers.picker_for(row, self.draft, self.current.schema),
+                             lambda value: row.set_value(value) if value is not None else None)
 
     @work(thread=True, exclusive=True, group="detect")
     def detect(self, row) -> None:
-        from tpotctl import netinfo, tz
-        found = netinfo.detect() if row.rule.widget == "interface" else tz.detect()
+        from tpotctl.screens import pickers
+        found = pickers.detect_for(row.rule)
         self.app.call_from_thread(self.detected, row, found)
 
     def detected(self, row, found: str) -> None:
+        from tpotctl.screens import pickers
         if not found:
             self.app.notify("Nothing detected on this host.", title=row.rule.title, severity="warning")
             return
         row.set_value(found)
-        note = (f"{found} has the route to the internet. Empty picks it automatically, and follows "
-                f"when the route changes." if row.rule.widget == "interface" else f"{found} is the time zone "
-                f"of this host.")
-        self.app.notify(note, title=row.rule.title)
+        self.app.notify(pickers.detected_note(row.rule, found), title=row.rule.title)
 
     def visible_rows(self):
         active = self.query_one("#settings-tabs", TabbedContent).active
@@ -779,6 +769,7 @@ class UpdatePane(Vertical):
             yield Button("Update", id="run-update", variant="primary")
             yield Button("Update and start", id="run-update-start")
             yield Button("Restore a backup", id="run-restore")
+            yield Button("Uninstall ...", id="run-uninstall", variant="error")
         yield DataTable(id="backups", cursor_type="row")
 
     def on_mount(self) -> None:
@@ -806,6 +797,11 @@ class UpdatePane(Vertical):
             self.app.script("update.sh", ["-y", "-s"])
         elif event.button.id == "run-restore":
             self.app.script("restore.sh", [])
+        elif event.button.id == "run-uninstall":
+            from tpotctl.screens.uninstall import UninstallScreen
+            # uninstall.sh removes tpot itself, the app ends and hands over to it
+            self.app.push_screen(UninstallScreen(), lambda target: self.app.exit(("uninstall", target))
+                                 if target else None)
 
 
 PANES = [
@@ -1083,4 +1079,7 @@ def run_app() -> int:
     result = TpotApp(splash=splash_wanted()).run()
     if result == "restart":
         os.execv(sys.executable, [sys.executable, LAUNCHER])
+    if isinstance(result, tuple) and result[0] == "uninstall":
+        from tpotctl.screens.uninstall import run_handover
+        run_handover(result[1])
     return 0

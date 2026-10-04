@@ -32,6 +32,11 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("update", help="update T-Pot, runs update.sh with your options")
     sub.add_parser("restore", help="restore a backup, runs restore.sh with your options")
     sub.add_parser("customize", help="choose edition, services and ports, runs compose/customizer.py")
+    install = sub.add_parser("install", help="install T-Pot on this host with the assistant (install.sh -s does it "
+                                             "without questions)")
+    install.add_argument("--classic", action="store_true", help="the questions of install.sh in the terminal")
+    sub.add_parser("uninstall", help="remove T-Pot from this host, with a backup first if you like "
+                                     "(uninstall.sh -y does it without questions)")
     env = sub.add_parser("env", help="list, check and change the settings in .env (default: list)")
     actions = env.add_subparsers(dest="env_command", metavar="ACTION")
     listing = actions.add_parser("list", help="the settings of this T-Pot, secrets masked")
@@ -588,6 +593,21 @@ def run_customizer(args: List[str]) -> int:
     return 0    # not reached
 
 
+def run_install(classic: bool) -> int:
+    from tpotctl import installer
+    if not sys.platform.startswith("linux"):
+        raise ops.OpsError("tpot install installs T-Pot on Linux, see the README for macOS and Windows")
+    if installer.installed():
+        raise ops.OpsError("T-Pot is installed on this host already, update it with: tpot update")
+    if classic:
+        os.execv(installer.INSTALL_SH, [installer.INSTALL_SH, "-n"])
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        error("the assistant needs a terminal, install without questions with: install.sh -s -t ...")
+        return 2
+    from tpotctl.screens.install import run_install as assistant
+    return assistant()
+
+
 def run_service(action: str) -> int:
     import subprocess
     ops.require_linux_host(action)
@@ -637,6 +657,15 @@ def main(argv: Optional[List[str]] = None) -> int:
             except tsensors.SensorsError as err:
                 error(str(err))
                 return 1
+        if args.command == "install":
+            return run_install(args.classic)
+        if args.command == "uninstall":
+            ops.require_linux_host("uninstall")
+            if not (sys.stdin.isatty() and sys.stdout.isatty()):
+                error("tpot uninstall asks first and needs a terminal, without questions: uninstall.sh -y")
+                return 2
+            from tpotctl.screens.uninstall import run_uninstall
+            return run_uninstall()
         if args.command in ("start", "stop", "restart"):
             return run_service(args.command)
         ops.require_linux_host(args.command)

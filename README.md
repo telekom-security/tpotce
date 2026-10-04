@@ -14,7 +14,7 @@ T-Pot is the all in one, optionally distributed, multiarch (amd64, arm64) honeyp
 ```
 env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/install.sh)"
 ```
-   * Follow instructions, read messages, check for possible port conflicts and reboot
+   * It installs what it needs to start (git, Ansible, the Python packages of `tpot`) and opens the installer assistant: system check, edition, web user, first settings, a review of what changes, then the installation with its progress. Reboot at the end.
 
 <!-- TOC -->
 - [T-Pot - The All In One Multi Honeypot Platform](#t-pot---the-all-in-one-multi-honeypot-platform)
@@ -381,9 +381,10 @@ Once you are familiar with how things work you should choose a network you suspe
      * Add `mi` (for `micro`, a great alternative to `vi` and / or `nano`)
      * Display open ports on the host (compare with T-Pot [required](https://github.com/telekom-security/tpotce#required-ports) ports)
      * Add and enable `tpot.service` to `/etc/systemd/system` so T-Pot can automatically start and stop
-4. Follow the installer instructions, you will have to enter your user (`sudo` or `root`) password at least once
-5. Check the installer messages for errors and open ports that might cause port conflicts
-6. Reboot: `$ sudo reboot`
+4. Follow the installer: at a terminal it gets what it needs to start (git, Ansible, the Python packages of `tpot`, a clone of the repository in `~/tpotce`) and hands over to the assistant `tpot install`. The assistant checks the host (distribution, sudo, ports, internet, RAM and disk), asks for the edition (or your own selection with the customizer), the web user and a few settings, shows what will change and then runs the installation with its progress. Everything is asked before anything changes; your `sudo` password is asked once and handed to Ansible in a file only you can read, removed afterwards.
+5. Reboot at the end of the assistant, or with `$ sudo reboot`
+
+Without the assistant, i.e. when its Python packages cannot be downloaded, the installer asks the same questions in the terminal and goes on as before: `./install.sh -n` does that on purpose. The look of the installer and the other scripts comes from [gum](https://github.com/charmbracelet/gum), a pinned release the scripts download and check against its sha256; without it (or with `TPOT_GUM=off`) they print plain text.
 
 On **Ubuntu 26.04** `sudo` is [sudo-rs](https://github.com/trifectatechfoundation/sudo-rs), which formats its password prompt differently. Ansible does not recognise that prompt and privilege escalation times out, a fix exists upstream but is not released yet. The installer detects this and runs Ansible against the traditional sudo that Ubuntu still ships as `/usr/bin/sudo.ws` - nothing to do, it says so when it happens. If you would rather have it system wide, switch the alternative: `$ sudo update-alternatives --set sudo /usr/bin/sudo.ws`.
 <br><br>
@@ -391,7 +392,7 @@ On **Ubuntu 26.04** `sudo` is [sudo-rs](https://github.com/trifectatechfoundatio
 ## Unattended Installation
 The installer can run without any interaction, i.e. for automated tests or cloud provisioning:
 ```
-./install.sh -s -t <type> [-u <webuser>] [-p <password>]
+./install.sh -s -t <type> [-u <webuser>] [-p <password> | -P <file>] [-B <file>] [-c <compose file>]
 ```
 | Option | Description |
 |---|---|
@@ -399,8 +400,11 @@ The installer can run without any interaction, i.e. for automated tests or cloud
 | `-t` | Installation type: `h` hive, `s` sensor, `l` llm, `i` mini, `m` mobile, `t` tarpit |
 | `-u` | Web user name, required for `h`, `l`, `i` and `t` |
 | `-p` | Web user password, required for `h`, `l`, `i` and `t` |
+| `-P` | Read the web user password from a file (`-` for stdin), it does not show up in the process list like `-p` |
+| `-B` | Read the `sudo` password from a file, so `-s` works without passwordless `sudo` |
+| `-c` | Install your own compose file (i.e. from `tpot customize`) instead of an edition, `-t` is then `h` (with a web UI) or `s` (without) |
 
-⚠️ ***`-s` requires passwordless `sudo` for the user running the installer.*** Ansible would otherwise ask for the `BECOME password` and the run would stall, so the installer stops right away and tells you so. Grant it before you start:
+⚠️ ***`-s` requires passwordless `sudo` for the user running the installer, or `-B`.*** Ansible would otherwise ask for the `BECOME password` and the run would stall, so the installer stops right away and tells you so. Grant it before you start (or hand the password over with `-B`):
 ```
 echo "$(whoami) ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/$(whoami)
 sudo chmod 440 /etc/sudoers.d/$(whoami)
@@ -491,8 +495,13 @@ The distributed version of T-Pot requires at least two hosts
 
 ## Uninstall T-Pot
 Uninstallation of T-Pot is only available on the [supported Linux distros](#choose-your-distro).<br>
-To uninstall T-Pot run `~/tpotce/uninstall.sh` and follow the uninstaller instructions, you will have to enter your password at least once.<br>
-Once the uninstall is finished reboot the machine `sudo reboot`
+To uninstall T-Pot run `tpot uninstall` (or *Uninstall ...* on the *Update & backup* page of the menu): it lists what is removed and reverted, offers a full backup to `~/tpot_backups` first (`restore.sh` brings it back after a new installation) and asks you to type the name of the host to confirm, then hands over to `~/tpotce/uninstall.sh`. `uninstall.sh` works on its own as well:
+```
+~/tpotce/uninstall.sh            # asks first
+~/tpotce/uninstall.sh -y -k      # no questions, a full backup first
+~/tpotce/uninstall.sh -y -B file # no questions, the sudo password from a file
+```
+`-y` requires passwordless `sudo` or `-B`, just like `install.sh -s`. Backups in `~/tpot_backups` are kept. Once the uninstall is finished reboot the machine `sudo reboot`
 <br><br>
 
 # First Start
@@ -695,6 +704,8 @@ On the T-Pot Landing Page just click on `Elasticvue` and you will be forwarded t
 | `tpot env check` | checks `.env` as T-Pot does on start, exit code 1 on errors |
 | `tpot users [list\|add\|passwd\|remove]` | the [web users](#add-users-to-nginx-t-pot-webui), changes count right away |
 | `tpot sensors [list\|add\|remove\|set\|cert]` | the [sensors](#distributed-deployment) of a HIVE |
+| `tpot install [--classic]` | the installer assistant, see [Get and install T-Pot](#get-and-install-t-pot) (the installer starts it for you) |
+| `tpot uninstall` | removes T-Pot, with a full backup first if you like, see [Uninstall T-Pot](#uninstall-t-pot) |
 | `tpot setup` | sets up or refreshes the Python packages of `tpot` |
 
 The installer links `~/tpotce/tpot` to `/usr/local/bin/tpot` and `update.sh` keeps it up to date. `tpot` runs from a Python venv of its own in `~/.local/share/tpotce/venv`, set up on first use from pinned and hash-checked packages (it needs pypi.org once, and `python3-venv` on Debian / Ubuntu, which the installer brings along). `update.sh`, `restore.sh` and the other scripts keep working on their own, `tpot` only calls them. Do not run `tpot` as root, it uses `sudo` where needed. On macOS and Windows only `tpot customize` and `tpot setup` are available.

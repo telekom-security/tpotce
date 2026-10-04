@@ -558,3 +558,160 @@ Toast {
     background: $warning;
     color: $background;
 }
+
+/* the installer assistant (tpot install) */
+
+#ins-head {
+    height: 4;
+    padding: 0 1;
+    border-bottom: solid $wax;
+}
+
+#ins-source {
+    width: 1fr;
+    padding: 0 0 0 3;
+}
+
+#ins-steps {
+    height: 1;
+    margin: 1 2 0 2;
+}
+
+#ins-body {
+    height: 1fr;
+}
+
+.ins-step {
+    height: 1fr;
+    padding: 1 2;
+}
+
+.ins-lead {
+    margin-bottom: 1;
+}
+
+#step-user Input {
+    width: 60;
+    margin-bottom: 1;
+}
+
+#step-review Input {
+    width: 60;
+    margin-top: 1;
+}
+
+#edition-list {
+    height: 1fr;
+    background: $background;
+    border: none;
+}
+
+#edition-list > .option-list--option {
+    padding: 0 1 1 1;
+}
+
+#edition-note {
+    height: auto;
+    margin-top: 1;
+}
+
+#check-again {
+    margin-top: 1;
+}
+
+#install-phase {
+    height: auto;
+    margin-bottom: 1;
+}
+
+#install-bar {
+    width: 1fr;
+    margin-bottom: 1;
+}
+
+#install-bar Bar {
+    width: 1fr;
+}
+
+#install-bar Bar > .bar--bar {
+    color: $primary;
+    background: $comb;
+}
+
+#install-bar Bar > .bar--complete {
+    color: $success;
+}
+
+#install-task {
+    height: auto;
+    margin-bottom: 1;
+}
+
+#install-log {
+    height: 1fr;
+    border: round $wax;
+    background: $background;
+    color: $ash;
+}
+
+#ins-nav {
+    height: auto;
+    padding: 0 2 1 2;
+}
+
+#ins-nav-note {
+    width: 1fr;
+    padding: 0 1 0 0;
+}
+
+#ins-nav Button {
+    margin-left: 2;
+}
+
+/* tpot uninstall */
+
+#un-body {
+    height: 1fr;
+    padding: 1 2;
+}
+
+#un-text {
+    margin: 1 0;
+}
+
+#un-body Input {
+    width: 60;
+    margin-top: 1;
+}
+
+#un-body Checkbox {
+    background: $background;
+    border: none;
+}
+
+.un-label {
+    margin-top: 1;
+}
+
+#un-nav {
+    height: auto;
+    padding: 0 2 1 2;
+}
+
+.un-spacer {
+    width: 1fr;
+}
+
+#un-nav Button {
+    margin-left: 2;
+}
+
+Button.-error {
+    background: $error 70%;
+    color: $glass;
+}
+
+Button.-error:disabled {
+    background: $comb;
+    color: $mist;
+}

@@ -52,6 +52,7 @@ myPULLOK=""
 # `-s` brings T-Pot back up at the end. Off by default, so a plain run leaves the
 # services stopped the way it always has.
 mySTART=""
+myBACKUP_ONLY=""
 
 # Both are published on the loopback interface by every edition that ships them,
 # so neither needs a detour through a container.
@@ -69,6 +70,19 @@ myRED="[0;31m"
 myGREEN="[0;32m"
 myWHITE="[0;0m"
 myBLUE="[0;34m"
+
+# The look of the T-Pot scripts at a terminal (installer/lib/ui.sh, gum or plain
+# text): the same messages, in the colours of T-Pot. Without ui.sh (a checkout of
+# an earlier release, i.e. during the self update) it stays as it was.
+myHERE=$(cd "$(dirname "$0")" 2>/dev/null && pwd)
+# shellcheck source=installer/lib/ui.sh
+if [ -t 1 ] && [ -f "${myHERE}/installer/lib/ui.sh" ] && source "${myHERE}/installer/lib/ui.sh" 2>/dev/null;
+  then
+    fuUI_INIT
+    myBLUE=$'\e[38;2;151;180;211m'
+    myGREEN=$'\e[38;2;63;163;77m'
+    myRED=$'\e[38;2;232;69;60m'
+fi
 
 # Where to update from. Empty means: keep the branch and the origin of the
 # current checkout, which is what a plain `update.sh -y` has always done.
@@ -106,7 +120,7 @@ EOF
 
 function fuPRINT_HELP () {
 	cat <<EOF
-Usage: $0 -y [-b <branch>] [-r <url>] [--full]
+Usage: $0 -y [-b <branch>] [-r <url>] [--full] [--backup-only]
 
 Options:
   -y                Confirm the update, required
@@ -117,6 +131,9 @@ Options:
                     when a release brings a newer Elastic Stack: Elasticsearch and
                     Kibana upgrade their data in data/elk/ on the first start, and
                     that cannot be undone. Kept uncompressed either way.
+  --backup-only     Only write the backup (T-Pot is stopped for it) and end, no
+                    update. With --full the data is in it, with -s T-Pot starts
+                    again afterwards. tpot uninstall uses it.
   -b <branch>       Branch to update from, i.e. to test a branch before it is
                     merged. The branch is checked out, so every following
                     update stays on it until another branch is requested.
@@ -1526,15 +1543,19 @@ for myARG in "$@";
     case "${myARG}" in
       --full)  myARGV+=("-F") ;;
       --start) myARGV+=("-s") ;;
+      --backup-only) myARGV+=("-o") ;;
       *)      myARGV+=("${myARG}") ;;
     esac
 done
 set -- "${myARGV[@]}"
 
-while getopts ":yFsb:r:h" opt; do
+while getopts ":yFsob:r:h" opt; do
   case "$opt" in
     y)
       myCONFIRMED="y"
+      ;;
+    o)
+      myBACKUP_ONLY="1"
       ;;
     F)
       myFULL="1"
@@ -1561,8 +1582,13 @@ done
 # -b, -r, TPOT_BRANCH and TPOT_REPO_URL all name an update source explicitly
 [ -n "${myTPOT_BRANCH}${myTPOT_REPO_URL}" ] && myTPOT_SOURCE_GIVEN="1"
 
-# Only run with command switch
-sudo echo "$myUPDATER"
+# Only run with command switch; sudo asks for the password right away
+if [ -n "${myUI_GUM}" ];
+  then
+    sudo true && fuUI_BANNER "Updater" "Updates T-Pot to the latest version of its branch, with a backup first."
+  else
+    sudo echo "$myUPDATER"
+fi
 
 if [ "${myCONFIRMED}" != "y" ]; then
   echo
@@ -1572,6 +1598,20 @@ if [ "${myCONFIRMED}" != "y" ]; then
   echo "If you understand the involved risks feel free to run this script with the '-y' switch."
   echo
   exit
+fi
+
+# --backup-only: the backup of an update, nothing else (i.e. before tpot uninstall)
+if [ -n "${myBACKUP_ONLY}" ];
+  then
+    fuCHECK_EDITION
+    fuCHECK_BACKUP_SPACE
+    fuEXPORT_ELASTIC
+    fuSTOP_TPOT
+    fuBACKUP
+    [ -n "${mySTART}" ] && fuSTART_TPOT
+    echo "### Done. The backup is ${myARCHIVE}, restore.sh brings it back."
+    echo
+    exit 0
 fi
 
 fuCHECK_VERSION

@@ -216,3 +216,31 @@ def model_picker(current: str, provider: str, url: str, api_key: str) -> Picker:
     where = url or (llm.OPENAI if provider == "openai" else "")
     return Picker(f"Models of {provider}", load, current, free=True,
                   note=f"Asked from {where}." if where else "")
+
+
+# -- for a row of the settings ----------------------------------------------------
+
+def picker_for(row, draft: dict, schema: dict) -> Picker:
+    """The picker of a SettingRow (interface, time zone, models)."""
+    from tpotctl.widgets.fields import llm_settings
+    rule = row.rule
+    current = draft.get(rule.key, "")
+    if rule.widget == "interface":
+        return interface_picker(current)
+    if rule.widget == "timezone":
+        return timezone_picker(current)
+    llm = llm_settings(rule, draft, schema)
+    return model_picker(current, llm["provider"], llm["url"], llm["api_key"])
+
+
+def detect_for(rule) -> str:
+    """What Detect finds for a row, "" for nothing; runs commands, call it from a worker."""
+    from tpotctl import netinfo, tz
+    return netinfo.detect() if rule.widget == "interface" else tz.detect()
+
+
+def detected_note(rule, found: str) -> str:
+    if rule.widget == "interface":
+        return (f"{found} has the route to the internet. Empty picks it automatically, and follows when the "
+                f"route changes.")
+    return f"{found} is the time zone of this host."
