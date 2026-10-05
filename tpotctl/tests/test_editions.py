@@ -196,6 +196,18 @@ class EditionsTest(unittest.TestCase):
         self.assertEqual(plan.env_changes, {"TPOT_TYPE": "HIVE"})
         self.assertFalse(plan.needs_web_user)            # MOBILE has no web UI
 
+    def test_no_compose_file_is_nothing_to_keep(self):
+        os.remove(self.compose())
+        plan = self.plan("mini")
+        self.assertEqual(plan.keep_copy, "")
+        self.assertFalse(any("kept as" in w for w in plan.warnings))
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            editions.switch(plan, self.repo, run=Calls(), linux=True)
+        self.assertNotIn("is kept as", out.getvalue())
+        self.assertFalse(os.path.exists(self.backups))
+        self.assertEqual(self.read(self.compose()), self.read(os.path.join(self.repo, "compose", "mini.yml")))
+
     def test_become_file_refreshes_sudo_first(self):
         become = os.path.join(self.repo, "become")
         with open(become, "w", encoding="utf-8") as out:

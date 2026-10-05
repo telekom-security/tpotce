@@ -106,8 +106,12 @@ def plan(target: str, repo_dir: str = REPO_DIR, env: Optional[Dict[str, str]] = 
     if name.lower() == choice.key and unchanged:
         raise EditionError(f"the {choice.title} edition runs here already")
     stamp = time.strftime("%Y%m%d%H%M%S")
-    result = SwitchPlan(choice, name, os.path.join(backup_dir, f"docker-compose_{name.lower()}_{stamp}.yml"))
-    if name == "CUSTOM" or not known:
+    # without a docker-compose.yml there is nothing to keep
+    keep = "" if name == "none" else os.path.join(backup_dir, f"docker-compose_{name.lower()}_{stamp}.yml")
+    result = SwitchPlan(choice, name, keep)
+    if name == "none":
+        pass
+    elif name == "CUSTOM" or not known:
         result.warnings.append(f"Your customized docker-compose.yml ({name}{' from ' + base if base else ''}) "
                                f"is replaced, it is kept as {result.keep_copy}.")
     elif not unchanged:
@@ -150,15 +154,16 @@ def switch(plan: SwitchPlan, repo_dir: str = REPO_DIR, become_file: str = "", ru
         _mark("stop", "Stopping T-Pot")
         say.info("Stopping T-Pot ...")
         sudo("systemctl", "stop", "tpot", what="Stopping T-Pot")
-    _mark("keep", "Keeping the compose file in use")
-    os.makedirs(os.path.dirname(plan.keep_copy), exist_ok=True)
-    if os.path.isfile(in_use):
+    if plan.keep_copy and os.path.isfile(in_use):
+        _mark("keep", "Keeping the compose file in use")
+        os.makedirs(os.path.dirname(plan.keep_copy), exist_ok=True)
         shutil.copy2(in_use, plan.keep_copy)
         say.ok(f"docker-compose.yml is kept as {plan.keep_copy}.")
     _mark("swap", f"Switching to the {plan.target.title} edition")
     shutil.copyfile(plan.target.path, in_use)
     say.ok(f"docker-compose.yml is the {plan.target.title} edition now.")
-    back = f"Back to the edition before: cp {plan.keep_copy} {in_use}"
+    back = f"Back to the edition before: cp {plan.keep_copy} {in_use}" if plan.keep_copy else \
+        "Nothing to go back to, there was no docker-compose.yml before."
     # .env and the web user before the start: tpotinit refuses a HIVE without a web user
     try:
         if plan.env_changes:
