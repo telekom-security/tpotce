@@ -1556,7 +1556,7 @@ class TpotApp(App):
                 fix, page = f"It is managed with {MANAGED_BY[key]}", "sensors"
             else:
                 fix = "Fix it on the Settings page"
-            found[key] = StartProblem(key, problem.text, fix, page)
+            found[key] = StartProblem(key, problem.text.rstrip(". "), fix, page)     # the callers add ". "
         return list(found.values())
 
     def setting_fixes(self):

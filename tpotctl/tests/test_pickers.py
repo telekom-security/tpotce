@@ -591,6 +591,7 @@ class StartProblemsTest(SettingsHelpersBase):
         self.assertEqual(len(start), 2, start)
         self.assertTrue(any("TPOT_OSTYPE" in m and "Save" in m and "MAC_WIN" in m for m in start), start)
         self.assertTrue(any("WEB_USER" in m and "Web users" in m for m in start), start)
+        self.assertFalse([m for m in start if ".." in m], start)         # texts that end with a full stop
 
     def with_web_user(self):
         from tpotctl.tests.test_settings import WEB_USER
