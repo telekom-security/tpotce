@@ -8,8 +8,8 @@ user can read (-B / --become-file), asked for here, removed when it ends.
 
 import os
 import time
-from dataclasses import dataclass
-from typing import Callable, List, Optional, Union
+from dataclasses import dataclass, field
+from typing import Callable, Dict, List, Optional, Union
 
 from rich.text import Text
 from textual import work
@@ -36,6 +36,9 @@ class Task:
     become: str = ""
     intro: Union[Text, str] = ""
     done: str = ""
+    # more secrets the command reads from files: {option: text}, each one appended as
+    # "option file" (i.e. the password of a new web user)
+    secrets: Dict[str, str] = field(default_factory=dict)
     restart_tpot: bool = False          # the checkout changed, offer to start tpot anew
     autostart: bool = False             # confirmed before, start without asking
 
@@ -124,10 +127,15 @@ class TaskScreen(Screen):
     def run_engine(self, password: str) -> None:
         env = dict(os.environ, TPOT_MARKS="1", TPOT_GUM="off", PYTHONUNBUFFERED="1")
         try:
-            with installer.secret_files(become=password) as files:
+            options = list(self.job.secrets)
+            texts = {f"secret{number}": self.job.secrets[option] for number, option in enumerate(options)}
+            with installer.secret_files(become=password, **texts) as files:
                 command = list(self.job.command)
                 if "become" in files:
                     command += [self.job.become, files["become"]]
+                for number, option in enumerate(options):
+                    if f"secret{number}" in files:
+                        command += [option, files[f"secret{number}"]]
                 code = self.engine_factory(command, env=env, cwd=self.job.cwd).run(
                     lambda line: self.app.call_from_thread(self.feed, line))
         except OSError as err:

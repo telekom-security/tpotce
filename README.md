@@ -698,6 +698,7 @@ On the T-Pot Landing Page just click on `Elasticvue` and you will be forwarded t
 | `tpot start` / `stop` / `restart` | `sudo systemctl … tpot` |
 | `tpot update [OPTIONS]` | runs `~/tpotce/update.sh` with your options, i.e. `tpot update -y` |
 | `tpot restore [OPTIONS]` | runs `~/tpotce/restore.sh` with your options |
+| `tpot edition [list]` / `tpot edition set EDITION` | the editions, and switching to another one: T-Pot stops, `docker-compose.yml` is kept in `~/tpot_backups`, the edition takes its place, T-Pot starts again |
 | `tpot customize [OPTIONS]` | the [customizer](#customize-t-pot-honeypots-and-services) |
 | `tpot env [list [--all] [--show-secrets]]` | the [settings](#t-pot-config-file) in `.env` that matter for this T-Pot, secrets masked |
 | `tpot env get KEY` / `tpot env set KEY=VALUE …` | read or change a setting, it is only written if it is valid afterwards |
@@ -740,7 +741,9 @@ tarpit.yml
 tpot_services.yml
 ```
 The `.yml` files are docker compose files, each representing a different set of honeypots and tools with `tpot_services.yml` being the catalog of all services `customizer.py` builds a customized docker compose file from.<br><br>
-To activate a compose file follow these steps:
+To switch to another edition run `tpot edition set <edition>` (i.e. `tpot edition set mini`) or choose it on the *Edition & services* page of the `tpot` menu. It stops T-Pot, keeps your `docker-compose.yml` in `~/tpot_backups` (a customized one too), copies the edition in its place and starts T-Pot again. A SENSOR that becomes a HIVE needs a web user (`--web-user NAME`, the menu asks for it), a HIVE that becomes a SENSOR keeps the data of its Elastic Stack in `data/elk` and sends its events once you run `tpot sensors add` on its HIVE.
+
+To activate a compose file by hand follow these steps:
 1. Stop T-Pot with `systemctl stop tpot`.
 2. Copy the docker compose file `cp ~/tpotce/compose/<dockercompose.yml> ~/tpotce/docker-compose.yml`.
 3. Start T-Pot with `systemctl start tpot`.

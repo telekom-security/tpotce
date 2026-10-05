@@ -54,6 +54,34 @@ if textual:
             from tpotctl import events
             return events.Attacks([0, 3, 9, 4] * 15, 1234, [("Cowrie", 900), ("Dionaea", 334)])
 
+        def sudo_mode(self):
+            return "passwordless"
+
+        def editions(self):
+            from tpotctl import editions
+            return [editions.Choice("standard", "Hive", "Everything.", "HIVE", 16, 256, "/x/standard.yml"),
+                    editions.Choice("sensor", "Sensor", "Honeypots only.", "SENSOR", 8, 128, "/x/sensor.yml"),
+                    editions.Choice("mini", "Mini", "Fewer daemons.", "HIVE", 16, 256, "/x/mini.yml")]
+
+        def edition_current(self):
+            return "STANDARD", ""
+
+        def edition_plan(self, key):
+            from tpotctl import editions
+            choice = next(c for c in self.editions() if c.key == key)
+            warnings = ["Kibana stops."] if key == "sensor" else []
+            return editions.SwitchPlan(choice, "STANDARD", "/x/keep.yml", warnings)
+
+    class FakeEngine:
+        seen = []
+
+        def __init__(self, command, env=None, cwd=None):
+            FakeEngine.seen.append(list(command))
+
+        def run(self, line):
+            line("@@tpot phase done Done\n")
+            return 0
+
     class Recorder:
         def __init__(self):
             self.commands = []
@@ -106,6 +134,48 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(runner.commands, [[os.path.join(cli.REPO_DIR, "update.sh"), "-y"]])
         self.assertEqual(app.return_value, "restart")
 
+    async def test_edition_switch_runs_tpot_edition_set(self):
+        from tpotctl.screens.task import TaskScreen
+        FakeEngine.seen.clear()
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.2)
+            app.goto("edition")
+            await pilot.pause(0.2)
+            listing = app.query_one("#edition-list")
+            self.assertEqual(listing.option_count, 3)
+            self.assertTrue(app.query_one("#switch-edition").disabled)       # the one in use
+            listing.highlighted = 2
+            await pilot.pause(0.1)
+            self.assertFalse(app.query_one("#switch-edition").disabled)
+            await pilot.click("#switch-edition")
+            await pilot.pause(0.2)
+            self.assertIsInstance(app.screen, ConfirmDialog)
+            await pilot.click("#yes")
+            await pilot.pause(0.4)
+            self.assertIsInstance(app.screen, TaskScreen)
+        self.assertEqual(FakeEngine.seen, [[tapp.LAUNCHER, "edition", "set", "mini", "-y"]])
+
+    async def test_palette_switches_the_edition(self):
+        from tpotctl.commands import TpotCommands
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.2)
+            names = [name for name, _help, _cb in TpotCommands(app.screen).commands()]
+        self.assertIn("Switch to the Mini edition", names)
+        self.assertNotIn("Switch to the Hive edition", names)       # in use
+
+    async def test_edition_switch_off_host_is_disabled(self):
+        app = tapp.TpotApp(backend=FakeBackend(host=False), runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.2)
+            app.goto("edition")
+            await pilot.pause(0.2)
+            app.query_one("#edition-list").highlighted = 2
+            await pilot.pause(0.1)
+            self.assertTrue(app.query_one("#switch-edition").disabled)
+            self.assertIn("MAC_WIN", str(app.query_one("#edition-note").render()))
+
     async def test_mac_only_gets_the_customizer(self):
         app = tapp.TpotApp(backend=FakeBackend(host=False), runner=Recorder())
         async with app.run_test(size=(120, 40)) as pilot:
@@ -113,7 +183,7 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual([p[0] for p in app.panes], ["edition", "settings", "users"])
 
     def test_every_menu_pane_has_a_command(self):
-        commands = {"status": "status", "edition": "customize", "settings": "env", "users": "users",
+        commands = {"status": "status", "edition": "edition", "settings": "env", "users": "users",
                     "sensors": "sensors", "images": "images", "update": "update"}
         help_text = cli.build_parser().format_help()
         for key, _title, _cls, _host in tapp.PANES:

@@ -112,6 +112,17 @@ class TaskScreenTest(unittest.IsolatedAsyncioTestCase):
             await pilot.pause(0.4)
         self.assertEqual(FakeEngine.seen[-1]["command"][-2], "--become-file")
 
+    async def test_secrets_go_in_files_too(self):
+        app = host(self.screen(command=["/x/tpot", "edition", "set", "standard", "-y"], become="",
+                               secrets={"--password-file": "web-secret"}, autostart=True))
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.4)
+        seen = FakeEngine.seen[-1]
+        self.assertEqual(seen["command"][-2], "--password-file")
+        self.assertTrue(seen["files"][-1])
+        self.assertFalse(os.path.exists(seen["command"][-1]))
+        self.assertNotIn("web-secret", " ".join(seen["command"]))
+
     async def test_autostart_without_a_password(self):
         app = host(self.screen(autostart=True))
         async with app.run_test(size=(120, 40)) as pilot:

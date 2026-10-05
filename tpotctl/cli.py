@@ -90,6 +90,18 @@ def build_parser() -> argparse.ArgumentParser:
     cert.add_argument("--no-restart", action="store_true", help="do not restart T-Pot after --renew")
     cert.add_argument("--no-become-pass", action="store_true", help="sudo on the sensors needs no password")
     cert.add_argument("-y", "--yes", action="store_true", help="do not ask")
+    edition = sub.add_parser("edition", help="the editions of T-Pot and switching between them (default: list)")
+    edition_actions = edition.add_subparsers(dest="edition_command", metavar="ACTION")
+    edition_actions.add_parser("list", help="the editions, the one in use marked")
+    switch = edition_actions.add_parser("set", help="switch to another edition: stop T-Pot, keep the compose "
+                                                    "file in ~/tpot_backups, swap it, start T-Pot")
+    switch.add_argument("key", metavar="EDITION", help="standard, sensor, llm, mini, mobile or tarpit")
+    switch.add_argument("-y", "--yes", action="store_true", help="do not ask")
+    switch.add_argument("--web-user", metavar="NAME", help="the web user a SENSOR needs to become a HIVE")
+    switch.add_argument("--password-stdin", action="store_true", help="read its password from stdin")
+    switch.add_argument("--password-file", metavar="FILE", default="", help="read its password from FILE")
+    switch.add_argument("--become-file", metavar="FILE", default="",
+                        help="read the sudo password from FILE (the tpot menu hands one over)")
     sub.add_parser("setup", help="set up or refresh the Python packages of tpot")
     return parser
 
@@ -564,6 +576,58 @@ def run_sensor_add(args, registry, console) -> int:
     return 0
 
 
+def run_edition(args) -> int:
+    from tpotctl import editions, glyphs
+    if args.edition_command in (None, "list"):
+        from rich import box
+        from rich.table import Table
+        name, base = editions.current()
+        table = Table(box=box.SIMPLE_HEAD, header_style=f"bold {MAGENTA}", pad_edge=False)
+        for column in ("", "Edition", "Key", "Role", "RAM", "Disk", "Description"):
+            table.add_column(column, no_wrap=column != "Description")
+        for choice in editions.available():
+            here = choice.key == name.lower()
+            table.add_row(glyphs.g("on") if here else "", choice.title, choice.key, choice.role,
+                          f"{choice.ram} GB", f"{choice.disk} GB", choice.description,
+                          style=f"bold {MAGENTA}" if here else "")
+        console = _console()
+        console.print(table)
+        console.print(f"In use: {name}{' from ' + base if base else ''}. Switch with: tpot edition set EDITION")
+        return 0
+    if not args.yes and not sys.stdin.isatty():
+        error("add --yes to switch the edition without a terminal")
+        return 2
+    from tpotctl import users as tusers
+    try:
+        users_ok = any(user.ok for user in tusers.load().users())
+    except (tusers.UsersError, OSError):
+        users_ok = False
+    try:
+        plan = editions.plan(args.key, users_ok=users_ok)
+        editions.print_plan(plan)
+        if plan.needs_web_user and not args.web_user:
+            error("a HIVE needs a web user, add one with --web-user NAME (and --password-stdin)")
+            return 1
+        password = ""
+        if plan.needs_web_user:
+            tusers.check_name(args.web_user)
+            if args.password_file:
+                with open(args.password_file, encoding="utf-8") as handle:
+                    password = handle.readline().rstrip("\n")
+            else:
+                password = read_password(args)
+        if not confirm(f"Switch to the {plan.target.title} edition? T-Pot stops meanwhile.", args.yes):
+            return 1
+        editions.switch(plan, become_file=args.become_file)
+    except (editions.EditionError, tusers.UsersError, OSError) as err:
+        error(str(err))
+        return 1
+    if plan.needs_web_user:
+        note = tusers.load().add(args.web_user, password)
+        say.ok(f"{args.web_user} is added (bcrypt), {note}.")
+    return 0
+
+
 def envschema_sections():
     from tpotctl import envschema
     return envschema.SECTIONS
@@ -660,6 +724,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             except tsensors.SensorsError as err:
                 error(str(err))
                 return 1
+        if args.command == "edition":
+            return run_edition(args)
         if args.command == "install":
             return run_install(args.classic)
         if args.command == "uninstall":

@@ -16,8 +16,9 @@ from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.widgets import (Button, ContentSwitcher, DataTable, Footer, Label, ListItem, ListView, Static,
-                             TabbedContent, TabPane)
+from textual.widgets import (Button, ContentSwitcher, DataTable, Footer, Label, ListItem, ListView, OptionList,
+                             Static, TabbedContent, TabPane)
+from textual.widgets.option_list import Option
 
 from tpotctl import glyphs, logo, ops, prefs, theme
 from tpotctl.bootstrap import REPO_DIR
@@ -78,6 +79,26 @@ class Backend:
     def attacks(self):
         from tpotctl import events
         return events.fetch()
+
+    def sudo_mode(self) -> str:
+        from tpotctl import installer
+        return installer.sudo_mode()
+
+    def editions(self):
+        from tpotctl import editions
+        return editions.available()
+
+    def edition_current(self):
+        from tpotctl import editions
+        return editions.current()
+
+    def edition_plan(self, key: str):
+        from tpotctl import editions, users
+        try:
+            users_ok = any(user.ok for user in users.load().users())
+        except (users.UsersError, OSError):
+            users_ok = False
+        return editions.plan(key, users_ok=users_ok)
 
 
 class Runner:
@@ -290,26 +311,79 @@ class ImagesPane(Vertical):
 
 
 class EditionPane(Vertical):
+    """The editions of T-Pot: switch to one (tpot edition set), or build your own."""
 
     def compose(self) -> ComposeResult:
         yield Static("", id="edition-info", classes="info")
+        yield OptionList(id="edition-list")
+        yield Static("", id="edition-note")
         with Horizontal(classes="actions"):
-            yield Button("Open the customizer", id="open-customizer", variant="primary")
+            yield Button("Switch", id="switch-edition", variant="primary", disabled=True)
+            yield Button("Open the customizer", id="open-customizer")
 
     def on_mount(self) -> None:
+        self.choices = []
         self.show()
 
     def show(self) -> None:
+        name, base = self.app.backend.edition_current()
+        self.in_use = name.lower()
         info = Text()
         info.append("Installed   ", style=theme.color("mist"))
-        info.append(f"{ops.edition()}\n\n", style=f"bold {theme.color('magenta')}")
-        info.append("Choose an edition to start from, switch services on and off and move host ports. "
-                    "The customizer writes docker-compose-custom.yml and only does so without errors.")
+        info.append(f"{name}{' from ' + base if base else ''}\n\n", style=f"bold {theme.color('magenta')}")
+        info.append("Switch to another edition here: T-Pot stops, your docker-compose.yml is kept in "
+                    "~/tpot_backups, the edition takes its place and T-Pot starts again. Or build your own "
+                    "from an edition with the customizer.", style=theme.color("glass"))
         self.query_one("#edition-info", Static).update(info)
+        listing = self.query_one("#edition-list", OptionList)
+        highlighted = listing.highlighted
+        self.choices = self.app.backend.editions()
+        listing.clear_options()
+        for choice in self.choices:
+            listing.add_option(Option(self.option_text(choice), id=choice.key))
+        if self.choices:
+            listing.highlighted = highlighted if highlighted is not None and highlighted < len(self.choices) else 0
+        self.refresh_button()
+
+    def option_text(self, choice) -> Text:
+        here = choice.key == self.in_use
+        text = Text()
+        text.append(f"{glyphs.g('on') if here else glyphs.g('off')} ",
+                    style=theme.color("magenta") if here else theme.color("mist"))
+        text.append(choice.title, style=f"bold {theme.color('glass')}")
+        text.append(f"  {choice.key}{'  in use' if here else ''}\n", style=theme.color("ash"))
+        text.append(f"  {choice.description}\n", style=theme.color("glass"))
+        text.append(f"  RAM {choice.ram} GB or more, disk {choice.disk} GB or more", style=theme.color("ash"))
+        return text
+
+    def selected(self):
+        index = self.query_one("#edition-list", OptionList).highlighted
+        return self.choices[index] if index is not None and index < len(self.choices) else None
+
+    def refresh_button(self) -> None:
+        choice = self.selected()
+        button = self.query_one("#switch-edition", Button)
+        note = Text()
+        if not self.app.backend.linux_host():
+            note.append("macOS and Windows run the MAC_WIN edition, there is no other to switch to.",
+                        style=theme.color("ash"))
+            button.disabled = True
+        else:
+            button.disabled = choice is None or choice.key == self.in_use
+        button.label = f"Switch to {choice.title}" if choice is not None else "Switch"
+        self.query_one("#edition-note", Static).update(note)
+
+    def on_option_list_option_highlighted(self, event) -> None:
+        if event.option_list.id == "edition-list":
+            self.refresh_button()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "open-customizer":
             self.app.action_customize()
+        elif event.button.id == "switch-edition":
+            choice = self.selected()
+            if choice is not None:
+                self.app.switch_edition(choice.key)
 
 
 class SettingsForm(VerticalScroll, inherit_bindings=False):
@@ -847,10 +921,12 @@ class TpotApp(App):
         Binding("right", "enter_page", "Open", show=False),
     ]
 
-    def __init__(self, backend: Optional[Backend] = None, runner: Optional[Callable] = None, splash: bool = False):
+    def __init__(self, backend: Optional[Backend] = None, runner: Optional[Callable] = None, splash: bool = False,
+                 engine: Optional[Callable] = None):
         super().__init__()
         self.backend = backend or Backend()
         self.runner = runner or Runner(self)
+        self.engine = engine
         self.splash = splash
         apply_theme(self)
         sensor = self.backend.tpot_type() == "SENSOR"
@@ -1007,6 +1083,60 @@ class TpotApp(App):
                 self.exit("restart")
 
         self.push_screen(ConfirmDialog(what, yes="Run"), confirmed)
+
+    def run_task(self, task, then: Optional[Callable] = None) -> None:
+        """A script or tpot command in the task screen; "restart" ends the app to start it anew."""
+        from tpotctl.engine import Engine
+        from tpotctl.screens.task import TaskScreen
+
+        def ended(result) -> None:
+            if result == "restart":
+                self.exit("restart")
+            elif then is not None:
+                then(result)
+
+        self.push_screen(TaskScreen(task, engine=self.engine or Engine, sudo_mode=self.backend.sudo_mode()), ended)
+
+    def switch_edition(self, key: str) -> None:
+        from tpotctl import editions
+        from tpotctl.screens.task import Task
+        try:
+            plan = self.backend.edition_plan(key)
+        except editions.EditionError as err:
+            self.notify(str(err), title="Edition", severity="error", timeout=8)
+            return
+        command = [LAUNCHER, "edition", "set", key, "-y"]
+        body = Text()
+        for warning in plan.warnings:
+            body.append(f"{glyphs.g('warn')} {warning}\n", style=theme.color("warn"))
+        body.append("T-Pot is down while it switches, the images of the new edition are pulled when it starts.",
+                    style=theme.color("mist"))
+
+        def run(secrets) -> None:
+            task = Task(f"Switch to the {plan.target.title} edition", command + (
+                ["--web-user", secrets[0]] if secrets else []), become="--become-file",
+                secrets={"--password-file": secrets[1]} if secrets else {}, autostart=True,
+                done=f"T-Pot runs the {plan.target.title} edition.", restart_tpot=plan.target.role != "HIVE"
+                or bool(plan.env_changes))
+            self.run_task(task, lambda _code: self.after_switch())
+
+        def confirmed(yes: bool) -> None:
+            if not yes:
+                return
+            if plan.needs_web_user:
+                from tpotctl import users
+                self.push_screen(UserDialog("A HIVE needs a web user", check_name=users.check_name,
+                                            weakness=users.weakness),
+                                 lambda result: run(result) if result else None)
+            else:
+                run(None)
+
+        self.push_screen(ConfirmDialog(f"Switch to the {plan.target.title} edition?", body,
+                                       yes=f"Switch to {plan.target.title}"), confirmed)
+
+    def after_switch(self) -> None:
+        self.query_one("#edition", EditionPane).show()
+        self.load_header()
 
     def action_customize(self) -> None:
         from tpotctl.screens.customizer import CustomizerScreen, core

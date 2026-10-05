@@ -20,6 +20,12 @@ class TpotCommands(Provider):
             yield "Restart T-Pot", "sudo systemctl restart tpot", partial(app.service, "restart")
             yield "Update T-Pot", "update.sh, writes a backup first", partial(app.script, "update.sh", ["-y"])
         yield "Open the customizer", "edition and services", app.action_customize
+        if app.backend.linux_host():
+            in_use = app.backend.edition_current()[0].lower()
+            for choice in app.backend.editions():
+                if choice.key != in_use:
+                    yield (f"Switch to the {choice.title} edition", f"tpot edition set {choice.key}",
+                           partial(app.switch_edition, choice.key))
         for mode in ("unicode", "nerd", "ascii"):
             yield f"Icons: {mode}", {"unicode": "symbols every font has", "nerd": "needs a Nerd Font",
                                      "ascii": "plain characters"}[mode], partial(app.set_icons, mode)
