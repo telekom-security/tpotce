@@ -6,7 +6,7 @@ import sys
 import time
 from typing import List, Optional
 
-from tpotctl import bootstrap, ops
+from tpotctl import bootstrap, ops, say
 from tpotctl.bootstrap import REPO_DIR
 
 MAGENTA = "#E20074"
@@ -240,7 +240,7 @@ def run_env(args) -> int:
             changes[key.strip()] = value
         unlocked = [key for key in changes if current.can_unlock(key)] if args.unlock else []
         for key in unlocked:
-            console.print(f"[yellow][WARNING] - {key} is unlocked: {current.schema[key].unlock}[/]")
+            say.warn(f"{key} is unlocked: {current.schema[key].unlock}", console.file)
         try:
             remaining = current.change(changes, unlocked=unlocked)
         except tsettings.SettingsError as err:
@@ -248,7 +248,7 @@ def run_env(args) -> int:
             return 1
         print_problems(remaining, console)
         for key in changes:
-            console.print(f"[green][OK] - {key} is set.[/]")
+            say.ok(f"{key} is set.", console.file)
         console.print(f"[{MAGENTA}]Restart T-Pot to apply it: tpot restart[/]")
         return 0
     # list
@@ -294,10 +294,10 @@ def read_password(args) -> str:
     if args.password_stdin:
         return sys.stdin.readline().rstrip("\n")
     if not sys.stdin.isatty():
-        raise SystemExit("[ERROR] - no terminal to ask for the password, use --password-stdin")
+        fail("no terminal to ask for the password, use --password-stdin")
     first = getpass.getpass("Password: ")
     if getpass.getpass("Repeat the password: ") != first:
-        raise SystemExit("[ERROR] - the passwords do not match")
+        fail("the passwords do not match")
     return first
 
 
@@ -333,7 +333,7 @@ def run_users(args) -> int:
             if ask(f"Remove the web user {args.name}? [y/N] ").lower() != "y":
                 return 1
         note = store.remove(args.name)
-        console.print(Text(f"[OK] - {args.name} is removed, {note}.", style="green"))
+        say.ok(f"{args.name} is removed, {note}.", console.file)
         return 0
     name = args.name or (ask("Name of the new web user: ") if sys.stdin.isatty() else "")
     tusers.check_name(name)
@@ -347,7 +347,7 @@ def run_users(args) -> int:
             return 1
     note = store.add(name, password) if command == "add" else store.passwd(name, password)
     what = "is added" if command == "add" else "has a new password"
-    console.print(Text(f"[OK] - {name} {what} (bcrypt), {note}.", style="green"))
+    say.ok(f"{name} {what} (bcrypt), {note}.", console.file)
     return 0
 
 
@@ -355,7 +355,7 @@ def confirm(question: str, yes: bool) -> bool:
     if yes:
         return True
     if not sys.stdin.isatty():
-        raise SystemExit(f"[ERROR] - {question} Add --yes to do it without a terminal.")
+        fail(f"{question} Add --yes to do it without a terminal.")
     return ask(f"{question} [y/N] ").lower() == "y"
 
 
@@ -410,8 +410,7 @@ def run_sensors(args) -> int:
         if not confirm(f"Revoke the access of {args.name}? It cannot send to this HIVE any more.", args.yes):
             return 1
         note = registry.revoke(args.name)
-        console.print(Text(f"[OK] - {args.name} is removed, {note}. Nothing was done on the sensor itself.",
-                           style="green"))
+        say.ok(f"{args.name} is removed, {note}. Nothing was done on the sensor itself.", console.file)
         return 0
     if command == "set":
         sensor = registry.get(args.name)
@@ -424,7 +423,7 @@ def run_sensors(args) -> int:
         if args.ssh_port:
             sensor.ssh_port = tsensors.check_port(args.ssh_port)
         registry.record(sensor)
-        console.print(Text(f"[OK] - {args.name} is updated.", style="green"))
+        say.ok(f"{args.name} is updated.", console.file)
         return 0
     if command == "cert":
         return run_sensor_cert(args, registry, console)
@@ -433,7 +432,6 @@ def run_sensors(args) -> int:
 
 def renew_certificate(registry, addresses, console, yes: bool, restart: bool) -> bool:
     import subprocess
-    from rich.text import Text
     from tpotctl import sensors as tsensors
     current = tsensors.cert_sans(registry.cert)
     sans = list(dict.fromkeys(current + [tsensors.san_of(a) for a in addresses]))
@@ -443,7 +441,7 @@ def renew_certificate(registry, addresses, console, yes: bool, restart: bool) ->
         return False
     console.print("Creating a 8192 bit key, this can take a minute ...")
     stamp = tsensors.renew_cert(registry, sans)
-    console.print(Text(f"[OK] - New certificate, the old one is kept as nginx.crt.bak-{stamp}.", style="green"))
+    say.ok(f"New certificate, the old one is kept as nginx.crt.bak-{stamp}.", console.file)
     if restart and linux_host_ok() and confirm("Restart T-Pot now, so that nginx uses it?", yes):
         subprocess.call(ops.service_command("restart"))
     return True
@@ -482,8 +480,7 @@ def run_sensor_cert(args, registry, console) -> int:
             error("the certificate could not be copied to all sensors, see above")
             return 1
         names = ", ".join(s.name for s in reachable)
-        console.print(Text(f"[OK] - {names} {'has' if len(reachable) == 1 else 'have'} the new certificate.",
-                           style="green"))
+        say.ok(f"{names} {'has' if len(reachable) == 1 else 'have'} the new certificate.", console.file)
     return 0
 
 
@@ -533,7 +530,7 @@ def run_sensor_add(args, registry, console) -> int:
         error(f"cannot log in to {user}@{host} on port {port} with a key "
               f"(is T-Pot installed there, is the address right?)")
         return 1
-    console.print(Text(f"[OK] - SSH to {user}@{host} works.", style="green"))
+    say.ok(f"SSH to {user}@{host} works.", console.file)
 
     # 2. the sensor checks this HIVE against its certificate
     if not tsensors.covers(hive, tsensors.cert_sans(registry.cert)):
@@ -561,7 +558,7 @@ def run_sensor_add(args, registry, console) -> int:
     registry.record(tsensors.Sensor(name=name, host=host, ssh_user=user, ssh_port=port, hive_address=hive,
                                     added=_time.strftime("%Y-%m-%d %H:%M"),
                                     version=ops.env_values().get("TPOT_VERSION", ""), source="deployed"))
-    console.print(Text(f"[OK] - {name} is deployed to {host} and sends to {hive}.", style="green"))
+    say.ok(f"{name} is deployed to {host} and sends to {hive}.", console.file)
     console.print(Text(f"Its password, shown only now: {password}", style=f"bold {MAGENTA}"))
     console.print("The sensor has it already, keep it only if you want to set the sensor up again by hand.")
     return 0
@@ -573,7 +570,13 @@ def envschema_sections():
 
 
 def error(text: str) -> None:
-    print(f"[ERROR] - {text}", file=sys.stderr)
+    say.error(text)
+
+
+def fail(text: str) -> None:
+    """The end of a command that cannot go on, with exit code 1."""
+    say.error(text)
+    raise SystemExit(1)
 
 
 # ---------------------------------------------------------------------------
@@ -634,7 +637,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             return run_app()
         if args.command == "setup":
             python = bootstrap.setup_venv()
-            print(f"[OK] - The Python packages of tpot are ready ({os.path.dirname(os.path.dirname(python))}).")
+            say.ok(f"The Python packages of tpot are ready ({os.path.dirname(os.path.dirname(python))}).")
             return 0
         if args.command == "env":
             from tpotctl import settings as tsettings

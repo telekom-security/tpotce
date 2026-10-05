@@ -715,3 +715,48 @@ Button.-error:disabled {
     background: $comb;
     color: $mist;
 }
+
+/* scripts and tpot commands run from the menu (screens/task.py) */
+
+#task-body {
+    height: 1fr;
+    padding: 1 2;
+}
+
+#task-intro {
+    margin: 1 0;
+}
+
+#task-body Input {
+    width: 60;
+}
+
+#task-phases {
+    margin: 1 0 0 0;
+}
+
+#task-log {
+    height: 1fr;
+    min-height: 8;
+    max-height: 20;
+    margin: 1 0;
+    background: $comb;
+    border: none;
+}
+
+#task-result {
+    margin-top: 1;
+}
+
+#task-nav {
+    height: auto;
+    padding: 0 2 1 2;
+}
+
+.task-spacer {
+    width: 1fr;
+}
+
+#task-nav Button {
+    margin-left: 2;
+}

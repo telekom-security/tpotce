@@ -242,6 +242,13 @@ fuUI_INPUT () {
   echo "${myVALUE}"
 }
 
+fuMARK () {
+  # machine readable progress for tpot, one line each: @@tpot <what> <value ...>.
+  # install.sh -M sets myMARKS, the task screen of tpot TPOT_MARKS=1
+  [ -n "${myMARKS}" ] || [ "${TPOT_MARKS}" = "1" ] || return 0
+  echo "@@tpot $*"
+}
+
 fuUI_SPIN () {
   # fuUI_SPIN <title> <log file> <command> ...: runs the command (a function works too)
   # in this shell with its output in the log file and a spinner meanwhile; shows the
@@ -278,12 +285,6 @@ validate_type() {
     echo "Invalid installation type: $myTPOT_TYPE"
     print_help
   }
-}
-
-fuMARK () {
-  # progress marks for the assistant (-M), one line each: @@tpot <what> <value>
-  [ -n "${myMARKS}" ] && echo "@@tpot $*"
-  return 0
 }
 
 git_source() {

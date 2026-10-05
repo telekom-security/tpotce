@@ -10,14 +10,6 @@ import argparse
 import os
 import sys
 
-version = \
-"""
- ____  [T-Pot]         _            ____        _ _     _
-/ ___|  ___ _ ____   _(_) ___ ___  | __ ) _   _(_) | __| | ___ _ __
-\\___ \\ / _ \\ '__\\ \\ / / |/ __/ _ \\ |  _ \\| | | | | |/ _` |/ _ \\ '__|
- ___) |  __/ |   \\ V /| | (_|  __/ | |_) | |_| | | | (_| |  __/ |
-|____/ \\___|_|    \\_/ |_|\\___\\___| |____/ \\__,_|_|_|\\__,_|\\___|_| v2.0
-"""
 
 COMPOSE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, COMPOSE_DIR)
@@ -25,7 +17,7 @@ sys.path.insert(0, os.path.dirname(COMPOSE_DIR))
 
 # PyYAML of the distribution is enough for everything but the full screen dialog,
 # which needs Textual from the venv of tpot (tpotctl/bootstrap.py).
-from tpotctl import bootstrap  # noqa: E402
+from tpotctl import bootstrap, say  # noqa: E402
 
 HEADLESS = ("--base", "--add", "--remove", "--port", "--rebuild", "--setup", "-h", "--help", "--text")
 
@@ -42,12 +34,12 @@ def prepare(argv):
         try:
             return bootstrap.ensure("ui"), argv
         except bootstrap.BootstrapError as err:
-            print(f"[WARNING] - No full screen dialog: {err}. Using the text dialog.", file=sys.stderr)
+            say.warn(f"No full screen dialog: {err}. Using the text dialog.", sys.stderr)
             argv = argv + ["--text"]
     try:
         return bootstrap.ensure("yaml"), argv
     except bootstrap.BootstrapError as err:
-        print(f"[ERROR] - The customizer needs PyYAML: {err}", file=sys.stderr)
+        say.error(f"The customizer needs PyYAML: {err}")
         sys.exit(2)
 
 
@@ -59,21 +51,9 @@ if __name__ == "__main__":
 
 import customizer_core as core  # noqa: E402
 
-# Telekom magenta #E20074, on terminals without true colour the closest of the 256
-MAGENTA = "\033[38;2;226;0;116m" if os.environ.get("COLORTERM") in ("truecolor", "24bit") else "\033[38;5;162m"
-COLORS = {"red": "\033[91m", "green": "\033[92m", "magenta": MAGENTA, "yellow": "\033[93m", "end": "\033[0m"}
-
-
-def print_color(text, color, stream=sys.stdout):
-    if stream.isatty():
-        text = f"{COLORS[color]}{text}{COLORS['end']}"
-    print(text, file=stream)
-
-
 def report(result):
     for finding in result.findings:
-        color = "red" if finding.level == "error" else "yellow"
-        print_color(f"[{finding.level.upper()}] - {finding.text}", color, sys.stderr)
+        (say.error if finding.level == "error" else say.warn)(finding.text, sys.stderr)
 
 
 def names(value):
@@ -127,21 +107,21 @@ def write(catalog, result, path):
 
 def next_steps(path):
     name = os.path.basename(path)
-    print_color(f"[OK] - {path} is written.", "green")
+    say.ok(f"{path} is written.")
     if os.path.abspath(path) == os.path.join(core.REPO_DIR, "docker-compose.yml"):
         return
-    print_color("To use it:", "magenta")
-    print_color("  sudo systemctl stop tpot", "magenta")
-    print_color(f"  cd {core.REPO_DIR} && docker compose -f {name} up", "magenta")
-    print_color(f"  CTRL-C once everything works, then: docker compose -f {name} down -v", "magenta")
-    print_color(f"  mv {name} docker-compose.yml && sudo systemctl start tpot", "magenta")
+    say.info("To use it:")
+    say.hint("sudo systemctl stop tpot",
+             f"cd {core.REPO_DIR} && docker compose -f {name} up",
+             f"CTRL-C once everything works, then: docker compose -f {name} down -v",
+             f"mv {name} docker-compose.yml && sudo systemctl start tpot")
 
 
 def main(argv=None):
     args = parse_args(sys.argv[1:] if argv is None else argv)
     if args.setup:
         where = f"the venv {sys.prefix}" if os.environ.get(bootstrap.GUARD) else sys.executable
-        print_color(f"[OK] - PyYAML is available to the customizer ({where}).", "green")
+        say.ok(f"PyYAML is available to the customizer ({where}).")
         return 0
     try:
         catalog = core.Catalog()
@@ -149,15 +129,14 @@ def main(argv=None):
             with open(args.rebuild, encoding="utf-8") as handle:
                 selection = core.parse_header(handle.read())
             if selection is None:
-                print_color(f"[ERROR] - {args.rebuild} was not built by this customizer.", "red", sys.stderr)
+                say.error(f"{args.rebuild} was not built by this customizer.")
                 return 2
             result = core.resolve(catalog, selection, args.max_networks, strict=False)
             report(result)
             if result.errors:
                 return 1
             write(catalog, result, args.output or args.rebuild)
-            print_color(f"[OK] - {args.output or args.rebuild} is rebuilt from the {selection.base} edition.",
-                        "green")
+            say.ok(f"{args.output or args.rebuild} is rebuilt from the {selection.base} edition.")
             return 0
 
         output = args.output or os.path.join(core.REPO_DIR, "docker-compose-custom.yml")
@@ -177,10 +156,10 @@ def main(argv=None):
                 chosen = run_customizer(catalog, selection, args.max_networks)
             else:
                 import customizer_tui as tui
-                print_color(version, "magenta")
+                say.info("T-Pot customizer")
                 chosen = tui.run_text(catalog, selection, args.max_networks)
             if chosen is None:
-                print_color("Nothing written.", "magenta")
+                say.info("Nothing written.")
                 return 0
             result = core.resolve(catalog, chosen, args.max_networks, strict=True)
             report(result)
@@ -190,10 +169,10 @@ def main(argv=None):
         next_steps(output)
         return 0
     except core.CustomizerError as err:
-        print_color(f"[ERROR] - {err}", "red", sys.stderr)
+        say.error(f"{err}")
         return 2
     except OSError as err:
-        print_color(f"[ERROR] - {err}", "red", sys.stderr)
+        say.error(f"{err}")
         return 2
 
 

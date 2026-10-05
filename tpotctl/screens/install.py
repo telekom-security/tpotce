@@ -20,7 +20,7 @@ from textual.widgets import (Button, ContentSwitcher, Footer, Input, OptionList,
                              Static)
 from textual.widgets.option_list import Option
 
-from tpotctl import glyphs, installer, logo, theme, users
+from tpotctl import engine, glyphs, installer, logo, theme, users
 from tpotctl.bootstrap import REPO_DIR
 from tpotctl.screens.dialogs import ConfirmDialog
 from tpotctl.theme import apply as apply_theme
@@ -43,19 +43,11 @@ def mark(state: str) -> Text:
     return Text(glyphs.g(glyph), style=f"bold {theme.color(colour)}")
 
 
-class Engine:
+class Engine(engine.Engine):
     """Runs install.sh; replaced by a fake in the tests."""
 
     def __init__(self, command: List[str]):
-        self.command = command
-
-    def run(self, line: Callable[[str], None]) -> int:
-        proc = subprocess.Popen(self.command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                stdin=subprocess.DEVNULL, universal_newlines=True, bufsize=1,
-                                env=installer.engine_env(), cwd=os.path.dirname(self.command[0]))
-        for text in proc.stdout:
-            line(text)
-        return proc.wait()
+        super().__init__(command, env=installer.engine_env(), cwd=os.path.dirname(command[0]))
 
 
 class Steps(Static):

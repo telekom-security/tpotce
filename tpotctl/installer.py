@@ -19,6 +19,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Callable, Dict, Iterator, List, Optional, Tuple
 
+from tpotctl import runlog
 from tpotctl.bootstrap import REPO_DIR
 
 INSTALL_SH = os.path.join(REPO_DIR, "install.sh")
@@ -332,9 +333,10 @@ class Progress:
     def feed(self, line: str) -> None:
         line = line.rstrip("\n")
         self.lines.append(line)
-        if line.startswith("@@tpot "):
-            _mark, what, *rest = line.split() + [""]
-            value = rest[0] if rest else ""
+        mark = runlog.parse_mark(line)
+        if mark is not None:
+            what, words = mark
+            value = words[0] if words else ""
             if what == "phase":
                 self.phase = value
             elif what == "tasks" and value.isdigit():
