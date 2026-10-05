@@ -398,7 +398,13 @@ class SettingsForm(VerticalScroll, inherit_bindings=False):
 
 
 class SettingsPane(Vertical):
-    """The settings of this T-Pot in .env, checked against the schema while you type."""
+    """The settings of this T-Pot in .env, checked against the schema while you type.
+
+    One tab per group (the sections of the schema here, the honeypots on the LLM page);
+    a subclass picks its keys with wanted() and groups them with group_of().
+    """
+
+    PREFIX = "settings"
 
     BINDINGS = [
         Binding("down", "move(1)", "Next setting", show=False),
@@ -406,11 +412,26 @@ class SettingsPane(Vertical):
     ]
 
     def compose(self) -> ComposeResult:
-        with Horizontal(id="settings-head"):
-            yield Static("", id="settings-status")
-            yield Button("Revert", id="settings-revert")
-            yield Button("Save", id="settings-save", variant="primary", disabled=True)
-        yield TabbedContent(id="settings-tabs")
+        with Horizontal(id=f"{self.PREFIX}-head", classes="settings-head"):
+            yield Static("", id=f"{self.PREFIX}-status", classes="settings-status")
+            yield Button("Revert", id=f"{self.PREFIX}-revert")
+            yield Button("Save", id=f"{self.PREFIX}-save", variant="primary", disabled=True)
+        yield from self.extra()
+        yield TabbedContent(id=f"{self.PREFIX}-tabs", classes="settings-tabs")
+
+    def extra(self) -> ComposeResult:
+        """Widgets between the head and the tabs, for subclasses."""
+        return iter(())
+
+    def wanted(self, rule) -> bool:
+        return True
+
+    def group_of(self, rule) -> str:
+        return rule.section
+
+    def groups(self):
+        from tpotctl import envschema
+        return envschema.SECTIONS
 
     async def on_mount(self) -> None:
         self.current = None
@@ -419,10 +440,9 @@ class SettingsPane(Vertical):
         await self.reload()
 
     async def reload(self) -> None:
-        from tpotctl import envschema
         from tpotctl.settings import SettingsError
         from tpotctl.widgets.fields import SettingRow
-        tabs = self.query_one("#settings-tabs", TabbedContent)
+        tabs = self.query_one(f"#{self.PREFIX}-tabs", TabbedContent)
         active = tabs.active
         await tabs.clear_panes()
         self.rows = {}
@@ -430,23 +450,29 @@ class SettingsPane(Vertical):
             self.current = self.app.backend.settings()
         except (SettingsError, OSError) as err:
             self.current = None
-            self.query_one("#settings-status", Static).update(Text(str(err), style=theme.color("error")))
+            self.query_one(f"#{self.PREFIX}-status", Static).update(Text(str(err), style=theme.color("error")))
             return
         self.draft = dict(self.current.values)
         self.unlocked = set()
         by_section = {}
-        for rule in self.current.relevant():
+        for rule in self.current.relevant(offered=True):
+            if not self.wanted(rule):
+                continue
             row = SettingRow(rule, self.draft.get(rule.key, ""), self.current.why_fixed(rule.key),
-                             unlockable=self.current.can_unlock(rule.key))
+                             unlockable=self.current.can_unlock(rule.key), absent=self.current.absent(rule))
             self.rows[rule.key] = row
-            by_section.setdefault(rule.section, []).append(row)
-        for section, title in envschema.SECTIONS:
+            by_section.setdefault(self.group_of(rule), []).append(row)
+        for section, title in self.groups():
             if by_section.get(section):
                 await tabs.add_pane(TabPane(title, SettingsForm(*by_section[section], classes="settings-form"),
                                             id=f"tab-{section}"))
         if active and active in [f"tab-{section}" for section in by_section]:
             tabs.active = active
         self.call_after_refresh(self.check)
+        self.loaded()
+
+    def loaded(self) -> None:
+        """After a reload, for subclasses."""
 
     def changes(self):
         if self.current is None:
@@ -460,7 +486,7 @@ class SettingsPane(Vertical):
         from tpotctl import envschema
         if self.current is None:
             return
-        problems = self.current.problems(self.draft)
+        problems = self.current.problems(self.draft, offered=True)
         by_key = {}
         for problem in problems:
             by_key.setdefault(problem.key, []).append(problem)
@@ -472,9 +498,10 @@ class SettingsPane(Vertical):
             row.display = envschema.shown_now(row.rule, self.draft, self.current.schema) or bool(by_key.get(key))
             row.mark(key in changes, by_key.get(key, []))
             if any(p.level == "error" for p in by_key.get(key, [])):
-                errors_in[row.rule.section] = errors_in.get(row.rule.section, 0) + 1
-        tabs = self.query_one("#settings-tabs", TabbedContent)
-        for section, title in envschema.SECTIONS:
+                group = self.group_of(row.rule)
+                errors_in[group] = errors_in.get(group, 0) + 1
+        tabs = self.query_one(f"#{self.PREFIX}-tabs", TabbedContent)
+        for section, title in self.groups():
             try:
                 tab = tabs.get_tab(f"tab-{section}")
             except Exception:      # no keys of that section here
@@ -484,8 +511,8 @@ class SettingsPane(Vertical):
                 label.append(f" {glyphs.g('fail')} {errors_in[section]}", style=f"bold {theme.color('error')}")
             tab.label = label
         blocking = self.current.blocking(problems, changes)
-        self.query_one("#settings-save", Button).disabled = not changes or bool(blocking)
-        self.query_one("#settings-revert", Button).disabled = not changes
+        self.query_one(f"#{self.PREFIX}-save", Button).disabled = not changes or bool(blocking)
+        self.query_one(f"#{self.PREFIX}-revert", Button).disabled = not changes
         status = Text()
         if changes:
             status.append(f"{glyphs.g('changed')} {len(changes)} change{'s' if len(changes) > 1 else ''}",
@@ -497,7 +524,7 @@ class SettingsPane(Vertical):
         if others:
             status.append(f"\n{glyphs.g('fail')} T-Pot would not start with {len(others)} of the values, "
                           f"they are marked", style=theme.color("error"))
-        self.query_one("#settings-status", Static).update(status)
+        self.query_one(f"#{self.PREFIX}-status", Static).update(status)
 
     def on_setting_row_changed(self, event) -> None:
         self.draft[event.key] = event.value
@@ -558,9 +585,9 @@ class SettingsPane(Vertical):
         self.app.notify(pickers.detected_note(row.rule, found), title=row.rule.title)
 
     def visible_rows(self):
-        active = self.query_one("#settings-tabs", TabbedContent).active
+        active = self.query_one(f"#{self.PREFIX}-tabs", TabbedContent).active
         return [row for row in self.rows.values()
-                if row.is_mounted and row.display and f"tab-{row.rule.section}" == active]
+                if row.is_mounted and row.display and f"tab-{self.group_of(row.rule)}" == active]
 
     def action_move(self, step: int) -> None:
         """up / down: from setting to setting, above the first one is the tab bar."""
@@ -575,7 +602,7 @@ class SettingsPane(Vertical):
             return
         index = rows.index(row) if row in rows else 0
         if index + step < 0:
-            self.query_one("#settings-tabs", TabbedContent).query_one(Tabs).focus()
+            self.query_one(f"#{self.PREFIX}-tabs", TabbedContent).query_one(Tabs).focus()
         elif index + step < len(rows):
             self.focus_row(rows[index + step])
 
@@ -596,7 +623,7 @@ class SettingsPane(Vertical):
         row = self.rows.get(key)
         if row is None:
             return
-        self.query_one("#settings-tabs", TabbedContent).active = f"tab-{row.rule.section}"
+        self.query_one(f"#{self.PREFIX}-tabs", TabbedContent).active = f"tab-{self.group_of(row.rule)}"
 
         def focus() -> None:
             row.display = True
@@ -611,15 +638,16 @@ class SettingsPane(Vertical):
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         from tpotctl.settings import SettingsError
-        if event.button.id == "settings-revert":
+        if event.button.id == f"{self.PREFIX}-revert":
             await self.reload()
-        elif event.button.id == "settings-save":
+        elif event.button.id == f"{self.PREFIX}-save":
             try:
                 self.current.change(self.changes(), unlocked=self.unlocked)
             except SettingsError as err:
                 self.app.notify(str(err), title="Not saved", severity="error", timeout=10)
                 return
             await self.reload()
+            await self.app.settings_saved(self)
             if self.app.backend.linux_host():
                 self.app.push_screen(ConfirmDialog("Saved. Restart T-Pot now, so that it uses the new settings?",
                                                    yes="Restart", no="Later"),
@@ -627,6 +655,156 @@ class SettingsPane(Vertical):
             else:
                 self.app.notify("Saved, restart T-Pot to use the new settings.", title="Settings")
 
+
+
+class LlmPane(SettingsPane):
+    """The LLM backends of Beelzebub and Galah: find an Ollama, choose the model, test it.
+
+    The same keys as on the Settings page, one tab per honeypot; shown for every
+    edition, a honeypot that is not in it can be added with the customizer.
+    """
+
+    PREFIX = "llm"
+    SERVICES = [("beelzebub", "Beelzebub"), ("galah", "Galah")]
+    URL_KEY = {"beelzebub": "BEELZEBUB_LLM_HOST", "galah": "GALAH_LLM_SERVER_URL"}
+
+    def wanted(self, rule) -> bool:
+        return rule.key.startswith(("BEELZEBUB_LLM_", "GALAH_LLM_"))
+
+    def group_of(self, rule) -> str:
+        return rule.services[0] if rule.services else "beelzebub"
+
+    def groups(self):
+        return self.SERVICES
+
+    def extra(self) -> ComposeResult:
+        yield Static("", id="llm-notice")
+        with Horizontal(id="llm-tools", classes="actions"):
+            yield Button("Find Ollama", id="llm-find")
+            yield Button("Scan the network", id="llm-scan")
+            yield Button("Test the model", id="llm-test", variant="primary")
+            yield Button("Add to the edition", id="llm-add")
+        yield Static("", id="llm-result")
+
+    def service(self) -> str:
+        active = self.query_one("#llm-tabs", TabbedContent).active or "tab-beelzebub"
+        return active[len("tab-"):]
+
+    def title_of(self, service: str) -> str:
+        return dict(self.SERVICES).get(service, service)
+
+    def loaded(self) -> None:
+        self.call_after_refresh(self.show_service)
+
+    def on_tabbed_content_tab_activated(self, event) -> None:
+        if event.tabbed_content.id == "llm-tabs":
+            self.query_one("#llm-result", Static).update("")
+            self.show_service()
+
+    def show_service(self) -> None:
+        if self.current is None:
+            return
+        service = self.service()
+        title = self.title_of(service)
+        absent = service not in self.current.services
+        notice = Text()
+        if absent:
+            notice.append(f"{title} is not in your edition. ", style=theme.color("warn"))
+            notice.append("Its settings are kept for when you add it, i.e. with the customizer.",
+                          style=theme.color("mist"))
+        else:
+            notice.append(f"{title} runs in your edition and uses these settings after a restart of T-Pot.",
+                          style=theme.color("mist"))
+        self.query_one("#llm-notice", Static).update(notice)
+        add = self.query_one("#llm-add", Button)
+        add.display = absent
+        add.label = f"Add {title} to the edition"
+
+    def llm_of(self, service: str):
+        from tpotctl import llm
+        return llm.service_settings(service, self.draft, self.current.schema)
+
+    def result(self, text: Text) -> None:
+        self.query_one("#llm-result", Static).update(text)
+
+    async def on_button_pressed(self, event: Button.Pressed) -> None:
+        button = event.button.id or ""
+        if not button.startswith("llm-") or button in ("llm-save", "llm-revert"):
+            await super().on_button_pressed(event)
+            return
+        event.stop()
+        if self.current is None:
+            return
+        service = self.service()
+        if button == "llm-find":
+            self.pick_ollama(service)
+        elif button == "llm-scan":
+            self.ask_scan(service)
+        elif button == "llm-test":
+            self.result(Text(f"Asking the model of {self.title_of(service)} ...", style=theme.color("mist")))
+            self.run_test(service)
+        elif button == "llm-add":
+            self.app.customize_with(service)
+
+    def pick_ollama(self, service: str, find=None, title: str = "Ollama") -> None:
+        from tpotctl.screens import pickers
+        key = self.URL_KEY[service]
+        row = self.rows.get(key)
+        picker = pickers.ollama_picker(self.draft.get(key, ""), service, self.draft, find=find, title=title)
+
+        def chosen(value) -> None:
+            if value is None:
+                return
+            if row is not None and row.is_mounted:
+                row.display = True
+                row.set_value(value)
+            else:
+                self.draft[key] = value
+                self.check()
+        self.app.push_screen(picker, chosen)
+
+    def ask_scan(self, service: str) -> None:
+        from tpotctl import llm
+        try:
+            address = llm.scan_network()
+        except Exception:      # no network to scan here
+            address = ""
+        targets = llm.scan_targets(address) if address else []
+        if not targets:
+            self.result(Text(f"{glyphs.g('fail')} This host has no IPv4 network to scan.", style=theme.color("error")))
+            return
+        import ipaddress
+        own = ipaddress.ip_interface(address)
+        network = own.network if own.network.prefixlen >= 24 else ipaddress.ip_network(f"{own.ip}/24", strict=False)
+
+        def answered(yes: bool) -> None:
+            if yes:
+                self.pick_ollama(service, find=lambda: llm.scan(targets), title=f"Ollama in {network}")
+
+        self.app.push_screen(ConfirmDialog(
+            f"Scan {network} on port 11434?",
+            Text(f"This host connects to all {len(targets)} addresses of {network} on port 11434. On a honeypot "
+                 f"that can look like an attack to the IDS of your network.", style=theme.color("glass")),
+            yes="Scan", no="Back"), answered)
+
+    @work(thread=True, exclusive=True, group="llm-test")
+    def run_test(self, service: str) -> None:
+        from tpotctl import llm
+        settings = self.llm_of(service)
+        found = llm.test(settings["provider"], settings["url"], settings["model"], settings["api_key"])
+        self.app.call_from_thread(self.tested, service, settings, found)
+
+    def tested(self, service: str, settings, found) -> None:
+        text = Text()
+        if found.ok:
+            text.append(f"{glyphs.g('ok')} {settings['model']} answered in {found.seconds:.1f} s: ",
+                        style=f"bold {theme.color('ok')}")
+            text.append(found.answer, style=theme.color("glass"))
+        else:
+            text.append(f"{glyphs.g('fail')} {found.problem}", style=theme.color("error"))
+        text.append("\nAsked from this host; the honeypot asks from its container, where localhost is the "
+                    "container itself.", style=theme.color("ash"))
+        self.result(text)
 
 class UsersPane(Vertical):
     """Users of the web UI (WEB_USER), changes count at once."""
@@ -882,13 +1060,14 @@ PANES = [
     ("status", "Status", StatusPane, True),
     ("edition", "Edition & services", EditionPane, False),
     ("settings", "Settings", SettingsPane, False),
+    ("llm", "LLM", LlmPane, False),
     ("users", "Web users", UsersPane, False),
     ("sensors", "Sensors", SensorsPane, True),
     ("images", "Images", ImagesPane, True),
     ("update", "Update & backup", UpdatePane, True),
 ]
 SHORT = {"edition": "Edition", "users": "Users", "update": "Update"}
-REPAINT = {"status": "repaint", "edition": "show", "settings": "check", "users": "show", "sensors": "load",
+REPAINT = {"status": "repaint", "edition": "show", "settings": "check", "llm": "check", "users": "show", "sensors": "load",
            "images": "load", "update": "show"}
 
 
@@ -1083,6 +1262,39 @@ class TpotApp(App):
                 self.exit("restart")
 
         self.push_screen(ConfirmDialog(what, yes="Run"), confirmed)
+
+    def llm_action(self, what: str, service: str) -> None:
+        """From the palette: the LLM page, the tab of the honeypot, then find or test."""
+        self.goto("llm")
+        pane = self.query_one("#llm", LlmPane)
+        pane.query_one("#llm-tabs", TabbedContent).active = f"tab-{service}"
+
+        def run() -> None:
+            if what == "find":
+                pane.pick_ollama(service)
+            else:
+                pane.query_one("#llm-test", Button).press()
+        self.call_after_refresh(run)
+
+    async def settings_saved(self, source) -> None:
+        """The Settings and the LLM page show the same .env, a save on one reloads the other."""
+        for pane in self.query(SettingsPane):
+            if pane is not source:
+                await pane.reload()
+
+    def customize_with(self, service: str) -> None:
+        """The customizer with a service added to the edition in use."""
+        from tpotctl.screens.customizer import CustomizerScreen, core
+        catalog = core.Catalog()
+        edition, selection = core.current_edition()
+        if not (selection and selection.base in catalog.editions):
+            selection = core.Selection(edition if edition in catalog.editions else "STANDARD")
+        if service not in selection.add:
+            selection.add.append(service)
+        if service in selection.remove:
+            selection.remove.remove(service)
+        self.push_screen(CustomizerScreen(catalog, selection, core.DEFAULT_MAX_NETWORKS),
+                         lambda chosen: self.customized(catalog, chosen))
 
     def run_task(self, task, then: Optional[Callable] = None) -> None:
         """A script or tpot command in the task screen; "restart" ends the app to start it anew."""

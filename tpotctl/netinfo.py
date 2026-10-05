@@ -54,6 +54,20 @@ def parse_route_dev(text: str) -> str:
     return ""
 
 
+def parse_gateways(text: str) -> List[str]:
+    """The gateways of `ip -j route show default`."""
+    try:
+        routes = json.loads(text or "[]")
+    except ValueError:
+        return []
+    return [route["gateway"] for route in routes if route.get("gateway")]
+
+
+def default_gateways(run: Callable = subprocess.run) -> List[str]:
+    return parse_gateways(_run(["ip", "-j", "route", "show", "default"], run)) + \
+        parse_gateways(_run(["ip", "-6", "-j", "route", "show", "default"], run))
+
+
 def _run(command: List[str], run: Callable) -> str:
     if not shutil.which(command[0]):
         return ""

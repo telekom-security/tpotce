@@ -207,20 +207,20 @@ Screen.-short #containers {
 
 /* settings */
 
-#settings-head {
+.settings-head {
     height: auto;
     margin-bottom: 1;
 }
 
-#settings-status {
+.settings-status {
     width: 1fr;
 }
 
-#settings-head Button {
+.settings-head Button {
     margin-left: 2;
 }
 
-#settings-tabs {
+.settings-tabs {
     height: 1fr;
 }
 
@@ -255,6 +255,11 @@ Screen.-short #containers {
 
 .setting-key {
     color: $key;
+}
+
+.setting-absent {
+    color: $ash;
+    text-style: italic;
 }
 
 .setting-line {
@@ -759,4 +764,22 @@ Button.-error:disabled {
 
 #task-nav Button {
     margin-left: 2;
+}
+
+/* the LLM page (LlmPane) */
+
+#llm-notice {
+    margin-bottom: 1;
+}
+
+#llm-tools {
+    height: auto;
+}
+
+#llm-tools Button {
+    margin-right: 2;
+}
+
+#llm-result {
+    margin: 1 0;
 }

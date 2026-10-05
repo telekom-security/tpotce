@@ -19,7 +19,7 @@ SCHEMA_PATH = os.path.join(REPO_DIR, "docker", "tpotinit", "dist", "etc", "env.s
 TYPES = {"text", "path", "enum", "int", "number", "regex", "host", "url", "timezone", "interface",
          "htpasswd_list", "basic_cred"}
 # how tpot shows a key, tpotinit does not read these
-WIDGETS = {"", "switch", "choice", "interface", "timezone", "llm_model"}
+WIDGETS = {"", "switch", "choice", "interface", "timezone", "llm_model", "llm_url"}
 SECTIONS = [("base", "T-Pot"), ("honeypots", "Honeypots and tools"), ("system", "Advanced")]
 
 _SAFE_BAD = re.compile(r"[^a-zA-Z0-9_/.:-]")
@@ -67,6 +67,7 @@ class Rule:
     show_when: Dict = field(default_factory=dict)
     llm: Dict[str, str] = field(default_factory=dict)
     unlock: str = ""
+    offer: bool = False
 
 
 @dataclass

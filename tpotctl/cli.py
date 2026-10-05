@@ -102,6 +102,18 @@ def build_parser() -> argparse.ArgumentParser:
     switch.add_argument("--password-file", metavar="FILE", default="", help="read its password from FILE")
     switch.add_argument("--become-file", metavar="FILE", default="",
                         help="read the sudo password from FILE (the tpot menu hands one over)")
+    llm = sub.add_parser("llm", help="the LLM backends of Beelzebub and Galah: find an Ollama, list the models, "
+                                     "test a model (default: their settings)")
+    llm_actions = llm.add_subparsers(dest="llm_command", metavar="ACTION")
+    detect = llm_actions.add_parser("detect", help="find an Ollama: the configured URLs, this host, its Docker "
+                                                   "bridges and gateways, on port 11434")
+    detect.add_argument("--scan", action="store_true", help="also ask every address of the /24 of this host, it "
+                                                            "looks like a scan to the network")
+    detect.add_argument("-y", "--yes", action="store_true", help="scan without asking")
+    for name, text in (("models", "the models the backend of a honeypot offers"),
+                       ("test", "send a short prompt to the model of a honeypot, from this host")):
+        action = llm_actions.add_parser(name, help=text)
+        action.add_argument("service", nargs="?", choices=["beelzebub", "galah"], default="galah")
     sub.add_parser("setup", help="set up or refresh the Python packages of tpot")
     return parser
 
@@ -628,6 +640,62 @@ def run_edition(args) -> int:
     return 0
 
 
+def run_llm(args) -> int:
+    from tpotctl import llm, settings as tsettings
+    current = tsettings.load()
+    values, schema = current.values, current.schema
+    if args.llm_command is None:
+        for service, (title, _model) in llm.SERVICES.items():
+            found = llm.service_settings(service, values, schema)
+            where = "in your edition" if service in current.services else "not in your edition"
+            say.info(f"{title} ({where}): {found['provider']}, model {found['model'] or '(none)'}, "
+                     f"{found['url'] or 'the default endpoint of the provider'}")
+        say.hint("tpot llm detect | models SERVICE | test SERVICE, or the LLM page of the tpot menu")
+        return 0
+    if args.llm_command == "detect":
+        if args.scan and not args.yes and not sys.stdin.isatty():
+            error("add --yes to scan without a terminal")
+            return 2
+        found = llm.discover(values)
+        if args.scan:
+            address = llm.scan_network()
+            targets = llm.scan_targets(address) if address else []
+            if not targets:
+                error("this host has no IPv4 network to scan")
+                return 1
+            if not confirm(f"Connect to all {len(targets)} addresses around {address} on port 11434? On a "
+                           f"honeypot that can look like an attack to the IDS of your network.", args.yes):
+                return 1
+            known = {hit.url for hit in found}
+            found += [hit for hit in llm.scan(targets) if hit.url not in known]
+        if not found:
+            say.warn("No Ollama answers on port 11434 in the usual places.")
+            return 1
+        for hit in found:
+            line = f"{hit.url}  Ollama {hit.version}, {hit.models} model{'s' if hit.models != 1 else ''}"
+            (say.ok if hit.reachable_from_docker else say.warn)(line)
+            if hit.note:
+                say.hint(hit.note)
+        say.hint("Set it with: tpot env set GALAH_LLM_SERVER_URL=<url> BEELZEBUB_LLM_HOST=<url>/api/chat")
+        return 0
+    found = llm.service_settings(args.service, values, schema)
+    if args.llm_command == "models":
+        try:
+            for name in llm.list_models(found["provider"], found["url"], found["api_key"]):
+                print(name)
+        except llm.LLMError as err:
+            error(str(err))
+            return 1
+        return 0
+    result = llm.test(found["provider"], found["url"], found["model"], found["api_key"])
+    if not result.ok:
+        error(result.problem)
+        return 1
+    say.ok(f"{found['model']} answered in {result.seconds:.1f} s: {result.answer}")
+    say.hint("Asked from this host; the honeypot asks from its container.")
+    return 0
+
+
 def envschema_sections():
     from tpotctl import envschema
     return envschema.SECTIONS
@@ -726,6 +794,13 @@ def main(argv: Optional[List[str]] = None) -> int:
                 return 1
         if args.command == "edition":
             return run_edition(args)
+        if args.command == "llm":
+            from tpotctl import settings as tsettings
+            try:
+                return run_llm(args)
+            except tsettings.SettingsError as err:
+                error(str(err))
+                return 1
         if args.command == "install":
             return run_install(args.classic)
         if args.command == "uninstall":

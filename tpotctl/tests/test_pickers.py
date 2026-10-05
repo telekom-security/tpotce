@@ -187,6 +187,19 @@ class SchemaWidgetsTest(unittest.TestCase):
                 if rule.widget == "llm_model":
                     for name in ("provider", "url", "api_key"):
                         self.assertIn(rule.llm[name], self.schema)
+                if rule.widget == "llm_url":
+                    self.assertIn(rule.llm["provider"], self.schema)
+                    self.assertIn(rule.llm["service"], rule.services)
+                if rule.offer:
+                    self.assertTrue(rule.services, "an offered key belongs to a service")
+
+    def test_every_llm_key_is_offered(self):
+        llm_keys = [k for k in self.schema if k.startswith(("BEELZEBUB_LLM_", "GALAH_LLM_"))]
+        self.assertEqual(len(llm_keys), 11)
+        for key in llm_keys:
+            self.assertTrue(self.schema[key].offer, key)
+        self.assertEqual(self.schema["GALAH_LLM_SERVER_URL"].widget, "llm_url")
+        self.assertEqual(self.schema["BEELZEBUB_LLM_HOST"].widget, "llm_url")
 
     def test_show_when(self):
         key_rule = self.schema["GALAH_LLM_API_KEY"]
@@ -338,6 +351,116 @@ class SettingsHelpersTest(unittest.IsolatedAsyncioTestCase):
             await pilot.press("enter")
             await pilot.pause(0.3)
             self.assertEqual(pane.changes(), {"GALAH_LLM_MODEL": "openchat"})
+
+    async def test_llm_settings_without_the_service(self):
+        shutil.copy(os.path.join(REPO_DIR, "compose", "standard.yml"), os.path.join(self.repo, "docker-compose.yml"))
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            await self.open_settings(pilot)
+            self.app.query_one("#settings-tabs").active = "tab-honeypots"
+            await pilot.pause(0.3)
+            tag = self.app.query_one("#row-GALAH_LLM_MODEL").query(".setting-absent")
+            self.assertIn("not in your edition", str(tag.first().render()))
+            self.assertFalse(self.app.query_one("#row-OINKCODE").query(".setting-absent"))
+
+    async def test_find_ollama_fills_the_url_of_the_service(self):
+        original = llm.discover
+        llm.discover = lambda env, **kwargs: [
+            llm.Found("http://10.0.0.5:11434", "0.12.3", 2, True),
+            llm.Found("http://127.0.0.1:11434", "0.12.3", 1, False, "listens on localhost only")]
+        self.addCleanup(setattr, llm, "discover", original)
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            pane = await self.open_settings(pilot)
+            for key, url in (("GALAH_LLM_SERVER_URL", "http://10.0.0.5:11434"),
+                             ("BEELZEBUB_LLM_HOST", "http://10.0.0.5:11434/api/chat")):
+                self.app.goto_setting(key)
+                await pilot.pause(0.3)
+                await pilot.click(f"#pick-{key}")
+                await pilot.pause(0.5)
+                self.assertEqual([i[0] for i in self.app.screen.shown], [url])     # localhost hidden
+                await pilot.press("enter")
+                await pilot.pause(0.3)
+                self.assertEqual(pane.changes().get(key), url)
+
+    async def open_llm(self, pilot):
+        await pilot.pause(0.3)
+        self.app.goto("llm")
+        await pilot.pause(0.4)
+        return self.app.query_one("#llm")
+
+    async def test_llm_page_has_both_honeypots(self):
+        shutil.copy(os.path.join(REPO_DIR, "compose", "standard.yml"), os.path.join(self.repo, "docker-compose.yml"))
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            pane = await self.open_llm(pilot)
+            tabs = pane.query_one("#llm-tabs")
+            self.assertEqual(tabs.active, "tab-beelzebub")
+            self.assertTrue(pane.query("#row-BEELZEBUB_LLM_MODEL"))
+            self.assertIn("not in your edition", str(pane.query_one("#llm-notice").render()))
+            self.assertTrue(pane.query_one("#llm-add").display)
+            tabs.active = "tab-galah"
+            await pilot.pause(0.3)
+            self.assertIn("Galah", str(pane.query_one("#llm-add").label))
+
+    async def test_llm_page_in_the_llm_edition(self):
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            pane = await self.open_llm(pilot)
+            self.assertFalse(pane.query_one("#llm-add").display)
+
+    async def test_test_button_asks_the_model(self):
+        original = llm.test
+        asked = []
+        llm.test = lambda provider, url, model, api_key="", **kwargs: (
+            asked.append((provider, url, model)) or llm.TestResult(True, "OK", 1.25))
+        self.addCleanup(setattr, llm, "test", original)
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            pane = await self.open_llm(pilot)
+            pane.query_one("#llm-tabs").active = "tab-galah"
+            await pilot.pause(0.3)
+            await pilot.click("#llm-test")
+            await pilot.pause(0.5)
+            result = str(pane.query_one("#llm-result").render())
+        self.assertEqual(asked[0][0], "ollama")
+        self.assertIn("OK", result)
+        self.assertIn("1.2", result)
+
+    async def test_scan_only_after_a_yes(self):
+        from tpotctl.screens.dialogs import ConfirmDialog
+        original_scan, original_net = llm.scan, llm.scan_network
+        scans = []
+        llm.scan = lambda targets, **kwargs: scans.append(list(targets)) or []
+        llm.scan_network = lambda: "10.1.2.3/24"
+        self.addCleanup(setattr, llm, "scan", original_scan)
+        self.addCleanup(setattr, llm, "scan_network", original_net)
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            await self.open_llm(pilot)
+            await pilot.click("#llm-scan")
+            await pilot.pause(0.3)
+            self.assertIsInstance(self.app.screen, ConfirmDialog)
+            self.assertIn("10.1.2.0/24", str(self.app.screen.query_one(".dialog-title").render()))
+            await pilot.click("#no")
+            await pilot.pause(0.3)
+            self.assertEqual(scans, [])
+            await pilot.click("#llm-scan")
+            await pilot.pause(0.3)
+            await pilot.click("#yes")
+            await pilot.pause(0.6)
+        self.assertEqual(len(scans), 1)
+        self.assertEqual(len(scans[0]), 253)
+
+    async def test_saving_on_the_llm_page_updates_the_settings_page(self):
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            pane = await self.open_llm(pilot)
+            pane.query_one("#llm-tabs").active = "tab-galah"
+            await pilot.pause(0.3)
+            pane.query_one("#set-GALAH_LLM_MODEL").value = "qwen3"
+            await pilot.pause(0.3)
+            await pilot.click("#llm-save")
+            await pilot.pause(0.6)
+            if self.app.screen.query("#no"):
+                await pilot.click("#no")                   # no restart
+                await pilot.pause(0.3)
+            settings = self.app.query_one("#settings")
+            await pilot.pause(0.3)
+            self.assertEqual(settings.draft.get("GALAH_LLM_MODEL"), "qwen3")
 
     async def test_secret_can_be_shown(self):
         async with self.app.run_test(size=(150, 50)) as pilot:

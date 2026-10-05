@@ -218,6 +218,37 @@ def model_picker(current: str, provider: str, url: str, api_key: str) -> Picker:
                   note=f"Asked from {where}." if where else "")
 
 
+def ollama_items(found) -> List[Item]:
+    items = []
+    for hit in found:
+        label = Text()
+        label.append(hit.url, style=f"bold {theme.color('glass')}")
+        label.append(f"  Ollama {hit.version}, {hit.models} model{'s' if hit.models != 1 else ''}",
+                     style=theme.color("ash"))
+        if hit.note:
+            label.append(f"\n  {hit.note}", style=theme.color("warn" if not hit.reachable_from_docker else "ash"))
+        items.append((hit.url, label, not hit.reachable_from_docker))
+    return items
+
+
+def ollama_picker(current: str, service: str, env: dict, find: Optional[Callable] = None,
+                  title: str = "Ollama") -> Picker:
+    """The Ollama servers found (or scanned), the value is the URL setting of the service."""
+    from tpotctl import llm
+
+    def load() -> List[Item]:
+        found = (find or (lambda: llm.discover(env)))()
+        items = ollama_items(found)
+        if not items:
+            raise llm.LLMError("no Ollama answers on port 11434 in the usual places, enter its URL")
+        return [(llm.url_for(service, value), label, hidden) for value, label, hidden in items]
+
+    return Picker(title, load, current, free=True,
+                  show_all="Also the ones the honeypots cannot reach",
+                  note="Asked on port 11434: the URLs of the settings, this host, its Docker bridges and "
+                       "gateways. The honeypots run in Docker, localhost there is the container itself.")
+
+
 # -- for a row of the settings ----------------------------------------------------
 
 def picker_for(row, draft: dict, schema: dict) -> Picker:
@@ -229,6 +260,8 @@ def picker_for(row, draft: dict, schema: dict) -> Picker:
         return interface_picker(current)
     if rule.widget == "timezone":
         return timezone_picker(current)
+    if rule.widget == "llm_url":
+        return ollama_picker(current, rule.llm.get("service", ""), draft)
     llm = llm_settings(rule, draft, schema)
     return model_picker(current, llm["provider"], llm["url"], llm["api_key"])
 

@@ -103,7 +103,7 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             switcher = app.query_one("ContentSwitcher")
             self.assertEqual(switcher.current, "status")
             self.assertEqual(app.query_one("#containers").row_count, 2)
-            await pilot.press("down", "down", "down", "down", "down")
+            await pilot.press("down", "down", "down", "down", "down", "down")
             await pilot.pause(0.2)
             self.assertEqual(switcher.current, "images")
             self.assertEqual(app.query_one("#images-table").row_count, 1)
@@ -125,7 +125,7 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
         app = tapp.TpotApp(backend=FakeBackend(), runner=runner)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause(0.2)
-            await pilot.press("down", "down", "down", "down", "down", "down")
+            app.goto("update")
             await pilot.pause(0.2)
             await pilot.click("#run-update")
             await pilot.pause(0.2)
@@ -163,6 +163,8 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             await pilot.pause(0.2)
             names = [name for name, _help, _cb in TpotCommands(app.screen).commands()]
         self.assertIn("Switch to the Mini edition", names)
+        for name in ("Find Ollama", "Test the LLM of Beelzebub", "Test the LLM of Galah"):
+            self.assertIn(name, names)
         self.assertNotIn("Switch to the Hive edition", names)       # in use
 
     async def test_edition_switch_off_host_is_disabled(self):
@@ -180,10 +182,10 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
         app = tapp.TpotApp(backend=FakeBackend(host=False), runner=Recorder())
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause(0.2)
-            self.assertEqual([p[0] for p in app.panes], ["edition", "settings", "users"])
+            self.assertEqual([p[0] for p in app.panes], ["edition", "settings", "llm", "users"])
 
     def test_every_menu_pane_has_a_command(self):
-        commands = {"status": "status", "edition": "edition", "settings": "env", "users": "users",
+        commands = {"status": "status", "edition": "edition", "settings": "env", "llm": "llm", "users": "users",
                     "sensors": "sensors", "images": "images", "update": "update"}
         help_text = cli.build_parser().format_help()
         for key, _title, _cls, _host in tapp.PANES:

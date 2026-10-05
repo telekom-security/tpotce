@@ -1,6 +1,6 @@
 """One row of the Settings page per .env key, with the control that fits the key.
 
-The schema says which: widget switch / choice / interface / timezone / llm_model,
+The schema says which: widget switch / choice / interface / timezone / llm_model / llm_url,
 else the type (enum -> Select, int / number -> Input for numbers, secret -> masked
 Input with a button to show it). Every control is #set-<KEY>; whatever it is, a
 change arrives as SettingRow.Changed(key, value) with the text written to .env.
@@ -49,9 +49,10 @@ class SettingRow(Vertical):
             self.row = row
 
     def __init__(self, rule: envschema.Rule, value: str, fixed: str, unlockable: bool = False,
-                 unlocked: bool = False):
+                 unlocked: bool = False, absent: bool = False):
         super().__init__(classes="setting", id=f"row-{rule.key}")
         self.rule, self.value, self.fixed = rule, value, fixed
+        self.absent = absent            # its service is not in the edition, only offered
         self.unlockable, self.unlocked = unlockable and not rule.editable, unlocked
         # a row without a field can take the focus itself, so the arrows reach every setting
         self.can_focus = not rule.editable and not self.unlockable
@@ -70,6 +71,8 @@ class SettingRow(Vertical):
             with Vertical(classes="setting-name"):
                 yield Label(self.title_text(False), classes="setting-title")
                 yield Label(Text(rule.key), classes="setting-key")
+                if self.absent:
+                    yield Label(Text("not in your edition", style=theme.color("ash")), classes="setting-absent")
             with Horizontal(classes="setting-control"):
                 yield from self.control()
             yield Static(Text(rule.help), classes="help")
@@ -109,11 +112,12 @@ class SettingRow(Vertical):
             current = value if value in rule.values else Select.NULL
             yield TpotSelect([(v, v) for v in rule.values], value=current, id=f"set-{key}",
                          allow_blank=rule.optional or current is Select.NULL, compact=True)
-        elif rule.widget in ("interface", "timezone", "llm_model"):
+        elif rule.widget in ("interface", "timezone", "llm_model", "llm_url"):
             placeholder = {"interface": "automatic", "timezone": rule.default or "UTC"}.get(rule.widget, rule.default)
             yield Input(value, id=f"set-{key}", placeholder=placeholder, compact=True)
-            yield Button("Choose", id=f"pick-{key}", classes="small", compact=True)
-            if rule.widget != "llm_model":
+            yield Button("Find" if rule.widget == "llm_url" else "Choose", id=f"pick-{key}", classes="small",
+                         compact=True)
+            if rule.widget in ("interface", "timezone"):
                 yield Button("Detect", id=f"detect-{key}", classes="small", compact=True)
         elif rule.secret:
             yield Input(value, password=True, id=f"set-{key}", placeholder=rule.default, compact=True)
@@ -201,10 +205,5 @@ class SettingRow(Vertical):
 
 def llm_settings(rule: envschema.Rule, draft: Dict[str, str], schema) -> Optional[Dict[str, str]]:
     """provider, url, api_key for the model picker of an llm_model key, defaults filled in."""
-    if not rule.llm:
-        return None
-    out = {}
-    for name in ("provider", "url", "api_key"):
-        key = rule.llm.get(name, "")
-        out[name] = draft.get(key, "") or (schema[key].default if key in schema else "")
-    return out
+    from tpotctl import llm
+    return llm.settings_of(rule, draft, schema)

@@ -36,14 +36,30 @@ class Settings:
     def values(self) -> Dict[str, str]:
         return self.env.values()
 
-    def relevant(self, include_all: bool = False, values: Optional[Dict[str, str]] = None) -> List[envschema.Rule]:
-        """The keys that matter for this type of T-Pot and these services, in schema order."""
+    def relevant(self, include_all: bool = False, values: Optional[Dict[str, str]] = None,
+                 offered: bool = False) -> List[envschema.Rule]:
+        """The keys that matter for this type of T-Pot and these services, in schema order;
+        offered adds the keys the schema offers anyway (the LLM settings)."""
         values = self.values if values is None else values
         return [rule for rule in self.schema.values()
-                if include_all or envschema.applies(rule, values, self.services)]
+                if include_all or envschema.applies(rule, values, self.services) or (offered and rule.offer)]
 
-    def problems(self, values: Optional[Dict[str, str]] = None) -> List[envschema.Problem]:
-        return envschema.validate(self.values if values is None else values, self.services, self.schema)
+    def absent(self, rule: envschema.Rule) -> bool:
+        """A key of a service that is not in the edition."""
+        return bool(rule.services) and not set(rule.services) & set(self.services)
+
+    def problems(self, values: Optional[Dict[str, str]] = None, offered: bool = False) -> List[envschema.Problem]:
+        """The problems tpotinit finds; offered adds the ones of offered keys of absent services, as
+        warnings: tpotinit does not check them."""
+        values = self.values if values is None else values
+        found = envschema.validate(values, self.services, self.schema)
+        if offered:
+            defaults = {key: rule.default for key, rule in self.schema.items()}
+            for rule in self.schema.values():
+                if rule.offer and self.absent(rule):
+                    found += [envschema.Problem("warning", p.key, p.text)
+                              for p in envschema.check(rule, values, defaults)]
+        return found
 
     def blocking(self, problems: List[envschema.Problem], changes: Dict[str, str]) -> List[envschema.Problem]:
         """What stops a change: errors of changed keys, and a value tpotinit would replace by its

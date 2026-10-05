@@ -62,6 +62,25 @@ class SettingsTest(unittest.TestCase):
         self.assertNotIn("GALAH_LLM_PROVIDER", keys)    # galah is not in standard
         self.assertIn("GALAH_LLM_PROVIDER", [r.key for r in self.load().relevant(include_all=True)])
 
+    def test_llm_keys_are_offered_without_their_services(self):
+        current = self.load()
+        offered = {r.key: r for r in current.relevant(offered=True)}
+        for key in ("BEELZEBUB_LLM_PROVIDER", "BEELZEBUB_LLM_HOST", "GALAH_LLM_MODEL", "GALAH_LLM_SERVER_URL"):
+            with self.subTest(key=key):
+                self.assertIn(key, offered)
+                self.assertTrue(offered[key].offer)
+                self.assertTrue(current.absent(offered[key]))
+        self.assertFalse(current.absent(offered["OINKCODE"]))
+        self.assertNotIn("TPOT_HIVE_IP", offered)                 # not offered, SENSOR only
+
+    def test_problems_of_offered_keys_only_warn(self):
+        current = self.load()
+        values = dict(current.values, GALAH_LLM_TEMPERATURE="9")
+        self.assertEqual([p for p in current.problems(values) if p.key == "GALAH_LLM_TEMPERATURE"], [])
+        found = [p for p in current.problems(values, offered=True) if p.key == "GALAH_LLM_TEMPERATURE"]
+        self.assertEqual([p.level for p in found], ["warning"])
+        self.assertEqual(current.blocking(found, {"GALAH_LLM_TEMPERATURE": "9"}), [])
+
     def test_change_writes_valid_values(self):
         warnings = self.load().change({"TPOT_BLACKHOLE": "ENABLED", "TPOT_PERSISTENCE_CYCLES": "60"})
         self.assertEqual(warnings, [])

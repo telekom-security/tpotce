@@ -26,6 +26,9 @@ class TpotCommands(Provider):
                 if choice.key != in_use:
                     yield (f"Switch to the {choice.title} edition", f"tpot edition set {choice.key}",
                            partial(app.switch_edition, choice.key))
+        yield "Find Ollama", "for Beelzebub and Galah, LLM page", partial(app.llm_action, "find", "galah")
+        for service, title in (("beelzebub", "Beelzebub"), ("galah", "Galah")):
+            yield f"Test the LLM of {title}", "a short prompt to its model", partial(app.llm_action, "test", service)
         for mode in ("unicode", "nerd", "ascii"):
             yield f"Icons: {mode}", {"unicode": "symbols every font has", "nerd": "needs a Nerd Font",
                                      "ascii": "plain characters"}[mode], partial(app.set_icons, mode)
