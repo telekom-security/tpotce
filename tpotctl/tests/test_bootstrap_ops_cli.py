@@ -275,6 +275,42 @@ class SetupForceTest(unittest.TestCase):
         self.assertFalse(os.path.exists(self.venv + ".new"))
         self.assertFalse(os.path.exists(self.venv + ".old"))
 
+    def test_a_plain_launch_leaves_a_rebuild_in_progress_alone(self):
+        """tpot ps in another shell while the menu rebuilds: venv.new must stay."""
+        os.makedirs(self.venv + ".new")
+        with mock.patch.object(bootstrap, "venv_current", return_value=True):
+            bootstrap.setup_venv(quiet=True)
+        self.assertTrue(os.path.exists(self.venv + ".new"))
+
+    def test_a_second_rebuild_waits_for_the_first(self):
+        import threading
+        order = []
+        gate = threading.Event()
+        calls = self.fake_call()
+
+        def slow(command, **kwargs):
+            if command[1:3] == ["-m", "venv"] and not order:
+                order.append("first starts")
+                gate.wait(2)
+                order.append("first done")
+            elif command[1:3] == ["-m", "venv"]:
+                order.append("second starts")
+            return calls(command, **kwargs)
+        with mock.patch("subprocess.call", side_effect=slow), \
+                mock.patch.object(bootstrap, "imports_ok", return_value=True):
+            first = threading.Thread(target=bootstrap.setup_venv, kwargs={"force": True, "quiet": True})
+            first.start()
+            while not order:
+                pass
+            second = threading.Thread(target=bootstrap.setup_venv, kwargs={"force": True, "quiet": True})
+            second.start()
+            second.join(0.3)
+            gate.set()
+            first.join(5)
+            second.join(5)
+        self.assertEqual(order, ["first starts", "first done", "second starts"])
+        self.assertTrue(os.path.exists(bootstrap.venv_python(self.venv)))
+
     def test_launcher_and_cli_know_force(self):
         from tpotctl import cli
         self.assertTrue(cli.build_parser().parse_args(["setup", "--force"]).force)

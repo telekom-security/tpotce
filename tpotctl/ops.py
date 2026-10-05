@@ -270,7 +270,7 @@ def backup_info(path: str) -> BackupInfo:
             if "MANIFEST" in members:
                 handle = archive.extractfile("MANIFEST")
                 manifest = handle.read().decode("utf-8", "replace").splitlines()[1:8] if handle else []
-    except (OSError, tarfile.TarError) as err:
+    except (OSError, EOFError, tarfile.TarError) as err:     # EOFError: a cut compressed archive
         return BackupInfo(path, name, size, kind, [], [], f"cannot read it: {err}")
     groups = []
     for group, member in _GROUP_MEMBER.items():

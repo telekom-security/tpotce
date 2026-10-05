@@ -10,6 +10,7 @@ The customizer's headless part (update.sh --rebuild) only needs PyYAML and takes
 the one of the distribution when there is one.
 """
 
+import contextlib
 import hashlib
 import os
 import shutil
@@ -122,16 +123,40 @@ def setup_venv(force: bool = False, quiet: bool = False) -> str:
     directory = venv_dir()
     python = venv_python(directory)
     shutil.rmtree(old_venv_dir(), ignore_errors=True)
-    for leftover in (directory + ".new", directory + ".old"):       # of a run that broke off
-        shutil.rmtree(leftover, ignore_errors=True)
     if not force and venv_current(directory):
         return python
-    if not quiet:
-        print(f"[INFO] - Setting up the Python packages of tpot in {directory} (needs internet) ...",
-              file=sys.stderr)
-    _build(directory + ".new")
-    _swap(directory + ".new", directory)
+    # one build at a time: a tpot started meanwhile (another shell) waits instead of
+    # cleaning up a venv.new that is still being built
+    with _build_lock(directory):
+        if not force and venv_current(directory):
+            return python
+        for leftover in (directory + ".new", directory + ".old"):       # of a run that broke off
+            shutil.rmtree(leftover, ignore_errors=True)
+        if not quiet:
+            print(f"[INFO] - Setting up the Python packages of tpot in {directory} (needs internet) ...",
+                  file=sys.stderr)
+        _build(directory + ".new")
+        try:
+            _swap(directory + ".new", directory)
+        except OSError as err:
+            raise BootstrapError(f"the new venv could not take the place of {directory}: {err}")
     return python
+
+
+@contextlib.contextmanager
+def _build_lock(directory: str):
+    os.makedirs(os.path.dirname(directory), exist_ok=True)
+    try:
+        import fcntl
+    except ImportError:          # Windows: the customizer only, no menu that rebuilds meanwhile
+        yield
+        return
+    with open(directory + ".lock", "w") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
 
 
 def _build(directory: str) -> None:

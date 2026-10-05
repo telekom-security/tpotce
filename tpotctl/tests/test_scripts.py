@@ -293,6 +293,22 @@ class BackupInfoTest(unittest.TestCase):
         self.assertEqual(info.groups, ["git", "config", "untracked", "data"])
         self.assertIn("version: 24.04.2", info.manifest)
 
+    def test_truncated_compressed_archive(self):
+        """tarfile raises EOFError for it, the restore page must show it, not end tpot."""
+        import gzip
+        from tpotctl import ops
+        home = tempfile.mkdtemp(prefix="tpot-backup-info-")
+        self.addCleanup(shutil.rmtree, home)
+        whole = make_backup(home, {"MANIFEST": MANIFEST, "env": "A=1\n" * 2000})
+        with open(whole, "rb") as handle:
+            packed = gzip.compress(handle.read())
+        path = os.path.join(home, "cut_tpot_backup.tar")
+        with open(path, "wb") as out:
+            out.write(packed[:len(packed) // 2])
+        info = ops.backup_info(path)
+        self.assertEqual(info.groups, [])
+        self.assertTrue(info.problem)
+
     def test_broken_archive(self):
         from tpotctl import ops
         home = tempfile.mkdtemp(prefix="tpot-backup-info-")

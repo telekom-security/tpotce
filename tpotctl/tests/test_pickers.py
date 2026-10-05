@@ -354,7 +354,8 @@ class SettingsHelpersTest(SettingsHelpersBase):
             pane = await self.open_settings(pilot)
             self.app.goto_setting("GALAH_LLM_MODEL")
             await pilot.pause(0.3)
-            await pilot.click("#pick-GALAH_LLM_MODEL")
+            # pressed, not clicked: under load the row may still scroll into view
+            self.app.query_one("#pick-GALAH_LLM_MODEL").press()
             for _wait in range(30):           # the models load in a thread, slower under load
                 await pilot.pause(0.1)
                 if getattr(self.app.screen, "shown", None):
@@ -596,6 +597,32 @@ class SettingsDraftTest(SettingsHelpersBase):
             await self.save_llm_model(pilot, "qwen3")
             self.assertNotIn("GALAH_LLM_MODEL", settings.changes())
             self.assertTrue(any("GALAH_LLM_MODEL" in n for n in notes))
+
+    async def test_a_save_on_llm_saves_once_and_leaves_the_focus_there(self):
+        from tpotctl.screens.dialogs import ConfirmDialog
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            settings = await self.open_settings(pilot)
+            await settings.unlock(settings.rows["TPOT_DATA_PATH"])
+            await pilot.pause(0.2)
+            settings.query_one("#set-TPOT_DATA_PATH").value = "/srv/tpot-data"
+            await pilot.pause(0.3)
+            llm_pane = self.app.query_one("#llm")
+            self.app.goto("llm")
+            await pilot.pause(0.4)
+            llm_pane.query_one("#llm-tabs").active = "tab-galah"
+            await pilot.pause(0.3)
+            llm_pane.query_one("#set-GALAH_LLM_MODEL").value = "qwen3"
+            await pilot.pause(0.3)
+            llm_pane.query_one("#llm-save").press()
+            for _wait in range(50):            # writing .env and reloading both pages, slower under load
+                await pilot.pause(0.1)
+                if isinstance(self.app.screen, ConfirmDialog):
+                    break
+            await pilot.pause(0.5)             # a second save would ask a second time
+            dialogs = [s for s in self.app.screen_stack if isinstance(s, ConfirmDialog)]
+            self.assertEqual(len(dialogs), 1)                      # one save, one question
+            focused = self.app.screen_stack[0].focused
+            self.assertFalse(focused is not None and settings in focused.ancestors_with_self)
 
     async def test_unlocked_draft_survives_a_save_elsewhere(self):
         async with self.app.run_test(size=(150, 50)) as pilot:

@@ -496,8 +496,14 @@ class SettingsPane(Vertical):
         if not hasattr(self, "_reloading"):
             import asyncio
             self._reloading = asyncio.Lock()
+        from textual.css.query import NoMatches
         async with self._reloading:
-            await self._reload(keep, keep_unlocked)
+            try:
+                await self._reload(keep, keep_unlocked)
+            except NoMatches:
+                if self.is_attached and not self.app._closing and not self._closing:
+                    raise
+                # tpot ends meanwhile (i.e. q right after a save), its widgets are going
 
     async def _reload(self, keep: Optional[Dict[str, str]], keep_unlocked: Iterable[str]) -> None:
         from tpotctl.settings import SettingsError
@@ -543,7 +549,8 @@ class SettingsPane(Vertical):
             tabs.active = active
         for key in keep_unlocked:
             if key in self.rows:
-                await self.unlock(self.rows[key])
+                # unlocked again in the background: the focus stays where the person is
+                await self.unlock(self.rows[key], focus=False)
         self.call_after_refresh(self.check)
         self.loaded()
 
@@ -560,7 +567,7 @@ class SettingsPane(Vertical):
 
     def check(self) -> None:
         from tpotctl import envschema
-        if self.current is None:
+        if self.current is None or not self.is_attached:     # not while tpot ends
             return
         problems = self.current.problems(self.draft, offered=True)
         by_key = {}
@@ -619,7 +626,7 @@ class SettingsPane(Vertical):
                                                 f"T-Pot checks the value as always.", style=theme.color("glass")),
                                            yes="Unlock", no="Keep it fixed"), answered)
 
-    async def unlock(self, row) -> None:
+    async def unlock(self, row, focus: bool = True) -> None:
         import dataclasses
         from tpotctl.widgets.fields import SettingRow
         key = row.rule.key
@@ -634,7 +641,8 @@ class SettingsPane(Vertical):
         else:
             await parent.mount(editable)
         self.rows[key] = editable
-        self.focus_row(editable)
+        if focus:
+            self.focus_row(editable)
         self.check()
 
     def on_setting_row_pick(self, event) -> None:
@@ -808,8 +816,8 @@ class LlmPane(SettingsPane):
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         button = event.button.id or ""
         if not button.startswith("llm-") or button in ("llm-save", "llm-revert"):
-            await super().on_button_pressed(event)
-            return
+            return      # Textual calls SettingsPane.on_button_pressed after this one (MRO), once
+        event.prevent_default()
         event.stop()
         if self.current is None:
             return
