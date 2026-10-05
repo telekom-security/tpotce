@@ -258,9 +258,10 @@ def print_problems(problems, console) -> None:
 def run_env(args) -> int:
     from rich.markup import escape
     from tpotctl import settings as tsettings
-    current = tsettings.load()
-    console = _console()
     command = args.env_command or "list"
+    # check and set compare TPOT_OSTYPE with the host, as tpotinit does on start
+    current = tsettings.load(host_ostype=ops.host_ostype()) if command in ("check", "set") else tsettings.load()
+    console = _console()
     if command == "get":
         value = current.values.get(args.key)
         if value is None:

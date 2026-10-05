@@ -107,7 +107,7 @@ class SettingsTest(unittest.TestCase):
     def test_cli(self):
         from tpotctl import cli
         original = self.settings.load
-        with mock.patch.object(self.settings, "load", lambda: original(self.repo)):
+        with mock.patch.object(self.settings, "load", lambda **kwargs: original(self.repo, **kwargs)):
             out = io.StringIO()
             with redirect_stdout(out), redirect_stderr(io.StringIO()):
                 self.assertEqual(cli.main(["env", "set", "TPOT_ATTACKMAP_TEXT=DISABLED", "OINKCODE=abc123"]), 0)
@@ -154,11 +154,52 @@ class UnlockTest(unittest.TestCase):
             if not rule.editable and key not in self.settings.MANAGED_BY:
                 self.assertTrue(rule.unlock, f"{key} needs an unlock warning")
 
+    def test_a_mac_host_with_linux_is_an_error_with_a_fix(self):
+        current = self.settings.load(self.repo, host_ostype="mac")
+        self.assertEqual(current.values["TPOT_OSTYPE"], "linux")
+        self.assertEqual(current.fixes(), {"TPOT_OSTYPE": "mac"})
+        self.assertTrue(any(p.key == "TPOT_OSTYPE" and p.level == "error" and "macOS" in p.text
+                            for p in current.problems()))
+
+    def test_the_fix_needs_no_unlock_another_value_does(self):
+        current = self.settings.load(self.repo, host_ostype="mac")
+        with self.assertRaises(self.settings.SettingsError):
+            current.change({"TPOT_OSTYPE": "win"})
+        with self.assertRaises(self.settings.SettingsError):
+            current.change({"TPOT_OSTYPE": "win"}, unlocked=["TPOT_OSTYPE"])     # tpotinit would not start
+        current.change({"TPOT_OSTYPE": "mac"})
+        self.assertEqual(self.settings.load(self.repo).values["TPOT_OSTYPE"], "mac")
+
+    def test_a_matching_host_has_nothing_to_fix(self):
+        current = self.settings.load(self.repo, host_ostype="linux")
+        self.assertEqual(current.fixes(), {})
+        self.assertFalse(any(p.key == "TPOT_OSTYPE" for p in current.problems()))
+
+    def test_without_a_host_nothing_changes(self):
+        current = self.settings.load(self.repo)
+        self.assertEqual(current.fixes(), {})
+        self.assertFalse(any(p.key == "TPOT_OSTYPE" for p in current.problems()))
+
+    @unittest.skipUnless(rich, "Rich is not installed")
+    def test_cli_on_a_mac(self):
+        from tpotctl import cli
+        original = self.settings.load
+        with mock.patch.object(self.settings, "load", lambda **kwargs: original(self.repo, **kwargs)), \
+                mock.patch("tpotctl.ops.host_ostype", return_value="mac"):
+            out = io.StringIO()
+            with redirect_stdout(out), redirect_stderr(out):
+                self.assertEqual(cli.main(["env", "check"]), 1)
+            self.assertIn("TPOT_OSTYPE", out.getvalue())
+            out = io.StringIO()
+            with redirect_stdout(out), redirect_stderr(out):
+                self.assertEqual(cli.main(["env", "set", "TPOT_OSTYPE=mac"]), 0, out.getvalue())
+        self.assertEqual(self.settings.load(self.repo).values["TPOT_OSTYPE"], "mac")
+
     @unittest.skipUnless(rich, "Rich is not installed")
     def test_cli_unlock(self):
         from tpotctl import cli
         original = self.settings.load
-        with mock.patch.object(self.settings, "load", lambda: original(self.repo)):
+        with mock.patch.object(self.settings, "load", lambda **kwargs: original(self.repo, **kwargs)):
             out = io.StringIO()
             with redirect_stdout(out), redirect_stderr(out):
                 refused = cli.main(["env", "set", "TPOT_DATA_PATH=/srv/tpot"])

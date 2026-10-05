@@ -162,6 +162,53 @@ class OpsTest(unittest.TestCase):
                              ["20261001_tpot_backup_full.tar", "20260901_tpot_backup.tar"])
 
 
+class HostOstypeTest(unittest.TestCase):
+    """ops.host_ostype: what tpotinit compares TPOT_OSTYPE with (entrypoint.sh, uname of the Docker kernel)."""
+
+    def setUp(self):
+        patcher = mock.patch.dict(os.environ)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        os.environ.pop("TPOT_HOST_OSTYPE", None)
+
+    @staticmethod
+    def kernel(text, code=0):
+        import subprocess
+        return lambda command, **kwargs: subprocess.CompletedProcess(command, code, stdout=text, stderr="")
+
+    def test_from_the_docker_kernel(self):
+        with mock.patch("shutil.which", return_value="/usr/bin/docker"):
+            self.assertEqual(ops.host_ostype(run=self.kernel("6.10.14-linuxkit\n")), "mac")
+            self.assertEqual(ops.host_ostype(run=self.kernel("5.15.167.4-microsoft-standard-WSL2\n")), "win")
+            self.assertEqual(ops.host_ostype(run=self.kernel("6.12.48+deb13-amd64\n")), "linux")
+
+    def test_no_docker_falls_back_to_the_platform(self):
+        with mock.patch("shutil.which", return_value=None):
+            with mock.patch("sys.platform", "darwin"):
+                self.assertEqual(ops.host_ostype(run=self.kernel("", 1)), "mac")
+            with mock.patch("sys.platform", "linux"), mock.patch("platform.release", return_value="6.8.0-45-generic"):
+                self.assertEqual(ops.host_ostype(run=self.kernel("", 1)), "linux")
+            with mock.patch("sys.platform", "linux"), \
+                    mock.patch("platform.release", return_value="5.15.167.4-microsoft-standard-WSL2"):
+                self.assertEqual(ops.host_ostype(run=self.kernel("", 1)), "win")
+
+    def test_docker_that_does_not_answer(self):
+        import subprocess
+
+        def hangs(command, **kwargs):
+            raise subprocess.TimeoutExpired(command, kwargs.get("timeout"))
+        with mock.patch("shutil.which", return_value="/usr/bin/docker"), mock.patch("sys.platform", "darwin"):
+            self.assertEqual(ops.host_ostype(run=hangs), "mac")
+
+    def test_the_environment_wins(self):
+        os.environ["TPOT_HOST_OSTYPE"] = "win"
+        self.assertEqual(ops.host_ostype(run=self.kernel("6.10.14-linuxkit\n")), "win")
+
+    def test_tests_never_ask_docker(self):
+        isolate()
+        self.assertEqual(os.environ.get("TPOT_HOST_OSTYPE"), "linux")
+
+
 class CliTest(unittest.TestCase):
 
     def setUp(self):

@@ -31,6 +31,8 @@ class Settings:
     env: EnvFile
     schema: Dict[str, envschema.Rule]
     services: Set[str]
+    # linux, mac or win of the host (ops.host_ostype); None: TPOT_OSTYPE is not compared with it
+    host_ostype: Optional[str] = None
 
     @property
     def values(self) -> Dict[str, str]:
@@ -61,6 +63,10 @@ class Settings:
         warnings: tpotinit does not check them."""
         values = self.values if values is None else values
         found = envschema.validate(values, self.services, self.schema)
+        for key, value in self.fixes(values).items():
+            found.append(envschema.Problem(
+                "error", key, f"is {values.get(key, 'linux')}, this host runs {ops.OSTYPE_TEXT[value]}: "
+                              f"tpotinit does not start, set it to {value}"))
         if offered:
             defaults = {key: rule.default for key, rule in self.schema.items()}
             for rule in self.schema.values():
@@ -68,6 +74,15 @@ class Settings:
                     found += [envschema.Problem("warning", p.key, p.text)
                               for p in envschema.check(rule, values, defaults)]
         return found
+
+    def fixes(self, values: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+        """{key: value} for fixed keys that do not match this host (TPOT_OSTYPE): tpotinit would
+        not start, and the value that fits may be written without an unlock."""
+        values = self.values if values is None else values
+        current = values.get("TPOT_OSTYPE", "linux")
+        if self.host_ostype in ops.OSTYPE_TEXT and current != self.host_ostype:
+            return {"TPOT_OSTYPE": self.host_ostype}
+        return {}
 
     def blocking(self, problems: List[envschema.Problem], changes: Dict[str, str]) -> List[envschema.Problem]:
         """What stops a change: errors of changed keys, and a value tpotinit would replace by its
@@ -95,12 +110,20 @@ class Settings:
         """Write the changes, give back the warnings that remain; SettingsError if not written.
         A fixed key is only written if it is in unlocked (and can be unlocked)."""
         unlocked = set(unlocked)
+        fixes = self.fixes()
         for key, value in changes.items():
             rule = self.schema.get(key)
             if rule is None:
                 raise SettingsError(f"{key} is not a T-Pot setting, see tpot env list --all")
+            if fixes.get(key) == value:
+                continue
             if not rule.editable and not (key in unlocked and self.can_unlock(key)):
-                hint = f", unlock it with: tpot env set --unlock {key}=..." if self.can_unlock(key) else ""
+                if key in fixes:
+                    hint = f", this host needs: tpot env set {key}={fixes[key]}"
+                elif self.can_unlock(key):
+                    hint = f", unlock it with: tpot env set --unlock {key}=..."
+                else:
+                    hint = ""
                 raise SettingsError(f"{key} is {self.why_fixed(key)}, tpot does not change it{hint}")
         values = dict(self.values)
         values.update(changes)
@@ -118,7 +141,8 @@ class Settings:
         return [p for p in problems if p.key in changes]
 
 
-def load(repo_dir: str = REPO_DIR, schema_path: str = envschema.SCHEMA_PATH) -> Settings:
+def load(repo_dir: str = REPO_DIR, schema_path: str = envschema.SCHEMA_PATH,
+         host_ostype: Optional[str] = None) -> Settings:
     path = os.path.join(repo_dir, ".env")
     try:
         env = EnvFile(path)
@@ -126,7 +150,7 @@ def load(repo_dir: str = REPO_DIR, schema_path: str = envschema.SCHEMA_PATH) -> 
         raise SettingsError(f"cannot read {path}: {err}")
     schema = envschema.load_schema(schema_path)
     services = envschema.compose_services(ops.compose_path(repo_dir, env.values()))
-    return Settings(path, env, schema, services)
+    return Settings(path, env, schema, services, host_ostype)
 
 
 def shown(rule: envschema.Rule, value: str, reveal: bool = False) -> str:
