@@ -144,6 +144,12 @@ class EditionsTest(unittest.TestCase):
                              backup_dir=self.backups, linux=True, host_ostype="linux")
         self.assertEqual(plan.env_changes.get("TPOT_OSTYPE"), "linux")
 
+    def test_a_linux_edition_on_docker_desktop_warns_and_keeps_the_os_type(self):
+        plan = editions.plan("mini", self.repo, {"TPOT_TYPE": "HIVE", "TPOT_OSTYPE": "win"},
+                             backup_dir=self.backups, linux=True, host_ostype="win")
+        self.assertNotIn("TPOT_OSTYPE", plan.env_changes)
+        self.assertTrue(any("MAC_WIN" in w for w in plan.warnings), plan.warnings)
+
     def test_linux_stays_linux(self):
         self.assertNotIn("TPOT_OSTYPE", self.plan("mini").env_changes)
 

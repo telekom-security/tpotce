@@ -134,6 +134,10 @@ def plan(target: str, repo_dir: str = REPO_DIR, env: Optional[Dict[str, str]] = 
     if choice.key == "mac_win":
         if host != "linux" and os_now != host:
             result.env_changes["TPOT_OSTYPE"] = host
+    elif host != "linux":
+        # i.e. WSL2 with systemd: tpotinit sees the kernel of Docker Desktop, linux would stop it
+        result.warnings.append(f"This host runs {ops.OSTYPE_TEXT[host]}: tpotinit only starts the MAC_WIN "
+                               f"edition there.")
     elif os_now != "linux":
         result.env_changes["TPOT_OSTYPE"] = "linux"
     return result
