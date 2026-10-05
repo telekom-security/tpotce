@@ -180,6 +180,53 @@ class PagesTest(unittest.IsolatedAsyncioTestCase):
             await pilot.pause(0.1)
             self.assertEqual(app.focused.id, "check-honeypots")
 
+    async def test_enter_on_the_edition_list_goes_on_to_its_buttons(self):
+        """Choose, then act: down in a list moves the highlight, so enter takes the choice and goes on."""
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=(150, 50)) as pilot:
+            await pilot.pause(0.3)
+            app.goto("edition")
+            await pilot.pause(0.3)
+            listing = app.query_one("#edition-list")
+            listing.focus()
+            listing.highlighted = 2                     # Mini, not the last one
+            await pilot.pause(0.1)
+            await pilot.press("enter")
+            await pilot.pause(0.2)
+            self.assertEqual(app.focused.id, "switch-edition")
+            self.assertEqual(listing.highlighted, 2)
+            self.assertIn("Mini", str(app.focused.label))
+
+    async def test_enter_on_a_table_row_goes_on_to_its_buttons(self):
+        from textual.app import App
+        from textual.containers import Horizontal
+        from textual.widgets import Button
+        from tpotctl.widgets import nav
+
+        class Host(nav.ArrowNav, App):
+            BINDINGS = [*nav.BINDINGS]
+
+            def compose(self):
+                table = nav.NavDataTable(id="t", cursor_type="row", enter_goes_on=True)
+                yield table
+                with Horizontal():
+                    yield Button("Passwd", id="b")
+
+            def on_mount(self):
+                table = self.query_one("#t")
+                table.add_columns("user")
+                table.add_rows([["alice"], ["bob"], ["carol"]])
+                table.focus()
+
+        app = Host()
+        async with app.run_test(size=(80, 20)) as pilot:
+            await pilot.pause(0.2)
+            await pilot.press("down")                   # bob
+            await pilot.press("enter")
+            await pilot.pause(0.2)
+            self.assertEqual(app.focused.id, "b")
+            self.assertEqual(app.query_one("#t").cursor_row, 1)
+
     async def test_the_menu_keeps_its_keys(self):
         app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)
         async with app.run_test(size=(150, 50)) as pilot:
@@ -319,6 +366,22 @@ class ScreensTest(unittest.IsolatedAsyncioTestCase):
         for label, make in self.factories().items():
             with self.subTest(screen=label):
                 await self.check_screen(label, make)
+
+    async def test_enter_on_the_restore_list_goes_on_to_the_groups(self):
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=(150, 50)) as pilot:
+            await pilot.pause(0.3)
+            from tpotctl.screens import restore
+            app.push_screen(restore.RestoreScreen(FakeBackend().backup_infos))       # two archives
+            await pilot.pause(0.6)
+            listing = app.screen.query_one("#restore-list")
+            listing.focus()
+            listing.highlighted = 0
+            await pilot.pause(0.2)
+            await pilot.press("enter")
+            await pilot.pause(0.2)
+            self.assertEqual(listing.highlighted, 0)
+            self.assertTrue((app.focused.id or "").startswith("group-"), app.focused)
 
     async def test_picker_down_from_its_buttons_stays_below(self):
         app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)

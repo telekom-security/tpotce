@@ -360,7 +360,7 @@ class EditionPane(Vertical):
 
     def compose(self) -> ComposeResult:
         yield Static("", id="edition-info", classes="info")
-        yield NavOptionList(id="edition-list")
+        yield NavOptionList(id="edition-list", enter_goes_on=True)
         yield Static("", id="edition-note")
         with Horizontal(classes="actions"):
             yield Button("Switch", id="switch-edition", variant="primary", disabled=True)
@@ -917,7 +917,7 @@ class UsersPane(Vertical):
 
     def compose(self) -> ComposeResult:
         yield Static("", id="users-info", classes="info")
-        yield NavDataTable(id="users-table", cursor_type="row", zebra_stripes=True)
+        yield NavDataTable(id="users-table", cursor_type="row", zebra_stripes=True, enter_goes_on=True)
         with Horizontal(classes="actions"):
             yield Button("Add", id="user-add", variant="primary")
             yield Button("Change password", id="user-passwd")
@@ -1011,7 +1011,7 @@ class SensorsPane(Vertical):
 
     def compose(self) -> ComposeResult:
         yield Static("", id="sensors-info", classes="info")
-        yield NavDataTable(id="sensors-table", cursor_type="row", zebra_stripes=True)
+        yield NavDataTable(id="sensors-table", cursor_type="row", zebra_stripes=True, enter_goes_on=True)
         with Horizontal(classes="actions"):
             yield Button("Deploy a sensor", id="sensor-add", variant="primary")
             yield Button("Edit", id="sensor-edit")

@@ -129,7 +129,17 @@ class NavInput(Input):
 
 class NavDataTable(DataTable):
     """up / down move the cursor, at the first or last row on to the line before or after; with a row
-    cursor left / right go along the line (left to the menu)."""
+    cursor left / right go along the line (left to the menu). enter_goes_on: a table whose buttons act
+    on the row, enter takes the row and goes on to them (down would move the cursor instead)."""
+
+    def __init__(self, *args, enter_goes_on: bool = False, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.enter_goes_on = enter_goes_on
+
+    def action_select_cursor(self) -> None:
+        super().action_select_cursor()
+        if self.enter_goes_on:
+            navigate(self.app, "down")
 
     def action_cursor_up(self) -> None:
         if self.cursor_type in ("row", "cell") and self.cursor_row <= 0:
@@ -164,7 +174,17 @@ def _first_last(options) -> tuple:
 
 
 class NavOptionList(OptionList):
-    """up / down move the highlight, at the first or last option on to the line before or after."""
+    """up / down move the highlight, at the first or last option on to the line before or after.
+    enter_goes_on: a list to choose from for the buttons below, enter takes the choice and goes on."""
+
+    def __init__(self, *args, enter_goes_on: bool = False, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.enter_goes_on = enter_goes_on
+
+    def action_select(self) -> None:
+        super().action_select()
+        if self.enter_goes_on:
+            navigate(self.app, "down")
 
     def action_cursor_up(self) -> None:
         first, _last = _first_last(self.options)

@@ -40,7 +40,7 @@ class RestoreScreen(Screen):
             yield Static(Text("Choose the archive and what of it comes back. restore.sh stops T-Pot for "
                               "everything but the Kibana objects and starts it again for them.",
                               style=theme.color("glass")), classes="restore-intro")
-            yield NavOptionList(id="restore-list")
+            yield NavOptionList(id="restore-list", enter_goes_on=True)
             yield Static("", id="restore-manifest")
             with Vertical(id="restore-groups"):
                 for group, question in ops.GROUP_TEXT.items():
