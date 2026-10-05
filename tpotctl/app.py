@@ -20,6 +20,8 @@ from textual.widgets import (Button, Checkbox, ContentSwitcher, DataTable, Foote
                              OptionList, Static, TabbedContent, TabPane)
 from textual.widgets.option_list import Option
 
+from tpotctl.widgets import nav
+from tpotctl.widgets.nav import NavDataTable, NavInput, NavOptionList
 from tpotctl import glyphs, logo, ops, prefs, theme
 from tpotctl.bootstrap import REPO_DIR
 from tpotctl.commands import TpotCommands
@@ -239,7 +241,7 @@ class StatusPane(Vertical):
                     yield Static("", id="system")
             yield Static(logo.pot(), id="pot")
         yield Static("", id="status-info", classes="info")
-        yield DataTable(id="containers", cursor_type="row", zebra_stripes=True)
+        yield NavDataTable(id="containers", cursor_type="row", zebra_stripes=True)
         with Horizontal(classes="actions"):
             yield Button("Start", id="svc-start")
             yield Button("Stop", id="svc-stop")
@@ -325,7 +327,7 @@ class StatusPane(Vertical):
 class ImagesPane(Vertical):
 
     def compose(self) -> ComposeResult:
-        yield DataTable(id="images-table", cursor_type="row", zebra_stripes=True)
+        yield NavDataTable(id="images-table", cursor_type="row", zebra_stripes=True)
         with Horizontal(classes="actions"):
             yield Button("Refresh", id="images-refresh")
 
@@ -357,7 +359,7 @@ class EditionPane(Vertical):
 
     def compose(self) -> ComposeResult:
         yield Static("", id="edition-info", classes="info")
-        yield OptionList(id="edition-list")
+        yield NavOptionList(id="edition-list")
         yield Static("", id="edition-note")
         with Horizontal(classes="actions"):
             yield Button("Switch", id="switch-edition", variant="primary", disabled=True)
@@ -427,7 +429,10 @@ class EditionPane(Vertical):
 
 
 class SettingsForm(VerticalScroll, inherit_bindings=False):
-    """The settings of one tab; up and down go to the page, they move between the settings."""
+    """The settings of one tab; the arrows move between the settings (widgets/nav.py), the form
+    scrolls to the one with the focus."""
+
+    can_focus = False
 
     BINDINGS = [
         Binding("pageup", "page_up", show=False),
@@ -446,11 +451,6 @@ class SettingsPane(Vertical):
 
     PREFIX = "settings"
     ALL_TOGGLE = True           # the checkbox for tpot env list --all
-
-    BINDINGS = [
-        Binding("down", "move(1)", "Next setting", show=False),
-        Binding("up", "move(-1)", "Previous setting", show=False),
-    ]
 
     def compose(self) -> ComposeResult:
         with Horizontal(id=f"{self.PREFIX}-head", classes="settings-head"):
@@ -690,21 +690,8 @@ class SettingsPane(Vertical):
                 if row.is_mounted and row.display and f"tab-{self.group_of(row.rule)}" == active]
 
     def action_move(self, step: int) -> None:
-        """up / down: from setting to setting, above the first one is the tab bar."""
-        from tpotctl.widgets.fields import SettingRow
-        from textual.widgets import Tabs
-        rows = self.visible_rows()
-        focused = self.app.focused
-        row = next((w for w in (focused.ancestors_with_self if focused else []) if isinstance(w, SettingRow)), None)
-        if row is None:
-            if focused is not None and any(isinstance(w, Tabs) for w in focused.ancestors_with_self) and step > 0:
-                self.focus_row(rows[0] if rows else None)
-            return
-        index = rows.index(row) if row in rows else 0
-        if index + step < 0:
-            self.query_one(f"#{self.PREFIX}-tabs", TabbedContent).query_one(Tabs).focus()
-        elif index + step < len(rows):
-            self.focus_row(rows[index + step])
+        """up / down from setting to setting: the arrows of every page (widgets/nav.py)."""
+        nav.navigate(self.app, "down" if step > 0 else "up")
 
     def focus_row(self, row) -> None:
         if row is None:
@@ -913,7 +900,7 @@ class UsersPane(Vertical):
 
     def compose(self) -> ComposeResult:
         yield Static("", id="users-info", classes="info")
-        yield DataTable(id="users-table", cursor_type="row", zebra_stripes=True)
+        yield NavDataTable(id="users-table", cursor_type="row", zebra_stripes=True)
         with Horizontal(classes="actions"):
             yield Button("Add", id="user-add", variant="primary")
             yield Button("Change password", id="user-passwd")
@@ -1007,7 +994,7 @@ class SensorsPane(Vertical):
 
     def compose(self) -> ComposeResult:
         yield Static("", id="sensors-info", classes="info")
-        yield DataTable(id="sensors-table", cursor_type="row", zebra_stripes=True)
+        yield NavDataTable(id="sensors-table", cursor_type="row", zebra_stripes=True)
         with Horizontal(classes="actions"):
             yield Button("Deploy a sensor", id="sensor-add", variant="primary")
             yield Button("Edit", id="sensor-edit")
@@ -1128,7 +1115,7 @@ class ChecksPane(Vertical):
     def compose(self) -> ComposeResult:
         yield Static("", id="checks-info", classes="info")
         with Horizontal(classes="actions"):
-            yield Input(placeholder="host to probe", id="check-host", compact=True)
+            yield NavInput(placeholder="host to probe", id="check-host", compact=True)
             yield Button("Probe the honeypots", id="check-honeypots", variant="primary")
         with Horizontal(classes="actions"):
             yield Button("Test the Attack Map pipeline", id="check-pipeline")
@@ -1188,7 +1175,7 @@ class UpdatePane(Vertical):
         with Horizontal(classes="actions"):
             yield Checkbox("Full backup with data/ (for a newer Elastic Stack)", False, id="update-full")
             yield Button("Rebuild tpot's packages", id="run-setup")
-        yield DataTable(id="backups", cursor_type="row")
+        yield NavDataTable(id="backups", cursor_type="row")
 
     def on_mount(self) -> None:
         self.query_one(DataTable).add_columns("Backups in ~/tpot_backups", "Size")
@@ -1317,7 +1304,7 @@ class TpotApp(App):
         Binding("r", "restart_service", "Restart T-Pot", show=False),
         Binding("f2", "next_icons", "Icons"),
         Binding("escape", "menu", "Menu", show=False),
-        Binding("right", "enter_page", "Open", show=False),
+        *nav.BINDINGS,
     ]
 
     def __init__(self, backend: Optional[Backend] = None, runner: Optional[Callable] = None, splash: bool = False,
@@ -1441,6 +1428,15 @@ class TpotApp(App):
         """esc: back to the menu on the left."""
         if len(self.screen_stack) == 1:
             self.query_one("#sidebar", ListView).focus()
+
+    def action_nav(self, direction: str) -> None:
+        """The arrows: in the menu right opens the page (up / down are the menu's own), elsewhere
+        widgets/nav.py."""
+        if self.focused is self.query("#sidebar").first() and len(self.screen_stack) == 1:
+            if direction == "right":
+                self.action_enter_page()
+            return
+        nav.navigate(self, direction)
 
     def action_enter_page(self) -> None:
         """right or enter in the menu: into the page."""
@@ -1706,11 +1702,12 @@ class TpotApp(App):
                  "docker-compose-custom.yml up.", style=theme.color("mist")), yes="Replace and restart", no="Not now"), replace)
 
 
-class CustomizerApp(App):
+class CustomizerApp(nav.ArrowNav, App):
     """compose/customizer.py on its own: the customizer screen, returns the Selection."""
 
     CSS_PATH = "tpot.tcss"
     TITLE = "T-Pot customizer"
+    BINDINGS = [*nav.BINDINGS]
 
     def __init__(self, catalog, selection, max_networks: int):
         super().__init__()

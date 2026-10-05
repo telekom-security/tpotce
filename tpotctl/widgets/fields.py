@@ -16,6 +16,7 @@ from textual.message import Message
 from textual.widgets import Button, Input, Label, Select, Static, Switch
 
 from tpotctl import envschema, glyphs, theme
+from tpotctl.widgets.nav import NavInput
 
 OTHER = "\x00other"
 
@@ -120,7 +121,7 @@ class SettingRow(Vertical):
             current = OTHER if custom else (value if value in listed else Select.NULL)
             yield TpotSelect(options, value=current, id=f"set-{key}", allow_blank=current is Select.NULL, compact=True)
             if rule.custom:
-                own = Input(value if custom else "", id=f"own-{key}", placeholder="your value", classes="own",
+                own = NavInput(value if custom else "", id=f"own-{key}", placeholder="your value", classes="own",
                         compact=True)
                 own.display = custom
                 yield own
@@ -130,20 +131,20 @@ class SettingRow(Vertical):
                          allow_blank=rule.optional or current is Select.NULL, compact=True)
         elif rule.widget in ("interface", "timezone", "llm_model", "llm_url"):
             placeholder = {"interface": "automatic", "timezone": rule.default or "UTC"}.get(rule.widget, rule.default)
-            yield Input(value, id=f"set-{key}", placeholder=placeholder, compact=True)
+            yield NavInput(value, id=f"set-{key}", placeholder=placeholder, compact=True)
             yield Button("Find" if rule.widget == "llm_url" else "Choose", id=f"pick-{key}", classes="small",
                          compact=True)
             if rule.widget in ("interface", "timezone"):
                 yield Button("Detect", id=f"detect-{key}", classes="small", compact=True)
         elif rule.secret:
-            yield Input(value, password=True, id=f"set-{key}", placeholder=rule.default, compact=True)
+            yield NavInput(value, password=True, id=f"set-{key}", placeholder=rule.default, compact=True)
             yield Button(glyphs.g("show"), id=f"reveal-{key}", classes="small reveal", tooltip="show / hide",
                          compact=True)
         elif rule.type in ("int", "number"):
-            yield Input(value, type="integer" if rule.type == "int" else "number", id=f"set-{key}",
+            yield NavInput(value, type="integer" if rule.type == "int" else "number", id=f"set-{key}",
                         placeholder=rule.default, compact=True)
         else:
-            yield Input(value, id=f"set-{key}", placeholder=rule.default, compact=True)
+            yield NavInput(value, id=f"set-{key}", placeholder=rule.default, compact=True)
 
     def switch_label(self, value: str) -> Text:
         on = value == self.rule.values[0]
