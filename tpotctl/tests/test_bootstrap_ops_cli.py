@@ -67,20 +67,9 @@ class BootstrapTest(unittest.TestCase):
 
     def test_guard_stops_loops(self):
         with mock.patch.dict(os.environ, {bootstrap.GUARD: "1"}), \
-                mock.patch.object(bootstrap, "in_venv", return_value=True), \
                 mock.patch.object(bootstrap, "importable", return_value=False):
             with self.assertRaises(bootstrap.BootstrapError):
                 bootstrap.ensure("ui")
-
-    def test_an_inherited_guard_outside_the_venv_is_no_loop(self):
-        """tpot run from the menu (the task screen) inherits TPOT_VENV but starts with the system Python:
-        it goes to the venv like any other start."""
-        with mock.patch.dict(os.environ, {bootstrap.GUARD: "1"}), \
-                mock.patch.object(bootstrap, "in_venv", return_value=False), \
-                mock.patch.object(bootstrap, "importable", return_value=False), \
-                mock.patch.object(bootstrap, "setup_venv", return_value="/venv/bin/python") as setup:
-            self.assertEqual(bootstrap.ensure("ui"), "/venv/bin/python")
-        setup.assert_called_once()
 
     def test_hints(self):
         with tempfile.NamedTemporaryFile("w", delete=False) as handle:

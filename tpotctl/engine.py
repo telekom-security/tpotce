@@ -1,18 +1,24 @@
 """Run a script or a tpot command as a child and hand its output on line by line.
 
 stdin is closed (a script that asks would hang otherwise) and stderr goes with
-stdout, so the log shows both in order. The tests replace it with a fake.
+stdout, so the log shows both in order. The child starts anew: the venv guard of
+the menu (bootstrap.GUARD) stays out, a tpot it runs goes to the venv on its own. The
+tests replace it with a fake.
 """
 
+import os
 import subprocess
 from typing import Callable, Dict, List, Optional
+
+from tpotctl.bootstrap import GUARD
 
 
 class Engine:
 
     def __init__(self, command: List[str], env: Optional[Dict[str, str]] = None, cwd: Optional[str] = None):
         self.command = command
-        self.env = env
+        self.env = dict(os.environ if env is None else env)
+        self.env.pop(GUARD, None)
         self.cwd = cwd
 
     def run(self, line: Callable[[str], None]) -> int:

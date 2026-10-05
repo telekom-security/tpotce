@@ -111,6 +111,21 @@ class EngineTest(unittest.TestCase):
         self.assertEqual(len(lines), 2)
         self.assertIn("end", lines[0])
 
+    def test_children_do_not_inherit_the_venv_guard(self):
+        """tpot (or update.sh calling it) run from the menu starts anew: TPOT_VENV of the menu stays out."""
+        from tpotctl import bootstrap
+        from tpotctl.engine import Engine
+        lines = []
+        env = dict(os.environ, **{bootstrap.GUARD: "1"})
+        Engine(["python3", "-c", f"import os; print(os.environ.get('{bootstrap.GUARD}', 'none'))"],
+               env=env).run(lines.append)
+        self.assertEqual(lines[0].strip(), "none")
+        os.environ[bootstrap.GUARD] = "1"
+        self.addCleanup(os.environ.pop, bootstrap.GUARD, None)
+        lines.clear()
+        Engine(["python3", "-c", f"import os; print(os.environ.get('{bootstrap.GUARD}', 'none'))"]).run(lines.append)
+        self.assertEqual(lines[0].strip(), "none")
+
     def test_child_runs_in_a_session_of_its_own(self):
         """sudo of a child must not reach the terminal of the menu (no /dev/tty)."""
         from tpotctl.engine import Engine
