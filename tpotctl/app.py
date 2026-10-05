@@ -1334,6 +1334,7 @@ class TpotApp(App):
         apply_theme(self)
         self.panes = list(PANES)
         self.locked = {key: why for key, *_rest in PANES for why in [self.why_locked(key)] if why}
+        self.quit_dialog = None         # "Quit tpot?" while it is open
 
     def compose(self) -> ComposeResult:
         yield TpotHeader(id="header")
@@ -1434,6 +1435,9 @@ class TpotApp(App):
             self.notify("A script is still running, tpot ends when it is through.", title="Not now",
                         severity="warning", timeout=5)
             return
+        if self.quit_dialog is not None and self.screen is self.quit_dialog:
+            self.exit()             # ctrl+q on "Quit tpot?": the second ask is the yes
+            return
         if len(self.screen_stack) > 1:
             self.notify("Close this screen first (esc), then quit.", title="Not now", timeout=4)
             return
@@ -1446,11 +1450,13 @@ class TpotApp(App):
             body.append(("\n" if number else "") + f"{glyphs.g('bullet')} {line}", style=theme.color(style))
 
         def answered(yes: bool) -> None:
+            self.quit_dialog = None
             if yes:
                 self.exit()
             else:
                 self.goto(pending[0][0])
-        self.push_screen(ConfirmDialog("Quit tpot?", body, yes="Quit anyway", no="Back"), answered)
+        self.quit_dialog = ConfirmDialog("Quit tpot?", body, yes="Quit anyway", no="Back")
+        self.push_screen(self.quit_dialog, answered)
 
     def quit_pending(self):
         """[(page, line, colour)]: the unsaved changes of the settings pages, then the values of the
