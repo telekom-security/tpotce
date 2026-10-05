@@ -188,7 +188,9 @@ class TaskScreen(Screen):
         spinner = SPINNER.get(glyphs.mode(), SPINNER["unicode"])
         for number, (key, title) in enumerate(phases):
             last = number == len(phases) - 1
-            if not last or (self.code == 0 and not self.busy):
+            if key in self.run_state.failed:
+                text.append(f"{glyphs.g('fail')} {title}\n", style=theme.color("error"))
+            elif not last or (self.code == 0 and not self.busy):
                 text.append(f"{glyphs.g('ok')} {title}\n", style=theme.color("ok"))
             elif self.busy:
                 text.append(f"{spinner[self.frame % len(spinner)]} {title}", style=f"bold {theme.color('glass')}")
@@ -215,12 +217,17 @@ class TaskScreen(Screen):
                 text.append(f"\n  {line}", style=theme.color("ash"))
         for warning in self.run_state.warnings:
             text.append(f"\n{glyphs.g('warn')} {warning}", style=theme.color("warn"))
+        # a run that failed after it changed the checkout still leaves new code behind
+        restart_anyway = code != 0 and self.job.restart_tpot and self.run_state.checkout_changed
+        if restart_anyway:
+            text.append("\nThe checkout changed all the same, Restart tpot runs the code that is there now.",
+                        style=theme.color("warn"))
         self.query_one("#task-result", Static).update(text)
         back = self.query_one("#task-back", Button)
         back.disabled = False
         restart = self.query_one("#task-restart", Button)
-        restart.display = self.job.restart_tpot and code == 0
-        (restart if restart.display else back).focus()
+        restart.display = self.job.restart_tpot and code == 0 or restart_anyway
+        (restart if restart.display and code == 0 else back).focus()
 
     # -- leaving -----------------------------------------------------------------
 

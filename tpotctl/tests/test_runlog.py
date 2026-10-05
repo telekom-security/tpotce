@@ -39,6 +39,15 @@ class RunTest(unittest.TestCase):
         run.feed("@@tpot warn pull Not all images could be pulled\n")
         self.assertEqual(run.warnings, ["Not all images could be pulled"])
 
+    def test_changed_checkout_and_failed_phases(self):
+        run = runlog.Run()
+        for line in ("@@tpot phase git Rolling the checkout back", "@@tpot changed checkout",
+                     "@@tpot phase config Restoring the configuration", "@@tpot fail config"):
+            run.feed(line)
+        self.assertTrue(run.checkout_changed)
+        self.assertEqual(run.failed, {"config"})
+        self.assertEqual([key for key, _title in run.phases], ["git", "config"])
+
     def test_plain_lines_are_kept_marks_are_not(self):
         run = runlog.Run()
         run.feed("hello\n")

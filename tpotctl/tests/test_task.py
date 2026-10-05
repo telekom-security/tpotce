@@ -167,6 +167,54 @@ class TaskScreenTest(unittest.IsolatedAsyncioTestCase):
             await pilot.pause(0.2)
         self.assertIsNone(app.return_value)
 
+    def lines(self, lines, code):
+        old = FakeEngine.lines
+        FakeEngine.lines = lines
+        FakeEngine.code = code
+        self.addCleanup(setattr, FakeEngine, "lines", old)
+
+    async def run_to_the_end(self, pilot, screen):
+        await pilot.click("#task-run")
+        for _ in range(40):
+            await pilot.pause(0.05)
+            if screen.code is not None:
+                break
+        await pilot.pause(0.1)
+
+    async def test_restart_after_a_failure_that_changed_the_checkout(self):
+        self.lines(["@@tpot phase git Rolling the checkout back\n", "@@tpot changed checkout\n",
+                    "@@tpot phase config Restoring the configuration\n", "@@tpot fail config\n",
+                    "@@tpot phase done Done\n"], 1)
+        screen = self.screen(restart_tpot=True)
+        app = host(screen)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await self.run_to_the_end(pilot, screen)
+            self.assertTrue(screen.query_one("#task-restart").display)
+            self.assertIs(app.focused, screen.query_one("#task-back"))
+            self.assertIn("checkout changed", str(screen.query_one("#task-result").render()))
+
+    async def test_no_restart_after_a_failure_without_a_changed_checkout(self):
+        self.lines(["@@tpot phase config Restoring the configuration\n", "@@tpot fail config\n",
+                    "@@tpot phase done Done\n"], 1)
+        screen = self.screen(restart_tpot=True)
+        app = host(screen)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await self.run_to_the_end(pilot, screen)
+            self.assertFalse(screen.query_one("#task-restart").display)
+
+    async def test_a_failed_phase_is_red_in_the_list(self):
+        from tpotctl import glyphs
+        self.lines(["@@tpot phase git Rolling the checkout back\n", "@@tpot fail git\n",
+                    "@@tpot phase config Restoring the configuration\n", "@@tpot phase done Done\n"], 1)
+        screen = self.screen()
+        app = host(screen)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await self.run_to_the_end(pilot, screen)
+            phases = str(screen.query_one("#task-phases").render())
+        self.assertIn(f"{glyphs.g('fail')} Rolling the checkout back", phases)
+        self.assertIn(f"{glyphs.g('ok')} Restoring the configuration", phases)
+        self.assertIn(f"{glyphs.g('fail')} Done", phases)
+
     async def test_restart_tpot_after_an_update(self):
         app = host(self.screen(restart_tpot=True))
         async with app.run_test(size=(120, 40)) as pilot:
