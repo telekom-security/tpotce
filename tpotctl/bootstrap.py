@@ -193,7 +193,9 @@ def ensure(need: str):
     current one, so that an update of requirements.txt is picked up.
     """
     directory = venv_dir()
-    if os.environ.get(GUARD):
+    # the guard against loops counts in the venv only: a tpot the menu runs (task screen) inherits
+    # it, but starts with the system Python and has to go to the venv like any other start
+    if os.environ.get(GUARD) and in_venv(directory):
         if importable(NEEDS[need]):
             return None
         raise BootstrapError(f"the venv {sys.prefix} is missing packages, run: tpot setup")
