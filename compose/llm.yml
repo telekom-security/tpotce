@@ -1,7 +1,10 @@
 # T-Pot: LLM
 networks:
-  beelzebub_local:
-  galah_local:
+  honeypot_local:
+    # every honeypot that talks to no other container: one network saves address pools,
+    # ICC off keeps the honeypots apart. Run Ollama for Beelzebub / Galah outside of it.
+    driver_opts:
+      com.docker.network.bridge.enable_icc: "false"
   nginx_local:
   ewsposter_local:
 
@@ -47,7 +50,7 @@ services:
       tpotinit:
         condition: service_healthy
     networks:
-     - beelzebub_local
+     - honeypot_local
     ports:
       - "22:22"
     # Prepared Beelzebub services, uncomment to expose (check for port conflicts)
@@ -89,7 +92,7 @@ services:
       tpotinit:
         condition: service_healthy
     networks:
-     - galah_local
+     - honeypot_local
     ports:
       - "80:80"
       - "443:443"

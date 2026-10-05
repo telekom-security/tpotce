@@ -1,27 +1,11 @@
 # T-Pot: SENSOR
 networks:
-  adbhoney_local:
-  ciscoasa_local:
-  conpot_local:
-    # shared by all Conpot templates to save address pools, ICC off keeps them apart
+  honeypot_local:
+    # every honeypot that talks to no other container: one network saves address pools,
+    # ICC off keeps the honeypots apart. Run Ollama for Beelzebub / Galah outside of it.
     driver_opts:
       com.docker.network.bridge.enable_icc: "false"
-  cowrie_local:
-  dicompot_local:
-  dionaea_local:
-  elasticpot_local:
-  h0neytr4p_local:
-  heralding_local:
-  honeyaml_local:
-  ipphoney_local:
-  mailoney_local:
-  medpot_local:
-  miniprint_local:
-  rdphoneypot_local:
-  redishoneypot_local:
-  sentrypeer_local:
   tanner_local:
-  wordpot_local:
   ewsposter_local:
 
 services:
@@ -65,7 +49,7 @@ services:
       tpotinit:
         condition: service_healthy
     networks:
-     - adbhoney_local
+     - honeypot_local
     ports:
      - "5555:5555"
     image: ${TPOT_REPO}/adbhoney:${TPOT_VERSION}
@@ -85,7 +69,7 @@ services:
     tmpfs:
      - /tmp/ciscoasa:uid=2000,gid=2000
     networks:
-     - ciscoasa_local
+     - honeypot_local
     ports:
      - "5000:5000/udp"
      - "8443:8443"
@@ -111,7 +95,7 @@ services:
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
     networks:
-     - conpot_local
+     - honeypot_local
     ports:
      - "161:161/udp"
      - "2404:2404"
@@ -139,7 +123,7 @@ services:
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
     networks:
-     - conpot_local
+     - honeypot_local
     ports:
      - "10001:10001"
     image: ${TPOT_REPO}/conpot:${TPOT_VERSION}
@@ -165,7 +149,7 @@ services:
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
     networks:
-     - conpot_local
+     - honeypot_local
     ports:
      - "623:623/udp"
     image: ${TPOT_REPO}/conpot:${TPOT_VERSION}
@@ -191,7 +175,7 @@ services:
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
     networks:
-     - conpot_local
+     - honeypot_local
     ports:
      - "1025:1025"
      - "50100:50100"
@@ -218,7 +202,7 @@ services:
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
     networks:
-     - conpot_local
+     - honeypot_local
     ports:
      - "48898:48898"
      - "48899:48899/udp"
@@ -246,7 +230,7 @@ services:
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
     networks:
-     - conpot_local
+     - honeypot_local
     ports:
      - "3671:3671/udp"
      - "47808:47808/udp"
@@ -273,7 +257,7 @@ services:
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
     networks:
-     - conpot_local
+     - honeypot_local
     ports:
      - "5094:5094"
     image: ${TPOT_REPO}/conpot:${TPOT_VERSION}
@@ -299,7 +283,7 @@ services:
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
     networks:
-     - conpot_local
+     - honeypot_local
     ports:
      - "102:102"
     image: ${TPOT_REPO}/conpot:${TPOT_VERSION}
@@ -325,7 +309,7 @@ services:
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
     networks:
-     - conpot_local
+     - honeypot_local
     ports:
      - "502:502"
     image: ${TPOT_REPO}/conpot:${TPOT_VERSION}
@@ -346,7 +330,7 @@ services:
       - /tmp/cowrie:uid=2000,gid=2000
       - /tmp/cowrie/data:uid=2000,gid=2000
     networks:
-      - cowrie_local
+      - honeypot_local
     ports:
       - "22:22"
       - "23:23"
@@ -370,7 +354,7 @@ services:
       tpotinit:
         condition: service_healthy
     networks:
-     - dicompot_local
+     - honeypot_local
     ports:
      - "104:11112"
      - "11112:11112"
@@ -391,7 +375,7 @@ services:
       tpotinit:
         condition: service_healthy
     networks:
-     - dionaea_local
+     - honeypot_local
     ports:
      - "20:20"
      - "21:21"
@@ -430,7 +414,7 @@ services:
       tpotinit:
         condition: service_healthy
     networks:
-     - elasticpot_local
+     - honeypot_local
     ports:
      - "9200:9200"
     image: ${TPOT_REPO}/elasticpot:${TPOT_VERSION}
@@ -447,7 +431,7 @@ services:
       tpotinit:
         condition: service_healthy
     networks:
-     - h0neytr4p_local
+     - honeypot_local
     ports:
       - "443:443"
       - "2087:443"
@@ -469,7 +453,7 @@ services:
     tmpfs:
      - /tmp/heralding:uid=2000,gid=2000
     networks:
-     - heralding_local
+     - honeypot_local
     ports:
      - "389:389"
      - "636:636"
@@ -505,7 +489,7 @@ services:
       tpotinit:
         condition: service_healthy
     networks:
-     - honeyaml_local
+     - honeypot_local
     ports:
       - "3000:8080"
     image: ${TPOT_REPO}/honeyaml:${TPOT_VERSION}
@@ -542,7 +526,7 @@ services:
       tpotinit:
         condition: service_healthy
     networks:
-     - ipphoney_local
+     - honeypot_local
     ports:
      - "631:631"
     image: ${TPOT_REPO}/ipphoney:${TPOT_VERSION}
@@ -561,7 +545,7 @@ services:
       tpotinit:
         condition: service_healthy
     networks:
-     - mailoney_local
+     - honeypot_local
     ports:
      - "25:25"
      - "587:25"
@@ -579,7 +563,7 @@ services:
       tpotinit:
         condition: service_healthy
     networks:
-     - medpot_local
+     - honeypot_local
     ports:
      - "2575:2575"
     image: ${TPOT_REPO}/medpot:${TPOT_VERSION}
@@ -596,7 +580,7 @@ services:
       tpotinit:
         condition: service_healthy
     networks:
-     - miniprint_local
+     - honeypot_local
     ports:
       - "9100:9100"
     image: ${TPOT_REPO}/miniprint:${TPOT_VERSION}
@@ -614,7 +598,7 @@ services:
       tpotinit:
         condition: service_healthy
     networks:
-     - rdphoneypot_local
+     - honeypot_local
     ports:
      - "3389:3389"
     image: ${TPOT_REPO}/rdphoneypot:${TPOT_VERSION}
@@ -632,7 +616,7 @@ services:
       tpotinit:
         condition: service_healthy
     networks:
-     - redishoneypot_local
+     - honeypot_local
     ports:
      - "6379:6379"
     image: ${TPOT_REPO}/redishoneypot:${TPOT_VERSION}
@@ -651,7 +635,7 @@ services:
 #    environment:
 #     - SENTRYPEER_PEER_TO_PEER=1
     networks:
-     - sentrypeer_local
+     - honeypot_local
     ports:
 #     - "4222:4222/udp"
      - "5060:5060/tcp"
@@ -752,7 +736,7 @@ services:
       tpotinit:
         condition: service_healthy
     networks:
-     - wordpot_local
+     - honeypot_local
     ports:
      - "8080:80"
     image: ${TPOT_REPO}/wordpot:${TPOT_VERSION}

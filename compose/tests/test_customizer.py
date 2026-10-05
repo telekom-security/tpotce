@@ -152,11 +152,14 @@ class CoreTest(unittest.TestCase):
         self.assertTrue(errors(self.resolve("SENSOR", max_networks=len(result.networks) - 1), "network"))
         self.assertEqual(errors(self.resolve("SENSOR", max_networks=len(result.networks))), [])
 
-    def test_whole_catalog_exceeds_the_pools(self):
+    def test_network_limit_is_checked_for_the_whole_catalog(self):
+        # the honeypots share honeypot_local, the whole catalogue fits into a few networks
         everything = [n for n in self.catalog.order if not self.catalog.flag(n, "hidden")]
         result = self.resolve("STANDARD", add=everything, remove=["glutton"])
-        self.assertGreater(len(result.networks), core.DEFAULT_MAX_NETWORKS)
-        self.assertTrue(errors(result, "network"))
+        self.assertLessEqual(len(result.networks), 6)
+        self.assertEqual(errors(result, "network"), [])
+        self.assertTrue(errors(self.resolve("STANDARD", add=everything, remove=["glutton"],
+                                            max_networks=len(result.networks) - 1), "network"))
 
     # rendering --------------------------------------------------------------
 

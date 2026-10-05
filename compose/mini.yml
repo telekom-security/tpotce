@@ -1,14 +1,10 @@
 # T-Pot: MINI
 networks:
-  adbhoney_local:
-  ciscoasa_local:
-  conpot_local:
-    # shared by all Conpot templates to save address pools, ICC off keeps them apart
+  honeypot_local:
+    # every honeypot that talks to no other container: one network saves address pools,
+    # ICC off keeps the honeypots apart. Run Ollama for Beelzebub / Galah outside of it.
     driver_opts:
       com.docker.network.bridge.enable_icc: "false"
-  dicompot_local:
-  honeypots_local:
-  medpot_local:
   nginx_local:
   ewsposter_local:
 
@@ -54,7 +50,7 @@ services:
       tpotinit:
         condition: service_healthy
     networks:
-     - adbhoney_local
+     - honeypot_local
     ports:
      - "5555:5555"
     image: ${TPOT_REPO}/adbhoney:${TPOT_VERSION}
@@ -74,7 +70,7 @@ services:
     tmpfs:
      - /tmp/ciscoasa:uid=2000,gid=2000
     networks:
-     - ciscoasa_local
+     - honeypot_local
     ports:
      - "5000:5000/udp"
      - "8443:8443"
@@ -100,7 +96,7 @@ services:
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
     networks:
-     - conpot_local
+     - honeypot_local
     ports:
      - "161:161/udp"
      - "2404:2404"
@@ -128,7 +124,7 @@ services:
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
     networks:
-     - conpot_local
+     - honeypot_local
     ports:
      - "10001:10001"
     image: ${TPOT_REPO}/conpot:${TPOT_VERSION}
@@ -154,7 +150,7 @@ services:
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
     networks:
-     - conpot_local
+     - honeypot_local
     ports:
      - "623:623/udp"
     image: ${TPOT_REPO}/conpot:${TPOT_VERSION}
@@ -180,7 +176,7 @@ services:
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
     networks:
-     - conpot_local
+     - honeypot_local
     ports:
      - "1025:1025"
      - "50100:50100"
@@ -207,7 +203,7 @@ services:
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
     networks:
-     - conpot_local
+     - honeypot_local
     ports:
      - "48898:48898"
      - "48899:48899/udp"
@@ -235,7 +231,7 @@ services:
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
     networks:
-     - conpot_local
+     - honeypot_local
     ports:
      - "3671:3671/udp"
      - "47808:47808/udp"
@@ -262,7 +258,7 @@ services:
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
     networks:
-     - conpot_local
+     - honeypot_local
     ports:
      - "5094:5094"
     image: ${TPOT_REPO}/conpot:${TPOT_VERSION}
@@ -288,7 +284,7 @@ services:
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
     networks:
-     - conpot_local
+     - honeypot_local
     ports:
      - "102:102"
     image: ${TPOT_REPO}/conpot:${TPOT_VERSION}
@@ -314,7 +310,7 @@ services:
     tmpfs:
      - /tmp/conpot:uid=2000,gid=2000
     networks:
-     - conpot_local
+     - honeypot_local
     ports:
      - "502:502"
     image: ${TPOT_REPO}/conpot:${TPOT_VERSION}
@@ -335,7 +331,7 @@ services:
       tpotinit:
         condition: service_healthy
     networks:
-     - dicompot_local
+     - honeypot_local
     ports:
      - "104:11112"
      - "11112:11112"
@@ -358,7 +354,7 @@ services:
     tmpfs:
      - /tmp:uid=2000,gid=2000
     networks:
-     - honeypots_local
+     - honeypot_local
     ports:
      - "21:21"
      - "22:22"
@@ -424,7 +420,7 @@ services:
       tpotinit:
         condition: service_healthy
     networks:
-     - medpot_local
+     - honeypot_local
     ports:
      - "2575:2575"
     image: ${TPOT_REPO}/medpot:${TPOT_VERSION}

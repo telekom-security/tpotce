@@ -1,10 +1,10 @@
 # T-Pot: TARPIT
 networks:
-  ddospot_local:
-  endlessh_local:
-  go-pot_local:
-  hellpot_local:
-  heralding_local:
+  honeypot_local:
+    # every honeypot that talks to no other container: one network saves address pools,
+    # ICC off keeps the honeypots apart. Run Ollama for Beelzebub / Galah outside of it.
+    driver_opts:
+      com.docker.network.bridge.enable_icc: "false"
   nginx_local:
   ewsposter_local:
 
@@ -50,7 +50,7 @@ services:
       tpotinit:
         condition: service_healthy
     networks:
-     - ddospot_local
+     - honeypot_local
     ports:
      - "19:19/udp"
      - "53:53/udp"
@@ -73,7 +73,7 @@ services:
       tpotinit:
         condition: service_healthy
     networks:
-     - endlessh_local
+     - honeypot_local
     ports:
      - "22:2222"
     image: ${TPOT_REPO}/endlessh:${TPOT_VERSION}
@@ -90,7 +90,7 @@ services:
       tpotinit:
         condition: service_healthy
     networks:
-     - go-pot_local
+     - honeypot_local
     ports:
       - "8080:8080"
     image: ${TPOT_REPO}/go-pot:${TPOT_VERSION}
@@ -107,7 +107,7 @@ services:
       tpotinit:
         condition: service_healthy
     networks:
-     - hellpot_local
+     - honeypot_local
     ports:
      - "80:8080"
     image: ${TPOT_REPO}/hellpot:${TPOT_VERSION}
@@ -126,7 +126,7 @@ services:
     tmpfs:
      - /tmp/heralding:uid=2000,gid=2000
     networks:
-     - heralding_local
+     - honeypot_local
     ports:
      - "389:389"
      - "636:636"

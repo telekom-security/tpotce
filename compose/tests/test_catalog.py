@@ -18,6 +18,10 @@ import customizer_core as core  # noqa: E402
 ALLOWED = {"ports", "networks", "depends_on"}
 # Docker Desktop has no host networking for tpotinit and the NSM services and other mounts
 ALLOWED_MAC_WIN = ALLOWED | {"network_mode", "cap_add", "volumes"}
+# every honeypot that talks to no other container shares one network with ICC off,
+# the rest keep a network of their own
+SHARED = "honeypot_local"
+OWN_NETWORK = {"tanner_local", "nginx_local", "ewsposter_local", "tpotinit_local", "suricata_local", "default"}
 META_KEYS = {"group", "description", "required", "requires", "conflicts", "hidden", "hive_only", "linux_only"}
 
 
@@ -79,6 +83,35 @@ class CatalogTest(unittest.TestCase):
                 for network in core.service_networks(definition):
                     if network != "default":
                         self.assertIn(network, compose.networks, f"{compose.path}: {name} uses {network}")
+
+    def all_files(self):
+        return [self.catalog.catalog] + list(self.catalog.editions.values())
+
+    def test_honeypots_share_the_isolated_network(self):
+        for compose in self.all_files():
+            for name, definition in compose.services.items():
+                if self.catalog.group(name) not in ("honeypots", "conpot"):
+                    continue
+                networks = set(core.service_networks(definition))
+                if not networks or "tanner_local" in networks:    # host mode, snare / tanner
+                    continue
+                with self.subTest(file=compose.path, service=name):
+                    self.assertEqual(networks, {SHARED})
+
+    def test_shared_network_has_icc_off(self):
+        found = 0
+        for compose in self.all_files():
+            definition = compose.networks.get(SHARED)
+            if SHARED in compose.networks:
+                found += 1
+                self.assertEqual((definition or {}).get("driver_opts", {}).get(
+                    "com.docker.network.bridge.enable_icc"), "false", compose.path)
+        self.assertGreater(found, 0)
+
+    def test_no_network_of_its_own_for_a_honeypot(self):
+        for compose in self.all_files():
+            with self.subTest(file=compose.path):
+                self.assertEqual(set(compose.networks) - OWN_NETWORK - {SHARED}, set())
 
     def test_x_tpot_only_in_catalog(self):
         for compose in self.catalog.editions.values():

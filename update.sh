@@ -602,6 +602,9 @@ function fuSTOP_TPOT () {
 	        docker stop $(docker ps -aq)
 	        docker container prune -f && docker image prune -f && docker volume prune -f
 	    fi
+	    # the networks of an earlier compose file (one per honeypot until 24.04.2) would
+	    # keep their address pools
+	    docker network prune -f > /dev/null 2>&1
 	    echo "[ $myGREEN"OK"$myWHITE ]"
 	fi
 	echo
