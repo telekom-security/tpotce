@@ -127,6 +127,26 @@ class EditionsTest(unittest.TestCase):
 
     # the switch -------------------------------------------------------------
 
+    @unittest.skipUnless(yaml, "PyYAML is not installed")
+    def test_mac_win_on_a_mac_sets_the_os_type(self):
+        from tpotctl import ops, settings
+        plan = editions.plan("mac_win", self.repo, ops.env_values(self.repo), backup_dir=self.backups,
+                             linux=False, host_ostype="mac")
+        self.assertEqual(plan.env_changes.get("TPOT_OSTYPE"), "mac")
+        calls = Calls()
+        with contextlib.redirect_stdout(io.StringIO()):
+            editions.switch(plan, self.repo, run=calls, linux=False)
+        self.assertEqual(calls.commands, [])                       # no systemctl, no sudo on a Mac
+        self.assertEqual(settings.load(self.repo).values["TPOT_OSTYPE"], "mac")
+
+    def test_a_linux_edition_puts_linux_back(self):
+        plan = editions.plan("mini", self.repo, {"TPOT_TYPE": "HIVE", "TPOT_OSTYPE": "mac"},
+                             backup_dir=self.backups, linux=True, host_ostype="linux")
+        self.assertEqual(plan.env_changes.get("TPOT_OSTYPE"), "linux")
+
+    def test_linux_stays_linux(self):
+        self.assertNotIn("TPOT_OSTYPE", self.plan("mini").env_changes)
+
     def test_switch_runs_the_steps_in_order(self):
         calls = Calls()
         editions.switch(self.plan("mini"), self.repo, run=calls, linux=True)

@@ -359,14 +359,39 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             self.assertIn(name, names)
         self.assertNotIn("Switch to the Hive edition", names)       # in use
 
-    async def test_edition_switch_off_host_is_disabled(self):
-        app = tapp.TpotApp(backend=FakeBackend(host=False), runner=Recorder(), engine=FakeEngine)
+    def mac_backend(self, in_use):
+        from tpotctl import editions
+        backend = FakeBackend(host=False)
+        backend.editions = lambda: [editions.Choice("mac_win", "macOS / Windows", "Docker Desktop.", "HIVE", 16,
+                                                    256, "/x/mac_win.yml")]
+        backend.edition_current = lambda: (in_use, "")
+        backend.edition_plan = lambda key: editions.SwitchPlan(backend.editions()[0], in_use, "/x/keep.yml")
+        return backend
+
+    async def test_edition_switch_on_a_mac_to_mac_win(self):
+        from tpotctl.screens.task import TaskScreen
+        FakeEngine.seen.clear()
+        app = tapp.TpotApp(backend=self.mac_backend("STANDARD"), runner=Recorder(), engine=FakeEngine)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause(0.2)
             app.goto("edition")
             await pilot.pause(0.2)
-            app.query_one("#edition-list").highlighted = 2
-            await pilot.pause(0.1)
+            self.assertFalse(app.query_one("#switch-edition").disabled)
+            await pilot.click("#switch-edition")
+            await pilot.pause(0.2)
+            self.assertIsInstance(app.screen, ConfirmDialog)
+            await pilot.click("#yes")
+            await pilot.pause(0.4)
+            self.assertIsInstance(app.screen, TaskScreen)
+            self.assertEqual(app.screen.job.become, "")              # no sudo on Docker Desktop
+        self.assertEqual(FakeEngine.seen, [[tapp.LAUNCHER, "edition", "set", "mac_win", "-y"]])
+
+    async def test_edition_switch_on_a_mac_running_mac_win(self):
+        app = tapp.TpotApp(backend=self.mac_backend("MAC_WIN"), runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.2)
+            app.goto("edition")
+            await pilot.pause(0.2)
             self.assertTrue(app.query_one("#switch-edition").disabled)
             self.assertIn("MAC_WIN", str(app.query_one("#edition-note").render()))
 

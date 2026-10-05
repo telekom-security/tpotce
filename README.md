@@ -459,7 +459,7 @@ To get things up and running just follow these steps:
 3. Go to: `cd ~/tpotce`
 4. Copy `cp compose/mac_win.yml ./docker-compose.yml`
 5. Create a `WEB_USER` by running `~/tpotce/genuser.sh` (macOS) or `~/tpotce/genuserwin.ps1` (Windows)
-6. Adjust the `.env` file by changing `TPOT_OSTYPE=linux` to either `mac` or `win`:
+6. Set `TPOT_OSTYPE` in `.env` to `mac` or `win`. With the [`tpot`](#the-tpot-command) command (`./tpot`) this is done for you: it sees Docker Desktop and has the value ready on the *Settings* page (Save), `tpot env set TPOT_OSTYPE=mac` writes it without an unlock and switching to the MAC_WIN edition (`tpot edition set mac_win`, steps 4 and 6 in one) sets it as well. By hand, change `TPOT_OSTYPE=linux` to either `mac` or `win`:
    ```
    # OSType (linux, mac, win)
    #  Most docker features are available on linux

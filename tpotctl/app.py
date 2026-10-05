@@ -39,6 +39,9 @@ class Backend:
     def linux_host(self) -> bool:
         return ops.linux_host()
 
+    def host_ostype(self) -> str:
+        return ops.host_ostype()
+
     def status(self) -> ops.Status:
         return ops.status()
 
@@ -56,7 +59,8 @@ class Backend:
 
     def settings(self):
         from tpotctl import settings
-        return settings.load()
+        # TPOT_OSTYPE is compared with the host, as tpotinit does (one docker call per run)
+        return settings.load(host_ostype=self.host_ostype())
 
     def tpot_type(self) -> str:
         return ops.env_values().get("TPOT_TYPE", "HIVE")
@@ -402,12 +406,10 @@ class EditionPane(Vertical):
         choice = self.selected()
         button = self.query_one("#switch-edition", Button)
         note = Text()
-        if not self.app.backend.linux_host():
+        if not self.app.backend.linux_host() and self.in_use == "mac_win":
             note.append("macOS and Windows run the MAC_WIN edition, there is no other to switch to.",
                         style=theme.color("ash"))
-            button.disabled = True
-        else:
-            button.disabled = choice is None or choice.key == self.in_use
+        button.disabled = choice is None or choice.key == self.in_use
         button.label = f"Switch to {choice.title}" if choice is not None else "Switch"
         self.query_one("#edition-note", Static).update(note)
 
@@ -487,6 +489,7 @@ class SettingsPane(Vertical):
         self.current = None
         self.rows = {}
         self.unlocked = set()
+        self.fix_told = False           # the notice about a value that does not fit the host, once
         await self.reload()
 
     async def reload(self, keep: Optional[Dict[str, str]] = None, keep_unlocked: Iterable[str] = ()) -> None:
@@ -534,9 +537,13 @@ class SettingsPane(Vertical):
         self.draft.update(keep or {})
         self.unlocked = set()
         by_section = {}
-        for rule in self.current.relevant(include_all=self.include_all, offered=True):
-            if not self.wanted(rule):
-                continue
+        shown = [rule for rule in self.current.relevant(include_all=self.include_all, offered=True)
+                 if self.wanted(rule)]
+        # a fixed value that does not fit this host (TPOT_OSTYPE): the one that fits, ready to save
+        fixes = {key: value for key, value in self.current.fixes().items()
+                 if key in {rule.key for rule in shown} and key not in (keep or {})}
+        self.draft.update(fixes)
+        for rule in shown:
             row = SettingRow(rule, self.draft.get(rule.key, ""), self.current.why_fixed(rule.key),
                              unlockable=self.current.can_unlock(rule.key), note=self.current.not_here(rule))
             self.rows[rule.key] = row
@@ -547,10 +554,16 @@ class SettingsPane(Vertical):
                                             id=f"tab-{section}"))
         if active and active in [f"tab-{section}" for section in by_section]:
             tabs.active = active
-        for key in keep_unlocked:
-            if key in self.rows:
+        for key in list(keep_unlocked) + [key for key in self.current.fixes() if key in self.rows]:
+            if key in self.rows and key not in self.unlocked:
                 # unlocked again in the background: the focus stays where the person is
                 await self.unlock(self.rows[key], focus=False)
+        if fixes and not self.fix_told:
+            self.fix_told = True
+            for key, value in fixes.items():
+                self.app.notify(f"{key} is {self.current.values.get(key, 'linux')}, this host runs "
+                                f"{ops.OSTYPE_TEXT[value]}. Settings has {value} ready to save.",
+                                title="Settings", timeout=10)
         self.call_after_refresh(self.check)
         self.loaded()
 
@@ -631,8 +644,11 @@ class SettingsPane(Vertical):
         from tpotctl.widgets.fields import SettingRow
         key = row.rule.key
         self.unlocked.add(key)
+        fix = self.current.fixes().get(key) if self.current is not None else None
+        # short: it sits under the title in the narrow label column, the notice says the rest
+        note = f"{fix} fits this host, Save it" if fix in ops.OSTYPE_TEXT else ""
         editable = SettingRow(dataclasses.replace(row.rule, editable=True), self.draft.get(key, ""), "",
-                              unlocked=True)
+                              unlocked=True, note=note)
         parent = row.parent
         place = list(parent.children).index(row)
         await row.remove()
@@ -1463,6 +1479,12 @@ class TpotApp(App):
             return []
         return [(rule.key, rule.title) for rule in current.relevant()]
 
+    def setting_fixes(self):
+        """{key: value} of fixed settings that do not fit this host (TPOT_OSTYPE)."""
+        pane = self.query("#settings")
+        current = getattr(pane.first(), "current", None) if pane else None
+        return current.fixes() if current is not None else {}
+
     def goto_setting(self, key: str) -> None:
         self.goto("settings")
         self.query_one("#settings", SettingsPane).focus_setting(key)
@@ -1620,7 +1642,8 @@ class TpotApp(App):
 
         def run(secrets) -> None:
             task = Task(f"Switch to the {plan.target.title} edition", command + (
-                ["--web-user", secrets[0]] if secrets else []), become="--become-file",
+                ["--web-user", secrets[0]] if secrets else []),
+                become="--become-file" if self.backend.linux_host() else "",
                 secrets={"--password-file": secrets[1]} if secrets else {}, autostart=True,
                 done=f"T-Pot runs the {plan.target.title} edition.", restart_tpot=plan.target.role != "HIVE"
                 or bool(plan.env_changes))

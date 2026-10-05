@@ -29,12 +29,15 @@ class TpotCommands(Provider):
             yield "Install T-Pot", "the installer assistant, tpot install", app.start_install
         yield "Open the customizer", "edition and services", app.action_customize
         yield "Rebuild tpot's packages", "tpot setup --force", partial(app.goto, "update")
-        if app.backend.linux_host():
-            in_use = app.backend.edition_current()[0].lower()
-            for choice in app.backend.editions():
-                if choice.key != in_use:
-                    yield (f"Switch to the {choice.title} edition", f"tpot edition set {choice.key}",
-                           partial(app.switch_edition, choice.key))
+        for key, value in app.setting_fixes().items():
+            yield f"Fix {key}", f"this host needs {value}, the Settings page has it ready", \
+                partial(app.goto_setting, key)
+        # every host: macOS and Windows switch to MAC_WIN
+        in_use = app.backend.edition_current()[0].lower()
+        for choice in app.backend.editions():
+            if choice.key != in_use:
+                yield (f"Switch to the {choice.title} edition", f"tpot edition set {choice.key}",
+                       partial(app.switch_edition, choice.key))
         yield "Find Ollama", "for Beelzebub and Galah, LLM page", partial(app.llm_action, "find", "galah")
         for service, title in (("beelzebub", "Beelzebub"), ("galah", "Galah")):
             yield f"Test the LLM of {title}", "a short prompt to its model", partial(app.llm_action, "test", service)

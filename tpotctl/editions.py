@@ -92,7 +92,8 @@ def _read(path: str) -> str:
 
 
 def plan(target: str, repo_dir: str = REPO_DIR, env: Optional[Dict[str, str]] = None, users_ok: bool = True,
-         backup_dir: str = BACKUP_DIR, linux: Optional[bool] = None) -> SwitchPlan:
+         backup_dir: str = BACKUP_DIR, linux: Optional[bool] = None,
+         host_ostype: Optional[str] = None) -> SwitchPlan:
     env = ops.env_values(repo_dir) if env is None else env
     choices = {choice.key: choice for choice in available(repo_dir, linux)}
     choice = choices.get(target.lower())
@@ -127,6 +128,14 @@ def plan(target: str, repo_dir: str = REPO_DIR, env: Optional[Dict[str, str]] = 
         if env.get("TPOT_TYPE") == "SENSOR":
             result.env_changes["TPOT_TYPE"] = "HIVE"
         result.needs_web_user = choice.role == "HIVE" and not users_ok
+    # TPOT_OSTYPE goes with the edition: MAC_WIN runs on Docker Desktop, the others on Linux
+    host = ops.host_ostype() if host_ostype is None else host_ostype
+    os_now = env.get("TPOT_OSTYPE", "linux")
+    if choice.key == "mac_win":
+        if host != "linux" and os_now != host:
+            result.env_changes["TPOT_OSTYPE"] = host
+    elif os_now != "linux":
+        result.env_changes["TPOT_OSTYPE"] = "linux"
     return result
 
 
@@ -169,7 +178,9 @@ def switch(plan: SwitchPlan, repo_dir: str = REPO_DIR, become_file: str = "", ru
         if plan.env_changes:
             from tpotctl import settings
             _mark("env", "Changing .env")
-            settings.load(repo_dir).change(plan.env_changes)
+            current = settings.load(repo_dir)
+            # the switch is the confirmed step, it stands for the unlock of a fixed key (TPOT_OSTYPE)
+            current.change(plan.env_changes, unlocked=[key for key in plan.env_changes if current.can_unlock(key)])
             say.ok(", ".join(f"{key}={value}" for key, value in plan.env_changes.items()) + " in .env.")
         if add_user is not None:
             _mark("user", "Adding the web user")
@@ -196,3 +207,5 @@ def print_plan(plan: SwitchPlan, stream=None) -> None:
     say.info(f"{plan.current} -> {plan.target.title} ({plan.target.key})", out)
     for warning in plan.warnings:
         say.warn(warning, out)
+    for key, value in plan.env_changes.items():
+        say.info(f"{key}={value} goes into .env.", out)

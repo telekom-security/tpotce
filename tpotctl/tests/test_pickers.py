@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 import urllib.error
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from tpotctl.tests import isolate  # noqa: E402
@@ -243,7 +244,7 @@ class SettingsHelpersBase(unittest.IsolatedAsyncioTestCase):
                 return []
 
             def settings(self):
-                return settings.load(repo)
+                return settings.load(repo, host_ostype=self.host_ostype())
 
             def system(self):
                 return None
@@ -597,6 +598,39 @@ class SettingsDraftTest(SettingsHelpersBase):
             await self.save_llm_model(pilot, "qwen3")
             self.assertNotIn("GALAH_LLM_MODEL", settings.changes())
             self.assertTrue(any("GALAH_LLM_MODEL" in n for n in notes))
+
+    async def test_settings_page_on_a_mac_proposes_the_os_type(self):
+        notes = []
+        self.app.notify = lambda message, **kwargs: notes.append(message)
+        with mock.patch.dict(os.environ, {"TPOT_HOST_OSTYPE": "mac"}):
+            async with self.app.run_test(size=(150, 50)) as pilot:
+                settings_pane = await self.open_settings(pilot)
+                self.assertEqual(settings_pane.changes().get("TPOT_OSTYPE"), "mac")
+                self.assertIn("TPOT_OSTYPE", settings_pane.unlocked)
+                self.assertTrue(any("TPOT_OSTYPE" in n for n in notes), notes)
+                self.assertIn("mac fits this host", str(settings_pane.rows["TPOT_OSTYPE"].note))
+                settings_pane.query_one("#settings-save").press()
+                for _ in range(30):
+                    await pilot.pause(0.1)
+                    if self.app.screen.query("#no"):
+                        break
+                if self.app.screen.query("#no"):
+                    await pilot.click("#no")             # no restart of T-Pot
+                    await pilot.pause(0.3)
+        with open(os.path.join(self.repo, ".env"), encoding="utf-8") as handle:
+            self.assertTrue("TPOT_OSTYPE=mac\n" in handle.read())
+
+    async def test_settings_page_on_linux_proposes_nothing(self):
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            settings_pane = await self.open_settings(pilot)
+            self.assertNotIn("TPOT_OSTYPE", settings_pane.changes())
+            self.assertNotIn("TPOT_OSTYPE", settings_pane.unlocked)
+
+    async def test_the_llm_page_does_not_take_the_os_type(self):
+        with mock.patch.dict(os.environ, {"TPOT_HOST_OSTYPE": "mac"}):
+            async with self.app.run_test(size=(150, 50)) as pilot:
+                llm_pane = await self.open_llm(pilot)
+                self.assertNotIn("TPOT_OSTYPE", llm_pane.changes())
 
     async def test_same_value_saved_elsewhere_says_nothing(self):
         async with self.app.run_test(size=(150, 50)) as pilot:
