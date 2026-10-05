@@ -118,10 +118,11 @@ def plan(target: str, repo_dir: str = REPO_DIR, env: Optional[Dict[str, str]] = 
     if choice.role == "SENSOR" and was != "SENSOR":
         result.warnings.append("Kibana, Elasticsearch and the Attack Map stop, their data in data/elk stays. "
                                "The sensor sends its events after 'tpot sensors add' on its HIVE.")
-    if choice.role == "HIVE" and was == "SENSOR":
+    if choice.role != "SENSOR" and was == "SENSOR":
+        # a HIVE (and MOBILE, which installs with TPOT_TYPE=HIVE too) is no SENSOR any more
         if env.get("TPOT_TYPE") == "SENSOR":
             result.env_changes["TPOT_TYPE"] = "HIVE"
-        result.needs_web_user = not users_ok
+        result.needs_web_user = choice.role == "HIVE" and not users_ok
     return result
 
 
@@ -131,8 +132,9 @@ def _mark(key: str, title: str) -> None:
 
 
 def switch(plan: SwitchPlan, repo_dir: str = REPO_DIR, become_file: str = "", run: Callable = subprocess.run,
-           linux: Optional[bool] = None) -> None:
-    """Stop T-Pot, keep the compose file, swap it, set what .env needs, start T-Pot."""
+           linux: Optional[bool] = None, add_user: Optional[Callable[[], str]] = None) -> None:
+    """Stop T-Pot, keep the compose file, swap it, set what .env needs (and the web user a
+    HIVE needs, add_user), start T-Pot."""
     linux = ops.linux_host() if linux is None else linux
 
     def sudo(*args: str, what: str) -> None:
@@ -156,11 +158,19 @@ def switch(plan: SwitchPlan, repo_dir: str = REPO_DIR, become_file: str = "", ru
     _mark("swap", f"Switching to the {plan.target.title} edition")
     shutil.copyfile(plan.target.path, in_use)
     say.ok(f"docker-compose.yml is the {plan.target.title} edition now.")
-    if plan.env_changes:
-        from tpotctl import settings
-        _mark("env", "Changing .env")
-        settings.load(repo_dir).change(plan.env_changes)
-        say.ok(", ".join(f"{key}={value}" for key, value in plan.env_changes.items()) + " in .env.")
+    back = f"Back to the edition before: cp {plan.keep_copy} {in_use}"
+    # .env and the web user before the start: tpotinit refuses a HIVE without a web user
+    try:
+        if plan.env_changes:
+            from tpotctl import settings
+            _mark("env", "Changing .env")
+            settings.load(repo_dir).change(plan.env_changes)
+            say.ok(", ".join(f"{key}={value}" for key, value in plan.env_changes.items()) + " in .env.")
+        if add_user is not None:
+            _mark("user", "Adding the web user")
+            say.ok(f"The web user is added, {add_user()}.")
+    except Exception as err:      # SettingsError, UsersError, OSError: T-Pot is not started like that
+        raise EditionError(f"{err}. T-Pot is stopped. {back}")
     if not linux:
         say.info("Start it with: docker compose up -d")
         return
@@ -171,7 +181,7 @@ def switch(plan: SwitchPlan, repo_dir: str = REPO_DIR, become_file: str = "", ru
     try:
         sudo("systemctl", "start", "tpot", what="Starting T-Pot")
     except EditionError as err:
-        raise EditionError(f"{err}. Back to the edition before: cp {plan.keep_copy} {in_use}")
+        raise EditionError(f"{err}. {back}")
     _mark("done", "Done")
     say.ok(f"T-Pot runs the {plan.target.title} edition.")
 

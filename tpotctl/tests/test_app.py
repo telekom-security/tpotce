@@ -171,10 +171,15 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             screen = app.screen
             self.assertFalse(screen.query_one("#group-data").display)          # not in the newest archive
             self.assertTrue(screen.query_one("#group-config").display)
-            screen.query_one("#group-git").value = False
+            self.assertTrue(screen.query_one("#group-config").value)
+            self.assertFalse(screen.query_one("#group-git").value)             # git reset --hard: only on request
             await pilot.click("#restore-go")
             await pilot.pause(0.3)
             self.assertIsInstance(app.screen, TaskScreen)
+            self.assertEqual(FakeEngine.seen, [])                               # Run is the last yes
+            self.assertIn("configuration", str(app.screen.query_one("#task-intro").render()))
+            await pilot.click("#task-run")
+            await pilot.pause(0.4)
         self.assertEqual(FakeEngine.seen,
                          [[os.path.join(cli.REPO_DIR, "restore.sh"), "-f", "/b/new_tpot_backup.tar", "-g", "config"]])
 
@@ -218,6 +223,60 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             await pilot.click("#yes")
             await pilot.pause(0.5)
         self.assertEqual(FakeEngine.seen, [[cli.PIPELINE]])
+
+    async def test_quit_waits_for_a_running_task(self):
+        import threading
+        from tpotctl.screens.task import Task, TaskScreen
+        release = threading.Event()
+
+        class SlowEngine:
+            def __init__(self, command, env=None, cwd=None):
+                pass
+
+            def run(self, line):
+                line("@@tpot phase backup Writing the backup\n")
+                release.wait(5)
+                return 0
+
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=SlowEngine)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.2)
+            app.run_task(Task("Update T-Pot", ["/x/update.sh", "-y"], autostart=True))
+            await pilot.pause(0.3)
+            for key in ("q", "ctrl+q"):
+                await pilot.press(key)
+                await pilot.pause(0.2)
+                self.assertTrue(app.is_running, key)
+                self.assertIsInstance(app.screen, TaskScreen)
+            app.action_quit()          # the palette's Quit
+            await pilot.pause(0.2)
+            self.assertIsInstance(app.screen, TaskScreen)
+            release.set()
+            await pilot.pause(0.3)
+            await pilot.press("q")     # not running any more: q goes back
+            await pilot.pause(0.2)
+            self.assertNotIsInstance(app.screen, TaskScreen)
+
+    async def test_restore_of_data_says_what_goes(self):
+        from tpotctl.screens.restore import RestoreScreen
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.2)
+            app.goto("update")
+            await pilot.pause(0.2)
+            await pilot.click("#run-restore")
+            await pilot.pause(0.3)
+            screen = app.screen
+            self.assertIsInstance(screen, RestoreScreen)
+            screen.query_one("#restore-list").highlighted = 1                 # the full archive
+            await pilot.pause(0.2)
+            self.assertFalse(screen.query_one("#group-data").value)
+            screen.query_one("#group-data").value = True
+            await pilot.click("#restore-go")
+            await pilot.pause(0.3)
+            intro = str(app.screen.query_one("#task-intro").render())
+        self.assertIn("data/", intro)
+        self.assertIn("replaced", intro)
 
     async def test_refresh_runs_tpot_setup(self):
         FakeEngine.seen.clear()

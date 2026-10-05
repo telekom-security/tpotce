@@ -535,10 +535,30 @@ function fuSELFUPDATE () {
 	    # `-y` is repeated on purpose: after a switch to an older branch the
 	    # restarted script is that branch's update.sh, which only looks at `$1`
 	    # for the confirmation and would just print its usage otherwise
-	    exec bash "$0" -y "$@"
+	    local myRESTART=()
+	    mapfile -t myRESTART < <(fuRESTART_ARGS "$0" "$@")
+	    exec bash "$0" -y "${myRESTART[@]}"
 	    exit 1
 	fi
 	echo
+}
+
+# The options for the restarted script: all of them, but -B <file> only if that
+# script knows it - the update.sh of an earlier release stops with its usage on it
+# (the sudo timestamp of this run is enough for the restarted one then).
+function fuRESTART_ARGS () {   # $1 = the script that restarts, then the options
+	local myTARGET="$1" myDROP=""
+	shift
+	for myARG in "$@";
+	  do
+	    if [ -n "${myDROP}" ]; then myDROP=""; continue; fi
+	    if [ "${myARG}" = "-B" ] && ! grep -q 'getopts ":[^"]*B:' "${myTARGET}";
+	      then
+	        myDROP="1"
+	        continue
+	    fi
+	    printf '%s\n' "${myARG}"
+	done
 }
 
 function fuCHECK_VERSION () {

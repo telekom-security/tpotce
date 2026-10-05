@@ -152,6 +152,50 @@ class EditionsTest(unittest.TestCase):
         editions.switch(plan, self.repo, run=Calls(), linux=True)
         self.assertIn("TPOT_TYPE=HIVE\n", self.read(env))
 
+    def test_web_user_is_added_before_the_start(self):
+        calls = Calls()
+        order = []
+        original = calls.__call__
+
+        def run(command, **kwargs):
+            order.append(" ".join(command[-2:]))
+            return original(command, **kwargs)
+        editions.switch(self.plan("mini"), self.repo, run=run, linux=True,
+                        add_user=lambda: order.append("user") or "used right away")
+        self.assertLess(order.index("stop tpot"), order.index("user"))
+        self.assertLess(order.index("user"), order.index("start tpot"))
+
+    def test_a_failing_web_user_stops_before_the_start(self):
+        from tpotctl import users
+        calls = Calls()
+
+        def broken():
+            raise users.UsersError("htpasswd is missing")
+        with self.assertRaises(editions.EditionError) as caught:
+            editions.switch(self.plan("mini"), self.repo, run=calls, linux=True, add_user=broken)
+        self.assertNotIn(["sudo", "systemctl", "start", "tpot"], calls.commands)
+        self.assertIn("htpasswd is missing", str(caught.exception))
+        self.assertIn(self.plan_copy_hint, str(caught.exception))
+
+    plan_copy_hint = "Back to the edition before"
+
+    @unittest.skipUnless(yaml, "the schema needs PyYAML")
+    def test_a_settings_error_stops_before_the_start(self):
+        from tpotctl import settings
+        calls = Calls()
+        plan = self.plan("mini")
+        plan.env_changes = {"TPOT_TYPE": "HIVE"}
+        with mock.patch.object(settings, "load", side_effect=settings.SettingsError("cannot read .env")):
+            with self.assertRaises(editions.EditionError):
+                editions.switch(plan, self.repo, run=calls, linux=True)
+        self.assertNotIn(["sudo", "systemctl", "start", "tpot"], calls.commands)
+
+    def test_sensor_to_mobile_is_no_sensor_any_more(self):
+        self.use("sensor")
+        plan = self.plan("mobile", env={"TPOT_TYPE": "SENSOR"}, users_ok=False)
+        self.assertEqual(plan.env_changes, {"TPOT_TYPE": "HIVE"})
+        self.assertFalse(plan.needs_web_user)            # MOBILE has no web UI
+
     def test_become_file_refreshes_sudo_first(self):
         become = os.path.join(self.repo, "become")
         with open(become, "w", encoding="utf-8") as out:
@@ -208,8 +252,10 @@ class EditionCliTest(unittest.TestCase):
         target = editions.Choice("standard", "Hive", "Everything.", "HIVE", 16, 256, "/x/standard.yml")
         plan = editions.SwitchPlan(target, "SENSOR", "/x/keep.yml", needs_web_user=True,
                                    env_changes={"TPOT_TYPE": "HIVE"})
+        def switch(plan, **kwargs):
+            kwargs["add_user"]()
         with mock.patch.object(editions, "plan", return_value=plan), \
-                mock.patch.object(editions, "switch") as switch, \
+                mock.patch.object(editions, "switch", side_effect=switch) as switch, \
                 mock.patch.object(users, "load", return_value=Store()), \
                 contextlib.redirect_stdout(io.StringIO()):
             code = cli.main(["edition", "set", "standard", "-y", "--web-user", "anna", "--password-file", secret])

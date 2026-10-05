@@ -1367,6 +1367,18 @@ class TpotApp(App):
     def not_here(self, what: str) -> None:
         self.notify(f"{what} {NOT_HERE}", title="Not on this host", severity="warning", timeout=6)
 
+    def task_running(self) -> bool:
+        from tpotctl.screens.task import TaskScreen
+        return any(isinstance(screen, TaskScreen) and screen.busy for screen in self.screen_stack)
+
+    async def action_quit(self) -> None:
+        """Not while a script runs: quitting would kill it half way."""
+        if self.task_running():
+            self.notify("A script is still running, tpot ends when it is through.", title="Not now",
+                        severity="warning", timeout=5)
+            return
+        await super().action_quit()
+
     def check_action(self, action: str, parameters):
         # the customizer and the dialogs are screens of their own, c there would open a second one
         if action in ("customize", "restart_service") and len(self.screen_stack) > 1:
@@ -1477,9 +1489,22 @@ class TpotApp(App):
             if not choice:
                 return
             path, groups = choice
+            # the task screen shows what is replaced, Run is the last yes
+            intro = Text(f"restore.sh brings back from {os.path.basename(path)}:\n", style=theme.color("glass"))
+            for group in groups:
+                intro.append(f"  {glyphs.g('bullet')} {ops.GROUP_TEXT[group].rstrip('?')}\n",
+                             style=theme.color("glass"))
+            if "git" in groups:
+                intro.append("The checkout is reset to the commit of the backup (git reset --hard).\n",
+                             style=theme.color("warn"))
+            if "data" in groups:
+                intro.append("The files in data/ are replaced by the ones of the archive; with a full archive "
+                             "that is the Elasticsearch data too, the events since the backup are gone.\n",
+                             style=theme.color("warn"))
+            intro.append("T-Pot is stopped for it.", style=theme.color("mist"))
             self.run_task(Task("Restore a backup", ops.script_command("restore.sh", ["-f", path, "-g",
                                                                                       ",".join(groups)]),
-                               become="-B", autostart=True, done="The backup is restored.",
+                               become="-B", intro=intro, done="The backup is restored.",
                                restart_tpot=bool({"git", "patch"} & set(groups))),
                           lambda _code: self.query_one("#update", UpdatePane).show())
 

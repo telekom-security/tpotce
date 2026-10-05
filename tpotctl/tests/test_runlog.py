@@ -85,6 +85,15 @@ class EngineTest(unittest.TestCase):
         self.assertEqual(code, 3)
         self.assertEqual([line.rstrip("\n") for line in lines], ["one", "two", "no stdin"])
 
+    def test_bytes_that_are_not_utf8(self):
+        """nmap prints the banners of honeypots as they come."""
+        from tpotctl.engine import Engine
+        lines = []
+        code = Engine(["bash", "-c", r"printf 'banner \xff\xfe end\nnext\n'"]).run(lines.append)
+        self.assertEqual(code, 0)
+        self.assertEqual(len(lines), 2)
+        self.assertIn("end", lines[0])
+
     def test_missing_command(self):
         from tpotctl.engine import Engine
         lines = []

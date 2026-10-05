@@ -46,7 +46,10 @@ class Task:
 class TaskScreen(Screen):
     """Dismissed with the exit code, "restart", or None when it did not run."""
 
-    BINDINGS = [Binding("escape", "leave", "Back"), Binding("l", "toggle_log", "Log")]
+    # q of the menu would quit tpot and kill the script half way (a stopped T-Pot, a half
+    # reset checkout), so here it only goes back, and not while the script runs
+    BINDINGS = [Binding("escape", "leave", "Back"), Binding("q", "leave", "Back", show=False),
+                Binding("l", "toggle_log", "Log")]
 
     def __init__(self, task: Task, engine: Callable[..., Engine] = Engine, sudo_mode: Optional[str] = None,
                  password_ok: Optional[Callable[[str], bool]] = None):

@@ -1,7 +1,9 @@
 """Restore a backup: which archive, which of its parts. restore.sh -g does the work.
 
 The parts are the groups of restore.sh (ops.GROUP_TEXT), only the ones the archive
-holds are offered, all of them checked to begin with (what restore.sh -y does).
+holds are offered. The rollback of the checkout (git reset --hard) and data/ (with a
+full archive the Elasticsearch data, every event since the backup) are left unchecked:
+they replace more than a person expects from "restore".
 """
 
 from typing import List
@@ -15,6 +17,9 @@ from textual.widgets import Button, Checkbox, Footer, OptionList, Static
 from textual.widgets.option_list import Option
 
 from tpotctl import glyphs, ops, theme
+
+# checked to begin with; git and data only on request
+DEFAULT_GROUPS = ("patch", "config", "untracked", "elastic")
 
 
 class RestoreScreen(Screen):
@@ -37,7 +42,7 @@ class RestoreScreen(Screen):
             yield Static("", id="restore-manifest")
             with Vertical(id="restore-groups"):
                 for group, question in ops.GROUP_TEXT.items():
-                    yield Checkbox(question, True, id=f"group-{group}")
+                    yield Checkbox(question, group in DEFAULT_GROUPS, id=f"group-{group}")
             yield Static("", id="restore-hint")
         with Horizontal(id="restore-nav"):
             yield Static("", classes="task-spacer")

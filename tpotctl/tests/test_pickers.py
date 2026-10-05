@@ -344,7 +344,10 @@ class SettingsHelpersTest(unittest.IsolatedAsyncioTestCase):
             self.app.goto_setting("GALAH_LLM_MODEL")
             await pilot.pause(0.3)
             await pilot.click("#pick-GALAH_LLM_MODEL")
-            await pilot.pause(0.5)
+            for _wait in range(30):           # the models load in a thread, slower under load
+                await pilot.pause(0.1)
+                if getattr(self.app.screen, "shown", None):
+                    break
             self.assertEqual([i[0] for i in self.app.screen.shown], ["llama3.1", "openchat"])
             self.app.screen.query_one("#picker-filter").value = "open"
             await pilot.pause(0.2)

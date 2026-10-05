@@ -643,13 +643,11 @@ def run_edition(args) -> int:
                 password = read_password(args)
         if not confirm(f"Switch to the {plan.target.title} edition? T-Pot stops meanwhile.", args.yes):
             return 1
-        editions.switch(plan, become_file=args.become_file)
+        add_user = (lambda: tusers.load().add(args.web_user, password)) if plan.needs_web_user else None
+        editions.switch(plan, become_file=args.become_file, add_user=add_user)
     except (editions.EditionError, tusers.UsersError, OSError) as err:
         error(str(err))
         return 1
-    if plan.needs_web_user:
-        note = tusers.load().add(args.web_user, password)
-        say.ok(f"{args.web_user} is added (bcrypt), {note}.")
     return 0
 
 

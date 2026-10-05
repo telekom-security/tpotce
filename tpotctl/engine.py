@@ -17,9 +17,10 @@ class Engine:
 
     def run(self, line: Callable[[str], None]) -> int:
         try:
+            # a log is text, a stray byte (i.e. a banner nmap prints) must not end the run
             proc = subprocess.Popen(self.command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                     stdin=subprocess.DEVNULL, universal_newlines=True, bufsize=1,
-                                    env=self.env, cwd=self.cwd)
+                                    encoding="utf-8", errors="replace", env=self.env, cwd=self.cwd)
         except OSError as err:
             line(f"{self.command[0]}: {err.strerror or err}\n")
             return 127

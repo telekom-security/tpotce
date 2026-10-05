@@ -86,8 +86,26 @@ class UpdateShTest(Harness):
         self.assertTrue(re.search(r'getopts ":[a-zA-Z:]*B:', text))
 
     def test_selfupdate_hands_on_all_options(self):
-        self.assertIn('exec bash "$0" -y "$@"', read("update.sh"))
+        self.assertIn('exec bash "$0" -y "${myRESTART[@]}"', read("update.sh"))
         self.assertIn('fuSELFUPDATE "$@"', read("update.sh"))
+
+    def restart_args(self, script_text, *args):
+        function = re.search(r"function fuRESTART_ARGS \(\) \{.*?\n\}", read("update.sh"), re.S).group(0)
+        target = os.path.join(self.home, "target.sh")
+        with open(target, "w", encoding="utf-8") as out:
+            out.write(script_text)
+        result = subprocess.run(["bash", "-c", f'{function}\nfuRESTART_ARGS "$@"', "x", target] + list(args),
+                                capture_output=True, universal_newlines=True)
+        return result.stdout.split("\n")[:-1]
+
+    def test_restart_into_an_older_update_sh_drops_the_become_file(self):
+        old = 'while getopts ":yFsb:r:h" opt; do\n'
+        self.assertEqual(self.restart_args(old, "-y", "-B", "/run/f", "-F", "-b", "master"),
+                         ["-y", "-F", "-b", "master"])
+
+    def test_restart_into_this_update_sh_keeps_it(self):
+        self.assertEqual(self.restart_args(read("update.sh"), "-y", "-B", "/run/f", "-F"),
+                         ["-y", "-B", "/run/f", "-F"])
 
     def test_marks_with_tpot_marks(self):
         result = self.run_script(os.path.join(REPO, "update.sh"), "-y", "--backup-only",
