@@ -66,23 +66,27 @@ myELASTIC_GRACE="${TPOT_ELASTIC_GRACE:-120}"
 
 # Working directory, cleaned up when the script ends
 myTMPDIR=""
-myRED="[0;31m"
-myGREEN="[0;32m"
-myWHITE="[0;0m"
-myBLUE="[0;34m"
+# The sudo password from -B, empty: sudo asks itself (or needs none)
+myBECOME_FILE=""
 
-# The look of the T-Pot scripts at a terminal (installer/lib/ui.sh, gum or plain
-# text): the same messages, in the colours of T-Pot. Without ui.sh (a checkout of
-# an earlier release, i.e. during the self update) it stays as it was.
+# The look of the T-Pot scripts (installer/lib/ui.sh: gum at a terminal, plain text
+# otherwise) and the @@tpot marks the task screen of tpot reads (fuMARK).
 myHERE=$(cd "$(dirname "$0")" 2>/dev/null && pwd)
 # shellcheck source=installer/lib/ui.sh
-if [ -t 1 ] && [ -f "${myHERE}/installer/lib/ui.sh" ] && source "${myHERE}/installer/lib/ui.sh" 2>/dev/null;
+if ! source "${myHERE}/installer/lib/ui.sh" 2>/dev/null;
   then
-    fuUI_INIT
-    myBLUE=$'\e[38;2;151;180;211m'
-    myGREEN=$'\e[38;2;63;163;77m'
-    myRED=$'\e[38;2;232;69;60m'
+# >>> plain fallback: a checkout of an earlier release has no installer/lib/ui.sh
+    fuUI_INIT () { return 0; }
+    fuUI_BANNER () { echo; echo "### T-Pot $1"; shift; for myLINE in "$@"; do echo "### ${myLINE}"; done; echo; }
+    fuUI_INFO () { echo "### $*"; }
+    fuUI_OK () { echo "### [OK] - $*"; }
+    fuUI_WARN () { echo "### [WARNING] - $*"; }
+    fuUI_ERROR () { echo "### [ERROR] - $*" >&2; }
+    fuUI_HINT () { local myLINE; for myLINE in "$@"; do echo "###   ${myLINE}"; done; }
+    fuMARK () { [ "${TPOT_MARKS}" = "1" ] && echo "@@tpot $*"; return 0; }
+# <<< plain fallback
 fi
+fuUI_INIT
 
 # Where to update from. Empty means: keep the branch and the origin of the
 # current checkout, which is what a plain `update.sh -y` has always done.
@@ -108,19 +112,9 @@ myEDITIONS="STANDARD SENSOR MINI LLM TARPIT MOBILE MAC_WIN"
 # release, a docker-compose.yml of your own that still has them fails on the pull.
 myDROPPED_SERVICES="spiderfoot fatt"
 
-myUPDATER=$(cat << "EOF"
- _____     ____       _     _   _           _       _
-|_   _|   |  _ \ ___ | |_  | | | |_ __   __| | __ _| |_ ___ _ __
-  | |_____| |_) / _ \| __| | | | | '_ \ / _` |/ _` | __/ _ \ '__|
-  | |_____|  __/ (_) | |_  | |_| | |_) | (_| | (_| | ||  __/ |
-  |_|     |_|   \___/ \__|  \___/| .__/ \__,_|\__,_|\__\___|_|
-                                 |_|
-EOF
-)
-
 function fuPRINT_HELP () {
 	cat <<EOF
-Usage: $0 -y [-b <branch>] [-r <url>] [--full] [--backup-only]
+Usage: $0 -y [-b <branch>] [-r <url>] [--full] [--backup-only] [-B <file>]
 
 Options:
   -y                Confirm the update, required
@@ -141,6 +135,8 @@ Options:
   -r <url>          Repository to update from, https URL. Replaces the URL of
                     'origin' in ~/tpotce.
                     Default: the origin of ~/tpotce, environment: TPOT_REPO_URL
+  -B <file>         Read the sudo password from a file, so an unattended run also
+                    works without passwordless sudo (the tpot menu hands one over)
   -h                Show this help message
 EOF
 	exit 1
@@ -149,7 +145,7 @@ EOF
 # Check if running with root privileges
 if [ ${EUID} -eq 0 ];
   then
-    echo "This script should not be run as root. Please run it as a regular user."
+    fuUI_ERROR "This script should not be run as root. Please run it as a regular user."
     echo
     exit 1
 fi
@@ -158,20 +154,17 @@ fi
 function fuCHECKINET () {
 	mySITES=$1
 	  echo
-	  echo "### Now checking availability of ..."
+	  fuUI_INFO "Now checking availability of ..."
 	  for i in $mySITES;
 	    do
-	      echo -n "###### $myBLUE$i$myWHITE "
 	      curl --connect-timeout 5 -IsS $i >/dev/null 2>&1
 	        if [ $? -ne 0 ];
 	          then
-		    echo
-	            echo "###### $myBLUE""Error - Internet connection test failed.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
-	            echo "Exiting.""$myWHITE"
+	            fuUI_ERROR "${i} cannot be reached, the internet connection test failed. Exiting."
 	            echo
 	            exit 1
 	          else
-	            echo "[ $myGREEN"OK"$myWHITE ]"
+	            fuUI_OK "${i}"
 	        fi
 	  done;
 	echo
@@ -183,8 +176,8 @@ function fuTMPDIR () {
 	myTMPDIR=$(mktemp -d)
 	if [ ! -d "${myTMPDIR}" ];
 	  then
-	    echo "###### $myBLUE""Could not create a temporary directory.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
-	    echo "Exiting.""$myWHITE"
+	    fuUI_ERROR "Could not create a temporary directory."
+	    fuUI_HINT "Exiting."
 	    echo
 	    exit 1
 	fi
@@ -224,7 +217,7 @@ function fuDROP_OLDEST () {
 	myCount=$(echo "${myAll}" | grep -c .)
 	[ "${myCount}" -lt 2 ] && return 1
 	myVictim=$(echo "${myAll}" | head -1)
-	echo "###### $myBLUE""Removing ${myVictim} ($(du -h "${myVictim}" | cut -f1)) to make room.""$myWHITE"
+	fuUI_HINT "Removing ${myVictim} ($(du -h "${myVictim}" | cut -f1)) to make room."
 	rm -f "${myVictim}"
 }
 
@@ -243,7 +236,7 @@ function fuROTATE () {
 	    myCount=$(echo "${myList}" | grep -c .)
 	    [ "${myCount}" -le "${myKeep}" ] && break
 	    myVictim=$(echo "${myList}" | head -1)
-	    echo "###### $myBLUE""Keeping the last ${myKeep} ${myKind} backups, removing ${myVictim} ($(du -h "${myVictim}" | cut -f1)).""$myWHITE"
+	    fuUI_HINT "Keeping the last ${myKeep} ${myKind} backups, removing ${myVictim} ($(du -h "${myVictim}" | cut -f1))."
 	    rm -f "${myVictim}" || break
 	done
 }
@@ -276,17 +269,17 @@ function fuBACKUP_SIZE () {
 function fuCHECK_BACKUP_SPACE () {
 	local myNEED=0 myFREE=0 myTOTAL=0 myRESERVE=0
 	echo
-	echo "### Checking the space for the backup ..."
+	fuUI_INFO "Checking the space for the backup ..."
 	if [ -n "${myPREPARED}" ];
 	  then
-	    echo "###### $myBLUE""The backup was already taken before the restart, nothing to check.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	    fuUI_OK "The backup was already taken before the restart, nothing to check."
 	    echo
 	    return
 	fi
 	if ! mkdir -p "${myBACKUPDIR}" || ! chmod 0700 "${myBACKUPDIR}";
 	  then
-	    echo "###### $myBLUE""Could not prepare ${myBACKUPDIR}.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
-	    echo "Exiting.""$myWHITE"
+	    fuUI_ERROR "Could not prepare ${myBACKUPDIR}."
+	    fuUI_HINT "Exiting."
 	    echo
 	    exit 1
 	fi
@@ -296,10 +289,10 @@ function fuCHECK_BACKUP_SPACE () {
 	  do
 	    myNEED=$(fuBACKUP_SIZE)
 	    myFREE=$(df -B1 --output=avail "${myBACKUPDIR}" 2>/dev/null | tail -1 | tr -d " ")
-	    echo "###### $myBLUE""Archive needs about $((myNEED / 1048576)) MB, $((myFREE / 1048576)) MB free, keeping $((myRESERVE / 1048576)) MB in reserve.""$myWHITE"
+	    fuUI_HINT "Archive needs about $((myNEED / 1048576)) MB, $((myFREE / 1048576)) MB free, keeping $((myRESERVE / 1048576)) MB in reserve."
 	    if [ $((myFREE - myNEED)) -ge "${myRESERVE}" ];
 	      then
-	        echo "###### $myBLUE""Enough room.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	        fuUI_OK "Enough room."
 	        echo
 	        return
 	    fi
@@ -312,15 +305,15 @@ function fuCHECK_BACKUP_SPACE () {
 	    # taking the regular backup instead would leave no way back.
 	    if [ -n "${myFULL}" ];
 	      then
-	        echo "###### $myBLUE""Not enough room for a full backup.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
-	        echo "###### $myBLUE""Free up space in ${myBACKUPDIR} or on the filesystem, or run without '--full'. T-Pot was left running.""$myWHITE"
-	        echo "Exiting.""$myWHITE"
+	        fuUI_ERROR "Not enough room for a full backup."
+	        fuUI_HINT "Free up space in ${myBACKUPDIR} or on the filesystem, or run without '--full'. T-Pot was left running."
+	        fuUI_HINT "Exiting."
 	        echo
 	        exit 1
 	    fi
-	    echo "###### $myBLUE""Not enough room for a backup and T-Pot needs the disk.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
-	    echo "###### $myBLUE""Free up space in ${myBACKUPDIR} or on the filesystem, T-Pot was left running.""$myWHITE"
-	    echo "Exiting.""$myWHITE"
+	    fuUI_ERROR "Not enough room for a backup and T-Pot needs the disk."
+	    fuUI_HINT "Free up space in ${myBACKUPDIR} or on the filesystem, T-Pot was left running."
+	    fuUI_HINT "Exiting."
 	    echo
 	    exit 1
 	done
@@ -336,22 +329,22 @@ function fuNORMALIZE_REPO () {
 # otherwise the current checkout is kept as it is.
 function fuCHECK_SOURCE () {
 	echo
-	echo "### Checking the update source ..."
+	fuUI_INFO "Checking the update source ..."
 	myCURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
 	myCURRENT_REPO=$(fuNORMALIZE_REPO "$(git remote get-url origin 2>/dev/null)")
 	[ -z "${myTPOT_BRANCH}" ] && myTPOT_BRANCH="${myCURRENT_BRANCH}"
 	[ -z "${myTPOT_REPO_URL}" ] && myTPOT_REPO_URL="${myCURRENT_REPO}"
 	myTPOT_REPO_URL=$(fuNORMALIZE_REPO "${myTPOT_REPO_URL}")
-	echo "###### $myBLUE${myTPOT_REPO_URL} at ${myTPOT_BRANCH}$myWHITE"
+	fuUI_HINT "${myTPOT_REPO_URL} at ${myTPOT_BRANCH}"
 	# A detached HEAD - a tag or a bare commit checked out - has no upstream to pull
 	# into, `git pull` refuses outright. Without a branch the update cannot do
 	# anything, so it stops here while T-Pot is still running and untouched. `-b`
 	# still works: fuSWITCH_SOURCE checks the branch out and ends the detached state.
 	if [ -z "${myTPOT_BRANCH}" ] || [ "${myTPOT_BRANCH}" == "HEAD" ];
 	  then
-	    echo "###### $myBLUE""The checkout is not on a branch (detached at $(git describe --tags --always 2>/dev/null)), so there is nothing to update from.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
-	    echo "###### $myBLUE""Name a branch with '-b master' and it is checked out for you, or switch by hand first: 'git -C $HOME/tpotce switch master'.""$myWHITE"
-	    echo "Exiting.""$myWHITE"
+	    fuUI_ERROR "The checkout is not on a branch (detached at $(git describe --tags --always 2>/dev/null)), so there is nothing to update from."
+	    fuUI_HINT "Name a branch with '-b master' and it is checked out for you, or switch by hand first: 'git -C $HOME/tpotce switch master'."
+	    fuUI_HINT "Exiting."
 	    echo
 	    exit 1
 	fi
@@ -365,12 +358,12 @@ function fuCHECK_SOURCE () {
 	# repository itself and leaves the local checkout alone.
 	if ! git ls-remote --heads "${myTPOT_REPO_URL}" "refs/heads/${myTPOT_BRANCH}" 2>/dev/null | grep -q .;
 	  then
-	    echo "###### $myBLUE""Branch ${myTPOT_BRANCH} does not exist in ${myTPOT_REPO_URL}.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
-	    echo "Exiting.""$myWHITE"
+	    fuUI_ERROR "Branch ${myTPOT_BRANCH} does not exist in ${myTPOT_REPO_URL}."
+	    fuUI_HINT "Exiting."
 	    echo
 	    exit 1
 	  else
-	    echo "###### $myBLUE""Repository and branch are available.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	    fuUI_OK "Repository and branch are available."
 	fi
 	echo
 }
@@ -402,12 +395,12 @@ function fuCHECK_EDITION () {
 	local myKNOWN=""
 	local i=""
 	echo
-	echo "### Checking the installed T-Pot edition ..."
+	fuUI_INFO "Checking the installed T-Pot edition ..."
 	# A restarted update.sh inherits the result of the first run, the compose file
 	# has already been reset by then and cannot be read again.
 	if [ -n "${myEDITION}" ];
 	  then
-	    echo "###### $myBLUE""Edition ${myEDITION} was detected before the restart.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	    fuUI_OK "Edition ${myEDITION} was detected before the restart."
 	    echo
 	    return
 	fi
@@ -417,13 +410,13 @@ function fuCHECK_EDITION () {
 	myCOMPOSE="${myCOMPOSE:-./docker-compose.yml}"
 	if [ "$(basename "${myCOMPOSE}")" != "docker-compose.yml" ];
 	  then
-	    echo "###### $myBLUE""TPOT_DOCKER_COMPOSE points to ${myCOMPOSE}, which the update leaves alone.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	    fuUI_OK "TPOT_DOCKER_COMPOSE points to ${myCOMPOSE}, which the update leaves alone."
 	    echo
 	    return
 	fi
 	if [ ! -f "$HOME/tpotce/docker-compose.yml" ];
 	  then
-	    echo "###### $myBLUE""There is no docker-compose.yml, so there is no edition to remember.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	    fuUI_WARN "There is no docker-compose.yml, so there is no edition to remember."
 	    echo
 	    return
 	fi
@@ -433,7 +426,7 @@ function fuCHECK_EDITION () {
 	if [ "${myEDITION}" == "CUSTOM" ] && fuCUSTOM_FILE "$HOME/tpotce/docker-compose.yml";
 	  then
 	    fuCUSTOM_CHECKSUM "$HOME/tpotce/docker-compose.yml" || myCOMPOSE_CUSTOMIZED="1"
-	    echo "###### $myBLUE""Edition CUSTOM, built by compose/customizer.py${myCOMPOSE_CUSTOMIZED:+ and edited by hand since}.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	    fuUI_OK "Edition CUSTOM, built by compose/customizer.py${myCOMPOSE_CUSTOMIZED:+ and edited by hand since}."
 	    echo
 	    return
 	fi
@@ -448,7 +441,7 @@ function fuCHECK_EDITION () {
 	# before the checkout is reset, and that is the copy everything below works from.
 	if [ "${myEDITION}" == "UNKNOWN" ];
 	  then
-	    echo "###### $myBLUE""Unable to determine the edition, docker-compose.yml is restored as it is.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	    fuUI_WARN "Unable to determine the edition, docker-compose.yml is restored as it is."
 	  else
 	    # A compose file that differs from its own template was edited by the user.
 	    # The update cannot merge that, so it has to be handed back manually.
@@ -456,7 +449,7 @@ function fuCHECK_EDITION () {
 	      then
 	        myCOMPOSE_CUSTOMIZED="1"
 	    fi
-	    echo "###### $myBLUE""Edition ${myEDITION}${myCOMPOSE_CUSTOMIZED:+ (customized)}.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	    fuUI_OK "Edition ${myEDITION}${myCOMPOSE_CUSTOMIZED:+ (customized)}."
 	fi
 	echo
 }
@@ -469,13 +462,13 @@ function fuSWITCH_SOURCE () {
 	local mySWITCH=""
 	if [ "${myTPOT_REPO_URL}" != "${myCURRENT_REPO}" ];
 	  then
-	    echo "###### $myBLUE""Now switching origin from ${myCURRENT_REPO} to ${myTPOT_REPO_URL}.""$myWHITE"
+	    fuUI_HINT "Now switching origin from ${myCURRENT_REPO} to ${myTPOT_REPO_URL}."
 	    git remote set-url origin "${myTPOT_REPO_URL}"
 	    mySWITCH="1"
 	fi
 	if [ "${myTPOT_BRANCH}" != "${myCURRENT_BRANCH}" ];
 	  then
-	    echo "###### $myBLUE""Now switching from branch ${myCURRENT_BRANCH} to ${myTPOT_BRANCH}.""$myWHITE"
+	    fuUI_HINT "Now switching from branch ${myCURRENT_BRANCH} to ${myTPOT_BRANCH}."
 	    mySWITCH="1"
 	fi
 	[ -n "${mySWITCH}" ] || return
@@ -483,8 +476,8 @@ function fuSWITCH_SOURCE () {
 	git reset --hard
 	if ! git checkout -B "${myTPOT_BRANCH}" "origin/${myTPOT_BRANCH}";
 	  then
-	    echo "###### $myBLUE""Could not check out ${myTPOT_BRANCH}.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
-	    echo "Exiting.""$myWHITE"
+	    fuUI_ERROR "Could not check out ${myTPOT_BRANCH}."
+	    fuUI_HINT "Exiting."
 	    echo
 	    exit 1
 	fi
@@ -496,20 +489,20 @@ function fuSWITCH_SOURCE () {
 # Update
 function fuSELFUPDATE () {
 	echo
-	echo "### Now checking for newer files in repository ..."
+	fuUI_INFO "Now checking for newer files in repository ..."
 	# The running script may be replaced by the update, either by newer commits
 	# or by a switch to a different branch, and then has to restart itself.
 	myOLDSUM=$(sha256sum "$0" | awk '{ print $1 }')
 	fuSWITCH_SOURCE
-	echo "###### $myBLUE""Pulling updates from repository.""$myWHITE"
+	fuUI_HINT "Pulling updates from repository."
 	# Checked, because a failed pull used to leave the checkout untouched while the
 	# run went on to report "Done" - an update that silently did nothing.
 	if ! git fetch --all || ! git reset --hard || ! git pull --force;
 	  then
-	    echo "###### $myBLUE""Could not pull the updates.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
-	    echo "###### $myBLUE""The checkout may be left mid-merge, check it with 'git -C $HOME/tpotce status'.""$myWHITE"
-	    echo "###### $myBLUE""T-Pot is stopped, start it again with 'systemctl start tpot'. The backup is in ${myARCHIVE}.""$myWHITE"
-	    echo "Exiting.""$myWHITE"
+	    fuUI_ERROR "Could not pull the updates."
+	    fuUI_HINT "The checkout may be left mid-merge, check it with 'git -C $HOME/tpotce status'."
+	    fuUI_HINT "T-Pot is stopped, start it again with 'systemctl start tpot'. The backup is in ${myARCHIVE}."
+	    fuUI_HINT "Exiting."
 	    echo
 	    exit 1
 	fi
@@ -524,13 +517,13 @@ function fuSELFUPDATE () {
 	    # handover variable is the marker, it only exists from 24.04.1 onwards.
 	    if ! grep -q "TPOT_UPDATE_PREPARED" "$0";
 	      then
-	        echo "###### $myBLUE""The update.sh of this checkout predates the one running, so this checkout is an older release.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
-	        echo "###### $myBLUE""Not restarting into it. Putting the configuration back, then stopping.""$myWHITE"
+	        fuUI_WARN "The update.sh of this checkout predates the one running, so this checkout is an older release."
+	        fuUI_HINT "Not restarting into it. Putting the configuration back, then stopping."
 	        myOLDER_CHECKOUT="1"
 	        echo
 	        return
 	    fi
-	    echo "###### $myBLUE""Found newer version of update.sh, restarting myself.""$myWHITE"
+	    fuUI_HINT "Found newer version of update.sh, restarting myself."
 	    # The edition was read from a file the pull above has just overwritten, so
 	    # the restarted script cannot read it again and inherits it instead.
 	    export TPOT_UPDATE_PREPARED="1"
@@ -552,24 +545,24 @@ function fuCHECK_VERSION () {
 	local myMINVERSION="24.04.1"
 	local myMASTERVERSION="24.04.2"
 	echo
-	echo "### Checking for version tag ..."
+	fuUI_INFO "Checking for version tag ..."
 	if [ -f "version" ];
 	  then
 	    myVERSION=$(cat version)
 	    if [[ "$myVERSION" > "$myMINVERSION" || "$myVERSION" == "$myMINVERSION" ]] && [[ "$myVERSION" < "$myMASTERVERSION" || "$myVERSION" == "$myMASTERVERSION" ]]
 	      then
-	        echo "###### $myBLUE$myVERSION is eligible for the update procedure.$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	        fuUI_OK "$myVERSION is eligible for the update procedure."
 	      elif [ -n "${myTPOT_SOURCE_GIVEN}" ];
 	        then
 	          # A branch or a fork may have moved the version tag on already,
 	          # that must not stop a test of the update procedure itself.
-	          echo "###### $myBLUE $myVERSION is outside the supported range, continuing because an update source was requested.$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	          fuUI_WARN "$myVERSION is outside the supported range, continuing because an update source was requested."
 	      else
-	        echo "###### $myBLUE $myVERSION cannot be upgraded automatically. Please run a fresh install.$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	        fuUI_ERROR "$myVERSION cannot be upgraded automatically. Please run a fresh install."
 		exit
 	    fi
 	  else
-	    echo "###### $myBLUE""Unable to determine version. Please run 'update.sh' from within 'tpotce/'.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	    fuUI_ERROR "Unable to determine version. Please run 'update.sh' from within 'tpotce/'."
 	    exit
 	  fi
 	echo
@@ -578,25 +571,21 @@ function fuCHECK_VERSION () {
 # Stop T-Pot to avoid race conditions with running containers with regard to the current T-Pot config
 function fuSTOP_TPOT () {
 	echo
-	echo "### Need to stop T-Pot ..."
+	fuUI_INFO "Need to stop T-Pot ..."
 	if [ -n "${myPREPARED}" ];
 	  then
-	    echo "###### $myBLUE""Already stopped before the restart.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	    fuUI_OK "Already stopped before the restart."
 	    echo
 	    return
 	fi
-	echo -n "###### $myBLUE Now stopping T-Pot.$myWHITE "
 	sudo systemctl stop tpot.service
 	if [ $? -ne 0 ];
 	  then
-	    echo " [ $myRED""NOT OK""$myWHITE ]"
-	    echo "###### $myBLUE""Could not stop T-Pot.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
-	    echo "Exiting.""$myWHITE"
+	    fuUI_ERROR "Could not stop T-Pot. Exiting."
 	    echo
 	    exit 1
 	  else
-	    echo "[ $myGREEN"OK"$myWHITE ]"
-	    echo -n "###### $myBLUE Now cleaning up containers.$myWHITE "
+	    fuUI_OK "T-Pot is stopped."
 	    if [ "$(docker ps -aq)" != "" ];
 	      then
 	        docker stop $(docker ps -aq)
@@ -605,7 +594,7 @@ function fuSTOP_TPOT () {
 	    # the networks of an earlier compose file (one per honeypot until 24.04.2) would
 	    # keep their address pools
 	    docker network prune -f > /dev/null 2>&1
-	    echo "[ $myGREEN"OK"$myWHITE ]"
+	    fuUI_OK "Containers cleaned up."
 	fi
 	echo
 }
@@ -627,19 +616,18 @@ function fuCONTAINER_UP () {   # $1 = container name
 function fuWAIT_FOR () {   # $1 = URL, $2 = label
 	local myWAIT=0
 	curl -s -f -o /dev/null --connect-timeout 5 "$1" && return 0
-	echo -n "###### $myBLUE Waiting up to ${myELASTIC_GRACE}s for $2 $myWHITE"
+	fuUI_HINT "Waiting up to ${myELASTIC_GRACE}s for $2 ..."
 	while [ "${myWAIT}" -lt "${myELASTIC_GRACE}" ];
 	  do
 	    sleep 5
 	    myWAIT=$((myWAIT+5))
-	    echo -n "."
 	    if curl -s -f -o /dev/null --connect-timeout 5 "$1";
 	      then
-	        echo " [ $myGREEN"OK"$myWHITE ] after ${myWAIT}s"
+	        fuUI_OK "$2 answers after ${myWAIT}s."
 	        return 0
 	    fi
 	done
-	echo " [ $myRED""WARNING""$myWHITE ]"
+	fuUI_WARN "$2 does not answer after ${myELASTIC_GRACE}s."
 	return 1
 }
 
@@ -648,18 +636,18 @@ function fuWAIT_FOR () {   # $1 = URL, $2 = label
 function fuELASTIC_READY () {   # $1 = service, $2 = container, $3 = URL, $4 = label
 	if ! fuCOMPOSE_HAS "$1";
 	  then
-	    echo "###### $myBLUE""This edition does not run $4, nothing to save.""$myWHITE"
+	    fuUI_HINT "This edition does not run $4, nothing to save."
 	    return 1
 	fi
 	if ! fuCONTAINER_UP "$2";
 	  then
-	    echo "###### $myBLUE""$4 is not running, so it cannot be saved. Start T-Pot first if you want it in the backup.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	    fuUI_WARN "$4 is not running, so it cannot be saved. Start T-Pot first if you want it in the backup."
 	    return 1
 	fi
 	if ! fuWAIT_FOR "$3" "$4";
 	  then
-	    echo "###### $myBLUE""$4 did not answer within ${myELASTIC_GRACE}s, it is NOT in the backup.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
-	    echo "###### $myBLUE""Raise the wait with TPOT_ELASTIC_GRACE=<seconds> if this machine needs longer.""$myWHITE"
+	    fuUI_WARN "$4 did not answer within ${myELASTIC_GRACE}s, it is NOT in the backup."
+	    fuUI_HINT "Raise the wait with TPOT_ELASTIC_GRACE=<seconds> if this machine needs longer."
 	    return 1
 	fi
 	return 0
@@ -673,10 +661,10 @@ function fuELASTIC_READY () {   # $1 = service, $2 = container, $3 = URL, $4 = l
 function fuEXPORT_ELASTIC () {
 	local myOUT=""
 	echo
-	echo "### Saving the Elasticsearch state ..."
+	fuUI_INFO "Saving the Elasticsearch state ..."
 	if [ -n "${myPREPARED}" ];
 	  then
-	    echo "###### $myBLUE""Already saved before the restart, T-Pot is stopped by now.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	    fuUI_OK "Already saved before the restart, T-Pot is stopped by now."
 	    echo
 	    return
 	fi
@@ -687,15 +675,14 @@ function fuEXPORT_ELASTIC () {
 	# runs Elasticsearch without Kibana.
 	if fuELASTIC_READY kibana kibana "${myKIBANA}/api/status" "Kibana";
 	  then
-	    echo -n "###### $myBLUE Exporting Kibana objects.$myWHITE "
 	    if curl -s -f -X POST "${myKIBANA}/api/saved_objects/_export" \
 	         -H "kbn-xsrf: true" -H "Content-Type: application/json" \
 	         -d '{"type":"*","excludeExportDetails":true}' \
 	         -o "${myOUT}/kibana_export.ndjson";
 	      then
-	        echo "[ $myGREEN"OK"$myWHITE ] $(grep -c . "${myOUT}/kibana_export.ndjson") objects"
+	        fuUI_OK "Kibana objects exported, $(grep -c . "${myOUT}/kibana_export.ndjson") objects."
 	      else
-	        echo " [ $myRED""WARNING""$myWHITE ]"
+	        fuUI_WARN "The Kibana objects could not be exported."
 	        rm -f "${myOUT}/kibana_export.ndjson"
 	    fi
 	fi
@@ -704,7 +691,6 @@ function fuEXPORT_ELASTIC () {
 	# ready to be put back - restoring it is then a single curl.
 	if fuELASTIC_READY elasticsearch elasticsearch "${myES}" "Elasticsearch";
 	  then
-	    echo -n "###### $myBLUE Exporting the ILM policy.$myWHITE "
 	    if curl -s -f "${myES}/_ilm/policy/tpot" -o "${myTMPDIR}/ilm_raw.json" \
 	       && python3 -c "
 import json
@@ -712,9 +698,9 @@ myRAW = json.load(open('${myTMPDIR}/ilm_raw.json'))
 json.dump({'policy': myRAW['tpot']['policy']}, open('${myOUT}/ilm_policy_tpot.json', 'w'), indent=2)
 " 2>/dev/null;
 	      then
-	        echo "[ $myGREEN"OK"$myWHITE ]"
+	        fuUI_OK "ILM policy exported."
 	      else
-	        echo " [ $myRED""WARNING""$myWHITE ]"
+	        fuUI_WARN "The ILM policy could not be exported."
 	        rm -f "${myOUT}/ilm_policy_tpot.json"
 	    fi
 	fi
@@ -722,7 +708,7 @@ json.dump({'policy': myRAW['tpot']['policy']}, open('${myOUT}/ilm_policy_tpot.js
 	  then
 	    rmdir "${myOUT}" 2>/dev/null
 	  else
-	    echo "###### $myBLUE""Saved to the archive under 'elastic/'.""$myWHITE"
+	    fuUI_HINT "Saved to the archive under 'elastic/'."
 	fi
 	echo
 }
@@ -730,21 +716,20 @@ json.dump({'policy': myRAW['tpot']['policy']}, open('${myOUT}/ilm_policy_tpot.js
 # Bring T-Pot back up. Only on request, so nothing changes for anyone who relies on
 # the services staying down after a run.
 function fuSTART_TPOT () {
-	echo -n "### Now starting T-Pot ... "
+	fuUI_INFO "Now starting T-Pot ..."
 	if sudo systemctl start tpot.service 2>/dev/null;
 	  then
-	    echo "[ $myGREEN"OK"$myWHITE ]"
+	    fuUI_OK "T-Pot is started."
 	    return 0
 	fi
-	echo "[ $myRED""WARNING""$myWHITE ]"
-	echo "###### $myBLUE""Could not start tpot.service, trying docker compose.""$myWHITE"
+	fuUI_WARN "Could not start tpot.service, trying docker compose."
 	if [ -f "$HOME/tpotce/docker-compose.yml" ] \
 	   && ( cd "$HOME/tpotce" && docker compose up -d ) >/dev/null 2>&1;
 	  then
-	    echo "###### $myBLUE""Started with docker compose.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	    fuUI_OK "Started with docker compose."
 	    return 0
 	fi
-	echo "###### $myBLUE""Please start T-Pot yourself.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	fuUI_ERROR "Please start T-Pot yourself."
 	return 1
 }
 
@@ -769,11 +754,11 @@ function fuROLLBACK_CHECKOUT () {
 	myCOMMIT=$(tar xOf "${myARCHIVE}" rollback.txt 2>/dev/null | tr -d "[:space:]")
 	if [ -z "${myCOMMIT}" ] || [ "${myCOMMIT}" == "$(git -C "$HOME/tpotce" rev-parse HEAD)" ] || [ ! -x "$HOME/tpotce/restore.sh" ];
 	  then
-	    echo "###### $myBLUE""The archive holds no earlier commit to go back to, the checkout stays on this release.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
-	    echo "###### $myBLUE""Starting T-Pot now runs the new Elastic Stack on the existing data, free up space first.""$myWHITE"
+	    fuUI_WARN "The archive holds no earlier commit to go back to, the checkout stays on this release."
+	    fuUI_HINT "Starting T-Pot now runs the new Elastic Stack on the existing data, free up space first."
 	    return 1
 	fi
-	echo "###### $myBLUE""Putting the checkout and the configuration back to the state before this update.""$myWHITE"
+	fuUI_HINT "Putting the checkout and the configuration back to the state before this update."
 	"$HOME/tpotce/restore.sh" -f "${myARCHIVE}" -c
 }
 
@@ -783,14 +768,14 @@ function fuROLLBACK_CHECKOUT () {
 # well: everything before the stop is done by the update.sh the user started,
 # which may be an older one. T-Pot is stopped at this point.
 function fuCHECK_ELASTIC () {
-	local myNEW="" myOLD="" myDATA="" myUSED=0 myCOUNT=0
+	local myNEW="" myOLD="" myDATA="" myUSED=0
 	fuCOMPOSE_HAS elasticsearch || return
 	echo
-	echo "### Checking the Elastic Stack update ..."
+	fuUI_INFO "Checking the Elastic Stack update ..."
 	myNEW=$(sed -n "s/^ARG ES_VER=//p" "$HOME/tpotce/docker/elk/elasticsearch/Dockerfile" 2>/dev/null | head -1)
 	if [ -z "${myNEW}" ];
 	  then
-	    echo "###### $myBLUE""Cannot tell which Elasticsearch version this release ships, skipping the check.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	    fuUI_WARN "Cannot tell which Elasticsearch version this release ships, skipping the check."
 	    echo
 	    return
 	fi
@@ -801,15 +786,15 @@ function fuCHECK_ELASTIC () {
 	        | sed -n "s/^ES_VER=//p" | head -1)
 	if [ "${myOLD}" == "${myNEW}" ];
 	  then
-	    echo "###### $myBLUE""Elasticsearch stays on ${myNEW}.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	    fuUI_OK "Elasticsearch stays on ${myNEW}."
 	    echo
 	    return
 	fi
 	if [ -z "${myOLD}" ];
 	  then
-	    echo "###### $myBLUE""Cannot tell which Elasticsearch version ran so far, assuming it changes to ${myNEW}.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	    fuUI_WARN "Cannot tell which Elasticsearch version ran so far, assuming it changes to ${myNEW}."
 	  else
-	    echo "###### $myBLUE""Elasticsearch ${myOLD} -> ${myNEW}.""$myWHITE"
+	    fuUI_HINT "Elasticsearch ${myOLD} -> ${myNEW}."
 	fi
 	# Elasticsearch stops allocating new shards at 90%, the next daily index would
 	# stay red and nothing gets indexed any more
@@ -817,40 +802,35 @@ function fuCHECK_ELASTIC () {
 	myUSED=$(df --output=pcent "${myDATA}" 2>/dev/null | tail -1 | tr -dc "0-9")
 	if [ -n "${myUSED}" ] && [ "${myUSED}" -ge 90 ];
 	  then
-	    echo "###### $myBLUE""${myDATA} is ${myUSED}% full, Elasticsearch needs it below 90%.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
-	    echo "###### $myBLUE""Nothing was pulled and no image was removed.""$myWHITE"
+	    fuUI_ERROR "${myDATA} is ${myUSED}% full, Elasticsearch needs it below 90%."
+	    fuUI_HINT "Nothing was pulled and no image was removed."
 	    fuROLLBACK_CHECKOUT
-	    echo "###### $myBLUE""Free up space and run the update again. T-Pot is stopped, 'systemctl start tpot' brings it back.""$myWHITE"
-	    echo "Exiting.""$myWHITE"
+	    fuUI_HINT "Free up space and run the update again. T-Pot is stopped, 'systemctl start tpot' brings it back."
+	    fuUI_HINT "Exiting."
 	    echo
 	    exit 1
 	fi
 	if [ -n "${myUSED}" ] && [ "${myUSED}" -ge 85 ];
 	  then
-	    echo "###### $myBLUE""${myDATA} is ${myUSED}% full, Elasticsearch starts to complain at 85%.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	    fuUI_WARN "${myDATA} is ${myUSED}% full, Elasticsearch starts to complain at 85%."
 	fi
 	# A `--full` archive of ~/tpotce/data is the only way back to the old version
 	if [ "${myDATA}" == "$HOME/tpotce/data" ] && tar tf "${myARCHIVE}" data/elk/data >/dev/null 2>&1;
 	  then
-	    echo "###### $myBLUE""The Elasticsearch data is in ${myARCHIVE}.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	    fuUI_OK "The Elasticsearch data is in ${myARCHIVE}."
 	    echo
 	    return
 	fi
-	echo "###### $myBLUE""Elasticsearch and Kibana will upgrade their data in ${myDATA}/elk on the next start.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
-	echo "###### $myBLUE""This cannot be undone, and the backup of this run does not hold that data.""$myWHITE"
-	echo "###### $myBLUE""T-Pot is stopped right now, so this is the moment to copy it, e.g.:""$myWHITE"
-	echo "######   $myBLUE""sudo cp -a ${myDATA}/elk/data ${myBACKUPDIR}/elk_data_${myOLD:-old}""$myWHITE"
-	echo "###### $myBLUE""The checkout and .env are already on the new release, afterwards finish with:""$myWHITE"
-	echo "######   $myBLUE""docker compose -f $HOME/tpotce/docker-compose.yml pull && sudo systemctl start tpot""$myWHITE"
+	fuUI_WARN "Elasticsearch and Kibana will upgrade their data in ${myDATA}/elk on the next start."
+	fuUI_HINT "This cannot be undone, and the backup of this run does not hold that data."
+	fuUI_HINT "T-Pot is stopped right now, so this is the moment to copy it, e.g.:"
+	fuUI_HINT "  sudo cp -a ${myDATA}/elk/data ${myBACKUPDIR}/elk_data_${myOLD:-old}"
+	fuUI_HINT "The checkout and .env are already on the new release, afterwards finish with:"
+	fuUI_HINT "  docker compose -f $HOME/tpotce/docker-compose.yml pull && sudo systemctl start tpot"
 	if [ -t 0 ] && [ -t 1 ];
 	  then
-	    echo -n "###### $myBLUE Press Ctrl+C to stop here and copy it first, continuing in $myWHITE"
-	    for myCOUNT in $(seq 15 -1 1);
-	      do
-	        echo -n "${myCOUNT} "
-	        sleep 1
-	      done;
-	    echo
+	    fuUI_HINT "Press Ctrl+C to stop here and copy it first, continuing in 15 seconds ..."
+	    sleep 15
 	fi
 	echo
 }
@@ -871,21 +851,21 @@ function fuBACKUP () {
 	local myJEWELLIST=()
 	local myJEWELARGS=()
 	echo
-	echo "### Create a backup, just in case ... "
+	fuUI_INFO "Create a backup, just in case ... "
 	# The second pass would archive the checkout that the pull has already reset, and
 	# fuRESTORE would then put that back - the user's configuration would be gone
 	# while the run still reported success.
 	if [ -n "${myPREPARED}" ];
 	  then
-	    echo "###### $myBLUE""Keeping the backup from before the restart: ${myARCHIVE}""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	    fuUI_OK "Keeping the backup from before the restart: ${myARCHIVE}"
 	    echo
 	    return
 	fi
 	fuTMPDIR
 	if ! mkdir -p "${myBACKUPDIR}" || ! chmod 0700 "${myBACKUPDIR}";
 	  then
-	    echo "###### $myBLUE""Could not prepare ${myBACKUPDIR}.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
-	    echo "Exiting.""$myWHITE"
+	    fuUI_ERROR "Could not prepare ${myBACKUPDIR}."
+	    fuUI_HINT "Exiting."
 	    echo
 	    exit 1
 	fi
@@ -951,34 +931,29 @@ function fuBACKUP () {
 	    myJEWELARGS=(-C "$HOME/tpotce" "${myJEWELLIST[@]}")
 	fi
 
-	echo -n "###### $myBLUE Building ${myFULL:+full }archive in $myARCHIVE $myWHITE"
+	fuUI_INFO "Building the ${myFULL:+full }archive ${myARCHIVE} ..."
 	# A single tar run: intermediate files created under sudo belong to root and
 	# could not be moved afterwards.
 	if ! sudo tar cf "${myARCHIVE}" -p --numeric-owner \
 	        -C "${myStage}" ${myTARGETS} "${myJEWELARGS[@]}" 2>"${myTMPDIR}/tar.err";
 	  then
-	    echo " [ $myRED""NOT OK""$myWHITE ]"
-	    echo "###### $myBLUE""tar failed:""$myWHITE"
-	    sed 's/^/###### /' "${myTMPDIR}/tar.err"
-	    echo "Exiting.""$myWHITE"
+	    fuUI_ERROR "tar failed, exiting:"
+	    sed 's/^/    /' "${myTMPDIR}/tar.err"
 	    echo
 	    exit 1
 	fi
 	if ! sudo chown "$(id -u):$(id -g)" "${myARCHIVE}" || ! chmod 0600 "${myARCHIVE}";
 	  then
-	    echo " [ $myRED""NOT OK""$myWHITE ]"
-	    echo "###### $myBLUE""Could not take ownership of ${myARCHIVE}.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
-	    echo "Exiting.""$myWHITE"
+	    fuUI_ERROR "Could not take ownership of ${myARCHIVE}. Exiting."
 	    echo
 	    exit 1
 	fi
-	echo "[ $myGREEN"OK"$myWHITE ]"
-	echo "###### $myBLUE""Archive holds $(tar tf "${myARCHIVE}" | wc -l) entries, $(du -h "${myARCHIVE}" | cut -f1).""$myWHITE"
+	fuUI_OK "The archive holds $(tar tf "${myARCHIVE}" | wc -l) entries, $(du -h "${myARCHIVE}" | cut -f1)."
 	fuROTATE
 	# Point at the old archives from before this directory existed, once
 	if ls "$HOME"/*_tpot_backup.tgz >/dev/null 2>&1;
 	  then
-	    echo "###### $myBLUE""Note: older backups are still in $HOME, new ones go to ${myBACKUPDIR}.""$myWHITE"
+	    fuUI_HINT "Note: older backups are still in $HOME, new ones go to ${myBACKUPDIR}."
 	fi
 	echo
 }
@@ -992,10 +967,10 @@ function fuREMOVEOLDIMAGES () {
 	echo
 	if [ -z "${myKEEP}" ];
 	  then
-	    echo "### Not touching any images, cannot tell from .env which tag is in use."
+	    fuUI_INFO "Not touching any images, cannot tell from .env which tag is in use."
 	    return
 	fi
-	echo "### Removing docker images of earlier versions, keeping :${myKEEP} ..."
+	fuUI_INFO "Removing docker images of earlier versions, keeping :${myKEEP} ..."
 	for myREPO in ${myREPOS};
 	  do
 	    myLIST=$(docker images --format "{{.Repository}}:{{.Tag}}" 2>/dev/null \
@@ -1003,16 +978,16 @@ function fuREMOVEOLDIMAGES () {
 	    [ -z "${myLIST}" ] && continue
 	    for myTAG in $(echo "${myLIST}" | sed "s/.*://" | sort -u);
 	      do
-	        echo "###### $myBLUE""${myREPO}: $(echo "${myLIST}" | grep -c ":${myTAG}$") image(s) tagged :${myTAG}""$myWHITE"
+	        fuUI_HINT "${myREPO}: $(echo "${myLIST}" | grep -c ":${myTAG}$") image(s) tagged :${myTAG}"
 	      done;
 	    myTOTAL=$((myTOTAL + $(echo "${myLIST}" | grep -c .)))
 	    echo "${myLIST}" | xargs -r docker rmi >/dev/null 2>&1
 	done;
 	if [ "${myTOTAL}" -eq 0 ];
 	  then
-	    echo "###### $myBLUE""Nothing to remove.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	    fuUI_OK "Nothing to remove."
 	  else
-	    echo "###### $myBLUE""Removed ${myTOTAL} image(s).""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	    fuUI_OK "Removed ${myTOTAL} image(s)."
 	fi
 }
 
@@ -1021,64 +996,66 @@ function fuPULLIMAGES {
 }
 
 function fuUPDATER () {
-	echo "### Now pulling latest docker images ..."
-	echo "######$myBLUE This might take a while, please be patient!$myWHITE"
+	fuUI_INFO "Now pulling latest docker images ..."
+	fuUI_HINT "This might take a while, please be patient!"
 	if fuPULLIMAGES;
 	  then
 	    myPULLOK="1"
 	  else
 	    echo
-	    echo "###### $myBLUE""Could not pull all images.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
-	    echo "###### $myBLUE""Every service pulls on start, so T-Pot will not come up until they are there.""$myWHITE"
-	    echo "###### $myBLUE""Your .env asks for $(grep -E "^TPOT_REPO=" "$HOME/tpotce/.env" | tail -1 | cut -d= -f2-)/*:$(grep -E "^TPOT_VERSION=" "$HOME/tpotce/.env" | tail -1 | cut -d= -f2-), this release ships ${newVERSION}.""$myWHITE"
-	    echo "###### $myBLUE""If the tag is pinned on purpose, make sure those images exist. Otherwise:""$myWHITE"
-	    echo "######   $myBLUE""sed -i 's|^TPOT_VERSION=.*|TPOT_VERSION=${newVERSION}|' $HOME/tpotce/.env""$myWHITE"
-	    echo "######   $myBLUE""docker compose -f $HOME/tpotce/docker-compose.yml pull""$myWHITE"
+	    fuMARK warn pull Not all images could be pulled, T-Pot pulls them again when it starts.
+	    fuUI_WARN "Could not pull all images."
+	    fuUI_HINT "Every service pulls on start, so T-Pot will not come up until they are there."
+	    fuUI_HINT "Your .env asks for $(grep -E "^TPOT_REPO=" "$HOME/tpotce/.env" | tail -1 | cut -d= -f2-)/*:$(grep -E "^TPOT_VERSION=" "$HOME/tpotce/.env" | tail -1 | cut -d= -f2-), this release ships ${newVERSION}."
+	    fuUI_HINT "If the tag is pinned on purpose, make sure those images exist. Otherwise:"
+	    fuUI_HINT "  sed -i 's|^TPOT_VERSION=.*|TPOT_VERSION=${newVERSION}|' $HOME/tpotce/.env"
+	    fuUI_HINT "  docker compose -f $HOME/tpotce/docker-compose.yml pull"
 	fi
+	fuMARK phase cleanup Removing old images
 	fuREMOVEOLDIMAGES
 	echo
 	if [ -n "${myCOMPOSE_CUSTOMIZED}" ];
 	  then
-	    echo "### If you made changes to docker-compose.yml please ensure to add them again."
-	    echo "### Your previous one is in the backup as 'docker-compose.yml'."
+	    fuUI_INFO "If you made changes to docker-compose.yml please ensure to add them again."
+	    fuUI_INFO "Your previous one is in the backup as 'docker-compose.yml'."
 	fi
-	echo "### We stored the previous version as backup in $myARCHIVE."
-	echo "### Your own Kibana objects and the ILM policy were saved to the archive before"
-	echo "### T-Pot was stopped, 'restore.sh' can put them back."
-	echo "### Some updates ship newer Kibana objects. Download them here if they changed:"
-	echo "### https://raw.githubusercontent.com/telekom-security/tpotce/refs/heads/master/docker/tpotinit/dist/etc/objects/kibana_export.ndjson.zip"
-	echo "### Import through the Kibana WebUI: Management > Saved Objects > Import"
+	fuUI_INFO "We stored the previous version as backup in $myARCHIVE."
+	fuUI_INFO "Your own Kibana objects and the ILM policy were saved to the archive before"
+	fuUI_INFO "T-Pot was stopped, 'restore.sh' can put them back."
+	fuUI_INFO "Some updates ship newer Kibana objects. Download them here if they changed:"
+	fuUI_INFO "https://raw.githubusercontent.com/telekom-security/tpotce/refs/heads/master/docker/tpotinit/dist/etc/objects/kibana_export.ndjson.zip"
+	fuUI_INFO "Import through the Kibana WebUI: Management > Saved Objects > Import"
 	echo
 }
 
 function fuRESTORE () {
 	if [ -f '~/tpotce/data/ews/conf/ews.cfg' ] && ! grep 'ews.cfg' $myCOMPOSEFILE > /dev/null; then
 	    echo
-	    echo "### Restoring volume mount for ews.cfg in tpot.yml"
+	    fuUI_INFO "Restoring volume mount for ews.cfg in tpot.yml"
 	    sed -i '/- ${TPOT_DATA_PATH}:\/data/a \ \ \ \ \ - ${TPOT_DATA_PATH}/ews/conf/ews.cfg:/opt/ewsposter/ews.cfg' $myCOMPOSEFILE
 	fi
-	echo "### Restoring T-Pot config file .env"
+	fuUI_INFO "Restoring T-Pot config file .env"
 	fuTMPDIR
 	# `-C` only applies to the members named after it, hence it comes first. And the
 	# return value is checked: a restore that failed silently left T-Pot starting
 	# without a web login while the run still reported "Done".
 	if ! tar xf "${myARCHIVE}" -C "${myTMPDIR}" env 2>"${myTMPDIR}/untar.err";
 	  then
-	    echo "###### $myBLUE""Could not read 'env' from ${myARCHIVE}.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
-	    sed 's/^/###### /' "${myTMPDIR}/untar.err"
-	    echo "###### $myBLUE""Refusing to continue with a default configuration.""$myWHITE"
-	    echo "Exiting.""$myWHITE"
+	    fuUI_ERROR "Could not read 'env' from ${myARCHIVE}."
+	    sed 's/^/    /' "${myTMPDIR}/untar.err"
+	    fuUI_HINT "Refusing to continue with a default configuration."
+	    fuUI_HINT "Exiting."
 	    echo
 	    exit 1
 	fi
 	if ! cp "${myTMPDIR}/env" "$HOME/tpotce/.env";
 	  then
-	    echo "###### $myBLUE""Could not write $HOME/tpotce/.env.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
-	    echo "Exiting.""$myWHITE"
+	    fuUI_ERROR "Could not write $HOME/tpotce/.env."
+	    fuUI_HINT "Exiting."
 	    echo
 	    exit 1
 	fi
-	echo "###### $myBLUE""Restored from ${myARCHIVE}.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	fuUI_OK "Restored from ${myARCHIVE}."
 	# .env records the TPOT_VERSION that docker compose resolves the image tags from,
 	# so it has to follow the release - otherwise the new compose file asks for images
 	# of the old version, and honeypots added since then have no image at all.
@@ -1096,10 +1073,10 @@ function fuRESTORE () {
 	    if [ "${myOLDVERSION}" != "${newVERSION}" ];
 	      then
 	        sed -i "s|^TPOT_VERSION=.*|TPOT_VERSION=${newVERSION}|" "$HOME/tpotce/.env"
-	        echo "###### $myBLUE""TPOT_VERSION ${myOLDVERSION} -> ${newVERSION}.""$myWHITE"
+	        fuUI_HINT "TPOT_VERSION ${myOLDVERSION} -> ${newVERSION}."
 	    fi
 	  else
-	    echo "###### $myBLUE""Keeping TPOT_VERSION=${myOLDVERSION}, it is not a release version.""$myWHITE"
+	    fuUI_HINT "Keeping TPOT_VERSION=${myOLDVERSION}, it is not a release version."
 	fi
 	# dtagdevsec was the default before the images moved to ghcr, and Docker Hub rate
 	# limits are a known issue. An installation still on that old default is raised;
@@ -1109,7 +1086,7 @@ function fuRESTORE () {
 	if [ "${myOLDREPO}" == "dtagdevsec" ] && [ -n "${myNEWREPO}" ] && [ "${myNEWREPO}" != "dtagdevsec" ];
 	  then
 	    sed -i "s|^TPOT_REPO=.*|TPOT_REPO=${myNEWREPO}|" "$HOME/tpotce/.env"
-	    echo "###### $myBLUE""TPOT_REPO dtagdevsec -> ${myNEWREPO}, which avoids the Docker Hub rate limits.""$myWHITE"
+	    fuUI_HINT "TPOT_REPO dtagdevsec -> ${myNEWREPO}, which avoids the Docker Hub rate limits."
 	fi
 	fuMIGRATE_BEELZEBUB_ENV "$HOME/tpotce/.env"
 	fuMIGRATE_TOGGLES "$HOME/tpotce/.env"
@@ -1154,7 +1131,7 @@ function fuMIGRATE_BEELZEBUB_ENV () {
 	    [ "${myHOST}" == "http://ollama.local:11434/api/chat" ] && myHOST=""
 	    ;;
 	  *)
-	    echo "###### $myBLUE""BEELZEBUB_LLM_MODEL=${myOLDMODEL} is neither \"ollama\" nor \"gpt4-o\", please set up the Beelzebub section of .env as in env.example.""$myWHITE"
+	    fuUI_HINT "BEELZEBUB_LLM_MODEL=${myOLDMODEL} is neither \"ollama\" nor \"gpt4-o\", please set up the Beelzebub section of .env as in env.example."
 	    return 0
 	    ;;
 	esac
@@ -1177,12 +1154,12 @@ function fuMIGRATE_BEELZEBUB_ENV () {
 	' "${myENVFILE}" > "${myENVFILE}.beelzebub";
 	  then
 	    rm -f "${myENVFILE}.beelzebub"
-	    echo "###### $myBLUE""Could not migrate the Beelzebub settings in ${myENVFILE}, please set them up as in env.example.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	    fuUI_ERROR "Could not migrate the Beelzebub settings in ${myENVFILE}, please set them up as in env.example."
 	    return 0
 	fi
 	# cat keeps the owner and the mode of .env, it holds credentials
 	cat "${myENVFILE}.beelzebub" > "${myENVFILE}" && rm -f "${myENVFILE}.beelzebub"
-	echo "###### $myBLUE""Beelzebub settings moved to BEELZEBUB_LLM_PROVIDER=${myPROVIDER}, BEELZEBUB_LLM_MODEL=${myMODEL}.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	fuUI_OK "Beelzebub settings moved to BEELZEBUB_LLM_PROVIDER=${myPROVIDER}, BEELZEBUB_LLM_MODEL=${myMODEL}."
 }
 
 # tpotinit accepts only the values the scripts act on. Synonyms that passed its
@@ -1204,21 +1181,21 @@ function fuMIGRATE_TOGGLES () {
 	      *:off|*:false|*:disabled|*:no)
 	        myNEW="DISABLED" ;;
 	      *)
-	        echo "###### $myBLUE""${myKEY}=${myOLD} is not a valid value, T-Pot will not start until it is set as described in env.example.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	        fuUI_ERROR "${myKEY}=${myOLD} is not a valid value, T-Pot will not start until it is set as described in env.example."
 	        continue ;;
 	    esac
 	    [ "${myOLD}" == "${myNEW}" ] && continue
 	    sed -i -E "s/^(${myKEY}[[:space:]]*[:=][[:space:]]*)[\"']?${myOLD}[\"']?[[:space:]]*$/\1${myNEW}/" "${myENVFILE}"
 	    if [ "$(fuENV_VALUE "${myENVFILE}" "${myKEY}")" != "${myNEW}" ];
 	      then
-	        echo "###### $myBLUE""Could not change ${myKEY}=${myOLD} to ${myNEW}, please set it in .env.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	        fuUI_ERROR "Could not change ${myKEY}=${myOLD} to ${myNEW}, please set it in .env."
 	        continue
 	    fi
 	    if [ "${myKEY}" == "TPOT_PERSISTENCE" ] && [ "${myNEW}" == "on" ];
 	      then
-	        echo "###### $myBLUE""TPOT_PERSISTENCE ${myOLD} -> on, with ${myOLD} the logs were deleted on every start, only \"on\" keeps them.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	        fuUI_OK "TPOT_PERSISTENCE ${myOLD} -> on, with ${myOLD} the logs were deleted on every start, only \"on\" keeps them."
 	      else
-	        echo "###### $myBLUE""${myKEY} ${myOLD} -> ${myNEW}.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	        fuUI_OK "${myKEY} ${myOLD} -> ${myNEW}."
 	    fi
 	done
 }
@@ -1248,7 +1225,7 @@ function fuMERGE_ENV_KEYS () {
 	    case "${myKEY}" in
 	      WEB_USER|LS_WEB_USER|TPOT_HIVE_USER)
 	        # Credentials are never set to the example values
-	        echo "###### $myBLUE""${myKEY} is missing in .env, please set it as described in env.example.""$myWHITE"
+	        fuUI_HINT "${myKEY} is missing in .env, please set it as described in env.example."
 	        continue
 	        ;;
 	    esac
@@ -1310,13 +1287,13 @@ function fuMERGE_ENV_KEYS () {
 	      then
 	        # cat keeps the owner and the mode of .env, it holds credentials
 	        cat "${myENVFILE}.merge" > "${myENVFILE}"
-	        [ -n "${myADDED}" ] && echo "###### $myBLUE""New settings added to .env with their defaults:${myADDED}""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
-	        [ -n "${myOBSOLETE}" ] && echo "###### $myBLUE""Settings no longer used, commented out in .env:${myOBSOLETE}""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	        [ -n "${myADDED}" ] && fuUI_OK "New settings added to .env with their defaults:${myADDED}"
+	        [ -n "${myOBSOLETE}" ] && fuUI_OK "Settings no longer used, commented out in .env:${myOBSOLETE}"
 	      else
-	        echo "###### $myBLUE""Could not add the new settings to ${myENVFILE}, please compare it with env.example.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	        fuUI_ERROR "Could not add the new settings to ${myENVFILE}, please compare it with env.example."
 	    fi
 	fi
-	[ -n "${myKEPT}" ] && echo "###### $myBLUE""Not in env.example, kept as a compose file uses them:${myKEPT}""$myWHITE"
+	[ -n "${myKEPT}" ] && fuUI_HINT "Not in env.example, kept as a compose file uses them:${myKEPT}"
 	rm -f "${myENVFILE}.user" "${myENVFILE}.system" "${myENVFILE}.merge"
 	return 0
 }
@@ -1339,10 +1316,10 @@ function fuCOMPOSE_FROM_ARCHIVE () {
 function fuRESTORE_EDITION () {
 	local myTEMPLATE=""
 	echo
-	echo "### Restoring the T-Pot edition ..."
+	fuUI_INFO "Restoring the T-Pot edition ..."
 	if [ -z "${myEDITION}" ];
 	  then
-	    echo "###### $myBLUE""No edition was detected, nothing to restore.""$myWHITE"
+	    fuUI_HINT "No edition was detected, nothing to restore."
 	    echo
 	    return
 	fi
@@ -1359,43 +1336,39 @@ function fuRESTORE_EDITION () {
 	  then
 	    if grep -qE "^TPOT_TYPE=SENSOR" "$HOME/tpotce/.env" 2>/dev/null;
 	      then
-	        echo "###### $myBLUE""TPOT_TYPE is SENSOR, restoring the SENSOR edition instead of ${myEDITION}.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	        fuUI_WARN "TPOT_TYPE is SENSOR, restoring the SENSOR edition instead of ${myEDITION}."
 	        myEDITION="SENSOR"
 	    fi
 	fi
 	[ "${myEDITION}" != "UNKNOWN" ] && myTEMPLATE=$(fuEDITION_TEMPLATE)
 	if [ -n "${myTEMPLATE}" ] && [ -f "${myTEMPLATE}" ];
 	  then
-	    echo -n "###### $myBLUE Now restoring the ${myEDITION} edition.$myWHITE "
 	    if ! cp "${myTEMPLATE}" "$HOME/tpotce/docker-compose.yml";
 	      then
-	        echo " [ $myRED""NOT OK""$myWHITE ]"
-	        echo "###### $myBLUE""Please copy ${myTEMPLATE} to ~/tpotce/docker-compose.yml manually.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	        fuUI_ERROR "The ${myEDITION} edition could not be restored, please copy ${myTEMPLATE} to ~/tpotce/docker-compose.yml manually."
 	        echo
 	        return
 	    fi
-	    echo "[ $myGREEN"OK"$myWHITE ]"
+	    fuUI_OK "The ${myEDITION} edition is restored."
 	    if [ -n "${myCOMPOSE_CUSTOMIZED}" ];
 	      then
-	        echo "###### $myBLUE""Your docker-compose.yml had been modified. The ${myEDITION} edition of this release is in place now, please add your changes again.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
-	        echo "###### $myBLUE""Your previous file is in the backup, compare it with:""$myWHITE"
-	        echo "######   $myBLUE""tar xOf ${myARCHIVE} docker-compose.yml | diff - $HOME/tpotce/docker-compose.yml""$myWHITE"
+	        fuUI_WARN "Your docker-compose.yml had been modified. The ${myEDITION} edition of this release is in place now, please add your changes again."
+	        fuUI_HINT "Your previous file is in the backup, compare it with:"
+	        fuUI_HINT "  tar xOf ${myARCHIVE} docker-compose.yml | diff - $HOME/tpotce/docker-compose.yml"
 	    fi
 	  else
 	    # Without a template the file the user had is put back unchanged, which
 	    # keeps it on the service definitions of the previous release.
-	    echo -n "###### $myBLUE Now restoring your own docker-compose.yml from the backup.$myWHITE "
 	    if ! fuCOMPOSE_FROM_ARCHIVE \
 	       || ! cp "${myTMPDIR}/docker-compose.yml" "$HOME/tpotce/docker-compose.yml";
 	      then
-	        echo " [ $myRED""NOT OK""$myWHITE ]"
-	        echo "###### $myBLUE""Could not take it from ${myARCHIVE}. Put it back by hand with:""$myWHITE"
-	        echo "######   $myBLUE""tar xf ${myARCHIVE} -C $HOME/tpotce docker-compose.yml""$myWHITE"
+	        fuUI_ERROR "Your own docker-compose.yml could not be taken from ${myARCHIVE}. Put it back by hand with:"
+	        fuUI_HINT "  tar xf ${myARCHIVE} -C $HOME/tpotce docker-compose.yml"
 	        echo
 	        return
 	    fi
-	    echo "[ $myGREEN"OK"$myWHITE ]"
-	    echo "###### $myBLUE""Your docker-compose.yml does not match any edition in compose/, so the changes of this release were not applied to it.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	    fuUI_OK "Your own docker-compose.yml is restored from the backup."
+	    fuUI_WARN "Your docker-compose.yml does not match any edition in compose/, so the changes of this release were not applied to it."
 	fi
 	echo
 }
@@ -1422,15 +1395,13 @@ function fuCUSTOMIZER_DEPS () {
 	    myINSTALL=(zypper -n -q install)
 	fi
 	[ ${#myPKGS[@]} -eq 0 ] && return
-	echo "### Installing Python packages for tpot and compose/customizer.py ..."
+	fuUI_INFO "Installing Python packages for tpot and compose/customizer.py ..."
 	[ "${myINSTALL[0]}" == "env" ] && sudo apt-get update -qq >/dev/null 2>&1
-	echo -n "###### $myBLUE Now installing ${myPKGS[*]}.$myWHITE "
 	if sudo "${myINSTALL[@]}" "${myPKGS[@]}" >/dev/null 2>&1;
 	  then
-	    echo "[ $myGREEN"OK"$myWHITE ]"
+	    fuUI_OK "${myPKGS[*]} installed."
 	  else
-	    echo "[ $myRED""WARNING""$myWHITE ]"
-	    echo "###### $myBLUE""Could not install ${myPKGS[*]}, tpot and the customizer may not start.""$myWHITE"
+	    fuUI_WARN "Could not install ${myPKGS[*]}, tpot and the customizer may not start."
 	fi
 	echo
 }
@@ -1441,17 +1412,17 @@ function fuCUSTOMIZER_DEPS () {
 function fuTPOT_SETUP () {
 	local myTPOT="$HOME/tpotce/tpot"
 	[ -x "${myTPOT}" ] || return
-	echo "### Setting up the tpot command ..."
+	fuUI_INFO "Setting up the tpot command ..."
 	if [ ! -e /usr/local/bin/tpot ] || [ -L /usr/local/bin/tpot ];
 	  then
 	    sudo ln -sfn "${myTPOT}" /usr/local/bin/tpot \
-	      || echo "###### $myBLUE""Could not link /usr/local/bin/tpot, run ${myTPOT} directly.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	      || fuUI_WARN "Could not link /usr/local/bin/tpot, run ${myTPOT} directly."
 	fi
 	if "${myTPOT}" setup </dev/null;
 	  then
-	    echo "###### $myBLUE""tpot is ready.""$myWHITE"" [ $myGREEN""OK""$myWHITE ]"
+	    fuUI_OK "tpot is ready."
 	  else
-	    echo "###### $myBLUE""tpot could not set up its Python packages, it tries again on its next start.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	    fuUI_WARN "tpot could not set up its Python packages, it tries again on its next start."
 	fi
 	echo
 }
@@ -1464,34 +1435,32 @@ function fuRESTORE_CUSTOM () {
 	local myCUSTOMIZER="$HOME/tpotce/compose/customizer.py"
 	if ! fuCOMPOSE_FROM_ARCHIVE;
 	  then
-	    echo "###### $myBLUE""Could not take docker-compose.yml from ${myARCHIVE}. Put it back by hand with:""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
-	    echo "######   $myBLUE""tar xf ${myARCHIVE} -C $HOME/tpotce docker-compose.yml""$myWHITE"
+	    fuUI_ERROR "Could not take docker-compose.yml from ${myARCHIVE}. Put it back by hand with:"
+	    fuUI_HINT "  tar xf ${myARCHIVE} -C $HOME/tpotce docker-compose.yml"
 	    return
 	fi
 	if [ -n "${myCOMPOSE_CUSTOMIZED}" ];
 	  then
-	    echo "###### $myBLUE""Your docker-compose.yml was edited after the customizer built it, so it is not rebuilt.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	    fuUI_WARN "Your docker-compose.yml was edited after the customizer built it, so it is not rebuilt."
 	elif ! grep -q -- "--rebuild" "${myCUSTOMIZER}" 2>/dev/null;
 	  then
-	    echo "###### $myBLUE""The customizer of this checkout cannot rebuild your docker-compose.yml.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	    fuUI_WARN "The customizer of this checkout cannot rebuild your docker-compose.yml."
 	else
-	    echo "###### $myBLUE""Now rebuilding your custom docker-compose.yml from this release.""$myWHITE"
+	    fuUI_HINT "Now rebuilding your custom docker-compose.yml from this release."
 	    if python3 "${myCUSTOMIZER}" --rebuild "${myTMPDIR}/docker-compose.yml" -o "$HOME/tpotce/docker-compose.yml" </dev/null;
 	      then
 	        return
 	    fi
-	    echo "###### $myBLUE""The rebuild failed, see above.""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	    fuUI_WARN "The rebuild failed, see above."
 	fi
-	echo -n "###### $myBLUE Now restoring your docker-compose.yml from the backup.$myWHITE "
 	if ! cp "${myTMPDIR}/docker-compose.yml" "$HOME/tpotce/docker-compose.yml";
 	  then
-	    echo " [ $myRED""NOT OK""$myWHITE ]"
-	    echo "###### $myBLUE""Put it back by hand with: tar xf ${myARCHIVE} -C $HOME/tpotce docker-compose.yml""$myWHITE"
+	    fuUI_ERROR "Your docker-compose.yml could not be restored, put it back by hand with: tar xf ${myARCHIVE} -C $HOME/tpotce docker-compose.yml"
 	    return
 	fi
-	echo "[ $myGREEN"OK"$myWHITE ]"
-	echo "###### $myBLUE""The changes of this release were not applied to it. Run the customizer again to build it anew:""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
-	echo "######   $myBLUE""cd $HOME/tpotce/compose && python3 customizer.py""$myWHITE"
+	fuUI_OK "Your docker-compose.yml is restored from the backup."
+	fuUI_WARN "The changes of this release were not applied to it. Run the customizer again to build it anew:"
+	fuUI_HINT "  cd $HOME/tpotce/compose && python3 customizer.py"
 }
 
 # A docker-compose.yml restored from the backup can still hold services of the
@@ -1505,10 +1474,9 @@ function fuREMOVE_DROPPED_SERVICES () {
 	    if [ -z "${myFOUND}" ];
 	      then
 	        myFOUND="1"
-	        echo "### Removing services that are no longer part of T-Pot ..."
+	        fuUI_INFO "Removing services that are no longer part of T-Pot ..."
 	    fi
 	    fuTMPDIR
-	    echo -n "###### $myBLUE Now removing ${mySERVICE} from docker-compose.yml, it is no longer part of T-Pot.$myWHITE "
 	    if ! awk -v svc="${mySERVICE}" '
 	         /^[^ #]/ { insvc = ($0 ~ /^services:/) }
 	         skip && (/^[^ #]/ || /^  [^ #]/) { skip = 0; printf "%s", pend; pend = "" }
@@ -1525,12 +1493,11 @@ function fuREMOVE_DROPPED_SERVICES () {
 	       ' "$HOME/tpotce/docker-compose.yml" > "${myTMPDIR}/docker-compose.yml" \
 	       || ! cp "${myTMPDIR}/docker-compose.yml" "$HOME/tpotce/docker-compose.yml";
 	      then
-	        echo " [ $myRED""NOT OK""$myWHITE ]"
-	        echo "###### $myBLUE""Please remove the ${mySERVICE} service from ~/tpotce/docker-compose.yml manually, T-Pot will not start with it.""$myWHITE"" [ $myRED""NOT OK""$myWHITE ]"
+	        fuUI_ERROR "Please remove the ${mySERVICE} service from ~/tpotce/docker-compose.yml manually, T-Pot will not start with it."
 	        continue
 	    fi
-	    echo "[ $myGREEN"OK"$myWHITE ]"
-	    echo "###### $myBLUE""Your previous file is in the backup: tar xOf ${myARCHIVE} docker-compose.yml""$myWHITE"" [ $myRED""WARNING""$myWHITE ]"
+	    fuUI_OK "${mySERVICE} is removed from docker-compose.yml, it is no longer part of T-Pot."
+	    fuUI_WARN "Your previous file is in the backup: tar xOf ${myARCHIVE} docker-compose.yml"
 	done
 	[ -n "${myFOUND}" ] && echo
 }
@@ -1552,7 +1519,7 @@ for myARG in "$@";
 done
 set -- "${myARGV[@]}"
 
-while getopts ":yFsob:r:h" opt; do
+while getopts ":yFsob:r:B:h" opt; do
   case "$opt" in
     y)
       myCONFIRMED="y"
@@ -1572,6 +1539,9 @@ while getopts ":yFsob:r:h" opt; do
     r)
       myTPOT_REPO_URL="${OPTARG}"
       ;;
+    B)
+      myBECOME_FILE="${OPTARG}"
+      ;;
     h|\?)
       fuPRINT_HELP
       ;;
@@ -1585,50 +1555,67 @@ done
 # -b, -r, TPOT_BRANCH and TPOT_REPO_URL all name an update source explicitly
 [ -n "${myTPOT_BRANCH}${myTPOT_REPO_URL}" ] && myTPOT_SOURCE_GIVEN="1"
 
-# Only run with command switch; sudo asks for the password right away
-if [ -n "${myUI_GUM}" ];
+# -B: every sudo of this run refreshes the timestamp from the file first
+if [ -n "${myBECOME_FILE}" ];
   then
-    sudo true && fuUI_BANNER "Updater" "Updates T-Pot to the latest version of its branch, with a backup first."
-  else
-    sudo echo "$myUPDATER"
+    if [ ! -r "${myBECOME_FILE}" ];
+      then
+        fuUI_ERROR "Cannot read the sudo password from ${myBECOME_FILE}."
+        exit 1
+    fi
+    myBECOME_FILE=$(cd "$(dirname "${myBECOME_FILE}")" && pwd)/$(basename "${myBECOME_FILE}")
+    sudo () { command sudo -S -p "" -v < "${myBECOME_FILE}" >/dev/null 2>&1; command sudo "$@"; }
 fi
 
+fuUI_BANNER "Updater" "Updates T-Pot to the latest version of its branch, with a backup first."
 if [ "${myCONFIRMED}" != "y" ]; then
-  echo
-  echo "This script will update T-Pot to the latest version."
-  echo "A backup of ~/tpotce will be written to $HOME. If you are unsure, you should save your work."
-  echo "This tool might break things and therefore only recommended for experienced users."
-  echo "If you understand the involved risks feel free to run this script with the '-y' switch."
+  fuUI_INFO "This script will update T-Pot to the latest version."
+  fuUI_INFO "A backup of ~/tpotce will be written to ${HOME}/tpot_backups. If you are unsure, you should save your work."
+  fuUI_INFO "This tool might break things and therefore only recommended for experienced users."
+  fuUI_INFO "If you understand the involved risks feel free to run this script with the '-y' switch."
   echo
   exit
 fi
+# sudo asks for the password right away, not in the middle of the run
+sudo true || exit 1
 
 # --backup-only: the backup of an update, nothing else (i.e. before tpot uninstall)
 if [ -n "${myBACKUP_ONLY}" ];
   then
+    fuMARK phase check Checking the edition and the space
     fuCHECK_EDITION
     fuCHECK_BACKUP_SPACE
+    fuMARK phase backup Writing the backup
     fuEXPORT_ELASTIC
     fuSTOP_TPOT
     fuBACKUP
-    [ -n "${mySTART}" ] && fuSTART_TPOT
-    echo "### Done. The backup is ${myARCHIVE}, restore.sh brings it back."
+    if [ -n "${mySTART}" ];
+      then
+        fuMARK phase start Starting T-Pot
+        fuSTART_TPOT
+    fi
+    fuMARK phase "done" Done
+    fuUI_OK "Done. The backup is ${myARCHIVE}, restore.sh brings it back."
     echo
     exit 0
 fi
 
+fuMARK phase check Checking the version and the source
 fuCHECK_VERSION
 fuCHECKINET "https://index.docker.io https://github.com"
 fuCHECK_SOURCE
 fuCHECK_EDITION
 fuCHECK_BACKUP_SPACE
+fuMARK phase backup Writing the backup
 # The Elasticsearch export needs a running instance, so it goes before the stop
 fuEXPORT_ELASTIC
 fuSTOP_TPOT
 fuBACKUP
+fuMARK phase selfupdate Updating the checkout
 fuSELFUPDATE "$@"
 # The config and the edition have to be back in place before the images are
 # pulled, `docker compose pull` reads both.
+fuMARK phase restore Putting your configuration back
 fuRESTORE
 fuCUSTOMIZER_DEPS
 fuRESTORE_EDITION
@@ -1641,13 +1628,13 @@ fuREMOVE_DROPPED_SERVICES
 if [ -n "${myOLDER_CHECKOUT}" ];
   then
     echo
-    echo "### This is a downgrade, not an update, so nothing was pulled or removed."
-    echo "###### $myBLUE""The checkout is at $(git rev-parse --abbrev-ref HEAD 2>/dev/null), whose update.sh predates the one you started. Its .env and its compose file ask for the images of that release, and the cleanup would remove the ones in use.""$myWHITE"
-    echo "###### $myBLUE""Your configuration and your edition are back in place, no image was touched, T-Pot is stopped.""$myWHITE"
-    echo "###### $myBLUE""To update to the current release instead:""$myWHITE"
-    echo "######   $myBLUE""./update.sh -y -b master""$myWHITE"
-    echo "###### $myBLUE""To leave things as they are, start T-Pot again with 'systemctl start tpot'.""$myWHITE"
-    echo "###### $myBLUE""The backup of this run is in ${myARCHIVE}.""$myWHITE"
+    fuUI_INFO "This is a downgrade, not an update, so nothing was pulled or removed."
+    fuUI_HINT "The checkout is at $(git rev-parse --abbrev-ref HEAD 2>/dev/null), whose update.sh predates the one you started. Its .env and its compose file ask for the images of that release, and the cleanup would remove the ones in use."
+    fuUI_HINT "Your configuration and your edition are back in place, no image was touched, T-Pot is stopped."
+    fuUI_HINT "To update to the current release instead:"
+    fuUI_HINT "  ./update.sh -y -b master"
+    fuUI_HINT "To leave things as they are, start T-Pot again with 'systemctl start tpot'."
+    fuUI_HINT "The backup of this run is in ${myARCHIVE}."
     echo
     exit 1
 fi
@@ -1657,29 +1644,33 @@ fuTPOT_SETUP
 # Still before the image pull: the images of the previous version tell which
 # Elasticsearch version ran so far
 fuCHECK_ELASTIC
+fuMARK phase pull Pulling the images
 fuUPDATER
 
 echo
 if [ -n "${myEDITION}" ] && [ "${myEDITION}" != "UNKNOWN" ];
   then
-    echo "### The T-Pot ${myEDITION} edition was restored to ~/tpotce/docker-compose.yml."
+    fuUI_INFO "The T-Pot ${myEDITION} edition was restored to ~/tpotce/docker-compose.yml."
 fi
 if [ -n "${mySTART}" ];
   then
     # A failed pull alone is only a warning - the update itself is through, and every
     # start pulls again. But if a start was asked for and it does not come up, the
     # machine is not doing its job and an unattended run has to say so.
+    fuMARK phase start Starting T-Pot
     if fuSTART_TPOT;
       then
-        echo "### Done."
+        fuMARK phase "done" Done
+        fuUI_OK "Done."
       else
-        echo "### The update is through, but T-Pot is not running."
-        [ -z "${myPULLOK}" ] && echo "### The image pull failed earlier, which is the likely reason."
+        fuUI_ERROR "The update is through, but T-Pot is not running."
+        [ -z "${myPULLOK}" ] && fuUI_HINT "The image pull failed earlier, which is the likely reason."
         echo
         exit 1
     fi
   else
-    echo "### Done. You can now start T-Pot using 'systemctl start tpot' or 'docker compose up -d'."
-    echo "### Run with '-s' to have update.sh start it for you."
+    fuMARK phase "done" Done
+    fuUI_OK "Done. You can now start T-Pot using 'systemctl start tpot' or 'docker compose up -d'."
+    fuUI_HINT "Run with '-s' to have update.sh start it for you."
 fi
 echo

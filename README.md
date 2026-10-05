@@ -696,7 +696,7 @@ On the T-Pot Landing Page just click on `Elasticvue` and you will be forwarded t
 | `tpot ps [--watch [SECONDS]]` | containers with status and ports, `dps` / `dpsw` are short for it |
 | `tpot images` | Docker images, `dim` is short for it |
 | `tpot start` / `stop` / `restart` | `sudo systemctl … tpot` |
-| `tpot update [OPTIONS]` | runs `~/tpotce/update.sh` with your options, i.e. `tpot update -y` |
+| `tpot update [OPTIONS]` | runs `~/tpotce/update.sh` with your options, i.e. `tpot update -y`; the menu runs it with its phases and log on the *Update & backup* page |
 | `tpot restore [OPTIONS]` | runs `~/tpotce/restore.sh` with your options |
 | `tpot edition [list]` / `tpot edition set EDITION` | the editions, and switching to another one: T-Pot stops, `docker-compose.yml` is kept in `~/tpot_backups`, the edition takes its place, T-Pot starts again |
 | `tpot customize [OPTIONS]` | the [customizer](#customize-t-pot-honeypots-and-services) |
@@ -880,12 +880,18 @@ restore.sh -l                     # list the backups and what they hold
 restore.sh                        # restore from the newest one, asking per group
 restore.sh -f <archive> -y        # restore everything from this archive, no questions
 restore.sh -f <archive> -c        # only roll back the checkout and the configuration, no questions
+restore.sh -f <archive> -g config,data   # only these groups, no questions
 ```
 
 Without `-y` every group is offered separately, so you can bring back just the configuration
-without touching anything else. The groups are the rollback of the git checkout, your changes to
-tracked files, the configuration, your untracked files, the files under `data/`, and the Kibana
-objects with the ILM policy.
+without touching anything else. The groups are the rollback of the git checkout (`git`), your
+changes to tracked files (`patch`), the configuration (`config`), your untracked files
+(`untracked`), the files under `data/` (`data`), and the Kibana objects with the ILM policy
+(`elastic`); `-g` takes their names. *Restore a backup* on the *Update & backup* page of the `tpot`
+menu shows the archives with what they hold and lets you tick the groups, then runs
+`restore.sh -g` with its progress in the menu. `-B <file>` hands the sudo password over in a file
+(`update.sh` has it as well), which is how the menu runs both scripts without a terminal of their
+own.
 
 T-Pot is stopped for the file part and started again for the Kibana import, because that one needs
 a running instance. The files under `data/` are restored with the owner and mode from the archive

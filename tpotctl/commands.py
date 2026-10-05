@@ -18,8 +18,10 @@ class TpotCommands(Provider):
             yield "Start T-Pot", "sudo systemctl start tpot", partial(app.service, "start")
             yield "Stop T-Pot", "sudo systemctl stop tpot", partial(app.service, "stop")
             yield "Restart T-Pot", "sudo systemctl restart tpot", partial(app.service, "restart")
-            yield "Update T-Pot", "update.sh, writes a backup first", partial(app.script, "update.sh", ["-y"])
+            yield "Update T-Pot", "update.sh, writes a backup first", partial(app.run_update, ["-y"])
+            yield "Restore a backup", "restore.sh, the parts you choose", app.run_restore
         yield "Open the customizer", "edition and services", app.action_customize
+        yield "Refresh tpot's packages", "tpot setup", partial(app.goto, "update")
         if app.backend.linux_host():
             in_use = app.backend.edition_current()[0].lower()
             for choice in app.backend.editions():

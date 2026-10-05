@@ -57,6 +57,12 @@ if textual:
         def sudo_mode(self):
             return "passwordless"
 
+        def backup_infos(self):
+            return [ops.BackupInfo("/b/new_tpot_backup.tar", "new_tpot_backup.tar", 2 ** 20, "regular",
+                                   ["version: 24.04.2"], ["git", "config"]),
+                    ops.BackupInfo("/b/old_tpot_backup_full.tar", "old_tpot_backup_full.tar", 2 ** 30, "full",
+                                   ["version: 24.04.1"], ["config", "data"])]
+
         def editions(self):
             from tpotctl import editions
             return [editions.Choice("standard", "Hive", "Everything.", "HIVE", 16, 256, "/x/standard.yml"),
@@ -120,19 +126,59 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             await pilot.pause(0.2)
         self.assertEqual(runner.commands, [["sudo", "systemctl", "restart", "tpot"]])
 
-    async def test_update_runs_update_sh_and_restarts_the_app(self):
-        runner = Recorder()
-        app = tapp.TpotApp(backend=FakeBackend(), runner=runner)
+    async def test_update_runs_in_the_task_screen_and_restarts_the_app(self):
+        from tpotctl.screens.task import TaskScreen
+        FakeEngine.seen.clear()
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause(0.2)
             app.goto("update")
             await pilot.pause(0.2)
+            app.query_one("#update-full").value = True
             await pilot.click("#run-update")
-            await pilot.pause(0.2)
-            await pilot.click("#yes")
-            await pilot.pause(0.2)
-        self.assertEqual(runner.commands, [[os.path.join(cli.REPO_DIR, "update.sh"), "-y"]])
+            await pilot.pause(0.3)
+            self.assertIsInstance(app.screen, TaskScreen)
+            await pilot.click("#task-run")
+            await pilot.pause(0.4)
+            await pilot.click("#task-restart")
+            await pilot.pause(0.3)
+        self.assertEqual(FakeEngine.seen, [[os.path.join(cli.REPO_DIR, "update.sh"), "-y", "--full"]])
         self.assertEqual(app.return_value, "restart")
+
+    async def test_restore_chooses_the_archive_and_the_groups(self):
+        from tpotctl.screens.restore import RestoreScreen
+        from tpotctl.screens.task import TaskScreen
+        FakeEngine.seen.clear()
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.2)
+            app.goto("update")
+            await pilot.pause(0.2)
+            await pilot.click("#run-restore")
+            await pilot.pause(0.3)
+            self.assertIsInstance(app.screen, RestoreScreen)
+            screen = app.screen
+            self.assertFalse(screen.query_one("#group-data").display)          # not in the newest archive
+            self.assertTrue(screen.query_one("#group-config").display)
+            screen.query_one("#group-git").value = False
+            await pilot.click("#restore-go")
+            await pilot.pause(0.3)
+            self.assertIsInstance(app.screen, TaskScreen)
+        self.assertEqual(FakeEngine.seen,
+                         [[os.path.join(cli.REPO_DIR, "restore.sh"), "-f", "/b/new_tpot_backup.tar", "-g", "config"]])
+
+    async def test_refresh_runs_tpot_setup(self):
+        FakeEngine.seen.clear()
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.2)
+            app.goto("update")
+            await pilot.pause(0.2)
+            await pilot.click("#run-setup")
+            await pilot.pause(0.3)
+            await pilot.click("#task-run")
+            await pilot.pause(0.4)
+        self.assertEqual(FakeEngine.seen, [[tapp.LAUNCHER, "setup"]])
 
     async def test_edition_switch_runs_tpot_edition_set(self):
         from tpotctl.screens.task import TaskScreen

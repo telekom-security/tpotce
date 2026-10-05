@@ -783,3 +783,42 @@ Button.-error:disabled {
 #llm-result {
     margin: 1 0;
 }
+
+/* restore a backup (screens/restore.py) */
+
+#restore-body {
+    height: 1fr;
+    padding: 1 2;
+}
+
+.restore-intro {
+    margin: 1 0;
+}
+
+#restore-list {
+    height: auto;
+    max-height: 10;
+}
+
+#restore-manifest {
+    margin: 1 0;
+}
+
+#restore-groups Checkbox {
+    background: $background;
+    border: none;
+}
+
+#restore-nav {
+    height: auto;
+    padding: 0 2 1 2;
+}
+
+#restore-nav Button {
+    margin-left: 2;
+}
+
+#update-full {
+    background: $background;
+    border: none;
+}

@@ -227,3 +227,53 @@ def backups(home: Optional[str] = None) -> List[str]:
     except OSError:
         return []
     return sorted((os.path.join(folder, n) for n in names), key=os.path.getmtime, reverse=True)
+
+
+# The groups of an archive restore.sh can bring back (-g), with the questions it
+# asks for them; tests keep them the same as in restore.sh.
+GROUP_TEXT = {
+    "git": "Roll the checkout back to the commit before the update?",
+    "patch": "Re-apply all your changes to tracked files (tracked.patch)?",
+    "config": "Restore the configuration (.env and docker-compose.yml)?",
+    "untracked": "Restore your untracked files?",
+    "data": "Restore the files from data/ (certificates, uuid, host keys)?",
+    "elastic": "Import the Kibana objects and the ILM policy? T-Pot has to run for that.",
+}
+_GROUP_MEMBER = {"git": "rollback.txt", "patch": "tracked.patch", "config": "env", "untracked": "untracked/",
+                 "data": "data/", "elastic": "elastic/"}
+
+
+@dataclass
+class BackupInfo:
+    path: str
+    name: str
+    size: int
+    kind: str                       # full | regular
+    manifest: List[str]
+    groups: List[str]
+    problem: str = ""
+
+
+def backup_info(path: str) -> BackupInfo:
+    """What an archive of update.sh holds, read like restore.sh does."""
+    import tarfile
+    name = os.path.basename(path)
+    kind = "full" if "_full" in name else "regular"
+    try:
+        size = os.path.getsize(path)
+    except OSError:
+        size = 0
+    try:
+        with tarfile.open(path) as archive:
+            members = archive.getnames()
+            manifest = []
+            if "MANIFEST" in members:
+                handle = archive.extractfile("MANIFEST")
+                manifest = handle.read().decode("utf-8", "replace").splitlines()[1:8] if handle else []
+    except (OSError, tarfile.TarError) as err:
+        return BackupInfo(path, name, size, kind, [], [], f"cannot read it: {err}")
+    groups = []
+    for group, member in _GROUP_MEMBER.items():
+        if any(m == member or (member.endswith("/") and m.startswith(member)) for m in members):
+            groups.append(group)
+    return BackupInfo(path, name, size, kind, manifest, groups)

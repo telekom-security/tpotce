@@ -16,8 +16,8 @@ from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.widgets import (Button, ContentSwitcher, DataTable, Footer, Label, ListItem, ListView, OptionList,
-                             Static, TabbedContent, TabPane)
+from textual.widgets import (Button, Checkbox, ContentSwitcher, DataTable, Footer, Label, ListItem, ListView,
+                             OptionList, Static, TabbedContent, TabPane)
 from textual.widgets.option_list import Option
 
 from tpotctl import glyphs, logo, ops, prefs, theme
@@ -50,6 +50,9 @@ class Backend:
 
     def backups(self) -> List[str]:
         return ops.backups()
+
+    def backup_infos(self):
+        return [ops.backup_info(path) for path in ops.backups()]
 
     def settings(self):
         from tpotctl import settings
@@ -1022,6 +1025,9 @@ class UpdatePane(Vertical):
             yield Button("Update and start", id="run-update-start")
             yield Button("Restore a backup", id="run-restore")
             yield Button("Uninstall ...", id="run-uninstall", variant="error")
+        with Horizontal(classes="actions"):
+            yield Checkbox("Full backup with data/ (for a newer Elastic Stack)", False, id="update-full")
+            yield Button("Refresh tpot's packages", id="run-setup")
         yield DataTable(id="backups", cursor_type="row")
 
     def on_mount(self) -> None:
@@ -1043,12 +1049,19 @@ class UpdatePane(Vertical):
             table.add_row(os.path.basename(path), size)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
+        full = ["--full"] if self.query_one("#update-full", Checkbox).value else []
         if event.button.id == "run-update":
-            self.app.script("update.sh", ["-y"])
+            self.app.run_update(["-y"] + full)
         elif event.button.id == "run-update-start":
-            self.app.script("update.sh", ["-y", "-s"])
+            self.app.run_update(["-y", "-s"] + full)
         elif event.button.id == "run-restore":
-            self.app.script("restore.sh", [])
+            self.app.run_restore()
+        elif event.button.id == "run-setup":
+            from tpotctl.screens.task import Task
+            self.app.run_task(Task("Refresh the Python packages of tpot", [LAUNCHER, "setup"],
+                                   intro="tpot setup installs the pinned packages of tpot into its venv again.",
+                                   done="The packages of tpot are fresh, start tpot anew to use them.",
+                                   restart_tpot=True))
         elif event.button.id == "run-uninstall":
             from tpotctl.screens.uninstall import UninstallScreen
             # uninstall.sh removes tpot itself, the app ends and hands over to it
@@ -1251,17 +1264,31 @@ class TpotApp(App):
         if self.backend.linux_host():
             self.service("restart")
 
-    def script(self, name: str, args: List[str]) -> None:
-        what = {"update.sh": "Update T-Pot? update.sh stops T-Pot and writes a backup first.",
-                "restore.sh": "Restore a backup? restore.sh asks what to bring back."}[name]
+    def run_update(self, args: List[str]) -> None:
+        """update.sh in the task screen; the checkout below this app changes, so tpot starts anew."""
+        from tpotctl.screens.task import Task
+        intro = Text("update.sh stops T-Pot, writes a backup to ~/tpot_backups, pulls the release of your "
+                     "branch and puts your edition and settings back.", style=theme.color("glass"))
+        if "-s" in args:
+            intro.append(" T-Pot starts again afterwards.", style=theme.color("glass"))
+        self.run_task(Task("Update T-Pot", ops.script_command("update.sh", args), become="-B", intro=intro,
+                           done="T-Pot is updated, start tpot anew for its new version.", restart_tpot=True))
 
-        def confirmed(yes: bool) -> None:
-            if yes:
-                self.runner(ops.script_command(name, args), cwd=REPO_DIR)
-                # the checkout below this app may have changed, start it anew
-                self.exit("restart")
+    def run_restore(self) -> None:
+        from tpotctl.screens.restore import RestoreScreen
+        from tpotctl.screens.task import Task
 
-        self.push_screen(ConfirmDialog(what, yes="Run"), confirmed)
+        def chosen(choice) -> None:
+            if not choice:
+                return
+            path, groups = choice
+            self.run_task(Task("Restore a backup", ops.script_command("restore.sh", ["-f", path, "-g",
+                                                                                      ",".join(groups)]),
+                               become="-B", autostart=True, done="The backup is restored.",
+                               restart_tpot=bool({"git", "patch"} & set(groups))),
+                          lambda _code: self.query_one("#update", UpdatePane).show())
+
+        self.push_screen(RestoreScreen(self.backend.backup_infos()), chosen)
 
     def llm_action(self, what: str, service: str) -> None:
         """From the palette: the LLM page, the tab of the honeypot, then find or test."""
