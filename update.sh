@@ -883,8 +883,10 @@ function fuCHECK_ELASTIC () {
 	if [ -t 0 ] && [ -t 1 ];
 	  then
 	    fuUI_HINT "Press Ctrl+C to stop here and copy it first, continuing in 15 seconds ..."
+	    # Ctrl+C reaches bash and sleep at once: the trap or the status of the interrupted sleep
+	    # stops the run, whichever bash sees first
 	    trap fuELASTIC_STOPPED INT
-	    sleep 15
+	    sleep 15 || fuELASTIC_STOPPED
 	    trap - INT
 	fi
 	echo
