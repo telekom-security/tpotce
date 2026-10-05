@@ -1546,15 +1546,21 @@ class TpotApp(App):
                 continue
             key, page = problem.key, "settings"
             if key in fixes:
-                declined = key in getattr(pane.first(), "declined", ()) if pane else False
-                fix = f"Set it to {fixes[key]} on the Settings page (palette: Fix {key})" if declined else \
-                    f"Settings has {fixes[key]} ready, Save it"
-                if fixes[key] != "linux":
+                value, page_pane = fixes[key], pane.first() if pane else None
+                if page_pane is not None and getattr(page_pane, "draft", {}).get(key) == value:
+                    fix = f"Settings has {value} ready, Save it"
+                elif key in getattr(page_pane, "declined", ()):
+                    fix = f"Set it to {value} on the Settings page (palette: Fix {key})"
+                else:           # not loaded yet, or a value of your own in the draft
+                    fix = f"Set it to {value} on the Settings page"
+                if value != "linux":
                     try:
                         in_use = self.backend.edition_current()[0].lower()
                     except Exception:
-                        in_use = ""
-                    if in_use != "mac_win":
+                        in_use = None
+                    if in_use is None:
+                        fix += " (Docker Desktop runs the MAC_WIN edition)"
+                    elif in_use != "mac_win":
                         fix += " and switch to the MAC_WIN edition on Edition & services"
             elif key == "WEB_USER":
                 fix, page = "Add one on the Web users page (tpot users add)", "users"

@@ -655,6 +655,33 @@ class StartProblemsTest(SettingsHelpersBase):
             self.assertTrue(self.app.is_running)
             self.assertIs(self.app.screen, dialog)
 
+    async def test_ready_only_when_the_draft_holds_it(self):
+        with mock.patch.dict(os.environ, {"TPOT_HOST_OSTYPE": "mac"}):
+            async with self.app.run_test(size=(150, 50)) as pilot:
+                pane = await self.open_settings(pilot)
+
+                def fix():
+                    return next(p.fix for p in self.app.start_problems() if p.key == "TPOT_OSTYPE")
+                self.assertIn("ready", fix())
+                pane.query_one("#set-TPOT_OSTYPE").value = "win"           # your own value, not saved
+                await pilot.pause(0.3)
+                self.assertNotIn("ready", fix())
+                self.assertIn("Set it to mac", fix())
+                pane.query_one("#set-TPOT_OSTYPE").value = "mac"
+                await pilot.pause(0.3)
+                self.assertIn("ready", fix())
+
+    async def test_mac_win_hint_when_the_edition_is_unknown(self):
+        def unknown():
+            raise OSError("no compose file")
+        with mock.patch.dict(os.environ, {"TPOT_HOST_OSTYPE": "mac"}):
+            async with self.app.run_test(size=(150, 50)) as pilot:
+                await self.open_settings(pilot)
+                self.app.backend.edition_current = unknown
+                fix = next(p.fix for p in self.app.start_problems() if p.key == "TPOT_OSTYPE")
+        self.assertIn("Docker Desktop runs the MAC_WIN edition", fix)
+        self.assertNotIn("switch to", fix)
+
     async def test_quit_anyway(self):
         with mock.patch.dict(os.environ, {"TPOT_HOST_OSTYPE": "mac"}):
             async with self.app.run_test(size=(150, 50)) as pilot:
