@@ -9,6 +9,7 @@ glyphs.py and logo.py, the user's choice of it in prefs.py.
 import os
 import subprocess
 import sys
+from dataclasses import dataclass
 from typing import Callable, Dict, Iterable, List, Optional, Set
 
 from rich.text import Text
@@ -428,6 +429,15 @@ class EditionPane(Vertical):
                 self.app.switch_edition(choice.key)
 
 
+@dataclass
+class StartProblem:
+    """A value of the saved .env T-Pot would not start with, where to fix it and on which page."""
+    key: str
+    text: str
+    fix: str
+    page: str
+
+
 class SettingsForm(VerticalScroll, inherit_bindings=False):
     """The settings of one tab; the arrows move between the settings (widgets/nav.py), the form
     scrolls to the one with the focus."""
@@ -558,12 +568,12 @@ class SettingsPane(Vertical):
             if key in self.rows and key not in self.unlocked:
                 # unlocked again in the background: the focus stays where the person is
                 await self.unlock(self.rows[key], focus=False)
-        if fixes and not self.fix_told:
+        if self.id == "settings" and not self.fix_told:
+            # once a run: every value T-Pot would not start with, and where to fix it
             self.fix_told = True
-            for key, value in fixes.items():
-                self.app.notify(f"{key} is {self.current.values.get(key, 'linux')}, this host runs "
-                                f"{ops.OSTYPE_TEXT[value]}. Settings has {value} ready to save.",
-                                title="Settings", timeout=10)
+            for problem in self.app.start_problems():
+                self.app.notify(f"{problem.key} {problem.text}. {problem.fix}.", title="T-Pot would not start",
+                                severity="error", timeout=12)
         self.call_after_refresh(self.check)
         self.loaded()
 
@@ -1477,6 +1487,39 @@ class TpotApp(App):
         if current is None:
             return []
         return [(rule.key, rule.title) for rule in current.relevant()]
+
+    def start_problems(self) -> List[StartProblem]:
+        """The errors of the saved .env (what tpotinit would refuse), each with the way to fix it."""
+        from tpotctl.settings import MANAGED_BY
+        pane = self.query("#settings")
+        current = getattr(pane.first(), "current", None) if pane else None
+        try:
+            current = current if current is not None else self.backend.settings()
+            problems = current.problems()
+        except Exception:      # SettingsError, OSError: the Settings page says so itself
+            return []
+        fixes, found = current.fixes(), {}
+        for problem in problems:
+            if problem.level != "error" or problem.key in found:
+                continue
+            key, page = problem.key, "settings"
+            if key in fixes:
+                fix = f"Settings has {fixes[key]} ready, Save it"
+                if fixes[key] != "linux":
+                    try:
+                        in_use = self.backend.edition_current()[0].lower()
+                    except Exception:
+                        in_use = ""
+                    if in_use != "mac_win":
+                        fix += " and switch to the MAC_WIN edition on Edition & services"
+            elif key == "WEB_USER":
+                fix, page = "Add one on the Web users page (tpot users add)", "users"
+            elif key in MANAGED_BY:
+                fix, page = f"It is managed with {MANAGED_BY[key]}", "sensors"
+            else:
+                fix = "Fix it on the Settings page"
+            found[key] = StartProblem(key, problem.text, fix, page)
+        return list(found.values())
 
     def setting_fixes(self):
         """{key: value} of fixed settings that do not fit this host (TPOT_OSTYPE)."""

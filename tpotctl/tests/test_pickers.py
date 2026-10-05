@@ -246,6 +246,10 @@ class SettingsHelpersBase(unittest.IsolatedAsyncioTestCase):
             def settings(self):
                 return settings.load(repo, host_ostype=self.host_ostype())
 
+            def edition_current(self):
+                from tpotctl import editions
+                return editions.current(repo)
+
             def system(self):
                 return None
 
@@ -571,6 +575,36 @@ class StartProblemsTest(SettingsHelpersBase):
             badge = [span for span in tab.label.spans if " on " in str(span.style)]
             self.assertTrue(badge, tab.label.spans)
             self.assertIn("WEB_USER", str(pane.query_one("#settings-status").render()))
+
+    def notes(self):
+        notes = []
+        self.app.notify = lambda message, **kwargs: notes.append((kwargs.get("title"), message))
+        return notes
+
+    async def test_one_notice_per_start_problem(self):
+        notes = self.notes()
+        with mock.patch.dict(os.environ, {"TPOT_HOST_OSTYPE": "mac"}):
+            async with self.app.run_test(size=(150, 50)) as pilot:
+                await self.open_settings(pilot)
+                await pilot.pause(0.3)
+        start = [m for t, m in notes if t == "T-Pot would not start"]
+        self.assertEqual(len(start), 2, start)
+        self.assertTrue(any("TPOT_OSTYPE" in m and "Save" in m and "MAC_WIN" in m for m in start), start)
+        self.assertTrue(any("WEB_USER" in m and "Web users" in m for m in start), start)
+
+    async def test_no_notice_on_a_fine_linux_host(self):
+        from tpotctl.tests.test_settings import WEB_USER
+        env = os.path.join(self.repo, ".env")
+        with open(env, encoding="utf-8") as handle:
+            text = handle.read().replace("WEB_USER=\n", f"WEB_USER={WEB_USER}\n", 1)
+        with open(env, "w", encoding="utf-8") as out:
+            out.write(text)
+        notes = self.notes()
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            await self.open_settings(pilot)
+            await pilot.pause(0.3)
+            self.assertEqual(self.app.start_problems(), [])
+        self.assertFalse([m for t, m in notes if t == "T-Pot would not start"], notes)
 
     async def test_focused_problem_row_keeps_the_error_colour(self):
         from textual.color import Color
