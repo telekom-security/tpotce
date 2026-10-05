@@ -799,6 +799,8 @@ function fuROLLBACK_CHECKOUT () {
 	    fuUI_ERROR "The checkout and the configuration could not be put back completely, see above. The backup is ${myARCHIVE}."
 	    return 1
 	fi
+	# the checkout is the one before this update again, tpot needs no restart for it
+	fuMARK changed back
 }
 
 # Elasticsearch and Kibana upgrade their data in place on the first start of a

@@ -135,6 +135,14 @@ class UpdateShTest(Harness):
         self.assertTrue("could not be put back completely" in text)
         self.assertNotIn("-B", self.args_of(text))
 
+    def test_rollback_marks_the_old_checkout(self):
+        text = self.rollback(self.RESTORE_NOW.replace("exit 1", "exit 0"))
+        self.assertIn("rc=0", text)
+        self.assertIn("@@tpot changed back", text)
+
+    def test_a_failed_rollback_does_not_say_back(self):
+        self.assertNotIn("@@tpot changed back", self.rollback(self.RESTORE_NOW))
+
     def test_rollback_hands_the_become_file_on(self):
         text = self.rollback(self.RESTORE_NOW, become="/run/tpot-become")
         self.assertIn("-c -B /run/tpot-become", self.args_of(text))

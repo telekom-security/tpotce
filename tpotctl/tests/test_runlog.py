@@ -48,6 +48,14 @@ class RunTest(unittest.TestCase):
         self.assertEqual(run.failed, {"config"})
         self.assertEqual([key for key, _title in run.phases], ["git", "config"])
 
+    def test_changed_back(self):
+        run = runlog.Run()
+        for line in ("@@tpot changed checkout", "@@tpot changed back"):
+            run.feed(line)
+        self.assertFalse(run.checkout_changed)
+        run.feed("@@tpot changed checkout")
+        self.assertTrue(run.checkout_changed)
+
     def test_plain_lines_are_kept_marks_are_not(self):
         run = runlog.Run()
         run.feed("hello\n")

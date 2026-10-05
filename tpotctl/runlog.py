@@ -3,7 +3,7 @@
 `@@tpot phase <key> [title ...]` starts a phase, `@@tpot warn <key> <text ...>` is a
 warning to show at the end, `@@tpot fail <key>` says that phase failed (the run goes
 on) and `@@tpot changed checkout` that ~/tpotce changed, so tpot should start anew
-even if the run fails later; installer.Progress reads its own marks (tasks, images)
+even if the run fails later (`@@tpot changed back`: it is the one before the run again); installer.Progress reads its own marks (tasks, images)
 on top. Every other line is output of the script and kept for the log view.
 """
 
@@ -50,3 +50,5 @@ class Run:
             self.failed.add(words[0])
         elif what == "changed" and words == ["checkout"]:
             self.checkout_changed = True
+        elif what == "changed" and words == ["back"]:
+            self.checkout_changed = False
