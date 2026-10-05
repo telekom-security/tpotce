@@ -604,7 +604,10 @@ class SettingsPane(Vertical):
                 continue
             label = Text(title)
             if errors_in.get(section):
-                label.append(f" {glyphs.g('fail')} {errors_in[section]}", style=f"bold {theme.color('error')}")
+                # a badge: readable on the magenta of the focused tab too
+                label.append(" ")
+                label.append(f" {glyphs.g('fail')} {errors_in[section]} ",
+                             style=f"bold {theme.color('glass')} on {theme.color('error')}")
             tab.label = label
         blocking = self.current.blocking(problems, changes)
         self.query_one(f"#{self.PREFIX}-save", Button).disabled = not changes or bool(blocking)
@@ -616,10 +619,10 @@ class SettingsPane(Vertical):
             status.append(f"  {', '.join(changes)}", style=theme.color("mist"))
         else:
             status.append(self.current.path.replace(os.path.expanduser("~"), "~", 1), style=theme.color("mist"))
-        others = [p for p in problems if p.level == "error" and p.key not in changes]
+        others = list(dict.fromkeys(p.key for p in problems if p.level == "error" and p.key not in changes))
         if others:
-            status.append(f"\n{glyphs.g('fail')} T-Pot would not start with {len(others)} of the values, "
-                          f"they are marked", style=theme.color("error"))
+            names = ", ".join(others[:4]) + (", ..." if len(others) > 4 else "")
+            status.append(f"\n{glyphs.g('fail')} T-Pot would not start: {names}", style=theme.color("error"))
         self.query_one(f"#{self.PREFIX}-status", Static).update(status)
 
     def on_setting_row_changed(self, event) -> None:

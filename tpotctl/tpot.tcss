@@ -249,6 +249,15 @@ Screen.-short #containers {
     border: round $primary;
 }
 
+/* focus on a row with a problem: the colour keeps saying what is wrong, the heavy line says where you are */
+.setting.-problem:focus-within {
+    border: heavy $error;
+}
+
+.setting.-warning:focus-within {
+    border: heavy $warning;
+}
+
 .setting:focus-within .setting-title {
     color: $primary;
 }

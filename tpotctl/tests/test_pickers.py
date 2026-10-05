@@ -560,6 +560,33 @@ class SettingsHelpersTest(SettingsHelpersBase):
 
 
 @unittest.skipUnless(textual and yaml, "Textual is not installed, run with the venv of tpot")
+class StartProblemsTest(SettingsHelpersBase):
+    """What T-Pot would not start with (WEB_USER is empty in the LLM checkout): readable marks,
+    a notice per value, the warning on q."""
+
+    async def test_error_badge_has_its_own_background(self):
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            pane = await self.open_settings(pilot)
+            tab = pane.query_one("#settings-tabs").get_tab("tab-base")      # the section of WEB_USER
+            badge = [span for span in tab.label.spans if " on " in str(span.style)]
+            self.assertTrue(badge, tab.label.spans)
+            self.assertIn("WEB_USER", str(pane.query_one("#settings-status").render()))
+
+    async def test_focused_problem_row_keeps_the_error_colour(self):
+        from textual.color import Color
+        from tpotctl import theme
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            pane = await self.open_settings(pilot)
+            row = pane.rows["WEB_USER"]
+            row.focus()
+            await pilot.pause(0.2)
+            kind, colour = row.styles.border_top
+            self.assertEqual(kind, "heavy")
+            want = Color.parse(theme.color("error")).rgb
+            self.assertTrue(all(abs(a - b) <= 3 for a, b in zip(colour.rgb, want)), (colour.rgb, want))  # css rounds
+
+
+@unittest.skipUnless(textual and yaml, "Textual is not installed, run with the venv of tpot")
 class SettingsDraftTest(SettingsHelpersBase):
     """A save on one of Settings / LLM keeps the unsaved changes of the other."""
 
