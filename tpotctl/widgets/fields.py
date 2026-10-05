@@ -25,6 +25,22 @@ class TpotSelect(Select, inherit_bindings=False):
 
     BINDINGS = [Binding("enter,space", "show_overlay", "Choose", show=False)]
 
+    def _on_mount(self, event) -> None:
+        # On a busy page Textual can mount the Select before its SelectCurrent has its label,
+        # and setting the value then fails (NoMatches #label). So the value comes once the
+        # label is there: what Select._on_mount does, a refresh later if need be.
+        event.prevent_default()
+        self._set_initial_value()
+
+    def _set_initial_value(self) -> None:
+        if not self.is_attached:
+            return
+        if not self.query("SelectCurrent #label"):
+            self.call_after_refresh(self._set_initial_value)
+            return
+        self._setup_options_renderables()
+        self._init_selected_option(self._value)
+
 
 class SettingRow(Vertical):
     """Title and key, the control, help, the problems of the key."""
@@ -189,6 +205,8 @@ class SettingRow(Vertical):
         return text
 
     def mark(self, changed: bool, problems) -> None:
+        if not self.query(f"#err-{self.rule.key}"):
+            return      # still composing (a reload of the page is under way)
         if changed != self.has_class("-changed"):
             self.query_one(".setting-title", Label).update(self.title_text(changed))
         self.set_class(changed, "-changed")

@@ -216,8 +216,8 @@ def make_llm_checkout(test):
     return tmp.name
 
 
-@unittest.skipUnless(textual and yaml, "Textual is not installed, run with the venv of tpot")
-class SettingsHelpersTest(unittest.IsolatedAsyncioTestCase):
+class SettingsHelpersBase(unittest.IsolatedAsyncioTestCase):
+    """The app of the settings tests on an LLM checkout, no tests of its own."""
 
     async def asyncSetUp(self):
         from tpotctl import app as tapp, events, ops, settings
@@ -258,6 +258,17 @@ class SettingsHelpersTest(unittest.IsolatedAsyncioTestCase):
         self.app.goto("settings")
         await pilot.pause(0.4)
         return self.app.query_one("#settings")
+
+    async def open_llm(self, pilot):
+        await pilot.pause(0.3)
+        self.app.goto("llm")
+        await pilot.pause(0.4)
+        return self.app.query_one("#llm")
+
+
+
+@unittest.skipUnless(textual and yaml, "Textual is not installed, run with the venv of tpot")
+class SettingsHelpersTest(SettingsHelpersBase):
 
     async def test_pull_policy_with_a_value_of_your_own(self):
         from tpotctl.widgets.fields import OTHER
@@ -384,12 +395,6 @@ class SettingsHelpersTest(unittest.IsolatedAsyncioTestCase):
                 await pilot.pause(0.3)
                 self.assertEqual(pane.changes().get(key), url)
 
-    async def open_llm(self, pilot):
-        await pilot.pause(0.3)
-        self.app.goto("llm")
-        await pilot.pause(0.4)
-        return self.app.query_one("#llm")
-
     async def test_llm_page_has_both_honeypots(self):
         shutil.copy(os.path.join(REPO_DIR, "compose", "standard.yml"), os.path.join(self.repo, "docker-compose.yml"))
         async with self.app.run_test(size=(150, 50)) as pilot:
@@ -465,12 +470,25 @@ class SettingsHelpersTest(unittest.IsolatedAsyncioTestCase):
             await pilot.pause(0.3)
             self.assertEqual(settings.draft.get("GALAH_LLM_MODEL"), "qwen3")
 
+    async def test_reloads_do_not_overlap(self):
+        import asyncio
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            pane = await self.open_settings(pilot)
+            pane.include_all = True
+            await asyncio.gather(pane.reload(), pane.reload(), pane.reload())
+            await pilot.pause(0.5)
+            self.assertIn("TPOT_HIVE_IP", pane.rows)
+            self.assertEqual(len(pane.query("#row-TPOT_HIVE_IP")), 1)
+
     async def test_all_settings_checkbox_adds_the_rest(self):
         async with self.app.run_test(size=(150, 50)) as pilot:
             pane = await self.open_settings(pilot)
             self.assertNotIn("TPOT_HIVE_IP", pane.rows)              # SENSOR only
             self.app.query_one("#settings-all").value = True
-            await pilot.pause(0.6)
+            for _wait in range(30):           # the page reloads, slower under load
+                await pilot.pause(0.1)
+                if "TPOT_HIVE_IP" in pane.rows:
+                    break
             self.assertIn("TPOT_HIVE_IP", pane.rows)
 
     async def test_secret_can_be_shown(self):
@@ -537,6 +555,58 @@ class SettingsHelpersTest(unittest.IsolatedAsyncioTestCase):
             await pilot.pause(0.3)
             self.assertTrue(select.expanded)
             self.assertEqual(select.outer_size.height, 1)
+
+
+@unittest.skipUnless(textual and yaml, "Textual is not installed, run with the venv of tpot")
+class SettingsDraftTest(SettingsHelpersBase):
+    """A save on one of Settings / LLM keeps the unsaved changes of the other."""
+
+    async def save_llm_model(self, pilot, model):
+        llm_pane = self.app.query_one("#llm")
+        self.app.goto("llm")
+        await pilot.pause(0.4)
+        llm_pane.query_one("#llm-tabs").active = "tab-galah"
+        await pilot.pause(0.3)
+        llm_pane.query_one("#set-GALAH_LLM_MODEL").value = model
+        await pilot.pause(0.3)
+        await pilot.click("#llm-save")
+        await pilot.pause(0.6)
+        if self.app.screen.query("#no"):
+            await pilot.click("#no")
+            await pilot.pause(0.3)
+
+    async def test_draft_of_the_other_page_survives(self):
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            settings = await self.open_settings(pilot)
+            settings.query_one("#set-TPOT_ATTACKMAP_TEXT_TIMEZONE").value = "Europe/Berlin"
+            await pilot.pause(0.3)
+            await self.save_llm_model(pilot, "qwen3")
+            self.assertEqual(settings.changes().get("TPOT_ATTACKMAP_TEXT_TIMEZONE"), "Europe/Berlin")
+            self.assertEqual(settings.draft.get("GALAH_LLM_MODEL"), "qwen3")   # what was saved is there
+
+    async def test_the_saved_value_wins_and_says_so(self):
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            settings = await self.open_settings(pilot)
+            self.app.goto_setting("GALAH_LLM_MODEL")
+            await pilot.pause(0.3)
+            settings.query_one("#set-GALAH_LLM_MODEL").value = "mistral"
+            await pilot.pause(0.3)
+            notes = []
+            self.app.notify = lambda message, **kwargs: notes.append(message)
+            await self.save_llm_model(pilot, "qwen3")
+            self.assertNotIn("GALAH_LLM_MODEL", settings.changes())
+            self.assertTrue(any("GALAH_LLM_MODEL" in n for n in notes))
+
+    async def test_unlocked_draft_survives_a_save_elsewhere(self):
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            settings = await self.open_settings(pilot)
+            await settings.unlock(settings.rows["TPOT_DATA_PATH"])
+            await pilot.pause(0.2)
+            settings.query_one("#set-TPOT_DATA_PATH").value = "/srv/tpot-data"
+            await pilot.pause(0.3)
+            await self.save_llm_model(pilot, "qwen3")
+            self.assertIn("TPOT_DATA_PATH", settings.unlocked)
+            self.assertEqual(settings.changes().get("TPOT_DATA_PATH"), "/srv/tpot-data")
 
 
 if __name__ == "__main__":

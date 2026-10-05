@@ -9,7 +9,7 @@ glyphs.py and logo.py, the user's choice of it in prefs.py.
 import os
 import subprocess
 import sys
-from typing import Callable, List, Optional
+from typing import Callable, Dict, Iterable, List, Optional, Set
 
 from rich.text import Text
 from textual import work
@@ -489,12 +489,34 @@ class SettingsPane(Vertical):
         self.unlocked = set()
         await self.reload()
 
-    async def reload(self) -> None:
+    async def reload(self, keep: Optional[Dict[str, str]] = None, keep_unlocked: Iterable[str] = ()) -> None:
+        """.env anew; keep: unsaved changes that stay (a save on the other settings page), keep_unlocked:
+        the keys of them that were unlocked. One after the other: a second reload while the rows of
+        the first one still mount would remove them under their feet."""
+        if not hasattr(self, "_reloading"):
+            import asyncio
+            self._reloading = asyncio.Lock()
+        async with self._reloading:
+            await self._reload(keep, keep_unlocked)
+
+    async def _reload(self, keep: Optional[Dict[str, str]], keep_unlocked: Iterable[str]) -> None:
         from tpotctl.settings import SettingsError
         from tpotctl.widgets.fields import SettingRow
+        import asyncio
+        from textual.widgets import Select
         tabs = self.query_one(f"#{self.PREFIX}-tabs", TabbedContent)
         active = tabs.active
+        # a Select still mounting (the reload before) cannot be removed under its feet
+        for _wait in range(200):
+            if all(select.is_mounted for select in tabs.query(Select)):
+                break
+            await asyncio.sleep(0.01)
         await tabs.clear_panes()
+        # the tab headers go a moment after the panes, a new one of the same id would clash
+        for _wait in range(100):
+            if not tabs.query("ContentTab"):
+                break
+            await asyncio.sleep(0.01)
         self.rows = {}
         try:
             self.current = self.app.backend.settings()
@@ -503,6 +525,7 @@ class SettingsPane(Vertical):
             self.query_one(f"#{self.PREFIX}-status", Static).update(Text(str(err), style=theme.color("error")))
             return
         self.draft = dict(self.current.values)
+        self.draft.update(keep or {})
         self.unlocked = set()
         by_section = {}
         for rule in self.current.relevant(include_all=self.include_all, offered=True):
@@ -518,6 +541,9 @@ class SettingsPane(Vertical):
                                             id=f"tab-{section}"))
         if active and active in [f"tab-{section}" for section in by_section]:
             tabs.active = active
+        for key in keep_unlocked:
+            if key in self.rows:
+                await self.unlock(self.rows[key])
         self.call_after_refresh(self.check)
         self.loaded()
 
@@ -691,13 +717,14 @@ class SettingsPane(Vertical):
         if event.button.id == f"{self.PREFIX}-revert":
             await self.reload()
         elif event.button.id == f"{self.PREFIX}-save":
+            saved = self.changes()
             try:
-                self.current.change(self.changes(), unlocked=self.unlocked)
+                self.current.change(saved, unlocked=self.unlocked)
             except SettingsError as err:
                 self.app.notify(str(err), title="Not saved", severity="error", timeout=10)
                 return
             await self.reload()
-            await self.app.settings_saved(self)
+            await self.app.settings_saved(self, set(saved))
             if self.app.backend.linux_host():
                 self.app.push_screen(ConfirmDialog("Saved. Restart T-Pot now, so that it uses the new settings?",
                                                    yes="Restart", no="Later"),
@@ -1523,11 +1550,20 @@ class TpotApp(App):
                 pane.query_one("#llm-test", Button).press()
         self.call_after_refresh(run)
 
-    async def settings_saved(self, source) -> None:
-        """The Settings and the LLM page show the same .env, a save on one reloads the other."""
+    async def settings_saved(self, source, saved_keys: Set[str]) -> None:
+        """The Settings and the LLM page show the same .env, a save on one reloads the other. Its
+        unsaved changes stay, but a value just saved replaces an unsaved one of the same key."""
+        titles = dict((key, title) for key, title, *_rest in PANES)
         for pane in self.query(SettingsPane):
-            if pane is not source:
-                await pane.reload()
+            if pane is source:
+                continue
+            own = pane.changes()
+            keep = {key: value for key, value in own.items() if key not in saved_keys}
+            lost = sorted(set(own) & saved_keys)
+            await pane.reload(keep=keep, keep_unlocked=pane.unlocked & set(keep))
+            if lost:
+                self.notify(f"{', '.join(lost)}: the value just saved replaces the unsaved one on the "
+                            f"{titles.get(pane.id, pane.id)} page", title="Settings", timeout=8)
 
     def customize_with(self, service: str) -> None:
         """The customizer with a service added to the edition in use."""
