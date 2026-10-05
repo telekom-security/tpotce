@@ -94,6 +94,13 @@ class EngineTest(unittest.TestCase):
         self.assertEqual(len(lines), 2)
         self.assertIn("end", lines[0])
 
+    def test_child_runs_in_a_session_of_its_own(self):
+        """sudo of a child must not reach the terminal of the menu (no /dev/tty)."""
+        from tpotctl.engine import Engine
+        lines = []
+        Engine(["python3", "-c", "import os; print(os.getsid(0))"]).run(lines.append)
+        self.assertNotEqual(int(lines[0]), os.getsid(0))
+
     def test_missing_command(self):
         from tpotctl.engine import Engine
         lines = []
