@@ -232,6 +232,69 @@ class RestoreShTest(Harness):
         self.assertEqual(result.returncode, 0)
         self.assertFalse("Not restored" in result.stdout + result.stderr)
 
+    def fake(self, name, text):
+        path = os.path.join(self.bin, name)
+        with open(path, "w", encoding="utf-8") as out:
+            out.write(text)
+        os.chmod(path, 0o755)
+
+    def git_checkout_with_a_patch(self):
+        """~/tpotce as a git repository with one tracked file and an archive whose patch changes it."""
+        git = ["git", "-C", self.tpotce, "-c", "user.email=t@t", "-c", "user.name=t"]
+        subprocess.run(["git", "init", "-q", self.tpotce], check=True)
+        with open(os.path.join(self.tpotce, "a.txt"), "w", encoding="utf-8") as out:
+            out.write("one\n")
+        subprocess.run(git + ["add", "a.txt"], check=True)
+        subprocess.run(git + ["commit", "-q", "-m", "one"], check=True)
+        patch = "diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-one\n+two\n"
+        return make_backup(self.home, {"MANIFEST": MANIFEST, "tracked.patch": patch},
+                           name="20261005131313_tpot_backup.tar")
+
+    def test_a_patch_that_does_not_apply_after_the_check_ends_with_1(self):
+        archive = self.git_checkout_with_a_patch()
+        real = shutil.which("git")
+        self.fake("git", f'#!/bin/sh\nfor a in "$@"; do [ "$a" = "--check" ] && exec "{real}" "$@"; done\n'
+                         f'for a in "$@"; do [ "$a" = "apply" ] && {{ echo "error: simulated" >&2; exit 1; }}; done\n'
+                         f'exec "{real}" "$@"\n')
+        result = self.restore("-f", archive, "-g", "patch")
+        text = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 1, text[-400:])
+        self.assertTrue("Not restored: patch." in text, text[-400:])
+        kept = os.listdir(os.path.join(self.home, "tpot_backups"))
+        self.assertTrue(any(name.endswith("_tracked.patch") for name in kept), kept)
+
+    def test_an_unreadable_elastic_folder_ends_with_1(self):
+        archive = make_backup(self.home, {"MANIFEST": MANIFEST, "elastic/kibana_export.ndjson": "{}\n"},
+                              name="20261005141414_tpot_backup.tar")
+        real = shutil.which("tar")
+        self.fake("tar", f'#!/bin/sh\n[ "$1" = "xf" ] && [ "$5" = "elastic" ] && '
+                         f'{{ echo "tar: simulated" >&2; exit 2; }}\nexec "{real}" "$@"\n')
+        self.fake("curl", "#!/bin/sh\nexit 0\n")          # a Kibana that answers, nothing leaves the host
+        result = self.restore("-f", archive, "-g", "elastic", env={"TPOT_KIBANA_TIMEOUT": "0"})
+        text = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 1, text[-400:])
+        self.assertTrue("Could not read elastic/" in text, text[-400:])
+        self.assertTrue("Not restored: elastic." in text, text[-400:])
+
+    def test_an_unreadable_patch_is_not_called_empty(self):
+        archive = self.git_checkout_with_a_patch()
+        real = shutil.which("tar")
+        self.fake("tar", f'#!/bin/sh\n[ "$1" = "xf" ] && [ "$5" = "tracked.patch" ] && exit 2\n'
+                         f'exec "{real}" "$@"\n')
+        result = self.restore("-f", archive, "-g", "patch")
+        text = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 1, text[-400:])
+        self.assertFalse("The patch is empty" in text, text[-400:])
+
+    def test_an_unreadable_rollback_txt_is_not_called_empty(self):
+        real = shutil.which("tar")
+        self.fake("tar", f'#!/bin/sh\n[ "$1" = "xOf" ] && [ "$3" = "rollback.txt" ] && exit 2\n'
+                         f'exec "{real}" "$@"\n')
+        result = self.restore("-f", self.archive, "-g", "git")
+        text = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 1, text[-400:])
+        self.assertTrue("Could not read rollback.txt" in text, text[-400:])
+
     def test_become_file(self):
         text = read("restore.sh")
         self.assertIn("-B <file>", text)

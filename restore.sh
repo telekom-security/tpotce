@@ -240,7 +240,12 @@ function fuDO_GIT () {
 	fuMARK phase git Rolling the checkout back
 	echo
 	fuUI_INFO "Rolling the checkout back ..."
-	tar xOf "${myARCHIVE}" rollback.txt > "${myTMPDIR}/rollback.txt"
+	if ! tar xOf "${myARCHIVE}" rollback.txt > "${myTMPDIR}/rollback.txt" 2>/dev/null;
+	  then
+	    fuUI_ERROR "Could not read rollback.txt from the archive."
+	    fuFAILED git
+	    return
+	fi
 	myCOMMIT=$(tr -d "[:space:]" < "${myTMPDIR}/rollback.txt")
 	if [ -z "${myCOMMIT}" ];
 	  then
@@ -300,7 +305,12 @@ function fuDO_PATCH () {
 	fuMARK phase patch Applying your changes to tracked files
 	echo
 	fuUI_INFO "Re-applying your changes to tracked files ..."
-	tar xf "${myARCHIVE}" -C "${myTMPDIR}" tracked.patch 2>/dev/null
+	if ! tar xf "${myARCHIVE}" -C "${myTMPDIR}" tracked.patch 2>/dev/null;
+	  then
+	    fuUI_ERROR "Could not read tracked.patch from the archive."
+	    fuFAILED patch
+	    return
+	fi
 	if [ ! -s "${myTMPDIR}/tracked.patch" ];
 	  then
 	    fuUI_OK "The patch is empty, there was nothing to re-apply."
@@ -308,8 +318,15 @@ function fuDO_PATCH () {
 	fi
 	if git -C "${myTPOTDIR}" apply --check "${myTMPDIR}/tracked.patch" 2>/dev/null;
 	  then
-	    git -C "${myTPOTDIR}" apply "${myTMPDIR}/tracked.patch" \
-	      && fuUI_OK "Applied."
+	    if git -C "${myTPOTDIR}" apply "${myTMPDIR}/tracked.patch";
+	      then
+	        fuUI_OK "Applied."
+	      else
+	        cp "${myTMPDIR}/tracked.patch" "${myBACKUPDIR}/${myDATE}_tracked.patch"
+	        fuUI_ERROR "The patch passed the check but did not apply."
+	        fuUI_HINT "Left it in ${myBACKUPDIR}/${myDATE}_tracked.patch for you to look at."
+	        fuFAILED patch
+	    fi
 	    return
 	fi
 	if git -C "${myTPOTDIR}" apply --3way "${myTMPDIR}/tracked.patch" 2>/dev/null;
@@ -385,7 +402,12 @@ function fuDO_ELASTIC () {
 	echo
 	fuUI_INFO "Importing the Elasticsearch state ..."
 	rm -rf "${myTMPDIR}/elastic"
-	tar xf "${myARCHIVE}" -C "${myTMPDIR}" elastic 2>/dev/null
+	if ! tar xf "${myARCHIVE}" -C "${myTMPDIR}" elastic 2>/dev/null;
+	  then
+	    fuUI_ERROR "Could not read elastic/ from the archive."
+	    fuFAILED elastic
+	    return 1
+	fi
 	fuUI_HINT "Waiting for Kibana on ${myKIBANA} ..."
 	while [ "${myWAIT}" -lt "${myKIBANA_TIMEOUT}" ];
 	  do
