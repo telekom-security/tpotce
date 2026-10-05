@@ -257,6 +257,41 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             await pilot.pause(0.2)
             self.assertNotIsInstance(app.screen, TaskScreen)
 
+    async def test_backups_load_in_a_thread(self):
+        import threading
+        from tpotctl.screens.restore import RestoreScreen
+        gate = threading.Event()
+        backend = FakeBackend()
+        original = backend.backup_infos
+        backend.backup_infos = lambda: gate.wait(2) and original()
+        app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.2)
+            app.goto("update")
+            await pilot.pause(0.2)
+            await pilot.click("#run-restore")
+            await pilot.pause(0.2)
+            self.assertIsInstance(app.screen, RestoreScreen)
+            self.assertIn("reading the backups", str(app.screen.query_one("#restore-hint").render()))
+            gate.set()
+            await pilot.pause(0.4)
+            self.assertEqual(app.screen.query_one("#restore-list").option_count, 2)
+
+    async def test_no_backups_after_loading(self):
+        from tpotctl.screens.restore import RestoreScreen
+        backend = FakeBackend()
+        backend.backup_infos = lambda: []
+        app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.2)
+            app.goto("update")
+            await pilot.pause(0.2)
+            await pilot.click("#run-restore")
+            await pilot.pause(0.4)
+            self.assertIsInstance(app.screen, RestoreScreen)
+            self.assertIn("no backup", str(app.screen.query_one("#restore-hint").render()))
+            self.assertTrue(app.screen.query_one("#restore-go").disabled)
+
     async def test_restore_of_data_says_what_goes(self):
         from tpotctl.screens.restore import RestoreScreen
         app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)

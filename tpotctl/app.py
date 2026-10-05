@@ -1508,7 +1508,7 @@ class TpotApp(App):
                                restart_tpot=bool({"git", "patch"} & set(groups))),
                           lambda _code: self.query_one("#update", UpdatePane).show())
 
-        self.push_screen(RestoreScreen(self.backend.backup_infos()), chosen)
+        self.push_screen(RestoreScreen(self.backend.backup_infos), chosen)
 
     def llm_action(self, what: str, service: str) -> None:
         """From the palette: the LLM page, the tab of the honeypot, then find or test."""

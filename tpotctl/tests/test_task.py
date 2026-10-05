@@ -103,6 +103,29 @@ class TaskScreenTest(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(os.path.exists(command[-1]))       # and is gone now
         self.assertNotIn("right", " ".join(command))
 
+    async def test_password_check_does_not_block_and_runs_once(self):
+        import threading
+        gate = threading.Event()
+
+        def slow_ok(password):
+            gate.wait(2)
+            return password == "right"
+
+        from tpotctl.screens.task import Task, TaskScreen
+        screen = TaskScreen(Task("Update T-Pot", ["/x/update.sh", "-y"], become="-B"), engine=FakeEngine,
+                            sudo_mode="password", password_ok=slow_ok)
+        app = host(screen)
+        async with app.run_test(size=(120, 40)) as pilot:
+            screen.query_one("#task-sudo").value = "right"
+            await pilot.click("#task-run")
+            await pilot.pause(0.1)
+            self.assertIn("checking", str(screen.query_one("#task-hint").render()))   # the UI is not frozen
+            self.assertTrue(screen.query_one("#task-run").disabled)
+            screen.start()                                                          # a second press
+            gate.set()
+            await pilot.pause(0.5)
+        self.assertEqual(len(FakeEngine.seen), 1)
+
     async def test_become_file_option_of_tpot_commands(self):
         app = host(self.screen(sudo="password", command=["/x/tpot", "edition", "set", "mini", "-y"],
                                become="--become-file"))

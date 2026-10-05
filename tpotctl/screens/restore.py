@@ -6,9 +6,10 @@ full archive the Elasticsearch data, every event since the backup) are left unch
 they replace more than a person expects from "restore".
 """
 
-from typing import List
+from typing import Callable, List
 
 from rich.text import Text
+from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
@@ -27,9 +28,10 @@ class RestoreScreen(Screen):
 
     BINDINGS = [Binding("escape", "back", "Back")]
 
-    def __init__(self, backups: List[ops.BackupInfo]):
+    def __init__(self, load: Callable[[], List[ops.BackupInfo]]):
         super().__init__(id="restore")
-        self.backups = backups
+        self.load = load
+        self.backups: List[ops.BackupInfo] = []
 
     def compose(self) -> ComposeResult:
         with VerticalScroll(id="restore-body"):
@@ -37,8 +39,7 @@ class RestoreScreen(Screen):
             yield Static(Text("Choose the archive and what of it comes back. restore.sh stops T-Pot for "
                               "everything but the Kibana objects and starts it again for them.",
                               style=theme.color("glass")), classes="restore-intro")
-            yield OptionList(*[Option(self.option_text(info), id=str(index))
-                               for index, info in enumerate(self.backups)], id="restore-list")
+            yield OptionList(id="restore-list")
             yield Static("", id="restore-manifest")
             with Vertical(id="restore-groups"):
                 for group, question in ops.GROUP_TEXT.items():
@@ -59,6 +60,26 @@ class RestoreScreen(Screen):
         return text
 
     def on_mount(self) -> None:
+        # reading the headers of a full archive takes a while: in a thread
+        self.query_one("#restore-go", Button).disabled = True
+        for box in self.query(Checkbox):
+            box.display = False
+        self.query_one("#restore-hint", Static).update(Text("reading the backups ...", style=theme.color("mist")))
+        self.fetch()
+
+    @work(thread=True, exclusive=True, group="restore")
+    def fetch(self) -> None:
+        try:
+            infos = self.load()
+        except OSError:
+            infos = []
+        self.app.call_from_thread(self.loaded, infos)
+
+    def loaded(self, infos: List[ops.BackupInfo]) -> None:
+        self.backups = infos
+        self.query_one("#restore-hint", Static).update("")
+        listing = self.query_one("#restore-list", OptionList)
+        listing.add_options([Option(self.option_text(info), id=str(index)) for index, info in enumerate(infos)])
         if not self.backups:
             self.query_one("#restore-hint", Static).update(
                 Text("There is no backup in ~/tpot_backups yet, update.sh writes one before every update.",
@@ -67,7 +88,6 @@ class RestoreScreen(Screen):
             for box in self.query(Checkbox):
                 box.display = False
             return
-        listing = self.query_one("#restore-list", OptionList)
         listing.highlighted = 0
         listing.focus()
         self.show(0)

@@ -60,6 +60,7 @@ class TaskScreen(Screen):
         self.password_ok = password_ok or installer.sudo_password_ok
         self.run_state = runlog.Run()
         self.busy = False
+        self.checking = False
         self.code: Optional[int] = None
         self.started = 0.0
         self.frame = 0
@@ -107,15 +108,39 @@ class TaskScreen(Screen):
     # -- running -----------------------------------------------------------------
 
     def start(self) -> None:
-        if self.busy or self.code is not None:
+        if self.busy or self.checking or self.code is not None:
             return
-        password = ""
-        if self.needs_password():
-            password = self.query_one("#task-sudo", Input).value
-            if not password or not self.password_ok(password):
-                self.query_one("#task-hint", Static).update(
-                    Text(f"{glyphs.g('fail')} sudo does not accept this password", style=theme.color("error")))
-                return
+        if not self.needs_password():
+            self.launch("")
+            return
+        password = self.query_one("#task-sudo", Input).value
+        if not password:
+            self.wrong_password()
+            return
+        # sudo takes a moment, longer for a wrong password: not in the UI thread
+        self.checking = True
+        self.query_one("#task-run", Button).disabled = True
+        self.query_one("#task-hint", Static).update(Text("checking the sudo password ...", style=theme.color("mist")))
+        self.check_password(password)
+
+    @work(thread=True, exclusive=True, group="task-check")
+    def check_password(self, password: str) -> None:
+        ok = self.password_ok(password)
+        self.app.call_from_thread(self.checked, password, ok)
+
+    def checked(self, password: str, ok: bool) -> None:
+        self.checking = False
+        if ok:
+            self.launch(password)
+        else:
+            self.query_one("#task-run", Button).disabled = False
+            self.wrong_password()
+
+    def wrong_password(self) -> None:
+        self.query_one("#task-hint", Static).update(
+            Text(f"{glyphs.g('fail')} sudo does not accept this password", style=theme.color("error")))
+
+    def launch(self, password: str) -> None:
         self.query_one("#task-hint", Static).update("")
         self.query_one("#task-sudo", Input).display = False
         self.query_one("#task-run", Button).display = False
