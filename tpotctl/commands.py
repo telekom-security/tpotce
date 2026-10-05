@@ -31,7 +31,7 @@ class TpotCommands(Provider):
         yield "Rebuild tpot's packages", "tpot setup --force", partial(app.goto, "update")
         for key, value in app.setting_fixes().items():
             yield f"Fix {key}", f"this host needs {value}, the Settings page has it ready", \
-                partial(app.goto_setting, key)
+                partial(app.fix_setting, key)
         # every host: macOS and Windows switch to MAC_WIN
         in_use = app.backend.edition_current()[0].lower()
         for choice in app.backend.editions():

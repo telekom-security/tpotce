@@ -744,6 +744,22 @@ class SettingsDraftTest(SettingsHelpersBase):
                 llm_pane = await self.open_llm(pilot)
                 self.assertNotIn("TPOT_OSTYPE", llm_pane.changes())
 
+    async def test_revert_declines_the_proposal(self):
+        with mock.patch.dict(os.environ, {"TPOT_HOST_OSTYPE": "mac"}):
+            async with self.app.run_test(size=(150, 50)) as pilot:
+                pane = await self.open_settings(pilot)
+                self.assertEqual(pane.changes().get("TPOT_OSTYPE"), "mac")
+                pane.query_one("#settings-revert").press()
+                await pilot.pause(0.6)
+                self.assertNotIn("TPOT_OSTYPE", pane.changes())
+                problem = next(p for p in self.app.start_problems() if p.key == "TPOT_OSTYPE")
+                self.assertNotIn("ready", problem.fix)               # nothing is ready any more
+                await self.save_llm_model(pilot, "qwen3")            # a reload from the other page
+                self.assertNotIn("TPOT_OSTYPE", pane.changes())
+                self.app.fix_setting("TPOT_OSTYPE")                  # the palette entry asks again
+                await pilot.pause(0.6)
+                self.assertEqual(pane.changes().get("TPOT_OSTYPE"), "mac")
+
     async def test_same_value_saved_elsewhere_says_nothing(self):
         async with self.app.run_test(size=(150, 50)) as pilot:
             settings = await self.open_settings(pilot)

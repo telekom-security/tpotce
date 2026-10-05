@@ -500,6 +500,7 @@ class SettingsPane(Vertical):
         self.rows = {}
         self.unlocked = set()
         self.fix_told = False           # the notice about a value that does not fit the host, once
+        self.declined = set()           # proposals (TPOT_OSTYPE) taken back with Revert
         await self.reload()
 
     async def reload(self, keep: Optional[Dict[str, str]] = None, keep_unlocked: Iterable[str] = ()) -> None:
@@ -551,7 +552,7 @@ class SettingsPane(Vertical):
                  if self.wanted(rule)]
         # a fixed value that does not fit this host (TPOT_OSTYPE): the one that fits, ready to save
         fixes = {key: value for key, value in self.current.fixes().items()
-                 if key in {rule.key for rule in shown} and key not in (keep or {})}
+                 if key in {rule.key for rule in shown} and key not in (keep or {}) and key not in self.declined}
         self.draft.update(fixes)
         for rule in shown:
             row = SettingRow(rule, self.draft.get(rule.key, ""), self.current.why_fixed(rule.key),
@@ -564,7 +565,7 @@ class SettingsPane(Vertical):
                                             id=f"tab-{section}"))
         if active and active in [f"tab-{section}" for section in by_section]:
             tabs.active = active
-        for key in list(keep_unlocked) + [key for key in self.current.fixes() if key in self.rows]:
+        for key in list(keep_unlocked) + [key for key in fixes if key in self.rows]:
             if key in self.rows and key not in self.unlocked:
                 # unlocked again in the background: the focus stays where the person is
                 await self.unlock(self.rows[key], focus=False)
@@ -739,6 +740,9 @@ class SettingsPane(Vertical):
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         from tpotctl.settings import SettingsError
         if event.button.id == f"{self.PREFIX}-revert":
+            # Revert takes the proposal back too, it stays away until asked for again (palette: Fix ...)
+            if self.current is not None:
+                self.declined |= set(self.current.fixes())
             await self.reload()
         elif event.button.id == f"{self.PREFIX}-save":
             saved = self.changes()
@@ -1536,7 +1540,9 @@ class TpotApp(App):
                 continue
             key, page = problem.key, "settings"
             if key in fixes:
-                fix = f"Settings has {fixes[key]} ready, Save it"
+                declined = key in getattr(pane.first(), "declined", ()) if pane else False
+                fix = f"Set it to {fixes[key]} on the Settings page (palette: Fix {key})" if declined else \
+                    f"Settings has {fixes[key]} ready, Save it"
                 if fixes[key] != "linux":
                     try:
                         in_use = self.backend.edition_current()[0].lower()
@@ -1558,6 +1564,16 @@ class TpotApp(App):
         pane = self.query("#settings")
         current = getattr(pane.first(), "current", None) if pane else None
         return current.fixes() if current is not None else {}
+
+    def fix_setting(self, key: str) -> None:
+        """The palette's Fix entry: the proposal again (also after a Revert), then the setting."""
+        pane = self.query_one("#settings", SettingsPane)
+        pane.declined.discard(key)
+
+        async def again() -> None:
+            await pane.reload(keep=pane.changes(), keep_unlocked=pane.unlocked)
+            self.goto_setting(key)
+        self.call_later(again)
 
     def goto_setting(self, key: str) -> None:
         self.goto("settings")
