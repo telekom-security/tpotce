@@ -324,7 +324,7 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             await pilot.pause(0.3)
             await pilot.click("#task-run")
             await pilot.pause(0.4)
-        self.assertEqual(FakeEngine.seen, [[tapp.LAUNCHER, "setup"]])
+        self.assertEqual(FakeEngine.seen, [[tapp.LAUNCHER, "setup", "--force"]])
 
     async def test_edition_switch_runs_tpot_edition_set(self):
         from tpotctl.screens.task import TaskScreen

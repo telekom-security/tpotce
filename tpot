@@ -33,7 +33,7 @@ def main():
         sys.exit(cli.main(argv))
     if argv[:1] == ["setup"]:
         try:
-            python = bootstrap.setup_venv()
+            python = bootstrap.setup_venv(force="--force" in argv[1:])
         except bootstrap.BootstrapError as err:
             fail(str(err), 1)
         say.ok(f"The Python packages of tpot are ready ({os.path.dirname(os.path.dirname(python))}).")

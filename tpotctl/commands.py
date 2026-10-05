@@ -28,7 +28,7 @@ class TpotCommands(Provider):
         if host and app.backend.installable():
             yield "Install T-Pot", "the installer assistant, tpot install", app.start_install
         yield "Open the customizer", "edition and services", app.action_customize
-        yield "Refresh tpot's packages", "tpot setup", partial(app.goto, "update")
+        yield "Rebuild tpot's packages", "tpot setup --force", partial(app.goto, "update")
         if app.backend.linux_host():
             in_use = app.backend.edition_current()[0].lower()
             for choice in app.backend.editions():

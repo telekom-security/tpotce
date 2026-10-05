@@ -112,18 +112,31 @@ def linux_hint(ids) -> str:
 
 
 def setup_venv(force: bool = False, quiet: bool = False) -> str:
-    """Create or refresh the venv, give back its Python."""
+    """Create, refresh or (force) rebuild the venv, give back its Python.
+
+    The venv is built next to the one in use (venv.new) and swapped in when it works, so
+    a tpot that runs meanwhile keeps its packages, and a failed build (no internet)
+    leaves the old venv as it was. The scripts in venv/bin keep the path of venv.new in
+    their shebang; tpot never runs them, only venv/bin/python and `python -m pip`.
+    """
     directory = venv_dir()
     python = venv_python(directory)
     shutil.rmtree(old_venv_dir(), ignore_errors=True)
+    for leftover in (directory + ".new", directory + ".old"):       # of a run that broke off
+        shutil.rmtree(leftover, ignore_errors=True)
     if not force and venv_current(directory):
         return python
     if not quiet:
         print(f"[INFO] - Setting up the Python packages of tpot in {directory} (needs internet) ...",
               file=sys.stderr)
-    # a venv of an older requirements.txt or a Python that is gone is built anew
-    shutil.rmtree(directory, ignore_errors=True)
+    _build(directory + ".new")
+    _swap(directory + ".new", directory)
+    return python
+
+
+def _build(directory: str) -> None:
     os.makedirs(os.path.dirname(directory), exist_ok=True)
+    python = venv_python(directory)
     if subprocess.call([sys.executable, "-m", "venv", directory],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) != 0 or not os.path.exists(python):
         shutil.rmtree(directory, ignore_errors=True)
@@ -138,7 +151,14 @@ def setup_venv(force: bool = False, quiet: bool = False) -> str:
             f"for Python {sys.version_info.major}.{sys.version_info.minor} on this platform")
     with open(os.path.join(directory, MARKER), "w", encoding="utf-8") as handle:
         handle.write(requirements_hash() + "\n")
-    return python
+
+
+def _swap(new: str, directory: str) -> None:
+    """new takes the place of directory; between the two renames it is gone for a moment only."""
+    if os.path.exists(directory):
+        os.replace(directory, directory + ".old")
+    os.replace(new, directory)
+    shutil.rmtree(directory + ".old", ignore_errors=True)
 
 
 def ensure(need: str):

@@ -712,7 +712,7 @@ On the T-Pot Landing Page just click on `Elasticvue` and you will be forwarded t
 | `tpot attackers [--hours H] [--count N]` | *Status* (top five) | T-Pot host, HIVE | the source IPs with the most attacks, with country and reputation |
 | `tpot install [--classic]` | `ctrl+p` *Install T-Pot* | Linux without T-Pot | the installer assistant, see [Get and install T-Pot](#get-and-install-t-pot) (the installer starts it for you) |
 | `tpot uninstall` | *Update & backup* | T-Pot host | removes T-Pot, with a full backup first if you like, see [Uninstall T-Pot](#uninstall-t-pot) |
-| `tpot setup` | *Update & backup* | every host | sets up or refreshes the Python packages of `tpot` |
+| `tpot setup [--force]` | *Update & backup* (*Rebuild tpot's packages*) | every host | sets up or refreshes the Python packages of `tpot`; `--force` builds the venv anew, next to the old one, swapped when it works |
 
 The installer links `~/tpotce/tpot` to `/usr/local/bin/tpot` and `update.sh` keeps it up to date. `tpot` runs from a Python venv of its own in `~/.local/share/tpotce/venv`, set up on first use from pinned and hash-checked packages (it needs pypi.org once, and `python3-venv` on Debian / Ubuntu, which the installer brings along). `update.sh`, `restore.sh` and the other scripts keep working on their own, `tpot` only calls them. Do not run `tpot` as root, it uses `sudo` where needed.
 

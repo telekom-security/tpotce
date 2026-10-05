@@ -135,7 +135,9 @@ def build_parser() -> argparse.ArgumentParser:
     attackers.add_argument("--hours", type=int, default=24, help="of the last HOURS hours (default 24)")
     attackers.add_argument("--count", type=int, default=10, help="how many (default 10)")
     attackers.add_argument("--plain", action="store_true", help="only the IPs, one per line")
-    sub.add_parser("setup", help="set up or refresh the Python packages of tpot")
+    setup = sub.add_parser("setup", help="set up or refresh the Python packages of tpot")
+    setup.add_argument("--force", action="store_true",
+                       help="build the venv anew (next to the old one, swapped when it works)")
     return parser
 
 
@@ -842,7 +844,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             from tpotctl.app import run_app
             return run_app()
         if args.command == "setup":
-            python = bootstrap.setup_venv()
+            python = bootstrap.setup_venv(force=args.force)
             say.ok(f"The Python packages of tpot are ready ({os.path.dirname(os.path.dirname(python))}).")
             return 0
         if args.command == "env":

@@ -222,5 +222,65 @@ class CliTest(unittest.TestCase):
             self.assertEqual(cli.main([]), 2)
 
 
+class SetupForceTest(unittest.TestCase):
+    """setup_venv(force=True) in a temporary XDG_DATA_HOME; venv, pip and the import check are faked."""
+
+    def setUp(self):
+        import shutil
+        import tempfile
+        self.data = tempfile.mkdtemp(prefix="tpot-venv-")
+        self.addCleanup(shutil.rmtree, self.data)
+        patcher = mock.patch.dict(os.environ, {"XDG_DATA_HOME": self.data})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.venv = bootstrap.venv_dir()
+        os.makedirs(os.path.join(self.venv, "bin"))
+        with open(os.path.join(self.venv, "OLD"), "w") as out:
+            out.write("old venv\n")
+
+    def fake_call(self, pip_ok=True):
+        def call(command, **kwargs):
+            if command[1:3] == ["-m", "venv"]:
+                python = bootstrap.venv_python(command[3])
+                os.makedirs(os.path.dirname(python), exist_ok=True)
+                open(python, "w").close()
+                return 0
+            return 0 if pip_ok else 1
+        return call
+
+    def test_rebuild_swaps_the_venv(self):
+        with mock.patch("subprocess.call", side_effect=self.fake_call()), \
+                mock.patch.object(bootstrap, "imports_ok", return_value=True):
+            python = bootstrap.setup_venv(force=True, quiet=True)
+        self.assertEqual(python, bootstrap.venv_python(self.venv))
+        self.assertFalse(os.path.exists(os.path.join(self.venv, "OLD")))
+        self.assertTrue(os.path.exists(os.path.join(self.venv, bootstrap.MARKER)))
+        self.assertFalse(os.path.exists(self.venv + ".new"))
+        self.assertFalse(os.path.exists(self.venv + ".old"))
+
+    def test_failed_rebuild_keeps_the_old_venv(self):
+        with mock.patch("subprocess.call", side_effect=self.fake_call(pip_ok=False)), \
+                mock.patch.object(bootstrap, "imports_ok", return_value=True):
+            with self.assertRaises(bootstrap.BootstrapError):
+                bootstrap.setup_venv(force=True, quiet=True)
+        self.assertTrue(os.path.exists(os.path.join(self.venv, "OLD")))
+        self.assertFalse(os.path.exists(self.venv + ".new"))
+
+    def test_leftovers_of_a_broken_run_go(self):
+        os.makedirs(self.venv + ".new")
+        os.makedirs(self.venv + ".old")
+        with mock.patch("subprocess.call", side_effect=self.fake_call()), \
+                mock.patch.object(bootstrap, "imports_ok", return_value=True):
+            bootstrap.setup_venv(force=True, quiet=True)
+        self.assertFalse(os.path.exists(self.venv + ".new"))
+        self.assertFalse(os.path.exists(self.venv + ".old"))
+
+    def test_launcher_and_cli_know_force(self):
+        from tpotctl import cli
+        self.assertTrue(cli.build_parser().parse_args(["setup", "--force"]).force)
+        with open(os.path.join(bootstrap.REPO_DIR, "tpot"), encoding="utf-8") as handle:
+            self.assertTrue('"--force" in argv' in handle.read())
+
+
 if __name__ == "__main__":
     unittest.main()

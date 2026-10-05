@@ -1163,7 +1163,7 @@ class UpdatePane(Vertical):
             yield Button("Uninstall ...", id="run-uninstall", variant="error")
         with Horizontal(classes="actions"):
             yield Checkbox("Full backup with data/ (for a newer Elastic Stack)", False, id="update-full")
-            yield Button("Refresh tpot's packages", id="run-setup")
+            yield Button("Rebuild tpot's packages", id="run-setup")
         yield DataTable(id="backups", cursor_type="row")
 
     def on_mount(self) -> None:
@@ -1194,10 +1194,11 @@ class UpdatePane(Vertical):
             self.app.run_restore()
         elif event.button.id == "run-setup":
             from tpotctl.screens.task import Task
-            self.app.run_task(Task("Refresh the Python packages of tpot", [LAUNCHER, "setup"],
-                                   intro="tpot setup installs the pinned packages of tpot into its venv again.",
-                                   done="The packages of tpot are fresh, start tpot anew to use them.",
-                                   restart_tpot=True))
+            self.app.run_task(Task("Rebuild the Python packages of tpot", [LAUNCHER, "setup", "--force"],
+                                   intro="tpot setup --force builds the venv of tpot anew from requirements.txt "
+                                         "(needs pypi.org), next to the old one, and swaps them when it works. "
+                                         "tpot starts anew afterwards.",
+                                   done="The packages of tpot are rebuilt.", restart_tpot=True))
         elif event.button.id == "run-uninstall":
             from tpotctl.screens.uninstall import UninstallScreen
             # uninstall.sh removes tpot itself, the app ends and hands over to it
