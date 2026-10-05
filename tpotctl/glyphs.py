@@ -16,7 +16,7 @@ _UNICODE = {
     "bullet": "▸", "changed": "▌", "bar_on": "▰", "bar_off": "▱", "running": "●", "stopped": "○",
     "search": "/", "show": "◉", "hide": "◎",
     "pane_status": "⬢", "pane_edition": "⬢", "pane_settings": "⬢", "pane_users": "⬢",
-    "pane_sensors": "⬢", "pane_images": "⬢", "pane_update": "⬢", "pane_llm": "⬢",
+    "pane_sensors": "⬢", "pane_images": "⬢", "pane_update": "⬢", "pane_llm": "⬢", "pane_checks": "⬢",
 }
 
 _NERD = dict(_UNICODE, **{
@@ -24,7 +24,7 @@ _NERD = dict(_UNICODE, **{
     "fail": "\U000F0156", "warn": "\U000F0026", "running": "\U000F0765",
     "pane_status": "\U000F056E", "pane_edition": "\U000F06E1", "pane_settings": "\U000F0493",
     "pane_users": "\U000F0849", "pane_sensors": "\U000F0003", "pane_images": "\U000F0868",
-    "pane_update": "\U000F006F", "pane_llm": "\U000F06A9",
+    "pane_update": "\U000F006F", "pane_llm": "\U000F06A9", "pane_checks": "\U000F0E1C",
 })
 
 _ASCII = {
@@ -32,7 +32,7 @@ _ASCII = {
     "bullet": ">", "changed": "|", "bar_on": "#", "bar_off": "-", "running": "*", "stopped": "o",
     "search": "/", "show": "+", "hide": "-",
     "pane_status": "*", "pane_edition": "*", "pane_settings": "*", "pane_users": "*",
-    "pane_sensors": "*", "pane_images": "*", "pane_update": "*", "pane_llm": "*",
+    "pane_sensors": "*", "pane_images": "*", "pane_update": "*", "pane_llm": "*", "pane_checks": "*",
 }
 
 SETS: Dict[str, Dict[str, str]] = {"unicode": _UNICODE, "nerd": _NERD, "ascii": _ASCII}

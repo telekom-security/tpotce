@@ -21,8 +21,9 @@ Post-build container tests; they require the image to already exist locally and 
 - Conventions for new tests: one executable `tests/<service>.sh` per honeypot, source `lib/common.sh` (`test_*` helpers for compose, port checks, waiting on log text, cleanup), bind to loopback, prefer dynamic host ports, temp files under `/tmp`, fail with an image build hint when the image is missing. Some tests need host tools (e.g. dicompot needs DCMTK).
 
 ### On a running T-Pot host (from `docker/tpotinit/dist/bin/`)
-- `hptest.sh <host>` — probes honeypots listed in `~/tpotce/docker-compose.yml`.
-- `attackmap_pipeline_test.sh [--types ...] [--ips ...] [--dry-run]` — end-to-end check: injected honeypot JSON → Logstash → Elasticsearch → map_data → Redis → map_web WebSocket. Injected events are real and not cleaned up.
+- `hptest.sh [-B file] [--tools-only] [host]` (`tpot check honeypots`) — probes honeypots listed in `~/tpotce/docker-compose.yml` (ports from `docker compose config --format json`, the tools per distribution from `fuTOOLS_FOR`).
+- `attackmap_pipeline_test.sh [--types ...] [--ips ...] [--dry-run] [-B file]` (`tpot check pipeline`) — end-to-end check: injected honeypot JSON → Logstash → Elasticsearch → map_data → Redis → map_web WebSocket. Injected events are real and not cleaned up.
+- Both run from the *Checks* page in the task screen, in the look of `installer/lib/ui.sh` with `fuMARK` phases (a plain fallback inside the tpotinit image). `mytopips.sh` is `tpot attackers`.
 
 ### tpot command and its tests
 - `./tpot -h` lists the sub-commands; `./tpot setup` builds the venv.

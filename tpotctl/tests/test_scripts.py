@@ -206,6 +206,24 @@ class FallbackTest(Harness):
         self.assertNotRegex(read("deploy.sh"), r"htpasswd [^|]*-b")
 
 
+class MytopipsTest(Harness):
+
+    def test_is_tpot_attackers(self):
+        tpotce = os.path.join(self.home, "tpotce")
+        os.makedirs(tpotce)
+        fake = os.path.join(tpotce, "tpot")
+        with open(fake, "w", encoding="utf-8") as out:
+            out.write('#!/bin/sh\necho "tpot $*" >> "$HOME/calls"\n')
+        os.chmod(fake, 0o755)
+        self.run_script(os.path.join(REPO, "docker", "tpotinit", "dist", "bin", "mytopips.sh"))
+        with open(os.path.join(self.home, "calls"), encoding="utf-8") as handle:
+            self.assertIn("tpot attackers --count 100 --plain", handle.read())
+
+    def test_backup_es_folders_is_gone(self):
+        self.assertFalse(os.path.exists(os.path.join(REPO, "docker", "tpotinit", "dist", "bin",
+                                                     "backup_es_folders.sh")))
+
+
 class BackupInfoTest(unittest.TestCase):
 
     def test_info_of_an_archive(self):

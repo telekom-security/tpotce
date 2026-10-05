@@ -706,6 +706,9 @@ On the T-Pot Landing Page just click on `Elasticvue` and you will be forwarded t
 | `tpot llm [detect [--scan]\|models\|test]` | the LLM backends of Beelzebub and Galah: their settings, find an Ollama (the configured URLs, this host, its Docker bridges and gateways; `--scan` asks every address of the /24 of this host, after a confirmation), list the models, send a short test prompt |
 | `tpot users [list\|add\|passwd\|remove]` | the [web users](#add-users-to-nginx-t-pot-webui), changes count right away |
 | `tpot sensors [list\|add\|remove\|set\|cert]` | the [sensors](#distributed-deployment) of a HIVE |
+| `tpot check honeypots [--host HOST]` | probes the honeypots: a few service requests, then nmap over every published port (installs nmap, ncat and the DICOM tools of your distribution first; openSUSE has no nmap, there only the service requests run); the probes show up in Kibana |
+| `tpot check pipeline [--dry-run]` | follows test events from the honeypot logs through Logstash, Elasticsearch and Redis to the WebSocket of the Attack Map; the events stay in Kibana |
+| `tpot attackers [--hours H] [--count N]` | the source IPs with the most attacks, with country and reputation; the *Status* page shows the top five |
 | `tpot install [--classic]` | the installer assistant, see [Get and install T-Pot](#get-and-install-t-pot) (the installer starts it for you) |
 | `tpot uninstall` | removes T-Pot, with a full backup first if you like, see [Uninstall T-Pot](#uninstall-t-pot) |
 | `tpot setup` | sets up or refreshes the Python packages of `tpot` |

@@ -22,7 +22,31 @@
 #               -> DataServer skips the event; the ES stage reports that.
 #   --timeout   seconds to wait per stage (default: 90)
 #   --dry-run   print the events and commands only, touch nothing
+#   -B, --become-file FILE
+#               the sudo password in a file, for a log file only root may append to
+#               (`tpot check pipeline` from the menu hands one over)
 
+myHERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)
+# the look of the T-Pot scripts (installer/lib/ui.sh of the checkout this lies in,
+# or of ~/tpotce), plain text where there is none (i.e. inside the tpotinit image)
+# shellcheck source=installer/lib/ui.sh
+if ! source "${myHERE}/../../../../installer/lib/ui.sh" 2>/dev/null && \
+   ! source "${HOME}/tpotce/installer/lib/ui.sh" 2>/dev/null;
+  then
+# >>> plain fallback
+    fuUI_INIT () { return 0; }
+    fuUI_BANNER () { echo; echo "### T-Pot $1"; shift; for myLINE in "$@"; do echo "### ${myLINE}"; done; echo; }
+    fuUI_INFO () { echo "### $*"; }
+    fuUI_OK () { echo "### [OK] - $*"; }
+    fuUI_WARN () { echo "### [WARNING] - $*"; }
+    fuUI_ERROR () { echo "### [ERROR] - $*" >&2; }
+    fuUI_HINT () { local myLINE; for myLINE in "$@"; do echo "###   ${myLINE}"; done; }
+    fuMARK () { [ "${TPOT_MARKS}" = "1" ] && echo "@@tpot $*"; return 0; }
+# <<< plain fallback
+fi
+fuUI_INIT
+
+myBECOME_FILE=""
 myTYPES="cowrie,dionaea,honeytrap,rdphoneypot"
 myIPS=""
 myFALLBACKIPS="8.8.8.8 208.67.222.222 8.8.4.4 4.2.2.2"
@@ -78,7 +102,7 @@ asyncio.run(main())
 PY
 
 function fuUSAGE {
-  sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'
   exit 2
 }
 
@@ -89,21 +113,27 @@ function fuPARSEARGS {
       --ips) myIPS="$2"; shift 2 ;;
       --timeout) myTIMEOUT="$2"; shift 2 ;;
       --dry-run) myDRYRUN=1; shift ;;
+      -B|--become-file) myBECOME_FILE="$2"; shift 2 ;;
       -h|--help) fuUSAGE ;;
-      *) echo "ERROR: unknown argument: $1"; fuUSAGE ;;
+      *) fuUI_ERROR "unknown argument: $1"; fuUSAGE ;;
     esac
   done
   for t in ${myTYPES//,/ }; do
-    fuKNOWN "$t" || { echo "ERROR: unknown type '$t' (known: $myKNOWNTYPES)"; exit 2; }
+    fuKNOWN "$t" || { fuUI_ERROR "unknown type '$t' (known: $myKNOWNTYPES)"; exit 2; }
   done
+  if [ -n "$myBECOME_FILE" ]; then
+    [ -r "$myBECOME_FILE" ] || { fuUI_ERROR "cannot read the sudo password from $myBECOME_FILE."; exit 2; }
+    myBECOME_FILE=$(cd "$(dirname "$myBECOME_FILE")" && pwd)/$(basename "$myBECOME_FILE")
+    sudo () { command sudo -S -p "" -v < "$myBECOME_FILE" >/dev/null 2>&1; command sudo "$@"; }
+  fi
 }
 
 function fuCHECKDEPS {
   [ "$myDRYRUN" = 1 ] && return
-  command -v docker >/dev/null 2>&1 || { echo "ERROR: docker not found."; exit 1; }
+  command -v docker >/dev/null 2>&1 || { fuUI_ERROR "docker not found."; exit 1; }
   for c in logstash elasticsearch map_redis map_data map_web; do
     if [ "$(docker inspect -f '{{.State.Running}}' "$c" 2>/dev/null)" != "true" ]; then
-      echo "ERROR: container '$c' is not running."; exit 1
+      fuUI_ERROR "container '$c' is not running."; exit 1
     fi
   done
 }
@@ -118,7 +148,7 @@ function fuDATAPATH {
     /*) ;;
     *) myDATA="$myTPOTCE/${myDATA#./}" ;;
   esac
-  echo "[*] data path: $myDATA"
+  fuUI_INFO "data path: $myDATA"
 }
 
 function fuPICKIPS {
@@ -138,16 +168,16 @@ function fuPICKIPS {
   for t in ${myTYPES//,/ }; do
     i=$((i + 1))
     ip=$(printf '%s\n' $pool | awk -v n="$i" 'NF && !seen[$1]++ {c++; if (c==n) {print $1; exit}}')
-    [ -n "$ip" ] || { echo "ERROR: not enough test IPs (need one per type, use --ips)."; exit 1; }
+    [ -n "$ip" ] || { fuUI_ERROR "not enough test IPs (need one per type, use --ips)."; exit 1; }
     eval "myIP_$t=\"$ip\""
   done
-  echo "[*] test source IPs:$(for t in ${myTYPES//,/ }; do printf ' %s=%s' "$t" "$(fuTESTIP "$t")"; done)"
+  fuUI_INFO "test source IPs:$(for t in ${myTYPES//,/ }; do printf ' %s=%s' "$t" "$(fuTESTIP "$t")"; done)"
   if [ -n "$myIPS" ]; then
-    echo "    (given via --ips)"
+    fuUI_HINT "(given via --ips)"
   elif [ -n "$picked" ]; then
-    echo "    (taken from sources Elasticsearch geolocated in the last 24 h)"
+    fuUI_HINT "(taken from sources Elasticsearch geolocated in the last 24 h)"
   else
-    echo "    (no geolocated events in Elasticsearch yet — fresh installation? — using the built-in fallback list)"
+    fuUI_HINT "(no geolocated events in Elasticsearch yet — fresh installation? — using the built-in fallback list)"
   fi
 }
 
@@ -173,33 +203,33 @@ function fuEVENT { # type ip timestamp -> one JSON line (fields the Logstash fil
 
 function fuSTARTLISTENERS {
   myTMP=$(mktemp -d)
-  echo "[*] starting listeners (Redis pubsub + WebSocket) for ${myTIMEOUT}s ..."
+  fuUI_INFO "starting listeners (Redis pubsub + WebSocket) for ${myTIMEOUT}s ..."
   timeout "$myTIMEOUT" docker exec map_redis redis-cli SUBSCRIBE "$myREDISCHANNEL" > "$myTMP/redis.log" 2>&1 &
   myPID_REDIS=$!
   timeout "$myTIMEOUT" docker exec map_web python3 -c "$myWSCLIENT" > "$myTMP/ws.log" 2>&1 &
   myPID_WS=$!
   sleep 3
-  grep -q "WS-CONNECTED" "$myTMP/ws.log" && echo "    websocket client connected to map_web" \
-    || echo "    WARNING: websocket client not connected yet ($(head -c 200 "$myTMP/ws.log"))"
+  grep -q "WS-CONNECTED" "$myTMP/ws.log" && fuUI_OK "websocket client connected to map_web" \
+    || fuUI_WARN "websocket client not connected yet ($(head -c 200 "$myTMP/ws.log"))"
 }
 
 function fuINJECT {
-  echo "[*] injecting test events (run id $myRUNID) ..."
+  fuUI_INFO "injecting test events (run id $myRUNID) ..."
   for t in ${myTYPES//,/ }; do
     local file ts line ip
     file="$myDATA/$(fuLOGFILE "$t")"
     ip="$(fuTESTIP "$t")"
     ts="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
     line=$(fuEVENT "$t" "$ip" "$ts")
-    echo "  [$t] -> $file"
-    echo "        $line"
+    fuUI_HINT "[$t] -> $file"
+    fuUI_HINT "    $line"
     if [ "$myDRYRUN" = 1 ]; then continue; fi
     if [ ! -d "$(dirname "$file")" ]; then
-      echo "        SKIP: $(dirname "$file") does not exist (honeypot not part of this compose file)"
+      fuUI_WARN "$(dirname "$file") does not exist (honeypot not part of this compose file)"
       continue
     fi
     if ! printf '%s\n' "$line" | tee -a "$file" >/dev/null 2>&1; then
-      printf '%s\n' "$line" | sudo tee -a "$file" >/dev/null || { echo "        ERROR: cannot append to $file"; continue; }
+      printf '%s\n' "$line" | sudo tee -a "$file" >/dev/null || { fuUI_ERROR "cannot append to $file"; continue; }
     fi
     myINJECTEDTYPES="$myINJECTEDTYPES $t"
   done
@@ -212,7 +242,7 @@ function fuESQUERY { # type -> ES query body: exactly OUR event (ip + src_port +
 }
 
 function fuWAITES {
-  echo "[*] waiting for Elasticsearch (logstash-*) ..."
+  fuUI_INFO "waiting for Elasticsearch (logstash-*) ..."
   local deadline=$(( $(date +%s) + myTIMEOUT ))
   while :; do
     local pending=0
@@ -229,7 +259,7 @@ function fuWAITES {
         local missing=""
         if printf '%s' "$res" | grep -q '_geoip_lookup_failure'; then
           fuSETRES ES "$t" "FAIL (GeoIP lookup failed)"
-          echo "  [$t] indexed, but GeoIP lookup FAILED for $(fuTESTIP "$t") (no GeoLite2 City entry) -> DataServer will skip it; pick another IP (--ips)"
+          fuUI_HINT "[$t] indexed, but GeoIP lookup FAILED for $(fuTESTIP "$t") (no GeoLite2 City entry) -> DataServer will skip it; pick another IP (--ips)"
           continue
         fi
         printf '%s' "$res" | grep -q '"geoip":{[^}]*"latitude"' || missing="$missing geoip.latitude"
@@ -239,10 +269,10 @@ function fuWAITES {
         printf '%s' "$res" | grep -q '"dest_port"' || missing="$missing dest_port"
         if [ -z "$missing" ]; then
           fuSETRES ES "$t" "PASS ($(( $(date +%s) - mySTART_EPOCH ))s)"
-          echo "  [$t] indexed with geoip coordinates, geoip_ext, t-pot_hostname, dest_port"
+          fuUI_HINT "[$t] indexed with geoip coordinates, geoip_ext, t-pot_hostname, dest_port"
         else
           fuSETRES ES "$t" "FAIL (missing:$missing)"
-          echo "  [$t] indexed but missing:$missing"
+          fuUI_HINT "[$t] indexed but missing:$missing"
         fi
       else
         pending=1
@@ -253,12 +283,12 @@ function fuWAITES {
     sleep 3
   done
   for t in $myINJECTEDTYPES; do
-    [ -n "$(fuGETRES ES "$t")" ] || { fuSETRES ES "$t" "FAIL (timeout)"; echo "  [$t] NOT indexed within ${myTIMEOUT}s"; }
+    [ -n "$(fuGETRES ES "$t")" ] || { fuSETRES ES "$t" "FAIL (timeout)"; fuUI_HINT "[$t] NOT indexed within ${myTIMEOUT}s"; }
   done
 }
 
 function fuWAITMAP {
-  echo "[*] waiting for DataServer -> Redis -> map_web -> WebSocket (DataServer polls with a 10s indexing lag) ..."
+  fuUI_INFO "waiting for DataServer -> Redis -> map_web -> WebSocket (DataServer polls with a 10s indexing lag) ..."
   local deadline=$(( $(date +%s) + myTIMEOUT ))
   while :; do
     local pending=0
@@ -267,12 +297,12 @@ function fuWAITMAP {
       ip="$(fuTESTIP "$t")"; sport="$(fuSRCPORT "$t")"
       if [ -z "$(fuGETRES REDIS "$t")" ]; then
         if grep "\"src_ip\": *\"$ip\"" "$myTMP/redis.log" | grep -q "\"src_port\": *$sport\b"; then
-          fuSETRES REDIS "$t" "PASS ($(( $(date +%s) - mySTART_EPOCH ))s)"; echo "  [$t] seen on Redis pubsub"
+          fuSETRES REDIS "$t" "PASS ($(( $(date +%s) - mySTART_EPOCH ))s)"; fuUI_HINT "[$t] seen on Redis pubsub"
         else pending=1; fi
       fi
       if [ -z "$(fuGETRES WS "$t")" ]; then
         if grep "\"src_ip\": *\"$ip\"" "$myTMP/ws.log" | grep -q "\"src_port\": *$sport\b"; then
-          fuSETRES WS "$t" "PASS ($(( $(date +%s) - mySTART_EPOCH ))s)"; echo "  [$t] delivered over the WebSocket"
+          fuSETRES WS "$t" "PASS ($(( $(date +%s) - mySTART_EPOCH ))s)"; fuUI_HINT "[$t] delivered over the WebSocket"
         else pending=1; fi
       fi
     done
@@ -302,9 +332,9 @@ function fuREPORT {
     esac
   done
   echo
-  [ "$rc" = 0 ] && echo "RESULT: PASS — the full pipeline delivered every injected event to the Attack Map." \
-                || echo "RESULT: FAIL — see the stages above (listener logs kept in $myTMP)."
-  echo "Note: the test events remain in Elasticsearch/Kibana as ordinary events (src_ip$(for t in ${myTYPES//,/ }; do printf ' %s' "$(fuTESTIP "$t")"; done), src_port 51234-51237)."
+  [ "$rc" = 0 ] && fuUI_OK "PASS: the full pipeline delivered every injected event to the Attack Map." \
+                || fuUI_ERROR "FAIL: see the stages above (listener logs kept in $myTMP)."
+  fuUI_HINT "The test events remain in Elasticsearch/Kibana as ordinary events (src_ip$(for t in ${myTYPES//,/ }; do printf ' %s' "$(fuTESTIP "$t")"; done), src_port 51234-51237)."
   return $rc
 }
 
@@ -316,23 +346,30 @@ function fuCLEANUP {
 
 # Main
 fuPARSEARGS "$@"
+fuUI_BANNER "Attack Map pipeline test" "Honeypot JSON -> Logstash -> Elasticsearch -> map_data -> Redis -> map_web -> WebSocket"
+fuMARK phase prepare Checking the containers and picking test IPs
 fuCHECKDEPS
 fuDATAPATH
 fuPICKIPS
 mySTART_EPOCH=$(date +%s)
 if [ "$myDRYRUN" = 1 ]; then
-  echo "[*] DRY RUN — nothing is written. Events that would be appended:"
+  fuUI_INFO "DRY RUN — nothing is written. Events that would be appended:"
   fuINJECT
   echo
-  echo "ES query per test IP (example):"
+  fuUI_INFO "ES query per test IP (example):"
   fuESQUERY "$(printf '%s' "${myTYPES%%,*}")"; echo
-  echo "Listeners: docker exec map_redis redis-cli SUBSCRIBE $myREDISCHANNEL | docker exec map_web python3 -c <ws client>"
+  fuUI_INFO "Listeners: docker exec map_redis redis-cli SUBSCRIBE $myREDISCHANNEL | docker exec map_web python3 -c <ws client>"
+  fuMARK phase "done" Done
   exit 0
 fi
 trap fuCLEANUP EXIT INT TERM
+fuMARK phase inject Injecting the test events
 fuSTARTLISTENERS
 fuINJECT
-[ -n "$myINJECTEDTYPES" ] || { echo "ERROR: nothing injected."; exit 1; }
+[ -n "$myINJECTEDTYPES" ] || { fuUI_ERROR "nothing injected."; exit 1; }
+fuMARK phase elasticsearch Waiting for Elasticsearch
 fuWAITES
+fuMARK phase map Waiting for the Attack Map
 fuWAITMAP
+fuMARK phase "done" Done
 fuREPORT

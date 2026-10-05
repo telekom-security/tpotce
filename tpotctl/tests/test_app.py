@@ -57,6 +57,14 @@ if textual:
         def sudo_mode(self):
             return "passwordless"
 
+        def top_sources(self):
+            from tpotctl import events
+            return events.Sources([events.Source("203.0.113.7", 912, "Netherlands", "mass scanner"),
+                                   events.Source("198.51.100.2", 40)])
+
+        def host_address(self):
+            return "192.0.2.5"
+
         def backup_infos(self):
             return [ops.BackupInfo("/b/new_tpot_backup.tar", "new_tpot_backup.tar", 2 ** 20, "regular",
                                    ["version: 24.04.2"], ["git", "config"]),
@@ -167,6 +175,47 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(FakeEngine.seen,
                          [[os.path.join(cli.REPO_DIR, "restore.sh"), "-f", "/b/new_tpot_backup.tar", "-g", "config"]])
 
+    async def test_status_shows_the_top_attackers(self):
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=(140, 44)) as pilot:
+            await pilot.pause(0.5)
+            text = str(app.query_one("#top-attackers").render())
+        self.assertIn("203.0.113.7", text)
+        self.assertIn("Netherlands", text)
+
+    async def test_checks_probe_the_honeypots(self):
+        FakeEngine.seen.clear()
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.2)
+            app.goto("checks")
+            await pilot.pause(0.2)
+            self.assertEqual(app.query_one("#check-host").value, "192.0.2.5")
+            await pilot.click("#check-honeypots")
+            await pilot.pause(0.3)
+            await pilot.click("#task-run")
+            await pilot.pause(0.4)
+        self.assertEqual(FakeEngine.seen, [[cli.HPTEST, "192.0.2.5"]])
+
+    async def test_checks_pipeline_asks_first(self):
+        FakeEngine.seen.clear()
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.2)
+            app.goto("checks")
+            await pilot.pause(0.2)
+            await pilot.click("#check-pipeline")
+            await pilot.pause(0.3)
+            self.assertIsInstance(app.screen, ConfirmDialog)
+            await pilot.click("#no")
+            await pilot.pause(0.2)
+            self.assertEqual(FakeEngine.seen, [])
+            await pilot.click("#check-pipeline")
+            await pilot.pause(0.3)
+            await pilot.click("#yes")
+            await pilot.pause(0.5)
+        self.assertEqual(FakeEngine.seen, [[cli.PIPELINE]])
+
     async def test_refresh_runs_tpot_setup(self):
         FakeEngine.seen.clear()
         app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)
@@ -232,7 +281,7 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
 
     def test_every_menu_pane_has_a_command(self):
         commands = {"status": "status", "edition": "edition", "settings": "env", "llm": "llm", "users": "users",
-                    "sensors": "sensors", "images": "images", "update": "update"}
+                    "sensors": "sensors", "images": "images", "checks": "check", "update": "update"}
         help_text = cli.build_parser().format_help()
         for key, _title, _cls, _host in tapp.PANES:
             self.assertIn(key, commands, f"menu pane {key} needs a tpot command")

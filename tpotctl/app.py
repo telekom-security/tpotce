@@ -16,7 +16,7 @@ from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.widgets import (Button, Checkbox, ContentSwitcher, DataTable, Footer, Label, ListItem, ListView,
+from textual.widgets import (Button, Checkbox, ContentSwitcher, DataTable, Footer, Input, Label, ListItem, ListView,
                              OptionList, Static, TabbedContent, TabPane)
 from textual.widgets.option_list import Option
 
@@ -82,6 +82,17 @@ class Backend:
     def attacks(self):
         from tpotctl import events
         return events.fetch()
+
+    def top_sources(self):
+        from tpotctl import events
+        return events.top_sources(hours=24, size=5)
+
+    def host_address(self) -> str:
+        """The address of this host towards the internet, the default target of the honeypot probe."""
+        out = subprocess.run(["ip", "-4", "route", "get", "1.1.1.1"], stdout=subprocess.PIPE,
+                             stderr=subprocess.DEVNULL, universal_newlines=True) if ops.linux_host() else None
+        words = out.stdout.split() if out is not None and out.returncode == 0 else []
+        return words[words.index("src") + 1] if "src" in words[:-1] else ""
 
     def sudo_mode(self) -> str:
         from tpotctl import installer
@@ -189,6 +200,22 @@ def attacks_text(attacks, width: int) -> Text:
     return text
 
 
+def sources_text(sources) -> Text:
+    """The top attackers of 24 hours (tpot attackers)."""
+    text = Text()
+    if sources is None or sources.problem or not sources.sources:
+        return text
+    text.append("\nTop attackers, 24 hours\n", style=f"bold {theme.color('glass')}")
+    for source in sources.sources:
+        text.append(f"{source.ip:<16}", style=theme.color("magenta"))
+        text.append(f"{source.count:>7,}".replace(",", " "), style="bold")
+        if source.country:
+            text.append(f"  {source.country}", style=theme.color("mist"))
+        text.append("\n")
+    text.rstrip()
+    return text
+
+
 class StatusPane(Vertical):
 
     def compose(self) -> ComposeResult:
@@ -198,6 +225,7 @@ class StatusPane(Vertical):
             with Vertical(id="side-blocks"):
                 with Vertical(id="attacks-block", classes="block"):
                     yield Static(attacks_text(None, 40), id="attacks")
+                    yield Static("", id="top-attackers")
                 with Vertical(id="system-block", classes="block"):
                     yield Static("", id="system")
             yield Static(logo.pot(), id="pot")
@@ -238,19 +266,21 @@ class StatusPane(Vertical):
     @work(thread=True, exclusive=True, group="attacks")
     def load_attacks(self) -> None:
         attacks = self.app.backend.attacks()
-        self.app.call_from_thread(self.show_attacks, attacks)
+        sources = self.app.backend.top_sources() if not attacks.problem else None
+        self.app.call_from_thread(self.show_attacks, attacks, sources)
 
-    def show_attacks(self, attacks) -> None:
-        self.attacks = attacks
+    def show_attacks(self, attacks, sources=None) -> None:
+        self.attacks, self.sources = attacks, sources
         width = self.query_one("#attacks").content_region.width or 40
         self.query_one("#attacks", Static).update(attacks_text(attacks, width))
+        self.query_one("#top-attackers", Static).update(sources_text(sources))
 
     def repaint(self) -> None:
         """After a change of theme or icons."""
         self.query_one("#pot", Static).update(logo.pot())
         self.query_one(Honeycomb).repaint()
         if self.attacks is not None:
-            self.show_attacks(self.attacks)
+            self.show_attacks(self.attacks, getattr(self, "sources", None))
         if getattr(self, "shown", None):
             self.show(*self.shown)
 
@@ -1016,6 +1046,61 @@ class SensorsPane(Vertical):
         self.load()
 
 
+
+class ChecksPane(Vertical):
+    """Checks of a running T-Pot: probe the honeypots, test the Attack Map pipeline."""
+
+    def compose(self) -> ComposeResult:
+        yield Static("", id="checks-info", classes="info")
+        with Horizontal(classes="actions"):
+            yield Input(placeholder="host to probe", id="check-host", compact=True)
+            yield Button("Probe the honeypots", id="check-honeypots", variant="primary")
+        with Horizontal(classes="actions"):
+            yield Button("Test the Attack Map pipeline", id="check-pipeline")
+            yield Button("Dry run", id="check-pipeline-dry")
+
+    def on_mount(self) -> None:
+        self.show()
+        self.query_one("#check-host", Input).value = self.app.backend.host_address()
+
+    def show(self) -> None:
+        text = Text()
+        text.append("Probe the honeypots", style=f"bold {theme.color('glass')}")
+        text.append("  sends a few service requests and scans every published port with nmap (hptest.sh). Probe "
+                    "this host or another T-Pot; the probes show up in Kibana as attacks.\n\n",
+                    style=theme.color("mist"))
+        text.append("Test the Attack Map pipeline", style=f"bold {theme.color('glass')}")
+        text.append("  appends test events to the logs of Cowrie, Dionaea, Honeytrap and RDPy and follows them "
+                    "through Logstash, Elasticsearch and Redis to the WebSocket of the Attack Map "
+                    "(attackmap_pipeline_test.sh). The events stay in Kibana; the dry run only shows them.",
+                    style=theme.color("mist"))
+        self.query_one("#checks-info", Static).update(text)
+
+    def enter(self) -> None:
+        self.query_one("#check-host", Input).focus()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        from tpotctl import cli
+        from tpotctl.screens.task import Task
+        if event.button.id == "check-honeypots":
+            host = self.query_one("#check-host", Input).value.strip()
+            self.app.run_task(Task(f"Probe the honeypots{' on ' + host if host else ''}",
+                                   [cli.HPTEST] + ([host] if host else []), cwd=os.path.expanduser("~"),
+                                   become="-B", done="The probes are through, Kibana shows them."))
+        elif event.button.id == "check-pipeline-dry":
+            self.app.run_task(Task("Attack Map pipeline, dry run", [cli.PIPELINE, "--dry-run"],
+                                   cwd=os.path.expanduser("~"), autostart=True))
+        elif event.button.id == "check-pipeline":
+            def confirmed(yes: bool) -> None:
+                if yes:
+                    self.app.run_task(Task("Test the Attack Map pipeline", [cli.PIPELINE],
+                                           cwd=os.path.expanduser("~"), become="--become-file", autostart=True,
+                                           done="Every test event reached the Attack Map."))
+            self.app.push_screen(ConfirmDialog(
+                "Inject test events into the honeypot logs?",
+                Text("They become ordinary events in Kibana and the Attack Map and stay there.",
+                     style=theme.color("glass")), yes="Inject and test", no="Back"), confirmed)
+
 class UpdatePane(Vertical):
 
     def compose(self) -> ComposeResult:
@@ -1077,11 +1162,12 @@ PANES = [
     ("users", "Web users", UsersPane, False),
     ("sensors", "Sensors", SensorsPane, True),
     ("images", "Images", ImagesPane, True),
+    ("checks", "Checks", ChecksPane, True),
     ("update", "Update & backup", UpdatePane, True),
 ]
 SHORT = {"edition": "Edition", "users": "Users", "update": "Update"}
 REPAINT = {"status": "repaint", "edition": "show", "settings": "check", "llm": "check", "users": "show", "sensors": "load",
-           "images": "load", "update": "show"}
+           "images": "load", "checks": "show", "update": "show"}
 
 
 def menu_text(key: str, title: str, active: bool) -> Text:

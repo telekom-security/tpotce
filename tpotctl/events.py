@@ -61,6 +61,51 @@ def fetch(url: str = ES_URL, opener: Callable = urllib.request.urlopen) -> Attac
     return parse(answer)
 
 
+@dataclass
+class Source:
+    ip: str
+    count: int
+    country: str = ""
+    reputation: str = ""        # ip_rep of Logstash, i.e. known attacker, mass scanner
+
+
+@dataclass
+class Sources:
+    sources: List[Source] = field(default_factory=list)
+    problem: str = ""
+
+
+def sources_query(hours: int, size: int) -> dict:
+    honeypots = {"bool": {"must_not": {"terms": {"type.keyword": NOT_ATTACKS}}}}
+    return {
+        "size": 0,
+        "query": {"bool": {"filter": [{"range": {"@timestamp": {"gte": f"now-{int(hours)}h"}}}, honeypots]}},
+        "aggs": {"sources": {"terms": {"field": "src_ip.keyword", "size": int(size)}, "aggs": {
+            "country": {"terms": {"field": "geoip.country_name.keyword", "size": 1}},
+            "rep": {"terms": {"field": "ip_rep.keyword", "size": 1}}}}},
+    }
+
+
+def top_sources(hours: int = 24, size: int = 10, url: str = ES_URL,
+                opener: Callable = urllib.request.urlopen) -> Sources:
+    """The source IPs with the most attacks (was mytopips.sh), with country and reputation."""
+    request = urllib.request.Request(f"{url}/logstash-*/_search", data=json.dumps(sources_query(hours, size)).encode(),
+                                     headers={"Content-Type": "application/json"}, method="POST")
+    try:
+        with opener(request, timeout=5) as response:
+            answer = json.loads(response.read().decode("utf-8"))
+    except (OSError, ValueError) as err:
+        return Sources(problem=f"Elasticsearch is not reachable ({getattr(err, 'reason', err)})")
+
+    def first(bucket: dict, name: str) -> str:
+        found = (bucket.get(name) or {}).get("buckets") or []
+        return str(found[0]["key"]) if found else ""
+
+    buckets = ((answer.get("aggregations") or {}).get("sources") or {}).get("buckets") or []
+    return Sources([Source(str(b["key"]), int(b.get("doc_count", 0)), first(b, "country"), first(b, "rep"))
+                    for b in buckets])
+
+
 def sparkline(values: List[int], chars: str, rows: int = 1) -> List[str]:
     """Bars scaled to the highest value, `rows` text rows high (top row first)."""
     if not values:

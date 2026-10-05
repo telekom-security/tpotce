@@ -822,3 +822,10 @@ Button.-error:disabled {
     background: $background;
     border: none;
 }
+
+/* checks (ChecksPane) */
+
+#check-host {
+    width: 40;
+    margin-right: 2;
+}

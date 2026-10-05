@@ -114,6 +114,25 @@ def build_parser() -> argparse.ArgumentParser:
                        ("test", "send a short prompt to the model of a honeypot, from this host")):
         action = llm_actions.add_parser(name, help=text)
         action.add_argument("service", nargs="?", choices=["beelzebub", "galah"], default="galah")
+    check = sub.add_parser("check", help="checks of a running T-Pot: probe the honeypots, test the Attack Map "
+                                         "pipeline")
+    check_actions = check.add_subparsers(dest="check_command", metavar="CHECK")
+    probe = check_actions.add_parser("honeypots", help="probe the honeypots: service requests, then nmap over every "
+                                                       "published port (runs hptest.sh)")
+    probe.add_argument("--host", default="", help="the host to probe, default: the address of this host")
+    probe.add_argument("--become-file", metavar="FILE", default="", help="the sudo password in a file")
+    pipe = check_actions.add_parser("pipeline", help="inject test events and follow them to the Attack Map "
+                                                     "(runs attackmap_pipeline_test.sh); they stay in Kibana")
+    pipe.add_argument("--types", help="comma list of cowrie, dionaea, honeytrap, rdphoneypot")
+    pipe.add_argument("--ips", help="test source IPs, one per type")
+    pipe.add_argument("--dry-run", action="store_true", help="show the events only, inject nothing")
+    pipe.add_argument("--become-file", metavar="FILE", default="", help="the sudo password in a file")
+    pipe.add_argument("-y", "--yes", action="store_true", help="do not ask")
+    attackers = sub.add_parser("attackers", help="the source IPs with the most attacks, with country and "
+                                                 "reputation (was mytopips.sh)")
+    attackers.add_argument("--hours", type=int, default=24, help="of the last HOURS hours (default 24)")
+    attackers.add_argument("--count", type=int, default=10, help="how many (default 10)")
+    attackers.add_argument("--plain", action="store_true", help="only the IPs, one per line")
     sub.add_parser("setup", help="set up or refresh the Python packages of tpot")
     return parser
 
@@ -696,6 +715,69 @@ def run_llm(args) -> int:
     return 0
 
 
+CHECKS = os.path.join(REPO_DIR, "docker", "tpotinit", "dist", "bin")
+HPTEST = os.path.join(CHECKS, "hptest.sh")
+PIPELINE = os.path.join(CHECKS, "attackmap_pipeline_test.sh")
+
+
+def check_command(args) -> List[str]:
+    """The script of a check with its options, the menu runs the same."""
+    if args.check_command == "honeypots":
+        command = [HPTEST]
+        if args.become_file:
+            command += ["-B", args.become_file]
+        return command + ([args.host] if args.host else [])
+    command = [PIPELINE]
+    for option in ("types", "ips"):
+        if getattr(args, option):
+            command += [f"--{option}", getattr(args, option)]
+    if args.dry_run:
+        command.append("--dry-run")
+    if args.become_file:
+        command += ["--become-file", args.become_file]
+    return command
+
+
+def run_check(args) -> int:
+    if args.check_command is None:
+        build_parser().parse_args(["check", "-h"])
+        return 2
+    ops.require_linux_host(f"check {args.check_command}")
+    if args.check_command == "pipeline" and not args.dry_run:
+        if not args.yes and not sys.stdin.isatty():
+            error("add --yes to inject the test events without a terminal")
+            return 2
+        if not confirm("Inject test events into the honeypot logs? They become ordinary events in Kibana and "
+                       "stay there.", args.yes):
+            return 1
+    command = check_command(args)
+    os.chdir(os.path.expanduser("~"))
+    os.execv(command[0], command)
+    return 0    # not reached
+
+
+def run_attackers(args) -> int:
+    from tpotctl import events
+    found = events.top_sources(hours=args.hours, size=args.count)
+    if found.problem:
+        error(found.problem)
+        return 1
+    if args.plain:
+        for source in found.sources:
+            print(source.ip)
+        return 0
+    from rich import box
+    from rich.table import Table
+    table = Table(box=box.SIMPLE_HEAD, header_style=f"bold {MAGENTA}", pad_edge=False,
+                  title=f"Attackers of the last {args.hours} hours", title_justify="left")
+    for column in ("Source IP", "Attacks", "Country", "Reputation"):
+        table.add_column(column, justify="right" if column == "Attacks" else "left")
+    for source in found.sources:
+        table.add_row(source.ip, f"{source.count:,}".replace(",", " "), source.country, source.reputation)
+    _console().print(table)
+    return 0
+
+
 def envschema_sections():
     from tpotctl import envschema
     return envschema.SECTIONS
@@ -794,6 +876,10 @@ def main(argv: Optional[List[str]] = None) -> int:
                 return 1
         if args.command == "edition":
             return run_edition(args)
+        if args.command == "check":
+            return run_check(args)
+        if args.command == "attackers":
+            return run_attackers(args)
         if args.command == "llm":
             from tpotctl import settings as tsettings
             try:
