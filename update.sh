@@ -779,7 +779,12 @@ function fuROLLBACK_CHECKOUT () {
 	    return 1
 	fi
 	fuUI_HINT "Putting the checkout and the configuration back to the state before this update."
-	"$HOME/tpotce/restore.sh" -f "${myARCHIVE}" -c
+	# its own phases do not belong to the ones of this update
+	if ! TPOT_MARKS="" "$HOME/tpotce/restore.sh" -f "${myARCHIVE}" -c;
+	  then
+	    fuUI_ERROR "The checkout and the configuration could not be put back completely, see above. The backup is ${myARCHIVE}."
+	    return 1
+	fi
 }
 
 # Elasticsearch and Kibana upgrade their data in place on the first start of a

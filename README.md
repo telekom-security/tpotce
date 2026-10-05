@@ -902,7 +902,7 @@ changes to tracked files (`patch`), the configuration (`config`), your untracked
 (`untracked`), the files under `data/` (`data`), and the Kibana objects with the ILM policy
 (`elastic`); `-g` takes their names. *Restore a backup* on the *Update & backup* page of the `tpot`
 menu shows the archives with what they hold and lets you tick the groups, then runs
-`restore.sh -g` with its progress in the menu. `-B <file>` hands the sudo password over in a file
+`restore.sh -g` with its progress in the menu. A group that does not come back (i.e. a file that cannot be written) does not stop the others, but `restore.sh` names it at the end and exits with 1. `-B <file>` hands the sudo password over in a file
 (`update.sh` has it as well), which is how the menu runs both scripts without a terminal of their
 own.
 

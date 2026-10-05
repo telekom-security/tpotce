@@ -99,6 +99,15 @@ function fuARCHIVE_LIST () {
 	ls -1t "${myBACKUPDIR}"/*_tpot_backup*.tar 2>/dev/null
 }
 
+# A chosen group that did not come back, named at the end (exit 1)
+myFAILED=""
+function fuFAILED () {   # $1 = group
+	case ", ${myFAILED}, " in
+	  *", $1, "*) ;;
+	  *) myFAILED="${myFAILED:+${myFAILED}, }$1" ;;
+	esac
+}
+
 # What does the archive hold?
 function fuHAS () {   # $1 = Member oder Praefix
 	grep -q "$1" "${myTMPDIR}/toc" 2>/dev/null
@@ -236,11 +245,13 @@ function fuDO_GIT () {
 	if [ -z "${myCOMMIT}" ];
 	  then
 	    fuUI_WARN "rollback.txt is empty, skipping."
+	    fuFAILED git
 	    return
 	fi
 	if ! git -C "${myTPOTDIR}" cat-file -e "${myCOMMIT}^{commit}" 2>/dev/null;
 	  then
 	    fuUI_WARN "Commit ${myCOMMIT} is not in ${myTPOTDIR}, skipping."
+	    fuFAILED git
 	    return
 	fi
 	if git -C "${myTPOTDIR}" reset -q --hard "${myCOMMIT}";
@@ -248,6 +259,7 @@ function fuDO_GIT () {
 	    fuUI_OK "The checkout is at ${myCOMMIT} again."
 	  else
 	    fuUI_ERROR "Could not reset the checkout to ${myCOMMIT}."
+	    fuFAILED git
 	fi
 }
 
@@ -262,6 +274,7 @@ function fuDO_CONFIG () {
 	    fuUI_OK "Wrote ${myTPOTDIR}/.env."
 	  else
 	    fuUI_ERROR "Could not restore .env."
+	    fuFAILED config
 	fi
 	if fuHAS "^docker-compose.yml$";
 	  then
@@ -271,6 +284,7 @@ function fuDO_CONFIG () {
 	        fuUI_OK "Wrote ${myTPOTDIR}/docker-compose.yml ($(head -1 "${myTPOTDIR}/docker-compose.yml"))."
 	      else
 	        fuUI_ERROR "Could not restore docker-compose.yml."
+	        fuFAILED config
 	    fi
 	fi
 }
@@ -317,6 +331,7 @@ function fuDO_UNTRACKED () {
 	if ! tar xf "${myARCHIVE}" -C "${myTMPDIR}" untracked 2>/dev/null;
 	  then
 	    fuUI_ERROR "Could not read them from the archive."
+	    fuFAILED untracked
 	    return
 	fi
 	if ( cd "${myTMPDIR}/untracked" && tar cf - . ) | ( cd "${myTPOTDIR}" && tar xf - );
@@ -324,6 +339,7 @@ function fuDO_UNTRACKED () {
 	    fuUI_OK "Restored $(find "${myTMPDIR}/untracked" -type f | wc -l) files."
 	  else
 	    fuUI_ERROR "Could not write them."
+	    fuFAILED untracked
 	fi
 }
 
@@ -345,6 +361,7 @@ function fuDO_DATA () {
 	        fuUI_OK "Removed the current data/elk/data, the archive brings its own."
 	      else
 	        fuUI_ERROR "Could not remove the current data/elk/data."
+	        fuFAILED data
 	    fi
 	fi
 	if sudo tar xf "${myARCHIVE}" -C "${myTPOTDIR}" -p --numeric-owner --wildcards "data/*" 2>"${myTMPDIR}/data.err";
@@ -352,6 +369,7 @@ function fuDO_DATA () {
 	    fuUI_OK "$(grep -c '^data/' "${myTMPDIR}/toc") entries restored, owner and mode came from the archive."
 	  else
 	    fuUI_ERROR "The files from data/ could not be restored:"
+	    fuFAILED data
 	    sed 's/^/    /' "${myTMPDIR}/data.err"
 	fi
 }
@@ -378,6 +396,7 @@ function fuDO_ELASTIC () {
 	if ! curl -s -f -o /dev/null "${myKIBANA}/api/status";
 	  then
 	    fuUI_ERROR "Kibana does not answer."
+	    fuFAILED elastic
 	    # The files sit in the working directory, which is about to vanish - for the
 	    # manual route they have to stay, and the commands have to name the real path.
 	    myKEEP="${myBACKUPDIR}/${myDATE}_elastic"
@@ -400,10 +419,12 @@ function fuDO_ELASTIC () {
 	            fuUI_OK "Imported ${myOBJ:-0} Kibana objects."
 	          else
 	            fuUI_WARN "Imported ${myOBJ:-0} Kibana objects, errors reported:"
+	            fuFAILED elastic
 	            sed 's/^/    /' "${myTMPDIR}/import.json" | head -5
 	        fi
 	      else
 	        fuUI_ERROR "The Kibana objects could not be imported."
+	        fuFAILED elastic
 	    fi
 	fi
 	if [ -s "${myTMPDIR}/elastic/ilm_policy_tpot.json" ];
@@ -417,6 +438,7 @@ function fuDO_ELASTIC () {
 	        fuUI_OK "The ILM policy is back."
 	      else
 	        fuUI_WARN "Could not put the ILM policy back, the file is in the archive under elastic/."
+	        fuFAILED elastic
 	    fi
 	fi
 }
@@ -550,6 +572,18 @@ if [ -n "${myDO_ELASTIC}" ];
         fuSTART_TPOT
     fi
     fuDO_ELASTIC
+fi
+# A chosen group that failed: the rest is through, the run is not
+if [ -n "${myFAILED}" ];
+  then
+    fuMARK phase "done" Done
+    echo
+    fuUI_ERROR "Not restored: ${myFAILED}. The rest is back, the archive is ${myARCHIVE}."
+    echo
+    exit 1
+fi
+if [ -n "${myDO_ELASTIC}" ];
+  then
     fuMARK phase "done" Done
   else
     fuMARK phase "done" Done

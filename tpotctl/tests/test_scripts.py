@@ -103,6 +103,26 @@ class UpdateShTest(Harness):
         self.assertEqual(self.restart_args(old, "-y", "-B", "/run/f", "-F", "-b", "master"),
                          ["-y", "-F", "-b", "master"])
 
+    def test_rollback_runs_restore_sh_without_marks_and_says_when_it_fails(self):
+        function = re.search(r"function fuROLLBACK_CHECKOUT \(\) \{.*?\n\}", read("update.sh"), re.S).group(0)
+        tpotce = os.path.join(self.home, "tpotce")
+        os.makedirs(tpotce)
+        subprocess.run(["git", "init", "-q", tpotce], check=True)
+        subprocess.run(["git", "-C", tpotce, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q",
+                        "--allow-empty", "-m", "now"], check=True)
+        fake = os.path.join(tpotce, "restore.sh")
+        with open(fake, "w", encoding="utf-8") as out:
+            out.write('#!/bin/sh\necho "marks=${TPOT_MARKS:-none}"\nexit 1\n')
+        os.chmod(fake, 0o755)
+        archive = make_backup(self.home, {"rollback.txt": "0123456789abcdef\n"})
+        script = (f'source "{REPO}/installer/lib/ui.sh"; fuUI_INIT; myARCHIVE="{archive}"\n{function}\n'
+                  'fuROLLBACK_CHECKOUT; echo "rc=$?"')
+        result = subprocess.run(["bash", "-c", script], capture_output=True, universal_newlines=True,
+                                env=dict(os.environ, HOME=self.home, TPOT_MARKS="1", TPOT_GUM="off"))
+        self.assertIn("marks=none", result.stdout)
+        self.assertIn("rc=1", result.stdout)
+        self.assertTrue("could not be put back completely" in result.stdout + result.stderr)
+
     def test_restart_into_this_update_sh_keeps_it(self):
         self.assertEqual(self.restart_args(read("update.sh"), "-y", "-B", "/run/f", "-F"),
                          ["-y", "-B", "/run/f", "-F"])
@@ -175,6 +195,22 @@ class RestoreShTest(Harness):
     def test_unknown_group(self):
         result = self.restore("-f", self.archive, "-g", "config,nonsense")
         self.assertEqual(result.returncode, 1)
+
+    def test_a_failed_group_ends_with_1_after_the_others(self):
+        archive = make_backup(self.home, {"MANIFEST": MANIFEST, "env": "TPOT_TYPE=HIVE\nBEFORE=1\n",
+                                          "untracked/notes.txt": "x\n"}, name="20261005121212_tpot_backup.tar")
+        os.chmod(os.path.join(self.tpotce, ".env"), 0o444)     # read only: cp of .env fails
+        self.addCleanup(os.chmod, os.path.join(self.tpotce, ".env"), 0o644)
+        result = self.restore("-f", archive, "-g", "config,untracked")
+        self.assertEqual(result.returncode, 1, result.stdout[-400:] + result.stderr[-400:])
+        self.assertTrue(os.path.exists(os.path.join(self.tpotce, "notes.txt")))     # the other group is back
+        text = result.stdout + result.stderr
+        self.assertTrue("Not restored: config." in text, text[-400:])
+
+    def test_everything_restored_ends_with_0(self):
+        result = self.restore("-f", self.archive, "-g", "config")
+        self.assertEqual(result.returncode, 0)
+        self.assertFalse("Not restored" in result.stdout + result.stderr)
 
     def test_become_file(self):
         text = read("restore.sh")
