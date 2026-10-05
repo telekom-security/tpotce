@@ -198,39 +198,48 @@ class NavListView(ListView):
 
 
 class _EdgeScroll:
-    """For scrollers: the arrows scroll, at the edge they go on to the next line or widget."""
+    """For scrollers. With the focus on the scroller itself the arrows scroll it and at its edge go on
+    to the next line or widget; with the focus on a widget in it they move the focus (it scrolls
+    along) and only scroll where nothing comes in that direction, so the rest can still be read."""
+
+    def _arrow(self, direction: str, at_edge: bool, scroll) -> None:
+        if self.app.focused is self:
+            if at_edge:
+                navigate(self.app, direction)
+            else:
+                scroll()
+        elif not navigate(self.app, direction):
+            scroll()
 
     def action_scroll_up(self) -> None:
-        if self.scroll_y <= 0:
-            navigate(self.app, "up")
-            return
-        super().action_scroll_up()
+        self._arrow("up", self.scroll_y <= 0, super().action_scroll_up)
 
     def action_scroll_down(self) -> None:
-        if self.scroll_y >= self.max_scroll_y:
-            navigate(self.app, "down")
-            return
-        super().action_scroll_down()
+        self._arrow("down", self.scroll_y >= self.max_scroll_y, super().action_scroll_down)
 
     def action_scroll_left(self) -> None:
-        if self.scroll_x <= 0:
-            navigate(self.app, "left")
-            return
-        super().action_scroll_left()
+        self._arrow("left", self.scroll_x <= 0, super().action_scroll_left)
 
     def action_scroll_right(self) -> None:
-        if self.scroll_x >= self.max_scroll_x:
-            navigate(self.app, "right")
-            return
-        super().action_scroll_right()
+        self._arrow("right", self.scroll_x >= self.max_scroll_x, super().action_scroll_right)
+
+
+def _shown(widget: Widget, root: Widget) -> bool:
+    node = widget
+    while node is not None and node is not root:
+        if not node.display or not node.visible:
+            return False
+        node = node.parent
+    return True
 
 
 class NavScroll(_EdgeScroll, VerticalScroll):
-    """A scroller of a page or dialog. With fields or buttons in it, it takes no focus itself (the
+    """A scroller of a page or dialog. With fields or buttons shown in it, it takes no focus itself (the
     focus scrolls it to them); with only text (the body of a dialog) it does, the arrows scroll it."""
 
     def allow_focus(self) -> bool:
-        return super().allow_focus() and not any(w.can_focus for w in self.query("*"))
+        return super().allow_focus() and not any(
+            w.can_focus and not w.disabled and _shown(w, self) for w in self.query("*"))
 
 
 class NavRichLog(_EdgeScroll, RichLog):

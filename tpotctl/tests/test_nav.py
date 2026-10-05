@@ -18,9 +18,14 @@ KEYS = ("up", "down", "left", "right")
 def tries_for(widget, key):
     """How often a key may be pressed before the focus has to move: lists, tables and text fields
     first run to their edge."""
+    from textual.containers import ScrollableContainer
+    from textual.scroll_view import ScrollView
     from textual.widgets import DataTable, Input, ListView, OptionList
-    if isinstance(widget, Input) and key in ("left", "right"):
-        return len(widget.value) + 2
+    if isinstance(widget, Input):            # a ScrollView too, but its arrows move the cursor
+        return len(widget.value) + 2 if key in ("left", "right") else 1
+    if isinstance(widget, (ScrollableContainer, ScrollView)) and not isinstance(widget, (DataTable, OptionList,
+                                                                                         ListView)):
+        return int(widget.max_scroll_y if key in ("up", "down") else widget.max_scroll_x) + 2
     if isinstance(widget, DataTable) and key in ("up", "down"):
         return widget.row_count + 2
     if isinstance(widget, OptionList) and key in ("up", "down"):
@@ -344,6 +349,46 @@ class AppsTest(unittest.IsolatedAsyncioTestCase):
             graph = await edges(pilot, app)
             check(self, graph, app.focused if app.focused in graph else next(iter(graph)), "installer")
             self.assertIn(app.query_one("#ins-next"), graph)
+
+    def installer(self, sudo):
+        from tpotctl.screens.install import InstallApp
+        from tpotctl.tests.test_installer import FakeEngine as InstallEngine, all_ok
+        from tpotctl.tests.test_settings import make_checkout
+        return InstallApp(engine=InstallEngine, checks=all_ok, sudo_mode=sudo, password_ok=lambda pw: pw == "right",
+                          run=lambda *a, **k: None, repo_dir=make_checkout(self))
+
+    async def test_installer_every_step(self):
+        for sudo in ("password", "passwordless"):
+            app = self.installer(sudo)
+            async with app.run_test(size=(80, 24)) as pilot:
+                await pilot.pause(0.5)
+                for step in app.steps() + ["failed"]:
+                    with self.subTest(sudo=sudo, step=step):
+                        if step == "failed":            # the install ended with an error: log and Close
+                            from tpotctl import installer
+                            app.goto("install")
+                            await pilot.pause(0.2)
+                            app.progress = installer.Progress()
+                            app.finished(1)
+                        else:
+                            app.goto(step)
+                        await pilot.pause(0.3)
+                        graph = await edges(pilot, app)
+                        if graph:
+                            check(self, graph, app.focused if app.focused in graph else next(iter(graph)),
+                                  f"installer {step}")
+                        review = app.query_one("#step-review")
+                        if step == "review" and review.max_scroll_y > 0:
+                            # more than fits: the arrows reach all of it, with and without the sudo field
+                            if review.focusable:
+                                self.assertIn(review, graph)
+                            else:
+                                app.query_one("#ins-sudo").focus()
+                                await pilot.pause(0.2)
+                                before = review.scroll_y
+                                await pilot.press("up")         # nothing above the field: it scrolls
+                                await pilot.pause(0.2)
+                                self.assertLess(review.scroll_y, before)
 
     async def test_uninstaller(self):
         from tpotctl.screens.uninstall import UninstallApp

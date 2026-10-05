@@ -24,7 +24,7 @@ from tpotctl import engine, glyphs, installer, logo, theme, users
 from tpotctl.bootstrap import REPO_DIR
 from tpotctl.screens.dialogs import ConfirmDialog
 from tpotctl.theme import apply as apply_theme
-from tpotctl.widgets.nav import BINDINGS as NAV_BINDINGS, ArrowNav, NavInput, NavOptionList, NavScroll
+from tpotctl.widgets.nav import BINDINGS as NAV_BINDINGS, ArrowNav, NavInput, NavOptionList, NavRichLog, NavScroll
 
 STEPS = [("check", "System check"), ("edition", "Edition"), ("user", "Web user"), ("settings", "Settings"),
          ("review", "Review"), ("install", "Install"), ("done", "Done")]
@@ -131,7 +131,7 @@ class InstallApp(ArrowNav, App):
                 yield Static("", id="install-phase")
                 yield ProgressBar(total=1000, show_eta=False, id="install-bar")
                 yield Static("", id="install-task")
-                yield RichLog(id="install-log", max_lines=2000, wrap=False, markup=False, highlight=False)
+                yield NavRichLog(id="install-log", max_lines=2000, wrap=False, markup=False, highlight=False)
             with NavScroll(id="step-done", classes="ins-step"):
                 yield Static("", id="done-text")
         with Horizontal(id="ins-nav"):
