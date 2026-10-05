@@ -1424,12 +1424,44 @@ class TpotApp(App):
         return any(isinstance(screen, TaskScreen) and screen.busy for screen in self.screen_stack)
 
     async def action_quit(self) -> None:
-        """Not while a script runs: quitting would kill it half way."""
+        """Not while a script runs: quitting would kill it half way. Unsaved changes and values
+        T-Pot would not start with are named first."""
         if self.task_running():
             self.notify("A script is still running, tpot ends when it is through.", title="Not now",
                         severity="warning", timeout=5)
             return
-        await super().action_quit()
+        if len(self.screen_stack) > 1:
+            self.notify("Close this screen first (esc), then quit.", title="Not now", timeout=4)
+            return
+        pending = self.quit_pending()
+        if not pending:
+            await super().action_quit()
+            return
+        body = Text()
+        for number, (_page, line, style) in enumerate(pending):
+            body.append(("\n" if number else "") + f"{glyphs.g('bullet')} {line}", style=theme.color(style))
+
+        def answered(yes: bool) -> None:
+            if yes:
+                self.exit()
+            else:
+                self.goto(pending[0][0])
+        self.push_screen(ConfirmDialog("Quit tpot?", body, yes="Quit anyway", no="Back"), answered)
+
+    def quit_pending(self):
+        """[(page, line, colour)]: the unsaved changes of the settings pages, then the values of the
+        saved .env T-Pot would not start with."""
+        titles = dict((key, title) for key, title, *_rest in PANES)
+        pending = []
+        for pane in self.query(SettingsPane):
+            changes = pane.changes()
+            if changes:
+                pending.append((pane.id, f"Unsaved on the {titles.get(pane.id, pane.id)} page: "
+                                         f"{', '.join(changes)}", "warn"))
+        for problem in self.start_problems():
+            pending.append((problem.page, f"T-Pot would not start: {problem.key} {problem.text}. {problem.fix}.",
+                            "error"))
+        return pending
 
     def check_action(self, action: str, parameters):
         # the customizer and the dialogs are screens of their own, c there would open a second one
