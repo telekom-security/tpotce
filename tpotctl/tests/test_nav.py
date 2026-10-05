@@ -164,6 +164,7 @@ class PagesTest(unittest.IsolatedAsyncioTestCase):
             await pilot.pause(0.3)
             field = app.query_one("#check-host")
             field.focus()
+            await pilot.pause(0.1)
             field.value = "192.0.2.5"
             field.cursor_position = 0
             await pilot.press("left")
@@ -186,6 +187,77 @@ class PagesTest(unittest.IsolatedAsyncioTestCase):
             await pilot.press("left")
             await pilot.pause(0.1)
             self.assertIs(app.focused, sidebar)
+
+
+try:
+    import yaml  # noqa: F401
+except ImportError:
+    yaml = None
+
+if textual:
+    from tpotctl.tests.test_pickers import SettingsHelpersBase
+else:
+    SettingsHelpersBase = unittest.IsolatedAsyncioTestCase
+
+
+@unittest.skipUnless(textual and yaml, "Textual is not installed, run with the venv of tpot")
+class SettingsNavTest(SettingsHelpersBase):
+    """The Settings and the LLM page on an LLM checkout."""
+
+    async def test_llm_page_every_control_reachable(self):
+        from textual.widgets import Tabs
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            pane = await self.open_llm(pilot)
+            for tab in ("tab-beelzebub", "tab-galah"):
+                pane.query_one("#llm-tabs").active = tab
+                await pilot.pause(0.3)
+                graph = await edges(pilot, self.app, root=pane)
+                check(self, graph, pane.query_one("#llm-tabs").query_one(Tabs), tab)
+                for button in ("#llm-find", "#llm-test"):
+                    widget = pane.query_one(button)
+                    self.assertTrue(any(graph[widget][k] is not widget for k in KEYS), button)
+
+    async def test_down_from_the_tools_reaches_the_rows_and_up_comes_back(self):
+        from tpotctl.widgets.fields import SettingRow
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            pane = await self.open_llm(pilot)
+            pane.query_one("#llm-test").focus()
+            for _ in range(2):                      # the tab bar, then the first setting
+                await pilot.press("down")
+            await pilot.pause(0.1)
+            self.assertTrue(any(isinstance(a, SettingRow) for a in self.app.focused.ancestors),
+                            name(self.app.focused))
+            for _ in range(2):
+                await pilot.press("up")
+            await pilot.pause(0.1)
+            self.assertIn(self.app.focused.id or "", ("llm-find", "llm-scan", "llm-test", "llm-add"))
+
+    async def test_right_from_a_field_to_its_button(self):
+        from textual.widgets import Button
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            pane = await self.open_llm(pilot)
+            pane.query_one("#llm-tabs").active = "tab-galah"
+            await pilot.pause(0.3)
+            field = pane.query_one("#set-GALAH_LLM_SERVER_URL")
+            field.focus()
+            await pilot.pause(0.1)                  # the focus selects all of it, the first arrow ends that
+            field.cursor_position = len(field.value)
+            await pilot.press("right")
+            await pilot.pause(0.1)
+            self.assertIsInstance(self.app.focused, Button)
+            await pilot.press("left")
+            await pilot.pause(0.1)
+            self.assertIs(self.app.focused, field)
+
+    async def test_settings_page_save_and_revert_reachable(self):
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            settings_pane = await self.open_settings(pilot)
+            settings_pane.query_one("#set-TPOT_ATTACKMAP_TEXT_TIMEZONE").value = "Europe/Berlin"
+            await pilot.pause(0.3)                  # a change: Revert and Save are on
+            graph = await edges(pilot, self.app, root=settings_pane)
+            start = settings_pane.query_one("#set-TPOT_ATTACKMAP_TEXT_TIMEZONE")
+            check(self, graph, start, "settings")
+            self.assertIn(settings_pane.query_one("#settings-save"), graph)
 
 
 if __name__ == "__main__":
