@@ -1680,11 +1680,11 @@ if [ -n "${myOLDER_CHECKOUT}" ];
     exit 1
 fi
 
-fuTPOT_SETUP
-
 # Still before the image pull: the images of the previous version tell which
-# Elasticsearch version ran so far
+# Elasticsearch version ran so far. And before tpot gets the packages of the new
+# release: a rollback here leaves tpot as it was.
 fuCHECK_ELASTIC
+fuTPOT_SETUP
 fuMARK phase pull Pulling the images
 fuUPDATER
 

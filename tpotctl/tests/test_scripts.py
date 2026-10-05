@@ -173,6 +173,10 @@ class UpdateShTest(Harness):
         subprocess.run(["git", "-C", origin] + git + ["commit", "-q", "--allow-empty", "-m", "two"], check=True)
         self.assertIn("@@tpot changed checkout", run())
 
+    def test_the_elastic_check_comes_before_the_tpot_setup(self):
+        main = read("update.sh").split("\nfuREMOVE_DROPPED_SERVICES\n", 1)[1]     # the main section
+        self.assertLess(main.index("\nfuCHECK_ELASTIC\n"), main.index("\nfuTPOT_SETUP\n"))
+
     def test_restart_into_this_update_sh_keeps_it(self):
         self.assertEqual(self.restart_args(read("update.sh"), "-y", "-B", "/run/f", "-F"),
                          ["-y", "-B", "/run/f", "-F"])
