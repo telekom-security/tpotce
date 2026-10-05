@@ -779,8 +779,14 @@ function fuROLLBACK_CHECKOUT () {
 	    return 1
 	fi
 	fuUI_HINT "Putting the checkout and the configuration back to the state before this update."
+	local myARGS=(-f "${myARCHIVE}" -c)
+	# its own process: the sudo of this run does not reach it, the password file does
+	if [ -n "${myBECOME_FILE}" ] && grep -q 'getopts ":[^"]*B:' "$HOME/tpotce/restore.sh";
+	  then
+	    myARGS+=(-B "${myBECOME_FILE}")
+	fi
 	# its own phases do not belong to the ones of this update
-	if ! TPOT_MARKS="" "$HOME/tpotce/restore.sh" -f "${myARCHIVE}" -c;
+	if ! TPOT_MARKS="" "$HOME/tpotce/restore.sh" "${myARGS[@]}";
 	  then
 	    fuUI_ERROR "The checkout and the configuration could not be put back completely, see above. The backup is ${myARCHIVE}."
 	    return 1

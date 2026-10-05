@@ -103,7 +103,10 @@ class UpdateShTest(Harness):
         self.assertEqual(self.restart_args(old, "-y", "-B", "/run/f", "-F", "-b", "master"),
                          ["-y", "-F", "-b", "master"])
 
-    def test_rollback_runs_restore_sh_without_marks_and_says_when_it_fails(self):
+    RESTORE_NOW = '#!/bin/sh\n# while getopts ":lf:ycg:B:h" opt; do\necho "marks=${TPOT_MARKS:-none} args=$*"\nexit 1\n'
+    RESTORE_OLD = '#!/bin/sh\n# while getopts ":lf:ycg:h" opt; do\necho "marks=${TPOT_MARKS:-none} args=$*"\nexit 1\n'
+
+    def rollback(self, restore_text, become=""):
         function = re.search(r"function fuROLLBACK_CHECKOUT \(\) \{.*?\n\}", read("update.sh"), re.S).group(0)
         tpotce = os.path.join(self.home, "tpotce")
         os.makedirs(tpotce)
@@ -112,16 +115,33 @@ class UpdateShTest(Harness):
                         "--allow-empty", "-m", "now"], check=True)
         fake = os.path.join(tpotce, "restore.sh")
         with open(fake, "w", encoding="utf-8") as out:
-            out.write('#!/bin/sh\necho "marks=${TPOT_MARKS:-none}"\nexit 1\n')
+            out.write(restore_text)
         os.chmod(fake, 0o755)
         archive = make_backup(self.home, {"rollback.txt": "0123456789abcdef\n"})
-        script = (f'source "{REPO}/installer/lib/ui.sh"; fuUI_INIT; myARCHIVE="{archive}"\n{function}\n'
-                  'fuROLLBACK_CHECKOUT; echo "rc=$?"')
+        script = (f'source "{REPO}/installer/lib/ui.sh"; fuUI_INIT; myARCHIVE="{archive}"; '
+                  f'myBECOME_FILE="{become}"\n{function}\nfuROLLBACK_CHECKOUT; echo "rc=$?"')
         result = subprocess.run(["bash", "-c", script], capture_output=True, universal_newlines=True,
                                 env=dict(os.environ, HOME=self.home, TPOT_MARKS="1", TPOT_GUM="off"))
-        self.assertIn("marks=none", result.stdout)
-        self.assertIn("rc=1", result.stdout)
-        self.assertTrue("could not be put back completely" in result.stdout + result.stderr)
+        return result.stdout + result.stderr
+
+    @staticmethod
+    def args_of(text):
+        return text.split("args=")[1].split("\n")[0]
+
+    def test_rollback_runs_restore_sh_without_marks_and_says_when_it_fails(self):
+        text = self.rollback(self.RESTORE_NOW)
+        self.assertIn("marks=none", text)
+        self.assertIn("rc=1", text)
+        self.assertTrue("could not be put back completely" in text)
+        self.assertNotIn("-B", self.args_of(text))
+
+    def test_rollback_hands_the_become_file_on(self):
+        text = self.rollback(self.RESTORE_NOW, become="/run/tpot-become")
+        self.assertIn("-c -B /run/tpot-become", self.args_of(text))
+
+    def test_rollback_leaves_the_become_file_out_for_an_older_restore_sh(self):
+        text = self.rollback(self.RESTORE_OLD, become="/run/tpot-become")
+        self.assertNotIn("-B", self.args_of(text))
 
     def test_restart_into_this_update_sh_keeps_it(self):
         self.assertEqual(self.restart_args(read("update.sh"), "-y", "-B", "/run/f", "-F"),
