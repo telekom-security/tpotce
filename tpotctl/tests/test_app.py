@@ -24,16 +24,19 @@ if textual:
     from tpotctl.screens.dialogs import ChoiceDialog, ConfirmDialog
 
     class FakeBackend(tapp.Backend):
-        def __init__(self, host=True):
-            self.host = host
+        def __init__(self, host=True, kind="HIVE"):
+            self.host, self.kind = host, kind
+            self.calls = []
 
         def linux_host(self):
             return self.host
 
         def status(self):
-            return ops.Status("24.04.2", "dev", "abc1234", "STANDARD", "HIVE", "active", "/home/t/tpotce")
+            self.calls.append("status")
+            return ops.Status("24.04.2", "dev", "abc1234", "STANDARD", self.kind, "active", "/home/t/tpotce")
 
         def containers(self):
+            self.calls.append("containers")
             return [ops.Container("cowrie", "running", "Up 1 hour (healthy)", "healthy", "22->22/tcp", "c"),
                     ops.Container("conpot_ipmi", "exited", "Exited (1)", "", "", "c")]
 
@@ -44,7 +47,7 @@ if textual:
             return []
 
         def tpot_type(self):
-            return "HIVE"
+            return self.kind
 
         def system(self):
             from tpotctl import system
@@ -273,11 +276,55 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(app.query_one("#switch-edition").disabled)
             self.assertIn("MAC_WIN", str(app.query_one("#edition-note").render()))
 
-    async def test_mac_only_gets_the_customizer(self):
-        app = tapp.TpotApp(backend=FakeBackend(host=False), runner=Recorder())
+    async def test_host_pages_are_shown_locked_off_host(self):
+        backend = FakeBackend(host=False)
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.3)
+            self.assertEqual([p[0] for p in app.panes], [p[0] for p in tapp.PANES])     # nothing hidden
+            for key in ("status", "sensors", "images", "checks", "update"):
+                with self.subTest(page=key):
+                    self.assertIsInstance(app.query_one(f"#{key}"), tapp.LockedPane)
+                    self.assertIn("needs a T-Pot host", str(app.query_one(f"#{key}").query_one(".locked-why").render()))
+            for key in ("edition", "settings", "llm", "users"):
+                self.assertNotIsInstance(app.query_one(f"#{key}"), tapp.LockedPane)
+            label = str(app.query_one("#menu-status").query_one(".menu-long").render())
+            self.assertIn(tapp.glyphs.g("locked"), label)
+        self.assertNotIn("containers", backend.calls)          # no docker call off host
+
+    async def test_web_users_and_sensors_are_locked_on_a_sensor(self):
+        app = tapp.TpotApp(backend=FakeBackend(kind="SENSOR"), runner=Recorder())
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.3)
+            self.assertIn("SENSOR", str(app.query_one("#users").query_one(".locked-why").render()))
+            self.assertIn("HIVE", str(app.query_one("#sensors").query_one(".locked-why").render()))
+            self.assertNotIsInstance(app.query_one("#status"), tapp.LockedPane)
+
+    async def test_palette_host_action_off_host_only_tells(self):
+        from tpotctl.commands import TpotCommands
+        runner = Recorder()
+        app = tapp.TpotApp(backend=FakeBackend(host=False), runner=runner)
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause(0.2)
-            self.assertEqual([p[0] for p in app.panes], ["edition", "settings", "llm", "users"])
+            found = {name: (help_text, callback) for name, help_text, callback in TpotCommands(app.screen).commands()}
+            self.assertIn("needs a T-Pot host", found["Start T-Pot"][0])
+            found["Start T-Pot"][1]()
+            await pilot.pause(0.2)
+        self.assertEqual(runner.commands, [])
+
+    def test_readme_matrix_names_every_command_and_where(self):
+        import re
+        with open(os.path.join(cli.REPO_DIR, "README.md"), encoding="utf-8") as handle:
+            readme = handle.read()
+        start = readme.index("## The tpot Command")
+        section = readme[start:readme.index("\n## ", start + 10)]
+        self.assertIn("| Command | Menu | Where | Does |", section)
+        names = re.findall(r"^    (\w+)\s", cli.build_parser().format_help(), re.M)
+        self.assertGreater(len(names), 15)
+        for name in names:
+            self.assertTrue(f"`tpot {name}" in section or f"`{name}`" in section, name)
+        self.assertNotIn("only `tpot customize` and `tpot setup` are available", readme)
+        self.assertIn("### What depends on the host and the edition", section)
 
     def test_every_menu_pane_has_a_command(self):
         commands = {"status": "status", "edition": "edition", "settings": "env", "llm": "llm", "users": "users",

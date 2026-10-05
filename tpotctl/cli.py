@@ -20,7 +20,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="tpot", description="Configure and run T-Pot.",
         epilog="Without a command tpot opens its menu. update, restore and customize hand all their "
-               "options to update.sh, restore.sh and compose/customizer.py, i.e. tpot update -h.")
+               "options to update.sh, restore.sh and compose/customizer.py, i.e. tpot update -h. status, ps, "
+               "images, start, stop, restart, update, restore, check, uninstall and sensors need a T-Pot host "
+               "(Linux with systemd); users and sensors a HIVE.")
     sub = parser.add_subparsers(dest="command", metavar="COMMAND")
     sub.add_parser("status", help="version, edition, service state and containers")
     ps = sub.add_parser("ps", help="containers with status and ports (was: dps)")
@@ -456,16 +458,8 @@ def run_sensors(args) -> int:
         say.ok(f"{args.name} is removed, {note}. Nothing was done on the sensor itself.", console.file)
         return 0
     if command == "set":
-        sensor = registry.get(args.name)
-        if args.host:
-            sensor.host = tsensors.check_address(args.host)
-        if args.ssh_user:
-            sensor.ssh_user = tsensors.check_user(args.ssh_user)
-        if args.hive_address:
-            sensor.hive_address = tsensors.check_address(args.hive_address)
-        if args.ssh_port:
-            sensor.ssh_port = tsensors.check_port(args.ssh_port)
-        registry.record(sensor)
+        registry.update(args.name, host=args.host or "", ssh_user=args.ssh_user or "", ssh_port=args.ssh_port or "",
+                        hive_address=args.hive_address or "")
         say.ok(f"{args.name} is updated.", console.file)
         return 0
     if command == "cert":

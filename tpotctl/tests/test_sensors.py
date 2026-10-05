@@ -370,6 +370,48 @@ class SensorsPaneTest(unittest.IsolatedAsyncioTestCase):
                 await pilot.pause(0.5)
         self.assertEqual([u.name for u in sensors.Registry(repo).entries()], ["sensor-old-otter"])
 
+    async def test_edit_where_a_sensor_is(self):
+        from tpotctl import app as tapp, ops
+        from tpotctl.screens.dialogs import SensorEditDialog
+        repo = checkout(self)
+
+        class Backend(tapp.Backend):
+            def linux_host(self):
+                return True
+
+            def tpot_type(self):
+                return "HIVE"
+
+            def status(self):
+                return ops.Status("24.04.2", "dev", "abc", "STANDARD", "HIVE", "active", repo)
+
+            def containers(self):
+                return []
+
+            def sensors(self):
+                return sensors.Registry(repo, hasher=fake_hash)
+
+            def sensor_status(self, days=7):
+                return sensors.Status(sensors={})
+
+        app = tapp.TpotApp(backend=Backend(), runner=lambda command, cwd=None: 0)
+        async with app.run_test(size=(150, 45)) as pilot:
+            await pilot.pause(0.3)
+            app.goto("sensors")
+            await pilot.pause(0.5)
+            table = app.query_one("#sensors-table")
+            table.move_cursor(row=0)
+            name = app.query_one("#sensors").selected()
+            await pilot.click("#sensor-edit")
+            await pilot.pause(0.3)
+            self.assertIsInstance(app.screen, SensorEditDialog)
+            app.screen.query_one("#edit-host").value = "10.0.0.9"
+            app.screen.query_one("#edit-port").value = "2222"
+            await pilot.click("#edit-save")
+            await pilot.pause(0.4)
+        sensor = sensors.Registry(repo).get(name)
+        self.assertEqual((sensor.host, sensor.ssh_port), ("10.0.0.9", 2222))
+
     def test_sensor_pages_only_on_a_hive(self):
         from tpotctl import app as tapp
 
@@ -380,9 +422,11 @@ class SensorsPaneTest(unittest.IsolatedAsyncioTestCase):
             def tpot_type(self):
                 return "SENSOR"
 
-        panes = [p[0] for p in tapp.TpotApp(backend=Backend(), runner=None).panes]
-        self.assertNotIn("sensors", panes)
-        self.assertNotIn("users", panes)
+        app = tapp.TpotApp(backend=Backend(), runner=None)
+        # on a SENSOR both pages stay in the menu, locked with the reason
+        self.assertIn("sensors", app.locked)
+        self.assertIn("users", app.locked)
+        self.assertNotIn("status", app.locked)
 
 
 if __name__ == "__main__":

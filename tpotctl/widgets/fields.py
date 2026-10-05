@@ -49,10 +49,10 @@ class SettingRow(Vertical):
             self.row = row
 
     def __init__(self, rule: envschema.Rule, value: str, fixed: str, unlockable: bool = False,
-                 unlocked: bool = False, absent: bool = False):
+                 unlocked: bool = False, note: str = ""):
         super().__init__(classes="setting", id=f"row-{rule.key}")
         self.rule, self.value, self.fixed = rule, value, fixed
-        self.absent = absent            # its service is not in the edition, only offered
+        self.note = note                # why the key does not apply here (not in your edition, ...)
         self.unlockable, self.unlocked = unlockable and not rule.editable, unlocked
         # a row without a field can take the focus itself, so the arrows reach every setting
         self.can_focus = not rule.editable and not self.unlockable
@@ -71,8 +71,8 @@ class SettingRow(Vertical):
             with Vertical(classes="setting-name"):
                 yield Label(self.title_text(False), classes="setting-title")
                 yield Label(Text(rule.key), classes="setting-key")
-                if self.absent:
-                    yield Label(Text("not in your edition", style=theme.color("ash")), classes="setting-absent")
+                if self.note:
+                    yield Label(Text(self.note, style=theme.color("ash")), classes="setting-absent")
             with Horizontal(classes="setting-control"):
                 yield from self.control()
             yield Static(Text(rule.help), classes="help")

@@ -225,7 +225,7 @@ class UsersPaneTest(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(app.query_one("#users-table").row_count, 1)
         self.assertEqual([u.name for u in users.load(repo).users()], ["tsec"])
 
-    async def test_no_users_page_on_a_sensor(self):
+    async def test_users_page_is_locked_on_a_sensor(self):
         from tpotctl import app as tapp
 
         class Backend(tapp.Backend):
@@ -235,7 +235,8 @@ class UsersPaneTest(unittest.IsolatedAsyncioTestCase):
             def tpot_type(self):
                 return "SENSOR"
 
-        self.assertNotIn("users", [p[0] for p in tapp.TpotApp(backend=Backend(), runner=None).panes])
+        # the page stays in the menu, locked with the reason
+        self.assertIn("users", tapp.TpotApp(backend=Backend(), runner=None).locked)
 
 
 if __name__ == "__main__":

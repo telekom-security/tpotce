@@ -66,6 +66,7 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/in
   - [Elasticvue](#elasticvue)
 - [Configuration](#configuration)
   - [The tpot Command](#the-tpot-command)
+    - [What depends on the host and the edition](#what-depends-on-the-host-and-the-edition)
   - [T-Pot Config File](#t-pot-config-file)
   - [Customize T-Pot Honeypots and Services](#customize-t-pot-honeypots-and-services)
 - [Maintenance](#maintenance)
@@ -687,35 +688,44 @@ On the T-Pot Landing Page just click on `Elasticvue` and you will be forwarded t
 # Configuration
 
 ## The tpot Command
-`tpot` configures and runs T-Pot from one place. Without arguments it opens a menu (status, edition & services, settings, web users, sensors, images, update & backup), every menu entry is a command as well:
+`tpot` configures and runs T-Pot from one place. Without arguments it opens a menu (status, edition & services, settings, LLM, web users, sensors, images, checks, update & backup), every menu page is a command as well. *Where* says where a command works: on every host (also on macOS / Windows with Docker Desktop), on a T-Pot host (Linux with systemd) or on a HIVE (not on a SENSOR):
 
-| Command | Does |
-|---|---|
-| `tpot` | the menu |
-| `tpot status` | version, edition, type, service state and containers |
-| `tpot ps [--watch [SECONDS]]` | containers with status and ports, `dps` / `dpsw` are short for it |
-| `tpot images` | Docker images, `dim` is short for it |
-| `tpot start` / `stop` / `restart` | `sudo systemctl … tpot` |
-| `tpot update [OPTIONS]` | runs `~/tpotce/update.sh` with your options, i.e. `tpot update -y`; the menu runs it with its phases and log on the *Update & backup* page |
-| `tpot restore [OPTIONS]` | runs `~/tpotce/restore.sh` with your options |
-| `tpot edition [list]` / `tpot edition set EDITION` | the editions, and switching to another one: T-Pot stops, `docker-compose.yml` is kept in `~/tpot_backups`, the edition takes its place, T-Pot starts again |
-| `tpot customize [OPTIONS]` | the [customizer](#customize-t-pot-honeypots-and-services) |
-| `tpot env [list [--all] [--show-secrets]]` | the [settings](#t-pot-config-file) in `.env` that matter for this T-Pot, secrets masked |
-| `tpot env get KEY` / `tpot env set KEY=VALUE …` | read or change a setting, it is only written if it is valid afterwards |
-| `tpot env check` | checks `.env` as T-Pot does on start, exit code 1 on errors |
-| `tpot llm [detect [--scan]\|models\|test]` | the LLM backends of Beelzebub and Galah: their settings, find an Ollama (the configured URLs, this host, its Docker bridges and gateways; `--scan` asks every address of the /24 of this host, after a confirmation), list the models, send a short test prompt |
-| `tpot users [list\|add\|passwd\|remove]` | the [web users](#add-users-to-nginx-t-pot-webui), changes count right away |
-| `tpot sensors [list\|add\|remove\|set\|cert]` | the [sensors](#distributed-deployment) of a HIVE |
-| `tpot check honeypots [--host HOST]` | probes the honeypots: a few service requests, then nmap over every published port (installs nmap, ncat and the DICOM tools of your distribution first; openSUSE has no nmap, there only the service requests run); the probes show up in Kibana |
-| `tpot check pipeline [--dry-run]` | follows test events from the honeypot logs through Logstash, Elasticsearch and Redis to the WebSocket of the Attack Map; the events stay in Kibana |
-| `tpot attackers [--hours H] [--count N]` | the source IPs with the most attacks, with country and reputation; the *Status* page shows the top five |
-| `tpot install [--classic]` | the installer assistant, see [Get and install T-Pot](#get-and-install-t-pot) (the installer starts it for you) |
-| `tpot uninstall` | removes T-Pot, with a full backup first if you like, see [Uninstall T-Pot](#uninstall-t-pot) |
-| `tpot setup` | sets up or refreshes the Python packages of `tpot` |
+| Command | Menu | Where | Does |
+|---|---|---|---|
+| `tpot` | | every host | the menu |
+| `tpot status` | *Status* | T-Pot host | version, edition, type, service state and containers |
+| `tpot ps [--watch [SECONDS]]` | *Status* | T-Pot host | containers with status and ports, `dps` / `dpsw` are short for it |
+| `tpot images` | *Images* | T-Pot host | Docker images, `dim` is short for it |
+| `tpot start` / `stop` / `restart` | *Status* | T-Pot host | `sudo systemctl … tpot` |
+| `tpot update [OPTIONS]` | *Update & backup* | T-Pot host | runs `~/tpotce/update.sh` with your options, i.e. `tpot update -y`; the menu runs it with its phases and log |
+| `tpot restore [OPTIONS]` | *Update & backup* | T-Pot host | runs `~/tpotce/restore.sh` with your options; the menu lets you pick the archive and its parts |
+| `tpot edition [list]` / `tpot edition set EDITION` | *Edition & services* | every host (switching: T-Pot host) | the editions, and switching to another one: T-Pot stops, `docker-compose.yml` is kept in `~/tpot_backups`, the edition takes its place, T-Pot starts again |
+| `tpot customize [OPTIONS]` | *Edition & services*, `c` | every host | the [customizer](#customize-t-pot-honeypots-and-services) |
+| `tpot env [list [--all] [--show-secrets]]` | *Settings* (*All settings*) | every host | the [settings](#t-pot-config-file) in `.env` that matter for this T-Pot, secrets masked |
+| `tpot env get KEY` / `tpot env set KEY=VALUE …` | *Settings* | every host | read or change a setting, it is only written if it is valid afterwards |
+| `tpot env check` | `ctrl+p` *Check the settings* | every host | checks `.env` as T-Pot does on start, exit code 1 on errors |
+| `tpot llm [detect [--scan]\|models\|test]` | *LLM* | every host | the LLM backends of Beelzebub and Galah: their settings, find an Ollama (the configured URLs, this host, its Docker bridges and gateways; `--scan` asks every address of the /24 of this host, after a confirmation), list the models, send a short test prompt |
+| `tpot users [list\|add\|passwd\|remove]` | *Web users* | HIVE | the [web users](#add-users-to-nginx-t-pot-webui), changes count right away |
+| `tpot sensors [list\|add\|remove\|set\|cert]` | *Sensors* (`set` is *Edit*) | T-Pot host, HIVE | the [sensors](#distributed-deployment) of a HIVE |
+| `tpot check honeypots [--host HOST]` | *Checks* | T-Pot host | probes the honeypots: a few service requests, then nmap over every published port (installs nmap, ncat and the DICOM tools of your distribution first; openSUSE has no nmap, there only the service requests run); the probes show up in Kibana |
+| `tpot check pipeline [--dry-run]` | *Checks* | T-Pot host | follows test events from the honeypot logs through Logstash, Elasticsearch and Redis to the WebSocket of the Attack Map; the events stay in Kibana |
+| `tpot attackers [--hours H] [--count N]` | *Status* (top five) | T-Pot host, HIVE | the source IPs with the most attacks, with country and reputation |
+| `tpot install [--classic]` | `ctrl+p` *Install T-Pot* | Linux without T-Pot | the installer assistant, see [Get and install T-Pot](#get-and-install-t-pot) (the installer starts it for you) |
+| `tpot uninstall` | *Update & backup* | T-Pot host | removes T-Pot, with a full backup first if you like, see [Uninstall T-Pot](#uninstall-t-pot) |
+| `tpot setup` | *Update & backup* | every host | sets up or refreshes the Python packages of `tpot` |
 
-The installer links `~/tpotce/tpot` to `/usr/local/bin/tpot` and `update.sh` keeps it up to date. `tpot` runs from a Python venv of its own in `~/.local/share/tpotce/venv`, set up on first use from pinned and hash-checked packages (it needs pypi.org once, and `python3-venv` on Debian / Ubuntu, which the installer brings along). `update.sh`, `restore.sh` and the other scripts keep working on their own, `tpot` only calls them. Do not run `tpot` as root, it uses `sudo` where needed. On macOS and Windows only `tpot customize` and `tpot setup` are available.
+The installer links `~/tpotce/tpot` to `/usr/local/bin/tpot` and `update.sh` keeps it up to date. `tpot` runs from a Python venv of its own in `~/.local/share/tpotce/venv`, set up on first use from pinned and hash-checked packages (it needs pypi.org once, and `python3-venv` on Debian / Ubuntu, which the installer brings along). `update.sh`, `restore.sh` and the other scripts keep working on their own, `tpot` only calls them. Do not run `tpot` as root, it uses `sudo` where needed.
 
 The menu starts with a short animation, honey filling the t-pot letters (about two seconds, any key goes on at once, `TPOT_SPLASH=off` leaves it out). The arrow keys move through it: up / down in the menu on the left, right or enter into the page, esc back to the menu; on the *Settings* page up / down go from setting to setting (the one you are on is framed, changed ones are tagged *changed*), above the first one left / right switch between the tabs, enter or space opens a list or flips a switch. `ctrl+p` searches every page, action and setting, `f2` switches between the icon sets. The default icons are symbols every font has, `nerd` needs a [Nerd Font](https://www.nerdfonts.com) in the terminal you look at (on the other end of an SSH connection that is the font of your own computer), `ascii` uses plain characters only. Your choice is kept in `~/.config/tpotce/tpot.json`, `TPOT_ICONS` (`unicode`, `nerd` or `ascii`) in the environment wins over it. The *Status* page shows every container as a cell of a honeycomb (filled and green: running, yellow: starting, red: unhealthy or restarting, outlined: stopped), CPU, memory and the disk of the T-Pot data, and on a HIVE the attacks of the last hour and day from Elasticsearch.
+
+### What depends on the host and the edition
+The menu shows every page everywhere; a page that cannot work on this host stays in the menu, dimmed with a lock, and says why and what does the job instead:
+- **T-Pot host only** (Linux with systemd): *Status*, *Images*, *Checks*, *Update & backup* and *Sensors*. On macOS and Windows T-Pot runs in Docker Desktop, there these pages are locked; `ctrl+p` still lists their actions (start, stop, update, ...) and says the same.
+- **HIVE only**: *Web users* and *Sensors*. A SENSOR has no web UI and is managed from its HIVE, so both are locked there.
+- **Every host**: *Edition & services* (switching the edition needs a T-Pot host; macOS and Windows run the MAC_WIN edition), *Settings*, *LLM*.
+- **Settings follow the edition**: the *Settings* page and `tpot env list` show the settings of the services in your `docker-compose.yml` and of your T-Pot type. *All settings* (`--all`) shows the rest too, tagged *not in your edition* or *only on a SENSOR*.
+- **LLM settings are always shown**: those of Beelzebub and Galah, also when they are not in your edition, tagged *not in your edition*, so they are ready when you add them; their problems only warn then (T-Pot does not check them for a service it does not run). The *LLM* page offers *Add … to the edition*.
+- `tpot install` is offered (`ctrl+p` *Install T-Pot*) only on a Linux host without T-Pot.
 <br><br>
 
 ## T-Pot Config File

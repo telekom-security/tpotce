@@ -98,6 +98,11 @@ class Backend:
         from tpotctl import installer
         return installer.sudo_mode()
 
+    def installable(self) -> bool:
+        """A Linux host without T-Pot: tpot install would run here."""
+        from tpotctl import installer
+        return not installer.installed()
+
     def editions(self):
         from tpotctl import editions
         return editions.available()
@@ -438,6 +443,7 @@ class SettingsPane(Vertical):
     """
 
     PREFIX = "settings"
+    ALL_TOGGLE = True           # the checkbox for tpot env list --all
 
     BINDINGS = [
         Binding("down", "move(1)", "Next setting", show=False),
@@ -447,6 +453,10 @@ class SettingsPane(Vertical):
     def compose(self) -> ComposeResult:
         with Horizontal(id=f"{self.PREFIX}-head", classes="settings-head"):
             yield Static("", id=f"{self.PREFIX}-status", classes="settings-status")
+            if self.ALL_TOGGLE:
+                yield Checkbox("All settings", False, id=f"{self.PREFIX}-all",
+                               tooltip="also the ones of services that are not in your edition and of the other "
+                                       "T-Pot type (tpot env list --all)")
             yield Button("Revert", id=f"{self.PREFIX}-revert")
             yield Button("Save", id=f"{self.PREFIX}-save", variant="primary", disabled=True)
         yield from self.extra()
@@ -466,7 +476,14 @@ class SettingsPane(Vertical):
         from tpotctl import envschema
         return envschema.SECTIONS
 
+    async def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
+        if event.checkbox.id == f"{self.PREFIX}-all":
+            event.stop()
+            self.include_all = event.value
+            await self.reload()
+
     async def on_mount(self) -> None:
+        self.include_all = False
         self.current = None
         self.rows = {}
         self.unlocked = set()
@@ -488,11 +505,11 @@ class SettingsPane(Vertical):
         self.draft = dict(self.current.values)
         self.unlocked = set()
         by_section = {}
-        for rule in self.current.relevant(offered=True):
+        for rule in self.current.relevant(include_all=self.include_all, offered=True):
             if not self.wanted(rule):
                 continue
             row = SettingRow(rule, self.draft.get(rule.key, ""), self.current.why_fixed(rule.key),
-                             unlockable=self.current.can_unlock(rule.key), absent=self.current.absent(rule))
+                             unlockable=self.current.can_unlock(rule.key), note=self.current.not_here(rule))
             self.rows[rule.key] = row
             by_section.setdefault(self.group_of(rule), []).append(row)
         for section, title in self.groups():
@@ -698,6 +715,7 @@ class LlmPane(SettingsPane):
     """
 
     PREFIX = "llm"
+    ALL_TOGGLE = False
     SERVICES = [("beelzebub", "Beelzebub"), ("galah", "Galah")]
     URL_KEY = {"beelzebub": "BEELZEBUB_LLM_HOST", "galah": "GALAH_LLM_SERVER_URL"}
 
@@ -941,6 +959,7 @@ class SensorsPane(Vertical):
         yield DataTable(id="sensors-table", cursor_type="row", zebra_stripes=True)
         with Horizontal(classes="actions"):
             yield Button("Deploy a sensor", id="sensor-add", variant="primary")
+            yield Button("Edit", id="sensor-edit")
             yield Button("Remove", id="sensor-remove")
             yield Button("Renew certificate", id="sensor-cert-renew")
             yield Button("Send certificate", id="sensor-cert-send")
@@ -1012,6 +1031,11 @@ class SensorsPane(Vertical):
         elif button == "sensor-add":
             self.app.push_screen(SensorDialog(tsensors.check_address, tsensors.check_user,
                                               tsensors.default_hive_address), self.deploy)
+        elif button == "sensor-edit" and self.selected() and self.registry is not None:
+            from tpotctl.screens.dialogs import SensorEditDialog
+            name, registry = self.selected(), self.registry
+            self.app.push_screen(SensorEditDialog(registry.get(name), lambda **values: registry.update(name, **values)),
+                                 lambda values: self.load() if values else None)
         elif button == "sensor-remove" and self.selected() and self.registry is not None:
             name = self.selected()
             self.app.push_screen(ConfirmDialog(f"Revoke the access of {name}? It cannot send to this HIVE any more, "
@@ -1154,24 +1178,69 @@ class UpdatePane(Vertical):
                                  if target else None)
 
 
+
+class LockedPane(Vertical):
+    """A page that does not work here: why, and what does instead."""
+
+    def __init__(self, key: str, title: str, why: str, **kwargs):
+        super().__init__(**kwargs)
+        self.key, self.title, self.why = key, title, why
+
+    def compose(self) -> ComposeResult:
+        yield Static("", classes="locked-title")
+        yield Static("", classes="locked-why")
+        yield Static("", classes="locked-instead")
+
+    def on_mount(self) -> None:
+        self.show()
+
+    def show(self) -> None:
+        self.query_one(".locked-title", Static).update(
+            Text(f"{glyphs.g('locked')} {self.title}", style=f"bold {theme.color('ash')}"))
+        self.query_one(".locked-why", Static).update(Text(f"{self.title} {self.why}", style=theme.color("glass")))
+        text = Text()
+        if self.key in INSTEAD:
+            text.append("Instead: ", style=theme.color("mist"))
+            text.append(f"{INSTEAD[self.key]}\n\n", style=theme.color("key"))
+        working = [title for key, title, *_rest in PANES if key not in self.app.locked]
+        text.append("What works here: ", style=theme.color("mist"))
+        text.append(", ".join(working), style=theme.color("glass"))
+        self.query_one(".locked-instead", Static).update(text)
+
+# the 4th field says where a page works: "any" host, a T-Pot "host" (Linux with systemd),
+# a "hive" (not a SENSOR) or both; elsewhere it stays in the menu, locked (LockedPane)
 PANES = [
-    ("status", "Status", StatusPane, True),
-    ("edition", "Edition & services", EditionPane, False),
-    ("settings", "Settings", SettingsPane, False),
-    ("llm", "LLM", LlmPane, False),
-    ("users", "Web users", UsersPane, False),
-    ("sensors", "Sensors", SensorsPane, True),
-    ("images", "Images", ImagesPane, True),
-    ("checks", "Checks", ChecksPane, True),
-    ("update", "Update & backup", UpdatePane, True),
+    ("status", "Status", StatusPane, "host"),
+    ("edition", "Edition & services", EditionPane, "any"),
+    ("settings", "Settings", SettingsPane, "any"),
+    ("llm", "LLM", LlmPane, "any"),
+    ("users", "Web users", UsersPane, "hive"),
+    ("sensors", "Sensors", SensorsPane, "host+hive"),
+    ("images", "Images", ImagesPane, "host"),
+    ("checks", "Checks", ChecksPane, "host"),
+    ("update", "Update & backup", UpdatePane, "host"),
 ]
+NOT_HERE = "needs a T-Pot host: Linux with systemd. On macOS and Windows T-Pot runs in Docker Desktop."
+ON_A_SENSOR = {"users": "a SENSOR has no web UI, its events go to its HIVE.",
+               "sensors": "sensors are managed on their HIVE, this is a SENSOR."}
+# what does the job of a locked page on the command line or elsewhere
+INSTEAD = {"status": "docker compose ps, or tpot status on the T-Pot host",
+           "sensors": "tpot sensors on the HIVE", "images": "docker images",
+           "checks": "tpot check on the T-Pot host", "update": "git pull in ~/tpotce, then tpot customize",
+           "users": "tpot users on the HIVE"}
 SHORT = {"edition": "Edition", "users": "Users", "update": "Update"}
 REPAINT = {"status": "repaint", "edition": "show", "settings": "check", "llm": "check", "users": "show", "sensors": "load",
            "images": "load", "checks": "show", "update": "show"}
 
 
-def menu_text(key: str, title: str, active: bool) -> Text:
+def menu_text(key: str, title: str, active: bool, locked: bool = False) -> Text:
     text = Text()
+    if locked:
+        # dimmed, but readable on the magenta of the page you are on
+        style = f"bold {theme.color('glass')}" if active else theme.color("ash")
+        text.append(f"{glyphs.g('locked')} ", style=style)
+        text.append(title, style=style)
+        return text
     if glyphs.mode() == "nerd":
         icon = glyphs.icon_pane(key)
     else:
@@ -1207,20 +1276,24 @@ class TpotApp(App):
         self.engine = engine
         self.splash = splash
         apply_theme(self)
-        sensor = self.backend.tpot_type() == "SENSOR"
-        self.panes = [p for p in PANES if (self.backend.linux_host() or not p[3])
-                      and not (sensor and p[0] in ("users", "sensors"))]
+        self.panes = list(PANES)
+        self.locked = {key: why for key, *_rest in PANES for why in [self.why_locked(key)] if why}
 
     def compose(self) -> ComposeResult:
         yield TpotHeader(id="header")
         with Horizontal(id="body"):
-            yield ListView(*[ListItem(Label(menu_text(key, title, False), classes="menu-long"),
-                                      Label(menu_text(key, SHORT.get(key, title), False), classes="menu-short"),
+            yield ListView(*[ListItem(Label(menu_text(key, title, False, key in self.locked), classes="menu-long"),
+                                      Label(menu_text(key, SHORT.get(key, title), False, key in self.locked),
+                                            classes="menu-short"),
                                       id=f"menu-{key}")
-                             for key, title, _cls, _host in self.panes], id="sidebar")
+                             for key, title, _cls, _needs in self.panes], id="sidebar")
             with ContentSwitcher(initial=self.panes[0][0], id="panes"):
-                for key, _title, cls, _host in self.panes:
-                    yield cls(id=key, classes="pane")
+                for key, title, cls, _needs in self.panes:
+                    if key in self.locked:
+                        # the page itself is not built: no docker, systemctl or Elasticsearch here
+                        yield LockedPane(key, title, self.locked[key], id=key, classes="pane")
+                    else:
+                        yield cls(id=key, classes="pane")
         yield Footer()
 
     def get_theme_variable_defaults(self):
@@ -1232,7 +1305,7 @@ class TpotApp(App):
         self.query_one("#sidebar", ListView).focus()
         if self.splash and fits(self.size.width, self.size.height):
             self.push_screen(SplashScreen(ops.env_values().get("TPOT_VERSION", "")))
-        if not any(key == "status" for key, *_rest in self.panes):
+        if "status" in self.locked:
             self.load_header()
 
     @work(thread=True, exclusive=True, group="header")
@@ -1248,15 +1321,51 @@ class TpotApp(App):
 
     def paint_menu(self) -> None:
         current = self.query_one(ContentSwitcher).current
-        for key, title, _cls, _host in self.panes:
+        for key, title, _cls, _needs in self.panes:
             item = self.query_one(f"#menu-{key}", ListItem)
-            item.query_one(".menu-long", Label).update(menu_text(key, title, key == current))
-            item.query_one(".menu-short", Label).update(menu_text(key, SHORT.get(key, title), key == current))
+            locked = key in self.locked
+            item.query_one(".menu-long", Label).update(menu_text(key, title, key == current, locked))
+            item.query_one(".menu-short", Label).update(menu_text(key, SHORT.get(key, title), key == current, locked))
 
     def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
         if event.item is not None and event.item.id:
             self.query_one(ContentSwitcher).current = event.item.id[len("menu-"):]
             self.paint_menu()
+
+    def why_locked(self, key: str) -> str:
+        """"" where the page works, else why it does not."""
+        needs = dict((k, n) for k, _t, _c, n in PANES)[key]
+        if "host" in needs and not self.backend.linux_host():
+            return NOT_HERE
+        if "hive" in needs and self.backend.tpot_type() == "SENSOR":
+            return ON_A_SENSOR.get(key, "this is a SENSOR.")
+        return ""
+
+    def check_settings(self) -> None:
+        """tpot env check: the Settings page with what T-Pot would say about .env."""
+        self.goto("settings")
+        try:
+            current = self.backend.settings()
+            problems = current.problems()
+        except Exception as err:      # SettingsError, OSError: the text is for the user
+            self.notify(str(err), title="Settings", severity="error", timeout=8)
+            return
+        errors = [p for p in problems if p.level == "error"]
+        if errors:
+            self.notify("; ".join(f"{p.key}: {p.text}" for p in errors[:3]) + (" ..." if len(errors) > 3 else ""),
+                        title=f"T-Pot would not start, {len(errors)} problem{'s' if len(errors) > 1 else ''}",
+                        severity="error", timeout=10)
+        else:
+            warnings = len(problems)
+            self.notify(f"T-Pot would start with these settings{f', {warnings} warnings' if warnings else ''}.",
+                        title="Settings", timeout=6)
+
+    def start_install(self) -> None:
+        """tpot install from the palette: the assistant needs the terminal, the menu ends for it."""
+        self.exit(("install", None))
+
+    def not_here(self, what: str) -> None:
+        self.notify(f"{what} {NOT_HERE}", title="Not on this host", severity="warning", timeout=6)
 
     def check_action(self, action: str, parameters):
         # the customizer and the dialogs are screens of their own, c there would open a second one
@@ -1332,7 +1441,7 @@ class TpotApp(App):
         self.query_one(TpotHeader).repaint()
         self.paint_menu()
         for key, *_rest in self.panes:
-            getattr(self.query_one(f"#{key}"), REPAINT[key])()
+            getattr(self.query_one(f"#{key}"), "show" if key in self.locked else REPAINT[key])()
 
     # -- actions -------------------------------------------------------------
 
@@ -1537,4 +1646,6 @@ def run_app() -> int:
     if isinstance(result, tuple) and result[0] == "uninstall":
         from tpotctl.screens.uninstall import run_handover
         run_handover(result[1])
+    if isinstance(result, tuple) and result[0] == "install":
+        os.execv(sys.executable, [sys.executable, LAUNCHER, "install"])
     return 0

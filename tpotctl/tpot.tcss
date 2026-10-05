@@ -829,3 +829,20 @@ Button.-error:disabled {
     width: 40;
     margin-right: 2;
 }
+
+/* a page that does not work on this host (LockedPane) */
+
+.locked-title {
+    margin-bottom: 1;
+}
+
+.locked-why {
+    margin-bottom: 1;
+}
+
+.settings-head Checkbox {
+    background: $background;
+    border: none;
+    height: 1;
+    margin-left: 2;
+}

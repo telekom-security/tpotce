@@ -246,3 +246,52 @@ class SensorDialog(ModalScreen):
 
     def action_cancel(self) -> None:
         self.dismiss(None)
+
+
+class SensorEditDialog(ModalScreen):
+    """Where a registered sensor is (tpot sensors set), dismissed with a dict or None."""
+
+    BINDINGS = [Binding("escape", "cancel", "Back")]
+
+    def __init__(self, sensor, update=None):
+        super().__init__()
+        self.sensor, self.update = sensor, update
+
+    def compose(self) -> ComposeResult:
+        sensor = self.sensor
+        with Vertical(classes="dialog"):
+            yield Label(f"Where {sensor.name} is", classes="dialog-title")
+            yield Static(Text("For sending it the certificate and for its SSH access; nothing is done on the "
+                              "sensor itself."), classes="hint")
+            yield Input(sensor.host or "", placeholder="IP or name of the sensor", id="edit-host")
+            yield Input(sensor.ssh_user or "", placeholder="user T-Pot was installed with on the sensor",
+                        id="edit-user")
+            yield Input(str(sensor.ssh_port or ""), placeholder="SSH port (64295)", id="edit-port", type="integer")
+            yield Input(sensor.hive_address or "", placeholder="IP or name the sensor reaches this HIVE on",
+                        id="edit-hive")
+            yield Label("", id="edit-hint")
+            with Horizontal(classes="actions"):
+                yield Button("Save", variant="primary", id="edit-save")
+                yield Button("Back", id="edit-back")
+
+    def on_mount(self) -> None:
+        self.query_one("#edit-host", Input).focus()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id != "edit-save":
+            self.dismiss(None)
+            return
+        values = {"host": self.query_one("#edit-host", Input).value.strip(),
+                  "ssh_user": self.query_one("#edit-user", Input).value.strip(),
+                  "ssh_port": self.query_one("#edit-port", Input).value.strip(),
+                  "hive_address": self.query_one("#edit-hive", Input).value.strip()}
+        try:
+            if self.update:
+                self.update(**values)
+        except Exception as err:   # SensorsError, kept generic to stay UI-only
+            self.query_one("#edit-hint", Label).update(Text(str(err), style=f"bold {theme.color('error')}"))
+            return
+        self.dismiss(values)
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)

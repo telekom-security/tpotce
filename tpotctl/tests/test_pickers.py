@@ -462,6 +462,14 @@ class SettingsHelpersTest(unittest.IsolatedAsyncioTestCase):
             await pilot.pause(0.3)
             self.assertEqual(settings.draft.get("GALAH_LLM_MODEL"), "qwen3")
 
+    async def test_all_settings_checkbox_adds_the_rest(self):
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            pane = await self.open_settings(pilot)
+            self.assertNotIn("TPOT_HIVE_IP", pane.rows)              # SENSOR only
+            self.app.query_one("#settings-all").value = True
+            await pilot.pause(0.6)
+            self.assertIn("TPOT_HIVE_IP", pane.rows)
+
     async def test_secret_can_be_shown(self):
         async with self.app.run_test(size=(150, 50)) as pilot:
             await self.open_settings(pilot)

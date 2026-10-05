@@ -44,6 +44,14 @@ class Settings:
         return [rule for rule in self.schema.values()
                 if include_all or envschema.applies(rule, values, self.services) or (offered and rule.offer)]
 
+    def not_here(self, rule: envschema.Rule) -> str:
+        """Why a shown key does not apply to this T-Pot, "" if it does."""
+        if rule.scope and rule.scope != self.values.get("TPOT_TYPE", ""):
+            return f"only on a {rule.scope}"
+        if self.absent(rule):
+            return "not in your edition"
+        return ""
+
     def absent(self, rule: envschema.Rule) -> bool:
         """A key of a service that is not in the edition."""
         return bool(rule.services) and not set(rule.services) & set(self.services)

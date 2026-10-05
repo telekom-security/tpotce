@@ -233,6 +233,20 @@ class Registry:
         self.records[sensor.name] = sensor
         self.save()
 
+    def update(self, name: str, host: str = "", ssh_user: str = "", ssh_port="", hive_address: str = "") -> Sensor:
+        """Where a sensor is (tpot sensors set, Edit on the Sensors page); empty values stay as they are."""
+        sensor = self.get(name)
+        if host:
+            sensor.host = check_address(host)
+        if ssh_user:
+            sensor.ssh_user = check_user(ssh_user)
+        if hive_address:
+            sensor.hive_address = check_address(hive_address)
+        if ssh_port:
+            sensor.ssh_port = check_port(ssh_port)
+        self.record(sensor)
+        return sensor
+
     def hive_addresses(self) -> List[str]:
         return sorted({s.hive_address for s in self.sensors() if s.hive_address})
 

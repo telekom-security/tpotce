@@ -14,12 +14,19 @@ class TpotCommands(Provider):
         app = self.app
         for key, title, _cls, _host in app.panes:
             yield f"Go to {title}", "page", partial(app.goto, key)
-        if app.backend.linux_host():
-            yield "Start T-Pot", "sudo systemctl start tpot", partial(app.service, "start")
-            yield "Stop T-Pot", "sudo systemctl stop tpot", partial(app.service, "stop")
-            yield "Restart T-Pot", "sudo systemctl restart tpot", partial(app.service, "restart")
-            yield "Update T-Pot", "update.sh, writes a backup first", partial(app.run_update, ["-y"])
-            yield "Restore a backup", "restore.sh, the parts you choose", app.run_restore
+        host = app.backend.linux_host()
+        for name, help_text, callback in (
+                ("Start T-Pot", "sudo systemctl start tpot", partial(app.service, "start")),
+                ("Stop T-Pot", "sudo systemctl stop tpot", partial(app.service, "stop")),
+                ("Restart T-Pot", "sudo systemctl restart tpot", partial(app.service, "restart")),
+                ("Update T-Pot", "update.sh, writes a backup first", partial(app.run_update, ["-y"])),
+                ("Restore a backup", "restore.sh, the parts you choose", app.run_restore)):
+            # shown everywhere, so you find them; off a T-Pot host they say why not
+            yield (name, help_text, callback) if host else \
+                (name, "needs a T-Pot host", partial(app.not_here, name))
+        yield "Check the settings", "as T-Pot does on start, tpot env check", app.check_settings
+        if host and app.backend.installable():
+            yield "Install T-Pot", "the installer assistant, tpot install", app.start_install
         yield "Open the customizer", "edition and services", app.action_customize
         yield "Refresh tpot's packages", "tpot setup", partial(app.goto, "update")
         if app.backend.linux_host():
