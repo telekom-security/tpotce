@@ -318,6 +318,23 @@ class ScreensTest(unittest.IsolatedAsyncioTestCase):
             with self.subTest(screen=label):
                 await self.check_screen(label, make)
 
+    async def test_picker_down_from_its_buttons_stays_below(self):
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=(150, 50)) as pilot:
+            await pilot.pause(0.3)
+            app.push_screen(self.factories()["picker"]())
+            await pilot.pause(0.5)
+            app.screen.query_one("#picker-take").focus()
+            await pilot.pause(0.1)
+            await pilot.press("down")
+            await pilot.pause(0.1)
+            self.assertIn(app.focused.id, ("picker-detect", "picker-take", "picker-back"))
+            app.screen.query_one("#picker-filter").focus()
+            await pilot.pause(0.1)
+            await pilot.press("down")                   # from the search field into the list, as before
+            await pilot.pause(0.1)
+            self.assertEqual(app.focused.id, "picker-list")
+
     def test_every_screen_class_is_covered(self):
         import importlib
         import inspect

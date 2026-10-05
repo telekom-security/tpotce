@@ -18,7 +18,7 @@ from textual.binding import Binding
 from textual.containers import VerticalScroll
 from textual.screen import ModalScreen
 from textual.widget import Widget
-from textual.widgets import DataTable, Input, ListView, OptionList, RichLog
+from textual.widgets import DataTable, Input, OptionList, RichLog
 
 BINDINGS = [Binding(key, f"nav('{key}')", show=False) for key in ("up", "down", "left", "right")]
 
@@ -176,22 +176,6 @@ class NavOptionList(OptionList):
     def action_cursor_down(self) -> None:
         _first, last = _first_last(self.options)
         if last is None or (self.highlighted is not None and self.highlighted >= last):
-            navigate(self.app, "down")
-            return
-        super().action_cursor_down()
-
-
-class NavListView(ListView):
-    """A list outside the menu: on to the line before or after at its first or last item."""
-
-    def action_cursor_up(self) -> None:
-        if self.index is None or self.index <= 0:
-            if navigate(self.app, "up"):
-                return
-        super().action_cursor_up()
-
-    def action_cursor_down(self) -> None:
-        if self.index is None or self.index >= len(self) - 1:
             navigate(self.app, "down")
             return
         super().action_cursor_down()

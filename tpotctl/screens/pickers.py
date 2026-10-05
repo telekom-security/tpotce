@@ -17,7 +17,7 @@ from textual.widgets import Button, Checkbox, Input, Label, OptionList, Static
 from textual.widgets.option_list import Option
 
 from tpotctl import glyphs, theme
-from tpotctl.widgets.nav import NavInput, NavModal, NavOptionList
+from tpotctl.widgets.nav import NavInput, NavModal, NavOptionList, navigate
 
 Item = Tuple[str, Text, bool]      # value, label, hidden unless "show all"
 
@@ -157,7 +157,11 @@ class Picker(NavModal):
         self.query_one("#picker-list", OptionList).focus()
 
     def action_to_list(self) -> None:
-        self.query_one("#picker-list", OptionList).focus()
+        """down: from the search field into the list, everywhere else the arrows of every dialog."""
+        if self.focused is self.query_one("#picker-filter", Input):
+            self.query_one("#picker-list", OptionList).focus()
+        else:
+            navigate(self.app, "down", menu=False)
 
     def action_cancel(self) -> None:
         self.dismiss(None)
