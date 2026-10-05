@@ -493,6 +493,8 @@ function fuSELFUPDATE () {
 	# The running script may be replaced by the update, either by newer commits
 	# or by a switch to a different branch, and then has to restart itself.
 	myOLDSUM=$(sha256sum "$0" | awk '{ print $1 }')
+	local myOLDHEAD=""
+	myOLDHEAD=$(git rev-parse HEAD 2>/dev/null)
 	fuSWITCH_SOURCE
 	fuUI_HINT "Pulling updates from repository."
 	# Checked, because a failed pull used to leave the checkout untouched while the
@@ -505,6 +507,12 @@ function fuSELFUPDATE () {
 	    fuUI_HINT "Exiting."
 	    echo
 	    exit 1
+	fi
+	# tpot runs from this checkout: a moved HEAD means it should start anew, even if
+	# the update fails later (the restarted script writes into the same output)
+	if [ "$(git rev-parse HEAD 2>/dev/null)" != "${myOLDHEAD}" ];
+	  then
+	    fuMARK changed checkout
 	fi
 	if [ "${myOLDSUM}" != "$(sha256sum "$0" | awk '{ print $1 }')" ];
 	  then

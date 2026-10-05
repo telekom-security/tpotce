@@ -143,6 +143,28 @@ class UpdateShTest(Harness):
         text = self.rollback(self.RESTORE_OLD, become="/run/tpot-become")
         self.assertNotIn("-B", self.args_of(text))
 
+    @unittest.skipUnless(shutil.which("sha256sum"), "no sha256sum (macOS), runs in the VM")
+    def test_selfupdate_marks_a_moved_head_only(self):
+        function = re.search(r"function fuSELFUPDATE \(\) \{.*?\n\}", read("update.sh"), re.S).group(0)
+        origin = os.path.join(self.home, "origin")
+        clone = os.path.join(self.home, "tpotce")
+        git = ["-c", "user.email=t@t", "-c", "user.name=t"]
+        subprocess.run(["git", "init", "-q", origin], check=True)
+        subprocess.run(["git", "-C", origin] + git + ["commit", "-q", "--allow-empty", "-m", "one"], check=True)
+        subprocess.run(["git", "clone", "-q", origin, clone], check=True)
+        me = os.path.join(self.home, "update.sh")
+        with open(me, "w", encoding="utf-8") as out:
+            out.write("# stays the same\n")
+        script = (f'source "{REPO}/installer/lib/ui.sh"; fuUI_INIT; fuSWITCH_SOURCE () {{ :; }}\n{function}\n'
+                  f'cd "{clone}" && fuSELFUPDATE')
+
+        def run():
+            return subprocess.run(["bash", "-c", script, me], capture_output=True, universal_newlines=True,
+                                  env=dict(os.environ, HOME=self.home, TPOT_MARKS="1", TPOT_GUM="off")).stdout
+        self.assertNotIn("@@tpot changed checkout", run())            # nothing new upstream
+        subprocess.run(["git", "-C", origin] + git + ["commit", "-q", "--allow-empty", "-m", "two"], check=True)
+        self.assertIn("@@tpot changed checkout", run())
+
     def test_restart_into_this_update_sh_keeps_it(self):
         self.assertEqual(self.restart_args(read("update.sh"), "-y", "-B", "/run/f", "-F"),
                          ["-y", "-B", "/run/f", "-F"])
@@ -294,6 +316,34 @@ class RestoreShTest(Harness):
         text = result.stdout + result.stderr
         self.assertEqual(result.returncode, 1, text[-400:])
         self.assertTrue("Could not read rollback.txt" in text, text[-400:])
+
+    def two_commits(self):
+        git = ["git", "-C", self.tpotce, "-c", "user.email=t@t", "-c", "user.name=t"]
+        subprocess.run(["git", "init", "-q", self.tpotce], check=True)
+        subprocess.run(git + ["commit", "-q", "--allow-empty", "-m", "one"], check=True)
+        first = subprocess.run(git + ["rev-parse", "HEAD"], capture_output=True, universal_newlines=True).stdout
+        subprocess.run(git + ["commit", "-q", "--allow-empty", "-m", "two"], check=True)
+        return first.strip()
+
+    def test_a_rollback_marks_the_changed_checkout(self):
+        archive = make_backup(self.home, {"MANIFEST": MANIFEST, "rollback.txt": self.two_commits() + "\n"},
+                              name="20261005151515_tpot_backup.tar")
+        result = self.restore("-f", archive, "-g", "git", env={"TPOT_MARKS": "1"})
+        self.assertEqual(result.returncode, 0, result.stdout[-400:])
+        self.assertIn("@@tpot changed checkout", result.stdout)
+
+    def test_an_applied_patch_marks_the_changed_checkout(self):
+        archive = self.git_checkout_with_a_patch()
+        result = self.restore("-f", archive, "-g", "patch", env={"TPOT_MARKS": "1"})
+        self.assertEqual(result.returncode, 0, result.stdout[-400:])
+        self.assertIn("@@tpot changed checkout", result.stdout)
+
+    def test_a_failed_group_is_marked(self):
+        self.two_commits()
+        result = self.restore("-f", self.archive, "-g", "git", env={"TPOT_MARKS": "1"})   # 0123... is no commit
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("@@tpot fail git", result.stdout)
+        self.assertNotIn("@@tpot changed checkout", result.stdout)
 
     def test_become_file(self):
         text = read("restore.sh")

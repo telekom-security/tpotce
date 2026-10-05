@@ -106,6 +106,8 @@ function fuFAILED () {   # $1 = group
 	  *", $1, "*) ;;
 	  *) myFAILED="${myFAILED:+${myFAILED}, }$1" ;;
 	esac
+	# the groups are named like their phases, tpot shows that one as failed
+	fuMARK fail "$1"
 }
 
 # What does the archive hold?
@@ -262,6 +264,7 @@ function fuDO_GIT () {
 	if git -C "${myTPOTDIR}" reset -q --hard "${myCOMMIT}";
 	  then
 	    fuUI_OK "The checkout is at ${myCOMMIT} again."
+	    fuMARK changed checkout
 	  else
 	    fuUI_ERROR "Could not reset the checkout to ${myCOMMIT}."
 	    fuFAILED git
@@ -321,6 +324,7 @@ function fuDO_PATCH () {
 	    if git -C "${myTPOTDIR}" apply "${myTMPDIR}/tracked.patch";
 	      then
 	        fuUI_OK "Applied."
+	        fuMARK changed checkout
 	      else
 	        cp "${myTMPDIR}/tracked.patch" "${myBACKUPDIR}/${myDATE}_tracked.patch"
 	        fuUI_ERROR "The patch passed the check but did not apply."
@@ -332,6 +336,7 @@ function fuDO_PATCH () {
 	if git -C "${myTPOTDIR}" apply --3way "${myTMPDIR}/tracked.patch" 2>/dev/null;
 	  then
 	    fuUI_WARN "Applied with a three-way merge, please review the result."
+	    fuMARK changed checkout
 	    return
 	fi
 	cp "${myTMPDIR}/tracked.patch" "${myBACKUPDIR}/${myDATE}_tracked.patch"
