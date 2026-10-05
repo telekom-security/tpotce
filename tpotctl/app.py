@@ -1554,13 +1554,15 @@ class TpotApp(App):
                 else:           # not loaded yet, or a value of your own in the draft
                     fix = f"Set it to {value} on the Settings page"
                 if value != "linux":
-                    try:
-                        in_use = self.backend.edition_current()[0].lower()
+                    try:        # (name, base): CUSTOM from MAC_WIN runs MAC_WIN too
+                        name, base = (part.lower() for part in self.backend.edition_current())
                     except Exception:
-                        in_use = None
-                    if in_use is None:
+                        name, base = "unknown", ""
+                    if "mac_win" in (name, base):
+                        pass
+                    elif name in ("none", "unknown"):
                         fix += " (Docker Desktop runs the MAC_WIN edition)"
-                    elif in_use != "mac_win":
+                    else:
                         fix += " and switch to the MAC_WIN edition on Edition & services"
             elif key == "WEB_USER":
                 fix, page = "Add one on the Web users page (tpot users add)", "users"

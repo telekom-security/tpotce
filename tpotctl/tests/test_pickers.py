@@ -682,6 +682,21 @@ class StartProblemsTest(SettingsHelpersBase):
         self.assertIn("Docker Desktop runs the MAC_WIN edition", fix)
         self.assertNotIn("switch to", fix)
 
+    async def test_mac_win_hint_follows_the_edition_in_use(self):
+        cases = {("CUSTOM", "MAC_WIN"): "", ("MAC_WIN", ""): "", ("none", ""): "Docker Desktop runs",
+                 ("unknown", ""): "Docker Desktop runs", ("STANDARD", ""): "switch to the MAC_WIN"}
+        with mock.patch.dict(os.environ, {"TPOT_HOST_OSTYPE": "mac"}):
+            async with self.app.run_test(size=(150, 50)) as pilot:
+                await self.open_settings(pilot)
+                for in_use, want in cases.items():
+                    with self.subTest(edition=in_use):
+                        self.app.backend.edition_current = lambda in_use=in_use: in_use
+                        fix = next(p.fix for p in self.app.start_problems() if p.key == "TPOT_OSTYPE")
+                        if want:
+                            self.assertIn(want, fix)
+                        else:
+                            self.assertNotIn("MAC_WIN", fix)
+
     async def test_quit_anyway(self):
         with mock.patch.dict(os.environ, {"TPOT_HOST_OSTYPE": "mac"}):
             async with self.app.run_test(size=(150, 50)) as pilot:
