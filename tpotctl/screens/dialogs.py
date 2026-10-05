@@ -56,6 +56,12 @@ class ConfirmDialog(NavModal):
         self.dismiss(False)
 
 
+class QuitDialog(ConfirmDialog):
+    """Quit tpot?: q again (or ctrl+q, see TpotApp.action_quit) is the yes."""
+
+    BINDINGS = [Binding("q", "yes", "Quit", show=False)]
+
+
 class ChoiceDialog(NavModal):
     """Pick one of several options, dismissed with its index or None."""
 

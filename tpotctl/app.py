@@ -26,7 +26,7 @@ from tpotctl.widgets.nav import NavDataTable, NavInput, NavOptionList
 from tpotctl import glyphs, logo, ops, prefs, theme
 from tpotctl.bootstrap import REPO_DIR
 from tpotctl.commands import TpotCommands
-from tpotctl.screens.dialogs import ConfirmDialog, SensorDialog, UserDialog
+from tpotctl.screens.dialogs import ConfirmDialog, QuitDialog, SensorDialog, UserDialog
 from tpotctl.theme import apply as apply_theme
 from tpotctl.ops import cell_state
 from tpotctl.widgets.comb import Honeycomb
@@ -1455,7 +1455,7 @@ class TpotApp(App):
                 self.exit()
             else:
                 self.goto(pending[0][0])
-        self.quit_dialog = ConfirmDialog("Quit tpot?", body, yes="Quit anyway", no="Back")
+        self.quit_dialog = QuitDialog("Quit tpot?", body, yes="Quit anyway", no="Back")
         self.push_screen(self.quit_dialog, answered)
 
     def quit_pending(self):

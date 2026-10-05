@@ -281,6 +281,8 @@ class ScreensTest(unittest.IsolatedAsyncioTestCase):
             return State(core.Catalog(), core.Selection("MINI"), core.DEFAULT_MAX_NETWORKS)
         return {
             "confirm": lambda: dialogs.ConfirmDialog("Really?", body="It stops T-Pot."),
+            "quit": lambda: dialogs.QuitDialog("Quit tpot?", body="Unsaved on the Settings page", yes="Quit anyway",
+                                               no="Back"),
             "choice": lambda: dialogs.ChoiceDialog("Pick one", ["one", "two", "three"]),
             "port": lambda: dialogs.PortInputDialog("New host port"),
             "user": lambda: dialogs.UserDialog("Add a web user"),

@@ -697,6 +697,36 @@ class StartProblemsTest(SettingsHelpersBase):
                         else:
                             self.assertNotIn("MAC_WIN", fix)
 
+    async def test_q_on_the_quit_dialog_quits(self):
+        from tpotctl.screens.dialogs import ConfirmDialog
+        from textual.widgets import Input
+        with mock.patch.dict(os.environ, {"TPOT_HOST_OSTYPE": "mac"}):
+            async with self.app.run_test(size=(150, 50)) as pilot:
+                await self.open_settings(pilot)
+                self.app.query_one("#sidebar").focus()
+                await pilot.press("q")
+                await pilot.pause(0.3)
+                self.assertIsInstance(self.app.screen, ConfirmDialog)
+                self.assertFalse(self.app.screen.query(Input))            # nothing to type q into
+                await pilot.press("q")
+                await pilot.pause(0.3)
+                self.assertFalse(self.app.is_running)
+
+    async def test_q_elsewhere_does_nothing(self):
+        from tpotctl.screens.dialogs import ConfirmDialog
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            pane = await self.open_settings(pilot)
+            pane.focus_setting("TPOT_DATA_PATH")
+            await pilot.pause(0.3)
+            self.app.query_one("#unlock-TPOT_DATA_PATH").press()
+            await pilot.pause(0.4)
+            dialog = self.app.screen
+            self.assertIsInstance(dialog, ConfirmDialog)
+            await pilot.press("q")
+            await pilot.pause(0.3)
+            self.assertTrue(self.app.is_running)
+            self.assertIs(self.app.screen, dialog)
+
     async def test_quit_anyway(self):
         with mock.patch.dict(os.environ, {"TPOT_HOST_OSTYPE": "mac"}):
             async with self.app.run_test(size=(150, 50)) as pilot:
