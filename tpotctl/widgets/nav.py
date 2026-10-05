@@ -6,17 +6,19 @@ nearest to where the focus was. left / right move within the line; left at the s
 a line on a page goes back to the menu. Lists, tables, text fields and scrollers use the
 keys themselves and hand them on at their edge, a text field never goes to the menu.
 
-The apps take BINDINGS and ArrowNav; App bindings only fire when the focused widget does
-not use the key itself, so Buttons, Checkboxes, Switches and the up / down of an Input
-come here on their own.
+The apps take BINDINGS and ArrowNav, the dialogs NavModal (a modal screen does not see
+the bindings of the App); these bindings only fire when the focused widget does not use
+the key itself, so Buttons, Checkboxes, Switches and the up / down of an Input come here
+on their own.
 """
 
 from typing import List, Optional
 
 from textual.binding import Binding
 from textual.containers import VerticalScroll
+from textual.screen import ModalScreen
 from textual.widget import Widget
-from textual.widgets import DataTable, Input, ListView, OptionList
+from textual.widgets import DataTable, Input, ListView, OptionList, RichLog
 
 BINDINGS = [Binding(key, f"nav('{key}')", show=False) for key in ("up", "down", "left", "right")]
 
@@ -97,6 +99,16 @@ class ArrowNav:
 
     def action_nav(self, direction: str) -> None:
         navigate(self, direction)
+
+
+class NavModal(ModalScreen):
+    """The base of every dialog: a modal screen does not see the bindings of the App, so it brings
+    them itself (there is no menu behind a dialog, left stays in it)."""
+
+    BINDINGS = list(BINDINGS)
+
+    def action_nav(self, direction: str) -> None:
+        navigate(self.app, direction, menu=False)
 
 
 class NavInput(Input):
@@ -185,8 +197,8 @@ class NavListView(ListView):
         super().action_cursor_down()
 
 
-class NavScroll(VerticalScroll):
-    """A scroller that has the focus (the log of a task): scrolls, at its top or end on to the next line."""
+class _EdgeScroll:
+    """For scrollers: the arrows scroll, at the edge they go on to the next line or widget."""
 
     def action_scroll_up(self) -> None:
         if self.scroll_y <= 0:
@@ -199,3 +211,27 @@ class NavScroll(VerticalScroll):
             navigate(self.app, "down")
             return
         super().action_scroll_down()
+
+    def action_scroll_left(self) -> None:
+        if self.scroll_x <= 0:
+            navigate(self.app, "left")
+            return
+        super().action_scroll_left()
+
+    def action_scroll_right(self) -> None:
+        if self.scroll_x >= self.max_scroll_x:
+            navigate(self.app, "right")
+            return
+        super().action_scroll_right()
+
+
+class NavScroll(_EdgeScroll, VerticalScroll):
+    """A scroller of a page or dialog. With fields or buttons in it, it takes no focus itself (the
+    focus scrolls it to them); with only text (the body of a dialog) it does, the arrows scroll it."""
+
+    def allow_focus(self) -> bool:
+        return super().allow_focus() and not any(w.can_focus for w in self.query("*"))
+
+
+class NavRichLog(_EdgeScroll, RichLog):
+    """A log (the output of a task): scrolls, at its top or end on to the next line."""

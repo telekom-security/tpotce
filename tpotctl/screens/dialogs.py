@@ -5,11 +5,11 @@ from typing import List, Optional
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.screen import ModalScreen
+from textual.containers import Horizontal, Vertical
 from textual.widgets import Button, Checkbox, Input, Label, OptionList, Static
 
 from tpotctl import glyphs, theme
+from tpotctl.widgets.nav import NavInput, NavModal, NavOptionList, NavScroll
 
 
 def finding_lines(lines: List[str]) -> Text:
@@ -24,7 +24,7 @@ def finding_lines(lines: List[str]) -> Text:
     return text
 
 
-class ConfirmDialog(ModalScreen):
+class ConfirmDialog(NavModal):
     """Yes / no, dismissed with True or False."""
 
     BINDINGS = [Binding("escape", "no", "Back"), Binding("y", "yes", "Yes", show=False)]
@@ -38,7 +38,7 @@ class ConfirmDialog(ModalScreen):
         with Vertical(classes="dialog"):
             yield Label(self.title_text, classes="dialog-title")
             if self.body is not None:
-                with VerticalScroll():
+                with NavScroll():
                     yield Static(self.body)
             with Horizontal(classes="actions"):
                 if self.allow_yes:
@@ -56,7 +56,7 @@ class ConfirmDialog(ModalScreen):
         self.dismiss(False)
 
 
-class ChoiceDialog(ModalScreen):
+class ChoiceDialog(NavModal):
     """Pick one of several options, dismissed with its index or None."""
 
     BINDINGS = [Binding("escape", "cancel", "Back")]
@@ -68,7 +68,7 @@ class ChoiceDialog(ModalScreen):
     def compose(self) -> ComposeResult:
         with Vertical(classes="dialog"):
             yield Label(self.title_text, classes="dialog-title")
-            yield OptionList(*self.options, id="choices")
+            yield NavOptionList(*self.options, id="choices")
 
     def on_mount(self) -> None:
         choices = self.query_one(OptionList)
@@ -82,7 +82,7 @@ class ChoiceDialog(ModalScreen):
         self.dismiss(None)
 
 
-class PortInputDialog(ModalScreen):
+class PortInputDialog(NavModal):
     """A new host port: a number, '-' removes the mapping, empty keeps it."""
 
     BINDINGS = [Binding("escape", "cancel", "Back")]
@@ -95,7 +95,7 @@ class PortInputDialog(ModalScreen):
     def compose(self) -> ComposeResult:
         with Vertical(classes="dialog"):
             yield Label(self.title_text, classes="dialog-title")
-            yield Input(placeholder="host port, - removes the mapping", id="port")
+            yield NavInput(placeholder="host port, - removes the mapping", id="port")
             yield Label("", id="port-error", classes="error-text")
 
     def on_mount(self) -> None:
@@ -112,7 +112,7 @@ class PortInputDialog(ModalScreen):
         self.dismiss("")
 
 
-class UserDialog(ModalScreen):
+class UserDialog(NavModal):
     """Name (for a new user) and password twice, dismissed with (name, password) or None."""
 
     BINDINGS = [Binding("escape", "cancel", "Back")]
@@ -126,9 +126,9 @@ class UserDialog(ModalScreen):
         with Vertical(classes="dialog"):
             yield Label(self.title_text, classes="dialog-title")
             if not self.fixed_name:
-                yield Input(placeholder="user name: letters, digits, _ . -", id="user-name")
-            yield Input(placeholder="password", password=True, id="user-password")
-            yield Input(placeholder="repeat the password", password=True, id="user-repeat")
+                yield NavInput(placeholder="user name: letters, digits, _ . -", id="user-name")
+            yield NavInput(placeholder="password", password=True, id="user-password")
+            yield NavInput(placeholder="repeat the password", password=True, id="user-repeat")
             yield Label("", id="user-hint")
             with Horizontal(classes="actions"):
                 yield Button("Save", variant="primary", id="user-save")
@@ -188,7 +188,7 @@ class UserDialog(ModalScreen):
         self.dismiss(None)
 
 
-class SensorDialog(ModalScreen):
+class SensorDialog(NavModal):
     """Where a new sensor is, dismissed with a dict or None."""
 
     BINDINGS = [Binding("escape", "cancel", "Back")]
@@ -202,9 +202,9 @@ class SensorDialog(ModalScreen):
             yield Label("Deploy a sensor", classes="dialog-title")
             yield Static(Text("T-Pot has to be installed on it already. The deployment runs in the terminal "
                               "(SSH key, sudo password) and reboots the sensor."), classes="hint")
-            yield Input(placeholder="IP or name of the sensor", id="sensor-host")
-            yield Input(placeholder="user T-Pot was installed with on the sensor", id="sensor-user")
-            yield Input(placeholder="IP or name the sensor reaches this HIVE on", id="sensor-hive")
+            yield NavInput(placeholder="IP or name of the sensor", id="sensor-host")
+            yield NavInput(placeholder="user T-Pot was installed with on the sensor", id="sensor-user")
+            yield NavInput(placeholder="IP or name the sensor reaches this HIVE on", id="sensor-hive")
             yield Checkbox("sudo on the sensor needs no password", id="sensor-nopass")
             yield Label("", id="sensor-hint")
             with Horizontal(classes="actions"):
@@ -248,7 +248,7 @@ class SensorDialog(ModalScreen):
         self.dismiss(None)
 
 
-class SensorEditDialog(ModalScreen):
+class SensorEditDialog(NavModal):
     """Where a registered sensor is (tpot sensors set), dismissed with a dict or None."""
 
     BINDINGS = [Binding("escape", "cancel", "Back")]
@@ -263,11 +263,11 @@ class SensorEditDialog(ModalScreen):
             yield Label(f"Where {sensor.name} is", classes="dialog-title")
             yield Static(Text("For sending it the certificate and for its SSH access; nothing is done on the "
                               "sensor itself."), classes="hint")
-            yield Input(sensor.host or "", placeholder="IP or name of the sensor", id="edit-host")
-            yield Input(sensor.ssh_user or "", placeholder="user T-Pot was installed with on the sensor",
+            yield NavInput(sensor.host or "", placeholder="IP or name of the sensor", id="edit-host")
+            yield NavInput(sensor.ssh_user or "", placeholder="user T-Pot was installed with on the sensor",
                         id="edit-user")
-            yield Input(str(sensor.ssh_port or ""), placeholder="SSH port (64295)", id="edit-port", type="integer")
-            yield Input(sensor.hive_address or "", placeholder="IP or name the sensor reaches this HIVE on",
+            yield NavInput(str(sensor.ssh_port or ""), placeholder="SSH port (64295)", id="edit-port", type="integer")
+            yield NavInput(sensor.hive_address or "", placeholder="IP or name the sensor reaches this HIVE on",
                         id="edit-hive")
             yield Label("", id="edit-hint")
             with Horizontal(classes="actions"):

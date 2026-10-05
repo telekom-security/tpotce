@@ -15,13 +15,14 @@ from rich.text import Text
 from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, VerticalScroll
+from textual.containers import Horizontal
 from textual.screen import Screen
 from textual.widgets import Button, Footer, Input, RichLog, Static
 
 from tpotctl import glyphs, installer, runlog, theme
 from tpotctl.bootstrap import REPO_DIR
 from tpotctl.engine import Engine
+from tpotctl.widgets.nav import NavInput, NavRichLog, NavScroll
 
 SPINNER = {"unicode": "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏", "nerd": "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏", "ascii": "|/-\\"}
 
@@ -66,13 +67,13 @@ class TaskScreen(Screen):
         self.frame = 0
 
     def compose(self) -> ComposeResult:
-        with VerticalScroll(id="task-body"):
+        with NavScroll(id="task-body"):
             yield Static(Text(self.job.title, style=f"bold {theme.color('magenta')}"), id="task-title")
             yield Static(self.intro_text(), id="task-intro")
-            yield Input(placeholder="your sudo password", password=True, id="task-sudo")
+            yield NavInput(placeholder="your sudo password", password=True, id="task-sudo")
             yield Static("", id="task-hint")
             yield Static("", id="task-phases")
-            yield RichLog(id="task-log", max_lines=2000, wrap=False, markup=False, highlight=False)
+            yield NavRichLog(id="task-log", max_lines=2000, wrap=False, markup=False, highlight=False)
             yield Static("", id="task-result")
         with Horizontal(id="task-nav"):
             yield Static("", classes="task-spacer")

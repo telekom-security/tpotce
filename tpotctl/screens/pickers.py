@@ -13,11 +13,11 @@ from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.screen import ModalScreen
 from textual.widgets import Button, Checkbox, Input, Label, OptionList, Static
 from textual.widgets.option_list import Option
 
 from tpotctl import glyphs, theme
+from tpotctl.widgets.nav import NavInput, NavModal, NavOptionList
 
 Item = Tuple[str, Text, bool]      # value, label, hidden unless "show all"
 
@@ -27,7 +27,7 @@ def substring(query: str, items: List[Item]) -> List[Item]:
     return [i for i in items if all(w in f"{i[0]} {i[1].plain}".lower() for w in words)]
 
 
-class Picker(ModalScreen):
+class Picker(NavModal):
 
     BINDINGS = [Binding("escape", "cancel", "Back"), Binding("down", "to_list", "List", show=False)]
 
@@ -45,9 +45,9 @@ class Picker(ModalScreen):
             yield Label(self.title_text, classes="dialog-title")
             if self.note:
                 yield Static(Text(self.note), classes="hint")
-            yield Input(placeholder=f"{glyphs.g('search')} type to search" + (", or enter a value" if self.free else ""),
+            yield NavInput(placeholder=f"{glyphs.g('search')} type to search" + (", or enter a value" if self.free else ""),
                         id="picker-filter")
-            yield OptionList(id="picker-list")
+            yield NavOptionList(id="picker-list")
             yield Static(Text("loading ...", style=theme.color("mist")), id="picker-message")
             with Horizontal(classes="actions"):
                 if self.show_all:

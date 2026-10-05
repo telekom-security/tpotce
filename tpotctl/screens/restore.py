@@ -12,12 +12,13 @@ from rich.text import Text
 from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
 from textual.widgets import Button, Checkbox, Footer, OptionList, Static
 from textual.widgets.option_list import Option
 
 from tpotctl import glyphs, ops, theme
+from tpotctl.widgets.nav import NavOptionList, NavScroll
 
 # checked to begin with; git and data only on request
 DEFAULT_GROUPS = ("patch", "config", "untracked", "elastic")
@@ -34,12 +35,12 @@ class RestoreScreen(Screen):
         self.backups: List[ops.BackupInfo] = []
 
     def compose(self) -> ComposeResult:
-        with VerticalScroll(id="restore-body"):
+        with NavScroll(id="restore-body"):
             yield Static(Text("Restore a backup", style=f"bold {theme.color('magenta')}"), id="restore-title")
             yield Static(Text("Choose the archive and what of it comes back. restore.sh stops T-Pot for "
                               "everything but the Kibana objects and starts it again for them.",
                               style=theme.color("glass")), classes="restore-intro")
-            yield OptionList(id="restore-list")
+            yield NavOptionList(id="restore-list")
             yield Static("", id="restore-manifest")
             with Vertical(id="restore-groups"):
                 for group, question in ops.GROUP_TEXT.items():

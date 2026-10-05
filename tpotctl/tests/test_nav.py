@@ -260,5 +260,99 @@ class SettingsNavTest(SettingsHelpersBase):
             self.assertIn(settings_pane.query_one("#settings-save"), graph)
 
 
+@unittest.skipUnless(textual and yaml, "Textual is not installed, run with the venv of tpot")
+class ScreensTest(unittest.IsolatedAsyncioTestCase):
+    """Every dialog and screen of tpotctl/screens, on top of the menu as in tpot."""
+
+    @staticmethod
+    def factories():
+        from rich.text import Text
+        from tpotctl import sensors
+        from tpotctl.screens import customizer, dialogs, pickers, restore, task, uninstall
+        from tpotctl.screens.customizer import State, core
+        times = [("UTC", Text("UTC"), False), ("Europe/Berlin", Text("Europe/Berlin"), False)]
+
+        def state():
+            return State(core.Catalog(), core.Selection("MINI"), core.DEFAULT_MAX_NETWORKS)
+        return {
+            "confirm": lambda: dialogs.ConfirmDialog("Really?", body="It stops T-Pot."),
+            "choice": lambda: dialogs.ChoiceDialog("Pick one", ["one", "two", "three"]),
+            "port": lambda: dialogs.PortInputDialog("New host port"),
+            "user": lambda: dialogs.UserDialog("Add a web user"),
+            "sensor": lambda: dialogs.SensorDialog(),
+            "sensor-edit": lambda: dialogs.SensorEditDialog(sensors.Sensor("s1", host="192.0.2.9", ssh_user="t")),
+            "picker": lambda: pickers.Picker("Choose a time zone", lambda: times, current="UTC",
+                                             detect=lambda: "UTC"),
+            "task": lambda: task.TaskScreen(task.Task("Update T-Pot", ["/x/update.sh", "-y"], become="-B"),
+                                            engine=FakeEngine, sudo_mode="password",
+                                            password_ok=lambda password: True),
+            # one archive: moving to another one rebuilds the checkboxes of its groups
+            "restore": lambda: restore.RestoreScreen(lambda: FakeBackend().backup_infos()[:1]),
+            "uninstall": lambda: uninstall.UninstallScreen(sudo_mode="password", password_ok=lambda pw: True,
+                                                           hostname="honey"),
+            "customizer": lambda: customizer.CustomizerScreen(core.Catalog(), core.Selection("MINI"),
+                                                              core.DEFAULT_MAX_NETWORKS),
+            "ports": lambda: customizer.PortsDialog(state(), "cowrie"),
+        }
+
+    async def check_screen(self, label, make):
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=(150, 50)) as pilot:
+            await pilot.pause(0.3)
+            app.push_screen(make())
+            await pilot.pause(0.5)
+            start = app.focused
+            graph = await edges(pilot, app)
+            if graph:
+                check(self, graph, start if start in graph else next(iter(graph)), label)
+                for widget in graph:            # no menu behind a dialog: left stays on the screen
+                    self.assertIsNot(graph[widget]["left"], app.query_one("#sidebar"), label)
+
+    async def test_every_screen(self):
+        for label, make in self.factories().items():
+            with self.subTest(screen=label):
+                await self.check_screen(label, make)
+
+    def test_every_screen_class_is_covered(self):
+        import importlib
+        import inspect
+        import pkgutil
+        from textual.screen import Screen
+        from tpotctl import screens
+        classes = set()
+        for module in pkgutil.iter_modules(screens.__path__):
+            loaded = importlib.import_module(f"tpotctl.screens.{module.name}")
+            classes |= {c.__name__ for _n, c in inspect.getmembers(loaded, inspect.isclass)
+                        if issubclass(c, Screen) and c.__module__ == loaded.__name__}
+        covered = {type(make()).__name__ for make in self.factories().values()}
+        # the splash ends on any key
+        self.assertEqual(sorted(classes - covered - {"SplashScreen"}), [])
+
+
+@unittest.skipUnless(textual and yaml, "Textual is not installed, run with the venv of tpot")
+class AppsTest(unittest.IsolatedAsyncioTestCase):
+    """The installer and the uninstaller run as apps of their own."""
+
+    async def test_installer(self):
+        from tpotctl.screens.install import InstallApp
+        from tpotctl.tests.test_installer import FakeEngine as InstallEngine, all_ok
+        from tpotctl.tests.test_settings import make_checkout
+        app = InstallApp(engine=InstallEngine, checks=all_ok, sudo_mode="password",
+                         password_ok=lambda pw: pw == "right", run=lambda *a, **k: None, repo_dir=make_checkout(self))
+        async with app.run_test(size=(150, 50)) as pilot:
+            await pilot.pause(0.5)
+            graph = await edges(pilot, app)
+            check(self, graph, app.focused if app.focused in graph else next(iter(graph)), "installer")
+            self.assertIn(app.query_one("#ins-next"), graph)
+
+    async def test_uninstaller(self):
+        from tpotctl.screens.uninstall import UninstallApp
+        app = UninstallApp(sudo_mode="password", password_ok=lambda pw: pw == "right", hostname="honey")
+        async with app.run_test(size=(150, 50)) as pilot:
+            await pilot.pause(0.5)
+            graph = await edges(pilot, app)
+            check(self, graph, app.focused if app.focused in graph else next(iter(graph)), "uninstaller")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -13,12 +13,13 @@ from typing import Callable, Optional
 from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, VerticalScroll
+from textual.containers import Horizontal
 from textual.screen import Screen
 from textual.widgets import Button, Checkbox, Footer, Input, Static
 
 from tpotctl import glyphs, installer, logo, theme
 from tpotctl.theme import apply as apply_theme
+from tpotctl.widgets.nav import BINDINGS as NAV_BINDINGS, ArrowNav, NavInput, NavScroll
 
 REMOVED = [
     "all containers, images and the data of T-Pot (logs, Elasticsearch, certificates)",
@@ -54,7 +55,7 @@ class UninstallScreen(Screen):
         self.hostname = hostname or socket.gethostname()
 
     def compose(self) -> ComposeResult:
-        with VerticalScroll(id="un-body"):
+        with NavScroll(id="un-body"):
             yield Static(logo.wordmark(theme.color("glass")), id="wordmark")
             yield Static(self.summary(), id="un-text")
             yield Checkbox("Write a full backup to ~/tpot_backups first (restore.sh brings it back)", True,
@@ -62,8 +63,8 @@ class UninstallScreen(Screen):
             yield Static(self.space(), id="un-space")
             yield Static(Text(f"Type the name of this host, {self.hostname}, to confirm:",
                               style=theme.color("glass")), classes="un-label")
-            yield Input(placeholder=self.hostname, id="un-host")
-            yield Input(placeholder="your sudo password", password=True, id="un-sudo")
+            yield NavInput(placeholder=self.hostname, id="un-host")
+            yield NavInput(placeholder="your sudo password", password=True, id="un-sudo")
             yield Static("", id="un-hint")
         with Horizontal(id="un-nav"):
             yield Static("", classes="un-spacer")
@@ -138,11 +139,12 @@ class UninstallScreen(Screen):
         self.dismiss(None)
 
 
-class UninstallApp(App):
+class UninstallApp(ArrowNav, App):
     """tpot uninstall on its own."""
 
     CSS_PATH = "../tpot.tcss"
     TITLE = "T-Pot uninstaller"
+    BINDINGS = [*NAV_BINDINGS]
 
     def __init__(self, **options):
         super().__init__()

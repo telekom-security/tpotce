@@ -24,6 +24,7 @@ from tpotctl import engine, glyphs, installer, logo, theme, users
 from tpotctl.bootstrap import REPO_DIR
 from tpotctl.screens.dialogs import ConfirmDialog
 from tpotctl.theme import apply as apply_theme
+from tpotctl.widgets.nav import BINDINGS as NAV_BINDINGS, ArrowNav, NavInput, NavOptionList, NavScroll
 
 STEPS = [("check", "System check"), ("edition", "Edition"), ("user", "Web user"), ("settings", "Settings"),
          ("review", "Review"), ("install", "Install"), ("done", "Done")]
@@ -70,12 +71,12 @@ class Steps(Static):
         self.update(text)
 
 
-class InstallApp(App):
+class InstallApp(ArrowNav, App):
     """The assistant. answers collects what the steps ask, the Engine does the work."""
 
     CSS_PATH = "../tpot.tcss"
     TITLE = "T-Pot installer"
-    BINDINGS = [Binding("q", "leave", "Quit"), Binding("escape", "back", "Back", show=False)]
+    BINDINGS = [Binding("q", "leave", "Quit"), Binding("escape", "back", "Back", show=False), *NAV_BINDINGS]
 
     def __init__(self, engine: Callable[[List[str]], Engine] = Engine, checks: Optional[Callable] = None,
                  sudo_mode: Optional[str] = None, password_ok: Optional[Callable[[str], bool]] = None,
@@ -105,33 +106,33 @@ class InstallApp(App):
             yield Static(self.source_text(), id="ins-source")
         yield Steps(id="ins-steps")
         with ContentSwitcher(initial="step-check", id="ins-body"):
-            with VerticalScroll(id="step-check", classes="ins-step"):
+            with NavScroll(id="step-check", classes="ins-step"):
                 yield Static("", id="check-list")
             with Vertical(id="step-edition", classes="ins-step"):
                 yield Static(Text("Which T-Pot? You can change it later with tpot customize.",
                                   style=theme.color("ash")), classes="ins-lead")
-                yield OptionList(id="edition-list")
+                yield NavOptionList(id="edition-list")
                 yield Static("", id="edition-note")
-            with VerticalScroll(id="step-user", classes="ins-step"):
+            with NavScroll(id="step-user", classes="ins-step"):
                 yield Static(Text("The user of the T-Pot web UI (Kibana, Attack Map, CyberChef, ...). More users "
                                   "later with tpot users.", style=theme.color("ash")), classes="ins-lead")
-                yield Input(placeholder="user name: letters, digits, _ . -", id="ins-user-name")
-                yield Input(placeholder="password", password=True, id="ins-user-password")
-                yield Input(placeholder="repeat the password", password=True, id="ins-user-repeat")
+                yield NavInput(placeholder="user name: letters, digits, _ . -", id="ins-user-name")
+                yield NavInput(placeholder="password", password=True, id="ins-user-password")
+                yield NavInput(placeholder="repeat the password", password=True, id="ins-user-repeat")
                 yield Static("", id="ins-user-hint")
-            with VerticalScroll(id="step-settings", classes="ins-step settings-form"):
+            with NavScroll(id="step-settings", classes="ins-step settings-form"):
                 yield Static(Text("A few settings now, all of them later on the Settings page of tpot.",
                                   style=theme.color("ash")), classes="ins-lead")
-            with VerticalScroll(id="step-review", classes="ins-step"):
+            with NavScroll(id="step-review", classes="ins-step"):
                 yield Static("", id="review-text")
-                yield Input(placeholder="your sudo password", password=True, id="ins-sudo")
+                yield NavInput(placeholder="your sudo password", password=True, id="ins-sudo")
                 yield Static("", id="ins-sudo-hint")
             with Vertical(id="step-install", classes="ins-step"):
                 yield Static("", id="install-phase")
                 yield ProgressBar(total=1000, show_eta=False, id="install-bar")
                 yield Static("", id="install-task")
                 yield RichLog(id="install-log", max_lines=2000, wrap=False, markup=False, highlight=False)
-            with VerticalScroll(id="step-done", classes="ins-step"):
+            with NavScroll(id="step-done", classes="ins-step"):
                 yield Static("", id="done-text")
         with Horizontal(id="ins-nav"):
             yield Static("", id="ins-nav-note")

@@ -12,13 +12,14 @@ from rich.text import Text
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.screen import ModalScreen, Screen
+from textual.screen import Screen
 from textual.widgets import DataTable, Footer, Label, Static, Tree
 
 from tpotctl import glyphs, theme
 from tpotctl.bootstrap import REPO_DIR
 from tpotctl.screens.dialogs import ChoiceDialog, ConfirmDialog, PortInputDialog, finding_lines
 from tpotctl.widgets.header import chip
+from tpotctl.widgets.nav import NavDataTable, NavModal
 
 sys.path.insert(0, os.path.join(REPO_DIR, "compose"))
 import customizer_core as core  # noqa: E402
@@ -226,7 +227,7 @@ class CustomizerScreen(Screen):
                              lambda yes: self.dismiss(None) if yes else None)
 
 
-class PortsDialog(ModalScreen):
+class PortsDialog(NavModal):
     """Host ports of one service: change, remove, reset or take a suggestion."""
 
     BINDINGS = [
@@ -243,7 +244,7 @@ class PortsDialog(ModalScreen):
     def compose(self) -> ComposeResult:
         with Vertical(classes="dialog"):
             yield Label(f"Host ports of {self.service}", classes="dialog-title")
-            yield DataTable(id="ports", cursor_type="row")
+            yield NavDataTable(id="ports", cursor_type="row")
             yield Static("", id="ports-message")
             yield Footer()
 
