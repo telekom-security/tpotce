@@ -177,6 +177,35 @@ class UpdateShTest(Harness):
         main = read("update.sh").split("\nfuREMOVE_DROPPED_SERVICES\n", 1)[1]     # the main section
         self.assertLess(main.index("\nfuCHECK_ELASTIC\n"), main.index("\nfuTPOT_SETUP\n"))
 
+    @staticmethod
+    def check_elastic():
+        return re.search(r"function fuCHECK_ELASTIC \(\) \{.*?\n\}", read("update.sh"), re.S).group(0)
+
+    def test_ctrl_c_in_the_pause_stops_cleanly(self):
+        import signal
+        import time
+        function = re.search(r"function fuELASTIC_STOPPED \(\) \{.*?\n\}", read("update.sh"), re.S).group(0)
+        script = (f'source "{REPO}/installer/lib/ui.sh"; fuUI_INIT\n{function}\n'
+                  'trap fuELASTIC_STOPPED INT; sleep 5; trap - INT; echo after')
+        proc = subprocess.Popen(["bash", "-c", script], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                universal_newlines=True, start_new_session=True,
+                                env=dict(os.environ, HOME=self.home, TPOT_GUM="off"))
+        time.sleep(0.5)
+        os.killpg(proc.pid, signal.SIGINT)
+        out, _err = proc.communicate(timeout=10)
+        self.assertEqual(proc.returncode, 130, out)
+        self.assertTrue("Stopped before the image pull" in out, out)
+        self.assertTrue("tpot setup" in out, out)
+        self.assertFalse("after" in out, out)
+
+    def test_the_trap_only_covers_the_pause(self):
+        text = self.check_elastic()
+        self.assertTrue(re.search(r"trap fuELASTIC_STOPPED INT\n\s*sleep 15\n\s*trap - INT", text), text[-600:])
+        self.assertEqual(len(re.findall(r"trap .*INT", read("update.sh"))), 2)
+
+    def test_the_finish_hint_names_tpot_setup(self):
+        self.assertTrue("tpot setup" in self.check_elastic())
+
     def test_restart_into_this_update_sh_keeps_it(self):
         self.assertEqual(self.restart_args(read("update.sh"), "-y", "-B", "/run/f", "-F"),
                          ["-y", "-B", "/run/f", "-F"])
