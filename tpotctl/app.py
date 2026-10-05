@@ -1561,15 +1561,17 @@ class TpotApp(App):
 
     async def settings_saved(self, source, saved_keys: Set[str]) -> None:
         """The Settings and the LLM page show the same .env, a save on one reloads the other. Its
-        unsaved changes stay, but a value just saved replaces an unsaved one of the same key."""
+        unsaved changes stay, but a value just saved replaces an unsaved one of the same key (said
+        only when the two differ)."""
         titles = dict((key, title) for key, title, *_rest in PANES)
         for pane in self.query(SettingsPane):
             if pane is source:
                 continue
             own = pane.changes()
             keep = {key: value for key, value in own.items() if key not in saved_keys}
-            lost = sorted(set(own) & saved_keys)
             await pane.reload(keep=keep, keep_unlocked=pane.unlocked & set(keep))
+            now = pane.current.values if pane.current is not None else {}
+            lost = sorted(key for key in set(own) & saved_keys if own[key] != now.get(key, ""))
             if lost:
                 self.notify(f"{', '.join(lost)}: the value just saved replaces the unsaved one on the "
                             f"{titles.get(pane.id, pane.id)} page", title="Settings", timeout=8)

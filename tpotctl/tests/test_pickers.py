@@ -598,6 +598,19 @@ class SettingsDraftTest(SettingsHelpersBase):
             self.assertNotIn("GALAH_LLM_MODEL", settings.changes())
             self.assertTrue(any("GALAH_LLM_MODEL" in n for n in notes))
 
+    async def test_same_value_saved_elsewhere_says_nothing(self):
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            settings = await self.open_settings(pilot)
+            self.app.goto_setting("GALAH_LLM_MODEL")
+            await pilot.pause(0.3)
+            settings.query_one("#set-GALAH_LLM_MODEL").value = "qwen3"
+            await pilot.pause(0.3)
+            notes = []
+            self.app.notify = lambda message, **kwargs: notes.append(message)
+            await self.save_llm_model(pilot, "qwen3")
+            self.assertNotIn("GALAH_LLM_MODEL", settings.changes())
+            self.assertFalse(any("GALAH_LLM_MODEL" in n for n in notes), notes)
+
     async def test_a_save_on_llm_saves_once_and_leaves_the_focus_there(self):
         from tpotctl.screens.dialogs import ConfirmDialog
         async with self.app.run_test(size=(150, 50)) as pilot:
