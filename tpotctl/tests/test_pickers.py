@@ -852,6 +852,35 @@ class OutsideChangeTest(SettingsHelpersBase):
             self.assertIn("TPOT_DATA_PATH", pane.unlocked)
             self.assertEqual(pane.changes().get("TPOT_DATA_PATH"), "/srv/tpot-data")
 
+    async def test_palette_jump_after_an_outside_change(self):
+        from tpotctl.tests.test_settings import WEB_USER
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            pane = await self.open_settings(pilot)
+            self.app.goto("status")
+            await pilot.pause(0.3)
+            self.set_env("WEB_USER", WEB_USER)
+            self.app.goto_setting("TPOT_BLACKHOLE")
+            await pilot.pause(0.8)
+            row = pane.rows["TPOT_BLACKHOLE"]
+            self.assertTrue(row.is_mounted)
+            self.assertIsNotNone(self.app.focused)
+            self.assertIn(row, self.app.focused.ancestors_with_self)
+
+    async def test_a_page_with_a_load_error_recovers(self):
+        env = os.path.join(self.repo, ".env")
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            pane = await self.open_settings(pilot)
+            os.chmod(env, 0)
+            self.addCleanup(os.chmod, env, 0o644)
+            await pane.reload()
+            await pilot.pause(0.3)
+            self.assertIsNone(pane.current)
+            os.chmod(env, 0o644)
+            self.assertTrue(pane.stale())
+            await self.app.refresh_config()
+            await pilot.pause(0.3)
+            self.assertIsNotNone(pane.current)
+
     async def test_touch_without_change_says_nothing(self):
         async with self.app.run_test(size=(150, 50)) as pilot:
             pane = await self.open_settings(pilot)

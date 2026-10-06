@@ -620,8 +620,12 @@ class SettingsPane(Vertical):
                         severity="error", timeout=8)
 
     def stale(self) -> bool:
-        """.env or the compose file changed since this page read them (elsewhere in tpot or outside)."""
-        return self.current is not None and self.app.backend.config_stamp() != getattr(self, "stamp", None)
+        """.env or the compose file changed since this page read them (elsewhere in tpot or outside);
+        after a load error always, so that the page recovers once the file can be read again (a fixed
+        permission does not change the stamp)."""
+        if not hasattr(self, "stamp"):
+            return False            # not loaded yet, the mount does that
+        return self.current is None or self.app.backend.config_stamp() != self.stamp
 
     def changes(self):
         if self.current is None:
@@ -1683,7 +1687,15 @@ class TpotApp(App):
 
     def goto_setting(self, key: str) -> None:
         self.goto("settings")
-        self.query_one("#settings", SettingsPane).focus_setting(key)
+        pane = self.query_one("#settings", SettingsPane)
+        if not pane.stale():
+            pane.focus_setting(key)
+            return
+
+        async def after_the_refresh() -> None:  # the rows are built anew, the jump goes to the new one
+            await self.refresh_config()
+            pane.focus_setting(key)
+        self.call_later(after_the_refresh)
 
     # -- look ----------------------------------------------------------------
 
@@ -1808,6 +1820,9 @@ class TpotApp(App):
         settings pages read them anew, keeping what is unsaved like after a save on the other page."""
         for pane in self.query(SettingsPane):
             if not pane.stale():
+                continue
+            if pane.current is None:            # it could not read them before: nothing to keep
+                await pane.reload()
                 continue
             old = dict(pane.current.values)
             try:
