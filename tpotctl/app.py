@@ -1498,9 +1498,12 @@ class TpotApp(App):
         self.call_from_thread(self.update_header, state)
 
     def update_header(self, state: ops.Status, stamp=None) -> None:
+        header = self.query(TpotHeader)
+        if not header:                      # tpot ends, a late status worker delivers anyway
+            return
         if stamp is not None:               # what it was read from (the status page brings it)
             self.header_stamp = stamp
-        self.query_one(TpotHeader).repaint(state)
+        header.first().repaint(state)
 
     def paint_menu(self) -> None:
         current = self.query_one(ContentSwitcher).current

@@ -1129,6 +1129,16 @@ class RefreshTriggersTest(SettingsHelpersBase):
             await pilot.pause(0.6)
             self.assertEqual(calls, [])
 
+    async def test_a_late_header_update_while_tpot_ends(self):
+        """The status worker can deliver while tpot ends and its widgets go: no crash then."""
+        from tpotctl import ops
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            await pilot.pause(0.3)
+            await self.app.query_one("TpotHeader").remove()
+            self.app.update_header(ops.Status("24.04.2", "dev", "abc", "LLM", "HIVE", "active", self.repo),
+                                   self.app.backend.config_stamp())
+            await pilot.pause(0.1)
+
     async def test_the_menu_brings_the_settings_page_along(self):
         from tpotctl.envfile import EnvFile
         from tpotctl.tests.test_settings import WEB_USER
