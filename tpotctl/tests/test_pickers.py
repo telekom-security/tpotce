@@ -881,6 +881,28 @@ class OutsideChangeTest(SettingsHelpersBase):
             await pilot.pause(0.3)
             self.assertIsNotNone(pane.current)
 
+    async def test_unreadable_env_keeps_the_page_and_the_draft(self):
+        from tpotctl.tests.test_settings import WEB_USER
+        env = os.path.join(self.repo, ".env")
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            pane = await self.open_settings(pilot)
+            pane.query_one("#set-TPOT_ATTACKMAP_TEXT_TIMEZONE").value = "Europe/Berlin"
+            await pilot.pause(0.3)
+            notes = self.notes()
+            self.set_env("WEB_USER", WEB_USER)
+            os.chmod(env, 0)
+            self.addCleanup(os.chmod, env, 0o644)
+            await self.app.refresh_config()
+            await pilot.pause(0.3)
+            self.assertTrue(any("cannot be read" in n for n in notes), notes)
+            self.assertFalse(any("changed meanwhile" in n for n in notes), notes)
+            self.assertEqual(pane.changes().get("TPOT_ATTACKMAP_TEXT_TIMEZONE"), "Europe/Berlin")
+            os.chmod(env, 0o644)
+            await self.app.refresh_config()
+            await pilot.pause(0.3)
+            self.assertEqual(pane.current.values.get("WEB_USER"), WEB_USER)
+            self.assertEqual(pane.changes().get("TPOT_ATTACKMAP_TEXT_TIMEZONE"), "Europe/Berlin")
+
     async def test_touch_without_change_says_nothing(self):
         async with self.app.run_test(size=(150, 50)) as pilot:
             pane = await self.open_settings(pilot)

@@ -1831,8 +1831,13 @@ class TpotApp(App):
             old = dict(pane.current.values)
             try:
                 fresh = self.backend.settings().values
-            except Exception:      # the page shows the error itself on its reload
-                fresh = {}
+            except Exception as err:        # SettingsError, OSError: keep the page and its draft
+                stamp = self.backend.config_stamp()
+                if stamp != getattr(pane, "told_stamp", None):
+                    pane.told_stamp = stamp
+                    self.notify(f".env cannot be read right now ({err}), the page keeps what it shows.",
+                                title="Settings", severity="warning", timeout=8)
+                continue
             changed = {key for key in set(old) | set(fresh) if old.get(key) != fresh.get(key)}
             await self.reload_keeping(pane, changed, "the value in .env changed meanwhile and replaces")
 
