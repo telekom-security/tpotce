@@ -39,13 +39,6 @@ CHANGES = [
 ]
 
 
-def tpot_on_path() -> bool:
-    """Whether the link of the playbook made `tpot` this T-Pot Manager (a file of its own there stays)."""
-    import shutil
-    found = shutil.which("tpot")
-    return found is not None and os.path.realpath(found) == os.path.realpath(os.path.join(REPO_DIR, "tpot"))
-
-
 def mark(state: str) -> Text:
     glyph, colour = {"ok": ("ok", "ok"), "warn": ("warn", "warn"), "fail": ("fail", "error")}[state]
     return Text(glyphs.g(glyph), style=f"bold {theme.color(colour)}")
@@ -616,7 +609,7 @@ class InstallApp(ArrowNav, App):
             lines.append(f"The web UI is https://<host>:64297, sign in as {answers.web_user}.")
         if answers.edition.letter == "s":
             lines.append("Join it to your HIVE: on the HIVE run tpot sensors add.")
-        if tpot_on_path():
+        if installer.tpot_on_path():
             lines.append("Afterwards run the T-Pot Manager: tpot (i.e. tpot status), it shows and changes everything.")
         else:
             text.append(f"{glyphs.g('warn')} The command tpot does not run this T-Pot Manager yet, link it with: "

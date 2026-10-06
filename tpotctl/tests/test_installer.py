@@ -137,6 +137,19 @@ class SshColortermTest(unittest.TestCase):
 
 class ChecksTest(unittest.TestCase):
 
+    def test_tpot_on_path_is_this_manager(self):
+        from unittest import mock
+        mine = os.path.join(REPO_DIR, "tpot")
+        with mock.patch.object(installer.shutil, "which", return_value=mine):
+            self.assertTrue(installer.tpot_on_path())
+        with mock.patch.object(installer.shutil, "which", return_value="/opt/other/bin/tpot"):
+            self.assertFalse(installer.tpot_on_path())
+        with mock.patch.object(installer.shutil, "which", return_value=None):
+            self.assertFalse(installer.tpot_on_path())
+        with open(INSTALL_SH, encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertTrue('readlink -f "${HOME}/tpotce/tpot"' in text)
+
     def test_distributions(self):
         for name, (text, state) in OS_RELEASES.items():
             with self.subTest(name=name):
@@ -351,9 +364,8 @@ class AssistantTest(unittest.IsolatedAsyncioTestCase):
 
     async def done_text(self, on_path):
         from unittest import mock
-        from tpotctl.screens import install as screen
         app = self.make_app(sudo="passwordless")
-        with mock.patch.object(screen, "tpot_on_path", return_value=on_path):
+        with mock.patch.object(installer, "tpot_on_path", return_value=on_path):
             async with app.run_test(size=(140, 44)) as pilot:
                 await pilot.pause(0.4)
                 await pilot.click("#ins-next")
@@ -366,20 +378,6 @@ class AssistantTest(unittest.IsolatedAsyncioTestCase):
                 await pilot.pause(1.0)
                 self.assertEqual(app.step, "done")
                 return str(app.query_one("#done-text").render())
-
-    def test_tpot_on_path_is_this_manager(self):
-        from unittest import mock
-        from tpotctl.screens import install as screen
-        mine = os.path.join(REPO_DIR, "tpot")
-        with mock.patch("shutil.which", return_value=mine):
-            self.assertTrue(screen.tpot_on_path())
-        with mock.patch("shutil.which", return_value="/opt/other/bin/tpot"):
-            self.assertFalse(screen.tpot_on_path())
-        with mock.patch("shutil.which", return_value=None):
-            self.assertFalse(screen.tpot_on_path())
-        with open(INSTALL_SH, encoding="utf-8") as handle:
-            text = handle.read()
-        self.assertTrue('readlink -f "${HOME}/tpotce/tpot"' in text)
 
     async def test_done_says_how_the_manager_runs(self):
         text = await self.done_text(True)

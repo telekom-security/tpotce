@@ -103,6 +103,13 @@ class Answers:
 
 # -- checks ------------------------------------------------------------------
 
+
+def tpot_on_path(repo_dir: str = REPO_DIR) -> bool:
+    """Whether the link of the playbook made `tpot` this T-Pot Manager (a file of its own there stays)."""
+    found = shutil.which("tpot")
+    return found is not None and os.path.realpath(found) == os.path.realpath(os.path.join(repo_dir, "tpot"))
+
+
 def os_release(path: str = "/etc/os-release") -> Dict[str, str]:
     values = {}
     try:
