@@ -71,7 +71,12 @@ class TpotHeader(Horizontal):
         self.query_one("#header-chips", Static).update(chips)
         self.query_one("#header-service", Static).update(service_text(state.service) if state else "")
         width = self.app.size.width
+        # the credit takes what the wordmark and the chips leave: the full one, the short one, or none
+        mark = logo.wordmark(theme.color("glass"))
+        used = 2 + (max(line.cell_len for line in mark.split("\n")) + 2) + 3 + \
+            max(line.cell_len for line in chips.split("\n")) + 2
         credit = self.query_one("#header-credit", Static)
-        credit.display = width >= 90
-        text = CREDIT if width >= 120 else CREDIT_SHORT
+        text = next((t for t, least in ((CREDIT, 120), (CREDIT_SHORT, 90))
+                     if width >= least and used + len(t) <= width), "")
+        credit.display = bool(text)
         credit.update(Text(text, style=theme.color("ash")))

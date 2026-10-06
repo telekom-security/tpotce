@@ -260,14 +260,26 @@ class LookInTheAppTest(unittest.IsolatedAsyncioTestCase):
                      "Textual is not installed, run with the venv of tpot")
 class CreditTest(unittest.IsolatedAsyncioTestCase):
 
-    async def credit(self, width):
-        from tpotctl import app as tapp
+    async def credit(self, width, branch="dev", chips=None):
+        from tpotctl import app as tapp, ops
         from tpotctl.tests.test_app import FakeBackend, Recorder
-        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder())
+        backend = FakeBackend()
+        backend.status = lambda: ops.Status("24.04.2", branch, "abc1234", "STANDARD", "HIVE", "active",
+                                            "/home/t/tpotce")
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
         async with app.run_test(size=(width, 40)) as pilot:
-            await pilot.pause(0.4)
+            await pilot.pause(0.6)
             widget = app.query_one("#header-credit")
+            if chips is not None:
+                chips.append(str(app.query_one("#header-chips").render()))
             return str(widget.render()) if widget.display else ""
+
+    async def test_a_long_branch_gets_the_short_credit(self):
+        chips = []
+        short = await self.credit(130, "feature/maplibre-attack-map", chips)
+        self.assertTrue("by Telekom Security" in short and "Deutsche" not in short, short)
+        self.assertTrue("feature/maplibre-attack-map abc1234" in chips[0], chips[0])
+        self.assertTrue("Deutsche Telekom Security GmbH" in await self.credit(130, "dev"))
 
     async def test_header_names_telekom_security(self):
         self.assertIn("Powered by Deutsche Telekom Security GmbH", await self.credit(150))
