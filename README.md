@@ -310,7 +310,7 @@ Beelzebub is configured through these settings in `~/tpotce/.env`:
 | Setting                  | Description                                                                                          |
 | :----------------------- | :--------------------------------------------------------------------------------------------------- |
 | `BEELZEBUB_LLM_PROVIDER` | `ollama` or `openai`                                                                                 |
-| `BEELZEBUB_LLM_MODEL`    | The model served by the provider, i.e. `openchat` (Ollama) or `gpt-4o` (OpenAI)                      |
+| `BEELZEBUB_LLM_MODEL`    | The model served by the provider, `llama3.1:8b` (Ollama, recommended, see [Ollama](#ollama)) or i.e. `gpt-4o-mini` (OpenAI) |
 | `BEELZEBUB_LLM_HOST`     | Full URL of the chat endpoint, i.e. `http://ollama.local:11434/api/chat`, empty for the provider default |
 | `BEELZEBUB_LLM_API_KEY`  | Only required for `openai`                                                                           |
 
@@ -320,8 +320,16 @@ In the LLM edition Beelzebub publishes every prepared service that Galah does no
 Galah is configured through the `GALAH_LLM_*` settings in `~/tpotce/.env`. Besides Ollama and OpenAI it supports Anthropic, Google AI, GCP Vertex AI and Cohere, see the comments in `~/tpotce/.env`. Galah listens on `80`, `8080` (HTTP) and `443`, `8443` (TLS with a self-signed certificate created on the first start). Requests for `/` are answered with a static page, all other requests are forwarded to the LLM and the responses are cached for 24 hours.
 
 ### Ollama
-🚨 **CPU-based usage is not recommended**, not even for testing.<br><br>
-To set up and run **Ollama**, refer to the [Ollama GitHub repository](https://github.com/ollama/ollama) for instructions. For entry-level or testing purposes, results can be achieved using a **Nvidia RTX 4060 Ti 16GB** or equivalent (AMD's ROCm is also supported by Ollama), with models like **openchat** and **Llama3**. As a general rule with LLM-based systems, the better and more hardware you use, the faster and more accurate the results will be, especially when tasks are offloaded to multiple GPUs and larger models.
+To set up and run **Ollama**, refer to the [Ollama GitHub repository](https://github.com/ollama/ollama) for instructions, then pull the model on it (`ollama pull llama3.1:8b`) and let it listen on an address the containers reach (`OLLAMA_HOST=0.0.0.0`). T-Pot sets **`llama3.1:8b`** for Beelzebub and Galah (`BEELZEBUB_LLM_MODEL`, `GALAH_LLM_MODEL`):
+
+| Model           | Size     | Use                                                                                                                       |
+| :-------------- | :------- | :------------------------------------------------------------------------------------------------------------------------ |
+| `llama3.1:8b`   | ~5 GB    | The default. Of the small models it answers shell commands and HTTP requests most believably, runs on a CPU with 8 GB RAM |
+| `llama3.2:3b`   | ~2 GB    | Little RAM, i.e. a Raspberry Pi, quicker, but the answers give the honeypot away sooner                                   |
+| `qwen3:30b-a3b` | ~18 GB   | Best quality if the RAM is there; a mixture of experts (3B active), so still quick on a CPU                               |
+| `gpt-4o-mini`   | (cloud)  | With `openai` as provider, costs per request                                                                              |
+
+The choice follows a 2026 study of LLM based SSH honeypots ([arXiv 2608.18686](https://arxiv.org/html/2608.18686)), in which Llama 3.1 8B was the best of the small models with a structured prompt, and the [Beelzebub FAQ](https://beelzebub.ai/faq/), which names the Llama 3 models. On a CPU an answer takes a few seconds, attackers notice that sooner than with a GPU (i.e. a **Nvidia RTX 4060 Ti 16GB** or AMD with ROCm); as a general rule with LLM-based systems, the better and more hardware you use, the more convincing the honeypots get. The *LLM* page of the [`tpot`](#the-t-pot-manager-tpot) menu finds an Ollama, lists its models and sends a test prompt.
 
 ### ChatGPT
 ChatGPT support for these honeypots will remain untested in relation to T-Pot.

@@ -34,7 +34,7 @@ services:
     #  - "11211:11211"
     environment:
       LLM_PROVIDER: "ollama"
-      LLM_MODEL: "openchat"
+      LLM_MODEL: "llama3.1:8b"
       LLM_HOST: "http://ollama.local:11434/api/chat"
     #  LLM_PROVIDER: "openai"
     #  LLM_MODEL: "gpt-4o"

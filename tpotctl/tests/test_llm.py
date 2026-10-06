@@ -297,3 +297,37 @@ class HostAddressesTest(unittest.TestCase):
                       netinfo.Interface("br-4f2a", True, ["172.18.0.1/16"])]
         self.assertEqual(llm.host_addresses(interfaces), ["192.168.1.7"])
         self.assertEqual(llm.bridge_addresses(interfaces), ["172.17.0.1", "172.18.0.1"])
+
+
+class RecommendedModelTest(unittest.TestCase):
+    """llama3.1:8b is the model T-Pot recommends to Beelzebub and Galah, the same everywhere."""
+
+    MODEL = "llama3.1:8b"
+
+    def read(self, *parts):
+        import os
+        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        with open(os.path.join(root, *parts), encoding="utf-8") as handle:
+            return handle.read()
+
+    def test_env_example_recommends_it(self):
+        text = self.read("env.example")
+        for key in ("BEELZEBUB_LLM_MODEL", "GALAH_LLM_MODEL"):
+            line = f'{key}: "{self.MODEL}"'
+            self.assertTrue(line in text.splitlines(), line)
+        for other in ("llama3.2:3b", "qwen3:30b-a3b", "gpt-4o-mini"):
+            self.assertTrue(other in text, other)
+
+    def test_fallbacks_say_the_same(self):
+        for parts in (("compose", "llm.yml"), ("compose", "tpot_services.yml")):
+            text = self.read(*parts)
+            for key in ("BEELZEBUB_LLM_MODEL", "GALAH_LLM_MODEL"):
+                fallback = "${%s:-%s}" % (key, self.MODEL)
+                self.assertTrue(fallback in text, (parts, fallback))
+        for service in ("beelzebub", "galah"):
+            line = f'LLM_MODEL: "{self.MODEL}"'
+            self.assertTrue(line in self.read("docker", service, "docker-compose.yml"), (service, line))
+        self.assertTrue(f"LLM_MODEL={self.MODEL}" in self.read("docker", "beelzebub", "Dockerfile"))
+        self.assertTrue(f'myOLLAMAMODEL:-{self.MODEL}' in self.read("update.sh"))
+        schema = self.read("docker", "tpotinit", "dist", "etc", "env.schema.yml")
+        self.assertEqual(schema.count(f"i.e. {self.MODEL} (ollama"), 2)

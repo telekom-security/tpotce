@@ -21,7 +21,7 @@ services:
     environment:
       LLM_PROVIDER: "ollama"
       LLM_SERVER_URL: "http://ollama.local:11434"
-      LLM_MODEL: "llama3.1"
+      LLM_MODEL: "llama3.1:8b"
       LLM_TEMPERATURE: "1"
     #  LLM_PROVIDER: "openai"
     #  LLM_SERVER_URL: ""

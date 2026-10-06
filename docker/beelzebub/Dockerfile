@@ -31,7 +31,7 @@ RUN go mod download && \
     BEELZEBUB_TPOT_LOG_FILE=/tmp/tpot/beelzebub.json \
     BEELZEBUB_TPOT_HOST_KEY=/tmp/tpot/ssh_host_key \
     TPOT_SERVICES_DIR=/root/configurations/services \
-    LLM_PROVIDER=ollama LLM_MODEL=openchat \
+    LLM_PROVIDER=ollama LLM_MODEL=llama3.1:8b \
     go test ./internal/... && \
     GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldflags="-s -w" -o main .
 #

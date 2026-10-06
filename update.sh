@@ -1179,7 +1179,7 @@ function fuMIGRATE_BEELZEBUB_ENV () {
 	case "${myOLDMODEL}" in
 	  ollama)
 	    myPROVIDER="ollama"
-	    myMODEL="${myOLLAMAMODEL:-openchat}"
+	    myMODEL="${myOLLAMAMODEL:-llama3.1:8b}"
 	    ;;
 	  gpt4-o)
 	    myPROVIDER="openai"
@@ -1198,7 +1198,7 @@ function fuMIGRATE_BEELZEBUB_ENV () {
 	  /^BEELZEBUB_(LLM_HOST|OLLAMA_MODEL|OPENAISECRETKEY)[[:space:]]*[:=]/ { next }
 	  /^BEELZEBUB_LLM_MODEL[[:space:]]*[:=]/ {
 	    print "# BEELZEBUB_LLM_PROVIDER: Set to \"ollama\" or \"openai\"."
-	    print "# BEELZEBUB_LLM_MODEL: Set to the model served by the provider, i.e. \"openchat\" (ollama) or \"gpt-4o\" (openai)."
+	    print "# BEELZEBUB_LLM_MODEL: Set to the model served by the provider, i.e. \"llama3.1:8b\" (ollama) or \"gpt-4o-mini\" (openai)."
 	    print "# BEELZEBUB_LLM_HOST: Full URL of the chat endpoint, leave empty to use the provider default."
 	    print "# BEELZEBUB_LLM_API_KEY: Only required for \"openai\"."
 	    print "BEELZEBUB_LLM_PROVIDER: \"" provider "\""
