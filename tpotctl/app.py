@@ -481,6 +481,9 @@ class SettingsPane(Vertical):
     PREFIX = "settings"
     ALL_TOGGLE = True           # the checkbox for tpot env list --all
 
+    # in the footer while the focus is on the page; the Save button does the work
+    BINDINGS = [Binding("ctrl+s", "save", "Save", show=True)]
+
     def compose(self) -> ComposeResult:
         with Horizontal(id=f"{self.PREFIX}-head", classes="settings-head"):
             yield Static("", id=f"{self.PREFIX}-status", classes="settings-status")
@@ -601,6 +604,20 @@ class SettingsPane(Vertical):
 
     def loaded(self) -> None:
         """After a reload, for subclasses."""
+
+    def action_save(self) -> None:
+        """ctrl+s: the Save button, or why there is nothing to save."""
+        button = self.query_one(f"#{self.PREFIX}-save", Button)
+        if not button.disabled:
+            button.press()
+            return
+        changes = self.changes()
+        if not changes or self.current is None:
+            self.app.notify("Nothing to save, no value was changed.", title="Settings", timeout=4)
+            return
+        blocking = self.current.blocking(self.current.problems(self.draft, offered=True), changes)
+        self.app.notify("Not saved: " + "; ".join(f"{p.key}: {p.text}" for p in blocking[:3]), title="Settings",
+                        severity="error", timeout=8)
 
     def stale(self) -> bool:
         """.env or the compose file changed since this page read them (elsewhere in tpot or outside)."""

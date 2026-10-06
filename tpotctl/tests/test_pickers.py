@@ -1038,6 +1038,75 @@ class RefreshTriggersTest(SettingsHelpersBase):
 
 
 @unittest.skipUnless(textual and yaml, "Textual is not installed, run with the venv of tpot")
+class CtrlSTest(SettingsHelpersBase):
+    """ctrl+s saves the Settings and the LLM page, the footer offers it there."""
+
+    def env(self):
+        with open(os.path.join(self.repo, ".env"), encoding="utf-8") as handle:
+            return handle.read()
+
+    async def later(self, pilot):
+        for _ in range(20):
+            await pilot.pause(0.1)
+            if self.app.screen.query("#no"):
+                await pilot.click("#no")             # no restart of T-Pot
+                await pilot.pause(0.3)
+                return True
+        return False
+
+    async def test_ctrl_s_saves(self):
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            pane = await self.open_settings(pilot)
+            field = pane.query_one("#set-TPOT_ATTACKMAP_TEXT_TIMEZONE")
+            field.focus()
+            field.value = "Europe/Berlin"
+            await pilot.pause(0.3)
+            await pilot.press("ctrl+s")
+            self.assertTrue(await self.later(pilot))
+        self.assertTrue("TPOT_ATTACKMAP_TEXT_TIMEZONE=Europe/Berlin" in self.env())
+
+    async def test_ctrl_s_with_nothing_to_save_says_so(self):
+        notes = []
+        self.app.notify = lambda message, **kwargs: notes.append(message)
+        before = self.env()
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            await self.open_settings(pilot)
+            self.app.query_one("#settings").enter()
+            await pilot.pause(0.2)
+            await pilot.press("ctrl+s")
+            await pilot.pause(0.3)
+        self.assertTrue(any("Nothing to save" in n for n in notes), notes)
+        self.assertEqual(self.env(), before)
+
+    async def test_ctrl_s_is_in_the_footer_of_the_settings_page(self):
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            await self.open_settings(pilot)
+            self.app.query_one("#settings").enter()
+            await pilot.pause(0.2)
+            shown = {key for key, active in self.app.active_bindings.items() if active.binding.show}
+            self.assertIn("ctrl+s", shown)
+            self.app.goto("status")
+            self.app.query_one("#sidebar").focus()
+            await pilot.pause(0.2)
+            self.assertNotIn("ctrl+s", self.app.active_bindings)
+
+    async def test_ctrl_s_on_the_llm_page(self):
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            pane = await self.open_llm(pilot)
+            pane.query_one("#llm-tabs").active = "tab-galah"
+            await pilot.pause(0.3)
+            field = pane.query_one("#set-GALAH_LLM_MODEL")
+            field.focus()
+            field.value = "qwen3"
+            await pilot.pause(0.3)
+            await pilot.press("ctrl+s")
+            self.assertTrue(await self.later(pilot))
+            await pilot.pause(0.3)
+            self.assertFalse(self.app.screen.query("#no"))      # one save, one question
+        self.assertTrue("qwen3" in self.env())
+
+
+@unittest.skipUnless(textual and yaml, "Textual is not installed, run with the venv of tpot")
 class SettingsDraftTest(SettingsHelpersBase):
     """A save on one of Settings / LLM keeps the unsaved changes of the other."""
 
