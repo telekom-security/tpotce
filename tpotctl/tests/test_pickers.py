@@ -1147,6 +1147,48 @@ class CtrlSTest(SettingsHelpersBase):
         self.assertTrue(any("Nothing to save" in n for n in notes), notes)
         self.assertEqual(self.env(), before)
 
+    async def test_ctrl_s_names_what_blocks(self):
+        notes = []
+        self.app.notify = lambda message, **kwargs: notes.append(message)
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            pane = await self.open_settings(pilot)
+            field = pane.query_one("#set-TPOT_PERSISTENCE_CYCLES")
+            field.focus()
+            field.value = "abc"
+            await pilot.pause(0.3)
+            await pilot.press("ctrl+s")
+            await pilot.pause(0.3)
+        self.assertTrue(any("Not saved" in n and "TPOT_PERSISTENCE_CYCLES" in n for n in notes), notes)
+
+    async def test_ctrl_s_right_after_a_change(self):
+        notes = []
+        self.app.notify = lambda message, **kwargs: notes.append(message)
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            pane = await self.open_settings(pilot)
+            field = pane.query_one("#set-TPOT_ATTACKMAP_TEXT_TIMEZONE")
+            field.focus()
+            await pilot.pause(0.2)
+            field.value = "Europe/Berlin"
+            await pilot.press("ctrl+s")                 # no pause: the page has not checked yet
+            self.assertTrue(await self.later(pilot))
+        self.assertFalse([n for n in notes if n.startswith("Not saved")], notes)
+        self.assertTrue("TPOT_ATTACKMAP_TEXT_TIMEZONE=Europe/Berlin" in self.env())
+
+    async def test_ctrl_s_on_a_page_that_could_not_read(self):
+        notes = []
+        self.app.notify = lambda message, **kwargs: notes.append(message)
+        env = os.path.join(self.repo, ".env")
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            pane = await self.open_settings(pilot)
+            os.chmod(env, 0)
+            self.addCleanup(os.chmod, env, 0o644)
+            await pane.reload()
+            await pilot.pause(0.3)
+            pane.query_one("#settings-all").focus()     # the page has no rows, its head is still there
+            await pilot.press("ctrl+s")
+            await pilot.pause(0.3)
+        self.assertTrue(any("could not be read" in n for n in notes), notes)
+
     async def test_ctrl_s_is_in_the_footer_of_the_settings_page(self):
         async with self.app.run_test(size=(150, 50)) as pilot:
             await self.open_settings(pilot)

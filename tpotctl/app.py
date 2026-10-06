@@ -606,18 +606,23 @@ class SettingsPane(Vertical):
         """After a reload, for subclasses."""
 
     def action_save(self) -> None:
-        """ctrl+s: the Save button, or why there is nothing to save."""
+        """ctrl+s: the Save button, or why it does not save."""
+        if self.current is None:
+            self.app.notify("Not saved: .env could not be read, see the top of the page.", title="Settings",
+                            severity="error", timeout=8)
+            return
+        self.check()                    # the state of the button as of now, not of the last refresh
         button = self.query_one(f"#{self.PREFIX}-save", Button)
         if not button.disabled:
             button.press()
             return
         changes = self.changes()
-        if not changes or self.current is None:
+        if not changes:
             self.app.notify("Nothing to save, no value was changed.", title="Settings", timeout=4)
             return
         blocking = self.current.blocking(self.current.problems(self.draft, offered=True), changes)
-        self.app.notify("Not saved: " + "; ".join(f"{p.key}: {p.text}" for p in blocking[:3]), title="Settings",
-                        severity="error", timeout=8)
+        why = "; ".join(f"{p.key}: {p.text}" for p in blocking[:3]) or "the page is still loading, try again"
+        self.app.notify(f"Not saved: {why}", title="Settings", severity="error", timeout=8)
 
     def stale(self) -> bool:
         """.env or the compose file changed since this page read them (elsewhere in tpot or outside);
