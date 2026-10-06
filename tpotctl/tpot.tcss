@@ -163,7 +163,7 @@ DataTable > .datatable--header {
 }
 
 DataTable > .datatable--even-row {
-    background: $comb 50%;
+    background: $stripe;
 }
 
 /* status */

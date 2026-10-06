@@ -27,11 +27,13 @@ TRUECOLOR = {"INK": INK, "COMB": COMB, "COMB_LIT": COMB_LIT, "WAX": WAX, "MAGENT
 PALETTE_256 = {"INK": "#000000", "COMB": "#121212", "COMB_LIT": "#5f005f", "WAX": "#87005f",
                "MAGENTA": "#d70087", "PETROL": "#005f5f", "GLASS": "#ffffff", "MIST": "#87afd7",
                "KEY": "#5fafd7", "ASH": "#a8a8a8", "OK": "#5faf5f", "WARN": "#ffaf00", "ERROR": "#d75f5f"}
-# and as the 16 ANSI colours (TERM=xterm as PuTTY sets it, screen): panels grey, inactive borders
-# magenta, focus bright magenta, so the three stay apart; the terminal's palette gives the shades
-PALETTE_16 = {"INK": "#000000", "COMB": "#000000", "COMB_LIT": "#808080", "WAX": "#800080",
-              "MAGENTA": "#ff00ff", "PETROL": "#008080", "GLASS": "#ffffff", "MIST": "#c0c0c0",
-              "KEY": "#00ffff", "ASH": "#c0c0c0", "OK": "#00ff00", "WARN": "#ffff00", "ERROR": "#ff0000"}
+# and as the 16 ANSI colours (TERM=xterm as PuTTY sets it, screen): panels dark grey (8), inactive
+# borders magenta (5), focus bright magenta (13), so the three stay apart and light text stays readable
+# on the panels; the values are the VGA entries Rich downgrades to (rich._palettes.STANDARD_PALETTE),
+# the terminal's own palette gives the shades
+PALETTE_16 = {"INK": "#000000", "COMB": "#000000", "COMB_LIT": "#555555", "WAX": "#aa00aa",
+              "MAGENTA": "#ff55ff", "PETROL": "#00aaaa", "GLASS": "#ffffff", "MIST": "#aaaaaa",
+              "KEY": "#55ffff", "ASH": "#aaaaaa", "OK": "#55ff55", "WARN": "#ffff55", "ERROR": "#ff5555"}
 PALETTES = {"truecolor": TRUECOLOR, "256": PALETTE_256, "16": PALETTE_16}
 
 
@@ -46,6 +48,11 @@ def build(system: str) -> Theme:
         "primary-muted": p["COMB_LIT"], "accent-muted": p["COMB_LIT"],
         "primary-background-darken-1": p["COMB"],
     }
+    if system == "16":
+        # solid entries where blends vanish: the cursor on magenta (5), the selection on the focused field
+        # (WAX) in grey, no zebra (half of grey is black)
+        few.update({"block-cursor-background": p["WAX"], "input-selection-background": p["COMB_LIT"],
+                    "stripe": p["INK"]})
     # for Rich Text outside of CSS (tables, the honeycomb, the logo)
     STYLE = {
         "magenta": p["MAGENTA"], "petrol": p["PETROL"], "glass": p["GLASS"], "mist": p["MIST"], "key": p["KEY"],
@@ -75,6 +82,8 @@ def build(system: str) -> Theme:
             "input-selection-background": f"{p['MAGENTA']} 40%",
             "scrollbar": p["WAX"], "scrollbar-hover": p["MAGENTA"], "scrollbar-active": p["MAGENTA"],
             "scrollbar-background": p["INK"],
+            # every other row of a table
+            "stripe": f"{p['COMB_LIT']} 50%",
             # the background of a focused field; magenta at 35 % turns into maroon with fewer colours
             "focus-tint": f"{p['MAGENTA']} 35%" if not few else p["WAX"],
             # what a dialog leaves of the page below it: dimmed further, magenta goes red with 256

@@ -380,7 +380,7 @@ class ColoursPrefTest(unittest.TestCase):
         for extra, expected in (({"TPOT_COLORS": "256"}, "256 #5f005f"),
                                 ({"TPOT_COLORS": "truecolor", "TEXTUAL_COLOR_SYSTEM": "256"}, "256 #5f005f"),
                                 ({"TPOT_COLORS": "256", "TEXTUAL_COLOR_SYSTEM": "truecolor"}, "truecolor #38001D"),
-                                ({"TPOT_COLORS": "16"}, "standard #808080")):
+                                ({"TPOT_COLORS": "16"}, "standard #555555")):
             env = {k: v for k, v in os.environ.items() if k not in ("TEXTUAL_COLOR_SYSTEM", "TPOT_COLORS")}
             env.update(extra)
             out = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True,
@@ -506,6 +506,31 @@ class ColoursTest(unittest.IsolatedAsyncioTestCase):
         numbers = [Color.parse(theme.color(name)).downgrade(ColorSystem.STANDARD).number
                    for name in ("comb", "wax", "magenta")]
         self.assertEqual(len(set(numbers)), 3, numbers)
+
+    def test_16_tokens_are_palette_entries(self):
+        """The VGA entries Rich downgrades to (STANDARD_PALETTE), not xterm's: #808080 would be light grey."""
+        from rich._palettes import STANDARD_PALETTE
+        from rich.color import Color, ColorSystem
+        from tpotctl import theme
+        for name, value in theme.PALETTE_16.items():
+            number = Color.parse(value).downgrade(ColorSystem.STANDARD).number
+            self.assertEqual("#%02x%02x%02x" % tuple(STANDARD_PALETTE[number]), value.lower(), name)
+
+    def test_16_colour_text_stands_out(self):
+        """Text and what it sits on are different ANSI colours: panels, fields, cursor, selection, stripes."""
+        from rich.color import Color, ColorSystem
+        from tpotctl import theme
+        values = self.generated("16")
+        variables = theme.TPOT_THEME.variables
+
+        def n(value):
+            return Color.parse(value.split()[0]).downgrade(ColorSystem.STANDARD).number
+        panel = n(theme.color("comb"))
+        for text in ("glass", "mist", "ash", "key"):
+            self.assertNotEqual(n(theme.color(text)), panel, text)
+        self.assertNotEqual(n(variables["input-selection-background"]), n(variables["focus-tint"]))
+        self.assertNotEqual(n(variables["block-cursor-background"]), n(variables["block-cursor-foreground"]))
+        self.assertNotEqual(n(values["block-cursor-blurred-background"]), n(variables["stripe"]))
 
     async def test_16_colours_show_no_maroon(self):
         from rich.color import Color, ColorSystem
