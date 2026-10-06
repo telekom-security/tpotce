@@ -11,7 +11,7 @@ import sys
 REPO_DIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, REPO_DIR)
 
-from tpotctl import bootstrap, say  # noqa: E402
+from tpotctl import bootstrap, prefs, say  # noqa: E402
 
 
 def fail(text, code=2):
@@ -23,6 +23,8 @@ def main():
     argv = sys.argv[1:]
     if hasattr(os, "geteuid") and os.geteuid() == 0:
         fail("do not run tpot as root, it calls sudo itself where needed")
+    # the colours chosen (TPOT_COLORS, prefs) reach Textual before anything imports it
+    prefs.apply_color_system(os.environ)
     home = os.path.join(os.path.expanduser("~"), "tpotce")
     on_host = sys.platform.startswith("linux")
     if on_host and not os.environ.get(bootstrap.GUARD) and os.path.realpath(home) != REPO_DIR:

@@ -1,9 +1,11 @@
-"""ctrl+p in the T-Pot Manager: jump to a page or a setting, run an action, change the icons."""
+"""ctrl+p in the T-Pot Manager: jump to a page or a setting, run an action, change the icons or the colours."""
 
 from functools import partial
 from typing import Callable, Iterator, Tuple
 
 from textual.command import DiscoveryHit, Hit, Hits, Provider
+
+from tpotctl import prefs
 
 Command = Tuple[str, str, Callable]
 
@@ -44,6 +46,9 @@ class TpotCommands(Provider):
         for mode in ("unicode", "nerd", "ascii"):
             yield f"Icons: {mode}", {"unicode": "symbols every font has", "nerd": "needs a Nerd Font",
                                      "ascii": "plain characters"}[mode], partial(app.set_icons, mode)
+        for mode in prefs.COLORS:
+            yield f"Colours: {mode}", {"auto": "what the terminal says", "truecolor": "24 bit, i.e. over SSH",
+                                       "256": "the palette for 256 colours"}[mode], partial(app.set_colors, mode)
         for key, title in app.setting_keys():
             yield f"{title} ({key})", "setting", partial(app.goto_setting, key)
 

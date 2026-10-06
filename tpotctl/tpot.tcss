@@ -383,7 +383,7 @@ Input.-textual-compact > .input--placeholder {
 }
 
 Input.-textual-compact:focus {
-    background: $primary 35%;
+    background: $focus-tint;
 }
 
 Select.-textual-compact > SelectCurrent, Select.-textual-compact:focus > SelectCurrent,
@@ -394,7 +394,7 @@ Select.-textual-compact.-expanded > SelectCurrent {
 }
 
 Select.-textual-compact:focus > SelectCurrent {
-    background: $primary 35%;
+    background: $focus-tint;
 }
 
 Select > SelectOverlay {
@@ -411,7 +411,7 @@ Switch {
 }
 
 Switch:focus {
-    background: $primary 35%;
+    background: $focus-tint;
 }
 
 Switch > .switch--slider {
@@ -497,7 +497,7 @@ Tree:focus > .tree--cursor {
 
 ModalScreen {
     align: center middle;
-    background: $background 70%;
+    background: $modal-dim;
 }
 
 .dialog {

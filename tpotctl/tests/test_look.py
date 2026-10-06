@@ -248,6 +248,11 @@ class LookInTheAppTest(unittest.IsolatedAsyncioTestCase):
             names = [name for name, _help, _cb in TpotCommands(app.screen).commands()]
             self.assertIn("Go to Settings", names)
             self.assertIn("Icons: nerd", names)
+            self.assertIn("Colours: 256", names)
+            app.set_colors("256")
+            with open(prefs.path(), encoding="utf-8") as handle:
+                self.assertEqual(json.load(handle)["colors"], "256")
+            app.set_colors("auto")
             self.assertNotIn("Theme", [c.title for c in app.get_system_commands(app.screen)])
 
 
@@ -288,6 +293,105 @@ class CreditTest(unittest.IsolatedAsyncioTestCase):
                 app.update_header(state)                 # no crash on the way out
             finally:
                 app._closing = False
+            app._exit = True                             # exit() says so before anything closes
+            try:
+                app.update_header(state)
+            finally:
+                app._exit = False
+
+
+def pure_red(hexcolour: str) -> bool:
+    """A colour that the xterm 256 palette turns into a pure red (the maroon of an SSH session)."""
+    from rich.color import Color, ColorSystem
+    rgb = Color.parse(hexcolour).downgrade(ColorSystem.EIGHT_BIT).get_truecolor()
+    return rgb.red > 0 and rgb.green == 0 and rgb.blue == 0
+
+
+class ColoursPrefTest(unittest.TestCase):
+    """TPOT_COLORS / the colours of prefs.py: auto, truecolor or 256, before Textual is imported."""
+
+    def test_colors_pref_and_env(self):
+        with mock.patch.dict(os.environ, {"TPOT_COLORS": "256"}):
+            self.assertEqual(prefs.load().colors, "256")
+        with mock.patch.dict(os.environ, {"TPOT_COLORS": "plaid"}):
+            self.assertEqual(prefs.load().colors, "auto")
+        environ = {"TPOT_COLORS": "256"}
+        with mock.patch.dict(os.environ, environ):
+            target = {}
+            prefs.apply_color_system(target)
+            self.assertEqual(target, {"TEXTUAL_COLOR_SYSTEM": "256"})
+            target = {"TEXTUAL_COLOR_SYSTEM": "truecolor"}         # the user's own choice wins
+            prefs.apply_color_system(target)
+            self.assertEqual(target, {"TEXTUAL_COLOR_SYSTEM": "truecolor"})
+        with mock.patch.dict(os.environ, {"TPOT_COLORS": "auto"}):
+            target = {}
+            prefs.apply_color_system(target)
+            self.assertEqual(target, {})
+
+    def test_the_launcher_sets_it_before_textual(self):
+        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        with open(os.path.join(root, "tpot"), encoding="utf-8") as handle:
+            launcher = handle.read()
+        self.assertTrue("prefs.apply_color_system(os.environ)" in launcher)
+        self.assertLess(launcher.index("prefs.apply_color_system(os.environ)"), launcher.index("from tpotctl import cli"))
+
+
+@unittest.skipUnless(sys.modules.get("textual") or __import__("importlib").util.find_spec("textual"),
+                     "Textual is not installed, run with the venv of tpot")
+class ColoursTest(unittest.IsolatedAsyncioTestCase):
+    """Over SSH or in tmux the terminal says 256 colours: the T-Pot Manager brings a palette for it."""
+
+    def setUp(self):
+        from tpotctl import theme
+        self.addCleanup(theme.build, "truecolor")
+
+    async def colours(self, size=(170, 45)):
+        import re
+        from tpotctl import app as tapp
+        from tpotctl.tests.test_app import FakeBackend, Recorder
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder())
+        async with app.run_test(size=size) as pilot:
+            await pilot.pause(0.5)
+            found = set(re.findall(r"#[0-9a-fA-F]{6}\b", app.export_screenshot()))
+            await pilot.click("#svc-restart")                   # a dialog dims what is below it
+            await pilot.pause(0.4)
+            found |= set(re.findall(r"#[0-9a-fA-F]{6}\b", app.export_screenshot()))
+            await pilot.press("escape")
+            await pilot.pause(0.3)
+            await pilot.press("down", "down")                   # Settings: rows, tabs, fields
+            await pilot.pause(0.5)
+            found |= set(re.findall(r"#[0-9a-fA-F]{6}\b", app.export_screenshot()))
+            await pilot.press("right")                          # into the page: a focused field
+            await pilot.pause(0.5)
+            found |= set(re.findall(r"#[0-9a-fA-F]{6}\b", app.export_screenshot()))
+        return found
+
+    async def test_256_colours_show_no_red_surfaces(self):
+        from tpotctl import theme
+        theme.build("256")
+        reds = {colour for colour in await self.colours() if pure_red(colour)}
+        self.assertEqual(reds, set())
+
+    def test_256_tokens_are_palette_entries(self):
+        from rich.color import Color, ColorSystem
+        from tpotctl import theme
+        for name, value in theme.PALETTE_256.items():
+            rgb = Color.parse(value).downgrade(ColorSystem.EIGHT_BIT).get_truecolor()
+            shown = f"#{rgb.red:02x}{rgb.green:02x}{rgb.blue:02x}"
+            if len(set(value[1:].lower()[i:i + 2] for i in (0, 2, 4))) == 1 and value.lower() not in ("#ffffff", "#000000"):
+                # Rich takes a grey one step down its grey ramp: the shown grey is the one meant
+                self.assertNotEqual(shown[1:3], "00", name)
+                self.assertEqual(len({shown[1:3], shown[3:5], shown[5:7]}), 1, name)
+            else:
+                self.assertEqual(shown, value.lower(), name)
+
+    def test_truecolor_look_is_unchanged(self):
+        from tpotctl import theme
+        theme.build("truecolor")
+        self.assertEqual((theme.color("magenta"), theme.color("comb"), theme.TPOT_THEME.surface),
+                         ("#E20074", "#38001D", "#1C000E"))
+        theme.build("256")
+        self.assertEqual(theme.color("comb"), theme.PALETTE_256["COMB_LIT"])
 
 
 class NamesTest(unittest.TestCase):

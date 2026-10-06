@@ -310,11 +310,21 @@ class SettingsHelpersTest(SettingsHelpersBase):
             self.app.goto_setting("TPOT_ATTACKMAP_TEXT_TIMEZONE")
             await pilot.pause(0.3)
             await pilot.click("#pick-TPOT_ATTACKMAP_TEXT_TIMEZONE")
-            await pilot.pause(0.5)
+            from tpotctl.screens.pickers import Picker
+            for _ in range(40):                     # polling: under the load of the full suite it takes longer
+                await pilot.pause(0.05)
+                if isinstance(self.app.screen, Picker):
+                    break
             self.app.screen.query_one("#picker-filter").value = "berlin"
-            await pilot.pause(0.3)
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if self.app.screen.query_one("#picker-list").option_count == 1:
+                    break
             await pilot.press("enter")
-            await pilot.pause(0.3)
+            for _ in range(40):
+                await pilot.pause(0.05)
+                if pane.changes():
+                    break
             self.assertEqual(pane.changes(), {"TPOT_ATTACKMAP_TEXT_TIMEZONE": "Europe/Berlin"})
 
     async def test_interface_picker_automatic_and_detect(self):

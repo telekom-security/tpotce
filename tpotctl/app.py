@@ -1517,9 +1517,9 @@ class TpotApp(App):
         try:
             header.first().repaint(state)
         except NoMatches:
-            if not self._closing:
+            if not (self._exit or self._closing):
                 raise
-            # the T-Pot Manager ends meanwhile, the parts of the header are already gone
+            # the T-Pot Manager ends meanwhile (exit() first, then closing), the header is going
 
     def paint_menu(self) -> None:
         current = self.query_one(ContentSwitcher).current
@@ -1769,6 +1769,12 @@ class TpotApp(App):
         chosen = prefs.load()
         chosen.icons = mode
         self.remember(chosen, f"Icons {mode}" + (", they need a Nerd Font in your terminal" if mode == "nerd" else ""))
+
+    def set_colors(self, mode: str) -> None:
+        """Textual picks its colour system when it starts: the choice counts from the next start."""
+        chosen = prefs.load()
+        chosen.colors = mode
+        self.remember(chosen, f"Colours {mode}, from the next start of the T-Pot Manager")
 
     def remember(self, chosen: prefs.Prefs, what: str) -> None:
         saved = prefs.save(chosen)

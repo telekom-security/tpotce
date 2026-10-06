@@ -12,5 +12,8 @@ def isolate() -> None:
         os.environ["TPOT_TEST_CONFIG"] = tempfile.mkdtemp(prefix="tpot-test-config-")
     os.environ["XDG_CONFIG_HOME"] = os.environ["TPOT_TEST_CONFIG"]
     os.environ.pop("TPOT_ICONS", None)
+    # the look the tests check, whatever terminal runs them (ColoursTest builds the 256 one)
+    os.environ.pop("TPOT_COLORS", None)
+    os.environ["TEXTUAL_COLOR_SYSTEM"] = "truecolor"
     # the OS type of the host comes from Docker otherwise; tests that need another one set it
     os.environ["TPOT_HOST_OSTYPE"] = "linux"

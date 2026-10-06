@@ -1,8 +1,9 @@
-"""What the user chose for the look of tpot: the icon set.
+"""What the user chose for the look of tpot: the icon set and the colours.
 
 Kept in ${XDG_CONFIG_HOME:-~/.config}/tpotce/tpot.json, per user, outside of the
-checkout. A file that cannot be read gives the defaults. TPOT_ICONS in the environment
-wins over the file (i.e. for a terminal without the font).
+checkout. A file that cannot be read gives the defaults. TPOT_ICONS and TPOT_COLORS in
+the environment win over the file (i.e. for a terminal without the font, or one that
+can show true colours but does not say so over SSH).
 """
 
 import json
@@ -11,11 +12,14 @@ import tempfile
 from dataclasses import asdict, dataclass
 
 ICONS = ("unicode", "nerd", "ascii")
+# auto: what the terminal says (COLORTERM, TERM); over SSH COLORTERM usually stays behind
+COLORS = ("auto", "truecolor", "256")
 
 
 @dataclass
 class Prefs:
     icons: str = "unicode"
+    colors: str = "auto"
 
 
 def path() -> str:
@@ -30,11 +34,25 @@ def load() -> Prefs:
             data = json.load(handle)
         if data.get("icons") in ICONS:
             out.icons = data["icons"]
+        if data.get("colors") in COLORS:
+            out.colors = data["colors"]
     except (OSError, ValueError, AttributeError):
         pass
     if os.environ.get("TPOT_ICONS") in ICONS:
         out.icons = os.environ["TPOT_ICONS"]
+    if os.environ.get("TPOT_COLORS") in COLORS:
+        out.colors = os.environ["TPOT_COLORS"]
     return out
+
+
+def apply_color_system(environ) -> None:
+    """The colours chosen (not auto) for Textual, which reads TEXTUAL_COLOR_SYSTEM when it is
+    imported; a TEXTUAL_COLOR_SYSTEM of the user's own stays."""
+    if environ.get("TEXTUAL_COLOR_SYSTEM"):
+        return
+    colors = load().colors
+    if colors != "auto":
+        environ["TEXTUAL_COLOR_SYSTEM"] = colors
 
 
 def save(prefs: Prefs) -> bool:
