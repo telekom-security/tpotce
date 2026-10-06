@@ -458,6 +458,51 @@ class SensorsPaneTest(unittest.IsolatedAsyncioTestCase):
             await pilot.pause(0.3)
             self.assertIsInstance(app.screen, SensorEditDialog)
 
+    async def test_revoke_loads_the_sensors_once(self):
+        from tpotctl import app as tapp, ops
+        repo = checkout(self)
+        calls = []
+
+        class Backend(tapp.Backend):
+            def linux_host(self):
+                return True
+
+            def tpot_type(self):
+                return "HIVE"
+
+            def status(self):
+                return ops.Status("24.04.2", "dev", "abc", "STANDARD", "HIVE", "active", repo)
+
+            def containers(self):
+                return []
+
+            def config_stamp(self):
+                import threading
+                import time
+                if threading.current_thread() is not threading.main_thread():
+                    time.sleep(0.3)             # a slow worker: the stamp it notes comes late
+                return ops.config_stamp(repo)
+
+            def sensors(self):
+                calls.append(1)
+                return sensors.Registry(repo, hasher=fake_hash)
+
+            def sensor_status(self, days=7):
+                return sensors.Status(sensors={})
+
+        app = tapp.TpotApp(backend=Backend(), runner=lambda command, cwd=None: 0)
+        async with app.run_test(size=(150, 45)) as pilot:
+            await pilot.pause(0.3)
+            app.goto("sensors")
+            await pilot.pause(0.8)
+            before = len(calls)
+            app.query_one("#sensors-table").move_cursor(row=0)
+            await pilot.click("#sensor-remove")
+            await pilot.pause(0.3)
+            await pilot.click("#yes")
+            await pilot.pause(1.0)
+        self.assertEqual(len(calls) - before, 1, calls)
+
     def test_sensor_pages_only_on_a_hive(self):
         from tpotctl import app as tapp
 
