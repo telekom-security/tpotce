@@ -1766,13 +1766,13 @@ class TpotApp(App):
 
     def set_icons(self, mode: str) -> None:
         glyphs.set_mode(mode)
-        chosen = prefs.load()
+        chosen = prefs.load(environment=False)
         chosen.icons = mode
         self.remember(chosen, f"Icons {mode}" + (", they need a Nerd Font in your terminal" if mode == "nerd" else ""))
 
     def set_colors(self, mode: str) -> None:
         """Textual picks its colour system when it starts: the choice counts from the next start."""
-        chosen = prefs.load()
+        chosen = prefs.load(environment=False)
         chosen.colors = mode
         self.remember(chosen, f"Colours {mode}, from the next start of the T-Pot Manager")
 

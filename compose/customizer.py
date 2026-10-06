@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.dirname(COMPOSE_DIR))
 
 # PyYAML of the distribution is enough for everything but the full screen dialog,
 # which needs Textual from the venv of tpot (tpotctl/bootstrap.py).
-from tpotctl import bootstrap, say  # noqa: E402
+from tpotctl import bootstrap, prefs, say  # noqa: E402
 
 HEADLESS = ("--base", "--add", "--remove", "--port", "--rebuild", "--setup", "-h", "--help", "--text")
 
@@ -44,6 +44,8 @@ def prepare(argv):
 
 
 if __name__ == "__main__":
+    # the colours chosen (TPOT_COLORS, prefs) reach Textual before anything imports it
+    prefs.apply_color_system(os.environ)
     _python, _argv = prepare(sys.argv[1:])
     if _python:
         sys.exit(bootstrap.reexec(_python, os.path.abspath(__file__), _argv))

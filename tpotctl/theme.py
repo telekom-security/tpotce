@@ -73,15 +73,12 @@ def build(system: str) -> Theme:
 
 
 def color_system() -> str:
-    """truecolor or 256: the choice of prefs.py / TPOT_COLORS, else what the terminal says, as
-    Textual sees it (TEXTUAL_COLOR_SYSTEM, then Rich's look at COLORTERM and TERM)."""
-    import os
-    from tpotctl import prefs
-    chosen = prefs.load().colors
-    if chosen != "auto":
-        return chosen
-    system = os.environ.get("TEXTUAL_COLOR_SYSTEM", "auto")
-    if system in ("auto", ""):
+    """truecolor or 256, exactly as Textual renders: its COLOR_SYSTEM (TEXTUAL_COLOR_SYSTEM when it was
+    imported, which the launcher sets from TPOT_COLORS / prefs.py), for auto Rich's look at COLORTERM
+    and TERM. Read from the prefs here, palette and output could disagree."""
+    from textual import constants
+    system = constants.COLOR_SYSTEM or "auto"
+    if system == "auto":
         from rich.console import Console
         system = Console(force_terminal=True).color_system or "truecolor"
     return "truecolor" if system == "truecolor" else "256"

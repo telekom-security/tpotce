@@ -331,7 +331,7 @@ class ColoursPrefTest(unittest.TestCase):
         with mock.patch.dict(os.environ, environ):
             target = {}
             prefs.apply_color_system(target)
-            self.assertEqual(target, {"TEXTUAL_COLOR_SYSTEM": "256"})
+            self.assertEqual(target, {"TEXTUAL_COLOR_SYSTEM": "256", "TPOT_COLORS_SET": "256"})
             target = {"TEXTUAL_COLOR_SYSTEM": "truecolor"}         # the user's own choice wins
             prefs.apply_color_system(target)
             self.assertEqual(target, {"TEXTUAL_COLOR_SYSTEM": "truecolor"})
@@ -339,6 +339,45 @@ class ColoursPrefTest(unittest.TestCase):
             target = {}
             prefs.apply_color_system(target)
             self.assertEqual(target, {})
+
+    def test_a_restart_takes_the_new_choice(self):
+        """Restart the Manager keeps the environment of the first start: what tpot set there is not the user's."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as config, \
+                mock.patch.dict(os.environ, {"XDG_CONFIG_HOME": config}):
+            os.environ.pop("TPOT_COLORS", None)
+            prefs.save(prefs.Prefs(colors="truecolor"))
+            target = {"TEXTUAL_COLOR_SYSTEM": "256", "TPOT_COLORS_SET": "256"}
+            prefs.apply_color_system(target)
+            self.assertEqual(target, {"TEXTUAL_COLOR_SYSTEM": "truecolor", "TPOT_COLORS_SET": "truecolor"})
+            prefs.save(prefs.Prefs(colors="auto"))
+            prefs.apply_color_system(target)
+            self.assertEqual(target, {})
+
+    def test_palette_and_textual_agree(self):
+        """The palette follows what Textual renders with, whoever decided it."""
+        import subprocess
+        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        code = ("import os, sys; sys.path.insert(0, %r); from tpotctl import prefs; "
+                "prefs.apply_color_system(os.environ); from tpotctl import theme; "
+                "from textual import constants; print(constants.COLOR_SYSTEM, theme.color('comb'))" % root)
+        for extra, expected in (({"TPOT_COLORS": "256"}, "256 #5f005f"),
+                                ({"TPOT_COLORS": "truecolor", "TEXTUAL_COLOR_SYSTEM": "256"}, "256 #5f005f"),
+                                ({"TPOT_COLORS": "256", "TEXTUAL_COLOR_SYSTEM": "truecolor"}, "truecolor #38001D")):
+            env = {k: v for k, v in os.environ.items() if k not in ("TEXTUAL_COLOR_SYSTEM", "TPOT_COLORS")}
+            env.update(extra)
+            out = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True,
+                                 universal_newlines=True)
+            if "No module named 'textual'" in out.stderr:
+                self.skipTest("Textual is not installed, run with the venv of tpot")
+            self.assertEqual(out.stdout.strip(), expected, (extra, out.stderr))
+
+    def test_the_customizer_sets_it_too(self):
+        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        with open(os.path.join(root, "compose", "customizer.py"), encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertTrue("prefs.apply_color_system(os.environ)" in text)
+        self.assertLess(text.index("prefs.apply_color_system(os.environ)"), text.index("bootstrap.reexec("))
 
     def test_the_launcher_sets_it_before_textual(self):
         root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -365,11 +404,20 @@ class ColoursTest(unittest.IsolatedAsyncioTestCase):
         async with app.run_test(size=size) as pilot:
             await pilot.pause(0.5)
             found = set(re.findall(r"#[0-9a-fA-F]{6}\b", app.export_screenshot()))
-            await pilot.click("#svc-restart")                   # a dialog dims what is below it
-            await pilot.pause(0.4)
-            found |= set(re.findall(r"#[0-9a-fA-F]{6}\b", app.export_screenshot()))
-            await pilot.press("escape")
-            await pilot.pause(0.3)
+            from textual.command import CommandPalette
+            from tpotctl.screens.dialogs import ConfirmDialog
+            for opener, screen in ((lambda: pilot.click("#svc-restart"), ConfirmDialog),   # dialogs dim the page
+                                   (lambda: pilot.press("ctrl+p"), CommandPalette)):
+                await opener()
+                for _ in range(40):
+                    await pilot.pause(0.05)
+                    if isinstance(app.screen, screen):
+                        break
+                self.assertIsInstance(app.screen, screen)
+                await pilot.pause(0.2)
+                found |= set(re.findall(r"#[0-9a-fA-F]{6}\b", app.export_screenshot()))
+                await pilot.press("escape")
+                await pilot.pause(0.3)
             await pilot.press("down", "down")                   # Settings: rows, tabs, fields
             await pilot.pause(0.5)
             found |= set(re.findall(r"#[0-9a-fA-F]{6}\b", app.export_screenshot()))
@@ -383,6 +431,20 @@ class ColoursTest(unittest.IsolatedAsyncioTestCase):
         theme.build("256")
         reds = {colour for colour in await self.colours() if pure_red(colour)}
         self.assertEqual(reds, set())
+
+    async def test_a_choice_keeps_the_environment_out_of_the_file(self):
+        """TPOT_COLORS=truecolor tpot once, then f2: the file keeps its own colours."""
+        from tpotctl import app as tapp
+        from tpotctl.tests.test_app import FakeBackend, Recorder
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder())
+        with mock.patch.dict(os.environ, {"TPOT_COLORS": "truecolor", "TPOT_ICONS": "ascii"}):
+            async with app.run_test(size=(120, 40)) as pilot:
+                await pilot.pause(0.3)
+                app.set_icons("nerd")
+                with open(prefs.path(), encoding="utf-8") as handle:
+                    saved = json.load(handle)
+                app.set_icons("unicode")
+        self.assertEqual((saved["icons"], saved["colors"]), ("nerd", "auto"))
 
     def test_256_tokens_are_palette_entries(self):
         from rich.color import Color, ColorSystem

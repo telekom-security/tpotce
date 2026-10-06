@@ -116,8 +116,18 @@ class SshColortermTest(unittest.TestCase):
         self.assertEqual(task["lineinfile"]["line"], "AcceptEnv COLORTERM")
         for name in ("AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"):
             self.assertTrue(f'"{name}"' in task["when"], name)
-        checks = [t for t in self.tasks("installer", "install", "tpot.yml") if "sshd -t" in str(t.get("command", ""))]
-        self.assertTrue(checks)
+        tasks = self.tasks("installer", "install", "tpot.yml")
+        checks = [i for i, t in enumerate(tasks) if str(t.get("command", "")) == "/usr/sbin/sshd -t"]
+        self.assertEqual(len(checks), 1)
+        # sshd -t needs its privilege separation directory, which only a running ssh.service has on the
+        # Debian family (Ubuntu stops ssh.socket before, Raspberry Pi OS ships with SSH off)
+        privsep = [i for i, t in enumerate(tasks) if (t.get("file") or {}).get("path") == "/run/sshd"]
+        self.assertTrue(privsep and privsep[0] < checks[0], privsep)
+        for name in ("Debian", "Raspbian", "Ubuntu"):
+            self.assertTrue(f'"{name}"' in tasks[privsep[0]]["when"], name)
+        directory = [t for t in tasks if (t.get("file") or {}).get("path") == "/etc/ssh/sshd_config.d"]
+        self.assertEqual(len(directory), 1)
+        self.assertNotIn("mode", directory[0]["file"])     # RHEL-likes keep it 0700
 
     def test_uninstall_removes_it(self):
         found = [t for t in self.tasks("installer", "remove", "tpot.yml")

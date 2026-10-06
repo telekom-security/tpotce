@@ -679,7 +679,6 @@
       file:
         path: /etc/ssh/sshd_config.d
         state: directory
-        mode: "0755"
       when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
       tags:
         - "AlmaLinux"
@@ -710,8 +709,21 @@
         - "Rocky"
         - "Ubuntu"
 
+    - name: Give sshd its privilege separation directory for the check (Debian, Raspbian, Ubuntu)
+      # only a running ssh.service has /run/sshd there; Ubuntu stops ssh.socket above, Raspberry Pi OS
+      # ships with SSH off, and sshd -t stops at "Missing privilege separation directory" without it
+      file:
+        path: /run/sshd
+        state: directory
+        mode: "0755"
+      when: ansible_facts.distribution in ["Debian", "Raspbian", "Ubuntu"]
+      tags:
+        - "Debian"
+        - "Raspbian"
+        - "Ubuntu"
+
     - name: Check the sshd configuration (All)
-      command: sshd -t
+      command: /usr/sbin/sshd -t
       changed_when: false
       when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
       tags:

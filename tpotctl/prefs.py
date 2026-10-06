@@ -27,7 +27,9 @@ def path() -> str:
     return os.path.join(base, "tpotce", "tpot.json")
 
 
-def load() -> Prefs:
+def load(environment: bool = True) -> Prefs:
+    """The choices of the file, and (environment) TPOT_ICONS / TPOT_COLORS over them; a choice
+    to save starts from load(environment=False), so a one-off variable does not end up in the file."""
     out = Prefs()
     try:
         with open(path(), encoding="utf-8") as handle:
@@ -38,6 +40,8 @@ def load() -> Prefs:
             out.colors = data["colors"]
     except (OSError, ValueError, AttributeError):
         pass
+    if not environment:
+        return out
     if os.environ.get("TPOT_ICONS") in ICONS:
         out.icons = os.environ["TPOT_ICONS"]
     if os.environ.get("TPOT_COLORS") in COLORS:
@@ -45,14 +49,22 @@ def load() -> Prefs:
     return out
 
 
+# TEXTUAL_COLOR_SYSTEM as tpot set it: a restart of the T-Pot Manager (exec) keeps the environment,
+# and only a value of the user's own may win over a new choice
+SET_MARK = "TPOT_COLORS_SET"
+
+
 def apply_color_system(environ) -> None:
     """The colours chosen (not auto) for Textual, which reads TEXTUAL_COLOR_SYSTEM when it is
     imported; a TEXTUAL_COLOR_SYSTEM of the user's own stays."""
-    if environ.get("TEXTUAL_COLOR_SYSTEM"):
+    own = environ.get("TEXTUAL_COLOR_SYSTEM")
+    if own and own != environ.get(SET_MARK):
         return
+    environ.pop("TEXTUAL_COLOR_SYSTEM", None)
+    environ.pop(SET_MARK, None)
     colors = load().colors
     if colors != "auto":
-        environ["TEXTUAL_COLOR_SYSTEM"] = colors
+        environ["TEXTUAL_COLOR_SYSTEM"] = environ[SET_MARK] = colors
 
 
 def save(prefs: Prefs) -> bool:

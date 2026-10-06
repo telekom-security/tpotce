@@ -500,6 +500,11 @@ ModalScreen {
     background: $modal-dim;
 }
 
+/* ctrl+p: Textual's own backdrop ($background 60%) leaves the wax borders maroon with 256 colours */
+CommandPalette {
+    background: $modal-dim;
+}
+
 .dialog {
     width: 80%;
     max-width: 104;
