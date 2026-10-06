@@ -1071,7 +1071,12 @@ class RefreshTriggersTest(SettingsHelpersBase):
             self.assertIsInstance(self.app.screen, UserDialog)
 
     async def test_header_reloads_on_the_first_outside_change(self):
+        """Status locked (macOS / Windows): nothing polls, the header follows a change itself."""
+        from tpotctl import app as tapp
         from tpotctl.envfile import EnvFile
+        backend = self.app.backend
+        backend.linux_host = lambda: False
+        self.app = tapp.TpotApp(backend=backend, runner=lambda command, cwd=None: 0)
         calls = []
         original = self.app.load_header
         self.app.load_header = lambda: (calls.append(1), original())
@@ -1087,6 +1092,16 @@ class RefreshTriggersTest(SettingsHelpersBase):
             self.app.goto("llm")                    # nothing changed since
             await pilot.pause(0.6)
             self.assertEqual(len(calls), before + 1)
+
+    async def test_status_page_notes_the_header_stamp(self):
+        calls = []
+        original = self.app.load_header
+        self.app.load_header = lambda: (calls.append(1), original())
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            await pilot.pause(0.8)                  # the status page has shown, the header with it
+            self.app.goto("settings")               # nothing changed: no load of the header
+            await pilot.pause(0.6)
+            self.assertEqual(calls, [])
 
     async def test_the_menu_brings_the_settings_page_along(self):
         from tpotctl.envfile import EnvFile

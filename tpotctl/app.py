@@ -268,6 +268,7 @@ class StatusPane(Vertical):
     @work(thread=True, exclusive=True, group="status")
     def load(self) -> None:
         backend = self.app.backend
+        stamp = backend.config_stamp()      # before the read: the header is from this configuration
         try:
             state, containers, problem = backend.status(), backend.containers(), ""
         except ops.OpsError as err:
@@ -276,7 +277,7 @@ class StatusPane(Vertical):
             machine = backend.system()
         except Exception:      # nothing in /proc is worth a crash of the menu
             machine = None
-        self.app.call_from_thread(self.show, state, containers, problem, machine)
+        self.app.call_from_thread(self.show, state, containers, problem, machine, stamp)
 
     @work(thread=True, exclusive=True, group="attacks")
     def load_attacks(self) -> None:
@@ -300,10 +301,10 @@ class StatusPane(Vertical):
             self.show(*self.shown)
 
     def show(self, state: Optional[ops.Status], containers: List[ops.Container], problem: str,
-             machine=None) -> None:
+             machine=None, stamp=None) -> None:
         self.shown = (state, containers, problem, machine)
         if state is not None:
-            self.app.update_header(state)
+            self.app.update_header(state, stamp)
         self.query_one(Honeycomb).show(containers)
         if machine is not None:
             self.query_one("#system", Static).update(system_text(machine))
@@ -1491,7 +1492,9 @@ class TpotApp(App):
             return
         self.call_from_thread(self.update_header, state)
 
-    def update_header(self, state: ops.Status) -> None:
+    def update_header(self, state: ops.Status, stamp=None) -> None:
+        if stamp is not None:               # what it was read from (the status page brings it)
+            self.header_stamp = stamp
         self.query_one(TpotHeader).repaint(state)
 
     def paint_menu(self) -> None:
