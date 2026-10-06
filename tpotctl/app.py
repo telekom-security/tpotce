@@ -925,12 +925,25 @@ class LlmPane(SettingsPane):
                     "container itself.", style=theme.color("ash"))
         self.result(text)
 
+def offer_row_actions(pane, name: str, kind: str, actions) -> None:
+    """A ChoiceDialog with the actions of the row: the choice presses its button, so the checks and
+    questions stay where they are; esc does nothing."""
+    from tpotctl.screens.dialogs import ChoiceDialog
+    if not name:
+        return
+
+    def chosen(index) -> None:
+        if index is not None:
+            pane.query_one(actions[index][1], Button).press()
+    pane.app.push_screen(ChoiceDialog(f"{kind} {name}", [f"{text} {name}" for text, _button in actions]), chosen)
+
+
 class UsersPane(Vertical):
     """Users of the web UI (WEB_USER), changes count at once."""
 
     def compose(self) -> ComposeResult:
         yield Static("", id="users-info", classes="info")
-        yield NavDataTable(id="users-table", cursor_type="row", zebra_stripes=True, enter_goes_on=True)
+        yield NavDataTable(id="users-table", cursor_type="row", zebra_stripes=True)
         with Horizontal(classes="actions"):
             yield Button("Add", id="user-add", variant="primary")
             yield Button("Change password", id="user-passwd")
@@ -1012,6 +1025,12 @@ class UsersPane(Vertical):
         else:
             self.run_change(change, done)
 
+    def on_data_table_row_selected(self, event) -> None:
+        """enter on a user: the actions of that row."""
+        event.stop()
+        offer_row_actions(self, self.selected(), "Web user",
+                          [("Change the password of", "#user-passwd"), ("Remove", "#user-remove")])
+
     def run_change(self, change, done: str) -> None:
         from tpotctl.users import UsersError
         try:
@@ -1029,7 +1048,7 @@ class SensorsPane(Vertical):
 
     def compose(self) -> ComposeResult:
         yield Static("", id="sensors-info", classes="info")
-        yield NavDataTable(id="sensors-table", cursor_type="row", zebra_stripes=True, enter_goes_on=True)
+        yield NavDataTable(id="sensors-table", cursor_type="row", zebra_stripes=True)
         with Horizontal(classes="actions"):
             yield Button("Deploy a sensor", id="sensor-add", variant="primary")
             yield Button("Edit", id="sensor-edit")
@@ -1124,6 +1143,12 @@ class SensorsPane(Vertical):
         elif button == "sensor-cert-send":
             self.app.runner([LAUNCHER, "sensors", "cert", "--distribute"], cwd=REPO_DIR)
             self.load()
+
+    def on_data_table_row_selected(self, event) -> None:
+        """enter on a sensor: the actions of that row."""
+        event.stop()
+        offer_row_actions(self, self.selected(), "Sensor",
+                          [("Edit", "#sensor-edit"), ("Revoke the access of", "#sensor-remove")])
 
     def deploy(self, result) -> None:
         if not result:

@@ -990,6 +990,35 @@ class RefreshTriggersTest(SettingsHelpersBase):
             await pilot.pause(0.5)
             self.assertEqual(table.row_count, before + 1)
 
+    async def test_enter_on_a_user_row_offers_its_actions(self):
+        from tpotctl import users as tusers
+        from tpotctl.screens.dialogs import ChoiceDialog, UserDialog
+        from tpotctl.tests.test_users import fake_hash
+        with mock.patch.object(tusers, "weakness", lambda password: None):
+            store = tusers.load(self.repo, hasher=fake_hash)
+            store.add("alice", "a long passphrase")
+            store.add("bob", "another long passphrase")
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            await pilot.pause(0.3)
+            self.app.goto("users")
+            await pilot.pause(0.4)
+            table = self.app.query_one("#users-table")
+            table.focus()
+            table.move_cursor(row=1)
+            await pilot.pause(0.1)
+            await pilot.press("enter")
+            await pilot.pause(0.3)
+            self.assertIsInstance(self.app.screen, ChoiceDialog)
+            self.assertIn("bob", self.app.screen.title_text)
+            await pilot.press("escape")
+            await pilot.pause(0.3)
+            self.assertIs(self.app.focused, table)
+            await pilot.press("enter")
+            await pilot.pause(0.3)
+            await pilot.press("enter")              # the first one: the password
+            await pilot.pause(0.3)
+            self.assertIsInstance(self.app.screen, UserDialog)
+
     async def test_the_menu_brings_the_settings_page_along(self):
         from tpotctl.envfile import EnvFile
         from tpotctl.tests.test_settings import WEB_USER

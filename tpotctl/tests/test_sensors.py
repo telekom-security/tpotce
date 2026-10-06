@@ -412,6 +412,52 @@ class SensorsPaneTest(unittest.IsolatedAsyncioTestCase):
         sensor = sensors.Registry(repo).get(name)
         self.assertEqual((sensor.host, sensor.ssh_port), ("10.0.0.9", 2222))
 
+    async def test_enter_on_a_sensor_row_offers_its_actions(self):
+        from tpotctl import app as tapp, ops
+        from tpotctl.screens.dialogs import ChoiceDialog, SensorEditDialog
+        repo = checkout(self)
+
+        class Backend(tapp.Backend):
+            def linux_host(self):
+                return True
+
+            def tpot_type(self):
+                return "HIVE"
+
+            def status(self):
+                return ops.Status("24.04.2", "dev", "abc", "STANDARD", "HIVE", "active", repo)
+
+            def containers(self):
+                return []
+
+            def sensors(self):
+                return sensors.Registry(repo, hasher=fake_hash)
+
+            def sensor_status(self, days=7):
+                return sensors.Status(sensors={})
+
+        app = tapp.TpotApp(backend=Backend(), runner=lambda command, cwd=None: 0)
+        async with app.run_test(size=(150, 45)) as pilot:
+            await pilot.pause(0.3)
+            app.goto("sensors")
+            await pilot.pause(0.5)
+            table = app.query_one("#sensors-table")
+            table.focus()
+            table.move_cursor(row=1)
+            name = app.query_one("#sensors").selected()
+            await pilot.press("enter")
+            await pilot.pause(0.3)
+            self.assertIsInstance(app.screen, ChoiceDialog)
+            self.assertTrue(name in app.screen.title_text, app.screen.title_text)
+            await pilot.press("escape")
+            await pilot.pause(0.3)
+            self.assertIs(app.focused, table)
+            await pilot.press("enter")
+            await pilot.pause(0.3)
+            await pilot.press("enter")              # the first one: Edit
+            await pilot.pause(0.3)
+            self.assertIsInstance(app.screen, SensorEditDialog)
+
     def test_sensor_pages_only_on_a_hive(self):
         from tpotctl import app as tapp
 
