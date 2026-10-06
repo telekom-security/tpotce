@@ -435,6 +435,8 @@ class EditionPane(Vertical):
             self.app.notify(f"The {choice.title} edition runs already, the customizer changes it.", title="Edition",
                             timeout=5)
         elif button.disabled:
+            # not reachable today: refresh_button disables Switch only for the edition in use (said
+            # above); it stays for a rule that keeps an edition from a host
             note = str(self.query_one("#edition-note", Static).render()).strip()
             self.app.notify(note or f"The {choice.title} edition cannot be switched to here.", title="Edition",
                             timeout=5)
@@ -627,6 +629,8 @@ class SettingsPane(Vertical):
             self.app.notify("Nothing to save, no value was changed.", title="Settings", timeout=4)
             return
         blocking = self.current.blocking(self.current.problems(self.draft, offered=True), changes)
+        # the fallback is not reachable today: check() just set the button from the same changes and
+        # blockers; it stays for a rule that disables Save without a blocker (i.e. a save under way)
         why = "; ".join(f"{p.key}: {p.text}" for p in blocking[:3]) or "the page is still loading, try again"
         self.app.notify(f"Not saved: {why}", title="Settings", severity="error", timeout=8)
 
