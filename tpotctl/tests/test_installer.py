@@ -309,6 +309,30 @@ class AssistantTest(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("-B", command)
         self.assertNotIn("-u", command)
 
+    async def done_text(self, on_path):
+        from unittest import mock
+        from tpotctl.screens import install as screen
+        app = self.make_app(sudo="passwordless")
+        with mock.patch.object(screen, "tpot_on_path", return_value=on_path):
+            async with app.run_test(size=(140, 44)) as pilot:
+                await pilot.pause(0.4)
+                await pilot.click("#ins-next")
+                await pilot.pause(0.2)
+                await pilot.press("down", "enter")             # Sensor
+                await pilot.pause(0.3)
+                await pilot.click("#ins-next")
+                await pilot.pause(0.2)
+                await pilot.click("#ins-next")
+                await pilot.pause(1.0)
+                self.assertEqual(app.step, "done")
+                return str(app.query_one("#done-text").render())
+
+    async def test_done_says_how_the_manager_runs(self):
+        text = await self.done_text(True)
+        self.assertTrue("the T-Pot Manager: tpot" in text, text)
+        text = await self.done_text(False)
+        self.assertTrue("sudo ln -sfn" in text and "/usr/local/bin/tpot" in text, text)
+
     async def test_a_failed_check_blocks(self):
         app = self.make_app(checks=lambda: [installer.Check("Ports", "fail", "tcp/25 occupied")])
         async with app.run_test(size=(140, 44)) as pilot:

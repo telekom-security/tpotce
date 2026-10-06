@@ -39,6 +39,12 @@ CHANGES = [
 ]
 
 
+def tpot_on_path() -> bool:
+    """Whether the link of the playbook made `tpot` a command (a file of its own there stays)."""
+    import shutil
+    return shutil.which("tpot") is not None
+
+
 def mark(state: str) -> Text:
     glyph, colour = {"ok": ("ok", "ok"), "warn": ("warn", "warn"), "fail": ("fail", "error")}[state]
     return Text(glyphs.g(glyph), style=f"bold {theme.color(colour)}")
@@ -609,7 +615,13 @@ class InstallApp(ArrowNav, App):
             lines.append(f"The web UI is https://<host>:64297, sign in as {answers.web_user}.")
         if answers.edition.letter == "s":
             lines.append("Join it to your HIVE: on the HIVE run tpot sensors add.")
-        lines.append("Afterwards tpot shows and changes everything, i.e. tpot status.")
+        if tpot_on_path():
+            lines.append("Afterwards run the T-Pot Manager: tpot (i.e. tpot status), it shows and changes everything.")
+        else:
+            text.append(f"{glyphs.g('warn')} The command tpot is not in your PATH, link it with: "
+                        f"sudo ln -sfn {os.path.join(REPO_DIR, 'tpot')} /usr/local/bin/tpot\n\n",
+                        style=theme.color("warn"))
+            lines.append(f"Afterwards run the T-Pot Manager: {os.path.join(REPO_DIR, 'tpot')}, it shows and changes everything.")
         for line in lines:
             text.append(f"  {glyphs.g('bullet')} ", style=theme.color("magenta"))
             text.append(f"{line}\n", style=theme.color("glass"))

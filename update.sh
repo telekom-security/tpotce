@@ -1468,18 +1468,21 @@ function fuCUSTOMIZER_DEPS () {
 # does not need it, and pypi.org is not part of the internet check above.
 function fuTPOT_SETUP () {
 	local myTPOT="$HOME/tpotce/tpot"
+	local myLINK="${myTPOT_LINK:-/usr/local/bin/tpot}"
 	[ -x "${myTPOT}" ] || return
-	fuUI_INFO "Setting up the tpot command ..."
-	if [ ! -e /usr/local/bin/tpot ] || [ -L /usr/local/bin/tpot ];
+	fuUI_INFO "Setting up the T-Pot Manager (the tpot command) ..."
+	if [ ! -e "${myLINK}" ] || [ -L "${myLINK}" ];
 	  then
-	    sudo ln -sfn "${myTPOT}" /usr/local/bin/tpot \
-	      || fuUI_WARN "Could not link /usr/local/bin/tpot, run ${myTPOT} directly."
+	    sudo ln -sfn "${myTPOT}" "${myLINK}" \
+	      || fuUI_WARN "Could not link ${myLINK}, run ${myTPOT} directly."
+	  else
+	    fuUI_WARN "${myLINK} is a file of its own, update.sh leaves it alone: run ${myTPOT} directly."
 	fi
 	if "${myTPOT}" setup </dev/null;
 	  then
-	    fuUI_OK "tpot is ready."
+	    fuUI_OK "The T-Pot Manager is ready."
 	  else
-	    fuUI_WARN "tpot could not set up its Python packages, it tries again on its next start."
+	    fuUI_WARN "The T-Pot Manager could not set up its Python packages, it tries again on its next start."
 	fi
 	echo
 }

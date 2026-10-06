@@ -173,6 +173,34 @@ class UpdateShTest(Harness):
         subprocess.run(["git", "-C", origin] + git + ["commit", "-q", "--allow-empty", "-m", "two"], check=True)
         self.assertIn("@@tpot changed checkout", run())
 
+    def tpot_setup(self, link_is_a_file):
+        """fuTPOT_SETUP with a stub launcher and the link in the test home."""
+        function = re.search(r"function fuTPOT_SETUP \(\) \{.*?\n\}", read("update.sh"), re.S).group(0)
+        launcher = os.path.join(self.home, "tpotce", "tpot")
+        os.makedirs(os.path.dirname(launcher))
+        with open(launcher, "w", encoding="utf-8") as out:
+            out.write("#!/bin/sh\nexit 0\n")
+        os.chmod(launcher, 0o755)
+        link = os.path.join(self.home, "usr-local-bin-tpot")
+        if link_is_a_file:
+            with open(link, "w", encoding="utf-8") as out:
+                out.write("#!/bin/sh\n")
+        script = os.path.join(self.home, "setup.sh")
+        with open(script, "w", encoding="utf-8") as out:
+            out.write(f'source "{REPO}/installer/lib/ui.sh"; fuUI_INIT\nmyTPOT_LINK="{link}"\n{function}\nfuTPOT_SETUP\n')
+        result = self.run_script(script)
+        return result.stdout + result.stderr, os.path.islink(link)
+
+    def test_tpot_setup_links_the_manager(self):
+        out, linked = self.tpot_setup(link_is_a_file=False)
+        self.assertTrue(linked, out)
+        self.assertTrue("The T-Pot Manager is ready" in out, out)
+
+    def test_tpot_setup_warns_about_a_file_of_its_own(self):
+        out, linked = self.tpot_setup(link_is_a_file=True)
+        self.assertFalse(linked, out)
+        self.assertTrue("[WARNING]" in out and "leaves it alone" in out, out)
+
     def test_the_elastic_check_comes_before_the_tpot_setup(self):
         main = read("update.sh").split("\nfuREMOVE_DROPPED_SERVICES\n", 1)[1]     # the main section
         self.assertLess(main.index("\nfuCHECK_ELASTIC\n"), main.index("\nfuTPOT_SETUP\n"))

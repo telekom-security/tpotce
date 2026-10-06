@@ -31,6 +31,9 @@ def main():
     if argv[:1] in (["update"], ["restore"]):
         from tpotctl import cli
         sys.exit(cli.main(argv))
+    # ./tpot from ~/tpotce without the link of the installer: offer it, once
+    if on_host and not os.environ.get(bootstrap.GUARD):
+        bootstrap.ensure_link(os.path.join(REPO_DIR, "tpot"))
     if argv[:1] == ["setup"]:
         try:
             python = bootstrap.setup_venv(force="--force" in argv[1:])

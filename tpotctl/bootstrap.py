@@ -159,6 +159,56 @@ def offer_venv_package(package: str) -> bool:
     return True
 
 
+LINK = "/usr/local/bin/tpot"
+
+
+def ensure_link(launcher: str, link: str = LINK, checkout: str = "") -> None:
+    """Started as ./tpot in ~/tpotce without the link the installer makes: offer it, once.
+
+    Linux only and not as root; a file of its own at that place is never touched, a link
+    is (re)pointed with sudo ln, which asks for its password itself. The launcher it
+    offered last is noted next to the venv, so tpot does not ask on every start."""
+    if not sys.platform.startswith("linux") or (hasattr(os, "geteuid") and os.geteuid() == 0):
+        return
+    checkout = checkout or os.path.join(os.path.expanduser("~"), "tpotce")
+    if os.path.realpath(os.path.dirname(launcher)) != os.path.realpath(checkout):
+        return
+    if os.path.islink(link) and os.path.realpath(link) == os.path.realpath(launcher):
+        return
+    marker = os.path.join(os.path.dirname(venv_dir()), "link-asked")
+    try:
+        with open(marker, encoding="utf-8") as handle:
+            if handle.read().strip() == launcher:
+                return
+    except OSError:
+        pass
+    try:
+        os.makedirs(os.path.dirname(marker), exist_ok=True)
+        with open(marker, "w", encoding="utf-8") as handle:
+            handle.write(launcher + "\n")
+    except OSError:
+        return                      # without the note it would ask on every start
+    from tpotctl import say
+    command = f"sudo ln -sfn {launcher} {link}"
+    if os.path.lexists(link) and not os.path.islink(link):
+        say.warn(f"{link} is a file of its own, the T-Pot Manager leaves it alone: run {launcher}.", sys.stderr)
+        return
+    if not interactive():
+        say.info(f"So that 'tpot' works without ./ run: {command}", sys.stderr)
+        return
+    try:
+        answer = input(f"Link {link} so that 'tpot' works everywhere? [Y/n] ").strip().lower()
+    except EOFError:
+        return
+    if answer not in ("", "y", "yes"):
+        say.info(f"Later with: {command}", sys.stderr)
+        return
+    if subprocess.call(["sudo", "ln", "-sfn", launcher, link]) == 0:
+        say.ok(f"'tpot' works everywhere now ({link}).", sys.stderr)
+    else:
+        say.warn(f"{link} could not be linked, later with: {command}", sys.stderr)
+
+
 def _make_venv(directory: str):
     """python -m venv, its output kept for the error."""
     with tempfile.TemporaryFile("w+") as out:

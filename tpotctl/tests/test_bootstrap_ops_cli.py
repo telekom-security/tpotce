@@ -370,6 +370,94 @@ class SetupVenvInstallTest(unittest.TestCase):
         self.assertEqual(bootstrap.venv_package("", "/usr/local/bin/python3.12"), f"python3.{minor}-venv")
 
 
+class LinkTest(unittest.TestCase):
+    """tpot started as ./tpot from ~/tpotce offers the link /usr/local/bin/tpot, once."""
+
+    def setUp(self):
+        import shutil
+        self.root = tempfile.mkdtemp(prefix="tpot-link-")
+        self.addCleanup(shutil.rmtree, self.root)
+        self.checkout = os.path.join(self.root, "home", "tpotce")
+        os.makedirs(self.checkout)
+        self.launcher = os.path.join(self.checkout, "tpot")
+        open(self.launcher, "w").close()
+        self.link = os.path.join(self.root, "bin", "tpot")
+        os.makedirs(os.path.dirname(self.link))
+        self.calls = []
+        for patcher in (mock.patch.dict(os.environ, {"XDG_DATA_HOME": os.path.join(self.root, "data")}),
+                        mock.patch("sys.platform", "linux"),
+                        mock.patch.object(bootstrap.os, "geteuid", return_value=1000, create=True),
+                        mock.patch("subprocess.call", side_effect=self.call)):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def call(self, command, **kwargs):
+        self.calls.append(command)
+        if command[:3] == ["sudo", "ln", "-sfn"]:
+            if os.path.lexists(command[4]):
+                os.unlink(command[4])
+            os.symlink(command[3], command[4])
+        return 0
+
+    def ensure(self, answer="", tty=True, checkout=None):
+        asked = []
+
+        def ask(prompt):
+            asked.append(prompt)
+            return answer
+        with mock.patch.object(bootstrap, "interactive", return_value=tty), \
+                mock.patch("builtins.input", side_effect=ask), \
+                mock.patch("sys.stderr", new_callable=io.StringIO) as err:
+            bootstrap.ensure_link(self.launcher, self.link, checkout or self.checkout)
+        return asked, err.getvalue()
+
+    def test_missing_link_is_offered_and_made(self):
+        asked, _err = self.ensure()
+        self.assertEqual(len(asked), 1)
+        self.assertEqual(self.calls, [["sudo", "ln", "-sfn", self.launcher, self.link]])
+        self.assertEqual(os.readlink(self.link), self.launcher)
+
+    def test_a_link_to_this_launcher_is_left_as_it_is(self):
+        os.symlink(self.launcher, self.link)
+        self.assertEqual(self.ensure(), ([], ""))
+        self.assertEqual(self.calls, [])
+
+    def test_a_dead_link_is_offered_again(self):
+        os.symlink(os.path.join(self.root, "gone", "tpot"), self.link)
+        asked, _err = self.ensure()
+        self.assertEqual(len(asked), 1)
+        self.assertEqual(os.readlink(self.link), self.launcher)
+
+    def test_a_file_of_its_own_stays(self):
+        with open(self.link, "w") as handle:
+            handle.write("#!/bin/sh\n")
+        asked, err = self.ensure()
+        self.assertEqual((asked, self.calls), ([], []))
+        self.assertTrue("leaves it alone" in err, err)
+
+    def test_without_a_terminal_only_a_hint(self):
+        asked, err = self.ensure(tty=False)
+        self.assertEqual((asked, self.calls), ([], []))
+        self.assertTrue(f"sudo ln -sfn {self.launcher} {self.link}" in err, err)
+
+    def test_asked_once(self):
+        self.ensure(answer="n")
+        self.assertEqual(self.calls, [])
+        self.assertEqual(self.ensure(), ([], ""))
+
+    def test_the_launcher_offers_it(self):
+        with open(os.path.join(os.path.dirname(cli.__file__), os.pardir, "tpot"), encoding="utf-8") as handle:
+            self.assertTrue("bootstrap.ensure_link(" in handle.read())
+        with open(os.path.join(os.path.dirname(cli.__file__), os.pardir, "install.sh"), encoding="utf-8") as handle:
+            self.assertTrue("if command -v tpot >/dev/null;" in handle.read())
+
+    def test_nothing_on_a_mac_or_from_another_checkout(self):
+        with mock.patch("sys.platform", "darwin"):
+            self.assertEqual(self.ensure(), ([], ""))
+        self.assertEqual(self.ensure(checkout=os.path.join(self.root, "elsewhere")), ([], ""))
+        self.assertEqual(self.calls, [])
+
+
 class SetupForceTest(unittest.TestCase):
     """setup_venv(force=True) in a temporary XDG_DATA_HOME; venv, pip and the import check are faked."""
 

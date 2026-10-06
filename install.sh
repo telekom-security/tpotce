@@ -1066,6 +1066,14 @@ if [ -z "${myMARKS}" ];
     echo
 fi
 
+# The tpot command: the playbook links it, a file of your own at /usr/local/bin/tpot stays
+if command -v tpot >/dev/null;
+  then
+    fuUI_OK "The T-Pot Manager is ready, run it with: tpot"
+  else
+    fuUI_WARN "The command tpot is not in your PATH, link it with: sudo ln -sfn ${HOME}/tpotce/tpot /usr/local/bin/tpot"
+fi
+
 # Done
 fuMARK phase "done"
 fuUI_OK "Done. Please reboot and re-connect via SSH on tcp/64295."
