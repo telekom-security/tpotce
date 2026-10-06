@@ -40,9 +40,10 @@ CHANGES = [
 
 
 def tpot_on_path() -> bool:
-    """Whether the link of the playbook made `tpot` a command (a file of its own there stays)."""
+    """Whether the link of the playbook made `tpot` this T-Pot Manager (a file of its own there stays)."""
     import shutil
-    return shutil.which("tpot") is not None
+    found = shutil.which("tpot")
+    return found is not None and os.path.realpath(found) == os.path.realpath(os.path.join(REPO_DIR, "tpot"))
 
 
 def mark(state: str) -> Text:
@@ -618,7 +619,7 @@ class InstallApp(ArrowNav, App):
         if tpot_on_path():
             lines.append("Afterwards run the T-Pot Manager: tpot (i.e. tpot status), it shows and changes everything.")
         else:
-            text.append(f"{glyphs.g('warn')} The command tpot is not in your PATH, link it with: "
+            text.append(f"{glyphs.g('warn')} The command tpot does not run this T-Pot Manager yet, link it with: "
                         f"sudo ln -sfn {os.path.join(REPO_DIR, 'tpot')} /usr/local/bin/tpot\n\n",
                         style=theme.color("warn"))
             lines.append(f"Afterwards run the T-Pot Manager: {os.path.join(REPO_DIR, 'tpot')}, it shows and changes everything.")

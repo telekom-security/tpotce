@@ -1067,9 +1067,13 @@ if [ -z "${myMARKS}" ];
 fi
 
 # The tpot command: the playbook links it, a file of your own at /usr/local/bin/tpot stays
-if command -v tpot >/dev/null;
+myTPOT_FOUND=$(command -v tpot)
+if [ -n "${myTPOT_FOUND}" ] && [ "$(readlink -f "${myTPOT_FOUND}")" = "$(readlink -f "${HOME}/tpotce/tpot")" ];
   then
     fuUI_OK "The T-Pot Manager is ready, run it with: tpot"
+  elif [ -n "${myTPOT_FOUND}" ];
+  then
+    fuUI_WARN "The command tpot is ${myTPOT_FOUND}, not this T-Pot Manager. Run ${HOME}/tpotce/tpot, or link it with: sudo ln -sfn ${HOME}/tpotce/tpot /usr/local/bin/tpot"
   else
     fuUI_WARN "The command tpot is not in your PATH, link it with: sudo ln -sfn ${HOME}/tpotce/tpot /usr/local/bin/tpot"
 fi

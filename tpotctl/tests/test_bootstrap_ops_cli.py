@@ -428,6 +428,34 @@ class LinkTest(unittest.TestCase):
         self.assertEqual(len(asked), 1)
         self.assertEqual(os.readlink(self.link), self.launcher)
 
+    def test_a_link_to_another_launcher_defaults_to_no(self):
+        """A host with a second user: their T-Pot Manager stays linked unless this one says yes."""
+        other = os.path.join(self.root, "other", "tpotce", "tpot")
+        os.makedirs(os.path.dirname(other))
+        open(other, "w").close()
+        os.symlink(other, self.link)
+        asked, _err = self.ensure(answer="")
+        self.assertEqual(self.calls, [])
+        self.assertTrue(other in asked[0] and self.launcher in asked[0] and "[y/N]" in asked[0], asked)
+        os.unlink(os.path.join(os.path.dirname(bootstrap.venv_dir()), "link-asked"))
+        self.ensure(answer="y")
+        self.assertEqual(os.readlink(self.link), self.launcher)
+
+    def test_interactive_is_not_faked_here(self):
+        """The real condition: stdin and stderr at a terminal."""
+        tty = mock.Mock(isatty=lambda: True)
+        asked = []
+        with mock.patch("sys.stdin", tty), mock.patch("sys.stderr", mock.Mock(isatty=lambda: False)), \
+                mock.patch.object(bootstrap, "ask", side_effect=lambda p: asked.append(p) or ""):
+            bootstrap.ensure_link(self.launcher, self.link, self.checkout)
+        self.assertEqual((asked, self.calls), ([], []))
+        err = io.StringIO()
+        err.isatty = lambda: True
+        with mock.patch("sys.stdin", tty), mock.patch("sys.stderr", err), \
+                mock.patch.object(bootstrap, "ask", side_effect=lambda p: asked.append(p) or ""):
+            bootstrap.ensure_link(self.launcher, self.link, self.checkout)
+        self.assertEqual(len(asked), 1)
+
     def test_a_file_of_its_own_stays(self):
         with open(self.link, "w") as handle:
             handle.write("#!/bin/sh\n")
@@ -467,7 +495,7 @@ class LinkTest(unittest.TestCase):
             launcher = handle.read()
         self.assertTrue('argv[:1] in ([], ["setup"])' in launcher and "bootstrap.ensure_link(" in launcher)
         with open(os.path.join(os.path.dirname(cli.__file__), os.pardir, "install.sh"), encoding="utf-8") as handle:
-            self.assertTrue("if command -v tpot >/dev/null;" in handle.read())
+            self.assertTrue("myTPOT_FOUND=$(command -v tpot)" in handle.read())
 
     def test_nothing_on_a_mac_or_from_another_checkout(self):
         with mock.patch("sys.platform", "darwin"):

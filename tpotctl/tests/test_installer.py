@@ -357,6 +357,20 @@ class AssistantTest(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(app.step, "done")
                 return str(app.query_one("#done-text").render())
 
+    def test_tpot_on_path_is_this_manager(self):
+        from unittest import mock
+        from tpotctl.screens import install as screen
+        mine = os.path.join(REPO_DIR, "tpot")
+        with mock.patch("shutil.which", return_value=mine):
+            self.assertTrue(screen.tpot_on_path())
+        with mock.patch("shutil.which", return_value="/opt/other/bin/tpot"):
+            self.assertFalse(screen.tpot_on_path())
+        with mock.patch("shutil.which", return_value=None):
+            self.assertFalse(screen.tpot_on_path())
+        with open(INSTALL_SH, encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertTrue('readlink -f "${HOME}/tpotce/tpot"' in text)
+
     async def test_done_says_how_the_manager_runs(self):
         text = await self.done_text(True)
         self.assertTrue("the T-Pot Manager: tpot" in text, text)

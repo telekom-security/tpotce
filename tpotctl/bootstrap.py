@@ -209,7 +209,12 @@ def ensure_link(launcher: str, link: str = LINK, checkout: str = "") -> None:
         say.warn(f"{link} is a file of its own, the T-Pot Manager leaves it alone: run {launcher}.", sys.stderr)
         return
     try:
-        answer = ask(f"Link {link} so that 'tpot' works everywhere? [Y/n] ").strip().lower()
+        if os.path.islink(link) and os.path.exists(link):
+            # another T-Pot Manager (i.e. of another user) works there: it stays unless this one says yes
+            answer = ask(f"{link} runs {os.path.realpath(link)}. Point it to {launcher} instead? [y/N] ")
+            answer = answer.strip().lower() or "n"
+        else:
+            answer = ask(f"Link {link} so that 'tpot' works everywhere? [Y/n] ").strip().lower()
     except EOFError:
         return
     if answer not in ("", "y", "yes"):
