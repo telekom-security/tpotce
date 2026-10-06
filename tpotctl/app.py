@@ -95,7 +95,7 @@ class Backend:
 
     def top_sources(self):
         from tpotctl import events
-        return events.top_sources(hours=24, size=5)
+        return events.top_sources(hours=24, size=10)
 
     def host_address(self) -> str:
         """The address of this host towards the internet, the default target of the honeypot probe."""
@@ -220,7 +220,6 @@ def sources_text(sources) -> Text:
     text = Text()
     if sources is None or sources.problem or not sources.sources:
         return text
-    text.append("\nTop attackers, 24 hours\n", style=f"bold {theme.color('glass')}")
     for source in sources.sources:
         text.append(f"{source.ip:<16}", style=theme.color("magenta"))
         text.append(f"{source.count:>7,}".replace(",", " "), style="bold")
@@ -238,25 +237,28 @@ class StatusPane(Vertical):
             with Vertical(id="hive-block", classes="block"):
                 yield Honeycomb(id="comb")
             with Vertical(id="side-blocks"):
-                with Vertical(id="attacks-block", classes="block"):
-                    yield Static(attacks_text(None, 40), id="attacks")
-                    yield Static("", id="top-attackers")
+                with Horizontal(id="feed"):
+                    with Vertical(id="attacks-block", classes="block"):
+                        yield Static(attacks_text(None, 40), id="attacks")
+                    with Vertical(id="sources-block", classes="block"):
+                        yield Static("", id="top-attackers")
                 with Vertical(id="system-block", classes="block"):
                     yield Static("", id="system")
-            yield Static(logo.pot(), id="pot")
         yield Static("", id="status-info", classes="info")
         yield NavDataTable(id="containers", cursor_type="row", zebra_stripes=True)
         with Horizontal(classes="actions"):
-            yield Button("Start", id="svc-start")
-            yield Button("Stop", id="svc-stop")
+            yield Button("Start T-Pot", id="svc-start")
+            yield Button("Stop T-Pot", id="svc-stop")
             yield Button("Restart T-Pot", id="svc-restart", variant="primary")
 
     def on_mount(self) -> None:
         self.query_one("#hive-block").border_title = "Hive"
         self.query_one("#attacks-block").border_title = "Attacks"
+        self.query_one("#sources-block").border_title = "Top attackers, 24 hours"
         self.query_one("#system-block").border_title = "System"
         self.hive = self.app.backend.tpot_type() != "SENSOR"
         self.query_one("#attacks-block").display = self.hive
+        self.query_one("#sources-block").display = self.hive
         self.attacks = None
         self.query_one(DataTable).add_columns("Name", "Status", "Ports")
         self.load()
@@ -293,7 +295,6 @@ class StatusPane(Vertical):
 
     def repaint(self) -> None:
         """After a change of theme or icons."""
-        self.query_one("#pot", Static).update(logo.pot())
         self.query_one(Honeycomb).repaint()
         if self.attacks is not None:
             self.show_attacks(self.attacks, getattr(self, "sources", None))

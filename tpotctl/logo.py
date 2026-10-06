@@ -1,9 +1,8 @@
-"""The T-Pot logo for the terminal: the wordmark and the honey pot in its hexagon.
+"""The T-Pot wordmark for the header of the terminal.
 
-Both are pixel maps, one character per pixel and colour. Two pixel rows become one
-text row of upper half blocks (foreground = upper pixel, background = lower one),
-so the pixels are about square. The ascii icon set gets the figlet letters of
-install.sh instead.
+A pixel map, one character per pixel and colour. Two pixel rows become one text row
+of upper half blocks (foreground = upper pixel, background = lower one), so the
+pixels are about square. The ascii icon set gets the plain word instead.
 """
 
 from typing import List
@@ -21,47 +20,6 @@ WORDMARK = [
     ".#.....#.#.#.#..#.",
     ".##....###.###..##",
     ".......#..........",
-]
-
-POT = [
-    "............MM............",
-    "..........MMMMMM..........",
-    "........MMM....MMM........",
-    "......MMM........MMM......",
-    "....MMM......PPPP..MMM....",
-    "..MMM.......PMPMPP...MMM..",
-    "MMM.........PMPMPMP....MMM",
-    "MM..........PPMPMPP.....MM",
-    "MM...........PPPPPP.....MM",
-    "MM...........M...PP.....MM",
-    "MM...........M.M..PMP...MM",
-    "MM...........M.....PMP..MM",
-    "MM.....PPPPPPPPPPPP..PP.MM",
-    "MM......PWWWWMWWBP......MM",
-    "MM.....PWWWWWMWWBBP.....MM",
-    "MM....PWWWWWWWWWBBBP....MM",
-    "MM....PWWWWWWWWWBBBP....MM",
-    "MM....PPPPPPPPPPPPPP....MM",
-    "MM....PMMMMMMMMMMMMP....MM",
-    "MM....PMWMMWWMWWMWWP....MM",
-    "MM....PMWMMWMMWMMWMP....MM",
-    "MM....PMMMMMMMMMMMMP....MM",
-    "MM.....PPPPPPPPPPPP.....MM",
-    "MMM....................MMM",
-    "..MMM................MMM..",
-    "....MMM............MMM....",
-    "......MMM........MMM......",
-    "........MMM....MMM........",
-    "..........MMMMMM..........",
-    "............MM............",
-]
-
-FIGLET = [
-    " _____     ____       _   ",
-    "|_   _|   |  _ \\ ___ | |_ ",
-    "  | |_____| |_) / _ \\| __|",
-    "  | |_____|  __/ (_) | |_ ",
-    "  |_|     |_|   \\___/ \\__|",
 ]
 
 _PIXEL = {"M": "magenta", "P": "petrol", "W": "glass", "B": "mist", "#": "glass"}
@@ -102,10 +60,3 @@ def wordmark(colour: str = "") -> Text:
     if glyphs.mode() == "ascii":
         return Text("t-pot", style="bold")
     return _pixels(WORDMARK, colour)
-
-
-def pot() -> Text:
-    """15 rows, 26 columns."""
-    if glyphs.mode() == "ascii":
-        return Text("\n".join(FIGLET), style=theme.color("magenta"))
-    return _pixels(POT)

@@ -177,15 +177,19 @@ DataTable > .datatable--even-row {
     margin-left: 1;
 }
 
-#pot {
-    display: none;
-    width: 28;
+/* the room of the pot went to the attacks: a wider Attacks block, Top attackers a block of its own
+   below it (side by side they would need more than the pot gave) */
+#feed {
     height: auto;
-    margin-left: 2;
+    layout: vertical;
 }
 
-Screen.-wide #pot {
-    display: block;
+#sources-block {
+    height: auto;
+}
+
+Screen.-wide #side-blocks {
+    width: 80;
 }
 
 Screen.-narrow #dash {

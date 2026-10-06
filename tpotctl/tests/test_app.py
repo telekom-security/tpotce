@@ -125,6 +125,27 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(switcher.current, "images")
             self.assertEqual(app.query_one("#images-table").row_count, 1)
 
+    async def test_status_page_has_no_pot(self):
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder())
+        async with app.run_test(size=(170, 45)) as pilot:
+            await pilot.pause(0.5)
+            self.assertFalse(app.query("#status #pot"))
+
+    async def test_attacks_and_top_attackers_get_the_room(self):
+        from tpotctl import events
+        backend = FakeBackend()
+        backend.top_sources = lambda: events.Sources([events.Source(f"203.0.113.{n}", 100 - n, "Netherlands")
+                                                      for n in range(10)])
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        async with app.run_test(size=(170, 45)) as pilot:
+            await pilot.pause(0.8)
+            self.assertGreater(app.query_one("#attacks").content_region.width, 48)    # was 48 next to the pot
+            block = app.query_one("#sources-block")
+            self.assertTrue(block.display)
+            text = str(app.query_one("#top-attackers").render())
+            self.assertEqual(sum(f"203.0.113.{n}" in text for n in range(10)), 10)
+            self.assertEqual(app.query_one("#svc-start").label.plain, "Start T-Pot")
+
     async def test_restart_asks_then_runs_systemctl(self):
         runner = Recorder()
         app = tapp.TpotApp(backend=FakeBackend(), runner=runner)

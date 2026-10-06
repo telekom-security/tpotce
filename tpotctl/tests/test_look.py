@@ -105,7 +105,7 @@ class LogoTest(unittest.TestCase):
 
     def test_pixel_maps_are_rectangles_of_known_colours(self):
         from tpotctl import logo
-        for rows in (logo.WORDMARK, logo.POT):
+        for rows in (logo.WORDMARK,):
             self.assertEqual(len({len(r) for r in rows}), 1)
             self.assertTrue(set("".join(rows)) <= set(".") | set(logo._PIXEL))
 
@@ -140,11 +140,9 @@ class LogoTest(unittest.TestCase):
         from tpotctl import logo
         glyphs.set_mode("unicode")
         self.assertEqual(len(logo.wordmark().plain.split("\n")), 3)
-        self.assertEqual(len(logo.pot().plain.split("\n")), 15)
         glyphs.set_mode("ascii")
         try:
             self.assertEqual(logo.wordmark().plain, "t-pot")
-            self.assertTrue(logo.pot().plain.isascii())
         finally:
             glyphs.set_mode("unicode")
 
