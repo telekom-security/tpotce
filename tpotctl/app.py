@@ -971,8 +971,17 @@ def offer_row_actions(pane, name: str, kind: str, actions) -> None:
         return
 
     def chosen(index) -> None:
-        if index is not None:
-            pane.query_one(actions[index][1], Button).press()
+        if index is None:
+            return
+        # the row it was opened for: a reload under the dialog may have moved the cursor or removed it
+        table = pane.query_one(DataTable)
+        if pane.selected() != name:
+            try:
+                table.move_cursor(row=table.get_row_index(name))
+            except Exception:       # RowDoesNotExist
+                pane.app.notify(f"{name} is no longer there.", title=kind, timeout=5)
+                return
+        pane.query_one(actions[index][1], Button).press()
     pane.app.push_screen(ChoiceDialog(f"{kind} {name}", [f"{text} {name}" for text, _button in actions]), chosen)
 
 

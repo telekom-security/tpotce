@@ -458,6 +458,65 @@ class SensorsPaneTest(unittest.IsolatedAsyncioTestCase):
             await pilot.pause(0.3)
             self.assertIsInstance(app.screen, SensorEditDialog)
 
+    async def test_row_action_stays_on_its_row(self):
+        from tpotctl import app as tapp, ops
+        from tpotctl.screens.dialogs import ChoiceDialog, SensorEditDialog
+        repo = checkout(self)
+        notes = []
+
+        class Backend(tapp.Backend):
+            def linux_host(self):
+                return True
+
+            def tpot_type(self):
+                return "HIVE"
+
+            def status(self):
+                return ops.Status("24.04.2", "dev", "abc", "STANDARD", "HIVE", "active", repo)
+
+            def containers(self):
+                return []
+
+            def sensors(self):
+                return sensors.Registry(repo, hasher=fake_hash)
+
+            def sensor_status(self, days=7):
+                return sensors.Status(sensors={})
+
+        app = tapp.TpotApp(backend=Backend(), runner=lambda command, cwd=None: 0)
+        app.notify = lambda message, **kwargs: notes.append(message)
+        async with app.run_test(size=(150, 45)) as pilot:
+            await pilot.pause(0.3)
+            app.goto("sensors")
+            await pilot.pause(0.6)
+            pane = app.query_one("#sensors")
+            table = app.query_one("#sensors-table")
+            table.focus()
+            table.move_cursor(row=1)
+            name = pane.selected()
+            await pilot.press("enter")
+            await pilot.pause(0.3)
+            self.assertIsInstance(app.screen, ChoiceDialog)
+            table.move_cursor(row=0)                    # as if a reload had moved the cursor
+            await pilot.press("enter")                  # Edit
+            await pilot.pause(0.3)
+            self.assertIsInstance(app.screen, SensorEditDialog)
+            self.assertEqual(app.screen.sensor.name, name)
+            await pilot.press("escape")
+            await pilot.pause(0.3)
+            table.focus()
+            table.move_cursor(row=1)
+            name = pane.selected()
+            await pilot.press("enter")
+            await pilot.pause(0.3)
+            sensors.Registry(repo, hasher=fake_hash).revoke(name)       # gone meanwhile
+            pane.load()
+            await pilot.pause(0.5)
+            await pilot.press("enter")
+            await pilot.pause(0.3)
+            self.assertNotIsInstance(app.screen, SensorEditDialog)
+            self.assertTrue(any("no longer there" in n for n in notes), notes)
+
     async def test_revoke_loads_the_sensors_once(self):
         from tpotctl import app as tapp, ops
         repo = checkout(self)
