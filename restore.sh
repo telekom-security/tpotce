@@ -62,9 +62,9 @@ Options:
                     (.env, docker-compose.yml, your changes to tracked files),
                     without asking. Leaves data/ alone and does not start T-Pot.
   -g <groups>       Restore these groups without asking, comma separated: git,
-                    patch, config, untracked, data, elastic (the tpot menu uses it)
+                    patch, config, untracked, data, elastic (the T-Pot Manager uses it)
   -B <file>         Read the sudo password from a file, so it runs without
-                    asking for it (the tpot menu hands one over)
+                    asking for it (the T-Pot Manager hands one over)
   -h                Show this help message
 
 Without -y every group is offered separately, so you can bring back just the

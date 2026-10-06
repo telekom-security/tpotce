@@ -215,12 +215,16 @@ def attacks_text(attacks, width: int) -> Text:
     return text
 
 
-def sources_text(sources) -> Text:
-    """The top attackers of 24 hours (tpot attackers)."""
+# all ten top attackers from this terminal height on, five below: the containers table keeps its rows
+SOURCES_TALL = 50
+
+
+def sources_text(sources, limit: int = 10) -> Text:
+    """The top attackers of 24 hours (tpot attackers), the first `limit` of them."""
     text = Text()
     if sources is None or sources.problem or not sources.sources:
         return text
-    for source in sources.sources:
+    for source in sources.sources[:limit]:
         text.append(f"{source.ip:<16}", style=theme.color("magenta"))
         text.append(f"{source.count:>7,}".replace(",", " "), style="bold")
         if source.country:
@@ -291,7 +295,12 @@ class StatusPane(Vertical):
         self.attacks, self.sources = attacks, sources
         width = self.query_one("#attacks").content_region.width or 40
         self.query_one("#attacks", Static).update(attacks_text(attacks, width))
-        self.query_one("#top-attackers", Static).update(sources_text(sources))
+        limit = 10 if self.app.size.height >= SOURCES_TALL else 5
+        self.query_one("#top-attackers", Static).update(sources_text(sources, limit))
+
+    def on_resize(self) -> None:
+        if getattr(self, "attacks", None) is not None:
+            self.show_attacks(self.attacks, getattr(self, "sources", None))
 
     def repaint(self) -> None:
         """After a change of theme or icons."""
@@ -1341,9 +1350,9 @@ class UpdatePane(Vertical):
         elif event.button.id == "run-setup":
             from tpotctl.screens.task import Task
             self.app.run_task(Task("Rebuild the Python packages of the T-Pot Manager", [LAUNCHER, "setup", "--force"],
-                                   intro="tpot setup --force builds the venv of tpot anew from requirements.txt "
+                                   intro="tpot setup --force builds the venv of the T-Pot Manager anew from requirements.txt "
                                          "(needs pypi.org), next to the old one, and swaps them when it works. "
-                                         "the T-Pot Manager starts anew afterwards.",
+                                         "The T-Pot Manager starts anew afterwards.",
                                    done="The packages of the T-Pot Manager are rebuilt.", restart_tpot=True))
         elif event.button.id == "run-uninstall":
             from tpotctl.screens.uninstall import UninstallScreen

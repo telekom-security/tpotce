@@ -103,7 +103,7 @@ def build_parser() -> argparse.ArgumentParser:
     switch.add_argument("--password-stdin", action="store_true", help="read its password from stdin")
     switch.add_argument("--password-file", metavar="FILE", default="", help="read its password from FILE")
     switch.add_argument("--become-file", metavar="FILE", default="",
-                        help="read the sudo password from FILE (the tpot menu hands one over)")
+                        help="read the sudo password from FILE (the T-Pot Manager hands one over)")
     llm = sub.add_parser("llm", help="the LLM backends of Beelzebub and Galah: find an Ollama, list the models, "
                                      "test a model (default: their settings)")
     llm_actions = llm.add_subparsers(dest="llm_command", metavar="ACTION")
@@ -664,7 +664,7 @@ def run_llm(args) -> int:
             where = "in your edition" if service in current.services else "not in your edition"
             say.info(f"{title} ({where}): {found['provider']}, model {found['model'] or '(none)'}, "
                      f"{found['url'] or 'the default endpoint of the provider'}")
-        say.hint("tpot llm detect | models SERVICE | test SERVICE, or the LLM page of the tpot menu")
+        say.hint("tpot llm detect | models SERVICE | test SERVICE, or the LLM page of the T-Pot Manager")
         return 0
     if args.llm_command == "detect":
         if args.scan and not args.yes and not sys.stdin.isatty():

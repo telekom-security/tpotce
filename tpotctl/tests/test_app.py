@@ -131,13 +131,18 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             await pilot.pause(0.5)
             self.assertFalse(app.query("#status #pot"))
 
-    async def test_attacks_and_top_attackers_get_the_room(self):
+    def ten_sources(self):
         from tpotctl import events
         backend = FakeBackend()
         backend.top_sources = lambda: events.Sources([events.Source(f"203.0.113.{n}", 100 - n, "Netherlands")
                                                       for n in range(10)])
-        app = tapp.TpotApp(backend=backend, runner=Recorder())
-        async with app.run_test(size=(170, 45)) as pilot:
+        backend.containers = lambda: [ops.Container(f"honeypot{n}", "running", "Up 2 hours (healthy)", "healthy", "", "c")
+                                      for n in range(20)]
+        return backend
+
+    async def test_attacks_and_top_attackers_get_the_room(self):
+        app = tapp.TpotApp(backend=self.ten_sources(), runner=Recorder())
+        async with app.run_test(size=(170, 55)) as pilot:
             await pilot.pause(0.8)
             self.assertGreater(app.query_one("#attacks").content_region.width, 48)    # was 48 next to the pot
             block = app.query_one("#sources-block")
@@ -145,6 +150,15 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             text = str(app.query_one("#top-attackers").render())
             self.assertEqual(sum(f"203.0.113.{n}" in text for n in range(10)), 10)
             self.assertEqual(app.query_one("#svc-start").label.plain, "Start T-Pot")
+
+    async def test_top_attackers_leave_the_containers_their_rows(self):
+        """Below 50 lines five sources, so the containers table keeps the rows it had next to the pot."""
+        app = tapp.TpotApp(backend=self.ten_sources(), runner=Recorder())
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.8)
+            text = str(app.query_one("#top-attackers").render())
+            self.assertEqual(sum(f"203.0.113.{n}" in text for n in range(10)), 5)
+            self.assertGreaterEqual(app.query_one("#containers").content_region.height, 10)
 
     async def test_restart_asks_then_runs_systemctl(self):
         runner = Recorder()

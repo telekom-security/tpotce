@@ -136,7 +136,7 @@ Options:
                     'origin' in ~/tpotce.
                     Default: the origin of ~/tpotce, environment: TPOT_REPO_URL
   -B <file>         Read the sudo password from a file, so an unattended run also
-                    works without passwordless sudo (the tpot menu hands one over)
+                    works without passwordless sudo (the T-Pot Manager hands one over)
   -h                Show this help message
 EOF
 	exit 1
@@ -809,7 +809,7 @@ function fuELASTIC_STOPPED () {
 	fuUI_WARN "Stopped before the image pull, nothing was pulled and T-Pot is stopped."
 	fuUI_HINT "Copy the data now, then finish the update with:"
 	fuUI_HINT "  docker compose -f $HOME/tpotce/docker-compose.yml pull && sudo systemctl start tpot"
-	fuUI_HINT "  $HOME/tpotce/tpot setup    (the Python packages of tpot for this release)"
+	fuUI_HINT "  $HOME/tpotce/tpot setup    (the Python packages of the T-Pot Manager for this release)"
 	echo
 	exit 130
 }
@@ -879,7 +879,7 @@ function fuCHECK_ELASTIC () {
 	fuUI_HINT "  sudo cp -a ${myDATA}/elk/data ${myBACKUPDIR}/elk_data_${myOLD:-old}"
 	fuUI_HINT "The checkout and .env are already on the new release, afterwards finish with:"
 	fuUI_HINT "  docker compose -f $HOME/tpotce/docker-compose.yml pull && sudo systemctl start tpot"
-	fuUI_HINT "  $HOME/tpotce/tpot setup    (the Python packages of tpot for this release)"
+	fuUI_HINT "  $HOME/tpotce/tpot setup    (the Python packages of the T-Pot Manager for this release)"
 	if [ -t 0 ] && [ -t 1 ];
 	  then
 	    fuUI_HINT "Press Ctrl+C to stop here and copy it first, continuing in 15 seconds ..."

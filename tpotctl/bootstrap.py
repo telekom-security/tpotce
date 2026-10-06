@@ -133,7 +133,19 @@ def apt_get():
 
 
 def interactive() -> bool:
-    return sys.stdin.isatty()
+    """A person at a terminal: the question goes to stderr, the answer comes from stdin. stdout may be
+    redirected (tpot attackers > file, setup > /dev/null in genuser.sh) and must not swallow it."""
+    return sys.stdin.isatty() and sys.stderr.isatty()
+
+
+def ask(prompt: str) -> str:
+    """input() on stderr: the prompt where the person sees it, EOFError at the end of stdin."""
+    sys.stderr.write(prompt)
+    sys.stderr.flush()
+    line = sys.stdin.readline()
+    if not line:
+        raise EOFError
+    return line
 
 
 def offer_venv_package(package: str) -> bool:
@@ -148,7 +160,7 @@ def offer_venv_package(package: str) -> bool:
     from tpotctl import say
     say.info(f"{sys.executable} cannot create a venv, it needs the package {package}.", sys.stderr)
     try:
-        answer = input("Install it now with sudo apt-get? [Y/n] ").strip().lower()
+        answer = ask("Install it now with sudo apt-get? [Y/n] ").strip().lower()
     except EOFError:
         return False
     if answer not in ("", "y", "yes"):
@@ -165,9 +177,10 @@ LINK = "/usr/local/bin/tpot"
 def ensure_link(launcher: str, link: str = LINK, checkout: str = "") -> None:
     """Started as ./tpot in ~/tpotce without the link the installer makes: offer it, once.
 
-    Linux only and not as root; a file of its own at that place is never touched, a link
-    is (re)pointed with sudo ln, which asks for its password itself. The launcher it
-    offered last is noted next to the venv, so tpot does not ask on every start."""
+    Linux only, not as root and only for a person at a terminal; a file of its own at that
+    place is never touched, a link is (re)pointed with sudo ln, which asks for its password
+    itself. The launcher it offered last is noted next to the venv, so tpot does not ask on
+    every start."""
     if not sys.platform.startswith("linux") or (hasattr(os, "geteuid") and os.geteuid() == 0):
         return
     checkout = checkout or os.path.join(os.path.expanduser("~"), "tpotce")
@@ -175,6 +188,8 @@ def ensure_link(launcher: str, link: str = LINK, checkout: str = "") -> None:
         return
     if os.path.islink(link) and os.path.realpath(link) == os.path.realpath(launcher):
         return
+    if not interactive():
+        return                      # the playbook and update.sh link it, install.sh says if not
     marker = os.path.join(os.path.dirname(venv_dir()), "link-asked")
     try:
         with open(marker, encoding="utf-8") as handle:
@@ -193,11 +208,8 @@ def ensure_link(launcher: str, link: str = LINK, checkout: str = "") -> None:
     if os.path.lexists(link) and not os.path.islink(link):
         say.warn(f"{link} is a file of its own, the T-Pot Manager leaves it alone: run {launcher}.", sys.stderr)
         return
-    if not interactive():
-        say.info(f"So that 'tpot' works without ./ run: {command}", sys.stderr)
-        return
     try:
-        answer = input(f"Link {link} so that 'tpot' works everywhere? [Y/n] ").strip().lower()
+        answer = ask(f"Link {link} so that 'tpot' works everywhere? [Y/n] ").strip().lower()
     except EOFError:
         return
     if answer not in ("", "y", "yes"):

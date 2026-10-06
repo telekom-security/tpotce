@@ -320,7 +320,7 @@ class SetupVenvInstallTest(unittest.TestCase):
             return answer
         with mock.patch.object(bootstrap, "os_release_ids", return_value=list(ids)), \
                 mock.patch.object(bootstrap, "interactive", return_value=tty), \
-                mock.patch("builtins.input", side_effect=ask), \
+                mock.patch.object(bootstrap, "ask", side_effect=ask), \
                 mock.patch("sys.stderr", new_callable=io.StringIO):
             try:
                 return bootstrap.setup_venv(quiet=True), asked
@@ -406,7 +406,7 @@ class LinkTest(unittest.TestCase):
             asked.append(prompt)
             return answer
         with mock.patch.object(bootstrap, "interactive", return_value=tty), \
-                mock.patch("builtins.input", side_effect=ask), \
+                mock.patch.object(bootstrap, "ask", side_effect=ask), \
                 mock.patch("sys.stderr", new_callable=io.StringIO) as err:
             bootstrap.ensure_link(self.launcher, self.link, checkout or self.checkout)
         return asked, err.getvalue()
@@ -435,10 +435,27 @@ class LinkTest(unittest.TestCase):
         self.assertEqual((asked, self.calls), ([], []))
         self.assertTrue("leaves it alone" in err, err)
 
-    def test_without_a_terminal_only_a_hint(self):
-        asked, err = self.ensure(tty=False)
-        self.assertEqual((asked, self.calls), ([], []))
-        self.assertTrue(f"sudo ln -sfn {self.launcher} {self.link}" in err, err)
+    def test_without_a_terminal_nothing_and_later_it_asks(self):
+        """tpot setup from the playbook or update.sh: no question, no note, so ./tpot asks later."""
+        self.assertEqual(self.ensure(tty=False), ([], ""))
+        self.assertEqual(self.calls, [])
+        asked, _err = self.ensure()
+        self.assertEqual(len(asked), 1)
+
+    def test_the_question_goes_to_the_terminal_not_to_stdout(self):
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch("sys.stdin", io.StringIO("n\n")), mock.patch("sys.stdout", out), \
+                mock.patch("sys.stderr", err):
+            self.assertEqual(bootstrap.ask("Link it? [Y/n] "), "n\n")
+        self.assertEqual((out.getvalue(), err.getvalue()), ("", "Link it? [Y/n] "))
+        with mock.patch("sys.stdin", io.StringIO("")), self.assertRaises(EOFError):
+            bootstrap.ask("again? ")
+
+    def test_interactive_needs_stdin_and_stderr_at_a_terminal(self):
+        tty, pipe = mock.Mock(isatty=lambda: True), mock.Mock(isatty=lambda: False)
+        for stdin, stderr, expected in ((tty, tty, True), (tty, pipe, False), (pipe, tty, False)):
+            with mock.patch("sys.stdin", stdin), mock.patch("sys.stderr", stderr):
+                self.assertEqual(bootstrap.interactive(), expected)
 
     def test_asked_once(self):
         self.ensure(answer="n")
@@ -447,7 +464,8 @@ class LinkTest(unittest.TestCase):
 
     def test_the_launcher_offers_it(self):
         with open(os.path.join(os.path.dirname(cli.__file__), os.pardir, "tpot"), encoding="utf-8") as handle:
-            self.assertTrue("bootstrap.ensure_link(" in handle.read())
+            launcher = handle.read()
+        self.assertTrue('argv[:1] in ([], ["setup"])' in launcher and "bootstrap.ensure_link(" in launcher)
         with open(os.path.join(os.path.dirname(cli.__file__), os.pardir, "install.sh"), encoding="utf-8") as handle:
             self.assertTrue("if command -v tpot >/dev/null;" in handle.read())
 

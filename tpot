@@ -31,8 +31,8 @@ def main():
     if argv[:1] in (["update"], ["restore"]):
         from tpotctl import cli
         sys.exit(cli.main(argv))
-    # ./tpot from ~/tpotce without the link of the installer: offer it, once
-    if on_host and not os.environ.get(bootstrap.GUARD):
+    # ./tpot (the menu) or ./tpot setup from ~/tpotce without the link of the installer: offer it, once
+    if on_host and not os.environ.get(bootstrap.GUARD) and argv[:1] in ([], ["setup"]):
         bootstrap.ensure_link(os.path.join(REPO_DIR, "tpot"))
     if argv[:1] == ["setup"]:
         try:

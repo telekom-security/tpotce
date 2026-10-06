@@ -136,6 +136,18 @@ class LogoTest(unittest.TestCase):
         self.assertTrue(splash.fits(80, 24))
         self.assertFalse(splash.fits(40, 24))
 
+    def test_splash_with_a_long_version_keeps_its_frame(self):
+        from tpotctl import splash_anim
+        for version in ("24.04.2-elk9.5.4", "24.04.2-a-very-long-test-tag-of-a-fork"):
+            for scale in (1, 2):
+                splash = splash_anim.Splash(version, scale)
+                for step in range(0, 21):
+                    rows = splash.frame(step / 10).plain.split("\n")
+                    self.assertEqual({len(row) for row in rows}, {splash.width}, (version, scale, step))
+                bottom = splash.frame(1.2).plain.split("\n")[-1]
+                self.assertTrue(bottom.startswith("╚") and bottom.endswith("╝"), bottom)
+                self.assertTrue("telekom security" in bottom, bottom)
+
     def test_splash_looks_like_a_bbs_logo(self):
         """A CP437 frame with the credits in it, letters shaded in steps, a colour cycle on the edges."""
         from tpotctl import splash_anim
@@ -284,7 +296,10 @@ class NamesTest(unittest.TestCase):
 
     WRONG = ("Restart tpot", "Quit tpot", "tpot starts", "start tpot anew", "the tpot service",
              "Rebuild tpot's", "return to tpot", "packages of tpot", "tpot ends", "page of tpot",
-             "tpot does not change")
+             "tpot does not change", "the tpot menu", "venv of tpot", "tpot could not", ". the T-Pot Manager")
+    # the scripts and playbooks a person sees running: their texts, not their comments
+    SCRIPTS = ("install.sh", "update.sh", "restore.sh", "uninstall.sh", "genuser.sh", "deploy.sh",
+               "installer/install/tpot.yml", "installer/remove/tpot.yml")
 
     def test_names_say_what_they_mean(self):
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -298,6 +313,13 @@ class NamesTest(unittest.TestCase):
                     with open(path, encoding="utf-8") as handle:
                         for number, line in enumerate(handle, 1):
                             found += [f"{os.path.relpath(path, root)}:{number}: {w}" for w in self.WRONG if w in line]
+        repo = os.path.dirname(root)
+        for script in self.SCRIPTS:
+            with open(os.path.join(repo, script), encoding="utf-8") as handle:
+                for number, line in enumerate(handle, 1):
+                    if line.lstrip().startswith("#"):
+                        continue
+                    found += [f"{script}:{number}: {w}" for w in self.WRONG if w in line]
         self.assertEqual(found, [])
 
     def test_the_menu_is_the_t_pot_manager(self):

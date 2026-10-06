@@ -186,11 +186,16 @@ class Splash:
             grid[self.tag_y][x0 + index] = (char, "ash")
 
     def credits(self) -> List[Cell]:
-        """The credits in the bottom line of the frame: [ t-pot 24.04.2 ]==[ telekom security ]."""
+        """The credits in the bottom line of the frame: [ t-pot 24.04.2 ]==[ telekom security ]; a
+        version too long for the frame is left out, the corners always stay."""
         line = FRAME[self._set()][4]
-        parts = [("[ ", "wax"), (f"t-pot {self.version}".strip(), "glass"), (" ]", "wax"),
-                 (line * 2, "wax"), ("[ ", "wax"), (CREDIT, "magenta"), (" ]", "wax")]
-        return [(char, colour) for text, colour in parts for char in text]
+        for name in (f"t-pot {self.version}".strip(), "t-pot"):
+            parts = [("[ ", "wax"), (name, "glass"), (" ]", "wax"), (line * 2, "wax"), ("[ ", "wax"),
+                     (CREDIT, "magenta"), (" ]", "wax")]
+            cells = [(char, colour) for text, colour in parts for char in text]
+            if len(cells) <= self.width - 4:
+                break
+        return cells[:self.width - 4]
 
     def _paint_credits(self, grid, t: float) -> None:
         chars = self.credits()

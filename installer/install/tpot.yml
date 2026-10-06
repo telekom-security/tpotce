@@ -1194,7 +1194,7 @@
         state: link
       when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"] and (not my_tpot_link.stat.exists or my_tpot_link.stat.islnk)
 
-    - name: Set up the Python packages of tpot (All)
+    - name: Set up the Python packages of the T-Pot Manager (All)
       # a venv in ~/.local/share/tpotce, needs pypi.org once; tpot sets it up on first
       # use as well, so a failure here only warns
       command: '{{ ansible_facts.user_dir }}/tpotce/tpot setup'
@@ -1203,9 +1203,9 @@
       failed_when: false
       when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
 
-    - name: Warn if tpot could not set up its Python packages (All)
+    - name: Warn if the T-Pot Manager could not set up its Python packages (All)
       debug:
-        msg: "tpot setup failed, run it again later: {{ my_tpot_setup.stderr | default('') }}"
+        msg: "tpot setup (the T-Pot Manager) failed, run it again later: {{ my_tpot_setup.stderr | default('') }}"
       when: my_tpot_setup.rc | default(0) != 0
 
     - name: Add current user to Docker, T-Pot group (All)

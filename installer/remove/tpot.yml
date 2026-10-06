@@ -143,7 +143,7 @@
         state: absent
       when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"] and my_tpot_link.stat.islnk | default(false) and (my_tpot_link.stat.lnk_target | default('')) is search('tpotce/tpot$')
 
-    - name: Remove the Python packages of tpot (All)
+    - name: Remove the Python packages of the T-Pot Manager (All)
       file:
         path: ~/.local/share/tpotce
         state: absent
