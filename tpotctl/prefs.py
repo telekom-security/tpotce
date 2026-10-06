@@ -13,7 +13,9 @@ from dataclasses import asdict, dataclass
 
 ICONS = ("unicode", "nerd", "ascii")
 # auto: what the terminal says (COLORTERM, TERM); over SSH COLORTERM usually stays behind
-COLORS = ("auto", "truecolor", "256")
+COLORS = ("auto", "truecolor", "256", "16")
+# the names Textual knows them by (TEXTUAL_COLOR_SYSTEM)
+TEXTUAL_NAMES = {"16": "standard"}
 
 
 @dataclass
@@ -64,7 +66,7 @@ def apply_color_system(environ) -> None:
     environ.pop(SET_MARK, None)
     colors = load().colors
     if colors != "auto":
-        environ["TEXTUAL_COLOR_SYSTEM"] = environ[SET_MARK] = colors
+        environ["TEXTUAL_COLOR_SYSTEM"] = environ[SET_MARK] = TEXTUAL_NAMES.get(colors, colors)
 
 
 def save(prefs: Prefs) -> bool:

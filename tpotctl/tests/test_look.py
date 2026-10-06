@@ -340,6 +340,10 @@ class ColoursPrefTest(unittest.TestCase):
             target = {"TEXTUAL_COLOR_SYSTEM": "truecolor"}         # the user's own choice wins
             prefs.apply_color_system(target)
             self.assertEqual(target, {"TEXTUAL_COLOR_SYSTEM": "truecolor"})
+        with mock.patch.dict(os.environ, {"TPOT_COLORS": "16"}):
+            target = {}
+            prefs.apply_color_system(target)
+            self.assertEqual(target, {"TEXTUAL_COLOR_SYSTEM": "standard", "TPOT_COLORS_SET": "standard"})
         with mock.patch.dict(os.environ, {"TPOT_COLORS": "auto"}):
             target = {}
             prefs.apply_color_system(target)
@@ -368,7 +372,8 @@ class ColoursPrefTest(unittest.TestCase):
                 "from textual import constants; print(constants.COLOR_SYSTEM, theme.color('comb'))" % root)
         for extra, expected in (({"TPOT_COLORS": "256"}, "256 #5f005f"),
                                 ({"TPOT_COLORS": "truecolor", "TEXTUAL_COLOR_SYSTEM": "256"}, "256 #5f005f"),
-                                ({"TPOT_COLORS": "256", "TEXTUAL_COLOR_SYSTEM": "truecolor"}, "truecolor #38001D")):
+                                ({"TPOT_COLORS": "256", "TEXTUAL_COLOR_SYSTEM": "truecolor"}, "truecolor #38001D"),
+                                ({"TPOT_COLORS": "16"}, "standard #808080")):
             env = {k: v for k, v in os.environ.items() if k not in ("TEXTUAL_COLOR_SYSTEM", "TPOT_COLORS")}
             env.update(extra)
             out = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True,
@@ -376,6 +381,20 @@ class ColoursPrefTest(unittest.TestCase):
             if "No module named 'textual'" in out.stderr:
                 self.skipTest("Textual is not installed, run with the venv of tpot")
             self.assertEqual(out.stdout.strip(), expected, (extra, out.stderr))
+
+    def test_a_16_colour_terminal_is_recognised(self):
+        """TERM=xterm (PuTTY) or screen without COLORTERM: Rich and Textual see 16 colours."""
+        import subprocess
+        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        code = "import sys; sys.path.insert(0, %r); from tpotctl import theme; print(theme.color_system())" % root
+        env = {k: v for k, v in os.environ.items()
+               if k not in ("TEXTUAL_COLOR_SYSTEM", "TPOT_COLORS", "COLORTERM", "TERM_PROGRAM", "NO_COLOR")}
+        for term, expected in (("xterm", "16"), ("screen", "16"), ("xterm-256color", "256")):
+            env["TERM"] = term
+            out = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, universal_newlines=True)
+            if "No module named 'textual'" in out.stderr:
+                self.skipTest("Textual is not installed, run with the venv of tpot")
+            self.assertEqual(out.stdout.strip(), expected, (term, out.stderr))
 
     def test_the_customizer_sets_it_too(self):
         root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -450,6 +469,45 @@ class ColoursTest(unittest.IsolatedAsyncioTestCase):
                     saved = json.load(handle)
                 app.set_icons("unicode")
         self.assertEqual((saved["icons"], saved["colors"]), ("nerd", "auto"))
+
+    @staticmethod
+    def generated(system):
+        """Every colour Textual makes of the theme (primary-muted, ...), as its hex value."""
+        import re
+        from tpotctl import theme
+        theme.build(system)
+        values = theme.TPOT_THEME.to_color_system().generate()
+        return {key: match.group(0) for key, value in values.items()
+                if isinstance(value, str) and (match := re.match(r"#[0-9a-fA-F]{6}", value))}
+
+    def test_256_generated_variables_have_no_red(self):
+        reds = {key: value for key, value in self.generated("256").items()
+                if pure_red(value) and not key.startswith(("error", "warning"))}
+        self.assertEqual(reds, {})
+
+    def test_16_generated_variables_have_no_maroon(self):
+        from rich.color import Color, ColorSystem
+        maroon = {key: value for key, value in self.generated("16").items()
+                  if Color.parse(value).downgrade(ColorSystem.STANDARD).number in (1, 9)
+                  and "error" not in key}           # with 16 colours an error is simply red
+        self.assertEqual(maroon, {})
+
+    def test_16_colours_keep_comb_wax_magenta_apart(self):
+        from rich.color import Color, ColorSystem
+        from tpotctl import theme
+        theme.build("16")
+        numbers = [Color.parse(theme.color(name)).downgrade(ColorSystem.STANDARD).number
+                   for name in ("comb", "wax", "magenta")]
+        self.assertEqual(len(set(numbers)), 3, numbers)
+
+    async def test_16_colours_show_no_maroon(self):
+        from rich.color import Color, ColorSystem
+        from tpotctl import theme
+        errors = {value.lower() for key, value in self.generated("16").items() if "error" in key}
+        errors.add(theme.color("error").lower())
+        maroon = {colour for colour in await self.colours()
+                  if Color.parse(colour).downgrade(ColorSystem.STANDARD).number == 1 and colour.lower() not in errors}
+        self.assertEqual(maroon, set())
 
     def test_256_tokens_are_palette_entries(self):
         from rich.color import Color, ColorSystem

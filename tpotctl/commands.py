@@ -48,7 +48,8 @@ class TpotCommands(Provider):
                                      "ascii": "plain characters"}[mode], partial(app.set_icons, mode)
         for mode in prefs.COLORS:
             yield f"Colours: {mode}", {"auto": "what the terminal says", "truecolor": "24 bit, i.e. over SSH",
-                                       "256": "the palette for 256 colours"}[mode], partial(app.set_colors, mode)
+                                       "256": "the palette for 256 colours",
+                                       "16": "the 16 ANSI colours (TERM=xterm, screen)"}[mode], partial(app.set_colors, mode)
         for key, title in app.setting_keys():
             yield f"{title} ({key})", "setting", partial(app.goto_setting, key)
 
