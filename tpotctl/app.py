@@ -1504,7 +1504,13 @@ class TpotApp(App):
             return
         if stamp is not None:               # what it was read from (the status page brings it)
             self.header_stamp = stamp
-        header.first().repaint(state)
+        from textual.css.query import NoMatches
+        try:
+            header.first().repaint(state)
+        except NoMatches:
+            if not self._closing:
+                raise
+            # the T-Pot Manager ends meanwhile, the parts of the header are already gone
 
     def paint_menu(self) -> None:
         current = self.query_one(ContentSwitcher).current

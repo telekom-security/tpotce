@@ -125,7 +125,7 @@ class LogoTest(unittest.TestCase):
         self.assertEqual(sizes, {(splash.height, splash.width)})          # it never jumps
         start, middle, end = (splash.frame(t).plain for t in (0.0, 1.2, splash_anim.DURATION))
         self.assertFalse(start.strip())                                   # starts dark
-        self.assertIn("honeypot platform  24.04.2", middle)
+        self.assertIn("honeypot platform", middle)
         self.assertIn("█", middle)
         self.assertFalse(end.strip())                                     # and ends dark
         glyphs.set_mode("ascii")
@@ -135,6 +135,23 @@ class LogoTest(unittest.TestCase):
             glyphs.set_mode("unicode")
         self.assertTrue(splash.fits(80, 24))
         self.assertFalse(splash.fits(40, 24))
+
+    def test_splash_looks_like_a_bbs_logo(self):
+        """A CP437 frame with the credits in it, letters shaded in steps, a colour cycle on the edges."""
+        from tpotctl import splash_anim
+        splash = splash_anim.Splash("24.04.2")
+        early, filling, credits = (splash.frame(t).plain for t in (0.2, 0.5, 1.2))
+        self.assertTrue("╔" in early and "═" in early, early)
+        self.assertGreaterEqual(sum(shade in filling for shade in "░▒▓"), 2, filling)
+        self.assertTrue("t-pot 24.04.2" in credits and "telekom security" in credits, credits)
+        edge_colours = {colour for row in splash.cells(1.1) for char, colour in row if char == "█"}
+        self.assertGreaterEqual(len(edge_colours & {"magenta", "comb", "glass"}), 2, edge_colours)
+        glyphs.set_mode("ascii")
+        try:
+            for step in range(0, 21):
+                self.assertTrue(splash.frame(step / 10).plain.isascii(), step)
+        finally:
+            glyphs.set_mode("unicode")
 
     def test_rendered_sizes(self):
         from tpotctl import logo
@@ -241,6 +258,24 @@ class CreditTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("by Telekom Security", short)
         self.assertNotIn("Deutsche", short)
         self.assertEqual(await self.credit(80), "")
+
+    async def test_header_repaint_while_the_manager_ends(self):
+        """A late status update while the T-Pot Manager ends meets a header whose parts are gone."""
+        from textual.css.query import NoMatches
+        from tpotctl import app as tapp, ops
+        from tpotctl.tests.test_app import FakeBackend, Recorder
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder())
+        state = ops.Status("24.04.2", "dev", "abc", "STANDARD", "HIVE", "active", "/x")
+        async with app.run_test(size=(150, 40)) as pilot:
+            await pilot.pause(0.4)
+            await app.query_one("#wordmark").remove()
+            with self.assertRaises(NoMatches):          # a broken header while it runs still shows
+                app.update_header(state)
+            app._closing = True
+            try:
+                app.update_header(state)                 # no crash on the way out
+            finally:
+                app._closing = False
 
 
 class NamesTest(unittest.TestCase):
