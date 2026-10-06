@@ -894,7 +894,7 @@ class OutsideChangeTest(SettingsHelpersBase):
             self.addCleanup(os.chmod, env, 0o644)
             await self.app.refresh_config()
             await pilot.pause(0.3)
-            self.assertTrue(any("cannot be read" in n for n in notes), notes)
+            self.assertTrue(any("Permission denied" in n or "cannot read" in n for n in notes), notes)
             self.assertFalse(any("changed meanwhile" in n for n in notes), notes)
             self.assertEqual(pane.changes().get("TPOT_ATTACKMAP_TEXT_TIMEZONE"), "Europe/Berlin")
             os.chmod(env, 0o644)
@@ -902,6 +902,32 @@ class OutsideChangeTest(SettingsHelpersBase):
             await pilot.pause(0.3)
             self.assertEqual(pane.current.values.get("WEB_USER"), WEB_USER)
             self.assertEqual(pane.changes().get("TPOT_ATTACKMAP_TEXT_TIMEZONE"), "Europe/Berlin")
+
+    async def test_one_notice_per_outage_with_its_reason(self):
+        from tpotctl.tests.test_settings import WEB_USER
+        env = os.path.join(self.repo, ".env")
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            await self.open_settings(pilot)
+            await self.open_llm(pilot)                  # both pages hold the settings
+            notes = self.notes()
+            self.set_env("WEB_USER", WEB_USER)
+            os.chmod(env, 0)
+            self.addCleanup(os.chmod, env, 0o644)
+            await self.app.refresh_config()
+            await pilot.pause(0.3)
+            self.assertEqual(len(notes), 1, notes)
+            self.assertTrue("Permission denied" in notes[0] or "cannot read" in notes[0], notes)
+            await self.app.refresh_config()             # still down: nothing more
+            await pilot.pause(0.3)
+            self.assertEqual(len(notes), 1, notes)
+            os.chmod(env, 0o644)
+            await self.app.refresh_config()
+            await pilot.pause(0.3)
+            self.set_env("WEB_USER", "")
+            os.chmod(env, 0)
+            await self.app.refresh_config()             # a new outage is told again
+            await pilot.pause(0.3)
+            self.assertEqual(len(notes), 2, notes)
 
     async def test_touch_without_change_says_nothing(self):
         async with self.app.run_test(size=(150, 50)) as pilot:

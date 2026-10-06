@@ -1449,6 +1449,7 @@ class TpotApp(App):
         self.locked = {key: why for key, *_rest in PANES for why in [self.why_locked(key)] if why}
         self.quit_dialog = None         # "Quit tpot?" while it is open
         self.header_stamp = None        # the configuration the header was read from
+        self.read_error_stamp = None    # the configuration a refresh could not read, told once
 
     def compose(self) -> ComposeResult:
         yield TpotHeader(id="header")
@@ -1858,13 +1859,14 @@ class TpotApp(App):
             old = dict(pane.current.values)
             try:
                 fresh = self.backend.settings().values
-            except Exception as err:        # SettingsError, OSError: keep the page and its draft
+            except Exception as err:        # SettingsError, OSError, docker: keep the pages and their drafts
                 stamp = self.backend.config_stamp()
-                if stamp != getattr(pane, "told_stamp", None):
-                    pane.told_stamp = stamp
-                    self.notify(f".env cannot be read right now ({err}), the page keeps what it shows.",
-                                title="Settings", severity="warning", timeout=8)
+                if stamp != self.read_error_stamp:      # once for every page, once per outage
+                    self.read_error_stamp = stamp
+                    self.notify(f"{err}. The pages keep what they show until it can be read again.",
+                                title="Settings could not be read", severity="warning", timeout=8)
                 continue
+            self.read_error_stamp = None
             changed = {key for key in set(old) | set(fresh) if old.get(key) != fresh.get(key)}
             await self.reload_keeping(pane, changed, "the value in .env changed meanwhile and replaces")
 
