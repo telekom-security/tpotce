@@ -250,6 +250,9 @@ class SettingsHelpersBase(unittest.IsolatedAsyncioTestCase):
                 from tpotctl import editions
                 return editions.current(repo)
 
+            def config_stamp(self):
+                return ops.config_stamp(repo)
+
             def system(self):
                 return None
 
@@ -770,6 +773,117 @@ class StartProblemsTest(SettingsHelpersBase):
             self.assertEqual(kind, "heavy")
             want = Color.parse(theme.color("error")).rgb
             self.assertTrue(all(abs(a - b) <= 3 for a, b in zip(colour.rgb, want)), (colour.rgb, want))  # css rounds
+
+
+@unittest.skipUnless(textual and yaml, "Textual is not installed, run with the venv of tpot")
+class OutsideChangeTest(SettingsHelpersBase):
+    """.env changed elsewhere (the Web users page, an edition switch, tpot env set in a terminal):
+    the settings pages, the start problems and the quit dialog follow it."""
+
+    def set_env(self, key, value):
+        from tpotctl.envfile import EnvFile
+        env = EnvFile(os.path.join(self.repo, ".env"))
+        env.set(key, value)
+        env.save()
+
+    def notes(self):
+        notes = []
+        self.app.notify = lambda message, **kwargs: notes.append(message)
+        return notes
+
+    async def test_outside_web_user_clears_the_start_problem(self):
+        from tpotctl.tests.test_settings import WEB_USER
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            pane = await self.open_settings(pilot)
+            self.assertIn("WEB_USER", str(pane.query_one("#settings-status").render()))
+            self.set_env("WEB_USER", WEB_USER)
+            self.assertTrue(pane.stale())
+            await self.app.refresh_config()
+            await pilot.pause(0.3)
+            self.assertNotIn("WEB_USER", str(pane.query_one("#settings-status").render()))
+            label = pane.query_one("#settings-tabs").get_tab("tab-base").label
+            self.assertNotIn(" on ", " ".join(str(span.style) for span in label.spans))
+            self.assertFalse([p for p in self.app.start_problems() if p.key == "WEB_USER"])
+
+    async def test_outside_change_keeps_the_other_draft(self):
+        from tpotctl.tests.test_settings import WEB_USER
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            pane = await self.open_settings(pilot)
+            pane.query_one("#set-TPOT_ATTACKMAP_TEXT_TIMEZONE").value = "Europe/Berlin"
+            await pilot.pause(0.3)
+            notes = self.notes()
+            self.set_env("WEB_USER", WEB_USER)
+            await self.app.refresh_config()
+            await pilot.pause(0.3)
+            self.assertEqual(pane.changes().get("TPOT_ATTACKMAP_TEXT_TIMEZONE"), "Europe/Berlin")
+            self.assertEqual(notes, [])
+
+    async def test_outside_change_of_the_drafted_key_wins_and_says_so(self):
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            pane = await self.open_settings(pilot)
+            self.app.goto_setting("GALAH_LLM_MODEL")
+            await pilot.pause(0.3)
+            pane.query_one("#set-GALAH_LLM_MODEL").value = "mistral"
+            await pilot.pause(0.3)
+            notes = self.notes()
+            self.set_env("GALAH_LLM_MODEL", "qwen3")
+            await self.app.refresh_config()
+            await pilot.pause(0.3)
+            self.assertNotIn("GALAH_LLM_MODEL", pane.changes())
+            self.assertEqual(pane.current.values.get("GALAH_LLM_MODEL"), "qwen3")
+            self.assertTrue(any("GALAH_LLM_MODEL" in n and "changed meanwhile" in n for n in notes), notes)
+
+    async def test_outside_change_keeps_an_unlocked_draft(self):
+        from tpotctl.tests.test_settings import WEB_USER
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            pane = await self.open_settings(pilot)
+            await pane.unlock(pane.rows["TPOT_DATA_PATH"])
+            await pilot.pause(0.2)
+            pane.query_one("#set-TPOT_DATA_PATH").value = "/srv/tpot-data"
+            await pilot.pause(0.3)
+            self.set_env("WEB_USER", WEB_USER)
+            await self.app.refresh_config()
+            await pilot.pause(0.3)
+            self.assertIn("TPOT_DATA_PATH", pane.unlocked)
+            self.assertEqual(pane.changes().get("TPOT_DATA_PATH"), "/srv/tpot-data")
+
+    async def test_touch_without_change_says_nothing(self):
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            pane = await self.open_settings(pilot)
+            pane.query_one("#set-TPOT_ATTACKMAP_TEXT_TIMEZONE").value = "Europe/Berlin"
+            await pilot.pause(0.3)
+            notes = self.notes()
+            env = os.path.join(self.repo, ".env")
+            stat = os.stat(env)
+            os.utime(env, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000_000))
+            self.assertTrue(pane.stale())
+            await self.app.refresh_config()
+            await pilot.pause(0.3)
+            self.assertFalse(pane.stale())
+            self.assertEqual(notes, [])
+            self.assertEqual(pane.changes().get("TPOT_ATTACKMAP_TEXT_TIMEZONE"), "Europe/Berlin")
+
+    async def test_refresh_while_saving(self):
+        import asyncio
+        from tpotctl.tests.test_settings import WEB_USER
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            pane = await self.open_settings(pilot)
+            pane.query_one("#set-TPOT_ATTACKMAP_TEXT_TIMEZONE").value = "Europe/Berlin"
+            await pilot.pause(0.3)
+            self.set_env("WEB_USER", WEB_USER)
+            await asyncio.gather(pane.reload(), self.app.refresh_config(), pane.reload())
+            await pilot.pause(0.5)
+            self.assertIn("WEB_USER", pane.rows)
+
+    async def test_quit_after_an_outside_fix(self):
+        from tpotctl.tests.test_settings import WEB_USER
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            await self.open_settings(pilot)
+            self.set_env("WEB_USER", WEB_USER)
+            self.app.query_one("#sidebar").focus()
+            await pilot.press("q")
+            await pilot.pause(0.5)
+            self.assertFalse(self.app.is_running)
 
 
 @unittest.skipUnless(textual and yaml, "Textual is not installed, run with the venv of tpot")

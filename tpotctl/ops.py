@@ -86,6 +86,19 @@ def env_values(repo_dir: str = REPO_DIR) -> Dict[str, str]:
     return read_values(os.path.join(repo_dir, ".env"))
 
 
+def config_stamp(repo_dir: str = REPO_DIR) -> Tuple:
+    """(mtime_ns, size) of .env and of the compose file in use, None for a missing one: tells the
+    pages of tpot that the configuration was changed elsewhere."""
+    stamp = []
+    for path in (os.path.join(repo_dir, ".env"), compose_path(repo_dir)):
+        try:
+            info = os.stat(path)
+            stamp.append((info.st_mtime_ns, info.st_size))
+        except OSError:
+            stamp.append(None)
+    return tuple(stamp)
+
+
 def compose_path(repo_dir: str = REPO_DIR, env: Optional[Dict[str, str]] = None) -> str:
     env = env_values(repo_dir) if env is None else env
     path = env.get("TPOT_DOCKER_COMPOSE") or "./docker-compose.yml"

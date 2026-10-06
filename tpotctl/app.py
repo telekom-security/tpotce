@@ -45,6 +45,9 @@ class Backend:
     def host_ostype(self) -> str:
         return ops.host_ostype()
 
+    def config_stamp(self):
+        return ops.config_stamp()
+
     def status(self) -> ops.Status:
         return ops.status()
 
@@ -538,6 +541,8 @@ class SettingsPane(Vertical):
                 break
             await asyncio.sleep(0.01)
         self.rows = {}
+        # before the read: a change while it reads shows on the next look
+        self.stamp = self.app.backend.config_stamp()
         try:
             self.current = self.app.backend.settings()
         except (SettingsError, OSError) as err:
@@ -580,6 +585,10 @@ class SettingsPane(Vertical):
 
     def loaded(self) -> None:
         """After a reload, for subclasses."""
+
+    def stale(self) -> bool:
+        """.env or the compose file changed since this page read them (elsewhere in tpot or outside)."""
+        return self.current is not None and self.app.backend.config_stamp() != getattr(self, "stamp", None)
 
     def changes(self):
         if self.current is None:
@@ -1441,6 +1450,7 @@ class TpotApp(App):
         if len(self.screen_stack) > 1:
             self.notify("Close this screen first (esc), then quit.", title="Not now", timeout=4)
             return
+        await self.refresh_config()             # what the files say now, not when the page read them
         pending = self.quit_pending()
         if not pending:
             await super().action_quit()
@@ -1535,6 +1545,8 @@ class TpotApp(App):
         from tpotctl.settings import MANAGED_BY
         pane = self.query("#settings")
         current = getattr(pane.first(), "current", None) if pane else None
+        if current is not None and pane.first().stale():
+            current = None          # read anew below; refresh_config brings the page along
         try:
             current = current if current is not None else self.backend.settings()
             problems = current.problems()
@@ -1689,18 +1701,36 @@ class TpotApp(App):
         """The Settings and the LLM page show the same .env, a save on one reloads the other. Its
         unsaved changes stay, but a value just saved replaces an unsaved one of the same key (said
         only when the two differ)."""
-        titles = dict((key, title) for key, title, *_rest in PANES)
         for pane in self.query(SettingsPane):
-            if pane is source:
+            if pane is not source:
+                await self.reload_keeping(pane, saved_keys, "the value just saved replaces")
+
+    async def refresh_config(self) -> None:
+        """.env or the compose file changed elsewhere (another page of tpot, a task, a terminal): the
+        settings pages read them anew, keeping what is unsaved like after a save on the other page."""
+        for pane in self.query(SettingsPane):
+            if not pane.stale():
                 continue
-            own = pane.changes()
-            keep = {key: value for key, value in own.items() if key not in saved_keys}
-            await pane.reload(keep=keep, keep_unlocked=pane.unlocked & set(keep))
-            now = pane.current.values if pane.current is not None else {}
-            lost = sorted(key for key in set(own) & saved_keys if own[key] != now.get(key, ""))
-            if lost:
-                self.notify(f"{', '.join(lost)}: the value just saved replaces the unsaved one on the "
-                            f"{titles.get(pane.id, pane.id)} page", title="Settings", timeout=8)
+            old = dict(pane.current.values)
+            try:
+                fresh = self.backend.settings().values
+            except Exception:      # the page shows the error itself on its reload
+                fresh = {}
+            changed = {key for key in set(old) | set(fresh) if old.get(key) != fresh.get(key)}
+            await self.reload_keeping(pane, changed, "the value in .env changed meanwhile and replaces")
+
+    async def reload_keeping(self, pane, changed: Set[str], why: str) -> None:
+        """Reload a settings page: its unsaved changes stay, a key changed in the file takes the file's
+        value, and a notice names it when that differs from the unsaved one."""
+        titles = dict((key, title) for key, title, *_rest in PANES)
+        own = pane.changes()
+        keep = {key: value for key, value in own.items() if key not in changed}
+        await pane.reload(keep=keep, keep_unlocked=pane.unlocked & set(keep))
+        now = pane.current.values if pane.current is not None else {}
+        lost = sorted(key for key in set(own) & changed if own[key] != now.get(key, ""))
+        if lost:
+            self.notify(f"{', '.join(lost)}: {why} the unsaved one on the {titles.get(pane.id, pane.id)} page",
+                        title="Settings", timeout=8)
 
     def customize_with(self, service: str) -> None:
         """The customizer with a service added to the edition in use."""
