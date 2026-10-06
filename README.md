@@ -67,6 +67,7 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/in
 - [Configuration](#configuration)
   - [The T-Pot Manager (tpot)](#the-t-pot-manager-tpot)
     - [What depends on the host and the edition](#what-depends-on-the-host-and-the-edition)
+    - [True colours over SSH](#true-colours-over-ssh)
   - [T-Pot Config File](#t-pot-config-file)
   - [Customize T-Pot Honeypots and Services](#customize-t-pot-honeypots-and-services)
 - [Maintenance](#maintenance)
@@ -736,6 +737,24 @@ The menu shows every page everywhere; a page that cannot work on this host stays
 - **Settings follow the edition**: the *Settings* page and `tpot env list` show the settings of the services in your `docker-compose.yml` and of your T-Pot type. *All settings* (`--all`) shows the rest too, tagged *not in your edition* or *only on a SENSOR*.
 - **LLM settings are always shown**: those of Beelzebub and Galah, also when they are not in your edition, tagged *not in your edition*, so they are ready when you add them; their problems only warn then (T-Pot does not check them for a service it does not run). The *LLM* page offers *Add … to the edition*.
 - `tpot install` is offered (`ctrl+p` *Install T-Pot*) only on a Linux host without T-Pot.
+
+### True colours over SSH
+Your terminal tells programs it can show true colours with `COLORTERM=truecolor`. SSH does not take that variable along by itself, so on the T-Pot host the T-Pot Manager only learns about 256 colours and uses its palette for them. To bring the true colours along:
+
+1. T-Pot accepts `COLORTERM`: the installer writes `AcceptEnv COLORTERM` to `/etc/ssh/sshd_config.d/tpot.conf` (some distributions, i.e. Debian 13, accept it already). On a T-Pot installed before, add it yourself:
+   ```
+   echo "AcceptEnv COLORTERM" | sudo tee /etc/ssh/sshd_config.d/tpot.conf
+   sudo sshd -t && sudo systemctl reload ssh    # sshd on AlmaLinux, Fedora, openSUSE, RHEL, Rocky
+   ```
+2. Your SSH client sends it, in `~/.ssh/config` on your own computer (the ssh of macOS and most Linux distributions only sends `LANG` and `LC_*` by itself):
+   ```
+   Host my-tpot
+     HostName 192.168.1.10
+     Port 64295
+     SendEnv COLORTERM
+   ```
+
+Or choose the colours without SSH's help: `TPOT_COLORS=truecolor tpot` (or `export TPOT_COLORS=truecolor` in `~/.bashrc` of the T-Pot host), or `ctrl+p` *Colours: truecolor*, which is kept in `~/.config/tpotce/tpot.json`. Only do so if your terminal can show true colours (iTerm2, GNOME Terminal, Konsole, Windows Terminal, kitty, WezTerm can), otherwise the colours come out wrong. In tmux the same applies: `COLORTERM` has to reach the shell in tmux, or `TPOT_COLORS` decides.
 <br><br>
 
 ## T-Pot Config File

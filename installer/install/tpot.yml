@@ -674,6 +674,56 @@
       tags:
         - "openSUSE Tumbleweed"
 
+    - name: Let SSH bring COLORTERM along, so the T-Pot Manager shows its true colours (All)
+      # AcceptEnv adds to the LANG LC_* of the distribution; the client sends it with SendEnv COLORTERM
+      file:
+        path: /etc/ssh/sshd_config.d
+        state: directory
+        mode: "0755"
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Accept COLORTERM in /etc/ssh/sshd_config.d/tpot.conf (All)
+      lineinfile:
+        path: /etc/ssh/sshd_config.d/tpot.conf
+        line: "AcceptEnv COLORTERM"
+        create: yes
+        owner: root
+        group: root
+        mode: "0644"
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
+    - name: Check the sshd configuration (All)
+      command: sshd -t
+      changed_when: false
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
     - name: Install firewalld (AlmaLinux, Fedora, openSUSE Tumbleweed, RHEL, Rocky)
       package:
         name: firewalld

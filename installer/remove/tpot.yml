@@ -237,6 +237,21 @@
         - "RedHat"
         - "Rocky"
 
+    - name: Remove /etc/ssh/sshd_config.d/tpot.conf (AcceptEnv COLORTERM) (All)
+      file:
+        path: /etc/ssh/sshd_config.d/tpot.conf
+        state: absent
+      when: ansible_facts.distribution in ["AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"]
+      tags:
+        - "AlmaLinux"
+        - "Debian"
+        - "Fedora"
+        - "openSUSE Tumbleweed"
+        - "Raspbian"
+        - "RedHat"
+        - "Rocky"
+        - "Ubuntu"
+
     - name: Remove port.conf file to revert SSH to default port (openSUSE Tumbleweed)
       file:
         path: /etc/ssh/sshd_config.d/port.conf

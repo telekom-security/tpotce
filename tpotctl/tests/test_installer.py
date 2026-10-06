@@ -95,6 +95,36 @@ OS_RELEASES = {
 }
 
 
+@unittest.skipUnless(yaml, "PyYAML is not installed")
+class SshColortermTest(unittest.TestCase):
+    """sshd takes COLORTERM from the client, so the T-Pot Manager shows true colours over SSH."""
+
+    DROPIN = "/etc/ssh/sshd_config.d/tpot.conf"
+
+    @staticmethod
+    def tasks(*parts):
+        import yaml as pyyaml
+        with open(os.path.join(REPO_DIR, *parts), encoding="utf-8") as handle:
+            plays = pyyaml.safe_load(handle)
+        return [task for play in plays for task in play.get("tasks", [])]
+
+    def test_install_writes_the_dropin_on_every_distribution(self):
+        found = [t for t in self.tasks("installer", "install", "tpot.yml")
+                 if (t.get("lineinfile") or {}).get("path") == self.DROPIN]
+        self.assertEqual(len(found), 1, found)
+        task = found[0]
+        self.assertEqual(task["lineinfile"]["line"], "AcceptEnv COLORTERM")
+        for name in ("AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"):
+            self.assertTrue(f'"{name}"' in task["when"], name)
+        checks = [t for t in self.tasks("installer", "install", "tpot.yml") if "sshd -t" in str(t.get("command", ""))]
+        self.assertTrue(checks)
+
+    def test_uninstall_removes_it(self):
+        found = [t for t in self.tasks("installer", "remove", "tpot.yml")
+                 if (t.get("file") or {}).get("path") == self.DROPIN and t["file"].get("state") == "absent"]
+        self.assertEqual(len(found), 1, found)
+
+
 class ChecksTest(unittest.TestCase):
 
     def test_distributions(self):
