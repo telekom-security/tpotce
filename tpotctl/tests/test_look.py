@@ -267,12 +267,19 @@ class CreditTest(unittest.IsolatedAsyncioTestCase):
         backend.status = lambda: ops.Status("24.04.2", branch, "abc1234", "STANDARD", "HIVE", "active",
                                             "/home/t/tpotce")
         app = tapp.TpotApp(backend=backend, runner=Recorder())
-        async with app.run_test(size=(width, 40)) as pilot:
-            await pilot.pause(0.6)
-            widget = app.query_one("#header-credit")
-            if chips is not None:
-                chips.append(str(app.query_one("#header-chips").render()))
-            return str(widget.render()) if widget.display else ""
+        # the second chip line is host name and checkout: the same on every machine that runs the tests
+        with mock.patch("tpotctl.widgets.header.socket.gethostname", return_value="tpot"), \
+                mock.patch.object(ops, "REPO_DIR", "/home/t/tpotce"):
+            async with app.run_test(size=(width, 40)) as pilot:
+                for _ in range(40):                 # the status comes from a worker: wait for its branch
+                    await pilot.pause(0.05)
+                    if branch in str(app.query_one("#header-chips").render()):
+                        break
+                await pilot.pause(0.1)
+                widget = app.query_one("#header-credit")
+                if chips is not None:
+                    chips.append(str(app.query_one("#header-chips").render()))
+                return str(widget.render()) if widget.display else ""
 
     async def test_a_long_branch_gets_the_short_credit(self):
         chips = []
