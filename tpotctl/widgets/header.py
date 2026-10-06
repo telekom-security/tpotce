@@ -1,4 +1,4 @@
-"""The head of tpot: the wordmark on its magenta plate and what this T-Pot is."""
+"""The head of the T-Pot Manager: the wordmark on its magenta plate, what this T-Pot is, who makes it."""
 
 import os
 import socket
@@ -6,10 +6,14 @@ from typing import Optional
 
 from rich.text import Text
 from textual.app import ComposeResult
-from textual.containers import Horizontal
+from textual.containers import Horizontal, Vertical
 from textual.widgets import Static
 
 from tpotctl import glyphs, logo, ops, theme
+
+
+CREDIT = "Powered by Deutsche Telekom Security GmbH"
+CREDIT_SHORT = "by Telekom Security"
 
 
 def chip(text: str, background: str, foreground: str = "glass") -> Text:
@@ -31,7 +35,9 @@ class TpotHeader(Horizontal):
     def compose(self) -> ComposeResult:
         yield Static(id="wordmark")
         yield Static(id="header-chips")
-        yield Static(id="header-service")
+        with Vertical(id="header-right"):
+            yield Static(id="header-service")
+            yield Static(id="header-credit")
 
     def on_mount(self) -> None:
         self.repaint()
@@ -64,3 +70,8 @@ class TpotHeader(Horizontal):
         chips.append_text(second)
         self.query_one("#header-chips", Static).update(chips)
         self.query_one("#header-service", Static).update(service_text(state.service) if state else "")
+        width = self.app.size.width
+        credit = self.query_one("#header-credit", Static)
+        credit.display = width >= 90
+        text = CREDIT if width >= 120 else CREDIT_SHORT
+        credit.update(Text(text, style=theme.color("ash")))

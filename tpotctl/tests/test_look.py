@@ -222,6 +222,27 @@ class LookInTheAppTest(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn("Theme", [c.title for c in app.get_system_commands(app.screen)])
 
 
+@unittest.skipUnless(sys.modules.get("textual") or __import__("importlib").util.find_spec("textual"),
+                     "Textual is not installed, run with the venv of tpot")
+class CreditTest(unittest.IsolatedAsyncioTestCase):
+
+    async def credit(self, width):
+        from tpotctl import app as tapp
+        from tpotctl.tests.test_app import FakeBackend, Recorder
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder())
+        async with app.run_test(size=(width, 40)) as pilot:
+            await pilot.pause(0.4)
+            widget = app.query_one("#header-credit")
+            return str(widget.render()) if widget.display else ""
+
+    async def test_header_names_telekom_security(self):
+        self.assertIn("Powered by Deutsche Telekom Security GmbH", await self.credit(150))
+        short = await self.credit(110)
+        self.assertIn("by Telekom Security", short)
+        self.assertNotIn("Deutsche", short)
+        self.assertEqual(await self.credit(80), "")
+
+
 class NamesTest(unittest.TestCase):
     """T-Pot is the honeypot platform, the T-Pot Manager is this tool (the command tpot), the service is
     tpot.service: no text may mix them up."""

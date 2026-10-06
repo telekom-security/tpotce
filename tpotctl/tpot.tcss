@@ -32,9 +32,22 @@ VerticalScroll, DataTable, OptionList, Tree {
     padding: 0 0 0 3;
 }
 
+#header-right {
+    width: auto;
+    height: 3;
+}
+
 #header-service {
+    width: 100%;
+    height: 1;
+    text-align: right;
+}
+
+#header-credit {
     width: auto;
     height: 1;
+    margin-top: 1;
+    text-align: right;
 }
 
 Screen.-narrow #header-chips {
