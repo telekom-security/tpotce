@@ -753,6 +753,7 @@ Your terminal tells programs it can show true colours with `COLORTERM=truecolor`
      Port 64295
      SendEnv COLORTERM
    ```
+   An SSH connection that is already open (`ControlMaster` / `ControlPersist`) keeps the environment it was opened with: close it once with `ssh -O exit my-tpot`.
 
 Or choose the colours without SSH's help: `TPOT_COLORS=truecolor tpot` (or `export TPOT_COLORS=truecolor` in `~/.bashrc` of the T-Pot host), or `ctrl+p` *Colours: truecolor*, which is kept in `~/.config/tpotce/tpot.json`. Only do so if your terminal can show true colours (iTerm2, GNOME Terminal, Konsole, Windows Terminal, kitty, WezTerm can), otherwise the colours come out wrong. In tmux the same applies: `COLORTERM` has to reach the shell in tmux, or `TPOT_COLORS` decides.
 <br><br>
