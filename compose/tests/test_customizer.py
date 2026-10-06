@@ -74,6 +74,15 @@ class CoreTest(unittest.TestCase):
         self.assertEqual(errors(self.resolve("STANDARD", add=["glutton"]), "conflict"),
                          ["glutton and honeytrap cannot run at the same time"])
 
+    def test_llm_honeypot_outside_its_edition_warns(self):
+        result = self.resolve("STANDARD", add=["beelzebub"], ports={("beelzebub", 22, "tcp"): 2223})
+        self.assertEqual(errors(result), [])
+        texts = [f.text for f in result.warnings if f.kind == "edition"]
+        self.assertEqual(len(texts), 1, texts)
+        self.assertTrue("beelzebub belongs to the LLM edition" in texts[0], texts[0])
+        self.assertTrue("BEELZEBUB_LLM_" in texts[0], texts[0])
+        self.assertEqual([f for f in self.resolve("LLM").warnings if f.kind == "edition"], [])
+
     def test_mac_win_offers_no_nfq_honeypots(self):
         self.assertFalse(self.catalog.offered("MAC_WIN", "honeytrap"))
         self.assertTrue(self.catalog.offered("MAC_WIN", "p0f"))

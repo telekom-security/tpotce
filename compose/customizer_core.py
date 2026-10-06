@@ -31,6 +31,7 @@ DEFAULT_MAX_NETWORKS = 29
 GROUPS = [
     ("core", "T-Pot"),
     ("honeypots", "Honeypots"),
+    ("llm", "LLM honeypots"),
     ("conpot", "Conpot (ICS)"),
     ("nsm", "NSM"),
     ("elk", "ELK"),
@@ -451,6 +452,21 @@ def resolve(catalog: Catalog, selection: Selection, max_networks: int = DEFAULT_
     services = [n for n in catalog.order if n in chosen]
     services += [n for n in chosen if n not in services]       # only in an edition
     sources = {n: catalog.source(base, n) for n in services}
+
+    for name in services:
+        home = catalog.meta.get(name, {}).get("edition")
+        if not home or home == base or home not in catalog.editions:
+            continue
+        text = f"{name} belongs to the {home} edition"
+        if catalog.group(name) == "llm":
+            text += f": it needs an LLM ({name.upper()}_LLM_* in .env)"
+        there = {p.host for p in service_ports(catalog.editions[home].services.get(name, {}))}
+        here = {p.host for p in service_ports(catalog.catalog.services[name])}
+        if there - here:
+            listed = ", ".join(str(p) for p in sorted(here)) or "none"
+            text += f", and outside it only port {listed} is published" if len(here) == 1 else \
+                f", and outside it only ports {listed} are published"
+        findings.append(Finding("warning", "edition", text, (name,)))
 
     pairs = set()
     for name in services:

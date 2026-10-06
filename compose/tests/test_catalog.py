@@ -22,7 +22,8 @@ ALLOWED_MAC_WIN = ALLOWED | {"network_mode", "cap_add", "volumes"}
 # the rest keep a network of their own
 SHARED = "honeypot_local"
 OWN_NETWORK = {"tanner_local", "nginx_local", "ewsposter_local", "tpotinit_local", "suricata_local", "default"}
-META_KEYS = {"group", "description", "required", "requires", "conflicts", "hidden", "hive_only", "linux_only"}
+META_KEYS = {"group", "description", "required", "requires", "conflicts", "hidden", "hive_only", "linux_only",
+             "edition"}
 
 
 class CatalogTest(unittest.TestCase):
@@ -42,6 +43,9 @@ class CatalogTest(unittest.TestCase):
                 self.assertIn(meta.get("group"), groups)
                 self.assertTrue(meta.get("description"))
                 self.assertFalse(set(meta) - META_KEYS, "unknown x-tpot keys")
+                if "edition" in meta:
+                    self.assertIn(meta["edition"], self.catalog.editions, "edition")
+                    self.assertIn(name, self.catalog.editions[meta["edition"]].services, "edition")
                 for key in ("requires", "conflicts"):
                     for other in meta.get(key) or []:
                         self.assertIn(other, self.catalog.catalog.services, f"{key} {other}")
@@ -90,7 +94,7 @@ class CatalogTest(unittest.TestCase):
     def test_honeypots_share_the_isolated_network(self):
         for compose in self.all_files():
             for name, definition in compose.services.items():
-                if self.catalog.group(name) not in ("honeypots", "conpot"):
+                if self.catalog.group(name) not in ("honeypots", "conpot", "llm"):
                     continue
                 networks = set(core.service_networks(definition))
                 if not networks or "tanner_local" in networks:    # host mode, snare / tanner
@@ -112,6 +116,32 @@ class CatalogTest(unittest.TestCase):
         for compose in self.all_files():
             with self.subTest(file=compose.path):
                 self.assertEqual(set(compose.networks) - OWN_NETWORK - {SHARED}, set())
+
+    def test_llm_honeypots_belong_to_the_llm_edition(self):
+        for name in ("beelzebub", "galah"):
+            with self.subTest(service=name):
+                self.assertEqual(self.catalog.group(name), "llm")
+                self.assertEqual(self.catalog.meta[name].get("edition"), "LLM")
+        self.assertIn(("llm", "LLM honeypots"), core.GROUPS)
+
+    def test_llm_edition_has_no_port_clash(self):
+        """Beelzebub publishes every prepared service of its own that Galah does not take there."""
+        llm = self.catalog.editions["LLM"]
+        published = [(p.ip, p.host, p.proto) for name in llm.services
+                     for p in core.service_ports(llm.services[name])]
+        self.assertEqual(len(published), len(set(published)), sorted(published))
+        folder = os.path.join(os.path.dirname(core.COMPOSE_DIR), "docker", "beelzebub", "dist",
+                              "configurations", "services")
+        prepared = set()
+        for file in os.listdir(folder):
+            with open(os.path.join(folder, file), encoding="utf-8") as handle:
+                address = str(yaml.safe_load(handle).get("address", ""))
+            prepared.add(int(address.rsplit(":", 1)[1]))
+        galah = {p.host for p in core.service_ports(llm.services["galah"])}
+        beelzebub = {p.host for p in core.service_ports(llm.services["beelzebub"])}
+        self.assertEqual(beelzebub, prepared - galah)
+        catalog = {p.host for p in core.service_ports(self.catalog.catalog.services["beelzebub"])}
+        self.assertEqual(catalog, {22})          # elsewhere the others meet other honeypots
 
     def test_x_tpot_only_in_catalog(self):
         for compose in self.catalog.editions.values():
