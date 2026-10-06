@@ -1617,6 +1617,11 @@ class TpotApp(App):
         if len(self.screen_stack) == 1:
             self.query_one("#sidebar", ListView).focus()
 
+    def notify(self, message, *args, markup: bool = False, **kwargs):
+        """Notices carry paths and error texts: never read them as markup (a [/...] in a path would
+        raise while the toast renders)."""
+        return super().notify(message, *args, markup=markup, **kwargs)
+
     def action_nav(self, direction: str) -> None:
         """The arrows: in the menu right opens the page (up / down are the menu's own), elsewhere
         widgets/nav.py."""
@@ -1870,7 +1875,8 @@ class TpotApp(App):
                 stamp = self.backend.config_stamp()
                 if stamp != self.read_error_stamp:      # once for every page, once per outage
                     self.read_error_stamp = stamp
-                    self.notify(f"{err}. The pages keep what they show until it can be read again.",
+                    self.notify(f"{str(err).rstrip('. ')}. The pages keep what they show until it can be read "
+                                f"again.",
                                 title="Settings could not be read", severity="warning", timeout=8)
                 continue
             self.read_error_stamp = None
@@ -2008,6 +2014,10 @@ class CustomizerApp(nav.ArrowNav, App):
     CSS_PATH = "tpot.tcss"
     TITLE = "T-Pot customizer"
     BINDINGS = [*nav.BINDINGS]
+
+    def notify(self, message, *args, markup: bool = False, **kwargs):
+        """Notices carry paths and error texts: never read them as markup."""
+        return super().notify(message, *args, markup=markup, **kwargs)
 
     def __init__(self, catalog, selection, max_networks: int):
         super().__init__()

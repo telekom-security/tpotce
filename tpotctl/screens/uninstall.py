@@ -146,6 +146,10 @@ class UninstallApp(ArrowNav, App):
     TITLE = "T-Pot uninstaller"
     BINDINGS = [*NAV_BINDINGS]
 
+    def notify(self, message, *args, markup: bool = False, **kwargs):
+        """Notices carry paths and error texts: never read them as markup."""
+        return super().notify(message, *args, markup=markup, **kwargs)
+
     def __init__(self, **options):
         super().__init__()
         self.options = options

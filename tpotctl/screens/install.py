@@ -78,6 +78,10 @@ class InstallApp(ArrowNav, App):
     TITLE = "T-Pot installer"
     BINDINGS = [Binding("q", "leave", "Quit"), Binding("escape", "back", "Back", show=False), *NAV_BINDINGS]
 
+    def notify(self, message, *args, markup: bool = False, **kwargs):
+        """Notices carry paths and error texts: never read them as markup."""
+        return super().notify(message, *args, markup=markup, **kwargs)
+
     def __init__(self, engine: Callable[[List[str]], Engine] = Engine, checks: Optional[Callable] = None,
                  sudo_mode: Optional[str] = None, password_ok: Optional[Callable[[str], bool]] = None,
                  run: Callable = subprocess.run, repo_dir: str = REPO_DIR):

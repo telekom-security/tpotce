@@ -929,6 +929,33 @@ class OutsideChangeTest(SettingsHelpersBase):
             await pilot.pause(0.3)
             self.assertEqual(len(notes), 2, notes)
 
+    async def test_outage_notice_with_markup_characters(self):
+        """A path like /x [/bin/sh] y must show as it is: notices never go to Textual as markup (a
+        [/...] there raises a MarkupError while the toast renders), and no '..' at the end."""
+        from textual.app import App
+        from tpotctl.settings import SettingsError
+        seen = []
+        original = App.notify
+
+        def capture(app, message, *args, **kwargs):
+            seen.append((message, kwargs.get("markup", True)))
+            return original(app, message, *args, **kwargs)
+        with mock.patch.object(App, "notify", capture):
+            async with self.app.run_test(size=(150, 50)) as pilot:
+                pane = await self.open_settings(pilot)
+                self.set_env("WEB_USER", "x")
+                self.assertTrue(pane.stale())
+
+                def broken():
+                    raise SettingsError("cannot read /x [/bin/sh] y/.env: denied.")
+                self.app.backend.settings = broken
+                await self.app.refresh_config()
+                await pilot.pause(0.3)
+        outage = [(m, markup) for m, markup in seen if "[/bin/sh]" in m]
+        self.assertTrue(outage, seen)
+        self.assertFalse(any(markup for _m, markup in seen), seen)      # every notice of tpot
+        self.assertFalse(any(".." in m for m, _markup in outage), outage)
+
     async def test_touch_without_change_says_nothing(self):
         async with self.app.run_test(size=(150, 50)) as pilot:
             pane = await self.open_settings(pilot)
