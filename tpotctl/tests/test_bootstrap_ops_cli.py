@@ -4,6 +4,7 @@ Run from the repository root: python3 -m unittest discover tpotctl/tests
 """
 
 import hashlib
+import io
 import json
 import os
 import re
@@ -267,6 +268,106 @@ class CliTest(unittest.TestCase):
         with mock.patch.object(cli.sys.stdin, "isatty", return_value=False), \
                 mock.patch("sys.stdout", new_callable=lambda: open(os.devnull, "w")):
             self.assertEqual(cli.main([]), 2)
+
+
+class SetupVenvInstallTest(unittest.TestCase):
+    """A Python without its venv module (Debian, Ubuntu, Raspberry Pi OS): tpot asks, then installs it."""
+
+    ENSUREPIP = ("The virtual environment was not created successfully because ensurepip is not\n"
+                 "available.  On Debian/Ubuntu systems, you need to install the python3-venv\n"
+                 "package using the following command.\n\n    apt install python3.13-venv\n\n"
+                 "You may need to use sudo with that command.  After installing the python3-venv\n"
+                 "package, recreate your virtual environment.\n")
+
+    def setUp(self):
+        import shutil
+        import tempfile
+        self.data = tempfile.mkdtemp(prefix="tpot-venv-")
+        self.addCleanup(shutil.rmtree, self.data)
+        self.calls, self.installed = [], False
+        for patcher in (mock.patch.dict(os.environ, {"XDG_DATA_HOME": self.data}),
+                        mock.patch("sys.platform", "linux"),
+                        mock.patch.object(bootstrap.os, "geteuid", return_value=1000, create=True),
+                        mock.patch.object(bootstrap, "imports_ok", return_value=True),
+                        mock.patch.object(bootstrap, "apt_get", return_value="/usr/bin/apt-get"),
+                        mock.patch("subprocess.call", side_effect=self.call)):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def call(self, command, **kwargs):
+        self.calls.append(command)
+        if command[1:3] == ["-m", "venv"]:
+            if not self.installed:
+                if kwargs.get("stdout") not in (None, bootstrap.subprocess.DEVNULL):
+                    kwargs["stdout"].write(self.ENSUREPIP)
+                os.makedirs(command[3], exist_ok=True)          # venv leaves a half one behind
+                return 1
+            python = bootstrap.venv_python(command[3])
+            os.makedirs(os.path.dirname(python), exist_ok=True)
+            open(python, "w").close()
+            return 0
+        if command[:3] == ["sudo", "apt-get", "install"]:
+            self.installed = self.apt_ok
+            return 0 if self.apt_ok else 100
+        return 0
+
+    def setup(self, ids=("debian",), answer="", tty=True, apt_ok=True):
+        self.apt_ok = apt_ok
+        asked = []
+
+        def ask(prompt):
+            asked.append(prompt)
+            return answer
+        with mock.patch.object(bootstrap, "os_release_ids", return_value=list(ids)), \
+                mock.patch.object(bootstrap, "interactive", return_value=tty), \
+                mock.patch("builtins.input", side_effect=ask), \
+                mock.patch("sys.stderr", new_callable=io.StringIO):
+            try:
+                return bootstrap.setup_venv(quiet=True), asked
+            except bootstrap.BootstrapError as err:
+                return err, asked
+
+    def apt_calls(self):
+        return [c for c in self.calls if c[:1] == ["sudo"]]
+
+    def test_yes_installs_the_package_and_builds_on(self):
+        python, asked = self.setup(answer="")
+        self.assertEqual(python, bootstrap.venv_python(bootstrap.venv_dir()))
+        self.assertEqual(len(asked), 1)
+        self.assertTrue("sudo apt-get" in asked[0], asked)
+        self.assertEqual(self.apt_calls(), [["sudo", "apt-get", "install", "-y", "python3.13-venv"]])
+        self.assertEqual(len([c for c in self.calls if c[1:3] == ["-m", "venv"]]), 2)
+
+    def test_no_keeps_the_hint(self):
+        err, asked = self.setup(answer="n")
+        self.assertIsInstance(err, bootstrap.BootstrapError)
+        self.assertEqual(len(asked), 1)
+        self.assertEqual(self.apt_calls(), [])
+        self.assertTrue("sudo apt install python3.13-venv" in str(err), str(err))
+        self.assertFalse(os.path.exists(bootstrap.venv_dir() + ".new"))
+
+    def test_without_a_terminal_no_question(self):
+        err, asked = self.setup(tty=False)
+        self.assertIsInstance(err, bootstrap.BootstrapError)
+        self.assertEqual((asked, self.apt_calls()), ([], []))
+        self.assertTrue("python3.13-venv" in str(err), str(err))
+
+    def test_a_failed_apt_get_says_so(self):
+        err, _asked = self.setup(apt_ok=False)
+        self.assertIsInstance(err, bootstrap.BootstrapError)
+        self.assertTrue("apt-get" in str(err), str(err))
+
+    def test_other_distributions_get_the_output_of_venv(self):
+        err, asked = self.setup(ids=("fedora",))
+        self.assertIsInstance(err, bootstrap.BootstrapError)
+        self.assertEqual((asked, self.apt_calls()), ([], []))
+        self.assertTrue("ensurepip is not" in str(err), str(err))
+
+    def test_the_package_fits_the_python(self):
+        self.assertEqual(bootstrap.venv_package(self.ENSUREPIP, "/usr/bin/python3"), "python3.13-venv")
+        self.assertEqual(bootstrap.venv_package("", "/usr/bin/python3"), "python3-venv")
+        minor = sys.version_info.minor
+        self.assertEqual(bootstrap.venv_package("", "/usr/local/bin/python3.12"), f"python3.{minor}-venv")
 
 
 class SetupForceTest(unittest.TestCase):

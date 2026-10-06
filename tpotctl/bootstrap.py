@@ -13,9 +13,11 @@ the one of the distribution when there is one.
 import contextlib
 import hashlib
 import os
+import re
 import shutil
 import subprocess
 import sys
+import tempfile
 
 REPO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REQUIREMENTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "requirements.txt")
@@ -82,13 +84,13 @@ def venv_current(directory: str) -> bool:
     return os.path.exists(python) and marker_ok(directory) and imports_ok(python, NEEDS["ui"])
 
 
-def install_hint() -> str:
+def install_hint(package: str = "python3-venv") -> str:
     """What to install when this Python cannot create a venv."""
     if sys.platform == "darwin":
         return "Install Python from python.org or Homebrew (brew install python), both can create a venv."
     if os.name == "nt":
         return "Install Python from python.org, it can create a venv."
-    return linux_hint(os_release_ids())
+    return linux_hint(os_release_ids(), package)
 
 
 def os_release_ids(path: str = "/etc/os-release"):
@@ -104,12 +106,69 @@ def os_release_ids(path: str = "/etc/os-release"):
     return ids
 
 
-def linux_hint(ids) -> str:
-    if {"debian", "ubuntu", "raspbian"} & set(ids):
-        return "sudo apt install python3-venv   (the customizer alone also works with python3-yaml)"
+APT_IDS = {"debian", "ubuntu", "raspbian"}
+
+
+def linux_hint(ids, package: str = "python3-venv") -> str:
+    if APT_IDS & set(ids):
+        return f"sudo apt install {package}   (the customizer alone also works with python3-yaml)"
     if {"fedora", "rhel", "centos", "almalinux", "rocky"} & set(ids) or any("suse" in i for i in ids):
         return "python3 -m venv should work out of the box, check the output above"
     return "install the venv module (python3-venv) for this Python"
+
+
+def venv_package(output: str, executable: str) -> str:
+    """The Debian package with the venv module of this Python: the one venv names itself, else
+    python3-venv for the Python of the distribution and python3.X-venv for another one."""
+    match = re.search(r"\b(python3\.\d+-venv)\b", output)
+    if match:
+        return match.group(1)
+    if executable == "/usr/bin/python3":
+        return "python3-venv"
+    return f"python3.{sys.version_info.minor}-venv"
+
+
+def apt_get():
+    return shutil.which("apt-get")
+
+
+def interactive() -> bool:
+    return sys.stdin.isatty()
+
+
+def offer_venv_package(package: str) -> bool:
+    """Ask to install the venv package with sudo apt-get, give back whether it is installed now.
+
+    Only on Debian, Ubuntu and Raspberry Pi OS at a terminal, not as root; sudo asks for its
+    password itself, it never passes through tpot."""
+    if not sys.platform.startswith("linux") or not APT_IDS & set(os_release_ids()) or not apt_get():
+        return False
+    if not interactive() or (hasattr(os, "geteuid") and os.geteuid() == 0):
+        return False
+    from tpotctl import say
+    say.info(f"{sys.executable} cannot create a venv, it needs the package {package}.", sys.stderr)
+    try:
+        answer = input("Install it now with sudo apt-get? [Y/n] ").strip().lower()
+    except EOFError:
+        return False
+    if answer not in ("", "y", "yes"):
+        return False
+    if subprocess.call(["sudo", "apt-get", "install", "-y", package]) != 0:
+        raise BootstrapError(f"sudo apt-get install {package} did not work, see its output above. "
+                             f"{install_hint(package)}")
+    return True
+
+
+def _make_venv(directory: str):
+    """python -m venv, its output kept for the error."""
+    with tempfile.TemporaryFile("w+") as out:
+        code = subprocess.call([sys.executable, "-m", "venv", directory], stdout=out, stderr=subprocess.STDOUT)
+        out.seek(0)
+        output = out.read()
+    if code == 0 and os.path.exists(venv_python(directory)):
+        return True, output
+    shutil.rmtree(directory, ignore_errors=True)
+    return False, output
 
 
 def setup_venv(force: bool = False, quiet: bool = False) -> str:
@@ -162,10 +221,15 @@ def _build_lock(directory: str):
 def _build(directory: str) -> None:
     os.makedirs(os.path.dirname(directory), exist_ok=True)
     python = venv_python(directory)
-    if subprocess.call([sys.executable, "-m", "venv", directory],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) != 0 or not os.path.exists(python):
-        shutil.rmtree(directory, ignore_errors=True)
-        raise BootstrapError(f"{sys.executable} cannot create a venv. {install_hint()}")
+    made, output = _make_venv(directory)
+    if not made:
+        package = venv_package(output, sys.executable)
+        if offer_venv_package(package):
+            made, output = _make_venv(directory)
+    if not made:
+        said = " ".join(line.strip() for line in output.splitlines() if line.strip())
+        raise BootstrapError(f"{sys.executable} cannot create a venv. {install_hint(package)}"
+                             + (f"\nvenv said: {said}" if said else ""))
     pip = [python, "-m", "pip", "install", "--quiet", "--disable-pip-version-check", "--no-cache-dir",
            "--timeout", "15", "--retries", "1",
            "--require-hashes", "--only-binary", ":all:", "--no-deps", "-r", REQUIREMENTS]
