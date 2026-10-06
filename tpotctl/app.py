@@ -1117,10 +1117,15 @@ class SensorsPane(Vertical):
     def stale(self) -> bool:
         return self.app.backend.config_stamp() != getattr(self, "stamp", None)
 
-    @work(thread=True, exclusive=True, group="sensors")
     def load(self) -> None:
-        from tpotctl import sensors as tsensors
+        """The sensors anew; the stamp is noted here, on the UI thread, so that a refresh right after
+        does not start a second read (a thread worker cannot be stopped once it runs)."""
         self.stamp = self.app.backend.config_stamp()
+        self.fetch()
+
+    @work(thread=True, exclusive=True, group="sensors")
+    def fetch(self) -> None:
+        from tpotctl import sensors as tsensors
         try:
             registry = self.app.backend.sensors()
             status = self.app.backend.sensor_status()

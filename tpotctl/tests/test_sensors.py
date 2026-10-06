@@ -550,6 +550,10 @@ class SensorsPaneTest(unittest.IsolatedAsyncioTestCase):
                 return sensors.Status(sensors={})
 
         app = tapp.TpotApp(backend=Backend(), runner=lambda command, cwd=None: 0)
+
+        async def no_settings_refresh():        # it takes long enough to hide the race otherwise
+            return None
+        app.refresh_config = no_settings_refresh
         async with app.run_test(size=(150, 45)) as pilot:
             await pilot.pause(0.3)
             app.goto("sensors")
