@@ -1048,6 +1048,24 @@ class RefreshTriggersTest(SettingsHelpersBase):
             await pilot.pause(0.3)
             self.assertIsInstance(self.app.screen, UserDialog)
 
+    async def test_header_reloads_on_the_first_outside_change(self):
+        from tpotctl.envfile import EnvFile
+        calls = []
+        original = self.app.load_header
+        self.app.load_header = lambda: (calls.append(1), original())
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            await pilot.pause(0.5)
+            before = len(calls)
+            env = EnvFile(os.path.join(self.repo, ".env"))
+            env.set("TPOT_ATTACKMAP_TEXT", "DISABLED")
+            env.save()
+            self.app.goto("settings")
+            await pilot.pause(0.6)
+            self.assertEqual(len(calls), before + 1)
+            self.app.goto("llm")                    # nothing changed since
+            await pilot.pause(0.6)
+            self.assertEqual(len(calls), before + 1)
+
     async def test_the_menu_brings_the_settings_page_along(self):
         from tpotctl.envfile import EnvFile
         from tpotctl.tests.test_settings import WEB_USER

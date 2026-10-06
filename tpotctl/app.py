@@ -1423,6 +1423,7 @@ class TpotApp(App):
         self.panes = list(PANES)
         self.locked = {key: why for key, *_rest in PANES for why in [self.why_locked(key)] if why}
         self.quit_dialog = None         # "Quit tpot?" while it is open
+        self.header_stamp = None        # the configuration the header was read from
 
     def compose(self) -> ComposeResult:
         yield TpotHeader(id="header")
@@ -1453,8 +1454,13 @@ class TpotApp(App):
         if "status" in self.locked:
             self.load_header()
 
-    @work(thread=True, exclusive=True, group="header")
     def load_header(self) -> None:
+        """The header anew; the stamp of the configuration it reads is noted here, on the UI thread."""
+        self.header_stamp = self.backend.config_stamp()
+        self.fetch_header()
+
+    @work(thread=True, exclusive=True, group="header")
+    def fetch_header(self) -> None:
         try:
             state = self.backend.status()
         except ops.OpsError:
@@ -1810,10 +1816,8 @@ class TpotApp(App):
         for pane in self.query(SensorsPane):
             if pane.stale():
                 pane.load()
-        stamp = self.backend.config_stamp()
-        if stamp != getattr(self, "header_stamp", stamp):
-            self.load_header()
-        self.header_stamp = stamp
+        if self.header_stamp is None or self.backend.config_stamp() != self.header_stamp:
+            self.load_header()          # it notes the stamp it reads from
 
     async def refresh_config(self) -> None:
         """.env or the compose file changed elsewhere (another page of tpot, a task, a terminal): the
