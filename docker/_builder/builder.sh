@@ -1,32 +1,48 @@
 #!/usr/bin/env bash
+# Builds every image of docker-compose.yml here for linux/amd64 and linux/arm64 (buildx),
+# -p pushes them to Docker Hub and GHCR. A tool for building releases, not part of the
+# T-Pot Manager; run it from docker/_builder as root.
 
-# Got root?
-myWHOAMI=$(whoami)
-if [ "$myWHOAMI" != "root" ]
+myREPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# the look of the T-Pot scripts (installer/lib/ui.sh), plain text if it is missing
+# shellcheck source=../../installer/lib/ui.sh
+if ! source "${myREPO}/installer/lib/ui.sh" 2>/dev/null;
   then
-    echo "Need to run as root ..."
-    exit
+# >>> plain fallback
+    fuUI_INIT () { return 0; }
+    fuUI_BANNER () { echo; echo "### T-Pot $1"; shift; for myLINE in "$@"; do echo "### ${myLINE}"; done; echo; }
+    fuUI_INFO () { echo "### $*"; }
+    fuUI_OK () { echo "### [OK] - $*"; }
+    fuUI_WARN () { echo "### [WARNING] - $*"; }
+    fuUI_ERROR () { echo "### [ERROR] - $*" >&2; }
+    fuUI_HINT () { local myLINE; for myLINE in "$@"; do echo "###   ${myLINE}"; done; }
+    fuUI_SPIN () {
+      local myTITLE="$1" myLOG="$2"
+      shift 2
+      echo "### ${myTITLE}"
+      if "$@" >>"${myLOG}" 2>&1 < /dev/null;
+        then fuUI_OK "${myTITLE%% ...}"
+        else fuUI_ERROR "${myTITLE%% ...} failed, the end of ${myLOG}:"; tail -n 15 "${myLOG}" >&2; return 1
+      fi
+    }
+# <<< plain fallback
 fi
-
-# ANSI color codes for green (OK) and red (FAIL)
-GREEN='\033[0;32m'
-RED='\033[0;31m'
-NC='\033[0m' # No Color
+fuUI_INIT
 
 # Default settings
 PUSH_IMAGES=false
 NO_CACHE=false
 PARALLELBUILDS=2
 UPLOAD_BANDWIDTH=40mbit # Set this to max 90% of available upload bandwidth
-INTERFACE=$(ip route | grep "^default" | awk '{ print $5 }')
 
 # Help message
 usage() {
-    echo "Usage: $0 [-p] [-n] [-h]"
-    echo "  -p  Push images after building"
-    echo "  -n  Build images with --no-cache"
-    echo "  -h  Show help message"
-    exit 1
+    fuUI_BANNER "Image Builder" "Builds every image of docker-compose.yml here for linux/amd64 and linux/arm64."
+    fuUI_INFO "Usage: $0 [-p] [-n] [-h]"
+    fuUI_HINT "-p  Push images after building (Docker Hub and GHCR)" \
+              "-n  Build images with --no-cache" \
+              "-h  Show this help"
+    exit "$1"
 }
 
 # Parse command-line options
@@ -34,122 +50,106 @@ while getopts ":pnh" opt; do
     case ${opt} in
         p )
             PUSH_IMAGES=true
-            docker login
-            docker login ghcr.io
             ;;
         n )
             NO_CACHE=true
             ;;
         h )
-            usage
+            usage 0
             ;;
         \? )
-            echo "Invalid option: $OPTARG" 1>&2
-            usage
+            fuUI_ERROR "Invalid option: -$OPTARG"
+            usage 1
             ;;
     esac
 done
 
+# Got root?
+if [ "$(whoami)" != "root" ];
+  then
+    fuUI_ERROR "The image builder needs root, run it with sudo."
+    exit 1
+fi
+
+INTERFACE=$(ip route | grep "^default" | awk '{ print $5 }')
+
 # Function to apply upload bandwidth limit using tc
 apply_bandwidth_limit() {
-    echo -n "Applying upload bandwidth limit of $UPLOAD_BANDWIDTH on interface $INTERFACE..."
-    if tc qdisc add dev $INTERFACE root tbf rate $UPLOAD_BANDWIDTH burst 32kbit latency 400ms >/dev/null 2>&1; then
-        echo -e " [${GREEN}OK${NC}]"
+    if tc qdisc add dev "$INTERFACE" root tbf rate $UPLOAD_BANDWIDTH burst 32kbit latency 400ms >/dev/null 2>&1; then
+        fuUI_OK "Upload bandwidth limited to $UPLOAD_BANDWIDTH on $INTERFACE"
+        return
+    fi
+    fuUI_WARN "Could not limit the upload bandwidth on $INTERFACE, removing an old limit and trying again."
+    remove_bandwidth_limit
+    if tc qdisc add dev "$INTERFACE" root tbf rate $UPLOAD_BANDWIDTH burst 32kbit latency 400ms >/dev/null 2>&1; then
+        fuUI_OK "Upload bandwidth limited to $UPLOAD_BANDWIDTH on $INTERFACE"
     else
-        echo -e " [${RED}FAIL${NC}]"
-        remove_bandwidth_limit
-
-        # Try to reapply the limit
-        echo -n "Reapplying upload bandwidth limit of $UPLOAD_BANDWIDTH on interface $INTERFACE..."
-        if tc qdisc add dev $INTERFACE root tbf rate $UPLOAD_BANDWIDTH burst 32kbit latency 400ms >/dev/null 2>&1; then
-            echo -e " [${GREEN}OK${NC}]"
-        else
-            echo -e " [${RED}FAIL${NC}]"
-            echo "Failed to apply bandwidth limit on $INTERFACE. Exiting."
-            echo
-            exit 1
-        fi
+        fuUI_ERROR "Failed to apply the bandwidth limit on $INTERFACE. Exiting."
+        echo
+        exit 1
     fi
 }
 
 # Function to check if the bandwidth limit is set
 is_bandwidth_limit_set() {
-    tc qdisc show dev $INTERFACE | grep -q 'tbf'
+    tc qdisc show dev "$INTERFACE" | grep -q 'tbf'
 }
 
 # Function to remove the bandwidth limit using tc if it is set
 remove_bandwidth_limit() {
     if is_bandwidth_limit_set; then
-        echo -n "Removing upload bandwidth limit on interface $INTERFACE..."
-        if tc qdisc del dev $INTERFACE root; then
-            echo -e " [${GREEN}OK${NC}]"
+        if tc qdisc del dev "$INTERFACE" root; then
+            fuUI_OK "Upload bandwidth limit on $INTERFACE removed"
         else
-            echo -e " [${RED}FAIL${NC}]"
+            fuUI_ERROR "Could not remove the upload bandwidth limit on $INTERFACE"
         fi
     fi
 }
 
-echo "###########################"
-echo "# T-Pot Image Builder"
-echo "###########################"
-echo
-
 # Check if 'mybuilder' exists, and ensure it's running with bootstrap
-echo -n "Checking if buildx builder 'mybuilder' exists and is running..."
-if ! docker buildx inspect mybuilder --bootstrap >/dev/null 2>&1; then
-    echo
-    echo -n "  Creating and starting buildx builder 'mybuilder'..."
-    if docker buildx create --name mybuilder --driver docker-container --use >/dev/null 2>&1 && \
-       docker buildx inspect mybuilder --bootstrap >/dev/null 2>&1; then
-        echo -e " [${GREEN}OK${NC}]"
-    else
-        echo -e " [${RED}FAIL${NC}]"
-        exit 1
-    fi
-else
-    echo -e " [${GREEN}OK${NC}]"
-fi
-
-# Ensure QEMU is set up for cross-platform builds, before the platforms are checked
-echo -n "Ensuring QEMU is configured for cross-platform builds..."
-if docker run --rm --privileged tonistiigi/binfmt --install all > /dev/null 2>&1; then
-    echo -e " [${GREEN}OK${NC}]"
-else
-    echo -e " [${RED}FAIL${NC}]"
-fi
+ensure_builder() {
+    docker buildx inspect mybuilder --bootstrap && return 0
+    echo "Creating and starting buildx builder 'mybuilder'"
+    docker buildx create --name mybuilder --driver docker-container --use && \
+    docker buildx inspect mybuilder --bootstrap
+}
 
 # Ensure arm64 and amd64 platforms are active
-echo -n "Ensuring 'mybuilder' supports linux/arm64 and linux/amd64..."
-
-# Get active platforms from buildx
-active_platforms=$(docker buildx inspect mybuilder --bootstrap | grep -oP '(?<=Platforms: ).*')
-
-if [[ "$active_platforms" == *"linux/arm64"* && "$active_platforms" == *"linux/amd64"* ]]; then
-    echo -e " [${GREEN}OK${NC}]"
-else
-    echo
+ensure_platforms() {
+    local active_platforms
+    active_platforms=$(docker buildx inspect mybuilder --bootstrap | sed -n 's/.*Platforms: *//p')
+    [[ "$active_platforms" == *"linux/arm64"* && "$active_platforms" == *"linux/amd64"* ]] && return 0
     # BuildKit only detects the QEMU emulators present when it starts, so a builder
     # started before they were registered has to be restarted - creating it
     # again fails, it already exists
-    echo -n "  Restarting 'mybuilder' to enable linux/arm64 and linux/amd64..."
-    if docker buildx stop mybuilder >/dev/null 2>&1 && \
-       docker buildx inspect mybuilder --bootstrap >/dev/null 2>&1 && \
-       active_platforms=$(docker buildx inspect mybuilder | grep -oP '(?<=Platforms: ).*') && \
-       [[ "$active_platforms" == *"linux/arm64"* && "$active_platforms" == *"linux/amd64"* ]]; then
-        echo -e " [${GREEN}OK${NC}]"
-    else
-        echo -e " [${RED}FAIL${NC}]"
-        exit 1
-    fi
+    echo "Restarting 'mybuilder' to enable linux/arm64 and linux/amd64"
+    docker buildx stop mybuilder && \
+    docker buildx inspect mybuilder --bootstrap && \
+    active_platforms=$(docker buildx inspect mybuilder | sed -n 's/.*Platforms: *//p') && \
+    [[ "$active_platforms" == *"linux/arm64"* && "$active_platforms" == *"linux/amd64"* ]]
+}
+
+myMODE="$PARALLELBUILDS builds at a time"
+$PUSH_IMAGES && myMODE="$myMODE, pushed to Docker Hub and GHCR"
+$NO_CACHE && myMODE="$myMODE, without cache"
+fuUI_BANNER "Image Builder" "linux/amd64 and linux/arm64, $myMODE"
+
+if $PUSH_IMAGES; then
+    docker login
+    docker login ghcr.io
 fi
+
+mkdir -p log
+myLOG="log/builder.log"
+: > "$myLOG"
+fuUI_SPIN "Checking the buildx builder 'mybuilder' ..." "$myLOG" ensure_builder || exit 1
+# QEMU before the platforms are checked
+fuUI_SPIN "Configuring QEMU for cross-platform builds ..." "$myLOG" \
+    docker run --rm --privileged tonistiigi/binfmt --install all
+fuUI_SPIN "Making sure 'mybuilder' builds linux/arm64 and linux/amd64 ..." "$myLOG" ensure_platforms || exit 1
 
 # Apply bandwidth limit only if pushing images
 if $PUSH_IMAGES; then
-    echo
-    echo "########################################"
-    echo "# Setting Upload Bandwidth limit ..."
-    echo "########################################"
-    echo
     apply_bandwidth_limit
 fi
 
@@ -162,12 +162,7 @@ trap_cleanup() {
 trap trap_cleanup INT ERR EXIT
 
 echo
-echo "################################"
-echo "# Now building images ..."
-echo "################################"
-echo
-
-mkdir -p log
+fuUI_INFO "Now building images, the log of each is log/<image>.log ..."
 
 # List of services to build
 services=$(docker compose config --services | sort)
@@ -175,36 +170,52 @@ services=$(docker compose config --services | sort)
 # Loop through each service to build
 # Plain progress and both streams in the log: builds run in parallel, and with
 # only stdout redirected compose picks tty progress for a file and fails with
-# "failed to get console" (docker/compose#14182)
-echo $services | tr ' ' '\n' | xargs -I {} -P $PARALLELBUILDS bash -c '
-    echo "Building image: {}" && \
-    build_cmd="docker compose --progress plain build {}" && \
-    if '$PUSH_IMAGES'; then \
-        build_cmd="$build_cmd --push"; \
-    fi && \
-    if '$NO_CACHE'; then \
-        build_cmd="$build_cmd --no-cache"; \
-    fi && \
-    eval "$build_cmd > log/{}.log 2>&1 < /dev/null" && \
-    echo -e "Image {}: ['$GREEN'OK'$NC']" || \
-    echo -e "Image {}: ['$RED'FAIL'$NC'] (see log/{}.log)"
+# "failed to get console" (docker/compose#14182). The builds report one line each,
+# this shell shows them.
+myBUILD='
+    echo "START $1"
+    build_cmd="docker compose --progress plain build $1"
+    if '$PUSH_IMAGES'; then
+        build_cmd="$build_cmd --push"
+    fi
+    if '$NO_CACHE'; then
+        build_cmd="$build_cmd --no-cache"
+    fi
+    if eval "$build_cmd > log/$1.log 2>&1 < /dev/null"; then
+        echo "OK $1"
+    else
+        echo "FAIL $1"
+    fi
 '
+myFAILED=0
+myREPORTED=0
+while read -r myRESULT myIMAGE; do
+    case "$myRESULT" in
+        START) fuUI_INFO "Building $myIMAGE ..." ;;
+        OK) fuUI_OK "Image $myIMAGE"; myREPORTED=$((myREPORTED + 1)) ;;
+        *) fuUI_ERROR "Image $myIMAGE, see log/$myIMAGE.log"; myFAILED=1; myREPORTED=$((myREPORTED + 1)) ;;
+    esac
+done < <(echo $services | tr ' ' '\n' | xargs -n 1 -P $PARALLELBUILDS bash -c "$myBUILD" _)
+myCOUNT=$(echo $services | wc -w)
+if [ "$myREPORTED" -ne "$myCOUNT" ]; then
+    fuUI_ERROR "Only $myREPORTED of $myCOUNT builds reported back, see above."
+    myFAILED=1
+fi
 
 # Remove bandwidth limit if it was applied
 if is_bandwidth_limit_set; then
-    echo
-    echo "########################################"
-    echo "# Removiong Upload Bandwidth limit ..."
-    echo "########################################"
     echo
     remove_bandwidth_limit
 fi
 
 echo
-echo "#######################################################"
-echo "# Done."
-if ! "$PUSH_IMAGES"; then
-  echo "# Remeber to push the images using push option."
+if [ "$myFAILED" -eq 0 ]; then
+    fuUI_OK "Done."
+else
+    fuUI_ERROR "Done, but not every image was built, see above."
 fi
-echo "#######################################################"
+if ! "$PUSH_IMAGES"; then
+    fuUI_HINT "Remember to push the images with -p."
+fi
 echo
+exit "$myFAILED"

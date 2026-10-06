@@ -10,7 +10,7 @@ T-Pot is a multi-honeypot platform: ~30 honeypots plus NSM tools (Suricata, p0f)
 
 ### Building images (`docker/_builder/`)
 - `docker/_builder/docker-compose.yml` is the build-only manifest listing every image (multi-arch amd64/arm64 via buildx). Its settings (`TPOT_DOCKER_REPO`, `TPOT_GHCR_REPO`, `TPOT_VERSION`, platforms) come from `docker/_builder/.env`.
-- Build all: `sudo docker/_builder/builder.sh` (run from `docker/_builder`; requires root; `-n` no-cache, `-p` push to Docker Hub + GHCR). `setup_builder.sh` prepares a build host.
+- Build all: `sudo docker/_builder/builder.sh` (run from `docker/_builder`; requires root; `-n` no-cache, `-p` push to Docker Hub + GHCR). `setup_builder.sh` prepares a build host (`-y`, `-u` removes it again). Both speak through `installer/lib/ui.sh` (plain fallback block) like every script a person runs, but they are tools for building releases and on purpose **not** part of the T-Pot Manager: no menu entry, no sub-command, not in the README matrix (`test_scripts.py` `BuilderTest` checks).
 - Build one image: `cd docker/_builder && docker compose build <service>`, or `cd docker/<service> && docker compose build` (each service dir has its own standalone `docker-compose.yml` with `build: .`).
 
 ### Smoke tests (`docker/_tests/`)

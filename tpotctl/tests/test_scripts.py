@@ -529,3 +529,77 @@ class BackupInfoTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BuilderTest(Harness):
+    """docker/_builder/: a tool for building releases, not part of the T-Pot Manager, in the look of
+    the T-Pot scripts all the same."""
+
+    SCRIPTS = ("docker/_builder/builder.sh", "docker/_builder/setup_builder.sh")
+
+    def test_builder_scripts_speak_like_ui_sh(self):
+        for path in self.SCRIPTS:
+            text = read(path)
+            with self.subTest(script=path):
+                self.assertTrue("installer/lib/ui.sh" in text)
+                rest = text.replace(text[text.index("# >>> plain fallback"):text.index("# <<< plain fallback")], "")
+                self.assertEqual(re.findall(r'.*echo -?[ne]* ?"#.*', rest), [])
+                for raw in ("$RED", "$GREEN", "$BLUE", "${RED}", "${GREEN}", "${BLUE}", "[OK]", "[FAIL]",
+                            "Removiong", "Remeber"):
+                    self.assertFalse(raw in rest, raw)
+                self.assertTrue("fuUI_BANNER" in rest)
+
+    def test_builder_is_not_in_the_manager(self):
+        folder = os.path.join(REPO, "tpotctl")
+        for root, _dirs, files in os.walk(folder):
+            if os.sep + "tests" in root:
+                continue
+            for name in files:
+                if name.endswith(".py"):
+                    with open(os.path.join(root, name), encoding="utf-8") as handle:
+                        self.assertFalse("_builder" in handle.read(), name)
+        readme = read("README.md")
+        manager = readme[readme.index("## The T-Pot Manager (tpot)"):]
+        manager = manager[:manager.index("\n## ", 1)]
+        self.assertFalse("builder" in manager.lower())
+
+    def test_help_without_root(self):
+        result = self.run_script(os.path.join(REPO, self.SCRIPTS[0]), "-h")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue("### T-Pot Image Builder" in result.stdout, result.stdout)
+        self.assertTrue("-p" in result.stdout and "-n" in result.stdout, result.stdout)
+
+    @unittest.skipIf(os.geteuid() == 0, "runs as root")
+    def test_without_root_it_stops(self):
+        result = self.run_script(os.path.join(REPO, self.SCRIPTS[0]))
+        self.assertEqual(result.returncode, 1)
+        self.assertTrue("### [ERROR] - " in result.stderr and "root" in result.stderr, result.stderr)
+
+    def test_a_build_run_reports_each_image(self):
+        stubs = {
+            "whoami": "#!/bin/sh\necho root\n",
+            "ip": "#!/bin/sh\necho 'default via 10.0.0.1 dev eth0'\n",
+            "tc": "#!/bin/sh\nexit 0\n",
+            "docker": "#!/bin/sh\necho \"docker $*\" >> \"$HOME/calls\"\n"
+                      "case \"$*\" in\n"
+                      "  *'buildx inspect'*) echo 'Platforms: linux/amd64, linux/arm64' ;;\n"
+                      "  *'config --services'*) printf 'cowrie\\nbroken\\n' ;;\n"
+                      "  *'build broken'*) echo 'no such file' ; exit 1 ;;\n"
+                      "esac\nexit 0\n",
+        }
+        for name, text in stubs.items():
+            path = os.path.join(self.bin, name)
+            with open(path, "w", encoding="utf-8") as out:
+                out.write(text)
+            os.chmod(path, 0o755)
+        work = os.path.join(self.home, "work")
+        os.makedirs(work)
+        result = self.run_script(os.path.join(REPO, self.SCRIPTS[0]), cwd=work)
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 1, out)
+        self.assertTrue("### [OK] - Image cowrie" in out, out)
+        self.assertTrue("### [ERROR] - Image broken, see log/broken.log" in out, out)
+        self.assertTrue("### [OK] - Checking the buildx builder 'mybuilder'" in out, out)
+        self.assertTrue("Remember to push the images with -p." in out, out)
+        with open(os.path.join(work, "log", "broken.log"), encoding="utf-8") as handle:
+            self.assertTrue("no such file" in handle.read())
