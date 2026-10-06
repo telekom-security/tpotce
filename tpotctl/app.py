@@ -432,6 +432,10 @@ class EditionPane(Vertical):
                 self.app.switch_edition(choice.key)
 
 
+# the pages that show what .env and the compose file say
+CONFIG_PAGES = ("settings", "llm", "users", "sensors")
+
+
 @dataclass
 class StartProblem:
     """A value of the saved .env T-Pot would not start with, where to fix it and on which page."""
@@ -936,11 +940,15 @@ class UsersPane(Vertical):
         self.query_one(DataTable).add_columns("User", "Hash", "State")
         self.show()
 
+    def stale(self) -> bool:
+        return self.app.backend.config_stamp() != getattr(self, "stamp", None)
+
     def show(self) -> None:
         from tpotctl.users import UsersError
         table = self.query_one(DataTable)
         table.clear()
         info = Text()
+        self.stamp = self.app.backend.config_stamp()
         try:
             self.store = self.app.backend.users()
             entries = self.store.users()
@@ -1013,6 +1021,7 @@ class UsersPane(Vertical):
             return
         self.app.notify(f"{done}, {note}.", title="Web users")
         self.show()
+        self.app.config_maybe_changed()         # WEB_USER: the settings pages and the start problems
 
 
 class SensorsPane(Vertical):
@@ -1034,9 +1043,13 @@ class SensorsPane(Vertical):
         self.registry = None
         self.load()
 
+    def stale(self) -> bool:
+        return self.app.backend.config_stamp() != getattr(self, "stamp", None)
+
     @work(thread=True, exclusive=True, group="sensors")
     def load(self) -> None:
         from tpotctl import sensors as tsensors
+        self.stamp = self.app.backend.config_stamp()
         try:
             registry = self.app.backend.sensors()
             status = self.app.backend.sensor_status()
@@ -1122,6 +1135,7 @@ class SensorsPane(Vertical):
             command.append("--no-become-pass")
         self.app.runner(command, cwd=REPO_DIR)
         self.load()
+        self.app.config_maybe_changed()         # LS_WEB_USER
 
     def revoke(self, name: str) -> None:
         from tpotctl.sensors import SensorsError
@@ -1132,6 +1146,7 @@ class SensorsPane(Vertical):
             return
         self.app.notify(f"{name} is removed, {note}.", title="Sensors")
         self.load()
+        self.app.config_maybe_changed()         # LS_WEB_USER
 
 
 
@@ -1395,8 +1410,11 @@ class TpotApp(App):
 
     def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
         if event.item is not None and event.item.id:
-            self.query_one(ContentSwitcher).current = event.item.id[len("menu-"):]
+            key = event.item.id[len("menu-"):]
+            self.query_one(ContentSwitcher).current = key
             self.paint_menu()
+            if key in CONFIG_PAGES:
+                self.config_maybe_changed()
 
     def why_locked(self, key: str) -> str:
         """"" where the page works, else why it does not."""
@@ -1532,6 +1550,8 @@ class TpotApp(App):
             self.query_one("#sidebar", ListView).index = keys.index(key)
             self.query_one(ContentSwitcher).current = key
             self.paint_menu()
+            if key in CONFIG_PAGES:
+                self.config_maybe_changed()
 
     def setting_keys(self):
         pane = self.query("#settings")
@@ -1705,6 +1725,24 @@ class TpotApp(App):
             if pane is not source:
                 await self.reload_keeping(pane, saved_keys, "the value just saved replaces")
 
+    def config_maybe_changed(self) -> None:
+        """After an action of tpot that may have written .env or the compose file, and when a page that
+        shows them is opened: the pages read anew what changed (no polling)."""
+        self.call_later(self._config_changed)
+
+    async def _config_changed(self) -> None:
+        await self.refresh_config()
+        for pane in self.query(UsersPane):
+            if pane.stale():
+                pane.show()
+        for pane in self.query(SensorsPane):
+            if pane.stale():
+                pane.load()
+        stamp = self.backend.config_stamp()
+        if stamp != getattr(self, "header_stamp", stamp):
+            self.load_header()
+        self.header_stamp = stamp
+
     async def refresh_config(self) -> None:
         """.env or the compose file changed elsewhere (another page of tpot, a task, a terminal): the
         settings pages read them anew, keeping what is unsaved like after a save on the other page."""
@@ -1754,7 +1792,9 @@ class TpotApp(App):
         def ended(result) -> None:
             if result == "restart":
                 self.exit("restart")
-            elif then is not None:
+                return
+            self.config_maybe_changed()         # a script or tpot command may have written .env / compose
+            if then is not None:
                 then(result)
 
         self.push_screen(TaskScreen(task, engine=self.engine or Engine, sudo_mode=self.backend.sudo_mode()), ended)
@@ -1800,6 +1840,7 @@ class TpotApp(App):
     def after_switch(self) -> None:
         self.query_one("#edition", EditionPane).show()
         self.load_header()
+        self.config_maybe_changed()
 
     def action_customize(self) -> None:
         from tpotctl.screens.customizer import CustomizerScreen, core
@@ -1830,6 +1871,7 @@ class TpotApp(App):
             if yes:
                 self.runner(["bash", "-c", "sudo systemctl stop tpot && mv -f docker-compose-custom.yml "
                                            "docker-compose.yml && sudo systemctl start tpot"], cwd=REPO_DIR)
+                self.config_maybe_changed()     # other services: other settings apply
             else:
                 self.notify("Test it with: docker compose -f docker-compose-custom.yml up, then replace "
                             "docker-compose.yml with it.", title="docker-compose-custom.yml is written", timeout=15)

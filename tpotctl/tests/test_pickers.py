@@ -253,6 +253,11 @@ class SettingsHelpersBase(unittest.IsolatedAsyncioTestCase):
             def config_stamp(self):
                 return ops.config_stamp(repo)
 
+            def users(self):
+                from tpotctl import users
+                from tpotctl.tests.test_users import fake_hash
+                return users.load(repo, hasher=fake_hash)
+
             def system(self):
                 return None
 
@@ -884,6 +889,123 @@ class OutsideChangeTest(SettingsHelpersBase):
             await pilot.press("q")
             await pilot.pause(0.5)
             self.assertFalse(self.app.is_running)
+
+
+@unittest.skipUnless(textual and yaml, "Textual is not installed, run with the venv of tpot")
+class RefreshTriggersTest(SettingsHelpersBase):
+    """The actions of tpot that write the configuration bring every page that shows it along."""
+
+    async def test_web_user_added_clears_the_start_problem(self):
+        from tpotctl import users as tusers
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            await self.open_settings(pilot)
+            self.assertTrue([p for p in self.app.start_problems() if p.key == "WEB_USER"])
+            self.app.goto("users")
+            await pilot.pause(0.3)
+            with mock.patch.object(tusers, "weakness", lambda password: None):
+                self.app.query_one("#users").save("add", ("alice", "a long passphrase"))
+            await pilot.pause(0.6)
+            settings_pane = self.app.query_one("#settings")
+            self.assertFalse(settings_pane.stale())                 # brought along without a visit
+            self.assertNotIn("WEB_USER", str(settings_pane.query_one("#settings-status").render()))
+            self.app.query_one("#sidebar").focus()
+            await pilot.press("q")
+            await pilot.pause(0.5)
+            self.assertFalse(self.app.is_running)
+
+    async def test_edition_switch_refreshes_the_proposal(self):
+        from tpotctl.screens.task import Task, TaskScreen
+        repo = self.repo
+
+        class Switching:
+            """tpot edition set mac_win as it leaves the checkout: compose file and TPOT_OSTYPE."""
+            def __init__(self, command, env=None, cwd=None):
+                pass
+
+            def run(self, line):
+                from tpotctl.envfile import EnvFile
+                shutil.copy(os.path.join(REPO_DIR, "compose", "mac_win.yml"), os.path.join(repo, "docker-compose.yml"))
+                env = EnvFile(os.path.join(repo, ".env"))
+                env.set("TPOT_OSTYPE", "mac")
+                env.save()
+                line("@@tpot phase done Done\n")
+                return 0
+
+        with mock.patch.dict(os.environ, {"TPOT_HOST_OSTYPE": "mac"}):
+            async with self.app.run_test(size=(150, 50)) as pilot:
+                pane = await self.open_settings(pilot)
+                self.assertEqual(pane.changes().get("TPOT_OSTYPE"), "mac")
+                self.app.engine = Switching
+                self.app.run_task(Task("Switch to the macOS / Windows edition", ["/x/tpot", "edition", "set"]))
+                await pilot.pause(0.3)
+                self.assertIsInstance(self.app.screen, TaskScreen)
+                await pilot.click("#task-run")
+                for _ in range(40):
+                    await pilot.pause(0.05)
+                    if self.app.screen.code is not None:
+                        break
+                await pilot.press("escape")
+                await pilot.pause(0.8)
+                self.assertNotIn("TPOT_OSTYPE", pane.changes())
+                self.assertFalse([p for p in self.app.start_problems() if p.key == "TPOT_OSTYPE"])
+
+    async def test_customizer_refreshes_the_services(self):
+        from tpotctl import app as tapp
+        from tpotctl.screens.customizer import core
+        from tpotctl.screens.dialogs import ConfirmDialog
+        repo = self.repo
+        custom = os.path.join(repo, "docker-compose-custom.yml")
+
+        def runner(command, cwd=None):          # the mv of the replace, on the temporary checkout
+            shutil.move(custom, os.path.join(repo, "docker-compose.yml"))
+            return 0
+        with mock.patch.object(tapp, "CUSTOM_OUTPUT", custom):
+            async with self.app.run_test(size=(150, 50)) as pilot:
+                pane = await self.open_settings(pilot)
+                self.app.goto_setting("GALAH_LLM_MODEL")
+                await pilot.pause(0.3)
+                self.assertEqual(pane.rows["GALAH_LLM_MODEL"].note, "")            # llm.yml runs Galah
+                self.app.runner = runner
+                self.app.customized(core.Catalog(), core.Selection("STANDARD"))
+                await pilot.pause(0.3)
+                self.assertIsInstance(self.app.screen, ConfirmDialog)
+                await pilot.click("#yes")
+                await pilot.pause(0.8)
+                self.assertEqual(pane.rows["GALAH_LLM_MODEL"].note, "not in your edition")
+
+    async def test_users_page_reads_anew_when_shown(self):
+        from tpotctl import users as tusers
+        from tpotctl.tests.test_users import fake_hash
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            await pilot.pause(0.3)
+            self.app.goto("users")
+            await pilot.pause(0.3)
+            table = self.app.query_one("#users-table")
+            before = table.row_count
+            self.app.goto("settings")
+            await pilot.pause(0.3)
+            with mock.patch.object(tusers, "weakness", lambda password: None):
+                tusers.load(self.repo, hasher=fake_hash).add("bob", "a long passphrase")     # tpot users add elsewhere
+            self.app.goto("users")
+            await pilot.pause(0.5)
+            self.assertEqual(table.row_count, before + 1)
+
+    async def test_the_menu_brings_the_settings_page_along(self):
+        from tpotctl.envfile import EnvFile
+        from tpotctl.tests.test_settings import WEB_USER
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            pane = await self.open_settings(pilot)
+            self.app.goto("status")
+            await pilot.pause(0.3)
+            env = EnvFile(os.path.join(self.repo, ".env"))
+            env.set("WEB_USER", WEB_USER)
+            env.save()
+            sidebar = self.app.query_one("#sidebar")
+            sidebar.focus()
+            for _ in range(2):                      # down to Settings with the menu
+                await pilot.press("down")
+            await pilot.pause(0.6)
+            self.assertNotIn("WEB_USER", str(pane.query_one("#settings-status").render()))
 
 
 @unittest.skipUnless(textual and yaml, "Textual is not installed, run with the venv of tpot")
