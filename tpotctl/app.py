@@ -429,11 +429,16 @@ class EditionPane(Vertical):
         choice = self.selected()
         if choice is None:
             return
+        button = self.query_one("#switch-edition", Button)
         if choice.key == self.in_use:
             self.app.notify(f"The {choice.title} edition runs already, the customizer changes it.", title="Edition",
                             timeout=5)
+        elif button.disabled:
+            note = str(self.query_one("#edition-note", Static).render()).strip()
+            self.app.notify(note or f"The {choice.title} edition cannot be switched to here.", title="Edition",
+                            timeout=5)
         else:
-            self.query_one("#switch-edition", Button).focus()
+            button.focus()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "open-customizer":

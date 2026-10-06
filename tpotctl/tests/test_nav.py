@@ -214,6 +214,24 @@ class PagesTest(unittest.IsolatedAsyncioTestCase):
             self.assertIs(app.focused, listing)
             self.assertTrue(any("runs already" in n for n in notes), notes)
 
+    async def test_enter_on_an_edition_that_cannot_be_switched_to(self):
+        notes = []
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)
+        app.notify = lambda message, **kwargs: notes.append(message)
+        async with app.run_test(size=(150, 50)) as pilot:
+            await pilot.pause(0.3)
+            app.goto("edition")
+            await pilot.pause(0.3)
+            listing = app.query_one("#edition-list")
+            listing.focus()
+            listing.highlighted = 2                     # Mini
+            await pilot.pause(0.1)
+            app.query_one("#switch-edition").disabled = True        # what a later rule may do
+            await pilot.press("enter")
+            await pilot.pause(0.2)
+            self.assertIs(app.focused, listing)
+            self.assertTrue(any("cannot be switched to" in n for n in notes), notes)
+
     async def test_enter_in_the_host_field_goes_to_the_probe(self):
         FakeEngine.seen.clear()
         app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)
