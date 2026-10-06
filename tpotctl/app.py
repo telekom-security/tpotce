@@ -363,7 +363,7 @@ class EditionPane(Vertical):
 
     def compose(self) -> ComposeResult:
         yield Static("", id="edition-info", classes="info")
-        yield NavOptionList(id="edition-list", enter_goes_on=True)
+        yield NavOptionList(id="edition-list")
         yield Static("", id="edition-note")
         with Horizontal(classes="actions"):
             yield Button("Switch", id="switch-edition", variant="primary", disabled=True)
@@ -422,6 +422,18 @@ class EditionPane(Vertical):
     def on_option_list_option_highlighted(self, event) -> None:
         if event.option_list.id == "edition-list":
             self.refresh_button()
+
+    def on_option_list_option_selected(self, event) -> None:
+        """enter on an edition: on to Switch, or say that it runs already."""
+        event.stop()
+        choice = self.selected()
+        if choice is None:
+            return
+        if choice.key == self.in_use:
+            self.app.notify(f"The {choice.title} edition runs already, the customizer changes it.", title="Edition",
+                            timeout=5)
+        else:
+            self.query_one("#switch-edition", Button).focus()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "open-customizer":
@@ -1206,6 +1218,12 @@ class ChecksPane(Vertical):
 
     def enter(self) -> None:
         self.query_one("#check-host", Input).focus()
+
+    def on_input_submitted(self, event) -> None:
+        """enter in the host field: on to the probe, a second enter starts it."""
+        if event.input.id == "check-host":
+            event.stop()
+            self.query_one("#check-honeypots", Button).focus()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         from tpotctl import cli

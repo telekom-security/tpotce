@@ -197,6 +197,38 @@ class PagesTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(listing.highlighted, 2)
             self.assertIn("Mini", str(app.focused.label))
 
+    async def test_enter_on_the_edition_in_use_says_so(self):
+        notes = []
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)
+        app.notify = lambda message, **kwargs: notes.append(message)
+        async with app.run_test(size=(150, 50)) as pilot:
+            await pilot.pause(0.3)
+            app.goto("edition")
+            await pilot.pause(0.3)
+            listing = app.query_one("#edition-list")
+            listing.focus()
+            listing.highlighted = 0                     # Hive, the one in use
+            await pilot.pause(0.1)
+            await pilot.press("enter")
+            await pilot.pause(0.2)
+            self.assertIs(app.focused, listing)
+            self.assertTrue(any("runs already" in n for n in notes), notes)
+
+    async def test_enter_in_the_host_field_goes_to_the_probe(self):
+        FakeEngine.seen.clear()
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=(150, 50)) as pilot:
+            await pilot.pause(0.3)
+            app.goto("checks")
+            await pilot.pause(0.3)
+            app.query_one("#check-host").focus()
+            await pilot.pause(0.1)
+            await pilot.press("enter")
+            await pilot.pause(0.2)
+            self.assertEqual(app.focused.id, "check-honeypots")
+            self.assertEqual(len(app.screen_stack), 1)
+        self.assertEqual(FakeEngine.seen, [])
+
     async def test_enter_on_a_table_row_goes_on_to_its_buttons(self):
         from textual.app import App
         from textual.containers import Horizontal
