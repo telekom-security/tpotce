@@ -310,6 +310,11 @@ class CreditTest(unittest.IsolatedAsyncioTestCase):
                 app.update_header(state)
             finally:
                 app._exit = False
+            app._running = False                         # _shutdown says so first (run_test ends that way)
+            try:
+                app.update_header(state)
+            finally:
+                app._running = True
 
 
 def pure_red(hexcolour: str) -> bool:

@@ -1517,9 +1517,10 @@ class TpotApp(App):
         try:
             header.first().repaint(state)
         except NoMatches:
-            if not (self._exit or self._closing):
+            if self.is_running and not (self._exit or self._closing):
                 raise
-            # the T-Pot Manager ends meanwhile (exit() first, then closing), the header is going
+            # the T-Pot Manager ends meanwhile (exit(), or the shutdown that stops running first), the
+            # header is going
 
     def paint_menu(self) -> None:
         current = self.query_one(ContentSwitcher).current
