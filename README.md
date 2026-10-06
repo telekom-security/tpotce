@@ -65,7 +65,7 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/in
   - [Cyberchef](#cyberchef)
   - [Elasticvue](#elasticvue)
 - [Configuration](#configuration)
-  - [The tpot Command](#the-tpot-command)
+  - [The T-Pot Manager (tpot)](#the-t-pot-manager-tpot)
     - [What depends on the host and the edition](#what-depends-on-the-host-and-the-edition)
   - [T-Pot Config File](#t-pot-config-file)
   - [Customize T-Pot Honeypots and Services](#customize-t-pot-honeypots-and-services)
@@ -377,7 +377,7 @@ Once you are familiar with how things work you should choose a network you suspe
      * Install recommended packages
      * Remove packages known to cause issues
      * Add the current user to the docker group (allow docker interaction without `sudo`)
-     * Add the [`tpot`](#the-tpot-command) command, with the aliases `dps`, `dpsw` and `dim` for its container and image overviews
+     * Add the [`tpot`](#the-t-pot-manager-tpot) command, with the aliases `dps`, `dpsw` and `dim` for its container and image overviews
      * Add `la`, `ll` and `ls` aliases (for `exa`, a improved `ls` command)
      * Add `mi` (for `micro`, a great alternative to `vi` and / or `nano`)
      * Display open ports on the host (compare with T-Pot [required](https://github.com/telekom-security/tpotce#required-ports) ports)
@@ -459,7 +459,7 @@ To get things up and running just follow these steps:
 3. Go to: `cd ~/tpotce`
 4. Copy `cp compose/mac_win.yml ./docker-compose.yml`
 5. Create a `WEB_USER` by running `~/tpotce/genuser.sh` (macOS) or `~/tpotce/genuserwin.ps1` (Windows)
-6. Set `TPOT_OSTYPE` in `.env` to `mac` or `win`. With the [`tpot`](#the-tpot-command) command (`./tpot`) this is done for you: it sees Docker Desktop and has the value ready on the *Settings* page (Save), `tpot env set TPOT_OSTYPE=mac` writes it without an unlock and switching to the MAC_WIN edition (`tpot edition set mac_win`, steps 4 and 6 in one) sets it as well. By hand, change `TPOT_OSTYPE=linux` to either `mac` or `win`:
+6. Set `TPOT_OSTYPE` in `.env` to `mac` or `win`. With the [`tpot`](#the-t-pot-manager-tpot) command (`./tpot`) this is done for you: it sees Docker Desktop and has the value ready on the *Settings* page (Save), `tpot env set TPOT_OSTYPE=mac` writes it without an unlock and switching to the MAC_WIN edition (`tpot edition set mac_win`, steps 4 and 6 in one) sets it as well. By hand, change `TPOT_OSTYPE=linux` to either `mac` or `win`:
    ```
    # OSType (linux, mac, win)
    #  Most docker features are available on linux
@@ -526,7 +526,7 @@ There is not much to do except to login and check via `dps` if all services and 
 <br><br>
 
 ## Distributed Deployment
-A distributed T-Pot is one **Hive** and any number of **Sensors**. Install the **Sensor** with the installer first (type `s`), then manage everything from the **Hive** with [`tpot sensors`](#the-tpot-command), or on the *Sensors* page of the `tpot` menu:
+A distributed T-Pot is one **Hive** and any number of **Sensors**. Install the **Sensor** with the installer first (type `s`), then manage everything from the **Hive** with [`tpot sensors`](#the-t-pot-manager-tpot), or on the *Sensors* page of the `tpot` menu:
 
 | Command | Does |
 |---|---|
@@ -687,8 +687,10 @@ On the T-Pot Landing Page just click on `Elasticvue` and you will be forwarded t
 
 # Configuration
 
-## The tpot Command
-`tpot` configures and runs T-Pot from one place. Without arguments it opens a menu (status, edition & services, settings, LLM, web users, sensors, images, checks, update & backup), every menu page is a command as well. *Where* says where a command works: on every host (also on macOS / Windows with Docker Desktop), on a T-Pot host (Linux with systemd) or on a HIVE (not on a SENSOR):
+## The T-Pot Manager (tpot)
+**Names:** *T-Pot* is the honeypot platform. The *T-Pot Manager* is the tool that sets it up and runs it, started with the command `tpot` (the installer links it to `/usr/local/bin/tpot`). The service that runs T-Pot is `tpot.service`. So *Restart T-Pot* restarts the honeypots, *Restart the Manager* only starts the menu anew.
+
+`tpot` configures and runs T-Pot from one place. Without arguments it opens the T-Pot Manager, a menu (status, edition & services, settings, LLM, web users, sensors, images, checks, update & backup), every menu page is a command as well. *Where* says where a command works: on every host (also on macOS / Windows with Docker Desktop), on a T-Pot host (Linux with systemd) or on a HIVE (not on a SENSOR):
 
 | Command | Menu | Where | Does |
 |---|---|---|---|
@@ -696,7 +698,7 @@ On the T-Pot Landing Page just click on `Elasticvue` and you will be forwarded t
 | `tpot status` | *Status* | T-Pot host | version, edition, type, service state and containers |
 | `tpot ps [--watch [SECONDS]]` | *Status* | T-Pot host | containers with status and ports, `dps` / `dpsw` are short for it |
 | `tpot images` | *Images* | T-Pot host | Docker images, `dim` is short for it |
-| `tpot start` / `stop` / `restart` | *Status* | T-Pot host | `sudo systemctl … tpot` |
+| `tpot start` / `stop` / `restart` | *Status* | T-Pot host | `sudo systemctl … tpot.service` |
 | `tpot update [OPTIONS]` | *Update & backup* | T-Pot host | runs `~/tpotce/update.sh` with your options, i.e. `tpot update -y`; the menu runs it with its phases and log |
 | `tpot restore [OPTIONS]` | *Update & backup* | T-Pot host | runs `~/tpotce/restore.sh` with your options; the menu lets you pick the archive and its parts |
 | `tpot edition [list]` / `tpot edition set EDITION` | *Edition & services* | every host (switching: T-Pot host) | the editions, and switching to another one: T-Pot stops, `docker-compose.yml` is kept in `~/tpot_backups`, the edition takes its place, T-Pot starts again |
@@ -712,7 +714,7 @@ On the T-Pot Landing Page just click on `Elasticvue` and you will be forwarded t
 | `tpot attackers [--hours H] [--count N]` | *Status* (top five) | T-Pot host, HIVE | the source IPs with the most attacks, with country and reputation |
 | `tpot install [--classic]` | `ctrl+p` *Install T-Pot* | Linux without T-Pot | the installer assistant, see [Get and install T-Pot](#get-and-install-t-pot) (the installer starts it for you) |
 | `tpot uninstall` | *Update & backup* | T-Pot host | removes T-Pot, with a full backup first if you like, see [Uninstall T-Pot](#uninstall-t-pot) |
-| `tpot setup [--force]` | *Update & backup* (*Rebuild tpot's packages*) | every host | sets up or refreshes the Python packages of `tpot`; `--force` builds the venv anew, next to the old one, swapped when it works |
+| `tpot setup [--force]` | *Update & backup* (*Rebuild the Manager's packages*) | every host | sets up or refreshes the Python packages of `tpot`; `--force` builds the venv anew, next to the old one, swapped when it works |
 
 The installer links `~/tpotce/tpot` to `/usr/local/bin/tpot` and `update.sh` keeps it up to date. `tpot` runs from a Python venv of its own in `~/.local/share/tpotce/venv`, set up on first use from pinned and hash-checked packages (it needs pypi.org once, and `python3-venv` on Debian / Ubuntu, which the installer brings along). `update.sh`, `restore.sh` and the other scripts keep working on their own, `tpot` only calls them. Do not run `tpot` as root, it uses `sudo` where needed.
 
@@ -734,7 +736,7 @@ Before the first start run `~/tpotce/genuser.sh` or setup the `WEB_USER` manuall
 
 `update.sh` adds settings that are new in `env.example` to your `.env` with their defaults and comments out settings that are no longer used (unless your `docker-compose.yml` still uses them), your values are never changed.
 
-T-Pot checks `.env` on every start and does not start with an invalid value, all problems are listed at once in the log of `tpotinit` (`docker logs tpotinit`). Settings of a honeypot or tool are only checked if your `docker-compose.yml` runs it. The rules are in `docker/tpotinit/dist/etc/env.schema.yml`, the *Settings* page of the [`tpot`](#the-tpot-command) menu and `tpot env` use the same ones: they only show what matters for your T-Pot, mask passwords and keys, check while you type and only write valid values, keeping the rest of `.env` as it is. `tpot env check` shows the problems without starting T-Pot. The page helps with the values: switches for on / off settings, the registry and the pull policy to choose from (or a value of your own), the capture interface from a list of the interfaces of the host with *Detect* (the one T-Pot picks by itself), the time zone from a searchable list, the LLM models from your Ollama or OpenAI endpoint, *Find* next to the Ollama URL (the Ollama servers that answer on port 11434), and only the LLM fields the chosen provider needs. The LLM settings are shown for every edition, tagged *not in your edition* where Beelzebub or Galah do not run, so they are ready when you add them; the *LLM* page has them too, one tab per honeypot, with *Find Ollama*, *Scan the network* (asks first: it connects to every address of the /24 of this host), *Test the model* (a short prompt from this host, the honeypot asks from its container, where localhost is the container itself, so an Ollama has to listen on an address the containers reach, i.e. `OLLAMA_HOST=0.0.0.0`) and *Add … to the edition*. The settings under *Advanced* that come with the release or the installer (`TPOT_VERSION`, `TPOT_DATA_PATH`, the paths of the Docker socket, `.env` and compose file, `TPOT_OSTYPE`) are fixed; *Unlock* explains what a change does and frees the field until you save or revert, `tpot env set --unlock KEY=VALUE` does the same on the command line. They are checked as always. The web and sensor users are managed with `tpot users` and `tpot sensors`.
+T-Pot checks `.env` on every start and does not start with an invalid value, all problems are listed at once in the log of `tpotinit` (`docker logs tpotinit`). Settings of a honeypot or tool are only checked if your `docker-compose.yml` runs it. The rules are in `docker/tpotinit/dist/etc/env.schema.yml`, the *Settings* page of the [`tpot`](#the-t-pot-manager-tpot) menu and `tpot env` use the same ones: they only show what matters for your T-Pot, mask passwords and keys, check while you type and only write valid values, keeping the rest of `.env` as it is. `tpot env check` shows the problems without starting T-Pot. The page helps with the values: switches for on / off settings, the registry and the pull policy to choose from (or a value of your own), the capture interface from a list of the interfaces of the host with *Detect* (the one T-Pot picks by itself), the time zone from a searchable list, the LLM models from your Ollama or OpenAI endpoint, *Find* next to the Ollama URL (the Ollama servers that answer on port 11434), and only the LLM fields the chosen provider needs. The LLM settings are shown for every edition, tagged *not in your edition* where Beelzebub or Galah do not run, so they are ready when you add them; the *LLM* page has them too, one tab per honeypot, with *Find Ollama*, *Scan the network* (asks first: it connects to every address of the /24 of this host), *Test the model* (a short prompt from this host, the honeypot asks from its container, where localhost is the container itself, so an Ollama has to listen on an address the containers reach, i.e. `OLLAMA_HOST=0.0.0.0`) and *Add … to the edition*. The settings under *Advanced* that come with the release or the installer (`TPOT_VERSION`, `TPOT_DATA_PATH`, the paths of the Docker socket, `.env` and compose file, `TPOT_OSTYPE`) are fixed; *Unlock* explains what a change does and frees the field until you save or revert, `tpot env set --unlock KEY=VALUE` does the same on the command line. They are checked as always. The web and sensor users are managed with `tpot users` and `tpot sensors`.
 
 Settings for the NSM services (Suricata, P0f, Glutton):
 - `TPOT_CAPTURE_INTERFACE`: The interface to capture on. Empty (default) picks the interface of the route to the internet, or without a default route the first interface with a global IPv4 address. Set it if the host has more than one uplink or you capture on a mirror port.
@@ -1017,7 +1019,7 @@ Enabling this feature will drastically reduce attackers visibility and consequen
 <br><br>
 
 ## Add Users to Nginx (T-Pot WebUI)
-Nginx (T-Pot WebUI) allows you to add as many `<WEB_USER>` accounts as you want (according to the [User Types](#user-types)). Manage them with [`tpot`](#the-tpot-command), on the *Web users* page of its menu or with:
+Nginx (T-Pot WebUI) allows you to add as many `<WEB_USER>` accounts as you want (according to the [User Types](#user-types)). Manage them with [`tpot`](#the-t-pot-manager-tpot), on the *Web users* page of its menu or with:
 - `tpot users` lists the users, with the hash of each, and marks entries T-Pot would not start with.
 - `tpot users add [NAME]` adds a user (`~/tpotce/genuser.sh` does the same).
 - `tpot users passwd NAME` changes a password, this also repairs an entry T-Pot does not accept.

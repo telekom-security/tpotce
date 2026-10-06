@@ -124,7 +124,7 @@ class Settings:
                     hint = f", unlock it with: tpot env set --unlock {key}=..."
                 else:
                     hint = ""
-                raise SettingsError(f"{key} is {self.why_fixed(key)}, tpot does not change it{hint}")
+                raise SettingsError(f"{key} is {self.why_fixed(key)}, the T-Pot Manager does not change it{hint}")
         values = dict(self.values)
         values.update(changes)
         problems = self.problems(values)

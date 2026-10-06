@@ -125,7 +125,7 @@ class InstallApp(ArrowNav, App):
                 yield NavInput(placeholder="repeat the password", password=True, id="ins-user-repeat")
                 yield Static("", id="ins-user-hint")
             with NavScroll(id="step-settings", classes="ins-step settings-form"):
-                yield Static(Text("A few settings now, all of them later on the Settings page of tpot.",
+                yield Static(Text("A few settings now, all of them later on the Settings page of the T-Pot Manager.",
                                   style=theme.color("ash")), classes="ins-lead")
             with NavScroll(id="step-review", classes="ins-step"):
                 yield Static("", id="review-text")

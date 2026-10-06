@@ -36,7 +36,7 @@ def main():
             python = bootstrap.setup_venv(force="--force" in argv[1:])
         except bootstrap.BootstrapError as err:
             fail(str(err), 1)
-        say.ok(f"The Python packages of tpot are ready ({os.path.dirname(os.path.dirname(python))}).")
+        say.ok(f"The Python packages of the T-Pot Manager are ready ({os.path.dirname(os.path.dirname(python))}).")
         sys.exit(0)
     try:
         python = bootstrap.ensure("ui")

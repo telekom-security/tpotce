@@ -435,7 +435,7 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
         import re
         with open(os.path.join(cli.REPO_DIR, "README.md"), encoding="utf-8") as handle:
             readme = handle.read()
-        start = readme.index("## The tpot Command")
+        start = readme.index("## The T-Pot Manager (tpot)")
         section = readme[start:readme.index("\n## ", start + 10)]
         self.assertIn("| Command | Menu | Where | Does |", section)
         names = re.findall(r"^    (\w+)\s", cli.build_parser().format_help(), re.M)

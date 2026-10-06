@@ -19,7 +19,7 @@ CUSTOMIZER = os.path.join(REPO_DIR, "compose", "customizer.py")
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="tpot", description="Configure and run T-Pot.",
-        epilog="Without a command tpot opens its menu. update, restore and customize hand all their "
+        epilog="Without a command tpot opens the T-Pot Manager, its menu. update, restore and customize hand all their "
                "options to update.sh, restore.sh and compose/customizer.py, i.e. tpot update -h. status, ps, "
                "images, start, stop, restart, update, restore, check, uninstall and sensors need a T-Pot host "
                "(Linux with systemd); users and sensors a HIVE.")
@@ -30,7 +30,7 @@ def build_parser() -> argparse.ArgumentParser:
                     help="refresh every 2 or SECONDS seconds (was: dpsw)")
     sub.add_parser("images", help="docker images (was: dim)")
     for action in ("start", "stop", "restart"):
-        sub.add_parser(action, help=f"{action} T-Pot (sudo systemctl {action} tpot)")
+        sub.add_parser(action, help=f"{action} T-Pot (sudo systemctl {action} tpot.service)")
     sub.add_parser("update", help="update T-Pot, runs update.sh with your options")
     sub.add_parser("restore", help="restore a backup, runs restore.sh with your options")
     sub.add_parser("customize", help="choose edition, services and ports, runs compose/customizer.py")
@@ -135,7 +135,7 @@ def build_parser() -> argparse.ArgumentParser:
     attackers.add_argument("--hours", type=int, default=24, help="of the last HOURS hours (default 24)")
     attackers.add_argument("--count", type=int, default=10, help="how many (default 10)")
     attackers.add_argument("--plain", action="store_true", help="only the IPs, one per line")
-    setup = sub.add_parser("setup", help="set up or refresh the Python packages of tpot")
+    setup = sub.add_parser("setup", help="set up or refresh the Python packages of the T-Pot Manager")
     setup.add_argument("--force", action="store_true",
                        help="build the venv anew (next to the old one, swapped when it works)")
     return parser
@@ -846,7 +846,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             return run_app()
         if args.command == "setup":
             python = bootstrap.setup_venv(force=args.force)
-            say.ok(f"The Python packages of tpot are ready ({os.path.dirname(os.path.dirname(python))}).")
+            say.ok(f"The Python packages of the T-Pot Manager are ready ({os.path.dirname(os.path.dirname(python))}).")
             return 0
         if args.command == "env":
             from tpotctl import settings as tsettings

@@ -145,7 +145,7 @@ class Runner:
                 print(err)
                 code = 127
             try:
-                input(f"\n[exit code {code}] Press Enter to return to tpot ... ")
+                input(f"\n[exit code {code}] Press Enter to return to the T-Pot Manager ... ")
             except EOFError:
                 pass
         return code
@@ -249,7 +249,7 @@ class StatusPane(Vertical):
         with Horizontal(classes="actions"):
             yield Button("Start", id="svc-start")
             yield Button("Stop", id="svc-stop")
-            yield Button("Restart", id="svc-restart", variant="primary")
+            yield Button("Restart T-Pot", id="svc-restart", variant="primary")
 
     def on_mount(self) -> None:
         self.query_one("#hive-block").border_title = "Hive"
@@ -312,7 +312,7 @@ class StatusPane(Vertical):
         running = sum(c.state == "running" for c in containers)
         info.append(f"{running} of {len(containers)} containers running", style="bold")
         if state is not None and state.service not in ("active", "n/a"):
-            info.append(f"   the tpot service is {state.service}", style=theme.color("error"))
+            info.append(f"   the T-Pot service (tpot.service) is {state.service}", style=theme.color("error"))
         if problem:
             info.append(f"   {problem}", style=theme.color("error"))
         self.query_one("#status-info", Static).update(info)
@@ -547,7 +547,7 @@ class SettingsPane(Vertical):
             except NoMatches:
                 if self.is_attached and not self.app._closing and not self._closing:
                     raise
-                # tpot ends meanwhile (i.e. q right after a save), its widgets are going
+                # the T-Pot Manager ends meanwhile (i.e. q right after a save), its widgets are going
 
     async def _reload(self, keep: Optional[Dict[str, str]], keep_unlocked: Iterable[str]) -> None:
         from tpotctl.settings import SettingsError
@@ -652,7 +652,7 @@ class SettingsPane(Vertical):
 
     def check(self) -> None:
         from tpotctl import envschema
-        if self.current is None or not self.is_attached:     # not while tpot ends
+        if self.current is None or not self.is_attached:     # not while the T-Pot Manager ends
             return
         problems = self.current.problems(self.draft, offered=True)
         by_key = {}
@@ -816,7 +816,7 @@ class SettingsPane(Vertical):
             await self.app.settings_saved(self, set(saved))
             if self.app.backend.linux_host():
                 self.app.push_screen(ConfirmDialog("Saved. Restart T-Pot now, so that it uses the new settings?",
-                                                   yes="Restart", no="Later"),
+                                                   yes="Restart T-Pot", no="Later"),
                                      lambda yes: self.app.runner(ops.service_command("restart")) if yes else None)
             else:
                 self.app.notify("Saved, restart T-Pot to use the new settings.", title="Settings")
@@ -1303,12 +1303,12 @@ class UpdatePane(Vertical):
         yield Static("", id="update-info", classes="info")
         with Horizontal(classes="actions"):
             yield Button("Update", id="run-update", variant="primary")
-            yield Button("Update and start", id="run-update-start")
+            yield Button("Update and start T-Pot", id="run-update-start")
             yield Button("Restore a backup", id="run-restore")
             yield Button("Uninstall ...", id="run-uninstall", variant="error")
         with Horizontal(classes="actions"):
             yield Checkbox("Full backup with data/ (for a newer Elastic Stack)", False, id="update-full")
-            yield Button("Rebuild tpot's packages", id="run-setup")
+            yield Button("Rebuild the Manager's packages", id="run-setup")
         yield NavDataTable(id="backups", cursor_type="row")
 
     def on_mount(self) -> None:
@@ -1339,11 +1339,11 @@ class UpdatePane(Vertical):
             self.app.run_restore()
         elif event.button.id == "run-setup":
             from tpotctl.screens.task import Task
-            self.app.run_task(Task("Rebuild the Python packages of tpot", [LAUNCHER, "setup", "--force"],
+            self.app.run_task(Task("Rebuild the Python packages of the T-Pot Manager", [LAUNCHER, "setup", "--force"],
                                    intro="tpot setup --force builds the venv of tpot anew from requirements.txt "
                                          "(needs pypi.org), next to the old one, and swaps them when it works. "
-                                         "tpot starts anew afterwards.",
-                                   done="The packages of tpot are rebuilt.", restart_tpot=True))
+                                         "the T-Pot Manager starts anew afterwards.",
+                                   done="The packages of the T-Pot Manager are rebuilt.", restart_tpot=True))
         elif event.button.id == "run-uninstall":
             from tpotctl.screens.uninstall import UninstallScreen
             # uninstall.sh removes tpot itself, the app ends and hands over to it
@@ -1425,10 +1425,10 @@ def menu_text(key: str, title: str, active: bool, locked: bool = False) -> Text:
 
 
 class TpotApp(App):
-    """The tpot menu."""
+    """The T-Pot Manager: the menu of the command tpot."""
 
     CSS_PATH = "tpot.tcss"
-    TITLE = "T-Pot"
+    TITLE = "T-Pot Manager"
     COMMANDS = App.COMMANDS | {TpotCommands}
     HORIZONTAL_BREAKPOINTS = [(0, "-narrow"), (100, "-normal"), (150, "-wide")]
     VERTICAL_BREAKPOINTS = [(0, "-short"), (34, "-tall")]
@@ -1451,7 +1451,7 @@ class TpotApp(App):
         apply_theme(self)
         self.panes = list(PANES)
         self.locked = {key: why for key, *_rest in PANES for why in [self.why_locked(key)] if why}
-        self.quit_dialog = None         # "Quit tpot?" while it is open
+        self.quit_dialog = None         # "Quit the T-Pot Manager?" while it is open
         self.header_stamp = None        # the configuration the header was read from
         self.read_error_stamp = None    # the configuration a refresh could not read, told once
 
@@ -1499,7 +1499,7 @@ class TpotApp(App):
 
     def update_header(self, state: ops.Status, stamp=None) -> None:
         header = self.query(TpotHeader)
-        if not header:                      # tpot ends, a late status worker delivers anyway
+        if not header:                      # the T-Pot Manager ends, a late status worker delivers anyway
             return
         if stamp is not None:               # what it was read from (the status page brings it)
             self.header_stamp = stamp
@@ -1564,11 +1564,11 @@ class TpotApp(App):
         """Not while a script runs: quitting would kill it half way. Unsaved changes and values
         T-Pot would not start with are named first."""
         if self.task_running():
-            self.notify("A script is still running, tpot ends when it is through.", title="Not now",
+            self.notify("A script is still running, the T-Pot Manager ends when it is through.", title="Not now",
                         severity="warning", timeout=5)
             return
         if self.quit_dialog is not None and self.screen is self.quit_dialog:
-            self.exit()             # ctrl+q on "Quit tpot?": the second ask is the yes
+            self.exit()             # ctrl+q on "Quit the T-Pot Manager?": the second ask is the yes
             return
         if len(self.screen_stack) > 1:
             self.notify("Close this screen first (esc), then quit.", title="Not now", timeout=4)
@@ -1588,7 +1588,7 @@ class TpotApp(App):
                 self.exit()
             else:
                 self.goto(pending[0][0])
-        self.quit_dialog = QuitDialog("Quit tpot?", body, yes="Quit anyway", no="Back")
+        self.quit_dialog = QuitDialog("Quit the T-Pot Manager?", body, yes="Quit anyway", no="Back")
         self.push_screen(self.quit_dialog, answered)
 
     def quit_pending(self):
@@ -1784,14 +1784,15 @@ class TpotApp(App):
             self.service("restart")
 
     def run_update(self, args: List[str]) -> None:
-        """update.sh in the task screen; the checkout below this app changes, so tpot starts anew."""
+        """update.sh in the task screen; the checkout below this app changes, so the T-Pot Manager starts anew."""
         from tpotctl.screens.task import Task
         intro = Text("update.sh stops T-Pot, writes a backup to ~/tpot_backups, pulls the release of your "
                      "branch and puts your edition and settings back.", style=theme.color("glass"))
         if "-s" in args:
             intro.append(" T-Pot starts again afterwards.", style=theme.color("glass"))
         self.run_task(Task("Update T-Pot", ops.script_command("update.sh", args), become="-B", intro=intro,
-                           done="T-Pot is updated, start tpot anew for its new version.", restart_tpot=True))
+                           done="T-Pot is updated. Restart the T-Pot Manager to use its new version.",
+                           restart_tpot=True))
 
     def run_restore(self) -> None:
         from tpotctl.screens.restore import RestoreScreen
@@ -1860,7 +1861,7 @@ class TpotApp(App):
             self.load_header()          # it notes the stamp it reads from
 
     async def refresh_config(self) -> None:
-        """.env or the compose file changed elsewhere (another page of tpot, a task, a terminal): the
+        """.env or the compose file changed elsewhere (another page of the T-Pot Manager, a task, a terminal): the
         settings pages read them anew, keeping what is unsaved like after a save on the other page."""
         for pane in self.query(SettingsPane):
             if not pane.stale():

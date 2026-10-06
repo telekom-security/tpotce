@@ -224,5 +224,35 @@ class LookInTheAppTest(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn("Theme", [c.title for c in app.get_system_commands(app.screen)])
 
 
+class NamesTest(unittest.TestCase):
+    """T-Pot is the honeypot platform, the T-Pot Manager is this tool (the command tpot), the service is
+    tpot.service: no text may mix them up."""
+
+    WRONG = ("Restart tpot", "Quit tpot", "tpot starts", "start tpot anew", "the tpot service",
+             "Rebuild tpot's", "return to tpot", "packages of tpot", "tpot ends", "page of tpot",
+             "tpot does not change")
+
+    def test_names_say_what_they_mean(self):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        found = []
+        for folder, _dirs, files in os.walk(root):
+            if os.sep + "tests" in folder:
+                continue
+            for name in files:
+                if name.endswith(".py"):
+                    path = os.path.join(folder, name)
+                    with open(path, encoding="utf-8") as handle:
+                        for number, line in enumerate(handle, 1):
+                            found += [f"{os.path.relpath(path, root)}:{number}: {w}" for w in self.WRONG if w in line]
+        self.assertEqual(found, [])
+
+    def test_the_menu_is_the_t_pot_manager(self):
+        try:
+            from tpotctl import app as tapp
+        except ImportError:
+            self.skipTest("Textual is not installed, run with the venv of tpot")
+        self.assertEqual(tapp.TpotApp.TITLE, "T-Pot Manager")
+
+
 if __name__ == "__main__":
     unittest.main()

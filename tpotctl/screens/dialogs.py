@@ -57,7 +57,7 @@ class ConfirmDialog(NavModal):
 
 
 class QuitDialog(ConfirmDialog):
-    """Quit tpot?: q again (or ctrl+q, see TpotApp.action_quit) is the yes."""
+    """Quit the T-Pot Manager?: q again (or ctrl+q, see TpotApp.action_quit) is the yes."""
 
     BINDINGS = [Binding("q", "yes", "Quit", show=False)]
 

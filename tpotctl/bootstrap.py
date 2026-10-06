@@ -133,7 +133,7 @@ def setup_venv(force: bool = False, quiet: bool = False) -> str:
         for leftover in (directory + ".new", directory + ".old"):       # of a run that broke off
             shutil.rmtree(leftover, ignore_errors=True)
         if not quiet:
-            print(f"[INFO] - Setting up the Python packages of tpot in {directory} (needs internet) ...",
+            print(f"[INFO] - Setting up the Python packages of the T-Pot Manager in {directory} (needs internet) ...",
                   file=sys.stderr)
         _build(directory + ".new")
         try:

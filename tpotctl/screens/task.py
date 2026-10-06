@@ -40,7 +40,7 @@ class Task:
     # more secrets the command reads from files: {option: text}, each one appended as
     # "option file" (i.e. the password of a new web user)
     secrets: Dict[str, str] = field(default_factory=dict)
-    restart_tpot: bool = False          # the checkout changed, offer to start tpot anew
+    restart_tpot: bool = False          # the checkout changed, offer to start the T-Pot Manager anew
     autostart: bool = False             # confirmed before, start without asking
 
 
@@ -78,7 +78,7 @@ class TaskScreen(Screen):
         with Horizontal(id="task-nav"):
             yield Static("", classes="task-spacer")
             yield Button("Back", id="task-back")
-            yield Button("Restart tpot", id="task-restart", variant="primary")
+            yield Button("Restart the Manager", id="task-restart", variant="primary")
             yield Button("Run", id="task-run", variant="primary")
         yield Footer()
 
@@ -221,7 +221,7 @@ class TaskScreen(Screen):
         # a run that failed after it changed the checkout still leaves new code behind
         restart_anyway = code != 0 and self.job.restart_tpot and self.run_state.checkout_changed
         if restart_anyway:
-            text.append("\nThe checkout changed all the same, Restart tpot runs the code that is there now.",
+            text.append("\nThe checkout changed all the same, Restart the Manager to run the code that is there now.",
                         style=theme.color("warn"))
         self.query_one("#task-result", Static).update(text)
         back = self.query_one("#task-back", Button)

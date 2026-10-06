@@ -1,4 +1,4 @@
-"""ctrl+p in tpot: jump to a page or a setting, run an action, change the icons."""
+"""ctrl+p in the T-Pot Manager: jump to a page or a setting, run an action, change the icons."""
 
 from functools import partial
 from typing import Callable, Iterator, Tuple
@@ -16,9 +16,9 @@ class TpotCommands(Provider):
             yield f"Go to {title}", "page", partial(app.goto, key)
         host = app.backend.linux_host()
         for name, help_text, callback in (
-                ("Start T-Pot", "sudo systemctl start tpot", partial(app.service, "start")),
-                ("Stop T-Pot", "sudo systemctl stop tpot", partial(app.service, "stop")),
-                ("Restart T-Pot", "sudo systemctl restart tpot", partial(app.service, "restart")),
+                ("Start T-Pot", "sudo systemctl start tpot.service", partial(app.service, "start")),
+                ("Stop T-Pot", "sudo systemctl stop tpot.service", partial(app.service, "stop")),
+                ("Restart T-Pot", "sudo systemctl restart tpot.service", partial(app.service, "restart")),
                 ("Update T-Pot", "update.sh, writes a backup first", partial(app.run_update, ["-y"])),
                 ("Restore a backup", "restore.sh, the parts you choose", app.run_restore)):
             # shown everywhere, so you find them; off a T-Pot host they say why not
@@ -28,7 +28,7 @@ class TpotCommands(Provider):
         if host and app.backend.installable():
             yield "Install T-Pot", "the installer assistant, tpot install", app.start_install
         yield "Open the customizer", "edition and services", app.action_customize
-        yield "Rebuild tpot's packages", "tpot setup --force", partial(app.goto, "update")
+        yield "Rebuild the T-Pot Manager's packages", "tpot setup --force", partial(app.goto, "update")
         for key, value in app.setting_fixes().items():
             yield f"Fix {key}", f"this host needs {value}, the Settings page has it ready", \
                 partial(app.fix_setting, key)
