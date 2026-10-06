@@ -3,6 +3,7 @@
 T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, makes updating a lot safer with backups you can actually restore, and adds new honeypots and NSM tooling.
 
 ## New Features
+* **T-Pot Manager** (`tpot`) shows, configures, updates and restores T-Pot from one menu and as sub-commands, see the README section *The T-Pot Manager (tpot)*. Over SSH it uses a palette made for 256 colours unless the terminal says it can show true colours: T-Pot accepts `COLORTERM` from SSH now (`/etc/ssh/sshd_config.d/tpot.conf`), send it with `SendEnv COLORTERM`, or choose the colours with `TPOT_COLORS`.
 * **RDPHoneypot** a Remote Desktop honeypot for RDP connection and credential telemetry.
 * **Restore Script** `restore.sh` puts a backup written by `update.sh` back, as a whole or per group (checkout, configuration, `data/`, Kibana objects and ILM policy).
 * **Update Script** has been reworked:
@@ -23,7 +24,7 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 * **Elasticsearch** no longer rejects events once a daily index reaches its field limit (now 3000), further new fields are not indexed then but stay in the document.
 * **Kibana** now runs with a 1 GB Node.js heap (`KIBANA_HEAP_MB` in `docker/elk/kibana/Dockerfile`) within a `mem_limit` of 2 GB.
 * **Attack Map** has been updated to 4.0.0.
-* **Beelzebub** has been updated to 3.9.2 and is built from upstream again instead of the T-Pot fork. The log format, the dashboards and the SSH host key stay as they were, further services (Telnet, MCP, LDAP, SMB, MSSQL, MQTT, RDP, PostgreSQL, VNC, Redis, Memcached) are prepared and can be enabled in the compose file.
+* **Beelzebub** has been updated to 3.9.2 and is built from upstream again instead of the T-Pot fork. The log format, the dashboards and the SSH host key stay as they were, further services (Telnet, MCP, LDAP, SMB, MSSQL, MQTT, RDP, PostgreSQL, VNC, Redis, Memcached) are prepared; the LLM edition publishes all of them that Galah does not use (22, 23, 389, 445, 1433, 1883, 2222, 3306, 3389, 5432, 5900, 6379, 8000, 8081, 8888, 11211), the other editions only 22. Beelzebub and Galah now default to the model `llama3.1:8b` (see the README section *Ollama* for smaller and larger ones).
 * **Conpot** has been updated to 1.0.0, pinned to a later commit of the master branch (asyncio, TOML templates, new event schema). All Conpot and upstream default strings of the deployed templates have been replaced. The pinned commit includes fixes contributed upstream: Guardian AST no longer keeps a core at 100% CPU after a client sent anything but a command and closed the connection (the reason for the former CPU health check, which has been removed), IPMI answers again to clients that come back from a new source port, and Kamstrup and ICCP no longer crash on binary or malformed input.
 * **Cowrie** has been updated to 3.0.0, pinned to a later commit of the main branch.
 * **Suricata** has been updated to 8.0.7 (Alpine 3.24 package). The rules are now cached in `data/suricata/rules` and updated once in 24 hours (`SURICATA_RULES_UPDATE=off` never downloads them), a failed update or a start without internet access uses the latest cached rules, and the capture filter keeps excluding the T-Pot ports without DNS.
@@ -86,7 +87,8 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 - `TPOT_PERSISTENCE` accepts only `on` / `off`, `TPOT_BLACKHOLE` and `TPOT_ATTACKMAP_TEXT` only `ENABLED` / `DISABLED`. Other values such as `true` passed the check before but were not acted on; with `TPOT_PERSISTENCE=true` the honeypot logs were deleted on every start. `update.sh` rewrites these values, T-Pot does not start with any other value.
 
 ### Beelzebub
-- The LLM settings in `.env` are now `BEELZEBUB_LLM_PROVIDER` (`ollama` or `openai`), `BEELZEBUB_LLM_MODEL` (the model name, i.e. `openchat` or `gpt-4o`), `BEELZEBUB_LLM_HOST` and `BEELZEBUB_LLM_API_KEY`. `update.sh` migrates the previous settings (`BEELZEBUB_LLM_MODEL: "ollama"` / `"gpt4-o"`, `BEELZEBUB_OLLAMA_MODEL`), a `docker-compose.yml` of your own needs the new `environment` block of the `beelzebub` service from `compose/llm.yml`.
+- The LLM settings in `.env` are now `BEELZEBUB_LLM_PROVIDER` (`ollama` or `openai`), `BEELZEBUB_LLM_MODEL` (the model name, i.e. `llama3.1:8b` or `gpt-4o-mini`), `BEELZEBUB_LLM_HOST` and `BEELZEBUB_LLM_API_KEY`. `update.sh` migrates the previous settings (`BEELZEBUB_LLM_MODEL: "ollama"` / `"gpt4-o"`, `BEELZEBUB_OLLAMA_MODEL`), a `docker-compose.yml` of your own needs the new `environment` block of the `beelzebub` service from `compose/llm.yml`.
+- In the LLM edition Beelzebub publishes further ports (see *Updates*). A compose file of your own that the customizer built on the LLM edition and that adds services on these ports (i.e. Dionaea on 445, 1433, 1883, 3306) now has a port conflict: `update.sh` keeps it unchanged and says so, change the port in the customizer (`p`) or remove the service.
 
 ## Thanks & Credits
 A heartfelt thank you to the contributors who made this release possible:

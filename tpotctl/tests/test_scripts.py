@@ -527,9 +527,6 @@ class BackupInfoTest(unittest.TestCase):
         self.assertTrue(info.problem)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class BuilderTest(Harness):
     """docker/_builder/: a tool for building releases, not part of the T-Pot Manager, in the look of
@@ -603,3 +600,7 @@ class BuilderTest(Harness):
         self.assertTrue("Remember to push the images with -p." in out, out)
         with open(os.path.join(work, "log", "broken.log"), encoding="utf-8") as handle:
             self.assertTrue("no such file" in handle.read())
+
+
+if __name__ == "__main__":
+    unittest.main()
