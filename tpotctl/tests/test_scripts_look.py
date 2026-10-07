@@ -106,6 +106,17 @@ class ScriptsLookAlikeTest(base.Harness):
             with self.subTest(script=path):
                 self.assertGreater(calls, 0)
 
+    def test_help_fits_80_columns(self):
+        """-h on the common 80 column SSH terminal: no line the terminal has to wrap."""
+        for path in INTERACTIVE:
+            if path in HANDED_OVER:
+                continue
+            with self.subTest(script=path):
+                result = self.run_script(os.path.join(REPO, path), "-h")
+                out = (result.stdout + result.stderr).replace(self.home, "/home/tpot")   # a real home
+                wide = [line for line in out.splitlines() if len(line) > 80]
+                self.assertEqual(wide, [])
+
     def test_handed_over_help_is_the_managers(self):
         """genuser.sh / deploy.sh -h: no banner of their own, the exec to tpot shows its help."""
         for path in HANDED_OVER:

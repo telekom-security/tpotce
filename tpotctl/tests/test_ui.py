@@ -867,6 +867,25 @@ class HelpersTest(unittest.TestCase):
         # the spinner waits with the same test
         self.assertIn("/proc/", re.search(r"fuUI_SPIN \(\) \{.*?\n\}", read(UI_SH), re.S).group(0))
 
+    def test_fold_breaks_only_what_is_too_wide(self):
+        text = ("Short line\\nand its own break.\\n\\n"
+                "A paragraph that is much too wide for twenty columns\\nand goes on here.\\n"
+                "  - an indented item that stays as it is even if it is wide\\n\\nLast.")
+        out = self.run_ui(f'fuUI_FOLD 20 $\'{text}\'').stdout
+        self.assertEqual(out, "Short line\nand its own break.\n\n"
+                              "A paragraph that is\nmuch too wide for\ntwenty columns and\ngoes on here.\n"
+                              "  - an indented item that stays as it is even if it is wide\n\nLast.\n")
+
+    def test_help_follows_the_terminal(self):
+        """At a terminal the help takes its width (100 at most); the texts never get narrower than
+        26 columns past the flags."""
+        script = f'fuUI_HELP "T" "t.sh" --opt "-x" "{"word " * 40}"'
+        for cols, widest in ((60, 60), (200, 100)):
+            text = at_terminal(script, self.sandbox.env(TPOT_GUM="off"), cols=cols, rows=24)
+            lines = [line for line in text.replace("\r", "").splitlines() if "word" in line]
+            self.assertLessEqual(max(len(line) for line in lines), widest, text)
+            self.assertGreater(max(len(line) for line in lines), widest - 8, text)
+
     def test_tree(self):
         result = self.run_ui('sh -c \'sh -c "sleep 3; true"; true\' & myP=$!; sleep 0.5; myT=$(fuUI_TREE "${myP}"); echo ${myT}; kill ${myT}')
         pids = result.stdout.split()

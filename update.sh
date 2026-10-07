@@ -227,7 +227,7 @@ myDROPPED_SERVICES="spiderfoot fatt"
 function fuPRINT_HELP () {
 	# at a terminal the T-Pot logo first, as a run shows it
 	fuUI_LOGO
-	fuUI_HELP "Updater" "update.sh -y [-s] [--full] [--backup-only] [-b <branch>] [-r <url>] [-B <file>]" \
+	fuUI_HELP "Updater" "update.sh -y [-s] [--full] [--backup-only] [-b <branch>] [-r <url>]"$'\n'"          [-B <file>]" \
 	  --about "Updates T-Pot to the latest version of its branch: a backup to ~/tpot_backups first, then the
 checkout, your configuration and edition put back, the images of the release pulled." \
 	  --opt "-y" "Confirm the update, required" \

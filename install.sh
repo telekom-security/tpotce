@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 print_help() {
-  fuUI_HELP "Installer" "install.sh [-s] [-t <type>] [-u <webuser>] [-p <password> | -P <file>]"$'\n'"           [-B <file>] [-c <compose file>] [-b <branch>] [-r <url>] [-n] [-M]" \
+  fuUI_HELP "Installer" "install.sh [-s] [-t <type>] [-u <webuser>] [-p <password> | -P <file>]"$'\n'"           [-B <file>] [-c <compose file>] [-b <branch>] [-r <url>]"$'\n'"           [-n] [-M]" \
     --about "Installs T-Pot on this host: the packages it needs, Docker Engine and the
 services of the edition, by the Ansible playbook installer/install/tpot.yml." \
     --about "Without -s, at a terminal, the installer gets what it needs to start and hands
@@ -493,13 +493,38 @@ fuUI_HINT () {
   done
 }
 
+fuUI_FOLD () {
+  # fuUI_FOLD <width> <text>: a paragraph (lines that do not start with a space) with a
+  # line wider than width is broken anew at spaces; the others and indented lines stay
+  printf '%s\n' "$2" | awk -v w="$1" '
+    function flush(  i, n, line, words) {
+      if (np == 0) return
+      if (wide <= w) { for (i = 1; i <= np; i++) print part[i] }
+      else {
+        n = split(joined, words, / +/); line = ""
+        for (i = 1; i <= n; i++) {
+          if (words[i] == "") continue
+          if (line == "") line = words[i]
+          else if (length(line) + 1 + length(words[i]) <= w) line = line " " words[i]
+          else { print line; line = words[i] }
+        }
+        if (line != "") print line
+      }
+      np = 0; joined = ""; wide = 0
+    }
+    /^ / || /^$/ { flush(); print; next }
+    { part[++np] = $0; joined = (joined == "" ? $0 : joined " " $0); if (length($0) > wide) wide = length($0) }
+    END { flush() }'
+}
+
 fuUI_HELP () {
   # fuUI_HELP <title> <usage> [--about <text>]... [--opt <flags> <text>]...
   #   [--example <command> <text>]... [--note <text>]...: the help of a script on
   # stdout, the same layout for all T-Pot scripts, rc 0. A text may have more lines;
   # the option texts line up after the longest flags (up to 24 characters, longer
-  # ones get their text on the next line). Coloured at a terminal with gum
-  local myTITLE="$1" myUSAGE="$2" myW=0 myI myLINE myFIRST myREST myPAD
+  # ones get their text on the next line). The texts are broken to the terminal
+  # (80 columns without one, 100 at most). Coloured at a terminal with gum
+  local myTITLE="$1" myUSAGE="$2" myW=0 myI myLINE myFIRST myREST myPAD myCOLS=80 myTEXT
   local myT="" myH="" myF="" myR="" myMODE myN
   shift 2
   local -a myABOUT=() myFLAGS=() myTEXTS=() myCMDS=() myCTEXTS=() myNOTES=() myC=()
@@ -527,16 +552,20 @@ fuUI_HELP () {
   for myI in "${!myFLAGS[@]}"; do
     if [ "${#myFLAGS[myI]}" -gt "${myW}" ] && [ "${#myFLAGS[myI]}" -le 24 ]; then myW="${#myFLAGS[myI]}"; fi
   done
+  if [ -t 1 ] && fuUI_TERM_SIZE; then myCOLS="${myUI_COLS}"; fi
+  [ "${myCOLS}" -le 100 ] || myCOLS=100
+  [ "${myCOLS}" -ge $((myW + 26)) ] || myCOLS=$((myW + 26))
   printf '%sT-Pot %s%s\n\n%sUsage:%s %s\n' "${myT}" "${myTITLE}" "${myR}" "${myH}" "${myR}" \
     "${myUSAGE//$'\n'/$'\n'       }"
-  for myLINE in "${myABOUT[@]}"; do printf '\n%s\n' "${myLINE}"; done
+  for myLINE in "${myABOUT[@]}"; do printf '\n%s\n' "$(fuUI_FOLD "${myCOLS}" "${myLINE}")"; done
   if [ "${#myFLAGS[@]}" -gt 0 ]; then
     printf '\n%sOptions:%s\n' "${myH}" "${myR}"
     printf -v myPAD '%*s' $((myW + 6)) ''
     for myI in "${!myFLAGS[@]}"; do
-      myFIRST="${myTEXTS[myI]%%$'\n'*}"
+      myTEXT=$(fuUI_FOLD $((myCOLS - myW - 6)) "${myTEXTS[myI]}")
+      myFIRST="${myTEXT%%$'\n'*}"
       myREST=""
-      [ "${myFIRST}" = "${myTEXTS[myI]}" ] || myREST="${myTEXTS[myI]#*$'\n'}"
+      [ "${myFIRST}" = "${myTEXT}" ] || myREST="${myTEXT#*$'\n'}"
       if [ "${#myFLAGS[myI]}" -le "${myW}" ];
         then printf '  %s%*s    %s\n' "${myF}${myFLAGS[myI]}${myR}" $((myW - ${#myFLAGS[myI]})) '' "${myFIRST}"
         else printf '  %s\n%s%s\n' "${myF}${myFLAGS[myI]}${myR}" "${myPAD}" "${myFIRST}"
@@ -548,12 +577,16 @@ fuUI_HELP () {
     printf '\n%sExamples:%s\n' "${myH}" "${myR}"
     for myI in "${!myCMDS[@]}"; do
       printf '  %s\n' "${myF}${myCMDS[myI]}${myR}"
-      [ -z "${myCTEXTS[myI]}" ] || printf '      %s\n' "${myCTEXTS[myI]//$'\n'/$'\n'      }"
+      myTEXT=$(fuUI_FOLD $((myCOLS - 6)) "${myCTEXTS[myI]}")
+      [ -z "${myCTEXTS[myI]}" ] || printf '      %s\n' "${myTEXT//$'\n'/$'\n'      }"
     done
   fi
   if [ "${#myNOTES[@]}" -gt 0 ]; then
     printf '\n%sNotes:%s\n' "${myH}" "${myR}"
-    for myLINE in "${myNOTES[@]}"; do printf '  %s\n' "${myLINE//$'\n'/$'\n'  }"; done
+    for myLINE in "${myNOTES[@]}"; do
+      myTEXT=$(fuUI_FOLD $((myCOLS - 2)) "${myLINE}")
+      printf '  %s\n' "${myTEXT//$'\n'/$'\n'  }"
+    done
   fi
   return 0
 }
