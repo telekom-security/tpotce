@@ -609,13 +609,14 @@ class InstallApp(ArrowNav, App):
             lines.append(f"The web UI is https://<host>:64297, sign in as {answers.web_user}.")
         if answers.edition.letter == "s":
             lines.append("Join it to your HIVE: on the HIVE run tpot sensors add.")
-        if installer.tpot_on_path():
+        launcher = os.path.join(self.repo_dir, "tpot")       # the checkout this assistant installs
+        if installer.tpot_on_path(self.repo_dir):
             lines.append("Afterwards run the T-Pot Manager: tpot (i.e. tpot status), it shows and changes everything.")
         else:
             text.append(f"{glyphs.g('warn')} The command tpot does not run this T-Pot Manager yet, link it with: "
-                        f"sudo ln -sfn {os.path.join(REPO_DIR, 'tpot')} /usr/local/bin/tpot\n\n",
+                        f"sudo ln -sfn {launcher} /usr/local/bin/tpot\n\n",
                         style=theme.color("warn"))
-            lines.append(f"Afterwards run the T-Pot Manager: {os.path.join(REPO_DIR, 'tpot')}, it shows and changes everything.")
+            lines.append(f"Afterwards run the T-Pot Manager: {launcher}, it shows and changes everything.")
         for line in lines:
             text.append(f"  {glyphs.g('bullet')} ", style=theme.color("magenta"))
             text.append(f"{line}\n", style=theme.color("glass"))

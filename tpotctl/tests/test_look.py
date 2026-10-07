@@ -310,10 +310,12 @@ class CreditTest(unittest.IsolatedAsyncioTestCase):
         with mock.patch("tpotctl.widgets.header.socket.gethostname", return_value="tpot"), \
                 mock.patch.object(ops, "REPO_DIR", "/home/t/tpotce"):
             async with app.run_test(size=(width, 40)) as pilot:
-                for _ in range(40):                 # the status comes from a worker: wait for its branch
-                    await pilot.pause(0.05)
-                    if branch in str(app.query_one("#header-chips").render()):
+                for _ in range(40):                 # the status comes from a worker: wait for its version
+                    await pilot.pause(0.05)              # (narrow headers leave the branch out)
+                    if "24.04.2" in str(app.query_one("#header-chips").render()):
                         break
+                else:
+                    self.fail("no status in the header after 2 s")
                 await pilot.pause(0.1)
                 widget = app.query_one("#header-credit")
                 if chips is not None:
@@ -427,6 +429,20 @@ class ColoursPrefTest(unittest.TestCase):
             if "No module named 'textual'" in out.stderr:
                 self.skipTest("Textual is not installed, run with the venv of tpot")
             self.assertEqual(out.stdout.strip(), expected, (extra, out.stderr))
+
+    def test_the_legacy_windows_console_does_not_count(self):
+        """Textual builds its console with legacy_windows=False: so does the colour detection."""
+        try:
+            from textual import constants
+        except ImportError:
+            self.skipTest("Textual is not installed, run with the venv of tpot")
+        from tpotctl import theme
+
+        class FakeConsole:
+            def __init__(self, **options):
+                self.color_system = "windows" if options.get("legacy_windows") is None else "256"
+        with mock.patch.object(constants, "COLOR_SYSTEM", "auto"), mock.patch("rich.console.Console", FakeConsole):
+            self.assertEqual(theme.color_system(), "256")
 
     def test_a_16_colour_terminal_is_recognised(self):
         """TERM=xterm (PuTTY) or screen without COLORTERM: Rich and Textual see 16 colours."""

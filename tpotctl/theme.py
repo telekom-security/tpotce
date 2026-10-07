@@ -102,7 +102,8 @@ def color_system() -> str:
     system = constants.COLOR_SYSTEM or "auto"
     if system == "auto":
         from rich.console import Console
-        system = Console(force_terminal=True).color_system or "truecolor"
+        # as Textual builds its console: a legacy Windows console does not count
+        system = Console(force_terminal=True, legacy_windows=False).color_system or "truecolor"
     return {"truecolor": "truecolor", "256": "256"}.get(system, "16")       # standard (and windows): 16
 
 

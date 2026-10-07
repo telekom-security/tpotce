@@ -384,6 +384,8 @@ class AssistantTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue("the T-Pot Manager: tpot" in text, text)
         text = await self.done_text(False)
         self.assertTrue("sudo ln -sfn" in text and "/usr/local/bin/tpot" in text, text)
+        launcher = os.path.join(self.repo, "tpot")              # the checkout the assistant runs from
+        self.assertTrue(launcher in text.replace("\n", ""), text)
 
     async def test_a_failed_check_blocks(self):
         app = self.make_app(checks=lambda: [installer.Check("Ports", "fail", "tcp/25 occupied")])
