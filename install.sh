@@ -49,6 +49,13 @@ EOF
 # gum is a pinned release, its sha256 taken from the signed checksums.txt of the
 # release. A failed download or a wrong hash means plain text, never a stop.
 # TPOT_GUM=off keeps the plain text.
+#
+# The T-Pot logo: the ANSI logo of the T-Pot Manager (tpotctl/splash_art.py) as a
+# still picture with its credits, rendered here in bash in the colours the T-Pot
+# Manager would take (fuUI_COLORS). A script that asks a person sets myUI_LOGO=1,
+# fuUI_BANNER then shows it once per chain of scripts (TPOT_LOGO_SHOWN) where
+# fuUI_LOGO_ON allows it; its pixels and the wordmark are generated into the logo
+# data at the end of this block: python3 -m tpotctl.ui_logo (--check).
 
 myUI_GUM_VERSION="2.0.2"
 myUI_GUM_SHA256_x86_64="d842e06d93dbed90af48cb8dd10698db6f22e331fc40346bb37bbc753109edc2"
@@ -62,6 +69,26 @@ myUI_OK_COLOUR="#3FA34D"
 myUI_WARN_COLOUR="#F4B400"
 myUI_ERROR_COLOUR="#E8453C"
 myUI_GUM=""
+# the ten colours of the logo (tpotctl/splash_anim.py colours()): true colour as
+# R;G;B, the entries of the xterm 256 palette, the SGR codes of the 16 ANSI colours
+# (background: +10). Pixel 0 is never painted, it stays the terminal's background.
+myUI_LOGO_RGB=("0;0;0" "56;0;29" "103;0;58" "162;0;83" "226;0;116" "255;76;167" "255;157;208"
+               "236;239;249" "91;88;90" "162;162;173")
+myUI_LOGO_256=(16 53 89 125 162 205 218 231 240 248)
+myUI_LOGO_16=(30 35 35 35 95 95 97 97 90 37)
+# set by the caller: 1 shows the logo in fuUI_BANNER; the version for its credits
+# (empty: fuUI_VERSION finds it)
+myUI_LOGO="${myUI_LOGO:-}"
+myUI_VERSION="${myUI_VERSION:-}"
+myUI_COLS=""
+myUI_ROWS=""
+# the checkout this file lies in, for the copy in install.sh (no file of its own) ~/tpotce
+case "${BASH_SOURCE[0]:-}" in
+  */installer/lib/ui.sh) myUI_CHECKOUT=$(cd "${BASH_SOURCE[0]%/installer/lib/ui.sh}/" 2>/dev/null && pwd) ;;
+  installer/lib/ui.sh) myUI_CHECKOUT="${PWD}" ;;
+  *) myUI_CHECKOUT="" ;;
+esac
+[ -n "${myUI_CHECKOUT}" ] || myUI_CHECKOUT="${HOME}/tpotce"
 
 fuUI_INIT () {
   # gum for a terminal only; output to a file or a pipe stays plain text
@@ -114,10 +141,266 @@ fuUI_PAINT () {
   CLICOLOR_FORCE=1 "${myUI_GUM}" style --foreground "$1" -- "$2"
 }
 
+fuUI_PREF () {
+  # fuUI_PREF <icons|colors>: the choice of the T-Pot Manager in its tpot.json
+  # (tpotctl/prefs.py), empty without one
+  local myFILE="${XDG_CONFIG_HOME:-${HOME}/.config}/tpotce/tpot.json" myTEXT="" myRE
+  [ -r "${myFILE}" ] || return 0
+  IFS= read -r -d '' myTEXT < "${myFILE}" || true
+  myRE="\"$1\"[[:space:]]*:[[:space:]]*\"([a-z0-9]+)\""
+  [[ "${myTEXT}" =~ ${myRE} ]] && echo "${BASH_REMATCH[1]}"
+  return 0
+}
+
+fuUI_ICONS () {
+  # the icon set of the T-Pot Manager: TPOT_ICONS, else tpot.json, else unicode
+  local myICONS="${TPOT_ICONS:-}"
+  case "${myICONS}" in unicode|nerd|ascii) echo "${myICONS}"; return 0 ;; esac
+  myICONS=$(fuUI_PREF icons)
+  case "${myICONS}" in unicode|nerd|ascii) echo "${myICONS}" ;; *) echo "unicode" ;; esac
+}
+
+fuUI_COLORS () {
+  # truecolor, 256 or 16, as the T-Pot Manager picks them (prefs.py, theme.py):
+  # TPOT_COLORS, else "colors" of tpot.json, unless that says auto; then what the
+  # terminal says (as Rich): COLORTERM truecolor / 24bit, TERM *-256color or
+  # *-kitty 256, anything else 16
+  local myCOLORS="${TPOT_COLORS:-}"
+  case "${myCOLORS}" in
+    truecolor|256|16) echo "${myCOLORS}"; return 0 ;;
+    auto) ;;
+    *) myCOLORS=$(fuUI_PREF colors)
+       case "${myCOLORS}" in truecolor|256|16) echo "${myCOLORS}"; return 0 ;; esac ;;
+  esac
+  myCOLORS="${COLORTERM:-}"
+  case "${myCOLORS,,}" in truecolor|24bit) echo "truecolor"; return 0 ;; esac
+  myCOLORS="${TERM:-}"
+  myCOLORS="${myCOLORS,,}"
+  case "${myCOLORS##*-}" in 256color|kitty) echo "256" ;; *) echo "16" ;; esac
+}
+
+fuUI_TERM_SIZE () {
+  # the size of the terminal on stdout into myUI_COLS and myUI_ROWS (stty, then
+  # tput, then COLUMNS / LINES); rc 1 without one. Call it directly: in $(...)
+  # stdout is a pipe
+  local mySIZE=""
+  myUI_COLS=""
+  myUI_ROWS=""
+  { mySIZE=$(stty size <&3 2>/dev/null); } 2>/dev/null 3<&1
+  if [[ "${mySIZE}" =~ ^([0-9]+)\ ([0-9]+)$ ]] && [ "${BASH_REMATCH[1]}" -gt 0 ] && [ "${BASH_REMATCH[2]}" -gt 0 ];
+    then
+      myUI_ROWS="${BASH_REMATCH[1]}"
+      myUI_COLS="${BASH_REMATCH[2]}"
+      return 0
+  fi
+  if command -v tput >/dev/null 2>&1;
+    then
+      myUI_COLS=$(tput cols 2>/dev/null)
+      myUI_ROWS=$(tput lines 2>/dev/null)
+  fi
+  if ! [[ "${myUI_COLS}" =~ ^[1-9][0-9]*$ && "${myUI_ROWS}" =~ ^[1-9][0-9]*$ ]];
+    then
+      myUI_COLS="${COLUMNS:-}"
+      myUI_ROWS="${LINES:-}"
+  fi
+  [[ "${myUI_COLS}" =~ ^[1-9][0-9]*$ && "${myUI_ROWS}" =~ ^[1-9][0-9]*$ ]] && return 0
+  myUI_COLS=""
+  myUI_ROWS=""
+  return 1
+}
+
+fuUI_LOGO_VARIANT () {
+  # fuUI_LOGO_VARIANT <cols> <rows>: the largest logo for the terminal, as the splash
+  # of the T-Pot Manager picks it: 120 (120 x 49), 80 (80 x 33), 80x24; rc 1 below
+  local myC="${1:-}" myR="${2:-}"
+  [[ "${myC}" =~ ^[0-9]+$ && "${myR}" =~ ^[0-9]+$ ]] || return 1
+  if [ "${myC}" -ge 120 ] && [ "${myR}" -ge 49 ]; then echo "120"
+  elif [ "${myC}" -ge 80 ] && [ "${myR}" -ge 33 ]; then echo "80"
+  elif [ "${myC}" -ge 80 ] && [ "${myR}" -ge 24 ]; then echo "80x24"
+  else return 1
+  fi
+  return 0
+}
+
+fuUI_MARKS_ON () {
+  # 0 in the marks mode: install.sh -M (myMARKS) or the task screen of tpot (TPOT_MARKS=1)
+  [ -n "${myMARKS:-}" ] || [ "${TPOT_MARKS:-}" = "1" ]
+}
+
+fuUI_LOGO_ON () {
+  # 0 when the logo may show: stdout is a terminal of at least 80 x 24, gum is not
+  # off, no marks mode, a TERM with colours, no NO_COLOR, not shown before in this
+  # chain of scripts (TPOT_LOGO_SHOWN), not the ascii icon set; sets myUI_COLS / ROWS
+  [ -t 1 ] || return 1
+  [ "${TPOT_GUM:-on}" = "off" ] && return 1
+  fuUI_MARKS_ON && return 1
+  case "${TERM:-}" in dumb|unknown) return 1 ;; esac
+  [ -n "${NO_COLOR+set}" ] && return 1
+  [ -n "${TPOT_LOGO_SHOWN:-}" ] && return 1
+  [ "$(fuUI_ICONS)" = "ascii" ] && return 1
+  fuUI_TERM_SIZE || return 1
+  [ "${myUI_COLS}" -ge 80 ] && [ "${myUI_ROWS}" -ge 24 ] && return 0
+  return 1
+}
+
+fuUI_VERSION () {
+  # fuUI_VERSION [checkout]: the version of T-Pot from one place: myUI_VERSION when
+  # a script set it, else the file version of the checkout (default: the one of this
+  # file, ~/tpotce for install.sh), else TPOT_VERSION of its .env, else empty. Only a
+  # plain version string counts
+  local myDIR="${1:-${myUI_CHECKOUT}}" myV="" myLINE myRE='^[0-9A-Za-z][0-9A-Za-z._+~-]*$' myENV
+  myENV='^[[:space:]]*TPOT_VERSION[[:space:]]*[=:][[:space:]]*["'"'"']?([^"'"'"'[:space:]]*)'
+  if [ -n "${myUI_VERSION:-}" ]; then echo "${myUI_VERSION}"; return 0; fi
+  [ -r "${myDIR}/version" ] && { IFS= read -r myV < "${myDIR}/version" || true; }
+  myV="${myV//[[:space:]]/}"
+  [[ "${myV}" =~ ${myRE} ]] || myV=""
+  if [ -z "${myV}" ] && [ -r "${myDIR}/.env" ]; then
+    while IFS= read -r myLINE || [ -n "${myLINE}" ]; do
+      [[ "${myLINE}" =~ ${myENV} ]] && myV="${BASH_REMATCH[1]}"
+    done < "${myDIR}/.env"
+    [[ "${myV}" =~ ${myRE} ]] || myV=""
+  fi
+  echo "${myV}"
+}
+
+fuUI_LOGO_TEXT () {
+  # fuUI_LOGO_TEXT <colour> <text>: text (ASCII) over the bottom row of the logo
+  # from column myX on, for fuUI_LOGO_RENDER (its myTXT / myTXC / myX)
+  local myK
+  for ((myK = 0; myK < ${#2}; myK++)); do
+    myTXT[myX]="${2:myK:1}"
+    myTXC[myX]="$1"
+    myX=$((myX + 1))
+  done
+}
+
+fuUI_LOGO_RENDER () {
+  # fuUI_LOGO_RENDER <120|80|80x24> <truecolor|256|16> [version]: the logo and its
+  # credits on stdout as the splash of the T-Pot Manager shows them at its end,
+  # without any check (fuUI_LOGO makes them). Every row ends with a reset; the
+  # credits are below the logo, for 80x24 in its bottom row. A version with more
+  # than printable ASCII, or too long for the room, is left out: [ t-pot ]
+  local LC_ALL=C IFS=$' \t\n'
+  local myVARIANT="$1" myMODE="$2" myVERSION="${3:-}" myESC=$'\033' myWIDTH myI myK myN myP myL myPAIR
+  local myROW myRUN myOUT myPRE myNAME myROOM myPAD myX myLAST mySG myCHAR myRESET=$'\033[0m'
+  local -a myROWS=() myFG=() myBG=() mySGR=() myCH=() myCOL=() myTXT=() myTXC=()
+  case "${myVARIANT}" in
+    120) myROWS=("${myUI_LOGO_120[@]}"); myWIDTH=120 ;;
+    80) myROWS=("${myUI_LOGO_80[@]}"); myWIDTH=80 ;;
+    80x24) myROWS=("${myUI_LOGO_80x24[@]}"); myWIDTH=80 ;;
+    *) return 1 ;;
+  esac
+  for myI in 0 1 2 3 4 5 6 7 8 9; do
+    case "${myMODE}" in
+      truecolor) myFG[myI]="38;2;${myUI_LOGO_RGB[myI]}"; myBG[myI]="48;2;${myUI_LOGO_RGB[myI]}" ;;
+      256) myFG[myI]="38;5;${myUI_LOGO_256[myI]}"; myBG[myI]="48;5;${myUI_LOGO_256[myI]}" ;;
+      16) myFG[myI]="${myUI_LOGO_16[myI]}"; myBG[myI]="$((myUI_LOGO_16[myI] + 10))" ;;
+      *) return 1 ;;
+    esac
+  done
+  # a pair of pixels (top, bottom) as a character and its colours, as the splash does
+  myN=0
+  for myPAIR in ${myUI_LOGO_PAIRS}; do
+    myP="${myPAIR:0:1}"
+    myL="${myPAIR:1:1}"
+    if [ "${myP}${myL}" = "00" ]; then mySGR[myN]="0"; myCH[myN]=" "
+    elif [ "${myP}" = "${myL}" ]; then mySGR[myN]="0;${myBG[myP]}"; myCH[myN]=" "
+    elif [ "${myL}" = "0" ]; then mySGR[myN]="0;${myFG[myP]}"; myCH[myN]="▀"
+    elif [ "${myP}" = "0" ]; then mySGR[myN]="0;${myFG[myL]}"; myCH[myN]="▄"
+    else mySGR[myN]="0;${myFG[myP]};${myBG[myL]}"; myCH[myN]="▀"
+    fi
+    myN=$((myN + 1))
+  done
+  # the credits: t-pot and the version where they fit (splash_anim.Splash.credits)
+  [[ "${myVERSION}" =~ ^[[:print:]]*$ ]] || myVERSION=""
+  myNAME="t-pot ${myVERSION}"
+  myNAME="${myNAME% }"
+  myROOM=$((myWIDTH - 34))
+  [ "${myVARIANT}" != "80x24" ] || myROOM=24
+  [ $((${#myNAME} + 4)) -le "${myROOM}" ] || myNAME="t-pot"
+  for ((myI = 0; myI < ${#myROWS[@]}; myI++)); do
+    myROW="${myROWS[myI]}"
+    if [ "${myVARIANT}" = "80x24" ] && [ "${myI}" -eq $((${#myROWS[@]} - 1)) ]; then
+      # the bottom row has room left and right of the honey pool for the credits
+      myCOL=()
+      for ((myK = 0; myK < ${#myROW}; myK += 2)); do
+        myPRE="${myUI_LOGO_ABC%%"${myROW:myK:1}"*}"
+        myP="${#myPRE}"
+        myPRE="${myUI_LOGO_ABC%%"${myROW:myK+1:1}"*}"
+        for ((myL = 0; myL <= ${#myPRE}; myL++)); do myCOL+=("${myP}"); done
+      done
+      myX=1
+      fuUI_LOGO_TEXT 2 "--[ "
+      fuUI_LOGO_TEXT 7 "${myNAME}"
+      fuUI_LOGO_TEXT 2 " ]"
+      myTXT[1]="─"
+      myTXT[2]="─"
+      myX=$((myWIDTH - 24))
+      fuUI_LOGO_TEXT 2 "[ "
+      fuUI_LOGO_TEXT 4 "telekom security"
+      fuUI_LOGO_TEXT 2 " ]--"
+      myTXT[myX - 2]="─"
+      myTXT[myX - 1]="─"
+      myOUT=""
+      myLAST=""
+      for ((myX = 0; myX < myWIDTH; myX++)); do
+        if [ -n "${myTXT[myX]:-}" ]; then
+          myCHAR="${myTXT[myX]}"
+          mySG="0;${myFG[myTXC[myX]]}"
+          [ "${myCHAR}" != " " ] || mySG="0"
+        else
+          myP="${myCOL[myX]:-0}"
+          myCHAR="${myCH[myP]}"
+          mySG="${mySGR[myP]}"
+        fi
+        if [ "${mySG}" != "${myLAST}" ]; then myOUT+="${myESC}[${mySG}m"; myLAST="${mySG}"; fi
+        myOUT+="${myCHAR}"
+      done
+      printf '%s%s\n' "${myOUT}" "${myRESET}"
+      continue
+    fi
+    myOUT=""
+    for ((myK = 0; myK < ${#myROW}; myK += 2)); do
+      myPRE="${myUI_LOGO_ABC%%"${myROW:myK:1}"*}"
+      myP="${#myPRE}"
+      myPRE="${myUI_LOGO_ABC%%"${myROW:myK+1:1}"*}"
+      printf -v myRUN '%*s' $((${#myPRE} + 1)) ''
+      [ "${myCH[myP]}" = " " ] || myRUN="${myRUN// /${myCH[myP]}}"
+      myOUT+="${myESC}[${mySGR[myP]}m${myRUN}"
+    done
+    printf '%s%s\n' "${myOUT}" "${myRESET}"
+  done
+  [ "${myVARIANT}" != "80x24" ] || return 0
+  # below the logo: an empty line, then the credits in the middle
+  printf -v myPAD '%*s' $(((myWIDTH - 30 - ${#myNAME}) / 2)) ''
+  printf '%s\n' "${myRESET}"
+  printf '%s%s──[ %s%s%s ]══[ %stelekom security%s ]──%s\n' "${myPAD}" "${myESC}[0;${myFG[2]}m" \
+    "${myESC}[0;${myFG[7]}m" "${myNAME}" "${myESC}[0;${myFG[2]}m" "${myESC}[0;${myFG[4]}m" \
+    "${myESC}[0;${myFG[2]}m" "${myRESET}"
+  return 0
+}
+
+# shellcheck disable=SC2120 # the version is for the scripts, fuUI_BANNER leaves it out
+fuUI_LOGO () {
+  # fuUI_LOGO [version]: the T-Pot logo with its credits where fuUI_LOGO_ON allows it,
+  # in the largest size for the terminal and its colours; marks it shown for the
+  # scripts this one starts (TPOT_LOGO_SHOWN). rc 1 without the logo. The version
+  # of the credits: the argument, else fuUI_VERSION
+  local myVARIANT myVERSION
+  fuUI_LOGO_ON || return 1
+  myVARIANT=$(fuUI_LOGO_VARIANT "${myUI_COLS}" "${myUI_ROWS}") || return 1
+  if [ "$#" -gt 0 ]; then myVERSION="$1"; else myVERSION=$(fuUI_VERSION); fi
+  fuUI_LOGO_RENDER "${myVARIANT}" "$(fuUI_COLORS)" "${myVERSION}" || return 1
+  export TPOT_LOGO_SHOWN=1
+  return 0
+}
+
 fuUI_BANNER () {
-  # fuUI_BANNER <title> <line> ...: the t-pot wordmark (as in the splash of tpot) and a title
-  local myTITLE="$1"
+  # fuUI_BANNER <title> <line> ...: the T-Pot logo (myUI_LOGO=1, see fuUI_LOGO) or the
+  # T-Pot wordmark of the T-Pot Manager (tpotctl/logo.py), then a title and lines
+  local myTITLE="$1" myLINE myLOGO=""
   shift
+  if [ "${myUI_LOGO}" = "1" ] && fuUI_LOGO; then myLOGO=1; fi
   if [ -z "${myUI_GUM}" ];
     then
       echo
@@ -127,12 +410,11 @@ fuUI_BANNER () {
       return
   fi
   echo
-  "${myUI_GUM}" style --foreground "${myUI_MAGENTA}" --bold --margin "0 2" -- \
-    "  ██                             ██" \
-    "▀▀██▀▀         ██▀▀█▄  ▄█▀▀█▄  ▀▀██▀▀" \
-    "  ██    ▀▀▀▀▀  ██  ██  ██  ██    ██" \
-    "   ▀▀▀         ██▀▀▀    ▀▀▀▀      ▀▀▀"
-  echo
+  if [ -z "${myLOGO}" ];
+    then
+      "${myUI_GUM}" style --foreground "${myUI_MAGENTA}" --bold --margin "0 2" -- "${myUI_WORDMARK[@]}"
+      echo
+  fi
   "${myUI_GUM}" style --foreground "${myUI_GLASS}" --bold --margin "0 2" -- "T-Pot ${myTITLE}"
   [ "$#" -gt 0 ] && "${myUI_GUM}" style --foreground "${myUI_ASH}" --margin "0 2" -- "$@"
   echo
@@ -175,6 +457,127 @@ fuUI_HINT () {
       else echo "###   ${myLINE}"
     fi
   done
+}
+
+fuUI_HELP () {
+  # fuUI_HELP <title> <usage> [--about <text>]... [--opt <flags> <text>]...
+  #   [--example <command> <text>]... [--note <text>]...: the help of a script on
+  # stdout, the same layout for all T-Pot scripts, rc 0. A text may have more lines;
+  # the option texts line up after the longest flags (up to 24 characters, longer
+  # ones get their text on the next line). Coloured at a terminal with gum
+  local myTITLE="$1" myUSAGE="$2" myW=0 myI myLINE myFIRST myREST myPAD
+  local myT="" myH="" myF="" myR="" myMODE myN
+  shift 2
+  local -a myABOUT=() myFLAGS=() myTEXTS=() myCMDS=() myCTEXTS=() myNOTES=() myC=()
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --about) myABOUT+=("${2:-}"); shift $(( $# < 2 ? $# : 2 )) ;;
+      --opt) myFLAGS+=("${2:-}"); myTEXTS+=("${3:-}"); shift $(( $# < 3 ? $# : 3 )) ;;
+      --example) myCMDS+=("${2:-}"); myCTEXTS+=("${3:-}"); shift $(( $# < 3 ? $# : 3 )) ;;
+      --note) myNOTES+=("${2:-}"); shift $(( $# < 2 ? $# : 2 )) ;;
+      *) shift ;;
+    esac
+  done
+  if [ -n "${myUI_GUM}" ] && [ -t 1 ] && [ -z "${NO_COLOR+set}" ]; then
+    # the colours of the logo: magenta (4) for the title and the flags, glass (7) for the heads
+    myMODE=$(fuUI_COLORS)
+    for myN in 4 7; do
+      case "${myMODE}" in
+        truecolor) myC[myN]="38;2;${myUI_LOGO_RGB[myN]}" ;;
+        256) myC[myN]="38;5;${myUI_LOGO_256[myN]}" ;;
+        *) myC[myN]="${myUI_LOGO_16[myN]}" ;;
+      esac
+    done
+    myT=$'\033'"[1;${myC[4]}m" myH=$'\033'"[1;${myC[7]}m" myF=$'\033'"[${myC[4]}m" myR=$'\033[0m'
+  fi
+  for myI in "${!myFLAGS[@]}"; do
+    if [ "${#myFLAGS[myI]}" -gt "${myW}" ] && [ "${#myFLAGS[myI]}" -le 24 ]; then myW="${#myFLAGS[myI]}"; fi
+  done
+  printf '%sT-Pot %s%s\n\n%sUsage:%s %s\n' "${myT}" "${myTITLE}" "${myR}" "${myH}" "${myR}" \
+    "${myUSAGE//$'\n'/$'\n'       }"
+  for myLINE in "${myABOUT[@]}"; do printf '\n%s\n' "${myLINE}"; done
+  if [ "${#myFLAGS[@]}" -gt 0 ]; then
+    printf '\n%sOptions:%s\n' "${myH}" "${myR}"
+    printf -v myPAD '%*s' $((myW + 6)) ''
+    for myI in "${!myFLAGS[@]}"; do
+      myFIRST="${myTEXTS[myI]%%$'\n'*}"
+      myREST=""
+      [ "${myFIRST}" = "${myTEXTS[myI]}" ] || myREST="${myTEXTS[myI]#*$'\n'}"
+      if [ "${#myFLAGS[myI]}" -le "${myW}" ];
+        then printf '  %s%*s    %s\n' "${myF}${myFLAGS[myI]}${myR}" $((myW - ${#myFLAGS[myI]})) '' "${myFIRST}"
+        else printf '  %s\n%s%s\n' "${myF}${myFLAGS[myI]}${myR}" "${myPAD}" "${myFIRST}"
+      fi
+      [ -z "${myREST}" ] || printf '%s%s\n' "${myPAD}" "${myREST//$'\n'/$'\n'${myPAD}}"
+    done
+  fi
+  if [ "${#myCMDS[@]}" -gt 0 ]; then
+    printf '\n%sExamples:%s\n' "${myH}" "${myR}"
+    for myI in "${!myCMDS[@]}"; do
+      printf '  %s\n' "${myF}${myCMDS[myI]}${myR}"
+      [ -z "${myCTEXTS[myI]}" ] || printf '      %s\n' "${myCTEXTS[myI]//$'\n'/$'\n'      }"
+    done
+  fi
+  if [ "${#myNOTES[@]}" -gt 0 ]; then
+    printf '\n%sNotes:%s\n' "${myH}" "${myR}"
+    for myLINE in "${myNOTES[@]}"; do printf '  %s\n' "${myLINE//$'\n'/$'\n'  }"; done
+  fi
+  return 0
+}
+
+fuUI_USAGE_ERROR () {
+  # fuUI_USAGE_ERROR <message> [script]: a wrong option or value on stderr and where
+  # the help is, rc 1 (the caller exits with it)
+  fuUI_ERROR "$1"
+  fuUI_HINT "${2:-${0##*/}} -h shows the options." >&2
+  return 1
+}
+
+fuUI_RESULT () {
+  # fuUI_RESULT <ok|fail|warn|next|info> <text>: one line of a result, i.e. of a summary
+  if [ -n "${myUI_GUM}" ]; then
+    case "$1" in
+      ok) echo "$(fuUI_PAINT "${myUI_OK_COLOUR}" "✓") $2" ;;
+      fail) echo "$(fuUI_PAINT "${myUI_ERROR_COLOUR}" "✗ $2")" ;;
+      warn) echo "$(fuUI_PAINT "${myUI_WARN_COLOUR}" "! $2")" ;;
+      next) echo "$(fuUI_PAINT "${myUI_MAGENTA}" "→") $(fuUI_PAINT "${myUI_GLASS}" "$2")" ;;
+      *) echo "$(fuUI_PAINT "${myUI_MAGENTA}" "⬢") $2" ;;
+    esac
+    return 0
+  fi
+  case "$1" in
+    ok) echo "### [OK] - $2" ;;
+    fail) echo "### [FAILED] - $2" ;;
+    warn) echo "### [WARNING] - $2" ;;
+    next) echo "### [NEXT] - $2" ;;
+    *) echo "### $2" ;;
+  esac
+}
+
+fuUI_SUMMARY () {
+  # fuUI_SUMMARY <title> [<ok|fail|warn|next|info>:<text>]...: the end of a script, its
+  # results and what comes next in a box (gum) or as plain lines; rc 1 when one of
+  # them is a fail. An item without a known kind is info
+  local myTITLE="$1" myITEM myKIND myTEXT myRC=0
+  shift
+  local -a myLINES=()
+  for myITEM in "$@"; do
+    myKIND="${myITEM%%:*}" myTEXT="${myITEM#*:}"
+    case "${myKIND}" in ok|fail|warn|next|info) ;; *) myKIND="info" myTEXT="${myITEM}" ;; esac
+    [ "${myKIND}" != "fail" ] || myRC=1
+    myLINES+=("$(fuUI_RESULT "${myKIND}" "${myTEXT}")")
+  done
+  echo
+  if [ -n "${myUI_GUM}" ];
+    then
+      "${myUI_GUM}" style --border rounded --border-foreground "${myUI_MAGENTA}" --padding "0 1" \
+        --margin "0 2" -- "$(CLICOLOR_FORCE=1 "${myUI_GUM}" style --foreground "${myUI_GLASS}" --bold -- "${myTITLE}")" \
+        "${myLINES[@]}"
+    else
+      echo "### ${myTITLE}"
+      [ "${#myLINES[@]}" -eq 0 ] || printf '%s\n' "${myLINES[@]}"
+  fi
+  echo
+  return "${myRC}"
 }
 
 fuUI_CONFIRM () {
@@ -222,6 +625,95 @@ fuUI_CHOOSE () {
   done
 }
 
+fuUI_CHOOSE_MANY () {
+  # fuUI_CHOOSE_MANY [--filter] [--all | --selected <value>,<value>] <header>
+  #   <label:value> ...: prints the values of the choices, one per line, in the order
+  # of the items (label and value split at the last colon, so a label may have one).
+  # --all / --selected mark items to begin with. gum choose at a terminal (gum filter
+  # with --filter, to find an item by typing), otherwise a numbered list on stderr
+  # and a line from stdin: 1,3-5, a for all, n for none, enter for the marked ones.
+  # rc 1 when stdin ends, the rc of gum when it is cancelled
+  local myFILTER="" myALL="" mySELECTED="" myI myN myPICK myPART myA myB myOK myOUT myLINE
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --filter) myFILTER=1; shift ;;
+      --all) myALL=1; shift ;;
+      --selected) mySELECTED="${2:-}"; shift $(( $# < 2 ? $# : 2 )) ;;
+      *) break ;;
+    esac
+  done
+  local myHEADER="${1:-}"
+  [ "$#" -eq 0 ] || shift
+  local -a myLABELS=() myVALUES=() myON=() myNEW=() myARGS=()
+  for myI in "$@"; do
+    myLABELS+=("${myI%:*}")
+    myVALUES+=("${myI##*:}")
+    if [ -n "${myALL}" ] || [[ ",${mySELECTED}," == *",${myVALUES[${#myVALUES[@]}-1]},"* ]];
+      then myON+=(1)
+      else myON+=("")
+    fi
+  done
+  myN="${#myLABELS[@]}"
+  if [ -n "${myUI_GUM}" ] && [ -t 0 ]; then
+    # gum filter has no --label-delimiter: gum gets the labels, they turn into values here
+    myARGS=(--no-limit --header "${myHEADER}" --header.foreground "${myUI_GLASS}")
+    if [ -n "${myALL}" ]; then myARGS+=(--selected "*")
+    else
+      myPICK=""
+      for myI in "${!myLABELS[@]}"; do
+        [ -z "${myON[myI]}" ] || myPICK="${myPICK:+${myPICK},}${myLABELS[myI]}"
+      done
+      [ -z "${myPICK}" ] || myARGS+=(--selected "${myPICK}")
+    fi
+    if [ -n "${myFILTER}" ];
+      then
+        myOUT=$("${myUI_GUM}" filter "${myARGS[@]}" --indicator.foreground "${myUI_MAGENTA}" \
+          --match.foreground "${myUI_MAGENTA}" --selected-indicator.foreground "${myUI_MAGENTA}" \
+          --prompt.foreground "${myUI_MAGENTA}" -- "${myLABELS[@]}") || return $?
+      else
+        myOUT=$("${myUI_GUM}" choose "${myARGS[@]}" --cursor.foreground "${myUI_MAGENTA}" \
+          --item.foreground "${myUI_ASH}" --selected.foreground "${myUI_MAGENTA}" -- "${myLABELS[@]}") || return $?
+    fi
+    for myI in "${!myLABELS[@]}"; do
+      while IFS= read -r myLINE; do
+        if [ "${myLINE}" = "${myLABELS[myI]}" ]; then printf '%s\n' "${myVALUES[myI]}"; break; fi
+      done <<< "${myOUT}"
+    done
+    return 0
+  fi
+  echo "### ${myHEADER}" >&2
+  for myI in "${!myLABELS[@]}"; do
+    if [ -n "${myON[myI]}" ]; then echo "###   $((myI + 1))) [x] ${myLABELS[myI]}" >&2
+    else echo "###   $((myI + 1))) [ ] ${myLABELS[myI]}" >&2; fi
+  done
+  while true; do
+    read -rp "### Choice (i.e. 1,3-5; a = all, n = none, enter = the marked ones): " myPICK || return 1
+    myPICK="${myPICK//[[:space:]]/}"
+    case "${myPICK}" in
+      "") break ;;
+      a|A) for myI in "${!myON[@]}"; do myON[myI]=1; done; break ;;
+      n|N) for myI in "${!myON[@]}"; do myON[myI]=""; done; break ;;
+    esac
+    myNEW=()
+    myOK=1
+    for myI in "${!myON[@]}"; do myNEW[myI]=""; done
+    if [[ "${myPICK}" =~ ^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$ ]]; then
+      for myPART in ${myPICK//,/ }; do
+        myA=$((10#${myPART%-*})) myB=$((10#${myPART#*-}))
+        if [ "${myA}" -lt 1 ] || [ "${myB}" -gt "${myN}" ] || [ "${myA}" -gt "${myB}" ]; then myOK=""; break; fi
+        for ((myI = myA; myI <= myB; myI++)); do myNEW[myI - 1]=1; done
+      done
+    else myOK=""
+    fi
+    if [ -n "${myOK}" ]; then myON=("${myNEW[@]}"); break; fi
+    echo "### [WARNING] - Not a choice: ${myPICK}" >&2
+  done
+  for myI in "${!myVALUES[@]}"; do
+    [ -z "${myON[myI]}" ] || printf '%s\n' "${myVALUES[myI]}"
+  done
+  return 0
+}
+
 fuUI_INPUT () {
   # fuUI_INPUT <prompt> [password]: prints what was typed
   local myVALUE=""
@@ -245,39 +737,166 @@ fuUI_INPUT () {
 fuMARK () {
   # machine readable progress for tpot, one line each: @@tpot <what> <value ...>.
   # install.sh -M sets myMARKS, the task screen of tpot TPOT_MARKS=1
-  [ -n "${myMARKS}" ] || [ "${TPOT_MARKS}" = "1" ] || return 0
+  fuUI_MARKS_ON || return 0
   echo "@@tpot $*"
 }
 
 fuUI_SPIN () {
   # fuUI_SPIN <title> <log file> <command> ...: runs the command (a function works too)
-  # in this shell with its output in the log file and a spinner meanwhile; shows the
-  # end of the log on failure. It runs in the background, so it must not prompt:
-  # refresh sudo before (sudo -v) where it needs a password.
+  # with its output in the log file and a spinner meanwhile; shows the end of the log
+  # on failure. Under gum the command runs in the background, in a subshell: what it
+  # sets does not reach the caller, and it must not prompt: refresh sudo before
+  # (sudo -v) where it needs a password. Without gum it runs in this shell. In the
+  # marks mode (fuUI_MARKS_ON) its output goes through instead, in the foreground and
+  # without a log, so the T-Pot Manager reads it (i.e. the pulls of the images).
   local myTITLE="$1" myLOG="$2"
   shift 2
-  local myPID myRC
-  if [ -n "${myUI_GUM}" ];
+  local myPID myRC=0
+  if fuUI_MARKS_ON;
+    then
+      echo "### ${myTITLE}"
+      "$@" < /dev/null || myRC=$?
+  elif [ -n "${myUI_GUM}" ];
     then
       "$@" >>"${myLOG}" 2>&1 < /dev/null &
       myPID=$!
       "${myUI_GUM}" spin --spinner dot --spinner.foreground "${myUI_MAGENTA}" --title "${myTITLE}" \
         --title.foreground "${myUI_GLASS}" -- sh -c "while kill -0 ${myPID} 2>/dev/null; do sleep 0.2; done"
-      wait "${myPID}"
-      myRC=$?
+      wait "${myPID}" || myRC=$?
     else
       echo "### ${myTITLE}"
-      "$@" >>"${myLOG}" 2>&1 < /dev/null
-      myRC=$?
+      "$@" >>"${myLOG}" 2>&1 < /dev/null || myRC=$?
   fi
   if [ "${myRC}" -eq 0 ];
     then fuUI_OK "${myTITLE%% ...}"
+  elif fuUI_MARKS_ON;
+    then fuUI_ERROR "${myTITLE%% ...} failed"
     else
       fuUI_ERROR "${myTITLE%% ...} failed, the end of ${myLOG}:"
       tail -n 15 "${myLOG}" >&2
   fi
   return "${myRC}"
 }
+
+# >>> tpot logo data >>>
+# generated from tpotctl/logo.py and tpotctl/splash_art.py by python3 -m tpotctl.ui_logo, do
+# not edit; the format is in tpotctl/ui_logo.py
+myUI_WORDMARK=(
+  '▀▀▀▀██▀▀▀▀        ██▀▀▀▀▄▄            ▄▄'
+  '    ██      ▄▄▄▄  ██▄▄▄▄▀▀  ██▀▀██  ▀▀██▀▀'
+  '    ██            ██        ██▄▄██    ██▄▄'
+)
+myUI_LOGO_ABC='!#%&()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ^_abcdefghijklmnopqrstuvwxyz{|}~'
+myUI_LOGO_PAIRS='00 01 02 03 12 11 14 31 20 10 32 13 33 23 42 44 21 43 30 41 08 18 04 40 81 69 99 22 34 24 45 49 88 46 63 91 53 52 82 83 80 87 79 98 55 77 54 89 58 56 25 35 67 19 65 97 90 09 78 17 95 64 16 06 71 96 93 74 85 84 29 51 62 38 15 86 28 94'
+myUI_LOGO_120=(
+''
+'!_#!%!&,#!'
+'!D(!)!!7#!*!+!,!-+,!.!/!#!'
+'!B#!/!0!1!/!#!!4*!2!,!!!#,!#,!3!'
+'!D4!)!!65!*!#!-!#!)*#!-!!!%!5!'
+'!R%#&!%#&!%!&!6!7!4!-!))-!)!4!6!,!#!&#%#'
+'!:8!9!##!0&!:#*!0!+!6%,!-&(!%#&!(#/,&!%!-!6#;!+!0!:!&!%!'
+'!4##!%-!<!=!>!<!-!!,&!*!?!6!,!-%!%%!(!?(1!05@!A!*#/!4!/!:!&!'
+'!1%!*!1!+#/!&!!#-!<!-#!+:!?!0!@!/!%!#!-!,#6#+!?#1!A!@!A#@93#@!#!0#%#'
+'!.#!&!1!;!)!-!)#-!,!7!A!&!!.3!)!-!4!+!2!0!/!*&/!(#?%.%2!35B#C!5!+!4#-#0!'
+'!.)!.!!!)*#!!!3!!.3!/!#!D#8!!#,(6+-!6!5!3#B!E!3+B!3!F!+!,#!#8!D!G!!!(!0!'
+'!.)!0!!!)+!!3!!-#!&!2!.!/%%#!2-!;!H!6!,!;!H!3&B!I!,!#!%!!&#!J!&!A!.!0!/!#!'
+'!-#!(!0!#!!!))!!#!3!#!!*%!A!.!6!-!8!)!-#6#+!4#?!/!&!:!&/!#-!0!3#B!.!!!#!1!K!&!/!?!+!6!,!-#!!-!+!0!/!#!'
+'!*#!%!*!.!+#.!*!#!-!)!-!#!%!*!7!,!7!A!%!#!!%/!B!L!!!8!M!N!O!-!!%#&)(-#!.0!3!P!.!-!!.-!D!9!#!-!+!0!/!'
+'!(%!*!.!6!)!#!)##!)!;!/!&!/!+!,!!(,!?!(!#!*!5!-!!!M!Q!N!<!-!!%)0#!!,0!3!R!)!!)#(!#-!D!S!9!!!)!0!/!'
+'!(3!!#)+!!0!)!!*-!!#(!T!-!!!M!Q!O!L!!&)/-%!,0!3!U!)!!(-!)(#!!#-!D!>!S!!!-!+!V!!1#!)!##'
+'!(3!!!),!!0!)!!,(!W!4!!#Q!N!L!!%-!),-(!.0!3!X!9!!)-!)(#!!#-!O!>!Y!!!#!P!!14!0#)!'
+'!(3!#!-!)*-!#!0!)!!!#*!!?!J!!#8!Q!D!!&#!))-!!50!B!Z!4!!*))!%<!O!^!8!!!+!/!!0-!4!-#'
+'!(,!7!1!&!)!-!)%&!-!6#-!!!,*!!,#!#_!L!!)-!)#-#!86!,!!-)(!%L!O!D!!!)!0!'
+'!+-!+!0!/!(!4!-!a!O!G6_!S!8!!.8!Y!b!G3c!8!!,-!)#!&D#!!)!+!#!a!b!G*a!#!'
+'!.,#9!O!L!&!d!R4e!f!)!N!)!!,S!G!<!&!P!R1g!!!h!M!8!!,-!!&-#!!#!Y!O!L!a!i!R(A!(!b!Y!'
+'!0D#j!e!37)!D!)!!,>!)!W!k!33e!&!D#!4)!>!#!c!k!3*4!)!>!'
+'!!,!6#.+4!D#0!355!0#)!D!)!!!#!!*>!)!360!D#!!#!Y!D.S!8!!!8!-!D!3,(!)!O#G!Y!#!+!.)+!6!,!'
+'!&,*6!-!<!D!)!-(4!B!3*4!-)#!O!-!!!-!)%##!#>!)!3*-(B!3)0!<#a!O!<!/!@,1!<!O!S!!!0!31!!D#-!,)-!'
+'!()!?!1#A!1#(!!!L!>!a&#!)!P!3*)!!!8!a%S!G!-!!-L!)!3*!(P!3)0!!#J!f!W!R!3-@!/!J!<!.!5!30!!D#(!1%?!)!'
+'!,#(!#-%L!S!)!P!3*)!!!>!D!)%<!G!h,Y!!!)!3*&!8#a!l!3)5!0!!!0!R#3&5&3)e!&!!!,!7!B!3*7!+!7!+!!!D###'
+'!,,#6#,!?!!!#!%#!!>!)!P!3)@!)!!!S!9!O!e.R!!!>!!!)!350!.!!!0!3(0!!&>!3)0!!##!P!3)0!!&a!O!-!,#-!'
+'!0)!0!!#-#!!Q!)!3*5!#!!!>!D!0!3/!!>!!!)!325#0!.!,!!!0!3(0!!&>!3)0!!#)!P!3*!!)!>!_!L!'
+'!0)!0!!(Q!)!3)@!0!)!!!>!D!.!5-.#!!>!!!)!3*0!.,,!!!8#0!3(0!!&>!3)0!!#)!P!3(5!0!!!-!>!Y!8!!!&!%!'
+'!0)!0!!(Q!)!3!0!5#3!5#0!)!#!O!S!8!-!,-!!a!O!!!)!3)5!?!#!!+8!S!_!!!0!3(@!/!a#K!R!3(0!?!!#)!P!3(5!@!A!m#/!G!S!8!6!.!*!#!'
+'!%#!1###!(-!.!!(Q!)!3!0*(!)!>!D!L!D!a-O!L!!!8!)!3&5!3!0!?!)!!!S!<)G!!!8#0#305!0%!#)!3!5#3!5#3!5!3&!!D#)!#!-!;!A!'
+'!%,!.#,!-!!&#!:!1!:!%!!%N!)!5!0!.)?!)!>!D!!2>!)!3!5!0#5#0!?!)#>!!+D#!!4!.!5-0%.!+!,!9!#!)!5!0,5#!!D#)#-!!!3!'
+'!&-#!%%!/!1!6!4!#!)!+!0!/!#!>!!!-!?!4!?!4!?%)!-!>!D!!%#&!!#(!#>!)!0#?))#>!!,L!S!8!!!4!?!4+.!4#-!#!Y!G!Y!#!!!,!4-!!D##!)#!!3!'
+'!+?!.!,!#!)(#!-!,!L!O!a!!+8!>!<!#!!%#!)+!#>!9!-+!!9!O!!--!_!S!#!!/a!O!-!!!-!G!M!#!!,8!S!_!-#%!*!.!6!'
+'!+?#!!)+!!0!)!L!G,-!(!@!!%-!)+##!!L!D!S!Y&S#D!L!!)##!(-!_.G!_!L!!)_.!!:!1!7!6!!!#!%!#!'
+'!+?#!!)+!!0!)!#*(#!#,!5!1!!%#!)-##!0-%!!#!!!#!!!#))!#!!%%!A!+!!##!%!@!%#!!0!!!#!)+#!3!!!#!))%!'
+'!+,!.!/!%!-!)%-!!!%!1!7!?!&!)!!!)!-!%!/!.!,!!%+!5!n!!%-!).##!/#!)0-!!#%!@!7!!%-#0!-#!!0!!!)-3!!!-!)%-!#!)!?!'
+'!--!+!0!&!#!%!/!+!6!!%,!;!1!:!+!6!-!!)+!H!/!#!!%)0#!!+#!)0-!!%/!3!+!!-@!#!)-3!#!-!)&-!)!?!'
+'!0,!7!,!!,,!!--!.!A!%!!%-!)/#!!()2-!!#&!*!.!,!!.,!;!1!/!#!!!)!##&!1!7!,!6!/#!#%!(!,!-!'
+'!;#!&%:,#!,!5!A!%!!&-#)(-!)!-%)!!#-!)(-!)&-#!&#!A!5!,!#!:*&!%!!)-!+!1!:!1!+!,!!(,!+#,!'
+'!:##)!,!6#_!o!H!5!B!3#5!0!(!)!+!5!A!&!#!!B%!A!5!+!(%/%&###!!6!;#?!/!%!#!!%-!'
+'!.#!%)/!*##!6!;%6!-!!!%#8!:!@!R!3#@!1!/!#!-!,!+!.%0#@!0!.!!&#!%%A&@,0!+!;#,!!&)!/!*!A!@!3#R!E!@!1!!%)!?!)!'
+'!/-*!!(!:!!(0!3!R!3%0%/#(!)!#!!+4#.!5#3+B%I!o!;!6#,!!+,!6%+!.!0%J!<!4!)!#!%!&!/!0#/-#!'
+'!7,!6#7!/%%!#!4!+!o!5%0!.!+!6%,!#06!7!H!5#o!6!-!!%%!/%?!6!;*2!3#+!,!-&,!6('
+'!>,!6%&#/!&!/!1#/&0!.!+!6*;!7!5!/#*!%!!#%!f!*#&!%!#&!()%4!+!7!;!-!'
+'!K-!)!?!2!0!/#(!!06!p!5)3!@!1!/!%!'
+'!Y)!(!?/(!)!-!'
+)
+myUI_LOGO_80=(
+''
+'!9%!!1&!?!,!6!,!6%?!%!'
+'!8,!.!,!!/0!,!!!#!!!#!!!)!!#4!)!'
+'!9-!!+#!%&?!+!)+,!(!%#'
+'!28!Y!8!!*#!%!(!?!+!6!,!-!#%(#1,/!1!0!.!?!(!%!#!'
+'!,#!&!?#&!#!-!<!-!!(%!(!@!(!##)#(!?!1!A%@13!@!?!5!(!#!'
+'!*#!?!,!#!)%+!1!!*0!#!9!q!;!+!.#?!/#1%.!5!3,B!3!2!o!;!9#!!?!'
+'!*)!?!!!-!)%!!0!!*/!.!/!K!%!#!!-7!2!6!7!3&6!?!!%(!K!/!0!(!'
+'!)#!/!1!%!-!)!-#%!0!&!#!!%&!.!,!8!Y!#!-!,!6#+!4,!#?!3!5!-!!!+!4!6#-!!!#!8!,!0!&!'
+'!%#!&!+!4!##4#&!/!6!,!!!-!+!(!#!1!+!8!^!N!L!!#)!#!)&#&!(?!3!D!!&%!#%!!<!S!#!+!/!'
+'!%0!!!))?!)!!)(!<!!!Q!>!!##!)*-!)!!*?!3!D!!&)&#!!!<!>!#!,!1!!,%!/!#!'
+'!%0!#!-!)(1!)!#!%%#!!!0!!!8!>!)!!##!)&!/4!P!J!!()&!#O!S!!!q!#!!+-!,!'
+'!&,!+!/!(#)!9!Y!8*Y!a!9!8#a!#!!!-#!(8-9!8#!)-!)!-!!#O!!!J!)!8!a!8&#!'
+'!*,!-!D!J!A!@/r!O!#!!(8!D!J!V!@,*!<!S!#!!)-!!#L!!!8!D!<!s!@%A!G!Y!'
+'!!%*#!D!0!300!D!)!!(D#R!3/D!)!!!8!a*8!!!<!9!e!3()!D!8##!%)'
+'!#-!6(-!D!4!,%q!3(,&-!D!-#)!-!#!!!D#3&.!,%3(<!9!D!J!A)*!J!S!)!@!3)@#1!D#6&,!'
+'!%-!6!;#6!,!!!_!<#9!D!3(!!9!D!<!_!8!a)#!)!3&1!!#8!3()!&!W!3,A!<!+!5!3(5#.!D!<!6%-!'
+'!),%(!!!%!#!>!D!3(!!D!)!@+)!D!)!3/0!)!3&?!-#t!3&?!!!D!3&5!!!#!8!D!-!,!'
+'!,?!!%>!?!3&5!#!D!)!5!3#5#3!5#)!D!)!3(5(0!.!-!#!3&?!!#D!3&?!!!D!3&5!!!>!9!!!#!'
+'!%#!!(?!!%>!?!5#3!5!0!)!D!9#,)-!8!<!)!3&0!)!-!!!-!!#8!D!-!5!3%@!&#u!3%5!?!!!J!3&@!A!m!K!D!t!+!&!#!'
+'!#)!0!)!!%#!/!%!!#>!?!0((!D!)!L!_!L#_#L!_!-!8!9!3!5%0!(!D!<!L&!!D!6!0!5%3!5&0!.!4!#!?!5!0&5#.!D#)!#!.!'
+'!%-!!!#!&!?!+!)!4!+!&!O!)!4(-!D!)!!%#!!!#%!!D#.#?#.!)!D!)!!(L!D!8!4+,!8!D#8!-!4)-!D!<!)!!!1!'
+'!()!(!)(#!(!<!9!a(<!/!)!!#))-!<!a)<!!%##!%L!D!9)D#L!!#L!D!9)<#&!(!6!)!'
+'!()!?!)%#!)!#!1!)!#&(#!!,!0!#!!!#!)(##!,-!!%#*!#/!+!!!#!/##!?!!!)!##)##!0!!!)!#!)#%!'
+'!),!?!&!)!%!/!4!,#4!&!(!4!,!!%+!K!#!!!-!)+!*##)+-!!!/!.!!%-#!!?!!!))0!!!)!-!)!-!?!'
+'!+-!6!,!!(-#!)-!0!&!!!-#4!)*!%)+-!,!-!!!/!.!,!!*-!6!?!(!-!)!&!4!,#(!%#,!-!'
+'!3-!6!+!7!5!3%0!(!6!0!&!#!!%-#!+-!!!-#!&&!1!+!%!1!0#+!6!,!)!(!%!#!!!-!6!,!!(-!'
+'!*#!%&(!?!-!6#,!%!&!:!*!5#2!?!%!!!,!6#+!.#?!&!%!&!:#A!@(0!.!+!6#,!!!%#/!1!0!5#0!+!!#/!)!'
+'!0-!+!(!&#4!6!2!5!@!0!.!+!4!)!!(-!,#6!2!3#2!;!6!,!(!&#()*!/!4!,!6#4%+!,,'
+'!5,%4%+!4#(!0!1!4#,%6!+!4#!!#!r!m!*!:!&##!!%-!,!6#,!'
+'!?-!,%!&#!%!&%(!?!1!?#6#,!'
+)
+myUI_LOGO_80x24=(
+'!I#*'
+'!8%!1!%!!/%!?!,!-),!(!#!'
+'!9,!!,#&+!(!)*%!4!)!#!'
+'!28!Y!8!!*%#(!4!+!,#4!)#(!?!/#1+/!1!0!?!1!(!%#'
+'!+#!%!4%(!&!#!L!-!!(/!4!.!/!&!(#?&.%0!@03#(!.!)!%!'
+'!*)!?!!!)&-!0!!*+!/!J!D!!!-!,%6(-!6!5#2!5!3&2!7!6!,!-!!!D!J!/!4!'
+'!)#!/!1!%!)&%!0!&!#!!%&!?!6!8!Y!)!,&4!(&)(!#.!3!5!4!!!+!)!,&-!)!6!/!%!'
+'!%%!)!+!4!#!)!4#/!?!,!-!!!-!4##!1!,!Y!^!b!-!!!#!)+-!!)?!3!D!!&)!#%!!<!S!8!6!/!#!'
+'!%0!!!))?!)!!)1!,!!!N!O!!##!)&-(!*?!B!D!!&)&#!!!-!>!9!!!.!!,4!.!-!'
+'!%,#(!/!)#%!)!q!9#t%9!8!t!8!D#8#!#-#!(8,9!q!9!#!!(-!)##!!!L!O!!!J!)!8)'
+'!*,#D#A!@/*!O!#!!(8!D!l!V!@,*!D##!!)-!!#L!!!8!D#l!@%A!G!S!'
+'!!,!4!?()!D!.!5&3(5#2#.!D!)!!(D#3&5&3(D!)!8!9!D*9!#!<!K!R!3(/!j!J!9!)!?&4!,!'
+'!&)!(%#!L!D!8%D!3(!!8%9!D!8#9!8!9!8!-!<!3&?!!##!3()!J!s!A!3*A!K!)!2!3+0!D#(#)!'
+'!),%(!!!%!#!>!D!3(!!D!)!m+)!D!)!3(@#3(5!)!3&.!,#q!3&?!!!D!3&5!-!9!8!D!-!,!'
+'!,?!!%>!?!3&0!#!D!)!2!5)2!)!D!)!3(2#7%+#9!8!3&?!!#D!3&?!!!D!3&0!#!O!8!#!%#'
+'!#%!/!%!!&4!!%>!?!5!0!5!0#)!D!<!9!8*<#)!3#5!3!0!)!8%9#<!L!8!.!5!3%@#3%5!0!?!!!?!5(3#1!D!9!)!,!/!'
+'!%,!!#%#4!+#(!%!O!4!+!4&,!D!)!!###!!#%!!D#.()!D!)!!(_!8!4!+,)!9!D!9!6!+)4!D#)!!!1!'
+'!()!?!))(!<!D!9(L!/!(!!!-!))-!L!8)L!!%##!%L!<*J!<!L!!#L!<+J!%!4!,!)!#!'
+'!(-!(#)&(!?!(#!!)!(#)!!!-!0!%!!!-!)*##!,#()&!!#!1!4!!!-!4#-!?!!!))0!!!)&(!'
+'!*-!6!4!,#!%-!,#!(-!6!/!%!!!-#)+!%#!),-!!!%!/!6!-!!),!(#)!-!)!(#+!)!(!)#(!,!'
+'!2#!)!4#+!.!0!@#0!(!7!1!&!#!!%-%!!-!!%-%!!-#!%#!&!1!+!%!?&4#)!(!%#!!,!6!,!-!!&,!-!'
+'!*-!,&6!+!(!,#-!&!r!m!A!5#2!4##!-!,#6#.!1!&!:!*!A#@!3#5!2!7#6#,#-!!!#!)!?!0!5#I!7!+!%#/!?!%)'
+'!1,&)!(!?!.&?!(#/!(!)&(#/!?!.!6!,!(!&!%!4%,&4#2!5!)!!%-&'
+'!?,!6#,!!&#!%&?!.&7!6!,!'
+)
+# <<< tpot logo data <<<
 # <<< tpot ui <<<
 
 validate_type() {

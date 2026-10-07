@@ -109,11 +109,15 @@ class LogoTest(unittest.TestCase):
             self.assertEqual(len({len(r) for r in rows}), 1)
             self.assertTrue(set("".join(rows)) <= set(".") | set(logo._PIXEL))
 
-    def test_wordmark_is_lower_case(self):
+    def test_wordmark_is_capital_t_pot(self):
         from tpotctl import logo
-        top, ascender_row = logo.WORDMARK[0], logo.WORDMARK[-1]
-        self.assertEqual(top.count("#"), 2)                 # only the two t reach above the x-height
-        self.assertEqual(ascender_row.count("#"), 1)        # only the p reaches below
+        self.assertEqual((len(logo.WORDMARK), len(logo.WORDMARK[0])), (6, 21))
+        top = logo.WORDMARK[0]
+        self.assertTrue(top.startswith("#####"))            # the bar of the capital T
+        self.assertEqual(top[5:].count("#"), 3)             # the bowl of the capital P, nothing else
+        self.assertEqual({row[2] for row in logo.WORDMARK}, {"#"})   # the stem of the T: full height
+        self.assertEqual({row[9] for row in logo.WORDMARK}, {"#"})   # the stem of the P: full height
+        self.assertEqual("".join(row[14:] for row in logo.WORDMARK[:1]).count("#"), 0)  # o, t below
 
     def test_splash_sizes(self):
         """120 x 49 and more the large logo, 80 x 33 the middle one, 80 x 24 the tight one, below none."""
@@ -226,7 +230,7 @@ class LogoTest(unittest.TestCase):
         self.assertEqual(len(logo.wordmark().plain.split("\n")), 3)
         glyphs.set_mode("ascii")
         try:
-            self.assertEqual(logo.wordmark().plain, "t-pot")
+            self.assertEqual(logo.wordmark().plain, "T-Pot")
         finally:
             glyphs.set_mode("unicode")
 

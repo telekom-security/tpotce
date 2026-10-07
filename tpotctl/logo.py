@@ -12,14 +12,16 @@ from rich.text import Text
 
 from tpotctl import glyphs, theme
 
-# t-pot in lower case: t with its ascender, p with its descender, o at x-height
+# T-Pot: the capital T and P at the full height of six pixels, the o and the t (with its
+# ascender) below them; the scripts show the same pixels (tpotctl/ui_logo.py writes them into
+# installer/lib/ui.sh), so keep it a plain list of strings
 WORDMARK = [
-    ".#..............#.",
-    "###....###.###.###",
-    ".#..##.#.#.#.#..#.",
-    ".#.....#.#.#.#..#.",
-    ".##....###.###..##",
-    ".......#..........",
+    "#####....###.........",
+    "..#......#..#......#.",
+    "..#......#..#.###.###",
+    "..#...##.###..#.#..#.",
+    "..#......#....#.#..#.",
+    "..#......#....###..##",
 ]
 
 _PIXEL = {"M": "magenta", "P": "petrol", "W": "glass", "B": "mist", "#": "glass"}
@@ -56,7 +58,7 @@ def _colour(pixel: str, on: str):
 
 
 def wordmark(colour: str = "") -> Text:
-    """Three rows, 19 columns; colour overrides the letters (i.e. glass on a magenta plate)."""
+    """Three rows, 21 columns; colour overrides the letters (i.e. glass on a magenta plate)."""
     if glyphs.mode() == "ascii":
-        return Text("t-pot", style="bold")
+        return Text("T-Pot", style="bold")
     return _pixels(WORDMARK, colour)
