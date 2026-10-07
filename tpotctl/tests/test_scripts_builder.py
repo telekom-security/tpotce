@@ -43,7 +43,16 @@ case "$*" in
     for s in ${STUB_FAIL:-}; do
       case "$*" in *"build $s "*) echo "no such file"; exit 1 ;; esac
     done
-    [ -n "${STUB_BUILD_SLEEP:-}" ] && sleep "${STUB_BUILD_SLEEP}"
+    for s in ${STUB_SLOW:-}; do
+      case "$*" in *"build $s "*) sleep 1 ;; esac
+    done
+    [ -n "${STUB_BUILD_PIDS:-}" ] && echo "$$" >> "${STUB_BUILD_PIDS}"
+    if [ -n "${STUB_BUILD_SLEEP:-}" ]; then
+      sleep "${STUB_BUILD_SLEEP}" &
+      [ -n "${STUB_BUILD_PIDS:-}" ] && echo "$!" >> "${STUB_BUILD_PIDS}"
+      wait "$!"
+    fi
+    [ -n "${STUB_BUILD_MARK:-}" ] && echo "finished $*" >> "${STUB_BUILD_MARK}"
     echo "built"
     exit 0 ;;
 esac
@@ -481,6 +490,78 @@ class PushTest(BuilderHarness):
         self.assertEqual(proc.returncode, 130, out + rest)
         self.assertIn("tc qdisc del dev eth0 root", self.calls())
 
+    def test_a_terminate_stops_the_builds_first(self):
+        # SIGTERM to the builder alone (systemd, kill): the builds it started end too, before the upload
+        # limit goes, so nothing goes on pushing without the limit
+        pids = os.path.join(self.home, "build.pids")
+        mark = os.path.join(self.home, "build.finished")
+        environment = dict(os.environ, HOME=self.home, PATH=f"{self.bin}:{os.environ['PATH']}", TPOT_GUM="off",
+                           STUB_BUILD_SLEEP="4", STUB_BUILD_PIDS=pids, STUB_BUILD_MARK=mark,
+                           STUB_SERVICES="adbhoney cowrie", **self.env())
+        started = time.time()
+        proc = subprocess.Popen(["bash", BUILDER, "-p"], env=environment, stdin=subprocess.DEVNULL,
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        self.addCleanup(lambda: proc.poll() is None and proc.kill())
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            if os.path.exists(pids):
+                with open(pids, encoding="utf-8") as handle:
+                    if len(handle.read().split()) >= 4:
+                        break
+            time.sleep(0.05)
+        with open(pids, encoding="utf-8") as handle:
+            stubs = [int(pid) for pid in handle.read().split()]
+        self.assertEqual(len(stubs), 4, stubs)
+        proc.send_signal(signal.SIGTERM)
+        self.assertEqual(proc.wait(timeout=20), 130)
+        alive = [pid for pid in stubs if self.alive(pid)]
+        self.assertEqual(alive, [], "the builds still run after the builder ended")
+        time.sleep(max(0, started + 5 - time.time()))
+        self.assertFalse(os.path.exists(mark), "a build finished after the builder ended")
+        tc = [line for line in self.calls() if line.startswith("tc ")]
+        self.assertEqual(tc[-1], "tc qdisc del dev eth0 root")
+
+    @staticmethod
+    def alive(pid):
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        state = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], capture_output=True,
+                               universal_newlines=True).stdout.strip()
+        return bool(state) and not state.startswith("Z")
+
+    def test_a_one_platform_push_needs_its_own_tag(self):
+        # the release tag carries the images of both platforms, one platform pushed over it would replace them
+        for args, arch in ((["-i", "cowrie", "-a", "host", "-p"], "amd64"), (["-a", "arm64", "--push-hub"], "arm64"),
+                           (["-a", "amd64", "--push-ghcr", "-l", "off"], "amd64")):
+            with self.subTest(args=args):
+                rc, out = self.builder(*args)
+                self.assertEqual(rc, 2, out)
+                self.assertIn("### [ERROR] - ", out)
+                self.assertIn("multi-arch", out)
+                self.assertIn(f"-t {VERSION}-{arch}", out)
+                self.assertEqual(self.calls(), [])
+        rc, out = self.builder("-i", "cowrie", "-a", "host", "-p", STUB_ARCH="aarch64")
+        self.assertEqual(rc, 2, out)
+        self.assertIn(f"-t {VERSION}-arm64", out)
+        self.assertEqual(self.calls(), [])
+        # with a tag of its own it pushes
+        rc, out = self.builder("-i", "cowrie", "-a", "host", "-p", "-t", "9.9.9-amd64", STUB_PLATFORMS="linux/amd64")
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(self.builds(), ["cowrie"])
+        build = [line for line in self.calls() if " build cowrie" in line][0]
+        self.assertIn("--push", build)
+        self.assertIn("TPOT_VERSION=9.9.9-amd64 ", build)
+        # one platform without a push, both platforms with one: no tag needed
+        os.remove(os.path.join(self.home, "calls"))
+        rc, out = self.builder("-a", "host", STUB_PLATFORMS="linux/amd64")
+        self.assertEqual(rc, 0, out)
+        rc, out = self.builder("-a", "both", "-p")
+        self.assertEqual(rc, 0, out)
+
 
 class SmokeTest(BuilderHarness):
 
@@ -550,6 +631,18 @@ class SmokeTest(BuilderHarness):
                       "        - linux/amd64\n      tags: !reset []\n", override)
         self.assertIn("### [OK] - Smoke test cowrie", out)
         self.assertIn(f"### [FAILED] - Smoke test tpotinit_env, see {self.log}/test-tpotinit_env.log", out)
+
+    def test_smoke_tests_follow_the_selection_not_the_finish(self):
+        # the first image finishes last: the load build and the tests still go in the order of the list
+        rc, out = self.builder("-i", "cowrie,tpotinit", "-T", "--docker-repo", "hub", STUB_SLOW="cowrie",
+                               TPOT_BUILDER_TESTS_DIR=self.tests)
+        self.assertEqual(rc, 0, out)
+        self.assertLess(out.index("### [OK] - Image tpotinit"), out.index("### [OK] - Image cowrie"), out)
+        load = [line for line in self.calls() if "override-load.yml" in line]
+        self.assertEqual(len(load), 1, self.calls())
+        self.assertIn("build cowrie tpotinit --builder mybuilder", load[0])
+        self.assertEqual([line.split()[1] for line in self.calls() if line.startswith("test ")],
+                         ["cowrie", "tpotinit_env"])
 
     def test_a_failed_load_build_skips_the_tests(self):
         rc, out = self.builder("-i", "cowrie", "-T", STUB_LOAD_RC="1", TPOT_BUILDER_TESTS_DIR=self.tests)
@@ -655,6 +748,31 @@ class MenuTest(BuilderHarness):
         self.assertIn("builder.sh -y -g nsm -a host -n -j 4", out)
         self.assertEqual(sorted(self.builds()), ["p0f", "suricata"])
         self.assertIn("### [OK] - 2 of 2 images built", out)
+
+    def test_menu_one_platform_push_asks_for_a_tag(self):
+        # all images; this host only; push to Docker Hub, not to GHCR; the tag; no limit; with cache;
+        # 2 at a time; no tests; keep; Build
+        answers = "1\n1\n2\ny\nn\n9.9.9-amd64\n2\nn\n2\nn\nn\n1\n"
+        rc, out = at_terminal([], self.terminal_env(STUB_PLATFORMS="linux/amd64"), answers=answers)
+        self.assertEqual(rc, 0, out)
+        self.assertIn("multi-arch", out)
+        self.assertIn(f"Tag for this push (i.e. {VERSION}-amd64, enter = no push):", out)
+        self.assertIn("### Tag 9.9.9-amd64 for linux/amd64 only", out)
+        self.assertIn("builder.sh -y -a host --push-hub -l off -t 9.9.9-amd64", out)
+        build = [line for line in self.calls() if " build cowrie" in line][0]
+        self.assertIn("--push", build)
+        self.assertIn("TPOT_VERSION=9.9.9-amd64 ", build)
+
+    def test_menu_one_platform_push_without_a_tag_does_not_push(self):
+        # a bad tag is asked again, enter then means no push: no limit question, the summary, Back, Quit
+        answers = "1\n1\n2\ny\ny\nbad tag\n\nn\n2\nn\nn\n2\n3\n"
+        rc, out = at_terminal([], self.terminal_env(STUB_PLATFORMS="linux/amd64"), answers=answers)
+        self.assertEqual(rc, 0, out)
+        self.assertIn("Not a version tag: bad tag", out)
+        self.assertNotIn("Upload limit while pushing", out)
+        self.assertRegex(out, r"builder\.sh -y -a host\n")
+        self.assertFalse(any(line.startswith("docker login") for line in self.calls()), self.calls())
+        self.assertEqual(self.builds(), [])
 
     def test_menu_end_of_input_cancels(self):
         rc, out = at_terminal([], self.terminal_env(), answers="1\n\x04")

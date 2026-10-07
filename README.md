@@ -965,10 +965,11 @@ sudo docker/_builder/builder.sh -y                                  # build ever
 sudo docker/_builder/builder.sh -y -i cowrie,dionaea -a host -T     # two images for this host, then their smoke tests
 sudo docker/_builder/builder.sh -y -g honeypots -p                  # the honeypots, pushed to Docker Hub and GHCR
 sudo docker/_builder/builder.sh --push-ghcr -t 24.04.3 -l off       # everything with tag 24.04.3 to GHCR, no upload limit
+sudo docker/_builder/builder.sh -a arm64 -p -t 24.04.3-arm64        # arm64 only, pushed: needs a tag of its own
 docker/_builder/builder.sh -L                                       # the images by group
 sudo docker/_builder/builder.sh --check | --setup | --uninstall     # the buildx builder
 ```
-- Groups: `honeypots`, `tanner` (Snare, Tanner, PHPox, Redis), `nsm`, `elk`, `tools`, `all`. Pushing needs a `docker login` to the registries beforehand, without one it stops instead of waiting. The logs are in `docker/_builder/log/`. Exit codes: 0 done, 1 an image failed, 2 a wrong option, 3 the environment (rights, Docker, builder, login), 4 built but a smoke test failed, 130 interrupted. `setup_builder.sh -y` / `-u` still works and calls `builder.sh --setup` / `--uninstall`.
+- Groups: `honeypots`, `tanner` (Snare, Tanner, PHPox, Redis), `nsm`, `elk`, `tools`, `all`. Pushing needs a `docker login` to the registries beforehand, without one it stops instead of waiting. A push for one platform (`-a amd64`, `arm64` or `host`) would replace the multi-arch images of the release tag, so it needs a tag of its own (`-t`); without one the builder refuses it (exit code 2), the menu asks for one. `CTRL-C` or a `SIGTERM` stops the running builds and pushes before the upload limit is removed. The logs are in `docker/_builder/log/`. Exit codes: 0 done, 1 an image failed, 2 a wrong option, 3 the environment (rights, Docker, builder, login), 4 built but a smoke test failed, 130 interrupted. `setup_builder.sh -y` / `-u` still works and calls `builder.sh --setup` / `--uninstall`.
 <br><br>
 
 ## Daily Reboot

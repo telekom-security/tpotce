@@ -236,6 +236,8 @@ myLOGIN_TIMEOUT="${TPOT_BUILDER_LOGIN_TIMEOUT:-30}"
 myCOMPOSE_MIN="2.24.4"
 myDEFAULT_JOBS=2
 myDEFAULT_LIMIT="40mbit" # at most 90% of the upload bandwidth there is
+mySTOP_TIMEOUT="${TPOT_BUILDER_STOP_TIMEOUT:-10}" # seconds for the builds to end on a signal
+myENV_VERSION="${TPOT_VERSION:-}" # before fuSETTINGS exports the version of a run
 myGROUP_NAMES="honeypots tanner nsm elk tools"
 
 # the options (fuPARSE), "" is off
@@ -317,7 +319,8 @@ terminal it never asks. The logs go to docker/_builder/log." \
     --opt "-j, --jobs N" "Builds at a time, 1-16 (default: ${myDEFAULT_JOBS})" \
     --opt "-l, --upload-limit RATE" "Upload limit while pushing, tc rate or off (default: ${myDEFAULT_LIMIT});
 needs root" \
-    --opt "-t, --tag VERSION" "The version tag (default: the file version of the checkout)" \
+    --opt "-t, --tag VERSION" "The version tag (default: the file version of the checkout); a push for
+one platform (-a amd64, arm64, host) needs one of its own, i.e. <version>-arm64" \
     --opt "--docker-repo REPO" "The Docker Hub repository (default: TPOT_DOCKER_REPO of .env)" \
     --opt "--ghcr-repo REPO" "The GHCR repository (default: TPOT_GHCR_REPO of .env)" \
     --opt "-T, --test" "Run the smoke tests of the built images after the build" \
@@ -445,12 +448,18 @@ fuENV_VALUE () {
   sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" "${myENVFILE}" | tail -n 1 | tr -d "\"'[:space:]"
 }
 
+fuRELEASE () {
+  # the release version: the file version of the checkout (fuUI_VERSION), else
+  # TPOT_VERSION of the environment, else that of docker/_builder/.env
+  local myV
+  myV=$(fuUI_VERSION "${myREPO}")
+  echo "${myV:-${myENV_VERSION:-$(fuENV_VALUE TPOT_VERSION)}}"
+}
+
 fuSETTINGS () {
-  # the version and the repositories of this run: an option, else the file version of
-  # the checkout (fuUI_VERSION) / the environment, else docker/_builder/.env; exported,
-  # so compose takes them over its .env
-  myVER="${myTAG:-$(fuUI_VERSION "${myREPO}")}"
-  [ -n "${myVER}" ] || myVER="${TPOT_VERSION:-$(fuENV_VALUE TPOT_VERSION)}"
+  # the version and the repositories of this run: an option, else the release version
+  # (fuRELEASE); exported, so compose takes them over its .env
+  myVER="${myTAG:-$(fuRELEASE)}"
   myHUB="${myDOCKER_REPO:-${TPOT_DOCKER_REPO:-$(fuENV_VALUE TPOT_DOCKER_REPO)}}"
   myGHCR="${myGHCR_REPO:-${TPOT_GHCR_REPO:-$(fuENV_VALUE TPOT_GHCR_REPO)}}"
   export TPOT_VERSION="${myVER}" TPOT_DOCKER_REPO="${myHUB}" TPOT_GHCR_REPO="${myGHCR}"
@@ -492,6 +501,26 @@ fuLIMITED () { fuPUSHING && [ "${myLIMIT}" != "off" ]; }
 fuONE_REGISTRY () { fuPUSHING && [ "${myPUSH_HUB}" != "${myPUSH_GHCR}" ]; }
 fuOVERRIDE_NEEDED () { [ "${myARCH}" != "both" ] || fuONE_REGISTRY; }
 fuHOST_ONLY () { [ "${#myPLATFORMS[@]}" -eq 1 ] && [ "${myPLATFORMS[0]}" = "linux/${myHOST}" ]; }
+# the release tag holds the images of linux/amd64 and linux/arm64 in one manifest, a
+# push of one platform over it replaces them with that one: it needs a tag of its own
+fuTAG_NEEDED () { fuPUSHING && [ "${myARCH}" != "both" ] && [ -z "${myTAG}" ]; }
+
+fuARCH_NAME () {
+  # the architecture of a one-platform run, for a tag of its own
+  case "${myARCH}" in
+    host) fuHOST_ARCH || echo "host" ;;
+    *) echo "${myARCH}" ;;
+  esac
+}
+
+fuTAG_REFUSED () {
+  # rc 2 with a hint for a push of one platform without -t (over the release tag)
+  fuTAG_NEEDED || return 0
+  fuUI_ERROR "A push for one platform (-a ${myARCH}) over the release tag ${myVER} would replace its multi-arch images (linux/amd64 and linux/arm64)."
+  fuUI_HINT "A one-platform push needs its own tag, i.e. -t ${myVER}-$(fuARCH_NAME)" \
+            "or build both platforms (-a both), or without a push; ${0##*/} -h shows the options." >&2
+  return 2
+}
 
 fuIMAGE_REF () {
   # fuIMAGE_REF <image>: the name the image gets (GHCR when only GHCR is pushed to)
@@ -901,9 +930,10 @@ fuRUN () {
   # one build run, the same from the menu and without it; the exit code of the table
   # in fuHELP
   local myRC=0 myRESULT myIMAGE myREPORTED=0 myFLAGS myOVERRIDE="${myLOGDIR}/override.yml"
-  local -a myOK=() myFAILED=()
+  local -a myOK=() myFAILED=() myBUILT=()
   mySUMMARY=()
   fuSETTINGS
+  fuTAG_REFUSED || return 2
   fuPLATFORMS || return 3
   if [ -z "${myMENU}" ];
     then fuUI_BANNER "Image Builder" "$(fuDESCRIBE)" "Version ${myVER}, ${myHUB} and ${myGHCR}"
@@ -970,7 +1000,13 @@ fuRUN () {
     myRC=1
   fi
   if [ -n "${myTEST}" ] && [ "${#myOK[@]}" -gt 0 ]; then
-    fuSMOKE_TESTS "${myOK[@]}" || { [ "${myRC}" -ne 0 ] || myRC=4; }
+    # the built ones in the order of the selection, not in the one the parallel builds
+    # ended in
+    myBUILT=()
+    for myIMAGE in "${myLIST[@]}"; do
+      [[ " ${myOK[*]} " != *" ${myIMAGE} "* ]] || myBUILT+=("${myIMAGE}")
+    done
+    fuSMOKE_TESTS "${myBUILT[@]}" || { [ "${myRC}" -ne 0 ] || myRC=4; }
   fi
   if fuPUSHING;
     then [ "${myRC}" -eq 1 ] || mySUMMARY+=("ok:Pushed: $(fuTARGETS | cut -d '|' -f 1 | paste -sd ',' - | sed 's/,/, /g')")
@@ -1155,6 +1191,7 @@ fuMENU_OPTIONS () {
   myPUSH_HUB="" myPUSH_GHCR=""
   if fuYES "Push the images to Docker Hub (${myHUB})?" "Push" "No"; then myPUSH_HUB=1; fi
   if fuYES "Push the images to GHCR (${myGHCR})?" "Push" "No"; then myPUSH_GHCR=1; fi
+  if fuPUSHING && [ "${myARCH}" != "both" ]; then fuMENU_TAG; fi
   myLIMIT="${myDEFAULT_LIMIT}"
   if fuPUSHING; then
     if [ "$(whoami 2>/dev/null)" != "root" ];
@@ -1192,6 +1229,25 @@ fuMENU_OPTIONS () {
   fuPLATFORMS
 }
 
+fuMENU_TAG () {
+  # a push of one platform: a tag of its own, the release tag keeps the images of both
+  # platforms; enter means no push
+  local myOUT myREL
+  myREL=$(fuRELEASE)
+  myTAG=""
+  fuUI_WARN "A push for one platform over the release tag ${myREL} would replace its multi-arch images (linux/amd64 and linux/arm64)."
+  while true; do
+    fuASK myOUT fuUI_INPUT "Tag for this push (i.e. ${myREL}-$(fuARCH_NAME), enter = no push):"
+    if [ -z "${myOUT}" ]; then
+      fuUI_WARN "No tag, this run builds without a push."
+      myPUSH_HUB="" myPUSH_GHCR=""
+      return 0
+    fi
+    if fuTAG_OK "${myOUT}"; then myTAG="${myOUT}"; fuSETTINGS; return 0; fi
+    fuUI_WARN "Not a version tag: ${myOUT}"
+  done
+}
+
 fuMENU_LOGIN () {
   # the logins for pushing: docker login in the foreground where one is missing, then
   # checked again; rc 1 when one is still missing
@@ -1212,6 +1268,7 @@ fuMENU_LOGIN () {
 fuMENU_BUILD () {
   # images, options, login and the summary; rc 0 to build, 1 for back
   local myWHAT myIMAGETEXT
+  local -a myTAGTEXT=()
   fuMENU_IMAGES || return 1
   fuMENU_OPTIONS
   if fuPUSHING; then fuMENU_LOGIN || return 1; fi
@@ -1219,8 +1276,12 @@ fuMENU_BUILD () {
     then myIMAGETEXT="${myGROUPS:+groups ${myGROUPS//,/, }}${myGROUPS:+${myIMAGES:+; }}${myIMAGES//,/, }"
     else myIMAGETEXT="all"
   fi
+  if fuPUSHING && [ "${myARCH}" != "both" ]; then
+    myTAGTEXT=("info:Tag ${myTAG} for ${myPLATFORMS[*]} only (the release tag $(fuRELEASE) keeps its multi-arch images)")
+  fi
   fuUI_SUMMARY "Ready to build" "info:Images: ${myIMAGETEXT}" "info:$(fuDESCRIBE)" \
-    "info:Version ${myVER}, ${myHUB} and ${myGHCR}" "next:The same without the menu: $(fuCOMMAND_LINE)" || true
+    "info:Version ${myVER}, ${myHUB} and ${myGHCR}" "${myTAGTEXT[@]}" \
+    "next:The same without the menu: $(fuCOMMAND_LINE)" || true
   fuASK myWHAT fuUI_CHOOSE "Build now?" "Build:build" "Back:back"
   [ "${myWHAT}" = "build" ]
 }
@@ -1256,6 +1317,67 @@ fuMENU () {
   done
 }
 
+fuDESCENDANTS () {
+  # fuDESCENDANTS <pid>: the processes below it, parents first, without this snapshot
+  # (the subshell it runs in, ps and awk)
+  ps -A -o pid= -o ppid= 2>/dev/null | awk -v root="$1" -v self="${BASHPID}" '
+    { kids[$2] = kids[$2] " " $1 }
+    END {
+      tail = split(kids[root], queue, " ")
+      for (head = 1; head <= tail; head++) {
+        p = queue[head]
+        if (p == self) continue
+        print p
+        n = split(kids[p], c, " ")
+        for (i = 1; i <= n; i++) queue[++tail] = c[i]
+      }
+    }'
+}
+
+fuALIVE () {
+  # fuALIVE <pid> ...: 0 while one of them runs (a zombie does not)
+  ps -A -o pid= -o stat= 2>/dev/null | awk -v list=" $* " '
+    index(list, " " $1 " ") && $2 !~ /^Z/ { found = 1 } END { exit !found }'
+}
+
+fuSTOP_CHILDREN () {
+  # everything this run started (xargs, the builds, docker compose and what they
+  # started): stopped first, parents before their children, so none starts a new one,
+  # then ended; what still runs after mySTOP_TIMEOUT seconds is killed
+  local myP myI myNEW
+  local -a myALL=() myFOUND=()
+  for myI in 1 2 3 4 5; do
+    mapfile -t myFOUND < <(fuDESCENDANTS "$$")
+    myNEW=""
+    for myP in "${myFOUND[@]}"; do
+      [[ " ${myALL[*]} " != *" ${myP} "* ]] || continue
+      kill -STOP "${myP}" 2>/dev/null
+      myALL+=("${myP}") myNEW=1
+    done
+    [ -n "${myNEW}" ] || break
+  done
+  [ "${#myALL[@]}" -gt 0 ] || return 0
+  kill -TERM "${myALL[@]}" 2>/dev/null
+  kill -CONT "${myALL[@]}" 2>/dev/null
+  for ((myI = 0; myI < mySTOP_TIMEOUT * 10; myI++)); do
+    fuALIVE "${myALL[@]}" || return 0
+    sleep 0.1
+  done
+  kill -KILL "${myALL[@]}" 2>/dev/null
+  return 0
+}
+
+fuCANCEL () {
+  # INT / TERM: the builds end first, then the upload limit goes, exit 130; a second
+  # signal does not cut that short
+  trap '' INT TERM
+  echo
+  fuUI_WARN "Cancelled."
+  fuSTOP_CHILDREN
+  fuLIMIT_OFF
+  exit 130
+}
+
 fuMAIN () {
   local myRC=0
   fuPARSE "$@" || return 2
@@ -1264,7 +1386,7 @@ fuMAIN () {
     list) fuLIST; return 0 ;;
   esac
   trap fuLIMIT_OFF EXIT
-  trap 'echo; fuUI_WARN "Cancelled."; exit 130' INT TERM
+  trap fuCANCEL INT TERM
   case "${myACTION}" in
     check) fuCHECK; return $? ;;
     setup) fuSETUP; return $? ;;
