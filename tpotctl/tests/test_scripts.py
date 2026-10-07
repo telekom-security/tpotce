@@ -552,7 +552,9 @@ class BuilderTest(Harness):
             if os.sep + "tests" in root:
                 continue
             for name in files:
-                if name.endswith(".py"):
+                # release.py is a release tool like the builder, not the Manager (test_release checks it):
+                # it names the builder's .env as a place of the version
+                if name.endswith(".py") and not (root == folder and name == "release.py"):
                     with open(os.path.join(root, name), encoding="utf-8") as handle:
                         self.assertFalse("_builder" in handle.read(), name)
         readme = read("README.md")
