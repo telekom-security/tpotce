@@ -115,53 +115,87 @@ class LogoTest(unittest.TestCase):
         self.assertEqual(top.count("#"), 2)                 # only the two t reach above the x-height
         self.assertEqual(ascender_row.count("#"), 1)        # only the p reaches below
 
-    def test_splash_frames(self):
+    def test_splash_sizes(self):
+        """120 x 49 and more the large logo, 80 x 33 the middle one, 80 x 24 the tight one, below none."""
         from tpotctl import splash_anim
-        splash = splash_anim.Splash("24.04.2")
-        sizes = set()
-        for step in range(0, 21):
-            frame = splash.frame(step / 10).plain.split("\n")
-            sizes.add((len(frame), max(len(line) for line in frame)))
-        self.assertEqual(sizes, {(splash.height, splash.width)})          # it never jumps
-        start, middle, end = (splash.frame(t).plain for t in (0.0, 1.2, splash_anim.DURATION))
-        self.assertFalse(start.strip())                                   # starts dark
-        self.assertIn("honeypot platform", middle)
-        self.assertIn("█", middle)
-        self.assertFalse(end.strip())                                     # and ends dark
+        cases = {(120, 49): "120", (200, 60): "120", (119, 49): "80", (120, 48): "80", (80, 33): "80",
+                 (80, 32): "80x24", (100, 30): "80x24", (80, 24): "80x24", (79, 24): None, (80, 23): None}
+        for (width, height), variant in cases.items():
+            splash = splash_anim.best("24.04.2", width, height)
+            self.assertEqual(splash.variant if splash else None, variant, (width, height))
+        for variant, size in (("120", (120, 49)), ("80", (80, 33)), ("80x24", (80, 24))):
+            splash = splash_anim.Splash("24.04.2", variant)
+            self.assertEqual((splash.width, splash.height), size, variant)
+
+    def test_splash_frames_keep_their_size(self):
+        from tpotctl import splash_anim
+        for variant in ("120", "80", "80x24"):
+            splash = splash_anim.Splash("24.04.2", variant)
+            for step in range(0, int(splash_anim.DURATION * 4) + 1):
+                rows = splash.frame(step / 4).plain.split("\n")
+                self.assertEqual(len(rows), splash.height, (variant, step))
+                self.assertEqual({len(row) for row in rows}, {splash.width}, (variant, step))
+
+    def test_splash_starts_and_ends_dark(self):
+        from tpotctl import splash_anim
+        splash = splash_anim.Splash("24.04.2", "80")
+        for t in (0.0, splash_anim.DURATION):
+            cells = {cell for row in splash.cells(t) for cell in row}
+            self.assertEqual(cells, {(" ", None, None)}, t)
+
+    def test_splash_assembles_the_whole_logo(self):
+        """The honeycombs pop up, the pot draws itself, the honey rises, then the lettering lands."""
+        from tpotctl import splash_anim, splash_art
+        splash = splash_anim.Splash("", "80")
+        width, height, base = splash_art.grid("80")
+        self.assertEqual(splash.assembly(splash_anim.ASSEMBLE), base)
+        early = splash.assembly(0.3)
+        letters = [i for i, part in enumerate(splash.parts) if part == splash_anim.LETTERS]
+        combs = [i for i, part in enumerate(splash.parts) if part == splash_anim.COMBS]
+        self.assertTrue(letters and combs)
+        self.assertEqual({early[i] for i in letters}, {0})
+        self.assertTrue(any(early[i] for i in combs))
+        self.assertTrue(all(pixel == 0 for pixel in splash.assembly(0.0)))
+
+    def test_splash_credits_type_with_afterglow(self):
+        from tpotctl import splash_anim
+        splash = splash_anim.Splash("24.04.2", "80")
+        typing = splash.frame(1.9).plain.split("\n")[-1].strip()
+        done = splash.frame(3.0).plain.split("\n")[-1]
+        self.assertTrue("t-pot 24.04.2" in done and "telekom security" in done, done)
+        self.assertTrue(0 < len(typing) < len(done.strip()), typing)
+        glass, wax, magenta = (splash.colour(index) for index in (7, 2, 4))
+        row = splash.cells(splash_anim.TYPE_END)[-1]
+        last = max(x for x, (char, fg, bg) in enumerate(row) if char == "]")
+        self.assertEqual(row[last][1], glass)                    # just typed: it glows
+        settled = splash.cells(splash_anim.TYPE_END + 0.6)[-1]
+        self.assertEqual(settled[last][1], wax)                  # then it takes its own colour
+        text = "".join(char for char, fg, bg in settled)
+        self.assertEqual(settled[text.index("telekom")][1], magenta)
+        tight = splash_anim.Splash("24.04.2", "80x24").frame(3.0).plain.split("\n")[-1]
+        self.assertTrue("t-pot 24.04.2" in tight and "telekom security" in tight, tight)
+        long = splash_anim.Splash("24.04.2-a-very-long-test-tag-of-a-fork", "80x24").frame(3.0).plain
+        bottom = long.split("\n")[-1]
+        self.assertTrue("[ t-pot ]" in bottom and "telekom security" in bottom, bottom)
+
+    def test_splash_colours_fit_the_manager(self):
+        from rich.color import Color, ColorSystem
+        from tpotctl import splash_anim, theme
+        truecolor = splash_anim.colours("truecolor")
+        for index, token in ((1, "COMB_LIT"), (2, "WAX"), (4, "MAGENTA"), (7, "GLASS"), (9, "ASH")):
+            self.assertEqual(truecolor[index], theme.TRUECOLOR[token], token)
+        self.assertEqual([c for c in splash_anim.colours("256") if pure_red(c)], [])
+        self.assertEqual([c for c in splash_anim.colours("16")
+                          if Color.parse(c).downgrade(ColorSystem.STANDARD).number in (1, 9)], [])
+
+    def test_splash_ascii_is_ascii(self):
+        from tpotctl import splash_anim
         glyphs.set_mode("ascii")
         try:
-            self.assertTrue(splash.frame(1.2).plain.isascii())
-        finally:
-            glyphs.set_mode("unicode")
-        self.assertTrue(splash.fits(80, 24))
-        self.assertFalse(splash.fits(40, 24))
-
-    def test_splash_with_a_long_version_keeps_its_frame(self):
-        from tpotctl import splash_anim
-        for version in ("24.04.2-elk9.5.4", "24.04.2-a-very-long-test-tag-of-a-fork"):
-            for scale in (1, 2):
-                splash = splash_anim.Splash(version, scale)
-                for step in range(0, 21):
-                    rows = splash.frame(step / 10).plain.split("\n")
-                    self.assertEqual({len(row) for row in rows}, {splash.width}, (version, scale, step))
-                bottom = splash.frame(1.2).plain.split("\n")[-1]
-                self.assertTrue(bottom.startswith("╚") and bottom.endswith("╝"), bottom)
-                self.assertTrue("telekom security" in bottom, bottom)
-
-    def test_splash_looks_like_a_bbs_logo(self):
-        """A CP437 frame with the credits in it, letters shaded in steps, a colour cycle on the edges."""
-        from tpotctl import splash_anim
-        splash = splash_anim.Splash("24.04.2")
-        early, filling, credits = (splash.frame(t).plain for t in (0.2, 0.5, 1.2))
-        self.assertTrue("╔" in early and "═" in early, early)
-        self.assertGreaterEqual(sum(shade in filling for shade in "░▒▓"), 2, filling)
-        self.assertTrue("t-pot 24.04.2" in credits and "telekom security" in credits, credits)
-        edge_colours = {colour for row in splash.cells(1.1) for char, colour in row if char == "█"}
-        self.assertGreaterEqual(len(edge_colours & {"magenta", "comb", "glass"}), 2, edge_colours)
-        glyphs.set_mode("ascii")
-        try:
-            for step in range(0, 21):
-                self.assertTrue(splash.frame(step / 10).plain.isascii(), step)
+            for variant in ("80", "80x24"):
+                splash = splash_anim.Splash("24.04.2", variant)
+                for step in range(0, int(splash_anim.DURATION * 2) + 1):
+                    self.assertTrue(splash.frame(step / 2).plain.isascii(), (variant, step))
         finally:
             glyphs.set_mode("unicode")
 
@@ -208,17 +242,22 @@ class LookInTheAppTest(unittest.IsolatedAsyncioTestCase):
         from tpotctl import app as tapp
         from tpotctl.screens.splash import SplashScreen
         from tpotctl.tests.test_app import FakeBackend, Recorder
-        for wait, key in ((2.4, None), (0.2, "x")):
+        from tpotctl import splash_anim
+        for key in (None, "x"):
             app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), splash=True)
-            async with app.run_test(size=(120, 40)) as pilot:
-                await pilot.pause(0.1)
-                self.assertIsInstance(app.screen, SplashScreen)
-                if key:
-                    await pilot.press(key)
-                await pilot.pause(wait)
-                self.assertNotIsInstance(app.screen, SplashScreen)
+            with mock.patch.object(splash_anim, "DURATION", 1.0):      # its end, without waiting 8 s
+                async with app.run_test(size=(120, 40)) as pilot:
+                    await pilot.pause(0.1)
+                    self.assertIsInstance(app.screen, SplashScreen)
+                    if key:
+                        await pilot.press(key)
+                    for _ in range(60):
+                        await pilot.pause(0.05)
+                        if not isinstance(app.screen, SplashScreen):
+                            break
+                    self.assertNotIsInstance(app.screen, SplashScreen)
         app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), splash=True)
-        async with app.run_test(size=(60, 18)) as pilot:     # no room for it
+        async with app.run_test(size=(79, 24)) as pilot:     # no room for it
             await pilot.pause(0.1)
             self.assertNotIsInstance(app.screen, SplashScreen)
 

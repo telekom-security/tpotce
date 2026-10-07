@@ -1,6 +1,6 @@
 """The animated splash when the menu starts (tpotctl/splash_anim.py draws the frames).
 
-About two seconds, any key or click goes on at once.
+About eight seconds, any key or click goes on at once; below 80 x 24 there is none.
 """
 
 import time
@@ -10,13 +10,14 @@ from textual.containers import Center, Middle
 from textual.screen import Screen
 from textual.widgets import Static
 
-from tpotctl.splash_anim import DURATION, Splash, best
+from tpotctl import splash_anim
+from tpotctl.splash_anim import Splash, variant_for
 
-FPS = 30
+FPS = 20
 
 
 def fits(width: int, height: int) -> bool:
-    return best("", width, height) is not None
+    return variant_for(width, height) is not None
 
 
 class SplashScreen(Screen):
@@ -24,15 +25,24 @@ class SplashScreen(Screen):
     def __init__(self, version: str = ""):
         super().__init__(id="splash")
         self.version = version
+        self.splash = None
+
+    def choose(self) -> bool:
+        """The variant for the terminal now; False when it is too small for any."""
+        variant = variant_for(self.app.size.width, self.app.size.height)
+        if variant is None:
+            return False
+        if self.splash is None or self.splash.variant != variant:
+            self.splash = Splash(self.version, variant)
+        return True
 
     def on_resize(self) -> None:
-        self.choose()
-
-    def choose(self) -> None:
-        self.splash = best(self.version, self.app.size.width, self.app.size.height) or Splash(self.version)
+        if not self.choose():
+            self.leave()
 
     def compose(self) -> ComposeResult:
-        self.choose()
+        if not self.choose():
+            self.splash = Splash(self.version, "80x24")      # the app only shows it where it fits
         with Middle():
             with Center():
                 yield Static(self.splash.frame(0.0), id="splash-canvas")
@@ -42,14 +52,17 @@ class SplashScreen(Screen):
         self.ticker = self.set_interval(1 / FPS, self.tick)
 
     def tick(self) -> None:
+        # the frame of the time now: a slow tick skips frames instead of slowing the animation down
         elapsed = time.monotonic() - self.started
-        if elapsed >= DURATION:
+        if elapsed >= splash_anim.DURATION:
             self.leave()
             return
         self.query_one("#splash-canvas", Static).update(self.splash.frame(elapsed))
 
     def leave(self) -> None:
-        self.ticker.stop()
+        ticker = getattr(self, "ticker", None)
+        if ticker is not None:
+            ticker.stop()
         if self.is_current:
             self.app.pop_screen()
 

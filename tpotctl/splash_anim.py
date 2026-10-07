@@ -1,15 +1,19 @@
-"""The splash of the T-Pot Manager as frames: the t-pot wordmark as a BBS ANSI logo.
+"""The splash of the T-Pot Manager as frames: the T-Pot ANSI logo (splash_art.py).
 
-About two seconds, frame(t) gives the picture at t seconds (no UI here, the screen in
-screens/splash.py only shows the frames):
+About eight seconds, frame(t) gives the picture at t seconds (no UI here, the screen in
+screens/splash.py only shows the frames, any key goes on at once):
 
-  0.00 - 0.30  a CP437 double frame draws itself around the logo
-  0.15 - 0.90  the letters fill from below in shading steps, a shadow of light shade
-  0.60 - 1.00  the tagline and the credits in the bottom of the frame type themselves
-  0.70 - 1.50  drops fall from the letters, a glint cycles over their edges
-  1.50 - 2.00  everything crumbles cell by cell into the dark
+  0.00 - 1.50  the parts come together: the honeycombs pop up, the pot draws itself, the honey
+               rises, then the lettering lands with a white flash
+  1.50 - 7.50  the full cycle of the template: a light sweeps over the lettering, syrup runs down
+               the drip, three drops fall and splash, light waves on the honey pool, stars twinkle
+  1.60 - 2.60  the credits type themselves under the logo, every character with an afterglow
+  7.50 - 8.00  everything crumbles cell by cell into the dark
 
-Colours are the tokens of theme.py, glyphs follow the icon set (ascii has its own).
+Three sizes: 120 x 49 and 80 x 33 (the logo and a line of credits below it) and 80 x 24 (the logo
+set tighter, the credits in its bottom line); below 80 x 24 there is no splash. The colours follow
+the colour system of the T-Pot Manager (theme.color_system()): the tokens of theme.py in true
+colour, palette entries with 256 or 16 colours. The ascii icon set gets coloured spaces only.
 """
 
 import math
@@ -18,244 +22,356 @@ from typing import Dict, List, Optional, Tuple
 from rich.style import Style
 from rich.text import Text
 
-from tpotctl import glyphs, theme
+from tpotctl import glyphs, splash_art, theme
 
-DURATION = 2.0
-OUT = 1.5                   # the crumbling starts here
+ASSEMBLE = 1.5                  # the parts are together
+CYCLE = 6.0                     # one loop of the template
+OUT = ASSEMBLE + CYCLE          # the crumbling starts
+DURATION = OUT + 0.5
+TYPE_START, TYPE_END = 1.6, 2.6
+GLOW = 0.35                     # how long a typed character glows after
 
-# the letters as pixels, one character per cell: ascender row 0, x-height 2..6, descender 7
-LETTERS = {
-    "t": ["  ##  ", "  ##  ", "######", "  ##  ", "  ##  ", "  ##  ", "   ###", "      "],
-    "-": ["     ", "     ", "     ", "     ", "#####", "     ", "     ", "     "],
-    "p": ["      ", "      ", "##### ", "##  ##", "##  ##", "##  ##", "##### ", "##    "],
-    "o": ["      ", "      ", " #### ", "##  ##", "##  ##", "##  ##", " #### ", "      "],
-}
-WORD = "t-pot"
-TAGLINE = "honeypot platform"
-CREDIT = "telekom security"
-# the frame (corners top left, top right, bottom left, bottom right, then the lines) and the
-# shading steps from light to full, CP437 like the ANSI art of the BBS days, and plain ascii
-FRAME = {"unicode": "╔╗╚╝═║", "ascii": "++++-|"}
-SHADES = {"unicode": "░▒▓█", "ascii": ".:#@"}
-CYCLE = ("mist", "glass", "glass", "mist")                  # the glint over the letter edges
+COMBS, POT, HONEY, POOL, LETTERS = range(5)
+# when the parts come, seconds
+TIMES = {COMBS: (0.0, 0.5), POT: (0.3, 0.8), HONEY: (0.6, 1.1), POOL: (0.6, 1.1), LETTERS: (1.1, 1.5)}
+# where they are, in the coordinates of the design (splash_art.design_of)
+WORD_Y, WORD_X = (495, 798), (147, 1131)
+POT_CENTRE, POT_RADII = (623, 524), (330, 400)
+POOL_TOP = 900
+MAGENTAS = (3, 4, 5, 6)
+# the variants and the terminal they need: the logo, an empty line and the credits
+VARIANTS = (("120", 120, 49), ("80", 80, 33), ("80x24", 80, 24))
 
-Cell = Tuple[str, Optional[str]]          # character, colour token (None: no colour)
-
-
-def wordmark_pixels(scale: int = 1) -> List[str]:
-    """The pixels of the wordmark plus its shadow ('s', one right and one down), each pixel
-    scale x scale cells."""
-    rows = ["  ".join(LETTERS[c][r] for c in WORD) for r in range(len(LETTERS["t"]))]
-    rows = ["".join(c * scale for c in row) for row in rows for _ in range(scale)]
-    height, width = len(rows) + 1, len(rows[0]) + 1
-    grid = [[" "] * width for _ in range(height)]
-    for y, row in enumerate(rows):
-        for x, c in enumerate(row):
-            if c == "#":
-                grid[y][x] = "#"
-    for y, row in enumerate(rows):
-        for x, c in enumerate(row):
-            if c == "#" and grid[y + 1][x + 1] == " ":
-                grid[y + 1][x + 1] = "s"
-    return ["".join(r) for r in grid]
+Cell = Tuple[str, Optional[str], Optional[str]]        # character, foreground, background
 
 
-def _noise(x: int, y: int, salt: int = 0) -> float:
+def colours(system: str) -> List[str]:
+    """The ten colours of the logo for a colour system; the tokens of theme.py where there is one."""
+    if system == "256":
+        return ["#000000", "#5f005f", "#87005f", "#af005f", "#d70087", "#ff5faf", "#ffafd7", "#ffffff",
+                "#585858", "#a8a8a8"]
+    if system == "16":
+        # the template's classic mapping (black, magenta, bright magenta, white, greys) on the VGA set
+        return ["#000000", "#aa00aa", "#aa00aa", "#aa00aa", "#ff55ff", "#ff55ff", "#ffffff", "#ffffff",
+                "#555555", "#aaaaaa"]
+    t = theme.TRUECOLOR
+    return [t["INK"], t["COMB_LIT"], t["WAX"], "#A20053", t["MAGENTA"], "#FF4CA7", "#FF9DD0", t["GLASS"],
+            "#5B585A", t["ASH"]]
+
+
+def variant_for(width: int, height: int) -> Optional[str]:
+    """The largest variant that fits the terminal, None below 80 x 24."""
+    for variant, w, h in VARIANTS:
+        if width >= w and height >= h:
+            return variant
+    return None
+
+
+def _noise(x: float, y: float, salt: int = 0) -> float:
     """A fixed pseudo random number in [0, 1) per cell, the same in every frame."""
     value = math.sin(x * 12.9898 + y * 78.233 + salt * 37.719) * 43758.5453
     return value - math.floor(value)
-
-
-def _ease(p: float) -> float:
-    p = min(max(p, 0.0), 1.0)
-    return 1 - (1 - p) ** 3
 
 
 def _span(t: float, start: float, end: float) -> float:
     return min(max((t - start) / (end - start), 0.0), 1.0)
 
 
+# how bright the colours of the template are, for the ascii set (one colour per cell)
+_LIGHT = [r * .3 + g * .59 + b * .11 for r, g, b in splash_art.PALETTE]
+
+
 class Splash:
 
-    def __init__(self, version: str = "", scale: int = 1):
-        self.version, self.scale = version, scale
-        self.mark = wordmark_pixels(scale)
-        self.mark_w = len(self.mark[0])
-        self.width = self.mark_w + 8
-        # rows: frame, gap, wordmark, drip room (3), tagline, gap, frame with the credits
-        self.mark_y = 2
-        self.drip_y = self.mark_y + len(self.mark)
-        self.tag_y = self.drip_y + 3
-        self.height = self.tag_y + 3
-        self.mark_x = (self.width - self.mark_w) // 2
-        self.drops = self._drops()
+    def __init__(self, version: str = "", variant: str = "80"):
+        self.version, self.variant = version, variant
+        self.w, self.h, self.base = splash_art.grid(variant)
+        self.rows = self.h // 2
+        self.width = self.w
+        self.height = self.rows + (0 if variant == "80x24" else 2)
+        self.palette = colours(theme.color_system())
+        self.design_y = [splash_art.design_of(self.w, self.h, 0, y)[1] for y in range(self.h)]
+        self.parts = [self._part(i) for i in range(len(self.base))]
+        self.appear = [self._appear(i) for i in range(len(self.base))]
+        self.letters = [i for i, part in enumerate(self.parts) if part == LETTERS]
+        self._styles: Dict[Tuple[Optional[str], Optional[str]], Style] = {}
 
-    # -- the parts -----------------------------------------------------------
+    def colour(self, index: int) -> str:
+        return self.palette[index]
 
-    def _frame_cells(self) -> List[Tuple[int, int, int]]:
-        """The border clockwise from the top left corner: x, y, index into FRAME."""
-        right, bottom = self.width - 1, self.height - 1
-        cells = [(0, 0, 0)] + [(x, 0, 4) for x in range(1, right)] + [(right, 0, 1)]
-        cells += [(right, y, 5) for y in range(1, bottom)] + [(right, bottom, 3)]
-        cells += [(x, bottom, 4) for x in range(right - 1, 0, -1)] + [(0, bottom, 2)]
-        cells += [(0, y, 5) for y in range(bottom - 1, 0, -1)]
-        return cells
+    # -- the parts and when they come --------------------------------------------
 
-    def _edge(self, x: int, y: int) -> bool:
-        """A letter pixel next to the outside of its letter: where the colour cycle runs."""
-        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-            nx, ny = x + dx, y + dy
-            if not (0 <= ny < len(self.mark) and 0 <= nx < self.mark_w) or self.mark[ny][nx] != "#":
-                return True
-        return False
+    def _part(self, i: int) -> Optional[int]:
+        c = self.base[i]
+        if c == 0:
+            return None
+        dx, dy = splash_art.design_of(self.w, self.h, i % self.w, i // self.w)
+        if WORD_Y[0] < dy < WORD_Y[1] and WORD_X[0] < dx < WORD_X[1] and c >= 3:
+            return LETTERS
+        if dy > POOL_TOP:
+            return POOL
+        reach = ((dx - POT_CENTRE[0]) / POT_RADII[0]) ** 2 + ((dy - POT_CENTRE[1]) / POT_RADII[1]) ** 2
+        if reach <= 1:
+            # the rim of the pot draws itself, the magenta inside it is honey
+            return HONEY if c in MAGENTAS and reach < .72 else POT
+        return COMBS
 
-    def _drops(self) -> List[Tuple[int, int, float]]:
-        """(x, y of the lowest honey pixel, start time) under some letters."""
-        bottoms: Dict[int, int] = {}
-        for y, row in enumerate(self.mark):
-            for x, c in enumerate(row):
-                if c == "#":
-                    bottoms[x] = y
-        # the stem of the first t, the descender of p, the bottom of o, the hook of the last t
-        wanted = [x * self.scale for x in (3, 15, 24, 34)]
-        drops = []
-        for index, x in enumerate(wanted):
-            column = min(bottoms, key=lambda c: abs(c - x))
-            drops.append((self.mark_x + column, self.mark_y + bottoms[column], 0.72 + 0.11 * index))
-        return drops
+    def _appear(self, i: int) -> float:
+        part = self.parts[i]
+        if part is None:
+            return 0.0
+        start, end = TIMES[part]
+        x, y = i % self.w, i // self.w
+        if part == COMBS:
+            size = max(4, self.w // 14)               # a honeycomb pops up as a whole
+            return start + _noise(x // size, y // size, 3) * (end - start - .15)
+        if part == POT:
+            dx, dy = splash_art.design_of(self.w, self.h, x, y)
+            around = (math.atan2(dx - POT_CENTRE[0], POT_CENTRE[1] - dy) / (2 * math.pi)) % 1
+            return start + around * (end - start - .15) + (0 if self.base[i] in (1, 2) else .1)
+        if part in (HONEY, POOL):
+            return start + (1 - y / (self.h - 1)) * (end - start - .1)
+        return start
 
-    def _grid(self) -> List[List[Cell]]:
-        return [[(" ", None)] * self.width for _ in range(self.height)]
-
-    @staticmethod
-    def _set() -> str:
-        return "ascii" if glyphs.mode() == "ascii" else "unicode"
-
-    def _paint_frame(self, grid, t: float) -> None:
-        chars = FRAME[self._set()]
-        cells = self._frame_cells()
-        for x, y, kind in cells[:int(_ease(_span(t, 0.0, 0.30)) * len(cells))]:
-            grid[y][x] = (chars[kind], "magenta" if kind < 4 else "wax")
-
-    def _paint_mark(self, grid, t: float) -> None:
-        if t < 0.15:
-            return
-        light, medium, dark, full = SHADES[self._set()]
-        rows = len(self.mark)
-        level = rows - _span(t, 0.20, 0.90) * (rows + 3.5)              # the surface, from below
-        cycle = -len(CYCLE) + _span(t, 0.90, 1.35) * (self.mark_w + 2 * len(CYCLE))
-        for y, row in enumerate(self.mark):
-            for x, c in enumerate(row):
-                if c == " ":
-                    continue
-                gx, gy = self.mark_x + x, self.mark_y + y
-                depth = y - level                                       # rows under the surface
-                if c == "s":
-                    if depth >= 3:
-                        grid[gy][gx] = (light, "ash")                   # the shadow
-                elif depth < 0:
-                    grid[gy][gx] = (light, "wax")                       # still empty
-                elif depth < 1:
-                    grid[gy][gx] = (medium, "magenta")
-                elif depth < 2:
-                    grid[gy][gx] = (dark, "magenta")
+    def assembly(self, t: float) -> List[int]:
+        """The pixels while the parts come together; at ASSEMBLE the whole logo."""
+        out = [0] * len(self.base)
+        for i, c in enumerate(self.base):
+            part = self.parts[i]
+            if part is None or part == LETTERS or t < self.appear[i]:
+                continue
+            age = t - self.appear[i]
+            if part == COMBS:
+                out[i] = 7 if age < .05 else c                  # pops up with a glint
+            elif part == POT:
+                out[i] = 6 if age < .04 and c in (1, 2) else c
+            else:
+                out[i] = 6 if age < .06 else c                  # the rising edge of the honey shines
+        start = TIMES[LETTERS][0]
+        if t >= start:
+            age = t - start
+            drop = 2 if age < .1 else 0                         # it lands from a line above
+            for i in self.letters:
+                c = self.base[i]
+                if age < .12:
+                    shade = 7                                   # the flash
+                elif c in MAGENTAS and age < .22:
+                    shade = 6
+                elif c in MAGENTAS and age < .32:
+                    shade = 5
                 else:
-                    band = math.floor(x - cycle) if self._edge(x, y) else -1
-                    grid[gy][gx] = (full, CYCLE[band] if 0 <= band < len(CYCLE) else "magenta")
+                    shade = c
+                y = i // self.w - drop
+                if y >= 0:
+                    out[y * self.w + i % self.w] = shade
+        return out
 
-    def _paint_drops(self, grid, t: float) -> None:
-        ascii_mode = glyphs.mode() == "ascii"
-        trail, head, splash = ("|", "o", ".") if ascii_mode else ("┃", "•", "·")
-        for x, y0, start in self.drops:
-            if t < start or t >= OUT:
-                continue
-            fall = (t - start) / 0.06                                      # rows fallen
-            bottom = self.tag_y - 1
-            y = y0 + 1 + int(fall)
-            if y > bottom:
-                if fall < (bottom - y0) + 3:
-                    grid[bottom][x] = (splash, "magenta")
-                continue
-            if y - 1 > y0:
-                grid[y - 1][x] = (trail, "magenta")
-            grid[y][x] = (head, "magenta")
+    # -- the cycle of the template ------------------------------------------------
 
-    def _paint_tagline(self, grid, t: float) -> None:
-        x0 = (self.width - len(TAGLINE)) // 2
-        for index, char in enumerate(TAGLINE[:int(_span(t, 0.6, 1.0) * len(TAGLINE))]):
-            grid[self.tag_y][x0 + index] = (char, "ash")
+    def _put(self, a: List[int], x: int, y: int, colour: int) -> None:
+        if 0 <= x < self.w and 0 <= y < self.h:
+            a[y * self.w + x] = colour
 
-    def credits(self) -> List[Cell]:
-        """The credits in the bottom line of the frame: [ t-pot 24.04.2 ]==[ telekom security ]; a
-        version too long for the frame is left out, the corners always stay."""
-        line = FRAME[self._set()][4]
-        for name in (f"t-pot {self.version}".strip(), "t-pot"):
-            parts = [("[ ", "wax"), (name, "glass"), (" ]", "wax"), (line * 2, "wax"), ("[ ", "wax"),
-                     (CREDIT, "magenta"), (" ]", "wax")]
-            cells = [(char, colour) for text, colour in parts for char in text]
-            if len(cells) <= self.width - 4:
+    def cycle(self, phase: float) -> List[int]:
+        """One frame of the template's loop (its frame()), phase in seconds from 0 to CYCLE."""
+        w, h, base = self.w, self.h, self.base
+        a = list(base)
+        sweep = -.15 + (phase / CYCLE) * 1.45                   # a light across the lettering
+        for y in range(h):
+            if 495 < self.design_y[y] < 798:
+                for x in range(w):
+                    i = y * w + x
+                    if base[i] in MAGENTAS:
+                        distance = abs(x / w - y / h * .12 - sweep)
+                        if distance < .012:
+                            a[i] = 7
+                        elif distance < .034:
+                            a[i] = 6
+                        elif distance < .052:
+                            a[i] = 5
+        for yy in splash_art.SYRUP_Y:                           # syrup runs down the long drip
+            x, y = splash_art.design_xy(w, h, splash_art.SYRUP_X, yy)
+            if 0 <= x < w and 0 <= y < h and base[y * w + x] in MAGENTAS:
+                self._put(a, x, y, 6 if (y - int(phase * 7)) % 7 < 2 else 4)
+        for k, (xx, yy) in enumerate(splash_art.DROPS):         # three drops fall and splash
+            p = ((phase + k * 1.65) % 3) / 3
+            start_x, start_y = splash_art.design_xy(w, h, xx, yy)
+            end_x, end_y = splash_art.design_xy(w, h, xx, splash_art.POOL_Y)
+            if p < .16:
+                length = 1 + int(p / .16 * 2)
+                for dy in range(length):
+                    self._put(a, start_x, start_y + dy, 4)
+                self._put(a, start_x, start_y + length, 6)
+            elif p < .83:
+                q = (p - .16) / .67
+                y = start_y + 2 + int((end_y - start_y - 2) * q * q)
+                self._put(a, start_x, y - 1, 4)
+                self._put(a, start_x, y, 5)
+                if w >= 120:
+                    self._put(a, start_x - 1, y, 4)
+                    self._put(a, start_x, y + 1, 4)
+            else:
+                radius = 1 + int((p - .83) / .17 * 4)
+                for dx in (-radius, radius):
+                    self._put(a, end_x + dx, end_y, 5)
+                    self._put(a, end_x + dx, end_y - 1, 4)
+                if radius < 3:
+                    self._put(a, end_x, end_y - 2, 6)
+        for y in range(h):                                      # light waves on the honey pool
+            if 924 < self.design_y[y] < 1035:
+                for x in range(w):
+                    i = y * w + x
+                    if base[i] in MAGENTAS:
+                        wave = math.sin(x * .48 - phase * math.pi * 2 / CYCLE * 2 + y * .7)
+                        if wave > .93:
+                            a[i] = 6
+                        elif wave > .7:
+                            a[i] = 5
+        for k, (xx, yy) in enumerate(splash_art.STARS):         # the stars twinkle
+            x, y = splash_art.design_xy(w, h, xx, yy)
+            if int((phase + k * .73) * 3) % 9 == 0:
+                self._put(a, x, y, 7)
+                if w >= 120:
+                    for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                        self._put(a, x + dx, y + dy, 6)
+        return a
+
+    def pixels(self, t: float) -> List[int]:
+        if t < ASSEMBLE:
+            return self.assembly(t)
+        return self.cycle(min(t, OUT) - ASSEMBLE)
+
+    # -- the credits ---------------------------------------------------------------
+
+    def credits(self) -> List[Tuple[int, int, str, int]]:
+        """x, y, character and its colour index, in the order they are typed."""
+        ascii_set = glyphs.mode() == "ascii"
+        line, double = ("-", "=") if ascii_set else ("─", "═")
+        placed: List[Tuple[int, int, str, int]] = []
+
+        def place(x: int, y: int, parts) -> None:
+            for text, colour in parts:
+                for char in text:
+                    placed.append((x, y, char, colour))
+                    x += 1
+
+        def name_parts(room: int):
+            for name in (f"t-pot {self.version}".strip(), "t-pot"):
+                parts = [("[ ", 2), (name, 7), (" ]", 2)]
+                if sum(len(text) for text, _c in parts) <= room:
+                    break
+            return parts
+        credit = [("[ ", 2), ("telekom security", 4), (" ]", 2)]
+        if self.variant == "80x24":
+            # the bottom line of the logo has room left (columns 0-27) and right (49-79) of the pool
+            y = self.rows - 1
+            place(1, y, [(line * 2, 2)] + name_parts(24))
+            right = credit + [(line * 2, 2)]
+            place(self.width - 2 - sum(len(text) for text, _c in right), y, right)
+        else:
+            parts = [(line * 2, 2)] + name_parts(self.width - 34) + [(double * 2, 2)] + credit + [(line * 2, 2)]
+            place((self.width - sum(len(text) for text, _c in parts)) // 2, self.height - 1, parts)
+        return placed
+
+    def _paint_credits(self, grid: List[List[Cell]], t: float) -> None:
+        placed = self.credits()
+        count = len(placed)
+        typed = 0
+        for n, (x, y, char, colour) in enumerate(placed):
+            at = TYPE_START + n / count * (TYPE_END - TYPE_START)
+            if t < at:
                 break
-        return cells[:self.width - 4]
+            typed = n + 1
+            age = t - at
+            if age < GLOW / 3:
+                shade = 7                                       # fresh: white hot
+            elif age < GLOW * 2 / 3:
+                shade = 6
+            elif age < GLOW:
+                shade = 5
+            else:
+                shade = colour
+            grid[y][x] = (char, self.palette[shade] if char != " " else None, None)
+        cursor_on = TYPE_START <= t < TYPE_END or (t < TYPE_END + .5 and int(t * 4) % 2 == 0)
+        if cursor_on:
+            if typed < count:
+                x, y = placed[typed][0], placed[typed][1]
+            else:
+                x, y = placed[-1][0] + 1, placed[-1][1]
+            if x < self.width:
+                grid[y][x] = ("#" if glyphs.mode() == "ascii" else "█", self.palette[7], None)
 
-    def _paint_credits(self, grid, t: float) -> None:
-        chars = self.credits()
-        x0 = (self.width - len(chars)) // 2
-        for index, cell in enumerate(chars[:int(_span(t, 0.6, 1.0) * len(chars))]):
-            grid[self.height - 1][x0 + index] = cell
+    # -- the frame -----------------------------------------------------------------
 
-    def _crumble(self, grid, t: float) -> None:
+    def _crumble(self, grid: List[List[Cell]], t: float) -> None:
         if t < OUT:
             return
         progress = _span(t, OUT, DURATION) * 1.15
-        off = glyphs.g("off")
         for y, row in enumerate(grid):
-            for x, (char, colour) in enumerate(row):
-                if char == " ":
+            for x, cell in enumerate(row):
+                if cell == (" ", None, None):
                     continue
-                h = _noise(x, y, 7) * 0.85 + (abs(x - self.width / 2) / self.width) * 0.15
-                if h < progress - 0.12:
-                    row[x] = (" ", None)
+                h = _noise(x, y, 7) * .85 + (abs(x - self.width / 2) / self.width) * .15
+                if h < progress - .12:
+                    row[x] = (" ", None, None)
                 elif h < progress:
-                    row[x] = (off, "wax")                                  # crumbles into a cell
-
-    # -- the frame -----------------------------------------------------------
+                    row[x] = (" ", None, self.palette[2])            # an ember before it goes dark
 
     def cells(self, t: float) -> List[List[Cell]]:
-        grid = self._grid()
-        self._paint_frame(grid, t)
-        self._paint_mark(grid, t)
-        self._paint_drops(grid, t)
-        self._paint_tagline(grid, t)
-        self._paint_credits(grid, t)
+        pixels = self.pixels(t)
+        w, palette = self.w, self.palette
+        ascii_set = glyphs.mode() == "ascii"
+        grid: List[List[Cell]] = []
+        for r in range(self.rows):
+            row: List[Cell] = []
+            for x in range(w):
+                top, bottom = pixels[2 * r * w + x], pixels[(2 * r + 1) * w + x]
+                if top == bottom == 0:
+                    row.append((" ", None, None))
+                elif ascii_set:
+                    row.append((" ", None, palette[top if _LIGHT[top] >= _LIGHT[bottom] else bottom]))
+                elif top == bottom:
+                    row.append((" ", None, palette[top]))
+                elif bottom == 0:
+                    row.append(("▀", palette[top], None))
+                elif top == 0:
+                    row.append(("▄", palette[bottom], None))
+                else:
+                    row.append(("▀", palette[top], palette[bottom]))
+            grid.append(row)
+        for _ in range(self.height - self.rows):
+            grid.append([(" ", None, None)] * self.width)
+        if t >= TYPE_START:
+            self._paint_credits(grid, t)
         self._crumble(grid, t)
         return grid
 
     def frame(self, t: float) -> Text:
         out = Text()
-        styles: Dict[Optional[str], Style] = {}
         for y, row in enumerate(self.cells(t)):
-            run, run_colour = "", None
-            for char, colour in row:
-                if colour != run_colour and run:
-                    out.append(run, styles.get(run_colour))
+            run, key = "", None
+            for char, fg, bg in row:
+                if (fg, bg) != key and run:
+                    out.append(run, self._style(key))
                     run = ""
-                if colour not in styles:
-                    styles[colour] = Style(color=theme.color(colour), bold=colour == "glass") if colour else Style()
-                run_colour = colour
+                key = (fg, bg)
                 run += char
-            out.append(run, styles.get(run_colour))
+            out.append(run, self._style(key))
             if y < self.height - 1:
                 out.append("\n")
         return out
 
+    def _style(self, key) -> Style:
+        if key not in self._styles:
+            fg, bg = key
+            self._styles[key] = Style(color=fg, bgcolor=bg) if fg or bg else Style()
+        return self._styles[key]
+
     def fits(self, width: int, height: int) -> bool:
-        return width >= self.width + 2 and height >= self.height + 2
+        return width >= self.width and height >= self.height
 
 
 def best(version: str, width: int, height: int) -> Optional[Splash]:
-    """The largest splash that fits the terminal, None if not even the small one does."""
-    for scale in (2, 1):
-        splash = Splash(version, scale)
-        if splash.fits(width, height):
-            return splash
-    return None
+    """The largest splash that fits the terminal, None below 80 x 24."""
+    variant = variant_for(width, height)
+    return Splash(version, variant) if variant else None
