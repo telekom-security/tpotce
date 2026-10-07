@@ -258,7 +258,16 @@ if [ -z "${myBECOME_FILE}" ] && sudo_password_required;
     sudo -v
 fi
 myREMOVED="ok:${HOME}/tpotce is removed"
-if ! fuUI_SPIN "Removing ${HOME}/tpotce ..." "${HOME}/uninstall_tpot.log" sudo rm -rf "${HOME}/tpotce";
+myRC=0
+fuUI_SPIN "Removing ${HOME}/tpotce ..." "${HOME}/uninstall_tpot.log" sudo rm -rf "${HOME}/tpotce" || myRC=$?
+if [ "${myRC}" -eq 130 ];
+  then
+    fuUI_SUMMARY "The uninstallation was stopped" \
+      "ok:T-Pot, its data, Docker Engine and the T-Pot Manager are removed" \
+      "warn:Stopped while removing ${HOME}/tpotce, remove the rest with: sudo rm -rf ${HOME}/tpotce"
+    exit 130
+fi
+if [ "${myRC}" -ne 0 ];
   then
     myREMOVED="warn:${HOME}/tpotce is still there, remove it with: sudo rm -rf ${HOME}/tpotce"
 fi

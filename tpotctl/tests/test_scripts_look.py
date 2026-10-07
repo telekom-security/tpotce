@@ -85,6 +85,27 @@ class ScriptsLookAlikeTest(base.Harness):
                 self.assertTrue("### [ERROR] - " in wrong.stderr, wrong.stderr)
                 self.assertFalse("Options:" in wrong.stdout + wrong.stderr)   # a hint, not the whole help
 
+    def test_every_spinner_stops_on_ctrl_c(self):
+        """fuUI_SPIN returns 130 when Ctrl+C stopped its step (gum takes the key, the step is ended):
+        every call of the scripts a person runs handles that within its statement or the lines after it,
+        instead of taking it for a failure and going on. The builder (a tool for releases, run as root)
+        keeps its own exit codes."""
+        for path in ("install.sh", "update.sh", "restore.sh", "uninstall.sh"):
+            lines = body(path).split("\n")
+            calls = 0
+            for number, line in enumerate(lines):
+                if line.lstrip().startswith("#") or not re.search(r"\bfuUI_SPIN\s+\"", line):
+                    continue
+                calls += 1
+                end = number
+                while lines[end].rstrip().endswith("\\"):
+                    end += 1
+                window = "\n".join(lines[number:end + 4])
+                with self.subTest(script=path, line=line.strip()[:60]):
+                    self.assertIn("130", window)
+            with self.subTest(script=path):
+                self.assertGreater(calls, 0)
+
     def test_handed_over_help_is_the_managers(self):
         """genuser.sh / deploy.sh -h: no banner of their own, the exec to tpot shows its help."""
         for path in HANDED_OVER:

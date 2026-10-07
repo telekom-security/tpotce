@@ -11,6 +11,7 @@ import os
 import re
 import shutil
 import subprocess
+import time
 import unittest
 
 from tpotctl.tests import test_scripts as base
@@ -41,16 +42,19 @@ STUBS = {
                         "exit \"$FAKE_PLAYBOOK_RC\"; fi\necho 'changed: [127.0.0.1]'\n",
     "docker": "#!/bin/sh\necho \"docker $*\" >> \"$HOME/calls\"\ncase \"$*\" in\n"
               "  *'config --images'*) printf 'ghcr.io/t/cowrie:1\\nghcr.io/t/nginx:1\\n' ;;\n"
-              "  *' pull'*) echo ' cowrie Pulled' >&2; echo ' nginx Pulled' >&2; exit \"${FAKE_PULL_RC:-0}\" ;;\n"
+              "  *' pull'*) if [ -n \"$FAKE_PULL_SLOW\" ]; then sleep 2; touch \"$HOME/marker\"; fi\n"
+              "             echo ' cowrie Pulled' >&2; echo ' nginx Pulled' >&2; exit \"${FAKE_PULL_RC:-0}\" ;;\n"
               "esac\n",
 }
-# a gum that confirms with FAKE_GUM_CONFIRM (no by default), styles plain text and spins in the foreground
+# a gum that confirms with FAKE_GUM_CONFIRM (no by default), styles plain text and spins in the foreground;
+# a spin whose title has FAKE_GUM_STOP ends at once with 130, as gum does on Ctrl+C
 GUM = ("#!/bin/sh\ncase \"$1\" in\n"
        f"  --version) echo 'gum version v{GUM_VERSION}' ;;\n"
        "  confirm) echo confirm >> \"$HOME/gum.calls\"; exit \"${FAKE_GUM_CONFIRM:-1}\" ;;\n"
        "  style) while [ \"$#\" -gt 0 ] && [ \"$1\" != \"--\" ]; do shift; done; shift\n"
        "         for a in \"$@\"; do echo \"$a\"; done ;;\n"
-       "  spin) while [ \"$#\" -gt 0 ] && [ \"$1\" != \"--\" ]; do shift; done; shift; exec \"$@\" ;;\n"
+       "  spin) if [ -n \"$FAKE_GUM_STOP\" ]; then case \"$*\" in *\"$FAKE_GUM_STOP\"*) exit 130 ;; esac; fi\n"
+       "        while [ \"$#\" -gt 0 ] && [ \"$1\" != \"--\" ]; do shift; done; shift; exec \"$@\" ;;\n"
        "esac\nexit 0\n")
 
 
@@ -232,6 +236,17 @@ class InstallShTest(Scripts):
         write(os.path.join(self.home, "src", "version"), NEW + "\n")
         self.assertIn(f"[ t-pot {NEW} ]", ui.plain(self.at_terminal(self.script, "-b", "99.3.0")))
 
+    def test_ctrl_c_stops_the_pull(self):
+        out = ui.plain(stopped(self, self.script, "-s", "-t", "s", TPOT_INSTALL_PACKAGES_DONE="1",
+                               FAKE_GUM_STOP="Pulling the images", FAKE_PULL_SLOW="1"))
+        self.assertIn("rc=130", out)
+        self.assertIn("Stopped: Pulling the images", out)
+        self.assertIn("The installation was stopped", out)
+        self.assertFalse(re.search(r"^ *T-Pot is installed *$", out, re.M), out[-800:])   # not its summary
+        self.assertNotIn("Not all images could be pulled", out)
+        self.assertNotIn("grc netstat", self.calls())
+        went_no_further(self)
+
     def test_no_logo_in_the_marks_mode(self):
         out = ui.plain(self.at_terminal(self.script, "-s", "-M", "-t", "s", TPOT_INSTALL_PACKAGES_DONE="1"))
         self.assertNotIn("telekom security", out)
@@ -306,6 +321,34 @@ class UninstallShTest(Scripts):
         out = ui.plain(self.at_terminal(self.script, TPOT_MARKS="1"))
         self.assertNotIn("telekom security", out)
         self.assertIn("T-Pot Uninstaller", out)
+
+    def test_ctrl_c_stops_the_removal(self):
+        write(os.path.join(self.bin, "rm"), "#!/bin/sh\ncase \"$*\" in *\"/tpotce\")\n"
+              "  sleep 2; touch \"$HOME/marker\"; exit 0 ;;\nesac\n"
+              f"exec {shutil.which('rm')} \"$@\"\n", 0o755)
+        out = ui.plain(stopped(self, self.script, "-y", FAKE_GUM_STOP="Removing"))
+        self.assertIn("rc=130", out)
+        self.assertIn(f"Stopped: Removing {self.tpotce}", out)
+        self.assertIn("The uninstallation was stopped", out)
+        self.assertIn(f"sudo rm -rf {self.tpotce}", out)
+        self.assertNotIn("T-Pot is uninstalled", out)
+        went_no_further(self)
+
+
+def stopped(case, script, *args, **env):
+    """The script at a terminal (120 x 49) and its exit code as rc=<n>, the spin of FAKE_GUM_STOP
+    ends at once with 130 like gum on Ctrl+C."""
+    quoted = " ".join("'" + a.replace("'", "'\\''") + "'" for a in (script,) + args)
+    start = time.time()
+    out = ui.at_terminal(f'bash {quoted}; echo "rc=$?"', case.env(**env), 120, 49, source="/dev/null", timeout=60)
+    case.assertLess(time.time() - start, 10)
+    return out
+
+
+def went_no_further(case):
+    """The step under the spinner (2 s, then $HOME/marker) is gone."""
+    time.sleep(2.5)
+    case.assertFalse(os.path.exists(os.path.join(case.home, "marker")), "the step went on after Ctrl+C")
 
 
 class HandoverTest(Scripts):

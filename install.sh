@@ -63,6 +63,17 @@ install_failed() {
   exit 1
 }
 
+install_stopped() {
+  # install_stopped <what was stopped> <next step> ...: the summary of a run stopped with
+  # Ctrl+C under a spinner (fuUI_SPIN rc 130), exit 130
+  local myITEM
+  local -a myITEMS=("warn:$1")
+  shift
+  for myITEM in "$@"; do myITEMS+=("next:${myITEM}"); done
+  fuUI_SUMMARY "The installation was stopped" "${myITEMS[@]}"
+  exit 130
+}
+
 # >>> tpot ui >>>
 # The look of the T-Pot scripts: gum (https://github.com/charmbracelet/gum) for a
 # person at a terminal, plain text otherwise. Keep in sync! install.sh carries an
@@ -580,20 +591,29 @@ fuUI_SUMMARY () {
   # fuUI_SUMMARY <title> [<ok|fail|warn|next|info>:<text>]...: the end of a script, its
   # results and what comes next in a box (gum) or as plain lines; rc 1 when one of
   # them is a fail. An item without a known kind is info
-  local myTITLE="$1" myITEM myKIND myTEXT myRC=0
+  local myTITLE="$1" myITEM myKIND myTEXT myRC=0 myLONGEST="${#1}"
   shift
-  local -a myLINES=()
+  local -a myLINES=() myWIDTH=()
   for myITEM in "$@"; do
     myKIND="${myITEM%%:*}" myTEXT="${myITEM#*:}"
     case "${myKIND}" in ok|fail|warn|next|info) ;; *) myKIND="info" myTEXT="${myITEM}" ;; esac
     [ "${myKIND}" != "fail" ] || myRC=1
     myLINES+=("$(fuUI_RESULT "${myKIND}" "${myTEXT}")")
+    # an item is its sign, a space and the text
+    [ "$((${#myTEXT} + 2))" -le "${myLONGEST}" ] || myLONGEST=$((${#myTEXT} + 2))
   done
   echo
   if [ -n "${myUI_GUM}" ];
     then
+      # gum does not wrap on its own: a box wider than the terminal gets its width (gum
+      # wraps the lines in it then), 80 columns when the size is unknown. The box takes
+      # 8 columns more than its longest line: padding, border and margin, 2 each side
+      fuUI_TERM_SIZE || myUI_COLS=80
+      [ "${myUI_COLS}" -ge 24 ] || myUI_COLS=24
+      [ "$((myLONGEST + 8))" -le "${myUI_COLS}" ] || myWIDTH=(--width "$((myUI_COLS - 4))")
       "${myUI_GUM}" style --border rounded --border-foreground "${myUI_MAGENTA}" --padding "0 1" \
-        --margin "0 2" -- "$(CLICOLOR_FORCE=1 "${myUI_GUM}" style --foreground "${myUI_GLASS}" --bold -- "${myTITLE}")" \
+        --margin "0 2" "${myWIDTH[@]}" -- \
+        "$(CLICOLOR_FORCE=1 "${myUI_GUM}" style --foreground "${myUI_GLASS}" --bold -- "${myTITLE}")" \
         "${myLINES[@]}"
     else
       echo "### ${myTITLE}"
@@ -764,6 +784,52 @@ fuMARK () {
   echo "@@tpot $*"
 }
 
+fuUI_ALIVE () {
+  # fuUI_ALIVE <pid>: 0 while the process is there. kill -0 is not enough: a process of
+  # root (sudo, what it runs) refuses the signal of a user, /proc (ps -p without one)
+  # still has it
+  kill -0 "$1" 2>/dev/null && return 0
+  if [ -d /proc/self ];
+    then [ -d "/proc/$1" ]
+    else ps -p "$1" >/dev/null 2>&1
+  fi
+}
+
+fuUI_TREE () {
+  # fuUI_TREE <pid>: the pid and those of everything it started, one per line, parents first
+  local myTABLE myPID myPPID myI=0
+  local -a myTREE=("$1")
+  myTABLE=$(ps -A -o pid= -o ppid= 2>/dev/null) || myTABLE=""
+  while [ "${myI}" -lt "${#myTREE[@]}" ]; do
+    while read -r myPID myPPID; do
+      [ "${myPPID}" != "${myTREE[myI]}" ] || myTREE+=("${myPID}")
+    done <<< "${myTABLE}"
+    myI=$((myI + 1))
+  done
+  printf '%s\n' "${myTREE[@]}"
+}
+
+fuUI_STOP () {
+  # fuUI_STOP <pid>: ends a step of fuUI_SPIN and everything it started, TERM, KILL after
+  # 5 s. What runs as root (sudo) takes the signal through sudo -n, which never asks: the
+  # steps refresh sudo before. rc 1 when the step is still there
+  local mySIG myP myI
+  local -a myPIDS=() myROOT=()
+  for mySIG in TERM KILL; do
+    mapfile -t myPIDS < <(fuUI_TREE "$1")
+    myROOT=()
+    for myP in "${myPIDS[@]}"; do
+      kill -s "${mySIG}" "${myP}" 2>/dev/null || ! fuUI_ALIVE "${myP}" || myROOT+=("${myP}")
+    done
+    [ "${#myROOT[@]}" -eq 0 ] || sudo -n kill -s "${mySIG}" "${myROOT[@]}" >/dev/null 2>&1
+    for ((myI = 0; myI < 50; myI++)); do
+      fuUI_ALIVE "$1" || return 0
+      sleep 0.1
+    done
+  done
+  return 1
+}
+
 fuUI_SPIN () {
   # fuUI_SPIN <title> <log file> <command> ...: runs the command (a function works too)
   # with its output in the log file and a spinner meanwhile; shows the end of the log
@@ -774,7 +840,7 @@ fuUI_SPIN () {
   # without a log, so the T-Pot Manager reads it (i.e. the pulls of the images).
   local myTITLE="$1" myLOG="$2"
   shift 2
-  local myPID myRC=0
+  local myPID myRC=0 myGUM_RC=0 myTRAP
   if fuUI_MARKS_ON;
     then
       echo "### ${myTITLE}"
@@ -783,8 +849,26 @@ fuUI_SPIN () {
     then
       "$@" >>"${myLOG}" 2>&1 < /dev/null &
       myPID=$!
+      # Ctrl+C: gum has the terminal in raw mode, it reads the key and ends with 130, no
+      # SIGINT reaches the step (in the background it ignores one anyway). Without a
+      # terminal on stdin gum leaves the terminal as it is, the SIGINT then ends gum and
+      # (without the trap) this script, the step would go on. Either way the step and all
+      # it started end here, the caller stops on 130. The spinner waits as long as
+      # fuUI_ALIVE says (a step of sudo is root's, kill -0 of a user fails on it)
+      myTRAP=$(trap -p INT)
+      trap 'myGUM_RC=130' INT
       "${myUI_GUM}" spin --spinner dot --spinner.foreground "${myUI_MAGENTA}" --title "${myTITLE}" \
-        --title.foreground "${myUI_GLASS}" -- sh -c "while kill -0 ${myPID} 2>/dev/null; do sleep 0.2; done"
+        --title.foreground "${myUI_GLASS}" -- sh -c "while kill -0 ${myPID} 2>/dev/null || \
+{ if [ -d /proc/self ]; then [ -d /proc/${myPID} ]; else ps -p ${myPID} >/dev/null 2>&1; fi; }; do sleep 0.2; done" \
+        || myGUM_RC=$?
+      eval "${myTRAP:-trap - INT}"
+      if [ "${myGUM_RC}" -ne 0 ] && fuUI_ALIVE "${myPID}";
+        then
+          fuUI_STOP "${myPID}"
+          wait "${myPID}" 2>/dev/null
+          fuUI_WARN "Stopped: ${myTITLE%% ...}"
+          return 130
+      fi
       wait "${myPID}" || myRC=$?
     else
       echo "### ${myTITLE}"
@@ -1208,9 +1292,12 @@ get_packages() {
       fuUI_INFO "sudo needs your password to install the packages:"
       sudo -v || install_failed "sudo did not accept the password" "Run the installer again"
   fi
-  fuUI_SPIN "${myINSTALL_NOTIFICATION}" "${myLOG}" install_packages \
-    || install_failed "The packages the installer needs could not be installed" \
-         "Review ${myLOG}, then run the installer again"
+  local myRC=0
+  fuUI_SPIN "${myINSTALL_NOTIFICATION}" "${myLOG}" install_packages || myRC=$?
+  [ "${myRC}" -ne 130 ] || install_stopped "Stopped while installing the packages the installer needs" \
+    "Run the installer again"
+  [ "${myRC}" -eq 0 ] || install_failed "The packages the installer needs could not be installed" \
+    "Review ${myLOG}, then run the installer again"
   if [ "${myCURRENT_DISTRIBUTION}" = "openSUSE Tumbleweed" ];
     then
       source /etc/profile.d/ansible.sh
@@ -1506,13 +1593,18 @@ if [ -z "${myUNATTENDED}" ] && [ -z "${myCLASSIC}" ] && [ -t 0 ] && [ -t 1 ] && 
     check_tpot_clone
     check_ports
     get_packages
-    if ! fuUI_SPIN "Getting T-Pot from ${myTPOT_REPO_URL} at ${myTPOT_BRANCH} ..." "${myLOG}" clone_tpot;
+    myRC=0
+    fuUI_SPIN "Getting T-Pot from ${myTPOT_REPO_URL} at ${myTPOT_BRANCH} ..." "${myLOG}" clone_tpot || myRC=$?
+    [ "${myRC}" -ne 130 ] || install_stopped "Stopped while getting T-Pot" "Run the installer again"
+    if [ "${myRC}" -ne 0 ];
       then
         install_failed "T-Pot could not be cloned from ${myTPOT_REPO_URL} at ${myTPOT_BRANCH}" \
           "Check the repository and the branch (${myLOG}), then run the installer again"
     fi
-    if fuUI_SPIN "Setting up the T-Pot installer ..." "${myLOG}" "${HOME}/tpotce/tpot" setup \
-       && "${HOME}/tpotce/tpot" install --help >/dev/null 2>&1;
+    myRC=0
+    fuUI_SPIN "Setting up the T-Pot installer ..." "${myLOG}" "${HOME}/tpotce/tpot" setup || myRC=$?
+    [ "${myRC}" -ne 130 ] || install_stopped "Stopped while setting up the T-Pot installer" "Run the installer again"
+    if [ "${myRC}" -eq 0 ] && "${HOME}/tpotce/tpot" install --help >/dev/null 2>&1;
       then
         echo
         export TPOT_BRANCH="${myTPOT_BRANCH}" TPOT_REPO_URL="${myTPOT_REPO_URL}" TPOT_INSTALL_PACKAGES_DONE=1
@@ -1586,7 +1678,10 @@ fi
 # already (the assistant and a local clone have it). The playbook keeps it.
 if [ ! -f "${HOME}/tpotce/installer/install/tpot.yml" ];
   then
-    if ! fuUI_SPIN "Getting T-Pot from ${myTPOT_REPO_URL} at ${myTPOT_BRANCH} ..." "${myLOG}" clone_tpot;
+    myRC=0
+    fuUI_SPIN "Getting T-Pot from ${myTPOT_REPO_URL} at ${myTPOT_BRANCH} ..." "${myLOG}" clone_tpot || myRC=$?
+    [ "${myRC}" -ne 130 ] || install_stopped "Stopped while getting T-Pot" "Run the installer again"
+    if [ "${myRC}" -ne 0 ];
       then
         # a mistyped branch or repository ends up here, and would fail with a
         # confusing Ansible error further down
@@ -1711,7 +1806,15 @@ if ! fuUI_MARKS_ON && [ -z "${myBECOME_FILE}" ] && sudo_password_required;
 fi
 rm -f "${myPULL_LOG}"
 myPULL_FAILED=""
-if ! fuUI_SPIN "Pulling the images ..." "${myPULL_LOG}" sudo docker compose -f "${HOME}/tpotce/docker-compose.yml" pull;
+myRC=0
+fuUI_SPIN "Pulling the images ..." "${myPULL_LOG}" sudo docker compose -f "${HOME}/tpotce/docker-compose.yml" pull || myRC=$?
+if [ "${myRC}" -eq 130 ];
+  then
+    # T-Pot is installed by now, only images are missing
+    install_stopped "Stopped during the image pull, T-Pot is installed and pulls the missing images when it starts" \
+      "Reboot, then re-connect via SSH on tcp/64295"
+fi
+if [ "${myRC}" -ne 0 ];
   then
     # not a stop: T-Pot pulls what is missing when it starts (TPOT_PULL_POLICY)
     fuMARK warn pull

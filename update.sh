@@ -193,10 +193,12 @@ if ! source "${myHERE}/installer/lib/ui.sh" 2>/dev/null;
 # <<< plain fallback
 fi
 fuUI_INIT
-# the T-Pot logo in the banner (at a terminal, not in the marks mode); the restart after
-# the self update inherits that it was shown, so it shows the banner only
+# the T-Pot logo in the banner (at a terminal, not in the marks mode), in the first pass
+# only: the restart after the self update is mid-run and shows the banner only. It knows
+# itself by the handover (TPOT_UPDATE_PREPARED, see fuSELFUPDATE); TPOT_LOGO_SHOWN is not
+# enough, the update.sh of an earlier release (without the logo) never sets it
 # shellcheck disable=SC2034 # read by fuUI_BANNER (installer/lib/ui.sh)
-myUI_LOGO=1
+[ -n "${TPOT_UPDATE_PREPARED}" ] || myUI_LOGO=1
 
 # Where to update from. Empty means: keep the branch and the origin of the
 # current checkout, which is what a plain `update.sh -y` has always done.
@@ -1173,9 +1175,18 @@ function fuBACKUP () {
 	# A single tar run: intermediate files created under sudo belong to root and
 	# could not be moved afterwards. It runs under the spinner, which cannot ask for
 	# a password, so sudo is refreshed first.
+	local myRC=0
 	sudo -v
-	if ! fuUI_SPIN "Building the ${myFULL:+full }archive ${myARCHIVE} ..." "${myLOG}" \
-	        sudo tar cf "${myARCHIVE}" -p --numeric-owner -C "${myStage}" ${myTARGETS} "${myJEWELARGS[@]}";
+	fuUI_SPIN "Building the ${myFULL:+full }archive ${myARCHIVE} ..." "${myLOG}" \
+	  sudo tar cf "${myARCHIVE}" -p --numeric-owner -C "${myStage}" ${myTARGETS} "${myJEWELARGS[@]}" || myRC=$?
+	if [ "${myRC}" -eq 130 ];
+	  then
+	    # Ctrl+C: half an archive is no backup, restore.sh would offer it as the newest
+	    sudo rm -f "${myARCHIVE}"
+	    fuDID warn "Stopped while writing the backup, the checkout was not touched."
+	    exit 130
+	fi
+	if [ "${myRC}" -ne 0 ];
 	  then
 	    fuUI_HINT "Exiting."
 	    echo
@@ -1229,7 +1240,13 @@ function fuREMOVEOLDIMAGES () {
 	    fuUI_OK "Nothing to remove."
 	    return
 	fi
-	fuUI_SPIN "Removing ${myTOTAL} image(s) ..." "${myLOG}" fuRMI "${myALL[@]}"
+	local myRC=0
+	fuUI_SPIN "Removing ${myTOTAL} image(s) ..." "${myLOG}" fuRMI "${myALL[@]}" || myRC=$?
+	if [ "${myRC}" -eq 130 ];
+	  then
+	    fuDID warn "Stopped while removing the images of earlier versions, the rest of them stay."
+	    exit 130
+	fi
 	# what is still there is in use by a container of its own
 	for myREPO in ${myREPOS};
 	  do
@@ -1265,7 +1282,14 @@ function fuPULLIMAGES () {
 
 function fuUPDATER () {
 	fuUI_HINT "This might take a while, please be patient!"
-	if fuUI_SPIN "Pulling the images of this release ..." "${myLOG}" fuPULLIMAGES;
+	local myRC=0
+	fuUI_SPIN "Pulling the images of this release ..." "${myLOG}" fuPULLIMAGES || myRC=$?
+	if [ "${myRC}" -eq 130 ];
+	  then
+	    fuDID warn "Stopped during the image pull, T-Pot pulls what is missing when it starts."
+	    exit 130
+	fi
+	if [ "${myRC}" -eq 0 ];
 	  then
 	    myPULLOK="1"
 	    fuDID ok "The images of this release are pulled."
@@ -1692,7 +1716,14 @@ function fuTPOT_SETUP () {
 	    fuUI_WARN "${myLINK} is a file of its own, update.sh leaves it alone: run ${myTPOT} directly."
 	fi
 	# the venv of the Manager: pip writes a lot, it goes to the log under a spinner
-	if fuUI_SPIN "Installing the Python packages of the T-Pot Manager ..." "${myLOG}" "${myTPOT}" setup;
+	local myRC=0
+	fuUI_SPIN "Installing the Python packages of the T-Pot Manager ..." "${myLOG}" "${myTPOT}" setup || myRC=$?
+	if [ "${myRC}" -eq 130 ];
+	  then
+	    fuDID warn "Stopped while setting up the T-Pot Manager, before the image pull: run update.sh -y again to finish."
+	    exit 130
+	fi
+	if [ "${myRC}" -eq 0 ];
 	  then
 	    fuUI_OK "The T-Pot Manager is ready."
 	    fuDID ok "The T-Pot Manager is ready (tpot)."

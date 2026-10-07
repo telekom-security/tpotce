@@ -595,15 +595,22 @@ class BannerTest(unittest.TestCase):
 
 def fake_gum(home, output=""):
     """A gum that writes its argv (one per line, a call per block) to gum.calls and prints output
-    for choose / filter; style prints its texts."""
+    for choose / filter; style prints its texts; spin runs its command like gum, or ends at once
+    with FAKE_GUM_SPIN_RC as gum does on Ctrl+C (130) when its argv has FAKE_GUM_STOP (any spin
+    without it)."""
     path = os.path.join(home, "gum")
     with open(path, "w", encoding="utf-8") as out:
         out.write("#!/bin/sh\n"
                   f'{{ echo "--- call"; for a in "$@"; do echo "$a"; done; }} >> "{home}/gum.calls"\n'
                   'case "$1" in\n'
+                  '  --version) echo "gum version v2.0.2" ;;\n'
                   '  choose|filter) printf "%s" "$FAKE_GUM_OUT"; exit "${FAKE_GUM_RC:-0}" ;;\n'
                   '  style) while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do shift; done; shift\n'
                   '         for a in "$@"; do echo "$a"; done ;;\n'
+                  '  spin) if [ -n "$FAKE_GUM_SPIN_RC" ]; then\n'
+                  '          case "$*" in *"$FAKE_GUM_STOP"*) exit "$FAKE_GUM_SPIN_RC" ;; esac\n'
+                  '        fi\n'
+                  '        while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do shift; done; shift; exec "$@" ;;\n'
                   'esac\n')
     os.chmod(path, os.stat(path).st_mode | stat.S_IEXEC)
     return path
@@ -696,6 +703,54 @@ class HelpersTest(unittest.TestCase):
         self.assertIn("fine", result.stdout)
         self.assertTrue(result.stdout.endswith("rc=0\n"))
 
+    # the longest items of install.sh and update.sh
+    LONG = ('"warn:The command tpot is not in your PATH, link it with: sudo ln -sfn /home/someone/tpotce/tpot '
+            '/usr/local/bin/tpot" "next:Start T-Pot with \'sudo systemctl start tpot\' or \'docker compose up -d\' '
+            '(update.sh -s does it for you)."')
+
+    def box_width(self, script, cols=None, **env):
+        """The --width of the box of fuUI_SUMMARY (None without one), in a pty of cols x 24 or without
+        a terminal."""
+        gum = fake_gum(self.sandbox.home)
+        calls = os.path.join(self.sandbox.home, "gum.calls")
+        if os.path.exists(calls):
+            os.remove(calls)
+        line = f'myUI_GUM="{gum}"; {script}'
+        if cols:
+            at_terminal(line, self.sandbox.env(**env), cols, 24)
+        else:
+            run(line, self.sandbox.env(**env))
+        for call in read(calls).split("--- call\n"):
+            args = call.split("\n")
+            if "--border" in args:
+                return int(args[args.index("--width") + 1]) if "--width" in args else None
+        self.fail("no box")
+
+    def test_summary_box_fits_the_terminal(self):
+        """gum style does not wrap on its own: a long item makes the box wider than the terminal. The
+        box is limited to the terminal (2 columns of margin on each side), 80 when its size is unknown;
+        a box that fits keeps its own width."""
+        self.assertEqual(self.box_width(f'fuUI_SUMMARY "Done" {self.LONG}', 80), 76)
+        self.assertEqual(self.box_width(f'fuUI_SUMMARY "Done" {self.LONG}', 100), 96)
+        self.assertEqual(self.box_width(f'fuUI_SUMMARY "Done" {self.LONG}', COLUMNS=None, LINES=None, TERM="dumb"),
+                         76)
+        self.assertIsNone(self.box_width('fuUI_SUMMARY "Done" "ok:fine" "next:sudo reboot"', 80))
+        # the longest line that still fits: 72 characters + padding, border and margin = 80
+        self.assertIsNone(self.box_width(f'fuUI_SUMMARY "Done" "ok:{"x" * 70}"', 80))
+        self.assertEqual(self.box_width(f'fuUI_SUMMARY "Done" "ok:{"x" * 71}"', 80), 76)
+        self.assertEqual(self.box_width(f'fuUI_SUMMARY "{"T" * 73}" "ok:fine"', 80), 76)
+
+    @unittest.skipUnless(shutil.which("gum") and "2.0.2" in subprocess.run(
+        [shutil.which("gum") or "true", "--version"], capture_output=True, text=True).stdout, "no gum 2.0.2")
+    def test_summary_box_with_gum_wraps_at_80_columns(self):
+        out = at_terminal(f'myUI_GUM="{shutil.which("gum")}"; fuUI_SUMMARY "Done" {self.LONG}',
+                          self.sandbox.env(COLORTERM="truecolor"), 80, 24)
+        lines = [plain(line) for line in out.split("\n")]
+        self.assertLessEqual(max(len(line) for line in lines), 80, "\n".join(lines))
+        words = " ".join(line.strip(" │╭╮╰╯─") for line in lines)
+        for word in ("/usr/local/bin/tpot", "(update.sh", "you).", "Done"):
+            self.assertIn(word, words)
+
     CHOOSE = 'fuUI_CHOOSE_MANY {options} "Groups" "Git: the checkout:git" "Config:config" "Data:data" "Logs:logs"'
 
     def choose(self, answer, options=""):
@@ -769,6 +824,54 @@ class HelpersTest(unittest.TestCase):
         log = os.path.join(self.sandbox.home, "spin.log")
         result = self.run_ui(f'set -e; fuUI_SPIN "Step ..." "{log}" false || echo "rc=$?"; echo after')
         self.assertIn("rc=1\nafter\n", result.stdout)
+
+    def test_ctrl_c_under_the_spinner_stops_the_step(self):
+        """gum reads Ctrl+C as a key in raw mode and ends with 130; the step in the background (it
+        ignores SIGINT) and everything it started stop, fuUI_SPIN returns 130 at once."""
+        gum = fake_gum(self.sandbox.home)
+        log = os.path.join(self.sandbox.home, "spin.log")
+        marker = os.path.join(self.sandbox.home, "marker")
+        # three levels below the job: its subshell, a shell, the shell with the sleep and the marker
+        script = (f'myUI_GUM="{gum}"\nfuJOB () {{ sh -c \'sh -c "sleep 2; touch {marker}"; true\'; }}\n'
+                  f'fuUI_SPIN "Pulling the images ..." "{log}" fuJOB; echo "rc=$?"')
+        start = time.time()
+        result = self.run_ui(script, FAKE_GUM_SPIN_RC="130")
+        self.assertLess(time.time() - start, 1.8, result.stdout)
+        self.assertTrue(result.stdout.endswith("rc=130\n"), result.stdout + result.stderr)
+        self.assertIn("! Stopped: Pulling the images", result.stdout)
+        self.assertNotIn("✓", result.stdout)
+        time.sleep(2.5)
+        self.assertFalse(os.path.exists(marker), "the step went on after Ctrl+C")
+        # gum ends with an error after the step is through: the result of the step counts
+        result = self.run_ui(f'myUI_GUM="{gum}"; fuUI_SPIN "Step ..." "{log}" true; echo "rc=$?"',
+                             FAKE_GUM_SPIN_RC="1")
+        self.assertTrue(result.stdout.endswith("rc=0\n"), result.stdout + result.stderr)
+        # only the spin of the stop ends early, the others wait for their step
+        result = self.run_ui(f'myUI_GUM="{gum}"; fuUI_SPIN "Step ..." "{log}" sleep 0.5; echo "rc=$?"',
+                             FAKE_GUM_SPIN_RC="130", FAKE_GUM_STOP="Pulling")
+        self.assertTrue(result.stdout.endswith("rc=0\n"), result.stdout + result.stderr)
+
+    def test_the_spinner_keeps_the_int_trap_of_the_caller(self):
+        gum = fake_gum(self.sandbox.home)
+        log = os.path.join(self.sandbox.home, "spin.log")
+        spin = f'myUI_GUM="{gum}"; fuUI_SPIN "Step ..." "{log}" true >/dev/null; trap -p INT; echo end'
+        self.assertEqual(self.run_ui(spin).stdout, "end\n")
+        self.assertEqual(self.run_ui("trap 'echo caught' INT; " + spin).stdout, "trap -- 'echo caught' SIGINT\nend\n")
+
+    def test_alive(self):
+        """A process of root (sudo, the step it runs) cannot take kill -0 from a user, it is alive."""
+        self.assertEqual(self.run_ui('fuUI_ALIVE 1; echo "$?"').stdout, "0\n")
+        self.assertEqual(self.run_ui('fuUI_ALIVE "$$"; echo "$?"').stdout, "0\n")
+        self.assertEqual(self.run_ui('sh -c "exit 0" & myP=$!; wait "${myP}"; fuUI_ALIVE "${myP}"; echo "$?"').stdout,
+                         "1\n")
+        # the spinner waits with the same test
+        self.assertIn("/proc/", re.search(r"fuUI_SPIN \(\) \{.*?\n\}", read(UI_SH), re.S).group(0))
+
+    def test_tree(self):
+        result = self.run_ui('sh -c \'sh -c "sleep 3; true"; true\' & myP=$!; sleep 0.5; myT=$(fuUI_TREE "${myP}"); echo ${myT}; kill ${myT}')
+        pids = result.stdout.split()
+        self.assertEqual(len(pids), 3, result.stdout)
+        self.assertEqual(len(set(pids)), 3)
 
     def test_marks_on(self):
         self.assertEqual(self.run_ui('fuUI_MARKS_ON; echo "$?"').stdout, "1\n")

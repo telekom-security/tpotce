@@ -12,6 +12,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import time
 import unittest
 
 from tpotctl.tests import test_scripts as base
@@ -131,9 +132,18 @@ class LogoTest(Scripts):
         self.assertIn('exec bash "$0" -y "${myRESTART[@]}"', text)
         code = [line for line in text.split("\n") if not line.lstrip().startswith("#")]
         self.assertEqual([line for line in code if "TPOT_LOGO_SHOWN" in line], [])     # nothing unsets it
-        for script in ("update.sh", "restore.sh"):
-            with self.subTest(script=script):
-                self.assertTrue(re.search(r"^myUI_LOGO=1$", base.read(script), re.M))
+        self.assertTrue(re.search(r"^myUI_LOGO=1$", base.read("restore.sh"), re.M))
+        # update.sh: the first pass only, the restart is mid-run
+        self.assertTrue(re.search(r'^\[ -n "\$\{TPOT_UPDATE_PREPARED\}" \] \|\| myUI_LOGO=1$', text, re.M))
+
+    def test_no_logo_in_the_restarted_update(self):
+        """The update.sh of an earlier release restarts into this one without TPOT_LOGO_SHOWN, only
+        TPOT_UPDATE_PREPARED (its handover since 24.04.1) says it is the second pass: no logo mid-run."""
+        out = self.terminal(UPDATE_SH, TPOT_UPDATE_PREPARED="1", TPOT_LOGO_SHOWN=None)
+        self.assertNotIn(LOGO, out)
+        self.assertIn("T-Pot Updater", out)
+        # the first pass still shows it
+        self.assertEqual(self.terminal(UPDATE_SH, TPOT_UPDATE_PREPARED=None).count(LOGO), 1)
 
     def test_no_logo_without_a_terminal(self):
         result = self.run_plain(UPDATE_SH, TPOT_GUM=None)
@@ -434,10 +444,64 @@ class TaskScreenTest(Scripts):
         self.assertIn("fuUI_SPIN", body("fuREMOVEOLDIMAGES"))
         self.assertIn("fuUI_SPIN", body("fuTPOT_SETUP"))
         backup = body("fuBACKUP")
-        self.assertTrue(re.search(r"sudo -v\n(?:\s*#.*\n)*\s*if ! fuUI_SPIN (?:[^\n]|\\\n)*?sudo tar cf", backup), backup[-900:])
+        self.assertTrue(re.search(r"sudo -v\n(?:\s*#.*\n)*\s*(?:if ! )?fuUI_SPIN (?:[^\n]|\\\n)*?sudo tar cf", backup),
+                        backup[-900:])
         # the Elastic export asks Kibana and waits for it, the pause waits for Ctrl+C: both in the open
         self.assertNotIn("fuUI_SPIN", body("fuEXPORT_ELASTIC"))
         self.assertNotIn("fuUI_SPIN", body("fuCHECK_ELASTIC"))
+
+
+class StopTest(Scripts):
+    """Ctrl+C under a gum spinner: gum ends with 130 (it reads the key in raw mode), the step stops and
+    the script ends there with 130 and says so, instead of waiting for the step and going on."""
+
+    def setUp(self):
+        super().setUp()
+        gum_dir = os.path.join(self.home, "data", "tpotce", "bin")
+        os.makedirs(gum_dir)
+        self.gum = ui.fake_gum(gum_dir)          # fuUI_INIT takes it: gum 2.0.2 at the pinned place
+        self.marker = os.path.join(self.home, "marker")
+
+    def slow(self, name, pattern, rest):
+        """A command that takes 2 s and then writes the marker when its arguments match the pattern."""
+        self.stub(name, f'#!/bin/sh\necho "{name} $*" >> "$HOME/calls"\n'
+                        f'case "$*" in {pattern}) sleep 2; touch {shlex.quote(self.marker)}; exit 0 ;; esac\n'
+                        f'{rest}\n')
+
+    def assert_went_no_further(self):
+        time.sleep(2.5)
+        self.assertFalse(os.path.exists(self.marker), "the step went on after Ctrl+C")
+
+    def test_update_sh_stops_at_the_pull(self):
+        self.slow("docker", "*pull*", 'case "$*" in images*) echo "ghcr.io/telekom-security/cowrie:24.04.1" ;; esac')
+        with open(os.path.join(self.tpotce, ".env"), "w", encoding="utf-8") as out:
+            out.write("TPOT_REPO=ghcr.io/telekom-security\nTPOT_VERSION=24.04.2\n")
+        call = f'myRUNNING=1; mySTOPPED=1; fuLOG_START; myUI_GUM={shlex.quote(self.gum)}; fuUPDATER'
+        start = time.time()
+        result = self.source_update(call, FAKE_GUM_SPIN_RC="130")
+        self.assertLess(time.time() - start, 1.8)
+        self.assertEqual(result.returncode, 130, result.stdout + result.stderr)
+        out = result.stdout
+        self.assertIn("Stopped: Pulling the images of this release", out)
+        self.assertIn("The update was stopped", out)
+        self.assertIn("T-Pot is stopped, 'sudo systemctl start tpot' brings it back.", out)
+        self.assertNotIn("Could not pull all images", out + result.stderr)
+        self.assertNotIn("docker images", self.calls())                    # no cleanup after the stop
+        self.assert_went_no_further()
+
+    def test_restore_sh_stops_at_the_extract(self):
+        archive = base.make_backup(self.home, {"MANIFEST": base.MANIFEST, "data/uuid": "x\n"})
+        self.slow("tar", "*'data/*'*", f'exec {shutil.which("tar")} "$@"')
+        line = f'bash {shlex.quote(RESTORE_SH)} -f {shlex.quote(archive)} -g data; echo "rc=$?"'
+        out = ui.plain(ui.at_terminal(line, self.env(FAKE_GUM_SPIN_RC="130", FAKE_GUM_STOP="Extracting"),
+                                      120, 49, source="/dev/null", timeout=30))
+        self.assertIn("rc=130", out)
+        self.assertIn("Stopped: Extracting data/ from the archive", out)
+        self.assertIn("The restore was stopped", out)
+        self.assertNotIn("Restored from", out)
+        self.assertIn("systemctl start tpot", out)                  # T-Pot was stopped for the restore
+        self.assertNotIn("systemctl start", self.calls())
+        self.assert_went_no_further()
 
 
 if __name__ == "__main__":

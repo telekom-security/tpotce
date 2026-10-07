@@ -288,6 +288,16 @@ function fuFAILED () {   # $1 = group
 	fuMARK fail "$1"
 }
 
+# Ctrl+C under a spinner (fuUI_SPIN rc 130): the run ends here, with what to do next
+myTPOT_STOPPED=""
+function fuSTOPPED () {   # $1 = what was stopped
+	local myITEMS=("warn:Stopped while $1, the restore is not complete.")
+	[ -z "${myTPOT_STOPPED}" ] || myITEMS+=("next:T-Pot is stopped, 'sudo systemctl start tpot' brings it back.")
+	[ -z "${myARCHIVE}" ] || myITEMS+=("next:Run restore.sh -f ${myARCHIVE} again to finish it.")
+	fuUI_SUMMARY "The restore was stopped" "${myITEMS[@]}"
+	exit 130
+}
+
 # What does the archive hold?
 function fuHAS () {   # $1 = Member oder Praefix
 	grep -q "$1" "${myTMPDIR}/toc" 2>/dev/null
@@ -342,7 +352,10 @@ function fuPICK_ARCHIVE () {
 	fuTMPDIR
 	fuLOG_START
 	# a full archive holds all of data/, reading it takes a while
-	if ! fuUI_SPIN "Reading the archive ..." "${myLOG}" fuTOC;
+	local myRC=0
+	fuUI_SPIN "Reading the archive ..." "${myLOG}" fuTOC || myRC=$?
+	[ "${myRC}" -ne 130 ] || fuSTOPPED "reading the archive"
+	if [ "${myRC}" -ne 0 ];
 	  then
 	    fuUI_ERROR "Cannot read ${myARCHIVE}."
 	    echo
@@ -406,10 +419,16 @@ function fuSTOP_TPOT () {
 	fuMARK phase stop Stopping T-Pot
 	echo
 	sudo -v
-	if ! fuUI_SPIN "Stopping T-Pot ..." "${myLOG}" sudo systemctl stop tpot.service;
+	local myRC=0
+	myTPOT_STOPPED="1"
+	fuUI_SPIN "Stopping T-Pot ..." "${myLOG}" sudo systemctl stop tpot.service || myRC=$?
+	[ "${myRC}" -ne 130 ] || fuSTOPPED "stopping T-Pot"
+	if [ "${myRC}" -ne 0 ];
 	  then
 	    fuUI_WARN "No tpot.service, trying docker compose."
-	    fuUI_SPIN "Stopping T-Pot with docker compose ..." "${myLOG}" fuCOMPOSE_DOWN
+	    myRC=0
+	    fuUI_SPIN "Stopping T-Pot with docker compose ..." "${myLOG}" fuCOMPOSE_DOWN || myRC=$?
+	    [ "${myRC}" -ne 130 ] || fuSTOPPED "stopping T-Pot"
 	fi
 }
 
@@ -418,12 +437,16 @@ function fuSTART_TPOT () {
 	fuMARK phase start Starting T-Pot
 	echo
 	sudo -v
-	if ! fuUI_SPIN "Starting T-Pot ..." "${myLOG}" sudo systemctl start tpot.service;
+	local myRC=0
+	fuUI_SPIN "Starting T-Pot ..." "${myLOG}" sudo systemctl start tpot.service || myRC=$?
+	[ "${myRC}" -ne 130 ] || fuSTOPPED "starting T-Pot"
+	if [ "${myRC}" -ne 0 ];
 	  then
 	    fuUI_WARN "Could not start tpot.service, please start T-Pot yourself."
 	    mySTART_FAILED="1"
 	    return 1
 	fi
+	myTPOT_STOPPED=""
 }
 
 # The rollback comes first: a `git reset --hard` puts .env and docker-compose.yml
@@ -580,8 +603,11 @@ function fuDO_DATA () {
 	fi
 	# under the spinner, a full archive takes a while: sudo is refreshed first
 	sudo -v
-	if fuUI_SPIN "Extracting data/ from the archive ..." "${myLOG}" \
-	     sudo tar xf "${myARCHIVE}" -C "${myTPOTDIR}" -p --numeric-owner --wildcards "data/*";
+	local myRC=0
+	fuUI_SPIN "Extracting data/ from the archive ..." "${myLOG}" \
+	  sudo tar xf "${myARCHIVE}" -C "${myTPOTDIR}" -p --numeric-owner --wildcards "data/*" || myRC=$?
+	[ "${myRC}" -ne 130 ] || fuSTOPPED "extracting data/"
+	if [ "${myRC}" -eq 0 ];
 	  then
 	    fuUI_OK "$(grep -c '^data/' "${myTMPDIR}/toc") entries restored, owner and mode came from the archive."
 	  else
@@ -609,6 +635,7 @@ function fuDO_ELASTIC () {
 	local myOBJ=0
 	local myKEEP=""
 	local mySINCE="${SECONDS}"
+	local myRC=0
 	[ -z "${myDO_ELASTIC}" ] && return
 	fuMARK phase elastic Importing the Kibana objects and the ILM policy
 	echo
@@ -620,7 +647,8 @@ function fuDO_ELASTIC () {
 	    fuFAILED elastic
 	    return 1
 	fi
-	fuUI_SPIN "Waiting for Kibana on ${myKIBANA} ..." "${myLOG}" fuWAIT_KIBANA
+	fuUI_SPIN "Waiting for Kibana on ${myKIBANA} ..." "${myLOG}" fuWAIT_KIBANA || myRC=$?
+	[ "${myRC}" -ne 130 ] || fuSTOPPED "waiting for Kibana"
 	myWAIT=$((SECONDS - mySINCE))
 	if ! curl -s -f -o /dev/null "${myKIBANA}/api/status";
 	  then
@@ -638,10 +666,13 @@ function fuDO_ELASTIC () {
 	fuUI_OK "Kibana answers after ${myWAIT}s."
 	if [ -s "${myTMPDIR}/elastic/kibana_export.ndjson" ];
 	  then
-	    if fuUI_SPIN "Importing the Kibana objects ..." "${myLOG}" \
-	         curl -s -S -f -X POST "${myKIBANA}/api/saved_objects/_import?overwrite=true" \
-	         -H "kbn-xsrf: true" --form file=@"${myTMPDIR}/elastic/kibana_export.ndjson" \
-	         -o "${myTMPDIR}/import.json";
+	    myRC=0
+	    fuUI_SPIN "Importing the Kibana objects ..." "${myLOG}" \
+	      curl -s -S -f -X POST "${myKIBANA}/api/saved_objects/_import?overwrite=true" \
+	      -H "kbn-xsrf: true" --form file=@"${myTMPDIR}/elastic/kibana_export.ndjson" \
+	      -o "${myTMPDIR}/import.json" || myRC=$?
+	    [ "${myRC}" -ne 130 ] || fuSTOPPED "importing the Kibana objects"
+	    if [ "${myRC}" -eq 0 ];
 	      then
 	        myOBJ=$(sed -n 's/.*"successCount":\([0-9]*\).*/\1/p' "${myTMPDIR}/import.json")
 	        if grep -q '"success":true' "${myTMPDIR}/import.json";
