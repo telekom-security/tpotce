@@ -644,6 +644,24 @@ class SmokeTest(BuilderHarness):
         self.assertEqual([line.split()[1] for line in self.calls() if line.startswith("test ")],
                          ["cowrie", "tpotinit_env"])
 
+    def test_ctrl_c_under_a_spinner_cancels_the_run(self):
+        """gum takes Ctrl+C as a key and fuUI_SPIN gives back 130: the run ends as cancelled (130),
+        no further smoke test, no "builder failed" (3)."""
+        stop = ('fuUI_SPIN () { case "$1" in *"$STOP_AT"*) return 130 ;; esac; shift 2; "$@" > /dev/null; }\n'
+                'fuSTOP_CHILDREN () { :; }\nfuLIMIT_OFF () { echo limit-off; }\n')
+        result = self.bash(stop + 'myHUB=hub myGHCR=ghcr.io/me myVER=1.0 myHOST=amd64 myPLATFORMS=(linux/amd64)\n'
+                           'myLOGDIR="$TPOT_BUILDER_LOG_DIR"; mkdir -p "$myLOGDIR"\n'
+                           'fuSMOKE_TESTS cowrie tpotinit; echo "rc=$?"',
+                           TPOT_BUILDER_TESTS_DIR=self.tests, STOP_AT="Smoke test cowrie")
+        self.assertEqual(result.returncode, 130, result.stdout + result.stderr)
+        self.assertNotIn("rc=", result.stdout)
+        self.assertIn("limit-off", result.stdout)
+        self.assertFalse(any(line.startswith("test ") for line in self.calls()), self.calls())
+        result = self.bash(stop + 'myHOST=amd64 myLOG=/dev/null\nfuPREPARE linux/amd64; echo "rc=$?"',
+                           STOP_AT="Checking the buildx builder")
+        self.assertEqual(result.returncode, 130, result.stdout + result.stderr)
+        self.assertNotIn("rc=3", result.stdout)
+
     def test_a_failed_load_build_skips_the_tests(self):
         rc, out = self.builder("-i", "cowrie", "-T", STUB_LOAD_RC="1", TPOT_BUILDER_TESTS_DIR=self.tests)
         self.assertEqual(rc, 4, out)

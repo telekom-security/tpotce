@@ -740,16 +740,24 @@ fuQEMU () {
   fuBINFMT_HAS "$@"
 }
 
+fuSPIN () {
+  # fuUI_SPIN, but a Ctrl+C under the spinner (gum takes it as a key, rc 130) cancels the run
+  local myRC=0
+  fuUI_SPIN "$@" || myRC=$?
+  [ "${myRC}" -eq 130 ] && fuCANCEL
+  return "${myRC}"
+}
+
 fuPREPARE () {
   # fuPREPARE <platform> ...: builder, QEMU for the ones of another architecture, platforms
   local myP
   local -a myARCHS=()
   for myP in "$@"; do [ "${myP#linux/}" = "${myHOST}" ] || myARCHS+=("${myP#linux/}"); done
-  fuUI_SPIN "Checking the buildx builder '${myBUILDER}' ..." "${myLOG}" fuENSURE_BUILDER || return 3
+  fuSPIN "Checking the buildx builder '${myBUILDER}' ..." "${myLOG}" fuENSURE_BUILDER || return 3
   if [ "${#myARCHS[@]}" -gt 0 ]; then
-    fuUI_SPIN "Configuring QEMU for ${myARCHS[*]} ..." "${myLOG}" fuQEMU "${myARCHS[@]}" || return 3
+    fuSPIN "Configuring QEMU for ${myARCHS[*]} ..." "${myLOG}" fuQEMU "${myARCHS[@]}" || return 3
   fi
-  fuUI_SPIN "Making sure '${myBUILDER}' builds $* ..." "${myLOG}" fuENSURE_PLATFORMS "$@" || return 3
+  fuSPIN "Making sure '${myBUILDER}' builds $* ..." "${myLOG}" fuENSURE_PLATFORMS "$@" || return 3
   return 0
 }
 
@@ -871,7 +879,7 @@ fuSMOKE_TESTS () {
   fi
   if ! fuHOST_ONLY || fuPUSHING; then
     fuWRITE_OVERRIDE "${myLOAD}" load "${mySMOKE_IMAGES[@]}"
-    if ! fuUI_SPIN "Building ${mySMOKE_IMAGES[*]} for linux/${myHOST} into docker for the smoke tests ..." \
+    if ! fuSPIN "Building ${mySMOKE_IMAGES[*]} for linux/${myHOST} into docker for the smoke tests ..." \
            "${myLOGDIR}/load.log" docker compose "${myFILES[@]}" -f "${myLOAD}" --progress plain build \
            "${mySMOKE_IMAGES[@]}" --builder "${myBUILDER}"; then
       mySUMMARY+=("fail:The build for the smoke tests, see ${myLOGDIR}/load.log")
@@ -881,7 +889,7 @@ fuSMOKE_TESTS () {
   for myI in "${!mySMOKE_NAMES[@]}"; do
     read -r -a myARGS <<< "${mySMOKE_ARGS[myI]}"
     : > "${myLOGDIR}/test-${mySMOKE_NAMES[myI]}.log"
-    if fuUI_SPIN "Smoke test ${mySMOKE_NAMES[myI]} ..." "${myLOGDIR}/test-${mySMOKE_NAMES[myI]}.log" \
+    if fuSPIN "Smoke test ${mySMOKE_NAMES[myI]} ..." "${myLOGDIR}/test-${mySMOKE_NAMES[myI]}.log" \
          bash "${myTESTDIR}/${mySMOKE_NAMES[myI]}.sh" "${myARGS[@]}";
       then mySUMMARY+=("ok:Smoke test ${mySMOKE_NAMES[myI]}")
       else mySUMMARY+=("fail:Smoke test ${mySMOKE_NAMES[myI]}, see ${myLOGDIR}/test-${mySMOKE_NAMES[myI]}.log"); myRC=4
