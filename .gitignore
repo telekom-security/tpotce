@@ -10,3 +10,4 @@ install_tpot.log
 .env
 AGENTS.md
 UPDATE_SH_FIXES.md
+docker/_builder/log/
