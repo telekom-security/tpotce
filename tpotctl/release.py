@@ -5,7 +5,7 @@ installed T-Pot). A few places cannot read it, because they are static files or
 defaults of other tools; they are listed in PLACES and this module keeps them in step:
 
     python3 -m tpotctl.release check                    every place has the number of `version`
-    python3 -m tpotctl.release set-version X.Y.Z        writes `version` and every place
+    python3 -m tpotctl.release set-version X.Y.Z        writes `version` and every place (all or none)
 
 Places that name the version on purpose and must not follow a release are listed in
 EXCLUDED, each with its reason; the tests (`tpotctl/tests/test_release.py`) turn red on a
@@ -13,6 +13,9 @@ hard coded number that is in neither list. Standard library only, Python 3.9.
 """
 
 import argparse
+import contextlib
+import errno
+import os
 import re
 import subprocess
 import sys
@@ -20,6 +23,8 @@ from pathlib import Path
 from typing import List, NamedTuple, Optional, Tuple
 
 ROOT = Path(__file__).resolve().parent.parent
+# the unit of an installed T-Pot names the compose file of its checkout
+SERVICE_FILE = Path("/etc/systemd/system/tpot.service")
 
 # the number a place carries: digits first, then word characters, dashes and inner dots
 # (a dot that ends a sentence is not part of it)
@@ -29,7 +34,19 @@ IMAGE = r"(?:dtagdevsec|ghcr\.io/telekom-security)/[\w.-]+:" + V
 
 
 class ReleaseError(Exception):
-    """set-version refused, nothing was written."""
+    """check or set-version could not do its work.
+
+    set-version writes every file or none: a refusal (a bad number, a lost place, a
+    target it cannot open or that changed after it was read) leaves every file as it was.
+    A write that fails puts the files back as they were; then `failed` is the file whose
+    write failed, `restored` the files put back and `unrestored` the ones that could not
+    be (they need a look by hand, the message names them)."""
+
+    def __init__(self, message, failed=None, restored=(), unrestored=()):
+        super().__init__(message)
+        self.failed = failed
+        self.restored = list(restored)
+        self.unrestored = list(unrestored)
 
 
 class Place(NamedTuple):
@@ -132,9 +149,31 @@ def files_of(place, root=ROOT) -> List[str]:
     return sorted(_glob(root, place.paths) - _glob(root, getattr(place, "skip", ())))
 
 
-def _lines(root, rel) -> List[str]:
+def _split(data: bytes) -> List[str]:
     # split at \n only, so a join gives back the same bytes (\r stays at the end of a line)
-    return Path(root, rel).read_bytes().decode("utf-8").split("\n")
+    return data.decode("utf-8").split("\n")
+
+
+def _lines(root, rel) -> List[str]:
+    return _split(Path(root, rel).read_bytes())
+
+
+class _Read(NamedTuple):
+    """A file as set-version read it: its bytes and what it was (to find a replaced one)."""
+    data: bytes
+    lines: Tuple[str, ...]
+    stat: Tuple[int, int, int, int]
+
+
+def _identity(st) -> Tuple[int, int, int, int]:
+    return (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns)
+
+
+def _read(root, rel) -> _Read:
+    with open(Path(root, rel), "rb") as handle:
+        st = os.fstat(handle.fileno())
+        data = handle.read()
+    return _Read(data, tuple(_split(data)), _identity(st))
 
 
 def hits(place, root, rel, lines=None) -> List[Hit]:
@@ -146,15 +185,20 @@ def hits(place, root, rel, lines=None) -> List[Hit]:
     return found
 
 
-def _scan(root, places, optional=False):
-    """{path: [hits]} of every place and the problems of places without a line."""
+def _scan(root, places, optional=False, read=None):
+    """{path: [hits]} of every place and the problems of places without a line.
+
+    `read` ({path: _Read}) keeps every file read once, for all its places and the write."""
+    read = {} if read is None else read
     found, problems = {}, []
     for place in places:
         files = files_of(place, root)
         if not files and not optional:
             problems.append(f"{' '.join(place.paths)}: no such file ({place.what})")
         for rel in files:
-            got = hits(place, root, rel)
+            if rel not in read:
+                read[rel] = _read(root, rel)
+            got = hits(place, root, rel, read[rel].lines)
             if not got and not optional:
                 problems.append(f"{rel}: not found: {place.what}")
             found.setdefault(rel, []).extend(got)
@@ -165,9 +209,9 @@ def check(root=ROOT, places=PLACES, pending=PENDING_READERS, version=None) -> Li
     """Every place against the file `version`; the list of problems, empty when all agree."""
     root = Path(root)
     version = version or read_version(root)
-    problems = []
+    problems, read = [], {}
     for group, optional in ((places, False), (pending, True)):
-        found, missing = _scan(root, group, optional)
+        found, missing = _scan(root, group, optional, read)
         problems += missing
         problems += [f"{hit.path}:{hit.line}: found {hit.value}, expected {version}"
                      for got in found.values() for hit in got if hit.value != version]
@@ -177,37 +221,104 @@ def check(root=ROOT, places=PLACES, pending=PENDING_READERS, version=None) -> Li
 def set_version(root, new, places=PLACES, pending=PENDING_READERS) -> List[str]:
     """Writes `new` into `version` and every place, in place (mode, owner and line endings stay).
 
-    Refuses (ReleaseError, nothing written) a number that is not X.Y.Z or a place that has
-    no line any more. Returns the files it changed."""
+    All or nothing: every file is read once, every target is opened for writing before the
+    first write, and a write that fails puts back the files already written and the one
+    that failed. Refuses (ReleaseError, nothing written) a number that is not X.Y.Z, a place
+    that has no line any more, a target it cannot open and one that was replaced or changed
+    after it was read. A failed write raises ReleaseError with `failed`, `restored` and
+    `unrestored` (see there). Returns the files it changed."""
     root = Path(root)
     if not isinstance(new, str) or not RELEASE.fullmatch(new):
         raise ReleaseError(f"{new!r} is not a release number X.Y.Z (digits, e.g. 24.04.3)")
-    found, problems = _scan(root, places)
+    read = {}
+    found, problems = _scan(root, places, read=read)
     if problems:
         raise ReleaseError("places without the version, nothing written:\n  " + "\n  ".join(problems))
-    for rel, got in _scan(root, pending, optional=True)[0].items():
+    for rel, got in _scan(root, pending, optional=True, read=read)[0].items():
         found.setdefault(rel, []).extend(got)
 
-    writes = {}
+    writes = {}     # {path: (read, new bytes)}, in the order of writing (`version` last)
     for rel, got in sorted(found.items()):
-        lines = _lines(root, rel)
+        lines = list(read[rel].lines)
         spans = sorted({(h.line, h.start, h.end) for h in got}, reverse=True)
         for number, start, end in spans:
             line = lines[number - 1]
             lines[number - 1] = line[:start] + new + line[end:]
-        text = "\n".join(lines)
-        if text.encode("utf-8") != Path(root, rel).read_bytes():
-            writes[rel] = text
-    old = Path(root, "version").read_bytes().decode("utf-8")
-    ending = "\r\n" if old.endswith("\r\n") else "\n"
-    writes["version"] = new + ending
-
-    for rel, text in writes.items():
-        # in place, not by rename: the file keeps its inode, mode and owner
-        with open(Path(root, rel), "r+b") as handle:
-            handle.write(text.encode("utf-8"))
-            handle.truncate()
+        data = "\n".join(lines).encode("utf-8")
+        if data != read[rel].data:
+            writes[rel] = (read[rel], data)
+    old = read["version"] if "version" in read else _read(root, "version")
+    ending = b"\r\n" if old.data.endswith(b"\r\n") else b"\n"
+    writes["version"] = (old, new.encode("utf-8") + ending)
+    _write_all(root, writes)
     return sorted(writes)
+
+
+def _put(handle, data: bytes) -> None:
+    """The whole of `data` into an unbuffered handle, from the start (a short write goes on)."""
+    handle.seek(0)
+    view = memoryview(data)
+    while view:
+        count = handle.write(view)
+        if not count:
+            raise OSError(errno.EIO, "the write made no progress")
+        view = view[count:]
+    handle.truncate()
+
+
+def _write_all(root, writes) -> None:
+    """Opens every target (r+b, unbuffered), then writes them; puts them back on an error."""
+    with contextlib.ExitStack() as stack:
+        handles = {}
+        for rel, (was, _) in writes.items():
+            # in place, not by rename: the file keeps its inode, mode and owner
+            try:
+                handle = stack.enter_context(open(Path(root, rel), "r+b", buffering=0))
+                now = _identity(os.fstat(handle.fileno()))
+            except OSError as error:
+                raise ReleaseError(f"{rel}: cannot open it for writing ({error.strerror or error}),"
+                                   " nothing written") from error
+            if now != was.stat:
+                raise ReleaseError(f"{rel}: replaced or changed after it was read, nothing written")
+            handles[rel] = handle
+        written = []
+        for rel, (_, data) in writes.items():
+            written.append(rel)
+            try:
+                _put(handles[rel], data)
+            except OSError as error:
+                restored, unrestored = [], []
+                for back in written:
+                    try:
+                        _put(handles[back], writes[back][0].data)
+                        restored.append(back)
+                    except OSError:
+                        unrestored.append(back)
+                message = [f"{rel}: write failed ({error.strerror or error})"]
+                if restored:
+                    message.append("restored as they were: " + ", ".join(restored))
+                if unrestored:
+                    message.append("not restored, check by hand: " + ", ".join(unrestored))
+                raise ReleaseError("\n  ".join(message), failed=rel, restored=restored,
+                                   unrestored=unrestored) from error
+
+
+def installed_t_pot(root, service_file=SERVICE_FILE) -> bool:
+    """Whether the checkout `root` is the one of a T-Pot installed on this host: the unit
+    `service_file` names its docker-compose.yml, or it has a data folder (TPOT_DATA_PATH,
+    ./data by default). Then its `.env` is the configuration T-Pot starts with."""
+    root = Path(root)
+    if root.joinpath("data").is_dir():
+        return True
+    try:
+        unit = Path(service_file).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+    compose = (root.resolve() / "docker-compose.yml")
+    for name in re.findall(r"""[^\s"'=]*docker-compose\.yml(?![^\s"'])""", unit):
+        if Path(name).is_absolute() and Path(name).resolve() == compose:
+            return True
+    return False
 
 
 def _excluded(root):
@@ -294,6 +405,8 @@ def main(argv=None) -> int:
     two = sub.add_parser("set-version", help="write X.Y.Z into `version` and every place")
     two.add_argument("version", help="the new release number, X.Y.Z")
     two.add_argument("--root", default=str(ROOT), help="the checkout (default: this one)")
+    # the unit that tells an installed T-Pot, for the tests (they never read the host's)
+    two.add_argument("--service-file", default=str(SERVICE_FILE), help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     root = Path(args.root)
     try:
@@ -312,6 +425,9 @@ def main(argv=None) -> int:
         print(f"version {args.version}: {len(changed)} file(s) written")
         for rel in changed:
             print("  " + rel)
+        if ".env" in changed and installed_t_pot(root, args.service_file):
+            print("note: .env is the configuration of the T-Pot installed here: its next start pulls"
+                  f" the images {args.version} (TPOT_VERSION)", file=sys.stderr)
         return 0
     except (ReleaseError, OSError, UnicodeDecodeError) as error:
         print(f"release: {error}", file=sys.stderr)

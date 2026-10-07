@@ -5,7 +5,11 @@ Nothing here writes the checkout the tests run from: set-version only runs in a
 temporary copy of the files it touches.
 """
 
+import contextlib
+import errno
+import io
 import os
+import pathlib
 import shutil
 import stat
 import subprocess
@@ -13,6 +17,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from tpotctl.tests import isolate  # noqa: E402
@@ -26,9 +31,65 @@ NEW = "99.1.0"
 
 
 def run(*args, cwd=None):
-    """The command line of the tool, as a person runs it."""
+    """The command line of the tool, as a person runs it (set-version without the unit of the
+    host: the tests never read /etc/systemd/system/tpot.service)."""
+    if args and args[0] == "set-version":
+        args = (*args, "--service-file", os.devnull)
     return subprocess.run([sys.executable, "-m", "tpotctl.release", *args], cwd=str(ROOT),
                           capture_output=True, text=True, timeout=60)
+
+
+def main_in_process(*args):
+    """release.main with its output: (rc, stdout, stderr)."""
+    out, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        rc = release.main(list(args))
+    return rc, out.getvalue(), err.getvalue()
+
+
+def contents(root, paths):
+    return {rel: Path(root, rel).read_bytes() for rel in paths}
+
+
+class FlakyOpen:
+    """`open` of tpotctl.release: the handles opened for writing (a "+" mode) are counted, and
+    `fail(number, call)` says whether write call `call` (1, 2, ...) of handle `number` (1, 2,
+    ...) fails; it writes half of the data first, like a disk that runs full."""
+
+    def __init__(self, fail):
+        self.fail = fail
+        self.opened = []        # the paths of the handles for writing, in order
+        self.real = open
+
+    def __call__(self, file, mode="r", *args, **kwargs):
+        handle = self.real(file, mode, *args, **kwargs)
+        if "+" not in mode:
+            return handle
+        self.opened.append(str(file))
+        return _FlakyHandle(handle, len(self.opened), self.fail)
+
+
+class _FlakyHandle:
+
+    def __init__(self, handle, number, fail):
+        self._handle, self._number, self._fail, self._calls = handle, number, fail, 0
+
+    def write(self, data):
+        self._calls += 1
+        if self._fail(self._number, self._calls):
+            data = bytes(data)
+            self._handle.write(data[:len(data) // 2])
+            raise OSError(errno.ENOSPC, "No space left on device")
+        return self._handle.write(data)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return self._handle.__exit__(*exc)
+
+    def __getattr__(self, name):
+        return getattr(self._handle, name)
 
 
 def copy_of_the_places(target):
@@ -152,6 +213,179 @@ class SetVersionTest(unittest.TestCase):
                 release.set_version(Path(tmp), NEW)
             self.assertIn("index.html", str(caught.exception))
             self.assertEqual({rel: Path(tmp, rel).read_bytes() for rel in paths}, before)
+
+    def test_each_file_is_read_once(self):
+        # CITATION.cff has four places: one read, not one per place plus two more for the write
+        reads = {}
+        real_read_bytes, real_open = pathlib.Path.read_bytes, open
+
+        def count(path):
+            key = Path(path).resolve()
+            reads[key] = reads.get(key, 0) + 1
+
+        def read_bytes(path):
+            count(path)
+            return real_read_bytes(path)
+
+        def opener(file, mode="r", *args, **kwargs):
+            if "+" not in mode and "w" not in mode:
+                count(file)
+            return real_open(file, mode, *args, **kwargs)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            copy_of_the_places(tmp)
+            with mock.patch.object(pathlib.Path, "read_bytes", read_bytes), \
+                    mock.patch("tpotctl.release.open", opener, create=True):
+                release.set_version(Path(tmp), NEW)
+            self.assertEqual(release.check(Path(tmp)), [])
+        self.assertIn(Path(tmp, "CITATION.cff").resolve(), reads)
+        self.assertEqual({path.name: n for path, n in reads.items() if n != 1}, {})
+
+    @unittest.skipIf(hasattr(os, "geteuid") and os.geteuid() == 0, "root opens a 0444 file for writing")
+    def test_a_target_it_cannot_open_writes_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = copy_of_the_places(tmp)
+            target = Path(tmp, "genuserwin.ps1")       # late in the order, the files before it would be written
+            os.chmod(str(target), 0o444)
+            before = contents(tmp, paths)
+            with self.assertRaises(release.ReleaseError) as caught:
+                release.set_version(Path(tmp), NEW)
+            self.assertIn("genuserwin.ps1", str(caught.exception))
+            self.assertIn("nothing written", str(caught.exception))
+            self.assertEqual(contents(tmp, paths), before)
+            result = run("set-version", NEW, "--root", tmp)
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            self.assertIn("genuserwin.ps1", result.stderr)
+            self.assertEqual(contents(tmp, paths), before)
+
+    def test_a_file_replaced_after_reading_writes_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = copy_of_the_places(tmp)
+            target = Path(tmp, "genuserwin.ps1")
+            swapped = target.read_bytes().replace(b"\n", b"\r\n")
+            real_open = open
+
+            def opener(file, mode="r", *args, **kwargs):
+                if "+" in mode and Path(file).name == ".env":    # the first target: replace a later one
+                    spare = Path(tmp, "spare")
+                    spare.write_bytes(swapped)
+                    os.replace(str(spare), str(target))
+                return real_open(file, mode, *args, **kwargs)
+
+            before = contents(tmp, paths)
+            with mock.patch("tpotctl.release.open", opener, create=True):
+                with self.assertRaises(release.ReleaseError) as caught:
+                    release.set_version(Path(tmp), NEW)
+            self.assertIn("genuserwin.ps1", str(caught.exception))
+            self.assertIn("nothing written", str(caught.exception))
+            before["genuserwin.ps1"] = swapped
+            self.assertEqual(contents(tmp, paths), before)
+
+    def test_a_failed_write_restores_what_was_written(self):
+        flaky = FlakyOpen(lambda number, call: number == 3 and call == 1)
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = copy_of_the_places(tmp)
+            os.chmod(os.path.join(tmp, ".env"), 0o600)
+            before = contents(tmp, paths)
+            with mock.patch("tpotctl.release.open", flaky, create=True):
+                with self.assertRaises(release.ReleaseError) as caught:
+                    release.set_version(Path(tmp), NEW)
+            self.assertGreater(len(flaky.opened), 3)     # every target was open before the first write
+            first, second, third = (Path(p).relative_to(tmp).as_posix() for p in flaky.opened[:3])
+            error = caught.exception
+            self.assertEqual(error.failed, third)
+            self.assertEqual(sorted(error.restored), sorted([first, second, third]))
+            self.assertEqual(error.unrestored, [])
+            self.assertIn(third, str(error))
+            self.assertIn("No space left", str(error))
+            self.assertEqual(contents(tmp, paths), before)
+            self.assertEqual(stat.S_IMODE(os.stat(os.path.join(tmp, ".env")).st_mode), 0o600)
+
+    def test_a_failed_restore_is_reported(self):
+        # handle 1 is written and cannot be put back, handle 2 is written and put back, handle 3 fails
+        flaky = FlakyOpen(lambda number, call: (number == 1 and call == 2) or number == 3)
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = copy_of_the_places(tmp)
+            before = contents(tmp, paths)
+            with mock.patch("tpotctl.release.open", flaky, create=True):
+                with self.assertRaises(release.ReleaseError) as caught:
+                    release.set_version(Path(tmp), NEW)
+            first, second, third = (Path(p).relative_to(tmp).as_posix() for p in flaky.opened[:3])
+            error = caught.exception
+            self.assertEqual(error.failed, third)
+            self.assertEqual(error.restored, [second])
+            self.assertEqual(sorted(error.unrestored), sorted([first, third]))
+            text = str(error)
+            self.assertIn("not restored", text)
+            for rel in (first, second, third):
+                self.assertIn(rel, text)
+            after = contents(tmp, paths)
+            self.assertEqual(after[second], before[second])
+            self.assertNotEqual(after[first], before[first])
+            untouched = [rel for rel in paths if rel not in (first, second, third)]
+            self.assertEqual({rel: after[rel] for rel in untouched}, {rel: before[rel] for rel in untouched})
+
+
+class InstalledTest(unittest.TestCase):
+    """The note of set-version for a .env that is the configuration of an installed T-Pot."""
+
+    def unit(self, folder, root):
+        path = Path(folder, "tpot.service")
+        compose = Path(root, "docker-compose.yml")
+        path.write_text("[Service]\n"
+                        f"ExecStartPre=-/usr/bin/docker compose -f {compose} down -v\n"
+                        f"ExecStart=/usr/bin/docker compose -f {compose} up\n"
+                        f"ExecStop=/usr/bin/docker compose -f {compose} down -v\n")
+        return path
+
+    def test_with_a_data_folder(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "data").mkdir()
+            self.assertTrue(release.installed_t_pot(Path(tmp), service_file=Path(tmp, "no-such.service")))
+
+    def test_with_a_unit_that_names_this_root(self):
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as etc:
+            self.assertTrue(release.installed_t_pot(Path(tmp), service_file=self.unit(etc, tmp)))
+            # the root as the unit names it, the checkout as given (a link, a relative path)
+            link = Path(etc, "link")
+            link.symlink_to(tmp)
+            self.assertTrue(release.installed_t_pot(link, service_file=self.unit(etc, tmp)))
+            self.assertTrue(release.installed_t_pot(Path(tmp), service_file=self.unit(etc, link)))
+
+    def test_without_both(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "data").write_text("a file, not the data folder\n")
+            self.assertFalse(release.installed_t_pot(Path(tmp), service_file=Path(tmp, "no-such.service")))
+
+    def test_with_a_unit_for_another_root(self):
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as etc:
+            for other in (tmp + "2", "/opt" + tmp, str(Path(tmp, "tpotce"))):
+                with self.subTest(other=other):
+                    self.assertFalse(release.installed_t_pot(Path(tmp), service_file=self.unit(etc, other)))
+
+    def test_set_version_says_it_for_the_env_of_an_installed_t_pot(self):
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as etc:
+            copy_of_the_places(tmp)
+            unit = self.unit(etc, tmp)
+            rc, out, err = main_in_process("set-version", NEW, "--root", tmp, "--service-file", str(unit))
+            self.assertEqual(rc, 0, out + err)
+            self.assertIn("  .env\n", out)
+            self.assertIn("note: .env is the configuration of the T-Pot installed here: its next start pulls"
+                          f" the images {NEW} (TPOT_VERSION)", err)
+            # .env not changed (the same version again): no note
+            rc, out, err = main_in_process("set-version", NEW, "--root", tmp, "--service-file", str(unit))
+            self.assertEqual(rc, 0, out + err)
+            self.assertNotIn(".env", out)
+            self.assertNotIn("note:", out + err)
+
+    def test_set_version_says_nothing_for_a_checkout(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            copy_of_the_places(tmp)
+            rc, out, err = main_in_process("set-version", NEW, "--root", tmp,
+                                           "--service-file", str(Path(tmp, "no-such.service")))
+            self.assertEqual(rc, 0, out + err)
+            self.assertIn("  .env\n", out)
+            self.assertNotIn("note:", out + err)
 
 
 def git_checkout():
