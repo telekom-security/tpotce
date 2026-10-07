@@ -129,6 +129,9 @@ fuUI_INIT () {
   myUI_GUM=""
   [ -t 1 ] || return 0
   [ "${TPOT_GUM:-on}" = "off" ] && return 0
+  # gum (lipgloss) and what the script starts (i.e. tpot) know true colour by COLORTERM
+  # only: the rule of fuUI_COLORS says it for them where COLORTERM is empty
+  if [ -z "${COLORTERM:-}" ] && [ "$(fuUI_COLORS)" = "truecolor" ]; then export COLORTERM=truecolor; fi
   local myDIR="${XDG_DATA_HOME:-${HOME}/.local/share}/tpotce/bin"
   local myBIN="${myDIR}/gum"
   if [ -x "${myBIN}" ] && "${myBIN}" --version 2>/dev/null | grep -q "${myUI_GUM_VERSION}";
@@ -136,6 +139,9 @@ fuUI_INIT () {
       myUI_GUM="${myBIN}"
       return 0
   fi
+  # the release is the one of Linux: elsewhere (macOS, Windows) the scripts stop or only show
+  # their help (fuUI_LINUX_ONLY), plain text is enough there
+  [ "$(uname -s 2>/dev/null)" = "Linux" ] || return 0
   local myARCH mySHA
   case "$(uname -m)" in
     x86_64|amd64) myARCH="x86_64"; mySHA="${myUI_GUM_SHA256_x86_64}" ;;
@@ -195,11 +201,14 @@ fuUI_ICONS () {
 }
 
 fuUI_COLORS () {
-  # truecolor, 256 or 16, as the T-Pot Manager picks them (prefs.py, theme.py):
-  # TPOT_COLORS, else "colors" of tpot.json, unless that says auto; then what the
-  # terminal says (as Rich): COLORTERM truecolor / 24bit, TERM *-256color or
-  # *-kitty 256, anything else 16
-  local myCOLORS="${TPOT_COLORS:-}"
+  # truecolor, 256 or 16, by the one rule of the T-Pot Manager too (prefs.py; the cases
+  # are tpotctl/tests/color_cases.json): TPOT_COLORS, else "colors" of tpot.json, unless
+  # that says auto; then the terminal: COLORTERM truecolor / 24bit, a TERM of a true
+  # colour terminal (*-direct, kitty, ghostty, alacritty, foot, wezterm, contour, rio),
+  # outside tmux and screen a terminal that says who it is (TERM_PROGRAM, LC_TERMINAL of
+  # iTerm2, which comes over SSH, VTE_VERSION, KONSOLE_VERSION, WT_SESSION); 256 for a
+  # TERM *256color or the Terminal of macOS, anything else 16
+  local myCOLORS="${TPOT_COLORS:-}" myTERM="${TERM:-}" myMUX=""
   case "${myCOLORS}" in
     truecolor|256|16) echo "${myCOLORS}"; return 0 ;;
     auto) ;;
@@ -208,9 +217,24 @@ fuUI_COLORS () {
   esac
   myCOLORS="${COLORTERM:-}"
   case "${myCOLORS,,}" in truecolor|24bit) echo "truecolor"; return 0 ;; esac
-  myCOLORS="${TERM:-}"
-  myCOLORS="${myCOLORS,,}"
-  case "${myCOLORS##*-}" in 256color|kitty) echo "256" ;; *) echo "16" ;; esac
+  myTERM="${myTERM,,}"
+  case "${myTERM}" in
+    *-direct|xterm-kitty|xterm-ghostty|alacritty|foot*|wezterm|contour|rio) echo "truecolor"; return 0 ;;
+  esac
+  # in tmux or screen the terminal outside does not count, the multiplexer draws
+  if [ -n "${TMUX:-}" ]; then myMUX=1; fi
+  case "${myTERM}" in screen*|tmux*) myMUX=1 ;; esac
+  if [ -z "${myMUX}" ]; then
+    case "${TERM_PROGRAM:-}" in
+      iTerm.app|WezTerm|vscode|ghostty|Hyper|Tabby|rio|WarpTerminal) echo "truecolor"; return 0 ;;
+    esac
+    if [ "${LC_TERMINAL:-}" = "iTerm2" ] || [ -n "${KONSOLE_VERSION:-}" ] || [ -n "${WT_SESSION:-}" ] \
+       || { [[ "${VTE_VERSION:-}" =~ ^[0-9]{1,9}$ ]] && [ "$((10#${VTE_VERSION}))" -ge 3600 ]; };
+      then echo "truecolor"; return 0
+    fi
+    [ "${TERM_PROGRAM:-}" != "Apple_Terminal" ] || { echo "256"; return 0; }
+  fi
+  case "${myTERM}" in *256color) echo "256" ;; *) echo "16" ;; esac
 }
 
 fuUI_TERM_SIZE () {
@@ -452,17 +476,41 @@ fuUI_LOGO () {
   return 0
 }
 
+fuUI_HANG () {
+  # fuUI_HANG <room> <text>: the text as it is when every line of it fits the room,
+  # else broken at spaces (fuUI_FOLD) with the lines after the first indented by two
+  local myROOM="$1" myLINE myOUT
+  while IFS= read -r myLINE; do
+    if [ "${#myLINE}" -gt "${myROOM}" ] && [ "${myROOM}" -ge 12 ];
+      then
+        myOUT=$(fuUI_FOLD $((myROOM - 2)) "$2")
+        printf '%s\n' "${myOUT//$'\n'/$'\n'  }"
+        return 0
+    fi
+  done <<< "$2"
+  printf '%s\n' "$2"
+}
+
 fuUI_BANNER () {
   # fuUI_BANNER <title> <line> ...: the T-Pot logo (myUI_LOGO=1, see fuUI_LOGO) or the
-  # T-Pot wordmark of the T-Pot Manager (tpotctl/logo.py), then a title and lines
-  local myTITLE="$1" myLINE myLOGO=""
+  # T-Pot wordmark of the T-Pot Manager (tpotctl/logo.py), then a title and lines. At a
+  # terminal a line wider than it is broken, with a hanging indent
+  local myTITLE="$1" myLINE myTEXT myLOGO="" myCOLS=""
+  local -a myLINES=()
   shift
   if [ "${myUI_LOGO}" = "1" ] && fuUI_LOGO; then myLOGO=1; fi
+  if [ -t 1 ] && fuUI_TERM_SIZE; then myCOLS="${myUI_COLS}"; fi
   if [ -z "${myUI_GUM}" ];
     then
       echo
       echo "### T-Pot ${myTITLE}"
-      for myLINE in "$@"; do echo "### ${myLINE}"; done
+      for myLINE in "$@"; do
+        [ -z "${myCOLS}" ] || myTEXT=$(fuUI_HANG $((myCOLS - 4)) "${myLINE}")
+        if [ -z "${myCOLS}" ] || [ "${myTEXT}" = "${myLINE}" ];
+          then echo "### ${myLINE}"
+          else echo "### ${myTEXT//$'\n'/$'\n'### }"
+        fi
+      done
       echo
       return
   fi
@@ -473,15 +521,43 @@ fuUI_BANNER () {
       echo
   fi
   "${myUI_GUM}" style --foreground "${myUI_GLASS}" --bold --margin "0 2" -- "T-Pot ${myTITLE}"
-  [ "$#" -gt 0 ] && "${myUI_GUM}" style --foreground "${myUI_ASH}" --margin "0 2" -- "$@"
+  # gum style does not break lines; its margin takes two columns on each side
+  for myLINE in "$@"; do
+    if [ -n "${myCOLS}" ];
+      then mapfile -t -O "${#myLINES[@]}" myLINES < <(fuUI_HANG $((myCOLS - 4)) "${myLINE}")
+      else myLINES+=("${myLINE}")
+    fi
+  done
+  [ "${#myLINES[@]}" -eq 0 ] || "${myUI_GUM}" style --foreground "${myUI_ASH}" --margin "0 2" -- "${myLINES[@]}"
   echo
 }
 
 fuUI_INFO () {
-  if [ -n "${myUI_GUM}" ];
-    then echo "$(fuUI_PAINT "${myUI_MAGENTA}" "⬢") $(fuUI_PAINT "${myUI_GLASS}" "$*")"
-    else echo "### $*"
+  # fuUI_INFO <text>: a line of what happens; at a terminal a line wider than it is broken,
+  # with a hanging indent
+  local myTEXT="$*" myCOLS="" myLINE myFIRST=1
+  if [ -t 1 ] && fuUI_TERM_SIZE; then myCOLS="${myUI_COLS}"; fi
+  if [ -z "${myUI_GUM}" ];
+    then
+      [ -z "${myCOLS}" ] || myTEXT=$(fuUI_HANG $((myCOLS - 4)) "${myTEXT}")
+      if [ "${myTEXT}" = "$*" ];
+        then echo "### $*"
+        else echo "### ${myTEXT//$'\n'/$'\n'### }"
+      fi
+      return 0
   fi
+  [ -z "${myCOLS}" ] || myTEXT=$(fuUI_HANG $((myCOLS - 2)) "${myTEXT}")
+  if [ -z "${myCOLS}" ] || [ "${myTEXT}" = "$*" ];
+    then
+      echo "$(fuUI_PAINT "${myUI_MAGENTA}" "⬢") $(fuUI_PAINT "${myUI_GLASS}" "${myTEXT}")"
+      return 0
+  fi
+  while IFS= read -r myLINE; do
+    if [ -n "${myFIRST}" ];
+      then echo "$(fuUI_PAINT "${myUI_MAGENTA}" "⬢") $(fuUI_PAINT "${myUI_GLASS}" "${myLINE}")"; myFIRST=""
+      else echo "  $(fuUI_PAINT "${myUI_GLASS}" "${myLINE}")"
+    fi
+  done <<< "${myTEXT}"
 }
 
 fuUI_OK () {
@@ -620,6 +696,23 @@ fuUI_USAGE_ERROR () {
   fuUI_ERROR "$1"
   fuUI_HINT "${2:-${0##*/}} -h shows the options." >&2
   return 1
+}
+
+fuUI_LINUX_ONLY () {
+  # fuUI_LINUX_ONLY <script> [rc]: ends the script with rc (1) outside Linux (uname -s:
+  # macOS, Windows with MINGW / MSYS / Cygwin, any other), an error and where it runs on
+  # stderr. WSL2 is Linux. Call it after -h, the help shows everywhere
+  local mySYSTEM
+  mySYSTEM=$(uname -s 2>/dev/null)
+  [ "${mySYSTEM}" != "Linux" ] || return 0
+  case "${mySYSTEM}" in
+    Darwin) mySYSTEM="macOS" ;;
+    MINGW*|MSYS*|CYGWIN*) mySYSTEM="Windows (${mySYSTEM})" ;;
+    "") mySYSTEM="an unknown system" ;;
+  esac
+  fuUI_ERROR "$1 does not run on ${mySYSTEM}."
+  fuUI_HINT "$1 runs on Linux: a T-Pot host, a build host or a VM, WSL2 on Windows." >&2
+  exit "${2:-1}"
 }
 
 fuUI_RESULT () {

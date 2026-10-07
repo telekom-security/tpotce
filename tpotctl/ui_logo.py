@@ -338,6 +338,19 @@ FALLBACK = r'''    fuUI_INIT () { return 0; }
       echo "###   ${2:-${0##*/}} -h shows the options." >&2
       return 1
     }
+    fuUI_LINUX_ONLY () {
+      local mySYSTEM
+      mySYSTEM=$(uname -s 2>/dev/null)
+      [ "${mySYSTEM}" != "Linux" ] || return 0
+      case "${mySYSTEM}" in
+        Darwin) mySYSTEM="macOS" ;;
+        MINGW*|MSYS*|CYGWIN*) mySYSTEM="Windows (${mySYSTEM})" ;;
+        "") mySYSTEM="an unknown system" ;;
+      esac
+      echo "### [ERROR] - $1 does not run on ${mySYSTEM}." >&2
+      echo "###   $1 runs on Linux: a T-Pot host, a build host or a VM, WSL2 on Windows." >&2
+      exit "${2:-1}"
+    }
     fuUI_RESULT () {
       case "$1" in
         ok) echo "### [OK] - $2" ;;

@@ -7,6 +7,7 @@ tpot.json or .env of the user running the tests, nothing calls docker or downloa
 """
 
 import fcntl
+import json
 import os
 import pty
 import re
@@ -373,7 +374,7 @@ class ColoursTest(unittest.TestCase):
 
         self.assertEqual(colours(TERM="xterm"), "16")
         self.assertEqual(colours(TERM="xterm-256color"), "256")
-        self.assertEqual(colours(TERM="xterm-kitty"), "256")
+        self.assertEqual(colours(TERM="xterm-kitty"), "truecolor")
         self.assertEqual(colours(TERM="screen.xterm-256color"), "256")
         self.assertEqual(colours(TERM="xterm", COLORTERM="truecolor"), "truecolor")
         self.assertEqual(colours(TERM="xterm", COLORTERM="24bit"), "truecolor")
@@ -389,6 +390,77 @@ class ColoursTest(unittest.TestCase):
         self.assertEqual(colours('{"colors": "16"}', TPOT_COLORS="truecolor", TERM="xterm"), "truecolor")
         self.assertEqual(colours('{"colors": "16"}', TPOT_COLORS="auto", COLORTERM="truecolor"), "truecolor")
         self.assertEqual(colours('{"colors": "16"}', TPOT_COLORS="bogus", COLORTERM="truecolor"), "16")
+
+    def test_colour_detection_cases(self):
+        """The rule of the colours, the same for fuUI_COLORS (bash) and the T-Pot Manager (Python),
+        against the shared cases of tpotctl/tests/color_cases.json.
+
+        The file is a JSON list of cases {"env": {...}, "expect": "truecolor" | "256" | "16",
+        "note": "...", "prefs": {...}}: env is the whole environment that counts, every key not in it
+        is unset (TERM too); prefs, when there, is the tpot.json of the T-Pot Manager (written as JSON),
+        without it there is no tpot.json. The rule, first match wins:
+          1. TPOT_COLORS truecolor / 256 / 16 (auto: on with 3., tpot.json does not count)
+          2. "colors" of tpot.json truecolor / 256 / 16
+          3. COLORTERM truecolor or 24bit (any case)                                -> truecolor
+          4. TERM (any case) ends in -direct, or is xterm-kitty, xterm-ghostty, alacritty, foot*,
+             wezterm, contour or rio                                                -> truecolor
+          5. not in tmux or screen (TMUX set, or TERM begins with screen or tmux):
+             TERM_PROGRAM iTerm.app, WezTerm, vscode, ghostty, Hyper, Tabby, rio or WarpTerminal, or
+             LC_TERMINAL iTerm2, or VTE_VERSION a number of 3600 or more, or KONSOLE_VERSION or
+             WT_SESSION not empty                                                   -> truecolor
+          6. TERM ends in 256color, or (not in tmux or screen) TERM_PROGRAM Apple_Terminal -> 256
+          7. anything else                                                          -> 16
+        """
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "color_cases.json"),
+                  encoding="utf-8") as handle:
+            cases = json.load(handle)
+        self.assertGreaterEqual(len(cases), 25)
+        sandbox = Sandbox(self)
+        prefs = os.path.join(sandbox.config, "tpotce", "tpot.json")
+        for case in cases:
+            self.assertEqual(set(case) - {"env", "expect", "note", "prefs"}, set(), case)
+            self.assertIn(case["expect"], ("truecolor", "256", "16"), case)
+            with self.subTest(note=case["note"]):
+                if "prefs" in case:
+                    sandbox.prefs(json.dumps(case["prefs"]))
+                elif os.path.exists(prefs):
+                    os.remove(prefs)
+                env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": sandbox.home,
+                       "XDG_CONFIG_HOME": sandbox.config, "LANG": os.environ.get("LANG", "en_US.UTF-8")}
+                env.update(case["env"])
+                result = run("fuUI_COLORS", env)
+                self.assertEqual((result.stdout.strip(), result.stderr), (case["expect"], ""), case["env"])
+
+    def test_init_tells_gum_of_true_colour(self):
+        """fuUI_INIT exports COLORTERM=truecolor when the rule says truecolor and COLORTERM is empty,
+        so gum (lipgloss) and what the script starts (i.e. tpot) take the same colours."""
+        sandbox = Sandbox(self)
+        folder = os.path.join(sandbox.home, "data", "tpotce", "bin")
+        os.makedirs(folder)
+        shutil.move(fake_gum(sandbox.home), os.path.join(folder, "gum"))
+        record = os.path.join(sandbox.home, "gum.env")
+        script = 'fuUI_INIT; fuUI_INFO "hello"; bash -c \'echo "child=${COLORTERM-(unset)}"\''
+        cases = (
+            ({"LC_TERMINAL": "iTerm2"}, "truecolor"),
+            ({"TERM": "xterm-kitty"}, "truecolor"),
+            ({"TPOT_COLORS": "truecolor", "TERM": "xterm"}, "truecolor"),
+            ({}, "(unset)"),                                              # TERM xterm-256color: 256
+            ({"COLORTERM": "24bit"}, "24bit"),                            # one of its own stays
+            ({"LC_TERMINAL": "iTerm2", "TMUX": "/tmp/tmux-1/default,1,0"}, "(unset)"),
+        )
+        for extra, want in cases:
+            with self.subTest(env=extra):
+                if os.path.exists(record):
+                    os.remove(record)
+                out = at_terminal(script, sandbox.env(**extra), 100, 30)
+                self.assertIn(f"child={want}", out)
+                self.assertEqual(read(record).split(), [f"COLORTERM={want}"] * len(read(record).split()))
+                self.assertTrue(read(record))                             # gum ran (fuUI_INFO)
+        # without a terminal or with TPOT_GUM=off there is no gum: nothing is exported
+        result = run(script, sandbox.env(LC_TERMINAL="iTerm2"))
+        self.assertIn("child=(unset)", result.stdout)
+        out = at_terminal(script, sandbox.env(LC_TERMINAL="iTerm2", TPOT_GUM="off"), 100, 30)
+        self.assertIn("child=(unset)", out)
 
     def test_colour_detection_reads_the_config_of_xdg(self):
         sandbox = Sandbox(self)
@@ -593,6 +665,52 @@ class BannerTest(unittest.TestCase):
             out = run(logo + 'fuUI_INIT; fuUI_BANNER "Installer" "one" "two"', sandbox.env()).stdout
             self.assertEqual(out, "\n### T-Pot Installer\n### one\n### two\n\n")
 
+    # 140 characters, words of 4 to 13 (the status line of the builder)
+    LONG = ("Builder 'mybuilder': running, linux/arm64, linux/amd64 and 6 more platforms, QEMU for both, "
+            "the log in /home/someone/tpotce/docker/x/log now")
+
+    def assert_hanging(self, lines, first, rest, width=80):
+        """The long line broken into lines no wider than width: the first starts with first, the
+        others with rest (the hanging indent), the words all there in their order."""
+        self.assertEqual(len(self.LONG), 140)
+        lines = [line for line in lines if line.strip()]
+        self.assertGreater(len(lines), 1, lines)
+        self.assertLessEqual(max(len(line) for line in lines), width, lines)
+        self.assertTrue(lines[0].startswith(first) and not lines[0].startswith(first + " "), lines)
+        for line in lines[1:]:
+            self.assertTrue(line.startswith(rest) and not line.startswith(rest + " "), lines)
+        words = " ".join(line[len(first if i == 0 else rest):] for i, line in enumerate(lines)).split()
+        self.assertEqual(words, self.LONG.split())
+
+    def test_info_lines_wrap_at_the_terminal(self):
+        sandbox = Sandbox(self)
+        long = self.LONG.replace("'", "'\\''")
+        # plain text: ### and a hanging indent of two
+        out = at_terminal(f"fuUI_BANNER Builder '{long}' 'short one'", sandbox.env(TPOT_GUM="off"), 80, 24)
+        lines = out.split("\n")
+        start = lines.index("### T-Pot Builder") + 1
+        end = lines.index("### short one")
+        self.assert_hanging(lines[start:end], "### ", "###   ")
+        out = at_terminal(f"fuUI_INFO '{long}'; echo end", sandbox.env(TPOT_GUM="off"), 80, 24)
+        self.assert_hanging(out.split("\n")[:out.split("\n").index("end")], "### ", "###   ")
+        # gum: the banner lines go to gum style broken (gum has a margin of two on each side), INFO
+        # puts its sign before the first line
+        gum = fake_gum(sandbox.home)
+        at_terminal(f"myUI_GUM='{gum}'; fuUI_BANNER Builder '{long}' 'short one'", sandbox.env(), 80, 24)
+        call = [c for c in read(os.path.join(sandbox.home, "gum.calls")).split("--- call\n") if "short one" in c][0]
+        args = call.split("\n")
+        texts = args[args.index("--") + 1:-1]
+        self.assertEqual(texts[-1], "short one")
+        self.assert_hanging(texts[:-1], "", "  ", width=76)
+        out = at_terminal(f"myUI_GUM='{gum}'; fuUI_INFO '{long}'; echo end", sandbox.env(), 80, 24)
+        lines = plain(out).split("\n")
+        self.assert_hanging(lines[:lines.index("end")], "⬢ ", "    ")
+        # a wider terminal takes more, a line that fits and the output without a terminal stay
+        out = at_terminal(f"fuUI_INFO '{long}'", sandbox.env(TPOT_GUM="off"), 200, 24)
+        self.assertEqual(out, f"### {self.LONG}\n")
+        result = run(f"fuUI_BANNER Builder '{long}'; myUI_GUM='{gum}'; fuUI_INFO '{long}'", sandbox.env())
+        self.assertEqual(result.stdout, f"\n### T-Pot Builder\n### {self.LONG}\n\n⬢ {self.LONG}\n")
+
     def test_gum_banner_shows_the_wordmark(self):
         sandbox = Sandbox(self)
         gum = fake_gum(sandbox.home)
@@ -612,6 +730,7 @@ def fake_gum(home, output=""):
     with open(path, "w", encoding="utf-8") as out:
         out.write("#!/bin/sh\n"
                   f'{{ echo "--- call"; for a in "$@"; do echo "$a"; done; }} >> "{home}/gum.calls"\n'
+                  f'echo "COLORTERM=${{COLORTERM-(unset)}}" >> "{home}/gum.env"\n'
                   'case "$1" in\n'
                   '  --version) echo "gum version v2.0.2" ;;\n'
                   '  choose|filter) printf "%s" "$FAKE_GUM_OUT"; exit "${FAKE_GUM_RC:-0}" ;;\n'
@@ -624,6 +743,24 @@ def fake_gum(home, output=""):
                   'esac\n')
     os.chmod(path, os.stat(path).st_mode | stat.S_IEXEC)
     return path
+
+
+def fake_system(home):
+    """A folder for the front of PATH with uname (uname -s says FAKE_UNAME_S, Linux without it;
+    -m says arm64) and curl / wget that write their argv to net.calls and fail: nothing downloads."""
+    folder = os.path.join(home, "fakebin")
+    os.makedirs(folder, exist_ok=True)
+    scripts = {
+        "uname": '#!/bin/sh\ncase "$1" in -s) echo "${FAKE_UNAME_S-Linux}" ;; -m) echo arm64 ;; *) echo "${FAKE_UNAME_S-Linux}" ;; esac\n',
+        "curl": f'#!/bin/sh\necho "curl $*" >> "{home}/net.calls"\nexit 22\n',
+        "wget": f'#!/bin/sh\necho "wget $*" >> "{home}/net.calls"\nexit 8\n',
+    }
+    for name, text in scripts.items():
+        path = os.path.join(folder, name)
+        with open(path, "w", encoding="utf-8") as out:
+            out.write(text)
+        os.chmod(path, 0o755)
+    return folder
 
 
 HELP = ('fuUI_HELP "Installer" "install.sh [-s] [-t <type>]"$\'\\n\'"           [-b <branch>]" '
@@ -967,6 +1104,52 @@ class HelpersTest(unittest.TestCase):
         self.assertEqual(self.run_ui('myMARKS=1; fuMARK phase pull').stdout, "@@tpot phase pull\n")
         self.assertEqual(self.run_ui('fuMARK phase pull').stdout, "")
 
+    # uname -s and how fuUI_LINUX_ONLY names the system; None: it goes on
+    SYSTEMS = (("Linux", None), ("Darwin", "macOS"), ("MINGW64_NT-10.0-19045", "Windows (MINGW64_NT-10.0-19045)"),
+               ("MSYS_NT-10.0-19045", "Windows (MSYS_NT-10.0-19045)"), ("CYGWIN_NT-10.0", "Windows (CYGWIN_NT-10.0)"),
+               ("FreeBSD", "FreeBSD"), ("", "an unknown system"))
+
+    def test_linux_only(self):
+        """Outside Linux a host script stops: an error, where it runs, the exit code (1 or its own).
+        WSL2 is Linux (uname -s says so), it goes on."""
+        path = fake_system(self.sandbox.home) + os.pathsep + os.environ.get("PATH", "/usr/bin:/bin")
+        script = 'fuUI_LINUX_ONLY update.sh; echo "goes on"'
+        for system, name in self.SYSTEMS:
+            with self.subTest(system=system):
+                result = self.run_ui(script, PATH=path, FAKE_UNAME_S=system)
+                if name is None:
+                    self.assertEqual((result.returncode, result.stdout, result.stderr), (0, "goes on\n", ""))
+                    continue
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(result.stdout, "")
+                self.assertEqual(result.stderr, f"### [ERROR] - update.sh does not run on {name}.\n"
+                                                "###   update.sh runs on Linux: a T-Pot host, a build host or a "
+                                                "VM, WSL2 on Windows.\n")
+        result = self.run_ui('fuUI_LINUX_ONLY builder.sh 3; echo "goes on"', PATH=path, FAKE_UNAME_S="Darwin")
+        self.assertEqual(result.returncode, 3)
+        self.assertIn("builder.sh does not run on macOS.", result.stderr)
+        # with gum the same words, the error on stderr
+        gum = fake_gum(self.sandbox.home)
+        result = self.run_ui(f'myUI_GUM="{gum}"; {script}', PATH=path, FAKE_UNAME_S="Darwin")
+        self.assertEqual((result.returncode, result.stdout), (1, ""))
+        self.assertIn("✗ update.sh does not run on macOS.", result.stderr)
+        self.assertIn("update.sh runs on Linux: a T-Pot host", result.stderr)
+
+    def test_init_downloads_gum_on_linux_only(self):
+        """Outside Linux fuUI_INIT never fetches the Linux gum; on Linux it tries (here it fails: the
+        curl of the test)."""
+        folder = fake_system(self.sandbox.home)
+        calls = os.path.join(self.sandbox.home, "net.calls")
+        env = dict(PATH=folder + os.pathsep + os.environ.get("PATH", "/usr/bin:/bin"))
+        script = 'fuUI_INIT; echo "gum=[${myUI_GUM}]"'
+        for system, name in self.SYSTEMS:
+            with self.subTest(system=system):
+                if os.path.exists(calls):
+                    os.remove(calls)
+                out = at_terminal(script, self.sandbox.env(FAKE_UNAME_S=system, **env), 100, 30)
+                self.assertIn("gum=[]", out)
+                self.assertEqual(os.path.exists(calls), name is None, out)
+
     # fuUI_VERSION_GE <version> <minimum>: rc 0 when the version is at least the minimum
     VERSION_GE = (
         ("24.04.10", "24.04.9", 0), ("24.04.9", "24.04.10", 1), ("v2.24.4-desktop.1", "2.24.4", 0),
@@ -1066,7 +1249,8 @@ class FallbackTest(unittest.TestCase):
         for name in ("fuUI_INIT", "fuUI_BANNER", "fuUI_INFO", "fuUI_OK", "fuUI_WARN", "fuUI_ERROR", "fuUI_HINT",
                      "fuUI_CONFIRM", "fuUI_CHOOSE", "fuUI_INPUT",
                      "fuUI_MARKS_ON", "fuMARK", "fuUI_LOGO", "fuUI_VERSION", "fuUI_VERSION_GE", "fuUI_HELP",
-                     "fuUI_USAGE_ERROR", "fuUI_RESULT", "fuUI_SUMMARY", "fuUI_CHOOSE_MANY", "fuUI_SPIN"):
+                     "fuUI_USAGE_ERROR", "fuUI_RESULT", "fuUI_SUMMARY", "fuUI_CHOOSE_MANY", "fuUI_SPIN",
+                     "fuUI_LINUX_ONLY"):
             self.assertIn(name, defined)
         self.assertNotIn("# >>> plain fallback", ui_logo.FALLBACK)
         self.assertTrue(all(line.startswith("    ") or not line for line in ui_logo.FALLBACK.split("\n")))
@@ -1108,6 +1292,14 @@ class FallbackTest(unittest.TestCase):
             ('myV=$(fuUI_INPUT "Name:"); echo "rc=$? [${myV}]"', ("someone\n", "", "  a b \n")),
             ('myV=$(fuUI_INPUT "Password:" password); echo "rc=$? [${myV}]"', ("secret\n", "")),
         ]
+        path = fake_system(sandbox.home) + os.pathsep + os.environ.get("PATH", "/usr/bin:/bin")
+        for system, _name in HelpersTest.SYSTEMS:
+            for call in ('fuUI_LINUX_ONLY update.sh; echo "goes on"', 'fuUI_LINUX_ONLY builder.sh 3; echo "goes on"'):
+                with self.subTest(call=call, system=system):
+                    env = sandbox.env(TPOT_GUM="off", PATH=path, FAKE_UNAME_S=system)
+                    one = run(call, env, source=UI_SH)
+                    two = run(call, env, source=fallback)
+                    self.assertEqual((two.returncode, two.stdout, two.stderr), (one.returncode, one.stdout, one.stderr))
         for call, answers in stdin_calls:
             for answer in answers:
                 with self.subTest(call=call[:40], answer=answer):
