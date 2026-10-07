@@ -15,6 +15,7 @@ import hashlib
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -29,6 +30,35 @@ NEEDS = {"yaml": ("yaml",), "ui": ("yaml", "textual", "rich")}
 
 class BootstrapError(Exception):
     """The environment cannot be set up."""
+
+
+class Interrupted(KeyboardInterrupt):
+    """Ctrl+C at a question whose line is ended already, with what is left to do said."""
+
+
+def cancelled(error: BaseException = None, stream=None) -> int:
+    """The end of a command after Ctrl+C: the line of the ^C ended, "Cancelled." said, 130 given back
+    (128 + SIGINT, as a shell gives it)."""
+    from tpotctl import say
+    stream = stream or sys.stderr
+    if not isinstance(error, Interrupted):
+        stream.write("\n")
+    say.warn("Cancelled.", stream)
+    return 128 + signal.SIGINT
+
+
+def wait_child(proc) -> int:
+    """Wait for a child in the foreground and give back its exit code, 128 + n if signal n ended it.
+
+    Ctrl+C reaches the child as well (the same process group of the terminal): the child decides
+    whether it ends, so a KeyboardInterrupt here only waits on, a second one as well."""
+    while True:
+        try:
+            code = proc.wait()
+            break
+        except KeyboardInterrupt:
+            continue
+    return 128 - code if code < 0 else code
 
 
 def venv_dir() -> str:
@@ -163,6 +193,10 @@ def offer_venv_package(package: str) -> bool:
         answer = ask("Install it now with sudo apt-get? [Y/n] ").strip().lower()
     except EOFError:
         return False
+    except KeyboardInterrupt:
+        sys.stderr.write("\n")
+        say.info(f"Later with: sudo apt-get install {package}", sys.stderr)
+        raise Interrupted from None
     if answer not in ("", "y", "yes"):
         return False
     if subprocess.call(["sudo", "apt-get", "install", "-y", package]) != 0:
@@ -217,6 +251,10 @@ def ensure_link(launcher: str, link: str = LINK, checkout: str = "") -> None:
             answer = ask(f"Link {link} so that 'tpot' works everywhere? [Y/n] ").strip().lower()
     except EOFError:
         return
+    except KeyboardInterrupt:       # an answer as well: the note stays, the launcher says "Cancelled."
+        sys.stderr.write("\n")
+        say.info(f"Later with: {command}", sys.stderr)
+        raise Interrupted from None
     if answer not in ("", "y", "yes"):
         say.info(f"Later with: {command}", sys.stderr)
         return
@@ -340,9 +378,4 @@ def reexec(python: str, script: str, argv) -> int:
     """Run the script again with the venv's Python and give back its exit code."""
     env = dict(os.environ)
     env[GUARD] = "1"
-    proc = subprocess.Popen([python, script] + list(argv), env=env)
-    while True:
-        try:
-            return proc.wait()
-        except KeyboardInterrupt:    # the child gets it as well and decides
-            continue
+    return wait_child(subprocess.Popen([python, script] + list(argv), env=env))

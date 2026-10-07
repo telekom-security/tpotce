@@ -20,7 +20,13 @@ def fail(text, code=2):
 
 
 def main():
-    argv = sys.argv[1:]
+    try:
+        run(sys.argv[1:])
+    except KeyboardInterrupt as interrupt:      # Ctrl+C at a question or during setup
+        sys.exit(bootstrap.cancelled(interrupt))
+
+
+def run(argv):
     if hasattr(os, "geteuid") and os.geteuid() == 0:
         fail("do not run tpot as root, it calls sudo itself where needed")
     # the colours chosen (TPOT_COLORS, prefs) reach Textual before anything imports it

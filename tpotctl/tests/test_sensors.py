@@ -57,6 +57,48 @@ def checkout(test, ls_web_user=" ".join(OLD_SENSORS)):
     return tmp.name
 
 
+class Child:
+    """A child of subprocess.Popen: wait() takes the next step, an exit code or an exception to raise."""
+
+    def __init__(self, command, kwargs, steps):
+        self.args, self.kwargs, self.steps, self.returncode = command, kwargs, list(steps), None
+
+    def wait(self, timeout=None):
+        if self.returncode is not None:
+            return self.returncode
+        step = self.steps.pop(0) if self.steps else 0
+        if isinstance(step, BaseException) or (isinstance(step, type) and issubclass(step, BaseException)):
+            raise step
+        self.returncode = step
+        return step
+
+    def kill(self):
+        self.returncode = self.returncode if self.returncode is not None else -9
+
+    def __enter__(self):            # subprocess.call and run use it so
+        return self
+
+    def __exit__(self, *_exc):
+        return False
+
+
+def fake_popen(*steps):
+    """A Popen that records its children; each child waits through `steps`."""
+    children = []
+
+    def popen(command, **kwargs):
+        children.append(Child(command, kwargs, steps))
+        return children[-1]
+    return popen, children
+
+
+class TTY(io.StringIO):
+    """stdin of a person at a terminal."""
+
+    def isatty(self):
+        return True
+
+
 class HelpersTest(unittest.TestCase):
 
     def test_names_and_passwords(self):
@@ -226,7 +268,7 @@ class CliTest(unittest.TestCase):
 
     def setUp(self):
         self.repo = checkout(self)
-        original = sensors.Registry
+        original = self.Registry = sensors.Registry
         self.patches = [
             mock.patch.object(sensors, "Registry", lambda repo_dir=None, hasher=fake_hash:
                               original(repo_dir or self.repo, hasher=hasher)),
@@ -238,15 +280,17 @@ class CliTest(unittest.TestCase):
             patch.start()
         self.addCleanup(lambda: [p.stop() for p in self.patches])
 
-    def run_cli(self, *args):
+    def run_cli(self, *args, stdin=None):
         from tpotctl import cli
         out, err = io.StringIO(), io.StringIO()
-        with redirect_stdout(out), redirect_stderr(err), mock.patch("sys.stdin", io.StringIO()):
+        with redirect_stdout(out), redirect_stderr(err), mock.patch("sys.stdin", stdin or io.StringIO()):
             try:
                 code = cli.main(list(args))
             except SystemExit as stop:
                 code = stop.code if isinstance(stop.code, int) else 2
                 err.write(str(stop.code))
+            except KeyboardInterrupt:       # unittest would stop on it
+                code = "KeyboardInterrupt"
         return code, out.getvalue() + err.getvalue()
 
     def test_list_set_remove(self):
@@ -258,14 +302,103 @@ class CliTest(unittest.TestCase):
                                       "--ssh-user", "debian")[0], 0)
         self.assertEqual(sensors.Registry(self.repo).get("sensor-old-lynx").host, "10.0.0.7")
         self.assertNotEqual(self.run_cli("sensors", "set", "sensor-old-lynx", "--host", "a;b")[0], 0)
-        self.assertNotEqual(self.run_cli("sensors", "remove", "sensor-old-lynx")[0], 0)      # no --yes
+        self.assertEqual(self.run_cli("sensors", "remove", "sensor-old-lynx")[0], 2)         # no --yes, cannot ask
         self.assertEqual(self.run_cli("sensors", "remove", "sensor-old-lynx", "--yes")[0], 0)
         self.assertEqual([u.name for u in sensors.Registry(self.repo).entries()], ["sensor-old-otter"])
 
+    def test_ctrl_c_at_the_question_of_remove(self):
+        with mock.patch("builtins.input", side_effect=KeyboardInterrupt):
+            code, text = self.run_cli("sensors", "remove", "sensor-old-lynx", stdin=TTY())
+        self.assertEqual(code, 130, text)
+        self.assertIn("Cancelled.", text)
+        self.assertNotIn("Traceback", text)
+        self.assertEqual(len(sensors.Registry(self.repo).entries()), 2)      # nothing revoked
+
+    def test_add_asks_or_says_which_option_it_needs(self):
+        code, text = self.run_cli("sensors", "add", "--ssh-user", "debian")
+        self.assertEqual(code, 2, text)
+        self.assertIn("--host", text)
+        with mock.patch("builtins.input", side_effect=KeyboardInterrupt):
+            code, text = self.run_cli("sensors", "add", stdin=TTY())
+        self.assertEqual(code, 130, text)
+        self.assertNotIn("Traceback", text)
+
+    def add_with(self, *steps, ssh="ok"):
+        """sensors add at a terminal with the children of fake_popen(*steps); its password is known."""
+        popen, children = fake_popen(*steps)
+        with mock.patch.object(sensors, "check_ssh", return_value=ssh), \
+                mock.patch.object(sensors, "has_ssh_key", return_value=True), \
+                mock.patch.object(sensors, "cert_sans", return_value=["IP:192.168.1.2"]), \
+                mock.patch.object(sensors, "new_password", return_value="Pw-of-the-sensor-1234"), \
+                mock.patch.object(sensors, "default_hive_address", return_value="192.168.1.2"), \
+                mock.patch("subprocess.Popen", side_effect=popen):
+            code, text = self.run_cli("sensors", "add", "--host", "10.0.0.5", "--ssh-user", "debian",
+                                      "--hive-address", "192.168.1.2", stdin=TTY())
+        return code, text, children
+
+    def test_ctrl_c_during_the_playbook_takes_the_access_back(self):
+        """The playbook ends by the ^C: the access goes, the password is never shown, exit code 130."""
+        code, text, children = self.add_with(KeyboardInterrupt, -2)
+        self.assertEqual(children[0].args[0], "ansible-playbook")
+        self.assertEqual(code, 130, text)
+        self.assertIn("taken back", text)
+        self.assertIn("Cancelled.", text)
+        self.assertNotIn("Traceback", text)
+        self.assertNotIn("Pw-of-the-sensor-1234", text)
+        self.assertEqual(len(sensors.Registry(self.repo).entries()), 2)      # only the migrated ones
+        self.assertEqual([s.source for s in sensors.Registry(self.repo).sensors()], ["migrated", "migrated"])
+
+    def test_a_second_ctrl_c_cannot_stop_taking_the_access_back(self):
+        import signal
+        before, seen = signal.getsignal(signal.SIGINT), []
+        original = self.Registry.revoke
+
+        def revoke(registry, name, forget=True):
+            seen.append(signal.getsignal(signal.SIGINT))
+            return original(registry, name, forget)
+        for steps in ((KeyboardInterrupt, -2), (2,)):
+            with mock.patch.object(self.Registry, "revoke", revoke):
+                self.add_with(*steps)
+        self.assertEqual(seen, [signal.SIG_IGN, signal.SIG_IGN])
+        self.assertEqual(signal.getsignal(signal.SIGINT), before)
+        self.assertEqual(len(sensors.Registry(self.repo).entries()), 2)
+
+    def test_ctrl_c_that_the_playbook_survives_takes_the_access_back(self):
+        """ansible-playbook catches the ^C itself and exits 99: a failed deployment, the access goes."""
+        code, text, _children = self.add_with(KeyboardInterrupt, 99)
+        self.assertEqual(code, 1, text)
+        self.assertIn("taken back", text)
+        self.assertNotIn("Pw-of-the-sensor-1234", text)
+        self.assertEqual(len(sensors.Registry(self.repo).entries()), 2)
+
+    def test_a_playbook_that_cannot_start_takes_the_access_back(self):
+        code, text, _children = self.add_with(FileNotFoundError(2, "No such file or directory", "ansible-playbook"))
+        self.assertEqual(code, 1, text)
+        self.assertIn("taken back", text)
+        self.assertNotIn("Traceback", text)
+        self.assertNotIn("Pw-of-the-sensor-1234", text)
+        self.assertEqual(len(sensors.Registry(self.repo).entries()), 2)
+
+    def test_any_other_break_takes_the_access_back(self):
+        with mock.patch.object(self.Registry, "record", side_effect=RuntimeError("disk gone")), \
+                self.assertRaises(RuntimeError):
+            self.add_with(0)
+        self.assertEqual(len(sensors.Registry(self.repo).entries()), 2)
+
+    def test_ctrl_c_at_ssh_copy_id_is_cancelled(self):
+        code, text, children = self.add_with(KeyboardInterrupt, -2, ssh="key")
+        self.assertEqual(children[0].args[0], "ssh-copy-id")
+        self.assertEqual(code, 130, text)
+        self.assertIn("Cancelled.", text)
+        self.assertNotIn("Traceback", text)
+        self.assertEqual(len(sensors.Registry(self.repo).entries()), 2)      # nothing granted
+
     def test_add_grants_first_and_takes_back_on_failure(self):
+        popen, children = fake_popen(0)
         with mock.patch.object(sensors, "check_ssh", return_value="ok"), \
                 mock.patch.object(sensors, "cert_sans", return_value=["IP:192.168.1.2"]), \
-                mock.patch("subprocess.call", return_value=0) as call:
+                mock.patch.object(sensors, "default_hive_address", return_value="192.168.1.2"), \
+                mock.patch("subprocess.Popen", side_effect=popen):
             code, text = self.run_cli("sensors", "add", "--host", "10.0.0.5", "--ssh-user", "debian",
                                       "--hive-address", "192.168.1.2", "--no-become-pass")
         self.assertEqual(code, 0, text)
@@ -273,14 +406,15 @@ class CliTest(unittest.TestCase):
         deployed = [s for s in sensors.Registry(self.repo).sensors() if s.source == "deployed"]
         self.assertEqual(len(deployed), 1)
         self.assertEqual((deployed[0].host, deployed[0].hive_address), ("10.0.0.5", "192.168.1.2"))
-        command, kwargs = call.call_args[0][0], call.call_args[1]
+        command, kwargs = children[0].args, children[0].kwargs
         self.assertEqual(command[0], "ansible-playbook")
         self.assertNotIn("--ask-become-pass", command)
         self.assertEqual(base64.b64decode(kwargs["env"]["myTPOT_HIVE_USER"]).decode(),
                          f"{deployed[0].name}:{password}")
         with mock.patch.object(sensors, "check_ssh", return_value="ok"), \
                 mock.patch.object(sensors, "cert_sans", return_value=["IP:192.168.1.2"]), \
-                mock.patch("subprocess.call", return_value=2):
+                mock.patch.object(sensors, "default_hive_address", return_value="192.168.1.2"), \
+                mock.patch("subprocess.Popen", side_effect=fake_popen(2)[0]):
             code, text = self.run_cli("sensors", "add", "--host", "10.0.0.6", "--ssh-user", "debian",
                                       "--hive-address", "192.168.1.2")
         self.assertEqual(code, 1)
@@ -304,12 +438,27 @@ class CliTest(unittest.TestCase):
     def test_cert_distribute(self):
         registry = sensors.Registry(self.repo)
         registry.record(sensors.Sensor("sensor-new-fox", host="10.0.0.5", ssh_user="debian", source="deployed"))
+        popen, children = fake_popen(0)
         with mock.patch.object(sensors, "cert_sans", return_value=["IP:192.168.5.15"]), \
-                mock.patch("subprocess.call", return_value=0) as call:
+                mock.patch("subprocess.Popen", side_effect=popen):
             code, text = self.run_cli("sensors", "cert", "--distribute")
         self.assertIn("skipped", text)                                        # migrated ones have no host
         self.assertEqual(code, 1)                                             # sensor-new-fox has no access
-        call.assert_not_called()
+        self.assertEqual(children, [])
+
+    def test_ctrl_c_during_the_distribution_is_cancelled(self):
+        registry = sensors.Registry(self.repo)
+        registry.grant("sensor-new-fox", "pw")
+        registry.record(sensors.Sensor("sensor-new-fox", host="10.0.0.5", ssh_user="debian", source="deployed"))
+        popen, children = fake_popen(KeyboardInterrupt, -2)
+        with mock.patch.object(sensors, "cert_sans", return_value=["IP:192.168.5.15"]), \
+                mock.patch("subprocess.Popen", side_effect=popen):
+            code, text = self.run_cli("sensors", "cert", "--distribute", "sensor-new-fox", stdin=TTY())
+        self.assertEqual(children[0].args[0], "ansible-playbook")
+        self.assertEqual(code, 130, text)
+        self.assertNotIn("Traceback", text)
+        inventory = children[0].args[children[0].args.index("-i") + 1]
+        self.assertFalse(os.path.exists(inventory))                           # the inventory goes as well
 
 
 @unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")

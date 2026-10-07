@@ -331,10 +331,18 @@ def run_env(args) -> int:
 
 
 def ask(prompt: str) -> str:
+    """input() at a terminal; Ctrl+C goes on to main, which ends the command with 130."""
     try:
         return input(prompt).strip()
     except EOFError:
         return ""
+
+
+def ask_for(prompt: str, option: str) -> str:
+    """A value the command needs: asked at a terminal, without one exit code 2 (it cannot ask)."""
+    if not sys.stdin.isatty():
+        fail(f"no terminal to ask for it ({prompt.strip().rstrip(':')}), give it with {option}", 2)
+    return ask(prompt)
 
 
 def read_password(args) -> str:
@@ -342,11 +350,28 @@ def read_password(args) -> str:
     if args.password_stdin:
         return sys.stdin.readline().rstrip("\n")
     if not sys.stdin.isatty():
-        fail("no terminal to ask for the password, use --password-stdin")
-    first = getpass.getpass("Password: ")
-    if getpass.getpass("Repeat the password: ") != first:
+        fail("no terminal to ask for the password, use --password-stdin", 2)
+    try:
+        first = getpass.getpass("Password: ")
+        again = getpass.getpass("Repeat the password: ")
+    except EOFError:                # ctrl+d
+        sys.stderr.write("\n")
+        fail("no password entered")
+    if again != first:
         fail("the passwords do not match")
     return first
+
+
+def call(command: List[str], **kwargs) -> int:
+    """A child in the foreground, as subprocess.call. Ctrl+C reaches it as well and it decides; if it
+    ends by the ^C, so does the command (130), else its exit code comes back (128 + n for signal n)."""
+    import signal
+    import subprocess
+    proc = subprocess.Popen(command, **kwargs)
+    code = bootstrap.wait_child(proc)
+    if proc.returncode == -signal.SIGINT:
+        raise KeyboardInterrupt
+    return code
 
 
 def run_users(args) -> int:
@@ -383,7 +408,7 @@ def run_users(args) -> int:
         note = store.remove(args.name)
         say.ok(f"{args.name} is removed, {note}.", console.file)
         return 0
-    name = args.name or (ask("Name of the new web user: ") if sys.stdin.isatty() else "")
+    name = args.name or ask_for("Name of the new web user: ", "the NAME argument")
     tusers.check_name(name)
     password = read_password(args)
     weak = tusers.weakness(password)
@@ -403,7 +428,7 @@ def confirm(question: str, yes: bool) -> bool:
     if yes:
         return True
     if not sys.stdin.isatty():
-        fail(f"{question} Add --yes to do it without a terminal.")
+        fail(f"{question} Add --yes to do it without a terminal.", 2)
     return ask(f"{question} [y/N] ").lower() == "y"
 
 
@@ -471,7 +496,6 @@ def run_sensors(args) -> int:
 
 
 def renew_certificate(registry, addresses, console, yes: bool, restart: bool) -> bool:
-    import subprocess
     from tpotctl import sensors as tsensors
     current = tsensors.cert_sans(registry.cert)
     sans = list(dict.fromkeys(current + [tsensors.san_of(a) for a in addresses]))
@@ -483,7 +507,7 @@ def renew_certificate(registry, addresses, console, yes: bool, restart: bool) ->
     stamp = tsensors.renew_cert(registry, sans)
     say.ok(f"New certificate, the old one is kept as nginx.crt.bak-{stamp}.", console.file)
     if restart and linux_host_ok() and confirm("Restart T-Pot now, so that nginx uses it?", yes):
-        subprocess.call(ops.service_command("restart"))
+        call(ops.service_command("restart"))
     return True
 
 
@@ -492,7 +516,6 @@ def linux_host_ok() -> bool:
 
 
 def run_sensor_cert(args, registry, console) -> int:
-    import subprocess
     from rich.text import Text
     from tpotctl import sensors as tsensors
     sans = tsensors.cert_sans(registry.cert)
@@ -515,7 +538,7 @@ def run_sensor_cert(args, registry, console) -> int:
         if not reachable:
             return 1
         with tempfile_inventory(tsensors.inventory_text(reachable)) as inventory:
-            code = subprocess.call(tsensors.distribute_command(inventory, not args.no_become_pass), cwd=REPO_DIR)
+            code = call(tsensors.distribute_command(inventory, not args.no_become_pass), cwd=REPO_DIR)
         if code != 0:
             error("the certificate could not be copied to all sensors, see above")
             return 1
@@ -540,13 +563,12 @@ class tempfile_inventory:
 
 
 def run_sensor_add(args, registry, console) -> int:
-    import subprocess
     from rich.text import Text
     from tpotctl import sensors as tsensors
     interactive = sys.stdin.isatty()
-    host = tsensors.check_address(args.host or (ask("IP or name of the sensor: ") if interactive else ""))
-    user = tsensors.check_user(args.ssh_user or (ask("User T-Pot was installed with on the sensor: ")
-                                                 if interactive else ""))
+    host = tsensors.check_address(args.host or ask_for("IP or name of the sensor: ", "--host"))
+    user = tsensors.check_user(args.ssh_user or ask_for("User T-Pot was installed with on the sensor: ",
+                                                        "--ssh-user"))
     proposal = tsensors.default_hive_address(host)
     hive = args.hive_address or (ask(f"IP or name the sensor reaches this HIVE on [{proposal}]: ")
                                  if interactive else "") or proposal
@@ -559,12 +581,12 @@ def run_sensor_add(args, registry, console) -> int:
         if not tsensors.has_ssh_key():
             if not confirm("There is no SSH key on this HIVE. Create one?", args.yes):
                 return 1
-            subprocess.call(tsensors.keygen_command())
+            call(tsensors.keygen_command())
         if not interactive:
             error(f"no key login on {user}@{host}, run: {' '.join(tsensors.copy_id_command(host, user, port))}")
             return 1
         console.print(f"Copying the SSH key to {user}@{host}, enter the password of {user} there.")
-        subprocess.call(tsensors.copy_id_command(host, user, port))
+        call(tsensors.copy_id_command(host, user, port))
         state = tsensors.check_ssh(host, user, port=port)
     if state != "ok":
         error(f"cannot log in to {user}@{host} on port {port} with a key "
@@ -583,25 +605,52 @@ def run_sensor_add(args, registry, console) -> int:
             console.print(Text(f"Remember: {', '.join(others)} need the new certificate as well: "
                                f"tpot sensors cert --distribute", style="yellow"))
 
-    # 3. access first, so the sensor can send as soon as it is up; taken back if the deployment fails
+    # 3. access first, so the sensor can send as soon as it is up; taken back if the deployment fails,
+    # is interrupted or breaks off in any other way before the sensor is recorded
     name = tsensors.new_name(set(registry.records))
     password = tsensors.new_password()
     registry.grant(name, password)
-    console.print(f"Deploying {name} to {host}, this reboots the sensor.")
-    code = subprocess.call(tsensors.deploy_command(host, user, not args.no_become_pass, port=port),
-                           env=tsensors.deploy_env(tsensors.hive_user(name, password), hive), cwd=REPO_DIR)
+    try:
+        console.print(f"Deploying {name} to {host}, this reboots the sensor.")
+        code = call(tsensors.deploy_command(host, user, not args.no_become_pass, port=port),
+                    env=tsensors.deploy_env(tsensors.hive_user(name, password), hive), cwd=REPO_DIR)
+        if code == 0:
+            registry.record(tsensors.Sensor(name=name, host=host, ssh_user=user, ssh_port=port, hive_address=hive,
+                                            added=time.strftime("%Y-%m-%d %H:%M"),
+                                            version=ops.env_values().get("TPOT_VERSION", ""), source="deployed"))
+    except KeyboardInterrupt:
+        take_back(registry, name)
+        sys.stderr.write("\n")
+        error(f"the deployment was interrupted, the access for {name} is taken back")
+        raise bootstrap.Interrupted from None
+    except BaseException as err:
+        take_back(registry, name)
+        if not isinstance(err, OSError):
+            raise
+        error(f"the sensor could not be added ({err}), the access for {name} is taken back")
+        return 1
     if code != 0:
-        registry.revoke(name)
+        take_back(registry, name)
         error(f"the deployment failed (see data/deploy_sensor.log), the access for {name} is taken back")
         return 1
-    import time as _time
-    registry.record(tsensors.Sensor(name=name, host=host, ssh_user=user, ssh_port=port, hive_address=hive,
-                                    added=_time.strftime("%Y-%m-%d %H:%M"),
-                                    version=ops.env_values().get("TPOT_VERSION", ""), source="deployed"))
     say.ok(f"{name} is deployed to {host} and sends to {hive}.", console.file)
     console.print(Text(f"Its password, shown only now: {password}", style=f"bold {MAGENTA}"))
     console.print("The sensor has it already, keep it only if you want to set the sensor up again by hand.")
     return 0
+
+
+def take_back(registry, name: str) -> None:
+    """registry.revoke(name) that a second Ctrl+C cannot break off, so no access of a sensor stays open."""
+    import signal
+    try:
+        previous = signal.signal(signal.SIGINT, signal.SIG_IGN)
+    except ValueError:              # not the main thread: nothing to hold off there
+        registry.revoke(name)
+        return
+    try:
+        registry.revoke(name)
+    finally:
+        signal.signal(signal.SIGINT, signal.default_int_handler if previous is None else previous)
 
 
 def run_edition(args) -> int:
@@ -782,10 +831,10 @@ def error(text: str) -> None:
     say.error(text)
 
 
-def fail(text: str) -> None:
-    """The end of a command that cannot go on, with exit code 1."""
+def fail(text: str, code: int = 1) -> None:
+    """The end of a command that cannot go on: exit code 1, 2 if it would have to ask without a terminal."""
     say.error(text)
-    raise SystemExit(1)
+    raise SystemExit(code)
 
 
 # ---------------------------------------------------------------------------
@@ -821,9 +870,8 @@ def run_install(classic: bool) -> int:
 
 
 def run_service(action: str) -> int:
-    import subprocess
     ops.require_linux_host(action)
-    return subprocess.call(ops.service_command(action))
+    return call(ops.service_command(action))
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -831,6 +879,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     if hasattr(os, "geteuid") and os.geteuid() == 0:
         error("do not run tpot as root, it calls sudo itself where needed")
         return 2
+    try:
+        return dispatch(argv)
+    except KeyboardInterrupt as interrupt:      # Ctrl+C at a question or during a child
+        return bootstrap.cancelled(interrupt)
+
+
+def dispatch(argv: List[str]) -> int:
     try:
         if argv and argv[0] in PASSTHROUGH:
             ops.require_linux_host(argv[0])

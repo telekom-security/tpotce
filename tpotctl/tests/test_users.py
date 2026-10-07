@@ -189,6 +189,58 @@ class StoreTest(unittest.TestCase):
             self.assertIn("--allow-weak", err.getvalue())
         self.assertEqual([u.name for u in users.load(self.repo).users()], ["tsec", "alice"])
 
+    def run_cli(self, *argv, tty=True, **patches):
+        """cli.main at a terminal (or not); patches: input / getpass as mock side effects."""
+        from tpotctl import cli
+        original = users.load
+
+        class Stdin(io.StringIO):
+            def isatty(self):
+                return tty
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch.object(users, "load", lambda: original(self.repo, hasher=fake_hash)), \
+                mock.patch.object(cli.os, "geteuid", return_value=1000, create=True), \
+                mock.patch("builtins.input", side_effect=patches.get("input", AssertionError("asked"))), \
+                mock.patch("getpass.getpass", side_effect=patches.get("getpass", AssertionError("asked"))), \
+                mock.patch("sys.stdin", Stdin()), redirect_stdout(out), redirect_stderr(err):
+            try:
+                code = cli.main(list(argv))
+            except SystemExit as stop:
+                code = stop.code
+            except KeyboardInterrupt:       # unittest would stop on it
+                code = "KeyboardInterrupt"
+        return code, out.getvalue() + err.getvalue()
+
+    @unittest.skipUnless(textual, "Rich is not installed, run with the venv of tpot")
+    def test_ctrl_c_at_a_question_is_cancelled_with_130(self):
+        for argv, patches in ((["users", "add"], {"input": KeyboardInterrupt}),
+                              (["users", "add", "alice"], {"getpass": KeyboardInterrupt}),
+                              (["users", "add", "alice"], {"getpass": ["a long passphrase", KeyboardInterrupt]}),
+                              (["users", "passwd", "tsec"], {"getpass": KeyboardInterrupt}),
+                              (["users", "remove", "tsec"], {"input": KeyboardInterrupt})):
+            code, text = self.run_cli(*argv, **patches)
+            self.assertEqual(code, 130, (argv, text))
+            self.assertIn("Cancelled.", text)
+            self.assertNotIn("Traceback", text)
+        self.assertEqual([u.name for u in users.load(self.repo).users()], ["tsec"])
+
+    @unittest.skipUnless(textual, "Rich is not installed, run with the venv of tpot")
+    def test_ctrl_d_at_the_password_is_no_password(self):
+        for steps in (EOFError, ["a long passphrase", EOFError]):
+            code, text = self.run_cli("users", "add", "alice", getpass=steps)
+            self.assertEqual(code, 1, text)
+            self.assertIn("no password entered", text)
+            self.assertNotIn("Traceback", text)
+
+    @unittest.skipUnless(textual, "Rich is not installed, run with the venv of tpot")
+    def test_without_a_terminal_it_cannot_ask_and_says_so_with_2(self):
+        for argv, hint in ((["users", "add", "alice"], "--password-stdin"), (["users", "passwd", "tsec"],
+                                                                            "--password-stdin"),
+                           (["users", "add"], "NAME"), (["users", "remove", "tsec"], "--yes")):
+            code, text = self.run_cli(*argv, tty=False)
+            self.assertEqual(code, 2, (argv, text))
+            self.assertIn(hint, text)
+
 
 @unittest.skipUnless(textual and yaml, "Textual is not installed, run with the venv of tpot")
 class UsersPaneTest(unittest.IsolatedAsyncioTestCase):

@@ -31,6 +31,126 @@ PS = [
 ]
 
 
+class Child:
+    """A child of subprocess.Popen: wait() takes the next step, an exit code or an exception to raise."""
+
+    def __init__(self, command, steps):
+        self.args, self.steps, self.returncode, self.waits = command, list(steps), None, 0
+
+    def wait(self, timeout=None):
+        self.waits += 1
+        if self.returncode is not None:
+            return self.returncode
+        step = self.steps.pop(0) if self.steps else 0
+        if isinstance(step, BaseException) or (isinstance(step, type) and issubclass(step, BaseException)):
+            raise step
+        self.returncode = step
+        return step
+
+    def kill(self):
+        self.returncode = self.returncode if self.returncode is not None else -9
+
+    def __enter__(self):            # subprocess.call and run use it so
+        return self
+
+    def __exit__(self, *_exc):
+        return False
+
+
+def fake_popen(*steps):
+    """A Popen that records its children; each child waits through `steps`."""
+    children = []
+
+    def popen(command, **kwargs):
+        children.append(Child(command, steps))
+        children[-1].kwargs = kwargs
+        return children[-1]
+    return popen, children
+
+
+def main(argv):
+    """cli.main, a KeyboardInterrupt it lets through as a result (unittest would stop on it)."""
+    try:
+        return cli.main(argv)
+    except KeyboardInterrupt:
+        return "KeyboardInterrupt"
+
+
+class TTY(io.StringIO):
+    """stdin of a person at a terminal."""
+
+    def isatty(self):
+        return True
+
+
+class WaitChildTest(unittest.TestCase):
+
+    def test_ctrl_c_waits_for_the_child_and_gives_128_plus_the_signal(self):
+        child = Child(["x"], [KeyboardInterrupt, -2])
+        self.assertEqual(bootstrap.wait_child(child), 130)
+        self.assertEqual(child.waits, 2)
+
+    def test_exit_codes_and_other_signals(self):
+        for code, expected in ((0, 0), (3, 3), (130, 130), (-15, 143), (-9, 137)):
+            self.assertEqual(bootstrap.wait_child(Child(["x"], [code])), expected)
+
+    def test_a_double_ctrl_c_still_waits(self):
+        child = Child(["x"], [KeyboardInterrupt, KeyboardInterrupt, 0])
+        self.assertEqual(bootstrap.wait_child(child), 0)
+
+    def test_reexec_gives_130_for_ctrl_c_not_254(self):
+        popen, children = fake_popen(KeyboardInterrupt, -2)
+        with mock.patch("subprocess.Popen", side_effect=popen):
+            self.assertEqual(bootstrap.reexec("/venv/bin/python3", "/x/tpot", ["ps"]), 130)
+        self.assertEqual(children[0].args, ["/venv/bin/python3", "/x/tpot", "ps"])
+        self.assertEqual(children[0].kwargs["env"][bootstrap.GUARD], "1")
+
+
+class LauncherTest(unittest.TestCase):
+    """The launcher itself, run as a script would be."""
+
+    LAUNCHER = os.path.join(bootstrap.REPO_DIR, "tpot")
+
+    def launch(self, *argv, platform="darwin"):
+        import runpy
+        err = io.StringIO()
+        with mock.patch.object(sys, "argv", ["tpot"] + list(argv)), mock.patch.object(sys, "path", list(sys.path)), \
+                mock.patch.dict(os.environ), mock.patch("sys.platform", platform), \
+                mock.patch.object(os, "geteuid", return_value=1000, create=True), \
+                mock.patch("sys.stderr", err), mock.patch("sys.stdout", io.StringIO()):
+            try:
+                runpy.run_path(self.LAUNCHER, run_name="__main__")
+                code = 0
+            except SystemExit as stop:
+                code = stop.code
+            except KeyboardInterrupt:
+                code = "KeyboardInterrupt"
+        return code, err.getvalue()
+
+    def test_ctrl_c_in_setup_is_cancelled_with_130(self):
+        with mock.patch.object(bootstrap, "setup_venv", side_effect=KeyboardInterrupt):
+            code, err = self.launch("setup")
+        self.assertEqual(code, 130, err)
+        self.assertIn("Cancelled.", err)
+        self.assertNotIn("Traceback", err)
+        self.assertTrue(err.startswith("\n"), repr(err))          # ends the line of the ^C
+
+    def test_ctrl_c_after_a_line_that_is_ended_adds_no_empty_line(self):
+        """ensure_link ends the line of the ^C itself and says how to link later."""
+        with mock.patch.dict(os.environ, {bootstrap.GUARD: ""}), \
+                mock.patch.object(bootstrap, "ensure_link", side_effect=bootstrap.Interrupted), \
+                mock.patch.object(bootstrap, "setup_venv", side_effect=AssertionError("must not build")):
+            code, err = self.launch("setup", platform="linux")
+        self.assertEqual(code, 130, err)
+        self.assertIn("Cancelled.", err)
+        self.assertNotIn("\n\n", err)
+
+    def test_the_exit_code_of_the_venv_child_comes_through(self):
+        with mock.patch.object(bootstrap, "ensure", return_value="/venv/bin/python3"), \
+                mock.patch.object(bootstrap, "reexec", return_value=130):
+            self.assertEqual(self.launch("ps")[0], 130)
+
+
 class BootstrapTest(unittest.TestCase):
 
     def test_venv_dir_follows_xdg(self):
@@ -262,9 +382,32 @@ class CliTest(unittest.TestCase):
             self.assertEqual(cli.main(["update", "-y"]), 1)
 
     def test_service_actions(self):
-        with mock.patch("subprocess.call", return_value=0) as call:
+        popen, children = fake_popen(0)
+        with mock.patch("subprocess.Popen", side_effect=popen):
             self.assertEqual(cli.main(["restart"]), 0)
-        call.assert_called_once_with(["sudo", "systemctl", "restart", "tpot"])
+        self.assertEqual([c.args for c in children], [["sudo", "systemctl", "restart", "tpot"]])
+
+    def test_ctrl_c_during_a_child_is_cancelled_with_130(self):
+        """The child gets the ^C as well and ends; the T-Pot Manager waits for it, then says so."""
+        popen, children = fake_popen(KeyboardInterrupt, -2)
+        err = io.StringIO()
+        with mock.patch("subprocess.Popen", side_effect=popen), mock.patch("sys.stderr", err):
+            self.assertEqual(main(["restart"]), 130)
+        self.assertEqual(children[0].waits, 2)
+        self.assertIn("Cancelled.", err.getvalue())
+        self.assertNotIn("Traceback", err.getvalue())
+
+    def test_a_child_ended_by_another_signal_gives_128_plus_it(self):
+        popen, _children = fake_popen(-15)
+        with mock.patch("subprocess.Popen", side_effect=popen):
+            self.assertEqual(main(["stop"]), 143)
+
+    def test_ctrl_c_anywhere_in_main_is_cancelled_with_130(self):
+        err = io.StringIO()
+        with mock.patch.object(cli, "print_status", side_effect=KeyboardInterrupt), mock.patch("sys.stderr", err):
+            self.assertEqual(main(["status"]), 130)
+        self.assertTrue(err.getvalue().startswith("\n"), repr(err.getvalue()))
+        self.assertIn("Cancelled.", err.getvalue())
 
     def test_help_lists_every_command(self):
         text = cli.build_parser().format_help()
@@ -367,6 +510,17 @@ class SetupVenvInstallTest(unittest.TestCase):
         self.assertIsInstance(err, bootstrap.BootstrapError)
         self.assertEqual((asked, self.apt_calls()), ([], []))
         self.assertTrue("python3.13-venv" in str(err), str(err))
+
+    def test_ctrl_c_at_the_question_says_later_and_goes_on(self):
+        err = io.StringIO()
+        with mock.patch.object(bootstrap, "os_release_ids", return_value=["debian"]), \
+                mock.patch.object(bootstrap, "interactive", return_value=True), \
+                mock.patch.object(bootstrap, "ask", side_effect=KeyboardInterrupt), \
+                mock.patch("sys.stderr", err), self.assertRaises(bootstrap.Interrupted):
+            bootstrap.setup_venv(quiet=True)
+        self.assertIn("Later with: sudo apt-get install python3.13-venv", err.getvalue())
+        self.assertEqual(self.apt_calls(), [])
+        self.assertFalse(os.path.exists(bootstrap.venv_dir() + ".new"))
 
     def test_a_failed_apt_get_says_so(self):
         err, _asked = self.setup(apt_ok=False)
@@ -503,6 +657,19 @@ class LinkTest(unittest.TestCase):
 
     def test_asked_once(self):
         self.ensure(answer="n")
+        self.assertEqual(self.calls, [])
+        self.assertEqual(self.ensure(), ([], ""))
+
+    def test_ctrl_c_at_the_question_says_later_and_goes_on(self):
+        """Ctrl+C is an answer as well: the command for later, the interrupt on to the launcher, not asked again."""
+        err = io.StringIO()
+        with mock.patch.object(bootstrap, "interactive", return_value=True), \
+                mock.patch.object(bootstrap, "ask", side_effect=KeyboardInterrupt), \
+                mock.patch("sys.stderr", err), self.assertRaises(KeyboardInterrupt) as caught:
+            bootstrap.ensure_link(self.launcher, self.link, self.checkout)
+        self.assertIsInstance(caught.exception, bootstrap.Interrupted)       # the line of the ^C is ended
+        self.assertTrue(err.getvalue().startswith("\n"), repr(err.getvalue()))
+        self.assertIn(f"Later with: sudo ln -sfn {self.launcher} {self.link}", err.getvalue())
         self.assertEqual(self.calls, [])
         self.assertEqual(self.ensure(), ([], ""))
 
