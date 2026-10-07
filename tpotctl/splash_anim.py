@@ -6,7 +6,8 @@ screens/splash.py only shows the frames, any key goes on at once):
   0.00 - 1.50  the parts come together: the honeycombs pop up, the pot draws itself, the honey
                rises, then the lettering lands with a white flash
   1.50 - 7.50  the full cycle of the template: a light sweeps over the lettering, syrup runs down
-               the drip, three drops fall and splash, light waves on the honey pool, stars twinkle
+               the drip, three drops fall and splash, light waves on the honey pool, stars twinkle;
+               syrup and waves fade in, a drop comes when its own cycle begins (no jump at 1.50)
   1.60 - 2.60  the credits type themselves under the logo, every character with an afterglow
   7.50 - 8.00  everything crumbles cell by cell into the dark
 
@@ -30,6 +31,8 @@ OUT = ASSEMBLE + CYCLE          # the crumbling starts
 DURATION = OUT + 0.5
 TYPE_START, TYPE_END = 1.6, 2.6
 GLOW = 0.35                     # how long a typed character glows after
+FADE = 0.3                      # syrup and the waves on the pool fade in when the cycle begins
+DROP_PERIOD, DROP_OFFSET = 3.0, 1.65    # a drop falls every 3 s, the next one 1.65 s later
 
 COMBS, POT, HONEY, POOL, LETTERS = range(5)
 # when the parts come, seconds
@@ -96,6 +99,12 @@ class Splash:
         self.appear = [self._appear(i) for i in range(len(self.base))]
         self.letters = [i for i, part in enumerate(self.parts) if part == LETTERS]
         self._styles: Dict[Tuple[Optional[str], Optional[str]], Style] = {}
+        # cells() makes a row anew only when its pixel pairs changed, the others it gives back as they were
+        self._pairs: List[Optional[List[int]]] = [None] * self.rows
+        self._made: List[List[Cell]] = [[] for _ in range(self.rows)]
+        self._ascii: Optional[bool] = None
+        self._given: List[List[Cell]] = []
+        self._blank: List[Cell] = [(" ", None, None)] * self.width
 
     def colour(self, index: int) -> str:
         return self.palette[index]
@@ -209,12 +218,18 @@ class Splash:
                             a[i] = 6
                         elif distance < .052:
                             a[i] = 5
+        fade = min(phase / FADE, 1.0)                           # the logo stands still at first
+
+        def faded(x: int, y: int, salt: int) -> bool:
+            return fade < 1 and _noise(x, y, salt) >= fade
         for yy in splash_art.SYRUP_Y:                           # syrup runs down the long drip
             x, y = splash_art.design_xy(w, h, splash_art.SYRUP_X, yy)
-            if 0 <= x < w and 0 <= y < h and base[y * w + x] in MAGENTAS:
+            if 0 <= x < w and 0 <= y < h and base[y * w + x] in MAGENTAS and not faded(x, y, 11):
                 self._put(a, x, y, 6 if (y - int(phase * 7)) % 7 < 2 else 4)
         for k, (xx, yy) in enumerate(splash_art.DROPS):         # three drops fall and splash
-            p = ((phase + k * 1.65) % 3) / 3
+            if phase < (-k * DROP_OFFSET) % DROP_PERIOD:
+                continue                                        # it comes when its cycle begins anew
+            p = ((phase + k * DROP_OFFSET) % DROP_PERIOD) / DROP_PERIOD
             start_x, start_y = splash_art.design_xy(w, h, xx, yy)
             end_x, end_y = splash_art.design_xy(w, h, xx, splash_art.POOL_Y)
             if p < .16:
@@ -241,7 +256,7 @@ class Splash:
             if 924 < self.design_y[y] < 1035:
                 for x in range(w):
                     i = y * w + x
-                    if base[i] in MAGENTAS:
+                    if base[i] in MAGENTAS and not faded(x, y, 13):
                         wave = math.sin(x * .48 - phase * math.pi * 2 / CYCLE * 2 + y * .7)
                         if wave > .93:
                             a[i] = 6
@@ -296,6 +311,8 @@ class Splash:
     def _paint_credits(self, grid: List[List[Cell]], t: float) -> None:
         placed = self.credits()
         count = len(placed)
+        for y in {y for _x, y, _char, _colour in placed}:
+            grid[y] = list(grid[y])                             # the rows cells() keeps stay as they are
         typed = 0
         for n, (x, y, char, colour) in enumerate(placed):
             at = TYPE_START + n / count * (TYPE_END - TYPE_START)
@@ -328,43 +345,63 @@ class Splash:
             return
         progress = _span(t, OUT, DURATION) * 1.15
         for y, row in enumerate(grid):
+            new = None                                          # a copy once a cell goes
             for x, cell in enumerate(row):
                 if cell == (" ", None, None):
                     continue
                 h = _noise(x, y, 7) * .85 + (abs(x - self.width / 2) / self.width) * .15
-                if h < progress - .12:
-                    row[x] = (" ", None, None)
-                elif h < progress:
-                    row[x] = (" ", None, self.palette[2])            # an ember before it goes dark
+                if h < progress:
+                    if new is None:
+                        new = list(row)
+                    # an ember before it goes dark
+                    new[x] = (" ", None, None) if h < progress - .12 else (" ", None, self.palette[2])
+            if new is not None:
+                grid[y] = new
 
     def cells(self, t: float) -> List[List[Cell]]:
+        """The rows of cells at t. A row that is the same as in the call before is the same list (the
+        screen sends only the others); only rows whose pixel pairs changed are made anew."""
         pixels = self.pixels(t)
-        w, palette = self.w, self.palette
+        w = self.w
         ascii_set = glyphs.mode() == "ascii"
+        if ascii_set != self._ascii:                            # another icon set: every row anew
+            self._ascii, self._pairs = ascii_set, [None] * self.rows
         grid: List[List[Cell]] = []
         for r in range(self.rows):
-            row: List[Cell] = []
-            for x in range(w):
-                top, bottom = pixels[2 * r * w + x], pixels[(2 * r + 1) * w + x]
-                if top == bottom == 0:
-                    row.append((" ", None, None))
-                elif ascii_set:
-                    row.append((" ", None, palette[top if _LIGHT[top] >= _LIGHT[bottom] else bottom]))
-                elif top == bottom:
-                    row.append((" ", None, palette[top]))
-                elif bottom == 0:
-                    row.append(("▀", palette[top], None))
-                elif top == 0:
-                    row.append(("▄", palette[bottom], None))
-                else:
-                    row.append(("▀", palette[top], palette[bottom]))
-            grid.append(row)
-        for _ in range(self.height - self.rows):
-            grid.append([(" ", None, None)] * self.width)
+            pairs = pixels[2 * r * w:(2 * r + 2) * w]
+            if pairs != self._pairs[r]:
+                self._pairs[r], self._made[r] = pairs, self._row(pairs, ascii_set)
+            grid.append(self._made[r])
+        grid.extend([self._blank] * (self.height - self.rows))
         if t >= TYPE_START:
             self._paint_credits(grid, t)
         self._crumble(grid, t)
+        given = self._given                                     # the credits and the crumbling copy rows:
+        for r, row in enumerate(grid):                          # one that came out the same is the old one
+            if r < len(given) and row is not given[r] and row == given[r]:
+                grid[r] = given[r]
+        self._given = grid
         return grid
+
+    def _row(self, pairs: List[int], ascii_set: bool) -> List[Cell]:
+        """One row of cells from its two rows of pixels (top, bottom)."""
+        w, palette = self.w, self.palette
+        row: List[Cell] = []
+        for x in range(w):
+            top, bottom = pairs[x], pairs[w + x]
+            if top == bottom == 0:
+                row.append((" ", None, None))
+            elif ascii_set:
+                row.append((" ", None, palette[top if _LIGHT[top] >= _LIGHT[bottom] else bottom]))
+            elif top == bottom:
+                row.append((" ", None, palette[top]))
+            elif bottom == 0:
+                row.append(("▀", palette[top], None))
+            elif top == 0:
+                row.append(("▄", palette[bottom], None))
+            else:
+                row.append(("▀", palette[top], palette[bottom]))
+        return row
 
     def line(self, row: List[Cell]) -> Text:
         """One row of cells as Rich text, a run per colour pair."""
@@ -387,9 +424,6 @@ class Splash:
             fg, bg = key
             self._styles[key] = Style(color=fg, bgcolor=bg) if fg or bg else Style()
         return self._styles[key]
-
-    def fits(self, width: int, height: int) -> bool:
-        return width >= self.width and height >= self.height
 
 
 def best(version: str, width: int, height: int) -> Optional[Splash]:

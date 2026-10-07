@@ -86,6 +86,17 @@ def env_values(repo_dir: str = REPO_DIR) -> Dict[str, str]:
     return read_values(os.path.join(repo_dir, ".env"))
 
 
+def tpot_version(repo_dir: str = REPO_DIR) -> str:
+    """The version of T-Pot, from one place: the file version of the checkout, else TPOT_VERSION of its
+    .env (an installed T-Pot without one), else "" (the credits then say only t-pot)."""
+    try:
+        with open(os.path.join(repo_dir, "version"), encoding="utf-8") as handle:
+            version = handle.readline().strip()
+    except (OSError, UnicodeDecodeError):
+        version = ""
+    return version or env_values(repo_dir).get("TPOT_VERSION", "").strip()
+
+
 def config_stamp(repo_dir: str = REPO_DIR) -> Tuple:
     """(mtime_ns, size) of .env and of the compose file in use, None for a missing one: tells the
     pages of tpot that the configuration was changed elsewhere."""

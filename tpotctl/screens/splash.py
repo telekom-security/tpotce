@@ -72,8 +72,8 @@ class SplashScreen(Screen):
         self.show(elapsed)
 
     def show(self, elapsed: float) -> int:
-        """The frame at elapsed seconds; only the rows whose cells changed are updated. Gives back
-        how many."""
+        """The frame at elapsed seconds; only the rows whose cells changed are updated (cells() gives
+        back the same list for a row that stays). Gives back how many."""
         cells = self.splash.cells(elapsed)
         widgets = list(self.query(".splash-row").results(Static))
         if len(widgets) != len(cells):
@@ -81,18 +81,23 @@ class SplashScreen(Screen):
         shown = self.shown or [None] * len(cells)
         updated = 0
         for widget, row, old in zip(widgets, cells, shown):
-            if row != old:
+            if row is not old and row != old:
                 widget.update(self.splash.line(row))
                 updated += 1
         self.shown = cells
         return updated
 
     def leave(self) -> None:
+        """The end (its time, a key, a click, a terminal too small): the menu, then the notices that
+        waited for it."""
         ticker = getattr(self, "ticker", None)
         if ticker is not None:
             ticker.stop()
         if self.is_current:
             self.app.pop_screen()
+        release = getattr(self.app, "release_notices", None)
+        if release is not None:
+            release()
 
     def on_key(self, event) -> None:
         event.stop()

@@ -110,7 +110,9 @@ def hash_line(name: str, password: str, repo_dir: str = REPO_DIR, run: Callable 
         command = [htpasswd, "-n", "-i", "-B", name]
     elif shutil.which("docker"):
         env = ops.env_values(repo_dir)
-        image = f"{env.get('TPOT_REPO', 'ghcr.io/telekom-security')}/tpotinit:{env.get('TPOT_VERSION', '24.04.2')}"
+        # the image this installation pulls (.env), else the one of the checkout's version
+        tag = env.get("TPOT_VERSION") or ops.tpot_version(repo_dir)
+        image = f"{env.get('TPOT_REPO', 'ghcr.io/telekom-security')}/tpotinit" + (f":{tag}" if tag else "")
         command = ["docker", "run", "--rm", "-i", "--entrypoint", "htpasswd", image, "-n", "-i", "-B", name]
     else:
         raise UsersError("htpasswd is missing (apache2-utils / httpd-tools), and there is no docker to run it in")

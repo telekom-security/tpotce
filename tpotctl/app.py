@@ -9,6 +9,7 @@ glyphs.py and logo.py, the user's choice of it in prefs.py.
 import os
 import subprocess
 import sys
+import threading
 from dataclasses import dataclass
 from typing import Callable, Dict, Iterable, List, Optional, Set
 
@@ -1458,6 +1459,9 @@ class TpotApp(App):
         self.runner = runner or Runner(self)
         self.engine = engine
         self.splash = splash
+        # the notices while the splash runs (a start problem of .env, a refresh): told when it ends
+        self.held_notices: Optional[List[tuple]] = [] if splash else None
+        self._held_lock = threading.Lock()
         apply_theme(self)
         self.panes = list(PANES)
         self.locked = {key: why for key, *_rest in PANES for why in [self.why_locked(key)] if why}
@@ -1490,7 +1494,9 @@ class TpotApp(App):
         self.paint_menu()
         self.query_one("#sidebar", ListView).focus()
         if self.splash and fits(self.size.width, self.size.height):
-            self.push_screen(SplashScreen(ops.env_values().get("TPOT_VERSION", "")))
+            self.push_screen(SplashScreen(ops.tpot_version(ops.REPO_DIR)))
+        else:
+            self.release_notices()          # no room for the splash: nothing to wait for
         if "status" in self.locked:
             self.load_header()
 
@@ -1636,8 +1642,20 @@ class TpotApp(App):
 
     def notify(self, message, *args, markup: bool = False, **kwargs):
         """Notices carry paths and error texts: never read them as markup (a [/...] in a path would
-        raise while the toast renders)."""
+        raise while the toast renders). While the splash runs they wait (release_notices)."""
+        with self._held_lock:
+            if self.held_notices is not None:
+                self.held_notices.append((message, args, dict(kwargs, markup=markup)))
+                return None
         return super().notify(message, *args, markup=markup, **kwargs)
+
+    def release_notices(self) -> None:
+        """The splash is gone: the notices of its time in their order, with their options; their time
+        counts from now."""
+        with self._held_lock:
+            held, self.held_notices = self.held_notices or [], None
+        for message, args, kwargs in held:
+            super().notify(message, *args, **kwargs)
 
     def action_nav(self, direction: str) -> None:
         """The arrows: in the menu right opens the page (up / down are the menu's own), elsewhere

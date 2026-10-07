@@ -306,6 +306,107 @@ class LookInTheAppTest(unittest.IsolatedAsyncioTestCase):
                 self.assertLess(changed, screen.splash.height // 2)
                 self.assertEqual(screen.show(4.05), 0)
 
+    async def poll(self, pilot, done, seconds=4.0):
+        """Wait until done() (the full suite runs under load), fail after seconds."""
+        for _ in range(int(seconds / 0.05)):
+            if done():
+                return
+            await pilot.pause(0.05)
+        self.fail(f"not reached in {seconds} s")
+
+    def splash_app(self):
+        from tpotctl import app as tapp
+        from tpotctl.tests.test_app import FakeBackend, Recorder
+        return tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), splash=True)
+
+    async def test_splash_follows_a_resize(self):
+        """Smaller, the splash takes the variant that fits now; below 80 x 24 it ends."""
+        from tpotctl import splash_anim
+        from tpotctl.screens.splash import SplashScreen
+        app = self.splash_app()
+        with mock.patch.object(splash_anim, "DURATION", 60.0):
+            async with app.run_test(size=(120, 49)) as pilot:
+                await self.poll(pilot, lambda: isinstance(app.screen, SplashScreen)
+                                and len(app.screen.query(".splash-row")) == 49)
+                screen = app.screen
+                self.assertEqual(screen.splash.variant, "120")
+                await pilot.resize_terminal(80, 30)
+                await self.poll(pilot, lambda: screen.splash.variant == "80x24"
+                                and len(screen.query(".splash-row")) == 24)
+                self.assertIs(app.screen, screen)
+                self.assertGreater(screen.show(3.0), 0)                  # the new rows take the frames
+                await pilot.resize_terminal(79, 30)
+                await self.poll(pilot, lambda: not isinstance(app.screen, SplashScreen))
+
+    async def test_toasts_wait_for_the_splash(self):
+        """A notice while the splash runs (a start problem of .env, a refresh) comes after it, in its order,
+        with its options, and its time counts from then."""
+        import time
+        from tpotctl import splash_anim
+        from tpotctl.screens.splash import SplashScreen
+        app = self.splash_app()
+        with mock.patch.object(splash_anim, "DURATION", 60.0):
+            async with app.run_test(size=(120, 40)) as pilot:
+                await self.poll(pilot, lambda: isinstance(app.screen, SplashScreen))
+                asked = time.time()
+                app.notify("T-Pot would not start: WEB_USER is empty [/x]", title="T-Pot would not start",
+                           severity="error", timeout=30)
+                app.notify("second", timeout=20)
+                await pilot.pause(0.5)
+                self.assertEqual(len(app._notifications), 0)
+                self.assertIsInstance(app.screen, SplashScreen)
+                # the Settings page may have told its own start problems (the .env of this checkout) meanwhile
+                held = [message for message, _args, _kwargs in app.held_notices]
+                self.assertEqual(held[-2:], ["T-Pot would not start: WEB_USER is empty [/x]", "second"])
+                await pilot.press("x")
+                await self.poll(pilot, lambda: len(app._notifications) == len(held))
+                notes = list(app._notifications)
+                self.assertEqual([n.message for n in notes], held)
+                self.assertEqual([(n.title, n.severity, n.timeout, n.markup) for n in notes[-2:]],
+                                 [("T-Pot would not start", "error", 30, False), ("", "information", 20, False)])
+                self.assertGreaterEqual(min(n.raised_at for n in notes), asked + 0.5)
+                self.assertIsNone(app.held_notices)
+                app.notify("later")                                      # after the splash: at once
+                await self.poll(pilot, lambda: "later" in [n.message for n in app._notifications])
+        app = self.splash_app()
+        with mock.patch.object(splash_anim, "DURATION", 1.0):            # its own end lets them out too
+            async with app.run_test(size=(120, 40)) as pilot:
+                await self.poll(pilot, lambda: isinstance(app.screen, SplashScreen))
+                app.notify("one")
+                app.notify("two")
+                await pilot.pause(0.1)
+                self.assertEqual(len(app._notifications), 0)
+                await self.poll(pilot, lambda: not isinstance(app.screen, SplashScreen))
+                await self.poll(pilot, lambda: "two" in [n.message for n in app._notifications])
+                messages = [n.message for n in app._notifications]
+                self.assertEqual(messages.index("one") + 1, messages.index("two"))
+
+    async def test_toasts_without_a_splash_come_at_once(self):
+        from tpotctl.screens.splash import SplashScreen
+        for app, size in ((self.make_app(), (120, 40)), (self.splash_app(), (79, 24))):    # off, no room
+            async with app.run_test(size=size) as pilot:
+                await pilot.pause(0.1)
+                self.assertNotIsInstance(app.screen, SplashScreen)
+                app.notify("now", title="Settings")
+                await self.poll(pilot, lambda: "now" in [n.message for n in app._notifications])
+                self.assertIsNone(app.held_notices)
+
+    async def test_splash_credits_name_the_version_of_the_checkout(self):
+        import tempfile
+        from tpotctl import ops
+        from tpotctl.screens.splash import SplashScreen
+        with tempfile.TemporaryDirectory() as repo:
+            with open(os.path.join(repo, "version"), "w", encoding="utf-8") as handle:
+                handle.write("99.1.0\n")
+            with open(os.path.join(repo, ".env"), "w", encoding="utf-8") as handle:
+                handle.write("TPOT_VERSION=24.04.2\n")
+            app = self.splash_app()
+            with mock.patch.object(ops, "REPO_DIR", repo):
+                async with app.run_test(size=(120, 49)) as pilot:
+                    await self.poll(pilot, lambda: isinstance(app.screen, SplashScreen))
+                    self.assertEqual(app.screen.version, "99.1.0")
+                    self.assertIn("[ t-pot 99.1.0 ]", app.screen.splash.frame(3.0).plain)
+
     async def test_narrow_menu_uses_short_titles(self):
         app = self.make_app()
         async with app.run_test(size=(80, 24)) as pilot:
@@ -690,6 +791,48 @@ class SplashArtTest(unittest.TestCase):
             expected = list(zlib.decompress(base64.b64decode(entry["data"])))
             self.assertEqual(splash_art.grid(variant)[2], expected, variant)
             self.assertEqual([tuple(c) for c in data["palette"]], list(splash_art.PALETTE))
+
+
+@unittest.skipUnless(rich, "Rich is not installed")
+class SplashCycleTest(unittest.TestCase):
+    """The cycle after the assembly: no jump where it begins, and only the rows that change are new."""
+
+    def test_the_cycle_starts_without_a_jump(self):
+        """At ASSEMBLE the whole logo stands; drops come when their cycle begins anew, syrup and the
+        waves on the pool fade in."""
+        from tpotctl import splash_anim, splash_art
+        for variant in ("120", "80", "80x24"):
+            splash = splash_anim.Splash("", variant)
+            base = splash.base
+
+            def off(t):
+                return sum(1 for a, b in zip(splash.pixels(t), base) if a != b)
+            self.assertLess(off(splash_anim.ASSEMBLE), 10, variant)
+            # while it fades in, a frame changes less than a frame of the running cycle does
+            times = [splash_anim.ASSEMBLE + n / 15 for n in range(int(splash_anim.CYCLE * 15))]
+            steps = [sum(1 for a, b in zip(splash.pixels(t), splash.pixels(t + 1 / 15)) if a != b)
+                     for t in times]
+            median = sorted(steps)[len(steps) // 2]
+            self.assertLess(max(steps[:int(splash_anim.FADE * 15)]), median, variant)
+            self.assertGreater(off(splash_anim.ASSEMBLE + 0.5), off(splash_anim.ASSEMBLE), variant)
+            # drop 1 begins anew at phase 1.35: before that it is nowhere, then it hangs at its start
+            x, y = splash_art.design_xy(splash.w, splash.h, *splash_art.DROPS[1])
+            self.assertEqual(splash.cycle(1.4)[(y + 1) * splash.w + x], 6, variant)
+
+    def test_cells_reuse_the_rows_that_stay(self):
+        from tpotctl import splash_anim
+        for variant in ("120", "80x24"):
+            splash, fresh = splash_anim.Splash("24.04.2", variant), splash_anim.Splash("24.04.2", variant)
+            for before, after in ((4.0, 4.05), (1.0, 1.05), (2.0, 2.05), (7.6, 7.65), (4.05, 2.0)):
+                one, two = splash.cells(before), splash.cells(after)
+                self.assertEqual(two, fresh.cells(after), (variant, after))     # nothing stale in it
+                same = [r for r in range(len(one)) if one[r] == two[r]]
+                if after < splash_anim.OUT:                 # the crumbling may reach every row
+                    self.assertTrue(same, (variant, before, after))
+                for r in same:
+                    self.assertTrue(one[r] is two[r], (variant, before, after, r))
+            self.assertEqual(splash.cells(1.0), fresh.cells(1.0), variant)    # the credits left no trace
+        self.assertFalse(hasattr(splash_anim.Splash, "fits"))                 # unused, gone
 
 
 class NamesTest(unittest.TestCase):

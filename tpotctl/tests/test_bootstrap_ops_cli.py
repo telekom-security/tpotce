@@ -143,6 +143,22 @@ class OpsTest(unittest.TestCase):
                 handle.write("# T-Pot: CUSTOM\n# customizer: version=2 base=MINI\n# customizer: add=\n")
             self.assertEqual(ops.edition(repo), "CUSTOM (from MINI)")
 
+    def test_the_version_comes_from_one_place(self):
+        """The file version of the checkout, else TPOT_VERSION of its .env, else nothing."""
+        with tempfile.TemporaryDirectory() as repo:
+            self.assertEqual(ops.tpot_version(repo), "")
+            with open(os.path.join(repo, ".env"), "w") as handle:
+                handle.write("TPOT_VERSION=98.0.0\n")
+            self.assertEqual(ops.tpot_version(repo), "98.0.0")
+            with open(os.path.join(repo, "version"), "w") as handle:
+                handle.write("99.1.0\n")
+            self.assertEqual(ops.tpot_version(repo), "99.1.0")
+            with open(os.path.join(repo, "version"), "w") as handle:
+                handle.write("\n")                          # an empty file says nothing
+            self.assertEqual(ops.tpot_version(repo), "98.0.0")
+        with open(os.path.join(ops.REPO_DIR, "version"), encoding="utf-8") as handle:
+            self.assertEqual(ops.tpot_version(), handle.read().strip())
+
     def test_commands(self):
         self.assertEqual(ops.service_command("restart"), ["sudo", "systemctl", "restart", "tpot"])
         with self.assertRaises(ops.OpsError):

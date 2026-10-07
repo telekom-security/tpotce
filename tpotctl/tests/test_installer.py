@@ -365,7 +365,8 @@ class AssistantTest(unittest.IsolatedAsyncioTestCase):
     async def done_text(self, on_path):
         from unittest import mock
         app = self.make_app(sudo="passwordless")
-        with mock.patch.object(installer, "tpot_on_path", return_value=on_path):
+        self.assertEqual(app.repo_dir, self.repo)
+        with mock.patch.object(installer, "tpot_on_path", return_value=on_path) as on_path_of:
             async with app.run_test(size=(140, 44)) as pilot:
                 await pilot.pause(0.4)
                 await pilot.click("#ins-next")
@@ -377,6 +378,7 @@ class AssistantTest(unittest.IsolatedAsyncioTestCase):
                 await pilot.click("#ins-next")
                 await pilot.pause(1.0)
                 self.assertEqual(app.step, "done")
+                on_path_of.assert_called_with(app.repo_dir)      # the checkout it installs, not the default
                 return str(app.query_one("#done-text").render())
 
     async def test_done_says_how_the_manager_runs(self):

@@ -98,6 +98,27 @@ class ParseTest(unittest.TestCase):
         self.assertIn("-B", seen["command"])
         self.assertEqual(seen["input"], "s3cret\n")
 
+    def test_the_fallback_image_takes_the_version_of_the_checkout(self):
+        """Without htpasswd the tpotinit image of .env, else the one of the checkout's version file."""
+        seen = []
+
+        def fake(command, input=None, **_kwargs):
+            seen.append(command)
+            return mock.Mock(returncode=0, stdout="bob:$2y$05$abc\n\n", stderr="")
+        with tempfile.TemporaryDirectory() as repo:
+            with open(os.path.join(repo, "version"), "w", encoding="utf-8") as handle:
+                handle.write("99.1.0\n")
+            with open(os.path.join(repo, ".env"), "w", encoding="utf-8") as handle:
+                handle.write("TPOT_REPO=example.org/tsec\n")
+            with mock.patch.object(users, "_find", return_value=None), \
+                    mock.patch.object(users.shutil, "which", return_value="/usr/bin/docker"):
+                users.hash_line("bob", "s3cret", repo_dir=repo, run=fake)
+                self.assertIn("example.org/tsec/tpotinit:99.1.0", seen[-1])
+                with open(os.path.join(repo, ".env"), "a", encoding="utf-8") as handle:
+                    handle.write("TPOT_VERSION=98.0.0\n")       # the images this installation pulls
+                users.hash_line("bob", "s3cret", repo_dir=repo, run=fake)
+                self.assertIn("example.org/tsec/tpotinit:98.0.0", seen[-1])
+
 
 @unittest.skipUnless(yaml, "PyYAML is not installed")
 class StoreTest(unittest.TestCase):
