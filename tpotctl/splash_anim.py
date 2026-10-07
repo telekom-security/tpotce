@@ -92,6 +92,7 @@ class Splash:
         self.palette = colours(theme.color_system())
         self.design_y = [splash_art.design_of(self.w, self.h, 0, y)[1] for y in range(self.h)]
         self.parts = [self._part(i) for i in range(len(self.base))]
+        self._shadow_to_letters()
         self.appear = [self._appear(i) for i in range(len(self.base))]
         self.letters = [i for i, part in enumerate(self.parts) if part == LETTERS]
         self._styles: Dict[Tuple[Optional[str], Optional[str]], Style] = {}
@@ -115,6 +116,23 @@ class Splash:
             # the rim of the pot draws itself, the magenta inside it is honey
             return HONEY if c in MAGENTAS and reach < .72 else POT
         return COMBS
+
+    def _shadow_to_letters(self) -> None:
+        """The dark shadow around a letter (colours 1 and 2, two pixels deep) lands with the lettering,
+        so no ghost of it draws itself with the pot before."""
+        w, h, base = self.w, self.h, self.base
+        reach = [part == LETTERS for part in self.parts]
+        for _ring in range(2):
+            grown = list(reach)
+            for i, c in enumerate(base):
+                if c not in (1, 2) or reach[i]:
+                    continue
+                x, y = i % w, i // w
+                if any(reach[(y + dy) * w + x + dx] for dy in (-1, 0, 1) for dx in (-1, 0, 1)
+                       if 0 <= x + dx < w and 0 <= y + dy < h):
+                    grown[i] = True
+                    self.parts[i] = LETTERS
+            reach = grown
 
     def _appear(self, i: int) -> float:
         part = self.parts[i]
@@ -153,7 +171,9 @@ class Splash:
             drop = 2 if age < .1 else 0                         # it lands from a line above
             for i in self.letters:
                 c = self.base[i]
-                if age < .12:
+                if c in (1, 2):
+                    shade = c                                   # the shadow comes without a flash
+                elif age < .12:
                     shade = 7                                   # the flash
                 elif c in MAGENTAS and age < .22:
                     shade = 6
@@ -346,20 +366,21 @@ class Splash:
         self._crumble(grid, t)
         return grid
 
-    def frame(self, t: float) -> Text:
+    def line(self, row: List[Cell]) -> Text:
+        """One row of cells as Rich text, a run per colour pair."""
         out = Text()
-        for y, row in enumerate(self.cells(t)):
-            run, key = "", None
-            for char, fg, bg in row:
-                if (fg, bg) != key and run:
-                    out.append(run, self._style(key))
-                    run = ""
-                key = (fg, bg)
-                run += char
-            out.append(run, self._style(key))
-            if y < self.height - 1:
-                out.append("\n")
+        run, key = "", None
+        for char, fg, bg in row:
+            if (fg, bg) != key and run:
+                out.append(run, self._style(key))
+                run = ""
+            key = (fg, bg)
+            run += char
+        out.append(run, self._style(key))
         return out
+
+    def frame(self, t: float) -> Text:
+        return Text("\n").join(self.line(row) for row in self.cells(t))
 
     def _style(self, key) -> Style:
         if key not in self._styles:

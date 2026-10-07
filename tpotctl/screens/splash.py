@@ -6,14 +6,15 @@ About eight seconds, any key or click goes on at once; below 80 x 24 there is no
 import time
 
 from textual.app import ComposeResult
-from textual.containers import Center, Middle
+from textual.containers import Center, Middle, Vertical
 from textual.screen import Screen
 from textual.widgets import Static
 
 from tpotctl import splash_anim
 from tpotctl.splash_anim import Splash, variant_for
 
-FPS = 20
+# like the template; every frame only sends the rows that changed (over SSH every byte counts)
+FPS = 15
 
 
 def fits(width: int, height: int) -> bool:
@@ -34,18 +35,29 @@ class SplashScreen(Screen):
             return False
         if self.splash is None or self.splash.variant != variant:
             self.splash = Splash(self.version, variant)
+            self.shown = None
         return True
 
+    def rows(self):
+        return [Static(self.splash.line(row), classes="splash-row") for row in self.splash.cells(0.0)]
+
     def on_resize(self) -> None:
+        before = self.splash
         if not self.choose():
             self.leave()
+        elif self.splash is not before and self.query("#splash-canvas"):
+            canvas = self.query_one("#splash-canvas", Vertical)
+            canvas.remove_children()
+            canvas.mount(*self.rows())
 
     def compose(self) -> ComposeResult:
         if not self.choose():
             self.splash = Splash(self.version, "80x24")      # the app only shows it where it fits
+        self.shown = None
         with Middle():
             with Center():
-                yield Static(self.splash.frame(0.0), id="splash-canvas")
+                with Vertical(id="splash-canvas"):
+                    yield from self.rows()
 
     def on_mount(self) -> None:
         self.started = time.monotonic()
@@ -57,7 +69,23 @@ class SplashScreen(Screen):
         if elapsed >= splash_anim.DURATION:
             self.leave()
             return
-        self.query_one("#splash-canvas", Static).update(self.splash.frame(elapsed))
+        self.show(elapsed)
+
+    def show(self, elapsed: float) -> int:
+        """The frame at elapsed seconds; only the rows whose cells changed are updated. Gives back
+        how many."""
+        cells = self.splash.cells(elapsed)
+        widgets = list(self.query(".splash-row").results(Static))
+        if len(widgets) != len(cells):
+            return 0                                          # a new variant is being mounted
+        shown = self.shown or [None] * len(cells)
+        updated = 0
+        for widget, row, old in zip(widgets, cells, shown):
+            if row != old:
+                widget.update(self.splash.line(row))
+                updated += 1
+        self.shown = cells
+        return updated
 
     def leave(self) -> None:
         ticker = getattr(self, "ticker", None)

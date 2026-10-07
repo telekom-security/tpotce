@@ -157,6 +157,27 @@ class LogoTest(unittest.TestCase):
         self.assertTrue(any(early[i] for i in combs))
         self.assertTrue(all(pixel == 0 for pixel in splash.assembly(0.0)))
 
+    def test_splash_lettering_has_no_ghost_before_it_lands(self):
+        """The dark shadow of the lettering comes with it, not before it with the pot."""
+        from tpotctl import splash_anim, splash_art
+        for variant in ("120", "80", "80x24"):
+            splash = splash_anim.Splash("", variant)
+            w, h, base = splash_art.grid(variant)
+            letters = {i for i, part in enumerate(splash.parts) if part == splash_anim.LETTERS}
+            shadow = [i for i in letters if base[i] in (1, 2)]
+            self.assertTrue(shadow, variant)
+            for i in range(len(base)):
+                x, y = i % w, i // w
+                near = any(base[(y + dy) * w + x + dx] >= 3 and (y + dy) * w + x + dx in letters
+                           for dy in (-1, 0, 1) for dx in (-1, 0, 1)
+                           if 0 <= x + dx < w and 0 <= y + dy < h)
+                if base[i] in (1, 2) and near:
+                    self.assertIn(i, letters, (variant, x, y))
+            early = splash.assembly(1.05)
+            self.assertEqual({early[i] for i in letters}, {0}, variant)
+            landed = splash.assembly(1.205)                 # landed, the letters still flash white
+            self.assertEqual([landed[i] for i in shadow], [base[i] for i in shadow], variant)  # no flash
+
     def test_splash_credits_type_with_afterglow(self):
         from tpotctl import splash_anim
         splash = splash_anim.Splash("24.04.2", "80")
@@ -243,23 +264,47 @@ class LookInTheAppTest(unittest.IsolatedAsyncioTestCase):
         from tpotctl.screens.splash import SplashScreen
         from tpotctl.tests.test_app import FakeBackend, Recorder
         from tpotctl import splash_anim
-        for key in (None, "x"):
-            app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), splash=True)
-            with mock.patch.object(splash_anim, "DURATION", 1.0):      # its end, without waiting 8 s
-                async with app.run_test(size=(120, 40)) as pilot:
-                    await pilot.pause(0.1)
-                    self.assertIsInstance(app.screen, SplashScreen)
-                    if key:
-                        await pilot.press(key)
-                    for _ in range(60):
-                        await pilot.pause(0.05)
-                        if not isinstance(app.screen, SplashScreen):
-                            break
-                    self.assertNotIsInstance(app.screen, SplashScreen)
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), splash=True)
+        with mock.patch.object(splash_anim, "DURATION", 1.0):          # its end, without waiting 8 s
+            async with app.run_test(size=(120, 40)) as pilot:
+                await pilot.pause(0.1)
+                self.assertIsInstance(app.screen, SplashScreen)
+                for _ in range(60):
+                    await pilot.pause(0.05)
+                    if not isinstance(app.screen, SplashScreen):
+                        break
+                self.assertNotIsInstance(app.screen, SplashScreen)
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), splash=True)
+        async with app.run_test(size=(120, 40)) as pilot:              # the full 8 s: a key ends it at once
+            await pilot.pause(0.3)
+            self.assertIsInstance(app.screen, SplashScreen)
+            await pilot.press("x")
+            await pilot.pause(0.3)
+            self.assertNotIsInstance(app.screen, SplashScreen)
         app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), splash=True)
         async with app.run_test(size=(79, 24)) as pilot:     # no room for it
             await pilot.pause(0.1)
             self.assertNotIsInstance(app.screen, SplashScreen)
+
+    async def test_splash_redraws_only_the_rows_that_change(self):
+        """Over SSH every byte counts: a frame updates the rows whose cells changed, nothing else."""
+        from tpotctl import app as tapp, splash_anim
+        from tpotctl.screens.splash import SplashScreen
+        from tpotctl.tests.test_app import FakeBackend, Recorder
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), splash=True)
+        with mock.patch.object(splash_anim, "DURATION", 60.0):
+            async with app.run_test(size=(80, 24)) as pilot:
+                await pilot.pause(0.2)
+                screen = app.screen
+                self.assertIsInstance(screen, SplashScreen)
+                screen.ticker.stop()
+                self.assertEqual(len(screen.query(".splash-row")), screen.splash.height)
+                screen.show(4.0)
+                before, after = screen.splash.cells(4.0), screen.splash.cells(4.05)
+                changed = sum(1 for a, b in zip(before, after) if a != b)
+                self.assertEqual(screen.show(4.05), changed)
+                self.assertLess(changed, screen.splash.height // 2)
+                self.assertEqual(screen.show(4.05), 0)
 
     async def test_narrow_menu_uses_short_titles(self):
         app = self.make_app()

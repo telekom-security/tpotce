@@ -579,6 +579,12 @@ Toast {
 
 #splash-canvas {
     width: auto;
+    height: auto;
+}
+
+.splash-row {
+    width: auto;
+    height: 1;
 }
 
 .setting-control .fixed {
