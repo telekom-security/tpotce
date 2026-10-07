@@ -91,8 +91,6 @@ PLACES = (
 # test_pending_readers_are_still_pending fails as soon as one reads the file: remove it here.
 PENDING_READERS = (
     Place(("update.sh",), r'^\s*local myMASTERVERSION="' + V + r'"', "update.sh myMASTERVERSION (W2: read `version`)"),
-    Place(("tpotctl/users.py",), r"env\.get\('TPOT_VERSION', '" + V + r"'\)",
-          "users.py fallback tag of the tpotinit image (W4: read `version`)"),
 )
 
 EXCLUDED = (
