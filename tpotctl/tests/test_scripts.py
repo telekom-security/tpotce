@@ -451,17 +451,75 @@ class FallbackTest(Harness):
         with open(os.path.join(tpotce, ".env"), "w", encoding="utf-8") as out:
             out.write("TPOT_TYPE=HIVE\nTPOT_REPO=ghcr.io/telekom-security\nTPOT_VERSION=24.04.2\n")
 
+    def stub(self, name, text):
+        path = os.path.join(self.bin, name)
+        with open(path, "w", encoding="utf-8") as out:
+            out.write(text)
+        os.chmod(path, 0o755)
+
+    def without_ui_sh(self):
+        os.remove(os.path.join(self.home, "tpotce", "installer", "lib", "ui.sh"))
+
     def test_genuser_fallback(self):
         result = self.run_script(os.path.join(REPO, "genuser.sh"))
         self.assertIn("### [WARNING] - tpot is not available, using the tpotinit container.", result.stdout)
         with open(os.path.join(self.home, "calls"), encoding="utf-8") as handle:
             self.assertIn("tpotinit:24.04.2", handle.read())
+        self.assertEqual(result.returncode, 0)
+        summary = result.stdout[result.stdout.index("### T-Pot web user"):]
+        self.assertIn("### [NEXT] - Restart T-Pot", summary)
+        self.assertIn("sudo systemctl restart tpot", summary)
+
+    def test_genuser_fallback_without_ui_sh(self):
+        self.without_ui_sh()
+        result = self.run_script(os.path.join(REPO, "genuser.sh"))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("### [WARNING] - tpot is not available, using the tpotinit container.", result.stdout)
+        self.assertIn("### [NEXT] - Restart T-Pot", result.stdout)
+
+    def test_genuser_fallback_failure_ends_with_a_summary(self):
+        self.stub("docker", "#!/bin/sh\nexit 125\n")
+        result = self.run_script(os.path.join(REPO, "genuser.sh"))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("### [FAILED] - The tpotinit container did not add a web user", result.stdout)
+
+    def deploy(self):
+        """deploy.sh without tpot, its answers on stdin, a playbook that fails: nothing changes."""
+        awk = shutil.which("awk") or "/usr/bin/awk"
+        self.stub("awk", "#!/bin/sh\nn=$#\nwhile [ \"$n\" -gt 0 ]; do\n  a=$1; shift; n=$((n - 1))\n"
+                         "  [ \"$a\" = /etc/os-release ] && a=\"$HOME/os-release\"\n  set -- \"$@\" \"$a\"\ndone\n"
+                         f"exec {awk} \"$@\"\n")
+        with open(os.path.join(self.home, "os-release"), "w", encoding="utf-8") as out:
+            out.write('NAME="Debian GNU/Linux"\nVERSION_ID="13"\n')
+        self.stub("shuf", "#!/bin/sh\necho honey\n")
+        self.stub("htpasswd", "#!/bin/sh\nread -r pw\necho \"$4:\\$2y\\$05\\$hash\"\n")
+        self.stub("ansible-playbook", "#!/bin/sh\necho \"ansible-playbook $*\" >> \"$HOME/calls\"\nexit 2\n")
+        environment = dict(os.environ, HOME=self.home, PATH=f"{self.bin}:{os.environ['PATH']}", TPOT_GUM="off")
+        environment.pop("TPOT_MARKS", None)
+        return subprocess.run(["bash", os.path.join(REPO, "deploy.sh")], input="y\nadmin\n10.0.0.2\ny\n10.0.0.1\n",
+                              capture_output=True, universal_newlines=True, env=environment, cwd=self.home,
+                              timeout=60)
+
+    def test_deploy_fallback_ends_with_a_summary(self):
+        for ui_sh in (True, False):
+            with self.subTest(ui_sh=ui_sh):
+                if not ui_sh:
+                    self.without_ui_sh()
+                result = self.deploy()
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertIn("### T-Pot Sensor deploy", result.stdout)
+                summary = result.stdout[result.stdout.index("### The SENSOR is not deployed"):]
+                self.assertIn("### [FAILED] - The deployment playbook failed", summary)
+                self.assertIn("deploy_sensor.log", summary)
+                with open(os.path.join(self.home, "tpotce", ".env"), encoding="utf-8") as handle:
+                    self.assertNotIn("LS_WEB_USER", handle.read())
 
     def test_deploy_fallback_speaks_like_ui_sh(self):
         text = read("deploy.sh")
         text = text.replace(text[text.index("# >>> plain fallback"):text.index("# <<< plain fallback")], "")
         self.assertEqual(re.findall(r'.*(?:echo "#|read -r?p).*', text), [])
         self.assertIn("fuUI_BANNER", text)
+        self.assertIn("fuUI_SUMMARY", text)
 
     def test_deploy_fallback_keeps_the_password_out_of_argv(self):
         self.assertNotRegex(read("deploy.sh"), r"htpasswd [^|]*-b")

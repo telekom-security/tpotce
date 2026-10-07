@@ -1,42 +1,65 @@
 #!/usr/bin/env bash
 
 print_help() {
-  cat <<EOF
-Usage: $0 [-s] -t <type> [-u <webuser>] [-p <password> | -P <file>] [-B <file>]
-          [-c <compose file>] [-b <branch>] [-r <url>] [-n]
-
-Without -s, at a terminal, the installer gets what it needs to start and hands
+  fuUI_HELP "Installer" "install.sh [-s] [-t <type>] [-u <webuser>] [-p <password> | -P <file>]"$'\n'"           [-B <file>] [-c <compose file>] [-b <branch>] [-r <url>] [-n] [-M]" \
+    --about "Installs T-Pot on this host: the packages it needs, Docker Engine and the
+services of the edition, by the Ansible playbook installer/install/tpot.yml." \
+    --about "Without -s, at a terminal, the installer gets what it needs to start and hands
 over to the T-Pot installer assistant (tpot install). -s installs without any
-question.
+question." \
+    --opt "-s" "Suppress installation confirmation prompt, unattended run
+(requires passwordless sudo or -B, see below)" \
+    --opt "-t <type>" "Type of installation (required if -s is used):
+  h - hive      (requires -u and -p / -P)
+  s - sensor    (no user/pass required)
+  l - llm       (requires -u and -p / -P)
+  i - mini      (requires -u and -p / -P)
+  m - mobile    (no user/pass required)
+  t - tarpit    (requires -u and -p / -P)
+With -c only h (a HIVE) or s (a SENSOR)." \
+    --opt "-u <webuser>" "Web interface username (required for h/l/i/t)" \
+    --opt "-p <password>" "Web interface password (required for h/l/i/t)" \
+    --opt "-P <file>" "Read the web interface password from a file, - for stdin.
+Unlike -p it does not show up in the process list." \
+    --opt "-B <file>" "Read the sudo password from a file, so -s also works without
+passwordless sudo. The file is only read." \
+    --opt "-c <file>" "Install this compose file (i.e. from tpot customize) instead
+of an edition." \
+    --opt "-b <branch>" "Branch, tag or commit to install from. Default: the branch
+of the local clone this script runs from, otherwise master" \
+    --opt "-r <url>" "Repository to install from, https URL, the raw URL for the
+playbook is derived from it. Default: the origin of the
+local clone this script runs from, otherwise
+https://github.com/telekom-security/tpotce" \
+    --opt "-n" "No assistant, ask in the terminal (as earlier releases did)" \
+    --opt "-M" "Progress marks (@@tpot ...) for the assistant, which runs
+install.sh -s -M with its answers" \
+    --opt "-h" "Show this help message" \
+    --example "./install.sh" "At a terminal: the assistant asks everything, then installs" \
+    --example "./install.sh -s -t h -u admin -P ~/webpw.txt" "A HIVE without questions, the web password from a file" \
+    --example "./install.sh -s -t s -B ~/sudopw.txt" "A SENSOR without questions, sudo needs a password" \
+    --example "./install.sh -b dev -r https://github.com/<you>/tpotce" "Test a branch of a fork (see the README, Testing a Branch)" \
+    --note "Run it as a regular user with sudo, not as root." \
+    --note "The environment variables TPOT_BRANCH and TPOT_REPO_URL work like -b and -r,
+the options win." \
+    --note "Logs: ~/install_tpot_prepare.log (packages, clone), ~/install_tpot.log
+(playbook), ~/install_tpot_pull.log (images)."
+  exit 0
+}
 
-Options:
-  -s                Suppress installation confirmation prompt, unattended run
-                    (requires passwordless sudo or -B, see below)
-  -b <branch>       Branch, tag or commit to install from. Default: the branch
-                    of the local clone this script runs from, otherwise master
-  -r <url>          Repository to install from, https URL, the raw URL for the
-                    playbook is derived from it. Default: the origin of the
-                    local clone this script runs from, otherwise
-                    https://github.com/telekom-security/tpotce
-  -t <type>         Type of installation (required if -s is used):
-                      h - hive      (requires -u and -p / -P)
-                      s - sensor    (no user/pass required)
-                      l - llm       (requires -u and -p / -P)
-                      i - mini      (requires -u and -p / -P)
-                      m - mobile    (no user/pass required)
-                      t - tarpit    (requires -u and -p / -P)
-                    With -c only h (a HIVE) or s (a SENSOR).
-  -u <webuser>      Web interface username (required for h/l/i/t)
-  -p <password>     Web interface password (required for h/l/i/t)
-  -P <file>         Read the web interface password from a file, - for stdin.
-                    Unlike -p it does not show up in the process list.
-  -B <file>         Read the sudo password from a file, so -s also works without
-                    passwordless sudo. The file is only read.
-  -c <file>         Install this compose file (i.e. from tpot customize) instead
-                    of an edition.
-  -n                No assistant, ask in the terminal (as earlier releases did)
-  -h                Show this help message
-EOF
+usage_error() {
+  # a wrong option or value: what is wrong and where the help is, exit 1
+  fuUI_USAGE_ERROR "$1" "install.sh"
+  exit 1
+}
+
+install_failed() {
+  # install_failed <what failed> <next step> ...: the summary of a run that stops, exit 1
+  local myITEM
+  local -a myITEMS=("fail:$1")
+  shift
+  for myITEM in "$@"; do myITEMS+=("next:${myITEM}"); done
+  fuUI_SUMMARY "T-Pot is not installed" "${myITEMS[@]}"
   exit 1
 }
 
@@ -900,10 +923,7 @@ myUI_LOGO_80x24=(
 # <<< tpot ui <<<
 
 validate_type() {
-  [[ "$myTPOT_TYPE" =~ ^[hslimtHSLIMT]$ ]] || {
-    echo "Invalid installation type: $myTPOT_TYPE"
-    print_help
-  }
+  [[ "$myTPOT_TYPE" =~ ^[hslimtHSLIMT]$ ]] || usage_error "Invalid installation type: $myTPOT_TYPE"
 }
 
 git_source() {
@@ -926,6 +946,23 @@ git_source() {
       git -C "${myDIR}" remote get-url origin 2>/dev/null
       ;;
   esac
+}
+
+install_version() {
+  # The version for the credits of the T-Pot logo: the file version of the clone this
+  # script runs from (fuUI_VERSION, the one source), else the branch when it looks
+  # like a tag (X.Y.Z or vX.Y.Z), else none. Not ~/tpotce: an earlier clone there
+  # says nothing about what this installer installs.
+  local myDIR myV=""
+  if [ -f "$0" ] && myDIR=$(cd "$(dirname "$0")" 2>/dev/null && pwd) && [ -r "${myDIR}/version" ];
+    then
+      myV=$(myUI_VERSION="" fuUI_VERSION "${myDIR}")
+  fi
+  if [ -z "${myV}" ] && [[ "${myTPOT_BRANCH}" =~ ^v?([0-9]+(\.[0-9]+)+)$ ]];
+    then
+      myV="${BASH_REMATCH[1]}"
+  fi
+  echo "${myV}"
 }
 
 normalize_repo() {
@@ -975,8 +1012,8 @@ check_tpot_clone() {
       fuUI_INFO "T-Pot would be installed from the existing checkout. Remove it and run"
       fuUI_INFO "the installer again, or clone what you want to test into ${HOME}/tpotce:"
       fuUI_HINT "sudo rm -rf ${HOME}/tpotce"
-      echo
-      exit 1
+      install_failed "${HOME}/tpotce is not what was requested" \
+        "Remove it or clone the requested source into it, then run the installer again"
   fi
 }
 
@@ -1025,8 +1062,8 @@ sudo_rs_become_exe() {
   fuUI_INFO "traditional sudo or configure passwordless sudo for ${myUSER}:"
   fuUI_HINT "sudo apt install sudo" \
             "echo '${myUSER} ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/${myUSER}"
-  echo
-  exit 1
+  install_failed "Ansible cannot use sudo-rs" \
+    "Install the traditional sudo or configure passwordless sudo, then run the installer again"
 }
 
 abort_unattended() {
@@ -1035,8 +1072,8 @@ abort_unattended() {
   fuUI_INFO "for ${myUSER}, e.g."
   fuUI_HINT "echo '${myUSER} ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/${myUSER}"
   fuUI_INFO "or run the installer without -s and enter the password when asked."
-  echo
-  exit 1
+  install_failed "-s needs sudo without a password prompt" \
+    "Run the installer again with -B <file>, with passwordless sudo or without -s"
 }
 
 check_port_conflicts() {
@@ -1144,9 +1181,10 @@ install_sudo_debian() {
          NEEDRESTART_SUSPEND=1 apt -y install sudo ${myPACKAGES_DEBIAN} && \
          /usr/sbin/usermod -aG sudo ${myUSER} && \
          echo '${mySUDOERS_RULE}' | tee /etc/sudoers.d/${myUSER} >/dev/null && \
-         chmod 440 /etc/sudoers.d/${myUSER}" || exit 1
+         chmod 440 /etc/sudoers.d/${myUSER}" || install_failed "sudo could not be installed" \
+           "Install sudo, add ${myUSER} to the sudoers, then run the installer again"
   fuUI_INFO "We need sudo for Ansible, please enter the sudo password ..."
-  sudo echo "### ... sudo works. Note that Ansible needs it without a password prompt, see below."
+  sudo true && fuUI_OK "sudo works. Note that Ansible needs it without a password prompt, see below."
   echo
 }
 
@@ -1168,9 +1206,11 @@ get_packages() {
   if [ -z "${myBECOME_FILE}" ] && sudo_password_required;
     then
       fuUI_INFO "sudo needs your password to install the packages:"
-      sudo -v || exit 1
+      sudo -v || install_failed "sudo did not accept the password" "Run the installer again"
   fi
-  fuUI_SPIN "${myINSTALL_NOTIFICATION}" "${myLOG}" install_packages || exit 1
+  fuUI_SPIN "${myINSTALL_NOTIFICATION}" "${myLOG}" install_packages \
+    || install_failed "The packages the installer needs could not be installed" \
+         "Review ${myLOG}, then run the installer again"
   if [ "${myCURRENT_DISTRIBUTION}" = "openSUSE Tumbleweed" ];
     then
       source /etc/profile.d/ansible.sh
@@ -1190,8 +1230,7 @@ check_ports () {
       fuUI_HINT "Debian, Raspbian, Ubuntu:       sudo apt install iproute2" \
                 "AlmaLinux, Fedora, RHEL, Rocky: sudo dnf install iproute" \
                 "openSUSE Tumbleweed:            sudo zypper install iproute2"
-      echo
-      exit 1
+      install_failed "‘ss‘ is missing" "Install it (see above), then run the installer again"
   fi
   fuUI_INFO "Now checking for services on ports T-Pot needs ..."
   check_port_conflicts
@@ -1203,8 +1242,7 @@ check_ports () {
       fuUI_HINT "sudo ss -lntup" \
                 "sudo systemctl list-sockets    # for a process that reads ‘systemd‘" \
                 "sudo systemctl disable --now <unit>"
-      echo
-      exit 1
+      install_failed "Services hold ports T-Pot needs" "Disable them (see above), then run the installer again"
     else
       fuUI_OK "No services found on ports T-Pot needs."
       echo
@@ -1215,10 +1253,7 @@ read_password_file() {
   # -P <file>: the first line, - reads stdin
   if [ "$1" = "-" ];
     then IFS= read -r myWEB_PW
-    else IFS= read -r myWEB_PW < "$1" || [ -n "${myWEB_PW}" ] || {
-      echo "Error: cannot read the password from $1."
-      exit 1
-    }
+    else IFS= read -r myWEB_PW < "$1" || [ -n "${myWEB_PW}" ] || usage_error "Cannot read the password from $1."
   fi
 }
 
@@ -1332,12 +1367,14 @@ while getopts ":sb:r:t:u:p:P:B:c:nMh" opt; do
       # for the assistant: marks on stdout, no terminal behind them
       myMARKS="y"
       ;;
-    h|\?)
+    h)
       print_help
       ;;
+    \?)
+      usage_error "Unknown option -${OPTARG}."
+      ;;
     :)
-      echo "Option -${OPTARG} requires an argument."
-      print_help
+      usage_error "Option -${OPTARG} requires an argument."
       ;;
   esac
 done
@@ -1346,31 +1383,24 @@ done
 
 # -s requires -t
 if [[ "$myUNATTENDED" == "y" && -z "$myTPOT_TYPE" ]]; then
-  echo "Error: -t is required when using -s to suppress interaction."
-  print_help
+  usage_error "-t is required when using -s to suppress interaction."
 fi
 
 # Determine if user/pass are required based on install type
 if [[ "$myUNATTENDED" == "y" && "$myTPOT_TYPE" =~ ^[hlit]$ ]]; then
-  [[ -n "$myWEB_USER" && -n "$myWEB_PW" ]] || {
-    echo "Error: -u and -p (or -P) are required for installation type '$myTPOT_TYPE'."
-    print_help
-  }
+  [[ -n "$myWEB_USER" && -n "$myWEB_PW" ]] || usage_error "-u and -p (or -P) are required for installation type '$myTPOT_TYPE'."
 fi
 
 if [ -n "${myCUSTOM_COMPOSE}" ];
   then
-    [[ "${myTPOT_TYPE}" =~ ^[hs]$ ]] || [ -z "${myTPOT_TYPE}" ] || {
-      echo "Error: with -c the type is h (a HIVE) or s (a SENSOR)."
-      print_help
-    }
-    [ -f "${myCUSTOM_COMPOSE}" ] || { echo "Error: ${myCUSTOM_COMPOSE} does not exist."; exit 1; }
+    [[ "${myTPOT_TYPE}" =~ ^[hs]$ ]] || [ -z "${myTPOT_TYPE}" ] || usage_error "With -c the type is h (a HIVE) or s (a SENSOR)."
+    [ -f "${myCUSTOM_COMPOSE}" ] || usage_error "${myCUSTOM_COMPOSE} does not exist."
     myCUSTOM_COMPOSE=$(cd "$(dirname "${myCUSTOM_COMPOSE}")" && pwd)/$(basename "${myCUSTOM_COMPOSE}")
 fi
 
 if [ -n "${myBECOME_FILE}" ];
   then
-    [ -r "${myBECOME_FILE}" ] || { echo "Error: cannot read the sudo password from ${myBECOME_FILE}."; exit 1; }
+    [ -r "${myBECOME_FILE}" ] || usage_error "Cannot read the sudo password from ${myBECOME_FILE}."
     myBECOME_FILE=$(cd "$(dirname "${myBECOME_FILE}")" && pwd)/$(basename "${myBECOME_FILE}")
     # every sudo of this script refreshes the timestamp from the file first, so none
     # of them prompts and pipes into sudo (tee) keep working
@@ -1382,6 +1412,7 @@ resolve_tpot_source
 myINSTALL_NOTIFICATION="Installing the packages the installer needs ..."
 myUSER=$(whoami)
 myLOG="${HOME}/install_tpot_prepare.log"
+myPULL_LOG="${HOME}/install_tpot_pull.log"
 myTPOT_CONF_FILE="${HOME}/tpotce/.env"
 # git and the Python venv module: the assistant (tpot install) runs before the
 # playbook, from a clone the installer makes itself
@@ -1452,7 +1483,11 @@ if [ -n "${mySUPPORTED_VERSION}" ] && [ "${myCURRENT_VERSION}" != "${mySUPPORTED
     exit 1
 fi
 
-# Begin of Installer
+# Begin of Installer: the T-Pot logo above the banner, at a terminal only (fuUI_LOGO_ON,
+# never with -M). Without a version its credits name none, fuUI_VERSION would read ~/tpotce
+myUI_LOGO=1
+myUI_VERSION=$(install_version)
+[ -n "${myUI_VERSION}" ] || myUI_CHECKOUT="/dev/null"
 [ -z "${myMARKS}" ] && fuUI_BANNER "Installer" "This script will now install T-Pot and all of its dependencies." \
   "Source: ${myTPOT_REPO_URL} at ${myTPOT_BRANCH}" "${myCURRENT_DISTRIBUTION} ${myVERSION_ID}"
 
@@ -1473,7 +1508,8 @@ if [ -z "${myUNATTENDED}" ] && [ -z "${myCLASSIC}" ] && [ -t 0 ] && [ -t 1 ] && 
     get_packages
     if ! fuUI_SPIN "Getting T-Pot from ${myTPOT_REPO_URL} at ${myTPOT_BRANCH} ..." "${myLOG}" clone_tpot;
       then
-        exit 1
+        install_failed "T-Pot could not be cloned from ${myTPOT_REPO_URL} at ${myTPOT_BRANCH}" \
+          "Check the repository and the branch (${myLOG}), then run the installer again"
     fi
     if fuUI_SPIN "Setting up the T-Pot installer ..." "${myLOG}" "${HOME}/tpotce/tpot" setup \
        && "${HOME}/tpotce/tpot" install --help >/dev/null 2>&1;
@@ -1509,8 +1545,7 @@ check_tpot_clone
 if [ -n "${myBECOME_FILE}" ] && command -v sudo >/dev/null && ! command sudo -S -k -p "" -v < "${myBECOME_FILE}" >/dev/null 2>&1;
   then
     fuUI_ERROR "The sudo password in ${myBECOME_FILE} is not accepted."
-    echo
-    exit 1
+    install_failed "sudo does not accept the password of -B" "Check ${myBECOME_FILE}, then run the installer again"
 fi
 
 # Fail before anything is installed: -s promises an unattended run, but Ansible
@@ -1555,9 +1590,8 @@ if [ ! -f "${HOME}/tpotce/installer/install/tpot.yml" ];
       then
         # a mistyped branch or repository ends up here, and would fail with a
         # confusing Ansible error further down
-        fuUI_INFO "Check the repository and the branch, then run the installer again."
-        echo
-        exit 1
+        install_failed "T-Pot could not be cloned from ${myTPOT_REPO_URL} at ${myTPOT_BRANCH}" \
+          "Check the repository and the branch (${myLOG}), then run the installer again"
     fi
 fi
 myANSIBLE_TPOT_PLAYBOOK="${HOME}/tpotce/installer/install/tpot.yml"
@@ -1618,9 +1652,8 @@ if [ ! $? -eq 0 ];
   then
     fuMARK phase failed
     fuUI_ERROR "Something went wrong with the Playbook, please review the output and / or install_tpot.log for clues."
-    fuUI_INFO "Aborting."
-    echo
-    exit 1
+    install_failed "The playbook failed, see the output above" \
+      "Review ${HOME}/install_tpot.log, fix the cause, then run the installer again"
   else
     fuUI_OK "Playbook was successful."
     echo
@@ -1628,15 +1661,19 @@ fi
 
 # The T-Pot type, asked before the playbook (or given with -t / -c)
 fuMARK phase compose
+# and what the summary says about it: a hint and the next step
+myINFO=""
+myNEXT=""
 case "${myTPOT_TYPE}" in
-  h) myTPOT_TYPE="HIVE";   myEDITION="standard"; myINFO="" ;;
+  h) myTPOT_TYPE="HIVE";   myEDITION="standard" ;;
   s) myTPOT_TYPE="SENSOR"; myEDITION="sensor"
-     myINFO="Make sure to deploy SSH keys to this SENSOR and disable SSH password authentication.
-On the HIVE run 'tpot sensors add' to join this SENSOR to the HIVE." ;;
-  l) myTPOT_TYPE="HIVE";   myEDITION="llm";    myINFO="Make sure to adjust the T-Pot config file (.env) for Ollama / ChatGPT settings, i.e. with 'tpot'." ;;
-  i) myTPOT_TYPE="HIVE";   myEDITION="mini";   myINFO="" ;;
-  m) myTPOT_TYPE="MOBILE"; myEDITION="mobile"; myINFO="" ;;
-  t) myTPOT_TYPE="HIVE";   myEDITION="tarpit"; myINFO="" ;;
+     myINFO="Make sure to deploy SSH keys to this SENSOR and disable SSH password authentication."
+     myNEXT="On the HIVE run 'tpot sensors add' to join this SENSOR to the HIVE." ;;
+  l) myTPOT_TYPE="HIVE";   myEDITION="llm"
+     myNEXT="Adjust the T-Pot config file (.env) for Ollama / ChatGPT settings, i.e. with 'tpot llm'." ;;
+  i) myTPOT_TYPE="HIVE";   myEDITION="mini" ;;
+  m) myTPOT_TYPE="MOBILE"; myEDITION="mobile" ;;
+  t) myTPOT_TYPE="HIVE";   myEDITION="tarpit" ;;
 esac
 if [ -n "${myCUSTOM_COMPOSE}" ];
   then
@@ -1665,11 +1702,20 @@ if [ -n "${myMARKS}" ];
   then
     fuMARK images "$(sudo docker compose -f "${HOME}/tpotce/docker-compose.yml" config --images 2>/dev/null | wc -l)"
 fi
-fuUI_INFO "Now pulling images ..."
-if ! sudo docker compose -f "${HOME}/tpotce/docker-compose.yml" pull;
+# A spinner meanwhile, the output goes into its log; in the marks mode it passes through,
+# so the assistant counts the pulled images. The spinner runs it in the background, where
+# sudo cannot ask: a password is asked for now (-B refreshes it from its file)
+if ! fuUI_MARKS_ON && [ -z "${myBECOME_FILE}" ] && sudo_password_required;
+  then
+    sudo -v
+fi
+rm -f "${myPULL_LOG}"
+myPULL_FAILED=""
+if ! fuUI_SPIN "Pulling the images ..." "${myPULL_LOG}" sudo docker compose -f "${HOME}/tpotce/docker-compose.yml" pull;
   then
     # not a stop: T-Pot pulls what is missing when it starts (TPOT_PULL_POLICY)
     fuMARK warn pull
+    myPULL_FAILED="y"
     fuUI_WARN "Not all images could be pulled (see above), T-Pot tries again when it starts."
 fi
 echo
@@ -1689,16 +1735,25 @@ fi
 myTPOT_FOUND=$(command -v tpot)
 if [ -n "${myTPOT_FOUND}" ] && [ "$(readlink -f "${myTPOT_FOUND}")" = "$(readlink -f "${HOME}/tpotce/tpot")" ];
   then
-    fuUI_OK "The T-Pot Manager is ready, run it with: tpot"
+    myTPOT_ITEM="ok:The T-Pot Manager is ready, run it with: tpot"
   elif [ -n "${myTPOT_FOUND}" ];
   then
-    fuUI_WARN "The command tpot is ${myTPOT_FOUND}, not this T-Pot Manager. Run ${HOME}/tpotce/tpot, or link it with: sudo ln -sfn ${HOME}/tpotce/tpot /usr/local/bin/tpot"
+    myTPOT_ITEM="warn:The command tpot is ${myTPOT_FOUND}, not this T-Pot Manager. Run ${HOME}/tpotce/tpot, or link it with: sudo ln -sfn ${HOME}/tpotce/tpot /usr/local/bin/tpot"
   else
-    fuUI_WARN "The command tpot is not in your PATH, link it with: sudo ln -sfn ${HOME}/tpotce/tpot /usr/local/bin/tpot"
+    myTPOT_ITEM="warn:The command tpot is not in your PATH, link it with: sudo ln -sfn ${HOME}/tpotce/tpot /usr/local/bin/tpot"
 fi
 
-# Done
+# Done: what is installed and what comes next
 fuMARK phase "done"
-fuUI_OK "Done. Please reboot and re-connect via SSH on tcp/64295."
-[ -n "${myINFO}" ] && fuUI_INFO "${myINFO}"
-echo
+if [ -n "${myCUSTOM_COMPOSE}" ];
+  then mySUMMARY=("ok:T-Pot is installed with your own compose file (${myTPOT_TYPE})")
+  else mySUMMARY=("ok:T-Pot ${myEDITION} is installed (${myTPOT_TYPE})")
+fi
+[ "${myTPOT_TYPE}" = "HIVE" ] && mySUMMARY+=("ok:The web user ${myWEB_USER} is set up")
+[ -n "${myPULL_FAILED}" ] && mySUMMARY+=("warn:Not all images could be pulled, T-Pot tries again when it starts")
+mySUMMARY+=("${myTPOT_ITEM}")
+[ -n "${myINFO}" ] && mySUMMARY+=("info:${myINFO}")
+mySUMMARY+=("next:Reboot, then re-connect via SSH on tcp/64295")
+[ "${myTPOT_TYPE}" = "HIVE" ] && mySUMMARY+=("next:Open the web UI on https://<this host>:64297")
+[ -n "${myNEXT}" ] && mySUMMARY+=("next:${myNEXT}")
+fuUI_SUMMARY "T-Pot is installed" "${mySUMMARY[@]}"

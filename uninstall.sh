@@ -1,22 +1,39 @@
 #!/usr/bin/env bash
 
 print_help() {
-  cat <<EOF
-Usage: $0 [-y] [-k] [-B <file>]
-
-Removes T-Pot from this host: the containers, images and data, Docker Engine,
+  # shellcheck disable=SC2088 # the examples show ~ as a person types it
+  fuUI_HELP "Uninstaller" "uninstall.sh [-y] [-k] [-B <file>]" \
+    --about "Removes T-Pot from this host: the containers, images and data, Docker Engine,
 tpot.service, the tpot user and group, the tpot command and ~/tpotce. SSH goes
-back to port 22. Backups in ~/tpot_backups stay.
+back to port 22. Backups in ~/tpot_backups stay." \
+    --about "tpot uninstall asks (the host name) and runs it with -y." \
+    --opt "-y" "Uninstall without asking, unattended run (requires passwordless
+sudo or -B)" \
+    --opt "-k" "Keep a full backup first (update.sh --backup-only --full), it
+lands in ~/tpot_backups and restore.sh can bring it back" \
+    --opt "-B <file>" "Read the sudo password from a file, so -y also works without
+passwordless sudo" \
+    --opt "-h" "Show this help message" \
+    --example "~/tpotce/uninstall.sh" "Asks before it removes T-Pot" \
+    --example "~/tpotce/uninstall.sh -y -k" "A full backup first, then T-Pot goes without a question" \
+    --note "Run it as a regular user with sudo, not as root." \
+    --note "The log of the playbook: ~/uninstall_tpot.log"
+  exit 0
+}
 
-Options:
-  -y          Uninstall without asking, unattended run (requires passwordless
-              sudo or -B)
-  -k          Keep a full backup first (update.sh --backup-only --full), it
-              lands in ~/tpot_backups and restore.sh can bring it back
-  -B <file>   Read the sudo password from a file, so -y also works without
-              passwordless sudo
-  -h          Show this help message
-EOF
+usage_error() {
+  # a wrong option or value: what is wrong and where the help is, exit 1
+  fuUI_USAGE_ERROR "$1" "uninstall.sh"
+  exit 1
+}
+
+uninstall_failed() {
+  # uninstall_failed <what failed> <next step> ...: the summary of a run that stops, exit 1
+  local myITEM
+  local -a myITEMS=("fail:$1")
+  shift
+  for myITEM in "$@"; do myITEMS+=("next:${myITEM}"); done
+  fuUI_SUMMARY "T-Pot is not uninstalled" "${myITEMS[@]}"
   exit 1
 }
 
@@ -86,8 +103,9 @@ while getopts ":ykB:h" opt; do
     y) myQST="y"; myUNATTENDED="y" ;;
     k) myBACKUP="y" ;;
     B) myBECOME_FILE="${OPTARG}" ;;
-    h|\?) print_help ;;
-    :) echo "Option -${OPTARG} requires an argument."; print_help ;;
+    h) print_help ;;
+    \?) usage_error "Unknown option -${OPTARG}." ;;
+    :) usage_error "Option -${OPTARG} requires an argument." ;;
   esac
 done
 
@@ -95,7 +113,7 @@ trap fuCLEANUP EXIT
 
 if [ -n "${myBECOME_FILE}" ];
   then
-    [ -r "${myBECOME_FILE}" ] || { echo "Error: cannot read the sudo password from ${myBECOME_FILE}."; exit 1; }
+    [ -r "${myBECOME_FILE}" ] || usage_error "Cannot read the sudo password from ${myBECOME_FILE}."
     myBECOME_FILE=$(cd "$(dirname "${myBECOME_FILE}")" && pwd)/$(basename "${myBECOME_FILE}")
     # every sudo of this script refreshes the timestamp from the file first
     sudo () { command sudo -S -p "" -v < "${myBECOME_FILE}" >/dev/null 2>&1; command sudo "$@"; }
@@ -129,7 +147,9 @@ if [[ ! " ${mySUPPORTED_DISTRIBUTIONS[*]} " =~ " ${myCURRENT_DISTRIBUTION} " ]];
     exit 1
 fi
 
-# Begin of Uninstaller
+# Begin of Uninstaller: the T-Pot logo above the banner, at a terminal only (fuUI_LOGO_ON)
+# shellcheck disable=SC2034 # fuUI_BANNER of installer/lib/ui.sh reads it
+myUI_LOGO=1
 fuUI_BANNER "Uninstaller" "This script will now uninstall T-Pot: containers, images, data, Docker Engine," \
   "tpot.service, the tpot user and command, ~/tpotce. SSH goes back to port 22."
 if [ -z "${myQST}" ] && ! fuUI_CONFIRM "Uninstall T-Pot?" "Uninstall" "Keep T-Pot";
@@ -144,8 +164,7 @@ fi
 if [ -n "${myBECOME_FILE}" ] && ! command sudo -S -k -p "" -v < "${myBECOME_FILE}" >/dev/null 2>&1;
   then
     fuUI_ERROR "The sudo password in ${myBECOME_FILE} is not accepted."
-    echo
-    exit 1
+    uninstall_failed "sudo does not accept the password of -B" "Check ${myBECOME_FILE}, then run the uninstaller again"
 fi
 
 # -y promises an unattended run, Ansible would ask for the become password
@@ -154,8 +173,8 @@ if [ "${myUNATTENDED}" = "y" ] && [ -z "${myBECOME_FILE}" ] && sudo_password_req
     fuUI_ERROR "‘sudo‘ requires a password, so -y cannot be honoured."
     fuUI_INFO "Hand the password over with -B <file>, configure passwordless sudo for ${myUSER},"
     fuUI_INFO "or run the uninstaller without -y and enter the password when asked."
-    echo
-    exit 1
+    uninstall_failed "-y needs sudo without a password prompt" \
+      "Run the uninstaller again with -B <file>, with passwordless sudo or without -y"
 fi
 
 # A backup first: the same archive an update writes, with the data
@@ -164,15 +183,15 @@ if [ "${myBACKUP}" = "y" ];
     fuUI_INFO "Writing a full backup to ~/tpot_backups first ..."
     if [ -z "${myBECOME_FILE}" ] && sudo_password_required;
       then
-        sudo -v || exit 1
+        sudo -v || uninstall_failed "sudo did not accept the password" "Run the uninstaller again"
       else
         sudo true
     fi
     if ! "${myHERE}/update.sh" -y --backup-only --full;
       then
         fuUI_ERROR "The backup failed, T-Pot is not uninstalled."
-        echo
-        exit 1
+        uninstall_failed "The backup failed, see the output above" \
+          "Fix the cause and run the uninstaller again, or run it without -k"
     fi
     fuUI_OK "Backup written, it stays in ~/tpot_backups."
     echo
@@ -225,18 +244,31 @@ ANSIBLE_LOG_PATH=${HOME}/uninstall_tpot.log ansible-playbook "${myANSIBLE_TPOT_P
 if [ ! $? -eq 0 ];
   then
     fuUI_ERROR "Something went wrong with the Playbook, please review the output and / or uninstall_tpot.log for clues."
-    fuUI_INFO "Aborting."
-    echo
-    exit 1
-  else
-    fuUI_OK "Playbook was successful."
-    fuUI_INFO "Now removing ${HOME}/tpotce."
-    cd "${HOME}" || exit 1
-    sudo rm -rf "${HOME}/tpotce"
-    rm -rf "${HOME}/tpot.yml"
-    echo
+    uninstall_failed "The playbook failed, see the output above" \
+      "Review ${HOME}/uninstall_tpot.log, fix the cause, then run the uninstaller again"
 fi
-
-# Done
-fuUI_OK "Done. Please reboot and re-connect via SSH on tcp/22."
+fuUI_OK "Playbook was successful."
 echo
+
+# The checkout goes last, with a spinner meanwhile. It runs in the background, where sudo
+# cannot ask: a password is asked for now (-B refreshes it from its file)
+cd "${HOME}" || exit 1
+if [ -z "${myBECOME_FILE}" ] && sudo_password_required;
+  then
+    sudo -v
+fi
+myREMOVED="ok:${HOME}/tpotce is removed"
+if ! fuUI_SPIN "Removing ${HOME}/tpotce ..." "${HOME}/uninstall_tpot.log" sudo rm -rf "${HOME}/tpotce";
+  then
+    myREMOVED="warn:${HOME}/tpotce is still there, remove it with: sudo rm -rf ${HOME}/tpotce"
+fi
+rm -rf "${HOME}/tpot.yml"
+
+# Done: what is gone and what comes next
+mySUMMARY=("ok:T-Pot, its data, Docker Engine and the T-Pot Manager are removed" "${myREMOVED}")
+if [ "${myBACKUP}" = "y" ];
+  then mySUMMARY+=("ok:A full backup is in ~/tpot_backups, restore.sh brings it back after a new installation")
+  else mySUMMARY+=("info:Backups in ~/tpot_backups stay")
+fi
+mySUMMARY+=("next:Reboot, then re-connect via SSH on tcp/22")
+fuUI_SUMMARY "T-Pot is uninstalled" "${mySUMMARY[@]}"

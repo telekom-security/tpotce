@@ -2,11 +2,6 @@
 # Deploy a T-Pot SENSOR from this HIVE. This is `tpot sensors add` now (pre-checks,
 # certificate, registry, access taken back if it fails); without the Python packages
 # of tpot (i.e. no internet to set them up) the steps below run as before.
-myTPOT="$HOME/tpotce/tpot"
-if [ -x "${myTPOT}" ] && "${myTPOT}" setup > /dev/null 2>&1;
-  then
-    exec "${myTPOT}" sensors add "$@"
-fi
 # the look of the T-Pot scripts (installer/lib/ui.sh), plain text if it is missing
 # shellcheck source=installer/lib/ui.sh
 if ! source "$HOME/tpotce/installer/lib/ui.sh" 2>/dev/null;
@@ -21,9 +16,49 @@ if ! source "$HOME/tpotce/installer/lib/ui.sh" 2>/dev/null;
     fuUI_HINT () { local myLINE; for myLINE in "$@"; do echo "###   ${myLINE}"; done; }
     fuUI_CONFIRM () { local myANSWER; read -rp "### $1 (y/n) " myANSWER; [[ "${myANSWER}" =~ ^(y|Y|yes|YES)$ ]]; }
     fuUI_INPUT () { local myVALUE; read -rp "### $1 " myVALUE; echo "${myVALUE}"; }
+    fuUI_RESULT () {
+      case "$1" in
+        ok) echo "### [OK] - $2" ;;
+        fail) echo "### [FAILED] - $2" ;;
+        warn) echo "### [WARNING] - $2" ;;
+        next) echo "### [NEXT] - $2" ;;
+        *) echo "### $2" ;;
+      esac
+    }
+    fuUI_SUMMARY () {
+      local myTITLE="$1" myITEM myKIND myTEXT myRC=0
+      shift
+      echo
+      echo "### ${myTITLE}"
+      for myITEM in "$@"; do
+        myKIND="${myITEM%%:*}" myTEXT="${myITEM#*:}"
+        case "${myKIND}" in ok|fail|warn|next|info) ;; *) myKIND="info" myTEXT="${myITEM}" ;; esac
+        [ "${myKIND}" != "fail" ] || myRC=1
+        fuUI_RESULT "${myKIND}" "${myTEXT}"
+      done
+      echo
+      return "${myRC}"
+    }
 # <<< plain fallback
 fi
 fuUI_INIT
+# a person at a terminal sees the T-Pot logo and what comes, then tpot asks; not for the help
+myBANNER=""
+case " $* " in
+  *" -h "*|*" --help "*) ;;
+  *) if [ -t 0 ] && [ -t 1 ];
+       then
+         # shellcheck disable=SC2034 # fuUI_BANNER of installer/lib/ui.sh reads it
+         myUI_LOGO=1
+         fuUI_BANNER "Sensor deploy" "Joins a T-Pot SENSOR to this HIVE, it sends its logs here."
+         myBANNER="y"
+     fi ;;
+esac
+myTPOT="$HOME/tpotce/tpot"
+if [ -x "${myTPOT}" ] && "${myTPOT}" setup > /dev/null 2>&1;
+  then
+    exec "${myTPOT}" sensors add "$@"
+fi
 fuUI_WARN "tpot is not available, using the previous deployment."
 cd "$HOME/tpotce" || exit 1
 
@@ -52,7 +87,7 @@ if [[ ! " ${mySUPPORTED_DISTRIBUTIONS[@]} " =~ " ${myCURRENT_DISTRIBUTION} " ]];
     exit 1
 fi
 
-fuUI_BANNER "Sensor deploy" "This script will prepare a T-Pot SENSOR installation to transmit logs into this HIVE."
+[ -n "${myBANNER}" ] || fuUI_BANNER "Sensor deploy" "This script will prepare a T-Pot SENSOR installation to transmit logs into this HIVE."
 
 # Ask if a T-Pot SENSOR was installed
 if ! fuUI_CONFIRM "Was a T-Pot SENSOR installed?";
@@ -141,8 +176,9 @@ export myTPOT_HIVE_USER
 export myTPOT_HIVE_IP
 
 ANSIBLE_LOG_PATH=${HOME}/tpotce/data/deploy_sensor.log ansible-playbook ${myANSIBLE_TPOT_PLAYBOOK} -i ${mySENSOR_IP}, -c ssh -u ${mySSHUSER} --ask-become-pass -e "ansible_port=${myANSIBLE_PORT}"
+myRC=$?
 
-if [ "$?" == 0 ];
+if [ "${myRC}" == 0 ];
   then
 	# Update the T-Pot .env config and lswebpasswd (avoid the need to restart T-Pot) on the host
 	fuUI_INFO "Updating SENSOR users on this HIVE and in the T-Pot .env config:"
@@ -163,3 +199,15 @@ fi
 
 unset myTPOT_HIVE_USER
 unset myTPOT_HIVE_IP
+
+# Done: what happened and what comes next
+if [ "${myRC}" == 0 ];
+  then
+    fuUI_SUMMARY "The SENSOR is deployed" "ok:${mySENSOR_IP} sends its logs to ${myTPOT_HIVE_IP} as ${myLS_WEB_USER}" \
+      "info:The SENSOR reboots, its data shows up on this HIVE once it is back" \
+      "next:Next time use tpot sensors add, it checks before and takes the access back if a step fails"
+  else
+    fuUI_SUMMARY "The SENSOR is not deployed" "fail:The deployment playbook failed, this HIVE is unchanged" \
+      "next:Review ${HOME}/tpotce/data/deploy_sensor.log, then run deploy.sh again"
+    exit 1
+fi
