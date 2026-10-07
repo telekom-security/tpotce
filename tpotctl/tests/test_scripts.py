@@ -187,7 +187,8 @@ class UpdateShTest(Harness):
                 out.write("#!/bin/sh\n")
         script = os.path.join(self.home, "setup.sh")
         with open(script, "w", encoding="utf-8") as out:
-            out.write(f'source "{REPO}/installer/lib/ui.sh"; fuUI_INIT\nmyTPOT_LINK="{link}"\n{function}\nfuTPOT_SETUP\n')
+            out.write(f'source "{REPO}/installer/lib/ui.sh"; fuUI_INIT\nmyTPOT_LINK="{link}"\n'
+                      f'myLOG="{self.home}/update.log"\nfuDID () {{ :; }}\n{function}\nfuTPOT_SETUP\n')
         result = self.run_script(script)
         return result.stdout + result.stderr, os.path.islink(link)
 
@@ -216,7 +217,7 @@ class UpdateShTest(Harness):
         import time
         function = re.search(r"function fuELASTIC_STOPPED \(\) \{.*?\n\}", read("update.sh"), re.S).group(0)
         pause = re.search(r"\n(\s*trap fuELASTIC_STOPPED INT\n.*?trap - INT\n)", self.check_elastic(), re.S).group(1)
-        script = (f'source "{REPO}/installer/lib/ui.sh"; fuUI_INIT\n{function}\n'
+        script = (f'source "{REPO}/installer/lib/ui.sh"; fuUI_INIT\nfuDID () {{ :; }}\n{function}\n'
                   + pause.replace("sleep 15", "sleep 5") + 'echo after\n')
         for attempt in range(12):
             proc = subprocess.Popen(["bash", "-c", script], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,

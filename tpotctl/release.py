@@ -85,13 +85,12 @@ PLACES = (
     Place(SMOKE_HELP, r"Defaults to " + IMAGE, "the default image in the help of a smoke test"),
 )
 
-# Logic that carries the version but has to read it instead; other work packages change it
-# (stage 8e: W2 update.sh, W4 users.py). Until then check and set-version treat them like
-# places (a release must not leave them behind) and the tests let them pass. The test
-# test_pending_readers_are_still_pending fails as soon as one reads the file: remove it here.
-PENDING_READERS = (
-    Place(("update.sh",), r'^\s*local myMASTERVERSION="' + V + r'"', "update.sh myMASTERVERSION (W2: read `version`)"),
-)
+# Logic that carries the version but has to read it instead (none left since stage 8e:
+# update.sh and users.py read the file `version`). Until a reader is changed check and
+# set-version treat it like a place (a release must not leave it behind) and the tests let
+# it pass. The test test_pending_readers_are_still_pending fails as soon as one reads the
+# file: remove it here.
+PENDING_READERS = ()
 
 EXCLUDED = (
     Exclusion(("version",), None, "the source itself"),

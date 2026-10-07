@@ -69,9 +69,22 @@ myTMPDIR=""
 # The sudo password from -B, empty: sudo asks itself (or needs none)
 myBECOME_FILE=""
 
+# What runs under a spinner writes its output here, the log of the last run (in the
+# marks mode of the task screen it goes through instead, fuUI_SPIN)
+myLOG="${myBACKUPDIR}/update.log"
+
+# The summary at the end (fuEND): what the run did, as <kind>:<text> items of
+# fuUI_SUMMARY. myRUNNING is set once the update is confirmed, from then on every way
+# out ends with it; mySTOPPED while T-Pot is stopped.
+myDONE=()
+myEND_TITLE=""
+myRUNNING=""
+mySTOPPED=""
+
 # The look of the T-Pot scripts (installer/lib/ui.sh: gum at a terminal, plain text
-# otherwise) and the @@tpot marks the task screen of tpot reads (fuMARK).
-myHERE=$(cd "$(dirname "$0")" 2>/dev/null && pwd)
+# otherwise) and the @@tpot marks the task screen of tpot reads (fuMARK). BASH_SOURCE:
+# the tests source this file for its functions.
+myHERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)
 # shellcheck source=installer/lib/ui.sh
 if ! source "${myHERE}/installer/lib/ui.sh" 2>/dev/null;
   then
@@ -83,10 +96,107 @@ if ! source "${myHERE}/installer/lib/ui.sh" 2>/dev/null;
     fuUI_WARN () { echo "### [WARNING] - $*"; }
     fuUI_ERROR () { echo "### [ERROR] - $*" >&2; }
     fuUI_HINT () { local myLINE; for myLINE in "$@"; do echo "###   ${myLINE}"; done; }
-    fuMARK () { [ "${TPOT_MARKS}" = "1" ] && echo "@@tpot $*"; return 0; }
+    fuUI_MARKS_ON () { [ -n "${myMARKS:-}" ] || [ "${TPOT_MARKS:-}" = "1" ]; }
+    fuMARK () { fuUI_MARKS_ON || return 0; echo "@@tpot $*"; }
+    fuUI_LOGO () { return 1; }
+    fuUI_HELP () {
+      local myTITLE="$1" myUSAGE="$2" myW=0 myI myLINE myFIRST myREST myPAD
+      shift 2
+      local -a myABOUT=() myFLAGS=() myTEXTS=() myCMDS=() myCTEXTS=() myNOTES=()
+      while [ "$#" -gt 0 ]; do
+        case "$1" in
+          --about) myABOUT+=("${2:-}"); shift $(( $# < 2 ? $# : 2 )) ;;
+          --opt) myFLAGS+=("${2:-}"); myTEXTS+=("${3:-}"); shift $(( $# < 3 ? $# : 3 )) ;;
+          --example) myCMDS+=("${2:-}"); myCTEXTS+=("${3:-}"); shift $(( $# < 3 ? $# : 3 )) ;;
+          --note) myNOTES+=("${2:-}"); shift $(( $# < 2 ? $# : 2 )) ;;
+          *) shift ;;
+        esac
+      done
+      for myI in "${!myFLAGS[@]}"; do
+        if [ "${#myFLAGS[myI]}" -gt "${myW}" ] && [ "${#myFLAGS[myI]}" -le 24 ]; then myW="${#myFLAGS[myI]}"; fi
+      done
+      printf 'T-Pot %s\n\nUsage: %s\n' "${myTITLE}" "${myUSAGE//$'\n'/$'\n'       }"
+      for myLINE in "${myABOUT[@]}"; do printf '\n%s\n' "${myLINE}"; done
+      if [ "${#myFLAGS[@]}" -gt 0 ]; then
+        printf '\nOptions:\n'
+        printf -v myPAD '%*s' $((myW + 6)) ''
+        for myI in "${!myFLAGS[@]}"; do
+          myFIRST="${myTEXTS[myI]%%$'\n'*}"
+          myREST=""
+          [ "${myFIRST}" = "${myTEXTS[myI]}" ] || myREST="${myTEXTS[myI]#*$'\n'}"
+          if [ "${#myFLAGS[myI]}" -le "${myW}" ];
+            then printf '  %s%*s    %s\n' "${myFLAGS[myI]}" $((myW - ${#myFLAGS[myI]})) '' "${myFIRST}"
+            else printf '  %s\n%s%s\n' "${myFLAGS[myI]}" "${myPAD}" "${myFIRST}"
+          fi
+          [ -z "${myREST}" ] || printf '%s%s\n' "${myPAD}" "${myREST//$'\n'/$'\n'${myPAD}}"
+        done
+      fi
+      if [ "${#myCMDS[@]}" -gt 0 ]; then
+        printf '\nExamples:\n'
+        for myI in "${!myCMDS[@]}"; do
+          printf '  %s\n' "${myCMDS[myI]}"
+          [ -z "${myCTEXTS[myI]}" ] || printf '      %s\n' "${myCTEXTS[myI]//$'\n'/$'\n'      }"
+        done
+      fi
+      if [ "${#myNOTES[@]}" -gt 0 ]; then
+        printf '\nNotes:\n'
+        for myLINE in "${myNOTES[@]}"; do printf '  %s\n' "${myLINE//$'\n'/$'\n'  }"; done
+      fi
+      return 0
+    }
+    fuUI_USAGE_ERROR () {
+      echo "### [ERROR] - $1" >&2
+      echo "###   ${2:-${0##*/}} -h shows the options." >&2
+      return 1
+    }
+    fuUI_RESULT () {
+      case "$1" in
+        ok) echo "### [OK] - $2" ;;
+        fail) echo "### [FAILED] - $2" ;;
+        warn) echo "### [WARNING] - $2" ;;
+        next) echo "### [NEXT] - $2" ;;
+        *) echo "### $2" ;;
+      esac
+    }
+    fuUI_SUMMARY () {
+      local myTITLE="$1" myITEM myKIND myTEXT myRC=0
+      shift
+      echo
+      echo "### ${myTITLE}"
+      for myITEM in "$@"; do
+        myKIND="${myITEM%%:*}" myTEXT="${myITEM#*:}"
+        case "${myKIND}" in ok|fail|warn|next|info) ;; *) myKIND="info" myTEXT="${myITEM}" ;; esac
+        [ "${myKIND}" != "fail" ] || myRC=1
+        fuUI_RESULT "${myKIND}" "${myTEXT}"
+      done
+      echo
+      return "${myRC}"
+    }
+    fuUI_SPIN () {
+      local myTITLE="$1" myLOG="$2" myRC=0
+      shift 2
+      echo "### ${myTITLE}"
+      if fuUI_MARKS_ON;
+        then "$@" < /dev/null || myRC=$?
+        else "$@" >>"${myLOG}" 2>&1 < /dev/null || myRC=$?
+      fi
+      if [ "${myRC}" -eq 0 ];
+        then echo "### [OK] - ${myTITLE%% ...}"
+        else
+          if fuUI_MARKS_ON;
+            then echo "### [ERROR] - ${myTITLE%% ...} failed" >&2
+            else echo "### [ERROR] - ${myTITLE%% ...} failed, the end of ${myLOG}:" >&2; tail -n 15 "${myLOG}" >&2
+          fi
+      fi
+      return "${myRC}"
+    }
 # <<< plain fallback
 fi
 fuUI_INIT
+# the T-Pot logo in the banner (at a terminal, not in the marks mode); the restart after
+# the self update inherits that it was shown, so it shows the banner only
+# shellcheck disable=SC2034 # read by fuUI_BANNER (installer/lib/ui.sh)
+myUI_LOGO=1
 
 # Where to update from. Empty means: keep the branch and the origin of the
 # current checkout, which is what a plain `update.sh -y` has always done.
@@ -113,33 +223,38 @@ myEDITIONS="STANDARD SENSOR MINI LLM TARPIT MOBILE MAC_WIN"
 myDROPPED_SERVICES="spiderfoot fatt"
 
 function fuPRINT_HELP () {
-	cat <<EOF
-Usage: $0 -y [-b <branch>] [-r <url>] [--full] [--backup-only] [-B <file>]
-
-Options:
-  -y                Confirm the update, required
-  -s, --start       Start T-Pot again once the update is through. Off by default,
-                    so an unattended run leaves the services stopped unless asked.
-  --full            Include the whole data/ folder in the backup. Off by default,
-                    on a busy hive it turns a 1 MB archive into tens of GB. Use it
-                    when a release brings a newer Elastic Stack: Elasticsearch and
-                    Kibana upgrade their data in data/elk/ on the first start, and
-                    that cannot be undone. Kept uncompressed either way.
-  --backup-only     Only write the backup (T-Pot is stopped for it) and end, no
-                    update. With --full the data is in it, with -s T-Pot starts
-                    again afterwards. tpot uninstall uses it.
-  -b <branch>       Branch to update from, i.e. to test a branch before it is
-                    merged. The branch is checked out, so every following
-                    update stays on it until another branch is requested.
-                    Default: the branch of ~/tpotce, environment: TPOT_BRANCH
-  -r <url>          Repository to update from, https URL. Replaces the URL of
-                    'origin' in ~/tpotce.
-                    Default: the origin of ~/tpotce, environment: TPOT_REPO_URL
-  -B <file>         Read the sudo password from a file, so an unattended run also
-                    works without passwordless sudo (the T-Pot Manager hands one over)
-  -h                Show this help message
-EOF
-	exit 1
+	# at a terminal the T-Pot logo first, as a run shows it
+	fuUI_LOGO
+	fuUI_HELP "Updater" "update.sh -y [-s] [--full] [--backup-only] [-b <branch>] [-r <url>] [-B <file>]" \
+	  --about "Updates T-Pot to the latest version of its branch: a backup to ~/tpot_backups first, then the
+checkout, your configuration and edition put back, the images of the release pulled." \
+	  --opt "-y" "Confirm the update, required" \
+	  --opt "-s, --start" "Start T-Pot again once the update is through. Off by default,
+so an unattended run leaves the services stopped unless asked." \
+	  --opt "-F, --full" "Include the whole data/ folder in the backup. Off by default,
+on a busy hive it turns a 1 MB archive into tens of GB. Use it
+when a release brings a newer Elastic Stack: Elasticsearch and
+Kibana upgrade their data in data/elk/ on the first start, and
+that cannot be undone. Kept uncompressed either way." \
+	  --opt "-o, --backup-only" "Only write the backup (T-Pot is stopped for it) and end, no
+update. With --full the data is in it, with -s T-Pot starts
+again afterwards. tpot uninstall uses it." \
+	  --opt "-b <branch>" "Branch to update from, i.e. to test a branch before it is
+merged. The branch is checked out, so every following
+update stays on it until another branch is requested.
+Default: the branch of ~/tpotce, environment: TPOT_BRANCH" \
+	  --opt "-r <url>" "Repository to update from, https URL. Replaces the URL of
+'origin' in ~/tpotce.
+Default: the origin of ~/tpotce, environment: TPOT_REPO_URL" \
+	  --opt "-B <file>" "Read the sudo password from a file, so an unattended run also
+works without passwordless sudo (the T-Pot Manager hands one over)" \
+	  --opt "-h" "Show this help message" \
+	  --example "./update.sh -y" "Update from the branch of ~/tpotce, T-Pot stays stopped afterwards" \
+	  --example "./update.sh -y -s --full" "Update with all of data/ in the backup and start T-Pot again" \
+	  --example "./update.sh -y -b dev" "Test the branch dev (it stays checked out)" \
+	  --example "./update.sh -y --backup-only -s" "Only a backup, T-Pot runs again afterwards" \
+	  --note "restore.sh brings a backup back, tpot update hands every option on to update.sh."
+	exit 0
 }
 
 # Check if running with root privileges
@@ -162,6 +277,7 @@ function fuCHECKINET () {
 	          then
 	            fuUI_ERROR "${i} cannot be reached, the internet connection test failed. Exiting."
 	            echo
+	            fuDID fail "${i} cannot be reached, nothing was changed."
 	            exit 1
 	          else
 	            fuUI_OK "${i}"
@@ -181,8 +297,54 @@ function fuTMPDIR () {
 	    echo
 	    exit 1
 	fi
-	trap 'rm -rf "${myTMPDIR}"' EXIT
 }
+
+# One item of the summary at the end, i.e. fuDID ok "The images are pulled."
+function fuDID () {   # $1 = ok | fail | warn | next | info, $2 = text
+	myDONE+=("$1:$2")
+}
+
+# The log of the steps under a spinner: the one of this run (the restart after the self
+# update adds to it), next to the backups. Without a place for it the output goes nowhere.
+function fuLOG_START () {
+	if mkdir -p "${myBACKUPDIR}" 2>/dev/null && chmod 0700 "${myBACKUPDIR}" 2>/dev/null \
+	   && { [ -n "${myPREPARED}" ] || : > "${myLOG}"; } 2>/dev/null;
+	  then
+	    return 0
+	fi
+	myLOG="/dev/null"
+}
+
+# Every way out: the working directory goes, and a run that was confirmed ends with its
+# summary (an `exec` for the restart does not come here, the restarted script ends it).
+# The exit code stays the one of the run.
+function fuEND () {
+	local myRC=$? myITEM myFAIL="" myTITLE=""
+	[ -n "${myTMPDIR}" ] && rm -rf "${myTMPDIR}"
+	[ -n "${myRUNNING}" ] || exit "${myRC}"
+	myRUNNING=""
+	if [ "${myRC}" -eq 0 ];
+	  then
+	    myTITLE="T-Pot is updated"
+	    [ -z "${myBACKUP_ONLY}" ] || myTITLE="The backup is written"
+	  else
+	    myTITLE="The update did not finish"
+	    [ -z "${myBACKUP_ONLY}" ] || myTITLE="The backup did not finish"
+	    [ "${myRC}" -ne 130 ] || myTITLE="The update was stopped"
+	    for myITEM in "${myDONE[@]}"; do [ "${myITEM%%:*}" != "fail" ] || myFAIL="1"; done
+	    if [ -z "${myFAIL}" ] && [ "${myRC}" -ne 130 ];
+	      then
+	        fuDID fail "It stopped with an error, see the messages above."
+	    fi
+	    if [ -n "${mySTOPPED}" ];
+	      then fuDID next "T-Pot is stopped, 'sudo systemctl start tpot' brings it back."
+	      else fuDID info "T-Pot was left running."
+	    fi
+	fi
+	fuUI_SUMMARY "${myEND_TITLE:-${myTITLE}}" "${myDONE[@]}"
+	exit "${myRC}"
+}
+trap fuEND EXIT
 
 # Find a free archive name. The timestamp has second resolution, and a name that
 # already exists gets a counter - two runs must not overwrite each other.
@@ -548,6 +710,7 @@ function fuSELFUPDATE () {
 	    exec bash "$0" -y "${myRESTART[@]}"
 	    exit 1
 	fi
+	fuDID ok "The checkout is on $(git rev-parse --abbrev-ref HEAD 2>/dev/null) at $(git rev-parse --short HEAD 2>/dev/null), version $(cat version 2>/dev/null)."
 	echo
 }
 
@@ -571,9 +734,18 @@ function fuRESTART_ARGS () {   # $1 = the script that restarts, then the options
 
 function fuCHECK_VERSION () {
 	local myMINVERSION="24.04.1"
-	local myMASTERVERSION="24.04.2"
+	# The newest release this update.sh knows: the one it belongs to, the file version of
+	# its checkout (after the self update the one just fetched), no number written in here
+	local myMASTERVERSION=""
+	[ -r "${myHERE}/version" ] && myMASTERVERSION=$(tr -d "[:space:]" < "${myHERE}/version")
 	echo
 	fuUI_INFO "Checking for version tag ..."
+	if [ -z "${myMASTERVERSION}" ];
+	  then
+	    fuUI_ERROR "Unable to tell the release of this update.sh, there is no ${myHERE}/version."
+	    fuDID fail "This update.sh has no version file next to it, run the one in ~/tpotce."
+	    exit 1
+	fi
 	if [ -f "version" ];
 	  then
 	    myVERSION=$(cat version)
@@ -587,11 +759,13 @@ function fuCHECK_VERSION () {
 	          fuUI_WARN "$myVERSION is outside the supported range, continuing because an update source was requested."
 	      else
 	        fuUI_ERROR "$myVERSION cannot be upgraded automatically. Please run a fresh install."
-		exit
+	        fuDID fail "$myVERSION cannot be upgraded automatically (this update.sh handles ${myMINVERSION} to ${myMASTERVERSION}), please run a fresh install."
+	        exit 1
 	    fi
 	  else
 	    fuUI_ERROR "Unable to determine version. Please run 'update.sh' from within 'tpotce/'."
-	    exit
+	    fuDID fail "No version file here, run update.sh from within ~/tpotce."
+	    exit 1
 	  fi
 	echo
 }
@@ -602,6 +776,7 @@ function fuSTOP_TPOT () {
 	fuUI_INFO "Need to stop T-Pot ..."
 	if [ -n "${myPREPARED}" ];
 	  then
+	    mySTOPPED="1"
 	    fuUI_OK "Already stopped before the restart."
 	    echo
 	    return
@@ -613,6 +788,7 @@ function fuSTOP_TPOT () {
 	    echo
 	    exit 1
 	  else
+	    mySTOPPED="1"
 	    fuUI_OK "T-Pot is stopped."
 	    if [ "$(docker ps -aq)" != "" ];
 	      then
@@ -747,6 +923,7 @@ function fuSTART_TPOT () {
 	fuUI_INFO "Now starting T-Pot ..."
 	if sudo systemctl start tpot.service 2>/dev/null;
 	  then
+	    mySTOPPED=""
 	    fuUI_OK "T-Pot is started."
 	    return 0
 	fi
@@ -754,6 +931,7 @@ function fuSTART_TPOT () {
 	if [ -f "$HOME/tpotce/docker-compose.yml" ] \
 	   && ( cd "$HOME/tpotce" && docker compose up -d ) >/dev/null 2>&1;
 	  then
+	    mySTOPPED=""
 	    fuUI_OK "Started with docker compose."
 	    return 0
 	fi
@@ -811,6 +989,8 @@ function fuELASTIC_STOPPED () {
 	fuUI_HINT "  docker compose -f $HOME/tpotce/docker-compose.yml pull && sudo systemctl start tpot"
 	fuUI_HINT "  $HOME/tpotce/tpot setup    (the Python packages of the T-Pot Manager for this release)"
 	echo
+	fuDID warn "Stopped before the image pull, nothing was pulled."
+	fuDID next "Copy the data, then finish with the commands above."
 	exit 130
 }
 
@@ -860,6 +1040,7 @@ function fuCHECK_ELASTIC () {
 	    fuUI_HINT "Free up space and run the update again. T-Pot is stopped, 'systemctl start tpot' brings it back."
 	    fuUI_HINT "Exiting."
 	    echo
+	    fuDID fail "${myDATA} is ${myUSED}% full, Elasticsearch needs it below 90%: free up space and update again."
 	    exit 1
 	fi
 	if [ -n "${myUSED}" ] && [ "${myUSED}" -ge 85 ];
@@ -915,6 +1096,7 @@ function fuBACKUP () {
 	if [ -n "${myPREPARED}" ];
 	  then
 	    fuUI_OK "Keeping the backup from before the restart: ${myARCHIVE}"
+	    fuDID ok "The backup is ${myARCHIVE}."
 	    echo
 	    return
 	fi
@@ -988,15 +1170,16 @@ function fuBACKUP () {
 	    myJEWELARGS=(-C "$HOME/tpotce" "${myJEWELLIST[@]}")
 	fi
 
-	fuUI_INFO "Building the ${myFULL:+full }archive ${myARCHIVE} ..."
 	# A single tar run: intermediate files created under sudo belong to root and
-	# could not be moved afterwards.
-	if ! sudo tar cf "${myARCHIVE}" -p --numeric-owner \
-	        -C "${myStage}" ${myTARGETS} "${myJEWELARGS[@]}" 2>"${myTMPDIR}/tar.err";
+	# could not be moved afterwards. It runs under the spinner, which cannot ask for
+	# a password, so sudo is refreshed first.
+	sudo -v
+	if ! fuUI_SPIN "Building the ${myFULL:+full }archive ${myARCHIVE} ..." "${myLOG}" \
+	        sudo tar cf "${myARCHIVE}" -p --numeric-owner -C "${myStage}" ${myTARGETS} "${myJEWELARGS[@]}";
 	  then
-	    fuUI_ERROR "tar failed, exiting:"
-	    sed 's/^/    /' "${myTMPDIR}/tar.err"
+	    fuUI_HINT "Exiting."
 	    echo
+	    fuDID fail "The backup could not be written, the checkout was not touched."
 	    exit 1
 	fi
 	if ! sudo chown "$(id -u):$(id -g)" "${myARCHIVE}" || ! chmod 0600 "${myARCHIVE}";
@@ -1006,6 +1189,7 @@ function fuBACKUP () {
 	    exit 1
 	fi
 	fuUI_OK "The archive holds $(tar tf "${myARCHIVE}" | wc -l) entries, $(du -h "${myARCHIVE}" | cut -f1)."
+	fuDID ok "The backup is ${myARCHIVE}."
 	fuROTATE
 	# Point at the old archives from before this directory existed, once
 	if ls "$HOME"/*_tpot_backup.tgz >/dev/null 2>&1;
@@ -1019,7 +1203,8 @@ function fuBACKUP () {
 # .env names now - no hardcoded list that has to be bumped with each release, and
 # nothing that is in use can be caught, because the tag in use is the one kept.
 function fuREMOVEOLDIMAGES () {
-	local myKEEP="" myREPO="" myTAG="" myLIST="" myTOTAL=0
+	local myKEEP="" myREPO="" myTAG="" myLIST="" myTOTAL=0 myLEFT=0 myIMAGE=""
+	local myALL=()
 	myKEEP=$(grep -E "^TPOT_VERSION=" "$HOME/tpotce/.env" 2>/dev/null | tail -1 | cut -d= -f2-)
 	echo
 	if [ -z "${myKEEP}" ];
@@ -1030,34 +1215,60 @@ function fuREMOVEOLDIMAGES () {
 	fuUI_INFO "Removing docker images of earlier versions, keeping :${myKEEP} ..."
 	for myREPO in ${myREPOS};
 	  do
-	    myLIST=$(docker images --format "{{.Repository}}:{{.Tag}}" 2>/dev/null \
-	             | grep "^${myREPO}/" | grep -v ":${myKEEP}$")
+	    myLIST=$(fuIMAGES "${myREPO}" "${myKEEP}")
 	    [ -z "${myLIST}" ] && continue
 	    for myTAG in $(echo "${myLIST}" | sed "s/.*://" | sort -u);
 	      do
 	        fuUI_HINT "${myREPO}: $(echo "${myLIST}" | grep -c ":${myTAG}$") image(s) tagged :${myTAG}"
 	      done;
-	    myTOTAL=$((myTOTAL + $(echo "${myLIST}" | grep -c .)))
-	    echo "${myLIST}" | xargs -r docker rmi >/dev/null 2>&1
+	    mapfile -t -O "${#myALL[@]}" myALL <<< "${myLIST}"
 	done;
+	myTOTAL="${#myALL[@]}"
 	if [ "${myTOTAL}" -eq 0 ];
 	  then
 	    fuUI_OK "Nothing to remove."
-	  else
+	    return
+	fi
+	fuUI_SPIN "Removing ${myTOTAL} image(s) ..." "${myLOG}" fuRMI "${myALL[@]}"
+	# what is still there is in use by a container of its own
+	for myREPO in ${myREPOS};
+	  do
+	    for myIMAGE in $(fuIMAGES "${myREPO}" "${myKEEP}");
+	      do
+	        printf '%s\n' "${myALL[@]}" | grep -qxF "${myIMAGE}" && myLEFT=$((myLEFT + 1))
+	      done;
+	done;
+	if [ "${myLEFT}" -eq 0 ];
+	  then
 	    fuUI_OK "Removed ${myTOTAL} image(s)."
+	    fuDID ok "Removed ${myTOTAL} image(s) of earlier versions."
+	  else
+	    fuUI_WARN "Removed $((myTOTAL - myLEFT)) of ${myTOTAL} image(s), ${myLEFT} still in use, see ${myLOG}."
+	    fuDID warn "${myLEFT} image(s) of earlier versions are still in use and stay."
 	fi
 }
 
-function fuPULLIMAGES {
+# The T-Pot images of one registry without the tag in use, repository:tag each
+function fuIMAGES () {   # $1 = registry, $2 = the tag to keep
+	docker images --format "{{.Repository}}:{{.Tag}}" 2>/dev/null | grep "^$1/" | grep -v ":$2$"
+}
+
+# Under the spinner: remove the images. One a container still uses stays, docker says
+# so in the log and fuREMOVEOLDIMAGES counts it.
+function fuRMI () {   # $@ = images
+	docker rmi "$@" || true
+}
+
+function fuPULLIMAGES () {
 	docker compose -f ~/tpotce/docker-compose.yml pull
 }
 
 function fuUPDATER () {
-	fuUI_INFO "Now pulling latest docker images ..."
 	fuUI_HINT "This might take a while, please be patient!"
-	if fuPULLIMAGES;
+	if fuUI_SPIN "Pulling the images of this release ..." "${myLOG}" fuPULLIMAGES;
 	  then
 	    myPULLOK="1"
+	    fuDID ok "The images of this release are pulled."
 	  else
 	    echo
 	    fuMARK warn pull Not all images could be pulled, T-Pot pulls them again when it starts.
@@ -1067,6 +1278,7 @@ function fuUPDATER () {
 	    fuUI_HINT "If the tag is pinned on purpose, make sure those images exist. Otherwise:"
 	    fuUI_HINT "  sed -i 's|^TPOT_VERSION=.*|TPOT_VERSION=${newVERSION}|' $HOME/tpotce/.env"
 	    fuUI_HINT "  docker compose -f $HOME/tpotce/docker-compose.yml pull"
+	    fuDID warn "Not all images could be pulled, T-Pot pulls them again when it starts (see above)."
 	fi
 	fuMARK phase cleanup Removing old images
 	fuREMOVEOLDIMAGES
@@ -1152,6 +1364,7 @@ function fuRESTORE () {
 	# does not know, those are kept.
 	fuCOMPOSE_FROM_ARCHIVE || true
 	fuMERGE_ENV_KEYS "$HOME/tpotce/.env" "$HOME/tpotce/env.example" "$HOME/tpotce/docker-compose.yml" "${myTMPDIR}/docker-compose.yml"
+	fuDID ok "Your configuration (.env) is back, TPOT_VERSION=$(grep -E "^TPOT_VERSION=" "$HOME/tpotce/.env" | tail -1 | cut -d= -f2-)."
 }
 
 # Value of a .env setting, written as KEY=value or KEY: "value".
@@ -1478,11 +1691,14 @@ function fuTPOT_SETUP () {
 	  else
 	    fuUI_WARN "${myLINK} is a file of its own, update.sh leaves it alone: run ${myTPOT} directly."
 	fi
-	if "${myTPOT}" setup </dev/null;
+	# the venv of the Manager: pip writes a lot, it goes to the log under a spinner
+	if fuUI_SPIN "Installing the Python packages of the T-Pot Manager ..." "${myLOG}" "${myTPOT}" setup;
 	  then
 	    fuUI_OK "The T-Pot Manager is ready."
+	    fuDID ok "The T-Pot Manager is ready (tpot)."
 	  else
 	    fuUI_WARN "The T-Pot Manager could not set up its Python packages, it tries again on its next start."
+	    fuDID warn "The T-Pot Manager could not set up its Python packages, it tries again on its next start."
 	fi
 	echo
 }
@@ -1562,6 +1778,9 @@ function fuREMOVE_DROPPED_SERVICES () {
 	[ -n "${myFOUND}" ] && echo
 }
 
+# Sourced (the tests do, for the functions): no run
+[[ "${BASH_SOURCE[0]}" != "$0" ]] && return 0
+
 ################
 # Main section #
 ################
@@ -1574,6 +1793,8 @@ for myARG in "$@";
       --full)  myARGV+=("-F") ;;
       --start) myARGV+=("-s") ;;
       --backup-only) myARGV+=("-o") ;;
+      --help)  myARGV+=("-h") ;;
+      --?*)    fuUI_USAGE_ERROR "Unknown option ${myARG}." update.sh; exit 1 ;;
       *)      myARGV+=("${myARG}") ;;
     esac
 done
@@ -1602,12 +1823,16 @@ while getopts ":yFsob:r:B:h" opt; do
     B)
       myBECOME_FILE="${OPTARG}"
       ;;
-    h|\?)
+    h)
       fuPRINT_HELP
       ;;
     :)
-      echo "Option -${OPTARG} requires an argument."
-      fuPRINT_HELP
+      fuUI_USAGE_ERROR "Option -${OPTARG} requires an argument." update.sh
+      exit 1
+      ;;
+    \?)
+      fuUI_USAGE_ERROR "Unknown option -${OPTARG}." update.sh
+      exit 1
       ;;
   esac
 done
@@ -1636,8 +1861,16 @@ if [ "${myCONFIRMED}" != "y" ]; then
   echo
   exit
 fi
+# From here on every way out ends with the summary (fuEND)
+myRUNNING="1"
+[ -z "${myPREPARED}" ] || mySTOPPED="1"
 # sudo asks for the password right away, not in the middle of the run
-sudo true || exit 1
+if ! sudo true;
+  then
+    fuDID fail "sudo did not work, nothing was changed."
+    exit 1
+fi
+fuLOG_START
 
 # --backup-only: the backup of an update, nothing else (i.e. before tpot uninstall)
 if [ -n "${myBACKUP_ONLY}" ];
@@ -1652,11 +1885,15 @@ if [ -n "${myBACKUP_ONLY}" ];
     if [ -n "${mySTART}" ];
       then
         fuMARK phase start Starting T-Pot
-        fuSTART_TPOT
+        if fuSTART_TPOT;
+          then fuDID ok "T-Pot is started again."
+          else fuDID warn "T-Pot did not start again, please start it yourself."
+        fi
+      else
+        fuDID next "T-Pot is stopped, 'sudo systemctl start tpot' brings it back."
     fi
     fuMARK phase "done" Done
-    fuUI_OK "Done. The backup is ${myARCHIVE}, restore.sh brings it back."
-    echo
+    fuDID next "restore.sh brings the backup back."
     exit 0
 fi
 
@@ -1696,6 +1933,8 @@ if [ -n "${myOLDER_CHECKOUT}" ];
     fuUI_HINT "To leave things as they are, start T-Pot again with 'systemctl start tpot'."
     fuUI_HINT "The backup of this run is in ${myARCHIVE}."
     echo
+    fuDID fail "Not updated: the checkout is an older release, nothing was pulled or removed."
+    fuDID next "To update to the current release instead: ./update.sh -y -b master"
     exit 1
 fi
 
@@ -1707,10 +1946,9 @@ fuTPOT_SETUP
 fuMARK phase pull Pulling the images
 fuUPDATER
 
-echo
 if [ -n "${myEDITION}" ] && [ "${myEDITION}" != "UNKNOWN" ];
   then
-    fuUI_INFO "The T-Pot ${myEDITION} edition was restored to ~/tpotce/docker-compose.yml."
+    fuDID ok "The T-Pot ${myEDITION} edition is in ~/tpotce/docker-compose.yml."
 fi
 if [ -n "${mySTART}" ];
   then
@@ -1721,16 +1959,18 @@ if [ -n "${mySTART}" ];
     if fuSTART_TPOT;
       then
         fuMARK phase "done" Done
-        fuUI_OK "Done."
+        fuDID ok "T-Pot is started."
       else
         fuUI_ERROR "The update is through, but T-Pot is not running."
         [ -z "${myPULLOK}" ] && fuUI_HINT "The image pull failed earlier, which is the likely reason."
         echo
+        myWHY=""
+        [ -n "${myPULLOK}" ] || myWHY=", the image pull failed earlier, which is the likely reason"
+        myEND_TITLE="T-Pot is updated, but not running"
+        fuDID fail "The update is through, but T-Pot is not running${myWHY}."
         exit 1
     fi
   else
     fuMARK phase "done" Done
-    fuUI_OK "Done. You can now start T-Pot using 'systemctl start tpot' or 'docker compose up -d'."
-    fuUI_HINT "Run with '-s' to have update.sh start it for you."
+    fuDID next "Start T-Pot with 'sudo systemctl start tpot' or 'docker compose up -d' (update.sh -s does it for you)."
 fi
-echo
