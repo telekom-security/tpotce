@@ -1633,6 +1633,12 @@ class TpotApp(App):
         # the customizer and the dialogs are screens of their own, c there would open a second one
         if action in ("customize", "restart_service") and len(self.screen_stack) > 1:
             return False
+        # ctrl+p is a priority binding: over the splash it would open the palette on top of it, and the
+        # splash would freeze under it; there the key ends the splash like any other
+        if action == "command_palette":
+            from tpotctl.screens.splash import SplashScreen
+            if any(isinstance(screen, SplashScreen) for screen in self.screen_stack):
+                return False
         return True
 
     def action_menu(self) -> None:

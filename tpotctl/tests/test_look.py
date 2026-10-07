@@ -263,6 +263,24 @@ class LookInTheAppTest(unittest.IsolatedAsyncioTestCase):
             app.set_icons("unicode")
         self.assertEqual(prefs.load(), prefs.Prefs("unicode"))
 
+    async def test_ctrl_p_does_not_open_the_palette_over_the_splash(self):
+        """ctrl+p is a key like any other while the splash runs: it ends the splash, no palette over it."""
+        from textual.command import CommandPalette
+        from tpotctl import app as tapp
+        from tpotctl.screens.splash import SplashScreen
+        from tpotctl.tests.test_app import FakeBackend, Recorder
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder(), splash=True)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.3)
+            self.assertIsInstance(app.screen, SplashScreen)
+            await pilot.press("ctrl+p")
+            for _ in range(20):
+                await pilot.pause(0.05)
+                if not isinstance(app.screen, SplashScreen):
+                    break
+            self.assertNotIsInstance(app.screen, SplashScreen)
+            self.assertNotIsInstance(app.screen, CommandPalette)
+
     async def test_splash_for_a_second_or_a_key(self):
         from tpotctl import app as tapp
         from tpotctl.screens.splash import SplashScreen
