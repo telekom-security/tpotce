@@ -1593,6 +1593,9 @@ class TpotApp(App):
         if self.quit_dialog is not None and self.screen is self.quit_dialog:
             self.exit()             # ctrl+q on "Quit the T-Pot Manager?": the second ask is the yes
             return
+        from tpotctl.screens.splash import SplashScreen
+        if isinstance(self.screen, SplashScreen):
+            self.screen.leave()     # ctrl+q ends the splash too, then quits as from the menu
         if len(self.screen_stack) > 1:
             self.notify("Close this screen first (esc), then quit.", title="Not now", timeout=4)
             return

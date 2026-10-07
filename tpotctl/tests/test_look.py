@@ -403,6 +403,23 @@ class LookInTheAppTest(unittest.IsolatedAsyncioTestCase):
                 messages = [n.message for n in app._notifications]
                 self.assertEqual(messages.index("one") + 1, messages.index("two"))
 
+    async def test_ctrl_q_during_the_splash_quits(self):
+        """ctrl+q while the splash runs: the splash ends and the quit goes on as from the menu, no
+        "Close this screen first" that would wait for the splash."""
+        from tpotctl import splash_anim
+        from tpotctl.screens.splash import SplashScreen
+        app = self.splash_app()
+        with mock.patch.object(splash_anim, "DURATION", 60.0):
+            async with app.run_test(size=(120, 40)) as pilot:
+                await self.poll(pilot, lambda: isinstance(app.screen, SplashScreen))
+                await pilot.press("ctrl+q")
+                await self.poll(pilot, lambda: not app.is_running or not isinstance(app.screen, SplashScreen))
+                messages = [n.message for n in app._notifications] + \
+                    [message for message, _args, _kwargs in (app.held_notices or [])]
+                self.assertFalse([m for m in messages if "Close this screen first" in m], messages)
+                if app.is_running:                                 # values T-Pot would not start with: asked
+                    self.assertIs(app.screen, app.quit_dialog)
+
     async def test_toasts_without_a_splash_come_at_once(self):
         from tpotctl.screens.splash import SplashScreen
         for app, size in ((self.make_app(), (120, 40)), (self.splash_app(), (79, 24))):    # off, no room
