@@ -71,11 +71,13 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/in
   - [T-Pot Config File](#t-pot-config-file)
   - [Customize T-Pot Honeypots and Services](#customize-t-pot-honeypots-and-services)
 - [Maintenance](#maintenance)
+  - [The T-Pot Scripts](#the-t-pot-scripts)
   - [General Updates](#general-updates)
   - [Update Script](#update-script)
   - [Elastic Stack Upgrades](#elastic-stack-upgrades)
   - [Updating From an Older Release](#updating-from-an-older-release)
   - [Restore Script](#restore-script)
+  - [Build the Images Yourself](#build-the-images-yourself)
   - [Daily Reboot](#daily-reboot)
   - [Known Issues](#known-issues)
     - [Docker Images Fail to Download](#docker-images-fail-to-download)
@@ -816,6 +818,15 @@ T-Pot is designed to be low maintenance. Since almost everything is provided thr
 Should an update fail, opening an issue or a discussion will help to improve things in the future, but the offered solution will ***always*** be to perform a ***fresh install*** as we simply ***cannot*** provide any support for lost data!
 <br><br>
 
+## The T-Pot Scripts
+`install.sh`, `update.sh`, `restore.sh`, `uninstall.sh`, `genuser.sh`, `deploy.sh` and the image builder look and behave alike:
+- At a terminal they start with the T-Pot logo of the T-Pot Manager, sized to the terminal (none below 80 x 24, none when the T-Pot Manager runs them, none with `TPOT_GUM=off`), in the colours your terminal can show (see [True colours over SSH](#true-colours-over-ssh), `TPOT_COLORS`).
+- Questions, choices and long steps go through [gum](https://github.com/charmbracelet/gum) (plain text without a terminal); a long step shows a spinner and writes its output to a log (`~/install_tpot_pull.log`, `~/uninstall_tpot.log`, `~/tpot_backups/update.log` and `restore.log`), whose end is shown if it fails.
+- They end with a summary: what was done, what failed, what to do next.
+- `-h` shows the options with examples and exits with 0, a wrong option names itself and exits with 1 (the image builder with 2).
+- The version they show comes from the file `version` of the checkout, nothing in the scripts carries it.
+<br><br>
+
 ## General Updates
 T-Pot security depends on the updates provided for the [supported Linux distro images](#choose-your-distro). Make sure to review the OS documentation and ensure updates are installed regularly by the OS. By default (`~/tpotce/.env`) `TPOT_PULL_POLICY=always` will ensure that at every T-Pot start docker will check for new docker images and download them before creating the containers.
 <br><br>
@@ -926,8 +937,7 @@ restore.sh -f <archive> -c        # only roll back the checkout and the configur
 restore.sh -f <archive> -g config,data   # only these groups, no questions
 ```
 
-Without `-y` every group is offered separately, so you can bring back just the configuration
-without touching anything else. The groups are the rollback of the git checkout (`git`), your
+Without `-y` the groups come in one list, all of them ticked: untick what should stay as it is, so you can bring back just the configuration without touching anything else. The groups are the rollback of the git checkout (`git`), your
 changes to tracked files (`patch`), the configuration (`config`), your untracked files
 (`untracked`), the files under `data/` (`data`), and the Kibana objects with the ILM policy
 (`elastic`); `-g` takes their names. *Restore a backup* on the *Update & backup* page of the `tpot`
@@ -945,6 +955,21 @@ be merged with an older copy.
 If you would rather do it by hand, the archive is a plain tar: `tar tvf <archive>` lists it,
 `MANIFEST` says which edition and commit it came from, and `rollback.txt` holds the commit to go
 back to with `cd ~/tpotce && git reset --hard $(cat rollback.txt)`.
+
+## Build the Images Yourself
+`docker/_builder/builder.sh` builds the T-Pot images for `linux/amd64` and `linux/arm64` with buildx, as for a release. It is a tool for building releases, not part of the T-Pot Manager. It needs root or the docker group (root for an upload limit while pushing).
+- **At a terminal, without options**, it shows a menu: build images (all, a group, or picked from a list you can filter), the options one by one (platforms, push to Docker Hub and / or GHCR, upload limit, cache, parallel builds, smoke tests, version and repositories), a summary with the same run as a command line, then *Build*; or the builder setup (check, set up, remove buildx `mybuilder` and the QEMU emulation).
+- **With `-y`, any option, or without a terminal** (cron, CI) it never asks:
+```
+sudo docker/_builder/builder.sh -y                                  # build everything for both platforms
+sudo docker/_builder/builder.sh -y -i cowrie,dionaea -a host -T     # two images for this host, then their smoke tests
+sudo docker/_builder/builder.sh -y -g honeypots -p                  # the honeypots, pushed to Docker Hub and GHCR
+sudo docker/_builder/builder.sh --push-ghcr -t 24.04.3 -l off       # everything with tag 24.04.3 to GHCR, no upload limit
+docker/_builder/builder.sh -L                                       # the images by group
+sudo docker/_builder/builder.sh --check | --setup | --uninstall     # the buildx builder
+```
+- Groups: `honeypots`, `tanner` (Snare, Tanner, PHPox, Redis), `nsm`, `elk`, `tools`, `all`. Pushing needs a `docker login` to the registries beforehand, without one it stops instead of waiting. The logs are in `docker/_builder/log/`. Exit codes: 0 done, 1 an image failed, 2 a wrong option, 3 the environment (rights, Docker, builder, login), 4 built but a smoke test failed, 130 interrupted. `setup_builder.sh -y` / `-u` still works and calls `builder.sh --setup` / `--uninstall`.
+<br><br>
 
 ## Daily Reboot
 By default T-Pot will add a daily reboot including some cleaning up. You can adjust this line with `sudo crontab -e` 
