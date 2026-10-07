@@ -149,9 +149,10 @@ def run(script, env, source=UI_SH, stdin=None, timeout=20):
                           timeout=timeout)
 
 
-def at_terminal(script, env, cols=120, rows=49, source=UI_SH, stdout_tty=True, timeout=20):
+def at_terminal(script, env, cols=120, rows=49, source=UI_SH, stdout_tty=True, timeout=20, keys=None):
     """Runs the script in a pty of cols x rows (stdin and stderr, stdout too unless stdout_tty is
-    False: then a pipe); the output of the pty with the line ends of the script."""
+    False: then a pipe); the output of the pty with the line ends of the script. keys are typed
+    into the pty after a second (for a real gum)."""
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
     attrs = termios.tcgetattr(slave)
@@ -162,7 +163,11 @@ def at_terminal(script, env, cols=120, rows=49, source=UI_SH, stdout_tty=True, t
     os.close(slave)
     out = b""
     deadline = time.time() + timeout
+    typed_at = time.time() + 1.0
     while time.time() < deadline:
+        if keys and time.time() >= typed_at:
+            os.write(master, keys)
+            keys = None
         ready, _w, _x = select.select([master], [], [], 0.1)
         if ready:
             try:
@@ -184,6 +189,11 @@ def at_terminal(script, env, cols=120, rows=49, source=UI_SH, stdout_tty=True, t
         piped = proc.stdout.read().decode("utf-8", "replace")
         proc.stdout.close()
     return out.decode("utf-8", "replace") + piped
+
+
+def selected(args):
+    """The values of every --selected in an argv."""
+    return [args[i + 1] for i, arg in enumerate(args[:-1]) if arg == "--selected"]
 
 
 def logo_pixels(rows, width, palette):
@@ -762,7 +772,8 @@ class HelpersTest(unittest.TestCase):
         self.assertEqual(self.choose("a\n")[0], "git\nconfig\ndata\nlogs\nrc=0\n")
         self.assertEqual(self.choose("n\n", "--all")[0], "rc=0\n")
         self.assertEqual(self.choose("\n", "--all")[0], "git\nconfig\ndata\nlogs\nrc=0\n")
-        self.assertEqual(self.choose("\n", "--selected config,logs")[0], "config\nlogs\nrc=0\n")
+        self.assertEqual(self.choose("\n", "--selected config --selected logs")[0], "config\nlogs\nrc=0\n")
+        self.assertEqual(self.choose("\n", "--selected config,logs")[0], "rc=0\n")     # one value, not two
         self.assertEqual(self.choose("\n")[0], "rc=0\n")
         self.assertEqual(self.choose(" 4, 2 \n")[0], "config\nlogs\nrc=0\n")
         out, err = self.choose("7\n0\n2-1\nx\n2\n")
@@ -774,25 +785,39 @@ class HelpersTest(unittest.TestCase):
         self.assertIn("###   1) [ ] Git: the checkout\n", err)
         self.assertIn("###   3) [x] Data\n", err)
         self.assertEqual(self.choose("2\n", "--filter")[0], "config\nrc=0\n")
+        # --selected once per value; a value (and a label) may have commas
+        out = self.run_ui(self.COMMAS.format(options="--selected cowrie --selected tanner,redis,phpox")
+                          + '; echo "rc=$?"', stdin="\n")
+        self.assertEqual(out.stdout, "tanner,redis,phpox\ncowrie\nrc=0\n")
+        self.assertIn("###   1) [x] Tanner stack (redis, phpox)\n", out.stderr)
+        self.assertIn("###   3) [ ] Dionaea, the old one\n", out.stderr)
+        out = self.run_ui(self.COMMAS.format(options="--selected tanner --selected redis") + '; echo "rc=$?"',
+                          stdin="\n")
+        self.assertEqual(out.stdout, "rc=0\n")                            # parts of a value are no value
 
-    def gum_choose(self, options, output, rc=0):
+    # labels and values with commas (split at the last colon)
+    COMMAS = ('fuUI_CHOOSE_MANY {options} "Images" "Tanner stack (redis, phpox):tanner,redis,phpox" '
+              '"Cowrie:cowrie" "Dionaea, the old one:dionaea"')
+
+    def gum_choose(self, options, output, rc=0, choose=None):
         gum = fake_gum(self.sandbox.home)
         calls = os.path.join(self.sandbox.home, "gum.calls")
         if os.path.exists(calls):
             os.remove(calls)
-        script = f'myUI_GUM="{gum}"\n' + self.CHOOSE.format(options=options) + '; echo "rc=$?"'
+        script = f'myUI_GUM="{gum}"\n' + (choose or self.CHOOSE).format(options=options) + '; echo "rc=$?"'
         out = at_terminal(script, self.sandbox.env(FAKE_GUM_OUT=output, FAKE_GUM_RC=str(rc)), 100, 40,
                           stdout_tty=False)
         args = read(calls).split("\n")[1:-1]
         return out, args
 
     def test_choose_many_gum(self):
-        out, args = self.gum_choose("--selected config,logs", "Git: the checkout\nLogs\n")
+        out, args = self.gum_choose("--selected logs --selected config", "Git: the checkout\nLogs\n")
         self.assertEqual(out, "git\nlogs\nrc=0\n")
         self.assertEqual(args[0], "choose")
         self.assertIn("--no-limit", args)
         self.assertNotIn("--label-delimiter", args)
-        self.assertEqual(args[args.index("--selected") + 1], "Config,Logs")
+        # one --selected per marked label, in the order of the items: gum splits a value at commas
+        self.assertEqual(selected(args), ["Config", "Logs"])
         self.assertEqual(args[args.index("--header") + 1], "Groups")
         self.assertEqual(args[args.index("--") + 1:], ["Git: the checkout", "Config", "Data", "Logs"])
         out, args = self.gum_choose("--filter --all", "Logs\nData\n")
@@ -803,19 +828,62 @@ class HelpersTest(unittest.TestCase):
         out, args = self.gum_choose("", "", rc=130)
         self.assertEqual(out, "rc=130\n")
         self.assertNotIn("--selected", args)
+        # a comma of a label is \, for gum (gum 2.0.2 splits --selected at the others)
+        out, args = self.gum_choose("--selected tanner,redis,phpox --selected dionaea",
+                                    "Tanner stack (redis, phpox)\nDionaea, the old one\n", choose=self.COMMAS)
+        self.assertEqual(out, "tanner,redis,phpox\ndionaea\nrc=0\n")
+        self.assertEqual(selected(args), ["Tanner stack (redis\\, phpox)", "Dionaea\\, the old one"])
+        self.assertEqual(args[args.index("--") + 1:],
+                         ["Tanner stack (redis, phpox)", "Cowrie", "Dionaea, the old one"])
+        # what gum cannot mark: a label * (gum: all of them) or with \, (gum has no escape for it)
+        odd = 'fuUI_CHOOSE_MANY {options} "Odd" "*:star" "a\\\\,b:ab" "Plain:plain"'
+        _out, args = self.gum_choose("--selected star --selected ab --selected plain", "", choose=odd)
+        self.assertEqual(selected(args), ["Plain"])
+        _out, args = self.gum_choose("--all", "", choose=odd)
+        self.assertEqual(selected(args), ["*"])
+
+    @unittest.skipUnless(shutil.which("gum") and "2.0.2" in subprocess.run(
+        [shutil.which("gum") or "true", "--version"], capture_output=True, text=True).stdout, "no gum 2.0.2")
+    def test_choose_many_real_gum_keeps_commas(self):
+        """The real gum 2.0.2 marks the labels with commas and gives them back whole: enter takes the
+        marked ones."""
+        for verb in ("", "--filter "):
+            with self.subTest(verb=verb or "choose"):
+                script = (f'myUI_GUM="{shutil.which("gum")}"\n'
+                          + self.COMMAS.format(options=verb + "--selected dionaea --selected tanner,redis,phpox")
+                          + '; echo "rc=$?"')
+                out = at_terminal(script, self.sandbox.env(), 100, 40, stdout_tty=False, keys=b"\r")
+                self.assertTrue(out.endswith("tanner,redis,phpox\ndionaea\nrc=0\n"), out[-300:])
 
     def test_spin_passes_through_with_marks(self):
+        """In the marks mode the output goes through (the T-Pot Manager reads it) and into the log
+        as well, stdout and stderr together; the rc is the one of the step."""
         log = os.path.join(self.sandbox.home, "spin.log")
         script = f'fuUI_SPIN "Pulling ..." "{log}" sh -c "echo Pulled one; echo oops >&2"; echo "rc=$?"'
         result = self.run_ui(script, TPOT_MARKS="1")
-        self.assertEqual(result.stdout, "### Pulling ...\nPulled one\n### [OK] - Pulling\nrc=0\n")
-        self.assertIn("oops", result.stderr)
-        self.assertFalse(os.path.exists(log))
+        self.assertEqual(result.stdout, "### Pulling ...\nPulled one\noops\n### [OK] - Pulling\nrc=0\n")
+        self.assertEqual(result.stderr, "")
+        self.assertEqual(read(log), "Pulled one\noops\n")
+        os.remove(log)
         result = self.run_ui("myMARKS=1; " + script.replace("echo oops >&2", "exit 3"))
-        self.assertIn("Pulled one\n", result.stdout)
-        self.assertTrue(result.stdout.endswith("rc=3\n"))
-        self.assertIn("### [ERROR] - Pulling failed", result.stderr)
-        # without marks: into the log
+        self.assertEqual(result.stdout, "### Pulling ...\nPulled one\nrc=3\n")
+        self.assertEqual(result.stderr, "### [ERROR] - Pulling failed\n")
+        self.assertEqual(read(log), "Pulled one\n")
+        # the log is added to, as without the marks
+        self.run_ui(script, TPOT_MARKS="1")
+        self.assertEqual(read(log), "Pulled one\nPulled one\noops\n")
+        # a log that cannot be written, or none: the output still goes through, the rc stays
+        for target in (os.path.join(self.sandbox.home, "no", "such", "spin.log"), "/dev/null", ""):
+            with self.subTest(log=target):
+                result = self.run_ui(f'fuUI_SPIN "Pulling ..." "{target}" sh -c "echo Pulled one; exit 4"; '
+                                     'echo "rc=$?"', TPOT_MARKS="1")
+                self.assertEqual(result.stdout, "### Pulling ...\nPulled one\nrc=4\n")
+                self.assertEqual(result.stderr, "### [ERROR] - Pulling failed\n")
+        # under set -e -o pipefail, a function as the step, a stdin that is closed for it
+        result = self.run_ui(f'set -e -o pipefail; fuJOB () {{ read -r myX || echo "no stdin"; return 5; }}\n'
+                             f'fuUI_SPIN "Job ..." "{log}" fuJOB || echo "rc=$?"; echo after', TPOT_MARKS="1")
+        self.assertEqual(result.stdout, "### Job ...\nno stdin\nrc=5\nafter\n")
+        # without marks: into the log only
         result = self.run_ui(script)
         self.assertEqual(result.stdout, "### Pulling ...\n### [OK] - Pulling\nrc=0\n")
         self.assertIn("Pulled one", read(log))
@@ -899,6 +967,24 @@ class HelpersTest(unittest.TestCase):
         self.assertEqual(self.run_ui('myMARKS=1; fuMARK phase pull').stdout, "@@tpot phase pull\n")
         self.assertEqual(self.run_ui('fuMARK phase pull').stdout, "")
 
+    # fuUI_VERSION_GE <version> <minimum>: rc 0 when the version is at least the minimum
+    VERSION_GE = (
+        ("24.04.10", "24.04.9", 0), ("24.04.9", "24.04.10", 1), ("v2.24.4-desktop.1", "2.24.4", 0),
+        ("2.24.3", "2.24.4", 1), ("24.04", "24.04.0", 0), ("24.04.02", "24.04.2", 0), ("", "2.24.4", 1),
+        ("abc", "2.24.4", 1), ("2.24.4", "2.24.4", 0), ("3", "2.24.4", 0), ("2.24.4+build.7", "2.24.5", 1),
+        ("2.24.4-rc1", "2.24.4", 0), ("1.2.3.5", "1.2.3.4", 0), ("1.2.3.3", "1.2.3.4", 1),
+        ("1.2.3", "1.2.3.1", 1), ("2.24.4\r", "2.24.4", 0), (" 2.24.5 ", "2.24.4", 0), ("08.09", "8.9", 0),
+        ("2..4", "2.0.4", 1), ("2.x.4", "2.0.0", 1), ("2.24.4", "", 1), ("2.24.4", "abc", 1),
+        ("", "", 1),
+    )
+
+    def test_version_ge(self):
+        for version, minimum, rc in self.VERSION_GE:
+            with self.subTest(version=version, minimum=minimum):
+                result = self.run_ui(f'fuUI_VERSION_GE $\'{version}\' $\'{minimum}\'; echo "rc=$?"')
+                self.assertEqual(result.stdout, f"rc={rc}\n", result.stderr)
+                self.assertEqual(result.stderr, "")
+
     def test_version(self):
         sandbox = self.sandbox
         both = sandbox.checkout(version="99.1.0\n", env="TPOT_VERSION=24.04.1\n")
@@ -933,6 +1019,26 @@ def script_fallback(path):
     return text[start:end], text[:start] + text[end:]
 
 
+def functions(text):
+    """The functions of a fallback block (four spaces in, a one liner or up to its line "    }"),
+    by name."""
+    out = {}
+    name, lines = None, []
+    for line in text.split("\n"):
+        match = re.match(r"    (fu\w+) \(\) \{(.*)$", line)
+        if name is None and match:
+            if match.group(2).strip():
+                out[match.group(1)] = line
+            else:
+                name, lines = match.group(1), [line]
+        elif name is not None:
+            lines.append(line)
+            if line == "    }":
+                out[name] = "\n".join(lines)
+                name = None
+    return out
+
+
 SCRIPTS = ("install.sh", "update.sh", "restore.sh", "uninstall.sh", "genuser.sh", "deploy.sh",
            "docker/_builder/builder.sh", "docker/_builder/setup_builder.sh",
            "docker/tpotinit/dist/bin/hptest.sh", "docker/tpotinit/dist/bin/attackmap_pipeline_test.sh")
@@ -957,8 +1063,10 @@ class FallbackTest(unittest.TestCase):
 
     def test_canonical_fallback_has_the_new_helpers(self):
         defined = set(re.findall(r"^\s*(fu(?:UI_\w+|MARK)) \(\)", ui_logo.FALLBACK, re.M))
-        for name in ("fuUI_MARKS_ON", "fuMARK", "fuUI_LOGO", "fuUI_VERSION", "fuUI_HELP", "fuUI_USAGE_ERROR",
-                     "fuUI_RESULT", "fuUI_SUMMARY", "fuUI_CHOOSE_MANY", "fuUI_SPIN"):
+        for name in ("fuUI_INIT", "fuUI_BANNER", "fuUI_INFO", "fuUI_OK", "fuUI_WARN", "fuUI_ERROR", "fuUI_HINT",
+                     "fuUI_CONFIRM", "fuUI_CHOOSE", "fuUI_INPUT",
+                     "fuUI_MARKS_ON", "fuMARK", "fuUI_LOGO", "fuUI_VERSION", "fuUI_VERSION_GE", "fuUI_HELP",
+                     "fuUI_USAGE_ERROR", "fuUI_RESULT", "fuUI_SUMMARY", "fuUI_CHOOSE_MANY", "fuUI_SPIN"):
             self.assertIn(name, defined)
         self.assertNotIn("# >>> plain fallback", ui_logo.FALLBACK)
         self.assertTrue(all(line.startswith("    ") or not line for line in ui_logo.FALLBACK.split("\n")))
@@ -980,7 +1088,33 @@ class FallbackTest(unittest.TestCase):
             'fuUI_MARKS_ON; echo "$?"; TPOT_MARKS=1 fuMARK phase x',
             f'fuUI_SPIN "Step ..." "{log}" sh -c "echo out"; echo "rc=$?"',
             f'TPOT_MARKS=1; fuUI_SPIN "Step ..." "{log}" sh -c "echo out; exit 2"; echo "rc=$?"',
+            f'rm -f "{log}.marks"; TPOT_MARKS=1; fuUI_SPIN "Step ..." "{log}.marks" sh -c "echo out; echo err >&2"; '
+            f'echo "rc=$?"; cat "{log}.marks"',
         ]
+        calls += [f'fuUI_VERSION_GE $\'{version}\' $\'{minimum}\'; echo "rc=$?"'
+                  for version, minimum, _rc in HelpersTest.VERSION_GE]
+        # the base helpers, as ui.sh speaks without gum
+        calls += [
+            'fuUI_INIT; echo "rc=$? gum=[${myUI_GUM}]"',
+            'myLINE=keep; fuUI_BANNER "Installer" "one" "two  spaces"; echo "${myLINE}"',
+            'myUI_LOGO=1; fuUI_BANNER "Updater"; fuUI_BANNER "Only"',
+            'fuUI_INFO "a  b" c; fuUI_OK done; fuUI_WARN "careful: x"; fuUI_ERROR "bad"; echo "rc=$?"',
+            'myLINE=keep; fuUI_HINT "one" "two three"; fuUI_HINT; echo "${myLINE}"',
+        ]
+        stdin_calls = [
+            ('fuUI_CONFIRM "Go on?"; echo "rc=$?"', ("y\n", "n\n", "yes\nY\nn\n", "x\ny\n", "")),
+            ('fuUI_CONFIRM "Go on?" Sure Never; echo "rc=$?"', ("y\n",)),
+            ('fuUI_CHOOSE "Pick" "One:1" "Two, too:2" "Three: a b:3"; echo "rc=$?"', ("2\n", "0\n9\nx\n3\n", "")),
+            ('myV=$(fuUI_INPUT "Name:"); echo "rc=$? [${myV}]"', ("someone\n", "", "  a b \n")),
+            ('myV=$(fuUI_INPUT "Password:" password); echo "rc=$? [${myV}]"', ("secret\n", "")),
+        ]
+        for call, answers in stdin_calls:
+            for answer in answers:
+                with self.subTest(call=call[:40], answer=answer):
+                    env = sandbox.env(TPOT_GUM="off")
+                    one = run(call, env, source=UI_SH, stdin=answer)
+                    two = run(call, env, source=fallback, stdin=answer)
+                    self.assertEqual((two.stdout, two.stderr), (one.stdout, one.stderr))
         for call in calls:
             with self.subTest(call=call[:40]):
                 env = sandbox.env(TPOT_GUM="off")
@@ -989,10 +1123,82 @@ class FallbackTest(unittest.TestCase):
                 self.assertEqual((two.stdout, two.stderr), (one.stdout, one.stderr))
         for answer in ("1,3-4\n", "a\n", "\n", "x\n2\n", ""):
             with self.subTest(answer=answer):
-                call = HelpersTest.CHOOSE.format(options="--selected data") + '; echo "rc=$?"'
-                one = run(call, sandbox.env(), source=UI_SH, stdin=answer)
-                two = run(call, sandbox.env(), source=fallback, stdin=answer)
-                self.assertEqual((two.stdout, two.stderr), (one.stdout, one.stderr))
+                for call in (HelpersTest.CHOOSE.format(options="--selected data"),
+                             HelpersTest.COMMAS.format(options="--selected cowrie --selected tanner,redis,phpox")):
+                    one = run(call + '; echo "rc=$?"', sandbox.env(), source=UI_SH, stdin=answer)
+                    two = run(call + '; echo "rc=$?"', sandbox.env(), source=fallback, stdin=answer)
+                    self.assertEqual((two.stdout, two.stderr), (one.stdout, one.stderr))
+
+    def test_fallback_copies_are_the_canonical_ones(self):
+        """Every helper in the fallback block of a script of ui_logo.FALLBACK_FILES is the one of
+        FALLBACK, letter for letter, and the block is the generated one (python3 -m tpotctl.ui_logo
+        writes them, --check finds a changed one)."""
+        canonical = functions(ui_logo.FALLBACK)
+        for path in ui_logo.FALLBACK_FILES:
+            name = os.path.relpath(path, REPO)
+            block, _rest = script_fallback(path)
+            with self.subTest(script=name):
+                self.assertIsNotNone(block, name)
+                for function, text in functions(block).items():
+                    self.assertEqual(text, canonical.get(function), f"{function} in {name}")
+        self.assertEqual(ui_logo.check_fallback(), [], "run python3 -m tpotctl.ui_logo")
+
+    def test_fallback_files_and_the_excluded(self):
+        """Every script with a fallback block is generated, or left out with a reason: the scripts of
+        the tpotinit image never have ui.sh, their small block is their look there."""
+        found = set()
+        for top, dirs, files in os.walk(REPO):
+            dirs[:] = [d for d in dirs if not d.startswith(".") and d not in ("data", "node_modules")]
+            for file in files:
+                if file.endswith(".sh") and "\n# >>> plain fallback" in read(os.path.join(top, file)):
+                    found.add(os.path.relpath(os.path.join(top, file), REPO))
+        generated = {os.path.relpath(path, REPO) for path in ui_logo.FALLBACK_FILES}
+        self.assertEqual(generated, {"update.sh", "restore.sh", "genuser.sh", "deploy.sh",
+                                     "docker/_builder/builder.sh"})
+        self.assertEqual(found, generated | set(ui_logo.FALLBACK_EXCLUDED))
+        self.assertFalse(generated & set(ui_logo.FALLBACK_EXCLUDED))
+        for name, reason in ui_logo.FALLBACK_EXCLUDED.items():
+            self.assertTrue(name.startswith("docker/tpotinit/"), name)
+            self.assertIn("tpotinit", reason)
+
+    def test_generator_writes_and_checks_the_fallback_blocks(self):
+        folder = tempfile.mkdtemp(prefix="tpot-ui-fallback-")
+        self.addCleanup(shutil.rmtree, folder)
+        text = read(os.path.join(REPO, "deploy.sh"))
+        copy = os.path.join(folder, "deploy.sh")
+
+        def put(content):
+            with open(copy, "w", encoding="utf-8") as out:
+                out.write(content)
+            os.chmod(copy, 0o750)
+
+        # a changed helper is found and written anew; mode and the rest of the file stay
+        changed = text.replace('fuUI_INFO () { echo "### $*"; }', 'fuUI_INFO () { echo "## $*"; }')
+        self.assertNotEqual(changed, text)
+        put(changed)
+        self.assertEqual(ui_logo.check_fallback([copy]), [copy])
+        self.assertEqual(ui_logo.write_fallback([copy]), [copy])
+        self.assertEqual(ui_logo.check_fallback([copy]), [])
+        self.assertEqual(read(copy), text)
+        self.assertEqual(stat.S_IMODE(os.stat(copy).st_mode), 0o750)
+        self.assertEqual(ui_logo.write_fallback([copy]), [])
+        # a helper the script calls comes into its block, with what it needs itself
+        put(text + "\nfuUI_SPIN \"Step ...\" /tmp/x true\n")
+        self.assertEqual(ui_logo.check_fallback([copy]), [copy])
+        ui_logo.write_fallback([copy])
+        block, _rest = script_fallback(copy)
+        self.assertIn("fuUI_SPIN ()", block)
+        self.assertIn("fuUI_MARKS_ON ()", block)
+        # a helper of ui.sh the fallback does not have: the generator says which
+        put(text + "\nfuUI_PAINT x y\n")
+        with self.assertRaises(ValueError) as caught:
+            ui_logo.write_fallback([copy])
+        self.assertIn("fuUI_PAINT", str(caught.exception))
+        result = subprocess.run([sys.executable, "-c", "import sys; from tpotctl import ui_logo; "
+                                 f"sys.exit(1 if ui_logo.check_fallback([{copy!r}]) else 0)"],
+                                cwd=REPO, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                universal_newlines=True)
+        self.assertEqual(result.returncode, 1, result.stdout)
 
     def test_fallback_blocks_of_the_scripts_parse(self):
         for name in SCRIPTS:

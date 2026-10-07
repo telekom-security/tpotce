@@ -222,6 +222,29 @@ fuUI_VERSION () {
   echo "${myV}"
 }
 
+fuUI_VERSION_GE () {
+  # fuUI_VERSION_GE <version> <minimum>: rc 0 when the version is at least the minimum,
+  # part by part as numbers (24.04.10 > 24.04.9, a missing part is 0). Spaces and line
+  # ends are left out, a leading v and a suffix after - or + of the version too (2.24.4-rc1
+  # counts as 2.24.4). rc 1 for an empty version or a part that is not a number
+  local myI myX myY myN myV="${1//[[:space:]]/}" myM="${2//[[:space:]]/}"
+  local -a myA=() myB=()
+  myV="${myV#v}"
+  myV="${myV%%[-+]*}"
+  [ -n "${myV}" ] && [ -n "${myM}" ] || return 1
+  IFS=. read -r -a myA <<< "${myV}"
+  IFS=. read -r -a myB <<< "${myM}"
+  myN="${#myA[@]}"
+  [ "${#myB[@]}" -le "${myN}" ] || myN="${#myB[@]}"
+  for ((myI = 0; myI < myN; myI++)); do
+    myX="${myA[myI]-0}" myY="${myB[myI]-0}"
+    [[ "${myX}" =~ ^[0-9]{1,18}$ && "${myY}" =~ ^[0-9]{1,18}$ ]] || return 1
+    if [ "$((10#${myX}))" -gt "$((10#${myY}))" ]; then return 0; fi
+    if [ "$((10#${myX}))" -lt "$((10#${myY}))" ]; then return 1; fi
+  done
+  return 0
+}
+
 fuUI_LOGO_TEXT () {
   # fuUI_LOGO_TEXT <colour> <text>: text (ASCII) over the bottom row of the logo
   # from column myX on, for fuUI_LOGO_RENDER (its myTXT / myTXC / myX)
@@ -627,19 +650,21 @@ fuUI_CHOOSE () {
 }
 
 fuUI_CHOOSE_MANY () {
-  # fuUI_CHOOSE_MANY [--filter] [--all | --selected <value>,<value>] <header>
+  # fuUI_CHOOSE_MANY [--filter] [--all | --selected <value>]... <header>
   #   <label:value> ...: prints the values of the choices, one per line, in the order
   # of the items (label and value split at the last colon, so a label may have one).
-  # --all / --selected mark items to begin with. gum choose at a terminal (gum filter
-  # with --filter, to find an item by typing), otherwise a numbered list on stderr
-  # and a line from stdin: 1,3-5, a for all, n for none, enter for the marked ones.
-  # rc 1 when stdin ends, the rc of gum when it is cancelled
-  local myFILTER="" myALL="" mySELECTED="" myI myN myPICK myPART myA myB myOK myOUT myLINE
+  # --all / --selected mark items to begin with, --selected once per value (a value
+  # may have commas). gum choose at a terminal (gum filter with --filter, to find an
+  # item by typing), otherwise a numbered list on stderr and a line from stdin: 1,3-5,
+  # a for all, n for none, enter for the marked ones. rc 1 when stdin ends, the rc of
+  # gum when it is cancelled
+  local myFILTER="" myALL="" myI myJ myN myPICK myPART myA myB myOK myOUT myLINE
+  local -a mySELECTED=()
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --filter) myFILTER=1; shift ;;
       --all) myALL=1; shift ;;
-      --selected) mySELECTED="${2:-}"; shift $(( $# < 2 ? $# : 2 )) ;;
+      --selected) mySELECTED+=("${2:-}"); shift $(( $# < 2 ? $# : 2 )) ;;
       *) break ;;
     esac
   done
@@ -649,22 +674,24 @@ fuUI_CHOOSE_MANY () {
   for myI in "$@"; do
     myLABELS+=("${myI%:*}")
     myVALUES+=("${myI##*:}")
-    if [ -n "${myALL}" ] || [[ ",${mySELECTED}," == *",${myVALUES[${#myVALUES[@]}-1]},"* ]];
-      then myON+=(1)
-      else myON+=("")
-    fi
+    myON+=("${myALL}")
+    for myJ in "${mySELECTED[@]}"; do
+      [ "${myJ}" != "${myVALUES[${#myVALUES[@]}-1]}" ] || myON[${#myON[@]}-1]=1
+    done
   done
   myN="${#myLABELS[@]}"
   if [ -n "${myUI_GUM}" ] && [ -t 0 ]; then
-    # gum filter has no --label-delimiter: gum gets the labels, they turn into values here
+    # gum filter has no --label-delimiter: gum gets the labels, they turn into values here.
+    # gum splits --selected at commas (\, is one) and takes it again for more labels; * is
+    # all of them. A label * or one with \, in it cannot be marked alone, it starts unmarked
     myARGS=(--no-limit --header "${myHEADER}" --header.foreground "${myUI_GLASS}")
     if [ -n "${myALL}" ]; then myARGS+=(--selected "*")
     else
-      myPICK=""
       for myI in "${!myLABELS[@]}"; do
-        [ -z "${myON[myI]}" ] || myPICK="${myPICK:+${myPICK},}${myLABELS[myI]}"
+        [ -n "${myON[myI]}" ] || continue
+        [ "${myLABELS[myI]}" != "*" ] && [[ "${myLABELS[myI]}" != *'\,'* ]] || continue
+        myARGS+=(--selected "${myLABELS[myI]//,/\\,}")
       done
-      [ -z "${myPICK}" ] || myARGS+=(--selected "${myPICK}")
     fi
     if [ -n "${myFILTER}" ];
       then
@@ -794,15 +821,17 @@ fuUI_SPIN () {
   # on failure. Under gum the command runs in the background, in a subshell: what it
   # sets does not reach the caller, and it must not prompt: refresh sudo before
   # (sudo -v) where it needs a password. Without gum it runs in this shell. In the
-  # marks mode (fuUI_MARKS_ON) its output goes through instead, in the foreground and
-  # without a log, so the T-Pot Manager reads it (i.e. the pulls of the images).
+  # marks mode (fuUI_MARKS_ON) its output goes through as well, in the foreground, so the
+  # T-Pot Manager reads it (i.e. the pulls of the images), and into the log by tee:
+  # stdout and stderr together, the rc of the step, also when the log cannot be
+  # written; the step runs in a subshell there too
   local myTITLE="$1" myLOG="$2"
   shift 2
   local myPID myRC=0 myGUM_RC=0 myTRAP
   if fuUI_MARKS_ON;
     then
       echo "### ${myTITLE}"
-      "$@" < /dev/null || myRC=$?
+      { "$@" < /dev/null 2>&1 | tee -a "${myLOG}" 2>/dev/null; myRC="${PIPESTATUS[0]}"; } || true
   elif [ -n "${myUI_GUM}" ];
     then
       "$@" >>"${myLOG}" 2>&1 < /dev/null &

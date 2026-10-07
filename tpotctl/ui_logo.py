@@ -5,9 +5,10 @@ bash by fuUI_LOGO_RENDER, and the wordmark of logo.py over their banner. install
 without Python, so both live as text inside the ui block, in ui.sh and in the same copy in
 install.sh, between the marks `# >>> tpot logo data >>>` and `# <<< tpot logo data <<<`:
 
-  python3 -m tpotctl.ui_logo             writes them from splash_art.py and logo.py
+  python3 -m tpotctl.ui_logo             writes them from splash_art.py and logo.py, and the
+                                         plain fallback blocks of the scripts (FALLBACK_FILES)
   python3 -m tpotctl.ui_logo --check     exit 1 when a copy differs (tests run it too)
-  python3 -m tpotctl.ui_logo --fallback  prints the plain fallback of the newer helpers (FALLBACK)
+  python3 -m tpotctl.ui_logo --fallback  prints the plain fallback of the helpers (FALLBACK)
 
 The format: two pixels (top, bottom) make one character, as in the splash. Every pair of pixels the
 logo has is an entry of one table (myUI_LOGO_PAIRS, the two digits of the colour indices, 00 first).
@@ -20,6 +21,7 @@ Standard library only (Python 3.9), it reads logo.py as text: logo.py needs Rich
 
 import ast
 import os
+import re
 import sys
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -205,10 +207,52 @@ def write(files: Sequence[str] = FILES) -> List[str]:
     return changed
 
 
-# The plain fallback of the newer helpers of ui.sh for the `# >>> plain fallback` block of a script
-# (a checkout of an earlier release has no installer/lib/ui.sh): the same plain text as ui.sh without
-# gum (tests/test_ui.py compares them). Take the functions the script calls.
-FALLBACK = r'''    fuUI_MARKS_ON () { [ -n "${myMARKS:-}" ] || [ "${TPOT_MARKS:-}" = "1" ]; }
+# The plain fallback of the helpers of ui.sh for the `# >>> plain fallback` block of a script (a
+# checkout of an earlier release has no installer/lib/ui.sh): the same plain text as ui.sh with
+# TPOT_GUM=off and without a terminal on stdout (tests/test_ui.py compares them; at a terminal ui.sh
+# also breaks long lines, the fallback does not). python3 -m tpotctl.ui_logo writes the functions a
+# script of FALLBACK_FILES calls into its block, with the ones they call themselves, in this order.
+FALLBACK = r'''    fuUI_INIT () { return 0; }
+    fuUI_BANNER () { local myLINE; echo; echo "### T-Pot $1"; shift; for myLINE in "$@"; do echo "### ${myLINE}"; done; echo; }
+    fuUI_INFO () { echo "### $*"; }
+    fuUI_OK () { echo "### [OK] - $*"; }
+    fuUI_WARN () { echo "### [WARNING] - $*"; }
+    fuUI_ERROR () { echo "### [ERROR] - $*" >&2; }
+    fuUI_HINT () { local myLINE; for myLINE in "$@"; do echo "###   ${myLINE}"; done; }
+    fuUI_CONFIRM () {
+      local myANSWER=""
+      while [ "${myANSWER}" != "y" ] && [ "${myANSWER}" != "n" ]; do
+        read -rp "### $1 (y/n) " myANSWER || return 1
+      done
+      [ "${myANSWER}" = "y" ]
+    }
+    fuUI_CHOOSE () {
+      local myHEADER="$1" myI=1 myITEM myPICK
+      shift
+      echo "### ${myHEADER}" >&2
+      for myITEM in "$@"; do
+        echo "###   ${myI}) ${myITEM%%:*}" >&2
+        myI=$((myI + 1))
+      done
+      while true; do
+        read -rp "### Choice (1-$#): " myPICK || return 1
+        if [[ "${myPICK}" =~ ^[0-9]+$ ]] && [ "${myPICK}" -ge 1 ] && [ "${myPICK}" -le "$#" ];
+          then
+            myITEM="${!myPICK}"
+            echo "${myITEM#*:}"
+            return 0
+        fi
+      done
+    }
+    fuUI_INPUT () {
+      local myVALUE=""
+      if [ "$2" = "password" ];
+        then read -rsp "### $1 " myVALUE; echo >&2
+        else read -rp "### $1 " myVALUE
+      fi
+      echo "${myVALUE}"
+    }
+    fuUI_MARKS_ON () { [ -n "${myMARKS:-}" ] || [ "${TPOT_MARKS:-}" = "1" ]; }
     fuMARK () { fuUI_MARKS_ON || return 0; echo "@@tpot $*"; }
     fuUI_LOGO () { return 1; }
     fuUI_VERSION () {
@@ -225,6 +269,24 @@ FALLBACK = r'''    fuUI_MARKS_ON () { [ -n "${myMARKS:-}" ] || [ "${TPOT_MARKS:-
         [[ "${myV}" =~ ${myRE} ]] || myV=""
       fi
       echo "${myV}"
+    }
+    fuUI_VERSION_GE () {
+      local myI myX myY myN myV="${1//[[:space:]]/}" myM="${2//[[:space:]]/}"
+      local -a myA=() myB=()
+      myV="${myV#v}"
+      myV="${myV%%[-+]*}"
+      [ -n "${myV}" ] && [ -n "${myM}" ] || return 1
+      IFS=. read -r -a myA <<< "${myV}"
+      IFS=. read -r -a myB <<< "${myM}"
+      myN="${#myA[@]}"
+      [ "${#myB[@]}" -le "${myN}" ] || myN="${#myB[@]}"
+      for ((myI = 0; myI < myN; myI++)); do
+        myX="${myA[myI]-0}" myY="${myB[myI]-0}"
+        [[ "${myX}" =~ ^[0-9]{1,18}$ && "${myY}" =~ ^[0-9]{1,18}$ ]] || return 1
+        if [ "$((10#${myX}))" -gt "$((10#${myY}))" ]; then return 0; fi
+        if [ "$((10#${myX}))" -lt "$((10#${myY}))" ]; then return 1; fi
+      done
+      return 0
     }
     fuUI_HELP () {
       local myTITLE="$1" myUSAGE="$2" myW=0 myI myLINE myFIRST myREST myPAD
@@ -300,12 +362,13 @@ FALLBACK = r'''    fuUI_MARKS_ON () { [ -n "${myMARKS:-}" ] || [ "${TPOT_MARKS:-
       return "${myRC}"
     }
     fuUI_CHOOSE_MANY () {
-      local myALL="" mySELECTED="" myI myN myPICK myPART myA myB myOK
+      local myALL="" myI myJ myN myPICK myPART myA myB myOK
+      local -a mySELECTED=()
       while [ "$#" -gt 0 ]; do
         case "$1" in
           --filter) shift ;;
           --all) myALL=1; shift ;;
-          --selected) mySELECTED="${2:-}"; shift $(( $# < 2 ? $# : 2 )) ;;
+          --selected) mySELECTED+=("${2:-}"); shift $(( $# < 2 ? $# : 2 )) ;;
           *) break ;;
         esac
       done
@@ -315,10 +378,10 @@ FALLBACK = r'''    fuUI_MARKS_ON () { [ -n "${myMARKS:-}" ] || [ "${TPOT_MARKS:-
       for myI in "$@"; do
         myLABELS+=("${myI%:*}")
         myVALUES+=("${myI##*:}")
-        if [ -n "${myALL}" ] || [[ ",${mySELECTED}," == *",${myVALUES[${#myVALUES[@]}-1]},"* ]];
-          then myON+=(1)
-          else myON+=("")
-        fi
+        myON+=("${myALL}")
+        for myJ in "${mySELECTED[@]}"; do
+          [ "${myJ}" != "${myVALUES[${#myVALUES[@]}-1]}" ] || myON[${#myON[@]}-1]=1
+        done
       done
       myN="${#myLABELS[@]}"
       echo "### ${myHEADER}" >&2
@@ -358,7 +421,7 @@ FALLBACK = r'''    fuUI_MARKS_ON () { [ -n "${myMARKS:-}" ] || [ "${TPOT_MARKS:-
       shift 2
       echo "### ${myTITLE}"
       if fuUI_MARKS_ON;
-        then "$@" < /dev/null || myRC=$?
+        then { "$@" < /dev/null 2>&1 | tee -a "${myLOG}" 2>/dev/null; myRC="${PIPESTATUS[0]}"; } || true
         else "$@" >>"${myLOG}" 2>&1 < /dev/null || myRC=$?
       fi
       if [ "${myRC}" -eq 0 ];
@@ -374,6 +437,132 @@ FALLBACK = r'''    fuUI_MARKS_ON () { [ -n "${myMARKS:-}" ] || [ "${TPOT_MARKS:-
 '''
 
 
+FALLBACK_BEGIN = "# >>> plain fallback"
+FALLBACK_END = "# <<< plain fallback"
+
+
+def _fallback_files() -> Tuple[str, ...]:
+    """The scripts at the top of the checkout and in the folders of docker/ with a fallback block
+    (update.sh, restore.sh, genuser.sh, deploy.sh and the image builder; tests/test_ui.py names them).
+    Found by the mark, so a new script gets its block from the generator too."""
+    found = []
+    docker = os.path.join(REPO, "docker")
+    folders = [REPO] + sorted(os.path.join(docker, name) for name in
+                              (os.listdir(docker) if os.path.isdir(docker) else [])
+                              if os.path.isdir(os.path.join(docker, name)))
+    for folder in folders:
+        for name in sorted(os.listdir(folder)):
+            path = os.path.join(folder, name)
+            if name.endswith(".sh") and os.path.isfile(path):
+                with open(path, encoding="utf-8", errors="replace") as handle:
+                    if "\n" + FALLBACK_BEGIN in handle.read():
+                        found.append(path)
+    return tuple(found)
+
+
+# the scripts whose fallback block is generated from FALLBACK
+FALLBACK_FILES = _fallback_files()
+# the scripts with a fallback block of their own (deeper than the folders of docker/), and why
+FALLBACK_EXCLUDED = {
+    "docker/tpotinit/dist/bin/hptest.sh":
+        "runs inside the tpotinit image too, which has no installer/lib/ui.sh: its small block is its "
+        "look there (fuMARK of TPOT_MARKS only, no checkout of an earlier release)",
+    "docker/tpotinit/dist/bin/attackmap_pipeline_test.sh":
+        "runs inside the tpotinit image too, which has no installer/lib/ui.sh: its small block is its "
+        "look there (fuMARK of TPOT_MARKS only, no checkout of an earlier release)",
+}
+_HELPER = re.compile(r"\b(fuUI_\w+|fuMARK)\b")
+_DEFINED = re.compile(r"^\s*(fu\w+)\s*\(\)", re.M)
+
+
+def fallback_functions(text: str = FALLBACK) -> "Dict[str, str]":
+    """The functions of FALLBACK (or of a fallback block) by name, in their order: a line of four
+    spaces and `fuNAME () {` with the body on the same line, or up to the line `    }`."""
+    out: Dict[str, str] = {}
+    name: Optional[str] = None
+    lines: List[str] = []
+    for line in text.split("\n"):
+        match = re.match(r"    (fu\w+) \(\) \{(.*)$", line)
+        if name is None and match:
+            if match.group(2).strip():
+                out[match.group(1)] = line
+            else:
+                name, lines = match.group(1), [line]
+        elif name is not None:
+            lines.append(line)
+            if line == "    }":
+                out[name] = "\n".join(lines)
+                name = None
+    if name is not None:
+        raise ValueError(f"{name} of the fallback has no end (a line of four spaces and }})")
+    return out
+
+
+def _fallback_span(text: str) -> Tuple[int, int]:
+    """Where the body of the fallback block is: after the line of its begin mark up to its end mark."""
+    start = text.index("\n" + FALLBACK_BEGIN) + 1
+    body = text.index("\n", start) + 1
+    end = text.index("\n" + FALLBACK_END, start) + 1
+    return body, end
+
+
+def fallback_block(text: str, ui_text: Optional[str] = None) -> str:
+    """The body of the fallback block for a script: every function of FALLBACK the script calls
+    outside the block and does not define itself, with the ones they call, in the order of FALLBACK.
+    ValueError for a helper of ui.sh the script calls that FALLBACK does not have."""
+    if ui_text is None:
+        with open(FILES[0], encoding="utf-8") as handle:
+            ui_text = handle.read()
+    body, end = _fallback_span(text)
+    rest = text[:body] + text[end:]
+    canonical = fallback_functions()
+    own = set(_DEFINED.findall(rest))
+    called = set(_HELPER.findall(rest)) - own
+    missing = sorted((called & set(_DEFINED.findall(ui_text))) - set(canonical))
+    if missing:
+        raise ValueError(f"{', '.join(missing)} of installer/lib/ui.sh {'is' if len(missing) == 1 else 'are'} "
+                         "not in ui_logo.FALLBACK: add the plain form there")
+    want = called & set(canonical)
+    todo = list(want)
+    while todo:
+        for name in _HELPER.findall(canonical[todo.pop()].split("{", 1)[1]):
+            if name in canonical and name not in want:
+                want.add(name)
+                todo.append(name)
+    return "".join(canonical[name] + "\n" for name in canonical if name in want)
+
+
+def check_fallback(files: Sequence[str] = FALLBACK_FILES) -> List[str]:
+    """The scripts whose fallback block is not the generated one."""
+    wrong = []
+    for path in files:
+        with open(path, encoding="utf-8") as handle:
+            text = handle.read()
+        try:
+            body, end = _fallback_span(text)
+            if text[body:end] != fallback_block(text):
+                wrong.append(path)
+        except ValueError:
+            wrong.append(path)
+    return wrong
+
+
+def write_fallback(files: Sequence[str] = FALLBACK_FILES) -> List[str]:
+    """Writes the generated fallback block into the scripts (in place: mode and owner stay); the
+    changed ones."""
+    changed = []
+    for path in files:
+        with open(path, encoding="utf-8", newline="") as handle:
+            text = handle.read()
+        body, end = _fallback_span(text)
+        new = text[:body] + fallback_block(text) + text[end:]
+        if new != text:
+            with open(path, "w", encoding="utf-8", newline="") as out:
+                out.write(new)
+            changed.append(path)
+    return changed
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if argv == ["--fallback"]:
@@ -384,11 +573,20 @@ def main(argv: Optional[List[str]] = None) -> int:
         for path in wrong:
             print(f"the logo data of {os.path.relpath(path, REPO)} is not the generated one, "
                   "run python3 -m tpotctl.ui_logo", file=sys.stderr)
-        return 1 if wrong else 0
+        stale = check_fallback()
+        for path in stale:
+            print(f"the plain fallback of {os.path.relpath(path, REPO)} is not the generated one, "
+                  "run python3 -m tpotctl.ui_logo", file=sys.stderr)
+        return 1 if wrong or stale else 0
     if argv:
         print("usage: python3 -m tpotctl.ui_logo [--check | --fallback]", file=sys.stderr)
         return 2
-    for path in write():
+    try:
+        changed = write() + write_fallback()
+    except ValueError as error:
+        print(error, file=sys.stderr)
+        return 1
+    for path in changed:
         print(f"wrote {os.path.relpath(path, REPO)}")
     return 0
 

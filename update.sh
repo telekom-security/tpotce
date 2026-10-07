@@ -90,7 +90,7 @@ if ! source "${myHERE}/installer/lib/ui.sh" 2>/dev/null;
   then
 # >>> plain fallback: a checkout of an earlier release has no installer/lib/ui.sh
     fuUI_INIT () { return 0; }
-    fuUI_BANNER () { echo; echo "### T-Pot $1"; shift; for myLINE in "$@"; do echo "### ${myLINE}"; done; echo; }
+    fuUI_BANNER () { local myLINE; echo; echo "### T-Pot $1"; shift; for myLINE in "$@"; do echo "### ${myLINE}"; done; echo; }
     fuUI_INFO () { echo "### $*"; }
     fuUI_OK () { echo "### [OK] - $*"; }
     fuUI_WARN () { echo "### [WARNING] - $*"; }
@@ -177,7 +177,7 @@ if ! source "${myHERE}/installer/lib/ui.sh" 2>/dev/null;
       shift 2
       echo "### ${myTITLE}"
       if fuUI_MARKS_ON;
-        then "$@" < /dev/null || myRC=$?
+        then { "$@" < /dev/null 2>&1 | tee -a "${myLOG}" 2>/dev/null; myRC="${PIPESTATUS[0]}"; } || true
         else "$@" >>"${myLOG}" 2>&1 < /dev/null || myRC=$?
       fi
       if [ "${myRC}" -eq 0 ];

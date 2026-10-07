@@ -16,7 +16,7 @@ if ! source "${myREPO}/installer/lib/ui.sh" 2>/dev/null;
   then
 # >>> plain fallback
     fuUI_INIT () { return 0; }
-    fuUI_BANNER () { echo; echo "### T-Pot $1"; shift; for myLINE in "$@"; do echo "### ${myLINE}"; done; echo; }
+    fuUI_BANNER () { local myLINE; echo; echo "### T-Pot $1"; shift; for myLINE in "$@"; do echo "### ${myLINE}"; done; echo; }
     fuUI_INFO () { echo "### $*"; }
     fuUI_OK () { echo "### [OK] - $*"; }
     fuUI_WARN () { echo "### [WARNING] - $*"; }
@@ -56,8 +56,6 @@ if ! source "${myREPO}/installer/lib/ui.sh" 2>/dev/null;
       echo "${myVALUE}"
     }
     fuUI_MARKS_ON () { [ -n "${myMARKS:-}" ] || [ "${TPOT_MARKS:-}" = "1" ]; }
-    fuMARK () { fuUI_MARKS_ON || return 0; echo "@@tpot $*"; }
-    fuUI_LOGO () { return 1; }
     fuUI_VERSION () {
       local myDIR="${1:-${HOME}/tpotce}" myV="" myLINE myRE='^[0-9A-Za-z][0-9A-Za-z._+~-]*$' myENV
       myENV='^[[:space:]]*TPOT_VERSION[[:space:]]*[=:][[:space:]]*["'"'"']?([^"'"'"'[:space:]]*)'
@@ -147,12 +145,13 @@ if ! source "${myREPO}/installer/lib/ui.sh" 2>/dev/null;
       return "${myRC}"
     }
     fuUI_CHOOSE_MANY () {
-      local myALL="" mySELECTED="" myI myN myPICK myPART myA myB myOK
+      local myALL="" myI myJ myN myPICK myPART myA myB myOK
+      local -a mySELECTED=()
       while [ "$#" -gt 0 ]; do
         case "$1" in
           --filter) shift ;;
           --all) myALL=1; shift ;;
-          --selected) mySELECTED="${2:-}"; shift $(( $# < 2 ? $# : 2 )) ;;
+          --selected) mySELECTED+=("${2:-}"); shift $(( $# < 2 ? $# : 2 )) ;;
           *) break ;;
         esac
       done
@@ -162,10 +161,10 @@ if ! source "${myREPO}/installer/lib/ui.sh" 2>/dev/null;
       for myI in "$@"; do
         myLABELS+=("${myI%:*}")
         myVALUES+=("${myI##*:}")
-        if [ -n "${myALL}" ] || [[ ",${mySELECTED}," == *",${myVALUES[${#myVALUES[@]}-1]},"* ]];
-          then myON+=(1)
-          else myON+=("")
-        fi
+        myON+=("${myALL}")
+        for myJ in "${mySELECTED[@]}"; do
+          [ "${myJ}" != "${myVALUES[${#myVALUES[@]}-1]}" ] || myON[${#myON[@]}-1]=1
+        done
       done
       myN="${#myLABELS[@]}"
       echo "### ${myHEADER}" >&2
@@ -205,7 +204,7 @@ if ! source "${myREPO}/installer/lib/ui.sh" 2>/dev/null;
       shift 2
       echo "### ${myTITLE}"
       if fuUI_MARKS_ON;
-        then "$@" < /dev/null || myRC=$?
+        then { "$@" < /dev/null 2>&1 | tee -a "${myLOG}" 2>/dev/null; myRC="${PIPESTATUS[0]}"; } || true
         else "$@" >>"${myLOG}" 2>&1 < /dev/null || myRC=$?
       fi
       if [ "${myRC}" -eq 0 ];

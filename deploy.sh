@@ -8,14 +8,27 @@ if ! source "$HOME/tpotce/installer/lib/ui.sh" 2>/dev/null;
   then
 # >>> plain fallback
     fuUI_INIT () { return 0; }
-    fuUI_BANNER () { echo; echo "### T-Pot $1"; shift; for myLINE in "$@"; do echo "### ${myLINE}"; done; echo; }
+    fuUI_BANNER () { local myLINE; echo; echo "### T-Pot $1"; shift; for myLINE in "$@"; do echo "### ${myLINE}"; done; echo; }
     fuUI_INFO () { echo "### $*"; }
     fuUI_OK () { echo "### [OK] - $*"; }
     fuUI_WARN () { echo "### [WARNING] - $*"; }
     fuUI_ERROR () { echo "### [ERROR] - $*" >&2; }
     fuUI_HINT () { local myLINE; for myLINE in "$@"; do echo "###   ${myLINE}"; done; }
-    fuUI_CONFIRM () { local myANSWER; read -rp "### $1 (y/n) " myANSWER; [[ "${myANSWER}" =~ ^(y|Y|yes|YES)$ ]]; }
-    fuUI_INPUT () { local myVALUE; read -rp "### $1 " myVALUE; echo "${myVALUE}"; }
+    fuUI_CONFIRM () {
+      local myANSWER=""
+      while [ "${myANSWER}" != "y" ] && [ "${myANSWER}" != "n" ]; do
+        read -rp "### $1 (y/n) " myANSWER || return 1
+      done
+      [ "${myANSWER}" = "y" ]
+    }
+    fuUI_INPUT () {
+      local myVALUE=""
+      if [ "$2" = "password" ];
+        then read -rsp "### $1 " myVALUE; echo >&2
+        else read -rp "### $1 " myVALUE
+      fi
+      echo "${myVALUE}"
+    }
     fuUI_RESULT () {
       case "$1" in
         ok) echo "### [OK] - $2" ;;
