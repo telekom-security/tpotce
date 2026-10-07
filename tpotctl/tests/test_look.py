@@ -563,6 +563,35 @@ class ColoursTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(theme.color("comb"), theme.PALETTE_256["COMB_LIT"])
 
 
+class SplashArtTest(unittest.TestCase):
+    """The pixels of the ANSI logo (the template in ansi/, kept out of git) as data of the T-Pot Manager."""
+
+    def test_splash_art_is_the_template(self):
+        import ast
+        import re
+        from tpotctl import splash_art
+        sizes = {"120": (120, 94), "80": (80, 62), "80x24": (80, 48)}
+        for variant, (w, h) in sizes.items():
+            width, height, pixels = splash_art.grid(variant)
+            self.assertEqual((width, height, len(pixels)), (w, h, w * h), variant)
+            self.assertTrue(set(pixels) <= set(range(10)), variant)
+        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        sources = {"120": ("t-pot-animate.py", "120"), "80": ("t-pot-animate.py", "80"),
+                   "80x24": (os.path.join("80x24", "t-pot-animate-80x24.py"), "80")}
+        for variant, (name, key) in sources.items():
+            path = os.path.join(root, "ansi", name)
+            if not os.path.exists(path):
+                self.skipTest("the template in ansi/ is not in this checkout")
+            with open(path, encoding="utf-8") as handle:
+                data = ast.literal_eval(re.search(r"^DATA = (\{.*\})$", handle.read(), re.M).group(1))
+            entry = data["grids"][key]
+            import base64
+            import zlib
+            expected = list(zlib.decompress(base64.b64decode(entry["data"])))
+            self.assertEqual(splash_art.grid(variant)[2], expected, variant)
+            self.assertEqual([tuple(c) for c in data["palette"]], list(splash_art.PALETTE))
+
+
 class NamesTest(unittest.TestCase):
     """T-Pot is the honeypot platform, the T-Pot Manager is this tool (the command tpot), the service is
     tpot.service: no text may mix them up."""
