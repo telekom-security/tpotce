@@ -30,6 +30,11 @@ STEPS = [("check", "System check"), ("edition", "Edition"), ("user", "Web user")
          ("review", "Review"), ("install", "Install"), ("done", "Done")]
 FIRST_SETTINGS = ["TPOT_ATTACKMAP_TEXT_TIMEZONE", "TPOT_BLACKHOLE", "TPOT_CAPTURE_INTERFACE", "TPOT_PULL_POLICY"]
 LLM_PREFIXES = ("BEELZEBUB_LLM_", "GALAH_LLM_")
+# the log install.sh writes in a phase (its marks, installer.Progress); the playbook and what follows it
+# go to ~/install_tpot.log
+PHASE_LOGS = {"checks": "~/install_tpot_prepare.log", "packages": "~/install_tpot_prepare.log",
+              "pull": "~/install_tpot_pull.log"}
+PLAYBOOK_LOG = "~/install_tpot.log"
 CHANGES = [
     "SSH moves to port 64295, connect with ssh -p 64295 after the reboot",
     "Docker Engine from the Docker repository, distribution Docker packages are removed",
@@ -534,6 +539,7 @@ class InstallApp(ArrowNav, App):
                 self.notify(str(err), title="Settings not written", severity="error", timeout=10)
                 return
         self.progress = installer.Progress()
+        self.step_phase = self.progress.phase      # the step it is in, kept when a mark says failed
         self.busy = True
         self.started = time.monotonic()
         self.goto("install")
@@ -552,6 +558,8 @@ class InstallApp(ArrowNav, App):
 
     def feed(self, line: str) -> None:
         self.progress.feed(line)
+        if self.progress.phase not in ("failed", "done"):
+            self.step_phase = self.progress.phase
         self.query_one("#install-log", RichLog).write(Text(line.rstrip("\n")))
         self.show_progress()
 
@@ -588,7 +596,8 @@ class InstallApp(ArrowNav, App):
         text.append(f"{glyphs.g('fail')} The installation failed", style=f"bold {theme.color('error')}")
         if self.progress.failed_task:
             text.append(f" at: {self.progress.failed_task}", style=theme.color("error"))
-        text.append("\nThe whole log is ~/install_tpot.log. Fix the cause and run the installer again.",
+        log = PHASE_LOGS.get(getattr(self, "step_phase", ""), PLAYBOOK_LOG)
+        text.append(f"\nThe log of this step is {log}. Fix the cause and run the installer again.",
                     style=theme.color("glass"))
         self.query_one("#install-phase", Static).update(text)
         nxt = self.query_one("#ins-next", Button)

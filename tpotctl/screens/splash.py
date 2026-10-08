@@ -27,6 +27,7 @@ class SplashScreen(Screen):
         super().__init__(id="splash")
         self.version = version
         self.splash = None
+        self.done = False           # its end has come; a dialog over it may still keep it on the stack
 
     def choose(self) -> bool:
         """The variant for the terminal now; False when it is too small for any."""
@@ -89,15 +90,22 @@ class SplashScreen(Screen):
 
     def leave(self) -> None:
         """The end (its time, a key, a click, a terminal too small): the menu, then the notices that
-        waited for it."""
+        waited for it. Under a dialog (is_current is true there as well, it shows through) it pops
+        nothing, the dialog stays; it goes when the dialog closes (on_screen_resume)."""
+        self.done = True
         ticker = getattr(self, "ticker", None)
         if ticker is not None:
             ticker.stop()
-        if self.is_current:
+        if self.app.screen is self:
             self.app.pop_screen()
         release = getattr(self.app, "release_notices", None)
         if release is not None:
             release()
+
+    def on_screen_resume(self) -> None:
+        """In front again (the dialog over it closed): a splash whose end came meanwhile goes now."""
+        if self.done and self.app.screen is self:
+            self.app.pop_screen()
 
     def on_key(self, event) -> None:
         event.stop()

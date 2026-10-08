@@ -403,6 +403,104 @@ class LookInTheAppTest(unittest.IsolatedAsyncioTestCase):
                 messages = [n.message for n in app._notifications]
                 self.assertEqual(messages.index("one") + 1, messages.index("two"))
 
+    async def test_a_resize_too_small_lets_the_held_notices_out(self):
+        """Below 80 x 24 the splash ends: the notices of its time come too, in their order, with their
+        options, and nothing is held any more."""
+        from tpotctl import splash_anim
+        from tpotctl.screens.splash import SplashScreen
+        app = self.splash_app()
+        with mock.patch.object(splash_anim, "DURATION", 60.0):
+            async with app.run_test(size=(120, 40)) as pilot:
+                await self.poll(pilot, lambda: isinstance(app.screen, SplashScreen))
+                app.notify("first", title="One", severity="warning", timeout=25)
+                app.notify("second [/x]", title="Two", severity="error", timeout=35)
+                await pilot.pause(0.2)
+                self.assertEqual(len(app._notifications), 0)
+                held = [message for message, _args, _kwargs in app.held_notices]
+                await pilot.resize_terminal(79, 30)
+                await self.poll(pilot, lambda: not isinstance(app.screen, SplashScreen)
+                                and len(app._notifications) == len(held))
+                notes = list(app._notifications)
+                self.assertEqual([n.message for n in notes], held)
+                self.assertEqual([(n.message, n.title, n.severity, n.timeout, n.markup) for n in notes[-2:]],
+                                 [("first", "One", "warning", 25, False), ("second [/x]", "Two", "error", 35, False)])
+                self.assertIsNone(app.held_notices)
+
+    async def test_a_splash_that_ends_under_a_dialog_leaves_when_the_dialog_closes(self):
+        """A dialog over the splash (a worker that asks): ctrl+p works over the dialog, the splash's time runs
+        out under it, and when it closes the menu is there, not a splash that stands still."""
+        from textual.command import CommandPalette
+        from tpotctl import splash_anim
+        from tpotctl.screens.dialogs import ConfirmDialog
+        from tpotctl.screens.splash import SplashScreen
+        app = self.splash_app()
+        with mock.patch.object(splash_anim, "DURATION", 1.0):
+            async with app.run_test(size=(120, 40)) as pilot:
+                await self.poll(pilot, lambda: isinstance(app.screen, SplashScreen))
+                splash = app.screen
+                dialog = ConfirmDialog("A question while the splash runs")
+                app.push_screen(dialog)
+                await self.poll(pilot, lambda: app.screen is dialog)
+                self.assertTrue(app.check_action("command_palette", ()))     # the splash is not in front
+                await self.poll(pilot, lambda: getattr(splash, "done", False))
+                self.assertIs(app.screen, dialog)
+                self.assertIsNone(app.held_notices)
+                dialog.dismiss(False)
+                await self.poll(pilot, lambda: len(app.screen_stack) == 1)
+                self.assertNotIsInstance(app.screen, SplashScreen)
+                self.assertNotIn(splash, app.screen_stack)
+                await pilot.press("ctrl+p")
+                await self.poll(pilot, lambda: isinstance(app.screen, CommandPalette))
+
+    async def test_a_resize_too_small_under_a_dialog_ends_the_splash(self):
+        """Below 80 x 24 while a dialog is over the splash: it ends there, and when the dialog closes the
+        menu is there."""
+        from tpotctl import splash_anim
+        from tpotctl.screens.dialogs import ConfirmDialog
+        from tpotctl.screens.splash import SplashScreen
+        app = self.splash_app()
+        with mock.patch.object(splash_anim, "DURATION", 60.0):
+            async with app.run_test(size=(120, 40)) as pilot:
+                await self.poll(pilot, lambda: isinstance(app.screen, SplashScreen))
+                splash = app.screen
+                dialog = ConfirmDialog("A question while the splash runs")
+                app.push_screen(dialog)
+                await self.poll(pilot, lambda: app.screen is dialog)
+                await pilot.resize_terminal(79, 30)
+                await pilot.pause(0.3)
+                dialog.dismiss(False)
+                await self.poll(pilot, lambda: len(app.screen_stack) == 1)
+                self.assertNotIn(splash, app.screen_stack)
+                self.assertIsNone(app.held_notices)
+
+    def test_a_notice_while_the_held_ones_are_told_comes_after_them(self):
+        """A worker's notice while the held ones are being told waits for them (the lock covers the
+        telling); a notice told from within the telling, on the same thread, does not lock up."""
+        import threading
+        from textual.app import App
+        app = self.splash_app()
+        app.notify("one")
+        app.notify("two")
+        told, workers = [], []
+
+        def telling(_self, message, *args, **kwargs):
+            told.append(message)
+            if message == "one":
+                worker = threading.Thread(target=app.notify, args=("late",), daemon=True)
+                workers.append(worker)
+                worker.start()
+                worker.join(0.3)                     # it waits for the lock, or it is told now
+                app.notify("again")                  # the same thread, under the lock it holds
+        with mock.patch.object(App, "notify", telling):
+            releasing = threading.Thread(target=app.release_notices, daemon=True)   # a lock-up fails, no hang
+            releasing.start()
+            releasing.join(5)
+            self.assertFalse(releasing.is_alive(), "the telling locked up")
+            for worker in workers:
+                worker.join(5)
+        self.assertEqual(told, ["one", "two", "again", "late"])
+        self.assertIsNone(app.held_notices)
+
     async def test_ctrl_q_during_the_splash_quits(self):
         """ctrl+q while the splash runs: the splash ends and the quit goes on as from the menu, no
         "Close this screen first" that would wait for the splash."""

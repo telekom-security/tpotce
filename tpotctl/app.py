@@ -138,17 +138,20 @@ class Runner:
         self.app = app
 
     def __call__(self, command: List[str], cwd: Optional[str] = None) -> int:
+        """ctrl+c reaches the child as well and it decides (bootstrap.wait_child waits on, 128 + n when
+        signal n ended it); at the question afterwards it counts as Enter, no traceback in the menu."""
+        from tpotctl import bootstrap
         with self.app.suspend():
             print(f"\n$ {' '.join(command)}\n", flush=True)
             try:
-                code = subprocess.call(command, cwd=cwd)
+                code = bootstrap.wait_child(subprocess.Popen(command, cwd=cwd))
             except OSError as err:
                 print(err)
                 code = 127
             try:
                 input(f"\n[exit code {code}] Press Enter to return to the T-Pot Manager ... ")
-            except EOFError:
-                pass
+            except (EOFError, KeyboardInterrupt):
+                print(flush=True)
         return code
 
 
@@ -1461,7 +1464,8 @@ class TpotApp(App):
         self.splash = splash
         # the notices while the splash runs (a start problem of .env, a refresh): told when it ends
         self.held_notices: Optional[List[tuple]] = [] if splash else None
-        self._held_lock = threading.Lock()
+        # an RLock: a notice told from within the telling of the held ones (same thread) must not lock up
+        self._held_lock = threading.RLock()
         apply_theme(self)
         self.panes = list(PANES)
         self.locked = {key: why for key, *_rest in PANES for why in [self.why_locked(key)] if why}
@@ -1637,10 +1641,11 @@ class TpotApp(App):
         if action in ("customize", "restart_service") and len(self.screen_stack) > 1:
             return False
         # ctrl+p is a priority binding: over the splash it would open the palette on top of it, and the
-        # splash would freeze under it; there the key ends the splash like any other
+        # splash would freeze under it; there the key ends the splash like any other. Over a dialog on top
+        # of the splash the palette is the dialog's as anywhere else
         if action == "command_palette":
             from tpotctl.screens.splash import SplashScreen
-            if any(isinstance(screen, SplashScreen) for screen in self.screen_stack):
+            if isinstance(self.screen, SplashScreen):
                 return False
         return True
 
@@ -1660,11 +1665,16 @@ class TpotApp(App):
 
     def release_notices(self) -> None:
         """The splash is gone: the notices of its time in their order, with their options; their time
-        counts from now."""
+        counts from now. They are told under the lock: a worker's notice meanwhile waits and comes after
+        them, one told from within the telling joins the end of the list."""
         with self._held_lock:
-            held, self.held_notices = self.held_notices or [], None
-        for message, args, kwargs in held:
-            super().notify(message, *args, **kwargs)
+            held = self.held_notices or []
+            told = 0
+            while told < len(held):
+                message, args, kwargs = held[told]
+                told += 1
+                super().notify(message, *args, **kwargs)
+            self.held_notices = None
 
     def action_nav(self, direction: str) -> None:
         """The arrows: in the menu right opens the page (up / down are the menu's own), elsewhere

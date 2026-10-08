@@ -412,6 +412,56 @@ class AssistantTest(unittest.IsolatedAsyncioTestCase):
             self.assertIn("Install Docker Engine (All)", str(app.query_one("#install-phase").render()))
             self.assertFalse(app.busy)
 
+    async def failed_text(self, lines):
+        """The text of a sensor installation whose install.sh prints lines, then fails."""
+        from tpotctl.screens.install import InstallApp
+
+        class Failing:
+            def __init__(self, command):
+                self.command = command
+
+            def run(self, line):
+                for text in lines:
+                    line(text + "\n")
+                return 1
+        self.repo = make_checkout(self)
+        app = InstallApp(engine=Failing, checks=all_ok, sudo_mode="passwordless", password_ok=lambda pw: True,
+                         run=lambda *a, **k: None, repo_dir=self.repo)
+        async with app.run_test(size=(140, 44)) as pilot:
+            await pilot.pause(0.4)
+            await pilot.click("#ins-next")
+            await pilot.pause(0.2)
+            await pilot.press("down", "enter")                 # Sensor
+            await pilot.pause(0.3)
+            await pilot.click("#ins-next")
+            await pilot.pause(0.2)
+            await pilot.click("#ins-next")
+            for _ in range(80):                                # under load the engine thread takes a while
+                await pilot.pause(0.05)
+                if not app.busy:
+                    break
+            self.assertFalse(app.busy)
+            return str(app.query_one("#install-phase").render()).replace("\n", " ")
+
+    async def test_a_failed_installation_names_the_log_of_its_step(self):
+        """install.sh writes a log per step: the packages and checks to install_tpot_prepare.log, the
+        playbook to install_tpot.log, the pull to install_tpot_pull.log; a phase failed mark after
+        it does not hide which step it was."""
+        logs = ("~/install_tpot_prepare.log", "~/install_tpot.log", "~/install_tpot_pull.log")
+        cases = [(["@@tpot phase checks"], logs[0]),
+                 (["@@tpot phase checks", "@@tpot phase packages"], logs[0]),
+                 (["@@tpot phase checks", "@@tpot phase packages", "@@tpot tasks 2", "@@tpot phase playbook",
+                   "TASK [Gathering Facts] ***", "fatal: [127.0.0.1]: FAILED! => {}", "@@tpot phase failed"],
+                  logs[1]),
+                 (["@@tpot phase playbook", "@@tpot phase compose"], logs[1]),
+                 (["@@tpot phase playbook", "@@tpot phase compose", "@@tpot phase pull", "@@tpot images 3",
+                   "@@tpot phase failed"], logs[2])]
+        for lines, log in cases:
+            with self.subTest(lines=" | ".join(lines)):
+                text = await self.failed_text(lines)
+                self.assertIn(log, text)
+                self.assertEqual([other for other in logs if other in text], [log])
+
     async def test_quitting_before_the_install_asks(self):
         from tpotctl.screens.dialogs import ConfirmDialog
         app = self.make_app()

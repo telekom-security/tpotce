@@ -573,5 +573,69 @@ class CustomizerScreenTest(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn("wordpot", self.screen(app).state.result.services)
 
 
+@unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")
+class RunnerTest(unittest.TestCase):
+    """A command of the menu runs in the normal terminal (the app is suspended); ctrl+c reaches the
+    child, which decides, and brings no traceback into the T-Pot Manager."""
+
+    class Child:
+        """A child that ctrl+c ends: the first wait is interrupted, then it is gone by SIGINT."""
+
+        def __init__(self, *args, **kwargs):
+            self.args, self.kwargs, self.waits, self.returncode = args, kwargs, 0, None
+
+        def wait(self, timeout=None):
+            self.waits += 1
+            if self.waits == 1:
+                raise KeyboardInterrupt
+            self.returncode = -2
+            return self.returncode
+
+        def kill(self):
+            self.killed = True
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    def run_command(self, popen, answer):
+        import contextlib
+        import io
+        from types import SimpleNamespace
+        from unittest import mock
+        stub = SimpleNamespace(suspend=contextlib.nullcontext)
+        out = io.StringIO()
+        with mock.patch("subprocess.Popen", popen) as started, mock.patch("builtins.input", answer) as asked, \
+                contextlib.redirect_stdout(out):
+            code = tapp.Runner(stub)(["/x/update.sh", "-y"], cwd="/x")
+        return code, out.getvalue(), started, asked
+
+    def test_ctrl_c_ends_the_child_and_the_enter_too(self):
+        from unittest import mock
+        children = []
+
+        def popen(*args, **kwargs):
+            children.append(self.Child(*args, **kwargs))
+            return children[-1]
+        code, out, _started, asked = self.run_command(popen, mock.Mock(side_effect=KeyboardInterrupt))
+        self.assertEqual(code, 130)                                  # 128 + SIGINT
+        self.assertEqual(len(children), 1)
+        self.assertEqual(children[0].args, (["/x/update.sh", "-y"],))
+        self.assertEqual(children[0].kwargs, {"cwd": "/x"})
+        self.assertEqual(children[0].waits, 2)                       # the ctrl+c only waited on
+        self.assertIn("$ /x/update.sh -y", out)
+        self.assertEqual(asked.call_count, 1)
+        self.assertIn("[exit code 130]", asked.call_args[0][0])
+
+    def test_a_command_that_does_not_start(self):
+        from unittest import mock
+        code, _out, _started, asked = self.run_command(mock.Mock(side_effect=FileNotFoundError(2, "No such file")),
+                                                       mock.Mock(side_effect=EOFError))
+        self.assertEqual(code, 127)
+        self.assertIn("[exit code 127]", asked.call_args[0][0])
+
+
 if __name__ == "__main__":
     unittest.main()
