@@ -37,7 +37,7 @@ def _unquote(raw: str):
             inner = inner.replace('\\"', '"').replace("\\\\", "\\")
         return inner, raw[0]
     # an unquoted value ends where a comment starts, as for docker compose
-    return re.split(r"\s+#", raw, 1)[0].strip(), ""
+    return re.split(r"\s+#", raw, maxsplit=1)[0].strip(), ""
 
 
 def _quote(value: str, quote: str) -> str:
