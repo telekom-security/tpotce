@@ -71,7 +71,7 @@ def build_parser() -> argparse.ArgumentParser:
     add.add_argument("--host", help="IP or name of the sensor, asked for if left out")
     add.add_argument("--ssh-user", help="user T-Pot was installed with on the sensor")
     add.add_argument("--ssh-port", type=int, default=64295, help="SSH port of the sensor (default 64295, T-Pot's)")
-    add.add_argument("--hive-address", help="IP or name the sensor reaches this HIVE on")
+    add.add_argument("--hive-address", help="IPv4 or name the sensor reaches this HIVE on")
     add.add_argument("--no-become-pass", action="store_true", help="sudo on the sensor needs no password")
     add.add_argument("-y", "--yes", action="store_true", help="do not ask, renew the certificate if needed")
     remove = sensor_actions.add_parser("remove", help="revoke the access of a sensor, nothing is done on it")
@@ -82,7 +82,7 @@ def build_parser() -> argparse.ArgumentParser:
     change.add_argument("--host")
     change.add_argument("--ssh-user")
     change.add_argument("--ssh-port", type=int)
-    change.add_argument("--hive-address")
+    change.add_argument("--hive-address", help="IPv4 or name the sensor reaches this HIVE on")
     cert = sensor_actions.add_parser("cert", help="the certificate the sensors check this HIVE with")
     cert.add_argument("--add", action="append", default=[], metavar="ADDRESS",
                       help="an IP or name of this HIVE the certificate has to cover, repeatable")

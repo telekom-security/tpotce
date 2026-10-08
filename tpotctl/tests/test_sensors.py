@@ -335,6 +335,14 @@ class CliTest(unittest.TestCase):
         popen.assert_not_called()
         self.assertEqual(len(sensors.Registry(self.repo).entries()), 2)      # nothing granted
 
+    def test_the_help_says_ipv4_for_the_hive_address(self):
+        """As the question and the dialogs: a sensor cannot send to an IPv6 address of this HIVE."""
+        for action in ("add", "set"):
+            with self.subTest(action=action):
+                code, text = self.run_cli("sensors", action, "-h")
+                self.assertEqual(code, 0, text)
+                self.assertIn("IPv4 or name the sensor reaches this HIVE on", " ".join(text.split()))
+
     def test_no_proposal_of_the_hive_address_asks_for_it(self):
         """An SSH alias (sensor_1) has no address of this HIVE on the way to it: no "[]" in the question,
         without a terminal exit 2 (cannot ask) and the option to give it with, an empty answer exit 1."""
@@ -678,11 +686,111 @@ class SensorsPaneTest(unittest.IsolatedAsyncioTestCase):
                     app.push_screen(dialog)
                     await pilot.pause()
                     dialog.query_one("#sensor-host").value = "sensor_1"
-                    await pilot.pause()
+                    await pilot.pause(0.8)                  # the proposal comes after a pause in typing
                     placeholder = dialog.query_one("#sensor-hive").placeholder
                 self.assertNotIn("[]", placeholder)
+                self.assertIn("IPv4", placeholder)
                 if found:
                     self.assertIn(f"[{found}]", placeholder)
+
+    async def test_the_proposal_of_the_hive_address_does_not_hold_up_typing(self):
+        """default_hive_address resolves the name (DNS) and runs ip route get: once after a pause in
+        typing, in a thread, never per key in the UI thread; a late answer for an older host is dropped."""
+        import threading
+        from textual.app import App
+        from tpotctl.screens.dialogs import SensorDialog
+        calls = []
+
+        def default_hive(host):
+            calls.append((host, threading.current_thread() is threading.main_thread()))
+            return "192.168.1.2" if host == "sensor1" else "10.9.9.9"
+        dialog = SensorDialog(sensors.check_address, sensors.check_user, default_hive, sensors.check_hive_address)
+        app = App()
+        async with app.run_test() as pilot:
+            app.push_screen(dialog)
+            await pilot.pause()
+            dialog.query_one("#sensor-host").focus()
+            await pilot.press(*"sensor1")
+            self.assertEqual(calls, [])                 # not while typing
+            await pilot.pause(0.8)
+            placeholder = dialog.query_one("#sensor-hive").placeholder
+        self.assertEqual(calls, [("sensor1", False)])
+        self.assertIn("[192.168.1.2]", placeholder)
+
+    async def test_a_late_proposal_for_an_older_host_is_dropped(self):
+        import threading
+        from textual.app import App
+        from tpotctl.screens.dialogs import SensorDialog
+        slow = threading.Event()
+
+        def default_hive(host):
+            if host == "old":
+                slow.wait(5)
+                return "10.9.9.9"
+            return "192.168.1.2"
+        dialog = SensorDialog(sensors.check_address, sensors.check_user, default_hive, sensors.check_hive_address)
+        app = App()
+        async with app.run_test() as pilot:
+            app.push_screen(dialog)
+            await pilot.pause()
+            dialog.query_one("#sensor-host").value = "old"
+            await pilot.pause(0.6)                      # its lookup hangs
+            dialog.query_one("#sensor-host").value = "new"
+            await pilot.pause(0.6)
+            self.assertIn("[192.168.1.2]", dialog.query_one("#sensor-hive").placeholder)
+            slow.set()                                  # the answer for "old" comes last
+            await pilot.pause(0.3)
+            placeholder = dialog.query_one("#sensor-hive").placeholder
+        self.assertIn("[192.168.1.2]", placeholder)
+        self.assertNotIn("10.9.9.9", placeholder)
+
+    async def test_leaving_a_right_hive_address_keeps_the_problem_of_another_field(self):
+        from textual.app import App
+        from tpotctl.screens.dialogs import SensorDialog
+        dialog = SensorDialog(sensors.check_address, sensors.check_user, lambda _host: "", sensors.check_hive_address)
+        app = App()
+        async with app.run_test() as pilot:
+            app.push_screen(dialog)
+            await pilot.pause()
+            dialog.query_one("#sensor-host").value = "10.0.0.5"
+            dialog.query_one("#sensor-user").value = "no user"
+            dialog.query_one("#sensor-hive").value = "192.168.1.2"
+            await pilot.click("#sensor-deploy")
+            await pilot.pause()
+            self.assertIn("not a user name", str(dialog.query_one("#sensor-hint").render()))
+            dialog.query_one("#sensor-hive").focus()
+            await pilot.pause()
+            dialog.query_one("#sensor-user").focus()
+            await pilot.pause()
+            self.assertIn("not a user name", str(dialog.query_one("#sensor-hint").render()))
+
+    async def test_the_dialogs_check_the_hive_address_before_deploy(self):
+        """IPv4 or a name: the placeholder says so, an IPv6 address is marked when the field is left,
+        the mark goes when the value is right; for a new sensor and for one that is registered."""
+        from textual.app import App
+        from tpotctl.screens.dialogs import SensorDialog, SensorEditDialog
+        new = lambda: SensorDialog(sensors.check_address, sensors.check_user, lambda _host: "",  # noqa: E731
+                                   sensors.check_hive_address)
+        edit = lambda: SensorEditDialog(sensors.Sensor("s1", host="192.0.2.9", ssh_user="t"),  # noqa: E731
+                                        lambda **values: None, sensors.check_hive_address)
+        for make, field, hint, after in ((new, "#sensor-hive", "#sensor-hint", "#sensor-nopass"),
+                                         (edit, "#edit-hive", "#edit-hint", "#edit-host")):
+            with self.subTest(field=field):
+                dialog = make()
+                app = App()
+                async with app.run_test() as pilot:
+                    app.push_screen(dialog)
+                    await pilot.pause()
+                    self.assertIn("IPv4 or name", dialog.query_one(field).placeholder)
+                    dialog.query_one(field).focus()
+                    await pilot.press(*"fd00::1")
+                    dialog.query_one(after).focus()           # leaves the field
+                    await pilot.pause()
+                    self.assertIn("IPv6", str(dialog.query_one(hint).render()))
+                    self.assertIs(app.screen, dialog)
+                    dialog.query_one(field).value = "192.168.1.2"
+                    await pilot.pause()
+                    self.assertEqual(str(dialog.query_one(hint).render()).strip(), "")
 
     async def test_edit_where_a_sensor_is(self):
         from tpotctl import app as tapp, ops
@@ -719,6 +827,7 @@ class SensorsPaneTest(unittest.IsolatedAsyncioTestCase):
             await pilot.click("#sensor-edit")
             await pilot.pause(0.3)
             self.assertIsInstance(app.screen, SensorEditDialog)
+            self.assertIs(app.screen.check_hive, sensors.check_hive_address)
             app.screen.query_one("#edit-host").value = "10.0.0.9"
             app.screen.query_one("#edit-port").value = "2222"
             await pilot.click("#edit-save")

@@ -1219,7 +1219,8 @@ class SensorsPane(Vertical):
         elif button == "sensor-edit" and self.selected() and self.registry is not None:
             from tpotctl.screens.dialogs import SensorEditDialog
             name, registry = self.selected(), self.registry
-            self.app.push_screen(SensorEditDialog(registry.get(name), lambda **values: registry.update(name, **values)),
+            self.app.push_screen(SensorEditDialog(registry.get(name), lambda **values: registry.update(name, **values),
+                                                  tsensors.check_hive_address),
                                  lambda values: self.load() if values else None)
         elif button == "sensor-remove" and self.selected() and self.registry is not None:
             name = self.selected()

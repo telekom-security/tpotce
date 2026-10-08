@@ -3,6 +3,7 @@
 from typing import List, Optional
 
 from rich.text import Text
+from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
@@ -194,16 +195,55 @@ class UserDialog(NavModal):
         self.dismiss(None)
 
 
-class SensorDialog(NavModal):
+HIVE_PLACEHOLDER = "IPv4 or name the sensor reaches this HIVE on"
+PROPOSAL_PAUSE = 0.4        # seconds without a key in the sensor field before the HIVE address is looked up
+
+
+class HiveField:
+    """The HIVE address field of the sensor dialogs: checked when it is left (and again as you type
+    while it is marked), so an IPv6 address shows before Deploy / Save. Needs hive_id, hint_id and
+    check_hive (None: no check)."""
+
+    hive_id = hint_id = ""
+    check_hive = None
+    hive_marked = False
+
+    def mark_hive(self) -> None:
+        value = self.query_one(f"#{self.hive_id}", Input).value.strip()
+        problem = ""
+        if value and self.check_hive is not None:
+            try:
+                self.check_hive(value)
+            except Exception as err:   # SensorsError, kept generic to stay UI-only
+                problem = str(err)
+        hint = self.query_one(f"#{self.hint_id}", Label)
+        if problem:
+            hint.update(Text(problem, style=f"bold {theme.color('error')}"))
+        elif self.hive_marked:          # only its own mark goes, a problem of another field stays
+            hint.update("")
+        self.hive_marked = bool(problem)
+
+    def hive_changed(self, event: Input.Changed) -> None:
+        if event.input.id == self.hive_id and self.hive_marked:
+            self.mark_hive()
+
+    def on_input_blurred(self, event: Input.Blurred) -> None:
+        if event.input.id == self.hive_id:
+            self.mark_hive()
+
+
+class SensorDialog(HiveField, NavModal):
     """Where a new sensor is, dismissed with a dict or None."""
 
     BINDINGS = [Binding("escape", "cancel", "Back")]
+    hive_id, hint_id = "sensor-hive", "sensor-hint"
 
     def __init__(self, check_address=None, check_user=None, default_hive=None, check_hive=None):
         super().__init__()
         self.check_address, self.check_user, self.default_hive = check_address, check_user, default_hive
         # the HIVE address has a check of its own (no IPv6, what tpotinit takes as TPOT_HIVE_IP)
         self.check_hive = check_hive or check_address
+        self.proposal_timer = None
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="dialog"):
@@ -212,7 +252,7 @@ class SensorDialog(NavModal):
                               "(SSH key, sudo password) and reboots the sensor."), classes="hint")
             yield NavInput(placeholder="IP or name of the sensor", id="sensor-host")
             yield NavInput(placeholder="user T-Pot was installed with on the sensor", id="sensor-user")
-            yield NavInput(placeholder="IP or name the sensor reaches this HIVE on", id="sensor-hive")
+            yield NavInput(placeholder=HIVE_PLACEHOLDER, id="sensor-hive")
             yield Checkbox("sudo on the sensor needs no password", id="sensor-nopass")
             yield Label("", id="sensor-hint")
             with Horizontal(classes="actions"):
@@ -223,11 +263,32 @@ class SensorDialog(NavModal):
         self.query_one("#sensor-host", Input).focus()
 
     def on_input_changed(self, event: Input.Changed) -> None:
+        self.hive_changed(event)
         if event.input.id == "sensor-host" and self.default_hive:
-            hive = self.query_one("#sensor-hive", Input)
-            if not hive.value:
-                proposal = self.default_hive(event.value) if event.value else ""
-                hive.placeholder = "IP or name the sensor reaches this HIVE on" + (f" [{proposal}]" if proposal else "")
+            # default_hive resolves the name and asks ip route: once after a pause in typing, in a thread
+            if self.proposal_timer is not None:
+                self.proposal_timer.stop()
+                self.proposal_timer = None
+            self.query_one("#sensor-hive", Input).placeholder = HIVE_PLACEHOLDER
+            host = event.value.strip()
+            if host:
+                self.proposal_timer = self.set_timer(PROPOSAL_PAUSE, lambda: self.propose(host))
+
+    @work(thread=True, exclusive=True, group="hive-proposal")
+    def propose(self, host: str) -> None:
+        try:
+            proposal = self.default_hive(host)
+        except Exception:      # a proposal only, the CLI looks again
+            proposal = ""
+        try:
+            self.app.call_from_thread(self.proposed, host, proposal)
+        except RuntimeError:   # the app is gone
+            pass
+
+    def proposed(self, host: str, proposal: str) -> None:
+        if not self.is_mounted or self.query_one("#sensor-host", Input).value.strip() != host:
+            return             # the dialog is closed or the host changed meanwhile: an old answer
+        self.query_one("#sensor-hive", Input).placeholder = HIVE_PLACEHOLDER + (f" [{proposal}]" if proposal else "")
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         self.focus_next()
@@ -256,14 +317,15 @@ class SensorDialog(NavModal):
         self.dismiss(None)
 
 
-class SensorEditDialog(NavModal):
+class SensorEditDialog(HiveField, NavModal):
     """Where a registered sensor is (tpot sensors set), dismissed with a dict or None."""
 
     BINDINGS = [Binding("escape", "cancel", "Back")]
+    hive_id, hint_id = "edit-hive", "edit-hint"
 
-    def __init__(self, sensor, update=None):
+    def __init__(self, sensor, update=None, check_hive=None):
         super().__init__()
-        self.sensor, self.update = sensor, update
+        self.sensor, self.update, self.check_hive = sensor, update, check_hive
 
     def compose(self) -> ComposeResult:
         sensor = self.sensor
@@ -275,8 +337,7 @@ class SensorEditDialog(NavModal):
             yield NavInput(sensor.ssh_user or "", placeholder="user T-Pot was installed with on the sensor",
                         id="edit-user")
             yield NavInput(str(sensor.ssh_port or ""), placeholder="SSH port (64295)", id="edit-port", type="integer")
-            yield NavInput(sensor.hive_address or "", placeholder="IP or name the sensor reaches this HIVE on",
-                        id="edit-hive")
+            yield NavInput(sensor.hive_address or "", placeholder=HIVE_PLACEHOLDER, id="edit-hive")
             yield Label("", id="edit-hint")
             with Horizontal(classes="actions"):
                 yield Button("Save", variant="primary", id="edit-save")
@@ -284,6 +345,9 @@ class SensorEditDialog(NavModal):
 
     def on_mount(self) -> None:
         self.query_one("#edit-host", Input).focus()
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        self.hive_changed(event)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id != "edit-save":
