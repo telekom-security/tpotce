@@ -67,12 +67,22 @@ def _unreachable(url: str, err: Exception) -> str:
     return f"{url} cannot be reached ({getattr(err, 'reason', err)}).{hint}"
 
 
+def _close(answer) -> None:
+    """An HTTPError is a response as well: closed here, not by the garbage collector (Python 3.14 warns);
+    one without a body cannot be closed on Python 3.9."""
+    try:
+        answer.close()
+    except Exception:          # noqa: BLE001
+        pass
+
+
 def list_models(provider: str, url: str, api_key: str = "", opener: Callable = urllib.request.urlopen) -> List[str]:
     request = request_for(provider, url, api_key)
     try:
         with opener(request, timeout=5) as response:
             answer = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as err:
+        _close(err)
         raise LLMError(f"{request.full_url} answered {err.code} {err.reason}")
     except (OSError, ValueError) as err:
         raise LLMError(_unreachable(request.full_url, err))
@@ -287,6 +297,7 @@ def test(provider: str, url: str, model: str, api_key: str = "", opener: Callabl
         with opener(request, timeout=timeout) as response:
             answer = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as err:
+        _close(err)
         return TestResult(False, problem=f"{target} answered {err.code} {err.reason}")
     except (OSError, ValueError) as err:
         return TestResult(False, problem=_unreachable(target, err))

@@ -96,9 +96,10 @@ STUBS = {
 }
 
 
-def at_terminal(args, env, answers="", timeout=30, cwd=None, script=BUILDER):
+def at_terminal(args, env, answers="", timeout=90, cwd=None, script=BUILDER):
     """Runs builder.sh (as script names it, from cwd) in a pty (stdin, stdout and stderr) with the answers
-    typed ahead; rc, output."""
+    typed ahead; rc, output. It ends with the script; the timeout only counts for one that hangs (a machine
+    busy with other suites made 30 s too tight for the menu walks)."""
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 50, 120, 0, 0))
     proc = subprocess.Popen(["bash", script] + list(args), env=env, stdin=slave, stdout=slave, stderr=slave,

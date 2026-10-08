@@ -175,8 +175,25 @@ class TestCallTest(unittest.TestCase):
         self.assertTrue(result.ok)
         self.assertEqual(seen[0].get_header("Authorization"), "Bearer sk-secret")
 
+    def test_an_error_answer_is_closed(self):
+        """An HTTPError is an answer too (a socket of its own): closed, not left to the garbage collector,
+        whose ResourceWarning would land in the stderr of a later test."""
+        import io
+        for call in (lambda opener: llm.test("openai", "", "gpt-4o", api_key="k", opener=opener),
+                     lambda opener: llm.list_models("openai", "", api_key="k", opener=opener)):
+            body = io.BytesIO(b"{}")
+            error = urllib.error.HTTPError("https://api.openai.com/v1/x", 401, "Unauthorized", {}, body)
+            try:
+                call(lambda *_a, **_k: (_ for _ in ()).throw(error))
+            except llm.LLMError:
+                pass
+            self.assertTrue(body.closed)
+
     def test_key_never_in_the_problem(self):
-        error = urllib.error.HTTPError("https://api.openai.com/v1/chat/completions", 401, "Unauthorized", {}, None)
+        import io
+        error = urllib.error.HTTPError("https://api.openai.com/v1/chat/completions", 401, "Unauthorized", {},
+                                       io.BytesIO(b""))
+        self.addCleanup(error.close)
         opener = fake_opener({"https://api.openai.com/v1/chat/completions": error})
         result = llm.test("openai", "", "gpt-4o", api_key="sk-secret", opener=opener)
         self.assertFalse(result.ok)
