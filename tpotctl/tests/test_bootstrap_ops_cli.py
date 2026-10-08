@@ -98,6 +98,15 @@ class WaitChildTest(unittest.TestCase):
         child = Child(["x"], [KeyboardInterrupt, KeyboardInterrupt, 0])
         self.assertEqual(bootstrap.wait_child(child), 0)
 
+    def test_it_remembers_a_ctrl_c_while_it_waited(self):
+        """ansible-playbook or sudo catch the ^C and exit 99 / 1: the caller still learns that it came."""
+        interrupts = []
+        self.assertEqual(bootstrap.wait_child(Child(["x"], [KeyboardInterrupt, 99]), interrupts), 99)
+        self.assertEqual(len(interrupts), 1)
+        interrupts = []
+        self.assertEqual(bootstrap.wait_child(Child(["x"], [3]), interrupts), 3)
+        self.assertEqual(interrupts, [])
+
     def test_reexec_gives_130_for_ctrl_c_not_254(self):
         popen, children = fake_popen(KeyboardInterrupt, -2)
         with mock.patch("subprocess.Popen", side_effect=popen):
@@ -396,6 +405,17 @@ class CliTest(unittest.TestCase):
         self.assertEqual(children[0].waits, 2)
         self.assertIn("Cancelled.", err.getvalue())
         self.assertNotIn("Traceback", err.getvalue())
+
+    def test_ctrl_c_that_the_child_survives_but_fails_on_is_cancelled(self):
+        """sudo at its password prompt exits 1 on ^C (sudo's behaviour), ansible-playbook 99: the command
+        was stopped all the same, 130 and Cancelled.; a child that ends well despite the ^C gives 0."""
+        for steps, expected in (((KeyboardInterrupt, 1), 130), ((KeyboardInterrupt, 99), 130),
+                                ((KeyboardInterrupt, 0), 0)):
+            popen, _children = fake_popen(*steps)
+            err = io.StringIO()
+            with mock.patch("subprocess.Popen", side_effect=popen), mock.patch("sys.stderr", err):
+                self.assertEqual(main(["restart"]), expected, steps)
+            self.assertEqual("Cancelled." in err.getvalue(), expected == 130, err.getvalue())
 
     def test_a_child_ended_by_another_signal_gives_128_plus_it(self):
         popen, _children = fake_popen(-15)

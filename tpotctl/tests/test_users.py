@@ -180,7 +180,7 @@ class StoreTest(unittest.TestCase):
             with redirect_stdout(out), redirect_stderr(err), \
                     mock.patch("sys.stdin", io.StringIO("a long passphrase\nshort\nshort\n")):
                 self.assertEqual(cli.main(["users", "add", "alice", "--password-stdin"]), 0)
-                self.assertEqual(cli.main(["users", "add", "bob", "--password-stdin"]), 1)      # weak
+                self.assertEqual(cli.main(["users", "add", "bob", "--password-stdin"]), 2)      # weak, cannot ask
                 self.assertEqual(cli.main(["users", "add", "bob", "--password-stdin", "--allow-weak"]), 0)
                 self.assertEqual(cli.main(["users", "remove", "bob"]), 2)                       # no --yes
                 self.assertEqual(cli.main(["users", "remove", "bob", "--yes"]), 0)

@@ -151,44 +151,20 @@ class Runner:
             if asking[0]:                       # once: a second ctrl+c cannot escape the except below
                 asking[0] = False
                 raise KeyboardInterrupt
-        previous = take_sigint(on_sigint)
-        try:
-            with self.app.suspend():
-                print(f"\n$ {' '.join(command)}\n", flush=True)
-                try:
-                    code = bootstrap.wait_child(subprocess.Popen(command, cwd=cwd))
-                except OSError as err:
-                    print(err)
-                    code = 127
-                try:
-                    asking[0] = True
-                    input(f"\n[exit code {code}] Press Enter to return to the T-Pot Manager ... ")
-                except (EOFError, KeyboardInterrupt):
-                    print(flush=True)
-                asking[0] = False
-        finally:
-            give_back_sigint(previous)
+        with bootstrap.sigint_to(on_sigint), self.app.suspend():
+            print(f"\n$ {' '.join(command)}\n", flush=True)
+            try:
+                code = bootstrap.wait_child(subprocess.Popen(command, cwd=cwd))
+            except OSError as err:
+                print(err)
+                code = 127
+            try:
+                asking[0] = True
+                input(f"\n[exit code {code}] Press Enter to return to the T-Pot Manager ... ")
+            except (EOFError, KeyboardInterrupt):
+                print(flush=True)
+            asking[0] = False
         return code
-
-
-def take_sigint(handler):
-    """Put handler on SIGINT and give back the one before it (None where that cannot be done: not
-    the main thread, or a handler that was not set from Python)."""
-    import signal
-    try:
-        previous = signal.getsignal(signal.SIGINT)
-        if previous is None:
-            return None
-        signal.signal(signal.SIGINT, handler)
-    except ValueError:                          # not the main thread
-        return None
-    return previous
-
-
-def give_back_sigint(previous) -> None:
-    import signal
-    if previous is not None:
-        signal.signal(signal.SIGINT, previous)
 
 
 def container_rows(containers: List[ops.Container]):

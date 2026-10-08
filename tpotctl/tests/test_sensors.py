@@ -364,12 +364,77 @@ class CliTest(unittest.TestCase):
         self.assertEqual(len(sensors.Registry(self.repo).entries()), 2)
 
     def test_ctrl_c_that_the_playbook_survives_takes_the_access_back(self):
-        """ansible-playbook catches the ^C itself and exits 99: a failed deployment, the access goes."""
+        """ansible-playbook catches the ^C itself and exits 99: still a ^C, 130 and Cancelled., the access goes."""
         code, text, _children = self.add_with(KeyboardInterrupt, 99)
-        self.assertEqual(code, 1, text)
+        self.assertEqual(code, 130, text)
+        self.assertIn("taken back", text)
+        self.assertIn("Cancelled.", text)
+        self.assertNotIn("Pw-of-the-sensor-1234", text)
+        self.assertEqual(len(sensors.Registry(self.repo).entries()), 2)
+
+    def ctrl_c_in(self, method, *steps):
+        """sensors add with a real SIGINT to this process right after Registry.<method>."""
+        import signal
+        original = getattr(self.Registry, method)
+
+        def wrapped(registry, *args, **kwargs):
+            result = original(registry, *args, **kwargs)
+            os.kill(os.getpid(), signal.SIGINT)
+            return result
+        before = signal.getsignal(signal.SIGINT)
+        with mock.patch.object(self.Registry, method, wrapped):
+            code, text, children = self.add_with(*steps)
+        self.assertEqual(signal.getsignal(signal.SIGINT), before)               # given back
+        return code, text, children
+
+    def test_ctrl_c_right_after_the_grant_starts_no_deployment(self):
+        """No window between the grant and what takes it back: the access goes, nothing is deployed."""
+        code, text, children = self.ctrl_c_in("grant", 0)
+        self.assertEqual(code, 130, text)
+        self.assertEqual(children, [])
         self.assertIn("taken back", text)
         self.assertNotIn("Pw-of-the-sensor-1234", text)
         self.assertEqual(len(sensors.Registry(self.repo).entries()), 2)
+
+    def test_ctrl_c_as_the_playbook_fails_takes_the_access_back(self):
+        """The ^C comes just as the playbook ends with an error, before the access is taken back."""
+        import signal
+        popen, children = fake_popen(2)
+
+        def late_popen(*args, **kwargs):
+            child = popen(*args, **kwargs)
+            wait, sent = child.wait, []
+
+            def wait_then_ctrl_c(timeout=None):
+                code = wait(timeout)
+                if not sent:
+                    sent.append(True)
+                    os.kill(os.getpid(), signal.SIGINT)
+                return code
+            child.wait = wait_then_ctrl_c
+            return child
+        with mock.patch.object(sensors, "check_ssh", return_value="ok"), \
+                mock.patch.object(sensors, "cert_sans", return_value=["IP:192.168.1.2"]), \
+                mock.patch.object(sensors, "default_hive_address", return_value="192.168.1.2"), \
+                mock.patch("subprocess.Popen", side_effect=late_popen):
+            code, text = self.run_cli("sensors", "add", "--host", "10.0.0.5", "--ssh-user", "debian",
+                                      "--hive-address", "192.168.1.2", stdin=TTY())
+        self.assertEqual(len(children), 1)
+        self.assertEqual(code, 130, text)
+        self.assertIn("taken back", text)
+        self.assertEqual(len(sensors.Registry(self.repo).entries()), 2)
+
+    def test_ctrl_c_while_taking_the_access_back_cannot_stop_it(self):
+        code, text, _children = self.ctrl_c_in("revoke", 2)
+        self.assertNotEqual(code, 0, text)
+        self.assertIn("taken back", text)
+        self.assertEqual(len(sensors.Registry(self.repo).entries()), 2)
+
+    def test_ctrl_c_while_noting_a_deployed_sensor_keeps_it(self):
+        code, text, _children = self.ctrl_c_in("record", 0)
+        self.assertEqual(code, 0, text)
+        self.assertIn("shown only now: Pw-of-the-sensor-1234", text)
+        self.assertEqual(len(sensors.Registry(self.repo).entries()), 3)
 
     def test_a_playbook_that_cannot_start_takes_the_access_back(self):
         code, text, _children = self.add_with(FileNotFoundError(2, "No such file or directory", "ansible-playbook"))
@@ -379,10 +444,43 @@ class CliTest(unittest.TestCase):
         self.assertNotIn("Pw-of-the-sensor-1234", text)
         self.assertEqual(len(sensors.Registry(self.repo).entries()), 2)
 
-    def test_any_other_break_takes_the_access_back(self):
-        with mock.patch.object(self.Registry, "record", side_effect=RuntimeError("disk gone")), \
+    def test_any_other_break_before_the_deployment_ends_takes_the_access_back(self):
+        with mock.patch.object(sensors, "deploy_env", side_effect=RuntimeError("a bug")), \
                 self.assertRaises(RuntimeError):
             self.add_with(0)
+        self.assertEqual(len(sensors.Registry(self.repo).entries()), 2)
+
+    def test_a_deployed_sensor_keeps_its_access_if_it_cannot_be_noted(self):
+        """The sensor works and sends: a registry that cannot be written (or a .env that cannot be read for
+        the version) only costs its details, the access stays and the password is shown."""
+        from tpotctl import ops
+        for target, name in ((self.Registry, "record"), (ops, "env_values")):
+            with self.subTest(failing=name):
+                before = {u.name for u in sensors.Registry(self.repo).entries()}
+                failure = sensors.SensorsError("cannot write data/sensors.json")
+                with mock.patch.object(target, name, side_effect=failure):
+                    code, text, _children = self.add_with(0)
+                self.assertEqual(code, 0, text)
+                self.assertIn("shown only now: Pw-of-the-sensor-1234", text)
+                self.assertIn("cannot write data/sensors.json", text)
+                self.assertIn("tpot sensors set", text)
+                self.assertNotIn("taken back", text)
+                added = {u.name for u in sensors.Registry(self.repo).entries()} - before
+                self.assertEqual(len(added), 1, text)
+
+    def test_no_key_login_without_a_terminal_cannot_ask(self):
+        """ssh-copy-id asks for the password of the sensor: without a terminal exit code 2."""
+        popen, children = fake_popen(0)
+        with mock.patch.object(sensors, "check_ssh", return_value="key"), \
+                mock.patch.object(sensors, "has_ssh_key", return_value=True), \
+                mock.patch.object(sensors, "cert_sans", return_value=["IP:192.168.1.2"]), \
+                mock.patch.object(sensors, "default_hive_address", return_value="192.168.1.2"), \
+                mock.patch("subprocess.Popen", side_effect=popen):
+            code, text = self.run_cli("sensors", "add", "--host", "10.0.0.5", "--ssh-user", "debian",
+                                      "--hive-address", "192.168.1.2")
+        self.assertEqual(code, 2, text)
+        self.assertIn("ssh-copy-id", text)
+        self.assertEqual(children, [])
         self.assertEqual(len(sensors.Registry(self.repo).entries()), 2)
 
     def test_ctrl_c_at_ssh_copy_id_is_cancelled(self):

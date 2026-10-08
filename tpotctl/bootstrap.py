@@ -19,6 +19,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+from typing import Optional
 
 REPO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REQUIREMENTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "requirements.txt")
@@ -47,18 +48,40 @@ def cancelled(error: BaseException = None, stream=None) -> int:
     return 128 + signal.SIGINT
 
 
-def wait_child(proc) -> int:
+def wait_child(proc, interrupts: Optional[list] = None) -> int:
     """Wait for a child in the foreground and give back its exit code, 128 + n if signal n ended it.
 
     Ctrl+C reaches the child as well (the same process group of the terminal): the child decides
-    whether it ends, so a KeyboardInterrupt here only waits on, a second one as well."""
+    whether it ends, so a KeyboardInterrupt here only waits on, a second one as well. Each one goes
+    into interrupts, so a caller learns of a ^C the child caught and failed on (ansible-playbook
+    exits 99, sudo at its password prompt 1)."""
     while True:
         try:
             code = proc.wait()
             break
         except KeyboardInterrupt:
+            if interrupts is not None:
+                interrupts.append(signal.SIGINT)
             continue
     return 128 - code if code < 0 else code
+
+
+@contextlib.contextmanager
+def sigint_to(handler):
+    """SIGINT goes to handler inside, the handler before comes back afterwards. Nothing changes where
+    that cannot be done: not the main thread, or a handler that was not set from Python. A child
+    started inside gets the default (exec resets a handler, only SIG_IGN would be inherited)."""
+    try:
+        previous = signal.getsignal(signal.SIGINT)
+        if previous is not None:
+            signal.signal(signal.SIGINT, handler)
+    except ValueError:                          # not the main thread
+        previous = None
+    try:
+        yield
+    finally:
+        if previous is not None:
+            signal.signal(signal.SIGINT, previous)
 
 
 def venv_dir() -> str:
