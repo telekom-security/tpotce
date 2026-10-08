@@ -5,6 +5,7 @@ Skipped where Textual is missing; run them with the venv of tpot:
 """
 
 import os
+import subprocess
 import sys
 import unittest
 
@@ -635,6 +636,108 @@ class RunnerTest(unittest.TestCase):
                                                        mock.Mock(side_effect=EOFError))
         self.assertEqual(code, 127)
         self.assertIn("[exit code 127]", asked.call_args[0][0])
+
+
+RUNNER_APP = r'''
+import os, sys
+sys.path.insert(0, sys.argv[1])
+from textual.app import App
+from tpotctl import app as tapp
+LOG = sys.argv[2]
+
+def log(text):
+    with open(LOG, "a", encoding="utf-8") as out:
+        out.write(text + "\n")
+
+class Menu(App):
+    def on_mount(self):
+        self.set_timer(0.3, self.command)
+
+    def command(self):
+        code = tapp.Runner(self)(["sh", "-c", "echo CHILD-READY; exec sleep 5"])
+        log(f"runner {code}")
+        self.set_timer(0.5, self.after)
+
+    def after(self):
+        log("menu is back")
+        self.exit(0)
+
+Menu().run()
+log("run returned")
+'''
+
+
+@unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")
+@unittest.skipUnless(os.name == "posix", "needs a pty")
+class RunnerPtyTest(unittest.TestCase):
+    """A real ctrl+c (\\x03 into a pty) while a command of the menu runs: on Python >= 3.11 Textual runs on
+    asyncio.run, whose own SIGINT handler cancels the app's main task; the T-Pot Manager must come back to
+    the menu all the same (it runs on 3.9 too, where it passed before)."""
+
+    def drive(self, steps):
+        """Run the menu of RUNNER_APP in a pty, type each key once its text shows; the lines of its log."""
+        import fcntl
+        import pty
+        import select
+        import struct
+        import tempfile
+        import termios
+        import time
+        repo = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        with tempfile.TemporaryDirectory() as tmp:
+            script, log = os.path.join(tmp, "menu.py"), os.path.join(tmp, "log")
+            with open(script, "w", encoding="utf-8") as out:
+                out.write(RUNNER_APP)
+            master, slave = pty.openpty()
+            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
+
+            def terminal():                         # the pty is the controlling terminal: \x03 is SIGINT
+                os.setsid()
+                fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+            env = dict(os.environ, TERM="xterm-256color", TPOT_SPLASH="off")
+            proc = subprocess.Popen([sys.executable, script, repo, log], stdin=slave, stdout=slave, stderr=slave,
+                                    env=env, preexec_fn=terminal, close_fds=True)
+            os.close(slave)
+            out, steps = b"", list(steps)
+            deadline = time.time() + 20
+            try:
+                while time.time() < deadline:
+                    if steps and steps[0][0] in out:
+                        time.sleep(0.2)
+                        os.write(master, steps.pop(0)[1])
+                    ready, _w, _x = select.select([master], [], [], 0.1)
+                    if ready:
+                        try:
+                            data = os.read(master, 65536)
+                        except OSError:
+                            break
+                        if not data:
+                            break
+                        out += data
+                    elif proc.poll() is not None:
+                        break
+            finally:
+                if proc.poll() is None:
+                    proc.kill()
+                proc.wait(timeout=5)
+                os.close(master)
+            with open(log, encoding="utf-8") as handle:
+                lines = handle.read().splitlines()
+        self.assertEqual(steps, [], out.decode("utf-8", "replace")[-2000:])
+        self.assertEqual(proc.returncode, 0)
+        return lines
+
+    def test_ctrl_c_during_a_command_comes_back_to_the_menu(self):
+        self.assertEqual(self.drive([(b"CHILD-READY", b"\x03"), (b"Press Enter", b"\r")]),
+                         ["runner 130", "menu is back", "run returned"])
+
+    def test_ctrl_c_at_the_question_counts_as_enter(self):
+        self.assertEqual(self.drive([(b"CHILD-READY", b"\x03"), (b"Press Enter", b"\x03")]),
+                         ["runner 130", "menu is back", "run returned"])
+
+    def test_ctrl_c_twice_during_a_command(self):
+        self.assertEqual(self.drive([(b"CHILD-READY", b"\x03\x03"), (b"Press Enter", b"\x03\x03")]),
+                         ["runner 130", "menu is back", "run returned"])
 
 
 if __name__ == "__main__":

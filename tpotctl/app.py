@@ -139,20 +139,56 @@ class Runner:
 
     def __call__(self, command: List[str], cwd: Optional[str] = None) -> int:
         """ctrl+c reaches the child as well and it decides (bootstrap.wait_child waits on, 128 + n when
-        signal n ended it); at the question afterwards it counts as Enter, no traceback in the menu."""
+        signal n ended it); at the question afterwards it counts as Enter, no traceback in the menu.
+
+        While suspended the T-Pot Manager takes SIGINT itself: on Python >= 3.11 Textual runs on
+        asyncio.run, whose handler would cancel the main task of the app, so the first ctrl+c during
+        a command would end the T-Pot Manager instead of coming back to the menu."""
         from tpotctl import bootstrap
-        with self.app.suspend():
-            print(f"\n$ {' '.join(command)}\n", flush=True)
-            try:
-                code = bootstrap.wait_child(subprocess.Popen(command, cwd=cwd))
-            except OSError as err:
-                print(err)
-                code = 127
-            try:
-                input(f"\n[exit code {code}] Press Enter to return to the T-Pot Manager ... ")
-            except (EOFError, KeyboardInterrupt):
-                print(flush=True)
+        asking = [False]
+
+        def on_sigint(_signum, _frame) -> None:
+            if asking[0]:                       # once: a second ctrl+c cannot escape the except below
+                asking[0] = False
+                raise KeyboardInterrupt
+        previous = take_sigint(on_sigint)
+        try:
+            with self.app.suspend():
+                print(f"\n$ {' '.join(command)}\n", flush=True)
+                try:
+                    code = bootstrap.wait_child(subprocess.Popen(command, cwd=cwd))
+                except OSError as err:
+                    print(err)
+                    code = 127
+                try:
+                    asking[0] = True
+                    input(f"\n[exit code {code}] Press Enter to return to the T-Pot Manager ... ")
+                except (EOFError, KeyboardInterrupt):
+                    print(flush=True)
+                asking[0] = False
+        finally:
+            give_back_sigint(previous)
         return code
+
+
+def take_sigint(handler):
+    """Put handler on SIGINT and give back the one before it (None where that cannot be done: not
+    the main thread, or a handler that was not set from Python)."""
+    import signal
+    try:
+        previous = signal.getsignal(signal.SIGINT)
+        if previous is None:
+            return None
+        signal.signal(signal.SIGINT, handler)
+    except ValueError:                          # not the main thread
+        return None
+    return previous
+
+
+def give_back_sigint(previous) -> None:
+    import signal
+    if previous is not None:
+        signal.signal(signal.SIGINT, previous)
 
 
 def container_rows(containers: List[ops.Container]):
