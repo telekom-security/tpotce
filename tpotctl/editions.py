@@ -155,7 +155,8 @@ def switch(plan: SwitchPlan, repo_dir: str = REPO_DIR, become_file: str = "", ru
 
     Ctrl+C only counts meanwhile, so the switch never stops halfway (the child of the step,
     i.e. systemctl, gets it from the terminal as well and decides): before the swap it goes
-    back, docker-compose.yml stays, T-Pot is started again and bootstrap.Interrupted follows;
+    back, docker-compose.yml stays, T-Pot is started again if it ran before the switch and
+    bootstrap.Interrupted follows;
     after the swap it finishes the switch and says so."""
     interrupts: List[int] = []
     with bootstrap.sigint_to(lambda signum, _frame: interrupts.append(signum)):
@@ -188,6 +189,8 @@ def _switch(plan: SwitchPlan, repo_dir: str, become_file: str, run: Callable, li
             raise EditionError(f"{what} failed: sudo {' '.join(args)}")
 
     in_use = ops.compose_path(repo_dir)
+    # how T-Pot is before the switch: the way back goes back to it (a T-Pot stopped on purpose stays so)
+    before = _state(run) if linux else ""
     # 1. up to the swap a ctrl+c goes back
     try:
         if linux:
@@ -203,7 +206,7 @@ def _switch(plan: SwitchPlan, repo_dir: str, become_file: str, run: Callable, li
         if not interrupts:          # a stop that failed by itself: nothing is changed
             raise
     if interrupts:
-        _go_back(plan, linux, sudo, run)
+        _go_back(plan, linux, sudo, run, before)
     _mark("swap", f"Switching to the {plan.target.title} edition")
     shutil.copyfile(plan.target.path, in_use)
     say.ok(f"docker-compose.yml is the {plan.target.title} edition now.")
@@ -255,15 +258,23 @@ def _switch(plan: SwitchPlan, repo_dir: str, become_file: str, run: Callable, li
     say.ok(f"T-Pot runs the {plan.target.title} edition.")
 
 
-def _go_back(plan: SwitchPlan, linux: bool, sudo: Callable, run: Callable) -> None:
-    """Ctrl+C before the swap: docker-compose.yml is unchanged, T-Pot runs again (as after a switch).
+def _go_back(plan: SwitchPlan, linux: bool, sudo: Callable, run: Callable, before: str) -> None:
+    """Ctrl+C before the swap: docker-compose.yml is unchanged, T-Pot is as it was before the switch.
 
     What it says comes from systemd: a ^C at sudo's password prompt of the stop left T-Pot running
-    (no start, no second prompt), one into systemctl stop let the stop go on."""
+    (no start, no second prompt), one into systemctl stop let the stop go on. A T-Pot that did not
+    run before the switch (before: systemd then, stopped on purpose, failed or in a restart loop) is
+    not started."""
     started = ""
     if linux:
-        if _state(run) in _RUNS:
+        now = _state(run)
+        if now in _RUNS:
             started = ", T-Pot still runs"
+        elif before not in _RUNS and now == before:
+            started = f", T-Pot is as it was before the switch (systemd says {now})"
+        elif before not in _RUNS:
+            started = f", T-Pot did not run before the switch and is not started (systemd says {now}), " \
+                      "start it with: tpot start"
         else:
             say.info("Starting T-Pot again ...")
             failed = ""
