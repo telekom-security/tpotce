@@ -43,6 +43,14 @@ case "$*" in
     [ "${STUB_ROOTLESS:-}" = 1 ] && echo '[name=seccomp,profile=builtin name=rootless name=cgroupns]'
     exit 0 ;;
   *'compose version --short'*) echo "${STUB_COMPOSE_VERSION:-2.29.1}"; exit 0 ;;
+  # the context in use (DOCKER_CONTEXT, else docker context use) and its endpoint; asks no daemon
+  'context show') echo "${DOCKER_CONTEXT:-${STUB_CONTEXT:-default}}"; exit 0 ;;
+  'context inspect'*)
+    case "${DOCKER_CONTEXT:-${STUB_CONTEXT:-default}}" in
+      default) echo "${STUB_CONTEXT_HOST:-unix:///var/run/docker.sock}" ;;
+      *) echo "${STUB_CONTEXT_HOST:-unix://$HOME/.docker/desktop/docker.sock}" ;;
+    esac
+    exit 0 ;;
   *'buildx inspect'*)
     [ "${STUB_NO_BUILDER:-}" = 1 ] && { echo "no builder"; exit 1; }
     printf 'Name:   mybuilder\nDriver: docker-container\nNodes:\nStatus:    running\nPlatforms: %s\n' \
@@ -88,12 +96,13 @@ STUBS = {
 }
 
 
-def at_terminal(args, env, answers="", timeout=30):
-    """Runs builder.sh in a pty (stdin, stdout and stderr) with the answers typed ahead; rc, output."""
+def at_terminal(args, env, answers="", timeout=30, cwd=None, script=BUILDER):
+    """Runs builder.sh (as script names it, from cwd) in a pty (stdin, stdout and stderr) with the answers
+    typed ahead; rc, output."""
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 50, 120, 0, 0))
-    proc = subprocess.Popen(["bash", BUILDER] + list(args), env=env, stdin=slave, stdout=slave, stderr=slave,
-                            close_fds=True)
+    proc = subprocess.Popen(["bash", script] + list(args), env=env, stdin=slave, stdout=slave, stderr=slave,
+                            close_fds=True, cwd=cwd)
     os.close(slave)
     if answers:
         os.write(master, answers.encode())
@@ -155,7 +164,7 @@ class BuilderHarness(base.Harness):
         # the settings of the one who runs the tests stay out
         for key in ("TPOT_VERSION", "TPOT_DOCKER_REPO", "TPOT_GHCR_REPO", "TPOT_BUILDER_ARCH", "TPOT_BUILDER_JOBS",
                     "TPOT_BUILDER_LIMIT", "SUDO_UID", "SUDO_GID", "SUDO_USER", "myUI_VERSION", "DOCKER_HOST",
-                    "XDG_RUNTIME_DIR"):
+                    "DOCKER_CONTEXT", "XDG_RUNTIME_DIR"):
             env[key] = ""
         env.update(extra)
         return env
@@ -315,6 +324,17 @@ class CliTest(BuilderHarness):
         self.assertIn("fuUI_VERSION_GE ()", block)
         self.assertIn("fuUI_LINUX_ONLY ()", block)
 
+    def test_the_plain_fallback_takes_the_defaults(self):
+        """The menu calls fuUI_CHOOSE --selected and fuUI_CONFIRM --default: the plain fallback block of the
+        builder (from ui_logo.FALLBACK) takes them as ui.sh does, an empty answer is the default."""
+        text = base.read("docker/_builder/builder.sh")
+        block = text[text.index("# >>> plain fallback"):text.index("# <<< plain fallback")]
+        script = (block + '\nfuUI_CHOOSE --selected b "Pick" "A:a" "B:b" "C:c"\n'
+                  'fuUI_CONFIRM --default no "Push?" "Push" "No"; echo "rc=$?"\n')
+        result = subprocess.run(["bash", "-c", script], input="\n\n", capture_output=True, universal_newlines=True,
+                                timeout=30)
+        self.assertEqual(result.stdout, "b\nrc=1\n", result.stderr)
+
     def test_status_line_names_the_platforms_of_t_pot(self):
         """The banner line about mybuilder: the two platforms T-Pot builds and how many more, not all of
         them (13 with the QEMU emulators wrap at 80 columns)."""
@@ -354,7 +374,7 @@ class CliTest(BuilderHarness):
         would be dropped without a word, so it is a wrong option (2) and nothing happens."""
         with open(self.local, "w", encoding="utf-8") as handle:
             handle.write("TPOT_BUILDER_JOBS=3\n")
-        for args in (["--set", "TPOT_BUILDER_JOBS=8", "-y"], ["--set", "TPOT_BUILDER_JOBS=8", "-i", "cowrie"],
+        for args in (["--set", "TPOT_BUILDER_JOBS=8", "-i", "cowrie"],
                      ["-p", "--set", "TPOT_BUILDER_JOBS=8"], ["--unset", "TPOT_BUILDER_JOBS", "-T"],
                      ["--set", "TPOT_BUILDER_JOBS=8", "-y", "-i", "cowrie", "-p"], ["--check", "-a", "arm64"],
                      ["--setup", "-n"], ["--uninstall", "-g", "nsm"], ["-L", "-j", "4"], ["--check", "-t", "1.2.3"]):
@@ -372,6 +392,25 @@ class CliTest(BuilderHarness):
         self.assertEqual(rc, 0, out)
         self.assertRegex(out, r"TPOT_BUILDER_JOBS=6\s+# option")
 
+    def test_yes_next_to_another_action_is_no_build_option(self):
+        """-y only says never ask: next to -L, --check, --setup, --uninstall, --set / --unset or
+        --show-config it changes nothing, so it is no wrong option there and the action runs."""
+        for args, done in ((["--setup", "-y"], "docker run --rm --privileged tonistiigi/binfmt --install all"),
+                           (["--uninstall", "--yes"], "docker buildx rm mybuilder"),
+                           (["-y", "--check"], "docker buildx inspect mybuilder --bootstrap"),
+                           (["-L", "-y"], None), (["--show-config", "-y"], None),
+                           (["--set", "TPOT_BUILDER_JOBS=8", "-y"], None)):
+            with self.subTest(args=args):
+                self.calls_reset()
+                rc, out = self.builder(*args)
+                self.assertEqual(rc, 0, out)
+                self.assertNotIn("### [ERROR] - ", out)
+                if done:
+                    self.assertIn(done, [line.split(" | ")[0] for line in self.calls()])
+                self.assertEqual(self.builds(), [])
+        with open(self.local, encoding="utf-8") as handle:
+            self.assertIn("TPOT_BUILDER_JOBS=8\n", handle.read())
+
     def test_readme_says_what_a_run_empties_and_caches(self):
         """The README section of the builder: a run empties the logs of what it does, not all of them, and
         the load build of the smoke tests takes the cache only where the run built this host's platform."""
@@ -381,6 +420,10 @@ class CliTest(BuilderHarness):
         self.assertNotIn("each run starts them anew", section)
         self.assertIn("the logs of other images stay", section)
         self.assertIn("without the cache after `-n`", section)
+        # the menu preselects the default in the order of the items, the release version is no tag of its own
+        self.assertNotIn("the default of your settings comes first", section)
+        self.assertIn("the default of your settings preselected", section)
+        self.assertIn("not the release version itself", section)
         text = base.read("docker/_builder/builder.sh")
         self.assertNotIn("the same and fast", text)
 
@@ -409,7 +452,9 @@ class RightsTest(BuilderHarness):
         for hint in ("with sudo", "sudo usermod -aG docker tester", "rootless Docker"):
             self.assertIn(hint, out)
         self.assertEqual(self.builds(), [])
-        self.assertEqual([line.split(" | ")[0] for line in self.calls()], ["docker info"])
+        # only docker info asks the daemon (docker context reads the files of this user)
+        self.assertEqual([line.split(" | ")[0] for line in self.calls() if not line.startswith("docker context ")],
+                         ["docker info"])
         # root: is it running; with sudo also that rootless Docker is another daemon for root
         rc, out = self.builder("-y", STUB_INFO_RC="1")
         self.assertEqual(rc, 3, out)
@@ -427,6 +472,8 @@ class RightsTest(BuilderHarness):
         self.assertIn("sudo", out)
         self.assertIn("-l off", out)
         self.assertEqual(self.builds(), [])
+        # -l off for every run is a setting
+        self.assertIn("--set TPOT_BUILDER_LIMIT=off", out)
         rc, out = self.builder("-p", "-l", "off", STUB_USER="tester", STUB_GROUPS="tester docker")
         self.assertEqual(rc, 0, out)
         self.assertEqual(self.builds(), ["cowrie"])
@@ -554,6 +601,8 @@ class RightsTest(BuilderHarness):
                 self.assertEqual(rc, 3, out)
                 self.assertIn("rootless Docker", out)
                 self.assertIn("-l off", out)
+                # and for every run
+                self.assertIn("--set TPOT_BUILDER_LIMIT=off", out)
                 self.assertNotIn("sudo", out)
                 self.assertEqual(self.builds(), [])
         rc, out = at_terminal([], self.terminal_env(STUB_USER="tester", STUB_ROOTLESS="1"),
@@ -562,6 +611,56 @@ class RightsTest(BuilderHarness):
         self.assertIn("rootless Docker", out)
         self.assertIn("Push without a limit", out)
         self.assertNotIn("sudo", out)
+        self.assertEqual(self.builds(), [])
+
+    def test_another_docker_context_and_the_upload_limit(self):
+        """Docker Desktop for Linux, any other context (DOCKER_CONTEXT, docker context use) or a DOCKER_HOST
+        that is not the Docker of the system: under sudo root has neither (sudo drops both variables, the
+        contexts are per user) and talks to the Docker of the system, without that builder and login. So
+        the hint is -l off, not sudo; a context by another name for the socket of the system is the same
+        Docker, sudo goes there."""
+        for extra in ({"DOCKER_CONTEXT": "desktop-linux"}, {"STUB_CONTEXT": "desktop-linux"},
+                      {"DOCKER_HOST": "tcp://10.0.0.5:2375"}):
+            with self.subTest(extra=extra):
+                self.calls_reset()
+                rc, out = self.builder("-p", STUB_USER="tester", **extra)
+                self.assertEqual(rc, 3, out)
+                self.assertIn("The upload limit while pushing (tc) needs root.", out)
+                self.assertIn("another Docker", out)
+                self.assertIn("-l off", out)
+                self.assertIn("--set TPOT_BUILDER_LIMIT=off", out)
+                self.assertNotIn("sudo", out)
+                self.assertEqual(self.builds(), [])
+        rc, out = self.builder("-p", "-l", "off", STUB_USER="tester", STUB_CONTEXT="desktop-linux")
+        self.assertEqual(rc, 0, out)
+        rc, out = self.builder("-p", STUB_USER="tester", STUB_CONTEXT="mine",
+                               STUB_CONTEXT_HOST="unix:///var/run/docker.sock")
+        self.assertEqual(rc, 3, out)
+        self.assertIn("Run the builder with sudo", out)
+
+    def test_the_menu_of_another_docker_context_does_not_offer_sudo(self):
+        rc, out = at_terminal([], self.terminal_env(STUB_USER="tester", STUB_CONTEXT="desktop-linux"),
+                              answers=MenuTest.PUSH_HUB + "2\n")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("desktop-linux", out)
+        self.assertIn("Push without a limit", out)
+        self.assertNotIn("sudo", out)
+        self.assertEqual(self.builds(), [])
+
+    def test_a_docker_context_that_does_not_answer(self):
+        """The hint names the Docker of the context in use, also where DOCKER_HOST is not set: a rootless
+        one is started with systemctl --user, Docker Desktop is an app, neither with sudo systemctl."""
+        rc, out = self.builder("-y", STUB_USER="tester", STUB_GROUPS="tester docker", STUB_INFO_RC="1",
+                               STUB_CONTEXT="rootless", STUB_CONTEXT_HOST="unix:///run/user/1000/docker.sock")
+        self.assertEqual(rc, 3, out)
+        self.assertIn("systemctl --user start docker", out)
+        self.assertNotIn("sudo systemctl", out)
+        rc, out = self.builder("-y", STUB_USER="tester", STUB_GROUPS="tester docker", STUB_INFO_RC="1",
+                               DOCKER_CONTEXT="desktop-linux")
+        self.assertEqual(rc, 3, out)
+        self.assertIn("desktop-linux", out)
+        self.assertIn("docker context use default", out)
+        self.assertNotIn("sudo systemctl", out)
         self.assertEqual(self.builds(), [])
 
 
@@ -624,6 +723,28 @@ class BuildTest(BuilderHarness):
         self.assertEqual(self.builds(), [])
         rc, out = self.builder("-a", "host", STUB_PLATFORMS="linux/amd64", STUB_COMPOSE_VERSION="v2.24.4-desktop.1")
         self.assertEqual(rc, 0, out)
+
+    def test_compose_names_the_setting_that_needs_it(self):
+        """No -a, but TPOT_BUILDER_ARCH of .env.local or the environment: the message names that setting
+        and where it is, not an option nobody gave."""
+        with open(self.local, "w", encoding="utf-8") as handle:
+            handle.write("TPOT_BUILDER_ARCH=host\n")
+        rc, out = self.builder("-y", STUB_PLATFORMS="linux/amd64", STUB_COMPOSE_VERSION="2.20.3")
+        self.assertEqual(rc, 3, out)
+        self.assertIn(f"TPOT_BUILDER_ARCH=host of {self.local} needs 2.24.4", out)
+        self.assertNotIn("-a host", out)
+        self.assertEqual(self.builds(), [])
+        rc, out = self.builder("-y", STUB_COMPOSE_VERSION="2.20.3", TPOT_BUILDER_ARCH="arm64")
+        self.assertEqual(rc, 3, out)
+        self.assertIn("TPOT_BUILDER_ARCH=arm64 of the environment needs 2.24.4", out)
+        rc, out = self.builder("-a", "amd64", STUB_COMPOSE_VERSION="2.20.3")
+        self.assertEqual(rc, 3, out)
+        self.assertIn("-a amd64 needs 2.24.4", out)
+        # --check: every run without -a needs it, so it is no warning there but a failed check
+        rc, out = self.builder("--check", STUB_COMPOSE_VERSION="2.20.3")
+        self.assertEqual(rc, 3, out)
+        self.assertIn(f"TPOT_BUILDER_ARCH=host of {self.local}", out)
+        self.assertIn("### [FAILED] - docker compose 2.20.3", out)
 
     def test_jobs_and_no_cache(self):
         rc, out = self.builder("-n", "-j", "3", STUB_SERVICES="adbhoney cowrie")
@@ -843,6 +964,26 @@ class PushTest(BuilderHarness):
         rc, out = self.builder("-a", "host", STUB_PLATFORMS="linux/amd64")
         self.assertEqual(rc, 0, out)
         rc, out = self.builder("-a", "both", "-p")
+        self.assertEqual(rc, 0, out)
+
+    def test_the_release_tag_itself_is_no_tag_of_its_own(self):
+        """-t with the release version (the file version) is the release tag: one platform pushed over it
+        would replace its multi-arch images all the same, so it is refused like no -t (rc 2, no build)."""
+        for args, arch in ((["-i", "cowrie", "-a", "arm64", "-p", "-l", "off", "-t", VERSION], "arm64"),
+                           (["-a", "host", "--push-hub", "-l", "off", f"--tag={VERSION}"], "amd64"),
+                           (["-a", "amd64", "--push-ghcr", "-l", "off", "-t", VERSION], "amd64")):
+            with self.subTest(args=args):
+                self.calls_reset()
+                rc, out = self.builder(*args)
+                self.assertEqual(rc, 2, out)
+                self.assertIn("### [ERROR] - ", out)
+                self.assertIn("multi-arch", out)
+                self.assertIn(f"-t {VERSION}-{arch}", out)
+                self.assertFalse(any(" build " in line for line in self.calls()), self.calls())
+        # both platforms with it, or one platform without a push: the release
+        rc, out = self.builder("-a", "both", "-p", "-l", "off", "-t", VERSION)
+        self.assertEqual(rc, 0, out)
+        rc, out = self.builder("-a", "host", "-t", VERSION, STUB_PLATFORMS="linux/amd64")
         self.assertEqual(rc, 0, out)
 
     def test_a_one_platform_push_of_a_setting_names_the_setting(self):
@@ -1147,8 +1288,8 @@ class SetupTest(BuilderHarness):
     def test_check_names_the_smoke_tests_for_compose(self):
         rc, out = self.builder("--check", STUB_COMPOSE_VERSION="2.20.3")
         self.assertEqual(rc, 0, out)
-        self.assertIn("### [WARNING] - docker compose 2.20.3: -a, the push to one registry and the smoke tests (-T) "
-                      "need 2.24.4", out)
+        self.assertIn("### [WARNING] - docker compose 2.20.3: -a amd64, arm64 or host, the push to one registry and "
+                      "the smoke tests (-T) need 2.24.4", out)
 
 
 class SettingsTest(BuilderHarness):
@@ -1288,6 +1429,14 @@ class SettingsTest(BuilderHarness):
         rc, out = self.builder("-y", TPOT_BUILDER_ARCH="sparc")
         self.assertEqual(rc, 2, out)
         self.assertIn("TPOT_BUILDER_ARCH=sparc (environment)", out)
+        # the environment wins over --set: the hint is to change the environment
+        self.assertIn("unset TPOT_BUILDER_ARCH", out)
+        self.assertNotIn("--set", out)
+        with open(self.local, "w", encoding="utf-8") as handle:
+            handle.write("TPOT_BUILDER_ARCH=sparc\n")
+        rc, out = self.builder("-y")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("--set TPOT_BUILDER_ARCH=<value>", out)
         # the file is read as text, never run: a command or a space in a value is a wrong value
         marker = os.path.join(self.home, "ran")
         for value in (f"$(touch {marker})", f'"`touch {marker}`"', "'a b'", "me ; touch " + marker):
@@ -1348,6 +1497,35 @@ class SettingsTest(BuilderHarness):
                 self.assertIn(f"Cannot write {self.local}.", out)
                 self.assertIn(f"sudo chown tester:tester {self.local}", out)
                 self.assertEqual(self.read_local(), b"TPOT_BUILDER_JOBS=3\n")
+
+    def test_a_file_that_is_no_text_stays_as_it_is(self):
+        """A NUL byte (a binary file, UTF-16 of an editor of Windows) cannot be read as the lines of an env
+        file: --set and --unset leave the file byte for byte (rc 3) and say how to repair it."""
+        for case, data in (("a NUL byte", b"# a\x00b\nTPOT_DOCKER_REPO=me\n"),
+                           ("UTF-16", "TPOT_DOCKER_REPO=me\r\n".encode("utf-16")),
+                           ("UTF-16 BE", b"\xfe\xff" + "TPOT_DOCKER_REPO=me\n".encode("utf-16-be"))):
+            for args in (["--set", "TPOT_BUILDER_JOBS=8"], ["--unset", "TPOT_DOCKER_REPO"]):
+                with self.subTest(case=case, args=args):
+                    with open(self.local, "wb") as handle:
+                        handle.write(data)
+                    rc, out = self.builder(*args)
+                    self.assertEqual(rc, 3, out)
+                    self.assertIn(f"### [ERROR] - {self.local} is no text file", out)
+                    self.assertIn("UTF-8", out)
+                    self.assertNotIn("chown", out)
+                    self.assertEqual(self.read_local(), data)
+
+    def test_a_missing_folder_of_the_settings_is_named(self):
+        # TPOT_BUILDER_ENV_LOCAL in a folder that is not there: make it, nothing to chown
+        missing = os.path.join(self.home, "no such", "env.local")
+        for user in ("tester", "root"):
+            with self.subTest(user=user):
+                rc, out = self.builder("--set", "TPOT_BUILDER_JOBS=4", STUB_USER=user, TPOT_BUILDER_ENV_LOCAL=missing)
+                self.assertEqual(rc, 3, out)
+                self.assertIn(f"Cannot write {missing}.", out)
+                self.assertIn("mkdir -p " + os.path.dirname(missing).replace(" ", "\\ "), out)
+                self.assertNotIn("chown", out)
+                self.assertFalse(os.path.exists(os.path.dirname(missing)))
 
     def test_the_environment_over_a_saved_setting_is_named(self):
         # saved, but the environment of this shell wins over it: say so, or the next run surprises
@@ -1455,8 +1633,8 @@ class SettingsTest(BuilderHarness):
 class MenuTest(BuilderHarness):
 
     # main menu: build; all images; both platforms; no push to Docker Hub, none to GHCR; with cache;
-    # 2 builds at a time (the default, first); no smoke tests; keep the version
-    WALK = "1\n1\n1\nn\nn\nn\n1\nn\nn\n"
+    # 2 builds at a time (the default, the second of 1, 2, 4, 8); no smoke tests; keep the version
+    WALK = "1\n1\n1\nn\nn\nn\n2\nn\nn\n"
 
     # main menu: 1 build, 2 builder setup, 3 settings, 4 quit
     QUIT = "4\n"
@@ -1486,7 +1664,7 @@ class MenuTest(BuilderHarness):
     def test_menu_one_platform_push_asks_for_a_tag(self):
         # all images; this host only; push to Docker Hub, not to GHCR; the tag; no limit; with cache;
         # 2 at a time; no tests; keep; Build
-        answers = "1\n1\n2\ny\nn\n9.9.9-amd64\n2\nn\n1\nn\nn\n1\n"
+        answers = "1\n1\n2\ny\nn\n9.9.9-amd64\n2\nn\n2\nn\nn\n1\n"
         rc, out = at_terminal([], self.terminal_env(STUB_PLATFORMS="linux/amd64"), answers=answers)
         self.assertEqual(rc, 0, out)
         self.assertIn("multi-arch", out)
@@ -1499,7 +1677,7 @@ class MenuTest(BuilderHarness):
 
     def test_menu_one_platform_push_without_a_tag_does_not_push(self):
         # a bad tag is asked again, enter then means no push: no limit question, the summary, Back, Quit
-        answers = "1\n1\n2\ny\ny\nbad tag\n\nn\n1\nn\nn\n2\n" + self.QUIT
+        answers = "1\n1\n2\ny\ny\nbad tag\n\nn\n2\nn\nn\n2\n" + self.QUIT
         rc, out = at_terminal([], self.terminal_env(STUB_PLATFORMS="linux/amd64"), answers=answers)
         self.assertEqual(rc, 0, out)
         self.assertIn("Not a version tag: bad tag", out)
@@ -1534,7 +1712,7 @@ class MenuTest(BuilderHarness):
         self.assertFalse(any(line.startswith("docker login") for line in self.calls()), self.calls())
         # off: with cache, 2 at a time, no tests, keep; the summary names -l off; Back, Quit
         rc, out = at_terminal([], self.terminal_env(STUB_USER="tester"),
-                              answers=self.PUSH_HUB + "1\nn\n1\nn\nn\n2\n" + self.QUIT)
+                              answers=self.PUSH_HUB + "1\nn\n2\nn\nn\n2\n" + self.QUIT)
         self.assertEqual(rc, 0, out)
         self.assertRegex(out, r"builder\.sh -y --push-hub -l off\n")
         self.assertEqual(self.builds(), [])
@@ -1542,7 +1720,7 @@ class MenuTest(BuilderHarness):
         with open(self.local, "w", encoding="utf-8") as handle:
             handle.write("TPOT_BUILDER_LIMIT=off\n")
         rc, out = at_terminal([], self.terminal_env(STUB_USER="tester"),
-                              answers=self.PUSH_HUB + "n\n1\nn\nn\n2\n" + self.QUIT)
+                              answers=self.PUSH_HUB + "n\n2\nn\nn\n2\n" + self.QUIT)
         self.assertEqual(rc, 0, out)
         self.assertNotIn("Upload limit needs root", out)
         self.assertRegex(out, r"builder\.sh -y --push-hub\n")
@@ -1552,31 +1730,139 @@ class MenuTest(BuilderHarness):
         a value of the environment is in it, one of .env.local or .env goes without saying."""
         env = self.terminal_env(STUB_PLATFORMS="linux/amd64", TPOT_BUILDER_JOBS="5", TPOT_BUILDER_ARCH="host",
                                 TPOT_DOCKER_REPO="envrepo")
-        # build; all images; this host only (the default); no push; with cache; 5 at a time (the default);
-        # no tests; keep; Back; Quit
-        rc, out = at_terminal([], env, answers="1\n1\n1\nn\nn\nn\n1\nn\nn\n2\n" + self.QUIT)
+        # build; all images; this host only (the default, the second); no push; with cache; 5 at a time (the
+        # default, the fourth of 1, 2, 4, 5, 8); no tests; keep; Back; Quit
+        rc, out = at_terminal([], env, answers="1\n1\n2\nn\nn\nn\n4\nn\nn\n2\n" + self.QUIT)
         self.assertEqual(rc, 0, out)
         self.assertRegex(out, r"builder\.sh -y -a host -j 5 --docker-repo envrepo\n")
         # the same values from .env.local: implied
         with open(self.local, "w", encoding="utf-8") as handle:
             handle.write("TPOT_BUILDER_JOBS=5\nTPOT_BUILDER_ARCH=host\nTPOT_DOCKER_REPO=envrepo\n")
         rc, out = at_terminal([], self.terminal_env(STUB_PLATFORMS="linux/amd64"),
-                              answers="1\n1\n1\nn\nn\nn\n1\nn\nn\n2\n" + self.QUIT)
+                              answers="1\n1\n2\nn\nn\nn\n4\nn\nn\n2\n" + self.QUIT)
         self.assertEqual(rc, 0, out)
         self.assertRegex(out, r"builder\.sh -y\n")
 
-    def test_menu_offers_the_default_first(self):
-        """enter in gum takes the first item: the default of the settings comes first, for the platforms
-        and the builds at a time as for the upload limit."""
-        pick_first = ('fuUI_CHOOSE () { local h="$1"; shift; echo "Q $h | $*" >&2; local v="${1##*:}"; echo "$v"; }\n'
-                      'fuUI_CONFIRM () { return 1; }\nfuUI_INPUT () { echo; }\n')
-        for arch, jobs in (("host", "4"), ("arm64", "8"), ("both", "2"), ("amd64", "5")):
+    # a fuUI_CHOOSE that writes its arguments and takes the preselected item, else the first one; a
+    # fuUI_CONFIRM that writes its arguments and says no; an empty fuUI_INPUT
+    RECORD = ('fuUI_CHOOSE () { echo "Q $*" >&2; if [ "$1" = --selected ]; then echo "$2"; return 0; fi\n'
+              '  shift; echo "${1##*:}"; }\n'
+              'fuUI_CONFIRM () { echo "C $*" >&2; return 1; }\nfuUI_INPUT () { echo; }\n')
+
+    def test_menu_preselects_the_default_in_the_natural_order(self):
+        """The platforms and the builds at a time keep their order; the default of the settings is
+        preselected (fuUI_CHOOSE --selected: the cursor of gum, enter in plain text), not moved first. A
+        value of the settings that is not offered (5 at a time) gets an item in its place."""
+        for arch, jobs, items in (("host", "4", "1:1 2:2 4:4 8:8"), ("arm64", "8", "1:1 2:2 4:4 8:8"),
+                                  ("both", "2", "1:1 2:2 4:4 8:8"), ("amd64", "5", "1:1 2:2 4:4 5:5 8:8"),
+                                  ("both", "16", "1:1 2:2 4:4 8:8 16:16")):
             with self.subTest(arch=arch, jobs=jobs):
-                result = self.bash(pick_first + f'myCONF_ARCH={arch} myCONF_JOBS={jobs} myHOST=amd64\n'
+                result = self.bash(self.RECORD + f'myCONF_ARCH={arch} myCONF_JOBS={jobs} myHOST=amd64\n'
                                    'fuMENU_OPTIONS; echo "$myARCH $myJOBS"')
                 self.assertEqual(result.stdout.strip().splitlines()[-1], f"{arch} {jobs}", result.stderr)
                 questions = [line for line in result.stderr.splitlines() if line.startswith("Q ")]
-                self.assertIn("(the default)", questions[0].split(" | ")[1].split(":")[0], questions)
+                self.assertIn(f"Q --selected {arch} Platforms linux/amd64 and linux/arm64:both "
+                              "This host only (linux/amd64):host linux/amd64 only:amd64 linux/arm64 only:arm64",
+                              questions)
+                self.assertIn(f"Q --selected {jobs} Builds at a time {items}", questions)
+
+    def test_menu_no_is_the_default_of_each_yes_no_question(self):
+        """Push to Docker Hub, to GHCR, without the cache, the smoke tests, change the version, remove the
+        builder setup: no is what a run without the option does, so enter takes no (gum
+        --default=false, an empty answer in plain text)."""
+        result = self.bash(self.RECORD + 'fuCONFIG\nmyHOST=amd64\nfuSETTINGS\nfuMENU_OPTIONS')
+        confirms = [line for line in result.stderr.splitlines() if line.startswith("C ")]
+        self.assertEqual(len(confirms), 5, result.stderr)
+        for line in confirms:
+            self.assertTrue(line.startswith("C --default no "), line)
+        # the builder setup in the main menu: setup, remove, then quit
+        answers = os.path.join(self.home, "answers")
+        menu = ('fuUI_CHOOSE () { local n; n=$(($(wc -l < "$ANSWERS"))); echo x >> "$ANSWERS"\n'
+                '  case "$n" in 0) echo setup ;; 1) echo uninstall ;; *) echo quit ;; esac; }\n'
+                'fuUI_CONFIRM () { echo "C $*" >&2; return 1; }\nfuUI_BANNER () { :; }\n')
+        with open(answers, "w", encoding="utf-8"):
+            pass
+        result = self.bash(menu + 'fuCONFIG\nfuMENU; echo "rc=$?"', ANSWERS=answers)
+        self.assertIn("rc=0", result.stdout, result.stderr)
+        self.assertIn("C --default no Remove the builder, all QEMU handlers and their images? Remove Keep",
+                      result.stderr)
+        self.assertFalse(any("buildx rm" in line for line in self.calls()))
+
+    def test_menu_back_asks_the_options_anew(self):
+        """Back in the summary and a new round: the tag, the version and the repositories of the round
+        before are gone, a multi-arch push does not take the tag of a one-platform push."""
+        result = self.bash(self.RECORD + 'fuCONFIG\nmyHOST=amd64 myTAG=9.9.9-amd64 myDOCKER_REPO=me '
+                           'myGHCR_REPO=ghcr.io/me\nfuSETTINGS\nfuMENU_OPTIONS\n'
+                           'echo "[$myTAG] $myVER $myHUB $myGHCR"\nfuCOMMAND_LINE')
+        lines = result.stdout.strip().splitlines()
+        self.assertEqual(lines[-2], f"[] {VERSION} dtagdevsec ghcr.io/telekom-security", result.stderr)
+        self.assertEqual(lines[-1], f"{BUILDER} -y")
+        self.assertIn("C --default no Push the images to Docker Hub (dtagdevsec)? Push No", result.stderr)
+        # the same in the menu: one platform pushed with a tag of its own, Back; both platforms pushed
+        answers = ("1\n1\n2\ny\nn\n9.9.9-amd64\n2\nn\n2\nn\nn\n2\n"
+                   "1\n1\n1\ny\nn\n1\nn\n2\nn\nn\n2\n" + self.QUIT)
+        rc, out = at_terminal([], self.terminal_env(STUB_PLATFORMS="linux/amd64, linux/arm64"), answers=answers)
+        self.assertEqual(rc, 0, out)
+        first, second = out.split("### Ready to build")[1:3]
+        self.assertIn("-t 9.9.9-amd64", first)
+        self.assertIn(f"### Version {VERSION}, dtagdevsec and ghcr.io/telekom-security", second)
+        self.assertNotIn("9.9.9", second)
+        self.assertRegex(second, r"builder\.sh -y --push-hub\n")
+        self.assertEqual(self.builds(), [])
+
+    def test_menu_the_release_tag_is_asked_again(self):
+        """The tag of a one-platform push: the release version itself is the release tag, asked again;
+        typed as the version later on, it is not taken either."""
+        # this host only; push to Docker Hub; the release version, then a tag of its own; no limit; with
+        # cache; 2 at a time; no tests; keep; Build
+        answers = f"1\n1\n2\ny\nn\n{VERSION}\n9.9.9-amd64\n2\nn\n2\nn\nn\n1\n"
+        rc, out = at_terminal([], self.terminal_env(STUB_PLATFORMS="linux/amd64"), answers=answers)
+        self.assertEqual(rc, 0, out)
+        self.assertIn(f"{VERSION} is the release tag", out)
+        build = [line for line in self.calls() if " build cowrie" in line][0]
+        self.assertIn("TPOT_VERSION=9.9.9-amd64 ", build)
+        self.assertIn("--push", build)
+        # change the version to the release version: kept 9.9.9-amd64
+        self.calls_reset()
+        answers = f"1\n1\n2\ny\nn\n9.9.9-amd64\n2\nn\n2\nn\ny\n{VERSION}\n\n\n1\n"
+        rc, out = at_terminal([], self.terminal_env(STUB_PLATFORMS="linux/amd64"), answers=answers)
+        self.assertEqual(rc, 0, out)
+        self.assertIn(f"{VERSION} is the release tag", out)
+        build = [line for line in self.calls() if " build cowrie" in line][0]
+        self.assertIn("TPOT_VERSION=9.9.9-amd64 ", build)
+
+    def test_menu_names_the_builder_by_its_full_path(self):
+        """The command lines of the menu run from anywhere (cron starts in HOME): the builder by its full
+        path, also when it was started as builder.sh in its folder."""
+        folder = os.path.dirname(BUILDER)
+        # Settings: Docker Hub: another one (me), the rest kept, Back; Quit
+        rc, out = at_terminal([], self.terminal_env(), answers="3\n2\nme\n1\n1\n1\n1\n2\n" + self.QUIT,
+                              cwd=folder, script="builder.sh")
+        self.assertEqual(rc, 0, out)
+        self.assertIn(f"The same without the menu: {BUILDER} --set TPOT_DOCKER_REPO=me", out)
+        self.assertFalse(os.path.exists(self.local))
+        # the build: the summary, Back, Quit
+        rc, out = at_terminal([], self.terminal_env(), answers=self.WALK + "2\n" + self.QUIT, cwd=folder,
+                              script="builder.sh")
+        self.assertEqual(rc, 0, out)
+        self.assertIn(f"The same without the menu: {BUILDER} -y\n", out)
+        # --setup names the builder for the next steps the same way
+        result = self.run_script("builder.sh", "--setup", env=self.env(), cwd=folder)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(f"Build: {BUILDER} (a menu) or {BUILDER} -y", result.stdout)
+
+    def test_menu_settings_take_any_repository(self):
+        """Another repository named like a choice (keep, unset, other) is that repository."""
+        # Docker Hub: another one (keep); GHCR: another one (unset); the rest kept; Save; Quit
+        rc, out = at_terminal([], self.terminal_env(), answers="3\n2\nkeep\n2\nunset\n1\n1\n1\n1\n" + self.QUIT)
+        self.assertEqual(rc, 0, out)
+        with open(self.local, encoding="utf-8") as handle:
+            lines = [line for line in handle.read().splitlines() if line and not line.startswith("#")]
+        self.assertEqual(sorted(lines), ["TPOT_DOCKER_REPO=keep", "TPOT_GHCR_REPO=unset"])
+        rc, out = at_terminal([], self.terminal_env(), answers="3\n2\nother\n1\n1\n1\n1\n1\n" + self.QUIT)
+        self.assertEqual(rc, 0, out)
+        with open(self.local, encoding="utf-8") as handle:
+            self.assertIn("TPOT_DOCKER_REPO=other\n", handle.read())
 
     def test_menu_settings(self):
         """Settings: every key one by one, Keep first; a summary of the changes, then Save or Back."""
@@ -1616,6 +1902,65 @@ class MenuTest(BuilderHarness):
         rc, out = at_terminal(["-p", "-l", "off"], self.terminal_env(STUB_LOGIN_RC="1"))
         self.assertEqual(rc, 3, out)
         self.assertEqual(self.builds(), [])
+
+
+class MenuGumTest(BuilderHarness):
+    """The menu with gum (a fake one that writes its argv): the default of each question preselected."""
+
+    GUM = ('#!/bin/sh\n{ echo "--- call"; for a in "$@"; do echo "$a"; done; } >> "$HOME/gum.calls"\n'
+           'case "$1" in\n'
+           '  --version) echo "gum version v%s" ;;\n'
+           '  confirm) exit 1 ;;\n'
+           '  choose) sel=""; while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do\n'
+           '            case "$1" in --selected) sel="$2"; shift ;; --selected=*) sel="${1#--selected=}" ;; esac\n'
+           '            shift; done; shift\n'
+           '          if [ -n "$sel" ]; then printf "%%s\\n" "$sel" | sed "s/\\\\\\\\,/,/g"; else echo "$1"; fi ;;\n'
+           '  input) echo ;;\n'
+           '  style) while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do shift; done; shift\n'
+           '         for a in "$@"; do echo "$a"; done ;;\n'
+           '  spin) while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do shift; done; shift; exec "$@" ;;\n'
+           'esac\nexit 0\n')
+
+    def calls_of_gum(self):
+        with open(os.path.join(self.home, "gum.calls"), encoding="utf-8") as handle:
+            blocks = handle.read().split("--- call\n")[1:]
+        return [block.rstrip("\n").split("\n") for block in blocks]
+
+    @staticmethod
+    def selected(argv):
+        for index, arg in enumerate(argv):
+            if arg == "--selected":
+                return argv[index + 1]
+            if arg.startswith("--selected="):
+                return arg[len("--selected="):]
+        return None
+
+    def test_gum_preselects_the_defaults(self):
+        version = re.search(r'^myUI_GUM_VERSION="([^"]+)"', base.read("installer/lib/ui.sh"), re.M).group(1)
+        data = os.path.join(self.home, "share")
+        os.makedirs(os.path.join(data, "tpotce", "bin"))
+        self.stub("gum", self.GUM % version, os.path.join(data, "tpotce", "bin"))
+        env = self.terminal_env(XDG_DATA_HOME=data, TPOT_GUM="on", TPOT_BUILDER_JOBS="4")
+        # gum takes what is preselected, else the first item: build, all images, both platforms, no push,
+        # with cache, 4 at a time, no tests, keep, Build
+        rc, out = at_terminal([], env)
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(self.builds(), ["cowrie"])
+        self.assertIn("4 builds at a time", out)
+        calls = self.calls_of_gum()
+        confirms = [argv for argv in calls if argv[0] == "confirm"]
+        self.assertEqual(len(confirms), 5, confirms)
+        for argv in confirms:
+            self.assertIn("--default=false", argv)
+        chooses = [argv for argv in calls if argv[0] == "choose"]
+        platforms = [argv for argv in chooses if "Platforms" in argv][0]
+        self.assertEqual(self.selected(platforms), "linux/amd64 and linux/arm64")
+        self.assertEqual(platforms[platforms.index("--") + 1:],
+                         ["linux/amd64 and linux/arm64", "This host only (linux/amd64)", "linux/amd64 only",
+                          "linux/arm64 only"])
+        jobs = [argv for argv in chooses if "Builds at a time" in argv][0]
+        self.assertEqual(self.selected(jobs), "4")
+        self.assertEqual(jobs[jobs.index("--") + 1:], ["1", "2", "4", "8"])
 
 
 if __name__ == "__main__":

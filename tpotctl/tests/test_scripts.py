@@ -670,8 +670,10 @@ class BuilderTest(Harness):
         self.assertTrue("### [ERROR] - Docker does not answer" in result.stderr, result.stderr)
         for hint in ("sudo", "usermod -aG docker tester", "rootless Docker"):
             self.assertTrue(hint in result.stderr, hint)
+        # only docker info asks the daemon (docker context reads the files of this user)
         with open(os.path.join(self.home, "calls"), encoding="utf-8") as handle:
-            self.assertEqual(handle.read(), "docker info\n")
+            self.assertEqual([line for line in handle.read().splitlines() if not line.startswith("docker context ")],
+                             ["docker info"])
 
     def test_a_build_run_reports_each_image(self):
         stubs = {
