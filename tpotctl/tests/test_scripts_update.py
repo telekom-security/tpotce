@@ -22,11 +22,7 @@ REPO = base.REPO
 UPDATE_SH = os.path.join(REPO, "update.sh")
 RESTORE_SH = os.path.join(REPO, "restore.sh")
 LOGO = "telekom security"         # the credits of the logo, only the logo has them
-# uname -s (and uname alone) says FAKE_UNAME_S, Linux without it; the rest is the real uname. The
-# host scripts stop outside Linux (fuUI_LINUX_ONLY), the tests run on macOS as well
-REAL_UNAME = shutil.which("uname") or "/usr/bin/uname"
-UNAME = ('#!/bin/sh\ncase "$*" in\n  -s|"") echo "${FAKE_UNAME_S-Linux}"; exit 0 ;;\nesac\n'
-         f'exec {REAL_UNAME} "$@"\n')
+UNAME = base.UNAME               # Linux, FAKE_UNAME_S says otherwise
 # a curl that answers like an Elasticsearch / Kibana: -o files get a successful import
 CURL_OK = ('#!/bin/sh\nout=""\nwhile [ $# -gt 0 ]; do [ "$1" = "-o" ] && out="$2"; shift; done\n'
            '[ -n "$out" ] && [ "$out" != /dev/null ] && echo \'{"success":true,"successCount":2}\' > "$out"\n'

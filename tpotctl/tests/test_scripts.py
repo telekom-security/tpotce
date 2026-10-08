@@ -20,6 +20,11 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 SUDO = "#!/bin/sh\n# runs the command without sudo, options of sudo are left out\nwhile [ $# -gt 0 ]; do\n" \
        "  case \"$1\" in -S|-k|-v|-n) shift ;; -p) shift 2 ;; *) break ;; esac\ndone\n" \
        "[ $# -eq 0 ] && exit 0\nexec \"$@\"\n"
+# uname -s (and uname alone) says FAKE_UNAME_S, Linux without it; the rest is the real uname. The
+# host scripts stop outside Linux (fuUI_LINUX_ONLY), the tests run on macOS as well
+REAL_UNAME = shutil.which("uname") or "/usr/bin/uname"
+UNAME = ('#!/bin/sh\ncase "$*" in\n  -s|"") echo "${FAKE_UNAME_S-Linux}"; exit 0 ;;\nesac\n'
+         f'exec {REAL_UNAME} "$@"\n')
 
 
 def read(path):
@@ -36,7 +41,7 @@ class Harness(unittest.TestCase):
         self.bin = os.path.join(self.home, "bin")
         os.makedirs(self.bin)
         for name, text in (("sudo", SUDO), ("systemctl", "#!/bin/sh\necho \"systemctl $*\" >> \"$HOME/calls\"\n"),
-                           ("docker", "#!/bin/sh\necho \"docker $*\" >> \"$HOME/calls\"\n")):
+                           ("docker", "#!/bin/sh\necho \"docker $*\" >> \"$HOME/calls\"\n"), ("uname", UNAME)):
             path = os.path.join(self.bin, name)
             with open(path, "w", encoding="utf-8") as out:
                 out.write(text)
