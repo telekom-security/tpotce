@@ -449,6 +449,47 @@ class CliTest(unittest.TestCase):
             self.assertEqual(cli.main([]), 2)
 
 
+class ConsoleColoursTest(unittest.TestCase):
+    """The tables of tpot status / ps / images follow the colour rule of the scripts (prefs.detect_colors)
+    at a terminal, i.e. true colour for iTerm2 over SSH (LC_TERMINAL), and have no escapes in a pipe."""
+
+    TERMINAL = ("COLORTERM", "TERM", "TERM_PROGRAM", "LC_TERMINAL", "TMUX", "VTE_VERSION", "KONSOLE_VERSION",
+                "WT_SESSION", "TPOT_COLORS", "NO_COLOR", "FORCE_COLOR", "TTY_COMPATIBLE", "TTY_INTERACTIVE")
+
+    class Tty(io.StringIO):
+        def isatty(self):
+            return True
+
+    def setUp(self):
+        try:
+            import rich  # noqa: F401
+        except ImportError:
+            self.skipTest("Rich is not installed, run with the venv of tpot")
+
+    def console(self, env, stream):
+        environ = {k: v for k, v in os.environ.items() if k not in self.TERMINAL}
+        environ.update(env)
+        with mock.patch.dict(os.environ, environ, clear=True), mock.patch("sys.stdout", stream):
+            console = cli._console()
+            console.print("[bold red]x[/]")
+        return console, stream.getvalue()
+
+    def test_a_terminal_gets_the_colours_of_the_rule(self):
+        cases = [({"TERM": "xterm-256color", "LC_TERMINAL": "iTerm2"}, "truecolor"),     # iTerm2 over SSH
+                 ({"TERM": "xterm-256color"}, "256"),
+                 ({"TERM": "xterm"}, "standard"),                                         # PuTTY
+                 ({"TERM": "xterm-256color", "TPOT_COLORS": "16"}, "standard")]
+        for env, expected in cases:
+            with self.subTest(env=env):
+                console, _out = self.console(env, self.Tty())
+                self.assertEqual(console.color_system, expected)
+
+    def test_a_pipe_gets_no_escapes(self):
+        console, out = self.console({"TERM": "xterm-256color", "LC_TERMINAL": "iTerm2"}, io.StringIO())
+        self.assertNotIn("\x1b[", out)
+        self.assertIsNone(console.color_system)
+
+
 class SetupVenvInstallTest(unittest.TestCase):
     """A Python without its venv module (Debian, Ubuntu, Raspberry Pi OS): tpot asks, then installs it."""
 

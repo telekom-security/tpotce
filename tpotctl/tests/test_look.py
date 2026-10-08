@@ -567,10 +567,15 @@ class LookInTheAppTest(unittest.IsolatedAsyncioTestCase):
         app = self.make_app()
         async with app.run_test(size=(140, 45)) as pilot:
             await pilot.pause(0.4)
-            names = [name for name, _help, _cb in TpotCommands(app.screen).commands()]
+            found = {name: help_text for name, help_text, _cb in TpotCommands(app.screen).commands()}
+            names = list(found)
             self.assertIn("Go to Settings", names)
             self.assertIn("Icons: nerd", names)
             self.assertIn("Colours: 256", names)
+            # SSH brings LC_TERMINAL (iTerm2) and COLORTERM along: true colour is for a terminal that
+            # has it without saying so, not for SSH as such
+            self.assertNotIn("SSH", found["Colours: truecolor"])
+            self.assertIn("24 bit", found["Colours: truecolor"])
             app.set_colors("256")
             with open(prefs.path(), encoding="utf-8") as handle:
                 self.assertEqual(json.load(handle)["colors"], "256")
