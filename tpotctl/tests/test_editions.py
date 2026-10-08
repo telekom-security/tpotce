@@ -343,9 +343,24 @@ class EditionsTest(unittest.TestCase):
                     self.assertNotEqual(self.last_state, "active")
                     if self.last_state == initial:      # ^C at sudo's prompt: nothing happened
                         self.assertIn(f"as it was before the switch (systemd says {initial})", text)
+                    elif initial == "activating":       # test_ctrl_c_goes_back_to_a_tpot_that_was_starting
+                        self.assertIn("was starting before the switch, the way back does not start it", text)
                     else:
                         self.assertIn("did not run before the switch and is not started", text)
                         self.assertIn("tpot start", text)
+
+    def test_ctrl_c_goes_back_to_a_tpot_that_was_starting(self):
+        """verify #5: T-Pot activating before the switch (Restart=always, an ExecStartPre that runs), a ^C
+        into systemctl stop: it was starting, it did not "not run"; it is not started again (a restart
+        loop stays stopped), the line says how to start it."""
+        for code, state in ((1, "deactivating"), (0, None), (1, "inactive")):
+            with self.subTest(code=code, state=state):
+                commands, raised, text = self.switch_with_ctrl_c("stop", code, state, initial="activating")
+                self.assertIsInstance(raised, editions.bootstrap.Interrupted, text)
+                self.assertNotIn(["sudo", "systemctl", "start", "tpot"], commands)
+                self.assertNotIn("did not run", text)
+                self.assertIn("T-Pot was starting before the switch, the way back does not start it "
+                              f"(systemd says {self.last_state}), start it with: tpot start", text)
 
     def test_ctrl_c_while_stopping_and_a_start_still_activating(self):
         """The way back starts T-Pot, systemd still says activating: a hint, no success, no stop."""

@@ -264,7 +264,8 @@ def _go_back(plan: SwitchPlan, linux: bool, sudo: Callable, run: Callable, befor
     What it says comes from systemd: a ^C at sudo's password prompt of the stop left T-Pot running
     (no start, no second prompt), one into systemctl stop let the stop go on. A T-Pot that did not
     run before the switch (before: systemd then, stopped on purpose, failed or in a restart loop) is
-    not started."""
+    not started, nor one that was starting then (activating: Restart=always, an ExecStartPre); the
+    line says it was starting, not that it did not run."""
     started = ""
     if linux:
         now = _state(run)
@@ -272,6 +273,10 @@ def _go_back(plan: SwitchPlan, linux: bool, sudo: Callable, run: Callable, befor
             started = ", T-Pot still runs"
         elif before not in _RUNS and now == before:
             started = f", T-Pot is as it was before the switch (systemd says {now})"
+        elif before == "activating":
+            # starting (Restart=always, an ExecStartPre): it ran, not yet up; a restart loop stays stopped
+            started = f", T-Pot was starting before the switch, the way back does not start it (systemd says {now}), " \
+                      "start it with: tpot start"
         elif before not in _RUNS:
             started = f", T-Pot did not run before the switch and is not started (systemd says {now}), " \
                       "start it with: tpot start"
