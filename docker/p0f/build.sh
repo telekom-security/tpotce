@@ -8,6 +8,8 @@
 # Distributed under the terms and conditions of GNU LGPL.
 #
 
+# an exported CDPATH turns a cd into a search that prints (or goes to) the folder it found
+unset CDPATH
 PROGNAME="p0f"
 VERSION="3.09b"
 

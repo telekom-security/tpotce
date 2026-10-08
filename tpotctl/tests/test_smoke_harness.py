@@ -23,9 +23,7 @@ CAPTURED = re.compile(r"\$\(\s*(CDPATH=(?:\"\"|'')?\s+)?cd\s")
 VENDORED = ()
 # scripts outside this pass that still capture a cd with the caller's CDPATH, with the reason; the test
 # fails when one of them is fixed and still listed here
-PENDING = {
-    "docker/heralding/validation/build_tpot.sh": "not owned by the stage 8f Fix-Rest pass: patch in its report",
-}
+PENDING = {}
 
 
 def run(args, env=None, cwd=REPO):
@@ -114,6 +112,14 @@ class CdpathTest(unittest.TestCase):
                  for where in [uncleared_cd(path, CAPTURED)] if where}
         self.assertEqual(sorted(set(found) - set(PENDING)), [], found)
         self.assertEqual(sorted(set(PENDING) - set(found)), [], "fixed: take it out of PENDING")
+
+    def test_the_build_scripts_clear_cdpath(self):
+        """The build scripts that cd into a relative folder of their own (an exported CDPATH could take them
+        to another one of that name)."""
+        for rel in ("docker/nginx/builder/cyberchef/build.sh", "docker/nginx/builder/esvue/build.sh",
+                    "docker/p0f/build.sh"):
+            with self.subTest(script=rel):
+                self.assertIsNone(uncleared_cd(os.path.join(REPO, rel)))
 
     def test_the_check_sees_a_cd_without_cdpath(self):
         """The rule of the static check itself: a cd in each position counts, CDPATH="" and unset clear it."""

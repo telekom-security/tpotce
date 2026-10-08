@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Build the pinned local source without publishing it to a remote repository.
 set -euo pipefail
+# an exported CDPATH turns a cd into a search that prints (or goes to) the folder it found
+unset CDPATH
 tpot_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd)"
 project_dir="${1:-${tpot_dir}/../heralding}"
 image="${2:-heralding:tpot-dev}"

@@ -1,6 +1,8 @@
 #!/bin/bash
-# Needs buildx to build. Run tpotce/bin/setup-builder.sh first
+# Needs buildx to build: docker/_builder/builder.sh --setup sets it up
 set -euo pipefail
+# an exported CDPATH turns a cd into a search that prints (or goes to) the folder it found
+unset CDPATH
 
 cd "$(dirname "$0")"
 OUT_DIR="../../dist/html/cyberchef"
