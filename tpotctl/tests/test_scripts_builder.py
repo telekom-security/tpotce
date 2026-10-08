@@ -331,8 +331,9 @@ class CliTest(BuilderHarness):
         block = text[text.index("# >>> plain fallback"):text.index("# <<< plain fallback")]
         script = (block + '\nfuUI_CHOOSE --selected b "Pick" "A:a" "B:b" "C:c"\n'
                   'fuUI_CONFIRM --default no "Push?" "Push" "No"; echo "rc=$?"\n')
-        result = subprocess.run(["bash", "-c", script], input="\n\n", capture_output=True, universal_newlines=True,
-                                timeout=30)
+        # enter for both, then a yes that only a confirm without its default would read (and push)
+        result = subprocess.run(["bash", "-c", script], input="\n\ny\n", capture_output=True,
+                                universal_newlines=True, timeout=30)
         self.assertEqual(result.stdout, "b\nrc=1\n", result.stderr)
 
     def test_status_line_names_the_platforms_of_t_pot(self):
@@ -411,6 +412,31 @@ class CliTest(BuilderHarness):
         with open(self.local, encoding="utf-8") as handle:
             self.assertIn("TPOT_BUILDER_JOBS=8\n", handle.read())
 
+    def test_an_exported_cdpath_changes_nothing(self):
+        """cd prints the folder it found through CDPATH: the builder finds its folder and the checkout all
+        the same, also started by a path relative to the folder it is in."""
+        for cdpath in (".", ".:/tmp"):
+            with self.subTest(cdpath=cdpath):
+                result = self.run_script("docker/_builder/builder.sh", "-L", env=self.env(CDPATH=cdpath), cwd=REPO)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertNotIn("cd:", result.stderr)
+                self.assertIn("cowrie", result.stdout)
+                # the .env of its folder, named relative to the checkout
+                result = self.run_script("docker/_builder/builder.sh", "--show-config",
+                                         env=self.env(CDPATH=cdpath), cwd=REPO)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertNotIn("cd:", result.stderr)
+                self.assertRegex(result.stdout, r"TPOT_GHCR_REPO=ghcr.io/telekom-security\s+# docker/_builder/.env")
+
+    def test_help_and_readme_say_a_one_platform_push_needs_no_plain_version(self):
+        rc, out = self.builder("-h")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("no plain version", " ".join(out.split()))
+        readme = base.read("README.md")
+        section = readme[readme.index("## Build the Images Yourself"):]
+        section = section[:section.index("\n## ", 1)]
+        self.assertIn("no plain version", section)
+
     def test_readme_says_what_a_run_empties_and_caches(self):
         """The README section of the builder: a run empties the logs of what it does, not all of them, and
         the load build of the smoke tests takes the cache only where the run built this host's platform."""
@@ -420,10 +446,10 @@ class CliTest(BuilderHarness):
         self.assertNotIn("each run starts them anew", section)
         self.assertIn("the logs of other images stay", section)
         self.assertIn("without the cache after `-n`", section)
-        # the menu preselects the default in the order of the items, the release version is no tag of its own
+        # the menu preselects the default in the order of the items, no plain version is a tag of its own
         self.assertNotIn("the default of your settings comes first", section)
         self.assertIn("the default of your settings preselected", section)
-        self.assertIn("not the release version itself", section)
+        self.assertIn("no plain version", section)
         text = base.read("docker/_builder/builder.sh")
         self.assertNotIn("the same and fast", text)
 
@@ -637,6 +663,31 @@ class RightsTest(BuilderHarness):
                                STUB_CONTEXT_HOST="unix:///var/run/docker.sock")
         self.assertEqual(rc, 3, out)
         self.assertIn("Run the builder with sudo", out)
+
+    def test_a_remote_docker_and_the_upload_limit(self):
+        """DOCKER_HOST=tcp:// or ssh://: the Docker of another host pushes from there, a limit of this host
+        would not slow it down; the question of the menu fits 76 columns, whatever the URL."""
+        for url in ("tcp://buildhost.example.internal:2376", "ssh://builder@buildhost.example.internal"):
+            with self.subTest(url=url):
+                rc, out = self.builder("-p", STUB_USER="tester", DOCKER_HOST=url)
+                self.assertEqual(rc, 3, out)
+                self.assertIn("-l off", out)
+                self.assertIn(url, out)
+                self.assertNotIn("this host", out)
+                self.assertIn("the host of that Docker", out)
+                rc, out = at_terminal([], self.terminal_env(STUB_USER="tester", DOCKER_HOST=url),
+                                      answers=MenuTest.PUSH_HUB + "2\n")
+                self.assertEqual(rc, 0, out)
+                self.assertIn(url, out)
+                headers = re.findall(r"^### (Upload limit[^\n]*)$", out, re.M)
+                self.assertEqual(len(headers), 1, out)
+                self.assertLessEqual(len(headers[0]), 76, headers[0])
+                self.assertNotIn("sudo", out)
+                self.assertEqual(self.builds(), [])
+        # a Docker of this host (rootless): its upload is the one of this host
+        rc, out = self.builder("-p", STUB_USER="tester", DOCKER_HOST="unix:///run/user/1000/docker.sock")
+        self.assertEqual(rc, 3, out)
+        self.assertIn("this host", out)
 
     def test_the_menu_of_another_docker_context_does_not_offer_sudo(self):
         rc, out = at_terminal([], self.terminal_env(STUB_USER="tester", STUB_CONTEXT="desktop-linux"),
@@ -986,6 +1037,30 @@ class PushTest(BuilderHarness):
         rc, out = self.builder("-a", "host", "-t", VERSION, STUB_PLATFORMS="linux/amd64")
         self.assertEqual(rc, 0, out)
 
+    def test_a_one_platform_push_over_any_release_version_is_refused(self):
+        """Any plain version (digits and dots, v first or not) is the tag of a release or will be one, with
+        the images of both platforms: an older release, the version of a checkout that is ahead. A
+        one-platform push needs a tag with more than that (rc 2, no build); the hint takes the tag given."""
+        for tag in ("0.0.1", "v0.0.1", "25", "1.2.3.4"):
+            with self.subTest(tag=tag):
+                self.calls_reset()
+                rc, out = self.builder("-i", "cowrie", "-a", "arm64", "-p", "-l", "off", "-t", tag)
+                self.assertEqual(rc, 2, out)
+                self.assertIn("### [ERROR] - ", out)
+                self.assertIn("multi-arch", out)
+                self.assertIn(f"-t {tag}-arm64", out)
+                self.assertFalse(any(" build " in line for line in self.calls()), self.calls())
+        rc, out = self.builder("-i", "cowrie", "-a", "arm64", "-p", "-l", "off", "-t", "0.0.1-arm64")
+        self.assertEqual(rc, 0, out)
+        build = [line for line in self.calls() if " build cowrie" in line][0]
+        self.assertIn("--push", build)
+        self.assertIn("TPOT_VERSION=0.0.1-arm64 ", build)
+        # both platforms with an older release (a rebuild of it), one platform without a push
+        rc, out = self.builder("-i", "cowrie", "-a", "both", "-p", "-l", "off", "-t", "0.0.1")
+        self.assertEqual(rc, 0, out)
+        rc, out = self.builder("-i", "cowrie", "-a", "host", "-t", "0.0.1", STUB_PLATFORMS="linux/amd64")
+        self.assertEqual(rc, 0, out)
+
     def test_a_one_platform_push_of_a_setting_names_the_setting(self):
         # no -a on the command line: the message names where the one platform comes from
         with open(self.local, "w", encoding="utf-8") as handle:
@@ -1291,6 +1366,15 @@ class SetupTest(BuilderHarness):
         self.assertIn("### [WARNING] - docker compose 2.20.3: -a amd64, arm64 or host, the push to one registry and "
                       "the smoke tests (-T) need 2.24.4", out)
 
+    def test_check_takes_the_platforms_of_the_environment(self):
+        # TPOT_BUILDER_ARCH of the environment is the one of every run without -a, as one of .env.local
+        rc, out = self.builder("--check", STUB_COMPOSE_VERSION="2.20.3", TPOT_BUILDER_ARCH="arm64")
+        self.assertEqual(rc, 3, out)
+        self.assertIn("### [FAILED] - docker compose 2.20.3 is too old: TPOT_BUILDER_ARCH=arm64 of the environment "
+                      "needs 2.24.4", out)
+        rc, out = self.builder("--check", STUB_COMPOSE_VERSION="2.20.3", TPOT_BUILDER_ARCH="both")
+        self.assertEqual(rc, 0, out)
+
 
 class SettingsTest(BuilderHarness):
     """docker/_builder/.env.local (untracked, TPOT_BUILDER_ENV_LOCAL in the tests): the settings of this
@@ -1514,6 +1598,73 @@ class SettingsTest(BuilderHarness):
                     self.assertIn("UTF-8", out)
                     self.assertNotIn("chown", out)
                     self.assertEqual(self.read_local(), data)
+
+    NO_TEXT = (("a NUL byte", b"# a\x00b\nTPOT_DOCKER_REPO=me\n"),
+               ("UTF-16", "TPOT_DOCKER_REPO=me\r\nTPOT_BUILDER_JOBS=3\r\n".encode("utf-16")),
+               ("UTF-16 BE", b"\xfe\xff" + "TPOT_DOCKER_REPO=me\n".encode("utf-16-be")))
+
+    def test_a_file_that_is_no_text_stops_every_reader(self):
+        """A run, --show-config, --check and the menu read the settings: of a file that is no text they
+        would find no key and take the defaults without a word (built in for every key), so they stop
+        with rc 3 and the same message as --set, before anything is built or asked."""
+        for case, data in self.NO_TEXT:
+            for args in (["-y"], ["-i", "cowrie", "-p", "-l", "off"], ["--show-config"], ["--check"], []):
+                with self.subTest(case=case, args=args):
+                    with open(self.local, "wb") as handle:
+                        handle.write(data)
+                    self.calls_reset()
+                    if args:
+                        rc, out = self.builder(*args)
+                    else:
+                        rc, out = at_terminal([], self.terminal_env(), answers=MenuTest.QUIT)
+                        self.assertNotIn("What do you want to do?", out)
+                    self.assertEqual(rc, 3, out)
+                    self.assertIn(f"### [ERROR] - {self.local} is no text file", out)
+                    self.assertIn("UTF-8", out)
+                    self.assertNotIn("built in", out)
+                    self.assertEqual(self.builds(), [])
+                    self.assertEqual(self.read_local(), data)
+        # the file turns into one while the menu runs: Settings says so and asks nothing
+        with open(self.local, "wb") as handle:
+            handle.write(self.NO_TEXT[1][1])
+        result = self.bash(MenuTest.RECORD + 'fuMENU_SETTINGS; echo "rc=$?"')
+        self.assertIn("rc=0", result.stdout, result.stderr)
+        self.assertIn(f"{self.local} is no text file", result.stderr)
+        self.assertFalse([line for line in result.stderr.splitlines() if line.startswith("Q ")], result.stderr)
+
+    def test_a_file_that_turns_into_no_text_before_the_write_stays(self):
+        """fuLOCAL_WRITE reads the file again for the new text: one replaced by a file that is no text after
+        the check of fuSAVE_SETTINGS is left as it is (rc 3), not written from what bash makes of it."""
+        # the key in plain text before the NUL byte, so that --unset finds it and writes
+        data = b"TPOT_DOCKER_REPO=me\nTPOT_BUILDER_JOBS=3\x00\n"
+        octal = "".join("\\%03o" % byte for byte in data)
+        for item in ("TPOT_BUILDER_JOBS=8", "TPOT_DOCKER_REPO"):
+            with self.subTest(item=item):
+                with open(self.local, "w", encoding="utf-8") as handle:
+                    handle.write("TPOT_DOCKER_REPO=me\n")
+                swap = f'fuLOCAL_TEXT () {{ printf \'{octal}\' > "$myLOCALFILE"; return 0; }}\n'
+                result = self.bash(swap + f'fuSAVE_SETTINGS {item}; echo "rc=$?"')
+                self.assertIn("rc=3", result.stdout, result.stdout + result.stderr)
+                self.assertIn("is no text file", result.stderr)
+                self.assertEqual(self.read_local(), data)
+
+    def test_a_wrong_value_of_the_tracked_env_names_that_file(self):
+        """A wrong value in docker/_builder/.env (in git): the hint is to fix it there or to override it with
+        --set in .env.local; --unset would only say it is not set in .env.local."""
+        root = self.checkout_copy()
+        envfile = os.path.join(root, "docker", "_builder", ".env")
+        with open(envfile, encoding="utf-8") as handle:
+            text = handle.read()
+        with open(envfile, "w", encoding="utf-8") as handle:
+            handle.write(re.sub(r"^TPOT_DOCKER_REPO=.*$", "TPOT_DOCKER_REPO=My_Repo", text, flags=re.M))
+        result = self.run_script(os.path.join(root, "docker", "_builder", "builder.sh"), "-y", env=self.env())
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 2, out)
+        self.assertIn("TPOT_DOCKER_REPO=My_Repo (docker/_builder/.env)", out)
+        self.assertIn("Fix it in docker/_builder/.env", out)
+        self.assertIn("--set TPOT_DOCKER_REPO=<value>", out)
+        self.assertNotIn("--unset", out)
+        self.assertEqual(self.builds(), [])
 
     def test_a_missing_folder_of_the_settings_is_named(self):
         # TPOT_BUILDER_ENV_LOCAL in a folder that is not there: make it, nothing to chown
@@ -1831,6 +1982,75 @@ class MenuTest(BuilderHarness):
         build = [line for line in self.calls() if " build cowrie" in line][0]
         self.assertIn("TPOT_VERSION=9.9.9-amd64 ", build)
 
+    def test_menu_any_release_version_is_asked_again(self):
+        """Not only the version of the checkout: any plain version (an older release, one of a checkout
+        ahead) is a release tag with multi-arch images, so a one-platform push asks for another tag."""
+        # this host only; push to Docker Hub; an older release, then a tag of its own; no limit; with cache;
+        # 2 at a time; no tests; keep; Build
+        answers = "1\n1\n2\ny\nn\n0.0.1\nv0.0.1\n9.9.9-amd64\n2\nn\n2\nn\nn\n1\n"
+        rc, out = at_terminal([], self.terminal_env(STUB_PLATFORMS="linux/amd64"), answers=answers)
+        self.assertEqual(rc, 0, out)
+        self.assertIn("0.0.1 is a release version", out)
+        self.assertIn("v0.0.1 is a release version", out)
+        build = [line for line in self.calls() if " build cowrie" in line][0]
+        self.assertIn("TPOT_VERSION=9.9.9-amd64 ", build)
+        # change the version to an older release: kept 9.9.9-amd64
+        self.calls_reset()
+        answers = "1\n1\n2\ny\nn\n9.9.9-amd64\n2\nn\n2\nn\ny\n0.0.1\n\n\n1\n"
+        rc, out = at_terminal([], self.terminal_env(STUB_PLATFORMS="linux/amd64"), answers=answers)
+        self.assertEqual(rc, 0, out)
+        self.assertIn("0.0.1 is a release version", out)
+        build = [line for line in self.calls() if " build cowrie" in line][0]
+        self.assertIn("TPOT_VERSION=9.9.9-amd64 ", build)
+
+    def test_menu_compose_names_the_platforms_of_the_menu(self):
+        """An old compose for the platforms picked in the menu: the message names that choice, not the
+        setting (nor the built-in default) it replaced."""
+        # build; all images; linux/arm64 only; no push; with cache; 2 at a time (enter); no tests; keep; Build
+        rc, out = at_terminal([], self.terminal_env(STUB_COMPOSE_VERSION="2.20.3"),
+                              answers="1\n1\n4\nn\nn\nn\n\nn\nn\n1\n")
+        self.assertEqual(rc, 3, out)
+        self.assertIn("linux/arm64 of the menu needs 2.24.4", out)
+        self.assertNotIn("of built in", out)
+        self.assertNotIn("TPOT_BUILDER_ARCH=", out)
+        self.assertEqual(self.builds(), [])
+        # TPOT_BUILDER_ARCH=arm64 of .env.local, this host only picked: the choice
+        with open(self.local, "w", encoding="utf-8") as handle:
+            handle.write("TPOT_BUILDER_ARCH=arm64\n")
+        rc, out = at_terminal([], self.terminal_env(STUB_COMPOSE_VERSION="2.20.3"),
+                              answers="1\n1\n2\nn\nn\nn\n\nn\nn\n1\n")
+        self.assertEqual(rc, 3, out)
+        self.assertIn("linux/amd64 of the menu needs 2.24.4", out)
+        self.assertNotIn("TPOT_BUILDER_ARCH=", out)
+        # the check of the builder setup is about the setting (every run without -a), also after this host
+        # only was picked for a build: the same, Back; Builder setup, Check; Quit
+        rc, out = at_terminal([], self.terminal_env(STUB_COMPOSE_VERSION="2.20.3"),
+                              answers="1\n1\n2\nn\nn\nn\n\nn\nn\n2\n2\n1\n" + self.QUIT)
+        self.assertEqual(rc, 0, out)
+        self.assertIn(f"TPOT_BUILDER_ARCH=arm64 of {self.local} needs 2.24.4", out)
+        self.assertNotIn("of the menu", out)
+
+    def test_menu_a_setting_with_a_leading_zero_goes_without_saying(self):
+        # TPOT_BUILDER_JOBS=04 of .env.local is 4: taken as it is (enter), no -j 4 in the command line
+        with open(self.local, "w", encoding="utf-8") as handle:
+            handle.write("TPOT_BUILDER_JOBS=04\n")
+        rc, out = at_terminal([], self.terminal_env(), answers="1\n1\n1\nn\nn\nn\n\nn\nn\n2\n" + self.QUIT)
+        self.assertEqual(rc, 0, out)
+        self.assertIn("4 builds at a time", out)
+        self.assertRegex(out, r"builder\.sh -y\n")
+
+    def test_menu_preselects_the_limit_of_the_settings(self):
+        """Root pushing: the upload limit of the settings is preselected, enter keeps it."""
+        record = self.RECORD.replace('return 1; }', 'case "$*" in *"Docker Hub"*) return 0 ;; esac; return 1; }')
+        for limit in ("40mbit", "800kbit"):
+            with self.subTest(limit=limit):
+                with open(self.local, "w", encoding="utf-8") as handle:
+                    handle.write(f"TPOT_BUILDER_LIMIT={limit}\n")
+                result = self.bash(record + 'fuCONFIG\nmyHOST=amd64\nfuSETTINGS\nfuMENU_OPTIONS; echo "[$myLIMIT]"')
+                self.assertEqual(result.stdout.strip().splitlines()[-1], f"[{limit}]", result.stderr)
+                self.assertIn(f"Q --selected {limit} Upload limit while pushing {limit}:{limit} No limit:off "
+                              "Another rate:other", result.stderr)
+
     def test_menu_names_the_builder_by_its_full_path(self):
         """The command lines of the menu run from anywhere (cron starts in HOME): the builder by its full
         path, also when it was started as builder.sh in its folder."""
@@ -1846,6 +2066,11 @@ class MenuTest(BuilderHarness):
                               script="builder.sh")
         self.assertEqual(rc, 0, out)
         self.assertIn(f"The same without the menu: {BUILDER} -y\n", out)
+        # a push without root, quit to run it with sudo: the hint names it the same way
+        rc, out = at_terminal([], self.terminal_env(STUB_USER="tester"), answers=self.PUSH_HUB + "2\n", cwd=folder,
+                              script="builder.sh")
+        self.assertEqual(rc, 0, out)
+        self.assertIn(f"Run it with sudo: sudo {BUILDER}\n", out)
         # --setup names the builder for the next steps the same way
         result = self.run_script("builder.sh", "--setup", env=self.env(), cwd=folder)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

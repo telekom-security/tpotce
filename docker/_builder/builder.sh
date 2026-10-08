@@ -11,8 +11,9 @@
 # (--set, --unset, --show-config, Settings in the menu) are in docker/_builder/.env.local
 # (not in git) over docker/_builder/.env.
 
-myDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-myREPO="$(cd "${myDIR}/../.." && pwd)"
+# CDPATH="": with an exported CDPATH cd prints the folder it found there, into the path
+myDIR="$(CDPATH="" cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+myREPO="$(CDPATH="" cd -- "${myDIR}/../.." && pwd)"
 # the builder by its full path, for the command lines it prints: they run from anywhere
 # (cron starts in HOME), not only from the folder it was started in
 mySELF="${myDIR}/${BASH_SOURCE[0]##*/}"
@@ -326,6 +327,8 @@ myDOCKER_REPO=""
 myGHCR_REPO=""
 myTEST=""
 myMENU=""
+# the platforms were picked in the menu (fuMENU_OPTIONS), for fuARCH_SOURCE
+myMENU_ARCH=""
 mySET_ITEMS=()
 # the first option of a build and the option of another action (fuBUILD_OPTIONS_OK)
 myBUILD_OPT=""
@@ -348,6 +351,7 @@ myCONF_GHCR="${myDEFAULT_GHCR}"
 myEXIT_DONE=""
 myLIMIT_SET=""
 myOTHER_DOCKER=""
+myOTHER_REMOTE=""
 myIF=""
 myVER=""
 myHUB=""
@@ -413,8 +417,8 @@ Docker); root only for the upload limit while pushing." \
     --opt "-l, --upload-limit RATE" "Upload limit while pushing, tc rate or off (default: ${myDEFAULT_LIMIT},
 or TPOT_BUILDER_LIMIT); needs root" \
     --opt "-t, --tag VERSION" "The version tag (default: the file version of the checkout); a push for
-one platform (-a amd64, arm64, host) needs one of its own, not the release
-version, i.e. <version>-arm64" \
+one platform (-a amd64, arm64, host) needs one of its own, no plain version
+(digits and dots, as a release has), i.e. <version>-arm64" \
     --opt "--docker-repo REPO" "The Docker Hub repository (default: TPOT_DOCKER_REPO)" \
     --opt "--ghcr-repo REPO" "The GHCR repository (default: TPOT_GHCR_REPO)" \
     --opt "-T, --test" "Run the smoke tests of the built images after the build" \
@@ -700,21 +704,30 @@ fuCONFIG () {
   # the settings of this run into myCONF_* (without the options) with where they come
   # from in myFROM_*, what the files say without the environment in myFILES_* (what the
   # command line of the menu leaves out), and myARCH / myJOBS / myLIMIT (an option over
-  # them); rc 2 for a value that is used and wrong, with where it comes from
+  # them); rc 2 for a value that is used and wrong, with where it comes from, rc 3 for an
+  # .env.local that is no text (its keys would go unseen)
   local myKEY myOUT myVAL myFROM
+  fuLOCAL_TEXT || return 3
   for myKEY in ${mySETTING_KEYS}; do
     myOUT=$(fuCONFIG_GET "${myKEY}" files)
-    printf -v "myFILES_${myKEY#TPOT_}" '%s' "${myOUT%%|*}"
+    # the value the key takes (4 for 04), as the run has it
+    myVAL="${myOUT%%|*}"
+    if fuSETTING_CHECK "${myKEY}" "${myVAL}"; then myVAL="${mySETTING_VALUE}"; fi
+    printf -v "myFILES_${myKEY#TPOT_}" '%s' "${myVAL}"
     myOUT=$(fuCONFIG_GET "${myKEY}")
     myVAL="${myOUT%%|*}" myFROM="${myOUT#*|}"
     printf -v "myFROM_${myKEY#TPOT_}" '%s' "${myFROM}"
     if [ -z "$(fuCONFIG_OPTION "${myKEY}")" ]; then
       if ! fuSETTING_CHECK "${myKEY}" "${myVAL}"; then
         fuUI_ERROR "${myKEY}=${myVAL} (${myFROM}): ${mySETTING_WHY}"
-        # the environment wins over .env.local: --set would not help
-        if [ "${myFROM}" = "environment" ];
-          then fuUI_HINT "Change it in the environment, or remove it there: unset ${myKEY}" >&2
-          else fuUI_HINT "Change it: ${0##*/} --set ${myKEY}=<value>, or remove it: ${0##*/} --unset ${myKEY}" >&2
+        # the environment wins over .env.local: --set would not help; --unset removes a key
+        # of .env.local only, the tracked .env stays (--set overrides it)
+        if [ "${myFROM}" = "environment" ]; then
+          fuUI_HINT "Change it in the environment, or remove it there: unset ${myKEY}" >&2
+        elif [ "${myFROM}" = "$(fuSHORT "${myENVFILE}")" ]; then
+          fuUI_HINT "Fix it in ${myFROM}, or override it in $(fuSHORT "${myLOCALFILE}"): ${0##*/} --set ${myKEY}=<value>" >&2
+        else
+          fuUI_HINT "Change it: ${0##*/} --set ${myKEY}=<value>, or remove it: ${0##*/} --unset ${myKEY}" >&2
         fi
         return 2
       fi
@@ -732,8 +745,10 @@ fuCONFIG () {
 }
 
 fuSHOW_CONFIG () {
-  # --show-config: every setting as KEY=VALUE with where it comes from, the version too
+  # --show-config: every setting as KEY=VALUE with where it comes from, the version too;
+  # rc 3 for an .env.local that is no text
   local myKEY myOUT myVAL myFROM
+  fuLOCAL_TEXT || return 3
   printf '%s\n' "# The settings of the image builder: an option, else the environment, else" \
     "# $(fuSHORT "${myLOCALFILE}"), else $(fuSHORT "${myENVFILE}"), else the built-in default"
   for myKEY in ${mySETTING_KEYS}; do
@@ -924,12 +939,14 @@ fuLIMITED () { fuPUSHING && [ "${myLIMIT}" != "off" ]; }
 fuONE_REGISTRY () { fuPUSHING && [ "${myPUSH_HUB}" != "${myPUSH_GHCR}" ]; }
 fuOVERRIDE_NEEDED () { [ "${myARCH}" != "both" ] || fuONE_REGISTRY; }
 fuHOST_ONLY () { [ "${#myPLATFORMS[@]}" -eq 1 ] && [ "${myPLATFORMS[0]}" = "linux/${myHOST}" ]; }
-# the release tag holds the images of linux/amd64 and linux/arm64 in one manifest, a
-# push of one platform over it replaces them with that one: it needs a tag of its own,
-# neither none nor -t with the release version itself
+# a release tag holds the images of linux/amd64 and linux/arm64 in one manifest, a push
+# of one platform over it replaces them with that one: it needs a tag of its own,
+# neither none nor -t with a release version. Any plain version is one (fuPLAIN_VERSION):
+# an older release, the version of a checkout ahead of the last release
+fuPLAIN_VERSION () { [[ "$1" =~ ^v?[0-9]+(\.[0-9]+)*$ ]]; }
 fuTAG_NEEDED () {
   fuPUSHING && [ "${myARCH}" != "both" ] || return 1
-  [ -z "${myTAG}" ] || [ "${myTAG}" = "$(fuRELEASE)" ]
+  [ -z "${myTAG}" ] || [ "${myTAG}" = "$(fuRELEASE)" ] || fuPLAIN_VERSION "${myTAG}"
 }
 
 fuARCH_NAME () {
@@ -941,9 +958,10 @@ fuARCH_NAME () {
 }
 
 fuARCH_SOURCE () {
-  # where the platforms of a one-platform run come from: -a, else the setting
+  # where the platforms of a one-platform run come from: -a, the menu, else the setting
   # TPOT_BUILDER_ARCH and where that is
   if [ -n "${myOPT_ARCH}" ]; then echo "-a ${myARCH}"; return 0; fi
+  if [ -n "${myMENU_ARCH}" ]; then echo "${myPLATFORMS[*]} of the menu"; return 0; fi
   case "${myFROM_BUILDER_ARCH}" in
     environment) echo "TPOT_BUILDER_ARCH=${myARCH} of the environment" ;;
     *) echo "TPOT_BUILDER_ARCH=${myARCH} of ${myFROM_BUILDER_ARCH}" ;;
@@ -951,16 +969,19 @@ fuARCH_SOURCE () {
 }
 
 fuTAG_REFUSED () {
-  # rc 2 with a hint for a push of one platform over the release tag: without -t, or
-  # with -t of the release version
+  # rc 2 with a hint for a push of one platform over a release tag: without -t, or with
+  # -t of the release version or any other plain version (fuTAG_NEEDED)
   local myREL
   fuTAG_NEEDED || return 0
   myREL=$(fuRELEASE)
-  if [ -n "${myTAG}" ];
-    then fuUI_ERROR "A push for one platform ($(fuARCH_SOURCE)) with -t ${myTAG}, the release tag, would replace its multi-arch images (linux/amd64 and linux/arm64)."
-    else fuUI_ERROR "A push for one platform ($(fuARCH_SOURCE)) over the release tag ${myVER} would replace its multi-arch images (linux/amd64 and linux/arm64)."
+  if [ -z "${myTAG}" ]; then
+    fuUI_ERROR "A push for one platform ($(fuARCH_SOURCE)) over the release tag ${myVER} would replace its multi-arch images (linux/amd64 and linux/arm64)."
+  elif [ "${myTAG}" = "${myREL}" ]; then
+    fuUI_ERROR "A push for one platform ($(fuARCH_SOURCE)) with -t ${myTAG}, the release tag, would replace its multi-arch images (linux/amd64 and linux/arm64)."
+  else
+    fuUI_ERROR "A push for one platform ($(fuARCH_SOURCE)) with -t ${myTAG}, a release version, would replace the multi-arch images (linux/amd64 and linux/arm64) of that release."
   fi
-  fuUI_HINT "A one-platform push needs its own tag, i.e. -t ${myREL}-$(fuARCH_NAME)" \
+  fuUI_HINT "A one-platform push needs a tag of its own, no plain version: i.e. -t ${myTAG:-${myREL}}-$(fuARCH_NAME)" \
             "or build both platforms (-a both), or without a push; ${0##*/} -h shows the options." >&2
   return 2
 }
@@ -1066,10 +1087,11 @@ fuOTHER_DOCKER () {
   # fuOTHER_DOCKER [down]: this user talks to another Docker than root under sudo, which
   # drops DOCKER_HOST and DOCKER_CONTEXT, has contexts of its own and so talks to the
   # Docker of the system: rootless Docker, Docker Desktop, any context or DOCKER_HOST but
-  # the socket of the system. What it is into myOTHER_DOCKER; root never does. down: a
-  # Docker that does not answer, docker info is not asked
+  # the socket of the system. What it is into myOTHER_DOCKER, myOTHER_REMOTE=1 for one of
+  # another host (tcp://, ssh://: it pushes from there); root never does. down: a Docker
+  # that does not answer, docker info is not asked
   local myURL myNAME=""
-  myOTHER_DOCKER=""
+  myOTHER_DOCKER="" myOTHER_REMOTE=""
   fuROOT && return 1
   myURL=$(fuDOCKER_ENDPOINT)
   [ -n "${DOCKER_HOST:-}" ] || myNAME="${DOCKER_CONTEXT:-$(docker context show 2>/dev/null)}"
@@ -1087,6 +1109,7 @@ fuOTHER_DOCKER () {
     then myOTHER_DOCKER="DOCKER_HOST=${DOCKER_HOST}"
     else myOTHER_DOCKER="the Docker context ${myNAME:-in use}"
   fi
+  case "${myURL}" in ""|unix://*|npipe://*|fd://*) ;; *) myOTHER_REMOTE=1 ;; esac
   return 0
 }
 
@@ -1095,12 +1118,16 @@ fuRIGHTS () {
   # needs a Docker that answers this user (fuDOCKER_READY)
   fuROOT && return 0
   fuUI_ERROR "The upload limit while pushing (tc) needs root."
-  if fuOTHER_DOCKER;
-    then fuUI_HINT "With ${myOTHER_DOCKER} root talks to another Docker (its builder, cache and login):" \
-                   "push without a limit, -l off (for every run: ${0##*/} --set TPOT_BUILDER_LIMIT=off)," \
-                   "or limit the upload of this host yourself." >&2
-    else fuUI_HINT "Run the builder with sudo, or push without a limit: -l off" \
-                   "(for every run: ${0##*/} --set TPOT_BUILDER_LIMIT=off)" >&2
+  if fuOTHER_DOCKER; then
+    local myWHERE="this host"
+    # a Docker of another host pushes from there
+    [ -z "${myOTHER_REMOTE}" ] || myWHERE="the host of that Docker"
+    fuUI_HINT "With ${myOTHER_DOCKER} root talks to another Docker (its builder, cache and login):" \
+              "push without a limit, -l off (for every run: ${0##*/} --set TPOT_BUILDER_LIMIT=off)," \
+              "or limit the upload of ${myWHERE} yourself." >&2
+  else
+    fuUI_HINT "Run the builder with sudo, or push without a limit: -l off" \
+              "(for every run: ${0##*/} --set TPOT_BUILDER_LIMIT=off)" >&2
   fi
   return 3
 }
@@ -1669,6 +1696,8 @@ fuCHECK () {
   local myOUT myPLAT myRC=0 myA myV
   local -a myITEMS=()
   fuUI_BANNER "Builder Setup" "Checking the buildx builder '${myBUILDER}'"
+  # TPOT_BUILDER_ARCH below: not from an .env.local that is no text
+  fuLOCAL_TEXT || return 3
   fuDOCKER_READY || return 3
   myHOST=$(fuHOST_ARCH) || myHOST=""
   if myOUT=$(docker buildx inspect "${myBUILDER}" --bootstrap 2>&1); then
@@ -1700,8 +1729,8 @@ fuCHECK () {
   myOUT=$(fuCONFIG_GET TPOT_BUILDER_ARCH)
   if fuUI_VERSION_GE "${myV}" "${myCOMPOSE_MIN}"; then myITEMS+=("ok:docker compose ${myV}")
   elif [ "${myOUT%%|*}" != "both" ] && fuSETTING_CHECK TPOT_BUILDER_ARCH "${myOUT%%|*}"; then
-    # the setting for fuARCH_SOURCE, here only (the menu builds after a check)
-    local myFROM_BUILDER_ARCH="${myOUT#*|}" myARCH="${myOUT%%|*}" myOPT_ARCH=""
+    # the setting for fuARCH_SOURCE, here only: not the platforms a build of the menu picked
+    local myFROM_BUILDER_ARCH="${myOUT#*|}" myARCH="${myOUT%%|*}" myOPT_ARCH="" myMENU_ARCH=""
     myITEMS+=("fail:docker compose ${myV:-of an unknown version} is too old: $(fuARCH_SOURCE) needs ${myCOMPOSE_MIN} for every run without -a both")
     myRC=3
   else myITEMS+=("warn:docker compose ${myV:-of an unknown version}: -a amd64, arm64 or host, the push to one registry and the smoke tests (-T) need ${myCOMPOSE_MIN}")
@@ -1833,6 +1862,7 @@ fuMENU_OPTIONS () {
   [ -z "${myHOST}" ] || myHOSTTEXT="${myHOSTTEXT} (linux/${myHOST})"
   fuASK myARCH fuUI_CHOOSE --selected "${myCONF_ARCH}" "Platforms" "linux/amd64 and linux/arm64:both" \
     "${myHOSTTEXT}:host" "linux/amd64 only:amd64" "linux/arm64 only:arm64"
+  myMENU_ARCH=1
   myPUSH_HUB="" myPUSH_GHCR=""
   if fuYES --default no "Push the images to Docker Hub (${myHUB})?" "Push" "No"; then myPUSH_HUB=1; fi
   if fuYES --default no "Push the images to GHCR (${myGHCR})?" "Push" "No"; then myPUSH_GHCR=1; fi
@@ -1841,8 +1871,10 @@ fuMENU_OPTIONS () {
   if fuPUSHING && [ "${myCONF_LIMIT}" != "off" ]; then
     if fuOTHER_DOCKER;
       then
-        # sudo talks to the Docker of root, not to this one: no limit, or no push now
-        fuASK myOUT fuUI_CHOOSE "Upload limit needs root (not with ${myOTHER_DOCKER})" \
+        # sudo talks to the Docker of root, not to this one: no limit, or no push now. What
+        # this one is in a line of its own, the question fits 76 columns whatever its name
+        fuUI_INFO "With ${myOTHER_DOCKER} root talks to another Docker: no upload limit for this one."
+        fuASK myOUT fuUI_CHOOSE "Upload limit needs root (another Docker)" \
           "Push without a limit:off" "Quit:quit"
         [ "${myOUT}" != "quit" ] || exit 0
         myLIMIT="off"
@@ -1881,6 +1913,8 @@ fuMENU_OPTIONS () {
       if ! fuTAG_OK "${myOUT}"; then fuUI_WARN "Not a version tag: ${myOUT}, kept ${myVER}"
       elif fuPUSHING && [ "${myARCH}" != "both" ] && [ "${myOUT}" = "$(fuRELEASE)" ]; then
         fuUI_WARN "${myOUT} is the release tag: a one-platform push needs its own, kept ${myVER}"
+      elif fuPUSHING && [ "${myARCH}" != "both" ] && fuPLAIN_VERSION "${myOUT}"; then
+        fuUI_WARN "${myOUT} is a release version: a one-platform push needs a tag of its own, kept ${myVER}"
       else myTAG="${myOUT}"
       fi
     fi
@@ -1898,8 +1932,8 @@ fuMENU_OPTIONS () {
 }
 
 fuMENU_TAG () {
-  # a push of one platform: a tag of its own, the release tag keeps the images of both
-  # platforms; enter means no push
+  # a push of one platform: a tag of its own, no plain version (fuPLAIN_VERSION), a
+  # release tag keeps the images of both platforms; enter means no push
   local myOUT myREL
   myREL=$(fuRELEASE)
   myTAG=""
@@ -1912,6 +1946,10 @@ fuMENU_TAG () {
       return 0
     fi
     if [ "${myOUT}" = "${myREL}" ]; then fuUI_WARN "${myREL} is the release tag: a tag of its own, i.e. ${myREL}-$(fuARCH_NAME)"; continue; fi
+    if fuPLAIN_VERSION "${myOUT}"; then
+      fuUI_WARN "${myOUT} is a release version: a tag of its own, no plain version, i.e. ${myOUT}-$(fuARCH_NAME)"
+      continue
+    fi
     if fuTAG_OK "${myOUT}"; then myTAG="${myOUT}"; fuSETTINGS; return 0; fi
     fuUI_WARN "Not a version tag: ${myOUT}"
   done
@@ -1960,6 +1998,8 @@ fuMENU_SETTINGS () {
   # into .env.local like --set / --unset, the run takes them at once
   local myKEY myOUT myVAL myFROM myNAME myOTHER myWHAT
   local -a myCHANGES=() myITEMS=() myTEXTS=()
+  # a file that turned into no text while the menu ran: no value of it to show
+  fuLOCAL_TEXT || return 0
   for myKEY in ${mySETTING_KEYS}; do
     myOUT=$(fuCONFIG_GET "${myKEY}")
     myVAL="${myOUT%%|*}" myFROM="${myOUT#*|}"
@@ -2112,7 +2152,7 @@ fuMAIN () {
   fuUI_LINUX_ONLY "Image Builder" 3
   case "${myACTION}" in
     list) fuLIST; return 0 ;;
-    show) fuSHOW_CONFIG; return 0 ;;
+    show) fuSHOW_CONFIG; return $? ;;
   esac
   trap fuEXIT EXIT
   trap fuCANCEL INT TERM
@@ -2122,7 +2162,8 @@ fuMAIN () {
     setup) fuSETUP; return $? ;;
     uninstall) fuUNINSTALL; return $? ;;
   esac
-  fuCONFIG || return 2
+  # rc 2 for a wrong setting, 3 for an .env.local that is no text
+  fuCONFIG || return $?
   # the menu only without any option (-y too) at a terminal
   if [ -z "${myYES}" ] && [ "$#" -eq 0 ] && [ -t 0 ] && [ -t 1 ];
     then fuMENU || myRC=$?
