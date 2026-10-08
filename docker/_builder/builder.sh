@@ -422,7 +422,8 @@ Docker); root only for the upload limit while pushing." \
 or TPOT_BUILDER_LIMIT); needs root" \
     --opt "-t, --tag VERSION" "The version tag (default: the file version of the checkout); a push for
 one platform (-a amd64, arm64, host) needs one of its own, no plain version
-(digits and dots, as a release has), i.e. <version>-arm64" \
+(digits and dots, a v first or not, as a release has: not <version> or
+v<version>), i.e. <version>-arm64" \
     --opt "--docker-repo REPO" "The Docker Hub repository (default: TPOT_DOCKER_REPO)" \
     --opt "--ghcr-repo REPO" "The GHCR repository (default: TPOT_GHCR_REPO)" \
     --opt "-T, --test" "Run the smoke tests of the built images after the build" \
@@ -1697,6 +1698,31 @@ fuSTATUS () {
   echo "Builder '${myBUILDER}': ${myTEXT}"
 }
 
+fuWHO () { id -un 2>/dev/null || echo "this user"; }
+
+fuOTHER_BUILDER () {
+  # fuOTHER_BUILDER <action>: the summary line about the builder of the other user.
+  # buildx keeps its builders per user (BUILDX_CONFIG, else DOCKER_CONFIG/buildx, else
+  # ~/.docker/buildx), so a run with sudo has one of root and a run without sudo one of
+  # the user. A user cannot look into the store of root (/root is 0700): the line says
+  # that it may be there. Root under sudo reads the store of the user of sudo and names
+  # its builder where there is one, not where sudo kept the HOME of the user (one store)
+  local myUSER="${SUDO_USER:-}" myHOME myTHEIRS myOWN myC
+  myC=$(printf '%q' "${mySELF}")
+  if ! fuROOT; then
+    echo "info:A run with sudo has a builder '${myBUILDER}' of its own (root's), not handled here: sudo ${myC} $1"
+    return 0
+  fi
+  [ -n "${myUSER}" ] && [ "${myUSER}" != "root" ] || return 0
+  myHOME=$(getent passwd "${myUSER}" 2>/dev/null | cut -d: -f6)
+  [ -n "${myHOME}" ] && [ -e "${myHOME}/.docker/buildx/instances/${myBUILDER}" ] || return 0
+  myTHEIRS=$(fuREAL_PATH "${myHOME}/.docker/buildx") || myTHEIRS="${myHOME}/.docker/buildx"
+  if [ -n "${BUILDX_CONFIG:-}" ]; then myOWN="${BUILDX_CONFIG}"; else myOWN="${DOCKER_CONFIG:-${HOME}/.docker}/buildx"; fi
+  myOWN=$(fuREAL_PATH "${myOWN}") || true
+  [ "${myTHEIRS}" != "${myOWN}" ] || return 0
+  echo "info:${myUSER} has a builder '${myBUILDER}' of its own too (a run without sudo), not handled here: ${myC} $1 as ${myUSER}"
+}
+
 fuCHECK () {
   # --check: rc 0 when mybuilder builds linux/amd64 and linux/arm64
   local myOUT myPLAT myRC=0 myA myV
@@ -1708,7 +1734,7 @@ fuCHECK () {
   myHOST=$(fuHOST_ARCH) || myHOST=""
   if myOUT=$(docker buildx inspect "${myBUILDER}" --bootstrap 2>&1); then
     myPLAT=$(sed -n 's/.*Platforms: *//p' <<< "${myOUT}" | head -n 1)
-    myITEMS+=("ok:Builder '${myBUILDER}' runs")
+    myITEMS+=("ok:Builder '${myBUILDER}' of $(fuWHO) runs")
     for myA in linux/amd64 linux/arm64; do
       if fuHAS_PLATFORMS "${myPLAT}" "${myA}";
         then myITEMS+=("ok:It builds ${myA}")
@@ -1716,7 +1742,7 @@ fuCHECK () {
       fi
     done
   else
-    myITEMS+=("fail:No buildx builder '${myBUILDER}' (--setup sets it up)")
+    myITEMS+=("fail:No buildx builder '${myBUILDER}' of $(fuWHO) (--setup sets it up)")
     myRC=3
   fi
   for myA in amd64 arm64; do
@@ -1741,6 +1767,8 @@ fuCHECK () {
     myRC=3
   else myITEMS+=("warn:docker compose ${myV:-of an unknown version}: -a amd64, arm64 or host, the push to one registry and the smoke tests (-T) need ${myCOMPOSE_MIN}")
   fi
+  myOUT=$(fuOTHER_BUILDER --check)
+  [ -z "${myOUT}" ] || myITEMS+=("${myOUT}")
   fuUI_SUMMARY "Builder '${myBUILDER}'" "${myITEMS[@]}" || true
   return "${myRC}"
 }
@@ -1768,7 +1796,7 @@ fuSETUP () {
 fuUNINSTALL () {
   # --uninstall: the builder, what is left of it, the QEMU emulation and the images used
   # for it; steps with nothing to remove are skipped. rc 3 when a step fails
-  local myRC=0
+  local myRC=0 myOTHER
   local -a myITEMS=() myIMAGES_LEFT=()
   fuUI_BANNER "Builder Setup" "Removing the multi-arch build setup"
   fuDOCKER_READY || return 3
@@ -1776,12 +1804,14 @@ fuUNINSTALL () {
   # without), so a builder may exist for the other one as well
   if docker buildx inspect "${myBUILDER}" >/dev/null 2>&1; then
     if docker buildx rm "${myBUILDER}" >/dev/null 2>&1;
-      then myITEMS+=("ok:Removed the buildx builder '${myBUILDER}'")
-      else myITEMS+=("fail:Could not remove the buildx builder '${myBUILDER}'"); myRC=3
+      then myITEMS+=("ok:Removed the buildx builder '${myBUILDER}' of $(fuWHO)")
+      else myITEMS+=("fail:Could not remove the buildx builder '${myBUILDER}' of $(fuWHO)"); myRC=3
     fi
   else
-    myITEMS+=("info:No buildx builder '${myBUILDER}', skipped")
+    myITEMS+=("info:No buildx builder '${myBUILDER}' of $(fuWHO), skipped")
   fi
+  myOTHER=$(fuOTHER_BUILDER --uninstall)
+  [ -z "${myOTHER}" ] || myITEMS+=("${myOTHER}")
   # the container and its state volume are shared by both
   docker rm -f buildx_buildkit_mybuilder0 >/dev/null 2>&1
   docker volume rm buildx_buildkit_mybuilder0_state >/dev/null 2>&1

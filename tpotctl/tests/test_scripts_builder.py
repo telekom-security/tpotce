@@ -87,6 +87,9 @@ STUBS = {
           "case \"$*\" in\n  -u|-g) echo \"$n\" ;;\n  -un|-gn) echo \"$u\" ;;\n  *) echo \"${STUB_GROUPS:-$u}\" ;;\nesac\n",
     "uname": "#!/bin/sh\ncase \"$1\" in -s) echo \"${STUB_SYSTEM:-Linux}\" ;; *) echo \"${STUB_ARCH:-x86_64}\" ;; esac\n",
     "chown": "#!/bin/sh\necho \"chown $*\" >> \"$HOME/calls\"\n",
+    # the passwd entry of any user: home STUB_SUDO_HOME
+    "getent": "#!/bin/sh\n[ \"$1\" = passwd ] || exit 2\n"
+              "echo \"$2:x:1000:1000::${STUB_SUDO_HOME:-/nonexistent}:/bin/sh\"\n",
     "ip": "#!/bin/sh\necho \"ip $*\" >> \"$HOME/calls\"\necho 'default via 10.0.0.1 dev eth0 proto dhcp'\n",
     "tc": "#!/bin/sh\necho \"tc $*\" >> \"$HOME/calls\"\n"
           "case \"$*\" in\n"
@@ -165,7 +168,7 @@ class BuilderHarness(base.Harness):
         # the settings of the one who runs the tests stay out
         for key in ("TPOT_VERSION", "TPOT_DOCKER_REPO", "TPOT_GHCR_REPO", "TPOT_BUILDER_ARCH", "TPOT_BUILDER_JOBS",
                     "TPOT_BUILDER_LIMIT", "SUDO_UID", "SUDO_GID", "SUDO_USER", "myUI_VERSION", "DOCKER_HOST",
-                    "DOCKER_CONTEXT", "XDG_RUNTIME_DIR"):
+                    "DOCKER_CONTEXT", "XDG_RUNTIME_DIR", "DOCKER_CONFIG", "BUILDX_CONFIG"):
             env[key] = ""
         env.update(extra)
         return env
@@ -433,6 +436,10 @@ class CliTest(BuilderHarness):
         rc, out = self.builder("-h")
         self.assertEqual(rc, 0, out)
         self.assertIn("no plain version", " ".join(out.split()))
+        # verify #6: fuPLAIN_VERSION refuses a v first too (v24.04.3), -h says so, not only digits and dots
+        option = " ".join(out[out.index("-t, --tag"):out.index("--docker-repo")].split())
+        self.assertIn("a v first or not", option)
+        self.assertIn("not <version> or v<version>", option)
         readme = base.read("README.md")
         section = readme[readme.index("## Build the Images Yourself"):]
         section = section[:section.index("\n## ", 1)]
@@ -1340,6 +1347,75 @@ class SetupTest(BuilderHarness):
         rc, out = self.builder("--uninstall")
         self.assertEqual(rc, 3, out)
         self.assertIn("Could not remove the QEMU emulation", out)
+
+    def other_builder(self, user="tester"):
+        """The home of the user of sudo (getent stub, STUB_SUDO_HOME) with a builder mybuilder in its buildx
+        store, the one a run without sudo created."""
+        home = os.path.join(self.home, "home-" + user)
+        os.makedirs(os.path.join(home, ".docker", "buildx", "instances"))
+        with open(os.path.join(home, ".docker", "buildx", "instances", "mybuilder"), "w", encoding="utf-8") as out:
+            out.write('{"Name":"mybuilder","Driver":"docker-container"}\n')
+        return home
+
+    def test_check_and_uninstall_name_whose_builder(self):
+        """VM: buildx keeps its builders per user (~/.docker/buildx of root under sudo): a run with sudo
+        made one of root, --uninstall as the user left it. Both say whose builder they handled."""
+        for action, text in (("--check", "Builder 'mybuilder' of {who} runs"),
+                             ("--uninstall", "Removed the buildx builder 'mybuilder' of {who}")):
+            for who, extra in (("root", {}), ("tester", {"STUB_USER": "tester", "STUB_GROUPS": "tester docker"})):
+                with self.subTest(action=action, who=who):
+                    rc, out = self.builder(action, **extra)
+                    self.assertEqual(rc, 0, out)
+                    self.assertIn(text.format(who=who), " ".join(out.split()))
+        rc, out = self.builder("--uninstall", STUB_NO_BUILDER="1", STUB_USER="tester", STUB_GROUPS="tester docker")
+        self.assertIn("No buildx builder 'mybuilder' of tester, skipped", out)
+
+    def test_without_sudo_the_builder_of_root_is_named(self):
+        """As a user, root's store (/root, 0700) cannot be seen: the summary says that a run with sudo has a
+        builder of its own and how to handle it, and never runs sudo itself."""
+        self.stub("sudo", "#!/bin/sh\necho \"sudo $*\" >> \"$HOME/calls\"\nexit 1\n")
+        for action in ("--check", "--uninstall"):
+            with self.subTest(action=action):
+                rc, out = self.builder(action, STUB_USER="tester", STUB_GROUPS="tester docker")
+                self.assertEqual(rc, 0, out)
+                flat = " ".join(out.split())
+                self.assertIn("A run with sudo has a builder 'mybuilder' of its own (root's)", flat)
+                self.assertRegex(flat, r"sudo \S*builder\.sh " + action)
+                self.assertFalse([line for line in self.calls() if line.startswith("sudo")])
+
+    def test_with_sudo_the_builder_of_the_user_is_named(self):
+        """Under sudo the store of the user of sudo can be read: its builder is named where it exists, with
+        the command for it (as that user, without sudo); none where it does not, or where sudo kept the
+        HOME of the user (one store for both)."""
+        home = self.other_builder()
+        for action in ("--check", "--uninstall"):
+            with self.subTest(action=action):
+                rc, out = self.builder(action, SUDO_USER="tester", STUB_SUDO_HOME=home)
+                self.assertEqual(rc, 0, out)
+                flat = " ".join(out.split())
+                self.assertIn("tester has a builder 'mybuilder' of its own too (a run without sudo)", flat)
+                self.assertRegex(flat, r"\S*builder\.sh " + action + " as tester")
+                self.assertNotIn("A run with sudo has a builder", flat)
+                # the builder of tester stays: only root's was removed
+                self.assertTrue(os.path.exists(os.path.join(home, ".docker", "buildx", "instances", "mybuilder")))
+                # no builder of the user, or sudo kept the user's HOME
+                for extra in ({"STUB_SUDO_HOME": os.path.join(self.home, "nobody")},
+                              {"STUB_SUDO_HOME": home, "HOME": home}):
+                    rc, out = self.builder(action, SUDO_USER="tester", **extra)
+                    self.assertEqual(rc, 0, out)
+                    self.assertNotIn("has a builder 'mybuilder' of its own", out)
+                    self.assertNotIn("A run with sudo has a builder", out)
+        # root without sudo, or sudo by root: there is no other user
+        for extra in ({}, {"SUDO_USER": "root", "STUB_SUDO_HOME": home}):
+            rc, out = self.builder("--uninstall", **extra)
+            self.assertNotIn("of its own", out)
+
+    def test_readme_says_a_run_with_sudo_has_a_builder_of_its_own(self):
+        readme = base.read("README.md")
+        section = readme[readme.index("## Build the Images Yourself"):]
+        section = " ".join(section[:section.index("\n## ", 1)].split())
+        self.assertIn("buildx keeps its builders per user", section)
+        self.assertIn("`sudo docker/_builder/builder.sh --uninstall`", section)
 
     def test_setup_and_check_need_a_docker_that_answers(self):
         # not root and not in the docker group: Docker decides (rootless Docker, a group of another name)
