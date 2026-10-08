@@ -386,6 +386,39 @@ class ImportTest(unittest.TestCase):
                 self.assertEqual(quiet_main(["--import", template.path], target=copy), 1)
         self.assertEqual(read(copy), before)
 
+    def test_a_huge_wrong_value_gives_a_short_message_fast(self):
+        """A wrong value is named in brief: no repr of a huge integer (quadratic on Python 3.9) or string in
+        the message, and a number of more digits than Python 3.11 parses is refused before parsing."""
+        import time
+        main, tight = template_data()
+        colour_ok = list(main["palette"][:9])
+        grids = main["grids"]
+
+        def with_grid(**fields):
+            changed = {k: dict(v) for k, v in grids.items()}
+            changed["80"].update(fields)
+            return {"palette": main["palette"], "grids": changed}
+        texts = {
+            "a palette of a huge number": "DATA = {'palette': " + "9" * 900_000 + ", 'grids': {}}\n",
+            "a palette of a long number": "DATA = {'palette': " + "9" * 4000 + ", 'grids': {}}\n",
+            "a palette of a long string": template_text({"palette": "x" * 900_000, "grids": grids}, ""),
+            "a colour of a long string": template_text({"palette": colour_ok + ["x" * 900_000], "grids": grids}, ""),
+            "a colour of long numbers": template_text({"palette": colour_ok + [[int("9" * 4000)] * 3],
+                                                       "grids": grids}, ""),
+            "a width of a long number": template_text(with_grid(width=int("9" * 4000)), ""),
+            "a height of a long list": template_text(with_grid(height=list(range(100_000))), ""),
+        }
+        for name, text in texts.items():
+            with self.subTest(case=name):
+                template = Template(self, main_text=text, tight_text=template_text(tight, ""))
+                started = time.monotonic()
+                with self.assertRaises(ValueError) as caught:
+                    splash_art.import_template(template.path)
+                message = str(caught.exception).replace(template.path, "<template>")
+                self.assertLess(time.monotonic() - started, 3.0)
+                self.assertLess(len(message), 400, message[:400])
+                self.assertIn("<template>", message)
+
     def test_a_huge_template_is_refused_unread(self):
         template = Template(self, main_text="DATA = {'palette': []}\n" + "#" * (splash_art.MAX_TEMPLATE + 1))
         with self.assertRaises(ValueError) as caught:

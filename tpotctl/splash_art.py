@@ -24,6 +24,7 @@ import ast
 import base64
 import binascii
 import os
+import re
 import sys
 import zlib
 from functools import lru_cache
@@ -170,6 +171,9 @@ TEMPLATE = "t-pot-animate.py"
 TEMPLATE_80X24 = os.path.join("80x24", "t-pot-animate-80x24.py")
 MAX_TEMPLATE = 1 << 20              # bytes of a template (the real one has 11 kB)
 CHUNK = 96                          # characters of the grid data per line
+# Python >= 3.11 parses no int literal of more digits (sys.int_info.default_max_str_digits), 3.9 takes
+# seconds for a longer one: refused before parsing
+_LONG_NUMBER = re.compile(rb"[0-9]{4301}")
 # the grids of a template: the variant of splash_art and its key in DATA["grids"]
 FROM_TEMPLATE = (("120", "120"), ("80", "80"))
 FROM_TEMPLATE_80X24 = (("80x24", "80"),)
@@ -188,6 +192,8 @@ def _read_data(path: str) -> dict:
         raise ValueError(f"{path}: cannot be read ({error.strerror or error})") from None
     if len(raw) > MAX_TEMPLATE:
         raise ValueError(f"{path}: more than {MAX_TEMPLATE} bytes, not a template of the logo")
+    if _LONG_NUMBER.search(raw):
+        raise ValueError(f"{path}: a number of more than 4300 digits, not a template of the logo")
     try:
         tree = ast.parse(raw.decode("utf-8"), filename=path)
     except (SyntaxError, ValueError, UnicodeDecodeError, RecursionError, MemoryError) as error:
@@ -206,17 +212,32 @@ def _read_data(path: str) -> dict:
     return data
 
 
+def _brief(value, depth: int = 0) -> str:
+    """A wrong value of a template for a message: short, and never the repr of a huge number (that is
+    quadratic on Python 3.9) or string."""
+    if value is None or isinstance(value, (bool, float)):
+        return repr(value)
+    if isinstance(value, int):
+        return repr(value) if value.bit_length() <= 64 else f"a number of {value.bit_length()} bits"
+    if isinstance(value, str):
+        return repr(value) if len(value) <= 40 else f"{value[:30]!r}... ({len(value)} characters)"
+    if isinstance(value, (list, tuple)) and depth < 2:
+        items = [_brief(item, depth + 1) for item in value[:4]] + (["..."] if len(value) > 4 else [])
+        return ("[{}]" if isinstance(value, list) else "({})").format(", ".join(items))
+    return f"a {type(value).__name__}" + (f" of {len(value)}" if isinstance(value, (list, tuple, dict)) else "")
+
+
 def _palette(data: dict, path: str) -> Palette:
     palette = data["palette"]
     if not isinstance(palette, (list, tuple)) or len(palette) != len(PALETTE):
         raise ValueError(f"{path}: the palette needs {len(PALETTE)} colours (COLOURS, the tables of the "
                          f"scripts and the pairs of ui_logo count on them), not "
-                         f"{len(palette) if isinstance(palette, (list, tuple)) else palette!r}")
+                         f"{len(palette) if isinstance(palette, (list, tuple)) else _brief(palette)}")
     out = []
     for colour in palette:
         if (not isinstance(colour, (list, tuple)) or len(colour) != 3
                 or not all(type(c) is int and 0 <= c <= 255 for c in colour)):
-            raise ValueError(f"{path}: {colour!r} of the palette is not (r, g, b) of 0-255")
+            raise ValueError(f"{path}: {_brief(colour)} of the palette is not (r, g, b) of 0-255")
         out.append(tuple(colour))
     return tuple(out)
 
@@ -228,8 +249,8 @@ def _grid(data: dict, key: str, variant: str, path: str) -> Tuple[int, int, str]
     width, height, text = entry.get("width"), entry.get("height"), entry.get("data")
     want = SIZES[variant]
     if (type(width) is not int or type(height) is not int) or (width, height) != want:
-        raise ValueError(f"{path}: the grid {key!r} is {width!r} x {height!r} pixels, the variant {variant} "
-                         f"is {want[0]} x {want[1]} (another size also needs the terminal sizes of "
+        raise ValueError(f"{path}: the grid {key!r} is {_brief(width)} x {_brief(height)} pixels, the variant "
+                         f"{variant} is {want[0]} x {want[1]} (another size also needs the terminal sizes of "
                          "splash_anim.VARIANTS and fuUI_LOGO_ON changed)")
     if not isinstance(text, str):
         raise ValueError(f"{path}: the data of the grid {key!r} is not a string")
