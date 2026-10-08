@@ -284,9 +284,14 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
                 await pilot.pause(0.2)
                 self.assertTrue(app.is_running, key)
                 self.assertIsInstance(app.screen, TaskScreen)
-            app.action_quit()          # the palette's Quit
+            said = len(app._notifications)
+            await app.action_quit()    # the palette's Quit
             await pilot.pause(0.2)
+            self.assertTrue(app.is_running)
             self.assertIsInstance(app.screen, TaskScreen)
+            notes = [str(note.message) for note in app._notifications]
+            self.assertEqual(len(notes), said + 1, notes)
+            self.assertIn("still running", notes[-1])
             release.set()
             await pilot.pause(0.3)
             await pilot.press("q")     # not running any more: q goes back
