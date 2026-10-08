@@ -23,9 +23,11 @@ import argparse
 import ast
 import base64
 import binascii
+import io
 import os
 import re
 import sys
+import tokenize
 import zlib
 from functools import lru_cache
 from typing import Dict, List, Optional, Sequence, Tuple
@@ -173,7 +175,11 @@ MAX_TEMPLATE = 1 << 20              # bytes of a template (the real one has 11 k
 CHUNK = 96                          # characters of the grid data per line
 # Python >= 3.11 parses no int literal of more digits (sys.int_info.default_max_str_digits), 3.9 takes
 # seconds for a longer one: refused before parsing
-_LONG_NUMBER = re.compile(rb"[0-9]{4301}")
+_LONG_NUMBER = re.compile(rb"[0-9][0-9_]{4300}")
+# the tokens of a template (the real ones have about 2 200): a chain of more (-----1, 1-1-1, a.a.a,
+# lambda:lambda:) nests too deep for the parser of Python 3.9, which crashes (SIGSEGV) from about
+# 150 000 on, counted before parsing
+MAX_TOKENS = 50_000
 # the grids of a template: the variant of splash_art and its key in DATA["grids"]
 FROM_TEMPLATE = (("120", "120"), ("80", "80"))
 FROM_TEMPLATE_80X24 = (("80x24", "80"),)
@@ -195,7 +201,15 @@ def _read_data(path: str) -> dict:
     if _LONG_NUMBER.search(raw):
         raise ValueError(f"{path}: a number of more than 4300 digits, not a template of the logo")
     try:
-        tree = ast.parse(raw.decode("utf-8"), filename=path)
+        text = raw.decode("utf-8")
+        for count, _token in enumerate(tokenize.generate_tokens(io.StringIO(text).readline)):
+            if count >= MAX_TOKENS:
+                raise ValueError(f"{path}: more than {MAX_TOKENS} tokens (the template has about 2 200), "
+                                 "not a template of the logo")
+    except (tokenize.TokenError, SyntaxError, UnicodeDecodeError) as error:
+        raise ValueError(f"{path}: not Python source of a template ({error.__class__.__name__})") from None
+    try:
+        tree = ast.parse(text, filename=path)
     except (SyntaxError, ValueError, UnicodeDecodeError, RecursionError, MemoryError) as error:
         raise ValueError(f"{path}: not Python source of a template ({error.__class__.__name__})") from None
     found = [node for node in tree.body if isinstance(node, ast.Assign) and len(node.targets) == 1

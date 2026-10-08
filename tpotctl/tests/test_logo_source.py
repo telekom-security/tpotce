@@ -419,6 +419,35 @@ class ImportTest(unittest.TestCase):
                 self.assertLess(len(message), 400, message[:400])
                 self.assertIn("<template>", message)
 
+    def test_a_deep_expression_is_refused_before_parsing(self):
+        """Long chains (-----1, 1-1-1, a.a.a, lambda:lambda:, a 1 MB number with _) crash the parser of
+        Python 3.9 (SIGSEGV, MemoryError on 3.14): refused with a message before ast.parse, in every
+        Python there is, the 3.9 of the system too."""
+        pythons = [sys.executable]
+        system = "/usr/bin/python3"
+        if os.path.isfile(system) and os.path.realpath(system) != os.path.realpath(sys.executable):
+            probe = subprocess.run([system, "-c", "import sys; print(sys.version_info >= (3, 9))"],
+                                   stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, universal_newlines=True)
+            if probe.stdout.strip() == "True":
+                pythons.append(system)
+        head, end = "DATA = {'palette': ", ", 'grids': {}}\n"
+        room = splash_art.MAX_TEMPLATE - len(head) - len(end) - 8
+        shapes = {"-": "1", "- ": "1", "-+~": "1", "not ": "1", "1**": "1", "lambda:": "1", "1-": "1",
+                  "a.": "a", "7_": "7"}
+        for unit, tail in shapes.items():
+            text = head + unit * (room // len(unit)) + tail + end
+            self.assertLessEqual(len(text.encode()), splash_art.MAX_TEMPLATE)
+            template = Template(self, main_text=text, tight_text=text)
+            for python in pythons:
+                with self.subTest(unit=unit, python=python):
+                    result = subprocess.run([python, "-m", "tpotctl.splash_art", "--import", template.folder,
+                                             "--check"], cwd=REPO, stdout=subprocess.PIPE,
+                                            stderr=subprocess.STDOUT, universal_newlines=True)
+                    self.assertEqual(result.returncode, 1, result.stdout[-300:])
+                    self.assertIn("the template is refused", result.stdout)
+                    self.assertLess(len(result.stdout), 600, result.stdout[:600])
+                    self.assertFalse(template.ran())
+
     def test_a_huge_template_is_refused_unread(self):
         template = Template(self, main_text="DATA = {'palette': []}\n" + "#" * (splash_art.MAX_TEMPLATE + 1))
         with self.assertRaises(ValueError) as caught:
