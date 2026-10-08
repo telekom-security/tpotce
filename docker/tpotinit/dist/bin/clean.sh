@@ -52,8 +52,6 @@ fuLOGROTATE () {
   local myHONEYTRAPDLTGZ="/data/honeytrap/downloads.tgz"
   local myMINIPRINTU="/data/miniprint/uploads/"
   local myMINIPRINTTGZ="/data/miniprint/uploads.tgz"
-  local myTANNERF="/data/tanner/files/"
-  local myTANNERFTGZ="/data/tanner/files.tgz"
 
 # Setup logrotate config
 fuLOGROTATECONF
@@ -77,19 +75,18 @@ if [ "$(fuEMPTY $myH0NEYTR4PP)" != "0" ]; then tar -I $myPIGZ -cvf $myH0NEYTR4PT
 if [ "$(fuEMPTY $myHONEYTRAPATTACKS)" != "0" ]; then tar -I $myPIGZ -cvf $myHONEYTRAPATTACKSTGZ $myHONEYTRAPATTACKS; fi
 if [ "$(fuEMPTY $myHONEYTRAPDL)" != "0" ]; then tar -I $myPIGZ -cvf $myHONEYTRAPDLTGZ $myHONEYTRAPDL; fi
 if [ "$(fuEMPTY $myMINIPRINTU)" != "0" ]; then tar -I $myPIGZ -cvf $myMINIPRINTTGZ $myMINIPRINTU; fi
-if [ "$(fuEMPTY $myTANNERF)" != "0" ]; then tar -I $myPIGZ -cvf $myTANNERFTGZ $myTANNERF; fi
 
 # Ensure correct permissions and ownership for previously created archives
-chmod 770 $myADBHONEYTGZ $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myH0NEYTR4PTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ $myMINIPRINTTGZ $myTANNERFTGZ
-chown tpot:tpot $myADBHONEYTGZ $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myH0NEYTR4PTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ $myMINIPRINTTGZ $myTANNERFTGZ
+chmod 770 $myADBHONEYTGZ $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myH0NEYTR4PTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ $myMINIPRINTTGZ
+chown tpot:tpot $myADBHONEYTGZ $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myH0NEYTR4PTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ $myMINIPRINTTGZ
 
 # Need to remove subfolders since too many files cause rm to exit with errors
-rm -rf $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myH0NEYTR4PP $myHONEYTRAPATTACKS $myHONEYTRAPDL $myMINIPRINTU $myTANNERF
+rm -rf $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myH0NEYTR4PP $myHONEYTRAPATTACKS $myHONEYTRAPDL $myMINIPRINTU
 
 # Recreate subfolders with correct permissions and ownership
-mkdir -p $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myH0NEYTR4PP $myHONEYTRAPATTACKS $myHONEYTRAPDL $myMINIPRINTU $myTANNERF
-chmod 770 $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myH0NEYTR4PP $myHONEYTRAPATTACKS $myHONEYTRAPDL $myMINIPRINTU $myTANNERF
-chown tpot:tpot $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myH0NEYTR4PP $myHONEYTRAPATTACKS $myHONEYTRAPDL $myMINIPRINTU $myTANNERF
+mkdir -p $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myH0NEYTR4PP $myHONEYTRAPATTACKS $myHONEYTRAPDL $myMINIPRINTU
+chmod 770 $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myH0NEYTR4PP $myHONEYTRAPATTACKS $myHONEYTRAPDL $myMINIPRINTU
+chown tpot:tpot $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myH0NEYTR4PP $myHONEYTRAPATTACKS $myHONEYTRAPDL $myMINIPRINTU
 
 # Run logrotate again to account for previously created archives - DO NOT FORCE HERE!
 logrotate -s $mySTATUS $myCONF
@@ -381,14 +378,6 @@ fuP0F () {
   chown tpot:tpot -R /data/p0f
 }
 
-# Let's create a function to clean up and prepare tanner data
-fuTANNER () {
-  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/tanner/*; fi
-  mkdir -vp /data/tanner/{log,files}
-  chmod 770 -R /data/tanner
-  chown tpot:tpot -R /data/tanner
-}
-
 # Let's create a function to clean up and prepare wordpot data
 fuWORDPOT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/wordpot/log; fi
@@ -455,5 +444,4 @@ fuREDISHONEYPOT
 fuSENTRYPEER
 fuSURICATA
 fuP0F
-fuTANNER
 fuWORDPOT

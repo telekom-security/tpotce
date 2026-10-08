@@ -270,44 +270,6 @@ services:
       context: ../sentrypeer/
       <<: *common-build
 
-#### Snare / Tanner
-## Tanner Redis
-  redis:
-    image: ${TPOT_DOCKER_REPO}/redis:${TPOT_VERSION}
-    build:
-      tags:
-        - ${TPOT_GHCR_REPO}/redis:${TPOT_VERSION}
-      context: ../tanner/redis/
-      <<: *common-build
-
-## PHP Sandbox
-  phpox:
-    image: ${TPOT_DOCKER_REPO}/phpox:${TPOT_VERSION}
-    build:
-      tags:
-        - ${TPOT_GHCR_REPO}/phpox:${TPOT_VERSION}
-      context: ../tanner/phpox/
-      <<: *common-build
-
-## Tanner
-  tanner:
-    image: ${TPOT_DOCKER_REPO}/tanner:${TPOT_VERSION}
-    build:
-      tags:
-        - ${TPOT_GHCR_REPO}/tanner:${TPOT_VERSION}
-      context: ../tanner/tanner/
-      <<: *common-build
-
-## Snare
-  snare:
-    image: ${TPOT_DOCKER_REPO}/snare:${TPOT_VERSION}
-    build:
-      tags:
-        - ${TPOT_GHCR_REPO}/snare:${TPOT_VERSION}
-      context: ../tanner/snare/
-      <<: *common-build
-####
-
 # Wordpot
   wordpot:
     image: ${TPOT_DOCKER_REPO}/wordpot:${TPOT_VERSION}
@@ -389,6 +351,15 @@ services:
       tags:
         - ${TPOT_GHCR_REPO}/map:${TPOT_VERSION}
       context: ../elk/map/
+      <<: *common-build
+
+## Map Redis
+  redis:
+    image: ${TPOT_DOCKER_REPO}/redis:${TPOT_VERSION}
+    build:
+      tags:
+        - ${TPOT_GHCR_REPO}/redis:${TPOT_VERSION}
+      context: ../redis/
       <<: *common-build
 ####
 

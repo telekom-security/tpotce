@@ -21,7 +21,7 @@ ALLOWED_MAC_WIN = ALLOWED | {"network_mode", "cap_add", "volumes"}
 # every honeypot that talks to no other container shares one network with ICC off,
 # the rest keep a network of their own
 SHARED = "honeypot_local"
-OWN_NETWORK = {"tanner_local", "nginx_local", "ewsposter_local", "tpotinit_local", "suricata_local", "default"}
+OWN_NETWORK = {"nginx_local", "ewsposter_local", "tpotinit_local", "suricata_local", "default"}
 META_KEYS = {"group", "description", "required", "requires", "conflicts", "hidden", "hive_only", "linux_only",
              "edition"}
 
@@ -97,7 +97,7 @@ class CatalogTest(unittest.TestCase):
                 if self.catalog.group(name) not in ("honeypots", "conpot", "llm"):
                     continue
                 networks = set(core.service_networks(definition))
-                if not networks or "tanner_local" in networks:    # host mode, snare / tanner
+                if not networks:    # host mode
                     continue
                 with self.subTest(file=compose.path, service=name):
                     self.assertEqual(networks, {SHARED})

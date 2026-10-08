@@ -32,11 +32,11 @@ not touch production `data/` or `data_backup/` paths.
 ./docker/_tests/run.sh medpot
 ./docker/_tests/run.sh miniprint
 ./docker/_tests/run.sh p0f
+./docker/_tests/run.sh redis
 ./docker/_tests/run.sh redishoneypot
 ./docker/_tests/run.sh rdphoneypot
 ./docker/_tests/run.sh sentrypeer
 ./docker/_tests/run.sh suricata
-./docker/_tests/run.sh tanner
 ./docker/_tests/run.sh tpotinit_env
 ./docker/_tests/run.sh wordpot
 ```
@@ -98,6 +98,7 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/p0f.sh
 ./docker/_tests/tests/p0f.sh --image dtagdevsec/p0f:24.04.2
 ./docker/_tests/tests/p0f.sh --skip-scanners
+./docker/_tests/tests/redis.sh
 ./docker/_tests/tests/redishoneypot.sh
 ./docker/_tests/tests/redishoneypot.sh --redis-port 16379
 ./docker/_tests/tests/rdphoneypot.sh
@@ -105,8 +106,6 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/sentrypeer.sh
 ./docker/_tests/tests/sentrypeer.sh --tcp-port 15060 --udp-port 15060
 ./docker/_tests/tests/suricata.sh
-./docker/_tests/tests/tanner.sh
-./docker/_tests/tests/tanner.sh --snare-port 18080
 ./docker/_tests/tests/wordpot.sh
 ./docker/_tests/tests/wordpot.sh --http-port 18080
 ```
@@ -162,10 +161,9 @@ responses, and checks matching JSON events in `sentrypeer.json`.
 The Suricata test replays a generated HTTP PCAP and verifies a matching HTTP
 event in `eve.json` plus the Suricata runtime log.
 
-The Tanner test starts Snare, Tanner, Tanner API, PHPox, and Redis in an
-isolated Compose stack. It sends a request through Snare, checks Snare and
-Tanner JSON logs, verifies Redis/Tanner API state, and probes PHPox directly
-over the Compose network.
+The Redis test runs the image of the Attack Map's `map_redis` read-only and
+without a host port, checks PING, SET / GET, uid 2000 and that it keeps its
+data in memory only (`/etc/redis.conf`).
 
 ## Conventions
 

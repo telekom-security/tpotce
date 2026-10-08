@@ -1,0 +1,11 @@
+services:
+
+# Redis service (Attack Map)
+  redis:
+    build: .
+    container_name: redis
+    restart: always
+    stop_signal: SIGKILL
+    tty: true
+    image: "dtagdevsec/redis:24.04.2"
+    read_only: true

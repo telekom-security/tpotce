@@ -9,7 +9,6 @@ networks:
     # ICC off keeps the honeypots apart. Run Ollama for Beelzebub / Galah outside of it.
     driver_opts:
       com.docker.network.bridge.enable_icc: "false"
-  tanner_local:
   ewsposter_local:
 
 services:
@@ -395,7 +394,7 @@ services:
     ports:
       - "443:443"
       - "2087:443"
-    # - "80:80"
+      - "80:80"
     image: ${TPOT_REPO}/h0neytr4p:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
     read_only: true
@@ -630,87 +629,6 @@ services:
     read_only: true
     volumes:
      - ${TPOT_DATA_PATH}/sentrypeer/log:/var/log/sentrypeer
-
-#### Snare / Tanner
-## Tanner Redis Service
-  tanner_redis:
-    container_name: tanner_redis
-    restart: always
-    depends_on:
-      logstash:
-        condition: service_healthy
-    tty: true
-    networks:
-     - tanner_local
-    image: ${TPOT_REPO}/redis:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
-    read_only: true
-
-## PHP Sandbox service
-  tanner_phpox:
-    container_name: tanner_phpox
-    restart: always
-    depends_on:
-      logstash:
-        condition: service_healthy
-    tty: true
-    networks:
-     - tanner_local
-    image: ${TPOT_REPO}/phpox:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
-    read_only: true
-
-## Tanner API Service
-  tanner_api:
-    container_name: tanner_api
-    restart: always
-    depends_on:
-     - tanner_redis
-    tmpfs:
-     - /tmp/tanner:uid=2000,gid=2000
-    tty: true
-    networks:
-     - tanner_local
-    image: ${TPOT_REPO}/tanner:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
-    read_only: true
-    volumes:
-     - ${TPOT_DATA_PATH}/tanner/log:/var/log/tanner
-    command: tannerapi
-
-## Tanner Service
-  tanner:
-    container_name: tanner
-    restart: always
-    depends_on:
-     - tanner_api
-     - tanner_phpox
-    tmpfs:
-     - /tmp/tanner:uid=2000,gid=2000
-    tty: true
-    networks:
-     - tanner_local
-    image: ${TPOT_REPO}/tanner:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
-    command: tanner
-    read_only: true
-    volumes:
-     - ${TPOT_DATA_PATH}/tanner/log:/var/log/tanner
-     - ${TPOT_DATA_PATH}/tanner/files:/opt/tanner/files
-
-## Snare Service
-  snare:
-    container_name: snare
-    restart: always
-    depends_on:
-     - tanner
-    tty: true
-    networks:
-     - tanner_local
-    ports:
-     - "80:80"
-    image: ${TPOT_REPO}/snare:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
 
 # Wordpot service
   wordpot:

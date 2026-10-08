@@ -295,7 +295,7 @@ myDEFAULT_LIMIT="40mbit" # at most 90% of the upload bandwidth there is
 myDEFAULT_HUB="dtagdevsec"
 myDEFAULT_GHCR="ghcr.io/telekom-security"
 mySTOP_TIMEOUT="${TPOT_BUILDER_STOP_TIMEOUT:-10}" # seconds for the builds to end on a signal
-myGROUP_NAMES="honeypots tanner nsm elk tools"
+myGROUP_NAMES="honeypots nsm elk tools"
 # the settings (fuCONFIG): an option, else the environment, else .env.local, else .env,
 # else the built-in default. The version is none: the file version, -t for one run
 mySETTING_KEYS="TPOT_DOCKER_REPO TPOT_GHCR_REPO TPOT_BUILDER_ARCH TPOT_BUILDER_JOBS TPOT_BUILDER_LIMIT"
@@ -374,9 +374,8 @@ fuGROUP_IMAGES () {
                     "elasticpot endlessh galah glutton go-pot h0neytr4p hellpot heralding honeyaml" \
                     "honeypots honeytrap ipphoney log4pot mailoney medpot miniprint rdphoneypot" \
                     "redishoneypot sentrypeer wordpot" ;;
-    tanner) echo "redis phpox tanner snare" ;;
     nsm) echo "p0f suricata" ;;
-    elk) echo "elasticsearch kibana logstash map" ;;
+    elk) echo "elasticsearch kibana logstash map redis" ;;
     tools) echo "tpotinit ewsposter nginx" ;;
     *) return 1 ;;
   esac
@@ -384,8 +383,7 @@ fuGROUP_IMAGES () {
 
 fuGROUP_TEXT () {
   case "$1" in
-    honeypots) echo "Honeypots (without the Tanner stack)" ;;
-    tanner) echo "Tanner stack (redis, phpox, tanner, snare)" ;;
+    honeypots) echo "Honeypots" ;;
     nsm) echo "NSM (p0f, suricata)" ;;
     elk) echo "Elastic Stack and Attack Map" ;;
     tools) echo "Tools (tpotinit, ewsposter, nginx)" ;;
@@ -1449,14 +1447,13 @@ fuSMOKE_PLAN () {
   # fuSMOKE_PLAN <image> ...: the smoke tests of docker/_tests for built images into
   # mySMOKE_NAMES / mySMOKE_ARGS (one string each), the images they need into
   # mySMOKE_IMAGES and what has none into mySMOKE_NOTES. A test has the name of its
-  # image, tpotinit has tpotinit_env, the Tanner stack one for all four (only when all
-  # four are built); the Elastic Stack, the Attack Map, nginx and glutton have none
-  local myI myT myTANNER=""
+  # image, tpotinit has tpotinit_env; the Elastic Stack, the Attack Map, nginx and
+  # glutton have none
+  local myI myT
   mySMOKE_NAMES=() mySMOKE_ARGS=() mySMOKE_IMAGES=() mySMOKE_NOTES=()
   for myI in "$@"; do
     case "${myI}" in
       elasticsearch|kibana|logstash|map|nginx|glutton) continue ;;
-      redis|phpox|tanner|snare) myTANNER="${myTANNER} ${myI}"; continue ;;
       tpotinit) myT="tpotinit_env" ;;
       *) myT="${myI}" ;;
     esac
@@ -1468,20 +1465,6 @@ fuSMOKE_PLAN () {
       else mySMOKE_NOTES+=("No smoke test for ${myI} (${myTESTDIR}/${myT}.sh)")
     fi
   done
-  [ -n "${myTANNER}" ] || return 0
-  for myI in redis phpox tanner snare; do
-    if [[ " ${myTANNER} " != *" ${myI} "* ]]; then
-      mySMOKE_NOTES+=("The Tanner test needs redis, phpox, tanner and snare built together, it is left out")
-      return 0
-    fi
-  done
-  if [ -f "${myTESTDIR}/tanner.sh" ];
-    then
-      mySMOKE_NAMES+=("tanner")
-      mySMOKE_ARGS+=("--redis-image $(fuIMAGE_REF redis) --phpox-image $(fuIMAGE_REF phpox) --tanner-image $(fuIMAGE_REF tanner) --snare-image $(fuIMAGE_REF snare)")
-      mySMOKE_IMAGES+=(redis phpox tanner snare)
-    else mySMOKE_NOTES+=("No smoke test for the Tanner stack (${myTESTDIR}/tanner.sh)")
-  fi
   return 0
 }
 

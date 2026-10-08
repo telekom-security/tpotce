@@ -279,7 +279,7 @@ class OpsTest(unittest.TestCase):
             self.assertEqual(ops.compose_names(tmp, {}), ["cowrie", "dionaea", "nginx", "tpotinit"])
             self.assertEqual(ops.compose_names(os.path.join(tmp, "none"), {}), [])
         self.assertEqual(len(ops.compose_names(ops.REPO_DIR, {"TPOT_DOCKER_COMPOSE": "./compose/standard.yml"})),
-                         43)
+                         38)
 
     def test_tpot_containers_are_the_services_of_the_compose_file(self):
         running = ops.Container("cowrie", "running", "Up 1 hour", "", "22->22/tcp", "c")

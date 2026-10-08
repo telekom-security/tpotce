@@ -52,6 +52,7 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 * **Beelzebub** and **Honeypots** log their status as text (i.e. `Stateless`, `failed`), it is now indexed as `status_text`. So far Elasticsearch could not index it in the numeric `status` field, some values ended up as `0` and with 24.04.1 part of these events were not indexed at all.
 * **Kibana** >T-Pot Username / Password tag clouds now include the logins of **Honeypots** (import the Kibana objects of this release). **Heralding** no longer indexes the header row of `auth.csv` as a login with username `username` and password `password`.
 * **Fatt** has been removed, see [Breaking Changes](#fatt).
+* **Snare / Tanner** has been removed, **H0neytr4p** now also takes port 80, see [Breaking Changes](#snare--tanner).
 * **Spiderfoot** has been removed, see [Breaking Changes](#spiderfoot).
 * Updates for `24.04.2` images will be provided continuously through Docker image updates.
 
@@ -80,6 +81,13 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 - The Suricata dashboard now also shows SSH HASSH, RDP client names and HTTP URLs. Import the Kibana objects of this release to get it; the import does not delete the Fatt dashboard, remove it under Stack Management → Saved Objects (tag `Fatt`).
 - `update.sh` removes the `fatt` service from a `docker-compose.yml` of your own, the previous file stays in the backup.
 - The logs in `~/tpotce/data/fatt` are kept. If you no longer need them, remove the folder with `sudo rm -rf ~/tpotce/data/fatt`.
+
+### Snare / Tanner
+- Snare and Tanner have been removed, together with Tanner's API, PHPox and its Redis. The Dockerfiles have moved to `docker/deprecated/tanner`.
+- **H0neytr4p** now also listens on port 80 in the Standard, Sensor, Mobile and Mac / Win editions. The Redis image of the Attack Map stays, it is built from `docker/redis` now.
+- Import the Kibana objects of this release: the overview dashboards no longer list Tanner. The import does not delete the Tanner dashboard, remove it under Stack Management → Saved Objects (tag `Tanner`).
+- `update.sh` removes the `snare`, `tanner`, `tanner_api`, `tanner_phpox` and `tanner_redis` services from a `docker-compose.yml` of your own, the previous file stays in the backup. Port 80 for H0neytr4p is not added there, uncomment `- "80:80"` in its block yourself.
+- The logs and downloads in `~/tpotce/data/tanner` are kept. If you no longer need them, remove the folder with `sudo rm -rf ~/tpotce/data/tanner`.
 
 ### Spiderfoot
 - Spiderfoot has been removed. As an OSINT / reconnaissance tool it does not fit the defensive scope of T-Pot. The service, the `/spiderfoot/` route and the link on the landing page are gone, the Dockerfile has moved to `docker/deprecated/spiderfoot`.

@@ -57,12 +57,6 @@ class CoreTest(unittest.TestCase):
         self.assertFalse(self.catalog.offered("SENSOR", "kibana"))
         self.assertTrue(errors(self.resolve("SENSOR", add=["kibana"]), "service"))
 
-    def test_snare_brings_tanner_along(self):
-        result = self.resolve("TARPIT", add=["snare"], ports={("snare", 80, "tcp"): 8081})
-        for name in ("tanner", "tanner_api", "tanner_phpox", "tanner_redis"):
-            self.assertIn(name, result.services)
-        self.assertEqual(errors(result), [])
-
     def test_attack_map_brings_its_helpers(self):
         result = self.resolve("STANDARD", remove=["map_data", "map_redis"])
         self.assertTrue(errors(result, "dependency"))

@@ -20,7 +20,6 @@ networks:
     # ICC off keeps the honeypots apart. Run Ollama for Beelzebub / Galah outside of it.
     driver_opts:
       com.docker.network.bridge.enable_icc: "false"
-  tanner_local:
   nginx_local:
   ewsposter_local:
 
@@ -566,7 +565,7 @@ services:
     ports:
       - "443:443"
       - "2087:443"
-    # - "80:80"
+      - "80:80"
     image: ${TPOT_REPO}/h0neytr4p:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
     read_only: true
@@ -879,92 +878,6 @@ services:
     read_only: true
     volumes:
      - ${TPOT_DATA_PATH}/sentrypeer/log:/var/log/sentrypeer
-
-#### Snare / Tanner
-## Tanner Redis Service
-  tanner_redis:
-    x-tpot: {group: honeypots, description: "Redis for Tanner", hidden: true}
-    container_name: tanner_redis
-    restart: always
-    depends_on:
-      tpotinit:
-        condition: service_healthy
-    tty: true
-    networks:
-     - tanner_local
-    image: ${TPOT_REPO}/redis:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
-    read_only: true
-
-## PHP Sandbox service
-  tanner_phpox:
-    x-tpot: {group: honeypots, description: "PHP sandbox for Tanner", hidden: true}
-    container_name: tanner_phpox
-    restart: always
-    depends_on:
-      tpotinit:
-        condition: service_healthy
-    tty: true
-    networks:
-     - tanner_local
-    image: ${TPOT_REPO}/phpox:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
-    read_only: true
-
-## Tanner API service
-  tanner_api:
-    x-tpot: {group: honeypots, description: "Tanner API", hidden: true}
-    container_name: tanner_api
-    restart: always
-    depends_on:
-     - tanner_redis
-    tmpfs:
-     - /tmp/tanner:uid=2000,gid=2000
-    tty: true
-    networks:
-     - tanner_local
-    image: ${TPOT_REPO}/tanner:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
-    read_only: true
-    volumes:
-     - ${TPOT_DATA_PATH}/tanner/log:/var/log/tanner
-    command: tannerapi
-
-## Tanner service
-  tanner:
-    x-tpot: {group: honeypots, description: "Tanner, analyzes Snare requests", hidden: true}
-    container_name: tanner
-    restart: always
-    depends_on:
-     - tanner_api
-     - tanner_phpox
-    tmpfs:
-     - /tmp/tanner:uid=2000,gid=2000
-    tty: true
-    networks:
-     - tanner_local
-    image: ${TPOT_REPO}/tanner:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
-    command: tanner
-    read_only: true
-    volumes:
-     - ${TPOT_DATA_PATH}/tanner/log:/var/log/tanner
-     - ${TPOT_DATA_PATH}/tanner/files:/opt/tanner/files
-
-## Snare service
-  snare:
-    x-tpot: {group: honeypots, description: "Web application honeypot, brings Tanner along"}
-    container_name: snare
-    restart: always
-    depends_on:
-     - tanner
-    tty: true
-    networks:
-     - tanner_local
-    ports:
-     - "80:80"
-    image: ${TPOT_REPO}/snare:${TPOT_VERSION}
-    pull_policy: ${TPOT_PULL_POLICY}
 
 # Wordpot service
   wordpot:

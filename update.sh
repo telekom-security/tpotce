@@ -259,7 +259,7 @@ myEDITIONS="STANDARD SENSOR MINI LLM TARPIT MOBILE MAC_WIN"
 
 # Services that are no longer part of T-Pot. Their images are not built for this
 # release, a docker-compose.yml of your own that still has them fails on the pull.
-myDROPPED_SERVICES="spiderfoot fatt"
+myDROPPED_SERVICES="spiderfoot fatt tanner_redis tanner_phpox tanner_api tanner snare"
 
 function fuPRINT_HELP () {
 	# the help only, without the T-Pot logo (that is for a run)

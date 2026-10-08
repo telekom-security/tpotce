@@ -152,8 +152,6 @@ T-Pot's main components have been moved into the `tpotinit` Docker image allowin
 [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot),
 [rdphoneypot](https://gitlab.com/bontchev/rdphoneypot),
 [sentrypeer](https://github.com/SentryPeer/SentryPeer),
-[snare](http://mushmush.org/),
-[tanner](http://mushmush.org/),
 [wordpot](https://github.com/gbrindisi/wordpot)
 
 Alongside the following tools:
@@ -295,7 +293,6 @@ Besides the ports generally needed by the OS, i.e. obtaining a DHCP lease, DNS, 
 | 6379                                                                                                                                  | tcp      | incoming  | Honeypot: Redishoneypot                                                                             |
 | 3389                                                                                                                                  | tcp      | incoming  | Honeypot: RDPHoneypot                                                                               |
 | 5060                                                                                                                                  | tcp/udp  | incoming  | Honeypot: SentryPeer                                                                                |
-| 80                                                                                                                                    | tcp      | incoming  | Honeypot: Snare (Tanner)                                                                            |
 | 8090                                                                                                                                  | tcp      | incoming  | Honeypot: Wordpot                                                                                   |
 
 
@@ -798,7 +795,7 @@ To activate a compose file by hand follow these steps:
 
 To create your customized docker compose file:
 1. Run `tpot customize`, or open *Edition & services* in the `tpot` menu. `cd ~/tpotce/compose && python3 customizer.py` does the same.
-2. Pick the edition to start from (`b`, the installed one is preselected) and switch services on and off with `space`, `enter` folds a group. Dependencies come along on their own (i.e. Snare brings Tanner, Kibana brings Elasticsearch and Nginx), services that cannot run together and port conflicts are marked with `!`. `p` opens the host ports of a service: change or remove them, or take a suggestion (`v`), i.e. the port another edition uses for it. The status bar counts the Docker networks, Docker's default address pools leave room for about 29. The honeypots share one network, `honeypot_local`, with inter-container communication (ICC) off: they cannot reach each other, only Snare / Tanner (`tanner_local`) and the Elastic Stack with Nginx (`nginx_local`) talk among themselves. So an Ollama for Beelzebub / Galah has to run outside of `honeypot_local`, i.e. on the host or another machine.
+2. Pick the edition to start from (`b`, the installed one is preselected) and switch services on and off with `space`, `enter` folds a group. Dependencies come along on their own (i.e. the Attack Map brings map_data and map_redis, Kibana brings Elasticsearch and Nginx), services that cannot run together and port conflicts are marked with `!`. `p` opens the host ports of a service: change or remove them, or take a suggestion (`v`), i.e. the port another edition uses for it. The status bar counts the Docker networks, Docker's default address pools leave room for about 29. The honeypots share one network, `honeypot_local`, with inter-container communication (ICC) off: they cannot reach each other, only the Elastic Stack and Nginx (`nginx_local`) talk to each other. So an Ollama for Beelzebub / Galah has to run outside of `honeypot_local`, i.e. on the host or another machine.
 3. `s` shows a summary and writes `~/tpotce/docker-compose-custom.yml` - only without errors, and only after `docker compose config` accepted it. From the `tpot` menu you can then replace `docker-compose.yml` with it and restart T-Pot right away.
 4. To try it first instead: stop T-Pot with `systemctl stop tpot`, run `cd ~/tpotce && docker compose -f docker-compose-custom.yml up`, and if everything works press `CTRL-C` and run `docker compose -f docker-compose-custom.yml down -v`.
 5. Replace the docker compose file: `mv ~/tpotce/docker-compose-custom.yml ~/tpotce/docker-compose.yml`.
@@ -981,7 +978,7 @@ sudo docker/_builder/builder.sh --check | --setup | --uninstall     # the buildx
 docker/_builder/builder.sh --set TPOT_DOCKER_REPO=me --set TPOT_BUILDER_JOBS=4   # your settings from now on
 docker/_builder/builder.sh --show-config                            # every setting and where it comes from
 ```
-- Groups: `honeypots`, `tanner` (Snare, Tanner, PHPox, Redis), `nsm`, `elk`, `tools`, `all`. Pushing needs a `docker login` to the registries beforehand, without one it stops instead of waiting. A push for one platform (`-a amd64`, `arm64` or `host`, or `TPOT_BUILDER_ARCH`) would replace the multi-arch images of the release tag, so it needs a tag of its own (`-t`), no plain version: not `24.04.3` or `v24.04.3` (the tag of a release, also an older one or one of a checkout ahead), but `24.04.3-arm64`; without one the builder refuses it (exit code 2), the menu asks for one again. `-L`, `--check`, `--setup`, `--uninstall`, `--set` and `--unset` build nothing, so an option of a build next to them is a wrong option (exit code 2); `-y` is none, it only says never ask. `CTRL-C` or a `SIGTERM` stops the running builds and pushes before the upload limit is removed.
+- Groups: `honeypots`, `nsm`, `elk` (Elastic Stack, Attack Map and its Redis), `tools`, `all`. Pushing needs a `docker login` to the registries beforehand, without one it stops instead of waiting. A push for one platform (`-a amd64`, `arm64` or `host`, or `TPOT_BUILDER_ARCH`) would replace the multi-arch images of the release tag, so it needs a tag of its own (`-t`), no plain version: not `24.04.3` or `v24.04.3` (the tag of a release, also an older one or one of a checkout ahead), but `24.04.3-arm64`; without one the builder refuses it (exit code 2), the menu asks for one again. `-L`, `--check`, `--setup`, `--uninstall`, `--set` and `--unset` build nothing, so an option of a build next to them is a wrong option (exit code 2); `-y` is none, it only says never ask. `CTRL-C` or a `SIGTERM` stops the running builds and pushes before the upload limit is removed.
 - **Settings** of your checkout live in `docker/_builder/.env.local`, which is not in git and wins over the tracked `docker/_builder/.env`: `TPOT_DOCKER_REPO`, `TPOT_GHCR_REPO`, `TPOT_BUILDER_ARCH` (`amd64`, `arm64`, `host`, `both`), `TPOT_BUILDER_JOBS` (1-16) and `TPOT_BUILDER_LIMIT` (a tc rate or `off`). Set one with `builder.sh --set KEY=VALUE`, remove it with `--unset KEY`, or use *Settings* in the menu; `--show-config` lists every value with where it comes from. An option wins over the environment, the environment over `.env.local`, that over `.env`, and that over the built-in default; a wrong key or value is exit code 2 (one of the environment: change or `unset` it there; one of `docker/_builder/.env`: fix it there or override it with `--set`), and a saved setting that the environment of your shell overrides gets a warning. The file is written in place (owner, mode, comments, CRLF and a BOM stay); a write that fails puts the old text back (exit code 3, with a `chown` hint for a file root left behind); a file that is no text (a NUL byte, i.e. UTF-16) stays as it is and stops every run, `--show-config`, `--check` and the menu before they take any setting (exit code 3), save it as UTF-8. The version is not a setting: it is the file `version` of the checkout, `-t` sets it for one run.
 - **`-T`** runs the smoke tests of `docker/_tests` after the build. Unless the run builds only this host's platform without pushing, it first builds the tested images for this host into docker. Where the run built this host's platform too (both platforms, or pushed), that build takes the images it just built from the cache, also after `-n`. With `-a arm64` on an amd64 host (or the other way round) it is a build of its own, without the cache after `-n`, and the tests test that amd64 build, as the summary says. The overrides for one platform (`-a amd64`, `arm64` or `host`, or `TPOT_BUILDER_ARCH`), a push to one registry and this build need docker compose 2.24.4 or newer; an older one stops the run before any build (exit code 3), and `--check` fails with a `TPOT_BUILDER_ARCH` of one platform.
 - The logs are in `docker/_builder/log/`: `builder.log`, one log per image, `load.log` for the build of the smoke tests and `test-<name>.log`. A run empties `builder.log`, the logs of the images it builds, `load.log` when it makes that build and the logs of the tests it runs; the logs of other images stay. It removes the overrides of the last run. Exit codes: 0 done, 1 an image failed, 2 a wrong option or setting, 3 the environment (Linux, Docker, builder, QEMU, login, tc, root for the limit), 4 built but a smoke test failed, 130 interrupted. `setup_builder.sh` is gone, use `builder.sh --setup` / `--uninstall`.
@@ -1188,9 +1185,7 @@ The software that T-Pot is built on uses the following licenses.
 [miniprint](https://github.com/sa7mon/miniprint?tab=GPL-3.0-1-ov-file#readme),
 [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot/blob/main/LICENSE),
 [rdphoneypot](https://gitlab.com/bontchev/rdphoneypot/-/blob/master/LICENSE),
-[sentrypeer](https://github.com/SentryPeer/SentryPeer/blob/main/LICENSE.GPL-3.0-only),
-[snare](https://github.com/mushorg/snare/blob/main/LICENSE),
-[tanner](https://github.com/mushorg/snare/blob/main/LICENSE)
+[sentrypeer](https://github.com/SentryPeer/SentryPeer/blob/main/LICENSE.GPL-3.0-only)
 <br>Apache 2 License:
 [cyberchef](https://github.com/gchq/CyberChef/blob/master/LICENSE),
 [dicompot](https://github.com/nsmfoo/dicompot/blob/master/LICENSE),
@@ -1271,8 +1266,6 @@ Without open source and the development community we are proud to be a part of, 
 [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot/graphs/contributors),
 [rdphoneypot](https://gitlab.com/bontchev/rdphoneypot/-/project_members),
 [sentrypeer](https://github.com/SentryPeer/SentryPeer/graphs/contributors),
-[snare](https://github.com/mushorg/snare/graphs/contributors),
-[tanner](https://github.com/mushorg/tanner/graphs/contributors),
 [suricata](https://github.com/OISF/suricata/graphs/contributors),
 [wordpot](https://github.com/gbrindisi/wordpot)
 <br><br>

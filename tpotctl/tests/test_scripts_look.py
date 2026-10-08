@@ -220,7 +220,7 @@ class ScriptsLookAlikeTest(base.Harness):
         # the questions of deploy.sh's own wrapper fuASK_VALID (\b does not fire before its _)
         self.assertIn("Enter the IP/domain name of the SENSOR:", question_texts("deploy.sh"))
         self.assertIn("Enter the IPv4 address or the domain name of this HIVE:", question_texts("deploy.sh"))
-        self.assertIn("Tanner stack (redis, phpox, tanner, snare)", question_texts("docker/_builder/builder.sh"))
+        self.assertIn("Elastic Stack and Attack Map", question_texts("docker/_builder/builder.sh"))
         self.assertTrue(any(text.startswith("Import the Kibana objects") for text in question_texts("restore.sh")))
         self.assertEqual(len(label(shrink('Tag (i.e. ${myREL}-$(fuARCH "${myX}")):x'))), len("Tag (i.e. -)") + 24)
         self.assertEqual(label("Hive - all of it:h"), "Hive - all of it")

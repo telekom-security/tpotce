@@ -260,7 +260,7 @@ class CliTest(BuilderHarness):
         self.assertEqual(rc, 0, out)
         self.assertEqual(self.calls(), [])
         groups = dict(line.split(None, 1) for line in out.strip().splitlines())
-        self.assertEqual(sorted(groups), ["elk", "honeypots", "nsm", "tanner", "tools"])
+        self.assertEqual(sorted(groups), ["elk", "honeypots", "nsm", "tools"])
         self.assertIn("cowrie", groups["honeypots"].split())
 
     def test_groups_cover_compose(self):
@@ -282,7 +282,7 @@ class CliTest(BuilderHarness):
         self.assertEqual(sorted(self.builds()), ["cowrie", "p0f", "suricata"])
         self.assertFalse(any("config --services" in line for line in self.calls()))
         self.calls_reset()
-        rc, out = self.builder("-g", "tanner,all", STUB_SERVICES="adbhoney cowrie")
+        rc, out = self.builder("-g", "nsm,all", STUB_SERVICES="adbhoney cowrie")
         self.assertEqual(rc, 0, out)
         self.assertEqual(sorted(self.builds()), ["adbhoney", "cowrie"])
         self.calls_reset()
@@ -1101,34 +1101,30 @@ class SmokeTest(BuilderHarness):
         super().setUp()
         self.tests = os.path.join(self.home, "tests")
         os.makedirs(self.tests)
-        for name in ("cowrie", "tpotinit_env", "tanner"):
+        for name in ("cowrie", "tpotinit_env", "redis"):
             self.stub(f"{name}.sh", f"#!/bin/sh\necho \"test {name} $*\" >> \"$HOME/calls\"\n"
                                     f"[ \"${{STUB_TEST_FAIL:-}}\" = {name} ] && exit 1\nexit 0\n", self.tests)
 
     def test_smoke_test_mapping(self):
         result = self.bash('myHUB=hub myGHCR=ghcr.io/me myVER=1.0\n'
                            'fuSMOKE_PLAN cowrie tpotinit elasticsearch kibana logstash map nginx glutton redis '
-                           'phpox tanner adbhoney\n'
+                           'adbhoney\n'
                            'printf "N %s\\n" "${mySMOKE_NAMES[@]}"; printf "A %s\\n" "${mySMOKE_ARGS[@]}"\n'
                            'printf "I %s\\n" "${mySMOKE_IMAGES[@]}"; printf "W %s\\n" "${mySMOKE_NOTES[@]}"',
                            TPOT_BUILDER_TESTS_DIR=self.tests)
         lines = result.stdout.splitlines()
-        self.assertEqual([line[2:] for line in lines if line.startswith("N ")], ["cowrie", "tpotinit_env"])
+        self.assertEqual([line[2:] for line in lines if line.startswith("N ")], ["cowrie", "tpotinit_env", "redis"])
         self.assertEqual([line[2:] for line in lines if line.startswith("A ")],
-                         ["--image hub/cowrie:1.0", "--image hub/tpotinit:1.0"])
-        self.assertEqual([line[2:] for line in lines if line.startswith("I ")], ["cowrie", "tpotinit"])
+                         ["--image hub/cowrie:1.0", "--image hub/tpotinit:1.0", "--image hub/redis:1.0"])
+        self.assertEqual([line[2:] for line in lines if line.startswith("I ")], ["cowrie", "tpotinit", "redis"])
         notes = [line[2:] for line in lines if line.startswith("W ")]
-        self.assertEqual(len(notes), 2, notes)
+        self.assertEqual(len(notes), 1, notes)
         self.assertIn("No smoke test for adbhoney", notes[0])
-        self.assertIn("Tanner test needs redis, phpox, tanner and snare", notes[1])
         result = self.bash('myHUB=hub myGHCR=ghcr.io/me myVER=1.0 myPUSH_GHCR=1\n'
-                           'fuSMOKE_PLAN snare redis tanner phpox\n'
+                           'fuSMOKE_PLAN redis\n'
                            'printf "N %s\\n" "${mySMOKE_NAMES[@]}"; printf "A %s\\n" "${mySMOKE_ARGS[@]}"',
                            TPOT_BUILDER_TESTS_DIR=self.tests)
-        self.assertEqual(result.stdout.splitlines(), [
-            "N tanner",
-            "A --redis-image ghcr.io/me/redis:1.0 --phpox-image ghcr.io/me/phpox:1.0 "
-            "--tanner-image ghcr.io/me/tanner:1.0 --snare-image ghcr.io/me/snare:1.0"])
+        self.assertEqual(result.stdout.splitlines(), ["N redis", "A --image ghcr.io/me/redis:1.0"])
 
     def test_every_test_the_plan_names_is_in_the_repo(self):
         names = set()
@@ -1890,8 +1886,8 @@ class MenuTest(BuilderHarness):
         self.assertFalse(any(" build " in line for line in self.calls()))
 
     def test_menu_builds_a_group(self):
-        # groups: nsm (3); this host only; no push; without cache; 4 at a time; no tests; keep; Build
-        answers = "1\n2\n3\n2\nn\nn\ny\n3\nn\nn\n1\n"
+        # groups: nsm (2); this host only; no push; without cache; 4 at a time; no tests; keep; Build
+        answers = "1\n2\n2\n2\nn\nn\ny\n3\nn\nn\n1\n"
         rc, out = at_terminal([], self.terminal_env(STUB_PLATFORMS="linux/amd64"), answers=answers)
         self.assertEqual(rc, 0, out)
         self.assertIn("builder.sh -y -g nsm -a host -n -j 4", out)
