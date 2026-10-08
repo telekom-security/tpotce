@@ -497,20 +497,62 @@ CommandPalette {
     background: $modal-dim;
 }
 
+/* a card as large as its content, in the middle (ModalScreen above); the title in the top line of the
+   frame (DialogTitle), the keys in the bottom one; NavModal.fit_dialog keeps it inside the terminal */
 .dialog {
     width: 80%;
     max-width: 104;
     height: auto;
     max-height: 90%;
     border: round $primary;
+    border-title-color: $primary;
+    border-title-style: bold;
+    border-subtitle-color: $mist;
+    border-subtitle-align: right;
     background: $background;
     padding: 1 2;
 }
 
+/* questions: a line that reads well, 48 to 72 columns (nav.DIALOG_WIDE) */
+.dialog.compact {
+    width: auto;
+    min-width: 48;
+}
+
+/* a question without a text: the buttons right under the title and only as wide as they are (a row
+   as wide as the terminal would make the card as wide as it may get), on the right */
+.dialog.no-body {
+    align-horizontal: right;
+}
+
+.dialog.no-body .actions {
+    width: auto;
+    margin-top: 0;
+}
+
 .dialog-title {
-    color: $primary;
-    text-style: bold;
-    margin-bottom: 1;
+    display: none;
+}
+
+/* the text of a question: as tall as it is, it scrolls only beyond the terminal less 10 rows */
+.dialog NavScroll {
+    height: auto;
+}
+
+/* below 60 columns the buttons one below the other, as wide as the card */
+.dialog.-tight {
+    min-width: 0;
+    width: 100%;
+}
+
+.dialog.-tight .actions {
+    layout: vertical;
+    width: 100%;
+}
+
+.dialog.-tight .actions Button {
+    width: 100%;
+    margin: 0;
 }
 
 .dialog DataTable, .dialog OptionList {

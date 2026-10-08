@@ -18,7 +18,7 @@ from textual.binding import Binding
 from textual.containers import VerticalScroll
 from textual.screen import ModalScreen
 from textual.widget import Widget
-from textual.widgets import DataTable, Input, OptionList, RichLog
+from textual.widgets import DataTable, Input, Label, OptionList, RichLog
 
 BINDINGS = [Binding(key, f"nav('{key}')", show=False) for key in ("up", "down", "left", "right")]
 
@@ -109,12 +109,55 @@ class ArrowNav:
 
 class NavModal(ModalScreen):
     """The base of every dialog: a modal screen does not see the bindings of the App, so it brings
-    them itself (there is no menu behind a dialog, left stays in it)."""
+    them itself (there is no menu behind a dialog, left stays in it). It also fits its `.dialog` to
+    the terminal: never wider than the terminal less 4 columns, a text that scrolls only when it is
+    taller than the terminal less 10 rows, and below 60 columns the buttons one below the other."""
 
     BINDINGS = list(BINDINGS)
 
     def action_nav(self, direction: str) -> None:
         navigate(self.app, direction, menu=False)
+
+    def on_mount(self) -> None:
+        self.fit_dialog()
+
+    def on_resize(self) -> None:
+        self.fit_dialog()
+
+    def fit_dialog(self) -> None:
+        width, height = self.app.size
+        for dialog in self.query(".dialog"):
+            dialog.styles.max_width = max(20, min(DIALOG_WIDE if dialog.has_class("compact") else 104, width - 4))
+            dialog.set_class(width < 60, "-tight")
+            for scroll in dialog.query(NavScroll):
+                scroll.styles.max_height = max(3, height - 10)
+
+
+# the width of a question: a line that reads well (the compact dialogs, .dialog.compact)
+DIALOG_WIDE = 72
+
+
+class DialogTitle(Label):
+    """The title of a dialog in the top line of its frame, as the blocks of the Status page carry
+    theirs; the label itself stays in the dialog (for queries) without taking a row."""
+
+    DEFAULT_CLASSES = "dialog-title"
+
+    def __init__(self, title="", **kwargs):
+        super().__init__(title, **kwargs)
+        self.title_text = title
+
+    def on_mount(self) -> None:
+        self.frame()
+
+    def update(self, content="", *, layout: bool = True) -> None:
+        super().update(content, layout=layout)
+        self.title_text = content
+        self.frame()
+
+    def frame(self) -> None:
+        if self.parent is not None:
+            self.parent.border_title = self.title_text
 
 
 class NavInput(Input):

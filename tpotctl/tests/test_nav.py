@@ -594,3 +594,62 @@ class SyncRowsTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(table.cursor_row, 39)                                   # its row is gone: the place
             table.sync_rows([])
             self.assertEqual(table.row_count, 0)
+
+
+@unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")
+class DialogCardTest(unittest.IsolatedAsyncioTestCase):
+    """A question is a card as large as its content, in the middle, with the safe answer focused (the
+    quit dialog filled 90 % of the terminal for two lines of text)."""
+
+    async def card(self, size, dialog):
+        from tpotctl import app as tapp
+        from tpotctl.tests.test_app import FakeBackend, Recorder
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder())
+        async with app.run_test(size=size) as pilot:
+            await pilot.pause(0.3)
+            app.push_screen(dialog)
+            await pilot.pause(0.4)
+            box = dialog.query_one(".dialog")
+            self.buttons = {button.id: button.region for button in box.query("Button")}
+            return box.region, box, app.focused
+
+    def quit_dialog(self, lines=1):
+        from rich.text import Text
+        from tpotctl.screens.dialogs import QuitDialog
+        body = Text("\n".join(["T-Pot would not start: WEB_USER is not set or empty. Add one on the Web users "
+                               "page (tpot users add)."] * lines))
+        return QuitDialog("Quit the T-Pot Manager?", body, yes="Quit anyway", no="Back")
+
+    async def test_the_quit_dialog_is_a_card_in_the_middle(self):
+        for size in ((80, 24), (120, 40), (160, 60)):
+            with self.subTest(size=size):
+                region, box, focused = await self.card(size, self.quit_dialog())
+                width, height = size
+                self.assertLessEqual(region.width, 72)
+                self.assertLessEqual(region.height, 9)
+                self.assertLessEqual(abs(region.x + region.width / 2 - width / 2), 1)
+                self.assertLessEqual(abs(region.y + region.height / 2 - height / 2), 1)
+                self.assertEqual(focused.id, "no")                              # enter only closes it
+                self.assertEqual(str(box.border_title), "Quit the T-Pot Manager?")
+                self.assertEqual(str(box.border_subtitle), "q quit anyway  esc back")
+
+    async def test_a_long_text_scrolls_inside_the_terminal(self):
+        region, box, _focused = await self.card((80, 24), self.quit_dialog(lines=60))
+        self.assertLessEqual(region.height, 24 - 4)
+        self.assertGreaterEqual(region.y, 1)
+
+    async def test_a_narrow_terminal_stacks_the_buttons(self):
+        region, box, _focused = await self.card((56, 24), self.quit_dialog())
+        self.assertTrue(box.has_class("-tight"))
+        self.assertLessEqual(region.width, 52)
+        yes, no = self.buttons["yes"], self.buttons["no"]
+        self.assertEqual(yes.x, no.x)
+        self.assertGreater(no.y, yes.y)
+
+    async def test_a_question_without_a_text_is_small(self):
+        from tpotctl.screens.dialogs import ConfirmDialog
+        region, box, focused = await self.card((120, 40), ConfirmDialog("Restart T-Pot now?", yes="Restart"))
+        self.assertEqual(region.width, 48)
+        self.assertLessEqual(region.height, 5)
+        self.assertEqual(focused.id, "no")
+        self.assertEqual(str(box.border_subtitle), "y restart  esc back")

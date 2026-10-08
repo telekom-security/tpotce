@@ -13,11 +13,11 @@ from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Button, Checkbox, Input, Label, OptionList, Static
+from textual.widgets import Button, Checkbox, Input, OptionList, Static
 from textual.widgets.option_list import Option
 
 from tpotctl import glyphs, theme
-from tpotctl.widgets.nav import NavInput, NavModal, NavOptionList, navigate
+from tpotctl.widgets.nav import DialogTitle, NavInput, NavModal, NavOptionList, navigate
 
 Item = Tuple[str, Text, bool]      # value, label, hidden unless "show all"
 
@@ -42,7 +42,7 @@ class Picker(NavModal):
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="dialog picker"):
-            yield Label(self.title_text, classes="dialog-title")
+            yield DialogTitle(self.title_text)
             if self.note:
                 yield Static(Text(self.note), classes="hint")
             yield NavInput(placeholder=f"{glyphs.g('search')} type to search" + (", or enter a value" if self.free else ""),

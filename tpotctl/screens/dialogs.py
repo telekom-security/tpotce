@@ -10,7 +10,7 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import Button, Checkbox, Input, Label, OptionList, Static
 
 from tpotctl import glyphs, theme
-from tpotctl.widgets.nav import NavInput, NavModal, NavOptionList, NavScroll
+from tpotctl.widgets.nav import DialogTitle, NavInput, NavModal, NavOptionList, NavScroll
 
 
 def finding_lines(lines: List[str]) -> Text:
@@ -35,9 +35,12 @@ class ConfirmDialog(NavModal):
         self.title_text, self.body, self.yes_label, self.no_label = title, body, yes, no
         self.allow_yes = allow_yes
 
+    # the key of the yes in the hint below the frame (QuitDialog: q)
+    YES_KEY = "y"
+
     def compose(self) -> ComposeResult:
-        with Vertical(classes="dialog"):
-            yield Label(self.title_text, classes="dialog-title")
+        with Vertical(classes="dialog compact" + (" no-body" if self.body is None else "")) as dialog:
+            yield DialogTitle(self.title_text)
             if self.body is not None:
                 with NavScroll():
                     yield Static(self.body)
@@ -45,6 +48,12 @@ class ConfirmDialog(NavModal):
                 if self.allow_yes:
                     yield Button(self.yes_label, variant="primary", id="yes")
                 yield Button(self.no_label, id="no")
+        keys = ([f"{self.YES_KEY} {self.yes_label.lower()}"] if self.allow_yes else []) + [f"esc {self.no_label.lower()}"]
+        dialog.border_subtitle = "  ".join(keys)
+
+    def on_mount(self) -> None:
+        # the safe answer has the focus: enter only closes the question
+        self.query_one("#no", Button).focus()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         self.dismiss(event.button.id == "yes")
@@ -61,6 +70,7 @@ class QuitDialog(ConfirmDialog):
     """Quit the T-Pot Manager?: q again (or ctrl+q, see TpotApp.action_quit) is the yes."""
 
     BINDINGS = [Binding("q", "yes", "Quit", show=False)]
+    YES_KEY = "q"
 
 
 class ChoiceDialog(NavModal):
@@ -73,8 +83,8 @@ class ChoiceDialog(NavModal):
         self.title_text, self.options, self.current = title, options, current
 
     def compose(self) -> ComposeResult:
-        with Vertical(classes="dialog"):
-            yield Label(self.title_text, classes="dialog-title")
+        with Vertical(classes="dialog compact"):
+            yield DialogTitle(self.title_text)
             yield NavOptionList(*self.options, id="choices")
 
     def on_mount(self) -> None:
@@ -100,8 +110,8 @@ class PortInputDialog(NavModal):
         self.error: Optional[str] = None
 
     def compose(self) -> ComposeResult:
-        with Vertical(classes="dialog"):
-            yield Label(self.title_text, classes="dialog-title")
+        with Vertical(classes="dialog compact"):
+            yield DialogTitle(self.title_text)
             yield NavInput(placeholder="host port, - removes the mapping", id="port")
             yield Label("", id="port-error", classes="error-text")
 
@@ -131,7 +141,7 @@ class UserDialog(NavModal):
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="dialog"):
-            yield Label(self.title_text, classes="dialog-title")
+            yield DialogTitle(self.title_text)
             if not self.fixed_name:
                 yield NavInput(placeholder="user name: letters, digits, _ . -", id="user-name")
             yield NavInput(placeholder="password", password=True, id="user-password")
@@ -247,7 +257,7 @@ class SensorDialog(HiveField, NavModal):
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="dialog"):
-            yield Label("Deploy a sensor", classes="dialog-title")
+            yield DialogTitle("Deploy a sensor")
             yield Static(Text("T-Pot has to be installed on it already. The deployment runs in the terminal "
                               "(SSH key, sudo password) and reboots the sensor."), classes="hint")
             yield NavInput(placeholder="IP or name of the sensor", id="sensor-host")
@@ -330,7 +340,7 @@ class SensorEditDialog(HiveField, NavModal):
     def compose(self) -> ComposeResult:
         sensor = self.sensor
         with Vertical(classes="dialog"):
-            yield Label(f"Where {sensor.name} is", classes="dialog-title")
+            yield DialogTitle(f"Where {sensor.name} is")
             yield Static(Text("For sending it the certificate and for its SSH access; nothing is done on the "
                               "sensor itself."), classes="hint")
             yield NavInput(sensor.host or "", placeholder="IP or name of the sensor", id="edit-host")
