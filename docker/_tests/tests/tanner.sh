@@ -25,6 +25,8 @@ SNARE_LOG_FILE=""
 SNARE_ERR_FILE=""
 TANNER_REPORT_FILE=""
 TOKEN=""
+# Emulator probes that already fail with the 24.04.1 images; a failure there is only a warning
+KNOWN_BROKEN="sqli,sqli_post,sqli_cookie,crlf_post,php_code_injection,php_object_injection,xxe_injection,rfi"
 
 usage() {
   cat <<EOF
@@ -40,6 +42,8 @@ Options:
   --snare-port PORT     Host TCP port for Snare HTTP. Default: dynamic loopback port.
   --timeout SEC         Timeout for startup, protocol, and log checks. Default: 30.
   --bind-ip IP          Host IP to bind. Default: 127.0.0.1.
+  --known-broken LIST   Emulator probes that only warn when they fail, comma separated, or none.
+                        Default: ${KNOWN_BROKEN}
   --keep-artifacts      Keep temporary compose file and logs for debugging.
   -h, --help            Show this help message.
 EOF
@@ -153,6 +157,15 @@ parse_args() {
         ;;
       --bind-ip=*)
         TEST_BIND_IP="${1#*=}"
+        shift
+        ;;
+      --known-broken)
+        [[ $# -ge 2 ]] || test_die "--known-broken requires an argument"
+        KNOWN_BROKEN="$2"
+        shift 2
+        ;;
+      --known-broken=*)
+        KNOWN_BROKEN="${1#*=}"
         shift
         ;;
       --keep-artifacts)
@@ -496,6 +509,129 @@ sys.exit(1)
 PY
 }
 
+run_emulator_probes() {
+  python3 - "${TEST_BIND_IP}" "${MAPPED_SNARE_PORT}" "${TANNER_REPORT_FILE}" "${TOKEN}" "${TEST_TIMEOUT}" "${KNOWN_BROKEN}" <<'PY'
+import http.client
+import json
+import pathlib
+import sys
+import time
+import urllib.parse
+
+host = sys.argv[1]
+port = int(sys.argv[2])
+report_file = pathlib.Path(sys.argv[3])
+token = sys.argv[4]
+timeout = int(sys.argv[5])
+known_broken = {name for name in sys.argv[6].split(",") if name and name != "none"}
+
+# name, method, parameter, value, expected detection, text expected in the emulated payload
+probes = [
+    ("xss", "GET", "q", "<script>alert(1)</script>", "xss", "<script>"),
+    ("xss_post", "POST", "q", "<script>alert(1)</script>", "xss", "<script>"),
+    ("sqli", "GET", "id", "1' OR 1-- -", "sqli", None),
+    ("sqli_post", "POST", "id", "1' OR 1-- -", "sqli", None),
+    ("sqli_cookie", "COOKIE", "id", "1' OR 1-- -", "sqli", None),
+    ("crlf_post", "POST", "r", "x\r\nSet-Cookie: tpot=1", "crlf", None),
+    ("php_code_injection", "GET", "c", 'print("tpotphp");', "php_code_injection", "tpotphp"),
+    ("php_object_injection", "GET", "o",
+     'O:15:"ObjectInjection":1:{s:6:"insert";s:12:"echo tpotobj";}', "php_object_injection", "tpotobj"),
+    ("xxe_injection", "POST", "x",
+     '<?xml version="1.0"?><!DOCTYPE r [<!ENTITY e "tpotxxe">]><r>&e;</r>', "xxe_injection", "tpotxxe"),
+    ("rfi", "GET", "file", "http://127.0.0.1:9/tpot.txt", "rfi", None),
+]
+unknown = known_broken - {probe[0] for probe in probes}
+if unknown:
+    print("Unknown --known-broken probe(s): {}".format(", ".join(sorted(unknown))), file=sys.stderr)
+    sys.exit(1)
+
+
+def marker(name):
+    return "{}-{}-".format(token, name)
+
+
+def send(name, method, param, value):
+    path = "/?tpot_emulator={}".format(marker(name))
+    headers = {"User-Agent": "tpot-tanner-smoke/{}".format(token)}
+    body = None
+    if method == "GET":
+        path += "&" + urllib.parse.urlencode({param: value})
+    elif method == "POST":
+        body = urllib.parse.urlencode({param: value})
+        headers["Content-Type"] = "application/x-www-form-urlencoded"
+    else:
+        headers["Cookie"] = "{}={}".format(param, value)
+    try:
+        conn = http.client.HTTPConnection(host, port, timeout=min(15, timeout))
+        conn.request("POST" if method == "POST" else "GET", path, body=body, headers=headers)
+        response = conn.getresponse()
+        response.read()
+        conn.close()
+        return response.status
+    except Exception:
+        # a broken emulator may make Snare drop the connection
+        return None
+
+
+def read_detections():
+    found = {}
+    if not report_file.exists():
+        return found
+    for line in report_file.read_text(encoding="utf-8", errors="replace").splitlines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        for probe in probes:
+            if marker(probe[0]) in event.get("path", ""):
+                message = event.get("response_msg", {}).get("response", {}).get("message", {})
+                found[probe[0]] = message.get("detection", {})
+    return found
+
+
+statuses = {probe[0]: send(*probe[:4]) for probe in probes}
+
+expected = {probe[0] for probe in probes} - known_broken
+deadline = time.monotonic() + timeout
+found = read_detections()
+while not expected <= set(found) and time.monotonic() < deadline:
+    time.sleep(1)
+    found = read_detections()
+# the reports of the known broken probes need a moment more, if they come at all
+time.sleep(2)
+found = read_detections()
+
+failed = []
+for name, _method, _param, _value, want, want_text in probes:
+    detection = found.get(name)
+    status = statuses[name]
+    if status is None:
+        problem = "Snare dropped the connection"
+    elif status >= 500:
+        problem = "Snare answered {}".format(status)
+    elif detection is None:
+        problem = "no Tanner report"
+    elif detection.get("name") != want:
+        problem = "detected as {!r}".format(detection.get("name"))
+    elif want_text and want_text not in json.dumps(detection.get("payload")):
+        problem = "no emulated payload with {!r}".format(want_text)
+    else:
+        problem = None
+    if problem is None:
+        if name in known_broken:
+            print("[OK] Emulator probe {} works now, remove it from --known-broken".format(name))
+        else:
+            print("[OK] Emulator probe {}".format(name))
+    elif name in known_broken:
+        print("[WARN] Emulator probe {} is known broken: {}".format(name, problem))
+    else:
+        print("[FAIL] Emulator probe {}: {}".format(name, problem), file=sys.stderr)
+        failed.append(name)
+
+sys.exit(1 if failed else 0)
+PY
+}
+
 main() {
   parse_args "$@"
   resolve_images
@@ -530,6 +666,10 @@ main() {
 
   run_phpox_probe
   test_ok "PHPox executes a sandboxed PHP probe over the Compose network"
+
+  test_info "Running Tanner emulator probes through Snare"
+  run_emulator_probes || test_die "Tanner emulator probes failed"
+  test_ok "Tanner emulator probes completed"
 }
 
 main "$@"
