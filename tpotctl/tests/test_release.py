@@ -324,6 +324,59 @@ class SetVersionTest(unittest.TestCase):
             self.assertNotEqual(after[first], before[first])
             untouched = [rel for rel in paths if rel not in (first, second, third)]
             self.assertEqual({rel: after[rel] for rel in untouched}, {rel: before[rel] for rel in untouched})
+            line = [part for part in text.split("\n") if "not restored" in part][0]
+            self.assertIn(f"{first} (No space left on device)", line)        # why it could not be put back
+
+    def test_ctrl_c_during_the_writes_restores_them(self):
+        """A KeyboardInterrupt in the middle of the third write: every file as it was, rc 130 from main."""
+        def fail(number, call):
+            if number == 3 and call == 1:
+                raise KeyboardInterrupt
+            return False
+        for in_process in (False, True):
+            flaky = FlakyOpen(fail)
+            with self.subTest(main=in_process), tempfile.TemporaryDirectory() as tmp:
+                paths = copy_of_the_places(tmp)
+                before = contents(tmp, paths)
+                with mock.patch("tpotctl.release.open", flaky, create=True):
+                    if in_process:
+                        rc, _out, err = main_in_process("set-version", NEW, "--root", tmp)
+                        self.assertEqual(rc, 130, err)
+                        self.assertIn("interrupted", err)
+                        self.assertNotIn("Traceback", err)
+                    else:
+                        with self.assertRaises(release.ReleaseError) as caught:
+                            release.set_version(Path(tmp), NEW)
+                        self.assertTrue(caught.exception.interrupted)
+                        self.assertEqual(len(caught.exception.restored), 3)
+                self.assertEqual(contents(tmp, paths), before)
+
+    def test_a_real_ctrl_c_during_the_writes_restores_them(self):
+        """SIGINT while the second file is written: the writes stop, every file is put back; a second one
+        while they are put back cannot break that off."""
+        import signal
+
+        seen = []
+
+        def fail(number, call):
+            seen.append(signal.getsignal(signal.SIGINT))
+            if (number == 2 and call == 1) or call == 2:      # call 2: putting a file back
+                os.kill(os.getpid(), signal.SIGINT)
+            return False
+        flaky = FlakyOpen(fail)
+        before_handler = signal.getsignal(signal.SIGINT)
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = copy_of_the_places(tmp)
+            before = contents(tmp, paths)
+            with mock.patch("tpotctl.release.open", flaky, create=True), \
+                    self.assertRaises(release.ReleaseError) as caught:
+                release.set_version(Path(tmp), NEW)
+            self.assertTrue(caught.exception.interrupted)
+            self.assertEqual(caught.exception.unrestored, [])
+            self.assertEqual(contents(tmp, paths), before)
+        self.assertEqual(signal.getsignal(signal.SIGINT), before_handler)
+        # from the first write on a ^C only counts: no window where it breaks off between two steps
+        self.assertNotIn(signal.default_int_handler, seen)
 
 
 class InstalledTest(unittest.TestCase):

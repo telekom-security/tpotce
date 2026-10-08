@@ -17,6 +17,7 @@ import contextlib
 import errno
 import os
 import re
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -38,15 +39,17 @@ class ReleaseError(Exception):
 
     set-version writes every file or none: a refusal (a bad number, a lost place, a
     target it cannot open or that changed after it was read) leaves every file as it was.
-    A write that fails puts the files back as they were; then `failed` is the file whose
-    write failed, `restored` the files put back and `unrestored` the ones that could not
-    be (they need a look by hand, the message names them)."""
+    A write that fails or is interrupted (Ctrl+C, `interrupted`) puts the files back as they
+    were; then `failed` is the file being written, `restored` the files put back and
+    `unrestored` the ones that could not be (they need a look by hand, the message names
+    them and why)."""
 
-    def __init__(self, message, failed=None, restored=(), unrestored=()):
+    def __init__(self, message, failed=None, restored=(), unrestored=(), interrupted=False):
         super().__init__(message)
         self.failed = failed
         self.restored = list(restored)
         self.unrestored = list(unrestored)
+        self.interrupted = interrupted
 
 
 class Place(NamedTuple):
@@ -281,26 +284,58 @@ def _write_all(root, writes) -> None:
             if now != was.stat:
                 raise ReleaseError(f"{rel}: replaced or changed after it was read, nothing written")
             handles[rel] = handle
-        written = []
-        for rel, (_, data) in writes.items():
-            written.append(rel)
+        # from the first write to the last one put back a Ctrl+C only counts: it stops the writes after
+        # the file being written and every file goes back, nothing can break off between two steps
+        interrupts: List[int] = []
+        with _counting_sigint(interrupts):
+            written = []
             try:
-                _put(handles[rel], data)
-            except OSError as error:
+                for rel, (_, data) in writes.items():
+                    if interrupts:
+                        raise KeyboardInterrupt
+                    written.append(rel)
+                    _put(handles[rel], data)
+                if interrupts:
+                    raise KeyboardInterrupt
+            except BaseException as error:          # OSError, Ctrl+C, anything: all or nothing
                 restored, unrestored = [], []
                 for back in written:
                     try:
                         _put(handles[back], writes[back][0].data)
                         restored.append(back)
-                    except OSError:
-                        unrestored.append(back)
-                message = [f"{rel}: write failed ({error.strerror or error})"]
+                    except OSError as why:
+                        unrestored.append((back, why.strerror or str(why)))
+                rel = written[-1] if written else None
+                if isinstance(error, OSError):
+                    message = [f"{rel}: write failed ({error.strerror or error})"]
+                elif isinstance(error, KeyboardInterrupt):
+                    message = [f"{rel}: interrupted while writing" if rel else "interrupted, nothing written"]
+                else:
+                    raise
                 if restored:
                     message.append("restored as they were: " + ", ".join(restored))
                 if unrestored:
-                    message.append("not restored, check by hand: " + ", ".join(unrestored))
+                    message.append("not restored, check by hand: "
+                                   + ", ".join(f"{back} ({why})" for back, why in unrestored))
                 raise ReleaseError("\n  ".join(message), failed=rel, restored=restored,
-                                   unrestored=unrestored) from error
+                                   unrestored=[back for back, _why in unrestored],
+                                   interrupted=isinstance(error, KeyboardInterrupt)) from error
+
+
+@contextlib.contextmanager
+def _counting_sigint(interrupts: List[int]):
+    """SIGINT inside only goes into `interrupts` (nothing to change outside the main thread)."""
+    try:
+        previous = signal.getsignal(signal.SIGINT)
+        if previous is not None:            # None: a handler not set from Python, it stays
+            signal.signal(signal.SIGINT, lambda signum, _frame: interrupts.append(signum))
+    except ValueError:
+        previous = None
+    try:
+        yield
+    finally:
+        if previous is not None:
+            signal.signal(signal.SIGINT, previous)
 
 
 def installed_t_pot(root, service_file=SERVICE_FILE) -> bool:
@@ -431,7 +466,7 @@ def main(argv=None) -> int:
         return 0
     except (ReleaseError, OSError, UnicodeDecodeError) as error:
         print(f"release: {error}", file=sys.stderr)
-        return 1
+        return 130 if getattr(error, "interrupted", False) else 1
 
 
 if __name__ == "__main__":
