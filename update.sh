@@ -1849,15 +1849,30 @@ function fuREMOVE_DROPPED_SERVICES () {
 # update.sh does not run) adds the LC_TERMINAL of iTerm2. Only the very file an earlier T-Pot wrote
 # is changed: sshd -t checks it (with its privilege separation directory, as the playbook), a failed
 # check puts the old line back. Any other file there is yours and stays as it is.
+# AlmaLinux, Fedora, RHEL and Rocky keep the folder at 0700 root: there only sudo sees the file.
 function fuSSHD_DROPIN () {
 	local myDROPIN="${myTPOT_SSHD_DROPIN:-/etc/ssh/sshd_config.d/tpot.conf}"
 	local myRUN="${myTPOT_SSHD_RUN:-/run/sshd}"
 	local myOLD="AcceptEnv COLORTERM"
 	local myNEW="AcceptEnv COLORTERM LC_TERMINAL LC_TERMINAL_VERSION"
-	local mySSHD="" myOUT="" myUNIT=""
-	{ [ -f "${myDROPIN}" ] && [ ! -L "${myDROPIN}" ]; } || return 0
+	local mySSHD="" myOUT="" myUNIT="" myTEXT="" myDIR="${myDROPIN%/*}"
+	local myAS=""
+	[ -d "${myDIR}" ] || return 0
+	if [ ! -x "${myDIR}" ];
+	  then
+	    myAS="sudo"
+	    if ! sudo test -d "${myDIR}" 2>/dev/null;
+	      then
+	        fuUI_WARN "Could not look into ${myDIR}, not even with sudo."
+	        fuDID warn "SSH may still not take LC_TERMINAL along: ${myDIR} could not be read, not even with sudo (see README, True colours over SSH)."
+	        echo
+	        return 0
+	    fi
+	fi
+	{ ${myAS} test -f "${myDROPIN}" && ! ${myAS} test -L "${myDROPIN}"; } || return 0
 	# the whole file with its line end: exactly what the playbook of an earlier T-Pot wrote
-	[ "$(cat "${myDROPIN}" 2>/dev/null; echo x)" == "${myOLD}"$'\n'"x" ] || return 0
+	myTEXT="$(${myAS} cat "${myDROPIN}" 2>/dev/null; echo x)"
+	[ "${myTEXT}" == "${myOLD}"$'\n'"x" ] || return 0
 	mySSHD=$(PATH="${PATH}:/usr/sbin:/sbin" command -v sshd) || return 0
 	fuUI_INFO "Letting SSH bring LC_TERMINAL along (iTerm2) in ${myDROPIN} ..."
 	if ! printf '%s\n' "${myNEW}" | sudo tee "${myDROPIN}" > /dev/null;

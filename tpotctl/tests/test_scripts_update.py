@@ -641,6 +641,59 @@ class SshdDropinTest(Scripts):
         self.assertIn("bad configuration option", result.stdout)
         self.assertIn("done warn:", result.stdout)
 
+    def lock_folder(self, sudo_works=True):
+        """r2-RA 1: AlmaLinux, Fedora, RHEL and Rocky keep /etc/ssh/sshd_config.d at 0700 root: the user
+        sees neither the file nor what it says, only sudo does. The folder is 000 here, the sudo stub opens
+        it for the one command it runs (or fails, FAKE_SUDO_FAIL)."""
+        if os.geteuid() == 0:
+            self.skipTest("root reads a folder of mode 000")
+        folder = os.path.dirname(self.dropin)
+        self.stub("sudo", '#!/bin/sh\necho "sudo $*" >> "$HOME/calls"\n'
+                          '[ -n "$FAKE_SUDO_FAIL" ] && { echo "sudo: a password is required" >&2; exit 1; }\n'
+                          'chmod 700 "$FAKE_LOCKED"; "$@"; rc=$?; chmod 000 "$FAKE_LOCKED"; exit $rc\n')
+        os.chmod(folder, 0)
+        self.addCleanup(os.chmod, folder, 0o700)
+        extra = {"FAKE_LOCKED": folder}
+        if not sudo_works:
+            extra["FAKE_SUDO_FAIL"] = "1"
+        return extra
+
+    def test_a_folder_only_root_can_read_is_read_through_sudo(self):
+        self.write_dropin(self.OLD)
+        result = self.migrate(**self.lock_folder())
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        os.chmod(os.path.dirname(self.dropin), 0o700)
+        self.assertEqual(self.dropin_text(), self.NEW)
+        self.assertIn("sshd -t\n  run dir there\n  file: " + self.NEW, self.calls())
+        self.assertIn("done ok:SSH takes LC_TERMINAL along", result.stdout)
+
+    def test_a_file_of_your_own_in_such_a_folder_stays(self):
+        for text in ("AcceptEnv COLORTERM\nAcceptEnv FOO\n", self.NEW):
+            with self.subTest(text=text):
+                os.chmod(os.path.dirname(self.dropin), 0o700)
+                self.write_dropin(text)
+                result = self.migrate(**self.lock_folder())
+                self.assertEqual(result.returncode, 0, result.stderr)
+                os.chmod(os.path.dirname(self.dropin), 0o700)
+                self.assertEqual(self.dropin_text(), text)
+                self.assertNotIn("tee", self.calls())
+                self.assertNotIn("sshd -t", self.calls())
+                self.assertNotIn("done ", result.stdout)
+                if os.path.exists(os.path.join(self.home, "calls")):
+                    os.remove(os.path.join(self.home, "calls"))
+
+    def test_a_folder_sudo_cannot_read_either_is_named_in_the_summary(self):
+        self.write_dropin(self.OLD)
+        result = self.migrate(**self.lock_folder(sudo_works=False))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        os.chmod(os.path.dirname(self.dropin), 0o700)
+        self.assertEqual(self.dropin_text(), self.OLD)
+        self.assertNotIn("tee", self.calls())
+        warn = [line for line in result.stdout.splitlines() if line.startswith("done warn:")]
+        self.assertEqual(len(warn), 1, result.stdout)
+        self.assertIn(os.path.dirname(self.dropin), warn[0])
+        self.assertIn("LC_TERMINAL", warn[0])
+
     def test_update_sh_runs_it_after_the_confirmation(self):
         text = base.read("update.sh")
         main = text[text.index("# Main section #"):]
@@ -673,13 +726,43 @@ class SshdDocsTest(unittest.TestCase):
         text = readme[readme.index("### True colours over SSH"):]
         return text[:text.index("\n## ")]
 
-    def test_the_readme_says_what_update_sh_does_and_what_sudo_drops(self):
+    def test_the_readme_says_what_update_sh_does(self):
         section = self.section()
         self.assertNotIn("i.e. Debian 13", section)
         self.assertIn("e.g. Debian 13", section)
         self.assertIn("update.sh", section)
-        # sudo resets the environment: COLORTERM and LC_TERMINAL stay behind
-        self.assertIn("sudo --preserve-env=COLORTERM,LC_TERMINAL", section)
+
+    def test_the_readme_does_not_say_sudo_drops_the_colours(self):
+        """r2-RA 2: sudo's own env_check keeps TERM, COLORTERM, LANG and LC_* (Debian 13, Ubuntu 26.04 with
+        sudo-rs, Fedora 44, openSUSE Tumbleweed; sudo and sudo -i), so a script under sudo sees the colours
+        of the terminal as well: no advice against a problem that is not there."""
+        section = self.section()
+        self.assertNotIn("--preserve-env", section)
+        self.assertNotIn("clean environment", section)
+        self.assertNotIn("without `COLORTERM` and `LC_TERMINAL`", section)
+
+    def test_the_readme_on_tmux_and_gnu_screen(self):
+        """r2-RA 10, r2-RC 9: in GNU screen (STY, or a TERM of screen* that is no tmux) the rule ignores
+        COLORTERM, only TPOT_COLORS (or the choice in tpot.json) helps; a tmux with its default TERM
+        screen-256color counts as GNU screen too (TMUX does not come over SSH), tmux-256color does not."""
+        from tpotctl import prefs
+        section = self.section()
+        sentences = re.split(r"(?<=[.:])\s+", " ".join(section.split()))
+        screen = [s for s in sentences if "GNU screen" in s and "COLORTERM" in s]
+        self.assertTrue(screen, section)
+        self.assertTrue(any("only" in s and "TPOT_COLORS" in s for s in screen), screen)
+        self.assertIn("`screen*`", section)
+        self.assertIn("set -g default-terminal tmux-256color", section)
+        self.assertNotIn("`COLORTERM` has to reach the shell in tmux, or `TPOT_COLORS` decides", section)
+        # what the README says is the rule
+        isolated = {"XDG_CONFIG_HOME": "/nonexistent-tpot-test"}
+        self.assertEqual(prefs.detect_colors(dict(isolated, TERM="screen-256color", COLORTERM="truecolor")), "256")
+        self.assertEqual(prefs.detect_colors(dict(isolated, TERM="tmux-256color", COLORTERM="truecolor")),
+                         "truecolor")
+        self.assertEqual(prefs.detect_colors(dict(isolated, TERM="xterm-256color", STY="1.pts", COLORTERM="truecolor")),
+                         "256")
+        self.assertEqual(prefs.detect_colors(dict(isolated, TERM="screen-256color", TPOT_COLORS="truecolor")),
+                         "truecolor")
 
     def test_the_task_names_name_both_variables(self):
         install = base.read("installer/install/tpot.yml")
