@@ -280,8 +280,9 @@ class CdpathTest(base.Harness):
                 self.assertNotIn("is missing", found.stdout + found.stderr)
 
     def test_every_cd_comes_after_the_cdpath_is_cleared(self):
-        """The bodies: `unset CDPATH` before the first cd (also those that resolve -B / -c files)."""
-        for path in self.SCRIPTS:
+        """The bodies: `unset CDPATH` before the first cd (also those that resolve -B / -c files), the
+        two checks of the tpotinit image too (they find the checkout they lie in the same way)."""
+        for path in self.SCRIPTS + QUIET:
             text = body(path)
             with self.subTest(script=path):
                 unset = re.search(r"^unset CDPATH$", text, re.M)

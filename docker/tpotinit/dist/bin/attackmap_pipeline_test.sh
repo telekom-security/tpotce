@@ -26,6 +26,8 @@
 #               the sudo password in a file, for a log file only root may append to
 #               (`tpot check pipeline` from the menu hands one over)
 
+# an exported CDPATH turns a cd into a search that prints the folder it found
+unset CDPATH
 myHERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)
 # the look of the T-Pot scripts (installer/lib/ui.sh of the checkout this lies in,
 # or of ~/tpotce), plain text where there is none (i.e. inside the tpotinit image)

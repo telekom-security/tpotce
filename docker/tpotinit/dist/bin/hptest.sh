@@ -5,6 +5,8 @@
 # probes are real attacks as far as T-Pot can tell, they show up in Kibana.
 # `tpot check honeypots` runs it, also from the Checks page of the menu.
 
+# an exported CDPATH turns a cd into a search that prints the folder it found
+unset CDPATH
 myHERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)
 # the look of the T-Pot scripts (installer/lib/ui.sh of the checkout this lies in,
 # or of ~/tpotce), plain text where there is none (i.e. inside the tpotinit image)
