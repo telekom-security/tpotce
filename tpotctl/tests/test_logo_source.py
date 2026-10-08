@@ -448,6 +448,14 @@ class ImportTest(unittest.TestCase):
                     self.assertLess(len(result.stdout), 600, result.stdout[:600])
                     self.assertFalse(template.ran())
 
+    def test_claude_md_names_the_budget_of_the_logo_block(self):
+        """Changing the logo in CLAUDE.md says how many bytes the data block of the scripts may have."""
+        text = read(os.path.join(REPO, "CLAUDE.md"))
+        named = re.findall(r"`ui_logo\.BUDGET`, of ([0-9][0-9 ,]*) bytes", text)
+        self.assertEqual(len(named), 1, "CLAUDE.md names ui_logo.BUDGET once: `ui_logo.BUDGET`, of N bytes")
+        self.assertEqual(int(re.sub(r"[ ,]", "", named[0])), ui_logo.BUDGET)
+        self.assertNotRegex(text, r"budget[^.\n]{0,40}\b(?!%d\b)[0-9]{4,6} bytes" % ui_logo.BUDGET)
+
     def test_a_huge_template_is_refused_unread(self):
         template = Template(self, main_text="DATA = {'palette': []}\n" + "#" * (splash_art.MAX_TEMPLATE + 1))
         with self.assertRaises(ValueError) as caught:
