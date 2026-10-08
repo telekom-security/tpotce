@@ -605,7 +605,12 @@ class BuilderTest(Harness):
         with open(path, "w", encoding="utf-8") as out:
             out.write('#!/bin/sh\ncase "$1" in -s) echo Linux ;; *) echo x86_64 ;; esac\n')
         os.chmod(path, 0o755)
-        self.settings = {"TPOT_BUILDER_ENV_LOCAL": os.path.join(self.home, "env.local"), "SUDO_UID": ""}
+        # the settings and the sudo of the one who runs the tests stay out (as in test_scripts_builder.py)
+        self.settings = {key: "" for key in ("TPOT_VERSION", "TPOT_DOCKER_REPO", "TPOT_GHCR_REPO", "TPOT_BUILDER_ARCH",
+                                             "TPOT_BUILDER_JOBS", "TPOT_BUILDER_LIMIT", "TPOT_BUILDER_LOG_DIR",
+                                             "TPOT_BUILDER_TESTS_DIR", "TPOT_BINFMT_DIR", "SUDO_UID", "SUDO_GID",
+                                             "SUDO_USER", "myUI_VERSION", "DOCKER_HOST", "XDG_RUNTIME_DIR")}
+        self.settings["TPOT_BUILDER_ENV_LOCAL"] = os.path.join(self.home, "env.local")
 
     def test_builder_scripts_speak_like_ui_sh(self):
         text = read(self.SCRIPTS[0])
@@ -670,7 +675,7 @@ class BuilderTest(Harness):
 
     def test_a_build_run_reports_each_image(self):
         stubs = {
-            "ip":"#!/bin/sh\necho 'default via 10.0.0.1 dev eth0'\n",
+            "ip": "#!/bin/sh\necho 'default via 10.0.0.1 dev eth0'\n",
             "tc": "#!/bin/sh\nexit 0\n",
             "docker": "#!/bin/sh\necho \"docker $*\" >> \"$HOME/calls\"\n"
                       "case \"$*\" in\n"
