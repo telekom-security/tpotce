@@ -16,7 +16,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Tuple
 
-from tpotctl import installer, ops, say
+from tpotctl import bootstrap, installer, ops, say
 from tpotctl.bootstrap import REPO_DIR
 
 BACKUP_DIR = os.path.join(os.path.expanduser("~"), "tpot_backups")
@@ -151,9 +151,20 @@ def _mark(key: str, title: str) -> None:
 def switch(plan: SwitchPlan, repo_dir: str = REPO_DIR, become_file: str = "", run: Callable = subprocess.run,
            linux: Optional[bool] = None, add_user: Optional[Callable[[], str]] = None) -> None:
     """Stop T-Pot, keep the compose file, swap it, set what .env needs (and the web user a
-    HIVE needs, add_user), start T-Pot."""
-    linux = ops.linux_host() if linux is None else linux
+    HIVE needs, add_user), start T-Pot.
 
+    Ctrl+C only counts meanwhile, so the switch never stops halfway (the child of the step,
+    i.e. systemctl, gets it from the terminal as well and decides): before the swap it goes
+    back, docker-compose.yml stays, T-Pot is started again and bootstrap.Interrupted follows;
+    after the swap it finishes the switch and says so."""
+    interrupts: List[int] = []
+    with bootstrap.sigint_to(lambda signum, _frame: interrupts.append(signum)):
+        _switch(plan, repo_dir, become_file, run, ops.linux_host() if linux is None else linux, add_user,
+                interrupts)
+
+
+def _switch(plan: SwitchPlan, repo_dir: str, become_file: str, run: Callable, linux: bool,
+            add_user: Optional[Callable[[], str]], interrupts: List[int]) -> None:
     def sudo(*args: str, what: str) -> None:
         if become_file:
             with open(become_file, encoding="utf-8") as password:
@@ -163,20 +174,28 @@ def switch(plan: SwitchPlan, repo_dir: str = REPO_DIR, become_file: str = "", ru
             raise EditionError(f"{what} failed: sudo {' '.join(args)}")
 
     in_use = ops.compose_path(repo_dir)
-    if linux:
-        _mark("stop", "Stopping T-Pot")
-        say.info("Stopping T-Pot ...")
-        sudo("systemctl", "stop", "tpot", what="Stopping T-Pot")
-    if plan.keep_copy and os.path.isfile(in_use):
-        _mark("keep", "Keeping the compose file in use")
-        os.makedirs(os.path.dirname(plan.keep_copy), exist_ok=True)
-        shutil.copy2(in_use, plan.keep_copy)
-        say.ok(f"docker-compose.yml is kept as {plan.keep_copy}.")
+    # 1. up to the swap a ctrl+c goes back
+    try:
+        if linux:
+            _mark("stop", "Stopping T-Pot")
+            say.info("Stopping T-Pot ...")
+            sudo("systemctl", "stop", "tpot", what="Stopping T-Pot")
+        if plan.keep_copy and os.path.isfile(in_use) and not interrupts:
+            _mark("keep", "Keeping the compose file in use")
+            os.makedirs(os.path.dirname(plan.keep_copy), exist_ok=True)
+            shutil.copy2(in_use, plan.keep_copy)
+            say.ok(f"docker-compose.yml is kept as {plan.keep_copy}.")
+    except EditionError:
+        if not interrupts:          # a stop that failed by itself: nothing is changed
+            raise
+    if interrupts:
+        _go_back(plan, linux, sudo)
     _mark("swap", f"Switching to the {plan.target.title} edition")
     shutil.copyfile(plan.target.path, in_use)
     say.ok(f"docker-compose.yml is the {plan.target.title} edition now.")
     back = f"Back to the edition before: cp {plan.keep_copy} {in_use}" if plan.keep_copy else \
         "Nothing to go back to, there was no docker-compose.yml before."
+    # 2. from here on a ctrl+c finishes the switch
     # .env and the web user before the start: tpotinit refuses a HIVE without a web user
     try:
         if plan.env_changes:
@@ -195,15 +214,40 @@ def switch(plan: SwitchPlan, repo_dir: str = REPO_DIR, become_file: str = "", ru
         say.info("Start it with: docker compose up -d")
         return
     _mark("prune", "Removing the networks of the old edition")
-    sudo("docker", "network", "prune", "-f", what="Removing the old networks")
+    try:
+        sudo("docker", "network", "prune", "-f", what="Removing the old networks")
+    except EditionError:
+        if not interrupts:
+            raise
     _mark("start", "Starting T-Pot")
     say.info("Starting T-Pot, it pulls the images it does not have yet ...")
     try:
         sudo("systemctl", "start", "tpot", what="Starting T-Pot")
     except EditionError as err:
-        raise EditionError(f"{err}. {back}")
+        if not interrupts:
+            raise EditionError(f"{err}. {back}")
+        # systemctl stops waiting on ctrl+c, the start goes on in systemd
+        say.warn("systemctl start stopped waiting (Ctrl+C), T-Pot may still be starting: check with tpot status.")
     _mark("done", "Done")
+    if interrupts:
+        say.warn(f"Ctrl+C came after docker-compose.yml was swapped, so the switch is finished. {back}")
     say.ok(f"T-Pot runs the {plan.target.title} edition.")
+
+
+def _go_back(plan: SwitchPlan, linux: bool, sudo: Callable) -> None:
+    """Ctrl+C before the swap: docker-compose.yml is unchanged, T-Pot starts again (as after a switch)."""
+    started = ""
+    if linux:
+        say.info("Starting T-Pot again ...")
+        try:
+            sudo("systemctl", "start", "tpot", what="Starting T-Pot again")
+            started = ", T-Pot is started again"
+        except EditionError as err:
+            started = f", T-Pot is stopped ({err}), start it with: tpot start"
+    sys.stderr.write("\n")
+    say.warn(f"Stopped before the switch: docker-compose.yml is still the {plan.current} edition{started}.",
+             sys.stderr)
+    raise bootstrap.Interrupted
 
 
 def print_plan(plan: SwitchPlan, stream=None) -> None:

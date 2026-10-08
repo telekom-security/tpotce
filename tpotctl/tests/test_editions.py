@@ -258,6 +258,60 @@ class EditionsTest(unittest.TestCase):
         self.assertIn("@@tpot phase stop", out.getvalue())
         self.assertIn("@@tpot phase start", out.getvalue())
 
+    # ctrl+c: a real SIGINT to this process in a step; the child (systemctl) gets it from the terminal too
+
+    def switch_with_ctrl_c(self, during, code=0):
+        """switch to mini, a SIGINT while the command with `during` runs, which then exits with code."""
+        import signal
+        calls = Calls()
+
+        def run(command, **kwargs):
+            calls(command, **kwargs)
+            if during in command:
+                os.kill(os.getpid(), signal.SIGINT)
+                return Done(code)
+            return Done(0)
+        before = signal.getsignal(signal.SIGINT)
+        err, out = io.StringIO(), io.StringIO()
+        raised = None
+        with contextlib.redirect_stderr(err), contextlib.redirect_stdout(out):
+            try:
+                editions.switch(self.plan("mini"), self.repo, run=run, linux=True)
+            except KeyboardInterrupt as interrupt:     # unittest would stop on it
+                raised = interrupt
+        self.assertEqual(signal.getsignal(signal.SIGINT), before)
+        return calls.commands, raised, err.getvalue() + out.getvalue()
+
+    def test_ctrl_c_while_stopping_goes_back(self):
+        """Before the swap: docker-compose.yml stays, T-Pot is started again, the switch ends as cancelled."""
+        before = self.read(self.compose())
+        for code in (0, 1):                             # systemctl stopped waiting (1) or the stop was done
+            with self.subTest(code=code):
+                commands, raised, text = self.switch_with_ctrl_c("stop", code)
+                self.assertIsInstance(raised, editions.bootstrap.Interrupted, text)
+                self.assertEqual(self.read(self.compose()), before)
+                self.assertEqual(commands[-1], ["sudo", "systemctl", "start", "tpot"])
+                self.assertNotIn(["sudo", "docker", "network", "prune", "-f"], commands)
+                self.assertIn("still the STANDARD edition", text)
+                self.assertIn("started again", text)
+
+    def test_ctrl_c_after_the_swap_finishes_the_switch(self):
+        mini = self.read(os.path.join(self.repo, "compose", "mini.yml"))
+        for during, code in (("prune", 1), ("prune", 0), ("start", 0)):
+            with self.subTest(during=during, code=code):
+                self.use("standard")
+                commands, raised, text = self.switch_with_ctrl_c(during, code)
+                self.assertIsNone(raised, text)
+                self.assertEqual(self.read(self.compose()), mini)
+                self.assertEqual(commands[-1], ["sudo", "systemctl", "start", "tpot"])
+                self.assertIn("the switch is finished", text)
+
+    def test_ctrl_c_while_starting_says_to_look(self):
+        """systemctl start stops waiting on ctrl+c, the start goes on in systemd: no failure, a hint."""
+        commands, raised, text = self.switch_with_ctrl_c("start", 1)
+        self.assertIsNone(raised, text)
+        self.assertIn("tpot status", text)
+
 
 class EditionCliTest(unittest.TestCase):
 
