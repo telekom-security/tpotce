@@ -2,11 +2,11 @@
 
 At a terminal the glyph and the colours of gum's form there, otherwise the same plain
 text as ui.sh (`### [OK] - ...`). Standard library only: the launcher and the
-headless customizer use it before (or without) the venv. TPOT_GUM=off and NO_COLOR
-keep the plain text. The colours have the depth of the one rule of the scripts and the
-T-Pot Manager (prefs.detect_colors): true colour, the xterm 256 entries of
-theme.PALETTE_256 or the ANSI colours of theme.PALETTE_16; a dumb terminal gets the
-glyphs without colours, as gum gives them there.
+headless customizer use it before (or without) the venv. TPOT_GUM=off keeps the plain
+text. The colours have the depth of the one rule of the scripts and the T-Pot Manager
+(prefs.detect_colors): true colour, the xterm 256 entries of theme.PALETTE_256 or the
+ANSI colours of theme.PALETTE_16; a dumb terminal and NO_COLOR (when it is not empty,
+as for Rich and ui.sh) get the glyphs without colours, as gum gives them there.
 """
 
 import os
@@ -28,9 +28,9 @@ _RESET = "\x1b[0m"
 
 def depth(environ=None):
     """truecolor, 256 or 16 by the rule (prefs.detect_colors of the environment, default os.environ),
-    None for a dumb terminal (TERM dumb or unknown): no colours there."""
+    None for a dumb terminal (TERM dumb or unknown) and with NO_COLOR (not empty): no colours there."""
     env = os.environ if environ is None else environ
-    if prefs.ascii_lower(env.get("TERM") or "") in prefs.DUMB_TERMS:
+    if prefs.ascii_lower(env.get("TERM") or "") in prefs.DUMB_TERMS or env.get("NO_COLOR"):
         return None
     return prefs.detect_colors(env)
 
@@ -49,6 +49,9 @@ def _paint(name: str, text: str, colors) -> str:
 
 
 def plain(kind: str, text: str) -> str:
+    """The plain text of ui.sh; info of more lines has ### before each, as fuUI_INFO."""
+    if kind == "info":
+        return "\n".join(_PLAIN["info"].format(line) for line in text.split("\n"))
     return _PLAIN[kind].format(text)
 
 
@@ -60,15 +63,18 @@ def styled(kind: str, text: str, colors="rule") -> str:
         colors = depth()
     glyph, colour = _GLYPH[kind]
     if kind == "info":
-        return f"{_paint(colour, glyph, colors)} {_paint('glass', text, colors)}"
+        # more lines: the sign before the first, two spaces before the others (fuUI_INFO)
+        first, *rest = text.split("\n")
+        return "\n".join([f"{_paint(colour, glyph, colors)} {_paint('glass', first, colors)}"]
+                         + [f"  {_paint('glass', line, colors)}" for line in rest])
     if kind == "ok":
         return f"{_paint(colour, glyph, colors)} {text}"
     return _paint(colour, f"{glyph} {text}", colors)
 
 
 def fancy(stream) -> bool:
-    return (getattr(stream, "isatty", lambda: False)() and os.environ.get("TPOT_GUM", "on") != "off"
-            and "NO_COLOR" not in os.environ)
+    """The form of gum: a terminal, gum not off (NO_COLOR takes only the colours, depth())."""
+    return getattr(stream, "isatty", lambda: False)() and os.environ.get("TPOT_GUM", "on") != "off"
 
 
 def _say(kind: str, text: str, stream) -> None:

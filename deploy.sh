@@ -8,18 +8,24 @@ if ! source "$HOME/tpotce/installer/lib/ui.sh" 2>/dev/null;
   then
 # >>> plain fallback
     fuUI_INIT () { return 0; }
-    fuUI_BANNER () { local myLINE; echo; echo "### T-Pot $1"; shift; for myLINE in "$@"; do echo "### ${myLINE}"; done; echo; }
-    fuUI_INFO () { echo "### $*"; }
+    fuUI_BANNER () { local myLINE; echo; echo "### T-Pot $1"; shift; for myLINE in "$@"; do echo "### ${myLINE//$'\n'/$'\n'### }"; done; echo; }
+    fuUI_INFO () { local myTEXT="$*"; echo "### ${myTEXT//$'\n'/$'\n'### }"; }
     fuUI_OK () { echo "### [OK] - $*"; }
     fuUI_WARN () { echo "### [WARNING] - $*"; }
     fuUI_ERROR () { echo "### [ERROR] - $*" >&2; }
     fuUI_HINT () { local myLINE; for myLINE in "$@"; do echo "###   ${myLINE}"; done; }
     fuUI_CONFIRM () {
-      local myANSWER=""
-      while [ "${myANSWER}" != "y" ] && [ "${myANSWER}" != "n" ]; do
-        read -rp "### $1 (y/n) " myANSWER || return 1
+      local myANSWER="" myDEFAULT="" myPROMPT="(y/n)"
+      if [ "${1:-}" = "--default" ]; then
+        case "${2:-}" in yes|no) myDEFAULT="$2" ;; esac
+        shift $(( $# < 2 ? $# : 2 ))
+      fi
+      case "${myDEFAULT}" in yes) myPROMPT="(Y/n)" ;; no) myPROMPT="(y/N)" ;; esac
+      while true; do
+        read -rp "### $1 ${myPROMPT} " myANSWER || return 1
+        [ -n "${myANSWER}" ] || myANSWER="${myDEFAULT:0:1}"
+        case "${myANSWER}" in y) return 0 ;; n) return 1 ;; esac
       done
-      [ "${myANSWER}" = "y" ]
     }
     fuUI_INPUT () {
       local myVALUE=""

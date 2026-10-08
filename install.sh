@@ -119,9 +119,14 @@ myUI_ASH="#A2A2AD"
 myUI_OK_COLOUR="#3FA34D"
 myUI_WARN_COLOUR="#F4B400"
 myUI_ERROR_COLOUR="#E8453C"
+# the same as entries of the xterm 256 palette (theme.PALETTE_256) and as the 16 ANSI colours
+# (theme.PALETTE_16), for gum where the rule says 256 or 16 (fuUI_GUM): lipgloss would take the
+# nearest itself, and with 16 colours magenta and the yellow of a warning turn bright red
+myUI_GUM_256="#E20074=162 #014463=23 #ECEFF9=231 #A2A2AD=248 #3FA34D=71 #F4B400=214 #E8453C=167"
+myUI_GUM_16="#E20074=13 #014463=6 #ECEFF9=15 #A2A2AD=7 #3FA34D=10 #F4B400=11 #E8453C=9"
 myUI_GUM=""
-# the COLORTERM and TERM for gum, set by fuUI_INIT (fuUI_GUM)
-unset myUI_GUM_COLORTERM myUI_GUM_TERM
+# the COLORTERM, TERM and depth of the colours for gum, set by fuUI_INIT (fuUI_GUM)
+unset myUI_GUM_COLORTERM myUI_GUM_TERM myUI_GUM_DEPTH
 # set by the caller: 1 shows the logo in fuUI_BANNER; the version for its credits
 # (empty: fuUI_VERSION finds it)
 myUI_LOGO="${myUI_LOGO:-}"
@@ -147,7 +152,7 @@ fuUI_INIT () {
   local myDEPTH myLOW
   myDEPTH=$(fuUI_COLORS)
   if [ -z "${COLORTERM:-}" ] && [ "${myDEPTH}" = "truecolor" ]; then export COLORTERM=truecolor; fi
-  myUI_GUM_COLORTERM="" myUI_GUM_TERM="${TERM:-}"
+  myUI_GUM_COLORTERM="" myUI_GUM_TERM="${TERM:-}" myUI_GUM_DEPTH="${myDEPTH}"
   fuUI_LOWER myLOW "${TERM:-}"
   case "${myDEPTH}" in
     truecolor)
@@ -197,9 +202,31 @@ fuUI_INIT () {
 fuUI_GUM () {
   # fuUI_GUM <argument> ...: gum in the colours of the rule (fuUI_COLORS), as fuUI_INIT worked
   # them out: lipgloss takes true colour from any COLORTERM, 256 from a TERM with 256color,
-  # else 16. Without fuUI_INIT (myUI_GUM set by hand) gum as it is
+  # else 16; the colours of tpot as the entries of the palette there (myUI_GUM_256 / _16, only
+  # the values of the colour options before --). NO_COLOR that is not empty (no-color.org, as
+  # Rich and say) as gum takes it: 1. Without fuUI_INIT (myUI_GUM set by hand) gum as it is
   if [ -z "${myUI_GUM_TERM+set}" ]; then "${myUI_GUM}" "$@"; return; fi
-  COLORTERM="${myUI_GUM_COLORTERM}" TERM="${myUI_GUM_TERM}" "${myUI_GUM}" "$@"
+  local myARG myPREV="" myTABLE=""
+  local -a myARGS=()
+  case "${myUI_GUM_DEPTH:-}" in
+    256) myTABLE=" ${myUI_GUM_256} " ;;
+    16) myTABLE=" ${myUI_GUM_16} " ;;
+  esac
+  for myARG in "$@"; do
+    case "${myPREV}" in
+      --*foreground|--*background)
+        case "${myTABLE}" in
+          *" ${myARG}="*) myARG="${myTABLE#*" ${myARG}="}" myARG="${myARG%% *}" ;;
+        esac ;;
+      --) myTABLE="" ;;
+    esac
+    myARGS+=("${myARG}")
+    myPREV="${myARG}"
+  done
+  if [ -n "${NO_COLOR:-}" ];
+    then NO_COLOR=1 COLORTERM="${myUI_GUM_COLORTERM}" TERM="${myUI_GUM_TERM}" "${myUI_GUM}" "${myARGS[@]}"
+    else COLORTERM="${myUI_GUM_COLORTERM}" TERM="${myUI_GUM_TERM}" "${myUI_GUM}" "${myARGS[@]}"
+  fi
 }
 
 fuUI_STYLE () {
@@ -220,16 +247,26 @@ fuUI_PREF () {
   # fuUI_PREF <icons|colors>: the choice of the T-Pot Manager in its tpot.json, empty without
   # one. The grammar of tpotctl/prefs.py read_file: one JSON object of strings without escapes
   # and control characters (what the T-Pot Manager writes), any other file does not count; a
-  # key twice: the last. Control characters: [:cntrl:] of a UTF-8 locale, U+2028 / U+2029
-  # here too (glibc counts them, macOS not); no \001 in a pattern, bash 3.2 cannot have it
+  # key twice: the last. The same in every locale: the bytes count (C locale), the file must be
+  # UTF-8 (as Python reads it), control characters are C0 and DEL ([:cntrl:] of C), the C1 ones
+  # (U+0080 to U+009F) and U+2028 / U+2029. No \001 in a pattern, bash 3.2 cannot have it
+  local LC_ALL=C
   local myFILE="${XDG_CONFIG_HOME:-${HOME}/.config}/tpotce/tpot.json" myTEXT="" myOUT=""
-  local myW="[ "$'\t\n\r'"]*" myS="\"([^\"\\[:cntrl:]]*)\"" myPAIR myOBJECT
+  local myW="[ "$'\t\n\r'"]*" myS="\"([^\"\\[:cntrl:]]*)\"" myPAIR myOBJECT myUTF8
+  local myT=$'\200'-$'\277'
   [ -f "${myFILE}" ] && [ -r "${myFILE}" ] || return 0
   # a NUL ends the read with rc 0: no JSON
   if IFS= read -r -d '' myTEXT < "${myFILE}"; then return 0; fi
   case "${myTEXT}" in *$'\342\200\250'*|*$'\342\200\251'*) return 0 ;; esac
+  # UTF-8 without the C1 controls (\302\200 to \302\237): ASCII, then 2, 3 and 4 bytes
+  myUTF8="^([^${myT}"$'\300'-$'\377'"]|"$'\302'"["$'\240'-$'\277'"]|["$'\303'-$'\337'"][${myT}]"
+  myUTF8+="|"$'\340'"["$'\240'-$'\277'"][${myT}]|["$'\341'-$'\354\356\357'"][${myT}][${myT}]"
+  myUTF8+="|"$'\355'"["$'\200'-$'\237'"][${myT}]|"$'\360'"["$'\220'-$'\277'"][${myT}][${myT}]"
+  myUTF8+="|["$'\361'-$'\363'"][${myT}][${myT}][${myT}]|"$'\364'"["$'\200'-$'\217'"][${myT}][${myT}])*\$"
+  [[ "${myTEXT}" =~ ${myUTF8} ]] || return 0
+  # one way to read the spaces (linear, as prefs.py): after { or a pair, never two in a row
   myPAIR="${myS}${myW}:${myW}${myS}"
-  myOBJECT="^${myW}[{]${myW}(${myPAIR}(${myW},${myW}${myPAIR})*)?${myW}[}]${myW}\$"
+  myOBJECT="^${myW}[{]${myW}(${myPAIR}(${myW},${myW}${myPAIR})*${myW})?[}]${myW}\$"
   [[ "${myTEXT}" =~ ${myOBJECT} ]] || return 0
   while [[ "${myTEXT}" =~ ${myPAIR} ]]; do
     [ "${BASH_REMATCH[1]}" != "$1" ] || myOUT="${BASH_REMATCH[2]}"
@@ -362,7 +399,7 @@ fuUI_MARKS_ON () {
 
 fuUI_LOGO_ON () {
   # 0 when the logo may show: stdout is a terminal of at least 80 x 24, gum is not
-  # off, no marks mode, a TERM with colours, no NO_COLOR, not shown before in this
+  # off, no marks mode, a TERM with colours, no NO_COLOR (not empty), not shown before in this
   # chain of scripts (TPOT_LOGO_SHOWN), not the ascii icon set; sets myUI_COLS / ROWS
   [ -t 1 ] || return 1
   [ "${TPOT_GUM:-on}" = "off" ] && return 1
@@ -370,7 +407,7 @@ fuUI_LOGO_ON () {
   local myTERM
   fuUI_LOWER myTERM "${TERM:-}"
   case "${myTERM}" in dumb|unknown) return 1 ;; esac
-  [ -n "${NO_COLOR+set}" ] && return 1
+  [ -n "${NO_COLOR:-}" ] && return 1
   [ -n "${TPOT_LOGO_SHOWN:-}" ] && return 1
   [ "$(fuUI_ICONS)" = "ascii" ] && return 1
   fuUI_TERM_SIZE || return 1
@@ -558,9 +595,9 @@ fuUI_LOGO () {
 
 fuUI_HANG () {
   # fuUI_HANG <room> <text>: the text as it is when every line of it fits the room, else
-  # each line that does not is broken at spaces (fuUI_FOLD) with its lines after the first
-  # indented by two; the given line breaks stay
-  local myROOM="$1" myLINE myOUT myWIDE=""
+  # each line that does not is broken at spaces (fuUI_FOLD): it keeps its indent, its lines
+  # after the first hang two further; the given line breaks stay
+  local myROOM="$1" myLINE myOUT myWIDE="" myIND myW
   [ "${myROOM}" -ge 12 ] || { printf '%s\n' "$2"; return 0; }
   while IFS= read -r myLINE; do
     [ "${#myLINE}" -le "${myROOM}" ] || myWIDE=1
@@ -569,9 +606,12 @@ fuUI_HANG () {
   while IFS= read -r myLINE; do
     if [ "${#myLINE}" -gt "${myROOM}" ];
       then
-        # a line of its own for fuUI_FOLD: a leading space would keep it as it is
-        myOUT=$(fuUI_FOLD $((myROOM - 2)) "${myLINE#"${myLINE%%[! ]*}"}")
-        printf '%s\n' "${myOUT//$'\n'/$'\n'  }"
+        myIND="${myLINE%%[! ]*}"
+        myW=$((myROOM - ${#myIND} - 2))
+        [ "${myW}" -ge 10 ] || myW=10
+        # the text without its indent for fuUI_FOLD: a leading space would keep it as it is
+        myOUT=$(fuUI_FOLD "${myW}" "${myLINE#"${myIND}"}")
+        printf '%s%s\n' "${myIND}" "${myOUT//$'\n'/$'\n'${myIND}  }"
       else printf '%s\n' "${myLINE}"
     fi
   done <<< "$2"
@@ -580,7 +620,8 @@ fuUI_HANG () {
 fuUI_BANNER () {
   # fuUI_BANNER <title> <line> ...: the T-Pot logo (myUI_LOGO=1, see fuUI_LOGO) or the
   # T-Pot wordmark of the T-Pot Manager (tpotctl/logo.py), then a title and lines. At a
-  # terminal a line wider than it is broken, with a hanging indent
+  # terminal a line wider than it is broken, with a hanging indent. A line of more lines:
+  # each of them as a line (plain text: ### before each)
   local myTITLE="$1" myLINE myTEXT myLOGO="" myCOLS=""
   local -a myLINES=()
   shift
@@ -591,11 +632,9 @@ fuUI_BANNER () {
       echo
       echo "### T-Pot ${myTITLE}"
       for myLINE in "$@"; do
+        myTEXT="${myLINE}"
         [ -z "${myCOLS}" ] || myTEXT=$(fuUI_HANG $((myCOLS - 4)) "${myLINE}")
-        if [ -z "${myCOLS}" ] || [ "${myTEXT}" = "${myLINE}" ];
-          then echo "### ${myLINE}"
-          else echo "### ${myTEXT//$'\n'/$'\n'### }"
-        fi
+        echo "### ${myTEXT//$'\n'/$'\n'### }"
       done
       echo
       return
@@ -609,10 +648,9 @@ fuUI_BANNER () {
   fuUI_GUM style --foreground "${myUI_GLASS}" --bold --margin "0 2" -- "T-Pot ${myTITLE}"
   # gum style does not break lines; its margin takes two columns on each side
   for myLINE in "$@"; do
-    if [ -n "${myCOLS}" ];
-      then while IFS= read -r myTEXT; do myLINES+=("${myTEXT}"); done < <(fuUI_HANG $((myCOLS - 4)) "${myLINE}")
-      else myLINES+=("${myLINE}")
-    fi
+    myTEXT="${myLINE}"
+    [ -z "${myCOLS}" ] || myTEXT=$(fuUI_HANG $((myCOLS - 4)) "${myLINE}")
+    while IFS= read -r myLINE; do myLINES+=("${myLINE}"); done <<< "${myTEXT}"
   done
   [ "${#myLINES[@]}" -eq 0 ] || fuUI_GUM style --foreground "${myUI_ASH}" --margin "0 2" -- "${myLINES[@]}"
   echo
@@ -620,24 +658,17 @@ fuUI_BANNER () {
 
 fuUI_INFO () {
   # fuUI_INFO <text>: a line of what happens; at a terminal a line wider than it is broken,
-  # with a hanging indent
+  # with a hanging indent. A text of more lines: plain text ### before each, gum the sign
+  # before the first and two spaces before the others
   local myTEXT="$*" myCOLS="" myLINE myFIRST=1
   if [ -t 1 ] && fuUI_TERM_SIZE; then myCOLS="${myUI_COLS}"; fi
   if [ -z "${myUI_GUM}" ];
     then
       [ -z "${myCOLS}" ] || myTEXT=$(fuUI_HANG $((myCOLS - 4)) "${myTEXT}")
-      if [ "${myTEXT}" = "$*" ];
-        then echo "### $*"
-        else echo "### ${myTEXT//$'\n'/$'\n'### }"
-      fi
+      echo "### ${myTEXT//$'\n'/$'\n'### }"
       return 0
   fi
   [ -z "${myCOLS}" ] || myTEXT=$(fuUI_HANG $((myCOLS - 2)) "${myTEXT}")
-  if [ -z "${myCOLS}" ] || [ "${myTEXT}" = "$*" ];
-    then
-      echo "$(fuUI_PAINT "${myUI_MAGENTA}" "⬢") $(fuUI_PAINT "${myUI_GLASS}" "${myTEXT}")"
-      return 0
-  fi
   while IFS= read -r myLINE; do
     if [ -n "${myFIRST}" ];
       then echo "$(fuUI_PAINT "${myUI_MAGENTA}" "⬢") $(fuUI_PAINT "${myUI_GLASS}" "${myLINE}")"; myFIRST=""
@@ -725,10 +756,11 @@ fuUI_HELP () {
       *) shift ;;
     esac
   done
-  # colours where gum paints: a terminal that is not dumb (dumb, unknown), no NO_COLOR
+  # colours where gum paints: a terminal that is not dumb (dumb, unknown), no NO_COLOR (one
+  # that is not empty, as fuUI_GUM)
   fuUI_LOWER myN "${TERM:-}"
   case "${myN}" in dumb|unknown) myN="dumb" ;; esac
-  if [ -n "${myUI_GUM}" ] && [ -t 1 ] && [ -z "${NO_COLOR+set}" ] && [ "${myN}" != "dumb" ]; then
+  if [ -n "${myUI_GUM}" ] && [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && [ "${myN}" != "dumb" ]; then
     # the colours of the logo: magenta (4) for the title and the flags, glass (7) for the heads
     myMODE=$(fuUI_COLORS)
     for myN in 4 7; do
@@ -865,35 +897,67 @@ fuUI_SUMMARY () {
 }
 
 fuUI_CONFIRM () {
-  # fuUI_CONFIRM <question> [yes] [no]: 0 for yes; reads y/n from stdin without gum
-  local myANSWER=""
+  # fuUI_CONFIRM [--default yes|no] <question> [yes] [no]: 0 for yes. The default is the answer
+  # enter gives (gum: the button it starts on), yes without --default. Without gum y / n from
+  # stdin: with --default (Y/n) or (y/N) and an empty answer takes it, without the question
+  # (y/n) waits for one of them
+  local myANSWER="" myDEFAULT=""
+  if [ "${1:-}" = "--default" ]; then
+    case "${2:-}" in yes|no) myDEFAULT="$2" ;; esac
+    shift $(( $# < 2 ? $# : 2 ))
+  fi
   if [ -n "${myUI_GUM}" ] && [ -t 0 ];
     then
-      fuUI_GUM confirm --affirmative "${2:-Yes}" --negative "${3:-No}" \
+      local -a myFLAGS=()
+      [ "${myDEFAULT}" != "no" ] || myFLAGS=(--default=false)
+      fuUI_GUM confirm ${myFLAGS[@]+"${myFLAGS[@]}"} --affirmative "${2:-Yes}" --negative "${3:-No}" \
         --prompt.foreground "${myUI_GLASS}" --selected.background "${myUI_MAGENTA}" \
         --selected.foreground "${myUI_GLASS}" --unselected.background "${myUI_PETROL}" \
         --unselected.foreground "${myUI_GLASS}" -- "$1"
       return $?
   fi
-  while [ "${myANSWER}" != "y" ] && [ "${myANSWER}" != "n" ]; do
-    read -rp "### $1 (y/n) " myANSWER || return 1
+  local myPROMPT="(y/n)"
+  case "${myDEFAULT}" in yes) myPROMPT="(Y/n)" ;; no) myPROMPT="(y/N)" ;; esac
+  while true; do
+    read -rp "### $1 ${myPROMPT} " myANSWER || return 1
+    [ -n "${myANSWER}" ] || myANSWER="${myDEFAULT:0:1}"
+    case "${myANSWER}" in y) return 0 ;; n) return 1 ;; esac
   done
-  [ "${myANSWER}" = "y" ]
 }
 
 fuUI_CHOOSE () {
-  # fuUI_CHOOSE <header> <label:value> ...: prints the value of the choice; label and value
-  # split at the last colon (a label may have one, i.e. a registry with its port), as
-  # fuUI_CHOOSE_MANY. gum gets the labels (its --label-delimiter splits at the first colon),
-  # the first item with the label gum gives back is the choice; rc 1 for none, the rc of gum
-  # when it is cancelled
-  local myHEADER="$1" myI=1 myITEM myPICK myOUT
-  shift
+  # fuUI_CHOOSE [--selected <value>] <header> <label:value> ...: prints the value of the choice;
+  # label and value split at the last colon (a label may have one, i.e. a registry with its
+  # port), as fuUI_CHOOSE_MANY. --selected: the item of that value is the default (gum starts
+  # on it, without gum an empty answer takes it); a value no item has: none. gum gets the labels
+  # (its --label-delimiter splits at the first colon), the first item with the label gum gives
+  # back is the choice; the default as its label, a comma as \, (gum splits --selected at
+  # commas), a label * (gum: the last one) or with \, (no escape for it) starts on the first. rc 1
+  # for none, the rc of gum when it is cancelled
+  local myI=1 myITEM myPICK myOUT myDEFAULT="" myVALUE=""
+  if [ "${1:-}" = "--selected" ]; then
+    myVALUE="${2-}" myDEFAULT=0
+    shift $(( $# < 2 ? $# : 2 ))
+  fi
+  local myHEADER="${1:-}"
+  [ "$#" -eq 0 ] || shift
+  if [ -n "${myDEFAULT}" ]; then
+    myDEFAULT=""
+    for myITEM in "$@"; do
+      if [ "${myITEM##*:}" = "${myVALUE}" ]; then myDEFAULT="${myI}"; break; fi
+      myI=$((myI + 1))
+    done
+    myI=1
+  fi
   if [ -n "${myUI_GUM}" ] && [ -t 0 ];
     then
-      local -a myLABELS=()
+      local -a myLABELS=() myFLAGS=()
       for myITEM in "$@"; do myLABELS+=("${myITEM%:*}"); done
-      myOUT=$(fuUI_GUM choose --header "${myHEADER}" \
+      if [ -n "${myDEFAULT}" ]; then
+        myITEM="${myLABELS[myDEFAULT - 1]}"
+        [ "${myITEM}" = "*" ] || [[ "${myITEM}" == *'\,'* ]] || myFLAGS=(--selected "${myITEM//,/\\,}")
+      fi
+      myOUT=$(fuUI_GUM choose ${myFLAGS[@]+"${myFLAGS[@]}"} --header "${myHEADER}" \
         --header.foreground "${myUI_GLASS}" --cursor.foreground "${myUI_MAGENTA}" \
         --item.foreground "${myUI_ASH}" --selected.foreground "${myUI_MAGENTA}" -- "${myLABELS[@]}") || return $?
       for myITEM in "$@"; do
@@ -907,8 +971,14 @@ fuUI_CHOOSE () {
     myI=$((myI + 1))
   done
   while true; do
-    read -rp "### Choice (1-$#): " myPICK || return 1
-    if [[ "${myPICK}" =~ ^[0-9]+$ ]] && [ "${myPICK}" -ge 1 ] && [ "${myPICK}" -le "$#" ];
+    if [ -n "${myDEFAULT}" ];
+      then read -rp "### Choice (1-$#, enter = ${myDEFAULT}): " myPICK || return 1
+      else read -rp "### Choice (1-$#): " myPICK || return 1
+    fi
+    myPICK="${myPICK//[[:space:]]/}"
+    [ -n "${myPICK}" ] || myPICK="${myDEFAULT}"
+    [[ "${myPICK}" =~ ^[0-9]{1,9}$ ]] && myPICK=$((10#${myPICK})) || myPICK=0
+    if [ "${myPICK}" -ge 1 ] && [ "${myPICK}" -le "$#" ];
       then
         myITEM="${!myPICK}"
         echo "${myITEM##*:}"

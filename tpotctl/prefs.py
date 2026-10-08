@@ -43,12 +43,14 @@ def path(environ=None) -> str:
 # same file or both leave it out (any other JSON, an escape, a nested object, a number, a byte order
 # mark); a key twice: the last counts, as in JSON. No control characters in a string: the class
 # cntrl of a UTF-8 locale (C0, DEL, C1, U+2028 and U+2029), stricter than JSON, as the scripts see
-# them. The cases are in tests/color_cases.json.
+# them, in every locale; a file that is no UTF-8 does not count either. The cases are in
+# tests/color_cases.json. The spaces have one way to be read (never two _SPACE in a row), so a file
+# of many spaces takes no time: with two in a row the regex tries every split of them.
 _SPACE = "[ \t\n\r]*"
 _STRING = '"([^"\\\\\x00-\x1f\x7f-\x9f\u2028\u2029]*)"'
 _PAIR = _STRING + _SPACE + ":" + _SPACE + _STRING
 _OBJECT = re.compile("\\A" + _SPACE + "\\{" + _SPACE + "(?:" + _PAIR + "(?:" + _SPACE + "," + _SPACE + _PAIR
-                     + ")*)?" + _SPACE + "\\}" + _SPACE + "\\Z")
+                     + ")*" + _SPACE + ")?\\}" + _SPACE + "\\Z")
 _PAIRS = re.compile(_PAIR)
 
 

@@ -1,5 +1,6 @@
 """tpotctl.say: the messages of tpot look like the ones of installer/lib/ui.sh."""
 
+import importlib.util
 import io
 import os
 import re
@@ -48,6 +49,16 @@ class SayTest(unittest.TestCase):
                                ("error", "fuUI_ERROR")):
             with self.subTest(kind=kind):
                 self.assertEqual(say.plain(kind, "a b"), self.bash(f'{function} "a b"'))
+
+    def test_info_of_more_lines_is_the_one_of_ui_sh(self):
+        """A text of more lines: ### before each (plain), the sign before the first and two spaces
+        before the others (the form of gum), as fuUI_INFO."""
+        self.assertEqual(say.plain("info", "First:\n  second"),
+                         self.bash('fuUI_INFO "First:"$\'\\n\'"  second"'))
+        self.assertEqual(say.plain("info", "First:\n  second"), "### First:\n###   second")
+        self.assertEqual(say.styled("info", "First:\nsecond", colors=None), "⬢ First:\n  second")
+        self.assertEqual(say.styled("info", "First:\nsecond", colors="16"),
+                         "\x1b[95m⬢\x1b[0m \x1b[97mFirst:\x1b[0m\n  \x1b[97msecond\x1b[0m")
 
     def test_hint_plain_is_the_one_of_ui_sh(self):
         out = io.StringIO()
@@ -144,16 +155,69 @@ class SayTest(unittest.TestCase):
         say.ok("done", stream=out)
         self.assertIn("✓", out.getvalue())
 
-    def test_no_color_and_gum_off_stay_plain(self):
-        for variable, value in (("NO_COLOR", "1"), ("TPOT_GUM", "off")):
-            with self.subTest(variable=variable):
-                os.environ[variable] = value
-                try:
-                    out = Tty()
-                    say.ok("done", stream=out)
-                    self.assertEqual(out.getvalue(), "### [OK] - done\n")
-                finally:
-                    os.environ.pop(variable)
+    def test_gum_off_stays_plain(self):
+        os.environ["TPOT_GUM"] = "off"
+        try:
+            out = Tty()
+            say.ok("done", stream=out)
+            self.assertEqual(out.getvalue(), "### [OK] - done\n")
+        finally:
+            os.environ.pop("TPOT_GUM")
+
+    def test_no_color_keeps_the_glyphs(self):
+        """NO_COLOR at a terminal: the form of gum without colours, as ui.sh with gum (gum leaves the
+        colours out); NO_COLOR counts when it is not empty, as for Rich (the tables of tpot status) and
+        no-color.org: an empty one paints."""
+        keep = os.environ.get("NO_COLOR")
+        self.addCleanup(lambda: os.environ.__setitem__("NO_COLOR", keep) if keep is not None
+                        else os.environ.pop("NO_COLOR", None))
+        os.environ.pop("TPOT_GUM", None)
+        for value in ("1", "yes", "0"):
+            with self.subTest(NO_COLOR=value):
+                os.environ["NO_COLOR"] = value
+                out = Tty()
+                say.ok("done", stream=out)
+                say.info("step", stream=out)
+                say.warn("careful", stream=out)
+                say.hint("a hint", stream=out)
+                self.assertEqual(out.getvalue(), "✓ done\n⬢ step\n! careful\n    a hint\n")
+                self.assertIsNone(say.depth(dict(os.environ)))
+        os.environ["NO_COLOR"] = ""
+        out = Tty()
+        say.ok("done", stream=out)
+        self.assertIn("\x1b[", out.getvalue())
+        self.assertIn("✓", out.getvalue())
+
+    @unittest.skipUnless(importlib.util.find_spec("rich"), "Rich is not installed")
+    def test_no_color_is_the_one_of_the_tables(self):
+        """say and a Rich console of prefs.console_color_system (the tables of tpot status / ps / images)
+        paint or leave the colours out alike, for NO_COLOR unset, empty and set."""
+        from rich.console import Console
+        from tpotctl import prefs
+        keep = {k: os.environ.get(k) for k in ("NO_COLOR", "TERM", "TPOT_GUM", "COLORTERM")}
+
+        def restore():
+            for key, value in keep.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+        self.addCleanup(restore)
+        os.environ.pop("TPOT_GUM", None)
+        os.environ["TERM"] = "xterm-256color"
+        for value in (None, "", "1"):
+            with self.subTest(NO_COLOR=value):
+                if value is None:
+                    os.environ.pop("NO_COLOR", None)
+                else:
+                    os.environ["NO_COLOR"] = value
+                out = Tty()
+                say.ok("done", stream=out)
+                table = Tty()
+                Console(file=table, force_terminal=True, color_system=prefs.console_color_system(table)).print(
+                    "[red]done[/red]")
+                self.assertEqual("\x1b[" in out.getvalue(), "\x1b[" in table.getvalue(),
+                                 (out.getvalue(), table.getvalue()))
 
     def test_error_goes_to_stderr_by_default(self):
         import contextlib

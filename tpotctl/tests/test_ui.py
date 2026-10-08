@@ -7,6 +7,7 @@ tpot.json or .env of the user running the tests, nothing calls docker or downloa
 """
 
 import fcntl
+import itertools
 import json
 import os
 import pty
@@ -51,6 +52,8 @@ def _bash_major(bash):
 # (fuUI_INIT, fuUI_COLORS, fuUI_HELP, fuUI_USAGE_ERROR, fuUI_LINUX_ONLY) works with it too
 OLD_BASH = next((b for b in ("/bin/bash", BASH) if b and os.path.exists(b) and _bash_major(b) == 3), None)
 BASHES = tuple(b for b in (BASH, OLD_BASH) if b)
+# the locale of the tests, and the C locale of a host without a UTF-8 one (LC_ALL wins over LANG)
+LOCALES = ({}, {"LC_ALL": "C"})
 
 SGR = re.compile(r"\x1b\[([0-9;]*)m")
 # the 16 colour SGR codes as the VGA colours of splash_anim.colours("16")
@@ -142,7 +145,10 @@ class Sandbox:
         return env
 
     def prefs(self, text):
-        with open(os.path.join(self.config, "tpotce", "tpot.json"), "w", encoding="utf-8", newline="") as out:
+        """The tpot.json as it is; a lone surrogate \\udcXX is the byte XX (surrogateescape): a file
+        that is no UTF-8."""
+        with open(os.path.join(self.config, "tpotce", "tpot.json"), "w", encoding="utf-8", newline="",
+                  errors="surrogateescape") as out:
             out.write(text)
 
     def checkout(self, version=None, env=None):
@@ -447,7 +453,10 @@ class ColoursTest(unittest.TestCase):
              WT_SESSION not empty                                                   -> truecolor
           6. TERM ends in 256color, or (not in tmux or screen) TERM_PROGRAM Apple_Terminal -> 256
           7. anything else                                                          -> 16
-        Any case means A-Z only. Every bash there is: 4 or newer and 3 (/bin/bash of macOS).
+        Any case means A-Z only. A lone surrogate \\udcXX in prefs_text is the byte XX (surrogateescape):
+        a tpot.json that is no UTF-8 does not count. Every bash there is: 4 or newer and 3 (/bin/bash
+        of macOS), each in the locale of the tests and in the C locale (a host without a UTF-8 locale,
+        LC_ALL=C): the grammar of tpot.json is the same in every locale.
         """
         with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "color_cases.json"),
                   encoding="utf-8") as handle:
@@ -459,8 +468,8 @@ class ColoursTest(unittest.TestCase):
             self.assertEqual(set(case) - {"env", "expect", "note", "prefs", "prefs_text"}, set(), case)
             self.assertFalse({"prefs", "prefs_text"} <= set(case), case)
             self.assertIn(case["expect"], ("truecolor", "256", "16"), case)
-            for bash in BASHES:
-                with self.subTest(note=case["note"], bash=bash):
+            for bash, locale in itertools.product(BASHES, LOCALES):
+                with self.subTest(note=case["note"], bash=bash, locale=locale):
                     if "prefs_text" in case:
                         sandbox.prefs(case["prefs_text"])
                     elif "prefs" in case:
@@ -469,6 +478,7 @@ class ColoursTest(unittest.TestCase):
                         os.remove(prefs)
                     env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": sandbox.home,
                            "XDG_CONFIG_HOME": sandbox.config, "LANG": os.environ.get("LANG", "en_US.UTF-8")}
+                    env.update(locale)
                     env.update(case["env"])
                     # bash sets TERM=dumb (not exported) when it starts without one: unset is unset
                     result = run(("" if "TERM" in case["env"] else "unset TERM; ") + "fuUI_COLORS", env, bash=bash)
@@ -566,6 +576,123 @@ class ColoursTest(unittest.TestCase):
                 self.assertIn(sgr, out)
                 for other in {"38;5;", "\x1b[9", "38;2;"} - {sgr}:
                     self.assertNotIn(other, out)
+
+    # the colours of tpot for gum by the depth of the rule: the hex values (true colour), the entries of
+    # theme.PALETTE_256 and the ANSI colours of theme.PALETTE_16 as gum takes them (an index)
+    GUM_COLOURS = {"truecolor": {"magenta": "#E20074", "glass": "#ECEFF9", "ash": "#A2A2AD", "warn": "#F4B400",
+                                 "error": "#E8453C", "ok": "#3FA34D", "petrol": "#014463"},
+                   "256": {"magenta": "162", "glass": "231", "ash": "248", "warn": "214", "error": "167",
+                           "ok": "71", "petrol": "23"},
+                   "16": {"magenta": "13", "glass": "15", "ash": "7", "warn": "11", "error": "9", "ok": "10",
+                          "petrol": "6"}}
+
+    def test_gum_gets_the_palette_of_the_rule(self):
+        """With 256 or 16 colours gum gets the entries of the palettes of the T-Pot Manager, not the hex
+        values (lipgloss would take the nearest: magenta and the yellow of a warning turn bright red
+        with 16); only the values of colour options, a text stays as it is."""
+        sandbox = Sandbox(self)
+        folder = os.path.join(sandbox.home, "data", "tpotce", "bin")
+        os.makedirs(folder)
+        shutil.move(fake_gum(sandbox.home), os.path.join(folder, "gum"))
+        calls = os.path.join(sandbox.home, "gum.calls")
+        script = ('fuUI_INIT; fuUI_INFO "#E20074"; fuUI_WARN "careful"; fuUI_ERROR "bad"; fuUI_HINT "a hint"; '
+                  'fuUI_OK "fine"; fuUI_CONFIRM "Go?"')
+        for extra, depth in (({"TERM": "xterm"}, "16"), ({"TERM": "xterm-256color"}, "256"),
+                             ({"TERM": "xterm-256color", "COLORTERM": "truecolor"}, "truecolor"),
+                             ({"TERM": "xterm", "TPOT_COLORS": "256"}, "256")):
+            with self.subTest(env=extra):
+                if os.path.exists(calls):
+                    os.remove(calls)
+                at_terminal(script, sandbox.env(**extra), 100, 30)
+                blocks = [block.split("\n")[:-1] for block in read(calls).split("--- call\n")[2:]]
+                colours = {}
+                for args in blocks:
+                    for i, arg in enumerate(args[:args.index("--")]):
+                        if arg.endswith(("foreground", "background")):
+                            colours.setdefault(args[i + 1], []).append(arg)
+                want = self.GUM_COLOURS[depth]
+                self.assertEqual(set(colours), {want[name] for name in
+                                                ("magenta", "glass", "ash", "warn", "error", "ok", "petrol")})
+                self.assertEqual(blocks[1][blocks[1].index("--") + 1:], ["#E20074"])   # the text of INFO
+
+    def test_gum_colour_tables_are_the_palettes_of_the_manager(self):
+        ui = read(UI_SH)
+        palettes = ui_logo.theme_palettes()
+        for depth, table in (("256", "myUI_GUM_256"), ("16", "myUI_GUM_16")):
+            pairs = dict(item.split("=") for item in re.search(rf'^{table}="([^"]*)"', ui, re.M).group(1).split())
+            with self.subTest(depth=depth):
+                self.assertEqual(set(pairs), set(self.GUM_COLOURS["truecolor"].values()))
+                for name, colour in self.GUM_COLOURS["truecolor"].items():
+                    entry = palettes[depth][name.upper()]
+                    index = ui_logo.xterm_index(entry) if depth == "256" else ui_logo.sgr16(entry)
+                    if depth == "16":
+                        index = index - 30 if index < 90 else index - 82
+                    self.assertEqual(pairs[colour], str(index), name)
+                    self.assertEqual(self.GUM_COLOURS[depth][name], str(index), name)
+
+    @unittest.skipUnless(shutil.which("gum") and "2.0.2" in subprocess.run(
+        [shutil.which("gum") or "true", "--version"], capture_output=True, text=True).stdout, "no gum 2.0.2")
+    def test_real_gum_keeps_magenta_with_16_colours(self):
+        """The real gum 2.0.2 at TERM=xterm (PuTTY): magenta is bright magenta (95) and a warning
+        yellow (93), nothing turns bright red (91) but an error; 256 colours: the entries of the
+        palette (glass 231)."""
+        sandbox = Sandbox(self)
+        folder = os.path.join(sandbox.home, "data", "tpotce", "bin")
+        os.makedirs(folder)
+        os.symlink(shutil.which("gum"), os.path.join(folder, "gum"))
+        script = 'fuUI_INIT; [ -n "${myUI_GUM}" ] && fuUI_INFO "hello" && fuUI_WARN "careful" && fuUI_HINT "x"'
+        out = at_terminal(script, sandbox.env(TERM="xterm"), 100, 30)
+        self.assertIn("hello", out)
+        for sgr in ("\x1b[95m", "\x1b[97m", "\x1b[93m", "\x1b[37m"):
+            self.assertIn(sgr, out)
+        self.assertNotIn("91m", out)
+        out = at_terminal(script, sandbox.env(TERM="xterm-256color"), 100, 30)
+        for sgr in ("38;5;162", "38;5;231", "38;5;214", "38;5;248"):
+            self.assertIn(sgr, out)
+        self.assertNotIn("38;5;255", out)
+        out = at_terminal('fuUI_INIT; fuUI_ERROR "bad"', sandbox.env(TERM="xterm"), 100, 30)
+        self.assertIn("91m", out)
+
+    def test_gum_follows_no_color(self):
+        """NO_COLOR counts when it is not empty (no-color.org, Rich, say): gum gets NO_COLOR=1 then
+        (gum itself only takes 1 or true), an empty one stays."""
+        sandbox = Sandbox(self)
+        folder = os.path.join(sandbox.home, "data", "tpotce", "bin")
+        os.makedirs(folder)
+        shutil.move(fake_gum(sandbox.home), os.path.join(folder, "gum"))
+        record = os.path.join(sandbox.home, "gum.nocolor")
+        for value, want in ((None, "(unset)"), ("", ""), ("1", "1"), ("yes", "1"), ("0", "1"), ("false", "1")):
+            with self.subTest(NO_COLOR=value):
+                if os.path.exists(record):
+                    os.remove(record)
+                at_terminal('fuUI_INIT; fuUI_WARN "careful"', sandbox.env(NO_COLOR=value), 100, 30)
+                self.assertEqual(read(record).split("\n")[1:-1], [f"NO_COLOR={want}"])
+
+    @unittest.skipUnless(shutil.which("gum") and "2.0.2" in subprocess.run(
+        [shutil.which("gum") or "true", "--version"], capture_output=True, text=True).stdout, "no gum 2.0.2")
+    def test_real_gum_follows_no_color(self):
+        sandbox = Sandbox(self)
+        folder = os.path.join(sandbox.home, "data", "tpotce", "bin")
+        os.makedirs(folder)
+        os.symlink(shutil.which("gum"), os.path.join(folder, "gum"))
+        script = 'fuUI_INIT; [ -n "${myUI_GUM}" ] && fuUI_WARN "careful"'
+        for value, painted in (("yes", False), ("1", False), ("", True)):
+            with self.subTest(NO_COLOR=value):
+                out = at_terminal(script, sandbox.env(NO_COLOR=value), 100, 30)
+                self.assertIn("careful", out)
+                self.assertEqual("38;5;" in out, painted, repr(out))
+
+    def test_pref_keeps_the_locale_of_the_caller(self):
+        """fuUI_PREF reads tpot.json in the C locale (its bytes), the caller keeps its own: characters
+        are counted as before (fuUI_HANG, fuUI_HELP), its LC_ALL is the one it had."""
+        sandbox = Sandbox(self)
+        sandbox.prefs('{"name": "Größe", "colors": "16"}')
+        script = 'x="äö"; fuUI_PREF colors; echo "${#x} ${LC_ALL-unset}"'
+        for bash in BASHES:
+            for locale, want in (({}, "unset"), ({"LC_ALL": os.environ.get("LANG", "en_US.UTF-8")}, None)):
+                with self.subTest(bash=bash, locale=locale):
+                    result = run(script, sandbox.env(**locale), bash=bash)
+                    self.assertEqual(result.stdout, f"16\n2 {want or locale['LC_ALL']}\n")
 
     def test_colour_detection_reads_the_config_of_xdg(self):
         sandbox = Sandbox(self)
@@ -704,7 +831,7 @@ class LogoAtATerminalTest(unittest.TestCase):
             "a dumb terminal in capitals": (self.BANNER, self.env(TERM="DUMB"), (120, 49)),
             "an unknown terminal": (self.BANNER, self.env(TERM="unknown"), (120, 49)),
             "NO_COLOR": (self.BANNER, self.env(NO_COLOR="1"), (120, 49)),
-            "NO_COLOR empty": (self.BANNER, self.env(NO_COLOR=""), (120, 49)),
+            "NO_COLOR 0": (self.BANNER, self.env(NO_COLOR="0"), (120, 49)),
             "shown before": (self.BANNER, self.env(TPOT_LOGO_SHOWN="1"), (120, 49)),
             "the ascii icons": (self.BANNER, self.env(TPOT_ICONS="ascii"), (120, 49)),
             "too narrow": (self.BANNER, self.env(), (79, 49)),
@@ -715,6 +842,8 @@ class LogoAtATerminalTest(unittest.TestCase):
                 out = at_terminal(script, env, cols, rows)
                 self.assertNotIn("telekom security", out)
                 self.assertIn("T-Pot Test", out)
+        with self.subTest("NO_COLOR empty is no NO_COLOR (no-color.org, Rich, say)"):
+            self.assertIn("telekom security", at_terminal(self.BANNER, self.env(NO_COLOR=""), 120, 49))
         with self.subTest("the ascii icons of tpot.json"):
             sandbox.prefs('{"icons": "ascii", "colors": "auto"}')
             self.assertNotIn("telekom security", at_terminal(self.BANNER, self.env(), 120, 49))
@@ -850,6 +979,46 @@ class BannerTest(unittest.TestCase):
         self.assertEqual((lines[0], lines[-1]), ("⬢ First line:", "  Last one."))
         self.assert_hanging(lines[1:-1], "  ", "    ", width=60)
 
+    def test_hang_keeps_the_indent_of_a_line(self):
+        """A too wide line that is indented keeps its indent, its continuations hang two further; the
+        lines stay within the room, the words in their order."""
+        sandbox = Sandbox(self)
+        text = "First line:\n  indented line that is far too wide for the room here\nshort"
+        result = run("fuUI_HANG 30 $'" + text.replace("\n", "\\n") + "'", sandbox.env())
+        lines = result.stdout.split("\n")[:-1]
+        self.assertEqual(lines, ["First line:", "  indented line that is far", "    too wide for the room here",
+                                 "short"])
+        # deeper, and at once too wide in INFO (### before every line, the indent after it)
+        text = "      " + " ".join(["word"] * 20)
+        out = at_terminal(f"fuUI_INFO '{text}'", sandbox.env(TPOT_GUM="off"), 40, 24)
+        lines = out.split("\n")[:-1]
+        self.assertGreater(len(lines), 1)
+        self.assertTrue(all(len(line) <= 40 for line in lines), lines)
+        self.assertTrue(lines[0].startswith("###       word"), lines)
+        self.assertTrue(all(line.startswith("###         word") for line in lines[1:]), lines)
+        self.assertEqual(" ".join(line[4:] for line in lines).split(), text.split())
+
+    def test_the_lines_of_a_text_look_alike(self):
+        """A text of more lines has one layout, whether it fits or not and with or without a terminal:
+        plain text puts ### before every line, gum the sign before the first and two spaces before the
+        others (the indent of a line that is broken goes after that)."""
+        sandbox = Sandbox(self)
+        text = "\"First line:\"$'\\n'\"Second line.\""
+        want = "### First line:\n### Second line.\n"
+        self.assertEqual(run(f"fuUI_INFO {text}", sandbox.env()).stdout, want)
+        self.assertEqual(at_terminal(f"fuUI_INFO {text}", sandbox.env(TPOT_GUM="off"), 80, 24), want)
+        self.assertEqual(run(f"fuUI_BANNER Builder {text}", sandbox.env()).stdout,
+                         "\n### T-Pot Builder\n" + want + "\n")
+        self.assertEqual(at_terminal(f"fuUI_BANNER Builder {text}", sandbox.env(TPOT_GUM="off"), 80, 24),
+                         "\n### T-Pot Builder\n" + want + "\n")
+        gum = fake_gum(sandbox.home)
+        self.assertEqual(plain(run(f"myUI_GUM='{gum}'; fuUI_INFO {text}", sandbox.env()).stdout),
+                         "⬢ First line:\n  Second line.\n")
+        out = at_terminal(f"myUI_GUM='{gum}'; fuUI_INFO {text}; echo end", sandbox.env(), 80, 24)
+        self.assertEqual(plain(out), "⬢ First line:\n  Second line.\nend\n")
+        out = at_terminal(f"myUI_GUM='{gum}'; fuUI_BANNER Builder {text} 'last'", sandbox.env(), 80, 24)
+        self.assertIn("\nT-Pot Builder\nFirst line:\nSecond line.\nlast\n", plain(out))
+
     def test_gum_banner_shows_the_wordmark(self):
         sandbox = Sandbox(self)
         gum = fake_gum(sandbox.home)
@@ -861,7 +1030,8 @@ class BannerTest(unittest.TestCase):
 
 
 def fake_gum(home, output=""):
-    """A gum that writes its argv (one per line, a call per block) to gum.calls and prints output
+    """A gum that writes its argv (one per line, a call per block) to gum.calls (COLORTERM to gum.env,
+    COLORTERM and TERM to gum.term, NO_COLOR to gum.nocolor, a line per call) and prints output
     for choose / filter; style prints its texts; spin runs its command like gum, or ends with
     FAKE_GUM_SPIN_RC as gum does on Ctrl+C (130) when its argv has FAKE_GUM_STOP (any spin without
     it): at once, or once the file FAKE_GUM_WAIT has something in it (the step is under way, 20 s
@@ -872,6 +1042,7 @@ def fake_gum(home, output=""):
                   f'{{ echo "--- call"; for a in "$@"; do echo "$a"; done; }} >> "{home}/gum.calls"\n'
                   f'echo "COLORTERM=${{COLORTERM-(unset)}}" >> "{home}/gum.env"\n'
                   f'echo "COLORTERM=${{COLORTERM-(unset)}} TERM=${{TERM-(unset)}}" >> "{home}/gum.term"\n'
+                  f'echo "NO_COLOR=${{NO_COLOR-(unset)}}" >> "{home}/gum.nocolor"\n'
                   'case "$1" in\n'
                   '  --version) echo "gum version v2.0.2" ;;\n'
                   '  choose|filter) printf "%s" "$FAKE_GUM_OUT"; exit "${FAKE_GUM_RC:-0}" ;;\n'
@@ -964,6 +1135,10 @@ class HelpersTest(unittest.TestCase):
         self.assertEqual(plain(out), HELP_TEXT)
         out = at_terminal(f'myUI_GUM="{gum}"\n' + HELP, self.sandbox.env(NO_COLOR="1"), 100, 40)
         self.assertEqual(out, HELP_TEXT)
+        out = at_terminal(f'myUI_GUM="{gum}"\n' + HELP, self.sandbox.env(NO_COLOR="no"), 100, 40)
+        self.assertEqual(out, HELP_TEXT)                                 # any value but an empty one
+        out = at_terminal(f'myUI_GUM="{gum}"\n' + HELP, self.sandbox.env(NO_COLOR=""), 100, 40)
+        self.assertIn("\x1b[", out)                                       # empty: no NO_COLOR
         # a dumb terminal has no colours, whatever it inherited (gum leaves them out there too)
         for term in ("dumb", "unknown", "DUMB"):
             with self.subTest(term=term):
@@ -1156,6 +1331,110 @@ class HelpersTest(unittest.TestCase):
         self.assertEqual(out, "rc=130\n")
         out, _args = self.gum_choose("", "Not offered\n", choose=self.PICK)
         self.assertEqual(out, "rc=1\n")
+
+    def test_choose_with_a_default_plain(self):
+        """fuUI_CHOOSE --selected <value>: the item of that value is the default, shown in the question,
+        enter takes it; another answer goes as without it. A value no item has: no default."""
+        pick = self.PICK.replace("fuUI_CHOOSE ", "fuUI_CHOOSE {options} ", 1) + '; echo "rc=$?"'
+        for options, answer, value in (("--selected 3", "\n", "3"), ("--selected 3", "1\n", "1"),
+                                       ("--selected keep", "\n", "keep"), ("--selected keep", " \n", "keep"),
+                                       ("--selected 3", "x\n\n", "3"), ("--selected other", "\n", "other"),
+                                       ("--selected nope", "\n2\n", "2"), ("", "\n2\n", "2")):
+            with self.subTest(options=options, answer=answer):
+                result = self.run_ui(pick.format(options=options), stdin=answer)
+                self.assertEqual(result.stdout, f"{value}\nrc=0\n")
+                self.assertIn("###   3) Three: a b\n###   4) Keep localhost:5000/tpot\n", result.stderr)
+        # the question names the default; without one it is the one of before
+        script = 'fuUI_CHOOSE {options} "Jobs" "1:1" "2:2" "4:4" "8:8"; echo "rc=$?"'
+        for options, prompt, value in (("--selected 2", "### Choice (1-4, enter = 2): ", "2"),
+                                       ("--selected 8", "### Choice (1-4, enter = 4): ", "8"),
+                                       ("", "### Choice (1-4): ", "4")):
+            with self.subTest(options=options):
+                # enter, then 3 (for the question without a default, which asks again)
+                out = at_terminal(script.format(options=options), self.sandbox.env(TPOT_GUM="off"), 100, 30,
+                                  keys=b"\r3\r")
+                self.assertIn(prompt, out)
+                self.assertRegex(out, rf"(^|\n| ){value}\r?\nrc=0\r?\n$")
+        self.assertEqual(self.run_ui(pick.format(options="--selected 3"), stdin="").stdout, "rc=1\n")
+
+    def test_choose_with_a_default_gum(self):
+        """gum gets the label of the default as --selected (a comma as \\, as gum splits there); a label
+        gum cannot take alone (*, or one with \\,) goes without one; without --selected none."""
+        pick = self.PICK.replace("fuUI_CHOOSE ", "fuUI_CHOOSE {options} ", 1)
+        for options, want in (("--selected 3", ["Three: a b"]), ("--selected 2", ["Two\\, too"]),
+                              ("--selected keep", ["Keep localhost:5000/tpot"]), ("--selected other", ["One"]),
+                              ("--selected nope", []), ("", [])):
+            with self.subTest(options=options):
+                out, args = self.gum_choose("", "Three: a b\n", choose=pick.replace("{options}", options))
+                self.assertEqual(out, "3\nrc=0\n")
+                self.assertEqual(args[0], "choose")
+                self.assertEqual(selected(args), want)
+                self.assertEqual(args[args.index("--") + 1:],
+                                 ["One", "Two, too", "Three: a b", "Keep localhost:5000/tpot", "One"])
+        odd = 'fuUI_CHOOSE {options} "Odd" "*:star" "a\\\\,b:ab" "Plain:plain"'
+        for options, want in (("--selected star", []), ("--selected ab", []), ("--selected plain", ["Plain"])):
+            with self.subTest(options=options):
+                _out, args = self.gum_choose(options, "Plain\n", choose=odd)
+                self.assertEqual(selected(args), want)
+
+    @unittest.skipUnless(shutil.which("gum") and "2.0.2" in subprocess.run(
+        [shutil.which("gum") or "true", "--version"], capture_output=True, text=True).stdout, "no gum 2.0.2")
+    def test_choose_with_a_default_real_gum(self):
+        """The real gum 2.0.2 starts on the default: enter takes it, also with a comma in its label."""
+        for options, value in (("--selected other", "other"), ("--selected two", "two"), ("", "keep")):
+            with self.subTest(options=options):
+                script = (f'myUI_GUM="{shutil.which("gum")}"\n'
+                          f'fuUI_CHOOSE {options} "Pick" "Keep localhost:5000/tpot:keep" "Two, too:two" '
+                          '"Other:other"; echo "rc=$?"')
+                out = at_terminal(script, self.sandbox.env(), 100, 40, stdout_tty=False, keys=b"\r")
+                self.assertTrue(out.endswith(f"{value}\nrc=0\n"), repr(out[-300:]))
+
+    CONFIRM = 'fuUI_CONFIRM {options} "Push the images?" Push Skip; echo "rc=$?"'
+
+    def test_confirm_with_a_default_plain(self):
+        """fuUI_CONFIRM --default yes|no: enter takes the default, (Y/n) or (y/N) says which; y and n as
+        before. Without --default the question of before: (y/n), enter is no answer."""
+        for options, answer, rc in (("--default no", "\n", 1), ("--default no", "y\n", 0), ("--default no", "n\n", 1),
+                                    ("--default yes", "\n", 0), ("--default yes", "n\n", 1),
+                                    ("--default no", "x\n\n", 1), ("--default yes", "", 1),
+                                    ("", "\ny\n", 0), ("", "\nn\n", 1), ("", "\n", 1)):
+            with self.subTest(options=options, answer=answer):
+                result = self.run_ui(self.CONFIRM.format(options=options), stdin=answer)
+                self.assertEqual(result.stdout, f"rc={rc}\n")
+        for options, prompt in (("--default no", "### Push the images? (y/N) "),
+                                ("--default yes", "### Push the images? (Y/n) "),
+                                ("", "### Push the images? (y/n) ")):
+            with self.subTest(options=options):
+                # enter, then n (for the question without a default, which asks again)
+                out = at_terminal(self.CONFIRM.format(options=options), self.sandbox.env(TPOT_GUM="off"), 100, 30,
+                                  keys=b"\rn\r")
+                self.assertIn(prompt, out)
+                self.assertRegex(out, "rc=1" if options != "--default yes" else "rc=0")
+
+    def test_confirm_with_a_default_gum(self):
+        gum = fake_gum(self.sandbox.home)
+        calls = os.path.join(self.sandbox.home, "gum.calls")
+        for options, flags in (("--default no", ["--default=false"]), ("--default yes", []), ("", [])):
+            with self.subTest(options=options):
+                if os.path.exists(calls):
+                    os.remove(calls)
+                at_terminal(f'myUI_GUM="{gum}"\n' + self.CONFIRM.format(options=options), self.sandbox.env(), 100, 30)
+                args = read(calls).split("\n")[1:-1]
+                self.assertEqual(args[0], "confirm")
+                self.assertEqual([a for a in args if a.startswith("--default")], flags)
+                self.assertEqual(args[args.index("--affirmative") + 1:args.index("--affirmative") + 4],
+                                 ["Push", "--negative", "Skip"])
+                self.assertEqual(args[args.index("--") + 1:], ["Push the images?"])
+
+    @unittest.skipUnless(shutil.which("gum") and "2.0.2" in subprocess.run(
+        [shutil.which("gum") or "true", "--version"], capture_output=True, text=True).stdout, "no gum 2.0.2")
+    def test_confirm_with_a_default_real_gum(self):
+        """The real gum 2.0.2: enter takes the default button."""
+        for options, rc in (("--default no", 1), ("--default yes", 0), ("", 0)):
+            with self.subTest(options=options):
+                script = f'myUI_GUM="{shutil.which("gum")}"\n' + self.CONFIRM.format(options=options)
+                out = at_terminal(script, self.sandbox.env(), 100, 30, keys=b"\r")
+                self.assertTrue(out.endswith(f"rc={rc}\r\n") or out.endswith(f"rc={rc}\n"), out[-200:])
 
     def test_input_under_set_u(self):
         """fuUI_INPUT without its second argument under set -u (ui.sh, the plain fallback, gum)."""
@@ -1486,6 +1765,13 @@ class OldBashTest(unittest.TestCase):
                     self.assertNotIn("goes on", out)
                 else:
                     self.assertTrue(out.endswith("goes on\n"), out[-200:])
+        # 16 colours: gum gets the ANSI colours of the palette (fuUI_GUM), bash 3.2 too
+        calls = os.path.join(self.sandbox.home, "gum.calls")
+        os.remove(calls)
+        out = at_terminal(self.SCRIPT, self.env("Darwin", TPOT_COLORS="16"), 100, 40, bash=OLD_BASH)
+        self.assertNotIn("ui.sh: line", out)
+        self.assertIn("✗ update.sh does not run on macOS.", out)
+        self.assertIn("style\n--foreground\n9\n--bold\n--\n✗ Unknown option -Z.\n", read(calls))
 
     def test_the_way_to_linux_only_without_a_terminal(self):
         fallback = os.path.join(self.sandbox.home, "fallback.sh")
@@ -1592,12 +1878,19 @@ class FallbackTest(unittest.TestCase):
             'myLINE=keep; fuUI_BANNER "Installer" "one" "two  spaces"; echo "${myLINE}"',
             'myUI_LOGO=1; fuUI_BANNER "Updater"; fuUI_BANNER "Only"',
             'fuUI_INFO "a  b" c; fuUI_OK done; fuUI_WARN "careful: x"; fuUI_ERROR "bad"; echo "rc=$?"',
+            'fuUI_INFO "First:"$\'\\n\'"  second"; fuUI_BANNER "Builder" "one"$\'\\n\'"two" "three"',
+            'fuUI_INFO ""; fuUI_INFO; fuUI_BANNER "Empty" ""',
             'myLINE=keep; fuUI_HINT "one" "two three"; fuUI_HINT; echo "${myLINE}"',
         ]
         stdin_calls = [
             ('fuUI_CONFIRM "Go on?"; echo "rc=$?"', ("y\n", "n\n", "yes\nY\nn\n", "x\ny\n", "")),
             ('fuUI_CONFIRM "Go on?" Sure Never; echo "rc=$?"', ("y\n",)),
+            ('fuUI_CONFIRM --default no "Go on?" Sure Never; echo "rc=$?"', ("y\n", "\n", "x\n\n", "n\n", "")),
+            ('fuUI_CONFIRM --default yes "Go on?"; echo "rc=$?"', ("\n", "n\n", "maybe\ny\n", "")),
             ('fuUI_CHOOSE "Pick" "One:1" "Two, too:2" "Three: a b:3"; echo "rc=$?"', ("2\n", "0\n9\nx\n3\n", "")),
+            ('fuUI_CHOOSE --selected 2 "Pick" "One:1" "Two, too:2" "Three: a b:3"; echo "rc=$?"',
+             ("\n", "3\n", " \n", "0\n\n", "")),
+            ('fuUI_CHOOSE --selected 9 "Pick" "One:1" "Two, too:2"; echo "rc=$?"', ("\n1\n", "")),
             ('myV=$(fuUI_INPUT "Name:"); echo "rc=$? [${myV}]"', ("someone\n", "", "  a b \n")),
             ('myV=$(fuUI_INPUT "Password:" password); echo "rc=$? [${myV}]"', ("secret\n", "")),
         ]
@@ -1697,7 +1990,7 @@ class FallbackTest(unittest.TestCase):
             os.chmod(copy, 0o750)
 
         # a changed helper is found and written anew; mode and the rest of the file stay
-        changed = text.replace('fuUI_INFO () { echo "### $*"; }', 'fuUI_INFO () { echo "## $*"; }')
+        changed = text.replace('    fuUI_OK () { echo "### [OK] - $*"; }', '    fuUI_OK () { echo "## [OK] - $*"; }')
         self.assertNotEqual(changed, text)
         put(changed)
         self.assertEqual(ui_logo.check_fallback([copy]), [copy])

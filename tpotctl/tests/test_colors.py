@@ -17,6 +17,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest import mock
 
@@ -32,6 +33,8 @@ UI_SH = os.path.join(REPO, "installer", "lib", "ui.sh")
 CASES = os.path.join(REPO, "tpotctl", "tests", "color_cases.json")
 TEXTUAL = importlib.util.find_spec("textual") is not None
 # what a terminal may say of itself, and the choices of the user: the keys the rule looks at
+# the locale of the tests, and the C locale of a host without a UTF-8 one (LC_ALL wins over LANG)
+LOCALES = ({}, {"LC_ALL": "C"})
 RULE_KEYS = ("TPOT_COLORS", "COLORTERM", "TERM", "TMUX", "STY", "TERM_PROGRAM", "LC_TERMINAL", "VTE_VERSION",
              "KONSOLE_VERSION", "WT_SESSION", "NO_COLOR")
 
@@ -90,7 +93,8 @@ class Sandbox:
             if os.path.exists(path):
                 os.remove(path)
             return
-        with open(path, "w", encoding="utf-8", newline="") as out:
+        # a lone surrogate \udcXX of a str is the byte XX (surrogateescape): a file that is no UTF-8
+        with open(path, "w", encoding="utf-8", newline="", errors="surrogateescape") as out:
             if isinstance(data, str):
                 out.write(data)
             else:
@@ -115,10 +119,11 @@ class Sandbox:
         environ.update(env)
         return prefs.detect_colors(environ)
 
-    def bash(self, bash, runs):
+    def bash(self, bash, runs, locale=None):
         """fuUI_COLORS for every (env, tpot.json) of runs, in one bash: before each run every key of
         any run is unset, then the keys of its env are set (the bash itself starts with none of them),
-        XDG_CONFIG_HOME points to a folder with the tpot.json of the run."""
+        XDG_CONFIG_HOME points to a folder with the tpot.json of the run. locale: more of the
+        environment of the bash (LC_ALL=C)."""
         keys = sorted(set(RULE_KEYS).union(*(env for env, _data in runs)))
         lines = [f'source "{UI_SH}"']
         for env, data in runs:
@@ -128,6 +133,7 @@ class Sandbox:
             lines.append("fuUI_COLORS")
         environ = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "LANG": os.environ.get("LANG", "en_US.UTF-8")}
         environ.update(self.base())
+        environ.update(locale or {})
         out = subprocess.run([bash, "-c", "\n".join(lines)], env=environ, stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE, universal_newlines=True, timeout=300)
         return out.stdout.split(), out.stderr
@@ -145,6 +151,23 @@ class RuleTest(unittest.TestCase):
         for case in cases():
             with self.subTest(note=case["note"]):
                 self.assertEqual(sandbox.python(case["env"], case_file(case)), case["expect"], case["env"])
+
+    def test_reading_tpot_json_is_linear(self):
+        """read_file runs at every start of the launcher and every message of say: a file of many spaces
+        (no object, an object cut short, a valid one) takes no time; the grammar stays the same (the
+        cases, bash and Python agree on them: ParityTest)."""
+        sandbox = Sandbox(self)
+        for text, want in (("{" + " " * 200000, {}), ("{" + " " * 200000 + "x", {}),
+                           ('{"colors": "16"' + " " * 200000, {}), ('{"colors": "16"' + " " * 200000 + ",", {}),
+                           ('{"colors": "16"' + " " * 200000 + ", " + " " * 200000 + "}", {}),
+                           ('{"colors"' + " " * 200000 + ': "16"}', {"colors": "16"}),
+                           ("{" + " " * 200000 + "}", {}),
+                           ('{"colors": "16"' + " " * 200000 + "}" + " " * 200000, {"colors": "16"})):
+            with self.subTest(text=text[:20], size=len(text)):
+                sandbox.prefs(text)
+                start = time.monotonic()
+                self.assertEqual(prefs.read_file(sandbox.file), want)
+                self.assertLess(time.monotonic() - start, 0.5)
 
     def test_only_the_environment_given_counts(self):
         """A TPOT_COLORS or a tpot.json of the process running it does not reach another environment."""
@@ -195,19 +218,21 @@ class ParityTest(unittest.TestCase):
         if not self.bashes:
             self.skipTest("no bash")
 
-    def agree(self, runs):
+    def agree(self, runs, locales=({},)):
         sandbox = Sandbox(self)
         python = [sandbox.python(env, data) for env, data in runs]
-        for bash in self.bashes:
-            said, errors = sandbox.bash(bash, runs)
-            label = f"{bash} (bash {bash_version(bash)})"
+        for bash, locale in itertools.product(self.bashes, locales):
+            said, errors = sandbox.bash(bash, runs, locale)
+            label = f"{bash} (bash {bash_version(bash)}) {locale}"
             self.assertEqual(errors, "", label)
             self.assertEqual(len(said), len(runs), label)
             differ = [(env, data, b, p) for (env, data), b, p in zip(runs, said, python) if b != p]
             self.assertEqual(differ, [], f"{label} and Python differ (env, tpot.json, bash, Python)")
 
     def test_every_case(self):
-        self.agree([(case["env"], case_file(case)) for case in cases()])
+        """In the locale of the tests and in the C locale (a host without a UTF-8 locale): the bytes
+        of tpot.json count the same there (C1 controls, what is no UTF-8)."""
+        self.agree([(case["env"], case_file(case)) for case in cases()], LOCALES)
 
     def test_a_sample_of_terminals(self):
         values = {

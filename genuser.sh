@@ -8,7 +8,7 @@ if ! source "$HOME/tpotce/installer/lib/ui.sh" 2>/dev/null;
   then
 # >>> plain fallback
     fuUI_INIT () { return 0; }
-    fuUI_BANNER () { local myLINE; echo; echo "### T-Pot $1"; shift; for myLINE in "$@"; do echo "### ${myLINE}"; done; echo; }
+    fuUI_BANNER () { local myLINE; echo; echo "### T-Pot $1"; shift; for myLINE in "$@"; do echo "### ${myLINE//$'\n'/$'\n'### }"; done; echo; }
     fuUI_WARN () { echo "### [WARNING] - $*"; }
     fuUI_HINT () { local myLINE; for myLINE in "$@"; do echo "###   ${myLINE}"; done; }
     fuUI_HELP () {

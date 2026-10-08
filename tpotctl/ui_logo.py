@@ -313,30 +313,55 @@ def write(files: Sequence[str] = FILES) -> List[str]:
 # also breaks long lines, the fallback does not). python3 -m tpotctl.ui_logo writes the functions a
 # script of FALLBACK_FILES calls into its block, with the ones they call themselves, in this order.
 FALLBACK = r'''    fuUI_INIT () { return 0; }
-    fuUI_BANNER () { local myLINE; echo; echo "### T-Pot $1"; shift; for myLINE in "$@"; do echo "### ${myLINE}"; done; echo; }
-    fuUI_INFO () { echo "### $*"; }
+    fuUI_BANNER () { local myLINE; echo; echo "### T-Pot $1"; shift; for myLINE in "$@"; do echo "### ${myLINE//$'\n'/$'\n'### }"; done; echo; }
+    fuUI_INFO () { local myTEXT="$*"; echo "### ${myTEXT//$'\n'/$'\n'### }"; }
     fuUI_OK () { echo "### [OK] - $*"; }
     fuUI_WARN () { echo "### [WARNING] - $*"; }
     fuUI_ERROR () { echo "### [ERROR] - $*" >&2; }
     fuUI_HINT () { local myLINE; for myLINE in "$@"; do echo "###   ${myLINE}"; done; }
     fuUI_CONFIRM () {
-      local myANSWER=""
-      while [ "${myANSWER}" != "y" ] && [ "${myANSWER}" != "n" ]; do
-        read -rp "### $1 (y/n) " myANSWER || return 1
+      local myANSWER="" myDEFAULT="" myPROMPT="(y/n)"
+      if [ "${1:-}" = "--default" ]; then
+        case "${2:-}" in yes|no) myDEFAULT="$2" ;; esac
+        shift $(( $# < 2 ? $# : 2 ))
+      fi
+      case "${myDEFAULT}" in yes) myPROMPT="(Y/n)" ;; no) myPROMPT="(y/N)" ;; esac
+      while true; do
+        read -rp "### $1 ${myPROMPT} " myANSWER || return 1
+        [ -n "${myANSWER}" ] || myANSWER="${myDEFAULT:0:1}"
+        case "${myANSWER}" in y) return 0 ;; n) return 1 ;; esac
       done
-      [ "${myANSWER}" = "y" ]
     }
     fuUI_CHOOSE () {
-      local myHEADER="$1" myI=1 myITEM myPICK
-      shift
+      local myI=1 myITEM myPICK myDEFAULT="" myVALUE=""
+      if [ "${1:-}" = "--selected" ]; then
+        myVALUE="${2-}" myDEFAULT=0
+        shift $(( $# < 2 ? $# : 2 ))
+      fi
+      local myHEADER="${1:-}"
+      [ "$#" -eq 0 ] || shift
+      if [ -n "${myDEFAULT}" ]; then
+        myDEFAULT=""
+        for myITEM in "$@"; do
+          if [ "${myITEM##*:}" = "${myVALUE}" ]; then myDEFAULT="${myI}"; break; fi
+          myI=$((myI + 1))
+        done
+        myI=1
+      fi
       echo "### ${myHEADER}" >&2
       for myITEM in "$@"; do
         echo "###   ${myI}) ${myITEM%:*}" >&2
         myI=$((myI + 1))
       done
       while true; do
-        read -rp "### Choice (1-$#): " myPICK || return 1
-        if [[ "${myPICK}" =~ ^[0-9]+$ ]] && [ "${myPICK}" -ge 1 ] && [ "${myPICK}" -le "$#" ];
+        if [ -n "${myDEFAULT}" ];
+          then read -rp "### Choice (1-$#, enter = ${myDEFAULT}): " myPICK || return 1
+          else read -rp "### Choice (1-$#): " myPICK || return 1
+        fi
+        myPICK="${myPICK//[[:space:]]/}"
+        [ -n "${myPICK}" ] || myPICK="${myDEFAULT}"
+        [[ "${myPICK}" =~ ^[0-9]{1,9}$ ]] && myPICK=$((10#${myPICK})) || myPICK=0
+        if [ "${myPICK}" -ge 1 ] && [ "${myPICK}" -le "$#" ];
           then
             myITEM="${!myPICK}"
             echo "${myITEM##*:}"
