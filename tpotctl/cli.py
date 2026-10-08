@@ -248,7 +248,8 @@ def print_status() -> int:
     for label, value in rows:
         console.print(f"[bold {MAGENTA}]{label:<10}[/] {value}")
     try:
-        current = ops.containers()
+        # as the Status page: T-Pot's services, not the other containers of the host (tpot ps has them)
+        current = ops.tpot_containers(ops.containers(), ops.compose_names())
     except ops.OpsError as err:
         console.print(f"[red]Containers: {err}[/]")
         return 1

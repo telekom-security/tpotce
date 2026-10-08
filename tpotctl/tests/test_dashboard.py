@@ -12,7 +12,7 @@ from tpotctl.tests import isolate  # noqa: E402
 
 isolate()   # keeps the user's config out of the tests
 
-from tpotctl import events, ops, system  # noqa: E402
+from tpotctl import events, glyphs, ops, system  # noqa: E402
 
 try:
     import rich  # noqa: F401
@@ -141,12 +141,44 @@ class HoneycombTest(unittest.TestCase):
         self.assertEqual(ops.cell_state(container("a", "restarting")), ("warn", "error"))
         self.assertEqual(ops.cell_state(container("a", "exited")), ("off", "error"))
         self.assertEqual(ops.cell_state(container("a", "created")), ("off", "mist"))
+        self.assertEqual(ops.cell_state(container("a", ops.ABSENT)), ("off", "ash"))
 
-    def test_every_second_row_is_shifted(self):
-        rows = self.comb.render([container(f"c{i}") for i in range(9)], 50).plain.split("\n")
-        self.assertEqual(len(rows), 3)
-        self.assertTrue(rows[1].startswith(" " * (self.comb.CELL // 2)))
+    def test_long_names_lose_their_middle(self):
+        short = self.comb.short
+        self.assertEqual(short("elasticsearch"), "elasticsearch")
+        self.assertEqual(short("citrixhoneypot"), "citrixhoneypot")             # 14: whole
+        self.assertEqual(short("conpot_kamstrup_382"), "conpot_…up_382")
+        self.assertEqual(short("conpot_building_automation"), "conpot_…mation")
+        for name in ("conpot_guardian_ast", "buildx_buildkit_mybuilder0", "x" * 40):
+            self.assertEqual(len(short(name)), self.comb.NAME)
+        self.assertEqual(short("abcdefgh", 5), "ab…gh")
+        named = self.comb.render([container("conpot_kamstrup_382"), container("conpot_guardian_ast")], 80).plain
+        self.assertIn("conpot_…up_382", named)
+        self.assertIn("conpot_…an_ast", named)                                  # the two stay apart
+
+    def test_not_started_services(self):
+        absent = [container(f"honeypot{i}", ops.ABSENT) for i in range(43)]
+        legend = self.comb.legend(absent, name_problems=True).plain
+        self.assertEqual(legend.strip(), f"{glyphs.g('off')} 43 not started")    # T-Pot stopped: one line
+        some = absent[:2] + [container(f"other{i}") for i in range(5)]
+        legend = self.comb.legend(some, name_problems=True).plain
+        self.assertIn("2 not started", legend)
+        self.assertIn("honeypot0  not started", legend)                          # next to running ones
+
+    def test_the_packed_comb_shifts_every_second_row(self):
+        rows = self.comb.render([container(f"c{i}") for i in range(40)], 60, names=False).plain.split("\n")
+        self.assertGreater(len(rows), 1)
+        self.assertTrue(rows[1].startswith(" " * (self.comb.TIGHT // 2)))
         self.assertFalse(rows[0].startswith(" "))
+
+    def test_named_cells_stand_in_columns(self):
+        rows = self.comb.render([container(f"c{i}") for i in range(9)], 51).plain.split("\n")      # 3 a row
+        self.assertEqual(len(rows), 3)
+        self.assertFalse(any(row.startswith(" ") for row in rows))
+        glyph = glyphs.g("on")
+        columns = [[i for i, char in enumerate(row) if char == glyph] for row in rows]
+        self.assertEqual(columns[0], [0, self.comb.CELL, 2 * self.comb.CELL])
+        self.assertTrue(all(column == columns[0] for column in columns))
 
     def test_packed_comb_names_only_the_problems(self):
         many = [container(f"honeypot{i}") for i in range(40)] + [container("p0f", "restarting")]

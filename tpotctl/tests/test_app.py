@@ -171,6 +171,19 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             self.assertIn("24 hours", str(app.query_one("#attacks-block").border_subtitle))
             self.assertGreaterEqual(app.query_one("#containers").content_region.height, 10)
 
+    async def test_a_stopped_tpot_shows_its_services_not_started(self):
+        backend = FakeBackend()
+        backend.containers = lambda: ops.tpot_containers([], ["cowrie", "dionaea"])
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.8)
+            table = app.query_one("#containers")
+            self.assertEqual(table.row_count, 2)
+            self.assertIn("not started", str(table.get_row_at(0)[1]))
+            self.assertIn("0 of 2 up", str(app.query_one("#header-live").render()))
+            self.assertIn("2 not started", str(app.query_one("#comb").render()))
+            self.assertIn("0 of 2 containers running", str(app.query_one("#status-info").render()))
+
     async def test_restart_asks_then_runs_systemctl(self):
         runner = Recorder()
         app = tapp.TpotApp(backend=FakeBackend(), runner=runner)

@@ -251,6 +251,9 @@ def status(repo_dir: str = REPO_DIR, run: Callable = subprocess.run) -> Status:
 # containers and images (dps, dim)
 # ---------------------------------------------------------------------------
 
+ABSENT = "absent"       # a service of the compose file without a container: T-Pot did not start it
+
+
 @dataclass
 class Container:
     name: str
@@ -276,6 +279,8 @@ class Image:
 
 def cell_state(container: Container) -> Tuple[str, str]:
     """(glyph name, colour name) of a container, see tpotctl.glyphs and tpotctl.theme.STYLE."""
+    if container.state == ABSENT:
+        return "off", "ash"
     if container.state == "restarting":
         return "warn", "error"
     if container.state != "running":
@@ -343,6 +348,37 @@ def docker(args: List[str], run: Callable = subprocess.run) -> str:
 def containers(run: Callable = subprocess.run) -> List[Container]:
     # all of them: dps only showed running and exited ones, which hid restart loops
     return parse_ps(docker(["ps", "--all", "--format", "{{json .}}"], run))
+
+
+_CONTAINER_NAME = re.compile(r"""^\s*container_name:\s*["']?([^"'\s#]+)["']?""", re.M)
+_NAMES: Dict[str, Tuple[Tuple[int, int], List[str]]] = {}
+
+
+def compose_names(repo_dir: str = REPO_DIR, env: Optional[Dict[str, str]] = None) -> List[str]:
+    """The container names of the compose file in use: what T-Pot runs; [] without a readable file.
+    The Status page asks every 2 s, so the names are kept until the file changes."""
+    path = compose_path(repo_dir, env)
+    try:
+        info = os.stat(path)
+        stamp = (info.st_mtime_ns, info.st_size)
+        if path in _NAMES and _NAMES[path][0] == stamp:
+            return list(_NAMES[path][1])
+        with open(path, encoding="utf-8") as handle:
+            names = sorted(set(_CONTAINER_NAME.findall(handle.read())))
+    except (OSError, UnicodeDecodeError):
+        return []
+    _NAMES[path] = (stamp, names)
+    return list(names)
+
+
+def tpot_containers(found: List[Container], names: List[str]) -> List[Container]:
+    """One entry per service of the compose file: its container, or a placeholder that is not
+    started; containers of anything else on the host are left out. Without names (no readable
+    compose file) everything found, so a broken checkout still shows what runs."""
+    if not names:
+        return list(found)
+    by_name = {c.name: c for c in found}
+    return [by_name.get(name) or Container(name, ABSENT, "not started", "", "", "") for name in sorted(names)]
 
 
 def images(run: Callable = subprocess.run) -> List[Image]:

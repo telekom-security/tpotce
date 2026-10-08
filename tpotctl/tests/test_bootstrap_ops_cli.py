@@ -266,6 +266,30 @@ class OpsTest(unittest.TestCase):
             self.assertIsNone(ops.service_since(run("2000000000\n"), uptime))       # after now: nonsense
             self.assertIsNone(ops.service_since(run("400000000\n"), os.path.join(tmp, "none")))
 
+    def test_compose_names(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "docker-compose.yml")
+            with open(path, "w") as handle:
+                handle.write("services:\n  cowrie:\n    container_name: cowrie\n  tpotinit:\n"
+                             "    container_name: 'tpotinit'\n  nginx:\n    container_name: \"nginx\"  # web\n"
+                             "  # container_name: commented\n")
+            self.assertEqual(ops.compose_names(tmp, {}), ["cowrie", "nginx", "tpotinit"])
+            with open(path, "a") as handle:                     # a rewrite: the cache sees it
+                handle.write("  dionaea:\n    container_name: dionaea\n")
+            self.assertEqual(ops.compose_names(tmp, {}), ["cowrie", "dionaea", "nginx", "tpotinit"])
+            self.assertEqual(ops.compose_names(os.path.join(tmp, "none"), {}), [])
+        self.assertEqual(len(ops.compose_names(ops.REPO_DIR, {"TPOT_DOCKER_COMPOSE": "./compose/standard.yml"})),
+                         43)
+
+    def test_tpot_containers_are_the_services_of_the_compose_file(self):
+        running = ops.Container("cowrie", "running", "Up 1 hour", "", "22->22/tcp", "c")
+        foreign = ops.Container("buildx_buildkit_mybuilder0", "running", "Up 5 hours", "", "", "moby/buildkit")
+        found = ops.tpot_containers([foreign, running], ["dionaea", "cowrie"])
+        self.assertEqual([c.name for c in found], ["cowrie", "dionaea"])       # the builder is not T-Pot
+        self.assertIs(found[0], running)
+        self.assertEqual((found[1].state, found[1].status, found[1].ports), (ops.ABSENT, "not started", ""))
+        self.assertEqual(ops.tpot_containers([foreign, running], []), [foreign, running])   # no compose file
+
     def test_web_port_follows_the_compose_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             with open(os.path.join(tmp, "docker-compose.yml"), "w") as handle:
@@ -435,6 +459,42 @@ class CliTest(unittest.TestCase):
             path = os.path.join(cli.REPO_DIR, script)
             execv.assert_called_once_with(path, [path, "-y", "-b", "dev", "--full", "-h"])
             chdir.assert_called_once_with(cli.REPO_DIR)
+
+    def test_status_shows_tpot_and_ps_shows_everything(self):
+        """tpot status counts the services of the compose file, as the Status page; tpot ps lists
+        every container of the host, as docker ps does."""
+        try:
+            import rich  # noqa: F401
+        except ImportError:
+            self.skipTest("Rich is not installed")
+        found = [ops.Container("cowrie", "running", "Up 1 hour", "", "", "c"),
+                 ops.Container("buildx_buildkit_mybuilder0", "running", "Up 5 hours", "", "", "b")]
+        state = ops.Status("24.04.2", "dev", "abc", "STANDARD", "HIVE", "active", "/x")
+        with mock.patch.object(ops, "status", return_value=state), \
+                mock.patch.object(ops, "containers", return_value=found), \
+                mock.patch.object(ops, "compose_names", return_value=["cowrie", "dionaea"]), \
+                mock.patch("sys.stdout", new_callable=io.StringIO) as out:
+            self.assertEqual(cli.print_status(), 0)
+            status = out.getvalue()
+            out.truncate(0)
+            out.seek(0)
+            self.assertEqual(cli.print_ps(None), 0)                 # not a terminal: plain lines
+            listing = out.getvalue()
+        self.assertIn("dionaea", status)
+        self.assertIn("not started", status)
+        self.assertNotIn("buildx", status)
+        self.assertIn("buildx_buildkit_mybuilder0", listing)
+        self.assertNotIn("dionaea", listing)
+
+    def test_the_menu_takes_tpot_containers(self):
+        try:
+            from tpotctl import app as tapp
+        except ImportError:
+            self.skipTest("Textual is not installed")
+        found = [ops.Container("buildx_buildkit_mybuilder0", "running", "Up 5 hours", "", "", "b")]
+        with mock.patch.object(ops, "containers", return_value=found), \
+                mock.patch.object(ops, "compose_names", return_value=["cowrie"]):
+            self.assertEqual([(c.name, c.state) for c in tapp.Backend().containers()], [("cowrie", ops.ABSENT)])
 
     def test_customize_passes_everything_on(self):
         with mock.patch.object(cli.os, "execv") as execv:

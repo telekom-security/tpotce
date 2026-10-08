@@ -54,7 +54,9 @@ class Backend:
         return ops.status()
 
     def containers(self) -> List[ops.Container]:
-        return ops.containers()
+        # T-Pot's services only, not started ones as placeholders; other containers of the host
+        # stay out (tpot ps lists them)
+        return ops.tpot_containers(ops.containers(), ops.compose_names())
 
     def images(self) -> List[ops.Image]:
         return ops.images()
