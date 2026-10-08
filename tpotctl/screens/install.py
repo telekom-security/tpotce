@@ -20,7 +20,7 @@ from textual.widgets import (Button, ContentSwitcher, Footer, Input, OptionList,
                              Static)
 from textual.widgets.option_list import Option
 
-from tpotctl import engine, glyphs, installer, logo, runlog, theme, users
+from tpotctl import engine, glyphs, installer, logo, theme, users
 from tpotctl.bootstrap import REPO_DIR
 from tpotctl.screens.dialogs import ConfirmDialog
 from tpotctl.theme import apply as apply_theme
@@ -539,7 +539,6 @@ class InstallApp(ArrowNav, App):
                 self.notify(str(err), title="Settings not written", severity="error", timeout=10)
                 return
         self.progress = installer.Progress()
-        self.step_phase = self.progress.phase      # the step it is in, kept when a mark says failed
         self.busy = True
         self.started = time.monotonic()
         self.goto("install")
@@ -558,11 +557,6 @@ class InstallApp(ArrowNav, App):
 
     def feed(self, line: str) -> None:
         self.progress.feed(line)
-        mark = runlog.parse_mark(line.rstrip("\n"))
-        if mark is not None and mark[0] == "fail" and mark[1] and mark[1][0] in PHASE_LOGS:
-            self.step_phase = mark[1][0]            # fail <phase>: the step that failed
-        elif self.progress.phase not in ("failed", "done"):
-            self.step_phase = self.progress.phase
         self.query_one("#install-log", RichLog).write(Text(line.rstrip("\n")))
         self.show_progress()
 
@@ -595,7 +589,7 @@ class InstallApp(ArrowNav, App):
             self.goto("done")
             return
         self.progress.phase = "failed"
-        step = getattr(self, "step_phase", "")
+        step = self.progress.step                   # fail <phase>, else the step it was in
         text = Text()
         if code == 130 or code < 0:             # install_stopped, or a signal ended it
             text.append(f"{glyphs.g('warn')} The installation was stopped", style=f"bold {theme.color('warn')}")

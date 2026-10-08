@@ -250,6 +250,36 @@ class EngineTest(unittest.TestCase):
         progress.feed("@@tpot phase done")
         self.assertEqual(progress.fraction, 1.0)
 
+    def test_progress_keeps_the_phase_that_failed(self):
+        """@@tpot fail <phase> and @@tpot phase failed: the bar stays where the run was, the title names
+        the step that failed and that it failed."""
+        def fed(lines):
+            progress = installer.Progress()
+            for line in lines:
+                progress.feed(line)
+            return progress
+        playbook = ["@@tpot phase checks", "@@tpot phase packages", "@@tpot tasks 4", "@@tpot phase playbook",
+                    "TASK [Gathering Facts] ***", "TASK [Install Docker Engine packages (All)] ***"]
+        before = fed(playbook).fraction
+        cases = [(playbook + ["fatal: [127.0.0.1]: FAILED! => {}", "@@tpot fail playbook", "@@tpot phase failed"],
+                  "playbook", before),
+                 # an older install.sh: no fail mark, the phase it was in failed
+                 (playbook + ["@@tpot phase failed"], "playbook", before),
+                 # fail names a step before the last phase mark: the bar stays, the title names the step
+                 (["@@tpot phase compose", "@@tpot phase pull", "@@tpot images 2", " cowrie Pulled",
+                   "@@tpot fail compose", "@@tpot phase failed"], "compose", 0.80 + 0.19 * 0.5),
+                 (["@@tpot phase checks", "@@tpot fail checks", "@@tpot phase failed"], "checks", 0.0)]
+        for lines, step, fraction in cases:
+            with self.subTest(lines=" | ".join(lines)):
+                progress = fed(lines)
+                self.assertEqual(progress.phase, "failed")
+                self.assertEqual(progress.step, step)
+                self.assertAlmostEqual(progress.fraction, fraction)
+                self.assertEqual(progress.title, f"{installer.PHASE_TITLES[step]}: failed")
+        self.assertGreater(before, 0.05)
+        done = fed(playbook + ["@@tpot phase done"])
+        self.assertEqual((done.step, done.fraction, done.title), ("done", 1.0, "Done"))
+
 
 def make_checkout(test):
     """A checkout to install from: env.example as .env, the compose folder."""
@@ -454,6 +484,7 @@ class AssistantTest(unittest.IsolatedAsyncioTestCase):
                 if not app.busy:
                     break
             self.assertFalse(app.busy)
+            self.bar = app.query_one("#install-bar").progress
             return str(app.query_one("#install-phase").render()).replace("\n", " ")
 
     async def test_a_failed_installation_names_the_log_of_its_step(self):
@@ -483,6 +514,14 @@ class AssistantTest(unittest.IsolatedAsyncioTestCase):
                 self.assertIn("The installation failed", text)
                 self.assertIn(log, text)
                 self.assertEqual([other for other in logs if other in text], [log] if log in logs else [])
+
+    async def test_a_failed_installation_keeps_the_bar(self):
+        lines = ["@@tpot phase checks", "@@tpot phase packages", "@@tpot tasks 2", "@@tpot phase playbook",
+                 "TASK [Gathering Facts] ***", "fatal: [127.0.0.1]: FAILED! => {}", "@@tpot fail playbook",
+                 "@@tpot phase failed"]
+        text = await self.failed_text(lines)
+        self.assertIn("The installation failed", text)
+        self.assertGreater(self.bar, 50)            # of 1000: where the playbook was, not 0
 
     async def test_a_stopped_installation_says_stopped(self):
         """install.sh exits 130 when it was stopped (install_stopped): not a failure; during the pull T-Pot

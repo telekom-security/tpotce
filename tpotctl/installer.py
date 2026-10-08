@@ -332,7 +332,9 @@ class Progress:
     """What the lines of install.sh -M say."""
 
     def __init__(self):
-        self.phase = "checks"
+        self.phase = "checks"           # the last @@tpot phase: a step, done or failed
+        self.last = "checks"            # the last step (not done / failed): where the bar is
+        self.failed_phase = ""          # the step a @@tpot fail <phase> named
         self.tasks = 0
         self.tasks_done = 0
         self.task = ""
@@ -351,6 +353,10 @@ class Progress:
             value = words[0] if words else ""
             if what == "phase":
                 self.phase = value
+                if value not in ("failed", "done"):
+                    self.last = value
+            elif what == "fail" and value in SPANS and value != "done":
+                self.failed_phase = value
             elif what == "tasks" and value.isdigit():
                 self.tasks = int(value)
             elif what == "images" and value.isdigit():
@@ -370,17 +376,28 @@ class Progress:
             self.images_done += 1
 
     @property
+    def step(self) -> str:
+        """The step the run is in, done, or the one that failed (fail <phase>, else the last one)."""
+        if self.phase == "failed":
+            return self.failed_phase or self.last
+        return self.phase
+
+    @property
     def fraction(self) -> float:
-        start, end = SPANS.get(self.phase, (0.0, 0.0))
+        # a failed run keeps the bar where it was
+        phase = self.last if self.phase == "failed" else self.phase
+        start, end = SPANS.get(phase, (0.0, 0.0))
         part = 0.0
-        if self.phase == "playbook" and self.tasks:
+        if phase == "playbook" and self.tasks:
             part = min(self.tasks_done / self.tasks, 1.0)
-        elif self.phase == "pull" and self.images:
+        elif phase == "pull" and self.images:
             part = min(self.images_done / self.images, 1.0)
         return start + (end - start) * part
 
     @property
     def title(self) -> str:
+        if self.phase == "failed":
+            return f"{PHASE_TITLES.get(self.step, self.step)}: failed"
         return PHASE_TITLES.get(self.phase, self.phase)
 
 
