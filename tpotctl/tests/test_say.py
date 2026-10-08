@@ -219,10 +219,10 @@ class SayTest(unittest.TestCase):
 
     @unittest.skipUnless(importlib.util.find_spec("rich"), "Rich is not installed")
     def test_no_color_is_the_one_of_the_tables(self):
-        """say and a Rich console of prefs.console_color_system (the tables of tpot status / ps / images)
-        paint or leave the colours out alike, for NO_COLOR unset, empty and set."""
-        from rich.console import Console
-        from tpotctl import prefs
+        """say and the Rich console of the tables of tpot status / ps / images paint or leave the colours
+        out alike, for NO_COLOR unset, empty and set, whatever Rich counts itself (Rich 13 of Debian
+        takes an empty NO_COLOR as set, newer ones do not)."""
+        from tpotctl import cli
         keep = {k: os.environ.get(k) for k in ("NO_COLOR", "TERM", "TPOT_GUM", "COLORTERM")}
 
         def restore():
@@ -243,8 +243,7 @@ class SayTest(unittest.TestCase):
                 out = Tty()
                 say.ok("done", stream=out)
                 table = Tty()
-                Console(file=table, force_terminal=True, color_system=prefs.console_color_system(table)).print(
-                    "[red]done[/red]")
+                cli._console(table).print("[red]done[/red]")        # the console of the tables itself
                 self.assertEqual("\x1b[" in out.getvalue(), "\x1b[" in table.getvalue(),
                                  (out.getvalue(), table.getvalue()))
 

@@ -32,8 +32,9 @@ from tpotctl import splash_art, ui_logo  # noqa: E402
 
 try:
     import rich  # noqa: F401
+    import textual  # noqa: F401  the colours come from theme.py, which needs Textual as well
 except ImportError:
-    rich = None
+    rich = None                   # i.e. the python3 of Debian has Rich (python3-rich) but no Textual
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 UI_SH = os.path.join(REPO, "installer", "lib", "ui.sh")
@@ -1774,7 +1775,11 @@ class HelpersTest(unittest.TestCase):
                 else:
                     line = word
             return "\n".join(lines + [line]) + "\n"
-        for locale in ({}, {"LC_ALL": "C"}, {"LC_ALL": "en_US.UTF-8"}):
+        # the UTF-8 locales this system has (Debian has C.UTF-8 but no en_US.UTF-8 by default, macOS the other way)
+        utf8 = [name for name in ("en_US.UTF-8", "C.UTF-8")
+                if not run(":", self.sandbox.env(LC_ALL=name)).stderr]
+        self.assertTrue(utf8, "no UTF-8 locale to test with")
+        for locale in [{}, {"LC_ALL": "C"}] + [{"LC_ALL": name} for name in utf8]:
             for width in (12, 20, 33):
                 with self.subTest(locale=locale, width=width):
                     out = run(f"fuUI_FOLD {width} '{text}'", self.sandbox.env(**locale))

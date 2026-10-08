@@ -151,7 +151,8 @@ def _console(stream=None):
     for 256. In a pipe Rich's own choice: no escapes."""
     from rich.console import Console
     from tpotctl import prefs
-    return Console(file=stream, highlight=False,
+    # NO_COLOR counts when it is not empty, as for say and ui.sh (older Rich takes an empty one as set)
+    return Console(file=stream, highlight=False, no_color=bool(os.environ.get("NO_COLOR")),
                    color_system=prefs.console_color_system(sys.stdout if stream is None else stream))
 
 

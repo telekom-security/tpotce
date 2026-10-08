@@ -20,8 +20,9 @@ except ImportError:
     textual = None
 try:
     import rich  # noqa: F401
+    import textual  # noqa: F401  the colours come from theme.py, which needs Textual as well
 except ImportError:
-    rich = None
+    rich = None                   # i.e. the python3 of Debian has Rich (python3-rich) but no Textual
 
 
 class PrefsTest(unittest.TestCase):

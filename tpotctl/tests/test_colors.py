@@ -134,7 +134,8 @@ class Sandbox:
         environ = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "LANG": os.environ.get("LANG", "en_US.UTF-8")}
         environ.update(self.base())
         environ.update(locale or {})
-        out = subprocess.run([bash, "-c", "\n".join(lines)], env=environ, stdout=subprocess.PIPE,
+        # on stdin, not as -c: Linux takes at most 128 KiB per argument (MAX_ARG_STRLEN), the sample is more
+        out = subprocess.run([bash, "-s"], input="\n".join(lines) + "\n", env=environ, stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE, universal_newlines=True, timeout=300)
         return out.stdout.split(), out.stderr
 

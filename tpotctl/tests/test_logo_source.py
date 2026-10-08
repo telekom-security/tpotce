@@ -32,8 +32,9 @@ from tpotctl import splash_art, ui_logo  # noqa: E402
 
 try:
     import rich  # noqa: F401
+    import textual  # noqa: F401  the colours come from theme.py, which needs Textual as well
 except ImportError:
-    rich = None
+    rich = None                   # i.e. the python3 of Debian has Rich (python3-rich) but no Textual
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SIZES = {"120": (120, 94), "80": (80, 62), "80x24": (80, 48)}
