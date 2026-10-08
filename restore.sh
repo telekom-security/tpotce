@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# an exported CDPATH turns a cd into a search that prints the folder it found ($(cd ... && pwd)
+# gives two lines): every cd of this script means the folder it names
+unset CDPATH
+
 # Some global vars
 myDATE=$(date +%Y%m%d%H%M%S)
 myBECOME_FILE=""

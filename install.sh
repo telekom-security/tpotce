@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+# an exported CDPATH turns a cd into a search that prints the folder it found ($(cd ... && pwd)
+# gives two lines): every cd of this script means the folder it names
+unset CDPATH
+
 print_help() {
   fuUI_HELP "Installer" "install.sh [-s] [-t <type>] [-u <webuser>] [-p <password> | -P <file>]"$'\n'"           [-B <file>] [-c <compose file>] [-b <branch>] [-r <url>]"$'\n'"           [-n] [-M]" \
     --about "Installs T-Pot on this host: the packages it needs, Docker Engine and the

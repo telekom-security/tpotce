@@ -167,6 +167,39 @@ class InstallShTest(Scripts):
     def test_help(self):
         self.assert_help("install.sh", self.run_script(self.script, "-h"))
 
+    def test_an_exported_cdpath_changes_neither_the_source_nor_the_files(self):
+        """r3-RB 5: started as co/install.sh from the folder above its clone with an exported CDPATH,
+        the installer still takes branch and origin of that clone (not master of telekom-security) and
+        the relative -B / -c files it was given (not a search that prints the folder twice)."""
+        work = os.path.join(self.home, "work")
+        clone = os.path.join(work, "co")
+        write(os.path.join(clone, "install.sh"), base.read("install.sh"), 0o755)
+        write(os.path.join(clone, "version"), NEW + "\n")
+        git = ["git", "-C", clone, "-c", "user.name=T-Pot", "-c", "user.email=tpot@example.invalid"]
+        for args in (["init", "-q", "-b", "cdpath-test"], ["commit", "-q", "--allow-empty", "-m", "test"],
+                     ["remote", "add", "origin", "https://example.invalid/fork/tpotce"]):
+            subprocess.run(git + args, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        write(os.path.join(work, "files", "sudo-pw"), "Sudo-pw-0815\n", 0o600)
+        write(os.path.join(work, "files", "my.yml"), "services: {}\n")
+        write(os.path.join(self.bin, "sudo"), '#!/bin/sh\nfor a in "$@"; do [ "$a" = -S ] && cat > "$HOME/sudo.in"; done\n'
+              + base.SUDO.split("\n", 1)[1], 0o755)
+        result = subprocess.run(["bash", "co/install.sh", "-s", "-t", "s", "-B", "files/sudo-pw", "-c", "files/my.yml"],
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True,
+                                env=self.env(TPOT_GUM="off", TPOT_INSTALL_PACKAGES_DONE="1",
+                                             CDPATH=".:/nonexistent-tpot-cdpath"),
+                                cwd=work, stdin=subprocess.DEVNULL, timeout=60)
+        out = result.stdout
+        self.assertEqual(result.returncode, 0, out)
+        self.assertIn("Source: https://example.invalid/fork/tpotce at cdpath-test", out)
+        self.assertNotIn("No such file", out)
+        with open(os.path.join(self.home, "sudo.in"), encoding="utf-8") as handle:
+            self.assertEqual(handle.read(), "Sudo-pw-0815\n")
+        self.assertNotIn("Sudo-pw-0815", out + self.calls())
+        installed = re.search(r"Installing your own compose file (.*)\.\n", out).group(1)
+        self.assertEqual(os.path.realpath(installed), os.path.realpath(os.path.join(work, "files", "my.yml")))
+        with open(os.path.join(self.tpotce, "docker-compose.yml"), encoding="utf-8") as handle:
+            self.assertEqual(handle.read(), "services: {}\n")
+
     def test_the_readme_recommends_P_over_p(self):
         """known r3: -p puts the web password into the argv of install.sh (ps, /proc/<pid>/cmdline,
         the shell history), -P reads it from a file or stdin: the README names -P first, says why and

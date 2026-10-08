@@ -2,6 +2,9 @@
 # Add a user of the T-Pot web UI. This is `tpot users add` now (bcrypt, the change
 # counts at once); without the Python packages of tpot (i.e. no internet to set them
 # up) the tpotinit container asks for the user as before.
+# an exported CDPATH turns a cd into a search that prints the folder it found ($(cd ... && pwd)
+# gives two lines): every cd of this script means the folder it names
+unset CDPATH
 # the look of the T-Pot scripts (installer/lib/ui.sh), plain text if it is missing
 # shellcheck source=installer/lib/ui.sh
 if ! source "$HOME/tpotce/installer/lib/ui.sh" 2>/dev/null;

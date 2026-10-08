@@ -252,5 +252,46 @@ class ScriptsLookAlikeTest(base.Harness):
                 self.assertTrue(re.search(r'exec "\$\{?myTPOT\}?" (users|sensors) add "\$@"', text), path)
 
 
+class CdpathTest(base.Harness):
+    """r3-RB 5: an exported CDPATH turns `cd <relative dir>` into a search that prints the directory it
+    found, so `$(cd "$(dirname "$0")" && pwd)` gives two lines and the script no longer finds its
+    checkout (uninstall.sh stops, update.sh / restore.sh lose installer/lib/ui.sh, a relative -B / -c
+    file names another one). The scripts clear it before their first cd."""
+
+    SCRIPTS = ("install.sh", "update.sh", "restore.sh", "uninstall.sh", "genuser.sh", "deploy.sh")
+    CDPATH = ".:/nonexistent-tpot-cdpath"
+
+    def test_the_scripts_find_their_checkout(self):
+        """Started as co/<script> from the folder above the checkout: with CDPATH the same as without."""
+        work = os.path.join(self.home, "work")
+        checkout = os.path.join(work, "co")
+        os.makedirs(os.path.join(checkout, "installer", "lib"))
+        shutil.copy(os.path.join(REPO, "installer", "lib", "ui.sh"), os.path.join(checkout, "installer", "lib"))
+        shutil.copy(os.path.join(REPO, "version"), checkout)
+        for path in self.SCRIPTS:
+            shutil.copy(os.path.join(REPO, path), checkout)
+            with self.subTest(script=path):
+                without = self.run_script(f"co/{path}", "-h", cwd=work)
+                found = self.run_script(f"co/{path}", "-h", cwd=work, env={"CDPATH": self.CDPATH})
+                self.assertEqual(without.returncode, 0, without.stdout + without.stderr)
+                self.assertEqual((found.returncode, found.stdout), (without.returncode, without.stdout),
+                                 found.stderr)
+                self.assertNotIn("No such file", found.stderr)
+                self.assertNotIn("is missing", found.stdout + found.stderr)
+
+    def test_every_cd_comes_after_the_cdpath_is_cleared(self):
+        """The bodies: `unset CDPATH` before the first cd (also those that resolve -B / -c files)."""
+        for path in self.SCRIPTS:
+            text = body(path)
+            with self.subTest(script=path):
+                unset = re.search(r"^unset CDPATH$", text, re.M)
+                self.assertTrue(unset)
+                first = re.search(r"\bcd\s", "\n".join(line for line in text.split("\n")
+                                                        if not line.lstrip().startswith("#")))
+                if first:
+                    code = "\n".join(line for line in text.split("\n") if not line.lstrip().startswith("#"))
+                    self.assertLess(code.index("unset CDPATH"), first.start())
+
+
 if __name__ == "__main__":
     unittest.main()

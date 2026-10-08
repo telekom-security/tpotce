@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+# an exported CDPATH turns a cd into a search that prints the folder it found ($(cd ... && pwd)
+# gives two lines): every cd of this script means the folder it names
+unset CDPATH
+
 print_help() {
   # shellcheck disable=SC2088 # the examples show ~ as a person types it
   fuUI_HELP "Uninstaller" "uninstall.sh [-y] [-k] [-B <file>]" \
