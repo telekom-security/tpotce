@@ -1,12 +1,13 @@
 """The T-Pot logo and wordmark for the T-Pot scripts: the data in the ui block of installer/lib/ui.sh.
 
 The scripts show the ANSI logo of the T-Pot Manager (splash_art.py) as a still picture, rendered in
-bash by fuUI_LOGO_RENDER, and the wordmark of logo.py over their banner. install.sh runs from curl
-without Python, so both live as text inside the ui block, in ui.sh and in the same copy in
-install.sh, between the marks `# >>> tpot logo data >>>` and `# <<< tpot logo data <<<`:
+bash by fuUI_LOGO_RENDER in the colours of the Manager (splash_art.COLOURS, the tokens of theme.py),
+and the wordmark of logo.py over their banner. install.sh runs from curl without Python, so all of
+it lives as text inside the ui block, in ui.sh and in the same copy in install.sh, between the marks
+`# >>> tpot logo data >>>` and `# <<< tpot logo data <<<`:
 
-  python3 -m tpotctl.ui_logo             writes them from splash_art.py and logo.py, and the
-                                         plain fallback blocks of the scripts (FALLBACK_FILES)
+  python3 -m tpotctl.ui_logo             writes them from splash_art.py, theme.py and logo.py, and
+                                         the plain fallback blocks of the scripts (FALLBACK_FILES)
   python3 -m tpotctl.ui_logo --check     exit 1 when a copy differs (tests run it too)
   python3 -m tpotctl.ui_logo --fallback  prints the plain fallback of the helpers (FALLBACK)
 
@@ -14,9 +15,10 @@ The format: two pixels (top, bottom) make one character, as in the splash. Every
 logo has is an entry of one table (myUI_LOGO_PAIRS, the two digits of the colour indices, 00 first).
 A character row is a string of tokens of two symbols of ALPHABET: the entry of the pair and the length
 of the run (1-87). Empty cells at the end of a row are left out. The wordmark is two columns per
-pixel and half blocks, three text rows.
+pixel and half blocks, three text rows. The colours are three tables of an entry per colour of the
+logo: R;G;B, the number of the xterm 256 palette, the SGR code of the 16 ANSI colours.
 
-Standard library only (Python 3.9), it reads logo.py as text: logo.py needs Rich.
+Standard library only (Python 3.9), it reads logo.py and theme.py as text: they need Rich / Textual.
 """
 
 import ast
@@ -31,6 +33,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
 FILES = (os.path.join(REPO, "installer", "lib", "ui.sh"), os.path.join(REPO, "install.sh"))
 LOGO_PY = os.path.join(HERE, "logo.py")
+THEME_PY = os.path.join(HERE, "theme.py")
 
 BEGIN = "# >>> tpot logo data >>>"
 END = "# <<< tpot logo data <<<"
@@ -104,6 +107,98 @@ def manager_wordmark() -> List[str]:
     raise ValueError("no WORDMARK in logo.py")
 
 
+def theme_palettes() -> Dict[str, Dict[str, str]]:
+    """theme.PALETTES (the colour tokens per colour system), read from theme.py as text (it needs
+    Textual): its top level assignments of strings, and of dicts and names of them."""
+    with open(THEME_PY, encoding="utf-8") as handle:
+        tree = ast.parse(handle.read())
+    nodes: Dict[str, ast.expr] = {}
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                nodes[target.id] = node.value
+            elif isinstance(target, ast.Tuple) and isinstance(node.value, ast.Tuple):
+                for name, value in zip(target.elts, node.value.elts):
+                    if isinstance(name, ast.Name):
+                        nodes[name.id] = value
+
+    def value(node: ast.expr, depth: int = 0):
+        if depth > 4:
+            raise ValueError("theme.py: PALETTES is nested too deep")
+        if isinstance(node, ast.Name):
+            return value(nodes[node.id], depth + 1)
+        if isinstance(node, ast.Dict):
+            return {value(k, depth + 1): value(v, depth + 1) for k, v in zip(node.keys, node.values)}
+        return ast.literal_eval(node)
+    try:
+        return value(nodes["PALETTES"])
+    except (KeyError, ValueError) as error:
+        raise ValueError(f"theme.py: no PALETTES of colour tokens ({error})") from None
+
+
+def logo_colours(system: str) -> List[str]:
+    """The colours of the logo for a colour system: splash_art.COLOURS with the tokens of theme.py,
+    what splash_anim.colours() gives the T-Pot Manager."""
+    palette = theme_palettes()[system]
+    out = []
+    for colour in splash_art.COLOURS[system]:
+        if not colour.startswith("#"):
+            if colour not in palette:
+                raise ValueError(f"{colour} of splash_art.COLOURS[{system!r}] is no token of theme.py")
+            colour = palette[colour]
+        if not re.fullmatch(r"#[0-9A-Fa-f]{6}", colour):
+            raise ValueError(f"{colour} of splash_art.COLOURS[{system!r}] is not #rrggbb")
+        out.append(colour)
+    if len(out) != len(splash_art.PALETTE):
+        raise ValueError(f"splash_art.COLOURS[{system!r}] has {len(out)} colours, the logo {len(splash_art.PALETTE)}")
+    return out
+
+
+_CUBE = (0, 95, 135, 175, 215, 255)
+# the 16 ANSI colours as the VGA values Rich downgrades to, by their SGR code (background: + 10)
+VGA = {30: "#000000", 31: "#aa0000", 32: "#00aa00", 33: "#aa5500", 34: "#0000aa", 35: "#aa00aa",
+       36: "#00aaaa", 37: "#aaaaaa", 90: "#555555", 91: "#ff5555", 92: "#55ff55", 93: "#ffff55",
+       94: "#5555ff", 95: "#ff55ff", 96: "#55ffff", 97: "#ffffff"}
+
+
+def _rgb(colour: str) -> Tuple[int, int, int]:
+    return int(colour[1:3], 16), int(colour[3:5], 16), int(colour[5:7], 16)
+
+
+def xterm_index(colour: str) -> int:
+    """The entry of the xterm 256 palette that is this colour exactly: the colour cube (16-231) or the
+    greys (232-255), never 0-15 (a terminal sets those itself). ValueError for any other colour."""
+    r, g, b = _rgb(colour)
+    if r in _CUBE and g in _CUBE and b in _CUBE:
+        return 16 + 36 * _CUBE.index(r) + 6 * _CUBE.index(g) + _CUBE.index(b)
+    if r == g == b and (r - 8) % 10 == 0 and 8 <= r <= 238:
+        return 232 + (r - 8) // 10
+    raise ValueError(f"{colour} of splash_art.COLOURS['256'] is no entry of the xterm 256 palette")
+
+
+def sgr16(colour: str) -> int:
+    """The SGR code (foreground) of the ANSI colour that is this VGA colour. ValueError otherwise."""
+    for code, value in VGA.items():
+        if value == colour.lower():
+            return code
+    raise ValueError(f"{colour} of splash_art.COLOURS['16'] is none of the 16 VGA colours")
+
+
+def colour_tables() -> List[str]:
+    """The colour tables of the data block (bash lines)."""
+    rgb = [";".join(str(c) for c in _rgb(colour)) for colour in logo_colours("truecolor")]
+    lines = ["# the colours of the logo (tpotctl/splash_art.py COLOURS, splash_anim.colours()): true",
+             "# colour as R;G;B, the entries of the xterm 256 palette, the SGR codes of the 16 ANSI",
+             "# colours (background: +10). Pixel 0 is never painted, it stays the terminal's background.",
+             "myUI_LOGO_RGB=(" + " ".join(f'"{value}"' for value in rgb[:5])]
+    lines.append("               " + " ".join(f'"{value}"' for value in rgb[5:]) + ")")
+    lines.append("myUI_LOGO_256=(" + " ".join(str(xterm_index(c)) for c in logo_colours("256")) + ")")
+    lines.append("myUI_LOGO_16=(" + " ".join(str(sgr16(c)) for c in logo_colours("16")) + ")")
+    return lines
+
+
 _HALF = {(False, False): " ", (True, False): "▀", (False, True): "▄", (True, True): "█"}
 
 
@@ -138,9 +233,10 @@ def generate() -> str:
     table = pair_table(grids[v] for v in VARIANTS)
     index = {pair: i for i, pair in enumerate(table)}
     out = [BEGIN,
-           "# generated from tpotctl/logo.py and tpotctl/splash_art.py by python3 -m tpotctl.ui_logo, do",
-           "# not edit; the format is in tpotctl/ui_logo.py",
-           "myUI_WORDMARK=("]
+           "# generated from tpotctl/logo.py, tpotctl/splash_art.py and tpotctl/theme.py by",
+           "# python3 -m tpotctl.ui_logo, do not edit; the format is in tpotctl/ui_logo.py"]
+    out += colour_tables()
+    out.append("myUI_WORDMARK=(")
     out += [f"  '{line}'" for line in wordmark_lines()]
     out += [")",
             f"myUI_LOGO_ABC='{ALPHABET}'",

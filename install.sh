@@ -88,8 +88,9 @@ install_stopped() {
 # still picture with its credits, rendered here in bash in the colours the T-Pot
 # Manager would take (fuUI_COLORS). A script that asks a person sets myUI_LOGO=1,
 # fuUI_BANNER then shows it once per chain of scripts (TPOT_LOGO_SHOWN) where
-# fuUI_LOGO_ON allows it; its pixels and the wordmark are generated into the logo
-# data at the end of this block: python3 -m tpotctl.ui_logo (--check).
+# fuUI_LOGO_ON allows it; its pixels, its colour tables (myUI_LOGO_RGB / _256 /
+# _16) and the wordmark are generated into the logo data at the end of this block:
+# python3 -m tpotctl.ui_logo (--check).
 
 myUI_GUM_VERSION="2.0.2"
 myUI_GUM_SHA256_x86_64="d842e06d93dbed90af48cb8dd10698db6f22e331fc40346bb37bbc753109edc2"
@@ -103,13 +104,6 @@ myUI_OK_COLOUR="#3FA34D"
 myUI_WARN_COLOUR="#F4B400"
 myUI_ERROR_COLOUR="#E8453C"
 myUI_GUM=""
-# the ten colours of the logo (tpotctl/splash_anim.py colours()): true colour as
-# R;G;B, the entries of the xterm 256 palette, the SGR codes of the 16 ANSI colours
-# (background: +10). Pixel 0 is never painted, it stays the terminal's background.
-myUI_LOGO_RGB=("0;0;0" "56;0;29" "103;0;58" "162;0;83" "226;0;116" "255;76;167" "255;157;208"
-               "236;239;249" "91;88;90" "162;162;173")
-myUI_LOGO_256=(16 53 89 125 162 205 218 231 240 248)
-myUI_LOGO_16=(30 35 35 35 95 95 97 97 90 37)
 # set by the caller: 1 shows the logo in fuUI_BANNER; the version for its credits
 # (empty: fuUI_VERSION finds it)
 myUI_LOGO="${myUI_LOGO:-}"
@@ -1041,8 +1035,15 @@ fuUI_SPIN () {
 }
 
 # >>> tpot logo data >>>
-# generated from tpotctl/logo.py and tpotctl/splash_art.py by python3 -m tpotctl.ui_logo, do
-# not edit; the format is in tpotctl/ui_logo.py
+# generated from tpotctl/logo.py, tpotctl/splash_art.py and tpotctl/theme.py by
+# python3 -m tpotctl.ui_logo, do not edit; the format is in tpotctl/ui_logo.py
+# the colours of the logo (tpotctl/splash_art.py COLOURS, splash_anim.colours()): true
+# colour as R;G;B, the entries of the xterm 256 palette, the SGR codes of the 16 ANSI
+# colours (background: +10). Pixel 0 is never painted, it stays the terminal's background.
+myUI_LOGO_RGB=("0;0;0" "56;0;29" "103;0;58" "162;0;83" "226;0;116"
+               "255;76;167" "255;157;208" "236;239;249" "91;88;90" "162;162;173")
+myUI_LOGO_256=(16 53 89 125 162 205 218 231 240 248)
+myUI_LOGO_16=(30 35 35 35 95 95 97 97 90 37)
 myUI_WORDMARK=(
   '▀▀▀▀██▀▀▀▀        ██▀▀▀▀▄▄            ▄▄'
   '    ██      ▄▄▄▄  ██▄▄▄▄▀▀  ██▀▀██  ▀▀██▀▀'

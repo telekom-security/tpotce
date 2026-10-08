@@ -35,13 +35,8 @@ FADE = 0.3                      # syrup and the waves on the pool fade in when t
 DROP_PERIOD, DROP_OFFSET = 3.0, 1.65    # a drop falls every 3 s, the next one 1.65 s later
 
 COMBS, POT, HONEY, POOL, LETTERS = range(5)
-# when the parts come, seconds
+# when the parts come, seconds (where they are, and the places of the effects: splash_art.DESIGN)
 TIMES = {COMBS: (0.0, 0.5), POT: (0.3, 0.8), HONEY: (0.6, 1.1), POOL: (0.6, 1.1), LETTERS: (1.1, 1.5)}
-# where they are, in the coordinates of the design (splash_art.design_of)
-WORD_Y, WORD_X = (495, 798), (147, 1131)
-POT_CENTRE, POT_RADII = (623, 524), (330, 400)
-POOL_TOP = 900
-MAGENTAS = (3, 4, 5, 6)
 # the variants and the terminal they need: the logo, an empty line and the credits
 VARIANTS = (("120", 120, 49), ("80", 80, 33), ("80x24", 80, 24))
 
@@ -49,17 +44,11 @@ Cell = Tuple[str, Optional[str], Optional[str]]        # character, foreground, 
 
 
 def colours(system: str) -> List[str]:
-    """The ten colours of the logo for a colour system; the tokens of theme.py where there is one."""
-    if system == "256":
-        return ["#000000", "#5f005f", "#87005f", "#af005f", "#d70087", "#ff5faf", "#ffafd7", "#ffffff",
-                "#585858", "#a8a8a8"]
-    if system == "16":
-        # the template's classic mapping (black, magenta, bright magenta, white, greys) on the VGA set
-        return ["#000000", "#aa00aa", "#aa00aa", "#aa00aa", "#ff55ff", "#ff55ff", "#ffffff", "#ffffff",
-                "#555555", "#aaaaaa"]
-    t = theme.TRUECOLOR
-    return [t["INK"], t["COMB_LIT"], t["WAX"], "#A20053", t["MAGENTA"], "#FF4CA7", "#FF9DD0", t["GLASS"],
-            "#5B585A", t["ASH"]]
+    """The ten colours of the logo for a colour system (splash_art.COLOURS, the scripts take the same);
+    a token there is one of the palette of theme.py for that colour system."""
+    system = system if system in ("256", "16") else "truecolor"
+    palette = theme.PALETTES[system]
+    return [colour if colour.startswith("#") else palette[colour] for colour in splash_art.COLOURS[system]]
 
 
 def variant_for(width: int, height: int) -> Optional[str]:
@@ -115,15 +104,18 @@ class Splash:
         c = self.base[i]
         if c == 0:
             return None
+        design = splash_art.DESIGN
         dx, dy = splash_art.design_of(self.w, self.h, i % self.w, i // self.w)
-        if WORD_Y[0] < dy < WORD_Y[1] and WORD_X[0] < dx < WORD_X[1] and c >= 3:
+        word_x, word_y = design["word_x"], design["word_y"]
+        if word_y[0] < dy < word_y[1] and word_x[0] < dx < word_x[1] and c >= 3:
             return LETTERS
-        if dy > POOL_TOP:
+        if dy > design["pool_top"]:
             return POOL
-        reach = ((dx - POT_CENTRE[0]) / POT_RADII[0]) ** 2 + ((dy - POT_CENTRE[1]) / POT_RADII[1]) ** 2
+        (cx, cy), (rx, ry) = design["pot_centre"], design["pot_radii"]
+        reach = ((dx - cx) / rx) ** 2 + ((dy - cy) / ry) ** 2
         if reach <= 1:
             # the rim of the pot draws itself, the magenta inside it is honey
-            return HONEY if c in MAGENTAS and reach < .72 else POT
+            return HONEY if c in design["magentas"] and reach < .72 else POT
         return COMBS
 
     def _shadow_to_letters(self) -> None:
@@ -154,7 +146,8 @@ class Splash:
             return start + _noise(x // size, y // size, 3) * (end - start - .15)
         if part == POT:
             dx, dy = splash_art.design_of(self.w, self.h, x, y)
-            around = (math.atan2(dx - POT_CENTRE[0], POT_CENTRE[1] - dy) / (2 * math.pi)) % 1
+            cx, cy = splash_art.DESIGN["pot_centre"]
+            around = (math.atan2(dx - cx, cy - dy) / (2 * math.pi)) % 1
             return start + around * (end - start - .15) + (0 if self.base[i] in (1, 2) else .1)
         if part in (HONEY, POOL):
             return start + (1 - y / (self.h - 1)) * (end - start - .1)
@@ -163,6 +156,7 @@ class Splash:
     def assembly(self, t: float) -> List[int]:
         """The pixels while the parts come together; at ASSEMBLE the whole logo."""
         out = [0] * len(self.base)
+        magentas = splash_art.DESIGN["magentas"]
         for i, c in enumerate(self.base):
             part = self.parts[i]
             if part is None or part == LETTERS or t < self.appear[i]:
@@ -184,9 +178,9 @@ class Splash:
                     shade = c                                   # the shadow comes without a flash
                 elif age < .12:
                     shade = 7                                   # the flash
-                elif c in MAGENTAS and age < .22:
+                elif c in magentas and age < .22:
                     shade = 6
-                elif c in MAGENTAS and age < .32:
+                elif c in magentas and age < .32:
                     shade = 5
                 else:
                     shade = c
@@ -204,13 +198,15 @@ class Splash:
     def cycle(self, phase: float) -> List[int]:
         """One frame of the template's loop (its frame()), phase in seconds from 0 to CYCLE."""
         w, h, base = self.w, self.h, self.base
+        design = splash_art.DESIGN
+        magentas, word_y, waves_y = design["magentas"], design["word_y"], design["waves_y"]
         a = list(base)
         sweep = -.15 + (phase / CYCLE) * 1.45                   # a light across the lettering
         for y in range(h):
-            if 495 < self.design_y[y] < 798:
+            if word_y[0] < self.design_y[y] < word_y[1]:
                 for x in range(w):
                     i = y * w + x
-                    if base[i] in MAGENTAS:
+                    if base[i] in magentas:
                         distance = abs(x / w - y / h * .12 - sweep)
                         if distance < .012:
                             a[i] = 7
@@ -222,16 +218,16 @@ class Splash:
 
         def faded(x: int, y: int, salt: int) -> bool:
             return fade < 1 and _noise(x, y, salt) >= fade
-        for yy in splash_art.SYRUP_Y:                           # syrup runs down the long drip
-            x, y = splash_art.design_xy(w, h, splash_art.SYRUP_X, yy)
-            if 0 <= x < w and 0 <= y < h and base[y * w + x] in MAGENTAS and not faded(x, y, 11):
+        for yy in range(*design["syrup_y"]):                    # syrup runs down the long drip
+            x, y = splash_art.design_xy(w, h, design["syrup_x"], yy)
+            if 0 <= x < w and 0 <= y < h and base[y * w + x] in magentas and not faded(x, y, 11):
                 self._put(a, x, y, 6 if (y - int(phase * 7)) % 7 < 2 else 4)
-        for k, (xx, yy) in enumerate(splash_art.DROPS):         # three drops fall and splash
+        for k, (xx, yy) in enumerate(design["drops"]):          # three drops fall and splash
             if phase < (-k * DROP_OFFSET) % DROP_PERIOD:
                 continue                                        # it comes when its cycle begins anew
             p = ((phase + k * DROP_OFFSET) % DROP_PERIOD) / DROP_PERIOD
             start_x, start_y = splash_art.design_xy(w, h, xx, yy)
-            end_x, end_y = splash_art.design_xy(w, h, xx, splash_art.POOL_Y)
+            end_x, end_y = splash_art.design_xy(w, h, xx, design["pool_y"])
             if p < .16:
                 length = 1 + int(p / .16 * 2)
                 for dy in range(length):
@@ -253,16 +249,16 @@ class Splash:
                 if radius < 3:
                     self._put(a, end_x, end_y - 2, 6)
         for y in range(h):                                      # light waves on the honey pool
-            if 924 < self.design_y[y] < 1035:
+            if waves_y[0] < self.design_y[y] < waves_y[1]:
                 for x in range(w):
                     i = y * w + x
-                    if base[i] in MAGENTAS and not faded(x, y, 13):
+                    if base[i] in magentas and not faded(x, y, 13):
                         wave = math.sin(x * .48 - phase * math.pi * 2 / CYCLE * 2 + y * .7)
                         if wave > .93:
                             a[i] = 6
                         elif wave > .7:
                             a[i] = 5
-        for k, (xx, yy) in enumerate(splash_art.STARS):         # the stars twinkle
+        for k, (xx, yy) in enumerate(design["stars"]):          # the stars twinkle
             x, y = splash_art.design_xy(w, h, xx, yy)
             if int((phase + k * .73) * 3) % 9 == 0:
                 self._put(a, x, y, 7)
