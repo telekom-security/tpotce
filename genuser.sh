@@ -11,6 +11,51 @@ if ! source "$HOME/tpotce/installer/lib/ui.sh" 2>/dev/null;
     fuUI_BANNER () { local myLINE; echo; echo "### T-Pot $1"; shift; for myLINE in "$@"; do echo "### ${myLINE}"; done; echo; }
     fuUI_WARN () { echo "### [WARNING] - $*"; }
     fuUI_HINT () { local myLINE; for myLINE in "$@"; do echo "###   ${myLINE}"; done; }
+    fuUI_HELP () {
+      local myTITLE="$1" myUSAGE="$2" myW=0 myI myLINE myFIRST myREST myPAD
+      shift 2
+      local -a myABOUT=() myFLAGS=() myTEXTS=() myCMDS=() myCTEXTS=() myNOTES=()
+      while [ "$#" -gt 0 ]; do
+        case "$1" in
+          --about) myABOUT+=("${2:-}"); shift $(( $# < 2 ? $# : 2 )) ;;
+          --opt) myFLAGS+=("${2:-}"); myTEXTS+=("${3:-}"); shift $(( $# < 3 ? $# : 3 )) ;;
+          --example) myCMDS+=("${2:-}"); myCTEXTS+=("${3:-}"); shift $(( $# < 3 ? $# : 3 )) ;;
+          --note) myNOTES+=("${2:-}"); shift $(( $# < 2 ? $# : 2 )) ;;
+          *) shift ;;
+        esac
+      done
+      for myI in "${!myFLAGS[@]}"; do
+        if [ "${#myFLAGS[myI]}" -gt "${myW}" ] && [ "${#myFLAGS[myI]}" -le 24 ]; then myW="${#myFLAGS[myI]}"; fi
+      done
+      printf 'T-Pot %s\n\nUsage: %s\n' "${myTITLE}" "${myUSAGE//$'\n'/$'\n'       }"
+      for myLINE in "${myABOUT[@]}"; do printf '\n%s\n' "${myLINE}"; done
+      if [ "${#myFLAGS[@]}" -gt 0 ]; then
+        printf '\nOptions:\n'
+        printf -v myPAD '%*s' $((myW + 6)) ''
+        for myI in "${!myFLAGS[@]}"; do
+          myFIRST="${myTEXTS[myI]%%$'\n'*}"
+          myREST=""
+          [ "${myFIRST}" = "${myTEXTS[myI]}" ] || myREST="${myTEXTS[myI]#*$'\n'}"
+          if [ "${#myFLAGS[myI]}" -le "${myW}" ];
+            then printf '  %s%*s    %s\n' "${myFLAGS[myI]}" $((myW - ${#myFLAGS[myI]})) '' "${myFIRST}"
+            else printf '  %s\n%s%s\n' "${myFLAGS[myI]}" "${myPAD}" "${myFIRST}"
+          fi
+          [ -z "${myREST}" ] || printf '%s%s\n' "${myPAD}" "${myREST//$'\n'/$'\n'${myPAD}}"
+        done
+      fi
+      if [ "${#myCMDS[@]}" -gt 0 ]; then
+        printf '\nExamples:\n'
+        for myI in "${!myCMDS[@]}"; do
+          printf '  %s\n' "${myCMDS[myI]}"
+          [ -z "${myCTEXTS[myI]}" ] || printf '      %s\n' "${myCTEXTS[myI]//$'\n'/$'\n'      }"
+        done
+      fi
+      if [ "${#myNOTES[@]}" -gt 0 ]; then
+        printf '\nNotes:\n'
+        for myLINE in "${myNOTES[@]}"; do printf '  %s\n' "${myLINE//$'\n'/$'\n'  }"; done
+      fi
+      return 0
+    }
     fuUI_RESULT () {
       case "$1" in
         ok) echo "### [OK] - $2" ;;
@@ -52,6 +97,20 @@ if [ -x "${myTPOT}" ] && "${myTPOT}" setup > /dev/null 2>&1;
   then
     exec "${myTPOT}" users add "$@"
 fi
+# without tpot: the tpotinit container, its help says so
+case " $* " in
+  *" -h "*|*" --help "*)
+    fuUI_HELP "Web user" "genuser.sh [-h]" \
+      --about "Adds a user of the T-Pot web UI: the tpotinit container asks for its name
+and password and writes it to WEB_USER of the .env." \
+      --about "This is tpot users add of the T-Pot Manager. Where tpot cannot be set up
+(its Python packages need the internet), genuser.sh runs the tpotinit
+container instead." \
+      --opt "-h, --help" "Show this help" \
+      --note "tpot users add -h shows the options of the T-Pot Manager. Its users count
+at once, without a restart of T-Pot."
+    exit 0 ;;
+esac
 fuUI_WARN "tpot is not available, using the tpotinit container."
 cd "$HOME/tpotce" || exit 1
 TPOT_REPO=$(grep -E "^TPOT_REPO" .env | cut -d "=" -f2-)
