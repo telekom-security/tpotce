@@ -404,15 +404,15 @@ On **Ubuntu 26.04** `sudo` is [sudo-rs](https://github.com/trifectatechfoundatio
 ## Unattended Installation
 The installer can run without any interaction, i.e. for automated tests or cloud provisioning:
 ```
-./install.sh -s -t <type> [-u <webuser>] [-p <password> | -P <file>] [-B <file>] [-c <compose file>]
+./install.sh -s -t <type> [-u <webuser>] [-P <file> | -p <password>] [-B <file>] [-c <compose file>]
 ```
 | Option | Description |
 |---|---|
 | `-s` | Skip the confirmation prompt and every following question |
 | `-t` | Installation type: `h` hive, `s` sensor, `l` llm, `i` mini, `m` mobile, `t` tarpit |
 | `-u` | Web user name, required for `h`, `l`, `i` and `t` |
-| `-p` | Web user password, required for `h`, `l`, `i` and `t` |
-| `-P` | Read the web user password from a file (`-` for stdin), it does not show up in the process list like `-p` |
+| `-P` | Read the web user password from a file (`-` for stdin), required for `h`, `l`, `i` and `t` (or `-p`) |
+| `-p` | The web user password itself; it shows up in the process list and the shell history, so prefer `-P` |
 | `-B` | Read the `sudo` password from a file, so `-s` works without passwordless `sudo` |
 | `-c` | Install your own compose file (i.e. from `tpot customize`) instead of an edition, `-t` is then `h` (with a web UI) or `s` (without) |
 
@@ -432,7 +432,7 @@ git clone -b my-feature https://github.com/telekom-security/tpotce ~/tpotce
 ~/tpotce/install.sh
 
 # explicitly, works the same for an unattended run
-./install.sh -b my-feature -r https://github.com/someuser/tpotce -s -t h -u user -p pass
+./install.sh -b my-feature -r https://github.com/someuser/tpotce -s -t h -u user -P ~/webpw.txt
 
 # as environment variables, i.e. for the one-liner or cloud provisioning
 TPOT_BRANCH=my-feature env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/my-feature/install.sh)"
@@ -759,7 +759,7 @@ iTerm2 is recognised over SSH by itself: it sets `LC_TERMINAL=iTerm2`, which the
    ```
    An SSH connection that is already open (`ControlMaster` / `ControlPersist`) keeps the environment it was opened with: close it once with `ssh -O exit my-tpot`.
 
-Or choose the colours without SSH's help: `TPOT_COLORS=truecolor tpot` (or `export TPOT_COLORS=truecolor` in `~/.bashrc` of the T-Pot host), or `ctrl+p` *Colours: truecolor*, which is kept in `~/.config/tpotce/tpot.json`. Only do so if your terminal can show true colours (iTerm2, GNOME Terminal, Konsole, Windows Terminal, kitty, WezTerm can), otherwise the colours come out wrong. In tmux and GNU screen the terminal outside does not count, because they draw. In tmux `COLORTERM` counts once it reaches the shell in tmux, but a `TERM` of `screen*` counts as GNU screen (it is the default `TERM` of tmux, and over SSH nothing else tells it is tmux): give tmux `set -g default-terminal tmux-256color` in `~/.tmux.conf`. In GNU screen T-Pot ignores `COLORTERM` (screen 4 has no true colours), there only `TPOT_COLORS` (or the choice in `tpot.json`) brings them, for a screen that can show them. With only 16 colours (PuTTY's default terminal type is `xterm`) set *Connection → Data → Terminal-type string* to `xterm-256color` in PuTTY, or use `TPOT_COLORS`.
+Or choose the colours without SSH's help: `TPOT_COLORS=truecolor tpot` (or `export TPOT_COLORS=truecolor` in `~/.bashrc` of the T-Pot host), or `ctrl+p` *Colours: truecolor*, which is kept in `~/.config/tpotce/tpot.json`. Only do so if your terminal can show true colours (iTerm2, GNOME Terminal, Konsole, Windows Terminal, kitty, WezTerm can), otherwise the colours come out wrong. In tmux and GNU screen the terminal outside does not count, because they draw. A tmux on the T-Pot host sets `TMUX`, there `COLORTERM` counts once it reaches the shell in tmux. With a tmux on your own computer and SSH in it, nothing tells the T-Pot host it is tmux, so the default `TERM` of tmux, `screen*`, counts as GNU screen: give tmux `set -g default-terminal tmux-256color` in `~/.tmux.conf`, then `COLORTERM` counts as well. In GNU screen T-Pot ignores `COLORTERM` (screen 4 has no true colours), there only `TPOT_COLORS` (or the choice in `tpot.json`) brings them, for a screen that can show them. With only 16 colours (PuTTY's default terminal type is `xterm`) set *Connection → Data → Terminal-type string* to `xterm-256color` in PuTTY, or use `TPOT_COLORS`.
 <br><br>
 
 ## T-Pot Config File

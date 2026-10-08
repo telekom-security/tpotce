@@ -167,6 +167,24 @@ class InstallShTest(Scripts):
     def test_help(self):
         self.assert_help("install.sh", self.run_script(self.script, "-h"))
 
+    def test_the_readme_recommends_P_over_p(self):
+        """known r3: -p puts the web password into the argv of install.sh (ps, /proc/<pid>/cmdline,
+        the shell history), -P reads it from a file or stdin: the README names -P first, says why and
+        no example of it hands a password with -p."""
+        readme = base.read("README.md")
+        section = readme[readme.index("## Unattended Installation"):]
+        section = section[:section.index("\n## ", 1)]
+        usage = re.search(r"\./install\.sh -s -t <type> [^\n]*", section).group(0)
+        self.assertIn("[-P <file> | -p <password>]", usage)
+        rows = {m.group(1): m.group(2) for m in re.finditer(r"^\| `(-\w)` \| (.*) \|$", section, re.M)}
+        self.assertLess(list(rows).index("-P"), list(rows).index("-p"))
+        self.assertIn("process list", rows["-p"])
+        self.assertIn("`-P`", rows["-p"])
+        for block in re.findall(r"```\n(.*?)```", readme, re.S):
+            for line in block.splitlines():
+                if "install.sh" in line:
+                    self.assertNotRegex(line, r"\s-p\s+(?!<password>)", line)     # the usage line names it
+
     def test_usage_errors(self):
         for args, text in ((["-Z"], "Unknown option -Z."), (["-t"], "Option -t requires an argument."),
                            (["-t", "x"], "Invalid installation type: x"),

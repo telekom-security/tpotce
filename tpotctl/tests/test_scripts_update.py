@@ -764,6 +764,26 @@ class SshdDocsTest(unittest.TestCase):
         self.assertEqual(prefs.detect_colors(dict(isolated, TERM="screen-256color", TPOT_COLORS="truecolor")),
                          "truecolor")
 
+    def test_the_readme_tells_tmux_on_the_host_from_tmux_on_your_computer(self):
+        """r3-RA 5: a TERM of screen* counts as GNU screen only where nothing tells it is tmux, that is a
+        tmux on your own computer with SSH in it (TMUX does not come over SSH). A tmux on the T-Pot host
+        sets TMUX, there COLORTERM counts with its default TERM screen-256color as well."""
+        from tpotctl import prefs
+        sentences = re.split(r"(?<=[.:])\s+", " ".join(self.section().split()))
+        screen = [s for s in sentences if "`screen*`" in s]
+        self.assertTrue(screen)
+        for sentence in screen:
+            self.assertIn("your own computer", sentence)
+        host = [s for s in sentences if "tmux" in s and "T-Pot host" in s and "`TMUX`" in s]
+        self.assertTrue(host, sentences)
+        self.assertTrue(any("`COLORTERM`" in s for s in host), host)
+        # what the README says is the rule
+        isolated = {"XDG_CONFIG_HOME": "/nonexistent-tpot-test"}
+        self.assertEqual(prefs.detect_colors(dict(isolated, TERM="screen-256color", TMUX="/tmp/tmux-1000/default,1,0",
+                                                  COLORTERM="truecolor")), "truecolor")
+        self.assertEqual(prefs.detect_colors(dict(isolated, TERM="screen-256color", TMUX="/tmp/tmux-1000/default,1,0")),
+                         "256")
+
     def test_the_task_names_name_both_variables(self):
         install = base.read("installer/install/tpot.yml")
         directory = re.search(r"- name: ([^\n]*)\n(?:\s*#[^\n]*\n)*\s*file:\n\s*path: /etc/ssh/sshd_config.d\n",
