@@ -523,6 +523,11 @@ class ColoursTest(unittest.TestCase):
                 calls = read(record).split("\n")[1:-1]                   # after gum --version of fuUI_INIT
                 self.assertEqual(calls, [f"COLORTERM={gum}"] * 2)         # INFO (sign and text)
                 self.assertTrue(read(record))                             # gum ran (fuUI_INFO)
+        # a dumb, unknown or empty TERM paints nothing: no true colour is handed to the children either
+        for term in ("", "dumb", "unknown"):
+            with self.subTest(TERM=term):
+                out = at_terminal(script, sandbox.env(TERM=term, LC_TERMINAL="iTerm2"), 100, 30)
+                self.assertIn("child=(unset)", out)
         # without a terminal or with TPOT_GUM=off there is no gum: nothing is exported
         result = run(script, sandbox.env(LC_TERMINAL="iTerm2"))
         self.assertIn("child=(unset)", result.stdout)

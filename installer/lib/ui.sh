@@ -61,7 +61,7 @@ fuUI_INIT () {
   # by fuUI_GUM, also where it is less than the terminal says (TPOT_COLORS, GNU screen)
   local myDEPTH myLOW
   myDEPTH=$(fuUI_COLORS)
-  if [ -z "${COLORTERM:-}" ] && [ "${myDEPTH}" = "truecolor" ]; then export COLORTERM=truecolor; fi
+  if [ -z "${COLORTERM:-}" ] && [ "${myDEPTH}" = "truecolor" ] && ! fuUI_DUMB; then export COLORTERM=truecolor; fi
   myUI_GUM_COLORTERM="" myUI_GUM_TERM="${TERM:-}" myUI_GUM_DEPTH="${myDEPTH}" myUI_GUM_DUMB=""
   fuUI_LOWER myLOW "${TERM:-}"
   if fuUI_DUMB; then myUI_GUM_DUMB=1 myUI_GUM_TERM="dumb"; fi
