@@ -579,9 +579,10 @@ def run_sensor_add(args, registry, console) -> int:
         else:
             hive = proposal
         if not hive:
+            # 2 only when it cannot ask; an empty answer is a wrong value like one for --host (1)
             why = "nothing given" if interactive else "no terminal to ask for it"
             fail(f"no address of this HIVE for the sensor ({why}, none found on the way to {host}), "
-                 f"give it with --hive-address", 2)
+                 f"give it with --hive-address", 1 if interactive else 2)
     hive = tsensors.check_hive_address(hive)
 
     port = tsensors.check_port(args.ssh_port)

@@ -337,7 +337,7 @@ class CliTest(unittest.TestCase):
 
     def test_no_proposal_of_the_hive_address_asks_for_it(self):
         """An SSH alias (sensor_1) has no address of this HIVE on the way to it: no "[]" in the question,
-        without a terminal exit 2 and the option to give it with."""
+        without a terminal exit 2 (cannot ask) and the option to give it with, an empty answer exit 1."""
         with mock.patch.object(sensors, "check_ssh", return_value="unreachable") as ssh, \
                 mock.patch.object(sensors, "default_hive_address", return_value=""):
             code, text = self.run_cli("sensors", "add", "--host", "sensor_1", "--ssh-user", "u")
@@ -355,8 +355,9 @@ class CliTest(unittest.TestCase):
                     if answer:
                         self.assertEqual(code, 1, text)            # on to SSH, which is not there
                         self.assertIn("cannot log in", text)
-                    else:
-                        self.assertEqual(code, 2, text)
+                    else:                                   # it did ask: an empty answer is 1, as for --host
+                        self.assertEqual(code, 1, text)
+                        self.assertIn("nothing given", text)
                         self.assertIn("--hive-address", text)
         self.assertEqual(len(sensors.Registry(self.repo).entries()), 2)      # nothing granted
 
