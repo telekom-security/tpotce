@@ -2,6 +2,8 @@
 
 set -Eeuo pipefail
 
+# an exported CDPATH makes cd print the folder it found, into the paths below
+unset CDPATH
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 TEST_DIR="${SCRIPT_DIR}/tests"
 

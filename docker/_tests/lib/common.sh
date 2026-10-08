@@ -2,6 +2,8 @@
 
 set -Eeuo pipefail
 
+# an exported CDPATH makes cd print the folder it found, into the paths below
+unset CDPATH
 TEST_LIB_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 TEST_ROOT="$(cd -- "${TEST_LIB_DIR}/.." && pwd)"
 REPO_ROOT="$(cd -- "${TEST_ROOT}/../.." && pwd)"
