@@ -133,6 +133,17 @@ class EngineTest(unittest.TestCase):
         Engine(["python3", "-c", "import os; print(os.getsid(0))"]).run(lines.append)
         self.assertNotEqual(int(lines[0]), os.getsid(0))
 
+    def test_the_pipe_of_the_child_is_closed(self):
+        """Every run of the task screen closes the pipe it read (no ResourceWarning, no open fd)."""
+        import gc
+        import warnings
+        from tpotctl.engine import Engine
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always", ResourceWarning)
+            Engine(["bash", "-c", "echo one; exit 3"]).run(lambda _line: None)
+            gc.collect()
+        self.assertEqual([str(w.message) for w in caught if issubclass(w.category, ResourceWarning)], [])
+
     def test_missing_command(self):
         from tpotctl.engine import Engine
         lines = []

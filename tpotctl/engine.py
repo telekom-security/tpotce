@@ -33,6 +33,7 @@ class Engine:
         except OSError as err:
             line(f"{self.command[0]}: {err.strerror or err}\n")
             return 127
-        for text in proc.stdout:
-            line(text)
+        with proc.stdout:          # closed after the run, a menu runs many
+            for text in proc.stdout:
+                line(text)
         return proc.wait()
