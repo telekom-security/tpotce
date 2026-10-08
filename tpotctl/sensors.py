@@ -117,8 +117,8 @@ def _host_name(address: str, extra: str = "") -> bool:
     and dots only are a mistyped IPv4 address (999.1.1.1, 1.2.3, 123), no host name: as deploy.sh."""
     chars = "A-Za-z0-9" + extra
     label = f"[{chars}]([{chars}-]{{0,61}}[{chars}])?"
-    return (1 <= len(address) <= 253 and bool(re.match(rf"^({label}\.)*{label}$", address))
-            and not re.match(r"^[0-9.]+$", address))
+    return (1 <= len(address) <= 253 and bool(re.fullmatch(rf"({label}\.)*{label}", address))
+            and not re.fullmatch(r"[0-9.]+", address))
 
 
 def check_address(address: str) -> str:
@@ -133,14 +133,17 @@ def check_address(address: str) -> str:
 def check_hive_address(address: str) -> str:
     """The address the SENSOR reaches this HIVE on, its TPOT_HIVE_IP: an IPv4 address or a host name as
     tpotinit takes it there. No IPv6 address: Logstash sends to https://<address>:64294, without brackets
-    that URL breaks (and tpotinit rejects ::ffff:192.0.2.1); a host name of the HIVE works for IPv6 too."""
+    that URL breaks (and tpotinit rejects ::ffff:192.0.2.1). A host name only works with an A record: the
+    containers of the SENSOR have no IPv6 (default bridge of compose/sensor.yml) and do not read the
+    /etc/hosts of the host, so an IPv6-only HIVE cannot take sensors yet."""
     address = (address or "").strip()
     found = _ip(address)
     if found is not None and found.version == 4:
         return address
     if found is not None:
         raise SensorsError(f"'{address}' is an IPv6 address, a sensor cannot send to it: give the IPv4 address "
-                           f"or a host name of this HIVE")
+                           f"of this HIVE or a host name with an IPv4 (A) record (an IPv6-only HIVE cannot take "
+                           f"sensors yet)")
     if _host_name(address):
         return address
     raise SensorsError(f"'{address}' is not an IPv4 address or a host name of this HIVE")
@@ -148,7 +151,8 @@ def check_hive_address(address: str) -> str:
 
 def check_user(user: str) -> str:
     """A Linux user name: capitals too (useradd of Fedora, RHEL and openSUSE takes them)."""
-    if not re.match(r"^[A-Za-z_][A-Za-z0-9_.-]{0,31}$", user or ""):
+    # fullmatch: $ would match before a final newline, which splits the inventory line (as deploy.sh)
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.-]{0,31}", user or ""):
         raise SensorsError(f"'{user}' is not a user name")
     return user
 

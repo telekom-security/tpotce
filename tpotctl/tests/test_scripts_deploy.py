@@ -192,7 +192,8 @@ class DeployAddressTest(Harness):
         URL (and tpotinit rejects ::ffff:192.0.2.1): the question says IPv4 or a name, the warning no IPv6."""
         result = self.deploy("y", "admin", "10.0.0.2", "y", "fd00::1", "hive.example.org")
         self.assert_asked_again(result)
-        self.assertIn("### [WARNING] - Invalid IP/domain. Enter an IPv4 address or a domain name, no IPv6.",
+        # r2-RA 3: a name works only with an A record (no IPv6 in the containers of the SENSOR)
+        self.assertIn("### [WARNING] - Invalid IP/domain: an IPv4 address or a name with an A record, no IPv6.",
                       result.stdout)
         self.assertIn('fuASK_VALID "Enter the IPv4 address or the domain name of this HIVE:"', body("deploy.sh"))
         self.assertIn("env myTPOT_HIVE_IP=hive.example.org", self.calls())
@@ -528,6 +529,9 @@ class WrapperOptionsTest(Harness):
                  ("deploy.sh", ["--host", "-y"], "Option --host requires a value."),
                  ("deploy.sh", ["--ssh-port", "abc"], "--ssh-port takes a number, not abc."),
                  ("deploy.sh", ["--ssh-port=22x"], "--ssh-port takes a number, not 22x."),
+                 # r2-RA 6: the empty value is named, not "not ."
+                 ("deploy.sh", ["--ssh-port="], "--ssh-port takes a number, not an empty value."),
+                 ("deploy.sh", ["--ssh-port", ""], "--ssh-port takes a number, not an empty value."),
                  ("deploy.sh", ["10.0.0.2"], "Unexpected argument 10.0.0.2."),
                  ("deploy.sh", ["-x"], "Unknown option -x."),
                  ("genuser.sh", ["--bogus"], "Unknown option --bogus."),
@@ -541,6 +545,12 @@ class WrapperOptionsTest(Harness):
                 self.assertIn(f"{script} -h shows the options.", result.stderr)
                 self.assertEqual(result.stdout, "")
                 self.assertEqual(self.calls(), "")
+
+    def test_both_wrappers_name_an_empty_number_the_same_way(self):
+        """genuser.sh has no number option today, its parser is the one of deploy.sh (r2-RA 6)."""
+        for script in ("deploy.sh", "genuser.sh"):
+            with self.subTest(script=script):
+                self.assertTrue('takes a number, not ${myVALUE:-an empty value}.' in base.read(script), script)
 
     def test_no_logo_before_a_usage_error(self):
         self.with_tpot()
@@ -602,6 +612,11 @@ class ReadmeTest(unittest.TestCase):
         self.assertIn("IPv4 address or a host name", section)
         self.assertIn("IPv6", section)
         self.assertIn("https://<address>:64294", section)
+        # r2-RA 3: a name with only an AAAA record does not work either (compose/sensor.yml: the default
+        # bridge without enable_ipv6, the containers do not read the /etc/hosts of the host)
+        self.assertNotIn("for a **Hive** on IPv6 give its host name", section)
+        self.assertIn("IPv4 (A) record", section)
+        self.assertIn("IPv6-only **Hive** cannot take sensors yet", section)
 
     def test_a_wrong_option_of_the_wrappers(self):
         readme = base.read("README.md")

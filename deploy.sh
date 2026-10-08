@@ -148,7 +148,7 @@ fuCHECK_OPTIONS () {
               *" ${myKEY} "*)
                 if ! [[ "${myVALUE}" =~ ^[0-9]+$ ]];
                   then
-                    fuUI_USAGE_ERROR "${myKEY} takes a number, not ${myVALUE}." "deploy.sh"
+                    fuUI_USAGE_ERROR "${myKEY} takes a number, not ${myVALUE:-an empty value}." "deploy.sh"
                     exit 1
                 fi ;;
             esac
@@ -293,7 +293,8 @@ fuCHECK_ADDRESS () {
 fuCHECK_HIVE_ADDRESS () {
   # fuCHECK_HIVE_ADDRESS <text>: 0 for the address of this HIVE, TPOT_HIVE_IP of the SENSOR: an IPv4
   # address or a host name as tpotinit takes it there (sensors.check_hive_address). No IPv6: Logstash
-  # sends to https://<address>:64294, without brackets that URL breaks; a host name works for IPv6
+  # sends to https://<address>:64294, without brackets that URL breaks; a host name only with an A
+  # record (the containers of the SENSOR have no IPv6), an IPv6-only HIVE cannot take sensors yet
   fuIS_IPV4 "$1" || fuIS_HOSTNAME "$1"
 }
 
@@ -363,7 +364,7 @@ fi
 
 # Check if running on a supported distribution (the ones of install.sh)
 mySUPPORTED_DISTRIBUTIONS=("AlmaLinux" "Debian GNU/Linux" "Fedora Linux" "openSUSE Tumbleweed" "Raspbian GNU/Linux" "Red Hat Enterprise Linux" "Rocky Linux" "Ubuntu")
-myCURRENT_DISTRIBUTION=$(awk -F= '/^NAME/{print $2}' /etc/os-release | tr -d '"')
+myCURRENT_DISTRIBUTION=$(awk -F= '/^NAME/{print $2}' /etc/os-release 2>/dev/null | tr -d '"')
 mySUPPORTED=""
 for myNAME in "${mySUPPORTED_DISTRIBUTIONS[@]}"; do
   [ "${myNAME}" != "${myCURRENT_DISTRIBUTION}" ] || mySUPPORTED="y"
@@ -414,7 +415,7 @@ fi
 
 # Ask for the IPv4 address / domain name of this HIVE, the SENSOR sends its logs there
 if ! fuASK_VALID "Enter the IPv4 address or the domain name of this HIVE:" fuCHECK_HIVE_ADDRESS \
-       "Invalid IP/domain. Enter an IPv4 address or a domain name, no IPv6.";
+       "Invalid IP/domain: an IPv4 address or a name with an A record, no IPv6.";
   then
     fuUI_ERROR "You need to enter the IP/domain name of this HIVE. Aborting."
     exit 1

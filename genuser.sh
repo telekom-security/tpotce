@@ -124,7 +124,7 @@ fuCHECK_OPTIONS () {
               *" ${myKEY} "*)
                 if ! [[ "${myVALUE}" =~ ^[0-9]+$ ]];
                   then
-                    fuUI_USAGE_ERROR "${myKEY} takes a number, not ${myVALUE}." "genuser.sh"
+                    fuUI_USAGE_ERROR "${myKEY} takes a number, not ${myVALUE:-an empty value}." "genuser.sh"
                     exit 1
                 fi ;;
             esac

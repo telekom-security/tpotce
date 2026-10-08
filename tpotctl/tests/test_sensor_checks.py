@@ -117,7 +117,10 @@ class HiveAddressTest(unittest.TestCase):
                 with self.assertRaises(sensors.SensorsError) as raised:
                     sensors.check_hive_address(wrong)
                 self.assertIn("IPv6", str(raised.exception))
-                self.assertIn("host name", str(raised.exception))
+                # r2-RA 3: the containers of the SENSOR have no IPv6 (default bridge) and do not read the
+                # /etc/hosts of the host: only a name with an A record works, an IPv6-only HIVE not at all
+                self.assertIn("IPv4 (A) record", str(raised.exception))
+                self.assertIn("IPv6-only HIVE cannot take sensors yet", str(raised.exception))
 
     def test_what_tpotinit_rejects_is_refused(self):
         for wrong in ("sensor_1", "999.1.1.1", "1.2.3", "a b", "-host", "fe80::1%eth0", "", "x" * 64):
@@ -173,10 +176,33 @@ class UserTest(unittest.TestCase):
 
     def test_nothing_that_breaks_a_command(self):
         for wrong in ("", "a b", "-l", "-oProxyCommand=x", "root;id", "Admin User", "1admin", "a" * 33, "a@b",
-                      "ärger"):
+                      "ärger", "tpot\n", "tpot\r", "\ntpot", "tpot\nroot"):
             with self.subTest(user=wrong):
                 with self.assertRaises(sensors.SensorsError):
                     sensors.check_user(wrong)
+
+    def test_a_trailing_newline_is_refused_like_deploy_sh_does(self):
+        """r2-RA 4: $ of re.match matches before a final newline, so "tpot\n" went through (tpot sensors
+        set --ssh-user, a hand-edited sensors.json) and split the inventory line of sensors cert
+        --distribute; fuCHECK_USER of deploy.sh ([[ =~ ]], $ only at the end) refuses it."""
+        from tpotctl.tests.test_scripts_deploy import body
+        functions = "\n".join(re.findall(r"^fu(?:TRIM|IS_\w+|CHECK_\w+) \(\) \{\n.*?^\}$", body("deploy.sh"),
+                                         re.M | re.S))
+        for value in ("tpot\n", "tpot", "tpot\n\n"):
+            with self.subTest(user=value):
+                bash = subprocess.run(["bash", "-c", functions + '\nfuCHECK_USER "$1"', "x", value],
+                                      capture_output=True, universal_newlines=True, timeout=60).returncode == 0
+                self.assertEqual(accepts(sensors.check_user, value), bash)
+        registry = sensors.Registry(checkout(self), hasher=fake_hash)
+        with self.assertRaises(sensors.SensorsError):
+            registry.update("sensor-old-lynx", ssh_user="tpot\n")
+        self.assertNotIn("\n", registry.get("sensor-old-lynx").ssh_user)
+
+    def test_no_host_name_check_takes_a_trailing_newline(self):
+        for value in ("host\n", "host.example.org\n", "sensor_1\n", "123\n"):
+            with self.subTest(address=value):
+                self.assertFalse(sensors._host_name(value))
+                self.assertFalse(sensors._host_name(value, "_"))
 
 
 if __name__ == "__main__":
