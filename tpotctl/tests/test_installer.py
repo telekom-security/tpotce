@@ -97,7 +97,7 @@ OS_RELEASES = {
 
 @unittest.skipUnless(yaml, "PyYAML is not installed")
 class SshColortermTest(unittest.TestCase):
-    """sshd takes COLORTERM from the client, so the T-Pot Manager shows true colours over SSH."""
+    """sshd takes COLORTERM and LC_TERMINAL from the client, so the T-Pot Manager shows true colours over SSH."""
 
     DROPIN = "/etc/ssh/sshd_config.d/tpot.conf"
 
@@ -113,7 +113,8 @@ class SshColortermTest(unittest.TestCase):
                  if (t.get("lineinfile") or {}).get("path") == self.DROPIN]
         self.assertEqual(len(found), 1, found)
         task = found[0]
-        self.assertEqual(task["lineinfile"]["line"], "AcceptEnv COLORTERM")
+        # LC_TERMINAL is how iTerm2 says who it is (tpotctl/tests/test_colors.py SshdTest has the rest)
+        self.assertEqual(task["lineinfile"]["line"], "AcceptEnv COLORTERM LC_TERMINAL LC_TERMINAL_VERSION")
         for name in ("AlmaLinux", "Debian", "Fedora", "openSUSE Tumbleweed", "Raspbian", "RedHat", "Rocky", "Ubuntu"):
             self.assertTrue(f'"{name}"' in task["when"], name)
         tasks = self.tasks("installer", "install", "tpot.yml")

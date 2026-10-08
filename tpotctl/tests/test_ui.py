@@ -1223,7 +1223,7 @@ def functions(text):
 
 
 SCRIPTS = ("install.sh", "update.sh", "restore.sh", "uninstall.sh", "genuser.sh", "deploy.sh",
-           "docker/_builder/builder.sh", "docker/_builder/setup_builder.sh",
+           "docker/_builder/builder.sh",
            "docker/tpotinit/dist/bin/hptest.sh", "docker/tpotinit/dist/bin/attackmap_pipeline_test.sh")
 
 

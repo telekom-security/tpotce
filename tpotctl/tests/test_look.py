@@ -658,27 +658,30 @@ def pure_red(hexcolour: str) -> bool:
 class ColoursPrefTest(unittest.TestCase):
     """TPOT_COLORS / the colours of prefs.py: auto, truecolor or 256, before Textual is imported."""
 
+    @staticmethod
+    def applied(**env):
+        """What apply_color_system gives Textual for this environment (its tpot.json: the isolated one)."""
+        target = {"XDG_CONFIG_HOME": os.environ["XDG_CONFIG_HOME"]}
+        target.update(env)
+        prefs.apply_color_system(target)
+        return {key: value for key, value in target.items() if key in ("TEXTUAL_COLOR_SYSTEM", "TPOT_COLORS_SET")}
+
     def test_colors_pref_and_env(self):
         with mock.patch.dict(os.environ, {"TPOT_COLORS": "256"}):
             self.assertEqual(prefs.load().colors, "256")
         with mock.patch.dict(os.environ, {"TPOT_COLORS": "plaid"}):
             self.assertEqual(prefs.load().colors, "auto")
-        environ = {"TPOT_COLORS": "256"}
-        with mock.patch.dict(os.environ, environ):
-            target = {}
-            prefs.apply_color_system(target)
-            self.assertEqual(target, {"TEXTUAL_COLOR_SYSTEM": "256", "TPOT_COLORS_SET": "256"})
-            target = {"TEXTUAL_COLOR_SYSTEM": "truecolor"}         # the user's own choice wins
-            prefs.apply_color_system(target)
-            self.assertEqual(target, {"TEXTUAL_COLOR_SYSTEM": "truecolor"})
-        with mock.patch.dict(os.environ, {"TPOT_COLORS": "16"}):
-            target = {}
-            prefs.apply_color_system(target)
-            self.assertEqual(target, {"TEXTUAL_COLOR_SYSTEM": "standard", "TPOT_COLORS_SET": "standard"})
-        with mock.patch.dict(os.environ, {"TPOT_COLORS": "auto"}):
-            target = {}
-            prefs.apply_color_system(target)
-            self.assertEqual(target, {})
+        self.assertEqual(self.applied(TPOT_COLORS="256"), {"TEXTUAL_COLOR_SYSTEM": "256", "TPOT_COLORS_SET": "256"})
+        # the user's own choice wins
+        self.assertEqual(self.applied(TPOT_COLORS="256", TEXTUAL_COLOR_SYSTEM="truecolor"),
+                         {"TEXTUAL_COLOR_SYSTEM": "truecolor"})
+        self.assertEqual(self.applied(TPOT_COLORS="16"),
+                         {"TEXTUAL_COLOR_SYSTEM": "standard", "TPOT_COLORS_SET": "standard"})
+        # auto: the rule of the scripts (prefs.detect_colors), iTerm2 over SSH too
+        self.assertEqual(self.applied(TPOT_COLORS="auto", TERM="xterm-256color"),
+                         {"TEXTUAL_COLOR_SYSTEM": "256", "TPOT_COLORS_SET": "256"})
+        self.assertEqual(self.applied(TPOT_COLORS="auto", TERM="xterm-256color", LC_TERMINAL="iTerm2"),
+                         {"TEXTUAL_COLOR_SYSTEM": "truecolor", "TPOT_COLORS_SET": "truecolor"})
 
     def test_a_restart_takes_the_new_choice(self):
         """Restart the Manager keeps the environment of the first start: what tpot set there is not the user's."""
@@ -687,12 +690,13 @@ class ColoursPrefTest(unittest.TestCase):
                 mock.patch.dict(os.environ, {"XDG_CONFIG_HOME": config}):
             os.environ.pop("TPOT_COLORS", None)
             prefs.save(prefs.Prefs(colors="truecolor"))
-            target = {"TEXTUAL_COLOR_SYSTEM": "256", "TPOT_COLORS_SET": "256"}
+            target = {"XDG_CONFIG_HOME": config, "TERM": "xterm-256color",
+                      "TEXTUAL_COLOR_SYSTEM": "256", "TPOT_COLORS_SET": "256"}
             prefs.apply_color_system(target)
-            self.assertEqual(target, {"TEXTUAL_COLOR_SYSTEM": "truecolor", "TPOT_COLORS_SET": "truecolor"})
+            self.assertEqual((target["TEXTUAL_COLOR_SYSTEM"], target["TPOT_COLORS_SET"]), ("truecolor", "truecolor"))
             prefs.save(prefs.Prefs(colors="auto"))
-            prefs.apply_color_system(target)
-            self.assertEqual(target, {})
+            prefs.apply_color_system(target)                    # auto: the terminal, TERM xterm-256color
+            self.assertEqual((target["TEXTUAL_COLOR_SYSTEM"], target["TPOT_COLORS_SET"]), ("256", "256"))
 
     def test_palette_and_textual_agree(self):
         """The palette follows what Textual renders with, whoever decided it."""

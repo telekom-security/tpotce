@@ -125,7 +125,7 @@ EXCLUDED = (
 
 # the scripts and modules that must read the version (fuUI_VERSION, the file `version`)
 SCRIPTS = ("install.sh", "update.sh", "restore.sh", "uninstall.sh", "genuser.sh", "deploy.sh",
-           "docker/_builder/builder.sh", "docker/_builder/setup_builder.sh", "installer/lib/ui.sh",
+           "docker/_builder/builder.sh", "installer/lib/ui.sh",
            "tpotctl/*.py", "tpotctl/*/*.py")
 
 
