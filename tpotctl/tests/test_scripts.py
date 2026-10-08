@@ -217,18 +217,29 @@ class UpdateShTest(Harness):
 
     def test_ctrl_c_in_the_pause_stops_cleanly(self):
         """Ctrl+C reaches bash and sleep at once; in whatever order bash sees them, the run stops (several
-        runs: the order is a race)."""
+        runs: the order is a race). The Ctrl+C comes once the sleep of the pause runs (a sleep on PATH
+        says so and execs the real one): a fixed wait sent it before the trap under load (rc -2)."""
         import signal
         import time
         function = re.search(r"function fuELASTIC_STOPPED \(\) \{.*?\n\}", read("update.sh"), re.S).group(0)
         pause = re.search(r"\n(\s*trap fuELASTIC_STOPPED INT\n.*?trap - INT\n)", self.check_elastic(), re.S).group(1)
         script = (f'source "{REPO}/installer/lib/ui.sh"; fuUI_INIT\nfuDID () {{ :; }}\n{function}\n'
                   + pause.replace("sleep 15", "sleep 5") + 'echo after\n')
+        sleeping = os.path.join(self.home, "sleeping")
+        with open(os.path.join(self.bin, "sleep"), "w", encoding="utf-8") as out:
+            out.write(f'#!/bin/sh\n: > "{sleeping}"\nexec {shutil.which("sleep")} "$@"\n')
+        os.chmod(os.path.join(self.bin, "sleep"), 0o755)
         for attempt in range(12):
+            if os.path.exists(sleeping):
+                os.remove(sleeping)
             proc = subprocess.Popen(["bash", "-c", script], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                     universal_newlines=True, start_new_session=True,
-                                    env=dict(os.environ, HOME=self.home, TPOT_GUM="off"))
-            time.sleep(0.3)
+                                    env=dict(os.environ, HOME=self.home, TPOT_GUM="off",
+                                             PATH=f"{self.bin}:{os.environ['PATH']}"))
+            deadline = time.time() + 30
+            while not os.path.exists(sleeping) and proc.poll() is None and time.time() < deadline:
+                time.sleep(0.01)
+            self.assertTrue(os.path.exists(sleeping), f"run {attempt}: the pause did not start")
             os.killpg(proc.pid, signal.SIGINT)
             out, _err = proc.communicate(timeout=10)
             self.assertEqual(proc.returncode, 130, f"run {attempt}: {out}")
