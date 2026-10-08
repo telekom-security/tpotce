@@ -1,4 +1,4 @@
-FROM alpine:3.23
+FROM alpine:3.24
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -15,6 +15,7 @@ RUN apk --no-cache -U upgrade && \
 		py3-beautifulsoup4 \
 		py3-gitpython \
 		py3-jinja2 \
+		py3-legacy-cgi \
 		py3-markupsafe \
 		py3-setuptools \
 		py3-pip \
@@ -24,10 +25,9 @@ RUN apk --no-cache -U upgrade && \
 # Setup Snare 
     git clone https://github.com/mushorg/snare /opt/snare && \
     cd /opt/snare/ && \
-	git checkout 08c69b7165354ea2040b6170c37d92ff3c304f96 && \
+	git checkout b17fdfe7c2ba3ac540548763d73fc475cfc185c4 && \
     cp /root/dist/requirements.txt . && \
     pip3 install --break-system-packages --no-cache-dir -r requirements.txt && \
-    sed -i 's/parser.add_argument("--port", help="port to listen on", default=.8080.)/parser.add_argument("--port", help="port to listen on", default=8080, type=int)/' bin/snare && \
     sed -i '1,/loop = asyncio.get_event_loop()/s/loop = asyncio.get_event_loop()/loop = asyncio.new_event_loop(); asyncio.set_event_loop(loop)/' bin/snare && \
     python3 setup.py install && \
     cd / && \

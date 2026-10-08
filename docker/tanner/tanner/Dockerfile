@@ -1,4 +1,4 @@
-FROM alpine:3.23
+FROM alpine:3.24
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -38,6 +38,8 @@ RUN apk --no-cache -U upgrade && \
     git checkout 3bc9ae2831db2d7e9c3aa3fb98b3b3a6fc73b18c && \
     cp /root/dist/config.yaml /opt/tanner/tanner/data && \
     cp /root/dist/requirements.txt . && \
+    # Python 3.14: get_event_loop() no longer creates a loop, set one before tanner builds its server
+    sed -i 's/^import argparse$/import argparse, asyncio\nasyncio.set_event_loop(asyncio.new_event_loop())/' bin/tanner bin/tannerapi bin/tannerweb && \
     pip3 install --break-system-packages --no-cache-dir cython && \
     pip3 install --break-system-packages --no-cache-dir --no-build-isolation pylibinjection && \
     pip3 install --break-system-packages --no-cache-dir -r requirements.txt && \
