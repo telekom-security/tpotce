@@ -45,7 +45,7 @@ myUI_COLS=""
 myUI_ROWS=""
 # the checkout this file lies in, for the copy in install.sh (no file of its own) ~/tpotce
 case "${BASH_SOURCE[0]:-}" in
-  */installer/lib/ui.sh) myUI_CHECKOUT=$(cd "${BASH_SOURCE[0]%/installer/lib/ui.sh}/" 2>/dev/null && pwd) ;;
+  */installer/lib/ui.sh) myUI_CHECKOUT=$(CDPATH="" cd -- "${BASH_SOURCE[0]%/installer/lib/ui.sh}/" 2>/dev/null && pwd) ;;
   installer/lib/ui.sh) myUI_CHECKOUT="${PWD}" ;;
   *) myUI_CHECKOUT="" ;;
 esac

@@ -704,16 +704,23 @@ class SensorsPaneTest(unittest.IsolatedAsyncioTestCase):
         def default_hive(host):
             calls.append((host, threading.current_thread() is threading.main_thread()))
             return "192.168.1.2" if host == "sensor1" else "10.9.9.9"
+        from tpotctl.screens import dialogs
         dialog = SensorDialog(sensors.check_address, sensors.check_user, default_hive, sensors.check_hive_address)
         app = App()
-        async with app.run_test() as pilot:
-            app.push_screen(dialog)
-            await pilot.pause()
-            dialog.query_one("#sensor-host").focus()
-            await pilot.press(*"sensor1")
-            self.assertEqual(calls, [])                 # not while typing
-            await pilot.pause(0.8)
-            placeholder = dialog.query_one("#sensor-hive").placeholder
+        # a pause the keys of the test always beat, also on a busy machine (a key every 0.4 s would not)
+        with mock.patch.object(dialogs, "PROPOSAL_PAUSE", 3.0):
+            async with app.run_test() as pilot:
+                app.push_screen(dialog)
+                await pilot.pause()
+                dialog.query_one("#sensor-host").focus()
+                await pilot.press(*"sensor1")
+                self.assertEqual(calls, [])                 # not while typing
+                for _ in range(200):                        # once after the pause
+                    if calls:
+                        break
+                    await pilot.pause(0.05)
+                await pilot.pause(0.2)
+                placeholder = dialog.query_one("#sensor-hive").placeholder
         self.assertEqual(calls, [("sensor1", False)])
         self.assertIn("[192.168.1.2]", placeholder)
 

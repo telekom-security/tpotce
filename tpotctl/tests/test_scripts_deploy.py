@@ -453,13 +453,16 @@ class DeployLookTest(Harness):
                 if not following.lstrip().startswith("#"):
                     self.assertEqual(len(following) - len(following.lstrip()), indent + 2, following)
 
-    def test_yes_is_asked_again(self):
-        """y or n only: 'yes' is not an answer of fuUI_CONFIRM, the question comes again."""
+    def test_yes_and_no_in_any_case(self):
+        """y / n and yes / no in any case are answers of fuUI_CONFIRM, anything else asks again."""
         for _ in self.both():
-            result = self.deploy("yes", "y", "admin", "10.0.0.2", "y", "10.0.0.1")
+            result = self.deploy("YES", "admin", "10.0.0.2", "Y", "10.0.0.1")
+            self.assert_deployed(result)
+            os.remove(os.path.join(self.home, "calls"))
+            result = self.deploy("maybe", "y", "admin", "10.0.0.2", "y", "10.0.0.1")
             self.assert_asked_again(result)
             os.remove(os.path.join(self.home, "calls"))
-            result = self.deploy("yes", "n")
+            result = self.deploy("maybe", "No")
             self.assertEqual(result.returncode, 1)
             self.assertIn("A T-Pot SENSOR must be installed to continue.", result.stderr)
 

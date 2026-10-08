@@ -1998,6 +1998,31 @@ SCRIPTS = ("install.sh", "update.sh", "restore.sh", "uninstall.sh", "genuser.sh"
 
 
 @unittest.skipUnless(BASH, "no bash")
+class CheckoutTest(unittest.TestCase):
+    """ui.sh finds the checkout it lies in, also with an exported CDPATH (a cd into a relative folder then
+    prints the folder it found, and myUI_CHECKOUT would be two lines)."""
+
+    def test_an_exported_cdpath_changes_nothing(self):
+        with tempfile.TemporaryDirectory() as work:
+            lib = os.path.join(work, "co", "installer", "lib")
+            os.makedirs(lib)
+            shutil.copy(UI_SH, lib)
+            script = 'source co/installer/lib/ui.sh; printf "[%s]" "${myUI_CHECKOUT}"'
+            env = dict(os.environ, HOME=work, TPOT_GUM="off")
+            for cdpath in (None, ".", ".:/nonexistent-tpot-cdpath"):
+                environment = dict(env)
+                environment.pop("CDPATH", None)
+                if cdpath is not None:
+                    environment["CDPATH"] = cdpath
+                with self.subTest(cdpath=cdpath):
+                    out = subprocess.run([BASH, "-c", script], env=environment, cwd=work, capture_output=True,
+                                         universal_newlines=True, timeout=20)
+                    got = out.stdout
+                    self.assertTrue(got.startswith("[") and got.endswith("]") and "\n" not in got, got)
+                    self.assertEqual(os.path.realpath(got[1:-1]), os.path.realpath(os.path.join(work, "co")),
+                                     out.stderr)
+
+
 class FallbackTest(unittest.TestCase):
     """The plain fallback block of a script (a checkout without installer/lib/ui.sh) defines every
     fuUI_* the script calls; the canonical one (ui_logo.FALLBACK) speaks like ui.sh without gum."""
