@@ -37,7 +37,7 @@ if ! source "${myREPO}/installer/lib/ui.sh" 2>/dev/null;
       shift
       echo "### ${myHEADER}" >&2
       for myITEM in "$@"; do
-        echo "###   ${myI}) ${myITEM%%:*}" >&2
+        echo "###   ${myI}) ${myITEM%:*}" >&2
         myI=$((myI + 1))
       done
       while true; do
@@ -45,14 +45,14 @@ if ! source "${myREPO}/installer/lib/ui.sh" 2>/dev/null;
         if [[ "${myPICK}" =~ ^[0-9]+$ ]] && [ "${myPICK}" -ge 1 ] && [ "${myPICK}" -le "$#" ];
           then
             myITEM="${!myPICK}"
-            echo "${myITEM#*:}"
+            echo "${myITEM##*:}"
             return 0
         fi
       done
     }
     fuUI_INPUT () {
       local myVALUE=""
-      if [ "$2" = "password" ];
+      if [ "${2:-}" = "password" ];
         then read -rsp "### $1 " myVALUE; echo >&2
         else read -rp "### $1 " myVALUE
       fi
@@ -64,7 +64,10 @@ if ! source "${myREPO}/installer/lib/ui.sh" 2>/dev/null;
       local -a myA=() myB=()
       myV="${myV#v}"
       myV="${myV%%[-+]*}"
+      myM="${myM#v}"
+      myM="${myM%%[-+]*}"
       [ -n "${myV}" ] && [ -n "${myM}" ] || return 1
+      case "${myV}.${myM}" in .*|*.|*..*) return 1 ;; esac
       IFS=. read -r -a myA <<< "${myV}"
       IFS=. read -r -a myB <<< "${myM}"
       myN="${#myA[@]}"

@@ -38,7 +38,11 @@ THEME_PY = os.path.join(HERE, "theme.py")
 BEGIN = "# >>> tpot logo data >>>"
 END = "# <<< tpot logo data <<<"
 VARIANTS = ("120", "80", "80x24")
-BUDGET = 9000                        # bytes of the data block, per copy
+# bytes of the data block, per copy: a guard against a template far larger than the logo of today
+# (about 8.8 KB, three variants with ten colours), not a wall it stands at. 12 KB leave a richer
+# template a third more; install.sh (some 90 KB, read by bash from curl) does not feel it. A
+# template that needs more: change the format (i.e. a table of pairs per variant) or raise this
+BUDGET = 12000
 # printable ASCII without what bash quotes or matches: ' " \ $ ` [ ]  (and no space)
 ALPHABET = "".join(chr(c) for c in range(0x21, 0x7f) if chr(c) not in "'\"\\$`[]")
 RUN = len(ALPHABET)                  # the longest run of one token
@@ -327,7 +331,7 @@ FALLBACK = r'''    fuUI_INIT () { return 0; }
       shift
       echo "### ${myHEADER}" >&2
       for myITEM in "$@"; do
-        echo "###   ${myI}) ${myITEM%%:*}" >&2
+        echo "###   ${myI}) ${myITEM%:*}" >&2
         myI=$((myI + 1))
       done
       while true; do
@@ -335,14 +339,14 @@ FALLBACK = r'''    fuUI_INIT () { return 0; }
         if [[ "${myPICK}" =~ ^[0-9]+$ ]] && [ "${myPICK}" -ge 1 ] && [ "${myPICK}" -le "$#" ];
           then
             myITEM="${!myPICK}"
-            echo "${myITEM#*:}"
+            echo "${myITEM##*:}"
             return 0
         fi
       done
     }
     fuUI_INPUT () {
       local myVALUE=""
-      if [ "$2" = "password" ];
+      if [ "${2:-}" = "password" ];
         then read -rsp "### $1 " myVALUE; echo >&2
         else read -rp "### $1 " myVALUE
       fi
@@ -371,7 +375,10 @@ FALLBACK = r'''    fuUI_INIT () { return 0; }
       local -a myA=() myB=()
       myV="${myV#v}"
       myV="${myV%%[-+]*}"
+      myM="${myM#v}"
+      myM="${myM%%[-+]*}"
       [ -n "${myV}" ] && [ -n "${myM}" ] || return 1
+      case "${myV}.${myM}" in .*|*.|*..*) return 1 ;; esac
       IFS=. read -r -a myA <<< "${myV}"
       IFS=. read -r -a myB <<< "${myM}"
       myN="${#myA[@]}"

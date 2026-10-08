@@ -23,7 +23,7 @@ if ! source "$HOME/tpotce/installer/lib/ui.sh" 2>/dev/null;
     }
     fuUI_INPUT () {
       local myVALUE=""
-      if [ "$2" = "password" ];
+      if [ "${2:-}" = "password" ];
         then read -rsp "### $1 " myVALUE; echo >&2
         else read -rp "### $1 " myVALUE
       fi

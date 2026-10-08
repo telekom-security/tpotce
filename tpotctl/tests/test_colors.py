@@ -7,6 +7,7 @@ HOME and XDG_CONFIG_HOME to a temporary folder, os.environ is only changed under
 """
 
 import importlib.util
+import io
 import itertools
 import json
 import os
@@ -31,7 +32,7 @@ UI_SH = os.path.join(REPO, "installer", "lib", "ui.sh")
 CASES = os.path.join(REPO, "tpotctl", "tests", "color_cases.json")
 TEXTUAL = importlib.util.find_spec("textual") is not None
 # what a terminal may say of itself, and the choices of the user: the keys the rule looks at
-RULE_KEYS = ("TPOT_COLORS", "COLORTERM", "TERM", "TMUX", "TERM_PROGRAM", "LC_TERMINAL", "VTE_VERSION",
+RULE_KEYS = ("TPOT_COLORS", "COLORTERM", "TERM", "TMUX", "STY", "TERM_PROGRAM", "LC_TERMINAL", "VTE_VERSION",
              "KONSOLE_VERSION", "WT_SESSION", "NO_COLOR")
 
 
@@ -40,14 +41,32 @@ def cases():
         return json.load(handle)
 
 
-def modern_bash():
-    """A bash of 4 or newer (fuUI_COLORS lowercases with ${x,,}), None without one (macOS /bin/bash 3.2)."""
-    bash = shutil.which("bash")
-    if not bash:
-        return None
+def case_file(case):
+    """What the tpot.json of a case holds: its prefs_text as it is, its prefs as JSON, None for no file."""
+    if "prefs_text" in case:
+        return case["prefs_text"]
+    return case.get("prefs")
+
+
+def bash_version(bash):
     out = subprocess.run([bash, "-c", "echo ${BASH_VERSINFO[0]}"], stdout=subprocess.PIPE,
                          universal_newlines=True)
-    return bash if out.stdout.strip().isdigit() and int(out.stdout) >= 4 else None
+    return int(out.stdout) if out.stdout.strip().isdigit() else 0
+
+
+def modern_bash():
+    """A bash of 4 or newer, None without one (macOS has /bin/bash 3.2 only)."""
+    bash = shutil.which("bash")
+    return bash if bash and bash_version(bash) >= 4 else None
+
+
+def old_bash():
+    """A bash 3 (/bin/bash of macOS), None without one: fuUI_COLORS runs there too, before
+    fuUI_LINUX_ONLY stops a script (update.sh -h, -y on macOS)."""
+    for bash in ("/bin/bash", shutil.which("bash")):
+        if bash and os.path.exists(bash) and bash_version(bash) == 3:
+            return bash
+    return None
 
 
 class Sandbox:
@@ -59,17 +78,36 @@ class Sandbox:
         self.config = os.path.join(self.home, "config")
         os.makedirs(os.path.join(self.config, "tpotce"))
         self.file = os.path.join(self.config, "tpotce", "tpot.json")
+        self.configs = {}
 
     def base(self):
         return {"HOME": self.home, "XDG_CONFIG_HOME": self.config}
 
-    def prefs(self, data):
+    @staticmethod
+    def write(path, data):
+        """data: None (no file), a str (the file as it is) or what json.dump writes."""
         if data is None:
-            if os.path.exists(self.file):
-                os.remove(self.file)
+            if os.path.exists(path):
+                os.remove(path)
             return
-        with open(self.file, "w", encoding="utf-8") as out:
-            json.dump(data, out)
+        with open(path, "w", encoding="utf-8", newline="") as out:
+            if isinstance(data, str):
+                out.write(data)
+            else:
+                json.dump(data, out)
+
+    def prefs(self, data):
+        self.write(self.file, data)
+
+    def config_of(self, data):
+        """An XDG_CONFIG_HOME of its own with the tpot.json of data, one per distinct content."""
+        key = json.dumps(data)
+        if key not in self.configs:
+            folder = os.path.join(self.home, f"config{len(self.configs)}")
+            os.makedirs(os.path.join(folder, "tpotce"))
+            self.write(os.path.join(folder, "tpotce", "tpot.json"), data)
+            self.configs[key] = folder
+        return self.configs[key]
 
     def python(self, env, data=None):
         self.prefs(data)
@@ -78,19 +116,14 @@ class Sandbox:
         return prefs.detect_colors(environ)
 
     def bash(self, bash, runs):
-        """fuUI_COLORS for every (env, prefs) of runs, in one bash: before each run every key of any
-        run is unset, then the keys of its env are set (the bash itself starts with none of them)."""
+        """fuUI_COLORS for every (env, tpot.json) of runs, in one bash: before each run every key of
+        any run is unset, then the keys of its env are set (the bash itself starts with none of them),
+        XDG_CONFIG_HOME points to a folder with the tpot.json of the run."""
         keys = sorted(set(RULE_KEYS).union(*(env for env, _data in runs)))
         lines = [f'source "{UI_SH}"']
-        last = ()
         for env, data in runs:
-            if data != last:              # the file only changes between runs of another tpot.json
-                if data is None:
-                    lines.append(f'rm -f "{self.file}"')
-                else:
-                    lines.append(f"printf '%s' {quote(json.dumps(data))} > \"{self.file}\"")
-                last = data
             lines.append("unset " + " ".join(keys))
+            lines.append(f"export XDG_CONFIG_HOME={quote(self.config_of(data))}")
             lines.extend(f"export {key}={quote(value)}" for key, value in env.items())
             lines.append("fuUI_COLORS")
         environ = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "LANG": os.environ.get("LANG", "en_US.UTF-8")}
@@ -111,7 +144,7 @@ class RuleTest(unittest.TestCase):
         sandbox = Sandbox(self)
         for case in cases():
             with self.subTest(note=case["note"]):
-                self.assertEqual(sandbox.python(case["env"], case.get("prefs")), case["expect"], case["env"])
+                self.assertEqual(sandbox.python(case["env"], case_file(case)), case["expect"], case["env"])
 
     def test_only_the_environment_given_counts(self):
         """A TPOT_COLORS or a tpot.json of the process running it does not reach another environment."""
@@ -156,22 +189,25 @@ class ParityTest(unittest.TestCase):
     """bash and Python say the same, for every case and a sample of what a terminal may say."""
 
     def setUp(self):
-        self.bash = modern_bash()
-        if not self.bash:
-            self.skipTest("no bash 4 or newer")
+        # every bash there is: 4 or newer (the T-Pot hosts) and 3 (/bin/bash of macOS, where the
+        # scripts get as far as fuUI_LINUX_ONLY)
+        self.bashes = [bash for bash in (modern_bash(), old_bash()) if bash]
+        if not self.bashes:
+            self.skipTest("no bash")
 
     def agree(self, runs):
         sandbox = Sandbox(self)
-        runs = sorted(runs, key=lambda run: json.dumps(run[1], sort_keys=True))     # by tpot.json
-        said, errors = sandbox.bash(self.bash, runs)
-        self.assertEqual(errors, "")
-        self.assertEqual(len(said), len(runs))
         python = [sandbox.python(env, data) for env, data in runs]
-        differ = [(env, data, b, p) for (env, data), b, p in zip(runs, said, python) if b != p]
-        self.assertEqual(differ, [], "bash and Python differ (env, tpot.json, bash, Python)")
+        for bash in self.bashes:
+            said, errors = sandbox.bash(bash, runs)
+            label = f"{bash} (bash {bash_version(bash)})"
+            self.assertEqual(errors, "", label)
+            self.assertEqual(len(said), len(runs), label)
+            differ = [(env, data, b, p) for (env, data), b, p in zip(runs, said, python) if b != p]
+            self.assertEqual(differ, [], f"{label} and Python differ (env, tpot.json, bash, Python)")
 
     def test_every_case(self):
-        self.agree([(case["env"], case.get("prefs")) for case in cases()])
+        self.agree([(case["env"], case_file(case)) for case in cases()])
 
     def test_a_sample_of_terminals(self):
         values = {
@@ -179,8 +215,9 @@ class ParityTest(unittest.TestCase):
             "COLORTERM": (None, "truecolor", "24BIT", "yes", ""),
             "TERM": (None, "", "xterm", "xterm-256color", "XTERM-256COLOR", "screen", "screen.xterm-256color",
                      "tmux-256color", "xterm-kitty", "foot-extra", "xterm-direct", "-direct", "dumb", "rio",
-                     "linux", "xterm-16color"),
+                     "linux", "xterm-16color", "unknown", "DUMB", "screen-256color"),
             "TMUX": (None, "", "/tmp/tmux-1000/default,1,0"),
+            "STY": (None, "", "4242.pts-1.host"),
             "TERM_PROGRAM": (None, "", "iTerm.app", "Apple_Terminal", "vscode", "tmux", "ITERM.APP", "WarpTerminal"),
             "LC_TERMINAL": (None, "iTerm2", "iterm2", ""),
             "VTE_VERSION": (None, "3600", "3599", "abc", "0003600", "36OO", "99999999999", ""),
@@ -188,7 +225,8 @@ class ParityTest(unittest.TestCase):
             "WT_SESSION": (None, "", "x"),
             "NO_COLOR": (None, "1"),
         }
-        tpot_json = (None, {"colors": "256"}, {"colors": "auto"}, {"colors": "16", "icons": "nerd"})
+        tpot_json = (None, {"colors": "256"}, {"colors": "auto"}, {"colors": "16", "icons": "nerd"},
+                     '{"colors": "16",}', '{"colors": "16", "colors": "256"}', '{"x": {"colors": "16"}}')
         rng = random.Random(8)
         keys = list(values)
         runs = []
@@ -292,6 +330,67 @@ class ApplyTest(unittest.TestCase):
             env = self.environ(TEXTUAL_COLOR_SYSTEM="256", TPOT_COLORS_SET="256")     # a restart there
             prefs.apply_color_system(env)
             self.assertEqual(self.told(env), {})
+
+
+class Tty(io.StringIO):
+    def isatty(self):
+        return True
+
+
+class ConsoleTest(unittest.TestCase):
+    """console_color_system: the color_system of a Rich Console for the tables of tpot status / ps /
+    images, by the rule at a terminal; a pipe or a file stays Rich's (no colours, FORCE_COLOR)."""
+
+    def environ(self, **extra):
+        env = Sandbox(self).base()
+        env.update(extra)
+        return env
+
+    def test_at_a_terminal_the_rule(self):
+        for extra, expected in (({"TERM": "xterm-256color", "LC_TERMINAL": "iTerm2"}, "truecolor"),
+                                ({"TERM": "xterm-256color"}, "256"),
+                                ({"TERM": "xterm"}, "standard"),
+                                ({"TERM": "xterm", "TPOT_COLORS": "256"}, "256"),
+                                ({"TERM": "xterm-256color", "STY": "1.pts-0.h", "COLORTERM": "truecolor"}, "256"),
+                                ({"TERM": "xterm-256color", "TMUX": "x", "LC_TERMINAL": "iTerm2"}, "256")):
+            with self.subTest(env=extra):
+                self.assertEqual(prefs.console_color_system(Tty(), self.environ(**extra)), expected)
+
+    def test_a_dumb_terminal_has_no_colours(self):
+        for term in ("dumb", "unknown", "DUMB"):
+            with self.subTest(term=term):
+                env = self.environ(TERM=term, COLORTERM="truecolor", TPOT_COLORS="truecolor")
+                self.assertIsNone(prefs.console_color_system(Tty(), env))
+
+    def test_no_terminal_is_left_to_rich(self):
+        env = self.environ(TERM="xterm-256color", LC_TERMINAL="iTerm2")
+        self.assertEqual(prefs.console_color_system(io.StringIO(), env), "auto")
+        self.assertEqual(prefs.console_color_system(object(), env), "auto")
+
+    def test_windows_asks_its_console(self):
+        with mock.patch.object(prefs, "CONSOLE_KNOWS", True):
+            self.assertEqual(prefs.console_color_system(Tty(), self.environ()), "auto")
+            self.assertEqual(prefs.console_color_system(Tty(), self.environ(WT_SESSION="x")), "truecolor")
+            self.assertEqual(prefs.console_color_system(Tty(), self.environ(TPOT_COLORS="16")), "standard")
+
+    def test_the_environment_of_the_process_by_default(self):
+        with mock.patch.dict(os.environ, {"TERM": "xterm", "TPOT_COLORS": "256"}):
+            self.assertEqual(prefs.console_color_system(Tty()), "256")
+
+    @unittest.skipUnless(importlib.util.find_spec("rich"), "Rich is not installed, run with the venv of tpot")
+    def test_rich_paints_with_it(self):
+        from rich.console import Console
+        env = self.environ(TERM="xterm-256color", LC_TERMINAL="iTerm2")
+        out = Tty()
+        Console(file=out, color_system=prefs.console_color_system(out, env), force_terminal=True).print(
+            "[#E20074]x[/]")
+        self.assertIn("\x1b[38;2;226;0;116m", out.getvalue())
+        out = io.StringIO()
+        with mock.patch.dict(os.environ, {"TERM": "xterm-256color", "COLORTERM": "truecolor"}):
+            os.environ.pop("FORCE_COLOR", None)
+            os.environ.pop("TTY_COMPATIBLE", None)
+            Console(file=out, color_system=prefs.console_color_system(out, env)).print("[#E20074]x[/]")
+        self.assertEqual(out.getvalue(), "x\n")
 
 
 class EntryPointsTest(unittest.TestCase):

@@ -66,10 +66,76 @@ class SayTest(unittest.TestCase):
 
     def test_styled_has_glyph_and_colour(self):
         for kind, glyph in (("info", "⬢"), ("ok", "✓"), ("warn", "!"), ("error", "✗")):
-            text = say.styled(kind, "done")
+            text = say.styled(kind, "done", colors="truecolor")
             self.assertTrue(text.startswith("\x1b[38;2;"), kind)
             self.assertIn(f"{glyph}", text)
             self.assertIn("done", text)
+
+    # the SGR of magenta (the sign of info) and glass (its text) per depth
+    DEPTHS = {"truecolor": ("38;2;226;0;116", "38;2;236;239;249"), "256": ("38;5;162", "38;5;231"),
+              "16": ("95", "97")}
+
+    def test_styled_follows_the_colour_rule(self):
+        """The depth of prefs.detect_colors (the rule of the scripts): 38;2 for true colour, the entries
+        of theme.PALETTE_256 for 256, the ANSI colours of theme.PALETTE_16 for 16; a dumb terminal has
+        the glyphs without colours, as gum there."""
+        for env, depth in (({"TERM": "xterm-256color", "LC_TERMINAL": "iTerm2"}, "truecolor"),
+                           ({"TERM": "xterm-256color"}, "256"),
+                           ({"TERM": "xterm"}, "16"),
+                           ({"TERM": "linux"}, "16"),
+                           ({"TERM": "xterm-256color", "COLORTERM": "truecolor", "TPOT_COLORS": "16"}, "16"),
+                           ({"TERM": "xterm-256color", "STY": "1.pts-0.h", "COLORTERM": "truecolor"}, "256")):
+            with self.subTest(env=env):
+                environ = dict(env, HOME=os.environ["TPOT_TEST_CONFIG"],
+                               XDG_CONFIG_HOME=os.environ["TPOT_TEST_CONFIG"])
+                self.assertEqual(say.depth(environ), depth)
+                magenta, glass = self.DEPTHS[depth]
+                self.assertEqual(say.styled("info", "done", colors=say.depth(environ)),
+                                 f"\x1b[{magenta}m⬢\x1b[0m \x1b[{glass}mdone\x1b[0m")
+                if depth != "truecolor":
+                    self.assertNotIn("38;2;", say.styled("warn", "x", colors=depth))
+        for term in ("dumb", "unknown"):
+            environ = {"TERM": term, "COLORTERM": "truecolor", "HOME": os.environ["TPOT_TEST_CONFIG"]}
+            self.assertIsNone(say.depth(environ))
+            self.assertEqual(say.styled("ok", "done", colors=None), "✓ done")
+            self.assertEqual(say.styled("error", "bad", colors=None), "✗ bad")
+
+    def test_tables_are_the_palettes_of_theme(self):
+        """The 256 and 16 colours of say are the entries of theme.PALETTE_256 / PALETTE_16 (read as text:
+        theme.py needs Textual)."""
+        from tpotctl import ui_logo
+        palettes = ui_logo.theme_palettes()
+        for name in say.COLOURS:
+            with self.subTest(colour=name):
+                token = name.upper()
+                self.assertEqual(palettes["truecolor"][token].upper(), say.COLOURS[name].upper())
+                self.assertEqual(say.COLOURS_256[name], ui_logo.xterm_index(palettes["256"][token]))
+                self.assertEqual(say.COLOURS_16[name], ui_logo.sgr16(palettes["16"][token]))
+
+    def test_a_terminal_gets_the_depth_of_the_rule(self):
+        """say.warn / hint to a terminal with TERM=xterm (PuTTY, no COLORTERM): no true colour."""
+        keep = {k: os.environ.get(k) for k in ("TERM", "COLORTERM", "LC_TERMINAL", "TERM_PROGRAM", "TPOT_COLORS",
+                                               "NO_COLOR", "TPOT_GUM", "STY", "TMUX", "VTE_VERSION", "WT_SESSION",
+                                               "KONSOLE_VERSION")}
+        try:
+            for key in keep:
+                os.environ.pop(key, None)
+            os.environ["TERM"] = "xterm"
+            out = Tty()
+            say.warn("careful", stream=out)
+            say.hint("a hint", stream=out)
+            self.assertEqual(out.getvalue(), "\x1b[93m! careful\x1b[0m\n\x1b[37m    a hint\x1b[0m\n")
+            os.environ["TERM"] = "dumb"
+            out = Tty()
+            say.warn("careful", stream=out)
+            say.hint("a hint", stream=out)
+            self.assertEqual(out.getvalue(), "! careful\n    a hint\n")
+        finally:
+            for key, value in keep.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
 
     def test_terminal_gets_the_styled_form(self):
         out = Tty()

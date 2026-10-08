@@ -14,13 +14,13 @@ if ! source "${myHERE}/../../../../installer/lib/ui.sh" 2>/dev/null && \
   then
 # >>> plain fallback
     fuUI_INIT () { return 0; }
-    fuUI_BANNER () { echo; echo "### T-Pot $1"; shift; for myLINE in "$@"; do echo "### ${myLINE}"; done; echo; }
+    fuUI_BANNER () { local myLINE; echo; echo "### T-Pot $1"; shift; for myLINE in "$@"; do echo "### ${myLINE}"; done; echo; }
     fuUI_INFO () { echo "### $*"; }
     fuUI_OK () { echo "### [OK] - $*"; }
     fuUI_WARN () { echo "### [WARNING] - $*"; }
     fuUI_ERROR () { echo "### [ERROR] - $*" >&2; }
     fuUI_HINT () { local myLINE; for myLINE in "$@"; do echo "###   ${myLINE}"; done; }
-    fuMARK () { [ "${TPOT_MARKS}" = "1" ] && echo "@@tpot $*"; return 0; }
+    fuMARK () { [ "${TPOT_MARKS:-}" = "1" ] && echo "@@tpot $*"; return 0; }
 # <<< plain fallback
 fi
 fuUI_INIT

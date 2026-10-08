@@ -103,7 +103,10 @@ if ! source "${myHERE}/installer/lib/ui.sh" 2>/dev/null;
       local -a myA=() myB=()
       myV="${myV#v}"
       myV="${myV%%[-+]*}"
+      myM="${myM#v}"
+      myM="${myM%%[-+]*}"
       [ -n "${myV}" ] && [ -n "${myM}" ] || return 1
+      case "${myV}.${myM}" in .*|*.|*..*) return 1 ;; esac
       IFS=. read -r -a myA <<< "${myV}"
       IFS=. read -r -a myB <<< "${myM}"
       myN="${#myA[@]}"
