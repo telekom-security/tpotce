@@ -171,16 +171,28 @@ class ChecksTest(unittest.TestCase):
         self.assertEqual(installer.occupied("LISTEN 0 100 [::1]:25 [::]:*\n"), ["[::1]:25"])
 
     def test_reach_counts_any_answer(self):
+        import gc
+        import warnings
+        errors = []
+
         def opener(request, timeout):
             if "docker" in request.full_url:
-                raise urllib.error.HTTPError(request.full_url, 401, "Unauthorized", {}, None)
+                errors.append(urllib.error.HTTPError(request.full_url, 401, "Unauthorized", {}, io.BytesIO(b"")))
+                raise errors[-1]
             if "ghcr" in request.full_url:
                 raise urllib.error.URLError("no route")
             return io.BytesIO(b"")
-        check = installer.check_reach(opener)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always", ResourceWarning)
+            check = installer.check_reach(opener)
+            for error in errors:               # an HTTPError is a response too, Python 3.14 warns if not closed
+                error.close()
+            errors.clear()
+            gc.collect()
         self.assertEqual(check.state, "fail")
         self.assertIn("GitHub Container Registry", check.detail)
         self.assertNotIn("Docker Hub", check.detail)
+        self.assertEqual([str(w.message) for w in caught if issubclass(w.category, ResourceWarning)], [])
 
     def test_resources(self):
         hive = installer.EDITION_BY_LETTER["h"]
@@ -413,8 +425,8 @@ class AssistantTest(unittest.IsolatedAsyncioTestCase):
             self.assertIn("Install Docker Engine (All)", str(app.query_one("#install-phase").render()))
             self.assertFalse(app.busy)
 
-    async def failed_text(self, lines):
-        """The text of a sensor installation whose install.sh prints lines, then fails."""
+    async def failed_text(self, lines, code=1):
+        """The text of a sensor installation whose install.sh prints lines, then ends with code."""
         from tpotctl.screens.install import InstallApp
 
         class Failing:
@@ -424,7 +436,7 @@ class AssistantTest(unittest.IsolatedAsyncioTestCase):
             def run(self, line):
                 for text in lines:
                     line(text + "\n")
-                return 1
+                return code
         self.repo = make_checkout(self)
         app = InstallApp(engine=Failing, checks=all_ok, sudo_mode="passwordless", password_ok=lambda pw: True,
                          run=lambda *a, **k: None, repo_dir=self.repo)
@@ -445,23 +457,46 @@ class AssistantTest(unittest.IsolatedAsyncioTestCase):
             return str(app.query_one("#install-phase").render()).replace("\n", " ")
 
     async def test_a_failed_installation_names_the_log_of_its_step(self):
-        """install.sh writes a log per step: the packages and checks to install_tpot_prepare.log, the
-        playbook to install_tpot.log, the pull to install_tpot_pull.log; a phase failed mark after
-        it does not hide which step it was."""
+        """install.sh writes a log per step: the packages to install_tpot_prepare.log, the playbook to
+        install_tpot.log, the pull to install_tpot_pull.log; the checks, the edition and the web user
+        write none, their errors are only in the output of the assistant. A phase failed mark after it
+        does not hide which step it was, a fail <phase> mark names it."""
         logs = ("~/install_tpot_prepare.log", "~/install_tpot.log", "~/install_tpot_pull.log")
-        cases = [(["@@tpot phase checks"], logs[0]),
+        output = "The output below shows why"
+        cases = [(["@@tpot phase checks"], output),
                  (["@@tpot phase checks", "@@tpot phase packages"], logs[0]),
+                 (["@@tpot phase checks", "@@tpot phase packages", "@@tpot fail packages", "@@tpot phase failed"],
+                  logs[0]),
+                 (["@@tpot phase playbook", "@@tpot phase compose", "@@tpot phase failed"], output),
+                 (["@@tpot phase playbook", "@@tpot phase compose", "@@tpot phase user"], output),
+                 (["@@tpot phase playbook", "@@tpot phase compose", "@@tpot phase pull", "@@tpot fail compose"],
+                  output),
                  (["@@tpot phase checks", "@@tpot phase packages", "@@tpot tasks 2", "@@tpot phase playbook",
                    "TASK [Gathering Facts] ***", "fatal: [127.0.0.1]: FAILED! => {}", "@@tpot phase failed"],
                   logs[1]),
-                 (["@@tpot phase playbook", "@@tpot phase compose"], logs[1]),
+                 (["@@tpot phase playbook", "TASK [Gathering Facts] ***", "@@tpot fail playbook"], logs[1]),
                  (["@@tpot phase playbook", "@@tpot phase compose", "@@tpot phase pull", "@@tpot images 3",
                    "@@tpot phase failed"], logs[2])]
         for lines, log in cases:
             with self.subTest(lines=" | ".join(lines)):
                 text = await self.failed_text(lines)
+                self.assertIn("The installation failed", text)
                 self.assertIn(log, text)
-                self.assertEqual([other for other in logs if other in text], [log])
+                self.assertEqual([other for other in logs if other in text], [log] if log in logs else [])
+
+    async def test_a_stopped_installation_says_stopped(self):
+        """install.sh exits 130 when it was stopped (install_stopped): not a failure; during the pull T-Pot
+        is installed already and pulls the missing images when it starts."""
+        cases = [(["@@tpot phase checks", "@@tpot phase packages"], 130, "Run the installer again"),
+                 (["@@tpot phase playbook", "@@tpot phase compose", "@@tpot phase pull"], 130,
+                  "T-Pot is installed, it pulls the missing images when it starts"),
+                 (["@@tpot phase playbook"], -2, "Run the installer again")]       # ended by SIGINT itself
+        for lines, code, next_step in cases:
+            with self.subTest(lines=" | ".join(lines), code=code):
+                text = await self.failed_text(lines, code)
+                self.assertIn("The installation was stopped", text)
+                self.assertNotIn("failed", text)
+                self.assertIn(next_step, text)
 
     async def test_quitting_before_the_install_asks(self):
         from tpotctl.screens.dialogs import ConfirmDialog

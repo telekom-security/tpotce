@@ -20,7 +20,7 @@ from textual.widgets import (Button, ContentSwitcher, Footer, Input, OptionList,
                              Static)
 from textual.widgets.option_list import Option
 
-from tpotctl import engine, glyphs, installer, logo, theme, users
+from tpotctl import engine, glyphs, installer, logo, runlog, theme, users
 from tpotctl.bootstrap import REPO_DIR
 from tpotctl.screens.dialogs import ConfirmDialog
 from tpotctl.theme import apply as apply_theme
@@ -30,10 +30,10 @@ STEPS = [("check", "System check"), ("edition", "Edition"), ("user", "Web user")
          ("review", "Review"), ("install", "Install"), ("done", "Done")]
 FIRST_SETTINGS = ["TPOT_ATTACKMAP_TEXT_TIMEZONE", "TPOT_BLACKHOLE", "TPOT_CAPTURE_INTERFACE", "TPOT_PULL_POLICY"]
 LLM_PREFIXES = ("BEELZEBUB_LLM_", "GALAH_LLM_")
-# the log install.sh writes in a phase (its marks, installer.Progress); the playbook and what follows it
-# go to ~/install_tpot.log
-PHASE_LOGS = {"checks": "~/install_tpot_prepare.log", "packages": "~/install_tpot_prepare.log",
-              "pull": "~/install_tpot_pull.log"}
+# the log install.sh writes in a phase (its marks, installer.Progress); None: that phase writes none,
+# its errors are only in its output (the log view of the assistant)
+PHASE_LOGS = {"checks": None, "packages": "~/install_tpot_prepare.log", "playbook": "~/install_tpot.log",
+              "compose": None, "user": None, "pull": "~/install_tpot_pull.log"}
 PLAYBOOK_LOG = "~/install_tpot.log"
 CHANGES = [
     "SSH moves to port 64295, connect with ssh -p 64295 after the reboot",
@@ -558,7 +558,10 @@ class InstallApp(ArrowNav, App):
 
     def feed(self, line: str) -> None:
         self.progress.feed(line)
-        if self.progress.phase not in ("failed", "done"):
+        mark = runlog.parse_mark(line.rstrip("\n"))
+        if mark is not None and mark[0] == "fail" and mark[1] and mark[1][0] in PHASE_LOGS:
+            self.step_phase = mark[1][0]            # fail <phase>: the step that failed
+        elif self.progress.phase not in ("failed", "done"):
             self.step_phase = self.progress.phase
         self.query_one("#install-log", RichLog).write(Text(line.rstrip("\n")))
         self.show_progress()
@@ -592,13 +595,22 @@ class InstallApp(ArrowNav, App):
             self.goto("done")
             return
         self.progress.phase = "failed"
+        step = getattr(self, "step_phase", "")
         text = Text()
-        text.append(f"{glyphs.g('fail')} The installation failed", style=f"bold {theme.color('error')}")
-        if self.progress.failed_task:
-            text.append(f" at: {self.progress.failed_task}", style=theme.color("error"))
-        log = PHASE_LOGS.get(getattr(self, "step_phase", ""), PLAYBOOK_LOG)
-        text.append(f"\nThe log of this step is {log}. Fix the cause and run the installer again.",
-                    style=theme.color("glass"))
+        if code == 130 or code < 0:             # install_stopped, or a signal ended it
+            text.append(f"{glyphs.g('warn')} The installation was stopped", style=f"bold {theme.color('warn')}")
+            if step == "pull":
+                text.append("\nT-Pot is installed, it pulls the missing images when it starts. Reboot the host, "
+                            "then connect with ssh -p 64295.", style=theme.color("glass"))
+            else:
+                text.append("\nRun the installer again to go on.", style=theme.color("glass"))
+        else:
+            text.append(f"{glyphs.g('fail')} The installation failed", style=f"bold {theme.color('error')}")
+            if self.progress.failed_task:
+                text.append(f" at: {self.progress.failed_task}", style=theme.color("error"))
+            log = PHASE_LOGS.get(step, PLAYBOOK_LOG)
+            where = f"The log of this step is {log}." if log else "The output below shows why."
+            text.append(f"\n{where} Fix the cause and run the installer again.", style=theme.color("glass"))
         self.query_one("#install-phase", Static).update(text)
         nxt = self.query_one("#ins-next", Button)
         nxt.display, nxt.label, nxt.disabled = True, "Close", False
