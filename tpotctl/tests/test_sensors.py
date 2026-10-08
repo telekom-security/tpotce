@@ -323,6 +323,18 @@ class CliTest(unittest.TestCase):
         self.assertEqual(code, 130, text)
         self.assertNotIn("Traceback", text)
 
+    def test_an_ipv6_hive_address_is_refused_before_ssh(self):
+        """The HIVE address goes into the .env of the SENSOR (TPOT_HIVE_IP): IPv6 is refused at once."""
+        with mock.patch.object(sensors, "check_ssh") as ssh, mock.patch("subprocess.Popen") as popen, \
+                mock.patch.object(sensors, "default_hive_address", return_value="192.168.1.2"):
+            code, text = self.run_cli("sensors", "add", "--host", "10.0.0.5", "--ssh-user", "debian",
+                                      "--hive-address", "fd00::1", stdin=TTY())
+        self.assertNotEqual(code, 0, text)
+        self.assertIn("fd00::1", text)
+        ssh.assert_not_called()
+        popen.assert_not_called()
+        self.assertEqual(len(sensors.Registry(self.repo).entries()), 2)      # nothing granted
+
     def add_with(self, *steps, ssh="ok"):
         """sensors add at a terminal with the children of fake_popen(*steps); its password is known."""
         popen, children = fake_popen(*steps)

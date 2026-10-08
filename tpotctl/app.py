@@ -1214,7 +1214,8 @@ class SensorsPane(Vertical):
             self.load()
         elif button == "sensor-add":
             self.app.push_screen(SensorDialog(tsensors.check_address, tsensors.check_user,
-                                              tsensors.default_hive_address), self.deploy)
+                                              tsensors.default_hive_address, tsensors.check_hive_address),
+                                 self.deploy)
         elif button == "sensor-edit" and self.selected() and self.registry is not None:
             from tpotctl.screens.dialogs import SensorEditDialog
             name, registry = self.selected(), self.registry

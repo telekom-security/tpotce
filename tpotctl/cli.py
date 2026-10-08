@@ -570,9 +570,9 @@ def run_sensor_add(args, registry, console) -> int:
     user = tsensors.check_user(args.ssh_user or ask_for("User T-Pot was installed with on the sensor: ",
                                                         "--ssh-user"))
     proposal = tsensors.default_hive_address(host)
-    hive = args.hive_address or (ask(f"IP or name the sensor reaches this HIVE on [{proposal}]: ")
+    hive = args.hive_address or (ask(f"IPv4 or name the sensor reaches this HIVE on [{proposal}]: ")
                                  if interactive else "") or proposal
-    hive = tsensors.check_address(hive)
+    hive = tsensors.check_hive_address(hive)
 
     port = tsensors.check_port(args.ssh_port)
     # 1. SSH with a key, on the port T-Pot moves sshd to

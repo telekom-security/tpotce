@@ -199,9 +199,11 @@ class SensorDialog(NavModal):
 
     BINDINGS = [Binding("escape", "cancel", "Back")]
 
-    def __init__(self, check_address=None, check_user=None, default_hive=None):
+    def __init__(self, check_address=None, check_user=None, default_hive=None, check_hive=None):
         super().__init__()
         self.check_address, self.check_user, self.default_hive = check_address, check_user, default_hive
+        # the HIVE address has a check of its own (no IPv6, what tpotinit takes as TPOT_HIVE_IP)
+        self.check_hive = check_hive or check_address
 
     def compose(self) -> ComposeResult:
         with Vertical(classes="dialog"):
@@ -240,8 +242,8 @@ class SensorDialog(NavModal):
         try:
             if self.check_address:
                 self.check_address(host)
-                if hive:
-                    self.check_address(hive)
+                if hive and self.check_hive:
+                    self.check_hive(hive)
             if self.check_user:
                 self.check_user(user)
         except Exception as err:   # SensorsError, kept generic to stay UI-only
