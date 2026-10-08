@@ -392,13 +392,8 @@ class StatusPane(Vertical):
         if problem:
             info.append(f"   {problem}", style=theme.color("error"))
         self.query_one("#status-info", Static).update(info)
-        table = self.query_one(DataTable)
-        row = table.cursor_row
-        table.clear()
-        for key, cells in container_rows(containers):
-            table.add_row(*cells, key=key)
-        if containers:
-            table.move_cursor(row=min(row, len(containers) - 1))
+        # every 2 s: only what changed, so the table neither jumps to the top nor flickers
+        self.query_one(NavDataTable).sync_rows(container_rows(containers))
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id and event.button.id.startswith("svc-"):
@@ -425,10 +420,9 @@ class ImagesPane(Vertical):
         self.app.call_from_thread(self.show, images)
 
     def show(self, images: List[ops.Image]) -> None:
-        table = self.query_one(DataTable)
-        table.clear()
-        for i in images:
-            table.add_row(i.repository, i.tag, i.id, i.size, i.created)
+        # a ref can be on several images (<none>:<none>), an image ID under several refs: both are the key
+        self.query_one(NavDataTable).sync_rows((f"{i.ref}@{i.id}", (i.repository, i.tag, i.id, i.size, i.created))
+                                               for i in images)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "images-refresh":

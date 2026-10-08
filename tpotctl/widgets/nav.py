@@ -147,6 +147,34 @@ class NavDataTable(DataTable):
         if self.enter_goes_on:
             navigate(self.app, "down")
 
+    def sync_rows(self, rows) -> None:
+        """Show these (key, cells) rows without a jump: the same keys in the same order only get their
+        changed cells, nothing scrolls; other rows are built anew, the cursor stays on the row of the
+        same key (or the same place) and the table keeps its scroll position. A clear() would put the
+        cursor and the scroll position at the top for a frame, every refresh would flicker."""
+        rows = [(key, list(cells)) for key, cells in rows]
+        keys = [key for key, _cells in rows]
+        current = [row.key.value for row in self.ordered_rows]
+        if keys == current:
+            columns = [column.key for column in self.ordered_columns]
+            for key, cells in rows:
+                for column, value in zip(columns, cells):
+                    if self.get_cell(key, column) != value:
+                        self.update_cell(key, column, value)
+            return
+        cursor = self.cursor_row
+        selected = current[cursor] if 0 <= cursor < len(current) else None
+        scroll_y = self.scroll_y
+        self.clear()
+        for key, cells in rows:
+            self.add_row(*cells, key=key)
+        if not rows:
+            return
+        self.move_cursor(row=keys.index(selected) if selected in keys else min(cursor, len(rows) - 1),
+                         scroll=False)
+        # in the same step: clear() keeps the old size until the next layout, no frame at the top
+        self.set_scroll(None, scroll_y)
+
     def action_cursor_up(self) -> None:
         if self.cursor_type in ("row", "cell") and self.cursor_row <= 0:
             navigate(self.app, "up")

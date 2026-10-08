@@ -533,3 +533,64 @@ class AppsTest(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(textual, "Textual is not installed, run with the venv of tpot")
+class SyncRowsTest(unittest.IsolatedAsyncioTestCase):
+    """The tables of the Status and Images pages refresh without a jump (the containers table every 2 s
+    flickered at the top while scrolled down)."""
+
+    def rows(self, names, status="Up"):
+        return [(name, (name, status)) for name in names]
+
+    def table_app(self):
+        from textual.app import App
+        from tpotctl.widgets import nav
+
+        class TableApp(App):
+            def compose(self):
+                table = nav.NavDataTable(id="t", cursor_type="row")
+                table.add_columns("Name", "Status")
+                yield table
+        return TableApp()
+
+    async def scrolled(self, pilot, app, names):
+        table = app.query_one("#t")
+        table.sync_rows(self.rows(names))
+        await pilot.pause(0.1)
+        table.move_cursor(row=40)
+        await pilot.pause(0.2)
+        self.assertGreater(table.scroll_y, 0)
+        return table
+
+    async def test_the_same_rows_only_get_their_changed_cells(self):
+        from unittest import mock
+        names = [f"honeypot{n:02d}" for n in range(43)]
+        app = self.table_app()
+        async with app.run_test(size=(60, 20)) as pilot:
+            table = await self.scrolled(pilot, app, names)
+            scroll = table.scroll_y
+            changed = self.rows(names)
+            changed[3] = ("honeypot03", ("honeypot03", "Restarting"))
+            with mock.patch.object(table, "clear", side_effect=AssertionError("cleared")):
+                table.sync_rows(changed)
+            self.assertEqual(table.get_cell("honeypot03", table.ordered_columns[1].key), "Restarting")
+            self.assertEqual((table.scroll_y, table.cursor_row), (scroll, 40))
+            await pilot.pause(0.2)
+            self.assertEqual(table.scroll_y, scroll)
+
+    async def test_new_rows_keep_the_cursor_on_its_row_and_the_scroll_position(self):
+        names = [f"honeypot{n:02d}" for n in range(43)]
+        app = self.table_app()
+        async with app.run_test(size=(60, 20)) as pilot:
+            table = await self.scrolled(pilot, app, names)
+            scroll = table.scroll_y
+            table.sync_rows(self.rows([n for n in names if n != "honeypot05"]))     # one row less above
+            self.assertEqual(table.scroll_y, scroll)                                 # in the same step
+            self.assertEqual(table.ordered_rows[table.cursor_row].key.value, "honeypot40")
+            await pilot.pause(0.2)
+            self.assertEqual(table.scroll_y, scroll)
+            table.sync_rows(self.rows([n for n in names if n not in ("honeypot05", "honeypot40")]))
+            self.assertEqual(table.cursor_row, 39)                                   # its row is gone: the place
+            table.sync_rows([])
+            self.assertEqual(table.row_count, 0)
