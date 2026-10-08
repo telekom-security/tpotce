@@ -4,6 +4,7 @@ import importlib.util
 import io
 import os
 import re
+import shutil
 import subprocess
 import unittest
 
@@ -78,7 +79,7 @@ class SayTest(unittest.TestCase):
     def test_styled_has_glyph_and_colour(self):
         for kind, glyph in (("info", "⬢"), ("ok", "✓"), ("warn", "!"), ("error", "✗")):
             text = say.styled(kind, "done", colors="truecolor")
-            self.assertTrue(text.startswith("\x1b[38;2;"), kind)
+            self.assertTrue(text.startswith("\x1b[1;38;2;" if kind == "error" else "\x1b[38;2;"), kind)
             self.assertIn(f"{glyph}", text)
             self.assertIn("done", text)
 
@@ -110,6 +111,34 @@ class SayTest(unittest.TestCase):
             self.assertIsNone(say.depth(environ))
             self.assertEqual(say.styled("ok", "done", colors=None), "✓ done")
             self.assertEqual(say.styled("error", "bad", colors=None), "✗ bad")
+
+    def test_error_is_bold(self):
+        """An error is bold in its colour, as fuUI_ERROR (gum style --bold); the others are not bold."""
+        for colors, sgr in (("truecolor", "1;38;2;232;69;60"), ("256", "1;38;5;167"), ("16", "1;91")):
+            with self.subTest(colors=colors):
+                self.assertEqual(say.styled("error", "bad", colors=colors), f"\x1b[{sgr}m✗ bad\x1b[0m")
+                for kind in ("info", "ok", "warn"):
+                    self.assertNotIn("\x1b[1;", say.styled(kind, "x", colors=colors))
+        self.assertEqual(say.styled("error", "bad", colors=None), "✗ bad")
+
+    @unittest.skipUnless(shutil.which("gum") and "2.0.2" in subprocess.run(
+        [shutil.which("gum") or "true", "--version"], capture_output=True, text=True).stdout, "no gum 2.0.2")
+    def test_error_is_the_one_of_gum(self):
+        """The SGR of say.error is the one the real gum 2.0.2 gives fuUI_ERROR, for every depth."""
+        for colors, env in (("truecolor", {"COLORTERM": "truecolor"}), ("256", {"TERM": "xterm-256color"}),
+                            ("16", {"TERM": "xterm"})):
+            with self.subTest(colors=colors):
+                environ = dict({"PATH": os.environ["PATH"], "HOME": os.environ["TPOT_TEST_CONFIG"],
+                                "XDG_CONFIG_HOME": os.environ["TPOT_TEST_CONFIG"], "TERM": "xterm-256color",
+                                "TPOT_COLORS": colors}, **env)
+                gum = subprocess.run(["bash", "-c", f'source "{UI}"; myUI_GUM="{shutil.which("gum")}"; '
+                                      'myUI_GUM_TERM="${TERM}" myUI_GUM_COLORTERM="${COLORTERM:-}" '
+                                      f'myUI_GUM_DEPTH={colors}; CLICOLOR_FORCE=1 fuUI_ERROR bad 2>&1'],
+                                     env=environ, capture_output=True, universal_newlines=True).stdout
+                ours = say.styled("error", "bad", colors=colors)
+                codes = [[code or "0" for code in re.findall(r"\x1b\[([0-9;]*)m", text)] for text in (gum, ours)]
+                self.assertEqual(codes[0], codes[1])            # ESC[m of gum is ESC[0m
+                self.assertIn("✗ bad", gum)
 
     def test_tables_are_the_palettes_of_theme(self):
         """The 256 and 16 colours of say are the entries of theme.PALETTE_256 / PALETTE_16 (read as text:

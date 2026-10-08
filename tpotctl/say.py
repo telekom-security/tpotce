@@ -35,17 +35,19 @@ def depth(environ=None):
     return prefs.detect_colors(env)
 
 
-def _sgr(name: str, colors) -> str:
+def _sgr(name: str, colors, bold: bool = False) -> str:
+    """The SGR of a colour by the depth; bold first, as gum writes it (1;...)."""
+    start = "\x1b[1;" if bold else "\x1b["
     if colors == "256":
-        return f"\x1b[38;5;{COLOURS_256[name]}m"
+        return f"{start}38;5;{COLOURS_256[name]}m"
     if colors == "16":
-        return f"\x1b[{COLOURS_16[name]}m"
+        return f"{start}{COLOURS_16[name]}m"
     value = COLOURS[name].lstrip("#")
-    return f"\x1b[38;2;{int(value[0:2], 16)};{int(value[2:4], 16)};{int(value[4:6], 16)}m"
+    return f"{start}38;2;{int(value[0:2], 16)};{int(value[2:4], 16)};{int(value[4:6], 16)}m"
 
 
-def _paint(name: str, text: str, colors) -> str:
-    return text if colors is None else f"{_sgr(name, colors)}{text}{_RESET}"
+def _paint(name: str, text: str, colors, bold: bool = False) -> str:
+    return text if colors is None else f"{_sgr(name, colors, bold)}{text}{_RESET}"
 
 
 def plain(kind: str, text: str) -> str:
@@ -57,8 +59,8 @@ def plain(kind: str, text: str) -> str:
 
 def styled(kind: str, text: str, colors="rule") -> str:
     """The form of gum: info is a magenta hexagon and glass text, ok a green tick and plain text, warn
-    and error the whole line in their colour. colors: truecolor, 256, 16 or None (no colours); by
-    default the depth of the rule (depth())."""
+    and error the whole line in their colour, an error bold (fuUI_ERROR). colors: truecolor, 256, 16
+    or None (no colours); by default the depth of the rule (depth())."""
     if colors == "rule":
         colors = depth()
     glyph, colour = _GLYPH[kind]
@@ -69,7 +71,7 @@ def styled(kind: str, text: str, colors="rule") -> str:
                          + [f"  {_paint('glass', line, colors)}" for line in rest])
     if kind == "ok":
         return f"{_paint(colour, glyph, colors)} {text}"
-    return _paint(colour, f"{glyph} {text}", colors)
+    return _paint(colour, f"{glyph} {text}", colors, bold=kind == "error")
 
 
 def fancy(stream) -> bool:
