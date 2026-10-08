@@ -10,6 +10,7 @@ import os
 import subprocess
 import sys
 import threading
+import time
 from dataclasses import dataclass
 from typing import Callable, Dict, Iterable, List, Optional, Set
 
@@ -31,7 +32,7 @@ from tpotctl.screens.dialogs import ConfirmDialog, QuitDialog, SensorDialog, Use
 from tpotctl.theme import apply as apply_theme
 from tpotctl.ops import cell_state
 from tpotctl.widgets.comb import Honeycomb
-from tpotctl.widgets.header import TpotHeader
+from tpotctl.widgets.header import TpotHeader, lead
 
 LAUNCHER = os.path.join(REPO_DIR, "tpot")
 CUSTOM_OUTPUT = os.path.join(REPO_DIR, "docker-compose-custom.yml")
@@ -100,10 +101,7 @@ class Backend:
 
     def host_address(self) -> str:
         """The address of this host towards the internet, the default target of the honeypot probe."""
-        out = subprocess.run(["ip", "-4", "route", "get", "1.1.1.1"], stdout=subprocess.PIPE,
-                             stderr=subprocess.DEVNULL, universal_newlines=True) if ops.linux_host() else None
-        words = out.stdout.split() if out is not None and out.returncode == 0 else []
-        return words[words.index("src") + 1] if "src" in words[:-1] else ""
+        return ops.host_address()
 
     def sudo_mode(self) -> str:
         from tpotctl import installer
@@ -203,12 +201,38 @@ def system_text(state) -> Text:
                            f"{human(memory.used)} of {human(memory.total)}" if memory else ""))
     text.append("\n")
     disk = state.disk
-    text.append_text(meter("Data", disk.percent if disk else None,
+    text.append_text(meter("Disk", disk.percent if disk else None,
                            f"{human(disk.used)} of {human(disk.total)}" if disk else ""))
     return text
 
 
-def attacks_text(attacks, width: int) -> Text:
+def ago(seconds: float) -> str:
+    return "just now" if seconds < 1 else f"{ops.duration(seconds, short=True)} ago"
+
+
+def honeypot_bars(top, width: int) -> Text:
+    """A bar per honeypot, by its share of the busiest one: name, bar, count."""
+    text = Text()
+    if not top:
+        return text
+    names = min(max(len(name) for name, _count in top), 14)
+    counts = max(len(f"{count:,}") for _name, count in top)
+    room = max(width - names - counts - 2, 4)
+    most = max(count for _name, count in top) or 1
+    for name, count in top:
+        text.append(f"{name[:names]:<{names}} ", style=theme.color("glass"))
+        filled = max(1, round(count / most * room)) if count else 0
+        text.append(glyphs.g("bar_on") * filled, style=theme.color("magenta"))
+        text.append(" " * (room - filled + 1))
+        text.append(f"{count:>{counts},}".replace(",", " "), style="bold")
+        text.append("\n")
+    text.rstrip()
+    return text
+
+
+def attacks_text(attacks, width: int, top: int = 5, now: Optional[float] = None, rows: int = 2) -> Text:
+    """The Attacks widget: the last hour per minute (in `rows` rows), the totals, the newest attack, the
+    busiest honeypots of 24 hours (the block's subtitle says so)."""
     from tpotctl import events
     text = Text()
     if attacks is None:
@@ -218,20 +242,38 @@ def attacks_text(attacks, width: int) -> Text:
     values = attacks.per_minute[-max(10, width):]
     if not any(values):
         text.append("a quiet hour, no attacks\n\n", style=theme.color("mist"))
-    for line in [] if not any(values) else events.sparkline(values, glyphs.spark(), rows=1 if glyphs.mode() == "ascii" else 2):
+    rows = 1 if glyphs.mode() == "ascii" else rows
+    for line in [] if not any(values) else events.sparkline(values, glyphs.spark(), rows=rows):
         text.append(line, style=theme.color("magenta"))
         text.append("\n")
-    text.append(f"{sum(attacks.per_minute):,}".replace(",", " "), style="bold")
-    text.append(" in the last hour   ", style=theme.color("mist"))
-    text.append(f"{attacks.last_day:,}".replace(",", " "), style="bold")
-    text.append(" in 24 hours\n", style=theme.color("mist"))
-    for name, count in attacks.top:
-        text.append(f"{name} ", style=theme.color("glass"))
-        text.append(f"{count:,}   ".replace(",", " "), style=theme.color("mist"))
+
+    def figure(count: int, label: str) -> Text:
+        return Text.assemble((f"{count:,}".replace(",", " "), "bold"), (label, theme.color("mist")))
+    totals = Text("   ").join([figure(sum(attacks.per_minute), " last hour"), figure(attacks.last_day, " in 24 hours")])
+    sources = figure(attacks.sources, " sources" if attacks.sources != 1 else " source") if attacks.sources else None
+    latest = None
+    if attacks.latest is not None:
+        now = time.time() if now is None else now
+        latest = Text.assemble((f"{lead('last_attack')}last attack ", theme.color("mist")),
+                               (ago(now - attacks.latest), "bold"))
+    # the sources go with the totals where the line has room, else with the newest attack
+    if sources is not None and totals.cell_len + 3 + sources.cell_len <= width:
+        totals.append("   ")
+        totals.append_text(sources)
+    elif sources is not None:
+        latest = sources if latest is None else Text("   ").join([latest, sources])
+    text.append_text(totals)
+    if latest is not None:
+        text.append("\n")
+        text.append_text(latest)
+    if attacks.top[:top]:
+        text.append("\n")
+        text.append_text(honeypot_bars(attacks.top[:top], width))
     return text
 
 
-# all ten top attackers from this terminal height on, five below: the containers table keeps its rows
+# from this terminal height on the Attacks block has two rows of sparkline and five honeypots and Top
+# attackers ten sources; below one row, three and three: the containers table keeps its rows
 SOURCES_TALL = 50
 
 
@@ -310,9 +352,13 @@ class StatusPane(Vertical):
     def show_attacks(self, attacks, sources=None) -> None:
         self.attacks, self.sources = attacks, sources
         width = self.query_one("#attacks").content_region.width or 40
-        self.query_one("#attacks", Static).update(attacks_text(attacks, width))
-        limit = 10 if self.app.size.height >= SOURCES_TALL else 5
-        self.query_one("#top-attackers", Static).update(sources_text(sources, limit))
+        tall = self.app.size.height >= SOURCES_TALL
+        self.query_one("#attacks", Static).update(attacks_text(attacks, width, 5 if tall else 3,
+                                                               rows=2 if tall else 1))
+        busiest = attacks is not None and not attacks.problem and attacks.top
+        self.query_one("#attacks-block").border_subtitle = \
+            Text("busiest honeypots, 24 hours", style=theme.color("mist")) if busiest else None
+        self.query_one("#top-attackers", Static).update(sources_text(sources, 10 if tall else 3))
 
     def on_resize(self) -> None:
         if getattr(self, "attacks", None) is not None:
@@ -330,7 +376,9 @@ class StatusPane(Vertical):
              machine=None, stamp=None) -> None:
         self.shown = (state, containers, problem, machine)
         if state is not None:
-            self.app.update_header(state, stamp)
+            self.app.update_header(state, stamp, containers, machine)
+        if getattr(self, "attacks", None) is not None:     # the age of the newest attack goes on
+            self.show_attacks(self.attacks, getattr(self, "sources", None))
         self.query_one(Honeycomb).show(containers)
         if machine is not None:
             self.query_one("#system", Static).update(system_text(machine))
@@ -1458,6 +1506,7 @@ class TpotApp(App):
     CSS_PATH = "tpot.tcss"
     TITLE = "T-Pot Manager"
     COMMANDS = App.COMMANDS | {TpotCommands}
+    COMMAND_PALETTE_BINDING = nav.FIND_KEY
     HORIZONTAL_BREAKPOINTS = [(0, "-narrow"), (100, "-normal"), (150, "-wide")]
     VERTICAL_BREAKPOINTS = [(0, "-short"), (34, "-tall")]
     BINDINGS = [
@@ -1466,6 +1515,7 @@ class TpotApp(App):
         Binding("r", "restart_service", "Restart T-Pot", show=False),
         Binding("f2", "next_icons", "Icons"),
         Binding("escape", "menu", "Menu", show=False),
+        nav.FIND,
         *nav.BINDINGS,
     ]
 
@@ -1531,7 +1581,7 @@ class TpotApp(App):
             return
         self.call_from_thread(self.update_header, state)
 
-    def update_header(self, state: ops.Status, stamp=None) -> None:
+    def update_header(self, state: ops.Status, stamp=None, containers=None, machine=None) -> None:
         header = self.query(TpotHeader)
         if not header:                      # the T-Pot Manager ends, a late status worker delivers anyway
             return
@@ -1539,7 +1589,7 @@ class TpotApp(App):
             self.header_stamp = stamp
         from textual.css.query import NoMatches
         try:
-            header.first().repaint(state)
+            header.first().repaint(state, containers, machine)
         except NoMatches:
             if self.is_running and not (self._exit or self._closing):
                 raise
@@ -1654,7 +1704,7 @@ class TpotApp(App):
         # the customizer and the dialogs are screens of their own, c there would open a second one
         if action in ("customize", "restart_service") and len(self.screen_stack) > 1:
             return False
-        # ctrl+p is a priority binding: over the splash it would open the palette on top of it, and the
+        # ctrl+f is a priority binding: over the splash it would open the palette on top of it, and the
         # splash would freeze under it; there the key ends the splash like any other. Over a dialog on top
         # of the splash the palette is the dialog's as anywhere else
         if action == "command_palette":
@@ -2088,7 +2138,8 @@ class CustomizerApp(nav.ArrowNav, App):
 
     CSS_PATH = "tpot.tcss"
     TITLE = "T-Pot customizer"
-    BINDINGS = [*nav.BINDINGS]
+    COMMAND_PALETTE_BINDING = nav.FIND_KEY
+    BINDINGS = [nav.FIND, *nav.BINDINGS]
 
     def notify(self, message, *args, markup: bool = False, **kwargs):
         """Notices carry paths and error texts: never read them as markup."""

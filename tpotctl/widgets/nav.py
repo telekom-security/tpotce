@@ -22,6 +22,12 @@ from textual.widgets import DataTable, Input, OptionList, RichLog
 
 BINDINGS = [Binding(key, f"nav('{key}')", show=False) for key in ("up", "down", "left", "right")]
 
+# ctrl+f finds a page, an action or a setting (Textual's command palette); the apps take FIND_KEY as
+# their COMMAND_PALETTE_BINDING, the Footer shows it on the right as "^f find"
+FIND_KEY = "ctrl+f"
+FIND = Binding(FIND_KEY, "command_palette", "find", show=False, priority=True,
+               tooltip="Find a page, an action or a setting")
+
 
 def _area(app, widget: Optional[Widget]) -> Widget:
     """Where the arrows move: the open page of the menu (the child of #panes), else the screen."""

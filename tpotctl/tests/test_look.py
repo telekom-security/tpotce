@@ -110,15 +110,16 @@ class LogoTest(unittest.TestCase):
             self.assertEqual(len({len(r) for r in rows}), 1)
             self.assertTrue(set("".join(rows)) <= set(".") | set(logo._PIXEL))
 
-    def test_wordmark_is_capital_t_pot(self):
+    def test_wordmark_is_lowercase_t_pot(self):
         from tpotctl import logo
-        self.assertEqual((len(logo.WORDMARK), len(logo.WORDMARK[0])), (6, 21))
-        top = logo.WORDMARK[0]
-        self.assertTrue(top.startswith("#####"))            # the bar of the capital T
-        self.assertEqual(top[5:].count("#"), 3)             # the bowl of the capital P, nothing else
-        self.assertEqual({row[2] for row in logo.WORDMARK}, {"#"})   # the stem of the T: full height
-        self.assertEqual({row[9] for row in logo.WORDMARK}, {"#"})   # the stem of the P: full height
-        self.assertEqual("".join(row[14:] for row in logo.WORDMARK[:1]).count("#"), 0)  # o, t below
+        rows = logo.WORDMARK
+        self.assertEqual((len(rows), len(rows[0])), (6, 18))
+        self.assertEqual({row[1] for row in rows[:5]}, {"#"})      # the stem of the first t, ascender on
+        self.assertEqual({row[16] for row in rows[:5]}, {"#"})     # the stem of the second t
+        self.assertEqual(rows[5].count("#"), 1)                     # only the descender of the p below
+        self.assertEqual(rows[5].index("#"), 7)                     # under the stem of the p
+        self.assertEqual(rows[2][4:6], "##")                        # the hyphen
+        self.assertEqual(rows[0].count("#"), 2)                     # the two ascenders, nothing else
 
     def test_splash_sizes(self):
         """120 x 49 and more the large logo, 80 x 33 the middle one, 80 x 24 the tight one, below none."""
@@ -231,7 +232,8 @@ class LogoTest(unittest.TestCase):
         self.assertEqual(len(logo.wordmark().plain.split("\n")), 3)
         glyphs.set_mode("ascii")
         try:
-            self.assertEqual(logo.wordmark().plain, "T-Pot")
+            # the plain word in the middle row of the plate, as wide as the pixels
+            self.assertEqual(logo.wordmark().plain.split("\n"), ["", "t-pot".center(18), ""])
         finally:
             glyphs.set_mode("unicode")
 
@@ -264,8 +266,8 @@ class LookInTheAppTest(unittest.IsolatedAsyncioTestCase):
             app.set_icons("unicode")
         self.assertEqual(prefs.load(), prefs.Prefs("unicode"))
 
-    async def test_ctrl_p_does_not_open_the_palette_over_the_splash(self):
-        """ctrl+p is a key like any other while the splash runs: it ends the splash, no palette over it."""
+    async def test_ctrl_f_does_not_open_the_palette_over_the_splash(self):
+        """ctrl+f is a key like any other while the splash runs: it ends the splash, no palette over it."""
         from textual.command import CommandPalette
         from tpotctl import app as tapp
         from tpotctl.screens.splash import SplashScreen
@@ -274,7 +276,7 @@ class LookInTheAppTest(unittest.IsolatedAsyncioTestCase):
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause(0.3)
             self.assertIsInstance(app.screen, SplashScreen)
-            await pilot.press("ctrl+p")
+            await pilot.press("ctrl+f")
             for _ in range(20):
                 await pilot.pause(0.05)
                 if not isinstance(app.screen, SplashScreen):
@@ -428,7 +430,7 @@ class LookInTheAppTest(unittest.IsolatedAsyncioTestCase):
                 self.assertIsNone(app.held_notices)
 
     async def test_a_splash_that_ends_under_a_dialog_leaves_when_the_dialog_closes(self):
-        """A dialog over the splash (a worker that asks): ctrl+p works over the dialog, the splash's time runs
+        """A dialog over the splash (a worker that asks): ctrl+f works over the dialog, the splash's time runs
         out under it, and when it closes the menu is there, not a splash that stands still."""
         from textual.command import CommandPalette
         from tpotctl import splash_anim
@@ -450,7 +452,7 @@ class LookInTheAppTest(unittest.IsolatedAsyncioTestCase):
                 await self.poll(pilot, lambda: len(app.screen_stack) == 1)
                 self.assertNotIsInstance(app.screen, SplashScreen)
                 self.assertNotIn(splash, app.screen_stack)
-                await pilot.press("ctrl+p")
+                await pilot.press("ctrl+f")
                 await self.poll(pilot, lambda: isinstance(app.screen, CommandPalette))
 
     async def test_a_resize_too_small_under_a_dialog_ends_the_splash(self):
@@ -561,7 +563,39 @@ class LookInTheAppTest(unittest.IsolatedAsyncioTestCase):
             chips = str(app.query_one("#header-chips").render())
             for text in ("HIVE", "STANDARD", "24.04.2"):
                 self.assertIn(text, chips)
-            self.assertIn("running", str(app.query_one("#header-service").render()))
+            self.assertIn("running", str(app.query_one("#header-live").render()))
+
+    def test_every_app_finds_with_ctrl_f(self):
+        """ctrl+f opens the palette in every app of tpot, the Footer names it "find"; ctrl+p is gone."""
+        from tpotctl import app as tapp
+        from tpotctl.screens.install import InstallApp
+        from tpotctl.screens.uninstall import UninstallApp
+        from tpotctl.widgets import nav
+        for cls in (tapp.TpotApp, tapp.CustomizerApp, InstallApp, UninstallApp):
+            with self.subTest(app=cls.__name__):
+                self.assertEqual(cls.COMMAND_PALETTE_BINDING, "ctrl+f")
+                self.assertIn(nav.FIND, cls.BINDINGS)
+                self.assertEqual(nav.FIND.description, "find")
+                self.assertNotIn("ctrl+p", [getattr(b, "key", "") for b in cls.BINDINGS])
+
+    async def test_ctrl_f_finds_and_ctrl_p_does_nothing(self):
+        from textual.command import CommandPalette
+        from tpotctl import app as tapp
+        from tpotctl.tests.test_app import FakeBackend, Recorder
+        app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder())
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.3)
+            footer = app.query_one("FooterKey.-command-palette")
+            self.assertEqual((footer.key_display, footer.description), ("^f", "find"))
+            await pilot.press("ctrl+p")
+            await pilot.pause(0.3)
+            self.assertNotIsInstance(app.screen, CommandPalette)
+            await pilot.press("ctrl+f")
+            for _ in range(20):
+                await pilot.pause(0.05)
+                if isinstance(app.screen, CommandPalette):
+                    break
+            self.assertIsInstance(app.screen, CommandPalette)
 
     async def test_palette_goes_to_a_setting(self):
         from tpotctl.commands import TpotCommands
@@ -586,44 +620,143 @@ class LookInTheAppTest(unittest.IsolatedAsyncioTestCase):
 
 @unittest.skipUnless(sys.modules.get("textual") or __import__("importlib").util.find_spec("textual"),
                      "Textual is not installed, run with the venv of tpot")
+class AttacksWidgetTest(unittest.TestCase):
+    """The Attacks block of the Status page: the hour, the totals, the newest attack, the busiest honeypots."""
+
+    def attacks(self, **kwargs):
+        from tpotctl import events
+        values = dict(per_minute=[0, 3, 9, 4] * 15, last_day=18933,
+                      top=[("Cowrie", 6120), ("Dionaea", 3010), ("Tanner", 880), ("Honeytrap", 410), ("Conpot", 77)],
+                      latest=1000.0, sources=312)
+        values.update(kwargs)
+        return events.Attacks(**values)
+
+    def test_the_widget(self):
+        from tpotctl import app as tapp
+        lines = tapp.attacks_text(self.attacks(), 76, now=1004.0).plain.split("\n")
+        self.assertEqual(len(lines), 2 + 2 + 5)                # two sparkline rows, totals, newest, bars
+        self.assertEqual(lines[2], "240 last hour   18 933 in 24 hours   312 sources")
+        self.assertEqual(lines[3], f"{glyphs.g('last_attack')} last attack 4 s ago")
+        self.assertTrue(lines[4].startswith("Cowrie") and lines[4].endswith("6 120"), lines[4])
+        self.assertTrue(all(len(line) <= 76 for line in lines[4:]))
+        self.assertGreater(lines[4].count(glyphs.g("bar_on")), lines[5].count(glyphs.g("bar_on")))
+        self.assertEqual(lines[8].count(glyphs.g("bar_on")), 1)           # the smallest still shows
+
+    def test_a_narrow_block_moves_the_sources(self):
+        from tpotctl import app as tapp
+        lines = tapp.attacks_text(self.attacks(), 46, top=3, now=1000.5, rows=1).plain.split("\n")
+        self.assertEqual(lines[1], "240 last hour   18 933 in 24 hours")
+        self.assertIn("last attack just now   312 sources", lines[2])
+        self.assertEqual(len(lines), 1 + 2 + 3)                # below 50 rows: one sparkline row, three
+
+    def test_quiet_and_unreachable(self):
+        from tpotctl import app as tapp, events
+        quiet = tapp.attacks_text(self.attacks(per_minute=[0] * 60, latest=None, sources=0, top=[]), 60).plain
+        self.assertIn("a quiet hour, no attacks", quiet)
+        self.assertNotIn("last attack", quiet)
+        self.assertNotIn("sources", quiet)
+        self.assertEqual(tapp.attacks_text(events.Attacks(problem="Elasticsearch is not reachable"), 60).plain,
+                         "Elasticsearch is not reachable")
+        self.assertIn("asking", tapp.attacks_text(None, 60).plain)
+
+
+@unittest.skipUnless(sys.modules.get("textual") or __import__("importlib").util.find_spec("textual"),
+                     "Textual is not installed, run with the venv of tpot")
 class CreditTest(unittest.IsolatedAsyncioTestCase):
 
-    async def credit(self, width, branch="dev", chips=None):
-        from tpotctl import app as tapp, ops
+    async def header(self, width, branch="dev", kind="HIVE", machine=None, **status):
+        """The header of a run at this width: (rule row, plate region, middle text, right text)."""
+        from textual.geometry import Region
+        from tpotctl import app as tapp, ops, system
         from tpotctl.tests.test_app import FakeBackend, Recorder
-        backend = FakeBackend()
-        backend.status = lambda: ops.Status("24.04.2", branch, "abc1234", "STANDARD", "HIVE", "active",
-                                            "/home/t/tpotce")
+        backend = FakeBackend(kind=kind)
+        status.setdefault("since", 3 * 86400 + 4 * 3600)
+        status.setdefault("address", "10.0.0.1" if kind == "SENSOR" else "192.0.2.5")
+        backend.status = lambda: ops.Status("24.04.2", branch, "abc1234", "STANDARD", kind, "active",
+                                            "/home/t/tpotce", **status)
+        backend.system = lambda: machine or system.System(12.0, system.Usage(1, 4), system.Usage(1, 10), "/data",
+                                                          41 * 86400, 0.42, 4)
         app = tapp.TpotApp(backend=backend, runner=Recorder())
-        # the second chip line is host name and checkout: the same on every machine that runs the tests
+        # the second line is host name and checkout: the same on every machine that runs the tests
         with mock.patch("tpotctl.widgets.header.socket.gethostname", return_value="tpot"), \
                 mock.patch.object(ops, "REPO_DIR", "/home/t/tpotce"):
             async with app.run_test(size=(width, 40)) as pilot:
-                for _ in range(40):                 # the status comes from a worker: wait for its version
-                    await pilot.pause(0.05)              # (narrow headers leave the branch out)
-                    if "24.04.2" in str(app.query_one("#header-chips").render()):
+                for _ in range(40):                 # the status comes from a worker: wait for the containers
+                    await pilot.pause(0.05)
+                    if " up" in str(app.query_one("#header-live").render()):
                         break
                 else:
                     self.fail("no status in the header after 2 s")
                 await pilot.pause(0.1)
-                widget = app.query_one("#header-credit")
-                if chips is not None:
-                    chips.append(str(app.query_one("#header-chips").render()))
-                return str(widget.render()) if widget.display else ""
+                header = app.query_one("#header")
+                rule = "".join(seg.text for seg in header.render_lines(Region(0, 0, width, 4))[3])
+                return (rule, app.query_one("#wordmark").region, str(app.query_one("#header-chips").render()),
+                        str(app.query_one("#header-live").render()))
 
-    async def test_a_long_branch_gets_the_short_credit(self):
-        chips = []
-        short = await self.credit(130, "feature/maplibre-attack-map", chips)
-        self.assertTrue("by Telekom Security" in short and "Deutsche" not in short, short)
-        self.assertTrue("feature/maplibre-attack-map abc1234" in chips[0], chips[0])
-        self.assertTrue("Deutsche Telekom Security GmbH" in await self.credit(130, "dev"))
+    async def test_the_credit_sits_centred_under_the_plate(self):
+        for width in (80, 110, 150):
+            with self.subTest(width=width):
+                rule, plate, _what, _live = await self.header(width)
+                credit = "[ telekom security ]"
+                self.assertIn(credit, rule)
+                start = rule.index(credit)
+                self.assertEqual(start - plate.x, 2, rule)                          # two cells of the rule
+                self.assertEqual(plate.right - (start + len(credit)), 2, rule)      # on each side
+                self.assertEqual(rule[:start], "─" * start)
+                self.assertNotIn("Deutsche", rule)
+                self.assertNotIn("Powered", rule)
 
-    async def test_header_names_telekom_security(self):
-        self.assertIn("Powered by Deutsche Telekom Security GmbH", await self.credit(150))
-        short = await self.credit(110)
-        self.assertIn("by Telekom Security", short)
-        self.assertNotIn("Deutsche", short)
-        self.assertEqual(await self.credit(80), "")
+    async def test_a_long_branch_stays_in_the_header(self):
+        _rule, _plate, what, _live = await self.header(150, "feature/maplibre-attack-map")
+        self.assertIn("feature/maplibre-attack-map abc1234", what)
+        _rule, _plate, what, _live = await self.header(80, "feature/maplibre-attack-map")
+        self.assertNotIn("maplibre", what)                  # narrow: no branch
+
+    async def test_the_header_says_what_this_tpot_is_and_how_it_does(self):
+        _rule, _plate, what, live = await self.header(150)
+        for text in ("HIVE", "STANDARD", "24.04.2", "tpot", "/home/t/tpotce",
+                     "https://192.0.2.5:64297"):
+            self.assertIn(text, what)
+        for text in ("running", "3 d 4 h", "1 of 2 up", "up 41 d", "0.42"):
+            self.assertIn(text, live)
+        self.assertNotIn("disk", live)                      # 10 % full: nothing to tell
+        _rule, _plate, what, _live = await self.header(80)
+        self.assertIn("192.0.2.5:64297", what)
+        self.assertNotIn("https://", what)                  # narrow: the address, still a link
+
+    async def test_the_header_of_a_sensor_names_its_hive(self):
+        _rule, _plate, what, _live = await self.header(150, kind="SENSOR")
+        self.assertIn("10.0.0.1", what)
+        self.assertNotIn("https://", what)
+
+    async def test_the_header_warns_of_a_full_disk_and_a_high_load(self):
+        from tpotctl import system
+        machine = system.System(12.0, system.Usage(1, 4), system.Usage(93, 100), "/data", 600, 5.5, 4)
+        _rule, _plate, _what, live = await self.header(150, machine=machine, since=None)
+        self.assertIn("disk 93 %", live)
+        self.assertIn("up 10 min", live)
+        self.assertIn("5.50", live)
+        self.assertNotIn("3 d", live)                       # no uptime of the service without its start
+
+    def test_load_colours(self):
+        from tpotctl import theme
+        from tpotctl.widgets import header
+        self.assertEqual(header.load_colour(0.5, 4), theme.color("ok"))
+        self.assertEqual(header.load_colour(3.0, 4), theme.color("warn"))
+        self.assertEqual(header.load_colour(4.0, 4), theme.color("error"))
+
+    def test_glyphs_of_the_header_in_ascii(self):
+        from tpotctl import ops
+        from tpotctl.widgets import header
+        glyphs.set_mode("ascii")
+        try:
+            state = ops.Status("24.04.2", "dev", "abc", "STANDARD", "HIVE", "active", "/x", since=60,
+                               address="192.0.2.5")
+            live = header.live_text(state, [], None).plain
+            self.assertIn("* running  up 1 min", live)
+            self.assertIn("web https://192.0.2.5:64297", header.what_text(state, False).plain)
+        finally:
+            glyphs.set_mode("unicode")
 
     async def test_header_repaint_while_the_manager_ends(self):
         """A late status update while the T-Pot Manager ends meets a header whose parts are gone."""
@@ -786,7 +919,7 @@ class ColoursTest(unittest.IsolatedAsyncioTestCase):
             from textual.command import CommandPalette
             from tpotctl.screens.dialogs import ConfirmDialog
             for opener, screen in ((lambda: pilot.click("#svc-restart"), ConfirmDialog),   # dialogs dim the page
-                                   (lambda: pilot.press("ctrl+p"), CommandPalette)):
+                                   (lambda: pilot.press("ctrl+f"), CommandPalette)):
                 await opener()
                 for _ in range(40):
                     await pilot.pause(0.05)

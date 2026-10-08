@@ -19,7 +19,7 @@ from textual.widgets import Button, Checkbox, Footer, Input, Static
 
 from tpotctl import glyphs, installer, logo, theme
 from tpotctl.theme import apply as apply_theme
-from tpotctl.widgets.nav import BINDINGS as NAV_BINDINGS, ArrowNav, NavInput, NavScroll
+from tpotctl.widgets.nav import BINDINGS as NAV_BINDINGS, FIND, FIND_KEY, ArrowNav, NavInput, NavScroll
 
 REMOVED = [
     "all containers, images and the data of T-Pot (logs, Elasticsearch, certificates)",
@@ -144,7 +144,8 @@ class UninstallApp(ArrowNav, App):
 
     CSS_PATH = "../tpot.tcss"
     TITLE = "T-Pot uninstaller"
-    BINDINGS = [*NAV_BINDINGS]
+    COMMAND_PALETTE_BINDING = FIND_KEY
+    BINDINGS = [FIND, *NAV_BINDINGS]
 
     def notify(self, message, *args, markup: bool = False, **kwargs):
         """Notices carry paths and error texts: never read them as markup."""

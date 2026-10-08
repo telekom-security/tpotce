@@ -239,8 +239,12 @@ def print_images() -> int:
 def print_status() -> int:
     state = ops.status()
     console = _console()
+    service = state.service if state.since is None else f"{state.service} for {ops.duration(state.since)}"
     rows = [("Version", f"{state.version} ({state.branch} {state.commit})"), ("Edition", state.edition),
-            ("Type", state.tpot_type), ("Service", state.service), ("Checkout", state.repo_dir)]
+            ("Type", state.tpot_type), ("Service", service), ("Checkout", state.repo_dir)]
+    if state.address:
+        rows.append(("Hive", state.address) if state.tpot_type == "SENSOR"
+                    else ("Web UI", f"https://{state.address}:{state.web_port}"))
     for label, value in rows:
         console.print(f"[bold {MAGENTA}]{label:<10}[/] {value}")
     try:

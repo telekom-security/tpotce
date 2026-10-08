@@ -8,6 +8,7 @@ import io
 import json
 import os
 import re
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -214,6 +215,66 @@ class BootstrapTest(unittest.TestCase):
 
 
 class OpsTest(unittest.TestCase):
+
+    def test_duration(self):
+        self.assertEqual(ops.duration(3 * 86400 + 4 * 3600 + 59), "3 d 4 h")
+        self.assertEqual(ops.duration(3 * 86400 + 4 * 3600, short=True), "3 d")
+        self.assertEqual(ops.duration(2 * 86400), "2 d")
+        self.assertEqual(ops.duration(5 * 3600 + 12 * 60), "5 h 12 min")
+        self.assertEqual(ops.duration(12 * 60 + 5), "12 min")
+        self.assertEqual(ops.duration(40), "40 s")
+        self.assertEqual(ops.duration(-3), "0 s")
+
+    def test_route_source(self):
+        self.assertEqual(ops.parse_route_src("1.1.1.1 via 10.0.0.1 dev eth0 src 10.0.0.5 uid 1000\n    cache\n"),
+                         "10.0.0.5")
+        self.assertEqual(ops.parse_route_src("RTNETLINK answers: Network is unreachable"), "")
+
+    def test_host_address_is_asked_once_a_minute(self):
+        calls = []
+
+        def run(command, **kwargs):
+            calls.append(command)
+            return subprocess.CompletedProcess(command, 0, "1.1.1.1 via 10.0.0.1 dev eth0 src 10.0.0.5 uid 1\n")
+        ops._ADDRESS.clear()
+        try:
+            with mock.patch.object(ops, "linux_host", return_value=True), \
+                    mock.patch.object(ops.shutil, "which", return_value="/usr/sbin/ip"):
+                self.assertEqual(ops.host_address(run, now=100.0), "10.0.0.5")
+                self.assertEqual(ops.host_address(run, now=150.0), "10.0.0.5")
+                self.assertEqual(len(calls), 1)
+                ops.host_address(run, now=161.0)
+                self.assertEqual(len(calls), 2)
+                self.assertEqual(calls[0], ["ip", "-4", "route", "get", "1.1.1.1"])
+            ops._ADDRESS.clear()
+            with mock.patch.object(ops, "linux_host", return_value=False):
+                self.assertEqual(ops.host_address(run, now=0.0), "")         # macOS: no ip route here
+        finally:
+            ops._ADDRESS.clear()
+
+    def test_service_since(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            uptime = os.path.join(tmp, "uptime")
+            with open(uptime, "w") as handle:
+                handle.write("1000.0 4000.0\n")
+
+            def run(value):
+                return lambda command, **kwargs: subprocess.CompletedProcess(command, 0, value)
+            self.assertEqual(ops.service_since(run("400000000\n"), uptime), 600)    # active since 400 s
+            self.assertIsNone(ops.service_since(run("0\n"), uptime))                # never active
+            self.assertIsNone(ops.service_since(run("\n"), uptime))
+            self.assertIsNone(ops.service_since(run("2000000000\n"), uptime))       # after now: nonsense
+            self.assertIsNone(ops.service_since(run("400000000\n"), os.path.join(tmp, "none")))
+
+    def test_web_port_follows_the_compose_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with open(os.path.join(tmp, "docker-compose.yml"), "w") as handle:
+                handle.write('services:\n  nginx:\n    ports:\n     - "64294:64294"\n     - "8443:64297"\n')
+            self.assertEqual(ops.web_port(tmp, {}), 8443)
+            with open(os.path.join(tmp, "docker-compose.yml"), "w") as handle:
+                handle.write('services:\n  nginx:\n    ports:\n     - "64297:64297"\n')
+            self.assertEqual(ops.web_port(tmp, {}), 64297)
+            self.assertEqual(ops.web_port(os.path.join(tmp, "none"), {}), ops.WEB_PORT)
 
     def test_parse_ps(self):
         containers = ops.parse_ps("\n".join(json.dumps(i) for i in PS))

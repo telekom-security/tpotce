@@ -1041,7 +1041,7 @@ class BannerTest(unittest.TestCase):
         wordmark = bash_array(read(UI_SH), "myUI_WORDMARK")
         self.assertEqual(len(wordmark), 3)
         self.assertEqual(ui_logo.wordmark_pixels(wordmark), ui_logo.manager_wordmark())
-        self.assertEqual(ui_logo.manager_wordmark()[0].count("#"), 8)        # T-Pot, capital T and P
+        self.assertEqual(ui_logo.manager_wordmark()[0].count("#"), 2)        # t-pot: the ascenders of the t
 
     @unittest.skipUnless(rich, "Rich is not installed")
     def test_manager_wordmark_is_logo_wordmark(self):

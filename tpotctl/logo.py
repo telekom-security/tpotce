@@ -12,16 +12,16 @@ from rich.text import Text
 
 from tpotctl import glyphs, theme
 
-# T-Pot: the capital T and P at the full height of six pixels, the o and the t (with its
-# ascender) below them; the scripts show the same pixels (tpotctl/ui_logo.py writes them into
+# t-pot in lowercase: the two t with their ascenders, the hyphen, the p with its descender in
+# the last row and the o; the scripts show the same pixels (tpotctl/ui_logo.py writes them into
 # installer/lib/ui.sh), so keep it a plain list of strings
 WORDMARK = [
-    "#####....###.........",
-    "..#......#..#......#.",
-    "..#......#..#.###.###",
-    "..#...##.###..#.#..#.",
-    "..#......#....#.#..#.",
-    "..#......#....###..##",
+    ".#..............#.",
+    "###....###.###.###",
+    ".#..##.#.#.#.#..#.",
+    ".#.....#.#.#.#..#.",
+    ".##....###.###..##",
+    ".......#..........",
 ]
 
 _PIXEL = {"M": "magenta", "P": "petrol", "W": "glass", "B": "mist", "#": "glass"}
@@ -58,7 +58,9 @@ def _colour(pixel: str, on: str):
 
 
 def wordmark(colour: str = "") -> Text:
-    """Three rows, 21 columns; colour overrides the letters (i.e. glass on a magenta plate)."""
+    """Three rows, 18 columns; colour overrides the letters (i.e. glass on a magenta plate). The ascii
+    icon set gets the plain word in the middle row."""
     if glyphs.mode() == "ascii":
-        return Text("T-Pot", style="bold")
+        # the plain word in the middle of the plate, as wide as the pixels (the credit centres under it)
+        return Text("\n" + "t-pot".center(len(WORDMARK[0])) + "\n", style="bold")
     return _pixels(WORDMARK, colour)

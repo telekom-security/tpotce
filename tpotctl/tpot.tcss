@@ -17,12 +17,14 @@ VerticalScroll, DataTable, OptionList, Tree {
     height: 4;
     padding: 0 1;
     border-bottom: solid $wax;
+    border-subtitle-align: left;
 }
 
+/* 3 + 18 pixels + 3: the credit in the rule below (header.CREDIT_INDENT) sits centred under it */
 #wordmark {
     width: auto;
     height: 3;
-    padding: 0 1;
+    padding: 0 3;
     background: $primary;
 }
 
@@ -32,27 +34,17 @@ VerticalScroll, DataTable, OptionList, Tree {
     padding: 0 0 0 3;
 }
 
-#header-right {
+#header-live {
     width: auto;
+    max-width: 40;
     height: 3;
-}
-
-#header-service {
-    width: 100%;
-    height: 1;
-    text-align: right;
-}
-
-#header-credit {
-    width: auto;
-    height: 1;
-    margin-top: 1;
-    text-align: right;
+    padding-left: 2;
 }
 
 Screen.-narrow #header-chips {
     padding-left: 1;
 }
+
 
 /* menu */
 
@@ -500,7 +492,7 @@ ModalScreen {
     background: $modal-dim;
 }
 
-/* ctrl+p: Textual's own backdrop ($background 60%) leaves the wax borders maroon with 256 colours */
+/* ctrl+f: Textual's own backdrop ($background 60%) leaves the wax borders maroon with 256 colours */
 CommandPalette {
     background: $modal-dim;
 }

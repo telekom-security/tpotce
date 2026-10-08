@@ -1,4 +1,5 @@
-"""Attacks on this HIVE from Elasticsearch: per minute of the last hour, 24 hours, top honeypots.
+"""Attacks on this HIVE from Elasticsearch: per minute of the last hour, its sources, 24 hours, the
+busiest honeypots, the newest attack.
 
 Events of the NSM tools (Suricata, P0f) are not attacks of their own, they describe
 the same connections the honeypots see, so they are left out, as on the Attack Map.
@@ -7,7 +8,7 @@ the same connections the honeypots see, so they are left out, as on the Attack M
 import json
 import urllib.request
 from dataclasses import dataclass, field
-from typing import Callable, List, Tuple
+from typing import Callable, List, Optional, Tuple
 
 ES_URL = "http://127.0.0.1:64298"        # as in tpotctl.sensors
 NOT_ATTACKS = ["Suricata", "P0f"]
@@ -19,6 +20,8 @@ class Attacks:
     last_day: int = 0
     top: List[Tuple[str, int]] = field(default_factory=list)
     problem: str = ""
+    latest: Optional[float] = None      # epoch seconds of the newest attack of 24 hours
+    sources: int = 0                    # distinct source addresses of the last hour
 
 
 def query() -> dict:
@@ -32,9 +35,11 @@ def query() -> dict:
                 "filter": {"range": {"@timestamp": {"gte": "now-60m/m"}}},
                 "aggs": {"minutes": {"date_histogram": {
                     "field": "@timestamp", "fixed_interval": "1m", "min_doc_count": 0,
-                    "extended_bounds": {"min": "now-59m/m", "max": "now/m"}}}},
+                    "extended_bounds": {"min": "now-59m/m", "max": "now/m"}}},
+                    "sources": {"cardinality": {"field": "src_ip.keyword"}}},
             },
             "top": {"terms": {"field": "type.keyword", "size": 5}},
+            "latest": {"max": {"field": "@timestamp"}},
         },
     }
 
@@ -47,7 +52,9 @@ def parse(answer: dict) -> Attacks:
     buckets = ((aggs.get("hour") or {}).get("minutes") or {}).get("buckets", [])
     minutes = [int(b.get("doc_count", 0)) for b in buckets][-60:]
     top = [(b["key"], int(b.get("doc_count", 0))) for b in (aggs.get("top") or {}).get("buckets", [])]
-    return Attacks(minutes, int(total), top)
+    latest = (aggs.get("latest") or {}).get("value")             # epoch milliseconds, None without hits
+    sources = ((aggs.get("hour") or {}).get("sources") or {}).get("value") or 0
+    return Attacks(minutes, int(total), top, latest=latest / 1000 if latest else None, sources=int(sources))
 
 
 def fetch(url: str = ES_URL, opener: Callable = urllib.request.urlopen) -> Attacks:

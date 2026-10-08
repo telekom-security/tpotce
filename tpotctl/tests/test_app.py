@@ -153,12 +153,22 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(app.query_one("#svc-start").label.plain, "Start T-Pot")
 
     async def test_top_attackers_leave_the_containers_their_rows(self):
-        """Below 50 lines five sources, so the containers table keeps the rows it had next to the pot."""
-        app = tapp.TpotApp(backend=self.ten_sources(), runner=Recorder())
+        """Below 50 lines a compact Attacks block and three sources, so the containers table keeps the rows
+        it had next to the pot, with every line of the widget there (the newest attack, five honeypots)."""
+        from tpotctl import events
+        backend = self.ten_sources()
+        backend.attacks = lambda: events.Attacks([0, 3, 9, 4] * 15, 1234,
+                                                 [(f"Honeypot{n}", 900 - n) for n in range(5)],
+                                                 latest=1.0, sources=99)
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause(0.8)
             text = str(app.query_one("#top-attackers").render())
-            self.assertEqual(sum(f"203.0.113.{n}" in text for n in range(10)), 5)
+            self.assertEqual(sum(f"203.0.113.{n}" in text for n in range(10)), 3)
+            attacks = str(app.query_one("#attacks").render())
+            self.assertEqual(sum(f"Honeypot{n}" in attacks for n in range(5)), 3)
+            self.assertIn("last attack", attacks)
+            self.assertIn("24 hours", str(app.query_one("#attacks-block").border_subtitle))
             self.assertGreaterEqual(app.query_one("#containers").content_region.height, 10)
 
     async def test_restart_asks_then_runs_systemctl(self):

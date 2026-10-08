@@ -1,4 +1,4 @@
-"""ctrl+p in the T-Pot Manager: jump to a page or a setting, run an action, change the icons or the colours."""
+"""ctrl+f in the T-Pot Manager: jump to a page or a setting, run an action, change the icons or the colours."""
 
 from functools import partial
 from typing import Callable, Iterator, Tuple

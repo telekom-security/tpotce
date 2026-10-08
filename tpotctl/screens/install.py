@@ -24,7 +24,8 @@ from tpotctl import engine, glyphs, installer, logo, theme, users
 from tpotctl.bootstrap import REPO_DIR
 from tpotctl.screens.dialogs import ConfirmDialog
 from tpotctl.theme import apply as apply_theme
-from tpotctl.widgets.nav import BINDINGS as NAV_BINDINGS, ArrowNav, NavInput, NavOptionList, NavRichLog, NavScroll
+from tpotctl.widgets.nav import (BINDINGS as NAV_BINDINGS, FIND, FIND_KEY, ArrowNav, NavInput, NavOptionList,
+                                 NavRichLog, NavScroll)
 
 STEPS = [("check", "System check"), ("edition", "Edition"), ("user", "Web user"), ("settings", "Settings"),
          ("review", "Review"), ("install", "Install"), ("done", "Done")]
@@ -81,7 +82,9 @@ class InstallApp(ArrowNav, App):
 
     CSS_PATH = "../tpot.tcss"
     TITLE = "T-Pot installer"
-    BINDINGS = [Binding("q", "leave", "Quit"), Binding("escape", "back", "Back", show=False), *NAV_BINDINGS]
+    COMMAND_PALETTE_BINDING = FIND_KEY
+    BINDINGS = [Binding("q", "leave", "Quit"), Binding("escape", "back", "Back", show=False), FIND,
+                *NAV_BINDINGS]
 
     def notify(self, message, *args, markup: bool = False, **kwargs):
         """Notices carry paths and error texts: never read them as markup."""

@@ -32,11 +32,16 @@ class SystemTest(unittest.TestCase):
         self.assertEqual((memory.used, memory.total), (6000000 * 1024, 8000000 * 1024))
         self.assertAlmostEqual(memory.percent, 75.0)
         self.assertIsNone(system.parse_meminfo("nothing"))
+        self.assertEqual(system.parse_uptime("3542.29 13950.64\n"), 3542.29)
+        self.assertEqual(system.parse_loadavg("0.42 0.38 0.30 2/412 12345\n"), 0.42)
+        self.assertIsNone(system.parse_uptime(""))
+        self.assertIsNone(system.parse_loadavg("busy"))
 
     def test_meter_needs_two_readings_for_the_cpu(self):
         proc = tempfile.mkdtemp()
-        with open(os.path.join(proc, "meminfo"), "w") as handle:
-            handle.write(MEMINFO)
+        for name, text in (("meminfo", MEMINFO), ("uptime", "600.5 1200.0\n"), ("loadavg", "1.50 1 1 1/1 1\n")):
+            with open(os.path.join(proc, name), "w") as handle:
+                handle.write(text)
         meter = system.Meter(proc)
         for text, cpu in ((STAT_1, None), (STAT_2, 50.0)):
             with open(os.path.join(proc, "stat"), "w") as handle:
@@ -45,6 +50,8 @@ class SystemTest(unittest.TestCase):
             self.assertEqual(reading.cpu, cpu)
         self.assertIsNotNone(reading.disk)
         self.assertEqual(reading.disk_path, proc)
+        self.assertEqual((reading.uptime, reading.load), (600.5, 1.5))
+        self.assertGreaterEqual(reading.cpus, 1)
 
     def test_data_path_and_a_missing_folder(self):
         self.assertEqual(system.data_path({"TPOT_DATA_PATH": "./data"}, "/home/t/tpotce"), "/home/t/tpotce/data")
@@ -72,11 +79,16 @@ class EventsTest(unittest.TestCase):
         self.assertIn('"Suricata"', query)
         self.assertIn('"P0f"', query)
         self.assertIn("type.keyword", query)
+        self.assertEqual(events.query()["aggs"]["latest"], {"max": {"field": "@timestamp"}})
+        self.assertEqual(events.query()["aggs"]["hour"]["aggs"]["sources"],
+                         {"cardinality": {"field": "src_ip.keyword"}})     # the field of tpot attackers
 
     def test_parse_and_fetch(self):
         answer = {"hits": {"total": {"value": 4242}},
                   "aggregations": {"hour": {"minutes": {"buckets": [{"doc_count": n} for n in range(61)]}},
-                                   "top": {"buckets": [{"key": "Cowrie", "doc_count": 99}]}}}
+                                   "top": {"buckets": [{"key": "Cowrie", "doc_count": 99}]},
+                                   "latest": {"value": 1791460000123.0}}}
+        answer["aggregations"]["hour"]["sources"] = {"value": 312}
         seen = []
 
         def opener(request, timeout):
@@ -88,6 +100,13 @@ class EventsTest(unittest.TestCase):
         self.assertEqual(attacks.last_day, 4242)
         self.assertEqual(len(attacks.per_minute), 60)
         self.assertEqual(attacks.top, [("Cowrie", 99)])
+        self.assertAlmostEqual(attacks.latest, 1791460000.123)
+        self.assertEqual(attacks.sources, 312)
+
+    def test_no_attack_yet(self):
+        attacks = events.parse({"hits": {"total": 0}, "aggregations": {"latest": {"value": None}}})
+        self.assertIsNone(attacks.latest)
+        self.assertEqual(attacks.sources, 0)
 
     def test_unreachable(self):
         def opener(request, timeout):

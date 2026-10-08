@@ -11,6 +11,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Tuple
 
@@ -18,6 +19,7 @@ from tpotctl.bootstrap import REPO_DIR
 from tpotctl.envfile import read_values
 
 SERVICE = "tpot"
+WEB_PORT = 64297       # nginx, the one web entry point of a HIVE
 _EDITION_RE = re.compile(r"^# T-Pot: (\S.*?)\s*$")
 
 
@@ -148,23 +150,100 @@ class Status:
     tpot_type: str
     service: str        # active, inactive, failed, ... or "n/a" without systemd
     repo_dir: str
+    since: Optional[int] = None     # seconds the service is active, None when it is not or unknown
+    address: str = ""               # HIVE: this host's address for the web UI, SENSOR: its HIVE
+    web_port: int = WEB_PORT        # the host port of nginx (the customizer can move it)
+
+
+def parse_route_src(text: str) -> str:
+    """The source address of `ip route get`: "1.1.1.1 via 10.0.0.1 dev eth0 src 10.0.0.5 uid 1000"."""
+    match = re.search(r"\bsrc\s+(\S+)", text)
+    return match.group(1) if match else ""
+
+
+_NGINX_PORT = re.compile(r"""^\s*-\s*["']?(?:[\d.]+:)?(\d+):64297["']?\s*$""", re.M)
+
+
+def web_port(repo_dir: str = REPO_DIR, env: Optional[Dict[str, str]] = None) -> int:
+    """The host port that reaches nginx' 64297 in the compose file in use (64297 unless moved)."""
+    try:
+        with open(compose_path(repo_dir, env), encoding="utf-8") as handle:
+            match = _NGINX_PORT.search(handle.read())
+    except OSError:
+        match = None
+    return int(match.group(1)) if match else WEB_PORT
+
+
+# the address changes seldom, the header asks every 2 s: once a minute is enough
+_ADDRESS: Dict[str, Tuple[float, str]] = {}
+
+
+def host_address(run: Callable = subprocess.run, now: Optional[float] = None) -> str:
+    """The address of the route to the internet, the interface capture-if.sh / netinfo.detect take."""
+    now = time.monotonic() if now is None else now
+    cached = _ADDRESS.get("v4")
+    if cached and now - cached[0] < 60:
+        return cached[1]
+    address = ""
+    if linux_host() and shutil.which("ip"):
+        try:
+            proc = run(["ip", "-4", "route", "get", "1.1.1.1"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                       universal_newlines=True, timeout=2)
+            address = parse_route_src(proc.stdout or "") if proc.returncode == 0 else ""
+        except (OSError, subprocess.SubprocessError):
+            address = ""
+    _ADDRESS["v4"] = (now, address)
+    return address
+
+
+def service_since(run: Callable = subprocess.run, uptime_file: str = "/proc/uptime") -> Optional[int]:
+    """Seconds since tpot.service became active: its monotonic start against the uptime of the host."""
+    try:
+        proc = run(["systemctl", "show", SERVICE, "-p", "ActiveEnterTimestampMonotonic", "--value"],
+                   stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, universal_newlines=True, timeout=2)
+        started = int((proc.stdout or "").strip()) / 1e6
+        with open(uptime_file, encoding="utf-8") as handle:
+            uptime = float(handle.read().split()[0])
+    except (OSError, subprocess.SubprocessError, ValueError, IndexError):
+        return None
+    if started <= 0 or uptime < started:
+        return None
+    return int(uptime - started)
+
+
+def duration(seconds: float, short: bool = False) -> str:
+    """3 d 4 h, 5 h 12 min, 12 min, 40 s; short: the larger unit only (3 d, 5 h, 12 min)."""
+    seconds = int(max(seconds, 0))
+    days, hours, minutes = seconds // 86400, seconds // 3600 % 24, seconds // 60 % 60
+    if days:
+        return f"{days} d" if short or not hours else f"{days} d {hours} h"
+    if hours:
+        return f"{hours} h" if short or not minutes else f"{hours} h {minutes} min"
+    return f"{minutes} min" if minutes else f"{seconds} s"
 
 
 def status(repo_dir: str = REPO_DIR, run: Callable = subprocess.run) -> Status:
     env = env_values(repo_dir)
-    service = "n/a"
+    service, since = "n/a", None
     if shutil.which("systemctl"):
         proc = run(["systemctl", "is-active", SERVICE], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                    universal_newlines=True)
         service = (proc.stdout or "").strip() or "unknown"
+        if service == "active":
+            since = service_since(run)
+    tpot_type = env.get("TPOT_TYPE", "?")
+    address = env.get("TPOT_HIVE_IP", "") if tpot_type == "SENSOR" else host_address(run)
     return Status(
         version=env.get("TPOT_VERSION", "?"),
         branch=git(repo_dir, "rev-parse", "--abbrev-ref", "HEAD") or "?",
         commit=git(repo_dir, "rev-parse", "--short", "HEAD") or "?",
         edition=edition(repo_dir),
-        tpot_type=env.get("TPOT_TYPE", "?"),
+        tpot_type=tpot_type,
         service=service,
         repo_dir=repo_dir,
+        since=since,
+        address=address,
+        web_port=web_port(repo_dir, env),
     )
 
 

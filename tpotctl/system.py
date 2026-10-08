@@ -1,4 +1,4 @@
-"""CPU, memory and the disk of the T-Pot data, from /proc and statvfs (Linux, stdlib only)."""
+"""CPU, memory, the disk of the T-Pot data, uptime and load, from /proc and statvfs (Linux, stdlib only)."""
 
 import os
 import shutil
@@ -24,6 +24,9 @@ class System:
     memory: Optional[Usage]
     disk: Optional[Usage]
     disk_path: str
+    uptime: Optional[float] = None      # seconds since the host booted
+    load: Optional[float] = None        # load average of the last minute
+    cpus: int = 1
 
 
 def parse_stat(text: str) -> Optional[Tuple[int, int]]:
@@ -48,6 +51,19 @@ def parse_meminfo(text: str) -> Optional[Usage]:
         return None
     available = values.get("MemAvailable", values.get("MemFree", 0))
     return Usage(values["MemTotal"] - available, values["MemTotal"])
+
+
+def parse_uptime(text: str) -> Optional[float]:
+    """Seconds since boot, the first field of /proc/uptime."""
+    try:
+        return float(text.split()[0])
+    except (IndexError, ValueError):
+        return None
+
+
+def parse_loadavg(text: str) -> Optional[float]:
+    """The load average of the last minute, the first field of /proc/loadavg."""
+    return parse_uptime(text)
 
 
 def _read(path: str) -> str:
@@ -92,7 +108,9 @@ class Meter:
             cpu = 100.0 * (stat[0] - self.last[0]) / (stat[1] - self.last[1])
         self.last = stat or self.last
         path = data_path(env, repo_dir)
-        return System(cpu, parse_meminfo(_read(os.path.join(self.proc, "meminfo"))), disk(path), path)
+        return System(cpu, parse_meminfo(_read(os.path.join(self.proc, "meminfo"))), disk(path), path,
+                      parse_uptime(_read(os.path.join(self.proc, "uptime"))),
+                      parse_loadavg(_read(os.path.join(self.proc, "loadavg"))), os.cpu_count() or 1)
 
 
 def human(size: int) -> str:
