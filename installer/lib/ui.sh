@@ -64,7 +64,7 @@ fuUI_INIT () {
   if [ -z "${COLORTERM:-}" ] && [ "${myDEPTH}" = "truecolor" ]; then export COLORTERM=truecolor; fi
   myUI_GUM_COLORTERM="" myUI_GUM_TERM="${TERM:-}" myUI_GUM_DEPTH="${myDEPTH}" myUI_GUM_DUMB=""
   fuUI_LOWER myLOW "${TERM:-}"
-  case "${myLOW}" in dumb|unknown) myUI_GUM_DUMB=1 myUI_GUM_TERM="dumb" ;; esac
+  if fuUI_DUMB; then myUI_GUM_DUMB=1 myUI_GUM_TERM="dumb"; fi
   case "${myDEPTH}" in
     truecolor)
       fuUI_LOWER myUI_GUM_COLORTERM "${COLORTERM:-}"
@@ -115,8 +115,8 @@ fuUI_GUM () {
   # them out: lipgloss takes true colour from any COLORTERM, 256 from a TERM with 256color,
   # else 16; the colours of tpot as the entries of the palette there (myUI_GUM_256 / _16, only
   # the values of the colour options before --). No colours where the rule says none: NO_COLOR
-  # that is not empty (no-color.org, as Rich and say) and a dumb TERM (dumb, unknown, as
-  # fuUI_HELP): gum gets NO_COLOR=1 (it takes only 1 or true) and an empty CLICOLOR_FORCE, which
+  # that is not empty (no-color.org, as Rich and say) and a dumb TERM (fuUI_DUMB: dumb, unknown,
+  # empty): gum gets NO_COLOR=1 (it takes only 1 or true) and an empty CLICOLOR_FORCE, which
   # would beat NO_COLOR (fuUI_PAINT); a dumb TERM is dumb for gum (it paints at TERM=unknown and
   # leaves out bold only at dumb). Without fuUI_INIT (myUI_GUM set by hand) gum as it is
   if [ -z "${myUI_GUM_TERM+set}" ]; then "${myUI_GUM}" "$@"; return; fi
@@ -217,6 +217,17 @@ fuUI_LOWER () {
     myUI_LC_OUT+="${myUI_LC_C}"
   done
   printf -v "$1" '%s' "${myUI_LC_OUT}"
+}
+
+fuUI_DUMB () {
+  # 0 for a terminal that shows no colours at all (gum at TERM=dumb leaves out bold too): TERM dumb
+  # or unknown in any case, or empty (bash makes an unset TERM dumb itself), as prefs.dumb_terminal
+  # (the cases are tpotctl/tests/color_cases.json). The depth of fuUI_COLORS stays the one of the
+  # rule there; NO_COLOR is no dumb terminal (the colours go, bold stays)
+  local myTERM
+  fuUI_LOWER myTERM "${TERM:-}"
+  case "${myTERM}" in ""|dumb|unknown) return 0 ;; esac
+  return 1
 }
 
 fuUI_COLORS () {
@@ -321,9 +332,7 @@ fuUI_LOGO_ON () {
   [ -t 1 ] || return 1
   [ "${TPOT_GUM:-on}" = "off" ] && return 1
   fuUI_MARKS_ON && return 1
-  local myTERM
-  fuUI_LOWER myTERM "${TERM:-}"
-  case "${myTERM}" in dumb|unknown) return 1 ;; esac
+  fuUI_DUMB && return 1
   [ -n "${NO_COLOR:-}" ] && return 1
   [ -n "${TPOT_LOGO_SHOWN:-}" ] && return 1
   [ "$(fuUI_ICONS)" = "ascii" ] && return 1
@@ -673,11 +682,9 @@ fuUI_HELP () {
       *) shift ;;
     esac
   done
-  # colours where gum paints: a terminal that is not dumb (dumb, unknown), no NO_COLOR (one
-  # that is not empty, as fuUI_GUM)
-  fuUI_LOWER myN "${TERM:-}"
-  case "${myN}" in dumb|unknown) myN="dumb" ;; esac
-  if [ -n "${myUI_GUM}" ] && [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && [ "${myN}" != "dumb" ]; then
+  # colours where gum paints: a terminal that is not dumb (fuUI_DUMB), no NO_COLOR (one that is
+  # not empty, as fuUI_GUM)
+  if [ -n "${myUI_GUM}" ] && [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && ! fuUI_DUMB; then
     # the colours of the logo: magenta (4) for the title and the flags, glass (7) for the heads
     myMODE=$(fuUI_COLORS)
     for myN in 4 7; do
@@ -818,12 +825,13 @@ fuUI_CONFIRM () {
   # enter gives (gum: the button it starts on), yes without --default; --default takes only yes
   # or no, anything else is the question (a value forgotten does not eat it). Without gum y / n
   # or yes / no in any case from stdin: with --default (Y/n) or (y/N) and an empty answer takes
-  # it, without the question (y/n) waits for one of them
+  # it, without the question (y/n) waits for one of them. The same where the rule says no colours
+  # (NO_COLOR, fuUI_DUMB): gum confirm shows the active button by its colour only
   local myANSWER="" myDEFAULT=""
   if [ "${1:-}" = "--default" ]; then
     case "${2:-}" in yes|no) myDEFAULT="$2"; shift 2 ;; *) shift ;; esac
   fi
-  if [ -n "${myUI_GUM}" ] && [ -t 0 ];
+  if [ -n "${myUI_GUM}" ] && [ -t 0 ] && [ -z "${NO_COLOR:-}" ] && ! fuUI_DUMB;
     then
       local -a myFLAGS=()
       [ "${myDEFAULT}" != "no" ] || myFLAGS=(--default=false)

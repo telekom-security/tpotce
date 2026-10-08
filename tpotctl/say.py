@@ -5,8 +5,9 @@ text as ui.sh (`### [OK] - ...`). Standard library only: the launcher and the
 headless customizer use it before (or without) the venv. TPOT_GUM=off keeps the plain
 text. The colours have the depth of the one rule of the scripts and the T-Pot Manager
 (prefs.detect_colors): true colour, the xterm 256 entries of theme.PALETTE_256 or the
-ANSI colours of theme.PALETTE_16; a dumb terminal and NO_COLOR (when it is not empty,
-as for Rich and ui.sh) get the glyphs without colours, as gum gives them there.
+ANSI colours of theme.PALETTE_16; NO_COLOR (when it is not empty, as for Rich and ui.sh)
+gets the glyphs without colours and an error stays bold, a dumb terminal (prefs.dumb_terminal:
+TERM dumb, unknown, empty or none) gets them without any SGR: the bytes gum gives there.
 """
 
 import os
@@ -23,14 +24,20 @@ COLOURS_256 = {"magenta": 162, "glass": 231, "ash": 248, "ok": 71, "warn": 214, 
 COLOURS_16 = {"magenta": 95, "glass": 97, "ash": 37, "ok": 92, "warn": 93, "error": 91}
 _PLAIN = {"info": "### {}", "ok": "### [OK] - {}", "warn": "### [WARNING] - {}", "error": "### [ERROR] - {}"}
 _GLYPH = {"info": ("⬢", "magenta"), "ok": ("✓", "ok"), "warn": ("!", "warn"), "error": ("✗", "error")}
-_RESET = "\x1b[0m"
+# the reset as gum (lipgloss) writes it
+_RESET = "\x1b[m"
+# depth() of a dumb terminal: no SGR at all, gum leaves out bold there too
+DUMB = "dumb"
 
 
 def depth(environ=None):
-    """truecolor, 256 or 16 by the rule (prefs.detect_colors of the environment, default os.environ),
-    None for a dumb terminal (TERM dumb or unknown) and with NO_COLOR (not empty): no colours there."""
+    """truecolor, 256 or 16 by the rule (prefs.detect_colors of the environment, default os.environ);
+    DUMB for a dumb terminal (prefs.dumb_terminal: TERM dumb, unknown, empty or none, also with
+    NO_COLOR) and None with NO_COLOR (not empty): no colours, an error stays bold (as gum)."""
     env = os.environ if environ is None else environ
-    if prefs.ascii_lower(env.get("TERM") or "") in prefs.DUMB_TERMS or env.get("NO_COLOR"):
+    if prefs.dumb_terminal(env):
+        return DUMB
+    if env.get("NO_COLOR"):
         return None
     return prefs.detect_colors(env)
 
@@ -47,7 +54,11 @@ def _sgr(name: str, colors, bold: bool = False) -> str:
 
 
 def _paint(name: str, text: str, colors, bold: bool = False) -> str:
-    return text if colors is None else f"{_sgr(name, colors, bold)}{text}{_RESET}"
+    if colors == DUMB:
+        return text
+    if colors is None:
+        return f"\x1b[1m{text}{_RESET}" if bold else text
+    return f"{_sgr(name, colors, bold)}{text}{_RESET}"
 
 
 def plain(kind: str, text: str) -> str:
@@ -59,8 +70,9 @@ def plain(kind: str, text: str) -> str:
 
 def styled(kind: str, text: str, colors="rule") -> str:
     """The form of gum: info is a magenta hexagon and glass text, ok a green tick and plain text, warn
-    and error the whole line in their colour, an error bold (fuUI_ERROR). colors: truecolor, 256, 16
-    or None (no colours); by default the depth of the rule (depth())."""
+    and error the whole line in their colour, an error bold (fuUI_ERROR). colors: truecolor, 256, 16,
+    None (no colours, an error stays bold: NO_COLOR) or DUMB (no SGR at all); by default the depth of
+    the rule (depth())."""
     if colors == "rule":
         colors = depth()
     glyph, colour = _GLYPH[kind]

@@ -7,8 +7,9 @@ import re
 import shutil
 import subprocess
 import unittest
+from unittest import mock
 
-from tpotctl import say
+from tpotctl import prefs, say
 from tpotctl.tests import isolate
 
 isolate()
@@ -59,7 +60,7 @@ class SayTest(unittest.TestCase):
         self.assertEqual(say.plain("info", "First:\n  second"), "### First:\n###   second")
         self.assertEqual(say.styled("info", "First:\nsecond", colors=None), "⬢ First:\n  second")
         self.assertEqual(say.styled("info", "First:\nsecond", colors="16"),
-                         "\x1b[95m⬢\x1b[0m \x1b[97mFirst:\x1b[0m\n  \x1b[97msecond\x1b[0m")
+                         "\x1b[95m⬢\x1b[m \x1b[97mFirst:\x1b[m\n  \x1b[97msecond\x1b[m")
 
     def test_hint_plain_is_the_one_of_ui_sh(self):
         out = io.StringIO()
@@ -103,23 +104,40 @@ class SayTest(unittest.TestCase):
                 self.assertEqual(say.depth(environ), depth)
                 magenta, glass = self.DEPTHS[depth]
                 self.assertEqual(say.styled("info", "done", colors=say.depth(environ)),
-                                 f"\x1b[{magenta}m⬢\x1b[0m \x1b[{glass}mdone\x1b[0m")
+                                 f"\x1b[{magenta}m⬢\x1b[m \x1b[{glass}mdone\x1b[m")
                 if depth != "truecolor":
                     self.assertNotIn("38;2;", say.styled("warn", "x", colors=depth))
-        for term in ("dumb", "unknown"):
-            environ = {"TERM": term, "COLORTERM": "truecolor", "HOME": os.environ["TPOT_TEST_CONFIG"]}
-            self.assertIsNone(say.depth(environ))
-            self.assertEqual(say.styled("ok", "done", colors=None), "✓ done")
-            self.assertEqual(say.styled("error", "bad", colors=None), "✗ bad")
+        # a dumb terminal: TERM dumb, unknown, empty or none (bash makes an unset TERM dumb itself, ui.sh
+        # agrees), with NO_COLOR too: the form of gum there, no SGR at all
+        for term in ("dumb", "unknown", "", None):
+            for extra in ({}, {"NO_COLOR": "1"}):
+                with self.subTest(term=term, extra=extra):
+                    environ = dict(extra, COLORTERM="truecolor", LC_TERMINAL="iTerm2", HOME=os.environ["TPOT_TEST_CONFIG"],
+                                   XDG_CONFIG_HOME=os.environ["TPOT_TEST_CONFIG"])
+                    if term is not None:
+                        environ["TERM"] = term
+                    self.assertEqual(say.depth(environ), say.DUMB)
+                    self.assertEqual(say.styled("ok", "done", colors=say.DUMB), "✓ done")
+                    self.assertEqual(say.styled("error", "bad", colors=say.DUMB), "✗ bad")
+                    self.assertEqual(say.styled("info", "step", colors=say.DUMB), "⬢ step")
+        # a console of Windows has no TERM and is no dumb terminal
+        with mock.patch.object(prefs, "CONSOLE_KNOWS", True):
+            self.assertEqual(say.depth({"COLORTERM": "truecolor", "HOME": os.environ["TPOT_TEST_CONFIG"],
+                                        "XDG_CONFIG_HOME": os.environ["TPOT_TEST_CONFIG"]}), "truecolor")
 
     def test_error_is_bold(self):
         """An error is bold in its colour, as fuUI_ERROR (gum style --bold); the others are not bold."""
         for colors, sgr in (("truecolor", "1;38;2;232;69;60"), ("256", "1;38;5;167"), ("16", "1;91")):
             with self.subTest(colors=colors):
-                self.assertEqual(say.styled("error", "bad", colors=colors), f"\x1b[{sgr}m✗ bad\x1b[0m")
+                self.assertEqual(say.styled("error", "bad", colors=colors), f"\x1b[{sgr}m✗ bad\x1b[m")
                 for kind in ("info", "ok", "warn"):
                     self.assertNotIn("\x1b[1;", say.styled(kind, "x", colors=colors))
-        self.assertEqual(say.styled("error", "bad", colors=None), "✗ bad")
+        # NO_COLOR (None): no colours, the bold of an error stays, as gum keeps it (no-color.org allows
+        # it); a dumb terminal has neither
+        self.assertEqual(say.styled("error", "bad", colors=None), "\x1b[1m✗ bad\x1b[m")
+        for kind in ("info", "ok", "warn"):
+            self.assertNotIn("\x1b[", say.styled(kind, "x", colors=None))
+        self.assertEqual(say.styled("error", "bad", colors=say.DUMB), "✗ bad")
 
     @unittest.skipUnless(shutil.which("gum") and "2.0.2" in subprocess.run(
         [shutil.which("gum") or "true", "--version"], capture_output=True, text=True).stdout, "no gum 2.0.2")
@@ -164,12 +182,17 @@ class SayTest(unittest.TestCase):
             out = Tty()
             say.warn("careful", stream=out)
             say.hint("a hint", stream=out)
-            self.assertEqual(out.getvalue(), "\x1b[93m! careful\x1b[0m\n\x1b[37m    a hint\x1b[0m\n")
-            os.environ["TERM"] = "dumb"
-            out = Tty()
-            say.warn("careful", stream=out)
-            say.hint("a hint", stream=out)
-            self.assertEqual(out.getvalue(), "! careful\n    a hint\n")
+            self.assertEqual(out.getvalue(), "\x1b[93m! careful\x1b[m\n\x1b[37m    a hint\x1b[m\n")
+            for term in ("dumb", "", None):
+                if term is None:
+                    os.environ.pop("TERM", None)
+                else:
+                    os.environ["TERM"] = term
+                out = Tty()
+                say.warn("careful", stream=out)
+                say.hint("a hint", stream=out)
+                say.error("bad", stream=out)
+                self.assertEqual(out.getvalue(), "! careful\n    a hint\n✗ bad\n", term)
         finally:
             for key, value in keep.items():
                 if value is None:
@@ -200,6 +223,10 @@ class SayTest(unittest.TestCase):
         keep = os.environ.get("NO_COLOR")
         self.addCleanup(lambda: os.environ.__setitem__("NO_COLOR", keep) if keep is not None
                         else os.environ.pop("NO_COLOR", None))
+        term = os.environ.get("TERM")
+        self.addCleanup(lambda: os.environ.__setitem__("TERM", term) if term is not None
+                        else os.environ.pop("TERM", None))
+        os.environ["TERM"] = "xterm-256color"           # a terminal with colours (a dumb one has no bold)
         os.environ.pop("TPOT_GUM", None)
         for value in ("1", "yes", "0"):
             with self.subTest(NO_COLOR=value):
@@ -209,7 +236,8 @@ class SayTest(unittest.TestCase):
                 say.info("step", stream=out)
                 say.warn("careful", stream=out)
                 say.hint("a hint", stream=out)
-                self.assertEqual(out.getvalue(), "✓ done\n⬢ step\n! careful\n    a hint\n")
+                say.error("bad", stream=out)
+                self.assertEqual(out.getvalue(), "✓ done\n⬢ step\n! careful\n    a hint\n\x1b[1m✗ bad\x1b[m\n")
                 self.assertIsNone(say.depth(dict(os.environ)))
         os.environ["NO_COLOR"] = ""
         out = Tty()

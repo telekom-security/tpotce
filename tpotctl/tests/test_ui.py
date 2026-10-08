@@ -7,6 +7,7 @@ tpot.json or .env of the user running the tests, nothing calls docker or downloa
 """
 
 import fcntl
+import io
 import itertools
 import json
 import os
@@ -436,7 +437,8 @@ class ColoursTest(unittest.TestCase):
         against the shared cases of tpotctl/tests/color_cases.json.
 
         The file is a JSON list of cases {"env": {...}, "expect": "truecolor" | "256" | "16",
-        "note": "...", "prefs": {...} | "prefs_text": "..."}: env is the whole environment that counts,
+        "dumb": true | false, "note": "...", "prefs": {...} | "prefs_text": "..."}: env is the whole
+        environment that counts,
         every key not in it is unset (TERM too); prefs, when there, is the tpot.json of the T-Pot
         Manager (written as JSON), prefs_text a tpot.json as it is (not always JSON); without them there
         is no tpot.json. A tpot.json counts when it is one JSON object of strings without escapes and
@@ -454,6 +456,10 @@ class ColoursTest(unittest.TestCase):
              WT_SESSION not empty                                                   -> truecolor
           6. TERM ends in 256color, or (not in tmux or screen) TERM_PROGRAM Apple_Terminal -> 256
           7. anything else                                                          -> 16
+        dumb, when there, says whether the terminal shows no colours at all (fuUI_DUMB, prefs.dumb_terminal):
+        TERM (any case) dumb or unknown, an empty TERM or none (bash makes an unset TERM dumb itself; a
+        console of Windows has no TERM and is not dumb, the scripts do not run there); NO_COLOR is no dumb
+        terminal (the colours go, bold stays). The depth stays the one of the rule there.
         Any case means A-Z only. A lone surrogate \\udcXX in prefs_text is the byte XX (surrogateescape):
         a tpot.json that is no UTF-8 does not count. Every bash there is: 4 or newer and 3 (/bin/bash
         of macOS), each in the locale of the tests and in the C locale (a host without a UTF-8 locale,
@@ -466,7 +472,8 @@ class ColoursTest(unittest.TestCase):
         sandbox = Sandbox(self)
         prefs = os.path.join(sandbox.config, "tpotce", "tpot.json")
         for case in cases:
-            self.assertEqual(set(case) - {"env", "expect", "note", "prefs", "prefs_text"}, set(), case)
+            self.assertEqual(set(case) - {"env", "expect", "dumb", "note", "prefs", "prefs_text"}, set(), case)
+            self.assertIn(case.get("dumb", False), (True, False), case)
             self.assertFalse({"prefs", "prefs_text"} <= set(case), case)
             self.assertIn(case["expect"], ("truecolor", "256", "16"), case)
             for bash, locale in itertools.product(BASHES, LOCALES):
@@ -482,8 +489,12 @@ class ColoursTest(unittest.TestCase):
                     env.update(locale)
                     env.update(case["env"])
                     # bash sets TERM=dumb (not exported) when it starts without one: unset is unset
-                    result = run(("" if "TERM" in case["env"] else "unset TERM; ") + "fuUI_COLORS", env, bash=bash)
-                    self.assertEqual((result.stdout.strip(), result.stderr), (case["expect"], ""), case["env"])
+                    result = run(("" if "TERM" in case["env"] else "unset TERM; ")
+                                 + "fuUI_COLORS; fuUI_DUMB && echo dumb || echo terminal", env, bash=bash)
+                    depth, dumb = (result.stdout.split() + ["", ""])[:2]
+                    self.assertEqual((depth, result.stderr), (case["expect"], ""), case["env"])
+                    if "dumb" in case:
+                        self.assertEqual(dumb, "dumb" if case["dumb"] else "terminal", case["env"])
 
     def test_init_tells_gum_of_true_colour(self):
         """fuUI_INIT exports COLORTERM=truecolor when the rule says truecolor and COLORTERM is empty,
@@ -708,10 +719,12 @@ class ColoursTest(unittest.TestCase):
                 'fuUI_OK "done"; fuUI_WARN "warned"; fuUI_ERROR "bad"; fuUI_HINT "a hint"; '
                 'fuUI_RESULT fail "failed"; fuUI_RESULT next "then"; fuUI_RESULT info "about"; '
                 'fuUI_BANNER "Title" "a line"; fuUI_SUMMARY "Summary" "ok:fine" "warn:hm"')
-    # where the rule says no colours: NO_COLOR that is not empty, a dumb TERM (dumb, unknown, any case)
+    # where the rule says no colours: NO_COLOR that is not empty, a dumb TERM (dumb, unknown, any case,
+    # empty or none: bash makes an unset TERM dumb itself)
     UNPAINTED = ({"NO_COLOR": "1"}, {"NO_COLOR": "yes", "CLICOLOR_FORCE": "1"}, {"TERM": "dumb"},
                  {"TERM": "unknown"}, {"TERM": "DUMB", "COLORTERM": "truecolor"},
-                 {"TERM": "unknown", "CLICOLOR_FORCE": "1"})
+                 {"TERM": "unknown", "CLICOLOR_FORCE": "1"}, {"TERM": ""}, {"TERM": None},
+                 {"TERM": "", "COLORTERM": "truecolor", "LC_TERMINAL": "iTerm2"})
 
     def test_no_colour_where_the_rule_says_none(self):
         """NO_COLOR and a dumb TERM: no gum call may force colours (CLICOLOR_FORCE beats NO_COLOR in gum
@@ -755,8 +768,46 @@ class ColoursTest(unittest.TestCase):
                 # no colour (gum keeps bold under NO_COLOR, as no-color.org allows), a dumb TERM nothing
                 colours = {colour for row in cells(out) for _char, fg, bg in row for colour in (fg, bg)} - {None}
                 self.assertEqual(not colours, bool(extra), repr(out))
-                if extra.get("TERM"):
+                if "TERM" in extra:
                     self.assertNotIn("\x1b[", out)
+
+    @unittest.skipUnless(shutil.which("gum") and "2.0.2" in subprocess.run(
+        [shutil.which("gum") or "true", "--version"], capture_output=True, text=True).stdout, "no gum 2.0.2")
+    def test_say_writes_the_bytes_of_real_gum(self):
+        """tpotctl.say and ui.sh with the real gum 2.0.2 at a terminal write the same bytes for every
+        message, at every depth and where the rule says no colours: an error keeps gum's bold under
+        NO_COLOR, a dumb TERM (dumb, unknown, empty, none) has no SGR at all. The one difference: gum
+        puts an empty reset (ESC[m) before a warning and a hint under NO_COLOR, which shows nothing."""
+        from unittest import mock
+        from tpotctl import say
+
+        class Tty(io.StringIO):
+            def isatty(self):
+                return True
+        sandbox = Sandbox(self)
+        folder = os.path.join(sandbox.home, "data", "tpotce", "bin")
+        os.makedirs(folder)
+        os.symlink(shutil.which("gum"), os.path.join(folder, "gum"))
+        script = ('fuUI_INIT; [ -n "${myUI_GUM}" ] || echo "no gum"; fuUI_ERROR "bad"; fuUI_INFO "step"; '
+                  'fuUI_OK "done"; fuUI_WARN "careful"; fuUI_HINT "a hint"')
+        for extra in ({"COLORTERM": "truecolor"}, {}, {"TERM": "xterm"}) + self.UNPAINTED:
+            with self.subTest(env=extra):
+                env = sandbox.env(**extra)
+                gum = at_terminal(script, env, 100, 30)
+                out = Tty()
+                with mock.patch.dict(os.environ, env, clear=True):
+                    say.error("bad", stream=out)
+                    say.info("step", stream=out)
+                    say.ok("done", stream=out)
+                    say.warn("careful", stream=out)
+                    say.hint("a hint", stream=out)
+                ours = out.getvalue()
+                error, rest = gum.split("\n", 1)
+                self.assertEqual(error + "\n", ours.split("\n", 1)[0] + "\n")         # the error: the same bytes
+                if extra.get("NO_COLOR") and "TERM" not in extra:
+                    self.assertEqual(error, "\x1b[1m✗ bad\x1b[m")
+                    rest = rest.replace("\x1b[m", "")
+                self.assertEqual(rest, ours.split("\n", 1)[1])
 
     def test_pref_speed(self):
         """fuUI_PREF reads a tpot.json with a long value, many pairs or many spaces in about the time of
@@ -925,6 +976,8 @@ class LogoAtATerminalTest(unittest.TestCase):
             "a dumb terminal": (self.BANNER, self.env(TERM="dumb"), (120, 49)),
             "a dumb terminal in capitals": (self.BANNER, self.env(TERM="DUMB"), (120, 49)),
             "an unknown terminal": (self.BANNER, self.env(TERM="unknown"), (120, 49)),
+            "an empty TERM": (self.BANNER, self.env(TERM=""), (120, 49)),
+            "no TERM": (self.BANNER, self.env(TERM=None), (120, 49)),
             "NO_COLOR": (self.BANNER, self.env(NO_COLOR="1"), (120, 49)),
             "NO_COLOR 0": (self.BANNER, self.env(NO_COLOR="0"), (120, 49)),
             "shown before": (self.BANNER, self.env(TPOT_LOGO_SHOWN="1"), (120, 49)),
@@ -1237,8 +1290,9 @@ class HelpersTest(unittest.TestCase):
         self.assertEqual(out, HELP_TEXT)                                 # any value but an empty one
         out = at_terminal(f'myUI_GUM="{gum}"\n' + HELP, self.sandbox.env(NO_COLOR=""), 100, 40)
         self.assertIn("\x1b[", out)                                       # empty: no NO_COLOR
-        # a dumb terminal has no colours, whatever it inherited (gum leaves them out there too)
-        for term in ("dumb", "unknown", "DUMB"):
+        # a dumb terminal has no colours, whatever it inherited (gum leaves them out there too); an
+        # empty TERM or none is one (bash makes an unset TERM dumb itself)
+        for term in ("dumb", "unknown", "DUMB", "", None):
             with self.subTest(term=term):
                 env = self.sandbox.env(TERM=term, COLORTERM="truecolor", LC_TERMINAL="iTerm2", TPOT_COLORS="truecolor")
                 self.assertEqual(at_terminal(f'myUI_GUM="{gum}"\n' + HELP, env, 100, 40), HELP_TEXT)
@@ -1611,6 +1665,79 @@ class HelpersTest(unittest.TestCase):
                 script = f'myUI_GUM="{shutil.which("gum")}"\n' + self.CONFIRM.format(options=options)
                 out = at_terminal(script, self.sandbox.env(), 100, 30, keys=b"\r")
                 self.assertTrue(out.endswith(f"rc={rc}\r\n") or out.endswith(f"rc={rc}\n"), out[-200:])
+
+    # where the rule says no colours (fuUI_GUM): NO_COLOR that is not empty, a dumb TERM (dumb, unknown, any
+    # case, empty or none)
+    NO_COLOURS = ({"NO_COLOR": "1"}, {"TERM": "dumb"}, {"TERM": "unknown"}, {"TERM": "DUMB"}, {"TERM": ""},
+                  {"TERM": None}, {"TERM": "unknown", "COLORTERM": "truecolor", "LC_TERMINAL": "iTerm2"})
+
+    def test_confirm_without_colours_asks_plainly(self):
+        """gum confirm shows the active button by its colour only: where the rule says no colours the
+        question is the plain one, (y/N) / (Y/n) / (y/n), at a terminal with gum too; gum is not asked."""
+        gum = fake_gum(self.sandbox.home)
+        calls = os.path.join(self.sandbox.home, "gum.calls")
+        for extra in self.NO_COLOURS:
+            for options, prompt, keys, rc in (("--default no", "(y/N)", b"\r", 1), ("--default yes", "(Y/n)", b"\r", 0),
+                                              ("", "(y/n)", b"n\r", 1)):
+                with self.subTest(env=extra, options=options):
+                    if os.path.exists(calls):
+                        os.remove(calls)
+                    out = at_terminal(f'myUI_GUM="{gum}"\n' + self.CONFIRM.format(options=options),
+                                      self.sandbox.env(**extra), 100, 30, keys=keys)
+                    self.assertIn(f"### Push the images? {prompt} ", out)
+                    self.assertRegex(out, rf"rc={rc}\r?\n$")
+                    self.assertFalse(os.path.exists(calls), read(calls) if os.path.exists(calls) else "")
+        with self.subTest("with colours gum asks"):
+            out = at_terminal(f'myUI_GUM="{gum}"\n' + self.CONFIRM.format(options="--default no"),
+                              self.sandbox.env(NO_COLOR=""), 100, 30)
+            self.assertNotIn("(y/N)", out)
+            self.assertEqual(read(calls).split("\n")[1], "confirm")
+
+    @unittest.skipUnless(shutil.which("gum") and "2.0.2" in subprocess.run(
+        [shutil.which("gum") or "true", "--version"], capture_output=True, text=True).stdout, "no gum 2.0.2")
+    def test_confirm_without_colours_real_gum(self):
+        """The real gum 2.0.2 after fuUI_INIT: with colours its buttons, the active one on magenta; where
+        the rule says none the plain question (gum would show "Yes  No" with nothing that marks one)."""
+        folder = os.path.join(self.sandbox.home, "data", "tpotce", "bin")
+        os.makedirs(folder)
+        os.symlink(shutil.which("gum"), os.path.join(folder, "gum"))
+        script = 'fuUI_INIT; [ -n "${myUI_GUM}" ] || echo "no gum"; fuUI_CONFIRM --default no "Sure?"; echo "rc=$?"'
+        for extra in self.NO_COLOURS:
+            with self.subTest(env=extra):
+                out = at_terminal(script, self.sandbox.env(**extra), 100, 30, keys=b"\r")
+                self.assertNotIn("no gum", out)
+                self.assertIn("### Sure? (y/N) ", out)
+                self.assertNotIn("Yes", out)
+                self.assertRegex(out, r"rc=1\r?\n$")
+        with self.subTest("with colours"):
+            out = at_terminal(script, self.sandbox.env(), 100, 30, keys=b"\r")
+            self.assertNotIn("(y/N)", out)
+            self.assertIn("Yes", plain(out))
+            self.assertIn("\x1b[48;5;162m", out)                       # the active button, No, on magenta
+            self.assertRegex(out, r"rc=1\r?\n$")
+
+    @unittest.skipUnless(shutil.which("gum") and "2.0.2" in subprocess.run(
+        [shutil.which("gum") or "true", "--version"], capture_output=True, text=True).stdout, "no gum 2.0.2")
+    def test_choose_marks_its_cursor_without_colours_real_gum(self):
+        """gum choose and filter mark the cursor and the marked items with a character, so they stay as they
+        are where the rule says no colours: choose "> " before the item it is on, choose --no-limit
+        "> " and "✓", filter "•" and "◉"."""
+        folder = os.path.join(self.sandbox.home, "data", "tpotce", "bin")
+        os.makedirs(folder)
+        os.symlink(shutil.which("gum"), os.path.join(folder, "gum"))
+        calls = (('fuUI_CHOOSE --selected b "Pick" "A:a" "B:b" "C:c"', ("> B",), "b"),
+                 ('fuUI_CHOOSE_MANY --selected b "Many" "A:a" "B:b" "C:c"', ("> • A", "✓ B", "• C"), "b"),
+                 ('fuUI_CHOOSE_MANY --filter --selected b "Filter" "A:a" "B:b" "C:c"', ("• ○ A", "◉ B"), "b"))
+        for extra in self.NO_COLOURS:
+            for call, marks, value in calls:
+                with self.subTest(env=extra, call=call.split()[0] + (" --filter" if "--filter" in call else "")):
+                    out = at_terminal(f'fuUI_INIT; [ -n "${{myUI_GUM}}" ] || echo "no gum"; {call}; echo "rc=$?"',
+                                      self.sandbox.env(**extra), 100, 30, keys=b"\r")
+                    self.assertNotIn("no gum", out)
+                    self.assertNotIn("38;", out)                       # no colours
+                    for mark in marks:
+                        self.assertIn(mark, plain(out))
+                    self.assertRegex(out, rf"{value}\r?\nrc=0\r?\n$")
 
     def test_input_under_set_u(self):
         """fuUI_INPUT without its second argument under set -u (ui.sh, the plain fallback, gum)."""

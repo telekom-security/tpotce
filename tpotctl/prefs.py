@@ -95,12 +95,25 @@ VTE_TRUECOLOR = 3600          # VTE 0.36
 
 # a TERM (lowercased) of a terminal without colours, as Rich sees it
 DUMB_TERMS = ("dumb", "unknown")
+# a console of Windows has no TERM and says what it can itself (Rich asks it): there the rule
+# only counts where it knows true colour (Windows Terminal, a choice of the user's)
+CONSOLE_KNOWS = os.name == "nt"
 _ASCII_LOWER = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
 
 
 def ascii_lower(text: str) -> str:
     """A-Z only, as the scripts lowercase (tr A-Z a-z in the C locale)."""
     return text.translate(_ASCII_LOWER)
+
+
+def dumb_terminal(environ) -> bool:
+    """A terminal that shows no colours at all (gum at TERM=dumb leaves out bold too): TERM dumb or unknown
+    in any case, or empty or none (bash makes an unset TERM dumb itself), as fuUI_DUMB of the scripts (the
+    cases are tests/color_cases.json). A console of Windows has no TERM and says what it can itself
+    (CONSOLE_KNOWS): no TERM is no dumb terminal there. NO_COLOR is none either (the colours go, bold
+    stays); the depth (terminal_colors) stays the one of the rule."""
+    term = ascii_lower(environ.get("TERM") or "")
+    return term in DUMB_TERMS or (not term and not CONSOLE_KNOWS)
 
 
 def terminal_colors(environ) -> str:
@@ -147,9 +160,6 @@ def detect_colors(environ=None) -> str:
 # TEXTUAL_COLOR_SYSTEM as tpot set it: a restart of the T-Pot Manager (exec) keeps the environment,
 # and only a value of the user's own may win over a new choice
 SET_MARK = "TPOT_COLORS_SET"
-# a console of Windows has no TERM and says what it can itself (Rich asks it): there the rule
-# only counts where it knows true colour (Windows Terminal, a choice of the user's)
-CONSOLE_KNOWS = os.name == "nt"
 
 
 def apply_color_system(environ) -> None:
@@ -175,10 +185,10 @@ RICH_NAMES = {"truecolor": "truecolor", "256": "256", "16": "standard"}
 def console_color_system(stream=None, environ=None):
     """The color_system for a Rich Console that writes to stream (default sys.stdout): at a terminal
     the depth of the rule (detect_colors), so the tables of tpot status / ps / images have the colours
-    of the Manager and the scripts (iTerm2 over SSH: truecolor); None at a dumb terminal (no colours,
-    as Rich does there); "auto" when stream is no terminal (Rich then leaves the colours out, or takes
-    FORCE_COLOR) and for a console of Windows that the rule knows nothing of (CONSOLE_KNOWS). NO_COLOR
-    is Rich's own: it strips the colours of any depth."""
+    of the Manager and the scripts (iTerm2 over SSH: truecolor); None at a dumb terminal (dumb_terminal:
+    no colours, as Rich, say and the scripts there); "auto" when stream is no terminal (Rich then leaves
+    the colours out, or takes FORCE_COLOR) and for a console of Windows that the rule knows nothing of
+    (CONSOLE_KNOWS). NO_COLOR is Rich's own: it strips the colours of any depth."""
     import sys
     env = os.environ if environ is None else environ
     out = sys.stdout if stream is None else stream
@@ -188,7 +198,7 @@ def console_color_system(stream=None, environ=None):
         terminal = False
     if not terminal:
         return "auto"
-    if ascii_lower(env.get("TERM") or "") in DUMB_TERMS:
+    if dumb_terminal(env):
         return None
     chosen = load(environ=env).colors
     colors = chosen if chosen != "auto" else terminal_colors(env)

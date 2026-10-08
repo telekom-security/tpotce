@@ -119,8 +119,15 @@ class Sandbox:
         environ.update(env)
         return prefs.detect_colors(environ)
 
+    def python_dumb(self, env):
+        """dumb or terminal: prefs.dumb_terminal of the env (a terminal that shows no colours)."""
+        environ = self.base()
+        environ.update(env)
+        return "dumb" if prefs.dumb_terminal(environ) else "terminal"
+
     def bash(self, bash, runs, locale=None):
-        """fuUI_COLORS for every (env, tpot.json) of runs, in one bash: before each run every key of
+        """fuUI_COLORS and dumb / terminal by fuUI_DUMB (two words) for every (env, tpot.json) of runs, in
+        one bash: before each run every key of
         any run is unset, then the keys of its env are set (the bash itself starts with none of them),
         XDG_CONFIG_HOME points to a folder with the tpot.json of the run. locale: more of the
         environment of the bash (LC_ALL=C)."""
@@ -130,7 +137,7 @@ class Sandbox:
             lines.append("unset " + " ".join(keys))
             lines.append(f"export XDG_CONFIG_HOME={quote(self.config_of(data))}")
             lines.extend(f"export {key}={quote(value)}" for key, value in env.items())
-            lines.append("fuUI_COLORS")
+            lines.append("fuUI_COLORS; fuUI_DUMB && echo dumb || echo terminal")
         environ = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "LANG": os.environ.get("LANG", "en_US.UTF-8")}
         environ.update(self.base())
         environ.update(locale or {})
@@ -152,6 +159,22 @@ class RuleTest(unittest.TestCase):
         for case in cases():
             with self.subTest(note=case["note"]):
                 self.assertEqual(sandbox.python(case["env"], case_file(case)), case["expect"], case["env"])
+                if "dumb" in case:
+                    self.assertEqual(sandbox.python_dumb(case["env"]), "dumb" if case["dumb"] else "terminal")
+
+    def test_a_dumb_terminal(self):
+        """No colours show at a TERM dumb or unknown (any case), an empty TERM or none: bash makes an unset
+        TERM dumb itself, the scripts and say agree. A console of Windows has no TERM and is no dumb
+        terminal (it says what it can itself, CONSOLE_KNOWS); dumb or unknown are dumb there too."""
+        for env, dumb in (({"TERM": "dumb"}, True), ({"TERM": "Unknown"}, True), ({"TERM": ""}, True), ({}, True),
+                          ({"TERM": "xterm"}, False), ({"TERM": "dumb-ish"}, False), ({"TERM": " "}, False),
+                          ({"TERM": "xterm", "NO_COLOR": "1"}, False)):
+            with self.subTest(env=env):
+                self.assertEqual(prefs.dumb_terminal(env), dumb)
+        with mock.patch.object(prefs, "CONSOLE_KNOWS", True):
+            for env, dumb in (({}, False), ({"TERM": ""}, False), ({"TERM": "dumb"}, True), ({"TERM": "xterm"}, False)):
+                with self.subTest(env=env, console="Windows"):
+                    self.assertEqual(prefs.dumb_terminal(env), dumb)
 
     def test_reading_tpot_json_is_linear(self):
         """read_file runs at every start of the launcher and every message of say: a file of many spaces
@@ -220,13 +243,15 @@ class ParityTest(unittest.TestCase):
             self.skipTest("no bash")
 
     def agree(self, runs, locales=({},)):
+        """The depth and dumb / terminal of every run, bash and Python."""
         sandbox = Sandbox(self)
-        python = [sandbox.python(env, data) for env, data in runs]
+        python = [(sandbox.python(env, data), sandbox.python_dumb(env)) for env, data in runs]
         for bash, locale in itertools.product(self.bashes, locales):
-            said, errors = sandbox.bash(bash, runs, locale)
+            words, errors = sandbox.bash(bash, runs, locale)
+            said = list(zip(words[::2], words[1::2]))
             label = f"{bash} (bash {bash_version(bash)}) {locale}"
             self.assertEqual(errors, "", label)
-            self.assertEqual(len(said), len(runs), label)
+            self.assertEqual((len(words), len(said)), (2 * len(runs), len(runs)), label)
             differ = [(env, data, b, p) for (env, data), b, p in zip(runs, said, python) if b != p]
             self.assertEqual(differ, [], f"{label} and Python differ (env, tpot.json, bash, Python)")
 
@@ -280,6 +305,11 @@ class ParityTest(unittest.TestCase):
         with mock.patch.object(prefs, "detect_colors", wrong):
             with self.assertRaises(AssertionError):
                 self.agree([({"TERM": "xterm-256color", "LC_TERMINAL": "iTerm2"}, None)])
+        # and one that takes an empty TERM for a terminal with colours
+        real_dumb = prefs.dumb_terminal
+        with mock.patch.object(prefs, "dumb_terminal", lambda environ: environ.get("TERM") != "" and real_dumb(environ)):
+            with self.assertRaises(AssertionError):
+                self.agree([({"TERM": ""}, None)])
 
 
 class ApplyTest(unittest.TestCase):
@@ -383,9 +413,12 @@ class ConsoleTest(unittest.TestCase):
                 self.assertEqual(prefs.console_color_system(Tty(), self.environ(**extra)), expected)
 
     def test_a_dumb_terminal_has_no_colours(self):
-        for term in ("dumb", "unknown", "DUMB"):
+        """TERM dumb, unknown, empty or none (outside a console of Windows): no colours, as say."""
+        for term in ("dumb", "unknown", "DUMB", "", None):
             with self.subTest(term=term):
                 env = self.environ(TERM=term, COLORTERM="truecolor", TPOT_COLORS="truecolor")
+                if term is None:
+                    env.pop("TERM")
                 self.assertIsNone(prefs.console_color_system(Tty(), env))
 
     def test_no_terminal_is_left_to_rich(self):
