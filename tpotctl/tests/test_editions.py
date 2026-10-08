@@ -28,8 +28,9 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 
 
 class Done:
-    def __init__(self, code=0):
+    def __init__(self, code=0, stdout=None):
         self.returncode = code
+        self.stdout = stdout
 
 
 class Calls:
@@ -260,40 +261,90 @@ class EditionsTest(unittest.TestCase):
 
     # ctrl+c: a real SIGINT to this process in a step; the child (systemctl) gets it from the terminal too
 
-    def switch_with_ctrl_c(self, during, code=0):
-        """switch to mini, a SIGINT while the command with `during` runs, which then exits with code."""
+    def switch_with_ctrl_c(self, during, code=0, state=None):
+        """switch to mini, a SIGINT while the command with `during` runs, which then exits with code.
+
+        A small systemd answers `systemctl is-active tpot`: a stop or start that exits 0 is done, the
+        interrupted command leaves T-Pot in `state` (None: as its rc says). sudo exits 1 on ^C at
+        its password prompt and T-Pot stays as it was, a ^C into systemctl stops its waiting only."""
         import signal
         calls = Calls()
+        systemd = {"state": "active"}
 
         def run(command, **kwargs):
             calls(command, **kwargs)
+            if command[:2] == ["systemctl", "is-active"]:
+                now = systemd["state"]
+                return Done(0 if now == "active" else 3, now + "\n")
+            result = 0
             if during in command:
                 os.kill(os.getpid(), signal.SIGINT)
-                return Done(code)
-            return Done(0)
+                result = code
+            if result == 0 and "stop" in command:
+                systemd["state"] = "inactive"
+            if result == 0 and "start" in command:
+                systemd["state"] = "active"
+            if during in command and state is not None:
+                systemd["state"] = state
+            return Done(result)
         before = signal.getsignal(signal.SIGINT)
         err, out = io.StringIO(), io.StringIO()
         raised = None
         with contextlib.redirect_stderr(err), contextlib.redirect_stdout(out):
             try:
                 editions.switch(self.plan("mini"), self.repo, run=run, linux=True)
-            except KeyboardInterrupt as interrupt:     # unittest would stop on it
+            except (KeyboardInterrupt, editions.EditionError) as interrupt:     # unittest would stop on it
                 raised = interrupt
         self.assertEqual(signal.getsignal(signal.SIGINT), before)
-        return calls.commands, raised, err.getvalue() + out.getvalue()
+        self.last_state = systemd["state"]
+        return calls.commands, raised, err.getvalue() + out.getvalue() + str(raised or "")
 
     def test_ctrl_c_while_stopping_goes_back(self):
         """Before the swap: docker-compose.yml stays, T-Pot is started again, the switch ends as cancelled."""
         before = self.read(self.compose())
-        for code in (0, 1):                             # systemctl stopped waiting (1) or the stop was done
-            with self.subTest(code=code):
-                commands, raised, text = self.switch_with_ctrl_c("stop", code)
+        for code, state in ((0, None), (1, "inactive"), (1, "deactivating")):
+            # the stop was done / systemctl stopped waiting, the stop goes on in systemd
+            with self.subTest(code=code, state=state):
+                commands, raised, text = self.switch_with_ctrl_c("stop", code, state)
                 self.assertIsInstance(raised, editions.bootstrap.Interrupted, text)
                 self.assertEqual(self.read(self.compose()), before)
-                self.assertEqual(commands[-1], ["sudo", "systemctl", "start", "tpot"])
+                self.assertIn(["sudo", "systemctl", "start", "tpot"], commands)
                 self.assertNotIn(["sudo", "docker", "network", "prune", "-f"], commands)
                 self.assertIn("still the STANDARD edition", text)
                 self.assertIn("started again", text)
+                self.assertEqual(self.last_state, "active")
+
+    def test_ctrl_c_at_the_password_prompt_of_the_stop_leaves_tpot_running(self):
+        """sudo exits 1 on ^C at its prompt, T-Pot never stopped: no start (no second prompt), no
+        "T-Pot is stopped" while it runs."""
+        commands, raised, text = self.switch_with_ctrl_c("stop", 1, "active")
+        self.assertIsInstance(raised, editions.bootstrap.Interrupted, text)
+        self.assertNotIn(["sudo", "systemctl", "start", "tpot"], commands)
+        self.assertNotIn("is stopped", text)
+        self.assertIn("T-Pot still runs", text)
+
+    def test_ctrl_c_twice_at_the_password_prompts_says_what_systemd_says(self):
+        """^C into the stop (it goes on in systemd), ^C again at the prompt of the start: stopped."""
+        import signal
+        systemd = {"state": "active"}
+        commands = []
+
+        def run(command, **kwargs):
+            commands.append(list(command))
+            if command[:2] == ["systemctl", "is-active"]:
+                return Done(0 if systemd["state"] == "active" else 3, systemd["state"] + "\n")
+            os.kill(os.getpid(), signal.SIGINT)
+            if "stop" in command:
+                systemd["state"] = "inactive"
+            return Done(1)
+        text = io.StringIO()
+        with contextlib.redirect_stderr(text), contextlib.redirect_stdout(text), \
+                self.assertRaises(editions.bootstrap.Interrupted):
+            editions.switch(self.plan("mini"), self.repo, run=run, linux=True)
+        self.assertIn(["sudo", "systemctl", "start", "tpot"], commands)
+        self.assertIn("T-Pot is stopped", text.getvalue())
+        self.assertIn("tpot start", text.getvalue())
+        self.assertNotIn("started again", text.getvalue())
 
     def test_ctrl_c_after_the_swap_finishes_the_switch(self):
         mini = self.read(os.path.join(self.repo, "compose", "mini.yml"))
@@ -305,12 +356,30 @@ class EditionsTest(unittest.TestCase):
                 self.assertEqual(self.read(self.compose()), mini)
                 self.assertEqual(commands[-1], ["sudo", "systemctl", "start", "tpot"])
                 self.assertIn("the switch is finished", text)
+                self.assertIn("T-Pot runs the Mini edition", text)
+
+    def test_ctrl_c_at_the_password_prompt_of_the_start_is_no_success(self):
+        """After the swap sudo asks again (its time stamp ran out), ^C there: T-Pot stays stopped."""
+        mini = self.read(os.path.join(self.repo, "compose", "mini.yml"))
+        commands, raised, text = self.switch_with_ctrl_c("start", 1, "inactive")
+        self.assertIsInstance(raised, editions.EditionError, text)
+        self.assertNotIn("T-Pot runs the", text)
+        self.assertIn("T-Pot is stopped", text)
+        self.assertIn("tpot start", text)
+        self.assertEqual(self.read(self.compose()), mini)
 
     def test_ctrl_c_while_starting_says_to_look(self):
-        """systemctl start stops waiting on ctrl+c, the start goes on in systemd: no failure, a hint."""
-        commands, raised, text = self.switch_with_ctrl_c("start", 1)
-        self.assertIsNone(raised, text)
+        """systemctl start stops waiting on ctrl+c, the start goes on in systemd: no success yet, a hint."""
+        commands, raised, text = self.switch_with_ctrl_c("start", 1, "activating")
+        self.assertIsInstance(raised, editions.EditionError, text)
+        self.assertNotIn("T-Pot runs the", text)
         self.assertIn("tpot status", text)
+
+    def test_ctrl_c_into_a_start_that_got_through(self):
+        """systemctl gave 1 on the ^C, but systemd says active: the switch is done."""
+        commands, raised, text = self.switch_with_ctrl_c("start", 1, "active")
+        self.assertIsNone(raised, text)
+        self.assertIn("T-Pot runs the Mini edition", text)
 
 
 class EditionCliTest(unittest.TestCase):

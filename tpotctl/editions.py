@@ -163,6 +163,20 @@ def switch(plan: SwitchPlan, repo_dir: str = REPO_DIR, become_file: str = "", ru
                 interrupts)
 
 
+def _state(run: Callable) -> str:
+    """What systemd says of tpot.service (active, activating, inactive, failed, ...): after a Ctrl+C
+    sudo's rc tells nothing, sudo gives 1 for a ^C at its password prompt as well."""
+    try:
+        proc = run(["systemctl", "is-active", ops.SERVICE], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                   universal_newlines=True)
+    except OSError:
+        return "unknown"
+    return (getattr(proc, "stdout", "") or "").strip() or "unknown"
+
+
+_RUNS = ("active", "reloading")
+
+
 def _switch(plan: SwitchPlan, repo_dir: str, become_file: str, run: Callable, linux: bool,
             add_user: Optional[Callable[[], str]], interrupts: List[int]) -> None:
     def sudo(*args: str, what: str) -> None:
@@ -189,7 +203,7 @@ def _switch(plan: SwitchPlan, repo_dir: str, become_file: str, run: Callable, li
         if not interrupts:          # a stop that failed by itself: nothing is changed
             raise
     if interrupts:
-        _go_back(plan, linux, sudo)
+        _go_back(plan, linux, sudo, run)
     _mark("swap", f"Switching to the {plan.target.title} edition")
     shutil.copyfile(plan.target.path, in_use)
     say.ok(f"docker-compose.yml is the {plan.target.title} edition now.")
@@ -226,24 +240,44 @@ def _switch(plan: SwitchPlan, repo_dir: str, become_file: str, run: Callable, li
     except EditionError as err:
         if not interrupts:
             raise EditionError(f"{err}. {back}")
-        # systemctl stops waiting on ctrl+c, the start goes on in systemd
-        say.warn("systemctl start stopped waiting (Ctrl+C), T-Pot may still be starting: check with tpot status.")
+        # ^C at sudo's password prompt (nothing started) or into systemctl (the start goes on in
+        # systemd): only systemd knows
+        state = _state(run)
+        if state not in _RUNS:
+            say.warn(f"Ctrl+C came after docker-compose.yml was swapped, it is the {plan.target.title} edition now.")
+            if state == "activating":
+                raise EditionError(f"T-Pot is still starting the {plan.target.title} edition (Ctrl+C stopped "
+                                   f"systemctl waiting): check with tpot status. {back}")
+            raise EditionError(f"T-Pot is stopped (systemd says {state}), start it with: tpot start. {back}")
     _mark("done", "Done")
     if interrupts:
         say.warn(f"Ctrl+C came after docker-compose.yml was swapped, so the switch is finished. {back}")
     say.ok(f"T-Pot runs the {plan.target.title} edition.")
 
 
-def _go_back(plan: SwitchPlan, linux: bool, sudo: Callable) -> None:
-    """Ctrl+C before the swap: docker-compose.yml is unchanged, T-Pot starts again (as after a switch)."""
+def _go_back(plan: SwitchPlan, linux: bool, sudo: Callable, run: Callable) -> None:
+    """Ctrl+C before the swap: docker-compose.yml is unchanged, T-Pot runs again (as after a switch).
+
+    What it says comes from systemd: a ^C at sudo's password prompt of the stop left T-Pot running
+    (no start, no second prompt), one into systemctl stop let the stop go on."""
     started = ""
     if linux:
-        say.info("Starting T-Pot again ...")
-        try:
-            sudo("systemctl", "start", "tpot", what="Starting T-Pot again")
-            started = ", T-Pot is started again"
-        except EditionError as err:
-            started = f", T-Pot is stopped ({err}), start it with: tpot start"
+        if _state(run) in _RUNS:
+            started = ", T-Pot still runs"
+        else:
+            say.info("Starting T-Pot again ...")
+            failed = ""
+            try:
+                sudo("systemctl", "start", "tpot", what="Starting T-Pot again")
+            except EditionError as err:
+                failed = f" ({err})"
+            state = _state(run)
+            if state in _RUNS:
+                started = ", T-Pot is started again"
+            elif state == "activating":
+                started = ", T-Pot is starting again: check with tpot status"
+            else:
+                started = f", T-Pot is stopped{failed}, start it with: tpot start"
     sys.stderr.write("\n")
     say.warn(f"Stopped before the switch: docker-compose.yml is still the {plan.current} edition{started}.",
              sys.stderr)
