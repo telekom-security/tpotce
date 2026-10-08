@@ -690,10 +690,13 @@
         - "Rocky"
         - "Ubuntu"
 
-    - name: Accept COLORTERM in /etc/ssh/sshd_config.d/tpot.conf (All)
+    - name: Accept COLORTERM and LC_TERMINAL in /etc/ssh/sshd_config.d/tpot.conf (All)
+      # LC_TERMINAL(_VERSION) is how iTerm2 says who it is: the ssh of macOS sends LC_*, but not every
+      # distribution takes all of them (openSUSE names some); the regexp replaces the line of an earlier T-Pot
       lineinfile:
         path: /etc/ssh/sshd_config.d/tpot.conf
-        line: "AcceptEnv COLORTERM"
+        regexp: '^AcceptEnv COLORTERM(\s|$)'
+        line: "AcceptEnv COLORTERM LC_TERMINAL LC_TERMINAL_VERSION"
         create: yes
         owner: root
         group: root

@@ -23,7 +23,7 @@ OK, WARN, ERROR = "#3FA34D", "#F4B400", "#E8453C"
 TRUECOLOR = {"INK": INK, "COMB": COMB, "COMB_LIT": COMB_LIT, "WAX": WAX, "MAGENTA": MAGENTA, "PETROL": PETROL,
              "GLASS": GLASS, "MIST": MIST, "KEY": KEY, "ASH": ASH, "OK": OK, "WARN": WARN, "ERROR": ERROR}
 # The same tokens as entries of the xterm 256 palette, for a terminal that only says 256 colours
-# (SSH without COLORTERM, tmux): left to the nearest entry, the dark magentas turn into maroon.
+# (SSH without COLORTERM from most terminals, tmux): left to the nearest entry, the dark magentas turn into maroon.
 PALETTE_256 = {"INK": "#000000", "COMB": "#121212", "COMB_LIT": "#5f005f", "WAX": "#87005f",
                "MAGENTA": "#d70087", "PETROL": "#005f5f", "GLASS": "#ffffff", "MIST": "#87afd7",
                "KEY": "#5fafd7", "ASH": "#a8a8a8", "OK": "#5faf5f", "WARN": "#ffaf00", "ERROR": "#d75f5f"}
@@ -96,8 +96,9 @@ def build(system: str) -> Theme:
 
 def color_system() -> str:
     """truecolor, 256 or 16, exactly as Textual renders: its COLOR_SYSTEM (TEXTUAL_COLOR_SYSTEM when it was
-    imported, which the launcher sets from TPOT_COLORS / prefs.py), for auto Rich's look at COLORTERM
-    and TERM. Read from the prefs here, palette and output could disagree."""
+    imported, which the launcher and the customizer set by prefs.apply_color_system: TPOT_COLORS,
+    tpot.json or the rule of the scripts, prefs.detect_colors), for auto (nothing set it, or a console
+    of Windows) Rich's look at the terminal. Read from the prefs here, palette and output could disagree."""
     from textual import constants
     system = constants.COLOR_SYSTEM or "auto"
     if system == "auto":
