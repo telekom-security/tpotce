@@ -98,7 +98,24 @@ if ! source "${myHERE}/installer/lib/ui.sh" 2>/dev/null;
     fuUI_HINT () { local myLINE; for myLINE in "$@"; do echo "###   ${myLINE}"; done; }
     fuUI_MARKS_ON () { [ -n "${myMARKS:-}" ] || [ "${TPOT_MARKS:-}" = "1" ]; }
     fuMARK () { fuUI_MARKS_ON || return 0; echo "@@tpot $*"; }
-    fuUI_LOGO () { return 1; }
+    fuUI_VERSION_GE () {
+      local myI myX myY myN myV="${1//[[:space:]]/}" myM="${2//[[:space:]]/}"
+      local -a myA=() myB=()
+      myV="${myV#v}"
+      myV="${myV%%[-+]*}"
+      [ -n "${myV}" ] && [ -n "${myM}" ] || return 1
+      IFS=. read -r -a myA <<< "${myV}"
+      IFS=. read -r -a myB <<< "${myM}"
+      myN="${#myA[@]}"
+      [ "${#myB[@]}" -le "${myN}" ] || myN="${#myB[@]}"
+      for ((myI = 0; myI < myN; myI++)); do
+        myX="${myA[myI]-0}" myY="${myB[myI]-0}"
+        [[ "${myX}" =~ ^[0-9]{1,18}$ && "${myY}" =~ ^[0-9]{1,18}$ ]] || return 1
+        if [ "$((10#${myX}))" -gt "$((10#${myY}))" ]; then return 0; fi
+        if [ "$((10#${myX}))" -lt "$((10#${myY}))" ]; then return 1; fi
+      done
+      return 0
+    }
     fuUI_HELP () {
       local myTITLE="$1" myUSAGE="$2" myW=0 myI myLINE myFIRST myREST myPAD
       shift 2
@@ -148,6 +165,19 @@ if ! source "${myHERE}/installer/lib/ui.sh" 2>/dev/null;
       echo "### [ERROR] - $1" >&2
       echo "###   ${2:-${0##*/}} -h shows the options." >&2
       return 1
+    }
+    fuUI_LINUX_ONLY () {
+      local mySYSTEM
+      mySYSTEM=$(uname -s 2>/dev/null)
+      [ "${mySYSTEM}" != "Linux" ] || return 0
+      case "${mySYSTEM}" in
+        Darwin) mySYSTEM="macOS" ;;
+        MINGW*|MSYS*|CYGWIN*) mySYSTEM="Windows (${mySYSTEM})" ;;
+        "") mySYSTEM="an unknown system" ;;
+      esac
+      echo "### [ERROR] - $1 does not run on ${mySYSTEM}." >&2
+      echo "###   $1 runs on Linux: a T-Pot host, a build host or a VM, WSL2 on Windows." >&2
+      exit "${2:-1}"
     }
     fuUI_RESULT () {
       case "$1" in
@@ -225,8 +255,7 @@ myEDITIONS="STANDARD SENSOR MINI LLM TARPIT MOBILE MAC_WIN"
 myDROPPED_SERVICES="spiderfoot fatt"
 
 function fuPRINT_HELP () {
-	# at a terminal the T-Pot logo first, as a run shows it
-	fuUI_LOGO
+	# the help only, without the T-Pot logo (that is for a run)
 	fuUI_HELP "Updater" "update.sh -y [-s] [--full] [--backup-only] [-b <branch>] [-r <url>]"$'\n'"          [-B <file>]" \
 	  --about "Updates T-Pot to the latest version of its branch: a backup to ~/tpot_backups first, then the
 checkout, your configuration and edition put back, the images of the release pulled." \
@@ -737,7 +766,9 @@ function fuRESTART_ARGS () {   # $1 = the script that restarts, then the options
 function fuCHECK_VERSION () {
 	local myMINVERSION="24.04.1"
 	# The newest release this update.sh knows: the one it belongs to, the file version of
-	# its checkout (after the self update the one just fetched), no number written in here
+	# its checkout (after the self update the one just fetched), no number written in here.
+	# The checkout in the current directory is updated when its version lies between the
+	# two, both included
 	local myMASTERVERSION=""
 	[ -r "${myHERE}/version" ] && myMASTERVERSION=$(tr -d "[:space:]" < "${myHERE}/version")
 	echo
@@ -750,8 +781,10 @@ function fuCHECK_VERSION () {
 	fi
 	if [ -f "version" ];
 	  then
-	    myVERSION=$(cat version)
-	    if [[ "$myVERSION" > "$myMINVERSION" || "$myVERSION" == "$myMINVERSION" ]] && [[ "$myVERSION" < "$myMASTERVERSION" || "$myVERSION" == "$myMASTERVERSION" ]]
+	    # the version of the checkout, without spaces and CR (a file written on Windows);
+	    # both compared number by number (24.04.10 is newer than 24.04.9), fuUI_VERSION_GE
+	    myVERSION=$(tr -d "[:space:]" < version)
+	    if fuUI_VERSION_GE "${myVERSION}" "${myMINVERSION}" && fuUI_VERSION_GE "${myMASTERVERSION}" "${myVERSION}";
 	      then
 	        fuUI_OK "$myVERSION is eligible for the update procedure."
 	      elif [ -n "${myTPOT_SOURCE_GIVEN}" ];
@@ -1867,6 +1900,13 @@ while getopts ":yFsob:r:B:h" opt; do
       ;;
   esac
 done
+
+# A T-Pot host is Linux (WSL2 too): elsewhere nothing of this works, it stops before any
+# sudo, docker or git, with the way of the mac_win edition (as the T-Pot Manager says)
+( fuUI_LINUX_ONLY update.sh ) || {
+  fuUI_HINT "On macOS and Windows (the mac_win edition): git pull in ~/tpotce, then tpot customize." >&2
+  exit 1
+}
 
 # -b, -r, TPOT_BRANCH and TPOT_REPO_URL all name an update source explicitly
 [ -n "${myTPOT_BRANCH}${myTPOT_REPO_URL}" ] && myTPOT_SOURCE_GIVEN="1"

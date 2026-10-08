@@ -16,6 +16,7 @@ import unittest
 
 from tpotctl.tests import test_scripts as base
 from tpotctl.tests import test_ui as ui
+from tpotctl.tests.test_scripts_update import UNAME
 
 from tpotctl import installer
 
@@ -77,6 +78,7 @@ class Scripts(base.Harness):
         super().setUp()
         for name, text in STUBS.items():
             write(os.path.join(self.bin, name), text, 0o755)
+        write(os.path.join(self.bin, "uname"), UNAME, 0o755)        # Linux, FAKE_UNAME_S says otherwise
         write(os.path.join(self.home, "os-release"), 'NAME="Debian GNU/Linux"\nVERSION_ID="13"\n')
         self.data = os.path.join(self.home, ".local", "share")
         write(os.path.join(self.data, "tpotce", "bin", "gum"), GUM, 0o755)
@@ -168,6 +170,34 @@ class InstallShTest(Scripts):
         self.assertNotIn("telekom security", result.stdout)
         self.assertLess(result.stdout.index("@@tpot phase done"), result.stdout.index("### T-Pot is installed"))
 
+    def test_marks_run_keeps_the_log_of_a_failed_package_step(self):
+        """install.sh -s -M (the assistant): the package step goes through for the assistant and into
+        ~/install_tpot_prepare.log as well, which the summary names (fuUI_SPIN tees in the marks mode)."""
+        write(os.path.join(self.bin, "apt"), "#!/bin/sh\necho \"E: Unable to locate package $*\"\nexit 100\n",
+              0o755)
+        result = self.run_merged(self.script, "-s", "-M", "-t", "s")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        log = os.path.join(self.home, "install_tpot_prepare.log")
+        self.assertTrue(os.path.exists(log), result.stdout[-600:])
+        with open(log, encoding="utf-8") as handle:
+            self.assertIn("E: Unable to locate package", handle.read())
+        self.assertIn("E: Unable to locate package", result.stdout)          # the assistant sees it too
+        summary = result.stdout[result.stdout.index("### T-Pot is not installed"):]
+        self.assertIn("### [FAILED] - The packages the installer needs could not be installed", summary)
+        self.assertIn(f"Review {log}", summary)
+        self.assertNotIn("ansible-playbook", self.calls())
+
+    def test_marks_run_keeps_the_log_of_the_pull(self):
+        """The pull in the marks mode: in ~/install_tpot_pull.log, and the progress still counts it."""
+        result = self.install("-s", "-M", "-t", "s")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        with open(os.path.join(self.home, "install_tpot_pull.log"), encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertIn(" cowrie Pulled", text)
+        self.assertIn(" nginx Pulled", text)
+        progress = self.feed(result.stdout)
+        self.assertEqual((progress.images, progress.images_done), (2, 2))
+
     def test_marks_run_warns_about_the_pull(self):
         result = self.install("-s", "-M", "-t", "s", FAKE_PULL_RC="1")
         self.assertEqual(result.returncode, 0, result.stdout)
@@ -224,6 +254,13 @@ class InstallShTest(Scripts):
         # the logo comes before the title
         self.assertLess(out.index("telekom security"), out.index("T-Pot Installer"))
 
+    def test_the_start_question_is_short(self):
+        """At a terminal: what comes first as an info line, then the short question (80 columns)."""
+        out = ui.plain(self.at_terminal(self.script, cols=80, rows=24))
+        self.assertIn("It first installs git, Ansible and the Python packages it needs.", out)
+        self.assertLess(out.index("It first installs git"), out.index("Aborting!"))
+        self.assertIn('fuUI_CONFIRM "Start the T-Pot installer?" "Start" "Abort"', base.read("install.sh"))
+
     def test_the_version_of_the_logo(self):
         # an older clone in ~/tpotce says nothing about what this installer installs
         write(os.path.join(self.tpotce, "version"), "99.9.9\n")
@@ -257,6 +294,41 @@ class InstallShTest(Scripts):
         self.assertIn("T-Pot Installer", out)
 
 
+class DistributionTest(Scripts):
+    """install.sh and uninstall.sh know the distributions of installer.SUPPORTED, and name all of them
+    (from their list) when this one is not among them."""
+
+    def setUp(self):
+        super().setUp()
+        write(os.path.join(self.home, "os-release"), 'NAME="Gentoo"\nVERSION_ID="2.17"\n')
+        write(os.path.join(self.tpotce, "installer", "lib", "ui.sh"), base.read("installer/lib/ui.sh"))
+
+    @staticmethod
+    def names(script):
+        text = base.read(script)
+        return re.findall(r'"([^"]+)"', re.search(r"mySUPPORTED_DISTRIBUTIONS=\((.*?)\)", text).group(1))
+
+    def test_the_lists_are_the_supported_ones(self):
+        for script in ("install.sh", "uninstall.sh"):
+            with self.subTest(script=script):
+                self.assertEqual(sorted(self.names(script)), sorted(installer.SUPPORTED))
+
+    def test_an_unsupported_distribution_names_all_of_them(self):
+        for script in ("install.sh", "uninstall.sh"):
+            names = self.names(script)
+            listed = ", ".join(names[:-1]) + " and " + names[-1]
+            with self.subTest(script=script):
+                path = os.path.join(self.tpotce, script)
+                write(path, base.read(script), 0o755)
+                result = self.run_merged(path, "-s", "-t", "s") if script == "install.sh" \
+                    else self.run_merged(path, "-y")
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn(f"Only the following distributions are supported: {listed}.", result.stdout)
+                for name in installer.SUPPORTED:
+                    self.assertIn(name, result.stdout)
+                self.assertNotIn("ansible-playbook", self.calls())
+
+
 class UninstallShTest(Scripts):
 
     def setUp(self):
@@ -277,6 +349,23 @@ class UninstallShTest(Scripts):
                            (["-B", os.path.join(self.home, "missing")], "Cannot read the sudo password")):
             with self.subTest(args=args):
                 self.assert_usage_error(self.run_script(self.script, *args), text, "uninstall.sh")
+
+    def test_it_stops_outside_linux(self):
+        """Outside Linux (uname -s) it stops after the options, before sudo, Ansible or the removal;
+        -h and a wrong option work everywhere."""
+        write(os.path.join(self.bin, "sudo"), "#!/bin/sh\necho \"sudo $*\" >> \"$HOME/calls\"\n", 0o755)
+        for args in (["-y"], ["-y", "-k"], []):
+            with self.subTest(args=args):
+                result = self.run_script(self.script, *args, env={"FAKE_UNAME_S": "Darwin"})
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertIn("### [ERROR] - uninstall.sh does not run on macOS.", result.stderr)
+                self.assertIn("uninstall.sh runs on Linux: a T-Pot host", result.stderr)
+                self.assertNotIn("T-Pot Uninstaller", result.stdout)
+                self.assertEqual(self.calls(), "")
+                self.assertTrue(os.path.exists(self.tpotce))
+        self.assert_help("uninstall.sh", self.run_script(self.script, "-h", env={"FAKE_UNAME_S": "Darwin"}))
+        self.assert_usage_error(self.run_script(self.script, "-Z", env={"FAKE_UNAME_S": "Darwin"}),
+                                "Unknown option -Z.", "uninstall.sh")
 
     def test_a_run_removes_the_checkout_with_a_spinner(self):
         result = self.run_merged(self.script, "-y")

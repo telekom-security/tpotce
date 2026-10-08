@@ -820,10 +820,18 @@ Should an update fail, opening an issue or a discussion will help to improve thi
 
 ## The T-Pot Scripts
 `install.sh`, `update.sh`, `restore.sh`, `uninstall.sh`, `genuser.sh`, `deploy.sh` and the image builder look and behave alike:
-- At a terminal they start with the T-Pot logo of the T-Pot Manager, sized to the terminal (none below 80 x 24, none when the T-Pot Manager runs them, none with `TPOT_GUM=off`), in the colours your terminal can show (see [True colours over SSH](#true-colours-over-ssh), `TPOT_COLORS`).
-- Questions, choices and long steps go through [gum](https://github.com/charmbracelet/gum) (plain text without a terminal); a long step shows a spinner and writes its output to a log (`~/install_tpot_pull.log`, `~/uninstall_tpot.log`, `~/tpot_backups/update.log` and `restore.log`), whose end is shown if it fails.
+- At a terminal they start with the T-Pot logo of the T-Pot Manager, sized to the terminal (none below 80 x 24, none when the T-Pot Manager runs them, none with `TPOT_GUM=off`, not for `-h`), in the colours your terminal can show (see [True colours over SSH](#true-colours-over-ssh), `TPOT_COLORS`).
+- Questions, choices and long steps go through [gum](https://github.com/charmbracelet/gum) (plain text without a terminal); a long step shows a spinner and writes its output to a log, whose end is shown if it fails. When the T-Pot Manager runs them, the output goes to its screen and into the same log. The logs, each of the last run:
+  - `~/install_tpot_prepare.log`: what `install.sh` installs before the playbook (the packages, the clone of T-Pot, the setup of the T-Pot Manager)
+  - `~/install_tpot.log`: the Ansible playbook of `install.sh`
+  - `~/install_tpot_pull.log`: the image pull at the end of `install.sh`
+  - `~/uninstall_tpot.log`: the Ansible playbook of `uninstall.sh` and the removal of `~/tpotce`
+  - `~/tpot_backups/update.log`: the steps of `update.sh` (the backup archive, the setup of the T-Pot Manager, the image pull and the removal of old images)
+  - `~/tpot_backups/restore.log`: the steps of `restore.sh` (reading the archive, stop and start of T-Pot, the extract of `data/`, the Kibana import)
+  - `docker/_builder/log/`: a log per image and step of the image builder
 - They end with a summary: what was done, what failed, what to do next.
 - `-h` shows the options with examples and exits with 0, a wrong option names itself and exits with 1 (the image builder with 2).
+- `update.sh`, `restore.sh`, `uninstall.sh` and the image builder run on Linux only (a T-Pot host, a build host or a VM, WSL2 on Windows), elsewhere they stop with a hint; `-h` works everywhere. On macOS and Windows (the `mac_win` edition) an update is `git pull` in `~/tpotce`, then `tpot customize`.
 - The version they show comes from the file `version` of the checkout, nothing in the scripts carries it.
 <br><br>
 

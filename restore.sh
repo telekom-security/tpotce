@@ -22,7 +22,6 @@ if ! source "${myHERE}/installer/lib/ui.sh" 2>/dev/null;
     fuUI_HINT () { local myLINE; for myLINE in "$@"; do echo "###   ${myLINE}"; done; }
     fuUI_MARKS_ON () { [ -n "${myMARKS:-}" ] || [ "${TPOT_MARKS:-}" = "1" ]; }
     fuMARK () { fuUI_MARKS_ON || return 0; echo "@@tpot $*"; }
-    fuUI_LOGO () { return 1; }
     fuUI_HELP () {
       local myTITLE="$1" myUSAGE="$2" myW=0 myI myLINE myFIRST myREST myPAD
       shift 2
@@ -72,6 +71,19 @@ if ! source "${myHERE}/installer/lib/ui.sh" 2>/dev/null;
       echo "### [ERROR] - $1" >&2
       echo "###   ${2:-${0##*/}} -h shows the options." >&2
       return 1
+    }
+    fuUI_LINUX_ONLY () {
+      local mySYSTEM
+      mySYSTEM=$(uname -s 2>/dev/null)
+      [ "${mySYSTEM}" != "Linux" ] || return 0
+      case "${mySYSTEM}" in
+        Darwin) mySYSTEM="macOS" ;;
+        MINGW*|MSYS*|CYGWIN*) mySYSTEM="Windows (${mySYSTEM})" ;;
+        "") mySYSTEM="an unknown system" ;;
+      esac
+      echo "### [ERROR] - $1 does not run on ${mySYSTEM}." >&2
+      echo "###   $1 runs on Linux: a T-Pot host, a build host or a VM, WSL2 on Windows." >&2
+      exit "${2:-1}"
     }
     fuUI_RESULT () {
       case "$1" in
@@ -202,8 +214,7 @@ myDO_DATA=""
 myDO_ELASTIC=""
 
 function fuPRINT_HELP () {
-	# at a terminal the T-Pot logo first, as a run shows it
-	fuUI_LOGO
+	# the help only, without the T-Pot logo (that is for a run)
 	fuUI_HELP "Restorer" "restore.sh [-l] [-f <archive>] [-y | -c | -g <groups>] [-B <file>]" \
 	  --about "Restores a backup written by update.sh. Without -y, -c or -g it lists what the archive
 holds and you choose what comes back, so you can bring back just the configuration
@@ -782,6 +793,9 @@ while getopts ":lf:ycg:B:h" opt; do
       ;;
   esac
 done
+
+# A T-Pot host is Linux (WSL2 too): elsewhere it stops before any sudo, docker or git
+fuUI_LINUX_ONLY restore.sh
 
 # -g: only known groups
 for myGROUP in ${myGROUPS//,/ };

@@ -22,6 +22,11 @@ REPO = base.REPO
 UPDATE_SH = os.path.join(REPO, "update.sh")
 RESTORE_SH = os.path.join(REPO, "restore.sh")
 LOGO = "telekom security"         # the credits of the logo, only the logo has them
+# uname -s (and uname alone) says FAKE_UNAME_S, Linux without it; the rest is the real uname. The
+# host scripts stop outside Linux (fuUI_LINUX_ONLY), the tests run on macOS as well
+REAL_UNAME = shutil.which("uname") or "/usr/bin/uname"
+UNAME = ('#!/bin/sh\ncase "$*" in\n  -s|"") echo "${FAKE_UNAME_S-Linux}"; exit 0 ;;\nesac\n'
+         f'exec {REAL_UNAME} "$@"\n')
 # a curl that answers like an Elasticsearch / Kibana: -o files get a successful import
 CURL_OK = ('#!/bin/sh\nout=""\nwhile [ $# -gt 0 ]; do [ "$1" = "-o" ] && out="$2"; shift; done\n'
            '[ -n "$out" ] && [ "$out" != /dev/null ] && echo \'{"success":true,"successCount":2}\' > "$out"\n'
@@ -41,6 +46,7 @@ class Scripts(base.Harness):
         # no gum download at a terminal, and the internet check of update.sh fails
         self.stub("curl", "#!/bin/sh\nexit 7\n")
         self.stub("wget", "#!/bin/sh\nexit 4\n")
+        self.stub("uname", UNAME)
         self.tpotce = os.path.join(self.home, "tpotce")
         os.makedirs(self.tpotce)
 
@@ -105,11 +111,12 @@ class LogoTest(Scripts):
         self.assertIn("T-Pot Restorer", out)
         self.assertIn("No backups found.", out)
 
-    def test_the_help_shows_it_at_a_terminal(self):
+    def test_the_help_never_shows_it(self):
+        """-h is the help and nothing else, at a terminal too (the decision of 8f)."""
         for script in (UPDATE_SH, RESTORE_SH):
             with self.subTest(script=os.path.basename(script)):
                 out = self.terminal(script, "-h")
-                self.assertEqual(out.count(LOGO), 1, out[-600:])
+                self.assertNotIn(LOGO, out)
                 self.assertIn("Usage:", out)
 
     def test_no_logo_in_the_marks_mode(self):
@@ -205,6 +212,49 @@ class HelpTest(Scripts):
                 self.assertEqual(self.calls(), "")                       # nothing was run
 
 
+class LinuxOnlyTest(Scripts):
+    """update.sh and restore.sh run on a T-Pot host: outside Linux (uname -s) they stop after the
+    options, before sudo, docker or git; -h works everywhere. update.sh names the way of mac_win."""
+
+    def setUp(self):
+        super().setUp()
+        for name in ("sudo", "docker", "git", "systemctl"):
+            self.stub(name, f'#!/bin/sh\necho "{name} $*" >> "$HOME/calls"\nexit 0\n')
+
+    def test_they_stop_outside_linux(self):
+        for script, args in ((UPDATE_SH, ("-y",)), (UPDATE_SH, ()), (RESTORE_SH, ("-y",)), (RESTORE_SH, ("-l",))):
+            for system, name in (("Darwin", "macOS"), ("MINGW64_NT-10.0-19045", "Windows (MINGW64_NT-10.0-19045)")):
+                with self.subTest(script=os.path.basename(script), args=args, system=system):
+                    result = self.run_plain(script, *args, cwd=self.tpotce, FAKE_UNAME_S=system)
+                    me = os.path.basename(script)
+                    self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                    self.assertIn(f"### [ERROR] - {me} does not run on {name}.", result.stderr)
+                    self.assertIn(f"{me} runs on Linux: a T-Pot host, a build host or a VM, WSL2 on Windows.",
+                                  result.stderr)
+                    self.assertNotIn("T-Pot Updater", result.stdout)            # before the banner
+                    self.assertNotIn("T-Pot Restorer", result.stdout)
+                    self.assertEqual(self.calls(), "")
+                    if script == UPDATE_SH:
+                        self.assertIn("git pull in ~/tpotce, then tpot customize", result.stderr)
+
+    def test_help_and_usage_errors_work_everywhere(self):
+        for script in (UPDATE_SH, RESTORE_SH):
+            with self.subTest(script=os.path.basename(script)):
+                result = self.run_plain(script, "-h", FAKE_UNAME_S="Darwin")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("Usage:", result.stdout)
+                result = self.run_plain(script, "-Z", FAKE_UNAME_S="Darwin")
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("Unknown option -Z.", result.stderr)
+                self.assertNotIn("does not run on", result.stderr)
+
+    def test_wsl2_is_linux(self):
+        """WSL2 says Linux: update.sh goes on (here to the version check of the empty ~/tpotce)."""
+        result = self.run_plain(UPDATE_SH, "-y", cwd=self.tpotce, FAKE_UNAME_S="Linux")
+        self.assertNotIn("does not run on", result.stderr)
+        self.assertIn("Checking for version tag", result.stdout)
+
+
 class VersionTest(Scripts):
     """update.sh compares with the version of its own checkout (the file `version`), not a number in it."""
 
@@ -234,6 +284,34 @@ class VersionTest(Scripts):
         self.assertIn("99.1.0 cannot be upgraded automatically", out)
         self.assertEqual(result.returncode, 1, out[-400:])
         self.assertNotIn("cannot be reached", out)
+
+    def compare(self, local, script_version):
+        """update.sh of a checkout at script_version run in a checkout at local."""
+        script = self.checkout("script", script_version)
+        checkout = self.checkout("next", local, with_script=False)
+        result = self.run_plain(os.path.join(script, "update.sh"), "-y", cwd=checkout)
+        return result.stdout + result.stderr
+
+    def test_versions_compare_as_numbers(self):
+        """24.04.10 is newer than 24.04.9: number by number, not letter by letter (fuUI_VERSION_GE)."""
+        out = self.compare("24.04.9", "24.04.10")
+        self.assertIn("24.04.9 is eligible for the update procedure.", out)
+        self.assertIn("cannot be reached", out)                       # it went on to the internet check
+
+    def test_a_newer_checkout_is_refused_by_number(self):
+        out = self.compare("24.04.10", "24.04.9")
+        self.assertIn("24.04.10 cannot be upgraded automatically", out)
+        self.assertNotIn("is eligible", out)
+        self.assertNotIn("cannot be reached", out)
+
+    def test_spaces_and_crlf_in_the_version_files(self):
+        """A version file written on Windows (CRLF) or with spaces is the same version."""
+        script = self.checkout("script", " 24.04.10\r")
+        checkout = self.checkout("next", "24.04.2 \r", with_script=False)
+        result = self.run_plain(os.path.join(script, "update.sh"), "-y", cwd=checkout)
+        out = result.stdout + result.stderr
+        self.assertIn("### [OK] - 24.04.2 is eligible for the update procedure.", out)
+        self.assertNotIn("\r", out)
 
     def test_no_version_written_into_update_sh(self):
         self.assertFalse(re.search(r'myMASTERVERSION="[0-9]', base.read("update.sh")))

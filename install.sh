@@ -1518,12 +1518,12 @@ ask_type() {
   # the classic questions, before anything is installed
   [ -n "${myTPOT_TYPE}" ] && return
   myTPOT_TYPE=$(fuUI_CHOOSE "Choose your T-Pot type:" \
-    "Hive - T-Pot Standard / HIVE, everything incl. what a distributed setup needs:h" \
-    "Sensor - honeypots only, sends its data to a HIVE (no web UI, no Elastic Stack):s" \
+    "Hive - T-Pot Standard / HIVE, everything a distributed setup needs:h" \
+    "Sensor - honeypots only, sends to a HIVE (no web UI, no Elastic Stack):s" \
     "LLM - LLM based honeypots Beelzebub and Galah, needs Ollama or ChatGPT:l" \
     "Mini - 30+ honeypots with just a couple of honeypot daemons:i" \
     "Mobile - everything to run T-Pot Mobile (available separately):m" \
-    "Tarpit - feeds data endlessly to attackers, bots and scanners, with ddospot:t") || exit 1
+    "Tarpit - endless data for attackers, bots and scanners, with ddospot:t") || exit 1
   validate_type
 }
 
@@ -1685,7 +1685,9 @@ myCURRENT_DISTRIBUTION=$(awk -F= '/^NAME/{print $2}' /etc/os-release | tr -d '"'
 
 if [[ ! " ${mySUPPORTED_DISTRIBUTIONS[@]} " =~ " ${myCURRENT_DISTRIBUTION} " ]];
   then
-    fuUI_ERROR "Only the following distributions are supported: AlmaLinux, Fedora, Debian, openSUSE Tumbleweed, RHEL, Rocky Linux and Ubuntu."
+    # the list in words: "a, b and c", from the array, so the message names every one of them
+    myLIST=$(printf '%s, ' "${mySUPPORTED_DISTRIBUTIONS[@]:0:${#mySUPPORTED_DISTRIBUTIONS[@]}-1}")
+    fuUI_ERROR "Only the following distributions are supported: ${myLIST%, } and ${mySUPPORTED_DISTRIBUTIONS[-1]}."
     fuUI_INFO "Please follow the T-Pot documentation on how to run T-Pot on macOS, Windows and other currently unsupported platforms."
     echo
     exit 1
@@ -1739,7 +1741,8 @@ myUI_VERSION=$(install_version)
 # tpot install asks everything up front and runs this script again with -s.
 if [ -z "${myUNATTENDED}" ] && [ -z "${myCLASSIC}" ] && [ -t 0 ] && [ -t 1 ] && [ "${TPOT_ASSISTANT:-on}" != "off" ];
   then
-    if ! fuUI_CONFIRM "Start the T-Pot installer? It first installs git, Ansible and Python packages it needs." "Start" "Abort";
+    fuUI_INFO "It first installs git, Ansible and the Python packages it needs."
+    if ! fuUI_CONFIRM "Start the T-Pot installer?" "Start" "Abort";
       then
         echo
         fuUI_INFO "Aborting!"
