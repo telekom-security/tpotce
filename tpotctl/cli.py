@@ -569,9 +569,19 @@ def run_sensor_add(args, registry, console) -> int:
     host = tsensors.check_address(args.host or ask_for("IP or name of the sensor: ", "--host"))
     user = tsensors.check_user(args.ssh_user or ask_for("User T-Pot was installed with on the sensor: ",
                                                         "--ssh-user"))
-    proposal = tsensors.default_hive_address(host)
-    hive = args.hive_address or (ask(f"IPv4 or name the sensor reaches this HIVE on [{proposal}]: ")
-                                 if interactive else "") or proposal
+    hive = args.hive_address
+    if not hive:
+        # none for an SSH alias (sensor_1) without a name this HIVE resolves
+        proposal = tsensors.default_hive_address(host)
+        question = "IPv4 or name the sensor reaches this HIVE on"
+        if interactive:
+            hive = ask(f"{question}{f' [{proposal}]' if proposal else ''}: ") or proposal
+        else:
+            hive = proposal
+        if not hive:
+            why = "nothing given" if interactive else "no terminal to ask for it"
+            fail(f"no address of this HIVE for the sensor ({why}, none found on the way to {host}), "
+                 f"give it with --hive-address", 2)
     hive = tsensors.check_hive_address(hive)
 
     port = tsensors.check_port(args.ssh_port)
@@ -614,7 +624,7 @@ def run_sensor_add(args, registry, console) -> int:
     password = tsensors.new_password()
     interrupts: List[int] = []
     with bootstrap.sigint_to(lambda signum, _frame: interrupts.append(signum)):
-        registry.grant(name, password)
+        note = registry.grant(name, password)
         code = None
         try:
             if not interrupts:
@@ -646,7 +656,11 @@ def run_sensor_add(args, registry, console) -> int:
             say.warn(f"{name} could not be noted ({err}), its access stays. Add where it is with: "
                      f"tpot sensors set {name} --host {host} --ssh-user {user} --ssh-port {port} "
                      f"--hive-address {hive}", console.file)
-    say.ok(f"{name} is deployed to {host} and sends to {hive}.", console.file)
+    if "restart" in note:          # lswebpasswd could not be written in place, nginx refuses it until then
+        say.warn(f"{name} is deployed to {host}. nginx takes its access from the next start of T-Pot on "
+                 f"(tpot restart), it sends to {hive} after that.", console.file)
+    else:
+        say.ok(f"{name} is deployed to {host} and sends to {hive}.", console.file)
     console.print(Text(f"Its password, shown only now: {password}", style=f"bold {MAGENTA}"))
     console.print("The sensor has it already, keep it only if you want to set the sensor up again by hand.")
     return 0

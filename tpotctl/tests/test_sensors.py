@@ -335,6 +335,42 @@ class CliTest(unittest.TestCase):
         popen.assert_not_called()
         self.assertEqual(len(sensors.Registry(self.repo).entries()), 2)      # nothing granted
 
+    def test_no_proposal_of_the_hive_address_asks_for_it(self):
+        """An SSH alias (sensor_1) has no address of this HIVE on the way to it: no "[]" in the question,
+        without a terminal exit 2 and the option to give it with."""
+        with mock.patch.object(sensors, "check_ssh", return_value="unreachable") as ssh, \
+                mock.patch.object(sensors, "default_hive_address", return_value=""):
+            code, text = self.run_cli("sensors", "add", "--host", "sensor_1", "--ssh-user", "u")
+            self.assertEqual(code, 2, text)
+            self.assertIn("--hive-address", text)
+            self.assertNotIn("''", text)
+            ssh.assert_not_called()
+            prompts = []
+            for answer in ("", "192.168.1.2"):
+                with self.subTest(answer=answer), \
+                        mock.patch("builtins.input", side_effect=lambda prompt: prompts.append(prompt) or answer):
+                    code, text = self.run_cli("sensors", "add", "--host", "sensor_1", "--ssh-user", "u",
+                                              stdin=TTY())
+                    self.assertNotIn("[]", prompts[-1])
+                    if answer:
+                        self.assertEqual(code, 1, text)            # on to SSH, which is not there
+                        self.assertIn("cannot log in", text)
+                    else:
+                        self.assertEqual(code, 2, text)
+                        self.assertIn("--hive-address", text)
+        self.assertEqual(len(sensors.Registry(self.repo).entries()), 2)      # nothing granted
+
+    @unittest.skipIf(os.geteuid() == 0, "root writes a read-only file")
+    def test_an_access_that_counts_after_a_restart_is_said(self):
+        """lswebpasswd cannot be written in place: nginx knows the sensor only after tpot restart."""
+        lswebpasswd = os.path.join(self.repo, "data", "nginx", "conf", "lswebpasswd")
+        os.chmod(lswebpasswd, 0o444)
+        self.addCleanup(os.chmod, lswebpasswd, 0o644)
+        code, text, _children = self.add_with(0)
+        self.assertEqual(code, 0, text)
+        self.assertIn("tpot restart", text)
+        self.assertNotIn("and sends to", text)
+
     def add_with(self, *steps, ssh="ok"):
         """sensors add at a terminal with the children of fake_popen(*steps); its password is known."""
         popen, children = fake_popen(*steps)
@@ -628,6 +664,24 @@ class SensorsPaneTest(unittest.IsolatedAsyncioTestCase):
                 await pilot.click("#yes")
                 await pilot.pause(0.5)
         self.assertEqual([u.name for u in sensors.Registry(repo).entries()], ["sensor-old-otter"])
+
+    async def test_the_dialog_proposes_only_a_hive_address_it_found(self):
+        from textual.app import App
+        from tpotctl.screens.dialogs import SensorDialog
+        for found in ("", "192.168.1.2"):
+            with self.subTest(found=found):
+                dialog = SensorDialog(sensors.check_address, sensors.check_user, lambda _host: found,
+                                      sensors.check_hive_address)
+                app = App()
+                async with app.run_test() as pilot:
+                    app.push_screen(dialog)
+                    await pilot.pause()
+                    dialog.query_one("#sensor-host").value = "sensor_1"
+                    await pilot.pause()
+                    placeholder = dialog.query_one("#sensor-hive").placeholder
+                self.assertNotIn("[]", placeholder)
+                if found:
+                    self.assertIn(f"[{found}]", placeholder)
 
     async def test_edit_where_a_sensor_is(self):
         from tpotctl import app as tapp, ops

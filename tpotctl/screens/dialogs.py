@@ -226,8 +226,8 @@ class SensorDialog(NavModal):
         if event.input.id == "sensor-host" and self.default_hive:
             hive = self.query_one("#sensor-hive", Input)
             if not hive.value:
-                hive.placeholder = f"IP or name the sensor reaches this HIVE on [{self.default_hive(event.value)}]" \
-                    if event.value else "IP or name the sensor reaches this HIVE on"
+                proposal = self.default_hive(event.value) if event.value else ""
+                hive.placeholder = "IP or name the sensor reaches this HIVE on" + (f" [{proposal}]" if proposal else "")
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         self.focus_next()
