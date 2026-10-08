@@ -323,6 +323,91 @@ class InstallShTest(Scripts):
         self.assertEqual(self.marks(result.stdout)[-2:], ["@@tpot fail checks", "@@tpot phase failed"])
         self.assertEqual(self.feed(result.stdout).phase, "failed")
 
+    def test_root_and_another_distribution_mark_the_checks(self):
+        """r2-RA 8: the root check and the distribution check mark the checks as failed as well (without
+        mark_failed there the assistant shows the checks still running). Root is a copy of install.sh whose
+        root check takes 0 for EUID (the tests do not run as root)."""
+        line = "if [ ${EUID} -eq 0 ];"
+        text = base.read("install.sh")
+        self.assertEqual(text.count(line), 1)
+        root = os.path.join(self.home, "src", "install_root.sh")
+        write(root, text.replace(line, "if [ 0 -eq 0 ];"), 0o755)
+        result = self.run_merged(root, "-s", "-M", "-t", "s", TPOT_INSTALL_PACKAGES_DONE="1")
+        self.assertEqual(result.returncode, 1, result.stdout[-800:])
+        self.assertIn("This script should not be run as root.", result.stdout)
+        self.assertEqual(self.marks(result.stdout)[-2:], ["@@tpot fail checks", "@@tpot phase failed"])
+        write(os.path.join(self.home, "os-release"), 'NAME="Gentoo"\nVERSION_ID="2.17"\n')
+        result = self.install("-s", "-M", "-t", "s")
+        self.assertEqual(result.returncode, 1, result.stdout[-800:])
+        self.assertIn("Only the following distributions are supported", result.stdout)
+        self.assertEqual(self.marks(result.stdout)[-2:], ["@@tpot fail checks", "@@tpot phase failed"])
+
+    def test_the_comment_of_mark_failed_says_what_the_assistant_does(self):
+        """r2-RA 9: installer.Progress does not keep the phase it was in, the assistant marks the step that
+        failed (@@tpot fail <phase>)."""
+        function = re.search(r"^mark_failed\(\) \{\n(.*?)^\}", base.read("install.sh"), re.M | re.S).group(1)
+        self.assertNotIn("keeps the phase it was in", function)
+        self.assertIn("the assistant marks the step that failed", " ".join(function.replace("#", " ").split()))
+
+    def test_no_os_release(self):
+        """r2-RA 11: macOS has no /etc/os-release (the awk of the tests reads $HOME/os-release for it): no
+        awk error on stderr, the message about the distributions."""
+        os.remove(os.path.join(self.home, "os-release"))
+        result = subprocess.run(["bash", self.script, "-s", "-t", "s"], capture_output=True, universal_newlines=True,
+                                env=self.env(TPOT_GUM="off", TPOT_INSTALL_PACKAGES_DONE="1"), cwd=self.home,
+                                stdin=subprocess.DEVNULL, timeout=60)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("### [ERROR] - Only the following distributions are supported", result.stderr)
+        self.assertEqual([line for line in result.stderr.splitlines() if not line.startswith("###")], [],
+                         result.stderr)
+
+    def spy_on_the_children(self):
+        """Every stub and a few real tools write down whether the web password is in their environment."""
+        real = {name: shutil.which(name) for name in ("sed", "cp", "base64", "git", "tr", "whoami", "grep")}
+        # the real env and grep: a spy in the grep stub must not call itself
+        spy = (f'{shutil.which("env") or "/usr/bin/env"} | {real["grep"] or "/usr/bin/grep"} -q "^myWEB_PW=" '
+               '&& echo "${0##*/}" >> "$HOME/saw_pw"\necho "${0##*/}" >> "$HOME/ran"\n')
+        for name in os.listdir(self.bin):
+            path = os.path.join(self.bin, name)
+            with open(path, encoding="utf-8") as handle:
+                text = handle.read()
+            head, rest = text.split("\n", 1)
+            write(path, head + "\n" + spy + rest, 0o755)
+        for name, path in real.items():
+            if path and not os.path.exists(os.path.join(self.bin, name)):
+                write(os.path.join(self.bin, name), "#!/bin/sh\n" + spy + f'exec {path} "$@"\n', 0o755)
+
+    def saw_pw(self):
+        path = os.path.join(self.home, "saw_pw")
+        if not os.path.exists(path):
+            return []
+        with open(path, encoding="utf-8") as handle:
+            return sorted(set(handle.read().split()))
+
+    def test_no_child_sees_the_web_password(self):
+        """r2-RA 12: the web password goes to htpasswd on stdin only; no child (the playbook, docker, sudo,
+        htpasswd itself, sed, ...) has it in its environment, whether it came with -p, -P or the
+        environment install.sh was started with."""
+        self.spy_on_the_children()
+        password = "Secret-pw-4711"
+        pw_file = os.path.join(self.home, "pw")
+        write(pw_file, password + "\n", 0o600)
+        for args, extra in ((["-p", password], {}), (["-P", pw_file], {}),
+                            (["-P", pw_file], {"myWEB_PW": "Other-pw-0815"})):
+            with self.subTest(args=args[0], environment=bool(extra)):
+                for path in ("saw_pw", "calls", "ran"):
+                    if os.path.exists(os.path.join(self.home, path)):
+                        os.remove(os.path.join(self.home, path))
+                write(os.path.join(self.tpotce, ".env"), "TPOT_TYPE=HIVE\nWEB_USER=\n")
+                result = self.install("-s", "-t", "h", "-u", "admin", *args, **extra)
+                self.assertEqual(result.returncode, 0, result.stdout[-1500:])
+                self.assertIn("ansible-playbook", self.calls())
+                with open(os.path.join(self.home, "ran"), encoding="utf-8") as handle:
+                    ran = handle.read().split()
+                for child in ("htpasswd", "ansible-playbook", "docker", "sudo", "sed"):
+                    self.assertIn(child, ran)
+                self.assertEqual(self.saw_pw(), [])
+
     def test_a_port_conflict_ends_with_a_summary(self):
         write(os.path.join(self.bin, "ss"), "#!/bin/sh\necho 'LISTEN 0 100 0.0.0.0:25 0.0.0.0:*'\n", 0o755)
         result = self.install("-s", "-t", "s")
@@ -429,6 +514,18 @@ class DistributionTest(Scripts):
                               result.stderr)
                 self.assertEqual([line for line in result.stderr.splitlines() if not line.startswith("###")], [])
                 self.assertNotIn("bad ", result.stdout + result.stderr)
+
+    def test_uninstall_sh_without_os_release(self):
+        """r2-RA 11 for uninstall.sh: no awk error on stderr without /etc/os-release, the message."""
+        os.remove(os.path.join(self.home, "os-release"))
+        path = os.path.join(self.tpotce, "uninstall.sh")
+        write(path, base.read("uninstall.sh"), 0o755)
+        result = subprocess.run(["bash", path, "-y"], capture_output=True, universal_newlines=True,
+                                env=self.env(TPOT_GUM="off"), cwd=self.home, stdin=subprocess.DEVNULL, timeout=60)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("Only the following distributions are supported", result.stderr)
+        self.assertEqual([line for line in result.stderr.splitlines() if not line.startswith("###")], [],
+                         result.stderr)
 
     def test_the_lists_are_the_supported_ones(self):
         for script in ("install.sh", "uninstall.sh"):

@@ -140,7 +140,7 @@ fi
 
 # Check if running on a supported distribution
 mySUPPORTED_DISTRIBUTIONS=("AlmaLinux" "Debian GNU/Linux" "Fedora Linux" "openSUSE Tumbleweed" "Raspbian GNU/Linux" "Red Hat Enterprise Linux" "Rocky Linux" "Ubuntu")
-myCURRENT_DISTRIBUTION=$(awk -F= '/^NAME/{print $2}' /etc/os-release | tr -d '"')
+myCURRENT_DISTRIBUTION=$(awk -F= '/^NAME/{print $2}' /etc/os-release 2>/dev/null | tr -d '"')
 
 if [[ ! " ${mySUPPORTED_DISTRIBUTIONS[*]} " =~ " ${myCURRENT_DISTRIBUTION} " ]];
   then

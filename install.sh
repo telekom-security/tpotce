@@ -61,8 +61,9 @@ mark_phase() {
 }
 
 mark_failed() {
-  # mark_failed: for the assistant, the phase that failed (@@tpot fail <phase>, as runlog reads it)
-  # and that the run failed (@@tpot phase failed, installer.Progress keeps the phase it was in)
+  # mark_failed: for the assistant, the phase that failed (@@tpot fail <phase>, as runlog and
+  # installer.Progress read it: the assistant marks the step that failed) and that the run failed
+  # (@@tpot phase failed)
   fuMARK fail "${myPHASE}"
   fuMARK phase failed
 }
@@ -1735,6 +1736,9 @@ myQST=""
 myUNATTENDED=""
 myTPOT_TYPE=""
 myWEB_USER=""
+# the web password is no variable of the environment: only htpasswd gets it, on stdin (one from the
+# environment this script was started with is not taken, nor handed on to every child)
+unset myWEB_PW myWEB_PW2
 myWEB_PW=""
 myWEB_PW_FILE=""
 myBECOME_FILE=""
@@ -1771,7 +1775,7 @@ while getopts ":sb:r:t:u:p:P:B:c:nMh" opt; do
       export myWEB_USER="${OPTARG}"
       ;;
     p)
-      export myWEB_PW="${OPTARG}"
+      myWEB_PW="${OPTARG}"
       ;;
     P)
       myWEB_PW_FILE="${OPTARG}"
@@ -1861,7 +1865,8 @@ fi
 
 # Check if running on a supported distribution
 mySUPPORTED_DISTRIBUTIONS=("AlmaLinux" "Debian GNU/Linux" "Fedora Linux" "openSUSE Tumbleweed" "Raspbian GNU/Linux" "Red Hat Enterprise Linux" "Rocky Linux" "Ubuntu")
-myCURRENT_DISTRIBUTION=$(awk -F= '/^NAME/{print $2}' /etc/os-release | tr -d '"')
+# no /etc/os-release (macOS): no distribution, the message below says which ones T-Pot runs on
+myCURRENT_DISTRIBUTION=$(awk -F= '/^NAME/{print $2}' /etc/os-release 2>/dev/null | tr -d '"')
 
 if [[ ! " ${mySUPPORTED_DISTRIBUTIONS[@]} " =~ " ${myCURRENT_DISTRIBUTION} " ]];
   then
@@ -1877,7 +1882,7 @@ fi
 # Check if running on a supported distribution version. T-Pot follows the
 # current release of each distribution, the packages and repositories it uses
 # are only available there. openSUSE Tumbleweed rolls and is not pinned.
-myVERSION_ID=$(awk -F= '/^VERSION_ID/{print $2}' /etc/os-release | tr -d '"')
+myVERSION_ID=$(awk -F= '/^VERSION_ID/{print $2}' /etc/os-release 2>/dev/null | tr -d '"')
 case ${myCURRENT_DISTRIBUTION} in
   "AlmaLinux"|"Red Hat Enterprise Linux"|"Rocky Linux")
     mySUPPORTED_VERSION="10"
@@ -2126,6 +2131,8 @@ if [ "${myTPOT_TYPE}" == "HIVE" ];
     fuUI_INFO "Creating the web user ${myWEB_USER} in ${myTPOT_CONF_FILE}"
     # bcrypt, as `tpot users` creates them; the password goes through stdin, not argv
     myWEB_USER_ENC=$(printf "%s" "${myWEB_PW}" | htpasswd -n -i -B "${myWEB_USER}")
+    # nothing after this needs the password
+    unset myWEB_PW myWEB_PW2
     myWEB_USER_ENC_B64=$(echo -n "${myWEB_USER_ENC}" | base64 -w0)
     sed -i "s|^WEB_USER=.*|WEB_USER=${myWEB_USER_ENC_B64}|" ${myTPOT_CONF_FILE}
     echo
