@@ -469,7 +469,7 @@ class SetupVenvInstallTest(unittest.TestCase):
                         mock.patch.object(bootstrap.os, "geteuid", return_value=1000, create=True),
                         mock.patch.object(bootstrap, "imports_ok", return_value=True),
                         mock.patch.object(bootstrap, "apt_get", return_value="/usr/bin/apt-get"),
-                        mock.patch("subprocess.call", side_effect=self.call)):
+                        mock.patch.object(bootstrap, "run_child", side_effect=self.call)):
             patcher.start()
             self.addCleanup(patcher.stop)
 
@@ -577,7 +577,7 @@ class LinkTest(unittest.TestCase):
         for patcher in (mock.patch.dict(os.environ, {"XDG_DATA_HOME": os.path.join(self.root, "data")}),
                         mock.patch("sys.platform", "linux"),
                         mock.patch.object(bootstrap.os, "geteuid", return_value=1000, create=True),
-                        mock.patch("subprocess.call", side_effect=self.call)):
+                        mock.patch.object(bootstrap, "run_child", side_effect=self.call)):
             patcher.start()
             self.addCleanup(patcher.stop)
 
@@ -707,6 +707,70 @@ class LinkTest(unittest.TestCase):
         self.assertEqual(self.calls, [])
 
 
+class ForegroundChildTest(unittest.TestCase):
+    """sudo apt-get (the venv package) and sudo ln (the link) are children in the foreground: a ^C reaches
+    them from the terminal and they decide, tpot does not kill sudo halfway (subprocess.call would)."""
+
+    class Child(Child):
+        killed = False
+
+        def kill(self):
+            self.killed = True
+            super().kill()
+
+    def popen(self, *steps):
+        children = []
+
+        def popen(command, **kwargs):
+            children.append(self.Child(command, steps))
+            return children[-1]
+        return popen, children
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp(prefix="tpot-child-")
+        import shutil
+        self.addCleanup(shutil.rmtree, self.root)
+        for patcher in (mock.patch.dict(os.environ, {"XDG_DATA_HOME": os.path.join(self.root, "data")}),
+                        mock.patch("sys.platform", "linux"),
+                        mock.patch.object(bootstrap.os, "geteuid", return_value=1000, create=True),
+                        mock.patch.object(bootstrap, "os_release_ids", return_value=["debian"]),
+                        mock.patch.object(bootstrap, "apt_get", return_value="/usr/bin/apt-get"),
+                        mock.patch.object(bootstrap, "interactive", return_value=True),
+                        mock.patch.object(bootstrap, "ask", return_value="")):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def test_ctrl_c_during_apt_get_waits_for_sudo(self):
+        popen, children = self.popen(KeyboardInterrupt, 0)
+        with mock.patch("subprocess.Popen", side_effect=popen), mock.patch("sys.stderr", new_callable=io.StringIO):
+            self.assertTrue(bootstrap.offer_venv_package("python3-venv"))
+        self.assertEqual(children[0].args, ["sudo", "apt-get", "install", "-y", "python3-venv"])
+        self.assertFalse(children[0].killed)
+        self.assertEqual(children[0].waits, 2)
+
+    def test_ctrl_c_that_ends_apt_get_cancels(self):
+        for steps in ((KeyboardInterrupt, -2), (KeyboardInterrupt, 1)):     # apt-get by the ^C, sudo at its prompt
+            popen, children = self.popen(*steps)
+            with mock.patch("subprocess.Popen", side_effect=popen), \
+                    mock.patch("sys.stderr", new_callable=io.StringIO), self.assertRaises(KeyboardInterrupt):
+                bootstrap.offer_venv_package("python3-venv")
+            self.assertFalse(children[0].killed)
+
+    def test_ctrl_c_at_sudo_ln_says_later(self):
+        checkout = os.path.join(self.root, "home", "tpotce")
+        os.makedirs(checkout)
+        launcher, link = os.path.join(checkout, "tpot"), os.path.join(self.root, "tpot-link")
+        open(launcher, "w").close()
+        popen, children = self.popen(KeyboardInterrupt, 1)
+        err = io.StringIO()
+        with mock.patch("subprocess.Popen", side_effect=popen), mock.patch("sys.stderr", err), \
+                self.assertRaises(bootstrap.Interrupted):
+            bootstrap.ensure_link(launcher, link, checkout)
+        self.assertEqual(children[0].args, ["sudo", "ln", "-sfn", launcher, link])
+        self.assertFalse(children[0].killed)
+        self.assertIn(f"Later with: sudo ln -sfn {launcher} {link}", err.getvalue())
+
+
 class SetupForceTest(unittest.TestCase):
     """setup_venv(force=True) in a temporary XDG_DATA_HOME; venv, pip and the import check are faked."""
 
@@ -734,7 +798,7 @@ class SetupForceTest(unittest.TestCase):
         return call
 
     def test_rebuild_swaps_the_venv(self):
-        with mock.patch("subprocess.call", side_effect=self.fake_call()), \
+        with mock.patch.object(bootstrap, "run_child", side_effect=self.fake_call()), \
                 mock.patch.object(bootstrap, "imports_ok", return_value=True):
             python = bootstrap.setup_venv(force=True, quiet=True)
         self.assertEqual(python, bootstrap.venv_python(self.venv))
@@ -744,7 +808,7 @@ class SetupForceTest(unittest.TestCase):
         self.assertFalse(os.path.exists(self.venv + ".old"))
 
     def test_failed_rebuild_keeps_the_old_venv(self):
-        with mock.patch("subprocess.call", side_effect=self.fake_call(pip_ok=False)), \
+        with mock.patch.object(bootstrap, "run_child", side_effect=self.fake_call(pip_ok=False)), \
                 mock.patch.object(bootstrap, "imports_ok", return_value=True):
             with self.assertRaises(bootstrap.BootstrapError):
                 bootstrap.setup_venv(force=True, quiet=True)
@@ -754,18 +818,50 @@ class SetupForceTest(unittest.TestCase):
     def test_leftovers_of_a_broken_run_go(self):
         os.makedirs(self.venv + ".new")
         os.makedirs(self.venv + ".old")
-        with mock.patch("subprocess.call", side_effect=self.fake_call()), \
+        with mock.patch.object(bootstrap, "run_child", side_effect=self.fake_call()), \
                 mock.patch.object(bootstrap, "imports_ok", return_value=True):
             bootstrap.setup_venv(force=True, quiet=True)
         self.assertFalse(os.path.exists(self.venv + ".new"))
         self.assertFalse(os.path.exists(self.venv + ".old"))
 
     def test_a_plain_launch_leaves_a_rebuild_in_progress_alone(self):
-        """tpot ps in another shell while the menu rebuilds: venv.new must stay."""
+        """tpot ps in another shell while the menu rebuilds (it holds the lock): venv.new must stay."""
+        try:
+            import fcntl
+        except ImportError:
+            self.skipTest("no fcntl")
         os.makedirs(self.venv + ".new")
-        with mock.patch.object(bootstrap, "venv_current", return_value=True):
-            bootstrap.setup_venv(quiet=True)
+        with open(self.venv + ".lock", "w") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            with mock.patch.object(bootstrap, "venv_current", return_value=True):
+                bootstrap.setup_venv(quiet=True)
         self.assertTrue(os.path.exists(self.venv + ".new"))
+
+    def test_a_plain_launch_clears_what_a_stopped_rebuild_left(self):
+        """tpot setup --force stopped with ^C leaves venv.new (tens of MB): the next start clears it, also
+        when the venv in use is current."""
+        try:
+            import fcntl  # noqa: F401
+        except ImportError:
+            self.skipTest("no fcntl")
+        os.makedirs(os.path.join(self.venv + ".new", "lib"))
+        os.makedirs(self.venv + ".old")
+        with mock.patch.object(bootstrap, "venv_current", return_value=True):
+            self.assertEqual(bootstrap.setup_venv(quiet=True), bootstrap.venv_python(self.venv))
+        self.assertFalse(os.path.exists(self.venv + ".new"))
+        self.assertFalse(os.path.exists(self.venv + ".old"))
+        self.assertTrue(os.path.exists(os.path.join(self.venv, "OLD")))         # the venv in use stays
+
+    def test_ctrl_c_during_pip_leaves_no_venv_new(self):
+        def call(command, **kwargs):
+            if command[1:3] == ["-m", "venv"]:
+                return self.fake_call()(command, **kwargs)
+            raise KeyboardInterrupt
+        with mock.patch.object(bootstrap, "run_child", side_effect=call), \
+                mock.patch.object(bootstrap, "imports_ok", return_value=True), self.assertRaises(KeyboardInterrupt):
+            bootstrap.setup_venv(force=True, quiet=True)
+        self.assertFalse(os.path.exists(self.venv + ".new"))
+        self.assertTrue(os.path.exists(os.path.join(self.venv, "OLD")))
 
     def test_a_second_rebuild_waits_for_the_first(self):
         import threading
@@ -781,7 +877,7 @@ class SetupForceTest(unittest.TestCase):
             elif command[1:3] == ["-m", "venv"]:
                 order.append("second starts")
             return calls(command, **kwargs)
-        with mock.patch("subprocess.call", side_effect=slow), \
+        with mock.patch.object(bootstrap, "run_child", side_effect=slow), \
                 mock.patch.object(bootstrap, "imports_ok", return_value=True):
             first = threading.Thread(target=bootstrap.setup_venv, kwargs={"force": True, "quiet": True})
             first.start()

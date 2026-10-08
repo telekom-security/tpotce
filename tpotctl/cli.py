@@ -366,14 +366,7 @@ def call(command: List[str], **kwargs) -> int:
     """A child in the foreground, as subprocess.call. Ctrl+C reaches it as well and it decides; if it
     ends by the ^C, or fails after one (ansible-playbook exits 99, sudo at its password prompt 1),
     so does the command (130), else its exit code comes back (128 + n for signal n)."""
-    import signal
-    import subprocess
-    proc = subprocess.Popen(command, **kwargs)
-    interrupts: List[int] = []
-    code = bootstrap.wait_child(proc, interrupts)
-    if proc.returncode == -signal.SIGINT or (interrupts and code != 0):
-        raise KeyboardInterrupt
-    return code
+    return bootstrap.run_child(command, **kwargs)
 
 
 def run_users(args) -> int:

@@ -66,6 +66,18 @@ def wait_child(proc, interrupts: Optional[list] = None) -> int:
     return 128 - code if code < 0 else code
 
 
+def run_child(command, **kwargs) -> int:
+    """A child in the foreground, as subprocess.call but without its kill on Ctrl+C: the ^C reaches the
+    child as well and it decides. If it ends by the ^C, or fails after one (ansible-playbook exits 99,
+    sudo at its password prompt 1), KeyboardInterrupt follows; else its exit code (128 + n for signal n)."""
+    proc = subprocess.Popen(command, **kwargs)
+    interrupts: list = []
+    code = wait_child(proc, interrupts)
+    if proc.returncode == -signal.SIGINT or (interrupts and code != 0):
+        raise KeyboardInterrupt
+    return code
+
+
 @contextlib.contextmanager
 def sigint_to(handler):
     """SIGINT goes to handler inside, the handler before comes back afterwards. Nothing changes where
@@ -222,7 +234,7 @@ def offer_venv_package(package: str) -> bool:
         raise Interrupted from None
     if answer not in ("", "y", "yes"):
         return False
-    if subprocess.call(["sudo", "apt-get", "install", "-y", package]) != 0:
+    if run_child(["sudo", "apt-get", "install", "-y", package]) != 0:
         raise BootstrapError(f"sudo apt-get install {package} did not work, see its output above. "
                              f"{install_hint(package)}")
     return True
@@ -281,7 +293,13 @@ def ensure_link(launcher: str, link: str = LINK, checkout: str = "") -> None:
     if answer not in ("", "y", "yes"):
         say.info(f"Later with: {command}", sys.stderr)
         return
-    if subprocess.call(["sudo", "ln", "-sfn", launcher, link]) == 0:
+    try:
+        linked = run_child(["sudo", "ln", "-sfn", launcher, link]) == 0
+    except KeyboardInterrupt:       # at the password of sudo: the note stays, as for the question
+        sys.stderr.write("\n")
+        say.info(f"Later with: {command}", sys.stderr)
+        raise Interrupted from None
+    if linked:
         say.ok(f"'tpot' works everywhere now ({link}).", sys.stderr)
     else:
         say.warn(f"{link} could not be linked, later with: {command}", sys.stderr)
@@ -290,7 +308,7 @@ def ensure_link(launcher: str, link: str = LINK, checkout: str = "") -> None:
 def _make_venv(directory: str):
     """python -m venv, its output kept for the error."""
     with tempfile.TemporaryFile("w+") as out:
-        code = subprocess.call([sys.executable, "-m", "venv", directory], stdout=out, stderr=subprocess.STDOUT)
+        code = run_child([sys.executable, "-m", "venv", directory], stdout=out, stderr=subprocess.STDOUT)
         out.seek(0)
         output = out.read()
     if code == 0 and os.path.exists(venv_python(directory)):
@@ -311,6 +329,7 @@ def setup_venv(force: bool = False, quiet: bool = False) -> str:
     python = venv_python(directory)
     shutil.rmtree(old_venv_dir(), ignore_errors=True)
     if not force and venv_current(directory):
+        _clear_leftovers(directory)
         return python
     # one build at a time: a tpot started meanwhile (another shell) waits instead of
     # cleaning up a venv.new that is still being built
@@ -330,6 +349,30 @@ def setup_venv(force: bool = False, quiet: bool = False) -> str:
     return python
 
 
+def _clear_leftovers(directory: str) -> None:
+    """venv.new / venv.old of a build that broke off (tpot setup --force stopped with ^C), only when no
+    build runs: one that holds the lock (another shell) keeps its venv.new."""
+    if not (os.path.exists(directory + ".new") or os.path.exists(directory + ".old")):
+        return
+    try:
+        import fcntl
+    except ImportError:             # Windows: left for the next build
+        return
+    try:
+        with open(directory + ".lock", "w") as handle:
+            try:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError:
+                return              # a build runs
+            try:
+                for leftover in (directory + ".new", directory + ".old"):
+                    shutil.rmtree(leftover, ignore_errors=True)
+            finally:
+                fcntl.flock(handle, fcntl.LOCK_UN)
+    except OSError:
+        return
+
+
 @contextlib.contextmanager
 def _build_lock(directory: str):
     os.makedirs(os.path.dirname(directory), exist_ok=True)
@@ -347,6 +390,15 @@ def _build_lock(directory: str):
 
 
 def _build(directory: str) -> None:
+    """Build the venv in directory; a build that breaks off (^C, an error) leaves nothing behind."""
+    try:
+        _build_in(directory)
+    except BaseException:
+        shutil.rmtree(directory, ignore_errors=True)
+        raise
+
+
+def _build_in(directory: str) -> None:
     os.makedirs(os.path.dirname(directory), exist_ok=True)
     python = venv_python(directory)
     made, output = _make_venv(directory)
@@ -361,7 +413,7 @@ def _build(directory: str) -> None:
     pip = [python, "-m", "pip", "install", "--quiet", "--disable-pip-version-check", "--no-cache-dir",
            "--timeout", "15", "--retries", "1",
            "--require-hashes", "--only-binary", ":all:", "--no-deps", "-r", REQUIREMENTS]
-    if subprocess.call(pip) != 0 or not imports_ok(python, NEEDS["ui"]):
+    if run_child(pip) != 0 or not imports_ok(python, NEEDS["ui"]):
         shutil.rmtree(directory, ignore_errors=True)
         raise BootstrapError(
             "the packages could not be installed: no internet, pypi.org not reachable, or no wheel "
