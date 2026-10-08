@@ -3,10 +3,10 @@
 T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, makes updating a lot safer with backups you can actually restore, and adds new honeypots and NSM tooling.
 
 ## New Features
-* **T-Pot Manager** (`tpot`) shows, configures, updates and restores T-Pot from one menu and as sub-commands, see the README section *The T-Pot Manager (tpot)*. Over SSH it uses a palette made for 256 colours unless the terminal says it can show true colours, or the 16 ANSI colours where the terminal says only those: T-Pot accepts `COLORTERM` from SSH now (`/etc/ssh/sshd_config.d/tpot.conf`), send it with `SendEnv COLORTERM`, or choose the colours with `TPOT_COLORS`.
+* **T-Pot Manager** (`tpot`) shows, configures, updates and restores T-Pot from one menu and as sub-commands, see the README section *The T-Pot Manager (tpot)*. Over SSH it uses a palette made for 256 colours unless the terminal says it can show true colours, or the 16 ANSI colours where the terminal says only those: iTerm2, kitty, Ghostty, VS Code, VTE terminals, Konsole and Windows Terminal are recognised without `COLORTERM` (the same rule as the T-Pot scripts), T-Pot accepts `COLORTERM` and `LC_TERMINAL` from SSH now (`/etc/ssh/sshd_config.d/tpot.conf`), send `COLORTERM` with `SendEnv COLORTERM`, or choose the colours with `TPOT_COLORS`. Ctrl+C at a question of `tpot` ends it with exit code 130, an interrupted `tpot sensors add` takes the access back.
 * **RDPHoneypot** a Remote Desktop honeypot for RDP connection and credential telemetry.
-* **The T-Pot scripts** (install, update, restore, uninstall, genuser, deploy) start with the T-Pot logo at a terminal, ask and show their progress through gum with spinners, end with a summary and share one style of `-h` (now exit 0). The version they show comes from the file `version`; `python3 -m tpotctl.release set-version X` sets a new one everywhere it is needed.
-* **Image Builder** (`docker/_builder/builder.sh`) builds unattended with options (images or groups, platforms, push targets, version and repositories, smoke tests afterwards) and has a menu at a terminal; `setup_builder.sh` became part of it (`--setup`, `--uninstall`).
+* **The T-Pot scripts** (install, update, restore, uninstall, genuser, deploy) start with the T-Pot logo at a terminal, ask and show their progress through gum with spinners, end with a summary and share one style of `-h` (now exit 0, without the logo). update.sh, restore.sh and uninstall.sh stop outside Linux with a hint, `-h` works everywhere. The version they show comes from the file `version`; `python3 -m tpotctl.release set-version X` sets a new one everywhere it is needed.
+* **Image Builder** (`docker/_builder/builder.sh`) builds unattended with options (images or groups, platforms, push targets, version and repositories, smoke tests afterwards), has a menu at a terminal, settings of your own in `docker/_builder/.env.local` (`--set`, `--unset`, `--show-config`) and the builder setup (`--setup`, `--uninstall`). It runs on Linux for any user Docker answers to, root only for an upload limit while pushing.
 * **Restore Script** `restore.sh` puts a backup written by `update.sh` back, as a whole or per group (checkout, configuration, `data/`, Kibana objects and ILM policy).
 * **Update Script** has been reworked:
   * Backups go to `~/tpot_backups`, rotate, are checked for space and hold what git cannot bring back; `--full` adds all of `data/`.
@@ -62,6 +62,9 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 
 ### Update Script
 - Updates are supported from **24.04.1** onwards. Installations of 24.04.0 need a fresh install.
+
+### Image Builder
+- `docker/_builder/setup_builder.sh` is gone, use `docker/_builder/builder.sh --setup` / `--uninstall`.
 
 ### Conpot
 - Conpot logs the event schema of Conpot 1.0: `protocol` replaces `data_type`, `session_id` replaces `id`, `event_time` and `session_time` replace `timestamp`, further protocol details are indexed as `conpot_data`. Import the Kibana objects of this release, the Conpot dashboard then shows the protocol from `protocol`; older events keep `data_type`.
