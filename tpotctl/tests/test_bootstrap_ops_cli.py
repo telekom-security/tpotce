@@ -444,8 +444,8 @@ class CliTest(unittest.TestCase):
         self.assertEqual(parser.parse_args(["ps", "-w", "5"]).watch, 5.0)
 
     def test_no_menu_without_a_terminal(self):
-        with mock.patch.object(cli.sys.stdin, "isatty", return_value=False), \
-                mock.patch("sys.stdout", new_callable=lambda: open(os.devnull, "w")):
+        with open(os.devnull, "w") as null, mock.patch.object(cli.sys.stdin, "isatty", return_value=False), \
+                mock.patch("sys.stdout", null):
             self.assertEqual(cli.main([]), 2)
 
 
