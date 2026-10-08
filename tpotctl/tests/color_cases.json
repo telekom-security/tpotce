@@ -105,5 +105,9 @@
   {"env": {"TERM": "xterm-256color", "COLORTERM": "truecolor"}, "prefs_text": "{\"name\": \"a\u0080b\", \"colors\": \"16\"}", "expect": "truecolor", "note": "U+0080, the first C1 control character, in tpot.json: the file does not count"},
   {"env": {"TERM": "xterm-256color", "COLORTERM": "truecolor"}, "prefs_text": "{\"name\": \"a\u009fb\", \"colors\": \"16\"}", "expect": "truecolor", "note": "U+009F, the last C1 control character, in tpot.json: the file does not count"},
   {"env": {"TERM": "xterm-256color", "COLORTERM": "truecolor"}, "prefs_text": "{\"name\": \"a\u2029b\", \"colors\": \"16\"}", "expect": "truecolor", "note": "U+2029 in tpot.json: a control character, the file does not count"},
-  {"env": {"TERM": "xterm-256color", "COLORTERM": "truecolor"}, "prefs_text": "{\"name\": \"\ud7ff \ue000 \uffff \ud83d\ude00 \udbff\udfff\", \"colors\": \"16\"}", "expect": "16", "note": "the edges of UTF-8 around the surrogates, of the planes and an emoji in another value"}
+  {"env": {"TERM": "xterm-256color", "COLORTERM": "truecolor"}, "prefs_text": "{\"name\": \"\ud7ff \ue000 \uffff \ud83d\ude00 \udbff\udfff\", \"colors\": \"16\"}", "expect": "16", "note": "the edges of UTF-8 around the surrogates, of the planes and an emoji in another value"},
+  {"env": {"TERM": "xterm-256color", "COLORTERM": "truecolor"}, "prefs_text": "{\"name\": \"colors\", \"16\": \"256\"}", "expect": "truecolor", "note": "colors as a value is no key (the string after it neither)"},
+  {"env": {"TERM": "xterm-256color", "COLORTERM": "truecolor"}, "prefs_text": "{\"colors\": \"16\", \"name\": \"x\", \"colors\": \"256\", \"icons\": \"nerd\"}", "expect": "256", "note": "a key twice with pairs between and after them: the last one counts"},
+  {"env": {"TERM": "xterm-256color", "COLORTERM": "truecolor"}, "prefs_text": "{\"mycolors\": \"16\", \"colors \": \"256\"}", "expect": "truecolor", "note": "a key that only has colors in it is another key"},
+  {"env": {"TERM": "xterm-256color", "COLORTERM": "truecolor"}, "prefs_text": "{\n  \"colors\"\n  :\n  \"16\"\n}", "expect": "16", "note": "the key, the colon and the value on lines of their own"}
 ]

@@ -20,14 +20,15 @@ if ! source "$HOME/tpotce/installer/lib/ui.sh" 2>/dev/null;
     fuUI_CONFIRM () {
       local myANSWER="" myDEFAULT="" myPROMPT="(y/n)"
       if [ "${1:-}" = "--default" ]; then
-        case "${2:-}" in yes|no) myDEFAULT="$2" ;; esac
-        shift $(( $# < 2 ? $# : 2 ))
+        case "${2:-}" in yes|no) myDEFAULT="$2"; shift 2 ;; *) shift ;; esac
       fi
       case "${myDEFAULT}" in yes) myPROMPT="(Y/n)" ;; no) myPROMPT="(y/N)" ;; esac
       while true; do
         read -rp "### $1 ${myPROMPT} " myANSWER || return 1
-        [ -n "${myANSWER}" ] || myANSWER="${myDEFAULT:0:1}"
-        case "${myANSWER}" in y) return 0 ;; n) return 1 ;; esac
+        myANSWER="${myANSWER#"${myANSWER%%[![:space:]]*}"}"
+        myANSWER="${myANSWER%"${myANSWER##*[![:space:]]}"}"
+        [ -n "${myANSWER}" ] || myANSWER="${myDEFAULT}"
+        case "${myANSWER}" in [yY]|[yY][eE][sS]) return 0 ;; [nN]|[nN][oO]) return 1 ;; esac
       done
     }
     fuUI_INPUT () {

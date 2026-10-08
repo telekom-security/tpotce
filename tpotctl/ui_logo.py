@@ -322,14 +322,15 @@ FALLBACK = r'''    fuUI_INIT () { return 0; }
     fuUI_CONFIRM () {
       local myANSWER="" myDEFAULT="" myPROMPT="(y/n)"
       if [ "${1:-}" = "--default" ]; then
-        case "${2:-}" in yes|no) myDEFAULT="$2" ;; esac
-        shift $(( $# < 2 ? $# : 2 ))
+        case "${2:-}" in yes|no) myDEFAULT="$2"; shift 2 ;; *) shift ;; esac
       fi
       case "${myDEFAULT}" in yes) myPROMPT="(Y/n)" ;; no) myPROMPT="(y/N)" ;; esac
       while true; do
         read -rp "### $1 ${myPROMPT} " myANSWER || return 1
-        [ -n "${myANSWER}" ] || myANSWER="${myDEFAULT:0:1}"
-        case "${myANSWER}" in y) return 0 ;; n) return 1 ;; esac
+        myANSWER="${myANSWER#"${myANSWER%%[![:space:]]*}"}"
+        myANSWER="${myANSWER%"${myANSWER##*[![:space:]]}"}"
+        [ -n "${myANSWER}" ] || myANSWER="${myDEFAULT}"
+        case "${myANSWER}" in [yY]|[yY][eE][sS]) return 0 ;; [nN]|[nN][oO]) return 1 ;; esac
       done
     }
     fuUI_CHOOSE () {
@@ -358,7 +359,9 @@ FALLBACK = r'''    fuUI_INIT () { return 0; }
           then read -rp "### Choice (1-$#, enter = ${myDEFAULT}): " myPICK || return 1
           else read -rp "### Choice (1-$#): " myPICK || return 1
         fi
-        myPICK="${myPICK//[[:space:]]/}"
+        # the spaces around it go, ones in it make it no number (1 2 is not 12)
+        myPICK="${myPICK#"${myPICK%%[![:space:]]*}"}"
+        myPICK="${myPICK%"${myPICK##*[![:space:]]}"}"
         [ -n "${myPICK}" ] || myPICK="${myDEFAULT}"
         [[ "${myPICK}" =~ ^[0-9]{1,9}$ ]] && myPICK=$((10#${myPICK})) || myPICK=0
         if [ "${myPICK}" -ge 1 ] && [ "${myPICK}" -le "$#" ];
@@ -532,7 +535,8 @@ FALLBACK = r'''    fuUI_INIT () { return 0; }
       done
       while true; do
         read -rp "### Choice (i.e. 1,3-5; a = all, n = none, enter = the marked ones): " myPICK || return 1
-        myPICK="${myPICK//[[:space:]]/}"
+        # the spaces go, one between two digits makes it no choice (1 3 is not 13)
+        [[ "${myPICK}" =~ [0-9][[:space:]]+[0-9] ]] || myPICK="${myPICK//[[:space:]]/}"
         case "${myPICK}" in
           "") break ;;
           a|A) for myI in "${!myON[@]}"; do myON[myI]=1; done; break ;;

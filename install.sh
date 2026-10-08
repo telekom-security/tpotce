@@ -130,8 +130,9 @@ myUI_ERROR_COLOUR="#E8453C"
 myUI_GUM_256="#E20074=162 #014463=23 #ECEFF9=231 #A2A2AD=248 #3FA34D=71 #F4B400=214 #E8453C=167"
 myUI_GUM_16="#E20074=13 #014463=6 #ECEFF9=15 #A2A2AD=7 #3FA34D=10 #F4B400=11 #E8453C=9"
 myUI_GUM=""
-# the COLORTERM, TERM and depth of the colours for gum, set by fuUI_INIT (fuUI_GUM)
-unset myUI_GUM_COLORTERM myUI_GUM_TERM myUI_GUM_DEPTH
+# the COLORTERM, TERM and depth of the colours for gum and 1 for a dumb TERM, set by fuUI_INIT
+# (fuUI_GUM)
+unset myUI_GUM_COLORTERM myUI_GUM_TERM myUI_GUM_DEPTH myUI_GUM_DUMB
 # set by the caller: 1 shows the logo in fuUI_BANNER; the version for its credits
 # (empty: fuUI_VERSION finds it)
 myUI_LOGO="${myUI_LOGO:-}"
@@ -157,8 +158,9 @@ fuUI_INIT () {
   local myDEPTH myLOW
   myDEPTH=$(fuUI_COLORS)
   if [ -z "${COLORTERM:-}" ] && [ "${myDEPTH}" = "truecolor" ]; then export COLORTERM=truecolor; fi
-  myUI_GUM_COLORTERM="" myUI_GUM_TERM="${TERM:-}" myUI_GUM_DEPTH="${myDEPTH}"
+  myUI_GUM_COLORTERM="" myUI_GUM_TERM="${TERM:-}" myUI_GUM_DEPTH="${myDEPTH}" myUI_GUM_DUMB=""
   fuUI_LOWER myLOW "${TERM:-}"
+  case "${myLOW}" in dumb|unknown) myUI_GUM_DUMB=1 myUI_GUM_TERM="dumb" ;; esac
   case "${myDEPTH}" in
     truecolor)
       fuUI_LOWER myUI_GUM_COLORTERM "${COLORTERM:-}"
@@ -208,8 +210,11 @@ fuUI_GUM () {
   # fuUI_GUM <argument> ...: gum in the colours of the rule (fuUI_COLORS), as fuUI_INIT worked
   # them out: lipgloss takes true colour from any COLORTERM, 256 from a TERM with 256color,
   # else 16; the colours of tpot as the entries of the palette there (myUI_GUM_256 / _16, only
-  # the values of the colour options before --). NO_COLOR that is not empty (no-color.org, as
-  # Rich and say) as gum takes it: 1. Without fuUI_INIT (myUI_GUM set by hand) gum as it is
+  # the values of the colour options before --). No colours where the rule says none: NO_COLOR
+  # that is not empty (no-color.org, as Rich and say) and a dumb TERM (dumb, unknown, as
+  # fuUI_HELP): gum gets NO_COLOR=1 (it takes only 1 or true) and an empty CLICOLOR_FORCE, which
+  # would beat NO_COLOR (fuUI_PAINT); a dumb TERM is dumb for gum (it paints at TERM=unknown and
+  # leaves out bold only at dumb). Without fuUI_INIT (myUI_GUM set by hand) gum as it is
   if [ -z "${myUI_GUM_TERM+set}" ]; then "${myUI_GUM}" "$@"; return; fi
   local myARG myPREV="" myTABLE=""
   local -a myARGS=()
@@ -228,8 +233,9 @@ fuUI_GUM () {
     myARGS+=("${myARG}")
     myPREV="${myARG}"
   done
-  if [ -n "${NO_COLOR:-}" ];
-    then NO_COLOR=1 COLORTERM="${myUI_GUM_COLORTERM}" TERM="${myUI_GUM_TERM}" "${myUI_GUM}" "${myARGS[@]}"
+  if [ -n "${NO_COLOR:-}" ] || [ -n "${myUI_GUM_DUMB:-}" ];
+    then CLICOLOR_FORCE="" NO_COLOR=1 COLORTERM="${myUI_GUM_COLORTERM}" TERM="${myUI_GUM_TERM}" \
+           "${myUI_GUM}" "${myARGS[@]}"
     else COLORTERM="${myUI_GUM_COLORTERM}" TERM="${myUI_GUM_TERM}" "${myUI_GUM}" "${myARGS[@]}"
   fi
 }
@@ -244,7 +250,7 @@ fuUI_STYLE () {
 
 fuUI_PAINT () {
   # a coloured piece of a line, for $(...): gum leaves out colours when it does not
-  # write to a terminal itself
+  # write to a terminal itself (fuUI_GUM: none where the rule says none)
   CLICOLOR_FORCE=1 fuUI_GUM style --foreground "$1" -- "$2"
 }
 
@@ -254,11 +260,13 @@ fuUI_PREF () {
   # and control characters (what the T-Pot Manager writes), any other file does not count; a
   # key twice: the last. The same in every locale: the bytes count (C locale), the file must be
   # UTF-8 (as Python reads it), control characters are C0 and DEL ([:cntrl:] of C), the C1 ones
-  # (U+0080 to U+009F) and U+2028 / U+2029. No \001 in a pattern, bash 3.2 cannot have it
+  # (U+0080 to U+009F) and U+2028 / U+2029. No \001 in a pattern, bash 3.2 cannot have it. One
+  # look at the text for each step (a value of 100 000 characters in milliseconds)
   local LC_ALL=C
   local myFILE="${XDG_CONFIG_HOME:-${HOME}/.config}/tpotce/tpot.json" myTEXT="" myOUT=""
   local myW="[ "$'\t\n\r'"]*" myS="\"([^\"\\[:cntrl:]]*)\"" myPAIR myOBJECT myUTF8
   local myT=$'\200'-$'\277'
+  case "$1" in ""|*[!a-z]*) return 0 ;; esac
   [ -f "${myFILE}" ] && [ -r "${myFILE}" ] || return 0
   # a NUL ends the read with rc 0: no JSON
   if IFS= read -r -d '' myTEXT < "${myFILE}"; then return 0; fi
@@ -273,10 +281,10 @@ fuUI_PREF () {
   myPAIR="${myS}${myW}:${myW}${myS}"
   myOBJECT="^${myW}[{]${myW}(${myPAIR}(${myW},${myW}${myPAIR})*${myW})?[}]${myW}\$"
   [[ "${myTEXT}" =~ ${myOBJECT} ]] || return 0
-  while [[ "${myTEXT}" =~ ${myPAIR} ]]; do
-    [ "${BASH_REMATCH[1]}" != "$1" ] || myOUT="${BASH_REMATCH[2]}"
-    myTEXT="${myTEXT#*"${BASH_REMATCH[0]}"}"
-  done
+  # the last pair of the key: a string has no quote in it, so "<key>" before a colon is a key; the
+  # longest match ends at the last one
+  myPAIR="^.*\"$1\"${myW}:${myW}${myS}"
+  [[ "${myTEXT}" =~ ${myPAIR} ]] && myOUT="${BASH_REMATCH[1]}"
   [ -z "${myOUT}" ] || echo "${myOUT}"
   return 0
 }
@@ -903,13 +911,13 @@ fuUI_SUMMARY () {
 
 fuUI_CONFIRM () {
   # fuUI_CONFIRM [--default yes|no] <question> [yes] [no]: 0 for yes. The default is the answer
-  # enter gives (gum: the button it starts on), yes without --default. Without gum y / n from
-  # stdin: with --default (Y/n) or (y/N) and an empty answer takes it, without the question
-  # (y/n) waits for one of them
+  # enter gives (gum: the button it starts on), yes without --default; --default takes only yes
+  # or no, anything else is the question (a value forgotten does not eat it). Without gum y / n
+  # or yes / no in any case from stdin: with --default (Y/n) or (y/N) and an empty answer takes
+  # it, without the question (y/n) waits for one of them
   local myANSWER="" myDEFAULT=""
   if [ "${1:-}" = "--default" ]; then
-    case "${2:-}" in yes|no) myDEFAULT="$2" ;; esac
-    shift $(( $# < 2 ? $# : 2 ))
+    case "${2:-}" in yes|no) myDEFAULT="$2"; shift 2 ;; *) shift ;; esac
   fi
   if [ -n "${myUI_GUM}" ] && [ -t 0 ];
     then
@@ -925,8 +933,10 @@ fuUI_CONFIRM () {
   case "${myDEFAULT}" in yes) myPROMPT="(Y/n)" ;; no) myPROMPT="(y/N)" ;; esac
   while true; do
     read -rp "### $1 ${myPROMPT} " myANSWER || return 1
-    [ -n "${myANSWER}" ] || myANSWER="${myDEFAULT:0:1}"
-    case "${myANSWER}" in y) return 0 ;; n) return 1 ;; esac
+    myANSWER="${myANSWER#"${myANSWER%%[![:space:]]*}"}"
+    myANSWER="${myANSWER%"${myANSWER##*[![:space:]]}"}"
+    [ -n "${myANSWER}" ] || myANSWER="${myDEFAULT}"
+    case "${myANSWER}" in [yY]|[yY][eE][sS]) return 0 ;; [nN]|[nN][oO]) return 1 ;; esac
   done
 }
 
@@ -980,7 +990,9 @@ fuUI_CHOOSE () {
       then read -rp "### Choice (1-$#, enter = ${myDEFAULT}): " myPICK || return 1
       else read -rp "### Choice (1-$#): " myPICK || return 1
     fi
-    myPICK="${myPICK//[[:space:]]/}"
+    # the spaces around it go, ones in it make it no number (1 2 is not 12)
+    myPICK="${myPICK#"${myPICK%%[![:space:]]*}"}"
+    myPICK="${myPICK%"${myPICK##*[![:space:]]}"}"
     [ -n "${myPICK}" ] || myPICK="${myDEFAULT}"
     [[ "${myPICK}" =~ ^[0-9]{1,9}$ ]] && myPICK=$((10#${myPICK})) || myPICK=0
     if [ "${myPICK}" -ge 1 ] && [ "${myPICK}" -le "$#" ];
@@ -1059,7 +1071,8 @@ fuUI_CHOOSE_MANY () {
   done
   while true; do
     read -rp "### Choice (i.e. 1,3-5; a = all, n = none, enter = the marked ones): " myPICK || return 1
-    myPICK="${myPICK//[[:space:]]/}"
+    # the spaces go, one between two digits makes it no choice (1 3 is not 13)
+    [[ "${myPICK}" =~ [0-9][[:space:]]+[0-9] ]] || myPICK="${myPICK//[[:space:]]/}"
     case "${myPICK}" in
       "") break ;;
       a|A) for myI in "${!myON[@]}"; do myON[myI]=1; done; break ;;

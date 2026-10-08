@@ -142,7 +142,8 @@ if ! source "${myHERE}/installer/lib/ui.sh" 2>/dev/null;
       done
       while true; do
         read -rp "### Choice (i.e. 1,3-5; a = all, n = none, enter = the marked ones): " myPICK || return 1
-        myPICK="${myPICK//[[:space:]]/}"
+        # the spaces go, one between two digits makes it no choice (1 3 is not 13)
+        [[ "${myPICK}" =~ [0-9][[:space:]]+[0-9] ]] || myPICK="${myPICK//[[:space:]]/}"
         case "${myPICK}" in
           "") break ;;
           a|A) for myI in "${!myON[@]}"; do myON[myI]=1; done; break ;;
