@@ -146,23 +146,13 @@ def build_parser() -> argparse.ArgumentParser:
 # ---------------------------------------------------------------------------
 
 def _console(stream=None):
-    """A Rich console; at a terminal in the colours of the rule of the scripts (prefs.detect_colors:
+    """A Rich console; at a terminal in the colours of the rule of the scripts (prefs.console_color_system:
     TPOT_COLORS, tpot.json, the terminal), i.e. true colour for iTerm2 over SSH, which Rich alone takes
     for 256. In a pipe Rich's own choice: no escapes."""
     from rich.console import Console
     from tpotctl import prefs
-    out = stream if stream is not None else sys.stdout
-    try:
-        tty = out.isatty()
-    except (AttributeError, ValueError):
-        tty = False
-    options = {}
-    if tty:
-        chosen, colors = prefs.load().colors, prefs.detect_colors()
-        # a console of Windows says what it can itself, the rule only counts where it knows true colour
-        if not (prefs.CONSOLE_KNOWS and chosen == "auto" and colors != "truecolor"):
-            options["color_system"] = prefs.TEXTUAL_NAMES.get(colors, colors)
-    return Console(file=stream, highlight=False, **options)
+    return Console(file=stream, highlight=False,
+                   color_system=prefs.console_color_system(sys.stdout if stream is None else stream))
 
 
 def ps_table(containers: List[ops.Container]):

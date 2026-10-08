@@ -199,8 +199,13 @@ def check_reach(opener: Callable = urllib.request.urlopen) -> Check:
         try:
             with opener(urllib.request.Request(url, method="HEAD"), timeout=6):
                 pass
-        except urllib.error.HTTPError:
-            pass                      # an answer, 401 of a registry included, means reachable
+        except urllib.error.HTTPError as answer:
+            # an answer, 401 of a registry included, means reachable; it is a response as well, closed
+            # here (Python 3.14 warns otherwise); one without a body cannot be closed on Python 3.9
+            try:
+                answer.close()
+            except Exception:          # noqa: BLE001
+                pass
         except (OSError, ValueError):
             missing.append(name)
     if missing:
