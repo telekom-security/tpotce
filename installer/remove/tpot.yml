@@ -237,7 +237,7 @@
         - "RedHat"
         - "Rocky"
 
-    - name: Remove /etc/ssh/sshd_config.d/tpot.conf (AcceptEnv COLORTERM) (All)
+    - name: Remove /etc/ssh/sshd_config.d/tpot.conf (AcceptEnv COLORTERM LC_TERMINAL LC_TERMINAL_VERSION) (All)
       file:
         path: /etc/ssh/sshd_config.d/tpot.conf
         state: absent

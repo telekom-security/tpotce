@@ -674,7 +674,7 @@
       tags:
         - "openSUSE Tumbleweed"
 
-    - name: Let SSH bring COLORTERM along, so the T-Pot Manager shows its true colours (All)
+    - name: Let SSH bring COLORTERM and LC_TERMINAL along, so the T-Pot Manager shows its true colours (All)
       # AcceptEnv adds to the LANG LC_* of the distribution; the client sends it with SendEnv COLORTERM
       file:
         path: /etc/ssh/sshd_config.d

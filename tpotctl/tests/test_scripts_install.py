@@ -66,6 +66,31 @@ def write(path, text, mode=0o644):
     os.chmod(path, mode)
 
 
+def old_bash():
+    """A bash 3 (/bin/bash of macOS is 3.2): what `bash -c "$(curl ...install.sh)"` may run with there."""
+    for path in ("/bin/bash", "/usr/local/bin/bash3", "/opt/bash3/bin/bash"):
+        if os.access(path, os.X_OK):
+            out = subprocess.run([path, "-c", "echo ${BASH_VERSINFO[0]}"], capture_output=True,
+                                 universal_newlines=True).stdout.strip()
+            if out == "3":
+                return path
+    return None
+
+
+# what bash 3.2 does not know: negative subscripts (4.3), case changes (4.0), mapfile, associative
+# arrays and namerefs, the fall-through of case, |& and &>>, coproc, ${x@Q}
+BASH4 = re.compile(r"\[-\d+\]|\$\{[^}]*(,,|\^\^|,|\^)\}|\b(mapfile|readarray|coproc)\b|\b(declare|local) -[a-z]*[An]|"
+                   r";;&|;&|\|&|&>>|\$\{[^}]*@[QEPAKa]\}")
+
+
+def body_without_ui(script):
+    """The script without the ui block of install.sh (installer/lib/ui.sh has its own bash 3.2 tests)."""
+    text = base.read(script)
+    if "# >>> tpot ui >>>" in text:
+        text = text[:text.index("# >>> tpot ui >>>")] + text[text.index("# <<< tpot ui <<<"):]
+    return text
+
+
 def options_of(script):
     """The letters of the getopts string of a script."""
     return re.sub(r"[^A-Za-z]", "", re.search(r'getopts ":([^"]+)"', base.read(script)).group(1))
@@ -234,6 +259,70 @@ class InstallShTest(Scripts):
         progress = self.feed(marks.stdout)
         self.assertEqual((progress.phase, progress.failed_task), ("failed", "Task two"))
 
+    def marks(self, out):
+        return [line for line in out.splitlines() if line.startswith("@@tpot ")]
+
+    def assert_failed_in(self, result, phase, rc=1):
+        """The run says which phase failed (@@tpot fail <phase>, runlog) and that it failed (@@tpot phase
+        failed, installer.Progress), both before its summary; the assistant's view keeps that phase."""
+        self.assertEqual(result.returncode, rc, result.stdout[-800:])
+        marks = self.marks(result.stdout)
+        self.assertEqual(marks[-2:], [f"@@tpot fail {phase}", "@@tpot phase failed"], marks)
+        self.assertEqual(marks.count("@@tpot phase failed"), 1)
+        self.assertLess(result.stdout.index("@@tpot phase failed"), result.stdout.index("### T-Pot is not installed")
+                        if rc == 1 else result.stdout.index("### The installation was stopped"))
+        progress = self.feed(result.stdout)
+        self.assertEqual(progress.phase, "failed")
+        last = [m.split()[2] for m in marks if m.startswith("@@tpot phase ") and m != "@@tpot phase failed"]
+        self.assertEqual(last[-1], phase)
+        from tpotctl import runlog
+        run = runlog.Run()
+        for line in result.stdout.splitlines():
+            run.feed(line)
+        self.assertEqual(run.failed, {phase})
+
+    def test_every_failure_marks_its_phase(self):
+        """K: not only the playbook: a failed check, package step, clone or pull stop says so in the marks,
+        so the assistant does not show the phase as running (install_failed / install_stopped)."""
+        playbook = os.path.join(self.tpotce, "installer", "install", "tpot.yml")
+        ports = "#!/bin/sh\necho 'LISTEN 0 100 0.0.0.0:25 0.0.0.0:*'\n"
+        apt = "#!/bin/sh\necho 'E: Unable to locate package'\nexit 100\n"
+        git = "#!/bin/sh\necho 'fatal: repository not found' >&2\nexit 128\n"
+        # step, the stubs it needs (None: removed), its run, the phase that failed, the exit code
+        cases = (("checks", {"ss": ports}, lambda: self.install("-s", "-M", "-t", "s"), "checks", 1),
+                 ("packages", {"apt": apt}, lambda: self.run_merged(self.script, "-s", "-M", "-t", "s"),
+                  "packages", 1),
+                 # the clone goes into the log of the packages, so it is their phase
+                 ("clone", {"git": git, playbook: None}, lambda: self.install("-s", "-M", "-t", "s"), "packages", 1),
+                 ("playbook", {}, lambda: self.install("-s", "-M", "-t", "s", FAKE_PLAYBOOK_RC="2"), "playbook", 1),
+                 ("pull stopped", {}, lambda: self.install("-s", "-M", "-t", "s", FAKE_PULL_RC="130"), "pull", 130))
+        for step, stubs, run, phase, rc in cases:
+            with self.subTest(step=step):
+                for name, text in stubs.items():
+                    path = name if os.path.isabs(name) else os.path.join(self.bin, name)
+                    if text is None:
+                        os.remove(path)
+                    else:
+                        write(path, text, 0o755)
+                try:
+                    self.assert_failed_in(run(), phase, rc)
+                finally:
+                    for name in stubs:
+                        if name == playbook:
+                            write(playbook, "- hosts: all\n")
+                        elif name in STUBS:
+                            write(os.path.join(self.bin, name), STUBS[name], 0o755)
+                        else:
+                            os.remove(os.path.join(self.bin, name))
+
+    def test_an_early_stop_marks_the_checks(self):
+        """As root, on another distribution or release: the marks say the checks failed."""
+        write(os.path.join(self.home, "os-release"), 'NAME="Debian GNU/Linux"\nVERSION_ID="12"\n')
+        result = self.install("-s", "-M", "-t", "s")
+        self.assertEqual(result.returncode, 1, result.stdout[-800:])
+        self.assertEqual(self.marks(result.stdout)[-2:], ["@@tpot fail checks", "@@tpot phase failed"])
+        self.assertEqual(self.feed(result.stdout).phase, "failed")
+
     def test_a_port_conflict_ends_with_a_summary(self):
         write(os.path.join(self.bin, "ss"), "#!/bin/sh\necho 'LISTEN 0 100 0.0.0.0:25 0.0.0.0:*'\n", 0o755)
         result = self.install("-s", "-t", "s")
@@ -307,6 +396,39 @@ class DistributionTest(Scripts):
     def names(script):
         text = base.read(script)
         return re.findall(r'"([^"]+)"', re.search(r"mySUPPORTED_DISTRIBUTIONS=\((.*?)\)", text).group(1))
+
+    def test_no_bash_4_up_to_the_distribution_check(self):
+        """RA1: install.sh runs from curl with any bash (macOS /bin/bash 3.2), uninstall.sh alike: nothing
+        of bash 4 that would break before they say which distributions they run on."""
+        for script in ("install.sh", "uninstall.sh"):
+            with self.subTest(script=script):
+                found = [line.strip() for line in body_without_ui(script).splitlines()
+                         if not line.lstrip().startswith("#") and BASH4.search(line)]
+                self.assertEqual(found, [])
+        # the pattern finds what it is for
+        for line in ('x="${a[-1]}"', 'x="${OPTARG,,}"', "mapfile -t a < f", "local -A m", 'echo "${a@Q}"'):
+            self.assertTrue(BASH4.search(line), line)
+        for line in ('x="${a[${#a[@]}-1]}"', 'x="${a%, }"', 'echo "${a[@]:0:2}"', 'x="${a:-b}"'):
+            self.assertFalse(BASH4.search(line), line)
+
+    @unittest.skipUnless(old_bash(), "no bash 3 here (macOS has one as /bin/bash)")
+    def test_bash_3_names_every_distribution(self):
+        """RA1: with bash 3.2 the message ends "... Rocky Linux and Ubuntu.", nothing on stderr (no "bad
+        array subscript"); a -t in capitals works there too."""
+        names = self.names("install.sh")
+        listed = ", ".join(names[:-1]) + " and " + names[-1]
+        for script, args in (("install.sh", ["-s", "-t", "S"]), ("uninstall.sh", ["-y"])):
+            with self.subTest(script=script):
+                path = os.path.join(self.tpotce, script)
+                write(path, base.read(script), 0o755)
+                result = subprocess.run([old_bash(), path] + args, capture_output=True, universal_newlines=True,
+                                        env=self.env(TPOT_GUM="off"), cwd=self.home, stdin=subprocess.DEVNULL,
+                                        timeout=60)
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertIn(f"### [ERROR] - Only the following distributions are supported: {listed}.",
+                              result.stderr)
+                self.assertEqual([line for line in result.stderr.splitlines() if not line.startswith("###")], [])
+                self.assertNotIn("bad ", result.stdout + result.stderr)
 
     def test_the_lists_are_the_supported_ones(self):
         for script in ("install.sh", "uninstall.sh"):

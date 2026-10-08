@@ -11,6 +11,7 @@ import os
 import re
 import shlex
 import shutil
+import stat
 import subprocess
 import time
 import unittest
@@ -245,10 +246,25 @@ class LinuxOnlyTest(Scripts):
                 self.assertNotIn("does not run on", result.stderr)
 
     def test_wsl2_is_linux(self):
-        """WSL2 says Linux: update.sh goes on (here to the version check of the empty ~/tpotce)."""
-        result = self.run_plain(UPDATE_SH, "-y", cwd=self.tpotce, FAKE_UNAME_S="Linux")
+        """RA12: WSL2 says Linux with uname -s, everything else about it says Microsoft (its kernel in
+        uname -r / -v / -a, /proc/version): only uname -s counts. A uname that answers anything but -s
+        with Windows / Darwin names keeps update.sh going (here to the version check of the empty
+        ~/tpotce), and fuUI_LINUX_ONLY reads nothing else (no /proc/version, no other uname)."""
+        self.stub("uname", '#!/bin/sh\ncase "$*" in\n  -s) echo Linux ;;\n'
+                           '  *) echo "MINGW64_NT-10.0-19045 Darwin 5.15.153.1-microsoft-standard-WSL2" ;;\nesac\n')
+        result = self.run_plain(UPDATE_SH, "-y", cwd=self.tpotce)
         self.assertNotIn("does not run on", result.stderr)
         self.assertIn("Checking for version tag", result.stdout)
+        result = subprocess.run(["bash", "-c", f"source {shlex.quote(os.path.join(REPO, 'installer', 'lib', 'ui.sh'))}"
+                                               "; fuUI_LINUX_ONLY test.sh; echo linux"],
+                                capture_output=True, universal_newlines=True, env=self.env(TPOT_GUM="off"),
+                                timeout=60)
+        self.assertEqual((result.returncode, result.stdout, result.stderr), (0, "linux\n", ""))
+        ui_sh = base.read("installer/lib/ui.sh")
+        function = re.search(r"^fuUI_LINUX_ONLY \(\) \{\n(.*?)\n\}", ui_sh, re.M | re.S).group(1)
+        code = "\n".join(line for line in function.splitlines() if not line.lstrip().startswith("#"))
+        self.assertEqual(re.findall(r"\buname\b[^)\n]*", code), ["uname -s 2>/dev/null"])
+        self.assertNotIn("/proc", function)
 
 
 class VersionTest(Scripts):
@@ -523,6 +539,158 @@ class TaskScreenTest(Scripts):
         # the Elastic export asks Kibana and waits for it, the pause waits for Ctrl+C: both in the open
         self.assertNotIn("fuUI_SPIN", body("fuEXPORT_ELASTIC"))
         self.assertNotIn("fuUI_SPIN", body("fuCHECK_ELASTIC"))
+
+
+class SshdDropinTest(Scripts):
+    """K: update.sh does not run the playbook, so an earlier T-Pot keeps its sshd drop-in with
+    "AcceptEnv COLORTERM" only. fuSSHD_DROPIN brings it to the line of this release, but only the very
+    file an earlier T-Pot wrote; sshd -t checks it (with /run/sshd first, as the playbook does) and a
+    failed check puts the old line back; SSH is reloaded as ssh or sshd. Stubs only: the drop-in and
+    /run/sshd are in the temporary HOME, sudo, sshd and systemctl write what they are asked to do."""
+
+    OLD = "AcceptEnv COLORTERM\n"
+    NEW = "AcceptEnv COLORTERM LC_TERMINAL LC_TERMINAL_VERSION\n"
+
+    def setUp(self):
+        super().setUp()
+        self.dropin = os.path.join(self.home, "etc", "ssh", "sshd_config.d", "tpot.conf")
+        os.makedirs(os.path.dirname(self.dropin))
+        self.run_dir = os.path.join(self.home, "run", "sshd")
+        os.makedirs(os.path.dirname(self.run_dir))
+        self.stub("sudo", '#!/bin/sh\necho "sudo $*" >> "$HOME/calls"\nexec "$@"\n')
+        # sshd -t: whether /run/sshd is there by then and what the drop-in says, FAKE_SSHD_RC its answer
+        self.stub("sshd", '#!/bin/sh\n{ echo "sshd $*"; [ -d "$myTPOT_SSHD_RUN" ] && echo "  run dir there"\n'
+                          '  sed "s/^/  file: /" "$myTPOT_SSHD_DROPIN"; } >> "$HOME/calls"\n'
+                          '[ -n "$FAKE_SSHD_RC" ] && echo "sshd: bad configuration option" >&2\n'
+                          'exit "${FAKE_SSHD_RC:-0}"\n')
+        self.stub("systemctl", '#!/bin/sh\necho "systemctl $*" >> "$HOME/calls"\n'
+                               'case "$*" in "is-active --quiet ${FAKE_ACTIVE:-ssh}") exit 0 ;; is-active*) exit 3 ;; esac\n')
+
+    def write_dropin(self, text, mode=0o644):
+        with open(self.dropin, "w", encoding="utf-8", newline="") as out:
+            out.write(text)
+        os.chmod(self.dropin, mode)
+
+    def dropin_text(self):
+        with open(self.dropin, encoding="utf-8", newline="") as handle:
+            return handle.read()
+
+    def migrate(self, **extra):
+        return self.source_update("fuSSHD_DROPIN; fuEND_LIST", myTPOT_SSHD_DROPIN=self.dropin,
+                                  myTPOT_SSHD_RUN=self.run_dir, **extra)
+
+    def source_update(self, call, **extra):
+        # fuEND_LIST: what the summary would say (myDONE)
+        call = call.replace("fuEND_LIST", 'for myITEM in "${myDONE[@]}"; do echo "done ${myITEM}"; done')
+        return super().source_update(call, **extra)
+
+    def test_the_line_of_an_earlier_t_pot_is_replaced(self):
+        for unit in ("ssh", "sshd"):
+            with self.subTest(unit=unit):
+                shutil.rmtree(self.run_dir, ignore_errors=True)
+                self.write_dropin(self.OLD)
+                result = self.migrate(FAKE_ACTIVE=unit)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(self.dropin_text(), self.NEW)
+                self.assertEqual(stat.S_IMODE(os.stat(self.dropin).st_mode), 0o644)
+                calls = self.calls()
+                # the privilege separation directory before the check, the check sees the new line
+                self.assertTrue(os.path.isdir(self.run_dir))
+                self.assertIn(f"sudo install -d -m 0755 {self.run_dir}", calls)
+                self.assertIn("sshd -t\n  run dir there\n  file: " + self.NEW, calls)
+                self.assertLess(calls.index("sshd -t"), calls.index(f"sudo systemctl reload {unit}"))
+                self.assertIn("done ok:SSH takes LC_TERMINAL along", result.stdout)
+                os.remove(os.path.join(self.home, "calls"))
+
+    def test_a_file_of_your_own_stays(self):
+        """Anything but the exact old file: yours (more lines, a comment, no line end, already the new
+        line, another case, a link), nothing is written, checked or reloaded."""
+        for text in ("AcceptEnv COLORTERM\nAcceptEnv FOO\n", "# mine\nAcceptEnv COLORTERM\n", "AcceptEnv COLORTERM",
+                     "AcceptEnv COLORTERM\n\n", " AcceptEnv COLORTERM\n", "acceptenv colorterm\n", self.NEW,
+                     "AcceptEnv COLORTERM\r\n", ""):
+            with self.subTest(text=text):
+                self.write_dropin(text)
+                result = self.migrate()
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(self.dropin_text(), text)
+                self.assertEqual(self.calls(), "")
+                self.assertNotIn("done ", result.stdout)
+        with self.subTest(case="link"):
+            other = os.path.join(self.home, "mine.conf")
+            with open(other, "w", encoding="utf-8") as out:
+                out.write(self.OLD)
+            os.remove(self.dropin)
+            os.symlink(other, self.dropin)
+            self.migrate()
+            self.assertEqual(self.calls(), "")
+            with open(other, encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), self.OLD)
+        with self.subTest(case="missing"):
+            os.remove(self.dropin)
+            result = self.migrate()
+            self.assertFalse(os.path.lexists(self.dropin))
+            self.assertEqual(self.calls(), "")
+
+    def test_a_failed_check_puts_the_old_line_back(self):
+        self.write_dropin(self.OLD)
+        result = self.migrate(FAKE_SSHD_RC="255")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.dropin_text(), self.OLD)
+        self.assertNotIn("reload", self.calls())
+        self.assertIn("sshd -t did not accept", result.stdout)
+        self.assertIn("bad configuration option", result.stdout)
+        self.assertIn("done warn:", result.stdout)
+
+    def test_update_sh_runs_it_after_the_confirmation(self):
+        text = base.read("update.sh")
+        main = text[text.index("# Main section #"):]
+        self.assertLess(main.index('myRUNNING="1"'), main.index("\nfuSSHD_DROPIN\n"))
+        self.assertLess(main.index("\nfuTPOT_SETUP\n"), main.index("\nfuSSHD_DROPIN\n"))
+        self.assertLess(main.index("\nfuSSHD_DROPIN\n"), main.index("fuMARK phase pull"))
+        # not in --backup-only, which ends before
+        self.assertLess(main.index("--backup-only: the backup"), main.index("\nfuSSHD_DROPIN\n"))
+        self.assertLess(main[main.index("--backup-only: the backup"):].index("exit 0"),
+                        main[main.index("--backup-only: the backup"):].index("\nfuSSHD_DROPIN\n"))
+
+    def test_the_old_and_the_new_line_are_the_ones_of_the_playbook(self):
+        """The old line is what the regexp of the playbook task replaces, the new one is its line."""
+        text = base.read("update.sh")
+        function = re.search(r"function fuSSHD_DROPIN \(\) \{.*?\n\}", text, re.S).group(0)
+        playbook = base.read("installer/install/tpot.yml")
+        line = re.search(r'path: /etc/ssh/sshd_config.d/tpot.conf\n\s*regexp: .*\n\s*line: "([^"]+)"', playbook)
+        self.assertIn(f'myNEW="{line.group(1)}"', function)
+        self.assertIn(f'myOLD="{self.OLD.strip()}"', function)
+        self.assertIn("/etc/ssh/sshd_config.d/tpot.conf", function)
+        self.assertIn("/run/sshd", function)
+
+
+class SshdDocsTest(unittest.TestCase):
+    """RC11 and K: the README on true colours over SSH (update.sh, sudo, e.g.), the names of the
+    playbook tasks."""
+
+    def section(self):
+        readme = base.read("README.md")
+        text = readme[readme.index("### True colours over SSH"):]
+        return text[:text.index("\n## ")]
+
+    def test_the_readme_says_what_update_sh_does_and_what_sudo_drops(self):
+        section = self.section()
+        self.assertNotIn("i.e. Debian 13", section)
+        self.assertIn("e.g. Debian 13", section)
+        self.assertIn("update.sh", section)
+        # sudo resets the environment: COLORTERM and LC_TERMINAL stay behind
+        self.assertIn("sudo --preserve-env=COLORTERM,LC_TERMINAL", section)
+
+    def test_the_task_names_name_both_variables(self):
+        install = base.read("installer/install/tpot.yml")
+        directory = re.search(r"- name: ([^\n]*)\n(?:\s*#[^\n]*\n)*\s*file:\n\s*path: /etc/ssh/sshd_config.d\n",
+                              install).group(1)
+        self.assertIn("COLORTERM", directory)
+        self.assertIn("LC_TERMINAL", directory)
+        remove = base.read("installer/remove/tpot.yml")
+        name = re.search(r"- name: ([^\n]*)\n\s*file:\n\s*path: /etc/ssh/sshd_config.d/tpot.conf\n", remove).group(1)
+        self.assertNotIn("(AcceptEnv COLORTERM)", name)
+        self.assertIn("LC_TERMINAL", name)
 
 
 class StopTest(Scripts):

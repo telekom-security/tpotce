@@ -53,9 +53,24 @@ usage_error() {
   exit 1
 }
 
+mark_phase() {
+  # mark_phase <key>: the phase for the assistant (@@tpot phase, installer.Progress), the one a
+  # failure names
+  myPHASE="$1"
+  fuMARK phase "$1"
+}
+
+mark_failed() {
+  # mark_failed: for the assistant, the phase that failed (@@tpot fail <phase>, as runlog reads it)
+  # and that the run failed (@@tpot phase failed, installer.Progress keeps the phase it was in)
+  fuMARK fail "${myPHASE}"
+  fuMARK phase failed
+}
+
 install_failed() {
   # install_failed <what failed> <next step> ...: the summary of a run that stops, exit 1
   local myITEM
+  mark_failed
   local -a myITEMS=("fail:$1")
   shift
   for myITEM in "$@"; do myITEMS+=("next:${myITEM}"); done
@@ -67,6 +82,7 @@ install_stopped() {
   # install_stopped <what was stopped> <next step> ...: the summary of a run stopped with
   # Ctrl+C under a spinner (fuUI_SPIN rc 130), exit 130
   local myITEM
+  mark_failed
   local -a myITEMS=("warn:$1")
   shift
   for myITEM in "$@"; do myITEMS+=("next:${myITEM}"); done
@@ -1520,7 +1536,7 @@ install_sudo_debian() {
 
 get_packages() {
   echo
-  fuMARK phase packages
+  mark_phase packages
   if [ -n "${TPOT_INSTALL_PACKAGES_DONE}" ];
     then
       # the assistant comes after the bootstrap, which installed them already
@@ -1555,7 +1571,7 @@ check_ports () {
   # Abort before anything is installed if a service holds a port a honeypot needs.
   # The warning at the end of this script comes too late to act on, and an
   # unattended run cannot act on it at all.
-  fuMARK phase checks
+  mark_phase checks
   if ! command -v ss >/dev/null;
     then
       fuUI_ERROR "‘ss‘ was not found, so the check for conflicting services cannot run."
@@ -1655,6 +1671,8 @@ myBECOME_FILE=""
 myCUSTOM_COMPOSE=""
 myCLASSIC=""
 myMARKS=""
+# the phase the assistant is told about (mark_phase), installer.Progress starts with the checks
+myPHASE="checks"
 # Ansible become executable, empty means the Ansible default. See
 # sudo_rs_become_exe.
 myANSIBLE_BECOME_EXE=""
@@ -1675,7 +1693,8 @@ while getopts ":sb:r:t:u:p:P:B:c:nMh" opt; do
       myTPOT_REPO_URL="${OPTARG}"
       ;;
     t)
-      myTPOT_TYPE="${OPTARG,,}"
+      # lower case the bash 3.2 way: install.sh runs from curl with any bash up to the distribution check
+      myTPOT_TYPE=$(printf '%s' "${OPTARG}" | tr '[:upper:]' '[:lower:]')
       validate_type
       ;;
     u)
@@ -1766,6 +1785,7 @@ if [ ${EUID} -eq 0 ];
   then
     fuUI_ERROR "This script should not be run as root. Please run it as a regular user."
     echo
+    mark_failed
     exit 1
 fi
 
@@ -1777,9 +1797,10 @@ if [[ ! " ${mySUPPORTED_DISTRIBUTIONS[@]} " =~ " ${myCURRENT_DISTRIBUTION} " ]];
   then
     # the list in words: "a, b and c", from the array, so the message names every one of them
     myLIST=$(printf '%s, ' "${mySUPPORTED_DISTRIBUTIONS[@]:0:${#mySUPPORTED_DISTRIBUTIONS[@]}-1}")
-    fuUI_ERROR "Only the following distributions are supported: ${myLIST%, } and ${mySUPPORTED_DISTRIBUTIONS[-1]}."
+    fuUI_ERROR "Only the following distributions are supported: ${myLIST%, } and ${mySUPPORTED_DISTRIBUTIONS[${#mySUPPORTED_DISTRIBUTIONS[@]}-1]}."
     fuUI_INFO "Please follow the T-Pot documentation on how to run T-Pot on macOS, Windows and other currently unsupported platforms."
     echo
+    mark_failed
     exit 1
 fi
 
@@ -1815,6 +1836,7 @@ if [ -n "${mySUPPORTED_VERSION}" ] && [ "${myCURRENT_VERSION}" != "${mySUPPORTED
     fuUI_ERROR "T-Pot supports ${myCURRENT_DISTRIBUTION} ${mySUPPORTED_VERSION}, this system runs ${myCURRENT_VERSION}."
     fuUI_INFO "Please install T-Pot on the current release of your distribution."
     echo
+    mark_failed
     exit 1
 fi
 
@@ -1981,7 +2003,7 @@ if [ -n "${myMARKS}" ];
               --tags "${myANSIBLE_TAG}" --list-tasks 2>/dev/null | grep -c "TAGS: \[")
     fuMARK tasks "${myTASKS}"
 fi
-fuMARK phase playbook
+mark_phase playbook
 # INJECT_FACTS_AS_VARS=False: the playbooks read facts as ansible_facts.<name>,
 # the auto injected top-level copies are deprecated and gone in ansible-core
 # 2.24. Setting it explicitly makes a leftover fail here and now instead of
@@ -1994,7 +2016,6 @@ ANSIBLE_LOG_PATH=${HOME}/install_tpot.log ansible-playbook ${myANSIBLE_TPOT_PLAY
 # Something went wrong
 if [ ! $? -eq 0 ];
   then
-    fuMARK phase failed
     fuUI_ERROR "Something went wrong with the Playbook, please review the output and / or install_tpot.log for clues."
     install_failed "The playbook failed, see the output above" \
       "Review ${HOME}/install_tpot.log, fix the cause, then run the installer again"
@@ -2004,7 +2025,7 @@ if [ ! $? -eq 0 ];
 fi
 
 # The T-Pot type, asked before the playbook (or given with -t / -c)
-fuMARK phase compose
+mark_phase compose
 # and what the summary says about it: a hint and the next step
 myINFO=""
 myNEXT=""
@@ -2031,7 +2052,7 @@ fi
 if [ "${myTPOT_TYPE}" == "HIVE" ];
   # If T-Pot Type is HIVE write the WebUI username and password
   then
-    fuMARK phase user
+    mark_phase user
     fuUI_INFO "Creating the web user ${myWEB_USER} in ${myTPOT_CONF_FILE}"
     # bcrypt, as `tpot users` creates them; the password goes through stdin, not argv
     myWEB_USER_ENC=$(printf "%s" "${myWEB_PW}" | htpasswd -n -i -B "${myWEB_USER}")
@@ -2041,7 +2062,7 @@ if [ "${myTPOT_TYPE}" == "HIVE" ];
 fi
 
 # Pull docker images
-fuMARK phase pull
+mark_phase pull
 if [ -n "${myMARKS}" ];
   then
     fuMARK images "$(sudo docker compose -f "${HOME}/tpotce/docker-compose.yml" config --images 2>/dev/null | wc -l)"
@@ -2096,7 +2117,7 @@ if [ -n "${myTPOT_FOUND}" ] && [ "$(readlink -f "${myTPOT_FOUND}")" = "$(readlin
 fi
 
 # Done: what is installed and what comes next
-fuMARK phase "done"
+mark_phase "done"
 if [ -n "${myCUSTOM_COMPOSE}" ];
   then mySUMMARY=("ok:T-Pot is installed with your own compose file (${myTPOT_TYPE})")
   else mySUMMARY=("ok:T-Pot ${myEDITION} is installed (${myTPOT_TYPE})")
