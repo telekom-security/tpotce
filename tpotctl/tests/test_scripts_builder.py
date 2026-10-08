@@ -718,6 +718,15 @@ class RightsTest(BuilderHarness):
 
 class BuildTest(BuilderHarness):
 
+    def test_the_number_of_images_reads_right(self):
+        """"Building 1 image", "Building 2 images" (the VM run said "Building 1 images")."""
+        rc, out = self.builder("-i", "cowrie")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("Building 1 image, the log of each", out)
+        rc, out = self.builder("-i", "cowrie,dionaea")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("Building 2 images, the log of each", out)
+
     def test_builder_is_selected_explicitly(self):
         work = os.path.join(self.home, "elsewhere")
         os.makedirs(work)

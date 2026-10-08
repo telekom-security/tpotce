@@ -1601,7 +1601,9 @@ fuRUN () {
   if fuLIMITED; then fuLIMIT_ON || return 3; fi
 
   echo
-  fuUI_INFO "Building ${#myLIST[@]} images, the log of each is ${myLOGDIR}/<image>.log ..."
+  local myIMAGES="images"
+  [ "${#myLIST[@]}" -eq 1 ] && myIMAGES="image"
+  fuUI_INFO "Building ${#myLIST[@]} ${myIMAGES}, the log of each is ${myLOGDIR}/<image>.log ..."
   # Plain progress and both streams in the log: builds run in parallel, and with only
   # stdout redirected compose picks tty progress for a file and fails with "failed to
   # get console" (docker/compose#14182). The builds report one line each, this shell
