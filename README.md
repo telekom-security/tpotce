@@ -140,7 +140,7 @@ T-Pot's main components have been moved into the `tpotinit` Docker image allowin
 [glutton](https://github.com/mushorg/glutton),
 [h0neytr4p](https://github.com/pbssubhash/h0neytr4p),
 [hellpot](https://github.com/yunginnanet/HellPot),
-[heralding](https://github.com/johnnykv/heralding),
+[heralding](https://github.com/t3chn0m4g3/heralding),
 [honeyaml](https://github.com/mmta/honeyaml),
 [honeypots](https://github.com/qeeqbox/honeypots),
 [honeytrap](https://github.com/armedpot/honeytrap/),
@@ -283,7 +283,7 @@ Besides the ports generally needed by the OS, i.e. obtaining a DHCP lease, DNS, 
 | 80, 443, 8080, 8443                                                                                                                   | tcp      | incoming  | Honeypot: Galah  (LLM required)                                                                     |
 | 8080                                                                                                                                  | tcp      | incoming  | Honeypot: Go-pot                                                                                    |
 | 80, 443                                                                                                                               | tcp      | incoming  | Honeypot: H0neytr4p                                                                                 |
-| 21, 22, 23, 25, 80, 110, 143, 443, 993, 995, 1080, 5432, 5900                                                                         | tcp      | incoming  | Honeypot: Heralding                                                                                 |
+| 21, 22, 23, 25, 80, 110, 143, 389, 443, 465, 636, 990, 993, 995, 1080, 5432, 5900, 8883                                               | tcp      | incoming  | Honeypot: Heralding                                                                                 |
 | 3000                                                                                                                                  | tcp      | incoming  | Honeypot: Honeyaml                                                                                  |
 | 21, 22, 23, 25, 80, 110, 143, 389, 443, 445, 631, 1080, 1433, 1521, 3306, 3389, 5060, 5432, 5900, 6379, 6667, 8080, 9100, 9200, 11211 | tcp      | incoming  | Honeypot: qHoneypots                                                                                |
 | 53, 123, 161, 5060                                                                                                                    | udp      | incoming  | Honeypot: qHoneypots                                                                                |
@@ -1183,7 +1183,7 @@ The software that T-Pot is built on uses the following licenses.
 [elasticpot](https://gitlab.com/bontchev/elasticpot/-/blob/master/LICENSE),
 [ewsposter](https://github.com/telekom-security/ewsposter),
 [log4pot](https://github.com/thomaspatzke/Log4Pot/blob/master/LICENSE),
-[heralding](https://github.com/johnnykv/heralding/blob/master/LICENSE.txt),
+[heralding](https://github.com/t3chn0m4g3/heralding/blob/master/LICENSE.txt),
 [ipphoney](https://gitlab.com/bontchev/ipphoney/-/blob/master/LICENSE),
 [miniprint](https://github.com/sa7mon/miniprint?tab=GPL-3.0-1-ov-file#readme),
 [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot/blob/main/LICENSE),
@@ -1255,7 +1255,7 @@ Without open source and the development community we are proud to be a part of, 
 [go-pot](https://github.com/ryanolee/go-pot/graphs/contributors),
 [h0neytr4p](https://github.com/pbssubhash/h0neytr4p/graphs/contributors),
 [hellpot](https://github.com/yunginnanet/HellPot/graphs/contributors),
-[heralding](https://github.com/johnnykv/heralding/graphs/contributors),
+[heralding](https://github.com/t3chn0m4g3/heralding/graphs/contributors),
 [honeyaml](https://github.com/mmta/honeyaml/graphs/contributors),
 [honeypots](https://github.com/qeeqbox/honeypots/graphs/contributors),
 [honeytrap](https://github.com/armedpot/honeytrap/graphs/contributors),

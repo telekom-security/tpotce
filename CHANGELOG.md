@@ -42,6 +42,7 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 * **Go-Pot** has been updated to 1.2.0-rc-7.
 * **H0neytr4p** has been updated to 0.44.
 * **Hellpot** has been updated to 0.60.
+* **Heralding** has been updated to 2.0.0 (pre-release, master branch of the T-Pot fork) on Python 3.14 and catches credentials on 27 instead of 16 services. New services only get a host port where no other honeypot of the edition uses it: 389, 636, 990 and 8883 in Standard, Sensor and Mobile, 445 as well in Mac / Win, 445, 587, 1433, 1883, 6379 and 5060 (TCP / UDP) as well in Tarpit. RDP logs plaintext logins of the TLS fallback and NTLM hashes of NLA. `auth.csv` and `log_session.json` keep their format.
 * **Honeyaml** builds again: its Rust dependencies have been updated and it is now a static binary on a scratch image (branch `tpot-24.04.2` of the T-Pot fork, upstream is no longer maintained).
 * **IPPHoney** has been updated to 2.0.2.
 * **Honeypots** without releases were updated to their latest pushed code, pinned to a commit.
