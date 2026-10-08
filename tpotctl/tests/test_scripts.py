@@ -591,7 +591,16 @@ class BuilderTest(Harness):
     """docker/_builder/: a tool for building releases, not part of the T-Pot Manager, in the look of
     the T-Pot scripts all the same. The options, the menu and the runs: test_scripts_builder.py."""
 
-    SCRIPTS = ("docker/_builder/builder.sh", "docker/_builder/setup_builder.sh")
+    SCRIPTS = ("docker/_builder/builder.sh",)
+
+    def setUp(self):
+        super().setUp()
+        # a Linux host whatever runs the tests (the builder runs on Linux only), its settings elsewhere
+        path = os.path.join(self.bin, "uname")
+        with open(path, "w", encoding="utf-8") as out:
+            out.write('#!/bin/sh\ncase "$1" in -s) echo Linux ;; *) echo x86_64 ;; esac\n')
+        os.chmod(path, 0o755)
+        self.settings = {"TPOT_BUILDER_ENV_LOCAL": os.path.join(self.home, "env.local"), "SUDO_UID": ""}
 
     def test_builder_scripts_speak_like_ui_sh(self):
         text = read(self.SCRIPTS[0])
@@ -603,13 +612,11 @@ class BuilderTest(Harness):
             self.assertFalse(raw in rest, raw)
         self.assertTrue("fuUI_BANNER" in rest)
 
-    def test_setup_builder_is_a_wrapper_on_builder_sh(self):
-        # the setup lives in builder.sh (--setup, --uninstall), which speaks through ui.sh
-        text = read(self.SCRIPTS[1])
-        self.assertLess(len([line for line in text.splitlines() if line and not line.startswith("#")]), 10)
-        self.assertTrue("installer/lib/ui.sh" in text)
-        self.assertTrue('builder.sh" --setup' in text and 'builder.sh" --uninstall' in text, text)
-        self.assertFalse(re.search(r"^\s*docker ", text, re.M), text)
+    def test_the_setup_is_part_of_builder_sh(self):
+        # setup_builder.sh is gone: builder.sh --setup / --uninstall, no script of its own
+        self.assertFalse(os.path.exists(os.path.join(REPO, "docker", "_builder", "setup_builder.sh")))
+        text = read(self.SCRIPTS[0])
+        self.assertTrue("--setup) fuACTION setup" in text and "--uninstall) fuACTION uninstall" in text)
 
     def test_builder_is_not_in_the_manager(self):
         folder = os.path.join(REPO, "tpotctl")
@@ -636,22 +643,29 @@ class BuilderTest(Harness):
         self.assertFalse(os.path.exists(os.path.join(self.home, "calls")))
 
     @unittest.skipIf(os.geteuid() == 0, "runs as root")
-    def test_without_root_it_stops(self):
-        # neither root nor the docker group: rc 3 (the environment), before docker is asked
+    def test_without_root_docker_decides(self):
+        """Neither root nor the docker group is no reason to stop (rootless Docker): a docker that does
+        not answer is, rc 3 (the environment) with what to do, before anything is built."""
         path = os.path.join(self.bin, "id")
         with open(path, "w", encoding="utf-8") as out:
-            out.write("#!/bin/sh\necho staff\n")
+            out.write('#!/bin/sh\ncase "$1" in -u|-g) echo 1000 ;; -un|-gn) echo tester ;; *) echo staff ;; esac\n')
+        os.chmod(path, 0o755)
+        path = os.path.join(self.bin, "docker")
+        with open(path, "w", encoding="utf-8") as out:
+            out.write('#!/bin/sh\necho "docker $*" >> "$HOME/calls"\n[ "$1" = info ] && exit 1\nexit 0\n')
         os.chmod(path, 0o755)
         result = self.run_script(os.path.join(REPO, self.SCRIPTS[0]),
-                                 env={"TPOT_BUILDER_LOG_DIR": os.path.join(self.home, "log")})
+                                 env=dict(self.settings, TPOT_BUILDER_LOG_DIR=os.path.join(self.home, "log")))
         self.assertEqual(result.returncode, 3, result.stdout + result.stderr)
-        self.assertTrue("### [ERROR] - " in result.stderr and "root" in result.stderr, result.stderr)
-        self.assertFalse(os.path.exists(os.path.join(self.home, "calls")))
+        self.assertTrue("### [ERROR] - Docker does not answer" in result.stderr, result.stderr)
+        for hint in ("sudo", "usermod -aG docker tester", "rootless Docker"):
+            self.assertTrue(hint in result.stderr, hint)
+        with open(os.path.join(self.home, "calls"), encoding="utf-8") as handle:
+            self.assertEqual(handle.read(), "docker info\n")
 
     def test_a_build_run_reports_each_image(self):
         stubs = {
-            "whoami": "#!/bin/sh\necho root\n",
-            "ip": "#!/bin/sh\necho 'default via 10.0.0.1 dev eth0'\n",
+            "ip":"#!/bin/sh\necho 'default via 10.0.0.1 dev eth0'\n",
             "tc": "#!/bin/sh\nexit 0\n",
             "docker": "#!/bin/sh\necho \"docker $*\" >> \"$HOME/calls\"\n"
                       "case \"$*\" in\n"
@@ -670,8 +684,8 @@ class BuilderTest(Harness):
         log = os.path.join(work, "log")
         # no options, no terminal: every image, as before; the logs go to TPOT_BUILDER_LOG_DIR
         result = self.run_script(os.path.join(REPO, self.SCRIPTS[0]), cwd=work,
-                                 env={"TPOT_BUILDER_LOG_DIR": log,
-                                      "TPOT_BINFMT_DIR": os.path.join(self.home, "no-binfmt")})
+                                 env=dict(self.settings, TPOT_BUILDER_LOG_DIR=log,
+                                          TPOT_BINFMT_DIR=os.path.join(self.home, "no-binfmt")))
         out = result.stdout + result.stderr
         self.assertEqual(result.returncode, 1, out)
         self.assertTrue("### [OK] - Image cowrie" in out, out)

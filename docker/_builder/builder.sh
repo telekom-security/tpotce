@@ -5,8 +5,11 @@
 # the build. A tool for building releases, not part of the T-Pot Manager.
 #
 # With no option at a terminal it asks (a menu), with -y, any option or without a
-# terminal it never asks. -h shows the options and the exit codes. Root or the docker
-# group; root only for the upload limit (tc) while pushing.
+# terminal it never asks. -h shows the options and the exit codes. Linux only (a build
+# host, a VM, WSL2). Any user Docker answers to (root, the docker group, rootless
+# Docker); root only for the upload limit (tc) while pushing. The settings of a checkout
+# (--set, --unset, --show-config, Settings in the menu) are in docker/_builder/.env.local
+# (not in git) over docker/_builder/.env.
 
 myDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 myREPO="$(cd "${myDIR}/../.." && pwd)"
@@ -56,20 +59,23 @@ if ! source "${myREPO}/installer/lib/ui.sh" 2>/dev/null;
       echo "${myVALUE}"
     }
     fuUI_MARKS_ON () { [ -n "${myMARKS:-}" ] || [ "${TPOT_MARKS:-}" = "1" ]; }
-    fuUI_VERSION () {
-      local myDIR="${1:-${HOME}/tpotce}" myV="" myLINE myRE='^[0-9A-Za-z][0-9A-Za-z._+~-]*$' myENV
-      myENV='^[[:space:]]*TPOT_VERSION[[:space:]]*[=:][[:space:]]*["'"'"']?([^"'"'"'[:space:]]*)'
-      if [ -n "${myUI_VERSION:-}" ]; then echo "${myUI_VERSION}"; return 0; fi
-      [ -r "${myDIR}/version" ] && { IFS= read -r myV < "${myDIR}/version" || true; }
-      myV="${myV//[[:space:]]/}"
-      [[ "${myV}" =~ ${myRE} ]] || myV=""
-      if [ -z "${myV}" ] && [ -r "${myDIR}/.env" ]; then
-        while IFS= read -r myLINE || [ -n "${myLINE}" ]; do
-          [[ "${myLINE}" =~ ${myENV} ]] && myV="${BASH_REMATCH[1]}"
-        done < "${myDIR}/.env"
-        [[ "${myV}" =~ ${myRE} ]] || myV=""
-      fi
-      echo "${myV}"
+    fuUI_VERSION_GE () {
+      local myI myX myY myN myV="${1//[[:space:]]/}" myM="${2//[[:space:]]/}"
+      local -a myA=() myB=()
+      myV="${myV#v}"
+      myV="${myV%%[-+]*}"
+      [ -n "${myV}" ] && [ -n "${myM}" ] || return 1
+      IFS=. read -r -a myA <<< "${myV}"
+      IFS=. read -r -a myB <<< "${myM}"
+      myN="${#myA[@]}"
+      [ "${#myB[@]}" -le "${myN}" ] || myN="${#myB[@]}"
+      for ((myI = 0; myI < myN; myI++)); do
+        myX="${myA[myI]-0}" myY="${myB[myI]-0}"
+        [[ "${myX}" =~ ^[0-9]{1,18}$ && "${myY}" =~ ^[0-9]{1,18}$ ]] || return 1
+        if [ "$((10#${myX}))" -gt "$((10#${myY}))" ]; then return 0; fi
+        if [ "$((10#${myX}))" -lt "$((10#${myY}))" ]; then return 1; fi
+      done
+      return 0
     }
     fuUI_HELP () {
       local myTITLE="$1" myUSAGE="$2" myW=0 myI myLINE myFIRST myREST myPAD
@@ -120,6 +126,19 @@ if ! source "${myREPO}/installer/lib/ui.sh" 2>/dev/null;
       echo "### [ERROR] - $1" >&2
       echo "###   ${2:-${0##*/}} -h shows the options." >&2
       return 1
+    }
+    fuUI_LINUX_ONLY () {
+      local mySYSTEM
+      mySYSTEM=$(uname -s 2>/dev/null)
+      [ "${mySYSTEM}" != "Linux" ] || return 0
+      case "${mySYSTEM}" in
+        Darwin) mySYSTEM="macOS" ;;
+        MINGW*|MSYS*|CYGWIN*) mySYSTEM="Windows (${mySYSTEM})" ;;
+        "") mySYSTEM="an unknown system" ;;
+      esac
+      echo "### [ERROR] - $1 does not run on ${mySYSTEM}." >&2
+      echo "###   $1 runs on Linux: a T-Pot host, a build host or a VM, WSL2 on Windows." >&2
+      exit "${2:-1}"
     }
     fuUI_RESULT () {
       case "$1" in
@@ -226,6 +245,7 @@ myUI_LOGO=1
 myBUILDER="mybuilder"
 myCOMPOSE="${myDIR}/docker-compose.yml"
 myENVFILE="${myDIR}/.env"
+myLOCALFILE="${TPOT_BUILDER_ENV_LOCAL:-${myDIR}/.env.local}"
 myLOGDIR="${TPOT_BUILDER_LOG_DIR:-${myDIR}/log}"
 myLOG="${myLOGDIR}/builder.log"
 myTESTDIR="${TPOT_BUILDER_TESTS_DIR:-${myREPO}/docker/_tests/tests}"
@@ -233,29 +253,57 @@ myBINFMT="${TPOT_BINFMT_DIR:-/proc/sys/fs/binfmt_misc}"
 myLOGIN_TIMEOUT="${TPOT_BUILDER_LOGIN_TIMEOUT:-30}"
 # build.platforms: !override and tags: !reset of the generated override file
 myCOMPOSE_MIN="2.24.4"
+myDEFAULT_ARCH="both"
 myDEFAULT_JOBS=2
 myDEFAULT_LIMIT="40mbit" # at most 90% of the upload bandwidth there is
+myDEFAULT_HUB="dtagdevsec"
+myDEFAULT_GHCR="ghcr.io/telekom-security"
 mySTOP_TIMEOUT="${TPOT_BUILDER_STOP_TIMEOUT:-10}" # seconds for the builds to end on a signal
-myENV_VERSION="${TPOT_VERSION:-}" # before fuSETTINGS exports the version of a run
 myGROUP_NAMES="honeypots tanner nsm elk tools"
+# the settings (fuCONFIG): an option, else the environment, else .env.local, else .env,
+# else the built-in default. The version is none: the file version, -t for one run
+mySETTING_KEYS="TPOT_DOCKER_REPO TPOT_GHCR_REPO TPOT_BUILDER_ARCH TPOT_BUILDER_JOBS TPOT_BUILDER_LIMIT"
+# the environment as it came, before fuSETTINGS exports the values of a run (fuCONFIG_GET
+# reads them as myENV_<key without TPOT_>)
+myENV_VERSION="${TPOT_VERSION:-}"
+# shellcheck disable=SC2034
+{
+  myENV_DOCKER_REPO="${TPOT_DOCKER_REPO:-}"
+  myENV_GHCR_REPO="${TPOT_GHCR_REPO:-}"
+  myENV_BUILDER_ARCH="${TPOT_BUILDER_ARCH:-}"
+  myENV_BUILDER_JOBS="${TPOT_BUILDER_JOBS:-}"
+  myENV_BUILDER_LIMIT="${TPOT_BUILDER_LIMIT:-}"
+}
 
-# the options (fuPARSE), "" is off
+# the options (fuPARSE), "" is off; myARCH / myJOBS / myLIMIT are those of the run,
+# myOPT_* what an option said
 myACTION="build"
 myYES=""
 myIMAGES=""
 myGROUPS=""
-myARCH="both"
+myARCH="${myDEFAULT_ARCH}"
 myPUSH_HUB=""
 myPUSH_GHCR=""
 myNO_CACHE=""
 myJOBS="${myDEFAULT_JOBS}"
 myLIMIT="${myDEFAULT_LIMIT}"
+myOPT_ARCH=""
+myOPT_JOBS=""
+myOPT_LIMIT=""
 myTAG=""
 myDOCKER_REPO=""
 myGHCR_REPO=""
 myTEST=""
 myMENU=""
+mySET_ITEMS=()
+# the settings without the options (fuCONFIG), for the command line of the menu
+myCONF_ARCH="${myDEFAULT_ARCH}"
+myCONF_JOBS="${myDEFAULT_JOBS}"
+myCONF_LIMIT="${myDEFAULT_LIMIT}"
+myCONF_HUB="${myDEFAULT_HUB}"
+myCONF_GHCR="${myDEFAULT_GHCR}"
 # the state of a run
+myEXIT_DONE=""
 myLIMIT_SET=""
 myIF=""
 myVER=""
@@ -305,34 +353,46 @@ fuHELP () {
     --about "Builds the images of docker/_builder/docker-compose.yml with buildx for linux/amd64 and
 linux/arm64, pushes them on request and runs the smoke tests of docker/_tests after it.
 With no option at a terminal it asks (a menu); with -y, any option or without a
-terminal it never asks. The logs go to docker/_builder/log." \
+terminal it never asks. The logs go to docker/_builder/log. It runs on Linux (a build
+host, a VM, WSL2) for any user Docker answers to (root, the docker group, rootless
+Docker); root only for the upload limit while pushing." \
     --opt "-y, --yes" "Never ask, build at once (all images without other options)" \
     --opt "-i, --images a,b" "Images by name (-L lists them)" \
     --opt "-g, --group g,h" "Images by group: ${myGROUP_NAMES// /, }, all
 (default: all; with -i the union)" \
-    --opt "-a, --arch ARCH" "amd64, arm64, host (this host only) or both (default)" \
+    --opt "-a, --arch ARCH" "amd64, arm64, host (this host only) or both
+(default: both, or TPOT_BUILDER_ARCH)" \
     --opt "-p, --push" "Push to Docker Hub and GHCR (needs an existing docker login)" \
     --opt "--push-hub" "Push to Docker Hub only" \
     --opt "--push-ghcr" "Push to GHCR only" \
     --opt "-n, --no-cache" "Build without the cache" \
-    --opt "-j, --jobs N" "Builds at a time, 1-16 (default: ${myDEFAULT_JOBS})" \
-    --opt "-l, --upload-limit RATE" "Upload limit while pushing, tc rate or off (default: ${myDEFAULT_LIMIT});
-needs root" \
+    --opt "-j, --jobs N" "Builds at a time, 1-16 (default: ${myDEFAULT_JOBS}, or TPOT_BUILDER_JOBS)" \
+    --opt "-l, --upload-limit RATE" "Upload limit while pushing, tc rate or off (default: ${myDEFAULT_LIMIT},
+or TPOT_BUILDER_LIMIT); needs root" \
     --opt "-t, --tag VERSION" "The version tag (default: the file version of the checkout); a push for
 one platform (-a amd64, arm64, host) needs one of its own, i.e. <version>-arm64" \
-    --opt "--docker-repo REPO" "The Docker Hub repository (default: TPOT_DOCKER_REPO of .env)" \
-    --opt "--ghcr-repo REPO" "The GHCR repository (default: TPOT_GHCR_REPO of .env)" \
+    --opt "--docker-repo REPO" "The Docker Hub repository (default: TPOT_DOCKER_REPO)" \
+    --opt "--ghcr-repo REPO" "The GHCR repository (default: TPOT_GHCR_REPO)" \
     --opt "-T, --test" "Run the smoke tests of the built images after the build" \
     --opt "-L, --list" "List the images by group" \
     --opt "--check" "Check the buildx builder 'mybuilder' (platforms, QEMU)" \
     --opt "--setup" "Set up the builder 'mybuilder' and QEMU for multi-arch builds" \
     --opt "--uninstall" "Remove that setup again (builder, QEMU handlers, images)" \
+    --opt "--set KEY=VALUE" "Keep a setting in docker/_builder/.env.local (not in git), once per key:
+${mySETTING_KEYS// /, }" \
+    --opt "--unset KEY" "Remove a setting from docker/_builder/.env.local" \
+    --opt "--show-config" "Show every setting and where it comes from" \
     --opt "-h, --help" "Show this help" \
     --example "sudo builder.sh -y" "Build every image for both platforms" \
     --example "builder.sh -i cowrie,tpotinit -a host -T" "Two images for this host, then their smoke tests" \
     --example "sudo builder.sh -g honeypots -p -l 80mbit" "Build the honeypots, push them with an upload limit" \
-    --note "Exit codes: 0 done, 1 an image failed, 2 a wrong option, 3 the environment (rights, Docker,
-builder, QEMU, login, tc), 4 built but a smoke test failed, 130 cancelled." \
+    --example "builder.sh --set TPOT_DOCKER_REPO=me --set TPOT_BUILDER_JOBS=4" "Build for your own Docker Hub repository, four at a time" \
+    --note "A setting comes from an option, else the environment, else docker/_builder/.env.local,
+else docker/_builder/.env, else the built-in default. The version is no setting: the file
+version of the checkout, -t for one run." \
+    --note "Exit codes: 0 done, 1 an image failed, 2 a wrong option, 3 the environment (Linux, Docker,
+builder, QEMU, login, tc, root for the limit), 4 built but a smoke test failed, 130
+cancelled. A wrong setting is 2 as well." \
     --note "Pushing uses the login there is (docker login, docker login ghcr.io as the user who runs
 the builder); without one it stops instead of asking."
 }
@@ -346,9 +406,45 @@ fuLIST () {
 
 fuACTION () {
   if [ "${myACTION}" != "build" ] && [ "${myACTION}" != "$1" ];
-    then fuUI_USAGE_ERROR "Only one of -L, --check, --setup and --uninstall."; return 2
+    then fuUI_USAGE_ERROR "Only one of -L, --check, --setup, --uninstall, --set / --unset and --show-config."; return 2
   fi
   myACTION="$1"
+}
+
+fuSETTING_KEY () {
+  # fuSETTING_KEY <key>: rc 0 for a key of the settings, else rc 1 and why into mySETTING_WHY
+  mySETTING_WHY=""
+  [[ " ${mySETTING_KEYS} " != *" $1 "* ]] || return 0
+  if [ "$1" = "TPOT_VERSION" ];
+    then mySETTING_WHY="TPOT_VERSION is no setting: the file version of the checkout, -t for one run."
+    else mySETTING_WHY="Not a setting of the builder: $1 (${mySETTING_KEYS// /, })."
+  fi
+  return 1
+}
+
+fuSETTING_CHECK () {
+  # fuSETTING_CHECK <key> <value>: rc 0 for a value the key takes (the value of the
+  # key, i.e. 4 for 04, into mySETTING_VALUE), else rc 1 and why into mySETTING_WHY
+  local myKEY="$1" myVAL="$2"
+  mySETTING_VALUE="${myVAL}"
+  fuSETTING_KEY "${myKEY}" || return 1
+  case "${myKEY}" in
+    TPOT_DOCKER_REPO|TPOT_GHCR_REPO)
+      fuREPO_OK "${myVAL}" || mySETTING_WHY="Not a repository: ${myVAL}." ;;
+    TPOT_BUILDER_ARCH)
+      case "${myVAL}" in amd64|arm64|host|both) ;;
+        *) mySETTING_WHY="Unknown platform: ${myVAL} (amd64, arm64, host, both)." ;;
+      esac ;;
+    TPOT_BUILDER_JOBS)
+      if [[ "${myVAL}" =~ ^[0-9]{1,3}$ ]] && [ "$((10#${myVAL}))" -ge 1 ] && [ "$((10#${myVAL}))" -le 16 ];
+        then mySETTING_VALUE="$((10#${myVAL}))"
+        else mySETTING_WHY="1 to 16 builds at a time, not ${myVAL}."
+      fi ;;
+    TPOT_BUILDER_LIMIT)
+      [ "${myVAL}" = "off" ] || fuRATE_OK "${myVAL}" || \
+        mySETTING_WHY="Not a rate for tc: ${myVAL} (i.e. 40mbit, 800kbit, off)." ;;
+  esac
+  [ -z "${mySETTING_WHY}" ]
 }
 
 fuSET () {
@@ -370,25 +466,30 @@ fuSET () {
         myGROUPS="${myGROUPS:+${myGROUPS},}${myITEM}"
       done ;;
     -a|--arch)
-      case "${myVAL}" in amd64|arm64|host|both) myARCH="${myVAL}" ;;
-        *) fuUI_USAGE_ERROR "Unknown platform: ${myVAL} (amd64, arm64, host, both)."; return 2 ;;
-      esac ;;
+      fuSETTING_CHECK TPOT_BUILDER_ARCH "${myVAL}" || { fuUI_USAGE_ERROR "${mySETTING_WHY}"; return 2; }
+      myARCH="${mySETTING_VALUE}" myOPT_ARCH="${mySETTING_VALUE}" ;;
     -j|--jobs)
-      if [[ "${myVAL}" =~ ^[0-9]+$ ]] && [ "$((10#${myVAL}))" -ge 1 ] && [ "$((10#${myVAL}))" -le 16 ];
-        then myJOBS="$((10#${myVAL}))"
-        else fuUI_USAGE_ERROR "${myOPT} takes 1 to 16 builds at a time, not ${myVAL}."; return 2
-      fi ;;
+      fuSETTING_CHECK TPOT_BUILDER_JOBS "${myVAL}" || { fuUI_USAGE_ERROR "${myOPT}: ${mySETTING_WHY}"; return 2; }
+      myJOBS="${mySETTING_VALUE}" myOPT_JOBS="${mySETTING_VALUE}" ;;
     -l|--upload-limit)
-      if [ "${myVAL}" = "off" ] || fuRATE_OK "${myVAL}";
-        then myLIMIT="${myVAL}"
-        else fuUI_USAGE_ERROR "Not a rate for tc: ${myVAL} (i.e. 40mbit, 800kbit, off)."; return 2
-      fi ;;
+      fuSETTING_CHECK TPOT_BUILDER_LIMIT "${myVAL}" || { fuUI_USAGE_ERROR "${mySETTING_WHY}"; return 2; }
+      myLIMIT="${mySETTING_VALUE}" myOPT_LIMIT="${mySETTING_VALUE}" ;;
     -t|--tag)
       fuTAG_OK "${myVAL}" || { fuUI_USAGE_ERROR "Not a version tag: ${myVAL}."; return 2; }
       myTAG="${myVAL}" ;;
     --docker-repo|--ghcr-repo)
       fuREPO_OK "${myVAL}" || { fuUI_USAGE_ERROR "Not a repository: ${myVAL}."; return 2; }
       if [ "${myOPT}" = "--docker-repo" ]; then myDOCKER_REPO="${myVAL}"; else myGHCR_REPO="${myVAL}"; fi ;;
+    --set|--unset)
+      fuACTION settings || return 2
+      if [ "${myOPT}" = "--set" ]; then
+        [[ "${myVAL}" == *=* ]] || { fuUI_USAGE_ERROR "--set takes KEY=VALUE, not ${myVAL}."; return 2; }
+        fuSETTING_CHECK "${myVAL%%=*}" "${myVAL#*=}" || { fuUI_USAGE_ERROR "${mySETTING_WHY}"; return 2; }
+        mySET_ITEMS+=("${myVAL%%=*}=${mySETTING_VALUE}")
+      else
+        fuSETTING_KEY "${myVAL}" || { fuUI_USAGE_ERROR "${mySETTING_WHY}"; return 2; }
+        mySET_ITEMS+=("${myVAL}")
+      fi ;;
   esac
   return 0
 }
@@ -411,7 +512,7 @@ fuPARSE () {
     myOPT="$1" myVAL="" myHAS=""
     case "${myOPT}" in --*=*) myVAL="${myOPT#*=}" myOPT="${myOPT%%=*}" myHAS=1 ;; esac
     case "${myOPT}" in
-      -i|--images|-g|--group|-a|--arch|-j|--jobs|-l|--upload-limit|-t|--tag|--docker-repo|--ghcr-repo)
+      -i|--images|-g|--group|-a|--arch|-j|--jobs|-l|--upload-limit|-t|--tag|--docker-repo|--ghcr-repo|--set|--unset)
         if [ -z "${myHAS}" ]; then
           [ "$#" -ge 2 ] || { fuUI_USAGE_ERROR "${myOPT} needs a value."; return 2; }
           myVAL="$2"
@@ -434,6 +535,7 @@ fuPARSE () {
       --check) fuACTION check || return 2 ;;
       --setup) fuACTION setup || return 2 ;;
       --uninstall) fuACTION uninstall || return 2 ;;
+      --show-config) fuACTION show || return 2 ;;
       *) fuUI_USAGE_ERROR "Unknown option: ${myOPT}"; return 2 ;;
     esac
     shift
@@ -442,25 +544,195 @@ fuPARSE () {
 }
 
 fuENV_VALUE () {
-  # fuENV_VALUE <key>: the value of a key in docker/_builder/.env
-  [ -r "${myENVFILE}" ] || return 0
-  sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" "${myENVFILE}" | tail -n 1 | tr -d "\"'[:space:]"
+  # fuENV_VALUE <file> <key>: the value of the key in an env file (its last line, as
+  # compose takes it), without quotes, an inline comment and a CR; read as text, never
+  # run. rc 1 when the file has none (or an empty one)
+  local myLINE myV="" myFOUND="" myDQ='^"([^"]*)"' mySQ="^'([^']*)'"
+  local myRE="^[[:space:]]*(export[[:space:]]+)?$2[[:space:]]*=[[:space:]]*(.*)$"
+  [ -r "$1" ] || return 1
+  while IFS= read -r myLINE || [ -n "${myLINE}" ]; do
+    myLINE="${myLINE%$'\r'}"
+    [[ "${myLINE}" =~ ${myRE} ]] || continue
+    myV="${BASH_REMATCH[2]}"
+    if [[ "${myV}" =~ ${myDQ} ]] || [[ "${myV}" =~ ${mySQ} ]];
+      then myV="${BASH_REMATCH[1]}"
+      else
+        myV="${myV%%[[:space:]]#*}"
+        myV="${myV%"${myV##*[![:space:]]}"}"
+    fi
+    myFOUND=1
+  done < "$1"
+  [ -n "${myFOUND}" ] && [ -n "${myV}" ] || return 1
+  printf '%s\n' "${myV}"
+}
+
+fuSHORT () {
+  # fuSHORT <path>: a file of the checkout relative to it, any other one as it is
+  case "$1" in "${myREPO}/"*) echo "${1#"${myREPO}/"}" ;; *) echo "$1" ;; esac
+}
+
+fuRELEASE_FROM () {
+  # the release version and where it comes from, <version>|<origin>: the file version of
+  # the checkout, else TPOT_VERSION of the environment, else that of docker/_builder/.env.
+  # Never the .env of the checkout (that of an installed T-Pot) nor myUI_VERSION (only
+  # the credits of the banner); -t is the version of one run over it (fuSETTINGS)
+  local myV=""
+  [ -r "${myREPO}/version" ] && { IFS= read -r myV < "${myREPO}/version" || true; }
+  myV="${myV//[[:space:]]/}"
+  if fuTAG_OK "${myV}"; then echo "${myV}|the file version (-t for one run, no setting)"; return 0; fi
+  if [ -n "${myENV_VERSION}" ]; then echo "${myENV_VERSION}|environment"; return 0; fi
+  if myV=$(fuENV_VALUE "${myENVFILE}" TPOT_VERSION); then echo "${myV}|$(fuSHORT "${myENVFILE}")"; return 0; fi
+  echo "|none"
 }
 
 fuRELEASE () {
-  # the release version: the file version of the checkout (fuUI_VERSION), else
-  # TPOT_VERSION of the environment, else that of docker/_builder/.env
   local myV
-  myV=$(fuUI_VERSION "${myREPO}")
-  echo "${myV:-${myENV_VERSION:-$(fuENV_VALUE TPOT_VERSION)}}"
+  myV=$(fuRELEASE_FROM)
+  echo "${myV%%|*}"
+}
+
+fuCONFIG_GET () {
+  # fuCONFIG_GET <key>: <value>|<origin> of a setting without the options: the
+  # environment, else .env.local, else .env, else the built-in default
+  local myKEY="$1" myVAR myV
+  myVAR="myENV_${myKEY#TPOT_}"
+  if [ -n "${!myVAR:-}" ]; then echo "${!myVAR}|environment"; return 0; fi
+  if myV=$(fuENV_VALUE "${myLOCALFILE}" "${myKEY}"); then echo "${myV}|$(fuSHORT "${myLOCALFILE}")"; return 0; fi
+  if myV=$(fuENV_VALUE "${myENVFILE}" "${myKEY}"); then echo "${myV}|$(fuSHORT "${myENVFILE}")"; return 0; fi
+  case "${myKEY}" in
+    TPOT_DOCKER_REPO) myV="${myDEFAULT_HUB}" ;;
+    TPOT_GHCR_REPO) myV="${myDEFAULT_GHCR}" ;;
+    TPOT_BUILDER_ARCH) myV="${myDEFAULT_ARCH}" ;;
+    TPOT_BUILDER_JOBS) myV="${myDEFAULT_JOBS}" ;;
+    TPOT_BUILDER_LIMIT) myV="${myDEFAULT_LIMIT}" ;;
+  esac
+  echo "${myV}|built in"
+}
+
+fuCONFIG_OPTION () {
+  # fuCONFIG_OPTION <key>: what an option of this run says for it, empty for none
+  case "$1" in
+    TPOT_DOCKER_REPO) echo "${myDOCKER_REPO}" ;;
+    TPOT_GHCR_REPO) echo "${myGHCR_REPO}" ;;
+    TPOT_BUILDER_ARCH) echo "${myOPT_ARCH}" ;;
+    TPOT_BUILDER_JOBS) echo "${myOPT_JOBS}" ;;
+    TPOT_BUILDER_LIMIT) echo "${myOPT_LIMIT}" ;;
+  esac
+}
+
+fuCONFIG () {
+  # the settings of this run into myCONF_* (without the options, for the command line of
+  # the menu) and myARCH / myJOBS / myLIMIT (an option over them); rc 2 for a value that
+  # is used and wrong, with where it comes from
+  local myKEY myOUT myVAL myFROM
+  for myKEY in ${mySETTING_KEYS}; do
+    myOUT=$(fuCONFIG_GET "${myKEY}")
+    myVAL="${myOUT%%|*}" myFROM="${myOUT#*|}"
+    if [ -z "$(fuCONFIG_OPTION "${myKEY}")" ]; then
+      if ! fuSETTING_CHECK "${myKEY}" "${myVAL}"; then
+        fuUI_ERROR "${myKEY}=${myVAL} (${myFROM}): ${mySETTING_WHY}"
+        fuUI_HINT "Change it: ${0##*/} --set ${myKEY}=<value>, or remove it: ${0##*/} --unset ${myKEY}" >&2
+        return 2
+      fi
+      myVAL="${mySETTING_VALUE}"
+    fi
+    case "${myKEY}" in
+      TPOT_DOCKER_REPO) myCONF_HUB="${myVAL}" ;;
+      TPOT_GHCR_REPO) myCONF_GHCR="${myVAL}" ;;
+      TPOT_BUILDER_ARCH) myCONF_ARCH="${myVAL}"; myARCH="${myOPT_ARCH:-${myVAL}}" ;;
+      TPOT_BUILDER_JOBS) myCONF_JOBS="${myVAL}"; myJOBS="${myOPT_JOBS:-${myVAL}}" ;;
+      TPOT_BUILDER_LIMIT) myCONF_LIMIT="${myVAL}"; myLIMIT="${myOPT_LIMIT:-${myVAL}}" ;;
+    esac
+  done
+  return 0
+}
+
+fuSHOW_CONFIG () {
+  # --show-config: every setting as KEY=VALUE with where it comes from, the version too
+  local myKEY myOUT myVAL myFROM
+  printf '%s\n' "# The settings of the image builder: an option, else the environment, else" \
+    "# $(fuSHORT "${myLOCALFILE}"), else $(fuSHORT "${myENVFILE}"), else the built-in default"
+  for myKEY in ${mySETTING_KEYS}; do
+    myVAL=$(fuCONFIG_OPTION "${myKEY}")
+    if [ -n "${myVAL}" ];
+      then myFROM="option"
+      else myOUT=$(fuCONFIG_GET "${myKEY}"); myVAL="${myOUT%%|*}" myFROM="${myOUT#*|}"
+    fi
+    fuSETTING_CHECK "${myKEY}" "${myVAL}" || myFROM="${myFROM}, wrong: ${mySETTING_WHY}"
+    printf '%-40s # %s\n' "${myKEY}=${myVAL}" "${myFROM}"
+  done
+  if [ -n "${myTAG}" ];
+    then myVAL="${myTAG}" myFROM="option"
+    else myOUT=$(fuRELEASE_FROM); myVAL="${myOUT%%|*}" myFROM="${myOUT#*|}"
+  fi
+  printf '%-40s # %s\n' "TPOT_VERSION=${myVAL}" "${myFROM}"
+}
+
+fuLOCAL_WRITE () {
+  # fuLOCAL_WRITE <key> [value]: the key in .env.local set to the value (on its first
+  # line, later ones of it go) or, without a value, removed. Written in place, so mode,
+  # owner, the other lines and their CRLF stay; a new file gets a header. rc 1 when the
+  # file cannot be written
+  local myKEY="$1" myUNSET="" myTMP myCREATE="" myRC=0
+  [ "$#" -ge 2 ] || myUNSET=1
+  if [ ! -e "${myLOCALFILE}" ]; then
+    [ -z "${myUNSET}" ] || return 0
+    myCREATE=1
+  fi
+  myTMP=$(mktemp) || return 1
+  if [ -n "${myCREATE}" ]; then
+    printf '%s\n' "# The settings of the T-Pot image builder in this checkout (not in git), over" \
+      "# docker/_builder/.env: builder.sh --set KEY=VALUE / --unset KEY, or Settings in" \
+      "# its menu. An option or the environment wins over them; builder.sh -h names the keys." \
+      "${myKEY}=${2-}" > "${myTMP}" || myRC=1
+  else
+    awk -v key="${myKEY}" -v val="${2-}" -v unset="${myUNSET}" '
+      { line = $0; cr = ""; if (sub(/\r$/, "", line)) { cr = "\r"; crlf = 1 } }
+      line ~ ("^[[:space:]]*(export[[:space:]]+)?" key "[[:space:]]*=") {
+        if (!done && !unset) print key "=" val cr
+        done = 1
+        next
+      }
+      { print }
+      END { if (!done && !unset) printf "%s=%s%s\n", key, val, (crlf ? "\r" : "") }' "${myLOCALFILE}" > "${myTMP}" \
+      || myRC=1
+  fi
+  if [ "${myRC}" -ne 0 ] || ! cat "${myTMP}" > "${myLOCALFILE}"; then rm -f "${myTMP}"; return 1; fi
+  rm -f "${myTMP}"
+  [ -z "${myCREATE}" ] || fuGIVE_BACK "${myLOCALFILE}"
+  return 0
+}
+
+fuSAVE_SETTINGS () {
+  # fuSAVE_SETTINGS <KEY=VALUE | KEY> ...: set or remove them in .env.local; rc 3 when
+  # it cannot be written
+  local myITEM
+  for myITEM in "$@"; do
+    if [[ "${myITEM}" == *=* ]]; then
+      if ! fuLOCAL_WRITE "${myITEM%%=*}" "${myITEM#*=}"; then
+        fuUI_ERROR "Cannot write $(fuSHORT "${myLOCALFILE}")."
+        return 3
+      fi
+      fuUI_OK "${myITEM} in $(fuSHORT "${myLOCALFILE}")"
+    elif ! grep -Eq "^[[:space:]]*(export[[:space:]]+)?${myITEM}[[:space:]]*=" "${myLOCALFILE}" 2>/dev/null; then
+      fuUI_INFO "${myITEM} is not set in $(fuSHORT "${myLOCALFILE}")"
+    elif fuLOCAL_WRITE "${myITEM}"; then
+      fuUI_OK "${myITEM} removed from $(fuSHORT "${myLOCALFILE}")"
+    else
+      fuUI_ERROR "Cannot write $(fuSHORT "${myLOCALFILE}")."
+      return 3
+    fi
+  done
+  return 0
 }
 
 fuSETTINGS () {
-  # the version and the repositories of this run: an option, else the release version
-  # (fuRELEASE); exported, so compose takes them over its .env
+  # the version and the repositories of this run: an option, else the settings
+  # (fuCONFIG) and the release version (fuRELEASE); exported, so compose takes them over
+  # its .env
   myVER="${myTAG:-$(fuRELEASE)}"
-  myHUB="${myDOCKER_REPO:-${TPOT_DOCKER_REPO:-$(fuENV_VALUE TPOT_DOCKER_REPO)}}"
-  myGHCR="${myGHCR_REPO:-${TPOT_GHCR_REPO:-$(fuENV_VALUE TPOT_GHCR_REPO)}}"
+  myHUB="${myDOCKER_REPO:-${myCONF_HUB}}"
+  myGHCR="${myGHCR_REPO:-${myCONF_GHCR}}"
   export TPOT_VERSION="${myVER}" TPOT_DOCKER_REPO="${myHUB}" TPOT_GHCR_REPO="${myGHCR}"
   export BUILDX_BUILDER="${myBUILDER}"
   myFILES=(--env-file "${myENVFILE}" -f "${myCOMPOSE}")
@@ -590,29 +862,38 @@ fuLOGINS () {
   return "${myRC}"
 }
 
+fuROOT () { [ "$(id -u 2>/dev/null)" = "0" ]; }
+
 fuRIGHTS () {
-  # fuRIGHTS [root]: root, or the docker group where root is not needed
-  [ "$(whoami 2>/dev/null)" = "root" ] && return 0
-  if [ "${1:-}" = "root" ]; then
-    fuUI_ERROR "The upload limit while pushing (tc) needs root."
-    fuUI_HINT "Run the builder with sudo, or push without a limit: -l off" >&2
-    return 3
-  fi
-  id -nG 2>/dev/null | tr ' ' '\n' | grep -qx docker && return 0
-  fuUI_ERROR "The image builder needs root or the docker group."
-  fuUI_HINT "Run it with sudo, or add yourself to the docker group and log in again:" \
-            "sudo usermod -aG docker $(whoami 2>/dev/null)" >&2
+  # root for the upload limit while pushing (tc), the one thing that needs it; the rest
+  # needs a Docker that answers this user (fuDOCKER_READY)
+  fuROOT && return 0
+  fuUI_ERROR "The upload limit while pushing (tc) needs root."
+  fuUI_HINT "Run the builder with sudo, or push without a limit: -l off" >&2
   return 3
 }
 
 fuDOCKER_READY () {
+  # docker, buildx and compose, and a Docker that answers this user: root, the docker
+  # group or rootless Docker (DOCKER_HOST), Docker decides
   if ! command -v docker >/dev/null 2>&1; then
     fuUI_ERROR "Docker is not installed."
     fuUI_HINT "The Docker packages of https://get.docker.com/ bring buildx and compose." >&2
     return 3
   fi
   if ! docker info >/dev/null 2>&1; then
-    fuUI_ERROR "Docker does not answer: is it running, and may this user use it?"
+    fuUI_ERROR "Docker does not answer: it does not run, or this user may not use it."
+    if ! fuROOT; then
+      fuUI_HINT "Run the builder with sudo," \
+                "or join the docker group and log in again: sudo usermod -aG docker $(printf '%q' "$(id -un 2>/dev/null)")," \
+                "or use rootless Docker (https://docs.docker.com/engine/security/rootless/)." >&2
+    elif [[ "${SUDO_UID:-}" =~ ^[0-9]+$ ]] && [ "$((10#${SUDO_UID}))" -ne 0 ]; then
+      fuUI_HINT "Start it: sudo systemctl start docker" \
+                "With rootless Docker sudo talks to another Docker (the one of root): run the builder" \
+                "as your own user, without the upload limit (-l off), which needs root." >&2
+    else
+      fuUI_HINT "Start it: systemctl start docker" >&2
+    fi
     return 3
   fi
   if ! docker buildx version >/dev/null 2>&1; then
@@ -626,27 +907,38 @@ fuDOCKER_READY () {
   return 0
 }
 
-fuVERSION_GE () {
-  # fuVERSION_GE <version> <minimum>: 0 when the version (x.y.z, a v and a suffix are
-  # left out) is at least the minimum
-  local myI myX myY myV="${1#v}"
-  local -a myA=() myB=()
-  IFS=. read -r -a myA <<< "${myV%%[-+]*}"
-  IFS=. read -r -a myB <<< "$2"
-  for myI in 0 1 2; do
-    myX="${myA[myI]:-0}" myY="${myB[myI]:-0}"
-    [[ "${myX}" =~ ^[0-9]+$ ]] || return 1
-    if [ "$((10#${myX}))" -gt "$((10#${myY}))" ]; then return 0; fi
-    if [ "$((10#${myX}))" -lt "$((10#${myY}))" ]; then return 1; fi
-  done
-  return 0
+fuLOAD_BUILD () {
+  # the smoke tests need a build for this host loaded into docker: the run builds more
+  # than this host's platform, or pushes (a pushed build is not loaded)
+  ! fuHOST_ONLY || fuPUSHING
+}
+
+fuLOAD_NEEDED () {
+  # this run makes that build (with an override, fuWRITE_OVERRIDE load): -T, a host of a
+  # known architecture, a smoke test for an image of the selection, and fuLOAD_BUILD
+  [ -n "${myTEST}" ] && [ -n "${myHOST}" ] && fuLOAD_BUILD || return 1
+  fuSMOKE_PLAN "${myLIST[@]}"
+  [ "${#mySMOKE_NAMES[@]}" -gt 0 ]
 }
 
 fuCOMPOSE_RECENT () {
-  local myV
+  # compose of at least myCOMPOSE_MIN for the overrides of this run; the error names
+  # what of this run needs it
+  local myV myI myTEXT="" myNEED="needs"
+  local -a myWHY=()
   myV=$(docker compose version --short 2>/dev/null)
-  fuVERSION_GE "${myV}" "${myCOMPOSE_MIN}" && return 0
-  fuUI_ERROR "docker compose ${myV:-of an unknown version} is too old, -a and pushing to one registry need ${myCOMPOSE_MIN}."
+  fuUI_VERSION_GE "${myV}" "${myCOMPOSE_MIN}" && return 0
+  [ "${myARCH}" = "both" ] || myWHY+=("-a ${myARCH}")
+  if fuONE_REGISTRY; then myWHY+=("the push to one registry"); fi
+  if fuLOAD_NEEDED; then myWHY+=("the smoke test build (-T)"); fi
+  for myI in "${!myWHY[@]}"; do
+    if [ "${myI}" -eq 0 ]; then myTEXT="${myWHY[0]}"
+    elif [ "${myI}" -eq $((${#myWHY[@]} - 1)) ]; then myTEXT="${myTEXT} and ${myWHY[myI]}" myNEED="need"
+    else myTEXT="${myTEXT}, ${myWHY[myI]}"
+    fi
+  done
+  fuUI_ERROR "docker compose ${myV:-of an unknown version} is too old: ${myTEXT} ${myNEED} ${myCOMPOSE_MIN}."
+  fuUI_HINT "Update the Docker packages (docker-compose-plugin), i.e. those of https://get.docker.com/" >&2
   return 3
 }
 
@@ -676,8 +968,34 @@ fuLOGDIR () {
   # the folder of the logs, builder.log emptied
   { mkdir -p "${myLOGDIR}" && : > "${myLOG}"; } 2>/dev/null && return 0
   fuUI_ERROR "Cannot write the logs to ${myLOGDIR}."
-  fuUI_HINT "A run with sudo may have left it to root: sudo chown -R $(whoami 2>/dev/null) ${myLOGDIR}" >&2
+  fuUI_HINT "A run with sudo may have left it to root:" \
+            "sudo chown -R $(printf '%q:%q' "$(id -un 2>/dev/null)" "$(id -gn 2>/dev/null)") $(printf '%q' "${myLOGDIR}")" >&2
   return 3
+}
+
+fuGIVE_BACK () {
+  # fuGIVE_BACK <path>: what this run wrote there as root under sudo goes back to the
+  # user of sudo (SUDO_UID:SUDO_GID), recursively, symlinks themselves and never what
+  # they point to. Only for root with a numeric SUDO_UID other than 0 and a SUDO_GID, a
+  # path that is there and no symlink, in a folder of that user (a checkout of theirs,
+  # not /tmp or another user's folder)
+  local myPATH="$1" myPARENT
+  fuROOT || return 0
+  [[ "${SUDO_UID:-}" =~ ^[0-9]+$ && "${SUDO_GID:-}" =~ ^[0-9]+$ ]] || return 0
+  [ "$((10#${SUDO_UID}))" -ne 0 ] || return 0
+  [ -e "${myPATH}" ] && [ ! -L "${myPATH}" ] || return 0
+  myPARENT=$(dirname -- "${myPATH}")
+  [ -n "$(find "${myPARENT}" -maxdepth 0 -user "${SUDO_UID}" 2>/dev/null)" ] || return 0
+  chown -R -h "${SUDO_UID}:${SUDO_GID}" -- "${myPATH}" 2>/dev/null || true
+}
+
+fuEXIT () {
+  # the end of every run (EXIT, fuCANCEL), once: the upload limit of this run goes, the
+  # logs go back to the user of sudo
+  [ -z "${myEXIT_DONE}" ] || return 0
+  myEXIT_DONE=1
+  fuLIMIT_OFF
+  fuGIVE_BACK "${myLOGDIR}"
 }
 
 fuHAS_PLATFORMS () {
@@ -753,8 +1071,11 @@ fuPREPARE () {
   local -a myARCHS=()
   for myP in "$@"; do [ "${myP#linux/}" = "${myHOST}" ] || myARCHS+=("${myP#linux/}"); done
   fuSPIN "Checking the buildx builder '${myBUILDER}' ..." "${myLOG}" fuENSURE_BUILDER || return 3
-  if [ "${#myARCHS[@]}" -gt 0 ]; then
-    fuSPIN "Configuring QEMU for ${myARCHS[*]} ..." "${myLOG}" fuQEMU "${myARCHS[@]}" || return 3
+  if [ "${#myARCHS[@]}" -gt 0 ] && ! fuSPIN "Configuring QEMU for ${myARCHS[*]} ..." "${myLOG}" fuQEMU "${myARCHS[@]}"; then
+    # binfmt_misc belongs to the host: a privileged container registers it only with a
+    # Docker that runs as root, never with rootless Docker
+    fuUI_HINT "QEMU needs Docker running as root (sudo), rootless Docker cannot register it; see ${myLOG}." >&2
+    return 3
   fi
   fuSPIN "Making sure '${myBUILDER}' builds $* ..." "${myLOG}" fuENSURE_PLATFORMS "$@" || return 3
   return 0
@@ -876,13 +1197,21 @@ fuSMOKE_TESTS () {
     mySUMMARY+=("fail:No smoke tests, this host is neither amd64 nor arm64")
     return 4
   fi
-  if ! fuHOST_ONLY || fuPUSHING; then
+  if fuLOAD_BUILD; then
+    # compose loads the build of one platform into docker by itself (there is no
+    # --load); it takes the cache on purpose, also after -n: the images this run just
+    # built come out of it again, the same and fast
     fuWRITE_OVERRIDE "${myLOAD}" load "${mySMOKE_IMAGES[@]}"
+    : > "${myLOGDIR}/load.log"
     if ! fuSPIN "Building ${mySMOKE_IMAGES[*]} for linux/${myHOST} into docker for the smoke tests ..." \
            "${myLOGDIR}/load.log" docker compose "${myFILES[@]}" -f "${myLOAD}" --progress plain build \
            "${mySMOKE_IMAGES[@]}" --builder "${myBUILDER}"; then
       mySUMMARY+=("fail:The build for the smoke tests, see ${myLOGDIR}/load.log")
       return 4
+    fi
+    # -a arm64 on amd64 (or the other way round): what the tests run is this host's build
+    if [[ " ${myPLATFORMS[*]} " != *" linux/${myHOST} "* ]]; then
+      mySUMMARY+=("warn:The smoke tests tested a linux/${myHOST} build, not the ${myPLATFORMS[*]} images of this run")
     fi
   fi
   for myI in "${!mySMOKE_NAMES[@]}"; do
@@ -912,20 +1241,20 @@ fuDESCRIBE () {
 }
 
 fuCOMMAND_LINE () {
-  # the same run without the menu
+  # the same run without the menu (with the settings of this checkout, fuCONFIG)
   local -a myC=()
-  [ "$(whoami 2>/dev/null)" != "root" ] || [ -z "${SUDO_USER:-}" ] || myC+=(sudo)
+  ! fuROOT || [ -z "${SUDO_USER:-}" ] || myC+=(sudo)
   myC+=("$0" -y)
   [ -z "${myGROUPS}" ] || myC+=(-g "${myGROUPS}")
   [ -z "${myIMAGES}" ] || myC+=(-i "${myIMAGES}")
-  [ "${myARCH}" = "both" ] || myC+=(-a "${myARCH}")
+  [ "${myARCH}" = "${myCONF_ARCH}" ] || myC+=(-a "${myARCH}")
   if [ -n "${myPUSH_HUB}" ] && [ -n "${myPUSH_GHCR}" ]; then myC+=(-p)
   elif [ -n "${myPUSH_HUB}" ]; then myC+=(--push-hub)
   elif [ -n "${myPUSH_GHCR}" ]; then myC+=(--push-ghcr)
   fi
-  if fuPUSHING && [ "${myLIMIT}" != "${myDEFAULT_LIMIT}" ]; then myC+=(-l "${myLIMIT}"); fi
+  if fuPUSHING && [ "${myLIMIT}" != "${myCONF_LIMIT}" ]; then myC+=(-l "${myLIMIT}"); fi
   [ -z "${myNO_CACHE}" ] || myC+=(-n)
-  [ "${myJOBS}" = "${myDEFAULT_JOBS}" ] || myC+=(-j "${myJOBS}")
+  [ "${myJOBS}" = "${myCONF_JOBS}" ] || myC+=(-j "${myJOBS}")
   [ -z "${myTEST}" ] || myC+=(-T)
   [ -z "${myTAG}" ] || myC+=(-t "${myTAG}")
   [ -z "${myDOCKER_REPO}" ] || myC+=(--docker-repo "${myDOCKER_REPO}")
@@ -946,7 +1275,7 @@ fuRUN () {
     then fuUI_BANNER "Image Builder" "$(fuDESCRIBE)" "Version ${myVER}, ${myHUB} and ${myGHCR}"
     else fuUI_INFO "Building: $(fuDESCRIBE)"
   fi
-  if fuLIMITED; then fuRIGHTS root || return 3; else fuRIGHTS || return 3; fi
+  if fuLIMITED; then fuRIGHTS || return 3; fi
   fuDOCKER_READY || return 3
   if fuLIMITED && ! command -v tc >/dev/null 2>&1; then
     fuUI_ERROR "tc (iproute2) is missing for the upload limit."
@@ -954,8 +1283,10 @@ fuRUN () {
     return 3
   fi
   fuLOGDIR || return 3
+  # the overrides of an earlier run go, this one writes those it needs
+  rm -f "${myLOGDIR}"/override*.yml
   fuSELECTION || return 3
-  if fuOVERRIDE_NEEDED; then fuCOMPOSE_RECENT || return 3; fi
+  if fuOVERRIDE_NEEDED || fuLOAD_NEEDED; then fuCOMPOSE_RECENT || return 3; fi
   if fuPUSHING && [ -z "${myMENU}" ]; then fuLOGINS || return 3; fi
   fuPREPARE "${myPLATFORMS[@]}" || return 3
   if fuOVERRIDE_NEEDED; then
@@ -1025,15 +1356,38 @@ fuRUN () {
 }
 
 fuSTATUS () {
-  # one line about mybuilder for the menu (no bootstrap, nothing is started)
-  local myOUT myPLAT mySTATE
+  # one line about mybuilder for the menu (no bootstrap, nothing is started): the two
+  # platforms T-Pot builds, how many more it has (QEMU brings a dozen), what it lacks
+  local myOUT myPLAT mySTATE myP myTEXT myOTHER=0
+  local -a myALL=() myHAS=() myLACKS=()
   if ! myOUT=$(docker buildx inspect "${myBUILDER}" 2>/dev/null); then
     echo "Builder '${myBUILDER}': not set up (Builder setup sets it up)"
     return 0
   fi
   myPLAT=$(sed -n 's/.*Platforms: *//p' <<< "${myOUT}" | head -n 1)
   mySTATE=$(sed -n 's/^ *Status: *//p' <<< "${myOUT}" | head -n 1)
-  echo "Builder '${myBUILDER}': ${mySTATE:-there}${myPLAT:+, ${myPLAT}}"
+  myTEXT="${mySTATE:-there}"
+  if [ -n "${myPLAT}" ]; then
+    IFS=, read -r -a myALL <<< "${myPLAT}"
+    for myP in "${myALL[@]}"; do
+      myP="${myP//[[:space:]*]/}"
+      case "${myP}" in
+        linux/amd64|linux/arm64|"") ;;
+        *) myOTHER=$((myOTHER + 1)) ;;
+      esac
+    done
+    for myP in linux/amd64 linux/arm64; do
+      if [[ ",${myPLAT//[[:space:]*]/}," == *",${myP},"* ]]; then myHAS+=("${myP}"); else myLACKS+=("${myP}"); fi
+    done
+    if [ "${#myHAS[@]}" -gt 0 ]; then
+      myTEXT="${myTEXT}, builds ${myHAS[0]}${myHAS[1]:+ and ${myHAS[1]}}"
+      [ "${myOTHER}" -eq 0 ] || myTEXT="${myTEXT} (+${myOTHER} more)"
+    elif [ "${myOTHER}" -eq 1 ]; then myTEXT="${myTEXT}, 1 other platform"
+    else myTEXT="${myTEXT}, ${myOTHER} other platforms"
+    fi
+    [ "${#myLACKS[@]}" -eq 0 ] || myTEXT="${myTEXT}, not ${myLACKS[0]}${myLACKS[1]:+ and ${myLACKS[1]}}"
+  fi
+  echo "Builder '${myBUILDER}': ${myTEXT}"
 }
 
 fuCHECK () {
@@ -1041,7 +1395,6 @@ fuCHECK () {
   local myOUT myPLAT myRC=0 myA myV
   local -a myITEMS=()
   fuUI_BANNER "Builder Setup" "Checking the buildx builder '${myBUILDER}'"
-  fuRIGHTS || return 3
   fuDOCKER_READY || return 3
   myHOST=$(fuHOST_ARCH) || myHOST=""
   if myOUT=$(docker buildx inspect "${myBUILDER}" --bootstrap 2>&1); then
@@ -1069,9 +1422,9 @@ fuCHECK () {
     fi
   done
   myV=$(docker compose version --short 2>/dev/null)
-  if fuVERSION_GE "${myV}" "${myCOMPOSE_MIN}";
+  if fuUI_VERSION_GE "${myV}" "${myCOMPOSE_MIN}";
     then myITEMS+=("ok:docker compose ${myV}")
-    else myITEMS+=("warn:docker compose ${myV:-of an unknown version}: -a and pushing to one registry need ${myCOMPOSE_MIN}")
+    else myITEMS+=("warn:docker compose ${myV:-of an unknown version}: -a, the push to one registry and the smoke tests (-T) need ${myCOMPOSE_MIN}")
   fi
   fuUI_SUMMARY "Builder '${myBUILDER}'" "${myITEMS[@]}" || true
   return "${myRC}"
@@ -1081,7 +1434,6 @@ fuSETUP () {
   # --setup: mybuilder and QEMU for linux/amd64 and linux/arm64
   fuUI_BANNER "Builder Setup" "Setting up Docker for multi-arch builds." \
               "Requires the Docker packages of https://get.docker.com/"
-  fuRIGHTS || return 3
   fuDOCKER_READY || return 3
   myHOST=$(fuHOST_ARCH) || myHOST=""
   fuLOGDIR || return 3
@@ -1102,7 +1454,6 @@ fuUNINSTALL () {
   local myRC=0
   local -a myITEMS=() myIMAGES_LEFT=()
   fuUI_BANNER "Builder Setup" "Removing the multi-arch build setup"
-  fuRIGHTS || return 3
   fuDOCKER_READY || return 3
   # buildx keeps its builders per user (root with sudo, a user of the docker group
   # without), so a builder may exist for the other one as well
@@ -1189,22 +1540,32 @@ fuMENU_IMAGES () {
 }
 
 fuMENU_OPTIONS () {
-  # the options one by one
+  # the options one by one, the settings (fuCONFIG) as the defaults
   local myOUT myRATE myHOSTTEXT
+  local -a myITEMS=()
   myHOSTTEXT="This host only"
   [ -z "${myHOST}" ] || myHOSTTEXT="${myHOSTTEXT} (linux/${myHOST})"
-  fuASK myARCH fuUI_CHOOSE "Platforms" "linux/amd64 and linux/arm64:both" "${myHOSTTEXT}:host" \
-    "linux/amd64 only:amd64" "linux/arm64 only:arm64"
+  myITEMS=("linux/amd64 and linux/arm64:both" "${myHOSTTEXT}:host" "linux/amd64 only:amd64" "linux/arm64 only:arm64")
+  [ "${myCONF_ARCH}" = "both" ] || myITEMS=("${myITEMS[@]/%:${myCONF_ARCH}/ (the default):${myCONF_ARCH}}")
+  fuASK myARCH fuUI_CHOOSE "Platforms" "${myITEMS[@]}"
   myPUSH_HUB="" myPUSH_GHCR=""
   if fuYES "Push the images to Docker Hub (${myHUB})?" "Push" "No"; then myPUSH_HUB=1; fi
   if fuYES "Push the images to GHCR (${myGHCR})?" "Push" "No"; then myPUSH_GHCR=1; fi
   if fuPUSHING && [ "${myARCH}" != "both" ]; then fuMENU_TAG; fi
-  myLIMIT="${myDEFAULT_LIMIT}"
-  if fuPUSHING; then
-    if [ "$(whoami 2>/dev/null)" != "root" ];
-      then fuUI_WARN "An upload limit needs root (sudo), this run pushes without one."; myLIMIT="off"
+  myLIMIT="${myCONF_LIMIT}"
+  if fuPUSHING && [ "${myCONF_LIMIT}" != "off" ]; then
+    if ! fuROOT;
+      then
+        # the same as without the menu: no limit only when it is chosen
+        fuASK myOUT fuUI_CHOOSE "Upload limit needs root (sudo)" "Push without a limit:off" \
+          "Quit, then run it with sudo:quit"
+        if [ "${myOUT}" = "quit" ]; then
+          fuUI_HINT "Run it with sudo: sudo $(printf '%q' "$0")"
+          exit 0
+        fi
+        myLIMIT="off"
       else
-        fuASK myOUT fuUI_CHOOSE "Upload limit while pushing" "${myDEFAULT_LIMIT} (the default):${myDEFAULT_LIMIT}" \
+        fuASK myOUT fuUI_CHOOSE "Upload limit while pushing" "${myCONF_LIMIT} (the default):${myCONF_LIMIT}" \
           "No limit:off" "Another rate:other"
         myLIMIT="${myOUT}"
         while [ "${myLIMIT}" = "other" ]; do
@@ -1215,7 +1576,12 @@ fuMENU_OPTIONS () {
   fi
   myNO_CACHE=""
   if fuYES "Build without the cache (slower, fresh base images)?" "Without cache" "With cache"; then myNO_CACHE=1; fi
-  fuASK myJOBS fuUI_CHOOSE "Builds at a time" "1:1" "2 (the default):2" "4:4" "8:8"
+  myITEMS=()
+  [[ " 1 2 4 8 " == *" ${myCONF_JOBS} "* ]] || myITEMS+=("${myCONF_JOBS} (the default):${myCONF_JOBS}")
+  for myOUT in 1 2 4 8; do
+    if [ "${myOUT}" = "${myCONF_JOBS}" ]; then myITEMS+=("${myOUT} (the default):${myOUT}"); else myITEMS+=("${myOUT}:${myOUT}"); fi
+  done
+  fuASK myJOBS fuUI_CHOOSE "Builds at a time" "${myITEMS[@]}"
   myTEST=""
   if fuYES "Run the smoke tests of the built images afterwards?" "Run them" "No"; then myTEST=1; fi
   if fuYES "Change the version (${myVER}) or the repositories?" "Change" "Keep them"; then
@@ -1293,19 +1659,69 @@ fuMENU_BUILD () {
   [ "${myWHAT}" = "build" ]
 }
 
+fuMENU_SETTINGS () {
+  # Settings: every key one by one, Keep first; then what changes, Save or Back. Saved
+  # into .env.local like --set / --unset, the run takes them at once
+  local myKEY myOUT myVAL myFROM myNAME myOTHER
+  local -a myCHANGES=() myITEMS=() myTEXTS=()
+  for myKEY in ${mySETTING_KEYS}; do
+    myOUT=$(fuCONFIG_GET "${myKEY}")
+    myVAL="${myOUT%%|*}" myFROM="${myOUT#*|}"
+    myITEMS=("Keep:keep")
+    case "${myKEY}" in
+      TPOT_DOCKER_REPO) myNAME="Docker Hub repository" myOTHER="Another repository:other" ;;
+      TPOT_GHCR_REPO) myNAME="GHCR repository" myOTHER="Another repository:other" ;;
+      TPOT_BUILDER_ARCH) myNAME="Platforms without -a"; myOTHER=""
+        myITEMS+=("linux/amd64 and linux/arm64:both" "This host only:host" "linux/amd64 only:amd64"
+                  "linux/arm64 only:arm64") ;;
+      TPOT_BUILDER_JOBS) myNAME="Builds at a time without -j"; myOTHER=""
+        myITEMS+=("1:1" "2:2" "4:4" "8:8") ;;
+      TPOT_BUILDER_LIMIT) myNAME="Upload limit without -l" myOTHER="Another rate:other"
+        myITEMS+=("${myDEFAULT_LIMIT}:${myDEFAULT_LIMIT}" "No limit:off") ;;
+    esac
+    [ -z "${myOTHER}" ] || myITEMS+=("${myOTHER}")
+    if grep -Eq "^[[:space:]]*(export[[:space:]]+)?${myKEY}[[:space:]]*=" "${myLOCALFILE}" 2>/dev/null; then
+      myITEMS+=("Remove the setting (back to .env or the default):unset")
+    fi
+    fuASK myOUT fuUI_CHOOSE "${myNAME} (${myKEY}), now ${myVAL} (${myFROM})" "${myITEMS[@]}"
+    while [ "${myOUT}" = "other" ]; do
+      fuASK myOUT fuUI_INPUT "${myNAME} (${myKEY}):"
+      if ! fuSETTING_CHECK "${myKEY}" "${myOUT}"; then fuUI_WARN "${mySETTING_WHY}"; myOUT="other"; fi
+    done
+    case "${myOUT}" in
+      keep) ;;
+      unset) myCHANGES+=("${myKEY}"); myTEXTS+=("info:${myKEY} removed (back to .env or the default)") ;;
+      *) myCHANGES+=("${myKEY}=${myOUT}"); myTEXTS+=("info:${myKEY}=${myOUT}") ;;
+    esac
+  done
+  if [ "${#myCHANGES[@]}" -eq 0 ]; then fuUI_INFO "Nothing changed."; return 0; fi
+  myOUT=$(for myVAL in "${myCHANGES[@]}"; do
+            if [[ "${myVAL}" == *=* ]]; then printf ' --set %q' "${myVAL}"; else printf ' --unset %q' "${myVAL}"; fi
+          done)
+  fuUI_SUMMARY "Builder settings" "${myTEXTS[@]}" "info:Into $(fuSHORT "${myLOCALFILE}")" \
+    "next:The same without the menu: $(printf '%q' "$0")${myOUT}" || true
+  fuASK myOUT fuUI_CHOOSE "Save the settings?" "Save:save" "Back:back"
+  [ "${myOUT}" = "save" ] || return 0
+  fuSAVE_SETTINGS "${myCHANGES[@]}" || return 0
+  fuCONFIG || true
+  fuSETTINGS
+  fuPLATFORMS || true
+}
+
 fuMENU () {
   local myWHAT myRC
   fuSETTINGS
   fuPLATFORMS || true
-  fuRIGHTS || return 3
   fuDOCKER_READY || return 3
   myMENU=1
   fuUI_BANNER "Image Builder" "$(fuSTATUS)" "Version ${myVER}, ${myHUB} and ${myGHCR}"
   while true; do
     fuASK myWHAT fuUI_CHOOSE "What do you want to do?" "Build images:build" \
-      "Builder setup (check, set up, remove):setup" "Quit:quit"
+      "Builder setup (check, set up, remove):setup" "Settings (repositories, platforms, builds, limit):settings" \
+      "Quit:quit"
     case "${myWHAT}" in
       quit) return 0 ;;
+      settings) fuMENU_SETTINGS ;;
       setup)
         fuASK myWHAT fuUI_CHOOSE "Builder setup" "Check the builder:check" "Set up the builder:setup" \
           "Remove the builder setup:uninstall" "Back:back"
@@ -1381,24 +1797,30 @@ fuCANCEL () {
   echo
   fuUI_WARN "Cancelled."
   fuSTOP_CHILDREN
-  fuLIMIT_OFF
+  fuEXIT
   exit 130
 }
 
 fuMAIN () {
   local myRC=0
   fuPARSE "$@" || return 2
+  [ "${myACTION}" != "help" ] || { fuHELP; return 0; }
+  # a Linux tool (bash 4, tc, binfmt_misc, the GNU timeout of the smoke tests): -h shows
+  # everywhere, everything else stops outside Linux, one rule for all of it
+  fuUI_LINUX_ONLY "Image Builder" 3
   case "${myACTION}" in
-    help) fuHELP; return 0 ;;
     list) fuLIST; return 0 ;;
+    show) fuSHOW_CONFIG; return 0 ;;
   esac
-  trap fuLIMIT_OFF EXIT
+  trap fuEXIT EXIT
   trap fuCANCEL INT TERM
   case "${myACTION}" in
+    settings) fuSAVE_SETTINGS "${mySET_ITEMS[@]}"; return $? ;;
     check) fuCHECK; return $? ;;
     setup) fuSETUP; return $? ;;
     uninstall) fuUNINSTALL; return $? ;;
   esac
+  fuCONFIG || return 2
   # the menu only without any option (-y too) at a terminal
   if [ -z "${myYES}" ] && [ "$#" -eq 0 ] && [ -t 0 ] && [ -t 1 ];
     then fuMENU || myRC=$?
