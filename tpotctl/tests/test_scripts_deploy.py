@@ -17,6 +17,7 @@ import unittest
 
 from tpotctl.tests import test_scripts as base
 from tpotctl.tests import test_ui as ui
+from tpotctl.tests.test_sensor_checks import CANDIDATES, tpotinit_takes
 
 REPO = base.REPO
 AWK = shutil.which("awk") or "/usr/bin/awk"
@@ -167,7 +168,7 @@ class DeployAddressTest(Harness):
 
     def test_an_address_with_more_in_it_is_asked_again(self):
         for wrong in ("example.com -e x=1", "x;rm 1.2.3.4", "1.2.3.4;id", "-e.example.com", "999.1.1.1",
-                      "1.2.3", "a..b", "host_name.example.com", "[::1]", "1:2:3:4:5:6:7:8:9", "1::2::3",
+                      "1.2.3", "a..b", "[::1]", "1:2:3:4:5:6:7:8:9", "1::2::3",
                       "a" * 64 + ".example.com", ".".join(["a" * 63] * 4) + ".com", "h\u00f6st.example.com",
                       "fe80::1%eth0", "010.0.0.1", "123"):
             with self.subTest(address=wrong):
@@ -177,6 +178,8 @@ class DeployAddressTest(Harness):
                 self.assertIn("-i\n10.0.0.2,", "\n".join(self.args()))
                 self.assertNotIn(wrong, self.calls())
                 os.remove(os.path.join(self.home, "calls"))
+        for wrong in ("example.com -e x=1", "x;rm 1.2.3.4", "999.1.1.1", "1.2.3", "123", "fe80::1%eth0",
+                      "host_name.example.com", "sensor_1", "fd00::1", "::1", "::ffff:192.0.2.1"):
             with self.subTest(hive=wrong):
                 result = self.deploy("y", "admin", "10.0.0.2", "y", wrong, "10.0.0.1")
                 self.assertIn("### [WARNING] - Invalid IP/domain", result.stdout)
@@ -184,9 +187,18 @@ class DeployAddressTest(Harness):
                 self.assertIn("env myTPOT_HIVE_IP=10.0.0.1", self.calls())
                 os.remove(os.path.join(self.home, "calls"))
 
+    def test_an_ipv6_hive_is_asked_again_with_the_way_out(self):
+        """RA6: Logstash on the SENSOR sends to https://${TPOT_HIVE_IP}:64294, an IPv6 address breaks that
+        URL (and tpotinit rejects ::ffff:192.0.2.1): the question says IPv4 or a name, the warning no IPv6."""
+        result = self.deploy("y", "admin", "10.0.0.2", "y", "fd00::1", "hive.example.org")
+        self.assert_asked_again(result)
+        self.assertIn("### [WARNING] - Invalid IP/domain. Enter an IPv4 address or a domain name, no IPv6.",
+                      result.stdout)
+        self.assertIn('fuASK_VALID "Enter the IPv4 address or the domain name of this HIVE:"', body("deploy.sh"))
+        self.assertIn("env myTPOT_HIVE_IP=hive.example.org", self.calls())
+
     def test_host_names_and_addresses_go_through(self):
-        for good in ("my-host.example.com", "sensor1", "10.0.0.2", "255.255.255.255", "fd00::2", "::1",
-                     "2001:db8:0:0:0:0:0:1", "::ffff:192.0.2.1", "a" * 63 + ".example.com",
+        for good in ("my-host.example.com", "sensor1", "10.0.0.2", "255.255.255.255", "a" * 63 + ".example.com",
                      ".".join(["a" * 63] * 3) + ".example"):
             with self.subTest(address=good):
                 result = self.deploy(*self.answers(sensor=good, hive=good))
@@ -197,6 +209,18 @@ class DeployAddressTest(Harness):
                 self.assertIn(f"### [OK] - {good} sends its logs to {good} as", result.stdout)
                 os.remove(os.path.join(self.home, "calls"))
 
+    def test_a_sensor_on_ipv6_or_an_ssh_alias_goes_through(self):
+        """RA7: the SENSOR address goes to ssh and Ansible only: IPv6 works there, and an alias of
+        ~/.ssh/config or /etc/hosts may have an _ (sensor_1)."""
+        for good in ("fd00::2", "::1", "2001:db8:0:0:0:0:0:1", "::ffff:192.0.2.1", "sensor_1", "my_host.lan"):
+            with self.subTest(address=good):
+                result = self.deploy(*self.answers(sensor=good))
+                self.assertNotIn("Invalid IP/domain", result.stdout)
+                self.assert_deployed(result)
+                self.assertIn(f"{good},", self.args())
+                self.assertIn("env myTPOT_HIVE_IP=10.0.0.1", self.calls())
+                os.remove(os.path.join(self.home, "calls"))
+
     def test_spaces_around_an_answer_are_left_out(self):
         result = self.deploy(*self.answers(sensor="  10.0.0.2 ", hive=" 10.0.0.1  ", user=" admin "))
         self.assert_deployed(result)
@@ -205,7 +229,7 @@ class DeployAddressTest(Harness):
         self.assertIn("env myTPOT_HIVE_IP=10.0.0.1\n", self.calls())
 
     def test_a_user_name_with_more_in_it_is_asked_again(self):
-        for wrong in ("a b", "-oProxyCommand=x", "root;id", "Admin", "1admin", "a" * 33):
+        for wrong in ("a b", "-oProxyCommand=x", "root;id", "1admin", "a" * 33, "a@b"):
             with self.subTest(user=wrong):
                 result = self.deploy("y", wrong, "admin", "10.0.0.2", "y", "10.0.0.1")
                 self.assertIn("### [WARNING] - Invalid user name", result.stdout)
@@ -214,7 +238,7 @@ class DeployAddressTest(Harness):
                 os.remove(os.path.join(self.home, "calls"))
 
     def test_user_names_with_dots_and_dashes_go_through(self):
-        for good in ("tpot.admin-1", "_svc", "a" * 32):
+        for good in ("tpot.admin-1", "_svc", "a" * 32, "Marco", "Admin"):
             with self.subTest(user=good):
                 result = self.deploy(*self.answers(user=good))
                 self.assert_deployed(result)
@@ -230,27 +254,25 @@ class DeployAddressTest(Harness):
                 self.assertIn("### [ERROR] - ", result.stderr)
                 self.assertNotIn("ansible-playbook", self.calls())
 
-    def test_the_checks_are_the_ones_of_tpot_sensors_add(self):
-        """fuCHECK_ADDRESS / fuCHECK_USER of deploy.sh say what sensors.check_address / check_user say,
-        besides two cases deploy.sh rejects on purpose: digits and dots only that are no IPv4 address
-        (a mistyped one) and an IPv6 zone (%eth0, no address of another host)."""
-        from tpotctl import sensors
-        text = body("deploy.sh")
-        functions = "\n".join(re.findall(r"^fu(?:TRIM|IS_\w+|CHECK_\w+) \(\) \{\n.*?^\}$", text, re.M | re.S))
-        addresses = ["10.0.0.2", "0.0.0.0", "255.255.255.255", "256.1.1.1", "1.2.3.04", "1.2.3", "1.2.3.4.5",
-                     "::", "::1", "1::", "fd00::2", "1:2:3:4:5:6:7:8", "1:2:3:4:5:6:7::", "1:2:3:4:5:6:7:8::",
-                     "1:2:3:4:5:6:7", "::ffff:1.2.3.4", "::ffff:1.2.3.256", "1:::2", "1::2::3", ":1::2", "12345::1",
-                     "g::1", "[::1]", "sensor1", "my-host.example.com", "-host", "host-", "a_b", "a..b", ".a", "a.",
-                     "x" * 63, "x" * 64, ".".join(["x" * 63] * 3) + "." + "x" * 61, ".".join(["x" * 63] * 4),
-                     "1a.example", "example.com -e x=1", "x;rm 1.2.3.4", "", " "]
-        users = ["admin", "tpot.admin-1", "_svc", "a" * 32, "a" * 33, "Admin", "1admin", "a b", "-o", "root;id", ""]
+    def bash_checks(self, check, values):
+        """fuCHECK_* of deploy.sh (with the functions it calls) for each value: True when it passes."""
+        functions = "\n".join(re.findall(r"^fu(?:TRIM|IS_\w+|CHECK_\w+) \(\) \{\n.*?^\}$", body("deploy.sh"),
+                                         re.M | re.S))
         script = functions + "\nwhile IFS= read -r a; do if \"$0\" \"$a\"; then echo 1; else echo 0; fi; done\n"
+        result = subprocess.run(["bash", "-c", script, check], input="".join(v + "\n" for v in values),
+                                capture_output=True, universal_newlines=True, timeout=60)
+        self.assertEqual(result.stderr, "")
+        return [line == "1" for line in result.stdout.splitlines()]
 
-        def bash(check, values):
-            result = subprocess.run(["bash", "-c", script, check], input="".join(v + "\n" for v in values),
-                                    capture_output=True, universal_newlines=True, timeout=60)
-            self.assertEqual(result.stderr, "")
-            return [line == "1" for line in result.stdout.splitlines()]
+    def test_the_checks_are_the_ones_of_tpot_sensors_add(self):
+        """fuCHECK_ADDRESS / fuCHECK_HIVE_ADDRESS / fuCHECK_USER of deploy.sh say what
+        sensors.check_address / check_hive_address / check_user say, every case (K, RA6, RA7)."""
+        from tpotctl import sensors
+        addresses = CANDIDATES + ["1:2:3:4:5:6:7::", "1:2:3:4:5:6:7:8::", "1:2:3:4:5:6:7", "::ffff:1.2.3.4",
+                                  "::ffff:1.2.3.256", "1:::2", ":1::2", "12345::1", "a_b", "host_name.example.com",
+                                  "_sensor"]
+        users = ["admin", "tpot.admin-1", "_svc", "a" * 32, "a" * 33, "Admin", "Marco", "A" * 32, "1admin", "a b",
+                 "-o", "root;id", "a@b", ""]
 
         def python(check, value):
             try:
@@ -259,17 +281,21 @@ class DeployAddressTest(Harness):
             except sensors.SensorsError:
                 return False
 
-        for value, ok in zip(addresses, bash("fuCHECK_ADDRESS", addresses)):
-            with self.subTest(address=value):
-                expected = python(sensors.check_address, value) and value.strip() == value
-                if re.match(r"^[0-9.]+$", value) and expected:
-                    expected = python(sensors.check_address, value) and bool(re.match(
-                        r"^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])$",
-                        value))
-                self.assertEqual(ok, expected)
-        for value, ok in zip(users, bash("fuCHECK_USER", users)):
-            with self.subTest(user=value):
-                self.assertEqual(ok, python(sensors.check_user, value))
+        for function, check, values in (("fuCHECK_ADDRESS", sensors.check_address, addresses),
+                                        ("fuCHECK_HIVE_ADDRESS", sensors.check_hive_address, addresses),
+                                        ("fuCHECK_USER", sensors.check_user, users)):
+            for value, ok in zip(values, self.bash_checks(function, values)):
+                with self.subTest(check=function, value=value):
+                    # fuASK_VALID hands the answer over without the spaces around it
+                    self.assertEqual(ok, python(check, value) and value.strip() == value)
+
+    def test_every_hive_address_it_takes_passes_tpotinit(self):
+        """RA6: what deploy.sh writes as TPOT_HIVE_IP, tpotinit on the SENSOR starts with (fuHOST)."""
+        taken = [v for v, ok in zip(CANDIDATES, self.bash_checks("fuCHECK_HIVE_ADDRESS", CANDIDATES)) if ok]
+        self.assertIn("10.0.0.2", taken)
+        self.assertIn("hive.example.org", taken)
+        self.assertNotIn("fd00::1", taken)
+        self.assertEqual([v for v, ok in zip(taken, tpotinit_takes(taken)) if not ok], [])
 
     def test_the_arguments_are_quoted(self):
         # the command with its continuation lines
@@ -300,6 +326,23 @@ class DeployDistributionTest(Harness):
         self.assertNotIn("ansible-playbook", self.calls())
         for name in array("install.sh", "mySUPPORTED_DISTRIBUTIONS"):
             self.assertIn(name, result.stderr)
+
+    def test_the_same_sentence_as_install_and_uninstall(self):
+        """RA10: deploy.sh, install.sh and uninstall.sh name the distributions in one sentence, "..., Rocky
+        Linux and Ubuntu.", for an unsupported one (Gentoo)."""
+        names = array("install.sh", "mySUPPORTED_DISTRIBUTIONS")
+        sentence = f"Only the following distributions are supported: {', '.join(names[:-1])} and {names[-1]}."
+        self.os_release("Gentoo")
+        write(os.path.join(self.bin, "uname"), base.UNAME, 0o755)
+        for script in ("install.sh", "uninstall.sh"):
+            write(os.path.join(self.tpotce, script), base.read(script), 0o755)
+        runs = {"deploy.sh": self.deploy(),
+                "install.sh": self.run_with(os.path.join(self.tpotce, "install.sh"), (), "-s", "-t", "s"),
+                "uninstall.sh": self.run_with(os.path.join(self.tpotce, "uninstall.sh"), (), "-y")}
+        for script, result in runs.items():
+            with self.subTest(script=script):
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertIn(f"### [ERROR] - {sentence}", result.stdout + result.stderr)
 
 
 class DeployCredentialsTest(Harness):
@@ -427,6 +470,145 @@ class DeployLookTest(Harness):
                 text = re.sub(r"\$\{[^}]*\}|\$\([^)]*\)", "x" * 12, match.group(1))
                 with self.subTest(script=script, question=match.group(1)):
                     self.assertLessEqual(len(text), 72)
+
+
+def tpot_options(*command):
+    """The options of a sub-command of tpot from its argparse parser: flags, options with a value, the
+    ones with a number and how many arguments it takes."""
+    import argparse
+    from tpotctl import cli
+    parser = cli.build_parser()
+    for word in command:
+        parser = next(a for a in parser._actions if isinstance(a, argparse._SubParsersAction)).choices[word]
+    flags, values, numbers, names = set(), set(), set(), 0
+    for action in parser._actions:
+        if isinstance(action, argparse._HelpAction):
+            continue
+        if not action.option_strings:
+            names += 1 if action.nargs in (None, "?") else 99
+        elif action.nargs == 0:
+            flags.update(action.option_strings)
+        else:
+            values.update(action.option_strings)
+            if action.type is int:
+                numbers.update(action.option_strings)
+    return flags, values, numbers, names
+
+
+def wrapper_options(script):
+    """The same from the tables of the wrapper (myTPOT_FLAGS, myTPOT_VALUES, myTPOT_NUMBERS, myTPOT_NAMES)."""
+    text = body(script)
+
+    def words(name):
+        return set(re.search(rf'^{name}="([^"]*)"$', text, re.M).group(1).split())
+    return words("myTPOT_FLAGS"), words("myTPOT_VALUES"), words("myTPOT_NUMBERS"), int(re.search(r"^myTPOT_NAMES=(\d+)$", text,
+                                                                                   re.M).group(1))
+
+
+class WrapperOptionsTest(Harness):
+    """RA11 and K: deploy.sh and genuser.sh check the options of the command of the T-Pot Manager they hand
+    over to: a wrong one is a usage error with exit 1 before the logo, as in the other T-Pot scripts;
+    without tpot an option meant for it is an error naming that command, not left out silently."""
+
+    CASES = (("deploy.sh", ("sensors", "add")), ("genuser.sh", ("users", "add")))
+
+    def with_tpot(self):
+        write(os.path.join(self.tpotce, "tpot"),
+              "#!/bin/sh\n[ \"$1\" = setup ] && exit 0\necho \"tpot $*\" >> \"$HOME/calls\"\n", 0o755)
+
+    def test_the_options_are_the_ones_of_tpot(self):
+        for script, command in self.CASES:
+            with self.subTest(script=script):
+                self.assertEqual(wrapper_options(script), tpot_options(*command))
+
+    def test_a_wrong_option_is_a_usage_error(self):
+        self.with_tpot()
+        cases = (("deploy.sh", ["--bogus"], "Unknown option --bogus."),
+                 ("deploy.sh", ["--host"], "Option --host requires a value."),
+                 ("deploy.sh", ["--host", "-y"], "Option --host requires a value."),
+                 ("deploy.sh", ["--ssh-port", "abc"], "--ssh-port takes a number, not abc."),
+                 ("deploy.sh", ["--ssh-port=22x"], "--ssh-port takes a number, not 22x."),
+                 ("deploy.sh", ["10.0.0.2"], "Unexpected argument 10.0.0.2."),
+                 ("deploy.sh", ["-x"], "Unknown option -x."),
+                 ("genuser.sh", ["--bogus"], "Unknown option --bogus."),
+                 ("genuser.sh", ["alice", "bob"], "Unexpected argument bob."),
+                 ("genuser.sh", ["--password"], "Unknown option --password."))
+        for script, args, text in cases:
+            with self.subTest(script=script, args=args):
+                result = self.run_with(script, (), *args)
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertIn(f"### [ERROR] - {text}", result.stderr)
+                self.assertIn(f"{script} -h shows the options.", result.stderr)
+                self.assertEqual(result.stdout, "")
+                self.assertEqual(self.calls(), "")
+
+    def test_no_logo_before_a_usage_error(self):
+        self.with_tpot()
+        env = {"PATH": f"{self.bin}:{os.environ['PATH']}", "HOME": self.home, "LANG": "en_US.UTF-8",
+               "XDG_CONFIG_HOME": os.path.join(self.home, "config"), "XDG_DATA_HOME": self.data,
+               "TERM": "xterm-256color", "COLORTERM": "truecolor"}
+        for script, _command in self.CASES:
+            with self.subTest(script=script):
+                out = ui.plain(ui.at_terminal(f"bash '{os.path.join(REPO, script)}' --bogus; echo \"rc=$?\"", env,
+                                              120, 49, source="/dev/null", timeout=60))
+                self.assertIn("Unknown option --bogus.", out)
+                self.assertIn("rc=1", out)
+                self.assertNotIn("telekom security", out)
+                self.assertNotIn("T-Pot Sensor deploy", out)
+                self.assertNotIn("T-Pot Web user", out)
+                self.assertEqual(self.calls(), "")
+
+    def test_good_options_are_handed_over_unchanged(self):
+        self.with_tpot()
+        cases = (("deploy.sh", ["--host", "10.0.0.2", "--ssh-user=admin", "-y", "--no-become-pass", "--ssh-port",
+                                "2222", "--hive-address", "hive.example.org", "--yes"]),
+                 ("deploy.sh", []), ("genuser.sh", ["alice", "--password-stdin", "--allow-weak"]),
+                 ("genuser.sh", ["--", "-alice"]), ("genuser.sh", []))
+        for script, args in cases:
+            with self.subTest(script=script, args=args):
+                result = self.run_with(script, (), *args)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                command = " ".join(dict(self.CASES)[script])
+                self.assertEqual(self.calls(), " ".join(["tpot", command] + args) + "\n")
+                os.remove(os.path.join(self.home, "calls"))
+
+    def test_without_tpot_options_for_it_are_a_usage_error(self):
+        """No tpot (cannot be set up): deploy.sh / genuser.sh ask as before, an option or a name for tpot is
+        not left out silently: an error naming the command, before any question, docker or Ansible."""
+        for _ in self.both():
+            for script, args, command in (("deploy.sh", ["--host", "10.0.0.2"], "tpot sensors add"),
+                                          ("deploy.sh", ["-y"], "tpot sensors add"),
+                                          ("genuser.sh", ["alice"], "tpot users add"),
+                                          ("genuser.sh", ["--password-stdin"], "tpot users add")):
+                with self.subTest(script=script, args=args):
+                    result = self.run_with(script, ANSWERS, *args)
+                    self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                    self.assertIn(f"### [ERROR] - {args[0]} needs {command}, which cannot be set up here.",
+                                  result.stderr)
+                    self.assertIn(f"{script} -h shows the options.", result.stderr)
+                    self.assertNotIn("(y/n)", result.stdout + result.stderr)
+                    self.assertEqual(self.calls(), "")
+                    self.assertNotIn("Sensor deploy", result.stdout)
+
+
+class ReadmeTest(unittest.TestCase):
+    """The README says what tpot sensors add / deploy.sh take as addresses, and that the wrappers check
+    the options of tpot like the other scripts (RA6, RA11)."""
+
+    def test_the_hive_address_is_ipv4_or_a_host_name(self):
+        readme = base.read("README.md")
+        section = readme[readme.index("### Deploying Sensors"):]
+        section = section[:section.index("\n### ", 1)]
+        self.assertIn("IPv4 address or a host name", section)
+        self.assertIn("IPv6", section)
+        self.assertIn("https://<address>:64294", section)
+
+    def test_a_wrong_option_of_the_wrappers(self):
+        readme = base.read("README.md")
+        section = readme[readme.index("\n## The T-Pot Scripts\n"):]
+        section = section[:section.index("\n## ", 1)]
+        self.assertIn("`genuser.sh` and `deploy.sh` check the options of the `tpot` command they hand over to",
+                      section)
 
 
 class FallbackHelpTest(Harness):

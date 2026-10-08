@@ -56,6 +56,11 @@ if ! source "$HOME/tpotce/installer/lib/ui.sh" 2>/dev/null;
       fi
       return 0
     }
+    fuUI_USAGE_ERROR () {
+      echo "### [ERROR] - $1" >&2
+      echo "###   ${2:-${0##*/}} -h shows the options." >&2
+      return 1
+    }
     fuUI_RESULT () {
       case "$1" in
         ok) echo "### [OK] - $2" ;;
@@ -82,24 +87,98 @@ if ! source "$HOME/tpotce/installer/lib/ui.sh" 2>/dev/null;
 # <<< plain fallback
 fi
 fuUI_INIT
-# a person at a terminal sees the T-Pot logo and what comes, then tpot asks; not for the help
+# The options of tpot users add (the same as its parser, test_scripts_deploy.py checks it): a wrong
+# one is a usage error with exit 1 before anything is shown, as in the other T-Pot scripts
+myTPOT_FLAGS="--password-stdin --allow-weak"
+myTPOT_VALUES=""
+myTPOT_NUMBERS=""
+myTPOT_NAMES=1
+fuCHECK_OPTIONS () {
+  # fuCHECK_OPTIONS <argument ...>: the options of tpot users add, myTPOT_FLAGS without a value, myTPOT_VALUES
+  # with one (myTPOT_NUMBERS a number), myTPOT_NAMES arguments at most, -- before arguments that start with -.
+  # A wrong one ends the script with a usage error (exit 1), before anything is shown
+  local myARG myKEY myVALUE myCOUNT=0 myREST=""
+  while [ "$#" -gt 0 ]; do
+    myARG="$1"
+    shift
+    if [ -z "${myREST}" ];
+      then
+        case " ${myTPOT_FLAGS} -h --help " in
+          *" ${myARG} "*) continue ;;
+        esac
+        myKEY="${myARG%%=*}"
+        case " ${myTPOT_VALUES} " in
+          *" ${myKEY} "*)
+            myVALUE="${myARG#*=}"
+            if [ "${myKEY}" = "${myARG}" ];
+              then
+                if [ "$#" -eq 0 ] || [[ "$1" == -* ]];
+                  then
+                    fuUI_USAGE_ERROR "Option ${myKEY} requires a value." "genuser.sh"
+                    exit 1
+                fi
+                myVALUE="$1"
+                shift
+            fi
+            case " ${myTPOT_NUMBERS} " in
+              *" ${myKEY} "*)
+                if ! [[ "${myVALUE}" =~ ^[0-9]+$ ]];
+                  then
+                    fuUI_USAGE_ERROR "${myKEY} takes a number, not ${myVALUE}." "genuser.sh"
+                    exit 1
+                fi ;;
+            esac
+            continue ;;
+        esac
+        case "${myARG}" in
+          --) myREST="y"; continue ;;
+          -?*) fuUI_USAGE_ERROR "Unknown option ${myARG}." "genuser.sh"; exit 1 ;;
+        esac
+    fi
+    myCOUNT=$((myCOUNT + 1))
+    if [ "${myCOUNT}" -gt "${myTPOT_NAMES}" ];
+      then
+        fuUI_USAGE_ERROR "Unexpected argument ${myARG}." "genuser.sh"
+        exit 1
+    fi
+  done
+}
+
+fuCHECK_OPTIONS "$@"
+myHELP=""
 case " $* " in
-  *" -h "*|*" --help "*) ;;
-  *) if [ -t 0 ] && [ -t 1 ];
-       then
-         # shellcheck disable=SC2034 # fuUI_BANNER of installer/lib/ui.sh reads it
-         myUI_LOGO=1
-         fuUI_BANNER "Web user" "Adds a user of the T-Pot web UI."
-     fi ;;
+  *" -h "*|*" --help "*) myHELP="y" ;;
 esac
 myTPOT="$HOME/tpotce/tpot"
-if [ -x "${myTPOT}" ] && "${myTPOT}" setup > /dev/null 2>&1;
+fuTPOT_READY () {
+  # fuTPOT_READY: 0 when tpot runs here (its Python packages are set up, or can be now)
+  [ -x "${myTPOT}" ] && "${myTPOT}" setup > /dev/null 2>&1
+}
+# options and arguments are for tpot: without it they are a usage error, before the logo
+myREADY=""
+if [ -z "${myHELP}" ] && [ "$#" -gt 0 ];
+  then
+    if ! fuTPOT_READY;
+      then
+        fuUI_USAGE_ERROR "${1} needs tpot users add, which cannot be set up here." "genuser.sh"
+        exit 1
+    fi
+    myREADY="y"
+fi
+# a person at a terminal sees the T-Pot logo and what comes, then tpot asks; not for the help
+if [ -z "${myHELP}" ] && [ -t 0 ] && [ -t 1 ];
+  then
+    # shellcheck disable=SC2034 # fuUI_BANNER of installer/lib/ui.sh reads it
+    myUI_LOGO=1
+    fuUI_BANNER "Web user" "Adds a user of the T-Pot web UI."
+fi
+if [ -n "${myREADY}" ] || fuTPOT_READY;
   then
     exec "${myTPOT}" users add "$@"
 fi
 # without tpot: the tpotinit container, its help says so
-case " $* " in
-  *" -h "*|*" --help "*)
+if [ -n "${myHELP}" ];
+  then
     fuUI_HELP "Web user" "genuser.sh [-h]" \
       --about "Adds a user of the T-Pot web UI: the tpotinit container asks for its name
 and password and writes it to WEB_USER of the .env." \
@@ -109,8 +188,8 @@ container instead." \
       --opt "-h, --help" "Show this help" \
       --note "tpot users add -h shows the options of the T-Pot Manager. Its users count
 at once, without a restart of T-Pot."
-    exit 0 ;;
-esac
+    exit 0
+fi
 fuUI_WARN "tpot is not available, using the tpotinit container."
 cd "$HOME/tpotce" || exit 1
 TPOT_REPO=$(grep -E "^TPOT_REPO" .env | cut -d "=" -f2-)

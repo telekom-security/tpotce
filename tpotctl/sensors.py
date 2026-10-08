@@ -102,22 +102,53 @@ def hive_user(name: str, password: str) -> str:
     return base64.b64encode(f"{name}:{password}".encode()).decode()
 
 
-def check_address(address: str) -> str:
-    """An IP or a host name, nothing that could break the commands or the certificate."""
-    address = (address or "").strip()
+def _ip(address: str):
+    """The IP address, None for anything else; a zone (fe80::1%eth0) is no address of another host."""
+    if "%" in address:
+        return None
     try:
-        ipaddress.ip_address(address)
-        return address
+        return ipaddress.ip_address(address)
     except ValueError:
-        pass
-    if re.match(r"^(?=.{1,253}$)([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)*[A-Za-z0-9]([A-Za-z0-9-]{0,61}"
-                r"[A-Za-z0-9])?$", address):
+        return None
+
+
+def _host_name(address: str, extra: str = "") -> bool:
+    """Labels of letters, digits, inner dashes (and extra) of 63 characters at most, 253 in all. Digits
+    and dots only are a mistyped IPv4 address (999.1.1.1, 1.2.3, 123), no host name: as deploy.sh."""
+    chars = "A-Za-z0-9" + extra
+    label = f"[{chars}]([{chars}-]{{0,61}}[{chars}])?"
+    return (1 <= len(address) <= 253 and bool(re.match(rf"^({label}\.)*{label}$", address))
+            and not re.match(r"^[0-9.]+$", address))
+
+
+def check_address(address: str) -> str:
+    """The address of a SENSOR (ssh, Ansible): an IP or a host name, nothing that could break the commands;
+    an alias of ~/.ssh/config may have an _ (sensor_1)."""
+    address = (address or "").strip()
+    if _ip(address) is not None or _host_name(address, "_"):
         return address
     raise SensorsError(f"'{address}' is not an IP address or a host name")
 
 
+def check_hive_address(address: str) -> str:
+    """The address the SENSOR reaches this HIVE on, its TPOT_HIVE_IP: an IPv4 address or a host name as
+    tpotinit takes it there. No IPv6 address: Logstash sends to https://<address>:64294, without brackets
+    that URL breaks (and tpotinit rejects ::ffff:192.0.2.1); a host name of the HIVE works for IPv6 too."""
+    address = (address or "").strip()
+    found = _ip(address)
+    if found is not None and found.version == 4:
+        return address
+    if found is not None:
+        raise SensorsError(f"'{address}' is an IPv6 address, a sensor cannot send to it: give the IPv4 address "
+                           f"or a host name of this HIVE")
+    if _host_name(address):
+        return address
+    raise SensorsError(f"'{address}' is not an IPv4 address or a host name of this HIVE")
+
+
 def check_user(user: str) -> str:
-    if not re.match(r"^[a-z_][a-z0-9_.-]{0,31}$", user or ""):
+    """A Linux user name: capitals too (useradd of Fedora, RHEL and openSUSE takes them)."""
+    if not re.match(r"^[A-Za-z_][A-Za-z0-9_.-]{0,31}$", user or ""):
         raise SensorsError(f"'{user}' is not a user name")
     return user
 
@@ -241,7 +272,7 @@ class Registry:
         if ssh_user:
             sensor.ssh_user = check_user(ssh_user)
         if hive_address:
-            sensor.hive_address = check_address(hive_address)
+            sensor.hive_address = check_hive_address(hive_address)
         if ssh_port:
             sensor.ssh_port = check_port(ssh_port)
         self.record(sensor)
@@ -300,7 +331,7 @@ def deploy_command(host: str, user: str, become_pass: bool = True, repo_dir: str
 def deploy_env(hive_user_value: str, hive_address: str, repo_dir: str = REPO_DIR) -> Dict[str, str]:
     """deploy.yml reads both from the environment, as with deploy.sh."""
     env = dict(os.environ)
-    env.update(myTPOT_HIVE_USER=hive_user_value, myTPOT_HIVE_IP=check_address(hive_address),
+    env.update(myTPOT_HIVE_USER=hive_user_value, myTPOT_HIVE_IP=check_hive_address(hive_address),
                ANSIBLE_LOG_PATH=os.path.join(repo_dir, "data", "deploy_sensor.log"))
     return env
 

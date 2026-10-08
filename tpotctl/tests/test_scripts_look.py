@@ -16,7 +16,6 @@ isolate()
 
 from tpotctl.tests import test_scripts as base  # noqa: E402
 from tpotctl.tests import test_ui as ui  # noqa: E402
-from tpotctl.tests.test_scripts_update import UNAME  # noqa: E402
 
 REPO = base.REPO
 # the scripts with questions: the logo at their start
@@ -38,8 +37,9 @@ def body(path):
     return text
 
 
-# the calls that ask; fuYES / fuASK are the builder's wrappers on them
-QUESTION = re.compile(r"\b(fuUI_CONFIRM|fuUI_INPUT|fuUI_CHOOSE_MANY|fuUI_CHOOSE|fuYES|fuASK)\b(?!\s*\(\))")
+# the calls that ask; fuYES / fuASK are the builder's wrappers on them, fuASK_VALID the one of deploy.sh
+QUESTION = re.compile(r"\b(fuUI_CONFIRM|fuUI_INPUT|fuUI_CHOOSE_MANY|fuUI_CHOOSE|fuYES|fuASK_VALID|fuASK)\b"
+                      r"(?!\s*\(\))")
 # a question, a label or a button fits the 80 columns of a terminal with gum's frame
 QUESTION_ROOM = 72
 # what a ${...} or $(...) in a text stands for: a guess, the value is only known at run time
@@ -174,7 +174,7 @@ class ScriptsLookAlikeTest(base.Harness):
         the way of their own; a run of update.sh in the same place shows it (the test can see it)."""
         stub = os.path.join(self.bin, "uname")
         with open(stub, "w", encoding="utf-8") as out:
-            out.write(UNAME)
+            out.write(base.UNAME)
         os.chmod(stub, 0o755)
         for name, text in (("curl", "#!/bin/sh\nexit 7\n"), ("wget", "#!/bin/sh\nexit 4\n")):
             with open(os.path.join(self.bin, name), "w", encoding="utf-8") as out:
@@ -217,6 +217,9 @@ class ScriptsLookAlikeTest(base.Harness):
         for path in ("install.sh", "restore.sh", "uninstall.sh", "deploy.sh", "docker/_builder/builder.sh"):
             self.assertTrue(question_texts(path), path)
         self.assertIn("Uninstall T-Pot?", question_texts("uninstall.sh"))
+        # the questions of deploy.sh's own wrapper fuASK_VALID (\b does not fire before its _)
+        self.assertIn("Enter the IP/domain name of the SENSOR:", question_texts("deploy.sh"))
+        self.assertIn("Enter the IPv4 address or the domain name of this HIVE:", question_texts("deploy.sh"))
         self.assertIn("Tanner stack (redis, phpox, tanner, snare)", question_texts("docker/_builder/builder.sh"))
         self.assertTrue(any(text.startswith("Import the Kibana objects") for text in question_texts("restore.sh")))
         self.assertEqual(len(label(shrink('Tag (i.e. ${myREL}-$(fuARCH "${myX}")):x'))), len("Tag (i.e. -)") + 24)

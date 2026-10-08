@@ -589,12 +589,14 @@ Once you have rebooted the **Sensor** as instructed by the installer, log into t
 ```
 tpot sensors add
 ```
-It asks for the address of the **Sensor**, the user T-Pot was installed with there and the address the **Sensor** reaches the **Hive** on (proposed from the route to the sensor), or take them as options: `--host`, `--ssh-user`, `--hive-address`, `--ssh-port` (default `64295`, i.e. for a sensor behind NAT), `--no-become-pass` (sudo on the sensor needs no password), `--yes` (do not ask). Then it
+It asks for the address of the **Sensor** (an IP address or a host name, an alias of your `~/.ssh/config` too), the user T-Pot was installed with there and the address the **Sensor** reaches the **Hive** on (proposed from the route to the sensor), or take them as options: `--host`, `--ssh-user`, `--hive-address`, `--ssh-port` (default `64295`, i.e. for a sensor behind NAT), `--no-become-pass` (sudo on the sensor needs no password), `--yes` (do not ask). Then it
 1. checks that it can log in with an SSH key on port `64295`, and offers to create a key (`ssh-keygen`) and copy it to the **Sensor** (`ssh-copy-id`, you enter the password of the sensor user once),
 2. checks the certificate of the **Hive** covers the address of the **Hive** (see [Planning and Certificates](#planning-and-certificates)),
 3. creates the access of the sensor (a name like `sensor-<adjective>-<noun>` and a random password, added to `LS_WEB_USER` of the **Hive**),
 4. runs the Ansible playbook `installer/install/deploy.yml` on the **Sensor**: it stops T-Pot there, copies the certificate, switches to the `SENSOR` edition, sets `TPOT_TYPE`, `TPOT_HIVE_USER` and `TPOT_HIVE_IP` and reboots the **Sensor** (Ansible asks for the sudo password on it),
 5. records the sensor and shows its password once - the **Sensor** has it already, keep it only if you want to set the **Sensor** up again by hand.
+
+The address of the **Hive** is an IPv4 address or a host name: the **Sensor** sends its logs to `https://<address>:64294`, which does not work with an IPv6 address; for a **Hive** on IPv6 give its host name.
 
 If the deployment fails the access is taken back, the log is in `~/tpotce/data/deploy_sensor.log`. Without `tpot` (i.e. no internet to set up its Python packages) `./deploy.sh` runs the previous interactive deployment; deploy an SSH key to the **Sensor** first then (`ssh-keygen`, `ssh-copy-id -p 64295 <Sensor_SSH_USER>@<Sensor_IP>`).
 <br><br>
@@ -743,7 +745,7 @@ The menu shows every page everywhere; a page that cannot work on this host stays
 ### True colours over SSH
 iTerm2 is recognised over SSH by itself: it sets `LC_TERMINAL=iTerm2`, which the ssh of macOS sends along with the other `LC_*` and T-Pot accepts; kitty and Ghostty send a `TERM` of their own, which is enough as well. Other terminals say they can show true colours with `COLORTERM=truecolor`, which SSH does not take along by itself, so on the T-Pot host the T-Pot Manager only learns about 256 colours and uses its palette for them. To bring the true colours along:
 
-1. T-Pot accepts `COLORTERM` and `LC_TERMINAL`: the installer writes `AcceptEnv COLORTERM LC_TERMINAL LC_TERMINAL_VERSION` to `/etc/ssh/sshd_config.d/tpot.conf` (some distributions, i.e. Debian 13, accept them already). On a T-Pot installed before, add it yourself:
+1. T-Pot accepts `COLORTERM` and `LC_TERMINAL`: the installer writes `AcceptEnv COLORTERM LC_TERMINAL LC_TERMINAL_VERSION` to `/etc/ssh/sshd_config.d/tpot.conf` (some distributions, e.g. Debian 13, accept them already). On a T-Pot installed before, `update.sh` brings the `AcceptEnv COLORTERM` of an earlier T-Pot to this line (only that file as T-Pot wrote it, checked with `sshd -t`, then SSH is reloaded; a file you changed stays as it is). Without the update, or with a file of your own, add it yourself:
    ```
    echo "AcceptEnv COLORTERM LC_TERMINAL LC_TERMINAL_VERSION" | sudo tee /etc/ssh/sshd_config.d/tpot.conf
    sudo sshd -t && sudo systemctl reload ssh    # sshd on AlmaLinux, Fedora, openSUSE, RHEL, Rocky
@@ -757,7 +759,7 @@ iTerm2 is recognised over SSH by itself: it sets `LC_TERMINAL=iTerm2`, which the
    ```
    An SSH connection that is already open (`ControlMaster` / `ControlPersist`) keeps the environment it was opened with: close it once with `ssh -O exit my-tpot`.
 
-Or choose the colours without SSH's help: `TPOT_COLORS=truecolor tpot` (or `export TPOT_COLORS=truecolor` in `~/.bashrc` of the T-Pot host), or `ctrl+p` *Colours: truecolor*, which is kept in `~/.config/tpotce/tpot.json`. Only do so if your terminal can show true colours (iTerm2, GNOME Terminal, Konsole, Windows Terminal, kitty, WezTerm can), otherwise the colours come out wrong. In tmux and screen the terminal outside does not count, because tmux draws: `COLORTERM` has to reach the shell in tmux, or `TPOT_COLORS` decides. With only 16 colours (PuTTY's default terminal type is `xterm`) set *Connection → Data → Terminal-type string* to `xterm-256color` in PuTTY, or use `TPOT_COLORS`.
+Or choose the colours without SSH's help: `TPOT_COLORS=truecolor tpot` (or `export TPOT_COLORS=truecolor` in `~/.bashrc` of the T-Pot host), or `ctrl+p` *Colours: truecolor*, which is kept in `~/.config/tpotce/tpot.json`. Only do so if your terminal can show true colours (iTerm2, GNOME Terminal, Konsole, Windows Terminal, kitty, WezTerm can), otherwise the colours come out wrong. In tmux and screen the terminal outside does not count, because tmux draws: `COLORTERM` has to reach the shell in tmux, or `TPOT_COLORS` decides. With only 16 colours (PuTTY's default terminal type is `xterm`) set *Connection → Data → Terminal-type string* to `xterm-256color` in PuTTY, or use `TPOT_COLORS`. `sudo` starts its command with a clean environment, on most distributions without `COLORTERM` and `LC_TERMINAL`, so a T-Pot script started with `sudo` may only see 256 colours: keep them with `sudo --preserve-env=COLORTERM,LC_TERMINAL <script>`, or choose them with `sudo TPOT_COLORS=truecolor <script>`.
 <br><br>
 
 ## T-Pot Config File
@@ -830,7 +832,7 @@ Should an update fail, opening an issue or a discussion will help to improve thi
   - `~/tpot_backups/restore.log`: the steps of `restore.sh` (reading the archive, stop and start of T-Pot, the extract of `data/`, the Kibana import)
   - `docker/_builder/log/`: a log per image and step of the image builder
 - They end with a summary: what was done, what failed, what to do next.
-- `-h` shows the options with examples and exits with 0, a wrong option names itself and exits with 1 (the image builder with 2).
+- `-h` shows the options with examples and exits with 0, a wrong option names itself and exits with 1 before anything else is shown (the image builder with 2). `genuser.sh` and `deploy.sh` check the options of the `tpot` command they hand over to (`tpot users add`, `tpot sensors add`) the same way; without `tpot` they take none.
 - `update.sh`, `restore.sh`, `uninstall.sh` and the image builder run on Linux only (a T-Pot host, a build host or a VM, WSL2 on Windows), elsewhere they stop with a hint; `-h` works everywhere. On macOS and Windows (the `mac_win` edition) an update is `git pull` in `~/tpotce`, then `tpot customize`.
 - The version they show comes from the file `version` of the checkout, nothing in the scripts carries it.
 <br><br>

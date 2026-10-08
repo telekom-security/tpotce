@@ -74,6 +74,11 @@ if ! source "$HOME/tpotce/installer/lib/ui.sh" 2>/dev/null;
       fi
       return 0
     }
+    fuUI_USAGE_ERROR () {
+      echo "### [ERROR] - $1" >&2
+      echo "###   ${2:-${0##*/}} -h shows the options." >&2
+      return 1
+    }
     fuUI_RESULT () {
       case "$1" in
         ok) echo "### [OK] - $2" ;;
@@ -100,26 +105,100 @@ if ! source "$HOME/tpotce/installer/lib/ui.sh" 2>/dev/null;
 # <<< plain fallback
 fi
 fuUI_INIT
-# a person at a terminal sees the T-Pot logo and what comes, then tpot asks; not for the help
-myBANNER=""
+# The options of tpot sensors add (the same as its parser, test_scripts_deploy.py checks it): a wrong
+# one is a usage error with exit 1 before anything is shown, as in the other T-Pot scripts
+myTPOT_FLAGS="--no-become-pass -y --yes"
+myTPOT_VALUES="--host --ssh-user --ssh-port --hive-address"
+myTPOT_NUMBERS="--ssh-port"
+myTPOT_NAMES=0
+fuCHECK_OPTIONS () {
+  # fuCHECK_OPTIONS <argument ...>: the options of tpot sensors add, myTPOT_FLAGS without a value, myTPOT_VALUES
+  # with one (myTPOT_NUMBERS a number), myTPOT_NAMES arguments at most, -- before arguments that start with -.
+  # A wrong one ends the script with a usage error (exit 1), before anything is shown
+  local myARG myKEY myVALUE myCOUNT=0 myREST=""
+  while [ "$#" -gt 0 ]; do
+    myARG="$1"
+    shift
+    if [ -z "${myREST}" ];
+      then
+        case " ${myTPOT_FLAGS} -h --help " in
+          *" ${myARG} "*) continue ;;
+        esac
+        myKEY="${myARG%%=*}"
+        case " ${myTPOT_VALUES} " in
+          *" ${myKEY} "*)
+            myVALUE="${myARG#*=}"
+            if [ "${myKEY}" = "${myARG}" ];
+              then
+                if [ "$#" -eq 0 ] || [[ "$1" == -* ]];
+                  then
+                    fuUI_USAGE_ERROR "Option ${myKEY} requires a value." "deploy.sh"
+                    exit 1
+                fi
+                myVALUE="$1"
+                shift
+            fi
+            case " ${myTPOT_NUMBERS} " in
+              *" ${myKEY} "*)
+                if ! [[ "${myVALUE}" =~ ^[0-9]+$ ]];
+                  then
+                    fuUI_USAGE_ERROR "${myKEY} takes a number, not ${myVALUE}." "deploy.sh"
+                    exit 1
+                fi ;;
+            esac
+            continue ;;
+        esac
+        case "${myARG}" in
+          --) myREST="y"; continue ;;
+          -?*) fuUI_USAGE_ERROR "Unknown option ${myARG}." "deploy.sh"; exit 1 ;;
+        esac
+    fi
+    myCOUNT=$((myCOUNT + 1))
+    if [ "${myCOUNT}" -gt "${myTPOT_NAMES}" ];
+      then
+        fuUI_USAGE_ERROR "Unexpected argument ${myARG}." "deploy.sh"
+        exit 1
+    fi
+  done
+}
+
+fuCHECK_OPTIONS "$@"
+myHELP=""
 case " $* " in
-  *" -h "*|*" --help "*) ;;
-  *) if [ -t 0 ] && [ -t 1 ];
-       then
-         # shellcheck disable=SC2034 # fuUI_BANNER of installer/lib/ui.sh reads it
-         myUI_LOGO=1
-         fuUI_BANNER "Sensor deploy" "Joins a T-Pot SENSOR to this HIVE, it sends its logs here."
-         myBANNER="y"
-     fi ;;
+  *" -h "*|*" --help "*) myHELP="y" ;;
 esac
 myTPOT="$HOME/tpotce/tpot"
-if [ -x "${myTPOT}" ] && "${myTPOT}" setup > /dev/null 2>&1;
+fuTPOT_READY () {
+  # fuTPOT_READY: 0 when tpot runs here (its Python packages are set up, or can be now)
+  [ -x "${myTPOT}" ] && "${myTPOT}" setup > /dev/null 2>&1
+}
+# options and arguments are for tpot: without it they are a usage error, before the logo
+myREADY=""
+if [ -z "${myHELP}" ] && [ "$#" -gt 0 ];
+  then
+    if ! fuTPOT_READY;
+      then
+        fuUI_USAGE_ERROR "${1} needs tpot sensors add, which cannot be set up here." "deploy.sh"
+        exit 1
+    fi
+    myREADY="y"
+fi
+# a person at a terminal sees the T-Pot logo and what comes, then tpot asks; not for the help
+myBANNER=""
+if [ -z "${myHELP}" ] && [ -t 0 ] && [ -t 1 ];
+  then
+    # shellcheck disable=SC2034 # fuUI_BANNER of installer/lib/ui.sh reads it
+    myUI_LOGO=1
+    fuUI_BANNER "Sensor deploy" "Joins a T-Pot SENSOR to this HIVE, it sends its logs here."
+    myBANNER="y"
+fi
+if [ -n "${myREADY}" ] || fuTPOT_READY;
   then
     exec "${myTPOT}" sensors add "$@"
 fi
 # without tpot: the steps below, its help says so
-case " $* " in
-  *" -h "*|*" --help "*)
+if [ -n "${myHELP}" ];
+  then
     fuUI_HELP "Sensor deploy" "deploy.sh [-h]" \
       --about "Joins a T-Pot SENSOR to this HIVE, it sends its logs here: deploy.sh asks
 for the SENSOR, creates its access and runs the deployment playbook on it." \
@@ -129,8 +208,8 @@ itself." \
       --opt "-h, --help" "Show this help" \
       --note "tpot sensors add -h shows the options of the T-Pot Manager. It checks SSH
 and the certificate first and takes the access back if a step fails."
-    exit 0 ;;
-esac
+    exit 0
+fi
 fuUI_WARN "tpot is not available, using the previous deployment."
 cd "$HOME/tpotce" || exit 1
 
@@ -189,24 +268,34 @@ fuIS_IPV6 () {
 }
 
 fuIS_HOSTNAME () {
-  # fuIS_HOSTNAME <text>: 0 for a host name, labels of letters, digits and inner dashes (63 at
-  # most) and 253 characters at most; digits and dots only are a mistyped IPv4 address
-  local LC_ALL=C
-  local myLABEL='[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?'
+  # fuIS_HOSTNAME <text> [characters]: 0 for a host name, labels of letters, digits, inner dashes
+  # (and the characters, _ for an alias of ~/.ssh/config) of 63 at most and 253 characters at most;
+  # digits and dots only are a mistyped IPv4 address
+  local LC_ALL=C myCHARS="A-Za-z0-9${2:-}"
+  local myLABEL="[${myCHARS}]([${myCHARS}-]{0,61}[${myCHARS}])?"
   if [ "${#1}" -lt 1 ] || [ "${#1}" -gt 253 ]; then return 1; fi
   [[ "$1" =~ ^(${myLABEL}\.)*${myLABEL}$ ]] || return 1
   ! [[ "$1" =~ ^[0-9.]+$ ]]
 }
 
 fuCHECK_ADDRESS () {
-  # fuCHECK_ADDRESS <text>: 0 for an IP address or a host name, as tpot sensors add takes them
-  fuIS_IPV4 "$1" || fuIS_IPV6 "$1" || fuIS_HOSTNAME "$1"
+  # fuCHECK_ADDRESS <text>: 0 for the address of the SENSOR (ssh, Ansible): an IP address or a host
+  # name, an alias with an _ too, as tpot sensors add takes it (sensors.check_address)
+  fuIS_IPV4 "$1" || fuIS_IPV6 "$1" || fuIS_HOSTNAME "$1" "_"
+}
+
+fuCHECK_HIVE_ADDRESS () {
+  # fuCHECK_HIVE_ADDRESS <text>: 0 for the address of this HIVE, TPOT_HIVE_IP of the SENSOR: an IPv4
+  # address or a host name as tpotinit takes it there (sensors.check_hive_address). No IPv6: Logstash
+  # sends to https://<address>:64294, without brackets that URL breaks; a host name works for IPv6
+  fuIS_IPV4 "$1" || fuIS_HOSTNAME "$1"
 }
 
 fuCHECK_USER () {
-  # fuCHECK_USER <text>: 0 for a user name of Linux, as tpot sensors add takes it
+  # fuCHECK_USER <text>: 0 for a user name of Linux, capitals too (useradd of Fedora, RHEL and
+  # openSUSE takes them), as tpot sensors add takes it
   local LC_ALL=C
-  [[ "$1" =~ ^[a-z_][a-z0-9_.-]{0,31}$ ]]
+  [[ "$1" =~ ^[A-Za-z_][A-Za-z0-9_.-]{0,31}$ ]]
 }
 
 fuASK_VALID () {
@@ -275,8 +364,9 @@ for myNAME in "${mySUPPORTED_DISTRIBUTIONS[@]}"; do
 done
 if [ -z "${mySUPPORTED}" ];
   then
-    printf -v myNAMES '%s, ' "${mySUPPORTED_DISTRIBUTIONS[@]}"
-    fuUI_ERROR "Only the following distributions are supported: ${myNAMES%, }."
+    # the list in words: "a, b and c", the sentence of install.sh and uninstall.sh
+    myLIST=$(printf '%s, ' "${mySUPPORTED_DISTRIBUTIONS[@]:0:${#mySUPPORTED_DISTRIBUTIONS[@]}-1}")
+    fuUI_ERROR "Only the following distributions are supported: ${myLIST%, } and ${mySUPPORTED_DISTRIBUTIONS[${#mySUPPORTED_DISTRIBUTIONS[@]}-1]}."
     echo
     exit 1
 fi
@@ -292,7 +382,7 @@ fi
 
 # Ask for the remote user, a user name of Linux only (it goes to ssh)
 if ! fuASK_VALID "Enter the remote username T-Pot SENSOR was installed with:" fuCHECK_USER \
-       "Invalid user name. Please enter a Linux user name, i.e. tpot.";
+       "Invalid user name. Please enter a Linux user name, e.g. tpot.";
   then
     fuUI_ERROR "You need to enter a user. Aborting."
     exit 1
@@ -316,9 +406,9 @@ if ! fuUI_CONFIRM "Has an SSH key been deployed to the SENSOR?";
     exit 1
 fi
 
-# Ask for the IP/domain name of this HIVE, the SENSOR sends its logs there
-if ! fuASK_VALID "Enter the IP/domain name of this HIVE:" fuCHECK_ADDRESS \
-       "Invalid IP/domain. Please enter a valid IP or domain name.";
+# Ask for the IPv4 address / domain name of this HIVE, the SENSOR sends its logs there
+if ! fuASK_VALID "Enter the IPv4 address or the domain name of this HIVE:" fuCHECK_HIVE_ADDRESS \
+       "Invalid IP/domain. Enter an IPv4 address or a domain name, no IPv6.";
   then
     fuUI_ERROR "You need to enter the IP/domain name of this HIVE. Aborting."
     exit 1

@@ -16,11 +16,11 @@ import unittest
 
 from tpotctl.tests import test_scripts as base
 from tpotctl.tests import test_ui as ui
-from tpotctl.tests.test_scripts_update import UNAME
 
 from tpotctl import installer
 
 REPO = base.REPO
+UNAME = base.UNAME               # Linux, FAKE_UNAME_S says otherwise
 AWK = shutil.which("awk") or "/usr/bin/awk"
 GUM_VERSION = re.search(r'myUI_GUM_VERSION="([^"]+)"', base.read("installer/lib/ui.sh")).group(1)
 NEW = "99.1.0"
@@ -450,26 +450,28 @@ class HandoverTest(Scripts):
         write(os.path.join(self.tpotce, "tpot"),
               "#!/bin/sh\n[ \"$1\" = setup ] && exit 0\necho \"tpot $*\" >> \"$HOME/calls\"\n", 0o755)
 
-    CASES = (("genuser.sh", "users add", "T-Pot Web user"), ("deploy.sh", "sensors add", "T-Pot Sensor deploy"))
+    # an argument each takes: the name of the web user, the address of the sensor
+    CASES = (("genuser.sh", "users add", "T-Pot Web user", ("alice",)),
+             ("deploy.sh", "sensors add", "T-Pot Sensor deploy", ("--host", "10.0.0.2")))
 
     def test_without_a_terminal_it_only_hands_over(self):
-        for script, command, _title in self.CASES:
+        for script, command, _title, args in self.CASES:
             with self.subTest(script=script):
-                result = self.run_script(os.path.join(REPO, script), "alice")
+                result = self.run_script(os.path.join(REPO, script), *args)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(result.stdout, "")
-                self.assertIn(f"tpot {command} alice", self.calls())
+                self.assertIn(f"tpot {command} {' '.join(args)}", self.calls())
 
     def test_logo_at_a_terminal(self):
-        for script, command, title in self.CASES:
+        for script, command, title, args in self.CASES:
             with self.subTest(script=script):
-                out = ui.plain(self.at_terminal(os.path.join(REPO, script), "alice"))
+                out = ui.plain(self.at_terminal(os.path.join(REPO, script), *args))
                 self.assertIn(f"[ t-pot {NEW} ]", out)
                 self.assertLess(out.index("telekom security"), out.index(title))
-                self.assertIn(f"tpot {command} alice", self.calls())
+                self.assertIn(f"tpot {command} {' '.join(args)}", self.calls())
 
     def test_no_logo_for_the_help_or_in_the_marks_mode(self):
-        for script, command, title in self.CASES:
+        for script, command, title, _args in self.CASES:
             with self.subTest(script=script):
                 out = ui.plain(self.at_terminal(os.path.join(REPO, script), "-h"))
                 self.assertNotIn("telekom security", out)
