@@ -1,0 +1,1198 @@
+/* T-Pot landing page. The colours are the tokens of tpotctl/theme.py (tpotctl/tests/test_landing.py
+   keeps them the same); the shapes are the honeycomb of the logo. No inline styles: the CSP allows
+   only this file, values that change come in as custom properties through the CSSOM. */
+
+@font-face {
+  font-family: "Russo One";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../fonts/russo-one-v16-latin-regular.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Atkinson Hyperlegible Next";
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url("../fonts/atkinson-hyperlegible-next-wght.woff2") format("woff2");
+}
+
+:root {
+  /* theme.TRUECOLOR */
+  --ink: #000000;
+  --comb: #1C000E;
+  --comb-lit: #38001D;
+  --wax: #67003A;
+  --magenta: #E20074;
+  --petrol: #014463;
+  --glass: #ECEFF9;
+  --mist: #97B4D3;
+  --key: #5B9CC4;
+  --ash: #A2A2AD;
+  --ok: #3FA34D;
+  --warn: #F4B400;
+  --error: #E8453C;
+  /* the inside of a cell: the petrol of the outlines, almost black */
+  --deep: #010E15;
+
+  --hex: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  --gutter: clamp(16px, 4vw, 56px);
+  --display: "Russo One", "Atkinson Hyperlegible Next", sans-serif;
+  --text: "Atkinson Hyperlegible Next", system-ui, sans-serif;
+
+  color-scheme: dark;
+}
+
+@supports (width: round(1.5px, 1px)) {
+  :root {
+    /* whole pixels, so the boxes of the header do not land between two */
+    --gutter: round(clamp(16px, 4vw, 56px), 1px);
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--ink);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--ink);
+  color: var(--glass);
+  font-family: var(--text);
+  font-size: 16px;
+  line-height: 24px;
+}
+
+a {
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 3px solid var(--magenta);
+  outline-offset: 3px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------- the backdrop of the effects ---------- */
+
+#backdrop {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.top,
+main {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---------- header: brand, the two menus, the clock ---------- */
+
+.top {
+  z-index: 30;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 14rem;
+  align-items: center;
+  gap: 12px 28px;
+  min-height: 80px;
+  padding: 20px var(--gutter);
+  max-width: 1680px;
+  margin: 0 auto;
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 28px;
+  line-height: 32px;
+  color: var(--magenta);
+}
+
+.brand .version {
+  margin-left: 12px;
+  font-family: var(--text);
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--mist);
+}
+
+.readme {
+  display: inline-flex;
+  align-self: center;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-left: 8px;
+  border-radius: 6px;
+  color: var(--mist);
+  transition: color 0.2s, background-color 0.2s;
+}
+
+.readme:hover,
+.readme:focus-visible {
+  color: var(--glass);
+  background: var(--comb-lit);
+}
+
+.readme svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.clock {
+  margin: 0;
+  font-size: 16px;
+  line-height: 32px;
+  text-align: right;
+  color: var(--mist);
+  white-space: nowrap;
+}
+
+.clock .time {
+  font-family: var(--display);
+  font-size: 22px;
+  color: var(--glass);
+  margin-left: 0.4em;
+}
+
+/* a menu: the button shows the choice, the panel unfolds under it */
+.menus {
+  display: flex;
+  gap: 10px;
+}
+
+.menu {
+  position: relative;
+}
+
+.menu-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 12px 0 14px;
+  border: 1px solid var(--petrol);
+  border-radius: 20px;
+  background: var(--ink);
+  color: var(--glass);
+  font-family: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 20px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+
+/* fixed widths: the button does not change its size with the choice, nor land between two pixels */
+#range-button { width: 176px; }
+#effect-button { width: 136px; }
+
+.menu-button .menu-label {
+  flex: 1;
+}
+
+.menu-button:hover,
+.menu-button[aria-expanded="true"] {
+  border-color: var(--magenta);
+  background: var(--comb);
+}
+
+.menu-button .glyph {
+  flex: none;
+  fill: var(--magenta);
+}
+
+.menu-button .chevron {
+  flex: none;
+  fill: none;
+  stroke: var(--mist);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.14s ease-out;
+}
+
+.menu.open .chevron {
+  transform: rotate(180deg);
+}
+
+.menu-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  min-width: 300px;
+  padding: 6px;
+  border: 1px solid var(--petrol);
+  border-radius: 10px;
+  background: var(--ink);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7);
+  transform-origin: top right;
+  opacity: 0;
+  transform: translateY(-4px) scaleY(0.96);
+  visibility: hidden;
+  transition: opacity 0.14s ease-out, transform 0.14s ease-out, visibility 0s linear 0.14s;
+}
+
+.menu.open .menu-panel {
+  opacity: 1;
+  transform: none;
+  visibility: visible;
+  transition: opacity 0.14s ease-out, transform 0.14s ease-out, visibility 0s;
+}
+
+.menu-panel ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[role="menuitemradio"] {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) 16px;
+  grid-template-areas: "glyph name check" ". note .";
+  align-items: center;
+  column-gap: 12px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--glass);
+  font-family: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+[role="menuitemradio"]:hover,
+[role="menuitemradio"]:focus-visible {
+  background: var(--comb);
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--wax);
+}
+
+[role="menuitemradio"] .glyph {
+  grid-area: glyph;
+  fill: var(--mist);
+}
+
+[role="menuitemradio"][aria-checked="true"] .glyph {
+  fill: var(--magenta);
+}
+
+.item-name {
+  grid-area: name;
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 600;
+}
+
+.item-note {
+  grid-area: note;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--mist);
+}
+
+[role="menuitemradio"] .check {
+  grid-area: check;
+  fill: none;
+  stroke: var(--magenta);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0;
+}
+
+[role="menuitemradio"][aria-checked="true"] .check {
+  opacity: 1;
+}
+
+/* ---------- the band: the attacks of the range on their curve ---------- */
+
+.band {
+  position: relative;
+  z-index: 2;
+  border-top: 1px solid var(--comb-lit);
+  border-bottom: 1px solid var(--comb-lit);
+}
+
+.band-in {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "head facts"
+    "big facts"
+    "message message"
+    "chart chart";
+  align-items: end;
+  column-gap: 48px;
+  max-width: 1680px;
+  margin: 0 auto;
+  padding: 20px var(--gutter) 8px;
+}
+
+.band-head {
+  grid-area: head;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.band-head h2 {
+  margin: 0;
+}
+
+h2 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--mist);
+}
+
+/* live: a hexagon in a ring that fills until the next answer */
+.live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px 0 4px;
+  border: 1px solid var(--wax);
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 22px;
+  font-weight: 600;
+  color: var(--glass);
+  cursor: default;
+}
+
+.ring {
+  flex: none;
+}
+
+.ring-track,
+.ring-fill {
+  fill: none;
+  stroke-width: 2;
+}
+
+.ring-track {
+  stroke: var(--comb-lit);
+}
+
+.ring-fill {
+  stroke: var(--magenta);
+  stroke-dasharray: 40.85;
+  stroke-dashoffset: 40.85;
+  transform: rotate(-90deg);
+  transform-origin: 8px 8px;
+}
+
+.live.turn .ring-fill {
+  animation: ring var(--every, 15s) linear forwards;
+}
+
+@keyframes ring {
+  to { stroke-dashoffset: 0; }
+}
+
+.ring-dot {
+  fill: var(--magenta);
+}
+
+.live[data-state="wait"] .ring-dot { fill: var(--petrol); }
+.live[data-state="down"] { border-color: var(--warn); }
+.live[data-state="down"] .ring-dot { fill: var(--warn); }
+.live:not([data-state="live"]) .ring-fill { visibility: hidden; }
+
+/* the hero number: proportional figures, tabular ones look loose at this size */
+.big {
+  grid-area: big;
+  margin: 6px 0 0;
+  font-size: clamp(56px, 6vw, 96px);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--glass);
+}
+
+@supports (width: round(1.5px, 1px)) {
+  .big {
+    font-size: round(clamp(56px, 6vw, 96px), 2px);
+  }
+}
+
+.facts {
+  grid-area: facts;
+  display: grid;
+  /* fixed columns: a value that changes its length (14 s ago) moves no glyph */
+  grid-template-columns: repeat(4, 160px);
+  gap: 16px 20px;
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+}
+
+.fact {
+  display: grid;
+  grid-template-columns: 40px auto;
+  grid-template-rows: 22px 18px;
+  column-gap: 10px;
+  align-items: center;
+}
+
+.fact-icon {
+  grid-row: 1 / span 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--wax);
+  border-radius: 10px;
+  background: var(--comb);
+  color: var(--magenta);
+}
+
+.fact-icon svg {
+  fill: currentColor;
+}
+
+.fact-icon .line {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.fact-value,
+.fact-label {
+  white-space: nowrap;
+}
+
+.fact-value {
+  font-size: 19px;
+  line-height: 22px;
+  font-weight: 700;
+  color: var(--glass);
+  font-variant-numeric: tabular-nums;
+}
+
+.fact-label {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--mist);
+}
+
+.band-message {
+  grid-area: message;
+  margin: 12px 0 8px;
+  max-width: 60ch;
+  font-size: 17px;
+  line-height: 26px;
+  color: var(--glass);
+}
+
+.band-message:empty {
+  display: none;
+}
+
+.band-chart {
+  grid-area: chart;
+  position: relative;
+  margin-top: 14px;
+  border-radius: 4px;
+  touch-action: pan-y;
+}
+
+.band-chart:focus-visible {
+  outline-offset: 4px;
+}
+
+/* the sizes graph.js draws in, before its first drawing too (a canvas is 150 px high by default) */
+#band-canvas {
+  display: block;
+  width: 100%;
+  height: 100px;
+}
+
+/* the keys of the curve, or the values at the cursor */
+.band-read {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  pointer-events: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 20px;
+  min-height: 20px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--mist);
+  font-variant-numeric: tabular-nums;
+}
+
+.band-read .when {
+  font-weight: 600;
+  color: var(--glass);
+}
+
+.band-read strong {
+  font-weight: 700;
+  color: var(--glass);
+}
+
+.key-now,
+.key-before {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.key-now::before,
+.key-before::before {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--magenta);
+}
+
+.key-before::before {
+  height: 2px;
+  background: var(--mist);
+}
+
+.band-axis,
+.axis-box {
+  position: relative;
+  height: 20px;
+}
+
+.tick {
+  position: absolute;
+  top: 4px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--mist);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+.tick.now {
+  right: 0;
+  transform: none;
+}
+
+/* waiting for the first answer: the band keeps its height, so nothing below it moves when the
+   data comes in; Elasticsearch down: only the message */
+.band[data-state="wait"] .big,
+.band[data-state="wait"] .facts,
+.band[data-state="wait"] .band-chart {
+  visibility: hidden;
+}
+
+.band[data-state="down"] .big,
+.band[data-state="down"] .facts,
+.band[data-state="down"] .band-chart,
+.band:not([data-state="live"]) ~ main .side {
+  display: none;
+}
+
+/* ---------- under the band: the hive and the details ---------- */
+
+main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) min(660px, 46vw);
+  align-items: start;
+  gap: 40px 64px;
+  max-width: 1680px;
+  margin: 0 auto;
+  padding: 28px var(--gutter) 56px;
+}
+
+@supports (width: round(down, 1.5px, 1px)) {
+  main {
+    grid-template-columns: minmax(0, 1fr) min(660px, round(down, 46vw, 1px));
+    column-gap: round(clamp(24px, 5vw, 96px), 1px);
+  }
+}
+
+/* ---------- the hive: tools as cells around the logo ---------- */
+
+.cluster {
+  /* h: height of a cell, w: its width, s: spacing between the centres */
+  --h-raw: min(250px, 16.5vw);
+  --h: var(--h-raw);
+  --w: calc(var(--h) * 0.8660254);
+  --s: 1.045;
+  --cw: calc(var(--w) * (1 + 2 * var(--s)));
+  --ch: calc(var(--h) * (1 + 1.5 * var(--s)));
+  position: relative;
+  width: var(--cw);
+  height: var(--ch);
+  margin: 0 auto;
+}
+
+/* axial coordinates: q to the right, r down to the right */
+.cell,
+.logo,
+.honey {
+  --q: 0;
+  --r: 0;
+  position: absolute;
+  width: var(--w);
+  height: var(--h);
+  left: calc(var(--cw) / 2 - var(--w) / 2 + (var(--q) + var(--r) / 2) * var(--w) * var(--s));
+  top: calc(var(--ch) / 2 - var(--h) / 2 + var(--r) * var(--h) * 0.75 * var(--s));
+}
+
+.at-nw { --q: 0; --r: -1; }
+.at-ne { --q: 1; --r: -1; }
+.at-w { --q: -1; --r: 0; }
+.at-e { --q: 1; --r: 0; }
+.at-sw { --q: -1; --r: 1; }
+.at-se { --q: 0; --r: 1; }
+
+.logo {
+  object-fit: contain;
+  user-select: none;
+}
+
+.honey {
+  pointer-events: none;
+  display: none;
+}
+
+.effect-honey .honey {
+  display: block;
+}
+
+.cell {
+  --edge: var(--petrol);
+  --inside: var(--deep);
+  --honey: var(--magenta);
+  display: block;
+  clip-path: var(--hex);
+  background: var(--edge);
+  text-decoration: none;
+  transition: background-color 0.25s;
+}
+
+/* links that leave T-Pot wear the wax of the comb and let it shine through */
+.cell.ext {
+  --edge: var(--wax);
+  --inside: rgba(28, 0, 14, 0.82);
+  --honey: var(--wax);
+}
+
+.cell-in {
+  position: absolute;
+  inset: 3px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 14%;
+  clip-path: var(--hex);
+  background: var(--inside);
+  text-align: center;
+  overflow: hidden;
+}
+
+/* honey rises in a cell under the pointer or the keyboard */
+.cell-in::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--honey);
+  opacity: 0.3;
+  transform: translateY(100%);
+  transition: transform 0.5s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.cell.ext .cell-in::before {
+  opacity: 0.7;
+}
+
+.cell:hover,
+.cell:focus-visible {
+  background: var(--magenta);
+  outline: none;
+}
+
+.cell:hover .cell-in::before,
+.cell:focus-visible .cell-in::before {
+  transform: translateY(42%);
+}
+
+.cell-in > * {
+  position: relative;
+}
+
+.cell .icon {
+  width: 36px;
+  height: 36px;
+  margin-bottom: 4px;
+  fill: none;
+  stroke: var(--mist);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  transition: stroke 0.25s;
+}
+
+.cell.ext .icon {
+  stroke: #E89BC2;
+}
+
+.cell .away {
+  width: 12px;
+  height: 12px;
+  margin-top: 4px;
+  fill: none;
+  stroke: var(--mist);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.cell:hover .icon,
+.cell:focus-visible .icon {
+  stroke: var(--glass);
+}
+
+.tool {
+  font-family: var(--display);
+  font-size: 21px;
+  line-height: 24px;
+  color: var(--glass);
+}
+
+.ext .tool {
+  font-size: 18px;
+  line-height: 22px;
+}
+
+.what {
+  font-size: 14px;
+  line-height: 18px;
+  color: var(--mist);
+}
+
+@supports (width: round(1.5px, 1px)) {
+  /* whole pixels for every cell, so their outlines, icons and texts are not drawn between two */
+  .cluster {
+    --h: round(down, var(--h-raw), 2px);
+    --w: round(calc(var(--h) * 0.8660254), 2px);
+    --cw: round(calc(var(--w) * (1 + 2 * var(--s))), 2px);
+    --ch: round(calc(var(--h) * (1 + 1.5 * var(--s))), 2px);
+    margin-left: max(0px, round(down, calc((100% - var(--cw)) / 2), 1px));
+  }
+
+  .cell,
+  .logo,
+  .honey {
+    left: round(calc(var(--cw) / 2 - var(--w) / 2 + (var(--q) + var(--r) / 2) * var(--w) * var(--s)), 1px);
+    top: round(calc(var(--ch) / 2 - var(--h) / 2 + var(--r) * var(--h) * 0.75 * var(--s)), 1px);
+  }
+
+  .cell .icon {
+    width: round(calc(var(--h) * 0.15), 2px);
+    height: round(calc(var(--h) * 0.15), 2px);
+  }
+
+  .tool {
+    font-size: round(calc(var(--h) * 0.085), 1px);
+    line-height: round(calc(var(--h) * 0.1), 1px);
+  }
+
+  .ext .tool {
+    font-size: round(calc(var(--h) * 0.075), 1px);
+    line-height: round(calc(var(--h) * 0.09), 1px);
+  }
+
+  .what {
+    font-size: round(calc(var(--h) * 0.058), 1px);
+    line-height: round(calc(var(--h) * 0.075), 1px);
+  }
+}
+
+/* the edge of a cell in whole device pixels on screens that scale by 125 % or 150 % */
+@media (resolution: 1.25dppx) {
+  .cell-in { inset: 3.2px; }
+}
+
+@media (resolution: 1.5dppx) {
+  .cell-in { inset: 3.334px; }
+}
+
+/* ---------- the column beside the hive ---------- */
+
+.side {
+  display: grid;
+  gap: 36px;
+  width: 100%;
+}
+
+.multiples-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.multiples-head .when {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--glass);
+  font-variant-numeric: tabular-nums;
+}
+
+.series {
+  display: grid;
+  grid-template-columns: minmax(6rem, 9rem) minmax(0, 1fr) 6.5rem 6rem;
+  column-gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-variant-numeric: tabular-nums;
+  border-radius: 6px;
+}
+
+.series:focus-visible {
+  outline-offset: 6px;
+}
+
+.series li {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+  padding: 4px 0;
+}
+
+.series .series-head {
+  padding: 0 0 4px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--mist);
+}
+
+.series .name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+  line-height: 20px;
+  color: var(--glass);
+  text-decoration: none;
+}
+
+.series a.name:hover,
+.series a.name:focus-visible {
+  text-decoration: underline;
+  text-decoration-color: var(--magenta);
+  text-underline-offset: 3px;
+}
+
+.series .spark {
+  display: block;
+  min-width: 0;
+}
+
+.series .spark canvas {
+  display: block;
+  width: 100%;
+  height: 34px;
+}
+
+.series .num {
+  text-align: right;
+  font-size: 15px;
+  line-height: 20px;
+}
+
+.series .peak {
+  color: var(--mist);
+}
+
+.series.pointing .peak {
+  color: var(--glass);
+  font-weight: 600;
+}
+
+.series .total {
+  color: var(--glass);
+}
+
+.series .none {
+  display: block;
+  padding: 8px 0;
+  color: var(--mist);
+}
+
+.series .series-axis {
+  padding: 0;
+}
+
+/* ---------- the lists ---------- */
+
+.rows {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-variant-numeric: tabular-nums;
+}
+
+/* every row takes the columns of its list, so the columns line up */
+.rows li,
+.rows a {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+}
+
+.rows a {
+  padding: 4px 8px;
+  margin: 0 -8px;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: background-color 0.2s;
+}
+
+.rows a:hover,
+.rows a:focus-visible {
+  background: var(--comb);
+}
+
+.rows span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rows .count {
+  text-align: right;
+  color: var(--glass);
+}
+
+.rows .none {
+  display: block;
+  color: var(--mist);
+  max-width: 52ch;
+}
+
+.sources {
+  grid-template-columns: fit-content(10.5rem) minmax(4rem, 1fr) auto 6rem;
+  column-gap: 14px;
+}
+
+.sources .ip {
+  color: var(--key);
+}
+
+.sources .where {
+  color: var(--mist);
+}
+
+.sources .rep {
+  justify-self: start;
+  padding: 0 8px;
+  border: 1px solid var(--wax);
+  border-radius: 999px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--glass);
+  max-width: 11rem;
+}
+
+.sources .rep:empty {
+  visibility: hidden;
+}
+
+.sensor-rows {
+  grid-template-columns: auto minmax(0, 1fr) auto 6rem;
+  column-gap: 14px;
+}
+
+.sensor-rows .dot {
+  fill: var(--petrol);
+}
+
+.sensor-rows .is-live .dot {
+  fill: var(--magenta);
+}
+
+.sensor-rows .seen {
+  color: var(--mist);
+}
+
+/* ---------- wall mode (?kiosk or the key f) ---------- */
+
+.kiosk #effect-menu,
+.kiosk .readme,
+.kiosk .what,
+.kiosk .cell .away {
+  display: none;
+}
+
+.kiosk .cluster {
+  --h-raw: min(200px, 12vw);
+}
+
+.kiosk main {
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+}
+
+.kiosk .big {
+  font-size: clamp(72px, 9vw, 144px);
+}
+
+.kiosk.idle,
+.kiosk.idle * {
+  cursor: none !important;
+}
+
+/* ---------- narrow screens ---------- */
+
+@media (max-width: 1180px) {
+  .band-in {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "head" "big" "facts" "message" "chart";
+  }
+
+  .facts {
+    margin-top: 18px;
+    grid-template-columns: repeat(4, 160px);
+    justify-content: start;
+  }
+}
+
+@media (max-width: 1080px) {
+  main {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+  }
+
+  .cluster {
+    --h-raw: min(250px, calc((100vw - 32px) / 2.72));
+  }
+
+  .side {
+    max-width: 660px;
+  }
+}
+
+@media (max-width: 720px) {
+  .top {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .menus {
+    position: relative;
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .menu {
+    position: static;
+    flex: 1;
+  }
+
+  .menu-button {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .menu-panel {
+    left: 0;
+    right: 0;
+    min-width: 0;
+  }
+
+  .facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .what,
+  .cell .away,
+  .clock .date {
+    display: none;
+  }
+
+  .series {
+    grid-template-columns: minmax(5rem, 7rem) minmax(0, 1fr) 4.5rem;
+  }
+
+  .series .peak {
+    display: none;
+  }
+
+  .sources {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .sources .where {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0s !important;
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+  }
+
+  /* the ring stands full instead of filling */
+  .live.turn .ring-fill {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}

@@ -94,7 +94,7 @@ PLACES = (
           "CITATION.cff release URL"),
     Place(("CITATION.cff",), r"^\s*description: T-Pot Release " + V + r"\s*$", "CITATION.cff release description"),
     Place(("CITATION.cff",), r"^version: " + V + r"\s*$", "CITATION.cff version (date-released is set by hand)"),
-    Place(("docker/nginx/dist/html/index.html",), r'<div class="dynamic-text">T-Pot ' + V + r"</div>",
+    Place(("docker/nginx/dist/html/index.html",), r'<span class="version">' + V + r"</span>",
           "the version on the landing page (static HTML)"),
     Place(("genuserwin.ps1",), r"dtagdevsec/tpotinit:" + V, "the tpotinit image of the Windows web user script"),
     Place(("docker/p0f/dist/run.sh",), r"dtagdevsec/p0f:" + V, "the offline example in the header of run.sh"),

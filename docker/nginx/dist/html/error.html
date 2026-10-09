@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex">
+<title><!--# echo var="status" --></title>
+<style>body{margin:0;min-height:100vh;display:grid;place-content:center;gap:8px;background:#121212;color:#c8c8c8;font:16px/1.5 system-ui,sans-serif;text-align:center}h1{margin:0;font-size:48px;font-weight:600;color:#e8e8e8}p{margin:0}</style>
+</head>
+<body>
+<h1><!--# echo var="status" --></h1>
+<!--# if expr="$status = 401" -->
+<p>Sign in to continue.</p>
+<!--# elif expr="$status = 403" -->
+<p>Access denied.</p>
+<!--# elif expr="$status = 404" -->
+<p>Not found.</p>
+<!--# else -->
+<p>The service is not available right now.</p>
+<!--# endif -->
+</body>
+</html>

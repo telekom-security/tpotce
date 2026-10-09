@@ -31,6 +31,7 @@ not touch production `data/` or `data_backup/` paths.
 ./docker/_tests/run.sh mailoney
 ./docker/_tests/run.sh medpot
 ./docker/_tests/run.sh miniprint
+./docker/_tests/run.sh nginx
 ./docker/_tests/run.sh p0f
 ./docker/_tests/run.sh redis
 ./docker/_tests/run.sh redishoneypot
@@ -95,6 +96,8 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/medpot.sh --image dtagdevsec/medpot:24.04.2 --host-port 12575
 ./docker/_tests/tests/miniprint.sh
 ./docker/_tests/tests/miniprint.sh --image dtagdevsec/miniprint:24.04.2 --raw-port 19100 --http-port 18000
+./docker/_tests/tests/nginx.sh
+./docker/_tests/tests/nginx.sh --image dtagdevsec/nginx:24.04.2 --https-port 16429
 ./docker/_tests/tests/p0f.sh
 ./docker/_tests/tests/p0f.sh --image dtagdevsec/p0f:24.04.2
 ./docker/_tests/tests/p0f.sh --skip-scanners
@@ -161,6 +164,13 @@ responses, and checks matching JSON events in `sentrypeer.json`.
 
 The Suricata test replays a generated HTTP PCAP and verifies a matching HTTP
 event in `eve.json` plus the Suricata runtime log.
+
+The Nginx test starts the web UI read-only with a throwaway certificate and web
+user and checks the landing page: 401 with `WWW-Authenticate` and the neutral
+error page before the login, the page and its assets behind it with their
+Content-Security-Policy, Referrer-Policy and `Cache-Control: no-cache` (once)
+while HSTS and X-Frame-Options of the server block stay, and neutral error
+pages for 405 and 502 (no Elasticsearch behind `/es/`).
 
 The Redis test runs the image of the Attack Map's `map_redis` read-only and
 without a host port, checks PING, SET / GET, uid 2000 and that it keeps its

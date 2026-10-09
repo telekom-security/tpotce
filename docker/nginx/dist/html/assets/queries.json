@@ -1,0 +1,614 @@
+{
+  "default": "24h",
+  "ranges": {
+    "24h": {
+      "points": 48,
+      "every": 15,
+      "lists": 60,
+      "name": "the last 24 hours",
+      "short": "24 h",
+      "per": "30 min",
+      "overview": {
+        "size": 0,
+        "query": {
+          "bool": {
+            "filter": [
+              {
+                "range": {
+                  "@timestamp": {
+                    "gte": "now-48h"
+                  }
+                }
+              },
+              {
+                "bool": {
+                  "must_not": {
+                    "terms": {
+                      "type.keyword": [
+                        "Suricata",
+                        "P0f"
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "aggs": {
+          "current": {
+            "filter": {
+              "range": {
+                "@timestamp": {
+                  "gte": "now-24h"
+                }
+              }
+            },
+            "aggs": {
+              "slots": {
+                "date_histogram": {
+                  "field": "@timestamp",
+                  "fixed_interval": "30m",
+                  "min_doc_count": 0,
+                  "extended_bounds": {
+                    "min": "now-24h",
+                    "max": "now"
+                  }
+                }
+              },
+              "types": {
+                "terms": {
+                  "field": "type.keyword",
+                  "size": 7
+                },
+                "aggs": {
+                  "slots": {
+                    "date_histogram": {
+                      "field": "@timestamp",
+                      "fixed_interval": "30m",
+                      "min_doc_count": 0,
+                      "extended_bounds": {
+                        "min": "now-24h",
+                        "max": "now"
+                      }
+                    }
+                  }
+                }
+              },
+              "sources": {
+                "cardinality": {
+                  "field": "src_ip.keyword"
+                }
+              },
+              "honeypots": {
+                "cardinality": {
+                  "field": "type.keyword"
+                }
+              }
+            }
+          },
+          "previous": {
+            "filter": {
+              "range": {
+                "@timestamp": {
+                  "gte": "now-48h",
+                  "lt": "now-24h"
+                }
+              }
+            },
+            "aggs": {
+              "slots": {
+                "date_histogram": {
+                  "field": "@timestamp",
+                  "fixed_interval": "30m",
+                  "min_doc_count": 0,
+                  "extended_bounds": {
+                    "min": "now-48h",
+                    "max": "now-24h"
+                  }
+                }
+              }
+            }
+          },
+          "latest": {
+            "max": {
+              "field": "@timestamp"
+            }
+          }
+        }
+      },
+      "sources": {
+        "size": 0,
+        "query": {
+          "bool": {
+            "filter": [
+              {
+                "range": {
+                  "@timestamp": {
+                    "gte": "now-24h"
+                  }
+                }
+              },
+              {
+                "bool": {
+                  "must_not": {
+                    "terms": {
+                      "type.keyword": [
+                        "Suricata",
+                        "P0f"
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "aggs": {
+          "sources": {
+            "terms": {
+              "field": "src_ip.keyword",
+              "size": 12
+            },
+            "aggs": {
+              "country": {
+                "terms": {
+                  "field": "geoip.country_name.keyword",
+                  "size": 1
+                }
+              },
+              "rep": {
+                "terms": {
+                  "field": "ip_rep.keyword",
+                  "size": 1
+                }
+              }
+            }
+          }
+        }
+      },
+      "sensors": {
+        "size": 0,
+        "query": {
+          "bool": {
+            "filter": [
+              {
+                "range": {
+                  "@timestamp": {
+                    "gte": "now-24h"
+                  }
+                }
+              },
+              {
+                "exists": {
+                  "field": "t-pot_sensor"
+                }
+              }
+            ]
+          }
+        },
+        "aggs": {
+          "sensors": {
+            "terms": {
+              "field": "t-pot_sensor.keyword",
+              "size": 50
+            },
+            "aggs": {
+              "latest": {
+                "max": {
+                  "field": "@timestamp"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "1h": {
+      "points": 60,
+      "every": 10,
+      "lists": 30,
+      "name": "the last hour",
+      "short": "1 h",
+      "per": "minute",
+      "overview": {
+        "size": 0,
+        "query": {
+          "bool": {
+            "filter": [
+              {
+                "range": {
+                  "@timestamp": {
+                    "gte": "now-2h"
+                  }
+                }
+              },
+              {
+                "bool": {
+                  "must_not": {
+                    "terms": {
+                      "type.keyword": [
+                        "Suricata",
+                        "P0f"
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "aggs": {
+          "current": {
+            "filter": {
+              "range": {
+                "@timestamp": {
+                  "gte": "now-1h"
+                }
+              }
+            },
+            "aggs": {
+              "slots": {
+                "date_histogram": {
+                  "field": "@timestamp",
+                  "fixed_interval": "1m",
+                  "min_doc_count": 0,
+                  "extended_bounds": {
+                    "min": "now-1h",
+                    "max": "now"
+                  }
+                }
+              },
+              "types": {
+                "terms": {
+                  "field": "type.keyword",
+                  "size": 7
+                },
+                "aggs": {
+                  "slots": {
+                    "date_histogram": {
+                      "field": "@timestamp",
+                      "fixed_interval": "1m",
+                      "min_doc_count": 0,
+                      "extended_bounds": {
+                        "min": "now-1h",
+                        "max": "now"
+                      }
+                    }
+                  }
+                }
+              },
+              "sources": {
+                "cardinality": {
+                  "field": "src_ip.keyword"
+                }
+              },
+              "honeypots": {
+                "cardinality": {
+                  "field": "type.keyword"
+                }
+              }
+            }
+          },
+          "previous": {
+            "filter": {
+              "range": {
+                "@timestamp": {
+                  "gte": "now-2h",
+                  "lt": "now-1h"
+                }
+              }
+            },
+            "aggs": {
+              "slots": {
+                "date_histogram": {
+                  "field": "@timestamp",
+                  "fixed_interval": "1m",
+                  "min_doc_count": 0,
+                  "extended_bounds": {
+                    "min": "now-2h",
+                    "max": "now-1h"
+                  }
+                }
+              }
+            }
+          },
+          "latest": {
+            "max": {
+              "field": "@timestamp"
+            }
+          }
+        }
+      },
+      "sources": {
+        "size": 0,
+        "query": {
+          "bool": {
+            "filter": [
+              {
+                "range": {
+                  "@timestamp": {
+                    "gte": "now-1h"
+                  }
+                }
+              },
+              {
+                "bool": {
+                  "must_not": {
+                    "terms": {
+                      "type.keyword": [
+                        "Suricata",
+                        "P0f"
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "aggs": {
+          "sources": {
+            "terms": {
+              "field": "src_ip.keyword",
+              "size": 12
+            },
+            "aggs": {
+              "country": {
+                "terms": {
+                  "field": "geoip.country_name.keyword",
+                  "size": 1
+                }
+              },
+              "rep": {
+                "terms": {
+                  "field": "ip_rep.keyword",
+                  "size": 1
+                }
+              }
+            }
+          }
+        }
+      },
+      "sensors": {
+        "size": 0,
+        "query": {
+          "bool": {
+            "filter": [
+              {
+                "range": {
+                  "@timestamp": {
+                    "gte": "now-1h"
+                  }
+                }
+              },
+              {
+                "exists": {
+                  "field": "t-pot_sensor"
+                }
+              }
+            ]
+          }
+        },
+        "aggs": {
+          "sensors": {
+            "terms": {
+              "field": "t-pot_sensor.keyword",
+              "size": 50
+            },
+            "aggs": {
+              "latest": {
+                "max": {
+                  "field": "@timestamp"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "1m": {
+      "points": 30,
+      "every": 4,
+      "lists": 10,
+      "name": "the last minute",
+      "short": "1 min",
+      "per": "2 s",
+      "overview": {
+        "size": 0,
+        "query": {
+          "bool": {
+            "filter": [
+              {
+                "range": {
+                  "@timestamp": {
+                    "gte": "now-120s"
+                  }
+                }
+              },
+              {
+                "bool": {
+                  "must_not": {
+                    "terms": {
+                      "type.keyword": [
+                        "Suricata",
+                        "P0f"
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "aggs": {
+          "current": {
+            "filter": {
+              "range": {
+                "@timestamp": {
+                  "gte": "now-60s"
+                }
+              }
+            },
+            "aggs": {
+              "slots": {
+                "date_histogram": {
+                  "field": "@timestamp",
+                  "fixed_interval": "2s",
+                  "min_doc_count": 0,
+                  "extended_bounds": {
+                    "min": "now-60s",
+                    "max": "now"
+                  }
+                }
+              },
+              "types": {
+                "terms": {
+                  "field": "type.keyword",
+                  "size": 7
+                },
+                "aggs": {
+                  "slots": {
+                    "date_histogram": {
+                      "field": "@timestamp",
+                      "fixed_interval": "2s",
+                      "min_doc_count": 0,
+                      "extended_bounds": {
+                        "min": "now-60s",
+                        "max": "now"
+                      }
+                    }
+                  }
+                }
+              },
+              "sources": {
+                "cardinality": {
+                  "field": "src_ip.keyword"
+                }
+              },
+              "honeypots": {
+                "cardinality": {
+                  "field": "type.keyword"
+                }
+              }
+            }
+          },
+          "previous": {
+            "filter": {
+              "range": {
+                "@timestamp": {
+                  "gte": "now-120s",
+                  "lt": "now-60s"
+                }
+              }
+            },
+            "aggs": {
+              "slots": {
+                "date_histogram": {
+                  "field": "@timestamp",
+                  "fixed_interval": "2s",
+                  "min_doc_count": 0,
+                  "extended_bounds": {
+                    "min": "now-120s",
+                    "max": "now-60s"
+                  }
+                }
+              }
+            }
+          },
+          "latest": {
+            "max": {
+              "field": "@timestamp"
+            }
+          }
+        }
+      },
+      "sources": {
+        "size": 0,
+        "query": {
+          "bool": {
+            "filter": [
+              {
+                "range": {
+                  "@timestamp": {
+                    "gte": "now-60s"
+                  }
+                }
+              },
+              {
+                "bool": {
+                  "must_not": {
+                    "terms": {
+                      "type.keyword": [
+                        "Suricata",
+                        "P0f"
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "aggs": {
+          "sources": {
+            "terms": {
+              "field": "src_ip.keyword",
+              "size": 12
+            },
+            "aggs": {
+              "country": {
+                "terms": {
+                  "field": "geoip.country_name.keyword",
+                  "size": 1
+                }
+              },
+              "rep": {
+                "terms": {
+                  "field": "ip_rep.keyword",
+                  "size": 1
+                }
+              }
+            }
+          }
+        }
+      },
+      "sensors": {
+        "size": 0,
+        "query": {
+          "bool": {
+            "filter": [
+              {
+                "range": {
+                  "@timestamp": {
+                    "gte": "now-60s"
+                  }
+                }
+              },
+              {
+                "exists": {
+                  "field": "t-pot_sensor"
+                }
+              }
+            ]
+          }
+        },
+        "aggs": {
+          "sensors": {
+            "terms": {
+              "field": "t-pot_sensor.keyword",
+              "size": 50
+            },
+            "aggs": {
+              "latest": {
+                "max": {
+                  "field": "@timestamp"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

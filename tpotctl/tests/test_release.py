@@ -133,7 +133,7 @@ class CheckTest(unittest.TestCase):
             env = Path(tmp, "docker/_builder/.env")
             env.write_text(env.read_text().replace("TPOT_VERSION=" + release.read_version(ROOT), "TPOT_VERSION=1.0.0"))
             html = Path(tmp, "docker/nginx/dist/html/index.html")
-            html.write_text(html.read_text().replace('class="dynamic-text"', 'class="other-text"'))
+            html.write_text(html.read_text().replace('class="version"', 'class="other-text"'))
             problems = release.check(Path(tmp))
             self.assertEqual(len(problems), 2, problems)
             self.assertTrue(any("docker/_builder/.env" in p and "1.0.0" in p for p in problems), problems)
@@ -207,7 +207,7 @@ class SetVersionTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             paths = copy_of_the_places(tmp)
             html = Path(tmp, "docker/nginx/dist/html/index.html")
-            html.write_text(html.read_text().replace('class="dynamic-text"', 'class="other-text"'))
+            html.write_text(html.read_text().replace('class="version"', 'class="other-text"'))
             before = {rel: Path(tmp, rel).read_bytes() for rel in paths}
             with self.assertRaises(release.ReleaseError) as caught:
                 release.set_version(Path(tmp), NEW)

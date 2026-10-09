@@ -1,162 +1,170 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta http-equiv="Content-Security-Policy" content="script-src 'self'; object-src 'none'">
-    <meta charset="UTF-8">
-    <!--Setup Font Awesome-->
-    <link href="assets/fonts/awesome/css/all.css" rel="stylesheet">
-    <!--Setup Particles, Particles Conf, Clock-->
-    <!-- Check integrity: openssl dgst -sha384 -binary your.file.name | openssl base64 -A-->
-    <script src="assets/js/particles.min.js" defer integrity="sha384-d+UOwmNNIC7V4izkTAKSXzWhjC2GxiS9PTykO1XdOPC3nc2z65UOS7SP6QdKPA70" crossorigin="anonymous"></script>
-    <script src="assets/js/particles_conf.js" defer integrity="sha384-0191YAiOrh905UCYh44ZxeO+pKbvuEOIDEmo3F6qHKDL8FO8s66r6P2w8NGMWp7I" crossorigin="anonymous"></script>
-    <script src="assets/js/clock.js" defer integrity="sha384-ymJnuq0yExd1vCEQFQAvYDv0IWfHL1XJYSRt2nyK73ofjF6GzG5baOjLN1dLkGLI" crossorigin="anonymous"></script>
-
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <meta name="referrer" content="no-referrer">
     <title>T-Pot</title>
-    <style>
-        /* russo-one-regular - latin */
-        @font-face {
-          font-display: swap; /* Check https://developer.mozilla.org/en-US/docs/Web/CSS/@font-face/font-display for other options. */
-          font-family: 'Russo One';
-          font-style: normal;
-          font-weight: 400;
-          src: url('assets/fonts/russo-one-v16-latin-regular.woff2') format('woff2'); /* Chrome 36+, Opera 23+, Firefox 39+, Safari 12+, iOS 10+ */
-        }
-        body, html {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            overflow: hidden;
-            background-color: #000;
-            font-family: 'Russo One', normal;
-        }
-        .header-container {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            position: absolute;
-            top: 0px;
-            left: 20px;
-            right: 20px;
-        }
-        .clock-container, .dynamic-text {
-            color: #e20074;
-            font-size: 72px;
-        }
-        .dynamic-text {
-            text-align: right;
-        }
-        .logo-container {
-            width: 100%;
-            display: flex;
-            justify-content: flex-end;
-            position: absolute;
-            top: 45%;
-            transform: translateY(-50%);
-        }
-        .logo {
-            width: 25vw;
-            height: auto;
-            position: relative;
-            opacity: 0.9;
-            right: 10%;
-            z-index: 1;
-        }
-        #particles-js {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            z-index: 1;
-        }
-        .boxes-container {
-            display: flex;
-            justify-content: flex-start;
-            position: absolute;
-            bottom: 50px;
-            left: 20px;
-            padding: 0 20px;
-        }
-        .link-box {
-            margin: 0 10px;
-            padding: 20px;
-            padding-top: 60px;
-            background: rgba(51, 51, 51, 0.3);
-            border-radius: 20px;
-            text-align: center;
-            transition: box-shadow 0.5s ease;
-            z-index: 10;
-            box-sizing: border-box;
-            position: relative;
-            width: 400px; /* Adjust as needed */
-            min-height: 500px;
-            max-width: 100%;
-            display: flex;
-            flex-direction: column;
-            justify-content: top;
-            align-items: center;
-        }
-        .links-box::before, .tools-box::before {
-            font-family: 'FontAwesome';
-            content: attr(data-caption);
-            position: absolute;
-            top: -20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: transparent;
-            color: #FFF;
-            padding: 0 10px;
-            font-size: 36px;
-            white-space: nowrap;
-        }
-        .link-box:hover {
-            box-shadow: 0 0 15px 5px rgba(226, 0, 116, 0.6);
-            background: rgba(51, 51, 51, 0.3);
-        }
-        .link-box:hover::before {
-            color: #e20074;
-            transition: color 0.5s ease;
-        }
-        .link {
-            display: block;
-            color: #FFF;
-            text-decoration: none;
-            margin: 10px 0;
-            font-size: 42px;
-            transition: color 0.5s ease;
-        }
-        .link:hover {
-            color: #e20074;
-        }
-    </style>
+    <link rel="icon" href="assets/icons/favicon.png" type="image/png">
+    <!-- No inline code: the CSP of tpotweb.conf allows only these files. Integrity of a changed file:
+         openssl dgst -sha384 -binary FILE | openssl base64 -A (tpotctl/tests/test_landing.py checks it) -->
+    <link rel="stylesheet" href="assets/css/tpot.css" integrity="sha384-+DBbVo275SG+1yTzY+vYBjVtI8xHugjB6ZloMwKORq3V9Ki95+FB1Hs04ZawBb7l" crossorigin="anonymous">
+    <script src="assets/js/hexgrid.js" defer integrity="sha384-sA0GgVlaw99VMpyL8tH+dItlcAeVQSBv1zA2MbJQoxYaZalM8fzN5PffZ6YyZTFQ" crossorigin="anonymous"></script>
+    <script src="assets/js/effect-comb.js" defer integrity="sha384-A+HK/dJIMZpO7IbaHQeDJMjI27jtMzivrxy5gGpyhOlUxzze7QHhOPspX1oO+7ft" crossorigin="anonymous"></script>
+    <script src="assets/js/effect-honey.js" defer integrity="sha384-x6dCpUy02uo1D1AH3fATVj7VVqigbHt/PbitdQ+4X79KRRn9gEydUXv614VFngEc" crossorigin="anonymous"></script>
+    <script src="assets/js/effect-net.js" defer integrity="sha384-HFjoSqFEC/4mO5mggzd0KjFRCOoY6F+aHXqcfmDjpy3Ji77kd8SD9I6EEAHWqZYO" crossorigin="anonymous"></script>
+    <script src="assets/js/menu.js" defer integrity="sha384-OLdIijSpiwH/FJcTfwXLV2YPfYAYUOU+oU3tR7qcVoRrTjCSQAbw9b3LvFZx0IXD" crossorigin="anonymous"></script>
+    <script src="assets/js/pulse.js" defer integrity="sha384-wBlhKAIfmO95CL4EpBZ3ABWDaklFo0/4ycRehpj071lF/9/YXPBd2+N5tSXCaWCU" crossorigin="anonymous"></script>
+    <script src="assets/js/graph.js" defer integrity="sha384-NhsGJ29kZO1/QD0Ynh2V7RJuha9PTka682sUsbGBOubnW76uY/ey1Zr3j87FM01U" crossorigin="anonymous"></script>
+    <script src="assets/js/view.js" defer integrity="sha384-wn1MFgNUT2gfvPSMBSsRZFSlXeKGyNn8lvccGlkBC/26wl78elOhvVx9eoKwpCS4" crossorigin="anonymous"></script>
+    <script src="assets/js/app.js" defer integrity="sha384-B1nOthjKMZmrlnFYPhGIdeRykKZUkM8Ew8OD1b4xtUtLFQVMtRdqayRMhlqI4qnN" crossorigin="anonymous"></script>
 </head>
-<body>
+<body class="effect-comb">
 
-<div id="particles-js"></div>
+<canvas id="backdrop" aria-hidden="true"></canvas>
 
-<div class="header-container">
-    <div class="clock-container" id="clock"></div>
-    <div class="dynamic-text">T-Pot 24.04.2</div>
-</div>
-
-<div class="logo-container">
-    <img src="assets/img/logo.webp" alt="T-Pot Logo" class="logo">
-</div>
-
-<div class="boxes-container">
-    <div class="link-box tools-box" data-caption="&#xf085;">
-        <a href="/map/" class="link" target="_blank">Attack Map</a>
-        <a href="/cyberchef/" class="link" target="_blank">Cyberchef</a>
-        <a href="/elasticvue/" class="link" target="_blank">Elasticvue</a>
-        <a href="/kibana/" class="link" target="_blank">Kibana</a>
+<header class="top">
+    <h1 class="brand">T-Pot<span class="version">24.04.2</span><a class="readme" href="https://github.com/telekom-security/tpotce/blob/master/README.md" target="_blank" rel="noopener noreferrer" title="T-Pot readme" aria-label="T-Pot readme"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2.5C2 2.2 2.2 2 2.5 2H6c.9 0 1.6.4 2 1 .4-.6 1.1-1 2-1h3.5c.3 0 .5.2.5.5v10c0 .3-.2.5-.5.5H10c-.8 0-1.5.4-1.5 1h-1C7.5 13.4 6.8 13 6 13H2.5c-.3 0-.5-.2-.5-.5zM7.4 4.5C7.4 3.7 6.8 3 6 3H3v9h3c.5 0 1 .1 1.4.4zm1.2 7.9c.4-.3.9-.4 1.4-.4h3V3h-3c-.8 0-1.4.7-1.4 1.5z"/></svg></a></h1>
+    <div class="menus">
+        <div class="menu" id="range-menu">
+            <button type="button" class="menu-button" id="range-button" aria-haspopup="menu" aria-expanded="false" aria-controls="range-list" title="Time range of the numbers, graphs and lists">
+                <svg class="glyph" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 2a5 5 0 1 1 0 10A5 5 0 0 1 8 3zm-1 1v4.4l3.3 2 1-1.6L9 7.6V4z"/></svg><span class="menu-label">Last 24 hours</span><svg class="chevron" viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M2.5 4.5L6 8l3.5-3.5"/></svg>
+            </button>
+            <div class="menu-panel" id="range-list">
+                <ul role="menu" aria-labelledby="range-button">
+                    <li role="none"><button type="button" role="menuitemradio" data-value="24h" aria-checked="true"><svg class="glyph" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 2a5 5 0 1 1 0 10A5 5 0 0 1 8 3zm-1 1v4.4l3.3 2 1-1.6L9 7.6V4z"/></svg><span class="item-name">Last 24 hours</span><span class="item-note">a point every 30 minutes</span><svg class="check" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3 8.5l3 3 7-7"/></svg></button></li>
+                    <li role="none"><button type="button" role="menuitemradio" data-value="1h" aria-checked="false"><svg class="glyph" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 2a5 5 0 1 1 0 10A5 5 0 0 1 8 3zm-1 1v4.4l3.3 2 1-1.6L9 7.6V4z"/></svg><span class="item-name">Last hour</span><span class="item-note">a point every minute</span><svg class="check" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3 8.5l3 3 7-7"/></svg></button></li>
+                    <li role="none"><button type="button" role="menuitemradio" data-value="1m" aria-checked="false"><svg class="glyph" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 2a5 5 0 1 1 0 10A5 5 0 0 1 8 3zm-1 1v4.4l3.3 2 1-1.6L9 7.6V4z"/></svg><span class="item-name">Last minute</span><span class="item-note">a point every 2 seconds</span><svg class="check" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3 8.5l3 3 7-7"/></svg></button></li>
+                </ul>
+            </div>
+        </div>
+        <div class="menu" id="effect-menu">
+            <button type="button" class="menu-button" id="effect-button" aria-haspopup="menu" aria-expanded="false" aria-controls="effect-list" title="Background effect">
+                <svg class="glyph" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M7 1l1.4 4.6L13 7l-4.6 1.4L7 13 5.6 8.4 1 7l4.6-1.4zM13 10l.7 1.8L15.5 12.5l-1.8.7L13 15l-.7-1.8-1.8-.7 1.8-.7z"/></svg><span class="menu-label">Comb</span><svg class="chevron" viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M2.5 4.5L6 8l3.5-3.5"/></svg>
+            </button>
+            <div class="menu-panel" id="effect-list">
+                <ul role="menu" aria-labelledby="effect-button">
+                    <li role="none"><button type="button" role="menuitemradio" data-value="comb" aria-checked="true"><svg class="glyph" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4.5 1l3 1.75v3.5L4.5 8l-3-1.75v-3.5zM11.5 1l3 1.75v3.5L11.5 8l-3-1.75v-3.5zM8 8.5l3 1.75v3.5L8 15.5l-3-1.75v-3.5z"/></svg><span class="item-name">Comb</span><span class="item-note">a cell lights up for every attack</span><svg class="check" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3 8.5l3 3 7-7"/></svg></button></li>
+                    <li role="none"><button type="button" role="menuitemradio" data-value="honey" aria-checked="false"><svg class="glyph" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 1c0 0-5 5.6-5 9a5 5 0 0 0 10 0c0-3.4-5-9-5-9z"/></svg><span class="item-name">Honey</span><span class="item-note">a drop falls into the pot for every attack</span><svg class="check" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3 8.5l3 3 7-7"/></svg></button></li>
+                    <li role="none"><button type="button" role="menuitemradio" data-value="net" aria-checked="false"><svg class="glyph" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3.2 4.4l4.6-2 .4 1-4.6 2zM8.6 2.6l4.2 3-.6.8-4.2-3zM12 6l-.8 5.6-1-.2.8-5.6zM10.6 12.4l-5.2 1.4-.2-1 5.2-1.4zM4.6 12.6L2.4 5.8l1-.4 2.2 6.8z"/><circle cx="3" cy="5" r="2"/><circle cx="8" cy="2.5" r="2"/><circle cx="12.8" cy="6" r="2"/><circle cx="11" cy="12" r="2"/><circle cx="5" cy="13.4" r="2"/></svg><span class="item-name">Network</span><span class="item-note">a node flashes for every attack</span><svg class="check" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3 8.5l3 3 7-7"/></svg></button></li>
+                </ul>
+            </div>
+        </div>
     </div>
-    <div class="link-box links-box" data-caption="&#xf0c1;">
-        <a href="https://sicherheitstacho.eu/" class="link" target="_blank">SecurityMeter</a>
-        <a href="https://github.com/telekom-security/tpotce/blob/master/README.md" class="link" target="_blank">T-Pot ReadMe</a>
-        <a href="https://github.com/telekom-security/tpotce/" class="link" target="_blank">T-Pot @ Github</a>
+    <p class="clock"><time id="clock"></time></p>
+</header>
+
+<section class="band" id="band" aria-label="Attacks on this T-Pot" data-state="wait">
+    <div class="band-in">
+        <div class="band-head">
+            <h2 id="hero-title">Attacks in the last 24 hours</h2>
+            <span class="live" id="live" data-state="wait">
+                <svg class="ring" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle class="ring-track" cx="8" cy="8" r="6.5"/><circle class="ring-fill" id="ring-fill" cx="8" cy="8" r="6.5"/><path class="ring-dot" d="M8 4.5l3 1.75v3.5L8 11.5 5 9.75v-3.5z"/></svg>
+                <span id="live-text" role="status">connecting</span>
+            </span>
+        </div>
+        <p class="big" id="total">&nbsp;</p>
+        <ul class="facts">
+            <li class="fact" id="fact-trend">
+                <span class="fact-icon"><svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true"><path class="line" id="trend-path" d="M4 15L15 4M8 4h7v7"/></svg></span>
+                <span class="fact-value"></span><span class="fact-label"></span>
+            </li>
+            <li class="fact" id="fact-latest">
+                <span class="fact-icon"><svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true"><path d="M11.5 1L3 11.5h5.5L7.5 19 16 8.5h-5.5z"/></svg></span>
+                <span class="fact-value"></span><span class="fact-label">latest attack</span>
+            </li>
+            <li class="fact" id="fact-sources">
+                <span class="fact-icon"><svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true"><path d="M10 1a6.5 6.5 0 0 0-6.5 6.5C3.5 12.4 10 19 10 19s6.5-6.6 6.5-11.5A6.5 6.5 0 0 0 10 1zm0 9a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg></span>
+                <span class="fact-value"></span><span class="fact-label">sources</span>
+            </li>
+            <li class="fact" id="fact-honeypots">
+                <span class="fact-icon"><svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true"><path fill-rule="evenodd" d="M10 1l8 4.5v9L10 19l-8-4.5v-9zm0 4L5.5 7.5v5L10 15l4.5-2.5v-5z"/></svg></span>
+                <span class="fact-value"></span><span class="fact-label">honeypots hit</span>
+            </li>
+        </ul>
+        <p class="band-message" id="band-message"></p>
+        <div class="band-chart" id="band-chart" tabindex="0" aria-label="Attacks over the time range; the arrow keys move through the time">
+            <p class="band-read" id="band-read"></p>
+            <canvas id="band-canvas" aria-hidden="true"></canvas>
+            <div class="band-axis" id="band-axis" aria-hidden="true"></div>
+        </div>
+        <div class="sr-only"><table id="band-table"></table></div>
     </div>
-</div>
+</section>
+
+<main>
+    <nav class="hive" aria-label="Tools">
+        <div class="cluster">
+            <a class="cell at-nw" href="/map/" target="_blank" rel="noopener noreferrer">
+                <span class="cell-in">
+                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.5 3.9 5.5 3.9 9s-1.3 6.5-3.9 9c-2.6-2.5-3.9-5.5-3.9-9S9.4 5.5 12 3z"/></svg>
+                    <span class="tool">Attack Map</span>
+                    <span class="what">Attacks on a world map, as they happen</span>
+                </span>
+            </a>
+            <a class="cell at-ne" href="/kibana/" target="_blank" rel="noopener noreferrer">
+                <span class="cell-in">
+                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+                    <span class="tool">Kibana</span>
+                    <span class="what">Dashboards and search over every event</span>
+                </span>
+            </a>
+            <a class="cell ext at-w" href="https://sicherheitstacho.eu/" target="_blank" rel="noopener noreferrer">
+                <span class="cell-in">
+                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 17a9 9 0 1 1 17 0M12 13l4-5"/><circle cx="12" cy="14" r="1.6"/></svg>
+                    <span class="tool">SecurityMeter</span>
+                    <span class="what">Attacks on the honeypots of Deutsche Telekom</span>
+                    <svg class="away" viewBox="0 0 12 12" aria-hidden="true"><path d="M5 2H2v8h8V7M7 1.5h3.5V5M10.5 1.5L5.5 6.5"/></svg>
+                </span>
+            </a>
+            <img class="logo" src="assets/img/logo.webp" alt="T-Pot logo" width="777" height="900">
+            <canvas id="honey" class="honey" aria-hidden="true"></canvas>
+            <a class="cell ext at-e" href="https://github.com/telekom-security/tpotce/" target="_blank" rel="noopener noreferrer">
+                <span class="cell-in">
+                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 4l-4 16"/></svg>
+                    <span class="tool">T-Pot on GitHub</span>
+                    <span class="what">Source, issues and releases</span>
+                    <svg class="away" viewBox="0 0 12 12" aria-hidden="true"><path d="M5 2H2v8h8V7M7 1.5h3.5V5M10.5 1.5L5.5 6.5"/></svg>
+                </span>
+            </a>
+            <a class="cell at-sw" href="/cyberchef/" target="_blank" rel="noopener noreferrer">
+                <span class="cell-in">
+                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 14a4 4 0 1 1 1.2-7.8 4 4 0 0 1 7.6 0A4 4 0 1 1 17 14v6H7z M7 17h10"/></svg>
+                    <span class="tool">CyberChef</span>
+                    <span class="what">Decode, decrypt and analyse payloads</span>
+                </span>
+            </a>
+            <a class="cell at-se" href="/elasticvue/" target="_blank" rel="noopener noreferrer">
+                <span class="cell-in">
+                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>
+                    <span class="tool">Elasticvue</span>
+                    <span class="what">Browse the Elasticsearch indices</span>
+                </span>
+            </a>
+        </div>
+    </nav>
+
+    <div class="side">
+        <section class="multiples" aria-labelledby="series-title">
+            <div class="multiples-head">
+                <h2 id="series-title">Attacks per honeypot, last 24 hours</h2>
+                <p class="when" id="series-when"></p>
+            </div>
+            <ol class="series" id="series" tabindex="0" aria-label="Attacks per honeypot over time; the arrow keys move through the time"></ol>
+        </section>
+
+        <section class="top-sources" aria-labelledby="sources-title">
+            <h2 id="sources-title">Top sources, last 24 hours</h2>
+            <ol class="rows sources" id="sources"></ol>
+        </section>
+
+        <section class="sensors" id="sensors-box" aria-labelledby="sensors-title" hidden>
+            <h2 id="sensors-title">Sensors, last 24 hours</h2>
+            <ol class="rows sensor-rows" id="sensors"></ol>
+        </section>
+    </div>
+</main>
+
 </body>
 </html>
