@@ -583,10 +583,12 @@ services:
      - honeypot_local
     ports:
       - "9100:9100"
+      - "8000:8000"
     image: ${TPOT_REPO}/miniprint:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
     read_only: true
     volumes:
+     - ${TPOT_DATA_PATH}/miniprint/data/:/opt/miniprint/data/
      - ${TPOT_DATA_PATH}/miniprint/log/:/opt/miniprint/log/
      - ${TPOT_DATA_PATH}/miniprint/uploads/:/opt/miniprint/uploads/
 

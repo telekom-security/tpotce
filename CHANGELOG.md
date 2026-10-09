@@ -46,6 +46,7 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 * **Honeyaml** builds again: its Rust dependencies have been updated and it is now a static binary on a scratch image (branch `tpot-24.04.2` of the T-Pot fork, upstream is no longer maintained).
 * **IPPHoney** has been updated to 2.0.2.
 * **Mailoney** has been updated to 3.0.0 (T-Pot fork, pinned to the release): SMTP on 25 and Submission on 587 (both with STARTTLS), SMTPS on 465 (implicit TLS), logins with AUTH PLAIN / LOGIN, mails and their attachments are stored (`data/mailoney/log/mails`, archived daily to `data/mailoney/mails.tgz` like the downloads of other honeypots) and floods are limited per source and sender. The server name of its banner and TLS certificate is chosen once per installation (`data/mailoney/log/identity`). Mailoney takes port 465, Heralding no longer listens there in the Standard, Sensor, Mobile and Mac / Win editions. The new Mailoney dashboard shows mails, attachments, logins, TLS sessions and SMTP input, the >T-Pot Username / Password tag clouds include its logins, see [Breaking Changes](#mailoney).
+* **Miniprint** has been updated to 0.2.1 (T-Pot fork, pinned to the release): Brother, HP and Lexmark printer personas with one identity per installation (`data/miniprint/data`), a web admin interface on port 8000 (the Brother serial number leak, default password login, LDAP / SMTP passback and firmware upload, with CVE hints), print jobs captured as PostScript, PCL, PDF or raw files and limits per connection. The Miniprint dashboard shows the lure chain, CVE hints, PJL commands, print languages, uploads, passback targets, URLs and User-Agents, see [Breaking Changes](#miniprint).
 * **Honeypots** without releases were updated to their latest pushed code, pinned to a commit.
 * Docker images now use **Alpine 3.24**, **Go 1.26** or **Scratch** wherever possible; **Log4Pot** moved from Ubuntu to Alpine.
 * **Installer** supports unattended installations and has been tested with **Alma 10**, **Debian 13**, **Fedora 44**, **OpenSuse Tumbleweed**, **Rocky 10**, **RHEL 10** and **Ubuntu 26.04** (sudo-rs).
@@ -88,6 +89,11 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 - EWSPoster sends no Mailoney events until it reads the new format.
 - If you use a `docker-compose.yml` of your own, publish `465:465` and `587:587` for Mailoney (instead of `587:25`) and comment out `465:465` of Heralding.
 
+### Miniprint
+- Miniprint logs one session per connection (`session_id`, `protocol` `pjl` or `http`, `persona`, `session_start` / `session_end`), virtual paths as `virtual_path` (instead of `dir`), saved jobs as `save_print_job` / `save_raw_print_job` / `save_postscript` / `save_firmware` with `file_name`, `artifact_type`, `payload_sha256` and `size`, admin form fields as `form_fields` and the server of an LDAP / SMTP passback as `passback_target`; command responses are no longer logged. In Elasticsearch the session length is `session_seconds`. Import the Kibana objects of this release to get the new Miniprint dashboard, older events keep their fields.
+- EWSPoster reports only PJL connections of Miniprint until it reads the new format.
+- If you use a `docker-compose.yml` of your own, publish `8000:8000` for Miniprint and mount `${TPOT_DATA_PATH}/miniprint/data/:/opt/miniprint/data/`.
+
 ### Snare / Tanner
 - Snare and Tanner have been removed, together with Tanner's API, PHPox and its Redis. The Dockerfiles have moved to `docker/deprecated/tanner`.
 - **H0neytr4p** now also listens on port 80 in the Standard, Sensor, Mobile and Mac / Win editions. The Redis image of the Attack Map stays, it is built from `docker/redis` now.
@@ -101,7 +107,7 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 - Your scans in `~/tpotce/data/spiderfoot` are kept. If you no longer need them, remove the folder with `sudo rm -rf ~/tpotce/data/spiderfoot`.
 
 ### Galah
-- In Elasticsearch the request and response fields of Galah are now `http_request.*` and `http_response.*` (i.e. `http_request.method`, `http_request.requestURI`), as ConPot and Miniprint log `request` / `response` as text and the daily index could only hold one of them. Import the Kibana objects of this release to get the updated Galah dashboard, older events keep the previous field names.
+- In Elasticsearch the request and response fields of Galah are now `http_request.*` and `http_response.*` (i.e. `http_request.method`, `http_request.requestURI`), as ConPot and Miniprint log `request` as text and the daily index could only hold one of them. Import the Kibana objects of this release to get the updated Galah dashboard, older events keep the previous field names.
 
 ### T-Pot Config File
 - `TPOT_PERSISTENCE` accepts only `on` / `off`, `TPOT_BLACKHOLE` and `TPOT_ATTACKMAP_TEXT` only `ENABLED` / `DISABLED`. Other values such as `true` passed the check before but were not acted on; with `TPOT_PERSISTENCE=true` the honeypot logs were deleted on every start. `update.sh` rewrites these values, T-Pot does not start with any other value.

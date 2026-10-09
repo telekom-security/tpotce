@@ -148,7 +148,7 @@ T-Pot's main components have been moved into the `tpotinit` Docker image allowin
 [log4pot](https://github.com/thomaspatzke/Log4Pot),
 [mailoney](https://github.com/phin3has/mailoney),
 [medpot](https://github.com/schmalle/medpot),
-[miniprint](https://github.com/sa7mon/miniprint),
+[miniprint](https://github.com/t3chn0m4g3/miniprint),
 [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot),
 [rdphoneypot](https://gitlab.com/bontchev/rdphoneypot),
 [sentrypeer](https://github.com/SentryPeer/SentryPeer),
@@ -289,7 +289,7 @@ Besides the ports generally needed by the OS, i.e. obtaining a DHCP lease, DNS, 
 | 80, 443, 8080, 9200, 25565                                                                                                            | tcp      | incoming  | Honeypot: Log4Pot                                                                                   |
 | 25, 465, 587                                                                                                                          | tcp      | incoming  | Honeypot: Mailoney                                                                                  |
 | 2575                                                                                                                                  | tcp      | incoming  | Honeypot: Medpot                                                                                    |
-| 9100                                                                                                                                  | tcp      | incoming  | Honeypot: Miniprint                                                                                 |
+| 8000, 9100                                                                                                                            | tcp      | incoming  | Honeypot: Miniprint                                                                                 |
 | 6379                                                                                                                                  | tcp      | incoming  | Honeypot: Redishoneypot                                                                             |
 | 3389                                                                                                                                  | tcp      | incoming  | Honeypot: RDPHoneypot                                                                               |
 | 5060                                                                                                                                  | tcp/udp  | incoming  | Honeypot: SentryPeer                                                                                |
@@ -1182,7 +1182,7 @@ The software that T-Pot is built on uses the following licenses.
 [log4pot](https://github.com/thomaspatzke/Log4Pot/blob/master/LICENSE),
 [heralding](https://github.com/t3chn0m4g3/heralding/blob/master/LICENSE.txt),
 [ipphoney](https://gitlab.com/bontchev/ipphoney/-/blob/master/LICENSE),
-[miniprint](https://github.com/sa7mon/miniprint?tab=GPL-3.0-1-ov-file#readme),
+[miniprint](https://github.com/t3chn0m4g3/miniprint/blob/master/LICENSE.md),
 [redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot/blob/main/LICENSE),
 [rdphoneypot](https://gitlab.com/bontchev/rdphoneypot/-/blob/master/LICENSE),
 [sentrypeer](https://github.com/SentryPeer/SentryPeer/blob/main/LICENSE.GPL-3.0-only)

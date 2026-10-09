@@ -326,7 +326,7 @@ fuMEDPOT () {
 # Let's create a function to clean up and prepare miniprint data
 fuMINIPRINT () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/miniprint/*; fi
-  mkdir -vp /data/miniprint/{log,uploads}
+  mkdir -vp /data/miniprint/{data,log,uploads}
   chmod 770 /data/miniprint/ -R
   chown tpot:tpot /data/miniprint/ -R
 }

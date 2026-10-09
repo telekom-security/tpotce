@@ -14,8 +14,10 @@ services:
      - miniprint_local
     ports:
       - "9100:9100"
+      - "8000:8000"
     image: dtagdevsec/miniprint:24.04.2
     read_only: true
     volumes:
+     - $HOME/tpotce/data/miniprint/data/:/opt/miniprint/data/
      - $HOME/tpotce/data/miniprint/log/:/opt/miniprint/log/
      - $HOME/tpotce/data/miniprint/uploads/:/opt/miniprint/uploads/

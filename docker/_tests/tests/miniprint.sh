@@ -11,10 +11,13 @@ TEST_NAME="miniprint"
 DEFAULT_IMAGE="dtagdevsec/miniprint:24.04.2"
 IMAGE=""
 RAW_PORT=""
+HTTP_PORT=""
 LOG_DIR=""
 UPLOAD_DIR=""
+DATA_DIR=""
 JSON_LOG_FILE=""
 MAPPED_RAW_PORT=""
+MAPPED_HTTP_PORT=""
 
 usage() {
   cat <<EOF
@@ -24,7 +27,8 @@ Run an isolated post-build smoke test for the Miniprint image.
 
 Options:
   --image IMAGE      Image to test. Defaults to dtagdevsec/miniprint:24.04.2.
-  --raw-port PORT    Host TCP port for raw printer traffic. Default: dynamic loopback port.
+  --raw-port PORT    Host TCP port for PJL / raw printer traffic. Default: dynamic loopback port.
+  --http-port PORT   Host TCP port for the web admin interface. Default: dynamic loopback port.
   --timeout SEC      Timeout for startup, protocol, and log checks. Default: 30.
   --bind-ip IP       Host IP to bind. Default: 127.0.0.1.
   --keep-artifacts   Keep temporary compose file and logs for debugging.
@@ -51,6 +55,15 @@ parse_args() {
         ;;
       --raw-port=*|--host-port=*|--port=*)
         RAW_PORT="${1#*=}"
+        shift
+        ;;
+      --http-port)
+        [[ $# -ge 2 ]] || test_die "--http-port requires an argument"
+        HTTP_PORT="$2"
+        shift 2
+        ;;
+      --http-port=*)
+        HTTP_PORT="${1#*=}"
         shift
         ;;
       --timeout)
@@ -92,6 +105,9 @@ validate_args() {
   if [[ -n "${RAW_PORT}" ]]; then
     test_validate_port "${RAW_PORT}"
   fi
+  if [[ -n "${HTTP_PORT}" ]]; then
+    test_validate_port "${HTTP_PORT}"
+  fi
 }
 
 prepare_miniprint_harness() {
@@ -99,17 +115,24 @@ prepare_miniprint_harness() {
 
   LOG_DIR="${TEST_TMP_ROOT}/log"
   UPLOAD_DIR="${TEST_TMP_ROOT}/uploads"
+  DATA_DIR="${TEST_TMP_ROOT}/data"
   JSON_LOG_FILE="${LOG_DIR}/miniprint.json"
   TEST_ARTIFACT_LOG_DIR="${LOG_DIR}"
 
-  mkdir -p "${LOG_DIR}" "${UPLOAD_DIR}"
-  chmod 0777 "${LOG_DIR}" "${UPLOAD_DIR}"
+  mkdir -p "${LOG_DIR}" "${UPLOAD_DIR}" "${DATA_DIR}"
+  chmod 0777 "${LOG_DIR}" "${UPLOAD_DIR}" "${DATA_DIR}"
 
-  local port_mapping="${TEST_BIND_IP}::9100"
+  local raw_mapping="${TEST_BIND_IP}::9100"
   if [[ -n "${RAW_PORT}" ]]; then
-    port_mapping="${TEST_BIND_IP}:${RAW_PORT}:9100"
+    raw_mapping="${TEST_BIND_IP}:${RAW_PORT}:9100"
+  fi
+  local http_mapping="${TEST_BIND_IP}::8000"
+  if [[ -n "${HTTP_PORT}" ]]; then
+    http_mapping="${TEST_BIND_IP}:${HTTP_PORT}:8000"
   fi
 
+  # the Brother persona is the only one with the full lure chain; the image's
+  # own healthcheck runs, only more often than in T-Pot
   cat > "${TEST_HARNESS_COMPOSE}" <<EOF
 services:
   miniprint:
@@ -118,9 +141,16 @@ services:
     restart: "no"
     read_only: true
     user: "2000:2000"
+    environment:
+      MINIPRINT_PERSONA: "brother"
+    healthcheck:
+      interval: 2s
+      start_period: 5s
     ports:
-      - "${port_mapping}"
+      - "${raw_mapping}"
+      - "${http_mapping}"
     volumes:
+      - "${DATA_DIR}:/opt/miniprint/data"
       - "${LOG_DIR}:/opt/miniprint/log"
       - "${UPLOAD_DIR}:/opt/miniprint/uploads"
 networks:
@@ -174,9 +204,9 @@ except Exception as exc:
     sys.exit(1)
 
 checks = {
-    "printer id": b"@PJL INFO ID\r\nhp LaserJet 4200\r\n" in response,
+    "printer id": b"@PJL INFO ID\r\nBrother MFC-L9570CDW\r\n" in response,
     "status code": b"CODE=10001" in response,
-    "online status": b"ONLINE=True" in response,
+    "online status": b"ONLINE=TRUE" in response,
     "echo token": f"@PJL ECHO {token}".encode("utf-8") in response,
 }
 missing = [name for name, ok in checks.items() if not ok]
@@ -206,7 +236,7 @@ run_pjl_probe_with_retries() {
   return 1
 }
 
-run_raw_print_job_probe() {
+run_postscript_job_probe() {
   local token="$1"
 
   python3 - "${TEST_BIND_IP}" "${MAPPED_RAW_PORT}" "${token}" "${TEST_TIMEOUT}" <<'PY'
@@ -220,7 +250,16 @@ token = sys.argv[3]
 timeout = int(sys.argv[4])
 connect_timeout = max(1.0, min(float(timeout), 5.0))
 deadline = time.monotonic() + timeout
-payload = f"tpot-miniprint raw print job {token}\n".encode("utf-8")
+uel = b"\x1b%-12345X"
+payload = (
+    uel
+    + b"@PJL JOB NAME=\"tpot\"\r\n"
+    + b"@PJL ENTER LANGUAGE=POSTSCRIPT\r\n"
+    + f"%!PS-Adobe-3.0\n%% {token}\nshowpage\n".encode("utf-8")
+    + uel
+    + b"@PJL EOJ\r\n"
+    + uel
+)
 
 try:
     with socket.create_connection((host, port), timeout=connect_timeout) as sock:
@@ -237,14 +276,14 @@ try:
             if not chunk:
                 break
 except Exception as exc:
-    print(f"Miniprint raw print job probe failed: {exc}", file=sys.stderr)
+    print(f"Miniprint PostScript job probe failed: {exc}", file=sys.stderr)
     sys.exit(1)
 
-print(f"Miniprint raw print job probe sent token {token}")
+print(f"Miniprint PostScript job probe sent token {token}")
 PY
 }
 
-wait_for_uploaded_raw_print_job() {
+wait_for_uploaded_postscript_job() {
   local token="$1"
 
   python3 - "${UPLOAD_DIR}" "${token}" "${TEST_TIMEOUT}" <<'PY'
@@ -259,9 +298,9 @@ deadline = time.monotonic() + timeout
 last_error = None
 
 while time.monotonic() < deadline:
-    files = sorted(upload_dir.glob("*.txt"))
+    files = sorted(upload_dir.glob("*.ps"))
     if not files:
-        last_error = f"No raw print job files found in {upload_dir}"
+        last_error = f"No PostScript job files found in {upload_dir}"
         time.sleep(1)
         continue
 
@@ -272,10 +311,10 @@ while time.monotonic() < deadline:
             last_error = f"Could not read {path}: {exc}"
             continue
         if token in text:
-            print(f"Miniprint raw print job found in {path}")
+            print(f"Miniprint PostScript job found in {path}")
             sys.exit(0)
 
-    last_error = f"No raw print job file contains token {token}"
+    last_error = f"No PostScript job file contains token {token}"
     time.sleep(1)
 
 if last_error:
@@ -284,34 +323,164 @@ sys.exit(1)
 PY
 }
 
+read_serial() {
+  python3 - "${TEST_BIND_IP}" "${MAPPED_HTTP_PORT}" "${TEST_TIMEOUT}" <<'PY'
+import csv
+import http.client
+import io
+import sys
+import time
+
+host = sys.argv[1]
+port = int(sys.argv[2])
+timeout = int(sys.argv[3])
+deadline = time.monotonic() + timeout
+last_error = None
+
+while time.monotonic() < deadline:
+    try:
+        conn = http.client.HTTPConnection(host, port, timeout=5)
+        conn.request("GET", "/etc/mnt_info.csv")
+        response = conn.getresponse()
+        body = response.read().decode("utf-8", errors="replace")
+        server = response.getheader("Server", "")
+        conn.close()
+    except OSError as exc:
+        last_error = f"Miniprint web admin not reachable: {exc}"
+        time.sleep(1)
+        continue
+    if response.status != 200 or server != "Debut/1.30":
+        print(f"Unexpected serial CSV answer: status={response.status} server={server!r}", file=sys.stderr)
+        sys.exit(1)
+    rows = list(csv.DictReader(io.StringIO(body)))
+    if not rows or not rows[0].get("Serial No."):
+        print(f"No serial number in {body!r}", file=sys.stderr)
+        sys.exit(1)
+    print(rows[0]["Serial No."])
+    sys.exit(0)
+
+print(last_error, file=sys.stderr)
+sys.exit(1)
+PY
+}
+
+run_http_lure_chain() {
+  local password="$1"
+  local token="$2"
+
+  python3 - "${TEST_BIND_IP}" "${MAPPED_HTTP_PORT}" "${password}" "${token}" <<'PY'
+import http.client
+import json
+import sys
+from urllib.parse import urlencode
+
+host = sys.argv[1]
+port = int(sys.argv[2])
+password = sys.argv[3]
+token = sys.argv[4]
+form = {"Content-Type": "application/x-www-form-urlencoded"}
+
+
+def post(path, params, headers):
+    conn = http.client.HTTPConnection(host, port, timeout=5)
+    try:
+        conn.request("POST", path, body=urlencode(params), headers=headers)
+        response = conn.getresponse()
+        return response.status, response.read(), response.getheader("Set-Cookie", "")
+    finally:
+        conn.close()
+
+
+status, _, cookie = post("/login", {"username": "admin", "password": password}, form)
+if status != 200 or not cookie.startswith("AuthCookie="):
+    print(f"Default password login failed: status={status} cookie={cookie!r}", file=sys.stderr)
+    sys.exit(1)
+
+headers = dict(form, Cookie=cookie.split(";", 1)[0])
+status, body, _ = post("/admin/ldap", {"server": f"{token}.example.test", "password": "tpot-secret"}, headers)
+if status != 200 or json.loads(body).get("status") != "saved":
+    print(f"LDAP settings were not accepted: status={status} body={body!r}", file=sys.stderr)
+    sys.exit(1)
+
+print("Miniprint login with the derived default password and LDAP passback succeeded")
+PY
+}
+
+# identity.json is 0600 for uid 2000, so it is read inside the container
+assert_identity_persisted() {
+  local serial="$1"
+  local identity=""
+
+  identity="$(docker exec "${TEST_CONTAINER_NAME}" cat data/identity.json)" || return 1
+  python3 - "${serial}" "${identity}" <<'PY'
+import json
+import sys
+
+serial = sys.argv[1]
+identity = json.loads(sys.argv[2])
+if identity.get("persona") != "brother" or identity.get("serial") != serial:
+    print(f"Unexpected identity: {identity!r}", file=sys.stderr)
+    sys.exit(1)
+PY
+}
+
+wait_for_healthy() {
+  local deadline=$((SECONDS + TEST_TIMEOUT))
+  local health=""
+
+  while (( SECONDS < deadline )); do
+    health="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' "${TEST_CONTAINER_NAME}" 2>/dev/null || true)"
+    case "${health}" in
+      healthy)
+        return 0
+        ;;
+      unhealthy|"")
+        printf 'Container health: %s\n' "${health:-none}" >&2
+        return 1
+        ;;
+    esac
+    sleep 1
+  done
+
+  printf 'Container health: %s\n' "${health}" >&2
+  return 1
+}
+
 wait_for_json_log_events() {
   local pjl_token="$1"
-  local raw_token="$2"
+  local ps_token="$2"
+  local http_token="$3"
+  local password="$4"
 
-  python3 - "${JSON_LOG_FILE}" "${pjl_token}" "${raw_token}" "${TEST_TIMEOUT}" <<'PY'
+  python3 - "${JSON_LOG_FILE}" "${UPLOAD_DIR}" "${pjl_token}" "${ps_token}" "${http_token}" "${password}" "${TEST_TIMEOUT}" <<'PY'
+import hashlib
 import json
 import sys
 import time
 from pathlib import Path
 
 log_file = Path(sys.argv[1])
-pjl_token = sys.argv[2]
-raw_token = sys.argv[3]
-timeout = int(sys.argv[4])
+upload_dir = Path(sys.argv[2])
+pjl_token = sys.argv[3]
+ps_token = sys.argv[4]
+http_token = sys.argv[5]
+password = sys.argv[6]
+timeout = int(sys.argv[7])
 deadline = time.monotonic() + timeout
 last_error = None
+deprecated = {"fields", "dst_port", "level", "dir", "response", "job_text"}
 
 
 def load_events():
     if not log_file.exists():
         raise RuntimeError(f"{log_file} does not exist yet")
 
-    events = []
-    lines = log_file.read_text(encoding="utf-8", errors="replace").splitlines()
-    if not lines:
-        raise RuntimeError(f"{log_file} is empty")
+    text = log_file.read_text(encoding="utf-8", errors="replace")
+    if password in text or "tpot-secret" in text:
+        raise RuntimeError(f"A password was logged in plain text in {log_file}")
 
-    for line_number, line in enumerate(lines, 1):
+    events = []
+    for line_number, line in enumerate(text.splitlines(), 1):
         stripped = line.strip()
         if not stripped:
             continue
@@ -321,8 +490,11 @@ def load_events():
             raise RuntimeError(f"Invalid JSON in {log_file}:{line_number}: {exc}") from exc
         if not isinstance(event, dict):
             raise RuntimeError(f"JSON event in {log_file}:{line_number} is not an object")
-        if "timestamp" not in event or "info" not in event:
+        if "timestamp" not in event or "info" not in event or "event" not in event:
             raise RuntimeError(f"Missing base log fields in {log_file}:{line_number}: {event!r}")
+        old = deprecated & event.keys()
+        if old:
+            raise RuntimeError(f"Deprecated keys {sorted(old)} in {log_file}:{line_number}: {event!r}")
         events.append(event)
 
     if not events:
@@ -330,65 +502,65 @@ def load_events():
     return events
 
 
-def has_event(events, **fields):
-    return any(all(event.get(key) == value for key, value in fields.items()) for event in events)
-
-
-def has_response(events, event_name, *needles):
+def validate_session_fields(events):
     for event in events:
-        if event.get("event") != event_name or event.get("action") != "response":
+        if event.get("persona") != "brother":
+            raise RuntimeError(f"Unexpected persona in Miniprint event: {event!r}")
+        if not event.get("session_id") or not event.get("src_ip"):
+            raise RuntimeError(f"Missing session_id or src_ip in Miniprint event: {event!r}")
+        expected_port = {"pjl": 9100, "http": 8000}.get(event.get("protocol"))
+        if expected_port is None or event.get("dest_port") != expected_port:
+            raise RuntimeError(f"Unexpected protocol or dest_port in Miniprint event: {event!r}")
+
+
+def find(events, **fields):
+    return [event for event in events if all(event.get(key) == value for key, value in fields.items())]
+
+
+def postscript_saved(events):
+    for event in find(events, event="save_print_job", artifact_type="ps", language="POSTSCRIPT"):
+        path = upload_dir / event.get("file_name", "")
+        if not path.is_file():
             continue
-        response = event.get("response", "")
-        if all(needle in response for needle in needles):
+        data = path.read_bytes()
+        if ps_token.encode() in data and hashlib.sha256(data).hexdigest() == event.get("payload_sha256") \
+                and event.get("size") == len(data):
             return True
     return False
 
 
-def has_raw_job_append(events):
-    for event in events:
-        if event.get("event") != "append_raw_print_job" or event.get("action") != "append":
-            continue
-        if raw_token in event.get("job_text", ""):
-            return True
-    return False
-
-
-def validate_connection_fields(events):
-    for event in events:
-        if event.get("event") not in {
-            "connection",
-            "connection_closed",
-            "command_received",
-            "info_id",
-            "info_status",
-            "echo",
-            "append_raw_print_job",
-            "save_raw_print_job",
-            "response_sent",
-        }:
-            continue
-        if not event.get("src_ip"):
-            raise RuntimeError(f"Missing src_ip in Miniprint connection event: {event!r}")
-        if str(event.get("dest_port")) != "9100":
-            raise RuntimeError(f"Unexpected dest_port in Miniprint connection event: {event!r}")
+def sessions_closed(events):
+    sessions = {event["session_id"] for event in events}
+    closed = {event["session_id"] for event in events if event.get("session_end") and "session_duration" in event}
+    return sessions - closed
 
 
 while time.monotonic() < deadline:
     try:
         events = load_events()
-        validate_connection_fields(events)
+        validate_session_fields(events)
 
         checks = {
-            "server_start": has_event(events, event="server_start", action="start"),
-            "connection_open": has_event(events, event="connection", action="open_conn"),
-            "connection_closed": has_event(events, event="connection_closed", action="close_conn"),
-            "info_id_response": has_response(events, "info_id", "hp LaserJet 4200"),
-            "info_status_response": has_response(events, "info_status", "CODE=10001", "ONLINE=True"),
-            "echo_response": has_response(events, "echo", pjl_token),
-            "raw_job_append": has_raw_job_append(events),
-            "raw_job_saved": has_event(events, event="save_raw_print_job", action="saving"),
+            "pjl_connection": bool(find(events, event="connection", action="open_conn", protocol="pjl")),
+            "pjl_closed": bool(find(events, event="connection_closed", action="close_conn", protocol="pjl")),
+            "info_command": bool(find(events, event="command_received", command="INFO")),
+            "echo": bool(find(events, event="echo")),
+            "print_language": bool(find(events, event="print_job", language="POSTSCRIPT")),
+            "postscript_saved": postscript_saved(events),
+            "serial_leak_probe": bool(find(events, event="serial_leak_probe", cve_hint="CVE-2024-51977")),
+            "default_password_success": bool(find(
+                events, event="default_password_success", username="admin", secret_supplied=True,
+                cve_hint="CVE-2024-51978")),
+            "passback_attempt": bool(find(
+                events, event="passback_attempt", cve_hint="CVE-2024-51984", secret_supplied=True,
+                passback_target=f"{http_token}.example.test",
+                form_fields=[{"name": "server", "value": f"{http_token}.example.test"}])),
+            "http_closed": bool(find(events, event="http_connection_closed", protocol="http")),
         }
         missing = [name for name, ok in checks.items() if not ok]
+        open_sessions = sessions_closed(events)
+        if open_sessions:
+            missing.append(f"session_end of {len(open_sessions)} session(s)")
         if not missing:
             print(f"Miniprint JSON events found in {log_file}")
             sys.exit(0)
@@ -424,9 +596,10 @@ patterns = [
         r"PermissionError",
         r"permission denied",
         r"Address already in use",
-        r"Error occurred while processing request",
+        r"Read-only file system",
     )
 ]
+error_events = {"session_error", "artifact_error", "http_error", "command_error", "identity_ephemeral"}
 
 log_dir = Path(sys.argv[1])
 docker_log_file = Path(sys.argv[2])
@@ -445,14 +618,14 @@ for path in paths:
             sys.exit(1)
 
     for line_number, line in enumerate(text.splitlines(), 1):
-        stripped = line.strip()
-        if not stripped.startswith("{"):
+        start = line.find("{")
+        if start < 0:
             continue
         try:
-            event = json.loads(stripped)
+            event = json.loads(line[start:])
         except json.JSONDecodeError:
             continue
-        if isinstance(event, dict) and event.get("event") == "error":
+        if isinstance(event, dict) and event.get("event") in error_events:
             print(f"Miniprint error event found in {path}:{line_number}: {event!r}", file=sys.stderr)
             sys.exit(1)
 PY
@@ -473,6 +646,9 @@ main() {
   if [[ -n "${RAW_PORT}" ]]; then
     test_ensure_port_free "${TEST_BIND_IP}" "${RAW_PORT}" || test_die "${TEST_BIND_IP}:${RAW_PORT} is already in use. Try --raw-port <free-port>."
   fi
+  if [[ -n "${HTTP_PORT}" ]]; then
+    test_ensure_port_free "${TEST_BIND_IP}" "${HTTP_PORT}" || test_die "${TEST_BIND_IP}:${HTTP_PORT} is already in use. Try --http-port <free-port>."
+  fi
 
   prepare_miniprint_harness
   test_enable_cleanup
@@ -485,25 +661,47 @@ main() {
 
   MAPPED_RAW_PORT="$(test_get_mapped_port "${TEST_NAME}" "9100")" || test_die "Could not resolve mapped host port for 9100/tcp"
   test_ok "Port ${TEST_BIND_IP}:${MAPPED_RAW_PORT} maps to container port 9100/tcp"
+  MAPPED_HTTP_PORT="$(test_get_mapped_port "${TEST_NAME}" "8000")" || test_die "Could not resolve mapped host port for 8000/tcp"
+  test_ok "Port ${TEST_BIND_IP}:${MAPPED_HTTP_PORT} maps to container port 8000/tcp"
 
   local pjl_token="miniprint-pjl-$(date +%s)-$$"
-  local raw_token="miniprint-raw-$(date +%s)-$$"
+  local ps_token="miniprint-ps-$(date +%s)-$$"
+  local http_token="miniprint-http-$(date +%s)-$$"
 
   test_info "Running Miniprint PJL probe with token: ${pjl_token}"
   run_pjl_probe_with_retries "${pjl_token}" || test_die "Miniprint PJL probe failed on ${TEST_BIND_IP}:${MAPPED_RAW_PORT}"
   test_wait_for_container || test_die "Miniprint container stopped after PJL probe"
 
-  test_info "Running Miniprint raw print job probe with token: ${raw_token}"
-  run_raw_print_job_probe "${raw_token}" || test_die "Miniprint raw print job probe failed on ${TEST_BIND_IP}:${MAPPED_RAW_PORT}"
-  test_wait_for_container || test_die "Miniprint container stopped after raw print job probe"
+  test_info "Running Miniprint PostScript job probe with token: ${ps_token}"
+  run_postscript_job_probe "${ps_token}" || test_die "Miniprint PostScript job probe failed on ${TEST_BIND_IP}:${MAPPED_RAW_PORT}"
+  wait_for_uploaded_postscript_job "${ps_token}" || test_die "Expected Miniprint PostScript job was not written to uploads"
+  test_ok "Miniprint PostScript job was written to uploads"
 
-  test_info "Waiting for Miniprint raw print job upload"
-  wait_for_uploaded_raw_print_job "${raw_token}" || test_die "Expected Miniprint raw print job was not written to uploads"
-  test_ok "Miniprint raw print job was written to uploads"
+  test_info "Reading the serial number from the web admin interface"
+  local serial=""
+  serial="$(read_serial)" || test_die "Miniprint serial number CSV failed on ${TEST_BIND_IP}:${MAPPED_HTTP_PORT}"
+  test_ok "Serial number leaked: ${serial}"
+
+  # the default password comes from the image's own routine, as an attacker would derive it
+  local password=""
+  password="$(docker exec "${TEST_CONTAINER_NAME}" python -c 'import sys; from brother import brother_default_password; print(brother_default_password(sys.argv[1]))' "${serial}")" \
+    || test_die "Could not derive the default password in the container"
+
+  test_info "Running the Brother login and LDAP passback with token: ${http_token}"
+  run_http_lure_chain "${password}" "${http_token}" || test_die "Miniprint web admin lure chain failed on ${TEST_BIND_IP}:${MAPPED_HTTP_PORT}"
+  test_wait_for_container || test_die "Miniprint container stopped after the web admin probes"
 
   test_info "Waiting for Miniprint JSON log events"
-  wait_for_json_log_events "${pjl_token}" "${raw_token}" || test_die "Expected Miniprint events were not found in miniprint.json"
-  test_ok "Miniprint protocol and print job events were written to miniprint.json"
+  wait_for_json_log_events "${pjl_token}" "${ps_token}" "${http_token}" "${password}" || test_die "Expected Miniprint events were not found in miniprint.json"
+  test_ok "Miniprint PJL, print job and web admin events were written to miniprint.json"
+
+  [[ -s "${DATA_DIR}/identity.json" ]] || test_die "Miniprint identity was not written to the data volume"
+  assert_identity_persisted "${serial}" || test_die "Miniprint identity does not match the leaked serial number"
+  test_ok "Miniprint identity is persisted in the data volume"
+
+  test_info "Waiting for the image healthcheck"
+  wait_for_healthy || test_die "Miniprint container did not become healthy"
+  test_ok "Container is healthy"
 
   assert_no_runtime_errors
   test_ok "No Miniprint runtime errors found in logs"

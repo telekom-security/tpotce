@@ -94,7 +94,7 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/medpot.sh
 ./docker/_tests/tests/medpot.sh --image dtagdevsec/medpot:24.04.2 --host-port 12575
 ./docker/_tests/tests/miniprint.sh
-./docker/_tests/tests/miniprint.sh --image dtagdevsec/miniprint:24.04 --raw-port 19100
+./docker/_tests/tests/miniprint.sh --image dtagdevsec/miniprint:24.04.2 --raw-port 19100 --http-port 18000
 ./docker/_tests/tests/p0f.sh
 ./docker/_tests/tests/p0f.sh --image dtagdevsec/p0f:24.04.2
 ./docker/_tests/tests/p0f.sh --skip-scanners
