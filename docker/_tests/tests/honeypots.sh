@@ -216,6 +216,25 @@ networks:
 EOF
 }
 
+wait_for_all_servers() {
+  local deadline=$((SECONDS + TEST_TIMEOUT))
+  local output=""
+
+  while (( SECONDS < deadline )); do
+    output="$(docker logs "${TEST_CONTAINER_NAME}" 2>&1 || true)"
+    if grep -F -- "not running..." <<<"${output}" >&2; then
+      test_die "Not every honeypot server started"
+    fi
+    if grep -q -F -- "Everything looks good!" <<<"${output}"; then
+      test_ok "All honeypot servers started"
+      return 0
+    fi
+    sleep 1
+  done
+
+  test_die "Timed out waiting for the honeypot servers to start"
+}
+
 resolve_mapped_ports() {
   local protocol=""
   local container_port=""
@@ -598,6 +617,7 @@ main() {
   test_info "Starting Honeypots smoke container from ${IMAGE}"
   test_compose up -d >/dev/null
   test_wait_for_container || test_die "Honeypots container did not stay running"
+  wait_for_all_servers
 
   resolve_mapped_ports
   run_protocol_probes

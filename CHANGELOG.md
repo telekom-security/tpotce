@@ -46,7 +46,7 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 * **Honeyaml** builds again: its Rust dependencies have been updated and it is now a static binary on a scratch image (branch `tpot-24.04.2` of the T-Pot fork, upstream is no longer maintained).
 * **IPPHoney** has been updated to 2.0.2.
 * **Honeypots** without releases were updated to their latest pushed code, pinned to a commit.
-* Docker images now use **Alpine 3.23** (Suricata 3.24), **Go 1.26** or **Scratch** wherever possible; **Log4Pot** moved from Ubuntu to Alpine.
+* Docker images now use **Alpine 3.24**, **Go 1.26** or **Scratch** wherever possible; **Log4Pot** moved from Ubuntu to Alpine.
 * **Installer** supports unattended installations and has been tested with **Alma 10**, **Debian 13**, **Fedora 44**, **OpenSuse Tumbleweed**, **Rocky 10**, **RHEL 10** and **Ubuntu 26.04** (sudo-rs).
 * **Persistence** cycles for logrotate are configurable through `TPOT_PERSISTENCE_CYCLES` in `.env`.
 * **Beelzebub** and **Honeypots** log their status as text (i.e. `Stateless`, `failed`), it is now indexed as `status_text`. So far Elasticsearch could not index it in the numeric `status` field, some values ended up as `0` and with 24.04.1 part of these events were not indexed at all.

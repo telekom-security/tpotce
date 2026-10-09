@@ -1,4 +1,4 @@
-FROM alpine:3.23
+FROM alpine:3.24
 #
 # Include dist
 COPY dist/ /root/dist/
@@ -25,7 +25,6 @@ RUN apk --no-cache -U upgrade && \
 		py3-cryptography \
 		py3-dnspython \
 		py3-flask \
-		py3-future \
 		py3-hiredis \
 		py3-itsdangerous \
 		py3-jinja2 \
@@ -51,6 +50,8 @@ RUN apk --no-cache -U upgrade && \
     cd honeypots && \
 	git checkout f337a32e3351e2add3a455a3bcaf1f02ded5744b && \
 	# git checkout 3f52129fbe9a712e86c54207ceb088c3b2c2af17 && \
+	# T-Pot hook (see dist/tpot.patch): fork instead of forkserver on Python 3.14
+	git apply /root/dist/tpot.patch && \
     pip3 install --break-system-packages --no-cache-dir . && \
     setcap cap_net_bind_service=+ep $(readlink -f $(type -P python3)) && \
 #

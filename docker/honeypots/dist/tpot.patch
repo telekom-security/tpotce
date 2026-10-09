@@ -1,0 +1,50 @@
+T-Pot hook for Python 3.14: multiprocessing starts with forkserver there, the
+server objects are pickled and their loggers come back without handlers, so
+nothing reaches the log files. Servers and sniffer start with fork again.
+
+diff --git a/honeypots/base_server.py b/honeypots/base_server.py
+index 9a2604a..cc1418c 100644
+--- a/honeypots/base_server.py
++++ b/honeypots/base_server.py
+@@ -2,7 +2,7 @@ from __future__ import annotations
+ 
+ from abc import ABC, abstractmethod
+ from contextlib import suppress
+-from multiprocessing import Process
++from multiprocessing import get_context
+ from os import getenv
+ from socket import AF_INET, SOCK_STREAM, socket
+ from typing import Any
+@@ -18,6 +18,9 @@ from honeypots.helper import (
+     setup_logger,
+ )
+ 
++# Python 3.14 defaults to forkserver, which pickles the server and loses its log handlers
++Process = get_context("fork").Process
++
+ 
+ class BaseServer(ABC):
+     NAME = "base"
+diff --git a/honeypots/sniffer.py b/honeypots/sniffer.py
+index 5fa06a2..d01aabb 100644
+--- a/honeypots/sniffer.py
++++ b/honeypots/sniffer.py
+@@ -2,7 +2,7 @@ from __future__ import annotations
+ 
+ import re
+ from binascii import hexlify
+-from multiprocessing import Process
++from multiprocessing import get_context
+ from sys import stdout
+ from typing import Iterable, TYPE_CHECKING
+ 
+@@ -13,6 +13,9 @@ from scapy.sendrecv import send, sniff
+ from honeypots.base_server import BaseServer
+ from honeypots.helper import server_arguments
+ 
++# Python 3.14 defaults to forkserver, which pickles the sniffer and loses its log handlers
++Process = get_context("fork").Process
++
+ ICMP_CODES = [
+     (0, 0, "Echo/Ping reply"),
+     (3, 0, "Destination network unreachable"),
