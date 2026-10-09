@@ -361,6 +361,8 @@ services:
     depends_on:
       tpotinit:
         condition: service_healthy
+    environment:
+     - REDISHONEYPOT_PROFILE=${REDISHONEYPOT_PROFILE:-redis74}
     networks:
      - honeypot_local
     ports:

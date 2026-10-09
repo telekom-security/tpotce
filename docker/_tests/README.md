@@ -101,6 +101,7 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/redis.sh
 ./docker/_tests/tests/redishoneypot.sh
 ./docker/_tests/tests/redishoneypot.sh --redis-port 16379
+./docker/_tests/tests/redishoneypot.sh --profile valkey8
 ./docker/_tests/tests/rdphoneypot.sh
 ./docker/_tests/tests/rdphoneypot.sh --rdp-port 13389
 ./docker/_tests/tests/sentrypeer.sh

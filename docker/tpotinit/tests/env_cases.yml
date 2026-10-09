@@ -108,6 +108,19 @@ cases:
     set: {TPOT_CAPTURE_INTERFACE: "eth0;x"}
     errors: [TPOT_CAPTURE_INTERFACE]
     warnings: [LS_WEB_USER]
+  - name: redishoneypot persona
+    services: [redishoneypot]
+    set: {REDISHONEYPOT_PROFILE: valkey8}
+    warnings: [LS_WEB_USER]
+  - name: redishoneypot unknown persona
+    services: [redishoneypot]
+    set: {REDISHONEYPOT_PROFILE: redis99}
+    errors: [REDISHONEYPOT_PROFILE]
+    warnings: [LS_WEB_USER]
+  - name: redishoneypot persona without redishoneypot
+    services: [cowrie]
+    set: {REDISHONEYPOT_PROFILE: redis99}
+    warnings: [LS_WEB_USER]
   - name: beelzebub provider and url
     services: [beelzebub]
     set: {BEELZEBUB_LLM_PROVIDER: claude, BEELZEBUB_LLM_HOST: ollama.local}

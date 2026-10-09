@@ -149,7 +149,7 @@ T-Pot's main components have been moved into the `tpotinit` Docker image allowin
 [mailoney](https://github.com/phin3has/mailoney),
 [medpot](https://github.com/schmalle/medpot),
 [miniprint](https://github.com/t3chn0m4g3/miniprint),
-[redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot),
+[redishoneypot](https://github.com/t3chn0m4g3/RedisHoneyPot),
 [rdphoneypot](https://gitlab.com/bontchev/rdphoneypot),
 [sentrypeer](https://github.com/SentryPeer/SentryPeer),
 [wordpot](https://github.com/gbrindisi/wordpot)
@@ -771,6 +771,9 @@ Settings for the NSM services (Suricata, P0f, Glutton):
 - `TPOT_CAPTURE_INTERFACE`: The interface to capture on. Empty (default) picks the interface of the route to the internet, or without a default route the first interface with a global IPv4 address. Set it if the host has more than one uplink or you capture on a mirror port.
 - `SURICATA_RULES_UPDATE`: The Suricata rules are cached in `~/tpotce/data/suricata/rules` and updated once in 24 hours, without internet access the latest cached rules are used. Set it to `off` for isolated deployments to never download rules.
 
+Settings for the honeypots:
+- `REDISHONEYPOT_PROFILE`: The Redis or Valkey server RedisHoneyPot answers as, its replies, `INFO`, `CONFIG GET *` and command table are recorded from that server. `redis74` (default, Redis 7.4.5 in Docker, file writes over `CONFIG SET dir` / `SAVE` proceed), `legacy6` (Redis 6.2.18), `current8` (Redis 8.8.0, refuses protected configs and `MODULE LOAD` like the real one), `redis50` (Redis 5.0.7) or `valkey8` (Valkey 8.1.3).
+
 ## Customize T-Pot Honeypots and Services
 
 In `~/tpotce/compose` you will find everything you need to adjust the T-Pot Standard / Hive installation:
@@ -1183,7 +1186,7 @@ The software that T-Pot is built on uses the following licenses.
 [heralding](https://github.com/t3chn0m4g3/heralding/blob/master/LICENSE.txt),
 [ipphoney](https://gitlab.com/bontchev/ipphoney/-/blob/master/LICENSE),
 [miniprint](https://github.com/t3chn0m4g3/miniprint/blob/master/LICENSE.md),
-[redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot/blob/main/LICENSE),
+[redishoneypot](https://github.com/t3chn0m4g3/RedisHoneyPot/blob/main/LICENSE),
 [rdphoneypot](https://gitlab.com/bontchev/rdphoneypot/-/blob/master/LICENSE),
 [sentrypeer](https://github.com/SentryPeer/SentryPeer/blob/main/LICENSE.GPL-3.0-only)
 <br>Apache 2 License:
@@ -1263,7 +1266,7 @@ Without open source and the development community we are proud to be a part of, 
 [medpot](https://github.com/schmalle/medpot/graphs/contributors),
 [miniprint](https://github.com/sa7mon/miniprint/graphs/contributors),
 [p0f](https://lcamtuf.coredump.cx/p0f3/),
-[redishoneypot](https://github.com/cypwnpwnsocute/RedisHoneyPot/graphs/contributors),
+[redishoneypot](https://github.com/t3chn0m4g3/RedisHoneyPot/graphs/contributors),
 [rdphoneypot](https://gitlab.com/bontchev/rdphoneypot/-/project_members),
 [sentrypeer](https://github.com/SentryPeer/SentryPeer/graphs/contributors),
 [suricata](https://github.com/OISF/suricata/graphs/contributors),

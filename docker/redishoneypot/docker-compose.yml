@@ -10,6 +10,8 @@ services:
     restart: always
 #    cpu_count: 1
 #    cpus: 0.25
+    environment:
+     - REDISHONEYPOT_PROFILE=${REDISHONEYPOT_PROFILE:-redis74}
     networks:
      - redishoneypot_local
     ports:

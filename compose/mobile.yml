@@ -601,6 +601,8 @@ services:
     depends_on:
       logstash:
         condition: service_healthy
+    environment:
+     - REDISHONEYPOT_PROFILE=${REDISHONEYPOT_PROFILE:-redis74}
     networks:
      - honeypot_local
     ports:
