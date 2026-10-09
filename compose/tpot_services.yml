@@ -899,6 +899,8 @@ services:
     image: ${TPOT_REPO}/wordpot:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
     read_only: true
+    tmpfs:
+     - /tmp:uid=2000,gid=2000
     volumes:
      - ${TPOT_DATA_PATH}/wordpot/log:/opt/wordpot/logs/
 

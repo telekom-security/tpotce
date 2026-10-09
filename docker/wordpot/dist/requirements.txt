@@ -1,2 +1,0 @@
-hpfeeds-threatstream==1.1
-user-agents

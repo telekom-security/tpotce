@@ -16,5 +16,7 @@ services:
      - "80:80"
     image: "dtagdevsec/wordpot:24.04.2"
     read_only: true
+    tmpfs:
+     - /tmp:uid=2000,gid=2000
     volumes:
      - $HOME/tpotce/data/wordpot/log:/opt/wordpot/logs/

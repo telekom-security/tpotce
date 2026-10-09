@@ -152,7 +152,7 @@ T-Pot's main components have been moved into the `tpotinit` Docker image allowin
 [redishoneypot](https://github.com/t3chn0m4g3/RedisHoneyPot),
 [rdphoneypot](https://gitlab.com/bontchev/rdphoneypot),
 [sentrypeer](https://github.com/SentryPeer/SentryPeer),
-[wordpot](https://github.com/gbrindisi/wordpot)
+[wordpot](https://github.com/t3chn0m4g3/wordpot)
 
 Alongside the following tools:
 * [Autoheal](https://github.com/willfarrell/docker-autoheal) a tool to automatically restart containers with failed healthchecks.
@@ -293,7 +293,7 @@ Besides the ports generally needed by the OS, i.e. obtaining a DHCP lease, DNS, 
 | 6379                                                                                                                                  | tcp      | incoming  | Honeypot: Redishoneypot                                                                             |
 | 3389                                                                                                                                  | tcp      | incoming  | Honeypot: RDPHoneypot                                                                               |
 | 5060                                                                                                                                  | tcp/udp  | incoming  | Honeypot: SentryPeer                                                                                |
-| 8090                                                                                                                                  | tcp      | incoming  | Honeypot: Wordpot                                                                                   |
+| 8080                                                                                                                                  | tcp      | incoming  | Honeypot: Wordpot                                                                                   |
 
 
 Ports and availability of SaaS services may vary based on your geographical location.

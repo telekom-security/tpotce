@@ -54,6 +54,8 @@ fuLOGROTATE () {
   local myMAILONEYTGZ="/data/mailoney/mails.tgz"
   local myMINIPRINTU="/data/miniprint/uploads/"
   local myMINIPRINTTGZ="/data/miniprint/uploads.tgz"
+  local myWORDPOTP="/data/wordpot/log/payloads/"
+  local myWORDPOTTGZ="/data/wordpot/payloads.tgz"
 
 # Setup logrotate config
 fuLOGROTATECONF
@@ -78,18 +80,19 @@ if [ "$(fuEMPTY $myHONEYTRAPATTACKS)" != "0" ]; then tar -I $myPIGZ -cvf $myHONE
 if [ "$(fuEMPTY $myHONEYTRAPDL)" != "0" ]; then tar -I $myPIGZ -cvf $myHONEYTRAPDLTGZ $myHONEYTRAPDL; fi
 if [ "$(fuEMPTY $myMAILONEYM)" != "0" ]; then tar -I $myPIGZ -cvf $myMAILONEYTGZ $myMAILONEYM; fi
 if [ "$(fuEMPTY $myMINIPRINTU)" != "0" ]; then tar -I $myPIGZ -cvf $myMINIPRINTTGZ $myMINIPRINTU; fi
+if [ "$(fuEMPTY $myWORDPOTP)" != "0" ]; then tar -I $myPIGZ -cvf $myWORDPOTTGZ $myWORDPOTP; fi
 
 # Ensure correct permissions and ownership for previously created archives
-chmod 770 $myADBHONEYTGZ $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myH0NEYTR4PTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ $myMAILONEYTGZ $myMINIPRINTTGZ
-chown tpot:tpot $myADBHONEYTGZ $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myH0NEYTR4PTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ $myMAILONEYTGZ $myMINIPRINTTGZ
+chmod 770 $myADBHONEYTGZ $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myH0NEYTR4PTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ $myMAILONEYTGZ $myMINIPRINTTGZ $myWORDPOTTGZ
+chown tpot:tpot $myADBHONEYTGZ $myCOWRIETTYTGZ $myCOWRIEDLTGZ $myDIONAEABITGZ $myDIONAEABINTGZ $myH0NEYTR4PTGZ $myHONEYTRAPATTACKSTGZ $myHONEYTRAPDLTGZ $myMAILONEYTGZ $myMINIPRINTTGZ $myWORDPOTTGZ
 
 # Need to remove subfolders since too many files cause rm to exit with errors
-rm -rf $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myH0NEYTR4PP $myHONEYTRAPATTACKS $myHONEYTRAPDL $myMAILONEYM $myMINIPRINTU
+rm -rf $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myH0NEYTR4PP $myHONEYTRAPATTACKS $myHONEYTRAPDL $myMAILONEYM $myMINIPRINTU $myWORDPOTP
 
 # Recreate subfolders with correct permissions and ownership
-mkdir -p $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myH0NEYTR4PP $myHONEYTRAPATTACKS $myHONEYTRAPDL $myMAILONEYM $myMINIPRINTU
-chmod 770 $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myH0NEYTR4PP $myHONEYTRAPATTACKS $myHONEYTRAPDL $myMAILONEYM $myMINIPRINTU
-chown tpot:tpot $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myH0NEYTR4PP $myHONEYTRAPATTACKS $myHONEYTRAPDL $myMAILONEYM $myMINIPRINTU
+mkdir -p $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myH0NEYTR4PP $myHONEYTRAPATTACKS $myHONEYTRAPDL $myMAILONEYM $myMINIPRINTU $myWORDPOTP
+chmod 770 $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myH0NEYTR4PP $myHONEYTRAPATTACKS $myHONEYTRAPDL $myMAILONEYM $myMINIPRINTU $myWORDPOTP
+chown tpot:tpot $myADBHONEYDL $myCOWRIETTYLOGS $myCOWRIEDL $myDIONAEABI $myDIONAEABIN $myH0NEYTR4PP $myHONEYTRAPATTACKS $myHONEYTRAPDL $myMAILONEYM $myMINIPRINTU $myWORDPOTP
 
 # Run logrotate again to account for previously created archives - DO NOT FORCE HERE!
 logrotate -s $mySTATUS $myCONF
@@ -383,8 +386,8 @@ fuP0F () {
 
 # Let's create a function to clean up and prepare wordpot data
 fuWORDPOT () {
-  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/wordpot/log; fi
-  mkdir -vp /data/wordpot/log
+  if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/wordpot/*; fi
+  mkdir -vp /data/wordpot/log/payloads
   chmod 770 /data/wordpot -R
   chown tpot:tpot /data/wordpot -R
 }

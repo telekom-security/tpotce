@@ -1,50 +1,55 @@
-FROM alpine:3.24 AS builder
-#
-# Include dist
-COPY dist/ /root/dist/
+FROM alpine:3.24
 #
 # Install packages
 RUN apk --no-cache -U upgrade && \
-	apk --no-cache -U add \
-		build-base \
-		git \
+    apk --no-cache -U add \
 		libcap \
-		py3-click \
+		py3-defusedxml \
 		py3-flask \
-		py3-itsdangerous \
-		py3-jinja2 \
-		py3-markupsafe \
-		py3-pip \
 		py3-ua-parser \
 		py3-werkzeug \
-		py3-yaml \
-		python3 \
-		python3-dev
-#	     
-# Install wordpot from GitHub and setup
-RUN mkdir -p /opt && \
-    cd /opt/ && \
-    git clone https://github.com/t3chn0m4g3/wordpot && \
-    cd wordpot && \
-    git checkout b2701cb6c7057ed2843187c0c425bb8c13845719 && \
-    cp /root/dist/requirements.txt .
-WORKDIR /opt/wordpot
-RUN pip3 install --no-cache-dir --break-system-packages pyinstaller
-RUN	pip3 install --no-cache-dir --break-system-packages -r requirements.txt
-RUN pyinstaller wordpot.py \
-		--hidden-import hpfeeds \
-		--add-data "./wordpot/static:./wordpot/static" \
-		--add-data "./wordpot/templates:./wordpot/templates" \
-		--add-data "./wordpot/plugins:./wordpot/plugins" \
-		--add-data "./wordpot.conf:./"
-RUN ls -alR
+		python3 && \
+    apk --no-cache -U add --virtual .wordpot-build-deps \
+		git \
+		py3-pip && \
 #
-FROM alpine:3.24
-RUN apk --no-cache -U upgrade
-COPY --from=builder /opt/wordpot/dist /opt/
+# Install wordpot from git (v3.0.0), it runs from its folder with gunicorn
+    git clone https://github.com/t3chn0m4g3/wordpot /opt/wordpot && \
+    cd /opt/wordpot && \
+    git checkout f759f6971ff66d7412c431d2942d2d8631d788cf && \
 #
-# Start wordpot
+# hpfeeds is only imported when HPFEEDS_ENABLED is set, T-Pot does not use it.
+# pip only adds gunicorn (< 24, gunicorn.conf.py patches its internals) and user-agents.
+    sed -i '/^hpfeeds/d' requirements.txt && \
+    pip3 install --break-system-packages --no-cache-dir -r requirements.txt && \
+    mkdir -p /opt/wordpot/logs/payloads && \
+#
+# Setup user, groups and configs
+    addgroup -g 2000 wordpot && \
+    adduser -S -H -s /bin/ash -u 2000 -D -g 2000 wordpot && \
+    chown -R wordpot:wordpot /opt/wordpot && \
+    setcap cap_net_bind_service=+ep $(readlink -f $(type -P python3)) && \
+#
+# Clean up
+    apk del --purge .wordpot-build-deps && \
+    rm -rf /root/* /root/.cache /var/cache/apk/* \
+           /opt/wordpot/.git \
+           /opt/wordpot/.gitattributes \
+           /opt/wordpot/.gitignore \
+           /opt/wordpot/Dockerfile \
+           /opt/wordpot/docker-compose.yml \
+           /opt/wordpot/requirements-dev.txt \
+           /opt/wordpot/tests
+#
+# Set workdir and start wordpot. The fixed dest_port keeps the client's Host
+# header (gunicorn's SERVER_PORT) out of the events.
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    WORDPOT_LOG_DIR=/opt/wordpot/logs \
+    WORDPOT_PAYLOAD_DIR=/opt/wordpot/logs/payloads \
+    WORDPOT_EVENT_DEST_PORT=80
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 CMD python3 healthcheck.py
 STOPSIGNAL SIGINT
-USER 2000:2000
+USER wordpot:wordpot
 WORKDIR /opt/wordpot/
-CMD ["./wordpot", "--host", "0.0.0.0", "--port", "80", "--title", "Wordpress"]
+CMD ["python3", "-m", "gunicorn", "--config", "gunicorn.conf.py", "wordpot:app"]
