@@ -1,0 +1,52 @@
+# Mailoney config of T-Pot. Everything Mailoney writes goes to logs/, the
+# folder T-Pot mounts (data/mailoney/log). The server name is chosen per
+# install by run.sh (logs/identity) and handed over with --server-name.
+[server]
+conn_timeout = 30
+max_connections = 100
+max_mail_body_bytes = 10485760
+
+[[server.listeners]]
+name = "smtp"
+bind_ip = "0.0.0.0"
+port = 25
+starttls = true
+implicit_tls = false
+
+[[server.listeners]]
+name = "submission"
+bind_ip = "0.0.0.0"
+port = 587
+starttls = true
+implicit_tls = false
+
+[[server.listeners]]
+name = "smtps"
+bind_ip = "0.0.0.0"
+port = 465
+starttls = false
+implicit_tls = true
+
+[logging]
+log_file = "logs/log.json"
+log_level = "INFO"
+
+[storage]
+mail_dir = "logs/mails"
+save_mail_bodies = true
+save_attachments = true
+
+[tls]
+enabled = true
+auto_generate = true
+cert_file = "logs/tls/server.crt"
+key_file = "logs/tls/server.key"
+
+[rate_limit]
+enabled = true
+window_seconds = 3600
+block_seconds = 3600
+max_messages_per_ip = 100
+max_messages_per_sender = 25
+log_block_once = true
+state_file = "logs/rate_limit_state.json"

@@ -1,21 +1,24 @@
-# Mailoney still imports asyncore, asynchat and smtpd; Python 3.12+ needs backports.
 FROM alpine:3.24
+#
+# Add T-Pot config and entrypoint
+COPY dist/mailoney.toml /root/dist/mailoney.toml
+COPY --chmod=0755 dist/run.sh /usr/bin/mailoney-run.sh
 #
 # Install packages
 RUN apk --no-cache -U upgrade && \
     apk --no-cache -U add \
 		libcap \
+		py3-cryptography \
+		py3-pydantic \
 		python3 && \
     apk --no-cache -U add --virtual .mailoney-build-deps \
-		git \
-		py3-pip && \
-    pip3 install --break-system-packages --no-cache-dir --root-user-action=ignore \
-		standard-smtpd==3.13.0 && \
+		git && \
 #
-# Install mailoney from git
+# Install mailoney from git (v3.0.0), it runs from its folder without pip
     git clone https://github.com/t3chn0m4g3/mailoney /opt/mailoney && \
     cd /opt/mailoney && \
-    git checkout 06e54bd410e0044d26d8462321f1b2811318db0b && \
+    git checkout 52ff7a34b9772a4249aee23686163ed2e4c48e42 && \
+    cp /root/dist/mailoney.toml /opt/mailoney/mailoney.toml && \
 #
 # Setup user, groups and configs
     addgroup -g 2000 mailoney && \
@@ -25,10 +28,20 @@ RUN apk --no-cache -U upgrade && \
 #
 # Clean up
     apk del --purge .mailoney-build-deps && \
-    rm -rf /root/* /var/cache/apk/* /opt/mailoney/.git
+    rm -rf /root/* /var/cache/apk/* \
+           /opt/mailoney/.devcontainer \
+           /opt/mailoney/.env.example \
+           /opt/mailoney/.git \
+           /opt/mailoney/.gitignore \
+           /opt/mailoney/Dockerfile \
+           /opt/mailoney/docker-compose.yml \
+           /opt/mailoney/smoke_test.py \
+           /opt/mailoney/tests
 #
 # Set workdir and start mailoney
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 STOPSIGNAL SIGINT
 USER mailoney:mailoney
 WORKDIR /opt/mailoney/
-CMD ["/usr/bin/python3","mailoney.py","-i","0.0.0.0","-p","25","-t","schizo_open_relay"]
+ENTRYPOINT ["/usr/bin/mailoney-run.sh"]

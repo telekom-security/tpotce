@@ -775,7 +775,8 @@ services:
      - honeypot_local
     ports:
      - "25:25"
-     - "587:25"
+     - "465:465"
+     - "587:587"
     image: ${TPOT_REPO}/mailoney:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
     read_only: true

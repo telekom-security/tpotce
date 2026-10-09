@@ -45,6 +45,7 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 * **Heralding** has been updated to 2.0.0 (pre-release, master branch of the T-Pot fork) on Python 3.14 and catches credentials on 27 instead of 16 services. New services only get a host port where no other honeypot of the edition uses it: 389, 636, 990 and 8883 in Standard, Sensor and Mobile, 445 as well in Mac / Win, 445, 587, 1433, 1883, 6379 and 5060 (TCP / UDP) as well in Tarpit. RDP logs plaintext logins of the TLS fallback and NTLM hashes of NLA. `auth.csv` and `log_session.json` keep their format.
 * **Honeyaml** builds again: its Rust dependencies have been updated and it is now a static binary on a scratch image (branch `tpot-24.04.2` of the T-Pot fork, upstream is no longer maintained).
 * **IPPHoney** has been updated to 2.0.2.
+* **Mailoney** has been updated to 3.0.0 (T-Pot fork, pinned to the release): SMTP on 25 and Submission on 587 (both with STARTTLS), SMTPS on 465 (implicit TLS), logins with AUTH PLAIN / LOGIN, mails and their attachments are stored (`data/mailoney/log/mails`, archived daily to `data/mailoney/mails.tgz` like the downloads of other honeypots) and floods are limited per source and sender. The server name of its banner and TLS certificate is chosen once per installation (`data/mailoney/log/identity`). Mailoney takes port 465, Heralding no longer listens there in the Standard, Sensor, Mobile and Mac / Win editions. The new Mailoney dashboard shows mails, attachments, logins, TLS sessions and SMTP input, the >T-Pot Username / Password tag clouds include its logins, see [Breaking Changes](#mailoney).
 * **Honeypots** without releases were updated to their latest pushed code, pinned to a commit.
 * Docker images now use **Alpine 3.24**, **Go 1.26** or **Scratch** wherever possible; **Log4Pot** moved from Ubuntu to Alpine.
 * **Installer** supports unattended installations and has been tested with **Alma 10**, **Debian 13**, **Fedora 44**, **OpenSuse Tumbleweed**, **Rocky 10**, **RHEL 10** and **Ubuntu 26.04** (sudo-rs).
@@ -81,6 +82,11 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 - The Suricata dashboard now also shows SSH HASSH, RDP client names and HTTP URLs. Import the Kibana objects of this release to get it; the import does not delete the Fatt dashboard, remove it under Stack Management → Saved Objects (tag `Fatt`).
 - `update.sh` removes the `fatt` service from a `docker-compose.yml` of your own, the previous file stays in the backup.
 - The logs in `~/tpotce/data/fatt` are kept. If you no longer need them, remove the folder with `sudo rm -rf ~/tpotce/data/fatt`.
+
+### Mailoney
+- Mailoney logs one JSON event per mail, login or session to `data/mailoney/log/log.json` instead of `commands.log` / `mail.log`. In Elasticsearch `data` and `emails` are gone, the events carry `event_type` (`mail`, `auth`, `session`, `rate_limit_block`), `mail.*`, `attachment.*`, `username` / `password`, `auth.*`, `tls.*`, `listener.*`, `session_outcome`, `session_seconds` and `smtp_input` (one entry per line in `smtp_commands`). Import the Kibana objects of this release to get the new Mailoney dashboard, older events keep their fields.
+- EWSPoster sends no Mailoney events until it reads the new format.
+- If you use a `docker-compose.yml` of your own, publish `465:465` and `587:587` for Mailoney (instead of `587:25`) and comment out `465:465` of Heralding.
 
 ### Snare / Tanner
 - Snare and Tanner have been removed, together with Tanner's API, PHPox and its Redis. The Dockerfiles have moved to `docker/deprecated/tanner`.

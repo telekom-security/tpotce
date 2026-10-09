@@ -33,7 +33,7 @@
 /data/honeytrap/log/*.json
 /data/ipphoney/log/*.json
 /data/log4pot/log/*.log
-/data/mailoney/log/*.log
+/data/mailoney/log/log.json
 /data/medpot/log/*.log
 /data/miniprint/log/*.json
 /data/nginx/log/*.log
@@ -64,6 +64,7 @@
 /data/h0neytr4p/payloads.tgz
 /data/honeytrap/attacks.tgz
 /data/honeytrap/downloads.tgz
+/data/mailoney/mails.tgz
 /data/miniprint/uploads.tgz
 {
 	su tpot tpot

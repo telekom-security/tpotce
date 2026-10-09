@@ -90,7 +90,7 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/log4pot.sh
 ./docker/_tests/tests/log4pot.sh --image log4pot:alpine-check --http-port 18080
 ./docker/_tests/tests/mailoney.sh
-./docker/_tests/tests/mailoney.sh --image mailoney:test --smtp-port 10025
+./docker/_tests/tests/mailoney.sh --image mailoney:test --smtp-port 10025 --smtps-port 10465 --submission-port 10587
 ./docker/_tests/tests/medpot.sh
 ./docker/_tests/tests/medpot.sh --image dtagdevsec/medpot:24.04.2 --host-port 12575
 ./docker/_tests/tests/miniprint.sh
