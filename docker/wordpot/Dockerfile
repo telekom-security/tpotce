@@ -13,10 +13,10 @@ RUN apk --no-cache -U upgrade && \
 		git \
 		py3-pip && \
 #
-# Install wordpot from git (v3.0.0), it runs from its folder with gunicorn
+# Install wordpot from git (v3.0.1), it runs from its folder with gunicorn
     git clone https://github.com/t3chn0m4g3/wordpot /opt/wordpot && \
     cd /opt/wordpot && \
-    git checkout f759f6971ff66d7412c431d2942d2d8631d788cf && \
+    git checkout 8b9bea94f7e782cbbbe27786d0f62b08255c6d7c && \
 #
 # hpfeeds is only imported when HPFEEDS_ENABLED is set, T-Pot does not use it.
 # pip only adds gunicorn (< 24, gunicorn.conf.py patches its internals) and user-agents.
@@ -41,13 +41,11 @@ RUN apk --no-cache -U upgrade && \
            /opt/wordpot/requirements-dev.txt \
            /opt/wordpot/tests
 #
-# Set workdir and start wordpot. The fixed dest_port keeps the client's Host
-# header (gunicorn's SERVER_PORT) out of the events.
+# Set workdir and start wordpot
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     WORDPOT_LOG_DIR=/opt/wordpot/logs \
-    WORDPOT_PAYLOAD_DIR=/opt/wordpot/logs/payloads \
-    WORDPOT_EVENT_DEST_PORT=80
+    WORDPOT_PAYLOAD_DIR=/opt/wordpot/logs/payloads
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 CMD python3 healthcheck.py
 STOPSIGNAL SIGINT
 USER wordpot:wordpot

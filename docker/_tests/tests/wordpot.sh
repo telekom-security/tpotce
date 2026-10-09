@@ -257,6 +257,8 @@ def scenario():
     expect("GET", "/wp-json/wp/v2/users", 200, ('"slug": "admin"',))
     expect("GET", "/wp-content/plugins/elementor/readme.txt", 200, ("Elementor",))
     expect("GET", "/.env", 200)
+    expect("GET", f"/wp-admin/admin-ajax.php?action=duplicator_download&url=http://{token}/", 200)
+    expect("GET", "/wp-admin/admin-ajax.php?action=heartbeat", 200)
     body, headers = upload_body(f"{token}.php")
     expect("POST", "/wp-content/uploads/2026/10/report.php", 404, body=body, headers=headers)
     expect("GET", "/readme.html", 200, headers={"Host": "example.org:8080"})
@@ -302,10 +304,11 @@ required_keys = {
 expected_events = [
     ("credential_attempt", "/wp-login.php", {"username": "admin", "password": f"{token}-pw"}),
     ("xmlrpc_multicall", "/xmlrpc.php", {}),
-    ("xmlrpc_login", "/xmlrpc.php", {}),
+    ("xmlrpc_login", "/xmlrpc.php", {"username": "editor", "password": f"{token}-x"}),
     ("rest_user_enumeration", "/wp-json/wp/v2/users", {}),
     ("plugin_probe", "/wp-content/plugins/elementor/readme.txt", {"component_slug": "elementor"}),
     ("config_bait_served", "/.env", {}),
+    ("admin_ajax_action", "/wp-admin/admin-ajax.php", {}),
     ("upload_lure_payload", "/wp-content/uploads/2026/10/report.php", {"component_type": "upload"}),
     ("core_version_probe", "/readme.html", {}),
 ]
@@ -329,11 +332,12 @@ def load_records():
     return records
 
 
-def find(records, technique, path):
+def find(records, technique, path, query=None):
     for record in records:
         if record.get("user_agent") == token and record.get("technique") == technique and record.get("path") == path:
-            return record
-    raise LogError(f"Missing Wordpot event {technique} {path}")
+            if query is None or record.get("query") == query:
+                return record
+    raise LogError(f"Missing Wordpot event {technique} {path} {query or ''}".rstrip())
 
 
 def validate_once():
@@ -348,7 +352,7 @@ def validate_once():
             raise LogError(f"{technique} misses keys {sorted(missing)}: {record!r}")
         if record["profile_id"] != "modern-business":
             raise LogError(f"Unexpected profile in {technique}: {record['profile_id']!r}")
-        # the image fixes dest_port, the Host header must not change it
+        # dest_port is the port gunicorn listens on, the Host header must not change it
         if record["dest_port"] != 80:
             raise LogError(f"Unexpected dest_port in {technique}: {record['dest_port']!r}")
         wrong = {key: record.get(key) for key, value in fields.items() if record.get(key) != value}
@@ -358,6 +362,16 @@ def validate_once():
     pairs = find(records, "xmlrpc_multicall", "/xmlrpc.php").get("details", {}).get("credential_pairs")
     if pairs != [{"username": "admin", "password": f"{token}-mc"}]:
         raise LogError(f"xmlrpc_multicall has unexpected credential_pairs: {pairs!r}")
+
+    # lure parameters are a list of name / value pairs, absent without one
+    lure = find(records, "admin_ajax_action", "/wp-admin/admin-ajax.php",
+                f"action=duplicator_download&url=http://{token}/")
+    params = lure.get("details", {}).get("lure_params")
+    if params != [{"name": "url", "value": f"http://{token}/"}]:
+        raise LogError(f"admin_ajax_action has unexpected details.lure_params: {params!r}")
+    plain = find(records, "admin_ajax_action", "/wp-admin/admin-ajax.php", "action=heartbeat")
+    if "lure_params" in plain.get("details", {}):
+        raise LogError(f"admin_ajax_action without lure parameters has details.lure_params: {plain!r}")
 
     host = find(records, "core_version_probe", "/readme.html").get("details", {}).get("http_host")
     if host != "example.org:8080":
