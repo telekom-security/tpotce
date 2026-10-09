@@ -3,7 +3,7 @@
 FROM python:3.14-alpine3.24 AS build
 COPY --from=ghcr.io/astral-sh/uv:0.12@sha256:f513a91fc62fe7c17567eee97230dd198e43edb8a9fbecca843714a4358fe1bc /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
-ARG MINIPRINT_VERSION=v0.2.1
+ARG MINIPRINT_VERSION=v0.2.2
 # only the server and its seed files, no tests or docs in the image
 RUN apk --no-cache add git \
     && git clone --depth 1 --branch ${MINIPRINT_VERSION} https://github.com/t3chn0m4g3/miniprint /root/miniprint \
