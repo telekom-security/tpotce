@@ -6,7 +6,7 @@ import time
 from .common import (assign_processes, base_files, base_txtcmds, deb_arch, el_group, el_home_files, el_hosts,
                      el_passwd, el_shadow, gm, lscpu, ps_entry, rng_for, server_df, server_group, server_mount,
                      server_passwd, server_shadow, server_top, shadow_ctime)
-from .identity import updated_at
+from .identity import log_window
 from .model import Content
 
 # Package names of the tools themselves: versions for --version output, not for the logs.
@@ -56,10 +56,29 @@ repolist       Display the configured software repositories
 update         Update a package or packages on your system
 """
 
-_LSPCI_KVM = ("00:00.0 Host bridge: Intel Corporation 440FX - 82441FX PMC\n"
-              "00:01.0 ISA bridge: Intel Corporation 82371SB PIIX3 ISA\n"
-              "00:01.1 IDE interface: Intel Corporation 82371SB PIIX3 IDE\n"
-              "00:02.0 VGA compatible controller: Device 1234:1111\n")
+_LSPCI_KVM = ("00:00.0 Host bridge: Intel Corporation 440FX - 82441FX PMC [Natoma] (rev 02)\n"
+              "00:01.0 ISA bridge: Intel Corporation 82371SB PIIX3 ISA [Natoma/Triton II]\n"
+              "00:01.1 IDE interface: Intel Corporation 82371SB PIIX3 IDE [Natoma/Triton II]\n"
+              "00:01.3 Bridge: Intel Corporation 82371AB/EB/MB PIIX4 ACPI (rev 03)\n"
+              "00:02.0 VGA compatible controller: Device 1234:1111 (rev 02)\n"
+              "00:03.0 Ethernet controller: Red Hat, Inc. Virtio network device\n")
+_LSPCI_VIRTIO_DISK = {"/dev/sd": "00:04.0 SCSI storage controller: Red Hat, Inc. Virtio SCSI\n",
+                      "/dev/vd": "00:04.0 SCSI storage controller: Red Hat, Inc. Virtio block device\n"}
+# AWS Nitro (t3 / m6a): ENA network, EBS volumes as NVMe; unverified: the exact list of a t3/m6a guest
+_LSPCI_AWS = ("00:00.0 Host bridge: Intel Corporation 440FX - 82441FX PMC [Natoma]\n"
+              "00:01.0 ISA bridge: Intel Corporation 82371SB PIIX3 ISA [Natoma/Triton II]\n"
+              "00:01.3 Non-VGA unclassified device: Intel Corporation 82371AB/EB/MB PIIX4 ACPI (rev 08)\n"
+              "00:03.0 VGA compatible controller: Amazon.com, Inc. Device 1111\n"
+              "00:04.0 Non-Volatile memory controller: Amazon.com, Inc. NVMe EBS Controller\n"
+              "00:05.0 Ethernet controller: Amazon.com, Inc. Elastic Network Adapter (ENA)\n")
+# bare-metal AMD servers: root complex of the CPU generation, NVMe boot disk, ConnectX NIC (unverified: typical)
+_LSPCI_BARE = {
+    "Rome": "00:00.0 Host bridge: Advanced Micro Devices, Inc. [AMD] Starship/Matisse Root Complex\n",
+    "Genoa": "00:00.0 Host bridge: Advanced Micro Devices, Inc. [AMD] Genoa/Bergamo Root Complex\n",
+}
+_LSPCI_BARE_DEVICES = ("01:00.0 Non-Volatile memory controller: Samsung Electronics Co Ltd NVMe SSD Controller "
+                       "PM9A1/PM9A3/980PRO\n"
+                       "41:00.0 Ethernet controller: Mellanox Technologies MT28908 Family [ConnectX-6]\n")
 # unverified: the Pi 5 domain numbering of lspci
 _LSPCI_PI = {
     "Raspberry Pi 4 Model B Rev 1.5": ("00:00.0 PCI bridge: Broadcom Inc. and subsidiaries BCM2711 PCIe Bridge (rev 20)\n"
@@ -110,9 +129,48 @@ def gpu_lspci(hw):
     return "".join(lines)
 
 
+def root_disk(persona, ident):
+    """(device df and mount show, fs type, mount options) of the root file system,
+    as the provider's disks and the family's installer lay it out."""
+    provider, family = ident.hardware.provider, persona.family
+    el = family in ("rhel", "centos")
+    part = "4" if family == "rhel" else "1"   # RHEL 9 images: BIOS boot, EFI, /boot, then /
+    if provider == "pi":
+        return "/dev/mmcblk0p2", "ext4", "rw,noatime"
+    if provider == "aws":
+        # Ubuntu's AMIs boot without initramfs, so the kernel names the root /dev/root
+        dev = "/dev/root" if family == "ubuntu" else f"/dev/nvme0n1p{part}"
+        return dev, ("xfs" if el else "ext4"), ("rw,relatime,seclabel,attr2,inode64,noquota" if el
+                                                else "rw,relatime,discard,errors=remount-ro,commit=30")
+    if provider in ("dgx", "gpu"):
+        dev = "/dev/nvme0n1p2"
+    elif provider == "do" or el:
+        dev = f"/dev/vda{part}"
+    else:
+        dev = "/dev/sda1"
+    if el:
+        options = "rw,relatime,seclabel,attr2,inode64," + ("logbufs=8,logbsize=32k,noquota" if family == "rhel"
+                                                             else "noquota")
+        return dev, "xfs", options
+    return dev, "ext4", "rw,relatime,errors=remount-ro"
+
+
+def provider_lspci(persona, ident):
+    hw = ident.hardware
+    if hw.provider == "pi":
+        return _LSPCI_PI[hw.board]
+    if hw.provider == "aws":
+        return _LSPCI_AWS
+    if hw.provider in ("dgx", "gpu"):
+        generation = "Genoa" if " 9" in hw.cpu_model else "Rome"
+        return _LSPCI_BARE[generation] + _LSPCI_BARE_DEVICES
+    dev = root_disk(persona, ident)[0]
+    return _LSPCI_KVM + _LSPCI_VIRTIO_DISK["/dev/vd" if dev.startswith("/dev/vd") else "/dev/sd"]
+
+
 def command_inventory_txtcmds(persona, ident):
     hw = ident.hardware
-    lspci = _LSPCI_PI.get(hw.board, _LSPCI_KVM) + gpu_lspci(hw)
+    lspci = provider_lspci(persona, ident) + gpu_lspci(hw)
     return {
         "usr/bin/lspci": lspci,
         "usr/bin/sudo": "sudo: a password is required\n",
@@ -209,29 +267,36 @@ def server_processes(persona, ident, extra=()):
 # --- package logs ---------------------------------------------------------------
 
 def _log_entries(ident, purpose):
-    """2-5 (kind, names, start, seconds) entries, oldest first, none before the
-    installation or the update that brought the versions of the release: installs
-    of its packages up to now, and the upgrades of release.extra["upgrades"]
-    before the boot (upgrading openssh restarts sshd, and ps shows the sshd of
-    the boot)."""
+    """2-5 (kind, names, start, seconds) entries, oldest first, only while the
+    release's versions were the ones the mirror gave (identity.log_window): installs
+    of its packages, and the upgrades of release.extra["upgrades"] before the boot
+    (upgrading openssh restarts sshd, and ps shows the sshd of the boot). None for
+    a system installed from an image after the next patch level came out."""
     r = ident.release
     rng = rng_for(ident, purpose)
+    window = log_window(ident)
+    if window is None:
+        return []
+    first, last = window
     upgrades = r.extra.get("upgrades", {})
     installs = [n for n in sorted(r.packages) if n not in TOOL_PACKAGES and n not in upgrades]
     count = rng.randint(2, 5)
-    first = min(max(ident.installed_at, updated_at(r)), ident.booted_at)
-    last = max(first, ident.now - 3600)
-    entries = [("install", [name], rng.randint(first, last), rng.randint(4, 40))
-               for name in rng.sample(installs, min(len(installs), count - bool(upgrades)))]
-    if upgrades:
+    entries = []
+    for name in rng.sample(installs, min(len(installs), count - bool(upgrades))):
         took = rng.randint(4, 40)
-        start = rng.randint(first, max(first, ident.booted_at - took))
-        entries.append(("upgrade", sorted(upgrades), start, max(0, min(took, ident.booted_at - start))))
+        start = rng.randint(first, max(first, last - took))
+        entries.append(("install", [name], start, max(0, min(took, last - start))))
+    upgrade_end = min(last, ident.booted_at)
+    if upgrades and first <= upgrade_end:
+        took = rng.randint(4, 40)
+        start = rng.randint(first, max(first, upgrade_end - took))
+        entries.append(("upgrade", sorted(upgrades), start, max(0, min(took, upgrade_end - start))))
     return sorted(entries, key=lambda e: e[2])
 
 
-def _newest(entries):
-    return max(start + took for _, _, start, took in entries)
+def _newest(ident, entries):
+    """ctime of a log: its newest entry, the installation for an empty one."""
+    return max((start + took for _, _, start, took in entries), default=ident.installed_at)
 
 
 def apt_history(persona, ident):
@@ -253,7 +318,7 @@ def apt_history(persona, ident):
                       f"Requested-By: {persona.user} ({persona.uid})\n"
                       f"{body}\n"
                       f"End-Date: {gm(ts + took, '%Y-%m-%d  %H:%M:%S')}\n")
-    return "\n" + "\n".join(blocks), _newest(entries)
+    return ("\n" + "\n".join(blocks)) if blocks else "", _newest(ident, entries)
 
 
 def dnf_log(persona, ident):
@@ -277,7 +342,7 @@ def dnf_log(persona, ident):
                 lines.append(f"{done} SUBDEBUG Upgrade: {n}-{r.packages[n]}.{arch}")
                 lines.append(f"{done} SUBDEBUG Upgraded: {n}-{upgrades[n]}.{arch}")
         lines.append(f"{done} INFO Complete!")
-    return "\n".join(lines) + "\n", _newest(entries)
+    return ("\n".join(lines) + "\n") if lines else "", _newest(ident, entries)
 
 
 def _yum_name(name, version, arch):
@@ -377,9 +442,9 @@ def _gecos(user):
 
 
 def _server_content(persona, ident, files, tasks, run_lock=False, accounts=None, home=None, extra_ps=(),
-                    root_dev="/dev/sda1", root_fs=("ext4", "rw,relatime,errors=remount-ro"), boot=None,
-                    ctimes=None):
+                    boot=None, ctimes=None):
     hw = ident.hardware
+    root_dev, root_type, root_options = root_disk(persona, ident)
     processes = server_processes(persona, ident, extra_ps)
     passwd, group, shadow = accounts or (
         server_passwd(persona.user, persona.uid, persona.gid, _gecos(persona.user), persona.shell),
@@ -390,7 +455,7 @@ def _server_content(persona, ident, files, tasks, run_lock=False, accounts=None,
     txtcmds = base_txtcmds(persona, ident,
                            df=server_df(ident, root_dev=root_dev, run_lock=run_lock, boot=boot),
                            mount=server_mount(ident, root_dev=root_dev, run_lock=run_lock, boot=boot,
-                                              root_type=root_fs[0], root_options=root_fs[1]),
+                                              root_type=root_type, root_options=root_options),
                            lscpu_text=lscpu(persona, hw, op_modes="32-bit, 64-bit"),
                            top=server_top(ident, processes, tasks))
     txtcmds.update(package_manager_txtcmds(persona, ident))
@@ -650,7 +715,7 @@ deb http://deb.debian.org/debian {r.extra['codename']}-updates main contrib non-
     )
     boot = ("/dev/mmcblk0p1", 522232, "/boot/firmware")
     return _server_content(persona, ident, files, tasks=172, run_lock=True, accounts=accounts,
-                           root_dev="/dev/mmcblk0p2", root_fs=("ext4", "rw,noatime"), boot=boot, ctimes=ctimes)
+                           boot=boot, ctimes=ctimes)
 
 
 def build_rhel(persona, ident):
@@ -689,8 +754,7 @@ REDHAT_SUPPORT_PRODUCT_VERSION="{r.os_version_id}"
                 el_group("rhel", persona.user, persona.gid),
                 el_shadow("rhel", persona.user, ident))
     return _server_content(persona, ident, files, tasks=104, accounts=accounts,
-                           home=el_home_files("rhel", persona.user), root_dev="/dev/vda4",
-                           root_fs=("xfs", "rw,relatime,seclabel,attr2,inode64,logbufs=8,logbsize=32k,noquota"),
+                           home=el_home_files("rhel", persona.user),
                            ctimes={"var/log/dnf.log": dnf_ctime})
 
 
@@ -760,6 +824,5 @@ REDHAT_SUPPORT_PRODUCT_VERSION="7"
                 el_group("centos", persona.user, persona.gid),
                 el_shadow("centos", persona.user, ident))
     return _server_content(persona, ident, files, tasks=98, accounts=accounts,
-                           home=el_home_files("centos", persona.user), root_dev="/dev/vda1",
-                           root_fs=("xfs", "rw,relatime,seclabel,attr2,inode64,noquota"),
+                           home=el_home_files("centos", persona.user),
                            ctimes=log_ctimes)

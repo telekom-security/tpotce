@@ -26,6 +26,7 @@ class Hardware:
     gpus: tuple = ()
     gpu_mem_mib: int = 0
     board: str = ""          # Raspberry Pi model, device SoC; empty for VMs
+    provider: str = ""       # where it runs (aws, kvm, do, pi, dgx, gpu); picks host names, releases, lspci, disks
 
 
 @dataclass
@@ -53,7 +54,7 @@ class Persona:
     package_managers: tuple
     releases: tuple
     hardware: tuple
-    hostnames: tuple
+    hostnames: tuple         # patterns; "aws:ip-172-31-{n}-{n}" only for hardware of that provider
     builder: Callable
     vulnerability: str
     remove_paths: tuple = ()

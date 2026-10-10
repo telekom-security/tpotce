@@ -26,33 +26,44 @@ DNF = ("dnf", "yum", "rpm")
 YUM = ("yum", "rpm")
 
 # --- hardware ---------------------------------------------------------------------
-# Cloud VMs: MemTotal is a few percent below the nominal size (kernel and firmware
+# The provider ties host names, kernels, lspci and the root disk to the hardware.
+# VMs: MemTotal is a few percent below the nominal size (kernel and firmware
 # reservations, unverified per provider); /dev/shm in df is half of MemTotal.
-VPS_1 = Hardware(cpus=1, cpu_model="Intel(R) Xeon(R) Platinum 8259CL CPU @ 2.50GHz", mem_kb=985332,
-                 disk_kb=7941576)
-VPS_2 = Hardware(cpus=2, cpu_model="AMD EPYC 7R13 Processor", mem_kb=3964928, disk_kb=20134592)
-VPS_4 = Hardware(cpus=4, cpu_model="Intel Xeon Processor (Icelake)", mem_kb=8023548, disk_kb=81106868)
-VPS_8 = Hardware(cpus=8, cpu_model="Intel Xeon Processor (Icelake)", mem_kb=16359660, disk_kb=162420480)
+# AWS Nitro: t3.medium (8259CL, 2 vCPU, 4 GiB), m6a.xlarge (7R13, 4 vCPU, 16 GiB), 8 / 20 GB gp3 root
+AWS_2 = Hardware(cpus=2, cpu_model="Intel(R) Xeon(R) Platinum 8259CL CPU @ 2.50GHz", mem_kb=3964928,
+                 disk_kb=7941576, provider="aws")
+AWS_4 = Hardware(cpus=4, cpu_model="AMD EPYC 7R13 Processor", mem_kb=16106252, disk_kb=20134592, provider="aws")
+# KVM VPS of a hoster with QEMU's named CPU models
+KVM_1 = Hardware(cpus=1, cpu_model="Intel Xeon Processor (Icelake)", mem_kb=985332, disk_kb=20134592,
+                 provider="kvm")
+KVM_2 = Hardware(cpus=2, cpu_model="AMD EPYC-Milan Processor", mem_kb=3964928, disk_kb=40470732, provider="kvm")
+KVM_4 = Hardware(cpus=4, cpu_model="Intel Xeon Processor (Icelake)", mem_kb=8023548, disk_kb=81106868,
+                 provider="kvm")
+KVM_8 = Hardware(cpus=8, cpu_model="Intel Xeon Processor (Icelake)", mem_kb=16359660, disk_kb=162420480,
+                 provider="kvm")
+# DigitalOcean basic droplet s-2vcpu-4gb (80 GB); unverified: the "DO-Regular" model name of basic droplets
+DO_2 = Hardware(cpus=2, cpu_model="DO-Regular", mem_kb=3964928, disk_kb=81106868, provider="do")
 
 PI4 = "Raspberry Pi 4 Model B Rev 1.5"
 PI5 = "Raspberry Pi 5 Model B Rev 1.0"
 # 32 / 64 GB SD cards; MemTotal less the firmware's share (unverified)
 PI_HARDWARE = (
-    Hardware(cpus=4, cpu_model="Cortex-A72", mem_kb=3881084, disk_kb=30358348, board=PI4),
-    Hardware(cpus=4, cpu_model="Cortex-A72", mem_kb=7998564, disk_kb=60801848, board=PI4),
-    Hardware(cpus=4, cpu_model="Cortex-A76", mem_kb=4139168, disk_kb=30358348, board=PI5),
-    Hardware(cpus=4, cpu_model="Cortex-A76", mem_kb=8245920, disk_kb=60801848, board=PI5),
+    Hardware(cpus=4, cpu_model="Cortex-A72", mem_kb=3881084, disk_kb=30358348, board=PI4, provider="pi"),
+    Hardware(cpus=4, cpu_model="Cortex-A72", mem_kb=7998564, disk_kb=60801848, board=PI4, provider="pi"),
+    Hardware(cpus=4, cpu_model="Cortex-A76", mem_kb=4139168, disk_kb=30358348, board=PI5, provider="pi"),
+    Hardware(cpus=4, cpu_model="Cortex-A76", mem_kb=8245920, disk_kb=60801848, board=PI5, provider="pi"),
 )
 PI_FLAVORS = {PI4: "v8", PI5: "2712"}  # linux-image-*-rpi-v8 / -rpi-2712
 
-# GPU servers: HGX A100 node slice, a two-L40S inference box, a rented RTX 4090
+# GPU servers on bare metal: a DGX A100 (2x EPYC 7742, 1 TB, 8x A100; SMT off), a two-L40S
+# inference box, a rented RTX 4090
 GPU_HARDWARE = (
     Hardware(cpus=128, cpu_model="AMD EPYC 7742 64-Core Processor", mem_kb=1056622596, disk_kb=3750221592,
-             gpus=("NVIDIA A100-SXM4-80GB",) * 8, gpu_mem_mib=81920),
+             gpus=("NVIDIA A100-SXM4-80GB",) * 8, gpu_mem_mib=81920, provider="dgx"),
     Hardware(cpus=64, cpu_model="AMD EPYC 9354 32-Core Processor", mem_kb=528280640, disk_kb=1875110796,
-             gpus=("NVIDIA L40S",) * 2, gpu_mem_mib=46068),
+             gpus=("NVIDIA L40S",) * 2, gpu_mem_mib=46068, provider="gpu"),
     Hardware(cpus=32, cpu_model="AMD EPYC 7543 32-Core Processor", mem_kb=263932668, disk_kb=1875110796,
-             gpus=("NVIDIA GeForce RTX 4090",), gpu_mem_mib=24564),
+             gpus=("NVIDIA GeForce RTX 4090",), gpu_mem_mib=24564, provider="gpu"),
 )
 # single core MIPS SoC with 64 MB as on small routers
 MIPS_ROUTER = Hardware(cpus=1, cpu_model="MIPS 24Kc V7.4", mem_kb=65536, disk_kb=8192)
@@ -60,7 +71,26 @@ MIPS_ROUTER = Hardware(cpus=1, cpu_model="MIPS 24Kc V7.4", mem_kb=65536, disk_kb
 
 # --- release helpers ----------------------------------------------------------------
 
-def _ubuntu(updated, codename, os_version, openssh, openssh_before, kernel, uts, builder, compiler, openssl, packages):
+def _chain(*releases):
+    """A pool of patch levels in update order: each one is superseded on the day
+    the next one came out (the logs of a system never pull its versions later)."""
+    out = []
+    for i, r in enumerate(releases):
+        extra = {k: v for k, v in r.extra.items() if k != "superseded"}
+        if i + 1 < len(releases):
+            assert releases[i + 1].extra["updated"] > r.extra["updated"], r.label
+            extra["superseded"] = releases[i + 1].extra["updated"]
+        out.append(replace(r, extra=extra))
+    return tuple(out)
+
+
+def _medium(release):
+    """The patch level of an installation image (point release)."""
+    return replace(release, extra={**release.extra, "medium": True})
+
+
+def _ubuntu(updated, codename, os_version, openssh, openssh_before, kernel, uts, builder, compiler, openssl, packages,
+            flavor="generic", providers=("kvm", "do")):
     """One Ubuntu patch level. openssh is the package version (1:9.6p1-3ubuntu13.14)."""
     upstream, revision = openssh.split(":", 1)[1].split("-", 1)
     names = {"noble": ("24.04", "Noble Numbat", "trixie/sid", "2024-04-25"),
@@ -70,14 +100,14 @@ def _ubuntu(updated, codename, os_version, openssh, openssh_before, kernel, uts,
         label=f"{os_version.split()[0]} {kernel}",
         ssh_banner=f"SSH-2.0-OpenSSH_{upstream} Ubuntu-{revision}",
         ssh_version=f"OpenSSH_{upstream} Ubuntu-{revision}, {openssl}",
-        kernel_version=f"{kernel}-generic",
+        kernel_version=f"{kernel}-{flavor}",
         kernel_build=uts,
         os_version=os_version,
         os_version_id=version_id,
         packages={"openssh-client": openssh, "openssh-server": openssh, **packages},
         extra={"codename": codename, "codename_long": long_name, "debian_version": debian_version,
                "kernel_builder": f"buildd@{builder}", "kernel_compiler": compiler, "first_install": first,
-               "updated": updated,
+               "updated": updated, "providers": providers,
                "upgrades": {"openssh-client": openssh_before, "openssh-server": openssh_before}},
     )
 
@@ -177,8 +207,8 @@ _NOBLE_GCC = "x86_64-linux-gnu-gcc-13 (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0, GNU
 _NOBLE_GCC_1 = ("x86_64-linux-gnu-gcc-13 (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, "
                 "GNU ld (GNU Binutils for Ubuntu) 2.42")
 _NOBLE_SSL = "OpenSSL 3.0.13 30 Jan 2024"
-NOBLE = (
-    # forgotten since this update
+_NOBLE_LEVELS = (
+    # forgotten since this update (not in the pool: the -aws pool has this time)
     _ubuntu("2025-10-20", "noble", "24.04.3 LTS", "1:9.6p1-3ubuntu13.14", "1:9.6p1-3ubuntu13.13", "6.8.0-87",
             "#88-Ubuntu SMP PREEMPT_DYNAMIC Sat Oct 11 09:28:41 UTC 2025", "lcy02-amd64-034", _NOBLE_GCC,
             _NOBLE_SSL, {"apt": "2.8.3", "dpkg": "1.22.6ubuntu6.5", "curl": "8.5.0-2ubuntu10.6",
@@ -202,6 +232,25 @@ NOBLE = (
                          "net-tools": "2.10-0.1ubuntu4.4"}),
 )
 
+# Ubuntu on AWS runs the rolling linux-aws kernel of the linux-image-aws metapackage (6.14 in 2025, 6.17
+#   from 2026-02), Launchpad getPublishedBinaries linux-image-aws; uname -v of the aws flavor has no
+#   PREEMPT_DYNAMIC, verbatim example "6.14.0-1009-aws #9~24.04.1-Ubuntu SMP Fri Jun 27 17:50:08 UTC 2025"
+#   from https://github.com/k3s-io/k3s/issues/12711; builder and gcc from the Launchpad build records
+# unverified: the time of day of uname -v (build start + 87 min, the offset of the verified example)
+_NOBLE_AWS_LEVELS = (
+    _ubuntu("2025-10-25", "noble", "24.04.3 LTS", "1:9.6p1-3ubuntu13.14", "1:9.6p1-3ubuntu13.13", "6.14.0-1015",
+            "#15~24.04.1-Ubuntu SMP Tue Sep 23 22:40:31 UTC 2025", "lcy02-amd64-042", _NOBLE_GCC,
+            _NOBLE_SSL, {"apt": "2.8.3", "dpkg": "1.22.6ubuntu6.5", "curl": "8.5.0-2ubuntu10.6",
+                         "git": "1:2.43.0-1ubuntu7.3", "vim": "2:9.1.0016-1ubuntu7.9", "htop": "3.3.0-4build1",
+                         "net-tools": "2.10-0.1ubuntu4.4"}, flavor="aws", providers=("aws",)),
+    _ubuntu("2026-07-20", "noble", "24.04.4 LTS", "1:9.6p1-3ubuntu13.18", "1:9.6p1-3ubuntu13.16", "6.17.0-1019",
+            "#19~24.04.1-Ubuntu SMP Tue Jun 23 19:03:52 UTC 2026", "lcy02-amd64-070", _NOBLE_GCC_1,
+            _NOBLE_SSL, {"apt": "2.8.3", "dpkg": "1.22.6ubuntu6.6", "curl": "8.5.0-2ubuntu10.11",
+                         "git": "1:2.43.0-1ubuntu7.3", "vim": "2:9.1.0016-1ubuntu7.18", "htop": "3.3.0-4build1",
+                         "net-tools": "2.10-0.1ubuntu4.4"}, flavor="aws", providers=("aws",)),
+)
+NOBLE = _chain(*_NOBLE_LEVELS[1:]) + _chain(*_NOBLE_AWS_LEVELS)
+
 # --- Ubuntu 22.04 ---------------------------------------------------------------------
 # Versions: Launchpad API getPublishedSources, as for noble (openssh 3ubuntu0.12 never left -proposed)
 # Builder host and gcc-11 / binutils of each kernel: its Launchpad build record and log, e.g.
@@ -216,7 +265,7 @@ def _jammy_gcc(revision, binutils="2.38"):
 
 
 _JAMMY_NET_TOOLS = "1.60+git20181103.0eebece-1ubuntu5"
-JAMMY = (
+_JAMMY_LEVELS = (
     # forgotten since this update
     _ubuntu("2025-05-20", "jammy", "22.04.5 LTS", "1:8.9p1-3ubuntu0.13", "1:8.9p1-3ubuntu0.11", "5.15.0-140",
             "#150-Ubuntu SMP Sat Apr 12 07:11:09 UTC 2025", "lcy02-amd64-024", _jammy_gcc(""), _JAMMY_SSL,
@@ -235,6 +284,7 @@ JAMMY = (
             {"apt": "2.4.14", "dpkg": "1.21.1ubuntu2.6", "curl": "7.81.0-1ubuntu1.27", "git": "1:2.34.1-1ubuntu1.17",
              "vim": "2:8.2.3995-1ubuntu2.36", "htop": "3.0.5-7build2", "net-tools": _JAMMY_NET_TOOLS + ".4"}),
 )
+JAMMY = _chain(*_JAMMY_LEVELS)
 
 # --- Debian 13 ------------------------------------------------------------------------
 # openssh: https://metadata.ftp-master.debian.org/changelogs/main/o/openssh/stable_changelog
@@ -244,7 +294,7 @@ JAMMY = (
 # point releases: base-files changelog (DEBIAN_VERSION_FULL in os-release since 13.8)
 #   https://sources.debian.org/src/base-files/13.8+deb13u7/etc/os-release
 # OpenSSL dates: VERSION.dat of the openssl-3.5.x tags on github.com/openssl/openssl
-TRIXIE = (
+_TRIXIE_LEVELS = (
     # 13.1, forgotten since this update
     _debian("2025-09-08", "trixie", "13.1", "10.0p2", "1:10.0p1-7", None,
             "6.12.43+deb13-amd64", "6.12.43-1", "2025-08-27",
@@ -271,6 +321,8 @@ TRIXIE = (
             _TRIXIE_GCC, "OpenSSL 3.5.7 9 Jun 2026",
             {**_TRIXIE_PKGS, "dpkg": "1.22.22", "curl": "8.14.1-2+deb13u5", "sudo": "1.9.16p2-3+deb13u2"}),
 )
+# 13.1 and 13.2 are the versions of their installation images
+TRIXIE = _chain(_medium(_TRIXIE_LEVELS[0]), _medium(_TRIXIE_LEVELS[1]), *_TRIXIE_LEVELS[2:])
 
 # --- Debian 12 ------------------------------------------------------------------------
 # openssh: https://metadata.ftp-master.debian.org/changelogs/main/o/openssh/oldstable_changelog
@@ -279,7 +331,7 @@ TRIXIE = (
 #   6.1.0-47 / -50 from https://deb.debian.org/debian/pool/main/l/linux-signed-amd64/
 # point releases: https://metadata.ftp-master.debian.org/changelogs/main/b/base-files/oldstable_changelog
 # OpenSSL dates: VERSION.dat of the openssl-3.0.x tags on github.com/openssl/openssl
-BOOKWORM = (
+_BOOKWORM_LEVELS = (
     # 12.2, before the regreSSHion fix
     _debian("2023-10-10", "bookworm", "12.2", "9.2p1", "1:9.2p1-2+deb12u1", "1:9.2p1-2",
             "6.1.0-13-amd64", "6.1.55-1", "2023-09-29",
@@ -311,13 +363,15 @@ BOOKWORM = (
             {**_BOOKWORM_PKGS, "dpkg": "1.21.23", "curl": "7.88.1-10+deb12u15", "git": "1:2.39.5-0+deb12u3",
              "vim": "2:9.0.1378-2+deb12u2", "sudo": "1.9.13p3-1+deb12u4"}),
 )
+# 12.2 and 12.5 are the versions of their installation images: the regreSSHion bait stays installable
+BOOKWORM = _chain(_medium(_BOOKWORM_LEVELS[0]), _medium(_BOOKWORM_LEVELS[1]), *_BOOKWORM_LEVELS[2:])
 
 # --- RHEL 9 ---------------------------------------------------------------------------
 # Package NVRs: the RHEL rebuild Rocky Linux, https://dl.rockylinux.org/vault/rocky/9.4/BaseOS/x86_64/os/Packages/
 #   (same versions; Rocky's own ".rocky.0.1" and ".0.1" rebuild suffixes left out)
 # OpenSSL 3.0.7 1 Nov 2022 (9.4) / 3.2.2 4 Jun 2024 (9.5, 9.6): VERSION.dat of the openssl tags
 _RHEL_COMPILER_94 = "gcc (GCC) 11.4.1 20231218 (Red Hat 11.4.1-4), GNU ld version 2.35.2-43.el9"
-RHEL9 = (
+_RHEL9_LEVELS = (
     # 9.4 EUS; /proc/version verbatim from https://github.com/falcosecurity/falco/issues/3610
     _rhel("2025-02-20", 4, "5.14.0-427.55.1", "#1 SMP PREEMPT_DYNAMIC Mon Feb 10 12:37:38 EST 2025",
           "mockbuild@x86-64-03.build.eng.rdu2.redhat.com", _RHEL_COMPILER_94, "8.7p1-38.el9_4.4",
@@ -344,14 +398,16 @@ RHEL9 = (
           "8.7p1-43.el9", "OpenSSL 3.2.2 4 Jun 2024",
           {"curl": "7.76.1-31.el9_6.1", "git": "2.47.3-1.el9_6", "vim-enhanced": "2:8.2.2637-22.el9_6.1"}),
 )
+# in update order; 9.5 GA is the 9.5 installation image
+RHEL9 = _chain(_medium(_RHEL9_LEVELS[1]), _RHEL9_LEVELS[0], *_RHEL9_LEVELS[2:])
 
 # --- CentOS 7 -------------------------------------------------------------------------
 # Packages and their dates: https://vault.centos.org/7.9.2009/updates/x86_64/Packages/ and .../os/x86_64/Packages/
 # 3.10.0-1160.el7 uname -v verbatim from a boot log ("Mon Oct 19 16:18:59 UTC 2020", search result of
 #   openbenchmarking.org); unverified: the uname -v times of the updates (vault file time less an hour)
-CENTOS7 = (
+_CENTOS7_LEVELS = (
     # 7.9.2009 as installed, never updated
-    _centos(None, "1160", "#1 SMP Mon Oct 19 16:18:59 UTC 2020", "7.4p1-21.el7", None,
+    _centos("2020-11-12", "1160", "#1 SMP Mon Oct 19 16:18:59 UTC 2020", "7.4p1-21.el7", None,
             {"rpm": "4.11.3-45.el7", "curl": "7.29.0-59.el7", "git": "1.8.3.1-23.el7_8",
              "vim-enhanced": "2:7.4.629-7.el7"}),
     _centos("2023-03-15", "1160.88.1", "#1 SMP Tue Mar  7 15:41:52 UTC 2023", "7.4p1-22.el7_9", "7.4p1-21.el7",
@@ -365,6 +421,8 @@ CENTOS7 = (
             {"rpm": "4.11.3-48.el7_9", "curl": "7.29.0-59.el7_9.2", "git": "1.8.3.1-25.el7_9",
              "vim-enhanced": "2:7.4.629-8.el7_9"}),
 )
+# 7.9.2009 as installed is the image; a later install would get the newest updates from the vault
+CENTOS7 = _chain(_medium(_CENTOS7_LEVELS[0]), *_CENTOS7_LEVELS[1:])
 
 # --- Raspberry Pi OS (Bookworm, arm64) ------------------------------------------------
 # kernels and their changelog dates: debian.tar.xz of https://archive.raspberrypi.com/debian/pool/main/l/linux/
@@ -375,7 +433,7 @@ CENTOS7 = (
 # unverified: the compiler of the Pi kernel builds (the Debian gcc-12 of bookworm assumed)
 _PI_GCC = "aarch64-linux-gnu-gcc-12 (Debian 12.2.0-14) 12.2.0, GNU ld (GNU Binutils for Debian) 2.40"
 _PI_GCC_U1 = "aarch64-linux-gnu-gcc-12 (Debian 12.2.0-14+deb12u1) 12.2.0, GNU ld (GNU Binutils for Debian) 2.40"
-RASPIOS = (
+_RASPIOS_LEVELS = (
     _raspios("2024-10-25", "2024-10-22", "17c8e4853490218fafcd0cc2f95203ccfebe043e", "12.7", "1:9.2p1-2+deb12u3",
              "1:9.2p1-2+deb12u2", "6.6.51", "1:6.6.51-1+rpt3", "2024-10-08", _PI_GCC, "OpenSSL 3.0.14 4 Jun 2024",
              {**_BOOKWORM_PKGS, "curl": "7.88.1-10+deb12u8", "git": "1:2.39.5-0+deb12u1", "vim": "2:9.0.1378-2",
@@ -400,6 +458,8 @@ RASPIOS = (
              {**_BOOKWORM_PKGS, "dpkg": "1.21.23", "curl": "7.88.1-10+deb12u15", "git": "1:2.39.5-0+deb12u3",
               "vim": "2:9.0.1378-2+deb12u2", "sudo": "1.9.13p3-1+deb12u4"}),
 )
+# the 2024-10-22 image as written to the card
+RASPIOS = _chain(_medium(_RASPIOS_LEVELS[0]), *_RASPIOS_LEVELS[1:])
 
 # --- GPU server (Ubuntu + NVIDIA) -----------------------------------------------------
 # Drivers: Launchpad nvidia-graphics-drivers-550 / -570 (jammy, noble); CUDA 12.4 / 12.8 is the CUDA
@@ -411,17 +471,18 @@ RASPIOS = (
 def _gpu(base, driver, cuda, built, gcc):
     return replace(base, label=f"{base.label} nvidia-{driver}",
                    extra={**base.extra, "nvidia_driver": driver, "cuda": cuda, "nvidia_built": built,
-                          "nvidia_gcc": gcc})
+                          "nvidia_gcc": gcc, "providers": ("dgx", "gpu")})
 
 
-GPU_RELEASES = (
-    _gpu(JAMMY[1], "550.163.01", "12.4", "Wed Apr  9 19:58:21 UTC 2025",
+GPU_RELEASES = _chain(
+    _gpu(_JAMMY_LEVELS[1], "550.163.01", "12.4", "Wed Apr  9 19:58:21 UTC 2025",
          "gcc version 11.4.0 (Ubuntu 11.4.0-1ubuntu1~22.04.2)"),
-    _gpu(JAMMY[2], "570.211.01", "12.8", "Tue Dec  9 20:31:47 UTC 2025",
+    _gpu(_JAMMY_LEVELS[2], "570.211.01", "12.8", "Tue Dec  9 20:31:47 UTC 2025",
          "gcc version 11.4.0 (Ubuntu 11.4.0-1ubuntu1~22.04.3)"),
-    _gpu(NOBLE[1], "570.195.03", "12.8", "Tue Sep 23 16:12:09 UTC 2025",
+) + _chain(
+    _gpu(_NOBLE_LEVELS[1], "570.195.03", "12.8", "Tue Sep 23 16:12:09 UTC 2025",
          "gcc version 13.3.0 (Ubuntu 13.3.0-6ubuntu2~24.04)"),
-    _gpu(NOBLE[3], "570.211.01", "12.8", "Tue Dec  9 20:31:47 UTC 2025",
+    _gpu(_NOBLE_LEVELS[3], "570.211.01", "12.8", "Tue Dec  9 20:31:47 UTC 2025",
          "gcc version 13.3.0 (Ubuntu 13.3.0-6ubuntu2~24.04.1)"),
 )
 
@@ -439,29 +500,31 @@ def _server(pid, family, os_id, user, releases, hardware, hostnames, builder, vu
 
 
 PERSONAS = (
-    _server("ubuntu-noble", "ubuntu", "ubuntu", "ubuntu", NOBLE, (VPS_1, VPS_2, VPS_4, VPS_8),
-            ("ip-172-31-{n}-{n}", "vps-{hex6}", "{word}-{nn}", "ubuntu-s-{cpus}vcpu-{gib}gb-fra1-{nn}"),
+    _server("ubuntu-noble", "ubuntu", "ubuntu", "ubuntu", NOBLE, (AWS_2, AWS_4, KVM_4, DO_2),
+            # the AWS default VPC, a hoster's VPS, a DigitalOcean droplet named after its plan
+            ("aws:ip-172-31-{n}-{n}", "kvm:vps-{hex6}", "kvm:{word}-{nn}", "do:ubuntu-s-{cpus}vcpu-{gib}gb-fra1-{nn}"),
             build_ubuntu, "Ubuntu 24.04 cloud VPS, OpenSSH 9.6p1"),
-    _server("ubuntu-jammy", "ubuntu", "ubuntu", "ubuntu", JAMMY, (VPS_1, VPS_2, VPS_4),
-            ("srv{nn}", "{word}{nn}", "ip-10-0-{n}-{n}"),
+    _server("ubuntu-jammy", "ubuntu", "ubuntu", "ubuntu", JAMMY, (KVM_1, KVM_2, KVM_4),
+            ("srv{nn}", "{word}{nn}"),
             build_ubuntu, "Ubuntu 22.04 server, OpenSSH 8.9p1"),
-    _server("debian-trixie", "debian", "debian", "debian", TRIXIE, (VPS_2, VPS_4, VPS_8),
+    _server("debian-trixie", "debian", "debian", "debian", TRIXIE, (KVM_2, KVM_4, KVM_8),
             ("debian-{hex6}", "{word}-{nn}", "vm{nn}"),
             build_debian, "Debian 13 server, OpenSSH 10.0p2"),
-    _server("debian-bookworm", "debian", "debian", "debian", BOOKWORM, (VPS_1, VPS_2, VPS_4),
+    _server("debian-bookworm", "debian", "debian", "debian", BOOKWORM, (KVM_1, KVM_2, KVM_4),
             ("db12-{word}{nn}", "{word}-prod-{nn}"),
             build_debian, "Debian 12 OpenSSH 9.2p1 before the regreSSHion fix (CVE-2024-6387)"),
-    _server("rhel-9", "rhel", "rhel", "cloud-user", RHEL9, (VPS_2, VPS_4, VPS_8),
+    _server("rhel-9", "rhel", "rhel", "cloud-user", RHEL9, (KVM_2, KVM_4, KVM_8),
             ("rhel9-{word}{nn}", "{word}{nn}.corp.local"),
             build_rhel, "RHEL 9 cloud image, OpenSSH 8.7p1", managers=DNF),
-    _server("centos-7", "centos", "centos", "centos", CENTOS7, (VPS_1, VPS_2, VPS_4),
+    _server("centos-7", "centos", "centos", "centos", CENTOS7, (KVM_1, KVM_2, KVM_4),
             ("localhost.localdomain", "cent7-{word}{nn}", "{word}{nn}"),
             build_centos, "EOL CentOS 7, OpenSSH 7.4", managers=YUM),
     _server("raspios", "raspios", "debian", "pi", RASPIOS, PI_HARDWARE,
             ("raspberrypi", "pi{nn}", "pihole"),
             build_raspios, "Raspberry Pi with the default user pi", arch=("linux-aarch64-lsb", "aarch64")),
     _server("gpu-ubuntu", "ubuntu", "ubuntu", "ubuntu", GPU_RELEASES, GPU_HARDWARE,
-            ("gpu-node-{nn}", "{gpu}-worker-{nn}", "ml-{hex6}", "dgx{nn}"),
+            # DGX and A100 names only on the 8x A100 box
+            ("dgx:dgx{nn}", "dgx:a100-worker-{nn}", "gpu-node-{nn}", "gpu:ml-{hex6}", "gpu:{gpu}-worker-{nn}"),
             build_gpu_ubuntu, "GPU server with NVIDIA driver, Ollama and Jupyter",
             tokens=(("hf", "hf"), ("openai", "openai"))),
     Persona(

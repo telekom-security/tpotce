@@ -6,7 +6,7 @@ from pathlib import Path
 
 from tests.helpers import DIST  # noqa: F401
 from tpot_personas import PersonaError, catalog
-from tpot_personas.identity import first_install, kernel_time
+from tpot_personas.identity import first_install, fits, kernel_time
 from tpot_personas.ssh_profiles import PROFILES
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -146,3 +146,31 @@ class ServerCatalogTest(unittest.TestCase):
                 product = r.ssh_banner[len("SSH-2.0-"):].split(" ", 1)[0]
                 self.assertRegex(r.ssh_version, rf"^{re.escape(product)}(p\d+)?[ ,]", (pid, r.label))
                 self.assertIn("OpenSSL", r.ssh_version, (pid, r.label))
+
+
+class ProviderCatalogTest(unittest.TestCase):
+    AWS_CPUS = ("Intel(R) Xeon(R) Platinum 8259CL CPU @ 2.50GHz", "AMD EPYC 7R13 Processor")
+
+    def test_aws_cpus_only_on_aws_and_as_real_instance_sizes(self):
+        for p in catalog.PERSONAS:
+            for hw in p.hardware:
+                if hw.cpu_model in self.AWS_CPUS:
+                    self.assertEqual(hw.provider, "aws", (p.id, hw))
+                if hw.provider == "aws":
+                    self.assertIn(hw.cpu_model, self.AWS_CPUS, (p.id, hw))
+                    self.assertGreaterEqual(hw.cpus, 2, (p.id, hw))  # t3 / m5 / m6a start at 2 vCPU
+
+    def test_every_server_hardware_has_a_provider_and_host_names(self):
+        for pid in SERVERS:
+            p = catalog.by_id(pid)
+            for hw in p.hardware:
+                self.assertIn(hw.provider, ("aws", "kvm", "do", "pi", "dgx", "gpu"), (pid, hw))
+                self.assertTrue([x for x in p.hostnames if x.split(":")[0] in (hw.provider,) or ":" not in x],
+                                (pid, hw.provider))
+                self.assertTrue(any(fits(r, hw) for r in p.releases), (pid, hw.provider))
+
+    def test_chains_are_in_update_order(self):
+        for pid in SERVERS:
+            for r in catalog.by_id(pid).releases:
+                if r.extra.get("superseded"):
+                    self.assertGreater(r.extra["superseded"], r.extra["updated"], (pid, r.label))

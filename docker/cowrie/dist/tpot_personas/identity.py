@@ -69,15 +69,75 @@ def updated_at(release):
     return _day(release, "updated")
 
 
+def superseded_at(release):
+    """The day the next patch level of the pool came out, 0 for the newest."""
+    return _day(release, "superseded")
+
+
+def is_medium(release):
+    """The versions are those of an installation image (point release), so a
+    system installed from it after the next patch level came out still has them."""
+    return bool(release.extra.get("medium"))
+
+
 def ready_at(release):
     """From then on a system can run the release: installed, updated, its kernel built."""
     return max(kernel_time(release) or 0, first_install(release), updated_at(release))
 
 
+def latest_install(release):
+    """Installed later, a system would have got the next patch level (0: no limit)."""
+    return 0 if is_medium(release) else superseded_at(release)
+
+
+def log_window(ident):
+    """(first, last) time of package log entries that pull the release's
+    versions: from the installation (or the update to the release) until the
+    next patch level came out; None when the system was installed from an
+    image after that and never touched its packages."""
+    r = ident.release
+    first = max(ident.installed_at, updated_at(r))
+    last = ident.now - 3600
+    if superseded_at(r):
+        last = min(last, superseded_at(r))
+    if first > last:
+        return None
+    return first, last
+
+
 def fits(release, hardware):
-    """A release with kernels per board (Raspberry Pi) only fits those boards."""
+    """A release with kernels per board (Raspberry Pi) only fits those boards, one
+    with a provider kernel (Ubuntu -aws) only that provider's hardware."""
     flavors = release.extra.get("flavors")
-    return not flavors or hardware.board in flavors
+    providers = release.extra.get("providers")
+    return (not flavors or hardware.board in flavors) and (not providers or hardware.provider in providers)
+
+
+def provider_of(pattern):
+    """"aws:ip-172-31-{n}-{n}" -> "aws"; "" for a pattern of any provider."""
+    head, sep, _ = pattern.partition(":")
+    return head if sep and head.isalpha() and head.islower() else ""
+
+
+def host_patterns(persona, hardware):
+    """The host name patterns for the provider of the hardware, without the prefix."""
+    found = [p for p in persona.hostnames if provider_of(p) in ("", hardware.provider)]
+    return [p.split(":", 1)[1] if provider_of(p) else p for p in found]
+
+
+def hostname_regex(pattern, hardware):
+    """The names a pattern can expand to on this hardware, as a regex."""
+    tokens = {
+        "n": r"(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4])",
+        "nn": r"\d{2}",
+        "hex6": r"[0-9a-f]{6}",
+        "word": "(?:" + "|".join(_WORDS) + ")",
+        "cpus": str(hardware.cpus),
+        "gib": str(max(1, round(hardware.mem_kb / 1024 / 1024))),
+        "gpu": re.escape(_gpu_short(hardware.gpus[0])) if hardware.gpus else "(?!)",
+    }
+    parts = re.split(r"\{(n|nn|hex6|word|cpus|gib|gpu)\}", pattern)
+    return "".join(re.escape(part) if i % 2 == 0 else tokens[part] for i, part in enumerate(parts))
 
 
 def specialize(release, hardware):
@@ -120,8 +180,12 @@ def _gpu_short(name):
 
 
 def _ready(release, now):
-    """The release existed long enough before now to have been installed and booted."""
-    return ready_at(release) <= now - 2 * DAY and first_install(release) <= now - MIN_INSTALL_AGE
+    """The release existed long enough before now to have been installed and booted,
+    and an installation 90-900 days back can have it."""
+    if ready_at(release) > now - 2 * DAY or first_install(release) > now - MIN_INSTALL_AGE:
+        return False
+    latest = latest_install(release)
+    return not latest or max(now - MAX_INSTALL_AGE, first_install(release)) <= min(latest, now - MIN_INSTALL_AGE)
 
 
 def draw(persona, seed, now=None):
@@ -136,15 +200,19 @@ def draw(persona, seed, now=None):
     latest_boot = now - DAY
     earliest_boot = min(max(now - max_up, ready_at(release) + DAY), latest_boot)
     booted_at = rng.randint(earliest_boot, latest_boot)
-    # installed 90 to 900 days ago, not after the boot, not before the release existed
-    latest_install = min(booted_at, now - MIN_INSTALL_AGE)
-    earliest_install = min(max(now - MAX_INSTALL_AGE, first_install(release)), latest_install)
-    installed_at = rng.randint(earliest_install, latest_install)
+    # installed 90 to 900 days ago, not after the boot, not before the release existed,
+    # and not after the next patch level came out (unless from the image of this one)
+    last_install = min(booted_at, now - MIN_INSTALL_AGE)
+    if latest_install(release):
+        last_install = min(last_install, latest_install(release))
+    earliest_install = min(max(now - MAX_INSTALL_AGE, first_install(release)), last_install)
+    installed_at = rng.randint(earliest_install, last_install)
+    patterns = host_patterns(persona, hardware) or list(persona.hostnames)
     return Identity(
         persona_id=persona.id,
         seed=seed,
         now=now,
-        hostname=expand_hostname(rng.choice(persona.hostnames), rng, hardware),
+        hostname=expand_hostname(rng.choice(patterns), rng, hardware),
         release=release,
         hardware=hardware,
         boot_offset=now - booted_at,

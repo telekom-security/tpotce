@@ -205,3 +205,32 @@ class ServerContentTest(unittest.TestCase):
                     for y, m, d in re.findall(r"(\d{4})-(\d{2})-(\d{2})", path.read_text()):
                         day = calendar.timegm((int(y), int(m), int(d), 0, 0, 0))
                         self.assertGreaterEqual(day + DAY, updated_at(ident.release), (pid, seed, path.name))
+
+    def test_noble_on_aws_looks_like_a_nitro_instance(self):
+        persona = catalog.by_id("ubuntu-noble")
+        for seed in range(400):
+            ident = draw(persona, seed, NOW)
+            if ident.hardware.provider == "aws":
+                break
+        else:
+            self.fail("no AWS draw")
+        _, out, keys = render_ident(self, persona, ident)
+        lspci = (out / "txtcmds/usr/bin/lspci").read_text()
+        self.assertIn("Amazon.com, Inc. Elastic Network Adapter (ENA)", lspci)
+        self.assertIn("NVMe EBS Controller", lspci)
+        self.assertNotIn("Virtio", lspci)
+        self.assertIn("/dev/root", (out / "txtcmds/bin/df").read_text())
+        self.assertTrue(ident.release.kernel_version.endswith("-aws"))
+        self.assertNotIn("PREEMPT_DYNAMIC", ident.release.kernel_build)
+        self.assertEqual(validate.problems(persona, ident, out, out, keys, min_pickle=0), [])
+
+    def test_image_install_after_the_next_patch_level_logs_nothing(self):
+        persona = catalog.by_id("debian-bookworm")
+        for seed in range(400):
+            ident = draw(persona, seed, NOW)
+            if ident.release.ssh_banner.endswith("deb12u1"):
+                break
+        else:
+            self.fail("no 12.2 draw")
+        _, out, _ = render_ident(self, persona, ident)
+        self.assertEqual((out / "honeyfs/var/log/apt/history.log").read_text(), "")

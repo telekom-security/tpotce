@@ -178,6 +178,22 @@ class ValidateNegativeTest(unittest.TestCase):
         found = " | ".join(validate.problems(self.persona, late, self.out, self.out, self.keys, min_pickle=0))
         self.assertIn("kernel: built", found)
 
+    def test_host_name_of_another_provider(self):
+        # the persona of these tests runs on KVM; an AWS VPC name does not fit it
+        wrong = dataclasses.replace(self.ident, hostname="ip-172-31-4-20")
+        found = " | ".join(validate.problems(self.persona, wrong, self.out, self.out, self.keys, min_pickle=0))
+        self.assertIn("fits no host name of the kvm hardware", found)
+
+    def test_log_entry_after_the_next_patch_level(self):
+        superseded = self.ident.release.extra.get("superseded")
+        self.assertTrue(superseded, self.ident.release.label)
+        path = self.out / "honeyfs/var/log/apt/history.log"
+        late = time.strftime("%Y-%m-%d  %H:%M:%S",
+                             time.gmtime(time.mktime(time.strptime(superseded, "%Y-%m-%d")) + 5 * 86400))
+        path.write_text(path.read_text() + f"\nStart-Date: {late}\nCommandline: apt-get install -y git\n"
+                        f"End-Date: {late}\n")
+        self.assertIn("after the next patch level", self.problems())
+
     def test_small_pickle(self):
         self.assertIn("pickle", " ".join(
             validate.problems(self.persona, self.ident, self.out, self.out, self.keys, min_pickle=10**9)))

@@ -416,8 +416,11 @@ X86_CPUS = {
                                                          "46 bits physical, 48 bits virtual"),
     # AWS m6a/c6a (Milan); unverified: MHz as shown on the guest
     "AMD EPYC 7R13 Processor": (25, 1, 1, "512 KB", 2649.998, "48 bits physical, 48 bits virtual"),
-    # the QEMU/KVM CPU model "Icelake-Server" of many VPS providers; unverified: cache and MHz
+    # the QEMU/KVM CPU models "Icelake-Server" and "EPYC-Milan" of many VPS hosters; unverified: cache and MHz
     "Intel Xeon Processor (Icelake)": (6, 134, 0, "16384 KB", 2399.998, "40 bits physical, 48 bits virtual"),
+    "AMD EPYC-Milan Processor": (25, 1, 1, "512 KB", 2445.406, "40 bits physical, 48 bits virtual"),
+    # DigitalOcean basic droplets (an Intel host CPU under DO's own model name); unverified: all values
+    "DO-Regular": (6, 85, 7, "16384 KB", 2494.140, "40 bits physical, 48 bits virtual"),
     # GPU servers: Rome (DGX A100), Genoa, Milan
     "AMD EPYC 7742 64-Core Processor": (23, 49, 0, "512 KB", 2245.780, "43 bits physical, 48 bits virtual"),
     "AMD EPYC 9354 32-Core Processor": (25, 17, 1, "1024 KB", 3249.998, "52 bits physical, 57 bits virtual"),

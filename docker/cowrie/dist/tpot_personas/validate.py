@@ -12,7 +12,7 @@ from pathlib import Path
 
 from . import PersonaError, tree
 from .common import home_dir, is_login_shell, ps_user
-from .identity import DAY, kernel_time
+from .identity import DAY, host_patterns, hostname_regex, kernel_time, superseded_at, updated_at
 from .render import DIR_MODES, PACKAGE_MANAGER_PATHS
 from .ssh_profiles import COMPRESSIONS, HOST_KEYS, PROFILES, TWISTED_CIPHERS, TWISTED_MACS
 
@@ -234,9 +234,16 @@ def _restarts_sshd(text):
 def _check_logs(ident, honeyfs, fs, out):
     events = _log_events(ident, honeyfs)
     first, last = _utc_date(ident.installed_at), _utc_date(ident.now)
+    updated, superseded = updated_at(ident.release), superseded_at(ident.release)
     newest = {}
     for rel, stamp, text in events:
         newest[rel] = max(newest.get(rel, stamp), stamp)
+        # the logged versions are those of the release: current from its update to the next patch level
+        when = time.strftime("%Y-%m-%d", time.gmtime(stamp))
+        if stamp < updated:
+            out.append(f"date: {rel} logs versions on {when}, before the update of the release")
+        if superseded and stamp > superseded:
+            out.append(f"date: {rel} logs versions on {when}, after the next patch level came out")
         if rel.rsplit("/", 1)[-1].startswith("yum.log") and not first <= _utc_date(stamp) <= last:
             out.append(f"date {_utc_date(stamp)} in {rel} is not between {first} and {last}")
         # a real upgrade restarts sshd, but ps shows the sshd of the boot
@@ -354,6 +361,9 @@ def problems(persona, ident, out_dir, runtime_dir, keys_dir, min_pickle=MIN_PICK
     if built is not None and built > ident.booted_at:
         out.append(f"kernel: built {time.strftime('%Y-%m-%d', time.gmtime(built))}, after the boot")
 
+    patterns = host_patterns(persona, ident.hardware)
+    if not any(re.fullmatch(hostname_regex(p, ident.hardware), ident.hostname) for p in patterns):
+        out.append(f"hostname: {ident.hostname} fits no host name of the {ident.hardware.provider or 'any'} hardware")
     if _text(honeyfs / "etc/hostname") != ident.hostname + "\n":
         out.append(f"hostname: etc/hostname is not {ident.hostname}")
     if ident.hostname not in _text(honeyfs / "etc/hosts").split():
