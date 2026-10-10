@@ -2,7 +2,7 @@ import unittest
 
 from tests.helpers import DIST  # noqa: F401
 from tpot_personas import catalog
-from tpot_personas.identity import DAY, draw, to_json
+from tpot_personas.identity import DAY, draw, first_install, kernel_time, ready_at, to_json
 
 NOW = 1_790_000_000  # fixed "now" for reproducible tests
 
@@ -22,6 +22,42 @@ class IdentityTest(unittest.TestCase):
                 limit = 400 if p.kind == "device" else 120
                 self.assertLessEqual(i.boot_offset, (limit + 1) * DAY, (p.id, seed))
                 self.assertGreaterEqual(NOW - i.installed_at, 90 * DAY, (p.id, seed))
+                self.assertLessEqual(NOW - i.installed_at, 900 * DAY, (p.id, seed))
+                # a system is not installed before its release or image existed
+                self.assertGreaterEqual(i.installed_at, first_install(i.release), (p.id, seed))
+                # it runs the kernel it booted, so that kernel was built (and the update made) before the boot
+                self.assertLessEqual((kernel_time(i.release) or 0) + DAY, i.booted_at, (p.id, seed))
+                self.assertLessEqual(ready_at(i.release) + DAY, i.booted_at, (p.id, seed))
+
+    def test_ordering_holds_for_any_clock(self):
+        # a clock long before the releases (or far after them) must still give ordered dates
+        for now in (1_500_000_000, NOW, 2_200_000_000):
+            for p in catalog.PERSONAS:
+                for seed in range(30):
+                    i = draw(p, seed, now)
+                    self.assertLessEqual(i.installed_at, i.booted_at, (p.id, now, seed))
+                    self.assertGreaterEqual(i.boot_offset, DAY, (p.id, now, seed))
+                    self.assertGreaterEqual(now - i.installed_at, 90 * DAY, (p.id, now, seed))
+                    self.assertLessEqual(now - i.installed_at, 900 * DAY, (p.id, now, seed))
+
+    def test_hardware_tokens_in_host_names_match_the_hardware(self):
+        p = catalog.by_id("ubuntu-noble")
+        for seed in range(200):
+            i = draw(p, seed, NOW)
+            if i.hostname.startswith("ubuntu-s-"):
+                gib = max(1, round(i.hardware.mem_kb / 1024 / 1024))
+                self.assertTrue(i.hostname.startswith(f"ubuntu-s-{i.hardware.cpus}vcpu-{gib}gb-"), i.hostname)
+                break
+        else:
+            self.fail("no droplet host name in 200 seeds")
+
+    def test_raspberry_pi_kernel_fits_the_board(self):
+        p = catalog.by_id("raspios")
+        for seed in range(50):
+            i = draw(p, seed, NOW)
+            flavor = "rpi-2712" if "Pi 5" in i.hardware.board else "rpi-v8"
+            self.assertTrue(i.release.kernel_version.endswith(flavor), (seed, i.release.kernel_version))
+            self.assertNotIn("{", i.release.kernel_version)
 
     def test_hostname_tokens_are_expanded(self):
         for p in catalog.PERSONAS:

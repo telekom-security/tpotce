@@ -2,7 +2,7 @@
 inventory, processes, disks and one builder per family. Firmware details
 (model, firmware strings, BusyBox build) come from release.extra."""
 from .common import (assign_processes, base_files, base_txtcmds, deb_arch, device_top, embedded_group,
-                     embedded_passwd, embedded_shadow, lscpu, ps_entry, rng_for, shadow_days)
+                     embedded_passwd, embedded_shadow, lscpu, ps_entry, rng_for, shadow_ctime, shadow_days)
 from .model import Content
 
 _LSPCI = {
@@ -181,7 +181,8 @@ def _device_content(persona, ident, files, nas, passwd=None, group=None, shadow=
                            top=device_top(ident, processes))
     txtcmds.update(device_package_manager_txtcmds(persona, ident))
     txtcmds.update(embedded_command_inventory_txtcmds(persona, all_files))
-    return Content(files=all_files, txtcmds=txtcmds, processes=processes)
+    # /etc/shadow was last written on its newest lastchange day
+    return Content(files=all_files, txtcmds=txtcmds, processes=processes, ctimes={"etc/shadow": shadow_ctime(ident)})
 
 
 def _busybox(release):

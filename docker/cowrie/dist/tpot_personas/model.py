@@ -25,7 +25,7 @@ class Hardware:
     disk_kb: int
     gpus: tuple = ()
     gpu_mem_mib: int = 0
-    board: str = ""
+    board: str = ""          # Raspberry Pi model, device SoC; empty for VMs
 
 
 @dataclass
@@ -33,6 +33,7 @@ class Content:
     files: dict
     txtcmds: dict
     processes: list
+    ctimes: dict = field(default_factory=dict)  # rel path -> ctime, for files whose date shows (logs, shadow)
 
 
 @dataclass(frozen=True)

@@ -157,8 +157,9 @@ def apply_to_tree(base_tree, persona, ident, content):
     for _, node in tree.iter_nodes(t):
         tree.node_set(node, tree.A_CTIME, ident.installed_at - rng.randint(0, 30 * DAY))
     for rel, text in content.files.items():
-        tree.ensure_file(t, rel, text.encode("utf-8"), 0, 0, _mode(rel),
-                         ctime=rng.randint(ident.installed_at, ident.booted_at))
+        ctime = rng.randint(ident.installed_at, ident.booted_at)
+        # logs and /etc/shadow were last written at their newest entry
+        tree.ensure_file(t, rel, text.encode("utf-8"), 0, 0, _mode(rel), ctime=content.ctimes.get(rel, ctime))
     for rel in content.txtcmds:
         tree.ensure_file(t, rel, b"", 0, 0, 0o755, ctime=ident.installed_at)
     _set_dirs(t, persona, ident.installed_at)

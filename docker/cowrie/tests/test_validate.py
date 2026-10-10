@@ -1,5 +1,8 @@
 import configparser
+import dataclasses
 import json
+import re
+import time
 import unittest
 
 from tests.helpers import base_tree
@@ -139,6 +142,42 @@ class ValidateNegativeTest(unittest.TestCase):
         tree.dump_pickle(fs, self.out / "fs.pickle")
         self.assertIn("owner", self.problems())
 
+    def test_identity_json_that_is_no_object(self):
+        (self.out / "identity.json").write_text("[1, 2, 3]\n")
+        self.assertIn("identity.json", self.problems())
+
+    def test_grep_c_processor_counts_the_model_name_too(self):
+        self.edit("honeyfs/proc/cpuinfo", f"model name\t: {self.ident.hardware.cpu_model}",
+                  "model name\t: Common KVM processor")
+        self.assertIn("grep -c processor", self.problems())
+
+    def test_openssh_upgrade_after_boot(self):
+        path = self.out / "honeyfs/var/log/apt/history.log"
+        late = time.strftime("%Y-%m-%d  %H:%M:%S", time.gmtime(self.ident.now - 60))
+        blocks = path.read_text().split("\n\n")
+        changed = [re.sub(r"End-Date: .*", f"End-Date: {late}", b) if "\nUpgrade: openssh" in b else b
+                   for b in blocks]
+        self.assertNotEqual(blocks, changed)
+        path.write_text("\n\n".join(changed))
+        self.assertIn("sshd", self.problems())
+
+    def test_log_ctime_older_than_its_newest_entry(self):
+        fs = tree.load_pickle(self.out / "fs.pickle")
+        tree.node_set(tree.find_node(fs, "var/log/apt/history.log"), tree.A_CTIME, self.ident.installed_at)
+        tree.dump_pickle(fs, self.out / "fs.pickle")
+        self.assertIn("ctime of /var/log/apt/history.log", self.problems())
+
+    def test_shadow_ctime_older_than_its_last_change(self):
+        fs = tree.load_pickle(self.out / "fs.pickle")
+        tree.node_set(tree.find_node(fs, "etc/shadow"), tree.A_CTIME, self.ident.installed_at - 86400)
+        tree.dump_pickle(fs, self.out / "fs.pickle")
+        self.assertIn("ctime of /etc/shadow", self.problems())
+
+    def test_kernel_built_after_boot(self):
+        late = dataclasses.replace(self.ident, boot_offset=self.ident.now - 1_000_000_000)
+        found = " | ".join(validate.problems(self.persona, late, self.out, self.out, self.keys, min_pickle=0))
+        self.assertIn("kernel: built", found)
+
     def test_small_pickle(self):
         self.assertIn("pickle", " ".join(
             validate.problems(self.persona, self.ident, self.out, self.out, self.keys, min_pickle=10**9)))
@@ -161,7 +200,36 @@ class ValidateDeviceTest(unittest.TestCase):
         self.assertIn("ssh_version", " ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0)))
 
     def test_ubuntu_marker_outside_ubuntu(self):
-        persona = catalog.by_id("debian-bookworm-vuln")
+        persona = catalog.by_id("debian-bookworm")
         ident, out, keys = render_one(self, persona, 2)
         (out / "honeyfs/etc/issue").write_text("Ubuntu 22.04.4 LTS \\n \\l\n")
         self.assertIn("forbidden", " ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0)))
+
+
+class ValidateRpmTest(unittest.TestCase):
+    def test_dnf_openssh_upgrade_after_boot(self):
+        persona = catalog.by_id("rhel-9")
+        ident, out, keys = render_one(self, persona, 3)
+        path = out / "honeyfs/var/log/dnf.log"
+        late = time.strftime("%Y-%m-%dT%H:%M:%S+0000", time.gmtime(ident.now - 60))
+        lines = [re.sub(r"^\S+", late, line) if "Upgraded: openssh" in line else line
+                 for line in path.read_text().splitlines()]
+        path.write_text("\n".join(lines) + "\n")
+        self.assertIn("sshd", " ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0)))
+
+    def test_yum_log_entry_before_installation(self):
+        persona = catalog.by_id("centos-7")
+        ident, out, keys = render_one(self, persona, 3)
+        path = out / "honeyfs/var/log/yum.log"
+        path.write_text(path.read_text() + "Jan 01 00:00:01 Installed: wget-1.14-18.el7_6.1.x86_64\n")
+        year = time.gmtime(ident.now).tm_year
+        if time.gmtime(ident.installed_at).tm_year < year:  # Jan 1 of this year is after the installation
+            path.write_text(path.read_text().replace("Jan 01 00:00:01", "Dec 31 23:59:59"))
+        self.assertIn("date", " ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0)))
+
+    def test_clean_renders_of_rpm_systems(self):
+        for pid in ("rhel-9", "centos-7"):
+            persona = catalog.by_id(pid)
+            for seed in range(5):
+                ident, out, keys = render_one(self, persona, seed)
+                self.assertEqual(validate.problems(persona, ident, out, out, keys, min_pickle=0), [], (pid, seed))

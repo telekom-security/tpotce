@@ -40,7 +40,15 @@ def shadow_days(ident):
     return system, rng.randint(system, last), rng.randint(system, last)
 
 
-def server_passwd(user, uid, gid, gecos=None, shell="/bin/bash"):
+def shadow_ctime(ident):
+    """/etc/shadow was last written when its newest lastchange day happened."""
+    _, root, own = shadow_days(ident)
+    day = max(root, own) * DAY
+    low = max(day, ident.installed_at)
+    return rng_for(ident, "shadow-ctime").randint(low, max(low, min(ident.now, day + DAY - 1)))
+
+
+def server_passwd(user, uid, gid, gecos=None, shell="/bin/bash", extra=""):
     gecos = gecos or user
     return f"""root:x:0:0:root:/root:/bin/bash
 daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
@@ -63,11 +71,11 @@ systemd-network:x:998:998:systemd Network Management:/:/usr/sbin/nologin
 systemd-resolve:x:997:997:systemd Resolver:/:/usr/sbin/nologin
 messagebus:x:100:102::/nonexistent:/usr/sbin/nologin
 sshd:x:101:65534::/run/sshd:/usr/sbin/nologin
-{user}:x:{uid}:{gid}:{gecos}:/home/{user}:{shell}
+{extra}{user}:x:{uid}:{gid}:{gecos}:/home/{user}:{shell}
 """
 
 
-def server_group(user, gid):
+def server_group(user, gid, extra=""):
     return f"""root:x:0:
 daemon:x:1:
 bin:x:2:
@@ -104,7 +112,7 @@ systemd-network:x:998:
 systemd-resolve:x:997:
 messagebus:x:102:
 ssh:x:103:
-{user}:x:{gid}:
+{extra}{user}:x:{gid}:
 """
 
 
@@ -113,12 +121,180 @@ _SERVER_SYSTEM_ACCOUNTS = ("daemon", "bin", "sys", "sync", "games", "man", "lp",
                            "systemd-resolve", "messagebus", "sshd")
 
 
-def server_shadow(user, ident):
+def server_shadow(user, ident, extra=()):
     system, root, own = shadow_days(ident)
     lines = [f"root:*:{root}:0:99999:7:::"]
-    lines += [f"{name}:*:{system}:0:99999:7:::" for name in _SERVER_SYSTEM_ACCOUNTS]
+    lines += [f"{name}:*:{system}:0:99999:7:::" for name in _SERVER_SYSTEM_ACCOUNTS + tuple(extra)]
     lines.append(f"{user}:*:{own}:0:99999:7:::")
     return "\n".join(lines) + "\n"
+
+
+# RHEL 9 and CentOS 7 (setup + the packages of a cloud image)
+_EL_PASSWD = {
+    "rhel": """root:x:0:0:root:/root:/bin/bash
+bin:x:1:1:bin:/bin:/sbin/nologin
+daemon:x:2:2:daemon:/sbin:/sbin/nologin
+adm:x:3:4:adm:/var/adm:/sbin/nologin
+lp:x:4:7:lp:/var/spool/lpd:/sbin/nologin
+sync:x:5:0:sync:/sbin:/bin/sync
+shutdown:x:6:0:shutdown:/sbin:/sbin/shutdown
+halt:x:7:0:halt:/sbin:/sbin/halt
+mail:x:8:12:mail:/var/spool/mail:/sbin/nologin
+operator:x:11:0:operator:/root:/sbin/nologin
+games:x:12:100:games:/usr/games:/sbin/nologin
+ftp:x:14:50:FTP User:/var/ftp:/sbin/nologin
+nobody:x:65534:65534:Kernel Overflow User:/:/sbin/nologin
+systemd-coredump:x:999:997:systemd Core Dumper:/:/sbin/nologin
+dbus:x:81:81:System message bus:/:/sbin/nologin
+tss:x:59:59:Account used for TPM access:/dev/null:/sbin/nologin
+sssd:x:998:996:User for sssd:/:/sbin/nologin
+chrony:x:997:995:chrony system user:/var/lib/chrony:/sbin/nologin
+sshd:x:74:74:Privilege-separated SSH:/usr/share/empty.sshd:/sbin/nologin
+""",
+    "centos": """root:x:0:0:root:/root:/bin/bash
+bin:x:1:1:bin:/bin:/sbin/nologin
+daemon:x:2:2:daemon:/sbin:/sbin/nologin
+adm:x:3:4:adm:/var/adm:/sbin/nologin
+lp:x:4:7:lp:/var/spool/lpd:/sbin/nologin
+sync:x:5:0:sync:/sbin:/bin/sync
+shutdown:x:6:0:shutdown:/sbin:/sbin/shutdown
+halt:x:7:0:halt:/sbin:/sbin/halt
+mail:x:8:12:mail:/var/spool/mail:/sbin/nologin
+operator:x:11:0:operator:/root:/sbin/nologin
+games:x:12:100:games:/usr/games:/sbin/nologin
+ftp:x:14:50:FTP User:/var/ftp:/sbin/nologin
+nobody:x:99:99:Nobody:/:/sbin/nologin
+systemd-network:x:192:192:systemd Network Management:/:/sbin/nologin
+dbus:x:81:81:System message bus:/:/sbin/nologin
+polkitd:x:999:998:User for polkitd:/:/sbin/nologin
+sshd:x:74:74:Privilege-separated SSH:/var/empty/sshd:/sbin/nologin
+postfix:x:89:89::/var/spool/postfix:/sbin/nologin
+chrony:x:998:996::/var/lib/chrony:/sbin/nologin
+""",
+}
+_EL_GROUP = """root:x:0:
+bin:x:1:
+daemon:x:2:
+sys:x:3:
+adm:x:4:{user}
+tty:x:5:
+disk:x:6:
+lp:x:7:
+mem:x:8:
+kmem:x:9:
+wheel:x:10:{user}
+cdrom:x:11:
+mail:x:12:
+man:x:15:
+dialout:x:18:
+floppy:x:19:
+games:x:20:
+tape:x:33:
+video:x:39:
+ftp:x:50:
+lock:x:54:
+audio:x:63:
+users:x:100:
+nobody:x:{nobody}:
+utmp:x:22:
+utempter:x:35:
+input:x:999:
+systemd-journal:x:190:
+dbus:x:81:
+sshd:x:74:
+{user}:x:{gid}:
+"""
+
+
+def el_passwd(family, user, uid, gid, gecos="Cloud User", shell="/bin/bash"):
+    return _EL_PASSWD[family] + f"{user}:x:{uid}:{gid}:{gecos}:/home/{user}:{shell}\n"
+
+
+def el_group(family, user, gid):
+    return _EL_GROUP.format(user=user, gid=gid, nobody=65534 if family == "rhel" else 99)
+
+
+def el_shadow(family, user, ident):
+    system, root, own = shadow_days(ident)
+    names = [line.split(":", 1)[0] for line in _EL_PASSWD[family].splitlines()[1:]]
+    lines = [f"root:*:{root}:0:99999:7:::"]
+    # the accounts of the setup package have "*", those made by useradd -r later "!!"
+    lines += [f"{name}:*:{system}:0:99999:7:::" if int(_uid(family, name)) < 50 or name == "nobody"
+              else f"{name}:!!:{system}::::::" for name in names]
+    lines.append(f"{user}:!!:{own}:0:99999:7:::")
+    return "\n".join(lines) + "\n"
+
+
+def _uid(family, name):
+    for line in _EL_PASSWD[family].splitlines():
+        fields = line.split(":")
+        if fields[0] == name:
+            return fields[2]
+    raise KeyError(name)
+
+
+def el_hosts(hostname):
+    return ("127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4\n"
+            "::1         localhost localhost.localdomain localhost6 localhost6.localdomain6\n"
+            + ("" if hostname.startswith("localhost") else f"127.0.0.1   {hostname}\n"))
+
+
+def el_home_files(family, user):
+    bashrc = {
+        "rhel": """# .bashrc
+
+# Source global definitions
+if [ -f /etc/bashrc ]; then
+    . /etc/bashrc
+fi
+
+# User specific environment
+if ! [[ "$PATH" =~ "$HOME/.local/bin:$HOME/bin:" ]]
+then
+    PATH="$HOME/.local/bin:$HOME/bin:$PATH"
+fi
+export PATH
+
+# Uncomment the following line if you don't like systemctl's auto-paging feature:
+# export SYSTEMD_PAGER=
+
+# User specific aliases and functions
+if [ -d ~/.bashrc.d ]; then
+    for rc in ~/.bashrc.d/*; do
+        if [ -f "$rc" ]; then
+            . "$rc"
+        fi
+    done
+fi
+
+unset rc
+""",
+        "centos": """# .bashrc
+
+# Source global definitions
+if [ -f /etc/bashrc ]; then
+	. /etc/bashrc
+fi
+
+# Uncomment the following line if you don't like systemctl's auto-paging feature:
+# export SYSTEMD_PAGER=
+
+# User specific aliases and functions
+""",
+    }[family]
+    return {
+        f"home/{user}/.bash_logout": "# ~/.bash_logout\n",
+        f"home/{user}/.bash_profile": """# .bash_profile
+
+# Get the aliases and functions
+if [ -f ~/.bashrc ]; then
+	. ~/.bashrc
+fi
+
+# User specific environment and startup programs
+""",
+        f"home/{user}/.bashrc": bashrc,
+    }
 
 
 def embedded_passwd(user, uid, gid, shell="/bin/sh", gecos=None):
@@ -202,8 +378,11 @@ def home_dir(persona):
 # --- kernel, CPU, memory ----------------------------------------------------------
 
 def kernel_line(release):
+    """/proc/version: release, builder, compiler (when known), uname -v."""
     builder = release.extra.get("kernel_builder", "root@buildhost")
-    return f"Linux version {release.kernel_version} ({builder}) {release.kernel_build}"
+    compiler = release.extra.get("kernel_compiler")
+    middle = f" ({compiler})" if compiler else ""
+    return f"Linux version {release.kernel_version} ({builder}){middle} {release.kernel_build}"
 
 
 def proc_version(release):
@@ -229,7 +408,42 @@ def uptime_text(seconds):
     return text + (f"{hours:2d}:{minutes:02d}" if hours else f"{minutes} min")
 
 
+# x86 model name -> family, model, stepping, cache size, MHz, address sizes as a guest sees them.
+# Models not listed keep the generic Haswell values of the generator before the persona library.
+X86_CPUS = {
+    # AWS m5/t3 (Cascade Lake)
+    "Intel(R) Xeon(R) Platinum 8259CL CPU @ 2.50GHz": (6, 85, 7, "36608 KB", 2499.998,
+                                                         "46 bits physical, 48 bits virtual"),
+    # AWS m6a/c6a (Milan); unverified: MHz as shown on the guest
+    "AMD EPYC 7R13 Processor": (25, 1, 1, "512 KB", 2649.998, "48 bits physical, 48 bits virtual"),
+    # the QEMU/KVM CPU model "Icelake-Server" of many VPS providers; unverified: cache and MHz
+    "Intel Xeon Processor (Icelake)": (6, 134, 0, "16384 KB", 2399.998, "40 bits physical, 48 bits virtual"),
+    # GPU servers: Rome (DGX A100), Genoa, Milan
+    "AMD EPYC 7742 64-Core Processor": (23, 49, 0, "512 KB", 2245.780, "43 bits physical, 48 bits virtual"),
+    "AMD EPYC 9354 32-Core Processor": (25, 17, 1, "1024 KB", 3249.998, "52 bits physical, 57 bits virtual"),
+    "AMD EPYC 7543 32-Core Processor": (25, 1, 1, "512 KB", 2794.748, "48 bits physical, 48 bits virtual"),
+}
+_X86_DEFAULT = (6, 63, 2, "30720 KB", None, "46 bits physical, 48 bits virtual")
+# Raspberry Pi: core -> variant, part, revision, features (arm64 /proc/cpuinfo)
+ARM64_CORES = {
+    "Cortex-A72": ("0x0", "0xd08", "3", "fp asimd evtstrm crc32 cpuid"),
+    "Cortex-A76": ("0x4", "0xd0b", "1", "fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid "
+                                        "asimdrdm lrcpc dcpop asimddp"),
+}
+# revision codes of the boards (new-style: memory size, board type, revision)
+PI_REVISIONS = {
+    ("Raspberry Pi 4 Model B Rev 1.5", 2): "b03115",
+    ("Raspberry Pi 4 Model B Rev 1.5", 4): "c03115",
+    ("Raspberry Pi 4 Model B Rev 1.5", 8): "d03115",
+    ("Raspberry Pi 5 Model B Rev 1.0", 4): "c04170",
+    ("Raspberry Pi 5 Model B Rev 1.0", 8): "d04170",
+}
+
+
 def cpu_mhz(hw):
+    known = X86_CPUS.get(hw.cpu_model, _X86_DEFAULT)[4]
+    if known:
+        return known
     match = re.search(r"@\s*([\d.]+)\s*GHz", hw.cpu_model)
     return float(match.group(1)) * 1000 if match else 2399.998
 
@@ -239,6 +453,8 @@ def bogomips(persona, hw):
         return f"{cpu_mhz(hw) * 2:.2f}"
     if persona.hardware_platform == "mips":
         return "385.84"
+    if persona.hardware_platform == "aarch64":
+        return "108.00"  # the 54 MHz system timer of the Pi 4 and Pi 5
     return "50.00"
 
 
@@ -248,19 +464,30 @@ _X86_FLAGS = ("fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat
               "rdrand hypervisor lahf_lm abm")
 
 
+_AMD_FLAGS = ("fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse "
+              "sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good nopl nonstop_tsc cpuid "
+              "extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes "
+              "xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy cr8_legacy abm sse4a misalignsse 3dnowprefetch "
+              "topoext invpcid_single ssbd ibrs ibpb stibp vmmcall fsgsbase bmi1 avx2 smep bmi2 rdseed adx smap "
+              "clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves clzero xsaveerptr rdpru wbnoinvd arat npt "
+              "nrip_save umip vaes vpclmulqdq rdpid")
+
+
 def cpuinfo_x86(persona, hw):
     vendor = "AuthenticAMD" if "AMD" in hw.cpu_model else "GenuineIntel"
+    family, model, stepping, cache, _, address = X86_CPUS.get(hw.cpu_model, _X86_DEFAULT)
+    flags = _AMD_FLAGS if vendor == "AuthenticAMD" else _X86_FLAGS
     blocks = []
     for i in range(hw.cpus):
         blocks.append(
             f"processor\t: {i}\n"
             f"vendor_id\t: {vendor}\n"
-            "cpu family\t: 6\n"
-            "model\t\t: 63\n"
+            f"cpu family\t: {family}\n"
+            f"model\t\t: {model}\n"
             f"model name\t: {hw.cpu_model}\n"
-            "stepping\t: 2\n"
+            f"stepping\t: {stepping}\n"
             f"cpu MHz\t\t: {cpu_mhz(hw):.3f}\n"
-            "cache size\t: 30720 KB\n"
+            f"cache size\t: {cache}\n"
             "physical id\t: 0\n"
             f"siblings\t: {hw.cpus}\n"
             f"core id\t\t: {i}\n"
@@ -270,11 +497,11 @@ def cpuinfo_x86(persona, hw):
             "fpu_exception\t: yes\n"
             "cpuid level\t: 13\n"
             "wp\t\t: yes\n"
-            f"flags\t\t: {_X86_FLAGS}\n"
+            f"flags\t\t: {flags}\n"
             f"bogomips\t: {bogomips(persona, hw)}\n"
             "clflush size\t: 64\n"
             "cache_alignment\t: 64\n"
-            "address sizes\t: 46 bits physical, 48 bits virtual\n"
+            f"address sizes\t: {address}\n"
             "power management:\n"
         )
     return "\n".join(blocks) + "\n"
@@ -322,11 +549,39 @@ def cpuinfo_mips(persona, hw):
     return head + "\n".join(blocks) + "\n"
 
 
-def cpuinfo(persona, hw):
+def cpuinfo_arm64(persona, hw, serial):
+    """arm64 /proc/cpuinfo has no model name; the Pi firmware adds Revision, Serial and Model."""
+    variant, part, revision, features = ARM64_CORES[hw.cpu_model]
+    blocks = []
+    for i in range(hw.cpus):
+        blocks.append(
+            f"processor\t: {i}\n"
+            f"BogoMIPS\t: {bogomips(persona, hw)}\n"
+            f"Features\t: {features}\n"
+            "CPU implementer\t: 0x41\n"
+            "CPU architecture: 8\n"
+            f"CPU variant\t: {variant}\n"
+            f"CPU part\t: {part}\n"
+            f"CPU revision\t: {revision}\n"
+        )
+    code = PI_REVISIONS.get((hw.board, max(1, round(hw.mem_kb / 1024 / 1024))), "0000")
+    return "\n".join(blocks) + f"\nRevision\t: {code}\nSerial\t\t: {serial}\nModel\t\t: {hw.board}\n"
+
+
+def pi_serial(ident):
+    rng = rng_for(ident, "serial")
+    if "Pi 4" in ident.hardware.board:
+        return "10000000" + f"{rng.getrandbits(32):08x}"
+    return f"{rng.getrandbits(64):016x}"
+
+
+def cpuinfo(persona, hw, serial="0000000000000000"):
     if persona.hardware_platform == "x86_64":
         return cpuinfo_x86(persona, hw)
     if persona.hardware_platform == "mips":
         return cpuinfo_mips(persona, hw)
+    if persona.hardware_platform == "aarch64":
+        return cpuinfo_arm64(persona, hw, serial)
     return cpuinfo_arm(persona, hw)
 
 
@@ -355,8 +610,12 @@ def lscpu(persona, hw, op_modes=None, with_bogomips=True):
     if op_modes:
         lines.append(f"CPU op-mode(s):        {op_modes}")
     lines += ["Byte Order:            Little Endian",
-              f"CPU(s):                {hw.cpus}",
-              f"Model name:            {hw.cpu_model}"]
+              f"CPU(s):                {hw.cpus}"]
+    if persona.hardware_platform == "x86_64":
+        lines.append(f"Vendor ID:             {'AuthenticAMD' if 'AMD' in hw.cpu_model else 'GenuineIntel'}")
+    elif persona.hardware_platform == "aarch64":
+        lines.append("Vendor ID:             ARM")
+    lines.append(f"Model name:            {hw.cpu_model}")
     if with_bogomips:
         lines.append(f"BogoMIPS:              {bogomips(persona, hw)}")
     return "\n".join(lines) + "\n"
@@ -424,10 +683,12 @@ def device_top(ident, processes):
 
 def _df_row(fs, size, used, avail, mount):
     pct = math.ceil(used * 100 / (used + avail)) if used + avail else 0
-    return f"{fs:<14}{size:>10}{used:>8}{avail:>10}{pct:>4}% {mount}"
+    # at least one space between columns, also for long device names and multi-TB disks
+    return f"{fs:<14} {size:>9} {used:>7} {avail:>9} {pct:>3}% {mount}"
 
 
-def server_df(ident, root_dev="/dev/sda1", run_lock=True):
+def server_df(ident, root_dev="/dev/sda1", run_lock=True, boot=None):
+    """boot: (device, size kB, mount point) of a boot partition, e.g. the Pi's FAT /boot/firmware."""
     rng = rng_for(ident, "df")
     mem, disk = ident.hardware.mem_kb, ident.hardware.disk_kb
     udev, run, shm = int(mem * 0.4854), mem // 10, mem // 2
@@ -441,17 +702,25 @@ def server_df(ident, root_dev="/dev/sda1", run_lock=True):
             _df_row("tmpfs", shm, 0, shm, "/dev/shm")]
     if run_lock:
         rows.append(_df_row("tmpfs", 5120, 0, 5120, "/run/lock"))
+    if boot:
+        dev, size, mount = boot
+        boot_used = int(size * rng.uniform(0.12, 0.14))
+        rows.append(_df_row(dev, size, boot_used, size - boot_used, mount))
     return "\n".join(rows) + "\n"
 
 
-def server_mount(ident, root_dev="/dev/sda1", run_lock=True):
+def server_mount(ident, root_dev="/dev/sda1", run_lock=True, boot=None, root_type="ext4",
+                 root_options="rw,relatime,errors=remount-ro"):
     run = ident.hardware.mem_kb // 10
-    text = (f"{root_dev} on / type ext4 (rw,relatime,errors=remount-ro)\n"
+    text = (f"{root_dev} on / type {root_type} ({root_options})\n"
             "proc on /proc type proc (rw,nosuid,nodev,noexec,relatime)\n"
             "sysfs on /sys type sysfs (rw,nosuid,nodev,noexec,relatime)\n"
             f"tmpfs on /run type tmpfs (rw,nosuid,nodev,noexec,relatime,size={run}k,mode=755)\n")
     if run_lock:
         text += "tmpfs on /run/lock type tmpfs (rw,nosuid,nodev,noexec,relatime,size=5120k)\n"
+    if boot:
+        text += (f"{boot[0]} on {boot[2]} type vfat (rw,relatime,fmask=0022,dmask=0022,codepage=437,"
+                 "iocharset=ascii,shortname=mixed,errors=remount-ro)\n")
     return text
 
 
@@ -498,11 +767,14 @@ def is_login_shell(entry):
 
 def assign_processes(ident, entries):
     """PID 1 first, increasing PIDs drawn from pid_seed. Everything started at
-    boot; a login shell (on a tty) at some time between boot and now."""
+    boot; a login shell (on a tty) at some time between boot and now. %MEM is
+    RSS over MemTotal, as ps computes it."""
     rng = random.Random(ident.pid_seed)
     boot = gm(ident.booted_at, "%b%d")
     pid = 0
     for entry in entries:
+        if entry["RSS"]:
+            entry["MEM"] = round(entry["RSS"] * 100 / ident.hardware.mem_kb, 1)
         if is_login_shell(entry):
             pid += rng.randint(200, 20000)
             entry["START"] = gm(rng.randint(ident.booted_at, ident.now), "%b%d")
@@ -515,7 +787,8 @@ def assign_processes(ident, entries):
 
 # --- the parts every persona has -------------------------------------------------
 
-def base_files(persona, ident, passwd, group, shadow):
+def base_files(persona, ident, passwd, group, shadow, home=None):
+    serial = pi_serial(ident) if persona.hardware_platform == "aarch64" else "0000000000000000"
     files = {
         "etc/passwd": passwd,
         "etc/group": group,
@@ -524,11 +797,11 @@ def base_files(persona, ident, passwd, group, shadow):
         "etc/hosts": hosts(ident.hostname),
         "proc/version": proc_version(ident.release),
         "proc/mounts": PROC_MOUNTS,
-        "proc/cpuinfo": cpuinfo(persona, ident.hardware),
+        "proc/cpuinfo": cpuinfo(persona, ident.hardware, serial),
         "proc/meminfo": meminfo(ident),
     }
     if persona.kind == "server" and persona.user != "root":
-        files.update(home_files(persona.user))
+        files.update(home_files(persona.user) if home is None else home)
     else:
         files[f"{home_dir(persona)}/.profile"] = "export PATH=/bin:/sbin:/usr/bin:/usr/sbin\n"
     return files

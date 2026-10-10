@@ -2,6 +2,7 @@
 
 problems() returns one string per finding, each starting with the word of its
 rule (kernel, hostname, nproc, START, forbidden, ...); validate() raises."""
+import calendar
 import configparser
 import datetime
 import json
@@ -11,7 +12,7 @@ from pathlib import Path
 
 from . import PersonaError, tree
 from .common import home_dir, is_login_shell, ps_user
-from .identity import DAY
+from .identity import DAY, kernel_time
 from .render import DIR_MODES, PACKAGE_MANAGER_PATHS
 from .ssh_profiles import COMPRESSIONS, HOST_KEYS, PROFILES, TWISTED_CIPHERS, TWISTED_MACS
 
@@ -23,6 +24,9 @@ REQUIRED = ("fs.pickle", "honeyfs", "txtcmds", "cmdoutput.json", "cowrie.cfg", "
 # the keys Cowrie's free formats (src/cowrie/commands/free.py, FREE_OUTPUT)
 MEMINFO_KEYS = ("MemTotal", "MemFree", "MemAvailable", "Buffers", "Cached", "Shmem", "SwapTotal", "SwapFree")
 PS_KEYS = ("USER", "PID", "CPU", "MEM", "VSZ", "RSS", "TTY", "STAT", "START", "TIME", "COMMAND")
+_ISO_TIME = re.compile(r"(\d{4})-(\d{2})-(\d{2})[ T]+(\d{2}):(\d{2}):(\d{2})")
+# yum.log: "Jun 04 10:22:33 Updated: openssh-server-7.4p1-23.el7_9.x86_64", no year
+_YUM_LINE = re.compile(r"^([A-Z][a-z]{2}) (\d{2}) (\d{2}):(\d{2}):(\d{2}) (\w+): (\S+)$", re.M)
 
 
 def _text(path):
@@ -99,7 +103,15 @@ def _check_hardware(persona, ident, honeyfs, txtcmds, out):
     cpuinfo = _text(honeyfs / "proc/cpuinfo")
     if len(re.findall(r"^processor\s*:", cpuinfo, re.M)) != hw.cpus:
         out.append(f"cpuinfo: processor count is not {hw.cpus}")
-    if hw.cpu_model not in cpuinfo:
+    # what an attacker counts: lines with the lowercase word, the model name included
+    counted = sum("processor" in line for line in cpuinfo.splitlines())
+    if counted != hw.cpus:
+        out.append(f"cpuinfo: grep -c processor gives {counted}, not {hw.cpus}")
+    if persona.hardware_platform == "aarch64":
+        # arm64 cpuinfo has no model name; the Pi firmware names the board
+        if not re.search(rf"^Model\s*: {re.escape(hw.board)}$", cpuinfo, re.M):
+            out.append(f"cpuinfo: no Model {hw.board!r}")
+    elif hw.cpu_model not in cpuinfo:
         out.append(f"cpuinfo: no {hw.cpu_model!r}")
     if _text(txtcmds / "usr/bin/nproc").strip() != str(hw.cpus):
         out.append(f"nproc is not {hw.cpus}")
@@ -183,6 +195,66 @@ def _check_tree(persona, ident, fs, out):
                        + (f" {mode:o}" if mode is not None else ""))
 
 
+def _iso_ts(match):
+    return calendar.timegm(tuple(int(g) for g in match.groups()))
+
+
+def _log_events(ident, honeyfs):
+    """(path, time, text) of every dated entry of the logs under var/log: apt
+    history blocks (by End-Date), dnf.log lines and yum.log lines (the year
+    from the rotation name yum.log-<year>0101, else that of now)."""
+    events = []
+    for path in sorted((honeyfs / "var/log").rglob("*")):
+        if not path.is_file():
+            continue
+        rel, text = str(path.relative_to(honeyfs)), _text(path)
+        if path.name.startswith("yum.log"):
+            rotated = re.search(r"-(\d{4})0101$", path.name)
+            year = int(rotated.group(1)) - 1 if rotated else time.gmtime(ident.now).tm_year
+            for mon, day, hh, mm, ss, verb, name in _YUM_LINE.findall(text):
+                stamp = calendar.timegm(time.strptime(f"{year} {mon} {day} {hh}:{mm}:{ss}", "%Y %b %d %H:%M:%S"))
+                events.append((rel, stamp, f"{verb}: {name}"))
+        elif path.name == "history.log":
+            for block in text.split("\n\n"):
+                stamps = [_iso_ts(m) for m in _ISO_TIME.finditer(block)]
+                if stamps:
+                    events.append((rel, max(stamps), block))
+        else:
+            for line in text.splitlines():
+                match = _ISO_TIME.search(line)
+                if match:
+                    events.append((rel, _iso_ts(match), line))
+    return events
+
+
+def _restarts_sshd(text):
+    return "openssh-server" in text and re.search(r"(^|\n|\s)(Upgrade|Upgraded|Updated):", text) is not None
+
+
+def _check_logs(ident, honeyfs, fs, out):
+    events = _log_events(ident, honeyfs)
+    first, last = _utc_date(ident.installed_at), _utc_date(ident.now)
+    newest = {}
+    for rel, stamp, text in events:
+        newest[rel] = max(newest.get(rel, stamp), stamp)
+        if rel.rsplit("/", 1)[-1].startswith("yum.log") and not first <= _utc_date(stamp) <= last:
+            out.append(f"date {_utc_date(stamp)} in {rel} is not between {first} and {last}")
+        # a real upgrade restarts sshd, but ps shows the sshd of the boot
+        if _restarts_sshd(text) and stamp > ident.booted_at:
+            out.append(f"sshd: openssh upgrade in {rel} at {time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(stamp))} "
+                       "is after the boot")
+    if fs is None:
+        return
+    shadow_days = [int(f[2]) for f in (line.split(":") for line in _text(honeyfs / "etc/shadow").splitlines())
+                   if len(f) > 2 and f[2].isdigit()]
+    if shadow_days:
+        newest["etc/shadow"] = max(shadow_days) * DAY
+    for rel, stamp in sorted(newest.items()):
+        node = tree.find_node(fs, rel)
+        if node is not None and (tree.node_get(node, tree.A_CTIME) or 0) < stamp:
+            out.append(f"ctime of /{rel} is before its newest entry")
+
+
 def _check_dates(ident, honeyfs, out):
     first, last = _utc_date(ident.installed_at), _utc_date(ident.now)
     for path in sorted((honeyfs / "var/log").rglob("*")):
@@ -264,17 +336,23 @@ def problems(persona, ident, out_dir, runtime_dir, keys_dir, min_pickle=MIN_PICK
 
     try:
         data = json.loads(_text(out_dir / "identity.json"))
-        if (data.get("persona"), data.get("hostname"), data.get("boot_offset")) != \
-                (persona.id, ident.hostname, ident.boot_offset):
-            out.append("identity.json does not describe this identity")
     except ValueError:
         out.append("identity.json is no JSON")
+    else:
+        if not isinstance(data, dict):
+            out.append("identity.json is no JSON object")
+        elif (data.get("persona"), data.get("hostname"), data.get("boot_offset")) != \
+                (persona.id, ident.hostname, ident.boot_offset):
+            out.append("identity.json does not describe this identity")
 
     version = _text(honeyfs / "proc/version")
     if r.kernel_version not in version or r.kernel_build not in version:
         out.append(f"kernel: proc/version does not name {r.kernel_version} {r.kernel_build}")
     if r.kernel_version not in _text(txtcmds / "bin/dmesg"):
         out.append(f"kernel: dmesg does not name {r.kernel_version}")
+    built = kernel_time(r)
+    if built is not None and built > ident.booted_at:
+        out.append(f"kernel: built {time.strftime('%Y-%m-%d', time.gmtime(built))}, after the boot")
 
     if _text(honeyfs / "etc/hostname") != ident.hostname + "\n":
         out.append(f"hostname: etc/hostname is not {ident.hostname}")
@@ -292,6 +370,7 @@ def problems(persona, ident, out_dir, runtime_dir, keys_dir, min_pickle=MIN_PICK
 
     _check_processes(persona, ident, out_dir / "cmdoutput.json", out)
     _check_dates(ident, honeyfs, out)
+    _check_logs(ident, honeyfs, fs, out)
     _check_forbidden(persona, out_dir, runtime_dir, keys_dir, out)
     if fs is not None:
         if ident.hostname.encode() not in (out_dir / "fs.pickle").read_bytes():
