@@ -11,13 +11,14 @@ FIXTURE = Path(__file__).parent / "fixtures" / "v3.1.1"
 PATCH = DIST / "patch_cowrie_persona_support.py"
 
 
-def method(source, cls, name):
-    """The function `name` of class `cls` in source, compiled on its own."""
+def method(source, cls, name, namespace=None):
+    """The function `name` of class `cls` in source, compiled on its own (with the
+    module globals of namespace)."""
     for node in ast.parse(source).body:
         if isinstance(node, ast.ClassDef) and node.name == cls:
             for item in node.body:
                 if isinstance(item, ast.FunctionDef) and item.name == name:
-                    namespace = {}
+                    namespace = dict(namespace or {})
                     exec(compile(ast.Module([item], []), "<patched>", "exec"), namespace)  # noqa: S102
                     return namespace[name]
     raise AssertionError(f"{cls}.{name} not found")
@@ -115,6 +116,9 @@ class FakeConfig:
 
     def get(self, section, option, fallback=None):
         return self.values.get((section, option), fallback)
+
+    def has_option(self, section, option):
+        return (section, option) in self.values
 
 
 
@@ -255,6 +259,118 @@ class PatchTest(unittest.TestCase):
         done = self.grep("-m", "1", "processor", input_data=CPUINFO)
         self.assertEqual(bytes(done.out), b"processor\t: 0\n")
 
+    PS = (b"USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND\n"
+          b"root         1  0.0  0.1 167744 11788 ?        Ss   Oct09   0:04 /sbin/init\n"
+          b"root      4211  0.0  0.0   6480  2280 pts/0    S+   10:02   0:00 grep --color=auto xmrig\n")
+
+    def test_grep_v_inverts(self):
+        # ps aux | grep -v grep
+        done = self.grep("-v", "grep", input_data=self.PS)
+        self.assertEqual((bytes(done.out), done.code), (self.PS.rsplit(b"root      4211", 1)[0], 0))
+        done = self.grep("-vc", "processor", "/proc/cpuinfo")
+        self.assertEqual((bytes(done.out), done.code), (b"8\n", 0))
+        done = self.grep("-v", "-m", "1", "processor", "/proc/cpuinfo")
+        self.assertEqual(bytes(done.out), b"model name\t: Intel(R) Xeon(R)\n")
+        done = self.grep("-v", "", "/proc/meminfo")
+        self.assertEqual((bytes(done.out), done.code), (b"", 1))
+
+    def test_grep_i_ignores_case(self):
+        done = self.grep("-ci", "PROCESSOR", "/proc/cpuinfo")
+        self.assertEqual((bytes(done.out), done.code), (b"4\n", 0))
+        done = self.grep("-i", "memtotal", "/proc/meminfo")
+        self.assertEqual(bytes(done.out), b"MemTotal:        8023548 kB\n")
+        done = self.grep("-vi", "MODEL NAME", "/proc/meminfo")
+        self.assertEqual(bytes(done.out), MEMINFO)
+        done = self.grep("-c", "PROCESSOR", "/proc/cpuinfo")
+        self.assertEqual((bytes(done.out), done.code), (b"0\n", 1))
+
+    def test_grep_q_only_sets_the_status(self):
+        # grep -qi "model name" /proc/cpuinfo && echo yes
+        done = self.grep("-qi", "model name", "/proc/cpuinfo")
+        self.assertEqual((bytes(done.out), done.err, done.code), (b"", "", 0))
+        done = self.grep("-q", "model name", "/proc/meminfo")
+        self.assertEqual((bytes(done.out), done.code), (b"", 1))
+        done = self.grep("-qc", "processor", "/proc/cpuinfo", "/proc/meminfo")
+        self.assertEqual((bytes(done.out), done.code), (b"", 0))
+        done = self.grep("-q", "init", input_data=self.PS)
+        self.assertEqual((bytes(done.out), done.code), (b"", 0))
+        done = self.grep("-q", "a")
+        done.lineReceived("abc")
+        done.eofReceived()
+        self.assertEqual((bytes(done.out), done.code), (b"", 0))
+
+    def test_grep_exit_status_2_on_errors(self):
+        done = self.grep("processor", "/nope")
+        self.assertEqual((done.err, done.code), ("grep: /nope: No such file or directory\n", 2))
+        # an error wins over a match, unless -q found one
+        done = self.grep("processor", "/proc/cpuinfo", "/nope")
+        self.assertEqual(done.code, 2)
+        done = self.grep("-q", "processor", "/nope", "/proc/cpuinfo")
+        self.assertEqual((done.code, done.err), (0, "grep: /nope: No such file or directory\n"))
+        done = self.grep("-q", "nothing", "/proc/cpuinfo", "/nope")
+        self.assertEqual(done.code, 2)
+        done = self.grep("processor", "/proc")
+        self.assertEqual(done.code, 2)
+        done = self.grep("-c", "MemTotal", "nope", cwd="/proc")
+        self.assertEqual((bytes(done.out), done.err, done.code), (b"", "grep: nope: No such file or directory\n", 2))
+        done = self.grep("-K", "x", "/proc/cpuinfo")
+        self.assertEqual(done.code, 2)
+        self.assertIn("grep: invalid option -- K", done.err)
+
+    def prompt(self, cwd, user="root", uid=0, home="/root", style="redhat", hostname="build39.corp.local",
+               config=None):
+        import posixpath
+        honeypot = (self.patched() / "src/cowrie/shell/honeypot.py").read_text()
+        values = {} if style is None else {("shell", "prompt_style"): style}
+        show_prompt = method(honeypot, "HoneyPotShell", "showPrompt",
+                             {"CowrieConfig": FakeConfig(values if config is None else config),
+                              "posixpath": posixpath})
+        written = []
+
+        class Terminal:
+            def write(self, data):
+                written.append(data)
+
+        class Protocol:
+            terminal = Terminal()
+            ps = None
+
+        Protocol.hostname = hostname
+
+        class Shell:
+            interactive = True
+            protocol = Protocol()
+
+        shell = Shell()
+        shell.user = {"username": user, "uid": uid, "home": home}
+        shell.cwd = cwd
+        show_prompt(shell)
+        self.assertEqual(shell.protocol.ps, (written[0], b"> "))
+        return written[0].decode("utf-8")
+
+    def test_redhat_prompt(self):
+        # bash PS1 of RHEL / CentOS: [\u@\h \W]\$ (short host name, basename of the cwd)
+        self.assertEqual(self.prompt("/root"), "[root@build39 ~]# ")
+        self.assertEqual(self.prompt("/"), "[root@build39 /]# ")
+        self.assertEqual(self.prompt("/var/log"), "[root@build39 log]# ")
+        self.assertEqual(self.prompt("/root/bin"), "[root@build39 bin]# ")
+        self.assertEqual(self.prompt("/home/cloud-user", "cloud-user", 1000, "/home/cloud-user"),
+                         "[cloud-user@build39 ~]$ ")
+        self.assertEqual(self.prompt("/tmp", "cloud-user", 1000, "/home/cloud-user", hostname="rhel9-web12"),
+                         "[cloud-user@rhel9-web12 tmp]$ ")
+
+    def test_debian_prompt_stays_upstream(self):
+        for style in (None, "debian", "anything else"):
+            with self.subTest(style=style):
+                self.assertEqual(self.prompt("/root", style=style), "root@build39.corp.local:~# ")
+                self.assertEqual(self.prompt("/var/log", style=style), "root@build39.corp.local:/var/log# ")
+                self.assertEqual(self.prompt("/home/pi/src", "pi", 1000, "/home/pi", style=style, hostname="pihole"),
+                                 "pi@pihole:~/src$ ")
+
+    def test_configured_prompt_still_wins(self):
+        config = {("honeypot", "prompt"): "$", ("shell", "prompt_style"): "redhat"}
+        self.assertEqual(self.prompt("/root", config=config), "$ ")
+
     def banner(self, issue, os_release=None, config=None):
         factory = (self.patched() / "src/cowrie/telnet/factory.py").read_text()
         values = {("honeypot", "hostname"): "build39.corp.local",
@@ -326,7 +442,20 @@ class PatchTest(unittest.TestCase):
                   "            self.grep_application(contents, match=match)\n"),
                  ("src/cowrie/telnet/factory.py", "from cowrie.shell.honeyfs import read_honeyfs_bytes",
                   "from cowrie.shell import honeyfs"),
-                 ("src/cowrie/telnet/factory.py", "\nimport time\n", "\nimport time as clock\n"))
+                 ("src/cowrie/telnet/factory.py", "\nimport time\n", "\nimport time as clock\n"),
+                 ("src/cowrie/commands/fs.py", "        return re.compile(bmatch)\n",
+                  "        return re.compile(bmatch, 0)\n"),
+                 ("src/cowrie/commands/fs.py", "            if matcher.search(line):\n",
+                  "            if matcher.search(line) is not None:\n"),
+                 ("src/cowrie/commands/fs.py",
+                  "            self.errorWrite(f\"grep: invalid option -- {err.opt}\\n\")\n            self.help()\n",
+                  "            self.errorWrite(f\"grep: invalid option -- {err.opt}\\n\")\n"),
+                 ("src/cowrie/commands/fs.py",
+                  "            self.interactive = True\n            return\n\n        self.exit(0 if",
+                  "            self.interactive = True\n            return\n        self.exit(0 if"),
+                 ("src/cowrie/shell/honeypot.py",
+                  "            prompt = f\"{username}@{self.protocol.hostname}:{cwd}\"\n",
+                  "            prompt = f\"{username}@{self.protocol.hostname}:{cwd} \"\n"))
         for rel, old, new in cases:
             with self.subTest(rel=rel, needle=old):
                 root = tmpdir(self) / "cowrie"

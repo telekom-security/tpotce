@@ -176,10 +176,12 @@ def patch_free(cowrie_root):
 
 
 def patch_grep(cowrie_root):
-    """grep -c prints the number of matching lines (name:count per file for several
-    files) instead of the lines: `grep -c processor /proc/cpuinfo` is a common
-    bot probe. -m counts per file, as GNU grep, and the empty string after the
-    last newline is no line."""
+    """grep as GNU grep for the options bots use: -c prints the number of selected
+    lines (name:count per file for several files; `grep -c processor /proc/cpuinfo`),
+    -v inverts, -i ignores case, -q prints nothing; -m counts per file. The exit
+    status is 0 for a selected line, 1 for none and 2 for an error (missing file,
+    directory, invalid option), with -q a selected line wins over an error.
+    The empty string after the last newline is no line."""
     path = cowrie_root / "src" / "cowrie" / "commands" / "fs.py"
     replace_once(
         path,
@@ -191,10 +193,21 @@ def patch_grep(cowrie_root):
             self.errorWrite(f"grep: {filename}: No such file or directory\\n")
 """,
         """    count_only: bool = False
+    invert: bool = False
+    ignore_case: bool = False
+    quiet: bool = False
+    failed: bool = False
 
     def write_count(self, label: str | None = None) -> None:
+        if self.quiet:
+            return
         prefix = f"{label}:" if label is not None else ""
         self.write(f"{prefix}{self.match_count}\\n")
+
+    def exit_status(self) -> int:
+        if self.matched and (self.quiet or not self.failed):
+            return 0
+        return 2 if self.failed else 1
 
     def grep_get_contents(
         self, filename: str, match: str, label: str | None = None, show_name: bool = False
@@ -206,9 +219,17 @@ def patch_grep(cowrie_root):
             self.grep_application(contents, match)
         except Exception:
             self.errorWrite(f"grep: {name}: No such file or directory\\n")
+            self.failed = True
             return
         if self.count_only:
             self.write_count(name if show_name else None)
+""",
+    )
+    replace_once(
+        path,
+        """        return re.compile(bmatch)
+""",
+        """        return re.compile(bmatch, re.IGNORECASE if self.ignore_case else 0)
 """,
     )
     replace_once(
@@ -227,11 +248,22 @@ def patch_grep(cowrie_root):
         for line in lines:
             if self.max_count is not None and self.match_count >= self.max_count:
                 break
-            if matcher.search(line):
+            if (matcher.search(line) is not None) != self.invert:
                 self.matched = True
                 self.match_count += 1
-                if not self.count_only:
+                if not self.count_only and not self.quiet:
                     self.writeBytes(line + b"\\n")
+""",
+    )
+    replace_once(
+        path,
+        """            self.errorWrite(f"grep: invalid option -- {err.opt}\\n")
+            self.help()
+            self.exit()
+""",
+        """            self.errorWrite(f"grep: invalid option -- {err.opt}\\n")
+            self.help()
+            self.exit(2)
 """,
     )
     replace_once(
@@ -242,6 +274,12 @@ def patch_grep(cowrie_root):
         """        for opt, arg in optlist:
             if opt == "-c":
                 self.count_only = True
+            elif opt == "-v":
+                self.invert = True
+            elif opt == "-i":
+                self.ignore_case = True
+            elif opt == "-q":
+                self.quiet = True
             elif opt == "-h":
 """,
     )
@@ -259,8 +297,24 @@ def patch_grep(cowrie_root):
                 self.write_count()
         elif files:
             for arg in files:
-                for pname in self.check_arguments("grep", [arg]):
+                pnames = self.check_arguments("grep", [arg])
+                if not pnames:
+                    self.failed = True
+                for pname in pnames:
                     self.grep_get_contents(pname, self.match, arg, len(files) > 1)
+""",
+    )
+    replace_once(
+        path,
+        """            self.interactive = True
+            return
+
+        self.exit(0 if self.matched else 1)
+""",
+        """            self.interactive = True
+            return
+
+        self.exit(self.exit_status())
 """,
     )
     replace_once(
@@ -278,7 +332,31 @@ def patch_grep(cowrie_root):
         """                    self.grep_application(f.read(), self.match)
             if self.count_only:
                 self.write_count()
-        self.exit(0 if self.matched else 1)
+        self.exit(self.exit_status())
+""",
+    )
+
+
+def patch_prompt(cowrie_root):
+    """[shell] prompt_style = redhat gives the bash PS1 of RHEL / CentOS,
+    [\\u@\\h \\W]\\$ (short host name, basename of the cwd, ~ for home); anything
+    else keeps Cowrie's Debian prompt \\u@\\h:\\w\\$."""
+    path = cowrie_root / "src" / "cowrie" / "shell" / "honeypot.py"
+    replace_once(
+        path,
+        """            prompt = f"{username}@{self.protocol.hostname}:{cwd}"
+""",
+        """            if CowrieConfig.get("shell", "prompt_style", fallback="debian") == "redhat":
+                if self.cwd == home:
+                    base = "~"
+                elif self.cwd == "/":
+                    base = "/"
+                else:
+                    base = posixpath.basename(self.cwd.rstrip("/"))
+                short = self.protocol.hostname.split(".")[0]
+                prompt = f"[{username}@{short} {base}]"
+            else:
+                prompt = f"{username}@{self.protocol.hostname}:{cwd}"
 """,
     )
 
@@ -392,6 +470,7 @@ def main():
     patch_service(cowrie_root)
     patch_free(cowrie_root)
     patch_grep(cowrie_root)
+    patch_prompt(cowrie_root)
     patch_telnet_banner(cowrie_root)
 
 

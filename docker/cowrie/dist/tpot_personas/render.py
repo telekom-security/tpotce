@@ -204,6 +204,7 @@ kernel_version = {r.kernel_version}
 kernel_build_string = {r.kernel_build}
 hardware_platform = {persona.hardware_platform}
 operating_system = {persona.operating_system}
+prompt_style = {persona.prompt_style}
 ssh_version = {r.ssh_version}
 skip_python_commands = {",".join(skip_python_commands(persona))}
 

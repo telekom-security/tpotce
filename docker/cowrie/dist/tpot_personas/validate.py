@@ -13,6 +13,7 @@ from pathlib import Path
 from . import PersonaError, tree
 from .common import VM_PROVIDERS, home_dir, is_login_shell, ps_start, ps_user
 from .identity import DAY, host_patterns, hostname_regex, kernel_time, stale_at, updated_at
+from .model import PROMPT_STYLES
 from .render import DIR_MODES, PACKAGE_MANAGER_PATHS
 from .ssh_profiles import COMPRESSIONS, HOST_KEYS, PROFILES, TWISTED_CIPHERS, TWISTED_MACS
 
@@ -54,8 +55,11 @@ def _check_cfg(persona, ident, cfg, runtime_dir, keys_dir, out):
         ("shell", "kernel_build_string"): r.kernel_build,
         ("shell", "arch"): persona.arch,
         ("shell", "hardware_platform"): persona.hardware_platform,
+        ("shell", "prompt_style"): persona.prompt_style,
         ("ssh", "version"): r.ssh_banner,
     }
+    if persona.prompt_style not in PROMPT_STYLES:
+        out.append(f"prompt_style {persona.prompt_style!r} is not one of {', '.join(PROMPT_STYLES)}")
     for (section, key), value in expected.items():
         got = cfg.get(section, key, fallback=None)
         if got != value:

@@ -24,6 +24,13 @@ def render_one(test, persona, seed, now=NOW):
 
 
 class RenderTest(unittest.TestCase):
+    def test_cfg_names_the_prompt_style(self):
+        for persona in catalog.PERSONAS:
+            _, out, _ = render_one(self, persona, 0)
+            self.assertIn(f"\nprompt_style = {persona.prompt_style}\n", (out / "cowrie.cfg").read_text(), persona.id)
+        _, out, _ = render_one(self, catalog.by_id("rhel-9"), 0)
+        self.assertIn("\nprompt_style = redhat\n", (out / "cowrie.cfg").read_text())
+
     def test_every_persona_renders_and_validates(self):
         for persona in catalog.PERSONAS:
             for seed in range(20):

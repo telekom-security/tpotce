@@ -80,6 +80,20 @@ class ValidateNegativeTest(unittest.TestCase):
         self.edit("cowrie.cfg", f"boot_offset = {self.ident.boot_offset}", "boot_offset = 1")
         self.assertIn("cfg boot_offset", self.problems())
 
+    def test_prompt_style_mismatch(self):
+        self.edit("cowrie.cfg", "prompt_style = debian", "prompt_style = redhat")
+        self.assertIn("cfg prompt_style", self.problems())
+
+    def test_prompt_style_missing(self):
+        self.edit("cowrie.cfg", "prompt_style = debian\n", "")
+        self.assertIn("cfg prompt_style", self.problems())
+
+    def test_unknown_prompt_style(self):
+        persona = dataclasses.replace(self.persona, prompt_style="zsh")
+        self.edit("cowrie.cfg", "prompt_style = debian", "prompt_style = zsh")
+        found = " | ".join(validate.problems(persona, self.ident, self.out, self.out, self.keys, min_pickle=0))
+        self.assertIn("prompt_style 'zsh' is not one of", found)
+
     def test_banner_and_ssh_version_disagree(self):
         cfg = configparser.ConfigParser(interpolation=None)
         cfg.read(self.out / "cowrie.cfg")

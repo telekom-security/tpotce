@@ -785,7 +785,7 @@ IPCAM = (
 
 
 def _server(pid, family, os_id, user, releases, hardware, hostnames, builder, vulnerability, managers=APT,
-            arch=("linux-x64-lsb", "x86_64"), tokens=(), max_install_days=900):
+            arch=("linux-x64-lsb", "x86_64"), tokens=(), max_install_days=900, prompt_style="debian"):
     return Persona(
         id=pid, family=family, kind="server", os_id=os_id,
         user=user, uid=1000, gid=1000, shell="/bin/bash",
@@ -793,6 +793,7 @@ def _server(pid, family, os_id, user, releases, hardware, hostnames, builder, vu
         ssh_profile="openssh", package_managers=managers,
         releases=releases, hardware=hardware, hostnames=hostnames,
         builder=builder, vulnerability=vulnerability, tokens=tokens, max_install_days=max_install_days,
+        prompt_style=prompt_style,
     )
 
 
@@ -812,11 +813,12 @@ PERSONAS = (
             build_debian, "Debian 12 OpenSSH 9.2p1 before the regreSSHion fix (CVE-2024-6387)"),
     _server("rhel-9", "rhel", "rhel", "cloud-user", RHEL9, (KVM_2, KVM_4, KVM_8),
             ("rhel9-{word}{nn}", "{word}{nn}.corp.local"),
-            build_rhel, "RHEL 9 cloud image, OpenSSH 8.7p1", managers=DNF),
+            build_rhel, "RHEL 9 cloud image, OpenSSH 8.7p1", managers=DNF, prompt_style="redhat"),
     _server("centos-7", "centos", "centos", "centos", CENTOS7, (KVM_1, KVM_2, KVM_4),
             ("localhost.localdomain", "cent7-{word}{nn}", "{word}{nn}"),
             # an EOL box forgotten for years: installed up to ten years ago
-            build_centos, "EOL CentOS 7, OpenSSH 7.4", managers=YUM, max_install_days=3650),
+            build_centos, "EOL CentOS 7, OpenSSH 7.4", managers=YUM, max_install_days=3650,
+            prompt_style="redhat"),
     _server("raspios", "raspios", "debian", "pi", RASPIOS, PI_HARDWARE,
             ("raspberrypi", "pi{nn}", "pihole"),
             build_raspios, "Raspberry Pi with the default user pi", arch=("linux-aarch64-lsb", "aarch64")),

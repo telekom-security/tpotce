@@ -254,6 +254,13 @@ class DeviceCatalogTest(unittest.TestCase):
                 else:
                     self.assertRegex(r.ssh_version, rf"^{re.escape(product)}(p\d+)?[ ,]", (pid, r.label))
 
+    def test_prompt_style_fits_the_family(self):
+        # bash PS1 of Red Hat is [\u@\h \W]\$, Debian / Ubuntu and the devices keep Cowrie's \u@\h:\w\$
+        from tpot_personas.model import PROMPT_STYLES
+        for p in catalog.PERSONAS:
+            self.assertIn(p.prompt_style, PROMPT_STYLES, p.id)
+            self.assertEqual(p.prompt_style, "redhat" if p.family in ("rhel", "centos") else "debian", p.id)
+
     def test_uname_names_gnu_linux(self):
         # BusyBox uname -o / -a prints "GNU/Linux" (uname.c of 1.14.1, 1.19.2; CONFIG_UNAME_OSNAME since)
         for p in catalog.PERSONAS:
