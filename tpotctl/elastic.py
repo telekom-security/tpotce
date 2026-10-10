@@ -12,8 +12,11 @@ import copy
 import json
 import re
 import sys
+import time
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
-from typing import Optional
+from typing import Callable, List, Optional
 
 POLICY = "tpot"
 ES_URL = "http://127.0.0.1:64298"        # as in tpotctl.events
@@ -102,6 +105,119 @@ def _days(value: str) -> float:
 def shortens(old: str, new: str) -> bool:
     """new deletes events old keeps ("" and "off" keep them all; an empty new changes nothing)."""
     return bool(new) and _days(new) < _days(old)
+
+
+class ElasticError(Exception):
+    """Elasticsearch did not do what was asked."""
+
+
+def _call(method: str, path: str, url: str, opener: Callable, body: Optional[dict] = None):
+    data = json.dumps(body).encode() if body is not None else None
+    request = urllib.request.Request(f"{url}{path}", data=data, method=method,
+                                     headers={"Content-Type": "application/json"})
+    with opener(request, timeout=5) as response:
+        return json.loads(response.read().decode("utf-8") or "null")
+
+
+def _unreachable(err) -> str:
+    return f"Elasticsearch is not reachable ({getattr(err, 'reason', err)})"
+
+
+def get_policy(url: str = ES_URL, opener: Callable = urllib.request.urlopen) -> Optional[dict]:
+    try:
+        answer = _call("GET", f"/_ilm/policy/{POLICY}", url, opener)
+    except urllib.error.HTTPError as err:
+        if err.code == 404:
+            return None
+        raise ElasticError(f"Elasticsearch answered {err.code} for the ILM policy {POLICY}")
+    except (OSError, ValueError) as err:
+        raise ElasticError(_unreachable(err))
+    return ((answer or {}).get(POLICY) or {}).get("policy")
+
+
+def put_policy(policy: dict, url: str = ES_URL, opener: Callable = urllib.request.urlopen) -> None:
+    try:
+        _call("PUT", f"/_ilm/policy/{POLICY}", url, opener, {"policy": policy})
+    except (OSError, ValueError) as err:
+        raise ElasticError(f"the ILM policy {POLICY} could not be written ({getattr(err, 'reason', err)})")
+
+
+@dataclass
+class Index:
+    name: str
+    created: float      # epoch seconds
+    docs: int
+    size: int           # bytes
+
+
+def indices(url: str = ES_URL, opener: Callable = urllib.request.urlopen) -> List[Index]:
+    try:
+        rows = _call("GET", "/_cat/indices/logstash-*?format=json&bytes=b&h=index,creation.date,docs.count,store.size",
+                     url, opener) or []
+    except (OSError, ValueError) as err:
+        raise ElasticError(_unreachable(err))
+    return sorted((Index(r["index"], int(r.get("creation.date") or 0) / 1000, int(r.get("docs.count") or 0),
+                         int(r.get("store.size") or 0)) for r in rows), key=lambda i: i.created)
+
+
+def doomed(found: List[Index], value: str, now: float) -> List[Index]:
+    """The indices ILM deletes right away once the retention is value."""
+    if value in ("", "off"):
+        return []
+    limit = now - int(value) * 86400
+    return [index for index in found if index.created < limit]
+
+
+@dataclass
+class Status:
+    value: str          # TPOT_ES_RETENTION
+    current: str        # what the policy does (value_of), "" if not in days
+    state: str          # managed | foreign | missing | unreachable
+    problem: str = ""
+
+
+def status(value: str, url: str = ES_URL, opener: Callable = urllib.request.urlopen) -> Status:
+    try:
+        policy = get_policy(url, opener)
+    except ElasticError as err:
+        return Status(value, "", "unreachable", str(err))
+    if policy is None:
+        return Status(value, "", "missing")
+    return Status(value, value_of(policy), "managed" if is_managed(policy) else "foreign")
+
+
+@dataclass
+class Plan:
+    decision: Decision
+    doomed: List[Index]
+    reachable: bool
+
+
+def plan(value: str, force: bool = False, url: str = ES_URL, opener: Callable = urllib.request.urlopen,
+         now: Optional[float] = None) -> Plan:
+    """What setting value does now: the decision and the indices it deletes."""
+    try:
+        policy = get_policy(url, opener)
+    except ElasticError:
+        return Plan(Decision("keep", None, "", False), [], False)
+    decision = decide(value, policy, force)
+    gone: List[Index] = []
+    if decision.action in ("create", "update"):
+        try:
+            gone = doomed(indices(url, opener), value or DEFAULT, time.time() if now is None else now)
+        except ElasticError:
+            return Plan(decision, [], False)
+    return Plan(decision, gone, True)
+
+
+def apply(chosen: Plan, url: str = ES_URL, opener: Callable = urllib.request.urlopen) -> None:
+    if not chosen.reachable:
+        raise ElasticError("Elasticsearch is not reachable, T-Pot applies the retention on its next start")
+    if chosen.decision.action == "foreign":
+        raise ElasticError(f"the ILM policy {POLICY} was changed outside of T-Pot (retention: "
+                           f"{chosen.decision.current or 'not in days'}); take it over or apply anyway (--force)")
+    if chosen.decision.action in ("create", "update"):
+        put_policy(chosen.decision.policy, url, opener)
 
 
 def main(argv) -> int:

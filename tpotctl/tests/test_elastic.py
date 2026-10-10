@@ -5,9 +5,11 @@ The cases in docker/tpotinit/tests/ilm_cases.yml are the ones the jq rule of tpo
 """
 
 import copy
+import io
 import json
 import os
 import unittest
+import urllib.error
 
 import yaml
 
@@ -127,6 +129,100 @@ class WiringTest(unittest.TestCase):
         text = self.read("docker", "elk", "logstash", "dist", "entrypoint.sh")
         self.assertNotIn("_ilm/policy", text)
         self.assertIn("lifecycle", self.read("docker", "elk", "logstash", "dist", "tpot-template.json"))
+
+
+class FakeES:
+    """urlopen for tests: routes (method, path) -> (status, body); records the requests."""
+
+    def __init__(self, routes):
+        self.routes, self.requests = routes, []
+
+    def __call__(self, request, timeout=None):
+        path = request.full_url.split("64298", 1)[1]
+        self.requests.append((request.get_method(), path, request.data))
+        key = (request.get_method(), path.split("?", 1)[0])
+        if key not in self.routes:
+            raise urllib.error.URLError("connection refused")
+        status, body = self.routes[key]
+        if status >= 400:
+            raise urllib.error.HTTPError(request.full_url, status, "err", {}, io.BytesIO(json.dumps(body).encode()))
+        return io.BytesIO(json.dumps(body).encode())       # a context manager, as urlopen's answer
+
+
+MANAGED_90 = {"phases": {"hot": {"min_age": "0ms", "actions": {}},
+                         "delete": {"min_age": "90d", "actions": {"delete": {}}}},
+              "_meta": {"managed": True, "tpot_retention": "90"}}
+NOW = 1_800_000_000.0
+DAY = 86400
+INDICES = [{"index": "logstash-old", "creation.date": str(int((NOW - 60 * DAY) * 1000)), "docs.count": "1200",
+            "store.size": "5000"},
+           {"index": "logstash-new", "creation.date": str(int((NOW - 2 * DAY) * 1000)), "docs.count": "30",
+            "store.size": "100"}]
+
+
+class AccessTest(unittest.TestCase):
+
+    def es(self, policy=MANAGED_90):
+        routes = {("GET", "/_cat/indices/logstash-*"): (200, INDICES), ("PUT", "/_ilm/policy/tpot"): (200, {})}
+        routes[("GET", "/_ilm/policy/tpot")] = (200, {"tpot": {"policy": policy}}) if policy else (404, {})
+        return FakeES(routes)
+
+    def test_status_managed_and_foreign(self):
+        self.assertEqual(elastic.status("90", opener=self.es()).state, "managed")
+        foreign = dict(MANAGED_90, _meta={})
+        self.assertEqual(elastic.status("90", opener=self.es(foreign)).state, "foreign")
+        self.assertEqual(elastic.status("30", opener=self.es(None)).state, "missing")
+        down = elastic.status("30", opener=FakeES({}))
+        self.assertEqual(down.state, "unreachable")
+        self.assertIn("Elasticsearch", down.problem)
+
+    def test_plan_shows_what_a_shorter_retention_deletes(self):
+        plan = elastic.plan("30", opener=self.es(), now=NOW)
+        self.assertEqual(plan.decision.action, "update")
+        self.assertEqual([i.name for i in plan.doomed], ["logstash-old"])
+        self.assertEqual(plan.doomed[0].docs, 1200)
+
+    def test_plan_longer_deletes_nothing_and_off_neither(self):
+        self.assertEqual(elastic.plan("365", opener=self.es(), now=NOW).doomed, [])
+        self.assertEqual(elastic.plan("off", opener=self.es(), now=NOW).doomed, [])
+
+    def test_apply_puts_only_on_create_or_update(self):
+        es = self.es()
+        elastic.apply(elastic.plan("90", opener=es, now=NOW), opener=es)
+        self.assertNotIn("PUT", [m for m, _p, _d in es.requests])
+        elastic.apply(elastic.plan("30", opener=es, now=NOW), opener=es)
+        method, path, data = es.requests[-1]
+        self.assertEqual((method, path), ("PUT", "/_ilm/policy/tpot"))
+        self.assertEqual(json.loads(data)["policy"]["phases"]["delete"]["min_age"], "30d")
+
+    def test_apply_refuses_a_foreign_policy(self):
+        foreign = dict(MANAGED_90, _meta={})
+        es = self.es(foreign)
+        with self.assertRaises(elastic.ElasticError):
+            elastic.apply(elastic.plan("30", opener=es, now=NOW), opener=es)
+        elastic.apply(elastic.plan("30", force=True, opener=es, now=NOW), opener=es)
+        self.assertEqual(es.requests[-1][0], "PUT")
+
+    def test_unreachable_plan(self):
+        plan = elastic.plan("30", opener=FakeES({}), now=NOW)
+        self.assertFalse(plan.reachable)
+        with self.assertRaises(elastic.ElasticError):
+            elastic.apply(plan, opener=FakeES({}))
+
+
+class CliTest(unittest.TestCase):
+
+    def test_parser_knows_elastic(self):
+        from tpotctl import cli
+        args = cli.build_parser().parse_args(["elastic", "retention", "60", "-y"])
+        self.assertEqual((args.command, args.elastic_command, args.value, args.yes), ("elastic", "retention", "60", True))
+        self.assertEqual(cli.build_parser().parse_args(["elastic"]).command, "elastic")
+
+    def test_retention_value_must_be_valid_before_anything_is_asked(self):
+        from tpotctl import cli
+        args = cli.build_parser().parse_args(["elastic", "retention", "30d", "-y"])
+        self.assertEqual(cli.retention_value_problem(args.value), '"30d" is not a number of days from 1 to 3650 or off.')
+        self.assertEqual(cli.retention_value_problem("off"), "")
 
 
 if __name__ == "__main__":
