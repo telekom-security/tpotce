@@ -25,7 +25,8 @@ class Hardware:
     disk_kb: int
     gpus: tuple = ()
     gpu_mem_mib: int = 0
-    board: str = ""          # Raspberry Pi model, device SoC; empty for VMs
+    board: str = ""          # Raspberry Pi model, device SoC (ARM Hardware, MIPS system type); empty for VMs
+    machine: str = ""        # the board a MIPS kernel names after the SoC (cpuinfo "machine")
     provider: str = ""       # where it runs (aws, kvm, do, pi, dgx, gpu); picks host names, releases, lspci, disks
 
 

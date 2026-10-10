@@ -425,7 +425,37 @@ X86_CPUS = {
     "AMD EPYC 7742 64-Core Processor": (23, 49, 0, "512 KB", 2245.780, "43 bits physical, 48 bits virtual"),
     "AMD EPYC 9354 32-Core Processor": (25, 17, 1, "1024 KB", 3249.998, "52 bits physical, 57 bits virtual"),
     "AMD EPYC 7543 32-Core Processor": (25, 1, 1, "512 KB", 2794.748, "48 bits physical, 48 bits virtual"),
+    # bare metal NAS CPUs (Intel ARK: J1900 Bay Trail-D, N5105 Jasper Lake, C3538 Denverton, J4125 Gemini
+    # Lake Refresh); unverified: MHz (the TSC rate) and cache as the kernel reports them
+    "Intel(R) Celeron(R) CPU  J1900  @ 1.99GHz": (6, 55, 8, "1024 KB", 1996.800, "36 bits physical, 48 bits virtual"),
+    "Intel(R) Celeron(R) N5105 @ 2.00GHz": (6, 156, 0, "4096 KB", 1996.800, "39 bits physical, 48 bits virtual"),
+    "Intel(R) Atom(TM) CPU C3538 @ 2.10GHz": (6, 95, 1, "2048 KB", 2100.000, "39 bits physical, 48 bits virtual"),
+    "Intel(R) Celeron(R) J4125 CPU @ 2.00GHz": (6, 122, 8, "4096 KB", 1996.800, "39 bits physical, 48 bits virtual"),
 }
+# Flags and cpuid level of CPUs a persona runs on bare metal. None of these Atom-class cores has AVX,
+# FMA or BMI; Bay Trail has no AES-NI. Unverified: the exact flag lists of the kernels of QTS / DSM.
+_SILVERMONT = ("fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr "
+               "sse sse2 ss ht tm pbe syscall nx rdtscp lm constant_tsc arch_perfmon pebs bts rep_good nopl "
+               "xtopology nonstop_tsc cpuid aperfmperf pni pclmulqdq dtes64 monitor ds_cpl vmx est tm2 ssse3 cx16 "
+               "xtpr pdcm sse4_1 sse4_2 movbe popcnt tsc_deadline_timer rdrand lahf_lm 3dnowprefetch epb pti ibrs "
+               "ibpb stibp tpr_shadow vnmi flexpriority ept vpid tsc_adjust smep erms dtherm ida arat md_clear")
+_GOLDMONT = ("fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse "
+             "sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc arch_perfmon pebs bts rep_good nopl "
+             "xtopology nonstop_tsc aperfmperf tsc_known_freq pni pclmulqdq dtes64 monitor ds_cpl vmx est tm2 ssse3 "
+             "sdbg cx16 xtpr pdcm sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave rdrand lahf_lm "
+             "3dnowprefetch epb cat_l2 intel_pt tpr_shadow vnmi flexpriority ept vpid fsgsbase tsc_adjust smep erms "
+             "mpx rdt_a rdseed smap clflushopt sha_ni xsaveopt xsavec xgetbv1 dtherm arat pln pts")
+_TREMONT = (_GOLDMONT.replace(" mpx", "").replace(" epb", " cpuid_fault epb")
+            .replace("cat_l2", "cat_l2 cdp_l2 ssbd ibrs ibpb stibp ibrs_enhanced")
+            + " clwb xsaves split_lock_detect ida hwp hwp_notify hwp_act_window hwp_epp hwp_pkg_req umip waitpkg "
+              "gfni rdpid movdiri movdir64b md_clear flush_l1d arch_capabilities")
+X86_BARE_METAL = {
+    "Intel(R) Celeron(R) CPU  J1900  @ 1.99GHz": (_SILVERMONT, 11),
+    "Intel(R) Atom(TM) CPU C3538 @ 2.10GHz": (_GOLDMONT, 21),
+    "Intel(R) Celeron(R) J4125 CPU @ 2.00GHz": (_GOLDMONT + " xsaves umip rdpid", 24),
+    "Intel(R) Celeron(R) N5105 @ 2.00GHz": (_TREMONT, 27),
+}
+VM_PROVIDERS = ("aws", "kvm", "do")  # a guest's cpuinfo has the hypervisor flag, bare metal (dgx, gpu, devices) not
 _X86_DEFAULT = (6, 63, 2, "30720 KB", None, "46 bits physical, 48 bits virtual")
 # Raspberry Pi: core -> variant, part, revision, features (arm64 /proc/cpuinfo)
 ARM64_CORES = {
@@ -451,9 +481,22 @@ def cpu_mhz(hw):
     return float(match.group(1)) * 1000 if match else 2399.998
 
 
+# BogoMIPS of the embedded cores; unverified: the exact values, chosen from the clock of each SoC
+# (QCA9563 775 MHz, MT7628 575 MHz, MT7621 880 MHz, Armada 380 1.3 GHz, a 600 MHz Cortex-A7 camera SoC)
+EMBEDDED_BOGOMIPS = {
+    "MIPS 74Kc V5.0": "386.04",
+    "MIPS 24Kc V5.5": "385.84",
+    "MIPS 1004Kc V2.15": "586.13",
+    "ARMv7 Processor rev 1 (v7l)": "1594.36",
+    "ARMv7 Processor rev 5 (v7l)": "1196.85",
+}
+
+
 def bogomips(persona, hw):
     if persona.hardware_platform == "x86_64":
         return f"{cpu_mhz(hw) * 2:.2f}"
+    if hw.cpu_model in EMBEDDED_BOGOMIPS:
+        return EMBEDDED_BOGOMIPS[hw.cpu_model]
     if persona.hardware_platform == "mips":
         return "385.84"
     if persona.hardware_platform == "aarch64":
@@ -476,10 +519,21 @@ _AMD_FLAGS = ("fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat
               "nrip_save umip vaes vpclmulqdq rdpid")
 
 
+def x86_flags(hw):
+    """(flags, cpuid level): of the CPU on bare metal, else the vendor's set; only a VM has `hypervisor`."""
+    if hw.cpu_model in X86_BARE_METAL:
+        flags, level = X86_BARE_METAL[hw.cpu_model]
+    else:
+        flags, level = (_AMD_FLAGS if "AMD" in hw.cpu_model else _X86_FLAGS), 13
+    if hw.provider not in VM_PROVIDERS:
+        flags = " ".join(f for f in flags.split() if f != "hypervisor")
+    return flags, level
+
+
 def cpuinfo_x86(persona, hw):
     vendor = "AuthenticAMD" if "AMD" in hw.cpu_model else "GenuineIntel"
     family, model, stepping, cache, _, address = X86_CPUS.get(hw.cpu_model, _X86_DEFAULT)
-    flags = _AMD_FLAGS if vendor == "AuthenticAMD" else _X86_FLAGS
+    flags, level = x86_flags(hw)
     blocks = []
     for i in range(hw.cpus):
         blocks.append(
@@ -498,7 +552,7 @@ def cpuinfo_x86(persona, hw):
             f"apicid\t\t: {i}\n"
             "fpu\t\t: yes\n"
             "fpu_exception\t: yes\n"
-            "cpuid level\t: 13\n"
+            f"cpuid level\t: {level}\n"
             "wp\t\t: yes\n"
             f"flags\t\t: {flags}\n"
             f"bogomips\t: {bogomips(persona, hw)}\n"
@@ -510,19 +564,30 @@ def cpuinfo_x86(persona, hw):
     return "\n".join(blocks) + "\n"
 
 
+# ARMv7 cores: CPU variant, part, revision and the features a 3.10 / 3.18 kernel lists
+ARM_CORES = {
+    "ARMv7 Processor rev 1 (v7l)": ("0x4", "0xc09", "1", "swp half thumb fastmult vfp edsp neon vfpv3 tls vfpd32"),
+    "ARMv7 Processor rev 5 (v7l)": ("0x0", "0xc07", "5",
+                                    "swp half thumb fastmult vfp edsp neon vfpv3 tls vfpv4 idiva idivt vfpd32 lpae"),
+}
+
+
 def cpuinfo_arm(persona, hw):
+    """ARMv7 /proc/cpuinfo of a 3.8+ kernel: one block per CPU, then Hardware, Revision, Serial."""
+    variant, part, revision, features = ARM_CORES.get(
+        hw.cpu_model, ("0x4", "0xc09", "1", "half thumb fastmult vfp edsp neon vfpv3 tls vfpd32"))
     blocks = []
     for i in range(hw.cpus):
         blocks.append(
             f"processor\t: {i}\n"
             f"model name\t: {hw.cpu_model}\n"
             f"BogoMIPS\t: {bogomips(persona, hw)}\n"
-            "Features\t: half thumb fastmult vfp edsp neon vfpv3 tls vfpd32\n"
+            f"Features\t: {features} \n"
             "CPU implementer\t: 0x41\n"
             "CPU architecture: 7\n"
-            "CPU variant\t: 0x4\n"
-            "CPU part\t: 0xc09\n"
-            "CPU revision\t: 1\n"
+            f"CPU variant\t: {variant}\n"
+            f"CPU part\t: {part}\n"
+            f"CPU revision\t: {revision}\n"
         )
     tail = ""
     if hw.board:
@@ -530,25 +595,54 @@ def cpuinfo_arm(persona, hw):
     return "\n".join(blocks) + tail
 
 
-def cpuinfo_mips(persona, hw):
+# MIPS cores: PRId (dmesg "CPU revision is"), watch registers, ASEs on a 2.6 / a 4.x+ kernel, MT (VPEs)
+MIPS_CORES = {
+    "MIPS 74Kc V5.0": ("00019750", "[0x0000, 0x0ff8, 0x0ff8, 0x0ff8]", "mips16 dsp", "mips16 dsp dsp2", False),
+    "MIPS 24Kc V5.5": ("00019655", "[0x0ffc, 0x0ffc, 0x0ffb, 0x0ffb]", "mips16 dsp", "mips16 dsp", False),
+    "MIPS 1004Kc V2.15": ("0001992f", "[0x0ffc, 0x0ffc, 0x0ffb, 0x0ffb]", "mips16 dsp mt", "mips16 dsp mt", True),
+}
+_MIPS_OPTIONS = ("tlb 4kex 4k_cache prefetch mcheck ejtag llsc pindexed_dcache userlocal vint perf_cntr_intr_bit "
+                 "cdmm perf")
+
+
+def kernel_series(kernel_version):
+    """"2.6.31-svn58067" -> (2, 6), "5.10.221" -> (5, 10)."""
+    found = re.match(r"(\d+)\.(\d+)", kernel_version or "")
+    return (int(found.group(1)), int(found.group(2))) if found else (0, 0)
+
+
+def cpuinfo_mips(persona, hw, kernel=""):
+    """MIPS /proc/cpuinfo as the kernel prints it: 2.6 kernels without machine, isa
+    and Options lines; 4.x and later with them, kscratch, package and the VPE of MT cores."""
+    _, watch, ases_old, ases_new, mt = MIPS_CORES.get(hw.cpu_model, (None, None, "mips16 dsp", "mips16 dsp", False))
+    new = kernel_series(kernel) >= (3, 0)
     head = f"system type\t\t: {hw.board}\n" if hw.board else ""
+    if new and hw.machine:
+        head += f"machine\t\t\t: {hw.machine}\n"
     blocks = []
     for i in range(hw.cpus):
-        blocks.append(
-            f"processor\t\t: {i}\n"
-            f"cpu model\t\t: {hw.cpu_model}\n"
-            f"BogoMIPS\t\t: {bogomips(persona, hw)}\n"
-            "wait instruction\t: yes\n"
-            "microsecond timers\t: yes\n"
-            "tlb_entries\t\t: 32\n"
-            "extra interrupt vector\t: yes\n"
-            "isa\t\t\t: mips1 mips2 mips32r1 mips32r2\n"
-            "ASEs implemented\t: mips16 dsp\n"
-            "shadow register sets\t: 1\n"
-            f"core\t\t\t: {i}\n"
-            "VCED exceptions\t\t: not available\n"
-            "VCEI exceptions\t\t: not available\n"
-        )
+        lines = [f"processor\t\t: {i}",
+                 f"cpu model\t\t: {hw.cpu_model}",
+                 f"BogoMIPS\t\t: {bogomips(persona, hw)}",
+                 "wait instruction\t: yes",
+                 "microsecond timers\t: yes",
+                 "tlb_entries\t\t: 32",
+                 "extra interrupt vector\t: yes"]
+        if watch:
+            lines.append(f"hardware watchpoint\t: yes, count: 4, address/irw mask: {watch}")
+        if new:
+            lines.append("isa\t\t\t: mips1 mips2 mips32r1 mips32r2")
+        lines.append(f"ASEs implemented\t: {ases_new if new else ases_old}")
+        if new:
+            lines.append(f"Options implemented\t: {_MIPS_OPTIONS}")
+        lines.append("shadow register sets\t: 1")
+        if new:
+            lines += ["kscratch registers\t: 0", "package\t\t\t: 0"]
+        lines.append(f"core\t\t\t: {i // 2 if mt else i}")
+        if new and mt:
+            lines.append(f"VPE\t\t\t: {i % 2}")
+        lines += ["VCED exceptions\t\t: not available", "VCEI exceptions\t\t: not available"]
+        blocks.append("\n".join(lines) + "\n")
     return head + "\n".join(blocks) + "\n"
 
 
@@ -589,11 +683,11 @@ def pi_serial(ident):
     return f"{rng.getrandbits(64):016x}"
 
 
-def cpuinfo(persona, hw, serial="0000000000000000"):
+def cpuinfo(persona, hw, serial="0000000000000000", kernel=""):
     if persona.hardware_platform == "x86_64":
         return cpuinfo_x86(persona, hw)
     if persona.hardware_platform == "mips":
-        return cpuinfo_mips(persona, hw)
+        return cpuinfo_mips(persona, hw, kernel)
     if persona.hardware_platform == "aarch64":
         return cpuinfo_arm64(persona, hw, serial)
     return cpuinfo_arm(persona, hw)
@@ -779,19 +873,30 @@ def is_login_shell(entry):
     return entry["TTY"].startswith(TTY_PREFIXES)
 
 
+def ps_start(ts, now):
+    """START as procps prints it (pr_stime, in the honeypot's UTC): HH:MM for a
+    process of today, MonDD for one of this year, else its year."""
+    started, today = time.gmtime(ts), time.gmtime(now)
+    if started.tm_year != today.tm_year:
+        return gm(ts, "%Y")
+    if started.tm_yday != today.tm_yday:
+        return gm(ts, "%b%d")
+    return gm(ts, "%H:%M")
+
+
 def assign_processes(ident, entries):
     """PID 1 first, increasing PIDs drawn from pid_seed. Everything started at
     boot; a login shell (on a tty) at some time between boot and now. %MEM is
     RSS over MemTotal, as ps computes it."""
     rng = random.Random(ident.pid_seed)
-    boot = gm(ident.booted_at, "%b%d")
+    boot = ps_start(ident.booted_at, ident.now)
     pid = 0
     for entry in entries:
         if entry["RSS"]:
             entry["MEM"] = round(entry["RSS"] * 100 / ident.hardware.mem_kb, 1)
         if is_login_shell(entry):
             pid += rng.randint(200, 20000)
-            entry["START"] = gm(rng.randint(ident.booted_at, ident.now), "%b%d")
+            entry["START"] = ps_start(rng.randint(ident.booted_at, ident.now), ident.now)
         else:
             pid = 1 if pid == 0 else pid + (rng.randint(150, 450) if pid == 1 else rng.randint(8, 220))
             entry["START"] = boot
@@ -811,7 +916,7 @@ def base_files(persona, ident, passwd, group, shadow, home=None):
         "etc/hosts": hosts(ident.hostname),
         "proc/version": proc_version(ident.release),
         "proc/mounts": PROC_MOUNTS,
-        "proc/cpuinfo": cpuinfo(persona, ident.hardware, serial),
+        "proc/cpuinfo": cpuinfo(persona, ident.hardware, serial, ident.release.kernel_version),
         "proc/meminfo": meminfo(ident),
     }
     if persona.kind == "server" and persona.user != "root":

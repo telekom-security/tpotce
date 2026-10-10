@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 
 from . import PersonaError, tree
-from .common import home_dir, is_login_shell, ps_user
+from .common import VM_PROVIDERS, home_dir, is_login_shell, ps_start, ps_user
 from .identity import DAY, host_patterns, hostname_regex, kernel_time, stale_at, updated_at
 from .render import DIR_MODES, PACKAGE_MANAGER_PATHS
 from .ssh_profiles import COMPRESSIONS, HOST_KEYS, PROFILES, TWISTED_CIPHERS, TWISTED_MACS
@@ -86,7 +86,11 @@ def _check_ssh(persona, ident, cfg, out):
     banner = ident.release.ssh_banner
     ssh_version = cfg.get("shell", "ssh_version", fallback="")
     product = banner[len("SSH-2.0-"):].split(" ", 1)[0] if banner.startswith("SSH-2.0-") else ""
-    if product.lower().startswith("dropbear_"):
+    if product.lower() == "dropbear":
+        # OpenWrt builds dropbear without the version in its banner
+        if "dropbear" not in ssh_version.lower():
+            out.append(f"ssh_version {ssh_version!r} does not name dropbear of the banner")
+    elif product.lower().startswith("dropbear_"):
         version = product.split("_", 1)[1]
         if "dropbear" not in ssh_version.lower() or not re.search(rf"(^|\s){re.escape(version)}(\s|,|$)", ssh_version):
             out.append(f"ssh_version {ssh_version!r} does not name {product} of the banner")
@@ -139,6 +143,15 @@ def _check_hardware(persona, ident, honeyfs, txtcmds, out):
     if busybox and int(busybox.group(1)) + int(busybox.group(2)) != hw.mem_kb:
         out.append(f"top Mem used + free is not {hw.mem_kb}K")
 
+    flags = re.findall(r"^flags\s*: (.*)$", cpuinfo, re.M)
+    if any("hypervisor" in line.split() for line in flags) and hw.provider not in VM_PROVIDERS:
+        out.append(f"cpuinfo: hypervisor flag on bare metal ({hw.provider or 'device'})")
+    # the delay loop of dmesg is what cpuinfo shows per CPU (MIPS / ARM; x86 shows 2x MHz)
+    calibrated = re.search(r"([\d.]+) BogoMIPS \(lpj=", _text(txtcmds / "bin/dmesg"))
+    shown = set(re.findall(r"^(?:BogoMIPS|bogomips)\s*: ([\d.]+)$", cpuinfo, re.M))
+    if calibrated and shown and shown != {calibrated.group(1)}:
+        out.append(f"BogoMIPS {calibrated.group(1)} of dmesg is not the {' '.join(sorted(shown))} of cpuinfo")
+
 
 def _check_processes(persona, ident, path, out):
     try:
@@ -154,21 +167,28 @@ def _check_processes(persona, ident, path, out):
         return
     if ps_user(persona.user) not in {p["USER"] for p in processes}:
         out.append(f"processes: none of {persona.user}")
-    boot = time.strftime("%b%d", time.gmtime(ident.booted_at))
-    since_boot = {time.strftime("%b%d", time.gmtime(ts))
-                  for ts in range(ident.booted_at, ident.now, DAY)}
-    since_boot.add(time.strftime("%b%d", time.gmtime(ident.now)))
+    boot = ps_start(ident.booted_at, ident.now)
     for p in processes:
         if is_login_shell(p):
-            if p["START"] not in since_boot:
+            if not _start_between(p["START"], ident.booted_at, ident.now):
                 out.append(f"START {p['START']!r} of {p['COMMAND']!r} is not between boot and now")
         elif p["START"] != boot:
-            out.append(f"START {p['START']!r} of {p['COMMAND']!r} is not the boot day {boot}")
+            out.append(f"START {p['START']!r} of {p['COMMAND']!r} is not the boot {boot}")
     pids = [p["PID"] for p in processes]
     if pids[0] != 1:
         out.append(f"PID of {processes[0]['COMMAND']!r} is {pids[0]}, not 1")
     if len(set(pids)) != len(pids):
         out.append("PID used twice in ps")
+
+
+def _start_between(start, low, now):
+    """A procps START (HH:MM, MonDD or the year) of a process started between low and now."""
+    if re.fullmatch(r"\d{2}:\d{2}", start):
+        today = now // DAY * DAY
+        minute = today + int(start[:2]) * 3600 + int(start[3:]) * 60
+        return max(low, today) - 59 <= minute <= now
+    days = range(low // DAY * DAY, now + 1, DAY)
+    return any(ps_start(max(low, day), now) == start for day in days)
 
 
 def _check_tree(persona, ident, fs, out):
@@ -295,6 +315,46 @@ def _check_boot(honeyfs, txtcmds, out):
         out.append(f"boot: root={root} of dmesg is not the / entry {spec} of fstab")
 
 
+_MOUNT = re.compile(r"^(\S+) on (\S+) type (\S+) ", re.M)
+_VFS = re.compile(r"VFS: Mounted root \((\S+) filesystem\)(?: readonly)? on device (\d+):(\d+)\.")
+
+
+def _check_device_boot(honeyfs, txtcmds, out):
+    """Devices (no fstab): the kernel mounted its root as dmesg says, and mount shows
+    it: the file system type of "VFS: Mounted root" on /dev/root or the root= device
+    (/, /rom under an overlay or a mount point of the vendor), an mtdblock root on
+    MTD major 31 and its minor; an initramfs (no VFS line) has no root= and a tmpfs
+    or rootfs on /. Every file system of df is mounted."""
+    if _text(honeyfs / "etc/fstab"):
+        return
+    dmesg = _text(txtcmds / "bin/dmesg")
+    match = re.search(r"(?:Kernel command line|Command line): (.*)$", dmesg, re.M)
+    if not match:
+        out.append("boot: dmesg has no kernel command line")
+        return
+    root = next((t[len("root="):] for t in match.group(1).split() if t.startswith("root=")), None)
+    mounts = _MOUNT.findall(_text(txtcmds / "bin/mount"))
+    vfs = _VFS.search(dmesg)
+    if vfs is None:
+        if root is not None:
+            out.append(f"boot: root={root} of dmesg, but no root was mounted from it")
+        if not any(mp == "/" and fs in ("tmpfs", "rootfs") for _, mp, fs in mounts):
+            out.append("boot: an initramfs boot without a tmpfs or rootfs on /")
+    else:
+        fstype, major, minor = vfs.group(1), int(vfs.group(2)), int(vfs.group(3))
+        devices = {"/dev/root", root} if root else {"/dev/root"}
+        if not any(dev in devices and fs == fstype for dev, _, fs in mounts):
+            out.append(f"boot: dmesg mounted a {fstype} root, mount shows none on {' or '.join(sorted(devices))}")
+        mtd = re.fullmatch(r"/dev/mtdblock(\d+)", root or "")
+        if mtd and (major, minor) != (31, int(mtd.group(1))):
+            out.append(f"boot: root={root}, but dmesg mounted device {major}:{minor}")
+    mounted = {(dev, mp) for dev, mp, _ in mounts}
+    for line in _text(txtcmds / "bin/df").splitlines()[1:]:
+        fields = line.split()
+        if len(fields) >= 6 and (fields[0], fields[-1]) not in mounted:
+            out.append(f"df: {fields[0]} on {fields[-1]} is not in mount")
+
+
 def _check_dates(ident, honeyfs, out):
     first, last = _utc_date(ident.installed_at), _utc_date(ident.now)
     for path in sorted((honeyfs / "var/log").rglob("*")):
@@ -405,10 +465,13 @@ def problems(persona, ident, out_dir, runtime_dir, keys_dir, min_pickle=MIN_PICK
 
     _check_hardware(persona, ident, honeyfs, txtcmds, out)
     _check_boot(honeyfs, txtcmds, out)
+    if persona.kind == "device":
+        _check_device_boot(honeyfs, txtcmds, out)
 
     os_release = _text(honeyfs / "etc/os-release")
     fields = dict(line.split("=", 1) for line in os_release.splitlines() if "=" in line)
-    if fields.get("ID", "").strip().strip('"') != persona.os_id:
+    # firmware of routers, cameras and NAS vendors has no os-release
+    if (os_release or persona.kind != "device") and fields.get("ID", "").strip().strip('"') != persona.os_id:
         out.append(f"os-release ID is not {persona.os_id}")
     if "VERSION_ID" in fields and fields["VERSION_ID"].strip().strip('"') != r.os_version_id:
         out.append(f"os-release VERSION_ID is not {r.os_version_id}")

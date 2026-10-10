@@ -11,13 +11,16 @@ image date), Release.extra["updated"] the day of the update that brought the
 release's versions; the identity installs not before the first, boots after the
 second and after its kernel was built, and logs the upgrades between them.
 
-Devices: the values of the generator before the persona library (one release,
-one hardware entry and one host name each); Task 4 renews them.
+Devices (2026 catalog): every release is one firmware image of the vendor, with
+its download or release-note page above it (Release.extra["firmware"]): the
+device was set up with it on or after the day it came out and still runs it, so
+its versions go stale only when the next firmware came out.
 """
 from dataclasses import replace
 
 from . import PersonaError
-from .devices import build_iot_nas, build_iot_router, build_openwrt, build_qnap, build_synology, build_ubiquiti
+from .devices import (build_dlink, build_ipcam, build_openwrt, build_qnap, build_synology, build_tplink, build_ubiquiti,
+                      build_zyxel)
 from .model import Hardware, Persona, Release
 from .servers import build_centos, build_debian, build_gpu_ubuntu, build_raspios, build_rhel, build_ubuntu
 
@@ -65,8 +68,6 @@ GPU_HARDWARE = (
     Hardware(cpus=32, cpu_model="AMD EPYC 7543 32-Core Processor", mem_kb=263932668, disk_kb=1875110796,
              gpus=("NVIDIA GeForce RTX 4090",), gpu_mem_mib=24564, provider="gpu"),
 )
-# single core MIPS SoC with 64 MB as on small routers
-MIPS_ROUTER = Hardware(cpus=1, cpu_model="MIPS 24Kc V7.4", mem_kb=65536, disk_kb=8192)
 
 
 # --- release helpers ----------------------------------------------------------------
@@ -95,6 +96,34 @@ def _chain(*releases, stale=None):
 def _medium(release):
     """The patch level of an installation image (point release)."""
     return replace(release, extra={**release.extra, "medium": True})
+
+
+def _firmware(label, released, superseded, banner, ssh_version, kernel, uts, builder, compiler, os_version,
+              os_version_id, packages=None, **extra):
+    """A device firmware: installed (set up) from the day it came out
+    (first_install = updated), stale only when the vendor's next firmware came
+    out (superseded, None for the last one)."""
+    days = {"first_install": released, "updated": released}
+    if superseded:
+        assert superseded > released, label
+        days["superseded"] = superseded
+    return Release(label=label, ssh_banner=banner, ssh_version=ssh_version, kernel_version=kernel,
+                   kernel_build=uts, os_version=os_version, os_version_id=os_version_id, packages=packages or {},
+                   extra={"firmware": True, **days, "kernel_builder": builder, "kernel_compiler": compiler,
+                          **extra})
+
+
+def _device(pid, family, os_id, user, shell, arch, ssh_profile, managers, releases, hardware, hostnames, builder,
+            vulnerability, uid=1000, operating_system="Linux", remove_paths=(), max_install_days=900):
+    return Persona(
+        id=pid, family=family, kind="device", os_id=os_id,
+        user=user, uid=uid, gid=uid, shell=shell,
+        arch=arch[0], hardware_platform=arch[1], operating_system=operating_system,
+        ssh_profile=ssh_profile, package_managers=managers,
+        releases=releases, hardware=hardware, hostnames=hostnames,
+        builder=builder, vulnerability=vulnerability, remove_paths=remove_paths,
+        max_install_days=max_install_days,
+    )
 
 
 def _ubuntu(updated, codename, os_version, openssh, openssh_before, kernel, uts, builder, compiler, openssl, packages,
@@ -518,6 +547,240 @@ GPU_RELEASES = (
 )
 
 
+# --- devices ----------------------------------------------------------------------------
+# Each release is one firmware image of the vendor (its download or release-note
+# page above it); kernel, BusyBox and SSH server as in that image unless marked
+# unverified. A device runs the image it was set up with until the next one came out.
+MIPS = ("linux-mips-lsb", "mips")
+# the paths of Cowrie's Debian tree that a router, camera or NAS firmware does not have
+VENDOR_ONLY = ("etc/os-release", "etc/debian_version", "etc/issue", "etc/issue.net", "etc/motd")
+
+# DIR-859 A1/A3: QCA9563 (MIPS 74Kc), 64 MB (mem=64m of the built-in kernel command line), squashfs
+#   of the 1.05B03 image; unverified: MemTotal
+DLINK_HARDWARE = (Hardware(cpus=1, cpu_model="MIPS 74Kc V5.0", mem_kb=61496, disk_kb=5888, board="QCA956x"),)
+_DLINK_KERNEL = ("2.6.31-svn58067", "#1 Fri Jun 24 11:05:39 CST 2016", "vic@localhost.localdomain",
+                 "gcc version 4.3.3 (GCC) ")
+DLINK = (
+    # source: https://legacyfiles.us.dlink.com/DIR-859/REVA/FIRMWARE/ (DIR-859_REVA_FIRMWARE_1.05B03.zip:
+    #   release note "June, 2016", kernel and BusyBox from the image; /etc/config of its squashfs)
+    # unverified: the day of the release (the note names the month); the dropbear of the persona (the
+    #   image has telnetd only), taken from the TP-Link firmware of the same SDK era
+    _firmware("1.05B03", "2016-06-30", "2019-12-26", "SSH-2.0-dropbear_2012.55", "Dropbear sshd 2012.55",
+              *_DLINK_KERNEL, "1.05", "1.05", busybox="BusyBox v1.14.1 (2016-06-28 10:53:08 CST)", buildrev="b03",
+              image_sign="wrgac37_dlink.2013gui_dir859"),
+    # source: https://legacyfiles.us.dlink.com/DIR-859/REVA/FIRMWARE/ (DIR-859_REVA_FIRMWARE_1.07B03_HOTFIX.zip,
+    #   release note "December 26, 2019", the last firmware of the DIR-859)
+    # unverified: kernel and BusyBox (the 1.07 images are encrypted): the kernel of 1.05B03, BusyBox
+    #   rebuilt on the image date
+    _firmware("1.07B03", "2019-12-26", None, "SSH-2.0-dropbear_2012.55", "Dropbear sshd 2012.55",
+              *_DLINK_KERNEL, "1.07", "1.07", busybox="BusyBox v1.14.1 (2019-12-16 17:42:08 CST)", buildrev="b03",
+              image_sign="wrgac37_dlink.2013gui_dir859"),
+)
+
+# TL-WR841N v14: MT7628NN (MIPS 24KEc, named 24Kc by 2.6 kernels), 4 MB flash, 32 MB; system type,
+#   MemTotal and BogoMIPS unverified
+TPLINK_HARDWARE = (Hardware(cpus=1, cpu_model="MIPS 24Kc V5.5", mem_kb=29436, disk_kb=2752, board="MT7628"),)
+_TPLINK_GCC = "gcc version 4.6.3 (Buildroot 2012.11.1) "
+
+
+def _tplink(build, rel, released, superseded, uts, builder, busybox):
+    # the firmware version as the web UI shows it (unverified: "v0348.0")
+    return _firmware(build, released, superseded, "SSH-2.0-dropbear_2012.55", "Dropbear sshd 2012.55", "2.6.36",
+                     uts, builder, _TPLINK_GCC, f"0.9.1 4.19 v0348.0 Build {build} Rel.{rel}n", "0.9.1",
+                     busybox=busybox)
+
+
+# kernel, BusyBox and dropbear_2012.55 from the squashfs of each image (US firmware); released / superseded:
+#   the dates of the download page (the next US image)
+TPLINK = (
+    # source: https://www.tp-link.com/us/support/download/tl-wr841n/v14/ (TL-WR841N(US)_V14_220816, 2022-11-23)
+    _tplink("220816", "43928", "2022-11-23", "2023-11-24", "#1 Tue Aug 16 12:04:29 CST 2022", "jenkins@sohoici",
+            "BusyBox v1.19.2 (2022-08-16 12:08:08 CST)"),
+    # source: https://www.tp-link.com/us/support/download/tl-wr841n/v14/ (TL-WR841N(US)_V14_231119, 2023-11-24)
+    _tplink("231119", "69901", "2023-11-24", "2025-01-21", "#1 Sun Nov 19 19:19:44 PST 2023", "zhang@ubuntu",
+            "BusyBox v1.19.2 (2023-11-19 19:21:54 PST)"),
+    # source: https://www.tp-link.com/us/support/download/tl-wr841n/v14/ (TL-WR841N(US)_V14_250328, 2025-04-18)
+    _tplink("250328", "51324", "2025-04-18", "2026-01-14", "#1 Fri Mar 28 14:12:15 CST 2025",
+            "jenkins@sohoicilinux4", "BusyBox v1.19.2 (2025-03-28 14:13:40 CST)"),
+)
+
+# NAS326: Marvell Armada 380 (one Cortex-A9 at 1.3 GHz), 512 MB, one or two disks in the volume;
+#   unverified: MemTotal, BogoMIPS
+ZYXEL_HARDWARE = (
+    Hardware(cpus=1, cpu_model="ARMv7 Processor rev 1 (v7l)", mem_kb=506472, disk_kb=1921710080,
+             board="Marvell Armada 380/385 (Device Tree)"),
+    Hardware(cpus=1, cpu_model="ARMv7 Processor rev 1 (v7l)", mem_kb=506472, disk_kb=3843514368,
+             board="Marvell Armada 380/385 (Device Tree)"),
+)
+_ZYXEL_GCC = "gcc version 4.8.5 20150209 (prerelease) (crosstool-NG 1.21.0) "
+# OpenSSH 6.7p1 and OpenSSL 1.0.2h from the system image (sysdisk) of V5.21(AAZF.14)C0
+_ZYXEL_SSH = ("SSH-2.0-OpenSSH_6.7p1", "OpenSSH_6.7p1, OpenSSL 1.0.2h  3 May 2016")
+ZYXEL = (
+    # source: https://www.zyxel.com/global/en/support/download?model=nas326 (521AAZF14C0.pdf, "June 1, 2023";
+    #   kernel from the image)
+    # unverified: superseded by AAZF.16 (2024-01-10, no AAZF.15 release note); BusyBox (not in the image strings)
+    _firmware("5.21(AAZF.14)C0", "2023-06-01", "2024-01-10", *_ZYXEL_SSH, "3.10.39",
+              "#1 Fri May 26 10:10:07 CST 2023", "root@twsvnnt01652-01", _ZYXEL_GCC, "V5.21(AAZF.14)C0", "5.21",
+              busybox="BusyBox v1.19.4 (2023-05-26 10:21:37 CST)"),
+    # source: https://www.zyxel.com/global/en/support/download?model=nas326 (521AAZF18C0.pdf, "June 17, 2024",
+    #   the last firmware listed)
+    # unverified: the kernel build time (the image is packed), OpenSSH as in AAZF.14, BusyBox
+    _firmware("5.21(AAZF.18)C0", "2024-06-17", None, *_ZYXEL_SSH, "3.10.39",
+              "#1 Tue Jun 11 16:42:51 CST 2024", "root@twsvnnt01652-01", _ZYXEL_GCC, "V5.21(AAZF.18)C0", "5.21",
+              busybox="BusyBox v1.19.4 (2024-06-11 16:53:20 CST)"),
+)
+
+# MT7621A routers with NOR flash (MIPS 1004Kc, 2 cores x 2 VPEs, 880 MHz, 128 MB); hardware.disk_kb is the
+#   firmware partition; unverified: MemTotal, BogoMIPS, the MTD numbers of the rootfs split
+# source: https://openwrt.org/toh/xiaomi/mi_router_4a_gigabit_edition
+# source: https://openwrt.org/toh/tp-link/archer_c6_v3
+_MT7621 = "MediaTek MT7621 ver:1 eco:3"
+XIAOMI_4A = "Xiaomi Mi Router 4A Gigabit Edition"
+ARCHER_C6 = "TP-Link Archer C6 v3"
+OPENWRT_HARDWARE = (
+    Hardware(cpus=4, cpu_model="MIPS 1004Kc V2.15", mem_kb=124108, disk_kb=15104, board=_MT7621, machine=XIAOMI_4A),
+    Hardware(cpus=4, cpu_model="MIPS 1004Kc V2.15", mem_kb=123844, disk_kb=7680, board=_MT7621, machine=ARCHER_C6),
+)
+_OPENWRT_DEVICES = {"rootfs_mtd": {XIAOMI_4A: 9, ARCHER_C6: 3},
+                    "board_names": {XIAOMI_4A: "xiaomi,mi-router-4a-gigabit", ARCHER_C6: "tplink,archer-c6-v3"}}
+
+
+def _openwrt(version, revision, released, kernel, uts, compiler, dropbear, busybox, kernel_kb, rootfs_kb):
+    # the last release of an end-of-life branch: no next firmware, it stays
+    return _firmware(version, released, None, "SSH-2.0-dropbear", f"Dropbear v{dropbear}", kernel, uts,
+                     "builder@buildhost", compiler, version, version, revision=revision, target="ramips/mt7621",
+                     pkg_arch="mipsel_24kc", busybox=busybox, kernel_kb=kernel_kb, rootfs_kb=rootfs_kb,
+                     **_OPENWRT_DEVICES)
+
+
+# kernel, BusyBox and the dropbear package from the ramips/mt7621 sysupgrade images; dropbear of OpenWrt
+#   sends no version in its banner; df of /rom: the squashfs in 256 KiB blocks, kernel_kb the uImage
+OPENWRT = (
+    # source: https://openwrt.org/releases/21.02/notes-21.02.7 (2023-05-01, r16847-f8282da11e, Linux 5.4.238)
+    _openwrt("21.02.7", "r16847-f8282da11e", "2023-05-01", "5.4.238", "#0 SMP Mon Apr 17 13:15:36 2023",
+             "gcc version 8.4.0 (OpenWrt GCC 8.4.0 r16847-f8282da11e)", "2020.81",
+             "BusyBox v1.33.2 (2023-04-17 13:15:36 UTC)", 2330, 3328),
+    # source: https://openwrt.org/releases/22.03/notes-22.03.7 (2024-07-25, r20341-591b7e93d3, Linux 5.10.221)
+    _openwrt("22.03.7", "r20341-591b7e93d3", "2024-07-25", "5.10.221", "#0 SMP Mon Jul 15 22:25:54 2024",
+             "mipsel-openwrt-linux-musl-gcc (OpenWrt GCC 11.2.0 r20341-591b7e93d3) 11.2.0, GNU ld (GNU Binutils) "
+             "2.37", "2022.82", "BusyBox v1.35.0 (2024-07-15 22:25:54 UTC)", 2652, 3840),
+)
+
+X86 = ("linux-x64-lsb", "x86_64")
+# TS-451+ (Celeron J1900, 4 cores, 2 GB) and TS-464 (Celeron N5105, 4 cores, 8 GB); unverified: MemTotal
+QNAP_HARDWARE = (
+    Hardware(cpus=4, cpu_model="Intel(R) Celeron(R) CPU  J1900  @ 1.99GHz", mem_kb=1945988, disk_kb=3840539624),
+    Hardware(cpus=4, cpu_model="Intel(R) Celeron(R) N5105 @ 2.00GHz", mem_kb=7881640, disk_kb=7691397408),
+)
+
+
+def _qts(version, number, build, released, superseded, uts, openssh, openssl):
+    # unverified: uname -v (built the night of the build date), builder and compiler of the QNAP kernel,
+    #   the OpenSSH / OpenSSL of each build
+    return _firmware(f"{version}.{number}", released, superseded, f"SSH-2.0-OpenSSH_{openssh.split('p')[0]}",
+                     f"OpenSSH_{openssh}, {openssl}", "5.10.60-qnap", uts, "root@U16BuildServer141",
+                     "gcc version 8.4.0 (GCC) ", f"{version}.{number} build {build}", version, build=build,
+                     number=number)
+
+
+# QTS 5.2 builds of the release notes; superseded by the next build of the notes
+QNAP = (
+    # source: https://www.qnap.com/en/release-notes/qts (QTS 5.2.3.3006 build 20250108, 2025-01-10)
+    _qts("5.2.3", "3006", "20250108", "2025-01-10", "2025-03-17", "#1 SMP Wed Jan 8 02:31:17 CST 2025", "9.8p1",
+         "OpenSSL 3.0.15 3 Sep 2024"),
+    # source: https://www.qnap.com/en/release-notes/qts (QTS 5.2.6.3229 build 20250818, 2025-08-21)
+    _qts("5.2.6", "3229", "20250818", "2025-08-21", "2025-09-25", "#1 SMP Mon Aug 18 02:27:40 CST 2025", "9.9p2",
+         "OpenSSL 3.0.16 11 Feb 2025"),
+    # source: https://www.qnap.com/en/release-notes/qts (QTS 5.2.8.3359 build 20251225, 2026-01-07)
+    _qts("5.2.8", "3359", "20251225", "2026-01-07", "2026-03-04", "#1 SMP Thu Dec 25 02:19:52 CST 2025", "9.9p2",
+         "OpenSSL 3.0.17 1 Jul 2025"),
+)
+
+# DS1618+ (Atom C3538) and DS920+ (Celeron J4125), 4 GB each; the provider names the platform for the
+#   host names (DS1618 / DS920 only on their CPU); unverified: MemTotal
+SYNOLOGY_HARDWARE = (
+    Hardware(cpus=4, cpu_model="Intel(R) Atom(TM) CPU C3538 @ 2.10GHz", mem_kb=3933060, disk_kb=11231231488,
+             provider="denverton"),
+    Hardware(cpus=4, cpu_model="Intel(R) Celeron(R) J4125 CPU @ 2.00GHz", mem_kb=3765644, disk_kb=5615615744,
+             provider="geminilake"),
+)
+
+
+def _dsm(version, build, smallfix, released, superseded, uts, builddate, openssl):
+    # unverified: uname -v, builder and compiler of the kernel, builddate, the OpenSSL of ssh -V
+    #   (DSM 7.2 moved to OpenSSL 3; OpenSSH 8.2p1 of DSM 7)
+    return _firmware(f"{version}-{build} Update {smallfix}", released, superseded, "SSH-2.0-OpenSSH_8.2",
+                     f"OpenSSH_8.2p1, {openssl}", "4.4.302+", uts, "root@build13", "gcc version 12.2.0 (GCC) ",
+                     version, version.rsplit(".", 1)[0] if version.count(".") == 2 else version, build=build,
+                     smallfix=smallfix, builddate=builddate)
+
+
+# DSM updates of the release notes of the DS920+ / DS1618+; superseded: the next DSM a box of that level
+#   is offered (7.2.1 Update 5 -> 7.2.2-72803, 7.2.2 Update 4 -> 7.3)
+SYNOLOGY = (
+    # source: https://www.synology.com/en-global/releaseNote/DSM?model=DS920%2B (7.2.1-69057 Update 5, 2024-04-08)
+    _dsm("7.2.1", "69057", "5", "2024-04-08", "2024-08-26", "#69057 SMP Wed Mar 27 18:12:44 CST 2024",
+         "2024/03/27", "OpenSSL 3.0.13 30 Jan 2024"),
+    # source: https://www.synology.com/en-global/releaseNote/DSM?model=DS920%2B (7.2.2-72806 Update 3, 2025-02-04)
+    _dsm("7.2.2", "72806", "3", "2025-02-04", "2025-07-24", "#72806 SMP Tue Jan 21 15:40:31 CST 2025",
+         "2025/01/21", "OpenSSL 3.0.15 3 Sep 2024"),
+    # source: https://www.synology.com/en-global/releaseNote/DSM?model=DS920%2B (7.2.2-72806 Update 4, 2025-07-24)
+    _dsm("7.2.2", "72806", "4", "2025-07-24", "2025-10-08", "#72806 SMP Tue Jul 8 16:05:22 CST 2025",
+         "2025/07/08", "OpenSSL 3.0.16 11 Feb 2025"),
+)
+
+# EdgeRouter X: MT7621AT (2 cores x 2 VPEs), 256 MB, 256 MB NAND (UBI); unverified: MemTotal, the machine
+#   name of the vendor kernel, the UBI volume size; df of /root.ro: the squashfs of the image in 128 KiB blocks
+EDGEOS_HARDWARE = (Hardware(cpus=4, cpu_model="MIPS 1004Kc V2.15", mem_kb=249832, disk_kb=196608, board=_MT7621,
+                            machine="UBNT_E50"),)
+# kernel, BusyBox, OpenSSH (Debian 9 package, linked with OpenSSL 1.0.2u), dpkg and apt from the images
+_EDGEOS_SSH = ("SSH-2.0-OpenSSH_7.4p1 Debian-10+deb9u7", "OpenSSH_7.4p1 Debian-10+deb9u7, OpenSSL 1.0.2u  20 Dec 2019")
+_EDGEOS_GCC = "gcc version 6.3.0 20170516 (Debian 6.3.0-18) "
+
+
+def _edgeos(hotfix, image, released, superseded, uts, builder, busybox, squashfs_kb):
+    return _firmware(f"2.0.9-hotfix.{hotfix}", released, superseded, *_EDGEOS_SSH, "4.14.54-UBNT", uts, builder,
+                     _EDGEOS_GCC, f"v2.0.9-hotfix.{hotfix}", "9", packages={"dpkg": "1.18.25", "apt": "1.4.10"},
+                     image=image, busybox=busybox, squashfs_kb=squashfs_kb, deb_arch="mipsel")
+
+
+EDGEOS = (
+    # source: https://dl.ui.com/firmwares/edgemax/v2.0.9-hotfix.2/ER-e50.v2.0.9-hotfix.2.5402463.tar
+    # unverified: the release day (a week after the build), superseded by hotfix.4 (its build date)
+    _edgeos(2, "v2.0.9-hotfix.2.5402463.210511.1317", "2021-05-18", "2022-06-30",
+            "#1 SMP Tue May 11 13:23:28 UTC 2021", "ubnt@5dd49e7e3fb9", "BusyBox v1.27.2 (2021-05-11 12:39:02 UTC)",
+            69888),
+    # source: https://dl.ui.com/firmwares/edgemax/v2.0.9-hotfix.7/ER-e50.v2.0.9-hotfix.7.5622731.tar (the last
+    #   EdgeOS of the ER-X); unverified: the release day
+    _edgeos(7, "v2.0.9-hotfix.7.5622731.230615.0857", "2023-06-20", None, "#1 SMP Thu Jun 15 09:00:10 UTC 2023",
+            "ubnt@a704596799ed", "BusyBox v1.27.2 (2023-06-15 08:27:54 UTC)", 70144),
+)
+
+# IP camera in the style of Hikvision's DS-2CD2xxx: one Cortex-A7 (HiSilicon class SoC), 64 or 128 MB for
+#   Linux (mem= of the command line, the rest for the video buffers), a dav partition with the application;
+# unverified: all values of the camera (kernel, toolchain, BusyBox, dropbear and the firmware strings follow
+#   the version pairs of the brief, not one image), the dates of the firmware
+IPCAM_HARDWARE = (
+    Hardware(cpus=1, cpu_model="ARMv7 Processor rev 5 (v7l)", mem_kb=60268, disk_kb=12288,
+             board="Generic DT based system"),
+    Hardware(cpus=1, cpu_model="ARMv7 Processor rev 5 (v7l)", mem_kb=119744, disk_kb=16384,
+             board="Generic DT based system"),
+)
+_IPCAM_GCC = "gcc version 4.9.4 20150629 (prerelease) (Hisilicon_v500_20170922) "
+IPCAM = (
+    # source: https://www.hikvision.com/en/support/download/firmware/ (firmware of the DS-2CD2x43G0 series)
+    _firmware("V5.5.82_190909", "2019-10-15", "2021-03-01", "SSH-2.0-dropbear_2015.71", "Dropbear sshd 2015.71",
+              "3.18.20", "#1 SMP Mon Sep 9 17:05:12 CST 2019", "root@localhost.localdomain", _IPCAM_GCC,
+              "V5.5.82", "5.5", firmware_version="V5.5.82 build 190909",
+              busybox="BusyBox v1.19.4 (2019-09-09 17:21:46 CST)"),
+    # source: https://www.hikvision.com/en/support/download/firmware/ (firmware of the DS-2CD2x43G2 series)
+    _firmware("V5.7.3_220112", "2022-02-15", None, "SSH-2.0-dropbear_2016.74", "Dropbear sshd 2016.74",
+              "3.18.20", "#1 SMP Wed Jan 12 11:38:57 CST 2022", "root@localhost.localdomain", _IPCAM_GCC,
+              "V5.7.3", "5.7", firmware_version="V5.7.3 build 220112",
+              busybox="BusyBox v1.26.2 (2022-01-12 11:52:03 CST)"),
+)
+
+
 def _server(pid, family, os_id, user, releases, hardware, hostnames, builder, vulnerability, managers=APT,
             arch=("linux-x64-lsb", "x86_64"), tokens=(), max_install_days=900):
     return Persona(
@@ -559,174 +822,32 @@ PERSONAS = (
             ("dgx:dgx{nn}", "dgx:a100-worker-{nn}", "gpu-node-{nn}", "gpu:ml-{hex6}", "gpu:{gpu}-worker-{nn}"),
             build_gpu_ubuntu, "GPU server with NVIDIA driver, Ollama and Jupyter",
             tokens=(("hf", "hf"), ("openai", "openai"))),
-    Persona(
-        id="dlink-dir859", family="iot-router", kind="device", os_id="dlink",
-        user="admin", uid=1000, gid=1000, shell="/bin/sh",
-        arch="linux-mips-lsb", hardware_platform="mips", operating_system="Linux",
-        ssh_profile="dropbear", package_managers=(),
-        releases=(
-            Release(
-                label="1.06B01",
-                ssh_banner="SSH-2.0-dropbear_2012.55",
-                ssh_version="Dropbear sshd 2012.55",
-                kernel_version="2.6.30.9",
-                kernel_build="#1 Thu Oct 18 17:14:26 CST 2018",
-                os_version="V1.06B01",
-                os_version_id="1.06",
-                extra={"model": "DIR-859", "busybox": "BusyBox v1.19.4 (2018-10-18 17:14:26 CST)",
-                       "kernel_builder": "build@dlink-sw2"},
-            ),
-        ),
-        hardware=(MIPS_ROUTER,),
-        hostnames=("DIR-859",),
-        builder=build_iot_router,
-        vulnerability="D-Link DIR-859 CVE-2019-17621-style router fingerprint",
-    ),
-    Persona(
-        id="tplink-wr841n", family="iot-router", kind="device", os_id="tplink",
-        user="admin", uid=1000, gid=1000, shell="/bin/sh",
-        arch="linux-mips-lsb", hardware_platform="mips", operating_system="Linux",
-        ssh_profile="dropbear", package_managers=(),
-        releases=(
-            Release(
-                label="0.9.1",
-                ssh_banner="SSH-2.0-dropbear_2015.67",
-                ssh_version="Dropbear sshd 2015.67",
-                kernel_version="3.18.23",
-                kernel_build="#1 Mon Jan 9 15:21:00 CST 2023",
-                os_version="0.9.1",
-                os_version_id="0.9.1",
-                extra={"model": "TL-WR841N", "hw_version": "14.0",
-                       "busybox": "BusyBox v1.25.1 (2023-01-09 15:21:00 CST)",
-                       "kernel_builder": "tplink@buildserver"},
-            ),
-        ),
-        hardware=(MIPS_ROUTER,),
-        hostnames=("TL-WR841N",),
-        builder=build_iot_router,
-        vulnerability="TP-Link TL-WR841N CVE-2023-33538-style router fingerprint",
-    ),
-    Persona(
-        id="zyxel-nas326", family="iot-nas", kind="device", os_id="zyxel",
-        user="admin", uid=1000, gid=1000, shell="/bin/sh",
-        arch="linux-arm-lsb", hardware_platform="armv7l", operating_system="Linux",
-        ssh_profile="dropbear", package_managers=(),
-        releases=(
-            Release(
-                label="5.21(AAZF.7)",
-                ssh_banner="SSH-2.0-dropbear_2014.63",
-                ssh_version="Dropbear sshd 2014.63",
-                kernel_version="3.2.54",
-                kernel_build="#1 SMP Tue Jan 14 02:32:09 CST 2020",
-                os_version="V5.21(AAZF.7)",
-                os_version_id="5.21",
-                extra={"model": "NAS326", "busybox": "BusyBox v1.19.4 (2020-01-14 02:32:09 CST)",
-                       "kernel_builder": "root@nas-build"},
-            ),
-        ),
-        # Marvell Armada 385, single core
-        hardware=(Hardware(cpus=1, cpu_model="ARMv7 Processor rev 1 (v7l)", mem_kb=262144, disk_kb=389120000,
-                           board="Marvell Armada 380/385 (Device Tree)"),),
-        hostnames=("NAS326",),
-        builder=build_iot_nas,
-        vulnerability="Zyxel NAS326 CVE-2020-9054-style NAS fingerprint",
-    ),
-    Persona(
-        id="openwrt-1806", family="openwrt", kind="device", os_id="openwrt",
-        user="root", uid=0, gid=0, shell="/bin/ash",
-        arch="linux-mips-lsb", hardware_platform="mips", operating_system="Linux",
-        ssh_profile="dropbear", package_managers=("opkg",),
-        releases=(
-            Release(
-                label="18.06.2",
-                ssh_banner="SSH-2.0-dropbear_2017.75",
-                ssh_version="Dropbear sshd 2017.75",
-                kernel_version="4.14.95",
-                kernel_build="#0 Mon Jan 28 08:54:02 2019",
-                os_version="18.06.2",
-                os_version_id="18.06.2",
-                extra={"revision": "r7676-cddd7b4c77", "target": "ramips/mt7620", "pkg_arch": "mipsel_24kc",
-                       "busybox": "BusyBox v1.28.4 ()", "kernel_builder": "builder@buildhost"},
-            ),
-        ),
-        hardware=(MIPS_ROUTER,),
-        hostnames=("OpenWrt",),
-        builder=build_openwrt,
-        vulnerability="OpenWrt 18.06 Dropbear router fingerprint",
-        remove_paths=("home/root", "etc/motd"),
-    ),
-    Persona(
-        id="qnap-qts", family="qnap", kind="device", os_id="qnap",
-        user="admin", uid=1000, gid=1000, shell="/bin/sh",
-        arch="linux-x64-lsb", hardware_platform="x86_64", operating_system="GNU/Linux",
-        ssh_profile="openssh", package_managers=("qpkg_cli",),
-        releases=(
-            Release(
-                label="5.1.0",
-                ssh_banner="SSH-2.0-OpenSSH_8.4",
-                ssh_version="OpenSSH_8.4p1, OpenSSL 1.1.1t 7 Feb 2023",
-                kernel_version="5.10.60-qnap",
-                kernel_build="#1 SMP Tue Sep 12 01:23:45 CST 2023",
-                os_version="5.1.0",
-                os_version_id="5.1.0",
-                extra={"model": "TS-451+", "build": "20230912", "kernel_builder": "root@U16BuildServer141"},
-            ),
-        ),
-        # TS-451+: Celeron J1900 (4 cores), 2 GB
-        hardware=(Hardware(cpus=4, cpu_model="Intel(R) Celeron(R) CPU  J1900  @ 1.99GHz",
-                           mem_kb=1945988, disk_kb=389120000),),
-        hostnames=("NAS4BAY",),
-        builder=build_qnap,
-        vulnerability="QNAP QTS NAS fingerprint",
-    ),
-    Persona(
-        id="synology-dsm", family="synology", kind="device", os_id="synology",
-        user="admin", uid=1000, gid=1000, shell="/bin/sh",
-        arch="linux-x64-lsb", hardware_platform="x86_64", operating_system="GNU/Linux",
-        ssh_profile="openssh", package_managers=("synopkg",),
-        releases=(
-            Release(
-                label="7.1.1-42962",
-                ssh_banner="SSH-2.0-OpenSSH_8.2",
-                ssh_version="OpenSSH_8.2p1, OpenSSL 1.1.1t 7 Feb 2023",
-                kernel_version="4.4.302+",
-                kernel_build="#64570 SMP Fri Jul 21 00:00:00 CST 2023",
-                os_version="7.1.1",
-                os_version_id="7.1",
-                extra={"build": "42962", "smallfix": "6", "builddate": "2023/06/05",
-                       "kernel_builder": "root@build3"},
-            ),
-        ),
-        # Atom C3538 (4 cores, matches the C3000 chipset of lspci), 4 GB
-        hardware=(Hardware(cpus=4, cpu_model="Intel(R) Atom(TM) CPU C3538 @ 2.10GHz",
-                           mem_kb=3933060, disk_kb=389120000),),
-        hostnames=("DiskStation",),
-        builder=build_synology,
-        vulnerability="Synology DSM 7.1 NAS fingerprint",
-    ),
-    Persona(
-        id="ubiquiti-edgerouter-x", family="ubiquiti", kind="device", os_id="edgeos",
-        user="ubnt", uid=1000, gid=1000, shell="/bin/vbash",
-        arch="linux-mips-lsb", hardware_platform="mips", operating_system="GNU/Linux",
-        ssh_profile="openssh", package_managers=("apt-get", "dpkg"),
-        releases=(
-            Release(
-                label="2.0.9-hotfix.7",
-                ssh_banner="SSH-2.0-OpenSSH_7.4",
-                ssh_version="OpenSSH_7.4p1, OpenSSL 1.0.2k-fips 26 Jan 2017",
-                kernel_version="4.14.54-UBNT",
-                kernel_build="#1 SMP Thu May 25 12:12:35 UTC 2023",
-                os_version="v2.0.9-hotfix.7",
-                os_version_id="2.0.9",
-                packages={"dpkg": "1.19.8"},
-                extra={"model": "EdgeRouter X", "kernel_builder": "builder@edgeos-build"},
-            ),
-        ),
-        hardware=(MIPS_ROUTER,),
-        hostnames=("ubnt",),
-        builder=build_ubiquiti,
-        vulnerability="Ubiquiti EdgeRouter CVE-2023-2377-style EdgeOS fingerprint",
-    ),
+    _device("dlink-dir859", "dlink", "dlink", "admin", "/bin/sh", MIPS, "dropbear", (), DLINK, DLINK_HARDWARE,
+            ("dlinkrouter", "DIR-859"), build_dlink, "D-Link DIR-859 router, discontinued, old firmware",
+            remove_paths=VENDOR_ONLY, max_install_days=3650),
+    _device("tplink-wr841n", "tplink", "tplink", "admin", "/bin/sh", MIPS, "dropbear", (), TPLINK, TPLINK_HARDWARE,
+            ("TL-WR841N",), build_tplink, "TP-Link TL-WR841N v14 router, firmware not updated",
+            remove_paths=VENDOR_ONLY, max_install_days=1500),
+    _device("zyxel-nas326", "zyxel", "zyxel", "admin", "/bin/sh", ("linux-arm-lsb", "armv7l"), "openssh", (),
+            ZYXEL, ZYXEL_HARDWARE, ("NAS326",), build_zyxel, "Zyxel NAS326, end of support",
+            remove_paths=VENDOR_ONLY, max_install_days=2190),
+    _device("openwrt", "openwrt", "openwrt", "root", "/bin/ash", MIPS, "dropbear", ("opkg",), OPENWRT,
+            OPENWRT_HARDWARE, ("OpenWrt",), build_openwrt, "OpenWrt router on an end-of-life release", uid=0,
+            remove_paths=("home/root",) + VENDOR_ONLY),
+    _device("qnap-qts", "qnap", "qnap", "admin", "/bin/sh", X86, "openssh", ("qpkg_cli",), QNAP, QNAP_HARDWARE,
+            ("NAS{HEX6}",), build_qnap, "QNAP NAS on QTS 5.2, updates not installed",
+            operating_system="GNU/Linux", remove_paths=VENDOR_ONLY),
+    _device("synology-dsm", "synology", "synology", "admin", "/bin/sh", X86, "openssh", ("synopkg",), SYNOLOGY,
+            SYNOLOGY_HARDWARE, ("DiskStation", "denverton:DS1618", "geminilake:DS920"), build_synology,
+            "Synology DiskStation on DSM 7.2, updates not installed", uid=1024, operating_system="GNU/Linux",
+            remove_paths=VENDOR_ONLY),
+    _device("ubiquiti-edgerouter-x", "ubiquiti", "debian", "ubnt", "/bin/vbash", MIPS, "openssh", ("apt-get", "dpkg"),
+            EDGEOS, EDGEOS_HARDWARE, ("ubnt", "EdgeRouter-X-5-Port"), build_ubiquiti,
+            "Ubiquiti EdgeRouter X on EdgeOS 2.0, end of updates", operating_system="GNU/Linux",
+            remove_paths=("etc/debian_version",), max_install_days=2190),
+    _device("ipcam", "ipcam", "ipcam", "admin", "/bin/sh", ("linux-arm-lsb", "armv7l"), "dropbear", (), IPCAM,
+            IPCAM_HARDWARE, ("IPCamera", "HIKVISION", "cam-{nn}"), build_ipcam,
+            "IP camera (Hikvision-style), old firmware", remove_paths=VENDOR_ONLY, max_install_days=3650),
 )
 
 

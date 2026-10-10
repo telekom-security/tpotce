@@ -13,8 +13,15 @@ ROOT = Path(__file__).resolve().parents[3]
 
 SERVERS = ["ubuntu-noble", "ubuntu-jammy", "debian-trixie", "debian-bookworm",
            "rhel-9", "centos-7", "raspios", "gpu-ubuntu"]
-DEVICES = ["dlink-dir859", "tplink-wr841n", "zyxel-nas326", "openwrt-1806", "qnap-qts", "synology-dsm",
-           "ubiquiti-edgerouter-x"]
+DEVICES = ["dlink-dir859", "tplink-wr841n", "zyxel-nas326", "openwrt", "qnap-qts",
+           "synology-dsm", "ubiquiti-edgerouter-x", "ipcam"]
+DEVICE_PACKAGES = {"dlink-dir859": set(), "tplink-wr841n": set(), "zyxel-nas326": set(),
+                   "openwrt": {"opkg"}, "qnap-qts": {"qpkg_cli"}, "synology-dsm": {"synopkg"},
+                   "ubiquiti-edgerouter-x": {"apt-get", "dpkg"}, "ipcam": set()}
+DEVICE_USERS = {"dlink-dir859": ("admin", "/bin/sh"), "tplink-wr841n": ("admin", "/bin/sh"),
+                "zyxel-nas326": ("admin", "/bin/sh"), "openwrt": ("root", "/bin/ash"),
+                "qnap-qts": ("admin", "/bin/sh"), "synology-dsm": ("admin", "/bin/sh"),
+                "ubiquiti-edgerouter-x": ("ubnt", "/bin/vbash"), "ipcam": ("admin", "/bin/sh")}
 PACKAGES = {"ubuntu-noble": {"apt", "apt-get", "dpkg"}, "ubuntu-jammy": {"apt", "apt-get", "dpkg"},
             "debian-trixie": {"apt", "apt-get", "dpkg"}, "debian-bookworm": {"apt", "apt-get", "dpkg"},
             "rhel-9": {"dnf", "rpm", "yum"}, "centos-7": {"rpm", "yum"},
@@ -31,7 +38,7 @@ class CatalogTest(unittest.TestCase):
         for pid in ids:
             self.assertRegex(pid, r"^[a-z0-9][a-z0-9-]*$")
 
-    def test_servers_then_the_ported_devices(self):
+    def test_servers_then_the_devices(self):
         self.assertEqual(catalog.ids(), SERVERS + DEVICES)
 
     def test_by_id_rejects_unknown(self):
@@ -174,3 +181,75 @@ class ProviderCatalogTest(unittest.TestCase):
             for r in catalog.by_id(pid).releases:
                 if r.extra.get("superseded"):
                     self.assertGreater(r.extra["superseded"], r.extra["updated"], (pid, r.label))
+
+
+class DeviceCatalogTest(unittest.TestCase):
+    def test_sixteen_in_order(self):
+        self.assertEqual(catalog.ids(), SERVERS + DEVICES)
+        self.assertEqual(len(catalog.ids()), 16)
+        self.assertNotIn("openwrt-1806", catalog.ids())
+
+    def test_device_fields(self):
+        for pid in DEVICES:
+            p = catalog.by_id(pid)
+            self.assertEqual(p.kind, "device", pid)
+            self.assertEqual(set(p.package_managers), DEVICE_PACKAGES[pid], pid)
+            self.assertGreaterEqual(len(p.releases), 2, pid)
+            self.assertLessEqual(len(p.releases), 4, pid)
+            self.assertGreaterEqual(len(p.hardware), 1, pid)
+            self.assertLessEqual(len(p.hardware), 3, pid)
+            self.assertEqual((p.user, p.shell), DEVICE_USERS[pid], pid)
+            self.assertTrue(p.vulnerability, pid)
+
+    def test_ipcam_is_a_busybox_camera(self):
+        p = catalog.by_id("ipcam")
+        self.assertEqual((p.ssh_profile, p.hardware_platform), ("dropbear", "armv7l"))
+        for hw in p.hardware:
+            self.assertEqual((hw.cpus, hw.cpu_model), (1, "ARMv7 Processor rev 5 (v7l)"))
+            self.assertTrue(64 * 1024 * 0.9 <= hw.mem_kb <= 256 * 1024, hw)
+        self.assertTrue(all(r.extra["busybox"].startswith(("BusyBox v1.19.4 ", "BusyBox v1.26.2 "))
+                            for r in p.releases))
+
+    def test_openwrt_runs_the_last_releases_of_two_eol_branches(self):
+        p = catalog.by_id("openwrt")
+        self.assertEqual(sorted(r.os_version for r in p.releases), ["21.02.7", "22.03.7"])
+        self.assertEqual({r.kernel_version.rsplit(".", 1)[0] for r in p.releases}, {"5.4", "5.10"})
+        for r in p.releases:
+            self.assertEqual(r.extra["target"], "ramips/mt7621")
+            # OpenWrt's dropbear hides its version in the banner
+            self.assertEqual(r.ssh_banner, "SSH-2.0-dropbear")
+
+    def test_device_hardware_is_realistic(self):
+        for pid in DEVICES:
+            for hw in catalog.by_id(pid).hardware:
+                if "nas" in pid or pid in ("qnap-qts", "synology-dsm"):
+                    self.assertTrue(1 <= hw.cpus <= 4, (pid, hw))
+                    self.assertTrue(450 * 1024 <= hw.mem_kb <= 8 * 1024 * 1024, (pid, hw))
+                else:
+                    self.assertLessEqual(hw.mem_kb, 256 * 1024, (pid, hw))
+                self.assertNotIn("processor", hw.cpu_model, (pid, hw))
+
+    def test_firmware_levels_have_dates_and_sources(self):
+        source = (DIST / "tpot_personas" / "catalog.py").read_text()
+        for pid in DEVICES:
+            for r in catalog.by_id(pid).releases:
+                self.assertTrue(r.extra.get("firmware"), (pid, r.label))
+                self.assertTrue(first_install(r), (pid, r.label))
+                self.assertIsNotNone(kernel_time(r), (pid, r.label))
+                # the kernel was built before the firmware came out
+                self.assertLessEqual(kernel_time(r), first_install(r) + 86400, (pid, r.label))
+                if r.extra.get("superseded"):
+                    self.assertGreater(r.extra["superseded"], r.extra["updated"], (pid, r.label))
+        self.assertGreaterEqual(source.count("# source: "), 20)
+
+    def test_device_ssh_version_names_the_banner(self):
+        for pid in DEVICES:
+            p = catalog.by_id(pid)
+            for r in p.releases:
+                product = r.ssh_banner[len("SSH-2.0-"):].split(" ", 1)[0]
+                if p.ssh_profile == "dropbear":
+                    self.assertTrue(r.ssh_version.startswith("Dropbear "), (pid, r.label))
+                    if "_" in product:
+                        self.assertIn(product.split("_", 1)[1], r.ssh_version, (pid, r.label))
+                else:
+                    self.assertRegex(r.ssh_version, rf"^{re.escape(product)}(p\d+)?[ ,]", (pid, r.label))

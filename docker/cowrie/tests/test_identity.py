@@ -5,7 +5,7 @@ import unittest
 from tests.helpers import DIST  # noqa: F401
 from tpot_personas import catalog, servers
 from tpot_personas.identity import (DAY, draw, first_install, host_patterns, hostname_regex, is_medium, kernel_time,
-                                    log_window, ready_at, stale_at, to_json, updated_at)
+                                    is_firmware, log_window, ready_at, stale_at, superseded_at, to_json, updated_at)
 
 NOW = 1_790_000_000  # fixed "now" for reproducible tests
 
@@ -187,7 +187,7 @@ class StaleTest(unittest.TestCase):
     def test_every_level_is_stale_at_most_90_days_after_its_update(self):
         for p in catalog.PERSONAS:
             for r in p.releases:
-                if updated_at(r):
+                if updated_at(r) and not is_firmware(r):
                     self.assertLessEqual(stale_at(r), updated_at(r) + 90 * DAY, (p.id, r.label))
                     self.assertGreater(stale_at(r), updated_at(r), (p.id, r.label))
 
@@ -204,3 +204,60 @@ class StaleTest(unittest.TestCase):
             for days in (0, 60, 400):
                 labels = {draw(p, seed, NOW + days * DAY).release.label for seed in range(600)}
                 self.assertGreaterEqual(len(labels), 3, (p.id, days, labels))
+
+
+class FirmwareTest(unittest.TestCase):
+    """A device runs the firmware it got when it was set up (or the last one of
+    its vendor) and is up to 400 days; its levels stay reachable for years."""
+
+    def devices(self):
+        return [p for p in catalog.PERSONAS if p.kind == "device"]
+
+    def test_devices_draw_two_levels_now_and_later(self):
+        for p in self.devices():
+            for days in (0, 60, 400):
+                labels = {draw(p, seed, NOW + days * DAY).release.label for seed in range(400)}
+                self.assertGreaterEqual(len(labels), 2, (p.id, days, labels))
+
+    def test_the_firmware_existed_when_the_device_was_set_up(self):
+        for p in self.devices():
+            for days in (0, 400):
+                for seed in range(150):
+                    i = draw(p, seed, NOW + days * DAY)
+                    self.assertGreaterEqual(i.installed_at, first_install(i.release), (p.id, seed))
+                    # never updated since: set up before the vendor published the next firmware
+                    if superseded_at(i.release):
+                        self.assertLessEqual(i.installed_at, superseded_at(i.release), (p.id, seed))
+                    self.assertGreater(i.booted_at, ready_at(i.release), (p.id, seed))
+
+    def test_firmware_goes_stale_with_the_next_firmware_only(self):
+        for p in self.devices():
+            for r in p.releases:
+                self.assertTrue(is_firmware(r), (p.id, r.label))
+                self.assertEqual(stale_at(r), superseded_at(r), (p.id, r.label))
+
+    def test_vendor_host_names(self):
+        expected = {
+            "dlink-dir859": r"dlinkrouter|DIR-859",
+            "tplink-wr841n": r"TL-WR841N",
+            "zyxel-nas326": r"NAS326",
+            "openwrt": r"OpenWrt",
+            "qnap-qts": r"NAS[0-9A-F]{6}",
+            "synology-dsm": r"DiskStation|DS1618|DS920",
+            "ubiquiti-edgerouter-x": r"ubnt|EdgeRouter-X-5-Port",
+            "ipcam": r"IPCamera|HIKVISION|cam-\d{2}",
+        }
+        for pid, pattern in expected.items():
+            p = catalog.by_id(pid)
+            names = {draw(p, seed, NOW).hostname for seed in range(200)}
+            for name in names:
+                self.assertRegex(name, rf"^(?:{pattern})$", pid)
+
+    def test_synology_model_names_fit_the_hardware(self):
+        p = catalog.by_id("synology-dsm")
+        for seed in range(300):
+            i = draw(p, seed, NOW)
+            if i.hostname == "DS1618":
+                self.assertIn("C3538", i.hardware.cpu_model, seed)
+            if i.hostname == "DS920":
+                self.assertIn("J4125", i.hardware.cpu_model, seed)

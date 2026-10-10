@@ -79,6 +79,12 @@ def is_medium(release):
     return bool(release.extra.get("medium"))
 
 
+def is_firmware(release):
+    """A device firmware: no package updates, it stays on the device until the
+    vendor's next firmware is flashed (extra["superseded"])."""
+    return bool(release.extra.get("firmware"))
+
+
 def ready_at(release):
     """From then on a system can run the release: installed, updated, its kernel built."""
     return max(kernel_time(release) or 0, first_install(release), updated_at(release))
@@ -90,7 +96,10 @@ STALE_AFTER = 90 * DAY  # a patch level counts as current for at most 90 days af
 def stale_at(release):
     """From then on the mirror gave newer versions than the release's: the next
     openssh / kernel security update (extra["stale_from"]), the next patch level
-    of the pool, at the latest 90 days after the update; 0 if unknown (devices)."""
+    of the pool, at the latest 90 days after the update; 0 if unknown. A device
+    firmware goes stale when the next firmware came out, the last one never (0)."""
+    if is_firmware(release):
+        return superseded_at(release)
     updated = updated_at(release)
     if not updated:
         return 0
@@ -144,12 +153,13 @@ def hostname_regex(pattern, hardware):
         "n": r"(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4])",
         "nn": r"\d{2}",
         "hex6": r"[0-9a-f]{6}",
+        "HEX6": r"[0-9A-F]{6}",
         "word": "(?:" + "|".join(_WORDS) + ")",
         "cpus": str(hardware.cpus),
         "gib": str(max(1, round(hardware.mem_kb / 1024 / 1024))),
         "gpu": re.escape(_gpu_short(hardware.gpus[0])) if hardware.gpus else "(?!)",
     }
-    parts = re.split(r"\{(n|nn|hex6|word|cpus|gib|gpu)\}", pattern)
+    parts = re.split(r"\{(n|nn|hex6|HEX6|word|cpus|gib|gpu)\}", pattern)
     return "".join(re.escape(part) if i % 2 == 0 else tokens[part] for i, part in enumerate(parts))
 
 
@@ -177,6 +187,8 @@ def expand_hostname(pattern, rng, hardware=None):
         "n": lambda: str(rng.randint(1, 254)),
         "nn": lambda: f"{rng.randint(1, 99):02d}",
         "hex6": lambda: f"{rng.getrandbits(24):06x}",
+        # QNAP names a NAS after the last three bytes of its MAC: NAS5F3A2B
+        "HEX6": lambda: f"{rng.getrandbits(24):06X}",
         "word": lambda: rng.choice(_WORDS),
         # a plan name (ubuntu-s-2vcpu-4gb-...) must name the hardware it runs on
         "cpus": lambda: str(hardware.cpus),
@@ -184,7 +196,7 @@ def expand_hostname(pattern, rng, hardware=None):
         # "NVIDIA A100-SXM4-80GB" -> a100, "NVIDIA GeForce RTX 4090" -> rtx4090
         "gpu": lambda: _gpu_short(hardware.gpus[0]),
     }
-    return re.sub(r"\{(n|nn|hex6|word|cpus|gib|gpu)\}", lambda m: subs[m.group(1)](), pattern)
+    return re.sub(r"\{(n|nn|hex6|HEX6|word|cpus|gib|gpu)\}", lambda m: subs[m.group(1)](), pattern)
 
 
 def _gpu_short(name):

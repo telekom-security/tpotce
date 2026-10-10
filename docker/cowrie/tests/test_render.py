@@ -246,3 +246,89 @@ class ServerContentTest(unittest.TestCase):
                 self.assertNotIn("console=ttyS0 root=/dev/sda1 ro quiet", dmesg, persona.id)
                 self.assertIn("root=", dmesg, persona.id)
                 self.assertTrue((out / "honeyfs/etc/fstab").read_text(), persona.id)
+
+
+class DeviceContentTest(unittest.TestCase):
+    def ps(self, out):
+        return json.loads((out / "cmdoutput.json").read_text())["command"]["ps"]
+
+    def test_ipcam_is_a_davinci_camera(self):
+        persona = catalog.by_id("ipcam")
+        for seed in range(6):
+            ident, out, _ = render_one(self, persona, seed)
+            r = ident.release
+            self.assertIn(r.extra["firmware_version"], (out / "honeyfs/etc/version").read_text())
+            self.assertIn("davinci", (out / "honeyfs/etc/init.d/rcS").read_text())
+            commands = [p["COMMAND"] for p in self.ps(out)]
+            for command in ("/home/davinci", "/bin/sh /home/process_cfg.sh", "/usr/sbin/telnetd", "/sbin/dropbear"):
+                self.assertTrue(any(c.startswith(command) for c in commands), (seed, command, commands))
+            busybox = (out / "txtcmds/bin/busybox").read_text()
+            self.assertTrue(busybox.startswith(f"{r.extra['busybox']} multi-call binary."), busybox)
+            cpuinfo = (out / "honeyfs/proc/cpuinfo").read_text()
+            self.assertIn("model name\t: ARMv7 Processor rev 5 (v7l)", cpuinfo)
+            self.assertEqual(cpuinfo.count("processor\t:"), 1)
+
+    def test_dlink_has_its_vendor_files_and_kernel(self):
+        persona = catalog.by_id("dlink-dir859")
+        ident, out, _ = render_one(self, persona, 2)
+        r = ident.release
+        self.assertEqual((out / "honeyfs/etc/config/buildver").read_text(), r.os_version + "\n")
+        self.assertEqual((out / "honeyfs/etc/config/image_sign").read_text(), "wrgac37_dlink.2013gui_dir859\n")
+        self.assertFalse((out / "honeyfs/etc/os-release").exists())
+        self.assertIn("etc/os-release", persona.remove_paths)
+        cpuinfo = (out / "honeyfs/proc/cpuinfo").read_text()
+        self.assertIn("system type\t\t: QCA956x", cpuinfo)
+        self.assertIn("cpu model\t\t: MIPS 74Kc", cpuinfo)
+        self.assertNotIn("isa\t", cpuinfo)  # 2.6.31 has no isa line
+        self.assertTrue(r.kernel_version.startswith("2.6.31-"))
+
+    def test_openwrt_is_a_mt7621_router(self):
+        persona = catalog.by_id("openwrt")
+        for seed in range(6):
+            ident, out, _ = render_one(self, persona, seed)
+            r = ident.release
+            release = (out / "honeyfs/etc/openwrt_release").read_text()
+            self.assertIn(f"DISTRIB_RELEASE='{r.os_version}'", release)
+            self.assertIn("DISTRIB_TARGET='ramips/mt7621'", release)
+            os_release = (out / "honeyfs/etc/os-release").read_text()
+            self.assertIn(f'OPENWRT_RELEASE="OpenWrt {r.os_version} {r.extra["revision"]}"', os_release)
+            self.assertIn(f" OpenWrt {r.os_version}, {r.extra['revision']}\n", (out / "honeyfs/etc/banner").read_text())
+            cpuinfo = (out / "honeyfs/proc/cpuinfo").read_text()
+            self.assertIn("system type\t\t: MediaTek MT7621 ver:1 eco:3", cpuinfo)
+            self.assertIn(f"machine\t\t\t: {ident.hardware.machine}", cpuinfo)
+            self.assertEqual(cpuinfo.count("cpu model\t\t: MIPS 1004Kc"), 4)
+            self.assertIn("overlayfs:/overlay on / type overlay", (out / "txtcmds/bin/mount").read_text())
+
+    def test_bare_metal_x86_nas_cpus(self):
+        no_avx = ("J1900", "C3538", "N5105", "J4125")
+        for pid in ("qnap-qts", "synology-dsm"):
+            persona = catalog.by_id(pid)
+            for seed in range(8):
+                ident, out, _ = render_one(self, persona, seed)
+                cpuinfo = (out / "honeyfs/proc/cpuinfo").read_text()
+                flags = re.search(r"^flags\t\t: (.*)$", cpuinfo, re.M).group(1).split()
+                self.assertNotIn("hypervisor", flags, (pid, seed))
+                self.assertTrue(any(m in ident.hardware.cpu_model for m in no_avx), ident.hardware)
+                self.assertNotIn("avx", flags, (pid, seed))
+                self.assertNotIn("avx2", flags, (pid, seed))
+                lspci = (out / "txtcmds/usr/bin/lspci").read_text()
+                self.assertIn("Intel Corporation", lspci)
+
+    def test_ps_start_follows_procps(self):
+        for persona in catalog.PERSONAS:
+            for seed in range(4):
+                ident, out, _ = render_one(self, persona, seed)
+                for p in self.ps(out):
+                    self.assertRegex(p["START"], r"^(\d{2}:\d{2}|[A-Z][a-z]{2}\d{2}|\d{4})$", (persona.id, p))
+
+    def test_each_device_says_what_it_is(self):
+        expected = {
+            "tplink-wr841n": ("txtcmds/bin/busybox", "BusyBox v1.19.2 "),
+            "zyxel-nas326": ("honeyfs/firmware/mnt/info/fwversion", "V5.21(AAZF."),
+            "qnap-qts": ("honeyfs/etc/config/uLinux.conf", "Model = TS-"),
+            "synology-dsm": ("honeyfs/etc.defaults/VERSION", 'productversion="7.'),
+            "ubiquiti-edgerouter-x": ("honeyfs/etc/version", "EdgeRouter.ER-e50.v2.0.9-hotfix."),
+        }
+        for pid, (rel, text) in expected.items():
+            _, out, _ = render_one(self, catalog.by_id(pid), 6)
+            self.assertIn(text, (out / rel).read_text(), pid)

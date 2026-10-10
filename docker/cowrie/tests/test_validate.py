@@ -8,6 +8,7 @@ import unittest
 from tests.helpers import base_tree
 from tests.test_render import NOW, render_ident, render_one
 from tpot_personas import PersonaError, catalog, tree, validate
+from tpot_personas.common import ps_start
 from tpot_personas.identity import draw, stale_at
 from tpot_personas.render import render
 
@@ -226,7 +227,8 @@ class ValidateDeviceTest(unittest.TestCase):
         persona = catalog.by_id("tplink-wr841n")
         ident, out, keys = render_one(self, persona, 2)
         path = out / "cowrie.cfg"
-        path.write_text(path.read_text().replace("Dropbear sshd 2015.67", "Dropbear sshd 2019.78"))
+        # the v14 firmware has dropbear 2012.55 (the brief's 2015.67 is in no image)
+        path.write_text(path.read_text().replace("Dropbear sshd 2012.55", "Dropbear sshd 2019.78"))
         self.assertIn("ssh_version", " ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0)))
 
     def test_ubuntu_marker_outside_ubuntu(self):
@@ -285,3 +287,108 @@ class ValidateBootTest(unittest.TestCase):
         path = out / "txtcmds/bin/dmesg"
         path.write_text(re.sub(r"root=PARTUUID=\S+", "root=LABEL=cloudimg-rootfs", path.read_text()))
         self.assertIn("/dev/root (no initramfs)", " ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0)))
+
+
+def _problems(persona, ident, out, keys):
+    return " | ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0))
+
+
+def _edit(test, path, old, new):
+    text = path.read_text()
+    test.assertIn(old, text)
+    path.write_text(text.replace(old, new, 1))
+
+
+class PsStartTest(unittest.TestCase):
+    """procps prints HH:MM for a process of today, MonDD in this year, else the year."""
+
+    def test_formats(self):
+        now = 1_790_000_000  # 2026-09-21 14:13 UTC
+        self.assertEqual(ps_start(now - 3600, now), "13:13")
+        self.assertEqual(ps_start(now - 3 * 86400, now), "Sep18")
+        self.assertEqual(ps_start(now - 300 * 86400, now), "2025")
+        # yesterday 23:59 is another day, Dec 31 another year
+        midnight = now // 86400 * 86400
+        self.assertEqual(ps_start(midnight - 60, midnight + 60), "Sep20")
+        new_year = 1_767_225_600  # 2026-01-01 00:00 UTC
+        self.assertEqual(ps_start(new_year - 60, new_year + 60), "2025")
+
+    def test_boot_process_in_the_wrong_format(self):
+        persona = catalog.by_id("openwrt")
+        for seed in range(200):
+            ident = draw(persona, seed, NOW)
+            if time.gmtime(ident.booted_at).tm_year < time.gmtime(NOW).tm_year:
+                break
+        else:
+            self.fail("no device booted last year")
+        _, out, keys = render_ident(self, persona, ident)
+        self.assertEqual(_problems(persona, ident, out, keys), "")
+        boot_year = time.strftime("%Y", time.gmtime(ident.booted_at))
+        _edit(self, out / "cmdoutput.json", f'"START": "{boot_year}"',
+              f'"START": "{time.strftime("%b%d", time.gmtime(ident.booted_at))}"')
+        self.assertIn("START", _problems(persona, ident, out, keys))
+
+    def test_login_shell_in_the_future(self):
+        persona = catalog.by_id("ubuntu-jammy")
+        ident, out, keys = render_one(self, persona, 5)
+        path = out / "cmdoutput.json"
+        data = json.loads(path.read_text())
+        shell = [p for p in data["command"]["ps"] if p["TTY"].startswith("pts/")][0]
+        shell["START"] = time.strftime("%H:%M", time.gmtime(ident.now + 3600))
+        path.write_text(json.dumps(data))
+        self.assertIn("START", _problems(persona, ident, out, keys))
+
+
+class ValidateDeviceBootTest(unittest.TestCase):
+    def test_clean_device_renders(self):
+        for persona in catalog.PERSONAS:
+            if persona.kind == "device":
+                ident, out, keys = render_one(self, persona, 4)
+                self.assertEqual(_problems(persona, ident, out, keys), "", persona.id)
+
+    def test_root_file_system_type_differs_from_the_mount(self):
+        persona = catalog.by_id("openwrt")
+        ident, out, keys = render_one(self, persona, 1)
+        _edit(self, out / "txtcmds/bin/mount", "/dev/root on /rom type squashfs", "/dev/root on /rom type jffs2")
+        self.assertIn("boot:", _problems(persona, ident, out, keys))
+
+    def test_mtd_root_on_another_device(self):
+        persona = catalog.by_id("tplink-wr841n")
+        ident, out, keys = render_one(self, persona, 1)
+        _edit(self, out / "txtcmds/bin/dmesg", "root=/dev/mtdblock5", "root=/dev/mtdblock3")
+        self.assertIn("boot:", _problems(persona, ident, out, keys))
+
+    def test_initramfs_with_a_root_device(self):
+        persona = catalog.by_id("qnap-qts")
+        ident, out, keys = render_one(self, persona, 1)
+        path = out / "txtcmds/bin/dmesg"
+        path.write_text(re.sub(r"(Kernel command line: .*)", r"\1 root=/dev/sda1", path.read_text()))
+        self.assertIn("boot:", _problems(persona, ident, out, keys))
+
+    def test_df_names_a_file_system_mount_does_not_have(self):
+        persona = catalog.by_id("synology-dsm")
+        ident, out, keys = render_one(self, persona, 1)
+        _edit(self, out / "txtcmds/bin/df", "/volume1", "/volume9")
+        self.assertIn("df:", _problems(persona, ident, out, keys))
+
+    def test_dmesg_bogomips_differs_from_cpuinfo(self):
+        persona = catalog.by_id("dlink-dir859")
+        ident, out, keys = render_one(self, persona, 1)
+        path = out / "txtcmds/bin/dmesg"
+        path.write_text(re.sub(r"\d+\.\d+ BogoMIPS", "1.00 BogoMIPS", path.read_text()))
+        self.assertIn("BogoMIPS", _problems(persona, ident, out, keys))
+
+
+class ValidateCpuTest(unittest.TestCase):
+    def test_hypervisor_flag_on_bare_metal(self):
+        persona = catalog.by_id("qnap-qts")
+        ident, out, keys = render_one(self, persona, 1)
+        _edit(self, out / "honeyfs/proc/cpuinfo", "flags\t\t: fpu ", "flags\t\t: hypervisor fpu ")
+        self.assertIn("cpuinfo: hypervisor", _problems(persona, ident, out, keys))
+
+    def test_dropbear_without_version_needs_dropbear_in_ssh_version(self):
+        persona = catalog.by_id("openwrt")
+        ident, out, keys = render_one(self, persona, 1)
+        self.assertEqual(_problems(persona, ident, out, keys), "")
+        _edit(self, out / "cowrie.cfg", "ssh_version = Dropbear", "ssh_version = OpenSSH")
+        self.assertIn("ssh_version", _problems(persona, ident, out, keys))
