@@ -268,3 +268,13 @@ class DeviceCatalogTest(unittest.TestCase):
                     continue
                 year = int(re.search(r"(\d{4})\.\d+", r.ssh_version).group(1))
                 self.assertEqual(p.ssh_profile, "dropbear-openwrt" if year >= 2019 else "dropbear", (pid, r.label))
+
+
+class SchemaTest(unittest.TestCase):
+    def test_env_schema_values_are_the_catalog(self):
+        text = (ROOT / "docker/tpotinit/dist/etc/env.schema.yml").read_text()
+        block = re.search(r"^  COWRIE_PERSONA:\n((?:    .*\n)+)", text, re.M)
+        self.assertIsNotNone(block, "COWRIE_PERSONA missing in env.schema.yml")
+        values = re.search(r"^    values: \[(.*)\]$", block.group(1), re.M).group(1)
+        self.assertEqual([v.strip() for v in values.split(",")], catalog.ids())
+        self.assertIn("COWRIE_PERSONA=", (ROOT / "env.example").read_text())

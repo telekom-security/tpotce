@@ -121,6 +121,24 @@ cases:
     services: [cowrie]
     set: {REDISHONEYPOT_PROFILE: redis99}
     warnings: [LS_WEB_USER]
+  - name: cowrie personas from a list
+    services: [tpotinit, cowrie]
+    set: {COWRIE_PERSONA: "raspios ipcam"}
+    warnings: [LS_WEB_USER]
+  - name: cowrie persona unknown
+    services: [tpotinit, cowrie]
+    set: {COWRIE_PERSONA: "fedora-36-vuln"}
+    errors: [COWRIE_PERSONA]
+    warnings: [LS_WEB_USER]
+  - name: cowrie persona twice
+    services: [tpotinit, cowrie]
+    set: {COWRIE_PERSONA: "raspios raspios"}
+    errors: [COWRIE_PERSONA]
+    warnings: [LS_WEB_USER]
+  - name: cowrie persona not checked without cowrie
+    services: [tpotinit, suricata]
+    set: {COWRIE_PERSONA: "nope"}
+    warnings: [LS_WEB_USER]
   - name: beelzebub provider and url
     services: [beelzebub]
     set: {BEELZEBUB_LLM_PROVIDER: claude, BEELZEBUB_LLM_HOST: ollama.local}

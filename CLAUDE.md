@@ -18,6 +18,7 @@ Post-build container tests; they require the image to already exist locally and 
 - All: `./docker/_tests/run.sh`; list: `./docker/_tests/run.sh --list`
 - One: `./docker/_tests/run.sh cowrie` or directly `./docker/_tests/tests/cowrie.sh [--image ...] [--<proto>-port ...]`
 - Options: `--timeout SEC`, `--bind-ip IP`, `--keep-artifacts`
+- Cowrie personas (no Docker): `python3 -m unittest discover -s docker/cowrie/tests -t docker/cowrie`
 - `run.sh`, `lib/common.sh` and every `tests/*.sh` clear CDPATH before their first `cd` (`tpotctl/tests/test_smoke_harness.py`, which also checks every `*.sh` of the checkout that captures `$(cd …)`); a new test starts with `unset CDPATH` before its `SCRIPT_DIR` line.
 - Conventions for new tests: one executable `tests/<service>.sh` per honeypot, source `lib/common.sh` (`test_*` helpers for compose, port checks, waiting on log text, cleanup), bind to loopback, prefer dynamic host ports, temp files under `/tmp`, fail with an image build hint when the image is missing. Some tests need host tools (e.g. dicompot needs DCMTK).
 
