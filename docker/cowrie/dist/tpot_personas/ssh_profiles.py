@@ -31,4 +31,12 @@ PROFILES = {
                            ("hmac-sha1", "hmac-sha2-256", "hmac-md5"),
                            ("zlib@openssh.com", "none"),
                            ("ssh-rsa",)),
+    # Dropbear 2020.81 / 2022.82 as OpenWrt 21.02 / 22.03 build it: default_options.h has CBC and 3DES off
+    #   and no MD5 HMAC (hmac-sha1, hmac-sha2-256; sha2-512 off), OpenWrt's package builds --disable-zlib and
+    #   adds ed25519 (DROPBEAR_ED25519 default y), DSS off, ECDSA off (DROPBEAR_ECC default n); in the order
+    #   of common-algo.c (ssh-ed25519 before the RSA keys); chacha20-poly1305 dropped (not in Twisted)
+    "dropbear-openwrt": SshProfile("dropbear-openwrt", ("aes128-ctr", "aes256-ctr"),
+                                   ("hmac-sha1", "hmac-sha2-256"),
+                                   ("none",),
+                                   ("ssh-ed25519", "ssh-rsa")),
 }

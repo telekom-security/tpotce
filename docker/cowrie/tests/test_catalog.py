@@ -53,7 +53,7 @@ class CatalogTest(unittest.TestCase):
             self.assertTrue(p.releases and p.hardware and p.hostnames, p.id)
             for r in p.releases:
                 self.assertTrue(r.ssh_banner.startswith("SSH-2.0-"), (p.id, r.label))
-                product = "dropbear" if p.ssh_profile == "dropbear" else "OpenSSH"
+                product = "dropbear" if p.ssh_profile.startswith("dropbear") else "OpenSSH"
                 self.assertIn(product, r.ssh_banner, (p.id, r.label))
             for hw in p.hardware:
                 self.assertGreater(hw.cpus, 0, p.id)
@@ -247,9 +247,24 @@ class DeviceCatalogTest(unittest.TestCase):
             p = catalog.by_id(pid)
             for r in p.releases:
                 product = r.ssh_banner[len("SSH-2.0-"):].split(" ", 1)[0]
-                if p.ssh_profile == "dropbear":
+                if p.ssh_profile.startswith("dropbear"):
                     self.assertTrue(r.ssh_version.startswith("Dropbear "), (pid, r.label))
                     if "_" in product:
                         self.assertIn(product.split("_", 1)[1], r.ssh_version, (pid, r.label))
                 else:
                     self.assertRegex(r.ssh_version, rf"^{re.escape(product)}(p\d+)?[ ,]", (pid, r.label))
+
+    def test_uname_names_gnu_linux(self):
+        # BusyBox uname -o / -a prints "GNU/Linux" (uname.c of 1.14.1, 1.19.2; CONFIG_UNAME_OSNAME since)
+        for p in catalog.PERSONAS:
+            self.assertEqual(p.operating_system, "GNU/Linux", p.id)
+
+    def test_dropbear_profile_fits_the_version(self):
+        # dropbear 2020.79 and later builds without CBC / 3DES / MD5; the legacy profile is for 2012-2017
+        for pid in DEVICES:
+            p = catalog.by_id(pid)
+            for r in p.releases:
+                if "dropbear" not in r.ssh_version.lower():
+                    continue
+                year = int(re.search(r"(\d{4})\.\d+", r.ssh_version).group(1))
+                self.assertEqual(p.ssh_profile, "dropbear-openwrt" if year >= 2019 else "dropbear", (pid, r.label))

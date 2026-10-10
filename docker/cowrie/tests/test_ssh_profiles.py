@@ -19,3 +19,10 @@ class ProfilesTest(unittest.TestCase):
     def test_no_dsa(self):
         for profile in sp.PROFILES.values():
             self.assertNotIn("ssh-dss", profile.host_keys)
+
+    def test_openwrt_dropbear_has_the_defaults_of_2020_and_later(self):
+        profile = sp.PROFILES["dropbear-openwrt"]
+        # no CBC, no 3DES, no MD5 (default_options.h), no zlib (OpenWrt --disable-zlib), ed25519 host key
+        self.assertFalse(set(profile.ciphers + profile.macs) & sp.LEGACY)
+        self.assertEqual(profile.compression, ("none",))
+        self.assertEqual(profile.host_keys, ("ssh-ed25519", "ssh-rsa"))

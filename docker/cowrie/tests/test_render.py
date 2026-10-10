@@ -298,6 +298,13 @@ class DeviceContentTest(unittest.TestCase):
             self.assertIn(f"machine\t\t\t: {ident.hardware.machine}", cpuinfo)
             self.assertEqual(cpuinfo.count("cpu model\t\t: MIPS 1004Kc"), 4)
             self.assertIn("overlayfs:/overlay on / type overlay", (out / "txtcmds/bin/mount").read_text())
+            cfg = (out / "cowrie.cfg").read_text()
+            # what ssh-audit sees of dropbear 2020.81 / 2022.82 on OpenWrt, and uname -a of BusyBox
+            self.assertIn("\nciphers = aes128-ctr,aes256-ctr\n", cfg)
+            self.assertIn("\nmacs = hmac-sha1,hmac-sha2-256\n", cfg)
+            self.assertIn("\ncompression = none\n", cfg)
+            self.assertIn("\npublic_key_auth = ssh-ed25519,ssh-rsa\n", cfg)
+            self.assertIn("\noperating_system = GNU/Linux\n", cfg)
 
     def test_bare_metal_x86_nas_cpus(self):
         no_avx = ("J1900", "C3538", "N5105", "J4125")

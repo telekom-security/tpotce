@@ -114,7 +114,10 @@ def _firmware(label, released, superseded, banner, ssh_version, kernel, uts, bui
 
 
 def _device(pid, family, os_id, user, shell, arch, ssh_profile, managers, releases, hardware, hostnames, builder,
-            vulnerability, uid=1000, operating_system="Linux", remove_paths=(), max_install_days=900):
+            vulnerability, uid=1000, remove_paths=(), max_install_days=900):
+    # uname -o / -a: BusyBox prints "GNU/Linux" (coreutils/uname.c 1.14.1 and 1.19.2 hard-code it, 1.35.0
+    #   takes CONFIG_UNAME_OSNAME, default "GNU/Linux"), as coreutils does on the Debian-based EdgeOS
+    operating_system = "GNU/Linux"
     return Persona(
         id=pid, family=family, kind="device", os_id=os_id,
         user=user, uid=uid, gid=uid, shell=shell,
@@ -831,19 +834,19 @@ PERSONAS = (
     _device("zyxel-nas326", "zyxel", "zyxel", "admin", "/bin/sh", ("linux-arm-lsb", "armv7l"), "openssh", (),
             ZYXEL, ZYXEL_HARDWARE, ("NAS326",), build_zyxel, "Zyxel NAS326, end of support",
             remove_paths=VENDOR_ONLY, max_install_days=2190),
-    _device("openwrt", "openwrt", "openwrt", "root", "/bin/ash", MIPS, "dropbear", ("opkg",), OPENWRT,
+    _device("openwrt", "openwrt", "openwrt", "root", "/bin/ash", MIPS, "dropbear-openwrt", ("opkg",), OPENWRT,
             OPENWRT_HARDWARE, ("OpenWrt",), build_openwrt, "OpenWrt router on an end-of-life release", uid=0,
             remove_paths=("home/root",) + VENDOR_ONLY),
     _device("qnap-qts", "qnap", "qnap", "admin", "/bin/sh", X86, "openssh", ("qpkg_cli",), QNAP, QNAP_HARDWARE,
             ("NAS{HEX6}",), build_qnap, "QNAP NAS on QTS 5.2, updates not installed",
-            operating_system="GNU/Linux", remove_paths=VENDOR_ONLY),
+            remove_paths=VENDOR_ONLY),
     _device("synology-dsm", "synology", "synology", "admin", "/bin/sh", X86, "openssh", ("synopkg",), SYNOLOGY,
             SYNOLOGY_HARDWARE, ("DiskStation", "denverton:DS1618", "geminilake:DS920"), build_synology,
-            "Synology DiskStation on DSM 7.2, updates not installed", uid=1024, operating_system="GNU/Linux",
+            "Synology DiskStation on DSM 7.2, updates not installed", uid=1024,
             remove_paths=VENDOR_ONLY),
     _device("ubiquiti-edgerouter-x", "ubiquiti", "debian", "ubnt", "/bin/vbash", MIPS, "openssh", ("apt-get", "dpkg"),
             EDGEOS, EDGEOS_HARDWARE, ("ubnt", "EdgeRouter-X-5-Port"), build_ubiquiti,
-            "Ubiquiti EdgeRouter X on EdgeOS 2.0, end of updates", operating_system="GNU/Linux",
+            "Ubiquiti EdgeRouter X on EdgeOS 2.0, end of updates",
             remove_paths=("etc/debian_version",), max_install_days=2190),
     _device("ipcam", "ipcam", "ipcam", "admin", "/bin/sh", ("linux-arm-lsb", "armv7l"), "dropbear", (), IPCAM,
             IPCAM_HARDWARE, ("IPCamera", "HIKVISION", "cam-{nn}"), build_ipcam,
