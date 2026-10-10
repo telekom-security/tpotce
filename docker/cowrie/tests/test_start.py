@@ -125,6 +125,25 @@ class StartTest(unittest.TestCase):
         self.assertFalse((self.runtime / "runtime.new").exists())
         self.assertFalse((self.cowrie / "etc" / "openwrt").exists())
 
+    def test_main_execs_twistd_with_umask_0027(self):
+        # private host keys and logs 0640 (dirs 0750): the log readers run as 2000:2000
+        self.start.COWRIE_ROOT, self.start.TMP_ROOT = self.cowrie, self.runtime
+        self.start.prepare = lambda *args, **kwargs: "ipcam"
+        (self.runtime / "runtime").mkdir(parents=True)
+        cwd = os.getcwd()
+        self.addCleanup(os.chdir, cwd)
+        calls = []
+        with unittest.mock.patch.dict(os.environ, {"COWRIE_PERSONA": "ipcam"}), \
+                unittest.mock.patch("sys.stdout"), \
+                unittest.mock.patch("os.umask", side_effect=lambda m: calls.append(("umask", m)) or 0o22), \
+                unittest.mock.patch("os.execv", side_effect=lambda *a: calls.append(("execv",))) as execv:
+            self.assertEqual(self.start.main(), 1)
+        # twistd applies --umask only after the plugin opened log/cowrie.json: the process umask is set first
+        self.assertEqual(calls, [("umask", 0o027), ("execv",)])
+        execv.assert_called_once_with("/usr/bin/twistd",
+                                      ["/usr/bin/twistd", "-n", "--umask=0027", "--pidfile=", "cowrie"])
+        self.assertEqual(Path(os.getcwd()).resolve(), (self.runtime / "runtime").resolve())
+
     def test_main_reports_an_unknown_persona(self):
         self.start.COWRIE_ROOT, self.start.TMP_ROOT = self.cowrie, self.runtime
         old = os.environ.get("COWRIE_PERSONA")
@@ -178,7 +197,8 @@ class LayoutTest(unittest.TestCase):
     def test_dockerfile_pins_v3_1_1_and_boots_a_catalog_persona(self):
         text = DOCKERFILE.read_text()
         for needle in ("ARG COWRIE_VERSION=v3.1.1", "ARG COWRIE_COMMIT=c17c9b73d6af0972334ea1e90b20d974cb24eeca",
-                       "COWRIE_PERSONA=debian-bookworm "):
+                       "COWRIE_PERSONA=debian-bookworm ",
+                       "python3 /root/dist/check_ssh_support.py --cowrie-root /home/cowrie/cowrie &&"):
             self.assertTrue(needle in text, f"{needle} not in the Dockerfile")
         self.assertIn("debian-bookworm", catalog.ids())
 

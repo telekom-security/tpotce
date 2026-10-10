@@ -37,15 +37,12 @@ RUN apk --no-cache -U upgrade && \
     pip3 install --break-system-packages --no-cache-dir -e . && \
     python3 /root/dist/patch_cowrie_persona_support.py --cowrie-root /home/cowrie/cowrie && \
 #
-# Personas: library, SSH algorithms of this Twisted, build check of every persona
+# Personas: library, SSH algorithms (ciphers, MACs, host keys, compressions) of this Twisted and Cowrie,
+# build check of every persona
     mkdir -p /usr/local/lib/tpot-cowrie && \
     cp -r /root/dist/tpot_personas /usr/local/lib/tpot-cowrie/ && \
     find /usr/local/lib/tpot-cowrie -name __pycache__ -prune -exec rm -rf {} + && \
-    python3 -c "import sys; sys.path.insert(0, '/usr/local/lib/tpot-cowrie'); \
-from twisted.conch.ssh.transport import SSHTransportBase as T; \
-from tpot_personas import ssh_profiles as p; \
-assert p.TWISTED_CIPHERS <= {c.decode() for c in T.supportedCiphers}, 'ciphers'; \
-assert p.TWISTED_MACS <= {m.decode() for m in T.supportedMACs}, 'macs'" && \
+    python3 /root/dist/check_ssh_support.py --cowrie-root /home/cowrie/cowrie && \
     python3 /root/dist/generate_cowrie_fs.py --cowrie-root /home/cowrie/cowrie && \
     install -m 0755 /root/dist/start-cowrie-persona.py /usr/local/bin/start-cowrie-persona && \
 #

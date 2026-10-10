@@ -22,9 +22,12 @@ class SelectTest(unittest.TestCase):
         self.assertIn("../etc", str(ctx.exception))
         self.assertIn("ubuntu-noble", str(ctx.exception))
 
-    def test_duplicate_is_an_error(self):
-        with self.assertRaises(PersonaError):
-            parse_selection("ipcam ipcam", IDS)
+    def test_duplicate_is_an_error_that_names_the_allowed_ids(self):
+        with self.assertRaises(PersonaError) as ctx:
+            parse_selection("ipcam debian-trixie ipcam", IDS)
+        message = str(ctx.exception)
+        self.assertEqual(message, 'COWRIE_PERSONA names "ipcam" twice, allowed: ubuntu-noble debian-trixie ipcam')
+        self.assertNotIn("\n", message)
 
     def test_choose_stays_in_selection(self):
         rng = random.Random(1)

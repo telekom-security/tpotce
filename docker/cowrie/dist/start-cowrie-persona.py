@@ -26,6 +26,7 @@ from tpot_personas.validate import MIN_PICKLE_SIZE, validate  # noqa: E402
 COWRIE_ROOT = Path("/home/cowrie/cowrie")
 TMP_ROOT = Path("/tmp/cowrie")
 TWISTD = "/usr/bin/twistd"
+UMASK = 0o027
 
 
 def prepare(environ, cowrie_root, tmp_root, rng, min_pickle=MIN_PICKLE_SIZE):
@@ -64,7 +65,10 @@ def main():
     print(f"Starting Cowrie persona: {persona_id}", flush=True)
     os.environ.setdefault("PYTHONPATH", f"{COWRIE_ROOT}:{COWRIE_ROOT / 'src'}")
     os.chdir(TMP_ROOT / "runtime")
-    os.execv(TWISTD, [TWISTD, "-n", "--umask=0022", "--pidfile=", "cowrie"])
+    # 0640 / 0750: private host keys not world readable; Logstash and ewsposter read the logs as 2000:2000.
+    # twistd applies --umask only after the plugin opened log/cowrie.json, so the process gets it first.
+    os.umask(UMASK)
+    os.execv(TWISTD, [TWISTD, "-n", f"--umask={UMASK:04o}", "--pidfile=", "cowrie"])
     return 1
 
 

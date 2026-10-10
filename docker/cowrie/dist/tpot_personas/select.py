@@ -10,8 +10,9 @@ def parse_selection(value, ids):
     unknown = [e for e in entries if e not in ids]
     if unknown:
         raise PersonaError(f'unknown COWRIE_PERSONA "{unknown[0]}", allowed: {" ".join(ids)}')
-    if len(set(entries)) != len(entries):
-        raise PersonaError("COWRIE_PERSONA names a persona twice")
+    twice = [e for i, e in enumerate(entries) if e in entries[:i]]
+    if twice:
+        raise PersonaError(f'COWRIE_PERSONA names "{twice[0]}" twice, allowed: {" ".join(ids)}')
     return entries
 
 
