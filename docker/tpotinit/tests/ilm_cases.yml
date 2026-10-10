@@ -1,0 +1,178 @@
+# Cases for the retention rule of the ILM policy tpot (TPOT_ES_RETENTION), shared by
+# both implementations:
+#   bash in tpotinit:  docker/tpotinit/dist/bin/es_retention.sh  (docker/_tests/tests/tpotinit_ilm.sh)
+#   Python in tpot:    tpotctl/elastic.py                        (tpotctl/tests/test_elastic.py)
+#
+# values: min_age of the delete phase (none: no delete phase) -> the .env value it stands for,
+#         "" when it stands for none (T-Pot then never adopts it).
+# cases:  policy is what GET _ilm/policy/tpot returns under .tpot.policy (null: no policy),
+#         value is TPOT_ES_RETENTION, force the explicit "apply .env anyway".
+#         Expected: action (create | update | keep | foreign) and for create / update the written
+#         policy: min_age of its delete phase (none: no delete phase), retention (_meta.tpot_retention)
+#         and phases, all phases it has.
+legacy: &legacy
+  phases:
+    hot: {min_age: 0ms, actions: {}}
+    delete: {min_age: 30d, actions: {delete: {delete_searchable_snapshot: true}}}
+  _meta: {managed: true, description: T-Pot ILM policy with a retention of 30 days}
+values:
+  - {min_age: 30d, value: "30"}
+  - {min_age: 3650d, value: "3650"}
+  - {min_age: 720h, value: "30"}
+  - {min_age: none, value: "off"}
+  - {min_age: 0d, value: ""}
+  - {min_age: 36h, value: ""}
+  - {min_age: 3651d, value: ""}
+  - {min_age: 90m, value: ""}
+  - {min_age: 1d, value: "1"}
+cases:
+  - name: no policy, default
+    policy: null
+    value: "30"
+    action: create
+    min_age: 30d
+    retention: "30"
+    phases: [delete, hot]
+  - name: no policy, off
+    policy: null
+    value: "off"
+    action: create
+    min_age: none
+    retention: "off"
+    phases: [hot]
+  - name: no policy, empty value creates the default
+    policy: null
+    value: ""
+    action: create
+    min_age: 30d
+    retention: "30"
+    phases: [delete, hot]
+  - name: policy of an earlier release, same value, only the marker is added
+    policy: *legacy
+    value: "30"
+    action: update
+    min_age: 30d
+    retention: "30"
+    phases: [delete, hot]
+  - name: policy of an earlier release, longer value
+    policy: *legacy
+    value: "90"
+    action: update
+    min_age: 90d
+    retention: "90"
+    phases: [delete, hot]
+  - name: policy of an earlier release, empty value leaves it alone
+    policy: *legacy
+    value: ""
+    action: keep
+  - name: policy of an earlier release edited to 365 days in Kibana
+    policy:
+      phases:
+        hot: {min_age: 0ms, actions: {}}
+        delete: {min_age: 365d, actions: {delete: {delete_searchable_snapshot: true}}}
+      _meta: {managed: true, description: T-Pot ILM policy with a retention of 30 days}
+    value: "30"
+    action: foreign
+  - name: policy of an earlier release with a warm phase added in Kibana
+    policy:
+      phases:
+        hot: {min_age: 0ms, actions: {}}
+        warm: {min_age: 7d, actions: {forcemerge: {max_num_segments: 1}}}
+        delete: {min_age: 30d, actions: {delete: {delete_searchable_snapshot: true}}}
+      _meta: {managed: true, description: T-Pot ILM policy with a retention of 30 days}
+    value: "30"
+    action: foreign
+  - name: managed, nothing to do
+    policy:
+      phases:
+        hot: {min_age: 0ms, actions: {}}
+        delete: {min_age: 90d, actions: {delete: {delete_searchable_snapshot: true}}}
+      _meta: {managed: true, tpot_retention: "90", description: x}
+    value: "90"
+    action: keep
+  - name: managed, shorter value
+    policy:
+      phases:
+        hot: {min_age: 0ms, actions: {}}
+        delete: {min_age: 90d, actions: {delete: {delete_searchable_snapshot: true}}}
+      _meta: {managed: true, tpot_retention: "90", description: x}
+    value: "7"
+    action: update
+    min_age: 7d
+    retention: "7"
+    phases: [delete, hot]
+  - name: managed with a warm phase, only the delete phase changes
+    policy:
+      phases:
+        hot: {min_age: 0ms, actions: {}}
+        warm: {min_age: 7d, actions: {forcemerge: {max_num_segments: 1}}}
+        delete: {min_age: 90d, actions: {delete: {delete_searchable_snapshot: true}}}
+      _meta: {managed: true, tpot_retention: "90", description: x}
+    value: "30"
+    action: update
+    min_age: 30d
+    retention: "30"
+    phases: [delete, hot, warm]
+  - name: managed off, a value adds the delete phase
+    policy:
+      phases:
+        hot: {min_age: 0ms, actions: {}}
+      _meta: {managed: true, tpot_retention: "off", description: x}
+    value: "30"
+    action: update
+    min_age: 30d
+    retention: "30"
+    phases: [delete, hot]
+  - name: managed, off removes the delete phase
+    policy:
+      phases:
+        hot: {min_age: 0ms, actions: {}}
+        delete: {min_age: 30d, actions: {delete: {delete_searchable_snapshot: true}}}
+      _meta: {managed: true, tpot_retention: "30", description: x}
+    value: "off"
+    action: update
+    min_age: none
+    retention: "off"
+    phases: [hot]
+  - name: managed, but the delete phase was changed in Kibana
+    policy:
+      phases:
+        hot: {min_age: 0ms, actions: {}}
+        delete: {min_age: 120d, actions: {delete: {delete_searchable_snapshot: true}}}
+      _meta: {managed: true, tpot_retention: "90", description: x}
+    value: "90"
+    action: foreign
+  - name: managed off, but a delete phase was added in Kibana
+    policy:
+      phases:
+        hot: {min_age: 0ms, actions: {}}
+        delete: {min_age: 400d, actions: {delete: {}}}
+      _meta: {managed: true, tpot_retention: "off", description: x}
+    value: "off"
+    action: foreign
+  - name: a policy of its own without any marker
+    policy:
+      phases:
+        hot: {min_age: 0ms, actions: {rollover: {max_age: 1d}}}
+        delete: {min_age: 45d, actions: {delete: {}}}
+    value: "30"
+    action: foreign
+  - name: force applies the value to a foreign policy, keeping its other phases
+    policy:
+      phases:
+        hot: {min_age: 0ms, actions: {rollover: {max_age: 1d}}}
+        delete: {min_age: 45d, actions: {delete: {}}}
+    value: "60"
+    force: true
+    action: update
+    min_age: 60d
+    retention: "60"
+    phases: [delete, hot]
+  - name: a policy put back by restore.sh is managed again
+    policy:
+      phases:
+        hot: {min_age: 0ms, actions: {}}
+        delete: {min_age: 60d, actions: {delete: {delete_searchable_snapshot: true}}}
+      _meta: {managed: true, tpot_retention: "60", description: x}
+    value: "60"
+    action: keep
