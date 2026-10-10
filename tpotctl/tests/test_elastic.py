@@ -109,5 +109,25 @@ class RuleTest(unittest.TestCase):
         self.assertEqual(out.strip(), "365")
 
 
+class WiringTest(unittest.TestCase):
+
+    def read(self, *parts):
+        with open(os.path.join(REPO_DIR, *parts), encoding="utf-8") as handle:
+            return handle.read()
+
+    def test_tpotinit_applies_the_rule_on_a_hive_with_elasticsearch(self):
+        text = self.read("docker", "tpotinit", "dist", "entrypoint.sh")
+        start = text.index("touch /tmp/success")
+        self.assertIn("/opt/tpot/bin/es_retention.sh", text[start:])
+        block = text[text.index("/opt/tpot/bin/es_retention.sh") - 300:text.index("/opt/tpot/bin/es_retention.sh")]
+        self.assertIn('"${TPOT_TYPE}" == "HIVE"', block)
+        self.assertIn("elasticsearch", block)
+
+    def test_logstash_no_longer_writes_the_policy(self):
+        text = self.read("docker", "elk", "logstash", "dist", "entrypoint.sh")
+        self.assertNotIn("_ilm/policy", text)
+        self.assertIn("lifecycle", self.read("docker", "elk", "logstash", "dist", "tpot-template.json"))
+
+
 if __name__ == "__main__":
     unittest.main()

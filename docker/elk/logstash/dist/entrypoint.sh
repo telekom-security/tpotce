@@ -135,37 +135,7 @@ if [ "$TPOT_TYPE" != "SENSOR" ];
     echo "T-Pot type: $TPOT_TYPE"
     echo
 
-    # Index Management is happening through ILM, but we need to put T-Pot ILM setting on ES.
-    myTPOTILM=$(curl -s -XGET "http://elasticsearch:9200/_ilm/policy/tpot" | grep "Lifecycle policy not found: tpot" -c)
-    if [ "$myTPOTILM" == "1" ];
-      then
-        echo "T-Pot ILM template not found on ES, putting it on ES now."
-        curl -XPUT "http://elasticsearch:9200/_ilm/policy/tpot" -H 'Content-Type: application/json' -d'
-        {
-          "policy": {
-            "phases": {
-              "hot": {
-                "min_age": "0ms",
-                "actions": {}
-              },
-              "delete": {
-                "min_age": "30d",
-                "actions": {
-                  "delete": {
-                    "delete_searchable_snapshot": true
-                  }
-                }
-              }
-            },
-            "_meta": {
-              "managed": true,
-              "description": "T-Pot ILM policy with a retention of 30 days"
-            }
-          }
-        }'
-      else
-        echo "T-Pot ILM already configured or ES not available."
-    fi
+    # The ILM policy tpot (TPOT_ES_RETENTION) is set by tpotinit, see its bin/es_retention.sh.
 fi
 echo
 
