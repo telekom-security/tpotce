@@ -6,6 +6,42 @@
 
 # Excerpt of Cowrie v3.1.1 (c17c9b73), the text patch_cowrie_persona_support.py touches.
 
+from __future__ import annotations
+
+import time
+from typing import TYPE_CHECKING
+
+from twisted.internet import protocol
+from twisted.logger import Logger
+
+from cowrie.shell.honeyfs import read_honeyfs_bytes
+from cowrie.telnet.transport import CowrieTelnetTransport
+from cowrie.telnet.userauth import HoneyPotTelnetAuthProtocol
+from cowrie.telnet_proxy.server_transport import FrontendTelnetTransport
+
+if TYPE_CHECKING:
+    from twisted.cred import portal as tp
+    from twisted.plugin import IPlugin
+
+
+class HoneyPotTelnetFactory(protocol.ServerFactory):
+    """
+    This factory creates HoneyPotTelnetAuthProtocol instances
+    They listen directly to the TCP port
+    """
+
+    _log = Logger()
+
+    tac: IPlugin
+    banner: bytes
+    starttime: float
+
+    def __init__(self, backend, pool_handler):
+        self.portal: tp.Portal | None = None  # gets set by Twisted plugin
+        self.backend: str = backend
+        self.pool_handler = pool_handler
+        super().__init__()
+
     def startFactory(self) -> None:
         """ """
         try:
