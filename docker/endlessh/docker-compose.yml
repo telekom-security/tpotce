@@ -16,5 +16,10 @@ services:
      - "22:2222"
     image: "dtagdevsec/endlessh:24.04.2"
     read_only: true
+    ulimits:
+      nofile:
+        soft: 8192
+        hard: 8192
     volumes:
+     - $HOME/tpotce/data/endlessh/identity:/var/lib/endlessh
      - $HOME/tpotce/data/endlessh/log:/var/log/endlessh
