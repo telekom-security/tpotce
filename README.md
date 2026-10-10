@@ -1209,7 +1209,7 @@ The software that T-Pot is built on uses the following licenses.
 [honeyaml](https://github.com/mmta/honeyaml?tab=MIT-1-ov-file#readme),
 [maltrail](https://github.com/stamparm/maltrail/blob/master/LICENSE)
 <br>Unlicense:
-[endlessh](https://github.com/t3chn0m4g3/endlessh/blob/tpot/UNLICENSE)
+[endlessh](https://github.com/t3chn0m4g3/endlessh/blob/master/UNLICENSE)
 <br>Other:
 [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot#licencing-agreement-malwaretech-public-licence),
 [cowrie](https://github.com/cowrie/cowrie/blob/main/LICENSE.rst),

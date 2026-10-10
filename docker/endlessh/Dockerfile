@@ -8,7 +8,7 @@ RUN apk -U add --no-cache \
 		build-base \
 		git && \
 #
-# Install endlessh from git (T-Pot fork of skeeto/endlessh: Jitter, BannerFile, EMFILE)
+# Install endlessh from git (T-Pot fork of skeeto/endlessh, release 1.2: Jitter, BannerFile, EMFILE)
     git clone https://github.com/t3chn0m4g3/endlessh /opt/endlessh && \
     cd /opt/endlessh && \
     git checkout ecc3dd39a7bd2ba7285f998eb8d9a38014022f75 && \
