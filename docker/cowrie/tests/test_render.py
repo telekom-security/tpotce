@@ -234,3 +234,15 @@ class ServerContentTest(unittest.TestCase):
             self.fail("no 12.2 draw")
         _, out, _ = render_ident(self, persona, ident)
         self.assertEqual((out / "honeyfs/var/log/apt/history.log").read_text(), "")
+
+    def test_kernel_command_line_names_the_root_of_each_server(self):
+        for persona in catalog.PERSONAS:
+            if persona.kind != "server":
+                continue
+            for seed in range(6):
+                _, out, _ = render_one(self, persona, seed)
+                dmesg = (out / "txtcmds/bin/dmesg").read_text()
+                # not the generic line of the devices
+                self.assertNotIn("console=ttyS0 root=/dev/sda1 ro quiet", dmesg, persona.id)
+                self.assertIn("root=", dmesg, persona.id)
+                self.assertTrue((out / "honeyfs/etc/fstab").read_text(), persona.id)

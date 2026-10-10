@@ -4,8 +4,8 @@ import calendar
 import time
 
 from .common import (assign_processes, base_files, base_txtcmds, deb_arch, el_group, el_home_files, el_hosts,
-                     el_passwd, el_shadow, gm, lscpu, ps_entry, rng_for, server_df, server_group, server_mount,
-                     server_passwd, server_shadow, server_top, shadow_ctime)
+                     el_passwd, el_shadow, gm, lscpu, pi_partuuid, ps_entry, rng_for, root_uuid, server_df,
+                     server_group, server_mount, server_passwd, server_shadow, server_top, shadow_ctime)
 from .identity import log_window
 from .model import Content
 
@@ -153,6 +153,47 @@ def root_disk(persona, ident):
                                                              else "noquota")
         return dev, "xfs", options
     return dev, "ext4", "rw,relatime,errors=remount-ro"
+
+
+def pi_cmdline(ident):
+    """/boot/firmware/cmdline.txt as pi-gen writes it; the kernel gets the same line."""
+    return (f"console=serial0,115200 console=tty1 root=PARTUUID={pi_partuuid(ident)}-02 rootfstype=ext4 "
+            "fsck.repair=yes rootwait quiet splash plymouth.ignore-serial-consoles")
+
+
+def boot_config(persona, ident):
+    """(kernel command line, /etc/fstab) that fit root_disk(): the root= of the
+    command line is the / entry of fstab, except on Ubuntu's AWS images, whose
+    kernel mounts root=PARTUUID without initramfs (df shows /dev/root) while
+    fstab names the cloudimg label. Unverified: the exact option lists."""
+    r, provider, family = ident.release, ident.hardware.provider, persona.family
+    kernel = r.kernel_version
+    dev, fs, options = root_disk(persona, ident)
+    uuid = root_uuid(ident)
+    if provider == "pi":
+        part = pi_partuuid(ident)
+        return pi_cmdline(ident), ("proc            /proc           proc    defaults          0       0\n"
+                                   f"PARTUUID={part}-01  /boot/firmware  vfat    defaults          0       2\n"
+                                   f"PARTUUID={part}-02  /               ext4    defaults,noatime  0       1\n")
+    if family == "ubuntu" and provider in ("aws", "kvm", "do"):
+        fstab = ("LABEL=cloudimg-rootfs\t/\t ext4\tdiscard,errors=remount-ro\t0 1\n"
+                 "LABEL=UEFI\t/boot/efi\tvfat\tumask=0077\t0 1\n")
+        if provider == "aws":
+            return (f"BOOT_IMAGE=/vmlinuz-{kernel} root=PARTUUID={root_uuid(ident, 'root-partuuid')} ro "
+                    "console=tty1 console=ttyS0 nvme_core.io_timeout=4294967295 panic=-1"), fstab
+        return f"BOOT_IMAGE=/vmlinuz-{kernel} root=LABEL=cloudimg-rootfs ro console=tty1 console=ttyS0", fstab
+    if family == "rhel":
+        return (f"BOOT_IMAGE=(hd0,gpt3)/vmlinuz-{kernel} root=UUID={uuid} console=tty0 console=ttyS0,115200n8 "
+                "no_timer_check net.ifnames=0 crashkernel=1G-4G:192M,4G-64G:256M,64G-:512M"), \
+            f"UUID={uuid}\t/\txfs\tdefaults\t0 0\n"
+    if family == "centos":
+        return (f"BOOT_IMAGE=/boot/vmlinuz-{kernel} root=UUID={uuid} ro console=tty0 console=ttyS0,115200n8 "
+                "crashkernel=auto net.ifnames=0 console=ttyS0 LANG=en_US.UTF-8"), \
+            f"UUID={uuid} /                       xfs     defaults        0 0\n"
+    fstab = ("# /etc/fstab: static file system information.\n#\n"
+             "# <file system> <mount point>   <type>  <options>       <dump>  <pass>\n"
+             f"UUID={uuid} /               {fs}    {'errors=remount-ro' if family in ('debian', 'ubuntu') else 'defaults'} 0       1\n")
+    return f"BOOT_IMAGE=/boot/vmlinuz-{kernel} root=UUID={uuid} ro quiet", fstab
 
 
 def provider_lspci(persona, ident):
@@ -445,14 +486,16 @@ def _server_content(persona, ident, files, tasks, run_lock=False, accounts=None,
                     boot=None, ctimes=None):
     hw = ident.hardware
     root_dev, root_type, root_options = root_disk(persona, ident)
+    cmdline, fstab = boot_config(persona, ident)
     processes = server_processes(persona, ident, extra_ps)
     passwd, group, shadow = accounts or (
         server_passwd(persona.user, persona.uid, persona.gid, _gecos(persona.user), persona.shell),
         server_group(persona.user, persona.gid),
         server_shadow(persona.user, ident))
     all_files = base_files(persona, ident, passwd, group, shadow, home=home)
+    all_files["etc/fstab"] = fstab
     all_files.update(files)
-    txtcmds = base_txtcmds(persona, ident,
+    txtcmds = base_txtcmds(persona, ident, cmdline=cmdline,
                            df=server_df(ident, root_dev=root_dev, run_lock=run_lock, boot=boot),
                            mount=server_mount(ident, root_dev=root_dev, run_lock=run_lock, boot=boot,
                                               root_type=root_type, root_options=root_options),
@@ -693,9 +736,7 @@ def build_raspios(persona, ident):
         "etc/rpi-issue": (f"Raspberry Pi reference {r.extra['image']}\n"
                           f"Generated using pi-gen, https://github.com/RPi-Distro/pi-gen, {r.extra['pi_gen']}, stage4\n"),
         "boot/firmware/config.txt": _PI_CONFIG_TXT,
-        "boot/firmware/cmdline.txt": ("console=serial0,115200 console=tty1 root=PARTUUID="
-                                      f"{rng_for(ident, 'partuuid').getrandbits(32):08x}-02 rootfstype=ext4 "
-                                      "fsck.repair=yes rootwait quiet splash plymouth.ignore-serial-consoles\n"),
+        "boot/firmware/cmdline.txt": pi_cmdline(ident) + "\n",
         # the device tree property ends with a NUL, cat shows no newline
         "proc/device-tree/model": ident.hardware.board + "\0",
         "etc/apt/sources.list": f"""deb http://deb.debian.org/debian {r.extra['codename']} main contrib non-free non-free-firmware

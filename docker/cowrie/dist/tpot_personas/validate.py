@@ -12,7 +12,7 @@ from pathlib import Path
 
 from . import PersonaError, tree
 from .common import home_dir, is_login_shell, ps_user
-from .identity import DAY, host_patterns, hostname_regex, kernel_time, superseded_at, updated_at
+from .identity import DAY, host_patterns, hostname_regex, kernel_time, stale_at, updated_at
 from .render import DIR_MODES, PACKAGE_MANAGER_PATHS
 from .ssh_profiles import COMPRESSIONS, HOST_KEYS, PROFILES, TWISTED_CIPHERS, TWISTED_MACS
 
@@ -234,16 +234,16 @@ def _restarts_sshd(text):
 def _check_logs(ident, honeyfs, fs, out):
     events = _log_events(ident, honeyfs)
     first, last = _utc_date(ident.installed_at), _utc_date(ident.now)
-    updated, superseded = updated_at(ident.release), superseded_at(ident.release)
+    updated, stale = updated_at(ident.release), stale_at(ident.release)
     newest = {}
     for rel, stamp, text in events:
         newest[rel] = max(newest.get(rel, stamp), stamp)
-        # the logged versions are those of the release: current from its update to the next patch level
+        # the logged versions are those of the release: current from its update until they went stale
         when = time.strftime("%Y-%m-%d", time.gmtime(stamp))
         if stamp < updated:
             out.append(f"date: {rel} logs versions on {when}, before the update of the release")
-        if superseded and stamp > superseded:
-            out.append(f"date: {rel} logs versions on {when}, after the next patch level came out")
+        if stale and stamp > stale:
+            out.append(f"date: {rel} logs versions on {when}, after they went stale")
         if rel.rsplit("/", 1)[-1].startswith("yum.log") and not first <= _utc_date(stamp) <= last:
             out.append(f"date {_utc_date(stamp)} in {rel} is not between {first} and {last}")
         # a real upgrade restarts sshd, but ps shows the sshd of the boot
@@ -260,6 +260,39 @@ def _check_logs(ident, honeyfs, fs, out):
         node = tree.find_node(fs, rel)
         if node is not None and (tree.node_get(node, tree.A_CTIME) or 0) < stamp:
             out.append(f"ctime of /{rel} is before its newest entry")
+
+
+def _root_mount(text):
+    match = re.search(r"^(\S+) on / type ", text, re.M)
+    return match.group(1) if match else None
+
+
+def _check_boot(honeyfs, txtcmds, out):
+    """The root= of the kernel command line in dmesg names the mounted root: by
+    device, by the / entry of fstab, or (no initramfs, /dev/root) by PARTUUID.
+    On a Pi the kernel gets cmdline.txt. Personas without fstab are not checked."""
+    fstab = _text(honeyfs / "etc/fstab")
+    if not fstab:
+        return
+    match = re.search(r"Command line: (.*)$", _text(txtcmds / "bin/dmesg"), re.M)
+    cmdline = match.group(1).strip() if match else ""
+    pi = _text(honeyfs / "boot/firmware/cmdline.txt").strip()
+    if pi and cmdline != pi:
+        out.append("boot: the kernel command line of dmesg is not boot/firmware/cmdline.txt")
+    root = next((t[len("root="):] for t in cmdline.split() if t.startswith("root=")), None)
+    spec = next((f[0] for f in (line.split() for line in fstab.splitlines() if not line.startswith("#"))
+                 if len(f) > 1 and f[1] == "/"), None)
+    mounted = _root_mount(_text(txtcmds / "bin/mount"))
+    if root is None:
+        out.append("boot: the kernel command line of dmesg has no root=")
+    elif root.startswith("/dev/"):
+        if root != mounted:
+            out.append(f"boot: root={root} of dmesg, but / is mounted from {mounted}")
+    elif mounted == "/dev/root":
+        if not root.startswith("PARTUUID="):
+            out.append(f"boot: / is /dev/root (no initramfs), but dmesg has root={root}")
+    elif root != spec:
+        out.append(f"boot: root={root} of dmesg is not the / entry {spec} of fstab")
 
 
 def _check_dates(ident, honeyfs, out):
@@ -355,7 +388,8 @@ def problems(persona, ident, out_dir, runtime_dir, keys_dir, min_pickle=MIN_PICK
     version = _text(honeyfs / "proc/version")
     if r.kernel_version not in version or r.kernel_build not in version:
         out.append(f"kernel: proc/version does not name {r.kernel_version} {r.kernel_build}")
-    if r.kernel_version not in _text(txtcmds / "bin/dmesg"):
+    banner = re.search(r"\bLinux version (\S+)", _text(txtcmds / "bin/dmesg"))
+    if not banner or banner.group(1) != r.kernel_version:
         out.append(f"kernel: dmesg does not name {r.kernel_version}")
     built = kernel_time(r)
     if built is not None and built > ident.booted_at:
@@ -370,6 +404,7 @@ def problems(persona, ident, out_dir, runtime_dir, keys_dir, min_pickle=MIN_PICK
         out.append(f"hostname: etc/hosts does not name {ident.hostname}")
 
     _check_hardware(persona, ident, honeyfs, txtcmds, out)
+    _check_boot(honeyfs, txtcmds, out)
 
     os_release = _text(honeyfs / "etc/os-release")
     fields = dict(line.split("=", 1) for line in os_release.splitlines() if "=" in line)

@@ -6,8 +6,9 @@ import time
 import unittest
 
 from tests.helpers import base_tree
-from tests.test_render import render_one
+from tests.test_render import NOW, render_ident, render_one
 from tpot_personas import PersonaError, catalog, tree, validate
+from tpot_personas.identity import draw, stale_at
 from tpot_personas.render import render
 
 
@@ -184,15 +185,28 @@ class ValidateNegativeTest(unittest.TestCase):
         found = " | ".join(validate.problems(self.persona, wrong, self.out, self.out, self.keys, min_pickle=0))
         self.assertIn("fits no host name of the kvm hardware", found)
 
-    def test_log_entry_after_the_next_patch_level(self):
-        superseded = self.ident.release.extra.get("superseded")
-        self.assertTrue(superseded, self.ident.release.label)
+    def test_log_entry_after_the_versions_went_stale(self):
+        stale = stale_at(self.ident.release)
+        self.assertTrue(stale, self.ident.release.label)
+        superseded = time.strftime("%Y-%m-%d", time.gmtime(stale))
         path = self.out / "honeyfs/var/log/apt/history.log"
         late = time.strftime("%Y-%m-%d  %H:%M:%S",
                              time.gmtime(time.mktime(time.strptime(superseded, "%Y-%m-%d")) + 5 * 86400))
         path.write_text(path.read_text() + f"\nStart-Date: {late}\nCommandline: apt-get install -y git\n"
                         f"End-Date: {late}\n")
-        self.assertIn("after the next patch level", self.problems())
+        self.assertIn("after they went stale", self.problems())
+
+    def test_dmesg_root_is_not_the_mounted_root(self):
+        self.edit("txtcmds/bin/dmesg", "root=", "root=/dev/sdz9 x=")
+        self.assertIn("boot: root=/dev/sdz9", self.problems())
+
+    def test_dmesg_root_is_not_the_fstab_root(self):
+        self.edit("txtcmds/bin/dmesg", "root=", "root=UUID=00000000-0000-4000-8000-000000000000 x=")
+        self.assertIn("is not the / entry", self.problems())
+
+    def test_dmesg_without_root(self):
+        self.edit("txtcmds/bin/dmesg", "root=", "rootX=")
+        self.assertIn("no root=", self.problems())
 
     def test_small_pickle(self):
         self.assertIn("pickle", " ".join(
@@ -249,3 +263,25 @@ class ValidateRpmTest(unittest.TestCase):
             for seed in range(5):
                 ident, out, keys = render_one(self, persona, seed)
                 self.assertEqual(validate.problems(persona, ident, out, out, keys, min_pickle=0), [], (pid, seed))
+
+
+class ValidateBootTest(unittest.TestCase):
+    def test_pi_kernel_gets_cmdline_txt(self):
+        persona = catalog.by_id("raspios")
+        ident, out, keys = render_one(self, persona, 1)
+        self.assertEqual(validate.problems(persona, ident, out, out, keys, min_pickle=0), [])
+        path = out / "txtcmds/bin/dmesg"
+        path.write_text(path.read_text().replace("console=serial0,115200 ", "", 1))
+        self.assertIn("cmdline.txt", " ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0)))
+
+    def test_dev_root_needs_a_partuuid(self):
+        persona = catalog.by_id("ubuntu-noble")
+        for seed in range(400):
+            ident = draw(persona, seed, NOW)
+            if ident.hardware.provider == "aws":
+                break
+        _, out, keys = render_ident(self, persona, ident)
+        self.assertEqual(validate.problems(persona, ident, out, out, keys, min_pickle=0), [])
+        path = out / "txtcmds/bin/dmesg"
+        path.write_text(re.sub(r"root=PARTUUID=\S+", "root=LABEL=cloudimg-rootfs", path.read_text()))
+        self.assertIn("/dev/root (no initramfs)", " ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0)))

@@ -59,3 +59,4 @@ class Persona:
     vulnerability: str
     remove_paths: tuple = ()
     tokens: tuple = ()
+    max_install_days: int = 900  # installed 90 to this many days ago (an EOL box may be older)

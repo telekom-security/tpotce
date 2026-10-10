@@ -71,15 +71,23 @@ MIPS_ROUTER = Hardware(cpus=1, cpu_model="MIPS 24Kc V7.4", mem_kb=65536, disk_kb
 
 # --- release helpers ----------------------------------------------------------------
 
-def _chain(*releases):
+def _chain(*releases, stale=None):
     """A pool of patch levels in update order: each one is superseded on the day
-    the next one came out (the logs of a system never pull its versions later)."""
+    the next one came out. stale: per level, the day the next openssh or kernel
+    security update came out (None: unknown); identity.stale_at takes the
+    earliest of it, the next level and 90 days after the update, and the logs
+    of a system never pull the level's versions after that."""
+    stale = stale or (None,) * len(releases)
+    assert len(stale) == len(releases)
     out = []
     for i, r in enumerate(releases):
-        extra = {k: v for k, v in r.extra.items() if k != "superseded"}
+        extra = {k: v for k, v in r.extra.items() if k not in ("superseded", "stale_from")}
         if i + 1 < len(releases):
             assert releases[i + 1].extra["updated"] > r.extra["updated"], r.label
             extra["superseded"] = releases[i + 1].extra["updated"]
+        if stale[i]:
+            assert stale[i] > r.extra["updated"], r.label
+            extra["stale_from"] = stale[i]
         out.append(replace(r, extra=extra))
     return tuple(out)
 
@@ -249,7 +257,10 @@ _NOBLE_AWS_LEVELS = (
                          "git": "1:2.43.0-1ubuntu7.3", "vim": "2:9.1.0016-1ubuntu7.18", "htop": "3.3.0-4build1",
                          "net-tools": "2.10-0.1ubuntu4.4"}, flavor="aws", providers=("aws",)),
 )
-NOBLE = _chain(*_NOBLE_LEVELS[1:]) + _chain(*_NOBLE_AWS_LEVELS)
+# stale: next linux / openssh in noble-security|updates (Launchpad): 6.8.0-106 / openssh 13.15 2026-03-12,
+#   6.8.0-124 2026-06-02, 6.8.0-137 2026-08-05; linux-image-aws 6.14.0-1016 2025-11-03, 7.0.0-1009 2026-07-27
+NOBLE = (_chain(*_NOBLE_LEVELS[1:], stale=("2026-03-12", "2026-06-02", "2026-08-05"))
+         + _chain(*_NOBLE_AWS_LEVELS, stale=("2025-11-03", "2026-07-27")))
 
 # --- Ubuntu 22.04 ---------------------------------------------------------------------
 # Versions: Launchpad API getPublishedSources, as for noble (openssh 3ubuntu0.12 never left -proposed)
@@ -284,7 +295,9 @@ _JAMMY_LEVELS = (
             {"apt": "2.4.14", "dpkg": "1.21.1ubuntu2.6", "curl": "7.81.0-1ubuntu1.27", "git": "1:2.34.1-1ubuntu1.17",
              "vim": "2:8.2.3995-1ubuntu2.36", "htop": "3.0.5-7build2", "net-tools": _JAMMY_NET_TOOLS + ".4"}),
 )
-JAMMY = _chain(*_JAMMY_LEVELS)
+# stale: next linux / openssh of jammy (Launchpad): 5.15.0-141 2025-06-03, 5.15.0-168 2026-02-04,
+#   openssh 0ubuntu0.15 2026-04-29, 5.15.0-191 2026-09-23
+JAMMY = _chain(*_JAMMY_LEVELS, stale=("2025-06-03", "2026-02-04", "2026-04-29", "2026-09-23"))
 
 # --- Debian 13 ------------------------------------------------------------------------
 # openssh: https://metadata.ftp-master.debian.org/changelogs/main/o/openssh/stable_changelog
@@ -322,7 +335,11 @@ _TRIXIE_LEVELS = (
             {**_TRIXIE_PKGS, "dpkg": "1.22.22", "curl": "8.14.1-2+deb13u5", "sudo": "1.9.16p2-3+deb13u2"}),
 )
 # 13.1 and 13.2 are the versions of their installation images
-TRIXIE = _chain(_medium(_TRIXIE_LEVELS[0]), _medium(_TRIXIE_LEVELS[1]), *_TRIXIE_LEVELS[2:])
+# stale: the next kernel of trixie(-security), a day after its changelog date (security) or the point release:
+#   6.12.48-1 2025-09-21, 6.12.63-1 with 13.3 2026-01-10, 6.12.74-2 2026-03-09, 6.12.90-1 2026-05-23;
+#   unknown after 6.12.107-1 (90 days)
+TRIXIE = _chain(_medium(_TRIXIE_LEVELS[0]), _medium(_TRIXIE_LEVELS[1]), *_TRIXIE_LEVELS[2:],
+                stale=("2025-09-21", "2026-01-10", "2026-03-09", "2026-05-23", None))
 
 # --- Debian 12 ------------------------------------------------------------------------
 # openssh: https://metadata.ftp-master.debian.org/changelogs/main/o/openssh/oldstable_changelog
@@ -364,7 +381,11 @@ _BOOKWORM_LEVELS = (
              "vim": "2:9.0.1378-2+deb12u2", "sudo": "1.9.13p3-1+deb12u4"}),
 )
 # 12.2 and 12.5 are the versions of their installation images: the regreSSHion bait stays installable
-BOOKWORM = _chain(_medium(_BOOKWORM_LEVELS[0]), _medium(_BOOKWORM_LEVELS[1]), *_BOOKWORM_LEVELS[2:])
+# stale: the next kernel of bookworm(-security), as for trixie: 6.1.66-1 with 12.4 2023-12-10,
+#   6.1.85-1 2024-04-12 (before openssh deb12u3 fixed regreSSHion on 2024-07-01), 6.1.140-1 2025-05-23,
+#   6.1.172-1 2026-05-16; unknown after 6.1.176-1 (90 days)
+BOOKWORM = _chain(_medium(_BOOKWORM_LEVELS[0]), _medium(_BOOKWORM_LEVELS[1]), *_BOOKWORM_LEVELS[2:],
+                  stale=("2023-12-10", "2024-04-12", "2025-05-23", "2026-05-16", None))
 
 # --- RHEL 9 ---------------------------------------------------------------------------
 # Package NVRs: the RHEL rebuild Rocky Linux, https://dl.rockylinux.org/vault/rocky/9.4/BaseOS/x86_64/os/Packages/
@@ -379,7 +400,7 @@ _RHEL9_LEVELS = (
           {"curl": "7.76.1-29.el9_4.1", "git": "2.43.5-1.el9_4", "vim-enhanced": "2:8.2.2637-20.el9_1"}),
     # 9.5 GA kernel; uname -v verbatim from https://www.spec.org/cpu2017/results/res2025q2/cpu2017-20250529-48392.html
     # unverified: builder host and compiler (gcc 11.5.0 of RHEL 9.5)
-    _rhel("2024-11-20", 5, "5.14.0-503.11.1", "#1 SMP PREEMPT_DYNAMIC Mon Sep 30 11:54:45 EDT 2024",
+    _rhel("2024-11-13", 5, "5.14.0-503.11.1", "#1 SMP PREEMPT_DYNAMIC Mon Sep 30 11:54:45 EDT 2024",
           "mockbuild@x86-64-01.build.eng.rdu2.redhat.com",
           "gcc (GCC) 11.5.0 20240719 (Red Hat 11.5.0-2), GNU ld version 2.35.2-54.el9", "8.7p1-43.el9",
           "8.7p1-38.el9_4.4", "OpenSSL 3.2.2 4 Jun 2024",
@@ -399,7 +420,10 @@ _RHEL9_LEVELS = (
           {"curl": "7.76.1-31.el9_6.1", "git": "2.47.3-1.el9_6", "vim-enhanced": "2:8.2.2637-22.el9_6.1"}),
 )
 # in update order; 9.5 GA is the 9.5 installation image
-RHEL9 = _chain(_medium(_RHEL9_LEVELS[1]), _RHEL9_LEVELS[0], *_RHEL9_LEVELS[2:])
+# stale: the next kernel (Rocky vault dates): 503.14.1 2024-11-15, 570.19.1 2025-06-09; unknown for the
+#   EUS kernels (90 days)
+RHEL9 = _chain(_medium(_RHEL9_LEVELS[1]), _RHEL9_LEVELS[0], *_RHEL9_LEVELS[2:],
+               stale=("2024-11-15", None, "2025-06-09", None))
 
 # --- CentOS 7 -------------------------------------------------------------------------
 # Packages and their dates: https://vault.centos.org/7.9.2009/updates/x86_64/Packages/ and .../os/x86_64/Packages/
@@ -422,7 +446,9 @@ _CENTOS7_LEVELS = (
              "vim-enhanced": "2:7.4.629-8.el7_9"}),
 )
 # 7.9.2009 as installed is the image; a later install would get the newest updates from the vault
-CENTOS7 = _chain(_medium(_CENTOS7_LEVELS[0]), *_CENTOS7_LEVELS[1:])
+# stale: the next kernel on the vault: 1160.90.1 2023-05-04, 1160.108.1 2024-01-26; none after 1160.119.1
+#   (and the update of the 2020 image unknown): 90 days
+CENTOS7 = _chain(_medium(_CENTOS7_LEVELS[0]), *_CENTOS7_LEVELS[1:], stale=(None, "2023-05-04", "2024-01-26", None))
 
 # --- Raspberry Pi OS (Bookworm, arm64) ------------------------------------------------
 # kernels and their changelog dates: debian.tar.xz of https://archive.raspberrypi.com/debian/pool/main/l/linux/
@@ -433,6 +459,8 @@ CENTOS7 = _chain(_medium(_CENTOS7_LEVELS[0]), *_CENTOS7_LEVELS[1:])
 # unverified: the compiler of the Pi kernel builds (the Debian gcc-12 of bookworm assumed)
 _PI_GCC = "aarch64-linux-gnu-gcc-12 (Debian 12.2.0-14) 12.2.0, GNU ld (GNU Binutils for Debian) 2.40"
 _PI_GCC_U1 = "aarch64-linux-gnu-gcc-12 (Debian 12.2.0-14+deb12u1) 12.2.0, GNU ld (GNU Binutils for Debian) 2.40"
+# Every level is drawable at the time of writing (2026-10); a non-image level is only drawn while an
+# installation 90-900 days back can still predate its stale day (2024-11-19 / 6.6.74: until about 2027-08).
 _RASPIOS_LEVELS = (
     _raspios("2024-10-25", "2024-10-22", "17c8e4853490218fafcd0cc2f95203ccfebe043e", "12.7", "1:9.2p1-2+deb12u3",
              "1:9.2p1-2+deb12u2", "6.6.51", "1:6.6.51-1+rpt3", "2024-10-08", _PI_GCC, "OpenSSL 3.0.14 4 Jun 2024",
@@ -459,7 +487,10 @@ _RASPIOS_LEVELS = (
               "vim": "2:9.0.1378-2+deb12u2", "sudo": "1.9.13p3-1+deb12u4"}),
 )
 # the 2024-10-22 image as written to the card
-RASPIOS = _chain(_medium(_RASPIOS_LEVELS[0]), *_RASPIOS_LEVELS[1:])
+# stale: Pi kernel 6.6.62 2024-11-28 (archive date), openssh deb12u5 (security) 2025-02-15,
+#   openssh deb12u9 (security) 2026-04-06; Pi kernels after 6.12.47 / 6.12.87 for bookworm: 90 days
+RASPIOS = _chain(_medium(_RASPIOS_LEVELS[0]), *_RASPIOS_LEVELS[1:],
+                 stale=("2024-11-28", "2025-02-15", None, "2026-04-06", None))
 
 # --- GPU server (Ubuntu + NVIDIA) -----------------------------------------------------
 # Drivers: Launchpad nvidia-graphics-drivers-550 / -570 (jammy, noble); CUDA 12.4 / 12.8 is the CUDA
@@ -474,28 +505,28 @@ def _gpu(base, driver, cuda, built, gcc):
                           "nvidia_gcc": gcc, "providers": ("dgx", "gpu")})
 
 
-GPU_RELEASES = _chain(
-    _gpu(_JAMMY_LEVELS[1], "550.163.01", "12.4", "Wed Apr  9 19:58:21 UTC 2025",
+# the levels of the full Ubuntu chains (their superseded / stale days), with a driver on top
+GPU_RELEASES = (
+    _gpu(JAMMY[1], "550.163.01", "12.4", "Wed Apr  9 19:58:21 UTC 2025",
          "gcc version 11.4.0 (Ubuntu 11.4.0-1ubuntu1~22.04.2)"),
-    _gpu(_JAMMY_LEVELS[2], "570.211.01", "12.8", "Tue Dec  9 20:31:47 UTC 2025",
+    _gpu(JAMMY[2], "570.211.01", "12.8", "Tue Dec  9 20:31:47 UTC 2025",
          "gcc version 11.4.0 (Ubuntu 11.4.0-1ubuntu1~22.04.3)"),
-) + _chain(
-    _gpu(_NOBLE_LEVELS[1], "570.195.03", "12.8", "Tue Sep 23 16:12:09 UTC 2025",
+    _gpu(NOBLE[0], "570.195.03", "12.8", "Tue Sep 23 16:12:09 UTC 2025",
          "gcc version 13.3.0 (Ubuntu 13.3.0-6ubuntu2~24.04)"),
-    _gpu(_NOBLE_LEVELS[3], "570.211.01", "12.8", "Tue Dec  9 20:31:47 UTC 2025",
+    _gpu(NOBLE[2], "570.211.01", "12.8", "Tue Dec  9 20:31:47 UTC 2025",
          "gcc version 13.3.0 (Ubuntu 13.3.0-6ubuntu2~24.04.1)"),
 )
 
 
 def _server(pid, family, os_id, user, releases, hardware, hostnames, builder, vulnerability, managers=APT,
-            arch=("linux-x64-lsb", "x86_64"), tokens=()):
+            arch=("linux-x64-lsb", "x86_64"), tokens=(), max_install_days=900):
     return Persona(
         id=pid, family=family, kind="server", os_id=os_id,
         user=user, uid=1000, gid=1000, shell="/bin/bash",
         arch=arch[0], hardware_platform=arch[1], operating_system="GNU/Linux",
         ssh_profile="openssh", package_managers=managers,
         releases=releases, hardware=hardware, hostnames=hostnames,
-        builder=builder, vulnerability=vulnerability, tokens=tokens,
+        builder=builder, vulnerability=vulnerability, tokens=tokens, max_install_days=max_install_days,
     )
 
 
@@ -518,7 +549,8 @@ PERSONAS = (
             build_rhel, "RHEL 9 cloud image, OpenSSH 8.7p1", managers=DNF),
     _server("centos-7", "centos", "centos", "centos", CENTOS7, (KVM_1, KVM_2, KVM_4),
             ("localhost.localdomain", "cent7-{word}{nn}", "{word}{nn}"),
-            build_centos, "EOL CentOS 7, OpenSSH 7.4", managers=YUM),
+            # an EOL box forgotten for years: installed up to ten years ago
+            build_centos, "EOL CentOS 7, OpenSSH 7.4", managers=YUM, max_install_days=3650),
     _server("raspios", "raspios", "debian", "pi", RASPIOS, PI_HARDWARE,
             ("raspberrypi", "pi{nn}", "pihole"),
             build_raspios, "Raspberry Pi with the default user pi", arch=("linux-aarch64-lsb", "aarch64")),

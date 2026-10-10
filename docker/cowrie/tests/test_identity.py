@@ -1,10 +1,11 @@
+import calendar
 import re
 import unittest
 
 from tests.helpers import DIST  # noqa: F401
-from tpot_personas import catalog
+from tpot_personas import catalog, servers
 from tpot_personas.identity import (DAY, draw, first_install, host_patterns, hostname_regex, is_medium, kernel_time,
-                                    log_window, ready_at, superseded_at, to_json)
+                                    log_window, ready_at, stale_at, to_json, updated_at)
 
 NOW = 1_790_000_000  # fixed "now" for reproducible tests
 
@@ -24,7 +25,7 @@ class IdentityTest(unittest.TestCase):
                 limit = 400 if p.kind == "device" else 120
                 self.assertLessEqual(i.boot_offset, (limit + 1) * DAY, (p.id, seed))
                 self.assertGreaterEqual(NOW - i.installed_at, 90 * DAY, (p.id, seed))
-                self.assertLessEqual(NOW - i.installed_at, 900 * DAY, (p.id, seed))
+                self.assertLessEqual(NOW - i.installed_at, p.max_install_days * DAY, (p.id, seed))
                 # a system is not installed before its release or image existed
                 self.assertGreaterEqual(i.installed_at, first_install(i.release), (p.id, seed))
                 # it runs the kernel it booted, so that kernel was built (and the update made) before the boot
@@ -40,7 +41,7 @@ class IdentityTest(unittest.TestCase):
                     self.assertLessEqual(i.installed_at, i.booted_at, (p.id, now, seed))
                     self.assertGreaterEqual(i.boot_offset, DAY, (p.id, now, seed))
                     self.assertGreaterEqual(now - i.installed_at, 90 * DAY, (p.id, now, seed))
-                    self.assertLessEqual(now - i.installed_at, 900 * DAY, (p.id, now, seed))
+                    self.assertLessEqual(now - i.installed_at, p.max_install_days * DAY, (p.id, now, seed))
 
     def test_hardware_tokens_in_host_names_match_the_hardware(self):
         p = catalog.by_id("ubuntu-noble")
@@ -122,8 +123,8 @@ class PatchLevelTest(unittest.TestCase):
         for p in catalog.PERSONAS:
             for seed in range(500 if p.kind == "server" else 20):
                 i = draw(p, seed, NOW)
-                if superseded_at(i.release) and not is_medium(i.release):
-                    self.assertLessEqual(i.installed_at, superseded_at(i.release), (p.id, seed, i.release.label))
+                if stale_at(i.release) and not is_medium(i.release):
+                    self.assertLessEqual(i.installed_at, stale_at(i.release), (p.id, seed, i.release.label))
 
     def test_log_window_is_the_time_the_versions_were_current(self):
         for p in catalog.PERSONAS:
@@ -133,12 +134,12 @@ class PatchLevelTest(unittest.TestCase):
                 if window is None:
                     # only an image install after the next patch level logs nothing
                     self.assertTrue(is_medium(i.release), (p.id, seed))
-                    self.assertGreater(i.installed_at, superseded_at(i.release), (p.id, seed))
+                    self.assertGreater(i.installed_at, stale_at(i.release), (p.id, seed))
                     continue
                 first, last = window
                 self.assertGreaterEqual(first, i.installed_at)
-                if superseded_at(i.release):
-                    self.assertLessEqual(last, superseded_at(i.release), (p.id, seed))
+                if stale_at(i.release):
+                    self.assertLessEqual(last, stale_at(i.release), (p.id, seed))
 
     def test_the_regresshion_bait_stays_reachable(self):
         p = catalog.by_id("debian-bookworm")
@@ -151,3 +152,55 @@ class PatchLevelTest(unittest.TestCase):
             if p.kind == "server":
                 labels = {draw(p, seed, NOW).release.label for seed in range(500)}
                 self.assertGreaterEqual(len(labels), 3, (p.id, labels))
+
+
+class StaleTest(unittest.TestCase):
+    """No package log entry pulls a level's versions after they went stale."""
+
+    def entries(self, ident):
+        found = []
+        for purpose in ("apt-history", "dnf-log", "yum-log"):
+            found += [start + took for _, _, start, took in servers._log_entries(ident, purpose)]
+        return found
+
+    def test_no_log_entry_after_the_stale_day(self):
+        for p in catalog.PERSONAS:
+            for seed in range(1500 if p.kind == "server" else 20):
+                i = draw(p, seed, NOW)
+                stale = stale_at(i.release)
+                for when in self.entries(i):
+                    self.assertGreaterEqual(when, i.installed_at, (p.id, seed))
+                    if stale:
+                        self.assertLessEqual(when, stale, (p.id, seed, i.release.label))
+
+    def test_the_regresshion_bait_logs_nothing_after_the_fix(self):
+        fix = calendar.timegm((2024, 7, 1, 0, 0, 0))  # openssh 1:9.2p1-2+deb12u3
+        p = catalog.by_id("debian-bookworm")
+        drawn = 0
+        for seed in range(3000):
+            i = draw(p, seed, NOW)
+            if i.release.ssh_banner.endswith(("deb12u1", "deb12u2")):
+                drawn += 1
+                self.assertTrue(all(when < fix for when in self.entries(i)), (seed, i.release.label))
+        self.assertGreater(drawn, 500)
+
+    def test_every_level_is_stale_at_most_90_days_after_its_update(self):
+        for p in catalog.PERSONAS:
+            for r in p.releases:
+                if updated_at(r):
+                    self.assertLessEqual(stale_at(r), updated_at(r) + 90 * DAY, (p.id, r.label))
+                    self.assertGreater(stale_at(r), updated_at(r), (p.id, r.label))
+
+    def test_gpu_levels_go_stale_with_their_ubuntu_levels(self):
+        by_kernel = {r.kernel_version: r for pid in ("ubuntu-noble", "ubuntu-jammy")
+                     for r in catalog.by_id(pid).releases}
+        for r in catalog.by_id("gpu-ubuntu").releases:
+            self.assertEqual(stale_at(r), stale_at(by_kernel[r.kernel_version]), r.label)
+
+    def test_servers_draw_three_levels_now_and_later(self):
+        for p in catalog.PERSONAS:
+            if p.kind != "server":
+                continue
+            for days in (0, 60, 400):
+                labels = {draw(p, seed, NOW + days * DAY).release.label for seed in range(600)}
+                self.assertGreaterEqual(len(labels), 3, (p.id, days, labels))

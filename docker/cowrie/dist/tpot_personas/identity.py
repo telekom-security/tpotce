@@ -10,8 +10,7 @@ import time
 from dataclasses import asdict, dataclass
 
 DAY = 86400
-MIN_INSTALL_AGE = 90 * DAY   # the system was installed 90 to 900 days ago
-MAX_INSTALL_AGE = 900 * DAY
+MIN_INSTALL_AGE = 90 * DAY   # the system was installed 90 days to Persona.max_install_days ago
 _WORDS = ("app", "web", "db", "api", "node", "srv", "prod", "stage", "build", "data", "edge", "mail")
 _MONTHS = {m: i for i, m in enumerate(("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct",
                                        "Nov", "Dec"), 1)}
@@ -85,21 +84,35 @@ def ready_at(release):
     return max(kernel_time(release) or 0, first_install(release), updated_at(release))
 
 
+STALE_AFTER = 90 * DAY  # a patch level counts as current for at most 90 days after its update
+
+
+def stale_at(release):
+    """From then on the mirror gave newer versions than the release's: the next
+    openssh / kernel security update (extra["stale_from"]), the next patch level
+    of the pool, at the latest 90 days after the update; 0 if unknown (devices)."""
+    updated = updated_at(release)
+    if not updated:
+        return 0
+    days = [d for d in (_day(release, "stale_from"), superseded_at(release)) if d]
+    return min(days + [updated + STALE_AFTER])
+
+
 def latest_install(release):
-    """Installed later, a system would have got the next patch level (0: no limit)."""
-    return 0 if is_medium(release) else superseded_at(release)
+    """Installed later, a system would have got newer versions (0: no limit)."""
+    return 0 if is_medium(release) else stale_at(release)
 
 
 def log_window(ident):
     """(first, last) time of package log entries that pull the release's
-    versions: from the installation (or the update to the release) until the
-    next patch level came out; None when the system was installed from an
+    versions: from the installation (or the update to the release) until its
+    versions went stale (stale_at); None when the system was installed from an
     image after that and never touched its packages."""
     r = ident.release
     first = max(ident.installed_at, updated_at(r))
     last = ident.now - 3600
-    if superseded_at(r):
-        last = min(last, superseded_at(r))
+    if stale_at(r):
+        last = min(last, stale_at(r))
     if first > last:
         return None
     return first, last
@@ -179,13 +192,13 @@ def _gpu_short(name):
     return model.split("-", 1)[0].replace(" ", "").lower()
 
 
-def _ready(release, now):
+def _ready(release, now, max_age):
     """The release existed long enough before now to have been installed and booted,
-    and an installation 90-900 days back can have it."""
+    and an installation 90 days to max_age back can have it."""
     if ready_at(release) > now - 2 * DAY or first_install(release) > now - MIN_INSTALL_AGE:
         return False
     latest = latest_install(release)
-    return not latest or max(now - MAX_INSTALL_AGE, first_install(release)) <= min(latest, now - MIN_INSTALL_AGE)
+    return not latest or max(now - max_age, first_install(release)) <= min(latest, now - MIN_INSTALL_AGE)
 
 
 def draw(persona, seed, now=None):
@@ -193,7 +206,10 @@ def draw(persona, seed, now=None):
     now = int(time.time()) if now is None else int(now)
     hardware = rng.choice(persona.hardware)
     fitting = [r for r in persona.releases if fits(r, hardware)] or list(persona.releases)
-    release = specialize(rng.choice([r for r in fitting if _ready(r, now)] or fitting), hardware)
+    max_age = getattr(persona, "max_install_days", 900) * DAY
+    ready = [r for r in fitting if _ready(r, now, max_age)]
+    # a clock far outside the pool has no consistent release: any one, installed in range, no logs
+    release = specialize(rng.choice(ready or fitting), hardware)
 
     # booted after its last update (and so after its kernel was built), up to 120 / 400 days ago
     max_up = (400 if persona.kind == "device" else 120) * DAY
@@ -203,9 +219,9 @@ def draw(persona, seed, now=None):
     # installed 90 to 900 days ago, not after the boot, not before the release existed,
     # and not after the next patch level came out (unless from the image of this one)
     last_install = min(booted_at, now - MIN_INSTALL_AGE)
-    if latest_install(release):
+    if ready and latest_install(release):
         last_install = min(last_install, latest_install(release))
-    earliest_install = min(max(now - MAX_INSTALL_AGE, first_install(release)), last_install)
+    earliest_install = min(max(now - max_age, first_install(release)), last_install)
     installed_at = rng.randint(earliest_install, last_install)
     patterns = host_patterns(persona, hardware) or list(persona.hostnames)
     return Identity(

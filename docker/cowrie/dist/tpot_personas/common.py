@@ -571,6 +571,17 @@ def cpuinfo_arm64(persona, hw, serial):
     return "\n".join(blocks) + f"\nRevision\t: {code}\nSerial\t\t: {serial}\nModel\t\t: {hw.board}\n"
 
 
+def root_uuid(ident, purpose="root-uuid"):
+    """A file system or GPT partition UUID of this identity (version 4 form)."""
+    bits = f"{rng_for(ident, purpose).getrandbits(128):032x}"
+    return f"{bits[:8]}-{bits[8:12]}-4{bits[13:16]}-{'89ab'[int(bits[16], 16) % 4]}{bits[17:20]}-{bits[20:]}"
+
+
+def pi_partuuid(ident):
+    """The disk identifier pi-gen writes; partitions are <id>-01 (boot) and <id>-02 (root)."""
+    return f"{rng_for(ident, 'partuuid').getrandbits(32):08x}"
+
+
 def pi_serial(ident):
     rng = rng_for(ident, "serial")
     if "Pi 4" in ident.hardware.board:
@@ -810,10 +821,13 @@ def base_files(persona, ident, passwd, group, shadow, home=None):
     return files
 
 
-def base_txtcmds(persona, ident, df, mount, lscpu_text, top):
+def base_txtcmds(persona, ident, df, mount, lscpu_text, top, cmdline=None):
+    """cmdline: the kernel command line of dmesg (servers build it from their root disk)."""
+    kernel = dmesg(ident.release, persona.hardware_platform) if cmdline is None else \
+        dmesg(ident.release, persona.hardware_platform, cmdline)
     return {
         "bin/df": df,
-        "bin/dmesg": dmesg(ident.release, persona.hardware_platform),
+        "bin/dmesg": kernel,
         "bin/mount": mount,
         "bin/ulimit": ULIMIT,
         "usr/bin/lscpu": lscpu_text,
