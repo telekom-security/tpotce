@@ -89,6 +89,28 @@ for (( i = 0; i < count; i++ )); do
   want="${want} current=$(yq -r ".cases[$i].current" "${CASES}") managed=$(yq -r ".cases[$i].managed" "${CASES}")"
   if [[ "${got}" == "${want}" ]]; then echo "ok   ${name}"; else echo "FAIL ${name}: [${got}] expected [${want}]"; failed=1; fi
 done
+# 200 without a policy is no missing policy: warn, never PUT (curl stubbed, no Elasticsearch)
+myMARK="$(mktemp)"
+curl() {
+  local myOUT="" myWRITE=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -o) myOUT="$2"; shift 2 ;;
+      -w) myWRITE="$2"; shift 2 ;;
+      -X) echo "$2" >> "${myMARK}"; shift 2 ;;
+      *) shift ;;
+    esac
+  done
+  if [[ -n "${myWRITE}" ]]; then echo '{}' > "${myOUT}"; printf '200'; fi
+  return 0
+}
+out="$(TPOT_ES_RETENTION=7 myILM_WAIT=5 fuILM_MAIN 2>&1)"
+unset -f curl
+if [[ "${out}" == *"# Warning: Elasticsearch answered without the ILM policy tpot, it is not checked."* && ! -s "${myMARK}" ]]
+  then echo "ok   200 without a policy writes nothing"
+  else echo "FAIL 200 without a policy writes nothing: [${out}] put=[$(cat "${myMARK}")]"; failed=1
+fi
+rm -f "${myMARK}"
 exit "${failed}"
 EOF
   chmod 0755 "${TEST_TMP_ROOT}/run.sh"

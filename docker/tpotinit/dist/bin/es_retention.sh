@@ -59,13 +59,18 @@ function fuILM_DECIDE () {
 function fuILM_MAIN () {
   local myI myCODE myBODY myDECISION myACTION myCURRENT
   for (( myI = 0; myI < myILM_WAIT / 5; myI++ )); do
-    curl -s -f -o /dev/null "${myILM_ES}/_cluster/health" && break
+    curl -s -f --max-time 10 -o /dev/null "${myILM_ES}/_cluster/health" && break
     sleep 5
   done
   myBODY="$(mktemp)"
-  myCODE="$(curl -s -o "${myBODY}" -w '%{http_code}' "${myILM_ES}/_ilm/policy/tpot")"
+  myCODE="$(curl -s --max-time 10 -o "${myBODY}" -w '%{http_code}' "${myILM_ES}/_ilm/policy/tpot")"
   case "${myCODE}" in
-    200) myDECISION="$(jq '.tpot.policy' "${myBODY}" | fuILM_DECIDE "${TPOT_ES_RETENTION:-}")" ;;
+    200) if ! jq -e '.tpot.policy | type == "object"' "${myBODY}" >/dev/null 2>&1;
+           then
+             echo "# Warning: Elasticsearch answered without the ILM policy tpot, it is not checked."
+             rm -f "${myBODY}"; return 0
+         fi
+         myDECISION="$(jq '.tpot.policy' "${myBODY}" | fuILM_DECIDE "${TPOT_ES_RETENTION:-}")" ;;
     404) myDECISION="$(echo null | fuILM_DECIDE "${TPOT_ES_RETENTION:-}")" ;;
     *)   echo "# Warning: Elasticsearch did not answer (HTTP ${myCODE}), the ILM policy tpot is not checked."
          rm -f "${myBODY}"; return 0 ;;
@@ -74,9 +79,14 @@ function fuILM_MAIN () {
   myACTION="$(jq -r '.action' <<<"${myDECISION}")"
   myCURRENT="$(jq -r '.current' <<<"${myDECISION}")"
   case "${myACTION}" in
+    create|update|keep|foreign) ;;
+    *) echo "# Warning: the ILM policy tpot could not be checked (no decision)."
+       return 0 ;;
+  esac
+  case "${myACTION}" in
     create|update)
       if jq -c '{policy: .policy}' <<<"${myDECISION}" \
-         | curl -s -f -o /dev/null -X PUT "${myILM_ES}/_ilm/policy/tpot" -H 'Content-Type: application/json' -d @-;
+         | curl -s -f --max-time 10 -o /dev/null -X PUT "${myILM_ES}/_ilm/policy/tpot" -H 'Content-Type: application/json' -d @-;
         then
           echo "# ILM policy tpot: ${myACTION}d, events are kept for $(jq -r '.policy._meta.tpot_retention' <<<"${myDECISION}" | sed 's/^off$/ever/; s/^\([0-9]*\)$/\1 days/')."
         else
