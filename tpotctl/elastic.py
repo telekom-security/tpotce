@@ -39,7 +39,7 @@ def _min_age(policy: dict) -> Optional[str]:
 
 def value_of(policy: Optional[dict]) -> str:
     """The TPOT_ES_RETENTION a policy stands for: days, "off" without a delete phase, "" if none."""
-    if policy is None:
+    if not isinstance(policy, dict) or not isinstance(policy.get("phases"), dict):
         return ""
     min_age = _min_age(policy)
     if min_age is None:
@@ -111,7 +111,9 @@ def main(argv) -> int:
                 data = json.load(handle)
         except (OSError, ValueError):
             return 1
-        print(value_of(data.get("policy", data) if isinstance(data, dict) else None))
+        if not isinstance(data, dict) or ("policy" not in data and "phases" not in data):
+            return 1
+        print(value_of(data["policy"] if "policy" in data else data))
         return 0
     print("usage: python3 -m tpotctl.elastic value-of POLICY.json", file=sys.stderr)
     return 2

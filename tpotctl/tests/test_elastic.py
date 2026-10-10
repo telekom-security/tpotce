@@ -37,12 +37,35 @@ class RuleTest(unittest.TestCase):
                 self.assertEqual(elastic.value_of(with_min_age(item["min_age"])), item["value"])
         self.assertEqual(elastic.value_of(None), "")
 
+    def test_shapes(self):
+        for item in load_cases()["shapes"]:
+            with self.subTest(shape=item["name"]):
+                self.assertEqual(elastic.value_of(item["policy"]), item["value"])
+
+    def test_value_of_command_rejects_what_is_no_policy(self):
+        import subprocess
+        import sys
+        import tempfile
+        for text in ("[]", json.dumps({"tpot": {"policy": {"phases": {}}}})):
+            with self.subTest(text=text):
+                with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as handle:
+                    handle.write(text)
+                try:
+                    result = subprocess.run([sys.executable, "-m", "tpotctl.elastic", "value-of", handle.name],
+                                            cwd=REPO_DIR, capture_output=True, text=True)
+                finally:
+                    os.unlink(handle.name)
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(result.stdout, "")
+
     def test_shared_cases(self):
         for case in load_cases()["cases"]:
             with self.subTest(case=case["name"]):
                 before = copy.deepcopy(case["policy"])
                 decision = elastic.decide(case["value"], case["policy"], force=case.get("force", False))
                 self.assertEqual(decision.action, case["action"])
+                self.assertEqual(decision.current, case["current"])
+                self.assertEqual(decision.managed, case["managed"])
                 self.assertEqual(case["policy"], before, "decide must not change its input")
                 if case["action"] in ("create", "update"):
                     policy = decision.policy

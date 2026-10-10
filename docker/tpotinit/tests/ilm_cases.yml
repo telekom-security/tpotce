@@ -5,11 +5,14 @@
 #
 # values: min_age of the delete phase (none: no delete phase) -> the .env value it stands for,
 #         "" when it stands for none (T-Pot then never adopts it).
+# shapes: whole policy objects -> the value they stand for
 # cases:  policy is what GET _ilm/policy/tpot returns under .tpot.policy (null: no policy),
 #         value is TPOT_ES_RETENTION, force the explicit "apply .env anyway".
 #         Expected: action (create | update | keep | foreign) and for create / update the written
 #         policy: min_age of its delete phase (none: no delete phase), retention (_meta.tpot_retention)
 #         and phases, all phases it has.
+#         current: what the policy stands for before the change ("" none, see values).
+#         managed: whether T-Pot wrote it last (for no policy: true).
 legacy: &legacy
   phases:
     hot: {min_age: 0ms, actions: {}}
@@ -25,10 +28,17 @@ values:
   - {min_age: 3651d, value: ""}
   - {min_age: 90m, value: ""}
   - {min_age: 1d, value: "1"}
+shapes:
+  - {name: empty object, policy: {}, value: ""}
+  - {name: error body of elasticsearch, policy: {error: {type: resource_not_found_exception}, status: 404}, value: ""}
+  - {name: GET answer not unwrapped, policy: {tpot: {policy: {phases: {hot: {min_age: 0ms, actions: {}}, delete: {min_age: 30d, actions: {delete: {}}}}}}}, value: ""}
+  - {name: only a hot phase, policy: {phases: {hot: {min_age: 0ms, actions: {}}}}, value: "off"}
 cases:
   - name: no policy, default
     policy: null
     value: "30"
+    current: ""
+    managed: true
     action: create
     min_age: 30d
     retention: "30"
@@ -36,6 +46,8 @@ cases:
   - name: no policy, off
     policy: null
     value: "off"
+    current: ""
+    managed: true
     action: create
     min_age: none
     retention: "off"
@@ -43,6 +55,8 @@ cases:
   - name: no policy, empty value creates the default
     policy: null
     value: ""
+    current: ""
+    managed: true
     action: create
     min_age: 30d
     retention: "30"
@@ -50,6 +64,8 @@ cases:
   - name: policy of an earlier release, same value, only the marker is added
     policy: *legacy
     value: "30"
+    current: "30"
+    managed: true
     action: update
     min_age: 30d
     retention: "30"
@@ -57,6 +73,8 @@ cases:
   - name: policy of an earlier release, longer value
     policy: *legacy
     value: "90"
+    current: "30"
+    managed: true
     action: update
     min_age: 90d
     retention: "90"
@@ -64,6 +82,8 @@ cases:
   - name: policy of an earlier release, empty value leaves it alone
     policy: *legacy
     value: ""
+    current: "30"
+    managed: true
     action: keep
   - name: policy of an earlier release edited to 365 days in Kibana
     policy:
@@ -72,6 +92,8 @@ cases:
         delete: {min_age: 365d, actions: {delete: {delete_searchable_snapshot: true}}}
       _meta: {managed: true, description: T-Pot ILM policy with a retention of 30 days}
     value: "30"
+    current: "365"
+    managed: false
     action: foreign
   - name: policy of an earlier release with a warm phase added in Kibana
     policy:
@@ -81,6 +103,8 @@ cases:
         delete: {min_age: 30d, actions: {delete: {delete_searchable_snapshot: true}}}
       _meta: {managed: true, description: T-Pot ILM policy with a retention of 30 days}
     value: "30"
+    current: "30"
+    managed: false
     action: foreign
   - name: managed, nothing to do
     policy:
@@ -89,6 +113,8 @@ cases:
         delete: {min_age: 90d, actions: {delete: {delete_searchable_snapshot: true}}}
       _meta: {managed: true, tpot_retention: "90", description: x}
     value: "90"
+    current: "90"
+    managed: true
     action: keep
   - name: managed, shorter value
     policy:
@@ -97,6 +123,8 @@ cases:
         delete: {min_age: 90d, actions: {delete: {delete_searchable_snapshot: true}}}
       _meta: {managed: true, tpot_retention: "90", description: x}
     value: "7"
+    current: "90"
+    managed: true
     action: update
     min_age: 7d
     retention: "7"
@@ -109,6 +137,8 @@ cases:
         delete: {min_age: 90d, actions: {delete: {delete_searchable_snapshot: true}}}
       _meta: {managed: true, tpot_retention: "90", description: x}
     value: "30"
+    current: "90"
+    managed: true
     action: update
     min_age: 30d
     retention: "30"
@@ -119,6 +149,8 @@ cases:
         hot: {min_age: 0ms, actions: {}}
       _meta: {managed: true, tpot_retention: "off", description: x}
     value: "30"
+    current: "off"
+    managed: true
     action: update
     min_age: 30d
     retention: "30"
@@ -130,6 +162,8 @@ cases:
         delete: {min_age: 30d, actions: {delete: {delete_searchable_snapshot: true}}}
       _meta: {managed: true, tpot_retention: "30", description: x}
     value: "off"
+    current: "30"
+    managed: true
     action: update
     min_age: none
     retention: "off"
@@ -141,6 +175,8 @@ cases:
         delete: {min_age: 120d, actions: {delete: {delete_searchable_snapshot: true}}}
       _meta: {managed: true, tpot_retention: "90", description: x}
     value: "90"
+    current: "120"
+    managed: false
     action: foreign
   - name: managed off, but a delete phase was added in Kibana
     policy:
@@ -149,6 +185,8 @@ cases:
         delete: {min_age: 400d, actions: {delete: {}}}
       _meta: {managed: true, tpot_retention: "off", description: x}
     value: "off"
+    current: "400"
+    managed: false
     action: foreign
   - name: a policy of its own without any marker
     policy:
@@ -156,6 +194,8 @@ cases:
         hot: {min_age: 0ms, actions: {rollover: {max_age: 1d}}}
         delete: {min_age: 45d, actions: {delete: {}}}
     value: "30"
+    current: "45"
+    managed: false
     action: foreign
   - name: force applies the value to a foreign policy, keeping its other phases
     policy:
@@ -163,6 +203,8 @@ cases:
         hot: {min_age: 0ms, actions: {rollover: {max_age: 1d}}}
         delete: {min_age: 45d, actions: {delete: {}}}
     value: "60"
+    current: "45"
+    managed: false
     force: true
     action: update
     min_age: 60d
@@ -175,4 +217,6 @@ cases:
         delete: {min_age: 60d, actions: {delete: {delete_searchable_snapshot: true}}}
       _meta: {managed: true, tpot_retention: "60", description: x}
     value: "60"
+    current: "60"
+    managed: true
     action: keep
