@@ -508,7 +508,12 @@ services:
     image: ${TPOT_REPO}/endlessh:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
     read_only: true
+    ulimits:
+      nofile:
+        soft: 8192
+        hard: 8192
     volumes:
+     - ${TPOT_DATA_PATH}/endlessh/identity:/var/lib/endlessh
      - ${TPOT_DATA_PATH}/endlessh/log:/var/log/endlessh
 
 # Glutton service

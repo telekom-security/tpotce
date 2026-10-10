@@ -1,0 +1,107 @@
+Unauthorized access to this system is prohibited.
+This system is for the use of authorized users only.
+All connections are monitored and recorded.
+Disconnect IMMEDIATELY if you are not an authorized user.
+Individuals using this system without authority are subject to having all activities logged.
+By accessing this system you consent to monitoring and recording.
+Activity on this system may be reviewed by authorized personnel.
+Evidence of unauthorized use may be provided to law enforcement officials.
+Use of this system constitutes consent to security monitoring and testing.
+This computer system is the property of its owner and is for authorized use only.
+Access is restricted to authorized personnel.
+Any unauthorized access attempt will be reported.
+Users have no expectation of privacy on this system.
+All sessions are logged for audit purposes.
+WARNING: This is a private system.
+NOTICE: Restricted access.
+*** Authorized access only ***
+****************************************************************
+================================================================
+----------------------------------------------------------------
+##############################################################
+#                                                            #
+*                                                              *
+If you are not authorized to access this system, disconnect now.
+Unauthorized use is a violation of applicable law.
+Misuse of this system may result in disciplinary or legal action.
+Access to this device is logged and audited.
+Login attempts are rate limited.
+Repeated failed logins will lock the account.
+Failed login attempts are reported to the security team.
+This host is managed by the infrastructure team.
+Maintenance window: Sundays 02:00 - 04:00 UTC.
+Scheduled maintenance may interrupt your session.
+Please report problems to the service desk.
+Contact the system administrator for access requests.
+Access requests must be approved by the system owner.
+Password changes are required every 90 days.
+Use of shared accounts is not permitted.
+Do not store confidential data in home directories.
+Backups run nightly; restore requests go through the service desk.
+This server is part of the production environment.
+This server is part of the staging environment.
+Changes on this host require an approved change request.
+Configuration is managed centrally, local changes will be overwritten.
+Remember to log out when you are done.
+Idle sessions are terminated after 15 minutes.
+Idle sessions are terminated after 30 minutes.
+Keep your credentials safe and never share them.
+Two-factor authentication is required for administrative accounts.
+Privileged actions are recorded.
+Sudo usage is logged.
+Data on this system is classified INTERNAL.
+Data on this system is classified CONFIDENTIAL.
+Export of data from this system requires approval.
+Copying data to removable media is not allowed.
+This system is subject to the acceptable use policy.
+Read the acceptable use policy before you continue.
+The acceptable use policy applies to all users.
+Security patches are applied automatically.
+A reboot may be scheduled after kernel updates.
+Disk quotas are enforced on this system.
+Large file transfers should be scheduled outside business hours.
+Monitoring alerts are sent to the on-call engineer.
+Report security incidents to the security operations center.
+Suspicious activity will be investigated.
+Connections from unknown networks are denied.
+Access from outside the corporate network is restricted.
+Only key based authentication is allowed.
+Password authentication is disabled for root.
+Root login is not permitted.
+Authorized users only. All others will be prosecuted.
+This service is provided as is, without warranty.
+Uptime is not guaranteed outside service hours.
+Service hours: Monday to Friday, 08:00 - 18:00.
+Support: open a ticket in the service portal.
+Emergency contact: see the on-call schedule.
+Legal notice: access implies acceptance of these terms.
+Terms of use apply.
+These terms may change without notice.
+The system owner reserves the right to terminate access at any time.
+Logs are retained for 180 days.
+Logs are retained for one year.
+Session recordings are retained according to policy.
+This message is displayed to all users.
+Please read this message carefully.
+Do not attempt to bypass security controls.
+Scanning or probing of this system is prohibited.
+Network scans are detected and blocked.
+Automated login attempts are blocked.
+Brute force attempts are logged and blocked.
+Your IP address has been recorded.
+Your connection is being logged.
+This connection may be monitored.
+Unauthorized access is a criminal offence.
+Authorized personnel only beyond this point.
+Welcome. Please authenticate.
+Welcome to the remote administration service.
+Remote access gateway.
+Bastion host. Jump to internal systems from here only.
+Management interface. Restricted access.
+Out of band management network.
+Lab system. Data may be reset without notice.
+Test environment. Do not use production credentials.
+Build server. Jobs run as the build user.
+Backup server. Restricted to operations staff.
+File transfer service. Uploads are scanned.
+Database host. Access requires approval from the data owner.
