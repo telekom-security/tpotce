@@ -36,11 +36,11 @@ def patch_protocol(cowrie_root):
         """        if cmd in self.commands:
             return self.commands[cmd]
         if cmd[0] in (".", "/"):
-            path = self.fs.resolve_path(cmd, self.cwd)
+            path = self.fs.resolve_path(cmd, cwd)
             if not self.fs.exists(path):
                 return None
         else:
-            for i in [f"{self.fs.resolve_path(x, self.cwd)}/{cmd}" for x in paths]:
+            for i in [f"{self.fs.resolve_path(x, cwd)}/{cmd}" for x in paths if x]:
                 if self.fs.exists(i):
                     path = i
                     break
@@ -62,11 +62,11 @@ def patch_protocol(cowrie_root):
         if cmd in self.commands and not skip_python_command(cmd):
             return self.commands[cmd]
         if cmd[0] in (".", "/"):
-            path = self.fs.resolve_path(cmd, self.cwd)
+            path = self.fs.resolve_path(cmd, cwd)
             if not self.fs.exists(path):
                 return None
         else:
-            for i in [f"{self.fs.resolve_path(x, self.cwd)}/{cmd}" for x in paths]:
+            for i in [f"{self.fs.resolve_path(x, cwd)}/{cmd}" for x in paths if x]:
                 if self.fs.exists(i):
                     path = i
                     break
@@ -120,8 +120,11 @@ def patch_netstat(cowrie_root):
 def patch_service(cowrie_root):
     path = cowrie_root / "src" / "cowrie" / "commands" / "service.py"
     text = path.read_text(encoding="utf-8")
-    start = text.index("        output = (\n")
-    end = text.index("        )\n        for line in output:", start) + len("        )\n")
+    start = text.find("        output = (\n")
+    end = text.find("        )\n        for line in output:", start)
+    if start < 0 or end < 0:
+        raise RuntimeError(f"Could not find expected text in {path}")
+    end += len("        )\n")
     replacement = """        output = (
             "[ + ]  cron",
             "[ + ]  dbus",
@@ -141,8 +144,54 @@ def patch_service(cowrie_root):
     path.write_text(text[:start] + replacement + text[end:], encoding="utf-8")
 
 
+def patch_free(cowrie_root):
+    """free reads the emulated /proc/meminfo of the persona (honeyfs / fs.pickle),
+    not the container's real one."""
+    path = cowrie_root / "src" / "cowrie" / "commands" / "free.py"
+    replace_once(
+        path,
+        """        try:
+            with open("/proc/meminfo") as proc_file:
+                for line in proc_file:
+                    tokens = line.split(":")
+
+                    # Later we are going to do some math on those numbers, better not include uneeded keys for performance
+                    if tokens[0] in needed_keys:
+                        mem_info_map[tokens[0]] = int(tokens[1].lstrip().split(" ")[0])
+        except Exception:
+            pass
+""",
+        """        try:
+            meminfo = self.fs.file_contents("/proc/meminfo").decode("utf-8", "replace")
+            for line in meminfo.splitlines():
+                tokens = line.split(":")
+                if tokens[0] in needed_keys:
+                    mem_info_map[tokens[0]] = int(tokens[1].lstrip().split(" ")[0])
+        except Exception:
+            pass
+""",
+    )
+
+
+def patch_telnet_banner(cowrie_root):
+    """Device personas have no /etc/issue.net: upstream already sends an empty
+    telnet banner then, but logs a traceback on every start."""
+    path = cowrie_root / "src" / "cowrie" / "telnet" / "factory.py"
+    replace_once(
+        path,
+        """        except FileNotFoundError:
+            self._log.failure("ERROR: Failed to load /etc/issue.net")
+            self.banner = b""
+""",
+        """        except FileNotFoundError:
+            self._log.info("No /etc/issue.net, empty telnet banner")
+            self.banner = b""
+""",
+    )
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Patch Cowrie v3 persona command support.")
+    parser = argparse.ArgumentParser(description="Patch Cowrie v3.1 persona command support.")
     parser.add_argument("--cowrie-root", required=True, type=Path)
     args = parser.parse_args()
     cowrie_root = args.cowrie_root.resolve()
@@ -150,6 +199,8 @@ def main():
     patch_ssh(cowrie_root)
     patch_netstat(cowrie_root)
     patch_service(cowrie_root)
+    patch_free(cowrie_root)
+    patch_telnet_banner(cowrie_root)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 FROM alpine:3.24
-ARG COWRIE_COMMIT=e74275223dbae611344e820364dad0d73338bb90
+ARG COWRIE_VERSION=v3.1.1
+ARG COWRIE_COMMIT=c17c9b73d6af0972334ea1e90b20d974cb24eeca
 ENV COWRIE_COMMIT=${COWRIE_COMMIT}
 #
 # Include dist
@@ -11,28 +12,11 @@ RUN apk --no-cache -U upgrade && \
 		bash \
 		build-base \
 		git \
-		gmp-dev \
 		libcap \
 		libffi-dev \
-		mpc1-dev \
-		mpfr-dev \
 		openssl \
 		openssl-dev \
-		py3-appdirs \
-		py3-asn1-modules \
-		py3-attrs \
-		py3-bcrypt \
-		py3-cryptography \
-		py3-dateutil \
-		py3-greenlet \
-		py3-mysqlclient \
-		py3-openssl \
-		py3-packaging \
-		py3-parsing \
 		py3-pip \
-		py3-service_identity \
-		py3-treq \
-		py3-twisted \
 		python3 \
 		python3-dev && \
 #
@@ -43,9 +27,8 @@ RUN apk --no-cache -U upgrade && \
 # Install cowrie
     mkdir -p /home/cowrie && \
     cd /home/cowrie && \
-    git clone https://github.com/cowrie/cowrie && \
+    git clone --depth 1 --branch "${COWRIE_VERSION}" https://github.com/cowrie/cowrie && \
     cd cowrie && \
-    git checkout "${COWRIE_COMMIT}" && \
     test "$(git rev-parse HEAD)" = "${COWRIE_COMMIT}" && \
     printf "%s\n" "${COWRIE_COMMIT}" > .cowrie-source-commit && \
     mkdir -p log && \
@@ -53,35 +36,40 @@ RUN apk --no-cache -U upgrade && \
     pip3 install --break-system-packages --no-cache-dir -r requirements.txt && \
     pip3 install --break-system-packages --no-cache-dir -e . && \
     python3 /root/dist/patch_cowrie_persona_support.py --cowrie-root /home/cowrie/cowrie && \
+#
+# Personas: library, SSH algorithms of this Twisted, build check of every persona
+    mkdir -p /usr/local/lib/tpot-cowrie && \
+    cp -r /root/dist/tpot_personas /usr/local/lib/tpot-cowrie/ && \
+    find /usr/local/lib/tpot-cowrie -name __pycache__ -prune -exec rm -rf {} + && \
+    python3 -c "import sys; sys.path.insert(0, '/usr/local/lib/tpot-cowrie'); \
+from twisted.conch.ssh.transport import SSHTransportBase as T; \
+from tpot_personas import ssh_profiles as p; \
+assert p.TWISTED_CIPHERS <= {c.decode() for c in T.supportedCiphers}, 'ciphers'; \
+assert p.TWISTED_MACS <= {m.decode() for m in T.supportedMACs}, 'macs'" && \
     python3 /root/dist/generate_cowrie_fs.py --cowrie-root /home/cowrie/cowrie && \
     install -m 0755 /root/dist/start-cowrie-persona.py /usr/local/bin/start-cowrie-persona && \
 #
 # Setup configs
     setcap cap_net_bind_service=+ep $(readlink -f $(type -P python3)) && \
-    cp /home/cowrie/cowrie/personas/debian-bookworm-vuln/cowrie.cfg /home/cowrie/cowrie/cowrie.cfg && \
     chown cowrie:cowrie -R /home/cowrie/* /usr/lib/$(readlink -f $(type -P python3) | cut -f4 -d"/")/site-packages/twisted/plugins && \
 #
 # Start Cowrie once to prevent dropin.cache errors upon container start caused by read-only filesystem
-    su - cowrie -c "export PYTHONPATH=/home/cowrie/cowrie:/home/cowrie/cowrie/src && \
-                    cd /home/cowrie/cowrie && \
-                    /usr/bin/twistd --uid=2000 --gid=2000 --pidfile cowrie.pid cowrie &" && \
-    sleep 10 && \
-    rm -rf /home/cowrie/cowrie/etc && \
+#   (timeout ends twistd with SIGTERM: busybox passes on its 0, 124 / 143 elsewhere; any other status fails the build)
+    { su - cowrie -c "export PYTHONPATH=/home/cowrie/cowrie:/home/cowrie/cowrie/src && \
+                      COWRIE_PERSONA=debian-bookworm timeout 20 /usr/local/bin/start-cowrie-persona" ; \
+      myRC=$? ; test "$myRC" -eq 124 || test "$myRC" -eq 143 || test "$myRC" -eq 0 ; } && \
+    test -f /usr/lib/$(readlink -f $(type -P python3) | cut -f4 -d"/")/site-packages/twisted/plugins/dropin.cache && \
+    rm -rf /home/cowrie/cowrie/etc /tmp/cowrie && \
 #
 # Clean up
     apk del --purge build-base \
                     git \
-                    gmp-dev \
                     libcap \
                     libffi-dev \
-                    mpc1-dev \
-                    mpfr-dev \
                     openssl-dev \
-                    python3-dev \
-                    py3-mysqlclient && \
+                    python3-dev && \
     rm -rf /root/* /tmp/* \
            /var/cache/apk/* \
-           /home/cowrie/cowrie/cowrie.pid \
            /home/cowrie/cowrie/.git
 #
 # Start cowrie

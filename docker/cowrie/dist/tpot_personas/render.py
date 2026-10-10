@@ -159,7 +159,10 @@ def apply_to_tree(base_tree, persona, ident, content):
     for rel, text in content.files.items():
         ctime = rng.randint(ident.installed_at, ident.booted_at)
         # logs and /etc/shadow were last written at their newest entry
-        tree.ensure_file(t, rel, text.encode("utf-8"), 0, 0, _mode(rel), ctime=content.ctimes.get(rel, ctime))
+        ctime = content.ctimes.get(rel, ctime)
+        node = tree.ensure_file(t, rel, text.encode("utf-8"), 0, 0, _mode(rel), ctime=ctime)
+        # ensure_file keeps the ctime of a node Cowrie's pickle already has (/etc/shadow, logs)
+        tree.node_set(node, tree.A_CTIME, ctime)
     for rel in content.txtcmds:
         tree.ensure_file(t, rel, b"", 0, 0, 0o755, ctime=ident.installed_at)
     _set_dirs(t, persona, ident.installed_at)

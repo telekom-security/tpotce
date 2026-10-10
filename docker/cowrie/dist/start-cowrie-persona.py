@@ -1,77 +1,70 @@
 #!/usr/bin/env python3
+"""Start Cowrie as one persona with a fresh identity.
 
-import json
+COWRIE_PERSONA (empty or "random": all) picks the persona, the identity is new
+on every start. Everything is rendered into the tmpfs /tmp/cowrie, the SSH host
+keys of the persona live in etc/<persona>/ of the keys volume (Cowrie creates
+the missing ones of every configured type on its first start). Keys of an
+earlier T-Pot directly in etc/ are left alone."""
 import os
 import random
+import secrets
 import shutil
 import sys
 from pathlib import Path
 
+LIB = Path("/usr/local/lib/tpot-cowrie")
+if LIB.is_dir() and str(LIB) not in sys.path:
+    sys.path.insert(0, str(LIB))
+
+from tpot_personas import PersonaError, catalog, tree  # noqa: E402
+from tpot_personas.identity import draw  # noqa: E402
+from tpot_personas.render import render  # noqa: E402
+from tpot_personas.select import choose  # noqa: E402
+from tpot_personas.validate import MIN_PICKLE_SIZE, validate  # noqa: E402
 
 COWRIE_ROOT = Path("/home/cowrie/cowrie")
-PERSONAS_ROOT = COWRIE_ROOT / "personas"
-RUNTIME_ROOT = Path("/tmp/cowrie/runtime")
-SELECTED_PERSONA_FILE = Path("/tmp/cowrie/persona")
+TMP_ROOT = Path("/tmp/cowrie")
+TWISTD = "/usr/bin/twistd"
 
 
-def load_personas():
-    metadata_path = PERSONAS_ROOT / "personas.json"
-    with metadata_path.open(encoding="utf-8") as handle:
-        personas = json.load(handle)
-    if not isinstance(personas, list) or not personas:
-        raise RuntimeError(f"No personas found in {metadata_path}")
-    return personas
-
-
-def choose_persona(personas):
-    requested = os.environ.get("COWRIE_PERSONA", "").strip()
-    ids = [persona["id"] for persona in personas]
-    if requested and requested != "random":
-        if requested not in ids:
-            raise RuntimeError(
-                f"Unknown COWRIE_PERSONA={requested!r}; expected one of: {', '.join(ids)}"
-            )
-        return requested
-    return random.choice(ids)
-
-
-def activate_persona(persona_id):
-    persona_dir = PERSONAS_ROOT / persona_id
-    config_path = persona_dir / "cowrie.cfg"
-    if not config_path.is_file():
-        raise RuntimeError(f"Persona config not found: {config_path}")
-    if not (persona_dir / "fs.pickle").is_file():
-        raise RuntimeError(f"Persona fs.pickle not found: {persona_dir / 'fs.pickle'}")
-    if not (persona_dir / "honeyfs").is_dir():
-        raise RuntimeError(f"Persona honeyfs not found: {persona_dir / 'honeyfs'}")
-
-    RUNTIME_ROOT.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(config_path, RUNTIME_ROOT / "cowrie.cfg")
-    SELECTED_PERSONA_FILE.write_text(persona_id + "\n", encoding="utf-8")
+def prepare(environ, cowrie_root, tmp_root, rng, min_pickle=MIN_PICKLE_SIZE):
+    """Select, render and validate a persona into tmp_root/runtime; returns its ID.
+    rng only selects the persona, the identity seed comes from secrets."""
+    cowrie_root, tmp_root = Path(cowrie_root), Path(tmp_root)
+    persona = catalog.by_id(choose(environ.get("COWRIE_PERSONA"), catalog.ids(), rng))
+    runtime = tmp_root / "runtime"
+    staging = tmp_root / "runtime.new"
+    keys_dir = cowrie_root / "etc" / persona.id
+    ident = draw(persona, secrets.randbits(64))
+    base = tree.load_pickle(cowrie_root / "personas" / "base.pickle")
+    try:
+        render(persona, ident, base, staging, runtime_dir=runtime, keys_dir=keys_dir, cowrie_root=cowrie_root)
+        validate(persona, ident, staging, runtime, keys_dir, min_pickle=min_pickle)
+    except BaseException:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+    if runtime.exists():
+        shutil.rmtree(runtime)
+    staging.rename(runtime)
+    (tmp_root / "data").mkdir(exist_ok=True)
+    # Cowrie writes missing host keys here, it does not create the directory
+    keys_dir.mkdir(mode=0o770, parents=True, exist_ok=True)
+    shutil.copy2(runtime / "identity.json", tmp_root / "identity.json")
+    (tmp_root / "persona").write_text(persona.id + "\n", encoding="utf-8")
+    return persona.id
 
 
 def main():
     try:
-        personas = load_personas()
-        persona_id = choose_persona(personas)
-        activate_persona(persona_id)
-    except Exception as exc:
+        persona_id = prepare(os.environ, COWRIE_ROOT, TMP_ROOT, random.SystemRandom())
+    except (PersonaError, OSError) as exc:
         print(f"Could not activate Cowrie persona: {exc}", file=sys.stderr)
         return 1
-
     print(f"Starting Cowrie persona: {persona_id}", flush=True)
     os.environ.setdefault("PYTHONPATH", f"{COWRIE_ROOT}:{COWRIE_ROOT / 'src'}")
-    os.chdir(RUNTIME_ROOT)
-    os.execv(
-        "/usr/bin/twistd",
-        [
-            "/usr/bin/twistd",
-            "--nodaemon",
-            "--pidfile",
-            "/tmp/cowrie/cowrie.pid",
-            "cowrie",
-        ],
-    )
+    os.chdir(TMP_ROOT / "runtime")
+    os.execv(TWISTD, [TWISTD, "-n", "--umask=0022", "--pidfile=", "cowrie"])
     return 1
 
 

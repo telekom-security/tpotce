@@ -32,6 +32,20 @@ class RenderTest(unittest.TestCase):
                     validate.problems(persona, ident, out, out, keys, min_pickle=0), [],
                     (persona.id, seed))
 
+    def test_files_that_exist_upstream_get_the_ctime_of_the_persona(self):
+        # Cowrie's fs.pickle already has /etc/shadow, /var/log/... with ctimes of its own
+        for persona in catalog.PERSONAS:
+            for seed in range(3):
+                ident = draw(persona, seed, NOW)
+                base = base_tree()
+                for rel in persona.builder(persona, ident).files:
+                    tree.ensure_file(base, rel, b"upstream\n", ctime=1_300_000_000)
+                out = tmpdir(self) / persona.id
+                keys = tmpdir(self) / "etc" / persona.id
+                render(persona, ident, base, out, runtime_dir=out, keys_dir=keys)
+                self.assertEqual(validate.problems(persona, ident, out, out, keys, min_pickle=0), [],
+                                 (persona.id, seed))
+
     def test_identity_json_round_trips(self):
         persona = catalog.PERSONAS[0]
         ident, out, _ = render_one(self, persona, 3)

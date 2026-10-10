@@ -1,2 +1,0 @@
-configparser==5.2.0
-tftpy==0.8.2
