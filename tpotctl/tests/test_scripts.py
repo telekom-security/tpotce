@@ -4,12 +4,14 @@ Bash harnesses: the scripts run in a temporary HOME with a sudo that only runs t
 command, never on the real checkout.
 """
 
+import json
 import os
 import re
 import shutil
 import subprocess
 import tarfile
 import tempfile
+import textwrap
 import unittest
 
 from tpotctl.tests import isolate
@@ -717,6 +719,57 @@ class BuilderTest(Harness):
         self.assertTrue("Remember to push the images with -p." in out, out)
         with open(os.path.join(log, "broken.log"), encoding="utf-8") as handle:
             self.assertTrue("no such file" in handle.read())
+
+
+class MigrateRetentionTest(unittest.TestCase):
+    """update.sh fuMIGRATE_RETENTION: the retention of the existing ILM policy goes into .env once."""
+
+    def run_migration(self, old_env: str, policy):
+        with tempfile.TemporaryDirectory() as tmp:
+            env, old, export = (os.path.join(tmp, n) for n in (".env", "old.env", "ilm_policy_tpot.json"))
+            with open(env, "w") as h:
+                h.write("TPOT_PERSISTENCE_CYCLES=30\nTPOT_ES_RETENTION=30\nTPOT_TYPE=HIVE\n")
+            with open(old, "w") as h:
+                h.write(old_env)
+            if policy is not None:
+                with open(export, "w") as h:
+                    json.dump({"policy": policy}, h)
+            script = textwrap.dedent(f"""
+                fuUI_OK() {{ echo "OK: $*"; }}; fuUI_WARN() {{ echo "WARN: $*"; }}; fuUI_HINT() {{ echo "HINT: $*"; }}
+                eval "$(sed -n '/^function fuENV_VALUE ()/,/^}}/p; /^function fuMIGRATE_RETENTION ()/,/^}}/p' update.sh)"
+                fuMIGRATE_RETENTION '{env}' '{old}' '{export}'
+            """)
+            out = subprocess.run(["bash", "-c", script], cwd=REPO, capture_output=True, text=True).stdout
+            with open(env) as h:
+                return h.read(), out
+
+    def policy(self, min_age):
+        return {"phases": {"hot": {"min_age": "0ms", "actions": {}},
+                           "delete": {"min_age": min_age, "actions": {"delete": {}}}}}
+
+    def test_takes_the_days_of_the_policy(self):
+        env, out = self.run_migration("TPOT_PERSISTENCE_CYCLES=30\n", self.policy("365d"))
+        self.assertIn("TPOT_ES_RETENTION=365\n", env)
+        self.assertIn("365", out)
+
+    def test_no_delete_phase_is_off(self):
+        env, _ = self.run_migration("TPOT_TYPE=HIVE\n", {"phases": {"hot": {"min_age": "0ms", "actions": {}}}})
+        self.assertIn("TPOT_ES_RETENTION=off\n", env)
+
+    def test_keeps_a_value_the_old_env_already_had(self):
+        env, out = self.run_migration("TPOT_ES_RETENTION=30\n", self.policy("365d"))
+        self.assertIn("TPOT_ES_RETENTION=30\n", env)
+        self.assertEqual(out.strip(), "")
+
+    def test_without_export_the_default_stays_and_it_says_why(self):
+        env, out = self.run_migration("TPOT_TYPE=HIVE\n", None)
+        self.assertIn("TPOT_ES_RETENTION=30\n", env)
+        self.assertIn("WARN", out)
+
+    def test_not_derivable_stays_default(self):
+        env, out = self.run_migration("TPOT_TYPE=HIVE\n", self.policy("36h"))
+        self.assertIn("TPOT_ES_RETENTION=30\n", env)
+        self.assertIn("WARN", out)
 
 
 if __name__ == "__main__":
