@@ -406,25 +406,30 @@ LOSS_MARK = "@@tpot loss "
 
 
 def check_data_loss(args: List[str], timeout: int = 180, run: Callable = subprocess.run,
-                    repo_dir: str = REPO_DIR) -> Tuple[bool, List[Tuple[str, str]]]:
+                    repo_dir: str = REPO_DIR) -> Tuple[bool, List[Tuple[str, str]], str]:
     """What an update (args as for update.sh: --full, --backup-only, -b, -r) would lose for good, read
-    with update.sh --check-data-loss, which changes nothing and asks nothing. (True, [(key, text), ...])
-    when it could tell, (False, []) when it could not (another exit code, a timeout, no script)."""
+    with update.sh --check-data-loss, which changes nothing and asks nothing. (True, [(key, text), ...], "")
+    when it could tell, (False, [], why) when it could not (another exit code, a timeout, no script): why is
+    the last line update.sh wrote to stderr, without its marks."""
     try:
         proc = run(script_command("update.sh", ["--check-data-loss"] + list(args), repo_dir), cwd=repo_dir,
-                   stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                   stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                    universal_newlines=True, timeout=timeout)
-    except (OSError, subprocess.SubprocessError):
-        return False, []
+    except subprocess.TimeoutExpired:
+        return False, [], f"no answer within {timeout} s"
+    except (OSError, subprocess.SubprocessError) as err:
+        return False, [], str(err)
     if proc.returncode not in (0, 3):
-        return False, []
+        said = [line.strip() for line in (proc.stderr or "").splitlines() if line.strip()]
+        why = re.sub(r"^#+\s*(\[[A-Z]+\]\s*-\s*)?", "", said[-1]) if said else ""
+        return False, [], why or f"update.sh ended with {proc.returncode}"
     items = []
     for line in (proc.stdout or "").splitlines():
         if line.startswith(LOSS_MARK):
             key, _, text = line[len(LOSS_MARK):].strip().partition(" ")
             if key:
                 items.append((key, text.strip()))
-    return True, items
+    return True, items, ""
 
 
 def backups(home: Optional[str] = None) -> List[str]:

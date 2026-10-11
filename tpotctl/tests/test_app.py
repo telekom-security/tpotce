@@ -111,7 +111,7 @@ if textual:
 
         def check_data_loss(self, args):
             self.calls.append(("loss", list(args)))
-            return getattr(self, "_loss", (True, []))
+            return getattr(self, "_loss", (True, [], ""))
 
     class FakeEngine:
         seen = []
@@ -274,7 +274,7 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
     async def test_update_with_findings_asks_and_passes_accept(self):
         update = os.path.join(cli.REPO_DIR, "update.sh")
         loss = (True, [("elastic", "Elasticsearch 8 -> 9 upgrades the data in /d/elk on the next start."),
-                       ("backups", "2 older backups go to make room.")])
+                       ("backups", "2 older backups go to make room.")], "")
         shown, seen, calls = await self.update_with(loss, "no")
         self.assertIn("Elasticsearch 8 -> 9 upgrades the data", shown[0])
         self.assertIn("2 older backups go to make room.", shown[0])
@@ -293,17 +293,18 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("--accept-data-loss-file", shown[0])
 
     async def test_update_without_findings_runs_as_before(self):
-        shown, seen, calls = await self.update_with((True, []), "yes")
+        shown, seen, calls = await self.update_with((True, [], ""), "yes")
         self.assertIsNone(shown)
         self.assertEqual(seen, [[os.path.join(cli.REPO_DIR, "update.sh"), "-y"]])
         self.assertIn(("loss", []), calls)
 
     async def test_update_when_the_check_fails_runs_without_accept(self):
-        shown, seen, _calls = await self.update_with((False, []), "no")
+        shown, seen, _calls = await self.update_with((False, [], "Could not fetch the branch master follows."), "no")
         self.assertIn("could not check for a loss of data; update.sh refuses any then", shown[0])
+        self.assertIn("Could not fetch the branch master follows.", shown[0])       # why, from update.sh
         self.assertEqual(shown[1], "no")
         self.assertEqual(seen, [])
-        shown, seen, _calls = await self.update_with((False, []), "yes")
+        shown, seen, _calls = await self.update_with((False, [], ""), "yes")
         self.assertEqual(seen, [[os.path.join(cli.REPO_DIR, "update.sh"), "-y"]])
 
     async def test_the_update_buttons_wait_for_the_check(self):
@@ -313,7 +314,7 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
 
         def slow(args):
             release.wait(5)
-            return True, []
+            return True, [], ""
         backend.check_data_loss = slow
         FakeEngine.seen.clear()
         app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
@@ -325,6 +326,7 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             await pilot.pause(0.2)
             self.assertTrue(app.query_one("#run-update").disabled)
             self.assertTrue(app.query_one("#run-update-start").disabled)
+            self.assertIn("Checking for a loss of data …", [str(note.message) for note in app._notifications])
             app.run_update(["-y"])                                        # the palette meanwhile: ignored
             release.set()
             await pilot.pause(0.4)

@@ -2348,6 +2348,8 @@ class TpotApp(App):
             return
         self.update_checking = True
         self.update_buttons()
+        # the check fetches and asks the registry, it may take a while
+        self.notify("Checking for a loss of data …", title="Update", timeout=6)
         self.run_worker(self.checked_update(args), group="update-check")
 
     def update_buttons(self) -> None:
@@ -2359,9 +2361,9 @@ class TpotApp(App):
         # the check reads what the run would do: the backup of --full, not -y or -s
         check = [arg for arg in args if arg in ("--full", "-F")]
         try:
-            ok, items = await asyncio.to_thread(self.backend.check_data_loss, check)
-        except Exception:       # noqa: BLE001 - a broken check is told as one, the app goes on
-            ok, items = False, []
+            ok, items, why = await asyncio.to_thread(self.backend.check_data_loss, check)
+        except Exception as err:       # noqa: BLE001 - a broken check is told as one, the app goes on
+            ok, items, why = False, [], str(err)
         finally:
             self.update_checking = False
             self.update_buttons()
@@ -2376,9 +2378,11 @@ class TpotApp(App):
                                    no="Back")
             confirmed = loss_lines(items)
         else:
-            dialog = ConfirmDialog("Update without the check?",
-                                   Text("The T-Pot Manager could not check for a loss of data; update.sh refuses "
-                                        "any then.", style=theme.color("mist")), yes="Update", no="Back")
+            body = Text("The T-Pot Manager could not check for a loss of data; update.sh refuses any then.",
+                        style=theme.color("mist"))
+            if why:
+                body.append(f"\n\n{why}", style=theme.color("ash"))
+            dialog = ConfirmDialog("Update without the check?", body, yes="Update", no="Back")
         self.push_screen(dialog, lambda yes: self.start_update(args, confirmed) if yes else None)
 
     def start_update(self, args: List[str], confirmed: str = "") -> None:
