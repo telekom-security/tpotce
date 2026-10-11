@@ -6,6 +6,7 @@ only what its own system has (foreign_paths, the multiarch and Python renames
 of render.apply_to_tree) and the versions its interpreters print (tools,
 shell_keys for the patched perl.py / python.py / git.py of Cowrie)."""
 import re
+import time
 
 from .common import deb_arch
 
@@ -90,23 +91,116 @@ SERVICE_STATUS = "service-status.txt"
 SYSTEMD_UNITS = "systemd-units.json"
 SUDO_LIST = "sudo-list.json"
 APT_PACKAGES = "apt-packages.json"
-# the Defaults of the sudoers of each family as sudo -l prints them
-_SUDO_DEBIAN = ("env_reset", "mail_badpass",
-                "secure_path=/usr/local/sbin\\:/usr/local/bin\\:/usr/sbin\\:/usr/bin\\:/sbin\\:/bin", "use_pty")
-_SUDO_EL_KEEP = ('env_keep="COLORS DISPLAY HOSTNAME HISTSIZE KDEDIR LS_COLORS"',
-                 'env_keep+="MAIL QTDIR USERNAME LANG LC_ADDRESS LC_CTYPE"',
-                 'env_keep+="LC_COLLATE LC_IDENTIFICATION LC_MEASUREMENT LC_MESSAGES"',
-                 'env_keep+="LC_MONETARY LC_NAME LC_NUMERIC LC_PAPER LC_TELEPHONE"',
-                 'env_keep+="LC_TIME LC_ALL LANGUAGE LINGUAS _XKB_CHARSET XAUTHORITY"')
-SUDO_DEFAULTS = {
-    "ubuntu": _SUDO_DEBIAN[:2] + (_SUDO_DEBIAN[2] + "\\:/snap/bin", "use_pty"),
-    "debian": _SUDO_DEBIAN,
-    "raspios": _SUDO_DEBIAN,
-    "rhel": ("!visiblepw", "always_set_home", "match_group_by_gid", "always_query_group_plugin", "env_reset")
-            + _SUDO_EL_KEEP + ("secure_path=/usr/local/sbin\\:/usr/local/bin\\:/usr/sbin\\:/usr/bin",),
-    "centos": ("!visiblepw", "always_set_home", "match_group_by_gid", "always_query_group_plugin", "env_reset")
-              + _SUDO_EL_KEEP + ("secure_path=/sbin\\:/bin\\:/usr/sbin\\:/usr/bin",),
+# the sudoers of each family: Defaults (name, operator, value) as the file writes them, the rule of
+#   the admin group; sudo -l prints both (unverified: the files are the defaults of the packages, shortened)
+_DEBIAN_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+_EL_KEEP = (("env_keep", "=", "COLORS DISPLAY HOSTNAME HISTSIZE KDEDIR LS_COLORS"),
+            ("env_keep", "+=", "MAIL QTDIR USERNAME LANG LC_ADDRESS LC_CTYPE"),
+            ("env_keep", "+=", "LC_COLLATE LC_IDENTIFICATION LC_MEASUREMENT LC_MESSAGES"),
+            ("env_keep", "+=", "LC_MONETARY LC_NAME LC_NUMERIC LC_PAPER LC_TELEPHONE"),
+            ("env_keep", "+=", "LC_TIME LC_ALL LANGUAGE LINGUAS _XKB_CHARSET XAUTHORITY"))
+_EL_FLAGS = tuple((flag, None, None) for flag in ("!visiblepw", "always_set_home", "match_group_by_gid",
+                                                   "always_query_group_plugin", "env_reset"))
+_DEBIAN_DEFAULTS = (("env_reset", None, None), ("mail_badpass", None, None), ("secure_path", "=", _DEBIAN_PATH),
+                    ("use_pty", None, None))
+SUDOERS = {
+    "ubuntu": (_DEBIAN_DEFAULTS[:2] + (("secure_path", "=", _DEBIAN_PATH + ":/snap/bin"), ("use_pty", None, None))),
+    "debian": _DEBIAN_DEFAULTS,
+    "raspios": _DEBIAN_DEFAULTS,
+    "rhel": _EL_FLAGS + _EL_KEEP + (("secure_path", "=", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"),),
+    "centos": _EL_FLAGS + _EL_KEEP + (("secure_path", "=", "/sbin:/bin:/usr/sbin:/usr/bin"),),
 }
+# cloud-init that wrote the rule of the image's user (unverified: the version of each image)
+CLOUD_INIT = {"noble": "25.1.4-0ubuntu0~24.04.1", "jammy": "25.1.4-0ubuntu0~22.04.1", "trixie": "25.1.1-1",
+              "bookworm": "22.4.2-1", "rhel": "23.4-19.el9", "centos": "19.4-7.el7.centos.6"}
+_SUDOERS_HEAD = """#
+# This file MUST be edited with the 'visudo' command as root.
+#
+# Please consider adding local content in /etc/sudoers.d/ instead of
+# directly modifying this file.
+#
+# See the man page for details on how to write a sudoers file.
+#
+"""
+_SUDOERS_D_README = """#
+# The default /etc/sudoers file created on installation of the
+# sudo  package now includes the directive:
+#
+# \t@includedir /etc/sudoers.d
+#
+# This will cause sudo to read and parse any files in the /etc/sudoers.d
+# directory that do not end in '~' or contain a '.' character.
+#
+# Note that there must be at least one file in the sudoers.d directory (this
+# one will do).
+#
+# Note also, that because sudoers contents can vary widely, no attempt is
+# made to add this directive to existing sudoers files on upgrade.  Feel free
+# to add the above directive to the end of your /etc/sudoers file to enable
+# this functionality for existing installations if you wish! Sudo
+# versions older than the one in Debian 11 (bullseye) require the
+# directive will only support the old syntax #includedir, and the current
+# sudo will happily accept both @includedir and #includedir
+#
+# Finally, please note that using the visudo command is the recommended way
+# to update sudoers content, since it protects against many failure modes.
+# See the man page for visudo and sudoers for more information.
+#
+"""
+
+
+def _listed_default(name, operator, value):
+    """A Default as sudo -l prints it: secure_path=/usr/local/sbin\\:..., env_keep+="..."."""
+    if operator is None:
+        return name
+    if name == "secure_path":
+        return f"secure_path={value.replace(':', chr(92) + ':')}"
+    return f'{name}{"+=" if operator == "+=" else "="}"{value}"'
+
+
+def _file_default(name, operator, value, el):
+    if operator is None:
+        return f"Defaults{'    ' if el else chr(9)}{name}"
+    if el:
+        if name == "secure_path":
+            return f"Defaults    secure_path = {value}"
+        return f'Defaults    {name} {operator.ljust(2)} "{value}"'
+    return f'Defaults\t{name}="{value}"'
+
+
+def sudoers_files(persona, ident):
+    """/etc/sudoers and /etc/sudoers.d of a server: the package's file, the rule cloud-init wrote for the
+    image's user (pi-gen's on Raspberry Pi OS), Debian's README."""
+    el = is_el(persona)
+    defaults = "\n".join(_file_default(*entry, el) for entry in SUDOERS[persona.family])
+    if el:
+        main = ("## Sudoers allows particular users to run various commands as\n"
+                "## the root user, without needing the root password.\n##\n"
+                f"{defaults}\n\n## Allow root to run any commands anywhere\nroot\tALL=(ALL) \tALL\n\n"
+                "## Allows people in group wheel to run all commands\n%wheel\tALL=(ALL)\tALL\n\n"
+                "## Read drop-in files from /etc/sudoers.d (the # here does not mean a comment)\n"
+                "#includedir /etc/sudoers.d\n")
+    else:
+        admin = ("# Members of the admin group may gain root privileges\n%admin ALL=(ALL) ALL\n\n"
+                 if persona.family == "ubuntu" else "")
+        main = (f"{_SUDOERS_HEAD}{defaults}\n\n# Host alias specification\n\n# User alias specification\n\n"
+                "# Cmnd alias specification\n\n# User privilege specification\nroot\tALL=(ALL:ALL) ALL\n\n"
+                f"{admin}# Allow members of group sudo to execute any command\n%sudo\tALL=(ALL:ALL) ALL\n\n"
+                "# See sudoers(5) for more information on \"@include\" directives:\n\n@includedir /etc/sudoers.d\n")
+    files = {"etc/sudoers": main}
+    if not el:
+        files["etc/sudoers.d/README"] = _SUDOERS_D_README
+    if persona.family == "raspios":
+        files["etc/sudoers.d/010_pi-nopasswd"] = f"{persona.user} ALL=(ALL) NOPASSWD: ALL\n"
+    else:
+        code = persona.family if el else ident.release.extra["codename"]
+        when = time.strftime("%a, %d %b %Y %H:%M:%S +0000", time.gmtime(ident.installed_at))
+        files["etc/sudoers.d/90-cloud-init-users"] = (f"# Created by cloud-init v. {CLOUD_INIT[code]} on {when}\n\n"
+                                                     f"# User rules for {persona.user}\n"
+                                                     f"{persona.user} ALL=(ALL) NOPASSWD:ALL\n")
+    return files
+
+
 # man-db of the Debian releases (its trigger closes every apt install); unverified per patch level
 MAN_DB = {"noble": "2.12.0-4build2", "jammy": "2.10.2-1", "trixie": "2.13.1-1", "bookworm": "2.11.2-2"}
 # service --status-all: the init scripts of the image (unverified: typical cloud and Pi images);
@@ -424,11 +518,11 @@ def service_status(persona):
 
 
 def sudo_list(persona):
-    """What sudo -l lists on a server: the Defaults of the family's sudoers and the rules of the
-    login user (its group sudo / wheel, then NOPASSWD of cloud-init or of the Pi image) and of root."""
+    """What sudo -l lists on a server (sudoers_files): the Defaults of the family's sudoers and the rules
+    of the login user (its group sudo / wheel, then the NOPASSWD rule of sudoers.d) and of root."""
     el = is_el(persona)
     group = "(ALL) ALL" if el else "(ALL : ALL) ALL"
-    return {"defaults": list(SUDO_DEFAULTS[persona.family]),
+    return {"defaults": [_listed_default(*entry) for entry in SUDOERS[persona.family]],
             "rules": {persona.user: [group, "(ALL) NOPASSWD: ALL"], "root": [group]}}
 
 

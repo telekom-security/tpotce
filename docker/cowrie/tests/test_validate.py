@@ -439,6 +439,12 @@ class ValidateServerCommandTest(unittest.TestCase):
                     "OpenBSD Secure Shell server", "OpenSSH server daemon").replace('"curl"', '"wget"'))
             self.assertIn(f"runtime: {name} is not the persona's", self.problems("ubuntu-jammy", change), name)
 
+    def test_sudoers_of_another_system(self):
+        def change(out):
+            (out / "honeyfs/etc/sudoers").chmod(0o640)
+            (out / "honeyfs/etc/sudoers").write_text("root ALL=(ALL) ALL\n")
+        self.assertIn("sudoers: /etc/sudoers is not the persona's", self.problems("rhel-9", change))
+
     def test_txtcmd_beside_cowries_command(self):
         # the old static sudo: /usr/bin/sudo would print it, sudo would run Cowrie's
         def change(out):

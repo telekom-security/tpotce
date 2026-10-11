@@ -224,6 +224,8 @@ def _login_links(t, persona, ident):
 def _mode(rel):
     if rel == "etc/shadow":
         return 0o640
+    if rel == "etc/sudoers" or rel.startswith("etc/sudoers.d/"):
+        return 0o440
     return 0o755 if rel.startswith(("bin/", "sbin/", "usr/bin/", "usr/sbin/")) else 0o644
 
 
@@ -263,6 +265,9 @@ def apply_to_tree(base_tree, persona, ident, content):
         tree.ensure_executable(t, rel, program_size(ident, rel, sizes), ctime=ident.installed_at)
     for rel in system.directories(persona):
         tree.ensure_dir(t, rel, ctime=ident.installed_at)
+    if persona.kind == "server":
+        # Red Hat's sudo package keeps sudoers.d closed
+        tree.ensure_dir(t, "etc/sudoers.d", mode=0o750 if system.is_el(persona) else 0o755, ctime=ident.installed_at)
     removed, ssh_links = system.ssh_units(persona, ident)
     for rel in removed:
         tree.remove_node(t, rel)

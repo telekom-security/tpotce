@@ -386,6 +386,35 @@ class ServerRuntimeTest(unittest.TestCase):
         self.assertIsNotNone(tree.find_node(fs_of(out), "etc/systemd/system/sshd.service"))
 
 
+class SudoersTest(unittest.TestCase):
+    """sudo -l lists what /etc/sudoers and /etc/sudoers.d of the persona say."""
+
+    def test_sudoers_files_back_sudo_l(self):
+        expected = {"ubuntu-noble": "90-cloud-init-users", "debian-bookworm": "90-cloud-init-users",
+                    "raspios": "010_pi-nopasswd", "rhel-9": "90-cloud-init-users", "centos-7": "90-cloud-init-users"}
+        for pid, name in expected.items():
+            persona = catalog.by_id(pid)
+            _, out, _ = render_one(self, persona, 1)
+            fs = fs_of(out)
+            for rel in ("etc/sudoers", f"etc/sudoers.d/{name}"):
+                node = tree.find_node(fs, rel)
+                self.assertIsNotNone(node, (pid, rel))
+                self.assertEqual(tree.node_get(node, tree.A_MODE) & 0o7777, 0o440, (pid, rel))
+                self.assertEqual(tree.node_get(node, tree.A_CONTENTS), (out / "honeyfs" / rel).read_bytes(), (pid, rel))
+            sudoers = (out / "honeyfs/etc/sudoers").read_text()
+            rule = (out / f"honeyfs/etc/sudoers.d/{name}").read_text()
+            listed = json.loads((out / system.SUDO_LIST).read_text())
+            self.assertIn(f"{persona.user} ALL=(ALL) NOPASSWD", rule, pid)
+            group = "%wheel\tALL=(ALL)\tALL" if pid in ("rhel-9", "centos-7") else "%sudo\tALL=(ALL:ALL) ALL"
+            self.assertIn(group, sudoers, pid)
+            self.assertEqual((tree.find_node(fs, "etc/sudoers.d/README") is not None),
+                             pid not in ("rhel-9", "centos-7"), pid)
+            for entry in listed["defaults"]:
+                self.assertIn(entry.split("=", 1)[0].rstrip("+"), sudoers, (pid, entry))
+            self.assertEqual(tree.node_get(tree.find_dir(fs, "etc/sudoers.d"), tree.A_MODE) & 0o7777,
+                             0o750 if pid in ("rhel-9", "centos-7") else 0o755, pid)
+
+
 class RenderTest(unittest.TestCase):
     def test_cfg_names_the_prompt_style(self):
         for persona in catalog.PERSONAS:

@@ -462,6 +462,8 @@ def _server_content(persona, ident, files, tasks, run_lock=False, accounts=None,
     all_files["etc/fstab"] = fstab
     all_files["proc/modules"] = proc_modules(persona, ident)
     all_files.update(system.files(persona))
+    sudoers = system.sudoers_files(persona, ident)
+    all_files.update(sudoers)
     all_files.update(files)
     txtcmds = base_txtcmds(persona, ident, cmdline=cmdline,
                            df=server_df(ident, root_dev=root_dev, run_lock=run_lock, boot=boot),
@@ -472,6 +474,7 @@ def _server_content(persona, ident, files, tasks, run_lock=False, accounts=None,
     txtcmds.update(package_manager_txtcmds(persona, ident))
     txtcmds.update(command_inventory_txtcmds(persona, ident))
     all_ctimes = {"etc/shadow": shadow_ctime(ident)}
+    all_ctimes.update({rel: ident.installed_at for rel in sudoers})
     all_ctimes.update(ctimes or {})
     return Content(files=all_files, txtcmds=txtcmds, processes=processes, ctimes=all_ctimes)
 

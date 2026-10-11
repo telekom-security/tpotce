@@ -602,6 +602,11 @@ def _check_system(persona, ident, cfg, out_dir, runtime_dir, fs, out):
                 found = None
             if found != json.loads(json.dumps(data)):
                 out.append(f"runtime: {name} is not the persona's")
+        for rel, text in system.sudoers_files(persona, ident).items():
+            node = tree.find_node(fs, rel)
+            if _text(honeyfs / rel) != text or node is None or tree.node_get(node, tree.A_CONTENTS) != text.encode() \
+                    or (tree.node_get(node, tree.A_MODE) or 0) & 0o7777 != 0o440:
+                out.append(f"sudoers: /{rel} is not the persona's")
         units = {u["name"]: u for u in expected.get(system.SYSTEMD_UNITS, {}).get("units", [])}
         for name in ("ssh.service", "sshd.service"):
             if name in units and tree.find_node(fs, units[name]["path"]) is None:
