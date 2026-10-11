@@ -20,8 +20,34 @@ DEBIAN_PATHS = (
     "var/log/alternatives.log", "var/log/apt", "var/log/dpkg.log",
     "usr/bin/apt-*", "usr/bin/debconf*", "usr/bin/dpkg*", "usr/sbin/dpkg-*",
 )
+# Debian's own tools, settings and init scripts besides the package system (adduser, debianutils,
+#   init-system-helpers, sysv-rc, the ufw profile and the sftp-server link of openssh-server, the
+#   loader link of libc-bin, the units of apt and dpkg, Debian's ssh unit names): on every system
+#   without dpkg; Red Hat writes its own (system.files, system.links)
+DEBIAN_SYSTEM_PATHS = (
+    "etc/adduser.conf", "etc/deluser.conf", "etc/ufw", "etc/update-motd.d", "etc/rc?.d", "etc/default/ssh",
+    "etc/init.d/hwclock.sh", "etc/init.d/procps", "etc/init.d/ssh", "etc/cron.daily/apt-compat",
+    "etc/cron.daily/dpkg",
+    "usr/sbin/add-shell", "usr/sbin/remove-shell", "usr/sbin/update-shells", "usr/sbin/installkernel",
+    "usr/sbin/invoke-rc.d", "usr/sbin/update-rc.d", "usr/sbin/policy-rc.d", "usr/sbin/start-stop-daemon",
+    "usr/sbin/update-passwd", "usr/sbin/pam-auth-update", "usr/sbin/pam_getenv", "usr/sbin/shadowconfig",
+    "usr/bin/ld.so", "usr/bin/savelog", "usr/bin/ischroot", "usr/bin/tempfile",
+    "usr/lib/openssh", "usr/lib/sftp-server",
+    "usr/lib/systemd/system/apt-daily*", "usr/lib/systemd/system/dpkg-db-backup*",
+    "usr/lib/systemd/system/ssh.s*", "usr/lib/systemd/system/rescue-ssh.target",
+    "etc/systemd/system/timers.target.wants/apt-daily*", "etc/systemd/system/timers.target.wants/dpkg-db-backup*",
+    "etc/systemd/system/multi-user.target.wants/ssh.service", "etc/systemd/system/sshd.service",
+    "etc/logrotate.d/apt", "usr/share/bash-completion/completions/apt", "usr/share/base-files", "usr/share/bug",
+    "usr/share/lintian",
+)
+# ... and every name or link target with one of these words (man pages, translations, alternatives, keyrings,
+#   changelog.Debian.gz, state of deb-systemd-helper): Debian itself, dpkg, apt and the packages adduser,
+#   debianutils (which.debianutils) and init-system-helpers
+DEBIAN_WORDS = ("debian", "Debian", "dpkg", "apt.mo", "deb-systemd", "adduser", "deluser", "addgroup",
+                "delgroup")
 # x86_64 only: the dynamic loader and the multiarch directory of Debian
 X86_PATHS = ("lib64", "usr/lib64", "usr/bin/x86_64", "usr/bin/ld.so")
+X86_WORDS = ("x86_64", "x86-64")
 MULTIARCH = "x86_64-linux-gnu"
 TRIPLETS = {"x86_64": "x86_64-linux-gnu", "aarch64": "aarch64-linux-gnu", "mips": "mipsel-linux-gnu",
             "armv7l": "arm-linux-gnueabihf"}
@@ -29,9 +55,10 @@ TRIPLETS = {"x86_64": "x86_64-linux-gnu", "aarch64": "aarch64-linux-gnu", "mips"
 SYSTEMD_PATHS = ("etc/systemd", "usr/lib/systemd", "var/lib/systemd")
 SYSTEMD_DEVICES = frozenset({"synology", "ubiquiti"})
 # OpenSSH: not on a dropbear system
-OPENSSH_PATHS = ("etc/ssh", "etc/default/ssh", "etc/init.d/ssh", "usr/lib/openssh", "usr/sbin/sshd",
-                 "usr/share/openssh", "usr/bin/ssh-*", "usr/bin/scp", "usr/bin/sftp",
-                 "etc/systemd/system/sshd.service", "etc/systemd/system/multi-user.target.wants/ssh.service")
+OPENSSH_PATHS = ("etc/ssh", "etc/default/ssh", "etc/init.d/ssh", "usr/lib/openssh", "usr/lib/sftp-server",
+                 "usr/sbin/sshd", "usr/share/openssh", "usr/bin/ssh-*", "usr/bin/scp", "usr/bin/sftp",
+                 "etc/systemd/system/sshd.service", "etc/systemd/system/multi-user.target.wants/ssh.service",
+                 "etc/ufw/applications.d/openssh-server", "etc/rc?.d/S01ssh")
 # Python 3.11 and Perl of Cowrie's tree: renamed to the persona's Python, removed where none is
 PYTHON_PATHS = ("etc/python3", "etc/python3.11", "usr/lib/python3", "usr/lib/python3.11", "usr/share/python3",
                 "usr/bin/py3*", "usr/bin/pydoc3*", "usr/bin/pdb3*", "usr/bin/pygettext3*", "usr/bin/python3*",
@@ -39,12 +66,17 @@ PYTHON_PATHS = ("etc/python3", "etc/python3.11", "usr/lib/python3", "usr/lib/pyt
 PERL_PATHS = ("usr/share/perl5", "usr/bin/perl*", "usr/lib/x86_64-linux-gnu/perl*")
 # /proc/modules of Cowrie's tree lists the modules of a Debian 6.x container host
 PROC_MODULES = "proc/modules"
+# the standard streams of Cowrie's tree are the pipes of the container's Python (proc/969/fd/pipe:[7685]);
+#   a login shell has them on its terminal
+STREAM_LINKS = (("dev/stdin", "proc/self/fd/0"), ("dev/stdout", "proc/self/fd/1"), ("dev/stderr", "proc/self/fd/2"))
+TERMINAL = "dev/pts/0"
 
 # interpreters of the server releases (codename, or the family for Red Hat): Perl and its
 # copyright year of `perl -v`, Python 3 (2.7 on CentOS 7, which has no python3); unverified: the
 # copyright years of 5.38.2 / 5.40.1 and the Python 3.9 of each RHEL 9 minor
 PERL = {"noble": ("5.38.2", "2023"), "jammy": ("5.34.0", "2021"), "trixie": ("5.40.1", "2025"),
-        "bookworm": ("5.36.0", "2022"), "rhel": ("5.32.1", "2021"), "centos": ("5.16.3", "2012")}
+        "bookworm": ("5.36.0", "2022"), "rhel": ("5.32.1", "2021"), "centos": ("5.16.3", "2012"),
+        "stretch": ("5.24.1", "2017")}
 PYTHON = {"noble": "3.12.3", "jammy": "3.10.12", "trixie": "3.13.5", "bookworm": "3.11.2",
           "rhel": "3.9.21", "centos": "2.7.5"}
 RHEL_PYTHON = {"9.4": "3.9.18", "9.5": "3.9.19", "9.6": "3.9.21"}
@@ -83,7 +115,7 @@ def foreign_paths(persona):
     """Paths (glob patterns in their last part) of Cowrie's tree the persona's system does not have."""
     paths = ()
     if not has_dpkg(persona):
-        paths += DEBIAN_PATHS
+        paths += DEBIAN_PATHS + DEBIAN_SYSTEM_PATHS
     if persona.hardware_platform != "x86_64":
         paths += X86_PATHS
     if not has_systemd(persona):
@@ -93,10 +125,30 @@ def foreign_paths(persona):
     if triplet(persona) is None:
         paths += (f"usr/lib/{MULTIARCH}",)
     if persona.kind == "device":
-        paths += PYTHON_PATHS + PERL_PATHS + (PROC_MODULES,)
+        paths += PYTHON_PATHS + (() if has_perl(persona) else PERL_PATHS)
     elif persona.family == "centos":
         paths += PYTHON_PATHS
     return paths
+
+
+def foreign_words(persona):
+    """Words no name or link target of the persona's tree has (x86_64 on another architecture,
+    the Debian packages of DEBIAN_WORDS without dpkg)."""
+    words = ()
+    if not has_dpkg(persona):
+        words += DEBIAN_WORDS
+    if persona.hardware_platform != "x86_64":
+        words += X86_WORDS
+    return words
+
+
+def is_el(persona):
+    return persona.family in ("rhel", "centos")
+
+
+def has_perl(persona):
+    """Perl: every server and EdgeOS (the Vyatta configuration system is Perl)."""
+    return persona.kind == "server" or persona.family == "ubiquiti"
 
 
 def triplet(persona):
@@ -105,7 +157,9 @@ def triplet(persona):
 
 
 def _codename(persona, ident):
-    return persona.family if persona.family in ("rhel", "centos") else ident.release.extra.get("codename")
+    if persona.family == "ubiquiti":
+        return "stretch"   # EdgeOS 2.0: a Debian 9 userland
+    return persona.family if is_el(persona) else ident.release.extra.get("codename")
 
 
 def _upstream(version):
@@ -114,14 +168,20 @@ def _upstream(version):
 
 
 def tools(persona, ident):
-    """{"perl": (version, copyright year), "python": version, "git": version} of a server, {} on devices."""
-    if persona.kind != "server":
+    """{"perl": (version, copyright year), "python": version, "git": version} of a server (git where
+    the release has it installed), {"perl": ...} on EdgeOS, {} on the other devices."""
+    if not has_perl(persona):
         return {}
     code = _codename(persona, ident)
+    if persona.kind != "server":
+        return {"perl": PERL[code]}
     python = PYTHON[code]
     if persona.family == "rhel":
         python = RHEL_PYTHON.get(ident.release.os_version_id, python)
-    return {"perl": PERL[code], "python": python, "git": _upstream(ident.release.packages["git"])}
+    found = {"perl": PERL[code], "python": python}
+    if "git" in ident.release.packages:
+        found["git"] = _upstream(ident.release.packages["git"])
+    return found
 
 
 def python3_name(version):
@@ -149,16 +209,141 @@ def command_path(name):
 
 
 def programs(persona, ident):
-    """The commands of Cowrie's Python a server has as programs: perl, git, its Python,
-    sudo, service and its package manager."""
+    """The programs of the persona's system Cowrie's tree has not (or elsewhere): perl, git, its Python,
+    sudo, service, systemctl and its package manager on a server, perl on EdgeOS; which and the dynamic
+    loader of a system without dpkg."""
     found = tools(persona, ident)
-    if not found:
-        return ()
-    paths = ["usr/bin/git", "usr/bin/perl"]
-    name = python3_name(found["python"])
-    paths.append(f"usr/bin/{name}" if name else "usr/bin/python2.7")
+    paths = ["usr/bin/perl"] if "perl" in found else []
+    if "git" in found:
+        paths.append("usr/bin/git")
+    if "python" in found:
+        name = python3_name(found["python"])
+        paths.append(f"usr/bin/{name}" if name else "usr/bin/python2.7")
     paths += [command_path(command) for command in python_answers(persona)]
+    if not has_dpkg(persona):
+        paths.append("usr/bin/which")
+        if persona.hardware_platform == "x86_64":
+            paths.append(LOADER if persona.family != "centos" else CENTOS_LOADER)
+    if is_el(persona):
+        paths.append("usr/libexec/openssh/sftp-server")
     return tuple(paths)
+
+
+# the dynamic loader of a system without Debian's multiarch directory (glibc 2.34 and later: the file
+#   itself); CentOS 7 links it to the loader of glibc 2.17
+LOADER = "usr/lib64/ld-linux-x86-64.so.2"
+CENTOS_LOADER = "usr/lib64/ld-2.17.so"
+# what ls -l shows for these programs (unverified: typical sizes); service is a shell script
+PROGRAM_SIZES = {"which": (24_000, 32_000), "ld-linux-x86-64.so.2": (200_000, 240_000),
+                 "ld-2.17.so": (160_000, 166_000), "sftp-server": (120_000, 140_000)}
+
+
+def program_sizes(persona):
+    """The size ranges of PROGRAM_SIZES, with /usr/sbin/service of the persona's family (init-system-helpers
+    on Debian, initscripts on Red Hat)."""
+    sizes = dict(PROGRAM_SIZES)
+    sizes["service"] = (3_200, 3_900) if is_el(persona) else (8_800, 9_400)
+    return sizes
+
+
+EL_RC_LOCAL = """#!/bin/bash
+# THIS FILE IS ADDED FOR COMPATIBILITY PURPOSES
+#
+# It is highly advisable to create own systemd services or udev rules
+# to run scripts during boot instead of using this file.
+#
+# In contrast to previous versions due to parallel execution during boot
+# this script will NOT be run after all other services.
+#
+# Please note that you must run 'chmod +x /etc/rc.d/rc.local' to ensure
+# that this script will be executed during boot.
+
+touch /var/lock/subsys/local
+"""
+# the README of systemd in the init directory (unverified: the exact text of each release)
+EL_INIT_README = """You are looking for the traditional init scripts in /etc/rc.d/init.d,
+and they are gone?
+
+Here's an explanation on what's going on:
+
+You are running a systemd-based OS where traditional init scripts have
+been replaced by native systemd services files. Service files provide
+very similar functionality to init scripts. To make use of service
+files simply invoke "systemctl", which will output a list of all
+currently running services (and other units). Use "systemctl
+list-unit-files" to get a listing of all known unit files, including
+stopped, disabled and masked ones. Use "systemctl start
+foobar.service" and "systemctl stop foobar.service" to start or stop a
+service, respectively. For further details, please refer to
+systemctl(1).
+
+Note that traditional init scripts continue to function on a systemd
+system. An init script /etc/rc.d/init.d/foobar is implicitly mapped
+into a service unit foobar.service during system initialization.
+
+Thank you!
+
+Further reading:
+        man:systemctl(1)
+        man:systemd(1)
+        http://0pointer.de/blog/projects/systemd-for-admins-3.html
+        https://www.freedesktop.org/wiki/Software/systemd/Incompatibilities
+"""
+EL_SSHD_UNIT = """[Unit]
+Description=OpenSSH server daemon
+Documentation=man:sshd(8) man:sshd_config(5)
+After=network.target sshd-keygen.{keygen}
+Wants=sshd-keygen.{keygen}
+
+[Service]
+Type=notify
+EnvironmentFile={env}/etc/sysconfig/sshd
+ExecStart=/usr/sbin/sshd -D $OPTIONS
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=process
+Restart=on-failure
+RestartSec=42s
+
+[Install]
+WantedBy=multi-user.target
+"""
+
+
+def files(persona):
+    """Files of the persona's system in place of Debian's: the init directory, rc.local and the
+    sshd unit of Red Hat."""
+    if not is_el(persona):
+        return {}
+    rhel = persona.family == "rhel"
+    return {"etc/rc.d/init.d/README": EL_INIT_README, "etc/rc.d/rc.local": EL_RC_LOCAL,
+            "usr/lib/systemd/system/sshd.service": EL_SSHD_UNIT.format(keygen="target" if rhel else "service",
+                                                                      env="-" if rhel else "")}
+
+
+def links(persona):
+    """(link, target) of the persona's system in place of Debian's (targets from the root, as in
+    Cowrie's pickle): Red Hat's init directories, the enabled sshd and adduser (useradd), the loader
+    link of CentOS 7."""
+    found = []
+    if is_el(persona):
+        found += [("etc/init.d", "etc/rc.d/init.d"), ("etc/rc.local", "etc/rc.d/rc.local"),
+                  ("etc/systemd/system/multi-user.target.wants/sshd.service", "usr/lib/systemd/system/sshd.service"),
+                  ("usr/sbin/adduser", "usr/sbin/useradd")]
+        found += [(f"etc/rc{level}.d", f"etc/rc.d/rc{level}.d") for level in range(7)]
+    if persona.family == "centos":
+        found.append((LOADER, CENTOS_LOADER))
+    return tuple(found)
+
+
+def directories(persona):
+    """Empty directories of the persona's system (the run level directories of Red Hat)."""
+    return tuple(f"etc/rc.d/rc{level}.d" for level in range(7)) if is_el(persona) else ()
+
+
+def login_program(persona, ident):
+    """The program of the login shell (/proc/self/exe of the shell): BusyBox of a firmware with it,
+    else bash."""
+    return "bin/busybox" if ident.release.extra.get("busybox") and persona.family != "ubiquiti" else "usr/bin/bash"
 
 
 def apt_sources(files):
@@ -210,7 +395,7 @@ def python_links(persona, ident):
     """(link, target) of the unversioned Python names: python3 -> python3.12; on CentOS 7
     python -> python2 -> python2.7 (targets from the root, as Cowrie's pickle stores them)."""
     found = tools(persona, ident)
-    if not found:
+    if "python" not in found:
         return ()
     name = python3_name(found["python"])
     if name:
@@ -219,23 +404,26 @@ def python_links(persona, ident):
 
 
 def perl_archname(persona):
-    if persona.family in ("rhel", "centos"):
+    if is_el(persona):
         return f"{persona.hardware_platform}-linux-thread-multi"
     return f"{TRIPLETS[persona.hardware_platform]}-thread-multi"
 
 
 def shell_keys(persona, ident, files, runtime_dir):
     """[shell] keys of the patched perl.py, python.py, git.py, sudo.py, service.py, apt.py and
-    yum.py ({} on devices). files: the persona's files (its apt sources)."""
+    yum.py (perl.py only on EdgeOS, {} on the other devices). files: the persona's files (its apt sources)."""
     found = tools(persona, ident)
     if not found:
         return {}
     perl, year = found["perl"]
+    keys = {"perl_version": perl, "perl_archname": perl_archname(persona), "perl_copyright": year}
+    if persona.kind != "server":
+        return keys
     sudo = sudo_version(persona, ident)
-    keys = {"perl_version": perl, "perl_archname": perl_archname(persona), "perl_copyright": year,
-            "python_version": found["python"], "git_version": found["git"],
-            "sudo_version": sudo, "sudo_grammar": sudo_grammar(sudo),
-            "service_status_all": f"{runtime_dir}/{SERVICE_STATUS}"}
+    keys.update({"python_version": found["python"], "sudo_version": sudo, "sudo_grammar": sudo_grammar(sudo),
+                 "service_status_all": f"{runtime_dir}/{SERVICE_STATUS}"})
+    if "git" in found:
+        keys["git_version"] = found["git"]
     if has_dpkg(persona):
         keys.update({"apt_version": ident.release.packages["apt"], "deb_arch": deb_arch(persona),
                      "apt_sources": ",".join(f"{url} {suite}" for url, suite in apt_sources(files))})
@@ -245,12 +433,14 @@ def shell_keys(persona, ident, files, runtime_dir):
 
 
 def python_commands(persona, ident):
-    """The Python names Cowrie must not answer: python on a system with Python 3 only,
-    python3 on CentOS 7 (Python 2 only); both on devices."""
+    """The commands of Cowrie's Python the system does not have: python on a system with Python 3
+    only, python3 on CentOS 7 (Python 2 only), both on devices; git where it is not installed."""
     found = tools(persona, ident)
-    if not found:
-        return ("python", "python3")
-    return ("python",) if python3_name(found["python"]) else ("python3",)
+    if "python" not in found:
+        names = ("python", "python3")
+    else:
+        names = ("python",) if python3_name(found["python"]) else ("python3",)
+    return names + (() if "git" in found else ("git",))
 
 
 def modules_line(name, size, users, deps, address):
@@ -288,9 +478,62 @@ _MODULES_NVIDIA = (("nvidia_uvm", 1789952, 0, ()), ("nvidia_drm", 122880, 0, ())
                    ("nvidia", 56807424, 2, ("nvidia_uvm", "nvidia_modeset")))
 
 
+# the modules of the device firmware, newest first (unverified: composites of the vendors' SDKs and public
+#   lsmod listings, not taken from the images); 2.6 / 3.x kernels do not round the sizes to pages
+_MODULES_DEVICE = {
+    "dlink": (("ath_pktlog", 19648, 0, ()), ("umac", 588720, 0, ()), ("ath_dev", 212364, 1, ("umac",)),
+              ("ath_rate_atheros", 31392, 2, ("umac", "ath_dev")),
+              ("ath_hal", 406720, 3, ("umac", "ath_dev", "ath_rate_atheros")),
+              ("asf", 5008, 4, ("ath_pktlog", "umac", "ath_dev", "ath_hal")),
+              ("adf", 54448, 4, ("ath_pktlog", "umac", "ath_dev", "ath_hal"))),
+    "tplink": (("nf_nat_pptp", 1904, 0, ()), ("nf_conntrack_pptp", 3712, 1, ("nf_nat_pptp",)),
+               ("nf_nat_proto_gre", 1072, 1, ("nf_nat_pptp",)),
+               ("nf_conntrack_proto_gre", 3008, 1, ("nf_conntrack_pptp",)), ("mt7628", 1083568, 1, ())),
+    "zyxel": (("ufsd", 640114, 0, ()), ("jnl", 21302, 1, ("ufsd",)), ("hfsplus", 77370, 0, ()),
+              ("usb_storage", 41022, 0, ()), ("fuse", 72290, 1, ()), ("nfsd", 238116, 13, ()),
+              ("exportfs", 3152, 1, ("nfsd",))),
+    "openwrt": (("mt7603e", 98304, 0, ()), ("mt76", 61440, 1, ("mt7603e",)),
+                ("mac80211", 507904, 2, ("mt7603e", "mt76")), ("cfg80211", 286720, 3, ("mt7603e", "mt76", "mac80211")),
+                ("compat", 4096, 2, ("mac80211", "cfg80211")), ("nf_conntrack", 81920, 0, ())),
+    "qnap": (("fbdisk", 36864, 0, ()), ("ufsd", 991232, 0, ()), ("jnl", 36864, 1, ("ufsd",)),
+             ("usb_storage", 77824, 0, ()), ("fuse", 155648, 1, ()), ("nfsd", 425984, 13, ())),
+    "synology": (("synoacl_vfs", 20480, 1, ()), ("btrfs", 1015808, 1, ()), ("fuse", 94208, 1, ()),
+                 ("usb_storage", 57344, 0, ()), ("loop", 28672, 2, ())),
+    "ubiquiti": (("ubnt_nf_app", 12288, 0, ()), ("tdts", 507904, 1, ("ubnt_nf_app",)), ("ipt_NETFLOW", 49152, 0, ()),
+                 ("imq", 12288, 0, ()), ("ubnt_platform", 36864, 0, ())),
+    "ipcam": (("hi_sensor_i2c", 5884, 0, ()), ("hi_mipi_rx", 31812, 0, ()), ("hi3516cv500_isp", 193804, 0, ()),
+              ("hi3516cv500_vi", 285916, 1, ("hi3516cv500_isp",)), ("hi3516cv500_sys", 67508, 2,
+              ("hi3516cv500_isp", "hi3516cv500_vi")), ("hi3516cv500_base", 13060, 3,
+              ("hi3516cv500_isp", "hi3516cv500_vi", "hi3516cv500_sys")),
+              ("hi_osal", 160432, 6, ("hi_sensor_i2c", "hi_mipi_rx", "hi3516cv500_isp", "hi3516cv500_vi",
+                                      "hi3516cv500_sys", "hi3516cv500_base"))),
+}
+# where a vendor kernel loads its modules (the 2.6 kernels and the firmware show the addresses to every
+#   reader, no kptr_restrict): MIPS KSEG2, ARM below the kernel, the x86_64 module area
+_MODULE_BASES = {"mips": 0xc0000000, "armv7l": 0xbf000000, "x86_64": 0xffffffffc0000000}
+
+
+def address_width(persona):
+    """Hex digits of a kernel address: 8 on the 32-bit devices, 16 on 64-bit systems."""
+    return 8 if persona.hardware_platform in ("mips", "armv7l") else 16
+
+
+def _device_modules(persona):
+    modules = _MODULES_DEVICE[persona.family]
+    width = address_width(persona)
+    address, lines = _MODULE_BASES[persona.hardware_platform], []
+    # loaded oldest first: the list shows the newest first, at the higher addresses
+    for name, size, users, deps in reversed(modules):
+        lines.append(modules_line(name, size, users, deps, f"0x{address:0{width}x}"))
+        address += -(-size // 4096) * 4096
+    return "".join(reversed(lines))
+
+
 def proc_modules(persona, ident):
-    """/proc/modules of a server (devices have none): the modules of its kind of
-    machine; addresses as a reader without CAP_SYSLOG sees them (kptr_restrict)."""
+    """/proc/modules: the modules of the persona's kind of machine; a server's addresses as a
+    reader without CAP_SYSLOG sees them (kptr_restrict), a device's as its vendor kernel shows them."""
+    if persona.kind == "device":
+        return _device_modules(persona)
     if persona.family == "centos":
         modules = _MODULES_CENTOS
     elif persona.family == "rhel":
@@ -305,13 +548,14 @@ def proc_modules(persona, ident):
                    for name, size, users, deps in modules)
 
 
-def modules_problems(text):
-    """A module named as a dependency is listed itself; the format of the kernel."""
+def modules_problems(text, width=16):
+    """A module named as a dependency is listed itself; the format of the kernel (addresses of
+    width hex digits)."""
     out = []
     names = set()
     for line in text.splitlines():
         fields = line.split()
-        if len(fields) != 6 or fields[4] != "Live" or not re.fullmatch(r"0x[0-9a-f]{16}", fields[5]):
+        if len(fields) != 6 or fields[4] != "Live" or not re.fullmatch(rf"0x[0-9a-f]{{{width}}}", fields[5]):
             out.append(f"modules: {line!r} is no /proc/modules line")
             continue
         names.add(fields[0])

@@ -533,33 +533,43 @@ def _on_path(fs, name):
     return False
 
 
+def _check_links(fs, out):
+    """Every link of the tree names a node (the links of its directories followed): ls -l and cd
+    find what a link points to."""
+    dangling = [f"{path} -> {tree.node_get(node, tree.A_TARGET)}" for path, node in tree.iter_nodes(fs)
+                if tree.node_get(node, tree.A_TYPE) == tree.T_LINK
+                and tree.find_node(fs, tree.node_get(node, tree.A_TARGET) or "") is None]
+    if dangling:
+        out.append(f"link: {len(dangling)} links name nothing: {', '.join(dangling[:4])}")
+
+
 def _check_system(persona, ident, cfg, out_dir, runtime_dir, fs, out):
     """Cowrie's Debian 12 x86_64 container tree is the persona's system (tpot_personas.system):
-    no foreign paths, no x86_64 names on another architecture, /proc/modules of the persona
-    (none on a device), the commands of Cowrie's Python (interpreters, sudo, service, apt / yum)
-    on PATH exactly where Cowrie or a txtcmd answers them, with their versions."""
+    no foreign paths, no x86_64 names on another architecture and no names of Debian's own
+    packages without dpkg, /proc/modules of the persona, the commands of Cowrie's Python
+    (interpreters, sudo, service, apt / yum) on PATH exactly where Cowrie or a txtcmd answers
+    them, with their versions."""
     honeyfs, txtcmds = out_dir / "honeyfs", out_dir / "txtcmds"
-    found = [hit for rel in system.CONTAINER_PATHS + system.foreign_paths(persona) for hit in _matches(fs, rel)]
+    own = {"/" + rel for rel, _ in system.links(persona)}
+    found = [hit for rel in system.CONTAINER_PATHS + system.foreign_paths(persona) for hit in _matches(fs, rel)
+             if "/" + hit not in own]
     if found:
         out.append(f"foreign: {', '.join('/' + rel for rel in found[:6])} on {persona.id}")
-    if persona.hardware_platform != "x86_64":
-        x86 = [path for path, node in tree.iter_nodes(fs)
-               if any(isinstance(v, str) and ("x86_64" in v or "x86-64" in v)
-                      for v in (tree.node_get(node, tree.A_NAME), tree.node_get(node, tree.A_TARGET)))]
-        if x86:
-            out.append(f"foreign: x86_64 names on {persona.hardware_platform}: {', '.join(x86[:4])}")
+    for word in system.foreign_words(persona):
+        named = [path for path, node in tree.iter_nodes(fs) if path not in own
+                 and any(isinstance(v, str) and word in v
+                         for v in (tree.node_get(node, tree.A_NAME), tree.node_get(node, tree.A_TARGET)))]
+        if named:
+            out.append(f"foreign: {word} names on {persona.id}: {', '.join(named[:4])}")
     triplet = system.triplet(persona)
     if triplet and tree.find_dir(fs, f"usr/lib/{triplet}") is None:
         out.append(f"foreign: no multiarch directory /usr/lib/{triplet}")
     node = tree.find_node(fs, system.PROC_MODULES)
     modules = _text(honeyfs / system.PROC_MODULES)
-    if persona.kind == "device":
-        if node is not None:
-            out.append("modules: /proc/modules of Cowrie's tree on a device")
-    elif not modules or tree.node_get(node or [], tree.A_CONTENTS) != modules.encode():
+    if not modules or tree.node_get(node or [], tree.A_CONTENTS) != modules.encode() \
+            or modules != system.proc_modules(persona, ident):
         out.append("modules: /proc/modules is not the persona's")
-    else:
-        out += system.modules_problems(modules)
+    out += system.modules_problems(modules, system.address_width(persona))
     for name in COMMANDS:
         answered = _answered(cfg, name)
         txtcmd = any((txtcmds / d / name).is_file() for d in PATH_DIRS)
@@ -656,6 +666,7 @@ def problems(persona, ident, out_dir, runtime_dir, keys_dir, min_pickle=MIN_PICK
         _check_package_managers(persona, cfg, fs, honeyfs, txtcmds, out)
         _check_programs(fs, txtcmds, out)
         _check_system(persona, ident, cfg, out_dir, runtime_dir, fs, out)
+        _check_links(fs, out)
     return out
 
 

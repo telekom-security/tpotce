@@ -7,6 +7,7 @@ from .common import (assign_processes, base_files, base_txtcmds, deb_arch, el_gr
                      el_passwd, el_shadow, gm, lscpu, pi_partuuid, ps_entry, rng_for, root_uuid, server_df,
                      server_group, server_mount, server_passwd, server_shadow, server_top, shadow_ctime)
 from .identity import log_window
+from . import system
 from .system import proc_modules
 from .model import Content
 
@@ -460,6 +461,7 @@ def _server_content(persona, ident, files, tasks, run_lock=False, accounts=None,
     all_files = base_files(persona, ident, passwd, group, shadow, home=home)
     all_files["etc/fstab"] = fstab
     all_files["proc/modules"] = proc_modules(persona, ident)
+    all_files.update(system.files(persona))
     all_files.update(files)
     txtcmds = base_txtcmds(persona, ident, cmdline=cmdline,
                            df=server_df(ident, root_dev=root_dev, run_lock=run_lock, boot=boot),

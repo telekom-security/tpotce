@@ -317,7 +317,24 @@ class ValidateSystemTest(unittest.TestCase):
     def test_x86_64_libraries_on_a_router(self):
         found = self.problems("openwrt", lambda fs, out: tree.ensure_file(fs, "usr/lib/x86_64-linux-gnu/libc.so.6", b""))
         self.assertIn("foreign: /usr/lib/x86_64-linux-gnu on openwrt", found)
-        self.assertIn("foreign: x86_64 names on mips", found)
+        self.assertIn("foreign: x86_64 names on openwrt", found)
+
+    def test_debian_tools_on_red_hat_and_devices(self):
+        for pid in ("rhel-9", "tplink-wr841n"):
+            found = self.problems(pid, lambda fs, out: (tree.ensure_file(fs, "etc/adduser.conf", b""),
+                                                        tree.ensure_dir(fs, "etc/rcS.d"),
+                                                        tree.ensure_file(fs, "usr/share/man/man1/which.debianutils.1.gz",
+                                                                         b"")))
+            self.assertIn(f"foreign: /etc/adduser.conf, /etc/rcS.d on {pid}", found)
+            self.assertIn(f"foreign: debian names on {pid}: /usr/share/man/man1/which.debianutils.1.gz", found)
+
+    def test_link_that_names_nothing(self):
+        found = self.problems("rhel-9", lambda fs, out: tree.ensure_link(
+            fs, "usr/lib64/ld-linux-x86-64.so.2", "usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2"))
+        self.assertIn("link: 1 links name nothing: /usr/lib64/ld-linux-x86-64.so.2 -> "
+                      "usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2", found)
+        found = self.problems("tplink-wr841n", lambda fs, out: tree.ensure_link(fs, "dev/stdout", "proc/969/fd/pipe:[7685]"))
+        self.assertIn("link: 1 links name nothing: /dev/stdout -> proc/969/fd/pipe:[7685]", found)
 
     def test_sshd_config_and_systemd_on_dropbear(self):
         found = self.problems("openwrt", lambda fs, out: (tree.ensure_file(fs, "etc/ssh/sshd_config", b""),
@@ -335,7 +352,18 @@ class ValidateSystemTest(unittest.TestCase):
 
     def test_proc_modules_on_a_device(self):
         found = self.problems("qnap-qts", lambda fs, out: tree.ensure_file(fs, "proc/modules", b"nft_chain_nat 12288\n"))
-        self.assertIn("modules: /proc/modules of Cowrie's tree on a device", found)
+        self.assertIn("modules: /proc/modules is not the persona's", found)
+        found = self.problems("tplink-wr841n", lambda fs, out: (tree.remove_node(fs, "proc/modules"),
+                                                                (out / "honeyfs/proc/modules").unlink()))
+        self.assertIn("modules: /proc/modules is not the persona's", found)
+
+    def test_device_modules_have_32_bit_addresses(self):
+        def change(fs, out):
+            path = out / "honeyfs/proc/modules"
+            text = path.read_text().replace("Live 0xc0", "Live 0x00000000c0")
+            path.write_text(text)
+            tree.ensure_file(fs, "proc/modules", text.encode())
+        self.assertIn("is no /proc/modules line", self.problems("tplink-wr841n", change))
 
     def test_proc_modules_of_cowries_tree(self):
         found = self.problems("ubuntu-jammy", lambda fs, out: tree.ensure_file(

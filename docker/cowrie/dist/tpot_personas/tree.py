@@ -28,6 +28,7 @@ A_REALFILE = 9
 T_LINK = 0
 T_DIR = 1
 T_FILE = 2
+T_CHR = 4   # Cowrie's fs.py: T_LINK, T_DIR, T_FILE, T_BLK, T_CHR, T_SOCK, T_FIFO
 
 MAX_LINKS = 40
 
@@ -178,6 +179,18 @@ def ensure_executable(root, relative_path, size, uid=0, gid=0, mode=0o755, ctime
     node_set(node, A_CONTENTS, [])
     node_set(node, A_TARGET, None)
     node_set(node, A_REALFILE, None)
+    return node
+
+
+def ensure_device(root, relative_path, uid=0, gid=0, mode=0o600, ctime=0):
+    """A character device (a terminal of /dev/pts)."""
+    parent = find_dir(root, str(Path(relative_path).parent)) or ensure_dir(root, str(Path(relative_path).parent),
+                                                                          ctime=ctime)
+    name = Path(relative_path).name
+    children = node_children(parent)
+    children[:] = [child for child in children if node_get(child, A_NAME) != name]
+    node = [name, T_CHR, uid, gid, 0, stat.S_IFCHR | mode, ctime, [], None, None]
+    children.append(node)
     return node
 
 

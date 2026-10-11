@@ -7,6 +7,7 @@ import unittest
 
 from tests.helpers import base_tree, tmpdir
 from tpot_personas import catalog, system, tree, validate
+from tpot_personas.common import kernel_series
 from tpot_personas.identity import DAY, draw, fits, kernel_time, specialize, updated_at
 from tpot_personas.render import render
 
@@ -159,28 +160,41 @@ class SystemTest(unittest.TestCase):
         for persona in catalog.PERSONAS:
             ident, out, _ = render_one(self, persona, 1)
             node = tree.find_node(fs_of(out), "proc/modules")
-            if persona.kind == "device":
-                self.assertIsNone(node, persona.id)
-                continue
             text = (out / "honeyfs/proc/modules").read_text()
             self.assertEqual(tree.node_get(node, tree.A_CONTENTS), text.encode(), persona.id)
             self.assertNotIn("nft_chain_nat", text, persona.id)
-            self.assertEqual(system.modules_problems(text), [], persona.id)
+            self.assertEqual(system.modules_problems(text, system.address_width(persona)), [], persona.id)
             sizes = [int(line.split()[1]) for line in text.splitlines()]
+            if persona.kind == "device":
+                # a vendor kernel shows its module addresses, 32 bits on the routers and cameras
+                width = 16 if persona.hardware_platform == "x86_64" else 8
+                addresses = [line.split()[5] for line in text.splitlines()]
+                self.assertTrue(all(len(a) == width + 2 and int(a, 16) for a in addresses), persona.id)
+                self.assertEqual(addresses, sorted(addresses, reverse=True), persona.id)
+                old = kernel_series(ident.release.kernel_version) < (4, 0)
+                self.assertEqual(any(size % 4096 for size in sizes), old, persona.id)
+                continue
             if persona.family == "centos":
                 self.assertTrue(any(size % 4096 for size in sizes))
             else:
                 self.assertTrue(all(size % 4096 == 0 for size in sizes), persona.id)
             self.assertEqual("nvidia " in text, bool(ident.hardware.gpus), persona.id)
 
-    def test_servers_have_perl_git_and_their_python(self):
+    def test_servers_have_perl_and_their_python_git_where_installed(self):
         expected = {"ubuntu-noble": "3.12", "ubuntu-jammy": "3.10", "debian-trixie": "3.13",
                     "debian-bookworm": "3.11", "rhel-9": "3.9", "raspios": "3.11"}
+        git = {"ubuntu-jammy", "raspios", "gpu-ubuntu"}
+        for persona in catalog.PERSONAS:
+            if persona.kind == "server":
+                for seed in range(4):
+                    ident, out, _ = render_one(self, persona, seed)
+                    on_path = tree.find_node(fs_of(out), "usr/bin/git") is not None
+                    self.assertEqual((on_path, "git" not in skipped(out), cfg_of(out).has_option("shell", "git_version"),
+                                      "git" in ident.release.packages), (persona.id in git,) * 4, persona.id)
         for pid, version in expected.items():
             ident, out, _ = render_one(self, catalog.by_id(pid), 1)
             fs, cfg = fs_of(out), cfg_of(out)
             self.assertEqual(tree.node_get(tree.find_node(fs, "usr/bin/perl"), tree.A_SIZE), 3804432, pid)
-            self.assertIsNotNone(tree.find_node(fs, "usr/bin/git"), pid)
             self.assertEqual(tree.node_get(tree.find_node(fs, "usr/bin/python3"), tree.A_TARGET),
                              f"usr/bin/python{version}", pid)
             self.assertIsNotNone(tree.find_node(fs, f"usr/bin/python{version}"), pid)
@@ -192,9 +206,9 @@ class SystemTest(unittest.TestCase):
             self.assertIn("python", skipped(out), pid)
             self.assertNotIn("python3", skipped(out), pid)
             self.assertNotIn("perl", skipped(out), pid)
-            self.assertNotIn("git", skipped(out), pid)
-            self.assertEqual(cfg.get("shell", "git_version"),
-                             ident.release.packages["git"].split(":")[-1].split("-")[0], pid)
+            if pid in git:
+                self.assertEqual(cfg.get("shell", "git_version"),
+                                 ident.release.packages["git"].split(":")[-1].split("-")[0], pid)
 
     def test_centos_has_python_2_only(self):
         ident, out, _ = render_one(self, catalog.by_id("centos-7"), 1)
@@ -208,17 +222,68 @@ class SystemTest(unittest.TestCase):
         self.assertNotIn("python", skipped(out))
         self.assertEqual(cfg.get("shell", "perl_archname"), "x86_64-linux-thread-multi")
 
-    def test_devices_have_no_interpreters(self):
+    def test_devices_have_no_interpreters_but_edgeos_perl(self):
         for persona in catalog.PERSONAS:
             if persona.kind != "device":
                 continue
             _, out, _ = render_one(self, persona, 1)
             fs, cfg = fs_of(out), cfg_of(out)
-            for name in ("perl", "git", "python", "python3"):
+            edgeos = persona.family == "ubiquiti"
+            for name in ("git", "python", "python3") + (() if edgeos else ("perl",)):
                 self.assertIn(name, skipped(out), (persona.id, name))
                 self.assertIsNone(tree.find_node(fs, f"usr/bin/{name}"), (persona.id, name))
-            self.assertFalse([p for p in names(fs) if "python3" in p or "/perl" in p], persona.id)
-            self.assertFalse(cfg.has_option("shell", "perl_version"), persona.id)
+            self.assertFalse([p for p in names(fs) if "python3" in p], persona.id)
+            self.assertEqual(bool([p for p in names(fs) if "/perl" in p]), edgeos, persona.id)
+            self.assertEqual(cfg.has_option("shell", "perl_version"), edgeos, persona.id)
+        _, out, _ = render_one(self, catalog.by_id("ubiquiti-edgerouter-x"), 1)
+        cfg = cfg_of(out)
+        self.assertNotIn("perl", skipped(out))
+        self.assertIsNotNone(tree.find_node(fs_of(out), "usr/bin/perl"))
+        self.assertEqual((cfg.get("shell", "perl_version"), cfg.get("shell", "perl_archname"),
+                          cfg.get("shell", "perl_copyright")), ("5.24.1", "mipsel-linux-gnu-thread-multi", "2017"))
+        self.assertFalse(cfg.has_option("shell", "sudo_version"))
+
+    def test_no_debian_tools_without_dpkg(self):
+        for persona in catalog.PERSONAS:
+            _, out, _ = render_one(self, persona, 1)
+            fs = fs_of(out)
+            debian = "dpkg" in persona.package_managers
+            for rel in ("etc/adduser.conf", "etc/rcS.d", "usr/bin/which.debianutils"):
+                self.assertEqual(tree.find_node(fs, rel) is not None, debian, (persona.id, rel))
+            which = tree.find_node(fs, "usr/bin/which")
+            self.assertEqual(tree.node_get(which, tree.A_TYPE), tree.T_LINK if debian else tree.T_FILE, persona.id)
+
+    def test_red_hat_init_directories_and_loader(self):
+        for pid in ("rhel-9", "centos-7"):
+            _, out, _ = render_one(self, catalog.by_id(pid), 1)
+            fs = fs_of(out)
+            self.assertEqual(tree.node_get(tree.find_node(fs, "etc/init.d"), tree.A_TARGET), "etc/rc.d/init.d")
+            self.assertEqual(tree.node_get(tree.find_node(fs, "etc/rc3.d"), tree.A_TARGET), "etc/rc.d/rc3.d")
+            self.assertIsNotNone(tree.find_dir(fs, "etc/rc3.d"))
+            self.assertIn(b"systemctl", tree.node_get(tree.find_node(fs, "etc/init.d/README"), tree.A_CONTENTS))
+            self.assertIn("Description=OpenSSH server daemon",
+                          (out / "honeyfs/usr/lib/systemd/system/sshd.service").read_text())
+            self.assertIsNone(tree.find_node(fs, "usr/lib/systemd/system/ssh.service"), pid)
+            self.assertEqual(tree.node_get(tree.find_node(fs, "usr/sbin/adduser"), tree.A_TARGET), "usr/sbin/useradd")
+            loader = tree.find_node(fs, "usr/lib64/ld-linux-x86-64.so.2")
+            if pid == "centos-7":
+                self.assertEqual(tree.node_get(loader, tree.A_TARGET), "usr/lib64/ld-2.17.so")
+            else:
+                self.assertEqual(tree.node_get(loader, tree.A_TYPE), tree.T_FILE)
+            self.assertIsNone(tree.find_node(fs, "usr/bin/ld.so"), pid)
+
+    def test_login_shell_streams_are_its_terminal(self):
+        for pid in ("ubuntu-noble", "tplink-wr841n"):
+            persona = catalog.by_id(pid)
+            _, out, _ = render_one(self, persona, 1)
+            fs = fs_of(out)
+            self.assertEqual(tree.node_get(tree.find_node(fs, "dev/stdout"), tree.A_TARGET), "proc/self/fd/1")
+            self.assertEqual(tree.node_get(tree.find_node(fs, "proc/self/fd/1"), tree.A_TARGET), "dev/pts/0")
+            pts = tree.find_node(fs, "dev/pts/0")
+            self.assertEqual((tree.node_get(pts, tree.A_TYPE), tree.node_get(pts, tree.A_UID)),
+                             (tree.T_CHR, persona.uid))
+            self.assertEqual(tree.node_get(tree.find_node(fs, "proc/self/exe"), tree.A_TARGET),
+                             "usr/bin/bash" if persona.kind == "server" else "bin/busybox")
 
 
 class ServerCommandTest(unittest.TestCase):

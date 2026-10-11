@@ -131,7 +131,7 @@ def skip_python_commands(persona, ident, content):
     for name in system.python_answers(persona):
         commands -= {name, f"/bin/{name}", f"/{system.command_path(name)}"}
     if persona.kind == "device":
-        commands |= set(EMBEDDED_SKIP_PYTHON_COMMANDS)
+        commands |= set(EMBEDDED_SKIP_PYTHON_COMMANDS) - ({"perl"} if system.has_perl(persona) else set())
     if not content.busybox_help:
         commands |= set(BUSYBOX_PYTHON_COMMANDS)
     return sorted(commands)
@@ -178,7 +178,7 @@ def remove_matching(t, words):
 def adapt_system(t, persona, ident):
     """Cowrie's Debian 12 x86_64 container tree as the persona's system (tpot_personas.system):
     foreign paths removed, the multiarch directory and Python named as on that system,
-    no x86_64 names on another architecture."""
+    no x86_64 names on another architecture and no names of Debian's own packages without dpkg."""
     remove_paths(t, system.foreign_paths(persona))
     triplet = system.triplet(persona)
     replacements = [(system.MULTIARCH, triplet)] if triplet and triplet != system.MULTIARCH else []
@@ -190,13 +190,35 @@ def adapt_system(t, persona, ident):
         replacements += [("cpython-311", f"cpython-{version.replace('.', '')}"), ("config-3.11-", f"config-{version}-")]
     if replacements:
         rename_parts(t, replacements)
-    if persona.hardware_platform != "x86_64":
-        remove_matching(t, ("x86_64", "x86-64"))
+    words = system.foreign_words(persona)
+    if words:
+        remove_matching(t, words)
 
 
-def program_size(ident, rel):
-    low, high = PROGRAM_SIZES.get(Path(rel).name, PROGRAM_SIZE)
+def program_size(ident, rel, sizes=PROGRAM_SIZES):
+    low, high = sizes.get(Path(rel).name, PROGRAM_SIZE)
     return rng_for(ident, f"size {rel}").randint(low, high)
+
+
+def _login_links(t, persona, ident):
+    """The standard streams and /proc/self of the login shell: fd 0-2 on its terminal, exe its
+    program (Cowrie's tree has the pipes and the Python of the container there)."""
+    own = tree.real_path(t, "proc/self/fd")
+    if tree.find_dir(t, "proc/self") is None or own is None:
+        return
+    fd = tree.find_dir(t, own)
+    mode = tree.node_get(fd, tree.A_MODE) if fd is not None else None
+    tree.ensure_device(t, system.TERMINAL, persona.uid, 5, 0o620, ctime=ident.now)
+    for number in range(3):
+        tree.ensure_link(t, f"{own}/{number}", system.TERMINAL, ctime=ident.now)
+    if mode is not None:
+        tree.node_set(tree.find_dir(t, own), tree.A_MODE, mode)
+    for rel, target in system.STREAM_LINKS:
+        tree.ensure_link(t, rel, target, ctime=ident.installed_at)
+    process = own.rsplit("/", 1)[0]
+    tree.ensure_link(t, f"{process}/exe", system.login_program(persona, ident), ctime=ident.now)
+    # /proc/thread-self: the one thread of the shell
+    tree.ensure_dir(t, f"{process}/task/{process.rsplit('/', 1)[-1]}", mode=0o555, ctime=ident.now)
 
 
 def _mode(rel):
@@ -236,10 +258,14 @@ def apply_to_tree(base_tree, persona, ident, content):
         tree.node_set(node, tree.A_CTIME, ctime)
     # txtcmds and the commands of Cowrie's Python: programs with a size and no contents
     # (cat / dd give the ELF header of [shell] arch)
+    sizes = {**PROGRAM_SIZES, **system.program_sizes(persona)}
     for rel in sorted(set(content.txtcmds) | set(content.programs) | set(system.programs(persona, ident))):
-        tree.ensure_executable(t, rel, program_size(ident, rel), ctime=ident.installed_at)
-    for rel, target in system.python_links(persona, ident):
+        tree.ensure_executable(t, rel, program_size(ident, rel, sizes), ctime=ident.installed_at)
+    for rel in system.directories(persona):
+        tree.ensure_dir(t, rel, ctime=ident.installed_at)
+    for rel, target in system.python_links(persona, ident) + system.links(persona):
         tree.ensure_link(t, rel, target, ctime=ident.installed_at)
+    _login_links(t, persona, ident)
     _set_dirs(t, persona, ident.installed_at)
     return t
 

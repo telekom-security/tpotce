@@ -10,6 +10,7 @@ from .common import (ARM_CORES, MIPS_CORES, ULIMIT, X86_CPUS, _df_row, assign_pr
                      device_top, embedded_group, embedded_passwd, embedded_shadow, kernel_line, kernel_series, lscpu,
                      nproc, ps_entry, rng_for, server_top, shadow_ctime, shadow_days)
 from .model import Content
+from .system import proc_modules
 
 
 # --- shared parts of the device builders -------------------------------------------
@@ -161,6 +162,7 @@ def device_content(persona, ident, files, entries, cmdline, boot, processes, acc
     all_files = base_files(persona, ident, passwd, group, shadow)
     mount, proc_mounts, df = fs_tables(entries, coreutils)
     all_files["proc/mounts"] = proc_mounts
+    all_files["proc/modules"] = proc_modules(persona, ident)
     all_files.update(files)
     top = server_top(ident, processes, len(processes) + 60) if coreutils else device_top(ident, processes)
     commands = {
