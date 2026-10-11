@@ -406,7 +406,6 @@ services:
      - "53:53/udp"
      - "53:53/tcp"
      - "123:123/udp"
-#     - "161:161/udp"
      - "1900:1900/udp"
     environment:
      - DDOSPOT_DNS_RECURSION=${DDOSPOT_DNS_RECURSION:-on} # on: DNS recursion via Quad9 (DNS over TLS), off: REFUSED (value provided by T-Pot .env)
