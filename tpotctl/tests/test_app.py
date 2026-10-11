@@ -555,6 +555,35 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             await pilot.pause(0.3)
         self.assertIn(("set", "120"), backend.calls)
 
+    async def test_elastic_take_over_shows_what_it_deletes_first(self):
+        from tpotctl import elastic
+        backend = FakeBackend()
+        backend._retention = elastic.Status("30", "120", "foreign")
+        # the policy changed again in Kibana meanwhile: taking 120 over deletes an index
+        backend._plan = elastic.Plan(elastic.Decision("update", {}, "200", False),
+                                     [elastic.Index("logstash-2026.05.01", 0, 800, 2 ** 20)], True)
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.2)
+            app.goto("elastic")
+            await pilot.pause(0.3)
+            await pilot.click("#elastic-adopt")
+            await pilot.pause(0.3)
+            self.assertIsInstance(app.screen, ConfirmDialog)
+            self.assertIs(app.focused, app.screen.query_one("#no"))
+            self.assertIn("logstash-2026.05.01", "".join(str(w.render()) for w in app.screen.query("Static")))
+            await pilot.click("#no")
+            await pilot.pause(0.3)
+            done = [call[0] for call in backend.calls if isinstance(call, tuple)]
+            self.assertNotIn("set", done)
+            self.assertNotIn("apply", done)
+            await pilot.click("#elastic-adopt")
+            await pilot.pause(0.3)
+            await pilot.click("#yes")
+            await pilot.pause(0.3)
+        self.assertIn(("set", "120"), backend.calls)
+        self.assertIn(("apply", "update"), backend.calls)
+
     async def test_elastic_shortening_without_es_warns(self):
         from tpotctl import elastic
         backend = FakeBackend()

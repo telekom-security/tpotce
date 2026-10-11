@@ -1506,7 +1506,8 @@ class ElasticPane(Vertical):
         elif event.button.id == "elastic-apply" and self.status is not None:
             await self.change(self.status.value, force=True)
         elif event.button.id == "elastic-adopt" and self.status is not None and self.status.current:
-            # the policy's own value: T-Pot owns the policy from now on, applying it deletes nothing new
+            # the policy's own value as the page read it, T-Pot owns the policy from now on; write() plans
+            # it anew and asks if that deletes indices (Kibana may have changed it again meanwhile)
             await self.write(self.status.current, None)
 
     async def change(self, value: str, force: bool) -> None:
@@ -1542,11 +1543,20 @@ class ElasticPane(Vertical):
         await self.write(value, chosen)
 
     async def write(self, value: str, chosen) -> None:
-        """value into .env, then the plan (None: made anew, forced) into the policy where it can be."""
+        """value into .env, then the plan into the policy where it can be. chosen None (Take over): the
+        plan is made here, forced, and what it deletes is asked first, before anything is written (the
+        policy may have changed in Kibana since the page read it)."""
         import asyncio
         from tpotctl import elastic
         from tpotctl.cli import _retention_shown as shown
         from tpotctl.settings import SettingsError
+        if chosen is None:
+            chosen = await asyncio.to_thread(self.app.backend.retention_plan, value, True)
+            if chosen.reachable and chosen.doomed:
+                self.app.push_screen(ConfirmDialog(f"Keep the events {shown(value)}?", doomed_text(chosen.doomed),
+                                                   yes="Delete and set", no="Back"),
+                                     lambda yes: self.run_worker(self.write(value, chosen)) if yes else None)
+                return
         old = self.status.value if self.status else ""
         try:
             await asyncio.to_thread(self.app.backend.set_retention, value)
@@ -1555,8 +1565,6 @@ class ElasticPane(Vertical):
             return
         self.app.config_maybe_changed()             # the Settings page shows TPOT_ES_RETENTION too
         try:
-            if chosen is None:
-                chosen = await asyncio.to_thread(self.app.backend.retention_plan, value, True)
             if chosen.reachable:
                 await asyncio.to_thread(self.app.backend.apply_retention, chosen)
                 self.app.notify(f"The ILM policy tpot keeps the events {shown(value)}.", title="Elastic")
