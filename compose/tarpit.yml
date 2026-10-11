@@ -54,16 +54,17 @@ services:
     ports:
      - "19:19/udp"
      - "53:53/udp"
+     - "53:53/tcp"
      - "123:123/udp"
 #     - "161:161/udp"
      - "1900:1900/udp"
+    environment:
+     - DDOSPOT_DNS_RECURSION=${DDOSPOT_DNS_RECURSION:-on} # on: DNS recursion via Quad9 (DNS over TLS), off: REFUSED (value provided by T-Pot .env)
     image: ${TPOT_REPO}/ddospot:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
     read_only: true
     volumes:
-     - ${TPOT_DATA_PATH}/ddospot/log:/opt/ddospot/ddospot/logs
-     - ${TPOT_DATA_PATH}/ddospot/bl:/opt/ddospot/ddospot/bl
-     - ${TPOT_DATA_PATH}/ddospot/db:/opt/ddospot/ddospot/db
+     - ${TPOT_DATA_PATH}/ddospot/log:/var/log/ddospot
 
 # Endlessh service
   endlessh:

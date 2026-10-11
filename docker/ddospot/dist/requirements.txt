@@ -1,4 +1,0 @@
-git+https://github.com/hpfeeds/hpfeeds
-tabulate
-python-geoip
-python-geoip-geolite2
