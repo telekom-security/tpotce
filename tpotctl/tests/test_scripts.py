@@ -12,6 +12,7 @@ import subprocess
 import tarfile
 import tempfile
 import textwrap
+import time
 import unittest
 
 from tpotctl.tests import isolate
@@ -114,7 +115,8 @@ class UpdateShTest(Harness):
     RESTORE_OLD = '#!/bin/sh\n# while getopts ":lf:ycg:h" opt; do\necho "marks=${TPOT_MARKS:-none} args=$*"\nexit 1\n'
 
     def rollback(self, restore_text, become=""):
-        function = re.search(r"function fuROLLBACK_CHECKOUT \(\) \{.*?\n\}", read("update.sh"), re.S).group(0)
+        function = "\n".join(re.search(rf"function {name} \(\) \{{.*?\n\}}", read("update.sh"), re.S).group(0)
+                             for name in ("fuCAN_ROLLBACK", "fuROLLBACK_CHECKOUT"))
         tpotce = os.path.join(self.home, "tpotce")
         os.makedirs(tpotce)
         subprocess.run(["git", "init", "-q", tpotce], check=True)
@@ -1378,21 +1380,24 @@ class DataLossTest(Harness):
 
     # --- the Elasticsearch upgrade -----------------------------------------------------------------
 
-    def elastic(self, archive_has_data, extra="", stub_confirm=""):
-        os.makedirs(os.path.join(self.tpotce, "docker", "elk", "elasticsearch"))
+    def elastic(self, archive_has_data, extra="", stub_confirm="", env=""):
+        os.makedirs(os.path.join(self.tpotce, "docker", "elk", "elasticsearch"), exist_ok=True)
         with open(os.path.join(self.tpotce, "docker", "elk", "elasticsearch", "Dockerfile"), "w") as out:
             out.write("FROM alpine\nARG ES_VER=9.1.0\n")
         with open(os.path.join(self.tpotce, "docker-compose.yml"), "w") as out:
             out.write("services:\n  elasticsearch:\n    image: x\n")
         with open(os.path.join(self.tpotce, ".env"), "w") as out:
-            out.write("TPOT_REPO=ghcr.io/telekom-security\nTPOT_VERSION=24.04.2\n")
+            out.write("TPOT_REPO=ghcr.io/telekom-security\nTPOT_VERSION=24.04.2\n" + env)
         return textwrap.dedent(f"""
             myOLDVERSION=24.04.1 myARCHIVE="$HOME/tpot_backups/x.tar"
             docker () {{ [ "$1 $2" = "image inspect" ] && printf 'PATH=/bin\\nES_VER=8.19.0\\n'; }}
             tar () {{ {"return 0" if archive_has_data else "return 1"}; }}
             fuROLLBACK_CHECKOUT () {{ echo "ROLLBACK"; return 0; }}
-        """) + extra + self.functions("fuLOSS_IN_FILE", "fuLOSS_CONFIRM", "fuDATA_PATH", "fuCOMPOSE_HAS", "fuES_IMAGE_VERSION", "fuELASTIC_REFUSED",
-                                                                  "fuCHECK_ELASTIC") \
+            fuCAN_ROLLBACK () {{ return 0; }}
+            fuSTART_TPOT () {{ echo "STARTED"; return 0; }}
+        """) + extra + self.functions("fuLOSS_IN_FILE", "fuLOSS_CONFIRM", "fuDATA_PATH", "fuCOMPOSE_HAS",
+                                      "fuES_IMAGE_VERSION", "fuELASTIC_REFUSED", "fuOLD_RELEASE_BACKUP",
+                                      "fuCHECK_ELASTIC") \
             + stub_confirm + 'fuCHECK_ELASTIC\necho "went on"\n'
 
     def test_elastic_upgrade_without_full_refused_rolls_back(self):
@@ -1452,6 +1457,109 @@ class DataLossTest(Harness):
             self.assertEqual(proc.returncode, 5, f"run {attempt}: {out}")
             self.assertIn("ROLLBACK", out)
             self.assertNotIn("went on", out)
+
+    # --- the upgrade from 24.04.1, a refusal with -s, a custom data path with --full -------------
+
+    # tar: the archive of this run has no Elasticsearch data, a .tgz in HOME is read for real
+    REAL_TGZ = 'tar () { case "$*" in *.tgz*) command tar "$@" ;; *) return 1 ;; esac; }\n'
+
+    def old_release_backup(self, member="data/elk/data/nodes/0", age=0):
+        """What the update.sh of 24.04.1 wrote: tar cvf of ~/tpotce (data included) to HOME/*.tgz."""
+        path = os.path.join(self.home, "20261011090000_tpot_backup.tgz")
+        source = os.path.join(self.home, "src")
+        shutil.rmtree(source, ignore_errors=True)
+        os.makedirs(os.path.join(source, os.path.dirname(member)), exist_ok=True)
+        with open(os.path.join(source, member), "w", encoding="utf-8") as out:
+            out.write("x\n")
+        with tarfile.open(path, "w") as archive:           # plain tar despite the name, as 24.04.1 did
+            archive.add(os.path.join(source, member.split("/")[0]), arcname=member.split("/")[0])
+        if age:
+            os.utime(path, (time.time() - age, time.time() - age))
+        return path
+
+    def test_a_fresh_backup_of_24_04_1_with_the_data_needs_no_question(self):
+        archive = self.old_release_backup()
+        result = self.bash(self.elastic(archive_has_data=False, extra=self.REAL_TGZ))
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out)
+        self.assertIn("went on", out)
+        self.assertIn(f"OK: The Elasticsearch data is in {archive}", out)
+        self.assertNotIn("ASKED", out)
+        self.assertNotIn("Not confirmed", out)
+
+    def test_a_backup_of_24_04_1_counts_only_fresh_with_the_data_and_the_data_path(self):
+        for name, kwargs, env in (("old", {"age": 25 * 3600}, ""),
+                                  ("no data", {"member": "data/uuid"}, ""),
+                                  ("another data path", {}, f"TPOT_DATA_PATH={self.home}/elsewhere\n")):
+            with self.subTest(name):
+                for left in os.listdir(self.home):
+                    if left.endswith(".tgz"):
+                        os.remove(os.path.join(self.home, left))
+                self.old_release_backup(**kwargs)
+                result = self.bash(self.elastic(archive_has_data=False, extra=self.REAL_TGZ, env=env))
+                self.assertEqual(result.returncode, 5, result.stdout + result.stderr)
+                self.assertNotIn("The Elasticsearch data is in", result.stdout)
+
+    def test_no_rollback_says_a_no_cannot_stop_the_upgrade(self):
+        result = self.bash(self.elastic(archive_has_data=False, stub_confirm="fuCAN_ROLLBACK () { return 1; }\n"))
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 5, out)
+        flat = " ".join(out.split())
+        self.assertIn("A no cannot stop the next start of T-Pot from upgrading the data: the checkout is already "
+                      f"the new release. Copy {self.tpotce}/data/elk/data first (sudo cp -a {self.tpotce}/data/elk/data "
+                      f"{self.backups}/elk_data_8.19.0), then run the update again.", flat)
+        self.assertNotIn("answer no, copy it", out)                   # a no does not keep the data as it is
+        self.assertNotIn("ROLLBACK", out)
+        self.assertNotIn("STARTED", out)
+        self.assertIn("DID: fail: Not updated: the Elasticsearch upgrade was not confirmed. The checkout is already "
+                      "the new release, the next start of T-Pot upgrades the data: T-Pot stays stopped.", out)
+
+    def test_can_rollback_is_the_check_of_the_rollback(self):
+        function = re.search(r"function fuCAN_ROLLBACK \(\) \{.*?\n\}", read("update.sh"), re.S).group(0)
+        subprocess.run(["git", "init", "-q", self.tpotce], check=True)
+        subprocess.run(["git", "-C", self.tpotce, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q",
+                        "--allow-empty", "-m", "now"], check=True)
+        head = subprocess.run(["git", "-C", self.tpotce, "rev-parse", "HEAD"], capture_output=True,
+                              universal_newlines=True).stdout.strip()
+        restore = os.path.join(self.tpotce, "restore.sh")
+        with open(restore, "w", encoding="utf-8") as out:
+            out.write("#!/bin/sh\n")
+        os.chmod(restore, 0o755)
+        for commit, expected in (("0123456789abcdef", "0"), (head, "1"), ("", "1")):
+            with self.subTest(commit=commit):
+                archive = make_backup(self.home, {"rollback.txt": commit + "\n"})
+                result = self.bash(f'myARCHIVE="{archive}"\n{function}\nfuCAN_ROLLBACK; echo "rc=$?"\n')
+                self.assertIn(f"rc={expected}", result.stdout, result.stdout + result.stderr)
+        self.assertIn("if ! fuCAN_ROLLBACK;", re.search(r"function fuROLLBACK_CHECKOUT \(\) \{.*?\n\}",
+                                                     read("update.sh"), re.S).group(0))
+
+    def test_a_refusal_with_start_starts_the_old_release(self):
+        result = self.bash(self.elastic(archive_has_data=False, extra="mySTART=1\n"))
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 5, out)
+        self.assertLess(out.index("ROLLBACK"), out.index("STARTED"))
+        self.assertIn("DID: ok: T-Pot runs again, on the release from before this update.", out)
+
+    def test_a_refusal_without_start_keeps_it_stopped(self):
+        result = self.bash(self.elastic(archive_has_data=False))
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 5, out)
+        self.assertNotIn("STARTED", out)
+        self.assertIn("DID: next: Copy ", out)
+
+    def test_a_refusal_with_start_but_no_rollback_does_not_start(self):
+        result = self.bash(self.elastic(archive_has_data=False, extra="mySTART=1\n",
+                                        stub_confirm='fuROLLBACK_CHECKOUT () { echo "ROLLBACK"; return 1; }\n'))
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 5, out)
+        self.assertNotIn("STARTED", out)
+
+    def test_full_with_a_custom_data_path_needs_no_question(self):
+        result = self.bash(self.elastic(archive_has_data=True, env=f"TPOT_DATA_PATH={self.home}/custom\n"))
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out)
+        self.assertIn("went on", out)
+        self.assertNotIn("Not confirmed", out)
 
     def test_no_pause_left(self):
         text = read("update.sh")
@@ -1552,7 +1660,7 @@ class DataLossTest(Harness):
     """)
     CHECK_FUNCTIONS = ("fuLOSS_ADD", "fuLOSS_IN_FILE", "fuLOSS_CONFIRM", "fuDROP_OLDEST", "fuBACKUP_SIZE", "fuNO_ROOM",
                        "fuCHECK_BACKUP_SPACE",
-                       "fuDATA_PATH", "fuCOMPOSE_HAS", "fuES_IMAGE_VERSION", "fuIMAGE_PULLABLE",
+                       "fuDATA_PATH", "fuCOMPOSE_HAS", "fuES_IMAGE_VERSION", "fuOLD_RELEASE_BACKUP", "fuIMAGE_PULLABLE",
                        "fuLOCAL_IMAGES_TEXT", "fuIMAGES", "fuLOSS_TARGET", "fuCHECK_DATA_LOSS")
 
     def check(self, extra=""):
@@ -1582,6 +1690,22 @@ class DataLossTest(Harness):
         os.makedirs(os.path.join(self.tpotce, "data", "elk", "data"))
         out, lines = self.check(extra="myFULL=1\n")
         self.assertEqual([line.split()[2] for line in lines], ["images"], out)
+
+    def test_check_mode_with_full_and_a_custom_data_path_has_no_elastic_finding(self):
+        self.target()
+        custom = os.path.join(self.home, "custom")
+        os.makedirs(os.path.join(custom, "elk", "data"))
+        with open(os.path.join(self.tpotce, ".env"), "a") as out:
+            out.write(f"TPOT_DATA_PATH={custom}\n")
+        out, lines = self.check(extra="myFULL=1\n")
+        self.assertEqual([line.split()[2] for line in lines], ["images"], out)
+
+    def test_check_mode_takes_a_fresh_backup_of_24_04_1(self):
+        self.target()
+        archive = self.old_release_backup()
+        out, lines = self.check()
+        self.assertEqual([line.split()[2] for line in lines], ["images"], out)
+        self.assertIn(archive, out)
 
     def test_check_mode_says_error_without_a_target(self):
         self.target()
