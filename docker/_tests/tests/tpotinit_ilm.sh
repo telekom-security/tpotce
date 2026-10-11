@@ -89,28 +89,56 @@ for (( i = 0; i < count; i++ )); do
   want="${want} current=$(yq -r ".cases[$i].current" "${CASES}") managed=$(yq -r ".cases[$i].managed" "${CASES}")"
   if [[ "${got}" == "${want}" ]]; then echo "ok   ${name}"; else echo "FAIL ${name}: [${got}] expected [${want}]"; failed=1; fi
 done
-# 200 without a policy is no missing policy: warn, never PUT (curl stubbed, no Elasticsearch)
-myMARK="$(mktemp)"
+# fuILM_MAIN with curl stubbed (no Elasticsearch): only myUP answers _cluster/health, the GET
+# of the policy answers myGET_CODE with myGET_BODY; every other call is logged to myCALLS
+myCALLS="$(mktemp)"
 curl() {
-  local myOUT="" myWRITE=""
+  local myOUT="" myWRITE="" myMETHOD="GET" myURL=""
   while [[ $# -gt 0 ]]; do
     case "$1" in
       -o) myOUT="$2"; shift 2 ;;
       -w) myWRITE="$2"; shift 2 ;;
-      -X) echo "$2" >> "${myMARK}"; shift 2 ;;
+      -X) myMETHOD="$2"; shift 2 ;;
+      -H|-d|--max-time) shift 2 ;;
+      http*) myURL="$1"; shift ;;
       *) shift ;;
     esac
   done
-  if [[ -n "${myWRITE}" ]]; then echo '{}' > "${myOUT}"; printf '200'; fi
+  if [[ "${myURL}" == */_cluster/health ]]; then [[ "${myURL}" == "${myUP}/_cluster/health" ]]; return; fi
+  echo "${myMETHOD} ${myURL}" >> "${myCALLS}"
+  if [[ -n "${myWRITE}" ]]; then printf '%s' "${myGET_BODY}" > "${myOUT}"; printf '%s' "${myGET_CODE}"; fi
   return 0
 }
-out="$(TPOT_ES_RETENTION=7 myILM_WAIT=5 fuILM_MAIN 2>&1)"
+fuSTUB_CHECK () {   # $1 = name, $2 = text the output must have, $3 = the calls expected; env: the stub's
+  local myOUT
+  : > "${myCALLS}"
+  myOUT="$(TPOT_ES_RETENTION=7 myILM_WAIT=0 fuILM_MAIN 2>&1)"
+  if [[ "${myOUT}" == *"$2"* && "$(cat "${myCALLS}")" == "$3" ]]
+    then echo "ok   $1"
+    else echo "FAIL $1: [${myOUT}] calls=[$(cat "${myCALLS}")]"; failed=1
+  fi
+}
+# 200 without a policy is no missing policy: warn, never PUT
+myUP="http://127.0.0.1:64298" myGET_CODE=200 myGET_BODY='{}' \
+  fuSTUB_CHECK "200 without a policy writes nothing" \
+  "# Warning: Elasticsearch answered without the ILM policy tpot, it is not checked." \
+  "GET http://127.0.0.1:64298/_ilm/policy/tpot"
+# the published port first, the service name of the compose network second (MAC_WIN: tpotinit is no host container)
+myUP="http://elasticsearch:9200" myGET_CODE=404 myGET_BODY='{}' \
+  fuSTUB_CHECK "Elasticsearch by its service name when the published port does not answer" \
+  "# ILM policy tpot: created, events are kept for 7 days." \
+  "GET http://elasticsearch:9200/_ilm/policy/tpot
+PUT http://elasticsearch:9200/_ilm/policy/tpot"
+myUP="http://es.example:9200" myGET_CODE=404 myGET_BODY='{}' TPOT_ES_URL="http://es.example:9200" \
+  fuSTUB_CHECK "TPOT_ES_URL is the only one tried" \
+  "# ILM policy tpot: created" \
+  "GET http://es.example:9200/_ilm/policy/tpot
+PUT http://es.example:9200/_ilm/policy/tpot"
+myUP="http://elasticsearch:9200" myGET_CODE=404 myGET_BODY='{}' TPOT_ES_URL="http://es.example:9200" \
+  fuSTUB_CHECK "nothing answers: nothing is written" \
+  "# Warning: Elasticsearch did not answer" ""
 unset -f curl
-if [[ "${out}" == *"# Warning: Elasticsearch answered without the ILM policy tpot, it is not checked."* && ! -s "${myMARK}" ]]
-  then echo "ok   200 without a policy writes nothing"
-  else echo "FAIL 200 without a policy writes nothing: [${out}] put=[$(cat "${myMARK}")]"; failed=1
-fi
-rm -f "${myMARK}"
+rm -f "${myCALLS}"
 exit "${failed}"
 EOF
   chmod 0755 "${TEST_TMP_ROOT}/run.sh"

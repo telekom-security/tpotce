@@ -28,8 +28,10 @@ services:
     tmpfs:
      - /tmp/etc:uid=2000,gid=2000
      - /tmp/:uid=2000,gid=2000
+    # nginx_local: no host network here, tpotinit reaches Elasticsearch by its name (ILM policy tpot)
     networks:
      - tpotinit_local
+     - nginx_local
     image: ${TPOT_REPO}/tpotinit:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
     volumes:

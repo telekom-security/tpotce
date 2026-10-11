@@ -178,6 +178,21 @@ class WiringTest(unittest.TestCase):
         self.assertIn('"${TPOT_TYPE}" == "HIVE"', block)
         self.assertIn("elasticsearch", block)
 
+    def test_tpotinit_reaches_elasticsearch_in_every_edition(self):
+        # host network: the published 127.0.0.1:64298; otherwise (MAC_WIN) the network of elasticsearch
+        script = self.read("docker", "tpotinit", "dist", "bin", "es_retention.sh")
+        self.assertIn('"http://127.0.0.1:64298" "http://elasticsearch:9200"', script)
+        for name in sorted(os.listdir(os.path.join(REPO_DIR, "compose"))):
+            if not name.endswith(".yml") or name == "tpot_services.yml":
+                continue
+            services = yaml.safe_load(self.read("compose", name))["services"]
+            if "elasticsearch" not in services:
+                continue
+            with self.subTest(edition=name):
+                tpotinit = services["tpotinit"]
+                if tpotinit.get("network_mode") != "host":
+                    self.assertTrue(set(tpotinit.get("networks") or []) & set(services["elasticsearch"]["networks"]))
+
     def test_logstash_no_longer_writes_the_policy(self):
         text = self.read("docker", "elk", "logstash", "dist", "entrypoint.sh")
         self.assertNotIn("_ilm/policy", text)

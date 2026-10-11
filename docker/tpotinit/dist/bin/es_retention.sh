@@ -9,7 +9,10 @@
 # both pass docker/tpotinit/tests/ilm_cases.yml (docker/_tests/run.sh tpotinit_ilm).
 # Sourced, it only defines the functions.
 
-myILM_ES="${TPOT_ES_URL:-http://127.0.0.1:64298}"
+# Where Elasticsearch answers: TPOT_ES_URL, else the port it publishes on the host (tpotinit runs
+# with the host network) or its service name (MAC_WIN: tpotinit joins nginx_local), the first
+# that answers _cluster/health within myILM_WAIT seconds (fuILM_FIND_ES).
+myILM_ES=""
 myILM_WAIT="${TPOT_ES_RETENTION_WAIT:-600}"
 
 myILM_JQ='
@@ -57,12 +60,31 @@ function fuILM_DECIDE () {
   jq -c --arg v "$1" --argjson force "${2:-false}" "${myILM_JQ} decide(\$v; \$force)"
 }
 
-function fuILM_MAIN () {
-  local myI myCODE myBODY myDECISION myACTION myCURRENT
-  for (( myI = 0; myI < myILM_WAIT / 5; myI++ )); do
-    curl -s -f --max-time 10 -o /dev/null "${myILM_ES}/_cluster/health" && break
+# sets myILM_ES to the first candidate that answers, tries every 5 s for myILM_WAIT seconds
+function fuILM_FIND_ES () {
+  local myURL myEND=$(( SECONDS + myILM_WAIT ))
+  local myCANDIDATES=("http://127.0.0.1:64298" "http://elasticsearch:9200")
+  [[ -n "${TPOT_ES_URL:-}" ]] && myCANDIDATES=("${TPOT_ES_URL}")
+  while true; do
+    for myURL in "${myCANDIDATES[@]}"; do
+      if curl -s -f --max-time 5 -o /dev/null "${myURL}/_cluster/health";
+        then
+          myILM_ES="${myURL}"
+          return 0
+      fi
+    done
+    (( SECONDS + 5 <= myEND )) || return 1
     sleep 5
   done
+}
+
+function fuILM_MAIN () {
+  local myCODE myBODY myDECISION myACTION myCURRENT
+  if ! fuILM_FIND_ES;
+    then
+      echo "# Warning: Elasticsearch did not answer within ${myILM_WAIT} s, the ILM policy tpot is not checked."
+      return 0
+  fi
   myBODY="$(mktemp)"
   myCODE="$(curl -s --max-time 10 -o "${myBODY}" -w '%{http_code}' "${myILM_ES}/_ilm/policy/tpot")"
   case "${myCODE}" in
@@ -89,7 +111,7 @@ function fuILM_MAIN () {
       if jq -c '{policy: .policy}' <<<"${myDECISION}" \
          | curl -s -f --max-time 10 -o /dev/null -X PUT "${myILM_ES}/_ilm/policy/tpot" -H 'Content-Type: application/json' -d @-;
         then
-          echo "# ILM policy tpot: ${myACTION}d, events are kept for $(jq -r '.policy._meta.tpot_retention' <<<"${myDECISION}" | sed 's/^off$/ever/; s/^\([0-9]*\)$/\1 days/')."
+          echo "# ILM policy tpot: ${myACTION}d, events are kept $(jq -r '.policy._meta.tpot_retention' <<<"${myDECISION}" | sed 's/^off$/forever/; s/^\([0-9]*\)$/for \1 days/')."
         else
           echo "# Warning: the ILM policy tpot could not be written."
       fi ;;
@@ -97,7 +119,8 @@ function fuILM_MAIN () {
       echo "# ILM policy tpot: as set (${myCURRENT:-not derivable})." ;;
     foreign)
       echo "# Warning: the ILM policy tpot was changed outside of T-Pot (retention: ${myCURRENT:-not in days}), T-Pot leaves it as it is."
-      echo "#          TPOT_ES_RETENTION=${TPOT_ES_RETENTION} is not applied; 'tpot elastic retention' shows both and takes one over." ;;
+      echo "#          TPOT_ES_RETENTION=${TPOT_ES_RETENTION} is not applied; 'tpot elastic status' shows both,"
+      echo "#          'tpot elastic retention --adopt' keeps the policy, 'tpot elastic retention --force' applies .env to it." ;;
   esac
 }
 
