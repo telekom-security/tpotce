@@ -26,7 +26,8 @@
                     "terms": {
                       "type.keyword": [
                         "Suricata",
-                        "P0f"
+                        "P0f",
+                        "DdospotTarget"
                       ]
                     }
                   }
@@ -135,7 +136,8 @@
                     "terms": {
                       "type.keyword": [
                         "Suricata",
-                        "P0f"
+                        "P0f",
+                        "DdospotTarget"
                       ]
                     }
                   }
@@ -229,7 +231,8 @@
                     "terms": {
                       "type.keyword": [
                         "Suricata",
-                        "P0f"
+                        "P0f",
+                        "DdospotTarget"
                       ]
                     }
                   }
@@ -338,7 +341,8 @@
                     "terms": {
                       "type.keyword": [
                         "Suricata",
-                        "P0f"
+                        "P0f",
+                        "DdospotTarget"
                       ]
                     }
                   }
@@ -432,7 +436,8 @@
                     "terms": {
                       "type.keyword": [
                         "Suricata",
-                        "P0f"
+                        "P0f",
+                        "DdospotTarget"
                       ]
                     }
                   }
@@ -541,7 +546,8 @@
                     "terms": {
                       "type.keyword": [
                         "Suricata",
-                        "P0f"
+                        "P0f",
+                        "DdospotTarget"
                       ]
                     }
                   }
