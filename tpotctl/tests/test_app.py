@@ -115,9 +115,17 @@ if textual:
 
     class FakeEngine:
         seen = []
+        # the file of --accept-data-loss-file while the command runs: (mode, text); in seen as FILE
+        files = []
 
         def __init__(self, command, env=None, cwd=None):
-            FakeEngine.seen.append(list(command))
+            command = list(command)
+            if "--accept-data-loss-file" in command:
+                at = command.index("--accept-data-loss-file") + 1
+                with open(command[at], encoding="utf-8") as handle:
+                    FakeEngine.files.append((os.stat(command[at]).st_mode & 0o777, handle.read()))
+                command[at] = "FILE"
+            FakeEngine.seen.append(command)
 
         def run(self, line):
             line("@@tpot phase done Done\n")
@@ -273,9 +281,16 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(shown[1], "no")                                  # the safe answer has the focus
         self.assertEqual(seen, [])                                        # no starts nothing
         self.assertIn(("loss", []), calls)
+        FakeEngine.files.clear()
         shown, seen, calls = await self.update_with(loss, "yes", start=True, full=True)
         self.assertIn(("loss", ["--full"]), calls)                        # -y and -s are no part of the check
-        self.assertEqual(seen, [[update, "-y", "-s", "--full", "--accept-data-loss"]])
+        # only what the dialog showed is confirmed: the lines of the check in a file of this user
+        self.assertEqual(seen, [[update, "-y", "-s", "--full", "--accept-data-loss-file", "FILE"]])
+        self.assertNotIn("--accept-data-loss", seen[0])
+        self.assertEqual(FakeEngine.files, [(0o600, "@@tpot loss elastic Elasticsearch 8 -> 9 upgrades the data in "
+                                                    "/d/elk on the next start.\n"
+                                                    "@@tpot loss backups 2 older backups go to make room.\n")])
+        self.assertIn("--accept-data-loss-file", shown[0])
 
     async def test_update_without_findings_runs_as_before(self):
         shown, seen, calls = await self.update_with((True, []), "yes")
@@ -539,21 +554,31 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("The current Elasticsearch data is deleted and replaced, events since 2026-10-05 10:10:10 "
                       "+0200 are lost", body)
         self.assertNotIn("ILM policy", body)                              # elastic is not chosen
-        self.assertIn("--accept-data-loss", body)
+        self.assertIn("--accept-data-loss-file", body)
         self.assertEqual(seen, [])
 
-    async def test_restore_of_data_with_yes_passes_accept(self):
+    async def test_restore_of_data_with_yes_confirms_data_only(self):
         restore = os.path.join(cli.REPO_DIR, "restore.sh")
+        FakeEngine.files.clear()
         shown, seen = await self.restore_with(self.full_backups(), 0, ["data", "elastic"], answer="yes")
-        self.assertIn("ILM policy", shown[1])                             # the flag confirms that too
+        # the yes is for data/: a shorter ILM policy of the archive is not put back, the dialog says so
+        self.assertIn("not put back", shown[1])
+        self.assertNotIn("goes back too", shown[1])
         self.assertEqual(seen, [[restore, "-f", "/b/new_tpot_backup_full.tar", "-g", "data,elastic",
-                                 "--accept-data-loss"]])
+                                 "--accept-data-loss-file", "FILE"]])
+        self.assertNotIn("--accept-data-loss", seen[0])
+        self.assertEqual(len(FakeEngine.files), 1)
+        mode, text = FakeEngine.files[0]
+        self.assertEqual(mode, 0o600)
+        self.assertEqual([line.split()[2] for line in text.splitlines()], ["data"])   # never ilm
+        self.assertTrue(text.startswith("@@tpot loss data ") and text.endswith("\n"), text)
+        self.assertIn("not put back", shown[3])                           # the intro says the same
 
     async def test_restore_of_data_without_elasticsearch_data_does_not_name_it(self):
         shown, seen = await self.restore_with(self.full_backups(), 1, ["data"], answer="yes")
         self.assertNotIn("Elasticsearch", shown[1])
         self.assertIn("are replaced by those of the archive", shown[1])
-        self.assertEqual(seen[0][-1], "--accept-data-loss")
+        self.assertEqual(seen[0][-2:], ["--accept-data-loss-file", "FILE"])
 
     def test_the_date_of_a_backup(self):
         info = ops.BackupInfo("/b/x.tar", "20261001101010_tpot_backup.tar", 1, "regular", [], [])
