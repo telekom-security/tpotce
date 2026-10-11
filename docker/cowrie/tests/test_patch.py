@@ -181,6 +181,8 @@ class PatchTest(unittest.TestCase):
         self.assertIn("for x in paths if x", protocol)
         self.assertNotIn("self.cwd", protocol)
         self.assertIn("if spelling in self.commands and not skip_python_command(spelling):", protocol)
+        # the smoke test looks for upstream's txtcmds_path lookup: it stays, the spellings follow it
+        self.assertIn("operator_path = Path(txtcmds_path) / relpath", protocol)
 
     def lookup(self, txtcmds, commands, skip=""):
         """getCommand of the patched protocol.py on base_tree() (bin -> usr/bin) with these

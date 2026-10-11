@@ -99,6 +99,10 @@ def tpot_skip_python_commands() -> frozenset[str]:
 """,
         """        relpath = path.lstrip("/")
         txtcmds_path = CowrieConfig.get("honeypot", "txtcmds_path", fallback="")
+        if txtcmds_path:
+            operator_path = Path(txtcmds_path) / relpath
+            if operator_path.is_file():
+                return self.txtcmd(operator_path.read_bytes())
 
         # T-Pot: the spellings of path through the directory links of the tree
         # (/bin -> usr/bin): `df` finds /usr/bin/df on PATH, the txtcmd is bin/df.
@@ -121,7 +125,7 @@ def tpot_skip_python_commands() -> frozenset[str]:
                 spellings.append("/" + link[fs.A_NAME] + real[len(target):])
         spellings = list(dict.fromkeys(spellings))
         if txtcmds_path:
-            for spelling in spellings:
+            for spelling in spellings[1:]:
                 operator_path = Path(txtcmds_path) / spelling.lstrip("/")
                 if operator_path.is_file():
                     return self.txtcmd(operator_path.read_bytes())
