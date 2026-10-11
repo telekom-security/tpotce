@@ -23,6 +23,7 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 * **P0f** reads pcap files offline and prints JSON: `docker run --rm -v "$PWD:/pcap:ro" dtagdevsec/p0f:24.04.2 -r /pcap/capture.pcap`, a BPF filter can follow, own `-j` / `-o` replace the defaults. On success it prints the JSON lines only, warnings and errors go to stderr. The container runs as uid 2000, pcaps only you can read need `--user "$(id -u):$(id -g)"`.
 
 ## Updates
+* **Ciscoasa** has been updated to [2.0.0](https://github.com/t3chn0m4g3/ciscoasa_honeypot/releases/tag/v2.0.0), pinned to its release commit: a Go honeypot for WebVPN, AnyConnect, minimal ASDM and IKE/IKEv2 with NAT-T, persistent identity, JSON events and inert upload evidence. Its dashboard and credential clouds have been updated; see [Breaking Changes](#ciscoasa).
 * **Elastic Stack** has been updated to 9.5.4 (from 8.16.1) and is now built on the official Elastic images.
 * **Elasticsearch** no longer rejects events once a daily index reaches its field limit (now 3000), further new fields are not indexed then but stay in the document.
 * **Kibana** now runs with a 1 GB Node.js heap (`KIBANA_HEAP_MB` in `docker/elk/kibana/Dockerfile`) within a `mem_limit` of 2 GB.
@@ -72,6 +73,11 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 
 ### Image Builder
 - `docker/_builder/setup_builder.sh` is gone, use `docker/_builder/builder.sh --setup` / `--uninstall`.
+
+### Ciscoasa
+* IKE moves from 5000/udp to 500/udp and 4500/udp; HTTPS remains on 8443/tcp. Customizer rebuilds warn and drop former 5000/udp overrides.
+* Events are now JSONL in `data/ciscoasa/log/ciscoasa.json`. Identity and inert upload evidence persist in `data/ciscoasa/identity` and `data/ciscoasa/payloads`; retain the identity directory across updates.
+* EWS export requires the separate [ewsposter compatibility change](https://github.com/telekom-security/ewsposter/pull/23) and a later update of its pinned commit. The current pin cannot consume v2 payload events.
 
 ### Conpot
 - Conpot logs the event schema of Conpot 1.0: `protocol` replaces `data_type`, `session_id` replaces `id`, `event_time` and `session_time` replace `timestamp`, further protocol details are indexed as `conpot_data`. Import the Kibana objects of this release, the Conpot dashboard then shows the protocol from `protocol`; older events keep `data_type`.
