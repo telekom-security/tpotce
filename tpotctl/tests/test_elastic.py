@@ -122,11 +122,18 @@ class RuleTest(unittest.TestCase):
         self.assertEqual(out.strip(), "365")
 
 
-def generated_policies(seed=17, count=200):
-    """Policies of every shape the rule tells apart: min_age, marker, warm phase."""
+NOW_EPOCH = 1800000000
+
+
+def generated_policies(seed=17, count=400):
+    """(value, force, shorten, oldest, policy) of every shape the rule tells apart: min_age, marker,
+    warm phase, the actions of the delete phase, shorten, and the age of the oldest index."""
     rng = random.Random(seed)
     min_ages = ["30d", "90d", "365d", "1d", "3650d", "720h", "2160h", "36h", "0h", "90m", "", "0d", "3651d",
                 "none", "bare"]
+    actions = [{"delete": {}}, {"delete": {}}, {"delete": {"delete_searchable_snapshot": True}}, {},
+               {"wait_for_snapshot": {"policy": "daily"}},
+               {"wait_for_snapshot": {"policy": "daily"}, "delete": {}}]
     metas = [None, {}, {"managed": True, "description": elastic.LEGACY_DESCRIPTION},
              {"managed": True, "description": "own"}, {"tpot_retention": "30"}, {"tpot_retention": 30},
              {"tpot_retention": "90"}, {"tpot_retention": 90}, {"tpot_retention": "365"},
@@ -139,39 +146,45 @@ def generated_policies(seed=17, count=200):
         if min_age == "bare":
             phases["delete"] = {}
         elif min_age != "none":
-            phases["delete"] = {"actions": {"delete": {}}}
+            phases["delete"] = {"actions": copy.deepcopy(rng.choice(actions))}
             if min_age:
                 phases["delete"]["min_age"] = min_age
         policy = {"phases": phases}
         meta = rng.choice(metas)
         if meta is not None:
             policy["_meta"] = copy.deepcopy(meta)
-        yield (rng.choice(["", "30", "90", "365", "off"]), rng.random() < 0.35,
-               None if rng.random() < 0.03 else policy)
+        oldest = rng.choice([None, None, NOW_EPOCH - 5 * 86400, NOW_EPOCH - 400 * 86400])
+        yield (rng.choice(["", "30", "90", "365", "off"]), rng.random() < 0.35, rng.random() < 0.3, oldest,
+               None if rng.random() < 0.15 else policy)
 
 
-# Task 2 aligns jq, then remove
-@unittest.expectedFailure
 @unittest.skipUnless(shutil.which("jq") and shutil.which("bash"), "needs jq and bash")
 class DifferentialTest(unittest.TestCase):
     """The jq rule of tpotinit and elastic.decide agree on generated policies, not only on the cases."""
 
     def test_jq_and_python_decide_alike(self):
         inputs = list(generated_policies())
-        lines = "".join(f"{value}\n{'true' if force else 'false'}\n{json.dumps(policy)}\n"
-                        for value, force, policy in inputs)
+        lines = "".join(f"{value}\n{'true' if force else 'false'}\n{'true' if shorten else 'false'}\n"
+                        f"{'' if oldest is None else oldest}\n{json.dumps(policy)}\n"
+                        for value, force, shorten, oldest, policy in inputs)
         script = ('source docker/tpotinit/dist/bin/es_retention.sh; '
-                  'while IFS= read -r v && IFS= read -r f && IFS= read -r p; do '
-                  'fuILM_DECIDE "$v" "$f" <<<"$p" || echo FAILED; done')
+                  'while IFS= read -r v && IFS= read -r f && IFS= read -r s && IFS= read -r o && IFS= read -r p; do '
+                  f'fuILM_DECIDE "$v" "$f" "$s" "$o" {NOW_EPOCH} <<<"$p" || echo FAILED; done')
         out = subprocess.run(["bash", "-c", script], cwd=REPO_DIR, input=lines, capture_output=True, text=True,
-                             timeout=60).stdout.splitlines()
+                             timeout=120).stdout.splitlines()
         self.assertEqual(len(out), len(inputs))
-        for (value, force, policy), line in zip(inputs, out):
-            with self.subTest(value=value, force=force, policy=policy):
+        seen = set()
+        for (value, force, shorten, oldest, policy), line in zip(inputs, out):
+            with self.subTest(value=value, force=force, shorten=shorten, oldest=oldest, policy=policy):
                 got = json.loads(line)
-                want = elastic.decide(value, copy.deepcopy(policy), force)
-                self.assertEqual((got["action"], got["current"], got["managed"], got["policy"]),
-                                 (want.action, want.current, want.managed, want.policy))
+                want = elastic.decide(value, copy.deepcopy(policy), force, shorten, oldest, float(NOW_EPOCH))
+                seen.add(want.action)
+                self.assertEqual((got["action"], got["current"], got["managed"], got["held"], got["policy"]),
+                                 (want.action, want.current, want.managed, want.held, want.policy))
+                delete = ((got["policy"] or {}).get("phases") or {}).get("delete")
+                if delete is not None:
+                    self.assertIn("delete", delete["actions"])
+        self.assertEqual(seen, {"create", "update", "keep", "foreign", "pending"})
 
 
 class WiringTest(unittest.TestCase):
@@ -191,7 +204,9 @@ class WiringTest(unittest.TestCase):
     def test_tpotinit_reaches_elasticsearch_in_every_edition(self):
         # host network: the published 127.0.0.1:64298; otherwise (MAC_WIN) the network of elasticsearch
         script = self.read("docker", "tpotinit", "dist", "bin", "es_retention.sh")
-        self.assertIn('"http://127.0.0.1:64298" "http://elasticsearch:9200"', script)
+        self.assertIn('echo "http://127.0.0.1:64298"', script)
+        self.assertIn('echo "http://elasticsearch:9200"', script)
+        self.assertIn("network_mode", script)
         for name in sorted(os.listdir(os.path.join(REPO_DIR, "compose"))):
             if not name.endswith(".yml") or name == "tpot_services.yml":
                 continue
