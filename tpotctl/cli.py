@@ -297,15 +297,6 @@ def _indices(count: int) -> str:
     return f"{count} index" if count == 1 else f"{count} indices"
 
 
-def retention_waiting(state) -> bool:
-    """A shorter TPOT_ES_RETENTION waits in .env: T-Pot's next start deletes what the policy keeps now
-    (a policy T-Pot manages, or none: tpotinit creates it; a foreign one stays as it is)."""
-    from tpotctl import elastic
-    if state.state == "managed":
-        return elastic.shortens(state.current, state.value)
-    return state.state == "missing" and elastic.shortens("off", state.value)
-
-
 def _retention_not_applied(new: str, old: str, err, console) -> int:
     """.env holds the new value but the ILM policy tpot was not written: say so, and how to undo it."""
     say.warn(f"TPOT_ES_RETENTION={new} is set in .env, but the ILM policy tpot was not changed ({err}). "

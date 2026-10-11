@@ -577,6 +577,7 @@ class SettingsPane(Vertical):
 
     # in the footer while the focus is on the page; the Save button does the work
     BINDINGS = [Binding("ctrl+s", "save", "Save", show=True)]
+    saving = False              # a save asks Elasticsearch first: Save stays disabled meanwhile
 
     def compose(self) -> ComposeResult:
         with Horizontal(id=f"{self.PREFIX}-head", classes="settings-head"):
@@ -715,9 +716,10 @@ class SettingsPane(Vertical):
             self.app.notify("Nothing to save, no value was changed.", title="Settings", timeout=4)
             return
         blocking = self.current.blocking(self.current.problems(self.draft, offered=True), changes)
-        # the fallback is not reachable today: check() just set the button from the same changes and
-        # blockers; it stays for a rule that disables Save without a blocker (i.e. a save under way)
-        why = "; ".join(f"{p.key}: {p.text}" for p in blocking[:3]) or "the page is still loading, try again"
+        # check() just set the button from the same changes and blockers: without a blocker, Save is
+        # disabled only while a save asks Elasticsearch (saving)
+        why = "; ".join(f"{p.key}: {p.text}" for p in blocking[:3]) or (
+            "a save is under way" if self.saving else "the page is still loading, try again")
         self.app.notify(f"Not saved: {why}", title="Settings", severity="error", timeout=8)
 
     def stale(self) -> bool:
@@ -768,7 +770,7 @@ class SettingsPane(Vertical):
                              style=f"bold {theme.color('glass')} on {theme.color('error')}")
             tab.label = label
         blocking = self.current.blocking(problems, changes)
-        self.query_one(f"#{self.PREFIX}-save", Button).disabled = not changes or bool(blocking)
+        self.query_one(f"#{self.PREFIX}-save", Button).disabled = not changes or bool(blocking) or self.saving
         self.query_one(f"#{self.PREFIX}-revert", Button).disabled = not changes
         status = Text()
         if changes:
@@ -891,60 +893,89 @@ class SettingsPane(Vertical):
                 self.declined |= set(self.current.fixes())
             await self.reload()
         elif event.button.id == f"{self.PREFIX}-save":
+            if self.saving:             # a press that came in before Save was disabled
+                return
             saved = self.changes()
             if "TPOT_ES_RETENTION" in saved and self.current.values.get("TPOT_TYPE", "HIVE") != "SENSOR":
-                # a retention that deletes events right away: which ones, before anything is written (as
-                # tpot elastic: every doomed index asks, a policy kept longer than .env says counts too).
-                # Off a T-Pot host as well (Docker Desktop publishes Elasticsearch on 127.0.0.1 too), an
-                # Elasticsearch that does not answer asks with its warning.
-                import asyncio
-                from tpotctl import cli as tcli, elastic
-                new, old = saved["TPOT_ES_RETENTION"], self.current.values.get("TPOT_ES_RETENTION", "")
-                chosen = await asyncio.to_thread(self.app.backend.retention_plan, new, False)
-                if chosen.doomed or (not chosen.reachable and elastic.shortens(old, new)):
-                    body = doomed_text(chosen.doomed) if chosen.doomed else Text(
-                        "Elasticsearch is not reachable, what this deletes cannot be shown. T-Pot applies it on "
-                        "its next start.", style=f"bold {theme.color('wax')}")
-                    self.app.push_screen(ConfirmDialog(f"Keep the Elasticsearch events {tcli._retention_shown(new)}?",
-                                                       body, yes="Save", no="Back"),
-                                         lambda yes: self.run_worker(self.save_confirmed(saved, chosen))
-                                         if yes else None)
-                    return
-                await self.save_confirmed(saved, chosen)
+                # Elasticsearch may take seconds: in a worker, Save disabled meanwhile
+                self.saving = True
+                self.query_one(f"#{self.PREFIX}-save", Button).disabled = True
+                self.run_worker(self.save_retention(saved), group=f"{self.PREFIX}-save")
                 return
             await self.save_confirmed(saved)
 
+    async def save_retention(self, saved: Dict[str, str]) -> None:
+        """A changed TPOT_ES_RETENTION: a shorter retention asks first, before anything is written, whether
+        indices go right away or not (as tpot elastic; a policy kept longer than .env says counts too). Off
+        a T-Pot host as well (Docker Desktop publishes Elasticsearch on 127.0.0.1 too). An Elasticsearch that
+        does not answer: only .env is written, a shorter value waits, T-Pot never shortens on its own."""
+        import asyncio
+        from tpotctl import cli as tcli
+        new = saved["TPOT_ES_RETENTION"]
+        try:
+            chosen = await asyncio.to_thread(self.app.backend.retention_plan, new, False)
+            if chosen.reachable and chosen.shortening:
+                self.app.push_screen(ConfirmDialog(f"Keep the Elasticsearch events {tcli._retention_shown(new)}?",
+                                                   shortening_text(chosen.doomed, new),
+                                                   yes="Delete and save", no="Back"),
+                                     lambda yes: self.run_worker(self.save_confirmed(saved, chosen)) if yes else None)
+                return
+            await self.save_confirmed(saved, chosen)
+        finally:
+            self.saving = False
+            from textual.css.query import NoMatches
+            try:
+                self.check()
+            except NoMatches:       # the T-Pot Manager ends meanwhile, its widgets are going
+                if self.is_attached and not self.app._closing and not self._closing:
+                    raise
+
     async def save_confirmed(self, saved: Dict[str, str], chosen=None) -> None:
         """Write the changes; chosen: the plan of a changed TPOT_ES_RETENTION, applied to the ILM policy
-        tpot right away where it can be (T-Pot does it on its next start anyway)."""
+        tpot right away where it can be (a shorter one only after the user's yes)."""
         import asyncio
         from tpotctl import cli as tcli, elastic
         from tpotctl.settings import SettingsError
+        old = self.current.values.get("TPOT_ES_RETENTION", "")
         try:
             self.current.change(saved, unlocked=self.unlocked)
         except SettingsError as err:
             self.app.notify(str(err), title="Not saved", severity="error", timeout=10)
             return
-        applied = False
+        host = self.app.backend.linux_host()
+        # what applies a waiting value: the Elastic page on a T-Pot host, Kibana elsewhere
+        later = ("Once Elasticsearch runs, Apply .env to the policy on the Elastic page applies it (it asks first)."
+                 if host else f"Once Elasticsearch runs, change the ILM policy tpot in {KIBANA_ILM}.")
+        applied = waiting = False
         if chosen is not None and chosen.reachable and chosen.decision.action in ("create", "update", "keep"):
             try:
                 await asyncio.to_thread(self.app.backend.apply_retention, chosen)
                 applied = True
             except elastic.ElasticError as err:
+                then = (f"T-Pot does not shorten it on its own, the value waits. {later}" if chosen.shortening
+                        else "T-Pot applies it on its next start.")
                 self.app.notify(f"TPOT_ES_RETENTION is saved, but the ILM policy tpot was not changed ({err}). "
-                                "T-Pot applies it on its next start.", title="Not applied", severity="warning",
-                                timeout=12)
+                                f"{then}", title="Not applied", severity="warning", timeout=12)
         elif chosen is not None and chosen.decision.action == "foreign":
-            self.app.notify("The ILM policy tpot was changed in Kibana, T-Pot leaves it alone. On the Elastic "
-                            "page, Take over from Kibana keeps it, Apply .env to the policy applies .env to it.",
+            where = ("On the Elastic page, Take over from Kibana keeps it, Apply .env to the policy applies .env "
+                     "to it." if host else f"Its retention is changed in {KIBANA_ILM}.")
+            self.app.notify(f"The ILM policy tpot was changed in Kibana, T-Pot leaves it alone. {where}",
                             title="Not applied", severity="warning", timeout=12)
+        elif chosen is not None and not chosen.reachable:
+            new = saved["TPOT_ES_RETENTION"]
+            waiting = chosen.shortening or elastic.shortens(old, new)
+            self.app.notify(retention_waits(new, later) if waiting else retention_unknown(new),
+                            title="Not applied" if waiting else "Settings", severity="warning", timeout=12)
         await self.reload()
         await self.app.settings_saved(self, set(saved))
-        if applied and set(saved) == {"TPOT_ES_RETENTION"}:
+        only_retention = set(saved) == {"TPOT_ES_RETENTION"}
+        if applied and only_retention:
             # nothing else changed and the policy has it already: no restart needed
             self.app.notify(f"Saved, Elasticsearch keeps the events "
                             f"{tcli._retention_shown(saved['TPOT_ES_RETENTION'])}.", title="Settings")
-        elif self.app.backend.linux_host():
+        elif waiting and only_retention:
+            return                  # a restart would not apply it either, the notice above says what does
+        elif host:
             self.app.push_screen(ConfirmDialog("Saved. Restart T-Pot now, so that it uses the new settings?",
                                                yes="Restart T-Pot", no="Later"),
                                  lambda yes: self.app.runner(ops.service_command("restart")) if yes else None)
@@ -1433,6 +1464,10 @@ class ChecksPane(Vertical):
 class ElasticPane(Vertical):
     """How long Elasticsearch keeps the events: TPOT_ES_RETENTION and the ILM policy tpot."""
 
+    status = None           # the elastic.Status the page shows, None before the first read or after an error
+    busy = False            # a Set, Apply or Take over is under way: its buttons are disabled
+    reading = False         # a read of the status is under way: a load meanwhile starts none
+
     def compose(self) -> ComposeResult:
         yield Static("", id="elastic-info", classes="info")
         yield Static("", id="elastic-status")
@@ -1445,58 +1480,91 @@ class ElasticPane(Vertical):
             yield Button("Apply .env to the policy", id="elastic-apply", disabled=True)
 
     def on_mount(self) -> None:
-        self.status = None
         self.load()
 
     def load(self) -> None:
-        """REPAINT and on_mount: the status anew, in a worker (Elasticsearch may take seconds)."""
+        """REPAINT, on_mount and page_shown: the status anew, in a worker (Elasticsearch may take seconds);
+        one read at a time, a load while one runs starts none."""
         text = Text()
         text.append("Retention", style=f"bold {theme.color('glass')}")
         text.append("  how many days Elasticsearch keeps the events (TPOT_ES_RETENTION, the ILM policy tpot), or "
-                    "off to keep them all. A shorter time lists the indices it deletes before it applies it. A "
-                    "policy changed in Kibana stays as it is until you keep it (Take over from Kibana) or apply "
-                    ".env to it (Apply .env to the policy).",
+                    "off to keep them all. A shorter time always asks first and lists the indices it deletes. T-Pot "
+                    "never shortens the policy on its own. A policy changed in Kibana stays as it is until you keep "
+                    "it (Take over from Kibana) or apply .env to it (Apply .env to the policy).",
                     style=theme.color("mist"))
-        self.query_one("#elastic-info", Static).update(text)
-        self.run_worker(self.show(), exclusive=True, group="elastic")
+        from textual.css.query import NoMatches
+        try:
+            self.query_one("#elastic-info", Static).update(text)
+        except NoMatches:           # a save's worker while the T-Pot Manager ends: its widgets are going
+            if self.is_attached and not self.app._closing and not self._closing:
+                raise
+            return
+        if self.reading:
+            return
+        self.reading = True
+        self.run_worker(self.read(), group="elastic")
+
+    async def read(self) -> None:
+        try:
+            await self.show()
+        finally:
+            self.reading = False
 
     async def show(self) -> None:
         import asyncio
-        from tpotctl.cli import _retention_shown as shown, retention_waiting
+        from tpotctl.cli import _retention_shown as shown
         from tpotctl.settings import SettingsError
         try:
             state = await asyncio.to_thread(self.app.backend.retention_status)
         except (SettingsError, OSError) as err:     # .env cannot be read
             self.status = None
             self.query_one("#elastic-status", Static).update(Text(str(err), style=theme.color("error")))
-            self.query_one("#elastic-adopt", Button).disabled = True
-            self.query_one("#elastic-apply", Button).disabled = True
+            self.buttons()
             return
         previous, self.status = self.status, state
         text = Text()
         text.append("TPOT_ES_RETENTION  ", style=theme.color("mist"))
         text.append(f"{shown(state.value)}\n", style=f"bold {theme.color('glass')}")
         text.append("ILM policy tpot    ", style=theme.color("mist"))
+        note = ""
         if state.state == "unreachable":
             text.append(state.problem, style=theme.color("wax"))
         elif state.state == "missing":
-            text.append("missing, T-Pot creates it on its next start", style=theme.color("wax"))
+            if state.value in ("", "off"):
+                text.append("missing, T-Pot creates it on its next start", style=theme.color("wax"))
+            else:
+                text.append("missing", style=theme.color("wax"))
+                note = (f"T-Pot creates the policy on its next start: for {state.value} days if no older events "
+                        "exist, otherwise forever (nothing is deleted) and the value waits.")
+        elif state.state == "foreign" and state.adopts:
+            text.append(f"{shown(state.current)} · changed in Kibana, T-Pot takes it over on its next start "
+                        "(same duration)", style=theme.color("wax"))
         elif state.state == "foreign":
             text.append(f"{shown(state.current) if state.current else 'not in days'} · changed in Kibana, "
                         "T-Pot leaves it alone", style=theme.color("wax"))
         else:
             text.append(f"{shown(state.current)} · set by T-Pot", style=theme.color("glass"))
-        if retention_waiting(state):
-            # a shorter value waits in .env (tpot env set, a restore): the next start deletes
-            keep = f", Set {state.current} keeps the policy as it is" if state.state == "managed" else ""
-            text.append(f"\nT-Pot deletes the events older than {state.value} days on its next start. Set "
-                        f"applies it now and shows first which ones{keep}.", style=f"bold {theme.color('wax')}")
+        if state.pending:
+            # a shorter value in .env (tpot env set, a restore, an unreachable Elasticsearch): T-Pot waits
+            note = (f"TPOT_ES_RETENTION={state.value} waits: T-Pot does not shorten the ILM policy tpot "
+                    f"({shown(state.current)}) on its own; Apply .env to the policy applies it (asks first), "
+                    f"Set {state.current} keeps the policy.")
+        if note:
+            text.append(f"\n{note}", style=f"bold {theme.color('wax')}")
         self.query_one("#elastic-status", Static).update(text)
-        self.query_one("#elastic-adopt", Button).disabled = not (state.state == "foreign" and state.current)
-        self.query_one("#elastic-apply", Button).disabled = state.state != "foreign" or not state.value
+        self.buttons()
         field = self.query_one("#elastic-value", Input)
         if not field.value or (previous is not None and field.value == previous.value):
             field.value = state.value           # not typed in: the value of .env as it is now
+
+    def buttons(self) -> None:
+        """Set, Take over and Apply as of the status read last; all three disabled while a change runs."""
+        state = self.status
+        self.query_one("#elastic-set", Button).disabled = self.busy
+        self.query_one("#elastic-adopt", Button).disabled = self.busy or not (
+            state is not None and state.state == "foreign" and state.current)
+        self.query_one("#elastic-apply", Button).disabled = self.busy or not (
+            state is not None and (state.state == "foreign" or state.pending) and state.value)
 
     def enter(self) -> None:
         self.query_one("#elastic-value", Input).focus()
@@ -1507,24 +1575,53 @@ class ElasticPane(Vertical):
             event.stop()
             self.query_one("#elastic-set", Button).press()
 
-    async def on_button_pressed(self, event: Button.Pressed) -> None:
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if self.busy:               # a press that came in before the buttons were disabled
+            return
         if event.button.id == "elastic-set":
             value = self.query_one("#elastic-value", Input).value.strip()
             if not value:           # never TPOT_ES_RETENTION= from an empty field
                 self.app.notify("Enter days (1-3650) or off.", title="Not set", severity="warning", timeout=8)
                 return
-            await self.change(value, force=False)
-        elif event.button.id == "elastic-apply" and self.status is not None:
-            await self.change(self.status.value, force=True)
+            self.start(self.change(value, force=False))
+        elif event.button.id == "elastic-apply" and self.status is not None and self.status.value:
+            self.start(self.change(self.status.value, force=True))
         elif event.button.id == "elastic-adopt" and self.status is not None and self.status.current:
             # the policy's own value as the page read it, T-Pot owns the policy from now on; write() plans
-            # it anew and asks if that deletes indices (Kibana may have changed it again meanwhile)
-            await self.write(self.status.current, None)
+            # it anew and asks if that shortens it (Kibana may have changed it again meanwhile)
+            self.start(self.write(self.status.current, None))
+
+    def start(self, job) -> None:
+        """One change at a time: the buttons stay disabled until job (change or write) is done."""
+        if self.busy:
+            job.close()
+            return
+        self.busy = True
+        self.buttons()
+        self.run_worker(self.run_job(job), group="elastic-change")
+
+    async def run_job(self, job) -> None:
+        try:
+            await job
+        finally:
+            self.busy = False
+            from textual.css.query import NoMatches
+            try:
+                self.buttons()
+            except NoMatches:       # the T-Pot Manager ends meanwhile, its widgets are going
+                if self.is_attached and not self.app._closing and not self._closing:
+                    raise
+
+    def ask(self, value: str, chosen) -> None:
+        """A shorter retention: what it deletes, before anything is written; #no has the focus."""
+        from tpotctl.cli import _retention_shown as shown
+        self.app.push_screen(ConfirmDialog(f"Keep the events {shown(value)}?", shortening_text(chosen.doomed, value),
+                                           yes="Delete and set", no="Back"),
+                             lambda yes: self.start(self.write(value, chosen)) if yes else None)
 
     async def change(self, value: str, force: bool) -> None:
         import asyncio
         from tpotctl import cli, elastic
-        shown = cli._retention_shown
         problem = cli.retention_value_problem(value)
         if problem:
             self.app.notify(f"TPOT_ES_RETENTION: {problem}", title="Not set", severity="error", timeout=8)
@@ -1532,44 +1629,37 @@ class ElasticPane(Vertical):
         chosen = await asyncio.to_thread(self.app.backend.retention_plan, value, force)
         old = self.status.value if self.status else ""
         if not chosen.reachable:
-            if elastic.shortens(old, value):
-                self.app.push_screen(ConfirmDialog(
-                    f"Set {shown(value)} without a preview?",
-                    Text("Elasticsearch is not reachable, so the indices a shorter retention deletes cannot be "
-                         "shown. T-Pot applies it on its next start.", style=theme.color("wax")),
-                    yes="Set it", no="Back"),
-                    lambda yes: self.run_worker(self.write(value, chosen)) if yes else None)
-            else:
-                await self.write(value, chosen)
+            # nothing can be shown or applied: only .env changes, a shorter value waits for a yes here;
+            # Apply (force) is a value that waits already
+            await self.write(value, chosen, waits=force or elastic.shortens(old, value))
             return
         if chosen.decision.action == "foreign":
             self.app.notify("The ILM policy tpot was changed in Kibana: Take over from Kibana keeps it, Apply .env "
                             "to the policy applies TPOT_ES_RETENTION of .env to it.", title="Not set",
                             severity="warning", timeout=8)
             return
-        if chosen.doomed:
-            self.app.push_screen(ConfirmDialog(f"Keep the events {shown(value)}?", doomed_text(chosen.doomed),
-                                               yes="Delete and set", no="Back"),
-                                 lambda yes: self.run_worker(self.write(value, chosen)) if yes else None)
+        if chosen.shortening:           # deletes events the policy keeps now: always asked, indices or not
+            self.ask(value, chosen)
             return
         await self.write(value, chosen)
 
-    async def write(self, value: str, chosen) -> None:
+    async def write(self, value: str, chosen, waits: Optional[bool] = None) -> None:
         """value into .env, then the plan into the policy where it can be. chosen None (Take over): the
-        plan is made here, forced, and what it deletes is asked first, before anything is written (the
-        policy may have changed in Kibana since the page read it)."""
+        plan is made here, forced, and a shorter retention is asked first, before anything is written
+        (the policy may have changed in Kibana since the page read it). waits: an unreachable
+        Elasticsearch leaves a shorter value waiting (None: shorter than .env)."""
         import asyncio
         from tpotctl import elastic
         from tpotctl.cli import _retention_shown as shown
         from tpotctl.settings import SettingsError
         if chosen is None:
             chosen = await asyncio.to_thread(self.app.backend.retention_plan, value, True)
-            if chosen.reachable and chosen.doomed:
-                self.app.push_screen(ConfirmDialog(f"Keep the events {shown(value)}?", doomed_text(chosen.doomed),
-                                                   yes="Delete and set", no="Back"),
-                                     lambda yes: self.run_worker(self.write(value, chosen)) if yes else None)
+            if chosen.reachable and chosen.shortening:
+                self.ask(value, chosen)
                 return
         old = self.status.value if self.status else ""
+        if waits is None:
+            waits = elastic.shortens(old, value)
         try:
             await asyncio.to_thread(self.app.backend.set_retention, value)
         except (SettingsError, OSError) as err:
@@ -1580,20 +1670,48 @@ class ElasticPane(Vertical):
             if chosen.reachable:
                 await asyncio.to_thread(self.app.backend.apply_retention, chosen)
                 self.app.notify(f"The ILM policy tpot keeps the events {shown(value)}.", title="Elastic")
+            elif waits or chosen.shortening:
+                self.app.notify(retention_waits(value, "Once Elasticsearch runs, Apply .env to the policy applies "
+                                                       "it here (it asks first)."),
+                                title="Not applied", severity="warning", timeout=12)
             else:
-                self.app.notify(f"TPOT_ES_RETENTION={value} is set, T-Pot applies it on its next start.",
-                                title="Elastic", severity="warning", timeout=8)
+                self.app.notify(retention_unknown(value), title="Elastic", severity="warning", timeout=12)
         except elastic.ElasticError as err:
             undo = f" To undo it, set {old} again." if old and old != value else ""
+            later = ("T-Pot does not shorten it on its own: Apply .env to the policy applies it (it asks first)."
+                     if chosen.shortening else "T-Pot applies it on its next start.")
             self.app.notify(f"TPOT_ES_RETENTION={value} is set in .env, but the ILM policy tpot was not changed "
-                            f"({err}). T-Pot applies it on its next start.{undo}",
-                            title="Not applied", severity="warning", timeout=12)
+                            f"({err}). {later}{undo}", title="Not applied", severity="warning", timeout=12)
         self.query_one("#elastic-value", Input).value = ""
         await self.show()
 
 
 # indices listed in the question before a shorter retention, the rest as a count
 DOOMED_SHOWN = 12
+# where the ILM policy tpot is changed where the T-Pot Manager has no Elastic page (Docker Desktop)
+KIBANA_ILM = "Kibana, Stack Management › Index Lifecycle Policies"
+
+
+def retention_waits(value: str, later: str) -> str:
+    """A shorter TPOT_ES_RETENTION written while Elasticsearch does not answer: it waits for a yes."""
+    return (f"TPOT_ES_RETENTION={value} is set in .env, but Elasticsearch is not reachable: T-Pot does not shorten "
+            f"the ILM policy tpot on its own, the value waits. {later}")
+
+
+def retention_unknown(value: str) -> str:
+    """A TPOT_ES_RETENTION that is not shorter than .env, written while Elasticsearch does not answer (as
+    tpot elastic says it): the policy is unknown, it may still keep the events longer."""
+    return (f"TPOT_ES_RETENTION={value} is set. T-Pot applies it on its next start if the ILM policy tpot keeps "
+            "the events less long; a shorter value waits for 'tpot elastic retention --force' (it asks first).")
+
+
+def shortening_text(doomed, value: str) -> Text:
+    """The body of the question before a shorter retention: the indices it deletes right away (or none),
+    then the rule from now on."""
+    text = doomed_text(doomed) if doomed else Text("No index is deleted right away.", style=theme.color("mist"))
+    text.append(f"\n\nFrom now on, events older than {value} days are deleted. This cannot be undone.",
+                style=f"bold {theme.color('wax')}")
+    return text
 
 
 def doomed_text(doomed, closing: str = "") -> Text:
@@ -2022,7 +2140,7 @@ class TpotApp(App):
 
     def page_shown(self, key: str) -> None:
         """A page comes into view: the pages that show .env read what changed meanwhile; the Elastic
-        page reads its status anew (its worker is exclusive, an earlier read is cancelled)."""
+        page reads its status anew (unless a read is under way: one at a time, ElasticPane.load)."""
         if key in CONFIG_PAGES:
             self.config_maybe_changed()
         if key == "elastic":
