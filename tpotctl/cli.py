@@ -31,14 +31,16 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("images", help="docker images (was: dim)")
     for action in ("start", "stop", "restart"):
         sub.add_parser(action, help=f"{action} T-Pot (sudo systemctl {action} tpot.service)")
-    sub.add_parser("update", help="update T-Pot, runs update.sh with your options")
+    sub.add_parser("update", help="update T-Pot, runs update.sh with your options (it asks before a loss of "
+                                  "data, without a terminal --accept-data-loss confirms one)")
     sub.add_parser("restore", help="restore a backup, runs restore.sh with your options")
     sub.add_parser("customize", help="choose edition, services and ports, runs compose/customizer.py")
     install = sub.add_parser("install", help="install T-Pot on this host with the assistant (install.sh -s does it "
                                              "without questions)")
     install.add_argument("--classic", action="store_true", help="the questions of install.sh in the terminal")
     sub.add_parser("uninstall", help="remove T-Pot from this host, with a backup first if you like "
-                                     "(uninstall.sh -y does it without questions)")
+                                     "(uninstall.sh -y does it without questions, a loss of data of the backup "
+                                     "needs a yes or --accept-data-loss)")
     env = sub.add_parser("env", help="list, check and change the settings in .env (default: list)")
     actions = env.add_subparsers(dest="env_command", metavar="ACTION")
     listing = actions.add_parser("list", help="the settings of this T-Pot, secrets masked")

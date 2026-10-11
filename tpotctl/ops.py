@@ -401,6 +401,32 @@ def script_command(name: str, args: List[str], repo_dir: str = REPO_DIR) -> List
     return [os.path.join(repo_dir, name)] + list(args)
 
 
+# update.sh --check-data-loss: one line per loss of data, exit 0 none, 3 some, anything else unknown
+LOSS_MARK = "@@tpot loss "
+
+
+def check_data_loss(args: List[str], timeout: int = 180, run: Callable = subprocess.run,
+                    repo_dir: str = REPO_DIR) -> Tuple[bool, List[Tuple[str, str]]]:
+    """What an update (args as for update.sh: --full, --backup-only, -b, -r) would lose for good, read
+    with update.sh --check-data-loss, which changes nothing and asks nothing. (True, [(key, text), ...])
+    when it could tell, (False, []) when it could not (another exit code, a timeout, no script)."""
+    try:
+        proc = run(script_command("update.sh", ["--check-data-loss"] + list(args), repo_dir), cwd=repo_dir,
+                   stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                   universal_newlines=True, timeout=timeout)
+    except (OSError, subprocess.SubprocessError):
+        return False, []
+    if proc.returncode not in (0, 3):
+        return False, []
+    items = []
+    for line in (proc.stdout or "").splitlines():
+        if line.startswith(LOSS_MARK):
+            key, _, text = line[len(LOSS_MARK):].strip().partition(" ")
+            if key:
+                items.append((key, text.strip()))
+    return True, items
+
+
 def backups(home: Optional[str] = None) -> List[str]:
     """Archives update.sh wrote, newest first."""
     folder = os.path.join(home or os.path.expanduser("~"), "tpot_backups")

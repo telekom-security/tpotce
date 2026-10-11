@@ -146,6 +146,9 @@ class Backend:
         from tpotctl import settings as tsettings
         tsettings.load().change({"TPOT_ES_RETENTION": value})
 
+    def check_data_loss(self, args: List[str]):
+        return ops.check_data_loss(args)
+
 
 class Runner:
     """Run a command in the normal terminal, the app is suspended meanwhile."""
@@ -1705,6 +1708,18 @@ def retention_unknown(value: str) -> str:
             "the events less long; a shorter value waits for 'tpot elastic retention --force' (it asks first).")
 
 
+def data_loss_text(items) -> Text:
+    """The body of the question before an update that loses data: one line per finding of
+    update.sh --check-data-loss, then what yes means."""
+    text = Text()
+    for _key, line in items:
+        text.append(f"{glyphs.g('fail')} ", style=theme.color("error"))
+        text.append(f"{line}\n", style=theme.color("mist"))
+    text.append("\nThe backup of the update cannot bring this back. Yes runs update.sh with --accept-data-loss.",
+                style=f"bold {theme.color('wax')}")
+    return text
+
+
 def shortening_text(doomed, value: str) -> Text:
     """The body of the question before a shorter retention: the indices it deletes right away (or none),
     then the rule from now on."""
@@ -1893,6 +1908,7 @@ class TpotApp(App):
         self.panes = list(PANES)
         self.locked = {key: why for key, *_rest in PANES for why in [self.why_locked(key)] if why}
         self.quit_dialog = None         # "Quit the T-Pot Manager?" while it is open
+        self.update_checking = False    # update.sh --check-data-loss runs before an update
         self.header_stamp = None        # the configuration the header was read from
         self.read_error_stamp = None    # the configuration a refresh could not read, told once
 
@@ -2274,12 +2290,51 @@ class TpotApp(App):
             self.service("restart")
 
     def run_update(self, args: List[str]) -> None:
+        """update.sh, after its check for a loss of data: the task screen has no terminal for update.sh to
+        ask on, so the question is asked here first. One check at a time, the Update buttons wait for it."""
+        if self.update_checking:
+            return
+        self.update_checking = True
+        self.update_buttons()
+        self.run_worker(self.checked_update(args), group="update-check")
+
+    def update_buttons(self) -> None:
+        for button in self.query("#run-update, #run-update-start"):
+            button.disabled = self.update_checking
+
+    async def checked_update(self, args: List[str]) -> None:
+        import asyncio
+        # the check reads what the run would do: the backup of --full, not -y or -s
+        check = [arg for arg in args if arg in ("--full", "-F")]
+        try:
+            ok, items = await asyncio.to_thread(self.backend.check_data_loss, check)
+        except Exception:       # noqa: BLE001 - a broken check is told as one, the app goes on
+            ok, items = False, []
+        finally:
+            self.update_checking = False
+            self.update_buttons()
+        if ok and not items:
+            self.start_update(args)
+            return
+        if ok:
+            dialog = ConfirmDialog("Accept this loss of data?", data_loss_text(items), yes="Update and lose it",
+                                   no="Back")
+            then = list(args) + ["--accept-data-loss"]
+        else:
+            dialog = ConfirmDialog("Update without the check?",
+                                   Text("The T-Pot Manager could not check for a loss of data; update.sh refuses "
+                                        "any then.", style=theme.color("mist")), yes="Update", no="Back")
+            then = list(args)
+        self.push_screen(dialog, lambda yes: self.start_update(then) if yes else None)
+
+    def start_update(self, args: List[str]) -> None:
         """update.sh in the task screen; the checkout below this app changes, so the T-Pot Manager starts anew."""
         from tpotctl.screens.task import Task
         intro = Text("update.sh stops T-Pot, writes a backup to ~/tpot_backups, pulls the release of your "
                      "branch and puts your edition and settings back.", style=theme.color("glass"))
         if "-s" in args:
             intro.append(" T-Pot starts again afterwards.", style=theme.color("glass"))
+        intro.append("\nupdate.sh asks before it deletes anything it cannot restore.", style=theme.color("glass"))
         self.run_task(Task("Update T-Pot", ops.script_command("update.sh", args), become="-B", intro=intro,
                            done="T-Pot is updated. Restart the T-Pot Manager to use its new version.",
                            restart_tpot=True))

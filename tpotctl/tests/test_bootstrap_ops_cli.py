@@ -381,6 +381,36 @@ class OpsTest(unittest.TestCase):
         with self.assertRaises(ops.OpsError):
             ops.script_command("install.sh", [])
 
+    def test_check_data_loss(self):
+        seen = []
+
+        def run(code, out="", error=None):
+            def call(command, **kwargs):
+                seen.append((command, kwargs))
+                if error:
+                    raise error
+                return subprocess.CompletedProcess(command, code, out)
+            return call
+        lines = ("### Checking what the update brings ...\n"
+                 "@@tpot loss backups 2 older backups go to make room.\n"
+                 "@@tpot loss elastic Elasticsearch 8 -> 9 upgrades the data.\n"
+                 "@@tpot phase done Done\n")
+        self.assertEqual(ops.check_data_loss(["--full"], run=run(3, lines), repo_dir="/r"),
+                         (True, [("backups", "2 older backups go to make room."),
+                                 ("elastic", "Elasticsearch 8 -> 9 upgrades the data.")]))
+        command, kwargs = seen[0]
+        self.assertEqual(command, ["/r/update.sh", "--check-data-loss", "--full"])
+        self.assertEqual(kwargs["cwd"], "/r")
+        self.assertIs(kwargs["stdin"], subprocess.DEVNULL)
+        self.assertEqual(kwargs["timeout"], 180)
+        self.assertEqual(ops.check_data_loss([], run=run(0, "### [OK] - No loss of data found.\n"), repo_dir="/r"),
+                         (True, []))
+        self.assertEqual(ops.check_data_loss([], run=run(1, lines), repo_dir="/r"), (False, []))
+        self.assertEqual(ops.check_data_loss([], run=run(5, lines), repo_dir="/r"), (False, []))
+        self.assertEqual(ops.check_data_loss([], run=run(0, error=subprocess.TimeoutExpired("x", 180)),
+                                             repo_dir="/r"), (False, []))
+        self.assertEqual(ops.check_data_loss([], run=run(0, error=OSError("gone")), repo_dir="/r"), (False, []))
+
     def test_backups_newest_first(self):
         with tempfile.TemporaryDirectory() as home:
             folder = os.path.join(home, "tpot_backups")

@@ -612,10 +612,14 @@ class UninstallShTest(Scripts):
               "#!/bin/sh\necho \"update.sh $*\" >> \"$HOME/calls\"\nexit \"${FAKE_BACKUP_RC:-0}\"\n", 0o755)
 
     def test_help(self):
-        self.assert_help("uninstall.sh", self.run_script(self.script, "-h"))
+        result = self.run_script(self.script, "-h")
+        self.assert_help("uninstall.sh", result)
+        self.assertIn("--accept-data-loss", result.stdout)
+        self.assert_help("uninstall.sh", self.run_script(self.script, "--help"))
 
     def test_usage_errors(self):
         for args, text in ((["-Z"], "Unknown option -Z."), (["-B"], "Option -B requires an argument."),
+                           (["--keep"], "Unknown option --keep."),
                            (["-B", os.path.join(self.home, "missing")], "Cannot read the sudo password")):
             with self.subTest(args=args):
                 self.assert_usage_error(self.run_script(self.script, *args), text, "uninstall.sh")
@@ -654,6 +658,21 @@ class UninstallShTest(Scripts):
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn("update.sh -y --backup-only --full", self.calls())
         self.assertIn("### [OK] - A full backup is in ~/tpot_backups", result.stdout)
+
+    def test_accept_data_loss_goes_to_the_backup(self):
+        result = self.run_merged(self.script, "-y", "-k", "--accept-data-loss")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("update.sh -y --backup-only --full --accept-data-loss", self.calls())
+
+    def test_a_loss_of_data_not_confirmed_keeps_tpot(self):
+        result = self.run_merged(self.script, "-y", "-k", FAKE_BACKUP_RC="5")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("update.sh -y --backup-only --full\n", self.calls())
+        summary = result.stdout[result.stdout.index("### T-Pot is not uninstalled"):]
+        self.assertIn("### [FAILED] - The backup would lose data that was not confirmed", summary)
+        self.assertIn("--accept-data-loss", summary)
+        self.assertNotIn("ansible-playbook", self.calls())
+        self.assertTrue(os.path.exists(self.tpotce))
 
     def test_a_failed_backup_ends_with_a_summary(self):
         result = self.run_merged(self.script, "-y", "-k", FAKE_BACKUP_RC="1")
