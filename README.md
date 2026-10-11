@@ -134,7 +134,7 @@ T-Pot's main components have been moved into the `tpotinit` Docker image allowin
 [dicompot](https://github.com/nsmfoo/dicompot),
 [dionaea](https://github.com/DinoTools/dionaea),
 [elasticpot](https://gitlab.com/bontchev/elasticpot),
-[endlessh](https://github.com/t3chn0m4g3/endlessh),
+[endlessh](https://github.com/telekom-security/endlessh),
 [galah](https://github.com/0x4D31/galah),
 [go-pot](https://github.com/ryanolee/go-pot),
 [glutton](https://github.com/mushorg/glutton),
@@ -1209,7 +1209,7 @@ The software that T-Pot is built on uses the following licenses.
 [honeyaml](https://github.com/mmta/honeyaml?tab=MIT-1-ov-file#readme),
 [maltrail](https://github.com/stamparm/maltrail/blob/master/LICENSE)
 <br>Unlicense:
-[endlessh](https://github.com/t3chn0m4g3/endlessh/blob/master/UNLICENSE)
+[endlessh](https://github.com/telekom-security/endlessh/blob/master/UNLICENSE)
 <br>Other:
 [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot#licencing-agreement-malwaretech-public-licence),
 [cowrie](https://github.com/cowrie/cowrie/blob/main/LICENSE.rst),
