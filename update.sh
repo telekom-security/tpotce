@@ -525,6 +525,26 @@ function fuBACKUP_SIZE () {
 	echo $((mySUM + 4194304))
 }
 
+# No room for the backup, even with the older ones gone: T-Pot was left running.
+function fuNO_ROOM () {
+	# `--full` was asked for, usually because the update brings a new Elastic Stack
+	# whose data upgrade cannot be undone - quietly taking the regular backup instead
+	# would leave no way back.
+	if [ -n "${myFULL}" ];
+	  then
+	    fuUI_ERROR "Not enough room for a full backup."
+	    fuUI_HINT "Free up space in ${myBACKUPDIR} or on the filesystem, or run without '--full'. T-Pot was left running."
+	    fuUI_HINT "Exiting."
+	    echo
+	    exit 1
+	fi
+	fuUI_ERROR "Not enough room for a backup and T-Pot needs the disk."
+	fuUI_HINT "Free up space in ${myBACKUPDIR} or on the filesystem, T-Pot was left running."
+	fuUI_HINT "Exiting."
+	echo
+	exit 1
+}
+
 # Does the archive still fit without closing the disk for the honeypots? Runs
 # before fuSTOP_TPOT on purpose, so that giving up leaves T-Pot running. Older
 # backups only make room once that is confirmed (fuLOSS_CONFIRM), and only when
@@ -573,22 +593,7 @@ function fuCHECK_BACKUP_SPACE () {
 	        echo
 	        return 0
 	    fi
-	    # `--full` was asked for, usually because the update brings a new Elastic Stack
-	    # whose data upgrade cannot be undone - quietly taking the regular backup instead
-	    # would leave no way back.
-	    if [ -n "${myFULL}" ];
-	      then
-	        fuUI_ERROR "Not enough room for a full backup."
-	        fuUI_HINT "Free up space in ${myBACKUPDIR} or on the filesystem, or run without '--full'. T-Pot was left running."
-	        fuUI_HINT "Exiting."
-	        echo
-	        exit 1
-	    fi
-	    fuUI_ERROR "Not enough room for a backup and T-Pot needs the disk."
-	    fuUI_HINT "Free up space in ${myBACKUPDIR} or on the filesystem, T-Pot was left running."
-	    fuUI_HINT "Exiting."
-	    echo
-	    exit 1
+	    fuNO_ROOM
 	fi
 	while read -r mySIZE myVICTIM;
 	  do
@@ -626,6 +631,14 @@ function fuCHECK_BACKUP_SPACE () {
 	    fi
 	  done <<< "${myPLAN}"
 	fuDID warn "Deleted ${myCOUNT} older backup(s) to make room: ${myLIST}."
+	# measured again: du and the filesystem may disagree, and nothing beyond what was
+	# confirmed goes, so a backup that still does not fit is not written
+	myFREE=$(df -B1 --output=avail "${myDIR}" 2>/dev/null | tail -1 | tr -d " ")
+	fuUI_HINT "Now $((myFREE / 1048576)) MB free."
+	if [ $((myFREE - myNEED)) -lt "${myRESERVE}" ];
+	  then
+	    fuNO_ROOM
+	fi
 	fuUI_OK "Enough room."
 	echo
 }
@@ -1146,7 +1159,13 @@ function fuELASTIC_REFUSED () {
 	trap - INT
 	echo
 	fuUI_HINT "Nothing was pulled and no image was removed."
-	if fuROLLBACK_CHECKOUT;
+	# a Ctrl+C now would leave the checkout half way back, and the next start would upgrade
+	# the data: the rollback finishes (restore.sh inherits the ignored INT)
+	local myRC=0
+	trap '' INT
+	fuROLLBACK_CHECKOUT || myRC=$?
+	trap - INT
+	if [ "${myRC}" -eq 0 ];
 	  then
 	    fuUI_HINT "Exiting."
 	    echo
@@ -1449,12 +1468,19 @@ function fuREMOVEOLDIMAGES () {
 	fi
 }
 
-# Can the image be pulled again? One built here has no RepoDigests. An answer that is no number
-# counts as built here: when in doubt it is kept.
+# Can the image be pulled again? Only if the registry still serves its digest: RepoDigests
+# alone do not tell, the containerd image store gives a local build one as well. No digest,
+# another digest, no timeout or buildx, no network: built here, so when in doubt it is kept
+# (or the run asks).
 function fuIMAGE_PULLABLE () {   # $1 = image
-	local myDIGESTS=""
-	myDIGESTS=$(docker image inspect --format '{{len .RepoDigests}}' "$1" 2>/dev/null)
-	[[ "${myDIGESTS}" =~ ^[1-9][0-9]*$ ]]
+	local myLOCAL="" myREMOTE=""
+	myLOCAL=$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$1" 2>/dev/null \
+	          | sed -n 's/^[^@]*@//p')
+	[ -n "${myLOCAL}" ] || return 1
+	command -v timeout > /dev/null 2>&1 || return 1
+	myREMOTE=$(timeout 20 docker buildx imagetools inspect --format '{{.Manifest.Digest}}' "$1" 2>/dev/null) || return 1
+	myREMOTE=$(printf '%s' "${myREMOTE}" | tr -d "[:space:]")
+	[ -n "${myREMOTE}" ] && printf '%s\n' "${myLOCAL}" | grep -qxF -- "${myREMOTE}"
 }
 
 # The loss of the images built here, for fuLOSS_CONFIRM and fuLOSS_ADD

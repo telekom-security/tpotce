@@ -485,9 +485,11 @@ class TaskScreenTest(Scripts):
             out.write("TPOT_REPO=ghcr.io/telekom-security\nTPOT_VERSION=24.04.2\n")
         self.stub("docker", '#!/bin/sh\necho "docker $*" >> "$HOME/calls"\ncase "$*" in\n'
                             '  *pull*) echo "Pulled cowrie" ;;\n'
-                            '  "image inspect"*) echo 1 ;;\n'                  # pulled: it has a RepoDigest
+                            '  *buildx*) echo "sha256:aaa" ;;\n'               # the registry has the same digest
+                            '  "image inspect"*) echo "ghcr.io/telekom-security/cowrie@sha256:aaa" ;;\n'
                             '  images*) echo "ghcr.io/telekom-security/cowrie:24.04.1" ;;\n'
                             '  rmi*) echo "Untagged: $2" ;;\nesac\n')
+        self.stub("timeout", '#!/bin/sh\nshift\nexec "$@"\n')                  # macOS has none
 
     def test_the_sourced_update_sh_runs_nothing(self):
         result = self.source_update('echo "sourced"')

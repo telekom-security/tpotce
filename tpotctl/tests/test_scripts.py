@@ -224,7 +224,7 @@ class UpdateShTest(Harness):
                                   r"\s*trap - INT\n", text), text[-900:])
         refused = re.search(r"function fuELASTIC_REFUSED \(\) \{\n\ttrap - INT\n", read("update.sh"))
         self.assertTrue(refused)
-        self.assertEqual(len(re.findall(r"trap .*INT", read("update.sh"))), 3)
+        self.assertEqual(len(re.findall(r"trap .*INT", read("update.sh"))), 5)
 
     def test_the_refusal_names_full(self):
         self.assertTrue("--full" in self.check_elastic())
@@ -817,9 +817,13 @@ class MigrateRetentionTest(unittest.TestCase):
 
 
 # A df of GNU coreutils (-B1 --output=size|avail|pcent): the sizes in the files df_size and df_avail
-# of HOME, the use in df_pcent. macOS has no -B1, the T-Pot host runs GNU
+# of HOME (plus what the archives of HOME/sizes that are gone took, unless HOME/df_frozen), the
+# use in df_pcent. macOS has no -B1, the T-Pot host runs GNU
 DF = ('#!/bin/sh\ncase "$*" in\n  *size*) echo "1B-blocks"; cat "$HOME/df_size" ;;\n'
-      '  *avail*) echo "Avail"; cat "$HOME/df_avail" ;;\n'
+      '  *avail*) echo "Avail"; a=$(cat "$HOME/df_avail")\n'
+      '    if [ -f "$HOME/sizes" ] && [ ! -e "$HOME/df_frozen" ]; then\n'
+      '      while read -r n k; do [ -e "$HOME/tpot_backups/$n" ] || a=$((a + k * 1024)); done < "$HOME/sizes"\n'
+      '    fi\n    echo "$a" ;;\n'
       '  *pcent*) echo "Use%"; cat "$HOME/df_pcent" 2>/dev/null || echo " 40%" ;;\nesac\n')
 # du -k <file>: the KiB of the file from HOME/sizes ("<name> <kib>" per line); du -scb (fuBACKUP_SIZE)
 # says what HOME/need holds
@@ -837,7 +841,7 @@ class DataLossTest(Harness):
         fuUI_INFO () { echo "INFO: $*"; }; fuUI_OK () { echo "OK: $*"; }; fuUI_WARN () { echo "WARN: $*"; }
         fuUI_HINT () { echo "HINT: $*"; }; fuUI_ERROR () { echo "ERROR: $*"; }
         fuUI_CONFIRM () { echo "ASKED: $*"; return 1; }
-        fuUI_SPIN () { shift 2; "$@"; }
+        fuUI_SPIN () { shift 2; "$@"; }; timeout () { shift; "$@"; }
         fuDID () { echo "DID: $1: $2"; }; fuMARK () { :; }
         myLOG=/dev/null myCONFIRMED=y myREPOS="ghcr.io/telekom-security" myBACKUP_RESERVE_PERCENT=10
         myBACKUPDIR="$HOME/tpot_backups" myLOSSES=0
@@ -898,7 +902,7 @@ class DataLossTest(Harness):
     def left(self):
         return sorted(os.listdir(self.backups))
 
-    SPACE = ("fuLOSS_ADD", "fuLOSS_CONFIRM", "fuDROP_OLDEST", "fuBACKUP_SIZE", "fuCHECK_BACKUP_SPACE")
+    SPACE = ("fuLOSS_ADD", "fuLOSS_CONFIRM", "fuDROP_OLDEST", "fuBACKUP_SIZE", "fuNO_ROOM", "fuCHECK_BACKUP_SPACE")
 
     def test_low_space_without_confirmation_deletes_nothing(self):
         names = self.archives([20000, 20000, 20000])
@@ -1062,7 +1066,10 @@ class DataLossTest(Harness):
                              ghcr.io/telekom-security/cowrie:24.04.2; do
                     grep -qxF "${myI}" "$HOME/removed" || echo "${myI}"
                   done ;;
-                "image inspect") for myA; do :; done; case "${myA}" in *cowrie*) echo 1 ;; *) echo 0 ;; esac ;;
+                "image inspect")
+                  for myA; do :; done
+                  case "${myA}" in *cowrie*) echo "ghcr.io/telekom-security/cowrie@sha256:aaa" ;; esac ;;
+                "buildx imagetools") echo "sha256:aaa" ;;
               esac
             }
             fuRMI () { echo "RMI: $*"; printf '%s\\n' "$@" >> "$HOME/removed"; }
@@ -1130,12 +1137,14 @@ class DataLossTest(Harness):
               for myA; do :; done
               case "$4" in
                 *Env*) printf 'ES_VER=8.19.0\\n' ;;
-                *) case "${myA}" in *mine*) echo 0 ;; *) echo 1 ;; esac ;;
+                *) case "${myA}" in *mine*) ;; *) echo "${myA%:*}@sha256:aaa" ;; esac ;;
               esac ;;
+            "buildx imagetools") echo "sha256:aaa" ;;
           esac
         }
     """)
-    CHECK_FUNCTIONS = ("fuLOSS_ADD", "fuLOSS_CONFIRM", "fuDROP_OLDEST", "fuBACKUP_SIZE", "fuCHECK_BACKUP_SPACE",
+    CHECK_FUNCTIONS = ("fuLOSS_ADD", "fuLOSS_CONFIRM", "fuDROP_OLDEST", "fuBACKUP_SIZE", "fuNO_ROOM",
+                       "fuCHECK_BACKUP_SPACE",
                        "fuDATA_PATH", "fuCOMPOSE_HAS", "fuES_IMAGE_VERSION", "fuIMAGE_PULLABLE",
                        "fuLOCAL_IMAGES_TEXT", "fuIMAGES", "fuLOSS_TARGET", "fuCHECK_DATA_LOSS")
 
@@ -1251,6 +1260,76 @@ class DataLossTest(Harness):
                       "--accept-data-loss", flat)
         self.assertIn("./update.sh --check-data-loss", flat)
         self.assertIn("exit 5", flat)
+
+    # --- review round 1 ----------------------------------------------------------------------------
+
+    def pullable(self, inspect, buildx):
+        """fuIMAGE_PULLABLE with the given RepoDigests lines and the answer of buildx imagetools
+        (None: buildx fails)."""
+        answer = "return 1" if buildx is None else f'echo "{buildx}"'
+        script = textwrap.dedent(f"""
+            docker () {{
+              case "$1 $2" in
+                "image inspect") printf '{inspect}' ;;
+                "buildx imagetools") {answer} ;;
+              esac
+            }}
+        """) + self.functions("fuIMAGE_PULLABLE") + 'fuIMAGE_PULLABLE repo/x:1 && echo pullable || echo here\n'
+        return self.bash(script).stdout.strip().splitlines()[-1]
+
+    def test_no_digest_is_built_here(self):
+        self.assertEqual(self.pullable("", "sha256:aaa"), "here")
+
+    def test_the_same_digest_as_the_registry_is_pullable(self):
+        self.assertEqual(self.pullable("repo/x@sha256:bbb\\nrepo/x@sha256:aaa\\n", "sha256:aaa"), "pullable")
+
+    def test_another_digest_than_the_registry_is_built_here(self):
+        # the containerd image store gives a local build a RepoDigest of its own
+        self.assertEqual(self.pullable("repo/x@sha256:bbb\\n", "sha256:aaa"), "here")
+
+    def test_buildx_failing_is_built_here(self):
+        self.assertEqual(self.pullable("repo/x@sha256:aaa\\n", None), "here")
+        self.assertEqual(self.pullable("repo/x@sha256:aaa\\n", ""), "here")
+
+    def test_without_timeout_it_is_built_here(self):
+        script = ('unset -f timeout\nPATH=/nonexistent\ndocker () { echo "repo/x@sha256:aaa"; }\n'
+                  + self.functions("fuIMAGE_PULLABLE") + 'fuIMAGE_PULLABLE repo/x:1 && echo pullable || echo here\n')
+        self.assertEqual(self.bash(script).stdout.strip().splitlines()[-1], "here")
+
+    def test_ctrl_c_during_the_rollback_lets_it_finish(self):
+        """A second Ctrl+C while restore.sh puts the checkout back must not leave it half way."""
+        import signal
+        import time
+        rolling = os.path.join(self.home, "rolling")
+        script = self.elastic(archive_has_data=False, stub_confirm=(
+            f'fuROLLBACK_CHECKOUT () {{ : > "{rolling}"; sleep 2; echo "ROLLBACK DONE"; return 0; }}\n'))
+        for attempt in range(3):
+            if os.path.exists(rolling):
+                os.remove(rolling)
+            proc = subprocess.Popen(["bash", "-c", self.HELPERS + script], cwd=REPO, stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT, universal_newlines=True, start_new_session=True,
+                                    stdin=subprocess.DEVNULL, env=self.environment())
+            deadline = time.time() + 30
+            while not os.path.exists(rolling) and proc.poll() is None and time.time() < deadline:
+                time.sleep(0.01)
+            self.assertTrue(os.path.exists(rolling), f"run {attempt}: the rollback did not start")
+            time.sleep(0.2)
+            os.killpg(proc.pid, signal.SIGINT)
+            out, _err = proc.communicate(timeout=20)
+            self.assertEqual(proc.returncode, 5, f"run {attempt}: {out}")
+            self.assertIn("ROLLBACK DONE", out)
+            self.assertIn("the checkout and the configuration are back", out)
+
+    def test_still_short_after_deleting_stops_before_the_backup(self):
+        names = self.archives([20000, 20000, 20000])
+        self.write("df_frozen", "")                 # the filesystem frees less than du said
+        result = self.bash('myACCEPT_LOSS=1\n' + self.functions(*self.SPACE)
+                           + 'fuCHECK_BACKUP_SPACE\necho "went on"\n')
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 1, out)
+        self.assertEqual(self.left(), names[1:])    # the confirmed plan, nothing beyond it
+        self.assertIn("Not enough room for a backup", out)
+        self.assertNotIn("went on", out)
 
 
 if __name__ == "__main__":
