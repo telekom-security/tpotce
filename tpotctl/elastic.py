@@ -3,7 +3,8 @@
 T-Pot marks the policy it writes with _meta.tpot_retention. A policy whose marker no
 longer matches its delete phase was changed in Kibana: it is "foreign" and T-Pot leaves
 it alone, so that nobody loses events they chose to keep, unless it keeps the events just
-as long as .env says (then T-Pot adopts it, only the marker is new). tpotinit applies the same
+as long as .env says (then T-Pot adopts it, only the marker is new). Without `shorten`, the rule never
+writes a shorter retention: tpotinit never shortens, the Manager asks first. tpotinit applies the same
 rule on every start (docker/tpotinit/dist/bin/es_retention.sh), both pass the cases in
 docker/tpotinit/tests/ilm_cases.yml. Standard library only: update.sh runs
 `python3 -m tpotctl.elastic value-of FILE` with the python3 of the system.
@@ -30,15 +31,22 @@ DELETE_ACTIONS = {"delete": {"delete_searchable_snapshot": True}}
 
 @dataclass
 class Decision:
-    action: str                 # create | update | keep | foreign
+    action: str                 # create | update | keep | foreign | pending
     policy: Optional[dict]      # what to PUT (create / update), None otherwise
     current: str                # value_of the policy as it is ("" none or not derivable)
     managed: bool               # T-Pot wrote it last (or it is the policy of an earlier release)
+    held: str = ""              # a shorter TPOT_ES_RETENTION that is not applied: it needs the user's yes
 
 
 def _min_age(policy: dict) -> Optional[str]:
     delete = (policy.get("phases") or {}).get("delete")
     return None if delete is None else str(delete.get("min_age", ""))
+
+
+def _deletes(policy: dict) -> bool:
+    """The delete phase really deletes: it has the delete action (a phase without it keeps everything)."""
+    delete = (policy.get("phases") or {}).get("delete")
+    return isinstance(delete, dict) and isinstance(delete.get("actions"), dict) and "delete" in delete["actions"]
 
 
 def value_of(policy: Optional[dict]) -> str:
@@ -48,6 +56,8 @@ def value_of(policy: Optional[dict]) -> str:
     min_age = _min_age(policy)
     if min_age is None:
         return "off"
+    if not _deletes(policy):
+        return ""
     match = re.fullmatch(r"([0-9]+)([dh])", min_age)
     if not match:
         return ""
@@ -63,10 +73,11 @@ def is_managed(policy: dict) -> bool:
     meta = policy.get("_meta") or {}
     if "tpot_retention" in meta:
         mark = str(meta["tpot_retention"])
-        return _min_age(policy) is None if mark == "off" else _min_age(policy) == f"{mark}d"
+        return (_min_age(policy) is None if mark == "off"
+                else _min_age(policy) == f"{mark}d" and _deletes(policy))
     return (meta.get("description") == LEGACY_DESCRIPTION
             and sorted((policy.get("phases") or {})) == ["delete", "hot"]
-            and _min_age(policy) == "30d")
+            and _min_age(policy) == "30d" and _deletes(policy))
 
 
 def build(value: str, base: Optional[dict]) -> dict:
@@ -76,9 +87,12 @@ def build(value: str, base: Optional[dict]) -> dict:
     if value == "off":
         phases.pop("delete", None)
     else:
-        delete = phases.get("delete")           # as in jq: an empty phase {} stays one
-        if delete is None or delete is False:
-            delete = {"actions": copy.deepcopy(DELETE_ACTIONS)}
+        delete = phases.get("delete")
+        delete = delete if isinstance(delete, dict) else {}
+        actions = delete.get("actions") if isinstance(delete.get("actions"), dict) else {}
+        if "delete" not in actions:                 # a delete phase always deletes, other actions stay
+            actions["delete"] = copy.deepcopy(DELETE_ACTIONS["delete"])
+        delete["actions"] = actions
         delete["min_age"] = f"{value}d"
         phases["delete"] = delete
     meta = dict(policy.get("_meta") or {})
@@ -87,9 +101,15 @@ def build(value: str, base: Optional[dict]) -> dict:
     return policy
 
 
-def decide(value: str, policy: Optional[dict], force: bool = False) -> Decision:
+def decide(value: str, policy: Optional[dict], force: bool = False, shorten: bool = False,
+           oldest: Optional[float] = None, now: Optional[float] = None) -> Decision:
+    """What T-Pot does with the policy for TPOT_ES_RETENTION=value. Without shorten (tpotinit, and every
+    caller before the user said yes) nothing is written that deletes events the policy keeps now."""
     if policy is None:
-        wanted = value or DEFAULT
+        wanted = value or "off"
+        if (wanted != "off" and not shorten and oldest is not None
+                and oldest < (time.time() if now is None else now) - int(wanted) * 86400):
+            return Decision("create", build("off", None), "", True, held=wanted)
         return Decision("create", build(wanted, None), "", True)
     current, managed = value_of(policy), is_managed(policy)
     if not value:
@@ -100,6 +120,8 @@ def decide(value: str, policy: Optional[dict], force: bool = False) -> Decision:
         return Decision("foreign", None, current, False)
     if managed and current == value and str((policy.get("_meta") or {}).get("tpot_retention", "")) == value:
         return Decision("keep", None, current, True)
+    if not shorten and shortens(current or "off", value):
+        return Decision("pending", None, current, managed, held=value)
     return Decision("update", build(value, policy), current, managed)
 
 
@@ -209,7 +231,7 @@ def plan(value: str, force: bool = False, url: str = ES_URL, opener: Callable = 
         policy = get_policy(url, opener)
     except ElasticError:
         return Plan(Decision("keep", None, "", False), [], False)
-    decision = decide(value, policy, force)
+    decision = decide(value, policy, force, shorten=True)
     gone: List[Index] = []
     # only where events go that the policy keeps now: a marker-only update or an adoption keeps
     # the same duration, a policy that is not in days counts as keeping them all

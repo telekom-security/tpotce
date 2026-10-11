@@ -15,6 +15,12 @@
 #         and phases, all phases it has.
 #         current: what the policy stands for before the change ("" none, see values).
 #         managed: whether T-Pot wrote it last (for no policy: true).
+#         Another action is pending: a shorter value that is not applied.
+# shorten: true   the user confirmed a shorter retention (Manager / CLI); tpotinit never sets it
+# oldest_days: N  the oldest logstash-* index is N days old (runners use now = 1800000000)
+# held: "N"       expected: a shorter value that is not applied (pending, or create with off)
+# actions: [...]  expected: the keys of phases.delete.actions of the written policy
+# 30d-noaction    a min_age of values: both runners build it as delete: {min_age: 30d, actions: {}}
 legacy: &legacy
   phases:
     hot: {min_age: 0ms, actions: {}}
@@ -30,11 +36,14 @@ values:
   - {min_age: 3651d, value: ""}
   - {min_age: 90m, value: ""}
   - {min_age: 1d, value: "1"}
+  - {min_age: 30d-noaction, value: ""}
 shapes:
   - {name: empty object, policy: {}, value: ""}
   - {name: error body of elasticsearch, policy: {error: {type: resource_not_found_exception}, status: 404}, value: ""}
   - {name: GET answer not unwrapped, policy: {tpot: {policy: {phases: {hot: {min_age: 0ms, actions: {}}, delete: {min_age: 30d, actions: {delete: {}}}}}}}, value: ""}
   - {name: only a hot phase, policy: {phases: {hot: {min_age: 0ms, actions: {}}}}, value: "off"}
+  - {name: delete phase without a delete action, policy: {phases: {hot: {min_age: 0ms, actions: {}}, delete: {min_age: 30d, actions: {}}}}, value: ""}
+  - {name: delete phase with only wait_for_snapshot, policy: {phases: {hot: {min_age: 0ms, actions: {}}, delete: {min_age: 30d, actions: {wait_for_snapshot: {policy: daily}}}}}, value: ""}
 cases:
   - name: no policy, default
     policy: null
@@ -54,15 +63,15 @@ cases:
     min_age: none
     retention: "off"
     phases: [hot]
-  - name: no policy, empty value creates the default
+  - name: no policy, empty value creates off
     policy: null
     value: ""
     current: ""
     managed: true
     action: create
-    min_age: 30d
-    retention: "30"
-    phases: [delete, hot]
+    min_age: none
+    retention: "off"
+    phases: [hot]
   - name: policy of an earlier release, same value, only the marker is added
     policy: *legacy
     value: "30"
@@ -158,6 +167,7 @@ cases:
     managed: true
     action: keep
   - name: managed, shorter value
+    shorten: true
     policy:
       phases:
         hot: {min_age: 0ms, actions: {}}
@@ -171,6 +181,7 @@ cases:
     retention: "7"
     phases: [delete, hot]
   - name: managed with a warm phase, only the delete phase changes
+    shorten: true
     policy:
       phases:
         hot: {min_age: 0ms, actions: {}}
@@ -185,6 +196,7 @@ cases:
     retention: "30"
     phases: [delete, hot, warm]
   - name: managed off, a value adds the delete phase
+    shorten: true
     policy:
       phases:
         hot: {min_age: 0ms, actions: {}}
@@ -261,3 +273,107 @@ cases:
     current: "60"
     managed: true
     action: keep
+  - name: no policy, a value but older indices creates off and the value waits
+    policy: null
+    value: "30"
+    oldest_days: 45
+    action: create
+    min_age: none
+    retention: "off"
+    phases: [hot]
+    held: "30"
+    current: ""
+    managed: true
+  - name: no policy, a value and only younger indices
+    policy: null
+    value: "30"
+    oldest_days: 10
+    action: create
+    min_age: 30d
+    retention: "30"
+    phases: [delete, hot]
+    current: ""
+    managed: true
+  - name: no policy, older indices, confirmed
+    policy: null
+    value: "30"
+    oldest_days: 45
+    shorten: true
+    action: create
+    min_age: 30d
+    retention: "30"
+    phases: [delete, hot]
+    current: ""
+    managed: true
+  - name: managed, a shorter value without confirmation waits
+    policy:
+      phases:
+        hot: {min_age: 0ms, actions: {}}
+        delete: {min_age: 90d, actions: {delete: {delete_searchable_snapshot: true}}}
+      _meta: {managed: true, tpot_retention: "90", description: x}
+    value: "7"
+    action: pending
+    held: "7"
+    current: "90"
+    managed: true
+  - name: managed off, a value without confirmation waits
+    policy:
+      phases:
+        hot: {min_age: 0ms, actions: {}}
+      _meta: {managed: true, tpot_retention: "off", description: x}
+    value: "30"
+    action: pending
+    held: "30"
+    current: "off"
+    managed: true
+  - name: force with a shorter value waits without confirmation
+    policy:
+      phases:
+        hot: {min_age: 0ms, actions: {rollover: {max_age: 1d}}}
+        delete: {min_age: 45d, actions: {delete: {}}}
+    value: "7"
+    force: true
+    action: pending
+    held: "7"
+    current: "45"
+    managed: false
+  - name: a marker without a delete action is foreign
+    policy:
+      phases:
+        hot: {min_age: 0ms, actions: {}}
+        delete: {min_age: 30d, actions: {}}
+      _meta: {managed: true, tpot_retention: "30", description: x}
+    value: "30"
+    action: foreign
+    current: ""
+    managed: false
+  - name: force on an empty delete phase adds the delete action
+    policy:
+      phases:
+        hot: {min_age: 0ms, actions: {}}
+        delete: {}
+    value: "30"
+    force: true
+    shorten: true
+    action: update
+    min_age: 30d
+    retention: "30"
+    phases: [delete, hot]
+    actions: [delete]
+    current: ""
+    managed: false
+  - name: force keeps wait_for_snapshot and adds the delete action
+    policy:
+      phases:
+        hot: {min_age: 0ms, actions: {}}
+        delete: {min_age: 60d, actions: {wait_for_snapshot: {policy: daily}}}
+    value: "30"
+    force: true
+    shorten: true
+    action: update
+    min_age: 30d
+    retention: "30"
+    phases: [delete, hot]
+    actions: [delete, wait_for_snapshot]
+    current: ""
+    managed: false
