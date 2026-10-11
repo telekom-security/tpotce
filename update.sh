@@ -870,6 +870,8 @@ function fuSWITCH_SOURCE () {
 	    fi
 	    fuUI_WARN "The local branch ${myTPOT_BRANCH} has commits that origin does not have. They stay as ${myREF}."
 	    fuUI_HINT "'git -C $HOME/tpotce checkout -B ${myTPOT_BRANCH} ${myREF}' brings the branch back as it was."
+	    # -C: the branch exists again after the switch below, -c would refuse it
+	    fuDID warn "Local commits of ${myTPOT_BRANCH} kept as ${myREF}, git switch -C ${myTPOT_BRANCH} ${myREF} brings them back."
 	fi
 	git -C "$HOME/tpotce" reset --hard
 	if ! git -C "$HOME/tpotce" checkout -B "${myTPOT_BRANCH}" "origin/${myTPOT_BRANCH}";

@@ -2220,6 +2220,9 @@ class UpdateRepairTest(Harness):
         self.assertRegex(refs[0], r"^refs/tpot-backup/[0-9]{14}/master " + mine + "$")
         warns = [line for line in out.splitlines() if line.startswith("WARN:")]
         self.assertTrue(any(refs[0].split(" ")[0] in line for line in warns), out)    # the warning names the ref
+        ref = refs[0].split(" ")[0]
+        self.assertIn(f"DID: warn: Local commits of master kept as {ref}, git switch -C master {ref} brings them "
+                      "back.", out)                                                   # in the summary too
         self.assertNotEqual(self.git("rev-parse", "master").strip(), mine)            # master is origin's now
         self.assertEqual(self.git("branch", "--show-current").strip(), "master")
 
