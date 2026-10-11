@@ -444,7 +444,12 @@ class RestoreChoiceTest(Scripts):
     def test_no_question_left_in_restore_sh(self):
         text = base.read("restore.sh")
         rest = text.replace(text[text.index("# >>> plain fallback"):text.index("# <<< plain fallback")], "")
-        self.assertNotIn("fuUI_CONFIRM", rest)
+        # the groups are one list; the only yes / no left is the one before a loss of data (default no)
+        calls = [line.strip() for line in rest.splitlines()
+                 if "fuUI_CONFIRM" in line and not line.lstrip().startswith("#")]
+        self.assertEqual(calls, ['fuUI_CONFIRM --default no "${3:-Accept this loss of data?}"'])
+        loss = rest[rest.index("function fuLOSS_CONFIRM ()"):]
+        self.assertIn("fuUI_CONFIRM --default no", loss[:loss.index("\n}\n")])
         self.assertIn("fuUI_CHOOSE_MANY --all", rest)
 
 

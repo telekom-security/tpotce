@@ -906,8 +906,8 @@ the one of the release and, if they differ,
 
 The first start after the upgrade takes longer than usual, give it a few minutes. To go back, stop
 T-Pot and restore the `--full` archive of that update with `restore.sh -f <archive> -y`: it replaces
-`data/elk/data` with the copy from the archive and brings back the checkout and `.env`, so T-Pot
-starts on the previous images again.
+`data/elk/data` with the copy from the archive (it asks first; without a terminal `--accept-data-loss`
+confirms it) and brings back the checkout and `.env`, so T-Pot starts on the previous images again.
 
 ### Updating From an Older Release
 When `update.sh` finds a newer version of itself it pulls, restarts, and the new script finishes the
@@ -945,7 +945,8 @@ restore.sh -l                     # list the backups and what they hold
 restore.sh                        # restore from the newest one, asking per group
 restore.sh -f <archive> -y        # restore everything from this archive, no questions
 restore.sh -f <archive> -c        # only roll back the checkout and the configuration, no questions
-restore.sh -f <archive> -g config,data   # only these groups, no questions
+restore.sh -f <archive> -g config,data   # only these groups, no questions but one: data/ asks first
+restore.sh -f <archive> -g data --accept-data-loss   # data/ without a terminal
 ```
 
 Without `-y` the groups come in one list, all of them ticked: untick what should stay as it is, so you can bring back just the configuration without touching anything else. The groups are the rollback of the git checkout (`git`), your
@@ -961,7 +962,18 @@ T-Pot is stopped for the file part and started again for the Kibana import, beca
 a running instance. The files under `data/` are restored with the owner and mode from the archive
 (`tpot:tpot`, uid/gid 2000) - without those the containers will not start. If the archive holds the
 Elasticsearch data (`--full`), the current `data/elk/data` is removed first: Elasticsearch data cannot
-be merged with an older copy.
+be merged with an older copy. The files under `data/` go into `TPOT_DATA_PATH` of the `.env` in effect
+(the restored one, if `config` is part of the run).
+
+Restoring `data/` replaces newer files and log lines, with a `--full` archive the Elasticsearch data
+and every event since the backup: `restore.sh` asks first (default no), even with `-y` or `-g`.
+Without a terminal only `--accept-data-loss` confirms it; not confirmed, `data/` stays as it is and
+the other groups go on (a warning at the end). The same holds for an ILM policy of the archive that
+keeps the events less long than the current one: putting it back deletes the older events right away,
+so not confirmed it is left out and `restore.sh` names the `curl` command to put it back yourself. A
+shorter `TPOT_ES_RETENTION` in the restored `.env` waits, T-Pot never shortens the policy on its own
+(`tpot elastic retention --force` applies it, it asks first). The menu asks before it restores `data/`
+and runs `restore.sh` with `--accept-data-loss` after a yes.
 
 If you would rather do it by hand, the archive is a plain tar: `tar tvf <archive>` lists it,
 `MANIFEST` says which edition and commit it came from, and `rollback.txt` holds the commit to go

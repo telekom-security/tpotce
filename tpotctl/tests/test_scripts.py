@@ -430,6 +430,331 @@ class RestoreShTest(Harness):
             self.assertIn(question, text, group)
 
 
+# curl for restore.sh: every call in HOME/curl_calls, a PUT of the ILM policy in HOME/puts, a GET of it
+# answers with HOME/current_policy.json (none: 404, curl -f exits 22), everything else answers
+CURL = ('#!/bin/sh\necho "curl $*" >> "$HOME/curl_calls"\nout=""; put=""; prev=""\n'
+        'for a in "$@"; do\n  [ "$prev" = "-o" ] && out="$a"\n'
+        '  [ "$prev" = "-X" ] && [ "$a" = "PUT" ] && put=1\n  prev="$a"\ndone\n'
+        'case "$*" in\n  *_ilm/policy/tpot*)\n'
+        '    if [ -n "$put" ]; then echo "PUT $*" >> "$HOME/puts"; exit 0; fi\n'
+        '    [ -f "$HOME/current_policy.json" ] || exit 22\n'
+        '    [ -n "$out" ] && cat "$HOME/current_policy.json" > "$out"; exit 0 ;;\nesac\nexit 0\n')
+
+
+def ilm_policy(min_age):
+    """An ILM policy tpot that deletes after min_age (None: no delete phase)."""
+    phases = {"hot": {"min_age": "0ms", "actions": {}}}
+    if min_age is not None:
+        phases["delete"] = {"min_age": min_age, "actions": {"delete": {}}}
+    return {"phases": phases}
+
+
+class RestoreScriptHarness(Harness):
+    """restore.sh sourced for its functions (it stops before its main section), the fuUI_* helpers
+    replaced by lines that say what they were called with."""
+
+    STUBS = textwrap.dedent("""
+        fuUI_INFO () { echo "INFO: $*"; }; fuUI_OK () { echo "OK: $*"; }; fuUI_WARN () { echo "WARN: $*"; }
+        fuUI_HINT () { echo "HINT: $*"; }; fuUI_ERROR () { echo "ERROR: $*"; }
+        fuUI_CONFIRM () { echo "ASKED: $*"; [ -e "$HOME/yes" ]; }
+        fuUI_SPIN () { shift 2; "$@"; }; fuMARK () { :; }; sleep () { :; }
+    """)
+
+    def setUp(self):
+        super().setUp()
+        self.tpotce = os.path.join(self.home, "tpotce")
+        os.makedirs(self.tpotce)
+        self.fake("curl", CURL)
+
+    def fake(self, name, text):
+        path = os.path.join(self.bin, name)
+        with open(path, "w", encoding="utf-8") as out:
+            out.write(text)
+        os.chmod(path, 0o755)
+
+    def write(self, path, text):
+        with open(os.path.join(self.home, path), "w", encoding="utf-8") as out:
+            out.write(text)
+
+    def environment(self):
+        environment = dict(os.environ, HOME=self.home, PATH=f"{self.bin}:{os.environ['PATH']}", TPOT_GUM="off")
+        environment.pop("TPOT_MARKS", None)
+        return environment
+
+    def bash(self, script, terminal=False):
+        """The script after restore.sh is sourced; terminal: stdin is a pty (the run may ask)."""
+        text = f'source "{REPO}/restore.sh"\n' + self.STUBS + script
+        if not terminal:
+            return subprocess.run(["bash", "-c", text], cwd=REPO, capture_output=True, universal_newlines=True,
+                                  env=self.environment(), stdin=subprocess.DEVNULL, timeout=60)
+        import pty
+        primary, secondary = pty.openpty()
+        try:
+            return subprocess.run(["bash", "-c", text], cwd=REPO, capture_output=True, universal_newlines=True,
+                                  env=self.environment(), stdin=secondary, timeout=60)
+        finally:
+            os.close(primary)
+            os.close(secondary)
+
+    def puts(self):
+        try:
+            with open(os.path.join(self.home, "puts"), encoding="utf-8") as handle:
+                return handle.read()
+        except FileNotFoundError:
+            return ""
+
+
+class RestoreRetentionTest(RestoreScriptHarness):
+    """A shorter TPOT_ES_RETENTION of the archive's .env waits (T-Pot never shortens on its own), a shorter
+    ILM policy of the archive goes back only after a yes at a terminal or with --accept-data-loss."""
+
+    def test_retention_shorter(self):
+        cases = [("365", "30", 0), ("30", "365", 1), ("off", "30", 0), ("", "30", 0), ("30", "off", 1),
+                 ("30", "", 1), ("30", "30", 1), ("090", "30", 0), ("30", "090", 1)]
+        script = "".join(f'fuRETENTION_SHORTER "{old}" "{new}"; echo "{old}|{new}|$?"\n' for old, new, _ in cases)
+        result = self.bash(script)
+        lines = [line for line in result.stdout.splitlines() if line.count("|") == 2]
+        self.assertEqual(lines, [f"{old}|{new}|{rc}" for old, new, rc in cases], result.stdout + result.stderr)
+
+    def config(self, current, archived):
+        with open(os.path.join(self.tpotce, ".env"), "w", encoding="utf-8") as out:
+            out.write(f"TPOT_TYPE=HIVE\nTPOT_ES_RETENTION={current}\n")
+        archive = make_backup(self.home, {"MANIFEST": MANIFEST, "env": f"TPOT_TYPE=HIVE\nTPOT_ES_RETENTION={archived}\n"})
+        result = self.bash(f"myARCHIVE='{archive}' myDO_CONFIG=1\nfuTMPDIR; fuTOC\nfuDO_CONFIG\n")
+        with open(os.path.join(self.tpotce, ".env"), encoding="utf-8") as handle:
+            self.assertIn(f"TPOT_ES_RETENTION={archived}\n", handle.read())      # .env is restored as before
+        return result.stdout + result.stderr
+
+    def test_config_with_a_shorter_retention_says_it_waits(self):
+        out = self.config("365", "30")
+        hints = [line for line in out.splitlines() if line.startswith("HINT: ")]
+        self.assertTrue(any("TPOT_ES_RETENTION=30" in line and "waits" in line
+                            and "T-Pot does not shorten the ILM policy tpot on its own" in line for line in hints), out)
+        self.assertIn("tpot elastic retention --force", out)
+        self.assertIn("365", out)
+
+    def test_config_from_off_to_days_says_it_waits(self):
+        self.assertIn("waits", self.config("off", "30"))
+
+    def test_config_with_a_longer_or_the_same_retention_says_nothing(self):
+        for current, archived in (("30", "365"), ("30", "30"), ("30", "off")):
+            with self.subTest(current=current, archived=archived):
+                self.assertNotIn("waits", self.config(current, archived))
+
+    def elastic(self, current, archived, accept=False, terminal=False):
+        """fuDO_ELASTIC with the current policy (its min_age, "none": no delete phase, None: there is no
+        policy) and the one of the archive."""
+        if current is not None:
+            policy = ilm_policy(None if current == "none" else current)
+            self.write("current_policy.json", json.dumps({"tpot": {"version": 3, "policy": policy}}))
+        archive = make_backup(self.home, {"MANIFEST": MANIFEST, "elastic/ilm_policy_tpot.json":
+                                          json.dumps({"policy": ilm_policy(archived)})})
+        script = (f"myARCHIVE='{archive}' myDO_ELASTIC=1 myKIBANA_TIMEOUT=0 myACCEPT_LOSS={'1' if accept else ''}\n"
+                  "fuTMPDIR; fuTOC\nfuDO_ELASTIC; echo \"rc=$?\"\necho \"failed=${myFAILED}\"\n"
+                  'for myI in "${myWARNED[@]}"; do echo "warned=${myI}"; done\n')
+        result = self.bash(script, terminal=terminal)
+        return result.stdout + result.stderr
+
+    def test_a_shorter_policy_without_terminal_is_not_put_back(self):
+        out = self.elastic("365d", "30d")
+        self.assertEqual(self.puts(), "", out)
+        self.assertNotIn("ASKED", out)
+        warns = [line for line in out.splitlines() if line.startswith("WARN: ")]
+        self.assertTrue(any("30 days" in line and "365 days" in line for line in warns), out)
+        self.assertIn("--accept-data-loss confirms it, -y does not", out)
+        kept = os.path.join(self.home, "tpot_backups")
+        manual = [line for line in out.splitlines() if "curl -X PUT" in line and "_ilm/policy/tpot" in line]
+        self.assertTrue(manual, out)
+        path = re.search(r"-d @(\S+)", manual[0]).group(1).rstrip("'")
+        self.assertTrue(path.startswith(kept) and os.path.isfile(path), (path, out))    # survives the run
+        with open(path, encoding="utf-8") as handle:
+            self.assertEqual(json.load(handle)["policy"]["phases"]["delete"]["min_age"], "30d")
+        self.assertIn("failed=\n", out)                                   # a warning, no failure
+        self.assertIn("warned=elastic:", out)
+
+    def test_a_shorter_policy_with_accept_is_put_back(self):
+        out = self.elastic("365d", "30d", accept=True)
+        self.assertIn("PUT", self.puts(), out)
+        self.assertIn("(confirmed with --accept-data-loss)", out)
+        self.assertIn("OK: The ILM policy is back.", out)
+
+    def test_a_shorter_policy_at_a_terminal_asks_with_no_as_default(self):
+        out = self.elastic("365d", "30d", terminal=True)
+        self.assertIn("ASKED: --default no", out)
+        self.assertEqual(self.puts(), "", out)
+        self.assertIn("warned=elastic:", out)
+        self.write("yes", "")
+        out = self.elastic("365d", "30d", terminal=True)
+        self.assertIn("PUT", self.puts(), out)
+
+    def test_a_policy_that_keeps_as_long_or_longer_goes_back_without_asking(self):
+        for current, archived in (("30d", "365d"), ("30d", "30d"), ("30d", None)):
+            with self.subTest(current=current, archived=archived):
+                if os.path.exists(os.path.join(self.home, "puts")):
+                    os.remove(os.path.join(self.home, "puts"))
+                out = self.elastic(current, archived)
+                self.assertIn("PUT", self.puts(), out)
+                self.assertNotIn("WARN", out)
+
+    def test_from_no_delete_phase_or_no_policy_to_days_is_shorter(self):
+        for current in ("none", None):              # no delete phase: forever; no policy at all: forever
+            with self.subTest(current=current):
+                out = self.elastic(current, "30d")
+                self.assertEqual(self.puts(), "", out)
+                self.assertTrue(any(line.startswith("WARN: ") and "30 days" in line for line in out.splitlines()),
+                                out)
+
+    def test_the_whole_run_ends_with_a_warning(self):
+        self.write("current_policy.json", json.dumps({"tpot": {"version": 3, "policy": ilm_policy("365d")}}))
+        archive = make_backup(self.home, {"MANIFEST": MANIFEST, "elastic/ilm_policy_tpot.json":
+                                          json.dumps({"policy": ilm_policy("30d")})})
+        result = self.run_script(os.path.join(REPO, "restore.sh"), "-f", archive, "-g", "elastic",
+                                 env={"TPOT_KIBANA_TIMEOUT": "0"}, cwd=REPO)
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out[-600:])
+        self.assertEqual(self.puts(), "", out)
+        self.assertIn("[WARNING] - The Kibana objects and the ILM policy", out)
+        self.assertNotIn("Not restored", out)
+
+    def test_help_names_accept_data_loss(self):
+        result = self.run_script(os.path.join(REPO, "restore.sh"), "-h")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        text = " ".join(result.stdout.split())
+        self.assertIn("--accept-data-loss", text)
+        self.assertIn("It does not confirm a loss of data", text)
+
+    def test_an_unknown_long_option(self):
+        result = self.run_script(os.path.join(REPO, "restore.sh"), "--nonsense")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("--nonsense", result.stdout + result.stderr)
+
+
+# tar for restore.sh: what extracts data/* is recorded in HOME/tar_calls and does nothing, the rest
+# is the real tar
+REAL_TAR = shutil.which("tar") or "/usr/bin/tar"
+TAR = f'#!/bin/sh\ncase "$*" in\n  *"data/*"*) echo "tar $*" >> "$HOME/tar_calls"; exit 0 ;;\nesac\nexec {REAL_TAR} "$@"\n'
+# du -sh: 12G for any path
+DU_SH = "#!/bin/sh\nfor a; do f=\"$a\"; done\nprintf '12G\\t%s\\n' \"$f\"\n"
+
+
+class RestoreDataTest(RestoreScriptHarness):
+    """data/ replaces newer files and the Elasticsearch data: only after a yes at a terminal or with
+    --accept-data-loss (-y does not), and into TPOT_DATA_PATH of the .env in effect."""
+
+    def setUp(self):
+        super().setUp()
+        self.fake("tar", TAR)
+        self.fake("du", DU_SH)
+        self.archive = make_backup(self.home, {"MANIFEST": MANIFEST, "env": "TPOT_TYPE=HIVE\n",
+                                               "data/uuid": "x\n", "data/elk/data/nodes/0": "old\n"})
+        self.env("")
+
+    def env(self, data_path):
+        with open(os.path.join(self.tpotce, ".env"), "w", encoding="utf-8") as out:
+            out.write("TPOT_TYPE=HIVE\n" + (f"TPOT_DATA_PATH={data_path}\n" if data_path else ""))
+
+    def elk(self, root):
+        """A current Elasticsearch data folder under root."""
+        folder = os.path.join(root, "elk", "data")
+        os.makedirs(folder, exist_ok=True)
+        with open(os.path.join(folder, "now"), "w", encoding="utf-8") as out:
+            out.write("events since the backup\n")
+        return folder
+
+    def tar_calls(self):
+        try:
+            with open(os.path.join(self.home, "tar_calls"), encoding="utf-8") as handle:
+                return handle.read()
+        except FileNotFoundError:
+            return ""
+
+    def restore(self, *args):
+        result = self.run_script(os.path.join(REPO, "restore.sh"), "-f", self.archive, *args)
+        return result.returncode, result.stdout + result.stderr
+
+    def test_without_confirmation_nothing_of_data_is_touched(self):
+        for args in (("-g", "data,config"), ("-y",)):                       # -y does not confirm it
+            with self.subTest(args=args):
+                folder = self.elk(os.path.join(self.tpotce, "data"))
+                code, out = self.restore(*args)
+                self.assertEqual(code, 0, out[-800:])
+                self.assertEqual(self.tar_calls(), "", out)
+                self.assertTrue(os.path.exists(os.path.join(folder, "now")), out)
+                self.assertIn("data/ was not restored: not confirmed", out)
+                self.assertIn("--accept-data-loss confirms it, -y does not", out)
+                self.assertIn("[WARNING] - The files from data/", out)            # a warning in the summary
+                self.assertNotIn("Not restored", out)
+                self.assertIn("[OK] - The configuration", out)                    # the other groups go on
+
+    def test_the_question_names_what_goes(self):
+        self.elk(os.path.join(self.tpotce, "data"))
+        _code, out = self.restore("-g", "data")
+        text = " ".join(out.split())
+        self.assertIn(f"files under {self.tpotce}/data are replaced by those of the archive", text)
+        self.assertIn("newer files and log lines since the backup are lost", text)
+        self.assertIn("The current Elasticsearch data (12G) is deleted and replaced, events since "
+                      "2026-10-05 10:10 are lost", text)
+
+    def test_without_elasticsearch_data_in_the_archive_it_is_not_named(self):
+        self.archive = make_backup(self.home, {"MANIFEST": MANIFEST, "data/uuid": "x\n"},
+                                   name="20261006101010_tpot_backup.tar")
+        _code, out = self.restore("-g", "data")
+        self.assertIn("files under", out)
+        self.assertNotIn("Elasticsearch data", out)
+
+    def test_accept_restores_into_the_default_path_as_before(self):
+        folder = self.elk(os.path.join(self.tpotce, "data"))
+        code, out = self.restore("-g", "data", "--accept-data-loss")
+        self.assertEqual(code, 0, out[-800:])
+        self.assertIn("(confirmed with --accept-data-loss)", out)
+        self.assertIn(f"tar xf {self.archive} -C {self.tpotce} -p --numeric-owner --wildcards data/*",
+                      self.tar_calls())
+        self.assertNotIn("--strip-components", self.tar_calls())
+        self.assertFalse(os.path.exists(folder), out)
+        self.assertIn("[OK] - The files from data/", out)
+
+    def test_accept_restores_into_a_custom_data_path(self):
+        custom = os.path.join(self.home, "custom")
+        os.makedirs(custom)
+        default, mine = self.elk(os.path.join(self.tpotce, "data")), self.elk(custom)
+        self.env(custom + "/")
+        code, out = self.restore("-g", "data", "--accept-data-loss")
+        self.assertEqual(code, 0, out[-800:])
+        self.assertIn(f"tar xf {self.archive} -C {custom} --strip-components=1 -p --numeric-owner --wildcards "
+                      "data/*", self.tar_calls())
+        self.assertFalse(os.path.exists(mine), out)
+        self.assertTrue(os.path.exists(default), out)
+        self.assertIn(f"files under {custom} are replaced", " ".join(out.split()))
+
+    def test_a_relative_data_path_is_under_the_checkout(self):
+        self.env("./mydata")
+        os.makedirs(os.path.join(self.tpotce, "mydata"))
+        code, out = self.restore("-g", "data", "--accept-data-loss")
+        self.assertEqual(code, 0, out[-800:])
+        self.assertIn(f"-C {self.tpotce}/mydata --strip-components=1", self.tar_calls())
+
+    def test_the_data_path_of_the_restored_env_counts(self):
+        custom = os.path.join(self.home, "fromarchive")
+        os.makedirs(custom)
+        self.archive = make_backup(self.home, {"MANIFEST": MANIFEST, "env": f"TPOT_DATA_PATH={custom}\n",
+                                               "data/uuid": "x\n"}, name="20261007101010_tpot_backup.tar")
+        code, out = self.restore("-g", "config,data", "--accept-data-loss")
+        self.assertEqual(code, 0, out[-800:])
+        self.assertIn(f"-C {custom} --strip-components=1", self.tar_calls())
+
+    def test_a_yes_at_a_terminal_confirms(self):
+        folder = self.elk(os.path.join(self.tpotce, "data"))
+        script = f"myARCHIVE='{self.archive}' myDO_DATA=1\nfuTMPDIR; fuTOC\nfuDO_DATA\n"
+        out = self.bash(script, terminal=True).stdout
+        self.assertIn("ASKED: --default no", out)
+        self.assertEqual(self.tar_calls(), "")
+        self.assertTrue(os.path.exists(folder))
+        self.write("yes", "")
+        out = self.bash(script, terminal=True).stdout
+        self.assertIn("data/*", self.tar_calls(), out)
+        self.assertFalse(os.path.exists(folder))
+
+
 class FallbackTest(Harness):
     """genuser.sh and deploy.sh without the Python packages of tpot: the old steps, the new look."""
 
@@ -547,6 +872,10 @@ class BackupInfoTest(unittest.TestCase):
         self.assertEqual(info.kind, "full")
         self.assertEqual(info.groups, ["git", "config", "untracked", "data"])
         self.assertIn("version: 24.04.2", info.manifest)
+        self.assertFalse(info.es_data)
+        path = make_backup(home, {"MANIFEST": MANIFEST, "data/elk/data/nodes/0": "x\n"},
+                           name="20261006101010_tpot_backup_full.tar")
+        self.assertTrue(ops.backup_info(path).es_data)          # the restore of data/ replaces it
 
     def test_truncated_compressed_archive(self):
         """tarfile raises EOFError for it, the restore page must show it, not end tpot."""

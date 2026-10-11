@@ -460,6 +460,7 @@ class BackupInfo:
     manifest: List[str]
     groups: List[str]
     problem: str = ""
+    es_data: bool = False           # data/elk/data/: restoring data/ replaces the Elasticsearch data
 
 
 def backup_info(path: str) -> BackupInfo:
@@ -484,4 +485,5 @@ def backup_info(path: str) -> BackupInfo:
     for group, member in _GROUP_MEMBER.items():
         if any(m == member or (member.endswith("/") and m.startswith(member)) for m in members):
             groups.append(group)
-    return BackupInfo(path, name, size, kind, manifest, groups)
+    es_data = any(m == "data/elk/data" or m.startswith("data/elk/data/") for m in members)
+    return BackupInfo(path, name, size, kind, manifest, groups, es_data=es_data)

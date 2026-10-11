@@ -24,6 +24,20 @@ if ! source "${myHERE}/installer/lib/ui.sh" 2>/dev/null;
     fuUI_WARN () { echo "### [WARNING] - $*"; }
     fuUI_ERROR () { echo "### [ERROR] - $*" >&2; }
     fuUI_HINT () { local myLINE; for myLINE in "$@"; do echo "###   ${myLINE}"; done; }
+    fuUI_CONFIRM () {
+      local myANSWER="" myDEFAULT="" myPROMPT="(y/n)"
+      if [ "${1:-}" = "--default" ]; then
+        case "${2:-}" in yes|no) myDEFAULT="$2"; shift 2 ;; *) shift ;; esac
+      fi
+      case "${myDEFAULT}" in yes) myPROMPT="(Y/n)" ;; no) myPROMPT="(y/N)" ;; esac
+      while true; do
+        read -rp "### $1 ${myPROMPT} " myANSWER || return 1
+        myANSWER="${myANSWER#"${myANSWER%%[![:space:]]*}"}"
+        myANSWER="${myANSWER%"${myANSWER##*[![:space:]]}"}"
+        [ -n "${myANSWER}" ] || myANSWER="${myDEFAULT}"
+        case "${myANSWER}" in [yY]|[yY][eE][sS]) return 0 ;; [nN]|[nN][oO]) return 1 ;; esac
+      done
+    }
     fuUI_MARKS_ON () { [ -n "${myMARKS:-}" ] || [ "${TPOT_MARKS:-}" = "1" ]; }
     fuMARK () { fuUI_MARKS_ON || return 0; echo "@@tpot $*"; }
     fuUI_HELP () {
@@ -218,9 +232,14 @@ myDO_UNTRACKED=""
 myDO_DATA=""
 myDO_ELASTIC=""
 
+# --accept-data-loss: confirms a loss of data where the run cannot ask (fuLOSS_CONFIRM): data/
+# replacing the current files and the Elasticsearch data, an ILM policy of the archive that keeps
+# the events less long than the current one. -y does not.
+myACCEPT_LOSS=""
+
 function fuPRINT_HELP () {
 	# the help only, without the T-Pot logo (that is for a run)
-	fuUI_HELP "Restorer" "restore.sh [-l] [-f <archive>] [-y | -c | -g <groups>] [-B <file>]" \
+	fuUI_HELP "Restorer" "restore.sh [-l] [-f <archive>] [-y | -c | -g <groups>] [-B <file>]"$'\n'"           [--accept-data-loss]" \
 	  --about "Restores a backup written by update.sh. Without -y, -c or -g it lists what the archive
 holds and you choose what comes back, so you can bring back just the configuration
 without touching anything else." \
@@ -228,7 +247,8 @@ without touching anything else." \
 	  --opt "-f <archive>" "Restore from this archive. Default: the newest one in
 ${myBACKUPDIR}" \
 	  --opt "-y" "Restore everything without asking, including the rollback
-of the git checkout" \
+of the git checkout. It does not confirm a loss of data,
+see --accept-data-loss" \
 	  --opt "-c" "Only roll the checkout back and restore the configuration
 (.env, docker-compose.yml, your changes to tracked files),
 without asking. Leaves data/ alone and does not start T-Pot." \
@@ -236,12 +256,20 @@ without asking. Leaves data/ alone and does not start T-Pot." \
 patch, config, untracked, data, elastic (the T-Pot Manager uses it)" \
 	  --opt "-B <file>" "Read the sudo password from a file, so it runs without
 asking for it (the T-Pot Manager hands one over)" \
+	  --opt "--accept-data-loss" "Confirm a loss of data without a terminal, where the run
+cannot ask: data/ replaces the current files and the
+Elasticsearch data, a shorter ILM policy of the archive" \
 	  --opt "-h" "Show this help message" \
 	  --example "./restore.sh -l" "The backups and what each one holds" \
 	  --example "./restore.sh" "Choose what of the newest backup comes back" \
 	  --example "./restore.sh -f ~/tpot_backups/<archive>.tar -g config" "Only .env and docker-compose.yml of that archive" \
+	  --example "./restore.sh -f ~/tpot_backups/<archive>.tar -g data --accept-data-loss" "data/ of that archive without a terminal: the current files and Elasticsearch data are replaced" \
 	  --note "T-Pot is stopped for everything but the Kibana objects and the ILM policy, which
-need it running: restore.sh starts it for them. tpot restore hands every option on."
+need it running: restore.sh starts it for them. tpot restore hands every option on." \
+	  --note "A loss of data is asked for at a terminal (default no); without one only
+--accept-data-loss confirms it, -y does not. Not confirmed, data/ or the shorter ILM policy
+stays as it is and the rest goes on. A shorter TPOT_ES_RETENTION of the archive waits:
+T-Pot never shortens the ILM policy on its own."
 	exit 0
 }
 
@@ -303,6 +331,102 @@ function fuFAILED () {   # $1 = group
 	esac
 	# the groups are named like their phases, tpot shows that one as failed
 	fuMARK fail "$1"
+}
+
+# A chosen group, or a part of it, that was left out on purpose (a loss of data not confirmed):
+# a warning in the summary, no failure
+myWARNED=()
+function fuWARNED () {   # $1 = group, $2 = what was left out
+	myWARNED+=("$1:$2")
+}
+
+# Is this loss of data confirmed? A yes at a terminal (no is the default) or --accept-data-loss;
+# -y confirms the restore, never a loss of data. rc 0 for confirmed. (As in update.sh.)
+function fuLOSS_CONFIRM () {   # $1 = data | ilm, $2 = text, $3 = the question (default: the one of update.sh)
+	if [ -n "${myACCEPT_LOSS}" ];
+	  then
+	    fuUI_WARN "$2 (confirmed with --accept-data-loss)"
+	    return 0
+	fi
+	fuUI_WARN "$2"
+	if [ -t 0 ];
+	  then
+	    fuUI_CONFIRM --default no "${3:-Accept this loss of data?}"
+	    return
+	fi
+	fuUI_HINT "Not confirmed: no terminal. --accept-data-loss confirms it, -y does not."
+	return 1
+}
+
+# A value of a .env style file, KEY=value or KEY: "value" (as in update.sh)
+function fuENV_VALUE () {   # $1 = file, $2 = key
+	grep -E "^$2[[:space:]]*[:=]" "$1" 2>/dev/null | tail -1 \
+	  | sed -E "s/^[^:=]*[:=][[:space:]]*//; s/[[:space:]]*$//; s/^[\"']//; s/[\"']$//"
+}
+
+# Where the data folder really is: TPOT_DATA_PATH of the .env in effect, relative to ~/tpotce
+# unless it is absolute, without a trailing slash (as fuDATA_PATH of update.sh)
+function fuDATA_PATH () {
+	local myPATH=""
+	myPATH=$(fuENV_VALUE "${myTPOTDIR}/.env" TPOT_DATA_PATH)
+	[ -z "${myPATH}" ] && myPATH="./data"
+	case "${myPATH}" in
+	  /*) ;;
+	  "~"|"~/"*) myPATH="${HOME}${myPATH#\~}" ;;
+	  *)  myPATH="${myTPOTDIR}/${myPATH#./}" ;;
+	esac
+	while [ "${myPATH}" != "/" ] && [ "${myPATH%/}" != "${myPATH}" ];
+	  do
+	    myPATH="${myPATH%/}"
+	done
+	echo "${myPATH}"
+}
+
+# Does NEW keep the events less long than OLD? Days, off or empty (no delete phase, a policy that
+# keeps them no whole number of days: both count as forever). rc 0 for shorter.
+function fuRETENTION_SHORTER () {   # $1 = OLD, $2 = NEW
+	case "$2" in ""|off|*[!0-9]*) return 1 ;; esac
+	case "$1" in ""|off|*[!0-9]*) return 0 ;; esac
+	[ "$((10#$2))" -lt "$((10#$1))" ]
+}
+
+# How long a retention keeps the events, in words
+function fuRETENTION_SHOWN () {   # $1 = days, off or empty
+	case "$1" in
+	  off) echo "forever" ;;
+	  "") echo "for no whole number of days" ;;
+	  *) echo "$((10#$1)) days" ;;
+	esac
+}
+
+# The retention an ILM policy stands for (tpotctl.elastic value-of: days, off or empty), from the
+# checkout, else from the working directory. rc 1: it could not be read.
+function fuPOLICY_VALUE () {   # $1 = policy file ({"policy": ...})
+	local myVALUE="" myRC=0
+	myVALUE=$(cd "${myTPOTDIR}" 2>/dev/null && python3 -m tpotctl.elastic value-of "$1" 2>/dev/null) || myRC=$?
+	if [ "${myRC}" -ne 0 ];
+	  then
+	    myRC=0
+	    myVALUE=$(python3 -m tpotctl.elastic value-of "$1" 2>/dev/null) || myRC=1
+	fi
+	echo "${myVALUE}"
+	return "${myRC}"
+}
+
+# When was the archive written? Created: of its MANIFEST, else the date in its name
+function fuARCHIVE_DATE () {
+	local myWHEN="" myNAME=""
+	myWHEN=$(tar xOf "${myARCHIVE}" MANIFEST 2>/dev/null | sed -n 's/^Created:[[:space:]]*//p' | head -1)
+	if [ -z "${myWHEN}" ];
+	  then
+	    myNAME=$(basename "${myARCHIVE}")
+	    case "${myNAME}" in
+	      [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]*)
+	        myWHEN="${myNAME:0:4}-${myNAME:4:2}-${myNAME:6:2} ${myNAME:8:2}:${myNAME:10:2}" ;;
+	      *) myWHEN="the backup" ;;
+	    esac
+	fi
+	echo "${myWHEN}"
 }
 
 # Ctrl+C under a spinner (fuUI_SPIN rc 130): the run ends here, with what to do next
@@ -504,14 +628,26 @@ function fuDO_GIT () {
 }
 
 function fuDO_CONFIG () {
-	local myFILE=""
+	local myFILE="" myOLD="" myNEW="" myHAD=""
 	[ -z "${myDO_CONFIG}" ] && return
 	fuMARK phase config Restoring the configuration
 	echo
 	fuUI_INFO "Restoring the configuration ..."
+	if grep -qE "^TPOT_ES_RETENTION[[:space:]]*[:=]" "${myTPOTDIR}/.env" 2>/dev/null;
+	  then
+	    myHAD="1"
+	    myOLD=$(fuENV_VALUE "${myTPOTDIR}/.env" TPOT_ES_RETENTION)
+	fi
 	if tar xf "${myARCHIVE}" -C "${myTMPDIR}" env 2>/dev/null && cp "${myTMPDIR}/env" "${myTPOTDIR}/.env";
 	  then
 	    fuUI_OK "Wrote ${myTPOTDIR}/.env."
+	    # T-Pot never shortens the ILM policy on its own: a shorter value of the backup waits
+	    myNEW=$(fuENV_VALUE "${myTPOTDIR}/.env" TPOT_ES_RETENTION)
+	    if [ -n "${myHAD}" ] && fuRETENTION_SHORTER "${myOLD}" "${myNEW}";
+	      then
+	        fuUI_HINT "TPOT_ES_RETENTION=${myNEW} of the backup is shorter than ${myOLD:-the empty value} before: T-Pot does not shorten the ILM policy tpot on its own, the value waits." \
+	                  "'tpot elastic retention --force' or the Elastic page of the T-Pot Manager applies it, both ask first."
+	    fi
 	  else
 	    fuUI_ERROR "Could not restore .env."
 	    fuFAILED config
@@ -600,29 +736,55 @@ function fuDO_UNTRACKED () {
 # The files under data/ belong to tpot:tpot (uid/gid 2000) with 0770. Without the
 # right modes the containers will not start, so owner and mode come from the archive
 # instead of from the caller's umask.
+# The archive holds data/ as data/...; it goes into TPOT_DATA_PATH of the .env in effect (after the
+# configuration of the archive, if that was chosen). It replaces what is there: newer files, log
+# lines and with a full archive the Elasticsearch data since the backup are lost, which needs a
+# confirmation (fuLOSS_CONFIRM). Not confirmed, data/ stays as it is and the rest goes on.
 function fuDO_DATA () {
+	local myDATA="" myTEXT="" mySIZE="" myRC=0
+	local myWHERE=()
 	[ -z "${myDO_DATA}" ] && return
 	fuMARK phase data Restoring the files from data/
 	echo
 	fuUI_INFO "Restoring the files from data/ ..."
+	myDATA=$(fuDATA_PATH)
+	myTEXT="Restoring data/: the files under ${myDATA} are replaced by those of the archive, newer files and log lines since the backup are lost."
+	if fuHAS "^data/elk/data/";
+	  then
+	    mySIZE=$(sudo du -sh "${myDATA}/elk/data" 2>/dev/null | cut -f1)
+	    myTEXT="${myTEXT} The current Elasticsearch data${mySIZE:+ (${mySIZE})} is deleted and replaced, events since $(fuARCHIVE_DATE) are lost."
+	fi
+	if ! fuLOSS_CONFIRM data "${myTEXT}";
+	  then
+	    fuUI_WARN "data/ was not restored: not confirmed."
+	    fuWARNED data "not restored: not confirmed, see above"
+	    return
+	fi
+	# the default data path takes the members as they are, any other one without their data/
+	if [ "${myDATA}" = "${myTPOTDIR}/data" ];
+	  then
+	    myWHERE=(-C "${myTPOTDIR}")
+	  else
+	    sudo mkdir -p "${myDATA}"
+	    myWHERE=(-C "${myDATA}" --strip-components=1)
+	fi
 	# Elasticsearch data cannot be merged: extracting over a data folder that a
 	# newer version has already upgraded leaves its files behind, and the older
 	# Elasticsearch of the archive refuses to start on that mix.
 	if fuHAS "^data/elk/data/";
 	  then
-	    if sudo rm -rf "${myTPOTDIR}/data/elk/data";
+	    if sudo rm -rf "${myDATA}/elk/data";
 	      then
-	        fuUI_OK "Removed the current data/elk/data, the archive brings its own."
+	        fuUI_OK "Removed the current ${myDATA}/elk/data, the archive brings its own."
 	      else
-	        fuUI_ERROR "Could not remove the current data/elk/data."
+	        fuUI_ERROR "Could not remove the current ${myDATA}/elk/data."
 	        fuFAILED data
 	    fi
 	fi
 	# under the spinner, a full archive takes a while: sudo is refreshed first
 	sudo -v
-	local myRC=0
 	fuUI_SPIN "Extracting data/ from the archive ..." "${myLOG}" \
-	  sudo tar xf "${myARCHIVE}" -C "${myTPOTDIR}" -p --numeric-owner --wildcards "data/*" || myRC=$?
+	  sudo tar xf "${myARCHIVE}" "${myWHERE[@]}" -p --numeric-owner --wildcards "data/*" || myRC=$?
 	[ "${myRC}" -ne 130 ] || fuSTOPPED "extracting data/"
 	if [ "${myRC}" -eq 0 ];
 	  then
@@ -645,6 +807,33 @@ function fuWAIT_KIBANA () {
 	    myWAIT=$((myWAIT+5))
 	done
 	curl -s -f -o /dev/null "${myKIBANA}/api/status"
+}
+
+# May the ILM policy of the archive go back? Yes, unless it keeps the events less long than the
+# current one (or how long it keeps them cannot be read): putting it back deletes the older events
+# right away, which needs a confirmation (fuLOSS_CONFIRM). rc 0: put it back.
+function fuILM_CONFIRMED () {   # $1 = the policy of the archive
+	local myNEW="" myOLD="" myNOW="" myTEXT=""
+	if ! myNEW=$(fuPOLICY_VALUE "$1");
+	  then
+	    myTEXT="How long the ILM policy of the archive keeps the events cannot be read here, putting it back may delete older events right away."
+	  else
+	    # GET wraps the policy in its name, value-of takes it as update.sh stores it
+	    if curl -s -f "${myES}/_ilm/policy/tpot" -o "${myTMPDIR}/ilm_current_raw.json" 2>/dev/null;
+	      then
+	        if python3 -c 'import json, sys; json.dump({"policy": json.load(open(sys.argv[1]))["tpot"]["policy"]}, open(sys.argv[2], "w"))' \
+	             "${myTMPDIR}/ilm_current_raw.json" "${myTMPDIR}/ilm_current.json" 2>/dev/null;
+	          then
+	            myOLD=$(fuPOLICY_VALUE "${myTMPDIR}/ilm_current.json")
+	        fi
+	        myNOW="the current one $(fuRETENTION_SHOWN "${myOLD}")"
+	      else
+	        myNOW="Elasticsearch has none now"
+	    fi
+	    fuRETENTION_SHORTER "${myOLD}" "${myNEW}" || return 0
+	    myTEXT="The ILM policy of the archive keeps the events $(fuRETENTION_SHOWN "${myNEW}"), ${myNOW}: putting it back deletes older events right away."
+	fi
+	fuLOSS_CONFIRM ilm "${myTEXT}" "Put the ILM policy of the archive back?"
 }
 
 function fuDO_ELASTIC () {
@@ -705,7 +894,20 @@ function fuDO_ELASTIC () {
 	        fuFAILED elastic
 	    fi
 	fi
-	if [ -s "${myTMPDIR}/elastic/ilm_policy_tpot.json" ];
+	if [ -s "${myTMPDIR}/elastic/ilm_policy_tpot.json" ] && ! fuILM_CONFIRMED "${myTMPDIR}/elastic/ilm_policy_tpot.json";
+	  then
+	    # kept for the manual route, the working directory is about to vanish
+	    myKEEP="${myBACKUPDIR}/${myDATE}_elastic"
+	    fuUI_WARN "The ILM policy of the archive was not put back: not confirmed."
+	    if mkdir -p "${myKEEP}" 2>/dev/null && cp "${myTMPDIR}/elastic/ilm_policy_tpot.json" "${myKEEP}/" 2>/dev/null;
+	      then
+	        fuUI_HINT "It deletes the older events right away. To put it back yourself:" \
+	                  "  curl -X PUT '${myES}/_ilm/policy/tpot' -H 'Content-Type: application/json' -d @${myKEEP}/ilm_policy_tpot.json"
+	      else
+	        fuUI_HINT "It is in the archive under elastic/ilm_policy_tpot.json, a PUT to ${myES}/_ilm/policy/tpot puts it back."
+	    fi
+	    fuWARNED elastic "the ILM policy of the archive was not put back: not confirmed, see above"
+	elif [ -s "${myTMPDIR}/elastic/ilm_policy_tpot.json" ];
 	  then
 	    # update.sh stored it ready to be put back, so this is a plain PUT against the
 	    # Elasticsearch port every edition that ships it publishes on the loopback.
@@ -724,7 +926,7 @@ function fuDO_ELASTIC () {
 # The end of a restore: one line per chosen group in a summary, exit 1 when one of
 # them did not come back (the rest is through then)
 function fuEND () {
-	local myGROUP="" myDO="" myITEMS=() myRC=0
+	local myGROUP="" myDO="" myITEMS=() myRC=0 myWARN="" myITEM=""
 	for myGROUP in git patch config untracked data elastic;
 	  do
 	    case "${myGROUP}" in
@@ -736,9 +938,17 @@ function fuEND () {
 	      elastic) myDO="${myDO_ELASTIC}" ;;
 	    esac
 	    [ -n "${myDO}" ] || continue
+	    myWARN=""
+	    for myITEM in "${myWARNED[@]}";
+	      do
+	        [ "${myITEM%%:*}" != "${myGROUP}" ] || myWARN="${myITEM#*:}"
+	    done
 	    case ", ${myFAILED}, " in
 	      *", ${myGROUP}, "*) myITEMS+=("fail:$(fuGROUP_TITLE "${myGROUP}"): not restored, see above") ;;
-	      *) myITEMS+=("ok:$(fuGROUP_TITLE "${myGROUP}")") ;;
+	      *) if [ -n "${myWARN}" ];
+	           then myITEMS+=("warn:$(fuGROUP_TITLE "${myGROUP}"): ${myWARN}")
+	           else myITEMS+=("ok:$(fuGROUP_TITLE "${myGROUP}")")
+	         fi ;;
 	    esac
 	done
 	if [ -n "${myFAILED}" ];
@@ -764,6 +974,19 @@ function fuEND () {
 ################
 # Main section #
 ################
+
+# The long options first: the option loop below knows only the short ones
+myARGV=()
+for myARG in "$@";
+  do
+    case "${myARG}" in
+      --accept-data-loss) myACCEPT_LOSS=1 ;;
+      --help) myARGV+=("-h") ;;
+      --?*)   fuUI_USAGE_ERROR "Unknown option ${myARG}." restore.sh; exit 1 ;;
+      *)      myARGV+=("${myARG}") ;;
+    esac
+done
+set -- "${myARGV[@]}"
 
 while getopts ":lf:ycg:B:h" opt; do
   case "$opt" in
