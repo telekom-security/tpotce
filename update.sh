@@ -43,6 +43,10 @@ myFULL=""
 # from a test run included - and only takes up disk.
 myREPOS="dtagdevsec ghcr.io/telekom-security"
 
+# How long the registry may take to confirm that the old images can be pulled again, all of
+# them together (fuSORT_IMAGES): one that is not confirmed by then is kept unless confirmed.
+myPULLABLE_DEADLINE=90
+
 # Set when the checkout turns out to ship an older release than the running script.
 # Nothing after the pull is an update then: the compose file, .env and the image tags
 # all belong to the older release. The run puts the configuration back and stops
@@ -326,9 +330,11 @@ does not all name, is not confirmed." \
 	  --example "./update.sh --check-data-loss" "List what an update would lose for good: '@@tpot loss <key> <text>'" \
 	  --note "restore.sh brings a backup back, tpot update hands every option on to update.sh." \
 	  --note "A loss of data is what the backup of the run cannot bring back: older backups deleted to
-make room, an Elasticsearch data upgrade without --full, images built here. Each one asks at a
-terminal (default no); without one only --accept-data-loss confirms it. Not confirmed, the run
-keeps the images and goes on, or stops with exit 5 (T-Pot keeps running, or the checkout goes back)."
+make room, an Elasticsearch data upgrade without --full, images built here or not confirmed as
+pullable again. Each one asks at a terminal (default no); without one only --accept-data-loss
+(every loss) or --accept-data-loss-file (the losses it names) confirms it. Not confirmed, the
+run keeps the images and goes on, or stops with exit 5 (T-Pot keeps running, or the checkout
+goes back where it can)."
 	exit 0
 }
 
@@ -1582,25 +1588,29 @@ function fuREMOVEOLDIMAGES () {
 	      done;
 	    mapfile -t -O "${#myALL[@]}" myALL <<< "${myLIST}"
 	done;
-	# An image built here has no RepoDigests: nothing can pull it again, so it only goes once
-	# that is confirmed (fuLOSS_CONFIRM). Otherwise it stays and the update goes on.
-	local myPULLABLE=() myLOCAL=()
-	for myIMAGE in ${myALL[@]+"${myALL[@]}"};
-	  do
-	    if fuIMAGE_PULLABLE "${myIMAGE}";
-	      then myPULLABLE+=("${myIMAGE}")
-	      else myLOCAL+=("${myIMAGE}")
-	    fi
-	  done;
+	# An image built here, or one the registry did not confirm in time, may never come back: it
+	# only goes once that is confirmed (fuLOSS_CONFIRM). Otherwise it stays and the update goes on.
+	local myPULLABLE=() myBUILT=() myUNSURE=()
+	fuSORT_IMAGES ${myALL[@]+"${myALL[@]}"}
 	myALL=(${myPULLABLE[@]+"${myPULLABLE[@]}"})
-	if [ "${#myLOCAL[@]}" -gt 0 ];
+	if [ "${#myBUILT[@]}" -gt 0 ];
 	  then
-	    if fuLOSS_CONFIRM images "$(fuLOCAL_IMAGES_TEXT "${myLOCAL[@]}")" "${myLOCAL[@]}";
+	    if fuLOSS_CONFIRM images "$(fuLOCAL_IMAGES_TEXT "${myBUILT[@]}")" "${myBUILT[@]}";
 	      then
-	        myALL+=("${myLOCAL[@]}")
+	        myALL+=("${myBUILT[@]}")
 	      else
 	        fuUI_HINT "Keeping them, the update goes on. 'docker rmi <image>' removes one later."
-	        fuDID info "Kept ${#myLOCAL[@]} image(s) built here, nothing can pull them again."
+	        fuDID info "Kept ${#myBUILT[@]} image(s) built here, nothing can pull them again."
+	    fi
+	fi
+	if [ "${#myUNSURE[@]}" -gt 0 ];
+	  then
+	    if fuLOSS_CONFIRM images "$(fuUNSURE_IMAGES_TEXT "${myUNSURE[@]}")" "${myUNSURE[@]}";
+	      then
+	        myALL+=("${myUNSURE[@]}")
+	      else
+	        fuUI_HINT "Keeping them, the update goes on. 'docker rmi <image>' removes one later."
+	        fuDID info "Kept ${#myUNSURE[@]} image(s) that could not be confirmed as pullable again."
 	    fi
 	fi
 	myTOTAL="${#myALL[@]}"
@@ -1635,18 +1645,45 @@ function fuREMOVEOLDIMAGES () {
 }
 
 # Can the image be pulled again? Only if the registry still serves its digest: RepoDigests
-# alone do not tell, the containerd image store gives a local build one as well. No digest,
-# another digest, no timeout or buildx, no network: built here, so when in doubt it is kept
-# (or the run asks).
-function fuIMAGE_PULLABLE () {   # $1 = image
+# alone do not tell, the containerd image store gives a local build one as well. rc 0: the
+# registry has the digest; 1: built here (no digest, or another one than the registry's);
+# 2: cannot tell (no timeout or buildx, a timeout, no network, any other error). 1 and 2 are
+# kept unless confirmed (or the run asks).
+function fuIMAGE_PULLABLE () {   # $1 = image, $2 = seconds the registry may take (default 20)
 	local myLOCAL="" myREMOTE=""
 	myLOCAL=$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$1" 2>/dev/null \
 	          | sed -n 's/^[^@]*@//p')
 	[ -n "${myLOCAL}" ] || return 1
-	command -v timeout > /dev/null 2>&1 || return 1
-	myREMOTE=$(timeout 20 docker buildx imagetools inspect --format '{{.Manifest.Digest}}' "$1" 2>/dev/null) || return 1
+	command -v timeout > /dev/null 2>&1 || return 2
+	myREMOTE=$(timeout "${2:-20}" docker buildx imagetools inspect --format '{{.Manifest.Digest}}' "$1" 2>/dev/null) || return 2
 	myREMOTE=$(printf '%s' "${myREMOTE}" | tr -d "[:space:]")
-	[ -n "${myREMOTE}" ] && printf '%s\n' "${myLOCAL}" | grep -qxF -- "${myREMOTE}"
+	[ -n "${myREMOTE}" ] || return 2
+	printf '%s\n' "${myLOCAL}" | grep -qxF -- "${myREMOTE}" || return 1
+}
+
+# The images sorted by fuIMAGE_PULLABLE into myPULLABLE, myBUILT (built here) and myUNSURE (cannot
+# tell), the arrays of the caller. One deadline for all of them (myPULLABLE_DEADLINE): once it is
+# over, every image left cannot be told, without another request to the registry.
+function fuSORT_IMAGES () {   # $@ = images
+	local myIMAGE="" myRC=0 myLEFT=0 myEND=$((SECONDS + ${myPULLABLE_DEADLINE:-90}))
+	myPULLABLE=() myBUILT=() myUNSURE=()
+	for myIMAGE in "$@";
+	  do
+	    myLEFT=$((myEND - SECONDS))
+	    if [ "${myLEFT}" -le 0 ];
+	      then
+	        myUNSURE+=("${myIMAGE}")
+	        continue
+	    fi
+	    [ "${myLEFT}" -le 20 ] || myLEFT=20
+	    myRC=0
+	    fuIMAGE_PULLABLE "${myIMAGE}" "${myLEFT}" || myRC=$?
+	    case "${myRC}" in
+	      0) myPULLABLE+=("${myIMAGE}") ;;
+	      1) myBUILT+=("${myIMAGE}") ;;
+	      *) myUNSURE+=("${myIMAGE}") ;;
+	    esac
+	  done
 }
 
 # The loss of the images built here, for fuLOSS_CONFIRM and fuLOSS_ADD
@@ -1654,6 +1691,13 @@ function fuLOCAL_IMAGES_TEXT () {   # $@ = images
 	local myIMAGE="" myLIST=""
 	for myIMAGE in "$@"; do myLIST="${myLIST}${myLIST:+, }${myIMAGE}"; done
 	echo "$# image(s) built here cannot be pulled again: ${myLIST}"
+}
+
+# The loss of the images the registry did not confirm, for fuLOSS_CONFIRM and fuLOSS_ADD
+function fuUNSURE_IMAGES_TEXT () {   # $@ = images
+	local myIMAGE="" myLIST=""
+	for myIMAGE in "$@"; do myLIST="${myLIST}${myLIST:+, }${myIMAGE}"; done
+	echo "$# image(s) could not be confirmed as pullable again (registry not reachable or slow): ${myLIST}"
 }
 
 # The T-Pot images of one registry without the tag in use, repository:tag each
@@ -2380,7 +2424,7 @@ function fuLOSS_TARGET () {
 # most. rc 0 for none, 3 for some, 1 when it cannot tell.
 function fuCHECK_DATA_LOSS () {
 	local myREF="" myNEW="" myOLD="" myREPO="" myNEWREPO="" myCURRENT="" myKEEP="" myIMAGE="" myDATA="" myOLDARCHIVE=""
-	local myLOCAL=()
+	local myLOCAL=() myPULLABLE=() myBUILT=() myUNSURE=()
 	local myGIT=(git -C "$HOME/tpotce")
 	myLOSSES=0
 	fuCHECK_BACKUP_SPACE
@@ -2432,10 +2476,13 @@ function fuCHECK_DATA_LOSS () {
 	          do
 	            for myIMAGE in $(fuIMAGES "${myNEWREPO}" "${myKEEP}");
 	              do
-	                fuIMAGE_PULLABLE "${myIMAGE}" || myLOCAL+=("${myIMAGE}")
+	                myLOCAL+=("${myIMAGE}")
 	              done;
 	          done;
-	        [ "${#myLOCAL[@]}" -eq 0 ] || fuLOSS_ADD images "$(fuLOCAL_IMAGES_TEXT "${myLOCAL[@]}")"
+	        # the same deadline as the run
+	        fuSORT_IMAGES ${myLOCAL[@]+"${myLOCAL[@]}"}
+	        [ "${#myBUILT[@]}" -eq 0 ] || fuLOSS_ADD images "$(fuLOCAL_IMAGES_TEXT "${myBUILT[@]}")"
+	        [ "${#myUNSURE[@]}" -eq 0 ] || fuLOSS_ADD images "$(fuUNSURE_IMAGES_TEXT "${myUNSURE[@]}")"
 	    fi
 	    echo
 	fi

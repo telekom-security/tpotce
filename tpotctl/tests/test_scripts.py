@@ -1588,7 +1588,7 @@ class DataLossTest(Harness):
               esac
             }
             fuRMI () { echo "RMI: $*"; printf '%s\\n' "$@" >> "$HOME/removed"; }
-        """) + extra + self.functions("fuLOSS_IN_FILE", "fuLOSS_CONFIRM", "fuIMAGE_PULLABLE", "fuLOCAL_IMAGES_TEXT", "fuIMAGES",
+        """) + extra + self.functions("fuLOSS_IN_FILE", "fuLOSS_CONFIRM", "fuIMAGE_PULLABLE", "fuSORT_IMAGES", "fuLOCAL_IMAGES_TEXT", "fuUNSURE_IMAGES_TEXT", "fuIMAGES",
                                                     "fuREMOVEOLDIMAGES") \
             + 'fuREMOVEOLDIMAGES\necho "went on"\n'
         return self.bash(script)
@@ -1660,8 +1660,8 @@ class DataLossTest(Harness):
     """)
     CHECK_FUNCTIONS = ("fuLOSS_ADD", "fuLOSS_IN_FILE", "fuLOSS_CONFIRM", "fuDROP_OLDEST", "fuBACKUP_SIZE", "fuNO_ROOM",
                        "fuCHECK_BACKUP_SPACE",
-                       "fuDATA_PATH", "fuCOMPOSE_HAS", "fuES_IMAGE_VERSION", "fuOLD_RELEASE_BACKUP", "fuIMAGE_PULLABLE",
-                       "fuLOCAL_IMAGES_TEXT", "fuIMAGES", "fuLOSS_TARGET", "fuCHECK_DATA_LOSS")
+                       "fuDATA_PATH", "fuCOMPOSE_HAS", "fuES_IMAGE_VERSION", "fuOLD_RELEASE_BACKUP", "fuIMAGE_PULLABLE", "fuSORT_IMAGES",
+                       "fuLOCAL_IMAGES_TEXT", "fuUNSURE_IMAGES_TEXT", "fuIMAGES", "fuLOSS_TARGET", "fuCHECK_DATA_LOSS")
 
     def check(self, extra=""):
         script = ('myCHECK_LOSS=1\n' + self.CHECK + extra + self.functions(*self.CHECK_FUNCTIONS)
@@ -1807,8 +1807,8 @@ class DataLossTest(Harness):
                 "buildx imagetools") {answer} ;;
               esac
             }}
-        """) + self.functions("fuIMAGE_PULLABLE") + 'fuIMAGE_PULLABLE repo/x:1 && echo pullable || echo here\n'
-        return self.bash(script).stdout.strip().splitlines()[-1]
+        """) + self.functions("fuIMAGE_PULLABLE") + 'fuIMAGE_PULLABLE repo/x:1; echo "rc=$?"\n'
+        return {"rc=0": "pullable", "rc=1": "here", "rc=2": "unsure"}[self.bash(script).stdout.strip().splitlines()[-1]]
 
     def test_no_digest_is_built_here(self):
         self.assertEqual(self.pullable("", "sha256:aaa"), "here")
@@ -1820,14 +1820,96 @@ class DataLossTest(Harness):
         # the containerd image store gives a local build a RepoDigest of its own
         self.assertEqual(self.pullable("repo/x@sha256:bbb\\n", "sha256:aaa"), "here")
 
-    def test_buildx_failing_is_built_here(self):
-        self.assertEqual(self.pullable("repo/x@sha256:aaa\\n", None), "here")
-        self.assertEqual(self.pullable("repo/x@sha256:aaa\\n", ""), "here")
+    def test_buildx_failing_cannot_tell(self):
+        # no network, a timeout, no buildx, any other error: the registry did not say
+        self.assertEqual(self.pullable("repo/x@sha256:aaa\\n", None), "unsure")
+        self.assertEqual(self.pullable("repo/x@sha256:aaa\\n", ""), "unsure")
 
-    def test_without_timeout_it_is_built_here(self):
-        script = ('unset -f timeout\nPATH=/nonexistent\ndocker () { echo "repo/x@sha256:aaa"; }\n'
-                  + self.functions("fuIMAGE_PULLABLE") + 'fuIMAGE_PULLABLE repo/x:1 && echo pullable || echo here\n')
-        self.assertEqual(self.bash(script).stdout.strip().splitlines()[-1], "here")
+    def test_without_timeout_it_cannot_tell(self):
+        # a PATH with the tools of the function but no timeout: the digests are read, then it stops
+        tools = os.path.join(self.home, "tools")
+        os.makedirs(tools)
+        for name in ("sed", "tr", "grep"):
+            os.symlink(shutil.which(name), os.path.join(tools, name))
+        script = (self.functions("fuIMAGE_PULLABLE") + f'unset -f timeout\nPATH="{tools}"\n'
+                  'docker () { case "$1 $2" in "image inspect") echo "repo/x@sha256:aaa" ;; '
+                  '*) echo "REGISTRY ASKED" ;; esac; }\n'
+                  'fuIMAGE_PULLABLE repo/x:1; echo "rc=$?"\n')
+        out = self.bash(script).stdout
+        self.assertEqual(out.strip().splitlines()[-1], "rc=2", out)
+        self.assertNotIn("REGISTRY ASKED", out)
+
+    def sort_images(self, deadline, buildx="echo sha256:aaa"):
+        """fuSORT_IMAGES on three images with RepoDigests, each registry request logged to HOME/asked."""
+        script = textwrap.dedent(f"""
+            myPULLABLE_DEADLINE={deadline}
+            docker () {{
+              case "$1 $2" in
+                "image inspect") echo "repo/x@sha256:aaa" ;;
+                "buildx imagetools") echo "$*" >> "$HOME/asked"; {buildx} ;;
+              esac
+            }}
+        """) + self.functions("fuIMAGE_PULLABLE", "fuSORT_IMAGES") + textwrap.dedent("""
+            fuSORT_IMAGES repo/a:1 repo/b:1 repo/c:1
+            echo "pullable=${myPULLABLE[*]}"; echo "built=${myBUILT[*]}"; echo "unsure=${myUNSURE[*]}"
+        """)
+        out = self.bash(script).stdout
+        try:
+            with open(os.path.join(self.home, "asked"), encoding="utf-8") as handle:
+                asked = handle.read().splitlines()
+        except FileNotFoundError:
+            asked = []
+        return out, asked
+
+    def test_the_three_states_are_sorted(self):
+        out, asked = self.sort_images(90)
+        self.assertIn("pullable=repo/a:1 repo/b:1 repo/c:1", out)
+        self.assertEqual(len(asked), 3)
+        out, _asked = self.sort_images(90, buildx="return 1")
+        self.assertIn("unsure=repo/a:1 repo/b:1 repo/c:1", out)
+
+    def test_after_the_deadline_the_registry_is_not_asked_again(self):
+        out, asked = self.sort_images(1, buildx="sleep 1.2; echo sha256:aaa")
+        self.assertEqual(len(asked), 1, out)                       # the first one took the whole time
+        self.assertIn("pullable=repo/a:1\n", out)
+        self.assertIn("unsure=repo/b:1 repo/c:1", out)
+        os.remove(os.path.join(self.home, "asked"))
+        out, asked = self.sort_images(0)
+        self.assertEqual(asked, [], out)
+        self.assertIn("unsure=repo/a:1 repo/b:1 repo/c:1", out)
+
+    def test_the_deadline_is_90_seconds(self):
+        self.assertIn("\nmyPULLABLE_DEADLINE=90\n", read("update.sh"))
+        for name in ("fuREMOVEOLDIMAGES", "fuCHECK_DATA_LOSS"):
+            body = re.search(rf"function {name} \(\) \{{.*?\n\}}", read("update.sh"), re.S).group(0)
+            self.assertIn("fuSORT_IMAGES", body, name)
+            self.assertNotIn("fuIMAGE_PULLABLE", body, name)
+
+    def test_the_texts_name_each_state(self):
+        script = self.functions("fuLOCAL_IMAGES_TEXT", "fuUNSURE_IMAGES_TEXT") + textwrap.dedent("""
+            fuLOCAL_IMAGES_TEXT repo/a:1 repo/b:1; fuUNSURE_IMAGES_TEXT repo/c:1
+        """)
+        self.assertEqual(self.bash(script).stdout.splitlines()[-2:],
+                         ["2 image(s) built here cannot be pulled again: repo/a:1, repo/b:1",
+                          "1 image(s) could not be confirmed as pullable again (registry not reachable or slow): "
+                          "repo/c:1"])
+
+    def test_images_that_cannot_be_told_are_kept_without_confirmation(self):
+        result = self.images(extra='myPULLABLE_DEADLINE=0\n')
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out)
+        self.assertEqual([line for line in out.splitlines() if line.startswith("RMI: ")], [])
+        self.assertIn("WARN: 2 image(s) could not be confirmed as pullable again (registry not reachable or slow): "
+                      "ghcr.io/telekom-security/cowrie:24.04.1, ghcr.io/telekom-security/mine:24.04.1", out)
+        self.assertIn("went on", out)
+
+    def test_check_mode_lists_images_that_cannot_be_told(self):
+        self.target()
+        out, lines = self.check(extra="myPULLABLE_DEADLINE=0\n")
+        self.assertEqual([line.split()[2] for line in lines], ["elastic", "images"], out)
+        self.assertIn("2 image(s) could not be confirmed as pullable again (registry not reachable or slow): "
+                      "ghcr.io/telekom-security/elasticsearch:24.04.2, ghcr.io/telekom-security/mine:24.04.2",
+                      lines[1])
 
     def test_ctrl_c_during_the_rollback_lets_it_finish(self):
         """A second Ctrl+C while restore.sh puts the checkout back must not leave it half way."""
