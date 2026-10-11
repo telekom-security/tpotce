@@ -1,9 +1,9 @@
 # Override the named "source" context for a local pre-publication build.
 FROM --platform=$BUILDPLATFORM alpine:3.24 AS fetch
 ARG CISCOASA_TAG=v2.0.1
-ARG CISCOASA_COMMIT=6ea515124017d38e7705e2e5367a2c699fae0221
+ARG CISCOASA_COMMIT=941fb0938c91e950f667bfc3a2b2f4afcfa89596
 RUN apk add --no-cache ca-certificates git && \
-    git clone --branch "$CISCOASA_TAG" --depth 1 https://github.com/t3chn0m4g3/ciscoasa_honeypot /src && \
+    git clone --branch "$CISCOASA_TAG" --depth 1 https://github.com/telekom-security/ciscoasa_honeypot /src && \
     test "$(git -C /src rev-parse HEAD)" = "$CISCOASA_COMMIT"
 
 FROM scratch AS source

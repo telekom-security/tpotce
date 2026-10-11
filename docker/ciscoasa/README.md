@@ -1,6 +1,6 @@
 # Ciscoasa v2 integration
 
-The regular Dockerfile fetches `v2.0.1` from the fork and verifies its source commit (`6ea515124017d38e7705e2e5367a2c699fae0221`). Publish the tag before using the remote build; the local `source` context can be used beforehand.
+The regular Dockerfile fetches the published `v2.0.1` release from `telekom-security/ciscoasa_honeypot` and verifies its source commit (`941fb0938c91e950f667bfc3a2b2f4afcfa89596`). Release: https://github.com/telekom-security/ciscoasa_honeypot/releases/tag/v2.0.1. The local `source` context can be used for development builds.
 
 For local development, use the named `source` build context pointing at the fork checkout, for example:
 

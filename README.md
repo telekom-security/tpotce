@@ -126,7 +126,7 @@ T-Pot's main components have been moved into the `tpotinit` Docker image allowin
 - T-Pot offers docker images for the following honeypots:<br>
 [adbhoney](https://github.com/huuck/ADBHoney),
 [beelzebub](https://github.com/beelzebub-labs/beelzebub),
-[ciscoasa](https://github.com/t3chn0m4g3/ciscoasa_honeypot),
+[ciscoasa](https://github.com/telekom-security/ciscoasa_honeypot),
 [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot),
 [conpot](http://conpot.org/),
 [cowrie](https://github.com/cowrie/cowrie),
@@ -1201,7 +1201,7 @@ The software that T-Pot is built on uses the following licenses.
 <br>MIT license:
 [autoheal](https://github.com/willfarrell/docker-autoheal?tab=MIT-1-ov-file#readme),
 [beelzebub](https://github.com/beelzebub-labs/beelzebub?tab=MIT-1-ov-file#readme),
-[ciscoasa](https://github.com/t3chn0m4g3/ciscoasa_honeypot/blob/master/LICENSE),
+[ciscoasa](https://github.com/telekom-security/ciscoasa_honeypot/blob/master/LICENSE),
 [ddospot](https://github.com/aelth/ddospot/blob/master/LICENSE),
 [elasticvue](https://github.com/cars10/elasticvue/blob/master/LICENSE),
 [glutton](https://github.com/mushorg/glutton/blob/main/LICENSE),
@@ -1235,7 +1235,7 @@ Without open source and the development community we are proud to be a part of, 
 
 * [adbhoney](https://github.com/huuck/ADBHoney/graphs/contributors),
 [beelzebub](https://github.com/beelzebub-labs/beelzebub/graphs/contributors),
-[ciscoasa](https://github.com/t3chn0m4g3/ciscoasa_honeypot/graphs/contributors),
+[ciscoasa](https://github.com/telekom-security/ciscoasa_honeypot/graphs/contributors),
 [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot/graphs/contributors),
 [conpot](https://github.com/mushorg/conpot/graphs/contributors),
 [cowrie](https://github.com/cowrie/cowrie/graphs/contributors),
