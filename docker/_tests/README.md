@@ -57,7 +57,7 @@ Individual tests can also be run directly:
 ```bash
 ./docker/_tests/tests/adbhoney.sh
 ./docker/_tests/tests/adbhoney.sh --image dtagdevsec/adbhoney:24.04 --host-port 15555
-./docker/_tests/tests/ciscoasa.sh --https-port 18443 --ike-port 15000
+./docker/_tests/tests/ciscoasa.sh --https-port 18443 --ike-port 15000 --natt-port 14500
 ./docker/_tests/tests/citrixhoneypot.sh --https-port 1443
 ./docker/_tests/tests/conpot.sh --guardian-ast-port 11001 --ipmi-port 1623
 ./docker/_tests/tests/cowrie.sh
@@ -184,3 +184,5 @@ data in memory only (`/etc/redis.conf`).
 - Use temporary directories under `/tmp` for logs and downloads.
 - Bind host ports to loopback by default and prefer dynamic host ports.
 - Fail with a clear image build hint when the target image is missing.
+
+Ciscoasa v2 uses dynamic host ports by default and probes HTTPS, AnyConnect, ASDM, JSON credentials, inert uploads and IKE on both UDP listeners. Its identity is checked again after restart.

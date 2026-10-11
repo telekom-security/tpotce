@@ -126,7 +126,7 @@ T-Pot's main components have been moved into the `tpotinit` Docker image allowin
 - T-Pot offers docker images for the following honeypots:<br>
 [adbhoney](https://github.com/huuck/ADBHoney),
 [beelzebub](https://github.com/beelzebub-labs/beelzebub),
-[ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot),
+[ciscoasa](https://github.com/t3chn0m4g3/ciscoasa_honeypot),
 [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot),
 [conpot](http://conpot.org/),
 [cowrie](https://github.com/cowrie/cowrie),
@@ -266,7 +266,7 @@ Besides the ports generally needed by the OS, i.e. obtaining a DHCP lease, DNS, 
 | 64297                                                                                                                                 | tcp      | incoming  | T-Pot Management Access to NGINX reverse proxy                                                      |
 | 5555                                                                                                                                  | tcp      | incoming  | Honeypot: ADBHoney                                                                                  |
 | 22, 23, 389, 445, 1433, 1883, 2222, 3306, 3389, 5432, 5900, 6379, 8000, 8081, 8888, 11211                                             | tcp      | incoming  | Honeypot: Beelzebub  (LLM required, LLM edition, elsewhere 22)                                      |
-| 5000                                                                                                                                  | udp      | incoming  | Honeypot: CiscoASA                                                                                  |
+| 500, 4500                                                                                                                                  | udp      | incoming  | Honeypot: CiscoASA                                                                                  |
 | 8443                                                                                                                                  | tcp      | incoming  | Honeypot: CiscoASA                                                                                  |
 | 443                                                                                                                                   | tcp      | incoming  | Honeypot: CitrixHoneypot                                                                            |
 | 102, 502, 1025, 2404, 4840, 5094, 10001, 20000, 48898, 50100                                                                          | tcp      | incoming  | Honeypot: Conpot                                                                                    |
@@ -1201,7 +1201,7 @@ The software that T-Pot is built on uses the following licenses.
 <br>MIT license:
 [autoheal](https://github.com/willfarrell/docker-autoheal?tab=MIT-1-ov-file#readme),
 [beelzebub](https://github.com/beelzebub-labs/beelzebub?tab=MIT-1-ov-file#readme),
-[ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/blob/master/LICENSE),
+[ciscoasa](https://github.com/t3chn0m4g3/ciscoasa_honeypot/blob/master/LICENSE),
 [ddospot](https://github.com/aelth/ddospot/blob/master/LICENSE),
 [elasticvue](https://github.com/cars10/elasticvue/blob/master/LICENSE),
 [glutton](https://github.com/mushorg/glutton/blob/main/LICENSE),
@@ -1235,7 +1235,7 @@ Without open source and the development community we are proud to be a part of, 
 
 * [adbhoney](https://github.com/huuck/ADBHoney/graphs/contributors),
 [beelzebub](https://github.com/beelzebub-labs/beelzebub/graphs/contributors),
-[ciscoasa](https://github.com/Cymmetria/ciscoasa_honeypot/graphs/contributors),
+[ciscoasa](https://github.com/t3chn0m4g3/ciscoasa_honeypot/graphs/contributors),
 [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot/graphs/contributors),
 [conpot](https://github.com/mushorg/conpot/graphs/contributors),
 [cowrie](https://github.com/cowrie/cowrie/graphs/contributors),
@@ -1292,3 +1292,5 @@ And from @robcowart (creator of [ElastiFlow](https://github.com/robcowart/elasti
 <br><br>
 
 # Thank you 💖
+
+Ciscoasa emulates Cisco ASA/FTD WebVPN, AnyConnect, minimal ASDM and IKE (8443/tcp, 500/udp, 4500/udp). Identity and inert uploads persist below `data/ciscoasa/`; logins are always rejected. Events are JSON lines in `data/ciscoasa/log/ciscoasa.json`. The Ciscoasa dashboard includes credentials, CVE matches, VPN groups, client versions and upload hashes.

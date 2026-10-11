@@ -61,25 +61,25 @@ myTMP=""
 myRUNID="$(date -u +%Y%m%d%H%M%S)"
 mySTART="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-myKNOWNTYPES="cowrie dionaea honeytrap rdphoneypot"
+myKNOWNTYPES="cowrie dionaea honeytrap rdphoneypot ciscoasa"
 myINJECTEDTYPES=""
 
 # Per-type lookups as functions (no associative arrays: portable to bash 3).
-function fuKNOWN { case "$1" in cowrie|dionaea|honeytrap|rdphoneypot) return 0 ;; *) return 1 ;; esac; }
+function fuKNOWN { case "$1" in cowrie|dionaea|honeytrap|rdphoneypot|ciscoasa) return 0 ;; *) return 1 ;; esac; }
 # test source IP per type, assigned by fuPICKIPS into myIP_<type>
 function fuTESTIP { eval "printf '%s' \"\${myIP_$1:-}\""; }
 # fixed, unusual source port per type: together with the IP it identifies OUR
 # event unambiguously in ES, Redis and WebSocket output (real traffic from the
 # same IP cannot be mistaken for the test event)
 function fuSRCPORT {
-  case "$1" in cowrie) echo 51234 ;; dionaea) echo 51235 ;; honeytrap) echo 51236 ;; rdphoneypot) echo 51237 ;; esac
+  case "$1" in cowrie) echo 51234 ;; dionaea) echo 51235 ;; honeytrap) echo 51236 ;; rdphoneypot) echo 51237 ;; ciscoasa) echo 51238 ;; esac
 }
 function fuLOGFILE { # relative to the data path, exactly the Logstash file inputs
   case "$1" in cowrie) echo cowrie/log/cowrie.json ;; dionaea) echo dionaea/log/dionaea.json ;;
-    honeytrap) echo honeytrap/log/attackers.json ;; rdphoneypot) echo rdphoneypot/log/rdphoneypot.json ;; esac
+    honeytrap) echo honeytrap/log/attackers.json ;; rdphoneypot) echo rdphoneypot/log/rdphoneypot.json ;; ciscoasa) echo ciscoasa/log/ciscoasa.json ;; esac
 }
 function fuPORT {
-  case "$1" in cowrie) echo 22 ;; dionaea) echo 445 ;; honeytrap) echo 3306 ;; rdphoneypot) echo 3389 ;; esac
+  case "$1" in cowrie) echo 22 ;; dionaea) echo 445 ;; honeytrap) echo 3306 ;; rdphoneypot) echo 3389 ;; ciscoasa) echo 8443 ;; esac
 }
 # per-type stage results live in plain variables myRES_<stage>_<type>
 function fuSETRES { eval "myRES_$1_$2=\"\$3\"" ; }
@@ -120,6 +120,7 @@ function fuPARSEARGS {
       *) fuUI_ERROR "unknown argument: $1"; fuUSAGE ;;
     esac
   done
+  myTYPES=${myTYPES//Ciscoasa/ciscoasa}
   for t in ${myTYPES//,/ }; do
     fuKNOWN "$t" || { fuUI_ERROR "unknown type '$t' (known: $myKNOWNTYPES)"; exit 2; }
   done
@@ -197,6 +198,9 @@ function fuEVENT { # type ip timestamp -> one JSON line (fields the Logstash fil
     honeytrap)
       printf '{"timestamp":"%s","attack_connection":{"local_ip":"172.20.0.7","local_port":%s,"remote_ip":"%s","remote_port":%s,"protocol":"tcp","payload":{"length":0}}}\n' \
         "$ts" "$port" "$ip" "$sport" ;;
+    ciscoasa)
+      printf '{"timestamp":"%s","event_type":"http.request","src_ip":"%s","src_port":%s,"dest_port":%s,"protocol":"tcp","cve":[],"payload":"pipeline-test","asa":{"http":{"method":"GET","uri":"/","user_agent":"pipeline-test"},"profile":{"version":"9.20(4)5","hostname":"asa-test"}}}\n' \
+        "$ts" "$ip" "$sport" "$port" ;;
     rdphoneypot)
       printf '{"timestamp":"%s","src_ip":"%s","src_port":%s,"dst_ip":"172.20.0.8","dst_port":%s}\n' \
         "$ts" "$ip" "$sport" "$port" ;;

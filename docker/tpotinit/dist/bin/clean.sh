@@ -130,7 +130,7 @@ fuBEELZEBUB () {
 # Let's create a function to clean up and prepare ciscoasa data
 fuCISCOASA () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/ciscoasa/*; fi
-  mkdir -vp /data/ciscoasa/log
+  mkdir -vp /data/ciscoasa/{identity,log,payloads}
   chmod 770 /data/ciscoasa -R
   chown tpot:tpot /data/ciscoasa -R
 }

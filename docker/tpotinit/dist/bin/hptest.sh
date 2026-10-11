@@ -99,6 +99,39 @@ print(",".join(f"U:{p}" for p in sorted(udp)))
 '
 }
 
+function fuIKEPORTS {   # compose JSON -> Ciscoasa published port and NAT-T marker flag
+    python3 -c '
+import json, sys
+service = (json.load(sys.stdin).get("services") or {}).get("ciscoasa", {})
+for port in service.get("ports") or []:
+    if port.get("protocol") != "udp" or port.get("host_ip") in ("127.0.0.1", "::1"):
+        continue
+    target = port.get("target")
+    published = str(port.get("published") or target or "")
+    if target in (500, 4500) and published.isdigit():
+        print(published, int(target == 4500))
+'
+}
+
+function fuIKEPROBE {   # host published-port NAT-T-flag
+    python3 - "$1" "$2" "$3" <<'PYPROBE'
+import socket, struct, sys
+host, port, natt = sys.argv[1:]
+sa = bytes.fromhex("00000001000000010000002001010001000000180101000080010005800200028003000180040002")
+packet = b"tpotprob" + b"\0" * 8 + bytes([1, 0x10, 2, 0]) + struct.pack("!II", 0, 32 + len(sa)) + struct.pack("!BBH", 0, 0, 4 + len(sa)) + sa
+marker = b"\0" * 4 if natt == "1" else b""
+try:
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        sock.settimeout(3)
+        sock.sendto(marker + packet, (host, int(port)))
+        response, _ = sock.recvfrom(65535)
+    if not response.startswith(marker + b"tpotprob"):
+        sys.exit(1)
+except OSError:
+    sys.exit(1)
+PYPROBE
+}
+
 function fuHAS {   # command
 	command -v "$1" >/dev/null 2>&1
 }
@@ -209,6 +242,15 @@ if fuHAS findscu;
     timeout 10 findscu -P -k PatientName="*" "$myHOST" 11112 >/dev/null 2>&1 &
     timeout 10 getscu -P -k PatientName="*" "$myHOST" 11112 >/dev/null 2>&1 &
 fi
+myIKEPORTS=$(docker compose -f "${myDOCKERCOMPOSEYML}" config --format json 2>/dev/null | fuIKEPORTS)
+while read -r myIKEPORT myNATT;
+  do
+    [ -n "${myIKEPORT}" ] || continue
+    if fuIKEPROBE "$myHOST" "$myIKEPORT" "$myNATT";
+      then fuUI_OK "Ciscoasa IKE answered on ${myIKEPORT}/udp."
+      else fuUI_WARN "Ciscoasa IKE did not answer on ${myIKEPORT}/udp."
+    fi
+  done <<< "${myIKEPORTS}"
 wait
 fuUI_OK "Service requests sent."
 
