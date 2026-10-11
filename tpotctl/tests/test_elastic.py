@@ -314,6 +314,15 @@ class CliTest(unittest.TestCase):
         self.assertEqual((args.command, args.elastic_command, args.value, args.yes), ("elastic", "retention", "60", True))
         self.assertEqual(cli.build_parser().parse_args(["elastic"]).command, "elastic")
 
+    def test_the_setting_offers_the_usual_retentions(self):
+        from tpotctl import envschema
+        rule = envschema.load_schema()["TPOT_ES_RETENTION"]
+        self.assertEqual(rule.widget, "choice")
+        self.assertTrue(rule.custom)
+        self.assertEqual([(c["value"], c["label"]) for c in rule.choices],
+                         [("30", "30 days"), ("90", "90 days"), ("180", "180 days"), ("365", "1 year"),
+                          ("off", "never delete")])
+
     def test_retention_value_must_be_valid_before_anything_is_asked(self):
         from tpotctl import cli
         args = cli.build_parser().parse_args(["elastic", "retention", "30d", "-y"])
@@ -406,7 +415,7 @@ class RunElasticTest(unittest.TestCase):
         chosen = self.plan(doomed=[self.OLD])
         self.assertEqual(self.run_cli(["retention", "30"], plan=chosen, confirm=False), 1)
         self.assertEqual(len(self.asked), 1)
-        self.assertIn("1 indices with 1200 events", self.asked[0][0])
+        self.assertIn("1 index with 1200 events (4.9 KB) is deleted right away", self.asked[0][0])
         self.assertEqual((self.settings.changes, self.applied), ([], []))
         self.assertEqual(self.run_cli(["retention", "30"], plan=chosen, confirm=True), 0)
         self.assertEqual(self.settings.changes, [{"TPOT_ES_RETENTION": "30"}])
@@ -463,10 +472,96 @@ class RunElasticTest(unittest.TestCase):
         self.assertIn("TPOT_ES_RETENTION=45 is set in .env", self.out.getvalue())
         self.assertIn("tpot env set TPOT_ES_RETENTION=90", self.out.getvalue())
 
+    def test_status_warns_of_a_shorter_value_waiting_in_env(self):
+        for state, names_adopt in ((elastic.Status("30", "90", "managed"), True),
+                                   (elastic.Status("30", "", "missing"), False)):
+            with self.subTest(state=state.state):
+                self.assertEqual(self.run_cli(["status"], retention="30", state=state), 0)
+                text = self.out.getvalue() + self.err.getvalue()
+                self.assertIn("T-Pot deletes the events older than 30 days on its next start", text)
+                self.assertIn("tpot elastic retention --force", text)
+                self.assertEqual("tpot elastic retention --adopt" in text, names_adopt)
+                self.assertEqual(self.planned, [])
+
+    def test_status_is_quiet_where_nothing_waits(self):
+        for retention, state in (("90", elastic.Status("90", "90", "managed")),
+                                 ("365", elastic.Status("365", "90", "managed")),
+                                 ("off", elastic.Status("off", "", "missing")),
+                                 ("", elastic.Status("", "", "missing")),
+                                 ("30", elastic.Status("30", "90", "foreign"))):
+            with self.subTest(retention=retention, state=state.state):
+                self.run_cli(["status"], retention=retention, state=state)
+                self.assertNotIn("on its next start", self.out.getvalue() + self.err.getvalue())
+
+    def test_force_without_a_value_applies_the_env_value(self):
+        chosen = self.plan(doomed=[self.OLD])
+        self.assertEqual(self.run_cli(["retention", "--force"], retention="30", plan=chosen, confirm=True), 0)
+        self.assertEqual(self.planned, [("30", True)])
+        self.assertEqual(len(self.asked), 1)                   # the preview asks as for a value
+        self.assertEqual(self.settings.changes, [{"TPOT_ES_RETENTION": "30"}])
+        self.assertEqual(self.applied, [chosen])
+
+    def test_force_without_a_value_and_an_empty_env_value(self):
+        self.assertEqual(self.run_cli(["retention", "--force", "-y"], retention="", plan=self.plan()), 1)
+        self.assertIn("TPOT_ES_RETENTION is empty, set a value: tpot elastic retention DAYS", self.err.getvalue())
+        self.assertEqual((self.planned, self.settings.changes, self.applied), ([], [], []))
+
+    def test_adopt_and_a_value_are_a_usage_error(self):
+        self.assertEqual(self.run_cli(["retention", "30", "--adopt", "-y"], plan=self.plan()), 2)
+        self.assertEqual((self.planned, self.settings.changes, self.applied), ([], [], []))
+        self.assertIn("--adopt", self.err.getvalue())
+
+    def test_texts_name_the_commands_that_do_it(self):
+        foreign = elastic.Status("30", "365", "foreign")
+        self.run_cli(["status"], retention="30", state=foreign)
+        text = self.out.getvalue() + self.err.getvalue()
+        self.assertIn("tpot elastic retention --adopt", text)
+        self.assertIn("tpot elastic retention --force", text)
+        self.assertNotIn("takes it over", text)
+
     def test_a_sensor_has_no_elasticsearch(self):
         self.assertEqual(self.run_cli(["retention", "30", "-y"], plan=self.plan(), sensor=True), 1)
         self.assertEqual((self.planned, self.settings.changes), ([], []))
         self.assertIn("SENSOR", self.err.getvalue())
+
+
+
+class RunEnvRetentionTest(unittest.TestCase):
+    """tpot env set TPOT_ES_RETENTION: what it says about the next start."""
+
+    def env_set(self, *assignments, start="90"):
+        from contextlib import redirect_stderr, redirect_stdout
+        from unittest import mock
+        from tpotctl import cli, settings
+        from tpotctl.envfile import EnvFile
+        from tpotctl.tests.test_settings import make_checkout
+        repo = make_checkout(self)
+        env = EnvFile(os.path.join(repo, ".env"))
+        env.set("TPOT_ES_RETENTION", start)
+        env.save()
+        original = settings.load
+        out = io.StringIO()
+        with mock.patch.object(settings, "load", lambda **kwargs: original(repo, **kwargs)), \
+                mock.patch("tpotctl.ops.host_ostype", return_value="linux"), \
+                redirect_stdout(out), redirect_stderr(out):
+            self.assertEqual(cli.main(["env", "set"] + list(assignments)), 0, out.getvalue())
+        return " ".join(out.getvalue().split())
+
+    def test_a_shorter_value_warns_of_the_next_start(self):
+        text = self.env_set("TPOT_ES_RETENTION=30")
+        self.assertIn("The next start of T-Pot deletes the events older than 30 days", text)
+        self.assertIn("tpot elastic retention --force", text)
+        self.assertNotIn("Restart T-Pot to apply it", text)
+
+    def test_a_longer_value_does_not_warn(self):
+        text = self.env_set("TPOT_ES_RETENTION=365")
+        self.assertNotIn("deletes the events", text)
+        self.assertIn("tpot elastic retention --force", text)
+
+    def test_another_key_still_asks_for_the_restart(self):
+        text = self.env_set("TPOT_ES_RETENTION=30", "TPOT_ATTACKMAP_TEXT=DISABLED")
+        self.assertIn("deletes the events older than 30 days", text)
+        self.assertIn("Restart T-Pot to apply it", text)
 
 
 if __name__ == "__main__":
