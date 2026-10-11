@@ -890,18 +890,22 @@ code 5, leaving T-Pot up and running rather than filling the disk. That includes
 never quietly swapped for the regular backup.
 
 ### Loss of Data
-`update.sh` never deletes data for good without your confirmation. Data counts as lost when the backup of the same run cannot bring it back: the Elasticsearch data of an upgrade without `--full`, older backups that are deleted to make room for the new one, and images that cannot be pulled again. Before each of these the script asks (default no) and names what goes. Regular rotation of the backups, the rollback of your checkout and the rewrite of `.env` and the compose file are no loss of data, they are only mentioned.
+`update.sh` never deletes data for good without your confirmation. Data counts as lost when the backup of the same run cannot bring it back: the Elasticsearch data of an upgrade without `--full`, older backups that are deleted to make room for the new one, and images that cannot be pulled again or that the registry does not confirm in time. Before each of these the script asks (default no) and names what goes. Regular rotation of the backups, the rollback of your checkout and the rewrite of `.env` and the compose file are no loss of data, they are only mentioned.
 
-`-y` confirms the update, it does not confirm a loss of data. Without a terminal only `--accept-data-loss` does:
+`-y` confirms the update, it does not confirm a loss of data. Without a terminal `--accept-data-loss` confirms every loss (for the command line and cron, where you typed it), `--accept-data-loss-file <file>` only the losses its lines name:
 ```
 ./update.sh -y --accept-data-loss
+./update.sh --check-data-loss | grep '^@@tpot loss ' > found   # read it, keep what you accept
+./update.sh -y --accept-data-loss-file found
 ```
+The file holds the `@@tpot loss <key> <text>` lines of `--check-data-loss` that you accept. A loss of another key is not confirmed, and older backups or images are only deleted if the lines name every one of them; what the run finds beyond that counts as not confirmed.
+
 If you decline (or cannot answer):
  - older backups stay where they are, the update stops before it touches anything with exit code 5 and T-Pot keeps running. Free some space, or confirm.
- - the Elasticsearch upgrade does not happen: the checkout and your configuration are rolled back, the Elasticsearch data was never touched, T-Pot stays stopped and the run ends with exit code 5. Run it with `--full` to have the data in the backup (with the default data path; with another `TPOT_DATA_PATH` it still asks).
- - images that cannot be pulled again are kept, and the update goes on. An image can be pulled again only if the registry has an image with the same digest; any other, i.e. one built here, is only removed after you confirm it.
+ - the Elasticsearch upgrade does not happen: the checkout and your configuration are rolled back, the Elasticsearch data was never touched and the run ends with exit code 5. T-Pot stays stopped, with `-s` it starts again on the release it ran before. Run it with `--full` to have the data in the backup, whatever `TPOT_DATA_PATH` is.
+ - images that cannot be pulled again are kept, and the update goes on. An image can be pulled again only if the registry has an image with the same digest: one built here (no digest, or another one) and one the registry does not confirm within 90 seconds for all images together (not reachable, too slow) are only removed after you confirm it.
 
-`update.sh -y --check-data-loss` lists what the run would lose and changes nothing (a `git fetch` at most), exit code 3 means it found something. The T-Pot Manager runs this check before an update from its menu and asks first.
+`update.sh --check-data-loss` lists what the run would lose and changes nothing (a `git fetch` at most); exit code 0 means nothing found, 3 found, 1 it cannot tell. The T-Pot Manager runs this check before an update from its menu and asks first; a yes there confirms the findings it showed and nothing else (`--accept-data-loss-file`), if the check cannot tell it says why.
 
 ### Elastic Stack Upgrades
 When a release ships a newer Elastic Stack, Elasticsearch and Kibana upgrade their data in
@@ -919,9 +923,11 @@ the one of the release and, if they differ,
  - warns at 85% and more.
  - asks if the backup of the run does not hold `data/elk/data` (default no), and tells you how to
    copy it while T-Pot is still stopped. A no, or no terminal without `--accept-data-loss`, puts the
-   checkout and your configuration back, leaves T-Pot stopped and ends with exit code 5. `--full`
-   with the default data path puts the data into the backup, and then there is no question; with
-   another `TPOT_DATA_PATH` it still asks. `-y` does not answer it.
+   checkout and your configuration back and ends with exit code 5; T-Pot stays stopped, with `-s` it
+   starts again on the previous release. `--full` puts the data into the backup, whatever
+   `TPOT_DATA_PATH` is, and then there is no question. `-y` does not answer it. Where the checkout
+   cannot go back (it is the new release already, see below), the question says that a no cannot
+   stop the next start from upgrading the data: copy `data/elk/data` first, then update again.
 
 The first start after the upgrade takes longer than usual, give it a few minutes. To go back, stop
 T-Pot and restore the `--full` archive of that update with `restore.sh -f <archive> -y`: it replaces
@@ -953,6 +959,12 @@ and remove the ones your installation is running on.
 
 This is only needed once, coming from a release that predates this behaviour. Afterwards a plain
 `./update.sh -y` carries everything across on its own.
+
+If the `update.sh` of 24.04.1 already restarted into the new one, its checkout is the new release
+before the new script writes its backup, so a rollback is no longer possible. A release with a newer
+Elasticsearch then takes the archive the old script wrote to `~/*_tpot_backup.tgz` as the backup of
+the Elasticsearch data, if it is younger than 24 hours and holds `data/elk/data` of the data folder;
+otherwise it says that a no cannot stop the upgrade and how to copy the data first.
 
 To update from a different branch or fork, i.e. to test changes before they are merged, see [Testing a Branch](#testing-a-branch).
 
@@ -991,8 +1003,10 @@ the other groups go on (a warning at the end). The same holds for an ILM policy 
 keeps the events less long than the current one: putting it back deletes the older events right away,
 so not confirmed it is left out and `restore.sh` names the `curl` command to put it back yourself. A
 shorter `TPOT_ES_RETENTION` in the restored `.env` waits, T-Pot never shortens the policy on its own
-(`tpot elastic retention --force` applies it, it asks first). The menu asks before it restores `data/`
-and runs `restore.sh` with `--accept-data-loss` after a yes.
+(`tpot elastic retention --force` applies it, it asks first). `--accept-data-loss-file <file>` confirms
+only the losses its `@@tpot loss data ...` / `@@tpot loss ilm ...` lines name. The menu asks before it
+restores `data/` and after a yes confirms that one alone (`--accept-data-loss-file` with a `data`
+line): a shorter ILM policy of the archive is not put back from the menu.
 
 If you would rather do it by hand, the archive is a plain tar: `tar tvf <archive>` lists it,
 `MANIFEST` says which edition and commit it came from, and `rollback.txt` holds the commit to go
