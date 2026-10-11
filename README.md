@@ -357,7 +357,7 @@ Ddospot sorts every source address into one of two roles:
 - **Attackers (scanners)** search the internet for reflectors from their real address, i.e. research projects, search engines for internet services, or someone who looks for servers to use in an attack. They send a few packets and expect an answer.
 - **Victims** are the forged source addresses of an attack. They show up as many packets from one address, or from many addresses of one network, mostly to the same service.
 
-A new source is held for 60 seconds before Ddospot decides. During that time it gets answers within its budget. A source that stays within its budget is a scanner: Ddospot writes one line with its first request into the log file of the service. A source that goes beyond its budget is a victim: `targets.log` gets one line when the attack starts and one when it ends, the latter with the number of packets, the first and the last packet and the length of the attack (`attack_seconds`). A scanner that later goes beyond its budget is recorded as a victim too. A network (IPv4 /24, IPv6 /48) whose budget is used up gets lines of its own, with the network (`target_net`) and the number of its sources, one per address and service (`sources`).
+A new source is held for 60 seconds before Ddospot decides. During that time it gets answers within its budget. A source that stays within its budget is a scanner: Ddospot writes one line with its first request into the log file of the service. A source that sends more packets than its budget is a victim: `targets.log` gets one line when the attack starts and one when it ends, the latter with the number of packets, the first and the last packet and the length of the attack (`attack_seconds`). A scanner that later goes beyond its budget is recorded as a victim too. A network (IPv4 /24, IPv6 /48) that sends more packets than its budget gets lines of its own, with the network (`target_net`) and the number of its sources, one per address and service (`sources`). Sources of DNS over TCP are never victims.
 
 | Role               | What it is                                  | Log file                                                  | `type` in Kibana | Dashboard           |
 | :----------------- | :------------------------------------------ | :-------------------------------------------------------- | :--------------- | :------------------ |
@@ -367,26 +367,28 @@ A new source is held for 60 seconds before Ddospot decides. During that time it 
 The log files are in `~/tpotce/data/ddospot/log`. Scanners are attackers like those of every other honeypot: they show up in the Attack Map, the attacker panels (source IPs, countries, AS/N, reputation), the attack counts of the T-Pot Manager and the landing page and the [community data submission](#community-data-submission). Victims never appear in any of these, they did not attack anyone. Their place is the dashboard *Ddospot - Victims*: the attacks over time, the victims with their countries, AS/N and networks, the services used and the longest attacks.
 
 ### Answer budget
-Every answer of Ddospot counts against these budgets:
+Every packet Ddospot receives counts against these budgets:
 
-| Budget                                                 | Answers                                   |
+| Budget                                                 | Answered                                  |
 | :----------------------------------------------------- | :---------------------------------------- |
-| per source address and service                         | 5                                         |
-| per network (IPv4 /24, IPv6 /48), across all services  | 20                                        |
+| per source address and service                         | the first 5 packets                       |
+| per network (IPv4 /24, IPv6 /48), across all services  | the first 20 packets                      |
 | all answers together                                   | at most 50 answers and 64 KiB per second  |
 
-Once a budget is used up, Ddospot stays silent towards that source or network until 10 minutes have passed without a packet from it, every packet starts the 10 minutes again. DNS answers over TCP count against the budgets of the source and the network. Scanners send only a few packets, so they stay within their budget and get answers every time they come back. The tables of sources and networks have a limited size; while they are full, new sources get no answer.
+The budgets of the source and the network count packets, answered or not: the sixth packet of a source makes it a victim, the 21st packet of a network blocks the network. From then on Ddospot stays silent towards that source or network until 10 minutes have passed without a packet from it, every packet starts the 10 minutes again. Scanners send only a few packets, so they stay within their budget and get answers every time they come back. The tables of sources and networks have a limited size; while they are full, new sources get no answer.
+
+DNS over TCP is counted apart: a TCP connection starts with a handshake, so its source address is the one of the sender. Such a source gets answers to its first 5 queries over TCP, is never a victim and is not counted for its network. At most 256 TCP connections are open at a time, 4 of them from one address.
 
 ### DNS
 With `DDOSPOT_DNS_RECURSION=on`, the default, Ddospot answers DNS queries as a recursive name server: it asks Quad9 (`9.9.9.9`, `149.112.112.112`) over DNS over TLS, which needs outgoing connections to `853/tcp` (see [Required Ports](#required-ports)), checks the certificate of `dns.quad9.net` and caches the answers. The answer budget applies to every answer, the queries to Quad9 have a rate limit of their own. Choose `on` or `off` on the *Settings* page of the [`tpot`](#the-t-pot-manager-tpot) menu or with `tpot env set DDOSPOT_DNS_RECURSION=off`, then restart T-Pot (`tpot restart`).
 
-With `off`, or while Quad9 cannot be reached (Ddospot checks it once a minute), Ddospot refuses recursive queries (`REFUSED`); `version.bind` is still answered with the version of the persona's name server. UDP answers are kept small: a larger answer is sent with the truncation flag and without records, the client can ask again over TCP and gets the complete answer there.
+With `off`, or while Quad9 cannot be reached (Ddospot checks it once a minute, every 10 seconds while it gets no answer, and prints every change, `docker logs ddospot`), Ddospot refuses queries of class IN (`REFUSED`); `version.bind` is still answered with the version of the persona's name server. UDP answers are kept small: a larger answer is sent with the truncation flag and without records, the client can ask again over TCP and gets the complete answer there.
 
 ### Personas
 On every start Ddospot takes one coherent host profile and answers as that host on all four services: a release of a Linux distribution (CentOS 6, CentOS 7, Debian 11 or Ubuntu 20.04) with the versions of its NTP daemon, name server and UPnP daemon that belong together. The details of the host are new on every start: host name, LAN address, NTP reference server, UPnP UUIDs, boot time and more. SSDP answers come in the order and with the wait of the UPnP daemon of the persona. The persona of a run is printed at its start (`docker logs ddospot`) and written into every log line (`persona`).
 
 ### Before you enable it
-Services like these on a public address get noticed: projects that scan the internet record them and may put the address of your T-Pot on their lists, and hosting providers sometimes ask their customers about them. If you are not sure, ask your provider first. If your provider asks: the [answer budget](#answer-budget) limits what Ddospot sends to any address and network, the *Ddospot - Victims* dashboard shows the addresses whose forged requests reached it, and `DDOSPOT_DNS_RECURSION=off` keeps DNS from answering recursive queries.
+Services like these on a public address get noticed: projects that scan the internet record them and may put the address of your T-Pot on their lists, and hosting providers sometimes ask their customers about them. If you are not sure, ask your provider first. If your provider asks: the [answer budget](#answer-budget) limits what Ddospot sends to any address and network, the *Ddospot - Victims* dashboard shows the addresses whose forged requests reached it, and with `DDOSPOT_DNS_RECURSION=off` DNS refuses queries of class IN.
 - [Blackhole](#blackhole) (`TPOT_BLACKHOLE=ENABLED`) null routes known mass scanners, so fewer of them see Ddospot and the other honeypots.
 - To run the Tarpit edition without Ddospot, leave it out with the [customizer](#customize-t-pot-honeypots-and-services) (*Edition & services* in the `tpot` menu, or `tpot customize --base tarpit --remove ddospot`).
 <br><br>
