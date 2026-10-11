@@ -189,9 +189,10 @@ fuENV_RULE() {
         fuCHOICE "${myKEY}" ${myVALUES}
         ;;
       choice_list)
-        # every entry one of the values, none twice
+        # every entry one of the values, none twice; split without globbing ("*" stays "*")
         myLISTED=" "
-        for myENTRY in ${myVALUE};
+        read -r -a myENTRIES <<< "${myVALUE}"
+        for myENTRY in "${myENTRIES[@]}";
           do
             if [[ " ${myVALUES} " != *" ${myENTRY} "* ]];
               then

@@ -4,7 +4,7 @@
 #   Python in tpot:    tpotctl/tests/test_envschema.py
 # Every case starts from env.example plus `base`, then applies `set`. services are
 # the services of the compose file. errors / warnings list the keys that must have
-# one, nothing else may.
+# one, nothing else may; messages are texts one of the problems must contain.
 base:
   # tsec:tsec, the example of env.example
   WEB_USER: dHNlYzokYXByMSRYUnE2SC5rbiRVRjZQM1VVQmJVNWJUQmNmSGRuUFQxCgo=
@@ -135,6 +135,13 @@ cases:
     set: {COWRIE_PERSONA: "raspios raspios"}
     errors: [COWRIE_PERSONA]
     warnings: [LS_WEB_USER]
+  - name: cowrie persona is no glob
+    # the entries are split without globbing: "*" is no file name of the working directory
+    services: [tpotinit, cowrie]
+    set: {COWRIE_PERSONA: "raspios *"}
+    errors: [COWRIE_PERSONA]
+    warnings: [LS_WEB_USER]
+    messages: ['invalid value "*", allowed:']
   - name: cowrie persona not checked without cowrie
     services: [tpotinit, suricata]
     set: {COWRIE_PERSONA: "nope"}
