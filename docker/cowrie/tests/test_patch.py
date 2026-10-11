@@ -443,6 +443,12 @@ class PatchTest(unittest.TestCase):
         # the syntax tree of 15000 arguments takes about 15 MB; separator times arguments would be 480 MB
         self.assertLess(self.peak, 32 << 20)
 
+    def test_python_2_print_tuple_counts_against_the_output_limit(self):
+        code = "a = '" + "a" * 6000 + "'; print(" + "a," * 19000 + ")"
+        self.assertEqual(self.python(["-c", code], "2.7.5"), ("", "", 0))
+        # the syntax tree of 19000 arguments takes about 19 MB; the whole tuple text would be 140 MB
+        self.assertLess(self.peak, 32 << 20)
+
     def test_python_2_print_call_prints_a_tuple(self):
         self.assertEqual(self.python(["-c", 'print("a", "b")'], "2.7.5"), ("('a', 'b')\n", "", 0))
         self.assertEqual(self.python(["-c", 'print "a", "b"'], "2.7.5"), ("a b\n", "", 0))

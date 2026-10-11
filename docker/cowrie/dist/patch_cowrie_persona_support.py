@@ -703,11 +703,14 @@ def tpot_print_tuple(call, names, budget):
     if any(value is TPOT_UNKNOWN for value in values) or any(isinstance(arg, ast.Starred) for arg in call.args):
         return None
     try:
-        return tpot_text(repr(tuple(values)), budget) + "\n"
+        # each value charged on its own, so the output limit stops before the whole text is built
+        parts = [tpot_text(repr(value), budget) for value in values]
     except TpotOutputFull:
         raise
     except Exception:  # noqa: BLE001 - repr() of a literal CPython would print (digits limit)
         return None
+    tpot_text(" " * (2 * len(parts) + 1), budget)
+    return "(" + ", ".join(parts) + ")\n"
 
 
 def tpot_text(value, budget) -> str:
