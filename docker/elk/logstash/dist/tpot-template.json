@@ -88,6 +88,34 @@
         "geoip_ext.longitude": {
           "type": "half_float"
         },
+        "target_geoip.ip": {
+          "type": "ip"
+        },
+        "target_geoip.latitude": {
+          "type": "half_float"
+        },
+        "target_geoip.location": {
+          "type": "geo_point"
+        },
+        "target_geoip.longitude": {
+          "type": "half_float"
+        },
+        "target_port": {
+          "type": "long",
+          "ignore_malformed": true
+        },
+        "attack_seconds": {
+          "type": "long",
+          "ignore_malformed": true
+        },
+        "packets": {
+          "type": "long",
+          "ignore_malformed": true
+        },
+        "sources": {
+          "type": "long",
+          "ignore_malformed": true
+        },
         "dest_port": {
           "type": "long",
           "ignore_malformed": true
