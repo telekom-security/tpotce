@@ -475,9 +475,101 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             screen.query_one("#group-data").value = True
             await pilot.click("#restore-go")
             await pilot.pause(0.3)
+            self.assertIsInstance(app.screen, ConfirmDialog)                 # a loss of data: asked first
+            await pilot.click("#yes")
+            await pilot.pause(0.3)
             intro = str(app.screen.query_one("#task-intro").render())
         self.assertIn("data/", intro)
         self.assertIn("replaced", intro)
+
+    async def restore_with(self, backend, index, groups, answer=None):
+        """The restore page: archive index, these groups checked (the rest not), Restore; answer the
+        question of a loss of data if one comes (None: none expected), then Run in the task screen.
+        (what the question said, what had the focus), the commands run."""
+        from tpotctl.screens.restore import RestoreScreen
+        from tpotctl.screens.task import TaskScreen
+        FakeEngine.seen.clear()
+        shown = None
+        app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.2)
+            app.goto("update")
+            await pilot.pause(0.2)
+            await pilot.click("#run-restore")
+            await pilot.pause(0.3)
+            screen = app.screen
+            self.assertIsInstance(screen, RestoreScreen)
+            screen.query_one("#restore-list").highlighted = index
+            await pilot.pause(0.2)
+            for group in ops.GROUP_TEXT:
+                screen.query_one(f"#group-{group}").value = group in groups
+            await pilot.pause(0.1)
+            await pilot.click("#restore-go")
+            await pilot.pause(0.3)
+            if isinstance(app.screen, ConfirmDialog):
+                shown = (app.screen.title_text,
+                         " ".join("".join(str(w.render()) for w in app.screen.query("Static")).split()),
+                         app.focused.id if app.focused else None)
+                self.assertIsNotNone(answer, shown)
+                await pilot.click(f"#{answer}")
+                await pilot.pause(0.3)
+            if isinstance(app.screen, TaskScreen):
+                shown = shown + (str(app.screen.query_one("#task-intro").render()),) if shown else \
+                    (None, None, None, str(app.screen.query_one("#task-intro").render()))
+                await pilot.click("#task-run")
+                await pilot.pause(0.4)
+        return shown, list(FakeEngine.seen)
+
+    def full_backups(self):
+        backend = FakeBackend()
+        backend.backup_infos = lambda: [
+            ops.BackupInfo("/b/new_tpot_backup_full.tar", "20261005101010_tpot_backup_full.tar", 2 ** 30, "full",
+                           ["Created:      2026-10-05 10:10:10 +0200"], ["config", "data", "elastic"], es_data=True),
+            ops.BackupInfo("/b/old_tpot_backup.tar", "20261001101010_tpot_backup.tar", 2 ** 20, "regular",
+                           [], ["data"])]
+        return backend
+
+    async def test_restore_of_data_asks_and_no_starts_nothing(self):
+        shown, seen = await self.restore_with(self.full_backups(), 0, ["data"], answer="no")
+        title, body, focus = shown[:3]
+        self.assertEqual(title, "Replace the current data with the backup?")
+        self.assertEqual(focus, "no")                                     # the safe answer has the focus
+        self.assertIn("are replaced by those of the archive", body)
+        self.assertIn("newer files and log lines since the backup are lost", body)
+        self.assertIn("The current Elasticsearch data is deleted and replaced, events since 2026-10-05 10:10:10 "
+                      "+0200 are lost", body)
+        self.assertNotIn("ILM policy", body)                              # elastic is not chosen
+        self.assertIn("--accept-data-loss", body)
+        self.assertEqual(seen, [])
+
+    async def test_restore_of_data_with_yes_passes_accept(self):
+        restore = os.path.join(cli.REPO_DIR, "restore.sh")
+        shown, seen = await self.restore_with(self.full_backups(), 0, ["data", "elastic"], answer="yes")
+        self.assertIn("ILM policy", shown[1])                             # the flag confirms that too
+        self.assertEqual(seen, [[restore, "-f", "/b/new_tpot_backup_full.tar", "-g", "data,elastic",
+                                 "--accept-data-loss"]])
+
+    async def test_restore_of_data_without_elasticsearch_data_does_not_name_it(self):
+        shown, seen = await self.restore_with(self.full_backups(), 1, ["data"], answer="yes")
+        self.assertNotIn("Elasticsearch", shown[1])
+        self.assertIn("are replaced by those of the archive", shown[1])
+        self.assertEqual(seen[0][-1], "--accept-data-loss")
+
+    def test_the_date_of_a_backup(self):
+        info = ops.BackupInfo("/b/x.tar", "20261001101010_tpot_backup.tar", 1, "regular", [], [])
+        self.assertEqual(tapp.backup_written(info), "2026-10-01 10:10")              # from its name
+        info.manifest = ["Created:      2026-10-05 10:10:10 +0200"]
+        self.assertEqual(tapp.backup_written(info), "2026-10-05 10:10:10 +0200")     # from its MANIFEST
+        self.assertEqual(tapp.backup_written(ops.BackupInfo("/b/x.tar", "x.tar", 1, "regular", [], [])),
+                         "the backup")
+
+    async def test_restore_without_data_asks_nothing_and_passes_no_flag(self):
+        restore = os.path.join(cli.REPO_DIR, "restore.sh")
+        shown, seen = await self.restore_with(self.full_backups(), 0, ["config", "elastic"])
+        self.assertIsNone(shown[0])                                       # no question
+        self.assertIn("ILM policy", shown[3])                             # the intro says it is left out if shorter
+        self.assertIn("not put back", shown[3])
+        self.assertEqual(seen, [[restore, "-f", "/b/new_tpot_backup_full.tar", "-g", "config,elastic"]])
 
     async def test_refresh_runs_tpot_setup(self):
         FakeEngine.seen.clear()

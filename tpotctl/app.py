@@ -1720,6 +1720,40 @@ def data_loss_text(items) -> Text:
     return text
 
 
+def backup_written(info) -> str:
+    """When an archive of update.sh was written: Created: of its MANIFEST, else the date in its name."""
+    for line in (info.manifest if info else []):
+        if line.startswith("Created:"):
+            return line.split(":", 1)[1].strip()
+    name = info.name if info else ""
+    if len(name) >= 12 and name[:12].isdigit():
+        return f"{name[0:4]}-{name[4:6]}-{name[6:8]} {name[8:10]}:{name[10:12]}"
+    return "the backup"
+
+
+def restore_loss_text(info, groups) -> Text:
+    """The body of the question before a restore of data/ (the text of restore.sh fuDO_DATA): what it
+    replaces, the Elasticsearch data of a full archive, a shorter ILM policy with the elastic group."""
+    from tpotctl import system
+    where = ("the data path (TPOT_DATA_PATH of the restored .env)" if "config" in groups
+             else system.data_path(ops.env_values()))
+    text = Text()
+    text.append(f"{glyphs.g('fail')} ", style=theme.color("error"))
+    text.append(f"The files under {where} are replaced by those of the archive, newer files and log lines "
+                "since the backup are lost.\n", style=theme.color("mist"))
+    if info is not None and info.es_data:
+        text.append(f"{glyphs.g('fail')} ", style=theme.color("error"))
+        text.append(f"The current Elasticsearch data is deleted and replaced, events since {backup_written(info)} "
+                    "are lost.\n", style=theme.color("mist"))
+    if "elastic" in groups:
+        text.append(f"{glyphs.g('fail')} ", style=theme.color("error"))
+        text.append("An ILM policy of the archive that keeps the events less long than the current one goes back "
+                    "too and deletes the older events right away.\n", style=theme.color("mist"))
+    text.append("\nThe backup cannot bring this back. Yes runs restore.sh with --accept-data-loss.",
+                style=f"bold {theme.color('wax')}")
+    return text
+
+
 def shortening_text(doomed, value: str) -> Text:
     """The body of the question before a shorter retention: the indices it deletes right away (or none),
     then the rule from now on."""
@@ -2340,33 +2374,52 @@ class TpotApp(App):
                            restart_tpot=True))
 
     def run_restore(self) -> None:
+        """restore.sh -g in the task screen. It has no terminal to ask on there: the restore of data/
+        (it replaces the current files and the Elasticsearch data) is asked here first, a yes runs it
+        with --accept-data-loss."""
         from tpotctl.screens.restore import RestoreScreen
-        from tpotctl.screens.task import Task
+        screen = RestoreScreen(self.backend.backup_infos)
 
         def chosen(choice) -> None:
             if not choice:
                 return
             path, groups = choice
-            # the task screen shows what is replaced, Run is the last yes
-            intro = Text(f"restore.sh brings back from {os.path.basename(path)}:\n", style=theme.color("glass"))
-            for group in groups:
-                intro.append(f"  {glyphs.g('bullet')} {ops.GROUP_TEXT[group].rstrip('?')}\n",
-                             style=theme.color("glass"))
-            if "git" in groups:
-                intro.append("The checkout is reset to the commit of the backup (git reset --hard).\n",
-                             style=theme.color("warn"))
-            if "data" in groups:
-                intro.append("The files in data/ are replaced by the ones of the archive; with a full archive "
-                             "that is the Elasticsearch data too, the events since the backup are gone.\n",
-                             style=theme.color("warn"))
-            intro.append("T-Pot is stopped for it.", style=theme.color("mist"))
-            self.run_task(Task("Restore a backup", ops.script_command("restore.sh", ["-f", path, "-g",
-                                                                                      ",".join(groups)]),
-                               become="-B", intro=intro, done="The backup is restored.",
-                               restart_tpot=bool({"git", "patch"} & set(groups))),
-                          lambda _code: self.query_one("#update", UpdatePane).show())
+            if "data" not in groups:
+                self.start_restore(path, groups, accept=False)
+                return
+            info = next((backup for backup in screen.backups if backup.path == path), None)
+            self.push_screen(ConfirmDialog("Replace the current data with the backup?",
+                                           restore_loss_text(info, groups), yes="Restore and lose it", no="Back"),
+                             lambda yes: self.start_restore(path, groups, accept=True) if yes else None)
 
-        self.push_screen(RestoreScreen(self.backend.backup_infos), chosen)
+        self.push_screen(screen, chosen)
+
+    def start_restore(self, path: str, groups: List[str], accept: bool) -> None:
+        from tpotctl.screens.task import Task
+        # the task screen shows what is replaced, Run is the last yes
+        intro = Text(f"restore.sh brings back from {os.path.basename(path)}:\n", style=theme.color("glass"))
+        for group in groups:
+            intro.append(f"  {glyphs.g('bullet')} {ops.GROUP_TEXT[group].rstrip('?')}\n",
+                         style=theme.color("glass"))
+        if "git" in groups:
+            intro.append("The checkout is reset to the commit of the backup (git reset --hard).\n",
+                         style=theme.color("warn"))
+        if "data" in groups:
+            intro.append("The files in data/ are replaced by the ones of the archive; with a full archive "
+                         "that is the Elasticsearch data too, the events since the backup are gone.\n",
+                         style=theme.color("warn"))
+        if "elastic" in groups and accept:
+            intro.append("The ILM policy of the archive goes back even if it keeps the events less long than "
+                         "the current one.\n", style=theme.color("warn"))
+        elif "elastic" in groups:
+            intro.append("An ILM policy of the archive that keeps the events less long than the current one is "
+                         "not put back, restore.sh names the command for it.\n", style=theme.color("mist"))
+        intro.append("T-Pot is stopped for it.", style=theme.color("mist"))
+        args = ["-f", path, "-g", ",".join(groups)] + (["--accept-data-loss"] if accept else [])
+        self.run_task(Task("Restore a backup", ops.script_command("restore.sh", args),
+                           become="-B", intro=intro, done="The backup is restored.",
+                           restart_tpot=bool({"git", "patch"} & set(groups))),
+                      lambda _code: self.query_one("#update", UpdatePane).show())
 
     def llm_action(self, what: str, service: str) -> None:
         """From the palette: the LLM page, the tab of the honeypot, then find or test."""
