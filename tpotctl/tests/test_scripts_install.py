@@ -664,6 +664,17 @@ class UninstallShTest(Scripts):
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn("update.sh -y --backup-only --full --accept-data-loss", self.calls())
 
+    def test_the_file_of_confirmed_losses_goes_to_the_backup(self):
+        confirmed = os.path.join(self.home, "confirmed")
+        write(confirmed, "@@tpot loss backups Making room deletes 1 older backup(s) in x: a.tar (1 MB).\n")
+        self.assert_usage_error(self.run_script(self.script, "-y", "--accept-data-loss-file"),
+                                "Option --accept-data-loss-file requires a file.", "uninstall.sh")
+        self.assertIn("--accept-data-loss-file <file>", self.run_script(self.script, "-h").stdout)
+        result = self.run_merged(self.script, "-y", "-k", "--accept-data-loss-file", confirmed)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn(f"update.sh -y --backup-only --full --accept-data-loss-file {confirmed}\n", self.calls())
+        self.assertNotIn("--accept-data-loss ", self.calls())
+
     def test_a_loss_of_data_not_confirmed_keeps_tpot(self):
         result = self.run_merged(self.script, "-y", "-k", FAKE_BACKUP_RC="5")
         self.assertEqual(result.returncode, 1, result.stdout)

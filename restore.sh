@@ -234,12 +234,14 @@ myDO_ELASTIC=""
 
 # --accept-data-loss: confirms a loss of data where the run cannot ask (fuLOSS_CONFIRM): data/
 # replacing the current files and the Elasticsearch data, an ILM policy of the archive that keeps
-# the events less long than the current one. -y does not.
+# the events less long than the current one. -y does not. --accept-data-loss-file: only the losses
+# whose key (data, ilm) one of its '@@tpot loss <key> <text>' lines names (the T-Pot Manager: data).
 myACCEPT_LOSS=""
+myACCEPT_FILE=""
 
 function fuPRINT_HELP () {
 	# the help only, without the T-Pot logo (that is for a run)
-	fuUI_HELP "Restorer" "restore.sh [-l] [-f <archive>] [-y | -c | -g <groups>] [-B <file>]"$'\n'"           [--accept-data-loss]" \
+	fuUI_HELP "Restorer" "restore.sh [-l] [-f <archive>] [-y | -c | -g <groups>] [-B <file>]"$'\n'"           [--accept-data-loss | --accept-data-loss-file <file>]" \
 	  --about "Restores a backup written by update.sh. Without -y, -c or -g it lists what the archive
 holds and you choose what comes back, so you can bring back just the configuration
 without touching anything else." \
@@ -256,9 +258,12 @@ without asking. Leaves data/ alone and does not start T-Pot." \
 patch, config, untracked, data, elastic (the T-Pot Manager uses it)" \
 	  --opt "-B <file>" "Read the sudo password from a file, so it runs without
 asking for it (the T-Pot Manager hands one over)" \
-	  --opt "--accept-data-loss" "Confirm a loss of data without a terminal, where the run
+	  --opt "--accept-data-loss" "Confirm every loss of data without a terminal, where the run
 cannot ask: data/ replaces the current files and the
 Elasticsearch data, a shorter ILM policy of the archive" \
+	  --opt "--accept-data-loss-file <file>" "Confirm only the losses this file names, one
+'@@tpot loss <key> <text>' line each, key data or ilm (the
+T-Pot Manager hands one over with data only)" \
 	  --opt "-h" "Show this help message" \
 	  --example "./restore.sh -l" "The backups and what each one holds" \
 	  --example "./restore.sh" "Choose what of the newest backup comes back" \
@@ -267,7 +272,8 @@ Elasticsearch data, a shorter ILM policy of the archive" \
 	  --note "T-Pot is stopped for everything but the Kibana objects and the ILM policy, which
 need it running: restore.sh starts it for them. tpot restore hands every option on." \
 	  --note "A loss of data is asked for at a terminal (default no); without one only
---accept-data-loss confirms it, -y does not. Not confirmed, data/ or the shorter ILM policy
+--accept-data-loss (every loss) or --accept-data-loss-file (the losses it names) confirms
+it, -y does not. Not confirmed, data/ or the shorter ILM policy
 stays as it is and the rest goes on. A shorter TPOT_ES_RETENTION of the archive waits:
 T-Pot never shortens the ILM policy on its own."
 	exit 0
@@ -340,15 +346,37 @@ function fuWARNED () {   # $1 = group, $2 = what was left out
 	myWARNED+=("$1:$2")
 }
 
-# Is this loss of data confirmed? A yes at a terminal (no is the default) or --accept-data-loss;
-# -y confirms the restore, never a loss of data. rc 0 for confirmed. (As in update.sh.)
+# Does the file of --accept-data-loss-file confirm the loss of this key? A line '@@tpot loss <key> ...'.
+function fuLOSS_IN_FILE () {   # $1 = data | ilm
+	local myLINE=""
+	[ -n "${myACCEPT_FILE}" ] && [ -r "${myACCEPT_FILE}" ] || return 1
+	while IFS= read -r myLINE || [ -n "${myLINE}" ];
+	  do
+	    myLINE="${myLINE%$'\r'}"
+	    case "${myLINE}" in
+	      "@@tpot loss $1"|"@@tpot loss $1 "*) return 0 ;;
+	    esac
+	  done < "${myACCEPT_FILE}"
+	return 1
+}
+
+# Is this loss of data confirmed? A yes at a terminal (no is the default), --accept-data-loss (every
+# loss) or a line of its key in --accept-data-loss-file (fuLOSS_IN_FILE); -y confirms the restore,
+# never a loss of data. rc 0 for confirmed. (As in update.sh.)
 function fuLOSS_CONFIRM () {   # $1 = data | ilm, $2 = text, $3 = the question (default: the one of update.sh)
 	if [ -n "${myACCEPT_LOSS}" ];
 	  then
 	    fuUI_WARN "$2 (confirmed with --accept-data-loss)"
 	    return 0
 	fi
+	if [ -n "${myACCEPT_FILE}" ] && fuLOSS_IN_FILE "$1";
+	  then
+	    fuUI_WARN "$2 (confirmed with --accept-data-loss-file)"
+	    return 0
+	fi
 	fuUI_WARN "$2"
+	# a loss the file does not name was not confirmed before the run: not confirmed at all
+	[ -z "${myACCEPT_FILE}" ] || fuUI_HINT "--accept-data-loss-file does not confirm it: it names no '$1' loss."
 	if [ -t 0 ];
 	  then
 	    fuUI_CONFIRM --default no "${3:-Accept this loss of data?}"
@@ -1027,15 +1055,30 @@ function fuEND () {
 
 # The long options first: the option loop below knows only the short ones
 myARGV=()
+myACCEPT_FILE_NEXT=""
+myACCEPT_FILE_GIVEN=""
 for myARG in "$@";
   do
+    if [ -n "${myACCEPT_FILE_NEXT}" ];
+      then
+        myACCEPT_FILE="${myARG}"
+        myACCEPT_FILE_GIVEN=1
+        myACCEPT_FILE_NEXT=""
+        continue
+    fi
     case "${myARG}" in
       --accept-data-loss) myACCEPT_LOSS=1 ;;
+      --accept-data-loss-file) myACCEPT_FILE_NEXT=1 ;;
       --help) myARGV+=("-h") ;;
       --?*)   fuUI_USAGE_ERROR "Unknown option ${myARG}." restore.sh; exit 1 ;;
       *)      myARGV+=("${myARG}") ;;
     esac
 done
+if [ -n "${myACCEPT_FILE_NEXT}" ];
+  then
+    fuUI_USAGE_ERROR "Option --accept-data-loss-file requires a file." restore.sh
+    exit 1
+fi
 set -- "${myARGV[@]}"
 
 while getopts ":lf:ycg:B:h" opt; do
@@ -1095,6 +1138,17 @@ if [ -n "${myBECOME_FILE}" ];
     fi
     myBECOME_FILE=$(cd "$(dirname "${myBECOME_FILE}")" && pwd)/$(basename "${myBECOME_FILE}")
     sudo () { command sudo -S -p "" -v < "${myBECOME_FILE}" >/dev/null 2>&1; command sudo "$@"; }
+fi
+
+# --accept-data-loss-file: the confirmed losses, read where fuLOSS_CONFIRM asks
+if [ -n "${myACCEPT_FILE_GIVEN}" ];
+  then
+    if [ -z "${myACCEPT_FILE}" ] || [ ! -f "${myACCEPT_FILE}" ] || [ ! -r "${myACCEPT_FILE}" ];
+      then
+        fuUI_ERROR "Cannot read the confirmed losses of data from ${myACCEPT_FILE}."
+        exit 1
+    fi
+    myACCEPT_FILE=$(cd "$(dirname "${myACCEPT_FILE}")" && pwd)/$(basename "${myACCEPT_FILE}")
 fi
 
 fuUI_BANNER "Restorer" "Brings back a backup of update.sh, or the parts of it you choose."

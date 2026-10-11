@@ -541,7 +541,7 @@ class RestoreRetentionTest(RestoreScriptHarness):
             with self.subTest(current=current, archived=archived):
                 self.assertNotIn("waits", self.config(current, archived))
 
-    def elastic(self, current, archived, accept=False, terminal=False):
+    def elastic(self, current, archived, accept=False, terminal=False, extra=""):
         """fuDO_ELASTIC with the current policy (its min_age, "none": no delete phase, None: there is no
         policy) and the one of the archive."""
         if current is not None:
@@ -551,7 +551,7 @@ class RestoreRetentionTest(RestoreScriptHarness):
         archive = make_backup(self.home, {"MANIFEST": MANIFEST, "elastic/ilm_policy_tpot.json":
                                           json.dumps({"policy": policy})})
         script = (f"myARCHIVE='{archive}' myDO_ELASTIC=1 myKIBANA_TIMEOUT=0 myACCEPT_LOSS={'1' if accept else ''}\n"
-                  "fuTMPDIR; fuTOC\nfuDO_ELASTIC; echo \"rc=$?\"\necho \"failed=${myFAILED}\"\n"
+                  + extra + "fuTMPDIR; fuTOC\nfuDO_ELASTIC; echo \"rc=$?\"\necho \"failed=${myFAILED}\"\n"
                   'for myI in "${myWARNED[@]}"; do echo "warned=${myI}"; done\n')
         result = self.bash(script, terminal=terminal)
         return result.stdout + result.stderr
@@ -667,6 +667,21 @@ class RestoreRetentionTest(RestoreScriptHarness):
         text = " ".join(result.stdout.split())
         self.assertIn("--accept-data-loss", text)
         self.assertIn("It does not confirm a loss of data", text)
+        self.assertIn("--accept-data-loss-file <file>", text)
+
+    def test_a_file_with_a_data_line_only_does_not_put_a_shorter_policy_back(self):
+        """The T-Pot Manager confirms the restore of data/ only: the ILM policy is a loss of its own."""
+        self.write("confirmed", "@@tpot loss data Restoring data/ replaces the current files.\n")
+        out = self.elastic("365d", "30d", extra=f"myACCEPT_FILE='{self.home}/confirmed'\n")
+        self.assertEqual(self.puts(), "", out)
+        self.assertIn("--accept-data-loss-file does not confirm it", out)
+        self.assertIn("warned=elastic:", out)
+
+    def test_a_file_with_an_ilm_line_puts_it_back(self):
+        self.write("confirmed", "@@tpot loss ilm The ILM policy of the archive keeps the events 30 days.\n")
+        out = self.elastic("365d", "30d", extra=f"myACCEPT_FILE='{self.home}/confirmed'\n")
+        self.assertIn("PUT", self.puts(), out)
+        self.assertIn("(confirmed with --accept-data-loss-file)", out)
 
     def test_an_unknown_long_option(self):
         result = self.run_script(os.path.join(REPO, "restore.sh"), "--nonsense")
@@ -786,6 +801,24 @@ class RestoreDataTest(RestoreScriptHarness):
         code, out = self.restore("-g", "config,data", "--accept-data-loss")
         self.assertEqual(code, 0, out[-800:])
         self.assertIn(f"-C {custom} --strip-components=1", self.tar_calls())
+
+    def test_the_file_confirms_data_only_with_a_data_line(self):
+        confirmed = os.path.join(self.home, "confirmed")
+        for line, restored in (("@@tpot loss ilm The ILM policy goes back.", False),
+                               ("@@tpot loss data Restoring data/ replaces the current files.", True)):
+            with self.subTest(line=line):
+                with open(confirmed, "w", encoding="utf-8") as out:
+                    out.write(line + "\n")
+                folder = self.elk(os.path.join(self.tpotce, "data"))
+                code, out = self.restore("-g", "data", "--accept-data-loss-file", confirmed)
+                self.assertEqual(code, 0, out[-800:])
+                self.assertEqual("data/*" in self.tar_calls(), restored, out)
+                self.assertEqual(os.path.exists(folder), not restored, out)
+
+    def test_the_file_must_be_readable(self):
+        code, out = self.restore("-g", "data", "--accept-data-loss-file", os.path.join(self.home, "none"))
+        self.assertEqual(code, 1, out)
+        self.assertEqual(self.tar_calls(), "")
 
     def test_a_yes_at_a_terminal_confirms(self):
         folder = self.elk(os.path.join(self.tpotce, "data"))
@@ -1276,7 +1309,7 @@ class DataLossTest(Harness):
     def left(self):
         return sorted(os.listdir(self.backups))
 
-    SPACE = ("fuLOSS_ADD", "fuLOSS_CONFIRM", "fuDROP_OLDEST", "fuBACKUP_SIZE", "fuNO_ROOM", "fuCHECK_BACKUP_SPACE")
+    SPACE = ("fuLOSS_ADD", "fuLOSS_IN_FILE", "fuLOSS_CONFIRM", "fuDROP_OLDEST", "fuBACKUP_SIZE", "fuNO_ROOM", "fuCHECK_BACKUP_SPACE")
 
     def test_low_space_without_confirmation_deletes_nothing(self):
         names = self.archives([20000, 20000, 20000])
@@ -1358,7 +1391,7 @@ class DataLossTest(Harness):
             docker () {{ [ "$1 $2" = "image inspect" ] && printf 'PATH=/bin\\nES_VER=8.19.0\\n'; }}
             tar () {{ {"return 0" if archive_has_data else "return 1"}; }}
             fuROLLBACK_CHECKOUT () {{ echo "ROLLBACK"; return 0; }}
-        """) + extra + self.functions("fuLOSS_CONFIRM", "fuDATA_PATH", "fuCOMPOSE_HAS", "fuES_IMAGE_VERSION", "fuELASTIC_REFUSED",
+        """) + extra + self.functions("fuLOSS_IN_FILE", "fuLOSS_CONFIRM", "fuDATA_PATH", "fuCOMPOSE_HAS", "fuES_IMAGE_VERSION", "fuELASTIC_REFUSED",
                                                                   "fuCHECK_ELASTIC") \
             + stub_confirm + 'fuCHECK_ELASTIC\necho "went on"\n'
 
@@ -1447,7 +1480,7 @@ class DataLossTest(Harness):
               esac
             }
             fuRMI () { echo "RMI: $*"; printf '%s\\n' "$@" >> "$HOME/removed"; }
-        """) + extra + self.functions("fuLOSS_CONFIRM", "fuIMAGE_PULLABLE", "fuLOCAL_IMAGES_TEXT", "fuIMAGES",
+        """) + extra + self.functions("fuLOSS_IN_FILE", "fuLOSS_CONFIRM", "fuIMAGE_PULLABLE", "fuLOCAL_IMAGES_TEXT", "fuIMAGES",
                                                     "fuREMOVEOLDIMAGES") \
             + 'fuREMOVEOLDIMAGES\necho "went on"\n'
         return self.bash(script)
@@ -1517,7 +1550,7 @@ class DataLossTest(Harness):
           esac
         }
     """)
-    CHECK_FUNCTIONS = ("fuLOSS_ADD", "fuLOSS_CONFIRM", "fuDROP_OLDEST", "fuBACKUP_SIZE", "fuNO_ROOM",
+    CHECK_FUNCTIONS = ("fuLOSS_ADD", "fuLOSS_IN_FILE", "fuLOSS_CONFIRM", "fuDROP_OLDEST", "fuBACKUP_SIZE", "fuNO_ROOM",
                        "fuCHECK_BACKUP_SPACE",
                        "fuDATA_PATH", "fuCOMPOSE_HAS", "fuES_IMAGE_VERSION", "fuIMAGE_PULLABLE",
                        "fuLOCAL_IMAGES_TEXT", "fuIMAGES", "fuLOSS_TARGET", "fuCHECK_DATA_LOSS")
@@ -1609,7 +1642,9 @@ class DataLossTest(Harness):
         return read("update.sh").split("################\n# Main section #\n################", 1)[1]
 
     def test_selfupdate_gets_accept(self):
-        self.assertIn('fuSELFUPDATE "$@" ${myACCEPT_LOSS:+--accept-data-loss}', self.main_section())
+        main = self.main_section()
+        self.assertIn('[ -z "${myACCEPT_LOSS}" ] || myLOSS_ARGS+=(--accept-data-loss)', main)
+        self.assertIn('fuSELFUPDATE "$@" ${myLOSS_ARGS[@]+"${myLOSS_ARGS[@]}"}', main)
 
     def test_yes_does_not_set_accept(self):
         main = self.main_section()
@@ -1704,6 +1739,109 @@ class DataLossTest(Harness):
         self.assertEqual(self.left(), names[1:])    # the confirmed plan, nothing beyond it
         self.assertIn("Not enough room for a backup", out)
         self.assertNotIn("went on", out)
+
+    # --- --accept-data-loss-file: only what was shown is confirmed ---------------------------------
+
+    def accept_file(self, *lines):
+        path = os.path.join(self.home, "confirmed")
+        with open(path, "w", encoding="utf-8") as out:
+            out.write("".join(f"{line}\n" for line in lines))
+        return f'myACCEPT_FILE="{path}"\n'
+
+    IMAGES_ONLY = "@@tpot loss images 1 image(s) built here cannot be pulled again: ghcr.io/telekom-security/mine:24.04.1"
+
+    def test_a_file_with_only_images_refuses_the_backups(self):
+        names = self.archives([20000, 20000, 20000])
+        result = self.bash(self.accept_file(self.IMAGES_ONLY) + self.functions(*self.SPACE)
+                           + 'fuCHECK_BACKUP_SPACE\necho "went on"\n')
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 5, out)
+        self.assertEqual(self.left(), names)
+        self.assertNotIn("went on", out)
+        self.assertIn("--accept-data-loss-file does not confirm it", out)
+
+    def test_a_file_with_only_images_refuses_the_elastic_upgrade(self):
+        result = self.bash(self.elastic(archive_has_data=False, extra=self.accept_file(self.IMAGES_ONLY)))
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 5, out)
+        self.assertIn("ROLLBACK", out)
+        self.assertNotIn("went on", out)
+
+    def test_a_file_with_the_elastic_line_confirms_the_upgrade(self):
+        line = ("@@tpot loss elastic Elasticsearch 8.19.0 -> 9.1.0 upgrades the data in /x/elk on the next start.")
+        result = self.bash(self.elastic(archive_has_data=False, extra=self.accept_file(line)))
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out)
+        self.assertIn("went on", out)
+        self.assertIn("(confirmed with --accept-data-loss-file)", out)
+
+    def backups_line(self, *names):
+        listed = ", ".join(f"{name} (5 MB)" for name in names)
+        return (f"@@tpot loss backups Making room for the backup deletes {len(names)} older backup(s) in "
+                f"{self.backups}: {listed}.")
+
+    def test_a_backup_the_file_does_not_name_is_refused(self):
+        names = self.archives([5000, 5000, 5000, 5000])                 # 14 MB short: three of them go
+        result = self.bash(self.accept_file(self.backups_line(names[0], names[1])) + self.functions(*self.SPACE)
+                           + 'fuCHECK_BACKUP_SPACE\necho "went on"\n')
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 5, out)
+        self.assertEqual(self.left(), names)                             # none of them, not even A and B
+        self.assertNotIn("went on", out)
+
+    def test_the_backups_the_file_names_are_confirmed(self):
+        names = self.archives([20000, 20000, 20000])                    # only the oldest one goes
+        result = self.bash(self.accept_file(self.backups_line(names[0], names[1])) + self.functions(*self.SPACE)
+                           + 'fuCHECK_BACKUP_SPACE\necho "went on"\n')
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out)
+        self.assertEqual(self.left(), names[1:])
+        self.assertIn("went on", out)
+        self.assertIn("(confirmed with --accept-data-loss-file)", out)
+
+    def test_a_name_is_matched_whole(self):
+        names = self.archives([20000, 20000, 20000])
+        longer = names[0].replace(".tar", "_1.tar")                     # another archive, same beginning
+        result = self.bash(self.accept_file(self.backups_line(longer), self.backups_line("1" + names[0]))
+                           + self.functions(*self.SPACE) + 'fuCHECK_BACKUP_SPACE\n')
+        self.assertEqual(result.returncode, 5, result.stdout + result.stderr)
+        self.assertEqual(self.left(), names)
+
+    def test_local_images_the_file_names_go(self):
+        line = "@@tpot loss images 1 image(s) built here cannot be pulled again: ghcr.io/telekom-security/mine:24.04.1"
+        result = self.images(extra=self.accept_file(line))
+        rmi = [entry for entry in (result.stdout + result.stderr).splitlines() if entry.startswith("RMI: ")]
+        self.assertEqual(len(rmi), 1, result.stdout)
+        self.assertIn("ghcr.io/telekom-security/mine:24.04.1", rmi[0])
+
+    def test_local_images_the_file_does_not_name_stay(self):
+        line = "@@tpot loss images 1 image(s) built here cannot be pulled again: ghcr.io/telekom-security/other:24.04.1"
+        result = self.images(extra=self.accept_file(line))
+        out = result.stdout + result.stderr
+        self.assertEqual([entry for entry in out.splitlines() if entry.startswith("RMI: ")],
+                         ["RMI: ghcr.io/telekom-security/cowrie:24.04.1"])
+        self.assertIn("went on", out)
+
+    def test_restart_hands_the_file_on(self):
+        self.assertEqual(self.restart_args(read("update.sh"), "-F", "--accept-data-loss-file", "/run/c"),
+                         ["-F", "--accept-data-loss-file", "/run/c"])
+
+    def test_restart_into_an_older_update_sh_drops_the_file(self):
+        older = 'while getopts ":yFsob:r:B:h" opt; do\n      --accept-data-loss) myACCEPT_LOSS=1 ;;\n'
+        self.assertEqual(self.restart_args(older, "-F", "--accept-data-loss-file", "/run/c", "-s"), ["-F", "-s"])
+
+    def test_the_option_needs_a_readable_file(self):
+        for args in (["--accept-data-loss-file"], ["--accept-data-loss-file", os.path.join(self.home, "none")]):
+            with self.subTest(args=args):
+                result = self.run_script(os.path.join(REPO, "update.sh"), "-y", *args)
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertNotIn("@@tpot phase", result.stdout)
+
+    def test_selfupdate_gets_the_file(self):
+        main = self.main_section()
+        self.assertIn("--accept-data-loss-file) myACCEPT_FILE_NEXT=1", main)
+        self.assertIn('myLOSS_ARGS+=(--accept-data-loss-file "${myACCEPT_FILE}")', main)
+        self.assertIn('fuSELFUPDATE "$@" ${myLOSS_ARGS[@]+"${myLOSS_ARGS[@]}"}', main)
 
 
 class UpdateRepairTest(Harness):

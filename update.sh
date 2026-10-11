@@ -59,10 +59,12 @@ mySTART=""
 myBACKUP_ONLY=""
 
 # --check-data-loss: only list what the run would lose for good (fuLOSS_ADD), change nothing.
-# --accept-data-loss: confirm those losses where the run cannot ask (fuLOSS_CONFIRM); -y does not.
+# --accept-data-loss: confirm every such loss where the run cannot ask (fuLOSS_CONFIRM); -y does not.
+# --accept-data-loss-file: confirm only the losses its lines name, as --check-data-loss printed them.
 # A loss that is not confirmed ends the run with exit 5, where the run cannot go on without it.
 myCHECK_LOSS=""
 myACCEPT_LOSS=""
+myACCEPT_FILE=""
 myLOSSES=0
 
 # Both are published on the loopback interface by every edition that ships them,
@@ -284,7 +286,7 @@ myDROPPED_SERVICES="spiderfoot fatt tanner_redis tanner_phpox tanner_api tanner 
 
 function fuPRINT_HELP () {
 	# the help only, without the T-Pot logo (that is for a run)
-	fuUI_HELP "Updater" "update.sh -y [-s] [--full] [--backup-only] [-b <branch>] [-r <url>]"$'\n'"          [-B <file>] [--accept-data-loss]"$'\n'"update.sh --check-data-loss [--full] [--backup-only] [-b <branch>]"$'\n'"          [-r <url>] [-B <file>]" \
+	fuUI_HELP "Updater" "update.sh -y [-s] [--full] [--backup-only] [-b <branch>] [-r <url>]"$'\n'"          [-B <file>] [--accept-data-loss]"$'\n'"          [--accept-data-loss-file <file>]"$'\n'"update.sh --check-data-loss [--full] [--backup-only] [-b <branch>]"$'\n'"          [-r <url>] [-B <file>]" \
 	  --about "Updates T-Pot to the latest version of its branch: a backup to ~/tpot_backups first, then the
 checkout, your configuration and edition put back, the images of the release pulled." \
 	  --opt "-y" "Confirm the update, required. It does not confirm a loss of data, see --accept-data-loss" \
@@ -308,7 +310,12 @@ Default: the origin of ~/tpotce, environment: TPOT_REPO_URL" \
 	  --opt "-B <file>" "Read the sudo password from a file, so an unattended run also
 works without passwordless sudo (the T-Pot Manager hands one over)" \
 	  --opt "--check-data-loss" "Only list what the run would lose for good, change nothing (exit 3: found)" \
-	  --opt "--accept-data-loss" "Confirm a loss of data without a terminal, where the run cannot ask" \
+	  --opt "--accept-data-loss" "Confirm every loss of data without a terminal, where the run cannot
+ask (for the command line and cron, where you typed it)" \
+	  --opt "--accept-data-loss-file <file>" "Confirm only the losses of this file: the '@@tpot loss' lines
+of --check-data-loss that were confirmed (the T-Pot Manager
+hands one over). A loss it does not name, or older backups it
+does not all name, is not confirmed." \
 	  --opt "-h" "Show this help message" \
 	  --example "./update.sh -y" "Update from the branch of ~/tpotce, T-Pot stays stopped afterwards" \
 	  --example "./update.sh -y -s --full" "Update with all of data/ in the backup and start T-Pot again" \
@@ -373,21 +380,58 @@ function fuDID () {   # $1 = ok | fail | warn | next | info, $2 = text
 # A loss of data is what the backup of this run cannot bring back: older backups deleted to
 # make room, an Elasticsearch data upgrade without --full, images that cannot be pulled again.
 # --check-data-loss only lists them, one line each for the T-Pot Manager, which asks before it
-# starts the update with --accept-data-loss.
+# starts the update with --accept-data-loss-file and the lines that were confirmed.
 function fuLOSS_ADD () {   # $1 = backups | elastic | images, $2 = text
 	myLOSSES=$((myLOSSES + 1))
 	echo "@@tpot loss $1 $2"
 }
 
-# Is this loss of data confirmed? A yes at a terminal (no is the default) or --accept-data-loss;
-# -y confirms the update, never a loss of data. rc 0 for confirmed.
-function fuLOSS_CONFIRM () {   # $1 = backups | elastic | images, $2 = text
+# Does the file of --accept-data-loss-file confirm this loss? It needs a line of the key, and every
+# name (the backups or images the step deletes) as a whole entry of the list in one of those lines:
+# ": <name>" or ", <name>", followed by a space, a comma, a dot or the end of the line.
+function fuLOSS_IN_FILE () {   # $1 = backups | elastic | images, $2... = the names it deletes
+	local myKEY="$1" myLINE="" myTEXT="" myFOUND="" myNAME=""
+	shift
+	[ -n "${myACCEPT_FILE}" ] && [ -r "${myACCEPT_FILE}" ] || return 1
+	while IFS= read -r myLINE || [ -n "${myLINE}" ];
+	  do
+	    myLINE="${myLINE%$'\r'}"
+	    case "${myLINE}" in
+	      "@@tpot loss ${myKEY}"|"@@tpot loss ${myKEY} "*)
+	        myFOUND="1"
+	        myTEXT="${myTEXT}${myLINE}"$'\n' ;;
+	    esac
+	  done < "${myACCEPT_FILE}"
+	[ -n "${myFOUND}" ] || return 1
+	for myNAME in "$@";
+	  do
+	    case "${myTEXT}" in
+	      *[:,]" ${myNAME}"[[:space:],.]*) ;;
+	      *) return 1 ;;
+	    esac
+	  done
+	return 0
+}
+
+# Is this loss of data confirmed? A yes at a terminal (no is the default), --accept-data-loss (every
+# loss) or the lines of --accept-data-loss-file (only the losses they name, fuLOSS_IN_FILE); -y
+# confirms the update, never a loss of data. rc 0 for confirmed.
+function fuLOSS_CONFIRM () {   # $1 = backups | elastic | images, $2 = text, $3... = the names it deletes
+	local myKEY="$1" myTEXT="$2"
+	shift 2
 	if [ -n "${myACCEPT_LOSS}" ];
 	  then
-	    fuUI_WARN "$2 (confirmed with --accept-data-loss)"
+	    fuUI_WARN "${myTEXT} (confirmed with --accept-data-loss)"
 	    return 0
 	fi
-	fuUI_WARN "$2"
+	if [ -n "${myACCEPT_FILE}" ] && fuLOSS_IN_FILE "${myKEY}" "$@";
+	  then
+	    fuUI_WARN "${myTEXT} (confirmed with --accept-data-loss-file)"
+	    return 0
+	fi
+	fuUI_WARN "${myTEXT}"
+	# a loss the file does not name was not shown before the run: not confirmed at all
+	[ -z "${myACCEPT_FILE}" ] || fuUI_HINT "--accept-data-loss-file does not confirm it: it was not shown like this before the run."
 	if [ -t 0 ];
 	  then
 	    fuUI_CONFIRM --default no "Accept this loss of data?"
@@ -554,6 +598,7 @@ function fuNO_ROOM () {
 function fuCHECK_BACKUP_SPACE () {
 	local myNEED=0 myFREE=0 myTOTAL=0 myRESERVE=0 myDIR="${myBACKUPDIR}" myPLAN="" mySIZE=0 myVICTIM=""
 	local myLIST="" myCOUNT=0 myTEXT=""
+	local myNAMES=()
 	echo
 	fuUI_INFO "Checking the space for the backup ..."
 	if [ -n "${myPREPARED}" ] && [ -z "${myCHECK_LOSS}" ];
@@ -600,6 +645,7 @@ function fuCHECK_BACKUP_SPACE () {
 	while read -r mySIZE myVICTIM;
 	  do
 	    myCOUNT=$((myCOUNT + 1))
+	    myNAMES+=("${myVICTIM##*/}")
 	    myLIST="${myLIST}${myLIST:+, }${myVICTIM##*/} ($(( (mySIZE + 1048575) / 1048576 )) MB)"
 	  done <<< "${myPLAN}"
 	myTEXT="Making room for the backup deletes ${myCOUNT} older backup(s) in ${myBACKUPDIR}: ${myLIST}."
@@ -609,7 +655,7 @@ function fuCHECK_BACKUP_SPACE () {
 	    echo
 	    return 0
 	fi
-	if ! fuLOSS_CONFIRM backups "${myTEXT}";
+	if ! fuLOSS_CONFIRM backups "${myTEXT}" "${myNAMES[@]}";
 	  then
 	    fuUI_HINT "Nothing was deleted and T-Pot was left running. Free up space in ${myBACKUPDIR} or on the filesystem."
 	    fuUI_HINT "Exiting."
@@ -895,10 +941,11 @@ function fuSELFUPDATE () {
 	echo
 }
 
-# The options for the restarted script: all of them, but -B <file> and --accept-data-loss
-# only if that script knows them - the update.sh of an earlier release stops with its usage
-# on them (the sudo timestamp of this run is enough for the restarted one then, and it has
-# no confirmation of a loss of data to give).
+# The options for the restarted script: all of them, but -B <file>, --accept-data-loss and
+# --accept-data-loss-file <file> only if that script knows them - the update.sh of an earlier
+# release stops with its usage on them (the sudo timestamp of this run is enough for the
+# restarted one then, and it has no confirmation of a loss of data to give; the bare
+# --accept-data-loss never stands in for the file).
 function fuRESTART_ARGS () {   # $1 = the script that restarts, then the options
 	local myTARGET="$1" myDROP=""
 	shift
@@ -906,6 +953,11 @@ function fuRESTART_ARGS () {   # $1 = the script that restarts, then the options
 	  do
 	    if [ -n "${myDROP}" ]; then myDROP=""; continue; fi
 	    if [ "${myARG}" = "-B" ] && ! grep -q 'getopts ":[^"]*B:' "${myTARGET}";
+	      then
+	        myDROP="1"
+	        continue
+	    fi
+	    if [ "${myARG}" = "--accept-data-loss-file" ] && ! grep -q -- '--accept-data-loss-file' "${myTARGET}";
 	      then
 	        myDROP="1"
 	        continue
@@ -1470,7 +1522,7 @@ function fuREMOVEOLDIMAGES () {
 	myALL=(${myPULLABLE[@]+"${myPULLABLE[@]}"})
 	if [ "${#myLOCAL[@]}" -gt 0 ];
 	  then
-	    if fuLOSS_CONFIRM images "$(fuLOCAL_IMAGES_TEXT "${myLOCAL[@]}")";
+	    if fuLOSS_CONFIRM images "$(fuLOCAL_IMAGES_TEXT "${myLOCAL[@]}")" "${myLOCAL[@]}";
 	      then
 	        myALL+=("${myLOCAL[@]}")
 	      else
@@ -2329,19 +2381,34 @@ function fuCHECK_DATA_LOSS () {
 
 # getopts has no long options, so `--full` is translated before they are read
 myARGV=()
+myACCEPT_FILE_NEXT=""
+myACCEPT_FILE_GIVEN=""
 for myARG in "$@";
   do
+    if [ -n "${myACCEPT_FILE_NEXT}" ];
+      then
+        myACCEPT_FILE="${myARG}"
+        myACCEPT_FILE_GIVEN=1
+        myACCEPT_FILE_NEXT=""
+        continue
+    fi
     case "${myARG}" in
       --full)  myARGV+=("-F") ;;
       --start) myARGV+=("-s") ;;
       --backup-only) myARGV+=("-o") ;;
       --check-data-loss) myCHECK_LOSS=1 ;;
       --accept-data-loss) myACCEPT_LOSS=1 ;;
+      --accept-data-loss-file) myACCEPT_FILE_NEXT=1 ;;
       --help)  myARGV+=("-h") ;;
       --?*)    fuUI_USAGE_ERROR "Unknown option ${myARG}." update.sh; exit 1 ;;
       *)      myARGV+=("${myARG}") ;;
     esac
 done
+if [ -n "${myACCEPT_FILE_NEXT}" ];
+  then
+    fuUI_USAGE_ERROR "Option --accept-data-loss-file requires a file." update.sh
+    exit 1
+fi
 set -- "${myARGV[@]}"
 
 while getopts ":yFsob:r:B:h" opt; do
@@ -2402,6 +2469,21 @@ if [ -n "${myBECOME_FILE}" ];
     myBECOME_FILE=$(cd "$(dirname "${myBECOME_FILE}")" && pwd)/$(basename "${myBECOME_FILE}")
     sudo () { command sudo -S -p "" -v < "${myBECOME_FILE}" >/dev/null 2>&1; command sudo "$@"; }
 fi
+
+# --accept-data-loss-file: the confirmed losses, read where fuLOSS_CONFIRM asks; the restarted
+# script gets the same file (fuRESTART_ARGS)
+if [ -n "${myACCEPT_FILE_GIVEN}" ];
+  then
+    if [ -z "${myACCEPT_FILE}" ] || [ ! -f "${myACCEPT_FILE}" ] || [ ! -r "${myACCEPT_FILE}" ];
+      then
+        fuUI_ERROR "Cannot read the confirmed losses of data from ${myACCEPT_FILE}."
+        exit 1
+    fi
+    myACCEPT_FILE=$(cd "$(dirname "${myACCEPT_FILE}")" && pwd)/$(basename "${myACCEPT_FILE}")
+fi
+myLOSS_ARGS=()
+[ -z "${myACCEPT_LOSS}" ] || myLOSS_ARGS+=(--accept-data-loss)
+[ -z "${myACCEPT_FILE}" ] || myLOSS_ARGS+=(--accept-data-loss-file "${myACCEPT_FILE}")
 
 # --check-data-loss: no -y needed, it changes nothing and asks nothing. It runs for the T-Pot
 # Manager without a terminal, so sudo never asks either: without -B a sudo that needs no
@@ -2476,7 +2558,7 @@ fuEXPORT_ELASTIC
 fuSTOP_TPOT
 fuBACKUP
 fuMARK phase selfupdate Updating the checkout
-fuSELFUPDATE "$@" ${myACCEPT_LOSS:+--accept-data-loss}
+fuSELFUPDATE "$@" ${myLOSS_ARGS[@]+"${myLOSS_ARGS[@]}"}
 # The config and the edition have to be back in place before the images are
 # pulled, `docker compose pull` reads both.
 fuMARK phase restore Putting your configuration back
