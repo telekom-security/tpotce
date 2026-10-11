@@ -80,7 +80,7 @@ T-Pot 24.04.2 moves the Elastic Stack to 9.5 on the official Elastic images, mak
 - If you use a `docker-compose.yml` of your own, add the volume `${TPOT_DATA_PATH}/conpot/identity:/var/lib/conpot` to the Conpot services and take the new services from `compose/standard.yml`.
 
 ### Ddospot
-- Ddospot 2.0 writes scanners into `chargenpot.log`, `dnspot.log`, `ntpot.log` and `ssdpot.log` (`type` `Ddospot`) and the victims of reflection attacks into `targets.log` (`type` `DdospotTarget`). Import the Kibana objects of this release to get the dashboards *Ddospot - Attackers* and *Ddospot - Victims*.
+- Ddospot 2.0 writes the requests of scanners into `chargenpot.log`, `dnspot.log`, `ntpot.log` and `ssdpot.log` (`type` `Ddospot`) and the victims of reflection attacks into `targets.log` (`type` `DdospotTarget`). Import the Kibana objects of this release to get the dashboards *Ddospot - Attackers* and *Ddospot - Victims*.
 - If you use a `docker-compose.yml` of your own, take the `ddospot` service from `compose/tarpit.yml`: the logs are in `/var/log/ddospot` of the container, DNS also listens on `53/tcp`, `DDOSPOT_DNS_RECURSION` comes from `.env`.
 - The folders `data/ddospot/bl` and `data/ddospot/db` are not used by Ddospot 2.0 and can be deleted with `sudo rm -rf ~/tpotce/data/ddospot/bl ~/tpotce/data/ddospot/db`.
 
