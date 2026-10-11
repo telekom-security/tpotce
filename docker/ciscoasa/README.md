@@ -1,8 +1,8 @@
 # Ciscoasa v2 integration
 
-The regular Dockerfile builds the pinned `v2.0.0` fork commit. That tag must be published before the remote build is possible. Fork/T-Pot publication is a separate approval step.
+The regular Dockerfile fetches the published `v2.0.0` release from the fork and verifies its source commit (`b1d8f422b72647562b432fe74c2931332332c54b`). Release: https://github.com/t3chn0m4g3/ciscoasa_honeypot/releases/tag/v2.0.0.
 
-For local validation before publication, use the named `source` build context pointing at the fork checkout, for example:
+For local development, use the named `source` build context pointing at the fork checkout, for example:
 
 ```sh
 docker buildx build --load --build-context source=../ciscoasa_honeypot \
