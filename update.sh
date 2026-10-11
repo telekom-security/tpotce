@@ -58,6 +58,13 @@ myPULLOK=""
 mySTART=""
 myBACKUP_ONLY=""
 
+# --check-data-loss: only list what the run would lose for good (fuLOSS_ADD), change nothing.
+# --accept-data-loss: confirm those losses where the run cannot ask (fuLOSS_CONFIRM); -y does not.
+# A loss that is not confirmed ends the run with exit 5, where the run cannot go on without it.
+myCHECK_LOSS=""
+myACCEPT_LOSS=""
+myLOSSES=0
+
 # Both are published on the loopback interface by every edition that ships them,
 # so neither needs a detour through a container.
 myKIBANA="http://127.0.0.1:64296"
@@ -100,6 +107,20 @@ if ! source "${myHERE}/installer/lib/ui.sh" 2>/dev/null;
     fuUI_WARN () { echo "### [WARNING] - $*"; }
     fuUI_ERROR () { echo "### [ERROR] - $*" >&2; }
     fuUI_HINT () { local myLINE; for myLINE in "$@"; do echo "###   ${myLINE}"; done; }
+    fuUI_CONFIRM () {
+      local myANSWER="" myDEFAULT="" myPROMPT="(y/n)"
+      if [ "${1:-}" = "--default" ]; then
+        case "${2:-}" in yes|no) myDEFAULT="$2"; shift 2 ;; *) shift ;; esac
+      fi
+      case "${myDEFAULT}" in yes) myPROMPT="(Y/n)" ;; no) myPROMPT="(y/N)" ;; esac
+      while true; do
+        read -rp "### $1 ${myPROMPT} " myANSWER || return 1
+        myANSWER="${myANSWER#"${myANSWER%%[![:space:]]*}"}"
+        myANSWER="${myANSWER%"${myANSWER##*[![:space:]]}"}"
+        [ -n "${myANSWER}" ] || myANSWER="${myDEFAULT}"
+        case "${myANSWER}" in [yY]|[yY][eE][sS]) return 0 ;; [nN]|[nN][oO]) return 1 ;; esac
+      done
+    }
     fuUI_MARKS_ON () { [ -n "${myMARKS:-}" ] || [ "${TPOT_MARKS:-}" = "1" ]; }
     fuMARK () { fuUI_MARKS_ON || return 0; echo "@@tpot $*"; }
     fuUI_VERSION_GE () {
@@ -263,10 +284,10 @@ myDROPPED_SERVICES="spiderfoot fatt tanner_redis tanner_phpox tanner_api tanner 
 
 function fuPRINT_HELP () {
 	# the help only, without the T-Pot logo (that is for a run)
-	fuUI_HELP "Updater" "update.sh -y [-s] [--full] [--backup-only] [-b <branch>] [-r <url>]"$'\n'"          [-B <file>]" \
+	fuUI_HELP "Updater" "update.sh -y [-s] [--full] [--backup-only] [-b <branch>] [-r <url>]"$'\n'"          [-B <file>] [--accept-data-loss]"$'\n'"update.sh --check-data-loss [--full] [--backup-only] [-b <branch>]"$'\n'"          [-r <url>] [-B <file>]" \
 	  --about "Updates T-Pot to the latest version of its branch: a backup to ~/tpot_backups first, then the
 checkout, your configuration and edition put back, the images of the release pulled." \
-	  --opt "-y" "Confirm the update, required" \
+	  --opt "-y" "Confirm the update, required. It does not confirm a loss of data, see --accept-data-loss" \
 	  --opt "-s, --start" "Start T-Pot again once the update is through. Off by default,
 so an unattended run leaves the services stopped unless asked." \
 	  --opt "-F, --full" "Include the whole data/ folder in the backup. Off by default,
@@ -286,12 +307,19 @@ Default: the branch of ~/tpotce, environment: TPOT_BRANCH" \
 Default: the origin of ~/tpotce, environment: TPOT_REPO_URL" \
 	  --opt "-B <file>" "Read the sudo password from a file, so an unattended run also
 works without passwordless sudo (the T-Pot Manager hands one over)" \
+	  --opt "--check-data-loss" "Only list what the run would lose for good, change nothing (exit 3: found)" \
+	  --opt "--accept-data-loss" "Confirm a loss of data without a terminal, where the run cannot ask" \
 	  --opt "-h" "Show this help message" \
 	  --example "./update.sh -y" "Update from the branch of ~/tpotce, T-Pot stays stopped afterwards" \
 	  --example "./update.sh -y -s --full" "Update with all of data/ in the backup and start T-Pot again" \
 	  --example "./update.sh -y -b dev" "Test the branch dev (it stays checked out)" \
 	  --example "./update.sh -y --backup-only -s" "Only a backup, T-Pot runs again afterwards" \
-	  --note "restore.sh brings a backup back, tpot update hands every option on to update.sh."
+	  --example "./update.sh --check-data-loss" "List what an update would lose for good: '@@tpot loss <key> <text>'" \
+	  --note "restore.sh brings a backup back, tpot update hands every option on to update.sh." \
+	  --note "A loss of data is what the backup of the run cannot bring back: older backups deleted to
+make room, an Elasticsearch data upgrade without --full, images built here. Each one asks at a
+terminal (default no); without one only --accept-data-loss confirms it. Not confirmed, the run
+keeps the images and goes on, or stops with exit 5 (T-Pot keeps running, or the checkout goes back)."
 	exit 0
 }
 
@@ -340,6 +368,33 @@ function fuTMPDIR () {
 # One item of the summary at the end, i.e. fuDID ok "The images are pulled."
 function fuDID () {   # $1 = ok | fail | warn | next | info, $2 = text
 	myDONE+=("$1:$2")
+}
+
+# A loss of data is what the backup of this run cannot bring back: older backups deleted to
+# make room, an Elasticsearch data upgrade without --full, images that cannot be pulled again.
+# --check-data-loss only lists them, one line each for the T-Pot Manager, which asks before it
+# starts the update with --accept-data-loss.
+function fuLOSS_ADD () {   # $1 = backups | elastic | images, $2 = text
+	myLOSSES=$((myLOSSES + 1))
+	echo "@@tpot loss $1 $2"
+}
+
+# Is this loss of data confirmed? A yes at a terminal (no is the default) or --accept-data-loss;
+# -y confirms the update, never a loss of data. rc 0 for confirmed.
+function fuLOSS_CONFIRM () {   # $1 = backups | elastic | images, $2 = text
+	if [ -n "${myACCEPT_LOSS}" ];
+	  then
+	    fuUI_WARN "$2 (confirmed with --accept-data-loss)"
+	    return 0
+	fi
+	fuUI_WARN "$2"
+	if [ -t 0 ];
+	  then
+	    fuUI_CONFIRM --default no "Accept this loss of data?"
+	    return
+	fi
+	fuUI_HINT "Not confirmed: no terminal. --accept-data-loss confirms it, -y does not."
+	return 1
 }
 
 # The log of the steps under a spinner: the one of this run (the restart after the self
@@ -409,16 +464,22 @@ function fuARCHIVE_LIST () {   # $1 = full | small
 	fi
 }
 
-# Remove the oldest archive to make room. The newest one always stays - it is the
-# most likely rollback point.
-function fuDROP_OLDEST () {
-	local myAll="" myVictim="" myCount=0
-	myAll=$(ls -1tr "${myBACKUPDIR}"/*_tpot_backup*.tar 2>/dev/null)
-	myCount=$(echo "${myAll}" | grep -c .)
-	[ "${myCount}" -lt 2 ] && return 1
-	myVictim=$(echo "${myAll}" | head -1)
-	fuUI_HINT "Removing ${myVictim} ($(du -h "${myVictim}" | cut -f1)) to make room."
-	rm -f "${myVictim}"
+# Which archives would make room for $1 more bytes, oldest first. The newest one always stays -
+# it is the most likely rollback point. Deletes nothing: prints "<bytes> <archive>" per archive,
+# rc 1 when all of them together do not free enough.
+function fuDROP_OLDEST () {   # $1 = bytes short
+	local myAll="" myVictim="" myKIB=0 myGAIN=0
+	myAll=$(ls -1tr "${myBACKUPDIR}"/*_tpot_backup*.tar 2>/dev/null | sed '$d')
+	while IFS= read -r myVictim;
+	  do
+	    [ -n "${myVictim}" ] || continue
+	    [ "${myGAIN}" -lt "$1" ] || break
+	    myKIB=$(du -k "${myVictim}" 2>/dev/null | cut -f1)
+	    [[ "${myKIB}" =~ ^[0-9]+$ ]] || myKIB=0
+	    myGAIN=$((myGAIN + myKIB * 1024))
+	    echo "$((myKIB * 1024)) ${myVictim}"
+	  done <<< "${myAll}"
+	[ "${myGAIN}" -ge "$1" ]
 }
 
 # Clean up after writing, deliberately not before: an archive is never sacrificed
@@ -465,44 +526,56 @@ function fuBACKUP_SIZE () {
 }
 
 # Does the archive still fit without closing the disk for the honeypots? Runs
-# before fuSTOP_TPOT on purpose, so that giving up leaves T-Pot running.
+# before fuSTOP_TPOT on purpose, so that giving up leaves T-Pot running. Older
+# backups only make room once that is confirmed (fuLOSS_CONFIRM), and only when
+# deleting them is enough: what would go is worked out before anything is deleted.
 function fuCHECK_BACKUP_SPACE () {
-	local myNEED=0 myFREE=0 myTOTAL=0 myRESERVE=0
+	local myNEED=0 myFREE=0 myTOTAL=0 myRESERVE=0 myDIR="${myBACKUPDIR}" myPLAN="" mySIZE=0 myVICTIM=""
+	local myLIST="" myCOUNT=0 myTEXT=""
 	echo
 	fuUI_INFO "Checking the space for the backup ..."
-	if [ -n "${myPREPARED}" ];
+	if [ -n "${myPREPARED}" ] && [ -z "${myCHECK_LOSS}" ];
 	  then
 	    fuUI_OK "The backup was already taken before the restart, nothing to check."
 	    echo
 	    return
 	fi
-	if ! mkdir -p "${myBACKUPDIR}" || ! chmod 0700 "${myBACKUPDIR}";
+	if [ -n "${myCHECK_LOSS}" ];
 	  then
-	    fuUI_ERROR "Could not prepare ${myBACKUPDIR}."
-	    fuUI_HINT "Exiting."
-	    echo
-	    exit 1
+	    # the check changes nothing: without the folder there is no backup to delete either,
+	    # df asks for the filesystem it would be on
+	    [ -d "${myDIR}" ] || myDIR="$HOME"
+	  elif ! mkdir -p "${myBACKUPDIR}" || ! chmod 0700 "${myBACKUPDIR}";
+	    then
+	      fuUI_ERROR "Could not prepare ${myBACKUPDIR}."
+	      fuUI_HINT "Exiting."
+	      echo
+	      exit 1
 	fi
-	myTOTAL=$(df -B1 --output=size "${myBACKUPDIR}" 2>/dev/null | tail -1 | tr -d " ")
+	myTOTAL=$(df -B1 --output=size "${myDIR}" 2>/dev/null | tail -1 | tr -d " ")
 	myRESERVE=$(( myTOTAL / 100 * myBACKUP_RESERVE_PERCENT ))
-	while :;
-	  do
-	    myNEED=$(fuBACKUP_SIZE)
-	    myFREE=$(df -B1 --output=avail "${myBACKUPDIR}" 2>/dev/null | tail -1 | tr -d " ")
-	    fuUI_HINT "Archive needs about $((myNEED / 1048576)) MB, $((myFREE / 1048576)) MB free, keeping $((myRESERVE / 1048576)) MB in reserve."
-	    if [ $((myFREE - myNEED)) -ge "${myRESERVE}" ];
+	myNEED=$(fuBACKUP_SIZE)
+	myFREE=$(df -B1 --output=avail "${myDIR}" 2>/dev/null | tail -1 | tr -d " ")
+	fuUI_HINT "Archive needs about $((myNEED / 1048576)) MB, $((myFREE / 1048576)) MB free, keeping $((myRESERVE / 1048576)) MB in reserve."
+	if [ $((myFREE - myNEED)) -ge "${myRESERVE}" ];
+	  then
+	    fuUI_OK "Enough room."
+	    echo
+	    return
+	fi
+	if ! myPLAN=$(fuDROP_OLDEST $((myRESERVE - myFREE + myNEED)));
+	  then
+	    # Deleting the older backups would not be enough either, so none is deleted. In the
+	    # check that is no loss of data: the update stops there, before it changes anything.
+	    if [ -n "${myCHECK_LOSS}" ];
 	      then
-	        fuUI_OK "Enough room."
+	        fuUI_WARN "Not enough room for a backup even without the older ones, the update would stop there and change nothing."
 	        echo
-	        return
+	        return 0
 	    fi
-	    if fuDROP_OLDEST;
-	      then
-	        continue
-	    fi
-	    # Nothing left to free. `--full` was asked for, usually because the update
-	    # brings a new Elastic Stack whose data upgrade cannot be undone - quietly
-	    # taking the regular backup instead would leave no way back.
+	    # `--full` was asked for, usually because the update brings a new Elastic Stack
+	    # whose data upgrade cannot be undone - quietly taking the regular backup instead
+	    # would leave no way back.
 	    if [ -n "${myFULL}" ];
 	      then
 	        fuUI_ERROR "Not enough room for a full backup."
@@ -516,7 +589,45 @@ function fuCHECK_BACKUP_SPACE () {
 	    fuUI_HINT "Exiting."
 	    echo
 	    exit 1
-	done
+	fi
+	while read -r mySIZE myVICTIM;
+	  do
+	    myCOUNT=$((myCOUNT + 1))
+	    myLIST="${myLIST}${myLIST:+, }${myVICTIM##*/} ($(( (mySIZE + 1048575) / 1048576 )) MB)"
+	  done <<< "${myPLAN}"
+	myTEXT="Making room for the backup deletes ${myCOUNT} older backup(s) in ${myBACKUPDIR}: ${myLIST}."
+	if [ -n "${myCHECK_LOSS}" ];
+	  then
+	    fuLOSS_ADD backups "${myTEXT}"
+	    echo
+	    return 0
+	fi
+	if ! fuLOSS_CONFIRM backups "${myTEXT}";
+	  then
+	    fuUI_HINT "Nothing was deleted and T-Pot was left running. Free up space in ${myBACKUPDIR} or on the filesystem."
+	    fuUI_HINT "Exiting."
+	    echo
+	    if [ -n "${myBACKUP_ONLY}" ];
+	      then fuDID fail "No backup written: making room would delete older backups, which was not confirmed."
+	      else fuDID fail "Not updated: making room would delete older backups, which was not confirmed."
+	    fi
+	    exit 5
+	fi
+	while read -r mySIZE myVICTIM;
+	  do
+	    fuUI_HINT "Removing ${myVICTIM} ($(( (mySIZE + 1048575) / 1048576 )) MB) to make room."
+	    if ! rm -f "${myVICTIM}";
+	      then
+	        fuUI_ERROR "Could not remove ${myVICTIM}, so there is not enough room for the backup."
+	        fuUI_HINT "Free up space in ${myBACKUPDIR} or on the filesystem, T-Pot was left running."
+	        fuUI_HINT "Exiting."
+	        echo
+	        exit 1
+	    fi
+	  done <<< "${myPLAN}"
+	fuDID warn "Deleted ${myCOUNT} older backup(s) to make room: ${myLIST}."
+	fuUI_OK "Enough room."
+	echo
 }
 
 # Compare repository URLs without a trailing slash or `.git`
@@ -752,9 +863,10 @@ function fuSELFUPDATE () {
 	echo
 }
 
-# The options for the restarted script: all of them, but -B <file> only if that
-# script knows it - the update.sh of an earlier release stops with its usage on it
-# (the sudo timestamp of this run is enough for the restarted one then).
+# The options for the restarted script: all of them, but -B <file> and --accept-data-loss
+# only if that script knows them - the update.sh of an earlier release stops with its usage
+# on them (the sudo timestamp of this run is enough for the restarted one then, and it has
+# no confirmation of a loss of data to give).
 function fuRESTART_ARGS () {   # $1 = the script that restarts, then the options
 	local myTARGET="$1" myDROP=""
 	shift
@@ -764,6 +876,10 @@ function fuRESTART_ARGS () {   # $1 = the script that restarts, then the options
 	    if [ "${myARG}" = "-B" ] && ! grep -q 'getopts ":[^"]*B:' "${myTARGET}";
 	      then
 	        myDROP="1"
+	        continue
+	    fi
+	    if [ "${myARG}" = "--accept-data-loss" ] && ! grep -q -- '--accept-data-loss' "${myTARGET}";
+	      then
 	        continue
 	    fi
 	    printf '%s\n' "${myARG}"
@@ -1023,17 +1139,31 @@ function fuROLLBACK_CHECKOUT () {
 	fuMARK changed back
 }
 
-# Ctrl+C in the pause of fuCHECK_ELASTIC: stop before the pull, say how to finish
-function fuELASTIC_STOPPED () {
+# The Elasticsearch upgrade of fuCHECK_ELASTIC was not confirmed (a no, no terminal, Ctrl+C at
+# the question): the checkout and the configuration go back to the release T-Pot ran so far.
+# myDATA is the one of fuCHECK_ELASTIC.
+function fuELASTIC_REFUSED () {
+	trap - INT
 	echo
-	fuUI_WARN "Stopped before the image pull, nothing was pulled and T-Pot is stopped."
-	fuUI_HINT "Copy the data now, then finish the update with:"
-	fuUI_HINT "  docker compose -f $HOME/tpotce/docker-compose.yml pull && sudo systemctl start tpot"
-	fuUI_HINT "  $HOME/tpotce/tpot setup    (the Python packages of the T-Pot Manager for this release)"
-	echo
-	fuDID warn "Stopped before the image pull, nothing was pulled."
-	fuDID next "Copy the data, then finish with the commands above."
-	exit 130
+	fuUI_HINT "Nothing was pulled and no image was removed."
+	if fuROLLBACK_CHECKOUT;
+	  then
+	    fuUI_HINT "Exiting."
+	    echo
+	    fuDID fail "Not updated: the Elasticsearch upgrade was not confirmed, the checkout and the configuration are back."
+	  else
+	    fuUI_HINT "Exiting."
+	    echo
+	    fuDID fail "Not updated: the Elasticsearch upgrade was not confirmed, but the checkout could not be put back: the next start of T-Pot upgrades the data."
+	fi
+	fuDID next "Copy ${myDATA}/elk/data first or use --full, then update again and confirm the upgrade."
+	exit 5
+}
+
+# The Elasticsearch version of a T-Pot image: ES_VER is set in every one of them
+function fuES_IMAGE_VERSION () {   # $1 = registry, $2 = tag
+	docker image inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$1/elasticsearch:$2" 2>/dev/null \
+	  | sed -n "s/^ES_VER=//p" | head -1
 }
 
 # Elasticsearch and Kibana upgrade their data in place on the first start of a
@@ -1054,10 +1184,8 @@ function fuCHECK_ELASTIC () {
 	    return
 	fi
 	# The images of the previous version are still there, fuSTOP_TPOT only prunes
-	# the untagged ones. ES_VER is set in every T-Pot Elasticsearch image.
-	myOLD=$(docker image inspect --format '{{range .Config.Env}}{{println .}}{{end}}' \
-	        "$(grep -E "^TPOT_REPO=" "$HOME/tpotce/.env" | tail -1 | cut -d= -f2-)/elasticsearch:${myOLDVERSION}" 2>/dev/null \
-	        | sed -n "s/^ES_VER=//p" | head -1)
+	# the untagged ones.
+	myOLD=$(fuES_IMAGE_VERSION "$(grep -E "^TPOT_REPO=" "$HOME/tpotce/.env" | tail -1 | cut -d= -f2-)" "${myOLDVERSION}")
 	if [ "${myOLD}" == "${myNEW}" ];
 	  then
 	    fuUI_OK "Elasticsearch stays on ${myNEW}."
@@ -1096,23 +1224,18 @@ function fuCHECK_ELASTIC () {
 	    echo
 	    return
 	fi
-	fuUI_WARN "Elasticsearch and Kibana will upgrade their data in ${myDATA}/elk on the next start."
-	fuUI_HINT "This cannot be undone, and the backup of this run does not hold that data."
-	fuUI_HINT "T-Pot is stopped right now, so this is the moment to copy it, e.g.:"
+	fuUI_HINT "T-Pot is stopped right now. To keep a copy of the data, answer no, copy it, e.g.:"
 	fuUI_HINT "  sudo cp -a ${myDATA}/elk/data ${myBACKUPDIR}/elk_data_${myOLD:-old}"
-	fuUI_HINT "The checkout and .env are already on the new release, afterwards finish with:"
-	fuUI_HINT "  docker compose -f $HOME/tpotce/docker-compose.yml pull && sudo systemctl start tpot"
-	fuUI_HINT "  $HOME/tpotce/tpot setup    (the Python packages of the T-Pot Manager for this release)"
-	if [ -t 0 ] && [ -t 1 ];
+	fuUI_HINT "and run the update again. Or run it with --full, which takes the data into the backup."
+	# Ctrl+C at the question is a no as well: the checkout goes back either way
+	trap fuELASTIC_REFUSED INT
+	if fuLOSS_CONFIRM elastic "Elasticsearch ${myOLD:-?} -> ${myNEW} upgrades the data in ${myDATA}/elk on the next start. This cannot be undone and the backup of this run does not hold it (--full does).";
 	  then
-	    fuUI_HINT "Press Ctrl+C to stop here and copy it first, continuing in 15 seconds ..."
-	    # Ctrl+C reaches bash and sleep at once: the trap or the status of the interrupted sleep
-	    # stops the run, whichever bash sees first
-	    trap fuELASTIC_STOPPED INT
-	    sleep 15 || fuELASTIC_STOPPED
 	    trap - INT
+	    echo
+	    return
 	fi
-	echo
+	fuELASTIC_REFUSED
 }
 
 # Backup
@@ -1274,6 +1397,27 @@ function fuREMOVEOLDIMAGES () {
 	      done;
 	    mapfile -t -O "${#myALL[@]}" myALL <<< "${myLIST}"
 	done;
+	# An image built here has no RepoDigests: nothing can pull it again, so it only goes once
+	# that is confirmed (fuLOSS_CONFIRM). Otherwise it stays and the update goes on.
+	local myPULLABLE=() myLOCAL=()
+	for myIMAGE in ${myALL[@]+"${myALL[@]}"};
+	  do
+	    if fuIMAGE_PULLABLE "${myIMAGE}";
+	      then myPULLABLE+=("${myIMAGE}")
+	      else myLOCAL+=("${myIMAGE}")
+	    fi
+	  done;
+	myALL=(${myPULLABLE[@]+"${myPULLABLE[@]}"})
+	if [ "${#myLOCAL[@]}" -gt 0 ];
+	  then
+	    if fuLOSS_CONFIRM images "$(fuLOCAL_IMAGES_TEXT "${myLOCAL[@]}")";
+	      then
+	        myALL+=("${myLOCAL[@]}")
+	      else
+	        fuUI_HINT "Keeping them, the update goes on. 'docker rmi <image>' removes one later."
+	        fuDID info "Kept ${#myLOCAL[@]} image(s) built here, nothing can pull them again."
+	    fi
+	fi
 	myTOTAL="${#myALL[@]}"
 	if [ "${myTOTAL}" -eq 0 ];
 	  then
@@ -1303,6 +1447,21 @@ function fuREMOVEOLDIMAGES () {
 	    fuUI_WARN "Removed $((myTOTAL - myLEFT)) of ${myTOTAL} image(s), ${myLEFT} still in use, see ${myLOG}."
 	    fuDID warn "${myLEFT} image(s) of earlier versions are still in use and stay."
 	fi
+}
+
+# Can the image be pulled again? One built here has no RepoDigests. An answer that is no number
+# counts as built here: when in doubt it is kept.
+function fuIMAGE_PULLABLE () {   # $1 = image
+	local myDIGESTS=""
+	myDIGESTS=$(docker image inspect --format '{{len .RepoDigests}}' "$1" 2>/dev/null)
+	[[ "${myDIGESTS}" =~ ^[1-9][0-9]*$ ]]
+}
+
+# The loss of the images built here, for fuLOSS_CONFIRM and fuLOSS_ADD
+function fuLOCAL_IMAGES_TEXT () {   # $@ = images
+	local myIMAGE="" myLIST=""
+	for myIMAGE in "$@"; do myLIST="${myLIST}${myLIST:+, }${myIMAGE}"; done
+	echo "$# image(s) built here cannot be pulled again: ${myLIST}"
 }
 
 # The T-Pot images of one registry without the tag in use, repository:tag each
@@ -1965,6 +2124,119 @@ function fuSSHD_DROPIN () {
 	echo
 }
 
+# The commit the update would go to, fetched without touching the checkout: the branch of -r /
+# TPOT_REPO_URL from that repository, the one of -b / TPOT_BRANCH from origin, otherwise the
+# upstream of the branch in use, the one `git pull` follows. Prints the ref, rc 1 if there is none.
+function fuLOSS_TARGET () {
+	local myBRANCH="${myTPOT_BRANCH}" myUP=""
+	local myGIT=(git -C "$HOME/tpotce")
+	[ -n "${myBRANCH}" ] || myBRANCH=$("${myGIT[@]}" rev-parse --abbrev-ref HEAD 2>/dev/null)
+	if [ -z "${myBRANCH}" ] || [ "${myBRANCH}" == "HEAD" ];
+	  then
+	    fuUI_ERROR "The checkout is not on a branch, so there is nothing to update from. '-b master' names one."
+	    return 1
+	fi
+	# no password prompt without a terminal: a repository that wants one is an error here
+	if [ -n "${myTPOT_REPO_URL}" ];
+	  then
+	    if ! GIT_TERMINAL_PROMPT=0 "${myGIT[@]}" fetch --quiet "${myTPOT_REPO_URL}" "${myBRANCH}" < /dev/null > /dev/null 2>&1;
+	      then
+	        fuUI_ERROR "Could not fetch ${myBRANCH} from ${myTPOT_REPO_URL}."
+	        return 1
+	    fi
+	    echo "FETCH_HEAD"
+	    return 0
+	fi
+	if [ -n "${myTPOT_BRANCH}" ];
+	  then
+	    if ! GIT_TERMINAL_PROMPT=0 "${myGIT[@]}" fetch --quiet origin < /dev/null > /dev/null 2>&1 \
+	       || ! "${myGIT[@]}" rev-parse --verify --quiet "refs/remotes/origin/${myBRANCH}^{commit}" > /dev/null;
+	      then
+	        fuUI_ERROR "Could not fetch the branch ${myBRANCH} from origin."
+	        return 1
+	    fi
+	    echo "origin/${myBRANCH}"
+	    return 0
+	fi
+	if ! myUP=$("${myGIT[@]}" rev-parse --abbrev-ref --symbolic-full-name "@{u}" 2>/dev/null) \
+	   || ! GIT_TERMINAL_PROMPT=0 "${myGIT[@]}" fetch --quiet < /dev/null > /dev/null 2>&1;
+	  then
+	    fuUI_ERROR "Could not fetch the branch ${myBRANCH} follows."
+	    return 1
+	fi
+	echo "${myUP}"
+}
+
+# --check-data-loss: what the update (or the backup of --backup-only) would lose for good, one
+# fuLOSS_ADD line each, read the way the run itself will see it. Changes nothing, a git fetch at
+# most. rc 0 for none, 3 for some, 1 when it cannot tell.
+function fuCHECK_DATA_LOSS () {
+	local myREF="" myNEW="" myOLD="" myREPO="" myNEWREPO="" myCURRENT="" myKEEP="" myIMAGE="" myDATA=""
+	local myLOCAL=()
+	local myGIT=(git -C "$HOME/tpotce")
+	myLOSSES=0
+	fuCHECK_BACKUP_SPACE
+	if [ -z "${myBACKUP_ONLY}" ];
+	  then
+	    fuUI_INFO "Checking what the update brings ..."
+	    myREF=$(fuLOSS_TARGET) || return 1
+	    fuUI_HINT "The update goes to $("${myGIT[@]}" rev-parse --short "${myREF}" 2>/dev/null) (${myREF})."
+	    myCURRENT=$(grep -E "^TPOT_VERSION=" "$HOME/tpotce/.env" 2>/dev/null | tail -1 | cut -d= -f2-)
+	    myREPO=$(grep -E "^TPOT_REPO=" "$HOME/tpotce/.env" 2>/dev/null | tail -1 | cut -d= -f2-)
+	    # as fuRESTORE: the old default dtagdevsec moves to the registry of env.example
+	    myNEWREPO=$("${myGIT[@]}" show "${myREF}:env.example" 2>/dev/null | sed -n "s/^TPOT_REPO=//p" | tail -1)
+	    if [ "${myREPO}" == "dtagdevsec" ] && [ -n "${myNEWREPO}" ] && [ "${myNEWREPO}" != "dtagdevsec" ];
+	      then
+	        myREPO="${myNEWREPO}"
+	    fi
+	    # Elasticsearch, as fuCHECK_ELASTIC will see it
+	    if fuCOMPOSE_HAS elasticsearch;
+	      then
+	        myNEW=$("${myGIT[@]}" show "${myREF}:docker/elk/elasticsearch/Dockerfile" 2>/dev/null | sed -n "s/^ARG ES_VER=//p" | head -1)
+	        myOLD=$(fuES_IMAGE_VERSION "${myREPO}" "${myCURRENT}")
+	        myDATA=$(fuDATA_PATH)
+	        if [ -z "${myNEW}" ];
+	          then
+	            fuUI_WARN "Cannot tell which Elasticsearch version the update ships, the update skips its check as well."
+	          elif [ "${myOLD}" == "${myNEW}" ];
+	            then
+	              fuUI_OK "Elasticsearch stays on ${myNEW}."
+	          elif [ -n "${myFULL}" ] && [ "${myDATA}" == "$HOME/tpotce/data" ] && [ -e "${myDATA}/elk/data" ];
+	            then
+	              fuUI_OK "Elasticsearch ${myOLD:-?} -> ${myNEW}, --full takes its data into the backup."
+	          else
+	            fuLOSS_ADD elastic "Elasticsearch ${myOLD:-?} -> ${myNEW} upgrades the data in ${myDATA}/elk on the next start. This cannot be undone and the backup of this run does not hold it (--full does)."
+	        fi
+	    fi
+	    # The images of every other tag go after the pull, as fuREMOVEOLDIMAGES will see them: the
+	    # tag of env.example, unless .env pins one that is no release (as fuRESTORE)
+	    myKEEP=$("${myGIT[@]}" show "${myREF}:env.example" 2>/dev/null | sed -n "s/^TPOT_VERSION=//p" | tail -1)
+	    [ -n "${myKEEP}" ] || myKEEP=$("${myGIT[@]}" show "${myREF}:version" 2>/dev/null | tr -d "[:space:]")
+	    echo "${myCURRENT}" | grep -qE "^[0-9]+(\.[0-9]+)+$" || myKEEP="${myCURRENT}"
+	    if [ -z "${myKEEP}" ];
+	      then
+	        fuUI_WARN "Cannot tell which image tag the update keeps, the update removes no image then."
+	      else
+	        for myNEWREPO in ${myREPOS};
+	          do
+	            for myIMAGE in $(fuIMAGES "${myNEWREPO}" "${myKEEP}");
+	              do
+	                fuIMAGE_PULLABLE "${myIMAGE}" || myLOCAL+=("${myIMAGE}")
+	              done;
+	          done;
+	        [ "${#myLOCAL[@]}" -eq 0 ] || fuLOSS_ADD images "$(fuLOCAL_IMAGES_TEXT "${myLOCAL[@]}")"
+	    fi
+	    echo
+	fi
+	if [ "${myLOSSES}" -gt 0 ];
+	  then
+	    fuUI_WARN "${myLOSSES} loss(es) of data found. The run asks before each one at a terminal, without one only --accept-data-loss confirms them, -y does not."
+	    return 3
+	fi
+	fuUI_OK "No loss of data found."
+	return 0
+}
+
 # Sourced (the tests do, for the functions): no run
 [[ "${BASH_SOURCE[0]}" != "$0" ]] && return 0
 
@@ -1980,6 +2252,8 @@ for myARG in "$@";
       --full)  myARGV+=("-F") ;;
       --start) myARGV+=("-s") ;;
       --backup-only) myARGV+=("-o") ;;
+      --check-data-loss) myCHECK_LOSS=1 ;;
+      --accept-data-loss) myACCEPT_LOSS=1 ;;
       --help)  myARGV+=("-h") ;;
       --?*)    fuUI_USAGE_ERROR "Unknown option ${myARG}." update.sh; exit 1 ;;
       *)      myARGV+=("${myARG}") ;;
@@ -2046,6 +2320,22 @@ if [ -n "${myBECOME_FILE}" ];
     sudo () { command sudo -S -p "" -v < "${myBECOME_FILE}" >/dev/null 2>&1; command sudo "$@"; }
 fi
 
+# --check-data-loss: no -y needed, it changes nothing and asks nothing. It runs for the T-Pot
+# Manager without a terminal, so sudo never asks either: without -B a sudo that needs no
+# password, otherwise the sizes as this user sees them
+if [ -n "${myCHECK_LOSS}" ];
+  then
+    if [ -z "${myBECOME_FILE}" ];
+      then
+        if command sudo -n true 2>/dev/null;
+          then sudo () { command sudo -n "$@"; }
+          else sudo () { "$@"; }
+        fi
+    fi
+    fuCHECK_DATA_LOSS
+    exit $?
+fi
+
 fuUI_BANNER "Updater" "Updates T-Pot to the latest version of its branch, with a backup first."
 if [ "${myCONFIRMED}" != "y" ]; then
   fuUI_INFO "This script will update T-Pot to the latest version."
@@ -2103,7 +2393,7 @@ fuEXPORT_ELASTIC
 fuSTOP_TPOT
 fuBACKUP
 fuMARK phase selfupdate Updating the checkout
-fuSELFUPDATE "$@"
+fuSELFUPDATE "$@" ${myACCEPT_LOSS:+--accept-data-loss}
 # The config and the edition have to be back in place before the images are
 # pulled, `docker compose pull` reads both.
 fuMARK phase restore Putting your configuration back

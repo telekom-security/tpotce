@@ -217,45 +217,17 @@ class UpdateShTest(Harness):
     def check_elastic():
         return re.search(r"function fuCHECK_ELASTIC \(\) \{.*?\n\}", read("update.sh"), re.S).group(0)
 
-    def test_ctrl_c_in_the_pause_stops_cleanly(self):
-        """Ctrl+C reaches bash and sleep at once; in whatever order bash sees them, the run stops (several
-        runs: the order is a race). The Ctrl+C comes once the sleep of the pause runs (a sleep on PATH
-        says so and execs the real one): a fixed wait sent it before the trap under load (rc -2)."""
-        import signal
-        import time
-        function = re.search(r"function fuELASTIC_STOPPED \(\) \{.*?\n\}", read("update.sh"), re.S).group(0)
-        pause = re.search(r"\n(\s*trap fuELASTIC_STOPPED INT\n.*?trap - INT\n)", self.check_elastic(), re.S).group(1)
-        script = (f'source "{REPO}/installer/lib/ui.sh"; fuUI_INIT\nfuDID () {{ :; }}\n{function}\n'
-                  + pause.replace("sleep 15", "sleep 5") + 'echo after\n')
-        sleeping = os.path.join(self.home, "sleeping")
-        with open(os.path.join(self.bin, "sleep"), "w", encoding="utf-8") as out:
-            out.write(f'#!/bin/sh\n: > "{sleeping}"\nexec {shutil.which("sleep")} "$@"\n')
-        os.chmod(os.path.join(self.bin, "sleep"), 0o755)
-        for attempt in range(12):
-            if os.path.exists(sleeping):
-                os.remove(sleeping)
-            proc = subprocess.Popen(["bash", "-c", script], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                    universal_newlines=True, start_new_session=True,
-                                    env=dict(os.environ, HOME=self.home, TPOT_GUM="off",
-                                             PATH=f"{self.bin}:{os.environ['PATH']}"))
-            deadline = time.time() + 30
-            while not os.path.exists(sleeping) and proc.poll() is None and time.time() < deadline:
-                time.sleep(0.01)
-            self.assertTrue(os.path.exists(sleeping), f"run {attempt}: the pause did not start")
-            os.killpg(proc.pid, signal.SIGINT)
-            out, _err = proc.communicate(timeout=10)
-            self.assertEqual(proc.returncode, 130, f"run {attempt}: {out}")
-            self.assertTrue("Stopped before the image pull" in out and "tpot setup" in out, out)
-            self.assertFalse("after" in out, out)
-
-    def test_the_trap_only_covers_the_pause(self):
+    def test_the_trap_only_covers_the_question(self):
+        """Ctrl+C at the question of the Elasticsearch upgrade is a no (DataLossTest runs it)."""
         text = self.check_elastic()
-        self.assertTrue(re.search(r"trap fuELASTIC_STOPPED INT\n\s*sleep 15 \|\| fuELASTIC_STOPPED\n\s*trap - INT", text),
-                        text[-600:])
-        self.assertEqual(len(re.findall(r"trap .*INT", read("update.sh"))), 2)
+        self.assertTrue(re.search(r"trap fuELASTIC_REFUSED INT\n\s*if fuLOSS_CONFIRM elastic .*\n\s*then\n"
+                                  r"\s*trap - INT\n", text), text[-900:])
+        refused = re.search(r"function fuELASTIC_REFUSED \(\) \{\n\ttrap - INT\n", read("update.sh"))
+        self.assertTrue(refused)
+        self.assertEqual(len(re.findall(r"trap .*INT", read("update.sh"))), 3)
 
-    def test_the_finish_hint_names_tpot_setup(self):
-        self.assertTrue("tpot setup" in self.check_elastic())
+    def test_the_refusal_names_full(self):
+        self.assertTrue("--full" in self.check_elastic())
 
     def test_restart_into_this_update_sh_keeps_it(self):
         self.assertEqual(self.restart_args(read("update.sh"), "-y", "-B", "/run/f", "-F"),
@@ -842,6 +814,443 @@ class MigrateRetentionTest(unittest.TestCase):
         body = body[:body.index("\n}\n")]
         self.assertIn("fuRETENTION_EXPORT", body)
         self.assertNotIn('-C "${myTMPDIR}" elastic/', body)
+
+
+# A df of GNU coreutils (-B1 --output=size|avail|pcent): the sizes in the files df_size and df_avail
+# of HOME, the use in df_pcent. macOS has no -B1, the T-Pot host runs GNU
+DF = ('#!/bin/sh\ncase "$*" in\n  *size*) echo "1B-blocks"; cat "$HOME/df_size" ;;\n'
+      '  *avail*) echo "Avail"; cat "$HOME/df_avail" ;;\n'
+      '  *pcent*) echo "Use%"; cat "$HOME/df_pcent" 2>/dev/null || echo " 40%" ;;\nesac\n')
+# du -k <file>: the KiB of the file from HOME/sizes ("<name> <kib>" per line); du -scb (fuBACKUP_SIZE)
+# says what HOME/need holds
+DU = ('#!/bin/sh\nfor a; do f="$a"; done\n'
+      'case "$1" in -s*b) echo "$(cat "$HOME/need" 2>/dev/null || echo 1)\ttotal"; exit 0 ;; esac\n'
+      'k=$(sed -n "s|^${f##*/} ||p" "$HOME/sizes" 2>/dev/null)\necho "${k:-1}\t$f"\n')
+
+
+class DataLossTest(Harness):
+    """update.sh loses no data the backup of the run cannot bring back without a confirmation: a yes at
+    a terminal or --accept-data-loss, never -y. Without either the step is refused (exit 5 where the
+    run stops), --check-data-loss lists them and changes nothing."""
+
+    HELPERS = textwrap.dedent("""
+        fuUI_INFO () { echo "INFO: $*"; }; fuUI_OK () { echo "OK: $*"; }; fuUI_WARN () { echo "WARN: $*"; }
+        fuUI_HINT () { echo "HINT: $*"; }; fuUI_ERROR () { echo "ERROR: $*"; }
+        fuUI_CONFIRM () { echo "ASKED: $*"; return 1; }
+        fuUI_SPIN () { shift 2; "$@"; }
+        fuDID () { echo "DID: $1: $2"; }; fuMARK () { :; }
+        myLOG=/dev/null myCONFIRMED=y myREPOS="ghcr.io/telekom-security" myBACKUP_RESERVE_PERCENT=10
+        myBACKUPDIR="$HOME/tpot_backups" myLOSSES=0
+    """)
+
+    def setUp(self):
+        super().setUp()
+        for name, text in (("df", DF), ("du", DU)):
+            path = os.path.join(self.bin, name)
+            with open(path, "w", encoding="utf-8") as out:
+                out.write(text)
+            os.chmod(path, 0o755)
+        self.tpotce = os.path.join(self.home, "tpotce")
+        os.makedirs(self.tpotce)
+        self.backups = os.path.join(self.home, "tpot_backups")
+
+    @staticmethod
+    def functions(*names):
+        """The functions of update.sh, as the tests of fuMIGRATE_RETENTION take them."""
+        return "eval \"$(sed -n '" + "; ".join(f"/^function {n} ()/,/^}}/p" for n in names) + "' update.sh)\"\n"
+
+    def write(self, name, text):
+        with open(os.path.join(self.home, name), "w", encoding="utf-8") as out:
+            out.write(text)
+
+    def environment(self):
+        environment = dict(os.environ, HOME=self.home, PATH=f"{self.bin}:{os.environ['PATH']}", TPOT_GUM="off")
+        environment.pop("TPOT_MARKS", None)
+        return environment
+
+    def bash(self, script):
+        return subprocess.run(["bash", "-c", self.HELPERS + script], cwd=REPO, capture_output=True,
+                              universal_newlines=True, env=self.environment(), stdin=subprocess.DEVNULL,
+                              timeout=60)
+
+    # --- the backups that make room ---------------------------------------------------------------
+
+    def archives(self, sizes_kib):
+        """Archives oldest first with the given KiB (du -k); 1 GB disk, 10 % reserve, the backup needs
+        50 MB and 4 MB allowance, 140 MB are free: 14 MB short."""
+        os.makedirs(self.backups, exist_ok=True)
+        names = []
+        for number, kib in enumerate(sizes_kib):
+            name = f"2026100{number + 1}101010_tpot_backup.tar"
+            path = os.path.join(self.backups, name)
+            with open(path, "w", encoding="utf-8") as out:
+                out.write("x")
+            os.utime(path, (1_700_000_000 + number * 100, 1_700_000_000 + number * 100))
+            names.append(name)
+        self.write("sizes", "".join(f"{n} {k}\n" for n, k in zip(names, sizes_kib)))
+        self.write("df_size", "1000000000\n")
+        self.write("df_avail", "140000000\n")
+        self.write("need", "50000000\n")
+        with open(os.path.join(self.tpotce, ".env"), "w") as out:        # fuBACKUP_SIZE measures it (du)
+            out.write("TPOT_TYPE=HIVE\n")
+        return names
+
+    def left(self):
+        return sorted(os.listdir(self.backups))
+
+    SPACE = ("fuLOSS_ADD", "fuLOSS_CONFIRM", "fuDROP_OLDEST", "fuBACKUP_SIZE", "fuCHECK_BACKUP_SPACE")
+
+    def test_low_space_without_confirmation_deletes_nothing(self):
+        names = self.archives([20000, 20000, 20000])
+        result = self.bash(self.functions(*self.SPACE) + 'fuCHECK_BACKUP_SPACE\necho "went on"\n')
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 5, out)
+        self.assertEqual(self.left(), names)
+        self.assertNotIn("went on", out)
+        self.assertNotIn("ASKED", out)                              # no terminal: no question
+        self.assertIn("HINT: Not confirmed: no terminal. --accept-data-loss confirms it, -y does not.", out)
+        self.assertIn("DID: fail: Not updated: making room would delete older backups, which was not confirmed.",
+                      out)
+        self.assertIn(names[0], out)                                # the text names what would go
+        self.assertNotIn(names[1], out)
+
+    def test_low_space_with_accept_deletes_only_what_is_needed(self):
+        names = self.archives([20000, 20000, 20000])
+        result = self.bash('myACCEPT_LOSS=1\n' + self.functions(*self.SPACE)
+                           + 'fuCHECK_BACKUP_SPACE\necho "went on"\n')
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out)
+        self.assertEqual(self.left(), names[1:])                    # the oldest one, no more
+        self.assertIn("went on", out)
+        self.assertIn("(confirmed with --accept-data-loss)", out)
+
+    def test_not_enough_even_after_dropping_all_deletes_nothing(self):
+        names = self.archives([1000, 1000, 50000])                  # the newest always stays
+        for accept in ("", "myACCEPT_LOSS=1\n"):
+            with self.subTest(accept=bool(accept)):
+                result = self.bash(accept + self.functions(*self.SPACE) + 'fuCHECK_BACKUP_SPACE\n')
+                out = result.stdout + result.stderr
+                self.assertEqual(result.returncode, 1, out)
+                self.assertEqual(self.left(), names)
+                self.assertIn("Not enough room for a backup", out)
+
+    def test_enough_room_asks_nothing(self):
+        names = self.archives([20000, 20000])
+        self.write("df_avail", "900000000\n")
+        result = self.bash(self.functions(*self.SPACE) + 'fuCHECK_BACKUP_SPACE\necho "went on"\n')
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertEqual(self.left(), names)
+        self.assertNotIn("WARN", result.stdout)
+
+    def test_check_mode_lists_backups_and_exits_3(self):
+        names = self.archives([20000, 20000, 20000])
+        script = ('myCHECK_LOSS=1 myBACKUP_ONLY=1\n'
+                  + self.functions(*self.SPACE, "fuCHECK_DATA_LOSS") + 'fuCHECK_DATA_LOSS\necho "rc=$?"\n')
+        result = self.bash(script)
+        out = result.stdout + result.stderr
+        self.assertIn("rc=3", out)
+        self.assertEqual(self.left(), names)
+        lines = [line for line in out.splitlines() if line.startswith("@@tpot loss ")]
+        self.assertEqual(len(lines), 1, out)
+        self.assertTrue(lines[0].startswith("@@tpot loss backups ") and names[0] in lines[0], lines)
+        self.assertNotIn(names[1], lines[0])
+
+    def test_check_mode_without_a_backup_folder_creates_none(self):
+        self.write("df_size", "1000000000\n")
+        self.write("df_avail", "900000000\n")
+        script = ('myCHECK_LOSS=1 myBACKUP_ONLY=1\n'
+                  + self.functions(*self.SPACE, "fuCHECK_DATA_LOSS") + 'fuCHECK_DATA_LOSS\necho "rc=$?"\n')
+        result = self.bash(script)
+        self.assertIn("rc=0", result.stdout, result.stdout + result.stderr)
+        self.assertFalse(os.path.exists(self.backups))
+        self.assertNotIn("@@tpot loss", result.stdout)
+
+    # --- the Elasticsearch upgrade -----------------------------------------------------------------
+
+    def elastic(self, archive_has_data, extra="", stub_confirm=""):
+        os.makedirs(os.path.join(self.tpotce, "docker", "elk", "elasticsearch"))
+        with open(os.path.join(self.tpotce, "docker", "elk", "elasticsearch", "Dockerfile"), "w") as out:
+            out.write("FROM alpine\nARG ES_VER=9.1.0\n")
+        with open(os.path.join(self.tpotce, "docker-compose.yml"), "w") as out:
+            out.write("services:\n  elasticsearch:\n    image: x\n")
+        with open(os.path.join(self.tpotce, ".env"), "w") as out:
+            out.write("TPOT_REPO=ghcr.io/telekom-security\nTPOT_VERSION=24.04.2\n")
+        return textwrap.dedent(f"""
+            myOLDVERSION=24.04.1 myARCHIVE="$HOME/tpot_backups/x.tar"
+            docker () {{ [ "$1 $2" = "image inspect" ] && printf 'PATH=/bin\\nES_VER=8.19.0\\n'; }}
+            tar () {{ {"return 0" if archive_has_data else "return 1"}; }}
+            fuROLLBACK_CHECKOUT () {{ echo "ROLLBACK"; return 0; }}
+        """) + extra + self.functions("fuLOSS_CONFIRM", "fuDATA_PATH", "fuCOMPOSE_HAS", "fuES_IMAGE_VERSION", "fuELASTIC_REFUSED",
+                                                                  "fuCHECK_ELASTIC") \
+            + stub_confirm + 'fuCHECK_ELASTIC\necho "went on"\n'
+
+    def test_elastic_upgrade_without_full_refused_rolls_back(self):
+        result = self.bash(self.elastic(archive_has_data=False))
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 5, out)
+        self.assertIn("ROLLBACK", out)
+        self.assertNotIn("went on", out)
+        self.assertNotIn("ASKED", out)
+        self.assertIn("WARN: Elasticsearch 8.19.0 -> 9.1.0 upgrades the data in "
+                      f"{self.tpotce}/data/elk on the next start. This cannot be undone and the backup "
+                      "of this run does not hold it (--full does).", out)
+        self.assertIn("DID: fail: Not updated: the Elasticsearch upgrade was not confirmed, the checkout "
+                      "and the configuration are back.", out)
+        self.assertLess(out.index("sudo cp -a"), out.index("WARN: Elasticsearch 8.19.0"))   # the copy hint first
+
+    def test_elastic_upgrade_with_accept_goes_on(self):
+        result = self.bash(self.elastic(archive_has_data=False, extra="myACCEPT_LOSS=1\n"))
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out)
+        self.assertIn("went on", out)
+        self.assertNotIn("ROLLBACK", out)
+        self.assertIn("(confirmed with --accept-data-loss)", out)
+
+    def test_elastic_upgrade_with_full_archive_needs_no_confirmation(self):
+        result = self.bash(self.elastic(archive_has_data=True))
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out)
+        self.assertIn("went on", out)
+        self.assertNotIn("ASKED", out)
+        self.assertNotIn("ROLLBACK", out)
+        self.assertNotIn("Not confirmed", out)
+
+    def test_ctrl_c_at_the_elastic_question_is_a_no(self):
+        """Ctrl+C reaches bash and the question at once: the checkout goes back as for a no (the plain
+        question of ui.sh reads from a pipe here, the signal needs no terminal)."""
+        import signal
+        import time
+        asked = os.path.join(self.home, "asked")
+        stub = (f'source "{REPO}/installer/lib/ui.sh"; fuUI_INIT\n'
+                + self.HELPERS.replace('fuUI_CONFIRM () { echo "ASKED: $*"; return 1; }', "")
+                + f'fuLOSS_CONFIRM () {{ : > "{asked}"; fuUI_CONFIRM --default no "Accept?" < <(sleep 30 2>/dev/null); }}\n')
+        script = self.elastic(archive_has_data=False, stub_confirm=stub)
+        for attempt in range(5):
+            if os.path.exists(asked):
+                os.remove(asked)
+            proc = subprocess.Popen(["bash", "-c", self.HELPERS + script], cwd=REPO, stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT, universal_newlines=True, start_new_session=True,
+                                    stdin=subprocess.DEVNULL, env=self.environment())
+            deadline = time.time() + 30
+            while not os.path.exists(asked) and proc.poll() is None and time.time() < deadline:
+                time.sleep(0.01)
+            self.assertTrue(os.path.exists(asked), f"run {attempt}: the question did not come")
+            time.sleep(0.2)
+            os.killpg(proc.pid, signal.SIGINT)
+            out, _err = proc.communicate(timeout=20)
+            self.assertEqual(proc.returncode, 5, f"run {attempt}: {out}")
+            self.assertIn("ROLLBACK", out)
+            self.assertNotIn("went on", out)
+
+    def test_no_pause_left(self):
+        text = read("update.sh")
+        self.assertNotIn("sleep 15", text)
+        self.assertNotIn("fuELASTIC_STOPPED", text)
+
+    # --- images that cannot be pulled again --------------------------------------------------------
+
+    def images(self, extra=""):
+        with open(os.path.join(self.tpotce, ".env"), "w") as out:
+            out.write("TPOT_VERSION=24.04.2\n")
+        self.write("removed", "")
+        script = textwrap.dedent("""
+            docker () {
+              local myA="" myI=""
+              case "$1 $2" in
+                "images --format")
+                  for myI in ghcr.io/telekom-security/cowrie:24.04.1 ghcr.io/telekom-security/mine:24.04.1 \\
+                             ghcr.io/telekom-security/cowrie:24.04.2; do
+                    grep -qxF "${myI}" "$HOME/removed" || echo "${myI}"
+                  done ;;
+                "image inspect") for myA; do :; done; case "${myA}" in *cowrie*) echo 1 ;; *) echo 0 ;; esac ;;
+              esac
+            }
+            fuRMI () { echo "RMI: $*"; printf '%s\\n' "$@" >> "$HOME/removed"; }
+        """) + extra + self.functions("fuLOSS_CONFIRM", "fuIMAGE_PULLABLE", "fuLOCAL_IMAGES_TEXT", "fuIMAGES",
+                                                    "fuREMOVEOLDIMAGES") \
+            + 'fuREMOVEOLDIMAGES\necho "went on"\n'
+        return self.bash(script)
+
+    def test_local_images_are_kept_without_confirmation(self):
+        result = self.images()
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, out)
+        self.assertIn("went on", out)
+        self.assertEqual([line for line in out.splitlines() if line.startswith("RMI: ")],
+                         ["RMI: ghcr.io/telekom-security/cowrie:24.04.1"])
+        self.assertIn("WARN: 1 image(s) built here cannot be pulled again: ghcr.io/telekom-security/mine:24.04.1",
+                      out)
+        self.assertNotIn("still in use", out)
+
+    def test_local_images_go_with_accept(self):
+        result = self.images(extra="myACCEPT_LOSS=1\n")
+        out = result.stdout + result.stderr
+        rmi = [line for line in out.splitlines() if line.startswith("RMI: ")]
+        self.assertEqual(len(rmi), 1, out)
+        self.assertIn("ghcr.io/telekom-security/mine:24.04.1", rmi[0])
+        self.assertIn("ghcr.io/telekom-security/cowrie:24.04.1", rmi[0])
+
+    # --- the check before an update ----------------------------------------------------------------
+
+    def target(self):
+        """An origin one commit ahead of ~/tpotce: Elasticsearch 9.1.0, the images :24.04.3."""
+        git = ["-c", "user.email=t@t", "-c", "user.name=t"]
+        origin = os.path.join(self.home, "origin")
+        os.makedirs(os.path.join(origin, "docker", "elk", "elasticsearch"))
+        subprocess.run(["git", "init", "-q", origin], check=True)
+        subprocess.run(["git", "-C", origin, "checkout", "-q", "-b", "master"], check=True)
+        dockerfile = os.path.join(origin, "docker", "elk", "elasticsearch", "Dockerfile")
+
+        def commit(es, tag):
+            with open(dockerfile, "w") as out:
+                out.write(f"ARG ES_VER={es}\n")
+            with open(os.path.join(origin, "env.example"), "w") as out:
+                out.write(f"TPOT_REPO=ghcr.io/telekom-security\nTPOT_VERSION={tag}\n")
+            subprocess.run(["git", "-C", origin, "add", "-A"], check=True)
+            subprocess.run(["git", "-C", origin] + git + ["commit", "-q", "-m", tag], check=True)
+        commit("8.19.0", "24.04.2")
+        shutil.rmtree(self.tpotce)
+        subprocess.run(["git", "clone", "-q", origin, self.tpotce], check=True)
+        commit("9.1.0", "24.04.3")
+        with open(os.path.join(self.tpotce, ".env"), "w") as out:
+            out.write("TPOT_REPO=ghcr.io/telekom-security\nTPOT_VERSION=24.04.2\n")
+        with open(os.path.join(self.tpotce, "docker-compose.yml"), "w") as out:
+            out.write("services:\n  elasticsearch:\n    image: x\n")
+        self.write("df_size", "1000000000\n")
+        self.write("df_avail", "900000000\n")
+        return origin
+
+    CHECK = textwrap.dedent("""
+        docker () {
+          local myA=""
+          case "$1 $2" in
+            "images --format")
+              printf '%s\\n' ghcr.io/telekom-security/elasticsearch:24.04.2 ghcr.io/telekom-security/mine:24.04.2 ;;
+            "image inspect")
+              for myA; do :; done
+              case "$4" in
+                *Env*) printf 'ES_VER=8.19.0\\n' ;;
+                *) case "${myA}" in *mine*) echo 0 ;; *) echo 1 ;; esac ;;
+              esac ;;
+          esac
+        }
+    """)
+    CHECK_FUNCTIONS = ("fuLOSS_ADD", "fuLOSS_CONFIRM", "fuDROP_OLDEST", "fuBACKUP_SIZE", "fuCHECK_BACKUP_SPACE",
+                       "fuDATA_PATH", "fuCOMPOSE_HAS", "fuES_IMAGE_VERSION", "fuIMAGE_PULLABLE",
+                       "fuLOCAL_IMAGES_TEXT", "fuIMAGES", "fuLOSS_TARGET", "fuCHECK_DATA_LOSS")
+
+    def check(self, extra=""):
+        script = ('myCHECK_LOSS=1\n' + self.CHECK + extra + self.functions(*self.CHECK_FUNCTIONS)
+                  + 'fuCHECK_DATA_LOSS\necho "rc=$?"\n')
+        result = self.bash(script)
+        out = result.stdout + result.stderr
+        return out, [line for line in out.splitlines() if line.startswith("@@tpot loss ")]
+
+    def head(self):
+        return subprocess.run(["git", "-C", self.tpotce, "rev-parse", "HEAD"], capture_output=True,
+                              universal_newlines=True).stdout
+
+    def test_check_mode_finds_the_elastic_upgrade_and_the_local_images(self):
+        self.target()
+        head = self.head()
+        out, lines = self.check()
+        self.assertIn("rc=3", out)
+        self.assertEqual([line.split()[2] for line in lines], ["elastic", "images"], out)
+        self.assertIn("8.19.0 -> 9.1.0", lines[0])
+        self.assertIn("1 image(s) built here cannot be pulled again: ghcr.io/telekom-security/mine:24.04.2",
+                      lines[1])
+        self.assertEqual(self.head(), head)                             # fetched, not moved
+
+    def test_check_mode_with_full_has_no_elastic_finding(self):
+        self.target()
+        os.makedirs(os.path.join(self.tpotce, "data", "elk", "data"))
+        out, lines = self.check(extra="myFULL=1\n")
+        self.assertEqual([line.split()[2] for line in lines], ["images"], out)
+
+    def test_check_mode_says_error_without_a_target(self):
+        self.target()
+        subprocess.run(["git", "-C", self.tpotce, "remote", "remove", "origin"], check=True)
+        out, lines = self.check()
+        self.assertIn("rc=1", out)
+        self.assertEqual(lines, [])
+
+    def test_check_mode_follows_a_branch(self):
+        origin = self.target()
+        subprocess.run(["git", "-C", origin, "branch", "-q", "same", "HEAD~1"], check=True)
+        out, lines = self.check(extra="myTPOT_BRANCH=same myTPOT_SOURCE_GIVEN=1\n")
+        self.assertEqual(lines, [], out)                   # the same Elasticsearch, the same image tag
+        self.assertIn("rc=0", out)
+
+    def test_check_mode_follows_a_repository(self):
+        origin = self.target()
+        fork = os.path.join(self.home, "fork")
+        subprocess.run(["git", "clone", "-q", "--bare", origin, fork], check=True)
+        subprocess.run(["git", "-C", fork, "update-ref", "refs/heads/master", "HEAD~1"], check=True)
+        out, lines = self.check(extra=f"myTPOT_REPO_URL={fork} myTPOT_SOURCE_GIVEN=1\n")
+        self.assertEqual(lines, [], out)
+        self.assertIn("rc=0", out)
+        self.assertEqual(subprocess.run(["git", "-C", self.tpotce, "remote", "get-url", "origin"],
+                                        capture_output=True, universal_newlines=True).stdout.strip(), origin)
+
+    def test_check_mode_runs_without_y_and_writes_nothing(self):
+        names = self.archives([20000, 20000, 20000])
+        result = self.run_script(os.path.join(REPO, "update.sh"), "--check-data-loss", "--backup-only")
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 3, out)
+        self.assertEqual(self.left(), names)
+        self.assertIn("@@tpot loss backups ", out)
+        self.assertNotIn("'-y' switch", out)
+
+    # --- options, restart and help -----------------------------------------------------------------
+
+    def restart_args(self, script_text, *args):
+        function = re.search(r"function fuRESTART_ARGS \(\) \{.*?\n\}", read("update.sh"), re.S).group(0)
+        target = os.path.join(self.home, "target.sh")
+        with open(target, "w", encoding="utf-8") as out:
+            out.write(script_text)
+        result = subprocess.run(["bash", "-c", f'{function}\nfuRESTART_ARGS "$@"', "x", target] + list(args),
+                                capture_output=True, universal_newlines=True)
+        return result.stdout.split("\n")[:-1]
+
+    def test_restart_hands_accept_on(self):
+        self.assertEqual(self.restart_args(read("update.sh"), "-F", "--accept-data-loss"),
+                         ["-F", "--accept-data-loss"])
+
+    def test_restart_into_an_older_update_sh_drops_accept(self):
+        old = 'while getopts ":yFsob:r:B:h" opt; do\n'
+        self.assertEqual(self.restart_args(old, "-F", "--accept-data-loss", "-B", "/run/f"),
+                         ["-F", "-B", "/run/f"])
+
+    @staticmethod
+    def main_section():
+        return read("update.sh").split("################\n# Main section #\n################", 1)[1]
+
+    def test_selfupdate_gets_accept(self):
+        self.assertIn('fuSELFUPDATE "$@" ${myACCEPT_LOSS:+--accept-data-loss}', self.main_section())
+
+    def test_yes_does_not_set_accept(self):
+        main = self.main_section()
+        self.assertIn("--check-data-loss) myCHECK_LOSS=1", main)
+        self.assertIn("--accept-data-loss) myACCEPT_LOSS=1", main)
+        y = re.search(r"\n    y\)\n(.*?);;", main, re.S).group(1)
+        self.assertNotIn("myACCEPT_LOSS", y)
+
+    def test_space_is_checked_before_the_stop(self):
+        main = self.main_section()
+        for start in ("--backup-only: the backup", "\nfuCHECK_VERSION\n"):     # T-Pot keeps running
+            part = main[main.index(start):]
+            self.assertLess(part.index("fuCHECK_BACKUP_SPACE"), part.index("fuSTOP_TPOT"))
+
+    def test_help_names_both_options(self):
+        result = self.run_script(os.path.join(REPO, "update.sh"), "-h")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(re.search(r"^  --check-data-loss  ", result.stdout, re.M), result.stdout)
+        self.assertTrue(re.search(r"^  --accept-data-loss  ", result.stdout, re.M), result.stdout)
+        flat = " ".join(result.stdout.split())
+        self.assertIn("-y Confirm the update, required. It does not confirm a loss of data, see "
+                      "--accept-data-loss", flat)
+        self.assertIn("./update.sh --check-data-loss", flat)
+        self.assertIn("exit 5", flat)
 
 
 if __name__ == "__main__":

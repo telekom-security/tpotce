@@ -485,6 +485,7 @@ class TaskScreenTest(Scripts):
             out.write("TPOT_REPO=ghcr.io/telekom-security\nTPOT_VERSION=24.04.2\n")
         self.stub("docker", '#!/bin/sh\necho "docker $*" >> "$HOME/calls"\ncase "$*" in\n'
                             '  *pull*) echo "Pulled cowrie" ;;\n'
+                            '  "image inspect"*) echo 1 ;;\n'                  # pulled: it has a RepoDigest
                             '  images*) echo "ghcr.io/telekom-security/cowrie:24.04.1" ;;\n'
                             '  rmi*) echo "Untagged: $2" ;;\nesac\n')
 
@@ -536,7 +537,7 @@ class TaskScreenTest(Scripts):
         backup = body("fuBACKUP")
         self.assertTrue(re.search(r"sudo -v\n(?:\s*#.*\n)*\s*(?:if ! )?fuUI_SPIN (?:[^\n]|\\\n)*?sudo tar cf", backup),
                         backup[-900:])
-        # the Elastic export asks Kibana and waits for it, the pause waits for Ctrl+C: both in the open
+        # the Elastic export asks Kibana and waits for it, the Elasticsearch upgrade asks: both in the open
         self.assertNotIn("fuUI_SPIN", body("fuEXPORT_ELASTIC"))
         self.assertNotIn("fuUI_SPIN", body("fuCHECK_ELASTIC"))
 
