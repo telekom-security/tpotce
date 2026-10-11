@@ -724,14 +724,19 @@ class BuilderTest(Harness):
 class MigrateRetentionTest(unittest.TestCase):
     """update.sh fuMIGRATE_RETENTION: the retention of the existing ILM policy goes into .env once."""
 
-    def run_migration(self, old_env: str, policy):
+    def run_migration(self, old_env: str, policy, read_only=False):
         with tempfile.TemporaryDirectory() as tmp:
             env, old, export = (os.path.join(tmp, n) for n in (".env", "old.env", "ilm_policy_tpot.json"))
             with open(env, "w") as h:
                 h.write("TPOT_PERSISTENCE_CYCLES=30\nTPOT_ES_RETENTION=30\nTPOT_TYPE=HIVE\n")
+            if read_only:
+                os.chmod(env, 0o444)
             with open(old, "w") as h:
                 h.write(old_env)
-            if policy is not None:
+            if isinstance(policy, str):
+                with open(export, "w") as h:
+                    h.write(policy)
+            elif policy is not None:
                 with open(export, "w") as h:
                     json.dump({"policy": policy}, h)
             script = textwrap.dedent(f"""
@@ -761,15 +766,82 @@ class MigrateRetentionTest(unittest.TestCase):
         self.assertIn("TPOT_ES_RETENTION=30\n", env)
         self.assertEqual(out.strip(), "")
 
-    def test_without_export_the_default_stays_and_it_says_why(self):
+    def test_without_export_it_is_left_empty_and_it_says_why(self):
+        # empty: T-Pot leaves the unknown policy alone, nothing can shorten it by one click
         env, out = self.run_migration("TPOT_TYPE=HIVE\n", None)
+        self.assertIn("TPOT_ES_RETENTION=\n", env)
+        self.assertIn("WARN: TPOT_ES_RETENTION is left empty, T-Pot leaves the ILM policy tpot as it is; "
+                      "tpot elastic retention shows it, --adopt lets T-Pot manage it.", out)
+        self.assertNotIn("OK:", out)
+
+    def test_not_derivable_is_left_empty(self):
+        env, out = self.run_migration("TPOT_TYPE=HIVE\n", self.policy("36h"))
+        self.assertIn("TPOT_ES_RETENTION=\n", env)
+        self.assertIn("WARN: TPOT_ES_RETENTION is left empty", out)
+
+    def test_an_unreadable_export_is_left_empty(self):
+        env, out = self.run_migration("TPOT_TYPE=HIVE\n", "not json")
+        self.assertIn("TPOT_ES_RETENTION=\n", env)
+        self.assertIn("WARN: TPOT_ES_RETENTION is left empty", out)
+
+    def test_ok_only_when_the_value_was_written(self):
+        env, out = self.run_migration("TPOT_TYPE=HIVE\n", self.policy("365d"), read_only=True)
         self.assertIn("TPOT_ES_RETENTION=30\n", env)
+        self.assertNotIn("OK:", out)
         self.assertIn("WARN", out)
 
-    def test_not_derivable_stays_default(self):
-        env, out = self.run_migration("TPOT_TYPE=HIVE\n", self.policy("36h"))
-        self.assertIn("TPOT_ES_RETENTION=30\n", env)
-        self.assertIn("WARN", out)
+    def export_of(self, stage: bool, archive: bool):
+        """fuRETENTION_EXPORT with a stage file and/or an archive that has elastic/ilm_policy_tpot.json."""
+        with tempfile.TemporaryDirectory() as tmp:
+            work, src = os.path.join(tmp, "work"), os.path.join(tmp, "src")
+            os.makedirs(os.path.join(src, "elastic"))
+            os.makedirs(work)
+            with open(os.path.join(src, "elastic", "ilm_policy_tpot.json"), "w") as h:
+                json.dump({"policy": self.policy("365d")}, h)
+            with open(os.path.join(src, "env"), "w") as h:
+                h.write("TPOT_TYPE=HIVE\n")
+            tarball = os.path.join(tmp, "backup.tgz")
+            subprocess.run(["tar", "czf", tarball, "-C", src, "env"] + (["elastic"] if archive else []), check=True)
+            staged = os.path.join(work, "stage", "elastic", "ilm_policy_tpot.json")
+            if stage:
+                os.makedirs(os.path.dirname(staged))
+                with open(staged, "w") as h:
+                    json.dump({"policy": self.policy("90d")}, h)
+            script = textwrap.dedent(f"""
+                myTMPDIR='{work}'
+                eval "$(sed -n '/^function fuRETENTION_EXPORT ()/,/^}}/p' update.sh)"
+                fuRETENTION_EXPORT '{staged}' '{tarball}'
+            """)
+            result = subprocess.run(["bash", "-c", script], cwd=REPO, capture_output=True, text=True)
+            path = result.stdout.strip()
+            content = ""
+            if path:
+                with open(path) as h:
+                    content = json.load(h)["policy"]["phases"]["delete"]["min_age"]
+            return path, content, work
+
+    def test_export_from_the_stage(self):
+        path, content, work = self.export_of(stage=True, archive=True)
+        self.assertEqual(path, os.path.join(work, "stage", "elastic", "ilm_policy_tpot.json"))
+        self.assertEqual(content, "90d")
+
+    def test_export_from_the_archive_when_the_stage_has_none(self):
+        # a restarted run (fuSELFUPDATE) has a new myTMPDIR without the stage
+        path, content, work = self.export_of(stage=False, archive=True)
+        self.assertEqual(path, os.path.join(work, "elastic", "ilm_policy_tpot.json"))
+        self.assertEqual(content, "365d")
+
+    def test_no_export_anywhere(self):
+        path, _content, _work = self.export_of(stage=False, archive=False)
+        self.assertEqual(path, "")
+
+    def test_restore_uses_the_export_function(self):
+        with open(os.path.join(REPO, "update.sh")) as h:
+            text = h.read()
+        body = text[text.index("function fuRESTORE ()"):]
+        body = body[:body.index("\n}\n")]
+        self.assertIn("fuRETENTION_EXPORT", body)
+        self.assertNotIn('-C "${myTMPDIR}" elastic/', body)
 
 
 if __name__ == "__main__":

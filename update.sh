@@ -1428,17 +1428,8 @@ function fuRESTORE () {
 	# does not know, those are kept.
 	fuCOMPOSE_FROM_ARCHIVE || true
 	fuMERGE_ENV_KEYS "$HOME/tpotce/.env" "$HOME/tpotce/env.example" "$HOME/tpotce/docker-compose.yml" "${myTMPDIR}/docker-compose.yml"
-	# Where the export of fuEXPORT_ELASTIC is: in the same run it is still in the stage
-	# folder (${myTMPDIR}/stage/elastic). A restarted run (myPREPARED, fuSELFUPDATE) has a
-	# new myTMPDIR - the old one is removed before the exec and the export is skipped as
-	# "already saved" - so the file comes from the archive then, where it is `elastic/`.
-	myELASTIC="${myTMPDIR}/stage/elastic/ilm_policy_tpot.json"
-	if [ ! -s "${myELASTIC}" ] && [ -n "${myARCHIVE}" ] && [ -f "${myARCHIVE}" ];
-	  then
-	    myELASTIC="${myTMPDIR}/elastic/ilm_policy_tpot.json"
-	    tar xf "${myARCHIVE}" -C "${myTMPDIR}" elastic/ilm_policy_tpot.json 2>/dev/null
-	fi
-	fuMIGRATE_RETENTION "$HOME/tpotce/.env" "${myTMPDIR}/env" "${myELASTIC}"
+	fuMIGRATE_RETENTION "$HOME/tpotce/.env" "${myTMPDIR}/env" \
+	  "$(fuRETENTION_EXPORT "${myTMPDIR}/stage/elastic/ilm_policy_tpot.json" "${myARCHIVE}")"
 	fuDID ok "Your configuration (.env) is back, TPOT_VERSION=$(grep -E "^TPOT_VERSION=" "$HOME/tpotce/.env" | tail -1 | cut -d= -f2-)."
 }
 
@@ -1545,11 +1536,30 @@ function fuMIGRATE_TOGGLES () {
 	done
 }
 
+# The export of fuEXPORT_ELASTIC: in the same run it is still in the stage folder ($1,
+# ${myTMPDIR}/stage/elastic). A restarted run (myPREPARED, fuSELFUPDATE) has a new myTMPDIR -
+# the old one is removed before the exec and the export is skipped as "already saved" - so
+# the file comes from the archive ($2) then, where it is `elastic/`. Prints the path of a
+# usable export, nothing if there is none.
+function fuRETENTION_EXPORT () {
+	local mySTAGE="$1" myARCHIVE="$2"
+	if [ -s "${mySTAGE}" ];
+	  then
+	    echo "${mySTAGE}"
+	    return 0
+	fi
+	[ -n "${myARCHIVE}" ] && [ -f "${myARCHIVE}" ] && [ -n "${myTMPDIR}" ] || return 0
+	tar xf "${myARCHIVE}" -C "${myTMPDIR}" elastic/ilm_policy_tpot.json 2>/dev/null
+	[ -s "${myTMPDIR}/elastic/ilm_policy_tpot.json" ] && echo "${myTMPDIR}/elastic/ilm_policy_tpot.json"
+	return 0
+}
+
 # TPOT_ES_RETENTION is new in 24.04.2, before it the retention lived only in the ILM policy
 # tpot (Kibana). The first update with it takes the delete phase of the exported policy over,
 # so that .env says what the policy does and T-Pot never shortens it: 365 days stay 365 days.
-# Without an export or with a value that is no whole number of days the default of env.example
-# stays - tpotinit then sees a policy without T-Pot's marker and leaves it alone.
+# Without an export, with one that cannot be read or with a value that is no whole number of
+# days it is left empty: T-Pot then leaves the policy as it is (and creates a missing one with
+# 30 days), nothing shortens an unknown policy by one click.
 # $1 = .env, $2 = .env of the archive, $3 = exported policy (ilm_policy_tpot.json)
 function fuMIGRATE_RETENTION () {
 	local myENVFILE="$1" myOLDENV="$2" myEXPORT="$3" myVALUE="" myTMP=""
@@ -1560,18 +1570,24 @@ function fuMIGRATE_RETENTION () {
 	    myVALUE=$(cd "$HOME/tpotce" 2>/dev/null && python3 -m tpotctl.elastic value-of "${myEXPORT}" 2>/dev/null)
 	    [ -z "${myVALUE}" ] && myVALUE=$(python3 -m tpotctl.elastic value-of "${myEXPORT}" 2>/dev/null)
 	fi
-	if [ -z "${myVALUE}" ];
-	  then
-	    fuUI_WARN "TPOT_ES_RETENTION=$(fuENV_VALUE "${myENVFILE}" TPOT_ES_RETENTION) is the default, the ILM policy (tpot) could not be read or is no whole number of days."
-	    fuUI_HINT "T-Pot leaves that policy as it is; 'tpot elastic retention' shows it and takes it over."
-	    return 0
-	fi
 	# rewritten in place (cat >), so that owner, mode and inode of .env stay; no sed -i (BSD sed differs)
-	myTMP=$(mktemp) || return 0
-	sed -E "s/^(TPOT_ES_RETENTION[[:space:]]*[:=][[:space:]]*).*$/\1${myVALUE}/" "${myENVFILE}" > "${myTMP}" \
-	  && cat "${myTMP}" > "${myENVFILE}"
-	rm -f "${myTMP}"
-	fuUI_OK "TPOT_ES_RETENTION=${myVALUE}, taken over from the ILM policy tpot."
+	myTMP=$(mktemp) || myTMP=""
+	if [ -n "${myTMP}" ] \
+	   && sed -E "s/^(TPOT_ES_RETENTION[[:space:]]*[:=][[:space:]]*).*$/\1${myVALUE}/" "${myENVFILE}" > "${myTMP}" \
+	   && { cat "${myTMP}" > "${myENVFILE}"; } 2>/dev/null \
+	   && grep -qE "^TPOT_ES_RETENTION[[:space:]]*[:=][[:space:]]*${myVALUE}[[:space:]]*$" "${myENVFILE}";
+	  then
+	    if [ -n "${myVALUE}" ];
+	      then
+	        fuUI_OK "TPOT_ES_RETENTION=${myVALUE}, taken over from the ILM policy tpot."
+	      else
+	        fuUI_WARN "TPOT_ES_RETENTION is left empty, T-Pot leaves the ILM policy tpot as it is; tpot elastic retention shows it, --adopt lets T-Pot manage it."
+	        fuUI_HINT "The exported policy could not be read or keeps the events for no whole number of days."
+	    fi
+	  else
+	    fuUI_WARN "TPOT_ES_RETENTION could not be written into ${myENVFILE}, it stays $(fuENV_VALUE "${myENVFILE}" TPOT_ES_RETENTION); tpot elastic retention shows the ILM policy tpot, --adopt lets T-Pot manage it."
+	fi
+	[ -n "${myTMP}" ] && rm -f "${myTMP}"
 }
 
 # Keys of a .env style file in file order, written as KEY=value or KEY: "value".
