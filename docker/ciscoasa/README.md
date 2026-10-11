@@ -5,8 +5,8 @@ The regular Dockerfile fetches the published `v2.0.1` release from `telekom-secu
 For local development, use the named `source` build context pointing at the fork checkout, for example:
 
 ```sh
-docker buildx build --load --build-context source=../ciscoasa_honeypot \
-  -t ciscoasa-v2:local -f tpotce-ciscoasa-2.0.1/docker/ciscoasa/Dockerfile tpotce-ciscoasa-2.0.1/docker/ciscoasa
+docker buildx build --load --build-context source=./ciscoasa_honeypot \
+  -t ciscoasa-v2:local -f tpotce/docker/ciscoasa/Dockerfile tpotce/docker/ciscoasa
 ```
 
 Run from the GitHub parent directory, then `docker/_tests/tests/ciscoasa.sh --image ciscoasa-v2:local` in the T-Pot worktree. Compose can use the same context through a temporary override with `services.ciscoasa.build.additional_contexts.source` set to the absolute fork path.
