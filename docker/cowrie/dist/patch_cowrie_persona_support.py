@@ -203,9 +203,12 @@ TPOT_PERL_ATTACHED = "CDFiImMdx"
 TPOT_CODE_LIMIT = 65536
 TPOT_OUTPUT_LIMIT = 1 << 20
 TPOT_ABORTED = "Execution of -e aborted due to compilation errors.\n"
-TPOT_PERL_STOP = re.compile(r"[/`#<]|(?<![\w$@%&])(?:qq|qw|qx|qr|tr|q|m|s|y)\s*[^\w\s,;)=]")
-TPOT_PERL_ITEM = r"""(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|-?(?:0|[1-9]\d{0,14})(?:\.\d{1,15})?|\$\w+|\$\{\w+\})"""
-TPOT_PERL_LIST = re.compile(rf"\s*(\(\s*)?((?:{TPOT_PERL_ITEM}(?:\s*,\s*{TPOT_PERL_ITEM})*\s*,?)?)\s*(?(1)\))\s*", re.S)
+TPOT_PERL_STOP = re.compile(r"[/`#<]|(?<![\w$@%&])(?:qq|qw|qx|qr|tr|q|m|s|y)\s*+[^\w\s,;)=]")
+TPOT_PERL_ITEM = r"""(?:"[^"\\]*+(?:\\.[^"\\]*+)*+"|'[^'\\]*+(?:\\.[^'\\]*+)*+'|-?(?:0|[1-9]\d{0,14})(?:\.\d{1,15})?|\$\w+|\$\{\w+\})"""
+# possessive quantifiers (*+): long whitespace is read once, never backtracked
+TPOT_PERL_LIST = re.compile(
+    rf"\s*+(\(\s*+)?((?:{TPOT_PERL_ITEM}(?:\s*+,\s*+{TPOT_PERL_ITEM})*+\s*+,?)?)\s*+(?(1)\))\s*+", re.S
+)
 TPOT_PERL_ITEMS = re.compile(TPOT_PERL_ITEM, re.S)
 TPOT_PERL_ESCAPES = {"n": "\n", "t": "\t", "r": "\r", "a": "\a", "e": "\x1b", "f": "\f", "0": "\0"}
 TPOT_PERL_INTERPOLATION = re.compile(r"\\x([0-9a-fA-F]{1,2})|\\(.)|\$(\w+|\{\w+\})(\[|\{|->)?|@\w", re.S)
@@ -257,7 +260,10 @@ def tpot_perl_inline(cmd) -> bool:
         index += 1
     if not code:
         return False
-    out, err, status = tpot_perl_code("\n".join(code), flags)
+    try:
+        out, err, status = tpot_perl_code("\n".join(code), flags)
+    except Exception:  # noqa: BLE001 - code this does not follow is silent, the command always exits
+        out, err, status = b"", "", 0
     cmd.writeBytes(out)
     cmd.errorWrite(err)
     cmd.exit(status)
@@ -313,22 +319,29 @@ def tpot_perl_code(code: str, flags) -> tuple[bytes, str, int]:
     if "n" in flags or "p" in flags:
         return b"", "", 0
     names: dict[str, bytes] = {}
+    stored = 0
     out: list[bytes] = []
     err: list[str] = []
     budget = TPOT_OUTPUT_LIMIT
     for offset, text in statements:
-        match = re.fullmatch(r"\s*(print|say|exit|die)\b(?:\s*(STDOUT|STDERR)\b(?!\s*[,(]))?(.*)", text, re.S)
+        match = re.fullmatch(r"\s*+(print|say|exit|die)\b(?:\s*+(STDOUT|STDERR)\b(?!\s*+[,(]))?(.*)", text, re.S)
         if not match:
-            assign = re.fullmatch(r"\s*(?:(?:my|our|local)\s+)?\$(\w+)\s*=(?![=~])(.*)", text, re.S)
+            assign = re.fullmatch(r"\s*+(?:(?:my|our|local)\s++)?\$(\w+)\s*+=(?![=~])(.*)", text, re.S)
             if assign:
+                name = assign.group(1)
+                stored -= len(names.pop(name, b""))
                 try:
-                    (names[assign.group(1)],) = tpot_perl_list(assign.group(2), names)
+                    (value,) = tpot_perl_list(assign.group(2), names)
                 except (TpotPerlUnknown, ValueError):
-                    names.pop(assign.group(1), None)
+                    continue
+                # all scalars together stay within the output limit
+                if stored + len(value) <= TPOT_OUTPUT_LIMIT:
+                    names[name] = value
+                    stored += len(value)
             continue
         word, stream, rest = match.groups()
         if word == "exit":
-            status = re.fullmatch(r"\s*\(?\s*(\d{1,9})?\s*\)?\s*", rest)
+            status = re.fullmatch(r"\s*+\(?\s*+(\d{1,9})?\s*+\)?\s*+", rest)
             return b"".join(out), "".join(err), int(status.group(1) or 0) & 0xFF if status else 0
         try:
             items = tpot_perl_list(rest, names) if rest.strip() else [names.get("_", b"")]
@@ -468,7 +481,9 @@ TPOT_PY_VALUE_FLAGS = "WXQ"
 TPOT_CODE_LIMIT = 65536
 TPOT_OUTPUT_LIMIT = 1 << 20
 TPOT_UNKNOWN = object()
-TPOT_PY2_PRINT = re.compile(r"(^|[;\n])([ \t]*)print[ \t]+(?![(=])([^;\n]*)")
+TPOT_PY2_PRINT = re.compile(r"(^|[;\n])([ \t]*+)print[ \t]++(?![(=])([^;\n]*)")
+# the name a Python 2 print statement is rewritten to (print(a, b) there prints the tuple)
+TPOT_PY2_STATEMENT = "tpot_print_statement"
 
 
 class TpotOutputFull(Exception):
@@ -530,7 +545,10 @@ def tpot_python_usage(cmd, flag: str) -> None:
 
 
 def tpot_python_run(cmd, code: str) -> None:
-    out, err, status = tpot_python_code(code, tpot_python_version())
+    try:
+        out, err, status = tpot_python_code(code, tpot_python_version())
+    except Exception:  # noqa: BLE001 - code this does not follow is silent, the command always exits
+        out, err, status = "", "", 0
     if out:
         cmd.write(out)
     if err:
@@ -561,11 +579,13 @@ def tpot_python_code(code: str, version: str) -> tuple[str, str, int]:
                     return "", tpot_syntax_error(error, version), 1
     except Exception:  # noqa: BLE001 - nesting or memory limits of the parser: silent
         return "", "", 0
-    return tpot_python_statements(module.body)
+    future = any(isinstance(node, ast.ImportFrom) and node.module == "__future__"
+                 and any(alias.name == "print_function" for alias in node.names) for node in module.body)
+    return tpot_python_statements(module.body, python2 and not future)
 
 
 def tpot_py2_print(match) -> str:
-    return f"{match.group(1)}{match.group(2)}print({match.group(3).rstrip().rstrip(',')})"
+    return f"{match.group(1)}{match.group(2)}{TPOT_PY2_STATEMENT}({match.group(3).rstrip().rstrip(',')})"
 
 
 def tpot_incomplete(error) -> bool:
@@ -612,12 +632,14 @@ def tpot_syntax_error(error, version: str) -> str:
 
 
 def tpot_dotted(node) -> str | None:
-    if isinstance(node, ast.Name):
-        return node.id
-    if isinstance(node, ast.Attribute):
-        base = tpot_dotted(node.value)
-        return f"{base}.{node.attr}" if base else None
-    return None
+    parts = []
+    while isinstance(node, ast.Attribute) and len(parts) < 8:
+        parts.append(node.attr)
+        node = node.value
+    if not isinstance(node, ast.Name):
+        return None
+    parts.append(node.id)
+    return ".".join(reversed(parts))
 
 
 def tpot_literal(node, names):
@@ -629,7 +651,8 @@ def tpot_literal(node, names):
         return TPOT_UNKNOWN
 
 
-def tpot_python_statements(body) -> tuple[str, str, int]:
+def tpot_python_statements(body, print_tuple=False) -> tuple[str, str, int]:
+    """print_tuple: print(a, b) prints the tuple (a, b), as a Python 2 print statement."""
     names: dict = {}
     out: list[str] = []
     err: list[str] = []
@@ -657,7 +680,11 @@ def tpot_python_statements(body) -> tuple[str, str, int]:
                     return "".join(out), "".join(err), status & 0xFF
                 err.append(tpot_text(status, budget) + "\n")
                 return "".join(out), "".join(err), 1
-            if func == "print":
+            if func == "print" and print_tuple and (call.keywords or len(call.args) != 1):
+                printed = None if call.keywords else tpot_print_tuple(call, names, budget)
+                if printed is not None:
+                    out.append(printed)
+            elif func in ("print", TPOT_PY2_STATEMENT):
                 printed = tpot_print(call, names, budget)
                 if printed is not None:
                     (err if printed[1] else out).append(printed[0])
@@ -668,6 +695,19 @@ def tpot_python_statements(body) -> tuple[str, str, int]:
     except TpotOutputFull:
         pass
     return "".join(out), "".join(err), 0
+
+
+def tpot_print_tuple(call, names, budget):
+    """The line of a Python 2 print statement of the tuple in print(a, b), None if it is no literal."""
+    values = [tpot_literal(arg, names) for arg in call.args]
+    if any(value is TPOT_UNKNOWN for value in values) or any(isinstance(arg, ast.Starred) for arg in call.args):
+        return None
+    try:
+        return tpot_text(repr(tuple(values)), budget) + "\n"
+    except TpotOutputFull:
+        raise
+    except Exception:  # noqa: BLE001 - repr() of a literal CPython would print (digits limit)
+        return None
 
 
 def tpot_text(value, budget) -> str:
@@ -710,7 +750,9 @@ def tpot_print(call, names, budget):
         raise
     except Exception:  # noqa: BLE001 - str() of a literal CPython would print (digits limit)
         return None
-    tpot_text(sep * max(0, len(parts) - 1) + end, budget)
+    budget[0] -= len(sep) * max(0, len(parts) - 1) + len(end)
+    if budget[0] < 0:
+        raise TpotOutputFull
     return sep.join(parts) + end, stderr
 '''
 

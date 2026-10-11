@@ -3,6 +3,8 @@ import re
 import shutil
 import subprocess
 import sys
+import time
+import tracemalloc
 import unittest
 from pathlib import Path
 
@@ -341,11 +343,24 @@ class PatchTest(unittest.TestCase):
         # Python 2 prints its version on stderr
         self.assertEqual((bytes(python.out), python.err), (b"", "Python 2.7.5\n"))
 
-    def python(self, args, version="3.12.3"):
-        """Command_python started with args on a persona with this Python: (stdout, stderr, exit code)."""
+    def python(self, args, version="3.12.3", quick=False):
+        """Command_python started with args on a persona with this Python: (stdout, stderr, exit code).
+        quick: start() must return within half a second."""
         _, python = self.command("python", "Command_python", {("shell", "python_version"): version}, args)
-        python.start()
+        self.start(python, quick)
         return bytes(python.out).decode(), python.err, python.code
+
+    def start(self, command, quick):
+        """command.start(); self.peak: the most memory it allocated at once, in bytes."""
+        begin = time.monotonic()
+        tracemalloc.start()
+        try:
+            command.start()
+            self.peak = tracemalloc.get_traced_memory()[1]
+        finally:
+            tracemalloc.stop()
+        if quick:
+            self.assertLess(time.monotonic() - begin, 0.5, command.args[-1][:20])
 
     def test_python_c_prints_a_literal_and_returns(self):
         self.assertEqual(self.python(["-c", "print(1)"]), ("1\n", "", 0))
@@ -411,6 +426,30 @@ class PatchTest(unittest.TestCase):
         # Python 2 syntax the parser does not know stays silent
         self.assertEqual(self.python(["-c", "try:\n  pass\nexcept Exception, e:\n  pass"], "2.7.5"), ("", "", 0))
 
+    def test_python_c_long_whitespace_is_read_in_bounded_time(self):
+        spaces = " " * 60000
+        self.assertEqual(self.python(["-c", "print(1)" + spaces], quick=True), ("1\n", "", 0))
+        self.assertEqual(self.python(["-c", "print 1;" + " \t" * 30000 + "print 2"], "2.7.5", quick=True), ("1\n2\n", "", 0))
+        self.assertEqual(self.python(["-c", "print" + spaces + "x"], "2.7.5", quick=True)[2], 0)
+
+    def test_python_c_deep_or_large_values_are_silent(self):
+        self.assertEqual(self.python(["-c", "a" + ".b" * 1000 + "()"]), ("", "", 0))
+        self.assertEqual(self.python(["-c", "print(a" + ".b" * 1000 + ")"]), ("", "", 0))
+        self.assertEqual(self.python(["-c", "import sys; sys.exit((0x" + "f" * 20000 + ",))"]), ("", "", 0))
+
+    def test_python_c_separator_counts_against_the_output_limit(self):
+        code = "print(" + "1," * 15000 + "sep='" + "a" * 32000 + "')"
+        self.assertEqual(self.python(["-c", code]), ("", "", 0))
+        # the syntax tree of 15000 arguments takes about 15 MB; separator times arguments would be 480 MB
+        self.assertLess(self.peak, 32 << 20)
+
+    def test_python_2_print_call_prints_a_tuple(self):
+        self.assertEqual(self.python(["-c", 'print("a", "b")'], "2.7.5"), ("('a', 'b')\n", "", 0))
+        self.assertEqual(self.python(["-c", 'print "a", "b"'], "2.7.5"), ("a b\n", "", 0))
+        self.assertEqual(self.python(["-c", 'from __future__ import print_function; print("a", "b")'], "2.7.5"),
+                         ("a b\n", "", 0))
+        self.assertEqual(self.python(["-c", 'print("a", "b")']), ("a b\n", "", 0))
+
     def test_python_m_returns_at_once(self):
         self.assertEqual(self.python(["-m", "http.server"]), ("", "", 0))
         self.assertEqual(self.python(["-m", "http.server", "8000"]), ("", "", 0))
@@ -428,12 +467,12 @@ class PatchTest(unittest.TestCase):
         self.assertEqual(self.python(["--version"]), ("Python 3.12.3\n", "", None))
         self.assertTrue(self.python(["-h"])[0].startswith("usage: python [option]"))
 
-    def perl(self, args):
+    def perl(self, args, quick=False):
         """Command_perl started with args: (stdout bytes, stderr, exit code)."""
         values = {("shell", "perl_version"): "5.36.0", ("shell", "perl_archname"): "x86_64-linux-gnu-thread-multi",
                   ("shell", "perl_copyright"): "2022"}
         _, perl = self.command("perl", "Command_perl", values, args)
-        perl.start()
+        self.start(perl, quick)
         return bytes(perl.out), perl.err, perl.code
 
     def test_perl_e_prints_and_returns(self):
@@ -462,6 +501,20 @@ class PatchTest(unittest.TestCase):
         self.assertEqual(self.perl(["-e", "print 1; s/'//; print 2"]), (b"1", "", 0))
         self.assertEqual(self.perl(["-ne", "print"]), (b"", "", 0))
         self.assertEqual(self.perl(["-e", 'say "s"']), (b"", "", 0))
+
+    def test_perl_e_long_whitespace_is_read_in_bounded_time(self):
+        spaces = " " * 60000
+        for code in ("exit" + spaces + "x", "print 1" + spaces + "x", "$a =" + spaces + "x", "q" + spaces + "x",
+                     "die" + spaces + "x", "my" + spaces + "$a" + spaces[:4000] + "x"):
+            self.assertEqual(self.perl(["-e", code], quick=True)[0], b"", code[:8])
+        self.assertEqual(self.perl(["-e", "exit ( 3 )"]), (b"", "", 3))
+        self.assertEqual(self.perl(["-e", " print ( 1 , 2 ) ; "]), (b"12", "", 0))
+
+    def test_perl_e_stored_scalars_are_limited(self):
+        code = '$b = "' + "a" * 60000 + '";' + "".join(f'$c{i} = "$b";' for i in range(350)) + 'print "x"'
+        self.assertLess(len(code), 65536)
+        self.assertEqual(self.perl(["-e", code]), (b"x", "", 0))
+        self.assertLess(self.peak, 4 << 20)
 
     def test_perl_e_output_is_limited(self):
         code = '$a = "' + "a" * 60000 + '"; $b = "' + "$a" * 20 + '"; print "x"; print ' + ",".join(["$a"] * 20)
