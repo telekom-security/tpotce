@@ -258,8 +258,7 @@ start_run() {
   MAPPED_SSDP_PORT="$(test_get_mapped_port "${TEST_NAME}" "1900/udp")" || test_die "Could not resolve mapped host port for 1900/udp"
 
   wait_for_persona_line || test_die "DDoSPot did not print its start line"
-  # The sockets are opened right after the start line
-  sleep 1
+  wait_for_dns_tcp || test_die "DNS on ${TEST_BIND_IP}:${MAPPED_DNS_TCP_PORT}/tcp did not accept a connection"
   test_wait_for_container || test_die "DDoSPot container stopped after start"
 }
 
@@ -293,6 +292,47 @@ wait_for_persona_line() {
   fi
   RUN_PERSONA="${BASH_REMATCH[1]}"
   test_ok "Start line: ${first}"
+}
+
+# wait_for_dns_tcp: DDoSPot binds all its sockets before the services
+# start, so a connection on 53/tcp that stays open means it is ready. A
+# Docker port proxy accepts the connect before the container listens and
+# then closes it, so the connection has to stay open for 0.3 s. The connect
+# sends no query, so it counts against no budget.
+wait_for_dns_tcp() {
+  python3 - "${TEST_BIND_IP}" "${MAPPED_DNS_TCP_PORT}" "${TEST_TIMEOUT}" <<'PY'
+import socket
+import sys
+import time
+
+host = sys.argv[1]
+port = int(sys.argv[2])
+deadline = time.monotonic() + int(sys.argv[3])
+
+while time.monotonic() < deadline:
+    try:
+        with socket.create_connection((host, port), timeout=1) as sock:
+            sock.settimeout(0.3)
+            try:
+                sock.recv(1)
+            except socket.timeout:
+                sys.exit(0)
+    except OSError:
+        pass
+    time.sleep(0.2)
+sys.exit(1)
+PY
+}
+
+# version_bind_of <persona>: the version.bind value of a persona
+version_bind_of() {
+  case "$1" in
+    centos6) printf '%s\n' "9.8.2rc1-RedHat-9.8.2-0.68.rc1.el6_10.8" ;;
+    centos7) printf '%s\n' "9.11.4-P2-RedHat-9.11.4-26.P2.el7_9.16" ;;
+    debian11) printf '%s\n' "dnsmasq-2.85" ;;
+    ubuntu2004) printf '%s\n' "dnsmasq-2.90" ;;
+    *) return 1 ;;
+  esac
 }
 
 # run_chargen_probe <count> <expected>: sends count probes one after the
@@ -341,7 +381,7 @@ run_dns_probe() {
     port="${MAPPED_DNS_TCP_PORT}"
   fi
 
-  python3 - "${TEST_BIND_IP}" "${port}" "${OLD_VERSION_BIND}" "$@" <<'PY'
+  python3 - "${TEST_BIND_IP}" "${port}" "${OLD_VERSION_BIND}" "${RUN_PERSONA}" "$(version_bind_of "${RUN_PERSONA}" || true)" "$@" <<'PY'
 import random
 import socket
 import struct
@@ -350,12 +390,16 @@ import sys
 host = sys.argv[1]
 port = int(sys.argv[2])
 old_version = sys.argv[3]
-transport, check, qtype_name, qclass_name = sys.argv[4:8]
-expected = int(sys.argv[8])
-names = sys.argv[9:]
+persona = sys.argv[4]
+persona_version = sys.argv[5]
+transport, check, qtype_name, qclass_name = sys.argv[6:10]
+expected = int(sys.argv[10])
+names = sys.argv[11:]
 QTYPES = {"A": 1, "TXT": 16}
 QCLASSES = {"IN": 1, "CH": 3}
 RCODES = {0: "NOERROR", 2: "SERVFAIL", 3: "NXDOMAIN", 4: "NOTIMP", 5: "REFUSED"}
+# an answer through the upstream resolver may take up to 3 s
+timeout = 5 if check in ("recursive", "truncated", "full") else 2
 
 
 def query(name, tid):
@@ -404,7 +448,7 @@ def txt_value(rdata):
 
 def exchange(msg):
     if transport == "tcp":
-        with socket.create_connection((host, port), timeout=5) as sock:
+        with socket.create_connection((host, port), timeout=timeout) as sock:
             sock.sendall(struct.pack("!H", len(msg)) + msg)
             data = b""
             while True:
@@ -418,7 +462,7 @@ def exchange(msg):
                     return b""
                 data += chunk
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-        sock.settimeout(2)
+        sock.settimeout(timeout)
         sock.sendto(msg, (host, port))
         try:
             response, _ = sock.recvfrom(65535)
@@ -447,7 +491,11 @@ def verify(name, response, tid):
             raise RuntimeError(f"{detail}: expected a TXT value")
         if txt[0] == old_version:
             raise RuntimeError(f"{detail}: version.bind has the value of earlier releases")
-        detail += f", value {txt[0]!r}"
+        if not persona_version:
+            raise RuntimeError(f"{detail}: no version.bind value known for persona {persona}")
+        if txt[0] != persona_version:
+            raise RuntimeError(f"{detail}: expected {persona_version!r} for persona {persona}, got {txt[0]!r}")
+        detail += f", value {txt[0]!r} of persona {persona}"
     elif check == "refused":
         if rcode != 5:
             raise RuntimeError(f"{detail}: expected REFUSED")
@@ -677,12 +725,22 @@ CHECKS = {
 }
 
 error = None
-while time.monotonic() < deadline:
+
+
+def run_check():
     try:
-        error = CHECKS[check]()
+        return CHECKS[check]()
     except (OSError, json.JSONDecodeError) as exc:
-        error = str(exc)
+        return str(exc)
+
+
+while time.monotonic() < deadline:
+    error = run_check()
     if error is None:
+        if check == "scanner":
+            # no second event may follow the first one
+            time.sleep(0.5)
+            error = run_check()
         break
     time.sleep(0.5)
 
@@ -792,19 +850,25 @@ check_persona_changes() {
 check_recursion() {
   local attempt
 
-  test_info "Checking DNS recursion (needs internet access)"
-  # The upstream counts as reachable after its first probe
-  sleep 3
-  for attempt in 1 2; do
+  # The upstream counts as reachable after its first probe, which runs at
+  # the start and then once a minute; a new container probes again at once
+  for attempt in 1 2 3; do
+    start_run "recursion-${attempt}" on
+    test_info "Checking DNS recursion (needs internet access)"
+    sleep 5
     if run_dns_probe udp recursive A IN 1 quad9.net; then
       break
     fi
-    (( attempt < 2 )) || test_die "DNS recursion did not answer; is ${TEST_BIND_IP} able to reach 9.9.9.9:853?"
-    sleep 5
+    (( attempt < 3 )) || test_die "DNS recursion did not answer on three starts; is 9.9.9.9:853 reachable from Docker?"
+    stop_run
   done
-  run_dns_probe udp truncated TXT IN 1 "${LARGE_TXT_NAME}" || test_die "Large TXT answer over UDP is not truncated"
-  run_dns_probe tcp full TXT IN 1 "${LARGE_TXT_NAME}" || test_die "Large TXT answer over TCP is not complete"
-  test_ok "DNS recursion: RA over UDP, TC for a large answer over UDP, full answer over TCP"
+  # one more try when the upstream answer takes longer than the 3 s of the
+  # resolver; the answer is cached then, so the UDP query below is quick
+  run_dns_probe tcp full TXT IN 1 "${LARGE_TXT_NAME}" \
+    || run_dns_probe tcp full TXT IN 1 "${LARGE_TXT_NAME}" \
+    || test_die "TXT answer for ${LARGE_TXT_NAME} over TCP is not complete (is its TXT answer still larger than 512 bytes?)"
+  run_dns_probe udp truncated TXT IN 1 "${LARGE_TXT_NAME}" || test_die "TXT answer for ${LARGE_TXT_NAME} over UDP is not truncated (is its TXT answer still larger than 512 bytes?)"
+  test_ok "DNS recursion: RA over UDP, full large answer over TCP, TC for it over UDP"
 }
 
 assert_no_runtime_errors() {
@@ -862,7 +926,6 @@ main() {
   stop_run
 
   if [[ "${RECURSION}" == "on" ]]; then
-    start_run recursion on
     check_recursion
     stop_run
   fi
