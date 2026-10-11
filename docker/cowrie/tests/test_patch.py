@@ -295,6 +295,156 @@ class PatchTest(unittest.TestCase):
         command, _, _ = self.busybox([])
         self.assertIn("BusyBox v1.20.2 (Debian 1:1.20.0-7) multi-call binary.", command.err)
 
+    def command(self, module, cls, values, args=()):
+        source = (self.patched() / f"src/cowrie/commands/{module}.py").read_text()
+        namespace = module_all(source, {"HoneyPotCommand": FakeCommand, "CowrieConfig": FakeConfig(values)})
+        return namespace, namespace[cls](list(args))
+
+    def test_perl_v_names_the_persona_perl(self):
+        values = {("shell", "perl_version"): "5.36.0", ("shell", "perl_archname"): "x86_64-linux-gnu-thread-multi",
+                  ("shell", "perl_copyright"): "2022"}
+        _, perl = self.command("perl", "Command_perl", values)
+        perl.version()
+        text = bytes(perl.out).decode()
+        self.assertIn("This is perl 5, version 36, subversion 0 (v5.36.0) built for x86_64-linux-gnu-thread-multi\n", text)
+        self.assertIn("Copyright 1987-2022, Larry Wall\n", text)
+        self.assertNotIn("5.14.2", text)
+        _, perl = self.command("perl", "Command_perl", {})
+        perl.version()
+        self.assertIn("(v5.14.2) built for x86_64-linux-thread-multi", bytes(perl.out).decode())
+
+    def test_python3_is_a_command_with_the_persona_version(self):
+        namespace, python = self.command("python", "Command_python", {("shell", "python_version"): "3.12.3"})
+        self.assertIs(namespace["commands"]["python3"], namespace["Command_python"])
+        self.assertIs(namespace["commands"]["/usr/bin/python3"], namespace["Command_python"])
+        python.version()
+        self.assertEqual((bytes(python.out), python.err), (b"Python 3.12.3\n", ""))
+        _, python = self.command("python", "Command_python", {("shell", "python_version"): "2.7.5"})
+        python.version()
+        # Python 2 prints its version on stderr
+        self.assertEqual((bytes(python.out), python.err), (b"", "Python 2.7.5\n"))
+
+    def test_git_version_of_the_persona(self):
+        _, git = self.command("git", "Command_git", {("shell", "git_version"): "2.43.0"}, ["--version"])
+        git.call()
+        self.assertEqual(bytes(git.out), b"git version 2.43.0\n")
+
+    def twisted_command(self, module, cls, values, args, uid=0):
+        """A command with inlineCallbacks: the generators run through at once, sleep returns."""
+        def inline_callbacks(function):
+            def run(*a, **k):
+                result = function(*a, **k)
+                if hasattr(result, "send"):
+                    for _ in result:
+                        pass
+            return run
+
+        source = (self.patched() / f"src/cowrie/commands/{module}.py").read_text()
+        namespace = module_all(source, {"HoneyPotCommand": FakeCommand, "CowrieConfig": FakeConfig(values),
+                                        "inlineCallbacks": inline_callbacks, "defer": None, "reactor": None,
+                                        "Logger": lambda: type("L", (), {"info": lambda *a, **k: None})()})
+        command = namespace[cls](list(args))
+        command.user = {"uid": uid, "gid": uid}
+        command.sleep = lambda *a, **k: None
+
+        class Fs:
+            def mkfile(self, *a, **k):
+                pass
+
+        command.fs = Fs()
+        command.protocol.commands = {}
+        command.start()
+        return namespace, command
+
+    APT = {("shell", "apt_version"): "2.8.3", ("shell", "deb_arch"): "amd64",
+           ("shell", "apt_sources"): "http://archive.ubuntu.com/ubuntu noble,http://archive.ubuntu.com/ubuntu "
+                                     "noble-updates,http://security.ubuntu.com/ubuntu noble-security"}
+
+    def test_apt_version_of_the_persona(self):
+        _, apt = self.twisted_command("apt", "Command_aptget", self.APT, ["-v"])
+        self.assertTrue(bytes(apt.out).startswith(b"apt 2.8.3 (amd64)\nSupported modules:"), bytes(apt.out)[:60])
+        _, apt = self.twisted_command("apt", "Command_aptget", {}, ["-v"])
+        self.assertTrue(bytes(apt.out).startswith(b"apt 1.0.9.8.1 for amd64 compiled on Jun 10 2015"))
+
+    def test_apt_update_as_root_fetches_the_persona_sources(self):
+        _, apt = self.twisted_command("apt", "Command_aptget", self.APT, ["update"])
+        self.assertEqual(bytes(apt.out).decode(), "Hit:1 http://archive.ubuntu.com/ubuntu noble InRelease\n"
+                         "Hit:2 http://archive.ubuntu.com/ubuntu noble-updates InRelease\n"
+                         "Hit:3 http://security.ubuntu.com/ubuntu noble-security InRelease\n"
+                         "Reading package lists... Done\n")
+        _, apt = self.twisted_command("apt", "Command_aptget", self.APT, ["update"], uid=1000)
+        self.assertIn("Could not open lock file /var/lib/apt/lists/lock", apt.err)
+
+    def test_apt_install_takes_no_option_as_a_package(self):
+        _, apt = self.twisted_command("apt", "Command_aptget", self.APT, ["install", "-y", "curl"])
+        text = bytes(apt.out).decode()
+        self.assertIn("The following NEW packages will be installed:\n  curl \n", text)
+        self.assertIn("Get:1 http://archive.ubuntu.com/ubuntu noble/main amd64 curl ", text)
+        self.assertIn("_amd64.deb) ...", text)
+        self.assertNotIn("i386", text)
+        self.assertNotIn("ftp.debian.org", text)
+        _, apt = self.twisted_command("apt", "Command_aptget", self.APT, ["-y", "install", "wget"])
+        self.assertIn("  wget \n", bytes(apt.out).decode())
+
+    YUM = {("shell", "yum_plugins"): "fastestmirror"}
+
+    def test_yum_install_y_of_centos(self):
+        _, yum = self.twisted_command("yum", "Command_yum", self.YUM, ["install", "-y", "curl"])
+        text = bytes(yum.out).decode()
+        self.assertIn("Loaded plugins: fastestmirror\n", text)
+        self.assertIn("---> Package curl.", text)
+        self.assertNotIn("Package y.", text)
+        self.assertNotIn("priority protections", text)
+        self.assertNotIn("Kernel Module Plugin", text)
+        self.assertNotIn("Is this ok", text)
+        self.assertIn("Complete!\n", text)
+        _, yum = self.twisted_command("yum", "Command_yum", self.YUM, ["install", "curl"])
+        self.assertTrue(bytes(yum.out).decode().endswith("Is this ok [y/d/N]: "))
+
+    def test_yum_update_as_root(self):
+        _, yum = self.twisted_command("yum", "Command_yum", self.YUM, ["-y", "update"])
+        self.assertEqual(bytes(yum.out).decode(), "Loaded plugins: fastestmirror\n"
+                         "Loading mirror speeds from cached hostfile\nNo packages marked for update\n")
+        _, yum = self.twisted_command("yum", "Command_yum", self.YUM, ["update"], uid=1000)
+        self.assertIn("You need to be root to perform this command.", yum.err)
+
+    def test_sudo_version_of_the_persona(self):
+        values = {("shell", "sudo_version"): "1.9.15p5", ("shell", "sudo_grammar"): "50"}
+        namespace, sudo = self.command("sudo", "Command_sudo", values)
+        sudo.version()
+        self.assertEqual(bytes(sudo.out).decode(), "Sudo version 1.9.15p5\nSudoers policy plugin version 1.9.15p5\n"
+                         "Sudoers file grammar version 50\nSudoers I/O plugin version 1.9.15p5\n"
+                         "Sudoers audit plugin version 1.9.15p5\n")
+        self.assertIs(namespace["commands"]["/usr/bin/sudo"], namespace["Command_sudo"])
+        _, sudo = self.command("sudo", "Command_sudo", {("shell", "sudo_version"): "1.8.23",
+                                                        ("shell", "sudo_grammar"): "46"})
+        sudo.version()
+        self.assertNotIn("audit", bytes(sudo.out).decode())
+
+    def test_service_status_all_of_the_persona(self):
+        path = tmpdir(self) / "service-status.txt"
+        path.write_text(" [ + ]  cron\n [ - ]  hwclock.sh\n")
+        _, service = self.command("service", "Command_service", {("shell", "service_status_all"): str(path)})
+        service.status_all()
+        self.assertEqual(bytes(service.out), b" [ + ]  cron\n [ - ]  hwclock.sh\n")
+        _, service = self.command("service", "Command_service", {})
+        service.status_all()
+        self.assertIn(b" [ + ]  ssh\n", bytes(service.out))
+        self.assertNotIn(b"lightdm", bytes(service.out))
+
+    def test_which_prints_the_first_match_and_fails_for_a_missing_name(self):
+        _, which = self.command("which", "Command_which", {}, ["python3", "nothere", "perl"])
+        which.environ = {"PATH": ":".join(PATH)}
+        which.fs = TreeFs(base_tree())
+        which.exit_code = 0
+        which.call()
+        # bin -> usr/bin: /usr/bin/python3 and /bin/python3 are one file, which names the first
+        self.assertEqual((bytes(which.out), which.exit_code), (b"/usr/bin/python3\n/usr/bin/perl\n", 1))
+        _, which = self.command("which", "Command_which", {}, ["perl"])
+        which.environ, which.fs, which.exit_code = {"PATH": ":".join(PATH)}, TreeFs(base_tree()), 0
+        which.call()
+        self.assertEqual((bytes(which.out), which.exit_code), (b"/usr/bin/perl\n", 0))
+
     def test_ssh_uname_is_persona_driven(self):
         ssh = (self.patched() / "src/cowrie/commands/ssh.py").read_text()
         self.assertNotIn("2.6.26-2-686", ssh)
@@ -612,7 +762,15 @@ class PatchTest(unittest.TestCase):
                   "            self.interactive = True\n            return\n        self.exit(0 if"),
                  ("src/cowrie/shell/honeypot.py",
                   "            prompt = f\"{username}@{self.protocol.hostname}:{cwd}\"\n",
-                  "            prompt = f\"{username}@{self.protocol.hostname}:{cwd} \"\n"))
+                  "            prompt = f\"{username}@{self.protocol.hostname}:{cwd} \"\n"),
+                 ("src/cowrie/shell/protocol.py", "                return self.txtcmd(operator_path.read_bytes())",
+                  "                return self.txtcmd(operator_path.read_text())"),
+                 ("src/cowrie/commands/busybox.py", "        if len(self.args) == 0:\n",
+                  "        if not self.args:\n"),
+                 ("src/cowrie/commands/perl.py", "Copyright 1987-2014, Larry Wall", "Copyright 1987-2015, Larry Wall"),
+                 ("src/cowrie/commands/python.py", 'ver = "Python 2.7.11+"', 'ver = "Python 2.7.18"'),
+                 ("src/cowrie/commands/git.py", 'self.write("git version 2.34.1\\n")',
+                  'self.write("git version 2.43.0\\n")'))
         for rel, old, new in cases:
             with self.subTest(rel=rel, needle=old):
                 root = tmpdir(self) / "cowrie"

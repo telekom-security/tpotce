@@ -170,6 +170,125 @@ def patch_busybox(cowrie_root):
     )
 
 
+CONFIG_IMPORT = (
+    "from cowrie.shell.command import HoneyPotCommand\n",
+    "from cowrie.core.config import CowrieConfig\nfrom cowrie.shell.command import HoneyPotCommand\n",
+)
+
+
+def patch_perl(cowrie_root):
+    """perl -v names the persona's Perl ([shell] perl_version, perl_archname,
+    perl_copyright); upstream's 5.14.2 without the keys."""
+    path = cowrie_root / "src" / "cowrie" / "commands" / "perl.py"
+    replace_once(path, *CONFIG_IMPORT)
+    replace_once(
+        path,
+        """            "This is perl 5, version 14, subversion 2 (v5.14.2) built for x86_64-linux-thread-multi",
+""",
+        """            tpot_perl_banner(),
+""",
+    )
+    replace_once(
+        path,
+        """            "Copyright 1987-2014, Larry Wall",
+""",
+        """            f"Copyright 1987-{CowrieConfig.get('shell', 'perl_copyright', fallback='2014')}, Larry Wall",
+""",
+    )
+    replace_once(
+        path,
+        """commands = {}
+""",
+        """commands = {}
+
+
+def tpot_perl_banner() -> str:
+    \"\"\"T-Pot: the version line of perl -v for [shell] perl_version / perl_archname.\"\"\"
+    version = CowrieConfig.get("shell", "perl_version", fallback="5.14.2")
+    arch = CowrieConfig.get("shell", "perl_archname", fallback="x86_64-linux-thread-multi")
+    parts = (version.split(".") + ["0", "0"])[:3]
+    return f"This is perl {parts[0]}, version {parts[1]}, subversion {parts[2]} (v{version}) built for {arch}"
+""",
+    )
+
+
+def patch_python(cowrie_root):
+    """python -V prints [shell] python_version (Python 2 on stderr, as Python 2 does);
+    python3 and /usr/bin/python3 are the same command (skip_python_commands keeps the
+    one the persona does not have away)."""
+    path = cowrie_root / "src" / "cowrie" / "commands" / "python.py"
+    replace_once(path, *CONFIG_IMPORT)
+    replace_once(
+        path,
+        """        ver = "Python 2.7.11+"
+        self.write(ver + "\\n")
+""",
+        """        ver = "Python " + CowrieConfig.get("shell", "python_version", fallback="2.7.11+")
+        if ver.startswith("Python 2"):
+            self.errorWrite(ver + "\\n")
+        else:
+            self.write(ver + "\\n")
+""",
+    )
+    replace_once(
+        path,
+        """commands["/usr/bin/python"] = Command_python
+commands["python"] = Command_python
+""",
+        """commands["/usr/bin/python"] = Command_python
+commands["python"] = Command_python
+commands["/usr/bin/python3"] = Command_python
+commands["python3"] = Command_python
+""",
+    )
+
+
+def patch_git(cowrie_root):
+    """git --version names [shell] git_version (upstream's 2.34.1 without it)."""
+    path = cowrie_root / "src" / "cowrie" / "commands" / "git.py"
+    replace_once(path, *CONFIG_IMPORT)
+    replace_once(
+        path,
+        """            self.write("git version 2.34.1\\n")
+""",
+        """            version = CowrieConfig.get("shell", "git_version", fallback="2.34.1")
+            self.write(f"git version {version}\\n")
+""",
+    )
+
+
+def patch_which(cowrie_root):
+    """which prints the first match on PATH (which without -a; /usr/bin and /bin are one
+    directory of a merged /usr tree) and fails with 1 when a name is not found, as
+    `which wget || which curl` of a bot expects."""
+    path = cowrie_root / "src" / "cowrie" / "commands" / "which.py"
+    replace_once(
+        path,
+        """        # Look up each file
+        for f in self.args:
+            for path in self.environ["PATH"].split(":"):
+                resolved = self.fs.resolve_path(f, path)
+
+                if self.fs.exists(resolved):
+                    self.write(f"{path}/{f}\\n")
+""",
+        """        # Look up each file
+        missing = False
+        for f in self.args:
+            for path in self.environ["PATH"].split(":"):
+                resolved = self.fs.resolve_path(f, path)
+
+                if self.fs.exists(resolved):
+                    self.write(f"{path}/{f}\\n")
+                    break
+            else:
+                missing = True
+        if missing:
+            self.exit_code = 1
+""",
+    )
+
+
 def patch_ssh(cowrie_root):
     path = cowrie_root / "src" / "cowrie" / "commands" / "ssh.py"
     replace_once(
@@ -202,6 +321,9 @@ def patch_netstat(cowrie_root):
 
 
 def patch_service(cowrie_root):
+    """service --status-all lists the init scripts of the persona ([shell]
+    service_status_all, a file of the runtime folder); without it a short
+    systemd server list (upstream's names a desktop: lightdm, whoopsie, cups)."""
     path = cowrie_root / "src" / "cowrie" / "commands" / "service.py"
     text = path.read_text(encoding="utf-8")
     start = text.find("        output = (\n")
@@ -209,23 +331,288 @@ def patch_service(cowrie_root):
     if start < 0 or end < 0:
         raise RuntimeError(f"Could not find expected text in {path}")
     end += len("        )\n")
-    replacement = """        output = (
-            "[ + ]  cron",
-            "[ + ]  dbus",
-            "[ + ]  networking",
-            "[ + ]  ssh",
-            "[ + ]  rsyslog",
-            "[ + ]  udev",
-            "[ + ]  systemd-journald",
-            "[ + ]  systemd-networkd",
-            "[ - ]  bluetooth",
-            "[ - ]  cups",
-            "[ - ]  nfs-server",
-            "[ - ]  postfix",
-            "[ - ]  rpcbind",
+    replacement = """        output: tuple[str, ...] = (
+            " [ + ]  cron",
+            " [ + ]  dbus",
+            " [ - ]  hwclock.sh",
+            " [ + ]  kmod",
+            " [ + ]  procps",
+            " [ + ]  ssh",
+            " [ + ]  udev",
         )
+        status_path = CowrieConfig.get("shell", "service_status_all", fallback="")
+        if status_path:
+            try:
+                output = tuple(Path(status_path).read_text(encoding="utf-8").splitlines())
+            except OSError:
+                pass
 """
     path.write_text(text[:start] + replacement + text[end:], encoding="utf-8")
+    replace_once(
+        path,
+        "from cowrie.shell.command import HoneyPotCommand\n",
+        "from pathlib import Path\n\nfrom cowrie.core.config import CowrieConfig\n"
+        "from cowrie.shell.command import HoneyPotCommand\n",
+    )
+
+
+def patch_sudo(cowrie_root):
+    """sudo -V names [shell] sudo_version (1.9 adds the audit plugin); /usr/bin/sudo
+    is the command too."""
+    path = cowrie_root / "src" / "cowrie" / "commands" / "sudo.py"
+    replace_once(path, *CONFIG_IMPORT)
+    replace_once(
+        path,
+        """        self.errorWrite(
+            \"\"\"Sudo version 1.8.5p2
+            Sudoers policy plugin version 1.8.5p2
+            Sudoers file grammar version 41
+            Sudoers I/O plugin version 1.8.5p2\\n\"\"\"
+        )
+""",
+        """        version = CowrieConfig.get("shell", "sudo_version", fallback="1.8.5p2")
+        grammar = CowrieConfig.get("shell", "sudo_grammar", fallback="41")
+        lines = [f"Sudo version {version}", f"Sudoers policy plugin version {version}",
+                 f"Sudoers file grammar version {grammar}", f"Sudoers I/O plugin version {version}"]
+        if not version.startswith("1.8."):
+            lines.append(f"Sudoers audit plugin version {version}")
+        self.write("".join(line + "\\n" for line in lines))
+""",
+    )
+    replace_once(
+        path,
+        """commands["sudo"] = Command_sudo
+""",
+        """commands["sudo"] = Command_sudo
+commands["/usr/bin/sudo"] = Command_sudo
+""",
+    )
+
+
+def patch_apt(cowrie_root):
+    """apt / apt-get of the persona: the version line ([shell] apt_version, deb_arch),
+    `update` as root fetches the sources of the persona ([shell] apt_sources: "url suite"
+    separated by commas), install takes them as its mirror and the arch of the persona;
+    options (-y, -q) are no packages. Without the keys upstream's text stays."""
+    path = cowrie_root / "src" / "cowrie" / "commands" / "apt.py"
+    replace_once(path, *CONFIG_IMPORT)
+    replace_once(
+        path,
+        """commands = {}
+""",
+        """commands = {}
+
+
+def tpot_apt(key: str, fallback: str) -> str:
+    return CowrieConfig.get("shell", key, fallback=fallback)
+
+
+def tpot_apt_banner() -> str:
+    \"\"\"T-Pot: the version line of apt, "apt 2.8.3 (amd64)".\"\"\"
+    version = tpot_apt("apt_version", "")
+    if not version:
+        return "apt 1.0.9.8.1 for amd64 compiled on Jun 10 2015 09:42:06"
+    return f"apt {version} ({tpot_apt('deb_arch', 'amd64')})"
+
+
+def tpot_apt_sources() -> list[tuple[str, str]]:
+    \"\"\"T-Pot: (url, suite) of the persona's sources.\"\"\"
+    sources = tpot_apt("apt_sources", "http://ftp.debian.org/debian stable")
+    return [tuple(entry.split(" ", 1)) for entry in sources.split(",") if " " in entry]  # type: ignore[misc]
+""",
+    )
+    replace_all(
+        path,
+        '''"""apt 1.0.9.8.1 for amd64 compiled on Jun 10 2015 09:42:06
+''',
+        '''tpot_apt_banner() + """
+''',
+    )
+    replace_once(
+        path,
+        """        self.packages = {}
+        if len(self.args) == 0:
+            self.do_help()
+        elif self.args[0] == "-v":
+            self.do_version()
+        elif self.args[0] == "install":
+            yield self.do_install()
+        elif self.args[0] == "moo":
+            self.do_moo()
+        else:
+            self.do_locked()
+""",
+        """        self.packages = {}
+        # T-Pot: options (-y, -q, --no-install-recommends) are no command and no package
+        self.tpot_words = [arg for arg in self.args if not arg.startswith("-")]
+        if len(self.args) == 0:
+            self.do_help()
+        elif self.args[0] in ("-v", "--version"):
+            self.do_version()
+        elif self.tpot_words[:1] == ["install"]:
+            yield self.do_install()
+        elif self.tpot_words[:1] == ["update"] and self.user["uid"] == 0:
+            yield self.tpot_update()
+        elif self.tpot_words[:1] == ["moo"]:
+            self.do_moo()
+        else:
+            self.do_locked()
+
+    @inlineCallbacks
+    def tpot_update(self):
+        \"\"\"T-Pot: apt-get update as root, the sources of the persona unchanged.\"\"\"
+        for number, (url, suite) in enumerate(tpot_apt_sources(), 1):
+            yield self.sleep(0.2, 0.6)
+            self.write(f"Hit:{number} {url} {suite} InRelease\\n")
+        self.write("Reading package lists... Done\\n")
+        self.exit()
+""",
+    )
+    replace_once(
+        path,
+        """        if len(self.args) <= 1:
+""",
+        """        if len(self.tpot_words) <= 1:
+""",
+    )
+    replace_once(
+        path,
+        """        for y in [re.sub("[^A-Za-z0-9]", "", x) for x in self.args[1:]]:
+""",
+        """        for y in [re.sub("[^A-Za-z0-9]", "", x) for x in self.tpot_words[1:]]:
+""",
+    )
+    replace_once(
+        path,
+        """                f"Get:{i} http://ftp.debian.org stable/main {p} {self.packages[p]['version']} [{self.packages[p]['size']}.2kB]\\n"
+""",
+        """                f"Get:{i} {tpot_apt_sources()[0][0]} {tpot_apt_sources()[0][1]}/main "
+                f"{tpot_apt('deb_arch', 'i386')} {p} {self.packages[p]['version']} [{self.packages[p]['size']}.2kB]\\n"
+""",
+    )
+    replace_once(
+        path,
+        """                f"Unpacking {p} (from .../archives/{p}_{self.packages[p]['version']}_i386.deb) ...\\n"
+""",
+        """                f"Unpacking {p} (from .../archives/{p}_{self.packages[p]['version']}_"
+                f"{tpot_apt('deb_arch', 'i386')}.deb) ...\\n"
+""",
+    )
+
+
+def patch_yum(cowrie_root):
+    """yum 3 of CentOS 7: the plugins of the persona ([shell] yum_plugins), without
+    the lines of plugins it does not load (priorities, kernel-module); -y installs
+    without asking, options are no packages; `update` as root finds nothing to do."""
+    path = cowrie_root / "src" / "cowrie" / "commands" / "yum.py"
+    replace_once(path, *CONFIG_IMPORT)
+    replace_once(
+        path,
+        """commands = {}
+""",
+        """commands = {}
+
+
+def tpot_yum_plugins() -> str:
+    return CowrieConfig.get(
+        "shell", "yum_plugins", fallback="changelog, kernel-module, ovl, priorities, tsflags, versionlock"
+    )
+""",
+    )
+    replace_all(
+        path,
+        '"Loaded plugins: changelog, kernel-module, ovl, priorities, tsflags, versionlock\\n"',
+        'f"Loaded plugins: {tpot_yum_plugins()}\\n"',
+    )
+    replace_once(
+        path,
+        """            \"\"\"Loaded plugins: changelog, kernel-module, ovl, priorities, tsflags, versionlock
+""",
+        """            f\"\"\"Loaded plugins: {tpot_yum_plugins()}
+""",
+    )
+    replace_once(
+        path,
+        """        self.packages = {}
+        match self.args:
+            case []:
+                yield self.do_help()
+            case ["version", *_]:
+                yield self.do_version()
+            case ["install", *_]:
+                yield self.do_install()
+            case _:
+                self.do_locked()
+""",
+        """        self.packages = {}
+        # T-Pot: options (-y, -q) are no command and no package
+        self.tpot_words = [arg for arg in self.args if not arg.startswith("-")]
+        self.tpot_assume_yes = any(arg in ("-y", "--assumeyes") for arg in self.args)
+        match self.tpot_words:
+            case [] if not self.args:
+                yield self.do_help()
+            case ["version", *_]:
+                yield self.do_version()
+            case ["install", *_]:
+                yield self.do_install()
+            case ["update" | "upgrade" | "check-update", *_] if self.user["uid"] == 0:
+                yield self.sleep(1, 2)
+                self.write(f"Loaded plugins: {tpot_yum_plugins()}\\n")
+                self.write("Loading mirror speeds from cached hostfile\\n")
+                self.write("No packages marked for update\\n")
+                self.exit()
+            case _:
+                self.do_locked()
+""",
+    )
+    replace_once(
+        path,
+        """        if len(self.args) <= 1:
+""",
+        """        if len(self.tpot_words) <= 1:
+""",
+    )
+    replace_once(
+        path,
+        """        for y in [re.sub("[^A-Za-z0-9]", "", x) for x in self.args[1:]]:
+""",
+        """        for y in [re.sub("[^A-Za-z0-9]", "", x) for x in self.tpot_words[1:]]:
+""",
+    )
+    replace_once(
+        path,
+        """        self.write(
+            f"{random.randint(200, 300)} packages excluded due to repository priority protections\\n"
+        )
+""",
+        """        if "priorities" in tpot_yum_plugins():
+            self.write(
+                f"{random.randint(200, 300)} packages excluded due to repository priority protections\\n"
+            )
+""",
+    )
+    replace_once(
+        path,
+        """        self.write("Beginning Kernel Module Plugin\\n")
+        self.write("Finished Kernel Module Plugin\\n\\n")
+""",
+        """        if "kernel-module" in tpot_yum_plugins():
+            self.write("Beginning Kernel Module Plugin\\n")
+            self.write("Finished Kernel Module Plugin\\n\\n")
+""",
+    )
+    replace_once(
+        path,
+        """        self.write("Is this ok [y/d/N]: ")
+        # Assume 'yes'
+""",
+        """        if self.tpot_assume_yes:
+            yield self.lineReceived("y")
+            return
+        self.write("Is this ok [y/d/N]: ")
+        # Assume 'yes'
+""",
+    )
 
 
 def patch_free(cowrie_root):
@@ -548,6 +935,13 @@ def main():
     cowrie_root = args.cowrie_root.resolve()
     patch_protocol(cowrie_root)
     patch_busybox(cowrie_root)
+    patch_perl(cowrie_root)
+    patch_python(cowrie_root)
+    patch_git(cowrie_root)
+    patch_sudo(cowrie_root)
+    patch_apt(cowrie_root)
+    patch_yum(cowrie_root)
+    patch_which(cowrie_root)
     patch_ssh(cowrie_root)
     patch_netstat(cowrie_root)
     patch_service(cowrie_root)

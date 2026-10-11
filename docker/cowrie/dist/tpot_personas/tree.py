@@ -92,6 +92,12 @@ def find_node(root, relative_path):
     return None if parent is None else _child(parent, parts[-1])
 
 
+def find_dir(root, relative_path):
+    """The directory node of the path, links followed (also the last part); None if there is none."""
+    node, _ = _walk(root, _parts(relative_path))
+    return node if node is not None and node_get(node, A_TYPE) == T_DIR else None
+
+
 def real_path(root, relative_path):
     """The path with the links of its directories resolved ("bin/df" -> "usr/bin/df"),
     None if a directory of it is missing."""
@@ -172,6 +178,17 @@ def ensure_executable(root, relative_path, size, uid=0, gid=0, mode=0o755, ctime
     node_set(node, A_CONTENTS, [])
     node_set(node, A_TARGET, None)
     node_set(node, A_REALFILE, None)
+    return node
+
+
+def ensure_link(root, relative_path, target, ctime=0):
+    """A link; target is from the root ("usr/bin/python2.7"), as in Cowrie's pickle."""
+    parent = ensure_dir(root, str(Path(relative_path).parent), ctime=ctime)
+    name = Path(relative_path).name
+    children = node_children(parent)
+    children[:] = [child for child in children if node_get(child, A_NAME) != name]
+    node = [name, T_LINK, 0, 0, len(target), stat.S_IFLNK | 0o777, ctime, [], target, None]
+    children.append(node)
     return node
 
 

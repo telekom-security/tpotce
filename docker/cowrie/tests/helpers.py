@@ -29,9 +29,9 @@ def _program(root, rel, size):
 def base_tree():
     """A small stand-in for Cowrie's fs.pickle (Debian 12, merged /usr): the
     links bin, sbin, lib and lib64, programs with their sizes, the parts of
-    another system the renderer removes (home/phil, Debian package files,
-    x86_64 libraries, systemd, sshd_config, /.dockerenv, Debian's
-    /proc/modules) and an old ctime."""
+    another system the renderer removes or renames (home/phil, Debian package
+    files, x86_64 libraries, systemd, sshd_config, /.dockerenv, Debian's
+    /proc/modules, Python 3.11, Perl) and an old ctime."""
     root = ["", tree.T_DIR, 0, 0, 4096, 0o40755, OLD, [], None, None]
     for rel in ("etc", "home/phil", "usr/bin", "usr/sbin", "usr/lib", "usr/lib64", "var/log", "proc", "root",
                 "tmp"):
@@ -50,6 +50,9 @@ def base_tree():
     tree.ensure_file(root, "usr/lib/x86_64-linux-gnu/libc.so.6", b"", ctime=OLD)
     tree.ensure_file(root, "usr/lib/systemd/systemd", b"", mode=0o755, ctime=OLD)
     tree.ensure_file(root, "usr/lib/os-release", b"ID=debian\n", ctime=OLD)
+    tree.ensure_file(root, "usr/lib/python3.11/os.py", b"", ctime=OLD)
+    tree.ensure_file(root, "usr/lib/python3.11/__pycache__/os.cpython-311.pyc", b"", ctime=OLD)
+    tree.ensure_file(root, "usr/share/perl5/strict.pm", b"", ctime=OLD)
     _link(root, "etc/os-release", "usr/lib/os-release")
     for rel, size in (("usr/bin/apt", 18824), ("usr/bin/apt-get", 51592), ("usr/bin/dpkg", 318816),
                       ("usr/bin/top", 134736), ("usr/bin/df", 105824), ("usr/bin/uname", 43888),

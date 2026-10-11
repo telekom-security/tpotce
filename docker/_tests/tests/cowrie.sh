@@ -907,8 +907,12 @@ if config.get("honeypot", "boot_offset", fallback="") != str(identity["boot_offs
     fail("Runtime config boot_offset does not match identity.json")
 if "ssh-dss" in config_text.lower() or re.search(r"\bdsa", config_text.lower()):
     fail("Runtime config names DSA host keys")
-if "apt" not in config.get("shell", "skip_python_commands", fallback=""):
-    fail("Runtime config does not disable generic package-manager Python commands")
+# Cowrie's apt answers on the Debian servers only (dpkg), everywhere else it is skipped
+skipped = {entry.strip() for entry in config.get("shell", "skip_python_commands", fallback="").split(",")}
+selected_persona = catalog.by_id(selected)
+apt_answers = selected_persona.kind == "server" and "dpkg" in selected_persona.package_managers
+if ("apt" in skipped) == apt_answers:
+    fail(f"Runtime config {'skips' if apt_answers else 'does not skip'} Cowrie's apt on {selected}")
 
 pickle_path = runtime / "fs.pickle"
 honeyfs = runtime / "honeyfs"
