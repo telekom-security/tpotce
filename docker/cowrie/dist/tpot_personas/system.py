@@ -86,6 +86,29 @@ SUDO = {"noble": "1.9.15p5", "jammy": "1.9.9", "rhel": "1.9.5p2", "centos": "1.8
 # CentOS 7 yum loads fastestmirror only
 YUM_PLUGINS = "fastestmirror"
 SERVICE_STATUS = "service-status.txt"
+# the runtime files of the patched systemctl, sudo -l and apt (written per start)
+SYSTEMD_UNITS = "systemd-units.json"
+SUDO_LIST = "sudo-list.json"
+APT_PACKAGES = "apt-packages.json"
+# the Defaults of the sudoers of each family as sudo -l prints them
+_SUDO_DEBIAN = ("env_reset", "mail_badpass",
+                "secure_path=/usr/local/sbin\\:/usr/local/bin\\:/usr/sbin\\:/usr/bin\\:/sbin\\:/bin", "use_pty")
+_SUDO_EL_KEEP = ('env_keep="COLORS DISPLAY HOSTNAME HISTSIZE KDEDIR LS_COLORS"',
+                 'env_keep+="MAIL QTDIR USERNAME LANG LC_ADDRESS LC_CTYPE"',
+                 'env_keep+="LC_COLLATE LC_IDENTIFICATION LC_MEASUREMENT LC_MESSAGES"',
+                 'env_keep+="LC_MONETARY LC_NAME LC_NUMERIC LC_PAPER LC_TELEPHONE"',
+                 'env_keep+="LC_TIME LC_ALL LANGUAGE LINGUAS _XKB_CHARSET XAUTHORITY"')
+SUDO_DEFAULTS = {
+    "ubuntu": _SUDO_DEBIAN[:2] + (_SUDO_DEBIAN[2] + "\\:/snap/bin", "use_pty"),
+    "debian": _SUDO_DEBIAN,
+    "raspios": _SUDO_DEBIAN,
+    "rhel": ("!visiblepw", "always_set_home", "match_group_by_gid", "always_query_group_plugin", "env_reset")
+            + _SUDO_EL_KEEP + ("secure_path=/usr/local/sbin\\:/usr/local/bin\\:/usr/sbin\\:/usr/bin",),
+    "centos": ("!visiblepw", "always_set_home", "match_group_by_gid", "always_query_group_plugin", "env_reset")
+              + _SUDO_EL_KEEP + ("secure_path=/sbin\\:/bin\\:/usr/sbin\\:/usr/bin",),
+}
+# man-db of the Debian releases (its trigger closes every apt install); unverified per patch level
+MAN_DB = {"noble": "2.12.0-4build2", "jammy": "2.10.2-1", "trixie": "2.13.1-1", "bookworm": "2.11.2-2"}
 # service --status-all: the init scripts of the image (unverified: typical cloud and Pi images);
 #   RHEL 9 has none, CentOS 7 the network scripts, which print their own status
 _UBUNTU_INIT = ("+ apparmor", "+ apport", "+ cron", "+ dbus", "- hwclock.sh", "+ irqbalance", "- iscsid",
@@ -98,7 +121,7 @@ _PI_INIT = ("- alsa-utils", "+ avahi-daemon", "+ bluetooth", "- console-setup.sh
 _CENTOS_STATUS = ("netconsole module not loaded", "Configured devices:", "lo eth0", "Currently active devices:",
                   "lo eth0")
 # the commands of Cowrie's Python a server runs in place of a txtcmd (F7), with their spellings
-SERVER_COMMANDS = ("sudo", "service")
+SERVER_COMMANDS = ("sudo", "service", "systemctl")
 APT_COMMANDS = ("apt", "apt-get")
 YUM_COMMANDS = ("yum",)
 
@@ -335,6 +358,15 @@ def links(persona):
     return tuple(found)
 
 
+def ssh_units(persona, ident):
+    """(paths to remove, links) of the ssh units: Ubuntu 24.04 starts sshd from ssh.socket, so
+    ssh.service is not enabled (no alias sshd.service) and the socket is."""
+    if ident.release.extra.get("codename") != "noble":
+        return (), ()
+    return (("etc/systemd/system/sshd.service", "etc/systemd/system/multi-user.target.wants/ssh.service"),
+            (("etc/systemd/system/sockets.target.wants/ssh.socket", "usr/lib/systemd/system/ssh.socket"),))
+
+
 def directories(persona):
     """Empty directories of the persona's system (the run level directories of Red Hat)."""
     return tuple(f"etc/rc.d/rc{level}.d" for level in range(7)) if is_el(persona) else ()
@@ -391,6 +423,22 @@ def service_status(persona):
     return "".join(line + "\n" for line in lines)
 
 
+def sudo_list(persona):
+    """What sudo -l lists on a server: the Defaults of the family's sudoers and the rules of the
+    login user (its group sudo / wheel, then NOPASSWD of cloud-init or of the Pi image) and of root."""
+    el = is_el(persona)
+    group = "(ALL) ALL" if el else "(ALL : ALL) ALL"
+    return {"defaults": list(SUDO_DEFAULTS[persona.family]),
+            "rules": {persona.user: [group, "(ALL) NOPASSWD: ALL"], "root": [group]}}
+
+
+def apt_packages(persona, ident):
+    """The installed packages apt knows on a Debian server (the release's, man-db of the release)."""
+    found = dict(sorted(ident.release.packages.items()))
+    found.setdefault("man-db", MAN_DB[ident.release.extra["codename"]])
+    return found
+
+
 def python_links(persona, ident):
     """(link, target) of the unversioned Python names: python3 -> python3.12; on CentOS 7
     python -> python2 -> python2.7 (targets from the root, as Cowrie's pickle stores them)."""
@@ -421,12 +469,15 @@ def shell_keys(persona, ident, files, runtime_dir):
         return keys
     sudo = sudo_version(persona, ident)
     keys.update({"python_version": found["python"], "sudo_version": sudo, "sudo_grammar": sudo_grammar(sudo),
-                 "service_status_all": f"{runtime_dir}/{SERVICE_STATUS}"})
+                 "sudo_list": f"{runtime_dir}/{SUDO_LIST}", "service_status_all": f"{runtime_dir}/{SERVICE_STATUS}",
+                 "systemctl_units": f"{runtime_dir}/{SYSTEMD_UNITS}"})
     if "git" in found:
         keys["git_version"] = found["git"]
     if has_dpkg(persona):
         keys.update({"apt_version": ident.release.packages["apt"], "deb_arch": deb_arch(persona),
-                     "apt_sources": ",".join(f"{url} {suite}" for url, suite in apt_sources(files))})
+                     "apt_sources": ",".join(f"{url} {suite}" for url, suite in apt_sources(files)),
+                     "apt_packages": f"{runtime_dir}/{APT_PACKAGES}",
+                     "apt_fallback": "ubuntu" if persona.os_id == "ubuntu" else "debian"})
     if persona.family == "centos":
         keys["yum_plugins"] = YUM_PLUGINS
     return keys

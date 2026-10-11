@@ -8,7 +8,7 @@ import random
 import shutil
 from pathlib import Path
 
-from . import system, tree
+from . import servers, system, tree
 from .common import home_dir, rng_for
 from .identity import DAY, to_json
 from .ssh_profiles import PROFILES
@@ -263,7 +263,10 @@ def apply_to_tree(base_tree, persona, ident, content):
         tree.ensure_executable(t, rel, program_size(ident, rel, sizes), ctime=ident.installed_at)
     for rel in system.directories(persona):
         tree.ensure_dir(t, rel, ctime=ident.installed_at)
-    for rel, target in system.python_links(persona, ident) + system.links(persona):
+    removed, ssh_links = system.ssh_units(persona, ident)
+    for rel in removed:
+        tree.remove_node(t, rel)
+    for rel, target in system.python_links(persona, ident) + system.links(persona) + ssh_links:
         tree.ensure_link(t, rel, target, ctime=ident.installed_at)
     _login_links(t, persona, ident)
     _set_dirs(t, persona, ident.installed_at)
@@ -348,6 +351,16 @@ format = text
 """
 
 
+def runtime_json(persona, ident, processes):
+    """The JSON files of a server's runtime folder: the units of systemctl, the rules of sudo -l,
+    the packages of apt (Debian)."""
+    files = {system.SYSTEMD_UNITS: servers.systemd_units(persona, ident, processes),
+             system.SUDO_LIST: system.sudo_list(persona)}
+    if system.has_dpkg(persona):
+        files[system.APT_PACKAGES] = system.apt_packages(persona, ident)
+    return files
+
+
 def _write(path, text, mode=0o644):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
@@ -373,6 +386,8 @@ def render(persona, ident, base_tree, out_dir, runtime_dir, keys_dir, cowrie_roo
         _write(out_dir / BUSYBOX_HELP, content.busybox_help)
     if persona.kind == "server":
         _write(out_dir / system.SERVICE_STATUS, system.service_status(persona))
+        for name, data in runtime_json(persona, ident, content.processes).items():
+            _write(out_dir / name, json.dumps(data, indent=1, sort_keys=True) + "\n")
     _write(out_dir / "cowrie.cfg", render_cfg(persona, ident, Path(runtime_dir), Path(keys_dir), cowrie_root,
                                               content))
     _write(out_dir / "identity.json", json.dumps(to_json(ident), indent=2, sort_keys=True, default=str) + "\n")

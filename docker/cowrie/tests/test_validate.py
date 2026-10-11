@@ -431,6 +431,14 @@ class ValidateServerCommandTest(unittest.TestCase):
             (out / "service-status.txt").write_text(" [ + ]  lightdm\n")
         self.assertIn("service: service-status.txt is not the persona's", self.problems("ubuntu-noble", change))
 
+    def test_runtime_files_of_another_system(self):
+        for name in ("systemd-units.json", "sudo-list.json", "apt-packages.json"):
+            def change(out, name=name):
+                path = out / name
+                path.write_text(path.read_text().replace("(ALL : ALL) ALL", "(ALL) ALL").replace(
+                    "OpenBSD Secure Shell server", "OpenSSH server daemon").replace('"curl"', '"wget"'))
+            self.assertIn(f"runtime: {name} is not the persona's", self.problems("ubuntu-jammy", change), name)
+
     def test_txtcmd_beside_cowries_command(self):
         # the old static sudo: /usr/bin/sudo would print it, sudo would run Cowrie's
         def change(out):

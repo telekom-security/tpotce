@@ -147,7 +147,7 @@ def patch_busybox(cowrie_root):
     """busybox prints the help of the persona's BusyBox ([shell] busybox_help, a
     file of the runtime folder) on stdout, as busybox does, for no arguments and
     --help; applets run and `busybox ECCHI` says "ECCHI: applet not found" as
-    upstream. Without the key upstream's help stays."""
+    upstream (on stderr, exit status 127). Without the key upstream's help stays."""
     path = cowrie_root / "src" / "cowrie" / "commands" / "busybox.py"
     replace_once(
         path,
@@ -181,6 +181,20 @@ def patch_busybox(cowrie_root):
 """,
         """        if len(self.args) == 0 or self.args == ["--help"]:
             self.help()
+""",
+    )
+    # an unknown applet: busybox says so on stderr and exits with 127
+    replace_once(
+        path,
+        """        if not cmdclass:
+            self.write(f"{cmd}: applet not found\\n")
+            self.exit()
+            return
+""",
+        """        if not cmdclass:
+            self.errorWrite(f"{cmd}: applet not found\\n")
+            self.exit(127)
+            return
 """,
     )
 
@@ -824,9 +838,9 @@ def patch_git(cowrie_root):
 
 
 def patch_which(cowrie_root):
-    """which prints the first match on PATH (which without -a; /usr/bin and /bin are one
-    directory of a merged /usr tree) and fails with 1 when a name is not found, as
-    `which wget || which curl` of a bot expects."""
+    """which prints the first match on PATH (/usr/bin and /bin are one directory of a merged
+    /usr tree), with -a every match, with -s nothing; a name with a slash is itself. It fails
+    with 1 when a name is not found, as `which wget || which curl` of a bot expects."""
     path = cowrie_root / "src" / "cowrie" / "commands" / "which.py"
     replace_once(
         path,
@@ -838,17 +852,32 @@ def patch_which(cowrie_root):
                 if self.fs.exists(resolved):
                     self.write(f"{path}/{f}\\n")
 """,
-        """        # Look up each file
-        missing = False
-        for f in self.args:
-            for path in self.environ["PATH"].split(":"):
-                resolved = self.fs.resolve_path(f, path)
-
-                if self.fs.exists(resolved):
-                    self.write(f"{path}/{f}\\n")
-                    break
+        """        # Look up each file (T-Pot: -a every match on PATH, -s only the status)
+        every = silent = False
+        names = list(self.args)
+        while names and names[0].startswith("-") and len(names[0]) > 1:
+            option = names.pop(0)
+            if option == "--":
+                break
+            every = every or "a" in option
+            silent = silent or "s" in option
+        missing = not names
+        for f in names:
+            found = []
+            if "/" in f:
+                found = [f] if self.fs.exists(self.fs.resolve_path(f, self.cwd)) else []
             else:
-                missing = True
+                for path in self.environ["PATH"].split(":"):
+                    resolved = self.fs.resolve_path(f, path)
+
+                    if self.fs.exists(resolved):
+                        found.append(f"{path}/{f}")
+                        if not every:
+                            break
+            if not silent:
+                for match in found:
+                    self.write(f"{match}\\n")
+            missing = missing or not found
         if missing:
             self.exit_code = 1
 """,
@@ -922,9 +951,361 @@ def patch_service(cowrie_root):
     )
 
 
+# module code of the patched service.py after Command_service: systemctl of the persona
+SYSTEMCTL_COMMAND = r"""
+
+# T-Pot: systemctl of the persona: status, is-active, is-enabled, is-failed, list-units,
+# list-unit-files and the verbs that change units (silent as root or under sudo). The units,
+# their processes and the version of systemd are those of [shell] systemctl_units (a JSON file
+# of the runtime folder); nothing is started or stopped.
+TPOT_SYSTEMCTL_CHANGES = ("start", "stop", "restart", "reload", "try-restart", "reload-or-restart",
+                          "enable", "disable", "mask", "unmask", "kill", "reset-failed", "daemon-reload")
+TPOT_SYSTEMCTL_FLAGS = ("--all", "-a", "--no-pager", "--no-legend", "--plain", "--full", "-l", "--quiet",
+                        "-q", "--system", "--no-ask-password", "--now", "--failed", "--legend=false")
+
+
+def tpot_units() -> dict:
+    path = CowrieConfig.get("shell", "systemctl_units", fallback="")
+    if path:
+        try:
+            data = json.loads(Path(path).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            data = None
+        if isinstance(data, dict) and isinstance(data.get("units"), list):
+            return data
+    return {"version": 252, "unit_dir": "/usr/lib/systemd/system", "units": []}
+
+
+def tpot_ago(seconds: float, version: int) -> str:
+    # systemd's format_timestamp_relative; before 236 every unit in its plural
+    s = max(0, int(seconds))
+    old = version < 236
+
+    def word(n, one, many):
+        return many if old or n != 1 else one
+
+    year, month, week, day, hour, minute = 31557600, 2629800, 604800, 86400, 3600, 60
+    if s >= year:
+        a, b = s // year, (s % year) // month
+        return f"{a} {word(a, 'year', 'years')} {b} {word(b, 'month', 'months')} ago"
+    if s >= month:
+        a, b = s // month, (s % month) // day
+        return f"{a} {word(a, 'month', 'months')} {b} {word(b, 'day', 'days')} ago"
+    if s >= week:
+        a, b = s // week, (s % week) // day
+        return f"{a} {word(a, 'week', 'weeks')} {b} {word(b, 'day', 'days')} ago"
+    if s >= 2 * day:
+        return f"{s // day} days ago"
+    if s >= 25 * hour:
+        return f"1 day {(s - day) // hour}h ago"
+    if s >= 6 * hour:
+        return f"{s // hour}h ago"
+    if s >= hour:
+        return f"{s // hour}h {(s % hour) // minute}min ago"
+    if s >= 5 * minute:
+        return f"{s // minute}min ago"
+    if s >= minute:
+        return f"{s // minute}min {s % minute}s ago"
+    return f"{s}s ago"
+
+
+def tpot_bytes(value: int) -> str:
+    # systemd's format_bytes: 1024 based, one decimal cut off, none for whole numbers
+    for factor, suffix in ((1 << 30, "G"), (1 << 20, "M"), (1 << 10, "K")):
+        if value >= factor:
+            whole, tenth = value // factor, value * 10 // factor % 10
+            return f"{whole}.{tenth}{suffix}" if tenth else f"{whole}{suffix}"
+    return f"{value}B"
+
+
+def tpot_timespan(ms: int) -> str:
+    # systemd's format_timespan to the millisecond: 54ms, 1.204s, 2min 3.5s, 1h 2min 3s
+    if ms < 1000:
+        return f"{ms}ms"
+    hours, rest = divmod(ms, 3600000)
+    minutes, rest = divmod(rest, 60000)
+    parts = [f"{hours}h"] if hours else []
+    if minutes:
+        parts.append(f"{minutes}min")
+    if rest:
+        seconds = f"{rest // 1000}.{rest % 1000:03d}".rstrip("0").rstrip(".")
+        parts.append(f"{seconds}s")
+    return " ".join(parts)
+
+
+def tpot_unit(data: dict, name: str):
+    # (the unit name systemd uses, its unit or None): a name without type is a service
+    if "." not in name.rsplit("/", 1)[-1]:
+        name += ".service"
+    name = data.get("aliases", {}).get(name, name)
+    return name, next((unit for unit in data["units"] if unit.get("name") == name), None)
+
+
+def tpot_privileged(cmd) -> bool:
+    if cmd.user.get("uid") == 0:
+        return True
+    return any(type(item).__name__ == "Command_sudo" for item in getattr(cmd.protocol, "cmdstack", []))
+
+
+def tpot_command_line(command: str, version: int) -> str:
+    # systemd 250 and later quote an argument with spaces (a process title "sshd: ...")
+    return f'"{command}"' if version >= 250 and command.split(" ", 1)[0].endswith(":") else command
+
+
+def tpot_status_unit(cmd, data: dict, unit: dict, boot: float, now: float, host: str) -> list[str]:
+    version = int(data.get("version", 252))
+    width = 11 if version >= 245 else 9
+
+    def key(name):
+        return f"{name:>{width}}: "
+
+    since = boot + float(unit.get("start", 0))
+    sub, state = unit.get("sub", "running"), unit.get("state", "enabled")
+    preset = "preset" if version >= 252 else "vendor preset"
+    loaded = (f"loaded ({unit.get('path')}; {state})" if state == "static"
+              else f"loaded ({unit.get('path')}; {state}; {preset}: {unit.get('preset', 'enabled')})")
+    lines = [f"● {unit['name']} - {unit.get('description', '')}", key("Loaded") + loaded,
+             key("Active") + f"active ({sub}) since {time.strftime('%a %Y-%m-%d %H:%M:%S UTC', time.gmtime(since))}; "
+             f"{tpot_ago(now - since, version)}"]
+    if unit.get("triggered_by"):
+        lines.append(key("TriggeredBy") + f"● {unit['triggered_by']}")
+    pid = unit.get("pid", 0)
+    if sub == "running":
+        lines.append(key("Main PID") + f"{pid} ({unit.get('comm', '')})")
+        if version >= 227:
+            lines.append(key("Tasks") + f"{unit.get('tasks', 1)} (limit: {data.get('tasks_max', 4096)})")
+        if version >= 238:
+            memory = key("Memory") + tpot_bytes(int(unit.get("memory", 0)))
+            if version >= 254:
+                memory += f" (peak: {tpot_bytes(int(unit.get('peak', 0)))})"
+            lines.append(memory)
+        if version >= 240:
+            lines.append(key("CPU") + tpot_timespan(int(unit.get("cpu_ms", 0))))
+        lines.append(key("CGroup") + f"/system.slice/{unit['name']}")
+        lines.append(" " * (width + 2) + f"└─{pid} {tpot_command_line(unit.get('command', ''), version)}")
+    else:
+        lines.append(key("Main PID") + f"{pid} (code=exited, status=0/SUCCESS)")
+        if version >= 240:
+            lines.append(key("CPU") + tpot_timespan(int(unit.get("cpu_ms", 0))))
+    stamp = time.strftime("%b %d %H:%M:%S", time.gmtime(since))
+    label = f"{unit['name']} - {unit.get('description', '')}" if version >= 252 else unit.get("description", "")
+    done = "Finished" if sub == "exited" and version >= 246 else "Started"
+    lines += ["", f"{stamp} {host} systemd[1]: Starting {label}..."]
+    lines += [f"{stamp} {host} {unit.get('comm', '')}[{pid}]: {text}" for text in unit.get("log", [])]
+    lines.append(f"{stamp} {host} systemd[1]: {done} {label}.")
+    return lines
+
+
+def tpot_status_system(data: dict, boot: float, now: float, host: str) -> list[str]:
+    version = int(data.get("version", 252))
+    width = 11 if version >= 245 else 9
+    pad = " " * (width + 2)
+    since = time.strftime("%a %Y-%m-%d %H:%M:%S UTC", time.gmtime(boot))
+    lines = [f"● {host}", f"{'State':>{width}}: running", f"{'Jobs':>{width}}: 0 queued",
+             f"{'Failed':>{width}}: 0 units", f"{'Since':>{width}}: {since}; {tpot_ago(now - boot, version)}",
+             f"{'CGroup':>{width}}: /", pad + "├─init.scope",
+             pad + f"│ └─1 {data.get('init', '/sbin/init')}", pad + "└─system.slice"]
+    running = sorted((u for u in data["units"] if u.get("sub") == "running"), key=lambda u: u["name"].lower())
+    for index, unit in enumerate(running):
+        last = index == len(running) - 1
+        lines.append(pad + "  " + ("└─" if last else "├─") + unit["name"])
+        lines.append(pad + "  " + ("  " if last else "│ ") + f"└─{unit.get('pid', 0)} "
+                     f"{tpot_command_line(unit.get('command', ''), version)}")
+    return lines
+
+
+def tpot_list_units(cmd, data: dict, every: bool, legend: bool, kind: str | None) -> None:
+    version = int(data.get("version", 252))
+    units = [] if kind not in (None, "service") else sorted(data["units"], key=lambda u: u["name"].lower())
+    if not units:
+        cmd.write("0 loaded units listed.\n" if legend else "")
+        return
+    name_width = max(len("UNIT"), *(len(u["name"]) for u in units))
+    sub_width = max(len("SUB"), *(len(u.get("sub", "")) for u in units))
+    if legend:
+        cmd.write(f"  {'UNIT':<{name_width}} LOAD   ACTIVE {'SUB':<{sub_width}} DESCRIPTION\n")
+    for unit in units:
+        cmd.write(f"  {unit['name']:<{name_width}} loaded active {unit.get('sub', ''):<{sub_width}} "
+                  f"{unit.get('description', '')}\n")
+    if not legend:
+        return
+    if version >= 251:
+        cmd.write("\nLegend: LOAD   → Reflects whether the unit definition was properly loaded.\n"
+                  "        ACTIVE → The high-level unit activation state, i.e. generalization of SUB.\n"
+                  "        SUB    → The low-level unit activation state, values depend on unit type.\n\n")
+    else:
+        cmd.write("\nLOAD   = Reflects whether the unit definition was properly loaded.\n"
+                  "ACTIVE = The high-level unit activation state, i.e. generalization of SUB.\n"
+                  "SUB    = The low-level unit activation state, values depend on unit type.\n\n")
+    hint = "" if every else " Pass --all to see loaded but inactive units, too."
+    cmd.write(f"{len(units)} loaded units listed.{hint}\n"
+              "To show all installed unit files use 'systemctl list-unit-files'.\n")
+
+
+def tpot_list_unit_files(cmd, data: dict, legend: bool) -> None:
+    version = int(data.get("version", 252))
+    units = sorted(data["units"], key=lambda u: u["name"].lower())
+    width = max([len("UNIT FILE")] + [len(u["name"]) for u in units])
+    state_width = max([len("STATE")] + [len(u.get("state", "")) for u in units])
+    preset = version >= 245
+    if legend:
+        cmd.write(f"{'UNIT FILE':<{width}} " + (f"{'STATE':<{state_width}} PRESET\n" if preset else "STATE\n"))
+    for unit in units:
+        state = unit.get("state", "enabled")
+        cmd.write(f"{unit['name']:<{width}} " + (f"{state:<{state_width}} "
+                                                 f"{'-' if state == 'static' else unit.get('preset', 'enabled')}\n"
+                                                 if preset else f"{state}\n"))
+    if legend:
+        cmd.write(f"\n{len(units)} unit files listed.\n")
+
+
+def tpot_systemctl(cmd, args: list[str]) -> int:
+    # one systemctl call on cmd (a HoneyPotCommand); returns the exit status
+    data = tpot_units()
+    version = int(data.get("version", 252))
+    words, every, legend, quiet, kind = [], False, True, False, None
+    items = list(args)
+    while items:
+        arg = items.pop(0)
+        if arg == "--version":
+            cmd.write(f"systemd {version}" + (f" ({data['full']})" if data.get("full") else "") + "\n"
+                      + (data.get("features", "") + "\n" if data.get("features") else ""))
+            return 0
+        if arg in ("-h", "--help"):
+            cmd.write("systemctl [OPTIONS...] COMMAND ...\n\nQuery or send control commands to the system manager.\n")
+            return 0
+        if arg in ("-t", "--type") and items:
+            kind = items.pop(0)
+        elif arg.startswith("--type=") or (arg.startswith("-t") and len(arg) > 2):
+            kind = arg.split("=", 1)[1] if arg.startswith("--type=") else arg[2:]
+        elif arg.startswith("--state=") or arg.startswith("--output=") or arg.startswith("--lines=") \
+                or arg.startswith("-n") or arg.startswith("-o"):
+            continue
+        elif arg in TPOT_SYSTEMCTL_FLAGS:
+            every = every or arg in ("--all", "-a")
+            legend = legend and arg not in ("--no-legend", "--legend=false")
+            quiet = quiet or arg in ("-q", "--quiet")
+        elif arg.startswith("--"):
+            cmd.errorWrite(f"systemctl: unrecognized option '{arg}'\n")
+            return 1
+        elif arg.startswith("-") and len(arg) > 1:
+            cmd.errorWrite(f"systemctl: invalid option -- '{arg[1]}'\n")
+            return 1
+        else:
+            words.append(arg)
+    verb, names = (words[0], words[1:]) if words else ("list-units", [])
+    boot, now = cmd.protocol.boot_time(), time.time()
+    host = cmd.protocol.hostname.split(".")[0]
+    if verb == "list-units":
+        tpot_list_units(cmd, data, every, legend, kind)
+        return 0
+    if verb == "list-unit-files":
+        tpot_list_unit_files(cmd, data, legend)
+        return 0
+    if verb == "status":
+        if not names:
+            cmd.write("".join(line + "\n" for line in tpot_status_system(data, boot, now, host)))
+            return 0
+        status, blocks = 0, []
+        for name in names:
+            name, unit = tpot_unit(data, name)
+            if unit is None:
+                cmd.errorWrite(f"Unit {name} could not be found.\n")
+                status = 4
+            else:
+                blocks.append("".join(line + "\n" for line in tpot_status_unit(cmd, data, unit, boot, now, host)))
+        cmd.write("\n".join(blocks))
+        return status
+    if verb in ("is-active", "is-enabled", "is-failed"):
+        if not names:
+            cmd.errorWrite("Too few arguments.\n")
+            return 1
+        status = 0
+        for name in names:
+            name, unit = tpot_unit(data, name)
+            if verb == "is-active":
+                answer, ok = ("active", True) if unit else ("inactive", False)
+            elif verb == "is-failed":
+                answer, ok = ("active", False) if unit else ("inactive", False)
+            elif unit is None:
+                cmd.errorWrite(f"Failed to get unit file state for {name}: No such file or directory\n")
+                status = 1
+                continue
+            else:
+                answer, ok = unit.get("state", "enabled"), True
+            if not quiet:
+                cmd.write(answer + "\n")
+            if not ok:
+                status = 1 if verb == "is-failed" else 3
+        return status
+    if verb in TPOT_SYSTEMCTL_CHANGES:
+        if verb == "daemon-reload":
+            if tpot_privileged(cmd):
+                return 0
+            cmd.errorWrite("Failed to reload daemon: Interactive authentication required.\n")
+            return 1
+        if not names:
+            cmd.errorWrite("Too few arguments.\n")
+            return 1
+        for name in names:
+            name, unit = tpot_unit(data, name)
+            if not tpot_privileged(cmd):
+                cmd.errorWrite(f"Failed to {verb} {name}: Interactive authentication required.\n"
+                               f"See system logs and 'systemctl status {name}' for details.\n")
+                return 1
+            if unit is None:
+                cmd.errorWrite(f"Failed to {verb} {name}: Unit {name} not found.\n")
+                return 5
+        return 0
+    cmd.errorWrite(f"Unknown command verb {verb}.\n" if version >= 240 else f"Unknown operation '{verb}'.\n")
+    return 1
+
+
+class Command_systemctl(HoneyPotCommand):
+    def call(self) -> None:
+        self.exit_code = tpot_systemctl(self, self.args)
+
+
+commands["/usr/bin/systemctl"] = Command_systemctl
+commands["/bin/systemctl"] = Command_systemctl
+commands["systemctl"] = Command_systemctl
+"""
+
+
+def patch_systemctl(cowrie_root):
+    """systemctl of the persona (SYSTEMCTL_COMMAND, in the module of service); `service X status`
+    shows the status of X as systemctl does (Red Hat names the redirection first). Runs after
+    patch_service."""
+    path = cowrie_root / "src" / "cowrie" / "commands" / "service.py"
+    replace_once(path, "import getopt\n", "import getopt\nimport json\nimport time\n")
+    replace_once(
+        path,
+        """    def call(self) -> None:
+        try:
+            opts, args = getopt.gnu_getopt(
+                self.args, "h", ["help", "status-all", "full-restart"]
+            )
+""",
+        """    def call(self) -> None:
+        # T-Pot: service NAME status is systemctl status NAME
+        if len(self.args) >= 2 and self.args[1] == "status" and tpot_units().get("units"):
+            if tpot_units().get("redirect"):
+                self.errorWrite(f"Redirecting to /bin/systemctl status {tpot_unit(tpot_units(), self.args[0])[0]}\\n")
+            self.exit_code = tpot_systemctl(self, ["status", self.args[0]])
+            return
+        try:
+            opts, args = getopt.gnu_getopt(
+                self.args, "h", ["help", "status-all", "full-restart"]
+            )
+""",
+    )
+    replace_once(path, 'commands["service"] = Command_service\n',
+                 'commands["service"] = Command_service\n' + SYSTEMCTL_COMMAND)
+
+
 def patch_sudo(cowrie_root):
     """sudo -V names [shell] sudo_version (1.9 adds the audit plugin); /usr/bin/sudo
-    is the command too."""
+    is the command too; sudo -l lists the persona's rules ([shell] sudo_list)."""
     path = cowrie_root / "src" / "cowrie" / "commands" / "sudo.py"
     replace_once(path, *CONFIG_IMPORT)
     replace_once(
@@ -953,15 +1334,92 @@ def patch_sudo(cowrie_root):
 commands["/usr/bin/sudo"] = Command_sudo
 """,
     )
+    # sudo -l / -ll / --list: the rules of the persona's sudoers ([shell] sudo_list)
+    replace_once(path, "import getopt\n", "import getopt\nimport json\nfrom pathlib import Path\n")
+    replace_once(
+        path,
+        """        try:
+            optlist, _args = getopt.getopt(
+                self.args[0:start_value], "bEeHhKknPSVva:C:g:i:l:p:r:s:t:U:u:"
+            )
+""",
+        """        if any(arg in ("-l", "-ll", "--list") or (arg.startswith("-") and not arg.startswith("--")
+                                                     and "l" in arg[1:] and arg.strip("-").isalpha())
+               for arg in self.args[0:start_value]):
+            self.tpot_list(parsed_arguments)
+            return
+        try:
+            optlist, _args = getopt.getopt(
+                self.args[0:start_value], "bEeHhKknPSVva:C:g:i:l:p:r:s:t:U:u:"
+            )
+""",
+    )
+    replace_once(
+        path,
+        """    def start(self) -> None:
+        start_value = None
+""",
+        """    def tpot_list(self, command: list[str]) -> None:
+        \"\"\"T-Pot: sudo -l as sudo prints it: the Defaults (wrapped as sudo's lbuf wraps them at
+        80 columns) and the rules of the user; with a command its full path.\"\"\"
+        path = CowrieConfig.get("shell", "sudo_list", fallback="")
+        try:
+            data = json.loads(Path(path).read_text(encoding="utf-8")) if path else {}
+        except (OSError, ValueError):
+            data = {}
+        name = self.user.get("username", "")
+        name = name.decode("utf-8", "replace") if isinstance(name, bytes) else str(name)
+        if self.user.get("uid") == 0:
+            name = "root"
+        host = self.protocol.hostname.split(".")[0]
+        rules = data.get("rules", {}).get("root" if name == "root" else name)
+        if rules is None:
+            self.errorWrite(f"Sorry, user {name} may not run sudo on {host}.\\n")
+            self.exit(1)
+            return
+        if command:
+            found = self.protocol.getCommand(command[0], self.environ.get("PATH", "").split(":"), self.cwd)
+            if not found:
+                self.exit(1)
+                return
+            program = command[0] if "/" in command[0] else next(
+                (f"{d}/{command[0]}" for d in self.environ.get("PATH", "").split(":")
+                 if d and self.fs.exists(f"{d}/{command[0]}")), f"/usr/bin/{command[0]}")
+            self.write(" ".join([program] + command[1:]) + "\\n")
+            self.exit()
+            return
+        lines, line = [], "   "
+        defaults = data.get("defaults", [])
+        for index, entry in enumerate(defaults):
+            text = entry + ("," if index < len(defaults) - 1 else "")
+            if len(line) + 1 + len(text) > 80 and line.strip():
+                lines.append(line)
+                line = "   "
+            line += " " + text
+        lines.append(line)
+        self.write(f"Matching Defaults entries for {name} on {host}:\\n" + "\\n".join(lines) + "\\n\\n"
+                   f"User {name} may run the following commands on {host}:\\n"
+                   + "".join(f"    {rule}\\n" for rule in rules))
+        self.exit()
+
+    def start(self) -> None:
+        start_value = None
+""",
+    )
 
 
 def patch_apt(cowrie_root):
     """apt / apt-get of the persona: the version line ([shell] apt_version, deb_arch),
     `update` as root fetches the sources of the persona ([shell] apt_sources: "url suite"
-    separated by commas), install takes them as its mirror and the arch of the persona;
-    options (-y, -q) are no packages. Without the keys upstream's text stays."""
+    separated by commas), install takes them as its mirror and the arch of the persona,
+    the versions of its packages ([shell] apt_packages) and for other packages one that
+    fits the release ([shell] apt_fallback); options (-y, -q) are no packages. Without the
+    keys upstream's text stays."""
     path = cowrie_root / "src" / "cowrie" / "commands" / "apt.py"
     replace_once(path, *CONFIG_IMPORT)
+    replace_once(path, "import random\n", "import functools\nimport hashlib\nimport json\nimport random\n")
+    replace_once(path, "from typing import TYPE_CHECKING, Any\n",
+                 "from pathlib import Path\nfrom typing import TYPE_CHECKING, Any\n")
     replace_once(
         path,
         """commands = {}
@@ -985,6 +1443,42 @@ def tpot_apt_sources() -> list[tuple[str, str]]:
     \"\"\"T-Pot: (url, suite) of the persona's sources.\"\"\"
     sources = tpot_apt("apt_sources", "http://ftp.debian.org/debian stable")
     return [tuple(entry.split(" ", 1)) for entry in sources.split(",") if " " in entry]  # type: ignore[misc]
+
+
+@functools.cache
+def tpot_apt_known() -> dict[str, str]:
+    \"\"\"T-Pot: the installed packages of the persona and their versions ([shell] apt_packages,
+    a JSON file of the runtime folder).\"\"\"
+    path = tpot_apt("apt_packages", "")
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8")) if path else {}
+    except (OSError, ValueError):
+        data = {}
+    return {str(k): str(v) for k, v in data.items()} if isinstance(data, dict) else {}
+
+
+def tpot_apt_digest(name: str) -> bytes:
+    return hashlib.sha256(f"{tpot_apt('apt_fallback', '')} {name}".encode()).digest()
+
+
+def tpot_apt_version(name: str) -> str:
+    \"\"\"T-Pot: the version of a package the persona has not installed: the same for a name on
+    every call, a Debian revision ("-2", "-1+b1") or one of Ubuntu ("-1build2", "-2ubuntu1")
+    after [shell] apt_fallback.\"\"\"
+    known = tpot_apt_known()
+    if name in known:
+        return known[name]
+    d = tpot_apt_digest(name)
+    upstream = f"{1 + d[0] % 9}.{d[1] % 24}" + (f".{d[2] % 12}" if d[3] % 3 else "")
+    revision = 1 + d[4] % 3
+    if tpot_apt("apt_fallback", "debian") == "ubuntu":
+        return f"{upstream}-{revision}" + (f"build{1 + d[5] % 3}" if d[6] % 2 else f"ubuntu{1 + d[5] % 3}")
+    return f"{upstream}-{revision}" + ("+b1" if d[6] % 4 == 0 else "")
+
+
+def tpot_apt_size(name: str) -> int:
+    d = tpot_apt_digest(name)
+    return 40 + int.from_bytes(d[7:9], "big") % 900
 """,
     )
     replace_all(
@@ -1041,28 +1535,126 @@ def tpot_apt_sources() -> list[tuple[str, str]]:
         """        if len(self.tpot_words) <= 1:
 """,
     )
+    # install: the versions of the persona, the output of apt (Selecting, Preparing to unpack, triggers last)
     replace_once(
         path,
         """        for y in [re.sub("[^A-Za-z0-9]", "", x) for x in self.args[1:]]:
+            self.packages[y] = {
+                "version": f"{random.choice([0, 1])}.{random.randint(1, 40)}-{random.randint(1, 10)}",
+                "size": random.randint(100, 900),
+            }
+        totalsize: int = sum(self.packages[x]["size"] for x in self.packages)
+
+        self.write("Reading package lists... Done\\n")
+        self.write("Building dependency tree\\n")
+        self.write("Reading state information... Done\\n")
+        self.write("The following NEW packages will be installed:\\n")
+        self.write(f"  {' '.join(self.packages)} \\n")
+        self.write(
+            f"0 upgraded, {len(self.packages)} newly installed, 0 to remove and 259 not upgraded.\\n"
+        )
+        self.write(f"Need to get {totalsize}.2kB of archives.\\n")
+        self.write(
+            f"After this operation, {totalsize * 2.2:.1f}kB of additional disk space will be used.\\n"
+        )
+        i = 1
+        for p in self.packages:
+            self.write(
+                f"Get:{i} http://ftp.debian.org stable/main {p} {self.packages[p]['version']} [{self.packages[p]['size']}.2kB]\\n"
+            )
+            i += 1
+            yield self.sleep(1, 2)
+        self.write(f"Fetched {totalsize}.2kB in 1s (4493B/s)\\n")
+        self.write("Reading package fields... Done\\n")
+        yield self.sleep(1, 2)
+        self.write("Reading package status... Done\\n")
+        self.write(
+            "(Reading database ... 177887 files and directories currently installed.)\\n"
+        )
+        yield self.sleep(1, 2)
+        for p in self.packages:
+            self.write(
+                f"Unpacking {p} (from .../archives/{p}_{self.packages[p]['version']}_i386.deb) ...\\n"
+            )
+            yield self.sleep(1, 2)
+        self.write("Processing triggers for man-db ...\\n")
+        yield self.sleep(2)
+        for p in self.packages:
+            self.write(f"Setting up {p} ({self.packages[p]['version']}) ...\\n")
+            self.fs.mkfile(
+                f"/usr/bin/{p}",
+                self.user["uid"],
+                self.user["gid"],
+                random.randint(10000, 90000),
+                33188,
+            )
+            self.protocol.commands[f"/usr/bin/{p}"] = (
+                Command_faked_package_class_factory.getCommand(p)
+            )
+            yield self.sleep(2)
+        self.exit()
 """,
-        """        for y in [re.sub("[^A-Za-z0-9]", "", x) for x in self.tpot_words[1:]]:
-""",
-    )
-    replace_once(
-        path,
-        """                f"Get:{i} http://ftp.debian.org stable/main {p} {self.packages[p]['version']} [{self.packages[p]['size']}.2kB]\\n"
-""",
-        """                f"Get:{i} {tpot_apt_sources()[0][0]} {tpot_apt_sources()[0][1]}/main "
-                f"{tpot_apt('deb_arch', 'i386')} {p} {self.packages[p]['version']} [{self.packages[p]['size']}.2kB]\\n"
-""",
-    )
-    replace_once(
-        path,
-        """                f"Unpacking {p} (from .../archives/{p}_{self.packages[p]['version']}_i386.deb) ...\\n"
-""",
-        """                f"Unpacking {p} (from .../archives/{p}_{self.packages[p]['version']}_"
-                f"{tpot_apt('deb_arch', 'i386')}.deb) ...\\n"
-""",
+        """        # T-Pot: package names as apt takes them; an installed package of the persona is already
+        # the newest version, another one gets a version that fits the release
+        names = list(dict.fromkeys(re.sub("[^a-z0-9.+-]", "", x.lower()) for x in self.tpot_words[1:]))
+        known = tpot_apt_known()
+        for y in names:
+            if y and y not in known:
+                self.packages[y] = {"version": tpot_apt_version(y), "size": tpot_apt_size(y)}
+        totalsize: int = sum(self.packages[x]["size"] for x in self.packages)
+
+        self.write("Reading package lists... Done\\n")
+        self.write("Building dependency tree... Done\\n" if tpot_apt("apt_version", "") else "Building dependency tree\\n")
+        self.write("Reading state information... Done\\n")
+        for y in names:
+            if y in known:
+                self.write(f"{y} is already the newest version ({known[y]}).\\n")
+        if not self.packages:
+            self.write("0 upgraded, 0 newly installed, 0 to remove and 259 not upgraded.\\n")
+            self.exit()
+            return
+        self.write("The following NEW packages will be installed:\\n")
+        self.write(f"  {' '.join(self.packages)} \\n")
+        self.write(
+            f"0 upgraded, {len(self.packages)} newly installed, 0 to remove and 259 not upgraded.\\n"
+        )
+        self.write(f"Need to get {totalsize} kB of archives.\\n")
+        self.write(f"After this operation, {int(totalsize * 2.2)} kB of additional disk space will be used.\\n")
+        arch = tpot_apt("deb_arch", "i386")
+        url, suite = tpot_apt_sources()[0]
+        i = 1
+        for p in self.packages:
+            self.write(
+                f"Get:{i} {url} {suite}/main {arch} {p} {arch} {self.packages[p]['version']} "
+                f"[{self.packages[p]['size']} kB]\\n"
+            )
+            i += 1
+            yield self.sleep(1, 2)
+        self.write(f"Fetched {totalsize} kB in 1s ({totalsize} kB/s)\\n")
+        yield self.sleep(1, 2)
+        for number, p in enumerate(self.packages):
+            version = self.packages[p]["version"]
+            self.write(f"Selecting previously unselected package {p}.\\n")
+            if number == 0:
+                self.write("(Reading database ... 177887 files and directories currently installed.)\\n")
+            self.write(f"Preparing to unpack .../{p}_{version.replace(':', '%3a')}_{arch}.deb ...\\n")
+            self.write(f"Unpacking {p} ({version}) ...\\n")
+            yield self.sleep(1, 2)
+        for p in self.packages:
+            self.write(f"Setting up {p} ({self.packages[p]['version']}) ...\\n")
+            self.fs.mkfile(
+                f"/usr/bin/{p}",
+                self.user["uid"],
+                self.user["gid"],
+                random.randint(10000, 90000),
+                33188,
+            )
+            self.protocol.commands[f"/usr/bin/{p}"] = (
+                Command_faked_package_class_factory.getCommand(p)
+            )
+            yield self.sleep(2)
+        self.write(f"Processing triggers for man-db ({tpot_apt_version('man-db')}) ...\\n")
+        self.exit()""",
     )
 
 
@@ -1863,6 +2455,7 @@ def main():
     patch_ssh(cowrie_root)
     patch_netstat(cowrie_root)
     patch_service(cowrie_root)
+    patch_systemctl(cowrie_root)
     patch_free(cowrie_root)
     patch_grep(cowrie_root)
     patch_prompt(cowrie_root)

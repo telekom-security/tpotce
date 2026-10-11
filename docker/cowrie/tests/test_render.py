@@ -344,6 +344,48 @@ class ServerCommandTest(unittest.TestCase):
         self.assertFalse(cfg_of(out).has_option("shell", "sudo_version"))
 
 
+class ServerRuntimeTest(unittest.TestCase):
+    """systemctl, sudo -l and apt of a server read the runtime files of its persona."""
+
+    def test_runtime_files_and_keys(self):
+        for persona in catalog.PERSONAS:
+            ident, out, _ = render_one(self, persona, 2)
+            cfg, fs = cfg_of(out), fs_of(out)
+            server = persona.kind == "server"
+            debian = server and "dpkg" in persona.package_managers
+            for name, key, present in ((system.SYSTEMD_UNITS, "systemctl_units", server),
+                                       (system.SUDO_LIST, "sudo_list", server),
+                                       (system.APT_PACKAGES, "apt_packages", debian)):
+                self.assertEqual((out / name).is_file(), present, (persona.id, name))
+                self.assertEqual(cfg.get("shell", key, fallback=None), f"{out}/{name}" if present else None,
+                                 (persona.id, key))
+            self.assertEqual("systemctl" not in skipped(out), server, persona.id)
+            self.assertEqual(tree.find_node(fs, "usr/bin/systemctl") is not None, server, persona.id)
+            if not server:
+                continue
+            units = json.loads((out / system.SYSTEMD_UNITS).read_text())
+            pids = {p["PID"]: p["COMMAND"] for p in json.loads((out / "cmdoutput.json").read_text())["command"]["ps"]}
+            for unit in units["units"]:
+                if unit["sub"] == "running":
+                    self.assertEqual(pids[unit["pid"]], unit["command"], (persona.id, unit["name"]))
+                else:
+                    self.assertNotIn(unit["pid"], pids, (persona.id, unit["name"]))
+            rules = json.loads((out / system.SUDO_LIST).read_text())["rules"]
+            self.assertEqual(rules[persona.user][-1], "(ALL) NOPASSWD: ALL", persona.id)
+        _, out, _ = render_one(self, catalog.by_id("ubuntu-noble"), 1)
+        self.assertEqual(cfg_of(out).get("shell", "apt_fallback"), "ubuntu")
+        packages = json.loads((out / system.APT_PACKAGES).read_text())
+        self.assertEqual(packages["man-db"], "2.12.0-4build2")
+        self.assertNotIn("git", packages)
+        fs = fs_of(out)
+        self.assertIsNone(tree.find_node(fs, "etc/systemd/system/sshd.service"))
+        self.assertEqual(tree.node_get(tree.find_node(fs, "etc/systemd/system/sockets.target.wants/ssh.socket"),
+                                       tree.A_TARGET), "usr/lib/systemd/system/ssh.socket")
+        _, out, _ = render_one(self, catalog.by_id("debian-trixie"), 1)
+        self.assertEqual(cfg_of(out).get("shell", "apt_fallback"), "debian")
+        self.assertIsNotNone(tree.find_node(fs_of(out), "etc/systemd/system/sshd.service"))
+
+
 class RenderTest(unittest.TestCase):
     def test_cfg_names_the_prompt_style(self):
         for persona in catalog.PERSONAS:

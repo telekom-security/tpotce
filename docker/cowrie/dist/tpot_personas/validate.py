@@ -16,7 +16,7 @@ from . import PersonaError, system, tree
 from .common import VM_PROVIDERS, home_dir, is_login_shell, ps_start, ps_user
 from .identity import DAY, host_patterns, hostname_regex, kernel_time, stale_at, updated_at
 from .model import PROMPT_STYLES
-from .render import BUSYBOX_HELP, DIR_MODES, PACKAGE_MANAGER_PATHS
+from .render import BUSYBOX_HELP, DIR_MODES, PACKAGE_MANAGER_PATHS, runtime_json
 from .ssh_profiles import COMPRESSIONS, HOST_KEYS, PROFILES, TWISTED_CIPHERS, TWISTED_MACS
 
 MIN_PICKLE_SIZE = 1_000_000
@@ -400,7 +400,8 @@ def _check_forbidden(persona, out_dir, runtime_dir, keys_dir, fs, out):
     markers = FORBIDDEN_MARKERS + (UBUNTU_MARKERS if persona.os_id != "ubuntu" else ())
     markers = tuple(m.lower().encode() for m in markers)
     paths = [out_dir / "cmdoutput.json", out_dir / "cowrie.cfg", out_dir / BUSYBOX_HELP,
-             out_dir / system.SERVICE_STATUS]
+             out_dir / system.SERVICE_STATUS, out_dir / system.SYSTEMD_UNITS, out_dir / system.SUDO_LIST,
+             out_dir / system.APT_PACKAGES]
     for root in (out_dir / "honeyfs", out_dir / "txtcmds"):
         for path in sorted(root.rglob("*")):
             if any(m in path.name.lower().encode() for m in markers):
@@ -508,7 +509,7 @@ def _check_busybox(ident, cfg, out_dir, runtime_dir, fs, out):
 
 
 # the commands of Cowrie's Python whose program differs per system (which and the command agree)
-COMMANDS = ("perl", "git", "python", "python3", "sudo", "service", "apt", "apt-get", "yum")
+COMMANDS = ("perl", "git", "python", "python3", "sudo", "service", "systemctl", "apt", "apt-get", "yum")
 
 
 def _matches(fs, rel):
@@ -588,6 +589,23 @@ def _check_system(persona, ident, cfg, out_dir, runtime_dir, fs, out):
             out.append(f"cfg {key}: {cfg.get('shell', key, fallback=None)!r}, expected {value!r}")
     if persona.kind == "server" and _text(out_dir / system.SERVICE_STATUS) != system.service_status(persona):
         out.append("service: service-status.txt is not the persona's")
+    if persona.kind == "server":
+        try:
+            processes = json.loads(_text(out_dir / "cmdoutput.json"))["command"]["ps"]
+            expected = runtime_json(persona, ident, processes)
+        except (ValueError, KeyError, TypeError):
+            expected = {}
+        for name, data in expected.items():
+            try:
+                found = json.loads(_text(out_dir / name))
+            except ValueError:
+                found = None
+            if found != json.loads(json.dumps(data)):
+                out.append(f"runtime: {name} is not the persona's")
+        units = {u["name"]: u for u in expected.get(system.SYSTEMD_UNITS, {}).get("units", [])}
+        for name in ("ssh.service", "sshd.service"):
+            if name in units and tree.find_node(fs, units[name]["path"]) is None:
+                out.append(f"systemctl: {units[name]['path']} of {name} is not in fs.pickle")
 
 
 def problems(persona, ident, out_dir, runtime_dir, keys_dir, min_pickle=MIN_PICKLE_SIZE):

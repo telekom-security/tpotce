@@ -1,4 +1,5 @@
 import ast
+import json
 import random
 import re
 import shutil
@@ -11,7 +12,7 @@ import warnings
 from pathlib import Path
 
 from tests.helpers import DIST, base_tree, tmpdir
-from tpot_personas import tree
+from tpot_personas import catalog, system, tree
 
 FIXTURE = Path(__file__).parent / "fixtures" / "v3.1.1"
 PATCH = DIST / "patch_cowrie_persona_support.py"
@@ -300,9 +301,10 @@ class PatchTest(unittest.TestCase):
         self.assertEqual(executed, [("Command_wget", ("http://127.0.0.1:1/x",))])
         self.assertEqual(dispatched, [{"input": "wget http://127.0.0.1:1/x"}])
 
-    def test_busybox_names_an_unknown_applet(self):
+    def test_busybox_names_an_unknown_applet_on_stderr_with_127(self):
         command, _, executed = self.busybox(["ECCHI"])
-        self.assertEqual((bytes(command.out), executed), (b"ECCHI: applet not found\n", []))
+        self.assertEqual((bytes(command.out), command.err, command.code, executed),
+                         (b"", "ECCHI: applet not found\n", 127, []))
 
     def test_busybox_prints_the_help_of_the_persona(self):
         help_path = tmpdir(self) / "busybox-help.txt"
@@ -611,15 +613,48 @@ class PatchTest(unittest.TestCase):
         self.assertIn("Could not open lock file /var/lib/apt/lists/lock", apt.err)
 
     def test_apt_install_takes_no_option_as_a_package(self):
-        _, apt = self.twisted_command("apt", "Command_aptget", self.APT, ["install", "-y", "curl"])
+        _, apt = self.twisted_command("apt", "Command_aptget", self.APT, ["install", "-y", "nmap"])
         text = bytes(apt.out).decode()
-        self.assertIn("The following NEW packages will be installed:\n  curl \n", text)
-        self.assertIn("Get:1 http://archive.ubuntu.com/ubuntu noble/main amd64 curl ", text)
-        self.assertIn("_amd64.deb) ...", text)
+        self.assertIn("The following NEW packages will be installed:\n  nmap \n", text)
+        self.assertIn("Get:1 http://archive.ubuntu.com/ubuntu noble/main amd64 nmap amd64 ", text)
+        self.assertRegex(text, r"Preparing to unpack \.\.\./nmap_[^ ]+_amd64\.deb \.\.\.\n")
         self.assertNotIn("i386", text)
         self.assertNotIn("ftp.debian.org", text)
         _, apt = self.twisted_command("apt", "Command_aptget", self.APT, ["-y", "install", "wget"])
         self.assertIn("  wget \n", bytes(apt.out).decode())
+
+    def apt_with_packages(self, packages, fallback="ubuntu"):
+        path = tmpdir(self) / "apt-packages.json"
+        path.write_text(json.dumps(packages))
+        return {**self.APT, ("shell", "apt_packages"): str(path), ("shell", "apt_fallback"): fallback}
+
+    def test_apt_install_shows_the_versions_of_the_persona(self):
+        values = self.apt_with_packages({"curl": "8.5.0-2ubuntu10.6", "vim": "2:9.1.0016-1ubuntu7.9",
+                                         "man-db": "2.12.0-4build2"})
+        _, apt = self.twisted_command("apt", "Command_aptget", values, ["install", "-y", "curl"])
+        self.assertEqual(bytes(apt.out).decode(), "Reading package lists... Done\nBuilding dependency tree... Done\n"
+                         "Reading state information... Done\ncurl is already the newest version (8.5.0-2ubuntu10.6).\n"
+                         "0 upgraded, 0 newly installed, 0 to remove and 259 not upgraded.\n")
+        _, apt = self.twisted_command("apt", "Command_aptget", values, ["install", "curl", "netcat-openbsd"])
+        text = bytes(apt.out).decode()
+        self.assertIn("curl is already the newest version (8.5.0-2ubuntu10.6).\n", text)
+        self.assertIn("The following NEW packages will be installed:\n  netcat-openbsd \n", text)
+        self.assertIn("Processing triggers for man-db (2.12.0-4build2) ...\n", text)
+        self.assertTrue(text.index("Setting up netcat-openbsd") < text.index("Processing triggers"))
+
+    def test_apt_fallback_versions_fit_the_release_and_stay_the_same(self):
+        seen = {}
+        for fallback, pattern in (("ubuntu", r"^\d+\.\d+(\.\d+)?-\d(build|ubuntu)\d$"),
+                                  ("debian", r"^\d+\.\d+(\.\d+)?-\d(\+b1)?$")):
+            values = self.apt_with_packages({}, fallback)
+            namespace, _ = self.twisted_command("apt", "Command_aptget", values, ["-v"])
+            for name in ("nmap", "tmux", "masscan", "zmap", "socat", "hydra"):
+                version = namespace["tpot_apt_version"](name)
+                self.assertRegex(version, pattern, (fallback, name))
+                self.assertEqual(version, namespace["tpot_apt_version"](name))
+                seen.setdefault(name, set()).add(version)
+                self.assertTrue(40 <= namespace["tpot_apt_size"](name) < 940)
+        self.assertNotIn("1.34-1", {v for versions in seen.values() for v in versions})
 
     YUM = {("shell", "yum_plugins"): "fastestmirror"}
 
@@ -656,6 +691,196 @@ class PatchTest(unittest.TestCase):
         sudo.version()
         self.assertNotIn("audit", bytes(sudo.out).decode())
 
+    def sudo(self, args, user="ubuntu", uid=1000, rules=None, commands=("ls",)):
+        path = tmpdir(self) / "sudo-list.json"
+        path.write_text(json.dumps(rules if rules is not None else system.sudo_list(catalog.by_id("ubuntu-noble"))))
+        _, sudo = self.command("sudo", "Command_sudo", {("shell", "sudo_list"): str(path)}, args)
+        sudo.user = {"username": user, "uid": uid, "gid": uid}
+        sudo.environ = {"PATH": ":".join(PATH)}
+        sudo.fs = TreeFs(base_tree())
+        sudo.protocol.hostname = "ip-172-31-5-9.eu-central-1.compute.internal"
+        sudo.protocol.getCommand = lambda cmd, paths, cwd: cmd if cmd in commands else None
+        sudo.start()
+        return bytes(sudo.out).decode(), sudo.err, sudo.code
+
+    def test_sudo_l_lists_the_rules_of_the_persona(self):
+        expected = ("Matching Defaults entries for ubuntu on ip-172-31-5-9:\n"
+                    "    env_reset, mail_badpass,\n"
+                    "    secure_path=/usr/local/sbin\\:/usr/local/bin\\:/usr/sbin\\:/usr/bin\\:/sbin\\:/bin\\:/snap/bin,\n"
+                    "    use_pty\n\n"
+                    "User ubuntu may run the following commands on ip-172-31-5-9:\n"
+                    "    (ALL : ALL) ALL\n    (ALL) NOPASSWD: ALL\n")
+        for args in (["-l"], ["-ll"], ["--list"], ["-nl"]):
+            self.assertEqual(self.sudo(args), (expected, "", None), args)
+        out, _, _ = self.sudo(["-l"], user="root", uid=0)
+        self.assertTrue(out.endswith("User root may run the following commands on ip-172-31-5-9:\n"
+                                     "    (ALL : ALL) ALL\n"), out)
+        self.assertEqual(self.sudo(["-l"], user="guest", uid=1001),
+                         ("", "Sorry, user guest may not run sudo on ip-172-31-5-9.\n", 1))
+        self.assertEqual(self.sudo(["-l", "ls", "-la"]), ("/usr/bin/ls -la\n", "", None))
+        out, _, _ = self.sudo(["-l"], user="cloud-user", rules=system.sudo_list(catalog.by_id("rhel-9")))
+        self.assertIn("    !visiblepw, always_set_home, match_group_by_gid, always_query_group_plugin,\n", out)
+        self.assertIn("    secure_path=/usr/local/sbin\\:/usr/local/bin\\:/usr/sbin\\:/usr/bin\n", out)
+        self.assertTrue(out.endswith("    (ALL) ALL\n    (ALL) NOPASSWD: ALL\n"), out)
+        self.assertTrue(all(len(line) <= 80 or "," not in line[:-1] for line in out.splitlines()), out)
+
+    def test_sudo_without_l_keeps_its_options(self):
+        _, err, _ = self.sudo(["-x"])
+        self.assertIn("sudo: illegal option -- x", err)
+        _, err, _ = self.sudo(["-V"])
+        self.assertEqual(err, "")
+
+    def systemctl(self, pid, args, uid=1000, seed=1, sudo=False, now_after_boot=3 * 86400 + 4 * 3600):
+        from tpot_personas.identity import draw
+        from tpot_personas.render import render
+        persona = catalog.by_id(pid)
+        out = tmpdir(self) / pid
+        ident = draw(persona, seed)
+        render(persona, ident, base_tree(), out, runtime_dir=out, keys_dir=out / "keys")
+        source = (self.patched() / "src/cowrie/commands/service.py").read_text()
+        namespace = module_all(source, {"HoneyPotCommand": FakeCommand, "CowrieConfig": FakeConfig(
+            {("shell", "systemctl_units"): str(out / "systemd-units.json")})})
+        cmd = FakeCommand(args)
+        cmd.user = {"uid": uid, "gid": uid}
+        boot = time.time() - now_after_boot
+        cmd.protocol.boot_time = lambda: boot
+        cmd.protocol.hostname = ident.hostname
+        cmd.protocol.cmdstack = [type("Command_sudo", (), {})()] if sudo else []
+        code = namespace["tpot_systemctl"](cmd, list(args))
+        return bytes(cmd.out).decode(), cmd.err, code, namespace, ident
+
+    def test_systemctl_status_of_a_unit_of_the_persona(self):
+        out, err, code, _, ident = self.systemctl("debian-bookworm", ["status", "sshd"])
+        self.assertEqual((err, code), ("", 0))
+        lines = out.splitlines()
+        self.assertEqual(lines[0], "\u25cf ssh.service - OpenBSD Secure Shell server")
+        self.assertEqual(lines[1], "     Loaded: loaded (/lib/systemd/system/ssh.service; enabled; preset: enabled)")
+        self.assertRegex(lines[2], r"^     Active: active \(running\) since \w{3} \d{4}-\d\d-\d\d \d\d:\d\d:\d\d UTC; "
+                                   r"3 days ago$")
+        self.assertRegex(lines[3], r"^   Main PID: \d+ \(sshd\)$")
+        self.assertRegex(lines[4], r"^      Tasks: 1 \(limit: \d+\)$")
+        self.assertRegex(lines[5], r"^     Memory: \d+(\.\d)?M$")
+        self.assertRegex(lines[6], r"^        CPU: \d")
+        self.assertEqual(lines[7], "     CGroup: /system.slice/ssh.service")
+        self.assertRegex(lines[8], r'^             \u2514\u2500\d+ "sshd: /usr/sbin/sshd -D \[listener\] 0 of 10-100 startups"$')
+        self.assertIn(f" {ident.hostname.split('.')[0]} systemd[1]: Starting ssh.service - OpenBSD Secure Shell server...", out)
+        self.assertRegex(out, r"sshd\[\d+\]: Server listening on 0\.0\.0\.0 port 22\.\n")
+        self.assertTrue(out.endswith("systemd[1]: Started ssh.service - OpenBSD Secure Shell server.\n"))
+
+    def test_systemctl_status_follows_the_systemd_of_the_release(self):
+        out, _, code, _, _ = self.systemctl("centos-7", ["status", "sshd.service"], now_after_boot=9 * 86400 + 3600)
+        lines = out.splitlines()
+        self.assertEqual(code, 0)
+        self.assertEqual(lines[1], "   Loaded: loaded (/usr/lib/systemd/system/sshd.service; enabled; vendor preset: enabled)")
+        self.assertTrue(lines[2].endswith("; 1 weeks 2 days ago"), lines[2])
+        self.assertFalse(any(line.lstrip().startswith(("Tasks:", "Memory:", "CPU:")) for line in lines))
+        self.assertRegex(out, r"\n           \u2514\u2500\d+ /usr/sbin/sshd -D\n")
+        self.assertIn("systemd[1]: Starting OpenSSH server daemon...", out)
+        out, _, _, _, _ = self.systemctl("ubuntu-noble", ["status", "ssh"])
+        self.assertIn("; disabled; preset: enabled)", out)
+        self.assertIn("TriggeredBy: \u25cf ssh.socket\n", out)
+        self.assertRegex(out, r"Memory: [\d.]+M \(peak: [\d.]+M\)\n")
+        out, err, code, _, _ = self.systemctl("ubuntu-noble", ["status", "sshd"])
+        self.assertEqual((out, err, code), ("", "Unit sshd.service could not be found.\n", 4))
+        out, _, _, _, _ = self.systemctl("ubuntu-jammy", ["status", "systemd-journald"])
+        self.assertIn("(/lib/systemd/system/systemd-journald.service; static)", out)
+        self.assertIn("Main PID: ", out)
+        out, _, _, _, _ = self.systemctl("rhel-9", ["status", "kdump"])
+        self.assertIn("Active: active (exited) since ", out)
+        self.assertRegex(out, r"Main PID: \d+ \(code=exited, status=0/SUCCESS\)")
+        self.assertIn("systemd[1]: Finished kdump.service - Crash recovery kernel arming.", out)
+
+    def test_systemctl_is_active_and_is_enabled(self):
+        self.assertEqual(self.systemctl("rhel-9", ["is-active", "sshd", "crond"])[:3], ("active\nactive\n", "", 0))
+        self.assertEqual(self.systemctl("rhel-9", ["is-active", "cron"])[:3], ("inactive\n", "", 3))
+        self.assertEqual(self.systemctl("ubuntu-noble", ["is-active", "--quiet", "cron"])[:3], ("", "", 0))
+        self.assertEqual(self.systemctl("ubuntu-noble", ["is-enabled", "cron", "systemd-journald"])[:3],
+                         ("enabled\nstatic\n", "", 0))
+        self.assertEqual(self.systemctl("ubuntu-noble", ["is-enabled", "nosuch"])[1:3],
+                         ("Failed to get unit file state for nosuch.service: No such file or directory\n", 1))
+        self.assertEqual(self.systemctl("ubuntu-noble", ["is-active"])[1:3], ("Too few arguments.\n", 1))
+
+    def test_systemctl_list_units(self):
+        out, _, code, namespace, _ = self.systemctl("ubuntu-jammy", ["list-units", "--type=service", "--no-pager"])
+        lines = out.splitlines()
+        self.assertEqual(code, 0)
+        self.assertRegex(lines[0], r"^  UNIT +LOAD   ACTIVE SUB     DESCRIPTION$")
+        rows = [line for line in lines[1:] if line.startswith("  ") and ".service" in line]
+        names = [row.split()[0] for row in rows]
+        self.assertEqual(names, sorted(names, key=str.lower))
+        self.assertIn("ssh.service", names)
+        self.assertTrue(all(re.match(r"^  \S+ +loaded active (running|exited ) \S", row) for row in rows), rows)
+        self.assertIn("\nLOAD   = Reflects whether the unit definition was properly loaded.\n", out)
+        self.assertIn(f"\n{len(rows)} loaded units listed. Pass --all to see loaded but inactive units, too.\n", out)
+        out, _, _, _, _ = self.systemctl("ubuntu-noble", ["list-units", "-t", "service", "--all"])
+        self.assertIn("\nLegend: LOAD   \u2192 Reflects whether the unit definition was properly loaded.\n", out)
+        self.assertIn(" loaded units listed.\nTo show all installed unit files", out)
+        out, _, _, _, _ = self.systemctl("ubuntu-noble", ["--no-legend"])
+        self.assertTrue(out.startswith("  apparmor.service "), out[:40])
+        self.assertNotIn("Legend", out)
+        out, _, _, _, _ = self.systemctl("ubuntu-noble", ["list-units", "--type=socket"])
+        self.assertEqual(out, "0 loaded units listed.\n")
+        out, _, _, _, _ = self.systemctl("rhel-9", ["list-unit-files"])
+        self.assertRegex(out, r"^UNIT FILE +STATE +PRESET\n")
+        self.assertRegex(out, r"\nsshd.service +enabled +enabled\n")
+        self.assertRegex(out, r"\n\d+ unit files listed.\n$")
+
+    def test_systemctl_overview_version_and_errors(self):
+        out, _, _, _, ident = self.systemctl("rhel-9", ["status"])
+        self.assertTrue(out.startswith(f"\u25cf {ident.hostname.split('.')[0]}\n      State: running\n"), out[:80])
+        self.assertIn("           \u251c\u2500init.scope\n", out)
+        self.assertRegex(out, r"\u2514\u2500\d+ \"sshd: /usr/sbin/sshd -D \[listener\] 0 of 10-100 startups\"\n")
+        out, _, _, _, _ = self.systemctl("rhel-9", ["--version"])
+        self.assertTrue(out.startswith("systemd 252 (252-"), out)
+        out, _, _, _, _ = self.systemctl("centos-7", ["--version"])
+        self.assertTrue(out.startswith("systemd 219\n+PAM"), out)
+        self.assertEqual(self.systemctl("rhel-9", ["frobnicate"])[1:3], ("Unknown command verb frobnicate.\n", 1))
+        self.assertEqual(self.systemctl("centos-7", ["frobnicate"])[1:3], ("Unknown operation 'frobnicate'.\n", 1))
+        self.assertEqual(self.systemctl("rhel-9", ["--bogus"])[1:3], ("systemctl: unrecognized option '--bogus'\n", 1))
+
+    def test_systemctl_changes_only_as_root(self):
+        _, err, code, _, _ = self.systemctl("ubuntu-noble", ["restart", "ssh"])
+        self.assertEqual((err, code), ("Failed to restart ssh.service: Interactive authentication required.\n"
+                                       "See system logs and 'systemctl status ssh.service' for details.\n", 1))
+        self.assertEqual(self.systemctl("ubuntu-noble", ["restart", "ssh"], uid=0)[1:3], ("", 0))
+        self.assertEqual(self.systemctl("ubuntu-noble", ["stop", "cron"], sudo=True)[1:3], ("", 0))
+        self.assertEqual(self.systemctl("ubuntu-noble", ["start", "nosuch"], uid=0)[1:3],
+                         ("Failed to start nosuch.service: Unit nosuch.service not found.\n", 5))
+        self.assertEqual(self.systemctl("ubuntu-noble", ["daemon-reload"], uid=0)[1:3], ("", 0))
+
+    def test_systemctl_time_and_size_formats(self):
+        _, _, _, namespace, _ = self.systemctl("rhel-9", ["is-active", "sshd"])
+        ago, size, span = namespace["tpot_ago"], namespace["tpot_bytes"], namespace["tpot_timespan"]
+        self.assertEqual([ago(n, 255) for n in (30, 90, 600, 7200 + 300, 7 * 3600, 26 * 3600, 3 * 86400,
+                                                8 * 86400, 40 * 86400, 400 * 86400)],
+                         ["30s ago", "1min 30s ago", "10min ago", "2h 5min ago", "7h ago", "1 day 2h ago",
+                          "3 days ago", "1 week 1 day ago", "1 month 9 days ago", "1 year 1 month ago"])
+        self.assertEqual(ago(8 * 86400, 219), "1 weeks 1 days ago")
+        self.assertEqual([size(n) for n in (740 * 1024, 5099520, 3 << 30)], ["740K", "4.8M", "3G"])
+        self.assertEqual([span(n) for n in (54, 1204, 2000, 123500, 3723000)],
+                         ["54ms", "1.204s", "2s", "2min 3.5s", "1h 2min 3s"])
+
+    def test_service_status_is_systemctl_status(self):
+        from tpot_personas.identity import draw
+        from tpot_personas.render import render
+        for pid, redirect in (("rhel-9", True), ("debian-trixie", False)):
+            persona = catalog.by_id(pid)
+            out = tmpdir(self) / pid
+            ident = draw(persona, 1)
+            render(persona, ident, base_tree(), out, runtime_dir=out, keys_dir=out / "keys")
+            source = (self.patched() / "src/cowrie/commands/service.py").read_text()
+            namespace = module_all(source, {"HoneyPotCommand": FakeCommand, "CowrieConfig": FakeConfig(
+                {("shell", "systemctl_units"): str(out / "systemd-units.json")})})
+            service = namespace["Command_service"](["sshd" if redirect else "ssh", "status"])
+            service.user, service.exit_code = {"uid": 1000}, 0
+            service.protocol.boot_time = lambda: time.time() - 3600
+            service.protocol.hostname = ident.hostname
+            service.call()
+            self.assertIn("Active: active (running)", bytes(service.out).decode())
+            self.assertEqual(service.err, "Redirecting to /bin/systemctl status sshd.service\n" if redirect else "")
+            self.assertIs(namespace["commands"]["systemctl"], namespace["Command_systemctl"])
+            self.assertIs(namespace["commands"]["/usr/bin/systemctl"], namespace["Command_systemctl"])
+
     def test_service_status_all_of_the_persona(self):
         path = tmpdir(self) / "service-status.txt"
         path.write_text(" [ + ]  cron\n [ - ]  hwclock.sh\n")
@@ -666,6 +891,22 @@ class PatchTest(unittest.TestCase):
         service.status_all()
         self.assertIn(b" [ + ]  ssh\n", bytes(service.out))
         self.assertNotIn(b"lightdm", bytes(service.out))
+
+    def which(self, args):
+        _, which = self.command("which", "Command_which", {}, args)
+        which.environ, which.fs, which.exit_code = {"PATH": ":".join(PATH)}, TreeFs(base_tree()), 0
+        which.call()
+        return bytes(which.out).decode(), which.exit_code
+
+    def test_which_a_prints_every_match(self):
+        # bin -> usr/bin: /usr/bin/perl and /bin/perl are two names on PATH
+        self.assertEqual(self.which(["-a", "perl"]), ("/usr/bin/perl\n/bin/perl\n", 0))
+        self.assertEqual(self.which(["-a", "perl", "nothere"]), ("/usr/bin/perl\n/bin/perl\n", 1))
+        self.assertEqual(self.which(["-s", "perl"]), ("", 0))
+        self.assertEqual(self.which(["-as", "nothere"]), ("", 1))
+        self.assertEqual(self.which(["/usr/bin/perl"]), ("/usr/bin/perl\n", 0))
+        self.assertEqual(self.which(["--", "perl"]), ("/usr/bin/perl\n", 0))
+        self.assertEqual(self.which(["-a"]), ("", 1))
 
     def test_which_prints_the_first_match_and_fails_for_a_missing_name(self):
         _, which = self.command("which", "Command_which", {}, ["python3", "nothere", "perl"])
@@ -1261,7 +1502,26 @@ class PatchTest(unittest.TestCase):
                  ("src/cowrie/commands/perl.py", '                self.args, "acfhnpsStTuUvwWXC:D:e:E:F:i:I:l:m:M:V:X:"\n',
                   '                self.args, "acfhnpsStTuUvwWXC:D:e:E:F:i:I:l:m:M:V:"\n'),
                  ("src/cowrie/commands/git.py", 'self.write("git version 2.34.1\\n")',
-                  'self.write("git version 2.43.0\\n")'))
+                  'self.write("git version 2.43.0\\n")'),
+                 ("src/cowrie/commands/busybox.py", 'self.write(f"{cmd}: applet not found\\n")',
+                  'self.errorWrite(f"{cmd}: applet not found\\n")'),
+                 ("src/cowrie/commands/which.py", "                if self.fs.exists(resolved):\n",
+                  "                if self.fs.isfile(resolved):\n"),
+                 ("src/cowrie/commands/sudo.py", "import getopt\n", "import getopt as options\n"),
+                 ("src/cowrie/commands/sudo.py", 'self.args[0:start_value], "bEeHhKknPSVva:C:g:i:l:p:r:s:t:U:u:"',
+                  'self.args[0:start_value], "bEeHhKknPSVva:C:g:i:l:p:r:s:t:U:u:R:"'),
+                 ("src/cowrie/commands/sudo.py", "    def start(self) -> None:\n        start_value = None\n",
+                  "    def start(self) -> None:\n        start_value: int | None = None\n"),
+                 ("src/cowrie/commands/apt.py", "import random\n", "import random as rnd\n"),
+                 ("src/cowrie/commands/apt.py", "from typing import TYPE_CHECKING, Any\n",
+                  "from typing import Any, TYPE_CHECKING\n"),
+                 ("src/cowrie/commands/apt.py", 'self.write("Processing triggers for man-db ...\\n")',
+                  'self.write("Processing triggers for man-db...\\n")'),
+                 ("src/cowrie/commands/service.py", "import getopt\n", "import getopt as options\n"),
+                 ("src/cowrie/commands/service.py", 'self.args, "h", ["help", "status-all", "full-restart"]',
+                  'self.args, "hv", ["help", "status-all", "full-restart"]'),
+                 ("src/cowrie/commands/service.py", 'commands["service"] = Command_service\n',
+                  'commands["service"] = Command_service  # service\n'))
         for rel, old, new in cases:
             with self.subTest(rel=rel, needle=old):
                 root = tmpdir(self) / "cowrie"
