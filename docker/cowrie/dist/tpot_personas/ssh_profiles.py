@@ -21,7 +21,11 @@ class SshProfile:
 
 
 PROFILES = {
-    # OpenSSH >= 7.4 server defaults minus chacha20/gcm/etm/umac (Twisted has none of them)
+    # OpenSSH >= 7.4 server defaults minus chacha20/gcm/etm/umac (Twisted has none of them). Host keys in
+    #   the order sshd offers them: the order of its HostKey files (servconf.c defaults and the sshd_config
+    #   of Debian, Ubuntu, RHEL: rsa, ecdsa, ed25519), not the client preference of HostKeyAlgorithms;
+    #   ssh -vv against OpenSSH 9.6p1 (Ubuntu 24.04) and 9.2p1 (Debian 12): rsa-sha2-512,rsa-sha2-256,
+    #   ecdsa-sha2-nistp256,ssh-ed25519 (Twisted offers ssh-rsa for the RSA key)
     "openssh": SshProfile("openssh", ("aes128-ctr", "aes192-ctr", "aes256-ctr"),
                           ("hmac-sha2-256", "hmac-sha2-512", "hmac-sha1"),
                           ("none", "zlib@openssh.com"),

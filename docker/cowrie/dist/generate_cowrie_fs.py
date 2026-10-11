@@ -21,7 +21,7 @@ from tpot_personas.validate import validate  # noqa: E402
 def metadata(persona):
     return {"id": persona.id, "family": persona.family, "kind": persona.kind, "user": persona.user,
             "arch": persona.arch, "ssh_banners": sorted({r.ssh_banner for r in persona.releases}),
-            "package_managers": sorted(persona.package_managers), "vulnerability": persona.vulnerability}
+            "package_managers": sorted(persona.package_managers), "summary": persona.summary}
 
 
 def main(argv=None):

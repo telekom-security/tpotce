@@ -114,7 +114,7 @@ def _firmware(label, released, superseded, banner, ssh_version, kernel, uts, bui
 
 
 def _device(pid, family, os_id, user, shell, arch, ssh_profile, managers, releases, hardware, hostnames, builder,
-            vulnerability, uid=1000, remove_paths=(), max_install_days=900):
+            summary, uid=1000, remove_paths=(), max_install_days=900):
     # uname -o / -a: BusyBox prints "GNU/Linux" (coreutils/uname.c 1.14.1 and 1.19.2 hard-code it, 1.35.0
     #   takes CONFIG_UNAME_OSNAME, default "GNU/Linux"), as coreutils does on the Debian-based EdgeOS
     operating_system = "GNU/Linux"
@@ -124,7 +124,7 @@ def _device(pid, family, os_id, user, shell, arch, ssh_profile, managers, releas
         arch=arch[0], hardware_platform=arch[1], operating_system=operating_system,
         ssh_profile=ssh_profile, package_managers=managers,
         releases=releases, hardware=hardware, hostnames=hostnames,
-        builder=builder, vulnerability=vulnerability, remove_paths=remove_paths,
+        builder=builder, summary=summary, remove_paths=remove_paths,
         max_install_days=max_install_days,
     )
 
@@ -375,19 +375,19 @@ TRIXIE = _chain(_medium(_TRIXIE_LEVELS[0]), _medium(_TRIXIE_LEVELS[1]), *_TRIXIE
 
 # --- Debian 12 ------------------------------------------------------------------------
 # openssh: https://metadata.ftp-master.debian.org/changelogs/main/o/openssh/oldstable_changelog
-#   regreSSHion (CVE-2024-6387) fixed in 1:9.2p1-2+deb12u3, https://security-tracker.debian.org/tracker/CVE-2024-6387
+#   1:9.2p1-2+deb12u3 of 2024-07-01, https://tracker.debian.org/pkg/openssh
 # kernel: https://metadata.ftp-master.debian.org/changelogs/main/l/linux/oldstable_changelog ("Bump ABI to N");
 #   6.1.0-47 / -50 from https://deb.debian.org/debian/pool/main/l/linux-signed-amd64/
 # point releases: https://metadata.ftp-master.debian.org/changelogs/main/b/base-files/oldstable_changelog
 # OpenSSL dates: VERSION.dat of the openssl-3.0.x tags on github.com/openssl/openssl
 _BOOKWORM_LEVELS = (
-    # 12.2, before the regreSSHion fix
+    # 12.2, installation image
     _debian("2023-10-10", "bookworm", "12.2", "9.2p1", "1:9.2p1-2+deb12u1", "1:9.2p1-2",
             "6.1.0-13-amd64", "6.1.55-1", "2023-09-29",
             _BOOKWORM_GCC, "OpenSSL 3.0.11 19 Sep 2023",
             {**_BOOKWORM_PKGS, "curl": "7.88.1-10+deb12u4", "git": "1:2.39.2-1.1", "vim": "2:9.0.1378-2",
              "sudo": "1.9.13p3-1+deb12u1"}),
-    # 12.5, before the regreSSHion fix
+    # 12.5, installation image
     _debian("2024-02-12", "bookworm", "12.5", "9.2p1", "1:9.2p1-2+deb12u2", "1:9.2p1-2+deb12u1",
             "6.1.0-18-amd64", "6.1.76-1", "2024-02-01",
             _BOOKWORM_GCC, "OpenSSL 3.0.11 19 Sep 2023",
@@ -412,9 +412,9 @@ _BOOKWORM_LEVELS = (
             {**_BOOKWORM_PKGS, "dpkg": "1.21.23", "curl": "7.88.1-10+deb12u15", "git": "1:2.39.5-0+deb12u3",
              "vim": "2:9.0.1378-2+deb12u2", "sudo": "1.9.13p3-1+deb12u4"}),
 )
-# 12.2 and 12.5 are the versions of their installation images: the regreSSHion bait stays installable
+# 12.2 and 12.5 are the versions of their installation images: the older OpenSSH patch levels stay installable
 # stale: the next kernel of bookworm(-security), as for trixie: 6.1.66-1 with 12.4 2023-12-10,
-#   6.1.85-1 2024-04-12 (before openssh deb12u3 fixed regreSSHion on 2024-07-01), 6.1.140-1 2025-05-23,
+#   6.1.85-1 2024-04-12 (before openssh 1:9.2p1-2+deb12u3 of 2024-07-01), 6.1.140-1 2025-05-23,
 #   6.1.172-1 2026-05-16; unknown after 6.1.176-1 (90 days)
 BOOKWORM = _chain(_medium(_BOOKWORM_LEVELS[0]), _medium(_BOOKWORM_LEVELS[1]), *_BOOKWORM_LEVELS[2:],
                   stale=("2023-12-10", "2024-04-12", "2025-05-23", "2026-05-16", None))
@@ -554,7 +554,10 @@ GPU_RELEASES = (
 # Each release is one firmware image of the vendor (its download or release-note
 # page above it); kernel, BusyBox and SSH server as in that image unless marked
 # unverified. A device runs the image it was set up with until the next one came out.
+# Cowrie's [shell] arch picks the ELF header `cat` / `dd` show for a program: MT7628 / MT7621 run
+#   little endian (OpenWrt mipsel_24kc), the QCA956x of the DIR-859 big endian (ath79, mips_24kc)
 MIPS = ("linux-mips-lsb", "mips")
+MIPS_BE = ("linux-mips-msb", "mips")
 # the paths of Cowrie's Debian tree that a router, camera or NAS firmware does not have
 VENDOR_ONLY = ("etc/os-release", "etc/debian_version", "etc/issue", "etc/issue.net", "etc/motd")
 
@@ -678,18 +681,19 @@ QNAP_HARDWARE = (
 
 
 def _qts(version, number, build, released, superseded, uts, openssh, openssl):
-    # unverified: uname -v (built the night of the build date), builder and compiler of the QNAP kernel,
-    #   the OpenSSH / OpenSSL of each build
+    # unverified: uname -v (built the night of the build date), builder and compiler of the QNAP kernel
+    #   (gcc 8.4.0, binutils assumed), the OpenSSH / OpenSSL of each build; a 5.10 kernel names the
+    #   compiler as `cc --version` and the linker (the format of Linux 5.8 and later)
     return _firmware(f"{version}.{number}", released, superseded, f"SSH-2.0-OpenSSH_{openssh.split('p')[0]}",
                      f"OpenSSH_{openssh}, {openssl}", "5.10.60-qnap", uts, "root@U16BuildServer141",
-                     "gcc version 8.4.0 (GCC) ", f"{version}.{number} build {build}", version, build=build,
-                     number=number)
+                     "gcc (GCC) 8.4.0, GNU ld (GNU Binutils) 2.32", f"{version}.{number} build {build}", version,
+                     build=build, number=number)
 
 
 # QTS 5.2 builds of the release notes; superseded by the next build of the notes
 QNAP = (
     # source: https://www.qnap.com/en/release-notes/qts (QTS 5.2.3.3006 build 20250108, 2025-01-10)
-    _qts("5.2.3", "3006", "20250108", "2025-01-10", "2025-03-17", "#1 SMP Wed Jan 8 02:31:17 CST 2025", "9.8p1",
+    _qts("5.2.3", "3006", "20250108", "2025-01-10", "2025-03-17", "#1 SMP Wed Jan  8 02:31:17 CST 2025", "9.8p1",
          "OpenSSL 3.0.15 3 Sep 2024"),
     # source: https://www.qnap.com/en/release-notes/qts (QTS 5.2.6.3229 build 20250818, 2025-08-21)
     _qts("5.2.6", "3229", "20250818", "2025-08-21", "2025-09-25", "#1 SMP Mon Aug 18 02:27:40 CST 2025", "9.9p2",
@@ -728,7 +732,7 @@ SYNOLOGY = (
     _dsm("7.2.2", "72806", "3", "2025-02-04", "2025-07-24", "#72806 SMP Tue Jan 21 15:40:31 CST 2025",
          "2025/01/21", "OpenSSL 3.0.15 3 Sep 2024"),
     # source: https://www.synology.com/en-global/releaseNote/DSM?model=DS920%2B (7.2.2-72806 Update 4, 2025-07-24)
-    _dsm("7.2.2", "72806", "4", "2025-07-24", "2025-10-08", "#72806 SMP Tue Jul 8 16:05:22 CST 2025",
+    _dsm("7.2.2", "72806", "4", "2025-07-24", "2025-10-08", "#72806 SMP Tue Jul  8 16:05:22 CST 2025",
          "2025/07/08", "OpenSSL 3.0.16 11 Feb 2025"),
 )
 
@@ -773,7 +777,7 @@ _IPCAM_GCC = "gcc version 4.9.4 20150629 (prerelease) (Hisilicon_v500_20170922) 
 IPCAM = (
     # source: https://www.hikvision.com/en/support/download/firmware/ (firmware of the DS-2CD2x43G0 series)
     _firmware("V5.5.82_190909", "2019-10-15", "2021-03-01", "SSH-2.0-dropbear_2015.71", "Dropbear sshd 2015.71",
-              "3.18.20", "#1 SMP Mon Sep 9 17:05:12 CST 2019", "root@localhost.localdomain", _IPCAM_GCC,
+              "3.18.20", "#1 SMP Mon Sep  9 17:05:12 CST 2019", "root@localhost.localdomain", _IPCAM_GCC,
               "V5.5.82", "5.5", firmware_version="V5.5.82 build 190909",
               busybox="BusyBox v1.19.4 (2019-09-09 17:21:46 CST)"),
     # source: https://www.hikvision.com/en/support/download/firmware/ (firmware of the DS-2CD2x43G2 series)
@@ -784,15 +788,16 @@ IPCAM = (
 )
 
 
-def _server(pid, family, os_id, user, releases, hardware, hostnames, builder, vulnerability, managers=APT,
-            arch=("linux-x64-lsb", "x86_64"), tokens=(), max_install_days=900):
+def _server(pid, family, os_id, user, releases, hardware, hostnames, builder, summary, managers=APT,
+            arch=("linux-x64-lsb", "x86_64"), tokens=(), max_install_days=900, prompt_style="debian"):
     return Persona(
         id=pid, family=family, kind="server", os_id=os_id,
         user=user, uid=1000, gid=1000, shell="/bin/bash",
         arch=arch[0], hardware_platform=arch[1], operating_system="GNU/Linux",
         ssh_profile="openssh", package_managers=managers,
         releases=releases, hardware=hardware, hostnames=hostnames,
-        builder=builder, vulnerability=vulnerability, tokens=tokens, max_install_days=max_install_days,
+        builder=builder, summary=summary, tokens=tokens, max_install_days=max_install_days,
+        prompt_style=prompt_style,
     )
 
 
@@ -809,14 +814,15 @@ PERSONAS = (
             build_debian, "Debian 13 server, OpenSSH 10.0p2"),
     _server("debian-bookworm", "debian", "debian", "debian", BOOKWORM, (KVM_1, KVM_2, KVM_4),
             ("db12-{word}{nn}", "{word}-prod-{nn}"),
-            build_debian, "Debian 12 OpenSSH 9.2p1 before the regreSSHion fix (CVE-2024-6387)"),
+            build_debian, "Debian 12 server, OpenSSH 9.2p1 at older and current patch levels"),
     _server("rhel-9", "rhel", "rhel", "cloud-user", RHEL9, (KVM_2, KVM_4, KVM_8),
             ("rhel9-{word}{nn}", "{word}{nn}.corp.local"),
-            build_rhel, "RHEL 9 cloud image, OpenSSH 8.7p1", managers=DNF),
+            build_rhel, "RHEL 9 cloud image, OpenSSH 8.7p1", managers=DNF, prompt_style="redhat"),
     _server("centos-7", "centos", "centos", "centos", CENTOS7, (KVM_1, KVM_2, KVM_4),
             ("localhost.localdomain", "cent7-{word}{nn}", "{word}{nn}"),
             # an EOL box forgotten for years: installed up to ten years ago
-            build_centos, "EOL CentOS 7, OpenSSH 7.4", managers=YUM, max_install_days=3650),
+            build_centos, "EOL CentOS 7, OpenSSH 7.4", managers=YUM, max_install_days=3650,
+            prompt_style="redhat"),
     _server("raspios", "raspios", "debian", "pi", RASPIOS, PI_HARDWARE,
             ("raspberrypi", "pi{nn}", "pihole"),
             build_raspios, "Raspberry Pi with the default user pi", arch=("linux-aarch64-lsb", "aarch64")),
@@ -825,7 +831,7 @@ PERSONAS = (
             ("dgx:dgx{nn}", "dgx:a100-worker-{nn}", "gpu-node-{nn}", "gpu:ml-{hex6}", "gpu:{gpu}-worker-{nn}"),
             build_gpu_ubuntu, "GPU server with NVIDIA driver, Ollama and Jupyter",
             tokens=(("hf", "hf"), ("openai", "openai"))),
-    _device("dlink-dir859", "dlink", "dlink", "admin", "/bin/sh", MIPS, "dropbear", (), DLINK, DLINK_HARDWARE,
+    _device("dlink-dir859", "dlink", "dlink", "admin", "/bin/sh", MIPS_BE, "dropbear", (), DLINK, DLINK_HARDWARE,
             ("dlinkrouter", "DIR-859"), build_dlink, "D-Link DIR-859 router, discontinued, old firmware",
             remove_paths=VENDOR_ONLY, max_install_days=3650),
     _device("tplink-wr841n", "tplink", "tplink", "admin", "/bin/sh", MIPS, "dropbear", (), TPLINK, TPLINK_HARDWARE,

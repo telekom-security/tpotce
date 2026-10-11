@@ -4,7 +4,7 @@
 #   Python in tpot:    tpotctl/tests/test_envschema.py
 # Every case starts from env.example plus `base`, then applies `set`. services are
 # the services of the compose file. errors / warnings list the keys that must have
-# one, nothing else may.
+# one, nothing else may; messages are texts one of the problems must contain.
 base:
   # tsec:tsec, the example of env.example
   WEB_USER: dHNlYzokYXByMSRYUnE2SC5rbiRVRjZQM1VVQmJVNWJUQmNmSGRuUFQxCgo=
@@ -120,6 +120,31 @@ cases:
   - name: redishoneypot persona without redishoneypot
     services: [cowrie]
     set: {REDISHONEYPOT_PROFILE: redis99}
+    warnings: [LS_WEB_USER]
+  - name: cowrie personas from a list
+    services: [tpotinit, cowrie]
+    set: {COWRIE_PERSONA: "raspios ipcam"}
+    warnings: [LS_WEB_USER]
+  - name: cowrie persona unknown
+    services: [tpotinit, cowrie]
+    set: {COWRIE_PERSONA: "fedora-36-vuln"}
+    errors: [COWRIE_PERSONA]
+    warnings: [LS_WEB_USER]
+  - name: cowrie persona twice
+    services: [tpotinit, cowrie]
+    set: {COWRIE_PERSONA: "raspios raspios"}
+    errors: [COWRIE_PERSONA]
+    warnings: [LS_WEB_USER]
+  - name: cowrie persona is no glob
+    # the entries are split without globbing: "*" is no file name of the working directory
+    services: [tpotinit, cowrie]
+    set: {COWRIE_PERSONA: "raspios *"}
+    errors: [COWRIE_PERSONA]
+    warnings: [LS_WEB_USER]
+    messages: ['invalid value "*", allowed:']
+  - name: cowrie persona not checked without cowrie
+    services: [tpotinit, suricata]
+    set: {COWRIE_PERSONA: "nope"}
     warnings: [LS_WEB_USER]
   - name: beelzebub provider and url
     services: [beelzebub]

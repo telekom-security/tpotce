@@ -10,8 +10,14 @@ IDS = ["ubuntu-noble", "debian-trixie", "ipcam"]
 
 class SelectTest(unittest.TestCase):
     def test_empty_means_all(self):
-        for value in (None, "", "   ", "random"):
+        for value in (None, "", "   "):
             self.assertEqual(parse_selection(value, IDS), IDS)
+
+    def test_random_is_no_alias(self):
+        # tpotinit's choice_list rejects it, so the container does too
+        with self.assertRaises(PersonaError) as ctx:
+            parse_selection("random", IDS)
+        self.assertEqual(str(ctx.exception), 'unknown COWRIE_PERSONA "random", allowed: ubuntu-noble debian-trixie ipcam')
 
     def test_list_with_any_whitespace(self):
         self.assertEqual(parse_selection("  ipcam\tubuntu-noble \n", IDS), ["ipcam", "ubuntu-noble"])

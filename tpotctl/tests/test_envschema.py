@@ -103,6 +103,8 @@ class SchemaTest(unittest.TestCase):
                                  sorted(case.get("errors", [])), [p.text for p in problems])
                 self.assertEqual(sorted({p.key for p in problems if p.level == "warning"}),
                                  sorted(case.get("warnings", [])), [p.text for p in problems])
+                for message in case.get("messages", []):
+                    self.assertTrue(any(message in p.text for p in problems), (message, [p.text for p in problems]))
 
     def test_messages_match_tpotinit(self):
         values = example_values()

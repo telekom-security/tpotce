@@ -99,10 +99,14 @@ for (( i = 0; i < count; i++ )); do
   )"
   errors="$(keys_of "${out}" Error)"; warnings="$(keys_of "${out}" Warning)"
   want_errors="$(expected "$i" errors)"; want_warnings="$(expected "$i" warnings)"
-  if [[ "${errors}" == "${want_errors}" && "${warnings}" == "${want_warnings}" ]]; then
+  missing=""
+  while IFS= read -r message; do
+    [[ -z "${message}" ]] || grep -qF -- "${message}" <<<"${out}" || missing+=" [${message}]"
+  done < <(yq -r ".cases[$i].messages // [] | .[]" "${CASES}")
+  if [[ "${errors}" == "${want_errors}" && "${warnings}" == "${want_warnings}" && -z "${missing}" ]]; then
     echo "ok   ${name}"
   else
-    echo "FAIL ${name}: errors [${errors}] expected [${want_errors}], warnings [${warnings}] expected [${want_warnings}]"
+    echo "FAIL ${name}: errors [${errors}] expected [${want_errors}], warnings [${warnings}] expected [${want_warnings}]${missing:+, missing messages${missing}}"
     echo "${out}" | sed 's/^/     /'
     failed=1
   fi

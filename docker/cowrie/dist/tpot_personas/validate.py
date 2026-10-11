@@ -1,22 +1,27 @@
-"""Consistency of a rendered persona: what an attacker can cross-check must agree.
+"""Consistency of a rendered persona: the parts of a system that describe the same thing must agree.
 
 problems() returns one string per finding, each starting with the word of its
 rule (kernel, hostname, nproc, START, forbidden, ...); validate() raises."""
 import calendar
 import configparser
 import datetime
+import fnmatch
 import json
+import posixpath
 import re
 import time
 from pathlib import Path
 
-from . import PersonaError, tree
+from . import PersonaError, system, tree
 from .common import VM_PROVIDERS, home_dir, is_login_shell, ps_start, ps_user
 from .identity import DAY, host_patterns, hostname_regex, kernel_time, stale_at, updated_at
-from .render import DIR_MODES, PACKAGE_MANAGER_PATHS
+from .model import PROMPT_STYLES
+from .render import BUSYBOX_HELP, DIR_MODES, PACKAGE_MANAGER_PATHS
 from .ssh_profiles import COMPRESSIONS, HOST_KEYS, PROFILES, TWISTED_CIPHERS, TWISTED_MACS
 
 MIN_PICKLE_SIZE = 1_000_000
+PATH_DIRS = ("usr/local/sbin", "usr/local/bin", "usr/sbin", "usr/bin", "sbin", "bin")
+PYTHON_PACKAGE_MANAGERS = ("apt", "apt-get", "yum")
 FORBIDDEN_MARKERS = ("phil", "2.6.26-2-686", "2.6.26-19lenny", "com/ubuntu/upstart", "dannf@debian.org",
                      "svr04", "Wed Nov 4 20:45:37")
 UBUNTU_MARKERS = ("ubuntu 22.04", "ubuntu 24.04", "id=ubuntu", "jammy jellyfish", "noble numbat")
@@ -54,8 +59,11 @@ def _check_cfg(persona, ident, cfg, runtime_dir, keys_dir, out):
         ("shell", "kernel_build_string"): r.kernel_build,
         ("shell", "arch"): persona.arch,
         ("shell", "hardware_platform"): persona.hardware_platform,
+        ("shell", "prompt_style"): persona.prompt_style,
         ("ssh", "version"): r.ssh_banner,
     }
+    if persona.prompt_style not in PROMPT_STYLES:
+        out.append(f"prompt_style {persona.prompt_style!r} is not one of {', '.join(PROMPT_STYLES)}")
     for (section, key), value in expected.items():
         got = cfg.get(section, key, fallback=None)
         if got != value:
@@ -107,7 +115,7 @@ def _check_hardware(persona, ident, honeyfs, txtcmds, out):
     cpuinfo = _text(honeyfs / "proc/cpuinfo")
     if len(re.findall(r"^processor\s*:", cpuinfo, re.M)) != hw.cpus:
         out.append(f"cpuinfo: processor count is not {hw.cpus}")
-    # what an attacker counts: lines with the lowercase word, the model name included
+    # what a count with grep sees: lines with the lowercase word, the model name included
     counted = sum("processor" in line for line in cpuinfo.splitlines())
     if counted != hw.cpus:
         out.append(f"cpuinfo: grep -c processor gives {counted}, not {hw.cpus}")
@@ -374,10 +382,25 @@ def _check_dates(ident, honeyfs, out):
             out.append(f"date: shadow lastchange of {fields[0]} is in the future")
 
 
-def _check_forbidden(persona, out_dir, runtime_dir, keys_dir, out):
+def _tree_texts(fs):
+    """(path, bytes) of what the shell shows of fs.pickle: the path of every node, the
+    contents of files and the targets of links. The raw pickle is no text: its
+    ctimes are 4-byte integers (0x6c696870 is b"phil", August 2027)."""
+    for path, node in tree.iter_nodes(fs):
+        yield path, path.encode("utf-8", "replace")
+        contents = tree.node_get(node, tree.A_CONTENTS)
+        if tree.node_get(node, tree.A_TYPE) != tree.T_DIR and isinstance(contents, (bytes, str)):
+            yield path, contents.encode("utf-8", "replace") if isinstance(contents, str) else contents
+        target = tree.node_get(node, tree.A_TARGET)
+        if isinstance(target, str):
+            yield path, target.encode("utf-8", "replace")
+
+
+def _check_forbidden(persona, out_dir, runtime_dir, keys_dir, fs, out):
     markers = FORBIDDEN_MARKERS + (UBUNTU_MARKERS if persona.os_id != "ubuntu" else ())
     markers = tuple(m.lower().encode() for m in markers)
-    paths = [out_dir / "fs.pickle", out_dir / "cmdoutput.json", out_dir / "cowrie.cfg"]
+    paths = [out_dir / "cmdoutput.json", out_dir / "cowrie.cfg", out_dir / BUSYBOX_HELP,
+             out_dir / system.SERVICE_STATUS]
     for root in (out_dir / "honeyfs", out_dir / "txtcmds"):
         for path in sorted(root.rglob("*")):
             if any(m in path.name.lower().encode() for m in markers):
@@ -386,28 +409,175 @@ def _check_forbidden(persona, out_dir, runtime_dir, keys_dir, out):
                 paths.append(path)
     # the directories are the operator's (or a test's random temp dir), not persona content
     own_paths = sorted({str(runtime_dir).lower().encode(), str(keys_dir).lower().encode()}, key=len, reverse=True)
-    for path in paths:
-        data = path.read_bytes().lower() if path.is_file() else b""
+
+    def found_in(data):
+        data = data.lower()
         for own in own_paths:
             data = data.replace(own, b"")
-        found = [m.decode() for m in markers if m in data]
+        return [m.decode() for m in markers if m in data]
+
+    for path in paths:
+        found = found_in(path.read_bytes() if path.is_file() else b"")
         if found:
             out.append(f"forbidden {', '.join(found)} in {path.relative_to(out_dir)}")
+    if fs is None:
+        return
+    hits = {}
+    for path, data in _tree_texts(fs):
+        for marker in found_in(data):
+            hits.setdefault(marker, path)
+    for marker, path in sorted(hits.items()):
+        out.append(f"forbidden {marker} in fs.pickle ({path})")
 
 
-def _check_package_managers(persona, fs, honeyfs, txtcmds, out):
+def _skipped(cfg):
+    return {e.strip() for e in cfg.get("shell", "skip_python_commands", fallback="").split(",") if e.strip()}
+
+
+def _answered(cfg, name):
+    """Cowrie's Python answers the command (it is not in skip_python_commands)."""
+    skipped = _skipped(cfg)
+    return name not in skipped and not any(f"/{d}/{name}" in skipped for d in PATH_DIRS)
+
+
+def _check_package_managers(persona, cfg, fs, honeyfs, txtcmds, out):
+    """The package managers of the persona are programs answered by a txtcmd or by Cowrie's
+    Python (apt / yum of a server), the others are neither."""
     names = set()
+    # bin/apt and usr/bin/apt are one node where bin is a link to usr/bin
+    commands = {}
     for rel in PACKAGE_MANAGER_PATHS:
-        command = (txtcmds / rel).is_file()
+        real = tree.real_path(fs, rel) or rel
+        python = Path(rel).name in PYTHON_PACKAGE_MANAGERS and _answered(cfg, Path(rel).name)
+        commands[real] = commands.get(real, False) or (txtcmds / rel).is_file() or python
+    for rel in PACKAGE_MANAGER_PATHS:
+        command = commands[tree.real_path(fs, rel) or rel]
         in_pickle = tree.find_node(fs, rel) is not None
         if command != in_pickle:
-            out.append(f"package manager {rel}: txtcmd {command}, fs.pickle {in_pickle}")
+            out.append(f"package manager {rel}: command {command}, fs.pickle {in_pickle}")
         if (honeyfs / rel).exists() and not command:
             out.append(f"package manager {rel} in honeyfs without txtcmd")
         if command:
             names.add(Path(rel).name)
     if names != set(persona.package_managers):
         out.append(f"package manager set {sorted(names)} is not {sorted(persona.package_managers)}")
+
+
+def _is_program(node):
+    return (node is not None and tree.node_get(node, tree.A_TYPE) == tree.T_FILE
+            and (tree.node_get(node, tree.A_MODE) or 0) & 0o111 != 0)
+
+
+def _check_programs(fs, txtcmds, out):
+    """Every program in a bin / sbin directory has a size, every txtcmd is a program
+    without contents (Cowrie's cat / dd serve the ELF header of [shell] arch)."""
+    empty = [path for path, node in tree.iter_nodes(fs)
+             if path.rsplit("/", 2)[-2] in ("bin", "sbin") and _is_program(node)
+             and not tree.node_get(node, tree.A_SIZE)]
+    if empty:
+        out.append(f"program: size 0 for {', '.join(empty[:5])}")
+    for path in sorted(txtcmds.rglob("*")):
+        if not path.is_file():
+            continue
+        rel = str(path.relative_to(txtcmds))
+        node = tree.find_node(fs, rel)
+        if not _is_program(node):
+            out.append(f"program: txtcmd {rel} is no executable of fs.pickle")
+        elif isinstance(tree.node_get(node, tree.A_CONTENTS), (bytes, str)):
+            out.append(f"program: txtcmd {rel} has contents in fs.pickle, cat shows no ELF header")
+
+
+def _check_busybox(ident, cfg, out_dir, runtime_dir, fs, out):
+    """BusyBox of the firmware: Cowrie's busybox runs (not skipped), prints the help
+    of that version and /bin/busybox is a program. Without BusyBox it is skipped."""
+    banner = ident.release.extra.get("busybox")
+    skipped = {e.strip() for e in cfg.get("shell", "skip_python_commands", fallback="").split(",")}
+    key = cfg.get("shell", "busybox_help", fallback=None)
+    if not banner:
+        if "busybox" not in skipped or key is not None:
+            out.append("busybox: Cowrie's busybox answers on a system without BusyBox")
+        return
+    if "busybox" in skipped or "/bin/busybox" in skipped:
+        out.append("busybox: Cowrie's busybox is skipped, the applets do not run")
+    if key != f"{runtime_dir}/{BUSYBOX_HELP}":
+        out.append(f"busybox: cfg busybox_help {key!r} is not {runtime_dir}/{BUSYBOX_HELP}")
+    if not _text(out_dir / BUSYBOX_HELP).startswith(f"{banner} multi-call binary.\n"):
+        out.append(f"busybox: the help does not start with {banner}")
+    if fs is not None and not _is_program(tree.find_node(fs, "bin/busybox")):
+        out.append("busybox: /bin/busybox is no program of fs.pickle")
+
+
+# the commands of Cowrie's Python whose program differs per system (which and the command agree)
+COMMANDS = ("perl", "git", "python", "python3", "sudo", "service", "apt", "apt-get", "yum")
+
+
+def _matches(fs, rel):
+    """The paths of the tree a path (a glob pattern in its last part) names."""
+    parent_rel, name = posixpath.split(rel)
+    if not any(c in name for c in "*?["):
+        return [rel] if tree.find_node(fs, rel) is not None else []
+    parent = tree.find_dir(fs, parent_rel)
+    return [f"{parent_rel}/{tree.node_get(c, tree.A_NAME)}" for c in tree.node_children(parent or [])
+            if fnmatch.fnmatchcase(tree.node_get(c, tree.A_NAME), name)] if parent else []
+
+
+def _on_path(fs, name):
+    for directory in PATH_DIRS:
+        node = tree.find_node(fs, f"{directory}/{name}")
+        for _ in range(5):
+            if node is None or tree.node_get(node, tree.A_TYPE) != tree.T_LINK:
+                break
+            node = tree.find_node(fs, tree.node_get(node, tree.A_TARGET) or "")
+        if _is_program(node):
+            return True
+    return False
+
+
+def _check_system(persona, ident, cfg, out_dir, runtime_dir, fs, out):
+    """Cowrie's Debian 12 x86_64 container tree is the persona's system (tpot_personas.system):
+    no foreign paths, no x86_64 names on another architecture, /proc/modules of the persona
+    (none on a device), the commands of Cowrie's Python (interpreters, sudo, service, apt / yum)
+    on PATH exactly where Cowrie or a txtcmd answers them, with their versions."""
+    honeyfs, txtcmds = out_dir / "honeyfs", out_dir / "txtcmds"
+    found = [hit for rel in system.CONTAINER_PATHS + system.foreign_paths(persona) for hit in _matches(fs, rel)]
+    if found:
+        out.append(f"foreign: {', '.join('/' + rel for rel in found[:6])} on {persona.id}")
+    if persona.hardware_platform != "x86_64":
+        x86 = [path for path, node in tree.iter_nodes(fs)
+               if any(isinstance(v, str) and ("x86_64" in v or "x86-64" in v)
+                      for v in (tree.node_get(node, tree.A_NAME), tree.node_get(node, tree.A_TARGET)))]
+        if x86:
+            out.append(f"foreign: x86_64 names on {persona.hardware_platform}: {', '.join(x86[:4])}")
+    triplet = system.triplet(persona)
+    if triplet and tree.find_dir(fs, f"usr/lib/{triplet}") is None:
+        out.append(f"foreign: no multiarch directory /usr/lib/{triplet}")
+    node = tree.find_node(fs, system.PROC_MODULES)
+    modules = _text(honeyfs / system.PROC_MODULES)
+    if persona.kind == "device":
+        if node is not None:
+            out.append("modules: /proc/modules of Cowrie's tree on a device")
+    elif not modules or tree.node_get(node or [], tree.A_CONTENTS) != modules.encode():
+        out.append("modules: /proc/modules is not the persona's")
+    else:
+        out += system.modules_problems(modules)
+    for name in COMMANDS:
+        answered = _answered(cfg, name)
+        txtcmd = any((txtcmds / d / name).is_file() for d in PATH_DIRS)
+        if answered and txtcmd:
+            out.append(f"which: a txtcmd of {name} answers /usr/bin/{name}, Cowrie's {name} answers {name}")
+        if _on_path(fs, name) != (answered or txtcmd):
+            out.append(f"which: {name} is {'not ' if answered or txtcmd else ''}on PATH, "
+                       f"{'Cowrie answers it' if answered else 'a txtcmd answers it' if txtcmd else 'nothing answers it'}")
+    for name in system.python_answers(persona):
+        if not _answered(cfg, name):
+            out.append(f"which: Cowrie's {name} is skipped on a server")
+    files = {str(path.relative_to(honeyfs)): _text(path) for path in (honeyfs / "etc/apt").rglob("*")
+             if path.is_file()}
+    for key, value in system.shell_keys(persona, ident, files, runtime_dir).items():
+        if cfg.get("shell", key, fallback=None) != value:
+            out.append(f"cfg {key}: {cfg.get('shell', key, fallback=None)!r}, expected {value!r}")
+    if persona.kind == "server" and _text(out_dir / system.SERVICE_STATUS) != system.service_status(persona):
+        out.append("service: service-status.txt is not the persona's")
 
 
 def problems(persona, ident, out_dir, runtime_dir, keys_dir, min_pickle=MIN_PICKLE_SIZE):
@@ -479,12 +649,13 @@ def problems(persona, ident, out_dir, runtime_dir, keys_dir, min_pickle=MIN_PICK
     _check_processes(persona, ident, out_dir / "cmdoutput.json", out)
     _check_dates(ident, honeyfs, out)
     _check_logs(ident, honeyfs, fs, out)
-    _check_forbidden(persona, out_dir, runtime_dir, keys_dir, out)
+    _check_forbidden(persona, out_dir, runtime_dir, keys_dir, fs, out)
+    _check_busybox(ident, cfg, out_dir, runtime_dir, fs, out)
     if fs is not None:
-        if ident.hostname.encode() not in (out_dir / "fs.pickle").read_bytes():
-            out.append("hostname not in fs.pickle")
         _check_tree(persona, ident, fs, out)
-        _check_package_managers(persona, fs, honeyfs, txtcmds, out)
+        _check_package_managers(persona, cfg, fs, honeyfs, txtcmds, out)
+        _check_programs(fs, txtcmds, out)
+        _check_system(persona, ident, cfg, out_dir, runtime_dir, fs, out)
     return out
 
 

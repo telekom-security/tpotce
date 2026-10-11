@@ -90,9 +90,9 @@ class ServerCatalogTest(unittest.TestCase):
             self.assertEqual(p.kind, "server")
             self.assertEqual(p.shell, "/bin/bash")
             self.assertEqual(p.user, USERS[pid], pid)
-            self.assertTrue(p.vulnerability, pid)
+            self.assertTrue(p.summary, pid)
 
-    def test_bookworm_has_a_pre_regresshion_release(self):
+    def test_bookworm_has_an_installation_image_release(self):
         banners = [r.ssh_banner for r in catalog.by_id("debian-bookworm").releases]
         self.assertTrue(any(b.endswith(("deb12u1", "deb12u2")) for b in banners), banners)
         self.assertTrue(any(not b.endswith(("deb12u1", "deb12u2")) for b in banners), banners)
@@ -139,6 +139,36 @@ class ServerCatalogTest(unittest.TestCase):
                     self.assertEqual(time.strftime("%a", time.gmtime(stamp)), match.group(1), (pid, r.label))
                     # date(1) pads the day with a space, as the kernel's UTS_VERSION does
                     self.assertNotRegex(r.kernel_build, r" [A-Z][a-z]{2} 0\d ", (pid, r.label))
+
+    def test_every_kernel_date_pads_the_day_with_a_space(self):
+        # UTS_VERSION is date(1) output: "Wed Jan  8", never "Wed Jan 8" or "Wed Jan 08"
+        stamp = re.compile(r"\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) "
+                           r"(?P<day>[ \d]\d|\d) \d{2}:\d{2}:\d{2} ")
+        for persona in catalog.PERSONAS:
+            for r in persona.releases:
+                match = stamp.search(r.kernel_build)
+                if match:
+                    self.assertEqual(len(match.group("day")), 2, (persona.id, r.label, r.kernel_build))
+                    self.assertNotEqual(match.group("day")[0], "0", (persona.id, r.label))
+                    stamp_time = kernel_time(r)
+                    if stamp_time is not None:
+                        self.assertEqual(time.strftime("%a", time.gmtime(stamp_time)), match.group(1),
+                                         (persona.id, r.label))
+
+    def test_proc_version_names_the_compiler_in_the_format_of_the_kernel(self):
+        # Linux 5.8 changed LINUX_COMPILER: "gcc version 8.4.0 (GCC) " before, "<cc --version>, <ld -v>" after
+        from tpot_personas.common import kernel_series
+        for persona in catalog.PERSONAS:
+            for r in persona.releases:
+                compiler = r.extra.get("kernel_compiler")
+                if not compiler:
+                    continue
+                if kernel_series(r.kernel_version) >= (5, 8):
+                    self.assertRegex(compiler, r", GNU ld ", (persona.id, r.label, compiler))
+                    self.assertNotIn("gcc version", compiler, (persona.id, r.label))
+                else:
+                    self.assertRegex(compiler, r"^gcc version \S+ ", (persona.id, r.label, compiler))
+                    self.assertNotIn("GNU ld", compiler, (persona.id, r.label))
 
     def test_release_dates_are_ordered(self):
         for pid in SERVERS:
@@ -199,7 +229,17 @@ class DeviceCatalogTest(unittest.TestCase):
             self.assertGreaterEqual(len(p.hardware), 1, pid)
             self.assertLessEqual(len(p.hardware), 3, pid)
             self.assertEqual((p.user, p.shell), DEVICE_USERS[pid], pid)
-            self.assertTrue(p.vulnerability, pid)
+            self.assertTrue(p.summary, pid)
+
+    def test_arch_is_the_byte_order_of_the_soc(self):
+        # [shell] arch is the ELF header of `cat /bin/busybox`: ath79 (QCA956x) is big endian
+        arches = {p.id: p.arch for p in catalog.PERSONAS}
+        self.assertEqual(arches["dlink-dir859"], "linux-mips-msb")
+        for pid in ("tplink-wr841n", "openwrt", "ubiquiti-edgerouter-x"):
+            self.assertEqual(arches[pid], "linux-mips-lsb", pid)
+        for pid in ("zyxel-nas326", "ipcam"):
+            self.assertEqual(arches[pid], "linux-arm-lsb", pid)
+        self.assertEqual(arches["raspios"], "linux-aarch64-lsb")
 
     def test_ipcam_is_a_busybox_camera(self):
         p = catalog.by_id("ipcam")
@@ -254,6 +294,13 @@ class DeviceCatalogTest(unittest.TestCase):
                 else:
                     self.assertRegex(r.ssh_version, rf"^{re.escape(product)}(p\d+)?[ ,]", (pid, r.label))
 
+    def test_prompt_style_fits_the_family(self):
+        # bash PS1 of Red Hat is [\u@\h \W]\$, Debian / Ubuntu and the devices keep Cowrie's \u@\h:\w\$
+        from tpot_personas.model import PROMPT_STYLES
+        for p in catalog.PERSONAS:
+            self.assertIn(p.prompt_style, PROMPT_STYLES, p.id)
+            self.assertEqual(p.prompt_style, "redhat" if p.family in ("rhel", "centos") else "debian", p.id)
+
     def test_uname_names_gnu_linux(self):
         # BusyBox uname -o / -a prints "GNU/Linux" (uname.c of 1.14.1, 1.19.2; CONFIG_UNAME_OSNAME since)
         for p in catalog.PERSONAS:
@@ -268,3 +315,13 @@ class DeviceCatalogTest(unittest.TestCase):
                     continue
                 year = int(re.search(r"(\d{4})\.\d+", r.ssh_version).group(1))
                 self.assertEqual(p.ssh_profile, "dropbear-openwrt" if year >= 2019 else "dropbear", (pid, r.label))
+
+
+class SchemaTest(unittest.TestCase):
+    def test_env_schema_values_are_the_catalog(self):
+        text = (ROOT / "docker/tpotinit/dist/etc/env.schema.yml").read_text()
+        block = re.search(r"^  COWRIE_PERSONA:\n((?:    .*\n)+)", text, re.M)
+        self.assertIsNotNone(block, "COWRIE_PERSONA missing in env.schema.yml")
+        values = re.search(r"^    values: \[(.*)\]$", block.group(1), re.M).group(1)
+        self.assertEqual([v.strip() for v in values.split(",")], catalog.ids())
+        self.assertIn("COWRIE_PERSONA=", (ROOT / "env.example").read_text())

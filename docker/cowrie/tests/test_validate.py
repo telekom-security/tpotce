@@ -80,6 +80,20 @@ class ValidateNegativeTest(unittest.TestCase):
         self.edit("cowrie.cfg", f"boot_offset = {self.ident.boot_offset}", "boot_offset = 1")
         self.assertIn("cfg boot_offset", self.problems())
 
+    def test_prompt_style_mismatch(self):
+        self.edit("cowrie.cfg", "prompt_style = debian", "prompt_style = redhat")
+        self.assertIn("cfg prompt_style", self.problems())
+
+    def test_prompt_style_missing(self):
+        self.edit("cowrie.cfg", "prompt_style = debian\n", "")
+        self.assertIn("cfg prompt_style", self.problems())
+
+    def test_unknown_prompt_style(self):
+        persona = dataclasses.replace(self.persona, prompt_style="zsh")
+        self.edit("cowrie.cfg", "prompt_style = debian", "prompt_style = zsh")
+        found = " | ".join(validate.problems(persona, self.ident, self.out, self.out, self.keys, min_pickle=0))
+        self.assertIn("prompt_style 'zsh' is not one of", found)
+
     def test_banner_and_ssh_version_disagree(self):
         cfg = configparser.ConfigParser(interpolation=None)
         cfg.read(self.out / "cowrie.cfg")
@@ -127,6 +141,50 @@ class ValidateNegativeTest(unittest.TestCase):
         out = self.out.parent / "philtmp"
         render(self.persona, self.ident, base_tree(), out, runtime_dir=out, keys_dir=self.keys)
         self.assertEqual(validate.problems(self.persona, self.ident, out, out, self.keys, min_pickle=0), [])
+
+    def test_ctime_bytes_of_a_marker_are_no_finding(self):
+        # 0x6c696870 pickles as b"phil" (BININT, little endian): a ctime in August 2027
+        phil = int.from_bytes(b"phil", "little")
+        ident = draw(self.persona, 5, phil + 30 * 86400)
+        _, out, keys = render_ident(self, self.persona, ident)
+        fs = tree.load_pickle(out / "fs.pickle")
+        tree.node_set(tree.find_node(fs, "etc/passwd"), tree.A_CTIME, phil)
+        tree.dump_pickle(fs, out / "fs.pickle")
+        self.assertIn(b"phil", (out / "fs.pickle").read_bytes())
+        self.assertEqual(validate.problems(self.persona, ident, out, out, keys, min_pickle=0), [])
+
+    def test_forbidden_marker_in_a_pickled_name_or_file(self):
+        fs = tree.load_pickle(self.out / "fs.pickle")
+        tree.ensure_dir(fs, "home/phil", ctime=self.ident.installed_at)
+        tree.dump_pickle(fs, self.out / "fs.pickle")
+        self.assertIn("forbidden phil in fs.pickle (/home/phil)", self.problems())
+        fs = tree.load_pickle(self.out / "fs.pickle")
+        tree.remove_node(fs, "home/phil")
+        tree.node_set(tree.find_node(fs, "etc/hostname"), tree.A_CONTENTS, b"svr04\n")
+        tree.dump_pickle(fs, self.out / "fs.pickle")
+        self.assertIn("forbidden svr04 in fs.pickle (/etc/hostname)", self.problems())
+
+    def test_program_of_size_0(self):
+        fs = tree.load_pickle(self.out / "fs.pickle")
+        tree.node_set(tree.find_node(fs, "usr/bin/top"), tree.A_SIZE, 0)
+        tree.dump_pickle(fs, self.out / "fs.pickle")
+        self.assertIn("program: size 0 for /usr/bin/top", self.problems())
+
+    def test_txtcmd_with_contents_shows_no_elf_header(self):
+        fs = tree.load_pickle(self.out / "fs.pickle")
+        tree.ensure_file(fs, "usr/bin/nproc", b"4\n", mode=0o755)
+        tree.dump_pickle(fs, self.out / "fs.pickle")
+        self.assertIn("program: txtcmd usr/bin/nproc has contents", self.problems())
+
+    def test_txtcmd_that_is_no_program(self):
+        fs = tree.load_pickle(self.out / "fs.pickle")
+        tree.remove_node(fs, "usr/bin/lscpu")
+        tree.dump_pickle(fs, self.out / "fs.pickle")
+        self.assertIn("program: txtcmd usr/bin/lscpu is no executable", self.problems())
+
+    def test_busybox_on_a_server(self):
+        self.edit("cowrie.cfg", "\n[ssh]\n", "\nbusybox_help = /x\n\n[ssh]\n")
+        self.assertIn("busybox: Cowrie's busybox answers", self.problems())
 
     def test_package_manager_without_command(self):
         (self.out / "txtcmds/usr/bin/dpkg").unlink()
@@ -236,6 +294,145 @@ class ValidateDeviceTest(unittest.TestCase):
         ident, out, keys = render_one(self, persona, 2)
         (out / "honeyfs/etc/issue").write_text("Ubuntu 22.04.4 LTS \\n \\l\n")
         self.assertIn("forbidden", " ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0)))
+
+
+class ValidateSystemTest(unittest.TestCase):
+    """Foreign paths of Cowrie's Debian 12 x86_64 tree, /proc/modules, interpreters (F4, F6)."""
+
+    def problems(self, pid, change, seed=1):
+        persona = catalog.by_id(pid)
+        ident, out, keys = render_one(self, persona, seed)
+        self.assertEqual(validate.problems(persona, ident, out, out, keys, min_pickle=0), [], pid)
+        fs = tree.load_pickle(out / "fs.pickle")
+        change(fs, out)
+        tree.dump_pickle(fs, out / "fs.pickle")
+        return " | ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0))
+
+    def test_debian_files_on_red_hat(self):
+        found = self.problems("rhel-9", lambda fs, out: tree.ensure_file(fs, "etc/debian_version", b"12.5\n"))
+        self.assertIn("foreign: /etc/debian_version on rhel-9", found)
+        found = self.problems("centos-7", lambda fs, out: tree.ensure_file(fs, "usr/bin/dpkg-query", b"", mode=0o755))
+        self.assertIn("foreign: /usr/bin/dpkg-query", found)
+
+    def test_x86_64_libraries_on_a_router(self):
+        found = self.problems("openwrt", lambda fs, out: tree.ensure_file(fs, "usr/lib/x86_64-linux-gnu/libc.so.6", b""))
+        self.assertIn("foreign: /usr/lib/x86_64-linux-gnu on openwrt", found)
+        self.assertIn("foreign: x86_64 names on mips", found)
+
+    def test_sshd_config_and_systemd_on_dropbear(self):
+        found = self.problems("openwrt", lambda fs, out: (tree.ensure_file(fs, "etc/ssh/sshd_config", b""),
+                                                          tree.ensure_dir(fs, "etc/systemd/system")))
+        self.assertIn("/etc/ssh", found)
+        self.assertIn("/etc/systemd", found)
+
+    def test_container_leftover(self):
+        found = self.problems("debian-trixie", lambda fs, out: tree.ensure_file(fs, ".dockerenv", b""))
+        self.assertIn("foreign: /.dockerenv", found)
+
+    def test_raspios_without_its_multiarch_directory(self):
+        found = self.problems("raspios", lambda fs, out: tree.remove_node(fs, "usr/lib/aarch64-linux-gnu"))
+        self.assertIn("foreign: no multiarch directory /usr/lib/aarch64-linux-gnu", found)
+
+    def test_proc_modules_on_a_device(self):
+        found = self.problems("qnap-qts", lambda fs, out: tree.ensure_file(fs, "proc/modules", b"nft_chain_nat 12288\n"))
+        self.assertIn("modules: /proc/modules of Cowrie's tree on a device", found)
+
+    def test_proc_modules_of_cowries_tree(self):
+        found = self.problems("ubuntu-jammy", lambda fs, out: tree.ensure_file(
+            fs, "proc/modules", b"nft_chain_nat 12288 0 - Live 0x0000000000000000\n"))
+        self.assertIn("modules: /proc/modules is not the persona's", found)
+
+    def test_module_used_by_one_not_loaded(self):
+        def change(fs, out):
+            path = out / "honeyfs/proc/modules"
+            text = path.read_text().replace("1 ip_tables,", "1 nf_tables,")
+            path.write_text(text)
+            tree.ensure_file(fs, "proc/modules", text.encode())
+        self.assertIn("modules: x_tables is used by nf_tables, which is not loaded", self.problems("debian-bookworm", change))
+
+    def test_perl_answered_but_not_on_path(self):
+        found = self.problems("ubuntu-noble", lambda fs, out: tree.remove_node(fs, "usr/bin/perl"))
+        self.assertIn("which: perl is not on PATH, Cowrie answers it", found)
+
+    def test_python3_on_path_but_skipped(self):
+        found = self.problems("centos-7", lambda fs, out: tree.ensure_executable(fs, "usr/bin/python3", 7000))
+        self.assertIn("which: python3 is on PATH, nothing answers it", found)
+
+    def test_perl_version_of_another_release(self):
+        def change(fs, out):
+            path = out / "cowrie.cfg"
+            path.write_text(path.read_text().replace("perl_version = 5.36.0", "perl_version = 5.14.2"))
+        self.assertIn("cfg perl_version: '5.14.2', expected '5.36.0'", self.problems("debian-bookworm", change))
+
+
+class ValidateServerCommandTest(unittest.TestCase):
+    def problems(self, pid, change):
+        persona = catalog.by_id(pid)
+        ident, out, keys = render_one(self, persona, 1)
+        change(out)
+        return " | ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0))
+
+    def edit_cfg(self, old, new):
+        def change(out):
+            path = out / "cowrie.cfg"
+            self.assertIn(old, path.read_text())
+            path.write_text(path.read_text().replace(old, new, 1))
+        return change
+
+    def test_sudo_skipped_on_a_server(self):
+        found = self.problems("debian-trixie", self.edit_cfg("skip_python_commands = ", "skip_python_commands = sudo,"))
+        self.assertIn("which: Cowrie's sudo is skipped on a server", found)
+        self.assertIn("which: sudo is on PATH, nothing answers it", found)
+
+    def test_apt_sources_of_another_system(self):
+        found = self.problems("ubuntu-jammy", self.edit_cfg("http://archive.ubuntu.com/ubuntu jammy,",
+                                                            "http://ftp.debian.org/debian stable,"))
+        self.assertIn("cfg apt_sources", found)
+
+    def test_service_status_of_another_system(self):
+        def change(out):
+            (out / "service-status.txt").write_text(" [ + ]  lightdm\n")
+        self.assertIn("service: service-status.txt is not the persona's", self.problems("ubuntu-noble", change))
+
+    def test_txtcmd_beside_cowries_command(self):
+        # the old static sudo: /usr/bin/sudo would print it, sudo would run Cowrie's
+        def change(out):
+            (out / "txtcmds/usr/bin/sudo").write_text("sudo: a password is required\n")
+        found = self.problems("centos-7", change)
+        self.assertIn("which: a txtcmd of sudo answers /usr/bin/sudo, Cowrie's sudo answers sudo", found)
+
+
+class ValidateBusyboxTest(unittest.TestCase):
+    def setUp(self):
+        self.persona = catalog.by_id("tplink-wr841n")
+        self.ident, self.out, self.keys = render_one(self, self.persona, 1)
+
+    def problems(self):
+        return " | ".join(validate.problems(self.persona, self.ident, self.out, self.out, self.keys, min_pickle=0))
+
+    def test_clean(self):
+        self.assertEqual(self.problems(), "")
+
+    def test_skipped_busybox(self):
+        path = self.out / "cowrie.cfg"
+        path.write_text(path.read_text().replace("skip_python_commands = ", "skip_python_commands = busybox,"))
+        self.assertIn("busybox: Cowrie's busybox is skipped", self.problems())
+
+    def test_help_of_another_version(self):
+        path = self.out / "busybox-help.txt"
+        path.write_text(path.read_text().replace("BusyBox v1.19.2", "BusyBox v1.20.2"))
+        self.assertIn("busybox: the help does not start with", self.problems())
+
+    def test_no_busybox_program(self):
+        fs = tree.load_pickle(self.out / "fs.pickle")
+        tree.remove_node(fs, "bin/busybox")
+        tree.dump_pickle(fs, self.out / "fs.pickle")
+        self.assertIn("busybox: /bin/busybox is no program", self.problems())
+
+    def test_forbidden_marker_in_the_help(self):
+        path = self.out / "busybox-help.txt"
+        path.write_text(path.read_text() + "svr04\n")
+        self.assertIn("forbidden svr04 in busybox-help.txt", self.problems())
 
 
 class ValidateRpmTest(unittest.TestCase):

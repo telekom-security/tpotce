@@ -7,26 +7,11 @@ from .common import (assign_processes, base_files, base_txtcmds, deb_arch, el_gr
                      el_passwd, el_shadow, gm, lscpu, pi_partuuid, ps_entry, rng_for, root_uuid, server_df,
                      server_group, server_mount, server_passwd, server_shadow, server_top, shadow_ctime)
 from .identity import log_window
+from .system import proc_modules
 from .model import Content
 
 # Package names of the tools themselves: versions for --version output, not for the logs.
 TOOL_PACKAGES = frozenset({"apt", "dpkg", "dnf", "rpm", "yum"})
-
-_APT_HELP = """apt {version} ({arch})
-Usage: apt [options] command
-
-apt is a commandline package manager and provides commands for
-searching and managing as well as querying information about packages.
-
-Most used commands:
-  list - list packages based on package names
-  search - search in package descriptions
-  show - show package details
-  update - update list of available packages
-  install - install packages
-  remove - remove packages
-  upgrade - upgrade the system by installing/upgrading packages
-"""
 
 _DNF_HELP = """dnf {version}
 usage: dnf [options] COMMAND
@@ -37,23 +22,6 @@ remove                  remove a package or packages from your system
 upgrade                 upgrade a package or packages on your system
 repolist                display the configured software repositories
 module                  interact with modular content
-"""
-
-_YUM_HELP = """Loaded plugins: fastestmirror
-You need to give some command
-Usage: yum [options] COMMAND
-
-List of Commands:
-
-check          Check for problems in the rpmdb
-check-update   Check for available package updates
-clean          Remove cached data
-erase          Remove a package or packages from your system
-info           Display details about a package or group of packages
-install        Install a package or packages on your system
-list           List a package or groups of packages
-repolist       Display the configured software repositories
-update         Update a package or packages on your system
 """
 
 _LSPCI_KVM = ("00:00.0 Host bridge: Intel Corporation 440FX - 82441FX PMC [Natoma] (rev 02)\n"
@@ -105,19 +73,19 @@ GPU_BUSES = ("07", "0f", "47", "4e", "87", "90", "b7", "bd")
 
 
 def package_manager_txtcmds(persona, ident):
+    """The package managers Cowrie does not emulate: dpkg, rpm and RHEL 9's dnf (its yum is
+    dnf 4). apt / apt-get of Debian and yum 3 of CentOS 7 are Cowrie's (system.python_answers)."""
     p = ident.release.packages
     if persona.family in ("ubuntu", "debian", "raspios"):
         arch = deb_arch(persona)
         return {
-            "usr/bin/apt": _APT_HELP.format(version=p["apt"], arch=arch),
-            "usr/bin/apt-get": f"apt {p['apt']} ({arch})\n",
             "usr/bin/dpkg": f"Debian 'dpkg' package management program version {p['dpkg']} ({arch}).\n",
         }
     if persona.family == "rhel":
         dnf = _DNF_HELP.format(version=p["dnf"])
         return {"usr/bin/dnf": dnf, "usr/bin/yum": dnf, "usr/bin/rpm": f"RPM version {p['rpm']}\n"}
     if persona.family == "centos":
-        return {"usr/bin/yum": _YUM_HELP, "usr/bin/rpm": f"RPM version {p['rpm']}\n"}
+        return {"usr/bin/rpm": f"RPM version {p['rpm']}\n"}
     return {}
 
 
@@ -212,11 +180,8 @@ def provider_lspci(persona, ident):
 def command_inventory_txtcmds(persona, ident):
     hw = ident.hardware
     lspci = provider_lspci(persona, ident) + gpu_lspci(hw)
-    return {
-        "usr/bin/lspci": lspci,
-        "usr/bin/sudo": "sudo: a password is required\n",
-        "usr/sbin/service": "Usage: service < option > | --status-all | [ service_name [ command | --full-restart ] ]\n",
-    }
+    # sudo and service are Cowrie's (system.python_answers)
+    return {"usr/bin/lspci": lspci}
 
 
 def _systemd_paths(ident):
@@ -494,6 +459,7 @@ def _server_content(persona, ident, files, tasks, run_lock=False, accounts=None,
         server_shadow(persona.user, ident))
     all_files = base_files(persona, ident, passwd, group, shadow, home=home)
     all_files["etc/fstab"] = fstab
+    all_files["proc/modules"] = proc_modules(persona, ident)
     all_files.update(files)
     txtcmds = base_txtcmds(persona, ident, cmdline=cmdline,
                            df=server_df(ident, root_dev=root_dev, run_lock=run_lock, boot=boot),
@@ -573,7 +539,7 @@ def build_ubuntu(persona, ident):
 
 
 def build_gpu_ubuntu(persona, ident):
-    """Ubuntu with NVIDIA GPUs, Ollama and Jupyter: bait for miners and model theft."""
+    """Ubuntu with NVIDIA GPUs, Ollama and Jupyter as one system."""
     user = persona.user
     files, ctimes = _ubuntu_files(persona, ident)
     home = f"home/{user}"

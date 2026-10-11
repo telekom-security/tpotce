@@ -172,11 +172,17 @@ def specialize(release, hardware):
 
 
 def _token(kind, rng):
+    """A random (never valid) token in the format of the credential type it names:
+    Hugging Face hf_ + 34 letters, an OpenAI project key sk-proj- + 74 +
+    the T3BlbkFJ marker + 74 of [A-Za-z0-9_-] (164 characters, a word character last),
+    an AWS access key id AKIA + 16 of [A-Z2-7]."""
     alnum = string.ascii_letters + string.digits
     if kind == "hf":
-        return "hf_" + "".join(rng.choice(alnum) for _ in range(34))
+        return "hf_" + "".join(rng.choice(string.ascii_letters) for _ in range(34))
     if kind == "openai":
-        return "sk-proj-" + "".join(rng.choice(alnum + "-_") for _ in range(56))
+        def run():
+            return "".join(rng.choice(alnum + "-_") for _ in range(73)) + rng.choice(alnum)
+        return f"sk-proj-{run()}T3BlbkFJ{run()}"
     if kind == "aws":
         return "AKIA" + "".join(rng.choice(string.ascii_uppercase + "234567") for _ in range(16))
     raise ValueError(f"unknown token kind {kind}")

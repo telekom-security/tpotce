@@ -92,6 +92,8 @@ services:
     tmpfs:
       - /tmp/cowrie:uid=2000,gid=2000
       - /tmp/cowrie/data:uid=2000,gid=2000
+    environment:
+     - COWRIE_PERSONA=${COWRIE_PERSONA:-}
     networks:
       - honeypot_local
     ports:

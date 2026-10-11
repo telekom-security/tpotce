@@ -15,7 +15,6 @@ from cowrie.shell.command import HoneyPotCommand
 
 commands = {}
 
-# Excerpt of Cowrie v3.1.1 (c17c9b73), the text patch_cowrie_persona_support.py touches.
 
 class Command_service(HoneyPotCommand):
     """
@@ -88,3 +87,37 @@ class Command_service(HoneyPotCommand):
         )
         for line in output:
             self.write(line + "\n")
+
+    def help(self) -> None:
+        output = "Usage: service < option > | --status-all | [ service_name [ command | --full-restart ] ]"
+        self.write(output + "\n")
+
+    def call(self) -> None:
+        try:
+            opts, args = getopt.gnu_getopt(
+                self.args, "h", ["help", "status-all", "full-restart"]
+            )
+        except getopt.GetoptError:
+            self.help()
+            return
+
+        if not opts and not args:
+            self.help()
+            return
+
+        for o, _a in opts:
+            if o in ("--help") or o in ("-h"):
+                self.help()
+                return
+            elif o in ("--status-all"):
+                self.status_all()
+        """
+        Ubuntu shows no response when stopping, starting
+        leviathan@ubuntu:~$ sudo service ufw stop
+        leviathan@ubuntu:~$ sudo service ufw start
+        leviathan@ubuntu:~$
+        """
+
+
+commands["/usr/sbin/service"] = Command_service
+commands["service"] = Command_service

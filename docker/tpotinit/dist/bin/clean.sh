@@ -209,7 +209,7 @@ fuELK () {
 # Let's create a function to clean up and prepare endlessh data
 fuENDLESSH () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/endlessh/log; fi
-  mkdir -vp /data/endlessh/log
+  mkdir -vp /data/endlessh/{identity,log}
   chmod 770 /data/endlessh -R
   chown tpot:tpot /data/endlessh -R
 }

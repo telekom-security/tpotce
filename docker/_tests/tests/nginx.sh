@@ -27,7 +27,7 @@ Run an isolated post-build smoke test for the Nginx image: the landing page behi
 the login, its security headers and caching, and the neutral error page.
 
 Options:
-  --image IMAGE      Image to test. Defaults to dtagdevsec/nginx:24.04.2.
+  --image IMAGE      Image to test. Defaults to docker/nginx/docker-compose.yml.
   --https-port PORT  Host TCP port for the web UI (64297 in T-Pot). Default: dynamic loopback port.
   --timeout SEC      Timeout for startup and checks. Default: 30.
   --bind-ip IP       Host IP to bind. Default: 127.0.0.1.

@@ -3,6 +3,11 @@
 from dataclasses import dataclass, field
 from typing import Callable
 
+# how the shell prompt looks ([shell] prompt_style, read by the patched showPrompt of Cowrie):
+#   debian  user@host:~/dir$   Cowrie's own prompt, bash PS1 of Debian / Ubuntu, kept for the devices
+#   redhat  [user@host dir]$   bash PS1 of RHEL / CentOS (/etc/bashrc): short host name, basename of the cwd
+PROMPT_STYLES = ("debian", "redhat")
+
 
 @dataclass(frozen=True)
 class Release:
@@ -36,6 +41,8 @@ class Content:
     txtcmds: dict
     processes: list
     ctimes: dict = field(default_factory=dict)  # rel path -> ctime, for files whose date shows (logs, shadow)
+    programs: tuple = ()     # paths of the commands Cowrie's Python runs that the system has (bin/busybox)
+    busybox_help: str = ""   # what `busybox` prints (patched busybox.py, [shell] busybox_help), "" without BusyBox
 
 
 @dataclass(frozen=True)
@@ -57,7 +64,8 @@ class Persona:
     hardware: tuple
     hostnames: tuple         # patterns; "aws:ip-172-31-{n}-{n}" only for hardware of that provider
     builder: Callable
-    vulnerability: str
+    summary: str
     remove_paths: tuple = ()
     tokens: tuple = ()
     max_install_days: int = 900  # installed 90 to this many days ago (an EOL box may be older)
+    prompt_style: str = "debian"  # one of PROMPT_STYLES

@@ -17,7 +17,7 @@ from tpotctl.bootstrap import REPO_DIR
 
 SCHEMA_PATH = os.path.join(REPO_DIR, "docker", "tpotinit", "dist", "etc", "env.schema.yml")
 TYPES = {"text", "path", "enum", "int", "number", "regex", "host", "url", "timezone", "interface",
-         "htpasswd_list", "basic_cred"}
+         "htpasswd_list", "basic_cred", "choice_list"}
 # how tpot shows a key, tpotinit does not read these
 WIDGETS = {"", "switch", "choice", "interface", "timezone", "llm_model", "llm_url"}
 SECTIONS = [("base", "T-Pot"), ("honeypots", "Honeypots and tools"), ("system", "Advanced")]
@@ -193,6 +193,16 @@ def check(rule: Rule, values: Dict[str, str], defaults: Dict[str, str], check_ho
     kind = rule.type
     if kind == "enum" and value not in rule.values:
         out.append(Problem("error", rule.key, f'invalid value "{value}", allowed: {" ".join(rule.values)}.'))
+    elif kind == "choice_list":
+        entries = value.split()
+        for entry in entries:
+            if entry not in rule.values:
+                out.append(Problem("error", rule.key,
+                                   f'invalid value "{entry}", allowed: {" ".join(rule.values)}.'))
+                break
+            if entries.count(entry) > 1:
+                out.append(Problem("error", rule.key, f'"{entry}" is listed twice.'))
+                break
     elif kind == "int":
         if not re.match(r"^[0-9]+$", value) or not rule.min <= int(value) <= rule.max:
             level = "warning" if rule.on_invalid == "default" else "error"

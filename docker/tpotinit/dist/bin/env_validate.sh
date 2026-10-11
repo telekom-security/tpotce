@@ -138,7 +138,7 @@ fuENV_RULE() {
     local myVALUES="$7" myOPTIONAL="$8" myMIN="$9" myMAX="${10}" myPATTERN="${11}" myMESSAGE="${12}"
     local myDEFAULT="${13}" myINVALID="${14}" myRW_KEY="${15}" myRW_VALUES="${16}" myRW_MESSAGE="${17}"
     local myWARN_EMPTY="${18}" myWW_KEY="${19}" myWW_VALUES="${20}" myWW_MESSAGE="${21}"
-    local myVALUE myWHEN myIFACE
+    local myVALUE myWHEN myIFACE myENTRY myLISTED
     myVALUE="$(fuVAL "${myKEY}")"
     [ -n "${mySCOPE}" ] && [ "${mySCOPE}" != "${TPOT_TYPE}" ] && return 0
     # shellcheck disable=SC2086
@@ -187,6 +187,25 @@ fuENV_RULE() {
       enum)
         # shellcheck disable=SC2086
         fuCHOICE "${myKEY}" ${myVALUES}
+        ;;
+      choice_list)
+        # every entry one of the values, none twice; split without globbing ("*" stays "*")
+        myLISTED=" "
+        read -r -a myENTRIES <<< "${myVALUE}"
+        for myENTRY in "${myENTRIES[@]}";
+          do
+            if [[ " ${myVALUES} " != *" ${myENTRY} "* ]];
+              then
+                fuENV_ERROR "${myKEY}" "invalid value \"${myENTRY}\", allowed: ${myVALUES}."
+                break
+            fi
+            if [[ "${myLISTED}" == *" ${myENTRY} "* ]];
+              then
+                fuENV_ERROR "${myKEY}" "\"${myENTRY}\" is listed twice."
+                break
+            fi
+            myLISTED+="${myENTRY} "
+        done
         ;;
       int)
         if [[ ! "${myVALUE}" =~ ^[0-9]+$ ]] || (( 10#${myVALUE} < myMIN )) || (( 10#${myVALUE} > myMAX ));

@@ -62,8 +62,9 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/conpot.sh --guardian-ast-port 11001 --ipmi-port 1623
 ./docker/_tests/tests/cowrie.sh
 ./docker/_tests/tests/cowrie.sh --ssh-port 2222 --telnet-port 2323
-./docker/_tests/tests/cowrie.sh --persona debian-bookworm-vuln
-./docker/_tests/tests/cowrie.sh --persona openwrt-1806
+./docker/_tests/tests/cowrie.sh --persona debian-bookworm
+./docker/_tests/tests/cowrie.sh --persona openwrt
+./docker/_tests/tests/cowrie.sh --all-personas
 ./docker/_tests/tests/ddospot.sh
 ./docker/_tests/tests/ddospot.sh --dns-port 1053 --ntp-port 1123 --ssdp-port 19000
 ./docker/_tests/tests/dionaea.sh
