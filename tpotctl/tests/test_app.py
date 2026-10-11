@@ -1113,6 +1113,22 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
         notes = " ".join(str(note.message) for note in app._notifications)
         self.assertIn("the value waits", notes)
 
+    async def test_settings_unreachable_off_a_tpot_host_names_the_tpot_host(self):
+        # tpot elastic only runs on the T-Pot host: off it, the text says where it applies a shorter value
+        from tpotctl import elastic
+        for host, wanted, unwanted in ((False, "apply it on the T-Pot host with 'tpot elastic retention --force'",
+                                        "waits for 'tpot elastic retention --force'"),
+                                       (True, "waits for 'tpot elastic retention --force'", "on the T-Pot host")):
+            with self.subTest(host=host):
+                repo = self.retention_checkout()
+                backend = self.settings_backend(repo)
+                backend.host = host
+                backend._plan = elastic.Plan(elastic.Decision("keep", None, "", False), [], False)
+                app, _pilot = await self.save_retention(backend, "365")
+                notes = " ".join(str(note.message) for note in app._notifications)
+                self.assertIn(wanted, notes)
+                self.assertNotIn(unwanted, notes)
+
     async def test_settings_shortening_without_indices_asks(self):
         from tpotctl import elastic, settings
         repo = self.retention_checkout()

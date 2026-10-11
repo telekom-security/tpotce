@@ -967,7 +967,7 @@ class SettingsPane(Vertical):
         elif chosen is not None and not chosen.reachable:
             new = saved["TPOT_ES_RETENTION"]
             waiting = chosen.shortening or elastic.shortens(old, new)
-            self.app.notify(retention_waits(new, later) if waiting else retention_unknown(new),
+            self.app.notify(retention_waits(new, later) if waiting else retention_unknown(new, host),
                             title="Not applied" if waiting else "Settings", severity="warning", timeout=12)
         await self.reload()
         await self.app.settings_saved(self, set(saved))
@@ -1701,11 +1701,15 @@ def retention_waits(value: str, later: str) -> str:
             f"the ILM policy tpot on its own, the value waits. {later}")
 
 
-def retention_unknown(value: str) -> str:
+def retention_unknown(value: str, host: bool = True) -> str:
     """A TPOT_ES_RETENTION that is not shorter than .env, written while Elasticsearch does not answer (as
-    tpot elastic says it): the policy is unknown, it may still keep the events longer."""
+    tpot elastic says it): the policy is unknown, it may still keep the events longer. Off the T-Pot host
+    there is no tpot elastic: the text says where it runs."""
+    then = ("a shorter value waits for 'tpot elastic retention --force' (it asks first)." if host else
+            "a shorter value waits: apply it on the T-Pot host with 'tpot elastic retention --force' (it asks "
+            "first).")
     return (f"TPOT_ES_RETENTION={value} is set. T-Pot applies it on its next start if the ILM policy tpot keeps "
-            "the events less long; a shorter value waits for 'tpot elastic retention --force' (it asks first).")
+            f"the events less long; {then}")
 
 
 def data_loss_text(items) -> Text:
