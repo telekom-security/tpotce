@@ -279,6 +279,54 @@ class AccessTest(unittest.TestCase):
         self.assertEqual(elastic.plan("365", opener=self.es(), now=NOW).doomed, [])
         self.assertEqual(elastic.plan("off", opener=self.es(), now=NOW).doomed, [])
 
+    def test_plan_marks_every_shortening(self):
+        shorter = elastic.plan("30", opener=self.es(), now=NOW)
+        self.assertEqual((shorter.decision.action, shorter.shortening), ("update", True))
+        self.assertEqual([i.name for i in shorter.doomed], ["logstash-old"])
+        self.assertFalse(elastic.plan("365", opener=self.es(), now=NOW).shortening)
+        same = elastic.plan("90", opener=self.es(), now=NOW)
+        self.assertEqual((same.decision.action, same.shortening), ("keep", False))
+        self.assertFalse(elastic.plan("off", opener=self.es(), now=NOW).shortening)
+        # a policy that is created shorter than "forever", and a foreign one that --force replaces
+        self.assertTrue(elastic.plan("30", opener=self.es(None), now=NOW).shortening)
+        self.assertFalse(elastic.plan("off", opener=self.es(None), now=NOW).shortening)
+        foreign = dict(MANAGED_90, _meta={})
+        self.assertTrue(elastic.plan("30", force=True, opener=self.es(foreign), now=NOW).shortening)
+
+    def test_plan_shortening_without_doomed_indices(self):
+        managed_365 = {"phases": {"hot": {"min_age": "0ms", "actions": {}},
+                                  "delete": {"min_age": "365d", "actions": {"delete": {}}}},
+                       "_meta": {"managed": True, "tpot_retention": "365"}}
+        es = FakeES({("GET", "/_cat/indices/logstash-*"): (200, INDICES[1:]),
+                     ("GET", "/_ilm/policy/tpot"): (200, {"tpot": {"policy": managed_365}})})
+        chosen = elastic.plan("90", opener=es, now=NOW)
+        self.assertTrue(chosen.shortening)
+        self.assertEqual(chosen.doomed, [])
+        self.assertTrue(chosen.reachable)
+
+    def test_status_pending_and_adopts(self):
+        def policy(days, managed):
+            return {"phases": {"hot": {"min_age": "0ms", "actions": {}},
+                               "delete": {"min_age": f"{days}d", "actions": {"delete": {}}}},
+                    "_meta": {"managed": True, "tpot_retention": days} if managed else {}}
+        found = elastic.status("7", opener=self.es(policy("365", True)))
+        self.assertEqual((found.state, found.pending, found.adopts), ("managed", True, False))
+        found = elastic.status("120", opener=self.es(policy("120", False)))
+        self.assertEqual((found.state, found.pending, found.adopts), ("foreign", False, True))
+        found = elastic.status("90", opener=self.es(policy("30", True)))
+        self.assertEqual((found.state, found.pending, found.adopts), ("managed", False, False))
+        found = elastic.status("30", opener=self.es(policy("120", False)))
+        self.assertEqual((found.pending, found.adopts), (False, False))
+        found = elastic.status("30", opener=self.es(None))
+        self.assertEqual((found.state, found.pending, found.adopts), ("missing", False, False))
+
+    def test_oldest_is_the_first_creation_date(self):
+        self.assertEqual(elastic.oldest(opener=self.es()), NOW - 60 * DAY)
+        empty = FakeES({("GET", "/_cat/indices/logstash-*"): (200, [])})
+        self.assertIsNone(elastic.oldest(opener=empty))
+        with self.assertRaises(elastic.ElasticError):
+            elastic.oldest(opener=FakeES({}))
+
     def test_apply_puts_only_on_create_or_update(self):
         es = self.es()
         elastic.apply(elastic.plan("90", opener=es, now=NOW), opener=es)
@@ -339,6 +387,13 @@ class CliTest(unittest.TestCase):
         self.assertEqual((args.command, args.elastic_command, args.value, args.yes), ("elastic", "retention", "60", True))
         self.assertEqual(cli.build_parser().parse_args(["elastic"]).command, "elastic")
 
+    def test_accept_data_loss_is_its_own_flag(self):
+        from tpotctl import cli
+        parse = cli.build_parser().parse_args
+        self.assertFalse(parse(["elastic", "retention", "30", "-y"]).accept_data_loss)
+        self.assertTrue(parse(["elastic", "retention", "30", "--accept-data-loss"]).accept_data_loss)
+        self.assertFalse(parse(["elastic", "retention", "30", "--accept-data-loss"]).yes)
+
     def test_the_setting_offers_the_usual_retentions(self):
         from tpotctl import envschema
         rule = envschema.load_schema()["TPOT_ES_RETENTION"]
@@ -367,7 +422,10 @@ class FakeSettings:
 class RunElasticTest(unittest.TestCase):
     """The decisions of `tpot elastic retention`: what is asked, what is written, what is applied."""
 
-    def run_cli(self, argv, retention="90", state=None, plan=None, confirm=True, apply_error=None, sensor=False):
+    def run_cli(self, argv, retention="90", state=None, plan=None, confirm=True, apply_error=None, sensor=False,
+                terminal=None):
+        """terminal None: confirm_data_loss is mocked (self.asked); True / False: the real one, with or
+        without a terminal on stdin (answers 'y' / 'n' to its question as `confirm` says)."""
         from unittest import mock
         from rich.console import Console
         from tpotctl import cli
@@ -376,9 +434,13 @@ class RunElasticTest(unittest.TestCase):
         self.asked, self.applied, self.planned = [], [], []
         self.out, self.err = io.StringIO(), io.StringIO()
 
-        def ask(question, yes):
-            self.asked.append((question, yes))
-            return yes or confirm
+        def ask(question, accept):
+            self.asked.append((question, accept))
+            return accept or confirm
+
+        def typed(prompt):
+            self.asked.append((prompt, None))
+            return "y" if confirm else "n"
 
         def plan_of(value, force=False):
             self.planned.append((value, force))
@@ -391,20 +453,27 @@ class RunElasticTest(unittest.TestCase):
 
         state = state or elastic.Status(retention, retention, "managed")
         import contextlib
+        self.plain_confirmed = []
         with mock.patch("tpotctl.ops.require_linux_host"), \
                 mock.patch("tpotctl.settings.load", return_value=self.settings), \
                 mock.patch("tpotctl.elastic.status", return_value=state), \
                 mock.patch("tpotctl.elastic.plan", side_effect=plan_of), \
                 mock.patch("tpotctl.elastic.apply", side_effect=apply_to), \
-                mock.patch("tpotctl.cli.confirm", side_effect=ask), \
+                mock.patch("tpotctl.cli.confirm", side_effect=lambda *a: self.plain_confirmed.append(a) or True), \
+                mock.patch("tpotctl.cli.ask", side_effect=typed), \
                 mock.patch("tpotctl.cli._console", return_value=Console(file=self.out, width=200)), \
                 contextlib.redirect_stderr(self.err):
-            return cli.run_elastic(cli.build_parser().parse_args(["elastic"] + argv))
+            if terminal is None:
+                with mock.patch("tpotctl.cli.confirm_data_loss", side_effect=ask):
+                    return cli.run_elastic(cli.build_parser().parse_args(["elastic"] + argv))
+            stdin = mock.Mock(isatty=lambda: terminal)
+            with mock.patch("sys.stdin", stdin):
+                return cli.run_elastic(cli.build_parser().parse_args(["elastic"] + argv))
 
     @staticmethod
-    def plan(action="update", doomed=(), reachable=True, current="90"):
+    def plan(action="update", doomed=(), reachable=True, current="90", shortening=False):
         return elastic.Plan(elastic.Decision(action, {"phases": {}} if action in ("create", "update") else None,
-                                             current, action != "foreign"), list(doomed), reachable)
+                                             current, action != "foreign"), list(doomed), reachable, shortening)
 
     OLD = elastic.Index("logstash-old", 1.0, 1200, 5000)
 
@@ -420,14 +489,16 @@ class RunElasticTest(unittest.TestCase):
         self.run_cli(["retention", "30", "--force", "-y"], plan=self.plan())
         self.assertEqual(self.planned, [("30", True)])
 
-    def test_unreachable_and_shorter_asks(self):
+    def test_unreachable_shorter_writes_env_only_and_says_it_waits(self):
         unreachable = self.plan("keep", reachable=False)
-        self.assertEqual(self.run_cli(["retention", "30"], plan=unreachable, confirm=False), 1)
-        self.assertEqual(len(self.asked), 1)
-        self.assertEqual((self.settings.changes, self.applied), ([], []))
-        self.assertEqual(self.run_cli(["retention", "30"], plan=unreachable, confirm=True), 0)
+        self.assertEqual(self.run_cli(["retention", "30"], plan=unreachable, confirm=False), 0)
+        self.assertEqual(self.asked, [])
+        self.assertEqual(self.plain_confirmed, [])
         self.assertEqual(self.settings.changes, [{"TPOT_ES_RETENTION": "30"}])
         self.assertEqual(self.applied, [])
+        text = self.out.getvalue()
+        self.assertIn("does not shorten", text)
+        self.assertIn("tpot elastic retention --force", text)
 
     def test_unreachable_and_longer_does_not_ask(self):
         code = self.run_cli(["retention", "365"], plan=self.plan("keep", reachable=False))
@@ -435,27 +506,80 @@ class RunElasticTest(unittest.TestCase):
         self.assertEqual(self.asked, [])
         self.assertEqual(self.settings.changes, [{"TPOT_ES_RETENTION": "365"}])
         self.assertEqual(self.applied, [])
+        self.assertIn("next start", self.out.getvalue())
+        self.assertNotIn("does not shorten", self.out.getvalue())
 
-    def test_doomed_indices_are_asked_about(self):
-        chosen = self.plan(doomed=[self.OLD])
+    def test_doomed_indices_are_listed_and_asked_about(self):
+        chosen = self.plan(doomed=[self.OLD], shortening=True)
         self.assertEqual(self.run_cli(["retention", "30"], plan=chosen, confirm=False), 1)
-        self.assertEqual(len(self.asked), 1)
-        self.assertIn("1 index with 1200 events (4.9 KB) is deleted right away", self.asked[0][0])
+        self.assertEqual(self.asked, [("Keep the Elasticsearch events 30 days?", False)])
+        self.assertIn("1 index with 1200 events (4.9 KB) is deleted right away", self.out.getvalue())
+        self.assertIn("logstash-old  1200 events", self.out.getvalue())
         self.assertEqual((self.settings.changes, self.applied), ([], []))
         self.assertEqual(self.run_cli(["retention", "30"], plan=chosen, confirm=True), 0)
         self.assertEqual(self.settings.changes, [{"TPOT_ES_RETENTION": "30"}])
         self.assertEqual(self.applied, [chosen])
 
-    def test_yes_does_not_prompt_but_lists_the_indices(self):
-        chosen = self.plan(doomed=[self.OLD])
-        self.assertEqual(self.run_cli(["retention", "30", "-y"], plan=chosen, confirm=False), 0)
-        self.assertEqual(self.asked[0][1], True)
-        self.assertIn("logstash-old  1200 events", self.out.getvalue())
+    def test_shortening_asks_even_without_doomed_indices(self):
+        chosen = self.plan(shortening=True)
+        self.assertEqual(self.run_cli(["retention", "30"], plan=chosen, confirm=False), 1)
+        self.assertEqual(len(self.asked), 1)
+        self.assertIn("No index is deleted right away; from now on events older than 30 days are deleted.",
+                      self.out.getvalue())
+        self.assertEqual((self.settings.changes, self.applied), ([], []))
+        self.assertEqual(self.plain_confirmed, [])
+        self.assertEqual(self.run_cli(["retention", "30"], plan=chosen, confirm=True), 0)
         self.assertEqual(self.applied, [chosen])
 
-    def test_nothing_doomed_does_not_ask(self):
+    def test_yes_does_not_confirm_data_loss(self):
+        chosen = self.plan(doomed=[self.OLD], shortening=True)
+        self.assertEqual(self.run_cli(["retention", "30", "-y"], plan=chosen, confirm=False), 1)
+        self.assertEqual(self.asked[0][1], False)               # -y is no accept
+        self.assertEqual((self.settings.changes, self.applied), ([], []))
+
+    def test_yes_without_a_terminal_and_without_the_flag_is_refused(self):
+        chosen = self.plan(shortening=True)
+        with self.assertRaises(SystemExit) as stop:
+            self.run_cli(["retention", "30", "-y"], plan=chosen, terminal=False)
+        self.assertEqual(stop.exception.code, 2)
+        self.assertEqual((self.settings.changes, self.applied), ([], []))
+        self.assertIn("--accept-data-loss", self.err.getvalue())
+        self.assertEqual(self.asked, [])
+
+    def test_accept_data_loss_without_terminal(self):
+        chosen = self.plan(doomed=[self.OLD], shortening=True)
+        self.assertEqual(self.run_cli(["retention", "30", "--accept-data-loss"], plan=chosen, terminal=False), 0)
+        self.assertEqual(self.settings.changes, [{"TPOT_ES_RETENTION": "30"}])
+        self.assertEqual(self.applied, [chosen])
+        self.assertEqual(self.asked, [])
+
+    def test_a_terminal_asks_and_only_y_agrees(self):
+        chosen = self.plan(shortening=True)
+        self.assertEqual(self.run_cli(["retention", "30", "-y"], plan=chosen, terminal=True, confirm=False), 1)
+        self.assertEqual(len(self.asked), 1)
+        self.assertTrue(self.asked[0][0].endswith("[y/N] "))
+        self.assertEqual((self.settings.changes, self.applied), ([], []))
+        self.assertEqual(self.run_cli(["retention", "30", "-y"], plan=chosen, terminal=True, confirm=True), 0)
+        self.assertEqual(self.applied, [chosen])
+
+    def test_confirm_data_loss_itself(self):
+        from unittest import mock
+        from tpotctl import cli
+        self.assertTrue(cli.confirm_data_loss("Delete?", True))
+        with mock.patch("sys.stdin", mock.Mock(isatty=lambda: False)), \
+                mock.patch("tpotctl.cli.ask", side_effect=AssertionError("asked without a terminal")), \
+                self.assertRaises(SystemExit) as stop:
+            cli.confirm_data_loss("Delete?", False)
+        self.assertEqual(stop.exception.code, 2)
+        with mock.patch("sys.stdin", mock.Mock(isatty=lambda: True)):
+            for answer, wanted in (("y", True), ("Y", True), ("", False), ("n", False), ("yes", False)):
+                with mock.patch("tpotctl.cli.ask", return_value=answer):
+                    self.assertEqual(cli.confirm_data_loss("Delete?", False), wanted, answer)
+
+    def test_nothing_shortening_does_not_ask(self):
         self.assertEqual(self.run_cli(["retention", "365"], plan=self.plan()), 0)
         self.assertEqual(self.asked, [])
+        self.assertEqual(self.plain_confirmed, [])
 
     def test_invalid_value_is_refused_first(self):
         self.assertEqual(self.run_cli(["retention", "30d", "-y"], plan=self.plan()), 2)
@@ -474,6 +598,23 @@ class RunElasticTest(unittest.TestCase):
         self.assertEqual(self.run_cli(["retention", "--adopt"], state=foreign, plan=self.plan(current="45")), 0)
         self.assertEqual(self.settings.changes, [{"TPOT_ES_RETENTION": "45"}])
         self.assertEqual(self.planned, [("45", True)])
+
+    def test_adopt_force_with_empty_env(self):
+        foreign = elastic.Status("", "120", "foreign")
+        chosen = self.plan(current="120")
+        self.assertEqual(self.run_cli(["retention", "--adopt", "--force"], retention="", state=foreign,
+                                      plan=chosen), 0)
+        self.assertEqual(self.settings.changes, [{"TPOT_ES_RETENTION": "120"}])
+        self.assertEqual(self.planned, [("120", True)])
+        self.assertEqual(self.applied, [chosen])
+        self.assertNotIn("is empty", self.err.getvalue())
+
+    def test_adopt_that_shortens_asks_too(self):
+        managed = elastic.Status("90", "45", "managed")
+        chosen = self.plan(current="90", shortening=True)
+        self.assertEqual(self.run_cli(["retention", "--adopt"], state=managed, plan=chosen, confirm=False), 1)
+        self.assertEqual(len(self.asked), 1)
+        self.assertEqual((self.settings.changes, self.applied), ([], []))
 
     def test_a_failed_put_after_the_env_write_is_told(self):
         code = self.run_cli(["retention", "30", "-y"], plan=self.plan(), apply_error="the ILM policy tpot refused")
@@ -497,16 +638,29 @@ class RunElasticTest(unittest.TestCase):
         self.assertIn("TPOT_ES_RETENTION=45 is set in .env", self.out.getvalue())
         self.assertIn("tpot env set TPOT_ES_RETENTION=90", self.out.getvalue())
 
-    def test_status_warns_of_a_shorter_value_waiting_in_env(self):
-        for state, names_adopt in ((elastic.Status("30", "90", "managed"), True),
-                                   (elastic.Status("30", "", "missing"), False)):
-            with self.subTest(state=state.state):
-                self.assertEqual(self.run_cli(["status"], retention="30", state=state), 0)
-                text = self.out.getvalue() + self.err.getvalue()
-                self.assertIn("T-Pot deletes the events older than 30 days on its next start", text)
-                self.assertIn("tpot elastic retention --force", text)
-                self.assertEqual("tpot elastic retention --adopt" in text, names_adopt)
-                self.assertEqual(self.planned, [])
+    def test_status_shows_pending(self):
+        state = elastic.Status("30", "90", "managed", pending=True)
+        self.assertEqual(self.run_cli(["status"], retention="30", state=state), 0)
+        text = self.out.getvalue() + self.err.getvalue()
+        self.assertIn("TPOT_ES_RETENTION=30 waits", text)
+        self.assertIn("does not shorten the ILM policy tpot (90 days) on its own", text)
+        self.assertIn("tpot elastic retention --force", text)
+        self.assertIn("--adopt", text)
+        self.assertEqual(self.planned, [])
+
+    def test_status_shows_adoption(self):
+        state = elastic.Status("120", "120", "foreign", adopts=True)
+        self.assertEqual(self.run_cli(["status"], retention="120", state=state), 0)
+        text = self.out.getvalue() + self.err.getvalue()
+        self.assertIn("takes it over on its next start", text)
+        self.assertIn("same duration", text)
+
+    def test_status_of_a_missing_policy_says_what_the_next_start_does(self):
+        state = elastic.Status("30", "", "missing")
+        self.run_cli(["status"], retention="30", state=state)
+        text = self.out.getvalue() + self.err.getvalue()
+        self.assertIn("T-Pot creates the policy on its next start: for 30 days if no older events exist, "
+                      "otherwise forever (nothing is deleted) and the value waits.", text)
 
     def test_status_is_quiet_where_nothing_waits(self):
         for retention, state in (("90", elastic.Status("90", "90", "managed")),
@@ -516,10 +670,12 @@ class RunElasticTest(unittest.TestCase):
                                  ("30", elastic.Status("30", "90", "foreign"))):
             with self.subTest(retention=retention, state=state.state):
                 self.run_cli(["status"], retention=retention, state=state)
-                self.assertNotIn("on its next start", self.out.getvalue() + self.err.getvalue())
+                text = self.out.getvalue() + self.err.getvalue()
+                for word in ("waits", "takes it over", "on its next start: for"):
+                    self.assertNotIn(word, text)
 
     def test_force_without_a_value_applies_the_env_value(self):
-        chosen = self.plan(doomed=[self.OLD])
+        chosen = self.plan(doomed=[self.OLD], shortening=True)
         self.assertEqual(self.run_cli(["retention", "--force"], retention="30", plan=chosen, confirm=True), 0)
         self.assertEqual(self.planned, [("30", True)])
         self.assertEqual(len(self.asked), 1)                   # the preview asks as for a value
@@ -554,7 +710,7 @@ class RunElasticTest(unittest.TestCase):
 class RunEnvRetentionTest(unittest.TestCase):
     """tpot env set TPOT_ES_RETENTION: what it says about the next start."""
 
-    def env_set(self, *assignments, start="90"):
+    def env_set(self, *assignments, start="90", state=None):
         from contextlib import redirect_stderr, redirect_stdout
         from unittest import mock
         from tpotctl import cli, settings
@@ -566,27 +722,41 @@ class RunEnvRetentionTest(unittest.TestCase):
         env.save()
         original = settings.load
         out = io.StringIO()
+        state = state or elastic.Status(start, "", "unreachable", "Elasticsearch is not reachable (refused)")
         with mock.patch.object(settings, "load", lambda **kwargs: original(repo, **kwargs)), \
+                mock.patch("tpotctl.elastic.status", return_value=state), \
                 mock.patch("tpotctl.ops.host_ostype", return_value="linux"), \
                 redirect_stdout(out), redirect_stderr(out):
             self.assertEqual(cli.main(["env", "set"] + list(assignments)), 0, out.getvalue())
         return " ".join(out.getvalue().split())
 
-    def test_a_shorter_value_warns_of_the_next_start(self):
-        text = self.env_set("TPOT_ES_RETENTION=30")
-        self.assertIn("The next start of T-Pot deletes the events older than 30 days", text)
+    def test_a_shorter_value_says_it_is_not_applied_on_its_own(self):
+        text = self.env_set("TPOT_ES_RETENTION=7", start="30")
+        self.assertIn("not applied by T-Pot on its own", text)
         self.assertIn("tpot elastic retention --force", text)
+        self.assertIn("asks first", text)
         self.assertNotIn("Restart T-Pot to apply it", text)
+        self.assertNotIn("next start of T-Pot deletes", text)
+
+    def test_a_value_shorter_than_the_policy_says_it_too(self):
+        # .env says 30 and waits, the policy still keeps 90: 60 is longer than .env but shorter than the policy
+        waiting = elastic.Status("30", "90", "managed", pending=True)
+        text = self.env_set("TPOT_ES_RETENTION=60", start="30", state=waiting)
+        self.assertIn("not applied by T-Pot on its own", text)
 
     def test_a_longer_value_does_not_warn(self):
         text = self.env_set("TPOT_ES_RETENTION=365")
+        self.assertNotIn("not applied by T-Pot on its own", text)
         self.assertNotIn("deletes the events", text)
         self.assertIn("tpot elastic retention --force", text)
 
     def test_another_key_still_asks_for_the_restart(self):
-        text = self.env_set("TPOT_ES_RETENTION=30", "TPOT_ATTACKMAP_TEXT=DISABLED")
-        self.assertIn("deletes the events older than 30 days", text)
+        text = self.env_set("TPOT_ES_RETENTION=365", "TPOT_ATTACKMAP_TEXT=DISABLED")
         self.assertIn("Restart T-Pot to apply it", text)
+        self.assertNotIn("not applied by T-Pot on its own", text)
+        text = self.env_set("TPOT_ES_RETENTION=30", "TPOT_ATTACKMAP_TEXT=DISABLED")
+        self.assertIn("Restart T-Pot to apply it", text)
+        self.assertIn("not applied by T-Pot on its own", text)
 
 
 if __name__ == "__main__":

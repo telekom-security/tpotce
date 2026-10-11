@@ -205,6 +205,8 @@ class Status:
     current: str        # what the policy does (value_of), "" if not in days
     state: str          # managed | foreign | missing | unreachable
     problem: str = ""
+    adopts: bool = False    # foreign, and its duration is the value: T-Pot takes it over on its next start
+    pending: bool = False   # managed, and the value is shorter: it waits for the user's yes
 
 
 def status(value: str, url: str = ES_URL, opener: Callable = urllib.request.urlopen) -> Status:
@@ -214,7 +216,16 @@ def status(value: str, url: str = ES_URL, opener: Callable = urllib.request.urlo
         return Status(value, "", "unreachable", str(err))
     if policy is None:
         return Status(value, "", "missing")
-    return Status(value, value_of(policy), "managed" if is_managed(policy) else "foreign")
+    current = value_of(policy)
+    if is_managed(policy):
+        return Status(value, current, "managed", pending=shortens(current, value))
+    return Status(value, current, "foreign", adopts=bool(current) and current == value)
+
+
+def oldest(url: str = ES_URL, opener: Callable = urllib.request.urlopen) -> Optional[float]:
+    """When the oldest index was created (epoch seconds), None if there is none."""
+    found = indices(url, opener)
+    return min(index.created for index in found) if found else None
 
 
 @dataclass
@@ -222,26 +233,28 @@ class Plan:
     decision: Decision
     doomed: List[Index]
     reachable: bool
+    shortening: bool = False    # applying it deletes events the policy keeps now: the user must say yes
 
 
 def plan(value: str, force: bool = False, url: str = ES_URL, opener: Callable = urllib.request.urlopen,
          now: Optional[float] = None) -> Plan:
-    """What setting value does now: the decision and the indices it deletes."""
+    """What setting value does once the user confirmed: the decision, whether it shortens, the indices it
+    deletes right away. A caller applies a shortening plan only after the user's yes."""
     try:
         policy = get_policy(url, opener)
     except ElasticError:
         return Plan(Decision("keep", None, "", False), [], False)
-    decision = decide(value, policy, force, shorten=True)
+    decision = decide(value, policy, force, shorten=True, now=now)
+    # a marker-only update or an adoption keeps the same duration, a policy that is not in days
+    # counts as keeping the events forever
+    shortening = decision.action in ("create", "update") and shortens(decision.current or "off", value)
     gone: List[Index] = []
-    # only where events go that the policy keeps now: a marker-only update or an adoption keeps
-    # the same duration, a policy that is not in days counts as keeping them all
-    if decision.action == "create" or (decision.action == "update"
-                                       and shortens(decision.current or "off", value)):
+    if shortening:
         try:
-            gone = doomed(indices(url, opener), value or DEFAULT, time.time() if now is None else now)
+            gone = doomed(indices(url, opener), value, time.time() if now is None else now)
         except ElasticError:
-            return Plan(decision, [], False)
-    return Plan(decision, gone, True)
+            return Plan(decision, [], False, shortening)
+    return Plan(decision, gone, True, shortening)
 
 
 def apply(chosen: Plan, url: str = ES_URL, opener: Callable = urllib.request.urlopen) -> None:
