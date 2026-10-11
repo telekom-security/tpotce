@@ -1,4 +1,5 @@
 import ast
+import configparser
 import json
 import random
 import re
@@ -75,6 +76,8 @@ class FakeFs:
 
 class FakeCommand:
     """The parts of cowrie.shell.command.HoneyPotCommand that Command_grep uses."""
+
+    pp = None
 
     def __init__(self, args, input_data=None, files=None, cwd="/root"):
         self.args = list(args)
@@ -838,12 +841,128 @@ class PatchTest(unittest.TestCase):
         self.assertEqual(self.systemctl("centos-7", ["frobnicate"])[1:3], ("Unknown operation 'frobnicate'.\n", 1))
         self.assertEqual(self.systemctl("rhel-9", ["--bogus"])[1:3], ("systemctl: unrecognized option '--bogus'\n", 1))
 
+    def upstream_session(self, pid="ubuntu-noble", uid=1000, extra_modules=()):
+        """A session on Cowrie's own HoneyPotCommand (exec_command, exit) and call_command of
+        v3.1.1, with the patched sudo, systemctl, apt and yum of a rendered persona."""
+        from tpot_personas.identity import draw
+        from tpot_personas.render import render
+        persona = catalog.by_id(pid)
+        out = tmpdir(self) / pid
+        ident = draw(persona, 1)
+        render(persona, ident, base_tree(), out, runtime_dir=out, keys_dir=out / "keys")
+        cfg = configparser.ConfigParser(interpolation=None)
+        cfg.read(out / "cowrie.cfg")
+        config = FakeConfig({(section, key): value for section in cfg.sections() for key, value in cfg.items(section)})
+
+        class Logger:
+            def info(self, *a, **k):
+                pass
+
+            def failure(self, *a, **k):
+                pass
+
+        base = module_parts((FIXTURE / "src/cowrie/shell/command.py").read_text(), ["HoneyPotCommand"],
+                            {"Logger": Logger, "error": None, "failure": None})["HoneyPotCommand"]
+        root = self.patched()
+        call_command = method((root / "src/cowrie/shell/protocol.py").read_text(), "HoneyPotBaseProtocol",
+                              "call_command", {"HoneyPotExecProtocol": type("Exec", (), {})})
+
+        class Pipe:
+            def __init__(self, protocol, cmdclass, args, input_data, targets, *rest, **kw):
+                self.input_data, self.targets, self.stdin_from_pipe = input_data, targets, False
+                self.out, self.err = bytearray(), bytearray()
+
+            def write_stdout(self, data):
+                self.out += data
+
+            def write_stderr(self, data):
+                self.err += data
+
+        def inline_callbacks(function):
+            def run(*a, **k):
+                result = function(*a, **k)
+                if hasattr(result, "send"):
+                    for _ in result:
+                        pass
+            return run
+
+        commands = {}
+        modules = {}
+        for name in ("sudo", "service", "apt", "yum") + tuple(extra_modules):
+            source = (root / f"src/cowrie/commands/{name}.py").read_text()
+            modules[name] = module_all(source, {"HoneyPotCommand": base, "PipeProtocol": Pipe, "CowrieConfig": config,
+                                                "inlineCallbacks": inline_callbacks, "defer": None, "reactor": None,
+                                                "Logger": Logger})
+            commands.update(modules[name]["commands"])
+            for cls in modules[name]["commands"].values():
+                if hasattr(cls, "sleep"):
+                    cls.sleep = lambda self, *a, **k: None
+
+        class Shell:
+            environ = {"PATH": ":".join(PATH)}
+            exported = set()
+            cwd = "/root"
+            user = {"uid": uid, "gid": uid, "username": persona.user if uid else "root", "home": "/root"}
+            interactive = True
+            last_exit_code = None
+
+            def queue_line(self, line):
+                pass
+
+            def resume(self):
+                pass
+
+        class Protocol:
+            hostname = ident.hostname
+            terminal = None
+            fs = TreeFs(base_tree())
+
+            def __init__(self):
+                self.cmdstack = [Shell()]
+                self.pp = Pipe(None, None, [], None, {})
+
+            def boot_time(self):
+                return time.time() - 86400
+
+            def getCommand(self, cmd, paths, cwd):
+                return commands.get(cmd)
+
+            def end_process(self, code):
+                pass
+
+        Protocol.call_command = call_command
+        protocol = Protocol()
+
+        def run(line):
+            words = line.split()
+            pp = Pipe(None, None, words[1:], None, {})
+            protocol.call_command(pp, commands[words[0]], *words[1:])
+            child = protocol.pp
+            return bytes(child.out).decode(), bytes(child.err).decode(), protocol.cmdstack[-1].last_exit_code
+
+        return run
+
+    def test_sudo_runs_its_command_as_root(self):
+        run = self.upstream_session()
+        self.assertEqual(run("sudo systemctl restart ssh"), ("", "", 0))
+        self.assertEqual(run("sudo systemctl stop cron"), ("", "", 0))
+        out, err, code = run("systemctl restart ssh")
+        self.assertIn("Interactive authentication required.", err)
+        self.assertEqual(code, 1)
+        self.assertIn("Unit nosuch.service not found.", run("sudo systemctl start nosuch")[1])
+
+    def test_sudo_apt_update_runs_as_root(self):
+        run = self.upstream_session("debian-trixie")
+        out, err, _ = run("sudo apt-get update")
+        self.assertIn("Reading package lists... Done", out)
+        self.assertEqual(err, "")
+        self.assertIn("Could not open lock file", run("apt-get update")[1])
+
     def test_systemctl_changes_only_as_root(self):
         _, err, code, _, _ = self.systemctl("ubuntu-noble", ["restart", "ssh"])
         self.assertEqual((err, code), ("Failed to restart ssh.service: Interactive authentication required.\n"
                                        "See system logs and 'systemctl status ssh.service' for details.\n", 1))
         self.assertEqual(self.systemctl("ubuntu-noble", ["restart", "ssh"], uid=0)[1:3], ("", 0))
-        self.assertEqual(self.systemctl("ubuntu-noble", ["stop", "cron"], sudo=True)[1:3], ("", 0))
         self.assertEqual(self.systemctl("ubuntu-noble", ["start", "nosuch"], uid=0)[1:3],
                          ("Failed to start nosuch.service: Unit nosuch.service not found.\n", 5))
         self.assertEqual(self.systemctl("ubuntu-noble", ["daemon-reload"], uid=0)[1:3], ("", 0))
@@ -1508,6 +1627,8 @@ class PatchTest(unittest.TestCase):
                  ("src/cowrie/commands/which.py", "                if self.fs.exists(resolved):\n",
                   "                if self.fs.isfile(resolved):\n"),
                  ("src/cowrie/commands/sudo.py", "import getopt\n", "import getopt as options\n"),
+                 ("src/cowrie/commands/sudo.py", "                self.exec_command(pp, cmdclass, *parsed_arguments[1:])\n",
+                  "                self.exec_command(pp, cmdclass, *parsed_arguments[1:])  # exec\n"),
                  ("src/cowrie/commands/sudo.py", 'self.args[0:start_value], "bEeHhKknPSVva:C:g:i:l:p:r:s:t:U:u:"',
                   'self.args[0:start_value], "bEeHhKknPSVva:C:g:i:l:p:r:s:t:U:u:R:"'),
                  ("src/cowrie/commands/sudo.py", "    def start(self) -> None:\n        start_value = None\n",

@@ -1042,9 +1042,8 @@ def tpot_unit(data: dict, name: str):
 
 
 def tpot_privileged(cmd) -> bool:
-    if cmd.user.get("uid") == 0:
-        return True
-    return any(type(item).__name__ == "Command_sudo" for item in getattr(cmd.protocol, "cmdstack", []))
+    # root, or the command sudo runs (patched sudo.py marks its pipe)
+    return cmd.user.get("uid") == 0 or bool(getattr(cmd.pp, "tpot_sudo", False))
 
 
 def tpot_command_line(command: str, version: int) -> str:
@@ -1305,7 +1304,8 @@ def patch_systemctl(cowrie_root):
 
 def patch_sudo(cowrie_root):
     """sudo -V names [shell] sudo_version (1.9 adds the audit plugin); /usr/bin/sudo
-    is the command too; sudo -l lists the persona's rules ([shell] sudo_list)."""
+    is the command too; sudo -l lists the persona's rules ([shell] sudo_list); the command
+    sudo runs has pp.tpot_sudo (systemctl, apt update and yum update run as root then)."""
     path = cowrie_root / "src" / "cowrie" / "commands" / "sudo.py"
     replace_once(path, *CONFIG_IMPORT)
     replace_once(
@@ -1332,6 +1332,17 @@ def patch_sudo(cowrie_root):
 """,
         """commands["sudo"] = Command_sudo
 commands["/usr/bin/sudo"] = Command_sudo
+""",
+    )
+    # the command sudo runs knows it runs as root: sudo keeps the shell's user, so its pipe says so
+    replace_once(
+        path,
+        """                pp.stdin_from_pipe = self.pp.stdin_from_pipe
+                self.exec_command(pp, cmdclass, *parsed_arguments[1:])
+""",
+        """                pp.stdin_from_pipe = self.pp.stdin_from_pipe
+                pp.tpot_sudo = True
+                self.exec_command(pp, cmdclass, *parsed_arguments[1:])
 """,
     )
     # sudo -l / -ll / --list: the rules of the persona's sudoers ([shell] sudo_list)
@@ -1511,7 +1522,7 @@ def tpot_apt_size(name: str) -> int:
             self.do_version()
         elif self.tpot_words[:1] == ["install"]:
             yield self.do_install()
-        elif self.tpot_words[:1] == ["update"] and self.user["uid"] == 0:
+        elif self.tpot_words[:1] == ["update"] and (self.user["uid"] == 0 or getattr(self.pp, "tpot_sudo", False)):
             yield self.tpot_update()
         elif self.tpot_words[:1] == ["moo"]:
             self.do_moo()
@@ -1713,7 +1724,9 @@ def tpot_yum_plugins() -> str:
                 yield self.do_version()
             case ["install", *_]:
                 yield self.do_install()
-            case ["update" | "upgrade" | "check-update", *_] if self.user["uid"] == 0:
+            case ["update" | "upgrade" | "check-update", *_] if self.user["uid"] == 0 or getattr(
+                self.pp, "tpot_sudo", False
+            ):
                 yield self.sleep(1, 2)
                 self.write(f"Loaded plugins: {tpot_yum_plugins()}\\n")
                 self.write("Loading mirror speeds from cached hostfile\\n")
