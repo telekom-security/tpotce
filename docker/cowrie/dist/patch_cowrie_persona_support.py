@@ -35,6 +35,23 @@ def patch_protocol(cowrie_root):
         )
     replace_once(
         path,
+        "from cowrie.shell import command, fs, honeypot\n",
+        """from cowrie.shell import command, fs, honeypot
+
+
+@functools.cache
+def tpot_skip_python_commands() -> frozenset[str]:
+    \"\"\"T-Pot: the commands of [shell] skip_python_commands, parsed once (the
+    config does not change while Cowrie runs, getCommand runs for every word).\"\"\"
+    return frozenset(
+        name.strip()
+        for name in CowrieConfig.get("shell", "skip_python_commands", fallback="").split(",")
+        if name.strip()
+    )
+""",
+    )
+    replace_once(
+        path,
         """        if cmd in self.commands:
             return self.commands[cmd]
         if cmd[0] in (".", "/"):
@@ -50,13 +67,7 @@ def patch_protocol(cowrie_root):
         if path is None:
             return None
 """,
-        """        skip_python_commands = {
-            command.strip()
-            for command in CowrieConfig.get(
-                "shell", "skip_python_commands", fallback=""
-            ).split(",")
-            if command.strip()
-        }
+        """        skip_python_commands = tpot_skip_python_commands()
 
         def skip_python_command(name):
             return name in skip_python_commands or Path(name).name in skip_python_commands

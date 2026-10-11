@@ -1,4 +1,5 @@
 import calendar
+import random
 import re
 import unittest
 
@@ -73,6 +74,20 @@ class IdentityTest(unittest.TestCase):
         p = catalog.by_id("ubuntu-jammy")
         seen = {(draw(p, s, NOW).boot_offset, draw(p, s, NOW).installed_at) for s in range(20)}
         self.assertGreater(len(seen), 15)
+
+    def test_memory_has_a_generator_of_its_own(self):
+        # random.Random(ident.seed) is the stream draw() takes the identity from
+        from tpot_personas.common import mem_stats, rng_for
+        for persona in catalog.PERSONAS[:4]:
+            ident = draw(persona, 11, NOW)
+            same = random.Random(ident.seed)
+            total = ident.hardware.mem_kb
+            old = sorted(int(total * same.uniform(0.20, 0.70)) for _ in range(2))
+            mine = rng_for(ident, "mem")
+            new = sorted(int(total * mine.uniform(0.20, 0.70)) for _ in range(2))
+            stats = mem_stats(ident)
+            self.assertEqual([stats["free"], stats["available"]], new, persona.id)
+            self.assertNotEqual([stats["free"], stats["available"]], old, persona.id)
 
     def test_to_json_names_persona_and_boot(self):
         p = catalog.PERSONAS[0]

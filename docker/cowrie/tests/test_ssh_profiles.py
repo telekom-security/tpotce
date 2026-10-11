@@ -20,6 +20,12 @@ class ProfilesTest(unittest.TestCase):
         for profile in sp.PROFILES.values():
             self.assertNotIn("ssh-dss", profile.host_keys)
 
+    def test_openssh_offers_its_host_keys_in_the_order_of_the_hostkey_files(self):
+        # sshd lists its keys as loaded (rsa, ecdsa, ed25519 of servconf.c and the distributions'
+        # sshd_config), checked with ssh -vv against OpenSSH 9.6p1 and 9.2p1; ed25519 first is the
+        # client's HostKeyAlgorithms preference, not what a server sends
+        self.assertEqual(sp.PROFILES["openssh"].host_keys, ("ssh-rsa", "ecdsa-sha2-nistp256", "ssh-ed25519"))
+
     def test_openwrt_dropbear_has_the_defaults_of_2020_and_later(self):
         profile = sp.PROFILES["dropbear-openwrt"]
         # no CBC, no 3DES, no MD5 (default_options.h), no zlib (OpenWrt --disable-zlib), ed25519 host key

@@ -694,8 +694,9 @@ def cpuinfo(persona, hw, serial="0000000000000000", kernel=""):
 
 
 def mem_stats(ident):
-    """Memory figures in kB; /proc/meminfo, free and top all read these."""
-    rng = random.Random(ident.seed)
+    """Memory figures in kB; /proc/meminfo, free and top all read these. A generator of
+    their own: random.Random(ident.seed) would repeat the draws of the identity."""
+    rng = rng_for(ident, "mem")
     total = ident.hardware.mem_kb
     free, available = sorted(int(total * rng.uniform(0.20, 0.70)) for _ in range(2))
     buffers = int(total * rng.uniform(0.01, 0.05))

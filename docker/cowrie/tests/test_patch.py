@@ -32,6 +32,8 @@ def module_parts(source, names, namespace):
     for node in ast.parse(source).body:
         if isinstance(node, ast.ImportFrom) and node.module and node.module.split(".")[0] in ("cowrie", "twisted"):
             continue
+        if isinstance(node, ast.Import) and any(a.name.split(".")[0] in ("cowrie", "twisted") for a in node.names):
+            continue
         if isinstance(node, (ast.Import, ast.ImportFrom)):
             keep.append(node)
         elif isinstance(node, (ast.ClassDef, ast.FunctionDef)) and node.name in names:
@@ -193,9 +195,11 @@ class PatchTest(unittest.TestCase):
             raise FileNotFoundError("/".join(parts))
 
         config = FakeConfig({("honeypot", "txtcmds_path"): str(root), ("shell", "skip_python_commands"): skip})
+        self.config = config
+        skip_set = module_parts(protocol, ["tpot_skip_python_commands"], {"CowrieConfig": config})
         get_command = method(protocol, "HoneyPotBaseProtocol", "getCommand",
-                             {"CowrieConfig": config, "Path": Path, "fs": FsModule,
-                              "read_data_bytes": read_data_bytes})
+                             {"CowrieConfig": config, "Path": Path, "fs": FsModule, "read_data_bytes": read_data_bytes,
+                              "tpot_skip_python_commands": skip_set["tpot_skip_python_commands"]})
 
         class Protocol:
             fs = TreeFs(base_tree())
@@ -231,6 +235,16 @@ class PatchTest(unittest.TestCase):
         find = self.lookup({}, {"/bin/top": "top"})
         self.assertEqual(find("/usr/bin/top"), "top")
         self.assertEqual(find("top"), "top")
+
+    def test_skip_list_is_parsed_once(self):
+        find = self.lookup({}, {"/bin/top": "top", "top": "top"}, skip="top,gcc")
+        asked = []
+        get = self.config.get
+        self.config.get = lambda section, option, fallback=None: (asked.append(option), get(section, option, fallback))[1]
+        for _ in range(3):
+            self.assertEqual(find("top"), ("script", "/usr/bin/top"))
+            self.assertIsNone(find("nothere"))
+        self.assertLessEqual(asked.count("skip_python_commands"), 1)
 
     def test_skipped_python_command_stays_skipped_in_every_spelling(self):
         find = self.lookup({}, {"/bin/top": "top", "top": "top"}, skip="top")
