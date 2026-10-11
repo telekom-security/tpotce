@@ -140,6 +140,15 @@ class CoreTest(unittest.TestCase):
     def test_unknown_override(self):
         self.assertTrue(errors(self.resolve("STANDARD", ports={("wordpot", 1, "tcp"): 2}), "port"))
 
+    def test_ciscoasa_old_ike_override_is_warned_and_dropped(self):
+        for override in (15500, None):
+            result = self.resolve("STANDARD", ports={("ciscoasa", 5000, "udp"): override}, strict=False)
+            self.assertEqual(errors(result), [])
+            self.assertTrue(any("5000/udp, override left out" in f.text for f in result.warnings))
+            self.assertNotIn(("ciscoasa", 5000, "udp"), result.selection.ports)
+            self.assertEqual({(p.host, p.container, p.proto) for p in result.ports["ciscoasa"]},
+                             {(500, 500, "udp"), (4500, 4500, "udp"), (8443, 8443, "tcp")})
+
     def test_override_syntax(self):
         self.assertEqual(core.parse_overrides("wordpot:80=8080,sentrypeer:5060/udp=-"),
                          {("wordpot", 80, "tcp"): 8080, ("sentrypeer", 5060, "udp"): None})

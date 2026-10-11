@@ -85,13 +85,21 @@ class HptestTest(unittest.TestCase):
         config = {"services": {
             "cowrie": {"ports": [{"target": 22, "published": "22", "protocol": "tcp"},
                                  {"target": 23, "published": "23", "protocol": "tcp"}]},
-            "ciscoasa": {"ports": [{"target": 5000, "published": "5000", "protocol": "udp"},
+            "ciscoasa": {"ports": [{"target": 500, "published": "500", "protocol": "udp"},
+                                   {"target": 4500, "published": "4500", "protocol": "udp"},
                                    {"target": 8443, "published": "8443", "protocol": "tcp"}]},
             "nginx": {"ports": [{"target": 64297, "published": "64297", "protocol": "tcp"}]},
             "elasticsearch": {"ports": [{"host_ip": "127.0.0.1", "target": 9200, "published": "64298",
                                          "protocol": "tcp"}]},
             "tpotinit": {}}}
-        self.assertEqual(self.call("fuPORTS", json.dumps(config)).split("\n"), ["T:22,T:23,T:8443", "U:5000"])
+        self.assertEqual(self.call("fuPORTS", json.dumps(config)).split("\n"), ["T:22,T:23,T:8443", "U:500,U:4500"])
+
+    def test_ike_ports_follow_published_overrides(self):
+        config = {"services": {"ciscoasa": {"ports": [
+            {"target": 500, "published": "15500", "protocol": "udp"},
+            {"target": 4500, "published": "14500", "protocol": "udp"},
+            {"target": 8443, "published": "18443", "protocol": "tcp"}]}}}
+        self.assertEqual(self.call("fuIKEPORTS", json.dumps(config)).splitlines(), ["15500 0", "14500 1"])
 
     def test_tools_per_distribution(self):
         folder = tempfile.mkdtemp(prefix="tpot-os-release-")

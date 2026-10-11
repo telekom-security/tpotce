@@ -1,36 +1,24 @@
-FROM alpine:3.24 AS builder
-#
-# Install packages
-RUN apk --no-cache -U upgrade && \
-	apk --no-cache -U add \
-		build-base \
-		git \
-		libffi \
-		libffi-dev \
-		openssl \
-		openssl-dev \
-		py3-pip \
-		python3 \
-		python3-dev && \
-#
-# Get and install packages
-	mkdir -p /opt/ && \
-    cd /opt/ && \
-    git clone https://github.com/t3chn0m4g3/ciscoasa_honeypot && \
-    cd ciscoasa_honeypot && \
-	git checkout 4bd2795cfa14320a87c00b7159fa3b7d6a8ba254 && \
-    sed -i "s/git+git/git+https/g" requirements.txt && \
-    pip3 install --break-system-packages pyinstaller && \
-    pip3 install --break-system-packages --no-cache-dir -r requirements.txt
-WORKDIR /opt/ciscoasa_honeypot
-RUN pyinstaller asa_server.py --add-data "./asa:./asa"
-#
-FROM alpine:3.24
-RUN apk --no-cache -U upgrade
-COPY --from=builder /opt/ciscoasa_honeypot/dist/ /opt/
-#
-# Start ciscoasa
-STOPSIGNAL SIGINT
-WORKDIR /opt/asa_server/
+# Override the named "source" context for a local pre-publication build.
+FROM --platform=$BUILDPLATFORM alpine:3.24 AS fetch
+ARG CISCOASA_TAG=v2.0.0
+ARG CISCOASA_COMMIT=2df4a52b229c70f2f8c354ed4970ab26b6921ab2
+RUN apk add --no-cache ca-certificates git && \
+    git clone --branch "$CISCOASA_TAG" --depth 1 https://github.com/t3chn0m4g3/ciscoasa_honeypot /src && \
+    test "$(git -C /src rev-parse HEAD)" = "$CISCOASA_COMMIT"
+
+FROM scratch AS source
+COPY --from=fetch /src/ /
+
+FROM --platform=$BUILDPLATFORM golang:1.26.4-alpine3.24 AS builder
+ARG TARGETARCH
+WORKDIR /src
+COPY --from=source /go.mod ./
+COPY --from=source /cmd/ cmd/
+COPY --from=source /internal/ internal/
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o /out/asapot ./cmd/asapot
+
+FROM scratch
+COPY --from=builder /out/asapot /asapot
 USER 2000:2000
-CMD ["sh", "-c", "exec ./asa_server --ike-port 5000 --enable_ssl --port 8443 --verbose >> /var/log/ciscoasa/ciscoasa.log 2>&1"]
+STOPSIGNAL SIGTERM
+ENTRYPOINT ["/asapot"]

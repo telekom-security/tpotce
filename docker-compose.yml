@@ -67,18 +67,19 @@ services:
     depends_on:
       tpotinit:
         condition: service_healthy
-    tmpfs:
-     - /tmp/ciscoasa:uid=2000,gid=2000
     networks:
      - honeypot_local
     ports:
-     - "5000:5000/udp"
+     - "500:500/udp"
+     - "4500:4500/udp"
      - "8443:8443"
     image: ${TPOT_REPO}/ciscoasa:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
     read_only: true
     volumes:
      - ${TPOT_DATA_PATH}/ciscoasa/log:/var/log/ciscoasa
+     - ${TPOT_DATA_PATH}/ciscoasa/identity:/var/lib/ciscoasa
+     - ${TPOT_DATA_PATH}/ciscoasa/payloads:/var/lib/ciscoasa/payloads
 
 # Conpot IEC104 service
   conpot_IEC104:

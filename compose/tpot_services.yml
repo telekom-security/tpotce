@@ -78,24 +78,25 @@ services:
 
 # Ciscoasa service
   ciscoasa:
-    x-tpot: {group: honeypots, description: "Cisco ASA (CVE-2018-0101)"}
+    x-tpot: {group: honeypots, description: "Cisco ASA/FTD WebVPN, AnyConnect, ASDM, IKE"}
     container_name: ciscoasa
     restart: always
     depends_on:
       tpotinit:
         condition: service_healthy
-    tmpfs:
-     - /tmp/ciscoasa:uid=2000,gid=2000
     networks:
      - honeypot_local
     ports:
-     - "5000:5000/udp"
+     - "500:500/udp"
+     - "4500:4500/udp"
      - "8443:8443"
     image: ${TPOT_REPO}/ciscoasa:${TPOT_VERSION}
     pull_policy: ${TPOT_PULL_POLICY}
     read_only: true
     volumes:
      - ${TPOT_DATA_PATH}/ciscoasa/log:/var/log/ciscoasa
+     - ${TPOT_DATA_PATH}/ciscoasa/identity:/var/lib/ciscoasa
+     - ${TPOT_DATA_PATH}/ciscoasa/payloads:/var/lib/ciscoasa/payloads
 
 # CitrixHoneypot service
   citrixhoneypot:

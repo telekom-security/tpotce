@@ -58,7 +58,7 @@ logfile = /data/beelzebub/log/beelzebub.json
 [CISCOASA]
 ciscoasa = true
 nodeid = ciscoasa-community-01
-logfile = /data/ciscoasa/log/ciscoasa.log
+logfile = /data/ciscoasa/log/ciscoasa.json
 
 [CITRIX]
 citrix = true
