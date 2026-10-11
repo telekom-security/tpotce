@@ -829,14 +829,19 @@ def node_children(node):
     return node[7] if len(node) > 7 and isinstance(node[7], list) else []
 
 
-def find_node(root_node, relative_path):
+def find_node(root_node, relative_path, depth=0):
+    """The node of the path; links of its directories are followed as Cowrie does
+    (bin -> usr/bin, targets from the root), the last part is not."""
+    parts = [part for part in Path(relative_path).parts if part not in ("", "/")]
     current = root_node
-    for part in Path(relative_path).parts:
-        if part in ("", "/"):
-            continue
+    for index, part in enumerate(parts):
         current = next((child for child in node_children(current) if child[0] == part), None)
         if current is None:
             return None
+        if index < len(parts) - 1 and current[1] == 0 and len(current) > 8 and current[8] and depth < 10:
+            current = find_node(root_node, current[8], depth + 1)
+            if current is None:
+                return None
     return current
 
 
