@@ -1,4 +1,5 @@
 import ast
+import re
 import shutil
 import subprocess
 import sys
@@ -339,6 +340,163 @@ class PatchTest(unittest.TestCase):
         python.version()
         # Python 2 prints its version on stderr
         self.assertEqual((bytes(python.out), python.err), (b"", "Python 2.7.5\n"))
+
+    def python(self, args, version="3.12.3"):
+        """Command_python started with args on a persona with this Python: (stdout, stderr, exit code)."""
+        _, python = self.command("python", "Command_python", {("shell", "python_version"): version}, args)
+        python.start()
+        return bytes(python.out).decode(), python.err, python.code
+
+    def test_python_c_prints_a_literal_and_returns(self):
+        self.assertEqual(self.python(["-c", "print(1)"]), ("1\n", "", 0))
+        self.assertEqual(self.python(["-c", "print(1)"], "3.9.18"), ("1\n", "", 0))
+        self.assertEqual(self.python(["-c", "print('a', 2.5, None, sep='-', end='')"]), ("a-2.5-None", "", 0))
+        self.assertEqual(self.python(["-c", "import sys\nx = 'hi'\nprint(x)\nprint('e', file=sys.stderr)"]),
+                         ("hi\n", "e\n", 0))
+        self.assertEqual(self.python(["-c", "sys.stdout.write('w')"]), ("w", "", 0))
+
+    def test_python_c_ends_the_option_list(self):
+        # the words after the code are sys.argv, no options and no files
+        self.assertEqual(self.python(["-c", "print(1)", "-x", "nofile"]), ("1\n", "", 0))
+        self.assertEqual(self.python(["-u", "-c", "print(2)"]), ("2\n", "", 0))
+        self.assertEqual(self.python(["-uc", "print(3)"]), ("3\n", "", 0))
+        self.assertEqual(self.python(["-cprint(4)"]), ("4\n", "", 0))
+        self.assertEqual(self.python(["-W", "ignore", "-c", "print(5)"]), ("5\n", "", 0))
+
+    def test_python_c_other_code_prints_nothing(self):
+        self.assertEqual(self.python(["-c", 'import os, platform; platform.system(); os.listdir("/")']), ("", "", 0))
+        self.assertEqual(self.python(["-c", "import os; print(os.getcwd()); print(open('/etc/passwd').read())"]),
+                         ("", "", 0))
+
+    def test_python_c_code_is_parsed_and_never_run(self):
+        marker = tmpdir(self) / "ran"
+        code = f"open({str(marker)!r}, 'w').write('x'); __import__('os').system('touch {marker}')"
+        self.assertEqual(self.python(["-c", code]), ("", "", 0))
+        self.assertFalse(marker.exists())
+        for module in ("python", "perl"):
+            source = (self.patched() / f"src/cowrie/commands/{module}.py").read_text()
+            # ast.literal_eval and re.compile only
+            self.assertIsNone(re.search(r"(?<![\w.])(eval|exec|compile)\(", source), module)
+            for word in ("subprocess", "os.system", "__import__", "importlib"):
+                self.assertNotIn(word, source, (module, word))
+
+    def test_python_c_exit_status(self):
+        self.assertEqual(self.python(["-c", "import sys; print(1); sys.exit(3); print(2)"]), ("1\n", "", 3))
+        self.assertEqual(self.python(["-c", "import sys; sys.exit('bye')"]), ("", "bye\n", 1))
+        self.assertEqual(self.python(["-c", "exit()"]), ("", "", 0))
+        self.assertEqual(self.python(["-c", ""]), ("", "", 0))
+
+    def test_python_c_syntax_error(self):
+        out, err, code = self.python(["-c", "print("])
+        self.assertEqual((out, code), ("", 1))
+        self.assertEqual(err, '  File "<string>", line 1\n    print(\n         ^\nSyntaxError: \'(\' was never closed\n')
+        # the messages and caret of Python 3.9 (RHEL 9) and 2.7 (CentOS 7)
+        self.assertEqual(self.python(["-c", "print("], "3.9.18")[1:],
+                         ('  File "<string>", line 1\n    print(\n          ^\nSyntaxError: unexpected EOF while parsing\n', 1))
+        self.assertEqual(self.python(["-c", 'print("a'], "3.9.18")[1:],
+                         ('  File "<string>", line 1\n    print("a\n            ^\nSyntaxError: EOL while scanning string literal\n', 1))
+        self.assertEqual(self.python(["-c", "x = = 1"], "3.9.18")[1:],
+                         ('  File "<string>", line 1\n    x = = 1\n        ^\nSyntaxError: invalid syntax\n', 1))
+        self.assertEqual(self.python(["-c", "if 1:"], "3.9.18")[1:],
+                         ('  File "<string>", line 1\n    if 1:\n         ^\nIndentationError: expected an indented block\n', 1))
+        self.assertEqual(self.python(["-c", "print 1"], "3.9.18")[1:],
+                         ('  File "<string>", line 1\n    print 1\n          ^\n'
+                          "SyntaxError: Missing parentheses in call to 'print'. Did you mean print(1)?\n", 1))
+        self.assertEqual(self.python(["-c", "print("], "2.7.5")[1:],
+                         ('  File "<string>", line 1\n    print(\n          ^\nSyntaxError: unexpected EOF while parsing\n', 1))
+
+    def test_python_2_print_statement(self):
+        self.assertEqual(self.python(["-c", 'print "x"; print 1'], "2.7.5"), ("x\n1\n", "", 0))
+        self.assertEqual(self.python(["-c", "print(1)"], "2.7.5"), ("1\n", "", 0))
+        # Python 2 syntax the parser does not know stays silent
+        self.assertEqual(self.python(["-c", "try:\n  pass\nexcept Exception, e:\n  pass"], "2.7.5"), ("", "", 0))
+
+    def test_python_m_returns_at_once(self):
+        self.assertEqual(self.python(["-m", "http.server"]), ("", "", 0))
+        self.assertEqual(self.python(["-m", "http.server", "8000"]), ("", "", 0))
+        self.assertEqual(self.python(["-mpip", "install", "x"]), ("", "", 0))
+
+    def test_python_c_or_m_without_argument(self):
+        out, err, code = self.python(["-c"])
+        self.assertEqual((out, code), ("", 2))
+        self.assertEqual(err, "Argument expected for the -c option\nusage: python3 [option] ... [-c cmd | -m mod | file | -] "
+                         "[arg] ...\nTry `python -h' for more information.\n")
+        self.assertTrue(self.python(["-m"])[1].startswith("Argument expected for the -m option\n"))
+
+    def test_python_version_and_help_stay_upstream(self):
+        self.assertEqual(self.python(["-V"]), ("Python 3.12.3\n", "", None))
+        self.assertEqual(self.python(["--version"]), ("Python 3.12.3\n", "", None))
+        self.assertTrue(self.python(["-h"])[0].startswith("usage: python [option]"))
+
+    def perl(self, args):
+        """Command_perl started with args: (stdout bytes, stderr, exit code)."""
+        values = {("shell", "perl_version"): "5.36.0", ("shell", "perl_archname"): "x86_64-linux-gnu-thread-multi",
+                  ("shell", "perl_copyright"): "2022"}
+        _, perl = self.command("perl", "Command_perl", values, args)
+        perl.start()
+        return bytes(perl.out), perl.err, perl.code
+
+    def test_perl_e_prints_and_returns(self):
+        self.assertEqual(self.perl(["-e", 'print "x\\n"']), (b"x\n", "", 0))
+        self.assertEqual(self.perl(["-e", "print 'a\\n', 1, \"\\n\""]), (b"a\\n1\n", "", 0))
+        self.assertEqual(self.perl(["-le", "print 1"]), (b"1\n", "", 0))
+        self.assertEqual(self.perl(["-l", "-e", "print"]), (b"\n", "", 0))
+        self.assertEqual(self.perl(["-e", 'print("a", "b\\n")']), (b"ab\n", "", 0))
+        self.assertEqual(self.perl(["-e", 'print STDERR "e\\n"; print STDOUT "o"']), (b"o", "e\n", 0))
+        self.assertEqual(self.perl(["-e", 'print 0, " ", 1.50, " ", -7']), (b"0 1.5 -7", "", 0))
+        self.assertEqual(self.perl(["-e", 'my $x = "v"; print "$x ${x} $0 \\$x\\x41\\n"']), (b"v v -e $xA\n", "", 0))
+        self.assertEqual(self.perl(["-e", 'print "\\xe4 \u00e4"']), (b"\xe4 \xc3\xa4", "", 0))
+        self.assertEqual(self.perl(["-E", 'say "s"']), (b"s\n", "", 0))
+        self.assertEqual(self.perl(["-e", "print 1;", "-e", "print 2"]), (b"12", "", 0))
+        self.assertEqual(self.perl(["-e", "use strict; print 1"]), (b"1", "", 0))
+
+    def test_perl_e_other_code_prints_nothing(self):
+        code = 'use POSIX; my @u = POSIX::uname(); $h = $u[1]; if (-d "/tmp") { chdir("/tmp"); }; print "$h\\n"'
+        self.assertEqual(self.perl(["-e", code]), (b"", "", 0))
+        self.assertEqual(self.perl(["-e", 'system("id")']), (b"", "", 0))
+        # scalars not set to a literal, arrays, expressions and other number forms are not printed
+        self.assertEqual(self.perl(["-e", '$x = `id`; print "$x\\n"']), (b"", "", 0))
+        self.assertEqual(self.perl(["-e", 'print "$y a@b.com $x[0]"']), (b"", "", 0))
+        self.assertEqual(self.perl(["-e", 'print "a" . "b"; print "c" x 3; print 010, 0x1F']), (b"", "", 0))
+        # from a regex on, the code is not read
+        self.assertEqual(self.perl(["-e", "print 1; s/'//; print 2"]), (b"1", "", 0))
+        self.assertEqual(self.perl(["-ne", "print"]), (b"", "", 0))
+        self.assertEqual(self.perl(["-e", 'say "s"']), (b"", "", 0))
+
+    def test_perl_e_output_is_limited(self):
+        code = '$a = "' + "a" * 60000 + '"; $b = "' + "$a" * 20 + '"; print "x"; print ' + ",".join(["$a"] * 20)
+        out, err, status = self.perl(["-e", code])
+        self.assertEqual((out, err, status), (b"x", "", 0))
+
+    def test_perl_e_exit_and_die(self):
+        self.assertEqual(self.perl(["-e", "print 1; exit 3; print 2"]), (b"1", "", 3))
+        self.assertEqual(self.perl(["-e", "exit(300)"]), (b"", "", 44))
+        self.assertEqual(self.perl(["-e", "exit"]), (b"", "", 0))
+        self.assertEqual(self.perl(["-e", 'die "oops"']), (b"", "oops at -e line 1.\n", 255))
+        self.assertEqual(self.perl(["-e", 'die "oops\\n"']), (b"", "oops\n", 255))
+        self.assertEqual(self.perl(["-e", "print 1;\ndie"]), (b"1", "Died at -e line 2.\n", 255))
+
+    def test_perl_e_syntax_errors(self):
+        self.assertEqual(self.perl(["-e", 'print "x']),
+                         (b"", "Can't find string terminator '\"' anywhere before EOF at -e line 1.\n", 255))
+        self.assertEqual(self.perl(["-e", 'print 1; print("x"']),
+                         (b"", "syntax error at -e line 1, at EOF\nExecution of -e aborted due to compilation errors.\n", 255))
+        self.assertEqual(self.perl(["-e", "print 1)"]),
+                         (b"", 'syntax error at -e line 1, near ")"\nExecution of -e aborted due to compilation errors.\n', 255))
+        self.assertEqual(self.perl(["-e"]), (b"", "No code specified for -e.\n", 29))
+
+    def test_perl_c_checks_the_syntax_only(self):
+        self.assertEqual(self.perl(["-c", "-e", "print 1"]), (b"", "-e syntax OK\n", 0))
+        self.assertEqual(self.perl(["-ce", 'print "x']),
+                         (b"", "Can't find string terminator '\"' anywhere before EOF at -e line 1.\n", 255))
+        self.assertEqual(self.perl(["-ce", "print(1"]),
+                         (b"", "syntax error at -e line 1, at EOF\n-e had compilation errors.\n", 255))
+
+    def test_perl_version_and_help_stay_upstream(self):
+        out, err, code = self.perl(["-v"])
+        self.assertIn(b"(v5.36.0) built for x86_64-linux-gnu-thread-multi", out)
+        self.assertEqual(code, None)
+        self.assertIn(b"Usage: perl [switches]", self.perl(["-h"])[0])
 
     def test_git_version_of_the_persona(self):
         _, git = self.command("git", "Command_git", {("shell", "git_version"): "2.43.0"}, ["--version"])
@@ -785,6 +943,13 @@ class PatchTest(unittest.TestCase):
                   "        if not self.args:\n"),
                  ("src/cowrie/commands/perl.py", "Copyright 1987-2014, Larry Wall", "Copyright 1987-2015, Larry Wall"),
                  ("src/cowrie/commands/python.py", 'ver = "Python 2.7.11+"', 'ver = "Python 2.7.18"'),
+                 ("src/cowrie/commands/python.py", "import getopt\n", "import getopt as options\n"),
+                 ("src/cowrie/commands/python.py", "commands = {}\n", "commands: dict = {}\n"),
+                 ("src/cowrie/commands/python.py", '                self.args, "BdEhiORsStuvVx3c:m:Q:W:", ["help", "version"]\n',
+                  '                self.args, "BdEhiORsStuvVx3c:m:Q:W:", ["help"]\n'),
+                 ("src/cowrie/commands/perl.py", "import getopt\n", "import getopt as options\n"),
+                 ("src/cowrie/commands/perl.py", '                self.args, "acfhnpsStTuUvwWXC:D:e:E:F:i:I:l:m:M:V:X:"\n',
+                  '                self.args, "acfhnpsStTuUvwWXC:D:e:E:F:i:I:l:m:M:V:"\n'),
                  ("src/cowrie/commands/git.py", 'self.write("git version 2.34.1\\n")',
                   'self.write("git version 2.43.0\\n")'))
         for rel, old, new in cases:

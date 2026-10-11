@@ -191,11 +191,241 @@ CONFIG_IMPORT = (
 )
 
 
+# module code of the patched perl.py (tpot_perl_inline and its helpers)
+PERL_INLINE = r'''
+# T-Pot: perl -e / -E return as perl does. The code is read and never run: print, say
+# (-E), exit and die with quoted strings, numbers and scalars set to them act as in
+# perl, every other statement is silent. An unterminated string or bracket gives
+# perl's compile error; from a regex, backticks, a heredoc, a comment or a quote
+# operator on, the code is not read.
+TPOT_PERL_SWITCHES = "acfnpsStTuUwWX"
+TPOT_PERL_ATTACHED = "CDFiImMdx"
+TPOT_CODE_LIMIT = 65536
+TPOT_OUTPUT_LIMIT = 1 << 20
+TPOT_ABORTED = "Execution of -e aborted due to compilation errors.\n"
+TPOT_PERL_STOP = re.compile(r"[/`#<]|(?<![\w$@%&])(?:qq|qw|qx|qr|tr|q|m|s|y)\s*[^\w\s,;)=]")
+TPOT_PERL_ITEM = r"""(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|-?(?:0|[1-9]\d{0,14})(?:\.\d{1,15})?|\$\w+|\$\{\w+\})"""
+TPOT_PERL_LIST = re.compile(rf"\s*(\(\s*)?((?:{TPOT_PERL_ITEM}(?:\s*,\s*{TPOT_PERL_ITEM})*\s*,?)?)\s*(?(1)\))\s*", re.S)
+TPOT_PERL_ITEMS = re.compile(TPOT_PERL_ITEM, re.S)
+TPOT_PERL_ESCAPES = {"n": "\n", "t": "\t", "r": "\r", "a": "\a", "e": "\x1b", "f": "\f", "0": "\0"}
+TPOT_PERL_INTERPOLATION = re.compile(r"\\x([0-9a-fA-F]{1,2})|\\(.)|\$(\w+|\{\w+\})(\[|\{|->)?|@\w", re.S)
+
+
+class TpotPerlUnknown(Exception):
+    pass
+
+
+def tpot_perl_inline(cmd) -> bool:
+    """T-Pot: perl -e / -E CODE (several are joined by newlines) returns. True when
+    handled (the command has exited); False leaves -v, -h, -V, a script file and
+    unknown switches to upstream."""
+    args = cmd.args
+    code: list[str] = []
+    flags: set[str] = set()
+    index = 0
+    while index < len(args):
+        arg = args[index]
+        if arg in ("-", "--") or not arg.startswith("-") or len(arg) == 1:
+            break
+        pos = 1
+        while pos < len(arg):
+            flag = arg[pos]
+            if flag in "eE":
+                flags.add(flag)
+                value = arg[pos + 1:]
+                if not value:
+                    index += 1
+                    if index == len(args):
+                        cmd.errorWrite("No code specified for -%s.\n" % flag)
+                        cmd.exit(29)
+                        return True
+                    value = args[index]
+                code.append(value)
+                break
+            if flag in "l0":
+                flags.add(flag)
+                pos += 1
+                while pos < len(arg) and arg[pos] in "01234567":
+                    pos += 1
+                continue
+            if flag in TPOT_PERL_ATTACHED:
+                break
+            if flag not in TPOT_PERL_SWITCHES:
+                return False
+            flags.add(flag)
+            pos += 1
+        index += 1
+    if not code:
+        return False
+    out, err, status = tpot_perl_code("\n".join(code), flags)
+    cmd.writeBytes(out)
+    cmd.errorWrite(err)
+    cmd.exit(status)
+    return True
+
+
+def tpot_perl_split(code: str):
+    """(statements as (offset, text), compile error or None): the code split at ;
+    outside strings and brackets, up to the first construct this does not read."""
+    statements, start, depth, pos = [], 0, 0, 0
+    while pos < len(code):
+        char = code[pos]
+        if char in "\"'":
+            end = pos + 1
+            while end < len(code) and code[end] != char:
+                end += 2 if code[end] == "\\" else 1
+            if end >= len(code):
+                mark = "'" if char == '"' else '"'
+                return [], (f"Can't find string terminator {mark}{char}{mark} anywhere before EOF at -e line "
+                            f"{code.count(chr(10), 0, pos) + 1}.\n")
+            pos = end + 1
+            continue
+        if TPOT_PERL_STOP.match(code, pos):
+            return statements, None
+        if char in "([{":
+            depth += 1
+        elif char in ")]}":
+            depth -= 1
+            if depth < 0:
+                return [], (f"syntax error at -e line {code.count(chr(10), 0, pos) + 1}, near "
+                            f"\"{char}\"\n{TPOT_ABORTED}")
+        elif char == ";" and depth == 0:
+            statements.append((start, code[start:pos]))
+            start = pos + 1
+        pos += 1
+    if depth:
+        return [], f"syntax error at -e line {code.count(chr(10)) + 1}, at EOF\n{TPOT_ABORTED}"
+    statements.append((start, code[start:]))
+    return statements, None
+
+
+def tpot_perl_code(code: str, flags) -> tuple[bytes, str, int]:
+    """(stdout, stderr, exit status) of perl -e code, read from its text alone."""
+    if len(code) > TPOT_CODE_LIMIT:
+        return b"", "", 0
+    statements, error = tpot_perl_split(code)
+    if error:
+        if "c" in flags:
+            return b"", error.replace(TPOT_ABORTED, "-e had compilation errors.\n"), 255
+        return b"", error, 255
+    if "c" in flags:
+        return b"", "-e syntax OK\n", 0
+    if "n" in flags or "p" in flags:
+        return b"", "", 0
+    names: dict[str, bytes] = {}
+    out: list[bytes] = []
+    err: list[str] = []
+    budget = TPOT_OUTPUT_LIMIT
+    for offset, text in statements:
+        match = re.fullmatch(r"\s*(print|say|exit|die)\b(?:\s*(STDOUT|STDERR)\b(?!\s*[,(]))?(.*)", text, re.S)
+        if not match:
+            assign = re.fullmatch(r"\s*(?:(?:my|our|local)\s+)?\$(\w+)\s*=(?![=~])(.*)", text, re.S)
+            if assign:
+                try:
+                    (names[assign.group(1)],) = tpot_perl_list(assign.group(2), names)
+                except (TpotPerlUnknown, ValueError):
+                    names.pop(assign.group(1), None)
+            continue
+        word, stream, rest = match.groups()
+        if word == "exit":
+            status = re.fullmatch(r"\s*\(?\s*(\d{1,9})?\s*\)?\s*", rest)
+            return b"".join(out), "".join(err), int(status.group(1) or 0) & 0xFF if status else 0
+        try:
+            items = tpot_perl_list(rest, names) if rest.strip() else [names.get("_", b"")]
+        except TpotPerlUnknown:
+            if word != "die":
+                continue
+            items = []
+        if word == "die":
+            message = b"".join(items).decode("utf-8", "replace") or "Died"
+            if not message.endswith("\n"):
+                line = code.count("\n", 0, offset + len(text) - len(text.lstrip())) + 1
+                message += f" at -e line {line}.\n"
+            return b"".join(out), "".join(err) + message, 255
+        if word == "say" and "E" not in flags:
+            continue
+        budget -= sum(map(len, items)) + 1
+        if budget < 0:
+            break
+        data = b"".join(items) + (b"\n" if word == "say" or "l" in flags else b"")
+        if stream == "STDERR":
+            err.append(data.decode("utf-8", "replace"))
+        else:
+            out.append(data)
+    return b"".join(out), "".join(err), 0
+
+
+def tpot_perl_list(text: str, names) -> list[bytes]:
+    """The values of a list of quoted strings, numbers and scalars; TpotPerlUnknown for
+    anything else."""
+    match = TPOT_PERL_LIST.fullmatch(text)
+    if not match:
+        raise TpotPerlUnknown
+    return [tpot_perl_value(item, names) for item in TPOT_PERL_ITEMS.findall(match.group(2))]
+
+
+def tpot_perl_value(item: str, names) -> bytes:
+    if item.startswith("'"):
+        return re.sub(r"\\([\\'])", r"\1", item[1:-1]).encode("utf-8")
+    if item.startswith('"'):
+        return tpot_perl_interpolate(item[1:-1], names)
+    if item.startswith("$"):
+        return tpot_perl_scalar(item[1:].strip("{}"), names)
+    return format(float(item), ".15g").encode() if "." in item else item.encode()
+
+
+def tpot_perl_scalar(name: str, names) -> bytes:
+    if name == "0":
+        return b"-e"
+    if name not in names:
+        raise TpotPerlUnknown
+    return names[name]
+
+
+def tpot_perl_interpolate(body: str, names) -> bytes:
+    """A "..." string: escapes and $scalar; arrays, elements and unknown scalars are
+    TpotPerlUnknown."""
+    parts, pos = [], 0
+    for match in TPOT_PERL_INTERPOLATION.finditer(body):
+        parts.append(body[pos:match.start()].encode("utf-8"))
+        pos = match.end()
+        if match.group(1):
+            parts.append(bytes((int(match.group(1), 16),)))
+        elif match.group(2) is not None:
+            parts.append(TPOT_PERL_ESCAPES.get(match.group(2), match.group(2)).encode("utf-8"))
+        elif match.group(3) and not match.group(4):
+            parts.append(tpot_perl_scalar(match.group(3).strip("{}"), names))
+        else:
+            raise TpotPerlUnknown
+    parts.append(body[pos:].encode("utf-8"))
+    if sum(map(len, parts)) > TPOT_OUTPUT_LIMIT:
+        raise TpotPerlUnknown
+    return b"".join(parts)
+'''
+
+
 def patch_perl(cowrie_root):
     """perl -v names the persona's Perl ([shell] perl_version, perl_archname,
-    perl_copyright); upstream's 5.14.2 without the keys."""
+    perl_copyright); upstream's 5.14.2 without the keys. perl -e / -E return with
+    the output of their print / say / die / exit of literals (PERL_INLINE)."""
     path = cowrie_root / "src" / "cowrie" / "commands" / "perl.py"
     replace_once(path, *CONFIG_IMPORT)
+    replace_once(path, "import getopt\n", "import getopt\nimport re\n")
+    replace_once(
+        path,
+        """    def start(self) -> None:
+        try:
+            opts, args = getopt.gnu_getopt(
+                self.args, "acfhnpsStTuUvwWXC:D:e:E:F:i:I:l:m:M:V:X:"
+""",
+        """    def start(self) -> None:
+        if tpot_perl_inline(self):
+            return
+        try:
+            opts, args = getopt.gnu_getopt(
+                self.args, "acfhnpsStTuUvwWXC:D:e:E:F:i:I:l:m:M:V:X:"
+""",
+    )
     replace_once(
         path,
         """            "This is perl 5, version 14, subversion 2 (v5.14.2) built for x86_64-linux-thread-multi",
@@ -223,16 +453,292 @@ def tpot_perl_banner() -> str:
     arch = CowrieConfig.get("shell", "perl_archname", fallback="x86_64-linux-thread-multi")
     parts = (version.split(".") + ["0", "0"])[:3]
     return f"This is perl {parts[0]}, version {parts[1]}, subversion {parts[2]} (v{version}) built for {arch}"
-""",
+""" + PERL_INLINE,
     )
+
+
+# module code of the patched python.py (tpot_python_inline and its helpers)
+PYTHON_INLINE = r'''
+# T-Pot: python -c CMD and -m MOD return as CPython does. The code is parsed with ast
+# and never run: print() / sys.stdout.write() of literals (ast.literal_eval) and of
+# names bound to literals print them, sys.exit() / exit() set the status, everything
+# else is silent; a syntax error prints CPython's message of the persona's version.
+TPOT_PY_FLAGS = "bBdEiIOPqRsStuvx3"
+TPOT_PY_VALUE_FLAGS = "WXQ"
+TPOT_CODE_LIMIT = 65536
+TPOT_OUTPUT_LIMIT = 1 << 20
+TPOT_UNKNOWN = object()
+TPOT_PY2_PRINT = re.compile(r"(^|[;\n])([ \t]*)print[ \t]+(?![(=])([^;\n]*)")
+
+
+class TpotOutputFull(Exception):
+    pass
+
+
+def tpot_python_version() -> str:
+    return CowrieConfig.get("shell", "python_version", fallback="2.7.11+")
+
+
+def tpot_version_tuple(version: str) -> tuple[int, int]:
+    match = re.match(r"(\d+)\.(\d+)", version)
+    return (int(match.group(1)), int(match.group(2))) if match else (2, 7)
+
+
+def tpot_python_inline(cmd) -> bool:
+    """T-Pot: -c CMD / -m MOD end the option list as in CPython (the rest is sys.argv).
+    True when handled (the command has exited); False leaves -V, -h, --long options,
+    a script file, - and unknown options to upstream."""
+    args = cmd.args
+    index = 0
+    while index < len(args):
+        arg = args[index]
+        if arg in ("-", "--") or not arg.startswith("-") or arg.startswith("--"):
+            return False
+        for pos in range(1, len(arg)):
+            flag = arg[pos]
+            if flag in "cm" or flag in TPOT_PY_VALUE_FLAGS:
+                value = arg[pos + 1:]
+                if not value:
+                    index += 1
+                    if index == len(args):
+                        if flag in "cm":
+                            tpot_python_usage(cmd, flag)
+                            return True
+                        return False
+                    value = args[index]
+                if flag == "c":
+                    tpot_python_run(cmd, value)
+                    return True
+                if flag == "m":
+                    cmd.exit(0)
+                    return True
+                break
+            if flag not in TPOT_PY_FLAGS:
+                return False
+        index += 1
+    return False
+
+
+def tpot_python_usage(cmd, flag: str) -> None:
+    name = "python3" if tpot_version_tuple(tpot_python_version())[0] >= 3 else "python"
+    cmd.errorWrite(
+        f"Argument expected for the -{flag} option\n"
+        f"usage: {name} [option] ... [-c cmd | -m mod | file | -] [arg] ...\n"
+        "Try `python -h' for more information.\n"
+    )
+    cmd.exit(2)
+
+
+def tpot_python_run(cmd, code: str) -> None:
+    out, err, status = tpot_python_code(code, tpot_python_version())
+    if out:
+        cmd.write(out)
+    if err:
+        cmd.errorWrite(err)
+    cmd.exit(status)
+
+
+def tpot_python_code(code: str, version: str) -> tuple[str, str, int]:
+    """(stdout, stderr, exit status) of python -c code, from its syntax tree alone."""
+    if len(code) > TPOT_CODE_LIMIT:
+        return "", "", 0
+    python2 = tpot_version_tuple(version)[0] < 3
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            try:
+                module = ast.parse(code, "<string>")
+            except SyntaxError as error:
+                module = None
+                if python2:
+                    # print statements; other Python 2 syntax stays silent unless the code is cut off
+                    try:
+                        module = ast.parse(TPOT_PY2_PRINT.sub(tpot_py2_print, code), "<string>")
+                    except SyntaxError:
+                        if not tpot_incomplete(error):
+                            return "", "", 0
+                if module is None:
+                    return "", tpot_syntax_error(error, version), 1
+    except Exception:  # noqa: BLE001 - nesting or memory limits of the parser: silent
+        return "", "", 0
+    return tpot_python_statements(module.body)
+
+
+def tpot_py2_print(match) -> str:
+    return f"{match.group(1)}{match.group(2)}print({match.group(3).rstrip().rstrip(',')})"
+
+
+def tpot_incomplete(error) -> bool:
+    return any(text in (error.msg or "") for text in ("never closed", "unterminated", "EOF", "EOL", "indented block"))
+
+
+def tpot_syntax_error(error, version: str) -> str:
+    """CPython's report of a syntax error in -c code; Python < 3.10 (and 2.7) with
+    their messages and one caret."""
+    line = (error.text or "").split("\n")[0].rstrip("\r")
+    stripped = line.lstrip()
+    indent = len(line) - len(stripped)
+    start = (error.offset or 1) - 1 - indent
+    width = 1
+    msg = error.msg or "invalid syntax"
+    if tpot_version_tuple(version) < (3, 10):
+        if "was never closed" in msg:
+            msg, start = "unexpected EOF while parsing", len(stripped)
+        elif msg.startswith("unterminated triple-quoted string literal"):
+            msg, start = "EOF while scanning triple-quoted string literal", len(stripped)
+        elif msg.startswith("unterminated string literal"):
+            msg, start = "EOL while scanning string literal", len(stripped)
+        elif msg.startswith("Missing parentheses in call to 'print'"):
+            found = re.match(r"print\s+(.*)", stripped)
+            if found:
+                msg = f"Missing parentheses in call to 'print'. Did you mean print({found.group(1).strip()})?"
+                start = found.start(1)
+        elif msg.startswith("expected an indented block"):
+            msg = "expected an indented block"
+        elif "Perhaps you forgot a comma" in msg:
+            msg = "invalid syntax"
+            start = (error.end_offset or error.offset or 1) - 2 - indent
+        elif msg.startswith(("invalid syntax", "expected ':'")):
+            msg = "invalid syntax"
+    elif error.end_offset and error.end_lineno == error.lineno and error.offset:
+        width = max(1, min(error.end_offset - error.offset, len(stripped) - max(start, 0)))
+    start = max(0, min(start, len(stripped)))
+    return (
+        f'  File "<string>", line {error.lineno or 1}\n'
+        f"    {stripped}\n"
+        f"    {' ' * start}{'^' * width}\n"
+        f"{type(error).__name__}: {msg}\n"
+    )
+
+
+def tpot_dotted(node) -> str | None:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        base = tpot_dotted(node.value)
+        return f"{base}.{node.attr}" if base else None
+    return None
+
+
+def tpot_literal(node, names):
+    if isinstance(node, ast.Name) and node.id in names:
+        return names[node.id]
+    try:
+        return ast.literal_eval(node)
+    except Exception:  # noqa: BLE001 - anything that is no literal
+        return TPOT_UNKNOWN
+
+
+def tpot_python_statements(body) -> tuple[str, str, int]:
+    names: dict = {}
+    out: list[str] = []
+    err: list[str] = []
+    budget = [TPOT_OUTPUT_LIMIT]
+    try:
+        for node in body:
+            if isinstance(node, ast.Assign):
+                value = tpot_literal(node.value, names)
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        if value is TPOT_UNKNOWN:
+                            names.pop(target.id, None)
+                        else:
+                            names[target.id] = value
+                continue
+            if not (isinstance(node, ast.Expr) and isinstance(node.value, ast.Call)):
+                continue
+            call = node.value
+            func = tpot_dotted(call.func)
+            if func in ("exit", "quit", "sys.exit", "os._exit"):
+                status = tpot_literal(call.args[0], names) if call.args else None
+                if status is None or status is TPOT_UNKNOWN:
+                    return "".join(out), "".join(err), 0
+                if isinstance(status, int):
+                    return "".join(out), "".join(err), status & 0xFF
+                err.append(tpot_text(status, budget) + "\n")
+                return "".join(out), "".join(err), 1
+            if func == "print":
+                printed = tpot_print(call, names, budget)
+                if printed is not None:
+                    (err if printed[1] else out).append(printed[0])
+            elif func in ("sys.stdout.write", "sys.stderr.write") and len(call.args) == 1 and not call.keywords:
+                value = tpot_literal(call.args[0], names)
+                if isinstance(value, str):
+                    (err if func == "sys.stderr.write" else out).append(tpot_text(value, budget))
+    except TpotOutputFull:
+        pass
+    return "".join(out), "".join(err), 0
+
+
+def tpot_text(value, budget) -> str:
+    text = str(value)
+    budget[0] -= len(text)
+    if budget[0] < 0:
+        raise TpotOutputFull
+    return text
+
+
+def tpot_print(call, names, budget):
+    """(text, to stderr) of a print() call with literal arguments, None otherwise."""
+    values = []
+    for arg in call.args:
+        value = tpot_literal(arg, names)
+        if value is TPOT_UNKNOWN or isinstance(arg, ast.Starred):
+            return None
+        values.append(value)
+    sep, end, stderr = " ", "\n", False
+    for keyword in call.keywords:
+        if keyword.arg == "file":
+            stream = tpot_dotted(keyword.value)
+            if stream not in ("sys.stdout", "sys.stderr"):
+                return None
+            stderr = stream == "sys.stderr"
+            continue
+        if keyword.arg == "flush":
+            continue
+        value = tpot_literal(keyword.value, names)
+        if keyword.arg not in ("sep", "end") or not (value is None or isinstance(value, str)):
+            return None
+        if value is not None:
+            if keyword.arg == "sep":
+                sep = value
+            else:
+                end = value
+    try:
+        parts = [tpot_text(value, budget) for value in values]
+    except TpotOutputFull:
+        raise
+    except Exception:  # noqa: BLE001 - str() of a literal CPython would print (digits limit)
+        return None
+    tpot_text(sep * max(0, len(parts) - 1) + end, budget)
+    return sep.join(parts) + end, stderr
+'''
 
 
 def patch_python(cowrie_root):
     """python -V prints [shell] python_version (Python 2 on stderr, as Python 2 does);
     python3 and /usr/bin/python3 are the same command (skip_python_commands keeps the
-    one the persona does not have away)."""
+    one the persona does not have away). python -c / -m return with the output of
+    their literal print() calls or the syntax error of that Python (PYTHON_INLINE)."""
     path = cowrie_root / "src" / "cowrie" / "commands" / "python.py"
     replace_once(path, *CONFIG_IMPORT)
+    replace_once(path, "import getopt\n", "import ast\nimport getopt\nimport re\nimport warnings\n")
+    replace_once(path, "commands = {}\n", "commands = {}\n\n" + PYTHON_INLINE)
+    replace_once(
+        path,
+        """    def start(self) -> None:
+        try:
+            opts, args = getopt.gnu_getopt(
+                self.args, "BdEhiORsStuvVx3c:m:Q:W:", ["help", "version"]
+""",
+        """    def start(self) -> None:
+        if tpot_python_inline(self):
+            return
+        try:
+            opts, args = getopt.gnu_getopt(
+                self.args, "BdEhiORsStuvVx3c:m:Q:W:", ["help", "version"]
+""",
+    )
     replace_once(
         path,
         """        ver = "Python 2.7.11+"

@@ -364,6 +364,15 @@ class ValidateSystemTest(unittest.TestCase):
             path.write_text(path.read_text().replace("perl_version = 5.36.0", "perl_version = 5.14.2"))
         self.assertIn("cfg perl_version: '5.14.2', expected '5.36.0'", self.problems("debian-bookworm", change))
 
+    def test_interpreter_versions_are_keys_of_every_server(self):
+        for pid in ("ubuntu-noble", "rhel-9", "centos-7"):
+            for key in ("python_version", "perl_version"):
+                def change(fs, out, key=key):
+                    path = out / "cowrie.cfg"
+                    path.write_text("".join(line for line in path.read_text().splitlines(True)
+                                            if not line.startswith(f"{key} =")))
+                self.assertIn(f"cfg {key}: None, expected ", self.problems(pid, change), (pid, key))
+
 
 class ValidateServerCommandTest(unittest.TestCase):
     def problems(self, pid, change):
