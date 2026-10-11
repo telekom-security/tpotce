@@ -1875,7 +1875,8 @@ function fuMIGRATE_BEELZEBUB_ENV () {
 	    return 0
 	    ;;
 	esac
-	# The new text goes to a file of its own: a name next to .env may belong to somebody else
+	# The new text goes to a temporary file, not to a name next to .env: files of their own under
+	# such names stay untouched
 	myNEWFILE=$(mktemp "${TMPDIR:-/tmp}/tpot-env-beelzebub.XXXXXX") || return 0
 	# The old comments describe the old settings, the new block replaces the old assignment
 	if ! awk -v provider="${myPROVIDER}" -v model="${myMODEL}" -v host="${myHOST}" -v apikey="${myAPIKEY}" '
@@ -2015,7 +2016,8 @@ function fuMERGE_ENV_KEYS () {
 	[ -f "${myEXAMPLE}" ] && [ -f "${myENVFILE}" ] || return 0
 	myVERSION=$(grep -E "^TPOT_VERSION=" "${myEXAMPLE}" | tail -1 | cut -d= -f2-)
 	myMARKER=$(grep -n "^# NEVER MAKE CHANGES" "${myEXAMPLE}" | head -1 | cut -d: -f1)
-	# Files of their own: names next to .env (.env.user, .env.merge ...) may belong to somebody else
+	# Temporary files, not names next to .env (.env.user, .env.merge ...): files of their own under
+	# these names stay untouched
 	myUSERFILE=$(mktemp "${TMPDIR:-/tmp}/tpot-env-user.XXXXXX") || return 0
 	mySYSTEMFILE=$(mktemp "${TMPDIR:-/tmp}/tpot-env-system.XXXXXX") || { rm -f "${myUSERFILE}"; return 0; }
 	myMERGEFILE=$(mktemp "${TMPDIR:-/tmp}/tpot-env-merge.XXXXXX") || { rm -f "${myUSERFILE}" "${mySYSTEMFILE}"; return 0; }
