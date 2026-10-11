@@ -79,11 +79,93 @@ def patch_protocol(cowrie_root):
     )
     replace_once(
         path,
+        """        relpath = path.lstrip("/")
+        txtcmds_path = CowrieConfig.get("honeypot", "txtcmds_path", fallback="")
+        if txtcmds_path:
+            operator_path = Path(txtcmds_path) / relpath
+            if operator_path.is_file():
+                return self.txtcmd(operator_path.read_bytes())
+""",
+        """        relpath = path.lstrip("/")
+        txtcmds_path = CowrieConfig.get("honeypot", "txtcmds_path", fallback="")
+
+        # T-Pot: the spellings of path through the directory links of the tree
+        # (/bin -> usr/bin): `df` finds /usr/bin/df on PATH, the txtcmd is bin/df.
+        def tpot_real(name):
+            parts = [part for part in name.split("/") if part]
+            real = []
+            for part in parts[:-1]:
+                node = self.fs.getfile("/" + "/".join(real + [part]), follow_symlinks=False)
+                if node is not None and node[fs.A_TYPE] == fs.T_LINK and node[fs.A_TARGET]:
+                    real = [x for x in node[fs.A_TARGET].split("/") if x and x != "."]
+                else:
+                    real.append(part)
+            return "/" + "/".join(real + parts[-1:])
+
+        real = tpot_real(path)
+        spellings = [path, real]
+        for link in self.fs.fs[fs.A_CONTENTS]:
+            target = "/" + "/".join(x for x in (link[fs.A_TARGET] or "").split("/") if x)
+            if link[fs.A_TYPE] == fs.T_LINK and target != "/" and real.startswith(target + "/"):
+                spellings.append("/" + link[fs.A_NAME] + real[len(target):])
+        spellings = list(dict.fromkeys(spellings))
+        if txtcmds_path:
+            for spelling in spellings:
+                operator_path = Path(txtcmds_path) / spelling.lstrip("/")
+                if operator_path.is_file():
+                    return self.txtcmd(operator_path.read_bytes())
+""",
+    )
+    replace_once(
+        path,
         """        if path in self.commands:
             return self.commands[path]
 """,
-        """        if path in self.commands and not skip_python_command(path):
-            return self.commands[path]
+        """        for spelling in spellings:
+            if spelling in self.commands and not skip_python_command(spelling):
+                return self.commands[spelling]
+""",
+    )
+
+
+def patch_busybox(cowrie_root):
+    """busybox prints the help of the persona's BusyBox ([shell] busybox_help, a
+    file of the runtime folder) on stdout, as busybox does, for no arguments and
+    --help; applets run and `busybox ECCHI` says "ECCHI: applet not found" as
+    upstream. Without the key upstream's help stays."""
+    path = cowrie_root / "src" / "cowrie" / "commands" / "busybox.py"
+    replace_once(
+        path,
+        "from cowrie.shell.command import HoneyPotCommand\n",
+        "from pathlib import Path\n\n"
+        "from cowrie.core.config import CowrieConfig\n"
+        "from cowrie.shell.command import HoneyPotCommand\n",
+    )
+    replace_once(
+        path,
+        """    def help(self) -> None:
+        for ln in busybox_help:
+            self.errorWrite(f"{ln}\\n")
+""",
+        """    def help(self) -> None:
+        help_path = CowrieConfig.get("shell", "busybox_help", fallback="")
+        if help_path:
+            try:
+                self.write(Path(help_path).read_text(encoding="utf-8"))
+                return
+            except OSError:
+                pass
+        for ln in busybox_help:
+            self.errorWrite(f"{ln}\\n")
+""",
+    )
+    replace_once(
+        path,
+        """        if len(self.args) == 0:
+            self.help()
+""",
+        """        if len(self.args) == 0 or self.args == ["--help"]:
+            self.help()
 """,
     )
 
@@ -465,6 +547,7 @@ def main():
     args = parser.parse_args()
     cowrie_root = args.cowrie_root.resolve()
     patch_protocol(cowrie_root)
+    patch_busybox(cowrie_root)
     patch_ssh(cowrie_root)
     patch_netstat(cowrie_root)
     patch_service(cowrie_root)

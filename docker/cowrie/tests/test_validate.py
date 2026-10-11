@@ -164,6 +164,28 @@ class ValidateNegativeTest(unittest.TestCase):
         tree.dump_pickle(fs, self.out / "fs.pickle")
         self.assertIn("forbidden svr04 in fs.pickle (/etc/hostname)", self.problems())
 
+    def test_program_of_size_0(self):
+        fs = tree.load_pickle(self.out / "fs.pickle")
+        tree.node_set(tree.find_node(fs, "usr/bin/top"), tree.A_SIZE, 0)
+        tree.dump_pickle(fs, self.out / "fs.pickle")
+        self.assertIn("program: size 0 for /usr/bin/top", self.problems())
+
+    def test_txtcmd_with_contents_shows_no_elf_header(self):
+        fs = tree.load_pickle(self.out / "fs.pickle")
+        tree.ensure_file(fs, "usr/bin/nproc", b"4\n", mode=0o755)
+        tree.dump_pickle(fs, self.out / "fs.pickle")
+        self.assertIn("program: txtcmd usr/bin/nproc has contents", self.problems())
+
+    def test_txtcmd_that_is_no_program(self):
+        fs = tree.load_pickle(self.out / "fs.pickle")
+        tree.remove_node(fs, "usr/bin/lscpu")
+        tree.dump_pickle(fs, self.out / "fs.pickle")
+        self.assertIn("program: txtcmd usr/bin/lscpu is no executable", self.problems())
+
+    def test_busybox_on_a_server(self):
+        self.edit("cowrie.cfg", "\n[ssh]\n", "\nbusybox_help = /x\n\n[ssh]\n")
+        self.assertIn("busybox: Cowrie's busybox answers", self.problems())
+
     def test_package_manager_without_command(self):
         (self.out / "txtcmds/usr/bin/dpkg").unlink()
         self.assertIn("package manager", self.problems())
@@ -272,6 +294,39 @@ class ValidateDeviceTest(unittest.TestCase):
         ident, out, keys = render_one(self, persona, 2)
         (out / "honeyfs/etc/issue").write_text("Ubuntu 22.04.4 LTS \\n \\l\n")
         self.assertIn("forbidden", " ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0)))
+
+
+class ValidateBusyboxTest(unittest.TestCase):
+    def setUp(self):
+        self.persona = catalog.by_id("tplink-wr841n")
+        self.ident, self.out, self.keys = render_one(self, self.persona, 1)
+
+    def problems(self):
+        return " | ".join(validate.problems(self.persona, self.ident, self.out, self.out, self.keys, min_pickle=0))
+
+    def test_clean(self):
+        self.assertEqual(self.problems(), "")
+
+    def test_skipped_busybox(self):
+        path = self.out / "cowrie.cfg"
+        path.write_text(path.read_text().replace("skip_python_commands = ", "skip_python_commands = busybox,"))
+        self.assertIn("busybox: Cowrie's busybox is skipped", self.problems())
+
+    def test_help_of_another_version(self):
+        path = self.out / "busybox-help.txt"
+        path.write_text(path.read_text().replace("BusyBox v1.19.2", "BusyBox v1.20.2"))
+        self.assertIn("busybox: the help does not start with", self.problems())
+
+    def test_no_busybox_program(self):
+        fs = tree.load_pickle(self.out / "fs.pickle")
+        tree.remove_node(fs, "bin/busybox")
+        tree.dump_pickle(fs, self.out / "fs.pickle")
+        self.assertIn("busybox: /bin/busybox is no program", self.problems())
+
+    def test_forbidden_marker_in_the_help(self):
+        path = self.out / "busybox-help.txt"
+        path.write_text(path.read_text() + "svr04\n")
+        self.assertIn("forbidden svr04 in busybox-help.txt", self.problems())
 
 
 class ValidateRpmTest(unittest.TestCase):

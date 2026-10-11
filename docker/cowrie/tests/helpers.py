@@ -9,15 +9,53 @@ if str(DIST) not in sys.path:
 
 from tpot_personas import tree  # noqa: E402
 
+OLD = 1_300_000_000
+
+
+def _link(root, rel, target):
+    parent = tree.ensure_dir(root, str(Path(rel).parent), ctime=OLD)
+    tree.node_children(parent).append([Path(rel).name, tree.T_LINK, 0, 0, len(target), 0o120777, OLD, [],
+                                       target, None])
+
+
+def _program(root, rel, size):
+    node = tree.ensure_file(root, rel, b"", mode=0o755, ctime=OLD)
+    # Cowrie's pickle: programs have their size and no contents (an empty list)
+    tree.node_set(node, tree.A_SIZE, size)
+    tree.node_set(node, tree.A_CONTENTS, [])
+    return node
+
 
 def base_tree():
-    """A tiny stand-in for Cowrie's fs.pickle: root dir with the parts the
-    renderer touches, a home/phil to be removed and an old ctime."""
-    root = ["", tree.T_DIR, 0, 0, 4096, 0o40755, 1_300_000_000, [], None, None]
-    for rel in ("bin", "etc", "home/phil", "usr/bin", "usr/sbin", "var/log", "proc"):
-        tree.ensure_dir(root, rel, ctime=1_300_000_000)
-    tree.ensure_file(root, "etc/motd", b"phil was here\n", ctime=1_300_000_000)
-    tree.ensure_file(root, "bin/apt", b"", mode=0o755, ctime=1_300_000_000)
+    """A small stand-in for Cowrie's fs.pickle (Debian 12, merged /usr): the
+    links bin, sbin, lib and lib64, programs with their sizes, the parts of
+    another system the renderer removes (home/phil, Debian package files,
+    x86_64 libraries, systemd, sshd_config, /.dockerenv, Debian's
+    /proc/modules) and an old ctime."""
+    root = ["", tree.T_DIR, 0, 0, 4096, 0o40755, OLD, [], None, None]
+    for rel in ("etc", "home/phil", "usr/bin", "usr/sbin", "usr/lib", "usr/lib64", "var/log", "proc", "root",
+                "tmp"):
+        tree.ensure_dir(root, rel, ctime=OLD)
+    for name in ("bin", "sbin", "lib", "lib64"):
+        _link(root, name, f"usr/{name}")
+    tree.ensure_file(root, "etc/motd", b"phil was here\n", ctime=OLD)
+    tree.ensure_file(root, "etc/debian_version", b"12.5\n", ctime=OLD)
+    tree.ensure_file(root, "etc/apt/sources.list.d/debian.sources", b"Types: deb\n", ctime=OLD)
+    tree.ensure_file(root, "etc/dpkg/dpkg.cfg", b"no-debsig\n", ctime=OLD)
+    tree.ensure_file(root, "var/lib/dpkg/status", b"Package: base-files\n", ctime=OLD)
+    tree.ensure_file(root, "etc/systemd/system/sshd.service", b"[Unit]\n", ctime=OLD)
+    tree.ensure_file(root, "etc/ssh/sshd_config", b"Include /etc/ssh/sshd_config.d/*.conf\n", ctime=OLD)
+    tree.ensure_file(root, "proc/modules", b"nft_chain_nat 12288 0 - Live 0x0000000000000000\n", ctime=OLD)
+    tree.ensure_file(root, ".dockerenv", b"", mode=0o755, ctime=OLD)
+    tree.ensure_file(root, "usr/lib/x86_64-linux-gnu/libc.so.6", b"", ctime=OLD)
+    tree.ensure_file(root, "usr/lib/systemd/systemd", b"", mode=0o755, ctime=OLD)
+    tree.ensure_file(root, "usr/lib/os-release", b"ID=debian\n", ctime=OLD)
+    _link(root, "etc/os-release", "usr/lib/os-release")
+    for rel, size in (("usr/bin/apt", 18824), ("usr/bin/apt-get", 51592), ("usr/bin/dpkg", 318816),
+                      ("usr/bin/top", 134736), ("usr/bin/df", 105824), ("usr/bin/uname", 43888),
+                      ("usr/bin/perl", 3804432), ("usr/bin/python3.11", 6831736), ("usr/sbin/sshd", 1265432)):
+        _program(root, rel, size)
+    _link(root, "usr/bin/python3", "usr/bin/python3.11")
     return root
 
 

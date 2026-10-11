@@ -14,7 +14,7 @@ from . import PersonaError, tree
 from .common import VM_PROVIDERS, home_dir, is_login_shell, ps_start, ps_user
 from .identity import DAY, host_patterns, hostname_regex, kernel_time, stale_at, updated_at
 from .model import PROMPT_STYLES
-from .render import DIR_MODES, PACKAGE_MANAGER_PATHS
+from .render import BUSYBOX_HELP, DIR_MODES, PACKAGE_MANAGER_PATHS
 from .ssh_profiles import COMPRESSIONS, HOST_KEYS, PROFILES, TWISTED_CIPHERS, TWISTED_MACS
 
 MIN_PICKLE_SIZE = 1_000_000
@@ -395,7 +395,7 @@ def _tree_texts(fs):
 def _check_forbidden(persona, out_dir, runtime_dir, keys_dir, fs, out):
     markers = FORBIDDEN_MARKERS + (UBUNTU_MARKERS if persona.os_id != "ubuntu" else ())
     markers = tuple(m.lower().encode() for m in markers)
-    paths = [out_dir / "cmdoutput.json", out_dir / "cowrie.cfg"]
+    paths = [out_dir / "cmdoutput.json", out_dir / "cowrie.cfg", out_dir / BUSYBOX_HELP]
     for root in (out_dir / "honeyfs", out_dir / "txtcmds"):
         for path in sorted(root.rglob("*")):
             if any(m in path.name.lower().encode() for m in markers):
@@ -427,8 +427,13 @@ def _check_forbidden(persona, out_dir, runtime_dir, keys_dir, fs, out):
 
 def _check_package_managers(persona, fs, honeyfs, txtcmds, out):
     names = set()
+    # bin/apt and usr/bin/apt are one node where bin is a link to usr/bin
+    commands = {}
     for rel in PACKAGE_MANAGER_PATHS:
-        command = (txtcmds / rel).is_file()
+        real = tree.real_path(fs, rel) or rel
+        commands[real] = commands.get(real, False) or (txtcmds / rel).is_file()
+    for rel in PACKAGE_MANAGER_PATHS:
+        command = commands[tree.real_path(fs, rel) or rel]
         in_pickle = tree.find_node(fs, rel) is not None
         if command != in_pickle:
             out.append(f"package manager {rel}: txtcmd {command}, fs.pickle {in_pickle}")
@@ -438,6 +443,50 @@ def _check_package_managers(persona, fs, honeyfs, txtcmds, out):
             names.add(Path(rel).name)
     if names != set(persona.package_managers):
         out.append(f"package manager set {sorted(names)} is not {sorted(persona.package_managers)}")
+
+
+def _is_program(node):
+    return (node is not None and tree.node_get(node, tree.A_TYPE) == tree.T_FILE
+            and (tree.node_get(node, tree.A_MODE) or 0) & 0o111 != 0)
+
+
+def _check_programs(fs, txtcmds, out):
+    """Every program in a bin / sbin directory has a size, every txtcmd is a program
+    without contents (Cowrie's cat / dd serve the ELF header of [shell] arch)."""
+    empty = [path for path, node in tree.iter_nodes(fs)
+             if path.rsplit("/", 2)[-2] in ("bin", "sbin") and _is_program(node)
+             and not tree.node_get(node, tree.A_SIZE)]
+    if empty:
+        out.append(f"program: size 0 for {', '.join(empty[:5])}")
+    for path in sorted(txtcmds.rglob("*")):
+        if not path.is_file():
+            continue
+        rel = str(path.relative_to(txtcmds))
+        node = tree.find_node(fs, rel)
+        if not _is_program(node):
+            out.append(f"program: txtcmd {rel} is no executable of fs.pickle")
+        elif isinstance(tree.node_get(node, tree.A_CONTENTS), (bytes, str)):
+            out.append(f"program: txtcmd {rel} has contents in fs.pickle, cat shows no ELF header")
+
+
+def _check_busybox(ident, cfg, out_dir, runtime_dir, fs, out):
+    """BusyBox of the firmware: Cowrie's busybox runs (not skipped), prints the help
+    of that version and /bin/busybox is a program. Without BusyBox it is skipped."""
+    banner = ident.release.extra.get("busybox")
+    skipped = {e.strip() for e in cfg.get("shell", "skip_python_commands", fallback="").split(",")}
+    key = cfg.get("shell", "busybox_help", fallback=None)
+    if not banner:
+        if "busybox" not in skipped or key is not None:
+            out.append("busybox: Cowrie's busybox answers on a system without BusyBox")
+        return
+    if "busybox" in skipped or "/bin/busybox" in skipped:
+        out.append("busybox: Cowrie's busybox is skipped, the applets do not run")
+    if key != f"{runtime_dir}/{BUSYBOX_HELP}":
+        out.append(f"busybox: cfg busybox_help {key!r} is not {runtime_dir}/{BUSYBOX_HELP}")
+    if not _text(out_dir / BUSYBOX_HELP).startswith(f"{banner} multi-call binary.\n"):
+        out.append(f"busybox: the help does not start with {banner}")
+    if fs is not None and not _is_program(tree.find_node(fs, "bin/busybox")):
+        out.append("busybox: /bin/busybox is no program of fs.pickle")
 
 
 def problems(persona, ident, out_dir, runtime_dir, keys_dir, min_pickle=MIN_PICKLE_SIZE):
@@ -510,9 +559,11 @@ def problems(persona, ident, out_dir, runtime_dir, keys_dir, min_pickle=MIN_PICK
     _check_dates(ident, honeyfs, out)
     _check_logs(ident, honeyfs, fs, out)
     _check_forbidden(persona, out_dir, runtime_dir, keys_dir, fs, out)
+    _check_busybox(ident, cfg, out_dir, runtime_dir, fs, out)
     if fs is not None:
         _check_tree(persona, ident, fs, out)
         _check_package_managers(persona, fs, honeyfs, txtcmds, out)
+        _check_programs(fs, txtcmds, out)
     return out
 
 

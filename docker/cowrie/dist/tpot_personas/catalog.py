@@ -554,7 +554,10 @@ GPU_RELEASES = (
 # Each release is one firmware image of the vendor (its download or release-note
 # page above it); kernel, BusyBox and SSH server as in that image unless marked
 # unverified. A device runs the image it was set up with until the next one came out.
+# Cowrie's [shell] arch picks the ELF header `cat` / `dd` show for a program: MT7628 / MT7621 run
+#   little endian (OpenWrt mipsel_24kc), the QCA956x of the DIR-859 big endian (ath79, mips_24kc)
 MIPS = ("linux-mips-lsb", "mips")
+MIPS_BE = ("linux-mips-msb", "mips")
 # the paths of Cowrie's Debian tree that a router, camera or NAS firmware does not have
 VENDOR_ONLY = ("etc/os-release", "etc/debian_version", "etc/issue", "etc/issue.net", "etc/motd")
 
@@ -827,7 +830,7 @@ PERSONAS = (
             ("dgx:dgx{nn}", "dgx:a100-worker-{nn}", "gpu-node-{nn}", "gpu:ml-{hex6}", "gpu:{gpu}-worker-{nn}"),
             build_gpu_ubuntu, "GPU server with NVIDIA driver, Ollama and Jupyter",
             tokens=(("hf", "hf"), ("openai", "openai"))),
-    _device("dlink-dir859", "dlink", "dlink", "admin", "/bin/sh", MIPS, "dropbear", (), DLINK, DLINK_HARDWARE,
+    _device("dlink-dir859", "dlink", "dlink", "admin", "/bin/sh", MIPS_BE, "dropbear", (), DLINK, DLINK_HARDWARE,
             ("dlinkrouter", "DIR-859"), build_dlink, "D-Link DIR-859 router, discontinued, old firmware",
             remove_paths=VENDOR_ONLY, max_install_days=3650),
     _device("tplink-wr841n", "tplink", "tplink", "admin", "/bin/sh", MIPS, "dropbear", (), TPLINK, TPLINK_HARDWARE,

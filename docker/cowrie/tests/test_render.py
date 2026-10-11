@@ -1,4 +1,5 @@
 import calendar
+import configparser
 import dataclasses
 import json
 import re
@@ -21,6 +22,84 @@ def render_ident(test, persona, ident):
 
 def render_one(test, persona, seed, now=NOW):
     return render_ident(test, persona, draw(persona, seed, now))
+
+
+def cfg_of(out):
+    cfg = configparser.ConfigParser(interpolation=None)
+    cfg.read(out / "cowrie.cfg")
+    return cfg
+
+
+def skipped(out):
+    return {e.strip() for e in cfg_of(out).get("shell", "skip_python_commands").split(",")}
+
+
+class ProgramTest(unittest.TestCase):
+    """Commands are programs of fs.pickle: a size, no contents (Cowrie's cat / dd
+    serve the ELF header of [shell] arch), the size of Cowrie's own program kept."""
+
+    def test_txtcmds_are_programs_with_a_size(self):
+        for persona in catalog.PERSONAS:
+            ident, out, _ = render_one(self, persona, 1)
+            fs = tree.load_pickle(out / "fs.pickle")
+            content = persona.builder(persona, ident)
+            for rel in set(content.txtcmds) | set(content.programs):
+                node = tree.find_node(fs, rel)
+                self.assertEqual(tree.node_get(node, tree.A_TYPE), tree.T_FILE, (persona.id, rel))
+                self.assertTrue(tree.node_get(node, tree.A_MODE) & 0o111, (persona.id, rel))
+                self.assertGreater(tree.node_get(node, tree.A_SIZE), 10_000, (persona.id, rel))
+                self.assertNotIsInstance(tree.node_get(node, tree.A_CONTENTS), bytes, (persona.id, rel))
+            # usr/bin/top of Cowrie's pickle keeps its size
+            self.assertEqual(tree.node_get(tree.find_node(fs, "usr/bin/top"), tree.A_SIZE), 134736, persona.id)
+
+    def test_bin_stays_a_link_to_usr_bin(self):
+        # a /bin of its own held only the txtcmds: `ls /bin` showed five files, `df` ran Debian's binary
+        for pid in ("ubuntu-noble", "tplink-wr841n"):
+            _, out, _ = render_one(self, catalog.by_id(pid), 1)
+            fs = tree.load_pickle(out / "fs.pickle")
+            for name in ("bin", "sbin", "lib"):
+                node = tree.find_node(fs, name)
+                self.assertEqual((tree.node_get(node, tree.A_TYPE), tree.node_get(node, tree.A_TARGET)),
+                                 (tree.T_LINK, f"usr/{name}"), (pid, name))
+            self.assertIs(tree.find_node(fs, "bin/df"), tree.find_node(fs, "usr/bin/df"))
+            self.assertEqual(tree.node_get(tree.find_node(fs, "usr/bin/df"), tree.A_SIZE), 105824)
+
+    def test_sizes_are_drawn_per_identity(self):
+        persona = catalog.by_id("openwrt")
+        sizes = set()
+        for seed in range(4):
+            _, out, _ = render_one(self, persona, seed)
+            sizes.add(tree.node_get(tree.find_node(tree.load_pickle(out / "fs.pickle"), "bin/busybox"), tree.A_SIZE))
+        self.assertGreater(len(sizes), 1)
+        self.assertTrue(all(380_000 <= size <= 1_100_000 for size in sizes), sizes)
+
+
+class BusyboxTest(unittest.TestCase):
+    def test_devices_with_busybox_run_cowries_busybox_with_their_help(self):
+        with_busybox = [p for p in catalog.PERSONAS if any(r.extra.get("busybox") for r in p.releases)]
+        self.assertEqual({p.id for p in with_busybox}, {"dlink-dir859", "tplink-wr841n", "zyxel-nas326", "openwrt",
+                                                       "ubiquiti-edgerouter-x", "ipcam"})
+        for persona in with_busybox:
+            for seed in range(3):
+                ident, out, _ = render_one(self, persona, seed)
+                banner = ident.release.extra["busybox"]
+                self.assertNotIn("busybox", skipped(out), persona.id)
+                self.assertNotIn("/bin/busybox", skipped(out), persona.id)
+                self.assertEqual(cfg_of(out).get("shell", "busybox_help"), f"{out}/busybox-help.txt")
+                text = (out / "busybox-help.txt").read_text()
+                self.assertTrue(text.startswith(f"{banner} multi-call binary.\n"), (persona.id, text[:80]))
+                self.assertIn("wget", text)
+                self.assertFalse((out / "txtcmds/bin/busybox").exists(), persona.id)
+
+    def test_systems_without_busybox_skip_it(self):
+        for persona in catalog.PERSONAS:
+            ident, out, _ = render_one(self, persona, 0)
+            if ident.release.extra.get("busybox"):
+                continue
+            self.assertIn("busybox", skipped(out), persona.id)
+            self.assertFalse(cfg_of(out).has_option("shell", "busybox_help"), persona.id)
+            self.assertFalse((out / "busybox-help.txt").exists(), persona.id)
+            self.assertIsNone(tree.find_node(tree.load_pickle(out / "fs.pickle"), "bin/busybox"), persona.id)
 
 
 class RenderTest(unittest.TestCase):
@@ -283,7 +362,7 @@ class DeviceContentTest(unittest.TestCase):
             commands = [p["COMMAND"] for p in self.ps(out)]
             for command in ("/home/davinci", "/bin/sh /home/process_cfg.sh", "/usr/sbin/telnetd", "/sbin/dropbear"):
                 self.assertTrue(any(c.startswith(command) for c in commands), (seed, command, commands))
-            busybox = (out / "txtcmds/bin/busybox").read_text()
+            busybox = (out / "busybox-help.txt").read_text()
             self.assertTrue(busybox.startswith(f"{r.extra['busybox']} multi-call binary."), busybox)
             cpuinfo = (out / "honeyfs/proc/cpuinfo").read_text()
             self.assertIn("model name\t: ARMv7 Processor rev 5 (v7l)", cpuinfo)
@@ -351,7 +430,7 @@ class DeviceContentTest(unittest.TestCase):
 
     def test_each_device_says_what_it_is(self):
         expected = {
-            "tplink-wr841n": ("txtcmds/bin/busybox", "BusyBox v1.19.2 "),
+            "tplink-wr841n": ("busybox-help.txt", "BusyBox v1.19.2 "),
             "zyxel-nas326": ("honeyfs/firmware/mnt/info/fwversion", "V5.21(AAZF."),
             "qnap-qts": ("honeyfs/etc/config/uLinux.conf", "Model = TS-"),
             "synology-dsm": ("honeyfs/etc.defaults/VERSION", 'productversion="7.'),

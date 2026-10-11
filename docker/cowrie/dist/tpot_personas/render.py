@@ -7,7 +7,7 @@ import shutil
 from pathlib import Path
 
 from . import tree
-from .common import home_dir
+from .common import home_dir, rng_for
 from .identity import DAY, to_json
 from .ssh_profiles import PROFILES
 
@@ -89,11 +89,9 @@ DIR_MODES = {"proc": 0o555, "root": 0o700, "tmp": 0o1777}
 COMMON_SKIP_PYTHON_COMMANDS = (
     "/bin/apt",
     "/bin/apt-get",
-    "/bin/busybox",
     "/bin/yum",
     "/usr/bin/apt",
     "/usr/bin/apt-get",
-    "/usr/bin/busybox",
     "/usr/bin/gcc",
     "/usr/bin/lspci",
     "/usr/bin/sudo",
@@ -101,7 +99,6 @@ COMMON_SKIP_PYTHON_COMMANDS = (
     "/usr/sbin/service",
     "apt",
     "apt-get",
-    "busybox",
     "gcc",
     "lspci",
     "sudo",
@@ -119,14 +116,28 @@ EMBEDDED_SKIP_PYTHON_COMMANDS = (
     "scp",
     "systemctl",
 )
+# Cowrie's busybox runs the applets: only on a system with BusyBox (Content.busybox_help)
+BUSYBOX_PYTHON_COMMANDS = ("/bin/busybox", "busybox")
 KEY_FILES = {"ssh-rsa": "rsa", "ecdsa-sha2-nistp256": "ecdsa", "ssh-ed25519": "ed25519"}
+BUSYBOX_HELP = "busybox-help.txt"
+# what ls -l shows for a program Cowrie runs (the pickle keeps the size of one it has):
+# BusyBox of a firmware, any other program
+PROGRAM_SIZES = {"busybox": (380_000, 1_100_000)}
+PROGRAM_SIZE = (18_000, 420_000)
 
 
-def skip_python_commands(persona):
+def skip_python_commands(persona, content):
     commands = set(COMMON_SKIP_PYTHON_COMMANDS)
     if persona.kind == "device":
         commands |= set(EMBEDDED_SKIP_PYTHON_COMMANDS)
+    if not content.busybox_help:
+        commands |= set(BUSYBOX_PYTHON_COMMANDS)
     return sorted(commands)
+
+
+def program_size(ident, rel):
+    low, high = PROGRAM_SIZES.get(Path(rel).name, PROGRAM_SIZE)
+    return rng_for(ident, f"size {rel}").randint(low, high)
 
 
 def _mode(rel):
@@ -163,14 +174,18 @@ def apply_to_tree(base_tree, persona, ident, content):
         node = tree.ensure_file(t, rel, text.encode("utf-8"), 0, 0, _mode(rel), ctime=ctime)
         # ensure_file keeps the ctime of a node Cowrie's pickle already has (/etc/shadow, logs)
         tree.node_set(node, tree.A_CTIME, ctime)
-    for rel in content.txtcmds:
-        tree.ensure_file(t, rel, b"", 0, 0, 0o755, ctime=ident.installed_at)
+    # txtcmds and the commands of Cowrie's Python: programs with a size and no contents
+    # (cat / dd give the ELF header of [shell] arch)
+    for rel in sorted(set(content.txtcmds) | set(content.programs)):
+        tree.ensure_executable(t, rel, program_size(ident, rel), ctime=ident.installed_at)
     _set_dirs(t, persona, ident.installed_at)
     return t
 
 
-def render_cfg(persona, ident, runtime_dir, keys_dir, cowrie_root=COWRIE_ROOT):
+def render_cfg(persona, ident, runtime_dir, keys_dir, cowrie_root=COWRIE_ROOT, content=None):
     r = ident.release
+    content = content if content is not None else persona.builder(persona, ident)
+    busybox = f"busybox_help = {runtime_dir}/{BUSYBOX_HELP}\n" if content.busybox_help else ""
     profile = PROFILES[persona.ssh_profile]
     keys = "\n".join(
         f"{KEY_FILES[k]}_public_key = {keys_dir}/ssh_host_{KEY_FILES[k]}_key.pub\n"
@@ -206,8 +221,8 @@ hardware_platform = {persona.hardware_platform}
 operating_system = {persona.operating_system}
 prompt_style = {persona.prompt_style}
 ssh_version = {r.ssh_version}
-skip_python_commands = {",".join(skip_python_commands(persona))}
-
+skip_python_commands = {",".join(skip_python_commands(persona, content))}
+{busybox}
 [ssh]
 enabled = true
 {keys}
@@ -264,5 +279,8 @@ def render(persona, ident, base_tree, out_dir, runtime_dir, keys_dir, cowrie_roo
     (out_dir / "txtcmds").mkdir(exist_ok=True)
     _write(out_dir / "cmdoutput.json",
            json.dumps({"command": {"ps": content.processes}}, indent=2, sort_keys=True) + "\n")
-    _write(out_dir / "cowrie.cfg", render_cfg(persona, ident, Path(runtime_dir), Path(keys_dir), cowrie_root))
+    if content.busybox_help:
+        _write(out_dir / BUSYBOX_HELP, content.busybox_help)
+    _write(out_dir / "cowrie.cfg", render_cfg(persona, ident, Path(runtime_dir), Path(keys_dir), cowrie_root,
+                                              content))
     _write(out_dir / "identity.json", json.dumps(to_json(ident), indent=2, sort_keys=True, default=str) + "\n")

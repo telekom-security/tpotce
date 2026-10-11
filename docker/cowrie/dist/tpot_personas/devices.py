@@ -151,7 +151,8 @@ def device_content(persona, ident, files, entries, cmdline, boot, processes, acc
                    txtcmds=None):
     """The Content of a device: accounts, kernel files, the file system table
     (mount, /proc/mounts, df), dmesg, CPU commands, top (BusyBox, or procps when
-    coreutils) and the vendor's commands (txtcmds; extra["busybox"] adds busybox)."""
+    coreutils) and the vendor's commands (txtcmds); with extra["busybox"] Cowrie's
+    busybox runs the applets and prints the help of that BusyBox."""
     hw, r = ident.hardware, ident.release
     processes = assign_processes(ident, processes)
     passwd, group, shadow = accounts or (embedded_passwd(persona.user, persona.uid, persona.gid, persona.shell),
@@ -171,14 +172,15 @@ def device_content(persona, ident, files, entries, cmdline, boot, processes, acc
         "usr/bin/nproc": nproc(hw),
         "usr/bin/top": top,
     }
-    if r.extra.get("busybox"):
-        commands["bin/busybox"] = busybox_help(r.extra["busybox"])
     if hw.cpu_model in NAS_LSPCI:
         commands["usr/bin/lspci"] = NAS_LSPCI[hw.cpu_model]
     commands.update(txtcmds or {})
     # /etc/shadow was last written on its newest lastchange day
+    banner = r.extra.get("busybox")
     return Content(files=all_files, txtcmds=commands, processes=processes,
-                   ctimes={"etc/shadow": shadow_ctime(ident)})
+                   ctimes={"etc/shadow": shadow_ctime(ident)},
+                   programs=("bin/busybox",) if banner else (),
+                   busybox_help=busybox_help(banner) if banner else "")
 
 
 # --- builders --------------------------------------------------------------------------

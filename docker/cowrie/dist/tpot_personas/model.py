@@ -41,6 +41,8 @@ class Content:
     txtcmds: dict
     processes: list
     ctimes: dict = field(default_factory=dict)  # rel path -> ctime, for files whose date shows (logs, shadow)
+    programs: tuple = ()     # paths of the commands Cowrie's Python runs that the system has (bin/busybox)
+    busybox_help: str = ""   # what `busybox` prints (patched busybox.py, [shell] busybox_help), "" without BusyBox
 
 
 @dataclass(frozen=True)

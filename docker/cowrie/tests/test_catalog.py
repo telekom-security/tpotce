@@ -201,6 +201,16 @@ class DeviceCatalogTest(unittest.TestCase):
             self.assertEqual((p.user, p.shell), DEVICE_USERS[pid], pid)
             self.assertTrue(p.vulnerability, pid)
 
+    def test_arch_is_the_byte_order_of_the_soc(self):
+        # [shell] arch is the ELF header of `cat /bin/busybox`: ath79 (QCA956x) is big endian
+        arches = {p.id: p.arch for p in catalog.PERSONAS}
+        self.assertEqual(arches["dlink-dir859"], "linux-mips-msb")
+        for pid in ("tplink-wr841n", "openwrt", "ubiquiti-edgerouter-x"):
+            self.assertEqual(arches[pid], "linux-mips-lsb", pid)
+        for pid in ("zyxel-nas326", "ipcam"):
+            self.assertEqual(arches[pid], "linux-arm-lsb", pid)
+        self.assertEqual(arches["raspios"], "linux-aarch64-lsb")
+
     def test_ipcam_is_a_busybox_camera(self):
         p = catalog.by_id("ipcam")
         self.assertEqual((p.ssh_profile, p.hardware_platform), ("dropbear", "armv7l"))

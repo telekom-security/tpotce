@@ -5,7 +5,8 @@ import sys
 import unittest
 from pathlib import Path
 
-from tests.helpers import DIST, tmpdir
+from tests.helpers import DIST, base_tree, tmpdir
+from tpot_personas import tree
 
 FIXTURE = Path(__file__).parent / "fixtures" / "v3.1.1"
 PATCH = DIST / "patch_cowrie_persona_support.py"
@@ -122,6 +123,47 @@ class FakeConfig:
 
 
 
+def module_all(source, namespace):
+    """The whole patched module without its cowrie / twisted imports, run in namespace."""
+    keep = [node for node in ast.parse(source).body
+            if not (isinstance(node, ast.ImportFrom) and node.module
+                    and node.module.split(".")[0] in ("cowrie", "twisted"))]
+    exec(compile(ast.Module(keep, []), "<patched>", "exec"), namespace)  # noqa: S102
+    return namespace
+
+
+class TreeFs:
+    """The parts of Cowrie's HoneyPotFilesystem getCommand uses, on a tpot_personas tree."""
+
+    def __init__(self, root):
+        self.fs = root
+
+    def resolve_path(self, path, cwd):
+        import posixpath
+        return posixpath.normpath(posixpath.join(cwd, path))
+
+    def getfile(self, path, follow_symlinks=True):
+        node = tree.find_node(self.fs, path)
+        if follow_symlinks and node is not None and node[tree.A_TYPE] == tree.T_LINK:
+            node = tree.find_node(self.fs, node[tree.A_TARGET])
+        return node
+
+    def exists(self, path):
+        return self.getfile(path) is not None
+
+    def isfile(self, path):
+        node = self.getfile(path)
+        return node is not None and node[tree.A_TYPE] == tree.T_FILE
+
+
+class FsModule:
+    A_NAME, A_TYPE, A_CONTENTS, A_TARGET = tree.A_NAME, tree.A_TYPE, tree.A_CONTENTS, tree.A_TARGET
+    T_LINK, T_DIR, T_FILE = tree.T_LINK, tree.T_DIR, tree.T_FILE
+
+
+PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".split(":")
+
+
 class PatchTest(unittest.TestCase):
     def patched(self):
         root = tmpdir(self) / "cowrie"
@@ -136,7 +178,122 @@ class PatchTest(unittest.TestCase):
         self.assertIn("self.fs.resolve_path(cmd, cwd)", protocol)
         self.assertIn("for x in paths if x", protocol)
         self.assertNotIn("self.cwd", protocol)
-        self.assertIn("if path in self.commands and not skip_python_command(path):", protocol)
+        self.assertIn("if spelling in self.commands and not skip_python_command(spelling):", protocol)
+
+    def lookup(self, txtcmds, commands, skip=""):
+        """getCommand of the patched protocol.py on base_tree() (bin -> usr/bin) with these
+        txtcmds files and Python commands; returns a function name -> what it found."""
+        root = tmpdir(self)
+        for rel, text in txtcmds.items():
+            (root / rel).parent.mkdir(parents=True, exist_ok=True)
+            (root / rel).write_text(text)
+        protocol = (self.patched() / "src/cowrie/shell/protocol.py").read_text()
+
+        def read_data_bytes(*parts):
+            raise FileNotFoundError("/".join(parts))
+
+        config = FakeConfig({("honeypot", "txtcmds_path"): str(root), ("shell", "skip_python_commands"): skip})
+        get_command = method(protocol, "HoneyPotBaseProtocol", "getCommand",
+                             {"CowrieConfig": config, "Path": Path, "fs": FsModule,
+                              "read_data_bytes": read_data_bytes})
+
+        class Protocol:
+            fs = TreeFs(base_tree())
+
+            def txtcmd(self, txt):
+                return ("txtcmd", txt.decode())
+
+            def scriptcmd(self, path, name):
+                return ("script", path)
+
+            class _log:
+                @staticmethod
+                def info(*args, **kwargs):
+                    pass
+
+        Protocol.commands = commands
+        protocol_obj = Protocol()
+        return lambda name, cwd="/root": get_command(protocol_obj, name, PATH, cwd)
+
+    def test_txtcmd_answers_every_spelling_through_the_bin_link(self):
+        # `df` finds /usr/bin/df on PATH (usr/bin before bin), the txtcmd is bin/df
+        find = self.lookup({"bin/df": "df of the persona\n", "usr/bin/top": "top of the persona\n"}, {})
+        for name in ("df", "/bin/df", "/usr/bin/df"):
+            self.assertEqual(find(name), ("txtcmd", "df of the persona\n"), name)
+        for name in ("top", "/bin/top", "/usr/bin/top"):
+            self.assertEqual(find(name), ("txtcmd", "top of the persona\n"), name)
+        # a program without txtcmd or command stays Cowrie's script / binary
+        self.assertEqual(find("uname"), ("script", "/usr/bin/uname"))
+        self.assertIsNone(find("nothere"))
+
+    def test_python_command_answers_every_spelling(self):
+        # a command found by path is looked up as /usr/bin/x and /bin/x (Cowrie registers /bin/busybox)
+        find = self.lookup({}, {"/bin/top": "top"})
+        self.assertEqual(find("/usr/bin/top"), "top")
+        self.assertEqual(find("top"), "top")
+
+    def test_skipped_python_command_stays_skipped_in_every_spelling(self):
+        find = self.lookup({}, {"/bin/top": "top", "top": "top"}, skip="top")
+        self.assertEqual(find("top"), ("script", "/usr/bin/top"))
+        self.assertEqual(find("/bin/top"), ("script", "/bin/top"))
+
+    def busybox(self, args, help_path=None):
+        source = (self.patched() / "src/cowrie/commands/busybox.py").read_text()
+        values = {("shell", "busybox_help"): str(help_path)} if help_path else {}
+        dispatched, executed = [], []
+
+        class Pipe:
+            targets = ()
+
+            def __init__(self, *args, **kwargs):
+                self.stdin_from_pipe = False
+
+        class BusyboxBase(FakeCommand):
+            environ = {"PATH": ":".join(PATH)}
+            user = None
+            pp = Pipe()
+
+            def exec_command(self, pp, cmdclass, *args):
+                executed.append((cmdclass, args))
+
+        namespace = module_all(source, {"HoneyPotCommand": BusyboxBase, "PipeProtocol": Pipe,
+                                        "CowrieConfig": FakeConfig(values)})
+        command = namespace["Command_busybox"](args)
+
+        class Events:
+            def dispatch(self, *args, **kwargs):
+                dispatched.append(kwargs)
+
+        class Protocol:
+            events = Events()
+
+            def getCommand(self, cmd, paths, cwd):
+                return {"wget": "Command_wget", "cat": "Command_cat"}.get(cmd)
+
+        command.protocol = Protocol()
+        command.start()
+        return command, dispatched, executed
+
+    def test_busybox_runs_its_applets(self):
+        command, dispatched, executed = self.busybox(["wget", "http://127.0.0.1:1/x"])
+        self.assertEqual(executed, [("Command_wget", ("http://127.0.0.1:1/x",))])
+        self.assertEqual(dispatched, [{"input": "wget http://127.0.0.1:1/x"}])
+
+    def test_busybox_names_an_unknown_applet(self):
+        command, _, executed = self.busybox(["ECCHI"])
+        self.assertEqual((bytes(command.out), executed), (b"ECCHI: applet not found\n", []))
+
+    def test_busybox_prints_the_help_of_the_persona(self):
+        help_path = tmpdir(self) / "busybox-help.txt"
+        help_path.write_text("BusyBox v1.19.2 (2025-03-28 14:13:40 CST) multi-call binary.\nhelp\n")
+        for args in ([], ["--help"]):
+            command, _, executed = self.busybox(args, help_path)
+            self.assertEqual(bytes(command.out), help_path.read_bytes(), args)
+            self.assertEqual((command.err, executed), ("", []))
+
+    def test_busybox_without_the_key_keeps_upstream_help(self):
+        command, _, _ = self.busybox([])
+        self.assertIn("BusyBox v1.20.2 (Debian 1:1.20.0-7) multi-call binary.", command.err)
 
     def test_ssh_uname_is_persona_driven(self):
         ssh = (self.patched() / "src/cowrie/commands/ssh.py").read_text()
