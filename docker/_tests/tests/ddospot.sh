@@ -831,7 +831,6 @@ check_refused() {
   run_dns_probe tcp version TXT CH 1 VERSION.bind || test_die "DNS over TCP did not answer on ${TEST_BIND_IP}:${MAPPED_DNS_TCP_PORT}"
   test_ok "REFUSED for class IN with recursion off, version.bind over TCP"
   test_info "Waiting for the DNS scanner events over UDP and TCP"
-  sleep 3
   check_log_events "${LOG_DIR}" dns_tcp "${RUN_PERSONA}" "${TEST_TIMEOUT}" || test_die "DNS scanner events over UDP and TCP are not as expected"
   test_ok "DNS scanner over TCP verified, over UDP not verified"
 }

@@ -7,7 +7,7 @@ RUN apk --no-cache add git ca-certificates
 WORKDIR /src
 RUN git -c init.defaultBranch=main init --quiet && \
     git remote add origin https://github.com/t3chn0m4g3/ddospot && \
-    git fetch --quiet --depth 1 origin c45c604f2ba1a02fab9b0b872a3b6b067dc3a761 && \
+    git fetch --quiet --depth 1 origin aaf828ac025f1edf8451a974a4fa04513295bd4e && \
     git -c advice.detachedHead=false checkout --quiet FETCH_HEAD
 FROM scratch AS src
 COPY --from=fetch /src/ /
