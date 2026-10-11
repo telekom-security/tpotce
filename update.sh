@@ -315,7 +315,8 @@ Default: the branch of ~/tpotce, environment: TPOT_BRANCH" \
 Default: the origin of ~/tpotce, environment: TPOT_REPO_URL" \
 	  --opt "-B <file>" "Read the sudo password from a file, so an unattended run also
 works without passwordless sudo (the T-Pot Manager hands one over)" \
-	  --opt "--check-data-loss" "Only list what the run would lose for good, change nothing (exit 3: found)" \
+	  --opt "--check-data-loss" "Only list what the run would lose for good, change nothing (a git
+fetch at most). Exit 0: nothing found, 3: found, 1: it cannot tell." \
 	  --opt "--accept-data-loss" "Confirm every loss of data without a terminal, where the run cannot
 ask (for the command line and cron, where you typed it)" \
 	  --opt "--accept-data-loss-file <file>" "Confirm only the losses of this file: the '@@tpot loss' lines
@@ -1194,17 +1195,24 @@ function fuSTART_TPOT () {
 	return 1
 }
 
-# Where the data folder really is. TPOT_DATA_PATH is relative to ~/tpotce unless
-# it is absolute.
+# Where the data folder really is: TPOT_DATA_PATH of ~/tpotce/.env (KEY=value or KEY: "value"),
+# relative to ~/tpotce unless it is absolute or starts with ~, without a trailing slash. From
+# `local myPATH` on the same code as fuDATA_PATH of restore.sh (a test compares them).
 function fuDATA_PATH () {
+	local myTPOTDIR="$HOME/tpotce"
 	local myPATH=""
-	myPATH=$(grep -E "^TPOT_DATA_PATH=" "$HOME/tpotce/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d "\"'")
+	myPATH=$(fuENV_VALUE "${myTPOTDIR}/.env" TPOT_DATA_PATH)
 	[ -z "${myPATH}" ] && myPATH="./data"
 	case "${myPATH}" in
 	  /*) ;;
-	  *)  myPATH="$HOME/tpotce/${myPATH#./}" ;;
+	  "~"|"~/"*) myPATH="${HOME}${myPATH#\~}" ;;
+	  *)  myPATH="${myTPOTDIR}/${myPATH#./}" ;;
 	esac
-	echo "${myPATH%/}"
+	while [ "${myPATH}" != "/" ] && [ "${myPATH%/}" != "${myPATH}" ];
+	  do
+	    myPATH="${myPATH%/}"
+	done
+	echo "${myPATH}"
 }
 
 # Can fuROLLBACK_CHECKOUT go back at all? Only if the archive of this run points at an older
@@ -1301,6 +1309,23 @@ function fuES_IMAGE_VERSION () {   # $1 = registry, $2 = tag
 	  | sed -n "s/^ES_VER=//p" | head -1
 }
 
+# The Elasticsearch version that ran so far: the image of the tag under the registry of .env, else
+# under any registry of myREPOS (an installation that just moved from dtagdevsec finds its old one)
+function fuOLD_ES_VERSION () {   # $1 = the registry of .env, $2 = tag
+	local myREPO="" myVER=""
+	for myREPO in "$1" ${myREPOS};
+	  do
+	    [ -n "${myREPO}" ] || continue
+	    myVER=$(fuES_IMAGE_VERSION "${myREPO}" "$2")
+	    if [ -n "${myVER}" ];
+	      then
+	        echo "${myVER}"
+	        return 0
+	    fi
+	  done
+	return 1
+}
+
 # The archive the update.sh of 24.04.1 wrote before it restarted into this one, if it holds the
 # Elasticsearch data: the newest $HOME/*_tpot_backup.tgz, younger than 24 hours. That script ran
 # `tar cvf` (uncompressed despite the name, `tar tf` reads either) of everything in ~/tpotce, so
@@ -1338,7 +1363,7 @@ function fuCHECK_ELASTIC () {
 	fi
 	# The images of the previous version are still there, fuSTOP_TPOT only prunes
 	# the untagged ones.
-	myOLD=$(fuES_IMAGE_VERSION "$(grep -E "^TPOT_REPO=" "$HOME/tpotce/.env" | tail -1 | cut -d= -f2-)" "${myOLDVERSION}")
+	myOLD=$(fuOLD_ES_VERSION "$(grep -E "^TPOT_REPO=" "$HOME/tpotce/.env" | tail -1 | cut -d= -f2-)" "${myOLDVERSION}")
 	if [ "${myOLD}" == "${myNEW}" ];
 	  then
 	    fuUI_OK "Elasticsearch stays on ${myNEW}."
@@ -2449,7 +2474,7 @@ function fuCHECK_DATA_LOSS () {
 	    if fuCOMPOSE_HAS elasticsearch;
 	      then
 	        myNEW=$("${myGIT[@]}" show "${myREF}:docker/elk/elasticsearch/Dockerfile" 2>/dev/null | sed -n "s/^ARG ES_VER=//p" | head -1)
-	        myOLD=$(fuES_IMAGE_VERSION "${myREPO}" "${myCURRENT}")
+	        myOLD=$(fuOLD_ES_VERSION "${myREPO}" "${myCURRENT}")
 	        myDATA=$(fuDATA_PATH)
 	        if [ -z "${myNEW}" ];
 	          then

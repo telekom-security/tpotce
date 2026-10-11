@@ -1395,8 +1395,8 @@ class DataLossTest(Harness):
             fuROLLBACK_CHECKOUT () {{ echo "ROLLBACK"; return 0; }}
             fuCAN_ROLLBACK () {{ return 0; }}
             fuSTART_TPOT () {{ echo "STARTED"; return 0; }}
-        """) + extra + self.functions("fuLOSS_IN_FILE", "fuLOSS_CONFIRM", "fuDATA_PATH", "fuCOMPOSE_HAS",
-                                      "fuES_IMAGE_VERSION", "fuELASTIC_REFUSED", "fuOLD_RELEASE_BACKUP",
+        """) + extra + self.functions("fuLOSS_IN_FILE", "fuLOSS_CONFIRM", "fuENV_VALUE", "fuDATA_PATH", "fuCOMPOSE_HAS",
+                                      "fuES_IMAGE_VERSION", "fuOLD_ES_VERSION", "fuELASTIC_REFUSED", "fuOLD_RELEASE_BACKUP",
                                       "fuCHECK_ELASTIC") \
             + stub_confirm + 'fuCHECK_ELASTIC\necho "went on"\n'
 
@@ -1660,7 +1660,7 @@ class DataLossTest(Harness):
     """)
     CHECK_FUNCTIONS = ("fuLOSS_ADD", "fuLOSS_IN_FILE", "fuLOSS_CONFIRM", "fuDROP_OLDEST", "fuBACKUP_SIZE", "fuNO_ROOM",
                        "fuCHECK_BACKUP_SPACE",
-                       "fuDATA_PATH", "fuCOMPOSE_HAS", "fuES_IMAGE_VERSION", "fuOLD_RELEASE_BACKUP", "fuIMAGE_PULLABLE", "fuSORT_IMAGES",
+                       "fuENV_VALUE", "fuDATA_PATH", "fuCOMPOSE_HAS", "fuES_IMAGE_VERSION", "fuOLD_ES_VERSION", "fuOLD_RELEASE_BACKUP", "fuIMAGE_PULLABLE", "fuSORT_IMAGES",
                        "fuLOCAL_IMAGES_TEXT", "fuUNSURE_IMAGES_TEXT", "fuIMAGES", "fuLOSS_TARGET", "fuCHECK_DATA_LOSS")
 
     def check(self, extra=""):
@@ -1793,6 +1793,59 @@ class DataLossTest(Harness):
                       "--accept-data-loss", flat)
         self.assertIn("./update.sh --check-data-loss", flat)
         self.assertIn("exit 5", flat)
+        # the exit codes of the check: found, nothing found, cannot tell
+        self.assertIn("Exit 0: nothing found, 3: found, 1: it cannot tell.", flat)
+
+    # --- one data path, the old Elasticsearch under every registry ---------------------------------
+
+    def data_path(self, script, line):
+        """fuDATA_PATH of update.sh or restore.sh with this TPOT_DATA_PATH line in ~/tpotce/.env."""
+        with open(os.path.join(self.tpotce, ".env"), "w", encoding="utf-8") as out:
+            out.write("TPOT_TYPE=HIVE\n" + line)
+        if script == "update.sh":
+            text = self.functions("fuENV_VALUE", "fuDATA_PATH")
+        else:
+            text = (f'myTPOTDIR="$HOME/tpotce"\n'
+                    + self.functions("fuENV_VALUE", "fuDATA_PATH").replace("' update.sh)", "' restore.sh)"))
+        return self.bash(text + "fuDATA_PATH\n").stdout.strip().splitlines()[-1]
+
+    def test_both_scripts_read_the_data_path_alike(self):
+        cases = (("", f"{self.tpotce}/data"),
+                 ("TPOT_DATA_PATH=./data\n", f"{self.tpotce}/data"),
+                 ("TPOT_DATA_PATH=mydata/\n", f"{self.tpotce}/mydata"),
+                 ('TPOT_DATA_PATH: "/srv/tpot//"\n', "/srv/tpot"),
+                 ("TPOT_DATA_PATH='/srv/tpot'\n", "/srv/tpot"),
+                 ("TPOT_DATA_PATH=~/tpotdata\n", f"{self.home}/tpotdata"),
+                 ("TPOT_DATA_PATH=~\n", self.home))
+        for script in ("update.sh", "restore.sh"):
+            for line, wanted in cases:
+                with self.subTest(script=script, line=line):
+                    self.assertEqual(self.data_path(script, line), wanted)
+
+    def test_both_scripts_have_the_same_code_for_it(self):
+        def body(script):
+            function = re.search(r"function fuDATA_PATH \(\) \{.*?\n\}", read(script), re.S).group(0)
+            return function.split('local myPATH=""', 1)[1]
+        self.assertEqual(body("update.sh"), body("restore.sh"))
+
+    def test_the_old_elasticsearch_is_found_under_every_registry(self):
+        """An installation that just moved from dtagdevsec to ghcr: its old images are dtagdevsec's."""
+        docker = ('myREPOS="dtagdevsec ghcr.io/telekom-security"\n'
+                  'docker () { case "$1 $2 $*" in "image inspect"*dtagdevsec/elasticsearch:24.04.1) '
+                  "printf 'ES_VER=8.19.0\\n' ;; esac; }\n")
+        result = self.bash(self.elastic(archive_has_data=False, stub_confirm=docker))
+        out = result.stdout + result.stderr
+        self.assertIn("HINT: Elasticsearch 8.19.0 -> 9.1.0.", out)
+        self.assertNotIn("Cannot tell which Elasticsearch version ran so far", out)
+
+    def test_check_mode_finds_the_old_elasticsearch_under_every_registry(self):
+        self.target()
+        docker = ('myREPOS="dtagdevsec ghcr.io/telekom-security"\n'
+                  'docker () { case "$1 $2 $*" in "image inspect"*Env*dtagdevsec/elasticsearch:24.04.2) '
+                  "printf 'ES_VER=8.19.0\\n' ;; esac; }\n")
+        out, lines = self.check(extra=docker)
+        self.assertEqual([line.split()[2] for line in lines], ["elastic"], out)
+        self.assertIn("8.19.0 -> 9.1.0", lines[0])
 
     # --- review round 1 ----------------------------------------------------------------------------
 
@@ -2128,7 +2181,7 @@ class UpdateRepairTest(Harness):
         data = custom or os.path.join(self.tpotce, "data")
         for jewel in ("uuid", "nginx/cert/nginx.crt"):
             self.write(os.path.join(data, jewel), "x\n")
-        script = (self.JEWELS + self.functions("fuBACKUP", "fuDATA_PATH")
+        script = (self.JEWELS + self.functions("fuBACKUP", "fuENV_VALUE", "fuDATA_PATH")
                   + f'fuTMPDIR () {{ myTMPDIR=$(mktemp -d); }}; fuARCHIVE_NAME () {{ echo "{self.home}/a.tar"; }}\n'
                   + f'fuROTATE () {{ :; }}; myEDITION=STANDARD myFULL={"1" if full else ""}\n'
                   + (f'fuDATA_PATH () {{ echo "{custom}"; }}\n' if custom else '') + 'fuBACKUP\n')

@@ -393,7 +393,8 @@ function fuENV_VALUE () {   # $1 = file, $2 = key
 }
 
 # Where the data folder really is: TPOT_DATA_PATH of the .env in effect, relative to ~/tpotce
-# unless it is absolute, without a trailing slash (as fuDATA_PATH of update.sh)
+# unless it is absolute or starts with ~, without a trailing slash (the same code as fuDATA_PATH of
+# update.sh, a test compares them)
 function fuDATA_PATH () {
 	local myPATH=""
 	myPATH=$(fuENV_VALUE "${myTPOTDIR}/.env" TPOT_DATA_PATH)
