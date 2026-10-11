@@ -1,11 +1,12 @@
-"""COWRIE_PERSONA: empty (or "random") is the whole pool, otherwise persona IDs
-separated by whitespace. The IDs are path parts, so only catalog IDs pass."""
+"""COWRIE_PERSONA: empty is the whole pool, otherwise persona IDs separated by
+whitespace (the choice_list of env.schema.yml: no alias). The IDs are path parts,
+so only catalog IDs pass."""
 from . import PersonaError
 
 
 def parse_selection(value, ids):
     entries = (value or "").split()
-    if not entries or entries == ["random"]:
+    if not entries:
         return list(ids)
     unknown = [e for e in entries if e not in ids]
     if unknown:

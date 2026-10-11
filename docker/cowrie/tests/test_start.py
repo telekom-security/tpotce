@@ -110,7 +110,8 @@ class StartTest(unittest.TestCase):
         self.assertIn(self.prepare(""), catalog.ids())
 
     def test_unknown_or_traversal_is_rejected_and_nothing_written(self):
-        for value in ("nope", "../etc", "ipcam ipcam"):
+        # "random" is no alias: tpotinit's choice_list rejects it too
+        for value in ("nope", "../etc", "ipcam ipcam", "random"):
             with self.assertRaises(PersonaError):
                 self.prepare(value)
         self.assertFalse((self.runtime / "runtime").exists())
@@ -154,6 +155,42 @@ class StartTest(unittest.TestCase):
             self.assertEqual(self.start.main(), 1)
         execv.assert_not_called()
         self.assertIn("Could not activate Cowrie persona", "".join(c.args[0] for c in err.write.call_args_list))
+
+
+    def main_error(self, error):
+        """What main() prints when prepare raises error."""
+        self.start.COWRIE_ROOT, self.start.TMP_ROOT = self.cowrie, self.runtime
+
+        def prepare(*args, **kwargs):
+            raise error
+
+        self.start.prepare = prepare
+        with unittest.mock.patch("sys.stderr") as err, unittest.mock.patch("os.execv") as execv:
+            self.assertEqual(self.start.main(), 1)
+        execv.assert_not_called()
+        return "".join(c.args[0] for c in err.write.call_args_list)
+
+    def test_main_reports_any_error_in_one_line(self):
+        # a corrupt base.pickle, a builder that fails: no traceback, the type and the message
+        cases = ((__import__("pickle").UnpicklingError("invalid load key, 'x'."),
+                  "Could not activate Cowrie persona: UnpicklingError: invalid load key, 'x'."),
+                 (EOFError("Ran out of input"), "Could not activate Cowrie persona: EOFError: Ran out of input"),
+                 (KeyError("git"), "Could not activate Cowrie persona: KeyError: 'git'"),
+                 (ValueError("bad"), "Could not activate Cowrie persona: ValueError: bad"),
+                 (PersonaError("unknown"), "Could not activate Cowrie persona: unknown"))
+        for error, text in cases:
+            with self.subTest(error=type(error).__name__):
+                self.assertEqual(self.main_error(error).strip(), text)
+
+    def test_main_reports_a_corrupt_base_pickle(self):
+        (self.cowrie / "personas" / "base.pickle").write_bytes(b"x" * 20)
+        self.start.COWRIE_ROOT, self.start.TMP_ROOT = self.cowrie, self.runtime
+        with unittest.mock.patch.dict(os.environ, {"COWRIE_PERSONA": "ipcam"}), \
+                unittest.mock.patch("sys.stderr") as err, unittest.mock.patch("os.execv") as execv:
+            self.assertEqual(self.start.main(), 1)
+        execv.assert_not_called()
+        self.assertTrue("".join(c.args[0] for c in err.write.call_args_list).startswith(
+            "Could not activate Cowrie persona: UnpicklingError: "))
 
 
 class GenerateTest(unittest.TestCase):

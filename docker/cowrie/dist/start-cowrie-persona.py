@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Start Cowrie as one persona with a fresh identity.
 
-COWRIE_PERSONA (empty or "random": all) picks the persona, the identity is new
+COWRIE_PERSONA (empty: all, else persona IDs) picks the persona, the identity is new
 on every start. Everything is rendered into the tmpfs /tmp/cowrie, the SSH host
 keys of the persona live in etc/<persona>/ of the keys volume (Cowrie creates
 the missing ones of every configured type on its first start). Keys of an
@@ -61,6 +61,9 @@ def main():
         persona_id = prepare(os.environ, COWRIE_ROOT, TMP_ROOT, random.SystemRandom())
     except (PersonaError, OSError) as exc:
         print(f"Could not activate Cowrie persona: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:  # noqa: BLE001 - a corrupt base.pickle or a builder bug: one line, no traceback
+        print(f"Could not activate Cowrie persona: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 1
     print(f"Starting Cowrie persona: {persona_id}", flush=True)
     os.environ.setdefault("PYTHONPATH", f"{COWRIE_ROOT}:{COWRIE_ROOT / 'src'}")
