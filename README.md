@@ -716,7 +716,7 @@ On the T-Pot Landing Page just click on `Elasticvue` and you will be forwarded t
 | `tpot env [list [--all] [--show-secrets]]` | *Settings* (*All settings*) | every host | the [settings](#t-pot-config-file) in `.env` that matter for this T-Pot, secrets masked |
 | `tpot env get KEY` / `tpot env set KEY=VALUE …` | *Settings* | every host | read or change a setting, it is only written if it is valid afterwards |
 | `tpot env check` | `ctrl+f` *Check the settings* | every host | checks `.env` as T-Pot does on start, exit code 1 on errors |
-| `tpot elastic [status]` / `tpot elastic retention [DAYS\|off] [--adopt] [--force]` | *Elastic* | T-Pot host, HIVE | how long Elasticsearch keeps the events (`TPOT_ES_RETENTION`, the ILM policy `tpot`); a shorter time lists the indices it deletes and asks first; a policy changed in Kibana is left alone until you take it over (`--adopt`) or apply `.env` to it (`--force`) |
+| `tpot elastic [status]` / `tpot elastic retention [DAYS\|off] [--adopt] [--force]` | *Elastic* | T-Pot host, HIVE | how long Elasticsearch keeps the events (`TPOT_ES_RETENTION`, the ILM policy `tpot`); a shorter time lists the indices it deletes and asks first; a policy changed in Kibana is left alone until you keep it (`--adopt`, its days go into `.env`) or apply a value to it (`--force` applies the `.env` value, or the given value) |
 | `tpot llm [detect [--scan]\|models\|test]` | *LLM* | every host | the LLM backends of Beelzebub and Galah: their settings, find an Ollama (the configured URLs, this host, its Docker bridges and gateways; `--scan` asks every address of the /24 of this host, after a confirmation), list the models, send a short test prompt |
 | `tpot users [list\|add\|passwd\|remove]` | *Web users* | HIVE | the [web users](#add-users-to-nginx-t-pot-webui), changes count right away |
 | `tpot sensors [list\|add\|remove\|set\|cert]` | *Sensors* (`set` is *Edit*) | T-Pot host, HIVE | the [sensors](#distributed-deployment) of a HIVE |
@@ -1058,10 +1058,10 @@ Elasticsearch keeps its events for the number of days set for `TPOT_ES_RETENTION
 <br>
 Change it on the *Elastic* page of the T-Pot Manager or with `tpot elastic retention DAYS`; a shorter time lists the indices it deletes and asks first. The Settings page does the same when you save a shorter retention.
 <br>
-A policy that was changed in Kibana (make sure to "Include managed system policies") is detected and left alone, T-Pot warns about it. `tpot elastic retention --adopt` takes its time over into `.env`, `--force` applies `.env` to it.
+A policy that was changed in Kibana (make sure to "Include managed system policies") is detected and left alone, T-Pot warns about it (`tpot elastic status` shows both). `tpot elastic retention --adopt` keeps the policy and writes its days into `.env`, `tpot elastic retention --force` applies the `.env` value to it (`--force DAYS` the given value), both show first what a shorter time deletes. A changed policy that keeps the events just as long as `.env` says is adopted on the next start.
 ![IndexManagement1](doc/kibana_b.png)
 <br>
-`update.sh` takes the retention of an existing policy over into `.env` once, so an update keeps the time you set in Kibana before.
+`update.sh` writes the retention of an existing policy into `.env` once, so an update keeps the time you set in Kibana before. If it cannot read the policy or its time is no whole number of days, it leaves `TPOT_ES_RETENTION` empty: T-Pot then leaves the policy as it is, `tpot elastic retention --adopt` lets T-Pot manage it.
 ![IndexManagement2](doc/kibana_c.png)
 <br><br>
 

@@ -1579,7 +1579,7 @@ function fuMIGRATE_RETENTION () {
 	  then
 	    if [ -n "${myVALUE}" ];
 	      then
-	        fuUI_OK "TPOT_ES_RETENTION=${myVALUE}, taken over from the ILM policy tpot."
+	        fuUI_OK "TPOT_ES_RETENTION=${myVALUE}, the retention of the ILM policy tpot, T-Pot keeps it."
 	      else
 	        fuUI_WARN "TPOT_ES_RETENTION is left empty, T-Pot leaves the ILM policy tpot as it is; tpot elastic retention shows it, --adopt lets T-Pot manage it."
 	        fuUI_HINT "The exported policy could not be read or keeps the events for no whole number of days."
