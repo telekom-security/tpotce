@@ -506,8 +506,34 @@ class RunElasticTest(unittest.TestCase):
         self.assertEqual(self.asked, [])
         self.assertEqual(self.settings.changes, [{"TPOT_ES_RETENTION": "365"}])
         self.assertEqual(self.applied, [])
-        self.assertIn("next start", self.out.getvalue())
+        self.assertIn("if the ILM policy tpot keeps the events less long", self.out.getvalue())
         self.assertNotIn("does not shorten", self.out.getvalue())
+
+    def test_unreachable_value_not_shorter_than_env_does_not_promise_the_next_start(self):
+        # .env 30 waits, the policy may keep 90: 60 is longer than .env, the policy is unknown
+        code = self.run_cli(["retention", "60"], retention="30", plan=self.plan("keep", reachable=False))
+        self.assertEqual(code, 0)
+        text = self.out.getvalue()
+        self.assertIn("TPOT_ES_RETENTION=60 is set.", text)
+        self.assertIn("if the ILM policy tpot keeps the events less long", text)
+        self.assertIn("a shorter value waits for 'tpot elastic retention --force' (it asks first)", text)
+        self.assertNotIn("applies it on its next start.", text)
+        self.assertEqual(self.settings.changes, [{"TPOT_ES_RETENTION": "60"}])
+        self.assertEqual((self.applied, self.asked, self.plain_confirmed), ([], [], []))
+
+    def test_unreachable_force_without_a_value_says_it_waits(self):
+        code = self.run_cli(["retention", "--force"], retention="30", plan=self.plan("keep", reachable=False))
+        self.assertEqual(code, 0)
+        text = self.out.getvalue()
+        self.assertIn("does not shorten", text)
+        self.assertIn("the value waits", text)
+        self.assertEqual((self.applied, self.asked, self.plain_confirmed), ([], [], []))
+
+    def test_unreachable_adopt_writes_and_applies_nothing(self):
+        down = elastic.Status("90", "", "unreachable", "Elasticsearch is not reachable (refused)")
+        self.assertEqual(self.run_cli(["retention", "--adopt"], state=down, plan=self.plan("keep", reachable=False)), 1)
+        self.assertIn("Elasticsearch is not reachable (refused)", self.err.getvalue())
+        self.assertEqual((self.settings.changes, self.applied, self.asked, self.planned), ([], [], [], []))
 
     def test_doomed_indices_are_listed_and_asked_about(self):
         chosen = self.plan(doomed=[self.OLD], shortening=True)

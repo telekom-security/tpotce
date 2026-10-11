@@ -407,8 +407,11 @@ def run_elastic(args) -> int:
             say.warn(f"TPOT_ES_RETENTION={new} is set in .env, but Elasticsearch is not reachable: T-Pot does not "
                      "shorten the ILM policy tpot on its own, the value waits. Once Elasticsearch runs, "
                      "'tpot elastic retention --force' applies it (asks first).", console.file)
-        else:
-            say.ok(f"TPOT_ES_RETENTION={new} is set, T-Pot applies it on its next start.", console.file)
+        else:       # the policy is unknown: only a value that keeps the events less long than it is applied
+            say.ok(f"TPOT_ES_RETENTION={new} is set.", console.file)
+            say.hint("T-Pot applies it on its next start if the ILM policy tpot keeps the events less long; "
+                     "a shorter value waits for 'tpot elastic retention --force' (it asks first).",
+                     stream=console.file)
         return 0
     if chosen.decision.action == "foreign":
         error(f"The ILM policy tpot was changed outside of T-Pot (retention: {shown(chosen.decision.current)}). "
