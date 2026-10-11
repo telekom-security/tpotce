@@ -114,7 +114,7 @@ def _firmware(label, released, superseded, banner, ssh_version, kernel, uts, bui
 
 
 def _device(pid, family, os_id, user, shell, arch, ssh_profile, managers, releases, hardware, hostnames, builder,
-            vulnerability, uid=1000, remove_paths=(), max_install_days=900):
+            summary, uid=1000, remove_paths=(), max_install_days=900):
     # uname -o / -a: BusyBox prints "GNU/Linux" (coreutils/uname.c 1.14.1 and 1.19.2 hard-code it, 1.35.0
     #   takes CONFIG_UNAME_OSNAME, default "GNU/Linux"), as coreutils does on the Debian-based EdgeOS
     operating_system = "GNU/Linux"
@@ -124,7 +124,7 @@ def _device(pid, family, os_id, user, shell, arch, ssh_profile, managers, releas
         arch=arch[0], hardware_platform=arch[1], operating_system=operating_system,
         ssh_profile=ssh_profile, package_managers=managers,
         releases=releases, hardware=hardware, hostnames=hostnames,
-        builder=builder, vulnerability=vulnerability, remove_paths=remove_paths,
+        builder=builder, summary=summary, remove_paths=remove_paths,
         max_install_days=max_install_days,
     )
 
@@ -375,19 +375,19 @@ TRIXIE = _chain(_medium(_TRIXIE_LEVELS[0]), _medium(_TRIXIE_LEVELS[1]), *_TRIXIE
 
 # --- Debian 12 ------------------------------------------------------------------------
 # openssh: https://metadata.ftp-master.debian.org/changelogs/main/o/openssh/oldstable_changelog
-#   regreSSHion (CVE-2024-6387) fixed in 1:9.2p1-2+deb12u3, https://security-tracker.debian.org/tracker/CVE-2024-6387
+#   1:9.2p1-2+deb12u3 of 2024-07-01, https://tracker.debian.org/pkg/openssh
 # kernel: https://metadata.ftp-master.debian.org/changelogs/main/l/linux/oldstable_changelog ("Bump ABI to N");
 #   6.1.0-47 / -50 from https://deb.debian.org/debian/pool/main/l/linux-signed-amd64/
 # point releases: https://metadata.ftp-master.debian.org/changelogs/main/b/base-files/oldstable_changelog
 # OpenSSL dates: VERSION.dat of the openssl-3.0.x tags on github.com/openssl/openssl
 _BOOKWORM_LEVELS = (
-    # 12.2, before the regreSSHion fix
+    # 12.2, installation image
     _debian("2023-10-10", "bookworm", "12.2", "9.2p1", "1:9.2p1-2+deb12u1", "1:9.2p1-2",
             "6.1.0-13-amd64", "6.1.55-1", "2023-09-29",
             _BOOKWORM_GCC, "OpenSSL 3.0.11 19 Sep 2023",
             {**_BOOKWORM_PKGS, "curl": "7.88.1-10+deb12u4", "git": "1:2.39.2-1.1", "vim": "2:9.0.1378-2",
              "sudo": "1.9.13p3-1+deb12u1"}),
-    # 12.5, before the regreSSHion fix
+    # 12.5, installation image
     _debian("2024-02-12", "bookworm", "12.5", "9.2p1", "1:9.2p1-2+deb12u2", "1:9.2p1-2+deb12u1",
             "6.1.0-18-amd64", "6.1.76-1", "2024-02-01",
             _BOOKWORM_GCC, "OpenSSL 3.0.11 19 Sep 2023",
@@ -412,9 +412,9 @@ _BOOKWORM_LEVELS = (
             {**_BOOKWORM_PKGS, "dpkg": "1.21.23", "curl": "7.88.1-10+deb12u15", "git": "1:2.39.5-0+deb12u3",
              "vim": "2:9.0.1378-2+deb12u2", "sudo": "1.9.13p3-1+deb12u4"}),
 )
-# 12.2 and 12.5 are the versions of their installation images: the regreSSHion bait stays installable
+# 12.2 and 12.5 are the versions of their installation images: the older OpenSSH patch levels stay installable
 # stale: the next kernel of bookworm(-security), as for trixie: 6.1.66-1 with 12.4 2023-12-10,
-#   6.1.85-1 2024-04-12 (before openssh deb12u3 fixed regreSSHion on 2024-07-01), 6.1.140-1 2025-05-23,
+#   6.1.85-1 2024-04-12 (before openssh 1:9.2p1-2+deb12u3 of 2024-07-01), 6.1.140-1 2025-05-23,
 #   6.1.172-1 2026-05-16; unknown after 6.1.176-1 (90 days)
 BOOKWORM = _chain(_medium(_BOOKWORM_LEVELS[0]), _medium(_BOOKWORM_LEVELS[1]), *_BOOKWORM_LEVELS[2:],
                   stale=("2023-12-10", "2024-04-12", "2025-05-23", "2026-05-16", None))
@@ -788,7 +788,7 @@ IPCAM = (
 )
 
 
-def _server(pid, family, os_id, user, releases, hardware, hostnames, builder, vulnerability, managers=APT,
+def _server(pid, family, os_id, user, releases, hardware, hostnames, builder, summary, managers=APT,
             arch=("linux-x64-lsb", "x86_64"), tokens=(), max_install_days=900, prompt_style="debian"):
     return Persona(
         id=pid, family=family, kind="server", os_id=os_id,
@@ -796,7 +796,7 @@ def _server(pid, family, os_id, user, releases, hardware, hostnames, builder, vu
         arch=arch[0], hardware_platform=arch[1], operating_system="GNU/Linux",
         ssh_profile="openssh", package_managers=managers,
         releases=releases, hardware=hardware, hostnames=hostnames,
-        builder=builder, vulnerability=vulnerability, tokens=tokens, max_install_days=max_install_days,
+        builder=builder, summary=summary, tokens=tokens, max_install_days=max_install_days,
         prompt_style=prompt_style,
     )
 
@@ -814,7 +814,7 @@ PERSONAS = (
             build_debian, "Debian 13 server, OpenSSH 10.0p2"),
     _server("debian-bookworm", "debian", "debian", "debian", BOOKWORM, (KVM_1, KVM_2, KVM_4),
             ("db12-{word}{nn}", "{word}-prod-{nn}"),
-            build_debian, "Debian 12 OpenSSH 9.2p1 before the regreSSHion fix (CVE-2024-6387)"),
+            build_debian, "Debian 12 server, OpenSSH 9.2p1 at older and current patch levels"),
     _server("rhel-9", "rhel", "rhel", "cloud-user", RHEL9, (KVM_2, KVM_4, KVM_8),
             ("rhel9-{word}{nn}", "{word}{nn}.corp.local"),
             build_rhel, "RHEL 9 cloud image, OpenSSH 8.7p1", managers=DNF, prompt_style="redhat"),

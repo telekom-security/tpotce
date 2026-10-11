@@ -90,9 +90,9 @@ class ServerCatalogTest(unittest.TestCase):
             self.assertEqual(p.kind, "server")
             self.assertEqual(p.shell, "/bin/bash")
             self.assertEqual(p.user, USERS[pid], pid)
-            self.assertTrue(p.vulnerability, pid)
+            self.assertTrue(p.summary, pid)
 
-    def test_bookworm_has_a_pre_regresshion_release(self):
+    def test_bookworm_has_an_installation_image_release(self):
         banners = [r.ssh_banner for r in catalog.by_id("debian-bookworm").releases]
         self.assertTrue(any(b.endswith(("deb12u1", "deb12u2")) for b in banners), banners)
         self.assertTrue(any(not b.endswith(("deb12u1", "deb12u2")) for b in banners), banners)
@@ -229,7 +229,7 @@ class DeviceCatalogTest(unittest.TestCase):
             self.assertGreaterEqual(len(p.hardware), 1, pid)
             self.assertLessEqual(len(p.hardware), 3, pid)
             self.assertEqual((p.user, p.shell), DEVICE_USERS[pid], pid)
-            self.assertTrue(p.vulnerability, pid)
+            self.assertTrue(p.summary, pid)
 
     def test_arch_is_the_byte_order_of_the_soc(self):
         # [shell] arch is the ELF header of `cat /bin/busybox`: ath79 (QCA956x) is big endian

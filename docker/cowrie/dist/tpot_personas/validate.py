@@ -1,4 +1,4 @@
-"""Consistency of a rendered persona: what an attacker can cross-check must agree.
+"""Consistency of a rendered persona: the parts of a system that describe the same thing must agree.
 
 problems() returns one string per finding, each starting with the word of its
 rule (kernel, hostname, nproc, START, forbidden, ...); validate() raises."""
@@ -115,7 +115,7 @@ def _check_hardware(persona, ident, honeyfs, txtcmds, out):
     cpuinfo = _text(honeyfs / "proc/cpuinfo")
     if len(re.findall(r"^processor\s*:", cpuinfo, re.M)) != hw.cpus:
         out.append(f"cpuinfo: processor count is not {hw.cpus}")
-    # what an attacker counts: lines with the lowercase word, the model name included
+    # what a count with grep sees: lines with the lowercase word, the model name included
     counted = sum("processor" in line for line in cpuinfo.splitlines())
     if counted != hw.cpus:
         out.append(f"cpuinfo: grep -c processor gives {counted}, not {hw.cpus}")

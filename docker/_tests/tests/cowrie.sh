@@ -871,7 +871,7 @@ for persona_id, persona in ids.items():
         fail(f"{persona_id} package managers do not match: {sorted(persona.get('package_managers', []))}")
     if not persona.get("ssh_banners") or not all(b.startswith("SSH-2.0-") for b in persona["ssh_banners"]):
         fail(f"{persona_id} personas.json has no valid SSH banners: {persona.get('ssh_banners')}")
-    for key in ("family", "kind", "user", "arch", "vulnerability"):
+    for key in ("family", "kind", "user", "arch", "summary"):
         if not persona.get(key):
             fail(f"{persona_id} personas.json has no {key}")
 ubuntu = {persona_id for persona_id in ids if catalog.by_id(persona_id).os_id == "ubuntu"}

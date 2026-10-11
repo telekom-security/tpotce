@@ -89,11 +89,11 @@ class IdentityTest(unittest.TestCase):
             self.assertEqual([stats["free"], stats["available"]], new, persona.id)
             self.assertNotEqual([stats["free"], stats["available"]], old, persona.id)
 
-    def test_honeytokens_match_the_secret_scanners(self):
-        # rules of gitleaks (config/gitleaks.toml) and trufflehog (pkg/detectors), the text around a
-        # token as it stands in the persona's files (KEY=token, a line of its own)
+    def test_honeytokens_match_their_formats(self):
+        # the format rules of the token kinds, the text around a token
+        # as it stands in the persona's files (KEY=token, a line of its own)
         from tpot_personas.identity import _token
-        scanners = {
+        rules = {
             "hf": (r"""(?:^|[\\'"`\s>=:(,)])(hf_(?i:[a-z]{34}))(?:$|[\\'"`\s<),])""",
                    r"""\b(?:hf_|api_org_)[a-zA-Z0-9]{34}\b"""),
             "openai": (r"""\b(sk-(?:proj|svcacct|admin)-(?:[A-Za-z0-9_-]{74}|[A-Za-z0-9_-]{58})T3BlbkFJ"""
@@ -103,7 +103,7 @@ class IdentityTest(unittest.TestCase):
             "aws": (r"""\b((?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z2-7]{16})\b""",
                     r"""\b((?:AKIA|ABIA|ACCA)[A-Z0-9]{16})\b"""),
         }
-        for kind, rules in scanners.items():
+        for kind, rules in rules.items():
             for seed in range(300):
                 token = _token(kind, random.Random(seed))
                 for text in (f"KEY={token}\n", f"{token}\n", f'"{token}"'):
@@ -125,7 +125,7 @@ class IdentityTest(unittest.TestCase):
 
 
 class ProviderTest(unittest.TestCase):
-    """Host name, kernel and hardware tell the same story about where the system runs."""
+    """Host name, kernel and hardware describe the same system about where the system runs."""
 
     def test_host_names_fit_the_provider_of_the_hardware(self):
         for p in catalog.PERSONAS:
@@ -181,7 +181,7 @@ class PatchLevelTest(unittest.TestCase):
                 if stale_at(i.release):
                     self.assertLessEqual(last, stale_at(i.release), (p.id, seed))
 
-    def test_the_regresshion_bait_stays_reachable(self):
+    def test_installation_image_level_stays_reachable(self):
         p = catalog.by_id("debian-bookworm")
         banners = {draw(p, seed, NOW).release.ssh_banner for seed in range(500)}
         self.assertIn("SSH-2.0-OpenSSH_9.2p1 Debian-2+deb12u1", banners)
@@ -213,15 +213,15 @@ class StaleTest(unittest.TestCase):
                     if stale:
                         self.assertLessEqual(when, stale, (p.id, seed, i.release.label))
 
-    def test_the_regresshion_bait_logs_nothing_after_the_fix(self):
-        fix = calendar.timegm((2024, 7, 1, 0, 0, 0))  # openssh 1:9.2p1-2+deb12u3
+    def test_installation_image_level_logs_nothing_later(self):
+        later = calendar.timegm((2024, 7, 1, 0, 0, 0))  # date of openssh 1:9.2p1-2+deb12u3
         p = catalog.by_id("debian-bookworm")
         drawn = 0
         for seed in range(3000):
             i = draw(p, seed, NOW)
             if i.release.ssh_banner.endswith(("deb12u1", "deb12u2")):
                 drawn += 1
-                self.assertTrue(all(when < fix for when in self.entries(i)), (seed, i.release.label))
+                self.assertTrue(all(when < later for when in self.entries(i)), (seed, i.release.label))
         self.assertGreater(drawn, 500)
 
     def test_every_level_is_stale_at_most_90_days_after_its_update(self):

@@ -211,7 +211,7 @@ class GenerateTest(unittest.TestCase):
         self.assertEqual([p["id"] for p in listed], catalog.ids())
         self.assertEqual(len(listed), 16)
         self.assertEqual(set(listed[0]), {"id", "family", "kind", "user", "arch", "ssh_banners",
-                                          "package_managers", "vulnerability"})
+                                          "package_managers", "summary"})
         noble = next(p for p in listed if p["id"] == "ubuntu-noble")
         self.assertTrue(all(b.startswith("SSH-2.0-OpenSSH_") for b in noble["ssh_banners"]))
 

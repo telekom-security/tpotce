@@ -172,8 +172,8 @@ def specialize(release, hardware):
 
 
 def _token(kind, rng):
-    """A random (never valid) token in the format secret scanners look for (gitleaks,
-    trufflehog): Hugging Face hf_ + 34 letters, an OpenAI project key sk-proj- + 74 +
+    """A random (never valid) token in the format of the credential type it names:
+    Hugging Face hf_ + 34 letters, an OpenAI project key sk-proj- + 74 +
     the T3BlbkFJ marker + 74 of [A-Za-z0-9_-] (164 characters, a word character last),
     an AWS access key id AKIA + 16 of [A-Z2-7]."""
     alnum = string.ascii_letters + string.digits

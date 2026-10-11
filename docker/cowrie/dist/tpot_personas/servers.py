@@ -539,7 +539,7 @@ def build_ubuntu(persona, ident):
 
 
 def build_gpu_ubuntu(persona, ident):
-    """Ubuntu with NVIDIA GPUs, Ollama and Jupyter: bait for miners and model theft."""
+    """Ubuntu with NVIDIA GPUs, Ollama and Jupyter as one system."""
     user = persona.user
     files, ctimes = _ubuntu_files(persona, ident)
     home = f"home/{user}"

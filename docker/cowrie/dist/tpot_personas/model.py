@@ -64,7 +64,7 @@ class Persona:
     hardware: tuple
     hostnames: tuple         # patterns; "aws:ip-172-31-{n}-{n}" only for hardware of that provider
     builder: Callable
-    vulnerability: str
+    summary: str
     remove_paths: tuple = ()
     tokens: tuple = ()
     max_install_days: int = 900  # installed 90 to this many days ago (an EOL box may be older)
