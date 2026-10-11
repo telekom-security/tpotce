@@ -89,6 +89,31 @@ class IdentityTest(unittest.TestCase):
             self.assertEqual([stats["free"], stats["available"]], new, persona.id)
             self.assertNotEqual([stats["free"], stats["available"]], old, persona.id)
 
+    def test_honeytokens_match_the_secret_scanners(self):
+        # rules of gitleaks (config/gitleaks.toml) and trufflehog (pkg/detectors), the text around a
+        # token as it stands in the persona's files (KEY=token, a line of its own)
+        from tpot_personas.identity import _token
+        scanners = {
+            "hf": (r"""(?:^|[\\'"`\s>=:(,)])(hf_(?i:[a-z]{34}))(?:$|[\\'"`\s<),])""",
+                   r"""\b(?:hf_|api_org_)[a-zA-Z0-9]{34}\b"""),
+            "openai": (r"""\b(sk-(?:proj|svcacct|admin)-(?:[A-Za-z0-9_-]{74}|[A-Za-z0-9_-]{58})T3BlbkFJ"""
+                       r"""(?:[A-Za-z0-9_-]{74}|[A-Za-z0-9_-]{58})\b|sk-[a-zA-Z0-9]{20}T3BlbkFJ[a-zA-Z0-9]{20})"""
+                       r"""(?:[\x60'"\s;]|\\[nr]|$)""",
+                       r"""\b(sk-(?:(?:proj|svcacct|service)-[A-Za-z0-9_-]+|[a-zA-Z0-9]+)T3BlbkFJ[A-Za-z0-9_-]+)\b"""),
+            "aws": (r"""\b((?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z2-7]{16})\b""",
+                    r"""\b((?:AKIA|ABIA|ACCA)[A-Z0-9]{16})\b"""),
+        }
+        for kind, rules in scanners.items():
+            for seed in range(300):
+                token = _token(kind, random.Random(seed))
+                for text in (f"KEY={token}\n", f"{token}\n", f'"{token}"'):
+                    for rule in rules:
+                        found = re.search(rule, text)
+                        self.assertIsNotNone(found, (kind, rule, token))
+                        self.assertIn(token, found.group(0), (kind, token))
+        self.assertEqual(len(_token("openai", random.Random(1))), 164)
+        self.assertNotEqual(_token("hf", random.Random(1)), _token("hf", random.Random(2)))
+
     def test_to_json_names_persona_and_boot(self):
         p = catalog.PERSONAS[0]
         ident = draw(p, 3, NOW)

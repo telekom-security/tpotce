@@ -778,6 +778,7 @@ forbidden_markers = (
     b"2.6.26-19lenny",
     b"com/ubuntu/upstart",
     b"dannf@debian.org",
+    b"wed nov 4 20:45:37",
 )
 package_manager_paths = (
     "bin/apt",

@@ -490,6 +490,7 @@ def build_synology(persona, ident):
     r, hw = ident.release, ident.hardware
     x = r.extra
     model, platform, ports = SYNOLOGY_MODELS[hw.cpu_model]
+    unique = model.lower()[2:] if model.startswith("DS") else model.lower()
     major, minor, micro = r.os_version.split(".")
     version = f"""majorversion="{major}"
 minorversion="{minor}"
@@ -508,7 +509,8 @@ builddate="{x['builddate']}"
     files = {
         "etc.defaults/VERSION": version,
         "etc/VERSION": version,
-        "etc.defaults/synoinfo.conf": f'unique="synology_{platform}_{model.lower()}"\nupnpmodelname="{model}"\n',
+        # the model without its DS: synology_geminilake_920+ (uname -a of DSM ends with it)
+        "etc.defaults/synoinfo.conf": f'unique="synology_{platform}_{unique}"\nupnpmodelname="{model}"\n',
     }
     half = hw.mem_kb // 2
     entries = [

@@ -681,18 +681,19 @@ QNAP_HARDWARE = (
 
 
 def _qts(version, number, build, released, superseded, uts, openssh, openssl):
-    # unverified: uname -v (built the night of the build date), builder and compiler of the QNAP kernel,
-    #   the OpenSSH / OpenSSL of each build
+    # unverified: uname -v (built the night of the build date), builder and compiler of the QNAP kernel
+    #   (gcc 8.4.0, binutils assumed), the OpenSSH / OpenSSL of each build; a 5.10 kernel names the
+    #   compiler as `cc --version` and the linker (the format of Linux 5.8 and later)
     return _firmware(f"{version}.{number}", released, superseded, f"SSH-2.0-OpenSSH_{openssh.split('p')[0]}",
                      f"OpenSSH_{openssh}, {openssl}", "5.10.60-qnap", uts, "root@U16BuildServer141",
-                     "gcc version 8.4.0 (GCC) ", f"{version}.{number} build {build}", version, build=build,
-                     number=number)
+                     "gcc (GCC) 8.4.0, GNU ld (GNU Binutils) 2.32", f"{version}.{number} build {build}", version,
+                     build=build, number=number)
 
 
 # QTS 5.2 builds of the release notes; superseded by the next build of the notes
 QNAP = (
     # source: https://www.qnap.com/en/release-notes/qts (QTS 5.2.3.3006 build 20250108, 2025-01-10)
-    _qts("5.2.3", "3006", "20250108", "2025-01-10", "2025-03-17", "#1 SMP Wed Jan 8 02:31:17 CST 2025", "9.8p1",
+    _qts("5.2.3", "3006", "20250108", "2025-01-10", "2025-03-17", "#1 SMP Wed Jan  8 02:31:17 CST 2025", "9.8p1",
          "OpenSSL 3.0.15 3 Sep 2024"),
     # source: https://www.qnap.com/en/release-notes/qts (QTS 5.2.6.3229 build 20250818, 2025-08-21)
     _qts("5.2.6", "3229", "20250818", "2025-08-21", "2025-09-25", "#1 SMP Mon Aug 18 02:27:40 CST 2025", "9.9p2",
@@ -731,7 +732,7 @@ SYNOLOGY = (
     _dsm("7.2.2", "72806", "3", "2025-02-04", "2025-07-24", "#72806 SMP Tue Jan 21 15:40:31 CST 2025",
          "2025/01/21", "OpenSSL 3.0.15 3 Sep 2024"),
     # source: https://www.synology.com/en-global/releaseNote/DSM?model=DS920%2B (7.2.2-72806 Update 4, 2025-07-24)
-    _dsm("7.2.2", "72806", "4", "2025-07-24", "2025-10-08", "#72806 SMP Tue Jul 8 16:05:22 CST 2025",
+    _dsm("7.2.2", "72806", "4", "2025-07-24", "2025-10-08", "#72806 SMP Tue Jul  8 16:05:22 CST 2025",
          "2025/07/08", "OpenSSL 3.0.16 11 Feb 2025"),
 )
 
@@ -776,7 +777,7 @@ _IPCAM_GCC = "gcc version 4.9.4 20150629 (prerelease) (Hisilicon_v500_20170922) 
 IPCAM = (
     # source: https://www.hikvision.com/en/support/download/firmware/ (firmware of the DS-2CD2x43G0 series)
     _firmware("V5.5.82_190909", "2019-10-15", "2021-03-01", "SSH-2.0-dropbear_2015.71", "Dropbear sshd 2015.71",
-              "3.18.20", "#1 SMP Mon Sep 9 17:05:12 CST 2019", "root@localhost.localdomain", _IPCAM_GCC,
+              "3.18.20", "#1 SMP Mon Sep  9 17:05:12 CST 2019", "root@localhost.localdomain", _IPCAM_GCC,
               "V5.5.82", "5.5", firmware_version="V5.5.82 build 190909",
               busybox="BusyBox v1.19.4 (2019-09-09 17:21:46 CST)"),
     # source: https://www.hikvision.com/en/support/download/firmware/ (firmware of the DS-2CD2x43G2 series)

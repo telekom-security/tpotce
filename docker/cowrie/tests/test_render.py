@@ -605,6 +605,18 @@ class DeviceContentTest(unittest.TestCase):
                 for p in self.ps(out):
                     self.assertRegex(p["START"], r"^(\d{2}:\d{2}|[A-Z][a-z]{2}\d{2}|\d{4})$", (persona.id, p))
 
+    def test_synology_unique_names_the_model_without_ds(self):
+        persona = catalog.by_id("synology-dsm")
+        seen = set()
+        for seed in range(12):
+            ident, out, _ = render_one(self, persona, seed)
+            text = (out / "honeyfs/etc.defaults/synoinfo.conf").read_text()
+            unique = re.search(r'^unique="(.*)"$', text, re.M).group(1)
+            self.assertRegex(unique, r"^synology_(denverton|geminilake)_(1618|920)\+$")
+            self.assertNotIn("_ds", unique)
+            seen.add(unique)
+        self.assertEqual(seen, {"synology_denverton_1618+", "synology_geminilake_920+"})
+
     def test_each_device_says_what_it_is(self):
         expected = {
             "tplink-wr841n": ("busybox-help.txt", "BusyBox v1.19.2 "),

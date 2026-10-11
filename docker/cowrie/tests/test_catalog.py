@@ -140,6 +140,36 @@ class ServerCatalogTest(unittest.TestCase):
                     # date(1) pads the day with a space, as the kernel's UTS_VERSION does
                     self.assertNotRegex(r.kernel_build, r" [A-Z][a-z]{2} 0\d ", (pid, r.label))
 
+    def test_every_kernel_date_pads_the_day_with_a_space(self):
+        # UTS_VERSION is date(1) output: "Wed Jan  8", never "Wed Jan 8" or "Wed Jan 08"
+        stamp = re.compile(r"\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) "
+                           r"(?P<day>[ \d]\d|\d) \d{2}:\d{2}:\d{2} ")
+        for persona in catalog.PERSONAS:
+            for r in persona.releases:
+                match = stamp.search(r.kernel_build)
+                if match:
+                    self.assertEqual(len(match.group("day")), 2, (persona.id, r.label, r.kernel_build))
+                    self.assertNotEqual(match.group("day")[0], "0", (persona.id, r.label))
+                    stamp_time = kernel_time(r)
+                    if stamp_time is not None:
+                        self.assertEqual(time.strftime("%a", time.gmtime(stamp_time)), match.group(1),
+                                         (persona.id, r.label))
+
+    def test_proc_version_names_the_compiler_in_the_format_of_the_kernel(self):
+        # Linux 5.8 changed LINUX_COMPILER: "gcc version 8.4.0 (GCC) " before, "<cc --version>, <ld -v>" after
+        from tpot_personas.common import kernel_series
+        for persona in catalog.PERSONAS:
+            for r in persona.releases:
+                compiler = r.extra.get("kernel_compiler")
+                if not compiler:
+                    continue
+                if kernel_series(r.kernel_version) >= (5, 8):
+                    self.assertRegex(compiler, r", GNU ld ", (persona.id, r.label, compiler))
+                    self.assertNotIn("gcc version", compiler, (persona.id, r.label))
+                else:
+                    self.assertRegex(compiler, r"^gcc version \S+ ", (persona.id, r.label, compiler))
+                    self.assertNotIn("GNU ld", compiler, (persona.id, r.label))
+
     def test_release_dates_are_ordered(self):
         for pid in SERVERS:
             for r in catalog.by_id(pid).releases:
