@@ -8,6 +8,9 @@ import copy
 import io
 import json
 import os
+import random
+import shutil
+import subprocess
 import unittest
 import urllib.error
 
@@ -111,6 +114,56 @@ class RuleTest(unittest.TestCase):
         self.assertEqual(out.strip(), "365")
 
 
+def generated_policies(seed=17, count=200):
+    """Policies of every shape the rule tells apart: min_age, marker, warm phase."""
+    rng = random.Random(seed)
+    min_ages = ["30d", "90d", "365d", "1d", "3650d", "720h", "2160h", "36h", "0h", "90m", "", "0d", "3651d",
+                "none", "bare"]
+    metas = [None, {}, {"managed": True, "description": elastic.LEGACY_DESCRIPTION},
+             {"managed": True, "description": "own"}, {"tpot_retention": "30"}, {"tpot_retention": 30},
+             {"tpot_retention": "90"}, {"tpot_retention": 90}, {"tpot_retention": "365"},
+             {"tpot_retention": "off"}, {"managed": True, "tpot_retention": "30", "description": "x"}]
+    for _ in range(count):
+        phases = {"hot": {"min_age": "0ms", "actions": rng.choice([{}, {"rollover": {"max_age": "1d"}}])}}
+        if rng.random() < 0.3:
+            phases["warm"] = {"min_age": "7d", "actions": {"forcemerge": {"max_num_segments": 1}}}
+        min_age = rng.choice(min_ages)
+        if min_age == "bare":
+            phases["delete"] = {}
+        elif min_age != "none":
+            phases["delete"] = {"actions": {"delete": {}}}
+            if min_age:
+                phases["delete"]["min_age"] = min_age
+        policy = {"phases": phases}
+        meta = rng.choice(metas)
+        if meta is not None:
+            policy["_meta"] = copy.deepcopy(meta)
+        yield (rng.choice(["", "30", "90", "365", "off"]), rng.random() < 0.35,
+               None if rng.random() < 0.03 else policy)
+
+
+@unittest.skipUnless(shutil.which("jq") and shutil.which("bash"), "needs jq and bash")
+class DifferentialTest(unittest.TestCase):
+    """The jq rule of tpotinit and elastic.decide agree on generated policies, not only on the cases."""
+
+    def test_jq_and_python_decide_alike(self):
+        inputs = list(generated_policies())
+        lines = "".join(f"{value}\n{'true' if force else 'false'}\n{json.dumps(policy)}\n"
+                        for value, force, policy in inputs)
+        script = ('source docker/tpotinit/dist/bin/es_retention.sh; '
+                  'while IFS= read -r v && IFS= read -r f && IFS= read -r p; do '
+                  'fuILM_DECIDE "$v" "$f" <<<"$p" || echo FAILED; done')
+        out = subprocess.run(["bash", "-c", script], cwd=REPO_DIR, input=lines, capture_output=True, text=True,
+                             timeout=60).stdout.splitlines()
+        self.assertEqual(len(out), len(inputs))
+        for (value, force, policy), line in zip(inputs, out):
+            with self.subTest(value=value, force=force, policy=policy):
+                got = json.loads(line)
+                want = elastic.decide(value, copy.deepcopy(policy), force)
+                self.assertEqual((got["action"], got["current"], got["managed"], got["policy"]),
+                                 (want.action, want.current, want.managed, want.policy))
+
+
 class WiringTest(unittest.TestCase):
 
     def read(self, *parts):
@@ -202,6 +255,34 @@ class AccessTest(unittest.TestCase):
             elastic.apply(elastic.plan("30", opener=es, now=NOW), opener=es)
         elastic.apply(elastic.plan("30", force=True, opener=es, now=NOW), opener=es)
         self.assertEqual(es.requests[-1][0], "PUT")
+
+    def test_a_200_without_the_policy_is_no_missing_policy(self):
+        for body in ({}, [], {"tpot": {}}, {"tpot": {"policy": "x"}}):
+            with self.subTest(body=body):
+                es = FakeES({("GET", "/_ilm/policy/tpot"): (200, body), ("PUT", "/_ilm/policy/tpot"): (200, {}),
+                             ("GET", "/_cat/indices/logstash-*"): (200, INDICES)})
+                with self.assertRaisesRegex(elastic.ElasticError, "answered without the ILM policy tpot"):
+                    elastic.get_policy(opener=es)
+                self.assertEqual(elastic.status("30", opener=es).state, "unreachable")
+                chosen = elastic.plan("30", opener=es, now=NOW)
+                self.assertFalse(chosen.reachable)
+                with self.assertRaises(elastic.ElasticError):
+                    elastic.apply(chosen, opener=es)
+                self.assertNotIn("PUT", [m for m, _p, _d in es.requests])
+
+    def test_plan_lists_nothing_where_the_duration_stays(self):
+        legacy = {"phases": {"hot": {"min_age": "0ms", "actions": {}},
+                             "delete": {"min_age": "30d", "actions": {"delete": {}}}},
+                  "_meta": {"managed": True, "description": elastic.LEGACY_DESCRIPTION}}
+        hours = {"phases": {"hot": {"min_age": "0ms", "actions": {}},
+                            "delete": {"min_age": "720h", "actions": {"delete": {}}}}}
+        for name, policy in (("marker only", legacy), ("adoption", hours)):
+            with self.subTest(name):
+                chosen = elastic.plan("30", opener=self.es(policy), now=NOW)
+                self.assertEqual(chosen.decision.action, "update")
+                self.assertEqual(chosen.doomed, [])
+        # a policy that is created or kept shorter than before still lists them
+        self.assertEqual([i.name for i in elastic.plan("30", opener=self.es(None), now=NOW).doomed], ["logstash-old"])
 
     def test_unreachable_plan(self):
         plan = elastic.plan("30", opener=FakeES({}), now=NOW)

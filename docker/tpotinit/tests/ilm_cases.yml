@@ -7,7 +7,9 @@
 #         "" when it stands for none (T-Pot then never adopts it).
 # shapes: whole policy objects -> the value they stand for
 # cases:  policy is what GET _ilm/policy/tpot returns under .tpot.policy (null: no policy),
-#         value is TPOT_ES_RETENTION, force the explicit "apply .env anyway".
+#         value is TPOT_ES_RETENTION, force the explicit "apply .env anyway" (--force).
+#         A foreign policy whose value equals the (non-empty) .env value is adopted: update writes
+#         only the marker (and the same duration in days), nothing is deleted that was kept.
 #         Expected: action (create | update | keep | foreign) and for create / update the written
 #         policy: min_age of its delete phase (none: no delete phase), retention (_meta.tpot_retention)
 #         and phases, all phases it has.
@@ -95,7 +97,43 @@ cases:
     current: "365"
     managed: false
     action: foreign
-  - name: policy of an earlier release with a warm phase added in Kibana
+  - name: policy of an earlier release with a warm phase added in Kibana, another value
+    policy:
+      phases:
+        hot: {min_age: 0ms, actions: {}}
+        warm: {min_age: 7d, actions: {forcemerge: {max_num_segments: 1}}}
+        delete: {min_age: 30d, actions: {delete: {delete_searchable_snapshot: true}}}
+      _meta: {managed: true, description: T-Pot ILM policy with a retention of 30 days}
+    value: "90"
+    current: "30"
+    managed: false
+    action: foreign
+  - name: foreign 365 days, the same value adopts it
+    policy:
+      phases:
+        hot: {min_age: 0ms, actions: {}}
+        delete: {min_age: 365d, actions: {delete: {delete_searchable_snapshot: true}}}
+      _meta: {managed: true, description: T-Pot ILM policy with a retention of 30 days}
+    value: "365"
+    current: "365"
+    managed: false
+    action: update
+    min_age: 365d
+    retention: "365"
+    phases: [delete, hot]
+  - name: foreign in hours, the same value adopts it
+    policy:
+      phases:
+        hot: {min_age: 0ms, actions: {}}
+        delete: {min_age: 720h, actions: {delete: {}}}
+    value: "30"
+    current: "30"
+    managed: false
+    action: update
+    min_age: 30d
+    retention: "30"
+    phases: [delete, hot]
+  - name: foreign with a warm phase and the same value keeps the warm phase
     policy:
       phases:
         hot: {min_age: 0ms, actions: {}}
@@ -105,7 +143,10 @@ cases:
     value: "30"
     current: "30"
     managed: false
-    action: foreign
+    action: update
+    min_age: 30d
+    retention: "30"
+    phases: [delete, hot, warm]
   - name: managed, nothing to do
     policy:
       phases:

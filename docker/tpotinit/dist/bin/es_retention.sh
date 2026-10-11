@@ -3,8 +3,9 @@
 #
 # T-Pot marks the policy it writes with _meta.tpot_retention. A policy whose marker does not
 # match its delete phase (or that has none and is not the policy of an earlier release) was
-# changed in Kibana and is left alone, so that nobody loses events they chose to keep. Only
-# the delete phase and _meta are ever changed. The rule is the one of tpotctl/elastic.py,
+# changed in Kibana and is left alone, so that nobody loses events they chose to keep - unless
+# it keeps them as long as TPOT_ES_RETENTION says, then T-Pot adopts it (only the marker is new).
+# Only the delete phase and _meta are ever changed. The rule is the one of tpotctl/elastic.py,
 # both pass docker/tpotinit/tests/ilm_cases.yml (docker/_tests/run.sh tpotinit_ilm).
 # Sourced, it only defines the functions.
 
@@ -40,7 +41,7 @@ def decide($v; $force):
   if . == null then {"action": "create", "policy": build(if $v == "" then "30" else $v end), "current": "", "managed": true}
   else value_of as $cur | managed as $m
     | if $v == "" then {"action": "keep", "policy": null, "current": $cur, "managed": $m}
-      elif ($m or $force) | not then {"action": "foreign", "policy": null, "current": $cur, "managed": $m}
+      elif ($m or $force or ($cur != "" and $cur == $v)) | not then {"action": "foreign", "policy": null, "current": $cur, "managed": $m}
       elif $m and $cur == $v and ((._meta.tpot_retention // "") | tostring) == $v then {"action": "keep", "policy": null, "current": $cur, "managed": $m}
       else {"action": "update", "policy": build($v), "current": $cur, "managed": $m} end
   end;

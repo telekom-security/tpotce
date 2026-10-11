@@ -2,7 +2,8 @@
 
 T-Pot marks the policy it writes with _meta.tpot_retention. A policy whose marker no
 longer matches its delete phase was changed in Kibana: it is "foreign" and T-Pot leaves
-it alone, so that nobody loses events they chose to keep. tpotinit applies the same
+it alone, so that nobody loses events they chose to keep, unless it keeps the events just
+as long as .env says (then T-Pot adopts it, only the marker is new). tpotinit applies the same
 rule on every start (docker/tpotinit/dist/bin/es_retention.sh), both pass the cases in
 docker/tpotinit/tests/ilm_cases.yml. Standard library only: update.sh runs
 `python3 -m tpotctl.elastic value-of FILE` with the python3 of the system.
@@ -75,7 +76,9 @@ def build(value: str, base: Optional[dict]) -> dict:
     if value == "off":
         phases.pop("delete", None)
     else:
-        delete = phases.get("delete") or {"actions": copy.deepcopy(DELETE_ACTIONS)}
+        delete = phases.get("delete")           # as in jq: an empty phase {} stays one
+        if delete is None or delete is False:
+            delete = {"actions": copy.deepcopy(DELETE_ACTIONS)}
         delete["min_age"] = f"{value}d"
         phases["delete"] = delete
     meta = dict(policy.get("_meta") or {})
@@ -91,7 +94,9 @@ def decide(value: str, policy: Optional[dict], force: bool = False) -> Decision:
     current, managed = value_of(policy), is_managed(policy)
     if not value:
         return Decision("keep", None, current, managed)
-    if not (managed or force):
+    # a foreign policy that keeps the events as long as value says is adopted: the update
+    # writes the marker and the same duration in days, it deletes nothing that was kept
+    if not (managed or force or (current and current == value)):
         return Decision("foreign", None, current, False)
     if managed and current == value and str((policy.get("_meta") or {}).get("tpot_retention", "")) == value:
         return Decision("keep", None, current, True)
@@ -132,7 +137,11 @@ def get_policy(url: str = ES_URL, opener: Callable = urllib.request.urlopen) -> 
         raise ElasticError(f"Elasticsearch answered {err.code} for the ILM policy {POLICY}")
     except (OSError, ValueError) as err:
         raise ElasticError(_unreachable(err))
-    return ((answer or {}).get(POLICY) or {}).get("policy")
+    # a 200 without the policy is no missing policy (creating one would replace it): as tpotinit
+    if not (isinstance(answer, dict) and isinstance(answer.get(POLICY), dict)
+            and isinstance(answer[POLICY].get("policy"), dict)):
+        raise ElasticError(f"Elasticsearch answered without the ILM policy {POLICY}")
+    return answer[POLICY]["policy"]
 
 
 def put_policy(policy: dict, url: str = ES_URL, opener: Callable = urllib.request.urlopen) -> None:
@@ -202,7 +211,10 @@ def plan(value: str, force: bool = False, url: str = ES_URL, opener: Callable = 
         return Plan(Decision("keep", None, "", False), [], False)
     decision = decide(value, policy, force)
     gone: List[Index] = []
-    if decision.action in ("create", "update"):
+    # only where events go that the policy keeps now: a marker-only update or an adoption keeps
+    # the same duration, a policy that is not in days counts as keeping them all
+    if decision.action == "create" or (decision.action == "update"
+                                       and shortens(decision.current or "off", value)):
         try:
             gone = doomed(indices(url, opener), value or DEFAULT, time.time() if now is None else now)
         except ElasticError:
@@ -215,7 +227,8 @@ def apply(chosen: Plan, url: str = ES_URL, opener: Callable = urllib.request.url
         raise ElasticError("Elasticsearch is not reachable, T-Pot applies the retention on its next start")
     if chosen.decision.action == "foreign":
         raise ElasticError(f"the ILM policy {POLICY} was changed outside of T-Pot (retention: "
-                           f"{chosen.decision.current or 'not in days'}); take it over or apply anyway (--force)")
+                           f"{chosen.decision.current or 'not in days'}); 'tpot elastic retention --adopt' "
+                           "keeps it, 'tpot elastic retention --force' applies .env to it")
     if chosen.decision.action in ("create", "update"):
         put_policy(chosen.decision.policy, url, opener)
 
