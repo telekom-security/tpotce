@@ -585,6 +585,7 @@ class RunElasticTest(unittest.TestCase):
         self.assertEqual(len(self.asked), 1)
         self.assertTrue(self.asked[0][0].endswith("[y/N] "))
         self.assertEqual((self.settings.changes, self.applied), ([], []))
+        self.assertIn("Nothing was changed.", self.out.getvalue() + self.err.getvalue())
         self.assertEqual(self.run_cli(["retention", "30", "-y"], plan=chosen, terminal=True, confirm=True), 0)
         self.assertEqual(self.applied, [chosen])
 
@@ -598,7 +599,8 @@ class RunElasticTest(unittest.TestCase):
             cli.confirm_data_loss("Delete?", False)
         self.assertEqual(stop.exception.code, 2)
         with mock.patch("sys.stdin", mock.Mock(isatty=lambda: True)):
-            for answer, wanted in (("y", True), ("Y", True), ("", False), ("n", False), ("yes", False)):
+            for answer, wanted in (("y", True), ("Y", True), ("yes", True), ("YES", True), ("Yes", True),
+                                   (" yes ", True), ("", False), ("n", False), ("no", False), ("yess", False)):
                 with mock.patch("tpotctl.cli.ask", return_value=answer):
                     self.assertEqual(cli.confirm_data_loss("Delete?", False), wanted, answer)
 

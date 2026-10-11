@@ -313,7 +313,7 @@ def confirm_data_loss(question: str, accept: bool) -> bool:
         return True
     if not sys.stdin.isatty():
         fail(f"{question} This deletes data: answer it at a terminal or add --accept-data-loss.", 2)
-    return ask(f"{question} [y/N] ").lower() == "y"
+    return ask(f"{question} [y/N] ").strip().lower() in ("y", "yes")
 
 
 def _retention_preview(chosen, new: str, console) -> None:
@@ -414,6 +414,7 @@ def run_elastic(args) -> int:
         _retention_preview(chosen, new, console)
         if not confirm_data_loss(f"Keep the Elasticsearch events {shown(new)}?",
                                  getattr(args, "accept_data_loss", False)):
+            say.info("Nothing was changed.", console.file)
             return 1
     current.change({"TPOT_ES_RETENTION": new})
     try:
