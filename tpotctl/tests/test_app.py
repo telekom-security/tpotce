@@ -599,6 +599,70 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             self.assertIsInstance(app.screen, ConfirmDialog)
             self.assertIn("next start", "".join(str(w.render()) for w in app.screen.query("Static")))
 
+    async def test_elastic_warns_of_a_shorter_value_and_reads_anew_when_shown(self):
+        from tpotctl import elastic
+        backend = FakeBackend()
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.2)
+            app.goto("elastic")
+            await pilot.pause(0.3)
+            self.assertNotIn("next start", str(app.query_one("#elastic-status").render()))
+            self.assertEqual(app.query_one("#elastic-value").value, "90")
+            # meanwhile .env got a shorter value (tpot env set, the Settings page): shown on the way back
+            backend._retention = elastic.Status("30", "90", "managed")
+            app.goto("status")
+            await pilot.pause(0.2)
+            app.goto("elastic")
+            await pilot.pause(0.3)
+            status = " ".join(str(app.query_one("#elastic-status").render()).split())
+            self.assertIn("T-Pot deletes the events older than 30 days on its next start", status)
+            self.assertEqual(app.query_one("#elastic-value").value, "30")      # not typed in: the new value
+            backend._retention = elastic.Status("30", "", "missing")
+            app.goto("status")
+            await pilot.pause(0.2)
+            app.goto("elastic")
+            await pilot.pause(0.3)
+            self.assertIn("older than 30 days", " ".join(str(app.query_one("#elastic-status").render()).split()))
+
+    async def test_elastic_set_with_an_empty_field_does_nothing(self):
+        backend = FakeBackend()
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.2)
+            app.goto("elastic")
+            await pilot.pause(0.3)
+            app.query_one("#elastic-value").value = "  "
+            await pilot.click("#elastic-set")
+            await pilot.pause(0.3)
+            notes = [str(note.message) for note in app._notifications]
+        self.assertIn("Enter days (1-3650) or off.", notes)
+        done = [call[0] for call in backend.calls if isinstance(call, tuple)]
+        self.assertEqual([c for c in done if c in ("plan", "set", "apply")], [])
+
+    async def test_elastic_apply_needs_a_value_in_env(self):
+        from tpotctl import elastic
+        backend = FakeBackend()
+        backend._retention = elastic.Status("", "120", "foreign")
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.2)
+            app.goto("elastic")
+            await pilot.pause(0.3)
+            self.assertTrue(app.query_one("#elastic-apply").disabled)
+            self.assertFalse(app.query_one("#elastic-adopt").disabled)
+
+    async def test_settings_previews_a_shorter_retention_off_a_tpot_host_too(self):
+        # Docker Desktop: no T-Pot host, but Elasticsearch on 127.0.0.1:64298 (MAC_WIN)
+        from tpotctl import settings
+        repo = self.retention_checkout()
+        backend = self.settings_backend(repo)
+        backend.host = False
+        app, pilot = await self.save_retention(backend, "30")
+        self.assertIn(("plan", "30", False), backend.calls)
+        self.assertIsInstance(app.screen, ConfirmDialog)
+        self.assertEqual(settings.load(repo).values["TPOT_ES_RETENTION"], "90")
+
     def retention_checkout(self):
         """A checkout of env.example with TPOT_ES_RETENTION=90, the Settings page reads its .env."""
         from tpotctl.tests.test_settings import make_checkout
