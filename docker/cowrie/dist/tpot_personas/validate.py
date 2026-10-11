@@ -378,10 +378,24 @@ def _check_dates(ident, honeyfs, out):
             out.append(f"date: shadow lastchange of {fields[0]} is in the future")
 
 
-def _check_forbidden(persona, out_dir, runtime_dir, keys_dir, out):
+def _tree_texts(fs):
+    """(path, bytes) of what the shell shows of fs.pickle: the path of every node, the
+    contents of files and the targets of links. The raw pickle is no text: its
+    ctimes are 4-byte integers (0x6c696870 is b"phil", August 2027)."""
+    for path, node in tree.iter_nodes(fs):
+        yield path, path.encode("utf-8", "replace")
+        contents = tree.node_get(node, tree.A_CONTENTS)
+        if tree.node_get(node, tree.A_TYPE) != tree.T_DIR and isinstance(contents, (bytes, str)):
+            yield path, contents.encode("utf-8", "replace") if isinstance(contents, str) else contents
+        target = tree.node_get(node, tree.A_TARGET)
+        if isinstance(target, str):
+            yield path, target.encode("utf-8", "replace")
+
+
+def _check_forbidden(persona, out_dir, runtime_dir, keys_dir, fs, out):
     markers = FORBIDDEN_MARKERS + (UBUNTU_MARKERS if persona.os_id != "ubuntu" else ())
     markers = tuple(m.lower().encode() for m in markers)
-    paths = [out_dir / "fs.pickle", out_dir / "cmdoutput.json", out_dir / "cowrie.cfg"]
+    paths = [out_dir / "cmdoutput.json", out_dir / "cowrie.cfg"]
     for root in (out_dir / "honeyfs", out_dir / "txtcmds"):
         for path in sorted(root.rglob("*")):
             if any(m in path.name.lower().encode() for m in markers):
@@ -390,13 +404,25 @@ def _check_forbidden(persona, out_dir, runtime_dir, keys_dir, out):
                 paths.append(path)
     # the directories are the operator's (or a test's random temp dir), not persona content
     own_paths = sorted({str(runtime_dir).lower().encode(), str(keys_dir).lower().encode()}, key=len, reverse=True)
-    for path in paths:
-        data = path.read_bytes().lower() if path.is_file() else b""
+
+    def found_in(data):
+        data = data.lower()
         for own in own_paths:
             data = data.replace(own, b"")
-        found = [m.decode() for m in markers if m in data]
+        return [m.decode() for m in markers if m in data]
+
+    for path in paths:
+        found = found_in(path.read_bytes() if path.is_file() else b"")
         if found:
             out.append(f"forbidden {', '.join(found)} in {path.relative_to(out_dir)}")
+    if fs is None:
+        return
+    hits = {}
+    for path, data in _tree_texts(fs):
+        for marker in found_in(data):
+            hits.setdefault(marker, path)
+    for marker, path in sorted(hits.items()):
+        out.append(f"forbidden {marker} in fs.pickle ({path})")
 
 
 def _check_package_managers(persona, fs, honeyfs, txtcmds, out):
@@ -483,10 +509,8 @@ def problems(persona, ident, out_dir, runtime_dir, keys_dir, min_pickle=MIN_PICK
     _check_processes(persona, ident, out_dir / "cmdoutput.json", out)
     _check_dates(ident, honeyfs, out)
     _check_logs(ident, honeyfs, fs, out)
-    _check_forbidden(persona, out_dir, runtime_dir, keys_dir, out)
+    _check_forbidden(persona, out_dir, runtime_dir, keys_dir, fs, out)
     if fs is not None:
-        if ident.hostname.encode() not in (out_dir / "fs.pickle").read_bytes():
-            out.append("hostname not in fs.pickle")
         _check_tree(persona, ident, fs, out)
         _check_package_managers(persona, fs, honeyfs, txtcmds, out)
     return out

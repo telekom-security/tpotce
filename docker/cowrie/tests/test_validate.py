@@ -142,6 +142,28 @@ class ValidateNegativeTest(unittest.TestCase):
         render(self.persona, self.ident, base_tree(), out, runtime_dir=out, keys_dir=self.keys)
         self.assertEqual(validate.problems(self.persona, self.ident, out, out, self.keys, min_pickle=0), [])
 
+    def test_ctime_bytes_of_a_marker_are_no_finding(self):
+        # 0x6c696870 pickles as b"phil" (BININT, little endian): a ctime in August 2027
+        phil = int.from_bytes(b"phil", "little")
+        ident = draw(self.persona, 5, phil + 30 * 86400)
+        _, out, keys = render_ident(self, self.persona, ident)
+        fs = tree.load_pickle(out / "fs.pickle")
+        tree.node_set(tree.find_node(fs, "etc/passwd"), tree.A_CTIME, phil)
+        tree.dump_pickle(fs, out / "fs.pickle")
+        self.assertIn(b"phil", (out / "fs.pickle").read_bytes())
+        self.assertEqual(validate.problems(self.persona, ident, out, out, keys, min_pickle=0), [])
+
+    def test_forbidden_marker_in_a_pickled_name_or_file(self):
+        fs = tree.load_pickle(self.out / "fs.pickle")
+        tree.ensure_dir(fs, "home/phil", ctime=self.ident.installed_at)
+        tree.dump_pickle(fs, self.out / "fs.pickle")
+        self.assertIn("forbidden phil in fs.pickle (/home/phil)", self.problems())
+        fs = tree.load_pickle(self.out / "fs.pickle")
+        tree.remove_node(fs, "home/phil")
+        tree.node_set(tree.find_node(fs, "etc/hostname"), tree.A_CONTENTS, b"svr04\n")
+        tree.dump_pickle(fs, self.out / "fs.pickle")
+        self.assertIn("forbidden svr04 in fs.pickle (/etc/hostname)", self.problems())
+
     def test_package_manager_without_command(self):
         (self.out / "txtcmds/usr/bin/dpkg").unlink()
         self.assertIn("package manager", self.problems())
