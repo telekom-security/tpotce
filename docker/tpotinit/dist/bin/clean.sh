@@ -61,7 +61,7 @@ fuLOGROTATE () {
 fuLOGROTATECONF
 
 # Ensure correct permissions and ownerships for logrotate to run without issues
-chmod 770 /data/ -R
+find /data -path /data/ciscoasa -prune -o ! -type l -exec chmod 770 {} +
 chown tpot:tpot /data -R
 chmod 774 /data/nginx/conf -R
 chmod 774 /data/nginx/cert -R
@@ -131,7 +131,8 @@ fuBEELZEBUB () {
 fuCISCOASA () {
   if [ "$myPERSISTENCE" != "on" ]; then rm -rf /data/ciscoasa/*; fi
   mkdir -vp /data/ciscoasa/{identity,log,payloads}
-  chmod 770 /data/ciscoasa -R
+  find /data/ciscoasa -type f -exec chmod a-x {} +
+  chmod -R u=rwX,g=rwX,o= /data/ciscoasa
   chown tpot:tpot /data/ciscoasa -R
 }
 
