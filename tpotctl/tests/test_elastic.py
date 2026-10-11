@@ -320,12 +320,8 @@ class AccessTest(unittest.TestCase):
         found = elastic.status("30", opener=self.es(None))
         self.assertEqual((found.state, found.pending, found.adopts), ("missing", False, False))
 
-    def test_oldest_is_the_first_creation_date(self):
-        self.assertEqual(elastic.oldest(opener=self.es()), NOW - 60 * DAY)
-        empty = FakeES({("GET", "/_cat/indices/logstash-*"): (200, [])})
-        self.assertIsNone(elastic.oldest(opener=empty))
-        with self.assertRaises(elastic.ElasticError):
-            elastic.oldest(opener=FakeES({}))
+    def test_no_oldest_left(self):
+        self.assertFalse(hasattr(elastic, "oldest"))           # nothing called it
 
     def test_apply_puts_only_on_create_or_update(self):
         es = self.es()
@@ -375,8 +371,12 @@ class AccessTest(unittest.TestCase):
     def test_unreachable_plan(self):
         plan = elastic.plan("30", opener=FakeES({}), now=NOW)
         self.assertFalse(plan.reachable)
-        with self.assertRaises(elastic.ElasticError):
+        with self.assertRaises(elastic.ElasticError) as caught:
             elastic.apply(plan, opener=FakeES({}))
+        # a shorter value does not come on the next start: it waits for the user's yes
+        self.assertEqual(str(caught.exception),
+                         "Elasticsearch is not reachable; T-Pot applies a longer retention on its next start, a "
+                         "shorter one waits for 'tpot elastic retention --force'")
 
 
 class CliTest(unittest.TestCase):

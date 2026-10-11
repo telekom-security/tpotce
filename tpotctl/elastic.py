@@ -222,12 +222,6 @@ def status(value: str, url: str = ES_URL, opener: Callable = urllib.request.urlo
     return Status(value, current, "foreign", adopts=bool(current) and current == value)
 
 
-def oldest(url: str = ES_URL, opener: Callable = urllib.request.urlopen) -> Optional[float]:
-    """When the oldest index was created (epoch seconds), None if there is none."""
-    found = indices(url, opener)
-    return min(index.created for index in found) if found else None
-
-
 @dataclass
 class Plan:
     decision: Decision
@@ -259,7 +253,8 @@ def plan(value: str, force: bool = False, url: str = ES_URL, opener: Callable = 
 
 def apply(chosen: Plan, url: str = ES_URL, opener: Callable = urllib.request.urlopen) -> None:
     if not chosen.reachable:
-        raise ElasticError("Elasticsearch is not reachable, T-Pot applies the retention on its next start")
+        raise ElasticError("Elasticsearch is not reachable; T-Pot applies a longer retention on its next start, a "
+                           "shorter one waits for 'tpot elastic retention --force'")
     if chosen.decision.action == "foreign":
         raise ElasticError(f"the ILM policy {POLICY} was changed outside of T-Pot (retention: "
                            f"{chosen.decision.current or 'not in days'}); 'tpot elastic retention --adopt' "
