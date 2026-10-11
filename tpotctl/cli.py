@@ -288,6 +288,14 @@ def _retention_shown(value: str) -> str:
     return "forever" if value == "off" else (f"{value} days" if value else "not set")
 
 
+def _retention_not_applied(new: str, old: str, err, console) -> int:
+    """.env holds the new value but the ILM policy tpot was not written: say so, and how to undo it."""
+    say.warn(f"TPOT_ES_RETENTION={new} is set in .env, but the ILM policy tpot was not changed ({err}). "
+             "T-Pot applies the value on its next start.", console.file)
+    say.hint(f"To undo it: tpot env set TPOT_ES_RETENTION={old}", stream=console.file)
+    return 1
+
+
 def run_elastic(args) -> int:
     from tpotctl import elastic, settings as tsettings
     ops.require_linux_host("tpot elastic")
@@ -318,7 +326,10 @@ def run_elastic(args) -> int:
             error("The retention of the policy is no whole number of days, set one: tpot elastic retention DAYS")
             return 1
         current.change({"TPOT_ES_RETENTION": state.current})
-        elastic.apply(elastic.plan(state.current, force=True))
+        try:
+            elastic.apply(elastic.plan(state.current, force=True))
+        except elastic.ElasticError as err:
+            return _retention_not_applied(state.current, value, err, console)
         say.ok(f"TPOT_ES_RETENTION={state.current}, taken over from the ILM policy tpot.", console.file)
         return 0
     problem = retention_value_problem(args.value)
@@ -347,7 +358,10 @@ def run_elastic(args) -> int:
                        f"right away. Set {shown(args.value)}?", args.yes):
             return 1
     current.change({"TPOT_ES_RETENTION": args.value})
-    elastic.apply(chosen)
+    try:
+        elastic.apply(chosen)
+    except elastic.ElasticError as err:
+        return _retention_not_applied(args.value, value, err, console)
     say.ok(f"TPOT_ES_RETENTION={args.value}, the ILM policy tpot keeps the events {shown(args.value)}.", console.file)
     return 0
 

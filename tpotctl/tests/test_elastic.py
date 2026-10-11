@@ -225,5 +225,153 @@ class CliTest(unittest.TestCase):
         self.assertEqual(cli.retention_value_problem("off"), "")
 
 
+class FakeSettings:
+    def __init__(self, values):
+        self.values, self.changes = values, []
+
+    def change(self, changes, unlocked=()):
+        self.changes.append(changes)
+        return []
+
+
+class RunElasticTest(unittest.TestCase):
+    """The decisions of `tpot elastic retention`: what is asked, what is written, what is applied."""
+
+    def run_cli(self, argv, retention="90", state=None, plan=None, confirm=True, apply_error=None, sensor=False):
+        from unittest import mock
+        from rich.console import Console
+        from tpotctl import cli
+        values = {"TPOT_TYPE": "SENSOR" if sensor else "HIVE", "TPOT_ES_RETENTION": retention}
+        self.settings = FakeSettings(values)
+        self.asked, self.applied, self.planned = [], [], []
+        self.out, self.err = io.StringIO(), io.StringIO()
+
+        def ask(question, yes):
+            self.asked.append((question, yes))
+            return yes or confirm
+
+        def plan_of(value, force=False):
+            self.planned.append((value, force))
+            return plan
+
+        def apply_to(chosen):
+            self.applied.append(chosen)
+            if apply_error:
+                raise elastic.ElasticError(apply_error)
+
+        state = state or elastic.Status(retention, retention, "managed")
+        import contextlib
+        with mock.patch("tpotctl.ops.require_linux_host"), \
+                mock.patch("tpotctl.settings.load", return_value=self.settings), \
+                mock.patch("tpotctl.elastic.status", return_value=state), \
+                mock.patch("tpotctl.elastic.plan", side_effect=plan_of), \
+                mock.patch("tpotctl.elastic.apply", side_effect=apply_to), \
+                mock.patch("tpotctl.cli.confirm", side_effect=ask), \
+                mock.patch("tpotctl.cli._console", return_value=Console(file=self.out, width=200)), \
+                contextlib.redirect_stderr(self.err):
+            return cli.run_elastic(cli.build_parser().parse_args(["elastic"] + argv))
+
+    @staticmethod
+    def plan(action="update", doomed=(), reachable=True, current="90"):
+        return elastic.Plan(elastic.Decision(action, {"phases": {}} if action in ("create", "update") else None,
+                                             current, action != "foreign"), list(doomed), reachable)
+
+    OLD = elastic.Index("logstash-old", 1.0, 1200, 5000)
+
+    def test_foreign_policy_without_force_changes_nothing(self):
+        foreign = elastic.Status("90", "90", "foreign")
+        code = self.run_cli(["retention", "30", "-y"], state=foreign, plan=self.plan("foreign"))
+        self.assertEqual(code, 1)
+        self.assertEqual((self.settings.changes, self.applied), ([], []))
+        self.assertEqual(self.planned, [("30", False)])
+        self.assertIn("--adopt", self.err.getvalue())
+
+    def test_force_is_handed_to_the_plan(self):
+        self.run_cli(["retention", "30", "--force", "-y"], plan=self.plan())
+        self.assertEqual(self.planned, [("30", True)])
+
+    def test_unreachable_and_shorter_asks(self):
+        unreachable = self.plan("keep", reachable=False)
+        self.assertEqual(self.run_cli(["retention", "30"], plan=unreachable, confirm=False), 1)
+        self.assertEqual(len(self.asked), 1)
+        self.assertEqual((self.settings.changes, self.applied), ([], []))
+        self.assertEqual(self.run_cli(["retention", "30"], plan=unreachable, confirm=True), 0)
+        self.assertEqual(self.settings.changes, [{"TPOT_ES_RETENTION": "30"}])
+        self.assertEqual(self.applied, [])
+
+    def test_unreachable_and_longer_does_not_ask(self):
+        code = self.run_cli(["retention", "365"], plan=self.plan("keep", reachable=False))
+        self.assertEqual(code, 0)
+        self.assertEqual(self.asked, [])
+        self.assertEqual(self.settings.changes, [{"TPOT_ES_RETENTION": "365"}])
+        self.assertEqual(self.applied, [])
+
+    def test_doomed_indices_are_asked_about(self):
+        chosen = self.plan(doomed=[self.OLD])
+        self.assertEqual(self.run_cli(["retention", "30"], plan=chosen, confirm=False), 1)
+        self.assertEqual(len(self.asked), 1)
+        self.assertIn("1 indices with 1200 events", self.asked[0][0])
+        self.assertEqual((self.settings.changes, self.applied), ([], []))
+        self.assertEqual(self.run_cli(["retention", "30"], plan=chosen, confirm=True), 0)
+        self.assertEqual(self.settings.changes, [{"TPOT_ES_RETENTION": "30"}])
+        self.assertEqual(self.applied, [chosen])
+
+    def test_yes_does_not_prompt_but_lists_the_indices(self):
+        chosen = self.plan(doomed=[self.OLD])
+        self.assertEqual(self.run_cli(["retention", "30", "-y"], plan=chosen, confirm=False), 0)
+        self.assertEqual(self.asked[0][1], True)
+        self.assertIn("logstash-old  1200 events", self.out.getvalue())
+        self.assertEqual(self.applied, [chosen])
+
+    def test_nothing_doomed_does_not_ask(self):
+        self.assertEqual(self.run_cli(["retention", "365"], plan=self.plan()), 0)
+        self.assertEqual(self.asked, [])
+
+    def test_invalid_value_is_refused_first(self):
+        self.assertEqual(self.run_cli(["retention", "30d", "-y"], plan=self.plan()), 2)
+        self.assertEqual((self.planned, self.settings.changes), ([], []))
+
+    def test_adopt_needs_a_policy_in_days(self):
+        for state in (elastic.Status("90", "", "missing"),
+                      elastic.Status("90", "", "unreachable", "Elasticsearch is not reachable (refused)"),
+                      elastic.Status("90", "", "foreign")):
+            with self.subTest(state=state.state):
+                self.assertEqual(self.run_cli(["retention", "--adopt"], state=state, plan=self.plan()), 1)
+                self.assertEqual((self.settings.changes, self.applied), ([], []))
+
+    def test_adopt_takes_the_policy_over(self):
+        foreign = elastic.Status("90", "45", "foreign")
+        self.assertEqual(self.run_cli(["retention", "--adopt"], state=foreign, plan=self.plan(current="45")), 0)
+        self.assertEqual(self.settings.changes, [{"TPOT_ES_RETENTION": "45"}])
+        self.assertEqual(self.planned, [("45", True)])
+
+    def test_a_failed_put_after_the_env_write_is_told(self):
+        code = self.run_cli(["retention", "30", "-y"], plan=self.plan(), apply_error="the ILM policy tpot refused")
+        self.assertEqual(code, 1)
+        self.assertEqual(self.settings.changes, [{"TPOT_ES_RETENTION": "30"}])
+        text = self.out.getvalue()
+        self.assertIn("TPOT_ES_RETENTION=30 is set in .env", text)
+        self.assertIn("the ILM policy tpot was not changed (the ILM policy tpot refused)", text)
+        self.assertIn("next start", text)
+        self.assertIn("tpot env set TPOT_ES_RETENTION=90", text)
+
+    def test_a_failed_put_names_an_empty_old_value(self):
+        self.run_cli(["retention", "30", "-y"], retention="", plan=self.plan(), apply_error="down")
+        self.assertIn("tpot env set TPOT_ES_RETENTION=\n", self.out.getvalue())
+
+    def test_a_failed_put_of_adopt_is_told_too(self):
+        foreign = elastic.Status("90", "45", "foreign")
+        code = self.run_cli(["retention", "--adopt"], state=foreign, plan=self.plan(current="45"),
+                            apply_error="down")
+        self.assertEqual(code, 1)
+        self.assertIn("TPOT_ES_RETENTION=45 is set in .env", self.out.getvalue())
+        self.assertIn("tpot env set TPOT_ES_RETENTION=90", self.out.getvalue())
+
+    def test_a_sensor_has_no_elasticsearch(self):
+        self.assertEqual(self.run_cli(["retention", "30", "-y"], plan=self.plan(), sensor=True), 1)
+        self.assertEqual((self.planned, self.settings.changes), ([], []))
+        self.assertIn("SENSOR", self.err.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()

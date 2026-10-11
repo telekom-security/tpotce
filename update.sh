@@ -1562,7 +1562,7 @@ function fuMIGRATE_RETENTION () {
 	fi
 	if [ -z "${myVALUE}" ];
 	  then
-	    fuUI_WARN "TPOT_ES_RETENTION=$(fuENV_VALUE "${myENVFILE}" TPOT_ES_RETENTION) is the default, the ILM policy tpot could not be read or is no whole number of days."
+	    fuUI_WARN "TPOT_ES_RETENTION=$(fuENV_VALUE "${myENVFILE}" TPOT_ES_RETENTION) is the default, the ILM policy (tpot) could not be read or is no whole number of days."
 	    fuUI_HINT "T-Pot leaves that policy as it is; 'tpot elastic retention' shows it and takes it over."
 	    return 0
 	fi
