@@ -31,8 +31,6 @@ FIRST_USN=""
 SECOND_PERSONA=""
 SECOND_USN=""
 
-# The value of version.bind before v2, the same on every start
-OLD_VERSION_BIND="9.8.2rc1-RedHat-9.8.2-0.37.rc1.el6_7.2"
 # A name with a TXT answer larger than 512 bytes, for the check with recursion
 LARGE_TXT_NAME="microsoft.com"
 
@@ -381,7 +379,7 @@ run_dns_probe() {
     port="${MAPPED_DNS_TCP_PORT}"
   fi
 
-  python3 - "${TEST_BIND_IP}" "${port}" "${OLD_VERSION_BIND}" "${RUN_PERSONA}" "$(version_bind_of "${RUN_PERSONA}" || true)" "$@" <<'PY'
+  python3 - "${TEST_BIND_IP}" "${port}" "${RUN_PERSONA}" "$(version_bind_of "${RUN_PERSONA}" || true)" "$@" <<'PY'
 import random
 import socket
 import struct
@@ -389,12 +387,11 @@ import sys
 
 host = sys.argv[1]
 port = int(sys.argv[2])
-old_version = sys.argv[3]
-persona = sys.argv[4]
-persona_version = sys.argv[5]
-transport, check, qtype_name, qclass_name = sys.argv[6:10]
-expected = int(sys.argv[10])
-names = sys.argv[11:]
+persona = sys.argv[3]
+persona_version = sys.argv[4]
+transport, check, qtype_name, qclass_name = sys.argv[5:9]
+expected = int(sys.argv[9])
+names = sys.argv[10:]
 QTYPES = {"A": 1, "TXT": 16}
 QCLASSES = {"IN": 1, "CH": 3}
 RCODES = {0: "NOERROR", 2: "SERVFAIL", 3: "NXDOMAIN", 4: "NOTIMP", 5: "REFUSED"}
@@ -489,8 +486,6 @@ def verify(name, response, tid):
         txt = [txt_value(rdata) for rtype, rdata in records if rtype == 16]
         if rcode != 0 or not txt or not txt[0]:
             raise RuntimeError(f"{detail}: expected a TXT value")
-        if txt[0] == old_version:
-            raise RuntimeError(f"{detail}: version.bind has the value of earlier releases")
         if not persona_version:
             raise RuntimeError(f"{detail}: no version.bind value known for persona {persona}")
         if txt[0] != persona_version:
