@@ -235,7 +235,8 @@ class LayoutTest(unittest.TestCase):
         text = DOCKERFILE.read_text()
         for needle in ("ARG COWRIE_VERSION=v3.1.1", "ARG COWRIE_COMMIT=c17c9b73d6af0972334ea1e90b20d974cb24eeca",
                        "COWRIE_PERSONA=debian-bookworm ",
-                       "python3 /root/dist/check_ssh_support.py --cowrie-root /home/cowrie/cowrie &&"):
+                       "python3 /root/dist/check_ssh_support.py --cowrie-root /home/cowrie/cowrie &&",
+                       "python3 /root/dist/patch_cowrie_persona_support.py --cowrie-root /home/cowrie/cowrie --self-test &&"):
             self.assertTrue(needle in text, f"{needle} not in the Dockerfile")
         self.assertIn("debian-bookworm", catalog.ids())
 

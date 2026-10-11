@@ -36,6 +36,7 @@ RUN apk --no-cache -U upgrade && \
     pip3 install --break-system-packages --no-cache-dir -r requirements.txt && \
     pip3 install --break-system-packages --no-cache-dir -e . && \
     python3 /root/dist/patch_cowrie_persona_support.py --cowrie-root /home/cowrie/cowrie && \
+    python3 /root/dist/patch_cowrie_persona_support.py --cowrie-root /home/cowrie/cowrie --self-test && \
 #
 # Personas: library, SSH algorithms (ciphers, MACs, host keys, compressions) of this Twisted and Cowrie,
 # build check of every persona

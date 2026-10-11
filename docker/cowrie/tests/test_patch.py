@@ -7,6 +7,7 @@ import sys
 import time
 import tracemalloc
 import unittest
+import warnings
 from pathlib import Path
 
 from tests.helpers import DIST, base_tree, tmpdir
@@ -860,7 +861,7 @@ class PatchTest(unittest.TestCase):
         self.assertIn("grep: invalid option -- K", done.err)
 
     def grep_timed(self, *args, limit=1.0, **kwargs):
-        """grep as above; start() must return within limit seconds, self.peak is its memory peak."""
+        """grep as above; start() must return within limit seconds."""
         fs = (self.patched() / "src/cowrie/commands/fs.py").read_text()
         command_grep = module_parts(fs, ["Command_grep", "TpotGrepMatcher"],
                                     {"HoneyPotCommand": FakeCommand})["Command_grep"]
@@ -874,19 +875,27 @@ class PatchTest(unittest.TestCase):
         fs = (self.patched() / "src/cowrie/commands/fs.py").read_text()
         return module_parts(fs, ["TpotGrepMatcher"], {})["TpotGrepMatcher"]
 
-    def test_grep_rejects_a_pattern_over_512_characters(self):
-        done = self.grep("a" * 513, "/proc/cpuinfo")
-        self.assertEqual((bytes(done.out), done.err, done.code), (b"", "grep: regular expression too big\n", 2))
-        done = self.grep("-c", "a" * 512, "/proc/cpuinfo")
+    KEY_LINE = "ssh-rsa " + "".join("AbCdEfGh0123" for _ in range(60)) + " backup@build39"
+
+    def test_grep_takes_long_patterns_up_to_the_automaton_limit(self):
+        # a bot that looks for its own authorized_keys line (about 740 characters)
+        keys = {"/root/.ssh/authorized_keys": b"ssh-ed25519 AAAA other@host\n" + self.KEY_LINE.encode() + b"\n"}
+        done = self.grep("-c", self.KEY_LINE, "/root/.ssh/authorized_keys", files=keys)
+        self.assertEqual((bytes(done.out), done.err, done.code), (b"1\n", "", 0))
+        done = self.grep("-c", "a" * 4000, "/proc/cpuinfo")
         self.assertEqual((bytes(done.out), done.err, done.code), (b"0\n", "", 1))
-        # counted repeats that would need too large an automaton get the same message
-        done = self.grep("(a{100}){100}", "/proc/cpuinfo")
-        self.assertEqual((done.err, done.code), ("grep: regular expression too big\n", 2))
-        done = self.grep("(", "/proc/cpuinfo")
-        self.assertEqual((done.err, done.code), ("grep: Invalid regular expression\n", 2))
-        # 255 nested groups fit in 512 characters
+        # 255 nested groups
         done = self.grep("(" * 255 + "M" + ")" * 255, "/proc/meminfo")
         self.assertEqual((bytes(done.out), done.err, done.code), (MEMINFO, "", 0))
+        done = self.grep("(", "/proc/cpuinfo")
+        self.assertEqual((done.err, done.code), ("grep: Invalid regular expression\n", 2))
+
+    def test_grep_rejects_a_pattern_too_big_for_the_automaton(self):
+        too_big = ("grep: regular expression too big\n", 2)
+        for pattern in ("a" * 5000, "(a{100}){100}", "(" * 5000 + ")" * 5000, "a" * (64 * 1024 + 1)):
+            with self.subTest(pattern=pattern[:16], size=len(pattern)):
+                done = self.grep(pattern, "/proc/cpuinfo")
+                self.assertEqual((bytes(done.out), done.err, done.code), (b"",) + too_big)
 
     def test_grep_nested_repeats_return_at_once(self):
         line = b"a" * 50000
@@ -910,22 +919,39 @@ class PatchTest(unittest.TestCase):
         done.eofReceived()
         self.assertEqual((bytes(done.out), done.code), (b"1024\n", 0))
 
-    def test_grep_matches_the_first_64_kib_of_a_line(self):
-        done = self.grep_timed("needle", input_data=b"a" * 70000 + b"needle\n")
-        self.assertEqual((bytes(done.out), done.code), (b"", 1))
-        line = b"needle" + b"a" * 70000
-        done = self.grep_timed("needle", input_data=line + b"\n")
+    def test_grep_matches_the_whole_line(self):
+        line = b"a" * 70000 + b"needle"
+        done = self.grep_timed("needle", input_data=line + b"\nother\n")
         self.assertEqual((bytes(done.out), done.code), (line + b"\n", 0))
+        done = self.grep_timed("-v", "needle", input_data=line + b"\nother\n")
+        self.assertEqual((bytes(done.out), done.code), (b"other\n", 0))
+        done = self.grep_timed("-c", "needle$", input_data=b"x" * (1024 * 1024 - 7) + b"needle\n")
+        self.assertEqual(bytes(done.out), b"1\n")
 
     def test_grep_stops_when_the_work_limit_is_reached(self):
         # a pattern whose automaton needs a new state at almost every byte
         rnd = random.Random(7)
         data = b"".join(bytes(rnd.choice(b"ab") for _ in range(64 * 1024 - 1)) + b"\n" for _ in range(16))
+        exhausted = "grep: memory exhausted\n"
         done = self.grep_timed("-c", "a[ab]{20}c", input_data=data, limit=3.0)
-        self.assertEqual((bytes(done.out), done.code, done.tpot_matcher.spent), (b"0\n", 1, True))
-        # the lines up to then were read: a match there still counts
-        done = self.grep_timed("-c", "a[ab]{20}c", input_data=b"a" * 21 + b"c\n" + data, limit=3.0)
-        self.assertEqual((bytes(done.out), done.code, done.tpot_matcher.spent), (b"1\n", 0, True))
+        self.assertEqual((bytes(done.out), done.err, done.code), (b"", exhausted, 2))
+        # GNU grep stops at once: the lines before are printed, no count, exit status 2
+        first = b"a" * 21 + b"c"
+        done = self.grep_timed("a[ab]{20}c", input_data=first + b"\n" + data, limit=3.0)
+        self.assertEqual((bytes(done.out), done.err, done.code), (first + b"\n", exhausted, 2))
+        done = self.grep_timed("-c", "a[ab]{20}c", "/root/one", "/root/two", "/nope",
+                               files={"/root/one": data, "/root/two": first + b"\n"}, limit=3.0)
+        self.assertEqual((bytes(done.out), done.err, done.code), (b"", exhausted, 2))
+        # -q stops reading at the first selected line
+        done = self.grep_timed("-q", "a[ab]{20}c", input_data=first + b"\n" + data, limit=3.0)
+        self.assertEqual((bytes(done.out), done.err, done.code), (b"", "", 0))
+        # interactive stdin: the message once, the status at the end
+        done = self.grep("a[ab]{20}c")
+        for line in data.split(b"\n")[:16]:
+            done.lineReceived(line.decode())
+        done.lineReceived(first.decode())
+        done.eofReceived()
+        self.assertEqual((bytes(done.out), done.err, done.code), (b"", exhausted, 2))
         fs = (self.patched() / "src/cowrie/commands/fs.py").read_text()
         command_grep = module_parts(fs, ["Command_grep", "TpotGrepMatcher"],
                                     {"HoneyPotCommand": FakeCommand})["Command_grep"]
@@ -995,6 +1021,76 @@ class PatchTest(unittest.TestCase):
                 for line in (bytes([byte]), bytes([byte, 97]), bytes([97, byte]), b""):
                     self.assertEqual(found.search(line) is not None, expected.search(line) is not None,
                                      (text, line))
+
+    def self_test(self, root):
+        return subprocess.run([sys.executable, str(PATCH), "--cowrie-root", str(root), "--self-test"],
+                              capture_output=True, text=True)
+
+    def test_grep_self_test_passes_on_the_patched_source(self):
+        done = self.self_test(self.patched())
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertRegex(done.stdout, r"^grep matcher self-test: \d+ patterns OK\n$")
+
+    def test_grep_self_test_fails_loudly(self):
+        # a Python whose re parser moved, a construct the matcher no longer knows, a wrong result, no size limit
+        cases = (("        from re import _parser\n", "        from re import _parser_gone as _parser\n"),
+                 ("        flags = parsed.state.flags\n", "        flags = parsed.flags\n"),
+                 (", sre.AT_NON_BOUNDARY: 3}[av]", "}[av]"),
+                 ("sre.CATEGORY_NOT_WORD: sre.CATEGORY_WORD}", "}"),
+                 ("        return ((prev == 1) != (nxt == 1)) == (test == 2)\n", "        return test == 2\n"),
+                 ("    MAX_STATES = 4096 ", "    MAX_STATES = 1 << 20 "))
+        for old, new in cases:
+            with self.subTest(old=old):
+                root = self.patched()
+                path = root / "src/cowrie/commands/fs.py"
+                text = path.read_text()
+                self.assertEqual(text.count(old), 1)
+                path.write_text(text.replace(old, new))
+                done = self.self_test(root)
+                self.assertNotEqual(done.returncode, 0)
+                self.assertIn("grep matcher self-test failed", done.stderr)
+
+    def test_grep_self_test_covers_every_construct_of_the_matcher(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("tpot_patch_script", PATCH)
+        script = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(script)
+        from re import _parser
+        seen = set()
+
+        def walk(items):
+            for op, av in items:
+                seen.add(str(op))
+                if str(op) == "IN":
+                    seen.update(f"IN {kind}" for kind, _ in av)
+                    seen.update(str(value) for kind, value in av if str(kind) == "CATEGORY")
+                elif str(op) == "AT":
+                    seen.add(str(av))
+                elif str(op) in ("MAX_REPEAT", "MIN_REPEAT"):
+                    walk(av[2])
+                elif str(op) == "SUBPATTERN":
+                    seen.add("SUBPATTERN flags" if av[1] or av[2] else "SUBPATTERN")
+                    walk(av[3])
+                elif str(op) == "BRANCH":
+                    for alternative in av[1]:
+                        walk(alternative)
+
+        for pattern, ignore_case in script.GREP_SELF_TEST:
+            walk(_parser.parse(pattern, re.IGNORECASE if ignore_case else 0))
+        self.assertTrue(any(ignore_case for _, ignore_case in script.GREP_SELF_TEST))
+        self.assertLessEqual({"LITERAL", "NOT_LITERAL", "ANY", "IN", "IN LITERAL", "IN RANGE", "IN CATEGORY",
+                              "IN NEGATE", "MAX_REPEAT", "MIN_REPEAT", "SUBPATTERN", "SUBPATTERN flags", "BRANCH",
+                              "AT", "AT_BEGINNING", "AT_BEGINNING_STRING", "AT_END", "AT_END_STRING", "AT_BOUNDARY",
+                              "AT_NON_BOUNDARY", "CATEGORY_DIGIT", "CATEGORY_NOT_DIGIT", "CATEGORY_SPACE",
+                              "CATEGORY_NOT_SPACE", "CATEGORY_WORD", "CATEGORY_NOT_WORD"}, seen)
+
+    def test_grep_warns_once_about_a_possible_nested_set(self):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            done = self.grep("[[t]pot-warn", "/proc/cpuinfo")
+        self.assertEqual(done.code, 1)
+        self.assertEqual([str(w.message) for w in caught if w.category is FutureWarning],
+                         ["Possible nested set at position 1"])
 
     def test_grep_selects_no_line_for_patterns_beyond_regular_expressions(self):
         # back references, lookarounds, atomic groups, possessive repeats and conditionals

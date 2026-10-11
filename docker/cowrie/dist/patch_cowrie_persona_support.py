@@ -1218,10 +1218,10 @@ class TpotGrepMatcher:
     byte of a line once, so the time grows with the input and not with the ways a
     pattern can repeat. Back references, lookarounds, conditionals, atomic groups and
     possessive repeats select no line. The budget limits the work of building automaton
-    states for one grep; when it is used up, `spent` is set and no further line is read."""
+    states for one grep; when it is used up, `spent` is set and grep stops as GNU grep does
+    when its memory runs out."""
 
-    MAX_PATTERN = 512  # characters; longer patterns get GNU grep's "regular expression too big"
-    MAX_LINE = 64 * 1024  # bytes of a line that are matched
+    MAX_PATTERN = 64 * 1024  # characters, a cap before parsing; the automaton limit comes first
     MAX_INPUT = 1024 * 1024  # bytes one grep reads
     MAX_STATES = 4096  # states of the automaton of a pattern
     MAX_CACHE = 16384  # cached automaton states and transitions
@@ -1235,6 +1235,7 @@ class TpotGrepMatcher:
         pass
 
     def __init__(self, pattern: bytes, ignore_case: bool = False) -> None:
+        import warnings
         from re import _constants as sre
         from re import _parser
 
@@ -1248,7 +1249,9 @@ class TpotGrepMatcher:
         self.spent = False
         self.context = False
         self.start = -1
-        parsed = _parser.parse(pattern, re.IGNORECASE if ignore_case else 0)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")  # re.compile has given them
+            parsed = _parser.parse(pattern, re.IGNORECASE if ignore_case else 0)
         flags = parsed.state.flags
         self.regular = not flags & re.LOCALE
         if self.regular:
@@ -1440,6 +1443,71 @@ class TpotGrepMatcher:
 '''
 
 
+# (pattern, -i): every construct TpotGrepMatcher reads; grep_self_test compares it with re.search
+GREP_SELF_TEST = (
+    (rb"proc", False),  # literal
+    (rb"[^a]b", False),  # not-literal
+    (rb"m.d", False),  # any
+    (rb"[a-c]_", False),  # set with a range
+    (rb"\d kB", False),  # category
+    (rb"[^\s\d:]{3}", False),  # negated set with categories and a literal
+    (rb"\w\W\S", False),  # word, non-word and non-space categories
+    (rb"\D\d", False),  # non-digit category
+    (rb"a+b", False),  # repeat
+    (rb"a+?b", False),  # lazy repeat
+    (rb"x{1,3}-", False),  # counted repeat
+    (rb"(?i:MEM)Total", False),  # group with a flag added
+    (rb"(?i)a(?-i:b)", False),  # group with a flag removed
+    (rb"(foo|bar) ", False),  # alternation in a group
+    (rb"^model", False),  # start of the line
+    (rb"\Aproc", False),  # start of the string
+    (rb"kB$", False),  # end of the line
+    (rb"\d\Z", False),  # end of the string
+    (rb"\bbar\b", False),  # word boundary
+    (rb"a\Bb", False),  # no word boundary
+    (rb"(a+)+$", False),  # nested repeats
+    (rb"PROCESSOR", True),  # -i
+)
+GREP_SELF_TEST_LINES = (b"", b"processor\t: 0", b"model name\t: Intel", b"MemTotal: 8023548 kB", b"aaab",
+                        b"Ab_c", b"foo bar", b"x-y", b" 42 ", b"ab", b"a b", b"amd64")
+
+
+def grep_self_test(cowrie_root):
+    """Runs TpotGrepMatcher of the patched fs.py in this Python: every pattern of
+    GREP_SELF_TEST is read as a regular expression and selects the lines re.search
+    selects, and an automaton over the state limit is too big. A Python whose re
+    parser changed fails here, in the build, and not in every grep."""
+    import ast
+    import re
+
+    path = cowrie_root / "src" / "cowrie" / "commands" / "fs.py"
+    try:
+        nodes = [node for node in ast.parse(path.read_text(encoding="utf-8")).body
+                 if isinstance(node, ast.ClassDef) and node.name == "TpotGrepMatcher"]
+        if len(nodes) != 1:
+            raise LookupError("no TpotGrepMatcher in fs.py")
+        namespace = {"re": re, "__name__": "tpot_grep_self_test"}
+        exec(compile(ast.Module(nodes, []), str(path), "exec"), namespace)  # noqa: S102 (our own patched source)
+        matcher = namespace["TpotGrepMatcher"]
+        for pattern, ignore_case in GREP_SELF_TEST:
+            found = matcher(pattern, ignore_case)
+            if found.regular is not True:
+                raise ValueError(f"{pattern!r} not read as a regular expression")
+            expected = re.compile(pattern, re.IGNORECASE if ignore_case else 0)
+            for line in GREP_SELF_TEST_LINES:
+                if (found.search(line) is not None) != (expected.search(line) is not None):
+                    raise ValueError(f"{pattern!r} on {line!r} differs from re.search")
+        try:
+            matcher(rb"(a{100}){100}")
+        except matcher.TooBig:
+            pass
+        else:
+            raise ValueError("(a{100}){100} is not too big")
+    except Exception as err:
+        raise RuntimeError(f"grep matcher self-test failed: {err!r}") from err
+    print(f"grep matcher self-test: {len(GREP_SELF_TEST)} patterns OK")
+
+
 def patch_grep(cowrie_root):
     """grep as GNU grep for the options bots use: -c prints the number of selected
     lines (name:count per file for several files; `grep -c processor /proc/cpuinfo`),
@@ -1447,9 +1515,10 @@ def patch_grep(cowrie_root):
     status is 0 for a selected line, 1 for none and 2 for an error (missing file,
     directory, invalid option), with -q a selected line wins over an error.
     The empty string after the last newline is no line. Lines are matched by
-    TpotGrepMatcher (GREP_MATCHER) in time that grows with the input: a pattern of
-    more than 512 characters is too big (exit 2), the first 64 KiB of a line are
-    matched and one grep reads at most 1 MiB."""
+    TpotGrepMatcher (GREP_MATCHER) in time that grows with the input: a pattern whose
+    automaton gets too large is too big (exit 2), one grep reads at most 1 MiB, and
+    when the work budget is used up grep stops with "memory exhausted" (exit 2).
+    The Dockerfile runs grep_self_test (--self-test) on the patched source."""
     path = cowrie_root / "src" / "cowrie" / "commands" / "fs.py"
     replace_once(path, "class Command_grep(HoneyPotCommand):\n",
                  GREP_MATCHER.lstrip("\n") + "class Command_grep(HoneyPotCommand):\n")
@@ -1466,17 +1535,20 @@ def patch_grep(cowrie_root):
     invert: bool = False
     tpot_matcher: TpotGrepMatcher | None = None
     tpot_input_left: int = TpotGrepMatcher.MAX_INPUT
+    tpot_exhausted: bool = False
     ignore_case: bool = False
     quiet: bool = False
     failed: bool = False
 
     def write_count(self, label: str | None = None) -> None:
-        if self.quiet:
+        if self.quiet or self.tpot_exhausted:
             return
         prefix = f"{label}:" if label is not None else ""
         self.write(f"{prefix}{self.match_count}\\n")
 
     def exit_status(self) -> int:
+        if self.tpot_exhausted:
+            return 2
         if self.matched and (self.quiet or not self.failed):
             return 0
         return 2 if self.failed else 1
@@ -1526,7 +1598,9 @@ def patch_grep(cowrie_root):
                 self.match_count += 1
                 self.writeBytes(line + b"\\n")
 """,
-        """        contents = contents[: self.tpot_input_left]
+        """        if self.tpot_exhausted or (self.quiet and self.matched):
+            return
+        contents = contents[: self.tpot_input_left]
         self.tpot_input_left -= len(contents)
         lines = contents.split(b"\\n")
         if lines[-1] == b"":
@@ -1534,13 +1608,17 @@ def patch_grep(cowrie_root):
         for line in lines:
             if self.max_count is not None and self.match_count >= self.max_count:
                 break
-            found = matcher.search(line[: matcher.MAX_LINE]) is not None
+            found = matcher.search(line) is not None
             if matcher.spent:
-                break
+                self.errorWrite("grep: memory exhausted\\n")
+                self.tpot_exhausted = True
+                return
             if found != self.invert:
                 self.matched = True
                 self.match_count += 1
-                if not self.count_only and not self.quiet:
+                if self.quiet:
+                    return
+                if not self.count_only:
                     self.writeBytes(line + b"\\n")
 """,
     )
@@ -1586,6 +1664,8 @@ def patch_grep(cowrie_root):
                 self.write_count()
         elif files:
             for arg in files:
+                if self.tpot_exhausted:
+                    break
                 pnames = self.check_arguments("grep", [arg])
                 if not pnames:
                     self.failed = True
@@ -1764,8 +1844,13 @@ class HoneyPotTelnetFactory(protocol.ServerFactory):
 def main():
     parser = argparse.ArgumentParser(description="Patch Cowrie v3.1 persona command support.")
     parser.add_argument("--cowrie-root", required=True, type=Path)
+    parser.add_argument("--self-test", action="store_true",
+                        help="check the grep matcher of an already patched Cowrie in this Python")
     args = parser.parse_args()
     cowrie_root = args.cowrie_root.resolve()
+    if args.self_test:
+        grep_self_test(cowrie_root)
+        return
     patch_protocol(cowrie_root)
     patch_busybox(cowrie_root)
     patch_perl(cowrie_root)
