@@ -66,7 +66,7 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/cowrie.sh --persona openwrt
 ./docker/_tests/tests/cowrie.sh --all-personas
 ./docker/_tests/tests/ddospot.sh
-./docker/_tests/tests/ddospot.sh --dns-port 1053 --ntp-port 1123 --ssdp-port 19000
+./docker/_tests/tests/ddospot.sh --chargen-port 10019 --dns-port 1053 --dns-tcp-port 1053 --ntp-port 1123 --ssdp-port 19000
 ./docker/_tests/tests/ddospot.sh --recursion
 ./docker/_tests/tests/dionaea.sh
 ./docker/_tests/tests/dionaea.sh --ftp-port 2121
@@ -144,7 +144,10 @@ The Dicompot test additionally requires DCMTK client tools on the host:
 The DDoSPot test starts a new container for each group of checks, because the
 response budgets are kept in memory and every probe comes from one source
 address. It runs with DNS recursion off; `--recursion` adds a check of DNS
-recursion over UDP and TCP and needs outbound access to `9.9.9.9:853`.
+recursion over UDP and TCP and needs outbound access to `9.9.9.9:853` and
+`149.112.112.112:853`. The host ports are dynamic unless set with
+`--chargen-port`, `--dns-port` (UDP), `--dns-tcp-port` (TCP), `--ntp-port` and
+`--ssdp-port`.
 
 The p0f test sends HTTP requests from a client container to a listener in the
 p0f container and verifies that p0f writes matching `syn` (label
