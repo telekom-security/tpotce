@@ -1,4 +1,5 @@
 import ast
+import random
 import re
 import shutil
 import subprocess
@@ -739,7 +740,8 @@ class PatchTest(unittest.TestCase):
 
     def grep(self, *args, **kwargs):
         fs = (self.patched() / "src/cowrie/commands/fs.py").read_text()
-        command_grep = module_parts(fs, ["Command_grep"], {"HoneyPotCommand": FakeCommand})["Command_grep"]
+        command_grep = module_parts(fs, ["Command_grep", "TpotGrepMatcher"],
+                                    {"HoneyPotCommand": FakeCommand})["Command_grep"]
         command = command_grep(args, **kwargs)
         command.start()
         return command
@@ -856,6 +858,152 @@ class PatchTest(unittest.TestCase):
         done = self.grep("-K", "x", "/proc/cpuinfo")
         self.assertEqual(done.code, 2)
         self.assertIn("grep: invalid option -- K", done.err)
+
+    def grep_timed(self, *args, limit=1.0, **kwargs):
+        """grep as above; start() must return within limit seconds, self.peak is its memory peak."""
+        fs = (self.patched() / "src/cowrie/commands/fs.py").read_text()
+        command_grep = module_parts(fs, ["Command_grep", "TpotGrepMatcher"],
+                                    {"HoneyPotCommand": FakeCommand})["Command_grep"]
+        command = command_grep(args, **kwargs)
+        begin = time.monotonic()
+        command.start()
+        self.assertLess(time.monotonic() - begin, limit, args)
+        return command
+
+    def matcher(self):
+        fs = (self.patched() / "src/cowrie/commands/fs.py").read_text()
+        return module_parts(fs, ["TpotGrepMatcher"], {})["TpotGrepMatcher"]
+
+    def test_grep_rejects_a_pattern_over_512_characters(self):
+        done = self.grep("a" * 513, "/proc/cpuinfo")
+        self.assertEqual((bytes(done.out), done.err, done.code), (b"", "grep: regular expression too big\n", 2))
+        done = self.grep("-c", "a" * 512, "/proc/cpuinfo")
+        self.assertEqual((bytes(done.out), done.err, done.code), (b"0\n", "", 1))
+        # counted repeats that would need too large an automaton get the same message
+        done = self.grep("(a{100}){100}", "/proc/cpuinfo")
+        self.assertEqual((done.err, done.code), ("grep: regular expression too big\n", 2))
+        done = self.grep("(", "/proc/cpuinfo")
+        self.assertEqual((done.err, done.code), ("grep: Invalid regular expression\n", 2))
+        # 255 nested groups fit in 512 characters
+        done = self.grep("(" * 255 + "M" + ")" * 255, "/proc/meminfo")
+        self.assertEqual((bytes(done.out), done.err, done.code), (MEMINFO, "", 0))
+
+    def test_grep_nested_repeats_return_at_once(self):
+        line = b"a" * 50000
+        done = self.grep_timed("(a+)+$", input_data=line + b"!\n")
+        self.assertEqual((bytes(done.out), done.code), (b"", 1))
+        done = self.grep_timed("-c", "(a+)+$", input_data=line + b"\n" + line + b"!\n")
+        self.assertEqual((bytes(done.out), done.code), (b"1\n", 0))
+        for pattern in ("(a*)*b", "(a|aa)+$", "(a|a)*b", "a*a*a*a*b", "(\\w+\\s?)+$", ".*.*=.*", "\\w+\\s"):
+            done = self.grep_timed(pattern, input_data=line + b"!\n")
+            self.assertEqual(done.code, 1, pattern)
+
+    def test_grep_reads_at_most_1_mib(self):
+        done = self.grep_timed("-c", "x", input_data=b"x\n" * (600 * 1024), limit=2.0)
+        self.assertEqual(bytes(done.out), b"%d\n" % (512 * 1024))
+        done = self.grep_timed("-c", "x", "/root/big", files={"/root/big": b"x\n" * (600 * 1024)}, limit=2.0)
+        self.assertEqual(bytes(done.out), b"%d\n" % (512 * 1024))
+        # interactive stdin: the same 1 MiB for all lines together
+        done = self.grep("-c", "x")
+        for _ in range(1100):
+            done.lineReceived("x" * 1023)
+        done.eofReceived()
+        self.assertEqual((bytes(done.out), done.code), (b"1024\n", 0))
+
+    def test_grep_matches_the_first_64_kib_of_a_line(self):
+        done = self.grep_timed("needle", input_data=b"a" * 70000 + b"needle\n")
+        self.assertEqual((bytes(done.out), done.code), (b"", 1))
+        line = b"needle" + b"a" * 70000
+        done = self.grep_timed("needle", input_data=line + b"\n")
+        self.assertEqual((bytes(done.out), done.code), (line + b"\n", 0))
+
+    def test_grep_stops_when_the_work_limit_is_reached(self):
+        # a pattern whose automaton needs a new state at almost every byte
+        rnd = random.Random(7)
+        data = b"".join(bytes(rnd.choice(b"ab") for _ in range(64 * 1024 - 1)) + b"\n" for _ in range(16))
+        done = self.grep_timed("-c", "a[ab]{20}c", input_data=data, limit=3.0)
+        self.assertEqual((bytes(done.out), done.code, done.tpot_matcher.spent), (b"0\n", 1, True))
+        # the lines up to then were read: a match there still counts
+        done = self.grep_timed("-c", "a[ab]{20}c", input_data=b"a" * 21 + b"c\n" + data, limit=3.0)
+        self.assertEqual((bytes(done.out), done.code, done.tpot_matcher.spent), (b"1\n", 0, True))
+        fs = (self.patched() / "src/cowrie/commands/fs.py").read_text()
+        command_grep = module_parts(fs, ["Command_grep", "TpotGrepMatcher"],
+                                    {"HoneyPotCommand": FakeCommand})["Command_grep"]
+        self.start(command_grep(["-c", "a[ab]{20}c"], input_data=data), quick=False)
+        self.assertLess(self.peak, 32 * 1024 * 1024)
+
+    GNU_SAMPLE = (b"processor\t: 0\nmodel name\t: Intel(R) Xeon(R) CPU E5-2680 v4 @ 2.40GHz\ncpu MHz\t\t: 2399.998\n"
+                  b"MemTotal:        8023548 kB\nSwapFree:              0 kB\n\nflags\t\t: fpu vme de pse tsc msr\n"
+                  b"aaaa\naaaa!\nxababy xy xcdy\nroot:x:0:0:root:/root:/bin/bash\nbooted foo\ncpus 4\n")
+    # line numbers selected by GNU grep 3.8 (debian:12) as `grep -E -n PATTERN`
+    GNU_LINES = {"^processor": [1], "model name": [2], "[0-9]+ kB$": [4, 5], "^(Mem|Swap)(Total|Free)": [4, 5],
+                 "\\bcpu\\b": [3], "(a+)+$": [8], "x(ab|cd)*y": [10], "^$": [6], "o{2,}": [11, 12],
+                 "^[^:]+:x:0:": [11], "(\\w+\\s?)+$": [1, 2, 3, 4, 5, 7, 8, 10, 11, 12, 13], "PROCESSOR": []}
+
+    def test_grep_selects_the_lines_gnu_grep_selects(self):
+        lines = self.GNU_SAMPLE.split(b"\n")
+        for pattern, numbers in self.GNU_LINES.items():
+            with self.subTest(pattern=pattern):
+                done = self.grep(pattern, input_data=self.GNU_SAMPLE)
+                self.assertEqual(bytes(done.out), b"".join(lines[n - 1] + b"\n" for n in numbers))
+                self.assertEqual(done.code, 0 if numbers else 1)
+        done = self.grep("-i", "PROCESSOR", input_data=self.GNU_SAMPLE)
+        self.assertEqual(bytes(done.out), b"processor\t: 0\n")
+
+    def test_grep_selects_the_lines_python_re_selects(self):
+        # the automaton against Python's own matcher, on patterns and lines small enough for both
+        matcher = self.matcher()
+        rnd = random.Random(3)
+        atoms = ["a", "b", "A", ".", "[ab]", "[^a]", "[a-c]", "\\d", "\\w", "\\s", "\\W", "\\S", "\\D", "[^\\s]",
+                 "[A-Z]", "x", " ", "1", "_", "\\.", "[^A-Z_]"]
+
+        def pattern(depth=0):
+            r = rnd.random()
+            if depth > 3 or r < 0.3:
+                return rnd.choice(atoms)
+            if r < 0.5:
+                return pattern(depth + 1) + pattern(depth + 1)
+            if r < 0.6:
+                return "(" + pattern(depth + 1) + "|" + pattern(depth + 1) + ")"
+            if r < 0.75:
+                return "(" + pattern(depth + 1) + ")" + rnd.choice(["*", "+", "?", "*?", "+?", "{2}", "{1,3}", "{2,}"])
+            if r < 0.85:
+                return rnd.choice(["^", "$", "\\b", "\\B", "\\A", "\\Z"]) + pattern(depth + 1)
+            if r < 0.9:
+                return rnd.choice(["(?i:", "(?:", "(?P<n>"]) + pattern(depth + 1) + ")"
+            return pattern(depth + 1) + rnd.choice(["^", "$", "\\b", "\\B"])
+
+        checked = 0
+        for _ in range(1500):
+            text = pattern().encode()
+            ignore_case = rnd.random() < 0.25
+            try:
+                expected = re.compile(text, re.IGNORECASE if ignore_case else 0)
+            except re.error:
+                continue  # a group name used twice
+            found = matcher(text, ignore_case)
+            for _ in range(10):
+                line = bytes(rnd.choice(b"aAbB1 _x.\t-") for _ in range(rnd.randint(0, 8)))
+                self.assertEqual(found.search(line) is not None, expected.search(line) is not None,
+                                 (text, ignore_case, line))
+                checked += 1
+        self.assertGreater(checked, 10000)
+        for text in (rb"\w", rb"\W", rb"\s", rb"\S", rb"\d", rb"\D", rb".", rb"(?i)[a-f]", rb"(?i)[^a-f]",
+                     rb"(?i)[Z-a]", rb"\b", rb"\B", rb"(?i)k", rb"[^\x00-\x7f]"):
+            found, expected = matcher(text), re.compile(text)
+            for byte in range(256):
+                for line in (bytes([byte]), bytes([byte, 97]), bytes([97, byte]), b""):
+                    self.assertEqual(found.search(line) is not None, expected.search(line) is not None,
+                                     (text, line))
+
+    def test_grep_selects_no_line_for_patterns_beyond_regular_expressions(self):
+        # back references, lookarounds, atomic groups, possessive repeats and conditionals
+        for pattern in ("(a)\\1", "(?=p)p", "(?!x)p", "(?<=o)c", "(?>p)", "p++", "(a)?(?(1)a|p)"):
+            with self.subTest(pattern=pattern):
+                done = self.grep(pattern, "/proc/cpuinfo")
+                self.assertEqual((bytes(done.out), done.err, done.code), (b"", "", 1))
+                done = self.grep("-vc", pattern, "/proc/cpuinfo")
+                self.assertEqual(bytes(done.out), b"12\n")
 
     def prompt(self, cwd, user="root", uid=0, home="/root", style="redhat", hostname="build39.corp.local",
                config=None):
@@ -985,6 +1133,13 @@ class PatchTest(unittest.TestCase):
                  ("src/cowrie/telnet/factory.py", "\nimport time\n", "\nimport time as clock\n"),
                  ("src/cowrie/commands/fs.py", "        return re.compile(bmatch)\n",
                   "        return re.compile(bmatch, 0)\n"),
+                 ("src/cowrie/commands/fs.py", "    def compile_match(self, match: str) -> re.Pattern[bytes]:\n",
+                  "    def compile_match(self, match: str) -> re.Pattern:\n"),
+                 ("src/cowrie/commands/fs.py", "class Command_grep(HoneyPotCommand):\n",
+                  "class Command_grep(HoneyPotCommand):  # grep\n"),
+                 ("src/cowrie/commands/fs.py",
+                  "            self.compile_match(self.match)\n        except re.error:\n",
+                  "            self.compile_match(self.match)\n        except (re.error, ValueError):\n"),
                  ("src/cowrie/commands/fs.py", "            if matcher.search(line):\n",
                   "            if matcher.search(line) is not None:\n"),
                  ("src/cowrie/commands/fs.py",

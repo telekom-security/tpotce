@@ -1210,14 +1210,249 @@ def patch_free(cowrie_root):
     )
 
 
+# module code of the patched fs.py, before Command_grep
+GREP_MATCHER = r'''
+class TpotGrepMatcher:
+    """T-Pot: whether a line has a match of a grep pattern in Python's re syntax (the
+    lines re.search selects). The parsed pattern becomes an automaton that reads each
+    byte of a line once, so the time grows with the input and not with the ways a
+    pattern can repeat. Back references, lookarounds, conditionals, atomic groups and
+    possessive repeats select no line. The budget limits the work of building automaton
+    states for one grep; when it is used up, `spent` is set and no further line is read."""
+
+    MAX_PATTERN = 512  # characters; longer patterns get GNU grep's "regular expression too big"
+    MAX_LINE = 64 * 1024  # bytes of a line that are matched
+    MAX_INPUT = 1024 * 1024  # bytes one grep reads
+    MAX_STATES = 4096  # states of the automaton of a pattern
+    MAX_CACHE = 16384  # cached automaton states and transitions
+    BUDGET = 4_000_000
+    # 1: a word byte of a bytes pattern, 2: any other byte, 0: no byte (start or end of the line)
+    CLASS = bytes(1 if 48 <= b <= 57 or 65 <= b <= 90 or 97 <= b <= 122 or b == 95 else 2 for b in range(256))
+    # whether \B matches an empty line (it does from Python 3.14 on)
+    EMPTY_NON_BOUNDARY = re.search(rb"\B", b"") is not None
+
+    class TooBig(Exception):
+        pass
+
+    def __init__(self, pattern: bytes, ignore_case: bool = False) -> None:
+        from re import _constants as sre
+        from re import _parser
+
+        self.sre = sre
+        self.kind: list[int] = []  # 0 reads a byte of the set arg, 1 goes to out1 and out2, 2 tests arg, 3 accepts
+        self.arg: list = []
+        self.out1: list[int] = []
+        self.out2: list[int] = []
+        self.tables: dict = {}
+        self.budget = self.BUDGET
+        self.spent = False
+        self.context = False
+        self.start = -1
+        parsed = _parser.parse(pattern, re.IGNORECASE if ignore_case else 0)
+        flags = parsed.state.flags
+        self.regular = not flags & re.LOCALE
+        if self.regular:
+            try:
+                self.start = self.seq(parsed, self.new(3, None, -1), bool(flags & re.IGNORECASE))
+            except LookupError:
+                self.regular = False
+        self.reset()
+
+    def new(self, kind: int, arg, out1: int, out2: int = -1) -> int:
+        if len(self.kind) >= self.MAX_STATES:
+            raise self.TooBig()
+        self.kind.append(kind)
+        self.arg.append(arg)
+        self.out1.append(out1)
+        self.out2.append(out2)
+        return len(self.kind) - 1
+
+    def table(self, codes: set, negate: bool, ignore_case: bool) -> bytes:
+        if ignore_case:
+            codes = codes | {c ^ 32 for c in codes if 65 <= (c & ~32) <= 90}
+        key = (frozenset(codes), negate)
+        found = self.tables.get(key)
+        if found is None:
+            found = self.tables[key] = bytes((b in codes) != negate for b in range(256))
+        return found
+
+    def category(self, name) -> set:
+        sre = self.sre
+        sets = {sre.CATEGORY_DIGIT: set(range(48, 58)), sre.CATEGORY_SPACE: {9, 10, 11, 12, 13, 32},
+                sre.CATEGORY_WORD: {b for b in range(256) if self.CLASS[b] == 1}}
+        opposite = {sre.CATEGORY_NOT_DIGIT: sre.CATEGORY_DIGIT, sre.CATEGORY_NOT_SPACE: sre.CATEGORY_SPACE,
+                    sre.CATEGORY_NOT_WORD: sre.CATEGORY_WORD}
+        if name in opposite:
+            return set(range(256)) - sets[opposite[name]]
+        return sets[name]
+
+    def seq(self, items, nxt: int, ignore_case: bool) -> int:
+        """The first state of items, which go on to the state nxt (built from the end)."""
+        for op, av in reversed(list(items)):
+            nxt = self.item(op, av, nxt, ignore_case)
+        return nxt
+
+    def item(self, op, av, nxt: int, ignore_case: bool) -> int:
+        sre = self.sre
+        if op is sre.LITERAL or op is sre.NOT_LITERAL:
+            return self.new(0, self.table({av}, op is sre.NOT_LITERAL, ignore_case), nxt)
+        if op is sre.ANY:
+            return self.new(0, self.table({10}, True, False), nxt)
+        if op is sre.IN:
+            codes, negate = set(), False
+            for kind, value in av:
+                if kind is sre.NEGATE:
+                    negate = True
+                elif kind is sre.LITERAL:
+                    codes.add(value)
+                elif kind is sre.RANGE:
+                    codes.update(range(value[0], value[1] + 1))
+                elif kind is sre.CATEGORY:
+                    codes |= self.category(value)
+                else:
+                    raise LookupError(kind)
+            return self.new(0, self.table(codes, negate, ignore_case), nxt)
+        if op is sre.MAX_REPEAT or op is sre.MIN_REPEAT:
+            low, high, body = av
+            start = nxt
+            if high == sre.MAXREPEAT:
+                start = self.new(1, None, -1, nxt)
+                self.out1[start] = self.seq(body, start, ignore_case)
+            else:
+                for _ in range(high - low):
+                    start = self.new(1, None, self.seq(body, start, ignore_case), nxt)
+            for _ in range(low):
+                start = self.seq(body, start, ignore_case)
+            return start
+        if op is sre.SUBPATTERN:
+            _, add, remove, body = av
+            if (add | remove) & re.LOCALE:
+                raise LookupError(op)
+            ignore_case = (ignore_case or bool(add & re.IGNORECASE)) and not remove & re.IGNORECASE
+            return self.seq(body, nxt, ignore_case)
+        if op is sre.BRANCH:
+            starts = [self.seq(alternative, nxt, ignore_case) for alternative in av[1]]
+            start = starts.pop()
+            while starts:
+                start = self.new(1, None, starts.pop(), start)
+            return start
+        if op is sre.AT:
+            test = {sre.AT_BEGINNING: 0, sre.AT_BEGINNING_STRING: 0, sre.AT_END: 1, sre.AT_END_STRING: 1,
+                    sre.AT_BOUNDARY: 2, sre.AT_NON_BOUNDARY: 3}[av]
+            self.context = True
+            return self.new(2, test, nxt)
+        raise LookupError(op)
+
+    def reset(self) -> None:
+        self.ids: dict = {}
+        self.consume: list = []
+        self.accepting: list[bool] = []
+        self.initial: dict = {}
+        self.trans: dict = {}
+        self.stored = 0
+
+    def holds(self, test: int, prev: int, nxt: int) -> bool:
+        if test == 0:
+            return prev == 0
+        if test == 1:
+            return nxt == 0
+        if prev == 0 and nxt == 0:
+            return test == 3 and self.EMPTY_NON_BOUNDARY
+        return ((prev == 1) != (nxt == 1)) == (test == 2)
+
+    def state(self, kernel, prev: int, nxt: int) -> int | None:
+        """The automaton state for the states kernel between a byte of class prev and
+        one of class nxt; None when the budget is used up."""
+        kind, arg, out1, out2 = self.kind, self.arg, self.out1, self.out2
+        stack, seen, consume, accept = list(kernel), set(), [], False
+        while stack:
+            s = stack.pop()
+            if s in seen:
+                continue
+            seen.add(s)
+            k = kind[s]
+            if k == 0:
+                consume.append(s)
+            elif k == 1:
+                stack.append(out1[s])
+                if out2[s] >= 0:
+                    stack.append(out2[s])
+            elif k == 2:
+                if self.holds(arg[s], prev, nxt):
+                    stack.append(out1[s])
+            else:
+                accept = True
+        self.budget -= len(seen) + len(kernel)
+        if self.budget < 0:
+            self.spent = True
+            return None
+        key = (tuple(sorted(consume)), accept)
+        found = self.ids.get(key)
+        if found is None:
+            if len(self.consume) >= self.MAX_CACHE or self.stored > 4 * self.MAX_CACHE:
+                self.reset()
+            found = self.ids[key] = len(self.consume)
+            self.consume.append(key[0])
+            self.accepting.append(accept)
+            self.stored += len(key[0])
+        return found
+
+    def search(self, line: bytes) -> bool | None:
+        """True when the line has a match, else None."""
+        if not self.regular or self.spent:
+            return None
+        n = len(line)
+        context, cls = self.context, self.CLASS
+        nc = cls[line[0]] if n and context else 0
+        d = self.initial.get(nc)
+        if d is None:
+            d = self.state((self.start,), 0, nc)
+            if d is None:
+                return None
+            self.initial[nc] = d
+        accepting, trans, start, arg, out1 = self.accepting, self.trans, self.start, self.arg, self.out1
+        if accepting[d]:
+            return True
+        for i in range(n):
+            b = line[i]
+            if context:
+                nc = cls[line[i + 1]] if i + 1 < n else 0
+            key = (d << 10) | (b << 2) | nc
+            nd = trans.get(key)
+            if nd is None:
+                kernel = [out1[s] for s in self.consume[d] if arg[s][b]]
+                kernel.append(start)
+                if len(trans) >= self.MAX_CACHE:
+                    trans.clear()
+                nd = self.state(kernel, cls[b] if context else 0, nc)
+                if nd is None:
+                    return None
+                if trans is self.trans:
+                    trans[key] = nd
+                else:  # the cache was emptied, the state ids before are gone
+                    trans, accepting = self.trans, self.accepting
+            d = nd
+            if accepting[d]:
+                return True
+        return None
+
+
+'''
+
+
 def patch_grep(cowrie_root):
     """grep as GNU grep for the options bots use: -c prints the number of selected
     lines (name:count per file for several files; `grep -c processor /proc/cpuinfo`),
     -v inverts, -i ignores case, -q prints nothing; -m counts per file. The exit
     status is 0 for a selected line, 1 for none and 2 for an error (missing file,
     directory, invalid option), with -q a selected line wins over an error.
-    The empty string after the last newline is no line."""
+    The empty string after the last newline is no line. Lines are matched by
+    TpotGrepMatcher (GREP_MATCHER) in time that grows with the input: a pattern of
+    more than 512 characters is too big (exit 2), the first 64 KiB of a line are
+    matched and one grep reads at most 1 MiB."""
     path = cowrie_root / "src" / "cowrie" / "commands" / "fs.py"
+    replace_once(path, "class Command_grep(HoneyPotCommand):\n",
+                 GREP_MATCHER.lstrip("\n") + "class Command_grep(HoneyPotCommand):\n")
     replace_once(
         path,
         """    def grep_get_contents(self, filename: str, match: str) -> None:
@@ -1229,6 +1464,8 @@ def patch_grep(cowrie_root):
 """,
         """    count_only: bool = False
     invert: bool = False
+    tpot_matcher: TpotGrepMatcher | None = None
+    tpot_input_left: int = TpotGrepMatcher.MAX_INPUT
     ignore_case: bool = False
     quiet: bool = False
     failed: bool = False
@@ -1262,9 +1499,21 @@ def patch_grep(cowrie_root):
     )
     replace_once(
         path,
-        """        return re.compile(bmatch)
+        """    def compile_match(self, match: str) -> re.Pattern[bytes]:
+        bmatch = os.path.basename(match).replace('"', "").encode("utf8")
+        return re.compile(bmatch)
 """,
-        """        return re.compile(bmatch, re.IGNORECASE if self.ignore_case else 0)
+        """    def compile_match(self, match: str) -> TpotGrepMatcher:
+        if self.tpot_matcher is None:
+            if len(match) > TpotGrepMatcher.MAX_PATTERN:
+                raise TpotGrepMatcher.TooBig()
+            bmatch = os.path.basename(match).replace('"', "").encode("utf8")
+            try:
+                re.compile(bmatch, re.IGNORECASE if self.ignore_case else 0)
+                self.tpot_matcher = TpotGrepMatcher(bmatch, self.ignore_case)
+            except RecursionError:
+                raise TpotGrepMatcher.TooBig() from None
+        return self.tpot_matcher
 """,
     )
     replace_once(
@@ -1277,13 +1526,18 @@ def patch_grep(cowrie_root):
                 self.match_count += 1
                 self.writeBytes(line + b"\\n")
 """,
-        """        lines = contents.split(b"\\n")
+        """        contents = contents[: self.tpot_input_left]
+        self.tpot_input_left -= len(contents)
+        lines = contents.split(b"\\n")
         if lines[-1] == b"":
             lines.pop()
         for line in lines:
             if self.max_count is not None and self.match_count >= self.max_count:
                 break
-            if (matcher.search(line) is not None) != self.invert:
+            found = matcher.search(line[: matcher.MAX_LINE]) is not None
+            if matcher.spent:
+                break
+            if found != self.invert:
                 self.matched = True
                 self.match_count += 1
                 if not self.count_only and not self.quiet:
@@ -1341,6 +1595,19 @@ def patch_grep(cowrie_root):
     )
     replace_once(
         path,
+        """            self.compile_match(self.match)
+        except re.error:
+""",
+        """            self.compile_match(self.match)
+        except TpotGrepMatcher.TooBig:
+            self.errorWrite("grep: regular expression too big\\n")
+            self.exit(2)
+            return
+        except re.error:
+""",
+    )
+    replace_once(
+        path,
         """            self.interactive = True
             return
 
@@ -1364,7 +1631,7 @@ def patch_grep(cowrie_root):
         """                    self.grep_application(f.read(), self.match)
         self.exit(0 if self.matched else 1)
 """,
-        """                    self.grep_application(f.read(), self.match)
+        """                    self.grep_application(f.read(self.tpot_input_left), self.match)
             if self.count_only:
                 self.write_count()
         self.exit(self.exit_status())
