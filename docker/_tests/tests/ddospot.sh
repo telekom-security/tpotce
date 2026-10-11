@@ -665,8 +665,10 @@ run_probe_with_retries() {
 }
 
 # check_log_events <log-dir> <check> <persona> <timeout>: scanner (one
-# scanner event in each pot log, no targets.log lines), target_start (one
-# start event in targets.log) or target_end (one start and one end event)
+# scanner event in each pot log, verified false, no targets.log lines),
+# dns_tcp (dnspot.log has a scanner event over TCP with verified true and
+# one over UDP with verified false), target_start (one start event in
+# targets.log) or target_end (one start and one end event)
 check_log_events() {
   python3 - "$@" <<'PY'
 import json
@@ -696,9 +698,27 @@ def scanner():
         event = lines[0]
         if event.get("role") != "scanner" or not event.get("src_ip") or event.get("persona") != persona:
             return f"{name}: expected role scanner, src_ip and persona {persona}, got {event}"
+        if event.get("proto") != "udp" or event.get("verified") is not False:
+            return f"{name}: expected proto udp and verified false, got {event}"
     target_lines = events("targets.log")
     if target_lines:
         return f"targets.log: expected no events, got {len(target_lines)}"
+    return None
+
+
+def dns_tcp():
+    lines = events("dnspot.log")
+    by_proto = {}
+    for event in lines:
+        if event.get("role") != "scanner" or event.get("persona") != persona:
+            return f"dnspot.log: expected role scanner and persona {persona}, got {event}"
+        by_proto.setdefault(event.get("proto"), []).append(event)
+    if sorted(by_proto) != ["tcp", "udp"] or any(len(group) != 1 for group in by_proto.values()):
+        return f"dnspot.log: expected one event over udp and one over tcp, got {lines}"
+    if by_proto["tcp"][0].get("verified") is not True:
+        return f"dnspot.log: expected verified true over tcp, got {by_proto['tcp'][0]}"
+    if by_proto["udp"][0].get("verified") is not False:
+        return f"dnspot.log: expected verified false over udp, got {by_proto['udp'][0]}"
     return None
 
 
@@ -715,6 +735,7 @@ def target(wanted):
 
 CHECKS = {
     "scanner": scanner,
+    "dns_tcp": dns_tcp,
     "target_start": lambda: target(["attack_start"]),
     "target_end": lambda: target(["attack_start", "attack_end"]),
 }
@@ -732,7 +753,7 @@ def run_check():
 while time.monotonic() < deadline:
     error = run_check()
     if error is None:
-        if check == "scanner":
+        if check in ("scanner", "dns_tcp"):
             # no second event may follow the first one
             time.sleep(0.5)
             error = run_check()
@@ -809,6 +830,10 @@ check_refused() {
   run_dns_probe udp refused A IN 1 example.org || test_die "DNS did not answer REFUSED"
   run_dns_probe tcp version TXT CH 1 VERSION.bind || test_die "DNS over TCP did not answer on ${TEST_BIND_IP}:${MAPPED_DNS_TCP_PORT}"
   test_ok "REFUSED for class IN with recursion off, version.bind over TCP"
+  test_info "Waiting for the DNS scanner events over UDP and TCP"
+  sleep 3
+  check_log_events "${LOG_DIR}" dns_tcp "${RUN_PERSONA}" "${TEST_TIMEOUT}" || test_die "DNS scanner events over UDP and TCP are not as expected"
+  test_ok "DNS scanner over TCP verified, over UDP not verified"
 }
 
 check_ssdp_mx() {
@@ -845,8 +870,9 @@ check_persona_changes() {
 check_recursion() {
   local attempt
 
-  # The upstream counts as reachable after its first probe, which runs at
-  # the start and then once a minute; a new container probes again at once
+  # The upstream counts as reachable after its first good probe. Probes run
+  # at the start, then every 10 s while the upstream does not answer and
+  # every 60 s while it does; a new container probes again at once
   for attempt in 1 2 3; do
     start_run "recursion-${attempt}" on
     test_info "Checking DNS recursion (needs internet access)"
