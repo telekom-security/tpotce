@@ -90,6 +90,24 @@ if textual:
             warnings = ["Kibana stops."] if key == "sensor" else []
             return editions.SwitchPlan(choice, "STANDARD", "/x/keep.yml", warnings)
 
+        def retention_status(self):
+            from tpotctl import elastic
+            return getattr(self, "_retention", elastic.Status("90", "90", "managed"))
+
+        def retention_plan(self, value, force=False):
+            from tpotctl import elastic
+            self.calls.append(("plan", value, force))
+            doomed = [elastic.Index("logstash-2026.08.01", 0, 1200, 5 * 2 ** 20)] if elastic.shortens("90", value) else []
+            action = "update" if value != "90" else "keep"
+            return getattr(self, "_plan", elastic.Plan(elastic.Decision(action, {} if action == "update" else None,
+                                                                         "90", True), doomed, True))
+
+        def apply_retention(self, plan):
+            self.calls.append(("apply", plan.decision.action))
+
+        def set_retention(self, value):
+            self.calls.append(("set", value))
+
     class FakeEngine:
         seen = []
 
@@ -465,7 +483,7 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause(0.3)
             self.assertEqual([p[0] for p in app.panes], [p[0] for p in tapp.PANES])     # nothing hidden
-            for key in ("status", "sensors", "images", "checks", "update"):
+            for key in ("status", "sensors", "images", "checks", "elastic", "update"):
                 with self.subTest(page=key):
                     self.assertIsInstance(app.query_one(f"#{key}"), tapp.LockedPane)
                     self.assertIn("needs a T-Pot host", str(app.query_one(f"#{key}").query_one(".locked-why").render()))
@@ -481,7 +499,154 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             await pilot.pause(0.3)
             self.assertIn("SENSOR", str(app.query_one("#users").query_one(".locked-why").render()))
             self.assertIn("HIVE", str(app.query_one("#sensors").query_one(".locked-why").render()))
+            self.assertIn("SENSOR", str(app.query_one("#elastic").query_one(".locked-why").render()))
             self.assertNotIsInstance(app.query_one("#status"), tapp.LockedPane)
+
+    async def test_elastic_shorter_retention_asks_with_the_indices(self):
+        backend = FakeBackend()
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.2)
+            app.goto("elastic")
+            await pilot.pause(0.3)
+            self.assertIn("90 days", str(app.query_one("#elastic-status").render()))
+            app.query_one("#elastic-value").value = "30"
+            await pilot.click("#elastic-set")
+            await pilot.pause(0.3)
+            self.assertIsInstance(app.screen, ConfirmDialog)
+            self.assertIs(app.focused, app.screen.query_one("#no"))
+            self.assertIn("logstash-2026.08.01", str(app.screen.query_one(".dialog").render()) +
+                          "".join(str(w.render()) for w in app.screen.query("Static")))
+            await pilot.click("#no")
+            await pilot.pause(0.2)
+            self.assertNotIn(("set", "30"), backend.calls)
+            await pilot.click("#elastic-set")
+            await pilot.pause(0.3)
+            await pilot.click("#yes")
+            await pilot.pause(0.3)
+        self.assertIn(("set", "30"), backend.calls)
+        self.assertIn(("apply", "update"), backend.calls)
+
+    async def test_elastic_longer_retention_needs_no_question(self):
+        backend = FakeBackend()
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.2)
+            app.goto("elastic")
+            await pilot.pause(0.3)
+            app.query_one("#elastic-value").value = "365"
+            await pilot.click("#elastic-set")
+            await pilot.pause(0.3)
+            self.assertNotIsInstance(app.screen, ConfirmDialog)
+        self.assertIn(("set", "365"), backend.calls)
+
+    async def test_elastic_foreign_policy_offers_take_over(self):
+        from tpotctl import elastic
+        backend = FakeBackend()
+        backend._retention = elastic.Status("30", "120", "foreign")
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.2)
+            app.goto("elastic")
+            await pilot.pause(0.3)
+            self.assertFalse(app.query_one("#elastic-adopt").disabled)
+            self.assertIn("Kibana", str(app.query_one("#elastic-status").render()))
+            await pilot.click("#elastic-adopt")
+            await pilot.pause(0.3)
+        self.assertIn(("set", "120"), backend.calls)
+
+    async def test_elastic_shortening_without_es_warns(self):
+        from tpotctl import elastic
+        backend = FakeBackend()
+        backend._plan = elastic.Plan(elastic.Decision("keep", None, "", False), [], False)
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.2)
+            app.goto("elastic")
+            await pilot.pause(0.3)
+            app.query_one("#elastic-value").value = "7"
+            await pilot.click("#elastic-set")
+            await pilot.pause(0.3)
+            self.assertIsInstance(app.screen, ConfirmDialog)
+            self.assertIn("next start", "".join(str(w.render()) for w in app.screen.query("Static")))
+
+    def retention_checkout(self):
+        """A checkout of env.example with TPOT_ES_RETENTION=90, the Settings page reads its .env."""
+        from tpotctl.tests.test_settings import make_checkout
+        repo = make_checkout(self)
+        path = os.path.join(repo, ".env")
+        with open(path, encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertIn("TPOT_ES_RETENTION=30\n", text)
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(text.replace("TPOT_ES_RETENTION=30\n", "TPOT_ES_RETENTION=90\n", 1))
+        return repo
+
+    async def save_retention(self, backend, value):
+        """The Settings page: TPOT_ES_RETENTION to value, then Save."""
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        pilot_cm = app.run_test(size=(150, 50))
+        pilot = await pilot_cm.__aenter__()
+        self.addAsyncCleanup(pilot_cm.__aexit__, None, None, None)
+        await pilot.pause(0.3)
+        app.goto("settings")
+        await pilot.pause(0.4)
+        app.query_one("#set-TPOT_ES_RETENTION").value = value
+        await pilot.pause(0.3)
+        await pilot.click("#settings-save")
+        await pilot.pause(0.4)
+        return app, pilot
+
+    def settings_backend(self, repo):
+        from tpotctl import settings
+
+        class Backend(FakeBackend):
+            def settings(self):
+                return settings.load(repo)
+
+        return Backend()
+
+    async def test_settings_shorter_retention_shows_the_indices_first(self):
+        from tpotctl import settings
+        repo = self.retention_checkout()
+        backend = self.settings_backend(repo)
+        app, pilot = await self.save_retention(backend, "30")
+        self.assertIsInstance(app.screen, ConfirmDialog)
+        self.assertIn("logstash-2026.08.01", "".join(str(w.render()) for w in app.screen.query("Static")))
+        self.assertEqual(settings.load(repo).values["TPOT_ES_RETENTION"], "90")     # nothing written yet
+        await pilot.click("#no")
+        await pilot.pause(0.3)
+        self.assertEqual(settings.load(repo).values["TPOT_ES_RETENTION"], "90")
+        self.assertNotIn(("apply", "update"), backend.calls)
+        await pilot.click("#settings-save")
+        await pilot.pause(0.4)
+        await pilot.click("#yes")
+        await pilot.pause(0.4)
+        self.assertEqual(settings.load(repo).values["TPOT_ES_RETENTION"], "30")
+        self.assertIn(("apply", "update"), backend.calls)
+        self.assertNotIsInstance(app.screen, ConfirmDialog)        # applied: no restart needed
+
+    async def test_settings_shorter_retention_without_es_says_next_start(self):
+        from tpotctl import elastic, settings
+        repo = self.retention_checkout()
+        backend = self.settings_backend(repo)
+        backend._plan = elastic.Plan(elastic.Decision("keep", None, "", False), [], False)
+        app, pilot = await self.save_retention(backend, "30")
+        self.assertIsInstance(app.screen, ConfirmDialog)
+        self.assertIn("next start", "".join(str(w.render()) for w in app.screen.query("Static")))
+        await pilot.click("#no")
+        await pilot.pause(0.3)
+        self.assertEqual(settings.load(repo).values["TPOT_ES_RETENTION"], "90")
+        self.assertNotIn("apply", [call[0] for call in backend.calls if isinstance(call, tuple)])
+
+    async def test_settings_longer_retention_saves_and_applies(self):
+        from tpotctl import settings
+        repo = self.retention_checkout()
+        backend = self.settings_backend(repo)
+        app, pilot = await self.save_retention(backend, "365")
+        self.assertNotIsInstance(app.screen, ConfirmDialog)
+        self.assertEqual(settings.load(repo).values["TPOT_ES_RETENTION"], "365")
+        self.assertIn(("apply", "update"), backend.calls)
 
     async def test_palette_host_action_off_host_only_tells(self):
         from tpotctl.commands import TpotCommands
@@ -511,7 +676,8 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
 
     def test_every_menu_pane_has_a_command(self):
         commands = {"status": "status", "edition": "edition", "settings": "env", "llm": "llm", "users": "users",
-                    "sensors": "sensors", "images": "images", "checks": "check", "update": "update"}
+                    "sensors": "sensors", "images": "images", "checks": "check", "elastic": "elastic",
+                    "update": "update"}
         help_text = cli.build_parser().format_help()
         for key, _title, _cls, _host in tapp.PANES:
             self.assertIn(key, commands, f"menu pane {key} needs a tpot command")

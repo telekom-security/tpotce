@@ -20,6 +20,7 @@ _UNICODE = {
     "machine": "▣", "load": "≈", "last_attack": "◷",
     "pane_status": "⬢", "pane_edition": "⬢", "pane_settings": "⬢", "pane_users": "⬢",
     "pane_sensors": "⬢", "pane_images": "⬢", "pane_update": "⬢", "pane_llm": "⬢", "pane_checks": "⬢",
+    "pane_elastic": "⬢",
 }
 
 _NERD = dict(_UNICODE, **{
@@ -31,6 +32,7 @@ _NERD = dict(_UNICODE, **{
     "pane_status": "\U000F056E", "pane_edition": "\U000F06E1", "pane_settings": "\U000F0493",
     "pane_users": "\U000F0849", "pane_sensors": "\U000F0003", "pane_images": "\U000F0868",
     "pane_update": "\U000F006F", "pane_llm": "\U000F06A9", "pane_checks": "\U000F08A8",
+    "pane_elastic": "\U000F01BC",
 })
 
 _ASCII = {
@@ -41,6 +43,7 @@ _ASCII = {
     "machine": "host", "load": "load", "last_attack": "",
     "pane_status": "*", "pane_edition": "*", "pane_settings": "*", "pane_users": "*",
     "pane_sensors": "*", "pane_images": "*", "pane_update": "*", "pane_llm": "*", "pane_checks": "*",
+    "pane_elastic": "*",
 }
 
 SETS: Dict[str, Dict[str, str]] = {"unicode": _UNICODE, "nerd": _NERD, "ascii": _ASCII}
