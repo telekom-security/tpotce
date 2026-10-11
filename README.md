@@ -1054,11 +1054,14 @@ All persistent log files from the honeypots, tools and T-Pot related services ar
 ## Log Persistence
 All log data is stored in the [T-Pot Data Folder](#t-pot-data-folder) and will be persisted for the number of cycles set for `TPOT_PERSISTENCE_CYCLES=<1-999>` in the T-Pot configuration file `~/tpotce/.env`. It defaults to 30.
 <br>
-Elasticsearch indices are handled by the `tpot` Index Lifecycle Policy which can be adjusted directly in Kibana (make sure to "Include managed system policies").
+Elasticsearch keeps its events for the number of days set for `TPOT_ES_RETENTION=<1-3650|off>` in `~/tpotce/.env`, it defaults to 30. This offers a good balance between storage and speed. T-Pot sets the Index Lifecycle Policy `tpot` accordingly on every start of a HIVE, `off` keeps the events forever (mind the disk).
+<br>
+Change it on the *Elastic* page of the T-Pot Manager or with `tpot elastic retention DAYS`; a shorter time lists the indices it deletes and asks first. The Settings page does the same when you save a shorter retention.
+<br>
+A policy that was changed in Kibana (make sure to "Include managed system policies") is detected and left alone, T-Pot warns about it. `tpot elastic retention --adopt` takes its time over into `.env`, `--force` applies `.env` to it.
 ![IndexManagement1](doc/kibana_b.png)
-<br><br>
-
-By default the `tpot` Index Lifecycle Policy keeps the indices for 30 days. This offers a good balance between storage and speed. However you may adjust the policy to your needs.
+<br>
+`update.sh` takes the retention of an existing policy over into `.env` once, so an update keeps the time you set in Kibana before.
 ![IndexManagement2](doc/kibana_c.png)
 <br><br>
 
