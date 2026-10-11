@@ -709,8 +709,8 @@ On the T-Pot Landing Page just click on `Elasticvue` and you will be forwarded t
 | `tpot ps [--watch [SECONDS]]` | *Status* | T-Pot host | containers with status and ports, `dps` / `dpsw` are short for it |
 | `tpot images` | *Images* | T-Pot host | Docker images, `dim` is short for it |
 | `tpot start` / `stop` / `restart` | *Status* | T-Pot host | `sudo systemctl … tpot.service` |
-| `tpot update [OPTIONS]` | *Update & backup* | T-Pot host | runs `~/tpotce/update.sh` with your options, i.e. `tpot update -y`; the menu runs it with its phases and log |
-| `tpot restore [OPTIONS]` | *Update & backup* | T-Pot host | runs `~/tpotce/restore.sh` with your options; the menu lets you pick the archive and its parts |
+| `tpot update [OPTIONS]` | *Update & backup* | T-Pot host | runs `~/tpotce/update.sh` with your options, i.e. `tpot update -y`; the menu runs it with its phases and log, after `--check-data-loss` and a question if the update would [lose data](#loss-of-data) |
+| `tpot restore [OPTIONS]` | *Update & backup* | T-Pot host | runs `~/tpotce/restore.sh` with your options; the menu lets you pick the archive and its parts and asks before it replaces `data/` |
 | `tpot edition [list]` / `tpot edition set EDITION` | *Edition & services* | every host (switching: T-Pot host) | the editions, and switching to another one: T-Pot stops, `docker-compose.yml` is kept in `~/tpot_backups`, the edition takes its place, T-Pot starts again |
 | `tpot customize [OPTIONS]` | *Edition & services*, `c` | every host | the [customizer](#customize-t-pot-honeypots-and-services) |
 | `tpot env [list [--all] [--show-secrets]]` | *Settings* (*All settings*) | every host | the [settings](#t-pot-config-file) in `.env` that matter for this T-Pot, secrets masked |
@@ -886,6 +886,20 @@ still leaves 10% of the partition free - `~/tpot_backups` usually sits on the sa
 your honeypot data. If that does not work out it drops the oldest archives; if even that does not
 fit it stops before touching anything, leaving T-Pot up and running rather than filling the disk.
 That includes `--full`: it is never quietly swapped for the regular backup.
+
+### Loss of Data
+`update.sh` never deletes data for good without your confirmation. Data counts as lost when the backup of the same run cannot bring it back: the Elasticsearch data of an upgrade without `--full`, older backups that are deleted to make room for the new one, and images that cannot be pulled again. Before each of these the script asks (default no) and names what goes. Regular rotation of the backups, the rollback of your checkout and the rewrite of `.env` and the compose file are no loss of data, they are only mentioned.
+
+`-y` confirms the update, it does not confirm a loss of data. Without a terminal only `--accept-data-loss` does:
+```
+./update.sh -y --accept-data-loss
+```
+If you decline (or cannot answer):
+ - older backups stay where they are, the update stops before it touches anything with exit code 5 and T-Pot keeps running. Free some space, or confirm.
+ - the Elasticsearch upgrade is rolled back to the state before the update and the run ends with exit code 5. Run it with `--full` to have the data in the backup.
+ - images that cannot be pulled again (the registry has no image with the same digest) are kept, and the update goes on.
+
+`update.sh -y --check-data-loss` lists what the run would lose and changes nothing, exit code 3 means it found something. The T-Pot Manager runs this check before an update from its menu and asks first.
 
 ### Elastic Stack Upgrades
 When a release ships a newer Elastic Stack, Elasticsearch and Kibana upgrade their data in
@@ -1066,9 +1080,11 @@ All persistent log files from the honeypots, tools and T-Pot related services ar
 ## Log Persistence
 All log data is stored in the [T-Pot Data Folder](#t-pot-data-folder) and will be persisted for the number of cycles set for `TPOT_PERSISTENCE_CYCLES=<1-999>` in the T-Pot configuration file `~/tpotce/.env`. It defaults to 30.
 <br>
-Elasticsearch keeps its events for the number of days set for `TPOT_ES_RETENTION=<1-3650|off>` in `~/tpotce/.env`, it defaults to 30. This offers a good balance between storage and speed. T-Pot sets the Index Lifecycle Policy `tpot` accordingly on every start of a HIVE, `off` keeps the events forever (mind the disk).
+Elasticsearch keeps its events for the number of days set for `TPOT_ES_RETENTION=<1-3650|off>` in `~/tpotce/.env`, it defaults to 30. This offers a good balance between storage and speed. T-Pot sets the Index Lifecycle Policy `tpot` accordingly on every start of a HIVE, `off` keeps the events forever (mind the disk). An empty value leaves an existing policy alone.
 <br>
-Change it on the *Elastic* page of the T-Pot Manager or with `tpot elastic retention DAYS`; a shorter time lists the indices it deletes and asks first. The Settings page does the same when you save a shorter retention.
+T-Pot never shortens the retention by itself. Change it on the *Elastic* page of the T-Pot Manager or with `tpot elastic retention DAYS`; a shorter time lists the indices it deletes and asks first, `-y` does not confirm it and without a terminal only `--accept-data-loss` does. The Settings page does the same when you save a shorter retention.
+<br>
+A shorter value that gets into `.env` any other way (by hand, `tpot env set`, `restore.sh`) waits: T-Pot warns about it on every start and keeps the policy as it is until `tpot elastic retention --force` or the *Elastic* page applies it, both ask first. If the policy is missing, T-Pot creates it with `off` (keep everything) when `TPOT_ES_RETENTION` is empty or when the value would delete older events that exist, in that case the value waits as well.
 <br>
 A policy that was changed in Kibana (make sure to "Include managed system policies") is detected and left alone, T-Pot warns about it (`tpot elastic status` shows both). `tpot elastic retention --adopt` keeps the policy and writes its days into `.env`, `tpot elastic retention --force` applies the `.env` value to it (`--force DAYS` the given value), both show first what a shorter time deletes. A changed policy that keeps the events just as long as `.env` says is adopted on the next start.
 ![IndexManagement1](doc/kibana_b.png)
