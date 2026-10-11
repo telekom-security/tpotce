@@ -435,7 +435,7 @@ class RestoreShTest(Harness):
 CURL = ('#!/bin/sh\necho "curl $*" >> "$HOME/curl_calls"\nout=""; put=""; prev=""\n'
         'for a in "$@"; do\n  [ "$prev" = "-o" ] && out="$a"\n'
         '  [ "$prev" = "-X" ] && [ "$a" = "PUT" ] && put=1\n  prev="$a"\ndone\n'
-        'case "$*" in\n  *_ilm/policy/tpot*)\n'
+        'case "$*" in\n  *api/status*) [ -e "$HOME/kibana_down" ] && exit 7; exit 0 ;;\n  *_ilm/policy/tpot*)\n'
         '    if [ -n "$put" ]; then echo "PUT $*" >> "$HOME/puts"; exit 0; fi\n'
         '    [ -f "$HOME/current_policy.json" ] || exit 22\n'
         '    [ -n "$out" ] && cat "$HOME/current_policy.json" > "$out"; exit 0 ;;\nesac\nexit 0\n')
@@ -547,8 +547,9 @@ class RestoreRetentionTest(RestoreScriptHarness):
         if current is not None:
             policy = ilm_policy(None if current == "none" else current)
             self.write("current_policy.json", json.dumps({"tpot": {"version": 3, "policy": policy}}))
+        policy = archived if isinstance(archived, dict) else ilm_policy(archived)
         archive = make_backup(self.home, {"MANIFEST": MANIFEST, "elastic/ilm_policy_tpot.json":
-                                          json.dumps({"policy": ilm_policy(archived)})})
+                                          json.dumps({"policy": policy})})
         script = (f"myARCHIVE='{archive}' myDO_ELASTIC=1 myKIBANA_TIMEOUT=0 myACCEPT_LOSS={'1' if accept else ''}\n"
                   "fuTMPDIR; fuTOC\nfuDO_ELASTIC; echo \"rc=$?\"\necho \"failed=${myFAILED}\"\n"
                   'for myI in "${myWARNED[@]}"; do echo "warned=${myI}"; done\n')
@@ -603,6 +604,50 @@ class RestoreRetentionTest(RestoreScriptHarness):
                 self.assertEqual(self.puts(), "", out)
                 self.assertTrue(any(line.startswith("WARN: ") and "30 days" in line for line in out.splitlines()),
                                 out)
+
+    def test_a_policy_that_deletes_but_not_in_whole_days_asks(self):
+        for min_age in ("36h", "0d", "12h", "1000000s"):
+            with self.subTest(min_age=min_age):
+                out = self.elastic("365d", min_age)
+                self.assertEqual(self.puts(), "", out)
+                self.assertIn("WARN: The ILM policy of the archive deletes events, but not after whole days "
+                              f"(min_age {min_age}): restoring it may delete older events right away.", out)
+                self.assertIn("--accept-data-loss confirms it, -y does not", out)
+                self.assertIn("warned=elastic:", out)
+
+    def test_a_policy_that_deletes_but_not_in_whole_days_goes_back_with_accept(self):
+        out = self.elastic("365d", "36h", accept=True)
+        self.assertIn("PUT", self.puts(), out)
+        self.assertIn("(confirmed with --accept-data-loss)", out)
+
+    def test_a_policy_that_does_not_delete_goes_back_without_asking(self):
+        no_action = {"phases": {"hot": {"min_age": "0ms", "actions": {}},
+                                "delete": {"min_age": "1d", "actions": {}}}}
+        for archived in (None, no_action):
+            with self.subTest(archived=archived):
+                if os.path.exists(os.path.join(self.home, "puts")):
+                    os.remove(os.path.join(self.home, "puts"))
+                out = self.elastic("365d", archived)
+                self.assertIn("PUT", self.puts(), out)
+                self.assertNotIn("WARN", out)
+
+    def test_a_longer_policy_goes_back_without_asking(self):
+        out = self.elastic("365d", "400d")
+        self.assertIn("PUT", self.puts(), out)
+        self.assertNotIn("WARN", out)
+
+    def test_kibana_down_names_the_loss_before_the_manual_put(self):
+        self.write("kibana_down", "")
+        for archived, warned in (("30d", True), ("36h", True), ("400d", False)):
+            with self.subTest(archived=archived):
+                out = self.elastic("365d", archived)
+                self.assertEqual(self.puts(), "", out)
+                lines = out.splitlines()
+                put = next(i for i, line in enumerate(lines) if "curl -X PUT" in line)
+                loss = [i for i, line in enumerate(lines) if line.startswith("WARN: ") and "delete" in line]
+                self.assertEqual(bool(loss), warned, out)
+                if warned:
+                    self.assertLess(loss[0], put, out)
 
     def test_the_whole_run_ends_with_a_warning(self):
         self.write("current_policy.json", json.dumps({"tpot": {"version": 3, "policy": ilm_policy("365d")}}))

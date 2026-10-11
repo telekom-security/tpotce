@@ -809,34 +809,79 @@ function fuWAIT_KIBANA () {
 	curl -s -f -o /dev/null "${myKIBANA}/api/status"
 }
 
-# May the ILM policy of the archive go back? Yes, unless it keeps the events less long than the
-# current one (or how long it keeps them cannot be read): putting it back deletes the older events
-# right away, which needs a confirmation (fuLOSS_CONFIRM). rc 0: put it back.
-function fuILM_CONFIRMED () {   # $1 = the policy of the archive
-	local myNEW="" myOLD="" myNOW="" myTEXT=""
-	if ! myNEW=$(fuPOLICY_VALUE "$1");
+# Does an ILM policy delete events at all: has its delete phase the delete action
+# (tpotctl.elastic._deletes, from the checkout, else from the working directory)? Prints its
+# min_age. rc 0: it deletes, 1: it does not, 2: it cannot be told (counts as deleting).
+function fuPOLICY_DELETES () {   # $1 = policy file ({"policy": ...})
+	local myOUT="" myRC=0
+	local myCODE='import json, sys
+from tpotctl import elastic
+data = json.load(open(sys.argv[1]))
+policy = data.get("policy", data) if isinstance(data, dict) else None
+if not isinstance(policy, dict):
+    sys.exit(2)
+if not elastic._deletes(policy):
+    sys.exit(3)
+print(policy["phases"]["delete"].get("min_age", ""))'
+	myOUT=$(cd "${myTPOTDIR}" 2>/dev/null && python3 -c "${myCODE}" "$1" 2>/dev/null) || myRC=$?
+	if [ "${myRC}" -ne 0 ] && [ "${myRC}" -ne 3 ];
 	  then
-	    myTEXT="How long the ILM policy of the archive keeps the events cannot be read here, putting it back may delete older events right away."
-	  else
-	    # GET wraps the policy in its name, value-of takes it as update.sh stores it
-	    if curl -s -f "${myES}/_ilm/policy/tpot" -o "${myTMPDIR}/ilm_current_raw.json" 2>/dev/null;
-	      then
-	        if python3 -c 'import json, sys; json.dump({"policy": json.load(open(sys.argv[1]))["tpot"]["policy"]}, open(sys.argv[2], "w"))' \
-	             "${myTMPDIR}/ilm_current_raw.json" "${myTMPDIR}/ilm_current.json" 2>/dev/null;
-	          then
-	            myOLD=$(fuPOLICY_VALUE "${myTMPDIR}/ilm_current.json")
-	        fi
-	        myNOW="the current one $(fuRETENTION_SHOWN "${myOLD}")"
-	      else
-	        myNOW="Elasticsearch has none now"
-	    fi
-	    fuRETENTION_SHORTER "${myOLD}" "${myNEW}" || return 0
-	    myTEXT="The ILM policy of the archive keeps the events $(fuRETENTION_SHOWN "${myNEW}"), ${myNOW}: putting it back deletes older events right away."
+	    myRC=0
+	    myOUT=$(python3 -c "${myCODE}" "$1" 2>/dev/null) || myRC=$?
 	fi
+	echo "${myOUT}"
+	case "${myRC}" in
+	  0) return 0 ;;
+	  3) return 1 ;;
+	  *) return 2 ;;
+	esac
+}
+
+# What putting the ILM policy of the archive back would delete, as the text of the question; empty
+# when it needs none: the policy deletes nothing, or it keeps the events whole days and not less
+# long than the current one (none, off or not in whole days: forever). Everything else asks.
+function fuILM_LOSS () {   # $1 = the policy of the archive
+	local myNEW="" myOLD="" myNOW="" myMINAGE="" myDELETES=0
+	myMINAGE=$(fuPOLICY_DELETES "$1") || myDELETES=$?
+	[ "${myDELETES}" -ne 1 ] || return 0
+	myNEW=$(fuPOLICY_VALUE "$1") || myNEW=""
+	case "${myNEW}" in
+	  ""|off|*[!0-9]*)
+	    if [ "${myDELETES}" -eq 0 ];
+	      then
+	        echo "The ILM policy of the archive deletes events, but not after whole days (min_age ${myMINAGE}): restoring it may delete older events right away."
+	      else
+	        echo "How long the ILM policy of the archive keeps the events cannot be read here, putting it back may delete older events right away."
+	    fi
+	    return 0 ;;
+	esac
+	# GET wraps the policy in its name, value-of takes it as update.sh stores it
+	if curl -s -f --connect-timeout 5 -m 30 "${myES}/_ilm/policy/tpot" -o "${myTMPDIR}/ilm_current_raw.json" 2>/dev/null;
+	  then
+	    if python3 -c 'import json, sys; json.dump({"policy": json.load(open(sys.argv[1]))["tpot"]["policy"]}, open(sys.argv[2], "w"))' \
+	         "${myTMPDIR}/ilm_current_raw.json" "${myTMPDIR}/ilm_current.json" 2>/dev/null;
+	      then
+	        myOLD=$(fuPOLICY_VALUE "${myTMPDIR}/ilm_current.json")
+	    fi
+	    myNOW="the current one $(fuRETENTION_SHOWN "${myOLD}")"
+	  else
+	    myNOW="Elasticsearch has none now"
+	fi
+	fuRETENTION_SHORTER "${myOLD}" "${myNEW}" || return 0
+	echo "The ILM policy of the archive keeps the events $(fuRETENTION_SHOWN "${myNEW}"), ${myNOW}: putting it back deletes older events right away."
+}
+
+# May the ILM policy of the archive go back? Without a loss of data (fuILM_LOSS) yes, otherwise only
+# once that is confirmed (fuLOSS_CONFIRM). rc 0: put it back.
+function fuILM_CONFIRMED () {   # $1 = the policy of the archive
+	local myTEXT=""
+	myTEXT=$(fuILM_LOSS "$1")
+	[ -n "${myTEXT}" ] || return 0
 	fuLOSS_CONFIRM ilm "${myTEXT}" "Put the ILM policy of the archive back?"
 }
 
 function fuDO_ELASTIC () {
+	local myTEXT=""
 	local myWAIT=0
 	local myOBJ=0
 	local myKEEP=""
@@ -866,6 +911,11 @@ function fuDO_ELASTIC () {
 	    mkdir -p "${myKEEP}" && cp -a "${myTMPDIR}/elastic/." "${myKEEP}/" 2>/dev/null
 	    fuUI_HINT "Kibana did not come up in ${myWAIT}s. The files are in ${myKEEP}, run these once it does:"
 	    fuUI_HINT "  curl -X POST '${myKIBANA}/api/saved_objects/_import?overwrite=true' -H 'kbn-xsrf: true' --form file=@${myKEEP}/kibana_export.ndjson"
+	    if [ -s "${myTMPDIR}/elastic/ilm_policy_tpot.json" ];
+	      then
+	        myTEXT=$(fuILM_LOSS "${myTMPDIR}/elastic/ilm_policy_tpot.json")
+	        [ -z "${myTEXT}" ] || fuUI_WARN "${myTEXT} The PUT below does that, run it only if you accept it."
+	    fi
 	    fuUI_HINT "  curl -X PUT '${myES}/_ilm/policy/tpot' -H 'Content-Type: application/json' -d @${myKEEP}/ilm_policy_tpot.json"
 	    return 1
 	fi
