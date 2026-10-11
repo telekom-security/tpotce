@@ -883,9 +883,11 @@ hand ahead of an update.
 Backups rotate: the last ten regular and the last two `--full` archives are kept, counted
 separately, and the newest is never removed. Before writing, the script checks that the archive
 still leaves 10% of the partition free - `~/tpot_backups` usually sits on the same filesystem as
-your honeypot data. If that does not work out it drops the oldest archives; if even that does not
-fit it stops before touching anything, leaving T-Pot up and running rather than filling the disk.
-That includes `--full`: it is never quietly swapped for the regular backup.
+your honeypot data. If that does not work out the oldest archives would have to go: that deletes
+backups for good, so it only happens after you confirm it (see [Loss of Data](#loss-of-data)).
+Without a confirmation the script stops before touching anything and deletes nothing, with exit
+code 5, leaving T-Pot up and running rather than filling the disk. That includes `--full`: it is
+never quietly swapped for the regular backup.
 
 ### Loss of Data
 `update.sh` never deletes data for good without your confirmation. Data counts as lost when the backup of the same run cannot bring it back: the Elasticsearch data of an upgrade without `--full`, older backups that are deleted to make room for the new one, and images that cannot be pulled again. Before each of these the script asks (default no) and names what goes. Regular rotation of the backups, the rollback of your checkout and the rewrite of `.env` and the compose file are no loss of data, they are only mentioned.
@@ -896,10 +898,10 @@ That includes `--full`: it is never quietly swapped for the regular backup.
 ```
 If you decline (or cannot answer):
  - older backups stay where they are, the update stops before it touches anything with exit code 5 and T-Pot keeps running. Free some space, or confirm.
- - the Elasticsearch upgrade is rolled back to the state before the update and the run ends with exit code 5. Run it with `--full` to have the data in the backup.
- - images that cannot be pulled again (the registry has no image with the same digest) are kept, and the update goes on.
+ - the Elasticsearch upgrade does not happen: the checkout and your configuration are rolled back, the Elasticsearch data was never touched, T-Pot stays stopped and the run ends with exit code 5. Run it with `--full` to have the data in the backup (with the default data path; with another `TPOT_DATA_PATH` it still asks).
+ - images that cannot be pulled again are kept, and the update goes on. An image can be pulled again only if the registry has an image with the same digest; any other, i.e. one built here, is only removed after you confirm it.
 
-`update.sh -y --check-data-loss` lists what the run would lose and changes nothing, exit code 3 means it found something. The T-Pot Manager runs this check before an update from its menu and asks first.
+`update.sh -y --check-data-loss` lists what the run would lose and changes nothing (a `git fetch` at most), exit code 3 means it found something. The T-Pot Manager runs this check before an update from its menu and asks first.
 
 ### Elastic Stack Upgrades
 When a release ships a newer Elastic Stack, Elasticsearch and Kibana upgrade their data in
@@ -915,8 +917,11 @@ the one of the release and, if they differ,
    then. The checkout and your configuration are put back to the state before the update, nothing
    was pulled, and T-Pot is left stopped.
  - warns at 85% and more.
- - warns if the backup of the run does not hold `data/elk/data`, and tells you how to copy it while
-   T-Pot is still stopped.
+ - asks if the backup of the run does not hold `data/elk/data` (default no), and tells you how to
+   copy it while T-Pot is still stopped. A no, or no terminal without `--accept-data-loss`, puts the
+   checkout and your configuration back, leaves T-Pot stopped and ends with exit code 5. `--full`
+   with the default data path puts the data into the backup, and then there is no question; with
+   another `TPOT_DATA_PATH` it still asks. `-y` does not answer it.
 
 The first start after the upgrade takes longer than usual, give it a few minutes. To go back, stop
 T-Pot and restore the `--full` archive of that update with `restore.sh -f <archive> -y`: it replaces
@@ -1084,7 +1089,7 @@ Elasticsearch keeps its events for the number of days set for `TPOT_ES_RETENTION
 <br>
 T-Pot never shortens the retention by itself. Change it on the *Elastic* page of the T-Pot Manager or with `tpot elastic retention DAYS`; a shorter time lists the indices it deletes and asks first, `-y` does not confirm it and without a terminal only `--accept-data-loss` does. The Settings page does the same when you save a shorter retention.
 <br>
-A shorter value that gets into `.env` any other way (by hand, `tpot env set`, `restore.sh`) waits: T-Pot warns about it on every start and keeps the policy as it is until `tpot elastic retention --force` or the *Elastic* page applies it, both ask first. If the policy is missing, T-Pot creates it with `off` (keep everything) when `TPOT_ES_RETENTION` is empty or when the value would delete older events that exist, in that case the value waits as well.
+A shorter value that gets into `.env` any other way (by hand, `tpot env set`, `restore.sh`) waits: T-Pot warns about it on every start and keeps the policy as it is until `tpot elastic retention --force` or the *Elastic* page applies it, both ask first. If the policy is missing and `TPOT_ES_RETENTION` is empty, T-Pot creates it to keep everything (`off`). If the value would delete older events that exist, the policy is created to keep everything as well and the value waits.
 <br>
 A policy that was changed in Kibana (make sure to "Include managed system policies") is detected and left alone, T-Pot warns about it (`tpot elastic status` shows both). `tpot elastic retention --adopt` keeps the policy and writes its days into `.env`, `tpot elastic retention --force` applies the `.env` value to it (`--force DAYS` the given value), both show first what a shorter time deletes. A changed policy that keeps the events just as long as `.env` says is adopted on the next start.
 ![IndexManagement1](doc/kibana_b.png)
