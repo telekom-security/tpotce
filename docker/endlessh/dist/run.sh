@@ -2,7 +2,8 @@
 #
 # Starts Endlessh with the values of this install. On the first start they are
 # chosen at random and kept in /var/lib/endlessh, so not every T-Pot sends with
-# the same delay, line length and banner. Delete a file there to get a new one.
+# the same delay, line length and banner. Delete a file there to get a new one;
+# endlessh reads them at its start (SIGHUP rereads endlessh.conf only), so restart it.
 
 set -eu
 

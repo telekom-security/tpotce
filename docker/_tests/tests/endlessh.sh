@@ -189,7 +189,7 @@ check_identity_fallback() {
   local deadline=$((SECONDS + TEST_TIMEOUT))
 
   while (( SECONDS < deadline )); do
-    if grep -q '^.* BannerFile /dev/shm/endlessh/banner.txt$' "${FALLBACK_LOG_DIR}/endlessh.log" 2>/dev/null \
+    if grep -E -q ' BannerFile /dev/shm/endlessh/banner.txt lines=[0-9]+$' "${FALLBACK_LOG_DIR}/endlessh.log" 2>/dev/null \
       && docker exec "${container}" test -s /dev/shm/endlessh/banner.txt; then
       docker logs "${container}" 2>&1 | grep -q 'is not writable, the values of this install are not kept' \
         || test_die "No warning about the missing identity folder in the Docker logs"
@@ -302,6 +302,67 @@ try:
           f"{min(gaps):.2f}-{max(gaps):.2f} s")
 except (OSError, ProbeError) as exc:
     fail(exc)
+PY
+}
+
+# many clients at once: each gets its lines at delay±jitter, a late client holds back no other
+run_jitter_probe() {
+  python3 - "${TEST_BIND_IP}" "${MAPPED_SSH_PORT}" "${TEST_TIMEOUT}" "${PROBE_DELAY}" "${PROBE_JITTER}" <<'PY'
+import socket
+import statistics
+import sys
+import threading
+import time
+
+host = sys.argv[1]
+port = int(sys.argv[2])
+timeout = int(sys.argv[3])
+delay = int(sys.argv[4]) / 1000
+jitter = int(sys.argv[5]) / 1000
+clients = 12
+lines_each = 12
+gaps = {}
+errors = []
+
+
+def collect(index):
+    try:
+        with socket.create_connection((host, port), timeout=timeout) as sock:
+            buffer, times = b"", []
+            while len(times) < lines_each:
+                chunk = sock.recv(4096)
+                if not chunk:
+                    raise OSError(f"client {index}: closed after {len(times)} lines")
+                buffer += chunk
+                while b"\r\n" in buffer and len(times) < lines_each:
+                    _, buffer = buffer.split(b"\r\n", 1)
+                    times.append(time.monotonic())
+        gaps[index] = [b - a for a, b in zip(times, times[1:])]
+    except OSError as exc:
+        errors.append(str(exc))
+
+
+threads = [threading.Thread(target=collect, args=(i,)) for i in range(clients)]
+for thread in threads:
+    thread.start()
+    time.sleep(0.05)
+for thread in threads:
+    thread.join()
+
+if errors:
+    sys.exit("Endlessh jitter probe failed: " + "; ".join(errors))
+every = [gap for values in gaps.values() for gap in values]
+low, high = delay - jitter - 0.05, delay + jitter + 0.25
+mean = statistics.mean(every)
+below = sum(gap < delay for gap in every) / len(every)
+if not all(low <= gap <= high for gap in every):
+    sys.exit(f"Endlessh jitter probe failed: gaps outside {low:.2f}-{high:.2f} s "
+             f"(min {min(every):.3f}, max {max(every):.3f})")
+if not (delay - 0.06 <= mean <= delay + 0.06 and below >= 0.3):
+    sys.exit(f"Endlessh jitter probe failed: mean gap {mean:.3f} s, {below:.0%} below Delay "
+             f"{delay:.2f} s: clients wait for one another")
+print(f"{clients} clients at once: mean gap {mean:.3f} s, {below:.0%} below Delay, "
+      f"gaps {min(every):.2f}-{max(every):.2f} s")
 PY
 }
 
@@ -484,6 +545,10 @@ main() {
   run_banner_probe_with_retries || test_die "Endlessh banner probe failed on ${TEST_BIND_IP}:${MAPPED_SSH_PORT}"
   test_wait_for_container || test_die "Endlessh container stopped after banner probe"
   test_ok "Endlessh banner probe succeeded"
+
+  test_info "Running Endlessh jitter probe with 12 clients at once"
+  run_jitter_probe || test_die "Endlessh clients do not get their lines at delay±jitter"
+  test_ok "Every client gets its lines at delay±jitter"
 
   test_info "Waiting for ACCEPT and CLOSE events in endlessh.log"
   wait_for_log_events || test_die "Expected Endlessh ACCEPT and CLOSE events were not found in endlessh.log"
