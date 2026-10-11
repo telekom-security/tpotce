@@ -12,19 +12,29 @@ DEFAULT_IMAGE="dtagdevsec/ddospot:24.04.2"
 IMAGE=""
 CHARGEN_PORT=""
 DNS_PORT=""
+DNS_TCP_PORT=""
 NTP_PORT=""
 SSDP_PORT=""
+RECURSION="off"
+LOG_ROOT=""
 LOG_DIR=""
-BL_DIR=""
-DB_DIR=""
-CHARGEN_LOG_FILE=""
-DNS_LOG_FILE=""
-NTP_LOG_FILE=""
-SSDP_LOG_FILE=""
+STDOUT_DIR=""
+RUN_NAME=""
+RUN_PERSONA=""
 MAPPED_CHARGEN_PORT=""
 MAPPED_DNS_PORT=""
+MAPPED_DNS_TCP_PORT=""
 MAPPED_NTP_PORT=""
 MAPPED_SSDP_PORT=""
+FIRST_PERSONA=""
+FIRST_USN=""
+SECOND_PERSONA=""
+SECOND_USN=""
+
+# The value of version.bind before v2, the same on every start
+OLD_VERSION_BIND="9.8.2rc1-RedHat-9.8.2-0.37.rc1.el6_7.2"
+# A name with a TXT answer larger than 512 bytes, for the check with recursion
+LARGE_TXT_NAME="microsoft.com"
 
 usage() {
   cat <<EOF
@@ -36,8 +46,10 @@ Options:
   --image IMAGE          Image to test. Defaults to docker/ddospot/docker-compose.yml.
   --chargen-port PORT    Host UDP port for CHARGEN. Default: dynamic free port.
   --dns-port PORT        Host UDP port for DNS. Default: dynamic free port.
+  --dns-tcp-port PORT    Host TCP port for DNS. Default: dynamic free port.
   --ntp-port PORT        Host UDP port for NTP. Default: dynamic free port.
   --ssdp-port PORT       Host UDP port for SSDP. Default: dynamic free port.
+  --recursion            Also check DNS recursion (needs internet access).
   --timeout SEC          Timeout for startup, protocol, and log checks. Default: 30.
   --bind-ip IP           Host IP to bind. Default: 127.0.0.1.
   --keep-artifacts       Keep temporary compose file and logs for debugging.
@@ -75,6 +87,15 @@ parse_args() {
         DNS_PORT="${1#*=}"
         shift
         ;;
+      --dns-tcp-port)
+        [[ $# -ge 2 ]] || test_die "--dns-tcp-port requires an argument"
+        DNS_TCP_PORT="$2"
+        shift 2
+        ;;
+      --dns-tcp-port=*)
+        DNS_TCP_PORT="${1#*=}"
+        shift
+        ;;
       --ntp-port)
         [[ $# -ge 2 ]] || test_die "--ntp-port requires an argument"
         NTP_PORT="$2"
@@ -91,6 +112,10 @@ parse_args() {
         ;;
       --ssdp-port=*)
         SSDP_PORT="${1#*=}"
+        shift
+        ;;
+      --recursion)
+        RECURSION="on"
         shift
         ;;
       --timeout)
@@ -128,18 +153,12 @@ parse_args() {
 
 validate_args() {
   test_validate_timeout
-  if [[ -n "${CHARGEN_PORT}" ]]; then
-    test_validate_port "${CHARGEN_PORT}"
-  fi
-  if [[ -n "${DNS_PORT}" ]]; then
-    test_validate_port "${DNS_PORT}"
-  fi
-  if [[ -n "${NTP_PORT}" ]]; then
-    test_validate_port "${NTP_PORT}"
-  fi
-  if [[ -n "${SSDP_PORT}" ]]; then
-    test_validate_port "${SSDP_PORT}"
-  fi
+  local port
+  for port in "${CHARGEN_PORT}" "${DNS_PORT}" "${DNS_TCP_PORT}" "${NTP_PORT}" "${SSDP_PORT}"; do
+    if [[ -n "${port}" ]]; then
+      test_validate_port "${port}"
+    fi
+  done
 }
 
 ensure_udp_port_free_for_docker() {
@@ -157,20 +176,34 @@ ensure_udp_port_free_for_docker() {
   fi
 }
 
+ensure_tcp_port_free_for_docker() {
+  local port="$1"
+  local option="$2"
+
+  if [[ -z "${port}" ]]; then
+    return 0
+  fi
+
+  if (( port < 1024 )); then
+    test_info "Skipping user-space preflight for privileged TCP port ${port}; Docker will validate the binding."
+  else
+    test_ensure_port_free "${TEST_BIND_IP}" "${port}" || test_die "${TEST_BIND_IP}:${port}/tcp is already in use. Try ${option} <free-port>."
+  fi
+}
+
 prepare_ddospot_harness() {
   test_prepare_harness "${TEST_NAME}"
 
-  LOG_DIR="${TEST_TMP_ROOT}/log"
-  BL_DIR="${TEST_TMP_ROOT}/bl"
-  DB_DIR="${TEST_TMP_ROOT}/db"
-  CHARGEN_LOG_FILE="${LOG_DIR}/chargenpot.log"
-  DNS_LOG_FILE="${LOG_DIR}/dnspot.log"
-  NTP_LOG_FILE="${LOG_DIR}/ntpot.log"
-  SSDP_LOG_FILE="${LOG_DIR}/ssdpot.log"
-  TEST_ARTIFACT_LOG_DIR="${LOG_DIR}"
+  LOG_ROOT="${TEST_TMP_ROOT}/log"
+  STDOUT_DIR="${TEST_TMP_ROOT}/stdout"
+  mkdir -p "${LOG_ROOT}" "${STDOUT_DIR}"
+  chmod 0777 "${LOG_ROOT}"
+}
 
-  mkdir -p "${LOG_DIR}" "${BL_DIR}" "${DB_DIR}"
-  chmod 0777 "${LOG_DIR}" "${BL_DIR}" "${DB_DIR}"
+# write_compose <log-dir> <recursion>: the compose file of one container run
+write_compose() {
+  local log_dir="$1"
+  local recursion="$2"
 
   cat > "${TEST_HARNESS_COMPOSE}" <<EOF
 services:
@@ -180,57 +213,135 @@ services:
     restart: "no"
     read_only: true
     user: "2000:2000"
+    environment:
+      - "DDOSPOT_DNS_RECURSION=${recursion}"
+      - "DDOSPOT_CLASSIFY_SECONDS=2"
     ports:
       - "${TEST_BIND_IP}:${CHARGEN_PORT}:19/udp"
       - "${TEST_BIND_IP}:${DNS_PORT}:53/udp"
+      - "${TEST_BIND_IP}:${DNS_TCP_PORT}:53/tcp"
       - "${TEST_BIND_IP}:${NTP_PORT}:123/udp"
       - "${TEST_BIND_IP}:${SSDP_PORT}:1900/udp"
     volumes:
-      - "${LOG_DIR}:/opt/ddospot/ddospot/logs"
-      - "${BL_DIR}:/opt/ddospot/ddospot/bl"
-      - "${DB_DIR}:/opt/ddospot/ddospot/db"
+      - "${log_dir}:/var/log/ddospot"
 networks:
   default:
     name: "${TEST_PROJECT_NAME}_net"
 EOF
 }
 
-run_chargen_probe() {
-  local token="$1"
+# start_run <name> [recursion]: a new container with its own log folder. The
+# budgets are kept in memory, so each group of checks starts with a fresh
+# container; all probes come from one source address.
+start_run() {
+  RUN_NAME="$1"
+  local recursion="${2:-off}"
 
-  python3 - "${TEST_BIND_IP}" "${MAPPED_CHARGEN_PORT}" "${token}" "${TEST_TIMEOUT}" <<'PY'
+  LOG_DIR="${LOG_ROOT}/${RUN_NAME}"
+  mkdir -p "${LOG_DIR}"
+  chmod 0777 "${LOG_DIR}"
+  TEST_ARTIFACT_LOG_DIR="${LOG_DIR}"
+  write_compose "${LOG_DIR}" "${recursion}"
+
+  test_info "Starting DDoSPot container (${RUN_NAME}, recursion ${recursion})"
+  local output=""
+  if ! output="$(test_compose up -d --no-build 2>&1)"; then
+    printf '%s\n' "${output}" >&2
+    test_die "DDoSPot container did not start"
+  fi
+  test_wait_for_container || test_die "DDoSPot container did not stay running"
+
+  MAPPED_CHARGEN_PORT="$(test_get_mapped_port "${TEST_NAME}" "19/udp")" || test_die "Could not resolve mapped host port for 19/udp"
+  MAPPED_DNS_PORT="$(test_get_mapped_port "${TEST_NAME}" "53/udp")" || test_die "Could not resolve mapped host port for 53/udp"
+  MAPPED_DNS_TCP_PORT="$(test_get_mapped_port "${TEST_NAME}" "53/tcp")" || test_die "Could not resolve mapped host port for 53/tcp"
+  MAPPED_NTP_PORT="$(test_get_mapped_port "${TEST_NAME}" "123/udp")" || test_die "Could not resolve mapped host port for 123/udp"
+  MAPPED_SSDP_PORT="$(test_get_mapped_port "${TEST_NAME}" "1900/udp")" || test_die "Could not resolve mapped host port for 1900/udp"
+
+  wait_for_persona_line || test_die "DDoSPot did not print its start line"
+  # The sockets are opened right after the start line
+  sleep 1
+  test_wait_for_container || test_die "DDoSPot container stopped after start"
+}
+
+# stop_run: keeps the output of the container, then removes it
+stop_run() {
+  save_run_output
+  test_compose down --volumes --remove-orphans >/dev/null 2>&1 || true
+}
+
+save_run_output() {
+  test_compose logs --no-color --no-log-prefix ddospot > "${STDOUT_DIR}/${RUN_NAME}.log" 2>&1 || true
+}
+
+# wait_for_persona_line: the first line of the output names version and
+# persona; sets RUN_PERSONA
+wait_for_persona_line() {
+  local deadline=$((SECONDS + TEST_TIMEOUT))
+  local first=""
+
+  while (( SECONDS < deadline )); do
+    first="$(test_compose logs --no-color --no-log-prefix ddospot 2>/dev/null | head -n 1 || true)"
+    if [[ -n "${first}" ]]; then
+      break
+    fi
+    sleep 1
+  done
+
+  if [[ ! "${first}" =~ ^ddospot\ v[0-9]+\.[0-9]+\.[0-9]+\ persona=([A-Za-z0-9._-]+)$ ]]; then
+    printf 'Unexpected first output line: %s\n' "${first:-<none>}" >&2
+    return 1
+  fi
+  RUN_PERSONA="${BASH_REMATCH[1]}"
+  test_ok "Start line: ${first}"
+}
+
+# run_chargen_probe <count> <expected>: sends count probes one after the
+# other and expects that many replies
+run_chargen_probe() {
+  python3 - "${TEST_BIND_IP}" "${MAPPED_CHARGEN_PORT}" "$1" "$2" <<'PY'
 import socket
 import sys
 
 host = sys.argv[1]
 port = int(sys.argv[2])
-token = sys.argv[3]
-timeout = int(sys.argv[4])
-payload = f"tpot-ddospot-chargen-{token}\n".encode("ascii")
+count = int(sys.argv[3])
+expected = int(sys.argv[4])
+payload = b"tpot-ddospot-chargen\n"
 
+replies = 0
 try:
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-        sock.settimeout(min(timeout, 3))
-        sock.sendto(payload, (host, port))
-        try:
-            response, _ = sock.recvfrom(4096)
-        except socket.timeout:
-            response = b""
-
-    if not response:
-        raise RuntimeError("Expected CHARGEN response, got no UDP response")
-
-    print(f"CHARGEN probe sent {len(payload)} bytes; received {len(response)} bytes")
+    for _ in range(count):
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.settimeout(1.5)
+            sock.sendto(payload, (host, port))
+            try:
+                response, _ = sock.recvfrom(4096)
+            except socket.timeout:
+                continue
+        if not response or len(response) > 1024:
+            raise RuntimeError(f"Expected a CHARGEN reply of 1 to 1024 bytes, got {len(response)} bytes")
+        replies += 1
+    if replies != expected:
+        raise RuntimeError(f"Expected {expected} of {count} CHARGEN probes answered, got {replies}")
+    print(f"CHARGEN: {replies} of {count} probes answered")
 except Exception as exc:
     print(f"CHARGEN probe failed: {exc}", file=sys.stderr)
     sys.exit(1)
 PY
 }
 
+# run_dns_probe <udp|tcp> <check> <qtype> <qclass> <expected> <name>...:
+# one query per name, expects that many answers, each must pass the check
+# (version, refused, any, recursive, truncated, full)
 run_dns_probe() {
-  local token="$1"
+  local transport="$1"
+  local port="${MAPPED_DNS_PORT}"
 
-  python3 - "${TEST_BIND_IP}" "${MAPPED_DNS_PORT}" "${token}" "${TEST_TIMEOUT}" <<'PY'
+  if [[ "${transport}" == "tcp" ]]; then
+    port="${MAPPED_DNS_TCP_PORT}"
+  fi
+
+  python3 - "${TEST_BIND_IP}" "${port}" "${OLD_VERSION_BIND}" "$@" <<'PY'
 import random
 import socket
 import struct
@@ -238,135 +349,266 @@ import sys
 
 host = sys.argv[1]
 port = int(sys.argv[2])
-token = sys.argv[3]
-timeout = int(sys.argv[4])
-transaction_id = random.randrange(0, 65536)
+old_version = sys.argv[3]
+transport, check, qtype_name, qclass_name = sys.argv[4:8]
+expected = int(sys.argv[8])
+names = sys.argv[9:]
+QTYPES = {"A": 1, "TXT": 16}
+QCLASSES = {"IN": 1, "CH": 3}
+RCODES = {0: "NOERROR", 2: "SERVFAIL", 3: "NXDOMAIN", 4: "NOTIMP", 5: "REFUSED"}
 
-question = b"".join(
-    bytes([len(label)]) + label
-    for label in (b"version", b"bind")
-) + b"\x00"
-query = (
-    struct.pack("!HHHHHH", transaction_id, 0x0100, 1, 0, 0, 0)
-    + question
-    + struct.pack("!HH", 16, 3)
-)
+
+def query(name, tid):
+    labels = [label.encode("ascii") for label in name.rstrip(".").split(".")]
+    question = b"".join(bytes([len(label)]) + label for label in labels) + b"\x00"
+    return (
+        struct.pack("!HHHHHH", tid, 0x0100, 1, 0, 0, 0)
+        + question
+        + struct.pack("!HH", QTYPES[qtype_name], QCLASSES[qclass_name])
+    )
+
+
+def skip_name(msg, pos):
+    while True:
+        length = msg[pos]
+        if length & 0xC0 == 0xC0:
+            return pos + 2
+        if length == 0:
+            return pos + 1
+        pos += 1 + length
+
+
+def answers(msg, qdcount, ancount):
+    pos = 12
+    for _ in range(qdcount):
+        pos = skip_name(msg, pos) + 4
+    records = []
+    for _ in range(ancount):
+        pos = skip_name(msg, pos)
+        rtype, _, _, rdlength = struct.unpack("!HHIH", msg[pos:pos + 10])
+        pos += 10
+        rdata = msg[pos:pos + rdlength]
+        pos += rdlength
+        records.append((rtype, rdata))
+    return records
+
+
+def txt_value(rdata):
+    out, pos = [], 0
+    while pos < len(rdata):
+        length = rdata[pos]
+        out.append(rdata[pos + 1:pos + 1 + length].decode("utf-8", errors="replace"))
+        pos += 1 + length
+    return "".join(out)
+
+
+def exchange(msg):
+    if transport == "tcp":
+        with socket.create_connection((host, port), timeout=5) as sock:
+            sock.sendall(struct.pack("!H", len(msg)) + msg)
+            data = b""
+            while True:
+                if len(data) >= 2 and len(data) >= 2 + struct.unpack("!H", data[:2])[0]:
+                    return data[2:2 + struct.unpack("!H", data[:2])[0]]
+                try:
+                    chunk = sock.recv(65535)
+                except socket.timeout:
+                    return b""
+                if not chunk:
+                    return b""
+                data += chunk
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        sock.settimeout(2)
+        sock.sendto(msg, (host, port))
+        try:
+            response, _ = sock.recvfrom(65535)
+        except socket.timeout:
+            return b""
+        return response
+
+
+def verify(name, response, tid):
+    if len(response) < 12:
+        raise RuntimeError(f"{name}: expected a DNS answer, got {len(response)} bytes")
+    rid, flags, qdcount, ancount, _, _ = struct.unpack("!HHHHHH", response[:12])
+    if rid != tid:
+        raise RuntimeError(f"{name}: expected id {tid:#x}, got {rid:#x}")
+    if not flags & 0x8000:
+        raise RuntimeError(f"{name}: expected the answer flag, got flags {flags:#x}")
+    rcode = flags & 0x000F
+    tc = bool(flags & 0x0200)
+    ra = bool(flags & 0x0080)
+    rcode_name = RCODES.get(rcode, str(rcode))
+    records = answers(response, qdcount, ancount)
+    detail = f"{name}: {rcode_name}, {ancount} answers, {len(response)} bytes over {transport}"
+    if check == "version":
+        txt = [txt_value(rdata) for rtype, rdata in records if rtype == 16]
+        if rcode != 0 or not txt or not txt[0]:
+            raise RuntimeError(f"{detail}: expected a TXT value")
+        if txt[0] == old_version:
+            raise RuntimeError(f"{detail}: version.bind has the value of earlier releases")
+        detail += f", value {txt[0]!r}"
+    elif check == "refused":
+        if rcode != 5:
+            raise RuntimeError(f"{detail}: expected REFUSED")
+    elif check == "recursive":
+        if rcode != 0 or not ra or not records:
+            raise RuntimeError(f"{detail}, RA {ra}: expected NOERROR with RA and an answer")
+        detail += ", RA set"
+    elif check == "truncated":
+        if not tc:
+            raise RuntimeError(f"{detail}: expected the TC flag")
+        if len(response) > 512:
+            raise RuntimeError(f"{detail}: expected at most 512 bytes")
+        detail += ", TC set"
+    elif check == "full":
+        if tc or rcode != 0 or not records or len(response) <= 512:
+            raise RuntimeError(f"{detail}, TC {tc}: expected the full answer of more than 512 bytes")
+    elif check != "any":
+        raise RuntimeError(f"unknown check {check}")
+    print(detail)
+
 
 try:
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-        sock.settimeout(min(timeout, 3))
-        sock.sendto(query, (host, port))
-        try:
-            response, _ = sock.recvfrom(4096)
-        except socket.timeout:
-            response = b""
-
-    if len(response) < 12:
-        raise RuntimeError(f"Expected DNS response, got {len(response)} bytes")
-
-    response_id, flags, qdcount, ancount, _, _ = struct.unpack("!HHHHHH", response[:12])
-    if response_id != transaction_id:
-        raise RuntimeError(f"Expected transaction id {transaction_id:#x}, got {response_id:#x}")
-    if not flags & 0x8000:
-        raise RuntimeError(f"Expected DNS response flag, got flags {flags:#x}")
-    if qdcount < 1 and ancount < 1:
-        raise RuntimeError("Expected DNS question or answer records in response")
-
-    print(f"DNS CHAOS/TXT probe {token}: received {len(response)} bytes")
+    answered = 0
+    for name in names:
+        tid = random.randrange(0, 65536)
+        response = exchange(query(name, tid))
+        if not response:
+            print(f"{name}: no answer over {transport}")
+            continue
+        verify(name, response, tid)
+        answered += 1
+    if answered != expected:
+        raise RuntimeError(f"Expected {expected} of {len(names)} DNS queries answered, got {answered}")
+    print(f"DNS: {answered} of {len(names)} queries answered")
 except Exception as exc:
     print(f"DNS probe failed: {exc}", file=sys.stderr)
     sys.exit(1)
 PY
 }
 
+# run_ntp_probe <expected> <mode>...: one request per mode (3 = client,
+# 6 = READVAR), expects that many answered requests
 run_ntp_probe() {
-  python3 - "${TEST_BIND_IP}" "${MAPPED_NTP_PORT}" "${TEST_TIMEOUT}" <<'PY'
+  python3 - "${TEST_BIND_IP}" "${MAPPED_NTP_PORT}" "$@" <<'PY'
 import socket
+import struct
 import sys
 
 host = sys.argv[1]
 port = int(sys.argv[2])
-timeout = int(sys.argv[3])
-payload = b"\x1b" + (b"\x00" * 47)
+expected = int(sys.argv[3])
+modes = [int(mode) for mode in sys.argv[4:]]
+
+
+def request(mode, seq):
+    if mode == 3:
+        return b"\x1b" + (b"\x00" * 47)
+    return struct.pack("!BBHHHHH", 0x16, 0x02, seq, 0, 0, 0, 0)
+
+
+def verify(mode, seq, response):
+    if mode == 3:
+        if len(response) < 48:
+            raise RuntimeError(f"Expected an NTP reply of at least 48 bytes, got {len(response)} bytes")
+        if response[0] & 0x07 != 4:
+            raise RuntimeError(f"Expected NTP server mode 4, got mode {response[0] & 0x07}")
+        if (response[0] >> 3) & 0x07 < 1:
+            raise RuntimeError(f"Expected a valid NTP version, got {(response[0] >> 3) & 0x07}")
+        return f"mode 3 request: {len(response)} bytes, mode 4"
+    if len(response) < 12:
+        raise RuntimeError(f"Expected a mode 6 reply of at least 12 bytes, got {len(response)} bytes")
+    op = response[1]
+    rseq = struct.unpack("!H", response[2:4])[0]
+    if response[0] & 0x07 != 6 or not op & 0x80 or op & 0x1F != 2 or rseq != seq:
+        raise RuntimeError(f"Expected a READVAR reply with sequence {seq}, got header {response[:12].hex()}")
+    return f"mode 6 request: {len(response)} bytes, READVAR reply"
+
 
 try:
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-        sock.settimeout(min(timeout, 3))
-        sock.sendto(payload, (host, port))
-        try:
-            response, _ = sock.recvfrom(4096)
-        except socket.timeout:
-            response = b""
-
-    if len(response) < 48:
-        raise RuntimeError(f"Expected NTP response of at least 48 bytes, got {len(response)} bytes")
-
-    mode = response[0] & 0x07
-    version = (response[0] >> 3) & 0x07
-    if mode != 4:
-        raise RuntimeError(f"Expected NTP server mode 4, got mode {mode}")
-    if version < 1:
-        raise RuntimeError(f"Expected sane NTP version, got {version}")
-
-    print(f"NTP client-mode probe received {len(response)} bytes")
+    answered = 0
+    for seq, mode in enumerate(modes, start=1):
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.settimeout(1.5)
+            sock.sendto(request(mode, seq), (host, port))
+            try:
+                response, _ = sock.recvfrom(4096)
+            except socket.timeout:
+                print(f"mode {mode} request: no reply")
+                continue
+        print(verify(mode, seq, response))
+        answered += 1
+    if answered != expected:
+        raise RuntimeError(f"Expected {expected} of {len(modes)} NTP requests answered, got {answered}")
+    print(f"NTP: {answered} of {len(modes)} requests answered")
 except Exception as exc:
     print(f"NTP probe failed: {exc}", file=sys.stderr)
     sys.exit(1)
 PY
 }
 
+# run_ssdp_probe <mx> <max-seconds>: one M-SEARCH for upnp:rootdevice,
+# expects one reply within max-seconds; prints its USN as usn=<value>
 run_ssdp_probe() {
-  local token="$1"
-
-  python3 - "${TEST_BIND_IP}" "${MAPPED_SSDP_PORT}" "${token}" "${TEST_TIMEOUT}" <<'PY'
+  python3 - "${TEST_BIND_IP}" "${MAPPED_SSDP_PORT}" "$1" "$2" <<'PY'
 import socket
 import sys
+import time
 
 host = sys.argv[1]
 port = int(sys.argv[2])
-token = sys.argv[3]
-timeout = int(sys.argv[4])
+mx = sys.argv[3]
+max_seconds = float(sys.argv[4])
 request = (
     "M-SEARCH * HTTP/1.1\r\n"
     "HOST: 239.255.255.250:1900\r\n"
     "MAN: \"ssdp:discover\"\r\n"
-    "MX: 1\r\n"
-    "ST: ssdp:all\r\n"
-    f"USER-AGENT: tpot-ddospot-smoke/{token}\r\n"
+    f"MX: {mx}\r\n"
+    "ST: upnp:rootdevice\r\n"
+    "USER-AGENT: tpot-ddospot-smoke\r\n"
     "\r\n"
 ).encode("ascii")
 
 try:
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-        sock.settimeout(min(timeout, 3))
+        sock.settimeout(max_seconds)
+        start = time.monotonic()
         sock.sendto(request, (host, port))
         try:
             response, _ = sock.recvfrom(4096)
         except socket.timeout:
-            response = b""
+            raise RuntimeError(f"Expected an SSDP reply within {max_seconds:g} s, got none")
+        elapsed = time.monotonic() - start
 
-    if not response:
-        raise RuntimeError("Expected SSDP response, got no UDP response")
-
-    upper = response.upper()
-    if not (upper.startswith(b"HTTP/") or b"SSDP" in upper or b"UPNP" in upper):
-        raise RuntimeError(f"Expected SSDP-like HTTP response, got {response[:120]!r}")
-
-    status = response.splitlines()[0].decode("iso-8859-1", errors="replace") if response.splitlines() else "<empty>"
-    print(f"SSDP probe response: {status}")
+    if not response.startswith(b"HTTP/1.1 200 OK\r\n"):
+        raise RuntimeError(f"Expected an SSDP reply starting with HTTP/1.1 200 OK, got {response[:60]!r}")
+    if not response.endswith(b"\r\n\r\n"):
+        raise RuntimeError(f"Expected an SSDP reply ending with an empty line, got {response[-60:]!r}")
+    usn = ""
+    for line in response.decode("iso-8859-1").split("\r\n"):
+        name, _, value = line.partition(":")
+        if name.strip().upper() == "USN":
+            usn = value.strip()
+    if not usn:
+        raise RuntimeError("Expected a USN header in the SSDP reply")
+    print(f"SSDP: MX {mx}, reply of {len(response)} bytes after {elapsed:.2f} s")
+    print(f"usn={usn}")
 except Exception as exc:
     print(f"SSDP probe failed: {exc}", file=sys.stderr)
     sys.exit(1)
 PY
 }
 
+# run_probe_with_retries <description> <command>...: at most three tries,
+# so that a probe sent while the container starts stays within the budget
 run_probe_with_retries() {
   local description="$1"
   shift
-  local deadline=$((SECONDS + TEST_TIMEOUT))
   local output=""
+  local attempt
 
-  while (( SECONDS < deadline )); do
+  for attempt in 1 2 3; do
     if output="$("$@" 2>&1)"; then
       printf '%s\n' "${output}"
       return 0
@@ -375,69 +617,201 @@ run_probe_with_retries() {
   done
 
   printf '%s\n' "${output}" >&2
-  printf '%s probe did not succeed before timeout\n' "${description}" >&2
+  printf '%s probe did not succeed after %s tries\n' "${description}" "${attempt}" >&2
   return 1
 }
 
-wait_for_json_event() {
-  local json_file="$1"
-  local service="$2"
-
-  python3 - "${json_file}" "${service}" "${TEST_TIMEOUT}" <<'PY'
+# check_log_events <log-dir> <check> <persona> <timeout>: scanner (one
+# scanner event in each pot log, no targets.log lines), target_start (one
+# start event in targets.log) or target_end (one start and one end event)
+check_log_events() {
+  python3 - "$@" <<'PY'
 import json
 import sys
 import time
 from pathlib import Path
 
-path = Path(sys.argv[1])
-service = sys.argv[2]
-timeout = int(sys.argv[3])
-deadline = time.monotonic() + timeout
-last_error = None
+log_dir = Path(sys.argv[1])
+check = sys.argv[2]
+persona = sys.argv[3]
+deadline = time.monotonic() + int(sys.argv[4])
+POTS = ("chargenpot.log", "dnspot.log", "ntpot.log", "ssdpot.log")
 
-while time.monotonic() < deadline:
+
+def events(name):
+    path = log_dir / name
     if not path.exists():
-        last_error = f"{path} does not exist yet"
-        time.sleep(1)
-        continue
+        return []
+    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
 
-    raw = path.read_text(encoding="utf-8", errors="replace")
-    if not raw.strip():
-        last_error = f"{path} is empty"
-        time.sleep(1)
-        continue
 
-    invalid = None
-    for line_number, line in enumerate(raw.splitlines(), 1):
-        if not line.strip():
-            continue
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError as exc:
-            invalid = f"{path}:{line_number}: invalid JSON: {exc}"
-            continue
-        if isinstance(event, dict):
-            print(f"{service} JSON event found in {path}:{line_number}")
-            sys.exit(0)
-        invalid = f"{path}:{line_number}: JSON event is not an object"
+def scanner():
+    for name in POTS:
+        lines = events(name)
+        if len(lines) != 1:
+            return f"{name}: expected 1 event, got {len(lines)}"
+        event = lines[0]
+        if event.get("role") != "scanner" or not event.get("src_ip") or event.get("persona") != persona:
+            return f"{name}: expected role scanner, src_ip and persona {persona}, got {event}"
+    target_lines = events("targets.log")
+    if target_lines:
+        return f"targets.log: expected no events, got {len(target_lines)}"
+    return None
 
-    last_error = invalid or f"No JSON event found in {path}"
-    time.sleep(1)
 
-if last_error:
-    print(last_error, file=sys.stderr)
-sys.exit(1)
+def target(wanted):
+    lines = events("targets.log")
+    got = [event.get("event") for event in lines]
+    if got != wanted:
+        return f"targets.log: expected events {wanted}, got {got}"
+    for event in lines:
+        if not event.get("target_ip") or "src_ip" in event or event.get("persona") != persona:
+            return f"targets.log: expected target_ip and persona {persona} without src_ip, got {event}"
+    return None
+
+
+CHECKS = {
+    "scanner": scanner,
+    "target_start": lambda: target(["attack_start"]),
+    "target_end": lambda: target(["attack_start", "attack_end"]),
+}
+
+error = None
+while time.monotonic() < deadline:
+    try:
+        error = CHECKS[check]()
+    except (OSError, json.JSONDecodeError) as exc:
+        error = str(exc)
+    if error is None:
+        break
+    time.sleep(0.5)
+
+if error is not None:
+    print(error, file=sys.stderr)
+    sys.exit(1)
 PY
 }
 
-assert_no_runtime_errors() {
-  if grep -R -E "Traceback|NameError|Exception" "${LOG_DIR}" >/dev/null 2>&1; then
-    test_die "DDoSPot runtime error found in log files"
-  fi
+check_answers() {
+  local output=""
 
-  if test_compose logs --no-color 2>/dev/null | grep -E "Traceback|NameError|Exception" >/dev/null 2>&1; then
-    test_die "DDoSPot runtime error found in Docker logs"
+  test_info "Checking one answer per service"
+  run_probe_with_retries "CHARGEN" run_chargen_probe 1 1 || test_die "CHARGEN probe failed on ${TEST_BIND_IP}:${MAPPED_CHARGEN_PORT}"
+  run_probe_with_retries "DNS" run_dns_probe udp version TXT CH 1 version.bind || test_die "DNS probe failed on ${TEST_BIND_IP}:${MAPPED_DNS_PORT}"
+  run_probe_with_retries "NTP" run_ntp_probe 1 3 || test_die "NTP probe failed on ${TEST_BIND_IP}:${MAPPED_NTP_PORT}"
+  output="$(run_probe_with_retries "SSDP" run_ssdp_probe 1 3)" || test_die "SSDP probe failed on ${TEST_BIND_IP}:${MAPPED_SSDP_PORT}"
+  printf '%s\n' "${output}"
+  FIRST_PERSONA="${RUN_PERSONA}"
+  FIRST_USN="$(sed -n 's/^usn=//p' <<<"${output}")"
+  test_wait_for_container || test_die "DDoSPot container stopped after the probes"
+  test_ok "Each service answers"
+}
+
+check_scanner_events() {
+  test_info "Waiting for the scanner events"
+  sleep 3
+  check_log_events "${LOG_DIR}" scanner "${RUN_PERSONA}" "${TEST_TIMEOUT}" || test_die "Scanner events are not as expected"
+  test_ok "One scanner event per service, targets.log without events"
+}
+
+check_response_budget() {
+  test_info "Sending 7 CHARGEN probes"
+  run_chargen_probe 7 5 || test_die "CHARGEN replies are not within the budget"
+  check_log_events "${LOG_DIR}" target_start "${RUN_PERSONA}" "${TEST_TIMEOUT}" || test_die "targets.log has no start event"
+  test_ok "Response budget per source"
+}
+
+check_stop() {
+  local elapsed=""
+  local exit_code=""
+
+  test_info "Stopping the container"
+  elapsed="$(python3 -c 'import subprocess, sys, time
+start = time.monotonic()
+subprocess.run(["docker", "stop", sys.argv[1]], check=True, stdout=subprocess.DEVNULL)
+print(f"{time.monotonic() - start:.2f}")' "${TEST_CONTAINER_NAME}")" || test_die "docker stop failed"
+  python3 -c 'import sys; sys.exit(0 if float(sys.argv[1]) < 3 else 1)' "${elapsed}" || test_die "docker stop took ${elapsed} s, expected less than 3 s"
+  exit_code="$(docker inspect -f '{{.State.ExitCode}}' "${TEST_CONTAINER_NAME}")"
+  [[ "${exit_code}" == "0" ]] || test_die "DDoSPot exited with code ${exit_code} on stop"
+  check_log_events "${LOG_DIR}" target_end "${RUN_PERSONA}" "${TEST_TIMEOUT}" || test_die "targets.log has no end event after the stop"
+  test_ok "Stop within ${elapsed} s, exit code 0, end event written"
+}
+
+check_budget_per_protocol() {
+  test_info "Sending 3 NTP mode 3 and 4 NTP mode 6 requests"
+  run_ntp_probe 5 3 3 3 6 6 6 6 || test_die "NTP replies are not within the budget"
+  test_ok "Response budget per service across NTP modes"
+}
+
+check_dns_budget_by_source() {
+  test_info "Sending 7 DNS queries for different names"
+  run_dns_probe udp any A IN 5 \
+    Name1.Example.Org nAmE2.eXaMpLe.OrG NAME3.EXAMPLE.ORG name4.Example.ORG \
+    NaMe5.ExAmPlE.oRg nAME6.EXample.org Name7.EXAMPLE.org || test_die "DNS replies are not within the budget"
+  test_ok "DNS response budget per source across names"
+}
+
+check_refused() {
+  test_info "Sending a class IN query with recursion off"
+  run_dns_probe udp refused A IN 1 example.org || test_die "DNS did not answer REFUSED"
+  run_dns_probe tcp version TXT CH 1 VERSION.bind || test_die "DNS over TCP did not answer on ${TEST_BIND_IP}:${MAPPED_DNS_TCP_PORT}"
+  test_ok "REFUSED for class IN with recursion off, version.bind over TCP"
+}
+
+check_ssdp_mx() {
+  local output=""
+
+  test_info "Sending an M-SEARCH with MX 999999999"
+  output="$(run_ssdp_probe 999999999 6)" || test_die "SSDP did not answer within 6 s"
+  printf '%s\n' "${output}"
+  SECOND_PERSONA="${RUN_PERSONA}"
+  SECOND_USN="$(sed -n 's/^usn=//p' <<<"${output}")"
+  test_ok "SSDP answers a large MX within 6 s"
+}
+
+check_json_only() {
+  local file
+
+  while IFS= read -r file; do
+    python3 -c 'import json, sys
+for number, line in enumerate(open(sys.argv[1]), start=1):
+    if not isinstance(json.loads(line), dict):
+        sys.exit(f"{sys.argv[1]}:{number}: not a JSON object")' "${file}" || test_die "${file} has a line that is no JSON object"
+  done < <(find "${LOG_ROOT}" -type f -print)
+  test_ok "Every log line is a JSON object"
+}
+
+check_persona_changes() {
+  [[ -n "${FIRST_USN}" && -n "${SECOND_USN}" ]] || test_die "SSDP USN of a start is missing"
+  test_info "First start: persona ${FIRST_PERSONA}, USN ${FIRST_USN}"
+  test_info "Second start: persona ${SECOND_PERSONA}, USN ${SECOND_USN}"
+  [[ "${FIRST_USN}" != "${SECOND_USN}" ]] || test_die "SSDP USN is the same on two starts"
+  test_ok "Persona details change between starts"
+}
+
+check_recursion() {
+  local attempt
+
+  test_info "Checking DNS recursion (needs internet access)"
+  # The upstream counts as reachable after its first probe
+  sleep 3
+  for attempt in 1 2; do
+    if run_dns_probe udp recursive A IN 1 quad9.net; then
+      break
+    fi
+    (( attempt < 2 )) || test_die "DNS recursion did not answer; is ${TEST_BIND_IP} able to reach 9.9.9.9:853?"
+    sleep 5
+  done
+  run_dns_probe udp truncated TXT IN 1 "${LARGE_TXT_NAME}" || test_die "Large TXT answer over UDP is not truncated"
+  run_dns_probe tcp full TXT IN 1 "${LARGE_TXT_NAME}" || test_die "Large TXT answer over TCP is not complete"
+  test_ok "DNS recursion: RA over UDP, TC for a large answer over UDP, full answer over TCP"
+}
+
+assert_no_runtime_errors() {
+  if grep -R -E "Traceback|panic:|fatal error" "${LOG_ROOT}" "${STDOUT_DIR}" >/dev/null 2>&1; then
+    test_die "DDoSPot runtime error found in the logs or the output"
   fi
+  test_ok "No DDoSPot runtime errors found in logs"
 }
 
 main() {
@@ -454,58 +828,49 @@ main() {
 
   ensure_udp_port_free_for_docker "${CHARGEN_PORT}" "--chargen-port"
   ensure_udp_port_free_for_docker "${DNS_PORT}" "--dns-port"
+  ensure_tcp_port_free_for_docker "${DNS_TCP_PORT}" "--dns-tcp-port"
   ensure_udp_port_free_for_docker "${NTP_PORT}" "--ntp-port"
   ensure_udp_port_free_for_docker "${SSDP_PORT}" "--ssdp-port"
 
   prepare_ddospot_harness
   test_enable_cleanup
 
-  test_info "Starting isolated DDoSPot container"
-  test_compose up -d --no-build >/dev/null
+  start_run answers
+  check_answers
+  check_scanner_events
+  stop_run
 
-  test_wait_for_container || test_die "DDoSPot container did not stay running"
-  test_ok "Container is running"
+  start_run budget
+  check_response_budget
+  check_stop
+  stop_run
 
-  MAPPED_CHARGEN_PORT="$(test_get_mapped_port "${TEST_NAME}" "19/udp")" || test_die "Could not resolve mapped host port for 19/udp"
-  test_ok "Port ${TEST_BIND_IP}:${MAPPED_CHARGEN_PORT} maps to container port 19/udp"
+  start_run ntp
+  check_budget_per_protocol
+  stop_run
 
-  MAPPED_DNS_PORT="$(test_get_mapped_port "${TEST_NAME}" "53/udp")" || test_die "Could not resolve mapped host port for 53/udp"
-  test_ok "Port ${TEST_BIND_IP}:${MAPPED_DNS_PORT} maps to container port 53/udp"
+  start_run dns
+  check_dns_budget_by_source
+  stop_run
 
-  MAPPED_NTP_PORT="$(test_get_mapped_port "${TEST_NAME}" "123/udp")" || test_die "Could not resolve mapped host port for 123/udp"
-  test_ok "Port ${TEST_BIND_IP}:${MAPPED_NTP_PORT} maps to container port 123/udp"
+  start_run refused
+  check_refused
+  stop_run
 
-  MAPPED_SSDP_PORT="$(test_get_mapped_port "${TEST_NAME}" "1900/udp")" || test_die "Could not resolve mapped host port for 1900/udp"
-  test_ok "Port ${TEST_BIND_IP}:${MAPPED_SSDP_PORT} maps to container port 1900/udp"
+  start_run ssdp
+  check_ssdp_mx
+  stop_run
 
-  local token="ddospot-test-$(date +%s)-$$"
+  if [[ "${RECURSION}" == "on" ]]; then
+    start_run recursion on
+    check_recursion
+    stop_run
+  fi
 
-  test_info "Running CHARGEN probe with token: ${token}"
-  run_probe_with_retries "CHARGEN" run_chargen_probe "${token}" || test_die "CHARGEN probe failed on ${TEST_BIND_IP}:${MAPPED_CHARGEN_PORT}"
-  test_wait_for_container || test_die "DDoSPot container stopped after CHARGEN probe"
-
-  test_info "Running DNS CHAOS/TXT probe with token: ${token}"
-  run_probe_with_retries "DNS" run_dns_probe "${token}" || test_die "DNS probe failed on ${TEST_BIND_IP}:${MAPPED_DNS_PORT}"
-  test_wait_for_container || test_die "DDoSPot container stopped after DNS probe"
-
-  test_info "Running NTP client-mode probe"
-  run_probe_with_retries "NTP" run_ntp_probe || test_die "NTP probe failed on ${TEST_BIND_IP}:${MAPPED_NTP_PORT}"
-  test_wait_for_container || test_die "DDoSPot container stopped after NTP probe"
-
-  test_info "Running SSDP M-SEARCH probe with token: ${token}"
-  run_probe_with_retries "SSDP" run_ssdp_probe "${token}" || test_die "SSDP probe failed on ${TEST_BIND_IP}:${MAPPED_SSDP_PORT}"
-  test_wait_for_container || test_die "DDoSPot container stopped after SSDP probe"
-
-  test_info "Waiting for DDoSPot JSON log events"
-  wait_for_json_event "${CHARGEN_LOG_FILE}" "CHARGEN" || test_die "CHARGEN JSON event was not found in chargenpot.log"
-  wait_for_json_event "${DNS_LOG_FILE}" "DNS" || test_die "DNS JSON event was not found in dnspot.log"
-  wait_for_json_event "${NTP_LOG_FILE}" "NTP" || test_die "NTP JSON event was not found in ntpot.log"
-  wait_for_json_event "${SSDP_LOG_FILE}" "SSDP" || test_die "SSDP JSON event was not found in ssdpot.log"
-  test_ok "All DDoSPot JSON events were written"
+  check_json_only
+  check_persona_changes
 
   assert_no_runtime_errors
-  test_ok "No DDoSPot runtime errors found in logs"
-
   test_ok "DDoSPot post-build smoke test completed successfully"
 }
 

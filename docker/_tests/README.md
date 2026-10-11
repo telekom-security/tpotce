@@ -67,6 +67,7 @@ Individual tests can also be run directly:
 ./docker/_tests/tests/cowrie.sh --all-personas
 ./docker/_tests/tests/ddospot.sh
 ./docker/_tests/tests/ddospot.sh --dns-port 1053 --ntp-port 1123 --ssdp-port 19000
+./docker/_tests/tests/ddospot.sh --recursion
 ./docker/_tests/tests/dionaea.sh
 ./docker/_tests/tests/dionaea.sh --ftp-port 2121
 ./docker/_tests/tests/dicompot.sh
@@ -139,6 +140,11 @@ external IP via `api.ipify.org` on every start.
 
 The Dicompot test additionally requires DCMTK client tools on the host:
 `echoscu`, `getscu`, `dcmdump`, and either `setscu` or `storescu`.
+
+The DDoSPot test starts a new container for each group of checks, because the
+response budgets are kept in memory and every probe comes from one source
+address. It runs with DNS recursion off; `--recursion` adds a check of DNS
+recursion over UDP and TCP and needs outbound access to `9.9.9.9:853`.
 
 The p0f test sends HTTP requests from a client container to a listener in the
 p0f container and verifies that p0f writes matching `syn` (label
