@@ -1,6 +1,6 @@
 # Ciscoasa v2 integration
 
-The regular Dockerfile fetches `v2.0.1` from the fork and verifies its source commit (`d05a195dff9816014eaf2d6ff63a73e7b5aa17c4`). Publish the tag before using the remote build; the local `source` context can be used beforehand.
+The regular Dockerfile fetches `v2.0.1` from the fork and verifies its source commit (`6ea515124017d38e7705e2e5367a2c699fae0221`). Publish the tag before using the remote build; the local `source` context can be used beforehand.
 
 For local development, use the named `source` build context pointing at the fork checkout, for example:
 
@@ -18,3 +18,5 @@ The ewsposter compatibility change is upstream PR https://github.com/telekom-sec
 nmap AnyConnect extracts the exact profile version; nmap IKE reports Cisco VPN Concentrator for the supplied Cisco vendor-ID signature.
 
 The active JSONL log is limited to 64 MiB and resumes after rotation. Data files use mode 660 and directories 770. HTTP admits up to 64 concurrent requests, four per source IP, and reads each body before taking a worker. IKE answers each request at most once; repeated requests use cached responses.
+
+Upload storage retains at most 4096 files and uses a separate 256 MiB calculated budget: content rounded up to 16 KiB plus 16 KiB per file. Existing regular files are included after restart. Existing evidence is retained when a limit is exceeded, and duplicate content remains available. This application budget is not a filesystem quota.
