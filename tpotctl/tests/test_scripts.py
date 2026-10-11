@@ -171,7 +171,7 @@ class UpdateShTest(Harness):
         with open(me, "w", encoding="utf-8") as out:
             out.write("# stays the same\n")
         script = (f'source "{REPO}/installer/lib/ui.sh"; fuUI_INIT; fuSWITCH_SOURCE () {{ :; }}\n{function}\n'
-                  f'cd "{clone}" && fuSELFUPDATE')
+                  f'cd "{self.home}" && fuSELFUPDATE')
 
         def run():
             return subprocess.run(["bash", "-c", script, me], capture_output=True, universal_newlines=True,
@@ -1330,6 +1330,293 @@ class DataLossTest(Harness):
         self.assertEqual(self.left(), names[1:])    # the confirmed plan, nothing beyond it
         self.assertIn("Not enough room for a backup", out)
         self.assertNotIn("went on", out)
+
+
+class UpdateRepairTest(Harness):
+    """The steps of update.sh that used to lose something: a backup that keeps binary changes and the data
+    path, a branch switch that keeps a ref, no image removal after a failed pull, side files that belong to
+    the user, the log of the last run, the SENSOR edition over a compose file of your own, git and file
+    reads that always go to ~/tpotce."""
+
+    HELPERS = DataLossTest.HELPERS
+    JEWELS = f'eval "$(sed -n \'/^myJEWELS="/,/cert"$/p\' {REPO}/update.sh)"\n'
+
+    @staticmethod
+    def functions(*names):
+        """The functions of update.sh, whatever the current folder is."""
+        return DataLossTest.functions(*names).replace("' update.sh)", f"' {REPO}/update.sh)")
+
+    def setUp(self):
+        super().setUp()
+        self.tpotce = os.path.join(self.home, "tpotce")
+        os.makedirs(self.tpotce)
+        self.tmp = os.path.join(self.home, "tmp")
+        os.makedirs(self.tmp)
+        self.elsewhere = os.path.join(self.home, "elsewhere")
+        os.makedirs(self.elsewhere)
+
+    def stub(self, name, text):
+        self.write(os.path.join(self.bin, name), text)
+        os.chmod(os.path.join(self.bin, name), 0o755)
+
+    def write(self, path, text):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as out:
+            out.write(text)
+
+    def read(self, path):
+        with open(path, encoding="utf-8") as handle:
+            return handle.read()
+
+    def bash(self, script, cwd=None):
+        environment = dict(os.environ, HOME=self.home, PATH=f"{self.bin}:{os.environ['PATH']}", TPOT_GUM="off",
+                           TMPDIR=self.tmp, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t", GIT_COMMITTER_NAME="t",
+                           GIT_COMMITTER_EMAIL="t@t", GIT_CONFIG_NOSYSTEM="1")
+        environment.pop("TPOT_MARKS", None)
+        return subprocess.run(["bash", "-c", self.HELPERS + script], cwd=cwd or REPO, capture_output=True,
+                              universal_newlines=True, env=environment, stdin=subprocess.DEVNULL, timeout=60)
+
+    def git(self, *args, repo=None):
+        return subprocess.run(["git", "-C", repo or self.tpotce, "-c", "user.email=t@t", "-c", "user.name=t"]
+                              + list(args), capture_output=True, check=True, universal_newlines=True).stdout
+
+    def clone_of_origin(self):
+        """HOME/tpotce, a clone of an origin with the branches master and other, on master."""
+        origin = os.path.join(self.home, "origin")
+        subprocess.run(["git", "init", "-q", "-b", "master", origin], check=True)
+        self.write(os.path.join(origin, "version"), read("version"))
+        self.write(os.path.join(origin, "env.example"), "TPOT_VERSION=24.04.2\n")
+        self.git("add", ".", repo=origin)
+        self.git("commit", "-q", "-m", "one", repo=origin)
+        self.git("branch", "other", repo=origin)
+        shutil.rmtree(self.tpotce)
+        subprocess.run(["git", "clone", "-q", origin, self.tpotce], check=True)
+
+    def commit_mine(self):
+        self.write(os.path.join(self.tpotce, "mine.txt"), "mine\n")
+        self.git("add", "mine.txt")
+        self.git("commit", "-q", "-m", "mine")
+        return self.git("rev-parse", "HEAD").strip()
+
+    # --- fuBACKUP: binary changes, the data path --------------------------------------------------
+
+    def backup(self, custom=None, full=False):
+        """fuBACKUP with a stub tar that records its arguments and keeps a copy of the staging folder."""
+        self.stub("tar", '#!/bin/sh\nif [ "$1" = cf ]; then\n  echo "$*" >> "$HOME/tar_calls"\n  : > "$2"\n'
+                         '  while [ $# -gt 0 ]; do [ "$1" = "-C" ] && { cp -R "$2" "$HOME/staged"; break; }; shift; done\n'
+                         'elif [ "$1" = tf ]; then echo MANIFEST; fi\nexit 0\n')
+        self.stub("hostname", "#!/bin/sh\necho test\n")
+        self.write(os.path.join(self.tpotce, ".env"), "TPOT_TYPE=HIVE\nTPOT_VERSION=24.04.2\n")
+        data = custom or os.path.join(self.tpotce, "data")
+        for jewel in ("uuid", "nginx/cert/nginx.crt"):
+            self.write(os.path.join(data, jewel), "x\n")
+        script = (self.JEWELS + self.functions("fuBACKUP", "fuDATA_PATH")
+                  + f'fuTMPDIR () {{ myTMPDIR=$(mktemp -d); }}; fuARCHIVE_NAME () {{ echo "{self.home}/a.tar"; }}\n'
+                  + f'fuROTATE () {{ :; }}; myEDITION=STANDARD myFULL={"1" if full else ""}\n'
+                  + (f'fuDATA_PATH () {{ echo "{custom}"; }}\n' if custom else '') + 'fuBACKUP\n')
+        return self.bash(script)
+
+    def tar_calls(self):
+        path = os.path.join(self.home, "tar_calls")
+        text = self.read(path)
+        os.remove(path)
+        shutil.rmtree(os.path.join(self.home, "staged"))
+        return text
+
+    def test_backup_patch_is_binary(self):
+        self.clone_of_origin()
+        self.write(os.path.join(self.tpotce, "pic.bin"), "one\n")
+        self.git("add", "pic.bin")
+        self.git("commit", "-q", "-m", "pic")
+        with open(os.path.join(self.tpotce, "pic.bin"), "wb") as out:
+            out.write(bytes(range(256)))                                # a changed binary file
+        result = self.backup()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        patch = os.path.join(self.home, "staged", "tracked.patch")
+        self.assertIn("GIT binary patch", self.read(patch))
+        self.git("checkout", "pic.bin")
+        self.git("apply", "--check", patch)                             # and it applies again
+
+    def test_jewels_and_full_follow_the_data_path(self):
+        self.clone_of_origin()
+        custom = os.path.join(self.home, "mnt", "tpotdata")
+        result = self.backup(custom=custom)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        call = self.tar_calls()
+        self.assertIn(f"-C {custom} ./uuid ./nginx/cert", call)
+        self.assertIn("--transform", call)                              # they land in the archive as data/...
+        self.assertNotIn(f"{self.tpotce}/data", call)
+        result = self.backup(custom=custom, full=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        call = self.tar_calls()
+        self.assertIn(f"-C {custom} .", call)
+        self.assertNotIn("./uuid", call)
+
+    def test_jewels_stay_in_data_for_the_default_path(self):
+        self.clone_of_origin()
+        result = self.backup()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        call = self.tar_calls()
+        self.assertIn(f"-C {self.tpotce} data/uuid data/nginx/cert", call)
+        self.assertNotIn("--transform", call)
+
+    def test_backup_size_follows_the_data_path(self):
+        custom = os.path.join(self.home, "mnt", "tpotdata")
+        for jewel in ("uuid", "nginx/cert/nginx.crt"):
+            self.write(os.path.join(custom, jewel), "x\n")
+        self.write(os.path.join(self.tpotce, "data", "uuid"), "x\n")
+        self.stub("du", '#!/bin/sh\necho "$*" >> "$HOME/du_calls"\nprintf "1\\ttotal\\n"\n')
+        base = (self.JEWELS + self.functions("fuBACKUP_SIZE")
+                + f'fuDATA_PATH () {{ echo "{custom}"; }}\nmyTMPDIR={self.tmp}\n')
+        for full in ("", "1"):
+            with self.subTest(full=bool(full)):
+                result = self.bash(base + f"myFULL={full}\nfuBACKUP_SIZE\n")
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                calls = self.read(os.path.join(self.home, "du_calls"))
+                os.remove(os.path.join(self.home, "du_calls"))
+                self.assertNotIn(f"{self.tpotce}/data", calls)
+                if full:
+                    self.assertIn(custom, calls)
+                else:
+                    self.assertIn(f"{custom}/uuid {custom}/nginx/cert", calls)
+
+    # --- fuSWITCH_SOURCE: a ref for commits origin does not have -----------------------------------
+
+    def switch(self, before=""):
+        origin = os.path.join(self.home, "origin")
+        script = (self.functions("fuSWITCH_SOURCE") + before
+                  + f'myTPOT_SOURCE_GIVEN=1 myTPOT_REPO_URL="{origin}" myCURRENT_REPO="{origin}" '
+                  'myTPOT_BRANCH=master myCURRENT_BRANCH=other\nfuSWITCH_SOURCE\necho "rc=$?"\n')
+        return self.bash(script, cwd=self.elsewhere)
+
+    def test_switch_source_keeps_a_backup_ref(self):
+        self.clone_of_origin()
+        mine = self.commit_mine()
+        self.git("checkout", "-q", "other")
+        result = self.switch()
+        out = result.stdout + result.stderr
+        self.assertIn("rc=0", out)
+        refs = [line for line in self.git("for-each-ref", "--format=%(refname) %(objectname)",
+                                          "refs/tpot-backup/").split("\n") if line]
+        self.assertEqual(len(refs), 1, refs)
+        self.assertRegex(refs[0], r"^refs/tpot-backup/[0-9]{14}/master " + mine + "$")
+        warns = [line for line in out.splitlines() if line.startswith("WARN:")]
+        self.assertTrue(any(refs[0].split(" ")[0] in line for line in warns), out)    # the warning names the ref
+        self.assertNotEqual(self.git("rev-parse", "master").strip(), mine)            # master is origin's now
+        self.assertEqual(self.git("branch", "--show-current").strip(), "master")
+
+    def test_switch_source_without_own_commits_keeps_no_ref(self):
+        self.clone_of_origin()
+        self.git("checkout", "-q", "other")
+        result = self.switch()
+        self.assertIn("rc=0", result.stdout + result.stderr)
+        self.assertEqual(self.git("for-each-ref", "refs/tpot-backup/").strip(), "")
+        self.assertNotIn("WARN", result.stdout)
+
+    def test_switch_source_stops_when_the_ref_cannot_be_kept(self):
+        self.clone_of_origin()
+        self.commit_mine()
+        self.git("checkout", "-q", "other")
+        result = self.switch('git () { case " $* " in *" update-ref "*) return 1 ;; esac; command git "$@"; }\n')
+        out = result.stdout + result.stderr
+        self.assertNotIn("rc=0", out)
+        self.assertEqual(self.git("branch", "--show-current").strip(), "other")       # nothing was switched
+        self.assertIn("mine", self.git("log", "--format=%s", "master"))
+
+    # --- the pull, the removal of images -----------------------------------------------------------
+
+    def updater(self, pull_rc):
+        self.write(os.path.join(self.tpotce, ".env"), "TPOT_REPO=ghcr.io/x\nTPOT_VERSION=24.04.2\n")
+        script = (self.functions("fuUPDATER")
+                  + f'fuPULLIMAGES () {{ return {pull_rc}; }}; fuREMOVEOLDIMAGES () {{ echo "REMOVE-CALLED"; }}\n'
+                  'newVERSION=24.04.2 myCOMPOSE_CUSTOMIZED="" myARCHIVE=/x.tar\nfuUPDATER\n')
+        return self.bash(script)
+
+    def test_no_image_removal_after_a_failed_pull(self):
+        out = (lambda r: r.stdout + r.stderr)(self.updater(1))
+        self.assertNotIn("REMOVE-CALLED", out)
+        self.assertIn("Could not pull all images", out)
+
+    def test_images_go_after_a_pull_that_worked(self):
+        self.assertIn("REMOVE-CALLED", self.updater(0).stdout)
+
+    # --- .env and its side files -------------------------------------------------------------------
+
+    def test_env_side_files_are_not_overwritten(self):
+        env = os.path.join(self.tpotce, ".env")
+        self.write(env, "TPOT_TYPE=HIVE\nBEELZEBUB_LLM_MODEL=ollama\nBEELZEBUB_OLLAMA_MODEL=m1\n")
+        self.write(os.path.join(self.tpotce, "env.example"), "TPOT_TYPE=HIVE\nNEW_KEY=1\n")
+        mine = {name: f"mine {name}\n" for name in (".env.user", ".env.system", ".env.merge", ".env.beelzebub")}
+        for name, text in mine.items():
+            self.write(os.path.join(self.tpotce, name), text)
+        script = (self.functions("fuENV_KEYS", "fuENV_VALUE", "fuMERGE_ENV_KEYS", "fuMIGRATE_BEELZEBUB_ENV")
+                  + f'fuMIGRATE_BEELZEBUB_ENV "{env}"; fuMERGE_ENV_KEYS "{env}" "{self.tpotce}/env.example"\n')
+        result = self.bash(script)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        text = self.read(env)
+        self.assertIn("BEELZEBUB_LLM_PROVIDER", text)                   # both functions did their work
+        self.assertIn("NEW_KEY=1", text)
+        for name, kept in mine.items():
+            self.assertEqual(self.read(os.path.join(self.tpotce, name)), kept, name)
+        self.assertEqual(os.listdir(self.tmp), [])                      # and left nothing in TMPDIR
+
+    # --- the log, the edition ----------------------------------------------------------------------
+
+    def log_start(self, prepared=""):
+        backups = os.path.join(self.home, "tpot_backups")
+        self.write(os.path.join(backups, "update.log"), "the last run\n")
+        script = (self.functions("fuLOG_START") + f'myBACKUPDIR="{backups}" myLOG="{backups}/update.log" '
+                  f'myPREPARED="{prepared}"\nfuLOG_START\n')
+        self.assertEqual(self.bash(script).returncode, 0)
+        return backups
+
+    def test_log_of_the_last_run_is_kept(self):
+        backups = self.log_start()
+        self.assertEqual(self.read(os.path.join(backups, "update.log.1")), "the last run\n")
+        self.assertEqual(self.read(os.path.join(backups, "update.log")), "")
+
+    def test_log_of_the_run_before_a_restart_stays(self):
+        backups = self.log_start("1")                                   # the restarted script adds to it
+        self.assertEqual(self.read(os.path.join(backups, "update.log")), "the last run\n")
+        self.assertFalse(os.path.exists(os.path.join(backups, "update.log.1")))
+
+    def test_unknown_sensor_edition_warns(self):
+        self.write(os.path.join(self.tpotce, ".env"), "TPOT_TYPE=SENSOR\n")
+        self.write(os.path.join(self.tpotce, "docker-compose.yml"), "services: {own: {}}\n")
+        self.write(os.path.join(self.tpotce, "compose", "sensor.yml"), "# T-Pot: SENSOR\n")
+        script = (self.functions("fuEDITION_TEMPLATE", "fuRESTORE_EDITION")
+                  + 'myEDITION=UNKNOWN myCOMPOSE_CUSTOMIZED="" myARCHIVE=/b/x_tpot_backup.tar\nfuRESTORE_EDITION\n')
+        result = self.bash(script)
+        warns = [line for line in result.stdout.splitlines() if line.startswith("WARN:")]
+        self.assertTrue(any("docker-compose.yml" in line and "/b/x_tpot_backup.tar" in line for line in warns), warns)
+        self.assertEqual(self.read(os.path.join(self.tpotce, "docker-compose.yml")), "# T-Pot: SENSOR\n")
+
+    # --- git and files always from ~/tpotce --------------------------------------------------------
+
+    def test_source_and_version_come_from_the_checkout_not_the_current_folder(self):
+        self.clone_of_origin()
+        script = (f'source {REPO}/installer/lib/ui.sh; fuUI_INIT\n'
+                  + self.functions("fuNORMALIZE_REPO", "fuCHECK_SOURCE", "fuCHECK_VERSION")
+                  + f'myHERE="{REPO}" myTPOT_SOURCE_GIVEN="" myTPOT_BRANCH="" myTPOT_REPO_URL=""\n'
+                  'fuCHECK_SOURCE; echo "branch=${myCURRENT_BRANCH} repo=${myCURRENT_REPO}"; fuCHECK_VERSION\n')
+        result = self.bash(script, cwd=self.elsewhere)
+        out = result.stdout + result.stderr
+        self.assertIn("branch=master", out)
+        self.assertIn("is eligible for the update procedure", out)
+
+    def test_no_bare_git_or_file_read_in_update_sh(self):
+        bad = []
+        for number, line in enumerate(read("update.sh").splitlines(), 1):
+            code = line.strip()
+            if code.startswith(("#", "echo")) or "fuUI_" in code:
+                continue
+            if re.search(r'(^|[\s(!&|;])git (rev-parse|remote|fetch|reset|pull|checkout|branch|describe|ls-files)\b',
+                         code):
+                bad.append((number, code))
+            if re.search(r'(env\.example|< version|cat version|-f "version")', code) \
+               and "$HOME/tpotce" not in code and "${myHERE}" not in code and " show " not in code:
+                bad.append((number, code))
+        self.assertEqual(bad, [])
 
 
 if __name__ == "__main__":

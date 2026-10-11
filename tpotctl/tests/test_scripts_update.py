@@ -268,7 +268,7 @@ class LinuxOnlyTest(Scripts):
 
 
 class VersionTest(Scripts):
-    """update.sh compares with the version of its own checkout (the file `version`), not a number in it."""
+    """update.sh compares the file `version` of ~/tpotce with the one of its own checkout, not a number in it."""
 
     def checkout(self, name, version, with_script=True):
         path = os.path.join(self.home, name)
@@ -281,7 +281,7 @@ class VersionTest(Scripts):
         return path
 
     def test_the_version_of_the_checkout_is_the_newest_it_knows(self):
-        checkout = self.checkout("next", "99.1.0")
+        checkout = self.checkout("tpotce", "99.1.0")
         result = self.run_plain(os.path.join(checkout, "update.sh"), "-y", cwd=checkout)
         out = result.stdout + result.stderr
         self.assertIn("99.1.0 is eligible for the update procedure.", out)
@@ -290,7 +290,7 @@ class VersionTest(Scripts):
 
     def test_a_checkout_newer_than_the_update_sh_is_refused(self):
         script = self.checkout("script", "25.0.0")
-        checkout = self.checkout("next", "99.1.0", with_script=False)
+        checkout = self.checkout("tpotce", "99.1.0", with_script=False)
         result = self.run_plain(os.path.join(script, "update.sh"), "-y", cwd=checkout)
         out = result.stdout + result.stderr
         self.assertIn("99.1.0 cannot be upgraded automatically", out)
@@ -300,7 +300,7 @@ class VersionTest(Scripts):
     def compare(self, local, script_version):
         """update.sh of a checkout at script_version run in a checkout at local."""
         script = self.checkout("script", script_version)
-        checkout = self.checkout("next", local, with_script=False)
+        checkout = self.checkout("tpotce", local, with_script=False)
         result = self.run_plain(os.path.join(script, "update.sh"), "-y", cwd=checkout)
         return result.stdout + result.stderr
 
@@ -319,7 +319,7 @@ class VersionTest(Scripts):
     def test_spaces_and_crlf_in_the_version_files(self):
         """A version file written on Windows (CRLF) or with spaces is the same version."""
         script = self.checkout("script", " 24.04.10\r")
-        checkout = self.checkout("next", "24.04.2 \r", with_script=False)
+        checkout = self.checkout("tpotce", "24.04.2 \r", with_script=False)
         result = self.run_plain(os.path.join(script, "update.sh"), "-y", cwd=checkout)
         out = result.stdout + result.stderr
         self.assertIn("### [OK] - 24.04.2 is eligible for the update procedure.", out)

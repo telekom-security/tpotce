@@ -398,10 +398,11 @@ function fuLOSS_CONFIRM () {   # $1 = backups | elastic | images, $2 = text
 }
 
 # The log of the steps under a spinner: the one of this run (the restart after the self
-# update adds to it), next to the backups. Without a place for it the output goes nowhere.
+# update adds to it), next to the backups, the one of the run before as update.log.1.
+# Without a place for it the output goes nowhere.
 function fuLOG_START () {
 	if mkdir -p "${myBACKUPDIR}" 2>/dev/null && chmod 0700 "${myBACKUPDIR}" 2>/dev/null \
-	   && { [ -n "${myPREPARED}" ] || : > "${myLOG}"; } 2>/dev/null;
+	   && { [ -n "${myPREPARED}" ] || { { [ ! -s "${myLOG}" ] || mv -f "${myLOG}" "${myLOG}.1"; } && : > "${myLOG}"; }; } 2>/dev/null;
 	  then
 	    return 0
 	fi
@@ -505,16 +506,17 @@ function fuROTATE () {
 # Roughly what the archive needs. The allowance covers MANIFEST, the patch and the
 # Elasticsearch export that is added later.
 function fuBACKUP_SIZE () {
-	local myPATHS=() myJEWEL="" mySUM=0
+	local myPATHS=() myJEWEL="" mySUM=0 myDATA=""
+	myDATA=$(fuDATA_PATH)
 	[ -f "$HOME/tpotce/.env" ] && myPATHS+=("$HOME/tpotce/.env")
 	[ -f "$HOME/tpotce/docker-compose.yml" ] && myPATHS+=("$HOME/tpotce/docker-compose.yml")
 	if [ -n "${myFULL}" ];
 	  then
-	    [ -d "$HOME/tpotce/data" ] && myPATHS+=("$HOME/tpotce/data")
+	    [ -d "${myDATA}" ] && myPATHS+=("${myDATA}")
 	  else
 	    for myJEWEL in ${myJEWELS};
 	      do
-	        [ -e "$HOME/tpotce/${myJEWEL}" ] && myPATHS+=("$HOME/tpotce/${myJEWEL}")
+	        [ -e "${myDATA}/${myJEWEL#data/}" ] && myPATHS+=("${myDATA}/${myJEWEL#data/}")
 	      done;
 	fi
 	[ -d "${myTMPDIR}/stage/elastic" ] && myPATHS+=("${myTMPDIR}/stage/elastic")
@@ -654,8 +656,8 @@ function fuNORMALIZE_REPO () {
 function fuCHECK_SOURCE () {
 	echo
 	fuUI_INFO "Checking the update source ..."
-	myCURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
-	myCURRENT_REPO=$(fuNORMALIZE_REPO "$(git remote get-url origin 2>/dev/null)")
+	myCURRENT_BRANCH=$(git -C "$HOME/tpotce" rev-parse --abbrev-ref HEAD 2>/dev/null)
+	myCURRENT_REPO=$(fuNORMALIZE_REPO "$(git -C "$HOME/tpotce" remote get-url origin 2>/dev/null)")
 	[ -z "${myTPOT_BRANCH}" ] && myTPOT_BRANCH="${myCURRENT_BRANCH}"
 	[ -z "${myTPOT_REPO_URL}" ] && myTPOT_REPO_URL="${myCURRENT_REPO}"
 	myTPOT_REPO_URL=$(fuNORMALIZE_REPO "${myTPOT_REPO_URL}")
@@ -666,7 +668,7 @@ function fuCHECK_SOURCE () {
 	# still works: fuSWITCH_SOURCE checks the branch out and ends the detached state.
 	if [ -z "${myTPOT_BRANCH}" ] || [ "${myTPOT_BRANCH}" == "HEAD" ];
 	  then
-	    fuUI_ERROR "The checkout is not on a branch (detached at $(git describe --tags --always 2>/dev/null)), so there is nothing to update from."
+	    fuUI_ERROR "The checkout is not on a branch (detached at $(git -C "$HOME/tpotce" describe --tags --always 2>/dev/null)), so there is nothing to update from."
 	    fuUI_HINT "Name a branch with '-b master' and it is checked out for you, or switch by hand first: 'git -C $HOME/tpotce switch master'."
 	    fuUI_HINT "Exiting."
 	    echo
@@ -783,11 +785,11 @@ function fuCHECK_EDITION () {
 # from it.
 function fuSWITCH_SOURCE () {
 	[ -n "${myTPOT_SOURCE_GIVEN}" ] || return
-	local mySWITCH=""
+	local mySWITCH="" myLOCAL="" myREF=""
 	if [ "${myTPOT_REPO_URL}" != "${myCURRENT_REPO}" ];
 	  then
 	    fuUI_HINT "Now switching origin from ${myCURRENT_REPO} to ${myTPOT_REPO_URL}."
-	    git remote set-url origin "${myTPOT_REPO_URL}"
+	    git -C "$HOME/tpotce" remote set-url origin "${myTPOT_REPO_URL}"
 	    mySWITCH="1"
 	fi
 	if [ "${myTPOT_BRANCH}" != "${myCURRENT_BRANCH}" ];
@@ -796,9 +798,26 @@ function fuSWITCH_SOURCE () {
 	    mySWITCH="1"
 	fi
 	[ -n "${mySWITCH}" ] || return
-	git fetch origin --prune
-	git reset --hard
-	if ! git checkout -B "${myTPOT_BRANCH}" "origin/${myTPOT_BRANCH}";
+	git -C "$HOME/tpotce" fetch origin --prune
+	# `checkout -B` puts the local branch on origin's: commits that only the local one has would
+	# be left without a name, so they get a ref first, and without one the switch does not start
+	myLOCAL=$(git -C "$HOME/tpotce" rev-parse --verify --quiet "refs/heads/${myTPOT_BRANCH}^{commit}" 2>/dev/null)
+	if [ -n "${myLOCAL}" ] \
+	   && [ -n "$(git -C "$HOME/tpotce" rev-list --max-count=1 "${myLOCAL}" --not --remotes=origin 2>/dev/null)" ];
+	  then
+	    myREF="refs/tpot-backup/$(date +%Y%m%d%H%M%S)/${myTPOT_BRANCH}"
+	    if ! git -C "$HOME/tpotce" update-ref "${myREF}" "${myLOCAL}";
+	      then
+	        fuUI_ERROR "Could not keep the commits of the local branch ${myTPOT_BRANCH} that origin does not have."
+	        fuUI_HINT "Nothing was switched. Exiting."
+	        echo
+	        exit 1
+	    fi
+	    fuUI_WARN "The local branch ${myTPOT_BRANCH} has commits that origin does not have. They stay as ${myREF}."
+	    fuUI_HINT "'git -C $HOME/tpotce checkout -B ${myTPOT_BRANCH} ${myREF}' brings the branch back as it was."
+	fi
+	git -C "$HOME/tpotce" reset --hard
+	if ! git -C "$HOME/tpotce" checkout -B "${myTPOT_BRANCH}" "origin/${myTPOT_BRANCH}";
 	  then
 	    fuUI_ERROR "Could not check out ${myTPOT_BRANCH}."
 	    fuUI_HINT "Exiting."
@@ -807,7 +826,7 @@ function fuSWITCH_SOURCE () {
 	fi
 	# a branch that existed locally before keeps whatever it tracked, the pull
 	# below has to follow the branch that was just requested
-	git branch --set-upstream-to="origin/${myTPOT_BRANCH}" "${myTPOT_BRANCH}"
+	git -C "$HOME/tpotce" branch --set-upstream-to="origin/${myTPOT_BRANCH}" "${myTPOT_BRANCH}"
 }
 
 # Update
@@ -818,12 +837,12 @@ function fuSELFUPDATE () {
 	# or by a switch to a different branch, and then has to restart itself.
 	myOLDSUM=$(sha256sum "$0" | awk '{ print $1 }')
 	local myOLDHEAD=""
-	myOLDHEAD=$(git rev-parse HEAD 2>/dev/null)
+	myOLDHEAD=$(git -C "$HOME/tpotce" rev-parse HEAD 2>/dev/null)
 	fuSWITCH_SOURCE
 	fuUI_HINT "Pulling updates from repository."
 	# Checked, because a failed pull used to leave the checkout untouched while the
 	# run went on to report "Done" - an update that silently did nothing.
-	if ! git fetch --all || ! git reset --hard || ! git pull --force;
+	if ! git -C "$HOME/tpotce" fetch --all || ! git -C "$HOME/tpotce" reset --hard || ! git -C "$HOME/tpotce" pull --force;
 	  then
 	    fuUI_ERROR "Could not pull the updates."
 	    fuUI_HINT "The checkout may be left mid-merge, check it with 'git -C $HOME/tpotce status'."
@@ -834,7 +853,7 @@ function fuSELFUPDATE () {
 	fi
 	# tpot runs from this checkout: a moved HEAD means it should start anew, even if
 	# the update fails later (the restarted script writes into the same output)
-	if [ "$(git rev-parse HEAD 2>/dev/null)" != "${myOLDHEAD}" ];
+	if [ "$(git -C "$HOME/tpotce" rev-parse HEAD 2>/dev/null)" != "${myOLDHEAD}" ];
 	  then
 	    fuMARK changed checkout
 	fi
@@ -872,7 +891,7 @@ function fuSELFUPDATE () {
 	    exec bash "$0" -y "${myRESTART[@]}"
 	    exit 1
 	fi
-	fuDID ok "The checkout is on $(git rev-parse --abbrev-ref HEAD 2>/dev/null) at $(git rev-parse --short HEAD 2>/dev/null), version $(cat version 2>/dev/null)."
+	fuDID ok "The checkout is on $(git -C "$HOME/tpotce" rev-parse --abbrev-ref HEAD 2>/dev/null) at $(git -C "$HOME/tpotce" rev-parse --short HEAD 2>/dev/null), version $(cat "$HOME/tpotce/version" 2>/dev/null)."
 	echo
 }
 
@@ -915,11 +934,11 @@ function fuCHECK_VERSION () {
 	    fuDID fail "This update.sh has no version file next to it, run the one in ~/tpotce."
 	    exit 1
 	fi
-	if [ -f "version" ];
+	if [ -f "$HOME/tpotce/version" ];
 	  then
 	    # the version of the checkout, without spaces and CR (a file written on Windows);
 	    # both compared number by number (24.04.10 is newer than 24.04.9), fuUI_VERSION_GE
-	    myVERSION=$(tr -d "[:space:]" < version)
+	    myVERSION=$(tr -d "[:space:]" < "$HOME/tpotce/version")
 	    if fuUI_VERSION_GE "${myVERSION}" "${myMINVERSION}" && fuUI_VERSION_GE "${myMASTERVERSION}" "${myVERSION}";
 	      then
 	        fuUI_OK "$myVERSION is eligible for the update procedure."
@@ -1272,6 +1291,7 @@ function fuBACKUP () {
 	local myFILE=""
 	local myJEWELLIST=()
 	local myJEWELARGS=()
+	local myDATA=""
 	echo
 	fuUI_INFO "Create a backup, just in case ... "
 	# The second pass would archive the checkout that the pull has already reset, and
@@ -1298,7 +1318,8 @@ function fuBACKUP () {
 	mkdir -p "${myStage}"
 
 	# What git cannot bring back
-	git -C "$HOME/tpotce" diff HEAD > "${myStage}/tracked.patch"
+	# --binary: without it a changed binary file is only a "differ" line and cannot come back
+	git -C "$HOME/tpotce" diff --binary HEAD > "${myStage}/tracked.patch"
 	git -C "$HOME/tpotce" rev-parse HEAD > "${myStage}/rollback.txt"
 	cp "$HOME/tpotce/.env" "${myStage}/env" 2>/dev/null
 	[ -f "$HOME/tpotce/docker-compose.yml" ] && cp "$HOME/tpotce/docker-compose.yml" "${myStage}/"
@@ -1339,19 +1360,39 @@ function fuBACKUP () {
 	[ -d "${myStage}/elastic" ]            && myTARGETS="${myTARGETS} elastic"
 
 	# With `--full` all of data/, otherwise only the irreplaceable files. Both belong
-	# to tpot:tpot with 0770, which the archive has to record.
-	if [ -n "${myFULL}" ];
+	# to tpot:tpot with 0770, which the archive has to record. The data folder is the
+	# one TPOT_DATA_PATH names; elsewhere than ~/tpotce/data its files go into the
+	# archive as data/..., the way restore.sh looks for them.
+	myDATA=$(fuDATA_PATH)
+	if [ "${myDATA}" == "$HOME/tpotce/data" ];
 	  then
-	    [ -d "$HOME/tpotce/data" ] && myJEWELLIST+=("data")
+	    if [ -n "${myFULL}" ];
+	      then
+	        [ -d "${myDATA}" ] && myJEWELLIST+=("data")
+	      else
+	        for myJEWEL in ${myJEWELS};
+	          do
+	            [ -e "$HOME/tpotce/${myJEWEL}" ] && myJEWELLIST+=("${myJEWEL}")
+	          done;
+	    fi
+	    if [ ${#myJEWELLIST[@]} -gt 0 ];
+	      then
+	        myJEWELARGS=(-C "$HOME/tpotce" "${myJEWELLIST[@]}")
+	    fi
 	  else
-	    for myJEWEL in ${myJEWELS};
-	      do
-	        [ -e "$HOME/tpotce/${myJEWEL}" ] && myJEWELLIST+=("${myJEWEL}")
-	      done;
-	fi
-	if [ ${#myJEWELLIST[@]} -gt 0 ];
-	  then
-	    myJEWELARGS=(-C "$HOME/tpotce" "${myJEWELLIST[@]}")
+	    if [ -n "${myFULL}" ];
+	      then
+	        [ -d "${myDATA}" ] && myJEWELLIST+=(".")
+	      else
+	        for myJEWEL in ${myJEWELS};
+	          do
+	            [ -e "${myDATA}/${myJEWEL#data/}" ] && myJEWELLIST+=("./${myJEWEL#data/}")
+	          done;
+	    fi
+	    if [ ${#myJEWELLIST[@]} -gt 0 ];
+	      then
+	        myJEWELARGS=(--transform 's,^\./,data/,' -C "${myDATA}" "${myJEWELLIST[@]}")
+	    fi
 	fi
 
 	# A single tar run: intermediate files created under sudo belong to root and
@@ -1529,8 +1570,15 @@ function fuUPDATER () {
 	    fuUI_HINT "  docker compose -f $HOME/tpotce/docker-compose.yml pull"
 	    fuDID warn "Not all images could be pulled, T-Pot pulls them again when it starts (see above)."
 	fi
-	fuMARK phase cleanup Removing old images
-	fuREMOVEOLDIMAGES
+	# The images of the earlier tags are the ones T-Pot would still start from: they go only when
+	# the pull brought the images of this release
+	if [ -n "${myPULLOK}" ];
+	  then
+	    fuMARK phase cleanup Removing old images
+	    fuREMOVEOLDIMAGES
+	  else
+	    fuUI_HINT "No image was removed, as the images of this release are not all there."
+	fi
 	echo
 	if [ -n "${myCOMPOSE_CUSTOMIZED}" ];
 	  then
@@ -1581,8 +1629,8 @@ function fuRESTORE () {
 	# The tag comes from env.example, not from `version`: at 24.04.0 those differed
 	# (release 24.04.0, images tagged 24.04), and env.example is the file that ships
 	# what .env should hold.
-	newVERSION=$(grep -E "^TPOT_VERSION=" env.example 2>/dev/null | tail -1 | cut -d= -f2-)
-	[ -z "${newVERSION}" ] && newVERSION=$(cat version)
+	newVERSION=$(grep -E "^TPOT_VERSION=" "$HOME/tpotce/env.example" 2>/dev/null | tail -1 | cut -d= -f2-)
+	[ -z "${newVERSION}" ] && newVERSION=$(cat "$HOME/tpotce/version")
 	myOLDVERSION=$(grep -E "^TPOT_VERSION=" "$HOME/tpotce/.env" | tail -1 | cut -d= -f2-)
 	# Digits and dots are a release tag, `24.04` as much as `24.04.1`. Only a value
 	# with something else in it - `dev`, a branch name - is a deliberate pin.
@@ -1600,7 +1648,7 @@ function fuRESTORE () {
 	# limits are a known issue. An installation still on that old default is raised;
 	# a registry someone picked themselves is left alone.
 	myOLDREPO=$(grep -E "^TPOT_REPO=" "$HOME/tpotce/.env" | tail -1 | cut -d= -f2-)
-	myNEWREPO=$(grep -E "^TPOT_REPO=" env.example 2>/dev/null | tail -1 | cut -d= -f2-)
+	myNEWREPO=$(grep -E "^TPOT_REPO=" "$HOME/tpotce/env.example" 2>/dev/null | tail -1 | cut -d= -f2-)
 	if [ "${myOLDREPO}" == "dtagdevsec" ] && [ -n "${myNEWREPO}" ] && [ "${myNEWREPO}" != "dtagdevsec" ];
 	  then
 	    sed -i "s|^TPOT_REPO=.*|TPOT_REPO=${myNEWREPO}|" "$HOME/tpotce/.env"
@@ -1630,7 +1678,7 @@ function fuENV_VALUE () {
 # kept. Runs again without effect once BEELZEBUB_LLM_PROVIDER is there.
 function fuMIGRATE_BEELZEBUB_ENV () {
 	local myENVFILE="$1"
-	local myOLDMODEL myOLLAMAMODEL myHOST myAPIKEY myPROVIDER myMODEL
+	local myOLDMODEL myOLLAMAMODEL myHOST myAPIKEY myPROVIDER myMODEL myNEWFILE
 	if grep -qE "^BEELZEBUB_LLM_PROVIDER[[:space:]]*[:=]" "${myENVFILE}" \
 	   || ! grep -qE "^BEELZEBUB_LLM_MODEL[[:space:]]*[:=]" "${myENVFILE}";
 	  then
@@ -1656,6 +1704,8 @@ function fuMIGRATE_BEELZEBUB_ENV () {
 	    return 0
 	    ;;
 	esac
+	# The new text goes to a file of its own: a name next to .env may belong to somebody else
+	myNEWFILE=$(mktemp "${TMPDIR:-/tmp}/tpot-env-beelzebub.XXXXXX") || return 0
 	# The old comments describe the old settings, the new block replaces the old assignment
 	if ! awk -v provider="${myPROVIDER}" -v model="${myMODEL}" -v host="${myHOST}" -v apikey="${myAPIKEY}" '
 	  /^# BEELZEBUB_(LLM_MODEL|LLM_HOST|OLLAMA_MODEL|OPENAISECRETKEY):/ { next }
@@ -1672,14 +1722,15 @@ function fuMIGRATE_BEELZEBUB_ENV () {
 	    next
 	  }
 	  { print }
-	' "${myENVFILE}" > "${myENVFILE}.beelzebub";
+	' "${myENVFILE}" > "${myNEWFILE}";
 	  then
-	    rm -f "${myENVFILE}.beelzebub"
+	    rm -f "${myNEWFILE}"
 	    fuUI_ERROR "Could not migrate the Beelzebub settings in ${myENVFILE}, please set them up as in env.example."
 	    return 0
 	fi
 	# cat keeps the owner and the mode of .env, it holds credentials
-	cat "${myENVFILE}.beelzebub" > "${myENVFILE}" && rm -f "${myENVFILE}.beelzebub"
+	cat "${myNEWFILE}" > "${myENVFILE}"
+	rm -f "${myNEWFILE}"
 	fuUI_OK "Beelzebub settings moved to BEELZEBUB_LLM_PROVIDER=${myPROVIDER}, BEELZEBUB_LLM_MODEL=${myMODEL}."
 }
 
@@ -1789,11 +1840,14 @@ function fuMERGE_ENV_KEYS () {
 	local myENVFILE="$1" myEXAMPLE="$2"
 	shift 2
 	local myVERSION myMARKER myKEY myKEYLINE myTARGET myCOMPOSE myADDED="" myOBSOLETE="" myKEPT=""
+	local myUSERFILE mySYSTEMFILE myMERGEFILE
 	[ -f "${myEXAMPLE}" ] && [ -f "${myENVFILE}" ] || return 0
 	myVERSION=$(grep -E "^TPOT_VERSION=" "${myEXAMPLE}" | tail -1 | cut -d= -f2-)
 	myMARKER=$(grep -n "^# NEVER MAKE CHANGES" "${myEXAMPLE}" | head -1 | cut -d: -f1)
-	: > "${myENVFILE}.user"
-	: > "${myENVFILE}.system"
+	# Files of their own: names next to .env (.env.user, .env.merge ...) may belong to somebody else
+	myUSERFILE=$(mktemp "${TMPDIR:-/tmp}/tpot-env-user.XXXXXX") || return 0
+	mySYSTEMFILE=$(mktemp "${TMPDIR:-/tmp}/tpot-env-system.XXXXXX") || { rm -f "${myUSERFILE}"; return 0; }
+	myMERGEFILE=$(mktemp "${TMPDIR:-/tmp}/tpot-env-merge.XXXXXX") || { rm -f "${myUSERFILE}" "${mySYSTEMFILE}"; return 0; }
 	for myKEY in $(fuENV_KEYS "${myEXAMPLE}");
 	  do
 	    fuENV_KEYS "${myENVFILE}" | grep -qx "${myKEY}" && continue
@@ -1805,8 +1859,8 @@ function fuMERGE_ENV_KEYS () {
 	        ;;
 	    esac
 	    myKEYLINE=$(grep -nE "^${myKEY}[[:space:]]*[:=]" "${myEXAMPLE}" | head -1 | cut -d: -f1)
-	    myTARGET="${myENVFILE}.user"
-	    [ -n "${myMARKER}" ] && [ "${myKEYLINE}" -gt "${myMARKER}" ] && myTARGET="${myENVFILE}.system"
+	    myTARGET="${myUSERFILE}"
+	    [ -n "${myMARKER}" ] && [ "${myKEYLINE}" -gt "${myMARKER}" ] && myTARGET="${mySYSTEMFILE}"
 	    # The key line and the comments right above it, without the section rulers
 	    awk -v myAT="${myKEYLINE}" '
 	      { myLINE[NR] = $0 }
@@ -1834,7 +1888,7 @@ function fuMERGE_ENV_KEYS () {
 	if [ -n "${myADDED}" ] || [ -n "${myOBSOLETE}" ];
 	  then
 	    # New settings go in front of the ruler above "# NEVER MAKE CHANGES", system settings to the end
-	    if awk -v myUSERFILE="${myENVFILE}.user" -v mySYSTEMFILE="${myENVFILE}.system" -v myOBSOLETE=" ${myOBSOLETE} " -v myVERSION="${myVERSION}" '
+	    if awk -v myUSERFILE="${myUSERFILE}" -v mySYSTEMFILE="${mySYSTEMFILE}" -v myOBSOLETE=" ${myOBSOLETE} " -v myVERSION="${myVERSION}" '
 	      function fuBLOCK(myFILE,  myL, myN) {
 	        myN = 0
 	        while ((getline myL < myFILE) > 0) { if (!myN++) printf "# Added by update.sh for T-Pot %s", myVERSION; print (myN == 1 && myL == "" ? "" : myL) }
@@ -1858,10 +1912,10 @@ function fuMERGE_ENV_KEYS () {
 	        }
 	        if (myAT > NR) fuBLOCK(myUSERFILE)
 	        fuBLOCK(mySYSTEMFILE)
-	      }' "${myENVFILE}" > "${myENVFILE}.merge";
+	      }' "${myENVFILE}" > "${myMERGEFILE}";
 	      then
 	        # cat keeps the owner and the mode of .env, it holds credentials
-	        cat "${myENVFILE}.merge" > "${myENVFILE}"
+	        cat "${myMERGEFILE}" > "${myENVFILE}"
 	        [ -n "${myADDED}" ] && fuUI_OK "New settings added to .env with their defaults:${myADDED}"
 	        [ -n "${myOBSOLETE}" ] && fuUI_OK "Settings no longer used, commented out in .env:${myOBSOLETE}"
 	      else
@@ -1869,7 +1923,7 @@ function fuMERGE_ENV_KEYS () {
 	    fi
 	fi
 	[ -n "${myKEPT}" ] && fuUI_HINT "Not in env.example, kept as a compose file uses them:${myKEPT}"
-	rm -f "${myENVFILE}.user" "${myENVFILE}.system" "${myENVFILE}.merge"
+	rm -f "${myUSERFILE}" "${mySYSTEMFILE}" "${myMERGEFILE}"
 	return 0
 }
 
@@ -1912,6 +1966,9 @@ function fuRESTORE_EDITION () {
 	    if grep -qE "^TPOT_TYPE=SENSOR" "$HOME/tpotce/.env" 2>/dev/null;
 	      then
 	        fuUI_WARN "TPOT_TYPE is SENSOR, restoring the SENSOR edition instead of ${myEDITION}."
+	        # A compose file that matched no edition may be one of your own, and the template replaces it
+	        [ "${myEDITION}" == "UNKNOWN" ] \
+	          && fuUI_WARN "$HOME/tpotce/docker-compose.yml matched no edition and is replaced by the SENSOR edition. Your file is in the backup ${myARCHIVE}: tar xOf ${myARCHIVE} docker-compose.yml"
 	        myEDITION="SENSOR"
 	    fi
 	fi
@@ -2436,7 +2493,7 @@ if [ -n "${myOLDER_CHECKOUT}" ];
   then
     echo
     fuUI_INFO "This is a downgrade, not an update, so nothing was pulled or removed."
-    fuUI_HINT "The checkout is at $(git rev-parse --abbrev-ref HEAD 2>/dev/null), whose update.sh predates the one you started. Its .env and its compose file ask for the images of that release, and the cleanup would remove the ones in use."
+    fuUI_HINT "The checkout is at $(git -C "$HOME/tpotce" rev-parse --abbrev-ref HEAD 2>/dev/null), whose update.sh predates the one you started. Its .env and its compose file ask for the images of that release, and the cleanup would remove the ones in use."
     fuUI_HINT "Your configuration and your edition are back in place, no image was touched, T-Pot is stopped."
     fuUI_HINT "To update to the current release instead:"
     fuUI_HINT "  ./update.sh -y -b master"
