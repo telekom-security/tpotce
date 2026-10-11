@@ -1,5 +1,8 @@
 """Ciscoasa v2 log inputs, dashboard references and packaged export consistency."""
 import json
+import re
+import subprocess
+import tempfile
 from pathlib import Path
 import unittest
 import zipfile
@@ -8,6 +11,36 @@ ROOT = Path(__file__).resolve().parents[2]
 EXPORT = ROOT / 'docker/tpotinit/dist/etc/objects/kibana_export.ndjson'
 
 class CiscoasaIntegrationTest(unittest.TestCase):
+    def test_data_modes_on_existing_files(self):
+        text = (ROOT / 'docker/tpotinit/dist/bin/clean.sh').read_text()
+        function = re.search(r'fuCISCOASA \(\) \{.*?^\}', text, re.M | re.S).group()
+        with tempfile.TemporaryDirectory() as directory:
+            data = Path(directory) / 'data'
+            folder = data / 'ciscoasa'
+            payloads = folder / 'payloads'
+            payloads.mkdir(parents=True)
+            sample = payloads / 'sample'
+            sample.write_text('inert')
+            sample.chmod(0o770)
+            function = function.replace('/data/ciscoasa', str(folder))
+            subprocess.run(['bash', '-c', 'chown() { :; }\nmyPERSISTENCE=on\n' + function + '\nfuCISCOASA'], check=True, capture_output=True)
+            self.assertEqual(sample.stat().st_mode & 0o777, 0o660)
+            for child in (folder, payloads, folder / 'identity', folder / 'log'):
+                self.assertEqual(child.stat().st_mode & 0o777, 0o770)
+            other = data / 'other'
+            other.mkdir()
+            target = Path(directory) / 'target'
+            target.write_text('inert')
+            target.chmod(0o600)
+            (other / 'link').symlink_to(target)
+            sample.chmod(0o660)
+            command = 'find /data -path /data/ciscoasa -prune -o ! -type l -exec chmod 770 {} +'
+            self.assertIn(command, text)
+            subprocess.run(['bash', '-c', command.replace('/data', str(data))], check=True, capture_output=True)
+            self.assertEqual(sample.stat().st_mode & 0o777, 0o660)
+            self.assertEqual(other.stat().st_mode & 0o777, 0o770)
+            self.assertEqual(target.stat().st_mode & 0o777, 0o600)
+
     def test_both_logstash_pipelines_decode_json_without_kv(self):
         for name in ('logstash.conf', 'http_output.conf'):
             text = (ROOT / 'docker/elk/logstash/dist' / name).read_text()
