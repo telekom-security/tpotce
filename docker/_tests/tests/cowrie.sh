@@ -23,6 +23,9 @@ MAPPED_SSH_PORT=""
 MAPPED_TELNET_PORT=""
 EXPECTED_IDENTITY_FILE=""
 SHELL_OUTPUT_FILE=""
+# the second start with COWRIE_PERSONA_ROTATION; run_all_personas does it once, for the first persona
+ROTATION_STEP="true"
+ROTATION_DAYS="7"
 
 usage() {
   cat <<EOF
@@ -167,6 +170,7 @@ services:
       - "${TEST_BIND_IP}:${TELNET_PORT}:23"
     environment:
       COWRIE_PERSONA: "${PERSONA}"
+      COWRIE_PERSONA_ROTATION: "\${COWRIE_PERSONA_ROTATION:-0}"
     volumes:
       - "${DL_DIR}:/home/cowrie/cowrie/dl"
       - "${KEYS_DIR}:/home/cowrie/cowrie/etc"
@@ -429,9 +433,13 @@ SE = 240
 
 BEGIN = "TPOT_BEGIN"
 END = "TPOT_END"
+PY_MARK = "TPOT_PY"
+AFTER_MARK = "TPOT_AFTER"
 COMMAND = (
     f"echo {BEGIN}; uname -r; hostname; nproc; grep -c ^processor /proc/cpuinfo; "
-    f"awk '/MemTotal/ {{print $2}}' /proc/meminfo; cat /etc/os-release; echo {END}"
+    f"awk '/MemTotal/ {{print $2}}' /proc/meminfo; cat /etc/os-release; "
+    # the interpreter answers and the line goes on (a harmless stand-in, no attacker code)
+    f"echo {PY_MARK}; python3 -c 'print(1)'; echo {AFTER_MARK}; echo {END}"
 )
 # AuthRandom (2, 5, 10) accepts after 2 to 5 different attempts per source IP
 MAX_LOGINS = 12
@@ -618,7 +626,14 @@ for name, got, want in checks:
     if got != want:
         problems.append(f"{name}: {got!r}, identity.json says {want!r}")
 
-os_release = lines[5:]
+rest = lines[5:]
+if "TPOT_PY" in rest:
+    os_release, after = rest[:rest.index("TPOT_PY")], rest[rest.index("TPOT_PY") + 1:]
+else:
+    os_release, after = rest, []
+# python3 -c 'print(1)' answers (a stand-in for code of any kind) and the line goes on
+if "TPOT_AFTER" not in [entry.strip() for entry in after]:
+    problems.append(f"the command line stopped at python3 -c, nothing came after it: {after!r}")
 ids = [entry.split("=", 1)[1].strip().strip('"') for entry in os_release if entry.startswith("ID=")]
 if expected["os_release"] or expected["kind"] != "device":
     if ids != [expected["os_id"]]:
@@ -775,7 +790,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, "/usr/local/lib/tpot-cowrie")
-from tpot_personas import catalog  # noqa: E402
+from tpot_personas import catalog, tree, validate  # noqa: E402
 
 requested = sys.argv[1].split()
 root = Path("/home/cowrie/cowrie")
@@ -869,6 +884,22 @@ def check_forbidden(path, os_id):
         data = read_bytes(path).lower().replace(str(runtime).encode("utf-8"), b"")
         if any(marker in data for marker in markers):
             offenders.append(str(path))
+
+
+def check_forbidden_in_tree(fs, os_id):
+    """The markers in what the shell shows of the tree (the path of every node, file contents, link
+    targets), read the way the validator of the image reads it. The raw pickle is no text: its 4-byte
+    ctimes spell words from some date on (b"phil" from July 2027), so the bytes are never scanned.
+    The markers are this test's own table, not validate.FORBIDDEN_MARKERS."""
+    markers = forbidden_markers + (ubuntu_only_markers if os_id != "ubuntu" else ())
+    found = {}
+    for path, data in validate._tree_texts(fs):
+        data = data.lower()
+        for marker in markers:
+            if marker in data:
+                found.setdefault(marker, path)
+    for marker, path in sorted(found.items()):
+        offenders.append(f"fs.pickle: {marker.decode()} in {path}")
 
 
 def node_children(node):
@@ -1030,7 +1061,7 @@ if os_id == "ubuntu":
     if b"id=ubuntu" not in read_bytes(os_release_path).lower():
         fail(f"{selected} honeyfs /etc/os-release does not say ID=ubuntu")
 
-check_forbidden(pickle_path, os_id)
+check_forbidden_in_tree(pickle_tree, os_id)
 check_forbidden(runtime_config_path, os_id)
 check_forbidden(cmdoutput_path, os_id)
 for item in honeyfs.rglob("*"):
@@ -1044,6 +1075,51 @@ if offenders:
 print(f"Cowrie persona validated: {selected} ({identity['hostname']}) of {len(personas)} personas, "
       f"no forbidden markers")
 PY
+}
+
+host_key_sums() {
+  local persona="$1"
+
+  docker exec "${TEST_CONTAINER_NAME}" sh -c "sha256sum /home/cowrie/cowrie/etc/${persona}/ssh_host_* | sort"
+}
+
+# COWRIE_PERSONA_ROTATION reaches the container: a second start in the same keys folder keeps persona,
+# host name and host keys
+assert_rotation_keeps_identity() {
+  local persona="$1"
+  local before_sums="" after_sums="" after_file="${TEST_TMP_ROOT}/identity-after.json"
+  local deadline=$((SECONDS + TEST_TIMEOUT))
+
+  before_sums="$(host_key_sums "${persona}")" || return 1
+  [[ -n "${before_sums}" ]] || { printf 'No host keys of %s to compare\n' "${persona}" >&2; return 1; }
+
+  test_compose stop >/dev/null || return 1
+  COWRIE_PERSONA_ROTATION="${ROTATION_DAYS}" test_compose up -d --no-build >/dev/null || return 1
+  test_wait_for_container || return 1
+
+  until test_compose logs --no-color 2>/dev/null | grep -F -q "Keeping Cowrie persona ${persona} drawn"; do
+    (( SECONDS < deadline )) || { printf 'No "Keeping Cowrie persona %s" line with COWRIE_PERSONA_ROTATION=%s\n' "${persona}" "${ROTATION_DAYS}" >&2; return 1; }
+    sleep 1
+  done
+  until [[ -s "${TEST_TMP_ROOT}/log/cowrie.json" ]] && docker exec "${TEST_CONTAINER_NAME}" test -s /tmp/cowrie/identity.json 2>/dev/null; do
+    (( SECONDS < deadline )) || { printf 'The second start did not come up\n' >&2; return 1; }
+    sleep 1
+  done
+
+  read_expected_identity > "${after_file}" || return 1
+  python3 - "${EXPECTED_IDENTITY_FILE}" "${after_file}" <<'PY' || return 1
+import json
+import sys
+from pathlib import Path
+
+first, second = (json.loads(Path(arg).read_text(encoding="utf-8")) for arg in sys.argv[1:3])
+for key in ("persona", "hostname", "kernel_version", "cpus", "mem_kb"):
+    if first[key] != second[key]:
+        print(f"COWRIE_PERSONA_ROTATION: {key} is {second[key]!r} after the second start, was {first[key]!r}", file=sys.stderr)
+        sys.exit(1)
+PY
+  after_sums="$(host_key_sums "${persona}")" || return 1
+  [[ "${before_sums}" == "${after_sums}" ]] || { printf 'The host keys of %s changed with COWRIE_PERSONA_ROTATION=%s\n' "${persona}" "${ROTATION_DAYS}" >&2; return 1; }
 }
 
 assert_no_runtime_errors() {
@@ -1129,6 +1205,12 @@ run_smoke_test() {
   wait_for_json_event_containing "TPOT_BEGIN" "closed" || test_die "No cowrie.session.closed event with an integer duration_ms for the shell session"
   test_ok "Shell commands and the closed session were written to cowrie.json"
 
+  if [[ "${ROTATION_STEP}" == "true" ]]; then
+    test_info "Starting ${persona} again with COWRIE_PERSONA_ROTATION=${ROTATION_DAYS}"
+    assert_rotation_keeps_identity "${persona}" || test_die "A second start with COWRIE_PERSONA_ROTATION=${ROTATION_DAYS} did not keep ${persona}"
+    test_ok "Second start kept persona, host name and host keys of ${persona}"
+  fi
+
   assert_no_runtime_errors
   test_ok "No Cowrie runtime errors found in logs"
 }
@@ -1144,9 +1226,13 @@ run_all_personas() {
   (( ${#ids[@]} > 0 )) || test_die "Could not read the persona IDs of ${IMAGE}"
   test_info "Testing ${#ids[@]} personas: ${ids[*]}"
 
+  local first="true"
   for id in "${ids[@]}"; do
     test_info "Persona ${id}"
     PERSONA="${id}"
+    # the second start costs a container start: once, for the first persona
+    ROTATION_STEP="${first}"
+    first="false"
     # one harness per persona: the subshell's EXIT trap takes it down
     set +e
     ( set -e; run_smoke_test )

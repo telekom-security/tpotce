@@ -6,7 +6,7 @@ from pathlib import Path
 
 from tests.helpers import DIST  # noqa: F401
 from tpot_personas import PersonaError, catalog
-from tpot_personas.identity import first_install, fits, kernel_time
+from tpot_personas.identity import DAY, draw, first_install, fits, kernel_time
 from tpot_personas.ssh_profiles import PROFILES
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -315,6 +315,20 @@ class DeviceCatalogTest(unittest.TestCase):
                     continue
                 year = int(re.search(r"(\d{4})\.\d+", r.ssh_version).group(1))
                 self.assertEqual(p.ssh_profile, "dropbear-openwrt" if year >= 2019 else "dropbear", (pid, r.label))
+
+
+class HorizonTest(unittest.TestCase):
+    """A catalog that is not touched for half a year still draws real levels."""
+
+    def test_catalog_has_levels_for_six_months(self):
+        later = int(time.time()) + 182 * DAY
+        for p in catalog.PERSONAS:
+            minimum = 3 if p.kind == "server" else 2
+            labels = {draw(p, seed, later).release.label for seed in range(600)}
+            self.assertGreaterEqual(
+                len(labels), minimum,
+                f"{p.id} draws {len(labels)} release levels 182 days from now, {minimum} are needed: "
+                f"refresh the catalog ({sorted(labels)})")
 
 
 class SchemaTest(unittest.TestCase):
