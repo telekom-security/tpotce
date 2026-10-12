@@ -1262,19 +1262,21 @@ def tpot_systemctl(cmd, args: list[str]) -> int:
         if not names:
             cmd.errorWrite("Too few arguments.\n")
             return 1
-        blocks = []
+        # as systemd: a unit without a file is named on stderr, the others are still printed
+        status, first = 0, True
         for name in names:
             name, unit = tpot_unit(data, name)
             try:
                 text = cmd.fs.file_contents(unit["path"]) if unit else None
-            except (OSError, KeyError, TypeError):
+            except Exception:  # noqa: BLE001 - Cowrie's FileNotFound is no OSError; the command always exits
                 text = None
-            if text is None:
+            if not isinstance(text, bytes):
                 cmd.errorWrite(f"No files found for {name}.\n")
-                return 1
-            blocks.append(f"# {unit['path']}\n".encode() + text)
-        cmd.writeBytes(b"\n".join(blocks))
-        return 0
+                status = 1
+                continue
+            cmd.writeBytes((b"" if first else b"\n") + f"# {unit['path']}\n".encode() + text)
+            first = False
+        return status
     if verb in ("is-active", "is-enabled", "is-failed"):
         if not names:
             cmd.errorWrite("Too few arguments.\n")

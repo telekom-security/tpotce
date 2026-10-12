@@ -56,6 +56,10 @@ CPUINFO = b"".join(b"processor\t: %d\nmodel name\t: Intel(R) Xeon(R)\n\n" % n fo
 MEMINFO = b"MemTotal:        8023548 kB\nMemFree:         1200000 kB\n"
 
 
+class FileNotFound(Exception):  # noqa: N818 - as Cowrie's fs.FileNotFound: no OSError
+    pass
+
+
 class FakeFs:
     def __init__(self, files, dirs=("/", "/proc", "/root")):
         self.files = files
@@ -70,7 +74,7 @@ class FakeFs:
 
     def file_contents(self, path):
         if path not in self.files:
-            raise FileNotFoundError(path)
+            raise FileNotFound(path)
         return self.files[path]
 
 
@@ -886,6 +890,44 @@ class PatchTest(unittest.TestCase):
         cmd.protocol.hostname = ident.hostname
         self.assertEqual(namespace["tpot_systemctl"](cmd, ["cat", "nosuch"]), 1)
         self.assertEqual(cmd.err, "No files found for nosuch.service.\n")
+        # a unit whose file is gone (rm): Cowrie's fs raises its FileNotFound, no OSError
+        cmd = FakeCommand([], files={})
+        cmd.user = {"uid": 1000}
+        cmd.protocol.boot_time = lambda: time.time() - 60
+        cmd.protocol.hostname = ident.hostname
+        self.assertEqual(namespace["tpot_systemctl"](cmd, ["cat", "dbus"]), 1)
+        self.assertEqual((bytes(cmd.out), cmd.err), (b"", "No files found for dbus.service.\n"))
+
+    def test_systemctl_cat_goes_on_after_a_missing_unit(self):
+        from tpot_personas.identity import draw
+        from tpot_personas.render import render
+        persona = catalog.by_id("ubuntu-noble")
+        out = tmpdir(self) / "noble"
+        ident = draw(persona, 1)
+        render(persona, ident, base_tree(), out, runtime_dir=out, keys_dir=out / "keys")
+        fs = tree.load_pickle(out / "fs.pickle")
+        source = (self.patched() / "src/cowrie/commands/service.py").read_text()
+        namespace = module_all(source, {"HoneyPotCommand": FakeCommand, "CowrieConfig": FakeConfig(
+            {("shell", "systemctl_units"): str(out / "systemd-units.json")})})
+        files = {path: tree.node_get(tree.find_node(fs, path), tree.A_CONTENTS)
+                 for path in ("usr/lib/systemd/system/dbus.service", "usr/lib/systemd/system/cron.service")}
+        cmd = FakeCommand([], files={"/" + path: text for path, text in files.items()})
+        cmd.user = {"uid": 1000}
+        cmd.protocol.boot_time = lambda: time.time() - 60
+        cmd.protocol.hostname = ident.hostname
+        code = namespace["tpot_systemctl"](cmd, ["cat", "dbus", "nosuch", "cron"])
+        self.assertEqual(code, 1)
+        self.assertEqual(cmd.err, "No files found for nosuch.service.\n")
+        self.assertEqual(bytes(cmd.out), b"# /usr/lib/systemd/system/dbus.service\n"
+                         + files["usr/lib/systemd/system/dbus.service"]
+                         + b"\n# /usr/lib/systemd/system/cron.service\n"
+                         + files["usr/lib/systemd/system/cron.service"])
+        cmd = FakeCommand([], files={})
+        cmd.user = {"uid": 1000}
+        cmd.protocol.boot_time = lambda: time.time() - 60
+        cmd.protocol.hostname = ident.hostname
+        self.assertEqual(namespace["tpot_systemctl"](cmd, ["cat", "nosuch", "other"]), 1)
+        self.assertEqual(cmd.err, "No files found for nosuch.service.\nNo files found for other.service.\n")
 
     def test_systemctl_sockets_and_unit_files(self):
         out, err, code, _, _ = self.systemctl("ubuntu-noble", ["status", "ssh.socket"])
@@ -1165,7 +1207,7 @@ class PatchTest(unittest.TestCase):
 
         class FakeFs:
             def file_contents(self, path):
-                raise FileNotFoundError(path)
+                raise FileNotFound(path)
 
         class Command:
             fs = FakeFs()
