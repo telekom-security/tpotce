@@ -1564,7 +1564,19 @@ commands["/usr/bin/sudo"] = Command_sudo
 """,
     )
     # sudo -l / -ll / --list: the rules of the persona's sudoers ([shell] sudo_list)
-    replace_once(path, "import getopt\n", "import getopt\nimport json\nfrom pathlib import Path\n")
+    replace_once(path, "import getopt\n", "import getopt\nimport json\nimport re\nfrom pathlib import Path\n")
+    replace_once(
+        path,
+        """commands = {}
+""",
+        """commands = {}
+# T-Pot: the options of sudo with a value (-u root, -uroot, --user root; --user=root is one word)
+TPOT_SUDO_VALUES = "aCcDghpRrTtUu"
+TPOT_SUDO_LONG_VALUES = frozenset({"--auth-type", "--close-from", "--login-class", "--chdir", "--group", "--host",
+                                   "--prompt", "--chroot", "--role", "--command-timeout", "--type", "--other-user",
+                                   "--user"})
+""",
+    )
     replace_once(
         path,
         """        try:
@@ -1572,10 +1584,37 @@ commands["/usr/bin/sudo"] = Command_sudo
                 self.args[0:start_value], "bEeHhKknPSVva:C:g:i:l:p:r:s:t:U:u:"
             )
 """,
-        """        if any(arg in ("-l", "-ll", "--list") or (arg.startswith("-") and not arg.startswith("--")
-                                                     and "l" in arg[1:] and arg.strip("-").isalpha())
-               for arg in self.args[0:start_value]):
+        """        # T-Pot: sudo's options end at the first word that is no option (or after --); -l / --list
+        # among them lists the rules, that word is the command (after VAR=value assignments)
+        listing, index = False, 0
+        while index < len(self.args):
+            arg = self.args[index]
+            if arg == "--":
+                index += 1
+                break
+            if not arg.startswith("-") or arg == "-":
+                break
+            if arg.startswith("--"):
+                listing = listing or arg == "--list"
+                if arg in TPOT_SUDO_LONG_VALUES:
+                    index += 1
+            else:
+                for pos, flag in enumerate(arg[1:], 1):
+                    listing = listing or flag == "l"
+                    if flag in TPOT_SUDO_VALUES:
+                        if pos == len(arg) - 1:
+                            index += 1
+                        break
+            index += 1
+        while index < len(self.args) and re.match(r"[A-Za-z_][A-Za-z0-9_]*=", self.args[index]):
+            index += 1
+        if listing:
             self.tpot_list(parsed_arguments)
+            return
+        if index < len(self.args) and not self.protocol.getCommand(
+                self.args[index], self.environ.get("PATH", "").split(":"), self.cwd):
+            self.errorWrite(f"sudo: {self.args[index]}: command not found\\n")
+            self.exit(1)
             return
         try:
             optlist, _args = getopt.getopt(

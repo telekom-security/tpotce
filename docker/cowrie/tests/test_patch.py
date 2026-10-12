@@ -824,6 +824,16 @@ class PatchTest(unittest.TestCase):
         self.assertTrue(out.endswith("    (ALL) ALL\n    (ALL) NOPASSWD: ALL\n"), out)
         self.assertTrue(all(len(line) <= 80 or "," not in line[:-1] for line in out.splitlines()), out)
 
+    def test_sudo_l_counts_only_before_the_command(self):
+        # the options end at the first word that is no option: -l after it belongs to that command
+        self.assertEqual(self.sudo(["foo", "-l"]), ("", "sudo: foo: command not found\n", 1))
+        self.assertEqual(self.sudo(["-n", "foo", "--list"]), ("", "sudo: foo: command not found\n", 1))
+        self.assertEqual(self.sudo(["--", "-l"]), ("", "sudo: -l: command not found\n", 1))
+        for args in (["-u", "root", "-l"], ["-uroot", "-l"], ["--user=root", "-l"], ["-n", "-l"], ["-p", "x", "-ln"]):
+            out, err, code = self.sudo(args)
+            self.assertEqual((err, code), ("", None), args)
+            self.assertTrue(out.startswith("Matching Defaults entries for ubuntu on "), args)
+
     def test_sudo_without_l_keeps_its_options(self):
         _, err, _ = self.sudo(["-x"])
         self.assertIn("sudo: illegal option -- x", err)
@@ -2261,6 +2271,7 @@ class PatchTest(unittest.TestCase):
                  ("src/cowrie/commands/which.py", "                if self.fs.exists(resolved):\n",
                   "                if self.fs.isfile(resolved):\n"),
                  ("src/cowrie/commands/sudo.py", "import getopt\n", "import getopt as options\n"),
+                 ("src/cowrie/commands/sudo.py", "commands = {}\n", "commands: dict = {}\n"),
                  ("src/cowrie/shell/honeypot.py", '            self.name = "-bash" if interactive else "bash"\n',
                   '            self.name = "-bash" if interactive else "sh"\n'),
                  ("src/cowrie/shell/honeypot.py", '        return f"{self.error_prefix()}{cmd}: command not found\\n"\n',
