@@ -1,3 +1,4 @@
+import calendar
 import configparser
 import dataclasses
 import json
@@ -11,6 +12,17 @@ from tpot_personas import PersonaError, catalog, tree, validate
 from tpot_personas.common import ps_start
 from tpot_personas.identity import DAY, draw, restore, stale_at, to_state
 from tpot_personas.render import render
+
+
+class KeptIdentityTest(unittest.TestCase):
+    def test_yum_log_of_an_identity_kept_over_new_year(self):
+        # yum.log has no year in its lines: they are of the year the identity was drawn, not of now
+        persona = catalog.by_id("centos-7")
+        drawn = draw(persona, 0, calendar.timegm((2024, 12, 20, 12, 0, 0)))
+        kept = restore(persona, to_state(persona, drawn), calendar.timegm((2025, 1, 5, 12, 0, 0)))
+        _, out, keys = render_ident(self, persona, kept)
+        self.assertTrue((out / "honeyfs/var/log/yum.log").read_text())
+        self.assertEqual(validate.problems(persona, kept, out, out, keys, min_pickle=0), [])
 
 
 class ValidateNegativeTest(unittest.TestCase):

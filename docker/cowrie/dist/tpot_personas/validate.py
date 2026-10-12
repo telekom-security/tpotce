@@ -14,7 +14,7 @@ from pathlib import Path
 
 from . import PersonaError, servers, system, tree
 from .common import VM_PROVIDERS, home_dir, is_login_shell, ps_start, ps_user
-from .identity import (DAY, host_patterns, hostname_regex, is_fresh, kernel_time, max_uptime, stale_at,
+from .identity import (DAY, drawn_at, host_patterns, hostname_regex, is_fresh, kernel_time, max_uptime, stale_at,
                        updated_at)
 from .model import PROMPT_STYLES
 from .render import BUSYBOX_HELP, DIR_MODES, PACKAGE_MANAGER_PATHS, runtime_json
@@ -300,7 +300,8 @@ def _iso_ts(match):
 def _log_events(ident, honeyfs):
     """(path, time, text) of every dated entry of the logs under var/log: apt
     history blocks (by End-Date), dnf.log lines and yum.log lines (the year
-    from the rotation name yum.log-<year>0101, else that of now)."""
+    from the rotation name yum.log-<year>0101, else that of the draw: the
+    history of a kept identity ends there)."""
     events = []
     for path in sorted((honeyfs / "var/log").rglob("*")):
         if not path.is_file():
@@ -308,7 +309,7 @@ def _log_events(ident, honeyfs):
         rel, text = str(path.relative_to(honeyfs)), _text(path)
         if path.name.startswith("yum.log"):
             rotated = re.search(r"-(\d{4})0101$", path.name)
-            year = int(rotated.group(1)) - 1 if rotated else time.gmtime(ident.now).tm_year
+            year = int(rotated.group(1)) - 1 if rotated else time.gmtime(drawn_at(ident)).tm_year
             for mon, day, hh, mm, ss, verb, name in _YUM_LINE.findall(text):
                 stamp = calendar.timegm(time.strptime(f"{year} {mon} {day} {hh}:{mm}:{ss}", "%Y %b %d %H:%M:%S"))
                 events.append((rel, stamp, f"{verb}: {name}"))
