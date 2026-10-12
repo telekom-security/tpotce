@@ -887,11 +887,13 @@ function fuSWITCH_SOURCE () {
 	if [ -n "${myLOCAL}" ] \
 	   && [ -n "$(git -C "$HOME/tpotce" rev-list --max-count=1 "${myLOCAL}" --not --remotes=origin 2>/dev/null)" ];
 	  then
-	    myREF="refs/tpot-backup/$(date +%Y%m%d%H%M%S)/${myTPOT_BRANCH}"
+	    # the process number keeps two switches within one second apart
+	    myREF="refs/tpot-backup/$(date +%Y%m%d%H%M%S)-$$/${myTPOT_BRANCH}"
 	    if ! git -C "$HOME/tpotce" update-ref "${myREF}" "${myLOCAL}";
 	      then
 	        fuUI_ERROR "Could not keep the commits of the local branch ${myTPOT_BRANCH} that origin does not have."
-	        fuUI_HINT "Nothing was switched. Exiting."
+	        fuUI_HINT "Nothing was switched. T-Pot is stopped, start it again with 'systemctl start tpot'. The backup is in ${myARCHIVE}."
+	        fuUI_HINT "Exiting."
 	        echo
 	        exit 1
 	    fi
@@ -1580,7 +1582,8 @@ function fuBACKUP () {
 	    fi
 	    if [ ${#myJEWELLIST[@]} -gt 0 ];
 	      then
-	        myJEWELARGS=(--transform 's,^\./,data/,' -C "${myDATA}" "${myJEWELLIST[@]}")
+	        # flags=r: only the names of the entries, not the targets of symbolic and hard links
+	        myJEWELARGS=(--transform 'flags=r;s,^\./,data/,' -C "${myDATA}" "${myJEWELLIST[@]}")
 	    fi
 	fi
 
@@ -1933,7 +1936,11 @@ function fuMIGRATE_BEELZEBUB_ENV () {
 	esac
 	# The new text goes to a temporary file, not to a name next to .env: files of their own under
 	# such names stay untouched
-	myNEWFILE=$(mktemp "${TMPDIR:-/tmp}/tpot-env-beelzebub.XXXXXX") || return 0
+	if ! myNEWFILE=$(mktemp "${TMPDIR:-/tmp}/tpot-env-beelzebub.XXXXXX");
+	  then
+	    fuUI_WARN "No temporary file could be made, the Beelzebub settings of .env are not migrated, set them up as in env.example."
+	    return 0
+	fi
 	# The old comments describe the old settings, the new block replaces the old assignment
 	if ! awk -v provider="${myPROVIDER}" -v model="${myMODEL}" -v host="${myHOST}" -v apikey="${myAPIKEY}" '
 	  /^# BEELZEBUB_(LLM_MODEL|LLM_HOST|OLLAMA_MODEL|OPENAISECRETKEY):/ { next }
@@ -2027,6 +2034,8 @@ function fuRETENTION_EXPORT () {
 # $1 = .env, $2 = .env of the archive, $3 = exported policy (ilm_policy_tpot.json)
 function fuMIGRATE_RETENTION () {
 	local myENVFILE="$1" myOLDENV="$2" myEXPORT="$3" myVALUE="" myTMP=""
+	# without the .env of the release before it is unknown whether the key was set: nothing is written
+	[ -r "${myOLDENV}" ] && [ -r "${myENVFILE}" ] || return 0
 	grep -qE "^TPOT_ES_RETENTION[[:space:]]*[:=]" "${myOLDENV}" 2>/dev/null && return 0
 	grep -qE "^TPOT_ES_RETENTION[[:space:]]*[:=]" "${myENVFILE}" || return 0
 	if [ -s "${myEXPORT}" ];
@@ -2051,7 +2060,7 @@ function fuMIGRATE_RETENTION () {
 	  else
 	    fuUI_WARN "TPOT_ES_RETENTION could not be written into ${myENVFILE}, it stays $(fuENV_VALUE "${myENVFILE}" TPOT_ES_RETENTION); tpot elastic retention shows the ILM policy tpot, --adopt lets T-Pot manage it."
 	fi
-	[ -n "${myTMP}" ] && rm -f "${myTMP}"
+	[ -z "${myTMP}" ] || rm -f "${myTMP}"
 }
 
 # Keys of a .env style file in file order, written as KEY=value or KEY: "value".
@@ -2074,9 +2083,9 @@ function fuMERGE_ENV_KEYS () {
 	myMARKER=$(grep -n "^# NEVER MAKE CHANGES" "${myEXAMPLE}" | head -1 | cut -d: -f1)
 	# Temporary files, not names next to .env (.env.user, .env.merge ...): files of their own under
 	# these names stay untouched
-	myUSERFILE=$(mktemp "${TMPDIR:-/tmp}/tpot-env-user.XXXXXX") || return 0
-	mySYSTEMFILE=$(mktemp "${TMPDIR:-/tmp}/tpot-env-system.XXXXXX") || { rm -f "${myUSERFILE}"; return 0; }
-	myMERGEFILE=$(mktemp "${TMPDIR:-/tmp}/tpot-env-merge.XXXXXX") || { rm -f "${myUSERFILE}" "${mySYSTEMFILE}"; return 0; }
+	myUSERFILE=$(mktemp "${TMPDIR:-/tmp}/tpot-env-user.XXXXXX") || { fuUI_WARN "No temporary file could be made, the new settings of env.example are not merged into .env, compare them with env.example."; return 0; }
+	mySYSTEMFILE=$(mktemp "${TMPDIR:-/tmp}/tpot-env-system.XXXXXX") || { rm -f "${myUSERFILE}"; fuUI_WARN "No temporary file could be made, the new settings of env.example are not merged into .env, compare them with env.example."; return 0; }
+	myMERGEFILE=$(mktemp "${TMPDIR:-/tmp}/tpot-env-merge.XXXXXX") || { rm -f "${myUSERFILE}" "${mySYSTEMFILE}"; fuUI_WARN "No temporary file could be made, the new settings of env.example are not merged into .env, compare them with env.example."; return 0; }
 	for myKEY in $(fuENV_KEYS "${myEXAMPLE}");
 	  do
 	    fuENV_KEYS "${myENVFILE}" | grep -qx "${myKEY}" && continue

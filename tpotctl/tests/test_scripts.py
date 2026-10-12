@@ -1184,15 +1184,16 @@ class BuilderTest(Harness):
 class MigrateRetentionTest(unittest.TestCase):
     """update.sh fuMIGRATE_RETENTION: the retention of the existing ILM policy goes into .env once."""
 
-    def run_migration(self, old_env: str, policy, read_only=False):
+    def run_migration(self, old_env, policy, read_only=False):
         with tempfile.TemporaryDirectory() as tmp:
             env, old, export = (os.path.join(tmp, n) for n in (".env", "old.env", "ilm_policy_tpot.json"))
             with open(env, "w") as h:
                 h.write("TPOT_PERSISTENCE_CYCLES=30\nTPOT_ES_RETENTION=30\nTPOT_TYPE=HIVE\n")
             if read_only:
                 os.chmod(env, 0o444)
-            with open(old, "w") as h:
-                h.write(old_env)
+            if old_env is not None:                                    # None: the archive has no .env
+                with open(old, "w") as h:
+                    h.write(old_env)
             if isinstance(policy, str):
                 with open(export, "w") as h:
                     h.write(policy)
@@ -1249,6 +1250,18 @@ class MigrateRetentionTest(unittest.TestCase):
         self.assertIn("TPOT_ES_RETENTION=30\n", env)
         self.assertNotIn("OK:", out)
         self.assertIn("WARN", out)
+
+    def test_without_the_old_env_nothing_is_written(self):
+        # whether the release before had the key is unknown, so the function leaves .env alone
+        env, out = self.run_migration(None, self.policy("365d"))
+        self.assertIn("TPOT_ES_RETENTION=30\n", env)
+        self.assertEqual(out.strip(), "")
+
+    def test_a_failed_write_of_the_same_value_is_no_ok_either(self):
+        env, out = self.run_migration("TPOT_TYPE=HIVE\n", self.policy("30d"), read_only=True)
+        self.assertIn("TPOT_ES_RETENTION=30\n", env)
+        self.assertNotIn("OK:", out)
+        self.assertIn("WARN: TPOT_ES_RETENTION could not be written", out)
 
     def export_of(self, stage: bool, archive: bool):
         """fuRETENTION_EXPORT with a stage file and/or an archive that has elastic/ilm_policy_tpot.json."""
@@ -2344,12 +2357,14 @@ class UpdateRepairTest(Harness):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         call = self.tar_calls()
         self.assertIn(f"-C {custom} ./uuid ./nginx/cert", call)
-        self.assertIn("--transform", call)                              # they land in the archive as data/...
+        self.assertIn("--transform flags=r;s,^\\./,data/,", call)       # they land in the archive as data/...,
+        #                                                               # the targets of links stay as they are
         self.assertNotIn(f"{self.tpotce}/data", call)
         result = self.backup(custom=custom, full=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         call = self.tar_calls()
         self.assertIn(f"-C {custom} .", call)
+        self.assertIn("--transform flags=r;s,^\\./,data/,", call)
         self.assertNotIn("./uuid", call)
 
     def test_jewels_stay_in_data_for_the_default_path(self):
@@ -2386,7 +2401,8 @@ class UpdateRepairTest(Harness):
         origin = os.path.join(self.home, "origin")
         script = (self.functions("fuSWITCH_SOURCE") + before
                   + f'myTPOT_SOURCE_GIVEN=1 myTPOT_REPO_URL="{origin}" myCURRENT_REPO="{origin}" '
-                  'myTPOT_BRANCH=master myCURRENT_BRANCH=other\nfuSWITCH_SOURCE\necho "rc=$?"\n')
+                  'myTPOT_BRANCH=master myCURRENT_BRANCH=other myARCHIVE=/b/x_tpot_backup.tar\n'
+                  'fuSWITCH_SOURCE\necho "rc=$?"\n')
         return self.bash(script, cwd=self.elsewhere)
 
     def test_switch_source_keeps_a_backup_ref(self):
@@ -2399,7 +2415,7 @@ class UpdateRepairTest(Harness):
         refs = [line for line in self.git("for-each-ref", "--format=%(refname) %(objectname)",
                                           "refs/tpot-backup/").split("\n") if line]
         self.assertEqual(len(refs), 1, refs)
-        self.assertRegex(refs[0], r"^refs/tpot-backup/[0-9]{14}/master " + mine + "$")
+        self.assertRegex(refs[0], r"^refs/tpot-backup/[0-9]{14}-[0-9]+/master " + mine + "$")
         warns = [line for line in out.splitlines() if line.startswith("WARN:")]
         self.assertTrue(any(refs[0].split(" ")[0] in line for line in warns), out)    # the warning names the ref
         ref = refs[0].split(" ")[0]
@@ -2425,6 +2441,21 @@ class UpdateRepairTest(Harness):
         self.assertNotIn("rc=0", out)
         self.assertEqual(self.git("branch", "--show-current").strip(), "other")       # nothing was switched
         self.assertIn("mine", self.git("log", "--format=%s", "master"))
+        self.assertIn("T-Pot is stopped", out)                                        # and what to do about it
+        self.assertIn("/b/x_tpot_backup.tar", out)
+        self.assertIn("systemctl start tpot", out)
+
+    def test_switch_source_ref_is_unique_within_a_second(self):
+        self.stub("date", "#!/bin/sh\necho 20260101000000\n")
+        self.clone_of_origin()
+        for _ in range(2):
+            self.git("checkout", "-q", "master")
+            self.commit_mine()
+            self.git("checkout", "-q", "other")
+            self.assertIn("rc=0", (lambda r: r.stdout + r.stderr)(self.switch()))
+        refs = [line for line in self.git("for-each-ref", "--format=%(refname)", "refs/tpot-backup/").split("\n")
+                if line]
+        self.assertEqual(len(set(refs)), 2, refs)
 
     # --- the pull, the removal of images -----------------------------------------------------------
 
@@ -2462,6 +2493,21 @@ class UpdateRepairTest(Harness):
         for name, kept in mine.items():
             self.assertEqual(self.read(os.path.join(self.tpotce, name)), kept, name)
         self.assertEqual(os.listdir(self.tmp), [])                      # and left nothing in TMPDIR
+
+    def test_a_failed_mktemp_is_a_warning_naming_the_step(self):
+        env = os.path.join(self.tpotce, ".env")
+        self.write(env, "TPOT_TYPE=HIVE\nBEELZEBUB_LLM_MODEL=ollama\nBEELZEBUB_OLLAMA_MODEL=m1\n")
+        self.write(os.path.join(self.tpotce, "env.example"), "TPOT_TYPE=HIVE\nNEW_KEY=1\n")
+        self.stub("mktemp", "#!/bin/sh\nexit 1\n")
+        script = (self.functions("fuENV_KEYS", "fuENV_VALUE", "fuMERGE_ENV_KEYS", "fuMIGRATE_BEELZEBUB_ENV")
+                  + f'fuMIGRATE_BEELZEBUB_ENV "{env}"; fuMERGE_ENV_KEYS "{env}" "{self.tpotce}/env.example"\n')
+        result = self.bash(script)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        warns = [line for line in result.stdout.splitlines() if line.startswith("WARN:")]
+        self.assertEqual(len(warns), 2, warns)
+        self.assertTrue(any("Beelzebub" in line for line in warns), warns)
+        self.assertTrue(any("env.example" in line for line in warns), warns)
+        self.assertEqual(self.read(env), "TPOT_TYPE=HIVE\nBEELZEBUB_LLM_MODEL=ollama\nBEELZEBUB_OLLAMA_MODEL=m1\n")
 
     # --- the log, the edition ----------------------------------------------------------------------
 

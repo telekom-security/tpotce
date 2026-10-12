@@ -173,6 +173,13 @@ myUP="http://es.example:9200" myGET_CODE=404 myGET_BODY='{}' TPOT_ES_URL="http:/
   "GET http://es.example:9200/_ilm/policy/tpot
 GET http://es.example:9200/${myCAT}
 PUT http://es.example:9200/_ilm/policy/tpot"
+# a candidate is tried as a whole, a blank in it does not split it into two URLs
+myUP="http://es blank:9200" myGET_CODE=404 myGET_BODY='{}' TPOT_ES_URL="http://es blank:9200" \
+  fuSTUB_CHECK "a candidate with a blank is tried whole" \
+  "# ILM policy tpot: created" \
+  "GET http://es blank:9200/_ilm/policy/tpot
+GET http://es blank:9200/${myCAT}
+PUT http://es blank:9200/_ilm/policy/tpot"
 myUP="http://elasticsearch:9200" myGET_CODE=404 myGET_BODY='{}' TPOT_ES_URL="http://es.example:9200" \
   fuSTUB_CHECK "nothing answers: nothing is written" \
   "# Warning: Elasticsearch did not answer" ""

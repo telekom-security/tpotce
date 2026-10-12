@@ -97,10 +97,13 @@ function fuILM_CANDIDATES () {
 # sets myILM_ES to the first candidate that answers, tries every 5 s for myILM_WAIT seconds
 function fuILM_FIND_ES () {
   local myURL myEND=$(( SECONDS + myILM_WAIT ))
-  local myCANDIDATES
-  myCANDIDATES="$(fuILM_CANDIDATES)"
+  local myCANDIDATES=() myLINE
+  # one candidate per line, kept whole in a quoted array: a URL is never split at a blank
+  while IFS= read -r myLINE; do
+    [[ -n "${myLINE}" ]] && myCANDIDATES+=("${myLINE}")
+  done < <(fuILM_CANDIDATES)
   while true; do
-    for myURL in ${myCANDIDATES}; do
+    for myURL in "${myCANDIDATES[@]}"; do
       if curl -s -f --max-time 5 -o /dev/null "${myURL}/_cluster/health";
         then
           myILM_ES="${myURL}"
