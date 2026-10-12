@@ -18,14 +18,18 @@ myILM_ES=""
 myILM_WAIT="${TPOT_ES_RETENTION_WAIT:-600}"
 
 myILM_JQ='
-def min_age: if .phases.delete == null then null else (.phases.delete.min_age // "" | tostring) end;
-def deletes: ((.phases.delete | type) == "object") and ((.phases.delete.actions | type) == "object")
-             and (.phases.delete.actions | has("delete"));
+def part($k): if (type == "object") and ((.[$k] | type) == "object") then .[$k] else {} end;
+def min_age: part("phases") as $p
+  | if ($p | has("delete") | not) then null
+    elif (($p.delete | type) != "object") then ""
+    else ($p.delete.min_age // "" | tostring) end;
+def deletes: (part("phases").delete | type) as $t | ($t == "object") and ((part("phases").delete.actions | type) == "object")
+             and (part("phases").delete.actions | has("delete"));
 def days($x): if $x == "" or $x == "off" then 1e18 else ($x | tonumber) end;
 def shortens($old; $new): ($new != "") and (days($new) < days($old));
 def value_of:
   if (type != "object") or ((.phases | type) != "object") then ""
-  elif .phases.delete == null then "off"
+  elif (part("phases") | has("delete") | not) then "off"
   elif (deletes | not) then ""
   else min_age as $m
     | if ($m | test("^[0-9]+d$")) then ($m | rtrimstr("d") | tonumber)
@@ -34,20 +38,21 @@ def value_of:
     | if . >= 1 and . <= 3650 then (. | floor | tostring) else "" end
   end;
 def managed:
-  if (._meta // {} | has("tpot_retention")) then
-    (._meta.tpot_retention | tostring) as $t
-    | if $t == "off" then .phases.delete == null else (min_age == ($t + "d") and deletes) end
-  else ((._meta // {}).description == "T-Pot ILM policy with a retention of 30 days")
-       and ((.phases // {} | keys) == ["delete", "hot"]) and min_age == "30d" and deletes
+  if (part("_meta") | has("tpot_retention")) then
+    (part("_meta").tpot_retention | tostring) as $t
+    | if $t == "off" then (min_age == null) else (min_age == ($t + "d") and deletes) end
+  else (part("_meta").description == "T-Pot ILM policy with a retention of 30 days")
+       and ((part("phases") | keys) == ["delete", "hot"]) and min_age == "30d" and deletes
   end;
 def build($v):
   (if . == null then {"phases": {"hot": {"min_age": "0ms", "actions": {}}}} else . end)
+  | (if (.phases | type) != "object" then .phases = {} else . end)
   | (if $v == "off" then del(.phases.delete)
      else .phases.delete = ((if (.phases.delete | type) == "object" then .phases.delete else {} end)
           | .actions = ((if (.actions | type) == "object" then .actions else {} end)
                         | if has("delete") then . else . + {"delete": {"delete_searchable_snapshot": true}} end)
           | .min_age = ($v + "d")) end)
-  | ._meta = ((._meta // {}) + {"managed": true, "tpot_retention": $v,
+  | ._meta = (part("_meta") + {"managed": true, "tpot_retention": $v,
                                  "description": "T-Pot ILM policy, its retention is TPOT_ES_RETENTION in .env"});
 def decide($v; $force; $shorten; $oldest; $now):
   if . == null then
@@ -58,7 +63,7 @@ def decide($v; $force; $shorten; $oldest; $now):
   else value_of as $cur | managed as $m
     | if $v == "" then {"action": "keep", "policy": null, "current": $cur, "managed": $m, "held": ""}
       elif ($m or $force or ($cur != "" and $cur == $v)) | not then {"action": "foreign", "policy": null, "current": $cur, "managed": $m, "held": ""}
-      elif $m and $cur == $v and ((._meta.tpot_retention // "") | tostring) == $v then {"action": "keep", "policy": null, "current": $cur, "managed": $m, "held": ""}
+      elif $m and $cur == $v and ((part("_meta").tpot_retention // "") | tostring) == $v then {"action": "keep", "policy": null, "current": $cur, "managed": $m, "held": ""}
       elif ($shorten | not) and shortens(if $cur == "" then "off" else $cur end; $v) then {"action": "pending", "policy": null, "current": $cur, "managed": $m, "held": $v}
       else {"action": "update", "policy": build($v), "current": $cur, "managed": $m, "held": ""} end
   end;

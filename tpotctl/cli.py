@@ -353,6 +353,19 @@ def _retention_status(state, console, shown) -> None:
                  "otherwise forever (nothing is deleted) and the value waits.", console.file)
 
 
+def _foreign_error(current: str) -> str:
+    return (f"The ILM policy tpot was changed outside of T-Pot (retention: "
+            f"{_retention_shown(current) if current else 'not in days'}). "
+            "tpot elastic retention --adopt keeps it, tpot elastic retention --force applies this value to it.")
+
+
+def _shortens_env(old: str, new: str) -> bool:
+    """new deletes events the value in .env keeps. An empty .env value is no retention: it shortens nothing,
+    the policy is unknown then."""
+    from tpotctl import elastic
+    return bool(old) and elastic.shortens(old, new)
+
+
 def run_elastic(args) -> int:
     from tpotctl import elastic, settings as tsettings
     if getattr(args, "adopt", False) and getattr(args, "value", None):
@@ -394,9 +407,15 @@ def run_elastic(args) -> int:
             return 2
         new, chosen = args.value, elastic.plan(args.value, force=args.force)
     if not chosen.reachable:
+        # the status above may have read the policy before Elasticsearch went away: a foreign policy stays
+        # foreign, nothing is written
+        if (state.state == "foreign" and not args.force and not args.adopt
+                and not (state.current and state.current == new)):
+            error(_foreign_error(state.current))
+            return 1
         # nothing can be shown or applied: only .env changes, and a shorter value waits for the user's yes
         current.change({"TPOT_ES_RETENTION": new})
-        if from_env or elastic.shortens(value, new):
+        if from_env or _shortens_env(value, new):
             say.warn(f"TPOT_ES_RETENTION={new} is set in .env, but Elasticsearch is not reachable: T-Pot does not "
                      "shorten the ILM policy tpot on its own, the value waits. Once Elasticsearch runs, "
                      "'tpot elastic retention --force' applies it (asks first).", console.file)
@@ -407,8 +426,7 @@ def run_elastic(args) -> int:
                      stream=console.file)
         return 0
     if chosen.decision.action == "foreign":
-        error(f"The ILM policy tpot was changed outside of T-Pot (retention: {shown(chosen.decision.current)}). "
-              "tpot elastic retention --adopt keeps it, tpot elastic retention --force applies this value to it.")
+        error(_foreign_error(chosen.decision.current))
         return 1
     if chosen.shortening:
         _retention_preview(chosen, new, console)
@@ -481,11 +499,23 @@ def run_env(args) -> int:
         if "TPOT_ES_RETENTION" in changes:
             from tpotctl import elastic
             new = changes["TPOT_ES_RETENTION"]
-            waits = elastic.shortens(old_retention, new)
-            if not waits:           # a value longer than .env had can still be shorter than the policy
+            waits, foreign = False, None
+            if new and (not old_retention or elastic.shortens(old_retention, new)):
+                # only a value shorter than .env had, or an unset .env, needs the policy: it says whether the
+                # next start applies the value (a longer value than .env had is applied on the next start)
                 state = elastic.status(new)
-                waits = state.state == "managed" and elastic.shortens(state.current, new)
-            if waits:
+                if state.state == "foreign":
+                    foreign = None if state.adopts else state       # the same duration: taken over, no waiting
+                elif state.state == "managed":
+                    waits = elastic.shortens(state.current, new)
+                else:               # missing, or Elasticsearch does not answer: the value in .env is all we know
+                    waits = _shortens_env(old_retention, new)
+            if foreign is not None:
+                keeps = _retention_shown(foreign.current) if foreign.current else "not in days"
+                say.hint(f"TPOT_ES_RETENTION={new} is set, but the ILM policy tpot was changed outside of T-Pot "
+                         f"and keeps its own retention ({keeps}). tpot elastic retention --adopt keeps it, "
+                         "tpot elastic retention --force applies .env to it.", stream=console.file)
+            elif waits:
                 say.hint(f"TPOT_ES_RETENTION={new} is not applied by T-Pot on its own; "
                          "tpot elastic retention --force applies it (asks first).", stream=console.file)
             else:

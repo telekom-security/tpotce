@@ -11,6 +11,7 @@ docker/tpotinit/tests/ilm_cases.yml. Standard library only: update.sh runs
 """
 
 import copy
+import http.client
 import json
 import re
 import sys
@@ -22,7 +23,6 @@ from typing import Callable, List, Optional
 
 POLICY = "tpot"
 ES_URL = "http://127.0.0.1:64298"        # as in tpotctl.events
-DEFAULT = "30"
 MAX_DAYS = 3650
 LEGACY_DESCRIPTION = "T-Pot ILM policy with a retention of 30 days"
 DESCRIPTION = "T-Pot ILM policy, its retention is TPOT_ES_RETENTION in .env"
@@ -38,14 +38,27 @@ class Decision:
     held: str = ""              # a shorter TPOT_ES_RETENTION that is not applied: it needs the user's yes
 
 
+def _part(policy: dict, key: str) -> dict:
+    """policy[key] if it is an object, else {}: Elasticsearch is asked, what it answers may have any shape."""
+    part = policy.get(key) if isinstance(policy, dict) else None
+    return part if isinstance(part, dict) else {}
+
+
 def _min_age(policy: dict) -> Optional[str]:
-    delete = (policy.get("phases") or {}).get("delete")
-    return None if delete is None else str(delete.get("min_age", ""))
+    """None without a delete phase, "" if the phase is no object (no days to read), else its min_age."""
+    phases = _part(policy, "phases")
+    if "delete" not in phases:
+        return None
+    delete = phases["delete"]
+    if not isinstance(delete, dict):
+        return ""
+    age = delete.get("min_age")
+    return "" if age is None or age is False else str(age)       # as jq's // ""
 
 
 def _deletes(policy: dict) -> bool:
     """The delete phase really deletes: it has the delete action (a phase without it keeps everything)."""
-    delete = (policy.get("phases") or {}).get("delete")
+    delete = _part(policy, "phases").get("delete")
     return isinstance(delete, dict) and isinstance(delete.get("actions"), dict) and "delete" in delete["actions"]
 
 
@@ -70,20 +83,22 @@ def value_of(policy: Optional[dict]) -> str:
 
 
 def is_managed(policy: dict) -> bool:
-    meta = policy.get("_meta") or {}
+    meta = _part(policy, "_meta")
     if "tpot_retention" in meta:
         mark = str(meta["tpot_retention"])
         return (_min_age(policy) is None if mark == "off"
                 else _min_age(policy) == f"{mark}d" and _deletes(policy))
     return (meta.get("description") == LEGACY_DESCRIPTION
-            and sorted((policy.get("phases") or {})) == ["delete", "hot"]
+            and sorted(_part(policy, "phases")) == ["delete", "hot"]
             and _min_age(policy) == "30d" and _deletes(policy))
 
 
 def build(value: str, base: Optional[dict]) -> dict:
     """base with the delete phase of value and the marker; every other part of base stays."""
     policy = copy.deepcopy(base) if base else {"phases": {"hot": {"min_age": "0ms", "actions": {}}}}
-    phases = policy.setdefault("phases", {})
+    if not isinstance(policy.get("phases"), dict):
+        policy["phases"] = {}
+    phases = policy["phases"]
     if value == "off":
         phases.pop("delete", None)
     else:
@@ -95,7 +110,7 @@ def build(value: str, base: Optional[dict]) -> dict:
         delete["actions"] = actions
         delete["min_age"] = f"{value}d"
         phases["delete"] = delete
-    meta = dict(policy.get("_meta") or {})
+    meta = dict(_part(policy, "_meta"))
     meta.update({"managed": True, "tpot_retention": value, "description": DESCRIPTION})
     policy["_meta"] = meta
     return policy
@@ -118,7 +133,7 @@ def decide(value: str, policy: Optional[dict], force: bool = False, shorten: boo
     # writes the marker and the same duration in days, it deletes nothing that was kept
     if not (managed or force or (current and current == value)):
         return Decision("foreign", None, current, False)
-    if managed and current == value and str((policy.get("_meta") or {}).get("tpot_retention", "")) == value:
+    if managed and current == value and str(_part(policy, "_meta").get("tpot_retention", "")) == value:
         return Decision("keep", None, current, True)
     if not shorten and shortens(current or "off", value):
         return Decision("pending", None, current, managed, held=value)
@@ -146,6 +161,9 @@ def _call(method: str, path: str, url: str, opener: Callable, body: Optional[dic
         return json.loads(response.read().decode("utf-8") or "null")
 
 
+_FAILS = (OSError, ValueError, http.client.HTTPException)    # a broken connection or an answer that is no JSON
+
+
 def _unreachable(err) -> str:
     return f"Elasticsearch is not reachable ({getattr(err, 'reason', err)})"
 
@@ -157,7 +175,7 @@ def get_policy(url: str = ES_URL, opener: Callable = urllib.request.urlopen) -> 
         if err.code == 404:
             return None
         raise ElasticError(f"Elasticsearch answered {err.code} for the ILM policy {POLICY}")
-    except (OSError, ValueError) as err:
+    except _FAILS as err:
         raise ElasticError(_unreachable(err))
     # a 200 without the policy is no missing policy (creating one would replace it): as tpotinit
     if not (isinstance(answer, dict) and isinstance(answer.get(POLICY), dict)
@@ -169,7 +187,7 @@ def get_policy(url: str = ES_URL, opener: Callable = urllib.request.urlopen) -> 
 def put_policy(policy: dict, url: str = ES_URL, opener: Callable = urllib.request.urlopen) -> None:
     try:
         _call("PUT", f"/_ilm/policy/{POLICY}", url, opener, {"policy": policy})
-    except (OSError, ValueError) as err:
+    except _FAILS as err:
         raise ElasticError(f"the ILM policy {POLICY} could not be written ({getattr(err, 'reason', err)})")
 
 
@@ -181,14 +199,38 @@ class Index:
     size: int           # bytes
 
 
+def _number(row: dict, key: str, closed: bool) -> int:
+    """A count of a row of _cat/indices: Elasticsearch gives them as strings; a closed index has none (0)."""
+    value = row.get(key)
+    if value is None and closed:
+        return 0
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        raise ValueError(key)
+    return int(value)
+
+
 def indices(url: str = ES_URL, opener: Callable = urllib.request.urlopen) -> List[Index]:
     try:
-        rows = _call("GET", "/_cat/indices/logstash-*?format=json&bytes=b&h=index,creation.date,docs.count,store.size",
-                     url, opener) or []
-    except (OSError, ValueError) as err:
+        rows = _call("GET", "/_cat/indices/logstash-*?format=json&bytes=b&h=index,status,creation.date,docs.count,"
+                            "store.size", url, opener)
+    except _FAILS as err:
         raise ElasticError(_unreachable(err))
-    return sorted((Index(r["index"], int(r.get("creation.date") or 0) / 1000, int(r.get("docs.count") or 0),
-                         int(r.get("store.size") or 0)) for r in rows), key=lambda i: i.created)
+    unreadable = ElasticError("Elasticsearch answered with an index list T-Pot cannot read")
+    if rows is None:
+        rows = []
+    if not isinstance(rows, list):
+        raise unreadable
+    found = []
+    for row in rows:
+        try:
+            if not isinstance(row, dict) or not isinstance(row.get("index"), str) or not row["index"]:
+                raise ValueError("index")
+            closed = row.get("status") == "close"
+            found.append(Index(row["index"], _number(row, "creation.date", False) / 1000,
+                               _number(row, "docs.count", closed), _number(row, "store.size", closed)))
+        except ValueError:
+            raise unreadable
+    return sorted(found, key=lambda i: i.created)
 
 
 def doomed(found: List[Index], value: str, now: float) -> List[Index]:

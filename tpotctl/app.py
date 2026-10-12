@@ -916,7 +916,12 @@ class SettingsPane(Vertical):
         from tpotctl import cli as tcli
         new = saved["TPOT_ES_RETENTION"]
         try:
-            chosen = await asyncio.to_thread(self.app.backend.retention_plan, new, False)
+            try:
+                chosen = await asyncio.to_thread(self.app.backend.retention_plan, new, False)
+            except Exception as err:        # whatever Elasticsearch answers, the worker must not end the Manager
+                self.app.notify(f"TPOT_ES_RETENTION is not saved: the check of the ILM policy failed ({err}).",
+                                title="Not saved", severity="error", timeout=10)
+                return
             if chosen.reachable and chosen.shortening:
                 self.app.push_screen(ConfirmDialog(f"Keep the Elasticsearch events {tcli._retention_shown(new)}?",
                                                    shortening_text(chosen.doomed, new),
@@ -966,7 +971,7 @@ class SettingsPane(Vertical):
                             title="Not applied", severity="warning", timeout=12)
         elif chosen is not None and not chosen.reachable:
             new = saved["TPOT_ES_RETENTION"]
-            waiting = chosen.shortening or elastic.shortens(old, new)
+            waiting = chosen.shortening or tcli._shortens_env(old, new)
             self.app.notify(retention_waits(new, later) if waiting else retention_unknown(new, host),
                             title="Not applied" if waiting else "Settings", severity="warning", timeout=12)
         await self.reload()

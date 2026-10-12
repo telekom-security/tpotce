@@ -4,19 +4,28 @@ The cases in docker/tpotinit/tests/ilm_cases.yml are the ones the jq rule of tpo
 (docker/tpotinit/dist/bin/es_retention.sh) passes as well: docker/_tests/run.sh tpotinit_ilm.
 """
 
+import contextlib
 import copy
+import http.client
 import io
 import json
 import os
 import random
 import shutil
 import subprocess
+import sys
+import tempfile
 import unittest
 import urllib.error
+from contextlib import redirect_stderr, redirect_stdout
+from unittest import mock
 
 import yaml
+from rich.console import Console
 
-from tpotctl import elastic
+from tpotctl import cli, elastic, envschema, settings
+from tpotctl.envfile import EnvFile
+from tpotctl.tests.test_settings import make_checkout
 
 REPO_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CASES = os.path.join(REPO_DIR, "docker", "tpotinit", "tests", "ilm_cases.yml")
@@ -50,10 +59,32 @@ class RuleTest(unittest.TestCase):
             with self.subTest(shape=item["name"]):
                 self.assertEqual(elastic.value_of(item["policy"]), item["value"])
 
+    def test_a_delete_phase_that_is_no_object_is_neither_a_value_nor_managed(self):
+        # jq (es_retention.sh) says the same: docker/_tests/run.sh tpotinit_ilm, the shapes of ilm_cases.yml
+        for delete in (None, "x", []):
+            for meta in ({"tpot_retention": "30"}, {"tpot_retention": "off"},
+                         {"managed": True, "description": elastic.LEGACY_DESCRIPTION}, {}):
+                policy = {"phases": {"hot": {"min_age": "0ms", "actions": {}}, "delete": delete}, "_meta": meta}
+                with self.subTest(delete=delete, meta=meta):
+                    self.assertEqual(elastic.value_of(policy), "")
+                    self.assertFalse(elastic.is_managed(policy))
+                    self.assertEqual(elastic.decide("30", policy).action, "foreign")
+                    self.assertEqual(elastic.decide("30", policy, force=True, shorten=True).policy["phases"]["delete"]["min_age"],
+                                     "30d")
+        for odd in ("x", [], None, 7):
+            with self.subTest(phases=odd):
+                policy = {"phases": odd, "_meta": {"tpot_retention": "30"}}
+                self.assertEqual(elastic.value_of(policy), "")
+                self.assertFalse(elastic.is_managed(policy))
+                self.assertEqual(elastic.decide("30", policy, force=True, shorten=True).policy["phases"]["delete"]["min_age"],
+                                 "30d")
+        for meta in ("x", [], 7):
+            with self.subTest(meta=meta):
+                policy = dict(with_min_age("30d"), _meta=meta)
+                self.assertFalse(elastic.is_managed(policy))
+                self.assertEqual(elastic.decide("30", policy).action, "update")        # same duration: adopted
+
     def test_value_of_command_rejects_what_is_no_policy(self):
-        import subprocess
-        import sys
-        import tempfile
         for text in ("[]", json.dumps({"tpot": {"policy": {"phases": {}}}})):
             with self.subTest(text=text):
                 with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as handle:
@@ -110,12 +141,10 @@ class RuleTest(unittest.TestCase):
         self.assertFalse(elastic.shortens("30", ""))
 
     def test_value_of_command_reads_the_export_of_update_sh(self):
-        import subprocess
-        import tempfile
         with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as handle:
             json.dump({"policy": with_min_age("365d")}, handle)
         try:
-            out = subprocess.run([__import__("sys").executable, "-m", "tpotctl.elastic", "value-of", handle.name],
+            out = subprocess.run([sys.executable, "-m", "tpotctl.elastic", "value-of", handle.name],
                                  cwd=REPO_DIR, capture_output=True, text=True, check=True).stdout
         finally:
             os.unlink(handle.name)
@@ -130,14 +159,14 @@ def generated_policies(seed=17, count=400):
     warm phase, the actions of the delete phase, shorten, and the age of the oldest index."""
     rng = random.Random(seed)
     min_ages = ["30d", "90d", "365d", "1d", "3650d", "720h", "2160h", "36h", "0h", "90m", "", "0d", "3651d",
-                "none", "bare"]
+                "none", "bare", "null", "string", "list"]
     actions = [{"delete": {}}, {"delete": {}}, {"delete": {"delete_searchable_snapshot": True}}, {},
                {"wait_for_snapshot": {"policy": "daily"}},
                {"wait_for_snapshot": {"policy": "daily"}, "delete": {}}]
     metas = [None, {}, {"managed": True, "description": elastic.LEGACY_DESCRIPTION},
              {"managed": True, "description": "own"}, {"tpot_retention": "30"}, {"tpot_retention": 30},
              {"tpot_retention": "90"}, {"tpot_retention": 90}, {"tpot_retention": "365"},
-             {"tpot_retention": "off"}, {"managed": True, "tpot_retention": "30", "description": "x"}]
+             {"tpot_retention": "off"}, {"managed": True, "tpot_retention": "30", "description": "x"}, "x", []]
     for _ in range(count):
         phases = {"hot": {"min_age": "0ms", "actions": rng.choice([{}, {"rollover": {"max_age": "1d"}}])}}
         if rng.random() < 0.3:
@@ -145,11 +174,13 @@ def generated_policies(seed=17, count=400):
         min_age = rng.choice(min_ages)
         if min_age == "bare":
             phases["delete"] = {}
+        elif min_age in ("null", "string", "list"):
+            phases["delete"] = {"null": None, "string": "x", "list": []}[min_age]
         elif min_age != "none":
             phases["delete"] = {"actions": copy.deepcopy(rng.choice(actions))}
             if min_age:
                 phases["delete"]["min_age"] = min_age
-        policy = {"phases": phases}
+        policy = {"phases": phases if rng.random() < 0.97 else rng.choice(["x", []])}
         meta = rng.choice(metas)
         if meta is not None:
             policy["_meta"] = copy.deepcopy(meta)
@@ -379,23 +410,94 @@ class AccessTest(unittest.TestCase):
                          "shorter one waits for 'tpot elastic retention --force'")
 
 
+class MalformedAnswerTest(unittest.TestCase):
+    """What Elasticsearch answers is data: a shape T-Pot cannot read is an ElasticError, never another exception."""
+
+    UNREADABLE = "Elasticsearch answered with an index list T-Pot cannot read"
+    GOOD = {"index": "logstash-1", "status": "open", "creation.date": "1700000000000", "docs.count": "5",
+            "store.size": "100"}
+
+    @staticmethod
+    def listing(rows):
+        return FakeES({("GET", "/_cat/indices/logstash-*"): (200, rows)})
+
+    def test_indices_reads_a_good_list(self):
+        found = elastic.indices(opener=self.listing([self.GOOD, dict(self.GOOD, index="logstash-0",
+                                                                      **{"creation.date": "1600000000000"})]))
+        self.assertEqual([(i.name, i.created, i.docs, i.size) for i in found],
+                         [("logstash-0", 1600000000.0, 5, 100), ("logstash-1", 1700000000.0, 5, 100)])
+        self.assertEqual(elastic.indices(opener=self.listing([])), [])
+        self.assertEqual(elastic.indices(opener=self.listing(None)), [])
+
+    def test_indices_names_a_list_it_cannot_read(self):
+        bad = {"no index": {k: v for k, v in self.GOOD.items() if k != "index"},
+               "index is no string": dict(self.GOOD, index=7),
+               "empty index name": dict(self.GOOD, index=""),
+               "date is no number": dict(self.GOOD, **{"creation.date": "abc"}),
+               "date is missing": {k: v for k, v in self.GOOD.items() if k != "creation.date"},
+               "date is null": dict(self.GOOD, **{"creation.date": None}),
+               "docs is null": dict(self.GOOD, **{"docs.count": None}),
+               "size is a list": dict(self.GOOD, **{"store.size": []}),
+               "size is a bool": dict(self.GOOD, **{"store.size": True}),
+               "a row that is no object": "logstash-1"}
+        for name, row in bad.items():
+            with self.subTest(row=name):
+                with self.assertRaises(elastic.ElasticError) as caught:
+                    elastic.indices(opener=self.listing([self.GOOD, row]))
+                self.assertEqual(str(caught.exception), self.UNREADABLE)
+        for answer in ({"error": "x"}, "x", 7):
+            with self.subTest(answer=answer):
+                with self.assertRaises(elastic.ElasticError) as caught:
+                    elastic.indices(opener=self.listing(answer))
+                self.assertEqual(str(caught.exception), self.UNREADABLE)
+
+    def test_a_closed_index_has_no_counts(self):
+        closed = dict(self.GOOD, status="close", **{"docs.count": None, "store.size": None})
+        found = elastic.indices(opener=self.listing([closed]))
+        self.assertEqual((found[0].docs, found[0].size), (0, 0))
+
+    def test_a_list_that_cannot_be_read_counts_as_unreachable_in_the_plan(self):
+        # the safe side: no plan that shows less than it deletes, the shorter value waits
+        es = FakeES({("GET", "/_ilm/policy/tpot"): (200, {"tpot": {"policy": MANAGED_90}}),
+                     ("GET", "/_cat/indices/logstash-*"): (200, [dict(self.GOOD, **{"creation.date": "abc"})])})
+        chosen = elastic.plan("30", opener=es, now=NOW)
+        self.assertEqual((chosen.reachable, chosen.shortening, chosen.doomed), (False, True, []))
+        with self.assertRaises(elastic.ElasticError):
+            elastic.apply(chosen, opener=es)
+        self.assertEqual([r for r in es.requests if r[0] == "PUT"], [])
+
+    def test_get_policy_names_an_answer_that_is_no_policy(self):
+        for answer in ([], "x", 7, None, {"tpot": []}, {"tpot": {"policy": []}}, {"other": {"policy": {}}}):
+            with self.subTest(answer=answer):
+                es = FakeES({("GET", "/_ilm/policy/tpot"): (200, answer)})
+                with self.assertRaises(elastic.ElasticError) as caught:
+                    elastic.get_policy(opener=es)
+                self.assertEqual(str(caught.exception), "Elasticsearch answered without the ILM policy tpot")
+                self.assertEqual(elastic.status("30", opener=es).state, "unreachable")
+
+    def test_a_connection_that_breaks_is_unreachable(self):
+        def broken(request, timeout=None):
+            raise http.client.IncompleteRead(b"x")
+        for call in (lambda: elastic.get_policy(opener=broken), lambda: elastic.indices(opener=broken),
+                     lambda: elastic.put_policy({}, opener=broken)):
+            with self.assertRaises(elastic.ElasticError):
+                call()
+
+
 class CliTest(unittest.TestCase):
 
     def test_parser_knows_elastic(self):
-        from tpotctl import cli
         args = cli.build_parser().parse_args(["elastic", "retention", "60", "-y"])
         self.assertEqual((args.command, args.elastic_command, args.value, args.yes), ("elastic", "retention", "60", True))
         self.assertEqual(cli.build_parser().parse_args(["elastic"]).command, "elastic")
 
     def test_accept_data_loss_is_its_own_flag(self):
-        from tpotctl import cli
         parse = cli.build_parser().parse_args
         self.assertFalse(parse(["elastic", "retention", "30", "-y"]).accept_data_loss)
         self.assertTrue(parse(["elastic", "retention", "30", "--accept-data-loss"]).accept_data_loss)
         self.assertFalse(parse(["elastic", "retention", "30", "--accept-data-loss"]).yes)
 
     def test_the_setting_offers_the_usual_retentions(self):
-        from tpotctl import envschema
         rule = envschema.load_schema()["TPOT_ES_RETENTION"]
         self.assertEqual(rule.widget, "choice")
         self.assertTrue(rule.custom)
@@ -404,7 +506,6 @@ class CliTest(unittest.TestCase):
                           ("off", "never delete")])
 
     def test_retention_value_must_be_valid_before_anything_is_asked(self):
-        from tpotctl import cli
         args = cli.build_parser().parse_args(["elastic", "retention", "30d", "-y"])
         self.assertEqual(cli.retention_value_problem(args.value), '"30d" is not a number of days from 1 to 3650 or off.')
         self.assertEqual(cli.retention_value_problem("off"), "")
@@ -426,9 +527,6 @@ class RunElasticTest(unittest.TestCase):
                 terminal=None):
         """terminal None: confirm_data_loss is mocked (self.asked); True / False: the real one, with or
         without a terminal on stdin (answers 'y' / 'n' to its question as `confirm` says)."""
-        from unittest import mock
-        from rich.console import Console
-        from tpotctl import cli
         values = {"TPOT_TYPE": "SENSOR" if sensor else "HIVE", "TPOT_ES_RETENTION": retention}
         self.settings = FakeSettings(values)
         self.asked, self.applied, self.planned = [], [], []
@@ -452,7 +550,6 @@ class RunElasticTest(unittest.TestCase):
                 raise elastic.ElasticError(apply_error)
 
         state = state or elastic.Status(retention, retention, "managed")
-        import contextlib
         self.plain_confirmed = []
         with mock.patch("tpotctl.ops.require_linux_host"), \
                 mock.patch("tpotctl.settings.load", return_value=self.settings), \
@@ -520,6 +617,33 @@ class RunElasticTest(unittest.TestCase):
         self.assertNotIn("applies it on its next start.", text)
         self.assertEqual(self.settings.changes, [{"TPOT_ES_RETENTION": "60"}])
         self.assertEqual((self.applied, self.asked, self.plain_confirmed), ([], [], []))
+
+    def test_unreachable_after_a_foreign_status_says_it_is_foreign(self):
+        # the status read the foreign policy, then Elasticsearch went away: nothing is written, no waiting text
+        foreign = elastic.Status("90", "365", "foreign")
+        code = self.run_cli(["retention", "30"], state=foreign, plan=self.plan("keep", reachable=False))
+        self.assertEqual(code, 1)
+        self.assertIn("was changed outside of T-Pot (retention: 365 days)", self.err.getvalue())
+        self.assertIn("--adopt", self.err.getvalue())
+        self.assertEqual((self.settings.changes, self.applied, self.asked), ([], [], []))
+        self.assertNotIn("waits", self.out.getvalue())
+
+    def test_unreachable_after_a_foreign_status_with_force_or_the_same_duration_still_writes_env(self):
+        foreign = elastic.Status("90", "365", "foreign")
+        for argv in (["retention", "30", "--force"], ["retention", "365"]):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.run_cli(argv, state=foreign, plan=self.plan("keep", reachable=False)), 0)
+                self.assertEqual(self.settings.changes[-1]["TPOT_ES_RETENTION"], argv[1])
+
+    def test_unreachable_with_an_unset_env_says_the_policy_is_unknown(self):
+        # no TPOT_ES_RETENTION in .env: shortens("", "60") is no shortening to wait for
+        code = self.run_cli(["retention", "60"], retention="", plan=self.plan("keep", reachable=False))
+        self.assertEqual(code, 0)
+        text = self.out.getvalue()
+        self.assertIn("TPOT_ES_RETENTION=60 is set.", text)
+        self.assertIn("T-Pot applies it on its next start if the ILM policy tpot keeps the events less long", text)
+        self.assertNotIn("does not shorten", text)
+        self.assertEqual((self.asked, self.plain_confirmed, self.applied), ([], [], []))
 
     def test_unreachable_force_without_a_value_says_it_waits(self):
         code = self.run_cli(["retention", "--force"], retention="30", plan=self.plan("keep", reachable=False))
@@ -590,8 +714,6 @@ class RunElasticTest(unittest.TestCase):
         self.assertEqual(self.applied, [chosen])
 
     def test_confirm_data_loss_itself(self):
-        from unittest import mock
-        from tpotctl import cli
         self.assertTrue(cli.confirm_data_loss("Delete?", True))
         with mock.patch("sys.stdin", mock.Mock(isatty=lambda: False)), \
                 mock.patch("tpotctl.cli.ask", side_effect=AssertionError("asked without a terminal")), \
@@ -739,11 +861,6 @@ class RunEnvRetentionTest(unittest.TestCase):
     """tpot env set TPOT_ES_RETENTION: what it says about the next start."""
 
     def env_set(self, *assignments, start="90", state=None):
-        from contextlib import redirect_stderr, redirect_stdout
-        from unittest import mock
-        from tpotctl import cli, settings
-        from tpotctl.envfile import EnvFile
-        from tpotctl.tests.test_settings import make_checkout
         repo = make_checkout(self)
         env = EnvFile(os.path.join(repo, ".env"))
         env.set("TPOT_ES_RETENTION", start)
@@ -752,10 +869,11 @@ class RunEnvRetentionTest(unittest.TestCase):
         out = io.StringIO()
         state = state or elastic.Status(start, "", "unreachable", "Elasticsearch is not reachable (refused)")
         with mock.patch.object(settings, "load", lambda **kwargs: original(repo, **kwargs)), \
-                mock.patch("tpotctl.elastic.status", return_value=state), \
+                mock.patch("tpotctl.elastic.status", return_value=state) as status, \
                 mock.patch("tpotctl.ops.host_ostype", return_value="linux"), \
                 redirect_stdout(out), redirect_stderr(out):
             self.assertEqual(cli.main(["env", "set"] + list(assignments)), 0, out.getvalue())
+        self.status_calls = status.call_count
         return " ".join(out.getvalue().split())
 
     def test_a_shorter_value_says_it_is_not_applied_on_its_own(self):
@@ -767,10 +885,48 @@ class RunEnvRetentionTest(unittest.TestCase):
         self.assertNotIn("next start of T-Pot deletes", text)
 
     def test_a_value_shorter_than_the_policy_says_it_too(self):
-        # .env says 30 and waits, the policy still keeps 90: 60 is longer than .env but shorter than the policy
-        waiting = elastic.Status("30", "90", "managed", pending=True)
-        text = self.env_set("TPOT_ES_RETENTION=60", start="30", state=waiting)
+        # .env is empty (unknown): the policy keeps 90, 60 is shorter than it
+        waiting = elastic.Status("60", "90", "managed", pending=True)
+        text = self.env_set("TPOT_ES_RETENTION=60", start="", state=waiting)
         self.assertIn("not applied by T-Pot on its own", text)
+        self.assertEqual(self.status_calls, 1)
+
+    def test_the_policy_is_read_only_for_a_value_shorter_than_env_or_an_empty_env(self):
+        policy = elastic.Status("365", "30", "managed")
+        for start, new, calls in (("30", "365", 0), ("30", "30", 0), ("30", "off", 0), ("90", "30", 1),
+                                  ("90", "off", 0), ("", "30", 1), ("", "off", 1), ("off", "30", 1)):
+            with self.subTest(start=start, new=new):
+                self.env_set(f"TPOT_ES_RETENTION={new}", start=start, state=policy)
+                self.assertEqual(self.status_calls, calls)
+
+    def test_a_policy_that_keeps_less_long_than_the_value_does_not_wait(self):
+        managed = elastic.Status("90", "30", "managed")
+        text = self.env_set("TPOT_ES_RETENTION=90", start="off", state=managed)
+        self.assertNotIn("not applied by T-Pot on its own", text)
+        self.assertIn("applies TPOT_ES_RETENTION on its next start", text)
+
+    def test_a_foreign_policy_that_keeps_longer_says_it_keeps_its_own_retention(self):
+        foreign = elastic.Status("30", "365", "foreign")
+        text = self.env_set("TPOT_ES_RETENTION=30", start="90", state=foreign)
+        self.assertIn("the ILM policy tpot was changed outside of T-Pot and keeps its own retention (365 days)", text)
+        self.assertIn("tpot elastic retention --adopt", text)
+        self.assertIn("tpot elastic retention --force applies .env to it", text)
+        self.assertNotIn("applies it on its next start", text)
+        self.assertNotIn("applies TPOT_ES_RETENTION on its next start", text)
+        self.assertNotIn("not applied by T-Pot on its own", text)
+
+    def test_a_foreign_policy_with_the_same_duration_is_taken_over_on_the_next_start(self):
+        adopted = elastic.Status("30", "30", "foreign", adopts=True)
+        text = self.env_set("TPOT_ES_RETENTION=30", start="90", state=adopted)
+        self.assertNotIn("keeps its own retention", text)
+        self.assertIn("applies TPOT_ES_RETENTION on its next start", text)
+
+    def test_an_unset_env_and_an_unreachable_elasticsearch_promise_nothing(self):
+        # the key was missing: no value it could shorten, the policy is unknown
+        text = self.env_set("TPOT_ES_RETENTION=60", start="")
+        self.assertEqual(self.status_calls, 1)
+        self.assertNotIn("not applied by T-Pot on its own", text)
+        self.assertIn("applies TPOT_ES_RETENTION on its next start", text)
 
     def test_a_longer_value_does_not_warn(self):
         text = self.env_set("TPOT_ES_RETENTION=365")

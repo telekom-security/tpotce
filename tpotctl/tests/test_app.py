@@ -1129,6 +1129,43 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
                 self.assertIn(wanted, notes)
                 self.assertNotIn(unwanted, notes)
 
+    async def test_settings_a_plan_that_fails_in_any_way_saves_nothing_and_enables_save(self):
+        from tpotctl import settings
+        for error in (ValueError("not an answer"), KeyError("phases"), AttributeError("get")):
+            with self.subTest(error=type(error).__name__):
+                repo = self.retention_checkout()
+                backend = self.settings_backend(repo)
+
+                def failing(value, force=False, error=error):
+                    raise error
+
+                backend.retention_plan = failing
+                app, _pilot = await self.save_retention(backend, "365")
+                notes = " ".join(str(note.message) for note in app._notifications)
+                self.assertIn("TPOT_ES_RETENTION is not saved", notes)
+                self.assertIn(str(error), notes)
+                self.assertEqual(settings.load(repo).values["TPOT_ES_RETENTION"], "90")      # nothing written
+                self.assertNotIn("apply", [call[0] for call in backend.calls if isinstance(call, tuple)])
+                self.assertFalse(app.query_one("#settings").saving)
+                self.assertFalse(app.query_one("#settings-save").disabled)
+
+    async def test_settings_unset_value_and_no_elasticsearch_does_not_promise_a_wait(self):
+        # .env has no value: nothing to shorten, the policy is unknown (the text of tpot elastic)
+        from tpotctl import elastic
+        repo = self.retention_checkout()
+        path = os.path.join(repo, ".env")
+        with open(path, encoding="utf-8") as handle:
+            text = handle.read()
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(text.replace("TPOT_ES_RETENTION=90\n", "TPOT_ES_RETENTION=\n", 1))
+        backend = self.settings_backend(repo)
+        backend._plan = elastic.Plan(elastic.Decision("keep", None, "", False), [], False)
+        app, _pilot = await self.save_retention(backend, "30")
+        notes = " ".join(str(note.message) for note in app._notifications)
+        self.assertIn("TPOT_ES_RETENTION=30 is set. T-Pot applies it on its next start if the ILM policy tpot "
+                      "keeps the events less long", notes)
+        self.assertNotIn("the value waits", notes)
+
     async def test_settings_shortening_without_indices_asks(self):
         from tpotctl import elastic, settings
         repo = self.retention_checkout()
