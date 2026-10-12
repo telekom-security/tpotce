@@ -613,9 +613,9 @@ def _on_path(fs, name):
 
 
 def _check_links(fs, out):
-    """Every link of the tree names a node (the links of its directories followed): ls -l and cd
-    find what a link points to."""
-    dangling = []
+    """Every link of the tree names a node (the links of its directories followed) and has the length
+    of its target as its size: ls -l and cd find what a link points to."""
+    dangling, sized = [], []
     for path, node in tree.iter_nodes(fs):
         if tree.node_get(node, tree.A_TYPE) != tree.T_LINK:
             continue
@@ -623,8 +623,14 @@ def _check_links(fs, out):
         resolved = tree.target_path(fs, path) if target else None
         if resolved is None or tree.find_node(fs, resolved) is None:
             dangling.append(f"{path} -> {target}")
+        # ls -l shows the length of the target as the size of a link
+        if tree.node_get(node, tree.A_SIZE) != len(target):
+            sized.append(f"{path} -> {target} ({tree.node_get(node, tree.A_SIZE)})")
     if dangling:
         out.append(f"link: {len(dangling)} links name nothing: {', '.join(dangling[:4])}")
+    if sized:
+        out.append(f"link: {len(sized)} links show a size other than the length of their target: "
+                   f"{', '.join(sized[:4])}")
 
 
 _LSB_LEVELS = re.compile(r"^# Default-(Start|Stop):[ \t]*(.*)$", re.M)

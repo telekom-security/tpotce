@@ -219,7 +219,8 @@ def remove_paths(t, paths):
 
 
 def rename_parts(t, replacements):
-    """Replace text in every name and link target (python3.11 -> python3.12)."""
+    """Replace text in every name and link target (python3.11 -> python3.12); a link keeps the
+    length of its target as its size."""
     for _, node in list(tree.iter_nodes(t)):
         for index in (tree.A_NAME, tree.A_TARGET):
             value = tree.node_get(node, index)
@@ -227,6 +228,8 @@ def rename_parts(t, replacements):
                 for old, new in replacements:
                     value = value.replace(old, new)
                 tree.node_set(node, index, value)
+                if index == tree.A_TARGET and tree.node_get(node, tree.A_TYPE) == tree.T_LINK:
+                    tree.node_set(node, tree.A_SIZE, len(value))
 
 
 def remove_matching(t, words):

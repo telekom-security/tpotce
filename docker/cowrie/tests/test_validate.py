@@ -381,6 +381,12 @@ class ValidateSystemTest(unittest.TestCase):
         found = self.problems("ubuntu-noble", lambda fs, out: tree.ensure_link(fs, "etc/os-release2", "usr/lib/os-release"))
         self.assertIn("link: 1 links name nothing: /etc/os-release2 -> usr/lib/os-release", found)
 
+    def test_link_with_a_size_other_than_its_target(self):
+        def change(fs, out):
+            tree.node_set(tree.find_node(fs, "bin"), tree.A_SIZE, 99)
+        found = self.problems("ubuntu-noble", change)
+        self.assertIn("link: 1 links show a size other than the length of their target: /bin -> usr/bin (99)", found)
+
     def test_link_that_names_nothing(self):
         found = self.problems("rhel-9", lambda fs, out: tree.ensure_link(
             fs, "usr/lib64/ld-linux-x86-64.so.2", "usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2"))

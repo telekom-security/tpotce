@@ -820,6 +820,28 @@ class RenderTest(unittest.TestCase):
                 self.assertEqual(tree.node_get(child, tree.A_UID), persona.uid, (persona.id, path))
 
 
+class LinkSizeTest(unittest.TestCase):
+    def test_a_renamed_link_target_gives_the_link_its_size(self):
+        # ls -l shows the length of the target as the size of a link, also after the renames of the
+        # release (python3.11 -> python3.9, the multiarch triplet of the hardware)
+        base = base_tree()
+        # targets from the root, as Cowrie's pickle stores them
+        tree.ensure_link(base, "usr/bin/pydoc3", "usr/bin/pydoc3.11")
+        tree.ensure_link(base, "usr/lib/python3.11/_sysconfigdata__linux_x86_64-linux-gnu.py",
+                         "usr/lib/python3.11/_sysconfigdata__x86_64-linux-gnu.py")
+        for pid in ("rhel-9", "raspios"):
+            with self.subTest(pid):
+                persona = catalog.by_id(pid)
+                out = tmpdir(self) / pid
+                render(persona, draw(persona, 1, NOW), base, out, runtime_dir=out, keys_dir=out / "keys")
+                fs = tree.load_pickle(out / "fs.pickle")
+                links = [(path, tree.node_get(node, tree.A_SIZE), tree.node_get(node, tree.A_TARGET))
+                         for path, node in tree.iter_nodes(fs) if tree.node_get(node, tree.A_TYPE) == tree.T_LINK]
+                self.assertTrue(any(target in ("pydoc3.9", "_sysconfigdata__aarch64-linux-gnu.py")
+                                    for _, _, target in links), links)
+                self.assertEqual([link for link in links if link[1] != len(link[2] or "")], [])
+
+
 class BoundaryTest(unittest.TestCase):
     """The edges of the identity ranges: every persona must still render and validate."""
 
