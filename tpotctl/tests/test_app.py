@@ -837,6 +837,91 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn(("set", "120"), backend.calls)
         self.assertIn(("apply", "update"), backend.calls)
 
+    async def test_elastic_take_over_that_shortens_without_indices_asks_first(self):
+        from tpotctl import elastic
+        backend = FakeBackend()
+        backend._retention = elastic.Status("30", "120", "foreign")
+        # the policy changed again in Kibana meanwhile: taking 120 over shortens it, no index is old enough
+        backend._plan = elastic.Plan(elastic.Decision("update", {}, "200", False), [], True, shortening=True)
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.2)
+            app.goto("elastic")
+            await pilot.pause(0.3)
+            await pilot.click("#elastic-adopt")
+            await pilot.pause(0.3)
+            self.assertIn(("plan", "120", True), backend.calls)
+            self.assertIsInstance(app.screen, ConfirmDialog)
+            self.assertIs(app.focused, app.screen.query_one("#no"))
+            body = " ".join("".join(str(w.render()) for w in app.screen.query("Static")).split())
+            self.assertIn("No index is deleted right away.", body)
+            self.assertIn("From now on, events older than 120 days are deleted. This cannot be undone.", body)
+            await pilot.click("#no")
+            await pilot.pause(0.3)
+            done = [call[0] for call in backend.calls if isinstance(call, tuple)]
+            self.assertNotIn("set", done)
+            self.assertNotIn("apply", done)
+            self.assertFalse(app.query_one("#elastic-adopt").disabled)          # not busy after the no
+            await pilot.click("#elastic-adopt")
+            await pilot.pause(0.3)
+            await pilot.click("#yes")
+            await pilot.pause(0.3)
+        self.assertIn(("set", "120"), backend.calls)
+        self.assertIn(("apply", "update"), backend.calls)
+
+    async def test_elastic_no_on_the_apply_dialog_writes_nothing(self):
+        from tpotctl import elastic
+        backend = FakeBackend()
+        backend._retention = elastic.Status("30", "90", "managed", pending=True)
+        backend._plan = elastic.Plan(elastic.Decision("update", {}, "90", True),
+                                     [elastic.Index("logstash-2026.04.01", 0, 500, 2 ** 20)], True, shortening=True)
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.2)
+            app.goto("elastic")
+            await pilot.pause(0.3)
+            await pilot.click("#elastic-apply")
+            await pilot.pause(0.3)
+            self.assertIn(("plan", "30", True), backend.calls)
+            self.assertIsInstance(app.screen, ConfirmDialog)
+            self.assertIs(app.focused, app.screen.query_one("#no"))
+            await pilot.click("#no")
+            await pilot.pause(0.3)
+            self.assertNotIsInstance(app.screen, ConfirmDialog)
+            done = [call[0] for call in backend.calls if isinstance(call, tuple)]
+            self.assertNotIn("set", done)
+            self.assertNotIn("apply", done)
+            self.assertFalse(app.query_one("#elastic-apply").disabled)          # still pending, can be asked again
+            self.assertIn("TPOT_ES_RETENTION=30 waits", " ".join(str(app.query_one("#elastic-status").render()).split()))
+
+    async def test_elastic_apply_while_elasticsearch_is_unreachable(self):
+        """The page read a pending value, Elasticsearch is gone by the time Apply plans: nothing is applied,
+        no question, the value stays in .env and waits; the page says why. An unreachable status has no
+        Apply at all."""
+        from tpotctl import elastic
+        backend = FakeBackend()
+        backend._retention = elastic.Status("30", "90", "managed", pending=True)
+        backend._plan = elastic.Plan(elastic.Decision("keep", None, "", False), [], False,
+                                     problem="no answer from http://127.0.0.1:64298")
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.2)
+            app.goto("elastic")
+            await pilot.pause(0.3)
+            backend._retention = elastic.Status("30", "", "unreachable", "no answer from http://127.0.0.1:64298")
+            await pilot.click("#elastic-apply")
+            await pilot.pause(0.4)
+            self.assertNotIsInstance(app.screen, ConfirmDialog)
+            notes = " ".join(str(note.message) for note in app._notifications)
+            self.assertIn("no answer from http://127.0.0.1:64298", str(app.query_one("#elastic-status").render()))
+            self.assertTrue(app.query_one("#elastic-apply").disabled)           # read anew: unreachable
+        self.assertIn(("plan", "30", True), backend.calls)
+        self.assertNotIn("apply", [call[0] for call in backend.calls if isinstance(call, tuple)])
+        self.assertIn("TPOT_ES_RETENTION=30 is set in .env, but Elasticsearch is not reachable: T-Pot does not "
+                      "shorten the ILM policy tpot on its own, the value waits. Once Elasticsearch runs, Apply .env "
+                      "to the policy applies it here (it asks first). Why: no answer from http://127.0.0.1:64298.",
+                      notes)
+
     async def test_unreachable_set_writes_env_only(self):
         from tpotctl import elastic
         backend = FakeBackend()

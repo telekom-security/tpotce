@@ -227,6 +227,13 @@ myUP="http://127.0.0.1:64298" myGET_CODE=404 myGET_BODY='{}' myCAT_BODY='[]' myR
 GET http://127.0.0.1:64298/${myCAT}
 PUT http://127.0.0.1:64298/_ilm/policy/tpot"
 fuPUT_CHECK "  ... the policy deletes after 30d" '.policy.phases.delete.min_age == "30d" and (.policy.phases.delete.actions | has("delete"))'
+# any other answer than 200 or 404 (an error of Elasticsearch, 000 for no answer in time): a warning, no PUT
+for myCODE in 500 000; do
+  myUP="http://127.0.0.1:64298" myGET_CODE="${myCODE}" myGET_BODY='{"error":"x"}' myCAT_BODY='[]' myRET=30 \
+    fuSTUB_CHECK "HTTP ${myCODE} for the policy: warned, nothing written" \
+    "# Warning: Elasticsearch did not answer (HTTP ${myCODE}), the ILM policy tpot is not checked." \
+    "GET http://127.0.0.1:64298/_ilm/policy/tpot"
+done
 # a value that is no number of days: one warning of its own, no jq error, nothing asked, nothing written
 myUP="http://127.0.0.1:64298" myGET_CODE=404 myGET_BODY='{}' myRET=abc \
   fuSTUB_CHECK "an invalid TPOT_ES_RETENTION is warned about once and not applied" \
@@ -253,6 +260,12 @@ myUP="http://127.0.0.1:64298" myGET_CODE=200 \
   fuSTUB_CHECK "a failing jq prints no error of its own, the script warns" \
   "# Warning: the ILM policy tpot could not be checked (no decision)." \
   "GET http://127.0.0.1:64298/_ilm/policy/tpot"
+# the same for a missing policy: no decision, so nothing is created
+myUP="http://127.0.0.1:64298" myGET_CODE=404 myGET_BODY='{}' myCAT_BODY='[]' myRET=30 \
+  fuSTUB_CHECK "a failing jq on a missing policy creates nothing" \
+  "# Warning: the ILM policy tpot could not be checked (no decision)." \
+  "GET http://127.0.0.1:64298/_ilm/policy/tpot
+GET http://127.0.0.1:64298/${myCAT}"
 unset -f jq
 unset -f curl
 rm -rf "${myCALLS}" "${myPUT}" "${myDIR}"

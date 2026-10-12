@@ -11,6 +11,7 @@ import io
 import json
 import os
 import random
+import re
 import shutil
 import subprocess
 import sys
@@ -227,13 +228,35 @@ class WiringTest(unittest.TestCase):
         with open(os.path.join(REPO_DIR, *parts), encoding="utf-8") as handle:
             return handle.read()
 
+    # an if block of entrypoint.sh: its condition, its body, up to its own fi
+    IF_BLOCK = re.compile(r"^if (?P<cond>[^\n]*);\n\s*then\n(?P<body>(?:(?!fi\n)[^\n]*\n)*?)fi$", re.M)
+
     def test_tpotinit_applies_the_rule_on_a_hive_with_elasticsearch(self):
+        """After touch /tmp/success (the healthcheck: the honeypots start meanwhile): one if block that
+        only on a HIVE whose compose file has elasticsearch starts es_retention.sh in the background,
+        before the Kibana import (which waits for Kibana and must not hold it up)."""
         text = self.read("docker", "tpotinit", "dist", "entrypoint.sh")
-        start = text.index("touch /tmp/success")
-        self.assertIn("/opt/tpot/bin/es_retention.sh", text[start:])
-        block = text[text.index("/opt/tpot/bin/es_retention.sh") - 300:text.index("/opt/tpot/bin/es_retention.sh")]
-        self.assertIn('"${TPOT_TYPE}" == "HIVE"', block)
-        self.assertIn("elasticsearch", block)
+        start = text.index("touch /tmp/success\n")
+        calls = [line for line in text.splitlines() if "es_retention.sh" in line and not line.lstrip().startswith("#")]
+        self.assertEqual(len(calls), 1, calls)                                   # one call, no other one
+        self.assertGreater(text.index(calls[0]), start)
+        blocks = [b for b in self.IF_BLOCK.finditer(text, start) if "es_retention.sh" in b.group("body")]
+        self.assertEqual(len(blocks), 1, blocks)
+        block = blocks[0]
+        # the guard: both tests, joined by &&, nothing else
+        tests = [part.strip() for part in block.group("cond").split("&&")]
+        self.assertNotIn("||", block.group("cond"))
+        self.assertEqual(tests, ['[ "${TPOT_TYPE}" == "HIVE" ]',
+                                 """yq -e '.services | has("elasticsearch")' "${COMPOSE}" >/dev/null 2>&1"""])
+        # the body: the call alone, in the background
+        body = [line.strip() for line in block.group("body").splitlines() if line.strip()]
+        self.assertEqual(body, ["/opt/tpot/bin/es_retention.sh &"])
+        # between the healthcheck and the Kibana block, nothing in between waits
+        kibana = text.index('if [ "${myFIRSTRUN}" == "true" ] && [ "${TPOT_TYPE}" == "HIVE" ];')
+        self.assertLess(block.end(), kibana)
+        between = text[start + len("touch /tmp/success\n"):block.start()] + text[block.end():kibana]
+        self.assertEqual([line for line in between.splitlines() if line.strip() and not line.lstrip().startswith("#")],
+                         [], between)
 
     def test_tpotinit_reaches_elasticsearch_in_every_edition(self):
         # host network: the published 127.0.0.1:64298; otherwise (MAC_WIN) the network of elasticsearch

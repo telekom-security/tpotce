@@ -35,6 +35,40 @@ def read(path):
         return handle.read()
 
 
+def at_terminal(argv, env, cwd, answers=(), timeout=60):
+    """argv with stdin, stdout and stderr on a pty: (exit code, output). answers: (text, keys) in their
+    order, the keys are typed once the text is in the output (after the text of the answer before)."""
+    import pty
+    import select
+    master, slave = pty.openpty()
+    proc = subprocess.Popen(argv, env=env, cwd=cwd, stdin=slave, stdout=slave, stderr=slave, close_fds=True)
+    os.close(slave)
+    out, seen, waiting = b"", 0, list(answers)
+    deadline = time.time() + timeout
+    try:
+        while time.time() < deadline:
+            if waiting and waiting[0][0].encode() in out[seen:]:
+                text, keys = waiting.pop(0)
+                seen = out.index(text.encode(), seen) + len(text.encode())
+                os.write(master, keys)
+            ready, _w, _x = select.select([master], [], [], 0.1)
+            if ready:
+                try:
+                    data = os.read(master, 65536)
+                except OSError:                     # Linux: EIO once the child is gone
+                    break
+                if not data:
+                    break
+                out += data
+            elif proc.poll() is not None:
+                break
+        else:
+            proc.kill()
+        return proc.wait(timeout=10), out.decode("utf-8", "replace").replace("\r\n", "\n")
+    finally:
+        os.close(master)
+
+
 @unittest.skipUnless(shutil.which("bash"), "no bash")
 class Harness(unittest.TestCase):
 
@@ -912,6 +946,84 @@ class RestoreDataTest(RestoreScriptHarness):
         out = self.bash(script, terminal=True).stdout
         self.assertIn("data/*", self.tar_calls(), out)
         self.assertFalse(os.path.exists(folder))
+
+    def test_at_a_terminal_the_early_check_leaves_data_to_the_question(self):
+        """restore.sh at a terminal (a pty, plain text): fuDATA_REFUSED does not drop data/ before the
+        stop, the question comes in fuDO_DATA; no restores nothing of it, yes restores it. -y does not
+        answer it."""
+        environment = dict(os.environ, HOME=self.home, PATH=f"{self.bin}:{os.environ['PATH']}", TPOT_GUM="off",
+                           TPOT_LOGO_SHOWN="1")
+        environment.pop("TPOT_MARKS", None)
+        for answer, restored in ((b"n\r", False), (b"y\r", True)):
+            with self.subTest(answer=answer):
+                folder = self.elk(os.path.join(self.tpotce, "data"))
+                for name in ("calls", "tar_calls"):
+                    if os.path.exists(os.path.join(self.home, name)):
+                        os.remove(os.path.join(self.home, name))
+                code, out = at_terminal(["bash", os.path.join(REPO, "restore.sh"), "-f", self.archive, "-y",
+                                         "-g", "data"], environment, self.home,
+                                        [("Accept this loss of data? (y/N)", answer)])
+                self.assertEqual(code, 0, out[-1500:])
+                self.assertNotIn("Not confirmed: no terminal", out)
+                self.assertNotIn("data/ was not restored: not confirmed. Restoring it replaces", out)  # the early one
+                self.assertIn("### Accept this loss of data? (y/N) ", out)
+                self.assertIn("The current Elasticsearch data (12G) is deleted and replaced", out)
+                self.assertIn("systemctl stop", self.calls(), out)             # data/ was still chosen
+                self.assertLess(out.index("Stopping T-Pot"), out.index("Accept this loss of data?"))
+                if restored:
+                    self.assertIn("tar xf", self.tar_calls(), out)
+                    self.assertFalse(os.path.exists(os.path.join(folder, "now")))
+                    self.assertNotIn("not restored", out)
+                else:
+                    self.assertEqual(self.tar_calls(), "", out)
+                    self.assertTrue(os.path.exists(os.path.join(folder, "now")))
+                    self.assertIn("data/ was not restored: not confirmed.", out)
+                    self.assertIn("not restored: not confirmed, see above", out)
+
+
+@unittest.skipUnless(shutil.which("bash"), "no bash")
+class LossConfirmTerminalTest(unittest.TestCase):
+    """fuLOSS_CONFIRM of update.sh and of restore.sh at a real terminal (a pty), with installer/lib/ui.sh
+    and with the plain fallback block of the script (TPOT_GUM=off): enter is no, y and yes are yes, n is
+    no. The question is asked, the hint for a run without a terminal is not given."""
+
+    # the arguments after the text: update.sh takes the names of what goes, restore.sh the question
+    CALLS = {"update.sh": 'fuLOSS_CONFIRM backups "Deleting 1 backup makes room." a_tpot_backup.tar',
+             "restore.sh": 'fuLOSS_CONFIRM data "Restoring data/ replaces the current files."'}
+    ANSWERS = ((b"\r", 1), (b"y\r", 0), (b"yes\r", 0), (b"n\r", 1))
+
+    def setUp(self):
+        self.home = tempfile.mkdtemp(prefix="tpot-loss-")
+        self.addCleanup(shutil.rmtree, self.home)
+
+    def sources(self, script):
+        """installer/lib/ui.sh and the plain fallback block of the script, as files to source."""
+        text = read(script)
+        start, end = text.index("# >>> plain fallback"), text.index("# <<< plain fallback")
+        fallback = os.path.join(self.home, f"fallback-{script}")
+        with open(fallback, "w", encoding="utf-8") as out:
+            out.write(text[start:end])
+        return (os.path.join(REPO, "installer", "lib", "ui.sh"), fallback)
+
+    def test_the_answer_at_a_terminal(self):
+        environment = dict(os.environ, HOME=self.home, TPOT_GUM="off")
+        for name in ("TPOT_MARKS", "NO_COLOR"):
+            environment.pop(name, None)
+        for script, call in self.CALLS.items():
+            for source in self.sources(script):
+                for keys, rc in self.ANSWERS:
+                    with self.subTest(script=script, source=os.path.basename(source), keys=keys):
+                        text = (f'source "{source}"\nfuUI_INIT\nmyACCEPT_LOSS="" myACCEPT_FILE=""\n'
+                                f"eval \"$(sed -n '/^function fuLOSS_IN_FILE ()/,/^}}/p; "
+                                f"/^function fuLOSS_CONFIRM ()/,/^}}/p' {script})\"\n"
+                                f'{call}; echo "rc=$?"\n')
+                        code, out = at_terminal(["bash", "-c", text], environment, REPO,
+                                                [("Accept this loss of data? (y/N) ", keys)], timeout=30)
+                        self.assertEqual(code, 0, out)
+                        self.assertIn("Accept this loss of data? (y/N) ", out)
+                        self.assertNotIn("Not confirmed: no terminal", out)
+                        self.assertNotIn("confirmed with", out)
+                        self.assertTrue(out.rstrip().endswith(f"rc={rc}"), repr(out[-300:]))
 
 
 class FallbackTest(Harness):
@@ -1997,7 +2109,8 @@ class DataLossTest(Harness):
         self.assertEqual(self.pullable("repo/x@sha256:aaa\\n", ""), "unsure")
 
     def test_without_timeout_it_cannot_tell(self):
-        # a PATH with the tools of the function but no timeout: the digests are read, then it stops
+        # a PATH with the tools of the function but no timeout: the digests are read, then it stops at
+        # the check for timeout (the trace shows the way: the digest is there, the check returns 2)
         tools = os.path.join(self.home, "tools")
         os.makedirs(tools)
         for name in ("sed", "tr", "grep"):
@@ -2005,10 +2118,15 @@ class DataLossTest(Harness):
         script = (self.functions("fuIMAGE_PULLABLE") + f'unset -f timeout\nPATH="{tools}"\n'
                   'docker () { case "$1 $2" in "image inspect") echo "repo/x@sha256:aaa" ;; '
                   '*) echo "REGISTRY ASKED" ;; esac; }\n'
-                  'fuIMAGE_PULLABLE repo/x:1; echo "rc=$?"\n')
-        out = self.bash(script).stdout
-        self.assertEqual(out.strip().splitlines()[-1], "rc=2", out)
+                  "PS4='TRACE: '; set -x\nfuIMAGE_PULLABLE repo/x:1; myRC=$?\nset +x\n"
+                  'echo "rc=${myRC}"\n')
+        result = self.bash(script)
+        out, trace = result.stdout, [line for line in result.stderr.splitlines() if line.startswith("TRACE: ")]
+        self.assertEqual(out.strip().splitlines()[-1], "rc=2", out + result.stderr)
         self.assertNotIn("REGISTRY ASKED", out)
+        self.assertIn("TRACE: myLOCAL=sha256:aaa", trace, trace)                  # sed and docker: the digest
+        steps = [line for line in trace if line.startswith(("TRACE: command -v", "TRACE: return"))]
+        self.assertEqual(steps, ["TRACE: command -v timeout", "TRACE: return 2"], trace)
 
     def sort_images(self, deadline, buildx="echo sha256:aaa"):
         """fuSORT_IMAGES on three images with RepoDigests, each registry request logged to HOME/asked."""
