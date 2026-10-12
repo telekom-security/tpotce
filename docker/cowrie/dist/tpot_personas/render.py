@@ -179,7 +179,9 @@ def real_links(t, persona, ident):
             if not target and re.fullmatch(r"/proc/\d+/(cwd|root)", path):
                 # captured without a destination: init runs in / (the shell's: _login_links)
                 target = "/"
-            tree.node_set(node, tree.A_TARGET, real_target(path, target, systemd))
+            target = real_target(path, target, systemd)
+            tree.node_set(node, tree.A_TARGET, target)
+            tree.node_set(node, tree.A_SIZE, len(target))
 
 
 def link(t, persona, ident, rel, target, ctime):
@@ -266,7 +268,7 @@ def _unit_files(t, persona, ident, processes):
                              ctime=ident.installed_at)
 
 
-def _login_links(t, persona, ident):
+def _login_links(t, persona, ident, content_group=""):
     """The standard streams and /proc/self of the login shell: fd 0-2 on its terminal, exe its
     program (Cowrie's tree has the pipes and the Python of the container there)."""
     own = tree.real_path(t, "proc/self/fd")
@@ -274,7 +276,9 @@ def _login_links(t, persona, ident):
         return
     fd = tree.find_dir(t, own)
     mode = tree.node_get(fd, tree.A_MODE) if fd is not None else None
-    tree.ensure_device(t, system.TERMINAL, persona.uid, 5, 0o620, ctime=ident.now)
+    # devpts gives the terminal to the tty group where the system has one (OpenWrt has none: root, 0600)
+    tty = "\ntty:x:5:" in "\n" + content_group
+    tree.ensure_device(t, system.TERMINAL, persona.uid, 5 if tty else 0, 0o620 if tty else 0o600, ctime=ident.now)
     for number in range(3):
         link(t, persona, ident, f"{own}/{number}", system.TERMINAL, ident.now)
     if mode is not None:
@@ -347,7 +351,7 @@ def apply_to_tree(base_tree, persona, ident, content):
         link(t, persona, ident, rel, target, ident.installed_at)
     if persona.kind == "server":
         _unit_files(t, persona, ident, content.processes)
-    _login_links(t, persona, ident)
+    _login_links(t, persona, ident, content.files.get("etc/group", ""))
     _set_dirs(t, persona, ident.installed_at)
     return t
 

@@ -264,6 +264,15 @@ class SystemTest(unittest.TestCase):
         self.assertEqual(targets["/proc/self"], "969")
         self.assertEqual(targets["/usr/lib64/ld-linux-x86-64.so.2"], "/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2")
         self.assertTrue(all(targets.values()), [p for p, t in targets.items() if not t])
+        sizes = [path for path, node in tree.iter_nodes(fs) if tree.node_get(node, tree.A_TYPE) == tree.T_LINK
+                 and tree.node_get(node, tree.A_SIZE) != len(tree.node_get(node, tree.A_TARGET))]
+        self.assertEqual(sizes, [])
+
+    def test_terminal_group_is_one_the_system_has(self):
+        for pid, gid, mode in (("ubuntu-noble", 5, 0o620), ("openwrt", 0, 0o600)):
+            _, out, _ = render_one(self, catalog.by_id(pid), 1)
+            pts = tree.find_node(fs_of(out), "dev/pts/0")
+            self.assertEqual((tree.node_get(pts, tree.A_GID), tree.node_get(pts, tree.A_MODE) & 0o777), (gid, mode), pid)
 
     def test_red_hat_init_directories_and_loader(self):
         for pid in ("rhel-9", "centos-7"):
