@@ -644,6 +644,21 @@ class ValidateRpmTest(unittest.TestCase):
         self.assertIn("apt: nmap is installed, its program nmap is not on PATH",
                       " | ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0)))
 
+    def test_program_without_an_owner(self):
+        persona, ident, out, keys, problems = self.rhel()
+        self.edit_dnf(out, lambda data: data["owners"].pop("/usr/bin/bash"))
+        self.assertIn("dnf: /usr/bin/bash is on PATH, rpm names no owner of it", problems())
+
+    def test_debian_programs_are_gone_on_red_hat(self):
+        for pid in ("rhel-9", "centos-7"):
+            persona = catalog.by_id(pid)
+            ident, out, keys = render_one(self, persona, 1)
+            fs = tree.load_pickle(out / "fs.pickle")
+            for rel in ("usr/bin/mawk", "usr/bin/dash", "usr/bin/run-parts"):
+                self.assertIsNone(tree.find_node(fs, rel), (pid, rel))
+            for rel, target in (("usr/bin/awk", "gawk"), ("usr/bin/sh", "bash")):
+                self.assertEqual(tree.node_get(tree.find_node(fs, rel), tree.A_TARGET), target, (pid, rel))
+
     def test_redhat_repo_enables_other_repositories(self):
         persona, ident, out, keys, problems = self.rhel()
         path = out / "honeyfs/etc/yum.repos.d/redhat.repo"

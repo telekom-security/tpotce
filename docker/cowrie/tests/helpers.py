@@ -107,10 +107,16 @@ def base_tree():
                       ("usr/sbin/rmt-tar", 60432), ("usr/sbin/e2scrub_all", 5442),
                       # the programs of the packages every server has installed, as Cowrie's tree has them
                       ("usr/bin/curl", 280800), ("usr/bin/gzip", 98136), ("usr/bin/tar", 531984),
-                      ("usr/bin/ssh", 1125408), ("usr/bin/vim.basic", 3800000)):
+                      ("usr/bin/ssh", 1125408), ("usr/bin/vim.basic", 3800000),
+                      ("usr/bin/ls", 151344), ("usr/bin/cat", 44016), ("usr/bin/ps", 154440),
+                      ("usr/bin/mount", 59704), ("usr/bin/mawk", 162088), ("usr/bin/dash", 125688),
+                      ("usr/bin/run-parts", 27200)):
         _program(root, rel, size)
     _link(root, "usr/bin/python3", "usr/bin/python3.11")
     _link(root, "usr/bin/vim", "usr/bin/vim.basic")
+    # Debian's alternatives of awk and sh
+    _link(root, "usr/bin/awk", "usr/bin/mawk")
+    _link(root, "usr/bin/sh", "usr/bin/dash")
     return root
 
 

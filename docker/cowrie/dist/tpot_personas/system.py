@@ -376,10 +376,44 @@ RPM_INSTALLED = {
             {"9.4": "2:1.34-6.el9_4.1", "9.5": "2:1.34-7.el9", "9.6": "2:1.34-7.el9"}),
     "wget": ("x86_64", "appstream", "A utility for retrieving files using the HTTP or FTP protocols",
              "1.21.1-8.el9_4"),
+    "diffutils": ("x86_64", "baseos", "GNU collection of diff utilities", "3.7-12.el9"),
+    "e2fsprogs": ("x86_64", "baseos", "Utilities for managing ext2, ext3, and ext4 file systems",
+                  {"9.4": "1.46.5-5.el9", "9.5": "1.46.5-5.el9", "9.6": "1.46.5-7.el9"}),
+    "findutils": ("x86_64", "baseos", "The GNU versions of find utilities (find and xargs)",
+                  {"9.4": "1:4.8.0-6.el9", "9.5": "1:4.8.0-7.el9", "9.6": "1:4.8.0-7.el9"}),
+    "gawk": ("x86_64", "baseos", "The GNU version of the AWK text processing utility", "5.1.0-6.el9"),
+    "gnupg2": ("x86_64", "baseos", "Utility for secure communication and data storage", "2.3.3-4.el9"),
+    "grep": ("x86_64", "baseos", "Pattern matching utilities", "3.6-5.el9"),
+    "grubby": ("x86_64", "baseos", "Command line tool for updating bootloader configs",
+               {"9.4": "8.40-61.el9", "9.5": "8.40-61.el9", "9.6": "8.40-64.el9"}),
+    "hostname": ("x86_64", "baseos", "Utility to set/show the host name or domain name", "3.23-6.el9"),
+    "initscripts-service": ("noarch", "baseos", "Support for service command",
+                            {"9.4": "10.11.6-1.el9", "9.5": "10.11.8-4.el9", "9.6": "10.11.8-4.el9"}),
+    "kmod": ("x86_64", "baseos", "Linux kernel module management utilities",
+             {"9.4": "28-9.el9", "9.5": "28-10.el9", "9.6": "28-10.el9"}),
+    "ncurses": ("x86_64", "baseos", "Ncurses support utilities", "6.2-10.20210508.el9"),
+    "pam": ("x86_64", "baseos", "An extensible library which provides authentication for applications",
+            {"9.4": "1.5.1-19.el9", "9.5": "1.5.1-22.el9_5", "9.6": "1.5.1-23.el9"}),
+    "passwd": ("x86_64", "baseos", "An utility for setting or changing passwords using PAM", "0.80-12.el9"),
+    "pciutils": ("x86_64", "baseos", "PCI bus related utilities", "3.7.0-5.el9"),
+    "procps-ng": ("x86_64", "baseos", "System and process monitoring utilities",
+                  {"9.4": "3.3.17-14.el9", "9.5": "3.3.17-14.el9", "9.6": "3.3.17-14.el9"}),
+    "sed": ("x86_64", "baseos", "A GNU stream text editor", "4.8-9.el9"),
+    "setup": ("noarch", "baseos", "A set of system configuration and setup files", "2.13.7-10.el9"),
+    "shadow-utils": ("x86_64", "baseos", "Utilities for managing accounts and shadow password files",
+                     {"9.4": "2:4.9-8.el9", "9.5": "2:4.9-10.el9_5", "9.6": "2:4.9-12.el9"}),
+    "util-linux": ("x86_64", "baseos", "A collection of basic system utilities",
+                   {"9.4": "2.37.4-18.el9", "9.5": "2.37.4-20.el9", "9.6": "2.37.4-21.el9"}),
+    "which": ("x86_64", "baseos", "Displays where a particular program in your path is located",
+              {"9.4": "2.21-29.el9", "9.5": "2.21-29.el9", "9.6": "2.21-30.el9"}),
 }
 # the packages of the persona's own versions: catalog, kernel, interpreters, sudo, OpenSSL, dnf and rpm
 RPM_PERSONA = {
     "cloud-init": ("noarch", "appstream", "Cloud instance init scripts"),
+    "glibc-common": ("x86_64", "baseos", "Common binaries and locale data for glibc"),
+    "redhat-release": ("x86_64", "baseos", "Red Hat Enterprise Linux release file"),
+    "systemd-udev": ("x86_64", "baseos", "Rule-based device node and kernel event manager"),
+    "vim-minimal": ("x86_64", "baseos", "A minimal version of the VIM editor"),
     "curl": ("x86_64", "baseos", "A utility for getting files from remote servers (FTP, HTTP, and others)"),
     "dnf": ("noarch", "baseos", "Package manager"),
     "kernel": ("x86_64", "baseos", "The Linux kernel, based on version 5.14.0, heavily modified with backports"),
@@ -402,6 +436,7 @@ RHEL_RPM = {"9.4": "4.16.1.3-29.el9", "9.5": "4.16.1.3-34.el9", "9.6": "4.16.1.3
 RHEL_PYTHON_RPM = {"9.4": "3.9.18-3.el9_4.6", "9.5": "3.9.19-8.el9_5.1", "9.6": "3.9.21-2.el9"}
 RHEL_OPENSSL = {"9.4": "1:3.0.7-27.el9", "9.5": "1:3.2.2-6.el9_5", "9.6": "1:3.2.2-6.el9_5.1"}
 RHEL_PERL = "4:5.32.1-481.el9"
+RHEL_RELEASE_RPM = {"9.4": "9.4-0.5.el9", "9.5": "9.5-0.6.el9", "9.6": "9.6-0.1.el9"}
 RHEL_SUDO = "1.9.5p2-10.el9_3"
 # name: (arch, repository, summary, evr, (download kB, installed kB), dependencies); an evr "=glibc" is
 #   that of the installed package (glibc-devel goes with glibc, kernel-headers with the kernel)
@@ -480,6 +515,77 @@ RPM_AVAILABLE_PROGRAMS = {
     "telnet": ("usr/bin/telnet",), "tftp": ("usr/bin/tftp",), "tmux": ("usr/bin/tmux",),
     "unzip": ("usr/bin/unzip",), "zip": ("usr/bin/zip",),
 }
+# what the installed packages own in the tree (rpm -qf; unverified: the file lists as remembered): the
+#   programs in /usr/bin and /usr/sbin, the files in /etc and /usr/lib
+_COREUTILS = ("[ arch b2sum base32 base64 basename basenc cat chcon chgrp chmod chown cksum comm cp csplit cut date dd "
+              "df dir dircolors dirname du echo env expand expr factor false fmt fold groups head hostid id install "
+              "join link ln logname ls md5sum mkdir mkfifo mknod mktemp mv nice nl nohup nproc numfmt od paste "
+              "pathchk pinky pr printenv printf ptx pwd readlink realpath rm rmdir runcon seq sha1sum sha224sum "
+              "sha256sum sha384sum sha512sum shred shuf sleep sort split stat stdbuf stty sum sync tac tail tee test "
+              "timeout touch tr true truncate tsort tty uname unexpand uniq unlink users vdir wc who whoami yes")
+_UTIL_LINUX = ("addpart chfn choom chrt chsh delpart dmesg fallocate fincore findmnt flock getopt hardlink i386 ionice "
+               "ipcmk ipcrm ipcs kill last lastb linux32 linux64 login logger lsblk lscpu lsfd lsipc lsirq lslocks "
+               "lslogins lsmem lsns mcookie mesg more mount mountpoint namei nsenter partx prlimit renice "
+               "resizepart rev script scriptlive scriptreplay setarch setpriv setsid setterm su taskset uclampset "
+               "umount unshare utmpdump wall wdctl whereis x86_64")
+_UTIL_LINUX_SBIN = ("agetty blkdiscard blkid blkzone blockdev chcpu chmem ctrlaltdel findfs fsck fsck.cramfs "
+                    "fsck.minix fsfreeze fstrim hwclock isosize ldattach losetup mkfs mkfs.bfs mkfs.cramfs mkfs.minix "
+                    "mkswap nologin pivot_root readprofile rtcwake runuser sulogin swaplabel swapoff swapon "
+                    "switch_root wipefs zramctl")
+_SHADOW_SBIN = ("adduser chgpasswd chpasswd groupadd groupdel groupmems groupmod grpck grpconv grpunconv newusers "
+                "pwck pwconv pwunconv useradd userdel usermod vigr vipw")
+_E2FS_SBIN = ("badblocks debugfs dumpe2fs e2freefrag e2fsck e2image e2label e2mmpstatus e2scrub e2scrub_all e2undo "
+              "e4crypt e4defrag filefrag fsck.ext2 fsck.ext3 fsck.ext4 logsave mke2fs mkfs.ext2 mkfs.ext3 mkfs.ext4 "
+              "mklost+found resize2fs tune2fs")
+RPM_OWNED = {
+    "audit": ("", "auditd"), "bash": ("bash bashbug sh ulimit", ""), "chrony": ("", "chronyd"),
+    "cloud-init": ("cloud-init", ""), "coreutils": (_COREUTILS, "chroot"), "cronie": ("", "crond"),
+    "curl": ("curl", ""), "dbus-broker": ("dbus-broker-launch", ""), "diffutils": ("cmp diff diff3 sdiff", ""),
+    "dnf": ("dnf dnf-3", ""), "e2fsprogs": ("chattr lsattr", _E2FS_SBIN), "ethtool": ("", "ethtool"),
+    "findutils": ("find xargs", ""), "gawk": ("awk gawk", ""),
+    "glibc": ("", "iconvconfig ldconfig"),
+    "glibc-common": ("getconf getent iconv ldd locale localedef pldd tzselect zdump", "zic"),
+    "gnupg2": ("gpgv", ""), "grep": ("egrep fgrep grep", ""), "grubby": ("", "installkernel"),
+    "gzip": ("gunzip gzexe gzip uncompress zcat zcmp zdiff zegrep zfgrep zforce zgrep zless zmore znew", ""),
+    "hostname": ("dnsdomainname domainname hostname nisdomainname ypdomainname", ""),
+    "initscripts-service": ("", "service"), "iputils": ("ping", ""), "kexec-tools": ("kdumpctl", ""),
+    "kmod": ("kmod", ""), "ncurses": ("captoinfo clear infocmp infotocap reset tabs tic toe tput tset", ""),
+    "NetworkManager": ("nm-online", "NetworkManager"),
+    "openssh-clients": ("scp sftp ssh ssh-add ssh-agent ssh-copy-id ssh-keygen ssh-keyscan", ""),
+    "openssh-server": ("", "sshd"),
+    "pam": ("", "faillock mkhomedir_helper pam_namespace_helper pam_timestamp_check pwhistory_helper unix_chkpwd "
+                "unix_update"),
+    "passwd": ("passwd", ""), "pciutils": ("lspci", ""), "perl-interpreter": ("perl", ""),
+    "procps-ng": ("free pgrep pidof pidwait pkill pmap ps pwdx skill slabtop snice tload top uptime vmstat w watch",
+                  "sysctl"),
+    "python3": ("pydoc3 pydoc3.9 python3 python3.9", ""), "rpm": ("rpm", ""), "rsyslog": ("", "rsyslogd"),
+    "sed": ("sed", ""), "shadow-utils": ("chage expiry faillog gpasswd lastlog newgrp sg", _SHADOW_SBIN),
+    "sudo": ("sudo", ""), "systemd": ("journalctl systemctl systemd-tmpfiles", ""), "systemd-udev": ("udevadm", ""),
+    "tar": ("tar", ""), "util-linux": (_UTIL_LINUX, _UTIL_LINUX_SBIN),
+    "vim-enhanced": ("rvim vim vim.basic vimdiff vimtutor", ""), "vim-minimal": ("ex rview vi view", ""),
+    "wget": ("wget", ""), "which": ("which", ""), "yum": ("yum", ""),
+}
+RPM_OWNED_FILES = {
+    "setup": ("etc/passwd", "etc/group", "etc/shadow", "etc/gshadow", "etc/hosts", "etc/services", "etc/profile",
+              "etc/bashrc", "etc/shells", "etc/fstab", "etc/motd"),
+    "redhat-release": ("etc/redhat-release", "etc/system-release", "etc/os-release", "usr/lib/os-release",
+                       "etc/issue", "etc/issue.net"),
+    "sudo": ("etc/sudoers",), "openssh-server": ("etc/ssh/sshd_config",), "systemd": ("usr/lib/systemd/systemd",),
+}
+# Debian's own programs of Cowrie's tree that Red Hat has not (awk and sh are gawk's and bash's there)
+EL_DEBIAN_PROGRAMS = ("usr/bin/clear_console", "usr/bin/dash", "usr/bin/editor", "usr/bin/pager", "usr/bin/helpztags",
+                      "usr/bin/lcf", "usr/bin/md5sum.textutils", "usr/bin/mawk", "usr/bin/nawk", "usr/bin/rename.ul",
+                      "usr/bin/rgrep", "usr/bin/run-parts", "usr/bin/select-editor", "usr/bin/sensible-*",
+                      "usr/bin/ucf", "usr/bin/ucfq", "usr/bin/ucfr", "usr/bin/update-alternatives",
+                      "usr/bin/py3clean", "usr/bin/py3compile", "usr/bin/py3versions", "usr/bin/pygettext3*",
+                      "usr/bin/pdb3*", "usr/bin/ssh-argv0", "usr/bin/perl5.*", "usr/sbin/cpgr", "usr/sbin/cppw",
+                      "usr/sbin/fstab-decode", "usr/sbin/getty", "etc/alternatives/awk*",
+                      "etc/alternatives/nawk*")
+# RHEL 9: pidof is procps-ng's (no killall5 of sysvinit), no rbash and no slogin
+RHEL_DEBIAN_PROGRAMS = ("usr/bin/rbash", "usr/sbin/killall5", "usr/bin/slogin")
+EL_PROGRAM_LINKS = (("usr/bin/awk", "usr/bin/gawk"), ("usr/bin/sh", "usr/bin/bash"),
+                    # PID 1 is systemd (Cowrie's tree has the dash of its container)
+                    ("proc/1/exe", "usr/lib/systemd/systemd"))
 # names dnf finds by what a package provides
 RPM_PROVIDES = {"nc": "nmap-ncat", "ncat": "nmap-ncat", "vim": "vim-enhanced"}
 # the packages of TOOL_PROGRAMS on Red Hat (no busybox)
@@ -883,6 +989,8 @@ def foreign_paths(persona):
         paths += PYTHON_PATHS + (() if has_perl(persona) else PERL_PATHS)
     elif persona.family == "centos":
         paths += PYTHON_PATHS
+    if is_el(persona):
+        paths += EL_DEBIAN_PROGRAMS + (RHEL_DEBIAN_PROGRAMS if persona.family == "rhel" else ())
     return paths
 
 
@@ -984,7 +1092,9 @@ def programs(persona, ident):
         if persona.hardware_platform == "x86_64":
             paths.append(LOADER if persona.family != "centos" else CENTOS_LOADER)
     if is_el(persona):
-        paths.append("usr/libexec/openssh/sftp-server")
+        paths += ["usr/libexec/openssh/sftp-server", "usr/bin/gawk"]
+    if persona.family == "rhel":
+        paths.append("usr/bin/pidof")
     return tuple(paths)
 
 
@@ -1170,6 +1280,7 @@ def links(persona):
                   ("etc/systemd/system/multi-user.target.wants/sshd.service", "usr/lib/systemd/system/sshd.service"),
                   ("usr/sbin/adduser", "usr/sbin/useradd")]
         found += [(f"etc/rc{level}.d", f"etc/rc.d/rc{level}.d") for level in range(7)]
+        found += EL_PROGRAM_LINKS
     if persona.family == "rhel":
         found += DNF_LINKS
     if persona.family == "centos":

@@ -662,7 +662,8 @@ def _check_dnf(persona, ident, out_dir, fs, out):
                 "perl-interpreter": found["perl"][0], "dnf": r.packages["dnf"], "rpm": r.packages["rpm"],
                 "systemd": str(servers.systemd_version(persona, ident)[0]),
                 "openssl": r.ssh_version.split("OpenSSL ", 1)[-1].split()[0],
-                "cloud-init": system.cloud_init_version(persona, ident)[0]}
+                "cloud-init": system.cloud_init_version(persona, ident)[0],
+                "redhat-release": r.os_version_id}
     for name, version in expected.items():
         evr = installed.get(name, {}).get("evr", "")
         shown = evr.split(":", 1)[-1] if name in ("kernel", "openssh-server", "cloud-init") else _upstream(evr)
@@ -677,9 +678,17 @@ def _check_dnf(persona, ident, out_dir, fs, out):
     enabled = re.findall(r"^\[([^\]]+)\]\n(?:[^\[]*?\n)?enabled = 1$", text, re.M)
     if sorted(enabled) != sorted(repo["id"] for repo in data.get("repos", []) if repo.get("enabled")):
         out.append(f"dnf: redhat.repo enables {sorted(enabled)}, dnf lists others")
-    for path, package in sorted(data.get("owners", {}).items()):
+    owners = data.get("owners", {})
+    for path, package in sorted(owners.items()):
         if package not in installed:
             out.append(f"dnf: rpm names {package} the owner of {path}, rpm does not have it installed")
+    # every program on PATH is from a package rpm names
+    for directory in ("usr/bin", "usr/sbin"):
+        for node in tree.node_children(tree.find_dir(fs, directory) or []):
+            name = tree.node_get(node, tree.A_NAME)
+            if (tree.node_get(node, tree.A_TYPE) == tree.T_LINK or _is_program(node)) \
+                    and f"/{directory}/{name}" not in owners:
+                out.append(f"dnf: /{directory}/{name} is on PATH, rpm names no owner of it")
 
 
 def _check_system(persona, ident, cfg, out_dir, runtime_dir, fs, out):

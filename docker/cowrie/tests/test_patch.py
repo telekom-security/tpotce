@@ -158,9 +158,14 @@ class TreeFs:
         return posixpath.normpath(posixpath.join(cwd, path))
 
     def getfile(self, path, follow_symlinks=True):
+        import posixpath
         node = tree.find_node(self.fs, path)
         if follow_symlinks and node is not None and node[tree.A_TYPE] == tree.T_LINK:
-            node = tree.find_node(self.fs, node[tree.A_TARGET])
+            # a relative target from the link's directory, as the patched fs.getfile resolves it (the
+            # unrendered test tree has its targets from the root)
+            target = node[tree.A_TARGET]
+            node = tree.find_node(self.fs, posixpath.normpath(posixpath.join(posixpath.dirname(path), target))) \
+                or tree.find_node(self.fs, target)
         return node
 
     def exists(self, path):
@@ -1040,7 +1045,8 @@ class PatchTest(unittest.TestCase):
         class Protocol:
             hostname = ident.hostname
             terminal = None
-            fs = TreeFs(base_tree())
+            # the persona's own tree, as Cowrie loads it
+            fs = TreeFs(tree.load_pickle(out / "fs.pickle"))
 
             def __init__(self):
                 self.cmdstack = [Shell()]
@@ -1260,6 +1266,22 @@ class PatchTest(unittest.TestCase):
                                                           "directory\n", 1))
         self.assertEqual(root("rpm -e wget")[2], 0)
         self.assertEqual(root("rpm -q wget")[2], 1)
+
+    def test_rpm_names_the_owner_of_the_system_files(self):
+        run = self.upstream_session("rhel-9", uid=1000)
+        installed = self.dnf_data(run)["installed"]
+
+        def nvra(name):
+            return f"{name}-{installed[name]['evr'].split(':')[-1]}.{installed[name]['arch']}\n"
+
+        for path, package in (("/bin/ls", "coreutils"), ("/usr/bin/cat", "coreutils"), ("/usr/bin/which", "which"),
+                              ("/etc/passwd", "setup"), ("/etc/group", "setup"),
+                              ("/etc/redhat-release", "redhat-release"), ("/etc/os-release", "redhat-release"),
+                              ("/usr/bin/ps", "procps-ng"), ("/usr/bin/mount", "util-linux"),
+                              ("/usr/bin/awk", "gawk"), ("/usr/bin/sudo", "sudo")):
+            self.assertEqual(run(f"rpm -qf {path}")[0], nvra(package), path)
+        self.assertEqual(run("rpm -qf /etc/hostname"), ("file /etc/hostname is not owned by any package\n", "", 1))
+        self.assertEqual(run("rpm -q coreutils")[0], nvra("coreutils"))
 
     def test_centos_yum_stays_yum_3(self):
         run = self.upstream_session("centos-7", uid=0)

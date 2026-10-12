@@ -2795,13 +2795,13 @@ class Command_rpm(HoneyPotCommand):
                     for name, entry in installed.items():
                         for program in entry.get("programs", []):
                             owners[program] = name
-                    if path in owners and owners[path] in installed:
-                        self.write(tpot_rpm_nvra(owners[path], installed[owners[path]]) + "\n")
-                    elif self.fs.exists(path):
-                        self.write(f"file {path} is not owned by any package\n")
-                        failed += 1
-                    else:
+                    if not self.fs.exists(path):
                         self.errorWrite(f"error: file {path}: No such file or directory\n")
+                        failed += 1
+                    elif path in owners and owners[path] in installed:
+                        self.write(tpot_rpm_nvra(owners[path], installed[owners[path]]) + "\n")
+                    else:
+                        self.write(f"file {path} is not owned by any package\n")
                         failed += 1
                 elif word in installed:
                     self.write(tpot_rpm_nvra(word, installed[word]) + "\n")

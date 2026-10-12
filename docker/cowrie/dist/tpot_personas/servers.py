@@ -413,11 +413,14 @@ def dnf_packages(persona, ident):
                 "openssl": system.RHEL_OPENSSL[minor], "perl-interpreter": system.RHEL_PERL,
                 "python3": system.RHEL_PYTHON_RPM[minor], "rpm": system.RHEL_RPM[minor], "sudo": system.RHEL_SUDO,
                 "systemd": systemd_version(persona, ident)[1], "yum": system.RHEL_DNF[minor],
+                "systemd-udev": systemd_version(persona, ident)[1], "redhat-release": system.RHEL_RELEASE_RPM[minor],
                 **{name: version for name, version in r.packages.items() if name not in TOOL_PACKAGES}}
     logged = {name for _, names, _, _ in _log_entries(ident, "dnf-log") for name in names}
     installed = {}
     for name, (arch, repo, summary, evr) in system.RPM_INSTALLED.items():
         installed[name] = {"evr": system.rpm_evr(evr, minor), "arch": arch, "repo": repo, "summary": summary}
+    versions["glibc-common"] = system.rpm_evr(system.RPM_INSTALLED["glibc"][3], minor)
+    versions["vim-minimal"] = versions["vim-enhanced"]
     for name, evr in versions.items():
         arch, repo, summary = system.RPM_PERSONA[name]
         installed[name] = {"evr": evr, "arch": arch, "repo": repo, "summary": summary}
@@ -436,13 +439,14 @@ def dnf_packages(persona, ident):
                            "requires": list(requires),
                            "programs": ["/" + rel for rel in system.RPM_AVAILABLE_PROGRAMS.get(name, ())]}
     owners = {}
-    for program, package in system.RPM_PROGRAMS.items():
-        if package in installed:
-            owners[f"/usr/{'sbin' if program == 'sshd' else 'bin'}/{program}"] = package
+    for package, (programs, sbin) in system.RPM_OWNED.items():
+        owners.update({f"/usr/bin/{name}": package for name in programs.split()})
+        owners.update({f"/usr/sbin/{name}": package for name in sbin.split()})
+    for package, files in system.RPM_OWNED_FILES.items():
+        owners.update({"/" + rel: package for rel in files})
     for tool in system.installed_tools(persona, ident):
         for rel in system.TOOL_PROGRAMS[tool].values():
             owners["/" + rel] = system.RPM_TOOLS[tool]
-    owners.update({"/usr/bin/dnf": "dnf", "/usr/bin/dnf-3": "dnf", "/usr/bin/yum": "yum", "/usr/bin/rpm": "rpm"})
     rng = rng_for(ident, "dnf-version")
     built = updated_at(r) or ident.installed_at
 
