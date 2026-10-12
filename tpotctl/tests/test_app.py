@@ -334,6 +334,44 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             self.assertIsInstance(app.screen, TaskScreen)
             self.assertEqual(len(app.screen_stack), 2)
 
+    async def test_a_check_that_ends_under_another_dialog_only_tells(self):
+        # a dialog opened while the check ran (the palette, a question of another page): the question of
+        # the update, or the task screen, does not land on top of it; Update asks anew
+        import threading
+        loss = (True, [("backups", "2 older backups go to make room.")], "")
+        for found in (loss, (True, [], "")):
+            with self.subTest(findings=bool(found[1])):
+                release = threading.Event()
+                backend = FakeBackend()
+
+                def slow(args, found=found, release=release):
+                    release.wait(5)
+                    return found
+                backend.check_data_loss = slow
+                FakeEngine.seen.clear()
+                app = tapp.TpotApp(backend=backend, runner=Recorder(), engine=FakeEngine)
+                try:
+                    async with app.run_test(size=(120, 40)) as pilot:
+                        await pilot.pause(0.2)
+                        app.goto("update")
+                        await pilot.pause(0.2)
+                        await pilot.click("#run-update")
+                        await pilot.pause(0.2)
+                        other = ConfirmDialog("Something else?")
+                        app.push_screen(other)
+                        await pilot.pause(0.2)
+                        release.set()
+                        await pilot.pause(0.4)
+                        self.assertIs(app.screen, other)
+                        self.assertEqual(len(app.screen_stack), 2)
+                        notes = [str(note.message) for note in app._notifications]
+                        self.assertIn("The check for a loss of data is done, but another screen was open: press "
+                                      "Update again.", notes)
+                        self.assertFalse(app.query_one("#run-update").disabled)
+                    self.assertEqual(FakeEngine.seen, [])
+                finally:
+                    release.set()
+
     async def test_restore_chooses_the_archive_and_the_groups(self):
         from tpotctl.screens.restore import RestoreScreen
         from tpotctl.screens.task import TaskScreen
@@ -581,6 +619,18 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("Elasticsearch", shown[1])
         self.assertIn("are replaced by those of the archive", shown[1])
         self.assertEqual(seen[0][-2:], ["--accept-data-loss-file", "FILE"])
+
+    async def test_restore_of_data_names_the_size_of_the_elasticsearch_data(self):
+        backend = self.full_backups()
+        infos = backend.backup_infos()
+        infos[0].es_size = 3 * 2 ** 30
+        backend.backup_infos = lambda: infos
+        shown, _seen = await self.restore_with(backend, 0, ["data"], answer="no")
+        self.assertIn("The archive holds 3.0 GB of Elasticsearch data.", shown[1])
+        # without a size (read from the table of contents of the archive) the text stays as it was
+        shown, _seen = await self.restore_with(self.full_backups(), 0, ["data"], answer="no")
+        self.assertIn("The current Elasticsearch data is deleted and replaced", shown[1])
+        self.assertNotIn("The archive holds", shown[1])
 
     def test_the_date_of_a_backup(self):
         info = ops.BackupInfo("/b/x.tar", "20261001101010_tpot_backup.tar", 1, "regular", [], [])
@@ -1062,6 +1112,123 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(app.query_one("#elastic-apply").disabled)
             self.assertFalse(app.query_one("#elastic-adopt").disabled)
 
+    async def test_elastic_a_load_while_reading_reads_once_more_afterwards(self):
+        import threading
+        release = threading.Event()
+
+        class Slow(FakeBackend):
+            reads = 0
+
+            def retention_status(self):
+                Slow.reads += 1
+                release.wait(5)
+                return super().retention_status()
+
+        backend = Slow()
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        try:
+            async with app.run_test(size=(120, 40)) as pilot:
+                await pilot.pause(0.2)
+                pane = app.query_one("#elastic", tapp.ElasticPane)
+                self.assertEqual(Slow.reads, 1)                 # the read of on_mount, it waits
+                pane.load()                                     # .env changed meanwhile (a save elsewhere)
+                pane.load()
+                await pilot.pause(0.2)
+                self.assertEqual(Slow.reads, 1)                 # one read at a time
+                self.assertTrue(pane.reload_wanted)
+                release.set()
+                await pilot.pause(0.5)
+                self.assertEqual(Slow.reads, 2)                 # the dropped loads: exactly one read more
+                self.assertFalse(pane.reading)
+                self.assertFalse(pane.reload_wanted)
+        finally:
+            release.set()
+
+    async def test_elastic_an_older_read_never_overwrites_a_newer_one(self):
+        import asyncio
+        import threading
+        from tpotctl import elastic
+        gate = threading.Event()
+
+        class Racing(FakeBackend):
+            answers = []            # (wait for gate, status) for the next reads
+
+            def retention_status(self):
+                if Racing.answers:
+                    wait, state = Racing.answers.pop(0)
+                    if wait:
+                        gate.wait(5)
+                    return state
+                return super().retention_status()
+
+        backend = Racing()
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        try:
+            async with app.run_test(size=(120, 40)) as pilot:
+                await pilot.pause(0.3)
+                pane = app.query_one("#elastic", tapp.ElasticPane)
+                self.assertFalse(pane.reading)
+                Racing.answers[:] = [(True, elastic.Status("30", "30", "managed")),
+                                     (False, elastic.Status("365", "365", "managed"))]
+                older = asyncio.ensure_future(pane.show())
+                await pilot.pause(0.2)                          # it waits in its thread
+                await pane.show()                               # a newer one, done first
+                self.assertEqual(pane.status.value, "365")
+                gate.set()
+                await older
+                await pilot.pause(0.1)
+                self.assertEqual(pane.status.value, "365")      # the older answer came last, it is dropped
+                self.assertIn("365 days", str(app.query_one("#elastic-status").render()))
+                self.assertEqual(app.query_one("#elastic-value").value, "365")
+        finally:
+            gate.set()
+
+    async def test_elastic_set_on_a_foreign_policy_writes_env_and_leaves_the_policy(self):
+        # as the Settings page does: .env takes the value, the policy stays as Kibana left it
+        from tpotctl import elastic
+        backend = FakeBackend()
+        backend._retention = elastic.Status("30", "120", "foreign")
+        backend._plan = elastic.Plan(elastic.Decision("foreign", None, "120", False), [], True)
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.2)
+            app.goto("elastic")
+            await pilot.pause(0.3)
+            app.query_one("#elastic-value").value = "60"
+            await pilot.click("#elastic-set")
+            await pilot.pause(0.3)
+            self.assertNotIsInstance(app.screen, ConfirmDialog)
+            notes = " ".join(str(note.message) for note in app._notifications)
+        self.assertIn(("set", "60"), backend.calls)
+        self.assertNotIn("apply", [call[0] for call in backend.calls if isinstance(call, tuple)])
+        self.assertIn("TPOT_ES_RETENTION=60 is set in .env.", notes)
+        self.assertIn("The ILM policy tpot was changed in Kibana, T-Pot leaves it as it is", notes)
+        self.assertIn("Take over from Kibana keeps it", notes)
+
+    async def test_elastic_unset_env_and_no_elasticsearch_does_not_promise_a_wait(self):
+        # an unset .env shortens nothing (cli._shortens_env): the text of an unknown policy, as tpot env set
+        from tpotctl import elastic
+        backend = FakeBackend()
+        backend._retention = elastic.Status("", "", "unreachable", problem="Elasticsearch is not reachable")
+        backend._plan = elastic.Plan(elastic.Decision("keep", None, "", False), [], False)
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.2)
+            app.goto("elastic")
+            await pilot.pause(0.3)
+            app.query_one("#elastic-value").value = "30"
+            await pilot.click("#elastic-set")
+            await pilot.pause(0.3)
+            notes = " ".join(str(note.message) for note in app._notifications)
+        self.assertIn(("set", "30"), backend.calls)
+        self.assertIn("TPOT_ES_RETENTION=30 is set. T-Pot applies it on its next start if the ILM policy tpot "
+                      "keeps the events less long", notes)
+        self.assertNotIn("the value waits", notes)
+
+    def test_instead_of_the_elastic_page_names_kibana_as_elsewhere(self):
+        self.assertIn(tapp.KIBANA_ILM, tapp.INSTEAD["elastic"])
+        self.assertNotIn(">", tapp.INSTEAD["elastic"])
+
     async def test_settings_previews_a_shorter_retention_off_a_tpot_host_too(self):
         # Docker Desktop: no T-Pot host, but Elasticsearch on 127.0.0.1:64298 (MAC_WIN)
         from tpotctl import settings
@@ -1281,6 +1448,57 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
         finally:
             release.set()
         self.assertEqual(seen, ["365"])
+
+    async def test_settings_save_stays_disabled_after_the_yes_until_applied(self):
+        import threading
+        from tpotctl import settings
+        release = threading.Event()
+        repo = self.retention_checkout()
+        applied = []
+
+        class Slow(type(self.settings_backend(repo))):
+            def apply_retention(self, plan):
+                release.wait(5)
+                applied.append(plan.decision.action)
+
+        backend = Slow()
+        try:
+            app, pilot = await self.save_retention(backend, "30")
+            pane = app.query_one("#settings")
+            self.assertIsInstance(app.screen, ConfirmDialog)
+            self.assertTrue(pane.saving)                        # the question is part of the save
+            await pilot.click("#yes")
+            await pilot.pause(0.4)
+            self.assertEqual(applied, [])                       # the apply still runs
+            self.assertTrue(pane.saving)
+            self.assertTrue(app.query_one("#settings-save").disabled)
+            pane.check()                                        # a refresh meanwhile keeps it disabled
+            self.assertTrue(app.query_one("#settings-save").disabled)
+            pane.action_save()                                  # ctrl+s meanwhile: nothing
+            await pilot.pause(0.2)
+            self.assertFalse(isinstance(app.screen, ConfirmDialog))
+            self.assertEqual([c for c in backend.calls if isinstance(c, tuple) and c[0] == "plan"],
+                             [("plan", "30", False)])
+            release.set()
+            for _wait in range(100):
+                if not pane.saving:
+                    break
+                await pilot.pause(0.1)
+            self.assertFalse(pane.saving)
+            self.assertEqual(applied, ["update"])
+            self.assertEqual(settings.load(repo).values["TPOT_ES_RETENTION"], "30")
+        finally:
+            release.set()
+
+    async def test_settings_no_to_the_question_enables_save_again(self):
+        repo = self.retention_checkout()
+        backend = self.settings_backend(repo)
+        app, pilot = await self.save_retention(backend, "30")
+        self.assertIsInstance(app.screen, ConfirmDialog)
+        await pilot.click("#no")
+        await pilot.pause(0.3)
+        self.assertFalse(app.query_one("#settings").saving)
+        self.assertFalse(app.query_one("#settings-save").disabled)      # the change is still there
 
     async def test_settings_longer_retention_saves_and_applies(self):
         from tpotctl import settings

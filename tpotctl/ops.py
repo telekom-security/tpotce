@@ -466,6 +466,7 @@ class BackupInfo:
     groups: List[str]
     problem: str = ""
     es_data: bool = False           # data/elk/data/: restoring data/ replaces the Elasticsearch data
+    es_size: int = 0                # the bytes of the files under data/elk/data/ (its table of contents)
 
 
 def backup_info(path: str) -> BackupInfo:
@@ -479,7 +480,8 @@ def backup_info(path: str) -> BackupInfo:
         size = 0
     try:
         with tarfile.open(path) as archive:
-            members = archive.getnames()
+            entries = archive.getmembers()
+            members = [entry.name for entry in entries]
             manifest = []
             if "MANIFEST" in members:
                 handle = archive.extractfile("MANIFEST")
@@ -491,4 +493,5 @@ def backup_info(path: str) -> BackupInfo:
         if any(m == member or (member.endswith("/") and m.startswith(member)) for m in members):
             groups.append(group)
     es_data = any(m == "data/elk/data" or m.startswith("data/elk/data/") for m in members)
-    return BackupInfo(path, name, size, kind, manifest, groups, es_data=es_data)
+    es_size = sum(entry.size for entry in entries if entry.isfile() and entry.name.startswith("data/elk/data/"))
+    return BackupInfo(path, name, size, kind, manifest, groups, es_data=es_data, es_size=es_size)

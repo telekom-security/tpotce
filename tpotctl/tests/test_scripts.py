@@ -1032,9 +1032,14 @@ class BackupInfoTest(unittest.TestCase):
         self.assertEqual(info.groups, ["git", "config", "untracked", "data"])
         self.assertIn("version: 24.04.2", info.manifest)
         self.assertFalse(info.es_data)
-        path = make_backup(home, {"MANIFEST": MANIFEST, "data/elk/data/nodes/0": "x\n"},
+        self.assertEqual(info.es_size, 0)
+        path = make_backup(home, {"MANIFEST": MANIFEST, "data/elk/data/nodes/0": "x\n",
+                                  "data/elk/data/nodes/1": "abcd\n", "data/elk/database": "not it\n",
+                                  "data/uuid": "y\n"},
                            name="20261006101010_tpot_backup_full.tar")
-        self.assertTrue(ops.backup_info(path).es_data)          # the restore of data/ replaces it
+        info = ops.backup_info(path)
+        self.assertTrue(info.es_data)                           # the restore of data/ replaces it
+        self.assertEqual(info.es_size, 7)                       # the files under data/elk/data/ only
 
     def test_truncated_compressed_archive(self):
         """tarfile raises EOFError for it, the restore page must show it, not end tpot."""
