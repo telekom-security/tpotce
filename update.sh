@@ -447,6 +447,10 @@ function fuLOSS_IN_FILE () {   # $1 = backups | elastic | images, $2... = the na
 # Is this loss of data confirmed? A yes at a terminal (no is the default), --accept-data-loss (every
 # loss) or the lines of --accept-data-loss-file (only the losses they name, fuLOSS_IN_FILE); -y
 # confirms the update, never a loss of data. rc 0 for confirmed.
+# restore.sh has a function of this name too, with another signature on purpose: there a loss is one
+# thing under its key and the question comes as the third argument; here the names of what goes
+# (backups, images) follow the text, because the lines of the file name them. What they decide and say
+# is the same: accept, terminal, refusal, in the same order and with the same texts.
 function fuLOSS_CONFIRM () {   # $1 = backups | elastic | images, $2 = text, $3... = the names it deletes
 	local myKEY="$1" myTEXT="$2"
 	shift 2

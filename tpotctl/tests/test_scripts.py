@@ -617,6 +617,28 @@ class RestoreRetentionTest(RestoreScriptHarness):
                 self.assertIn("--accept-data-loss confirms it, -y does not", out)
                 self.assertIn("warned=elastic:", out)
 
+    def test_a_delete_phase_without_min_age_says_it_is_not_set(self):
+        policy = {"phases": {"hot": {"min_age": "0ms", "actions": {}}, "delete": {"actions": {"delete": {}}}}}
+        out = self.elastic("365d", policy)
+        self.assertIn("not after whole days (min_age not set): restoring it may delete older events right away.", out)
+        self.assertNotIn("(min_age )", out)
+
+    def test_config_without_a_current_retention_key_says_it_waits(self):
+        """No TPOT_ES_RETENTION in the current .env keeps the events forever: 7 of the archive is shorter."""
+        with open(os.path.join(self.tpotce, ".env"), "w", encoding="utf-8") as out:
+            out.write("TPOT_TYPE=HIVE\n")
+        archive = make_backup(self.home, {"MANIFEST": MANIFEST, "env": "TPOT_TYPE=HIVE\nTPOT_ES_RETENTION=7\n"})
+        result = self.bash(f"myARCHIVE='{archive}' myDO_CONFIG=1\nfuTMPDIR; fuTOC\nfuDO_CONFIG\n")
+        out = result.stdout + result.stderr
+        self.assertTrue(any(line.startswith("HINT: ") and "TPOT_ES_RETENTION=7" in line and "waits" in line
+                            and "forever" in line for line in out.splitlines()), out)
+        # an archive without a shorter value, or with no key, says nothing
+        for archived in ("TPOT_TYPE=HIVE\n", "TPOT_TYPE=HIVE\nTPOT_ES_RETENTION=off\n"):
+            with self.subTest(archived=archived):
+                archive = make_backup(self.home, {"MANIFEST": MANIFEST, "env": archived})
+                result = self.bash(f"myARCHIVE='{archive}' myDO_CONFIG=1\nfuTMPDIR; fuTOC\nfuDO_CONFIG\n")
+                self.assertNotIn("waits", result.stdout + result.stderr)
+
     def test_a_policy_that_deletes_but_not_in_whole_days_goes_back_with_accept(self):
         out = self.elastic("365d", "36h", accept=True)
         self.assertIn("PUT", self.puts(), out)
@@ -748,9 +770,66 @@ class RestoreDataTest(RestoreScriptHarness):
                 self.assertNotIn("Not restored", out)
                 self.assertIn("[OK] - The configuration", out)                    # the other groups go on
 
+    def calls(self):
+        try:
+            with open(os.path.join(self.home, "calls"), encoding="utf-8") as handle:
+                return handle.read()
+        except FileNotFoundError:
+            return ""
+
+    def test_a_refused_data_restore_does_not_stop_tpot(self):
+        """Refused for sure (no terminal, no flag, no line of the file): T-Pot is not stopped for data/."""
+        for args in (("-g", "data"), ("-y", "-g", "data")):
+            with self.subTest(args=args):
+                folder = self.elk(os.path.join(self.tpotce, "data"))
+                if os.path.exists(os.path.join(self.home, "calls")):
+                    os.remove(os.path.join(self.home, "calls"))
+                code, out = self.restore(*args)
+                self.assertEqual(code, 0, out[-800:])
+                self.assertNotIn("systemctl stop", self.calls(), out)
+                self.assertNotIn("Stopping T-Pot", out)
+                self.assertEqual(self.tar_calls(), "", out)
+                self.assertTrue(os.path.exists(os.path.join(folder, "now")), out)
+                self.assertIn("data/ was not restored: not confirmed", out)
+                self.assertIn("--accept-data-loss confirms it, -y does not", out)
+                self.assertIn("[WARNING] - The files from data/", out)
+                self.assertIn("not restored: not confirmed", out)
+                self.assertNotIn("Not restored", out)                      # a warning, no failure
+                self.assertNotIn("Start T-Pot with", out)                  # it never stopped
+
+    def test_a_refused_data_restore_with_config_stops_for_the_config_only(self):
+        self.elk(os.path.join(self.tpotce, "data"))
+        code, out = self.restore("-g", "data,config")
+        self.assertEqual(code, 0, out[-800:])
+        self.assertEqual(self.calls().count("systemctl stop"), 1, out)   # the configuration needs it, data/ does not
+        self.assertEqual(self.tar_calls(), "", out)
+        self.assertIn("[WARNING] - The files from data/", out)
+        self.assertIn("[OK] - The configuration", out)
+        self.assertLess(out.index("data/ was not restored: not confirmed"), out.index("Stopping T-Pot"))
+
+    def test_a_confirmed_data_restore_stops_tpot(self):
+        self.write("confirmed", "@@tpot loss data Restoring data/ replaces the current files.\n")
+        for args in (("--accept-data-loss",), ("--accept-data-loss-file", os.path.join(self.home, "confirmed"))):
+            with self.subTest(args=args):
+                if os.path.exists(os.path.join(self.home, "calls")):
+                    os.remove(os.path.join(self.home, "calls"))
+                code, out = self.restore("-g", "data", *args)
+                self.assertEqual(code, 0, out[-800:])
+                self.assertIn("systemctl stop", self.calls(), out)
+                self.assertIn("tar xf", self.tar_calls())
+
+    def test_a_file_without_a_data_line_does_not_confirm_it_early(self):
+        self.write("confirmed", "@@tpot loss ilm The ILM policy.\n")
+        self.elk(os.path.join(self.tpotce, "data"))
+        code, out = self.restore("-g", "data", "--accept-data-loss-file", os.path.join(self.home, "confirmed"))
+        self.assertEqual(code, 0, out[-800:])
+        self.assertNotIn("systemctl stop", self.calls(), out)
+        self.assertEqual(self.tar_calls(), "", out)
+        self.assertIn("--accept-data-loss-file does not confirm it: it names no 'data' loss.", out)
+
     def test_the_question_names_what_goes(self):
         self.elk(os.path.join(self.tpotce, "data"))
-        _code, out = self.restore("-g", "data")
+        _code, out = self.restore("-g", "data", "--accept-data-loss")
         text = " ".join(out.split())
         self.assertIn(f"files under {self.tpotce}/data are replaced by those of the archive", text)
         self.assertIn("newer files and log lines since the backup are lost", text)
@@ -760,7 +839,7 @@ class RestoreDataTest(RestoreScriptHarness):
     def test_without_elasticsearch_data_in_the_archive_it_is_not_named(self):
         self.archive = make_backup(self.home, {"MANIFEST": MANIFEST, "data/uuid": "x\n"},
                                    name="20261006101010_tpot_backup.tar")
-        _code, out = self.restore("-g", "data")
+        _code, out = self.restore("-g", "data", "--accept-data-loss")
         self.assertIn("files under", out)
         self.assertNotIn("Elasticsearch data", out)
 

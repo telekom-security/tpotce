@@ -362,7 +362,11 @@ function fuLOSS_IN_FILE () {   # $1 = data | ilm
 
 # Is this loss of data confirmed? A yes at a terminal (no is the default), --accept-data-loss (every
 # loss) or a line of its key in --accept-data-loss-file (fuLOSS_IN_FILE); -y confirms the restore,
-# never a loss of data. rc 0 for confirmed. (As in update.sh.)
+# never a loss of data. rc 0 for confirmed.
+# update.sh has a function of this name too, with another signature on purpose: there it takes the
+# names of what goes (backups, images) after the text, because its file lines name them; here a loss
+# is one thing under its key, the question comes as the third argument. What they decide and say is
+# the same: accept, terminal, refusal, in the same order and with the same texts.
 function fuLOSS_CONFIRM () {   # $1 = data | ilm, $2 = text, $3 = the question (default: the one of update.sh)
 	if [ -n "${myACCEPT_LOSS}" ];
 	  then
@@ -384,6 +388,16 @@ function fuLOSS_CONFIRM () {   # $1 = data | ilm, $2 = text, $3 = the question (
 	fi
 	fuUI_HINT "Not confirmed: no terminal. --accept-data-loss confirms it, -y does not."
 	return 1
+}
+
+# Is the restore of data/ refused for sure, before anything is stopped? Where fuLOSS_CONFIRM could not
+# say yes: no --accept-data-loss, no 'data' line in --accept-data-loss-file and no terminal to ask at.
+# At a terminal the question stays where it was (fuDO_DATA). rc 0: refused.
+function fuDATA_REFUSED () {
+	[ -z "${myACCEPT_LOSS}" ] || return 1
+	[ -z "${myACCEPT_FILE}" ] || ! fuLOSS_IN_FILE data || return 1
+	[ -t 0 ] && return 1
+	return 0
 }
 
 # A value of a .env style file, KEY=value or KEY: "value" (as in update.sh)
@@ -657,24 +671,22 @@ function fuDO_GIT () {
 }
 
 function fuDO_CONFIG () {
-	local myFILE="" myOLD="" myNEW="" myHAD=""
+	local myFILE="" myOLD="" myNEW="" myWAS=""
 	[ -z "${myDO_CONFIG}" ] && return
 	fuMARK phase config Restoring the configuration
 	echo
 	fuUI_INFO "Restoring the configuration ..."
-	if grep -qE "^TPOT_ES_RETENTION[[:space:]]*[:=]" "${myTPOTDIR}/.env" 2>/dev/null;
-	  then
-	    myHAD="1"
-	    myOLD=$(fuENV_VALUE "${myTPOTDIR}/.env" TPOT_ES_RETENTION)
-	fi
+	# no key (or an empty one) keeps the events forever: any days of the archive are shorter
+	myOLD=$(fuENV_VALUE "${myTPOTDIR}/.env" TPOT_ES_RETENTION)
 	if tar xf "${myARCHIVE}" -C "${myTMPDIR}" env 2>/dev/null && cp "${myTMPDIR}/env" "${myTPOTDIR}/.env";
 	  then
 	    fuUI_OK "Wrote ${myTPOTDIR}/.env."
 	    # T-Pot never shortens the ILM policy on its own: a shorter value of the backup waits
 	    myNEW=$(fuENV_VALUE "${myTPOTDIR}/.env" TPOT_ES_RETENTION)
-	    if [ -n "${myHAD}" ] && fuRETENTION_SHORTER "${myOLD}" "${myNEW}";
+	    if fuRETENTION_SHORTER "${myOLD}" "${myNEW}";
 	      then
-	        fuUI_HINT "TPOT_ES_RETENTION=${myNEW} of the backup is shorter than ${myOLD:-the empty value} before: T-Pot does not shorten the ILM policy tpot on its own, the value waits." \
+	        myWAS="${myOLD:-not set, which keeps the events forever}"
+	        fuUI_HINT "TPOT_ES_RETENTION=${myNEW} of the backup is shorter than the value before (${myWAS}): T-Pot does not shorten the ILM policy tpot on its own, the value waits." \
 	                  "'tpot elastic retention --force' or the Elastic page of the T-Pot Manager applies it, both ask first."
 	    fi
 	  else
@@ -878,7 +890,7 @@ function fuILM_LOSS () {   # $1 = the policy of the archive
 	  ""|off|*[!0-9]*)
 	    if [ "${myDELETES}" -eq 0 ];
 	      then
-	        echo "The ILM policy of the archive deletes events, but not after whole days (min_age ${myMINAGE}): restoring it may delete older events right away."
+	        echo "The ILM policy of the archive deletes events, but not after whole days (min_age ${myMINAGE:-not set}): restoring it may delete older events right away."
 	      else
 	        echo "How long the ILM policy of the archive keeps the events cannot be read here, putting it back may delete older events right away."
 	    fi
@@ -1013,7 +1025,7 @@ function fuEND () {
 	      patch) myDO="${myDO_PATCH}" ;;
 	      config) myDO="${myDO_CONFIG}" ;;
 	      untracked) myDO="${myDO_UNTRACKED}" ;;
-	      data) myDO="${myDO_DATA}" ;;
+	      data) myDO="${myDO_DATA}${myDATA_REFUSED}" ;;
 	      elastic) myDO="${myDO_ELASTIC}" ;;
 	    esac
 	    [ -n "${myDO}" ] || continue
@@ -1038,7 +1050,7 @@ function fuEND () {
 	if [ -n "${mySTART_FAILED}" ];
 	  then
 	    myITEMS+=("warn:T-Pot did not start, please start it yourself.")
-	elif [ -z "${myDO_ELASTIC}" ] && [ -z "${myCONFIG_ONLY}" ];
+	elif [ -z "${myDO_ELASTIC}" ] && [ -z "${myCONFIG_ONLY}" ] && [ -n "${myDO_GIT}${myDO_CONFIG}${myDO_PATCH}${myDO_UNTRACKED}${myDO_DATA}" ];
 	  then
 	    myITEMS+=("next:Start T-Pot with 'sudo systemctl start tpot' or 'docker compose up -d'.")
 	fi
@@ -1203,6 +1215,19 @@ elif [ -n "${myCONFIRMED}" ];
     fuHAS "^elastic/"        && myDO_ELASTIC="1"
   else
     fuCHOOSE
+fi
+
+# data/ that is refused for sure does not stop T-Pot: it drops out here, before the stop, and the rest
+# of the groups goes on (the summary names it)
+myDATA_REFUSED=""
+if [ -n "${myDO_DATA}" ] && fuDATA_REFUSED;
+  then
+    fuUI_WARN "data/ was not restored: not confirmed. Restoring it replaces the current files and the Elasticsearch data, newer files and events since the backup are lost."
+    [ -z "${myACCEPT_FILE}" ] || fuUI_HINT "--accept-data-loss-file does not confirm it: it names no 'data' loss."
+    fuUI_HINT "Not confirmed: no terminal. --accept-data-loss confirms it, -y does not."
+    fuWARNED data "not restored: not confirmed, see above"
+    myDATA_REFUSED="1"
+    myDO_DATA=""
 fi
 
 # Phase 1 - everything that needs T-Pot stopped. If only the Elasticsearch import
