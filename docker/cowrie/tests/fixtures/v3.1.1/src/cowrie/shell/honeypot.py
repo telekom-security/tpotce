@@ -5,7 +5,8 @@
 
 # Excerpt of Cowrie v3.1.1 (c17c9b73): the imports, the class line, the shell name of __init__,
 # error_prefix, showPrompt and command_not_found_message, the text
-# patch_cowrie_persona_support.py touches.
+# patch_cowrie_persona_support.py touches. The first two lines of __init__ (its def
+# line and "launcher = None") stand in for the start of __init__; the rest is verbatim.
 
 from __future__ import annotations
 

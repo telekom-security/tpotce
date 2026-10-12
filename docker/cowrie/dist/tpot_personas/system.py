@@ -39,7 +39,7 @@ DEBIAN_SYSTEM_PATHS = (
     "etc/systemd/system/timers.target.wants/apt-daily*", "etc/systemd/system/timers.target.wants/dpkg-db-backup*",
     "etc/systemd/system/multi-user.target.wants/ssh.service", "etc/systemd/system/sshd.service",
     "etc/logrotate.d/apt", "usr/share/bash-completion/completions/apt", "usr/share/base-files", "usr/share/bug",
-    "usr/share/lintian",
+    "usr/share/lintian", "etc/rmt", "usr/sbin/rmt", "usr/sbin/rmt-tar", "usr/sbin/tarcat",
 )
 # ... and every name or link target with one of these words (man pages, translations, alternatives, keyrings,
 #   changelog.Debian.gz, state of deb-systemd-helper): Debian itself, dpkg, apt and the packages adduser,
@@ -110,9 +110,30 @@ SUDOERS = {
     "rhel": _EL_FLAGS + _EL_KEEP + (("secure_path", "=", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"),),
     "centos": _EL_FLAGS + _EL_KEEP + (("secure_path", "=", "/sbin:/bin:/usr/sbin:/usr/bin"),),
 }
-# cloud-init that wrote the rule of the image's user (unverified: the version of each image)
-CLOUD_INIT = {"noble": "25.1.4-0ubuntu0~24.04.1", "jammy": "25.1.4-0ubuntu0~22.04.1", "trixie": "25.1.1-1",
-              "bookworm": "22.4.2-1", "rhel": "23.4-19.el9", "centos": "19.4-7.el7.centos.6"}
+# cloud-init of each release and the day it came out (it writes the rule of the image's user on the
+#   first boot; unverified: versions and days)
+CLOUD_INIT = {
+    "noble": (("24.1.3-0ubuntu3", "2024-04-23"), ("24.1.3-0ubuntu3.3", "2024-06-26"),
+              ("24.3.1-0ubuntu0~24.04.1", "2024-09-30"), ("24.4-0ubuntu1~24.04.1", "2024-12-10"),
+              ("25.1.2-0ubuntu0~24.04.1", "2025-05-13"), ("25.1.4-0ubuntu0~24.04.1", "2025-08-05")),
+    "jammy": (("22.1-14-g2e17a0d6-0ubuntu1~22.04.5", "2022-04-19"), ("23.1.2-0ubuntu0~22.04.1", "2023-05-02"),
+              ("24.1.3-0ubuntu1~22.04.1", "2024-04-30"), ("24.4-0ubuntu1~22.04.1", "2024-12-10"),
+              ("25.1.4-0ubuntu0~22.04.1", "2025-08-05")),
+    "trixie": (("25.1.1-1", "2025-03-28"), ("25.1.2-1", "2025-06-02")),
+    "bookworm": (("22.4.2-1", "2023-01-20"),),
+    "rhel": (("22.1-5.el9", "2022-05-10"), ("23.1.1-11.el9", "2023-11-07"), ("23.4-7.el9", "2024-04-30"),
+             ("23.4-19.el9", "2024-11-12"), ("24.4-4.el9", "2025-05-13")),
+    "centos": (("19.4-7.el7.centos.2", "2020-11-10"), ("19.4-7.el7.centos.6", "2021-11-01")),
+}
+
+
+def cloud_init_version(persona, ident):
+    """(version, release time) of the newest cloud-init out when the system was installed."""
+    import calendar
+    code = persona.family if is_el(persona) else ident.release.extra["codename"]
+    found = [(version, calendar.timegm(time.strptime(day, "%Y-%m-%d"))) for version, day in CLOUD_INIT[code]]
+    usable = [entry for entry in found if entry[1] <= ident.installed_at]
+    return usable[-1] if usable else found[0]
 _SUDOERS_HEAD = """#
 # This file MUST be edited with the 'visudo' command as root.
 #
@@ -193,9 +214,9 @@ def sudoers_files(persona, ident):
     if persona.family == "raspios":
         files["etc/sudoers.d/010_pi-nopasswd"] = f"{persona.user} ALL=(ALL) NOPASSWD: ALL\n"
     else:
-        code = persona.family if el else ident.release.extra["codename"]
         when = time.strftime("%a, %d %b %Y %H:%M:%S +0000", time.gmtime(ident.installed_at))
-        files["etc/sudoers.d/90-cloud-init-users"] = (f"# Created by cloud-init v. {CLOUD_INIT[code]} on {when}\n\n"
+        version = cloud_init_version(persona, ident)[0]
+        files["etc/sudoers.d/90-cloud-init-users"] = (f"# Created by cloud-init v. {version} on {when}\n\n"
                                                      f"# User rules for {persona.user}\n"
                                                      f"{persona.user} ALL=(ALL) NOPASSWD:ALL\n")
     return files
@@ -862,13 +883,88 @@ WantedBy=multi-user.target
 """
 
 
+UBUNTU_ORIGIN = """Vendor: Ubuntu
+Vendor-URL: https://www.ubuntu.com/
+Bugs: https://bugs.launchpad.net/ubuntu/+filebug
+Parent: Debian
+"""
+# installkernel of grubby (unverified: shortened)
+EL_INSTALLKERNEL = """#! /bin/sh
+#
+# /sbin/installkernel
+#
+# Copyright 2007-2008 Red Hat, Inc.  All rights reserved.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# Author(s): tyson@rwii.com
+#
+
+usage() {
+    echo "Usage: `basename $0` <kernel_version> <bootimage> <mapfile>" >&2
+    exit 1
+}
+
+cfgLoader=
+
+if [ -z "$INSTALL_PATH" -o "$INSTALL_PATH" == "/boot" ]; then
+    INSTALL_PATH=/boot
+    cfgLoader=1
+fi
+
+LINK_PATH=/boot
+RELATIVE_PATH=`echo "$INSTALL_PATH/" | sed "s|^$LINK_PATH/||"`
+KERNEL_VERSION=$1
+BOOTIMAGE=$2
+MAPFILE=$3
+ARCH=$(uname -m)
+if [ $ARCH = 'ppc64' -o $ARCH = 'ppc' ]; then
+    KERNEL_NAME=vmlinux
+else
+    KERNEL_NAME=vmlinuz
+fi
+
+if [ -z "$KERNEL_VERSION" -o -z "$BOOTIMAGE" -o -z "$MAPFILE" ]; then
+    usage
+fi
+
+if [ -f $INSTALL_PATH/$KERNEL_NAME-$KERNEL_VERSION ]; then
+      mv $INSTALL_PATH/$KERNEL_NAME-$KERNEL_VERSION \
+              $INSTALL_PATH/$KERNEL_NAME-$KERNEL_VERSION.old;
+fi
+
+if [ ! -L $INSTALL_PATH/$KERNEL_NAME ]; then
+    if [ -e $INSTALLPATH/$KERNEL_NAME ]; then
+        mv $INSTALL_PATH/$KERNEL_NAME $INSTALL_PATH/$KERNEL_NAME.old
+    fi
+fi
+
+cat $BOOTIMAGE > $INSTALL_PATH/$KERNEL_NAME-$KERNEL_VERSION
+cp $MAPFILE $INSTALL_PATH/System.map-$KERNEL_VERSION
+
+ln -fs ${RELATIVE_PATH}$INSTALL_PATH/$KERNEL_NAME-$KERNEL_VERSION $LINK_PATH/$KERNEL_NAME
+ln -fs ${RELATIVE_PATH}$INSTALL_PATH/System.map-$KERNEL_VERSION $LINK_PATH/System.map
+
+if [ -n "$cfgLoader" ] && [ -x /sbin/new-kernel-pkg ]; then
+    /sbin/new-kernel-pkg --mkinitrd --dracut --depmod --install $KERNEL_VERSION
+    exit $?
+fi
+"""
+
+
 def files(persona):
-    """Files of the persona's system in place of Debian's: the init directory, rc.local and the
-    sshd unit of Red Hat."""
+    """Files of the persona's system in place of Debian's: dpkg's vendor on Ubuntu; the init directory,
+    rc.local, the sshd unit and installkernel of Red Hat."""
+    if persona.os_id == "ubuntu":
+        return {"etc/dpkg/origins/ubuntu": UBUNTU_ORIGIN}
     if not is_el(persona):
         return {}
     rhel = persona.family == "rhel"
     found = {"etc/rc.d/init.d/README": EL_INIT_README, "etc/rc.d/rc.local": EL_RC_LOCAL,
+             "usr/sbin/installkernel": EL_INSTALLKERNEL,
              "usr/lib/systemd/system/sshd.service": EL_SSHD_UNIT.format(keygen="target" if rhel else "service",
                                                                        env="-" if rhel else "")}
     if not rhel:
@@ -882,6 +978,8 @@ def links(persona):
     Cowrie's pickle): Red Hat's init directories, the enabled sshd and adduser (useradd), the loader
     link of CentOS 7."""
     found = []
+    if persona.os_id == "ubuntu":
+        found.append(("etc/dpkg/origins/default", "etc/dpkg/origins/ubuntu"))
     if is_el(persona):
         found += [("etc/init.d", "etc/rc.d/init.d"), ("etc/rc.local", "etc/rc.d/rc.local"),
                   ("etc/systemd/system/multi-user.target.wants/sshd.service", "usr/lib/systemd/system/sshd.service"),

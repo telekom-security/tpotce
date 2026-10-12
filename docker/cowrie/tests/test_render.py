@@ -546,6 +546,42 @@ class ToolPackageTest(unittest.TestCase):
             self.assertEqual(system.installed_tools(persona, draw(persona, 1, NOW)), tools, pid)
 
 
+class FamilyFilesTest(unittest.TestCase):
+    """Small files and links of the family: dpkg's vendor, rmt, the zone link, Red Hat's installkernel,
+    the cloud-init that wrote the sudoers rule."""
+
+    def test_family_files(self):
+        _, out, _ = render_one(self, catalog.by_id("ubuntu-noble"), 1)
+        fs = fs_of(out)
+        self.assertEqual(tree.node_get(tree.find_node(fs, "etc/dpkg/origins/default"), tree.A_TARGET), "ubuntu")
+        self.assertIn(b"Vendor: Ubuntu", tree.node_get(tree.find_node(fs, "etc/dpkg/origins/ubuntu"), tree.A_CONTENTS))
+        for pid in ("rhel-9", "centos-7", "openwrt"):
+            _, out, _ = render_one(self, catalog.by_id(pid), 1)
+            fs = fs_of(out)
+            self.assertIsNone(tree.find_node(fs, "etc/rmt"), pid)
+            if pid != "openwrt":
+                self.assertEqual(tree.node_get(tree.find_node(fs, "etc/localtime"), tree.A_TARGET),
+                                 "../usr/share/zoneinfo/Etc/UTC", pid)
+                node = tree.find_node(fs, "usr/sbin/installkernel")
+                self.assertTrue(tree.node_get(node, tree.A_CONTENTS).startswith(b"#!"), pid)
+                self.assertEqual(tree.node_get(node, tree.A_SIZE), len(tree.node_get(node, tree.A_CONTENTS)), pid)
+        _, out, _ = render_one(self, catalog.by_id("debian-bookworm"), 1)
+        self.assertIsNotNone(tree.find_node(fs_of(out), "etc/rmt"))
+        self.assertEqual(tree.node_get(tree.find_node(fs_of(out), "etc/localtime"), tree.A_TARGET),
+                         "/usr/share/zoneinfo/Etc/UTC")
+
+    def test_cloud_init_version_fits_the_installation(self):
+        for persona in catalog.PERSONAS:
+            if persona.kind != "server" or persona.family == "raspios":
+                continue
+            for seed in range(6):
+                ident = draw(persona, seed, NOW)
+                version, released = system.cloud_init_version(persona, ident)
+                text = system.sudoers_files(persona, ident)["etc/sudoers.d/90-cloud-init-users"]
+                self.assertIn(f"cloud-init v. {version} on", text)
+                self.assertLessEqual(released, ident.installed_at, (persona.id, seed, version))
+
+
 class SudoersTest(unittest.TestCase):
     """sudo -l lists what /etc/sudoers and /etc/sudoers.d of the persona say."""
 

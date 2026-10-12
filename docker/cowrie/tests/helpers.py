@@ -57,6 +57,11 @@ def base_tree():
     tree.ensure_file(root, "usr/lib/python3.11/__pycache__/os.cpython-311.pyc", b"", ctime=OLD)
     tree.ensure_file(root, "usr/share/perl5/strict.pm", b"", ctime=OLD)
     _link(root, "etc/os-release", "usr/lib/os-release")
+    tree.ensure_file(root, "usr/share/zoneinfo/Etc/UTC", b"TZif2", ctime=OLD)
+    _link(root, "etc/localtime", "usr/share/zoneinfo/Etc/UTC")
+    tree.ensure_file(root, "etc/dpkg/origins/debian", b"Vendor: Debian\n", ctime=OLD)
+    _link(root, "etc/dpkg/origins/default", "etc/dpkg/origins/debian")
+    _link(root, "etc/rmt", "usr/sbin/rmt-tar")
     # Debian's own packages (adduser, debianutils) and the process of the container
     tree.ensure_file(root, "etc/adduser.conf", b"DSHELL=/bin/bash\n", ctime=OLD)
     tree.ensure_file(root, "etc/rcS.d/README", b"", ctime=OLD)
@@ -77,7 +82,8 @@ def base_tree():
                       ("usr/bin/top", 134736), ("usr/bin/df", 105824), ("usr/bin/uname", 43888),
                       ("usr/bin/perl", 3804432), ("usr/bin/python3.11", 6831736), ("usr/sbin/sshd", 1265432),
                       ("usr/bin/bash", 1265648), ("usr/sbin/useradd", 159536), ("usr/sbin/adduser", 48382),
-                      ("usr/bin/wget", 470384), ("usr/sbin/installkernel", 2659)):
+                      ("usr/bin/wget", 470384), ("usr/sbin/installkernel", 2659),
+                      ("usr/sbin/rmt-tar", 60432)):
         _program(root, rel, size)
     _link(root, "usr/bin/python3", "usr/bin/python3.11")
     return root

@@ -152,13 +152,16 @@ def systemd_prefix(persona, ident):
     return {"ubiquiti": "/lib/systemd", "synology": "/usr/lib/systemd"}.get(persona.family, "")
 
 
-def real_target(link, target, systemd=""):
+def real_target(link, target, systemd="", el=False):
     """The target a real system has for a link (link: its real path; target: from the root, as
     Cowrie's pickle stores it): relative within the directory of the link and in the run level
     directories, absolute elsewhere; units under the unit directory of the release."""
     if not target or target.startswith("/"):
         return target
     link = link.strip("/")
+    if el and link == "etc/localtime":
+        # timedatectl of Red Hat links the zone relatively
+        return "../" + target
     if link in REAL_TARGETS:
         return REAL_TARGETS[link]
     directory = posixpath.dirname(link)
@@ -181,7 +184,7 @@ def real_links(t, persona, ident):
             if not target and re.fullmatch(r"/proc/\d+/(cwd|root)", path):
                 # captured without a destination: init runs in / (the shell's: _login_links)
                 target = "/"
-            target = real_target(path, target, systemd)
+            target = real_target(path, target, systemd, system.is_el(persona))
             tree.node_set(node, tree.A_TARGET, target)
             tree.node_set(node, tree.A_SIZE, len(target))
 
@@ -189,7 +192,8 @@ def real_links(t, persona, ident):
 def link(t, persona, ident, rel, target, ctime):
     """A link of the persona; target from the root ("usr/bin/python3.12") or absolute."""
     real = tree.real_path(t, rel) or rel
-    return tree.ensure_link(t, rel, real_target(real, target, systemd_prefix(persona, ident)), ctime=ctime)
+    return tree.ensure_link(t, rel, real_target(real, target, systemd_prefix(persona, ident), system.is_el(persona)),
+                            ctime=ctime)
 
 
 def remove_paths(t, paths):
