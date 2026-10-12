@@ -930,7 +930,8 @@ for path in (pickle_path, cmdoutput_path):
 for path in (honeyfs, txtcmds_path):
     if not path.is_dir():
         fail(f"Missing runtime folder: {path}")
-if pickle_path.stat().st_size < 1000000:
+# the floor of tpot_personas.validate.MIN_PICKLE_SIZE: a device tree is about 1 MB
+if pickle_path.stat().st_size < 800000:
     fail(f"{selected} fs.pickle is unexpectedly small: {pickle_path.stat().st_size} bytes")
 
 pickle_bytes = read_bytes(pickle_path)
