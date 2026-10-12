@@ -3,6 +3,7 @@ busiest honeypots, the newest attack.
 
 Events of the NSM tools (Suricata, P0f) are not attacks of their own, they describe
 the same connections the honeypots see, so they are left out, as on the Attack Map.
+Ddospot target events (type DdospotTarget) describe the victims of reflection attacks, whose source addresses were forged, so they are not attacks either.
 """
 
 import json
@@ -11,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Callable, List, Optional, Tuple
 
 ES_URL = "http://127.0.0.1:64298"        # as in tpotctl.sensors
-NOT_ATTACKS = ["Suricata", "P0f"]
+NOT_ATTACKS = ["Suricata", "P0f", "DdospotTarget"]
 
 
 @dataclass

@@ -1,65 +1,38 @@
-FROM alpine:3.24 AS builder
+# syntax=docker/dockerfile:1
 #
-# Include dist
-COPY dist/ /root/dist/
+# The fetch stage gets ddospot v2.0.0 at a pinned commit into the stage src, a local
+# checkout can replace src with --build-context src=<path>
+FROM --platform=$BUILDPLATFORM alpine:3.24 AS fetch
+RUN apk --no-cache add git ca-certificates
+WORKDIR /src
+RUN git -c init.defaultBranch=main init --quiet && \
+    git remote add origin https://github.com/telekom-security/ddospot && \
+    git fetch --quiet --depth 1 origin 6e1970379dba5f539330dbf5d56036f32d84259a && \
+    git -c advice.detachedHead=false checkout --quiet FETCH_HEAD
+FROM scratch AS src
+COPY --from=fetch /src/ /
 #
-# Install packages
-RUN apk --no-cache -U upgrade && \
-    apk --no-cache -U add \
-		build-base \
-		git \
-		py3-colorama \
-		py3-greenlet \
-		py3-pip \
-		py3-schedule \
-		py3-sqlalchemy \
-		py3-twisted \
-		py3-wheel \
-		python3 \
-		python3-dev && \
-#	     
-# Install ddospot from GitHub and setup
-    mkdir -p /opt && \
-    cd /opt/ && \
-    git clone https://github.com/t3chn0m4g3/ddospot && \
-    cd ddospot && \
-    git checkout 66b94f3cf56c66e2e26b55feff9e65493cfadf3c && \
-    cp /root/dist/requirements.txt . && \
-    pip3 install --break-system-packages -r ddospot/requirements.txt && \
-    pip3 install --break-system-packages pyinstaller
-WORKDIR /opt/ddospot/ddospot
-RUN pyinstaller ddospot.py \
-       --add-data "core:core" \
-       --hidden-import core \
-       --hidden-import cmd \
-       --hidden-import configparser \
-       --hidden-import colorama \
-       --hidden-import tabulate \
-       --hidden-import logging.handlers \
-       --hidden-import hpfeeds \
-       --hidden-import json \
-       --hidden-import http.server \
-       --hidden-import sys \
-       --hidden-import sqlalchemy \
-       --hidden-import sqlalchemy.ext.declarative \
-       --hidden-import schedule \
-       --hidden-import twisted \
-       --hidden-import twisted.internet \
-       --hidden-import twisted.internet.reactor \
-       --hidden-import twisted.names.client \
-       --hidden-import twisted.names.server \
-       --hidden-import twisted.python \
-       --hidden-import OpenSSL.crypto \
-       --hidden-import OpenSSL.SSL
+# The builder runs on the build platform and cross-compiles, Go under QEMU
+# emulation crashes
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS builder
+ARG TARGETOS
+ARG TARGETARCH
+RUN apk --no-cache add ca-certificates
+COPY --from=src / /src
+WORKDIR /src
+RUN go mod download && \
+    go test ./... && \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o /ddospot ./cmd/ddospot && \
+    mkdir -p /logdir
 #
-FROM alpine:3.24
-RUN apk --no-cache -U upgrade
-COPY --from=builder /opt/ddospot/ddospot/dist/ddospot/ /opt/ddospot/ddospot
-COPY --from=builder /opt/ddospot/ddospot/global.conf /opt/ddospot/ddospot/
-COPY --from=builder /opt/ddospot/ddospot/pots /opt/ddospot/ddospot/pots
+FROM scratch
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=builder /ddospot /ddospot
+# The log folder belongs to the user, so a volume mounted there starts
+# writable for it
+COPY --from=builder --chown=2000:2000 /logdir /var/log/ddospot
 #
 # Start ddospot
-STOPSIGNAL SIGINT
+STOPSIGNAL SIGTERM
 USER 2000:2000
-WORKDIR /opt/ddospot/ddospot
-CMD ["./ddospot", "-n"]
+ENTRYPOINT ["/ddospot"]

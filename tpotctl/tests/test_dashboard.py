@@ -74,6 +74,10 @@ class FakeResponse(io.BytesIO):
 
 class EventsTest(unittest.TestCase):
 
+    def test_ddospot_targets_are_no_attacks(self):
+        self.assertIn("DdospotTarget", events.NOT_ATTACKS)
+        self.assertNotIn("Ddospot", events.NOT_ATTACKS)
+
     def test_query_leaves_out_the_nsm_tools(self):
         query = json.dumps(events.query())
         self.assertIn('"Suricata"', query)

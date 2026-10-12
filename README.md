@@ -35,6 +35,13 @@ env bash -c "$(curl -sL https://github.com/telekom-security/tpotce/raw/master/in
     - [Galah](#galah)
     - [Ollama](#ollama)
     - [ChatGPT](#chatgpt)
+  - [Ddospot, the DDoS Reflection Honeypot](#ddospot-the-ddos-reflection-honeypot)
+    - [How reflection attacks work](#how-reflection-attacks-work)
+    - [Attackers and victims](#attackers-and-victims)
+    - [Answer budget](#answer-budget)
+    - [DNS](#dns)
+    - [Personas](#personas)
+    - [Before you enable it](#before-you-enable-it)
 - [System Placement](#system-placement)
 - [Installation](#installation)
   - [Choose your distro](#choose-your-distro)
@@ -130,7 +137,7 @@ T-Pot's main components have been moved into the `tpotinit` Docker image allowin
 [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot),
 [conpot](http://conpot.org/),
 [cowrie](https://github.com/cowrie/cowrie),
-[ddospot](https://github.com/aelth/ddospot),
+[ddospot](https://github.com/telekom-security/ddospot),
 [dicompot](https://github.com/nsmfoo/dicompot),
 [dionaea](https://github.com/DinoTools/dionaea),
 [elasticpot](https://gitlab.com/bontchev/elasticpot),
@@ -261,6 +268,7 @@ Besides the ports generally needed by the OS, i.e. obtaining a DHCP lease, DNS, 
 |:--------------------------------------------------------------------------------------------------------------------------------------|:---------|:----------|:----------------------------------------------------------------------------------------------------|
 | 80, 443                                                                                                                               | tcp      | outgoing  | T-Pot Management: Install, Updates, Logs (i.e. OS, GitHub, DockerHub, Sicherheitstacho, etc.        |
 | 11434                                                                                                                                 | tcp      | outgoing  | LLM based honeypots: Access your Ollama installation                                                |
+| 853                                                                                                                                   | tcp      | outgoing  | Ddospot DNS over TLS to Quad9 (with DDOSPOT_DNS_RECURSION=on, the default)                          |
 | 64294                                                                                                                                 | tcp      | incoming  | T-Pot Management: Sensor data transmission to hive (through NGINX reverse proxy) to 127.0.0.1:64305 |
 | 64295                                                                                                                                 | tcp      | incoming  | T-Pot Management: Access to SSH                                                                     |
 | 64297                                                                                                                                 | tcp      | incoming  | T-Pot Management Access to NGINX reverse proxy                                                      |
@@ -273,6 +281,7 @@ Besides the ports generally needed by the OS, i.e. obtaining a DHCP lease, DNS, 
 | 161, 623, 3671, 47808, 48899                                                                                                          | udp      | incoming  | Honeypot: Conpot                                                                                    |
 | 22, 23                                                                                                                                | tcp      | incoming  | Honeypot: Cowrie                                                                                    |
 | 19, 53, 123, 1900                                                                                                                     | udp      | incoming  | Honeypot: Ddospot                                                                                   |
+| 53                                                                                                                                    | tcp      | incoming  | Honeypot: Ddospot                                                                                   |
 | 11112                                                                                                                                 | tcp      | incoming  | Honeypot: Dicompot                                                                                  |
 | 21, 42, 135, 443, 445, 1433, 1723, 1883, 3306, 8081                                                                                   | tcp      | incoming  | Honeypot: Dionaea                                                                                   |
 | 69                                                                                                                                    | udp      | incoming  | Honeypot: Dionaea                                                                                   |
@@ -333,6 +342,57 @@ The choice follows a 2026 study of LLM based SSH honeypots ([arXiv 2608.18686](h
 
 ### ChatGPT
 ChatGPT support for these honeypots will remain untested in relation to T-Pot.
+<br><br>
+
+## Ddospot, the DDoS Reflection Honeypot
+[Ddospot](https://github.com/telekom-security/ddospot) offers four services and records who sends them requests: CHARGEN (`19/udp`), DNS (`53/udp`, `53/tcp`), NTP (`123/udp`) and SSDP (`1900/udp`). It is part of the Tarpit edition, the [customizer](#customize-t-pot-honeypots-and-services) adds it to other editions. Its data reads differently from that of the other honeypots: during an attack, the address in the packets Ddospot receives is not the one of the attacker.
+
+### How reflection attacks work
+UDP has no handshake. A server that receives a UDP request sends its answer to the source address written in the packet, it cannot tell whether that address belongs to the real sender. In a reflection attack the attacker writes the address of its victim as the source of small requests and sends them to many servers whose answers are larger than the requests, the *reflectors*. All of them answer the victim, which receives traffic it never asked for, from servers it does not know, while the attacker stays hidden behind them.
+
+For Ddospot this means: the source address of the requests it receives during an attack is the **victim**, not the attacker. The attacker itself does not appear in these packets. Ddospot records such addresses as victims and keeps its own answers to them within a small [answer budget](#answer-budget).
+
+### Attackers and victims
+Ddospot sorts every source address into one of two roles:
+- **Attackers (scanners)** search the internet for reflectors from their real address, i.e. research projects, search engines for internet services, or someone who looks for servers to use in an attack. They send a few packets and expect an answer.
+- **Victims** are the forged source addresses of an attack. They show up as many packets from one address, or from many addresses of one network, mostly to the same service.
+
+A new source is held for 60 seconds before Ddospot decides. During that time it gets answers within its budget. A source that stays within its budget is a scanner: Ddospot writes one line with its first request into the log file of the service. A source that sends more packets than its budget is a victim: `targets.log` gets one line when the attack starts (`attack_start`) and one when it ends (`attack_end`), both with the number of packets and the first packet (`first_seen`), the end line also with the last packet (`last_seen`) and the length of the attack (`attack_seconds`). A scanner that later goes beyond its budget is recorded as a victim too. A network (IPv4 /24, IPv6 /48) that sends more packets than its budget gets lines of its own (`net_start`, `net_end`, the end line also with `last_seen` and `attack_seconds`), with the network (`target_net`) and the number of its sources, one per address and service (`sources`). Sources in such a network are not written as scanners. Sources of DNS over TCP are never victims and are written as scanners, also in a blocked network.
+
+Every scanner line has the field `verified`. It is `true` only for DNS over TCP, where the source completed a TCP handshake. Scanners of the UDP services have `verified` `false`: UDP source addresses can be forged, so Ddospot cannot confirm that the source sent the request. They are shown and submitted to the community data submission as scanners like those over TCP, the field `verified` tells them apart in Kibana. A forged address that sends only a few requests stays within its budget and can appear as a scanner, because Ddospot cannot confirm a UDP sender; a filter on `verified: true` in Kibana shows only confirmed scanners (DNS over TCP).
+
+| Role               | What it is                                  | Log file                                                  | `type` in Kibana | Dashboard           |
+| :----------------- | :------------------------------------------ | :-------------------------------------------------------- | :--------------- | :------------------ |
+| Attacker (scanner) | real address searching for reflectors       | `chargenpot.log`, `dnspot.log`, `ntpot.log`, `ssdpot.log` | `Ddospot`        | Ddospot - Attackers |
+| Victim             | forged source address of an attack          | `targets.log`                                             | `DdospotTarget`  | Ddospot - Victims   |
+
+The log files are in `~/tpotce/data/ddospot/log`. Scanners are attackers like those of every other honeypot: they show up in the Attack Map, the attacker panels (source IPs, countries, AS/N, reputation), the attack counts of the T-Pot Manager and the landing page and the [community data submission](#community-data-submission). Sources that go beyond their budget during the hold time, or in a blocked network, are not written as scanners and do not appear in any of these; a scanner that goes beyond its budget later keeps its earlier scanner line and is recorded as a victim too. Their place is the dashboard *Ddospot - Victims*: the attacks over time, the victims with their countries, AS/N and networks, the services used and the longest attacks.
+
+### Answer budget
+Every request Ddospot receives counts against these budgets, also one it does not answer (for example an NTP mode the persona does not answer, or an SSDP request without the headers its UPnP daemon needs):
+
+| Budget                                                 | Answered                                  |
+| :----------------------------------------------------- | :---------------------------------------- |
+| per source address and service                         | the first 5 packets                       |
+| per network (IPv4 /24, IPv6 /48), across all services  | the first 20 packets                      |
+| all answers together                                   | at most 50 answers and 64 KiB per second  |
+
+The budgets of the source and the network count packets, answered or not: the sixth packet of a source makes it a victim, the 21st packet of a network blocks the network. From then on Ddospot stays silent towards that source or network until 10 minutes have passed without a packet from it, every packet starts the 10 minutes again. Scanners send only a few packets, so they stay within their budget and get answers every time they come back. The tables of sources and networks have a limited size; while they are full, new sources get no answer.
+
+DNS over TCP is counted apart: a TCP connection starts with a handshake, so its source address is the one of the sender. Such a source gets answers to its first 5 queries over TCP, is never a victim and is not counted for its network; the budget of all answers together applies to UDP only. Queries over TCP that go to Quad9 have a share of their own within its rate limit, 2 queries per second with a burst of 5, a query beyond it gets `SERVFAIL`. At most 256 TCP connections are open at a time, 4 of them from one address.
+
+### DNS
+With `DDOSPOT_DNS_RECURSION=on`, the default, Ddospot answers DNS queries as a recursive name server: it asks Quad9 (`9.9.9.9`, `149.112.112.112`) over DNS over TLS, which needs outgoing connections to `853/tcp` (see [Required Ports](#required-ports)), checks the certificate of `dns.quad9.net` and caches the answers. The answer budget applies to every answer, the queries to Quad9 have a rate limit of their own (10 per second, burst 20); a query that Quad9 does not answer in time, or one beyond that limit, gets `SERVFAIL`, over UDP and TCP. Choose `on` or `off` on the *Settings* page of the [`tpot`](#the-t-pot-manager-tpot) menu or with `tpot env set DDOSPOT_DNS_RECURSION=off`, then restart T-Pot (`tpot restart`).
+
+With `off`, or while Quad9 cannot be reached (Ddospot checks it once a minute, every 10 seconds while it gets no answer, and prints every change, `docker logs ddospot`), Ddospot refuses queries of class IN (`REFUSED`); `version.bind` is still answered with the version of the persona's name server. UDP answers are kept small: a larger answer is sent with the truncation flag and without records, the client can ask again over TCP and gets the complete answer there.
+
+### Personas
+On every start Ddospot takes one coherent host profile and answers as that host on all four services: a release of a Linux distribution (CentOS 6, CentOS 7, Debian 11 or Ubuntu 20.04) with the versions of its NTP daemon, name server and UPnP daemon that belong together. The details of the host are new on every start: host name, LAN address, NTP reference server, UPnP UUIDs, boot time and more. SSDP answers come in the order and with the wait of the UPnP daemon of the persona. The persona of a run is printed at its start (`docker logs ddospot`) and written into every log line (`persona`).
+
+### Before you enable it
+Services like these on a public address get noticed: projects that scan the internet record them and may put the address of your T-Pot on their lists, and hosting providers sometimes ask their customers about them. If you are not sure, ask your provider first. If your provider asks: the [answer budget](#answer-budget) limits what Ddospot sends to any address and network, the *Ddospot - Victims* dashboard shows the addresses whose forged requests reached it, and with `DDOSPOT_DNS_RECURSION=off` DNS refuses queries of class IN.
+- [Blackhole](#blackhole) (`TPOT_BLACKHOLE=ENABLED`) null routes known mass scanners, so fewer of them see Ddospot and the other honeypots.
+- To run the Tarpit edition without Ddospot, leave it out with the [customizer](#customize-t-pot-honeypots-and-services) (*Edition & services* in the `tpot` menu, or `tpot customize --base tarpit --remove ddospot`).
 <br><br>
 
 # System Placement
@@ -1202,7 +1262,7 @@ The software that T-Pot is built on uses the following licenses.
 [autoheal](https://github.com/willfarrell/docker-autoheal?tab=MIT-1-ov-file#readme),
 [beelzebub](https://github.com/beelzebub-labs/beelzebub?tab=MIT-1-ov-file#readme),
 [ciscoasa](https://github.com/telekom-security/ciscoasa_honeypot/blob/master/LICENSE),
-[ddospot](https://github.com/aelth/ddospot/blob/master/LICENSE),
+[ddospot](https://github.com/telekom-security/ddospot/blob/master/LICENSE),
 [elasticvue](https://github.com/cars10/elasticvue/blob/master/LICENSE),
 [glutton](https://github.com/mushorg/glutton/blob/main/LICENSE),
 [hellpot](https://github.com/yunginnanet/HellPot/blob/main/LICENSE),
@@ -1239,7 +1299,7 @@ Without open source and the development community we are proud to be a part of, 
 [citrixhoneypot](https://github.com/MalwareTech/CitrixHoneypot/graphs/contributors),
 [conpot](https://github.com/mushorg/conpot/graphs/contributors),
 [cowrie](https://github.com/cowrie/cowrie/graphs/contributors),
-[ddospot](https://github.com/aelth/ddospot/graphs/contributors),
+[ddospot](https://github.com/telekom-security/ddospot/graphs/contributors),
 [dicompot](https://github.com/nsmfoo/dicompot/graphs/contributors),
 [dionaea](https://github.com/DinoTools/dionaea/graphs/contributors),
 [docker](https://github.com/moby/moby/graphs/contributors),

@@ -99,6 +99,19 @@ cases:
     services: [cowrie]
     set: {OINKCODE: abc-123, SURICATA_RULES_UPDATE: "yes", TPOT_CAPTURE_INTERFACE: "eth0;x"}
     warnings: [LS_WEB_USER]
+  - name: ddospot recursion only on or off
+    services: [ddospot]
+    set: {DDOSPOT_DNS_RECURSION: "yes"}
+    errors: [DDOSPOT_DNS_RECURSION]
+    warnings: [LS_WEB_USER]
+  - name: ddospot settings without ddospot
+    services: [cowrie]
+    set: {DDOSPOT_DNS_RECURSION: "yes"}
+    warnings: [LS_WEB_USER]
+  - name: ddospot recursion off
+    services: [ddospot]
+    set: {DDOSPOT_DNS_RECURSION: "off"}
+    warnings: [LS_WEB_USER]
   - name: oinkcode
     services: [suricata]
     set: {OINKCODE: ABCdef0123456789}

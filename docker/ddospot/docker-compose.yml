@@ -15,12 +15,12 @@ services:
     ports:
      - "19:19/udp"
      - "53:53/udp"
+     - "53:53/tcp"
      - "123:123/udp"
-#     - "161:161/udp"
      - "1900:1900/udp"
+    environment:
+     - DDOSPOT_DNS_RECURSION=on
     image: "dtagdevsec/ddospot:24.04.2"
     read_only: true
     volumes:
-     - $HOME/tpotce/data/ddospot/log:/opt/ddospot/ddospot/logs
-     - $HOME/tpotce/data/ddospot/bl:/opt/ddospot/ddospot/bl
-     - $HOME/tpotce/data/ddospot/db:/opt/ddospot/ddospot/db
+     - $HOME/tpotce/data/ddospot/log:/var/log/ddospot

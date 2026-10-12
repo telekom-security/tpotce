@@ -178,7 +178,8 @@ class CoreTest(unittest.TestCase):
     def test_render_keeps_comments_and_drops_banners_and_meta(self):
         text = core.render(self.catalog, self.resolve("STANDARD", add=["ddospot"], remove=["honeytrap"]))
         self.assertIn("# Ddospot service", text)
-        self.assertIn('#     - "161:161/udp"', text)                 # commented option inside the block
+        self.assertIn("# SentryPeer service", text)
+        self.assertIn('#     - "4222:4222/udp"', text)               # commented option inside the block
         self.assertIn("#     - ${TPOT_DATA_PATH}/dicompot/images", text)  # trailing comment of a block
         self.assertNotIn("x-tpot", text)
         self.assertNotIn("#### DEV", text)
