@@ -95,7 +95,9 @@ def is_managed(policy: dict) -> bool:
 
 def build(value: str, base: Optional[dict]) -> dict:
     """base with the delete phase of value and the marker; every other part of base stays."""
-    policy = copy.deepcopy(base) if base else {"phases": {"hot": {"min_age": "0ms", "actions": {}}}}
+    # an empty or no object base gets the default hot phase, as in es_retention.sh
+    policy = (copy.deepcopy(base) if isinstance(base, dict) and base
+              else {"phases": {"hot": {"min_age": "0ms", "actions": {}}}})
     if not isinstance(policy.get("phases"), dict):
         policy["phases"] = {}
     phases = policy["phases"]

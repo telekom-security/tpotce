@@ -97,6 +97,12 @@ for (( i = 0; i < count; i++ )); do
       want="${want} actions=$(yq -r ".cases[$i].actions | join(\",\")" "${CASES}")"
     fi
   fi
+  if [[ "${want_action}" == "update" ]]; then
+    # everything but the delete action of the delete phase and _meta stays: the warm phase and the other delete actions
+    myKEPT='[((.phases? | objects | .warm) // null), ((.phases? | objects | .delete | objects | .actions | objects | del(.delete)) // {})]'
+    myBEFORE="$(jq -cS "${myKEPT}" <<<"${policy}")"; myAFTER="$(jq -cS ".policy | ${myKEPT}" <<<"${out}")"
+    if [[ "${myBEFORE}" != "${myAFTER}" ]]; then echo "FAIL ${name}: the warm phase or the other delete actions changed: ${myBEFORE} -> ${myAFTER}"; failed=1; fi
+  fi
   got="${got} current=$(jq -r '.current' <<<"${out}") managed=$(jq -r '.managed' <<<"${out}") held=$(jq -r '.held // ""' <<<"${out}")"
   want="${want} current=$(yq -r ".cases[$i].current" "${CASES}") managed=$(yq -r ".cases[$i].managed" "${CASES}") held=$(yq -r ".cases[$i].held // \"\"" "${CASES}")"
   if [[ "${got}" == "${want}" ]]; then echo "ok   ${name}"; else echo "FAIL ${name}: [${got}] expected [${want}]"; failed=1; fi
@@ -141,7 +147,7 @@ fuSTUB_CHECK () {   # $1 = name, $2 = text the output must have, $3 = the calls 
   local myOUT
   : > "${myCALLS}"; : > "${myPUT}"
   myOUT="$(TPOT_ES_RETENTION="${myRET:-7}" myILM_WAIT=0 fuILM_MAIN 2>&1)"
-  if [[ "${myOUT}" == *"$2"* && "$(cat "${myCALLS}")" == "$3" ]]
+  if [[ "${myOUT}" == *"$2"* && "${myOUT}" != *"jq: error"* && "$(cat "${myCALLS}")" == "$3" ]]
     then echo "ok   $1"
     else echo "FAIL $1: [${myOUT}] calls=[$(cat "${myCALLS}")]"; failed=1
   fi
@@ -221,6 +227,21 @@ myUP="http://127.0.0.1:64298" myGET_CODE=404 myGET_BODY='{}' myCAT_BODY='[]' myR
 GET http://127.0.0.1:64298/${myCAT}
 PUT http://127.0.0.1:64298/_ilm/policy/tpot"
 fuPUT_CHECK "  ... the policy deletes after 30d" '.policy.phases.delete.min_age == "30d" and (.policy.phases.delete.actions | has("delete"))'
+# a value that is no number of days: one warning of its own, no jq error, nothing asked, nothing written
+myUP="http://127.0.0.1:64298" myGET_CODE=404 myGET_BODY='{}' myRET=abc \
+  fuSTUB_CHECK "an invalid TPOT_ES_RETENTION is warned about once and not applied" \
+  "# Warning: TPOT_ES_RETENTION=abc is no number of days and not off, the ILM policy tpot is not checked." ""
+# jq failing on a policy it cannot read: its stderr does not reach the log, the warning of the script does
+jq() {
+  if [[ "$*" == *"decide("* ]]; then echo "jq: error (at <stdin>:1): odd" >&2; return 5; fi
+  command jq "$@"
+}
+myUP="http://127.0.0.1:64298" myGET_CODE=200 \
+  myGET_BODY='{"tpot":{"policy":{"phases":{"hot":{"min_age":"0ms","actions":{}}}}}}' myRET=30 \
+  fuSTUB_CHECK "a failing jq prints no error of its own, the script warns" \
+  "# Warning: the ILM policy tpot could not be checked (no decision)." \
+  "GET http://127.0.0.1:64298/_ilm/policy/tpot"
+unset -f jq
 unset -f curl
 rm -rf "${myCALLS}" "${myPUT}" "${myDIR}"
 exit "${failed}"

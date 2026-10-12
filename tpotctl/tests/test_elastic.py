@@ -158,7 +158,7 @@ def generated_policies(seed=17, count=400):
     """(value, force, shorten, oldest, policy) of every shape the rule tells apart: min_age, marker,
     warm phase, the actions of the delete phase, shorten, and the age of the oldest index."""
     rng = random.Random(seed)
-    min_ages = ["30d", "90d", "365d", "1d", "3650d", "720h", "2160h", "36h", "0h", "90m", "", "0d", "3651d",
+    min_ages = ["30d", "90d", "365d", "1d", "3650d", "720h", "2160h", "36h", "0h", "90m", "", "0d", "3651d", "30d\n", "720h\n",
                 "none", "bare", "null", "string", "list"]
     actions = [{"delete": {}}, {"delete": {}}, {"delete": {"delete_searchable_snapshot": True}}, {},
                {"wait_for_snapshot": {"policy": "daily"}},
@@ -205,17 +205,20 @@ class DifferentialTest(unittest.TestCase):
                              timeout=120).stdout.splitlines()
         self.assertEqual(len(out), len(inputs))
         seen = set()
+        held_created = False
         for (value, force, shorten, oldest, policy), line in zip(inputs, out):
             with self.subTest(value=value, force=force, shorten=shorten, oldest=oldest, policy=policy):
                 got = json.loads(line)
                 want = elastic.decide(value, copy.deepcopy(policy), force, shorten, oldest, float(NOW_EPOCH))
                 seen.add(want.action)
+                held_created = held_created or (want.action == "create" and bool(want.held))
                 self.assertEqual((got["action"], got["current"], got["managed"], got["held"], got["policy"]),
                                  (want.action, want.current, want.managed, want.held, want.policy))
                 delete = ((got["policy"] or {}).get("phases") or {}).get("delete")
                 if delete is not None:
                     self.assertIn("delete", delete["actions"])
         self.assertEqual(seen, {"create", "update", "keep", "foreign", "pending"})
+        self.assertTrue(held_created, "no generated input made a create with a held value")
 
 
 class WiringTest(unittest.TestCase):

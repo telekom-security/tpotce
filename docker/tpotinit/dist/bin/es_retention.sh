@@ -32,8 +32,8 @@ def value_of:
   elif (part("phases") | has("delete") | not) then "off"
   elif (deletes | not) then ""
   else min_age as $m
-    | if ($m | test("^[0-9]+d$")) then ($m | rtrimstr("d") | tonumber)
-      elif ($m | test("^[0-9]+h$")) and (($m | rtrimstr("h") | tonumber) % 24 == 0) then (($m | rtrimstr("h") | tonumber) / 24)
+    | if ($m | test("\\A[0-9]+d\\z")) then ($m | rtrimstr("d") | tonumber)
+      elif ($m | test("\\A[0-9]+h\\z")) and (($m | rtrimstr("h") | tonumber) % 24 == 0) then (($m | rtrimstr("h") | tonumber) / 24)
       else 0 end
     | if . >= 1 and . <= 3650 then (. | floor | tostring) else "" end
   end;
@@ -45,7 +45,7 @@ def managed:
        and ((part("phases") | keys) == ["delete", "hot"]) and min_age == "30d" and deletes
   end;
 def build($v):
-  (if . == null then {"phases": {"hot": {"min_age": "0ms", "actions": {}}}} else . end)
+  (if (type == "object") and (length > 0) then . else {"phases": {"hot": {"min_age": "0ms", "actions": {}}}} end)
   | (if (.phases | type) != "object" then .phases = {} else . end)
   | (if $v == "off" then del(.phases.delete)
      else .phases.delete = ((if (.phases.delete | type) == "object" then .phases.delete else {} end)
@@ -135,6 +135,12 @@ function fuILM_OLDEST () {
 
 function fuILM_MAIN () {
   local myCODE myBODY myDECISION myACTION myCURRENT myHELD myOLDEST
+  # tpotinit validates .env before it starts this; a value that gets here anyway is not worked with
+  if [[ ! "${TPOT_ES_RETENTION:-}" =~ ^([0-9]+|off)?$ ]];
+    then
+      echo "# Warning: TPOT_ES_RETENTION=${TPOT_ES_RETENTION} is no number of days and not off, the ILM policy tpot is not checked."
+      return 0
+  fi
   if ! fuILM_FIND_ES;
     then
       echo "# Warning: Elasticsearch did not answer within ${myILM_WAIT} s, the ILM policy tpot is not checked."
@@ -148,14 +154,14 @@ function fuILM_MAIN () {
              echo "# Warning: Elasticsearch answered without the ILM policy tpot, it is not checked."
              rm -f "${myBODY}"; return 0
          fi
-         myDECISION="$(jq '.tpot.policy' "${myBODY}" | fuILM_DECIDE "${TPOT_ES_RETENTION:-}")" ;;
+         myDECISION="$(jq '.tpot.policy' "${myBODY}" | fuILM_DECIDE "${TPOT_ES_RETENTION:-}" 2>/dev/null)" ;;
     404) myOLDEST=""
          # only a value that deletes needs to know how old the events are
          if [[ -n "${TPOT_ES_RETENTION:-}" && "${TPOT_ES_RETENTION}" != "off" ]];
            then
              myOLDEST="$(fuILM_OLDEST)"
          fi
-         myDECISION="$(echo null | fuILM_DECIDE "${TPOT_ES_RETENTION:-}" false false "${myOLDEST}")" ;;
+         myDECISION="$(echo null | fuILM_DECIDE "${TPOT_ES_RETENTION:-}" false false "${myOLDEST}" 2>/dev/null)" ;;
     *)   echo "# Warning: Elasticsearch did not answer (HTTP ${myCODE}), the ILM policy tpot is not checked."
          rm -f "${myBODY}"; return 0 ;;
   esac

@@ -49,6 +49,8 @@ shapes:
   - {name: delete phase is a list, policy: {phases: {hot: {min_age: 0ms, actions: {}}, delete: []}}, value: ""}
   - {name: phases is a string, policy: {phases: x}, value: ""}
   - {name: phases is a list, policy: {phases: []}, value: ""}
+  - {name: min_age with a trailing newline, policy: {phases: {hot: {min_age: 0ms, actions: {}}, delete: {min_age: "30d\n", actions: {delete: {}}}}}, value: ""}
+  - {name: min_age in hours with a trailing newline, policy: {phases: {hot: {min_age: 0ms, actions: {}}, delete: {min_age: "720h\n", actions: {delete: {}}}}}, value: ""}
 cases:
   - name: no policy, default
     policy: null
@@ -380,5 +382,29 @@ cases:
     retention: "30"
     phases: [delete, hot]
     actions: [delete, wait_for_snapshot]
+    current: ""
+    managed: false
+  - name: force on an empty policy builds the default hot phase and the delete phase
+    policy: {}
+    value: "30"
+    force: true
+    shorten: true
+    action: update
+    min_age: 30d
+    retention: "30"
+    phases: [delete, hot]
+    actions: [delete]
+    current: ""
+    managed: false
+  - name: force on a policy that is no object builds the default hot phase and the delete phase
+    policy: []
+    value: "30"
+    force: true
+    shorten: true
+    action: update
+    min_age: 30d
+    retention: "30"
+    phases: [delete, hot]
+    actions: [delete]
     current: ""
     managed: false
