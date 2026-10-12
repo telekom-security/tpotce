@@ -14,7 +14,8 @@ from pathlib import Path
 
 from . import PersonaError, servers, system, tree
 from .common import VM_PROVIDERS, home_dir, is_login_shell, ps_start, ps_user
-from .identity import DAY, host_patterns, hostname_regex, kernel_time, stale_at, updated_at
+from .identity import (DAY, host_patterns, hostname_regex, is_fresh, kernel_time, max_uptime, stale_at,
+                       updated_at)
 from .model import PROMPT_STYLES
 from .render import BUSYBOX_HELP, DIR_MODES, PACKAGE_MANAGER_PATHS, runtime_json
 from .ssh_profiles import (COMPRESSIONS, HOST_KEY_ALGORITHMS, HOST_KEYS, PROFILES, TWISTED_CIPHERS, TWISTED_MACS,
@@ -244,6 +245,18 @@ def _check_processes(persona, ident, path, out):
         out.append(f"PID of {processes[0]['COMMAND']!r} is {pids[0]}, not 1")
     if len(set(pids)) != len(pids):
         out.append("PID used twice in ps")
+
+
+def _check_clock(persona, ident, out):
+    """Installed before the boot, booted before now; a fresh draw boots one day
+    to max_uptime ago, a restored identity (COWRIE_PERSONA_ROTATION) keeps its
+    boot, so its uptime may have grown beyond that."""
+    if ident.booted_at > ident.now:
+        out.append("uptime: booted after now")
+    if ident.installed_at > ident.booted_at:
+        out.append("uptime: installed after the boot")
+    if is_fresh(ident) and not DAY <= ident.boot_offset <= max_uptime(persona):
+        out.append(f"uptime: {ident.boot_offset // DAY} days, a fresh draw has 1 to {max_uptime(persona) // DAY}")
 
 
 def _start_between(start, low, now):
@@ -904,6 +917,7 @@ def problems(persona, ident, out_dir, runtime_dir, keys_dir, min_pickle=MIN_PICK
     built = kernel_time(r)
     if built is not None and built > ident.booted_at:
         out.append(f"kernel: built {time.strftime('%Y-%m-%d', time.gmtime(built))}, after the boot")
+    _check_clock(persona, ident, out)
 
     patterns = host_patterns(persona, ident.hardware)
     if not any(re.fullmatch(hostname_regex(p, ident.hardware), ident.hostname) for p in patterns):

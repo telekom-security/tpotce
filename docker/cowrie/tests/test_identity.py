@@ -1,12 +1,14 @@
 import calendar
+import json
 import random
 import re
 import unittest
 
 from tests.helpers import DIST  # noqa: F401
 from tpot_personas import catalog, servers
-from tpot_personas.identity import (DAY, draw, first_install, host_patterns, hostname_regex, is_medium, kernel_time,
-                                    is_firmware, log_window, ready_at, stale_at, superseded_at, to_json, updated_at)
+from tpot_personas.identity import (DAY, draw, first_install, host_patterns, hostname_regex, is_fresh, is_medium,
+                                    kernel_time, is_firmware, log_window, ready_at, restore, stale_at, superseded_at,
+                                    to_json, to_state, updated_at)
 
 NOW = 1_790_000_000  # fixed "now" for reproducible tests
 
@@ -301,3 +303,62 @@ class FirmwareTest(unittest.TestCase):
                 self.assertIn("C3538", i.hardware.cpu_model, seed)
             if i.hostname == "DS920":
                 self.assertIn("J4125", i.hardware.cpu_model, seed)
+
+
+class RestoreTest(unittest.TestCase):
+    """COWRIE_PERSONA_ROTATION: the identity of an earlier start, at a later now."""
+
+    def setUp(self):
+        self.persona = catalog.by_id("ubuntu-noble")
+        self.first = draw(self.persona, 11, NOW)
+        self.state = to_state(self.persona, self.first)
+
+    def test_state_names_what_brings_the_identity_back(self):
+        self.assertEqual(set(self.state), {"version", "persona", "seed", "chosen_at", "booted_at", "installed_at",
+                                           "release_label", "hardware_index", "hostname"})
+        self.assertEqual(self.state["persona"], "ubuntu-noble")
+        self.assertEqual(self.state["chosen_at"], NOW)
+        self.assertEqual(self.state["booted_at"], self.first.booted_at)
+        self.assertEqual(self.persona.hardware[self.state["hardware_index"]], self.first.hardware)
+        self.assertEqual(json.loads(json.dumps(self.state)), self.state)
+
+    def test_same_identity_with_a_grown_uptime(self):
+        later = restore(self.persona, self.state, NOW + 3 * DAY + 5)
+        for name in ("persona_id", "seed", "hostname", "release", "hardware", "installed_at", "pid_seed", "tokens",
+                     "booted_at"):
+            self.assertEqual(getattr(later, name), getattr(self.first, name), name)
+        self.assertEqual(later.now, NOW + 3 * DAY + 5)
+        self.assertEqual(later.boot_offset, self.first.boot_offset + 3 * DAY + 5)
+        self.assertEqual(later.chosen_at, NOW)
+        self.assertTrue(is_fresh(self.first))
+        self.assertFalse(is_fresh(later))
+        self.assertTrue(is_fresh(restore(self.persona, self.state, NOW)))
+
+    def test_every_persona_comes_back(self):
+        for p in catalog.PERSONAS:
+            for seed in range(5):
+                first = draw(p, seed, NOW)
+                later = restore(p, to_state(p, first), NOW + 30 * DAY)
+                self.assertEqual((later.hostname, later.release, later.hardware, later.booted_at, later.tokens),
+                                 (first.hostname, first.release, first.hardware, first.booted_at, first.tokens),
+                                 (p.id, seed))
+
+    def test_a_state_that_does_not_fit_is_refused(self):
+        cases = {
+            "no object": [],
+            "no version": {k: v for k, v in self.state.items() if k != "version"},
+            "old version": {**self.state, "version": 0},
+            "another persona": {**self.state, "persona": "ipcam"},
+            "seed as text": {**self.state, "seed": "11"},
+            "seed as bool": {**self.state, "seed": True},
+            "negative boot": {**self.state, "booted_at": -1},
+            "chosen after now": {**self.state, "chosen_at": NOW + 2 * DAY},
+            "another release": {**self.state, "release_label": "other"},
+            "another host name": {**self.state, "hostname": "other"},
+            "another boot": {**self.state, "booted_at": self.state["booted_at"] + 1},
+            "another installation": {**self.state, "installed_at": self.state["installed_at"] + 1},
+            "hardware beyond the pool": {**self.state, "hardware_index": len(self.persona.hardware)},
+        }
+        for name, state in cases.items():
+            with self.subTest(name), self.assertRaises(ValueError):
+                restore(self.persona, state, NOW + DAY)

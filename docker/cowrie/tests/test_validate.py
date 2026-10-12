@@ -9,7 +9,7 @@ from tests.helpers import base_tree
 from tests.test_render import NOW, render_ident, render_one
 from tpot_personas import PersonaError, catalog, tree, validate
 from tpot_personas.common import ps_start
-from tpot_personas.identity import draw, stale_at
+from tpot_personas.identity import DAY, draw, restore, stale_at, to_state
 from tpot_personas.render import render
 
 
@@ -248,6 +248,27 @@ class ValidateNegativeTest(unittest.TestCase):
         late = dataclasses.replace(self.ident, boot_offset=self.ident.now - 1_000_000_000)
         found = " | ".join(validate.problems(self.persona, late, self.out, self.out, self.keys, min_pickle=0))
         self.assertIn("kernel: built", found)
+
+    def test_uptime_of_a_fresh_draw(self):
+        long = dataclasses.replace(self.ident, boot_offset=121 * DAY)
+        found = " | ".join(validate.problems(self.persona, long, self.out, self.out, self.keys, min_pickle=0))
+        self.assertIn("uptime: 121 days, a fresh draw has 1 to 120", found)
+
+    def test_uptime_of_a_kept_identity_may_grow(self):
+        kept = restore(self.persona, to_state(self.persona, self.ident), self.ident.now + 200 * DAY)
+        found = validate.problems(self.persona, kept, self.out, self.out, self.keys, min_pickle=0)
+        self.assertFalse([p for p in found if p.startswith("uptime")], found)
+
+    def test_booted_after_now_or_installed_after_the_boot(self):
+        for ident, text in ((dataclasses.replace(self.ident, boot_offset=-5), "uptime: booted after now"),
+                            (dataclasses.replace(self.ident, installed_at=self.ident.booted_at + 1),
+                             "uptime: installed after the boot")):
+            with self.subTest(text):
+                kept = dataclasses.replace(ident, chosen_at=ident.now - DAY)
+                for case in (ident, kept):
+                    found = " | ".join(validate.problems(self.persona, case, self.out, self.out, self.keys,
+                                                         min_pickle=0))
+                    self.assertIn(text, found)
 
     def test_host_name_of_another_provider(self):
         # the persona of these tests runs on KVM; an AWS VPC name does not fit it

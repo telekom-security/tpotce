@@ -68,7 +68,7 @@ class StartTest(unittest.TestCase):
         self.assertEqual(self.old_key.read_text(), "old key\n")
         self.assertEqual(stat.S_IMODE(self.old_key.stat().st_mode), 0o770)
         self.assertEqual(sorted(p.name for p in (self.cowrie / "etc").iterdir()),
-                         ["debian-bookworm", "ssh_host_rsa_key"])
+                         ["debian-bookworm", "persona-state.json", "ssh_host_rsa_key"])
 
     def test_cfg_names_the_key_files_of_the_profile_in_the_persona_dir(self):
         for pid, kinds in (("openwrt", ("ed25519", "rsa")), ("ubuntu-noble", ("rsa", "ecdsa", "ed25519")),
@@ -191,6 +191,203 @@ class StartTest(unittest.TestCase):
         execv.assert_not_called()
         self.assertTrue("".join(c.args[0] for c in err.write.call_args_list).startswith(
             "Could not activate Cowrie persona: UnpicklingError: "))
+
+
+DAY = 86400
+NOW = 1_790_000_000
+
+
+class Pick:
+    """A selection rng that takes the entry at index."""
+
+    def __init__(self, index):
+        self.index = index
+
+    def choice(self, seq):
+        return seq[self.index]
+
+
+class RotationTest(unittest.TestCase):
+    """COWRIE_PERSONA_ROTATION: a start within the days keeps persona and identity."""
+
+    setUp = StartTest.setUp
+
+    def prepare(self, value, rotation, now, pick=0):
+        self.lines = []
+        with unittest.mock.patch.object(self.start, "log", side_effect=self.lines.append):
+            return self.start.prepare({"COWRIE_PERSONA": value, "COWRIE_PERSONA_ROTATION": rotation}, self.cowrie,
+                                      self.runtime, Pick(pick), min_pickle=0, now=now)
+
+    def identity(self):
+        return json.loads((self.runtime / "identity.json").read_text())
+
+    @property
+    def state_path(self):
+        return self.cowrie / "etc" / "persona-state.json"
+
+    def state(self):
+        return json.loads(self.state_path.read_text())
+
+    def kept(self, first, second):
+        for name in ("persona", "seed", "hostname", "release", "hardware", "installed_at", "booted_at", "tokens",
+                     "pid_seed", "chosen_at"):
+            self.assertEqual(second[name], first[name], name)
+
+    def test_a_start_within_the_days_keeps_the_identity_and_the_uptime_grows(self):
+        self.assertEqual(self.prepare("ubuntu-noble ipcam", "7", NOW), "ubuntu-noble")
+        first = self.identity()
+        self.assertEqual(self.lines, [])
+        # the selection rng would take ipcam now
+        self.assertEqual(self.prepare("ubuntu-noble ipcam", "7", NOW + 7 * DAY - 1, pick=-1), "ubuntu-noble")
+        second = self.identity()
+        self.kept(first, second)
+        self.assertEqual(second["boot_offset"], first["boot_offset"] + 7 * DAY - 1)
+        self.assertEqual(second["now"], NOW + 7 * DAY - 1)
+        self.assertEqual(len(self.lines), 1)
+        self.assertTrue(self.lines[0].startswith("Keeping Cowrie persona ubuntu-noble drawn "), self.lines)
+        cfg = configparser.ConfigParser(interpolation=None)
+        cfg.read(self.runtime / "runtime" / "cowrie.cfg")
+        self.assertEqual(cfg.get("honeypot", "boot_offset"), str(second["boot_offset"]))
+        self.assertEqual(self.state()["chosen_at"], NOW)
+
+    def test_the_state_file_is_private_and_whole(self):
+        self.prepare("ipcam", "7", NOW)
+        self.assertEqual(stat.S_IMODE(self.state_path.stat().st_mode), 0o640)
+        state = self.state()
+        self.assertEqual(state["persona"], "ipcam")
+        self.assertEqual(state["seed"], self.identity()["seed"])
+        self.assertFalse((self.cowrie / "etc" / "persona-state.json.new").exists())
+
+    def test_after_the_days_a_new_persona_is_drawn(self):
+        self.prepare("ubuntu-noble ipcam", "7", NOW)
+        first = self.identity()
+        self.assertEqual(self.prepare("ubuntu-noble ipcam", "7", NOW + 7 * DAY, pick=-1), "ipcam")
+        second = self.identity()
+        self.assertNotEqual(second["seed"], first["seed"])
+        self.assertEqual(second["chosen_at"], NOW + 7 * DAY)
+        self.assertEqual(self.lines, ["Cowrie persona ubuntu-noble was kept for 7 days, drawing a new persona"])
+        self.assertEqual(self.state()["persona"], "ipcam")
+        self.assertEqual(self.state()["chosen_at"], NOW + 7 * DAY)
+
+    def test_a_persona_no_longer_selected_is_drawn_anew(self):
+        self.prepare("ubuntu-noble ipcam", "30", NOW)
+        self.assertEqual(self.prepare("ipcam debian-trixie", "30", NOW + DAY, pick=-1), "debian-trixie")
+        self.assertEqual(self.lines, ["Cowrie persona ubuntu-noble is no longer in COWRIE_PERSONA, drawing a new persona"])
+
+    def test_a_state_that_cannot_be_used_draws_anew_with_one_line(self):
+        cases = {
+            "broken JSON": b"{\"persona\": ",
+            "no UTF-8": b"\xff\xfe{}",
+            "no object": b"[1, 2]",
+            "no persona": b"{}",
+            "unknown persona": b'{"persona": "no-such-persona", "version": 1}',
+            "path as persona": b'{"persona": "../etc", "version": 1}',
+            "old version": None,
+            "another image": None,
+            "too large": b" " * (64 * 1024 + 1),
+        }
+        for name, data in cases.items():
+            with self.subTest(name):
+                if data is None:
+                    self.prepare("ipcam", "7", NOW)
+                    state = self.state()
+                    if name == "old version":
+                        state.pop("version")
+                    else:
+                        state["release_label"] = "an older release"
+                    data = json.dumps(state).encode()
+                self.state_path.write_bytes(data)
+                self.assertEqual(self.prepare("ipcam", "7", NOW + DAY), "ipcam")
+                self.assertEqual(len(self.lines), 1, self.lines)
+                self.assertTrue(self.lines[0].startswith("Cowrie persona state persona-state.json not used ("),
+                                self.lines)
+                self.assertTrue(self.lines[0].endswith("), drawing a new persona"), self.lines)
+                self.assertEqual(self.identity()["chosen_at"], NOW + DAY)
+                self.assertEqual(self.state()["chosen_at"], NOW + DAY)
+
+    def test_a_state_that_is_a_folder_does_not_stop_the_start(self):
+        self.state_path.mkdir()
+        self.assertEqual(self.prepare("ipcam", "7", NOW), "ipcam")
+        self.assertEqual(len(self.lines), 2, self.lines)
+        self.assertIn("not used (unreadable", self.lines[0])
+        self.assertTrue(self.lines[1].startswith("Could not save the Cowrie persona state persona-state.json ("))
+        self.assertTrue((self.runtime / "runtime" / "cowrie.cfg").is_file())
+
+    @unittest.skipIf(os.geteuid() == 0, "root writes into a read-only folder")
+    def test_an_unwritable_state_file_logs_one_line_and_starts(self):
+        self.prepare("ipcam", "7", NOW)
+        first = self.identity()
+        etc = self.cowrie / "etc"
+        os.chmod(etc, 0o550)
+        self.addCleanup(os.chmod, etc, 0o750)
+        self.assertEqual(self.prepare("ipcam", "7", NOW + DAY), "ipcam")
+        self.kept(first, self.identity())
+        self.assertEqual(len(self.lines), 2, self.lines)
+        self.assertEqual(self.lines[1], "Could not save the Cowrie persona state persona-state.json "
+                                        "(Permission denied), the next start draws a new persona")
+        self.assertFalse((etc / "persona-state.json.new").exists())
+        self.assertEqual(self.state()["chosen_at"], NOW)
+
+    def test_a_failed_rename_leaves_no_staged_file(self):
+        with unittest.mock.patch.object(self.start.os, "replace", side_effect=PermissionError(13, "Permission denied")):
+            self.assertEqual(self.prepare("ipcam", "7", NOW), "ipcam")
+        self.assertEqual(len(self.lines), 1, self.lines)
+        self.assertFalse(self.state_path.exists())
+        self.assertFalse((self.cowrie / "etc" / "persona-state.json.new").exists())
+
+    def test_rotation_0_draws_anew_on_every_start_and_records_the_persona(self):
+        seeds = set()
+        for day in range(3):
+            self.prepare("ubuntu-noble", "0", NOW + day * DAY)
+            seeds.add(self.identity()["seed"])
+            self.assertEqual(self.state()["seed"], self.identity()["seed"])
+            self.assertEqual(self.lines, [])
+        self.assertEqual(len(seeds), 3)
+        # unset is 0 too
+        self.prepare("ubuntu-noble", None, NOW + 3 * DAY)
+        self.assertNotIn(self.identity()["seed"], seeds)
+
+    def test_a_change_from_0_to_days_keeps_the_running_persona(self):
+        self.prepare("ubuntu-noble ipcam", "0", NOW)
+        first = self.identity()
+        self.prepare("ubuntu-noble ipcam", "7", NOW + DAY, pick=-1)
+        self.kept(first, self.identity())
+
+    def test_a_restart_of_the_same_persona_keeps_its_host_keys(self):
+        # Cowrie writes the keys of the profile into etc/<persona>/ on its first start
+        self.prepare("ubuntu-noble", "0", NOW)
+        keys = self.cowrie / "etc" / "ubuntu-noble"
+        written = {}
+        for kind in ("rsa", "ecdsa", "ed25519"):
+            for ext in ("", ".pub"):
+                path = keys / f"ssh_host_{kind}_key{ext}"
+                path.write_bytes(os.urandom(64))
+                written[path] = path.read_bytes()
+        for rotation, day in (("0", 1), ("7", 2), ("7", 3)):
+            self.prepare("ubuntu-noble", rotation, NOW + day * DAY)
+            for path, data in written.items():
+                self.assertEqual(path.read_bytes(), data, path.name)
+            cfg = configparser.ConfigParser(interpolation=None)
+            cfg.read(self.runtime / "runtime" / "cowrie.cfg")
+            self.assertEqual(cfg.get("ssh", "ed25519_private_key"), str(keys / "ssh_host_ed25519_key"))
+
+    def test_a_kept_device_renders_a_year_on(self):
+        # a kept uptime grows beyond the 400 days of a fresh draw
+        self.prepare("ipcam", "365", NOW)
+        first = self.identity()
+        self.prepare("ipcam", "365", NOW + 364 * DAY)
+        self.kept(first, self.identity())
+        self.assertGreater(self.identity()["boot_offset"], 364 * DAY)
+
+    def test_rotation_takes_what_tpotinit_takes(self):
+        for value, days in (("", 0), (None, 0), ("0", 0), ("365", 365), ("007", 7)):
+            self.assertEqual(self.start.rotation_days({"COWRIE_PERSONA_ROTATION": value}), days, value)
+        for value in ("366", "-1", "7d", " 7", "1.5", "seven"):
+            with self.subTest(value), self.assertRaises(PersonaError):
+                self.start.rotation_days({"COWRIE_PERSONA_ROTATION": value})
+        with self.assertRaises(PersonaError):
+            self.prepare("ipcam", "400", NOW)
+        self.assertFalse(self.state_path.exists())
 
 
 class GenerateTest(unittest.TestCase):

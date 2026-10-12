@@ -8,7 +8,7 @@ import unittest
 from tests.helpers import base_tree, tmpdir
 from tpot_personas import catalog, system, tree, validate
 from tpot_personas.common import kernel_series
-from tpot_personas.identity import DAY, draw, fits, kernel_time, specialize, updated_at
+from tpot_personas.identity import DAY, draw, fits, kernel_time, restore, specialize, to_state, updated_at
 from tpot_personas.render import render
 
 NOW = 1_790_000_000
@@ -843,6 +843,13 @@ class BoundaryTest(unittest.TestCase):
                 release = specialize(oldest, ident.hardware)
                 self.check(persona, dataclasses.replace(ident, release=release, boot_offset=100 * DAY,
                                                         installed_at=NOW - 100 * DAY))
+
+    def test_kept_identity_a_year_after_its_draw(self):
+        # COWRIE_PERSONA_ROTATION: the boot stays, the uptime grows beyond a fresh draw's
+        for persona in catalog.PERSONAS:
+            for seed in range(2):
+                first = draw(persona, seed, NOW)
+                self.check(persona, restore(persona, to_state(persona, first), NOW + 365 * DAY))
 
     def test_one_second_after_utc_midnight(self):
         midnight = NOW // DAY * DAY + 1
