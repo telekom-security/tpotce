@@ -997,8 +997,8 @@ UNIT_EXEC = {
     "rhel-import-state.service": "/usr/lib/systemd/rhel-import-state",
     "rhel-readonly.service": "/usr/lib/systemd/rhel-readonly",
     "cron.service": "/usr/sbin/cron -f $EXTRA_OPTS",
-    "dbus.service": "@/usr/bin/dbus-daemon @dbus-daemon --system --address=systemd: --nofork --nopidfile "
-                    "--systemd-activation --syslog-only",
+    "dbus.service": "/usr/bin/dbus-daemon --system --address=systemd: --nofork --nopidfile --systemd-activation "
+                    "--syslog-only",
     "rsyslog.service": "/usr/sbin/rsyslogd -n -iNONE",
     "snapd.service": "/usr/lib/snapd/snapd",
     "ssh.service": "/usr/sbin/sshd -D $SSHD_OPTS",
@@ -1020,6 +1020,40 @@ UNIT_EXEC = {
     "nvidia-persistenced.service": "/usr/bin/nvidia-persistenced --user nvidia-persistenced --no-persistence-mode "
                                    "--verbose",
     "ollama.service": "/usr/local/bin/ollama serve",
+}
+# the Type= of a running unit other than simple (unverified: the units of each release)
+UNIT_TYPE = {"systemd-journald.service": "notify", "systemd-logind.service": "notify", "systemd-udevd.service": "notify",
+             "systemd-networkd.service": "notify", "systemd-resolved.service": "notify", "rsyslog.service": "notify",
+             "snapd.service": "notify", "dbus-broker.service": "notify", "NetworkManager.service": "dbus",
+             "ModemManager.service": "dbus", "avahi-daemon.service": "dbus", "bluetooth.service": "dbus",
+             "wpa_supplicant.service": "dbus", "polkit.service": "dbus", "auditd.service": "forking",
+             "chronyd.service": "forking", "postfix.service": "forking", "nvidia-persistenced.service": "forking",
+             "ssh.service": "notify"}
+# the programs of the units that are scripts on a real system: shortened text (unverified)
+_SH_SCRIPT = "#!/bin/sh\n# {what}\n\nset -e\n\ncase \"$1\" in\n    *)\n        exit 0\n        ;;\nesac\n"
+_PY_SCRIPT = "#!/usr/bin/python3\n# {what}\n\nimport sys\n\nfrom {module} import main\n\nif __name__ == \"__main__\":\n    sys.exit(main())\n"
+SCRIPT_PROGRAMS = {
+    "/usr/share/apport/apport": _PY_SCRIPT.format(what="Collect information about a crash and create a report.",
+                                                  module="apport.cli"),
+    "/usr/share/unattended-upgrades/unattended-upgrade-shutdown": _PY_SCRIPT.format(
+        what="Wait for unattended-upgrades to finish before shutdown.", module="unattended_upgrades.shutdown"),
+    "/usr/bin/cloud-init": "#!/usr/bin/python3\n# -*- coding: utf-8 -*-\nimport re\nimport sys\n"
+                           "from cloudinit.cmd.main import main\nif __name__ == '__main__':\n"
+                           "    sys.argv[0] = re.sub(r'(-script\\.pyw|\\.exe)?$', '', sys.argv[0])\n"
+                           "    sys.exit(main())\n",
+    "/lib/apparmor/apparmor.systemd": _SH_SCRIPT.format(what="Load the AppArmor profiles of the system."),
+    "/lib/ufw/ufw-init": _SH_SCRIPT.format(what="Start, stop and reload the firewall rules of ufw."),
+    "/sbin/dphys-swapfile": _SH_SCRIPT.format(what="Set up, mount/unmount, and delete a swap file."),
+    "/sbin/fake-hwclock": _SH_SCRIPT.format(what="Save or restore the system clock from a file."),
+    "/usr/bin/rpi-eeprom-update": _SH_SCRIPT.format(what="Check and update the bootloader EEPROM of the Raspberry Pi."),
+    "/usr/bin/kdumpctl": _SH_SCRIPT.format(what="Arm the crash kernel of kdump."),
+    "/usr/libexec/import-state": _SH_SCRIPT.format(what="Import the network configuration of the initramfs."),
+    "/usr/libexec/selinux/selinux-autorelabel-mark.sh": _SH_SCRIPT.format(
+        what="Mark the need to relabel after reboot."),
+    "/usr/lib/systemd/rhel-dmesg": _SH_SCRIPT.format(what="Dump dmesg to /var/log/dmesg."),
+    "/usr/lib/systemd/rhel-domainname": _SH_SCRIPT.format(what="Set the NIS domain name of /etc/sysconfig/network."),
+    "/usr/lib/systemd/rhel-import-state": _SH_SCRIPT.format(what="Import the network configuration of the initramfs."),
+    "/usr/lib/systemd/rhel-readonly": _SH_SCRIPT.format(what="Configure read-only root support."),
 }
 # the ExecStart= of a family where it differs
 UNIT_EXEC_FAMILY = {
@@ -1043,14 +1077,15 @@ def wants_target(name):
 
 def unit_file(persona, ident, unit):
     """The text of a unit file the image has (shortened to what systemctl shows of it; unverified)."""
-    name, sd = unit["name"], _systemd_paths(ident)
+    name, sd = unit["name"], unit_dir(persona, ident).rsplit("/system", 1)[0]
     if name.endswith(".socket"):
         listen = "".join(f"Listen{'Stream' if 'Stream' in entry else 'Datagram' if 'Datagram' in entry else 'Netlink'}="
                          f"{entry.rsplit(' (', 1)[0]}\n" for entry in unit["listen"])
         body = f"[Socket]\n{listen}"
     else:
         command = UNIT_EXEC_FAMILY.get(persona.family, {}).get(name, UNIT_EXEC[name]).format(sd=sd)
-        kind = "" if unit["sub"] == "running" else "Type=oneshot\nRemainAfterExit=yes\n"
+        kind = (f"Type={UNIT_TYPE[name]}\n" if name in UNIT_TYPE else "") if unit["sub"] == "running" \
+            else "Type=oneshot\nRemainAfterExit=yes\n"
         body = f"[Service]\n{kind}ExecStart={command}\n"
     install = f"\n[Install]\nWantedBy={wants_target(name)}\n" if unit["state"] == "enabled" else ""
     return f"[Unit]\nDescription={unit['description']}\n\n{body}{install}"

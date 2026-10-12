@@ -135,6 +135,8 @@ def cloud_init_version(persona, ident):
     found = [(version, calendar.timegm(time.strptime(day, "%Y-%m-%d"))) for version, day in CLOUD_INIT[code]]
     usable = [entry for entry in found if entry[1] <= ident.installed_at]
     return usable[-1] if usable else found[0]
+
+
 _SUDOERS_HEAD = """#
 # This file MUST be edited with the 'visudo' command as root.
 #
@@ -302,7 +304,8 @@ def tool_programs(persona, ident):
     for tool in sorted(installed_tools(persona, ident)):
         for name, rel in TOOL_PROGRAMS[tool].items():
             if tool == "netcat-openbsd":
-                found.append((rel, NETCAT))
+                # dpkg's alternatives: /usr/bin/nc -> /etc/alternatives/nc -> /bin/nc.openbsd
+                found += [(rel, f"/etc/alternatives/{name}"), (f"etc/alternatives/{name}", "/bin/nc.openbsd")]
             else:
                 programs.append(rel)
         if tool == "netcat-openbsd":
@@ -1130,6 +1133,24 @@ def _init_entries(persona):
     return tuple((entry[0], entry[2:]) for entry in init)
 
 
+def _boot_script(name):
+    return name.endswith(".sh") or name in ("kmod", "udev", "fake-hwclock", "alsa-utils")
+
+
+def init_links(persona):
+    """(link, target) of the run level directories for the scripts of init_scripts, as their
+    Default-Start / Default-Stop say (insserv numbers them all 01)."""
+    found = []
+    for rel in init_scripts(persona):
+        name = rel.rsplit("/", 1)[-1]
+        if _boot_script(name):
+            found.append((f"etc/rcS.d/S01{name}", rel))
+        else:
+            found += [(f"etc/rc{level}.d/S01{name}", rel) for level in (2, 3, 4, 5)]
+            found += [(f"etc/rc{level}.d/K01{name}", rel) for level in (0, 1, 6)]
+    return tuple(found)
+
+
 def init_scripts(persona):
     """/etc/init.d of a Debian server: a script with its LSB header for every entry of service
     --status-all that Cowrie's tree has not (shortened; its status is the sign of the entry)."""
@@ -1139,7 +1160,7 @@ def init_scripts(persona):
     for sign, name in _init_entries(persona):
         if name in TREE_INIT:
             continue
-        boot = name.endswith(".sh") or name in ("kmod", "udev", "fake-hwclock", "alsa-utils")
+        boot = _boot_script(name)
         scripts[f"etc/init.d/{name}"] = _INIT_SCRIPT.format(
             provides=name.removesuffix(".sh"), description=INIT_DESCRIPTIONS[name], start="S" if boot else "2 3 4 5",
             stop="" if boot else "0 1 6", status=0 if sign == "+" else 3)

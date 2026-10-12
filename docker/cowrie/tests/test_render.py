@@ -582,6 +582,67 @@ class FamilyFilesTest(unittest.TestCase):
                 self.assertLessEqual(released, ident.installed_at, (persona.id, seed, version))
 
 
+class UnitDetailTest(unittest.TestCase):
+    """The units run what ps shows, scripts are text, init scripts have their run level links,
+    nc goes through dpkg's alternatives."""
+
+    def units(self, out):
+        return json.loads((out / system.SYSTEMD_UNITS).read_text())["units"]
+
+    def test_running_units_start_the_program_of_ps(self):
+        for persona in catalog.PERSONAS:
+            if persona.kind != "server":
+                continue
+            _, out, _ = render_one(self, persona, 1)
+            fs = fs_of(out)
+            for unit in self.units(out):
+                if unit["sub"] != "running" or unit["path"].startswith("/etc/"):
+                    continue
+                text = tree.node_get(tree.find_node(fs, unit["path"]), tree.A_CONTENTS).decode()
+                lines = [line for line in text.splitlines() if line.startswith("ExecStart=")]
+                first = unit["command"].split()[0]
+                if "Type=forking" in text or first.endswith(":") or first.rsplit("/", 1)[-1].startswith("python"):
+                    continue
+                self.assertEqual(system.exec_program(lines[0]), first, (persona.id, unit["name"]))
+            if persona.family == "centos":
+                postfix = tree.node_get(tree.find_node(fs, "usr/lib/systemd/system/postfix.service"), tree.A_CONTENTS)
+                self.assertIn(b"Type=forking\n", postfix)
+        _, out, _ = render_one(self, catalog.by_id("ubuntu-noble"), 1)
+        dbus = tree.node_get(tree.find_node(fs_of(out), "usr/lib/systemd/system/dbus.service"), tree.A_CONTENTS)
+        ps = json.loads((out / "cmdoutput.json").read_text())["command"]["ps"]
+        self.assertIn(f"ExecStart={next(p['COMMAND'] for p in ps if 'dbus-daemon' in p['COMMAND'])}\n".encode(), dbus)
+
+    def test_script_programs_are_text(self):
+        for pid, paths in (("ubuntu-noble", ("usr/share/apport/apport", "lib/apparmor/apparmor.systemd",
+                                             "usr/share/unattended-upgrades/unattended-upgrade-shutdown",
+                                             "usr/bin/cloud-init")),
+                           ("centos-7", ("usr/lib/systemd/rhel-dmesg", "usr/bin/kdumpctl")),
+                           ("raspios", ("sbin/dphys-swapfile", "sbin/fake-hwclock"))):
+            _, out, _ = render_one(self, catalog.by_id(pid), 1)
+            fs = fs_of(out)
+            for rel in paths:
+                node = tree.find_node(fs, rel)
+                text = tree.node_get(node, tree.A_CONTENTS)
+                self.assertTrue(isinstance(text, bytes) and text.startswith(b"#!"), (pid, rel))
+                self.assertEqual(tree.node_get(node, tree.A_MODE) & 0o777, 0o755, (pid, rel))
+
+    def test_init_scripts_have_their_run_level_links(self):
+        _, out, _ = render_one(self, catalog.by_id("ubuntu-noble"), 1)
+        fs = fs_of(out)
+        self.assertEqual(tree.node_get(tree.find_node(fs, "etc/rc2.d/S01cron"), tree.A_TARGET), "../init.d/cron")
+        self.assertEqual(tree.node_get(tree.find_node(fs, "etc/rc0.d/K01cron"), tree.A_TARGET), "../init.d/cron")
+        self.assertEqual(tree.node_get(tree.find_node(fs, "etc/rcS.d/S01kmod"), tree.A_TARGET), "../init.d/kmod")
+        self.assertIsNone(tree.find_node(fs, "etc/rc0.d/K01kmod"))
+
+    def test_netcat_goes_through_the_alternatives(self):
+        _, out, _ = render_one(self, catalog.by_id("debian-bookworm"), 1)
+        fs = fs_of(out)
+        for name in ("nc", "netcat"):
+            self.assertEqual(tree.node_get(tree.find_node(fs, f"usr/bin/{name}"), tree.A_TARGET), f"/etc/alternatives/{name}")
+            self.assertEqual(tree.node_get(tree.find_node(fs, f"etc/alternatives/{name}"), tree.A_TARGET),
+                             "/bin/nc.openbsd")
+
+
 class SudoersTest(unittest.TestCase):
     """sudo -l lists what /etc/sudoers and /etc/sudoers.d of the persona say."""
 

@@ -275,7 +275,11 @@ def _unit_files(t, persona, ident, processes):
             program = system.exec_program(line) if line.startswith("ExecStart=") else ""
             if program and system.program_node(t, program) is None:
                 rel_program = program.lstrip("/") if program.startswith("/") else f"usr/bin/{program}"
-                tree.ensure_executable(t, rel_program, program_size(ident, rel_program), ctime=ident.installed_at)
+                if program in servers.SCRIPT_PROGRAMS:
+                    tree.ensure_file(t, rel_program, servers.SCRIPT_PROGRAMS[program].encode(), mode=0o755,
+                                     ctime=ident.installed_at)
+                else:
+                    tree.ensure_executable(t, rel_program, program_size(ident, rel_program), ctime=ident.installed_at)
         if unit["state"] == "enabled":
             tree.ensure_link(t, f"etc/systemd/system/{servers.wants_target(unit['name'])}.wants/{unit['name']}", path,
                              ctime=ident.installed_at)
@@ -361,7 +365,8 @@ def apply_to_tree(base_tree, persona, ident, content):
     removed, ssh_links = system.ssh_units(persona, ident)
     for rel in removed:
         tree.remove_node(t, rel)
-    for rel, target in system.python_links(persona, ident) + system.links(persona) + ssh_links + tool_links:
+    for rel, target in (system.python_links(persona, ident) + system.links(persona) + ssh_links + tool_links
+                        + system.init_links(persona)):
         link(t, persona, ident, rel, target, ident.installed_at)
     if persona.kind == "server":
         _unit_files(t, persona, ident, content.processes)

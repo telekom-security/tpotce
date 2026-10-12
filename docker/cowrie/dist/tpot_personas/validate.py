@@ -12,7 +12,7 @@ import re
 import time
 from pathlib import Path
 
-from . import PersonaError, system, tree
+from . import PersonaError, servers, system, tree
 from .common import VM_PROVIDERS, home_dir, is_login_shell, ps_start, ps_user
 from .identity import DAY, host_patterns, hostname_regex, kernel_time, stale_at, updated_at
 from .model import PROMPT_STYLES
@@ -652,8 +652,11 @@ def _check_system(persona, ident, cfg, out_dir, runtime_dir, fs, out):
                 continue
             for line in text.decode("utf-8", "replace").splitlines():
                 program = system.exec_program(line) if line.startswith("ExecStart=") else ""
-                if program and system.program_node(fs, program) is None:
+                node = system.program_node(fs, program) if program else None
+                if program and node is None:
                     out.append(f"systemctl: ExecStart of {name} names {program}, which is not in fs.pickle")
+                elif program in servers.SCRIPT_PROGRAMS and not isinstance(tree.node_get(node, tree.A_CONTENTS), bytes):
+                    out.append(f"systemctl: {program} of {name} is a script, fs.pickle has no text of it")
         for line in _text(out_dir / system.SERVICE_STATUS).splitlines():
             if line.startswith(" [ ") and not _is_file(tree.find_node(fs, f"etc/init.d/{line.split()[-1]}")):
                 out.append(f"service: --status-all names {line.split()[-1]}, /etc/init.d/{line.split()[-1]} is missing")
