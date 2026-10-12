@@ -1857,6 +1857,1013 @@ def tpot_yum_plugins() -> str:
     )
 
 
+# module code of the patched yum.py after Command_yum: dnf 4 and rpm of RHEL 9
+DNF_COMMAND = r'''
+
+# T-Pot: dnf 4 of RHEL 9 (also its yum) and rpm. The packages, their versions and the repositories
+# are those of [shell] dnf_packages (a JSON file of the runtime folder). Nothing is downloaded or
+# installed: a package the session installs is a name of the session, its programs answer as
+# those of Cowrie's apt do. Without the key yum stays yum 3 (the persona skips dnf and rpm).
+TPOT_DNF_WIDTH = 80
+TPOT_DNF_VALUE_OPTIONS = frozenset({
+    "-c", "--config", "-d", "--debuglevel", "-e", "--errorlevel", "--installroot", "--releasever", "--setopt",
+    "-x", "--exclude", "--enablerepo", "--disablerepo", "--repo", "--repoid", "--rpmverbosity", "--color",
+    "--destdir", "--downloaddir", "--forcearch", "--comment", "--advisory", "--advisories", "--bz", "--bzs",
+    "--cve", "--cves", "--sec-severity", "--secseverity", "--enableplugin", "--disableplugin", "-R",
+    "--randomwait"})
+TPOT_DNF_ALIASES = {"in": "install", "rei": "reinstall", "rm": "remove", "erase": "remove", "up": "upgrade",
+                    "update": "upgrade", "check-upgrade": "check-update", "ls": "list", "se": "search",
+                    "mc": "makecache", "repoinfo": "repolist", "upgrade-minimal": "upgrade",
+                    "update-minimal": "upgrade", "up-min": "upgrade", "dsync": "distro-sync",
+                    "distribution-synchronization": "distro-sync", "dg": "downgrade", "autoremove": "autoremove"}
+# commands of dnf 4 and its plugins this emulation answers with the metadata only (and root ones: nothing to do)
+TPOT_DNF_ROOT_ONLY = frozenset({"autoremove", "distro-sync", "downgrade", "swap"})
+TPOT_DNF_ROOT = frozenset({"install", "reinstall", "remove", "upgrade"}) | TPOT_DNF_ROOT_ONLY
+TPOT_DNF_OTHER = frozenset({
+    "alias", "check", "deplist", "group", "grp", "groups", "grouplist", "groupinstall", "history", "hist", "info",
+    "if", "mark", "module", "provides", "whatprovides", "prov", "wp", "repoquery", "rq", "repository-packages",
+    "repo-pkgs", "shell", "sh", "updateinfo", "upif", "builddep", "changelog", "config-manager", "copr",
+    "debug-dump", "debug-restore", "debuginfo-install", "download", "needs-restarting", "repoclosure", "repodiff",
+    "repograph", "repomanage", "reposync", "groups-manager"})
+TPOT_DNF_COMMANDS = frozenset({"install", "reinstall", "remove", "upgrade", "check-update", "list", "search",
+                               "repolist", "makecache", "clean", "help"}) | TPOT_DNF_ROOT_ONLY | TPOT_DNF_OTHER
+TPOT_DNF_HELP = """usage: {prog} [options] COMMAND
+
+List of Main Commands:
+
+alias                     List or create command aliases
+autoremove                remove all unneeded packages that were originally installed as dependencies
+check                     check for problems in the packagedb
+check-update              check for available package upgrades
+clean                     remove cached data
+deplist                   [deprecated, use repoquery --deplist] List package's dependencies and what packages provide them
+distro-sync               synchronize installed packages to the latest available versions
+downgrade                 Downgrade a package
+group                     display, or use, the groups information
+help                      display a helpful usage message
+history                   display, or use, the transaction history
+info                      display details about a package or group of packages
+install                   install a package or packages on your system
+list                      list a package or groups of packages
+makecache                 generate the metadata cache
+mark                      mark or unmark installed packages as installed by user.
+module                    Interact with Modules.
+provides                  find what package provides the given value
+reinstall                 reinstall a package
+remove                    remove a package or packages from your system
+repolist                  display the configured software repositories
+repoquery                 search for packages matching keyword
+repository-packages       run commands on top of all packages in given repository
+search                    search package details for the given string
+shell                     run an interactive {upper} shell
+swap                      run an interactive {upper} mod for remove and install one spec
+updateinfo                display advisories about packages
+upgrade                   upgrade a package or packages on your system
+upgrade-minimal           upgrade, but only 'newest' package match which fixes a problem that affects your system
+
+List of Plugin Commands:
+
+builddep                  Install build dependencies for package or spec file
+changelog                 Show changelog data of packages
+config-manager            manage {prog} configuration options and repositories
+copr                      Interact with Copr repositories.
+debug-dump                dump information about installed rpm packages to file
+debug-restore             restore packages recorded in debug-dump file
+debuginfo-install         install debuginfo packages
+download                  Download package to current directory
+needs-restarting          determine updated binaries that need restarting
+repoclosure               Display a list of unresolved dependencies for repositories
+repodiff                  List differences between two sets of repositories
+repograph                 Output a full package dependency graph in dot format
+repomanage                Manage a directory of rpm packages
+reposync                  download all packages from remote repo
+
+Optional arguments:
+  -c [config file], --config [config file]
+                        config file location
+  -q, --quiet           quiet operation
+  -v, --verbose         verbose operation
+  --version             show {upper} version and exit
+  --installroot [path]  set install root
+  --nodocs              do not install documentations
+  --noplugins           disable all plugins
+  --enableplugin [plugin]
+                        enable plugins by name
+  --disableplugin [plugin]
+                        disable plugins by name
+  --releasever RELEASEVER
+                        override the value of $releasever in config and repo
+                        files
+  --setopt SETOPTS      set arbitrary config and repo options
+  --skip-broken         resolve depsolve problems by skipping packages
+  -h, --help, --help-cmd
+                        show command help
+  --allowerasing        allow erasing of installed packages to resolve
+                        dependencies
+  -b, --best            try the best available package versions in
+                        transactions.
+  --nobest              do not limit the transaction to the best candidate
+  -C, --cacheonly       run entirely from system cache, don't update cache
+  -R [minutes], --randomwait [minutes]
+                        maximum command wait time
+  -d [debug level], --debuglevel [debug level]
+                        debugging output level
+  -y, --assumeyes       automatically answer yes for all questions
+  --assumeno            automatically answer no for all questions
+  --enablerepo [repo]   Temporarily enable repositories for the purpose of the
+                        current dnf command. Accepts an id, a comma-separated
+                        list of ids, or a glob of ids. This option can be
+                        specified multiple times.
+  --disablerepo [repo]  Temporarily disable active repositories for the
+                        purpose of the current dnf command. Accepts an id, a
+                        comma-separated list of ids, or a glob of ids. This
+                        option can be specified multiple times, but is
+                        mutually exclusive with `--repo`.
+  -x [package], --exclude [package], --excludepkgs [package]
+                        exclude packages by name or glob
+  --nogpgcheck          disable gpg signature checking (if RPM policy allows)
+"""
+TPOT_DNF_SUPERUSER = "Error: This command has to be run with superuser privileges (under the root user on most systems).\n"
+
+
+@functools.cache
+def tpot_dnf_data() -> dict:
+    path = CowrieConfig.get("shell", "dnf_packages", fallback="")
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8")) if path else {}
+    except (OSError, ValueError):
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+    for part in ("installed", "available", "provides", "owners"):
+        if not isinstance(data.get(part), dict):
+            data[part] = {}
+    if not isinstance(data.get("repos"), list):
+        data["repos"] = []
+    return data
+
+
+def tpot_dnf_session(protocol) -> dict:
+    """What this session installed and removed (on the protocol: one per session)."""
+    session = getattr(protocol, "tpot_dnf_session", None)
+    if session is None:
+        session = {"installed": {}, "removed": set()}
+        try:
+            protocol.tpot_dnf_session = session
+        except AttributeError:
+            pass
+    return session
+
+
+def tpot_dnf_installed(protocol) -> dict:
+    session = tpot_dnf_session(protocol)
+    found = {name: entry for name, entry in tpot_dnf_data()["installed"].items() if name not in session["removed"]}
+    found.update(session["installed"])
+    return found
+
+
+def tpot_dnf_available(protocol) -> dict:
+    installed = tpot_dnf_installed(protocol)
+    return {name: entry for name, entry in tpot_dnf_data()["available"].items() if name not in installed}
+
+
+def tpot_dnf_repo(entry: dict) -> str:
+    """The repository of an installed package: where dnf installed it from, else the first enabled one."""
+    repo = entry.get("from", "@System").lstrip("@")
+    if repo != "System":
+        return repo
+    return next((r["id"] for r in tpot_dnf_data()["repos"] if r.get("enabled")), "System")
+
+
+def tpot_dnf_privileged(cmd) -> bool:
+    return cmd.user["uid"] == 0 or getattr(cmd.pp, "tpot_sudo", False)
+
+
+def tpot_dnf_nevra(name: str, entry: dict) -> str:
+    return f"{name}-{entry['evr']}.{entry['arch']}"
+
+
+def tpot_rpm_nvra(name: str, entry: dict) -> str:
+    return f"{name}-{entry['evr'].split(':', 1)[-1]}.{entry['arch']}"
+
+
+def tpot_dnf_number(number: float) -> str:
+    """format_number of dnf: 1024 steps, one decimal below 9.95."""
+    symbols = (" ", "k", "M", "G", "T")
+    depth = 0
+    while number > 999 and depth < len(symbols) - 1:
+        depth += 1
+        number = number / 1024
+    if isinstance(number, int):
+        return f"{number} {symbols[depth]}"
+    if number < 9.95:
+        return f"{number:.1f} {symbols[depth]}"
+    return f"{number:.0f} {symbols[depth]}"
+
+
+def tpot_dnf_time(ts: float, zone: str = "UTC") -> str:
+    """%c of en_US: Tue 25 Aug 2026 01:23:45 PM UTC."""
+    return time.strftime("%a %d %b %Y %I:%M:%S %p ", time.gmtime(ts)) + zone
+
+
+def tpot_dnf_spaces_help(current: int, data_tups: list, left: int) -> int:
+    ret = 0
+    for length, count in data_tups:
+        if left < (length - current):
+            break
+        if current >= length:
+            continue
+        ret += count
+    return ret
+
+
+def tpot_dnf_columns(data: list, columns: list | None = None, remainder_column: int = 0,
+                     total_width: int = TPOT_DNF_WIDTH, indent: str = "") -> list:
+    """calcColumns of dnf: the widths of the columns of data ({field length: count} per column)."""
+    cols = len(data)
+    data = [sorted(d.items()) for d in data]
+    if columns is None:
+        columns = [1] * (cols - 1) + [0]
+    columns = list(columns)
+    total_width -= sum(columns) + (cols - 1) + len(indent)
+    if not columns[-1]:
+        total_width += 1
+    while total_width > 0:
+        helps, val = 0, 0
+        for d in range(cols):
+            thelps = tpot_dnf_spaces_help(columns[d], data[d], total_width)
+            if not thelps:
+                continue
+            if helps and d == cols - 1 and (thelps / 2) < helps:
+                continue
+            if thelps < helps:
+                continue
+            helps, val = thelps, d
+        if helps:
+            diff = data[val].pop(0)[0] - columns[val]
+            if not columns[val] and val == cols - 1:
+                total_width -= 1
+            columns[val] += diff
+            total_width -= diff
+            continue
+        overflowed = sum(1 for d in range(cols) if data[d])
+        if overflowed:
+            norm = total_width // overflowed
+            for d in range(cols):
+                if data[d]:
+                    columns[d] += norm
+                    total_width -= norm
+        cols -= 1
+        norm = total_width // cols
+        for d in range(cols):
+            columns[d] += norm
+        columns[remainder_column] += total_width - cols * norm
+        total_width = 0
+    return columns
+
+
+def tpot_dnf_fmt(columns, msg: str = "", end: str = "") -> str:
+    """fmtColumns of dnf: (value, width) with negative widths left aligned; a value too wide for its
+    column goes on, the next column starts on a new line."""
+    columns = list(columns)
+    total_width = len(msg)
+    parts = [msg]
+    for val, width in columns[:-1]:
+        left, width = width < 0, abs(width)
+        if len(val) <= width:
+            pad = " " * (width - len(val))
+            parts.append((val + pad if left else pad + val) + " ")
+        else:
+            parts.append(val + "\n" + " " * (total_width + width + 1))
+        total_width += width + 1
+    val, width = columns[-1]
+    left, width = width < 0, abs(width)
+    pad = " " * max(0, width - len(val))
+    parts.append((val + pad if left else pad + val) + end)
+    return "".join(parts)
+
+
+def tpot_dnf_lengths(values) -> dict:
+    found: dict[int, int] = {}
+    for value in values:
+        found[len(value)] = found.get(len(value), 0) + 1
+    return found
+
+
+def tpot_dnf_short_long(width: int, short: str, long: str) -> str:
+    return long if len(long) <= width else short
+
+
+def tpot_dnf_pto(action: str, names: list) -> list:
+    """_pto_callback of dnf: the packages after the transaction in as many columns as fit."""
+    def fits(msgs, num):
+        if len(msgs) < num:
+            return []
+        left = TPOT_DNF_WIDTH - ((num - 1) + 2)
+        if left <= 0:
+            return []
+        col_lens = [0] * num
+        col = 0
+        for msg in msgs:
+            if len(msg) > col_lens[col]:
+                diff = len(msg) - col_lens[col]
+                if left <= diff:
+                    return []
+                left -= diff
+                col_lens[col] = len(msg)
+            col = (col + 1) % num
+        return [-(length + left // num) for length in col_lens]
+
+    out = [f"{action}:"]
+    cols: list = []
+    for num in (8, 7, 6, 5, 4, 3, 2):
+        cols = fits(names, num)
+        if cols:
+            break
+    if not cols:
+        cols = [-(TPOT_DNF_WIDTH - 2)]
+    while names:
+        out.append("  " + tpot_dnf_fmt(zip(names[:len(cols)], cols)))
+        names = names[len(cols):]
+    return out
+
+
+def tpot_dnf_section(name: str) -> str:
+    """fmtSection of dnf: the name centred in a line of = ."""
+    cols = TPOT_DNF_WIDTH - 2
+    if len(name) >= cols - 4:
+        beg = end = "=="
+    else:
+        beg = "=" * ((cols - len(name)) // 2)
+        end = "=" * (cols - len(name) - len(beg))
+    return f"{beg} {name} {end}"
+
+
+def tpot_dnf_digest(name: str) -> bytes:
+    return hashlib.sha256(f"tpot-dnf {name}".encode()).digest()
+
+
+def tpot_dnf_speed(name: str, size: int) -> float:
+    """Bytes per second of a download: small packages are slower."""
+    d = tpot_dnf_digest(name)
+    top = 4_000_000 + int.from_bytes(d[:3], "big") % 20_000_000
+    return max(150_000.0, min(float(top), size * (2 + d[3] % 6)))
+
+
+def tpot_dnf_clock(seconds: float) -> str:
+    seconds = int(seconds)
+    return f"{seconds // 60:02d}:{seconds % 60:02d}"
+
+
+class Command_dnf(HoneyPotCommand):
+    """dnf 4 of the persona: install, reinstall, remove, upgrade, check-update, list, search,
+    repolist, makecache, clean, --version and the help; -y / --assumeno and the [y/N] question."""
+
+    tpot_prog = "dnf"
+    _log = Logger()
+
+    def sleep(self, time: float, time2: float | None = None) -> defer.Deferred:
+        d: defer.Deferred = defer.Deferred()
+        if time2:
+            time = random.randint(int(time * 100), int(time2 * 100)) / 100.0
+        reactor.callLater(time, d.callback, None)
+        return d
+
+    def tpot_out(self, text: str) -> None:
+        if not self.tpot_quiet:
+            self.write(text)
+
+    def tpot_parse(self) -> list:
+        words: list[str] = []
+        self.tpot_opts: set[str] = set()
+        items = list(self.args)
+        while items:
+            arg = items.pop(0)
+            if arg == "--":
+                words += items
+                break
+            if arg.startswith("--"):
+                name = arg.split("=", 1)[0]
+                if name in TPOT_DNF_VALUE_OPTIONS and "=" not in arg and items:
+                    items.pop(0)
+                self.tpot_opts.add(name)
+            elif arg.startswith("-") and len(arg) > 1:
+                for index, char in enumerate(arg[1:]):
+                    if "-" + char in TPOT_DNF_VALUE_OPTIONS:
+                        if index == len(arg) - 2 and items:
+                            items.pop(0)
+                        break
+                    self.tpot_opts.add("-" + char)
+            else:
+                words.append(arg)
+        return words
+
+    @inlineCallbacks
+    def start(self):
+        words = self.tpot_parse()
+        opts = self.tpot_opts
+        self.tpot_quiet = bool(opts & {"-q", "--quiet"})
+        self.tpot_yes = bool(opts & {"-y", "--assumeyes"})
+        self.tpot_no = "--assumeno" in opts
+        self.tpot_pending = None
+        if "--version" in opts:
+            self.tpot_version()
+            self.exit(0)
+            return
+        if opts & {"-h", "--help", "--help-cmd"} or words[:1] == ["help"]:
+            self.write(TPOT_DNF_HELP.format(prog=self.tpot_prog, upper=self.tpot_prog.upper()))
+            self.exit(0)
+            return
+        if not words:
+            self.write(TPOT_DNF_HELP.format(prog=self.tpot_prog, upper=self.tpot_prog.upper()))
+            self.exit(1)
+            return
+        command = TPOT_DNF_ALIASES.get(words[0], words[0])
+        names = words[1:]
+        if command not in TPOT_DNF_COMMANDS:
+            self.errorWrite(f"No such command: {words[0]}. Please use /usr/bin/{self.tpot_prog} --help\n"
+                            f"It could be a {self.tpot_prog.upper()} plugin command, try: "
+                            f"\"{self.tpot_prog} install 'dnf-command({words[0]})'\"\n")
+            self.exit(1)
+            return
+        required = {"install": "PACKAGE", "reinstall": "PACKAGE", "remove": "PACKAGE", "search": "KEYWORD",
+                    "clean": "type"}
+        if command in required and not names:
+            self.errorWrite(f"usage: {self.tpot_prog} {command} [-c [config file]] [-q] [-v] [--version] ... "
+                            f"{required[command]} [{required[command]} ...]\n"
+                            f"{self.tpot_prog} {command}: error: the following arguments are required: "
+                            f"{required[command]}\n")
+            self.exit(2)
+            return
+        root = tpot_dnf_privileged(self)
+        self.tpot_out("Updating Subscription Management repositories.\n" if root
+                      else "Not root, Subscription Management repositories not updated\n")
+        if command in TPOT_DNF_ROOT and not root:
+            self.errorWrite(TPOT_DNF_SUPERUSER)
+            self.exit(1)
+            return
+        yield self.sleep(0.4, 1.2)
+        if command == "install":
+            yield self.tpot_install(names)
+        elif command == "reinstall":
+            yield self.tpot_install(names, reinstall=True)
+        elif command == "remove":
+            yield self.tpot_remove(names)
+        elif command == "upgrade":
+            self.tpot_upgrade(names)
+        elif command == "list":
+            self.tpot_list(names)
+        elif command == "search":
+            self.tpot_search(names)
+        elif command == "repolist":
+            self.tpot_repolist(names)
+        elif command == "clean":
+            self.tpot_out(f"{21 if root else 0} files removed\n")
+            self.exit(0)
+        elif command == "makecache":
+            self.tpot_metadata()
+            self.tpot_out("Metadata cache created.\n")
+            self.exit(0)
+        elif command in TPOT_DNF_ROOT_ONLY:
+            self.tpot_metadata()
+            self.tpot_out("Dependencies resolved.\nNothing to do.\nComplete!\n")
+            self.exit(0)
+        else:
+            # check-update (the system is up to date) and the commands without emulation
+            self.tpot_metadata()
+            self.exit(0)
+
+    def tpot_version(self) -> None:
+        data = tpot_dnf_data()
+        self.write(f"{data.get('version', '4.14.0')}\n")
+        blocks = []
+        for name in ("dnf", "rpm"):
+            info = data.get(name)
+            if not isinstance(info, dict):
+                continue
+            package, _, version = info.get("nevra", "").partition("-")
+            blocks.append(f"  Installed: \x1b[1m{package}\x1b(B\x1b[m-{version} at "
+                          f"{tpot_dnf_time(info.get('installed', 0), 'GMT')}\n"
+                          f"  Built    : {data.get('packager', '')} at {tpot_dnf_time(info.get('built', 0), 'GMT')}\n")
+        self.write("\n".join(blocks))
+
+    def tpot_metadata(self) -> None:
+        """The last refresh of the metadata: dnf-makecache.timer 10 minutes after the boot, then when
+        it expired (a day)."""
+        boot, now = self.protocol.boot_time(), time.time()
+        first = boot + 600
+        last = first + int((now - first) // 86400) * 86400 if now > first else boot
+        self.tpot_out(f"Last metadata expiration check: {datetime.timedelta(seconds=int(now - last))} ago on "
+                      f"{tpot_dnf_time(last)}.\n")
+
+    def tpot_find(self, arg: str):
+        """(kind, name, entry) of a package argument: installed / available, None without a match."""
+        name = arg
+        for arch in (".x86_64", ".noarch"):
+            if name.endswith(arch):
+                name = name[: -len(arch)]
+        name = tpot_dnf_data()["provides"].get(name, name)
+        installed, available = tpot_dnf_installed(self.protocol), tpot_dnf_available(self.protocol)
+        if name in installed:
+            return "installed", name, installed[name]
+        if name in available:
+            return "available", name, available[name]
+        return None
+
+    @inlineCallbacks
+    def tpot_install(self, names: list, reinstall: bool = False):
+        self.tpot_metadata()
+        missing, wanted, again = [], {}, {}
+        for arg in names:
+            found = self.tpot_find(arg)
+            if found is None:
+                missing.append(arg)
+                self.tpot_out(f"No match for argument: {arg}\n")
+            elif found[0] == "installed" and not reinstall:
+                self.tpot_out(f"Package {tpot_dnf_nevra(found[1], found[2])} is already installed.\n")
+            elif found[0] == "installed":
+                again[found[1]] = dict(found[2], repo=tpot_dnf_repo(found[2]),
+                                       download=found[2].get("size", 0) // 3)
+            elif reinstall:
+                self.tpot_out(f"Package {arg} available, but not installed.\nNo match for argument: {arg}\n")
+                missing.append(arg)
+            else:
+                wanted[found[1]] = found[2]
+        if missing:
+            self.errorWrite("Error: No packages marked for reinstall.\n" if reinstall
+                            else f"Error: Unable to find a match: {' '.join(missing)}\n")
+            self.exit(1)
+            return
+        if not wanted and not again:
+            self.tpot_out("Dependencies resolved.\nNothing to do.\nComplete!\n")
+            self.exit(0)
+            return
+        available = tpot_dnf_available(self.protocol)
+        deps: dict = {}
+        todo = [dep for entry in wanted.values() for dep in entry.get("requires", [])]
+        while todo:
+            dep = todo.pop(0)
+            if dep in available and dep not in wanted and dep not in deps:
+                deps[dep] = available[dep]
+                todo += available[dep].get("requires", [])
+        sections = [("Reinstalling", sorted(again.items()))] if again else []
+        sections += [("Installing", sorted(wanted.items())), ("Installing dependencies", sorted(deps.items()))]
+        self.tpot_pending = ("install" if wanted else "reinstall", sections)
+        self.tpot_table(sections, "download")
+        counts = [("Install", len(wanted) + len(deps)), ("Reinstall", len(again))]
+        self.tpot_summary(counts)
+        packages = [entry for _, rows in sections for _, entry in rows]
+        self.tpot_out(f"Total download size: {tpot_dnf_number(sum(e.get('download', e.get('size', 0)) for e in packages))}\n")
+        if wanted or deps:
+            self.tpot_out(f"Installed size: {tpot_dnf_number(sum(e.get('size', 0) for _, e in list(wanted.items()) + list(deps.items())))}\n")
+        yield self.tpot_ask()
+
+    @inlineCallbacks
+    def tpot_remove(self, names: list):
+        installed = tpot_dnf_installed(self.protocol)
+        wanted = {}
+        for arg in names:
+            found = self.tpot_find(arg)
+            if found is None or found[0] != "installed":
+                self.tpot_out(f"No match for argument: {arg}\n")
+            else:
+                wanted[found[1]] = dict(installed[found[1]], repo=installed[found[1]].get("from", "@System"))
+        if not wanted:
+            self.errorWrite("No packages marked for removal.\n")
+            self.tpot_out("Dependencies resolved.\nNothing to do.\nComplete!\n")
+            self.exit(0)
+            return
+        # /etc/dnf/protected.d of RHEL 9
+        protected = sorted(name for name in wanted if name in ("dnf", "yum", "systemd", "sudo"))
+        if protected:
+            self.errorWrite("Error: \n Problem: The operation would result in removing the following protected "
+                            f"packages: {', '.join(protected)}\n")
+            self.exit(1)
+            return
+        sections = [("Removing", sorted(wanted.items()))]
+        self.tpot_pending = ("remove", sections)
+        self.tpot_table(sections, "size")
+        self.tpot_summary([("Remove", len(wanted))])
+        self.tpot_out(f"Freed space: {tpot_dnf_number(sum(e.get('size', 0) for e in wanted.values()))}\n")
+        yield self.tpot_ask()
+
+    def tpot_upgrade(self, names: list) -> None:
+        self.tpot_metadata()
+        missing = []
+        for arg in names:
+            found = self.tpot_find(arg)
+            if found is None or found[0] != "installed":
+                if found is not None:
+                    self.tpot_out(f"Package {found[1]} available, but not installed.\n")
+                self.tpot_out(f"No match for argument: {arg}\n")
+                missing.append(arg)
+        if missing:
+            self.errorWrite("Error: No packages marked for upgrade.\n")
+            self.exit(1)
+            return
+        self.tpot_out("Dependencies resolved.\nNothing to do.\nComplete!\n")
+        self.exit(0)
+
+    def tpot_table(self, sections: list, size_key: str) -> None:
+        rows = [(name, entry) for _, part in sections for name, entry in part]
+        a_wid = max(len(entry["arch"]) for _, entry in rows)
+        columns = tpot_dnf_columns([tpot_dnf_lengths(name for name, _ in rows), {},
+                                    tpot_dnf_lengths(entry["evr"] for _, entry in rows),
+                                    tpot_dnf_lengths(entry["repo"] for _, entry in rows), {}],
+                                   [1, a_wid, 1, 1, 5], remainder_column=2, indent="  ")
+        n_wid, a_wid, v_wid, r_wid, s_wid = columns
+        header = tpot_dnf_fmt(((tpot_dnf_short_long(n_wid, "Package", "Package"), -n_wid),
+                               (tpot_dnf_short_long(a_wid, "Arch", "Architecture"), -a_wid),
+                               (tpot_dnf_short_long(v_wid, "Version", "Version"), -v_wid),
+                               (tpot_dnf_short_long(r_wid, "Repo", "Repository"), -r_wid),
+                               (tpot_dnf_short_long(s_wid, "Size", "Size"), s_wid)), " ")
+        lines = ["Dependencies resolved.\n", "=" * TPOT_DNF_WIDTH + "\n", header + "\n", "=" * TPOT_DNF_WIDTH + "\n"]
+        for title, part in sections:
+            if not part:
+                continue
+            lines.append(f"{title}:\n")
+            for name, entry in part:
+                lines.append(tpot_dnf_fmt(((name, -n_wid), (entry["arch"], -a_wid), (entry["evr"], -v_wid),
+                                           (entry["repo"], -r_wid),
+                                           (tpot_dnf_number(entry.get(size_key, entry.get("size", 0))), s_wid)),
+                                          " ", "\n"))
+        self.tpot_out("".join(lines))
+
+    def tpot_summary(self, counts: list) -> None:
+        counts = [(action, count) for action, count in counts if count]
+        width = max(len(action) for action, _ in counts)
+        digits = max(len(str(count)) for _, count in counts)
+        self.tpot_out("\nTransaction Summary\n" + "=" * TPOT_DNF_WIDTH + "\n"
+                      + "".join(f"{action:<{width}}  {count:>{digits}} {'Package' if count == 1 else 'Packages'}\n"
+                                for action, count in counts) + "\n")
+
+    @inlineCallbacks
+    def tpot_ask(self):
+        if self.tpot_no:
+            self.errorWrite("Operation aborted.\n")
+            self.exit(1)
+            return
+        if self.tpot_yes:
+            yield self.tpot_run()
+            return
+        self.write("Is this ok [y/N]: ")
+        if self.input_data is not None:
+            data, self.input_data = self.input_data, None
+            lines = data.decode("utf-8", "replace").splitlines()
+            yield self.tpot_answer(lines[0] if lines else None)
+
+    @inlineCallbacks
+    def tpot_answer(self, line):
+        answer = None if line is None else line.strip().lower()
+        if answer in ("y", "yes"):
+            yield self.tpot_run()
+        elif answer is None or answer in ("", "n", "no"):
+            self.tpot_pending = None
+            self.errorWrite("Operation aborted.\n")
+            self.exit(1)
+        else:
+            self.write("Is this ok [y/N]: ")
+
+    def lineReceived(self, line: str) -> None:
+        self._log.info("INPUT (dnf): {line}", line=line)
+        if self.tpot_pending is None:
+            return
+        self.tpot_answer(line)
+
+    def eofReceived(self) -> None:
+        if self.tpot_pending is not None:
+            self.tpot_answer(None)
+
+    @inlineCallbacks
+    def tpot_run(self):
+        kind, sections = self.tpot_pending
+        self.tpot_pending = None
+        rows = [(title, name, entry) for title, part in sections for name, entry in part]
+        if kind != "remove":
+            self.tpot_out("Downloading Packages:\n")
+            total, seconds = 0, 0.0
+            for number, (_, name, entry) in enumerate(rows, 1):
+                size = entry.get("download", entry.get("size", 0))
+                speed = tpot_dnf_speed(name, size)
+                took = size / speed
+                yield self.sleep(min(2.0, max(0.2, took)))
+                text = f"{name}-{entry['evr'].split(':', 1)[-1]}.{entry['arch']}.rpm"
+                if len(rows) > 1:
+                    text = f"({number:>{len(str(len(rows)))}}/{len(rows)}): {text}"
+                self.tpot_out(f"{text[:48]:<48} {tpot_dnf_number(speed):>5}B/s | {tpot_dnf_number(size):>5}B "
+                              f"{tpot_dnf_clock(took):>9}    \n")
+                total += size
+                seconds += took
+            if len(rows) > 1:
+                self.tpot_out("-" * TPOT_DNF_WIDTH + "\n")
+                self.tpot_out(f"{'Total':<48} {tpot_dnf_number(total / max(seconds, 0.5)):>5}B/s | "
+                              f"{tpot_dnf_number(total):>5}B {tpot_dnf_clock(seconds + 1):>9}    \n")
+        self.tpot_out("Running transaction check\nTransaction check succeeded.\nRunning transaction test\n"
+                      "Transaction test succeeded.\nRunning transaction\n")
+        yield self.sleep(0.5, 1)
+        # the deps first, as rpm orders them
+        order = [row for row in rows if row[0] == "Installing dependencies"] + \
+                [row for row in rows if row[0] != "Installing dependencies"]
+        digits = len(str(len(order)))
+        done = f"{{:>{digits}}}/{len(order)}"
+        wid2 = 52 - 2 * (digits - 1)
+        action = {"install": "Installing", "reinstall": "Reinstalling", "remove": "Erasing"}
+        lines = [f"  {'Preparing':<17}: {'':<52}   1/1\n"]
+        for number, (title, name, entry) in enumerate(order, 1):
+            verb = "Reinstalling" if title == "Reinstalling" else action[kind]
+            lines.append(f"  {verb:<17}: {tpot_dnf_nevra(name, entry):<{wid2}}   {done.format(number)}\n")
+        last = order[-1]
+        lines.append(f"  {'Running scriptlet':<17}: {tpot_dnf_nevra(last[1], last[2]):<{wid2}}   "
+                     f"{done.format(len(order))}\n")
+        for number, (_, name, entry) in enumerate(order, 1):
+            lines.append(f"  {'Verifying':<17}: {tpot_dnf_nevra(name, entry):<{wid2}}   {done.format(number)}\n")
+        for line in lines:
+            self.tpot_out(line)
+            yield self.sleep(0.05, 0.25)
+        self.tpot_out("Installed products updated.\n\n")
+        session = tpot_dnf_session(self.protocol)
+        for title, name, entry in order:
+            if kind == "remove":
+                session["installed"].pop(name, None)
+                session["removed"].add(name)
+            elif title != "Reinstalling":
+                session["installed"][name] = {"evr": entry["evr"], "arch": entry["arch"],
+                                              "from": "@" + entry["repo"], "summary": entry.get("summary", ""),
+                                              "size": entry.get("size", 0), "programs": entry.get("programs", [])}
+                session["removed"].discard(name)
+                for program in entry.get("programs", []):
+                    try:
+                        self.fs.mkfile(program, 0, 0, random.randint(10000, 90000), 33261)
+                    except Exception:  # noqa: BLE001 - a file the session cannot create stays a name
+                        continue
+                    self.protocol.commands[program] = Command_faked_package_class_factory.getCommand(
+                        program.rsplit("/", 1)[-1])
+        names = sorted(tpot_dnf_nevra(name, entry) for _, name, entry in order)
+        title = {"install": "Installed", "reinstall": "Reinstalled", "remove": "Removed"}[kind]
+        self.tpot_out("\n".join(tpot_dnf_pto(title, names)) + "\n\nComplete!\n")
+        self.exit(0)
+
+    def tpot_list(self, names: list) -> None:
+        narrow = "all"
+        if names and names[0] in ("all", "installed", "available", "updates", "upgrades", "extras", "obsoletes",
+                                  "recent", "autoremove"):
+            narrow, names = names[0], names[1:]
+        for opt in ("installed", "available", "updates", "upgrades", "extras"):
+            if f"--{opt}" in self.tpot_opts:
+                narrow = opt
+        if narrow != "installed":
+            self.tpot_metadata()
+        installed, available = tpot_dnf_installed(self.protocol), tpot_dnf_available(self.protocol)
+
+        def match(name, entry):
+            if not names:
+                return True
+            full = f"{name}.{entry['arch']}"
+            return any(fnmatch.fnmatchcase(name, pattern) or fnmatch.fnmatchcase(full, pattern) for pattern in names)
+
+        parts = []
+        if narrow in ("all", "installed"):
+            parts.append(("Installed Packages", [(n, e, e.get("from", "@System")) for n, e in installed.items()
+                                                 if match(n, e)]))
+        if narrow in ("all", "available"):
+            parts.append(("Available Packages", [(n, e, e["repo"]) for n, e in available.items() if match(n, e)]))
+        parts = [(title, sorted(rows, key=lambda row: (row[0], row[1]["arch"]))) for title, rows in parts if rows]
+        if not parts:
+            self.errorWrite("Error: No matching Packages to list\n")
+            self.exit(1)
+            return
+        rows = [row for _, part in parts for row in part]
+        columns = tpot_dnf_columns([tpot_dnf_lengths(f"{n}.{e['arch']}" for n, e, _ in rows),
+                                    tpot_dnf_lengths(e["evr"] for _, e, _ in rows),
+                                    tpot_dnf_lengths(r for _, _, r in rows)], remainder_column=1)
+        out = []
+        for title, part in parts:
+            out.append(title + "\n")
+            for name, entry, repo in part:
+                out.append(tpot_dnf_fmt(((f"{name}.{entry['arch']}", -columns[0]), (entry["evr"], -columns[1]),
+                                         (repo, -columns[2]))) + "\n")
+        self.tpot_out("".join(out))
+        self.exit(0)
+
+    def tpot_search(self, terms: list) -> None:
+        if not terms:
+            self.errorWrite(f"usage: {self.tpot_prog} search [-c [config file]] [-q] [-v] [--version] ... "
+                            "[--all] KEYWORD [KEYWORD ...]\n"
+                            f"{self.tpot_prog} search: error: the following arguments are required: KEYWORD\n")
+            self.exit(2)
+            return
+        self.tpot_metadata()
+        packages = {**tpot_dnf_available(self.protocol), **tpot_dnf_installed(self.protocol)}
+        matches = []
+        for name, entry in packages.items():
+            keys, needles, haystacks, weight = [], set(), set(), 0
+            for key, value in (("name", name), ("summary", entry.get("summary", ""))):
+                hit = [term for term in terms if term.lower() in value.lower()]
+                if hit:
+                    keys.append(key)
+                    needles.update(hit)
+                    haystacks.add(value)
+                    weight += sum(14 if key == "name" and value == term else 7 if key == "name" else 4 for term in hit)
+            if keys:
+                matches.append((-weight, name, entry, tuple(keys), tuple(sorted(needles)), haystacks))
+        if not matches:
+            self.tpot_out("No matches found.\n")
+            self.exit(0)
+            return
+        out, last = [], None
+        for _, name, entry, keys, needles, haystacks in sorted(matches, key=lambda m: (m[0], m[1])):
+            exact = haystacks == set(needles)
+            header = (keys, needles, exact)
+            if header != last:
+                corpus = " & ".join(key.capitalize() for key in keys)
+                out.append(tpot_dnf_section(f"{corpus} {'Exactly ' if exact else ''}Matched: {', '.join(needles)}")
+                           + "\n")
+                last = header
+            key = f"{name}.{entry['arch']} : "
+            text = textwrap.fill(entry.get("summary", ""), width=TPOT_DNF_WIDTH, initial_indent=key,
+                                 subsequent_indent=" " * (len(key) - 2) + ": ")
+            text = re.sub("|".join(re.escape(term) for term in sorted(terms, key=len, reverse=True)),
+                          lambda hit: f"\x1b[1m{hit.group(0)}\x1b(B\x1b[m", text)
+            out.append(text + "\n")
+        self.tpot_out("".join(out))
+        self.exit(0)
+
+    def tpot_repolist(self, names: list) -> None:
+        which = names[0] if names and names[0] in ("all", "enabled", "disabled") else "enabled"
+        for opt in ("all", "enabled", "disabled"):
+            if f"--{opt}" in self.tpot_opts:
+                which = opt
+        repos = sorted((repo for repo in tpot_dnf_data()["repos"]
+                        if which == "all" or bool(repo.get("enabled")) == (which == "enabled")),
+                       key=lambda repo: repo["id"])
+        if not repos:
+            self.errorWrite("No repositories available\n")
+            self.exit(0)
+            return
+        status = which == "all"
+        id_len = max([len("repo id")] + [len(repo["id"]) for repo in repos])
+        nm_len = max(len(repo["name"]) for repo in repos)
+        st_len = len("disabled") if any(not repo.get("enabled") for repo in repos) else len("enabled")
+        left = TPOT_DNF_WIDTH - (id_len + max(len("status"), st_len) + 2) if status else TPOT_DNF_WIDTH - (id_len + 1)
+        if left < nm_len:
+            nm_len = left
+        else:
+            left -= nm_len
+            id_len += left // 2
+            nm_len += left - left // 2
+        out = []
+        if status:
+            out.append(f"{'repo id':<{id_len}} {'repo name':<{nm_len}} status\n")
+            for repo in repos:
+                out.append(f"{repo['id']:<{id_len}} {repo['name'][:nm_len]:<{nm_len}} "
+                           f"{'enabled' if repo.get('enabled') else 'disabled'}\n")
+        else:
+            out.append(f"{'repo id':<{id_len}} repo name\n")
+            for repo in repos:
+                out.append(f"{repo['id']:<{id_len}} {repo['name']}\n")
+        self.tpot_out("".join(out))
+        self.exit(0)
+
+
+class Command_dnf_yum(Command_dnf):
+    """yum of RHEL 9: dnf under its other name."""
+
+    tpot_prog = "yum"
+
+
+class Command_rpm(HoneyPotCommand):
+    """rpm of the persona: --version, -q / -qa / -qf (and query options as -q), -i / -U / -e."""
+
+    def call(self) -> None:
+        self.exit_code = self.tpot_rpm()
+
+    def tpot_rpm(self) -> int:
+        data = tpot_dnf_data()
+        installed = tpot_dnf_installed(self.protocol)
+        args = list(self.args)
+        flags = set()
+        words = []
+        for arg in args:
+            if arg in ("--version",):
+                self.write(f"RPM version {data.get('rpm_version', '4.16.1.3')}\n")
+                return 0
+            if arg in ("--query", "--all", "--file", "--erase", "--install", "--upgrade", "--freshen", "--import",
+                       "--checksig", "--verify", "--rebuilddb", "--initdb", "--nodeps", "--force", "--quiet"):
+                flags.add({"--query": "q", "--all": "a", "--file": "f", "--erase": "e", "--install": "i",
+                           "--upgrade": "U", "--freshen": "F", "--import": "I", "--checksig": "K", "--verify": "V",
+                           "--rebuilddb": "R", "--initdb": "R"}.get(arg, ""))
+            elif arg.startswith("--"):
+                continue
+            elif arg.startswith("-") and len(arg) > 1:
+                flags.update(arg[1:])
+            else:
+                words.append(arg)
+        flags.discard("")
+        if not flags & set("qeiUFIKVR"):
+            self.errorWrite("RPM version " + data.get("rpm_version", "4.16.1.3") + "\n"
+                            "Copyright (C) 1998-2002 - Red Hat, Inc.\n"
+                            "This program may be freely redistributed under the terms of the GNU GPL\n\n"
+                            "Usage: rpm [-afgpcdLAlsiv?] [-a|--all] [-f|--file] [-g|--group] [-p|--package] "
+                            "[--pkgid] [--hdrid] [--triggeredby] [--whatconflicts] [--whatrequires] "
+                            "[--whatobsoletes] [--whatprovides] [--whatrecommends] [--whatsuggests] "
+                            "[--whatsupplements] [--whatenhances] [--nomanifest] [-c|--configfiles] "
+                            "[-d|--docfiles] [-L|--licensefiles] [-A|--artifactfiles] [--dump] [-l|--list]\n")
+            return 1
+        if "q" in flags:
+            if "a" in flags:
+                rows = [tpot_rpm_nvra(name, entry) for name, entry in installed.items()
+                        if not words or any(fnmatch.fnmatchcase(name, w) or fnmatch.fnmatchcase(tpot_rpm_nvra(name, entry), w)
+                                            for w in words)]
+                for row in sorted(rows, key=lambda row: tpot_dnf_digest(row)):
+                    self.write(row + "\n")
+                return 0 if rows or not words else 1
+            if not words:
+                self.errorWrite("rpm: no arguments given for query\n")
+                return 1
+            failed = 0
+            for word in words:
+                if "f" in flags:
+                    path = self.fs.resolve_path(word, self.cwd)
+                    for top in ("/bin/", "/sbin/"):
+                        if path.startswith(top):
+                            path = "/usr" + path
+                    owners = dict(data["owners"])
+                    for name, entry in installed.items():
+                        for program in entry.get("programs", []):
+                            owners[program] = name
+                    if path in owners and owners[path] in installed:
+                        self.write(tpot_rpm_nvra(owners[path], installed[owners[path]]) + "\n")
+                    elif self.fs.exists(path):
+                        self.write(f"file {path} is not owned by any package\n")
+                        failed += 1
+                    else:
+                        self.errorWrite(f"error: file {path}: No such file or directory\n")
+                        failed += 1
+                elif word in installed:
+                    self.write(tpot_rpm_nvra(word, installed[word]) + "\n")
+                else:
+                    self.write(f"package {word} is not installed\n")
+                    failed += 1
+            return min(failed, 255)
+        if "V" in flags:
+            failed = [word for word in words if word not in installed]
+            for word in failed:
+                self.write(f"package {word} is not installed\n")
+            return min(len(failed), 255)
+        if not tpot_dnf_privileged(self):
+            self.errorWrite("error: can't create transaction lock on /var/lib/rpm/.rpm.lock (Permission denied)\n")
+            return 1
+        if "e" in flags:
+            failed = 0
+            for word in words:
+                if word in installed:
+                    session = tpot_dnf_session(self.protocol)
+                    session["installed"].pop(word, None)
+                    session["removed"].add(word)
+                else:
+                    self.errorWrite(f"error: package {word} is not installed\n")
+                    failed += 1
+            return min(failed, 255)
+        if flags & set("iUF"):
+            if not words:
+                self.errorWrite("rpm: no packages given for install\n")
+                return 1
+            for word in words:
+                if "://" in word:
+                    self.write(f"Retrieving {word}\n")
+                    self.errorWrite(f"error: skipping {word} - transfer failed\n")
+                elif self.fs.exists(self.fs.resolve_path(word, self.cwd)):
+                    self.errorWrite(f"error: {word}: not an rpm package (or package manifest)\n")
+                else:
+                    self.errorWrite(f"error: open of {word} failed: No such file or directory\n")
+            return 1
+        return 0
+
+
+if CowrieConfig.get("shell", "dnf_packages", fallback=""):
+    commands["/usr/bin/yum"] = Command_dnf_yum
+    commands["yum"] = Command_dnf_yum
+commands["/usr/bin/dnf"] = Command_dnf
+commands["dnf"] = Command_dnf
+commands["/usr/bin/dnf-3"] = Command_dnf
+commands["dnf-3"] = Command_dnf
+commands["/usr/bin/rpm"] = Command_rpm
+commands["rpm"] = Command_rpm
+'''
+
+
+def patch_dnf(cowrie_root):
+    """dnf 4 and rpm of RHEL 9 (DNF_COMMAND, in the module of yum): yum of a persona with [shell]
+    dnf_packages is dnf; dnf and rpm answer only where the persona does not skip them. Runs after
+    patch_yum."""
+    path = cowrie_root / "src" / "cowrie" / "commands" / "yum.py"
+    replace_once(path, "import hashlib\nimport random\nimport re\n",
+                 "import datetime\nimport fnmatch\nimport functools\nimport hashlib\nimport json\nimport random\n"
+                 "import re\nimport textwrap\nimport time\nfrom pathlib import Path\n")
+    replace_once(path, 'commands["/usr/bin/yum"] = Command_yum\ncommands["yum"] = Command_yum\n',
+                 'commands["/usr/bin/yum"] = Command_yum\ncommands["yum"] = Command_yum\n' + DNF_COMMAND)
+
+
 def patch_free(cowrie_root):
     """free reads the emulated /proc/meminfo of the persona (honeyfs / fs.pickle),
     not the container's real one."""
@@ -2570,6 +3577,7 @@ def main():
     patch_sudo(cowrie_root)
     patch_apt(cowrie_root)
     patch_yum(cowrie_root)
+    patch_dnf(cowrie_root)
     patch_which(cowrie_root)
     patch_ssh(cowrie_root)
     patch_netstat(cowrie_root)

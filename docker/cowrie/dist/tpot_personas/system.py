@@ -328,6 +328,179 @@ PACKAGE_PROGRAMS = {"bash": "bash", "curl": "curl", "git": "git", "gzip": "gzip"
                     "openssh-server": "sshd", "sudo": "sudo", "vim": "vim", "nmap": "nmap", "masscan": "masscan",
                     "socat": "socat", "gcc": "gcc", "make": "make", "tor": "tor", "hydra": "hydra", "tmux": "tmux",
                     "screen": "screen", "zip": "zip"}
+
+# what dnf and rpm know on RHEL 9 (unverified: versions as remembered of the minor releases and their
+#   rebuilds, not read from the repositories; summaries those of the spec files, sizes typical):
+#   installed - the packages of the cloud image besides the persona's (catalog, kernel, interpreters)
+#   available - the packages bots install most that BaseOS / AppStream have (masscan, hydra, tor, screen and
+#               busybox are not in RHEL 9: dnf finds no match for them)
+# name: (arch, repository, summary, epoch:version-release for every minor or {minor: evr})
+RHEL_MINORS = ("9.4", "9.5", "9.6")
+RPM_INSTALLED = {
+    "NetworkManager": ("x86_64", "baseos", "Network connection manager and user applications",
+                       {"9.4": "1:1.46.0-26.el9_4", "9.5": "1:1.48.10-5.el9_5", "9.6": "1:1.52.0-3.el9_6"}),
+    "acl": ("x86_64", "baseos", "Access control list utilities", "2.3.1-4.el9"),
+    "alternatives": ("x86_64", "baseos", "A tool to maintain symbolic links determining default commands",
+                     {"9.4": "1.24-1.el9", "9.5": "1.24-1.el9_5.1", "9.6": "1.24-2.el9"}),
+    "audit": ("x86_64", "baseos", "User space tools for kernel auditing",
+              {"9.4": "3.1.2-2.el9", "9.5": "3.1.5-1.el9", "9.6": "3.1.5-4.el9"}),
+    "authselect": ("x86_64", "baseos", "Configures authentication and identity sources from supported profiles",
+                   {"9.4": "1.2.6-2.el9", "9.5": "1.2.6-2.el9", "9.6": "1.2.6-3.el9"}),
+    "basesystem": ("noarch", "baseos", "The skeleton package which defines a simple Red Hat Enterprise Linux "
+                   "system", "11-13.el9"),
+    "bash": ("x86_64", "baseos", "The GNU Bourne Again shell", "5.1.8-9.el9"),
+    "chrony": ("x86_64", "baseos", "An NTP client/server",
+               {"9.4": "4.5-1.el9", "9.5": "4.5-3.el9", "9.6": "4.6.1-1.el9"}),
+    "coreutils": ("x86_64", "baseos", "A set of basic GNU tools commonly used in shell scripts",
+                  {"9.4": "8.32-35.el9", "9.5": "8.32-36.el9", "9.6": "8.32-39.el9"}),
+    "cronie": ("x86_64", "baseos", "Cron daemon for executing programs at set times",
+               {"9.4": "1.5.7-11.el9", "9.5": "1.5.7-12.el9", "9.6": "1.5.7-13.el9"}),
+    "dbus-broker": ("x86_64", "baseos", "Linux D-Bus Message Broker", "28-7.el9"),
+    "dnf-plugins-core": ("noarch", "baseos", "Core Plugins for DNF",
+                         {"9.4": "4.3.0-13.el9", "9.5": "4.3.0-16.el9", "9.6": "4.3.0-20.el9"}),
+    "ethtool": ("x86_64", "baseos", "Settings tool for Ethernet NICs",
+                {"9.4": "2:6.2-1.el9", "9.5": "2:6.2-1.el9", "9.6": "2:6.11-1.el9"}),
+    "glibc": ("x86_64", "baseos", "The GNU libc libraries",
+              {"9.4": "2.34-100.el9_4.4", "9.5": "2.34-125.el9_5.3", "9.6": "2.34-168.el9_6.14"}),
+    "gzip": ("x86_64", "baseos", "The GNU data compression program", "1.12-1.el9"),
+    "iputils": ("x86_64", "baseos", "Network monitoring tools including ping",
+                {"9.4": "20210202-9.el9", "9.5": "20210202-10.el9_5", "9.6": "20210202-11.el9_6"}),
+    "kexec-tools": ("x86_64", "baseos", "The kexec/kdump userspace component",
+                    {"9.4": "2.0.27-8.el9_4", "9.5": "2.0.28-1.el9", "9.6": "2.0.29-5.el9"}),
+    "man-db": ("x86_64", "baseos", "Tools for searching and reading man pages", "2.9.3-7.el9"),
+    "rsyslog": ("x86_64", "appstream", "Enhanced system logging and kernel message trapping daemon",
+                {"9.4": "8.2310.0-4.el9", "9.5": "8.2310.0-4.el9", "9.6": "8.2412.0-1.el9"}),
+    "subscription-manager": ("x86_64", "baseos", "Tools and libraries for subscription and repository management",
+                             {"9.4": "1.29.40-1.el9", "9.5": "1.29.42-1.el9", "9.6": "1.29.45-1.el9_6"}),
+    "tar": ("x86_64", "baseos", "GNU file archiving program",
+            {"9.4": "2:1.34-6.el9_4.1", "9.5": "2:1.34-7.el9", "9.6": "2:1.34-7.el9"}),
+    "wget": ("x86_64", "appstream", "A utility for retrieving files using the HTTP or FTP protocols",
+             "1.21.1-8.el9_4"),
+}
+# the packages of the persona's own versions: catalog, kernel, interpreters, sudo, OpenSSL, dnf and rpm
+RPM_PERSONA = {
+    "cloud-init": ("noarch", "appstream", "Cloud instance init scripts"),
+    "curl": ("x86_64", "baseos", "A utility for getting files from remote servers (FTP, HTTP, and others)"),
+    "dnf": ("noarch", "baseos", "Package manager"),
+    "kernel": ("x86_64", "baseos", "The Linux kernel, based on version 5.14.0, heavily modified with backports"),
+    "kernel-core": ("x86_64", "baseos", "The Linux kernel"),
+    "openssh": ("x86_64", "baseos", "An open source implementation of SSH protocol version 2"),
+    "openssh-clients": ("x86_64", "baseos", "An open source SSH client applications"),
+    "openssh-server": ("x86_64", "baseos", "An open source SSH server daemon"),
+    "openssl": ("x86_64", "baseos", "Utilities from the general purpose cryptography library with TLS "
+                "implementation"),
+    "perl-interpreter": ("x86_64", "appstream", "Standalone executable Perl interpreter"),
+    "python3": ("x86_64", "baseos", "Python 3.9 interpreter"),
+    "rpm": ("x86_64", "baseos", "The RPM package management system"),
+    "sudo": ("x86_64", "baseos", "Allows restricted root access for specified users"),
+    "systemd": ("x86_64", "baseos", "System and Service Manager"),
+    "tmux": ("x86_64", "baseos", "A terminal multiplexer"),
+    "vim-enhanced": ("x86_64", "appstream", "A version of the VIM editor which includes recent enhancements"),
+    "yum": ("noarch", "baseos", "Package manager"),
+}
+RHEL_DNF = {"9.4": "4.14.0-9.el9", "9.5": "4.14.0-17.el9", "9.6": "4.14.0-25.el9"}
+RHEL_RPM = {"9.4": "4.16.1.3-29.el9", "9.5": "4.16.1.3-34.el9", "9.6": "4.16.1.3-37.el9"}
+RHEL_PYTHON_RPM = {"9.4": "3.9.18-3.el9_4.6", "9.5": "3.9.19-8.el9_5.1", "9.6": "3.9.21-2.el9"}
+RHEL_OPENSSL = {"9.4": "1:3.0.7-27.el9", "9.5": "1:3.2.2-6.el9_5", "9.6": "1:3.2.2-6.el9_5.1"}
+RHEL_PERL = "4:5.32.1-481.el9"
+RHEL_SUDO = "1.9.5p2-10.el9_3"
+# name: (arch, repository, summary, evr, (download kB, installed kB), dependencies); an evr "=glibc" is
+#   that of the installed package (glibc-devel goes with glibc, kernel-headers with the kernel)
+RPM_AVAILABLE = {
+    "bind-utils": ("x86_64", "appstream", "Utilities for querying DNS name servers",
+                   {"9.4": "32:9.16.23-18.el9_4.6", "9.5": "32:9.16.23-24.el9_5.3", "9.6": "32:9.16.23-31.el9_6"},
+                   (205, 668), ()),
+    "cpp": ("x86_64", "appstream", "The C Preprocessor",
+            {"9.4": "11.4.1-3.el9", "9.5": "11.5.0-2.el9", "9.6": "11.5.0-5.el9_5"}, (11_264, 30_720), ()),
+    "gcc": ("x86_64", "appstream", "Various compilers (C, C++, Objective-C, ...)",
+            {"9.4": "11.4.1-3.el9", "9.5": "11.5.0-2.el9", "9.6": "11.5.0-5.el9_5"}, (32_768, 90_112),
+            ("cpp", "glibc-devel", "glibc-headers", "kernel-headers", "libmpc", "libxcrypt-devel")),
+    "git": ("x86_64", "appstream", "Fast Version Control System",
+            {"9.4": "2.43.5-1.el9_4", "9.5": "2.43.5-2.el9_5", "9.6": "2.47.1-2.el9_6"}, (51, 85),
+            ("git-core", "git-core-doc", "perl-Error", "perl-Git", "perl-TermReadKey", "perl-lib")),
+    "git-core": ("x86_64", "appstream", "Core package of git with minimal functionality",
+                 {"9.4": "2.43.5-1.el9_4", "9.5": "2.43.5-2.el9_5", "9.6": "2.47.1-2.el9_6"}, (4_506, 22_528), ()),
+    "git-core-doc": ("noarch", "appstream", "Documentation files for git-core",
+                     {"9.4": "2.43.5-1.el9_4", "9.5": "2.43.5-2.el9_5", "9.6": "2.47.1-2.el9_6"}, (2_867, 17_408),
+                     ()),
+    "glibc-devel": ("x86_64", "appstream", "Object files for development using standard C libraries.", "=glibc",
+                    (38, 30), ()),
+    "glibc-headers": ("x86_64", "appstream", "Header files for development using standard C libraries.", "=glibc",
+                      (450, 2_252), ()),
+    "iproute": ("x86_64", "baseos", "Advanced IP routing and network device configuration tools",
+                {"9.4": "6.2.0-6.el9_4", "9.5": "6.2.0-6.el9_4", "9.6": "6.11.0-1.el9"}, (818, 2_457), ()),
+    "iptables-nft": ("x86_64", "baseos", "nftables compatibility for iptables, arptables and ebtables",
+                     {"9.4": "1.8.10-2.el9", "9.5": "1.8.10-5.el9_5", "9.6": "1.8.10-11.el9"}, (207, 676), ()),
+    "kernel-headers": ("x86_64", "appstream", "Header files for the Linux kernel for use by glibc", "=kernel",
+                       (2_560, 6_451), ()),
+    "libmpc": ("x86_64", "appstream", "C library for multiple precision complex arithmetic", "1.2.1-4.el9",
+               (66, 160), ()),
+    "libxcrypt-devel": ("x86_64", "appstream", "Development files for libxcrypt", "4.4.18-3.el9", (32, 27), ()),
+    "lsof": ("x86_64", "baseos", "A utility which lists open files on a Linux/UNIX system", "4.94.0-3.el9",
+             (245, 960), ()),
+    "make": ("x86_64", "baseos", "A GNU tool which simplifies the build process for users", "1:4.3-8.el9",
+             (541, 1_536), ()),
+    "net-tools": ("x86_64", "baseos", "Basic networking tools", "2.0-0.64.20160912git.el9", (314, 943), ()),
+    "nmap": ("x86_64", "appstream", "Network exploration tool and security scanner",
+             {"9.4": "3:7.92-1.el9", "9.5": "3:7.92-3.el9", "9.6": "3:7.92-3.el9"}, (5_735, 24_576), ()),
+    "nmap-ncat": ("x86_64", "appstream", "Nmap's Netcat replacement",
+                  {"9.4": "3:7.92-1.el9", "9.5": "3:7.92-3.el9", "9.6": "3:7.92-3.el9"}, (229, 485), ()),
+    "perl-Error": ("noarch", "appstream", "Error/exception handling in an OO-ish way", "1:0.17029-7.el9", (46, 77),
+                   ()),
+    "perl-Git": ("noarch", "appstream", "Perl interface to Git",
+                 {"9.4": "2.43.5-1.el9_4", "9.5": "2.43.5-2.el9_5", "9.6": "2.47.1-2.el9_6"}, (38, 64), ()),
+    "perl-TermReadKey": ("x86_64", "appstream", "A perl module for simple terminal control", "2.38-11.el9",
+                         (40, 64), ()),
+    "perl-lib": ("x86_64", "appstream", "Manipulate @INC at compile time", "0.65-481.el9", (15, 8), ()),
+    "php-cli": ("x86_64", "appstream", "Command-line interface for PHP", "8.0.30-1.el9_2", (3_174, 12_288),
+                ("php-common",)),
+    "php-common": ("x86_64", "appstream", "Common files for PHP", "8.0.30-1.el9_2", (667, 5_324), ()),
+    "python3-pip": ("noarch", "appstream", "A tool for installing and managing Python3 packages", "21.3.1-1.el9",
+                    (2_048, 8_806), ()),
+    "socat": ("x86_64", "appstream", "Bidirectional data relay between two data channels ('netcat++')",
+              {"9.4": "1.7.4.1-5.el9_4.2", "9.5": "1.7.4.1-6.el9", "9.6": "1.7.4.1-6.el9"}, (304, 1_126), ()),
+    "tcpdump": ("x86_64", "appstream", "A network traffic monitoring tool", "14:4.99.0-9.el9", (545, 1_331), ()),
+    "telnet": ("x86_64", "appstream", "The client program for the Telnet remote login protocol", "1:0.17-85.el9",
+               (64, 117), ()),
+    "tftp": ("x86_64", "appstream", "The client for the Trivial File Transfer Protocol (TFTP)", "5.2-38.el9",
+             (40, 51), ()),
+    "unzip": ("x86_64", "baseos", "A utility for unpacking zip files",
+              {"9.4": "6.0-56.el9", "9.5": "6.0-57.el9", "9.6": "6.0-58.el9_5"}, (186, 399), ()),
+    "zip": ("x86_64", "baseos", "A file compression and packaging utility compatible with PKZIP", "3.0-35.el9",
+            (270, 739), ()),
+}
+# the programs of the available packages (a package the session installs gets them as Cowrie's apt does)
+RPM_AVAILABLE_PROGRAMS = {
+    "bind-utils": ("usr/bin/dig", "usr/bin/host", "usr/bin/nslookup"), "cpp": ("usr/bin/cpp",),
+    "gcc": ("usr/bin/gcc", "usr/bin/cc"), "git-core": ("usr/bin/git",), "iproute": ("usr/sbin/ip", "usr/sbin/ss"),
+    "iptables-nft": ("usr/sbin/iptables",), "lsof": ("usr/bin/lsof",), "make": ("usr/bin/make",),
+    "net-tools": ("usr/bin/netstat", "usr/sbin/ifconfig", "usr/sbin/route"), "nmap": ("usr/bin/nmap",),
+    "nmap-ncat": ("usr/bin/ncat", "usr/bin/nc"), "php-cli": ("usr/bin/php",),
+    "python3-pip": ("usr/bin/pip3", "usr/bin/pip"), "socat": ("usr/bin/socat",), "tcpdump": ("usr/sbin/tcpdump",),
+    "telnet": ("usr/bin/telnet",), "tftp": ("usr/bin/tftp",), "unzip": ("usr/bin/unzip",), "zip": ("usr/bin/zip",),
+}
+# names dnf finds by what a package provides
+RPM_PROVIDES = {"nc": "nmap-ncat", "ncat": "nmap-ncat", "vim": "vim-enhanced"}
+# the packages of TOOL_PROGRAMS on Red Hat (no busybox)
+RPM_TOOLS = {"bind9-dnsutils": "bind-utils", "ethtool": "ethtool", "iproute2": "iproute", "iptables": "iptables-nft",
+             "iputils-ping": "iputils", "net-tools": "net-tools", "netcat-openbsd": "nmap-ncat", "php-cli": "php-cli",
+             "tftp-hpa": "tftp", "unzip": "unzip"}
+# the packages of the programs of PACKAGE_PROGRAMS on Red Hat (masscan, tor, hydra and screen are not in RHEL 9)
+RPM_PROGRAMS = {"bash": "bash", "curl": "curl", "git": "git", "gzip": "gzip", "perl": "perl-interpreter",
+                "python3": "python3", "tar": "tar", "wget": "wget", "ssh": "openssh-clients", "sshd": "openssh-server",
+                "sudo": "sudo", "vim": "vim-enhanced", "nmap": "nmap", "socat": "socat", "gcc": "gcc", "make": "make",
+                "tmux": "tmux", "zip": "zip"}
+# the repositories of a registered RHEL 9 (subscription-manager): (part of the id, of the name, enabled); EUS:
+#   a system that keeps its minor release after the next one came out (unverified: the days the minors came out)
+RHEL_NEXT_MINOR = {"9.4": "2024-11-12", "9.5": "2025-05-20", "9.6": "2025-11-11"}
+RHEL_REPOS = (("baseos", "BaseOS", "baseos/os", True), ("appstream", "AppStream", "appstream/os", True),
+              ("baseos-debug", "BaseOS (Debug RPMs)", "baseos/debug", False),
+              ("baseos-source", "BaseOS (Source RPMs)", "baseos/source/SRPMS", False),
+              ("appstream-debug", "AppStream (Debug RPMs)", "appstream/debug", False),
+              ("appstream-source", "AppStream (Source RPMs)", "appstream/source/SRPMS", False))
+DNF_PACKAGES = "dnf-packages.json"
+# the packager and build host of Red Hat's packages (dnf --version)
+RHEL_PACKAGER = "Red Hat, Inc. <http://bugzilla.redhat.com/bugzilla>"
 # service --status-all: the init scripts of the image (unverified: typical cloud and Pi images);
 #   RHEL 9 has none, CentOS 7 the network scripts, which print their own status
 _UBUNTU_INIT = ("+ apparmor", "+ apport", "+ cron", "+ dbus", "- hwclock.sh", "+ irqbalance", "- iscsid",
@@ -677,6 +850,9 @@ CENTOS_RC_LINKS = tuple((f"etc/rc.d/rc{level}.d/K50netconsole", "etc/rc.d/init.d
 SERVER_COMMANDS = ("sudo", "service", "systemctl")
 APT_COMMANDS = ("apt", "apt-get")
 YUM_COMMANDS = ("yum",)
+# RHEL 9: dnf 4 (its yum and dnf are links to dnf-3) and rpm
+DNF_COMMANDS = ("dnf", "dnf-3", "yum", "rpm")
+DNF_LINKS = (("usr/bin/dnf", "usr/bin/dnf-3"), ("usr/bin/yum", "usr/bin/dnf-3"))
 
 
 def has_dpkg(persona):
@@ -770,8 +946,8 @@ def python3_name(version):
 
 def python_answers(persona):
     """The commands of Cowrie's Python a server runs (not skipped) besides the interpreters:
-    sudo, service and its package manager (apt of Debian, yum 3 of CentOS 7; RHEL 9's yum
-    is dnf 4, which Cowrie does not emulate: a txtcmd)."""
+    sudo, service and its package manager (apt of Debian, yum 3 of CentOS 7, the patched dnf 4
+    and rpm of RHEL 9)."""
     if persona.kind != "server":
         return ()
     answers = SERVER_COMMANDS
@@ -779,6 +955,8 @@ def python_answers(persona):
         answers += APT_COMMANDS
     if persona.family == "centos":
         answers += YUM_COMMANDS
+    if persona.family == "rhel":
+        answers += DNF_COMMANDS
     return answers
 
 
@@ -797,7 +975,9 @@ def programs(persona, ident):
     if "python" in found:
         name = python3_name(found["python"])
         paths.append(f"usr/bin/{name}" if name else "usr/bin/python2.7")
-    paths += [command_path(command) for command in python_answers(persona)]
+    # dnf-3 is a Python script with its text (servers.build_rhel), dnf and yum are links to it
+    paths += [command_path(command) for command in python_answers(persona)
+              if persona.family != "rhel" or command not in ("dnf", "dnf-3", "yum")]
     if not has_dpkg(persona):
         paths.append("usr/bin/which")
         if persona.hardware_platform == "x86_64":
@@ -989,6 +1169,8 @@ def links(persona):
                   ("etc/systemd/system/multi-user.target.wants/sshd.service", "usr/lib/systemd/system/sshd.service"),
                   ("usr/sbin/adduser", "usr/sbin/useradd")]
         found += [(f"etc/rc{level}.d", f"etc/rc.d/rc{level}.d") for level in range(7)]
+    if persona.family == "rhel":
+        found += DNF_LINKS
     if persona.family == "centos":
         found.append((LOADER, CENTOS_LOADER))
         found += CENTOS_RC_LINKS
@@ -1198,6 +1380,67 @@ def apt_packages(persona, ident):
     return {"installed": installed, "available": available}
 
 
+def rpm_evr(value, minor):
+    """The epoch:version-release of a table entry for the minor release (9.6)."""
+    return value[minor] if isinstance(value, dict) else value
+
+
+def rhel_eus(ident):
+    """A RHEL that stayed on its minor release after the next one came out takes the EUS repositories."""
+    r = ident.release
+    return r.extra["updated"] >= RHEL_NEXT_MINOR[r.os_version_id]
+
+
+def rhel_repos(ident):
+    """The repositories of a registered RHEL 9: [{"id", "name", "url", "enabled"}], the enabled first."""
+    eus = rhel_eus(ident)
+    found = []
+    for part, title, path, enabled in RHEL_REPOS:
+        kind, _, variant = part.partition("-")
+        label, _, rpms = title.partition(" (")
+        found.append({
+            "id": f"rhel-9-for-x86_64-{kind}{'-eus' if eus else ''}{'-' + variant if variant else ''}-rpms",
+            "name": f"Red Hat Enterprise Linux 9 for x86_64 - {label}{' - Extended Update Support' if eus else ''}"
+                    f" ({rpms or 'RPMs)'}",
+            "url": f"https://cdn.redhat.com/content/{'eus' if eus else 'dist'}/rhel9/$releasever/x86_64/{path}",
+            "enabled": enabled})
+    return found
+
+
+_REDHAT_REPO_HEAD = """#
+# Certificate-Based Repositories
+# Managed by (rhsm) subscription-manager
+#
+# *** This file is auto-generated.  Changes made here will be over-written. ***
+# *** Use "subscription-manager repo-override --help" if you wish to make changes. ***
+#
+# If this file is empty and this system is subscribed consider
+# a "yum repolist" to refresh available repos
+#
+"""
+
+
+def redhat_repo(ident, serial):
+    """/etc/yum.repos.d/redhat.repo of subscription-manager (unverified: the keys of a 9.x system, shortened
+    to the repositories of rhel_repos; serial: the number of the entitlement certificate)."""
+    blocks = []
+    for repo in rhel_repos(ident):
+        blocks.append(f"[{repo['id']}]\n"
+                      f"name = {repo['name']}\n"
+                      f"baseurl = {repo['url']}\n"
+                      f"enabled = {int(repo['enabled'])}\n"
+                      "gpgcheck = 1\n"
+                      "gpgkey = file:///etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release\n"
+                      "sslverify = 1\n"
+                      "sslcacert = /etc/rhsm/ca/redhat-uep.pem\n"
+                      f"sslclientkey = /etc/pki/entitlement/{serial}-key.pem\n"
+                      f"sslclientcert = /etc/pki/entitlement/{serial}.pem\n"
+                      "sslverifystatus = 1\n"
+                      "metadata_expire = 86400\n"
+                      f"enabled_metadata = {int(repo['enabled'])}\n")
+    return _REDHAT_REPO_HEAD + "\n" + "\n".join(blocks)
+
+
 def python_links(persona, ident):
     """(link, target) of the unversioned Python names: python3 -> python3.12; on CentOS 7
     python -> python2 -> python2.7 (targets from the root, as Cowrie's pickle stores them)."""
@@ -1239,6 +1482,8 @@ def shell_keys(persona, ident, files, runtime_dir):
                      "apt_fallback": "ubuntu" if persona.os_id == "ubuntu" else "debian"})
     if persona.family == "centos":
         keys["yum_plugins"] = YUM_PLUGINS
+    if persona.family == "rhel":
+        keys["dnf_packages"] = f"{runtime_dir}/{DNF_PACKAGES}"
     return keys
 
 

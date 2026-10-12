@@ -22,7 +22,7 @@ from .ssh_profiles import COMPRESSIONS, HOST_KEYS, PROFILES, TWISTED_CIPHERS, TW
 # a rendered device tree is about 1 MB (a server's more); far below it the render broke
 MIN_PICKLE_SIZE = 800_000
 PATH_DIRS = ("usr/local/sbin", "usr/local/bin", "usr/sbin", "usr/bin", "sbin", "bin")
-PYTHON_PACKAGE_MANAGERS = ("apt", "apt-get", "yum")
+PYTHON_PACKAGE_MANAGERS = ("apt", "apt-get", "yum", "dnf", "rpm")
 FORBIDDEN_MARKERS = ("phil", "2.6.26-2-686", "2.6.26-19lenny", "com/ubuntu/upstart", "dannf@debian.org",
                      "svr04", "Wed Nov 4 20:45:37")
 UBUNTU_MARKERS = ("ubuntu 22.04", "ubuntu 24.04", "id=ubuntu", "jammy jellyfish", "noble numbat")
@@ -516,7 +516,8 @@ def _check_busybox(ident, cfg, out_dir, runtime_dir, fs, out):
 
 
 # the commands of Cowrie's Python whose program differs per system (which and the command agree)
-COMMANDS = ("perl", "git", "python", "python3", "sudo", "service", "systemctl", "apt", "apt-get", "yum")
+COMMANDS = ("perl", "git", "python", "python3", "sudo", "service", "systemctl", "apt", "apt-get", "yum",
+            "dnf", "rpm")
 
 
 def _matches(fs, rel):
@@ -616,6 +617,69 @@ def _check_init_links(persona, fs, out):
                    f"/etc/rc{level}.d has no {sign} link to it")
 
 
+_DNF_LOG_LINE = re.compile(r"SUBDEBUG (Installed|Upgrade): (\S+)$", re.M)
+
+
+def _upstream(evr):
+    return evr.split(":", 1)[-1].split("-", 1)[0]
+
+
+def _check_dnf(persona, ident, out_dir, fs, out):
+    """dnf / rpm of RHEL 9 (dnf-packages.json) and the system agree: a program on PATH is from an installed
+    package, a tool runs exactly where its package is installed, the packages of the persona have the
+    versions the system shows (uname, ssh -V, sudo -V, perl, python3, systemctl, cloud-init's sudoers rule),
+    dnf.log installed what is installed, redhat.repo has the repositories dnf lists."""
+    try:
+        data = json.loads(_text(out_dir / system.DNF_PACKAGES))
+        installed, available = data["installed"], data["available"]
+    except (ValueError, KeyError, TypeError):
+        out.append(f"dnf: {system.DNF_PACKAGES} is no package list")
+        return
+    for program, package in sorted(system.RPM_PROGRAMS.items()):
+        if _on_path(fs, program) and package not in installed:
+            out.append(f"dnf: {program} is on PATH, rpm does not have {package} installed")
+    tools = system.installed_tools(persona, ident)
+    for tool, package in sorted(system.RPM_TOOLS.items()):
+        if (tool in tools) != (package in installed):
+            out.append(f"dnf: {tool} is {'' if tool in tools else 'not '}installed, rpm has "
+                       f"{'' if package in installed else 'no '}{package}")
+    for name, entry in sorted(available.items()):
+        for path in entry.get("programs", []):
+            if tree.find_node(fs, path.lstrip("/")) is not None:
+                out.append(f"dnf: {path} is in fs.pickle, rpm does not have {name} installed")
+    for name in sorted(set(installed) & set(available)):
+        out.append(f"dnf: {name} is installed and available")
+    for name, entry in sorted(available.items()):
+        for dep in entry.get("requires", []):
+            if dep not in available and dep not in installed:
+                out.append(f"dnf: {name} requires {dep}, which dnf does not know")
+    r = ident.release
+    found = system.tools(persona, ident)
+    expected = {"kernel": r.kernel_version.rsplit(".", 1)[0], "openssh-server": r.packages["openssh-server"],
+                "sudo": system.sudo_version(persona, ident), "python3": found["python"],
+                "perl-interpreter": found["perl"][0], "dnf": r.packages["dnf"], "rpm": r.packages["rpm"],
+                "systemd": str(servers.systemd_version(persona, ident)[0]),
+                "openssl": r.ssh_version.split("OpenSSL ", 1)[-1].split()[0],
+                "cloud-init": system.cloud_init_version(persona, ident)[0]}
+    for name, version in expected.items():
+        evr = installed.get(name, {}).get("evr", "")
+        shown = evr.split(":", 1)[-1] if name in ("kernel", "openssh-server", "cloud-init") else _upstream(evr)
+        if shown != version:
+            out.append(f"dnf: {name} is {evr or 'not installed'}, the system shows {version}")
+    if (data.get("version"), data.get("rpm_version")) != (r.packages["dnf"], r.packages["rpm"]):
+        out.append("dnf: the versions of dnf and rpm are not the persona's")
+    for kind, nevra in _DNF_LOG_LINE.findall(_text(out_dir / "honeyfs/var/log/dnf.log")):
+        if not any(nevra == f"{name}-{entry['evr']}.{entry['arch']}" for name, entry in installed.items()):
+            out.append(f"dnf: dnf.log names {kind} {nevra}, rpm does not have it installed")
+    text = _text(out_dir / "honeyfs/etc/yum.repos.d/redhat.repo")
+    enabled = re.findall(r"^\[([^\]]+)\]\n(?:[^\[]*?\n)?enabled = 1$", text, re.M)
+    if sorted(enabled) != sorted(repo["id"] for repo in data.get("repos", []) if repo.get("enabled")):
+        out.append(f"dnf: redhat.repo enables {sorted(enabled)}, dnf lists others")
+    for path, package in sorted(data.get("owners", {}).items()):
+        if package not in installed:
+            out.append(f"dnf: rpm names {package} the owner of {path}, rpm does not have it installed")
+
+
 def _check_system(persona, ident, cfg, out_dir, runtime_dir, fs, out):
     """Cowrie's Debian 12 x86_64 container tree is the persona's system (tpot_personas.system):
     no foreign paths, no x86_64 names on another architecture and no names of Debian's own
@@ -687,6 +751,8 @@ def _check_system(persona, ident, cfg, out_dir, runtime_dir, fs, out):
             for package, program in sorted(system.PACKAGE_PROGRAMS.items()):
                 if _on_path(fs, program) and package not in installed:
                     out.append(f"apt: {program} is on PATH, apt does not have it installed")
+        if persona.family == "rhel":
+            _check_dnf(persona, ident, out_dir, fs, out)
         tools = system.installed_tools(persona, ident)
         for tool, programs in sorted(system.TOOL_PROGRAMS.items()):
             for name in programs:

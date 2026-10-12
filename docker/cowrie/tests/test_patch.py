@@ -170,6 +170,9 @@ class TreeFs:
         node = self.getfile(path)
         return node is not None and node[tree.A_TYPE] == tree.T_FILE
 
+    def mkfile(self, path, uid, gid, size, mode):
+        self.made = getattr(self, "made", []) + [(path, uid, gid, mode)]
+
 
 class FsModule:
     A_NAME, A_TYPE, A_CONTENTS, A_TARGET = tree.A_NAME, tree.A_TYPE, tree.A_CONTENTS, tree.A_TARGET
@@ -1042,6 +1045,7 @@ class PatchTest(unittest.TestCase):
             def __init__(self):
                 self.cmdstack = [Shell()]
                 self.pp = Pipe(None, None, [], None, {})
+                self.commands = commands
 
             def boot_time(self):
                 return time.time() - 86400
@@ -1055,13 +1059,26 @@ class PatchTest(unittest.TestCase):
         Protocol.call_command = call_command
         protocol = Protocol()
 
-        def run(line):
+        def run(line, input_data=None):
             words = line.split()
-            pp = Pipe(None, None, words[1:], None, {})
+            pp = Pipe(None, None, words[1:], input_data, {})
             protocol.call_command(pp, commands[words[0]], *words[1:])
             child = protocol.pp
-            return bytes(child.out).decode(), bytes(child.err).decode(), protocol.cmdstack[-1].last_exit_code
+            return bytes(child.out).decode(), bytes(child.err).decode(), protocol.cmdstack[0].last_exit_code
 
+        def answer(line):
+            """A line typed while the command of the last run waits for it."""
+            child = protocol.pp
+            start = (len(child.out), len(child.err))
+            protocol.cmdstack[-1].lineReceived(line)
+            return (bytes(child.out[start[0]:]).decode(), bytes(child.err[start[1]:]).decode(),
+                    protocol.cmdstack[0].last_exit_code)
+
+        run.answer = answer
+        run.protocol = protocol
+        run.commands = commands
+        run.ident = ident
+        run.out = out
         return run
 
     def test_sudo_runs_its_command_as_root(self):
@@ -1079,6 +1096,182 @@ class PatchTest(unittest.TestCase):
         self.assertIn("Reading package lists... Done", out)
         self.assertEqual(err, "")
         self.assertIn("Could not open lock file", run("apt-get update")[1])
+
+    def dnf_data(self, run):
+        return json.loads((run.out / "dnf-packages.json").read_text())
+
+    def test_dnf_install_y_of_rhel(self):
+        run = self.upstream_session("rhel-9", uid=0)
+        data = self.dnf_data(run)
+        nmap = data["available"]["nmap"]
+        out, err, code = run("dnf install -y nmap")
+        self.assertEqual((err, code), ("", 0))
+        lines = out.splitlines()
+        self.assertEqual(lines[0], "Updating Subscription Management repositories.")
+        self.assertRegex(lines[1], r"^Last metadata expiration check: \d+:\d\d:\d\d ago on [A-Z][a-z]{2} \d\d "
+                                   r"[A-Z][a-z]{2} \d{4} \d\d:\d\d:\d\d [AP]M UTC\.$")
+        self.assertEqual(lines[2:4], ["Dependencies resolved.", "=" * 80])
+        self.assertRegex(lines[4], r"^ Package +Arch(itecture)? +Version +Repository +Size$")
+        self.assertEqual(lines[5:7], ["=" * 80, "Installing:"])
+        self.assertRegex(lines[7], rf"^ nmap +x86_64 +{re.escape(nmap['evr'])} +{nmap['repo']} +5\.6 M$")
+        for part in ("\nTransaction Summary\n" + "=" * 80 + "\nInstall  1 Package\n\nTotal download size: 5.6 M\n"
+                     "Installed size: 24 M\nDownloading Packages:\n",
+                     "Running transaction check\nTransaction check succeeded.\nRunning transaction test\n"
+                     "Transaction test succeeded.\nRunning transaction\n",
+                     f"  Installing       : nmap-{nmap['evr']}.x86_64",
+                     f"  Verifying        : nmap-{nmap['evr']}.x86_64",
+                     "Installed products updated.\n\nInstalled:\n  nmap-"):
+            self.assertIn(part, out)
+        self.assertTrue(out.endswith("\n\nComplete!\n"), out[-40:])
+        self.assertNotIn("Is this ok", out)
+        self.assertRegex(out, r"\nnmap-7\.92-[^ ]+\.x86_64\.rpm +[\d.]+ [kM]B/s \| 5\.6 MB +00:0\d    \n")
+        self.assertTrue(all(len(line) <= 80 for line in lines if "Version" in line or line.startswith("  ")), out)
+        # the session has it now: rpm and dnf know it, its program answers as those of apt do
+        self.assertEqual(run("rpm -q nmap")[0], f"nmap-{nmap['evr'].split(':')[1]}.x86_64\n")
+        self.assertIn(f"Package nmap-{nmap['evr']}.x86_64 is already installed.\n", run("dnf install -y nmap")[0])
+        self.assertIn("/usr/bin/nmap", run.protocol.commands)
+        self.assertIn(("/usr/bin/nmap", 0, 0, 0o100755), run.protocol.fs.made)
+
+    def test_yum_of_rhel_is_dnf_and_asks(self):
+        run = self.upstream_session("rhel-9", uid=0)
+        data = self.dnf_data(run)
+        wget = data["installed"]["wget"]
+        out, err, code = run("yum install wget")
+        self.assertTrue(out.endswith(f"Package wget-{wget['evr']}.x86_64 is already installed.\n"
+                                     "Dependencies resolved.\nNothing to do.\nComplete!\n"), out)
+        self.assertEqual(code, 0)
+        out, err, code = run("yum install socat")
+        self.assertTrue(out.endswith("Installed size: 1.1 M\nIs this ok [y/N]: "), out[-60:])
+        self.assertEqual(run.answer("maybe")[0], "Is this ok [y/N]: ")
+        out, err, code = run.answer("y")
+        self.assertTrue(out.startswith("Downloading Packages:\nsocat-"), out[:60])
+        self.assertTrue(out.endswith("Complete!\n"))
+        self.assertEqual(code, 0)
+        out, err, code = run("yum install gcc")
+        self.assertIn("Installing dependencies:\n cpp ", out)
+        self.assertIn("Install  7 Packages\n", out)
+        self.assertEqual(run.answer("N"), ("", "Operation aborted.\n", 1))
+        self.assertEqual(run("rpm -q gcc"), ("package gcc is not installed\n", "", 1))
+        out, err, code = run("dnf --assumeno install gcc")
+        self.assertEqual((err, code), ("Operation aborted.\n", 1))
+        self.assertNotIn("Is this ok", out)
+        out, err, code = run("dnf install telnet", input_data=b"y\n")
+        self.assertIn("Is this ok [y/N]: Downloading Packages:\n", out)
+        self.assertEqual(code, 0)
+
+    def test_dnf_without_a_match_and_without_root(self):
+        run = self.upstream_session("rhel-9", uid=0)
+        out, err, code = run("dnf install -y masscan nmap")
+        self.assertTrue(out.endswith("No match for argument: masscan\n"), out)
+        self.assertEqual((err, code), ("Error: Unable to find a match: masscan\n", 1))
+        self.assertIn("No such command: frob. Please use /usr/bin/dnf --help", run("dnf frob")[1])
+        self.assertEqual(run("dnf install")[2], 2)
+        out, err, code = run("dnf update nmap")
+        self.assertIn("Package nmap available, but not installed.\nNo match for argument: nmap\n", out)
+        self.assertEqual((err, code), ("Error: No packages marked for upgrade.\n", 1))
+        self.assertTrue(run("dnf upgrade -y")[0].endswith("Dependencies resolved.\nNothing to do.\nComplete!\n"))
+        self.assertIn("protected packages: sudo", run("dnf remove -y sudo")[1])
+        user = self.upstream_session("rhel-9", uid=1000)
+        out, err, code = user("dnf install -y nmap")
+        self.assertEqual(out, "Not root, Subscription Management repositories not updated\n")
+        self.assertEqual((err, code), ("Error: This command has to be run with superuser privileges (under the root "
+                                       "user on most systems).\n", 1))
+        out, err, code = user("sudo dnf install -y nmap")
+        self.assertTrue(out.startswith("Updating Subscription Management repositories.\n"), out[:60])
+        self.assertEqual(code, 0)
+        self.assertIn("Installed Packages\nnmap.x86_64 ", user("dnf list installed nmap")[0])
+
+    def test_dnf_remove(self):
+        run = self.upstream_session("rhel-9", uid=0)
+        out, err, code = run("dnf remove -y wget")
+        self.assertIn("Removing:\n wget ", out)
+        self.assertIn("Remove  1 Package\n\nFreed space: ", out)
+        self.assertIn("  Erasing          : wget-", out)
+        self.assertIn("Removed:\n  wget-", out)
+        self.assertNotIn("Downloading Packages", out)
+        self.assertEqual(run("rpm -q wget"), ("package wget is not installed\n", "", 1))
+        out, err, code = run("dnf remove -y nosuch")
+        self.assertIn("No match for argument: nosuch\n", out)
+        self.assertEqual(code, 0)
+
+    def test_dnf_version_list_search_repolist(self):
+        run = self.upstream_session("rhel-9", uid=0)
+        data = self.dnf_data(run)
+        out = run("dnf --version")[0]
+        self.assertTrue(out.startswith(f"{data['version']}\n  Installed: \x1b[1mdnf\x1b(B\x1b[m-0:"
+                                       f"{data['installed']['dnf']['evr']}.noarch at "), out)
+        self.assertIn("  Built    : Red Hat, Inc. <http://bugzilla.redhat.com/bugzilla> at ", out)
+        self.assertIn(f"\n\n  Installed: \x1b[1mrpm\x1b(B\x1b[m-0:{data['installed']['rpm']['evr']}.x86_64 at ", out)
+        out, err, code = run("dnf list installed")
+        lines = out.splitlines()
+        self.assertEqual(lines[:2], ["Updating Subscription Management repositories.", "Installed Packages"])
+        self.assertTrue(lines[2].startswith("NetworkManager.x86_64 "), lines[2])
+        names = [line.split(".")[0] for line in lines[2:] if not line.startswith(" ")]
+        self.assertEqual(names, sorted(names))
+        self.assertEqual(len(names), len(data["installed"]))
+        self.assertRegex(out, r"\nopenssh-server\.x86_64 +" + re.escape(data["installed"]["openssh-server"]["evr"]))
+        self.assertNotIn("Last metadata", out)
+        out = run("dnf list available nmap")[0]
+        self.assertIn("Last metadata expiration check", out)
+        self.assertRegex(out, r"Available Packages\nnmap\.x86_64 +3:7\.92-\S+ +rhel-9-for-x86_64-appstream")
+        self.assertEqual(run("dnf list installed nosuch")[1:], ("Error: No matching Packages to list\n", 1))
+        out = run("dnf search nmap")[0]
+        self.assertIn("\n" + "=" * 26 + " Name Exactly Matched: nmap " + "=" * 26 + "\n"
+                      "\x1b[1mnmap\x1b(B\x1b[m.x86_64 : Network exploration tool and security scanner\n", out)
+        self.assertIn(" Name & Summary Matched: nmap ", out)
+        self.assertIn("No matches found.\n", run("dnf search zzzzz")[0])
+        out = run("dnf repolist")[0].splitlines()
+        repos = sorted(repo["id"] for repo in data["repos"] if repo["enabled"])
+        self.assertEqual([line.split()[0] for line in out[2:]], repos)
+        self.assertTrue(out[1].startswith("repo id ") and out[1].endswith(" repo name"), out[1])
+        self.assertEqual(len(out[1]), len(max(repos, key=len)) + 1 + len("repo name"))
+        out = run("yum repolist all")[0]
+        self.assertIn(" status\n", out)
+        self.assertIn(" disabled\n", out)
+
+    def test_rpm_of_rhel(self):
+        run = self.upstream_session("rhel-9", uid=1000)
+        data = self.dnf_data(run)
+        ssh = data["installed"]["openssh-server"]
+        self.assertEqual(run("rpm --version")[0], f"RPM version {data['rpm_version']}\n")
+        self.assertEqual(run("rpm -q openssh-server nosuch"),
+                         (f"openssh-server-{ssh['evr']}.x86_64\npackage nosuch is not installed\n", "", 1))
+        rows = run("rpm -qa")[0].splitlines()
+        self.assertEqual(len(rows), len(data["installed"]))
+        self.assertIn(f"kernel-{run.ident.release.kernel_version}", rows)
+        self.assertEqual(run("rpm -qf /usr/bin/curl")[0], f"curl-{data['installed']['curl']['evr']}.x86_64\n")
+        self.assertEqual(run("rpm -qf /bin/bash")[0], f"bash-{data['installed']['bash']['evr']}.x86_64\n")
+        self.assertEqual(run("rpm -qf /nonexistent")[1:], ("error: file /nonexistent: No such file or directory\n", 1))
+        self.assertIn("can't create transaction lock", run("rpm -ivh x.rpm")[1])
+        root = self.upstream_session("rhel-9", uid=0)
+        self.assertEqual(root("rpm -ivh /tmp/x.rpm")[1:], ("error: open of /tmp/x.rpm failed: No such file or "
+                                                          "directory\n", 1))
+        self.assertEqual(root("rpm -e wget")[2], 0)
+        self.assertEqual(root("rpm -q wget")[2], 1)
+
+    def test_centos_yum_stays_yum_3(self):
+        run = self.upstream_session("centos-7", uid=0)
+        self.assertEqual(run.commands["yum"].__name__, "Command_yum")
+        self.assertEqual(run.commands["dnf"].__name__, "Command_dnf")   # skipped by the persona's config
+        out = run("yum install -y curl")[0]
+        self.assertTrue(out.startswith("Loaded plugins: fastestmirror\n"), out[:40])
+        rhel = self.upstream_session("rhel-9", uid=0)
+        self.assertEqual(rhel.commands["yum"].__name__, "Command_dnf_yum")
+
+    def test_dnf_columns_as_dnf_computes_them(self):
+        source = (self.patched() / "src/cowrie/commands/yum.py").read_text()
+        namespace = module_all(source, {"HoneyPotCommand": FakeCommand, "CowrieConfig": FakeConfig({}),
+                                        "inlineCallbacks": lambda f: f, "defer": None, "reactor": None,
+                                        "Logger": lambda: None})
+        columns, fmt, number = namespace["tpot_dnf_columns"], namespace["tpot_dnf_fmt"], namespace["tpot_dnf_number"]
+        # one package of a long repository: the spaces left go to every column, the rest to the version
+        self.assertEqual(columns([{4: 1}, {}, {12: 1}, {32: 1}, {}], [1, 6, 1, 1, 5], remainder_column=2,
+                                 indent="  "), [7, 9, 18, 35, 5])
+        self.assertEqual(sum(columns([{20: 3}, {12: 3}, {9: 3}], remainder_column=1)) + 2, 80)
+        self.assertEqual(fmt((("a", -3), ("bbbbb", -2), ("c", 2)), " ", "\n"), " a   bbbbb\n" + " " * 9 + "c\n")
+        self.assertEqual([number(n) for n in (500, 58_000, 5_872_025, 25_165_824, 1_536)],
+                         ["500  ", "57 k", "5.6 M", "24 M", "1.5 k"])
+        self.assertEqual(namespace["tpot_dnf_section"]("Name Matched: x"), "=" * 31 + " Name Matched: x " + "=" * 32)
 
     def test_systemctl_changes_only_as_root(self):
         _, err, code, _, _ = self.systemctl("ubuntu-noble", ["restart", "ssh"])
@@ -1805,6 +1998,10 @@ class PatchTest(unittest.TestCase):
                  ("src/cowrie/commands/sudo.py", "    def start(self) -> None:\n        start_value = None\n",
                   "    def start(self) -> None:\n        start_value: int | None = None\n"),
                  ("src/cowrie/commands/apt.py", "import random\n", "import random as rnd\n"),
+                 ("src/cowrie/commands/yum.py", "import hashlib\nimport random\nimport re\n",
+                  "import hashlib\nimport random\nimport re as regex\n"),
+                 ("src/cowrie/commands/yum.py", 'commands["/usr/bin/yum"] = Command_yum\n',
+                  'commands["/usr/bin/yum"] = Command_yum  # yum\n'),
                  ("src/cowrie/commands/apt.py", "from typing import TYPE_CHECKING, Any\n",
                   "from typing import Any, TYPE_CHECKING\n"),
                  ("src/cowrie/commands/apt.py", 'self.write("Processing triggers for man-db ...\\n")',

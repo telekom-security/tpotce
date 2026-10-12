@@ -317,7 +317,8 @@ class SystemTest(unittest.TestCase):
 
 
 class ServerCommandTest(unittest.TestCase):
-    """Servers run Cowrie's sudo, service, apt / apt-get (Debian) and yum (CentOS 7) (F7)."""
+    """Servers run Cowrie's sudo, service, apt / apt-get (Debian), yum (CentOS 7) and the
+    patched dnf / rpm (RHEL 9) (F7)."""
 
     def test_python_commands_and_txtcmds(self):
         for persona in catalog.PERSONAS:
@@ -326,8 +327,9 @@ class ServerCommandTest(unittest.TestCase):
             txtcmds = {str(p.relative_to(out / "txtcmds")) for p in (out / "txtcmds").rglob("*") if p.is_file()}
             server = persona.kind == "server"
             debian = server and "dpkg" in persona.package_managers
+            rhel = persona.family == "rhel"
             answered = {"sudo": server, "service": server, "apt": debian, "apt-get": debian,
-                        "yum": persona.family == "centos"}
+                        "yum": persona.family in ("centos", "rhel"), "dnf": rhel, "dnf-3": rhel, "rpm": rhel}
             for name, python in answered.items():
                 self.assertEqual(name not in skip, python, (persona.id, name))
                 path = "usr/sbin/service" if name == "service" else f"usr/bin/{name}"
@@ -336,11 +338,50 @@ class ServerCommandTest(unittest.TestCase):
                     self.assertIsNotNone(tree.find_node(fs, path), (persona.id, name))
             if debian:
                 self.assertIn("usr/bin/dpkg", txtcmds, persona.id)
-            if persona.family == "rhel":
-                self.assertEqual({"usr/bin/dnf", "usr/bin/yum", "usr/bin/rpm"} & txtcmds,
-                                 {"usr/bin/dnf", "usr/bin/yum", "usr/bin/rpm"})
+            if rhel:
+                # dnf 4: dnf and yum are links to the script dnf-3
+                for name in ("dnf", "yum"):
+                    node = tree.find_node(fs, f"usr/bin/{name}")
+                    self.assertEqual((tree.node_get(node, tree.A_TYPE), tree.node_get(node, tree.A_TARGET)),
+                                     (tree.T_LINK, "dnf-3"))
+                script = tree.find_node(fs, "usr/bin/dnf-3")
+                self.assertTrue(tree.node_get(script, tree.A_CONTENTS).startswith(b"#!/usr/bin/python3\n"))
+                self.assertEqual(tree.node_get(script, tree.A_MODE) & 0o777, 0o755)
+                self.assertEqual(cfg_of(out).get("shell", "dnf_packages"), f"{out}/dnf-packages.json")
+            else:
+                self.assertIsNone(cfg_of(out).get("shell", "dnf_packages", fallback=None), persona.id)
             if persona.family == "centos":
                 self.assertIn("usr/bin/rpm", txtcmds)
+
+    def test_dnf_packages_of_rhel(self):
+        persona = catalog.by_id("rhel-9")
+        seen = set()
+        for seed in range(12):
+            ident, out, _ = render_one(self, persona, seed)
+            r = ident.release
+            data = json.loads((out / "dnf-packages.json").read_text())
+            installed = data["installed"]
+            self.assertEqual(installed["openssh-server"]["evr"], r.packages["openssh-server"])
+            self.assertEqual(installed["kernel"]["evr"] + ".x86_64", r.kernel_version)
+            self.assertEqual(data["version"], r.packages["dnf"])
+            self.assertTrue(installed["dnf"]["evr"].startswith(r.packages["dnf"] + "-"))
+            self.assertFalse(set(installed) & set(data["available"]))
+            eus = r.extra["updated"] >= system.RHEL_NEXT_MINOR[r.os_version_id]
+            seen.add(eus)
+            enabled = sorted(repo["id"] for repo in data["repos"] if repo["enabled"])
+            self.assertEqual(enabled, [f"rhel-9-for-x86_64-appstream{'-eus' if eus else ''}-rpms",
+                                       f"rhel-9-for-x86_64-baseos{'-eus' if eus else ''}-rpms"])
+            repo = (out / "honeyfs/etc/yum.repos.d/redhat.repo").read_text()
+            self.assertIn("# Managed by (rhsm) subscription-manager\n", repo)
+            for repo_id in enabled:
+                self.assertIn(f"[{repo_id}]\n", repo)
+            for line in (out / "honeyfs/var/log/dnf.log").read_text().splitlines():
+                if "SUBDEBUG Installed: " in line:
+                    name = line.split("Installed: ")[1].rsplit("-", 2)[0]
+                    self.assertIn(installed[name]["from"], {f"@{repo_id}" for repo_id in enabled})
+            self.assertEqual(data["available"]["glibc-devel"]["evr"], installed["glibc"]["evr"])
+            self.assertEqual(data["available"]["kernel-headers"]["evr"], installed["kernel"]["evr"])
+        self.assertEqual(seen, {True, False})
 
     def test_versions_and_sources_of_the_persona(self):
         ident, out, _ = render_one(self, catalog.by_id("ubuntu-noble"), 1)

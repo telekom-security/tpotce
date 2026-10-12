@@ -91,18 +91,27 @@ DIR_MODES = {"proc": 0o555, "root": 0o700, "tmp": 0o1777}
 COMMON_SKIP_PYTHON_COMMANDS = (
     "/bin/apt",
     "/bin/apt-get",
+    "/bin/dnf",
+    "/bin/dnf-3",
+    "/bin/rpm",
     "/bin/yum",
     "/usr/bin/apt",
     "/usr/bin/apt-get",
+    "/usr/bin/dnf",
+    "/usr/bin/dnf-3",
     "/usr/bin/gcc",
     "/usr/bin/lspci",
+    "/usr/bin/rpm",
     "/usr/bin/sudo",
     "/usr/bin/yum",
     "/usr/sbin/service",
     "apt",
     "apt-get",
+    "dnf",
+    "dnf-3",
     "gcc",
     "lspci",
+    "rpm",
     "sudo",
     "yum",
     "service",
@@ -469,11 +478,13 @@ format = text
 
 def runtime_json(persona, ident, processes):
     """The JSON files of a server's runtime folder: the units of systemctl, the rules of sudo -l,
-    the packages of apt (Debian)."""
+    the packages of apt (Debian) and of dnf / rpm (RHEL 9)."""
     files = {system.SYSTEMD_UNITS: servers.systemd_units(persona, ident, processes),
              system.SUDO_LIST: system.sudo_list(persona)}
     if system.has_dpkg(persona):
         files[system.APT_PACKAGES] = system.apt_packages(persona, ident)
+    if persona.family == "rhel":
+        files[system.DNF_PACKAGES] = servers.dnf_packages(persona, ident)
     return files
 
 

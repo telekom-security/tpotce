@@ -592,6 +592,46 @@ class ValidateRpmTest(unittest.TestCase):
             path.write_text(path.read_text().replace("Jan 01 00:00:01", "Dec 31 23:59:59"))
         self.assertIn("date", " ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0)))
 
+    def rhel(self):
+        persona = catalog.by_id("rhel-9")
+        ident, out, keys = render_one(self, persona, 2)
+        return persona, ident, out, keys, lambda: " | ".join(validate.problems(persona, ident, out, out, keys,
+                                                                               min_pickle=0))
+
+    def edit_dnf(self, out, change):
+        path = out / "dnf-packages.json"
+        data = json.loads(path.read_text())
+        change(data)
+        path.write_text(json.dumps(data))
+
+    def test_dnf_kernel_is_not_unames(self):
+        persona, ident, out, keys, problems = self.rhel()
+        self.edit_dnf(out, lambda data: data["installed"]["kernel"].update(evr="5.14.0-1.el9"))
+        self.assertIn("dnf: kernel is 5.14.0-1.el9, the system shows", problems())
+
+    def test_dnf_program_without_its_package(self):
+        persona, ident, out, keys, problems = self.rhel()
+        self.edit_dnf(out, lambda data: data["installed"].pop("perl-interpreter"))
+        self.assertIn("dnf: perl is on PATH, rpm does not have perl-interpreter installed", problems())
+
+    def test_dnf_tool_without_its_package(self):
+        persona, ident, out, keys, problems = self.rhel()
+        self.edit_dnf(out, lambda data: data["installed"].pop("ethtool"))
+        self.assertIn("dnf: ethtool is installed, rpm has no ethtool", problems())
+
+    def test_redhat_repo_enables_other_repositories(self):
+        persona, ident, out, keys, problems = self.rhel()
+        path = out / "honeyfs/etc/yum.repos.d/redhat.repo"
+        path.write_text(path.read_text().replace("enabled = 1", "enabled = 0", 1))
+        self.assertIn("dnf: redhat.repo enables", problems())
+
+    def test_dnf_log_installs_what_rpm_does_not_have(self):
+        persona, ident, out, keys, problems = self.rhel()
+        path = out / "honeyfs/var/log/dnf.log"
+        path.write_text(path.read_text() + "2026-01-01T00:00:00+0000 SUBDEBUG Installed: nmap-7.92-3.el9.x86_64\n")
+        self.assertIn("dnf: dnf.log names Installed nmap-7.92-3.el9.x86_64, rpm does not have it installed",
+                      problems())
+
     def test_clean_renders_of_rpm_systems(self):
         for pid in ("rhel-9", "centos-7"):
             persona = catalog.by_id(pid)

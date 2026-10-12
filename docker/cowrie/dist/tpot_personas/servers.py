@@ -1,12 +1,13 @@
 """Server personas (bash, systemd): package managers, command inventory,
 processes, package logs and one builder per family."""
 import calendar
+import hashlib
 import time
 
 from .common import (assign_processes, base_files, base_txtcmds, deb_arch, el_group, el_home_files, el_hosts,
                      el_passwd, el_shadow, gm, lscpu, pi_partuuid, ps_entry, rng_for, root_uuid, server_df,
                      server_group, server_mount, server_passwd, server_shadow, server_top, shadow_ctime)
-from .identity import log_window
+from .identity import log_window, updated_at
 from . import system
 from .system import proc_modules
 from .model import Content
@@ -14,15 +15,54 @@ from .model import Content
 # Package names of the tools themselves: versions for --version output, not for the logs.
 TOOL_PACKAGES = frozenset({"apt", "dpkg", "dnf", "rpm", "yum"})
 
-_DNF_HELP = """dnf {version}
-usage: dnf [options] COMMAND
+# /usr/bin/dnf-3 of dnf 4 (unverified: the script of dnf 4.14, its licence header shortened)
+DNF_SCRIPT = """#!/usr/bin/python3
+# The dnf executable script.
+#
+# Copyright (C) 2012-2016 Red Hat, Inc.
+#
+# This copyrighted material is made available to anyone wishing to use,
+# modify, copy, or redistribute it subject to the terms and conditions of
+# the GNU General Public License v.2, or (at your option) any later version.
+#
 
-List of Main Commands:
-install                 install a package or packages on your system
-remove                  remove a package or packages from your system
-upgrade                 upgrade a package or packages on your system
-repolist                display the configured software repositories
-module                  interact with modular content
+import sys
+
+
+def suppress_keyboard_interrupt_message():
+    \"\"\"Prevent unsightly KeyboardInterrupt tracebacks.
+
+    Nothing will be printed to the terminal after an uncaught
+    :class:`exceptions.KeyboardInterrupt`.
+
+    \"\"\"
+    old_excepthook = sys.excepthook
+
+    def new_hook(type, value, traceback):
+        if type != KeyboardInterrupt:
+            old_excepthook(type, value, traceback)
+        else:
+            pass
+
+    sys.excepthook = new_hook
+
+
+# do this ASAP to prevent tracebacks after ^C during imports
+suppress_keyboard_interrupt_message()
+
+if __name__ != "__main__":
+    sys.stderr.write('The executable DNF module must not be imported.')
+    sys.exit(1)
+
+here = sys.path[0]
+if here != '/usr/bin':
+    # git checkout
+    import os
+    dnf_toplevel = os.path.dirname(here)
+    sys.path[0] = dnf_toplevel
+
+from dnf.cli import main
+main.user_main(sys.argv[1:], exit_code=True)
 """
 
 _LSPCI_KVM = ("00:00.0 Host bridge: Intel Corporation 440FX - 82441FX PMC [Natoma] (rev 02)\n"
@@ -74,17 +114,14 @@ GPU_BUSES = ("07", "0f", "47", "4e", "87", "90", "b7", "bd")
 
 
 def package_manager_txtcmds(persona, ident):
-    """The package managers Cowrie does not emulate: dpkg, rpm and RHEL 9's dnf (its yum is
-    dnf 4). apt / apt-get of Debian and yum 3 of CentOS 7 are Cowrie's (system.python_answers)."""
+    """The package managers Cowrie does not emulate: dpkg and the rpm of CentOS 7. apt / apt-get
+    of Debian, yum 3 of CentOS 7 and dnf 4 / rpm of RHEL 9 are Cowrie's (system.python_answers)."""
     p = ident.release.packages
     if persona.family in ("ubuntu", "debian", "raspios"):
         arch = deb_arch(persona)
         return {
             "usr/bin/dpkg": f"Debian 'dpkg' package management program version {p['dpkg']} ({arch}).\n",
         }
-    if persona.family == "rhel":
-        dnf = _DNF_HELP.format(version=p["dnf"])
-        return {"usr/bin/dnf": dnf, "usr/bin/yum": dnf, "usr/bin/rpm": f"RPM version {p['rpm']}\n"}
     if persona.family == "centos":
         return {"usr/bin/rpm": f"RPM version {p['rpm']}\n"}
     return {}
@@ -353,6 +390,72 @@ def dnf_log(persona, ident):
                 lines.append(f"{done} SUBDEBUG Upgraded: {n}-{upgrades[n]}.{arch}")
         lines.append(f"{done} INFO Complete!")
     return ("\n".join(lines) + "\n") if lines else "", _newest(ident, entries)
+
+
+def _rpm_size(name, kb):
+    """Bytes of a package of about kb kB (the same for a name on every render)."""
+    return kb * 1024 - int.from_bytes(hashlib.sha256(name.encode()).digest()[:2], "big") % 1024
+
+
+def dnf_packages(persona, ident):
+    """What dnf 4 and rpm know on RHEL 9 ([shell] dnf_packages): dnf and rpm (with their install and build
+    times for dnf --version), the installed packages (from: @System for those of the image, the repository
+    for those dnf.log installed or upgraded), the packages the repositories have besides and the
+    repositories (system.rhel_repos)."""
+    r = ident.release
+    minor = r.os_version_id
+    repos = system.rhel_repos(ident)
+    repo_id = {repo["id"].split("-")[4]: repo["id"] for repo in repos if repo["enabled"]}
+    kernel = r.kernel_version.rsplit(".", 1)[0]
+    openssh = r.packages["openssh-server"]
+    versions = {"cloud-init": system.cloud_init_version(persona, ident)[0], "dnf": system.RHEL_DNF[minor],
+                "kernel": kernel, "kernel-core": kernel, "openssh": openssh, "openssh-clients": openssh,
+                "openssl": system.RHEL_OPENSSL[minor], "perl-interpreter": system.RHEL_PERL,
+                "python3": system.RHEL_PYTHON_RPM[minor], "rpm": system.RHEL_RPM[minor], "sudo": system.RHEL_SUDO,
+                "systemd": systemd_version(persona, ident)[1], "yum": system.RHEL_DNF[minor],
+                **{name: version for name, version in r.packages.items() if name not in TOOL_PACKAGES}}
+    logged = {name for _, names, _, _ in _log_entries(ident, "dnf-log") for name in names}
+    installed = {}
+    for name, (arch, repo, summary, evr) in system.RPM_INSTALLED.items():
+        installed[name] = {"evr": system.rpm_evr(evr, minor), "arch": arch, "repo": repo, "summary": summary}
+    for name, evr in versions.items():
+        arch, repo, summary = system.RPM_PERSONA[name]
+        installed[name] = {"evr": evr, "arch": arch, "repo": repo, "summary": summary}
+    for name, entry in installed.items():
+        repo = entry.pop("repo")
+        entry["from"] = f"@{repo_id[repo]}" if name in logged else "@System"
+        entry["size"] = _rpm_size(name, 200 + int.from_bytes(hashlib.sha256(name.encode()).digest()[2:4], "big")
+                                  % 4000)
+    available = {}
+    for name, (arch, repo, summary, evr, (size, unpacked), requires) in system.RPM_AVAILABLE.items():
+        evr = system.rpm_evr(evr, minor)
+        if evr.startswith("="):
+            evr = installed[evr[1:]]["evr"]
+        available[name] = {"evr": evr, "arch": arch, "repo": repo_id[repo], "summary": summary,
+                           "download": _rpm_size(name, size), "size": _rpm_size(name + "/", unpacked),
+                           "requires": list(requires),
+                           "programs": ["/" + rel for rel in system.RPM_AVAILABLE_PROGRAMS.get(name, ())]}
+    owners = {}
+    for program, package in system.RPM_PROGRAMS.items():
+        # tmux of the catalog has no program in Cowrie's tree
+        if package in installed and program != "tmux":
+            owners[f"/usr/{'sbin' if program == 'sshd' else 'bin'}/{program}"] = package
+    for tool in system.installed_tools(persona, ident):
+        for rel in system.TOOL_PROGRAMS[tool].values():
+            owners["/" + rel] = system.RPM_TOOLS[tool]
+    owners.update({"/usr/bin/dnf": "dnf", "/usr/bin/dnf-3": "dnf", "/usr/bin/yum": "yum", "/usr/bin/rpm": "rpm"})
+    rng = rng_for(ident, "dnf-version")
+    built = updated_at(r) or ident.installed_at
+
+    def tool(name):
+        return {"nevra": f"{name}-0:{installed[name]['evr']}.{installed[name]['arch']}",
+                "installed": max(ident.installed_at, min(built + rng.randint(28_800, 72_000), ident.booted_at)),
+                "built": built - rng.randint(10, 40) * 86400 - rng.randint(0, 86399)}
+
+    return {"version": r.packages["dnf"], "rpm_version": r.packages["rpm"], "dnf": tool("dnf"), "rpm": tool("rpm"),
+            "packager": system.RHEL_PACKAGER, "repos": repos, "installed": dict(sorted(installed.items())),
+            "available": dict(sorted(available.items())), "provides": dict(system.RPM_PROVIDES),
+            "owners": dict(sorted(owners.items()))}
 
 
 def _yum_name(name, version, arch):
@@ -765,6 +868,9 @@ REDHAT_SUPPORT_PRODUCT_VERSION="{r.os_version_id}"
         "etc/issue.net": "\\S\nKernel \\r on an \\m\n",
         "etc/motd": "Activate the web console with: systemctl enable --now cockpit.socket\n\n",
         "var/log/dnf.log": dnf,
+        "usr/bin/dnf-3": DNF_SCRIPT,
+        "etc/yum.repos.d/redhat.repo": system.redhat_repo(ident, rng_for(ident, "entitlement").randrange(
+            10 ** 18, 10 ** 19)),
     }
     accounts = (el_passwd("rhel", persona.user, persona.uid, persona.gid),
                 el_group("rhel", persona.user, persona.gid),
