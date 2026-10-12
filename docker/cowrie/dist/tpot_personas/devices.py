@@ -7,8 +7,8 @@ of cpuinfo."""
 import re
 
 from .common import (ARM_CORES, MIPS_CORES, ULIMIT, X86_CPUS, _df_row, assign_processes, base_files, bogomips,
-                     device_top, embedded_group, embedded_passwd, embedded_shadow, kernel_line, kernel_series, lscpu,
-                     nproc, ps_entry, rng_for, server_top, shadow_ctime, shadow_days)
+                     embedded_group, embedded_passwd, embedded_shadow, kernel_line, kernel_series, lscpu,
+                     nproc, ps_entry, rng_for, shadow_ctime, shadow_days)
 from .model import Content
 from .system import proc_modules
 
@@ -151,7 +151,7 @@ NAS_LSPCI = {
 def device_content(persona, ident, files, entries, cmdline, boot, processes, accounts=None, coreutils=False,
                    txtcmds=None):
     """The Content of a device: accounts, kernel files, the file system table
-    (mount, /proc/mounts, df), dmesg, CPU commands, top (BusyBox, or procps when
+    (mount, /proc/mounts, df), dmesg, CPU commands, the style of top (BusyBox, or procps when
     coreutils) and the vendor's commands (txtcmds); with extra["busybox"] Cowrie's
     busybox runs the applets and prints the help of that BusyBox."""
     hw, r = ident.hardware, ident.release
@@ -164,7 +164,6 @@ def device_content(persona, ident, files, entries, cmdline, boot, processes, acc
     all_files["proc/mounts"] = proc_mounts
     all_files["proc/modules"] = proc_modules(persona, ident)
     all_files.update(files)
-    top = server_top(ident, processes, len(processes) + 60) if coreutils else device_top(ident, processes)
     commands = {
         "bin/df": df,
         "bin/dmesg": device_dmesg(persona, ident, cmdline, boot),
@@ -172,7 +171,6 @@ def device_content(persona, ident, files, entries, cmdline, boot, processes, acc
         "bin/ulimit": ULIMIT,
         "usr/bin/lscpu": lscpu(persona, hw, with_bogomips=persona.hardware_platform != "x86_64"),
         "usr/bin/nproc": nproc(hw),
-        "usr/bin/top": top,
     }
     if hw.cpu_model in NAS_LSPCI:
         commands["usr/bin/lspci"] = NAS_LSPCI[hw.cpu_model]
@@ -182,7 +180,9 @@ def device_content(persona, ident, files, entries, cmdline, boot, processes, acc
     return Content(files=all_files, txtcmds=commands, processes=processes,
                    ctimes={"etc/shadow": shadow_ctime(ident)},
                    programs=("bin/busybox",) if banner else (),
-                   busybox_help=busybox_help(banner) if banner else "")
+                   busybox_help=busybox_help(banner) if banner else "",
+                   # the kernel threads and helpers of a small system (top counts them, ps lists them not)
+                   tasks=len(processes) + (60 if coreutils else 40), top_style="procps" if coreutils else "busybox")
 
 
 # --- builders --------------------------------------------------------------------------

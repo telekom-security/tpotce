@@ -775,11 +775,31 @@ class RenderTest(unittest.TestCase):
         _, out, _ = render_one(self, persona, 1)
         self.assertNotIn(b"phil", (out / "fs.pickle").read_bytes().lower())
 
+    def test_top_is_live_with_the_style_of_each_system(self):
+        wanted = {"ubuntu-noble": ("procps", "4.0.4"), "ubuntu-jammy": ("procps", "3.3.17"),
+                  "debian-bookworm": ("procps", "4.0.2"), "rhel-9": ("procps", "3.3.17"),
+                  "centos-7": ("procps", "3.3.10"), "ubiquiti-edgerouter-x": ("procps", "3.3.12"),
+                  "openwrt": ("busybox", None), "tplink-wr841n": ("busybox", None)}
+        for pid, (style, version) in wanted.items():
+            with self.subTest(pid):
+                persona = catalog.by_id(pid)
+                ident, out, _ = render_one(self, persona, 2)
+                cfg = cfg_of(out)
+                self.assertFalse((out / "txtcmds/usr/bin/top").exists())
+                self.assertEqual(cfg.get("shell", "top_style"), style)
+                self.assertEqual(cfg.get("shell", "procps_version", fallback=None), version)
+                processes = json.loads((out / "cmdoutput.json").read_text())["command"]["ps"]
+                threads = cfg.getint("shell", "kernel_threads")
+                # the tasks of the old static top: the ps list, the session and the kernel threads
+                self.assertEqual(len(processes) + 2 + threads,
+                                 persona.builder(persona, ident).tasks)
+                self.assertTrue(0.0 <= cfg.getfloat("shell", "load_base") <= 0.12)
+
     def test_same_identity_same_output(self):
         persona = catalog.by_id("debian-bookworm")
         _, first, _ = render_one(self, persona, 9)
         _, second, _ = render_one(self, persona, 9)
-        for rel in ("cmdoutput.json", "honeyfs/etc/shadow", "honeyfs/proc/meminfo", "txtcmds/usr/bin/top"):
+        for rel in ("cmdoutput.json", "honeyfs/etc/shadow", "honeyfs/proc/meminfo", "txtcmds/bin/df"):
             self.assertEqual((first / rel).read_text(), (second / rel).read_text(), rel)
 
     def test_restricted_directories_keep_owner_and_mode(self):

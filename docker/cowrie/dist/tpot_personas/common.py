@@ -399,15 +399,6 @@ def dmesg(release, hardware_platform, cmdline="console=ttyS0 root=/dev/sda1 ro q
     )
 
 
-def uptime_text(seconds):
-    """The `up` part of procps top/uptime: "8 days,  4:22" or "1 day, 17 min"."""
-    days, rest = divmod(int(seconds), DAY)
-    hours, rest = divmod(rest, 3600)
-    minutes = rest // 60
-    text = f"{days} day{'s' if days != 1 else ''}, " if days else ""
-    return text + (f"{hours:2d}:{minutes:02d}" if hours else f"{minutes} min")
-
-
 # x86 model name -> family, model, stepping, cache size, MHz, address sizes as a guest sees them.
 # Models not listed keep the generic Haswell values of the generator before the persona library.
 X86_CPUS = {
@@ -734,58 +725,35 @@ def nproc(hw):
     return f"{hw.cpus}\n"
 
 
-def comm(command):
-    """The process name top shows: "/usr/sbin/cron -f" -> cron, "-bash" -> bash."""
-    return command.split()[0].rstrip(":").rsplit("/", 1)[-1].lstrip("-")[:15]
+# procps-ng of each system (top -v; patched top: KiB and the old columns before 3.3.13): Ubuntu, Debian
+#   and Raspberry Pi OS per release, RHEL 9 3.3.17 (as its dnf data), CentOS 7 3.3.10, EdgeOS (Debian 9)
+#   3.3.12; unverified: DSM 7.2 (3.3.17 here)
+PROCPS_VERSIONS = {"noble": "4.0.4", "jammy": "3.3.17", "trixie": "4.0.4", "bookworm": "4.0.2"}
+PROCPS_FAMILIES = {"rhel": "3.3.17", "centos": "3.3.10", "ubiquiti": "3.3.12", "synology": "3.3.17"}
 
 
-def _load(rng):
-    return [rng.uniform(0.0, 0.12) for _ in range(3)]
+def procps_version(persona, ident):
+    if persona.family in PROCPS_FAMILIES:
+        return PROCPS_FAMILIES[persona.family]
+    return PROCPS_VERSIONS[ident.release.extra.get("codename", "bookworm")]
 
 
-def server_top(ident, processes, tasks):
-    rng = rng_for(ident, "top")
-    m = mem_stats(ident)
-    mib = lambda kb: kb / 1024  # noqa: E731
-    used = m["total"] - m["free"] - m["buffers"] - m["cached"]
-    l1, l5, l15 = _load(rng)
-    idle = rng.uniform(98.0, 99.6)
-    lines = [
-        f"top - {gm(ident.now, '%H:%M:%S')} up {uptime_text(ident.boot_offset)},  1 user,  "
-        f"load average: {l1:.2f}, {l5:.2f}, {l15:.2f}",
-        f"Tasks: {tasks:3d} total,   1 running, {tasks - 1:3d} sleeping,   0 stopped,   0 zombie",
-        f"%Cpu(s): {(100 - idle) / 2:4.1f} us, {(100 - idle) / 2:4.1f} sy,  0.0 ni, {idle:4.1f} id,  "
-        "0.0 wa,  0.0 hi,  0.0 si,  0.0 st",
-        f"MiB Mem : {mib(m['total']):8.1f} total, {mib(m['free']):8.1f} free, {mib(used):8.1f} used, "
-        f"{mib(m['buffers'] + m['cached']):8.1f} buff/cache",
-        f"MiB Swap: {mib(m['swap_total']):8.1f} total, {mib(m['swap_free']):8.1f} free, "
-        f"{0.0:8.1f} used. {mib(m['available']):8.1f} avail Mem",
-        "",
-        "    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND",
-    ]
-    for p in processes:
-        lines.append(f"{p['PID']:7d} {p['USER']:<8}  20   0 {p['VSZ']:7d} {p['RSS']:6d} {p['RSS'] // 2:6d} "
-                     f"{p['STAT'][0]} {p['CPU']:5.1f} {p['MEM']:5.1f}   0:00.00 {comm(p['COMMAND'])}")
-    return "\n".join(lines) + "\n"
+def load_base(ident):
+    """The load of an idle system the live load average of top, uptime and /proc/loadavg drifts
+    around (patched protocol.py, [shell] load_base)."""
+    return round(rng_for(ident, "top").uniform(0.0, 0.12), 2)
 
 
-def device_top(ident, processes):
-    """BusyBox top: used + free is MemTotal."""
-    rng = rng_for(ident, "top")
-    m = mem_stats(ident)
-    used = m["total"] - m["free"]
-    l1, l5, l15 = _load(rng)
-    lines = [
-        f"Mem: {used}K used, {m['free']}K free, 0K shrd, {m['buffers']}K buff, {m['cached']}K cached",
-        "CPU:   1% usr   2% sys   0% nic  96% idle   0% io   0% irq   1% sirq",
-        f"Load average: {l1:.2f} {l5:.2f} {l15:.2f} 1/{len(processes) + 40} {processes[-1]['PID']}",
-        "  PID USER     STATUS   VSZ %VSZ %CPU COMMAND",
-    ]
-    for p in processes:
-        share = round(p["VSZ"] * 100 / m["total"])
-        lines.append(f"{p['PID']:5d} {p['USER']:<8} {p['STAT'][0]:<6} {p['VSZ']:5d} {share:3d}%   0% "
-                     f"{p['COMMAND']}")
-    return "\n".join(lines) + "\n"
+def top_keys(persona, ident, content):
+    """[shell] keys of the patched top: its style (BusyBox without coreutils), procps-ng's version,
+    the kernel threads ps does not list (the tasks of the system less the ps list, the session's
+    server process and top itself) and the base load."""
+    keys = {"top_style": content.top_style}
+    if content.top_style == "procps":
+        keys["procps_version"] = procps_version(persona, ident)
+    keys["kernel_threads"] = max(0, content.tasks - len(content.processes) - 2)
+    keys["load_base"] = f"{load_base(ident):.2f}"
+    return keys
 
 
 # --- disks ------------------------------------------------------------------
@@ -927,7 +895,7 @@ def base_files(persona, ident, passwd, group, shadow, home=None):
     return files
 
 
-def base_txtcmds(persona, ident, df, mount, lscpu_text, top, cmdline=None):
+def base_txtcmds(persona, ident, df, mount, lscpu_text, cmdline=None):
     """cmdline: the kernel command line of dmesg (servers build it from their root disk)."""
     kernel = dmesg(ident.release, persona.hardware_platform) if cmdline is None else \
         dmesg(ident.release, persona.hardware_platform, cmdline)
@@ -938,5 +906,4 @@ def base_txtcmds(persona, ident, df, mount, lscpu_text, top, cmdline=None):
         "bin/ulimit": ULIMIT,
         "usr/bin/lscpu": lscpu_text,
         "usr/bin/nproc": nproc(ident.hardware),
-        "usr/bin/top": top,
     }

@@ -152,6 +152,30 @@ def _check_host_key_algorithms(profile, release, cfg, out):
         out.append(f"host key algorithms {','.join(names)} differ from {profile.name} of {release.ssh_banner}")
 
 
+def _check_top(persona, cfg, txtcmds, out):
+    """The patched top answers (it reads /proc/meminfo, the ps list and these keys): no static
+    top, a style the persona's system has, procps-ng's version, a plausible count of kernel
+    threads and base load."""
+    if (txtcmds / "usr/bin/top").exists():
+        out.append("top: a static txtcmd usr/bin/top shadows the live top")
+    style = cfg.get("shell", "top_style", fallback="")
+    if style not in ("procps", "busybox") or (style == "busybox" and persona.kind != "device"):
+        out.append(f"top_style {style!r} does not fit {persona.kind} {persona.id}")
+    version = cfg.get("shell", "procps_version", fallback="")
+    if style == "procps" and not re.fullmatch(r"\d+\.\d+\.\d+", version):
+        out.append(f"procps_version {version!r} is no procps-ng version")
+    try:
+        threads = int(cfg.get("shell", "kernel_threads", fallback=""))
+        base = float(cfg.get("shell", "load_base", fallback=""))
+    except ValueError:
+        out.append("top: kernel_threads or load_base is no number")
+        return
+    if not 20 <= threads <= 600:
+        out.append(f"top: {threads} kernel threads")
+    if not 0.0 <= base <= 1.0:
+        out.append(f"top: load_base {base} of an idle system")
+
+
 def _check_hardware(persona, ident, honeyfs, txtcmds, out):
     hw = ident.hardware
     cpuinfo = _text(honeyfs / "proc/cpuinfo")
@@ -183,15 +207,6 @@ def _check_hardware(persona, ident, honeyfs, txtcmds, out):
     match = re.search(r"^MemTotal:\s+(\d+) kB", meminfo, re.M)
     if not match or int(match.group(1)) != hw.mem_kb:
         out.append(f"meminfo MemTotal is not {hw.mem_kb} kB")
-    top = _text(txtcmds / "usr/bin/top")
-    procps = re.search(r"MiB Mem :\s+([\d.]+) total", top)
-    busybox = re.search(r"Mem: (\d+)K used, (\d+)K free", top)
-    if not procps and not busybox:
-        out.append("top shows no memory")
-    if procps and procps.group(1) != f"{hw.mem_kb / 1024:.1f}":
-        out.append(f"top MiB Mem {procps.group(1)} is not {hw.mem_kb / 1024:.1f}")
-    if busybox and int(busybox.group(1)) + int(busybox.group(2)) != hw.mem_kb:
-        out.append(f"top Mem used + free is not {hw.mem_kb}K")
 
     flags = re.findall(r"^flags\s*: (.*)$", cpuinfo, re.M)
     if any("hypervisor" in line.split() for line in flags) and hw.provider not in VM_PROVIDERS:
@@ -899,6 +914,7 @@ def problems(persona, ident, out_dir, runtime_dir, keys_dir, min_pickle=MIN_PICK
         out.append(f"hostname: etc/hosts does not name {ident.hostname}")
 
     _check_hardware(persona, ident, honeyfs, txtcmds, out)
+    _check_top(persona, cfg, txtcmds, out)
     _check_boot(honeyfs, txtcmds, out)
     if persona.kind == "device":
         _check_device_boot(honeyfs, txtcmds, out)

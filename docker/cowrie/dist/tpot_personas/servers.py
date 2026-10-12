@@ -6,7 +6,7 @@ import time
 
 from .common import (assign_processes, base_files, base_txtcmds, deb_arch, el_group, el_home_files, el_hosts,
                      el_passwd, el_shadow, gm, lscpu, pi_partuuid, ps_entry, rng_for, root_uuid, server_df,
-                     server_group, server_mount, server_passwd, server_shadow, server_top, shadow_ctime)
+                     server_group, server_mount, server_passwd, server_shadow, shadow_ctime)
 from .identity import log_window, updated_at
 from . import system
 from .system import proc_modules
@@ -579,14 +579,13 @@ def _server_content(persona, ident, files, tasks, run_lock=False, accounts=None,
                            df=server_df(ident, root_dev=root_dev, run_lock=run_lock, boot=boot),
                            mount=server_mount(ident, root_dev=root_dev, run_lock=run_lock, boot=boot,
                                               root_type=root_type, root_options=root_options),
-                           lscpu_text=lscpu(persona, hw, op_modes="32-bit, 64-bit"),
-                           top=server_top(ident, processes, tasks))
+                           lscpu_text=lscpu(persona, hw, op_modes="32-bit, 64-bit"))
     txtcmds.update(package_manager_txtcmds(persona, ident))
     txtcmds.update(command_inventory_txtcmds(persona, ident))
     all_ctimes = {"etc/shadow": shadow_ctime(ident)}
     all_ctimes.update({rel: ident.installed_at for rel in sudoers})
     all_ctimes.update(ctimes or {})
-    return Content(files=all_files, txtcmds=txtcmds, processes=processes, ctimes=all_ctimes)
+    return Content(files=all_files, txtcmds=txtcmds, processes=processes, ctimes=all_ctimes, tasks=tasks)
 
 
 def _ubuntu_files(persona, ident):

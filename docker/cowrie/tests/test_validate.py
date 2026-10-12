@@ -68,9 +68,20 @@ class ValidateNegativeTest(unittest.TestCase):
         self.edit("honeyfs/proc/meminfo", "Shmem:", "ShmemX:")
         self.assertIn("meminfo lacks Shmem", self.problems())
 
-    def test_top_memory_mismatch(self):
-        self.edit("txtcmds/usr/bin/top", f"{self.ident.hardware.mem_kb / 1024:.1f} total", "1.0 total")
-        self.assertIn("top", self.problems())
+    def test_static_top_shadows_the_live_one(self):
+        (self.out / "txtcmds/usr/bin/top").write_text("top - 10:00:00 up 1 day\n")
+        self.assertIn("static txtcmd usr/bin/top", self.problems())
+
+    def test_top_keys_of_the_persona(self):
+        self.edit("cowrie.cfg", "\ntop_style = procps\n", "\ntop_style = busybox\n")
+        self.assertIn("top_style 'busybox' does not fit server ubuntu-jammy", self.problems())
+        self.edit("cowrie.cfg", "\ntop_style = busybox\n", "\ntop_style = procps\n")
+        self.edit("cowrie.cfg", "\nprocps_version = 3.3.17\n", "\nprocps_version = 3.3\n")
+        self.assertIn("procps_version '3.3' is no procps-ng version", self.problems())
+        self.edit("cowrie.cfg", "\nkernel_threads = ", "\nkernel_threads = 99")
+        self.assertIn("kernel threads", self.problems())
+        self.edit("cowrie.cfg", "\nload_base = ", "\nload_base = x")
+        self.assertIn("load_base is no number", self.problems())
 
     def test_hostname_mismatch(self):
         (self.out / "honeyfs/etc/hostname").write_text("other\n")
@@ -273,13 +284,16 @@ class ValidateNegativeTest(unittest.TestCase):
 
 
 class ValidateDeviceTest(unittest.TestCase):
-    def test_busybox_top_memory_mismatch(self):
+    def test_busybox_top_without_a_procps_version(self):
         persona = catalog.by_id("dlink-dir859")
         ident, out, keys = render_one(self, persona, 2)
-        path = out / "txtcmds/usr/bin/top"
-        text = path.read_text()
-        path.write_text(text.replace("K free", "1K free", 1))
-        self.assertIn("top", " ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0)))
+        cfg = (out / "cowrie.cfg").read_text()
+        self.assertIn("\ntop_style = busybox\n", cfg)
+        self.assertNotIn("procps_version", cfg)
+        self.assertEqual(validate.problems(persona, ident, out, out, keys, min_pickle=0), [])
+        (out / "cowrie.cfg").write_text(cfg.replace("\ntop_style = busybox\n", "\ntop_style = procps\n"))
+        self.assertIn("procps_version '' is no procps-ng version",
+                      " ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0)))
 
     def test_dropbear_version_mismatch(self):
         persona = catalog.by_id("tplink-wr841n")

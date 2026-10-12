@@ -913,6 +913,11 @@ if config.get("honeypot", "boot_offset", fallback="") != str(identity["boot_offs
     fail("Runtime config boot_offset does not match identity.json")
 if "ssh-dss" in config_text.lower() or re.search(r"\bdsa", config_text.lower()):
     fail("Runtime config names DSA host keys")
+# the live top of the patched Cowrie: its style, and the host key algorithms of the banner's server
+if config.get("shell", "top_style", fallback="") not in ("procps", "busybox"):
+    fail(f"Runtime config has no top_style for the live top of {selected}")
+if not config.get("ssh", "host_key_algorithms", fallback=""):
+    fail(f"Runtime config has no host_key_algorithms for {selected}")
 # Cowrie's apt answers on the Debian servers only (dpkg), everywhere else it is skipped
 skipped = {entry.strip() for entry in config.get("shell", "skip_python_commands", fallback="").split(",")}
 selected_persona = catalog.by_id(selected)
@@ -952,7 +957,6 @@ for command_path in (
     "bin/ulimit",
     "usr/bin/lscpu",
     "usr/bin/nproc",
-    "usr/bin/top",
 ):
     if not (txtcmds_path / command_path).is_file():
         fail(f"{selected} txtcmds is missing {command_path}")

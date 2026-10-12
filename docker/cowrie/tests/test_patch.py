@@ -2123,7 +2123,30 @@ class PatchTest(unittest.TestCase):
                  ("src/cowrie/ssh/factory.py", "\n\nclass CowrieSSHFactory(factory.SSHFactory):\n",
                   "\n\nclass CowrieSSHFactory(factory.SSHFactory):  # factory\n"),
                  ("src/cowrie/ssh/factory.py", "        t.supportedPublicKeys = list(self.privateKeys.keys())\n",
-                  "        t.supportedPublicKeys = list(self.privateKeys)\n"))
+                  "        t.supportedPublicKeys = list(self.privateKeys)\n"),
+                 ("src/cowrie/shell/protocol.py", "import functools\nimport random\n",
+                  "import functools\nimport os\nimport random\n"),
+                 ("src/cowrie/shell/protocol.py", "        return time.time() - self.boot_time()\n",
+                  "        return time.monotonic() - self.boot_time()\n"),
+                 ("src/cowrie/shell/protocol.py", 'self.fs.generated_files["/proc/uptime"] = self.proc_uptime\n',
+                  'self.fs.generated_files["/proc/uptime"] = self.proc_uptime  # uptime\n'),
+                 ("src/cowrie/shell/protocol.py", "        self.resetTimeout()  # Reset the idle timeout\n",
+                  "        self.resetTimeout()\n"),
+                 ("src/cowrie/shell/protocol.py",
+                  "    def keystrokeReceived(self, keyID, modifier):\n        if not self.stdin_line_mode:\n",
+                  "    def keystrokeReceived(self, keyID, modifier):\n        if self.stdin_line_mode is False:\n"),
+                 ("src/cowrie/commands/uptime.py", '"{}  up {},  1 user,  load average: 0.00, 0.00, 0.00\\n".format(',
+                  '"{} up {},  1 user,  load average: 0.00, 0.00, 0.00\\n".format('),
+                 ("src/cowrie/commands/base.py", "import getopt\nimport random\nimport re\n",
+                  "import getopt\nimport random as rnd\nimport re\n"),
+                 ("src/cowrie/commands/base.py", "from cowrie.core import utils\n", "from cowrie.core import utils as u\n"),
+                 ("src/cowrie/commands/base.py", "\n\nclass Command_ps(HoneyPotCommand):\n",
+                  "\n\nclass Command_ps(HoneyPotCommand):  # ps\n"),
+                 ("src/cowrie/commands/base.py", "                s = s[: self.columns()]\n",
+                  "                s = s[: self.columns() - 1]\n"),
+                 ("src/cowrie/commands/base.py", 'commands["ps"] = Command_ps\n', 'commands["ps"] = Command_ps  # ps\n'),
+                 ("src/cowrie/commands/base.py", "1 user,  load average: 0.00, 0.00, 0.00\\n\"\n        )\n",
+                  "1 user, load average: 0.00, 0.00, 0.00\\n\"\n        )\n"))
         for rel, old, new in cases:
             with self.subTest(rel=rel, needle=old):
                 root = tmpdir(self) / "cowrie"

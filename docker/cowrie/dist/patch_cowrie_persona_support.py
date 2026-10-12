@@ -2972,6 +2972,614 @@ def patch_free(cowrie_root):
     )
 
 
+# methods of the patched HoneyPotBaseProtocol (shell/protocol.py) after uptime(): the load, the
+# tasks and the uptime line that top, uptime, w and /proc/loadavg share
+PROTOCOL_LOAD = r'''
+    # T-Pot: the load of the emulated system, shared by top, uptime, w and /proc/loadavg
+    TPOT_LOAD_WAVES = ((0.5, 1740.0), (0.3, 410.0), (0.15, 97.0))
+
+    def tpot_load_average(self, now: float | None = None) -> tuple[float, float, float]:
+        """T-Pot: the 1, 5 and 15 minute load average. A base load ([shell] load_base) drifts in
+        three slow waves (phases from the host name); the kernel's three exponential averages
+        (time constants 1, 5 and 15 minutes, in closed form for a wave) smooth it, so the values
+        move slowly, the 15 minute one least, and stay above zero."""
+        now = time.time() if now is None else now
+        try:
+            base = max(0.0, float(CowrieConfig.get("shell", "load_base", fallback="0.05")))
+        except ValueError:
+            base = 0.05
+        seed = hashlib.sha256(str(self.hostname).encode("utf-8")).digest()
+        values = []
+        for tau in (60.0, 300.0, 900.0):
+            value = base
+            for index, (share, period) in enumerate(self.TPOT_LOAD_WAVES):
+                omega = 2 * math.pi / period
+                phase = seed[index] / 256 * 2 * math.pi
+                value += (base * share / math.hypot(1.0, omega * tau)
+                          * math.sin(omega * now + phase - math.atan(omega * tau)))
+            values.append(max(0.0, value))
+        return values[0], values[1], values[2]
+
+    def tpot_processes(self) -> list:
+        """T-Pot: the ps list of the persona ([shell] processes)."""
+        server = getattr(self.user, "server", None)
+        return [p for p in (getattr(server, "process", None) or []) if isinstance(p, dict)]
+
+    def tpot_tasks(self) -> int:
+        """T-Pot: the tasks of the system: the ps list, the session's server process, the running
+        command and the kernel threads ps does not list ([shell] kernel_threads)."""
+        try:
+            threads = max(0, CowrieConfig.getint("shell", "kernel_threads", fallback=0))
+        except ValueError:
+            threads = 0
+        return len(self.tpot_processes()) + 2 + threads
+
+    def tpot_last_pid(self, now: float | None = None) -> int:
+        """T-Pot: the newest PID: a few after the newest process of the ps list, more the longer
+        the session runs."""
+        now = time.time() if now is None else now
+        pids = [p["PID"] for p in self.tpot_processes() if isinstance(p.get("PID"), int)]
+        since = max(0.0, now - getattr(self, "logintime", now))
+        return max(pids or [1000]) + 9 + int(since // 7)
+
+    def tpot_uptime_line(self, now: float | None = None) -> str:
+        """T-Pot: the line of uptime and w, and of top after "top -": procps sprint_uptime
+        (" 12:57:13 up 11 days,  4:22,  1 user,  load average: 0.06, 0.04, 0.01"); BusyBox
+        ([shell] top_style busybox) names no users."""
+        now = time.time() if now is None else now
+        up = max(0, int(now - self.boot_time()))
+        days, rest = divmod(up, 86400)
+        hours, minutes = rest // 3600, rest % 3600 // 60
+        text = f"{days} day{'s' if days != 1 else ''}, " if days else ""
+        text += f"{hours:2d}:{minutes:02d}" if hours else f"{minutes} min"
+        load = ", ".join(f"{value:.2f}" for value in self.tpot_load_average(now))
+        clock = time.strftime("%H:%M:%S", time.localtime(now))
+        if CowrieConfig.get("shell", "top_style", fallback="procps") == "busybox":
+            return f" {clock} up {text},  load average: {load}"
+        return f" {clock} up {text},  1 user,  load average: {load}"
+
+    def proc_loadavg(self) -> bytes:
+        """T-Pot: /proc/loadavg: the load average of top and uptime, runnable / all tasks and the
+        newest PID."""
+        now = time.time()
+        load = " ".join(f"{value:.2f}" for value in self.tpot_load_average(now))
+        return f"{load} 1/{self.tpot_tasks()} {self.tpot_last_pid(now)}\n".encode()
+'''
+
+
+def patch_protocol_load(cowrie_root):
+    """The load average, the task count and the uptime line of the emulated system (PROTOCOL_LOAD)
+    on the protocol, /proc/loadavg from them; a command with tpot_key (top) reads the keys of the
+    terminal one by one. Runs after patch_protocol."""
+    path = cowrie_root / "src" / "cowrie" / "shell" / "protocol.py"
+    replace_once(path, "import functools\nimport random\n", "import functools\nimport hashlib\nimport math\nimport random\n")
+    replace_once(
+        path,
+        '''    def uptime(self):
+        """
+        Uptime
+        """
+        return time.time() - self.boot_time()
+''',
+        '''    def uptime(self):
+        """
+        Uptime
+        """
+        return time.time() - self.boot_time()
+''' + PROTOCOL_LOAD,
+    )
+    replace_once(
+        path,
+        '        self.fs.generated_files["/proc/uptime"] = self.proc_uptime\n',
+        '        self.fs.generated_files["/proc/uptime"] = self.proc_uptime\n'
+        '        self.fs.generated_files["/proc/loadavg"] = self.proc_loadavg\n',
+    )
+    replace_once(
+        path,
+        '''        Easier way to implement password input?
+        """
+        self.resetTimeout()  # Reset the idle timeout
+''',
+        '''        Easier way to implement password input?
+        """
+        self.resetTimeout()  # Reset the idle timeout
+        # T-Pot: a full screen command (top) takes the keys one by one, without echo
+        key = getattr(self.cmdstack[-1], "tpot_key", None) if self.cmdstack else None
+        if key is not None and key(ch):
+            return
+''',
+    )
+    replace_once(
+        path,
+        """    def keystrokeReceived(self, keyID, modifier):
+        if not self.stdin_line_mode:
+""",
+        """    def keystrokeReceived(self, keyID, modifier):
+        # T-Pot: a full screen command (top, ssh -t) takes the keys of the pty
+        key = getattr(self.cmdstack[-1], "tpot_key", None) if self.cmdstack else None
+        if key is not None and isinstance(keyID, bytes) and key(keyID):
+            return
+        if not self.stdin_line_mode:
+""",
+    )
+
+
+def patch_uptime(cowrie_root):
+    """uptime prints the line of procps (BusyBox: no users) with the live load average."""
+    path = cowrie_root / "src" / "cowrie" / "commands" / "uptime.py"
+    replace_once(
+        path,
+        '''        self.write(
+            "{}  up {},  1 user,  load average: 0.00, 0.00, 0.00\\n".format(
+                time.strftime("%H:%M:%S"), utils.uptime(self.protocol.uptime())
+            )
+        )
+''',
+        '''        # T-Pot: the line of procps uptime, the load average of top
+        self.write(self.protocol.tpot_uptime_line() + "\\n")
+''',
+    )
+
+
+# module code of the patched base.py before Command_ps: the terminal ps and top write to
+PS_WINDOW = r'''
+
+def tpot_window(cmd) -> tuple[int, int] | None:
+    """T-Pot: (rows, columns) of the terminal when the stdout of cmd is the session's terminal
+    with a pty, else None (a pipe, a file, ssh without a pty). LINES / COLUMNS win, as procps
+    reads them."""
+    targets = getattr(getattr(cmd, "pp", None), "targets", None) or {}
+    if (targets.get(1) or ("",))[0] != "terminal":
+        return None
+    size = getattr(getattr(cmd.protocol, "user", None), "windowSize", None)
+    if not size:
+        return None
+
+    def number(name: str, fallback: int) -> int:
+        try:
+            value = int(str((cmd.environ or {}).get(name, "")).strip())
+        except ValueError:
+            return fallback
+        return value if 0 < value < 32768 else fallback
+
+    return number("LINES", int(size[0]) or 24), number("COLUMNS", int(size[1]) or 80)
+
+
+def tpot_ps_width(cmd, args: str) -> int:
+    """T-Pot: the width procps ps cuts its lines to, 0 for none: the columns of the terminal,
+    at least 132 with w, none with ww or when stdout is no terminal (ps aux | grep sees it all)."""
+    window = tpot_window(cmd)
+    wide = args.count("w")
+    if window is None or wide >= 2:
+        return 0
+    return max(window[1], 132) if wide else window[1]
+'''
+
+# module code of the patched base.py after Command_ps: top of the persona
+TOP_COMMAND = r'''
+
+# T-Pot: top of the persona. The header is live: clock, uptime, load average, tasks and CPU of
+# the session's system, memory of the emulated /proc/meminfo; the processes are those of the ps
+# list, the session's server process and top itself. [shell] top_style: procps (procps_version
+# picks KiB and the old columns before 3.3.13, unverified) or busybox. Nothing runs forever: at
+# most TPOT_TOP_FRAMES frames and TPOT_TOP_SECONDS seconds, q or Ctrl-C ends the screen.
+TPOT_TOP_FRAMES = 200
+TPOT_TOP_SECONDS = 900.0
+TPOT_TOP_ARGUMENT = frozenset("dnpuUoOwEe")
+TPOT_TOP_FLAGS = frozenset("bcHiSs1")
+
+
+def tpot_top_hash(*parts) -> int:
+    return int.from_bytes(hashlib.sha256("\0".join(str(p) for p in parts).encode("utf-8")).digest()[:8], "big")
+
+
+def tpot_top_time(seconds: float) -> str:
+    """TIME+ of procps top: minutes:seconds.hundredths, the hundredths dropped when too wide."""
+    hundredths = int(seconds * 100)
+    minutes, rest = divmod(hundredths, 6000)
+    text = f"{minutes}:{rest // 100:02d}.{rest % 100:02d}"
+    return text if len(text) <= 9 else f"{minutes}:{rest // 100:02d}"
+
+
+def tpot_top_comm(command: str) -> str:
+    """The name procps top shows (comm, 15 characters): "/usr/sbin/cron -f" -> cron, "-bash" -> bash,
+    "sshd: ubuntu@pts/0" -> sshd, a script run by its interpreter by the script's name."""
+    words = command.split()
+    if not words:
+        return ""
+    name = words[0].rstrip(":").rsplit("/", 1)[-1].lstrip("-")
+    if re.fullmatch(r"(python|perl|ruby|bash|sh)[0-9.]*", name) and len(words) > 1 and words[1].startswith("/"):
+        name = words[1].rsplit("/", 1)[-1]
+    return name[:15]
+
+
+def tpot_top_user(name: str) -> str:
+    return name if len(name) <= 8 else name[:7] + "+"
+
+
+class Command_top(HoneyPotCommand):
+    """T-Pot: top of the persona (see TOP_COMMAND)."""
+
+    def start(self) -> None:
+        self.style = CowrieConfig.get("shell", "top_style", fallback="procps")
+        version = CowrieConfig.get("shell", "procps_version", fallback="4.0.4")
+        self.version = tuple(int(x) for x in re.findall(r"\d+", version)[:3]) or (4, 0, 4)
+        self.version_text = version
+        self.scheduled = None
+        self.frames = 0
+        self.began = time.time()
+        self.interactive = False
+        self.limit = 0
+        self.delay = 5.0 if self.style == "busybox" else 3.0
+        self.users: set[str] = set()
+        self.pids: set[int] = set()
+        if not self.tpot_options():
+            return
+        self.window = tpot_window(self)
+        if not self.batch and self.window is None:
+            if hasattr(self.protocol, "execcmd") and self.style != "busybox":
+                # ssh host top: no terminal to draw on
+                self.errorWrite("top: failed tty get\n")
+                self.exit(1)
+                return
+            self.batch = True
+        if self.batch and self.window is None and not self.limit:
+            # a pipe or a file without -n: one frame, as when the reader has what it wants
+            self.limit = 1
+        self.limit = min(self.limit or TPOT_TOP_FRAMES, TPOT_TOP_FRAMES)
+        self.interactive = not self.batch
+        if self.interactive:
+            self.write("\x1b[?25l\x1b[H\x1b[2J")
+        self.tpot_tick()
+
+    def tpot_usage(self, error: str) -> None:
+        if self.style == "busybox":
+            self.errorWrite(f"top: {error}\nUsage: top [-b] [-nCOUNT] [-dSECONDS] [-m]\n")
+        else:
+            flags = "bcHiOSs" if self.version < (3, 3, 12) else "bcEeHiOSs1"
+            self.errorWrite(f"top: {error}\nUsage:\n  top -hv | -{flags} -d secs -n max -u|U user -p pid(s)"
+                            " -o field -w [cols]\n")
+        self.exit(1)
+
+    def tpot_options(self) -> bool:
+        """-b, -n, -d, -p, -u / -U (filters) and the flags top takes; False when it ended."""
+        self.batch = False
+        args = list(self.args)
+        while args:
+            arg = args.pop(0)
+            if not arg.startswith("-") or arg == "-":
+                self.tpot_usage(f"unknown option '{arg[:1] or '-'}'" if self.style != "busybox"
+                                else f"invalid option -- '{arg[:1]}'")
+                return False
+            letters = arg[1:]
+            while letters:
+                letter, letters = letters[0], letters[1:]
+                if letter in ("h", "v") and self.style != "busybox":
+                    self.write(f"  procps-ng {'version ' if self.version < (4,) else ''}{self.version_text}\n"
+                               "Usage:\n  top -hv | -"
+                               f"{'bcHiOSs' if self.version < (3, 3, 12) else 'bcEeHiOSs1'}"
+                               " -d secs -n max -u|U user -p pid(s) -o field -w [cols]\n")
+                    self.exit(0)
+                    return False
+                if letter == "b":
+                    self.batch = True
+                    continue
+                if letter == "m" and self.style == "busybox":
+                    continue
+                if letter in TPOT_TOP_FLAGS and self.style != "busybox":
+                    continue
+                if letter not in ("d", "n") and (self.style == "busybox" or letter not in TPOT_TOP_ARGUMENT):
+                    self.tpot_usage(f"unknown option '{letter}'" if self.style != "busybox"
+                                    else f"invalid option -- '{letter}'")
+                    return False
+                value, letters = letters, ""
+                if not value:
+                    if letter == "w" and (not args or not args[0].isdigit()):
+                        continue
+                    if not args:
+                        self.tpot_usage(f"-{letter} requires argument" if self.style != "busybox"
+                                        else f"option requires an argument -- '{letter}'")
+                        return False
+                    value = args.pop(0)
+                if not self.tpot_option(letter, value):
+                    return False
+        return True
+
+    def tpot_option(self, letter: str, value: str) -> bool:
+        if letter == "n":
+            try:
+                count = int(value)
+            except ValueError:
+                count = -1
+            if count < 0:
+                self.errorWrite(f"top: bad iterations argument '{value}'\n")
+                self.exit(1)
+                return False
+            self.limit = count
+        elif letter == "d":
+            try:
+                delay = float(value.replace(",", "."))
+            except ValueError:
+                delay = -1.0
+            if delay < 0 or delay != delay:
+                self.errorWrite(f"top: bad delay interval '{value}'\n")
+                self.exit(1)
+                return False
+            self.delay = delay
+        elif letter == "p":
+            for item in value.split(","):
+                if item.strip().isdigit():
+                    self.pids.add(int(item))
+        elif letter in ("u", "U"):
+            self.users.add(value)
+        return True
+
+    # --- frames -----------------------------------------------------------------------------
+
+    def tpot_tick(self) -> None:
+        self.scheduled = None
+        if self.protocol is None or self.protocol.terminal is None or self not in self.protocol.cmdstack:
+            return
+        now = time.time()
+        lines = self.tpot_frame(now)
+        if self.interactive:
+            rows, columns = self.window
+            lines = [line[:columns] for line in lines[:rows]]
+            heading = 6 if self.style != "busybox" else 3
+            if len(lines) > heading:
+                lines[heading] = "\x1b[7m" + lines[heading].ljust(columns)[:columns] + "\x1b[m"
+            self.write("\x1b[H" + "\n".join(line + "\x1b[K" for line in lines) + "\x1b[J")
+        else:
+            if self.window is not None:
+                lines = [line[:max(self.window[1], 80)] if self.style == "busybox" else line for line in lines]
+            self.write("\n".join(lines) + "\n\n")
+        self.frames += 1
+        if self.frames >= self.limit or now - self.began >= TPOT_TOP_SECONDS:
+            self.tpot_end()
+            return
+        self.scheduled = reactor.callLater(min(max(self.delay, 0.5), 60.0), self.tpot_tick)
+
+    def tpot_end(self, interrupted: bool = False) -> None:
+        if self.scheduled is not None and self.scheduled.active():
+            self.scheduled.cancel()
+        self.scheduled = None
+        if self.interactive:
+            rows = self.window[0] if self.window else 24
+            self.write(f"\x1b[{rows};1H\x1b[?25h\n")
+        elif interrupted:
+            self.write("^C\n")
+        self.exit(0)
+
+    def tpot_key(self, ch: bytes) -> bool:
+        """A key of the terminal while top draws: q ends, space draws now, the rest is ignored."""
+        if not self.interactive:
+            return False
+        if ch in (b"q", "q", b"\x03"):
+            self.tpot_end()
+        elif ch in (b" ", " ") and self.scheduled is not None:
+            self.scheduled.cancel()
+            self.tpot_tick()
+        return True
+
+    def lineReceived(self, line: str) -> None:
+        if not self.interactive:
+            super().lineReceived(line)
+            return
+        if self.scheduled is not None:
+            self.scheduled.cancel()
+            self.tpot_tick()
+
+    def handle_CTRL_C(self) -> None:
+        self.tpot_end(interrupted=True)
+
+    # --- what a frame shows -----------------------------------------------------------------
+
+    def tpot_rows(self, now: float) -> list[dict]:
+        """The processes: the ps list, the session's server process and top itself."""
+        protocol = self.protocol
+        host = protocol.hostname
+        uptime = max(1.0, now - protocol.boot_time())
+        user = str(self.user.get("username", "root"))
+        listed = protocol.tpot_processes()
+        rows = []
+        shell = None
+        for entry in listed:
+            try:
+                pid = int(entry["PID"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            stat = str(entry.get("STAT") or "S")
+            tty = str(entry.get("TTY") or "?")
+            login = tty.startswith(("pts/", "tty"))
+            if login:
+                shell = pid
+                seconds = 0.01 + tpot_top_hash(host, pid, "cpu") % 7 / 100
+            else:
+                rate = (50 + tpot_top_hash(host, pid, "cpu") % 950) / 1e7 * (1 + int(entry.get("RSS") or 0) / 20000)
+                seconds = uptime * rate
+            rows.append({"pid": pid, "ppid": 0 if pid == 1 else 1, "user": str(entry.get("USER") or "root"),
+                         "stat": stat, "virt": int(entry.get("VSZ") or 0), "res": int(entry.get("RSS") or 0),
+                         "mem": float(entry.get("MEM") or 0.0), "time": seconds,
+                         "command": str(entry.get("COMMAND") or "")})
+        last = protocol.tpot_last_pid(now)
+        ssh = CowrieConfig.get("shell", "ssh_version", fallback="OpenSSH")
+        dropbear = next((r for r in rows if "dropbear" in r["command"].split(" ", 1)[0]), None)
+        if "dropbear" in ssh.lower():
+            session = {"user": "root", "command": dropbear["command"] if dropbear else "dropbear",
+                       "virt": 1104, "res": 640}
+        else:
+            match = re.match(r"OpenSSH_(\d+)\.(\d+)", ssh)
+            newer = match is not None and (int(match.group(1)), int(match.group(2))) >= (9, 8)
+            session = {"user": tpot_top_user(user), "command": f"sshd{'-session' if newer else ''}: {user}@pts/0",
+                       "virt": 17400, "res": 6960}
+        session_pid = (shell - 1) if shell and shell > 2 else last - 2
+        rows.append({"pid": session_pid, "ppid": dropbear["pid"] if dropbear else 1, "stat": "S",
+                     "mem": 0.1, "time": 0.02, **session})
+        for row in rows:
+            if row["pid"] == shell:
+                row["ppid"] = session_pid
+        if self.style == "busybox":
+            virt, res = 1408, 0
+        elif self.version < (3, 3, 13):
+            virt, res = 162020, 2228
+        else:
+            virt, res = 11928, 5376
+        rows.append({"pid": last, "ppid": shell or 1, "user": tpot_top_user(user), "stat": "R", "virt": virt,
+                     "res": res, "mem": 0.1, "time": 0.01 * (1 + self.frames), "command": "top", "self": True})
+        if self.users:
+            rows = [r for r in rows if r["user"] in self.users]
+        if self.pids:
+            rows = [r for r in rows if r["pid"] in self.pids]
+        return rows
+
+    def tpot_cpu(self, now: float, row: dict) -> float:
+        """%CPU of a process in this frame: top itself some, now and then a daemon a tick."""
+        host = self.protocol.hostname
+        if row.get("self"):
+            if self.frames == 0:
+                return (0.0, 5.9, 6.2, 6.7, 11.8, 12.5)[tpot_top_hash(host, now) % 6]
+            return (0.0, 0.3, 0.3, 0.7, 1.0)[tpot_top_hash(host, int(now)) % 5]
+        if self.frames and tpot_top_hash(host, row["pid"], int(now)) % 40 == 0:
+            return 0.3
+        return 0.0
+
+    def tpot_summary_cpu(self, now: float) -> dict:
+        """us / sy / wa / si of this frame: since boot in the first (the 3 % busy of /proc/uptime),
+        then the last seconds, a little more with the load."""
+        if self.frames == 0:
+            return {"us": 1.6, "sy": 1.0, "wa": 0.3, "si": 0.1}
+        load = self.protocol.tpot_load_average(now)[0]
+        draw = tpot_top_hash(self.protocol.hostname, "cpu", int(now))
+        us = round(min(25.0, load * 4 + draw % 5 / 10), 1)
+        sy = round(min(15.0, load * 2 + draw // 5 % 4 / 10), 1)
+        return {"us": us, "sy": sy, "wa": 0.0, "si": 0.0}
+
+    def tpot_frame(self, now: float) -> list[str]:
+        protocol = self.protocol
+        rows = self.tpot_rows(now)
+        cpus = {id(r): self.tpot_cpu(now, r) for r in rows}
+        rows.sort(key=lambda r: (-cpus[id(r)], r["pid"]))
+        mem = tpot_top_meminfo(self.fs)
+        total = mem.get("MemTotal", 0)
+        free = mem.get("MemFree", 0)
+        cache = mem.get("Buffers", 0) + mem.get("Cached", 0) + mem.get("SReclaimable", 0)
+        load = protocol.tpot_load_average(now)
+        tasks = protocol.tpot_tasks()
+        running = 1 + sum(1 for r in rows if r["stat"][:1] == "R" and not r.get("self"))
+        cpu = self.tpot_summary_cpu(now)
+        if self.style == "busybox":
+            idle = max(0, 100 - round(cpu["us"]) - round(cpu["sy"]) - round(cpu["si"]))
+            lines = [
+                f"Mem: {total - free}K used, {free}K free, {mem.get('Shmem', 0)}K shrd, {mem.get('Buffers', 0)}K buff, "
+                f"{mem.get('Cached', 0)}K cached",
+                f"CPU: {round(cpu['us']):3d}% usr {round(cpu['sy']):3d}% sys   0% nic {idle:3d}% idle   0% io"
+                f"   0% irq {round(cpu['si']):3d}% sirq",
+                f"Load average: {load[0]:.2f} {load[1]:.2f} {load[2]:.2f} {running}/{tasks} {protocol.tpot_last_pid(now)}",
+                "  PID  PPID USER     STAT   VSZ %VSZ %CPU COMMAND",
+            ]
+            for r in rows:
+                state = r["stat"][:1] + ("<" if "<" in r["stat"] else "N" if "N" in r["stat"] else "")
+                share = r["virt"] * 100 // total if total else 0
+                lines.append(f"{r['pid']:5d}{r['ppid']:6d} {r['user'][:8]:<8} {state:<4}{r['virt']:6d}{share:4d}%"
+                             f"{round(cpus[id(r)]):4d}% {r['command']}")
+            return lines
+        idle = round(100.0 - cpu["us"] - cpu["sy"] - cpu["wa"] - cpu["si"], 1)
+        used = max(0, total - free - cache)
+        lines = [
+            "top -" + protocol.tpot_uptime_line(now),
+            f"Tasks:{tasks:4d} total,{running:4d} running,{tasks - running:4d} sleeping,   0 stopped,   0 zombie",
+            f"%Cpu(s):{cpu['us']:5.1f} us,{cpu['sy']:5.1f} sy,  0.0 ni,{idle:5.1f} id,{cpu['wa']:5.1f} wa,"
+            f"  0.0 hi,{cpu['si']:5.1f} si,  0.0 st",
+        ]
+        swap_total, swap_free = mem.get("SwapTotal", 0), mem.get("SwapFree", 0)
+        old = self.version < (3, 3, 13)
+        if old:
+            lines += [f"KiB Mem :{total:9d} total,{free:9d} free,{used:9d} used,{cache:9d} buff/cache",
+                      f"KiB Swap:{swap_total:9d} total,{swap_free:9d} free,{swap_total - swap_free:9d} used."
+                      f"{mem.get('MemAvailable', free):9d} avail Mem"]
+        else:
+            lines += [f"MiB Mem :{total / 1024:9.1f} total,{free / 1024:9.1f} free,{used / 1024:9.1f} used,"
+                      f"{cache / 1024:9.1f} buff/cache",
+                      f"MiB Swap:{swap_total / 1024:9.1f} total,{swap_free / 1024:9.1f} free,"
+                      f"{(swap_total - swap_free) / 1024:9.1f} used.{mem.get('MemAvailable', free) / 1024:9.1f} avail Mem"]
+        lines.append("")
+        if old:
+            lines.append("  PID USER      PR  NI    VIRT    RES    SHR S %CPU %MEM     TIME+ COMMAND")
+        else:
+            lines.append("    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND")
+        for r in rows:
+            nice = -4 if "<" in r["stat"] else 19 if "N" in r["stat"] else 0
+            shared = r["res"] * (55 + tpot_top_hash(r["pid"], "shr") % 25) // 100
+            comm = tpot_top_comm(r["command"])
+            if old:
+                lines.append(f"{r['pid']:5d} {r['user'][:8]:<8}  {20 + nice:2d} {nice:3d} {r['virt']:7d} {r['res']:6d} "
+                             f"{shared:6d} {r['stat'][:1]} {cpus[id(r)]:4.1f} {r['mem']:4.1f} "
+                             f"{tpot_top_time(r['time']):>9} {comm}")
+            else:
+                lines.append(f"{r['pid']:7d} {r['user'][:8]:<8}  {20 + nice:2d} {nice:3d} {r['virt']:7d} {r['res']:6d} "
+                             f"{shared:6d} {r['stat'][:1]} {cpus[id(r)]:5.1f} {r['mem']:5.1f} "
+                             f"{tpot_top_time(r['time']):>9} {comm}")
+        return lines
+
+
+def tpot_top_meminfo(fs) -> dict:
+    """The kB figures of the emulated /proc/meminfo (as free reads them)."""
+    try:
+        text = fs.file_contents("/proc/meminfo").decode("utf-8", "replace")
+    except Exception:
+        text = ""
+    values = {}
+    for line in text.splitlines():
+        name, _, rest = line.partition(":")
+        try:
+            values[name.strip()] = int(rest.split()[0])
+        except (IndexError, ValueError):
+            pass
+    return values
+
+
+commands["/usr/bin/top"] = Command_top
+commands["top"] = Command_top
+'''
+
+
+def patch_ps_top(cowrie_root):
+    """ps cuts its lines as procps does (PS_WINDOW): at the width of the terminal, not when its
+    output goes to a pipe or a file (ps aux | grep sshd finds the COMMAND); top of the persona
+    (TOP_COMMAND) and the load average of w. Runs after patch_protocol_load."""
+    path = cowrie_root / "src" / "cowrie" / "commands" / "base.py"
+    replace_once(path, "import getopt\nimport random\nimport re\n", "import getopt\nimport hashlib\nimport random\nimport re\n")
+    replace_once(path, "from cowrie.core import utils\n", "from cowrie.core import utils\nfrom cowrie.core.config import CowrieConfig\n")
+    replace_once(path, "\n\nclass Command_ps(HoneyPotCommand):\n", PS_WINDOW + "\n\nclass Command_ps(HoneyPotCommand):\n")
+    replace_once(
+        path,
+        '''            s = "".join([output_array[i][x] for x in line])
+            if "w" not in args:
+                s = s[: self.columns()]
+            self.write(f"{s}\\n")
+''',
+        '''            s = "".join([output_array[i][x] for x in line])
+            # T-Pot: cut as procps does (tpot_ps_width)
+            width = tpot_ps_width(self, args)
+            if width:
+                s = s[:width]
+            self.write(f"{s}\\n")
+''',
+    )
+    replace_once(path, 'commands["/bin/ps"] = Command_ps\ncommands["ps"] = Command_ps\n',
+                 'commands["/bin/ps"] = Command_ps\ncommands["ps"] = Command_ps\n' + TOP_COMMAND)
+    replace_once(
+        path,
+        '''        self.write(
+            f" {time.strftime('%H:%M:%S')} up {utils.uptime(self.protocol.uptime())},  1 user,  load average: 0.00, 0.00, 0.00\\n"
+        )
+''',
+        '''        # T-Pot: the uptime line of procps, the load average of top
+        self.write(self.protocol.tpot_uptime_line() + "\\n")
+''',
+    )
+
+
 # module code of the patched fs.py, before Command_grep
 GREP_MATCHER = r'''
 class TpotGrepMatcher:
@@ -3664,6 +4272,9 @@ def main():
     patch_service(cowrie_root)
     patch_systemctl(cowrie_root)
     patch_free(cowrie_root)
+    patch_protocol_load(cowrie_root)
+    patch_uptime(cowrie_root)
+    patch_ps_top(cowrie_root)
     patch_grep(cowrie_root)
     patch_prompt(cowrie_root)
     patch_shell_errors(cowrie_root)

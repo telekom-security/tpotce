@@ -10,7 +10,7 @@ import shutil
 from pathlib import Path
 
 from . import servers, system, tree
-from .common import home_dir, rng_for
+from .common import home_dir, rng_for, top_keys
 from .identity import DAY, to_json
 from .ssh_profiles import PROFILES, host_key_algorithms
 
@@ -402,6 +402,7 @@ def render_cfg(persona, ident, runtime_dir, keys_dir, cowrie_root=COWRIE_ROOT, c
     busybox = f"busybox_help = {runtime_dir}/{BUSYBOX_HELP}\n" if content.busybox_help else ""
     tools = "".join(f"{key} = {value}\n"
                     for key, value in system.shell_keys(persona, ident, content.files, runtime_dir).items())
+    top = "".join(f"{key} = {value}\n" for key, value in top_keys(persona, ident, content).items())
     profile = PROFILES[persona.ssh_profile]
     keys = "\n".join(
         f"{KEY_FILES[k]}_public_key = {keys_dir}/ssh_host_{KEY_FILES[k]}_key.pub\n"
@@ -440,7 +441,7 @@ shell_name = {system.shell_style(persona)[0]}
 not_found_style = {system.shell_style(persona)[1]}
 ssh_version = {r.ssh_version}
 skip_python_commands = {",".join(skip_python_commands(persona, ident, content))}
-{busybox}{tools}
+{top}{busybox}{tools}
 [ssh]
 enabled = true
 {keys}
