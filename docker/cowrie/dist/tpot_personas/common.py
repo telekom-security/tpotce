@@ -9,7 +9,7 @@ import random
 import re
 import time
 
-from .identity import DAY
+from .identity import DAY, drawn_at
 
 TTY_PREFIXES = ("pts/", "tty")
 
@@ -36,7 +36,7 @@ def shadow_days(ident):
     accounts were made at installation, the passwords changed since."""
     rng = rng_for(ident, "shadow")
     system = ident.installed_at // DAY
-    last = ident.now // DAY
+    last = drawn_at(ident) // DAY
     return system, rng.randint(system, last), rng.randint(system, last)
 
 
@@ -45,7 +45,7 @@ def shadow_ctime(ident):
     _, root, own = shadow_days(ident)
     day = max(root, own) * DAY
     low = max(day, ident.installed_at)
-    return rng_for(ident, "shadow-ctime").randint(low, max(low, min(ident.now, day + DAY - 1)))
+    return rng_for(ident, "shadow-ctime").randint(low, max(low, min(drawn_at(ident), day + DAY - 1)))
 
 
 def server_passwd(user, uid, gid, gecos=None, shell="/bin/bash", extra=""):
@@ -855,8 +855,8 @@ def ps_start(ts, now):
 
 def assign_processes(ident, entries):
     """PID 1 first, increasing PIDs drawn from pid_seed. Everything started at
-    boot; a login shell (on a tty) at some time between boot and now. %MEM is
-    RSS over MemTotal, as ps computes it."""
+    boot; a login shell (on a tty) at some time between boot and the draw. %MEM
+    is RSS over MemTotal, as ps computes it."""
     rng = random.Random(ident.pid_seed)
     boot = ps_start(ident.booted_at, ident.now)
     pid = 0
@@ -865,7 +865,7 @@ def assign_processes(ident, entries):
             entry["MEM"] = round(entry["RSS"] * 100 / ident.hardware.mem_kb, 1)
         if is_login_shell(entry):
             pid += rng.randint(200, 20000)
-            entry["START"] = ps_start(rng.randint(ident.booted_at, ident.now), ident.now)
+            entry["START"] = ps_start(rng.randint(ident.booted_at, drawn_at(ident)), ident.now)
         else:
             pid = 1 if pid == 0 else pid + (rng.randint(150, 450) if pid == 1 else rng.randint(8, 220))
             entry["START"] = boot

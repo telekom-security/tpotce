@@ -115,6 +115,12 @@ def latest_install(release):
     return 0 if is_medium(release) else stale_at(release)
 
 
+def drawn_at(ident):
+    """When the identity was drawn. Its history (logs, password changes, the
+    login of its shell) ends there, so a restored identity shows the same."""
+    return ident.chosen_at or ident.now
+
+
 def log_window(ident):
     """(first, last) time of package log entries that pull the release's
     versions: from the installation (or the update to the release) until its
@@ -122,7 +128,7 @@ def log_window(ident):
     image after that and never touched its packages."""
     r = ident.release
     first = max(ident.installed_at, updated_at(r))
-    last = ident.now - 3600
+    last = drawn_at(ident) - 3600
     if stale_at(r):
         last = min(last, stale_at(r))
     if first > last:

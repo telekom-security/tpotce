@@ -860,6 +860,51 @@ class BoundaryTest(unittest.TestCase):
                 self.check(persona, dataclasses.replace(ident, boot_offset=DAY))
 
 
+class KeptHistoryTest(unittest.TestCase):
+    """COWRIE_PERSONA_ROTATION: a kept identity shows the history it showed when it
+    was drawn; only what runs now (the clock, uptime, the ps START of today) moves."""
+
+    # what follows the clock of the start: the runtime config, the identity, the units
+    # with their CPU time, the date nvidia-smi prints; /proc and /dev/pts are compared apart
+    CLOCK_FILES = {"cowrie.cfg", "identity.json", "systemd-units.json", "txtcmds/usr/bin/nvidia-smi"}
+
+    def files(self, out):
+        return {str(p.relative_to(out)): p.read_bytes() for p in sorted(out.rglob("*"))
+                if p.is_file() and p.name not in ("fs.pickle", "cmdoutput.json")}
+
+    def nodes(self, out):
+        fs = tree.load_pickle(out / "fs.pickle")
+        # a folder without its children: those are compared on their own
+        return {path: [v for i, v in enumerate(node) if not (i == tree.A_CONTENTS and node[tree.A_TYPE] == tree.T_DIR)]
+                for path, node in tree.iter_nodes(fs)
+                if not path.startswith(("/proc/", "/dev/pts/")) and path not in ("/proc", "/dev/pts")}
+
+    def processes(self, out, ident):
+        rows = json.loads((out / "cmdoutput.json").read_text())["command"]["ps"]
+        return [{k: v for k, v in row.items() if k != "START"} for row in rows]
+
+    def test_kept_identity_renders_the_same_history(self):
+        for persona, seed in ((p, s) for p in catalog.PERSONAS for s in (3, 33)):
+            first = draw(persona, seed, NOW)
+            _, out, _ = render_ident(self, persona, first)
+            files, nodes = self.files(out), self.nodes(out)
+            procs = self.processes(out, first)
+            for days in (1, 7, 30, 365):
+                with self.subTest(persona=persona.id, seed=seed, days=days):
+                    kept = restore(persona, to_state(persona, first), NOW + days * DAY + 3600)
+                    _, again, _ = render_ident(self, persona, kept)
+                    later = self.files(again)
+                    self.assertEqual(sorted(later), sorted(files))
+                    changed = sorted(rel for rel in files if later[rel] != files[rel]
+                                     and rel.split("/", 1)[-1] not in self.CLOCK_FILES
+                                     and rel not in self.CLOCK_FILES and not rel.startswith("honeyfs/proc/"))
+                    self.assertEqual(changed, [])
+                    again_nodes = self.nodes(again)
+                    self.assertEqual(sorted(again_nodes), sorted(nodes))
+                    self.assertEqual([path for path in nodes if again_nodes[path] != nodes[path]], [])
+                    self.assertEqual(self.processes(again, kept), procs)
+
+
 class ServerContentTest(unittest.TestCase):
     def test_gpu_tokens_differ_per_seed_and_land_in_files(self):
         persona = catalog.by_id("gpu-ubuntu")

@@ -7,7 +7,7 @@ import time
 from .common import (assign_processes, base_files, base_txtcmds, deb_arch, el_group, el_home_files, el_hosts,
                      el_passwd, el_shadow, gm, lscpu, pi_partuuid, ps_entry, rng_for, root_uuid, server_df,
                      server_group, server_mount, server_passwd, server_shadow, shadow_ctime)
-from .identity import log_window, updated_at
+from .identity import drawn_at, log_window, updated_at
 from . import system
 from .system import proc_modules
 from .model import Content
@@ -480,7 +480,7 @@ def yum_logs(persona, ident):
             verb, version = ("Installed", r.packages[n]) if kind == "install" else ("Updated", r.packages[n])
             line = f"{gm(ts + took, '%b %d %H:%M:%S')} {verb}: {_yum_name(n, version, arch)}"
             by_year.setdefault(time.gmtime(ts + took).tm_year, []).append((ts + took, line))
-    this_year = time.gmtime(ident.now).tm_year
+    this_year = time.gmtime(drawn_at(ident)).tm_year
     files, ctimes = {"var/log/yum.log": ""}, {}
     for year, rows in sorted(by_year.items()):
         text = "".join(line + "\n" for _, line in rows)
@@ -491,7 +491,7 @@ def yum_logs(persona, ident):
             # logrotate runs from cron.daily in the first hours of the new year
             rotated = calendar.timegm((year + 1, 1, 1, 0, 0, 0)) + rng.randint(3 * 3600, 4 * 3600)
             files[f"var/log/yum.log-{year + 1}0101"] = text
-            ctimes[f"var/log/yum.log-{year + 1}0101"] = min(rotated, ident.now)
+            ctimes[f"var/log/yum.log-{year + 1}0101"] = min(rotated, drawn_at(ident))
     if "var/log/yum.log" not in ctimes:
         ctimes["var/log/yum.log"] = max(ctimes.values(), default=ident.installed_at)
     return files, ctimes
