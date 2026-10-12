@@ -45,27 +45,44 @@ def at_terminal(argv, env, cwd, answers=(), timeout=60):
     os.close(slave)
     out, seen, waiting = b"", 0, list(answers)
     deadline = time.time() + timeout
+
+    def chunk(wait):
+        """What the pty has within wait seconds: bytes, b"" for nothing yet, None at its end (EOF, EIO)."""
+        ready, _w, _x = select.select([master], [], [], wait)
+        if not ready:
+            return b""
+        try:
+            data = os.read(master, 65536)
+        except OSError:                             # Linux: EIO once the child is gone
+            return None
+        return data or None
+
     try:
         while time.time() < deadline:
             if waiting and waiting[0][0].encode() in out[seen:]:
                 text, keys = waiting.pop(0)
                 seen = out.index(text.encode(), seen) + len(text.encode())
                 os.write(master, keys)
-            ready, _w, _x = select.select([master], [], [], 0.1)
-            if ready:
-                try:
-                    data = os.read(master, 65536)
-                except OSError:                     # Linux: EIO once the child is gone
-                    break
-                if not data:
-                    break
+            data = chunk(0.1)
+            if data is None:
+                break
+            if data:
                 out += data
             elif proc.poll() is not None:
+                # gone: what it wrote just before it ended is still in the pty
+                while True:
+                    data = chunk(0.2)
+                    if not data:
+                        break
+                    out += data
                 break
         else:
-            proc.kill()
+            proc.kill()                             # the deadline: the output so far, the code of the kill
         return proc.wait(timeout=10), out.decode("utf-8", "replace").replace("\r\n", "\n")
     finally:
+        if proc.poll() is None:                     # the deadline, or a wait that timed out: no child stays
+            proc.kill()
+            proc.wait(timeout=10)
         os.close(master)
 
 
@@ -1004,6 +1021,41 @@ class LossConfirmTerminalTest(unittest.TestCase):
         with open(fallback, "w", encoding="utf-8") as out:
             out.write(text[start:end])
         return (os.path.join(REPO, "installer", "lib", "ui.sh"), fallback)
+
+    def test_the_helper_reads_the_last_output(self):
+        """at_terminal itself: a child that prints and ends at once loses nothing of it (20 runs, and once
+        with the race forced: the output comes after the last wait, the exit before the poll); a child past
+        the deadline is killed, none stays."""
+        import select
+        from unittest import mock
+        for run in range(20):
+            with self.subTest(run=run):
+                self.assertEqual(at_terminal(["printf", "x\n"], dict(os.environ), self.home), (0, "x\n"))
+        # the race made sure: the first wait of the helper times out, the child writes and ends meanwhile.
+        # Linux has that window; macOS keeps the child until its output is read (a pty drains on close),
+        # so the first poll says "gone" here as it would there
+        real_select, real_poll, selects, polls = select.select, subprocess.Popen.poll, [], []
+
+        def late(*args):
+            selects.append(args)
+            if len(selects) == 1:
+                time.sleep(0.3)
+                return [], [], []
+            return real_select(*args)
+
+        def gone(proc):
+            polls.append(proc)
+            return 0 if len(polls) == 1 else real_poll(proc)
+
+        with mock.patch("select.select", side_effect=late), \
+                mock.patch.object(subprocess.Popen, "poll", autospec=True, side_effect=gone):
+            self.assertEqual(at_terminal(["printf", "x\n"], dict(os.environ), self.home), (0, "x\n"))
+        started = time.time()
+        code, out = at_terminal(["bash", "-c", 'echo "before"; exec sleep 30'], dict(os.environ), self.home,
+                                timeout=1)
+        self.assertLess(time.time() - started, 15)
+        self.assertNotEqual(code, 0)
+        self.assertEqual(out, "before\n")
 
     def test_the_answer_at_a_terminal(self):
         environment = dict(os.environ, HOME=self.home, TPOT_GUM="off")

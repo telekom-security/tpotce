@@ -917,6 +917,8 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(app.query_one("#elastic-apply").disabled)           # read anew: unreachable
         self.assertIn(("plan", "30", True), backend.calls)
         self.assertNotIn("apply", [call[0] for call in backend.calls if isinstance(call, tuple)])
+        # .env keeps the value it has: written once, with that value, no other one
+        self.assertEqual([call for call in backend.calls if isinstance(call, tuple) and call[0] == "set"], [("set", "30")])
         self.assertIn("TPOT_ES_RETENTION=30 is set in .env, but Elasticsearch is not reachable: T-Pot does not "
                       "shorten the ILM policy tpot on its own, the value waits. Once Elasticsearch runs, Apply .env "
                       "to the policy applies it here (it asks first). Why: no answer from http://127.0.0.1:64298.",
