@@ -474,6 +474,15 @@ class ValidateServerCommandTest(unittest.TestCase):
         self.assertIn("systemctl: ExecStart of avahi-daemon.service names /usr/sbin/avahi-daemon, "
                       "which is not in fs.pickle", found)
 
+    def test_tool_answers_without_its_package(self):
+        def change(out):
+            path = out / "apt-packages.json"
+            data = json.loads(path.read_text())
+            data["available"]["net-tools"] = data["installed"].pop("net-tools")
+            path.write_text(json.dumps(data))
+        found = self.problems("ubuntu-noble", change)
+        self.assertIn("tools: ifconfig of net-tools answers, apt does not have net-tools installed", found)
+
     def test_unit_file_missing(self):
         persona = catalog.by_id("rhel-9")
         ident, out, keys = render_one(self, persona, 1)

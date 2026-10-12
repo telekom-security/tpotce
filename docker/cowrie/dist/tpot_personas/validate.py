@@ -629,6 +629,18 @@ def _check_system(persona, ident, cfg, out_dir, runtime_dir, fs, out):
             for package, program in sorted(system.PACKAGE_PROGRAMS.items()):
                 if _on_path(fs, program) and package not in installed:
                     out.append(f"apt: {program} is on PATH, apt does not have it installed")
+        tools = system.installed_tools(persona, ident)
+        for tool, programs in sorted(system.TOOL_PROGRAMS.items()):
+            for name in programs:
+                answers = (name in system.COWRIE_TOOL_NAMES and _answered(cfg, name)) or _on_path(fs, name)
+                if answers and system.has_dpkg(persona) and tool not in installed:
+                    out.append(f"tools: {name} of {tool} answers, apt does not have {tool} installed")
+                elif answers != (tool in tools):
+                    out.append(f"tools: {name} of {tool} {'answers' if answers else 'does not answer'}, "
+                               f"{tool} is {'' if tool in tools else 'not '}installed")
+                if name in system.COWRIE_TOOL_NAMES and _answered(cfg, name) != _on_path(fs, name):
+                    out.append(f"which: {name} is {'not ' if _answered(cfg, name) else ''}on PATH, "
+                               f"{'Cowrie answers it' if _answered(cfg, name) else 'nothing answers it'}")
         units = {u["name"]: u for u in expected.get(system.SYSTEMD_UNITS, {}).get("units", [])}
         for name, unit in sorted(units.items()):
             node = tree.find_node(fs, unit["path"])

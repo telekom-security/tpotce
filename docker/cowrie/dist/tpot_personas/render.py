@@ -133,6 +133,8 @@ def skip_python_commands(persona, ident, content):
         commands -= {name, f"/bin/{name}", f"/{system.command_path(name)}"}
     if persona.kind == "device":
         commands |= set(EMBEDDED_SKIP_PYTHON_COMMANDS) - ({"perl"} if system.has_perl(persona) else set())
+    # the tools of packages the server has not installed
+    commands |= set(system.skipped_tools(persona, ident))
     if not content.busybox_help:
         commands |= set(BUSYBOX_PYTHON_COMMANDS)
     return sorted(commands)
@@ -344,7 +346,8 @@ def apply_to_tree(base_tree, persona, ident, content):
     # txtcmds and the commands of Cowrie's Python: programs with a size and no contents
     # (cat / dd give the ELF header of [shell] arch)
     sizes = {**PROGRAM_SIZES, **system.program_sizes(persona)}
-    for rel in sorted(set(content.txtcmds) | set(content.programs) | set(system.programs(persona, ident))):
+    tools, tool_links = system.tool_programs(persona, ident)
+    for rel in sorted(set(content.txtcmds) | set(content.programs) | set(system.programs(persona, ident)) | set(tools)):
         tree.ensure_executable(t, rel, program_size(ident, rel, sizes), ctime=ident.installed_at)
     for rel in system.directories(persona):
         tree.ensure_dir(t, rel, ctime=ident.installed_at)
@@ -354,7 +357,7 @@ def apply_to_tree(base_tree, persona, ident, content):
     removed, ssh_links = system.ssh_units(persona, ident)
     for rel in removed:
         tree.remove_node(t, rel)
-    for rel, target in system.python_links(persona, ident) + system.links(persona) + ssh_links:
+    for rel, target in system.python_links(persona, ident) + system.links(persona) + ssh_links + tool_links:
         link(t, persona, ident, rel, target, ident.installed_at)
     if persona.kind == "server":
         _unit_files(t, persona, ident, content.processes)

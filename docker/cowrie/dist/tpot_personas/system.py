@@ -206,39 +206,97 @@ def sudoers_files(persona, ident):
 #   installed - preinstalled on the image (its programs on PATH, man-db of every apt install)
 #   available - the packages bots install most, at the version the release ships
 APT_INSTALLED = {
-    "noble": {"bash": "5.2.21-2ubuntu4", "coreutils": "9.4-3ubuntu6", "gzip": "1.12-1ubuntu3",
+    "noble": {"bind9-dnsutils": "1:9.18.28-0ubuntu0.24.04.1", "ethtool": "1:6.7-1build1", "iptables": "1.8.10-3ubuntu2", "iputils-ping": "3:20240117-1build1", "bash": "5.2.21-2ubuntu4", "coreutils": "9.4-3ubuntu6", "gzip": "1.12-1ubuntu3",
               "man-db": "2.12.0-4build2", "netcat-openbsd": "1.226-1ubuntu2", "perl": "5.38.2-3.2build2",
               "python3": "3.12.3-0ubuntu2", "sudo": "1.9.15p5-3ubuntu5", "tar": "1.35+dfsg-3build1",
               "wget": "1.21.4-1ubuntu4.1"},
-    "jammy": {"bash": "5.1-6ubuntu1.1", "coreutils": "8.32-4.1ubuntu1.2", "gzip": "1.10-4ubuntu4.1",
+    "jammy": {"bind9-dnsutils": "1:9.18.30-0ubuntu0.22.04.2", "ethtool": "1:5.16-1ubuntu0.1", "iptables": "1.8.7-1ubuntu5.2", "iputils-ping": "3:20211215-1", "bash": "5.1-6ubuntu1.1", "coreutils": "8.32-4.1ubuntu1.2", "gzip": "1.10-4ubuntu4.1",
               "man-db": "2.10.2-1", "netcat-openbsd": "1.218-4ubuntu1", "perl": "5.34.0-3ubuntu1.3",
               "python3": "3.10.6-1~22.04.1", "sudo": "1.9.9-1ubuntu2.4", "tar": "1.34+dfsg-1ubuntu0.1.22.04.2",
               "wget": "1.21.2-2ubuntu1.1"},
-    "trixie": {"bash": "5.2.37-2+b5", "coreutils": "9.7-3", "gzip": "1.13-1", "man-db": "2.13.1-1",
+    "trixie": {"iputils-ping": "3:20250605-1", "bash": "5.2.37-2+b5", "coreutils": "9.7-3", "gzip": "1.13-1", "man-db": "2.13.1-1",
                "netcat-openbsd": "1.229-1", "perl": "5.40.1-6", "python3": "3.13.5-1", "tar": "1.35+dfsg-3.1",
                "wget": "1.25.0-2"},
-    "bookworm": {"bash": "5.2.15-2+b7", "coreutils": "9.1-1", "gzip": "1.12-1", "man-db": "2.11.2-2",
+    "bookworm": {"iputils-ping": "3:20221126-1+deb12u1", "bash": "5.2.15-2+b7", "coreutils": "9.1-1", "gzip": "1.12-1", "man-db": "2.11.2-2",
                  "netcat-openbsd": "1.219-1", "perl": "5.36.0-7+deb12u2", "python3": "3.11.2-1+b1",
                  "tar": "1.34+dfsg-1.2+deb12u1", "wget": "1.21.3-1+deb12u1"},
 }
 APT_AVAILABLE = {
-    "noble": {"gcc": "4:13.2.0-7ubuntu1", "hydra": "9.5-1build3", "iproute2": "6.1.0-1ubuntu6",
+    "noble": {"busybox": "1:1.36.1-6ubuntu3.1", "php-cli": "2:8.3+93ubuntu2", "tftp-hpa": "5.2+20150808-1.4build2", "gcc": "4:13.2.0-7ubuntu1", "hydra": "9.5-1build3", "iproute2": "6.1.0-1ubuntu6",
               "make": "4.3-4.1build2", "masscan": "2:1.3.2+ds1-1", "nmap": "7.94+git20230807.3be01efb1+dfsg-3build2",
               "screen": "4.9.1-1build1", "socat": "1.8.0.0-4build3", "tmux": "3.4-1ubuntu0.1",
               "tor": "0.4.8.10-1build2", "unzip": "6.0-28ubuntu4.1", "zip": "3.0-13build1"},
-    "jammy": {"gcc": "4:11.2.0-1ubuntu1", "hydra": "9.2-1ubuntu1", "iproute2": "5.15.0-1ubuntu2",
+    "jammy": {"busybox": "1:1.30.1-7ubuntu3.1", "php-cli": "2:8.1+92ubuntu1", "tftp-hpa": "5.2+20150808-1.2build2", "gcc": "4:11.2.0-1ubuntu1", "hydra": "9.2-1ubuntu1", "iproute2": "5.15.0-1ubuntu2",
               "make": "4.3-4.1build1", "masscan": "2:1.3.2+ds1-1", "nmap": "7.91+dfsg1+really7.80+dfsg1-2ubuntu0.1",
               "screen": "4.9.0-1", "socat": "1.7.4.1-3ubuntu4", "tmux": "3.2a-4ubuntu0.2", "tor": "0.4.6.10-1",
               "unzip": "6.0-26ubuntu3.2", "zip": "3.0-12build2"},
-    "trixie": {"gcc": "4:14.2.0-1", "git": "1:2.47.3-0+deb13u1", "hydra": "9.5-3", "iproute2": "6.15.0-1",
+    "trixie": {"bind9-dnsutils": "1:9.20.11-4", "busybox": "1:1.37.0-6", "ethtool": "1:6.14.2-1", "iptables": "1.8.11-2", "php-cli": "2:8.4+96", "tftp-hpa": "5.2+20150808-1.6", "gcc": "4:14.2.0-1", "git": "1:2.47.3-0+deb13u1", "hydra": "9.5-3", "iproute2": "6.15.0-1",
                "make": "4.4.1-2", "masscan": "2:1.3.2+ds1-2", "net-tools": "2.10-1.3", "nmap": "7.95+dfsg-3",
                "screen": "4.9.1-3", "socat": "1.8.0.3-1", "tmux": "3.5a-3", "tor": "0.4.8.16-1", "unzip": "6.0-29",
                "zip": "3.0-15"},
-    "bookworm": {"gcc": "4:12.2.0-3", "git": "1:2.39.5-0+deb12u2", "hydra": "9.4-1", "iproute2": "6.1.0-3",
+    "bookworm": {"bind9-dnsutils": "1:9.18.33-1~deb12u2", "busybox": "1:1.35.0-4+b3", "ethtool": "1:6.1-1", "iptables": "1.8.9-2", "php-cli": "2:8.2+93", "tftp-hpa": "5.2+20150808-1.4", "gcc": "4:12.2.0-3", "git": "1:2.39.5-0+deb12u2", "hydra": "9.4-1", "iproute2": "6.1.0-3",
                  "make": "4.3-4.1", "masscan": "2:1.3.2+ds1-1", "net-tools": "2.10-0.1", "nmap": "7.93+dfsg1-1",
                  "screen": "4.9.0-4", "socat": "1.7.4.4-2", "tmux": "3.3a-3", "tor": "0.4.7.16-1", "unzip": "6.0-28",
                  "zip": "3.0-13"},
 }
+# the tools Cowrie answers by name (its Python commands) and the programs of their package (Debian's name,
+#   the path in the tree): a tool runs exactly where its package is installed, and is a program then;
+#   iproute2 has no command of Cowrie and stays uninstalled
+TOOL_PROGRAMS = {
+    "bind9-dnsutils": {"dig": "usr/bin/dig"},
+    "busybox": {"ftpget": "usr/bin/ftpget"},
+    "ethtool": {"ethtool": "usr/sbin/ethtool"},
+    "iproute2": {"ip": "usr/bin/ip", "ss": "usr/bin/ss"},
+    "iptables": {"iptables": "usr/sbin/iptables"},
+    "iputils-ping": {"ping": "usr/bin/ping"},
+    "net-tools": {"ifconfig": "usr/sbin/ifconfig", "netstat": "usr/bin/netstat"},
+    "netcat-openbsd": {"nc": "usr/bin/nc", "netcat": "usr/bin/netcat"},
+    "php-cli": {"php": "usr/bin/php"},
+    "tftp-hpa": {"tftp": "usr/bin/tftp"},
+    "unzip": {"unzip": "usr/bin/unzip"},
+}
+COWRIE_TOOL_NAMES = frozenset({"dig", "ftpget", "ethtool", "iptables", "ping", "ifconfig", "netstat", "nc", "netcat",
+                               "php", "tftp", "unzip"})
+# the tools of the Red Hat images (rpm: bind-utils, net-tools, iptables, ethtool, iputils; unverified)
+EL_TOOLS = {"rhel": frozenset({"ethtool", "iputils-ping"}),
+            "centos": frozenset({"ethtool", "iptables", "iputils-ping", "net-tools"})}
+# nc of netcat-openbsd: the program and the names of the alternative
+NETCAT = "usr/bin/nc.openbsd"
+
+
+def installed_tools(persona, ident):
+    """The packages of TOOL_PROGRAMS installed on a server (apt_packages on Debian, EL_TOOLS)."""
+    if persona.kind != "server":
+        return set()
+    if is_el(persona):
+        tools = set(EL_TOOLS[persona.family])
+        return tools | ({"net-tools"} if "net-tools" in ident.release.packages else set())
+    return {tool for tool in TOOL_PROGRAMS if tool in apt_packages(persona, ident)["installed"]}
+
+
+def tool_programs(persona, ident):
+    """(programs, links) of the installed tools."""
+    programs, found = [], []
+    for tool in sorted(installed_tools(persona, ident)):
+        for name, rel in TOOL_PROGRAMS[tool].items():
+            if tool == "netcat-openbsd":
+                found.append((rel, NETCAT))
+            else:
+                programs.append(rel)
+        if tool == "netcat-openbsd":
+            programs.append(NETCAT)
+    return tuple(programs), tuple(found)
+
+
+def skipped_tools(persona, ident):
+    """The names of Cowrie's commands whose package the server has not installed."""
+    if persona.kind != "server":
+        return ()
+    installed = installed_tools(persona, ident)
+    return tuple(name for tool, names in TOOL_PROGRAMS.items() if tool not in installed
+                 for name in names if name in COWRIE_TOOL_NAMES)
+
+
 # the program on PATH of a package (a program of the tree is from an installed package)
 PACKAGE_PROGRAMS = {"bash": "bash", "curl": "curl", "git": "git", "gzip": "gzip", "perl": "perl",
                     "python3": "python3", "tar": "tar", "wget": "wget", "openssh-client": "ssh",

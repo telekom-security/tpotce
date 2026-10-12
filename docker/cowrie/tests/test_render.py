@@ -515,6 +515,37 @@ class SystemdTreeTest(unittest.TestCase):
         self.assertIsNotNone(tree.find_node(fs, "etc/rc.d/rc3.d/S10network"))
 
 
+class ToolPackageTest(unittest.TestCase):
+    """A tool Cowrie answers by name (ifconfig, unzip, nc ...) runs exactly where its package is
+    installed, and is then a program on PATH."""
+
+    def test_tools_answer_where_their_package_is_installed(self):
+        for persona in catalog.PERSONAS:
+            if persona.kind != "server":
+                continue
+            ident, out, _ = render_one(self, persona, 1)
+            fs, skip = fs_of(out), skipped(out)
+            installed = system.installed_tools(persona, ident)
+            if "dpkg" in persona.package_managers:
+                apt = json.loads((out / system.APT_PACKAGES).read_text())
+                self.assertEqual({t for t in system.TOOL_PROGRAMS if t in apt["installed"]}, installed, persona.id)
+                self.assertFalse({t for t in system.TOOL_PROGRAMS if t not in installed} - set(apt["available"]),
+                                 persona.id)
+            for tool, programs in system.TOOL_PROGRAMS.items():
+                for name, rel in programs.items():
+                    answered = name not in skip and name in system.COWRIE_TOOL_NAMES
+                    on_path = tree.find_node(fs, rel) is not None
+                    self.assertEqual(on_path, tool in installed, (persona.id, tool, name))
+                    if name in system.COWRIE_TOOL_NAMES:
+                        self.assertEqual(answered, tool in installed, (persona.id, tool, name))
+        expected = {"ubuntu-noble": {"net-tools", "netcat-openbsd", "iptables", "ethtool", "bind9-dnsutils",
+                                     "iputils-ping"},
+                    "debian-bookworm": {"netcat-openbsd", "iputils-ping"}}
+        for pid, tools in expected.items():
+            persona = catalog.by_id(pid)
+            self.assertEqual(system.installed_tools(persona, draw(persona, 1, NOW)), tools, pid)
+
+
 class SudoersTest(unittest.TestCase):
     """sudo -l lists what /etc/sudoers and /etc/sudoers.d of the persona say."""
 
