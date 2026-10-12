@@ -15,7 +15,7 @@ CFG_DIR=""
 RUN_LOG=""
 
 # Honeypot modules enabled in the test config, all others are switched off.
-ENABLED_MODULES="HONEYTRAP ENDLESSH HERALDING IPPHONEY"
+ENABLED_MODULES="HONEYTRAP ENDLESSH HERALDING IPPHONEY COWRIE"
 
 usage() {
   cat <<EOF
@@ -25,8 +25,9 @@ Run an isolated post-build smoke test for the ewsposter image.
 
 ewsposter runs twice in verbose mode against fixture logs with EWS submission
 disabled. Run 1 sees only empty log files, run 2 sees one new line in the
-honeytrap and ipphoney logs. Both runs must finish cleanly and run 2 must report
-the events from line 1.
+honeytrap and ipphoney logs and three Cowrie sessions. Both runs must finish
+cleanly, run 2 must report the events from line 1 and label the Cowrie sessions
+SSH or Telnet by their protocol or target port.
 
 The container needs outbound network access, ewsposter looks up the external
 IP via api.ipify.org on every start. Nothing is sent to the EWS backend.
@@ -125,7 +126,8 @@ prepare_ewsposter_harness() {
 
   mkdir -p "${CFG_DIR}" "${RUN_LOG}" \
     "${DATA_DIR}/honeytrap/log" "${DATA_DIR}/honeytrap/attacks" \
-    "${DATA_DIR}/endlessh/log" "${DATA_DIR}/heralding/log" "${DATA_DIR}/ipphoney/log"
+    "${DATA_DIR}/endlessh/log" "${DATA_DIR}/heralding/log" "${DATA_DIR}/ipphoney/log" \
+    "${DATA_DIR}/cowrie/log"
 
   # Empty log files as on a fresh install. Python >= 3.13 linecache returned
   # '\n' for these, which crashed the 'simple' format parsers.
@@ -133,6 +135,7 @@ prepare_ewsposter_harness() {
   : > "${DATA_DIR}/endlessh/log/endlessh.log"
   : > "${DATA_DIR}/heralding/log/auth.csv"
   : > "${DATA_DIR}/ipphoney/log/ipphoney.json"
+  : > "${DATA_DIR}/cowrie/log/cowrie.json"
 
   write_test_config
 
@@ -188,6 +191,13 @@ append_fixture_events() {
     >> "${DATA_DIR}/honeytrap/log/attacker.log"
   printf '%s\n' '{"timestamp": "2026-10-01T12:00:01.000000Z", "src_ip": "198.51.100.8", "src_port": 40001, "dst_ip": "192.0.2.10", "dst_port": 631}' \
     >> "${DATA_DIR}/ipphoney/log/ipphoney.json"
+  # Cowrie writes dst_port as an integer and names the protocol in
+  # cowrie.session.connect; the last session has no protocol field.
+  printf '%s\n' \
+    '{"eventid": "cowrie.session.connect", "session": "c0ffee000022", "timestamp": "2026-10-01T12:00:02.000000Z", "src_ip": "198.51.100.9", "src_port": 40002, "dst_ip": "192.0.2.10", "dst_port": 22, "protocol": "ssh"}' \
+    '{"eventid": "cowrie.session.connect", "session": "c0ffee000023", "timestamp": "2026-10-01T12:00:03.000000Z", "src_ip": "198.51.100.10", "src_port": 40003, "dst_ip": "192.0.2.10", "dst_port": 23, "protocol": "telnet"}' \
+    '{"eventid": "cowrie.session.connect", "session": "c0ffee002323", "timestamp": "2026-10-01T12:00:04.000000Z", "src_ip": "198.51.100.11", "src_port": 40004, "dst_ip": "192.0.2.10", "dst_port": 2323}' \
+    >> "${DATA_DIR}/cowrie/log/cowrie.json"
 }
 
 count_alerts() {
@@ -219,6 +229,34 @@ PY
   done
 }
 
+assert_cowrie_labels() {
+  python3 - "${RUN_LOG}/run2.log" <<'PY'
+import re
+import sys
+
+text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+expected = {
+    "c0ffee000022": "SSH Honeypot Cowrie",
+    "c0ffee000023": "Telnet Honeypot Cowrie",
+    "c0ffee002323": "Telnet Honeypot Cowrie",
+}
+found = {}
+# One block per alert, from its "--------------- MODULE ---------------" line on.
+parts = re.split(r"^-{15} ([A-Z0-9]+) -{15}$", text, flags=re.M)
+for module, block in zip(parts[1::2], parts[2::2]):
+    if module != "COWRIE":
+        continue
+    session = re.search(r"^sessionid : (\S+)$", block, re.M)
+    label = re.search(r"^description : (.+)$", block, re.M)
+    if session and label:
+        found[session.group(1)] = label.group(1)
+if found != expected:
+    print(f"Cowrie labels {found}, expected {expected}", file=sys.stderr)
+    sys.exit(1)
+print("Cowrie sessions labelled SSH (22, ssh), Telnet (23, telnet) and Telnet (2323, no protocol)")
+PY
+}
+
 main() {
   parse_args "$@"
   test_validate_timeout
@@ -239,7 +277,7 @@ main() {
   test_wait_for_container || test_die "ewsposter container did not stay running"
   test_ok "Container is running"
 
-  test_info "Run 1: empty honeytrap, endlessh, heralding and ipphoney logs"
+  test_info "Run 1: empty honeytrap, endlessh, heralding, ipphoney and cowrie logs"
   run_ewsposter 1
   test_ok "Run 1 finished without errors"
 
@@ -248,14 +286,17 @@ main() {
   fi
   test_ok "No alerts from empty log files"
 
-  test_info "Run 2: one new line in the honeytrap and ipphoney logs"
+  test_info "Run 2: one new line in the honeytrap and ipphoney logs, three Cowrie sessions"
   append_fixture_events
   run_ewsposter 2
   test_ok "Run 2 finished without errors"
 
   assert_line1_alerts || test_die "Expected alerts for line 1 were not reported"
-  [[ "$(count_alerts 2)" == "2" ]] || test_die "Run 2 reported $(count_alerts 2) alerts, expected 2"
+  [[ "$(count_alerts 2)" == "5" ]] || test_die "Run 2 reported $(count_alerts 2) alerts, expected 5"
   test_ok "Events from line 1 were not skipped"
+
+  assert_cowrie_labels || test_die "Cowrie sessions were not labelled SSH / Telnet as expected"
+  test_ok "Cowrie sessions are labelled SSH or Telnet"
 
   test_ok "ewsposter post-build smoke test completed successfully"
 }
