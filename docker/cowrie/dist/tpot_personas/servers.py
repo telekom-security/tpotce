@@ -238,6 +238,8 @@ def server_processes(persona, ident, extra=()):
             ps_entry("root", 0, "/sbin/wpa_supplicant -u -s -O DIR=/run/wpa_supplicant GROUP=netdev", mem=0.2, vsz=16752, rss=8576, stat="Ss"),
             ps_entry("root", 0, "/usr/sbin/ModemManager", mem=0.2, vsz=239500, rss=9984, stat="Ssl"),
             ps_entry("root", 0, "/usr/libexec/bluetooth/bluetoothd", mem=0.1, vsz=9616, rss=5504, stat="Ss"),
+            ps_entry("nobody", 0, "/usr/sbin/thd --triggers /etc/triggerhappy/triggers.d/ --socket /run/thd.socket "
+                               "--user nobody --deviceglob /dev/input/event*", mem=0.0, vsz=3316, rss=1536, stat="Ss"),
             ps_entry("root", 0, "sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups", mem=0.2, vsz=15492, rss=8448, stat="Ss"),
         ]
     elif family == "ubuntu":
@@ -254,6 +256,7 @@ def server_processes(persona, ident, extra=()):
             ps_entry("root", 0, "sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups", mem=0.2, vsz=15492, rss=4980, stat="Ss"),
             ps_entry("root", 0, "/usr/lib/snapd/snapd", mem=1.6, vsz=1986784, rss=31672, stat="Ssl"),
             ps_entry("root", 0, "/usr/bin/python3 /usr/share/unattended-upgrades/unattended-upgrade-shutdown --wait-for-signal", mem=0.2, vsz=27520, rss=6420, stat="Ssl"),
+            ps_entry("root", 0, "/usr/sbin/irqbalance --foreground", mem=0.1, vsz=82840, rss=3840, stat="Ssl"),
         ]
     else:  # debian
         entries = [
@@ -906,7 +909,9 @@ _EL = (("auditd.service", "Security Auditing Service", "/sbin/auditd", "enabled"
        ("kdump.service", "Crash recovery kernel arming", None, "enabled"),
        ("rsyslog.service", "System Logging Service", "/usr/sbin/rsyslogd", "enabled")) + _NM
 SERVICE_UNITS = {
-    "ubuntu": _CLOUD + (("apparmor.service", "Load AppArmor profiles", None, "enabled"), _CRON, _DBUS,
+    "ubuntu": _CLOUD + (("apparmor.service", "Load AppArmor profiles", None, "enabled"),
+                        ("apport.service", "LSB: automatic crash report generation", None, "enabled"), _CRON, _DBUS,
+                        ("irqbalance.service", "irqbalance daemon", "/usr/sbin/irqbalance", "enabled"),
                         ("rsyslog.service", "System Logging Service", "/usr/sbin/rsyslogd", "enabled"),
                         ("snapd.service", "Snap Daemon", "/usr/lib/snapd/snapd", "enabled"), _SSH, _NETWORKD,
                         ("systemd-resolved.service", "Network Name Resolution", "systemd-resolved", "enabled"),
@@ -921,6 +926,7 @@ SERVICE_UNITS = {
                 ("fake-hwclock.service", "Restore / save the current clock", None, "enabled"),
                 ("ModemManager.service", "Modem Manager", "/usr/sbin/ModemManager", "enabled")) + _NM + (
                 ("rpi-eeprom-update.service", "Check for Raspberry Pi EEPROM updates", None, "enabled"), _SSH,
+                ("triggerhappy.service", "triggerhappy global hotkey daemon", "/usr/sbin/thd", "enabled"),
                 ("wpa_supplicant.service", "WPA supplicant", "/sbin/wpa_supplicant", "enabled")),
     "rhel": _CLOUD + _EL + (
         ("dbus-broker.service", "D-Bus System Message Bus", "dbus-broker-launch", "enabled"),
@@ -929,7 +935,8 @@ SERVICE_UNITS = {
         ("selinux-autorelabel-mark.service", "Mark the need to relabel after reboot", None, "enabled"),
         ("sshd.service", "OpenSSH server daemon", "sshd: ", "enabled")),
     "centos": _CLOUD_EL7 + _EL + (
-        _DBUS, ("polkit.service", "Authorization Manager", "polkitd", "static"),
+        _DBUS, ("network.service", "LSB: Bring up/down networking", None, "bad"),
+        ("polkit.service", "Authorization Manager", "polkitd", "static"),
         ("postfix.service", "Postfix Mail Transport Agent", "postfix/master", "enabled"),
         ("rhel-dmesg.service", "Dump dmesg to /var/log/dmesg", None, "enabled"),
         ("rhel-domainname.service", "Read and set NIS domainname from /etc/sysconfig/network", None, "enabled"),
@@ -938,6 +945,83 @@ SERVICE_UNITS = {
         ("sshd.service", "OpenSSH server daemon", "/usr/sbin/sshd -D", "enabled"),
         ("systemd-vconsole-setup.service", "Setup Virtual Console", None, "static")),
 }
+# the sockets of systemd and D-Bus, and ssh.socket on 24.04: (unit, description, the service it starts,
+#   what it listens on)
+SOCKETS = (("dbus.socket", "D-Bus System Message Bus Socket", "dbus.service", ("/run/dbus/system_bus_socket (Stream)",)),
+           ("systemd-journald-dev-log.socket", "Journal Socket (/dev/log)", "systemd-journald.service",
+            ("/run/systemd/journal/dev-log (Datagram)",)),
+           ("systemd-journald.socket", "Journal Socket", "systemd-journald.service",
+            ("/run/systemd/journal/socket (Datagram)", "/run/systemd/journal/stdout (Stream)")),
+           ("systemd-udevd-control.socket", "udev Control Socket", "systemd-udevd.service",
+            ("/run/udev/control (SequentialPacket)",)),
+           ("systemd-udevd-kernel.socket", "udev Kernel Socket", "systemd-udevd.service", ("kobject-uevent 1 (Netlink)",)))
+SSH_SOCKET = ("ssh.socket", "OpenBSD Secure Shell server socket", "ssh.service", ("[::]:22 (Stream)",))
+# what a unit file of the image runs (the oneshots; a daemon runs its program of ps); unverified: the
+#   command lines of each release
+UNIT_EXEC = {
+    "kmod-static-nodes.service": "/bin/kmod static-nodes --format=tmpfiles --output=/run/tmpfiles.d/static-nodes.conf",
+    "systemd-journal-flush.service": "journalctl --smart-relinquish-var",
+    "systemd-random-seed.service": "{sd}/systemd-random-seed load",
+    "systemd-remount-fs.service": "{sd}/systemd-remount-fs",
+    "systemd-sysctl.service": "{sd}/systemd-sysctl",
+    "systemd-tmpfiles-setup-dev.service": "systemd-tmpfiles --prefix=/dev --create --boot",
+    "systemd-tmpfiles-setup.service": "systemd-tmpfiles --create --remove --boot --exclude-prefix=/dev",
+    "systemd-udev-trigger.service": "-udevadm trigger --type=all --action=add",
+    "systemd-update-utmp.service": "{sd}/systemd-update-utmp reboot",
+    "systemd-user-sessions.service": "{sd}/systemd-user-sessions start",
+    "systemd-vconsole-setup.service": "{sd}/systemd-vconsole-setup",
+    "cloud-init-local.service": "/usr/bin/cloud-init init --local",
+    "cloud-init.service": "/usr/bin/cloud-init init",
+    "cloud-config.service": "/usr/bin/cloud-init modules --mode=config",
+    "cloud-final.service": "/usr/bin/cloud-init modules --mode=final",
+    "apparmor.service": "/lib/apparmor/apparmor.systemd reload",
+    "apport.service": "/etc/init.d/apport start",
+    "ufw.service": "/lib/ufw/ufw-init start quiet",
+    "e2scrub_reap.service": "/sbin/e2scrub_all -A -r",
+    "dphys-swapfile.service": "/sbin/dphys-swapfile setup",
+    "fake-hwclock.service": "/sbin/fake-hwclock load",
+    "NetworkManager-wait-online.service": "/usr/bin/nm-online -s -q",
+    "rpi-eeprom-update.service": "/usr/bin/rpi-eeprom-update -s -a",
+    "kdump.service": "/usr/bin/kdumpctl start",
+    "dracut-shutdown.service": "/bin/true",
+    "import-state.service": "/usr/libexec/import-state",
+    "selinux-autorelabel-mark.service": "/usr/libexec/selinux/selinux-autorelabel-mark.sh",
+    "rhel-dmesg.service": "/usr/lib/systemd/rhel-dmesg",
+    "rhel-domainname.service": "/usr/lib/systemd/rhel-domainname",
+    "rhel-import-state.service": "/usr/lib/systemd/rhel-import-state",
+    "rhel-readonly.service": "/usr/lib/systemd/rhel-readonly",
+}
+
+
+def wants_target(name):
+    """The target an enabled unit is wanted by (the directory of its link in /etc/systemd/system)."""
+    if name.endswith(".socket"):
+        return "sockets.target"
+    if name.startswith("cloud-"):
+        return "cloud-init.target"
+    if name.endswith("-wait-online.service"):
+        return "network-online.target"
+    return "multi-user.target"
+
+
+def unit_file(persona, ident, unit):
+    """The text of a unit file the image has (shortened to what systemctl shows of it; unverified)."""
+    name, sd = unit["name"], _systemd_paths(ident)
+    if name.endswith(".socket"):
+        listen = "".join(f"Listen{'Stream' if 'Stream' in entry else 'Datagram' if 'Datagram' in entry else 'Netlink'}="
+                         f"{entry.rsplit(' (', 1)[0]}\n" for entry in unit["listen"])
+        body = f"[Socket]\n{listen}"
+    elif unit["sub"] == "running":
+        command = unit["command"]
+        if command.split(" ", 1)[0].endswith(":"):
+            command = command.split(": ", 1)[1].split(" [", 1)[0]
+        body = f"[Service]\nExecStart={command}\n"
+    else:
+        body = f"[Service]\nType=oneshot\nRemainAfterExit=yes\nExecStart={UNIT_EXEC.get(name, '/bin/true').format(sd=sd)}\n"
+    install = f"\n[Install]\nWantedBy={wants_target(name)}\n" if unit["state"] == "enabled" else ""
+    return f"[Unit]\nDescription={unit['description']}\n\n{body}{install}"
+
+
 GPU_UNITS = (("nvidia-persistenced.service", "NVIDIA Persistence Daemon", "nvidia-persistenced", "enabled"),
              ("ollama.service", "Ollama Service", "ollama serve", "enabled"))
 
@@ -976,6 +1060,10 @@ def systemd_units(persona, ident, processes):
     if version < 250:
         entries = tuple(e if e[0] != "systemd-networkd.service" else (e[0], "Network Service") + e[2:]
                         for e in entries)
+    if version >= 255:
+        # apport of 24.04 is a native unit
+        entries = tuple(e if e[0] != "apport.service" else (e[0], "automatic crash report generation") + e[2:]
+                        for e in entries)
     rng = rng_for(ident, "systemd")
     pids = {p["PID"] for p in processes}
     directory = unit_dir(persona, ident)
@@ -984,6 +1072,9 @@ def systemd_units(persona, ident, processes):
     for name, description, match, state in sorted(core + entries, key=lambda e: e[0].lower()):
         unit = {"name": name, "description": description, "state": state, "preset": "enabled",
                 "path": f"{directory}/{name}"}
+        if name == "network.service":
+            # CentOS 7 runs the network init script through systemd's SysV generator
+            unit.update({"path": "/etc/rc.d/init.d/network", "preset": "disabled"})
         process = next((p for p in processes if match and match in p["COMMAND"]), None)
         if match and process is None:
             raise ValueError(f"{persona.id}: no process of {name} in ps")
@@ -1006,6 +1097,17 @@ def systemd_units(persona, ident, processes):
                 # 24.04 starts sshd from ssh.socket; ssh.service itself is disabled
                 unit.update({"state": "disabled", "triggered_by": "ssh.socket"})
         units.append(unit)
+    services = {u["name"] for u in units}
+    dbus = "dbus-broker.service" if "dbus-broker.service" in services else "dbus.service"
+    for name, description, triggers, listen in SOCKETS + ((SSH_SOCKET,) if noble else ()):
+        triggers = dbus if name == "dbus.socket" else triggers
+        static = name != "ssh.socket"
+        units.append({"name": name, "description": description, "state": "static" if static else "enabled",
+                      "preset": "enabled", "path": f"{directory}/{name}", "sub": "listening",
+                      "start": round(rng.uniform(0.3, 1.5), 3), "triggers": triggers, "listen": list(listen),
+                      "memory": rng.choice((4096, 8192, 12288)), "peak": rng.choice((262144, 393216, 524288)),
+                      "cpu_ms": rng.randint(1, 9)})
+    units.sort(key=lambda u: (u["name"].rsplit(".", 1)[-1], u["name"].lower()))
     data = {"version": version, "full": full, "features": SYSTEMD_FEATURES.get(
                 "centos" if family == "centos" else "rhel" if family == "rhel" else ident.release.extra["codename"],
                 _FEATURES_DEBIAN),

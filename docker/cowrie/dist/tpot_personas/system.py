@@ -214,6 +214,340 @@ _PI_INIT = ("- alsa-utils", "+ avahi-daemon", "+ bluetooth", "- console-setup.sh
             "- rsync", "+ ssh", "- sudo", "+ triggerhappy", "+ udev")
 _CENTOS_STATUS = ("netconsole module not loaded", "Configured devices:", "lo eth0", "Currently active devices:",
                   "lo eth0")
+# the systemd units behind an init script of service --status-all whose name is not the unit's
+INIT_UNITS = {"kmod": ("kmod-static-nodes.service",), "procps": ("systemd-sysctl.service",),
+              "udev": ("systemd-udevd.service",)}
+# the network scripts of CentOS 7 initscripts (unverified: shortened to the parts that service and
+#   systemctl show)
+CENTOS_FUNCTIONS = r"""# -*-Shell-script-*-
+#
+# functions	This file contains functions to be used by most or all
+#		shell scripts in the /etc/init.d directory.
+#
+
+TEXTDOMAIN=initscripts
+
+# Make sure umask is sane
+umask 022
+
+# Set up a default search path.
+PATH="/sbin:/usr/sbin:/bin:/usr/bin"
+export PATH
+
+if [ $PPID -ne 1 -a -z "$SYSTEMCTL_SKIP_REDIRECT" ] && \
+        [ -d /run/systemd/system ] ; then
+    case "$0" in
+    /etc/init.d/*|/etc/rc.d/init.d/*)
+        _use_systemctl=1
+        ;;
+    esac
+fi
+
+systemctl_redirect () {
+    local s
+    local prog=${1##*/}
+    local command=$2
+    local options=""
+
+    case "$command" in
+    start)
+        s=$"Starting $prog (via systemctl): "
+        ;;
+    stop)
+        s=$"Stopping $prog (via systemctl): "
+        ;;
+    reload|try-reload)
+        s=$"Reloading $prog configuration (via systemctl): "
+        ;;
+    restart|try-restart|condrestart)
+        s=$"Restarting $prog (via systemctl): "
+        ;;
+    esac
+
+    if [ -n "$SYSTEMCTL_IGNORE_DEPENDENCIES" ] ; then
+        options="--ignore-dependencies"
+    fi
+
+    action "$s" /bin/systemctl $options $command "$prog.service"
+}
+
+# Get a sane screen width
+[ -z "${COLUMNS:-}" ] && COLUMNS=80
+
+if [ -z "${CONSOLETYPE:-}" ]; then
+    if [ -c "/dev/stderr" -a -r "/dev/stderr" ]; then
+        CONSOLETYPE="$(/sbin/consoletype < /dev/stderr 2>/dev/null)"
+    else
+        CONSOLETYPE="serial"
+    fi
+fi
+
+if [ -z "${BOOTUP:-}" ]; then
+    if [ -f /etc/sysconfig/init ]; then
+        . /etc/sysconfig/init
+    else
+        BOOTUP=color
+        RES_COL=60
+        MOVE_TO_COL="echo -en \\033[${RES_COL}G"
+        SETCOLOR_SUCCESS="echo -en \\033[1;32m"
+        SETCOLOR_FAILURE="echo -en \\033[1;31m"
+        SETCOLOR_WARNING="echo -en \\033[1;33m"
+        SETCOLOR_NORMAL="echo -en \\033[0;39m"
+        LOGLEVEL=1
+    fi
+    if [ "$CONSOLETYPE" = "serial" ]; then
+        BOOTUP=serial
+        MOVE_TO_COL=
+        SETCOLOR_SUCCESS=
+        SETCOLOR_FAILURE=
+        SETCOLOR_WARNING=
+        SETCOLOR_NORMAL=
+    fi
+fi
+
+echo_success() {
+    [ "$BOOTUP" = "color" ] && $MOVE_TO_COL
+    echo -n "["
+    [ "$BOOTUP" = "color" ] && $SETCOLOR_SUCCESS
+    echo -n $"  OK  "
+    [ "$BOOTUP" = "color" ] && $SETCOLOR_NORMAL
+    echo -n "]"
+    echo -ne "\r"
+    return 0
+}
+
+echo_failure() {
+    [ "$BOOTUP" = "color" ] && $MOVE_TO_COL
+    echo -n "["
+    [ "$BOOTUP" = "color" ] && $SETCOLOR_FAILURE
+    echo -n $"FAILED"
+    [ "$BOOTUP" = "color" ] && $SETCOLOR_NORMAL
+    echo -n "]"
+    echo -ne "\r"
+    return 1
+}
+
+success() {
+    [ "$BOOTUP" != "verbose" -a -z "${LSB:-}" ] && echo_success
+    return 0
+}
+
+failure() {
+    local rc=$?
+    [ "$BOOTUP" != "verbose" -a -z "${LSB:-}" ] && echo_failure
+    [ -x /bin/plymouth ] && /bin/plymouth --details
+    return $rc
+}
+
+action() {
+    local STRING rc
+
+    STRING=$1
+    echo -n "$STRING "
+    shift
+    "$@" && success $"$STRING" || failure $"$STRING"
+    rc=$?
+    echo
+    return $rc
+}
+
+is_true() {
+    case "$1" in
+    [tT] | [yY] | [yY][eE][sS] | [oO][nN] | [tT][rR][uU][eE] | 1)
+        return 0
+        ;;
+    esac
+    return 1
+}
+
+is_false() {
+    case "$1" in
+    [fF] | [nN] | [nN][oO] | [oO][fF][fF] | [fF][aA][lL][sS][eE] | 0)
+        return 0
+        ;;
+    esac
+    return 1
+}
+
+# Evaluate shvar-style booleans
+if [ -n "${_use_systemctl:-}" ] && [ "$1" != "status" ]; then
+    systemctl_redirect $0 $1
+    exit $?
+fi
+"""
+CENTOS_NETCONSOLE = r"""#!/bin/bash
+#
+# netconsole	This loads the netconsole module with the configured parameters.
+#
+# chkconfig: - 50 50
+# description: Initializes network console logging
+# config: /etc/sysconfig/netconsole
+#
+### BEGIN INIT INFO
+# Provides:          netconsole
+# Required-Start:    $network
+# Short-Description: Initializes network console logging
+# Description:       Initializes network console logging of kernel messages.
+### END INIT INFO
+
+# Copyright 2002 Red Hat, Inc.
+#
+# Based in part on a shell script by
+# Andreas Dilger <adilger@turbolinux.com>  Sep 26, 2001
+
+PATH=/sbin:/usr/sbin:$PATH
+RETVAL=0
+SERVER_ADDRESS_RESOLUTION=
+
+# Check that networking is up.
+. /etc/sysconfig/network
+
+# Source function library.
+. /etc/rc.d/init.d/functions
+
+# Default values
+LOCALPORT=6666
+DEV=
+SYSLOGADDR=
+SYSLOGPORT=514
+SYSLOGMACADDR=
+
+kernel=$(uname -r | cut -d. -f1-2)
+
+usage ()
+{
+	echo $"Usage: $0 {start|stop|status|restart|condrestart}" 1>&2
+	RETVAL=2
+}
+
+[ -f /etc/sysconfig/netconsole ] && . /etc/sysconfig/netconsole
+
+case "$1" in
+  start)
+	[ -z "$SYSLOGADDR" ] && exit 6
+	modprobe netconsole netconsole=$LOCALPORT@/$DEV,$SYSLOGPORT@$SYSLOGADDR/$SYSLOGMACADDR 2>/dev/null
+	RETVAL=$?
+	;;
+  stop)
+	modprobe -r netconsole 2>/dev/null
+	RETVAL=$?
+	;;
+  status)
+	if grep -q "^netconsole " /proc/modules ; then
+		echo $"netconsole module loaded"
+		RETVAL=0
+	else
+		echo $"netconsole module not loaded"
+		RETVAL=3
+	fi
+	;;
+  restart|reload)
+	$0 stop
+	$0 start
+	RETVAL=$?
+	;;
+  condrestart)
+	if grep -q "^netconsole " /proc/modules ; then
+		$0 restart
+	fi
+	;;
+  *)
+	usage
+	;;
+esac
+
+exit $RETVAL
+"""
+CENTOS_NETWORK = r"""#! /bin/bash
+#
+# network       Bring up/down networking
+#
+# chkconfig: 2345 10 90
+# description: Activates/Deactivates all network interfaces configured to \
+#              start at boot time.
+#
+### BEGIN INIT INFO
+# Provides: $network
+# Should-Start: iptables ip6tables NetworkManager-wait-online NetworkManager $network-pre
+# Short-Description: Bring up/down networking
+# Description: Bring up/down networking
+### END INIT INFO
+
+# Source function library.
+. /etc/init.d/functions
+
+if [ ! -f /etc/sysconfig/network ]; then
+    exit 6
+fi
+
+. /etc/sysconfig/network
+
+# Check that networking is up.
+[ "${NETWORKING}" = "no" ] && exit 6
+
+# if the ip configuration utility isn't around we can't function.
+[ -x /sbin/ip ] || exit 1
+
+CWD=$(pwd)
+cd /etc/sysconfig/network-scripts
+
+. ./network-functions
+
+# find all the interfaces besides loopback.
+# ignore aliases, alternative configurations, and editor backup files
+interfaces=$(ls ifcfg-* | \
+            LC_ALL=C sed -e "$__sed_discard_ignored_files" \
+                       -e '/\(ifcfg-lo$\|:\|ifcfg-.*-range\)/d' \
+                       -e '{ s/^ifcfg-//g;s/[0-9]/ &/}' | \
+            LC_ALL=C sort -k 1,1 -k 2n | \
+            LC_ALL=C sed 's/ //')
+rc=0
+
+# See how we were called.
+case "$1" in
+start)
+        [ "$EUID" != "0" ] && exit 4
+        rc=0
+        action $"Bringing up loopback interface: " ./ifup ifcfg-lo
+        for i in $interfaces; do
+                action $"Bringing up interface $i: " ./ifup $i boot
+                [ $? -ne 0 ] && rc=1
+        done
+        touch /var/lock/subsys/network
+        ;;
+stop)
+        [ "$EUID" != "0" ] && exit 4
+        for i in $interfaces ; do
+                action $"Shutting down interface $i: " ./ifdown $i boot
+        done
+        action $"Shutting down loopback interface: " ./ifdown ifcfg-lo
+        rm -f /var/lock/subsys/network
+        ;;
+status)
+        echo $"Configured devices:"
+        echo lo $interfaces
+
+        echo $"Currently active devices:"
+        echo $(/sbin/ip -o link show up | awk -F ": " '{ print $2 }')
+        ;;
+restart|reload|force-reload)
+        cd "$CWD"
+        $0 stop
+        $0 start
+        rc=$?
+        ;;
+*)
+        echo $"Usage: $0 {start|stop|status|restart|reload|force-reload}"
+        exit 2
+esac
+
+exit $rc
+"""
+# the run level links of the CentOS 7 network scripts (chkconfig: netconsole off, network 2345)
+CENTOS_RC_LINKS = tuple((f"etc/rc.d/rc{level}.d/K50netconsole", "etc/rc.d/init.d/netconsole") for level in range(7)) + tuple(
+    (f"etc/rc.d/rc{level}.d/{'S10' if level in (2, 3, 4, 5) else 'K90'}network", "etc/rc.d/init.d/network")
+    for level in range(7))
+
 # the commands of Cowrie's Python a server runs in place of a txtcmd (F7), with their spellings
 SERVER_COMMANDS = ("sudo", "service", "systemctl")
 APT_COMMANDS = ("apt", "apt-get")
@@ -432,9 +766,13 @@ def files(persona):
     if not is_el(persona):
         return {}
     rhel = persona.family == "rhel"
-    return {"etc/rc.d/init.d/README": EL_INIT_README, "etc/rc.d/rc.local": EL_RC_LOCAL,
-            "usr/lib/systemd/system/sshd.service": EL_SSHD_UNIT.format(keygen="target" if rhel else "service",
-                                                                      env="-" if rhel else "")}
+    found = {"etc/rc.d/init.d/README": EL_INIT_README, "etc/rc.d/rc.local": EL_RC_LOCAL,
+             "usr/lib/systemd/system/sshd.service": EL_SSHD_UNIT.format(keygen="target" if rhel else "service",
+                                                                       env="-" if rhel else "")}
+    if not rhel:
+        found.update({"etc/rc.d/init.d/functions": CENTOS_FUNCTIONS, "etc/rc.d/init.d/netconsole": CENTOS_NETCONSOLE,
+                      "etc/rc.d/init.d/network": CENTOS_NETWORK})
+    return found
 
 
 def links(persona):
@@ -449,16 +787,16 @@ def links(persona):
         found += [(f"etc/rc{level}.d", f"etc/rc.d/rc{level}.d") for level in range(7)]
     if persona.family == "centos":
         found.append((LOADER, CENTOS_LOADER))
+        found += CENTOS_RC_LINKS
     return tuple(found)
 
 
 def ssh_units(persona, ident):
     """(paths to remove, links) of the ssh units: Ubuntu 24.04 starts sshd from ssh.socket, so
-    ssh.service is not enabled (no alias sshd.service) and the socket is."""
+    ssh.service is not enabled (no alias sshd.service); the socket's link comes with the units."""
     if ident.release.extra.get("codename") != "noble":
         return (), ()
-    return (("etc/systemd/system/sshd.service", "etc/systemd/system/multi-user.target.wants/ssh.service"),
-            (("etc/systemd/system/sockets.target.wants/ssh.socket", "usr/lib/systemd/system/ssh.socket"),))
+    return ("etc/systemd/system/sshd.service", "etc/systemd/system/multi-user.target.wants/ssh.service"), ()
 
 
 def directories(persona):

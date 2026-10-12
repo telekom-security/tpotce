@@ -200,6 +200,21 @@ def program_size(ident, rel, sizes=PROGRAM_SIZES):
     return rng_for(ident, f"size {rel}").randint(low, high)
 
 
+def _unit_files(t, persona, ident, processes):
+    """A unit file for every unit systemctl shows (Cowrie's tree has those of its container), the link
+    of the target that wants an enabled one."""
+    for unit in servers.systemd_units(persona, ident, processes)["units"]:
+        path = unit["path"]
+        if not path.startswith(("/usr/lib/systemd/", "/lib/systemd/")):
+            continue
+        rel = "usr" + path if path.startswith("/lib/") else path.lstrip("/")
+        if tree.find_node(t, rel) is None:
+            tree.ensure_file(t, rel, servers.unit_file(persona, ident, unit).encode(), ctime=ident.installed_at)
+        if unit["state"] == "enabled":
+            tree.ensure_link(t, f"etc/systemd/system/{servers.wants_target(unit['name'])}.wants/{unit['name']}", path,
+                             ctime=ident.installed_at)
+
+
 def _login_links(t, persona, ident):
     """The standard streams and /proc/self of the login shell: fd 0-2 on its terminal, exe its
     program (Cowrie's tree has the pipes and the Python of the container there)."""
@@ -226,6 +241,8 @@ def _mode(rel):
         return 0o640
     if rel == "etc/sudoers" or rel.startswith("etc/sudoers.d/"):
         return 0o440
+    if rel.startswith("etc/rc.d/init.d/") and rel.rsplit("/", 1)[-1] not in ("README", "functions"):
+        return 0o755
     return 0o755 if rel.startswith(("bin/", "sbin/", "usr/bin/", "usr/sbin/")) else 0o644
 
 
@@ -273,6 +290,8 @@ def apply_to_tree(base_tree, persona, ident, content):
         tree.remove_node(t, rel)
     for rel, target in system.python_links(persona, ident) + system.links(persona) + ssh_links:
         tree.ensure_link(t, rel, target, ctime=ident.installed_at)
+    if persona.kind == "server":
+        _unit_files(t, persona, ident, content.processes)
     _login_links(t, persona, ident)
     _set_dirs(t, persona, ident.installed_at)
     return t

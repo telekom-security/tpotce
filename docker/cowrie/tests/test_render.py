@@ -368,7 +368,7 @@ class ServerRuntimeTest(unittest.TestCase):
             for unit in units["units"]:
                 if unit["sub"] == "running":
                     self.assertEqual(pids[unit["pid"]], unit["command"], (persona.id, unit["name"]))
-                else:
+                elif unit["sub"] == "exited":
                     self.assertNotIn(unit["pid"], pids, (persona.id, unit["name"]))
             rules = json.loads((out / system.SUDO_LIST).read_text())["rules"]
             self.assertEqual(rules[persona.user][-1], "(ALL) NOPASSWD: ALL", persona.id)
@@ -380,10 +380,64 @@ class ServerRuntimeTest(unittest.TestCase):
         fs = fs_of(out)
         self.assertIsNone(tree.find_node(fs, "etc/systemd/system/sshd.service"))
         self.assertEqual(tree.node_get(tree.find_node(fs, "etc/systemd/system/sockets.target.wants/ssh.socket"),
-                                       tree.A_TARGET), "usr/lib/systemd/system/ssh.socket")
+                                       tree.A_TARGET), "/usr/lib/systemd/system/ssh.socket")
         _, out, _ = render_one(self, catalog.by_id("debian-trixie"), 1)
         self.assertEqual(cfg_of(out).get("shell", "apt_fallback"), "debian")
         self.assertIsNotNone(tree.find_node(fs_of(out), "etc/systemd/system/sshd.service"))
+
+
+class SystemdTreeTest(unittest.TestCase):
+    """The units systemctl shows are unit files of the tree, enabled ones are wanted, and
+    service --status-all says the same."""
+
+    def test_every_unit_has_its_file_and_link(self):
+        for persona in catalog.PERSONAS:
+            if persona.kind != "server":
+                continue
+            _, out, _ = render_one(self, persona, 1)
+            fs = fs_of(out)
+            units = json.loads((out / system.SYSTEMD_UNITS).read_text())["units"]
+            names = {u["name"] for u in units}
+            for unit in units:
+                node = tree.find_node(fs, unit["path"])
+                self.assertIsNotNone(node, (persona.id, unit["path"]))
+                if unit["state"] == "enabled" and unit["path"].startswith(("/usr/lib/systemd/", "/lib/systemd/")):
+                    wants = [path for path, n in tree.iter_nodes(fs) if path.startswith("/etc/systemd/system/")
+                             and path.endswith(f".wants/{unit['name']}") and tree.node_get(n, tree.A_TYPE) == tree.T_LINK]
+                    self.assertTrue(wants, (persona.id, unit["name"]))
+            status = (out / system.SERVICE_STATUS).read_text()
+            for line in status.splitlines():
+                if line.startswith(" [ + ]"):
+                    script = line.split()[-1]
+                    self.assertTrue(any(name.startswith(script) or name in system.INIT_UNITS.get(script, ())
+                                        for name in names), (persona.id, script))
+            self.assertIn("dbus.socket", names, persona.id)
+
+    def test_noble_listens_on_ssh_socket(self):
+        _, out, _ = render_one(self, catalog.by_id("ubuntu-noble"), 1)
+        units = {u["name"]: u for u in json.loads((out / system.SYSTEMD_UNITS).read_text())["units"]}
+        self.assertEqual((units["ssh.socket"]["sub"], units["ssh.socket"]["state"]), ("listening", "enabled"))
+        self.assertEqual(units["ssh.socket"]["triggers"], "ssh.service")
+        self.assertEqual(units["ssh.service"]["triggered_by"], "ssh.socket")
+        self.assertIn("irqbalance.service", units)
+        self.assertEqual(units["apport.service"]["sub"], "exited")
+        ps = json.loads((out / "cmdoutput.json").read_text())["command"]["ps"]
+        self.assertTrue(any("irqbalance" in p["COMMAND"] for p in ps))
+        _, out, _ = render_one(self, catalog.by_id("raspios"), 1)
+        units = {u["name"]: u for u in json.loads((out / system.SYSTEMD_UNITS).read_text())["units"]}
+        self.assertEqual(units["triggerhappy.service"]["sub"], "running")
+
+    def test_centos_network_scripts(self):
+        _, out, _ = render_one(self, catalog.by_id("centos-7"), 1)
+        fs = fs_of(out)
+        for name in ("functions", "netconsole", "network"):
+            node = tree.find_node(fs, f"etc/rc.d/init.d/{name}")
+            self.assertEqual(tree.node_get(node, tree.A_MODE) & 0o7777, 0o755 if name != "functions" else 0o644, name)
+            self.assertTrue(tree.node_get(node, tree.A_CONTENTS).startswith(b"#"), name)
+        units = {u["name"]: u for u in json.loads((out / system.SYSTEMD_UNITS).read_text())["units"]}
+        self.assertEqual((units["network.service"]["path"], units["network.service"]["sub"]),
+                         ("/etc/rc.d/init.d/network", "exited"))
+        self.assertIsNotNone(tree.find_node(fs, "etc/rc.d/rc3.d/S10network"))
 
 
 class SudoersTest(unittest.TestCase):

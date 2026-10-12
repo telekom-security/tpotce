@@ -439,6 +439,15 @@ class ValidateServerCommandTest(unittest.TestCase):
                     "OpenBSD Secure Shell server", "OpenSSH server daemon").replace('"curl"', '"wget"'))
             self.assertIn(f"runtime: {name} is not the persona's", self.problems("ubuntu-jammy", change), name)
 
+    def test_unit_file_missing(self):
+        persona = catalog.by_id("rhel-9")
+        ident, out, keys = render_one(self, persona, 1)
+        fs = tree.load_pickle(out / "fs.pickle")
+        tree.remove_node(fs, "usr/lib/systemd/system/crond.service")
+        tree.dump_pickle(fs, out / "fs.pickle")
+        found = " | ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0))
+        self.assertIn("systemctl: /usr/lib/systemd/system/crond.service of crond.service is not in fs.pickle", found)
+
     def test_sudoers_of_another_system(self):
         def change(out):
             (out / "honeyfs/etc/sudoers").chmod(0o640)

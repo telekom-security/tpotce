@@ -608,9 +608,14 @@ def _check_system(persona, ident, cfg, out_dir, runtime_dir, fs, out):
                     or (tree.node_get(node, tree.A_MODE) or 0) & 0o7777 != 0o440:
                 out.append(f"sudoers: /{rel} is not the persona's")
         units = {u["name"]: u for u in expected.get(system.SYSTEMD_UNITS, {}).get("units", [])}
-        for name in ("ssh.service", "sshd.service"):
-            if name in units and tree.find_node(fs, units[name]["path"]) is None:
-                out.append(f"systemctl: {units[name]['path']} of {name} is not in fs.pickle")
+        for name, unit in sorted(units.items()):
+            if tree.find_node(fs, unit["path"]) is None:
+                out.append(f"systemctl: {unit['path']} of {name} is not in fs.pickle")
+        for line in _text(out_dir / system.SERVICE_STATUS).splitlines():
+            script = line.split()[-1] if line.startswith(" [ + ]") else None
+            if script and not any(name.startswith(script + ".") or name in system.INIT_UNITS.get(script, ())
+                                  for name in units):
+                out.append(f"service: {script} runs, systemctl has no unit of it")
 
 
 def problems(persona, ident, out_dir, runtime_dir, keys_dir, min_pickle=MIN_PICKLE_SIZE):

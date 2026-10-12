@@ -1069,6 +1069,23 @@ def tpot_status_unit(cmd, data: dict, unit: dict, boot: float, now: float, host:
     if unit.get("triggered_by"):
         lines.append(key("TriggeredBy") + f"● {unit['triggered_by']}")
     pid = unit.get("pid", 0)
+    if unit["name"].endswith(".socket"):
+        lines.append(key("Triggers") + f"\u25cf {unit.get('triggers', '')}")
+        for index, entry in enumerate(unit.get("listen", [])):
+            lines.append((key("Listen") if index == 0 else " " * (width + 2)) + entry)
+        if version >= 227:
+            lines.append(key("Tasks") + f"0 (limit: {data.get('tasks_max', 4096)})")
+        if version >= 238:
+            memory = key("Memory") + tpot_bytes(int(unit.get("memory", 0)))
+            if version >= 254:
+                memory += f" (peak: {tpot_bytes(int(unit.get('peak', 0)))})"
+            lines.append(memory)
+        if version >= 240:
+            lines.append(key("CPU") + tpot_timespan(int(unit.get("cpu_ms", 0))))
+        lines.append(key("CGroup") + f"/system.slice/{unit['name']}")
+        stamp = time.strftime("%b %d %H:%M:%S", time.gmtime(since))
+        label = f"{unit['name']} - {unit.get('description', '')}" if version >= 252 else unit.get("description", "")
+        return lines + ["", f"{stamp} {host} systemd[1]: Listening on {label}."]
     if sub == "running":
         lines.append(key("Main PID") + f"{pid} ({unit.get('comm', '')})")
         if version >= 227:
@@ -1115,7 +1132,7 @@ def tpot_status_system(data: dict, boot: float, now: float, host: str) -> list[s
 
 def tpot_list_units(cmd, data: dict, every: bool, legend: bool, kind: str | None) -> None:
     version = int(data.get("version", 252))
-    units = [] if kind not in (None, "service") else sorted(data["units"], key=lambda u: u["name"].lower())
+    units = [u for u in data["units"] if kind is None or u["name"].endswith("." + kind)]
     if not units:
         cmd.write("0 loaded units listed.\n" if legend else "")
         return
@@ -1147,8 +1164,9 @@ def tpot_list_unit_files(cmd, data: dict, legend: bool) -> None:
     width = max([len("UNIT FILE")] + [len(u["name"]) for u in units])
     state_width = max([len("STATE")] + [len(u.get("state", "")) for u in units])
     preset = version >= 245
+    title = "PRESET" if version >= 252 else "VENDOR PRESET"
     if legend:
-        cmd.write(f"{'UNIT FILE':<{width}} " + (f"{'STATE':<{state_width}} PRESET\n" if preset else "STATE\n"))
+        cmd.write(f"{'UNIT FILE':<{width}} " + (f"{'STATE':<{state_width}} {title}\n" if preset else "STATE\n"))
     for unit in units:
         state = unit.get("state", "enabled")
         cmd.write(f"{unit['name']:<{width}} " + (f"{state:<{state_width}} "

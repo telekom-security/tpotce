@@ -821,12 +821,30 @@ class PatchTest(unittest.TestCase):
         out, _, _, _, _ = self.systemctl("ubuntu-noble", ["--no-legend"])
         self.assertTrue(out.startswith("  apparmor.service "), out[:40])
         self.assertNotIn("Legend", out)
-        out, _, _, _, _ = self.systemctl("ubuntu-noble", ["list-units", "--type=socket"])
+        out, _, _, _, _ = self.systemctl("ubuntu-noble", ["list-units", "--type=timer"])
         self.assertEqual(out, "0 loaded units listed.\n")
         out, _, _, _, _ = self.systemctl("rhel-9", ["list-unit-files"])
         self.assertRegex(out, r"^UNIT FILE +STATE +PRESET\n")
         self.assertRegex(out, r"\nsshd.service +enabled +enabled\n")
         self.assertRegex(out, r"\n\d+ unit files listed.\n$")
+
+    def test_systemctl_sockets_and_unit_files(self):
+        out, err, code, _, _ = self.systemctl("ubuntu-noble", ["status", "ssh.socket"])
+        self.assertEqual((err, code), ("", 0))
+        self.assertIn("\u25cf ssh.socket - OpenBSD Secure Shell server socket\n", out)
+        self.assertRegex(out, r"Active: active \(listening\) since ")
+        self.assertIn("   Triggers: \u25cf ssh.service\n", out)
+        self.assertIn("     Listen: [::]:22 (Stream)\n", out)
+        self.assertIn("systemd[1]: Listening on ssh.socket - OpenBSD Secure Shell server socket.", out)
+        out, _, _, _, _ = self.systemctl("ubuntu-noble", ["list-units", "--type=socket"])
+        self.assertRegex(out, r"\n  ssh\.socket +loaded active listening OpenBSD Secure Shell server socket\n")
+        out, _, _, _, _ = self.systemctl("ubuntu-noble", ["list-units"])
+        names = [line.split()[0] for line in out.splitlines()[1:] if line.startswith("  ") and "." in line.split()[0]]
+        self.assertLess(names.index("unattended-upgrades.service"), names.index("dbus.socket"))
+        out, _, _, _, _ = self.systemctl("ubuntu-jammy", ["list-unit-files"])
+        self.assertRegex(out, r"^UNIT FILE +STATE +VENDOR PRESET\n")
+        out, _, _, _, _ = self.systemctl("centos-7", ["status", "network"])
+        self.assertIn("Loaded: loaded (/etc/rc.d/init.d/network; bad; vendor preset: disabled)", out)
 
     def test_systemctl_overview_version_and_errors(self):
         out, _, _, _, ident = self.systemctl("rhel-9", ["status"])
