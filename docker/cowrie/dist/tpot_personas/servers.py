@@ -1048,6 +1048,8 @@ SCRIPT_PROGRAMS = {
     "/usr/bin/rpi-eeprom-update": _SH_SCRIPT.format(what="Check and update the bootloader EEPROM of the Raspberry Pi."),
     "/usr/bin/kdumpctl": _SH_SCRIPT.format(what="Arm the crash kernel of kdump."),
     "/usr/libexec/import-state": _SH_SCRIPT.format(what="Import the network configuration of the initramfs."),
+    "/sbin/e2scrub_all": _SH_SCRIPT.replace("/bin/sh", "/bin/bash", 1).format(
+        what="Check all mounted ext4 file systems on LVM, remove stale snapshots (-r)."),
     "/usr/libexec/selinux/selinux-autorelabel-mark.sh": _SH_SCRIPT.format(
         what="Mark the need to relabel after reboot."),
     "/usr/lib/systemd/rhel-dmesg": _SH_SCRIPT.format(what="Dump dmesg to /var/log/dmesg."),

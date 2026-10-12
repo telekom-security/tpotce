@@ -617,7 +617,8 @@ class UnitDetailTest(unittest.TestCase):
                                              "usr/share/unattended-upgrades/unattended-upgrade-shutdown",
                                              "usr/bin/cloud-init")),
                            ("centos-7", ("usr/lib/systemd/rhel-dmesg", "usr/bin/kdumpctl")),
-                           ("raspios", ("sbin/dphys-swapfile", "sbin/fake-hwclock"))):
+                           ("raspios", ("sbin/dphys-swapfile", "sbin/fake-hwclock")),
+                           ("debian-bookworm", ("sbin/e2scrub_all",))):
             _, out, _ = render_one(self, catalog.by_id(pid), 1)
             fs = fs_of(out)
             for rel in paths:
@@ -625,6 +626,24 @@ class UnitDetailTest(unittest.TestCase):
                 text = tree.node_get(node, tree.A_CONTENTS)
                 self.assertTrue(isinstance(text, bytes) and text.startswith(b"#!"), (pid, rel))
                 self.assertEqual(tree.node_get(node, tree.A_MODE) & 0o777, 0o755, (pid, rel))
+
+    def test_unit_files_of_cowries_tree_get_their_text(self):
+        # Cowrie's pickle has ssh.service, ssh.socket and e2scrub_reap.service without contents
+        for pid, names in (("ubuntu-noble", ("ssh.service", "ssh.socket")),
+                           ("debian-bookworm", ("ssh.service", "e2scrub_reap.service"))):
+            _, out, _ = render_one(self, catalog.by_id(pid), 1)
+            fs = fs_of(out)
+            for unit in self.units(out):
+                if unit["name"] not in names:
+                    continue
+                text = tree.node_get(tree.find_node(fs, unit["path"]), tree.A_CONTENTS)
+                self.assertIsInstance(text, bytes, (pid, unit["name"]))
+                self.assertIn(f"Description={unit['description']}\n".encode(), text)
+            names_found = {unit["name"] for unit in self.units(out)}
+            self.assertTrue(set(names) <= names_found, (pid, names_found))
+        _, out, _ = render_one(self, catalog.by_id("debian-bookworm"), 1)
+        reap = tree.node_get(tree.find_node(fs_of(out), "lib/systemd/system/e2scrub_reap.service"), tree.A_CONTENTS)
+        self.assertIn(b"ExecStart=/sbin/e2scrub_all -A -r\n", reap)
 
     def test_init_scripts_have_their_run_level_links(self):
         _, out, _ = render_one(self, catalog.by_id("ubuntu-noble"), 1)

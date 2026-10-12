@@ -464,6 +464,16 @@ class ValidateServerCommandTest(unittest.TestCase):
         found = " | ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0))
         self.assertIn("service: --status-all names cron, /etc/init.d/cron is missing", found)
 
+    def test_unit_file_without_text(self):
+        persona = catalog.by_id("debian-bookworm")
+        ident, out, keys = render_one(self, persona, 1)
+        fs = tree.load_pickle(out / "fs.pickle")
+        node = tree.find_node(fs, "usr/lib/systemd/system/cron.service")
+        tree.node_set(node, tree.A_CONTENTS, [])
+        tree.dump_pickle(fs, out / "fs.pickle")
+        found = " | ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0))
+        self.assertIn("systemctl: /lib/systemd/system/cron.service of cron.service has no text", found)
+
     def test_exec_start_names_a_missing_program(self):
         persona = catalog.by_id("raspios")
         ident, out, keys = render_one(self, persona, 1)

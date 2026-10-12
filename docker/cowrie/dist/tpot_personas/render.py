@@ -259,6 +259,12 @@ def program_size(ident, rel, sizes=PROGRAM_SIZES):
     return rng_for(ident, f"size {rel}").randint(low, high)
 
 
+def _without_text(node):
+    """A missing node, or a file without contents (as Cowrie's pickle has its files)."""
+    return node is None or (tree.node_get(node, tree.A_TYPE) == tree.T_FILE
+                            and not isinstance(tree.node_get(node, tree.A_CONTENTS), bytes))
+
+
 def _unit_files(t, persona, ident, processes):
     """A unit file for every unit systemctl shows (Cowrie's tree has those of its container), the link
     of the target that wants an enabled one."""
@@ -267,19 +273,20 @@ def _unit_files(t, persona, ident, processes):
         if not path.startswith(("/usr/lib/systemd/", "/lib/systemd/")):
             continue
         rel = "usr" + path if path.startswith("/lib/") else path.lstrip("/")
-        if tree.find_node(t, rel) is None:
+        # a unit of Cowrie's tree has its size and no contents: systemctl cat prints its text
+        if _without_text(tree.find_node(t, rel)):
             tree.ensure_file(t, rel, servers.unit_file(persona, ident, unit).encode(), ctime=ident.installed_at)
         # the programs the unit runs
         text = tree.node_get(tree.find_node(t, rel), tree.A_CONTENTS)
         for line in (text.decode("utf-8", "replace").splitlines() if isinstance(text, bytes) else ()):
             program = system.exec_program(line) if line.startswith("ExecStart=") else ""
-            if program and system.program_node(t, program) is None:
-                rel_program = program.lstrip("/") if program.startswith("/") else f"usr/bin/{program}"
-                if program in servers.SCRIPT_PROGRAMS:
-                    tree.ensure_file(t, rel_program, servers.SCRIPT_PROGRAMS[program].encode(), mode=0o755,
-                                     ctime=ident.installed_at)
-                else:
-                    tree.ensure_executable(t, rel_program, program_size(ident, rel_program), ctime=ident.installed_at)
+            node = system.program_node(t, program) if program else None
+            rel_program = program.lstrip("/") if program.startswith("/") else f"usr/bin/{program}"
+            if program in servers.SCRIPT_PROGRAMS and _without_text(node):
+                tree.ensure_file(t, rel_program, servers.SCRIPT_PROGRAMS[program].encode(), mode=0o755,
+                                 ctime=ident.installed_at)
+            elif program and node is None:
+                tree.ensure_executable(t, rel_program, program_size(ident, rel_program), ctime=ident.installed_at)
         if unit["state"] == "enabled":
             tree.ensure_link(t, f"etc/systemd/system/{servers.wants_target(unit['name'])}.wants/{unit['name']}", path,
                              ctime=ident.installed_at)

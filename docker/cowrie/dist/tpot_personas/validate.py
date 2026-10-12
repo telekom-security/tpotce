@@ -648,7 +648,10 @@ def _check_system(persona, ident, cfg, out_dir, runtime_dir, fs, out):
                 out.append(f"systemctl: {unit['path']} of {name} is not in fs.pickle")
                 continue
             text = tree.node_get(node, tree.A_CONTENTS)
-            if unit["path"].startswith("/etc/") or not isinstance(text, bytes):
+            if unit["path"].startswith("/etc/"):
+                continue
+            if not isinstance(text, bytes):
+                out.append(f"systemctl: {unit['path']} of {name} has no text, systemctl cat prints nothing of it")
                 continue
             for line in text.decode("utf-8", "replace").splitlines():
                 program = system.exec_program(line) if line.startswith("ExecStart=") else ""

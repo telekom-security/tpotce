@@ -21,6 +21,13 @@ def _link(root, rel, target):
                                        target, None])
 
 
+def _data_file(root, rel, size):
+    node = tree.ensure_file(root, rel, b"", ctime=OLD)
+    tree.node_set(node, tree.A_SIZE, size)
+    tree.node_set(node, tree.A_CONTENTS, [])
+    return node
+
+
 def _program(root, rel, size):
     node = tree.ensure_file(root, rel, b"", mode=0o755, ctime=OLD)
     # Cowrie's pickle: programs have their size and no contents (an empty list)
@@ -47,8 +54,9 @@ def base_tree():
     tree.ensure_file(root, "etc/apt/sources.list.d/debian.sources", b"Types: deb\n", ctime=OLD)
     tree.ensure_file(root, "etc/dpkg/dpkg.cfg", b"no-debsig\n", ctime=OLD)
     tree.ensure_file(root, "var/lib/dpkg/status", b"Package: base-files\n", ctime=OLD)
-    tree.ensure_file(root, "usr/lib/systemd/system/ssh.service", b"[Unit]\n", ctime=OLD)
-    tree.ensure_file(root, "usr/lib/systemd/system/ssh.socket", b"[Unit]\n", ctime=OLD)
+    # unit files as Cowrie's pickle has them: their size and no contents
+    for rel, size in (("ssh.service", 538), ("ssh.socket", 196), ("e2scrub_reap.service", 553)):
+        _data_file(root, f"usr/lib/systemd/system/{rel}", size)
     _link(root, "etc/systemd/system/sshd.service", "usr/lib/systemd/system/ssh.service")
     tree.ensure_file(root, "etc/ssh/sshd_config", b"Include /etc/ssh/sshd_config.d/*.conf\n", ctime=OLD)
     tree.ensure_file(root, "proc/modules", b"nft_chain_nat 12288 0 - Live 0x0000000000000000\n", ctime=OLD)
@@ -92,7 +100,7 @@ def base_tree():
                       ("usr/bin/perl", 3804432), ("usr/bin/python3.11", 6831736), ("usr/sbin/sshd", 1265432),
                       ("usr/bin/bash", 1265648), ("usr/sbin/useradd", 159536), ("usr/sbin/adduser", 48382),
                       ("usr/bin/wget", 470384), ("usr/sbin/installkernel", 2659),
-                      ("usr/sbin/rmt-tar", 60432)):
+                      ("usr/sbin/rmt-tar", 60432), ("usr/sbin/e2scrub_all", 5442)):
         _program(root, rel, size)
     _link(root, "usr/bin/python3", "usr/bin/python3.11")
     return root
