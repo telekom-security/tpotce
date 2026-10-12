@@ -862,6 +862,31 @@ class PatchTest(unittest.TestCase):
         self.assertRegex(out, r"\nsshd.service +enabled +enabled\n")
         self.assertRegex(out, r"\n\d+ unit files listed.\n$")
 
+    def test_systemctl_cat_prints_the_unit_file(self):
+        from tpot_personas.identity import draw
+        from tpot_personas.render import render
+        persona = catalog.by_id("ubuntu-noble")
+        out = tmpdir(self) / "noble"
+        ident = draw(persona, 1)
+        render(persona, ident, base_tree(), out, runtime_dir=out, keys_dir=out / "keys")
+        fs = tree.load_pickle(out / "fs.pickle")
+        source = (self.patched() / "src/cowrie/commands/service.py").read_text()
+        namespace = module_all(source, {"HoneyPotCommand": FakeCommand, "CowrieConfig": FakeConfig(
+            {("shell", "systemctl_units"): str(out / "systemd-units.json")})})
+        text = tree.node_get(tree.find_node(fs, "usr/lib/systemd/system/dbus.service"), tree.A_CONTENTS)
+        cmd = FakeCommand([], files={"/usr/lib/systemd/system/dbus.service": text})
+        cmd.user = {"uid": 1000}
+        cmd.protocol.boot_time = lambda: time.time() - 60
+        cmd.protocol.hostname = ident.hostname
+        code = namespace["tpot_systemctl"](cmd, ["cat", "dbus"])
+        self.assertEqual((bytes(cmd.out), code), (b"# /usr/lib/systemd/system/dbus.service\n" + text, 0))
+        cmd = FakeCommand([], files={})
+        cmd.user = {"uid": 1000}
+        cmd.protocol.boot_time = lambda: time.time() - 60
+        cmd.protocol.hostname = ident.hostname
+        self.assertEqual(namespace["tpot_systemctl"](cmd, ["cat", "nosuch"]), 1)
+        self.assertEqual(cmd.err, "No files found for nosuch.service.\n")
+
     def test_systemctl_sockets_and_unit_files(self):
         out, err, code, _, _ = self.systemctl("ubuntu-noble", ["status", "ssh.socket"])
         self.assertEqual((err, code), ("", 0))

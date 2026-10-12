@@ -979,7 +979,7 @@ def patch_service(cowrie_root):
 # module code of the patched service.py after Command_service: systemctl of the persona
 SYSTEMCTL_COMMAND = r"""
 
-# T-Pot: systemctl of the persona: status, is-active, is-enabled, is-failed, list-units,
+# T-Pot: systemctl of the persona: status, cat, is-active, is-enabled, is-failed, list-units,
 # list-unit-files and the verbs that change units (silent as root or under sudo). The units,
 # their processes and the version of systemd are those of [shell] systemctl_units (a JSON file
 # of the runtime folder); nothing is started or stopped.
@@ -1258,6 +1258,23 @@ def tpot_systemctl(cmd, args: list[str]) -> int:
                 blocks.append("".join(line + "\n" for line in tpot_status_unit(cmd, data, unit, boot, now, host)))
         cmd.write("\n".join(blocks))
         return status
+    if verb == "cat":
+        if not names:
+            cmd.errorWrite("Too few arguments.\n")
+            return 1
+        blocks = []
+        for name in names:
+            name, unit = tpot_unit(data, name)
+            try:
+                text = cmd.fs.file_contents(unit["path"]) if unit else None
+            except (OSError, KeyError, TypeError):
+                text = None
+            if text is None:
+                cmd.errorWrite(f"No files found for {name}.\n")
+                return 1
+            blocks.append(f"# {unit['path']}\n".encode() + text)
+        cmd.writeBytes(b"\n".join(blocks))
+        return 0
     if verb in ("is-active", "is-enabled", "is-failed"):
         if not names:
             cmd.errorWrite("Too few arguments.\n")
