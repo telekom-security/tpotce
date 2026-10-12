@@ -197,6 +197,7 @@ class Index:
     created: float      # epoch seconds
     docs: int
     size: int           # bytes
+    closed: bool = False    # a closed index has no counts: docs and size are 0 and unknown
 
 
 def _number(row: dict, key: str, closed: bool) -> int:
@@ -227,7 +228,7 @@ def indices(url: str = ES_URL, opener: Callable = urllib.request.urlopen) -> Lis
                 raise ValueError("index")
             closed = row.get("status") == "close"
             found.append(Index(row["index"], _number(row, "creation.date", False) / 1000,
-                               _number(row, "docs.count", closed), _number(row, "store.size", closed)))
+                               _number(row, "docs.count", closed), _number(row, "store.size", closed), closed))
         except ValueError:
             raise unreadable
     return sorted(found, key=lambda i: i.created)
@@ -270,6 +271,7 @@ class Plan:
     doomed: List[Index]
     reachable: bool
     shortening: bool = False    # applying it deletes events the policy keeps now: the user must say yes
+    problem: str = ""           # why it is not reachable: no answer, or one T-Pot cannot read
 
 
 def plan(value: str, force: bool = False, url: str = ES_URL, opener: Callable = urllib.request.urlopen,
@@ -278,8 +280,8 @@ def plan(value: str, force: bool = False, url: str = ES_URL, opener: Callable = 
     deletes right away. A caller applies a shortening plan only after the user's yes."""
     try:
         policy = get_policy(url, opener)
-    except ElasticError:
-        return Plan(Decision("keep", None, "", False), [], False)
+    except ElasticError as err:
+        return Plan(Decision("keep", None, "", False), [], False, problem=str(err))
     decision = decide(value, policy, force, shorten=True, now=now)
     # a marker-only update or an adoption keeps the same duration, a policy that is not in days
     # counts as keeping the events forever
@@ -288,8 +290,8 @@ def plan(value: str, force: bool = False, url: str = ES_URL, opener: Callable = 
     if shortening:
         try:
             gone = doomed(indices(url, opener), value, time.time() if now is None else now)
-        except ElasticError:
-            return Plan(decision, [], False, shortening)
+        except ElasticError as err:
+            return Plan(decision, [], False, shortening, str(err))
     return Plan(decision, gone, True, shortening)
 
 

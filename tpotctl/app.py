@@ -972,7 +972,8 @@ class SettingsPane(Vertical):
         elif chosen is not None and not chosen.reachable:
             new = saved["TPOT_ES_RETENTION"]
             waiting = chosen.shortening or tcli._shortens_env(old, new)
-            self.app.notify(retention_waits(new, later) if waiting else retention_unknown(new, host),
+            self.app.notify(because(retention_waits(new, later) if waiting else retention_unknown(new, host),
+                                    chosen.problem),
                             title="Not applied" if waiting else "Settings", severity="warning", timeout=12)
         await self.reload()
         await self.app.settings_saved(self, set(saved))
@@ -1679,11 +1680,13 @@ class ElasticPane(Vertical):
                 await asyncio.to_thread(self.app.backend.apply_retention, chosen)
                 self.app.notify(f"The ILM policy tpot keeps the events {shown(value)}.", title="Elastic")
             elif waits or chosen.shortening:
-                self.app.notify(retention_waits(value, "Once Elasticsearch runs, Apply .env to the policy applies "
-                                                       "it here (it asks first)."),
+                self.app.notify(because(retention_waits(value, "Once Elasticsearch runs, Apply .env to the policy "
+                                                               "applies it here (it asks first)."),
+                                        chosen.problem),
                                 title="Not applied", severity="warning", timeout=12)
             else:
-                self.app.notify(retention_unknown(value), title="Elastic", severity="warning", timeout=12)
+                self.app.notify(because(retention_unknown(value), chosen.problem), title="Elastic",
+                                severity="warning", timeout=12)
         except elastic.ElasticError as err:
             undo = f" To undo it, set {old} again." if old and old != value else ""
             later = ("T-Pot does not shorten it on its own: Apply .env to the policy applies it (it asks first)."
@@ -1704,6 +1707,11 @@ def retention_waits(value: str, later: str) -> str:
     """A shorter TPOT_ES_RETENTION written while Elasticsearch does not answer: it waits for a yes."""
     return (f"TPOT_ES_RETENTION={value} is set in .env, but Elasticsearch is not reachable: T-Pot does not shorten "
             f"the ILM policy tpot on its own, the value waits. {later}")
+
+
+def because(text: str, problem: str) -> str:
+    """text, then why Elasticsearch could not be used: no answer, or one T-Pot cannot read."""
+    return f"{text} Why: {problem}." if problem else text
 
 
 def retention_unknown(value: str, host: bool = True) -> str:
@@ -1792,15 +1800,13 @@ def shortening_text(doomed, value: str) -> Text:
 
 def doomed_text(doomed, closing: str = "") -> Text:
     """The indices a shorter retention deletes right away, for the question before it."""
-    from tpotctl.cli import _human_size
+    from tpotctl.cli import _doomed_summary, _index_line
     text = Text()
     for index in doomed[:DOOMED_SHOWN]:
-        text.append(f"{index.name}  {index.docs} events  {_human_size(index.size)}\n", style=theme.color("mist"))
+        text.append(f"{_index_line(index)}\n", style=theme.color("mist"))
     if len(doomed) > DOOMED_SHOWN:
         text.append(f"... and {len(doomed) - DOOMED_SHOWN} more\n", style=theme.color("mist"))
-    events, size = sum(index.docs for index in doomed), sum(index.size for index in doomed)
-    text.append(f"\n{len(doomed)} {'index' if len(doomed) == 1 else 'indices'} with {events} events "
-                f"({_human_size(size)}) {'is' if len(doomed) == 1 else 'are'} deleted right away.{closing}",
+    text.append(f"\n{_doomed_summary(doomed)} {'is' if len(doomed) == 1 else 'are'} deleted right away.{closing}",
                 style=f"bold {theme.color('wax')}")
     return text
 

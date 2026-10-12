@@ -316,18 +316,31 @@ def confirm_data_loss(question: str, accept: bool) -> bool:
     return ask(f"{question} [y/N] ").strip().lower() in ("y", "yes")
 
 
+def _index_line(index) -> str:
+    return (f"{index.name}  closed, size unknown" if index.closed
+            else f"{index.name}  {index.docs} events  {_human_size(index.size)}")
+
+
+def _doomed_summary(doomed) -> str:
+    """"N indices with E events (S)": a closed index has no counts, it is named apart."""
+    opened = [i for i in doomed if not i.closed]
+    closed = len(doomed) - len(opened)
+    size = _human_size(sum(i.size for i in opened))
+    if closed:
+        size += f", not counting {_indices(closed)} that {'is' if closed == 1 else 'are'} closed, size unknown"
+    return f"{_indices(len(doomed))} with {sum(i.docs for i in opened)} events ({size})"
+
+
 def _retention_preview(chosen, new: str, console) -> None:
     """What applying a shortening plan deletes: the indices ILM removes right away, or the rule from now on."""
     if not chosen.doomed:
         console.print(f"No index is deleted right away; from now on events older than {new} days are deleted.",
                       markup=False)
         return
-    events = sum(i.docs for i in chosen.doomed)
-    size = sum(i.size for i in chosen.doomed)
-    console.print(f"{_indices(len(chosen.doomed))} with {events} events ({_human_size(size)}) "
+    console.print(f"{_doomed_summary(chosen.doomed)} "
                   f"{'is' if len(chosen.doomed) == 1 else 'are'} deleted right away:", markup=False)
     for index in chosen.doomed:
-        console.print(f"  {index.name}  {index.docs} events  {_human_size(index.size)}", markup=False)
+        console.print(f"  {_index_line(index)}", markup=False)
 
 
 def _retention_status(state, console, shown) -> None:
@@ -357,6 +370,10 @@ def _foreign_error(current: str) -> str:
     return (f"The ILM policy tpot was changed outside of T-Pot (retention: "
             f"{_retention_shown(current) if current else 'not in days'}). "
             "tpot elastic retention --adopt keeps it, tpot elastic retention --force applies this value to it.")
+
+
+UNKNOWN_POLICY = ("T-Pot applies it on its next start if the ILM policy tpot keeps the events less long; "
+                  "a shorter value waits for 'tpot elastic retention --force' (it asks first).")
 
 
 def _shortens_env(old: str, new: str) -> bool:
@@ -421,9 +438,9 @@ def run_elastic(args) -> int:
                      "'tpot elastic retention --force' applies it (asks first).", console.file)
         else:       # the policy is unknown: only a value that keeps the events less long than it is applied
             say.ok(f"TPOT_ES_RETENTION={new} is set.", console.file)
-            say.hint("T-Pot applies it on its next start if the ILM policy tpot keeps the events less long; "
-                     "a shorter value waits for 'tpot elastic retention --force' (it asks first).",
-                     stream=console.file)
+            say.hint(UNKNOWN_POLICY, stream=console.file)
+        if chosen.problem:
+            say.hint(f"Why: {chosen.problem}.", stream=console.file)
         return 0
     if chosen.decision.action == "foreign":
         error(_foreign_error(chosen.decision.current))
@@ -499,11 +516,12 @@ def run_env(args) -> int:
         if "TPOT_ES_RETENTION" in changes:
             from tpotctl import elastic
             new = changes["TPOT_ES_RETENTION"]
-            waits, foreign = False, None
+            waits, foreign, asked = False, None, False
             if new and (not old_retention or elastic.shortens(old_retention, new)):
                 # only a value shorter than .env had, or an unset .env, needs the policy: it says whether the
                 # next start applies the value (a longer value than .env had is applied on the next start)
                 state = elastic.status(new)
+                asked = state.state != "unreachable"
                 if state.state == "foreign":
                     foreign = None if state.adopts else state       # the same duration: taken over, no waiting
                 elif state.state == "managed":
@@ -518,9 +536,11 @@ def run_env(args) -> int:
             elif waits:
                 say.hint(f"TPOT_ES_RETENTION={new} is not applied by T-Pot on its own; "
                          "tpot elastic retention --force applies it (asks first).", stream=console.file)
-            else:
+            elif asked:
                 console.print(f"[{MAGENTA}]T-Pot applies TPOT_ES_RETENTION on its next start; "
                               f"tpot elastic retention --force applies it now.[/]")
+            else:               # the policy was not read, or Elasticsearch did not answer: it is unknown
+                say.hint(f"TPOT_ES_RETENTION={new} is set. {UNKNOWN_POLICY}", stream=console.file)
         if set(changes) - {"TPOT_ES_RETENTION"}:
             console.print(f"[{MAGENTA}]Restart T-Pot to apply it: tpot restart[/]")
         return 0

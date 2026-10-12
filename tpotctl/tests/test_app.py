@@ -806,6 +806,34 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("the value waits", notes)
         self.assertIn("does not shorten the ILM policy tpot on its own", notes)
 
+    async def test_unreadable_list_of_indices_shows_why_and_writes_env_only(self):
+        from tpotctl.tests.test_elastic import MalformedAnswerTest, unreadable_plan
+        backend = FakeBackend()
+        backend._plan = unreadable_plan("7")
+        app = tapp.TpotApp(backend=backend, runner=Recorder())
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause(0.2)
+            app.goto("elastic")
+            await pilot.pause(0.3)
+            app.query_one("#elastic-value").value = "7"
+            await pilot.click("#elastic-set")
+            await pilot.pause(0.3)
+            self.assertNotIsInstance(app.screen, ConfirmDialog)
+            notes = " ".join(str(note.message) for note in app._notifications)
+        self.assertIn(f"Why: {MalformedAnswerTest.UNREADABLE}.", notes)
+        self.assertIn(("set", "7"), backend.calls)
+        self.assertNotIn("apply", [call[0] for call in backend.calls if isinstance(call, tuple)])
+
+    def test_a_closed_index_is_shown_as_closed(self):
+        from tpotctl import elastic
+        text = tapp.doomed_text([elastic.Index("logstash-a", 0, 1200, 5 * 2 ** 20),
+                                 elastic.Index("logstash-b", 0, 0, 0, True)]).plain
+        self.assertIn("logstash-a  1200 events  5.0 MB", text)
+        self.assertIn("logstash-b  closed, size unknown", text)
+        self.assertIn("2 indices with 1200 events (5.0 MB, not counting 1 index that is closed, size unknown) "
+                      "are deleted right away.", text)
+        self.assertNotIn("closed  0", text)
+
     async def test_unreachable_longer_value_says_when_it_applies(self):
         from tpotctl import elastic
         backend = FakeBackend()
@@ -1165,6 +1193,20 @@ class MenuTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("TPOT_ES_RETENTION=30 is set. T-Pot applies it on its next start if the ILM policy tpot "
                       "keeps the events less long", notes)
         self.assertNotIn("the value waits", notes)
+
+    async def test_settings_unreadable_list_of_indices_shows_why_and_writes_env_only(self):
+        from tpotctl import settings
+        from tpotctl.tests.test_elastic import MalformedAnswerTest, unreadable_plan
+        repo = self.retention_checkout()
+        backend = self.settings_backend(repo)
+        backend._plan = unreadable_plan("30")
+        app, _pilot = await self.save_retention(backend, "30")
+        self.assertNotIsInstance(app.screen, ConfirmDialog)
+        notes = " ".join(str(note.message) for note in app._notifications)
+        self.assertIn("the value waits", notes)
+        self.assertIn(f"Why: {MalformedAnswerTest.UNREADABLE}.", notes)
+        self.assertEqual(settings.load(repo).values["TPOT_ES_RETENTION"], "30")
+        self.assertNotIn("apply", [call[0] for call in backend.calls if isinstance(call, tuple)])
 
     async def test_settings_shortening_without_indices_asks(self):
         from tpotctl import elastic, settings

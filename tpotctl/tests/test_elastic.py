@@ -284,6 +284,13 @@ INDICES = [{"index": "logstash-old", "creation.date": str(int((NOW - 60 * DAY) *
             "store.size": "100"}]
 
 
+def unreadable_plan(value="30"):
+    """The plan of a shortening whose _cat/indices answer T-Pot cannot read (the cause is in plan.problem)."""
+    es = FakeES({("GET", "/_ilm/policy/tpot"): (200, {"tpot": {"policy": MANAGED_90}}),
+                 ("GET", "/_cat/indices/logstash-*"): (200, [{"index": "logstash-1", "creation.date": "abc"}])})
+    return elastic.plan(value, opener=es, now=NOW)
+
+
 class AccessTest(unittest.TestCase):
 
     def es(self, policy=MANAGED_90):
@@ -453,8 +460,9 @@ class MalformedAnswerTest(unittest.TestCase):
 
     def test_a_closed_index_has_no_counts(self):
         closed = dict(self.GOOD, status="close", **{"docs.count": None, "store.size": None})
-        found = elastic.indices(opener=self.listing([closed]))
-        self.assertEqual((found[0].docs, found[0].size), (0, 0))
+        found = elastic.indices(opener=self.listing([closed, self.GOOD]))
+        self.assertEqual([(i.docs, i.size, i.closed) for i in found], [(0, 0, True), (5, 100, False)])
+        self.assertEqual(elastic.doomed(found, "30", 1.8e9)[0].closed, True)
 
     def test_a_list_that_cannot_be_read_counts_as_unreachable_in_the_plan(self):
         # the safe side: no plan that shows less than it deletes, the shorter value waits
@@ -465,6 +473,17 @@ class MalformedAnswerTest(unittest.TestCase):
         with self.assertRaises(elastic.ElasticError):
             elastic.apply(chosen, opener=es)
         self.assertEqual([r for r in es.requests if r[0] == "PUT"], [])
+
+    def test_the_plan_keeps_the_cause_of_an_unreachable_answer(self):
+        chosen = unreadable_plan()
+        self.assertEqual((chosen.reachable, chosen.problem), (False, self.UNREADABLE))
+        down = elastic.plan("30", opener=FakeES({}), now=NOW)
+        self.assertEqual((down.reachable, down.problem), (False, "Elasticsearch is not reachable (connection refused)"))
+        odd = elastic.plan("30", opener=FakeES({("GET", "/_ilm/policy/tpot"): (200, [])}), now=NOW)
+        self.assertEqual((odd.reachable, odd.problem), (False, "Elasticsearch answered without the ILM policy tpot"))
+        fine = elastic.plan("365", opener=FakeES({("GET", "/_ilm/policy/tpot"): (200, {"tpot": {"policy": MANAGED_90}})}),
+                            now=NOW)
+        self.assertEqual((fine.reachable, fine.problem), (True, ""))
 
     def test_get_policy_names_an_answer_that_is_no_policy(self):
         for answer in ([], "x", 7, None, {"tpot": []}, {"tpot": {"policy": []}}, {"other": {"policy": {}}}):
@@ -644,6 +663,29 @@ class RunElasticTest(unittest.TestCase):
         self.assertIn("T-Pot applies it on its next start if the ILM policy tpot keeps the events less long", text)
         self.assertNotIn("does not shorten", text)
         self.assertEqual((self.asked, self.plain_confirmed, self.applied), ([], [], []))
+
+    def test_unreachable_shows_why(self):
+        for plan, cause in ((unreadable_plan(), MalformedAnswerTest.UNREADABLE),
+                            (elastic.plan("30", opener=FakeES({}), now=NOW),
+                             "Elasticsearch is not reachable (connection refused)")):
+            with self.subTest(cause=cause):
+                self.assertEqual(self.run_cli(["retention", "30"], plan=plan, confirm=False), 0)
+                self.assertIn(f"Why: {cause}.", self.out.getvalue() + self.err.getvalue())
+                self.assertEqual(self.settings.changes[-1], {"TPOT_ES_RETENTION": "30"})      # only .env
+                self.assertEqual((self.applied, self.asked), ([], []))
+        self.run_cli(["retention", "365"], plan=self.plan("keep", reachable=False))
+        self.assertNotIn("Why:", self.out.getvalue() + self.err.getvalue())
+
+    def test_a_closed_index_is_named_as_closed(self):
+        closed = elastic.Index("logstash-closed", 1.0, 0, 0, True)
+        chosen = self.plan(doomed=[self.OLD, closed], shortening=True)
+        self.assertEqual(self.run_cli(["retention", "30"], plan=chosen), 0)
+        text = self.out.getvalue()
+        self.assertIn("2 indices with 1200 events (4.9 KB, not counting 1 index that is closed, size unknown) "
+                      "are deleted right away:", text)
+        self.assertIn("logstash-old  1200 events  4.9 KB", text)
+        self.assertIn("logstash-closed  closed, size unknown", text)
+        self.assertNotIn("closed  0 events", text)
 
     def test_unreachable_force_without_a_value_says_it_waits(self):
         code = self.run_cli(["retention", "--force"], retention="30", plan=self.plan("keep", reachable=False))
@@ -926,7 +968,20 @@ class RunEnvRetentionTest(unittest.TestCase):
         text = self.env_set("TPOT_ES_RETENTION=60", start="")
         self.assertEqual(self.status_calls, 1)
         self.assertNotIn("not applied by T-Pot on its own", text)
-        self.assertIn("applies TPOT_ES_RETENTION on its next start", text)
+        self.assertIn("applies it on its next start if the ILM policy tpot keeps the events less long", text)
+
+    def test_a_policy_that_was_not_read_is_unknown(self):
+        # .env 30 waits, the policy keeps 90: 60 is not shorter than .env, the policy is not asked
+        unknown = ("TPOT_ES_RETENTION=60 is set. T-Pot applies it on its next start if the ILM policy tpot keeps "
+                   "the events less long; a shorter value waits for 'tpot elastic retention --force' (it asks first).")
+        text = self.env_set("TPOT_ES_RETENTION=60", start="30", state=elastic.Status("60", "90", "managed"))
+        self.assertEqual(self.status_calls, 0)
+        self.assertIn(unknown, text)
+        self.assertNotIn("applies TPOT_ES_RETENTION on its next start", text)
+        # asked, but Elasticsearch does not answer: unknown as well
+        text = self.env_set("TPOT_ES_RETENTION=60", start="")
+        self.assertEqual(self.status_calls, 1)
+        self.assertIn(unknown, text)
 
     def test_a_longer_value_does_not_warn(self):
         text = self.env_set("TPOT_ES_RETENTION=365")
