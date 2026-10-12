@@ -109,6 +109,8 @@ class FakeCommand:
         self.out += text.encode("utf-8")
 
     def errorWrite(self, text):
+        # as HoneyPotCommand.errorWrite: the text goes out as UTF-8
+        text.encode("utf8")
         self.err += text
 
     def exit(self, code=None):
@@ -465,6 +467,54 @@ class PatchTest(unittest.TestCase):
                           "SyntaxError: Missing parentheses in call to 'print'. Did you mean print(1)?\n", 1))
         self.assertEqual(self.python(["-c", "print("], "2.7.5")[1:],
                          ('  File "<string>", line 1\n    print(\n          ^\nSyntaxError: unexpected EOF while parsing\n', 1))
+
+    def test_python_c_output_that_utf_8_cannot_carry(self):
+        # stdout of CPython 3 is strict UTF-8: a lone surrogate ends the code with a traceback; stderr writes it
+        # as an escape (backslashreplace), Python 2 prints the escape of its byte string
+        def traceback(line, what="character '\\udcff' in position 0"):
+            return ('Traceback (most recent call last):\n  File "<string>", line %d, in <module>\n'
+                    "UnicodeEncodeError: 'utf-8' codec can't encode %s: surrogates not allowed\n" % (line, what))
+
+        self.assertEqual(self.python(["-c", 'print("\\udcff"); print(2)']), ("", traceback(1), 1))
+        self.assertEqual(self.python(["-c", 'print(1)\nprint("a", "\\udcff")\nprint(3)']), ("1\na ", traceback(2), 1))
+        self.assertEqual(self.python(["-c", 'import sys; sys.stdout.write("ab\\udcff\\udcfe")'], "3.9.18"),
+                         ("", traceback(1, "characters in position 2-3"), 1))
+        self.assertEqual(self.python(["-c", 'import sys; print("\\udcff", file=sys.stderr); sys.stderr.write("x\\udcff\\n")']),
+                         ("", "\\udcff\nx\\udcff\n", 0))
+        self.assertEqual(self.python(["-c", 'import sys; sys.exit("\\udcff")']), ("", "\\udcff\n", 1))
+        self.assertEqual(self.python(["-c", 'print "\\udcff"'], "2.7.5"), ("\\udcff\n", "", 0))
+        # Python 3.13 shows the code of the call
+        self.assertEqual(self.python(["-c", 'x=1;  print("\\u00e9", "\\udcff")  ;y=2'], "3.13.5"),
+                         ("\u00e9 ", 'Traceback (most recent call last):\n  File "<string>", line 1, in <module>\n'
+                          '    x=1;  print("\\u00e9", "\\udcff")  ;y=2\n          ~~~~~^^^^^^^^^^^^^^^^^^^^\n'
+                          "UnicodeEncodeError: 'utf-8' codec can't encode character '\\udcff' in position 0: "
+                          "surrogates not allowed\n", 1))
+        self.assertEqual(self.python(["-c", 'print("a",\n"\\udcff")'], "3.13.5")[1].splitlines()[2:6],
+                         ['    print("a",', "    ~~~~~^^^^^", '    "\\udcff")', "    ^^^^^^^^^"])
+
+    def test_python_c_writes_complete_lines_before_its_stderr(self):
+        # stdout of a terminal is line buffered: the last line without newline comes at the exit
+        _, python = self.command("python", "Command_python", {("shell", "python_version"): "3.12.3"},
+                                 ["-c", 'import sys; print("a"); print("b", end=""); sys.exit("bye")'])
+        stream = []
+        python.writeBytes = lambda data: stream.append(("out", data))
+        python.errorWrite = lambda text: stream.append(("err", text))
+        python.start()
+        self.assertEqual(stream, [("out", b"a\n"), ("err", "bye\n"), ("out", b"b")])
+        self.assertEqual(python.code, 1)
+
+    def test_python_and_perl_exit_when_the_output_fails(self):
+        for module, cls, args in (("python", "Command_python", ["-c", "print(1)"]),
+                                  ("perl", "Command_perl", ["-e", "print 1"])):
+            with self.subTest(module):
+                _, command = self.command(module, cls, {}, args)
+
+                def fail(*args):
+                    raise UnicodeEncodeError("utf-8", "\udcff", 0, 1, "surrogates not allowed")
+
+                command.write = command.writeBytes = command.errorWrite = fail
+                command.start()
+                self.assertEqual(command.code, 0)
 
     def test_python_2_print_statement(self):
         self.assertEqual(self.python(["-c", 'print "x"; print 1'], "2.7.5"), ("x\n1\n", "", 0))

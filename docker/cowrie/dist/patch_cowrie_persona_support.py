@@ -303,9 +303,13 @@ def tpot_perl_inline(cmd) -> bool:
         out, err, status = tpot_perl_code("\n".join(code), flags)
     except Exception:  # noqa: BLE001 - code this does not follow is silent, the command always exits
         out, err, status = b"", "", 0
-    cmd.writeBytes(out)
-    cmd.errorWrite(err)
-    cmd.exit(status)
+    try:
+        cmd.writeBytes(out)
+        cmd.errorWrite(err)
+    except Exception:  # noqa: BLE001 - the command always exits
+        pass
+    finally:
+        cmd.exit(status)
     return True
 
 
@@ -588,11 +592,20 @@ def tpot_python_run(cmd, code: str) -> None:
         out, err, status = tpot_python_code(code, tpot_python_version())
     except Exception:  # noqa: BLE001 - code this does not follow is silent, the command always exits
         out, err, status = "", "", 0
-    if out:
-        cmd.write(out)
-    if err:
-        cmd.errorWrite(err)
-    cmd.exit(status)
+    try:
+        # stdout of a terminal is line buffered: its last line without newline comes at the exit, after
+        # stderr; what UTF-8 cannot carry is an escape (stderr's backslashreplace, a Python 2 byte string)
+        head, tail = out[:out.rfind("\n") + 1], out[out.rfind("\n") + 1:]
+        if head:
+            cmd.writeBytes(head.encode("utf-8", "backslashreplace"))
+        if err:
+            cmd.errorWrite(err.encode("utf-8", "backslashreplace").decode("utf-8"))
+        if tail:
+            cmd.writeBytes(tail.encode("utf-8", "backslashreplace"))
+    except Exception:  # noqa: BLE001 - the command always exits
+        pass
+    finally:
+        cmd.exit(status)
 
 
 def tpot_python_code(code: str, version: str) -> tuple[str, str, int]:
@@ -620,7 +633,7 @@ def tpot_python_code(code: str, version: str) -> tuple[str, str, int]:
         return "", "", 0
     future = any(isinstance(node, ast.ImportFrom) and node.module == "__future__"
                  and any(alias.name == "print_function" for alias in node.names) for node in module.body)
-    return tpot_python_statements(module.body, python2 and not future)
+    return tpot_python_statements(module.body, python2 and not future, version, code)
 
 
 def tpot_py2_print(match) -> str:
@@ -690,12 +703,51 @@ def tpot_literal(node, names):
         return TPOT_UNKNOWN
 
 
-def tpot_python_statements(body, print_tuple=False) -> tuple[str, str, int]:
-    """print_tuple: print(a, b) prints the tuple (a, b), as a Python 2 print statement."""
+def tpot_encode_error(error, call, version: str, code: str) -> str:
+    """CPython's traceback of a write to stdout that UTF-8 cannot carry; 3.13 and later show the
+    lines of the call, ~ under the function and ^ under its arguments."""
+    lines = ["Traceback (most recent call last):\n", f'  File "<string>", line {call.lineno}, in <module>\n']
+    source = re.split(r"\r\n|\r|\n", code)
+    if tpot_version_tuple(version) >= (3, 13) and call.end_lineno <= len(source):
+        rows = source[call.lineno - 1:call.end_lineno]
+
+        def column(row, offset):
+            # ast counts columns in UTF-8 bytes
+            return len(row.encode("utf-8", "surrogatepass")[:offset].decode("utf-8", "surrogatepass"))
+
+        start = (call.lineno, column(rows[0], call.col_offset))
+        func_end = (call.func.end_lineno, column(source[call.func.end_lineno - 1], call.func.end_col_offset))
+        end = (call.end_lineno, column(rows[-1], call.end_col_offset))
+        indent = min(len(row) - len(row.lstrip()) for row in rows if row.strip())
+        for number, row in enumerate(rows, call.lineno):
+            first = start[1] if number == start[0] else len(row) - len(row.lstrip())
+            last = end[1] if number == end[0] else len(row.rstrip())
+            marks = "".join("~" if (number, pos) < func_end else "^" for pos in range(first, last))
+            lines.append(f"    {row[indent:].rstrip()}\n    {' ' * (first - indent)}{marks}\n")
+    return "".join(lines) + f"UnicodeEncodeError: {error}\n"
+
+
+def tpot_python_statements(body, print_tuple=False, version="3.12.3", code="") -> tuple[str, str, int]:
+    """print_tuple: print(a, b) prints the tuple (a, b), as a Python 2 print statement. Python 3
+    ends at a write to stdout that UTF-8 cannot carry, as CPython's strict stdout does."""
     names: dict = {}
     out: list[str] = []
     err: list[str] = []
     budget = [TPOT_OUTPUT_LIMIT]
+    strict = tpot_version_tuple(version)[0] >= 3
+
+    def stdout(pieces, call):
+        # each piece is one write of CPython (print writes every value, sep and end on their own)
+        for piece in pieces:
+            if strict:
+                try:
+                    piece.encode("utf-8")
+                except UnicodeEncodeError as error:
+                    err.append(tpot_encode_error(error, call, version, code))
+                    return False
+            out.append(piece)
+        return True
+
     try:
         for node in body:
             if isinstance(node, ast.Assign):
@@ -726,11 +778,17 @@ def tpot_python_statements(body, print_tuple=False) -> tuple[str, str, int]:
             elif func in ("print", TPOT_PY2_STATEMENT):
                 printed = tpot_print(call, names, budget)
                 if printed is not None:
-                    (err if printed[1] else out).append(printed[0])
+                    if printed[1]:
+                        err.append("".join(printed[0]))
+                    elif not stdout(printed[0], call):
+                        return "".join(out), "".join(err), 1
             elif func in ("sys.stdout.write", "sys.stderr.write") and len(call.args) == 1 and not call.keywords:
                 value = tpot_literal(call.args[0], names)
                 if isinstance(value, str):
-                    (err if func == "sys.stderr.write" else out).append(tpot_text(value, budget))
+                    if func == "sys.stderr.write":
+                        err.append(tpot_text(value, budget))
+                    elif not stdout([tpot_text(value, budget)], call):
+                        return "".join(out), "".join(err), 1
     except TpotOutputFull:
         pass
     return "".join(out), "".join(err), 0
@@ -761,7 +819,7 @@ def tpot_text(value, budget) -> str:
 
 
 def tpot_print(call, names, budget):
-    """(text, to stderr) of a print() call with literal arguments, None otherwise."""
+    """(the writes of the text, to stderr) of a print() call with literal arguments, None otherwise."""
     values = []
     for arg in call.args:
         value = tpot_literal(arg, names)
@@ -795,7 +853,8 @@ def tpot_print(call, names, budget):
     budget[0] -= len(sep) * max(0, len(parts) - 1) + len(end)
     if budget[0] < 0:
         raise TpotOutputFull
-    return sep.join(parts) + end, stderr
+    writes = [piece for index, part in enumerate(parts) for piece in ((sep, part) if index else (part,))]
+    return writes + [end], stderr
 '''
 
 
