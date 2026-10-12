@@ -1582,8 +1582,9 @@ function fuBACKUP () {
 	    fi
 	    if [ ${#myJEWELLIST[@]} -gt 0 ];
 	      then
-	        # flags=r: only the names of the entries, not the targets of symbolic and hard links
-	        myJEWELARGS=(--transform 'flags=r;s,^\./,data/,' -C "${myDATA}" "${myJEWELLIST[@]}")
+	        # flags=rh: h rewrites the targets of hard links too (they are archive member names, like the
+	        # entries), the targets of symbolic links stay as they are
+	        myJEWELARGS=(--transform 'flags=rh;s,^\./,data/,' -C "${myDATA}" "${myJEWELLIST[@]}")
 	    fi
 	fi
 

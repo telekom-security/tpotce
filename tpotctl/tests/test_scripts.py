@@ -2357,14 +2357,14 @@ class UpdateRepairTest(Harness):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         call = self.tar_calls()
         self.assertIn(f"-C {custom} ./uuid ./nginx/cert", call)
-        self.assertIn("--transform flags=r;s,^\\./,data/,", call)       # they land in the archive as data/...,
-        #                                                               # the targets of links stay as they are
+        self.assertIn("--transform flags=rh;s,^\\./,data/,", call)       # they land in the archive as data/...,
+        #                                                               # h: hard link targets follow, symlink targets stay
         self.assertNotIn(f"{self.tpotce}/data", call)
         result = self.backup(custom=custom, full=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         call = self.tar_calls()
         self.assertIn(f"-C {custom} .", call)
-        self.assertIn("--transform flags=r;s,^\\./,data/,", call)
+        self.assertIn("--transform flags=rh;s,^\\./,data/,", call)
         self.assertNotIn("./uuid", call)
 
     def test_jewels_stay_in_data_for_the_default_path(self):
