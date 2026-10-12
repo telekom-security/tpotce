@@ -3091,6 +3091,19 @@ def patch_protocol_load(cowrie_root):
     )
     replace_once(
         path,
+        '''        assert self.terminal is not None
+        self.terminal.write(b"timed out waiting for input: auto-logout\\n")
+''',
+        '''        assert self.terminal is not None
+        # T-Pot: a full screen command (top) gives the cursor back first
+        restore = getattr(self.cmdstack[-1], "tpot_restore", None) if self.cmdstack else None
+        if restore is not None:
+            restore()
+        self.terminal.write(b"timed out waiting for input: auto-logout\\n")
+''',
+    )
+    replace_once(
+        path,
         """    def keystrokeReceived(self, keyID, modifier):
         if not self.stdin_line_mode:
 """,
@@ -3211,6 +3224,7 @@ class Command_top(HoneyPotCommand):
         # the PID of this top, the newest when it started
         self.pid = self.protocol.tpot_last_pid(self.began)
         self.interactive = False
+        self.restored = False
         self.limit = 0
         self.delay = 5.0 if self.style == "busybox" else 3.0
         self.users: set[str] = set()
@@ -3322,8 +3336,17 @@ class Command_top(HoneyPotCommand):
 
     def tpot_tick(self) -> None:
         self.scheduled = None
-        if self.protocol is None or self.protocol.terminal is None or self not in self.protocol.cmdstack:
+        if self.protocol is None or self.protocol.terminal is None:
             return
+        if self not in self.protocol.cmdstack:
+            # the shell ended under the screen: the cursor comes back, nothing more is drawn
+            self.tpot_restore()
+            return
+        if self.interactive:
+            # a screen that redraws is no idle session (bounded by TPOT_TOP_SECONDS)
+            reset = getattr(self.protocol, "resetTimeout", None)
+            if reset is not None:
+                reset()
         now = time.time()
         lines = self.tpot_frame(now)
         if self.interactive:
@@ -3343,11 +3366,21 @@ class Command_top(HoneyPotCommand):
             return
         self.scheduled = reactor.callLater(min(max(self.delay, 0.5), 60.0), self.tpot_tick)
 
+    def tpot_restore(self) -> None:
+        """The cursor the screen hid comes back, once, on every way the screen ends."""
+        if not self.interactive or self.restored:
+            return
+        self.restored = True
+        terminal = getattr(self.protocol, "terminal", None)
+        if terminal is not None:
+            terminal.write(b"\x1b[?25h")
+
     def tpot_end(self, interrupted: bool = False) -> None:
         if self.scheduled is not None and self.scheduled.active():
             self.scheduled.cancel()
         self.scheduled = None
-        if self.interactive:
+        if self.interactive and not self.restored:
+            self.restored = True
             rows = self.window[0] if self.window else 24
             self.write(f"\x1b[{rows};1H\x1b[?25h\n")
         elif interrupted:
@@ -3375,6 +3408,13 @@ class Command_top(HoneyPotCommand):
 
     def handle_CTRL_C(self) -> None:
         self.tpot_end(interrupted=True)
+
+    def eofReceived(self) -> None:
+        # Ctrl-D, or the end of the channel's input, ends the screen; a batch top runs on
+        if self.interactive:
+            self.tpot_end()
+        else:
+            super().eofReceived()
 
     # --- what a frame shows -----------------------------------------------------------------
 
@@ -3406,22 +3446,16 @@ class Command_top(HoneyPotCommand):
                          "mem": float(entry.get("MEM") or 0.0), "time": seconds,
                          "command": str(entry.get("COMMAND") or "")})
         last = self.pid
-        ssh = CowrieConfig.get("shell", "ssh_version", fallback="OpenSSH")
-        dropbear = next((r for r in rows if "dropbear" in r["command"].split(" ", 1)[0]), None)
-        if "dropbear" in ssh.lower():
-            session = {"user": "root", "command": dropbear["command"] if dropbear else "dropbear",
-                       "virt": 1104, "res": 640}
-        else:
-            match = re.match(r"OpenSSH_(\d+)\.(\d+)", ssh)
-            newer = match is not None and (int(match.group(1)), int(match.group(2))) >= (9, 8)
-            session = {"user": tpot_top_user(user), "command": f"sshd{'-session' if newer else ''}: {user}@pts/0",
-                       "virt": 17400, "res": 6960}
-        session_pid = (shell - 1) if shell and shell > 2 else last - 2
-        rows.append({"pid": session_pid, "ppid": dropbear["pid"] if dropbear else 1, "stat": "S",
-                     "mem": 0.1, "time": 0.02, **session})
+        daemon, chain = self.tpot_session(rows, user)
+        # the session's processes just below the shell, each the child of the one before
+        parent = daemon["pid"] if daemon else 1
+        first = (shell or last - 1) - len(chain)
+        for offset, process in enumerate(chain):
+            rows.append({"pid": first + offset, "ppid": parent, "stat": "S", "mem": 0.1, "time": 0.02, **process})
+            parent = first + offset
         for row in rows:
             if row["pid"] == shell:
-                row["ppid"] = session_pid
+                row["ppid"] = parent
         # unverified: what top itself takes (procps-ng 3.3.10 of CentOS 7 maps 160 MB; a router's less)
         if self.style == "busybox":
             virt, res = 1408, 0
@@ -3438,6 +3472,32 @@ class Command_top(HoneyPotCommand):
         if self.pids:
             rows = [r for r in rows if r["pid"] in self.pids]
         return rows
+
+    def tpot_session(self, rows: list[dict], user: str) -> tuple[dict | None, list[dict]]:
+        """The daemon of this session (in the ps list, or None) and the processes between it and the
+        shell. SSH: the session's sshd (sshd-session from OpenSSH 9.8) or dropbear. Telnet on
+        BusyBox: telnetd, whose login execs the shell (telnetd -> shell; a telnetd of its own
+        where the ps list has none); elsewhere in.telnetd -> login -> shell."""
+        names = {tpot_top_comm(r["command"]): r for r in rows}
+        telnet = any("Telnet" in kind.__name__ for kind in type(self.protocol).__mro__)
+        if telnet:
+            daemon = names.get("telnetd") or names.get("utelnetd") or names.get("in.telnetd")
+            if self.style == "busybox":
+                return daemon, [] if daemon else [{"user": "root", "command": "/usr/sbin/telnetd", "virt": 1584,
+                                                   "res": 388}]
+            client = getattr(self.protocol, "clientIP", "")
+            return daemon, [{"user": "root", "command": f"in.telnetd: {client}", "virt": 6704, "res": 1632},
+                            {"user": "root", "command": f"login -- {user}", "virt": 14460, "res": 4128}]
+        ssh = CowrieConfig.get("shell", "ssh_version", fallback="OpenSSH")
+        if "dropbear" in ssh.lower():
+            daemon = names.get("dropbear")
+            return daemon, [{"user": "root", "command": daemon["command"] if daemon else "dropbear",
+                             "virt": 1104, "res": 640}]
+        match = re.match(r"OpenSSH_(\d+)\.(\d+)", ssh)
+        newer = match is not None and (int(match.group(1)), int(match.group(2))) >= (9, 8)
+        return names.get("sshd"), [{"user": tpot_top_user(user),
+                                    "command": f"sshd{'-session' if newer else ''}: {user}@pts/0",
+                                    "virt": 17400, "res": 6960}]
 
     def tpot_cpu(self, now: float, row: dict) -> float:
         """%CPU of a process in this frame: top itself some, now and then a daemon a tick."""
@@ -4254,6 +4314,23 @@ class HoneyPotTelnetFactory(protocol.ServerFactory):
     )
 
 
+def patch_ssh_userauth(cowrie_root):
+    """Device personas have no /etc/issue.net: upstream then sends no SSH banner, but logs a
+    traceback for every connection; an info line instead (as patch_telnet_banner)."""
+    path = cowrie_root / "src" / "cowrie" / "ssh" / "userauth.py"
+    replace_once(
+        path,
+        """        except FileNotFoundError:
+            self._log.failure("ERROR: Failed to load /etc/issue.net")
+            return
+""",
+        """        except FileNotFoundError:
+            self._log.info("No /etc/issue.net, no SSH banner")
+            return
+""",
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description="Patch Cowrie v3.1 persona command support.")
     parser.add_argument("--cowrie-root", required=True, type=Path)
@@ -4288,6 +4365,7 @@ def main():
     patch_prompt(cowrie_root)
     patch_shell_errors(cowrie_root)
     patch_telnet_banner(cowrie_root)
+    patch_ssh_userauth(cowrie_root)
 
 
 if __name__ == "__main__":

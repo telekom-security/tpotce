@@ -156,12 +156,15 @@ class Base:
         self.write("^C\n")
         self.exit(130)
 
+    def eofReceived(self):  # noqa: N802 - Cowrie's name
+        pass
+
 
 class Session:
     """A patched base.py / uptime.py / protocol with one session: config, clock, reactor, terminal."""
 
     def __init__(self, test, config=None, window=(24, 80), target="terminal", exec_mode=False, processes=None,
-                 username="ubuntu", files=None):
+                 username="ubuntu", files=None, telnet=False):
         root = test.root
         values = {("shell", "top_style"): "procps", ("shell", "procps_version"): "4.0.4",
                   ("shell", "kernel_threads"): "77", ("shell", "load_base"): "0.06",
@@ -203,16 +206,31 @@ class Session:
         class Pipe:
             targets = {1: (target, None), 2: ("terminal", None)}
 
+        class Terminal:
+            def __init__(self):
+                self.written = b""
+
+            def write(self, data):
+                self.written += data
+
+        resets = self.resets = []
+
         class Protocol(cls):
             hostname = "ubuntu-s-2vcpu-4gb-fra1-60"
             logintime = NOW - 600
+
+            def resetTimeout(self):  # noqa: N802 - Twisted's name
+                resets.append(clock.now)
             clientIP = "198.51.100.7"  # noqa: N815 - Cowrie's name
             terminal = object()
 
             def boot_time(self):
                 return NOW - 1_000_000
 
+        if telnet:
+            Protocol = type("HoneyPotInteractiveTelnetProtocol", (Protocol,), {})  # noqa: N806 - Cowrie's name
         self.protocol = Protocol()
+        self.protocol.terminal = Terminal()
         self.protocol.user = User()
         self.protocol.pp = Pipe()
         self.protocol.cmdstack = []
@@ -507,6 +525,87 @@ class TopProcpsTest(PatchedTest):
         top = session.run("Command_top", "-bn1")
         self.assertEqual(top.code, 0)
         self.assertIn("MiB Mem :      0.0 total", top.out)
+
+
+class TopSessionTest(PatchedTest):
+    """What surrounds the screen of top: the session's processes, the idle timeout, the cursor."""
+
+    DEVICE = {("shell", "top_style"): "busybox", ("shell", "ssh_version"): "Dropbear v2022.82",
+              ("shell", "kernel_threads"): "38"}
+
+    def rows(self, session):
+        top = session.run("Command_top", "-bn1")
+        return {int(line.split()[0]): line for line in top.out.split("\n") if re.match(r"^ *\d+ ", line)}
+
+    def test_telnet_on_busybox_runs_the_shell_under_telnetd(self):
+        # BusyBox telnetd starts login, which execs the shell: telnetd -> shell, no sshd or dropbear
+        ps = [dict(PS[0], COMMAND="/sbin/init", STAT="S"),
+              dict(PS[2], PID=640, COMMAND="/usr/sbin/telnetd", VSZ=1912),
+              dict(PS[5], PID=900, USER="admin", COMMAND="-sh", VSZ=1500)]
+        rows = self.rows(Session(self, config=self.DEVICE, processes=ps, username="admin", telnet=True,
+                                 target="capture"))
+        self.assertRegex(rows[900], r"^  900   640 admin ")
+        self.assertNotIn("dropbear", " ".join(rows.values()))
+        self.assertEqual(len(rows), 4)
+        # a device whose ps list has no telnetd gets one for the session
+        ps = [dict(PS[0], COMMAND="/sbin/procd", STAT="S"), dict(PS[5], PID=900, USER="root", COMMAND="-ash")]
+        rows = self.rows(Session(self, config=self.DEVICE, processes=ps, username="root", telnet=True,
+                                 target="capture"))
+        self.assertRegex(rows[899], r"^  899     1 root     S .* /usr/sbin/telnetd$")
+        self.assertRegex(rows[900], r"^  900   899 root ")
+
+    def test_telnet_on_a_server_is_in_telnetd_and_login(self):
+        rows = self.rows(Session(self, telnet=True, target="capture"))
+        self.assertRegex(rows[3087], r" root .* in\.telnetd$")
+        self.assertRegex(rows[3088], r" root .* login$")
+        # only the listener of the ps list is an sshd
+        self.assertEqual([pid for pid, line in rows.items() if line.endswith(" sshd")], [1391])
+
+    def test_ssh_keeps_the_sshd_of_the_session(self):
+        rows = self.rows(Session(self, target="capture"))
+        self.assertRegex(rows[3088], r" ubuntu .* sshd$")
+        self.assertNotIn("telnetd", " ".join(rows.values()))
+
+    def test_the_screen_keeps_the_session_from_the_idle_timeout(self):
+        session = Session(self)
+        top = session.run("Command_top")
+        for _ in range(5):
+            session.advance(3)
+        self.assertEqual(len(session.resets), 6)
+        top.tpot_key(b"q")
+        # a batch top is no screen: the idle timeout stays
+        session = Session(self)
+        session.run("Command_top", "-b", "-n", "3")
+        session.advance(3)
+        self.assertEqual(session.resets, [])
+
+    def test_ctrl_d_ends_the_screen_and_brings_the_cursor_back(self):
+        session = Session(self)
+        top = session.run("Command_top")
+        top.eofReceived()
+        self.assertTrue(top.exited)
+        self.assertTrue(top.out.endswith("\x1b[?25h\n"))
+        self.assertEqual(session.reactor.pending(), [])
+
+    def test_the_cursor_comes_back_when_the_shell_ends_under_top(self):
+        session = Session(self)
+        top = session.run("Command_top")
+        session.protocol.cmdstack.remove(top)
+        session.advance(3)
+        self.assertEqual(session.protocol.terminal.written, b"\x1b[?25h")
+        self.assertEqual(session.reactor.pending(), [])
+        # once only, and nothing after the end of the screen
+        top.tpot_restore()
+        self.assertEqual(session.protocol.terminal.written, b"\x1b[?25h")
+        top = session.run("Command_top")
+        top.tpot_key(b"q")
+        top.tpot_restore()
+        self.assertEqual(session.protocol.terminal.written, b"\x1b[?25h")
+
+    def test_the_idle_timeout_gives_the_cursor_back_first(self):
+        protocol = (self.root / "src/cowrie/shell/protocol.py").read_text()
+        self.assertRegex(protocol, r"def timeoutConnection\(self\) -> None:\n(.*\n){4}"
+                                   r"        # T-Pot: .*\n        restore = getattr\(self\.cmdstack\[-1\], \"tpot_restore\"")
 
 
 class TopBusyboxTest(PatchedTest):

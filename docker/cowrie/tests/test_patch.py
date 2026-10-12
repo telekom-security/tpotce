@@ -1516,6 +1516,51 @@ class PatchTest(unittest.TestCase):
         self.assertEqual(self.host_key_algorithms(None, ("ssh-rsa", "ssh-ed25519")), [b"ssh-rsa", b"ssh-ed25519"])
         self.assertEqual(self.host_key_algorithms("ssh-ed448", ("ssh-rsa",)), [b"ssh-rsa"])
 
+    def send_banner(self, banner):
+        """sendBanner of the patched ssh/userauth.py with /etc/issue.net = banner (None: missing);
+        returns (what it logged, the packets it sent)."""
+        import textwrap
+        source = (self.patched() / "src/cowrie/ssh/userauth.py").read_text()
+        body = textwrap.dedent(source[source.index("    def sendBanner(self):"):])
+        logged, sent = [], []
+
+        def read_honeyfs_bytes(rel):
+            if banner is None:
+                raise FileNotFoundError(rel)
+            return banner
+
+        class Log:
+            def failure(self, *args, **kwargs):
+                logged.append(("failure", args))
+
+            def info(self, *args, **kwargs):
+                logged.append(("info", args))
+
+        class Userauth:
+            MSG_USERAUTH_BANNER = 53
+
+        namespace = {"read_honeyfs_bytes": read_honeyfs_bytes, "userauth": Userauth, "NS": lambda b: b"<" +
+                     (b if isinstance(b, bytes) else b.encode()) + b">"}
+        exec(compile(body, "<patched userauth>", "exec"), namespace)  # noqa: S102
+
+        class Auth:
+            bannerSent = False
+            _log = Log()
+
+            class transport:
+                @staticmethod
+                def sendPacket(kind, payload):
+                    sent.append((kind, payload))
+
+        namespace["sendBanner"](Auth())
+        return logged, sent
+
+    def test_ssh_without_issue_net_logs_no_traceback(self):
+        # routers and cameras have no /etc/issue.net: no SSH banner, as upstream, and no failure
+        self.assertEqual(self.send_banner(None), ([("info", ("No /etc/issue.net, no SSH banner",))], []))
+        self.assertEqual(self.send_banner(b"Ubuntu 24.04.4 LTS\n"), ([], [(53, b"<Ubuntu 24.04.4 LTS\n><en>")]))
+        self.assertEqual(self.send_banner(b"  \n"), ([], []))
+
     def test_telnet_without_issue_net_logs_no_traceback(self):
         # routers and cameras have no /etc/issue.net: an empty banner, as upstream, but no failure
         factory = (self.patched() / "src/cowrie/telnet/factory.py").read_text()
@@ -2124,6 +2169,10 @@ class PatchTest(unittest.TestCase):
                   "\n\nclass CowrieSSHFactory(factory.SSHFactory):  # factory\n"),
                  ("src/cowrie/ssh/factory.py", "        t.supportedPublicKeys = list(self.privateKeys.keys())\n",
                   "        t.supportedPublicKeys = list(self.privateKeys)\n"),
+                 ("src/cowrie/ssh/userauth.py", '            self._log.failure("ERROR: Failed to load /etc/issue.net")\n',
+                  '            self._log.failure("Failed to load /etc/issue.net")\n'),
+                 ("src/cowrie/shell/protocol.py", 'self.terminal.write(b"timed out waiting for input: auto-logout\\n")\n',
+                  'self.terminal.write(b"timed out waiting for input: auto-logout\\r\\n")\n'),
                  ("src/cowrie/shell/protocol.py", "import functools\nimport random\n",
                   "import functools\nimport os\nimport random\n"),
                  ("src/cowrie/shell/protocol.py", "        return time.time() - self.boot_time()\n",

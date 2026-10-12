@@ -252,6 +252,52 @@ run_ssh_banner_probe_with_retries() {
   return 1
 }
 
+# An SSH session up to the authentication (the pre-login banner of /etc/issue.net is sent there), with
+# the Twisted SSH client of the image itself in a container in the honeypot's network: user
+# "smoke-test", the "none" method only, no password, nothing run.
+run_ssh_userauth_probe() {
+  docker run --rm --network "container:${TEST_CONTAINER_NAME}" --read-only --user 2000:2000 \
+    --entrypoint python3 "${IMAGE}" -c '
+import sys
+from twisted.conch.ssh import connection, transport, userauth
+from twisted.internet import defer, protocol, reactor
+
+reached = []
+
+
+class Auth(userauth.SSHUserAuthClient):
+    def ssh_USERAUTH_FAILURE(self, packet):
+        reached.append(True)
+        self.transport.loseConnection()
+
+    def getPassword(self, prompt=None):
+        return None
+
+
+class Client(transport.SSHClientTransport):
+    def verifyHostKey(self, pubKey, fingerprint):
+        return defer.succeed(True)
+
+    def connectionSecure(self):
+        self.requestService(Auth(b"smoke-test", connection.SSHConnection()))
+
+    def connectionLost(self, reason):
+        transport.SSHClientTransport.connectionLost(self, reason)
+        if reactor.running:
+            reactor.stop()
+
+
+factory = protocol.ClientFactory()
+factory.protocol = Client
+reactor.connectTCP("127.0.0.1", 22, factory)
+reactor.callLater(int(sys.argv[1]), reactor.stop)
+reactor.run()
+if not reached:
+    sys.exit("SSH userauth probe: no authentication reply")
+print("SSH session reached the authentication")
+' "${TEST_TIMEOUT}"
+}
+
 run_telnet_login_probe() {
   local token="$1"
 
@@ -1058,6 +1104,10 @@ run_smoke_test() {
 
   assert_host_keys "${persona}" || test_die "SSH host keys of ${persona} are missing in the keys volume"
   test_ok "SSH host keys of ${persona} are in the keys volume"
+
+  test_info "Running an SSH session up to the authentication"
+  run_ssh_userauth_probe || test_die "SSH session did not reach the authentication on ${persona}"
+  test_wait_for_container || test_die "Cowrie container stopped after the SSH session"
 
   local telnet_token=""
   telnet_token="telnet-test-$(date +%s)-$$"
