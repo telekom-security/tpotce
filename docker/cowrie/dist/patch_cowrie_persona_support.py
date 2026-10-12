@@ -1475,15 +1475,23 @@ def tpot_apt_sources() -> list[tuple[str, str]]:
 
 
 @functools.cache
-def tpot_apt_known() -> dict[str, str]:
-    \"\"\"T-Pot: the installed packages of the persona and their versions ([shell] apt_packages,
-    a JSON file of the runtime folder).\"\"\"
+def tpot_apt_data() -> dict[str, dict[str, str]]:
+    \"\"\"T-Pot: what apt of the persona knows ([shell] apt_packages, a JSON file of the runtime
+    folder): {"installed": {name: version}, "available": {name: version}}.\"\"\"
     path = tpot_apt("apt_packages", "")
     try:
         data = json.loads(Path(path).read_text(encoding="utf-8")) if path else {}
     except (OSError, ValueError):
         data = {}
-    return {str(k): str(v) for k, v in data.items()} if isinstance(data, dict) else {}
+    if not isinstance(data, dict):
+        data = {}
+    return {part: {str(k): str(v) for k, v in data.get(part, {}).items()} if isinstance(data.get(part), dict)
+            else {} for part in ("installed", "available")}
+
+
+def tpot_apt_known() -> dict[str, str]:
+    \"\"\"T-Pot: the installed packages of the persona and their versions.\"\"\"
+    return tpot_apt_data()["installed"]
 
 
 def tpot_apt_digest(name: str) -> bytes:
@@ -1491,14 +1499,15 @@ def tpot_apt_digest(name: str) -> bytes:
 
 
 def tpot_apt_version(name: str) -> str:
-    \"\"\"T-Pot: the version of a package the persona has not installed: the same for a name on
-    every call, a Debian revision ("-2", "-1+b1") or one of Ubuntu ("-1build2", "-2ubuntu1")
-    after [shell] apt_fallback.\"\"\"
-    known = tpot_apt_known()
-    if name in known:
-        return known[name]
+    \"\"\"T-Pot: the version of a package: the persona's (installed or available), else the same
+    for a name on every call, a Debian revision ("-2", "-1+b1") or one of Ubuntu ("-1build2",
+    "-2ubuntu1") after [shell] apt_fallback.\"\"\"
+    data = tpot_apt_data()
+    for part in ("installed", "available"):
+        if name in data[part]:
+            return data[part][name]
     d = tpot_apt_digest(name)
-    upstream = f"{1 + d[0] % 9}.{d[1] % 24}" + (f".{d[2] % 12}" if d[3] % 3 else "")
+    upstream = f"{1 + d[0] % 4}.{d[1] % 24}" + (f".{d[2] % 12}" if d[3] % 3 else "")
     revision = 1 + d[4] % 3
     if tpot_apt("apt_fallback", "debian") == "ubuntu":
         return f"{upstream}-{revision}" + (f"build{1 + d[5] % 3}" if d[6] % 2 else f"ubuntu{1 + d[5] % 3}")

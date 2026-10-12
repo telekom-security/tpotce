@@ -201,8 +201,50 @@ def sudoers_files(persona, ident):
     return files
 
 
-# man-db of the Debian releases (its trigger closes every apt install); unverified per patch level
-MAN_DB = {"noble": "2.12.0-4build2", "jammy": "2.10.2-1", "trixie": "2.13.1-1", "bookworm": "2.11.2-2"}
+# what apt knows on the Debian releases besides the catalog's packages (unverified: the versions are those
+#   of the release pockets around 2025/2026 as remembered, not read from the archive):
+#   installed - preinstalled on the image (its programs on PATH, man-db of every apt install)
+#   available - the packages bots install most, at the version the release ships
+APT_INSTALLED = {
+    "noble": {"bash": "5.2.21-2ubuntu4", "coreutils": "9.4-3ubuntu6", "gzip": "1.12-1ubuntu3",
+              "man-db": "2.12.0-4build2", "netcat-openbsd": "1.226-1ubuntu2", "perl": "5.38.2-3.2build2",
+              "python3": "3.12.3-0ubuntu2", "sudo": "1.9.15p5-3ubuntu5", "tar": "1.35+dfsg-3build1",
+              "wget": "1.21.4-1ubuntu4.1"},
+    "jammy": {"bash": "5.1-6ubuntu1.1", "coreutils": "8.32-4.1ubuntu1.2", "gzip": "1.10-4ubuntu4.1",
+              "man-db": "2.10.2-1", "netcat-openbsd": "1.218-4ubuntu1", "perl": "5.34.0-3ubuntu1.3",
+              "python3": "3.10.6-1~22.04.1", "sudo": "1.9.9-1ubuntu2.4", "tar": "1.34+dfsg-1ubuntu0.1.22.04.2",
+              "wget": "1.21.2-2ubuntu1.1"},
+    "trixie": {"bash": "5.2.37-2+b5", "coreutils": "9.7-3", "gzip": "1.13-1", "man-db": "2.13.1-1",
+               "netcat-openbsd": "1.229-1", "perl": "5.40.1-6", "python3": "3.13.5-1", "tar": "1.35+dfsg-3.1",
+               "wget": "1.25.0-2"},
+    "bookworm": {"bash": "5.2.15-2+b7", "coreutils": "9.1-1", "gzip": "1.12-1", "man-db": "2.11.2-2",
+                 "netcat-openbsd": "1.219-1", "perl": "5.36.0-7+deb12u2", "python3": "3.11.2-1+b1",
+                 "tar": "1.34+dfsg-1.2+deb12u1", "wget": "1.21.3-1+deb12u1"},
+}
+APT_AVAILABLE = {
+    "noble": {"gcc": "4:13.2.0-7ubuntu1", "hydra": "9.5-1build3", "iproute2": "6.1.0-1ubuntu6",
+              "make": "4.3-4.1build2", "masscan": "2:1.3.2+ds1-1", "nmap": "7.94+git20230807.3be01efb1+dfsg-3build2",
+              "screen": "4.9.1-1build1", "socat": "1.8.0.0-4build3", "tmux": "3.4-1ubuntu0.1",
+              "tor": "0.4.8.10-1build2", "unzip": "6.0-28ubuntu4.1", "zip": "3.0-13build1"},
+    "jammy": {"gcc": "4:11.2.0-1ubuntu1", "hydra": "9.2-1ubuntu1", "iproute2": "5.15.0-1ubuntu2",
+              "make": "4.3-4.1build1", "masscan": "2:1.3.2+ds1-1", "nmap": "7.91+dfsg1+really7.80+dfsg1-2ubuntu0.1",
+              "screen": "4.9.0-1", "socat": "1.7.4.1-3ubuntu4", "tmux": "3.2a-4ubuntu0.2", "tor": "0.4.6.10-1",
+              "unzip": "6.0-26ubuntu3.2", "zip": "3.0-12build2"},
+    "trixie": {"gcc": "4:14.2.0-1", "git": "1:2.47.3-0+deb13u1", "hydra": "9.5-3", "iproute2": "6.15.0-1",
+               "make": "4.4.1-2", "masscan": "2:1.3.2+ds1-2", "net-tools": "2.10-1.3", "nmap": "7.95+dfsg-3",
+               "screen": "4.9.1-3", "socat": "1.8.0.3-1", "tmux": "3.5a-3", "tor": "0.4.8.16-1", "unzip": "6.0-29",
+               "zip": "3.0-15"},
+    "bookworm": {"gcc": "4:12.2.0-3", "git": "1:2.39.5-0+deb12u2", "hydra": "9.4-1", "iproute2": "6.1.0-3",
+                 "make": "4.3-4.1", "masscan": "2:1.3.2+ds1-1", "net-tools": "2.10-0.1", "nmap": "7.93+dfsg1-1",
+                 "screen": "4.9.0-4", "socat": "1.7.4.4-2", "tmux": "3.3a-3", "tor": "0.4.7.16-1", "unzip": "6.0-28",
+                 "zip": "3.0-13"},
+}
+# the program on PATH of a package (a program of the tree is from an installed package)
+PACKAGE_PROGRAMS = {"bash": "bash", "curl": "curl", "git": "git", "gzip": "gzip", "perl": "perl",
+                    "python3": "python3", "tar": "tar", "wget": "wget", "openssh-client": "ssh",
+                    "openssh-server": "sshd", "sudo": "sudo", "vim": "vim", "nmap": "nmap", "masscan": "masscan",
+                    "socat": "socat", "gcc": "gcc", "make": "make", "tor": "tor", "hydra": "hydra", "tmux": "tmux",
+                    "screen": "screen", "zip": "zip"}
 # service --status-all: the init scripts of the image (unverified: typical cloud and Pi images);
 #   RHEL 9 has none, CentOS 7 the network scripts, which print their own status
 _UBUNTU_INIT = ("+ apparmor", "+ apport", "+ cron", "+ dbus", "- hwclock.sh", "+ irqbalance", "- iscsid",
@@ -865,10 +907,12 @@ def sudo_list(persona):
 
 
 def apt_packages(persona, ident):
-    """The installed packages apt knows on a Debian server (the release's, man-db of the release)."""
-    found = dict(sorted(ident.release.packages.items()))
-    found.setdefault("man-db", MAN_DB[ident.release.extra["codename"]])
-    return found
+    """What apt knows on a Debian server: the installed packages (the release's, APT_INSTALLED) and the
+    versions of the packages it would install (APT_AVAILABLE)."""
+    code = ident.release.extra["codename"]
+    installed = dict(sorted({**APT_INSTALLED[code], **ident.release.packages}.items()))
+    available = {name: version for name, version in sorted(APT_AVAILABLE[code].items()) if name not in installed}
+    return {"installed": installed, "available": available}
 
 
 def python_links(persona, ident):

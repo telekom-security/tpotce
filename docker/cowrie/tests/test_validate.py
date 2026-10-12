@@ -439,6 +439,16 @@ class ValidateServerCommandTest(unittest.TestCase):
                     "OpenBSD Secure Shell server", "OpenSSH server daemon").replace('"curl"', '"wget"'))
             self.assertIn(f"runtime: {name} is not the persona's", self.problems("ubuntu-jammy", change), name)
 
+    def test_program_of_a_package_apt_does_not_know(self):
+        persona = catalog.by_id("debian-bookworm")
+        ident, out, keys = render_one(self, persona, 1)
+        path = out / "apt-packages.json"
+        data = json.loads(path.read_text())
+        del data["installed"]["wget"]
+        path.write_text(json.dumps(data))
+        found = " | ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0))
+        self.assertIn("apt: wget is on PATH, apt does not have it installed", found)
+
     def test_unit_file_missing(self):
         persona = catalog.by_id("rhel-9")
         ident, out, keys = render_one(self, persona, 1)

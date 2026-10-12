@@ -183,7 +183,7 @@ class SystemTest(unittest.TestCase):
     def test_servers_have_perl_and_their_python_git_where_installed(self):
         expected = {"ubuntu-noble": "3.12", "ubuntu-jammy": "3.10", "debian-trixie": "3.13",
                     "debian-bookworm": "3.11", "rhel-9": "3.9", "raspios": "3.11"}
-        git = {"ubuntu-jammy", "raspios", "gpu-ubuntu"}
+        git = {"ubuntu-noble", "ubuntu-jammy", "raspios", "gpu-ubuntu"}
         for persona in catalog.PERSONAS:
             if persona.kind == "server":
                 for seed in range(4):
@@ -375,8 +375,15 @@ class ServerRuntimeTest(unittest.TestCase):
         _, out, _ = render_one(self, catalog.by_id("ubuntu-noble"), 1)
         self.assertEqual(cfg_of(out).get("shell", "apt_fallback"), "ubuntu")
         packages = json.loads((out / system.APT_PACKAGES).read_text())
-        self.assertEqual(packages["man-db"], "2.12.0-4build2")
-        self.assertNotIn("git", packages)
+        installed, available = packages["installed"], packages["available"]
+        self.assertEqual(installed["man-db"], "2.12.0-4build2")
+        self.assertEqual(installed["git"], "1:2.43.0-1ubuntu7.3")
+        for name in ("wget", "curl", "perl", "python3", "tar", "openssh-server", "sudo"):
+            self.assertIn(name, installed, name)
+        self.assertTrue(available["nmap"].startswith("7.94"), available["nmap"])
+        for name in ("nmap", "masscan", "socat", "gcc", "make", "tor", "hydra", "unzip", "screen", "tmux",
+                     "iproute2"):
+            self.assertIn(name, {**installed, **available}, name)
         fs = fs_of(out)
         self.assertIsNone(tree.find_node(fs, "etc/systemd/system/sshd.service"))
         self.assertEqual(tree.node_get(tree.find_node(fs, "etc/systemd/system/sockets.target.wants/ssh.socket"),

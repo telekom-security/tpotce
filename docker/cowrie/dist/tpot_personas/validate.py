@@ -607,6 +607,14 @@ def _check_system(persona, ident, cfg, out_dir, runtime_dir, fs, out):
             if _text(honeyfs / rel) != text or node is None or tree.node_get(node, tree.A_CONTENTS) != text.encode() \
                     or (tree.node_get(node, tree.A_MODE) or 0) & 0o7777 != 0o440:
                 out.append(f"sudoers: /{rel} is not the persona's")
+        if system.has_dpkg(persona):
+            try:
+                installed = json.loads(_text(out_dir / system.APT_PACKAGES)).get("installed", {})
+            except (ValueError, AttributeError):
+                installed = {}
+            for package, program in sorted(system.PACKAGE_PROGRAMS.items()):
+                if _on_path(fs, program) and package not in installed:
+                    out.append(f"apt: {program} is on PATH, apt does not have it installed")
         units = {u["name"]: u for u in expected.get(system.SYSTEMD_UNITS, {}).get("units", [])}
         for name, unit in sorted(units.items()):
             if tree.find_node(fs, unit["path"]) is None:

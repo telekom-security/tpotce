@@ -71,7 +71,8 @@ def base_tree():
     for rel, size in (("usr/bin/apt", 18824), ("usr/bin/apt-get", 51592), ("usr/bin/dpkg", 318816),
                       ("usr/bin/top", 134736), ("usr/bin/df", 105824), ("usr/bin/uname", 43888),
                       ("usr/bin/perl", 3804432), ("usr/bin/python3.11", 6831736), ("usr/sbin/sshd", 1265432),
-                      ("usr/bin/bash", 1265648), ("usr/sbin/useradd", 159536), ("usr/sbin/adduser", 48382)):
+                      ("usr/bin/bash", 1265648), ("usr/sbin/useradd", 159536), ("usr/sbin/adduser", 48382),
+                      ("usr/bin/wget", 470384)):
         _program(root, rel, size)
     _link(root, "usr/bin/python3", "usr/bin/python3.11")
     return root

@@ -626,9 +626,9 @@ class PatchTest(unittest.TestCase):
         _, apt = self.twisted_command("apt", "Command_aptget", self.APT, ["-y", "install", "wget"])
         self.assertIn("  wget \n", bytes(apt.out).decode())
 
-    def apt_with_packages(self, packages, fallback="ubuntu"):
+    def apt_with_packages(self, packages, fallback="ubuntu", available=None):
         path = tmpdir(self) / "apt-packages.json"
-        path.write_text(json.dumps(packages))
+        path.write_text(json.dumps({"installed": packages, "available": available or {}}))
         return {**self.APT, ("shell", "apt_packages"): str(path), ("shell", "apt_fallback"): fallback}
 
     def test_apt_install_shows_the_versions_of_the_persona(self):
@@ -644,6 +644,14 @@ class PatchTest(unittest.TestCase):
         self.assertIn("The following NEW packages will be installed:\n  netcat-openbsd \n", text)
         self.assertIn("Processing triggers for man-db (2.12.0-4build2) ...\n", text)
         self.assertTrue(text.index("Setting up netcat-openbsd") < text.index("Processing triggers"))
+
+    def test_apt_installs_the_release_version_of_a_known_package(self):
+        values = self.apt_with_packages({"wget": "1.21.4-1ubuntu4.1"},
+                                        available={"nmap": "7.94+git20230807.3be01efb1+dfsg-3build2"})
+        _, apt = self.twisted_command("apt", "Command_aptget", values, ["install", "-y", "wget", "nmap"])
+        text = bytes(apt.out).decode()
+        self.assertIn("wget is already the newest version (1.21.4-1ubuntu4.1).\n", text)
+        self.assertIn("Unpacking nmap (7.94+git20230807.3be01efb1+dfsg-3build2) ...\n", text)
 
     def test_apt_fallback_versions_fit_the_release_and_stay_the_same(self):
         seen = {}

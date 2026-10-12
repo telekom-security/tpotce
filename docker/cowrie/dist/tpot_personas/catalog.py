@@ -251,23 +251,23 @@ _NOBLE_LEVELS = (
     # forgotten since this update (not in the pool: the -aws pool has this time)
     _ubuntu("2025-10-20", "noble", "24.04.3 LTS", "1:9.6p1-3ubuntu13.14", "1:9.6p1-3ubuntu13.13", "6.8.0-87",
             "#88-Ubuntu SMP PREEMPT_DYNAMIC Sat Oct 11 09:28:41 UTC 2025", "lcy02-amd64-034", _NOBLE_GCC,
-            _NOBLE_SSL, {"apt": "2.8.3", "dpkg": "1.22.6ubuntu6.5", "curl": "8.5.0-2ubuntu10.6",
+            _NOBLE_SSL, {"apt": "2.8.3", "dpkg": "1.22.6ubuntu6.5", "curl": "8.5.0-2ubuntu10.6", "git": "1:2.43.0-1ubuntu7.3",
                          "vim": "2:9.1.0016-1ubuntu7.9", "htop": "3.3.0-4build1",
                          "net-tools": "2.10-0.1ubuntu4.4"}),
     _ubuntu("2026-02-25", "noble", "24.04.4 LTS", "1:9.6p1-3ubuntu13.14", "1:9.6p1-3ubuntu13.13", "6.8.0-101",
             "#101-Ubuntu SMP PREEMPT_DYNAMIC Mon Feb  9 10:15:05 UTC 2026", "lcy02-amd64-051", _NOBLE_GCC,
-            _NOBLE_SSL, {"apt": "2.8.3", "dpkg": "1.22.6ubuntu6.5", "curl": "8.5.0-2ubuntu10.7",
+            _NOBLE_SSL, {"apt": "2.8.3", "dpkg": "1.22.6ubuntu6.5", "curl": "8.5.0-2ubuntu10.7", "git": "1:2.43.0-1ubuntu7.3",
                          "vim": "2:9.1.0016-1ubuntu7.9", "htop": "3.3.0-4build1",
                          "net-tools": "2.10-0.1ubuntu4.4"}),
     _ubuntu("2026-05-20", "noble", "24.04.4 LTS", "1:9.6p1-3ubuntu13.16", "1:9.6p1-3ubuntu13.15", "6.8.0-117",
             "#117-Ubuntu SMP PREEMPT_DYNAMIC Tue May  5 19:26:24 UTC 2026", "lcy02-amd64-102", _NOBLE_GCC_1,
-            _NOBLE_SSL, {"apt": "2.8.3", "dpkg": "1.22.6ubuntu6.6", "curl": "8.5.0-2ubuntu10.9",
+            _NOBLE_SSL, {"apt": "2.8.3", "dpkg": "1.22.6ubuntu6.6", "curl": "8.5.0-2ubuntu10.9", "git": "1:2.43.0-1ubuntu7.3",
                          "vim": "2:9.1.0016-1ubuntu7.13", "htop": "3.3.0-4build1",
                          "net-tools": "2.10-0.1ubuntu4.4"}),
     # 13.17 was only in -proposed
     _ubuntu("2026-07-20", "noble", "24.04.4 LTS", "1:9.6p1-3ubuntu13.18", "1:9.6p1-3ubuntu13.16", "6.8.0-136",
             "#136-Ubuntu SMP PREEMPT_DYNAMIC Wed Jul  1 21:53:05 UTC 2026", "lcy02-amd64-041", _NOBLE_GCC_1,
-            _NOBLE_SSL, {"apt": "2.8.3", "dpkg": "1.22.6ubuntu6.6", "curl": "8.5.0-2ubuntu10.11",
+            _NOBLE_SSL, {"apt": "2.8.3", "dpkg": "1.22.6ubuntu6.6", "curl": "8.5.0-2ubuntu10.11", "git": "1:2.43.0-1ubuntu7.3",
                          "vim": "2:9.1.0016-1ubuntu7.18", "htop": "3.3.0-4build1",
                          "net-tools": "2.10-0.1ubuntu4.4"}),
 )
@@ -280,12 +280,12 @@ _NOBLE_LEVELS = (
 _NOBLE_AWS_LEVELS = (
     _ubuntu("2025-10-25", "noble", "24.04.3 LTS", "1:9.6p1-3ubuntu13.14", "1:9.6p1-3ubuntu13.13", "6.14.0-1015",
             "#15~24.04.1-Ubuntu SMP Tue Sep 23 22:40:31 UTC 2025", "lcy02-amd64-042", _NOBLE_GCC,
-            _NOBLE_SSL, {"apt": "2.8.3", "dpkg": "1.22.6ubuntu6.5", "curl": "8.5.0-2ubuntu10.6",
+            _NOBLE_SSL, {"apt": "2.8.3", "dpkg": "1.22.6ubuntu6.5", "curl": "8.5.0-2ubuntu10.6", "git": "1:2.43.0-1ubuntu7.3",
                          "vim": "2:9.1.0016-1ubuntu7.9", "htop": "3.3.0-4build1",
                          "net-tools": "2.10-0.1ubuntu4.4"}, flavor="aws", providers=("aws",)),
     _ubuntu("2026-07-20", "noble", "24.04.4 LTS", "1:9.6p1-3ubuntu13.18", "1:9.6p1-3ubuntu13.16", "6.17.0-1019",
             "#19~24.04.1-Ubuntu SMP Tue Jun 23 19:03:52 UTC 2026", "lcy02-amd64-070", _NOBLE_GCC_1,
-            _NOBLE_SSL, {"apt": "2.8.3", "dpkg": "1.22.6ubuntu6.6", "curl": "8.5.0-2ubuntu10.11",
+            _NOBLE_SSL, {"apt": "2.8.3", "dpkg": "1.22.6ubuntu6.6", "curl": "8.5.0-2ubuntu10.11", "git": "1:2.43.0-1ubuntu7.3",
                          "vim": "2:9.1.0016-1ubuntu7.18", "htop": "3.3.0-4build1",
                          "net-tools": "2.10-0.1ubuntu4.4"}, flavor="aws", providers=("aws",)),
 )
@@ -531,13 +531,8 @@ RASPIOS = _chain(_medium(_RASPIOS_LEVELS[0]), *_RASPIOS_LEVELS[1:],
 # unverified: the build dates in it (the file dates of https://download.nvidia.com/XFree86/Linux-x86_64/<ver>/)
 
 
-# git of the GPU servers on noble (installed for the ML repositories, unlike on the noble persona)
-_NOBLE_GIT = "1:2.43.0-1ubuntu7.3"
-
-
 def _gpu(base, driver, cuda, built, gcc):
     return replace(base, label=f"{base.label} nvidia-{driver}",
-                   packages={"git": _NOBLE_GIT, **base.packages},
                    extra={**base.extra, "nvidia_driver": driver, "cuda": cuda, "nvidia_built": built,
                           "nvidia_gcc": gcc, "providers": ("dgx", "gpu")})
 
