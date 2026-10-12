@@ -339,7 +339,12 @@ class TopProcpsTest(PatchedTest):
         self.assertEqual(lines[0], "top -" + session.protocol.tpot_uptime_line(NOW))
         self.assertEqual(lines[1], f"Tasks:{len(PS) + 79:4d} total,   1 running,{len(PS) + 78:4d} sleeping,"
                                    "   0 stopped,   0 zombie")
-        self.assertEqual(lines[2], "%Cpu(s):  1.6 us,  1.0 sy,  0.0 ni, 97.0 id,  0.3 wa,  0.0 hi,  0.1 si,  0.0 st")
+        # since boot: 1 to 4 % busy, per host
+        cpu = re.fullmatch(r"%Cpu\(s\):( +\d\.\d) us,( +\d\.\d) sy,  0\.0 ni,( 9\d\.\d) id,( +\d\.\d) wa,  0\.0 hi,"
+                           r"( +\d\.\d) si,  0\.0 st", lines[2])
+        self.assertIsNotNone(cpu, lines[2])
+        self.assertAlmostEqual(sum(float(x) for x in cpu.groups()), 100.0, places=1)
+        self.assertTrue(96.0 <= float(cpu.group(3)) <= 99.0)
         # used is total less free and buff/cache, as procps reads /proc/meminfo
         self.assertEqual(lines[3], "MiB Mem :   3911.3 total,   1484.4 free,   1069.5 used,   1357.4 buff/cache")
         self.assertEqual(lines[4], "MiB Swap:      0.0 total,      0.0 free,      0.0 used.   2939.5 avail Mem")
@@ -416,8 +421,11 @@ class TopProcpsTest(PatchedTest):
         self.assertTrue(all(len(line) <= 80 for line in screen))
         self.assertEqual(top.tpot_key(b"x"), True)
         self.assertFalse(top.exited)
-        session.advance(3)
+        session.advance(10)
         self.assertEqual(top.out.count("top - "), 2)
+        # the running top keeps its PID from frame to frame
+        frames = strip(top.out).split("top - ")[1:]
+        self.assertEqual(len({re.search(r"\n +(\d+) ubuntu .* top", f).group(1) for f in frames}), 1)
         top.tpot_key(b"q")
         self.assertTrue(top.exited)
         self.assertTrue(top.out.endswith("\x1b[24;1H\x1b[?25h\n"))
@@ -465,6 +473,9 @@ class TopProcpsTest(PatchedTest):
     def test_ssh_without_a_pty(self):
         session = Session(self, window=None, exec_mode=True)
         top = session.run("Command_top")
+        self.assertEqual((top.err, top.code), ("TERM environment variable not set.\n", 1))
+        session.protocol.environ["TERM"] = "xterm"
+        top = session.run("Command_top")
         self.assertEqual((top.err, top.code), ("top: failed tty get\n", 1))
         top = session.run("Command_top", "-bn1")
         self.assertEqual(top.code, 0)
@@ -509,7 +520,7 @@ class TopBusyboxTest(PatchedTest):
                           username="root", target="capture")
         lines = session.run("Command_top", "-b", "-n1").out.split("\n")
         self.assertEqual(lines[0], "Mem: 2485216K used, 1520000K free, 9000K shrd, 90000K buff, 1300000K cached")
-        self.assertEqual(lines[1], "CPU:   2% usr   1% sys   0% nic  97% idle   0% io   0% irq   0% sirq")
+        self.assertRegex(lines[1], r"^CPU:   \d% usr   \d% sys   0% nic  9\d% idle   0% io   0% irq   \d% sirq$")
         self.assertRegex(lines[2], r"^Load average: \d\.\d\d \d\.\d\d \d\.\d\d 1/43 \d+$")
         self.assertEqual(lines[3], "  PID  PPID USER     STAT   VSZ %VSZ %CPU COMMAND")
         self.assertRegex(lines[4], r"^ *\d+  1520 root     R     1408   0% +\d+% top$")

@@ -3208,6 +3208,8 @@ class Command_top(HoneyPotCommand):
         self.scheduled = None
         self.frames = 0
         self.began = time.time()
+        # the PID of this top, the newest when it started
+        self.pid = self.protocol.tpot_last_pid(self.began)
         self.interactive = False
         self.limit = 0
         self.delay = 5.0 if self.style == "busybox" else 3.0
@@ -3218,8 +3220,10 @@ class Command_top(HoneyPotCommand):
         self.window = tpot_window(self)
         if not self.batch and self.window is None:
             if hasattr(self.protocol, "execcmd") and self.style != "busybox":
-                # ssh host top: no terminal to draw on
-                self.errorWrite("top: failed tty get\n")
+                # ssh host top: no terminal to draw on, and without a pty sshd sets no TERM (ncurses'
+                # setupterm ends top then)
+                self.errorWrite("top: failed tty get\n" if (self.environ or {}).get("TERM")
+                                else "TERM environment variable not set.\n")
                 self.exit(1)
                 return
             self.batch = True
@@ -3401,7 +3405,7 @@ class Command_top(HoneyPotCommand):
                          "stat": stat, "virt": int(entry.get("VSZ") or 0), "res": int(entry.get("RSS") or 0),
                          "mem": float(entry.get("MEM") or 0.0), "time": seconds,
                          "command": str(entry.get("COMMAND") or "")})
-        last = protocol.tpot_last_pid(now)
+        last = self.pid
         ssh = CowrieConfig.get("shell", "ssh_version", fallback="OpenSSH")
         dropbear = next((r for r in rows if "dropbear" in r["command"].split(" ", 1)[0]), None)
         if "dropbear" in ssh.lower():
@@ -3418,8 +3422,11 @@ class Command_top(HoneyPotCommand):
         for row in rows:
             if row["pid"] == shell:
                 row["ppid"] = session_pid
+        # unverified: what top itself takes (procps-ng 3.3.10 of CentOS 7 maps 160 MB; a router's less)
         if self.style == "busybox":
             virt, res = 1408, 0
+        elif CowrieConfig.get("shell", "hardware_platform", fallback="x86_64") != "x86_64":
+            virt, res = 4852, 2432
         elif self.version < (3, 3, 13):
             virt, res = 162020, 2228
         else:
@@ -3444,10 +3451,12 @@ class Command_top(HoneyPotCommand):
         return 0.0
 
     def tpot_summary_cpu(self, now: float) -> dict:
-        """us / sy / wa / si of this frame: since boot in the first (the 3 % busy of /proc/uptime),
-        then the last seconds, a little more with the load."""
+        """us / sy / wa / si of this frame: since boot in the first (1 to 4 % busy, per host), then
+        the last seconds, a little more with the load."""
         if self.frames == 0:
-            return {"us": 1.6, "sy": 1.0, "wa": 0.3, "si": 0.1}
+            busy = 1.0 + tpot_top_hash(self.protocol.hostname, "boot") % 300 / 100
+            return {"us": round(busy * 0.55, 1), "sy": round(busy * 0.3, 1), "wa": round(busy * 0.1, 1),
+                    "si": round(busy * 0.05, 1)}
         load = self.protocol.tpot_load_average(now)[0]
         draw = tpot_top_hash(self.protocol.hostname, "cpu", int(now))
         us = round(min(25.0, load * 4 + draw % 5 / 10), 1)
@@ -3474,7 +3483,7 @@ class Command_top(HoneyPotCommand):
                 f"{mem.get('Cached', 0)}K cached",
                 f"CPU: {round(cpu['us']):3d}% usr {round(cpu['sy']):3d}% sys   0% nic {idle:3d}% idle   0% io"
                 f"   0% irq {round(cpu['si']):3d}% sirq",
-                f"Load average: {load[0]:.2f} {load[1]:.2f} {load[2]:.2f} {running}/{tasks} {protocol.tpot_last_pid(now)}",
+                f"Load average: {load[0]:.2f} {load[1]:.2f} {load[2]:.2f} {running}/{tasks} {self.pid}",
                 "  PID  PPID USER     STAT   VSZ %VSZ %CPU COMMAND",
             ]
             for r in rows:
