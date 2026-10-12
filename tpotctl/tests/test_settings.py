@@ -121,6 +121,32 @@ class SettingsTest(unittest.TestCase):
             self.assertIn("OINKCODE=••••••", text)          # list masks secrets
         self.assertEqual(self.load().values["TPOT_ATTACKMAP_TEXT"], "DISABLED")
 
+    @unittest.skipUnless(rich, "Rich is not installed, run with the venv of tpot")
+    def test_cli_cowrie_personas_and_rotation(self):
+        from tpotctl import cli
+        original = self.settings.load
+        env_path = os.path.join(self.repo, ".env")
+
+        def run(*argv):
+            out = io.StringIO()
+            with redirect_stdout(out), redirect_stderr(io.StringIO()):
+                done = cli.main(list(argv))
+            return done, out.getvalue()
+
+        with mock.patch.object(self.settings, "load", lambda **kwargs: original(self.repo, **kwargs)):
+            self.assertEqual(run("env", "set", "COWRIE_PERSONA=raspios ipcam", "COWRIE_PERSONA_ROTATION=7")[0], 0)
+            self.assertEqual(run("env", "get", "COWRIE_PERSONA"), (0, "raspios ipcam\n"))
+            self.assertEqual(run("env", "get", "COWRIE_PERSONA_ROTATION"), (0, "7\n"))
+            self.assertEqual(run("env", "set", "COWRIE_PERSONA=", "COWRIE_PERSONA_ROTATION=0")[0], 0)
+            self.assertEqual(run("env", "get", "COWRIE_PERSONA"), (0, "\n"))
+            self.assertEqual(run("env", "get", "COWRIE_PERSONA_ROTATION"), (0, "0\n"))
+            with open(env_path, encoding="utf-8") as handle:
+                before = handle.read()
+            self.assertEqual(run("env", "set", "COWRIE_PERSONA_ROTATION=366")[0], 1)
+            self.assertEqual(run("env", "set", "COWRIE_PERSONA=bogus")[0], 1)
+            with open(env_path, encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), before)
+
 
 @unittest.skipUnless(yaml, "PyYAML is not installed")
 class ListSettingTest(unittest.TestCase):
@@ -470,6 +496,23 @@ class ManyPickerTest(unittest.IsolatedAsyncioTestCase):
             await pilot.press("escape")
             await pilot.pause(0.3)
             self.assertEqual(self.app.query_one("#settings").changes(), {})     # Back changes nothing
+
+    async def test_typed_entries_off_the_list_are_named_and_left_out(self):
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            await pilot.pause(0.3)
+            self.app.goto_setting("COWRIE_PERSONA")
+            await pilot.pause(0.4)
+            self.app.query_one("#set-COWRIE_PERSONA").value = "raspios bogus nope"
+            await pilot.pause(0.2)
+            picker = await self.open_picker(pilot)
+            self.assertEqual(picker.chosen, {"raspios"})
+            status = str(picker.query_one("#many-status").render())
+            self.assertIn("bogus, nope are not on the list, Take it leaves them out.", status)
+            await self.tick(pilot, picker, "ipcam")
+            self.assertIn("leaves them out", str(picker.query_one("#many-status").render()))
+            await pilot.click("#many-take")
+            await pilot.pause(0.3)
+            self.assertEqual(self.app.query_one("#settings").changes(), {"COWRIE_PERSONA": "raspios ipcam"})
 
     async def test_the_field_says_empty_is_all(self):
         async with self.app.run_test(size=(150, 50)) as pilot:

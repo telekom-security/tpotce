@@ -405,6 +405,26 @@ class AssistantTest(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("-B", command)
         self.assertNotIn("-u", command)
 
+    async def test_a_schema_that_does_not_hold_together_is_named(self):
+        from unittest import mock
+        from tpotctl import envschema
+        app = self.make_app(sudo="passwordless")
+        notes = []
+        app.notify = lambda message, **kwargs: notes.append(message)
+        broken = mock.patch.object(envschema, "load_schema", side_effect=envschema.SchemaError("LIST: x is in no group"))
+        with broken:
+            async with app.run_test(size=(140, 44)) as pilot:
+                await pilot.pause(0.4)
+                await pilot.click("#ins-next")
+                await pilot.pause(0.2)
+                await pilot.press("down", "enter")             # Sensor
+                await pilot.pause(0.3)
+                self.assertEqual(app.step, "settings")
+        said = [n for n in notes if "LIST: x is in no group" in n]
+        self.assertEqual(len(said), 1, notes)
+        self.assertIn("env.schema.yml", said[0])
+        self.assertNotIn(".env cannot be read", said[0])
+
     async def done_text(self, on_path):
         from unittest import mock
         app = self.make_app(sudo="passwordless")

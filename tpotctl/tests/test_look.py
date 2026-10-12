@@ -964,7 +964,7 @@ class ColoursTest(unittest.IsolatedAsyncioTestCase):
         app = tapp.TpotApp(backend=FakeBackend(), runner=Recorder())
         async with app.run_test(size=(120, 40)) as pilot:
             await pilot.pause(0.3)
-            app.push_screen(many_picker(envschema.load_schema()["COWRIE_PERSONA"], "raspios ipcam"))
+            app.push_screen(many_picker(envschema.load_schema()["COWRIE_PERSONA"], "raspios ipcam bogus"))
             for _ in range(40):
                 await pilot.pause(0.05)
                 if isinstance(app.screen, ManyPicker):

@@ -2,8 +2,9 @@
 
 The schema says which: widget switch / choice / choice_many (a list setting, ticked in a
 ManyPicker) / interface / timezone / llm_model / llm_url, else the type (enum -> Select,
-int / number -> Input for numbers, secret -> masked Input with a button to show it). Every control is #set-<KEY>; whatever it is, a
-change arrives as SettingRow.Changed(key, value) with the text written to .env.
+int / number -> Input for numbers, secret -> masked Input with a button to show it).
+Every control is #set-<KEY>; whatever it is, a change arrives as
+SettingRow.Changed(key, value) with the text written to .env.
 """
 
 from typing import Dict, Optional

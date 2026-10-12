@@ -192,6 +192,8 @@ class ManyPicker(NavModal):
         self.title_text, self.values, self.note = title, list(values), note
         self.groups = dict(groups) if groups else {"": list(values)}
         self.chosen = {v for v in current.split() if v in self.values}
+        # typed into the field but not one of the values: Take it leaves them out, the status says so
+        self.dropped = list(dict.fromkeys(v for v in current.split() if v not in self.values))
         # what each line of the list is: ("group", title) or ("value", value)
         self.lines: List[Tuple[str, str]] = []
         for group, members in self.groups.items():
@@ -246,10 +248,16 @@ class ManyPicker(NavModal):
     def status_text(self) -> Text:
         count, total = len(self.chosen), len(self.values)
         if not count:
-            return Text(f"Nothing ticked: all {total}, the setting stays empty.", style=theme.color("mist"))
-        if count == total:
-            return Text(f"All {total} ticked: saved empty, the same as nothing ticked.", style=theme.color("mist"))
-        return Text(f"{count} of {total} ticked.", style=theme.color("glass"))
+            text = Text(f"Nothing ticked: all {total}, the setting stays empty.", style=theme.color("mist"))
+        elif count == total:
+            text = Text(f"All {total} ticked: saved empty, the same as nothing ticked.", style=theme.color("mist"))
+        else:
+            text = Text(f"{count} of {total} ticked.", style=theme.color("glass"))
+        if self.dropped:
+            one = len(self.dropped) == 1
+            text.append(f"\n{glyphs.g('warn')} {', '.join(self.dropped)} {'is' if one else 'are'} not on the list, "
+                        f"Take it leaves {'it' if one else 'them'} out.", style=theme.color("warn"))
+        return text
 
     def value(self) -> str:
         if len(self.chosen) == len(self.values):
