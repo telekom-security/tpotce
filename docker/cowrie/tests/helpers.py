@@ -1,4 +1,7 @@
 """Shared helpers for the tpot_personas tests (stdlib only)."""
+import io
+import pickle
+import pickletools
 import sys
 import tempfile
 from pathlib import Path
@@ -61,7 +64,13 @@ def base_tree():
     _link(root, "etc/localtime", "usr/share/zoneinfo/Etc/UTC")
     tree.ensure_file(root, "etc/dpkg/origins/debian", b"Vendor: Debian\n", ctime=OLD)
     _link(root, "etc/dpkg/origins/default", "etc/dpkg/origins/debian")
+    # tar's rmt as Cowrie's tree has it: through dpkg's alternatives
     _link(root, "etc/rmt", "usr/sbin/rmt-tar")
+    _link(root, "usr/sbin/rmt", "usr/sbin/rmt-tar")
+    _link(root, "etc/alternatives/rmt", "usr/sbin/rmt-tar")
+    tree.ensure_file(root, "usr/share/man/man8/rmt-tar.8.gz", b"\x1f\x8b", ctime=OLD)
+    _link(root, "usr/share/man/man8/rmt.8.gz", "usr/share/man/man8/rmt-tar.8.gz")
+    _link(root, "etc/alternatives/rmt.8.gz", "usr/share/man/man8/rmt-tar.8.gz")
     # Debian's own packages (adduser, debianutils) and the process of the container
     tree.ensure_file(root, "etc/adduser.conf", b"DSHELL=/bin/bash\n", ctime=OLD)
     tree.ensure_file(root, "etc/rcS.d/README", b"", ctime=OLD)
@@ -93,3 +102,32 @@ def tmpdir(test):
     handle = tempfile.TemporaryDirectory()
     test.addCleanup(handle.cleanup)
     return Path(handle.name)
+
+
+# opcodes a pickle of plain lists, strings, numbers and bytes needs; anything that names a class or
+# calls one is refused before loading
+_DATA_OPCODES = frozenset({"PROTO", "FRAME", "STOP", "MARK", "POP", "POP_MARK", "DUP", "EMPTY_LIST", "APPEND",
+                           "APPENDS", "LIST", "EMPTY_TUPLE", "TUPLE", "TUPLE1", "TUPLE2", "TUPLE3", "EMPTY_DICT",
+                           "DICT", "SETITEM", "SETITEMS", "NONE", "NEWTRUE", "NEWFALSE", "INT", "BININT",
+                           "BININT1", "BININT2", "LONG", "LONG1", "LONG4", "FLOAT", "BINFLOAT", "STRING",
+                           "BINSTRING", "SHORT_BINSTRING", "UNICODE", "BINUNICODE", "SHORT_BINUNICODE",
+                           "BINUNICODE8", "BINBYTES", "SHORT_BINBYTES", "BINBYTES8", "PUT", "BINPUT",
+                           "LONG_BINPUT", "GET", "BINGET", "LONG_BINGET", "MEMOIZE"})
+
+
+class _DataUnpickler(pickle.Unpickler):
+    def find_class(self, module, name):
+        raise pickle.UnpicklingError(f"refused: {module}.{name}")
+
+
+def load_data_pickle(path):
+    """A pickle of data only (Cowrie's upstream fs.pickle): the opcodes are checked first, then it
+    is loaded with an Unpickler that names no class."""
+    data = Path(path).read_bytes()
+    foreign = {op.name for op, _, _ in pickletools.genops(data)} - _DATA_OPCODES
+    if foreign:
+        raise pickle.UnpicklingError(f"refused opcodes: {sorted(foreign)}")
+    try:
+        return _DataUnpickler(io.BytesIO(data)).load()
+    except UnicodeDecodeError:
+        return _DataUnpickler(io.BytesIO(data), encoding="utf-8").load()

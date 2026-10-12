@@ -40,12 +40,13 @@ DEBIAN_SYSTEM_PATHS = (
     "etc/systemd/system/multi-user.target.wants/ssh.service", "etc/systemd/system/sshd.service",
     "etc/logrotate.d/apt", "usr/share/bash-completion/completions/apt", "usr/share/base-files", "usr/share/bug",
     "usr/share/lintian", "etc/rmt", "usr/sbin/rmt", "usr/sbin/rmt-tar", "usr/sbin/tarcat",
+    "etc/alternatives/rmt", "etc/alternatives/rmt.8.gz", "usr/share/man/man8/rmt*.8.gz",
 )
 # ... and every name or link target with one of these words (man pages, translations, alternatives, keyrings,
-#   changelog.Debian.gz, state of deb-systemd-helper): Debian itself, dpkg, apt and the packages adduser,
-#   debianutils (which.debianutils) and init-system-helpers
+#   changelog.Debian.gz, state of deb-systemd-helper): Debian itself, dpkg, apt, the rmt of Debian's tar and
+#   the packages adduser, debianutils (which.debianutils) and init-system-helpers
 DEBIAN_WORDS = ("debian", "Debian", "dpkg", "apt.mo", "deb-systemd", "adduser", "deluser", "addgroup",
-                "delgroup")
+                "delgroup", "rmt-tar")
 # x86_64 only: the dynamic loader and the multiarch directory of Debian
 X86_PATHS = ("lib64", "usr/lib64", "usr/bin/x86_64", "usr/bin/ld.so")
 X86_WORDS = ("x86_64", "x86-64")
