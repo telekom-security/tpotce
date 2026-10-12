@@ -805,3 +805,44 @@ class ValidateCpuTest(unittest.TestCase):
         self.assertEqual(_problems(persona, ident, out, keys), "")
         _edit(self, out / "cowrie.cfg", "ssh_version = Dropbear", "ssh_version = OpenSSH")
         self.assertIn("ssh_version", _problems(persona, ident, out, keys))
+
+
+class ValidateHostKeyAlgorithmsTest(unittest.TestCase):
+    def check(self, pid, old, new, wanted):
+        persona = catalog.by_id(pid)
+        ident, out, keys = render_one(self, persona, 1)
+        self.assertEqual(_problems(persona, ident, out, keys), "")
+        _edit(self, out / "cowrie.cfg", f"\nhost_key_algorithms = {old}", f"\nhost_key_algorithms = {new}")
+        self.assertIn(wanted, _problems(persona, ident, out, keys))
+
+    def test_openssh_9_offers_no_ssh_rsa(self):
+        self.check("ubuntu-noble", "rsa-sha2-512,rsa-sha2-256,", "rsa-sha2-512,rsa-sha2-256,ssh-rsa,",
+                   "OpenSSH 9.6 offers no ssh-rsa")
+
+    def test_openssh_7_4_offers_rsa_sha2_and_ssh_rsa(self):
+        self.check("centos-7", "ssh-rsa,rsa-sha2-512,rsa-sha2-256,", "ssh-rsa,",
+                   "OpenSSH 7.4 offers rsa-sha2-512 and rsa-sha2-256")
+        self.check("centos-7", "ssh-rsa,rsa-sha2-512,rsa-sha2-256,", "rsa-sha2-512,rsa-sha2-256,",
+                   "OpenSSH 7.4 still offers ssh-rsa")
+        self.check("centos-7", "ssh-rsa,rsa-sha2-512,rsa-sha2-256,", "rsa-sha2-512,rsa-sha2-256,ssh-rsa,",
+                   "differ from openssh of SSH-2.0-OpenSSH_7.4")
+
+    def test_rhel_9_policy_has_no_ssh_rsa(self):
+        persona = catalog.by_id("rhel-9")
+        ident, out, keys = render_one(self, persona, 1)
+        cfg = (out / "cowrie.cfg").read_text()
+        self.assertIn("\nhost_key_algorithms = rsa-sha2-512,rsa-sha2-256,ecdsa-sha2-nistp256,ssh-ed25519\n", cfg)
+        self.check("rhel-9", "rsa-sha2-512,rsa-sha2-256,", "rsa-sha2-512,rsa-sha2-256,ssh-rsa,", "differ from")
+
+    def test_old_dropbear_has_no_rsa_sha2(self):
+        self.check("tplink-wr841n", "ssh-rsa", "rsa-sha2-256,ssh-rsa", "dropbear 2012.55 has no rsa-sha2")
+
+    def test_dropbear_has_no_rsa_sha2_512(self):
+        self.check("openwrt", "ssh-ed25519,rsa-sha2-256,ssh-rsa", "ssh-ed25519,rsa-sha2-512,rsa-sha2-256,ssh-rsa",
+                   "dropbear has no rsa-sha2-512")
+
+    def test_every_key_is_offered_and_every_algorithm_has_its_key(self):
+        self.check("openwrt", "ssh-ed25519,rsa-sha2-256,ssh-rsa", "rsa-sha2-256,ssh-rsa",
+                   "host key ssh-ed25519 is not offered")
+        self.check("tplink-wr841n", "ssh-rsa", "ssh-rsa,ssh-ed25519", "ssh-ed25519 has no ssh-ed25519 key")
+        self.check("ubuntu-noble", "rsa-sha2-512,", "ssh-ed448,rsa-sha2-512,", "host key algorithm not supported: ssh-ed448")

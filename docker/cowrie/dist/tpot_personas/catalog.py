@@ -207,8 +207,11 @@ def _rhel(updated, minor, kernel, uts, builder, compiler, openssh, openssh_befor
         os_version=f"9.{minor} (Plow)",
         os_version_id=f"9.{minor}",
         packages={"dnf": "4.14.0", "rpm": "4.16.1.3", "openssh-server": openssh, **packages},
+        # ssh_rsa_sha1: the DEFAULT crypto policy of RHEL 9 has no SHA-1 signatures, sshd offers its RSA
+        #   key as rsa-sha2-512,rsa-sha2-256 only (unverified: from the opensshserver back-end of
+        #   crypto-policies, HostKeyAlgorithms without ssh-rsa)
         extra={"kernel_builder": builder, "kernel_compiler": compiler, "first_install": "2022-05-17",
-               "updated": updated,
+               "updated": updated, "ssh_rsa_sha1": False,
                "upgrades": {"openssh-server": openssh_before}},
     )
 

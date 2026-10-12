@@ -1477,6 +1477,45 @@ class PatchTest(unittest.TestCase):
 
         self.assertEqual(get_free_stats(Command()), {})
 
+    def host_key_algorithms(self, value, keys):
+        """tpot_host_key_algorithms of the patched factory.py with [ssh] host_key_algorithms = value
+        (None: unset) and these loaded key types; Twisted 26.4's supportedPublicKeys."""
+        source = (self.patched() / "src/cowrie/ssh/factory.py").read_text()
+
+        class Transport:
+            class SSHTransportBase:
+                supportedPublicKeys = [b"ecdsa-sha2-nistp256", b"ecdsa-sha2-nistp384", b"ecdsa-sha2-nistp521",
+                                       b"rsa-sha2-512", b"rsa-sha2-256", b"ssh-rsa", b"ssh-dss", b"ssh-ed25519"]
+
+        class Factory:
+            class SSHFactory:
+                pass
+
+        config = FakeConfig({} if value is None else {("ssh", "host_key_algorithms"): value})
+        namespace = module_all(source, {"CowrieConfig": config, "transport": Transport, "factory": Factory,
+                                        "Logger": lambda: None})
+        return namespace["tpot_host_key_algorithms"]({k.encode(): object() for k in keys})
+
+    def test_factory_offers_the_host_key_algorithms_of_the_persona(self):
+        factory = (self.patched() / "src/cowrie/ssh/factory.py").read_text()
+        self.assertIn("        t.supportedPublicKeys = tpot_host_key_algorithms(self.privateKeys)\n", factory)
+        self.assertNotIn("list(self.privateKeys.keys())\n\n        if not self.primes", factory)
+        keys = ("ssh-rsa", "ecdsa-sha2-nistp256", "ssh-ed25519")
+        self.assertEqual(self.host_key_algorithms("rsa-sha2-512,rsa-sha2-256,ecdsa-sha2-nistp256,ssh-ed25519", keys),
+                         [b"rsa-sha2-512", b"rsa-sha2-256", b"ecdsa-sha2-nistp256", b"ssh-ed25519"])
+        self.assertEqual(self.host_key_algorithms("ssh-rsa, rsa-sha2-512,rsa-sha2-256", keys),
+                         [b"ssh-rsa", b"rsa-sha2-512", b"rsa-sha2-256"])
+        self.assertEqual(self.host_key_algorithms("ssh-ed25519,rsa-sha2-256,ssh-rsa", ("ssh-ed25519", "ssh-rsa")),
+                         [b"ssh-ed25519", b"rsa-sha2-256", b"ssh-rsa"])
+
+    def test_factory_leaves_out_what_it_cannot_sign(self):
+        # no ed25519 key loaded, a name Twisted does not know, one named twice
+        self.assertEqual(self.host_key_algorithms("rsa-sha2-512,ssh-ed25519,ssh-ed448,rsa-sha2-512", ("ssh-rsa",)),
+                         [b"rsa-sha2-512"])
+        # unset or nothing usable: one per loaded key, as upstream
+        self.assertEqual(self.host_key_algorithms(None, ("ssh-rsa", "ssh-ed25519")), [b"ssh-rsa", b"ssh-ed25519"])
+        self.assertEqual(self.host_key_algorithms("ssh-ed448", ("ssh-rsa",)), [b"ssh-rsa"])
+
     def test_telnet_without_issue_net_logs_no_traceback(self):
         # routers and cameras have no /etc/issue.net: an empty banner, as upstream, but no failure
         factory = (self.patched() / "src/cowrie/telnet/factory.py").read_text()
@@ -2080,7 +2119,11 @@ class PatchTest(unittest.TestCase):
                  ("src/cowrie/commands/service.py", 'self.args, "h", ["help", "status-all", "full-restart"]',
                   'self.args, "hv", ["help", "status-all", "full-restart"]'),
                  ("src/cowrie/commands/service.py", 'commands["service"] = Command_service\n',
-                  'commands["service"] = Command_service  # service\n'))
+                  'commands["service"] = Command_service  # service\n'),
+                 ("src/cowrie/ssh/factory.py", "\n\nclass CowrieSSHFactory(factory.SSHFactory):\n",
+                  "\n\nclass CowrieSSHFactory(factory.SSHFactory):  # factory\n"),
+                 ("src/cowrie/ssh/factory.py", "        t.supportedPublicKeys = list(self.privateKeys.keys())\n",
+                  "        t.supportedPublicKeys = list(self.privateKeys)\n"))
         for rel, old, new in cases:
             with self.subTest(rel=rel, needle=old):
                 root = tmpdir(self) / "cowrie"

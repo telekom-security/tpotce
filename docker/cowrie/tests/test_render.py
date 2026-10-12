@@ -1034,6 +1034,8 @@ class DeviceContentTest(unittest.TestCase):
             self.assertIn("\nmacs = hmac-sha1,hmac-sha2-256\n", cfg)
             self.assertIn("\ncompression = none\n", cfg)
             self.assertIn("\npublic_key_auth = ssh-ed25519,ssh-rsa\n", cfg)
+            # dropbear 2020.79 and later: rsa-sha2-256 before ssh-rsa, no rsa-sha2-512
+            self.assertIn("\nhost_key_algorithms = ssh-ed25519,rsa-sha2-256,ssh-rsa\n", cfg)
             self.assertIn("\noperating_system = GNU/Linux\n", cfg)
 
     def test_bare_metal_x86_nas_cpus(self):

@@ -930,6 +930,52 @@ def patch_ssh(cowrie_root):
     )
 
 
+def patch_ssh_factory(cowrie_root):
+    """The server host key algorithms are those of the emulated server ([ssh] host_key_algorithms,
+    in its order), not one per loaded key: OpenSSH 8.8 offers its RSA key as rsa-sha2-512,
+    rsa-sha2-256, OpenSSH 7.4 as ssh-rsa,rsa-sha2-512,rsa-sha2-256. Twisted signs rsa-sha2-* with
+    the ssh-rsa key (SSHServerTransport._getHostKeys); a name without a loaded key or unknown to
+    Twisted is left out."""
+    path = cowrie_root / "src" / "cowrie" / "ssh" / "factory.py"
+    replace_once(
+        path,
+        """
+
+class CowrieSSHFactory(factory.SSHFactory):
+""",
+        """
+
+# T-Pot: the key an rsa-sha2 signature algorithm signs with
+TPOT_KEY_TYPES = {b"rsa-sha2-256": b"ssh-rsa", b"rsa-sha2-512": b"ssh-rsa"}
+
+
+def tpot_host_key_algorithms(private_keys) -> list[bytes]:
+    \"\"\"T-Pot: the host key algorithms of [ssh] host_key_algorithms that Twisted knows and a loaded
+    key signs, in their order; without the key, one per loaded key (upstream).\"\"\"
+    names = [
+        name.strip().encode("utf-8")
+        for name in CowrieConfig.get("ssh", "host_key_algorithms", fallback="").split(",")
+        if name.strip()
+    ]
+    known = set(transport.SSHTransportBase.supportedPublicKeys)
+    offered = [
+        name
+        for name in dict.fromkeys(names)
+        if name in known and TPOT_KEY_TYPES.get(name, name) in private_keys
+    ]
+    return offered or list(private_keys.keys())
+
+
+class CowrieSSHFactory(factory.SSHFactory):
+""",
+    )
+    replace_once(
+        path,
+        "        t.supportedPublicKeys = list(self.privateKeys.keys())\n",
+        "        t.supportedPublicKeys = tpot_host_key_algorithms(self.privateKeys)\n",
+    )
+
+
 def patch_netstat(cowrie_root):
     path = cowrie_root / "src" / "cowrie" / "commands" / "netstat.py"
     replace_all(path, "@/com/ubuntu/upstart", "/run/systemd/private")
@@ -3613,6 +3659,7 @@ def main():
     patch_dnf(cowrie_root)
     patch_which(cowrie_root)
     patch_ssh(cowrie_root)
+    patch_ssh_factory(cowrie_root)
     patch_netstat(cowrie_root)
     patch_service(cowrie_root)
     patch_systemctl(cowrie_root)

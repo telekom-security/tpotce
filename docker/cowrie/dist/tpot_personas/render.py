@@ -12,7 +12,7 @@ from pathlib import Path
 from . import servers, system, tree
 from .common import home_dir, rng_for
 from .identity import DAY, to_json
-from .ssh_profiles import PROFILES
+from .ssh_profiles import PROFILES, host_key_algorithms
 
 COWRIE_ROOT = Path("/home/cowrie/cowrie")
 
@@ -445,6 +445,7 @@ skip_python_commands = {",".join(skip_python_commands(persona, ident, content))}
 enabled = true
 {keys}
 public_key_auth = {",".join(profile.host_keys)}
+host_key_algorithms = {",".join(host_key_algorithms(profile, r))}
 version = {r.ssh_banner}
 ciphers = {",".join(profile.ciphers)}
 macs = {",".join(profile.macs)}

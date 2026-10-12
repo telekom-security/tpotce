@@ -38,7 +38,7 @@ RUN apk --no-cache -U upgrade && \
     python3 /root/dist/patch_cowrie_persona_support.py --cowrie-root /home/cowrie/cowrie && \
     python3 /root/dist/patch_cowrie_persona_support.py --cowrie-root /home/cowrie/cowrie --self-test && \
 #
-# Personas: library, SSH algorithms (ciphers, MACs, host keys, compressions) of this Twisted and Cowrie,
+# Personas: library, SSH algorithms (ciphers, MACs, host keys and their algorithms, compressions) of this Twisted and Cowrie,
 # build check of every persona
     mkdir -p /usr/local/lib/tpot-cowrie && \
     cp -r /root/dist/tpot_personas /usr/local/lib/tpot-cowrie/ && \

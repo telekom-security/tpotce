@@ -17,7 +17,8 @@ from .common import VM_PROVIDERS, home_dir, is_login_shell, ps_start, ps_user
 from .identity import DAY, host_patterns, hostname_regex, kernel_time, stale_at, updated_at
 from .model import PROMPT_STYLES
 from .render import BUSYBOX_HELP, DIR_MODES, PACKAGE_MANAGER_PATHS, runtime_json
-from .ssh_profiles import COMPRESSIONS, HOST_KEYS, PROFILES, TWISTED_CIPHERS, TWISTED_MACS
+from .ssh_profiles import (COMPRESSIONS, HOST_KEY_ALGORITHMS, HOST_KEYS, PROFILES, TWISTED_CIPHERS, TWISTED_MACS,
+                           host_key_algorithms, key_type, server_version)
 
 # a rendered device tree is about 1 MB (a server's more); far below it the render broke
 MIN_PICKLE_SIZE = 800_000
@@ -94,6 +95,7 @@ def _check_ssh(persona, ident, cfg, out):
         if entries != tuple(wanted):
             out.append(f"{word} list {','.join(entries)} differs from profile {profile.name}")
 
+    _check_host_key_algorithms(profile, ident.release, cfg, out)
     banner = ident.release.ssh_banner
     ssh_version = cfg.get("shell", "ssh_version", fallback="")
     product = banner[len("SSH-2.0-"):].split(" ", 1)[0] if banner.startswith("SSH-2.0-") else ""
@@ -111,6 +113,43 @@ def _check_ssh(persona, ident, cfg, out):
             out.append(f"ssh_version {ssh_version!r} does not name {product} of the banner")
     else:
         out.append(f"ssh_version: banner {banner!r} names no known product")
+
+
+def _check_host_key_algorithms(profile, release, cfg, out):
+    """[ssh] host_key_algorithms: what the server of the banner offers for the loaded keys. Each one
+    signs with a key of public_key_auth, every key is offered; OpenSSH 8.8 and later offer no
+    ssh-rsa, OpenSSH before 7.2 and dropbear before 2020.79 no rsa-sha2-*, dropbear no
+    rsa-sha2-512, OpenSSH 7.2 and later both rsa-sha2-512 and rsa-sha2-256 (unless its policy has
+    no SHA-1, also ssh-rsa)."""
+    names = tuple(e.strip() for e in cfg.get("ssh", "host_key_algorithms", fallback="").split(",") if e.strip())
+    keys = {e.strip() for e in cfg.get("ssh", "public_key_auth", fallback="").split(",") if e.strip()}
+    for name in names:
+        if name not in HOST_KEY_ALGORITHMS:
+            out.append(f"host key algorithm not supported: {name}")
+        elif key_type(name) not in keys:
+            out.append(f"host key algorithm {name} has no {key_type(name)} key")
+    for key in sorted(keys - {key_type(name) for name in names}):
+        out.append(f"host key {key} is not offered in host_key_algorithms")
+    try:
+        product, version = server_version(release)
+    except ValueError:
+        return
+    rsa = [name for name in names if key_type(name) == "ssh-rsa"]
+    sha2 = {"rsa-sha2-512", "rsa-sha2-256"}
+    if product == "openssh" and version >= (8, 8) and "ssh-rsa" in rsa:
+        out.append(f"host key algorithms: OpenSSH {version[0]}.{version[1]} offers no ssh-rsa")
+    if ((product == "openssh" and version < (7, 2)) or (product == "dropbear" and version < (2020, 79))) \
+            and sha2 & set(rsa):
+        out.append(f"host key algorithms: {product} {version[0]}.{version[1]} has no rsa-sha2")
+    if product == "dropbear" and "rsa-sha2-512" in rsa:
+        out.append("host key algorithms: dropbear has no rsa-sha2-512")
+    if product == "openssh" and version >= (7, 2) and rsa and not sha2 <= set(rsa):
+        out.append(f"host key algorithms: OpenSSH {version[0]}.{version[1]} offers rsa-sha2-512 and rsa-sha2-256")
+    if product == "openssh" and version < (8, 8) and rsa and "ssh-rsa" not in rsa \
+            and release.extra.get("ssh_rsa_sha1", True):
+        out.append(f"host key algorithms: OpenSSH {version[0]}.{version[1]} still offers ssh-rsa")
+    if names != host_key_algorithms(profile, release):
+        out.append(f"host key algorithms {','.join(names)} differ from {profile.name} of {release.ssh_banner}")
 
 
 def _check_hardware(persona, ident, honeyfs, txtcmds, out):
