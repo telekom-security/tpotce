@@ -1092,8 +1092,18 @@ TPOT_SYSTEMCTL_CHANGES = ("start", "stop", "restart", "reload", "try-restart", "
                           "enable", "disable", "mask", "unmask", "kill", "reset-failed", "daemon-reload")
 TPOT_SYSTEMCTL_FLAGS = ("--all", "-a", "--no-pager", "--no-legend", "--plain", "--full", "-l", "--quiet",
                         "-q", "--system", "--no-ask-password", "--now", "--failed", "--legend=false")
+# options with a value (-n 20, --lines=20, -n20) and their long names
+TPOT_SYSTEMCTL_VALUES = {"-n": "--lines", "-o": "--output", "-p": "--property", "-t": "--type", "-H": "--host",
+                         "-M": "--machine", "-s": "--signal", "-P": "--value"}
+TPOT_SYSTEMCTL_LONG_VALUES = frozenset({"--lines", "--output", "--property", "--type", "--host", "--machine",
+                                        "--signal", "--state", "--kill-whom", "--job-mode", "--root", "--what",
+                                        "--timestamp", "--message", "--legend", "--check-inhibitors"})
+# the unit file states is-enabled answers 0 for (systemctl(1))
+TPOT_SYSTEMCTL_ENABLED = frozenset({"enabled", "enabled-runtime", "static", "alias", "indirect", "generated",
+                                    "transient"})
 
 
+@functools.cache
 def tpot_units() -> dict:
     path = CowrieConfig.get("shell", "systemctl_units", fallback="")
     if path:
@@ -1260,9 +1270,20 @@ def tpot_status_system(data: dict, boot: float, now: float, host: str) -> list[s
     return lines
 
 
-def tpot_list_units(cmd, data: dict, every: bool, legend: bool, kind: str | None) -> None:
+def tpot_selected(unit: dict, kinds: set, states: set, file_states: bool = False) -> bool:
+    # --type and --state: the type of the unit; its LOAD, ACTIVE or SUB state (the unit file state
+    # for list-unit-files)
+    if kinds and unit["name"].rsplit(".", 1)[-1] not in kinds:
+        return False
+    if not states:
+        return True
+    found = {unit.get("state", "enabled")} if file_states else {"loaded", "active", unit.get("sub", "")}
+    return bool(found & states)
+
+
+def tpot_list_units(cmd, data: dict, every: bool, legend: bool, kinds: set, states: set = frozenset()) -> None:
     version = int(data.get("version", 252))
-    units = [u for u in data["units"] if kind is None or u["name"].endswith("." + kind)]
+    units = [u for u in data["units"] if tpot_selected(u, kinds, states)]
     if not units:
         cmd.write("0 loaded units listed.\n" if legend else "")
         return
@@ -1288,9 +1309,10 @@ def tpot_list_units(cmd, data: dict, every: bool, legend: bool, kind: str | None
               "To show all installed unit files use 'systemctl list-unit-files'.\n")
 
 
-def tpot_list_unit_files(cmd, data: dict, legend: bool) -> None:
+def tpot_list_unit_files(cmd, data: dict, legend: bool, kinds: set = frozenset(),
+                         states: set = frozenset()) -> None:
     version = int(data.get("version", 252))
-    units = sorted(data["units"], key=lambda u: u["name"].lower())
+    units = sorted((u for u in data["units"] if tpot_selected(u, kinds, states, True)), key=lambda u: u["name"].lower())
     width = max([len("UNIT FILE")] + [len(u["name"]) for u in units])
     state_width = max([len("STATE")] + [len(u.get("state", "")) for u in units])
     preset = version >= 245
@@ -1310,10 +1332,31 @@ def tpot_systemctl(cmd, args: list[str]) -> int:
     # one systemctl call on cmd (a HoneyPotCommand); returns the exit status
     data = tpot_units()
     version = int(data.get("version", 252))
-    words, every, legend, quiet, kind = [], False, True, False, None
+    words, every, legend, quiet = [], False, True, False
+    values: dict[str, str] = {}
     items = list(args)
     while items:
         arg = items.pop(0)
+        option = None
+        if arg[:2] in TPOT_SYSTEMCTL_VALUES:
+            option, value = TPOT_SYSTEMCTL_VALUES[arg[:2]], arg[2:]
+            if not value:
+                if not items:
+                    cmd.errorWrite(f"systemctl: option requires an argument -- '{arg[1]}'\n")
+                    return 1
+                value = items.pop(0)
+        elif arg.split("=", 1)[0] in TPOT_SYSTEMCTL_LONG_VALUES:
+            option, _, value = arg.partition("=")
+            if "=" not in arg:
+                if not items:
+                    cmd.errorWrite(f"systemctl: option '{arg}' requires an argument\n")
+                    return 1
+                value = items.pop(0)
+        if option is not None:
+            values[option] = value
+            if option == "--legend":
+                legend = legend and value not in ("false", "no", "0", "off")
+            continue
         if arg == "--version":
             cmd.write(f"systemd {version}" + (f" ({data['full']})" if data.get("full") else "") + "\n"
                       + (data.get("features", "") + "\n" if data.get("features") else ""))
@@ -1321,14 +1364,7 @@ def tpot_systemctl(cmd, args: list[str]) -> int:
         if arg in ("-h", "--help"):
             cmd.write("systemctl [OPTIONS...] COMMAND ...\n\nQuery or send control commands to the system manager.\n")
             return 0
-        if arg in ("-t", "--type") and items:
-            kind = items.pop(0)
-        elif arg.startswith("--type=") or (arg.startswith("-t") and len(arg) > 2):
-            kind = arg.split("=", 1)[1] if arg.startswith("--type=") else arg[2:]
-        elif arg.startswith("--state=") or arg.startswith("--output=") or arg.startswith("--lines=") \
-                or arg.startswith("-n") or arg.startswith("-o"):
-            continue
-        elif arg in TPOT_SYSTEMCTL_FLAGS:
+        if arg in TPOT_SYSTEMCTL_FLAGS:
             every = every or arg in ("--all", "-a")
             legend = legend and arg not in ("--no-legend", "--legend=false")
             quiet = quiet or arg in ("-q", "--quiet")
@@ -1340,14 +1376,20 @@ def tpot_systemctl(cmd, args: list[str]) -> int:
             return 1
         else:
             words.append(arg)
+    lines = values.get("--lines")
+    if lines is not None and not lines.isdigit():
+        cmd.errorWrite(f"Failed to parse lines '{lines}'\n")
+        return 1
+    kinds = {kind for kind in values.get("--type", "").split(",") if kind}
+    states = {state for state in values.get("--state", "").split(",") if state}
     verb, names = (words[0], words[1:]) if words else ("list-units", [])
     boot, now = cmd.protocol.boot_time(), time.time()
     host = cmd.protocol.hostname.split(".")[0]
     if verb == "list-units":
-        tpot_list_units(cmd, data, every, legend, kind)
+        tpot_list_units(cmd, data, every, legend, kinds, states)
         return 0
     if verb == "list-unit-files":
-        tpot_list_unit_files(cmd, data, legend)
+        tpot_list_unit_files(cmd, data, legend, kinds, states)
         return 0
     if verb == "status":
         if not names:
@@ -1360,7 +1402,13 @@ def tpot_systemctl(cmd, args: list[str]) -> int:
                 cmd.errorWrite(f"Unit {name} could not be found.\n")
                 status = 4
             else:
-                blocks.append("".join(line + "\n" for line in tpot_status_unit(cmd, data, unit, boot, now, host)))
+                block = tpot_status_unit(cmd, data, unit, boot, now, host)
+                if lines is not None and "" in block:
+                    # -n N: the last N lines of its journal
+                    cut = block.index("")
+                    journal = block[cut + 1:][-int(lines):] if int(lines) else []
+                    block = block[:cut] + ([""] + journal if journal else [])
+                blocks.append("".join(line + "\n" for line in block))
         cmd.write("\n".join(blocks))
         return status
     if verb == "cat":
@@ -1386,7 +1434,8 @@ def tpot_systemctl(cmd, args: list[str]) -> int:
         if not names:
             cmd.errorWrite("Too few arguments.\n")
             return 1
-        status = 0
+        # as systemd: 0 when one of the units is in the state asked for
+        found, missing = False, False
         for name in names:
             name, unit = tpot_unit(data, name)
             if verb == "is-active":
@@ -1395,15 +1444,17 @@ def tpot_systemctl(cmd, args: list[str]) -> int:
                 answer, ok = ("active", False) if unit else ("inactive", False)
             elif unit is None:
                 cmd.errorWrite(f"Failed to get unit file state for {name}: No such file or directory\n")
-                status = 1
+                missing = True
                 continue
             else:
-                answer, ok = unit.get("state", "enabled"), True
+                answer = unit.get("state", "enabled")
+                ok = answer in TPOT_SYSTEMCTL_ENABLED
             if not quiet:
                 cmd.write(answer + "\n")
-            if not ok:
-                status = 1 if verb == "is-failed" else 3
-        return status
+            found = found or ok
+        if missing:
+            return 1
+        return 0 if found else (3 if verb == "is-active" else 1)
     if verb in TPOT_SYSTEMCTL_CHANGES:
         if verb == "daemon-reload":
             if tpot_privileged(cmd):
@@ -1443,7 +1494,7 @@ def patch_systemctl(cowrie_root):
     shows the status of X as systemctl does (Red Hat names the redirection first). Runs after
     patch_service."""
     path = cowrie_root / "src" / "cowrie" / "commands" / "service.py"
-    replace_once(path, "import getopt\n", "import getopt\nimport json\nimport time\n")
+    replace_once(path, "import getopt\n", "import functools\nimport getopt\nimport json\nimport time\n")
     replace_once(
         path,
         """    def call(self) -> None:

@@ -900,6 +900,82 @@ class PatchTest(unittest.TestCase):
                          ("Failed to get unit file state for nosuch.service: No such file or directory\n", 1))
         self.assertEqual(self.systemctl("ubuntu-noble", ["is-active"])[1:3], ("Too few arguments.\n", 1))
 
+    def test_systemctl_is_enabled_answers_with_the_state_of_the_unit_file(self):
+        # systemd: 0 when one of the units is enabled, static, alias, indirect, generated or transient
+        self.assertEqual(self.systemctl("ubuntu-noble", ["is-enabled", "ssh"])[:3], ("disabled\n", "", 1))
+        self.assertEqual(self.systemctl("ubuntu-noble", ["is-enabled", "-q", "ssh"])[:3], ("", "", 1))
+        self.assertEqual(self.systemctl("ubuntu-noble", ["is-enabled", "ssh", "cron"])[:3], ("disabled\nenabled\n", "", 0))
+        _, _, _, namespace, _ = self.systemctl("ubuntu-noble", ["--version"])
+        states = {"enabled": 0, "enabled-runtime": 0, "static": 0, "alias": 0, "indirect": 0, "generated": 0,
+                  "transient": 0, "disabled": 1, "masked": 1, "masked-runtime": 1, "linked": 1, "linked-runtime": 1,
+                  "bad": 1}
+        namespace["tpot_units"] = lambda: {"version": 255, "units": [
+            {"name": f"u-{state}.service", "state": state, "path": "/x"} for state in states]}
+        for state, status in states.items():
+            cmd = FakeCommand([])
+            cmd.user = {"uid": 1000}
+            cmd.protocol.boot_time = lambda: time.time() - 60
+            cmd.protocol.hostname = "web1"
+            with self.subTest(state):
+                self.assertEqual(namespace["tpot_systemctl"](cmd, ["is-enabled", f"u-{state}"]), status)
+                self.assertEqual(bytes(cmd.out), f"{state}\n".encode())
+
+    def test_systemctl_is_active_when_one_of_the_units_is(self):
+        # systemd's check_unit_generic: 0 when one unit is in the state asked for
+        self.assertEqual(self.systemctl("rhel-9", ["is-active", "sshd", "cron"])[:3], ("active\ninactive\n", "", 0))
+        self.assertEqual(self.systemctl("rhel-9", ["is-active", "cron", "nosuch"])[:3], ("inactive\ninactive\n", "", 3))
+        self.assertEqual(self.systemctl("rhel-9", ["is-failed", "sshd"])[:3], ("active\n", "", 1))
+
+    def test_systemctl_options_take_their_values(self):
+        out, err, code, _, _ = self.systemctl("ubuntu-noble", ["status", "ssh", "-n", "20"])
+        self.assertEqual((err, code), ("", 0))
+        self.assertTrue(out.startswith("● ssh.service - "), out[:40])
+        for args in (["status", "ssh", "--lines", "0"], ["status", "-n0", "ssh"], ["--lines=0", "status", "ssh"]):
+            out, err, code, _, _ = self.systemctl("ubuntu-noble", args)
+            self.assertEqual((err, code), ("", 0), args)
+            self.assertNotIn("systemd[1]", out, args)
+            self.assertTrue(out.endswith("CGroup: /system.slice/ssh.service\n") or "└─" in out.splitlines()[-1],
+                            (args, out))
+        out, _, _, _, _ = self.systemctl("ubuntu-noble", ["status", "ssh", "-n", "1"])
+        self.assertEqual(len(out.split("\n\n", 1)[1].splitlines()), 1, out)
+        for args in (["-o", "cat", "status", "ssh"], ["--output", "short", "status", "ssh"], ["-p", "Id", "status", "ssh"],
+                     ["--property=Id", "status", "ssh"], ["-H", "web1", "status", "ssh"], ["-M", "c1", "status", "ssh"],
+                     ["--host=web1", "status", "ssh"]):
+            out, err, code, _, _ = self.systemctl("ubuntu-noble", args)
+            self.assertEqual((err, code), ("", 0), args)
+            self.assertTrue(out.startswith("● ssh.service"), args)
+        self.assertEqual(self.systemctl("ubuntu-noble", ["status", "ssh", "-n"])[1:3],
+                         ("systemctl: option requires an argument -- 'n'\n", 1))
+        self.assertEqual(self.systemctl("ubuntu-noble", ["status", "ssh", "--lines"])[1:3],
+                         ("systemctl: option '--lines' requires an argument\n", 1))
+        self.assertEqual(self.systemctl("ubuntu-noble", ["status", "ssh", "-n", "many"])[1:3],
+                         ("Failed to parse lines 'many'\n", 1))
+
+    def test_systemctl_state_and_type_select_the_units(self):
+        out, _, code, namespace, _ = self.systemctl("ubuntu-noble", ["list-units", "--state=running", "--no-legend"])
+        rows = out.splitlines()
+        self.assertEqual(code, 0)
+        self.assertTrue(rows and all(row.split()[3] == "running" for row in rows), rows)
+        out, _, _, _, _ = self.systemctl("ubuntu-noble", ["list-units", "--state", "running,listening", "--no-legend"])
+        self.assertEqual({row.split()[3] for row in out.splitlines()}, {"running", "listening"})
+        out, _, _, _, _ = self.systemctl("ubuntu-noble", ["list-units", "--state=failed"])
+        self.assertEqual(out, "0 loaded units listed.\n")
+        out, _, _, _, _ = self.systemctl("ubuntu-noble", ["list-units", "-t", "socket,service", "--state=listening",
+                                                          "--no-legend"])
+        self.assertTrue(out and all(row.split()[0].endswith(".socket") for row in out.splitlines()), out)
+        out, _, _, _, _ = self.systemctl("ubuntu-noble", ["list-unit-files", "--state=disabled", "--no-legend"])
+        self.assertIn("ssh.service ", out)
+        self.assertTrue(all(row.split()[1] == "disabled" for row in out.splitlines()), out)
+        out, _, _, _, _ = self.systemctl("ubuntu-noble", ["list-unit-files", "--type=socket", "--no-legend"])
+        self.assertTrue(out and all(row.split()[0].endswith(".socket") for row in out.splitlines()), out)
+
+    def test_systemctl_reads_its_units_once(self):
+        _, _, _, namespace, _ = self.systemctl("ubuntu-noble", ["--version"])
+        first = namespace["tpot_units"]()
+        Path(namespace["CowrieConfig"].get("shell", "systemctl_units")).unlink()
+        self.assertIs(namespace["tpot_units"](), first)
+        self.assertTrue(first["units"])
+
     def test_systemctl_list_units(self):
         out, _, code, namespace, _ = self.systemctl("ubuntu-jammy", ["list-units", "--type=service", "--no-pager"])
         lines = out.splitlines()
