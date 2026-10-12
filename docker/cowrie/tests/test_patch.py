@@ -1159,6 +1159,18 @@ class PatchTest(unittest.TestCase):
         self.assertIn("Is this ok [y/N]: Downloading Packages:\n", out)
         self.assertEqual(code, 0)
 
+    def test_dnf_reads_every_piped_answer(self):
+        run = self.upstream_session("rhel-9", uid=0)
+        self.assertTrue(run.commands["dnf"].consumes_stdin)
+        out, err, code = run("dnf install socat", input_data=b"maybe\n")
+        self.assertTrue(out.endswith("Is this ok [y/N]: Is this ok [y/N]: "), out[-60:])
+        self.assertEqual((err, code), ("Operation aborted.\n", 1))
+        out, err, code = run("dnf install socat", input_data=b"maybe\nyes\n")
+        self.assertTrue(out.endswith("Complete!\n"), out[-40:])
+        self.assertEqual(code, 0)
+        out, err, code = run("dnf install tcpdump", input_data=b"")
+        self.assertEqual((err, code), ("Operation aborted.\n", 1))
+
     def test_dnf_without_a_match_and_without_root(self):
         run = self.upstream_session("rhel-9", uid=0)
         out, err, code = run("dnf install -y masscan nmap")

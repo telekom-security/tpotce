@@ -2220,6 +2220,8 @@ class Command_dnf(HoneyPotCommand):
     repolist, makecache, clean, --version and the help; -y / --assumeno and the [y/N] question."""
 
     tpot_prog = "dnf"
+    # the question reads stdin: a pipe in front of dnf feeds its answers
+    consumes_stdin = True
     _log = Logger()
 
     def sleep(self, time: float, time2: float | None = None) -> defer.Deferred:
@@ -2508,9 +2510,11 @@ class Command_dnf(HoneyPotCommand):
             return
         self.write("Is this ok [y/N]: ")
         if self.input_data is not None:
+            # piped stdin: its lines answer in turn, its end is EOF (no)
             data, self.input_data = self.input_data, None
             lines = data.decode("utf-8", "replace").splitlines()
-            yield self.tpot_answer(lines[0] if lines else None)
+            while self.tpot_pending is not None:
+                yield self.tpot_answer(lines.pop(0) if lines else None)
 
     @inlineCallbacks
     def tpot_answer(self, line):
