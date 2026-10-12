@@ -135,10 +135,11 @@ function fuILM_OLDEST () {
 
 function fuILM_MAIN () {
   local myCODE myBODY myDECISION myACTION myCURRENT myHELD myOLDEST
-  # tpotinit validates .env before it starts this; a value that gets here anyway is not worked with
-  if [[ ! "${TPOT_ES_RETENTION:-}" =~ ^([0-9]+|off)?$ ]];
+  # the pattern of env.schema.yml (or empty): tpotinit validates .env before it starts this, a value that
+  # gets here anyway (1 to 3650 days, or off) is not worked with
+  if [[ ! "${TPOT_ES_RETENTION:-}" =~ ^([1-9][0-9]{0,2}|[1-2][0-9]{3}|3[0-5][0-9]{2}|36[0-4][0-9]|3650|off)?$ ]];
     then
-      echo "# Warning: TPOT_ES_RETENTION=${TPOT_ES_RETENTION} is no number of days and not off, the ILM policy tpot is not checked."
+      echo "# Warning: TPOT_ES_RETENTION=${TPOT_ES_RETENTION} is no number of days from 1 to 3650 and not off, the ILM policy tpot is not checked."
       return 0
   fi
   if ! fuILM_FIND_ES;

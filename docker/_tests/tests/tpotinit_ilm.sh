@@ -230,7 +230,19 @@ fuPUT_CHECK "  ... the policy deletes after 30d" '.policy.phases.delete.min_age 
 # a value that is no number of days: one warning of its own, no jq error, nothing asked, nothing written
 myUP="http://127.0.0.1:64298" myGET_CODE=404 myGET_BODY='{}' myRET=abc \
   fuSTUB_CHECK "an invalid TPOT_ES_RETENTION is warned about once and not applied" \
-  "# Warning: TPOT_ES_RETENTION=abc is no number of days and not off, the ILM policy tpot is not checked." ""
+  "# Warning: TPOT_ES_RETENTION=abc is no number of days from 1 to 3650 and not off, the ILM policy tpot is not checked." ""
+for myBAD in 0 0000 99999 3651; do
+  myUP="http://127.0.0.1:64298" myGET_CODE=404 myGET_BODY='{}' myRET="${myBAD}" \
+    fuSTUB_CHECK "TPOT_ES_RETENTION=${myBAD} is out of range: no PUT, the warning" \
+    "# Warning: TPOT_ES_RETENTION=${myBAD} is no number of days from 1 to 3650 and not off, the ILM policy tpot is not checked." ""
+done
+for myGOOD in 1 3650; do
+  myUP="http://127.0.0.1:64298" myGET_CODE=404 myGET_BODY='{}' myCAT_BODY='[]' myRET="${myGOOD}" \
+    fuSTUB_CHECK "TPOT_ES_RETENTION=${myGOOD} is still applied" "# ILM policy tpot: created, events are kept for ${myGOOD} days." \
+    "GET http://127.0.0.1:64298/_ilm/policy/tpot
+GET http://127.0.0.1:64298/${myCAT}
+PUT http://127.0.0.1:64298/_ilm/policy/tpot"
+done
 # jq failing on a policy it cannot read: its stderr does not reach the log, the warning of the script does
 jq() {
   if [[ "$*" == *"decide("* ]]; then echo "jq: error (at <stdin>:1): odd" >&2; return 5; fi
