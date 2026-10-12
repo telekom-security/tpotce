@@ -877,6 +877,9 @@ class PatchTest(unittest.TestCase):
         self.assertLess(names.index("unattended-upgrades.service"), names.index("dbus.socket"))
         out, _, _, _, _ = self.systemctl("ubuntu-jammy", ["list-unit-files"])
         self.assertRegex(out, r"^UNIT FILE +STATE +VENDOR PRESET\n")
+        self.assertRegex(out, r"\napport\.service +generated +-\n")
+        out, _, _, _, _ = self.systemctl("ubuntu-jammy", ["status", "apport"])
+        self.assertIn("Loaded: loaded (/etc/init.d/apport; generated)\n", out)
         out, _, _, _, _ = self.systemctl("centos-7", ["status", "network"])
         self.assertIn("Loaded: loaded (/etc/rc.d/init.d/network; bad; vendor preset: disabled)", out)
 

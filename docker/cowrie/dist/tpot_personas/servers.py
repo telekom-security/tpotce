@@ -465,6 +465,7 @@ def _server_content(persona, ident, files, tasks, run_lock=False, accounts=None,
     all_files["etc/fstab"] = fstab
     all_files["proc/modules"] = proc_modules(persona, ident)
     all_files.update(system.files(persona))
+    all_files.update(system.init_scripts(persona))
     sudoers = system.sudoers_files(persona, ident)
     all_files.update(sudoers)
     all_files.update(files)
@@ -1072,6 +1073,9 @@ def systemd_units(persona, ident, processes):
     for name, description, match, state in sorted(core + entries, key=lambda e: e[0].lower()):
         unit = {"name": name, "description": description, "state": state, "preset": "enabled",
                 "path": f"{directory}/{name}"}
+        if name == "apport.service" and version < 255:
+            # before 24.04 apport is an LSB script, the SysV generator makes its unit
+            unit.update({"path": "/etc/init.d/apport", "state": "generated"})
         if name == "network.service":
             # CentOS 7 runs the network init script through systemd's SysV generator
             unit.update({"path": "/etc/rc.d/init.d/network", "preset": "disabled"})

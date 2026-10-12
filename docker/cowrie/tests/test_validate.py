@@ -455,6 +455,15 @@ class ValidateServerCommandTest(unittest.TestCase):
         found = " | ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0))
         self.assertIn("apt: wget is on PATH, apt does not have it installed", found)
 
+    def test_init_script_of_status_all_missing(self):
+        persona = catalog.by_id("debian-bookworm")
+        ident, out, keys = render_one(self, persona, 1)
+        fs = tree.load_pickle(out / "fs.pickle")
+        tree.remove_node(fs, "etc/init.d/cron")
+        tree.dump_pickle(fs, out / "fs.pickle")
+        found = " | ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0))
+        self.assertIn("service: --status-all names cron, /etc/init.d/cron is missing", found)
+
     def test_unit_file_missing(self):
         persona = catalog.by_id("rhel-9")
         ident, out, keys = render_one(self, persona, 1)

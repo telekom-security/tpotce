@@ -450,6 +450,24 @@ class SystemdTreeTest(unittest.TestCase):
                                         for name in names), (persona.id, script))
             self.assertIn("dbus.socket", names, persona.id)
 
+    def test_every_init_script_of_status_all_is_in_init_d(self):
+        for pid in ("ubuntu-noble", "ubuntu-jammy", "debian-bookworm", "raspios", "gpu-ubuntu"):
+            _, out, _ = render_one(self, catalog.by_id(pid), 1)
+            fs = fs_of(out)
+            names = [line.split()[-1] for line in (out / system.SERVICE_STATUS).read_text().splitlines()]
+            self.assertTrue(names, pid)
+            for name in names:
+                node = tree.find_node(fs, f"etc/init.d/{name}")
+                self.assertIsNotNone(node, (pid, name))
+                self.assertEqual(tree.node_get(node, tree.A_MODE) & 0o777, 0o755, (pid, name))
+                if name not in ("hwclock.sh", "procps", "ssh"):
+                    text = tree.node_get(node, tree.A_CONTENTS).decode()
+                    self.assertIn(f"# Provides:          {name.removesuffix('.sh')}\n", text, (pid, name))
+        _, out, _ = render_one(self, catalog.by_id("ubuntu-jammy"), 1)
+        units = {u["name"]: u for u in json.loads((out / system.SYSTEMD_UNITS).read_text())["units"]}
+        self.assertEqual((units["apport.service"]["path"], units["apport.service"]["state"]),
+                         ("/etc/init.d/apport", "generated"))
+
     def test_noble_listens_on_ssh_socket(self):
         _, out, _ = render_one(self, catalog.by_id("ubuntu-noble"), 1)
         units = {u["name"]: u for u in json.loads((out / system.SYSTEMD_UNITS).read_text())["units"]}

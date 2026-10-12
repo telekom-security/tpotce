@@ -897,6 +897,79 @@ def sudo_grammar(version):
     return "48" if patch < 12 else "50"
 
 
+# the init scripts of service --status-all that Cowrie's Debian tree has (kept as they are)
+TREE_INIT = frozenset({"hwclock.sh", "procps", "ssh"})
+# Short-Description of the LSB header of each script (unverified: the wording of each package)
+INIT_DESCRIPTIONS = {
+    "alsa-utils": "Restore and store ALSA driver settings", "apparmor": "AppArmor initialization",
+    "apport": "automatic crash report generation", "avahi-daemon": "Avahi mDNS/DNS-SD Daemon",
+    "bluetooth": "Start bluetooth daemons", "console-setup.sh": "Set console font and keymap",
+    "cron": "Regular background program processing daemon", "dbus": "D-Bus systemwide message bus",
+    "dphys-swapfile": "Autogenerate and use a swap file", "fake-hwclock": "Restore / save the current clock",
+    "irqbalance": "daemon to balance interrupts for SMP systems", "iscsid": "iSCSI initiator daemon (iscsid)",
+    "keyboard-setup.sh": "Set the console keyboard layout", "kmod": "Load the modules listed in /etc/modules.",
+    "open-iscsi": "Login to default iSCSI targets", "plymouth": "Stop Plymouth Boot Screen",
+    "plymouth-log": "Copy the boot log to /var/log/boot.log", "rsync": "fast remote file copy program daemon (rsyncd)",
+    "sudo": "Provide limited super user privileges to specific users", "triggerhappy": "triggerhappy hotkey daemon",
+    "udev": "Start systemd-udevd and populate /dev", "ufw": "start firewall",
+    "unattended-upgrades": "Check if unattended upgrades are being applied", "uuidd": "uuidd daemon",
+}
+_INIT_SCRIPT = """#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          {provides}
+# Required-Start:    $remote_fs $syslog
+# Required-Stop:     $remote_fs $syslog
+# Default-Start:     {start}
+# Default-Stop:      {stop}
+# Short-Description: {description}
+### END INIT INFO
+
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+NAME={provides}
+DESC="{description}"
+
+. /lib/lsb/init-functions
+
+case "$1" in
+  start|stop|restart|force-reload)
+	log_daemon_msg "Running $1 of $DESC" "$NAME"
+	log_end_msg 0
+	;;
+  status)
+	exit {status}
+	;;
+  *)
+	echo "Usage: /etc/init.d/$NAME {{start|stop|restart|force-reload|status}}" >&2
+	exit 3
+	;;
+esac
+
+exit 0
+"""
+
+
+def _init_entries(persona):
+    """(sign, name) of service --status-all on a Debian server."""
+    init = _PI_INIT if persona.family == "raspios" else _UBUNTU_INIT if persona.os_id == "ubuntu" else _DEBIAN_INIT
+    return tuple((entry[0], entry[2:]) for entry in init)
+
+
+def init_scripts(persona):
+    """/etc/init.d of a Debian server: a script with its LSB header for every entry of service
+    --status-all that Cowrie's tree has not (shortened; its status is the sign of the entry)."""
+    if not has_dpkg(persona) or persona.kind != "server":
+        return {}
+    scripts = {}
+    for sign, name in _init_entries(persona):
+        if name in TREE_INIT:
+            continue
+        boot = name.endswith(".sh") or name in ("kmod", "udev", "fake-hwclock", "alsa-utils")
+        scripts[f"etc/init.d/{name}"] = _INIT_SCRIPT.format(
+            provides=name.removesuffix(".sh"), description=INIT_DESCRIPTIONS[name], start="S" if boot else "2 3 4 5",
+            stop="" if boot else "0 1 6", status=0 if sign == "+" else 3)
+    return scripts
+
+
 def service_status(persona):
     """What service --status-all prints on a server."""
     if persona.family == "rhel":
@@ -904,8 +977,7 @@ def service_status(persona):
     if persona.family == "centos":
         lines = _CENTOS_STATUS
     else:
-        init = _PI_INIT if persona.family == "raspios" else _UBUNTU_INIT if persona.os_id == "ubuntu" else _DEBIAN_INIT
-        lines = tuple(f" [ {entry[0]} ]  {entry[2:]}" for entry in init)
+        lines = tuple(f" [ {sign} ]  {name}" for sign, name in _init_entries(persona))
     return "".join(line + "\n" for line in lines)
 
 

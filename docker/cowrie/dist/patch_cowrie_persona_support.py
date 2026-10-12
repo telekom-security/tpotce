@@ -1086,7 +1086,7 @@ def tpot_status_unit(cmd, data: dict, unit: dict, boot: float, now: float, host:
     since = boot + float(unit.get("start", 0))
     sub, state = unit.get("sub", "running"), unit.get("state", "enabled")
     preset = "preset" if version >= 252 else "vendor preset"
-    loaded = (f"loaded ({unit.get('path')}; {state})" if state == "static"
+    loaded = (f"loaded ({unit.get('path')}; {state})" if state in ("static", "generated")
               else f"loaded ({unit.get('path')}; {state}; {preset}: {unit.get('preset', 'enabled')})")
     lines = [f"● {unit['name']} - {unit.get('description', '')}", key("Loaded") + loaded,
              key("Active") + f"active ({sub}) since {time.strftime('%a %Y-%m-%d %H:%M:%S UTC', time.gmtime(since))}; "
@@ -1195,7 +1195,7 @@ def tpot_list_unit_files(cmd, data: dict, legend: bool) -> None:
     for unit in units:
         state = unit.get("state", "enabled")
         cmd.write(f"{unit['name']:<{width}} " + (f"{state:<{state_width}} "
-                                                 f"{'-' if state == 'static' else unit.get('preset', 'enabled')}\n"
+                                                 f"{'-' if state in ('static', 'generated') else unit.get('preset', 'enabled')}\n"
                                                  if preset else f"{state}\n"))
     if legend:
         cmd.write(f"\n{len(units)} unit files listed.\n")

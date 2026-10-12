@@ -467,6 +467,10 @@ def _check_package_managers(persona, cfg, fs, honeyfs, txtcmds, out):
         out.append(f"package manager set {sorted(names)} is not {sorted(persona.package_managers)}")
 
 
+def _is_file(node):
+    return node is not None and tree.node_get(node, tree.A_TYPE) == tree.T_FILE
+
+
 def _is_program(node):
     return (node is not None and tree.node_get(node, tree.A_TYPE) == tree.T_FILE
             and (tree.node_get(node, tree.A_MODE) or 0) & 0o111 != 0)
@@ -630,6 +634,8 @@ def _check_system(persona, ident, cfg, out_dir, runtime_dir, fs, out):
             if tree.find_node(fs, unit["path"]) is None:
                 out.append(f"systemctl: {unit['path']} of {name} is not in fs.pickle")
         for line in _text(out_dir / system.SERVICE_STATUS).splitlines():
+            if line.startswith(" [ ") and not _is_file(tree.find_node(fs, f"etc/init.d/{line.split()[-1]}")):
+                out.append(f"service: --status-all names {line.split()[-1]}, /etc/init.d/{line.split()[-1]} is missing")
             script = line.split()[-1] if line.startswith(" [ + ]") else None
             if script and not any(name.startswith(script + ".") or name in system.INIT_UNITS.get(script, ())
                                   for name in units):

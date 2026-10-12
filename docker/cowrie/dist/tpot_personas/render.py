@@ -299,7 +299,7 @@ def _mode(rel):
         return 0o640
     if rel == "etc/sudoers" or rel.startswith("etc/sudoers.d/"):
         return 0o440
-    if rel.startswith("etc/rc.d/init.d/") and rel.rsplit("/", 1)[-1] not in ("README", "functions"):
+    if rel.startswith(("etc/rc.d/init.d/", "etc/init.d/")) and rel.rsplit("/", 1)[-1] not in ("README", "functions"):
         return 0o755
     return 0o755 if rel.startswith(("bin/", "sbin/", "usr/bin/", "usr/sbin/")) else 0o644
 

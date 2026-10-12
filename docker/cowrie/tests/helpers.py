@@ -60,6 +60,8 @@ def base_tree():
     # Debian's own packages (adduser, debianutils) and the process of the container
     tree.ensure_file(root, "etc/adduser.conf", b"DSHELL=/bin/bash\n", ctime=OLD)
     tree.ensure_file(root, "etc/rcS.d/README", b"", ctime=OLD)
+    for name in ("hwclock.sh", "procps", "ssh"):
+        tree.ensure_file(root, f"etc/init.d/{name}", b"#!/bin/sh\n", mode=0o755, ctime=OLD)
     tree.ensure_file(root, "usr/bin/which.debianutils", b"#! /bin/sh\n", mode=0o755, ctime=OLD)
     _link(root, "usr/bin/which", "usr/bin/which.debianutils")
     tree.ensure_file(root, "proc/969/status", b"Name:\tpython3\n", ctime=OLD)
