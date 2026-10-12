@@ -1463,8 +1463,9 @@ class DataLossTest(Harness):
     # tar: the archive of this run has no Elasticsearch data, a .tgz in HOME is read for real
     REAL_TGZ = 'tar () { case "$*" in *.tgz*) command tar "$@" ;; *) return 1 ;; esac; }\n'
 
-    def old_release_backup(self, member="data/elk/data/nodes/0", age=0):
-        """What the update.sh of 24.04.1 wrote: tar cvf of ~/tpotce (data included) to HOME/*.tgz."""
+    def old_release_backup(self, member="data/elk/data/nodes/0", age=0, env="TPOT_VERSION=24.04.1\n"):
+        """What the update.sh of 24.04.1 wrote: tar cvf of * and .env of ~/tpotce (data included) to
+        HOME/*.tgz; env=None leaves the .env out."""
         path = os.path.join(self.home, "20261011090000_tpot_backup.tgz")
         source = os.path.join(self.home, "src")
         shutil.rmtree(source, ignore_errors=True)
@@ -1473,6 +1474,10 @@ class DataLossTest(Harness):
             out.write("x\n")
         with tarfile.open(path, "w") as archive:           # plain tar despite the name, as 24.04.1 did
             archive.add(os.path.join(source, member.split("/")[0]), arcname=member.split("/")[0])
+            if env is not None:
+                with open(os.path.join(source, ".env"), "w", encoding="utf-8") as out:
+                    out.write(env)
+                archive.add(os.path.join(source, ".env"), arcname=".env")
         if age:
             os.utime(path, (time.time() - age, time.time() - age))
         return path
@@ -1497,6 +1502,22 @@ class DataLossTest(Harness):
                         os.remove(os.path.join(self.home, left))
                 self.old_release_backup(**kwargs)
                 result = self.bash(self.elastic(archive_has_data=False, extra=self.REAL_TGZ, env=env))
+                self.assertEqual(result.returncode, 5, result.stdout + result.stderr)
+                self.assertNotIn("The Elasticsearch data is in", result.stdout)
+
+    def test_a_backup_of_24_04_1_counts_only_for_the_version_that_ran_before(self):
+        for name, kwargs, old in (("the second update after 24.04.1", {}, "24.04.2"),
+                                  ("an .env of another version", {"env": "TPOT_VERSION=24.04.0\n"}, "24.04.1"),
+                                  ("an .env without the version", {"env": "TPOT_REPO=x\n"}, "24.04.1"),
+                                  ("no .env", {"env": None}, "24.04.1")):
+            with self.subTest(name):
+                for left in os.listdir(self.home):
+                    if left.endswith(".tgz"):
+                        os.remove(os.path.join(self.home, left))
+                self.old_release_backup(**kwargs)
+                script = self.elastic(archive_has_data=False, extra=self.REAL_TGZ).replace(
+                    "myOLDVERSION=24.04.1", f"myOLDVERSION={old}", 1)
+                result = self.bash(script)
                 self.assertEqual(result.returncode, 5, result.stdout + result.stderr)
                 self.assertNotIn("The Elasticsearch data is in", result.stdout)
 
@@ -1702,7 +1723,7 @@ class DataLossTest(Harness):
 
     def test_check_mode_takes_a_fresh_backup_of_24_04_1(self):
         self.target()
-        archive = self.old_release_backup()
+        archive = self.old_release_backup(env="TPOT_VERSION=24.04.2\n")      # the .env here says 24.04.2
         out, lines = self.check()
         self.assertEqual([line.split()[2] for line in lines], ["images"], out)
         self.assertIn(archive, out)
@@ -2065,6 +2086,35 @@ class DataLossTest(Harness):
                            + self.functions(*self.SPACE) + 'fuCHECK_BACKUP_SPACE\n')
         self.assertEqual(result.returncode, 5, result.stdout + result.stderr)
         self.assertEqual(self.left(), names)
+
+    def confirmed(self, key, line, *names):
+        """fuLOSS_IN_FILE of the file with this line: rc 0 for confirmed."""
+        result = self.bash(self.accept_file(line) + self.functions("fuLOSS_IN_FILE")
+                           + 'fuLOSS_IN_FILE "$@"; echo "rc=$?"\n'.replace('"$@"', key + " " + " ".join(
+                               f"'{name}'" for name in names)))
+        return "rc=0" in result.stdout
+
+    def test_an_image_is_confirmed_as_a_whole_entry_only(self):
+        line = ("@@tpot loss images 2 image(s) built here cannot be pulled again: "
+                "ghcr.io/x/cowrie:24.04.1, ghcr.io/x/dionaea:24.04.1")
+        self.assertTrue(self.confirmed("images", line, "ghcr.io/x/cowrie:24.04.1"))
+        self.assertTrue(self.confirmed("images", line, "ghcr.io/x/dionaea:24.04.1"))     # the last entry
+        self.assertTrue(self.confirmed("images", line, "ghcr.io/x/cowrie:24.04.1", "ghcr.io/x/dionaea:24.04.1"))
+        for name in ("ghcr.io/x/cowrie:24.04", "ghcr.io/x/cowrie:24", "ghcr.io/x/dionaea:24.04", "cowrie:24.04.1",
+                     "ghcr.io/x/cow"):
+            with self.subTest(name):
+                self.assertFalse(self.confirmed("images", line, name))
+        self.assertFalse(self.confirmed("images", line, "ghcr.io/x/cowrie:24.04.1", "ghcr.io/x/cowrie:24.04"))
+
+    def test_a_backup_is_confirmed_as_a_whole_entry_only(self):
+        line = (f"@@tpot loss backups Making room for the backup deletes 3 older backup(s) in {self.backups}: "
+                "20261010_tpot_backup.tar (3 MB), my backup.tar (1 MB), 20261011_tpot_backup.tar (4 MB).")
+        self.assertTrue(self.confirmed("backups", line, "20261010_tpot_backup.tar"))
+        self.assertTrue(self.confirmed("backups", line, "my backup.tar"))                  # a space in the name
+        self.assertTrue(self.confirmed("backups", line, "20261011_tpot_backup.tar"))       # the last, full stop
+        for name in ("20261010_tpot_backup", "20261010_tpot_backup.ta", "backup.tar", "my", "20261011_tpot_backup.tar."):
+            with self.subTest(name):
+                self.assertFalse(self.confirmed("backups", line, name))
 
     def test_local_images_the_file_names_go(self):
         line = "@@tpot loss images 1 image(s) built here cannot be pulled again: ghcr.io/telekom-security/mine:24.04.1"

@@ -397,27 +397,49 @@ function fuLOSS_ADD () {   # $1 = backups | elastic | images, $2 = text
 
 # Does the file of --accept-data-loss-file confirm this loss? It needs a line of the key, and every
 # name (the backups or images the step deletes) as a whole entry of the list in one of those lines:
-# ": <name>" or ", <name>", followed by a space, a comma, a dot or the end of the line.
+# the text after the first ": ", split at ", ", each entry without its " (<n> MB)" and the full stop
+# after the last one. A name that only begins like an entry (cowrie:24.04 for cowrie:24.04.1) or
+# lacks its end (20261010_tpot_backup for 20261010_tpot_backup.tar) is not confirmed.
 function fuLOSS_IN_FILE () {   # $1 = backups | elastic | images, $2... = the names it deletes
-	local myKEY="$1" myLINE="" myTEXT="" myFOUND="" myNAME=""
+	local myKEY="$1" myLINE="" myREST="" myENTRY="" myENTRIES="" myFOUND="" myNAME="" myHIT=""
 	shift
 	[ -n "${myACCEPT_FILE}" ] && [ -r "${myACCEPT_FILE}" ] || return 1
 	while IFS= read -r myLINE || [ -n "${myLINE}" ];
 	  do
 	    myLINE="${myLINE%$'\r'}"
 	    case "${myLINE}" in
-	      "@@tpot loss ${myKEY}"|"@@tpot loss ${myKEY} "*)
-	        myFOUND="1"
-	        myTEXT="${myTEXT}${myLINE}"$'\n' ;;
+	      "@@tpot loss ${myKEY}"|"@@tpot loss ${myKEY} "*) ;;
+	      *) continue ;;
 	    esac
+	    myFOUND="1"
+	    case "${myLINE}" in
+	      *": "*) myREST="${myLINE#*: }" ;;
+	      *) continue ;;
+	    esac
+	    while :;
+	      do
+	        case "${myREST}" in
+	          *", "*) myENTRY="${myREST%%, *}"; myREST="${myREST#*, }" ;;
+	          *) myENTRY="${myREST}"; myREST="" ;;
+	        esac
+	        case "${myENTRY}" in
+	          *" ("[0-9]*" MB)."|*" ("[0-9]*" MB)")
+	            myENTRY="${myENTRY%.}"
+	            case "${myENTRY}" in *" ("[0-9]*" MB)") myENTRY="${myENTRY% (*}" ;; esac ;;
+	        esac
+	        myENTRIES="${myENTRIES}${myENTRY}"$'\n'
+	        [ -n "${myREST}" ] || break
+	      done
 	  done < "${myACCEPT_FILE}"
 	[ -n "${myFOUND}" ] || return 1
 	for myNAME in "$@";
 	  do
-	    case "${myTEXT}" in
-	      *[:,]" ${myNAME}"[[:space:],.]*) ;;
-	      *) return 1 ;;
-	    esac
+	    myHIT=""
+	    while IFS= read -r myENTRY;
+	      do
+	        [ "${myENTRY}" == "${myNAME}" ] && { myHIT="1"; break; }
+	      done <<< "${myENTRIES}"
+	    [ -n "${myHIT}" ] || return 1
 	  done
 	return 0
 }
@@ -1329,10 +1351,12 @@ function fuOLD_ES_VERSION () {   # $1 = the registry of .env, $2 = tag
 # The archive the update.sh of 24.04.1 wrote before it restarted into this one, if it holds the
 # Elasticsearch data: the newest $HOME/*_tpot_backup.tgz, younger than 24 hours. That script ran
 # `tar cvf` (uncompressed despite the name, `tar tf` reads either) of everything in ~/tpotce, so
-# it holds a data folder inside ~/tpotce only, under its path there (data/elk/data/...).
+# it holds a data folder inside ~/tpotce only, under its path there (data/elk/data/...), and the
+# .env of that moment, whose TPOT_VERSION must be $2, the version that ran before this update: the
+# archive of an update before that one holds the data of a release older than the one that ran.
 # Prints the archive, rc 1 when there is none.
-function fuOLD_RELEASE_BACKUP () {   # $1 = the data folder
-	local myNEWEST="" myMEMBER=""
+function fuOLD_RELEASE_BACKUP () {   # $1 = the data folder, $2 = the version that ran before
+	local myNEWEST="" myMEMBER="" myVER=""
 	case "$1/" in
 	  "$HOME/tpotce/"?*) myMEMBER="${1#"$HOME/tpotce/"}/elk/data" ;;
 	  *) return 1 ;;
@@ -1341,6 +1365,9 @@ function fuOLD_RELEASE_BACKUP () {   # $1 = the data folder
 	[ -n "${myNEWEST}" ] && [ -f "${myNEWEST}" ] || return 1
 	[ -n "$(find "${myNEWEST}" -maxdepth 0 -mmin -1440 2>/dev/null)" ] || return 1
 	tar tf "${myNEWEST}" "${myMEMBER}" >/dev/null 2>&1 || return 1
+	myVER=$(tar xOf "${myNEWEST}" .env 2>/dev/null | grep -E "^TPOT_VERSION=" | tail -1 | cut -d= -f2-)
+	myVER="${myVER%$'\r'}"
+	[ -n "${myVER}" ] && [ "${myVER}" == "$2" ] || return 1
 	echo "${myNEWEST}"
 }
 
@@ -1404,7 +1431,7 @@ function fuCHECK_ELASTIC () {
 	    echo
 	    return
 	fi
-	if myOLDARCHIVE=$(fuOLD_RELEASE_BACKUP "${myDATA}");
+	if myOLDARCHIVE=$(fuOLD_RELEASE_BACKUP "${myDATA}" "${myOLDVERSION}");
 	  then
 	    fuUI_OK "The Elasticsearch data is in ${myOLDARCHIVE}, the backup of the update.sh of the release before."
 	    echo
@@ -2485,7 +2512,7 @@ function fuCHECK_DATA_LOSS () {
 	          elif [ -n "${myFULL}" ] && [ -e "${myDATA}/elk/data" ];
 	            then
 	              fuUI_OK "Elasticsearch ${myOLD:-?} -> ${myNEW}, --full takes its data into the backup."
-	          elif myOLDARCHIVE=$(fuOLD_RELEASE_BACKUP "${myDATA}");
+	          elif myOLDARCHIVE=$(fuOLD_RELEASE_BACKUP "${myDATA}" "${myCURRENT}");
 	            then
 	              fuUI_OK "Elasticsearch ${myOLD:-?} -> ${myNEW}, its data is in ${myOLDARCHIVE}, the backup of the update.sh of the release before."
 	          else
