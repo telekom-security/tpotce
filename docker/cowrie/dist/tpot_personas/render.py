@@ -5,6 +5,7 @@ import json
 import os
 import posixpath
 import random
+import re
 import shutil
 from pathlib import Path
 
@@ -137,6 +138,56 @@ def skip_python_commands(persona, ident, content):
     return sorted(commands)
 
 
+# links of Cowrie's pickle whose real target the rule of real_target does not give
+REAL_TARGETS = {"etc/os-release": "../usr/lib/os-release", "etc/mtab": "../proc/self/mounts",
+                "proc/mounts": "self/mounts", "proc/net": "self/net", "dev/fd": "/proc/self/fd"}
+
+
+def systemd_prefix(persona, ident):
+    """Where the units of the release are (/lib/systemd before the /usr merge of its units), "" without systemd."""
+    if persona.kind == "server":
+        return servers.unit_dir(persona, ident).rsplit("/system", 1)[0]
+    return {"ubiquiti": "/lib/systemd", "synology": "/usr/lib/systemd"}.get(persona.family, "")
+
+
+def real_target(link, target, systemd=""):
+    """The target a real system has for a link (link: its real path; target: from the root, as
+    Cowrie's pickle stores it): relative within the directory of the link and in the run level
+    directories, absolute elsewhere; units under the unit directory of the release."""
+    if not target or target.startswith("/"):
+        return target
+    link = link.strip("/")
+    if link in REAL_TARGETS:
+        return REAL_TARGETS[link]
+    directory = posixpath.dirname(link)
+    if systemd and link.startswith("etc/systemd/") and target.startswith("usr/lib/systemd/"):
+        return systemd + target[len("usr/lib/systemd"):]
+    if link == "usr/lib64/ld-linux-x86-64.so.2" and target.startswith("usr/lib/"):
+        return "/lib/" + target[len("usr/lib/"):]
+    if not directory or target.startswith(directory + "/") or fnmatch.fnmatchcase(posixpath.basename(directory),
+                                                                                  "rc?.d"):
+        return posixpath.relpath("/" + target, "/" + directory)
+    return "/" + target
+
+
+def real_links(t, persona, ident):
+    """Every link of Cowrie's pickle with the target of a real system (real_target)."""
+    systemd = systemd_prefix(persona, ident)
+    for path, node in tree.iter_nodes(t):
+        if tree.node_get(node, tree.A_TYPE) == tree.T_LINK:
+            target = tree.node_get(node, tree.A_TARGET) or ""
+            if not target and re.fullmatch(r"/proc/\d+/(cwd|root)", path):
+                # captured without a destination: init runs in / (the shell's: _login_links)
+                target = "/"
+            tree.node_set(node, tree.A_TARGET, real_target(path, target, systemd))
+
+
+def link(t, persona, ident, rel, target, ctime):
+    """A link of the persona; target from the root ("usr/bin/python3.12") or absolute."""
+    real = tree.real_path(t, rel) or rel
+    return tree.ensure_link(t, rel, real_target(real, target, systemd_prefix(persona, ident)), ctime=ctime)
+
+
 def remove_paths(t, paths):
     """Remove the paths; a glob pattern in the last part removes every match in its directory."""
     for rel in paths:
@@ -225,13 +276,16 @@ def _login_links(t, persona, ident):
     mode = tree.node_get(fd, tree.A_MODE) if fd is not None else None
     tree.ensure_device(t, system.TERMINAL, persona.uid, 5, 0o620, ctime=ident.now)
     for number in range(3):
-        tree.ensure_link(t, f"{own}/{number}", system.TERMINAL, ctime=ident.now)
+        link(t, persona, ident, f"{own}/{number}", system.TERMINAL, ident.now)
     if mode is not None:
         tree.node_set(tree.find_dir(t, own), tree.A_MODE, mode)
     for rel, target in system.STREAM_LINKS:
-        tree.ensure_link(t, rel, target, ctime=ident.installed_at)
+        link(t, persona, ident, rel, target, ident.installed_at)
     process = own.rsplit("/", 1)[0]
-    tree.ensure_link(t, f"{process}/exe", system.login_program(persona, ident), ctime=ident.now)
+    link(t, persona, ident, f"{process}/exe", system.login_program(persona, ident), ident.now)
+    # the shell runs in the home directory of the user, its root is /
+    link(t, persona, ident, f"{process}/cwd", home_dir(persona), ident.now)
+    link(t, persona, ident, f"{process}/root", "/", ident.now)
     # /proc/thread-self: the one thread of the shell
     tree.ensure_dir(t, f"{process}/task/{process.rsplit('/', 1)[-1]}", mode=0o555, ctime=ident.now)
 
@@ -261,6 +315,7 @@ def _set_dirs(t, persona, ctime):
 def apply_to_tree(base_tree, persona, ident, content):
     rng = random.Random(ident.seed ^ 0x5EED)
     t = copy.deepcopy(base_tree)
+    real_links(t, persona, ident)
     for rel in COMMON_REMOVE_PATHS + persona.remove_paths + PACKAGE_MANAGER_PATHS + HIGH_VARIANCE_COMMAND_PATHS:
         tree.remove_node(t, rel)
     adapt_system(t, persona, ident)
@@ -289,7 +344,7 @@ def apply_to_tree(base_tree, persona, ident, content):
     for rel in removed:
         tree.remove_node(t, rel)
     for rel, target in system.python_links(persona, ident) + system.links(persona) + ssh_links:
-        tree.ensure_link(t, rel, target, ctime=ident.installed_at)
+        link(t, persona, ident, rel, target, ident.installed_at)
     if persona.kind == "server":
         _unit_files(t, persona, ident, content.processes)
     _login_links(t, persona, ident)

@@ -196,7 +196,7 @@ class SystemTest(unittest.TestCase):
             fs, cfg = fs_of(out), cfg_of(out)
             self.assertEqual(tree.node_get(tree.find_node(fs, "usr/bin/perl"), tree.A_SIZE), 3804432, pid)
             self.assertEqual(tree.node_get(tree.find_node(fs, "usr/bin/python3"), tree.A_TARGET),
-                             f"usr/bin/python{version}", pid)
+                             f"python{version}", pid)
             self.assertIsNotNone(tree.find_node(fs, f"usr/bin/python{version}"), pid)
             self.assertIsNotNone(tree.find_node(fs, f"usr/lib/python{version}"), pid)
             if version != "3.11":
@@ -213,8 +213,8 @@ class SystemTest(unittest.TestCase):
     def test_centos_has_python_2_only(self):
         ident, out, _ = render_one(self, catalog.by_id("centos-7"), 1)
         fs, cfg = fs_of(out), cfg_of(out)
-        self.assertEqual(tree.node_get(tree.find_node(fs, "usr/bin/python"), tree.A_TARGET), "usr/bin/python2")
-        self.assertEqual(tree.node_get(tree.find_node(fs, "usr/bin/python2"), tree.A_TARGET), "usr/bin/python2.7")
+        self.assertEqual(tree.node_get(tree.find_node(fs, "usr/bin/python"), tree.A_TARGET), "python2")
+        self.assertEqual(tree.node_get(tree.find_node(fs, "usr/bin/python2"), tree.A_TARGET), "python2.7")
         self.assertIsNotNone(tree.find_node(fs, "usr/bin/python2.7"))
         self.assertFalse([p for p in names(fs) if "python3" in p])
         self.assertEqual((cfg.get("shell", "python_version"), cfg.get("shell", "perl_version")), ("2.7.5", "5.16.3"))
@@ -253,37 +253,58 @@ class SystemTest(unittest.TestCase):
             which = tree.find_node(fs, "usr/bin/which")
             self.assertEqual(tree.node_get(which, tree.A_TYPE), tree.T_LINK if debian else tree.T_FILE, persona.id)
 
+    def test_links_have_the_targets_of_a_real_system(self):
+        _, out, _ = render_one(self, catalog.by_id("debian-bookworm"), 1)
+        fs = fs_of(out)
+        targets = {path: tree.node_get(node, tree.A_TARGET) for path, node in tree.iter_nodes(fs)
+                   if tree.node_get(node, tree.A_TYPE) == tree.T_LINK}
+        self.assertEqual(targets["/bin"], "usr/bin")
+        self.assertEqual(targets["/usr/bin/which"], "which.debianutils")
+        self.assertEqual(targets["/etc/systemd/system/sshd.service"], "/lib/systemd/system/ssh.service")
+        self.assertEqual(targets["/proc/self"], "969")
+        self.assertEqual(targets["/usr/lib64/ld-linux-x86-64.so.2"], "/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2")
+        self.assertTrue(all(targets.values()), [p for p, t in targets.items() if not t])
+
     def test_red_hat_init_directories_and_loader(self):
         for pid in ("rhel-9", "centos-7"):
             _, out, _ = render_one(self, catalog.by_id(pid), 1)
             fs = fs_of(out)
-            self.assertEqual(tree.node_get(tree.find_node(fs, "etc/init.d"), tree.A_TARGET), "etc/rc.d/init.d")
-            self.assertEqual(tree.node_get(tree.find_node(fs, "etc/rc3.d"), tree.A_TARGET), "etc/rc.d/rc3.d")
+            self.assertEqual(tree.node_get(tree.find_node(fs, "etc/init.d"), tree.A_TARGET), "rc.d/init.d")
+            self.assertEqual(tree.node_get(tree.find_node(fs, "etc/rc3.d"), tree.A_TARGET), "rc.d/rc3.d")
             self.assertIsNotNone(tree.find_dir(fs, "etc/rc3.d"))
             self.assertIn(b"systemctl", tree.node_get(tree.find_node(fs, "etc/init.d/README"), tree.A_CONTENTS))
             self.assertIn("Description=OpenSSH server daemon",
                           (out / "honeyfs/usr/lib/systemd/system/sshd.service").read_text())
             self.assertIsNone(tree.find_node(fs, "usr/lib/systemd/system/ssh.service"), pid)
-            self.assertEqual(tree.node_get(tree.find_node(fs, "usr/sbin/adduser"), tree.A_TARGET), "usr/sbin/useradd")
+            self.assertEqual(tree.node_get(tree.find_node(fs, "usr/sbin/adduser"), tree.A_TARGET), "useradd")
             loader = tree.find_node(fs, "usr/lib64/ld-linux-x86-64.so.2")
             if pid == "centos-7":
-                self.assertEqual(tree.node_get(loader, tree.A_TARGET), "usr/lib64/ld-2.17.so")
+                self.assertEqual(tree.node_get(loader, tree.A_TARGET), "ld-2.17.so")
+                self.assertEqual(tree.node_get(tree.find_node(fs, "etc/rc.d/rc3.d/S10network"), tree.A_TARGET),
+                                 "../init.d/network")
             else:
                 self.assertEqual(tree.node_get(loader, tree.A_TYPE), tree.T_FILE)
             self.assertIsNone(tree.find_node(fs, "usr/bin/ld.so"), pid)
+            # grubby's installkernel
+            self.assertIsNotNone(tree.find_node(fs, "usr/sbin/installkernel"), pid)
+        _, out, _ = render_one(self, catalog.by_id("openwrt"), 1)
+        self.assertIsNone(tree.find_node(fs_of(out), "usr/sbin/installkernel"))
 
     def test_login_shell_streams_are_its_terminal(self):
         for pid in ("ubuntu-noble", "tplink-wr841n"):
             persona = catalog.by_id(pid)
             _, out, _ = render_one(self, persona, 1)
             fs = fs_of(out)
-            self.assertEqual(tree.node_get(tree.find_node(fs, "dev/stdout"), tree.A_TARGET), "proc/self/fd/1")
-            self.assertEqual(tree.node_get(tree.find_node(fs, "proc/self/fd/1"), tree.A_TARGET), "dev/pts/0")
+            self.assertEqual(tree.node_get(tree.find_node(fs, "dev/stdout"), tree.A_TARGET), "/proc/self/fd/1")
+            self.assertEqual(tree.node_get(tree.find_node(fs, "proc/self/fd/1"), tree.A_TARGET), "/dev/pts/0")
             pts = tree.find_node(fs, "dev/pts/0")
             self.assertEqual((tree.node_get(pts, tree.A_TYPE), tree.node_get(pts, tree.A_UID)),
                              (tree.T_CHR, persona.uid))
             self.assertEqual(tree.node_get(tree.find_node(fs, "proc/self/exe"), tree.A_TARGET),
-                             "usr/bin/bash" if persona.kind == "server" else "bin/busybox")
+                             "/usr/bin/bash" if persona.kind == "server" else "/bin/busybox")
+            self.assertEqual(tree.node_get(tree.find_node(fs, "proc/self/cwd"), tree.A_TARGET),
+                             "/" + ("root" if persona.uid == 0 else f"home/{persona.user}"))
+            self.assertEqual(tree.node_get(tree.find_node(fs, "proc/self/root"), tree.A_TARGET), "/")
 
 
 class ServerCommandTest(unittest.TestCase):

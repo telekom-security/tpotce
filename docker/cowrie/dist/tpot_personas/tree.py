@@ -6,7 +6,9 @@ Cowrie's pickle loader expects.
 
 Paths follow the links of their directories as Cowrie does: in Cowrie's Debian
 tree /bin, /sbin and /lib are links to usr/bin, usr/sbin and usr/lib, so
-bin/df is the node usr/bin/df. The last part of a path is not followed
+bin/df is the node usr/bin/df. Cowrie's pickle stores every link target from the
+root ("usr/bin/python3.11" for usr/bin/python3); render.real_links rewrites them
+to the targets of a real system, absolute or relative to the link. The last part of a path is not followed
 (remove_node removes a link, ensure_file replaces one), except by ensure_dir.
 """
 import pickle
@@ -58,11 +60,25 @@ def _parts(relative_path):
     return [part for part in Path(relative_path).parts if part not in ("", "/", ".")]
 
 
-def _link_path(link):
-    """The parts a link points to. Cowrie's pickle stores link targets from the root
-    ("usr/bin/python3.11" for usr/bin/python3) and fs.getfile resolves them so."""
-    target = node_get(link, A_TARGET) or ""
-    return [part for part in posixpath.normpath("/" + target).split("/") if part]
+def link_path(directory, target):
+    """The parts from the root a link in directory (its real parts) points to, as the kernel and
+    the patched fs.getfile of Cowrie resolve it: an absolute target from the root, a relative
+    one from the directory of the link."""
+    base = "" if target.startswith("/") else "/".join(directory)
+    return [part for part in posixpath.normpath(f"/{base}/{target}").split("/") if part]
+
+
+def _link_path(link, directory=()):
+    return link_path(directory, node_get(link, A_TARGET) or "")
+
+
+def target_path(root, relative_path):
+    """The path from the root the link at relative_path names (None if its directory is missing)."""
+    real = real_path(root, relative_path)
+    node = find_node(root, relative_path)
+    if real is None or node is None:
+        return None
+    return "/".join(link_path(real.split("/")[:-1], node_get(node, A_TARGET) or ""))
 
 
 def _walk(root, parts, depth=0):
@@ -76,7 +92,7 @@ def _walk(root, parts, depth=0):
             if child is not None and node_get(child, A_TYPE) == T_LINK:
                 if depth >= MAX_LINKS or not node_get(child, A_TARGET):
                     return None, None
-                current, real = _walk(root, _link_path(child), depth + 1)
+                current, real = _walk(root, _link_path(child, real), depth + 1)
             else:
                 current, real = child, real + [part]
         if current is None:
@@ -116,7 +132,7 @@ def ensure_dir(root, relative_path, uid=0, gid=0, mode=0o755, ctime=0):
     for part in _parts(relative_path):
         match = _child(current, part)
         if match is not None and node_get(match, A_TYPE) == T_LINK and node_get(match, A_TARGET):
-            target, target_real = _walk(root, _link_path(match), 1)
+            target, target_real = _walk(root, _link_path(match, real), 1)
             if target is not None and node_get(target, A_TYPE) == T_DIR:
                 current, real = target, target_real
                 continue
@@ -195,7 +211,8 @@ def ensure_device(root, relative_path, uid=0, gid=0, mode=0o600, ctime=0):
 
 
 def ensure_link(root, relative_path, target, ctime=0):
-    """A link; target is from the root ("usr/bin/python2.7"), as in Cowrie's pickle."""
+    """A link; target as ls -l shows it: absolute ("/usr/bin/bash") or relative to the link
+    ("python2.7")."""
     parent = ensure_dir(root, str(Path(relative_path).parent), ctime=ctime)
     name = Path(relative_path).name
     children = node_children(parent)

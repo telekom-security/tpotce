@@ -106,13 +106,17 @@ def tpot_skip_python_commands() -> frozenset[str]:
 
         # T-Pot: the spellings of path through the directory links of the tree
         # (/bin -> usr/bin): `df` finds /usr/bin/df on PATH, the txtcmd is bin/df.
+        import posixpath
+
         def tpot_real(name):
             parts = [part for part in name.split("/") if part]
             real = []
             for part in parts[:-1]:
                 node = self.fs.getfile("/" + "/".join(real + [part]), follow_symlinks=False)
                 if node is not None and node[fs.A_TYPE] == fs.T_LINK and node[fs.A_TARGET]:
-                    real = [x for x in node[fs.A_TARGET].split("/") if x and x != "."]
+                    target = node[fs.A_TARGET]
+                    base = "" if target.startswith("/") else "/".join(real)
+                    real = [x for x in posixpath.normpath(f"/{base}/{target}").split("/") if x]
                 else:
                     real.append(part)
             return "/" + "/".join(real + parts[-1:])
@@ -141,6 +145,27 @@ def tpot_skip_python_commands() -> frozenset[str]:
                 return self.commands[spelling]
 """,
     )
+
+
+def patch_fs_links(cowrie_root):
+    """A relative link target is resolved from the directory of the link, as the kernel does
+    (/usr/bin/python3 -> python3.12, /etc/os-release -> ../usr/lib/os-release); upstream reads
+    it from the root, the form of its own pickle (tpot_personas.render.real_links rewrites it)."""
+    path = cowrie_root / "src" / "cowrie" / "shell" / "fs.py"
+    replace_once(
+        path,
+        """                            fileobj = self.getfile(
+                                "/".join((cwd, x[A_TARGET])),
+                                follow_symlinks=follow_symlinks,
+                            )
+""",
+        """                            fileobj = self.getfile(
+                                posixpath.normpath("/".join((cwd, x[A_TARGET]))),
+                                follow_symlinks=follow_symlinks,
+                            )
+""",
+    )
+    replace_once(path, "            # cwd = '/'.join((cwd, piece))\n", "            cwd = \"/\".join((cwd, piece))\n")
 
 
 def patch_busybox(cowrie_root):
@@ -2484,6 +2509,7 @@ def main():
         grep_self_test(cowrie_root)
         return
     patch_protocol(cowrie_root)
+    patch_fs_links(cowrie_root)
     patch_busybox(cowrie_root)
     patch_perl(cowrie_root)
     patch_python(cowrie_root)

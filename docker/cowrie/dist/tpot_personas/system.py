@@ -608,7 +608,9 @@ def foreign_paths(persona):
     """Paths (glob patterns in their last part) of Cowrie's tree the persona's system does not have."""
     paths = ()
     if not has_dpkg(persona):
-        paths += DEBIAN_PATHS + DEBIAN_SYSTEM_PATHS
+        # Red Hat has an installkernel of its own (grubby)
+        paths += DEBIAN_PATHS + tuple(p for p in DEBIAN_SYSTEM_PATHS
+                                      if not (is_el(persona) and p == "usr/sbin/installkernel"))
     if persona.hardware_platform != "x86_64":
         paths += X86_PATHS
     if not has_systemd(persona):

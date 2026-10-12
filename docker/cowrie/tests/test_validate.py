@@ -328,6 +328,12 @@ class ValidateSystemTest(unittest.TestCase):
             self.assertIn(f"foreign: /etc/adduser.conf, /etc/rcS.d on {pid}", found)
             self.assertIn(f"foreign: debian names on {pid}: /usr/share/man/man1/which.debianutils.1.gz", found)
 
+    def test_link_without_target(self):
+        found = self.problems("ubuntu-noble", lambda fs, out: tree.ensure_link(fs, "proc/self/cwd", ""))
+        self.assertIn("link: 1 links name nothing: /proc/969/cwd -> ", found)
+        found = self.problems("ubuntu-noble", lambda fs, out: tree.ensure_link(fs, "etc/os-release2", "usr/lib/os-release"))
+        self.assertIn("link: 1 links name nothing: /etc/os-release2 -> usr/lib/os-release", found)
+
     def test_link_that_names_nothing(self):
         found = self.problems("rhel-9", lambda fs, out: tree.ensure_link(
             fs, "usr/lib64/ld-linux-x86-64.so.2", "usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2"))

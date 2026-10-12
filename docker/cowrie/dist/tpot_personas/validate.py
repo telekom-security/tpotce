@@ -19,7 +19,8 @@ from .model import PROMPT_STYLES
 from .render import BUSYBOX_HELP, DIR_MODES, PACKAGE_MANAGER_PATHS, runtime_json
 from .ssh_profiles import COMPRESSIONS, HOST_KEYS, PROFILES, TWISTED_CIPHERS, TWISTED_MACS
 
-MIN_PICKLE_SIZE = 1_000_000
+# a rendered device tree is about 1 MB (a server's more); far below it the render broke
+MIN_PICKLE_SIZE = 800_000
 PATH_DIRS = ("usr/local/sbin", "usr/local/bin", "usr/sbin", "usr/bin", "sbin", "bin")
 PYTHON_PACKAGE_MANAGERS = ("apt", "apt-get", "yum")
 FORBIDDEN_MARKERS = ("phil", "2.6.26-2-686", "2.6.26-19lenny", "com/ubuntu/upstart", "dannf@debian.org",
@@ -524,11 +525,13 @@ def _matches(fs, rel):
 
 def _on_path(fs, name):
     for directory in PATH_DIRS:
-        node = tree.find_node(fs, f"{directory}/{name}")
+        path = f"{directory}/{name}"
+        node = tree.find_node(fs, path)
         for _ in range(5):
             if node is None or tree.node_get(node, tree.A_TYPE) != tree.T_LINK:
                 break
-            node = tree.find_node(fs, tree.node_get(node, tree.A_TARGET) or "")
+            path = tree.target_path(fs, path)
+            node = tree.find_node(fs, path) if path is not None else None
         if _is_program(node):
             return True
     return False
@@ -537,9 +540,14 @@ def _on_path(fs, name):
 def _check_links(fs, out):
     """Every link of the tree names a node (the links of its directories followed): ls -l and cd
     find what a link points to."""
-    dangling = [f"{path} -> {tree.node_get(node, tree.A_TARGET)}" for path, node in tree.iter_nodes(fs)
-                if tree.node_get(node, tree.A_TYPE) == tree.T_LINK
-                and tree.find_node(fs, tree.node_get(node, tree.A_TARGET) or "") is None]
+    dangling = []
+    for path, node in tree.iter_nodes(fs):
+        if tree.node_get(node, tree.A_TYPE) != tree.T_LINK:
+            continue
+        target = tree.node_get(node, tree.A_TARGET) or ""
+        resolved = tree.target_path(fs, path) if target else None
+        if resolved is None or tree.find_node(fs, resolved) is None:
+            dangling.append(f"{path} -> {target}")
     if dangling:
         out.append(f"link: {len(dangling)} links name nothing: {', '.join(dangling[:4])}")
 

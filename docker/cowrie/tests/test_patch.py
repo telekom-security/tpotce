@@ -241,6 +241,32 @@ class PatchTest(unittest.TestCase):
         self.assertEqual(find("uname"), ("script", "/usr/bin/uname"))
         self.assertIsNone(find("nothere"))
 
+    def test_links_resolve_from_their_directory(self):
+        from tpot_personas.identity import draw
+        from tpot_personas.render import apply_to_tree
+        persona = catalog.by_id("debian-bookworm")
+        ident = draw(persona, 1)
+        rendered = apply_to_tree(base_tree(), persona, ident, persona.builder(persona, ident))
+        source = (self.patched() / "src/cowrie/shell/fs.py").read_text()
+        getfile = method(source, "HoneyPotFilesystem", "getfile",
+                         {"A_NAME": tree.A_NAME, "A_TYPE": tree.A_TYPE, "A_CONTENTS": tree.A_CONTENTS,
+                          "A_TARGET": tree.A_TARGET, "T_LINK": tree.T_LINK, "posixpath": __import__("posixpath"),
+                          "Node": list})
+
+        class Fs:
+            fs = rendered
+
+        Fs.getfile = getfile
+        files = Fs()
+        # python3 -> python3.11 (relative, in /usr/bin), also through the /bin link; dev/stdout -> /proc/self/fd/1
+        self.assertIs(files.getfile("/usr/bin/python3"), tree.find_node(rendered, "usr/bin/python3.11"))
+        self.assertIs(files.getfile("/bin/python3"), tree.find_node(rendered, "usr/bin/python3.11"))
+        self.assertIs(files.getfile("/dev/stdout"), tree.find_node(rendered, "dev/pts/0"))
+        self.assertIs(files.getfile("/proc/self/exe"), tree.find_node(rendered, "usr/bin/bash"))
+        self.assertIsNone(files.getfile("/usr/bin/nothere"))
+        source = (self.patched() / "src/cowrie/shell/protocol.py").read_text()
+        self.assertIn("posixpath.normpath", source)
+
     def test_python_command_answers_every_spelling(self):
         # a command found by path is looked up as /usr/bin/x and /bin/x (Cowrie registers /bin/busybox)
         find = self.lookup({}, {"/bin/top": "top"})
@@ -1653,6 +1679,10 @@ class PatchTest(unittest.TestCase):
                  ("src/cowrie/commands/which.py", "                if self.fs.exists(resolved):\n",
                   "                if self.fs.isfile(resolved):\n"),
                  ("src/cowrie/commands/sudo.py", "import getopt\n", "import getopt as options\n"),
+                 ("src/cowrie/shell/fs.py", "            # cwd = '/'.join((cwd, piece))\n",
+                  "            # cwd = posixpath.join(cwd, piece)\n"),
+                 ("src/cowrie/shell/fs.py", '                                "/".join((cwd, x[A_TARGET])),\n',
+                  '                                posixpath.join(cwd, x[A_TARGET]),\n'),
                  ("src/cowrie/commands/sudo.py", "                self.exec_command(pp, cmdclass, *parsed_arguments[1:])\n",
                   "                self.exec_command(pp, cmdclass, *parsed_arguments[1:])  # exec\n"),
                  ("src/cowrie/commands/sudo.py", 'self.args[0:start_value], "bEeHhKknPSVva:C:g:i:l:p:r:s:t:U:u:"',
