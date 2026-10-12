@@ -638,6 +638,8 @@ def _check_dnf(persona, ident, out_dir, fs, out):
     for program, package in sorted(system.RPM_PROGRAMS.items()):
         if _on_path(fs, program) and package not in installed:
             out.append(f"dnf: {program} is on PATH, rpm does not have {package} installed")
+        elif package in installed and not _on_path(fs, program):
+            out.append(f"dnf: {package} is installed, its program {program} is not on PATH")
     tools = system.installed_tools(persona, ident)
     for tool, package in sorted(system.RPM_TOOLS.items()):
         if (tool in tools) != (package in installed):
@@ -751,6 +753,8 @@ def _check_system(persona, ident, cfg, out_dir, runtime_dir, fs, out):
             for package, program in sorted(system.PACKAGE_PROGRAMS.items()):
                 if _on_path(fs, program) and package not in installed:
                     out.append(f"apt: {program} is on PATH, apt does not have it installed")
+                elif package in installed and not _on_path(fs, program):
+                    out.append(f"apt: {package} is installed, its program {program} is not on PATH")
         if persona.family == "rhel":
             _check_dnf(persona, ident, out_dir, fs, out)
         tools = system.installed_tools(persona, ident)

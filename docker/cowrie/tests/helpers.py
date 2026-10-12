@@ -104,9 +104,13 @@ def base_tree():
                       ("usr/bin/perl", 3804432), ("usr/bin/python3.11", 6831736), ("usr/sbin/sshd", 1265432),
                       ("usr/bin/bash", 1265648), ("usr/sbin/useradd", 159536), ("usr/sbin/adduser", 48382),
                       ("usr/bin/wget", 470384), ("usr/sbin/installkernel", 2659),
-                      ("usr/sbin/rmt-tar", 60432), ("usr/sbin/e2scrub_all", 5442)):
+                      ("usr/sbin/rmt-tar", 60432), ("usr/sbin/e2scrub_all", 5442),
+                      # the programs of the packages every server has installed, as Cowrie's tree has them
+                      ("usr/bin/curl", 280800), ("usr/bin/gzip", 98136), ("usr/bin/tar", 531984),
+                      ("usr/bin/ssh", 1125408), ("usr/bin/vim.basic", 3800000)):
         _program(root, rel, size)
     _link(root, "usr/bin/python3", "usr/bin/python3.11")
+    _link(root, "usr/bin/vim", "usr/bin/vim.basic")
     return root
 
 

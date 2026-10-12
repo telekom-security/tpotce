@@ -394,7 +394,6 @@ RPM_PERSONA = {
     "rpm": ("x86_64", "baseos", "The RPM package management system"),
     "sudo": ("x86_64", "baseos", "Allows restricted root access for specified users"),
     "systemd": ("x86_64", "baseos", "System and Service Manager"),
-    "tmux": ("x86_64", "baseos", "A terminal multiplexer"),
     "vim-enhanced": ("x86_64", "appstream", "A version of the VIM editor which includes recent enhancements"),
     "yum": ("noarch", "baseos", "Package manager"),
 }
@@ -460,6 +459,7 @@ RPM_AVAILABLE = {
     "socat": ("x86_64", "appstream", "Bidirectional data relay between two data channels ('netcat++')",
               {"9.4": "1.7.4.1-5.el9_4.2", "9.5": "1.7.4.1-6.el9", "9.6": "1.7.4.1-6.el9"}, (304, 1_126), ()),
     "tcpdump": ("x86_64", "appstream", "A network traffic monitoring tool", "14:4.99.0-9.el9", (545, 1_331), ()),
+    "tmux": ("x86_64", "baseos", "A terminal multiplexer", "3.2a-5.el9", (476, 1_126), ()),
     "telnet": ("x86_64", "appstream", "The client program for the Telnet remote login protocol", "1:0.17-85.el9",
                (64, 117), ()),
     "tftp": ("x86_64", "appstream", "The client for the Trivial File Transfer Protocol (TFTP)", "5.2-38.el9",
@@ -477,7 +477,8 @@ RPM_AVAILABLE_PROGRAMS = {
     "net-tools": ("usr/bin/netstat", "usr/sbin/ifconfig", "usr/sbin/route"), "nmap": ("usr/bin/nmap",),
     "nmap-ncat": ("usr/bin/ncat", "usr/bin/nc"), "php-cli": ("usr/bin/php",),
     "python3-pip": ("usr/bin/pip3", "usr/bin/pip"), "socat": ("usr/bin/socat",), "tcpdump": ("usr/sbin/tcpdump",),
-    "telnet": ("usr/bin/telnet",), "tftp": ("usr/bin/tftp",), "unzip": ("usr/bin/unzip",), "zip": ("usr/bin/zip",),
+    "telnet": ("usr/bin/telnet",), "tftp": ("usr/bin/tftp",), "tmux": ("usr/bin/tmux",),
+    "unzip": ("usr/bin/unzip",), "zip": ("usr/bin/zip",),
 }
 # names dnf finds by what a package provides
 RPM_PROVIDES = {"nc": "nmap-ncat", "ncat": "nmap-ncat", "vim": "vim-enhanced"}

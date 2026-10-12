@@ -437,8 +437,7 @@ def dnf_packages(persona, ident):
                            "programs": ["/" + rel for rel in system.RPM_AVAILABLE_PROGRAMS.get(name, ())]}
     owners = {}
     for program, package in system.RPM_PROGRAMS.items():
-        # tmux of the catalog has no program in Cowrie's tree
-        if package in installed and program != "tmux":
+        if package in installed:
             owners[f"/usr/{'sbin' if program == 'sshd' else 'bin'}/{program}"] = package
     for tool in system.installed_tools(persona, ident):
         for rel in system.TOOL_PROGRAMS[tool].values():

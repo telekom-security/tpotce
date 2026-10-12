@@ -619,6 +619,31 @@ class ValidateRpmTest(unittest.TestCase):
         self.edit_dnf(out, lambda data: data["installed"].pop("ethtool"))
         self.assertIn("dnf: ethtool is installed, rpm has no ethtool", problems())
 
+    def test_dnf_package_without_its_program(self):
+        persona, ident, out, keys, problems = self.rhel()
+        self.edit_dnf(out, lambda data: data["installed"].update(
+            nmap={"evr": "3:7.92-3.el9", "arch": "x86_64", "from": "@System", "summary": "", "size": 1}))
+        self.assertIn("dnf: nmap is installed, its program nmap is not on PATH", problems())
+
+    def test_rhel_installs_only_packages_with_their_programs(self):
+        persona = catalog.by_id("rhel-9")
+        for seed in range(8):
+            ident, out, _ = render_one(self, persona, seed)
+            data = json.loads((out / "dnf-packages.json").read_text())
+            self.assertNotIn("tmux", data["installed"], seed)
+            self.assertIn("tmux", data["available"], seed)
+            self.assertNotIn("tmux", (out / "honeyfs/var/log/dnf.log").read_text(), seed)
+
+    def test_apt_package_without_its_program(self):
+        persona = catalog.by_id("ubuntu-jammy")
+        ident, out, keys = render_one(self, persona, 2)
+        path = out / "apt-packages.json"
+        data = json.loads(path.read_text())
+        data["installed"]["nmap"] = "7.91+dfsg1+really7.80+dfsg1-2ubuntu0.1"
+        path.write_text(json.dumps(data))
+        self.assertIn("apt: nmap is installed, its program nmap is not on PATH",
+                      " | ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0)))
+
     def test_redhat_repo_enables_other_repositories(self):
         persona, ident, out, keys, problems = self.rhel()
         path = out / "honeyfs/etc/yum.repos.d/redhat.repo"
