@@ -4,9 +4,12 @@ One dialog for all of them. The items are loaded in a thread (an interface list
 runs ip, a model list asks a server), typing filters them, enter takes the
 highlighted one; with `free` a value that is not in the list is taken as typed.
 Dismissed with the value or None.
+
+ManyPicker is the one for a list setting (widget choice_many): tick any of its
+values, under the headings of its groups.
 """
 
-from typing import Callable, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 from rich.text import Text
 from textual import work
@@ -167,6 +170,131 @@ class Picker(NavModal):
         self.dismiss(None)
 
 
+class ManyList(NavOptionList):
+    """The list of a ManyPicker: enter or space ticks the highlighted line."""
+
+    BINDINGS = [Binding("space", "select", "Tick", show=False)]
+
+
+class ManyPicker(NavModal):
+    """Tick any of the values of a list setting (choice_list), under the headings of its groups.
+
+    enter / space ticks the highlighted value, on a heading every value of the group (or none when
+    all of them are ticked already). Nothing ticked is the empty value, which means all of them; so
+    is everything ticked, and it is saved empty, values that come later are then in it too.
+    Dismissed with the ticked values in the order of `values`, separated by spaces, or None."""
+
+    BINDINGS = [Binding("escape", "cancel", "Back")]
+
+    def __init__(self, title: str, values: List[str], groups: Optional[Dict[str, List[str]]] = None,
+                 current: str = "", note: str = ""):
+        super().__init__()
+        self.title_text, self.values, self.note = title, list(values), note
+        self.groups = dict(groups) if groups else {"": list(values)}
+        self.chosen = {v for v in current.split() if v in self.values}
+        # what each line of the list is: ("group", title) or ("value", value)
+        self.lines: List[Tuple[str, str]] = []
+        for group, members in self.groups.items():
+            if group:
+                self.lines.append(("group", group))
+            self.lines.extend(("value", member) for member in members)
+
+    def compose(self) -> ComposeResult:
+        with Vertical(classes="dialog compact picker many"):
+            yield DialogTitle(self.title_text)
+            if self.note:
+                yield Static(Text(self.note), classes="hint")
+            yield ManyList(*[Option(self.line_text(i), id=str(i)) for i in range(len(self.lines))],
+                           id="many-list")
+            yield Static(self.status_text(), id="many-status")
+            with Horizontal(classes="actions"):
+                yield Button("Take it", variant="primary", id="many-take")
+                yield Button("Clear", id="many-clear", tooltip="nothing ticked: all of them")
+                yield Button("Back", id="many-back")
+
+    def fit_dialog(self) -> None:
+        """The list as tall as its lines, in a small terminal what is left beside the rest of the card."""
+        super().fit_dialog()
+        for listing in self.query("#many-list"):
+            listing.styles.max_height = max(4, min(len(self.lines), self.app.size.height - 14))
+
+    def on_mount(self) -> None:
+        listing = self.query_one("#many-list", OptionList)
+        first = next((i for i, (kind, value) in enumerate(self.lines)
+                      if kind == "value" and value in self.chosen), 0)
+        listing.highlighted = first
+        listing.focus()
+
+    def mark(self, on: bool) -> Text:
+        return Text(f"{glyphs.g('on') if on else glyphs.g('off')} ",
+                    style=f"bold {theme.color('magenta')}" if on else theme.color("ash"))
+
+    def line_text(self, index: int) -> Text:
+        kind, value = self.lines[index]
+        if kind == "group":
+            members = self.groups[value]
+            ticked = sum(1 for m in members if m in self.chosen)
+            text = self.mark(ticked == len(members))
+            text.append(value, style=f"bold {theme.color('glass')}")
+            text.append(f"  {ticked} of {len(members)}", style=theme.color("ash"))
+            return text
+        text = Text("" if "" in self.groups else "  ")       # under a heading: indented
+        text.append_text(self.mark(value in self.chosen))
+        text.append(value, style=theme.color("glass") if value in self.chosen else theme.color("mist"))
+        return text
+
+    def status_text(self) -> Text:
+        count, total = len(self.chosen), len(self.values)
+        if not count:
+            return Text(f"Nothing ticked: all {total}, the setting stays empty.", style=theme.color("mist"))
+        if count == total:
+            return Text(f"All {total} ticked: saved empty, the same as nothing ticked.", style=theme.color("mist"))
+        return Text(f"{count} of {total} ticked.", style=theme.color("glass"))
+
+    def value(self) -> str:
+        if len(self.chosen) == len(self.values):
+            return ""
+        return " ".join(v for v in self.values if v in self.chosen)
+
+    def toggle(self, index: int) -> None:
+        kind, value = self.lines[index]
+        members = self.groups[value] if kind == "group" else [value]
+        if all(m in self.chosen for m in members):
+            self.chosen -= set(members)
+        else:
+            self.chosen |= set(members)
+        self.show_chosen()
+
+    def show_chosen(self) -> None:
+        """The marks, the counts of the headings and the line below, in place: nothing scrolls."""
+        listing = self.query_one("#many-list", OptionList)
+        for i in range(len(self.lines)):
+            listing.replace_option_prompt_at_index(i, self.line_text(i))
+        self.query_one("#many-status", Static).update(self.status_text())
+
+    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        event.stop()
+        self.toggle(event.option_index)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "many-take":
+            self.dismiss(self.value())
+        elif event.button.id == "many-clear":
+            self.chosen = set()
+            self.show_chosen()
+        else:
+            self.dismiss(None)
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+
+def many_picker(rule, current: str) -> ManyPicker:
+    """The ManyPicker of a choice_many setting."""
+    return ManyPicker(rule.title, rule.values, rule.groups, current,
+                      note="Enter or space ticks a line, a heading its whole group. Nothing ticked is all of them.")
+
+
 # -- the three pickers -------------------------------------------------------
 
 def interface_items(automatic: str, interfaces) -> List[Item]:
@@ -256,10 +384,12 @@ def ollama_picker(current: str, service: str, env: dict, find: Optional[Callable
 # -- for a row of the settings ----------------------------------------------------
 
 def picker_for(row, draft: dict, schema: dict) -> Picker:
-    """The picker of a SettingRow (interface, time zone, models)."""
+    """The picker of a SettingRow (a list setting, interface, time zone, models)."""
     from tpotctl.widgets.fields import llm_settings
     rule = row.rule
     current = draft.get(rule.key, "")
+    if rule.widget == "choice_many":
+        return many_picker(rule, current)
     if rule.widget == "interface":
         return interface_picker(current)
     if rule.widget == "timezone":

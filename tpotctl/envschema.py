@@ -19,7 +19,7 @@ SCHEMA_PATH = os.path.join(REPO_DIR, "docker", "tpotinit", "dist", "etc", "env.s
 TYPES = {"text", "path", "enum", "int", "number", "regex", "host", "url", "timezone", "interface",
          "htpasswd_list", "basic_cred", "choice_list"}
 # how tpot shows a key, tpotinit does not read these
-WIDGETS = {"", "switch", "choice", "interface", "timezone", "llm_model", "llm_url"}
+WIDGETS = {"", "switch", "choice", "choice_many", "interface", "timezone", "llm_model", "llm_url"}
 SECTIONS = [("base", "T-Pot"), ("honeypots", "Honeypots and tools"), ("system", "Advanced")]
 
 _SAFE_BAD = re.compile(r"[^a-zA-Z0-9_/.:-]")
@@ -68,6 +68,11 @@ class Rule:
     llm: Dict[str, str] = field(default_factory=dict)
     unlock: str = ""
     offer: bool = False
+    groups: Dict[str, List[str]] = field(default_factory=dict)
+
+
+class SchemaError(ValueError):
+    """env.schema.yml does not hold together (a key tpot cannot build its control for)."""
 
 
 @dataclass
@@ -89,8 +94,34 @@ def load_schema(path: str = SCHEMA_PATH) -> Dict[str, Rule]:
             spec[name] = "" if spec.get(name) is None else str(spec[name])
         spec["choices"] = [{"value": str(c["value"]), "label": str(c.get("label") or c["value"])}
                            for c in spec.get("choices") or []]
+        spec["groups"] = _groups(key, spec)
         rules[key] = Rule(key=key, **spec)
     return rules
+
+
+def _groups(key: str, spec: Dict) -> Dict[str, List[str]]:
+    """groups of a choice_list: {title: [values]}, together every value once, else SchemaError."""
+    groups = spec.get("groups")
+    if groups is None:
+        return {}
+    if spec.get("type") != "choice_list" or not isinstance(groups, dict) or not groups:
+        raise SchemaError(f"{key}: groups are a mapping of titles to values, only for a choice_list")
+    out: Dict[str, List[str]] = {}
+    for title, members in groups.items():
+        if not isinstance(members, list) or not members:
+            raise SchemaError(f"{key}: group {title} needs a list of values")
+        out[str(title)] = [str(m) for m in members]
+    grouped = [m for members in out.values() for m in members]
+    twice = sorted({m for m in grouped if grouped.count(m) > 1})
+    if twice:
+        raise SchemaError(f"{key}: {' '.join(twice)} in more than one place of the groups")
+    unknown = [m for m in grouped if m not in spec["values"]]
+    if unknown:
+        raise SchemaError(f"{key}: groups name {' '.join(unknown)}, which is not one of the values")
+    missing = [v for v in spec["values"] if v not in grouped]
+    if missing:
+        raise SchemaError(f"{key}: {' '.join(missing)} is in no group")
+    return out
 
 
 def compose_services(path: str) -> Set[str]:

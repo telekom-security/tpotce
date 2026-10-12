@@ -123,6 +123,21 @@ class SettingsTest(unittest.TestCase):
 
 
 @unittest.skipUnless(yaml, "PyYAML is not installed")
+class ListSettingTest(unittest.TestCase):
+    """A list setting (COWRIE_PERSONA): written and read back as the values separated by spaces."""
+
+    def test_two_saved_and_loaded_none_is_empty(self):
+        from tpotctl import settings
+        repo = make_checkout(self)
+        settings.load(repo).change({"COWRIE_PERSONA": "raspios ipcam"})
+        self.assertEqual(settings.load(repo).values["COWRIE_PERSONA"], "raspios ipcam")
+        settings.load(repo).change({"COWRIE_PERSONA": ""})
+        self.assertEqual(settings.load(repo).values["COWRIE_PERSONA"], "")
+        with self.assertRaises(settings.SettingsError):
+            settings.load(repo).change({"COWRIE_PERSONA": "raspios raspios"})
+
+
+@unittest.skipUnless(yaml, "PyYAML is not installed")
 class UnlockTest(unittest.TestCase):
 
     def setUp(self):
@@ -317,6 +332,152 @@ class SettingsPaneTest(unittest.IsolatedAsyncioTestCase):
         values = settings.load(repo).values
         self.assertEqual((values["TPOT_PERSISTENCE_CYCLES"], values["TPOT_BLACKHOLE"]), ("45", "ENABLED"))
         self.assertEqual(commands, [["sudo", "systemctl", "restart", "tpot"]])
+
+
+def standard_backend(repo):
+    from tpotctl import app as tapp, events, ops, settings
+
+    class Backend(tapp.Backend):
+        def linux_host(self):
+            return True
+
+        def tpot_type(self):
+            return "HIVE"
+
+        def status(self):
+            return ops.Status("24.04.2", "dev", "abc", "STANDARD", "HIVE", "active", repo)
+
+        def containers(self):
+            return []
+
+        def images(self):
+            return []
+
+        def backups(self):
+            return []
+
+        def settings(self):
+            return settings.load(repo)
+
+        def config_stamp(self):
+            return ops.config_stamp(repo)
+
+        def system(self):
+            return None
+
+        def attacks(self):
+            return events.Attacks(problem="none")
+
+    return Backend()
+
+
+@unittest.skipUnless(textual and yaml, "Textual is not installed, run with the venv of tpot")
+class ManyPickerTest(unittest.IsolatedAsyncioTestCase):
+    """COWRIE_PERSONA on the Settings page: Choose opens the list to tick, Servers and Devices."""
+
+    async def asyncSetUp(self):
+        from tpotctl import app as tapp
+        self.repo = make_checkout(self)
+        self.app = tapp.TpotApp(backend=standard_backend(self.repo), runner=lambda command, cwd=None: 0)
+
+    async def wait_for(self, pilot, test):
+        for _ in range(60):             # polling: under the load of the full suite it takes longer
+            await pilot.pause(0.05)
+            if test():
+                return True
+        return False
+
+    async def open_picker(self, pilot):
+        from tpotctl.screens.pickers import ManyPicker
+        self.app.goto_setting("COWRIE_PERSONA")
+        await self.wait_for(pilot, lambda: self.app.focused is not None
+                            and self.app.focused.id == "set-COWRIE_PERSONA")
+        field = self.app.focused
+        for _ in range(len(field.value) + 2):   # right runs through the text, then to Choose
+            await pilot.press("right")
+            if self.app.focused is not field:
+                break
+        self.assertEqual(self.app.focused.id, "pick-COWRIE_PERSONA")
+        await pilot.press("enter")
+        self.assertTrue(await self.wait_for(pilot, lambda: isinstance(self.app.screen, ManyPicker)))
+        await pilot.pause(0.1)
+        return self.app.screen
+
+    async def tick(self, pilot, picker, value, key="space"):
+        listing = picker.query_one("#many-list")
+        listing.highlighted = picker.lines.index(("value", value))
+        await pilot.pause(0.05)
+        await pilot.press(key)
+        await pilot.pause(0.05)
+
+    async def save(self, pilot):
+        await pilot.press("ctrl+s")
+        self.assertTrue(await self.wait_for(pilot, lambda: bool(self.app.screen.query("#no"))))
+        await pilot.click("#no")                # no restart of T-Pot
+        await pilot.pause(0.4)
+
+    async def test_two_ticked_saved_and_shown_again_none_is_empty(self):
+        from tpotctl import settings
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            await pilot.pause(0.3)
+            picker = await self.open_picker(pilot)
+            self.assertEqual(picker.chosen, set())
+            self.assertIn("Nothing ticked: all 16", str(picker.query_one("#many-status").render()))
+            self.assertEqual([line for line in picker.lines if line[0] == "group"],
+                             [("group", "Servers"), ("group", "Devices")])
+            await self.tick(pilot, picker, "ipcam")              # a device first, the setting keeps the order
+            await self.tick(pilot, picker, "raspios", key="enter")
+            self.assertIn("2 of 16", str(picker.query_one("#many-status").render()))
+            await pilot.click("#many-take")
+            await pilot.pause(0.3)
+            pane = self.app.query_one("#settings")
+            self.assertEqual(pane.changes(), {"COWRIE_PERSONA": "raspios ipcam"})
+            await self.save(pilot)
+            self.assertEqual(settings.load(self.repo).values["COWRIE_PERSONA"], "raspios ipcam")
+            self.assertEqual(self.app.query_one("#set-COWRIE_PERSONA").value, "raspios ipcam")
+            picker = await self.open_picker(pilot)
+            self.assertEqual(picker.chosen, {"raspios", "ipcam"})          # read back from .env
+            await pilot.click("#many-clear")
+            await pilot.pause(0.1)
+            await pilot.click("#many-take")
+            await pilot.pause(0.3)
+            self.assertEqual(self.app.query_one("#settings").changes(), {"COWRIE_PERSONA": ""})
+            await self.save(pilot)
+        self.assertEqual(settings.load(self.repo).values["COWRIE_PERSONA"], "")
+
+    async def test_a_heading_ticks_its_group_and_all_is_empty(self):
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            await pilot.pause(0.3)
+            picker = await self.open_picker(pilot)
+            listing = picker.query_one("#many-list")
+            listing.highlighted = picker.lines.index(("group", "Devices"))
+            await pilot.press("enter")
+            await pilot.pause(0.05)
+            self.assertEqual(picker.value(), "dlink-dir859 tplink-wr841n zyxel-nas326 openwrt qnap-qts synology-dsm "
+                                             "ubiquiti-edgerouter-x ipcam")
+            self.assertIn("8 of 8", str(listing.get_option_at_index(listing.highlighted).prompt))
+            await pilot.press("space")                          # all of the group ticked: none of it
+            await pilot.pause(0.05)
+            self.assertEqual(picker.value(), "")
+            self.assertEqual(picker.chosen, set())
+            for heading in ("Servers", "Devices"):
+                listing.highlighted = picker.lines.index(("group", heading))
+                await pilot.press("enter")
+                await pilot.pause(0.05)
+            self.assertEqual(len(picker.chosen), 16)
+            self.assertEqual(picker.value(), "")                # all of them: the same as nothing ticked
+            self.assertIn("saved empty", str(picker.query_one("#many-status").render()))
+            await pilot.press("escape")
+            await pilot.pause(0.3)
+            self.assertEqual(self.app.query_one("#settings").changes(), {})     # Back changes nothing
+
+    async def test_the_field_says_empty_is_all(self):
+        async with self.app.run_test(size=(150, 50)) as pilot:
+            await pilot.pause(0.3)
+            self.app.goto_setting("COWRIE_PERSONA")
+            await pilot.pause(0.4)
+            self.assertEqual(self.app.query_one("#set-COWRIE_PERSONA").placeholder, "empty = all 16")
+            self.assertIn(("COWRIE_PERSONA", "Cowrie personas"), self.app.setting_keys())      # ctrl+f finds it
 
 
 if __name__ == "__main__":

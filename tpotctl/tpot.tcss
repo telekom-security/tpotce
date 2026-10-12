@@ -582,6 +582,15 @@ OptionList > .option-list--option-highlighted {
     text-style: bold;
 }
 
+/* a list to tick (ManyPicker): as tall as its lines (ManyPicker.fit_dialog keeps it in the terminal) */
+.many OptionList {
+    height: auto;
+}
+
+#many-status {
+    margin-top: 1;
+}
+
 .picker .actions Checkbox {
     margin-right: 2;
     background: $background;
