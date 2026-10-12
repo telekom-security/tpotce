@@ -2035,6 +2035,12 @@ def tpot_dnf_repo(entry: dict) -> str:
     return next((r["id"] for r in tpot_dnf_data()["repos"] if r.get("enabled")), "System")
 
 
+def tpot_dnf_tty(cmd) -> bool:
+    """stdout of the command is the terminal of an interactive session (dnf marks only there)."""
+    targets = getattr(cmd.pp, "targets", None) or {}
+    return (targets.get(1) or ("",))[0] == "terminal" and not hasattr(cmd.protocol, "execcmd")
+
+
 def tpot_dnf_privileged(cmd) -> bool:
     return cmd.user["uid"] == 0 or getattr(cmd.pp, "tpot_sudo", False)
 
@@ -2235,6 +2241,9 @@ class Command_dnf(HoneyPotCommand):
         if not self.tpot_quiet:
             self.write(text)
 
+    def tpot_bold(self, text: str) -> str:
+        return f"\x1b[1m{text}\x1b(B\x1b[m" if text and tpot_dnf_tty(self) else text
+
     def tpot_parse(self) -> list:
         words: list[str] = []
         self.tpot_opts: set[str] = set()
@@ -2344,7 +2353,7 @@ class Command_dnf(HoneyPotCommand):
             if not isinstance(info, dict):
                 continue
             package, _, version = info.get("nevra", "").partition("-")
-            blocks.append(f"  Installed: \x1b[1m{package}\x1b(B\x1b[m-{version} at "
+            blocks.append(f"  Installed: {self.tpot_bold(package)}-{version} at "
                           f"{tpot_dnf_time(info.get('installed', 0), 'GMT')}\n"
                           f"  Built    : {data.get('packager', '')} at {tpot_dnf_time(info.get('built', 0), 'GMT')}\n")
         self.write("\n".join(blocks))
@@ -2380,14 +2389,15 @@ class Command_dnf(HoneyPotCommand):
             found = self.tpot_find(arg)
             if found is None:
                 missing.append(arg)
-                self.tpot_out(f"No match for argument: {arg}\n")
+                self.tpot_out(f"No match for argument: {self.tpot_bold(arg)}\n")
             elif found[0] == "installed" and not reinstall:
                 self.tpot_out(f"Package {tpot_dnf_nevra(found[1], found[2])} is already installed.\n")
             elif found[0] == "installed":
                 again[found[1]] = dict(found[2], repo=tpot_dnf_repo(found[2]),
                                        download=found[2].get("size", 0) // 3)
             elif reinstall:
-                self.tpot_out(f"Package {arg} available, but not installed.\nNo match for argument: {arg}\n")
+                self.tpot_out(f"Package {arg} available, but not installed.\n"
+                              f"No match for argument: {self.tpot_bold(arg)}\n")
                 missing.append(arg)
             else:
                 wanted[found[1]] = found[2]
@@ -2427,7 +2437,7 @@ class Command_dnf(HoneyPotCommand):
         for arg in names:
             found = self.tpot_find(arg)
             if found is None or found[0] != "installed":
-                self.tpot_out(f"No match for argument: {arg}\n")
+                self.tpot_out(f"No match for argument: {self.tpot_bold(arg)}\n")
             else:
                 wanted[found[1]] = dict(installed[found[1]], repo=installed[found[1]].get("from", "@System"))
         if not wanted:
@@ -2457,7 +2467,7 @@ class Command_dnf(HoneyPotCommand):
             if found is None or found[0] != "installed":
                 if found is not None:
                     self.tpot_out(f"Package {found[1]} available, but not installed.\n")
-                self.tpot_out(f"No match for argument: {arg}\n")
+                self.tpot_out(f"No match for argument: {self.tpot_bold(arg)}\n")
                 missing.append(arg)
         if missing:
             self.errorWrite("Error: No packages marked for upgrade.\n")
@@ -2562,12 +2572,34 @@ class Command_dnf(HoneyPotCommand):
                 self.tpot_out("-" * TPOT_DNF_WIDTH + "\n")
                 self.tpot_out(f"{'Total':<48} {tpot_dnf_number(total / max(seconds, 0.5)):>5}B/s | "
                               f"{tpot_dnf_number(total):>5}B {tpot_dnf_clock(seconds + 1):>9}    \n")
-        self.tpot_out("Running transaction check\nTransaction check succeeded.\nRunning transaction test\n"
-                      "Transaction test succeeded.\nRunning transaction\n")
-        yield self.sleep(0.5, 1)
+        self.tpot_out("Running transaction check\nTransaction check succeeded.\nRunning transaction test\n")
         # the deps first, as rpm orders them
         order = [row for row in rows if row[0] == "Installing dependencies"] + \
                 [row for row in rows if row[0] != "Installing dependencies"]
+        # the programs of the new packages; a tree that takes no more files fails as a full disk
+        made = []
+        for title, name, entry in order:
+            if kind == "remove" or title == "Reinstalling":
+                continue
+            for program in entry.get("programs", []):
+                try:
+                    ok = self.fs.mkfile(program, 0, 0, random.randint(10000, 90000), 33261)
+                except Exception:  # noqa: BLE001 - a file the session cannot create is a full disk
+                    ok = False
+                if not ok:
+                    need = max(1, sum(e.get("size", 0) for t, _, e in order if t != "Reinstalling") // 1_000_000)
+                    self.tpot_out("The downloaded packages were saved in cache until the next successful "
+                                  f"transaction.\nYou can remove cached packages by executing '{self.tpot_prog} "
+                                  "clean packages'.\n")
+                    self.errorWrite(f"Error: Transaction test error:\n  installing package "
+                                    f"{tpot_dnf_nevra(name, entry)} needs {need}MB more space on the / filesystem\n\n"
+                                    "Error Summary\n-------------\nDisk Requirements:\n"
+                                    f"   At least {need}MB more space needed on the / filesystem.\n\n")
+                    self.exit(1)
+                    return
+                made.append(program)
+        self.tpot_out("Transaction test succeeded.\nRunning transaction\n")
+        yield self.sleep(0.5, 1)
         digits = len(str(len(order)))
         done = f"{{:>{digits}}}/{len(order)}"
         wid2 = 52 - 2 * (digits - 1)
@@ -2595,13 +2627,8 @@ class Command_dnf(HoneyPotCommand):
                                               "from": "@" + entry["repo"], "summary": entry.get("summary", ""),
                                               "size": entry.get("size", 0), "programs": entry.get("programs", [])}
                 session["removed"].discard(name)
-                for program in entry.get("programs", []):
-                    try:
-                        self.fs.mkfile(program, 0, 0, random.randint(10000, 90000), 33261)
-                    except Exception:  # noqa: BLE001 - a file the session cannot create stays a name
-                        continue
-                    self.protocol.commands[program] = Command_faked_package_class_factory.getCommand(
-                        program.rsplit("/", 1)[-1])
+        for program in made:
+            self.protocol.commands[program] = Command_faked_package_class_factory.getCommand(program.rsplit("/", 1)[-1])
         names = sorted(tpot_dnf_nevra(name, entry) for _, name, entry in order)
         title = {"install": "Installed", "reinstall": "Reinstalled", "remove": "Removed"}[kind]
         self.tpot_out("\n".join(tpot_dnf_pto(title, names)) + "\n\nComplete!\n")
@@ -2668,7 +2695,8 @@ class Command_dnf(HoneyPotCommand):
                     needles.update(hit)
                     haystacks.add(value)
                     weight += sum(14 if key == "name" and value == term else 7 if key == "name" else 4 for term in hit)
-            if keys:
+            # every keyword (AND), with --all any of them (OR)
+            if keys and ("--all" in self.tpot_opts or needles == set(terms)):
                 matches.append((-weight, name, entry, tuple(keys), tuple(sorted(needles)), haystacks))
         if not matches:
             self.tpot_out("No matches found.\n")
@@ -2686,8 +2714,9 @@ class Command_dnf(HoneyPotCommand):
             key = f"{name}.{entry['arch']} : "
             text = textwrap.fill(entry.get("summary", ""), width=TPOT_DNF_WIDTH, initial_indent=key,
                                  subsequent_indent=" " * (len(key) - 2) + ": ")
-            text = re.sub("|".join(re.escape(term) for term in sorted(terms, key=len, reverse=True)),
-                          lambda hit: f"\x1b[1m{hit.group(0)}\x1b(B\x1b[m", text)
+            marked = [re.escape(term) for term in sorted(terms, key=len, reverse=True) if term]
+            if marked:
+                text = re.sub("|".join(marked), lambda hit: self.tpot_bold(hit.group(0)), text)
             out.append(text + "\n")
         self.tpot_out("".join(out))
         self.exit(0)

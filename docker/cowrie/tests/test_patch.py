@@ -177,6 +177,7 @@ class TreeFs:
 
     def mkfile(self, path, uid, gid, size, mode):
         self.made = getattr(self, "made", []) + [(path, uid, gid, mode)]
+        return True
 
 
 class FsModule:
@@ -1065,9 +1066,10 @@ class PatchTest(unittest.TestCase):
         Protocol.call_command = call_command
         protocol = Protocol()
 
-        def run(line, input_data=None):
-            words = line.split()
-            pp = Pipe(None, None, words[1:], input_data, {})
+        def run(line, input_data=None, tty=False):
+            words = line if isinstance(line, list) else line.split()
+            # stdout on the terminal (an interactive session) or captured (a pipe, the default here)
+            pp = Pipe(None, None, words[1:], input_data, {1: ("terminal", None)} if tty else {})
             protocol.call_command(pp, commands[words[0]], *words[1:])
             child = protocol.pp
             return bytes(child.out).decode(), bytes(child.err).decode(), protocol.cmdstack[0].last_exit_code
@@ -1215,7 +1217,7 @@ class PatchTest(unittest.TestCase):
     def test_dnf_version_list_search_repolist(self):
         run = self.upstream_session("rhel-9", uid=0)
         data = self.dnf_data(run)
-        out = run("dnf --version")[0]
+        out = run("dnf --version", tty=True)[0]
         self.assertTrue(out.startswith(f"{data['version']}\n  Installed: \x1b[1mdnf\x1b(B\x1b[m-0:"
                                        f"{data['installed']['dnf']['evr']}.noarch at "), out)
         self.assertIn("  Built    : Red Hat, Inc. <http://bugzilla.redhat.com/bugzilla> at ", out)
@@ -1233,7 +1235,7 @@ class PatchTest(unittest.TestCase):
         self.assertIn("Last metadata expiration check", out)
         self.assertRegex(out, r"Available Packages\nnmap\.x86_64 +3:7\.92-\S+ +rhel-9-for-x86_64-appstream")
         self.assertEqual(run("dnf list installed nosuch")[1:], ("Error: No matching Packages to list\n", 1))
-        out = run("dnf search nmap")[0]
+        out = run("dnf search nmap", tty=True)[0]
         self.assertIn("\n" + "=" * 26 + " Name Exactly Matched: nmap " + "=" * 26 + "\n"
                       "\x1b[1mnmap\x1b(B\x1b[m.x86_64 : Network exploration tool and security scanner\n", out)
         self.assertIn(" Name & Summary Matched: nmap ", out)
@@ -1246,6 +1248,40 @@ class PatchTest(unittest.TestCase):
         out = run("yum repolist all")[0]
         self.assertIn(" status\n", out)
         self.assertIn(" disabled\n", out)
+
+    def test_dnf_marks_only_on_a_terminal(self):
+        run = self.upstream_session("rhel-9", uid=0)
+        for line in ("dnf --version", "dnf search nmap", "dnf install -y masscan"):
+            self.assertNotIn("\x1b", "".join(run(line)[:2]), line)
+        self.assertIn("No match for argument: \x1b[1mmasscan\x1b(B\x1b[m\n", run("dnf install -y masscan", tty=True)[0])
+        self.assertIn("\x1b[1mdnf\x1b(B\x1b[m-0:", run("dnf --version", tty=True)[0])
+
+    def test_dnf_search_matches_every_keyword(self):
+        run = self.upstream_session("rhel-9", uid=0)
+        out = run("dnf search nmap netcat")[0]
+        self.assertIn(" Name & Summary Matched: netcat, nmap ", out)
+        self.assertIn("nmap-ncat.x86_64 : ", out)
+        self.assertNotIn("\nnmap.x86_64", out)
+        out = run("dnf search --all nmap netcat")[0]
+        self.assertIn("\nnmap.x86_64 : ", out)
+        self.assertIn("nmap-ncat.x86_64 : ", out)
+        self.assertEqual(run("dnf search", tty=True)[2], 2)
+        # an empty keyword matches every package, nothing to mark
+        text = run(["dnf", "search", ""], tty=True)[0]
+        self.assertNotIn("\x1b", text)
+        self.assertIn("\nbash.x86_64 : ", text)
+
+    def test_dnf_install_fails_at_the_file_limit(self):
+        run = self.upstream_session("rhel-9", uid=0)
+        run.protocol.fs.mkfile = lambda *a, **k: False
+        out, err, code = run("dnf install -y nmap")
+        self.assertIn("Running transaction test\n", out)
+        self.assertNotIn("Complete!", out)
+        self.assertIn("Error: Transaction test error:\n  installing package nmap-3:7.92-", err)
+        self.assertIn("more space on the / filesystem", err)
+        self.assertEqual(code, 1)
+        self.assertNotIn("/usr/bin/nmap", run.protocol.commands)
+        self.assertEqual(run("rpm -q nmap")[2], 1)
 
     def test_rpm_of_rhel(self):
         run = self.upstream_session("rhel-9", uid=1000)
