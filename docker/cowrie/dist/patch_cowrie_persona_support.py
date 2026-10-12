@@ -2400,6 +2400,40 @@ def patch_prompt(cowrie_root):
     )
 
 
+def patch_shell_errors(cowrie_root):
+    """The shell names itself as the persona's login shell ([shell] shell_name: -ash, -sh, -vbash,
+    -bash) and says a missing command as it does ([shell] not_found_style: ash "not found",
+    bash "command not found"); BusyBox ash names no line under -c. Without the keys bash stays."""
+    path = cowrie_root / "src" / "cowrie" / "shell" / "honeypot.py"
+    replace_once(
+        path,
+        """            self.name = "-bash" if interactive else "bash"
+""",
+        """            login = CowrieConfig.get("shell", "shell_name", fallback="bash")
+            self.name = f"-{login}" if interactive else login
+""",
+    )
+    replace_once(
+        path,
+        """        if self.line_numbers:
+            return f"{self.name}: line {self.current_line}: "
+""",
+        """        ash = CowrieConfig.get("shell", "not_found_style", fallback="bash") == "ash"
+        if self.line_numbers and not (ash and self.syntax_label == "-c"):
+            return f"{self.name}: line {self.current_line}: "
+""",
+    )
+    replace_once(
+        path,
+        """        return f"{self.error_prefix()}{cmd}: command not found\\n"
+""",
+        """        if CowrieConfig.get("shell", "not_found_style", fallback="bash") == "ash":
+            return f"{self.error_prefix()}{cmd}: not found\\n"
+        return f"{self.error_prefix()}{cmd}: command not found\\n"
+""",
+    )
+
+
 def patch_telnet_banner(cowrie_root):
     """The telnet banner expands the agetty escapes of /etc/issue.net (\\S, \\r, \\m ...),
     as a Red Hat login shows them; `cat /etc/issue.net` in the shell stays raw.
@@ -2525,6 +2559,7 @@ def main():
     patch_free(cowrie_root)
     patch_grep(cowrie_root)
     patch_prompt(cowrie_root)
+    patch_shell_errors(cowrie_root)
     patch_telnet_banner(cowrie_root)
 
 

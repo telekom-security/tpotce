@@ -392,6 +392,8 @@ kernel_build_string = {r.kernel_build}
 hardware_platform = {persona.hardware_platform}
 operating_system = {persona.operating_system}
 prompt_style = {persona.prompt_style}
+shell_name = {system.shell_style(persona)[0]}
+not_found_style = {system.shell_style(persona)[1]}
 ssh_version = {r.ssh_version}
 skip_python_commands = {",".join(skip_python_commands(persona, ident, content))}
 {busybox}{tools}

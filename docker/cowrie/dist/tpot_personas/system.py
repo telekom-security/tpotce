@@ -848,6 +848,16 @@ def directories(persona):
     return tuple(f"etc/rc.d/rc{level}.d" for level in range(7)) if is_el(persona) else ()
 
 
+# the devices whose /bin/sh is BusyBox ash (DSM's is bash, EdgeOS logs in to vbash)
+ASH_FAMILIES = frozenset({"dlink", "tplink", "zyxel", "openwrt", "qnap", "ipcam"})
+
+
+def shell_style(persona):
+    """(the shell's name, how it says a command is missing): BusyBox ash prints "-ash: x: not found",
+    bash and vbash "-bash: x: command not found"; the name is that of the login shell."""
+    return persona.shell.rsplit("/", 1)[-1], "ash" if persona.family in ASH_FAMILIES else "bash"
+
+
 def login_program(persona, ident):
     """The program of the login shell (/proc/self/exe of the shell): BusyBox of a firmware with it,
     else bash."""

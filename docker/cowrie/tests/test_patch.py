@@ -1544,6 +1544,45 @@ class PatchTest(unittest.TestCase):
         self.assertEqual(shell.protocol.ps, (written[0], b"> "))
         return written[0].decode("utf-8")
 
+    SHELL_ERRORS = {"openwrt": "-ash: x: not found\n", "dlink-dir859": "-sh: x: not found\n",
+                    "tplink-wr841n": "-sh: x: not found\n", "zyxel-nas326": "-sh: x: not found\n",
+                    "qnap-qts": "-sh: x: not found\n", "ipcam": "-sh: x: not found\n",
+                    "synology-dsm": "-sh: x: command not found\n", "ubiquiti-edgerouter-x": "-vbash: x: command not found\n",
+                    "ubuntu-noble": "-bash: x: command not found\n", "rhel-9": "-bash: x: command not found\n"}
+
+    def shell_error(self, pid, interactive=True):
+        from tpot_personas.identity import draw
+        from tpot_personas.render import render_cfg
+        persona = catalog.by_id(pid)
+        text = render_cfg(persona, draw(persona, 1), Path("/tmp/cowrie/run"), Path("/keys"))
+        cfg = configparser.ConfigParser(interpolation=None)
+        cfg.read_string(text)
+        config = FakeConfig({("shell", key): value for key, value in cfg.items("shell")})
+        source = (self.patched() / "src/cowrie/shell/honeypot.py").read_text()
+        names = {"CowrieConfig": config}
+        message = method(source, "HoneyPotShell", "command_not_found_message", names)
+        prefix = method(source, "HoneyPotShell", "error_prefix", names)
+        login = config.get("shell", "shell_name", fallback="bash")
+
+        class Shell:
+            name = f"-{login}" if interactive else login
+            line_numbers = not interactive
+            syntax_label = None if interactive else "-c"
+            current_line = 1
+            error_prefix = prefix
+
+        return message(Shell(), "x")
+
+    def test_not_found_names_the_shell_of_the_persona(self):
+        for pid, expected in self.SHELL_ERRORS.items():
+            self.assertEqual(self.shell_error(pid), expected, pid)
+        self.assertEqual(self.shell_error("openwrt", interactive=False), "ash: x: not found\n")
+        self.assertEqual(self.shell_error("tplink-wr841n", interactive=False), "sh: x: not found\n")
+        self.assertEqual(self.shell_error("rhel-9", interactive=False), "bash: line 1: x: command not found\n")
+        source = (self.patched() / "src/cowrie/shell/honeypot.py").read_text()
+        self.assertIn('login = CowrieConfig.get("shell", "shell_name", fallback="bash")', source)
+        self.assertIn('self.name = f"-{login}" if interactive else login', source)
+
     def test_redhat_prompt(self):
         # bash PS1 of RHEL / CentOS: [\u@\h \W]\$ (short host name, basename of the cwd)
         self.assertEqual(self.prompt("/root"), "[root@build39 ~]# ")
@@ -1679,6 +1718,12 @@ class PatchTest(unittest.TestCase):
                  ("src/cowrie/commands/which.py", "                if self.fs.exists(resolved):\n",
                   "                if self.fs.isfile(resolved):\n"),
                  ("src/cowrie/commands/sudo.py", "import getopt\n", "import getopt as options\n"),
+                 ("src/cowrie/shell/honeypot.py", '            self.name = "-bash" if interactive else "bash"\n',
+                  '            self.name = "-bash" if interactive else "sh"\n'),
+                 ("src/cowrie/shell/honeypot.py", '        return f"{self.error_prefix()}{cmd}: command not found\\n"\n',
+                  '        return f"{self.error_prefix()}{cmd}: not found\\n"\n'),
+                 ("src/cowrie/shell/honeypot.py", '            return f"{self.name}: line {self.current_line}: "\n',
+                  '            return f"{self.name}: {self.current_line}: "\n'),
                  ("src/cowrie/shell/fs.py", "            # cwd = '/'.join((cwd, piece))\n",
                   "            # cwd = posixpath.join(cwd, piece)\n"),
                  ("src/cowrie/shell/fs.py", '                                "/".join((cwd, x[A_TARGET])),\n',
