@@ -843,6 +843,25 @@ def ssh_units(persona, ident):
     return ("etc/systemd/system/sshd.service", "etc/systemd/system/multi-user.target.wants/ssh.service"), ()
 
 
+# where systemd looks for an ExecStart program given without a path
+EXEC_DIRS = ("usr/local/bin", "usr/bin", "usr/sbin", "usr/lib/systemd")
+
+
+def exec_program(line):
+    """The program of an ExecStart= line: the first word without the prefixes of systemd (@-+!:)."""
+    command = line.split("=", 1)[1].strip()
+    return command.lstrip("@-+!:").split()[0] if command.lstrip("@-+!:") else ""
+
+
+def program_node(fs, program):
+    """The node of an ExecStart program (absolute, or searched in EXEC_DIRS), None if there is none."""
+    from . import tree
+    if program.startswith("/"):
+        return tree.find_node(fs, program)
+    return next((node for node in (tree.find_node(fs, f"{d}/{program}") for d in EXEC_DIRS) if node is not None),
+                None)
+
+
 def directories(persona):
     """Empty directories of the persona's system (the run level directories of Red Hat)."""
     return tuple(f"etc/rc.d/rc{level}.d" for level in range(7)) if is_el(persona) else ()

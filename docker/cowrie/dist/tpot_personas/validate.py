@@ -631,8 +631,17 @@ def _check_system(persona, ident, cfg, out_dir, runtime_dir, fs, out):
                     out.append(f"apt: {program} is on PATH, apt does not have it installed")
         units = {u["name"]: u for u in expected.get(system.SYSTEMD_UNITS, {}).get("units", [])}
         for name, unit in sorted(units.items()):
-            if tree.find_node(fs, unit["path"]) is None:
+            node = tree.find_node(fs, unit["path"])
+            if node is None:
                 out.append(f"systemctl: {unit['path']} of {name} is not in fs.pickle")
+                continue
+            text = tree.node_get(node, tree.A_CONTENTS)
+            if unit["path"].startswith("/etc/") or not isinstance(text, bytes):
+                continue
+            for line in text.decode("utf-8", "replace").splitlines():
+                program = system.exec_program(line) if line.startswith("ExecStart=") else ""
+                if program and system.program_node(fs, program) is None:
+                    out.append(f"systemctl: ExecStart of {name} names {program}, which is not in fs.pickle")
         for line in _text(out_dir / system.SERVICE_STATUS).splitlines():
             if line.startswith(" [ ") and not _is_file(tree.find_node(fs, f"etc/init.d/{line.split()[-1]}")):
                 out.append(f"service: --status-all names {line.split()[-1]}, /etc/init.d/{line.split()[-1]} is missing")

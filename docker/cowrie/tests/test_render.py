@@ -468,6 +468,26 @@ class SystemdTreeTest(unittest.TestCase):
         self.assertEqual((units["apport.service"]["path"], units["apport.service"]["state"]),
                          ("/etc/init.d/apport", "generated"))
 
+    def test_unit_files_run_programs_of_the_tree(self):
+        for pid in ("ubuntu-noble", "raspios", "rhel-9", "centos-7", "gpu-ubuntu", "debian-trixie"):
+            _, out, _ = render_one(self, catalog.by_id(pid), 1)
+            fs = fs_of(out)
+            for unit in json.loads((out / system.SYSTEMD_UNITS).read_text())["units"]:
+                node = tree.find_node(fs, unit["path"])
+                text = tree.node_get(node, tree.A_CONTENTS)
+                if not isinstance(text, bytes) or unit["path"].startswith("/etc/"):
+                    continue
+                for line in text.decode().splitlines():
+                    if line.startswith("ExecStart="):
+                        program = system.exec_program(line)
+                        self.assertNotIn(":", program, (pid, unit["name"], line))
+                        self.assertIsNotNone(system.program_node(fs, program), (pid, unit["name"], line))
+            ps = json.loads((out / "cmdoutput.json").read_text())["command"]["ps"]
+            for entry in ps:
+                first = entry["COMMAND"].split()[0]
+                if first.startswith("/"):
+                    self.assertIsNotNone(tree.find_node(fs, first), (pid, first))
+
     def test_noble_listens_on_ssh_socket(self):
         _, out, _ = render_one(self, catalog.by_id("ubuntu-noble"), 1)
         units = {u["name"]: u for u in json.loads((out / system.SYSTEMD_UNITS).read_text())["units"]}

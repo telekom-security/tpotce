@@ -263,6 +263,13 @@ def _unit_files(t, persona, ident, processes):
         rel = "usr" + path if path.startswith("/lib/") else path.lstrip("/")
         if tree.find_node(t, rel) is None:
             tree.ensure_file(t, rel, servers.unit_file(persona, ident, unit).encode(), ctime=ident.installed_at)
+        # the programs the unit runs
+        text = tree.node_get(tree.find_node(t, rel), tree.A_CONTENTS)
+        for line in (text.decode("utf-8", "replace").splitlines() if isinstance(text, bytes) else ()):
+            program = system.exec_program(line) if line.startswith("ExecStart=") else ""
+            if program and system.program_node(t, program) is None:
+                rel_program = program.lstrip("/") if program.startswith("/") else f"usr/bin/{program}"
+                tree.ensure_executable(t, rel_program, program_size(ident, rel_program), ctime=ident.installed_at)
         if unit["state"] == "enabled":
             tree.ensure_link(t, f"etc/systemd/system/{servers.wants_target(unit['name'])}.wants/{unit['name']}", path,
                              ctime=ident.installed_at)
@@ -351,6 +358,11 @@ def apply_to_tree(base_tree, persona, ident, content):
         link(t, persona, ident, rel, target, ident.installed_at)
     if persona.kind == "server":
         _unit_files(t, persona, ident, content.processes)
+        # the daemons of ps are programs of the tree
+        for process in content.processes:
+            program = process["COMMAND"].split()[0]
+            if program.startswith("/") and tree.find_node(t, program) is None:
+                tree.ensure_executable(t, program.lstrip("/"), program_size(ident, program), ctime=ident.installed_at)
     _login_links(t, persona, ident, content.files.get("etc/group", ""))
     _set_dirs(t, persona, ident.installed_at)
     return t

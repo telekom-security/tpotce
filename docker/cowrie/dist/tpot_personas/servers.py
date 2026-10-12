@@ -957,8 +957,8 @@ SOCKETS = (("dbus.socket", "D-Bus System Message Bus Socket", "dbus.service", ("
             ("/run/udev/control (SequentialPacket)",)),
            ("systemd-udevd-kernel.socket", "udev Kernel Socket", "systemd-udevd.service", ("kobject-uevent 1 (Netlink)",)))
 SSH_SOCKET = ("ssh.socket", "OpenBSD Secure Shell server socket", "ssh.service", ("[::]:22 (Stream)",))
-# what a unit file of the image runs (the oneshots; a daemon runs its program of ps); unverified: the
-#   command lines of each release
+# the ExecStart= of each unit file of the image ({sd}: systemd's directory); unverified: the command
+#   lines of each release
 UNIT_EXEC = {
     "kmod-static-nodes.service": "/bin/kmod static-nodes --format=tmpfiles --output=/run/tmpfiles.d/static-nodes.conf",
     "systemd-journal-flush.service": "journalctl --smart-relinquish-var",
@@ -971,12 +971,17 @@ UNIT_EXEC = {
     "systemd-update-utmp.service": "{sd}/systemd-update-utmp reboot",
     "systemd-user-sessions.service": "{sd}/systemd-user-sessions start",
     "systemd-vconsole-setup.service": "{sd}/systemd-vconsole-setup",
+    "systemd-journald.service": "{sd}/systemd-journald",
+    "systemd-logind.service": "{sd}/systemd-logind",
+    "systemd-udevd.service": "{sd}/systemd-udevd",
+    "systemd-networkd.service": "{sd}/systemd-networkd",
+    "systemd-resolved.service": "{sd}/systemd-resolved",
     "cloud-init-local.service": "/usr/bin/cloud-init init --local",
     "cloud-init.service": "/usr/bin/cloud-init init",
     "cloud-config.service": "/usr/bin/cloud-init modules --mode=config",
     "cloud-final.service": "/usr/bin/cloud-init modules --mode=final",
     "apparmor.service": "/lib/apparmor/apparmor.systemd reload",
-    "apport.service": "/etc/init.d/apport start",
+    "apport.service": "/usr/share/apport/apport --start",
     "ufw.service": "/lib/ufw/ufw-init start quiet",
     "e2scrub_reap.service": "/sbin/e2scrub_all -A -r",
     "dphys-swapfile.service": "/sbin/dphys-swapfile setup",
@@ -991,6 +996,37 @@ UNIT_EXEC = {
     "rhel-domainname.service": "/usr/lib/systemd/rhel-domainname",
     "rhel-import-state.service": "/usr/lib/systemd/rhel-import-state",
     "rhel-readonly.service": "/usr/lib/systemd/rhel-readonly",
+    "cron.service": "/usr/sbin/cron -f $EXTRA_OPTS",
+    "dbus.service": "@/usr/bin/dbus-daemon @dbus-daemon --system --address=systemd: --nofork --nopidfile "
+                    "--systemd-activation --syslog-only",
+    "rsyslog.service": "/usr/sbin/rsyslogd -n -iNONE",
+    "snapd.service": "/usr/lib/snapd/snapd",
+    "ssh.service": "/usr/sbin/sshd -D $SSHD_OPTS",
+    "unattended-upgrades.service": "/usr/share/unattended-upgrades/unattended-upgrade-shutdown --wait-for-signal",
+    "irqbalance.service": "/usr/sbin/irqbalance --foreground $IRQBALANCE_ARGS",
+    "avahi-daemon.service": "/usr/sbin/avahi-daemon -s",
+    "bluetooth.service": "/usr/libexec/bluetooth/bluetoothd",
+    "ModemManager.service": "/usr/sbin/ModemManager",
+    "NetworkManager.service": "/usr/sbin/NetworkManager --no-daemon",
+    "wpa_supplicant.service": '/sbin/wpa_supplicant -u -s -O "DIR=/run/wpa_supplicant GROUP=netdev"',
+    "triggerhappy.service": "/usr/sbin/thd --triggers /etc/triggerhappy/triggers.d/ --socket /run/thd.socket "
+                            "--user nobody --deviceglob /dev/input/event*",
+    "auditd.service": "/sbin/auditd",
+    "chronyd.service": "/usr/sbin/chronyd $OPTIONS",
+    "crond.service": "/usr/sbin/crond -n $CRONDARGS",
+    "dbus-broker.service": "/usr/bin/dbus-broker-launch --scope system --audit",
+    "polkit.service": "/usr/lib/polkit-1/polkitd --no-debug",
+    "postfix.service": "/usr/sbin/postfix start",
+    "nvidia-persistenced.service": "/usr/bin/nvidia-persistenced --user nvidia-persistenced --no-persistence-mode "
+                                   "--verbose",
+    "ollama.service": "/usr/local/bin/ollama serve",
+}
+# the ExecStart= of a family where it differs
+UNIT_EXEC_FAMILY = {
+    "ubuntu": {"cron.service": "/usr/sbin/cron -f -P $EXTRA_OPTS"},
+    "centos": {"dbus.service": "/usr/bin/dbus-daemon --system --address=systemd: --nofork --nopidfile "
+                               "--systemd-activation", "rsyslog.service": "/usr/sbin/rsyslogd -n $SYSLOGD_OPTIONS"},
+    "rhel": {"rsyslog.service": "/usr/sbin/rsyslogd -n $SYSLOGD_OPTIONS"},
 }
 
 
@@ -1012,13 +1048,10 @@ def unit_file(persona, ident, unit):
         listen = "".join(f"Listen{'Stream' if 'Stream' in entry else 'Datagram' if 'Datagram' in entry else 'Netlink'}="
                          f"{entry.rsplit(' (', 1)[0]}\n" for entry in unit["listen"])
         body = f"[Socket]\n{listen}"
-    elif unit["sub"] == "running":
-        command = unit["command"]
-        if command.split(" ", 1)[0].endswith(":"):
-            command = command.split(": ", 1)[1].split(" [", 1)[0]
-        body = f"[Service]\nExecStart={command}\n"
     else:
-        body = f"[Service]\nType=oneshot\nRemainAfterExit=yes\nExecStart={UNIT_EXEC.get(name, '/bin/true').format(sd=sd)}\n"
+        command = UNIT_EXEC_FAMILY.get(persona.family, {}).get(name, UNIT_EXEC[name]).format(sd=sd)
+        kind = "" if unit["sub"] == "running" else "Type=oneshot\nRemainAfterExit=yes\n"
+        body = f"[Service]\n{kind}ExecStart={command}\n"
     install = f"\n[Install]\nWantedBy={wants_target(name)}\n" if unit["state"] == "enabled" else ""
     return f"[Unit]\nDescription={unit['description']}\n\n{body}{install}"
 

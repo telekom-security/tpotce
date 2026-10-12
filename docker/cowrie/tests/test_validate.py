@@ -464,6 +464,16 @@ class ValidateServerCommandTest(unittest.TestCase):
         found = " | ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0))
         self.assertIn("service: --status-all names cron, /etc/init.d/cron is missing", found)
 
+    def test_exec_start_names_a_missing_program(self):
+        persona = catalog.by_id("raspios")
+        ident, out, keys = render_one(self, persona, 1)
+        fs = tree.load_pickle(out / "fs.pickle")
+        tree.remove_node(fs, "usr/sbin/avahi-daemon")
+        tree.dump_pickle(fs, out / "fs.pickle")
+        found = " | ".join(validate.problems(persona, ident, out, out, keys, min_pickle=0))
+        self.assertIn("systemctl: ExecStart of avahi-daemon.service names /usr/sbin/avahi-daemon, "
+                      "which is not in fs.pickle", found)
+
     def test_unit_file_missing(self):
         persona = catalog.by_id("rhel-9")
         ident, out, keys = render_one(self, persona, 1)
